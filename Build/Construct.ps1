@@ -53,28 +53,146 @@ function Write-Lowered([string]  $Message) { Write-Report 'SPIR-V'   Magenta  $M
 #                                          THE UNIT ORDER
 #---
 
-# 📝 The order below IS the dependency DAG. A unit is compiled only after every unit it requires, and the
-#    Requires list is what the linker is handed — reversed, since a static library only satisfies references
-#    the linker has already seen.
-# 🔴 ⚠️ This array and the `[requires]` in each `Module.toml` are two statements of one graph, and they can
-#    drift. They mean different things and both are needed: this one is the LINK order, which must name
-#    every archive whose symbols the executable resolves against, while the manifest states what a unit is
-#    permitted to INCLUDE. SlateUI is exactly where the two part — it links against four archives and is
-#    permitted to include none of them.
-#    `Scripts/VerifyPartition.ps1` enforces the manifest and runs before anything is translated. Nothing yet
-#    checks that this array agrees with the manifests about ordering; folding the two together is Phase 4.
-$UnitOrder = @(
-    @{ Name = 'SlateMath';     Product = 'StaticLibrary'; Requires = @() }
-    @{ Name = 'SlateDocument'; Product = 'StaticLibrary'; Requires = @('SlateMath') }
-    @{ Name = 'SlateVulkan';   Product = 'StaticLibrary'; Requires = @('SlateMath') }
-    @{ Name = 'SlateCompute';  Product = 'StaticLibrary'; Requires = @('SlateVulkan', 'SlateDocument', 'SlateMath') }
-    @{ Name = 'SlateUI';       Product = 'StaticLibrary'; Requires = @('SlateCompute', 'SlateVulkan', 'SlateDocument', 'SlateMath') }
-    # 📝 🔴 Subject names one source folder that becomes its own link target. `32` §5's "separate editors or one
-    #    Editor" is exactly this array: every folder here links an executable named for it, from one shared set of
-    #    unit archives. A StaticLibrary unit ignores the field and archives its whole tree as before.
-    @{ Name = 'Application';   Product = 'Executable';    Requires = @('SlateUI', 'SlateCompute', 'SlateVulkan', 'SlateDocument', 'SlateMath');
-       Subject = @('ConsoleHost', 'PaintHost', 'EditorHost', 'InterfaceValidationHost') }
-)
+#---
+#                                    THE DECLARED UNIT GRAPH
+#---
+
+# 🔴 `Module.toml` is the authority and this script derives the graph from it. The array that used to sit
+#    here restated the same facts in a second place, and two statements of one graph are two things to keep
+#    agreeing — `SlateUI` had carried four requirements it did not use for exactly as long as nothing read
+#    the manifests.
+#
+# 🔴 Two DIFFERENT facts are read, and conflating them is the mistake this arrangement exists to prevent:
+#      [requires].unit  — what a unit may **include**. Enforced by `Scripts/VerifyPartition.ps1`.
+#      [link].unit      — what an executable must **link**, most-dependent first.
+#    They coincide for most units and part for `SlateUI`, which links four archives and includes none.
+#
+# 📝 Translation order is a topological sort of `[link].unit`, because a unit's archive must exist before
+#    anything that links it. `[requires]` cannot order the build: `SlateUI` requires nothing and must still
+#    be translated last of the libraries.
+function Read-UnitGraph
+{
+    $Declared = @{}
+
+    foreach ($Manifest in Get-ChildItem $EngineRoot -Filter 'Module.toml' -File -Recurse)
+    {
+        $Content  = Get-Content $Manifest.FullName -Raw
+        $UnitRoot = Split-Path -Parent $Manifest.FullName
+        $UnitName = Split-Path -Leaf $UnitRoot
+
+        if ($Content -match '(?ms)^\[unit\].*?^name\s*=\s*"([^"]+)"')
+        {
+            $UnitName = $Matches[1]
+        }
+
+        $Product = if ($Content -match '(?ms)^\[unit\].*?^product\s*=\s*"([^"]+)"') { $Matches[1] }
+                   else                                                               { 'StaticLibrary' }
+
+        # 📝 A subject names one source folder that becomes its own link target. `32` §5's "separate editors
+        #    or one Editor" is this field: every folder named here links an executable of its own name from
+        #    one shared set of archives. A StaticLibrary ignores it and archives its whole tree.
+        $Subject = @()
+
+        if ($Content -match '(?ms)^\[unit\].*?^subject\s*=\s*\[(.*?)\]')
+        {
+            $Subject = [regex]::Matches($Matches[1], '"([^"]+)"') | ForEach-Object { $_.Groups[1].Value }
+        }
+
+        $Linked = @()
+
+        if ($Content -match '(?ms)^\[link\].*?^unit\s*=\s*\[(.*?)\]')
+        {
+            $Linked = [regex]::Matches($Matches[1], '"([^"]+)"') | ForEach-Object { $_.Groups[1].Value }
+        }
+
+        $Declared[$UnitName] = @{
+            Name     = $UnitName
+            Product  = $Product
+            Subject  = @($Subject)
+            Requires = @($Linked)
+            Root     = $UnitRoot
+        }
+    }
+
+    return $Declared
+}
+
+# 🔴 Kahn's algorithm, so a cycle is reported as a cycle rather than as a stack overflow or an arbitrary
+#    order. An unknown unit is refused here too: naming an archive that no manifest declares would reach
+#    link.exe as a missing file, which names the path and not the declaration that asked for it.
+function Resolve-TranslationOrder([hashtable] $Declared)
+{
+    $Remaining = @{}
+    $Ordered   = New-Object System.Collections.Generic.List[hashtable]
+
+    foreach ($UnitName in $Declared.Keys)
+    {
+        foreach ($Required in $Declared[$UnitName].Requires)
+        {
+            if (-not $Declared.ContainsKey($Required))
+            {
+                throw "$UnitName links $Required, which declares no Module.toml"
+            }
+        }
+
+        $Remaining[$UnitName] = [System.Collections.Generic.HashSet[string]]::new(
+            [string[]] $Declared[$UnitName].Requires)
+    }
+
+    while ($Remaining.Count -gt 0)
+    {
+        # 📝 Sorted so the order is reproducible. Two units with no remaining dependency are equally valid
+        #    at this position, and an unsorted pass would translate them in hashtable order — which differs
+        #    between runs and turns a reproducible build into an almost-reproducible one.
+        $Ready = @($Remaining.Keys | Where-Object { $Remaining[$_].Count -eq 0 } | Sort-Object)
+
+        if ($Ready.Count -eq 0)
+        {
+            $Stuck = ($Remaining.Keys | Sort-Object) -join ', '
+            throw "the unit graph holds a cycle among: $Stuck"
+        }
+
+        foreach ($UnitName in $Ready)
+        {
+            $Ordered.Add($Declared[$UnitName])
+            $Remaining.Remove($UnitName)
+        }
+
+        foreach ($UnitName in @($Remaining.Keys))
+        {
+            foreach ($Settled in $Ready)
+            {
+                [void] $Remaining[$UnitName].Remove($Settled)
+            }
+        }
+    }
+
+    return $Ordered.ToArray()
+}
+
+# 🔴 A subject declared twice would have one host's objects overwrite the other's in a shared folder, and
+#    both would compile. Refused here rather than discovered as a host that runs the wrong main().
+function Test-SubjectUniqueness([hashtable] $Declared)
+{
+    $Seen = @{}
+
+    foreach ($UnitName in ($Declared.Keys | Sort-Object))
+    {
+        foreach ($Subject in $Declared[$UnitName].Subject)
+        {
+            if ($Seen.ContainsKey($Subject))
+            {
+                throw "subject $Subject is declared by both $($Seen[$Subject]) and $UnitName"
+            }
+
+            $Seen[$Subject] = $UnitName
+        }
+    }
+}
+
+$DeclaredUnits = Read-UnitGraph
+Test-SubjectUniqueness $DeclaredUnits
+$UnitOrder = Resolve-TranslationOrder $DeclaredUnits
 
 #---
 #                                       TOOLCHAIN ACQUISITION
