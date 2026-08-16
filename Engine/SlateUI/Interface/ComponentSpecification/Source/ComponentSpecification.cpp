@@ -1,5 +1,5 @@
 //============================================================================================================================================
-//                                                            COMPONENTSPECIFICATION.CPP
+//                                                         COMPONENTSPECIFICATION.CPP
 //============================================================================================================================================
 // 🧩 The eight controls, arranged and recorded from the sheet's own figures, arbitrated against the ledger's one seizure.
 

@@ -1,5 +1,5 @@
 //============================================================================================================================================
-//                                                             COMPONENTSPECIFICATION.H
+//                                                          COMPONENTSPECIFICATION.H
 //============================================================================================================================================
 // 🧩 The eight declared controls — one contact arbitrated across them, one appearance read, and not one datum owned.
 
