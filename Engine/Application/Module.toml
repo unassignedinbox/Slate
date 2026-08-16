@@ -1,0 +1,25 @@
+# Application — the host executables.
+# ConsoleHost compiles with main() and runs headless.
+
+[unit]
+name    = "Application"
+product = "Executable"
+subject = [ "ConsoleHost", "PaintHost", "EditorHost", "InterfaceValidationHost" ]
+
+# 📝 The host links every unit, so it is the one target where the whole DAG is realised at once. The link
+#    order below is the reverse of the dependency order, which is what the linker resolves against.
+[requires]
+unit = [ "SlateUI", "SlateCompute", "SlateVulkan", "SlateDocument", "SlateMath" ]
+
+[external]
+include = [ "$VULKAN_SDK/Include", "ExternalPackages/glfw/include" ]
+declare = []
+
+# 📝 🔴 glfw3.dll is copied beside the executable rather than being found on PATH. glfw3dll.lib is an
+#    import library; without the dynamic library beside the host, the process fails to start rather than
+#    reporting anything a reader could act on.
+# 📝 gdi32.lib carries the display-density read `04` §2 performs. It is the one platform import library
+#    named here that the operating system does not supply by default.
+[link]
+library = [ "$VULKAN_SDK/Lib/vulkan-1.lib", "ExternalPackages/glfw/lib-vc2022/glfw3dll.lib", "gdi32.lib" ]
+carry   = [ "ExternalPackages/glfw/lib-vc2022/glfw3.dll" ]
