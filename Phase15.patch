@@ -1,0 +1,2826 @@
+diff --git a/Engine/Application/ConsoleHost/Source/ConsoleHost.cpp b/Engine/Application/ConsoleHost/Source/ConsoleHost.cpp
+index ad9003e..bb6b2bd 100644
+--- a/Engine/Application/ConsoleHost/Source/ConsoleHost.cpp
++++ b/Engine/Application/ConsoleHost/Source/ConsoleHost.cpp
+@@ -828,7 +828,7 @@ void VerifyProperties()
+     Albedo.Defaulted.ColourHeld.BlueCoordinate  = 0.5;
+     Albedo.Defaulted.ColourHeld.SpaceIdentity   = Slate::WorkingSpaceIdentity;
+ 
+-    Properties.Declare(Albedo);
++    Disregard(Properties.Declare(Albedo));
+ 
+     Slate::PropertyValue Spaceless;
+     Spaceless.Measured                  = Slate::PropertyMeasure::Colour;
+@@ -850,7 +850,7 @@ void VerifyProperties()
+         && !Properties.Resolve("Absent").ContentPresent,
+            "[-] nothing declares it");
+ 
+-    Properties.Reclaim("Roughness");
++    Disregard(Properties.Reclaim("Roughness"));
+ 
+     Report("Reclamation restores the default",
+            Properties.Resolve("Roughness").Resolve().MagnitudeHeld == 0.5
+@@ -885,7 +885,7 @@ void VerifyDocument()
+            Population.Resolve(Enrolled),
+            "[-] the generation still occupies the slot");
+ 
+-    Population.Withdraw(Enrolled);
++    Disregard(Population.Withdraw(Enrolled));
+ 
+     Report("Withdrawal advances the generation",
+            !Population.Resolve(Enrolled),
+@@ -913,7 +913,7 @@ void VerifyDocument()
+            !Revisions.Open("", "PaintStroke").ContentPresent,
+            "[-] one transaction is open at a time");
+ 
+-    Revisions.Seal(1000000000ull, false);
++    Disregard(Revisions.Seal(1000000000ull, false));
+ 
+     Report("A sealed transaction enters", Revisions.Committed().size() == 1u, "[-] exactly one");
+ 
+@@ -1217,7 +1217,7 @@ void VerifyParity()
+     UncomparedEntry.EntryName = "ProjectOutlineCoverage";
+     UncomparedEntry.Claimed   = Slate::PrecisionGuarantee::Bounded;
+ 
+-    VacantRunner.Register(UncomparedEntry);
++    Disregard(VacantRunner.Register(UncomparedEntry));
+     VacantRunner.Compare();
+ 
+     Report("An uncompared entry point does not hold",
+@@ -1259,8 +1259,8 @@ void VerifyAtmosphere()
+            !Atmosphere.DeclareMedium(Sizeless).ContentPresent,
+            "[-] the tent must stand somewhere");
+ 
+-    Atmosphere.DeclareSun(0.0, 0.3, -0.95);
+-    Atmosphere.DeclareCameraAltitude(1000.0);
++    Disregard(Atmosphere.DeclareSun(0.0, 0.3, -0.95));
++    Disregard(Atmosphere.DeclareCameraAltitude(1000.0));
+ 
+     Report("A rebuild is owed",
+            Atmosphere.RebuildOwed(),
+@@ -1279,13 +1279,13 @@ void VerifyAtmosphere()
+         && Atmosphere.MediumRebuildCount() == 1u,
+            "[-] the count is the proof, not the words");
+ 
+-    Atmosphere.DeclareSun(0.0, 0.3000001, -0.95);
++    Disregard(Atmosphere.DeclareSun(0.0, 0.3000001, -0.95));
+ 
+     Report("An immaterial sun move rebuilds nothing",
+            !Atmosphere.RebuildOwed(),
+            "[-] below `SunDirectionMateriality`");
+ 
+-    Atmosphere.DeclareSun(0.0, 1.0, 0.0);
++    Disregard(Atmosphere.DeclareSun(0.0, 1.0, 0.0));
+ 
+     Report("A material sun move owes ③ alone",
+            Atmosphere.RebuildOwed()
+@@ -1303,8 +1303,8 @@ void VerifyAtmosphere()
+     double AfterGreen  = 0.0;
+     double AfterBlue   = 0.0;
+ 
+-    Atmosphere.SampleSkyView(std::cos(Seam), 0.1, std::sin(Seam), BeforeRed, BeforeGreen, BeforeBlue);
+-    Atmosphere.SampleSkyView(std::cos(-Seam), 0.1, std::sin(-Seam), AfterRed, AfterGreen, AfterBlue);
++    Disregard(Atmosphere.SampleSkyView(std::cos(Seam), 0.1, std::sin(Seam), BeforeRed, BeforeGreen, BeforeBlue));
++    Disregard(Atmosphere.SampleSkyView(std::cos(-Seam), 0.1, std::sin(-Seam), AfterRed, AfterGreen, AfterBlue));
+ 
+     Report("The azimuth wrap carries no seam",
+            std::fabs(BeforeRed - AfterRed) < 1.0e-3,
+@@ -1314,7 +1314,7 @@ void VerifyAtmosphere()
+     double OccludedGreen = 0.0;
+     double OccludedBlue  = 0.0;
+ 
+-    Atmosphere.SampleTransmittance(0.0, -1.0, OccludedRed, OccludedGreen, OccludedBlue);
++    Disregard(Atmosphere.SampleTransmittance(0.0, -1.0, OccludedRed, OccludedGreen, OccludedBlue));
+ 
+     Report("The sun below the horizon is occluded",
+            OccludedRed == 0.0,
+@@ -1324,7 +1324,7 @@ void VerifyAtmosphere()
+     double ZenithGreen = 0.0;
+     double ZenithBlue  = 0.0;
+ 
+-    Atmosphere.SampleTransmittance(0.0, 1.0, ZenithRed, ZenithGreen, ZenithBlue);
++    Disregard(Atmosphere.SampleTransmittance(0.0, 1.0, ZenithRed, ZenithGreen, ZenithBlue));
+ 
+     std::printf("  🔍 zenith %.9f %.9f %.9f | rayleigh %.6e %.6e %.6e | ozone %.6e %.6e %.6e | mie %.6e\n",
+                 ZenithRed, ZenithGreen, ZenithBlue,
+@@ -1356,13 +1356,13 @@ void VerifyAtmosphere()
+     Floor.RedCoordinate = 0.02;
+     Floor.SpaceIdentity = Slate::WorkingSpaceIdentity;
+ 
+-    Atmosphere.DeclareConstantFloor(Floor);
++    Disregard(Atmosphere.DeclareConstantFloor(Floor));
+ 
+     double FloorRed   = 0.0;
+     double FloorGreen = 0.0;
+     double FloorBlue  = 0.0;
+ 
+-    Atmosphere.SampleSkyView(0.0, 1.0, 0.0, FloorRed, FloorGreen, FloorBlue);
++    Disregard(Atmosphere.SampleSkyView(0.0, 1.0, 0.0, FloorRed, FloorGreen, FloorBlue));
+ 
+     Report("A disabled atmosphere resolves to the floor",
+            FloorRed == 0.02,
+@@ -1390,14 +1390,14 @@ void VerifyTopology()
+     Positions[4].PositionX = 1.0;  Positions[4].PositionY = 0.0;   // duplicate of vertex 1
+     Positions[5].PositionX = 2.0;  Positions[5].PositionY = 0.0;
+ 
+-    Imported.DeclarePositions(Positions);
++    Disregard(Imported.DeclarePositions(Positions));
+ 
+     Report("A run of two corners is refused",
+            !Imported.DeclareFace({ 0u, 1u }).ContentPresent,
+            "[-] fewer than three corners is not a face");
+ 
+-    Imported.DeclareFace({ 0u, 1u, 2u, 3u });
+-    Imported.DeclareFace({ 4u, 5u, 2u });
++    Disregard(Imported.DeclareFace({ 0u, 1u, 2u, 3u }));
++    Disregard(Imported.DeclareFace({ 4u, 5u, 2u }));
+ 
+     Report("An unsealed topology refuses conditioning",
+            !Slate::TopologyConditioning{}.Condition(Imported).ContentPresent,
+@@ -1519,7 +1519,7 @@ void VerifyMaterials()
+     Slate::ChannelSpecification Sheen = Occlusion;
+     Sheen.Source = Slate::ChannelSource::Layered;
+ 
+-    Amending->DeclareChannel(Slate::ChannelSubject::SheenRoughness, Sheen);
++    Disregard(Amending->DeclareChannel(Slate::ChannelSubject::SheenRoughness, Sheen));
+     Amending->DeclareReflectance(Slate::ReflectanceSelection::Standard);
+ 
+     Report("An unconsumed channel is not sampled",
+@@ -1798,8 +1798,8 @@ void VerifyCamera()
+     Distant.Placement.Translation.PositionZ = 10.0;
+ 
+     Slate::CameraProjection DistantCamera;
+-    DistantCamera.Declare(CameraOccupant, Distant);
+-    DistantCamera.Reconcile();
++    Disregard(DistantCamera.Declare(CameraOccupant, Distant));
++    Disregard(DistantCamera.Reconcile());
+ 
+     Slate::DocumentPosition DistantLeast;
+     DistantLeast.PositionX = 1.0e9 - 1.0;  DistantLeast.PositionY = -1.0;  DistantLeast.PositionZ = -1.0;
+@@ -1822,7 +1822,7 @@ void VerifyCamera()
+            "[-] one gesture at a time");
+ 
+     for (std::uint32_t Ordinal = 0u; Ordinal < 50u; ++Ordinal)
+-        Navigating.Amend(4.0, 0.0);
++        Disregard(Navigating.Amend(4.0, 0.0));
+ 
+     const Slate::Deliver<Slate::CameraSpecification> Sealed = Navigating.Seal();
+ 
+@@ -1837,8 +1837,8 @@ void VerifyCamera()
+     Report("A gesture Seals once", !Navigating.GestureOpen(), "[-] and nothing between Open and Seal recorded");
+ 
+     Slate::NavigationSequence Abandoning;
+-    Abandoning.Open(Slate::NavigationSubject::Pan, Declaring);
+-    Abandoning.Amend(100.0, 100.0);
++    Disregard(Abandoning.Open(Slate::NavigationSubject::Pan, Declaring));
++    Disregard(Abandoning.Amend(100.0, 100.0));
+ 
+     const Slate::Deliver<Slate::CameraSpecification> Restored = Abandoning.Abandon();
+ 
+@@ -1945,7 +1945,7 @@ void VerifyIlluminants()
+     Warm.TemperatureDeclared             = true;
+     Warm.Temperature                     = 5600.0;
+ 
+-    Illuminants.Declare(ThirdOccupant, Warm);
++    Disregard(Illuminants.Declare(ThirdOccupant, Warm));
+ 
+     Report("A temperature is retained as authored",
+            Illuminants.Resolve(ThirdOccupant).Resolve().Temperature == 5600.0,
+@@ -1985,7 +1985,7 @@ void VerifyIlluminants()
+ 
+     Slate::IlluminantSpecification Brighter = Declaring;
+     Brighter.RadiantIntensity               = 40.0;
+-    Illuminants.Amend(FirstOccupant, Brighter);
++    Disregard(Illuminants.Amend(FirstOccupant, Brighter));
+ 
+     Slate::IlluminantIndex Reach;
+ 
+@@ -2045,12 +2045,12 @@ void VerifySubdivision()
+     Positions[2].PositionX =  1.0;  Positions[2].PositionY =  1.0;
+     Positions[3].PositionX = -1.0;  Positions[3].PositionY =  1.0;
+ 
+-    Imported.DeclarePositions(Positions);
+-    Imported.DeclareFace({ 0u, 1u, 2u, 3u });
+-    Imported.Seal();
++    Disregard(Imported.DeclarePositions(Positions));
++    Disregard(Imported.DeclareFace({ 0u, 1u, 2u, 3u }));
++    Disregard(Imported.Seal());
+ 
+     Slate::TopologyConditioning Conditioned;
+-    Conditioned.Condition(Imported);
++    Disregard(Conditioned.Condition(Imported));
+ 
+     Slate::BoundingStructure Inner;
+ 
+@@ -2061,9 +2061,9 @@ void VerifySubdivision()
+     // 🔴 The revision gate: a conditioning describing a different seal indexes faces that have moved. A second
+     //    topology, sealed separately — not the same one resealed, which is idempotent and issues nothing.
+     Slate::TopologyStructure Reimported;
+-    Reimported.DeclarePositions(Positions);
+-    Reimported.DeclareFace({ 0u, 1u, 2u });
+-    Reimported.Seal();
++    Disregard(Reimported.DeclarePositions(Positions));
++    Disregard(Reimported.DeclareFace({ 0u, 1u, 2u }));
++    Disregard(Reimported.Seal());
+ 
+     Slate::BoundingStructure Mismatched;
+ 
+@@ -2118,7 +2118,7 @@ void VerifySubdivision()
+            !Outer.Admit(Slate::AdmittedOccupant{}).ContentPresent,
+            "[-] an undeclared identity occupies nothing");
+ 
+-    Outer.Construct();
++    Disregard(Outer.Construct());
+ 
+     Report("Construction discharges the debt", !Outer.ConstructionOwed(), "[-] the shape is current");
+ 
+@@ -2134,20 +2134,20 @@ void VerifySubdivision()
+            "[mm] `78`'s manipulator plane reads this");
+ 
+     // 🔴 `40` §3: exclusion is tested before descent, so a locked occupant is never traversed at all.
+-    Subsets.Enrol(Admitting.Occupant, Slate::SubsetSubject::Lock);
++    Disregard(Subsets.Enrol(Admitting.Occupant, Slate::SubsetSubject::Lock));
+ 
+     Report("A locked occupant is not traversed",
+            !Outer.IntersectRay(RayOrigin, 0.0, 0.0, -1.0, Subsets).Resolved,
+            "[-] excluded before descent, never after");
+ 
+-    Subsets.Unenrol(Admitting.Occupant, Slate::SubsetSubject::Lock);
+-    Subsets.Enrol(Admitting.Occupant, Slate::SubsetSubject::VisibilityExclusion);
++    Disregard(Subsets.Unenrol(Admitting.Occupant, Slate::SubsetSubject::Lock));
++    Disregard(Subsets.Enrol(Admitting.Occupant, Slate::SubsetSubject::VisibilityExclusion));
+ 
+     Report("A hidden occupant is not traversed",
+            !Outer.IntersectRay(RayOrigin, 0.0, 0.0, -1.0, Subsets).Resolved,
+            "[-] the same test, the same cost");
+ 
+-    Subsets.Unenrol(Admitting.Occupant, Slate::SubsetSubject::VisibilityExclusion);
++    Disregard(Subsets.Unenrol(Admitting.Occupant, Slate::SubsetSubject::VisibilityExclusion));
+ 
+     // 🔴 The property the two levels exist for: an occupant move is a refit, and the inner structure is untouched.
+     Slate::DecomposedTransform Moved;
+@@ -2201,9 +2201,9 @@ void VerifySubdivision()
+     Report("A locked occupant is absent from a marquee",
+            [&]
+            {
+-               Subsets.Enrol(Admitting.Occupant, Slate::SubsetSubject::Lock);
++               Disregard(Subsets.Enrol(Admitting.Occupant, Slate::SubsetSubject::Lock));
+                const bool Empty = Outer.IntersectExtent(Marquee, false, Subsets).empty();
+-               Subsets.Unenrol(Admitting.Occupant, Slate::SubsetSubject::Lock);
++               Disregard(Subsets.Unenrol(Admitting.Occupant, Slate::SubsetSubject::Lock));
+                return Empty;
+            }(),
+            "[-] the same exclusion, the same place");
+@@ -2272,7 +2272,7 @@ void VerifyPartition()
+         }
+     }
+ 
+-    Imported.DeclarePositions(Positions);
++    Disregard(Imported.DeclarePositions(Positions));
+ 
+     for (std::uint32_t Across = 0u; Across < 3u; ++Across)
+     {
+@@ -2280,14 +2280,14 @@ void VerifyPartition()
+         {
+             const std::uint32_t Corner = Across * 4u + Along;
+ 
+-            Imported.DeclareFace({ Corner, Corner + 1u, Corner + 5u, Corner + 4u });
++            Disregard(Imported.DeclareFace({ Corner, Corner + 1u, Corner + 5u, Corner + 4u }));
+         }
+     }
+ 
+-    Imported.Seal();
++    Disregard(Imported.Seal());
+ 
+     Slate::TopologyConditioning Conditioned;
+-    Conditioned.Condition(Imported);
++    Disregard(Conditioned.Condition(Imported));
+ 
+     Slate::SeamSpecification Seams;
+ 
+@@ -2344,9 +2344,9 @@ void VerifyPartition()
+            "[-] area and angle, never one number for both");
+ 
+     // 🔴 The seam is what cuts, and it is over welded positions rather than imported vertices.
+-    Seams.DeclareAuthored(1u, 5u);
+-    Seams.DeclareAuthored(5u, 9u);
+-    Seams.DeclareAuthored(9u, 13u);
++    Disregard(Seams.DeclareAuthored(1u, 5u));
++    Disregard(Seams.DeclareAuthored(5u, 9u));
++    Disregard(Seams.DeclareAuthored(9u, 13u));
+ 
+     const Slate::Deliver<Slate::DerivedPartition> Cut =
+         Slate::Derive(Imported, Conditioned, Seams, Declaring, Posed, Progressed);
+@@ -2371,7 +2371,7 @@ void VerifyPartition()
+            "[-] what `24` §3 keys on and `20` promotes against");
+ 
+     const std::uint64_t BeforeSecond = Standing.Revision();
+-    Standing.Adopt(Derived.Resolve());
++    Disregard(Standing.Adopt(Derived.Resolve()));
+ 
+     Report("A re-partition advances it again",
+            Standing.Revision() > BeforeSecond,
+@@ -2458,7 +2458,7 @@ void VerifyPartition()
+            [&]
+            {
+                Slate::DomainSpace Repeated;
+-               Repeated.Arrange(Extents, true);
++               Disregard(Repeated.Arrange(Extents, true));
+                return Repeated.SettledScale() == Arranged.SettledScale();
+            }(),
+            "[-] bit for bit; the shelf order is scale-invariant");
+@@ -2561,7 +2561,7 @@ void VerifyIntake()
+     Scaled.UnitScaleDeclared      = true;
+ 
+     Slate::TopologyStructure ScaledInto;
+-    Interchange.IntakeTopology(Scaled, ScaledInto, Recorded);
++    Disregard(Interchange.IntakeTopology(Scaled, ScaledInto, Recorded));
+ 
+     Report("Unit scale is applied once, at intake",
+            ScaledInto.Positions()[1].PositionX == 10.0,
+@@ -2622,7 +2622,7 @@ void VerifyIntake()
+     Albedo.ConstantColour.SpaceIdentity = Slate::WorkingSpaceIdentity;
+     Albedo.DefaultColour.SpaceIdentity  = Slate::WorkingSpaceIdentity;
+ 
+-    Materials.Amend(MaterialOrdinal).Resolve()->DeclareChannel(Slate::ChannelSubject::AlbedoColour, Albedo);
++    Disregard(Materials.Amend(MaterialOrdinal).Resolve()->DeclareChannel(Slate::ChannelSubject::AlbedoColour, Albedo));
+ 
+     Slate::EmissionSpecification Emitting;
+ 
+@@ -2689,7 +2689,7 @@ void VerifyIntake()
+     Refusing.UnsupportedNamed.push_back("animation track");
+ 
+     Slate::TopologyStructure RefusingInto;
+-    Interchange.IntakeTopology(Refusing, RefusingInto, Recorded);
++    Disregard(Interchange.IntakeTopology(Refusing, RefusingInto, Recorded));
+ 
+     Report("An unsupported construct is named at intake",
+            Interchange.Unsupported().size() == 1u,
+@@ -2768,9 +2768,9 @@ void VerifyStroke()
+     Shape.Source  = Slate::ShapeSource::Analytic;
+     Shape.Profile = Slate::ProfileSubject::Linear;
+ 
+-    Brush.DeclareShape(Shape);
+-    Brush.DeclareExtent(0.1);
+-    Brush.DeclareSpacing(0.25);
++    Disregard(Brush.DeclareShape(Shape));
++    Disregard(Brush.DeclareExtent(0.1));
++    Disregard(Brush.DeclareSpacing(0.25));
+ 
+     Slate::BrushChannelValue Albedo;
+     Albedo.Channel                     = Slate::ChannelSubject::AlbedoColour;
+@@ -2827,7 +2827,7 @@ void VerifyStroke()
+     Beginning.PositionAcross        = 0.5;
+     Beginning.Arriving.Arrival      = StrokeTimeline.Advance();
+ 
+-    Stroke.Amend(Beginning);
++    Disregard(Stroke.Amend(Beginning));
+ 
+     Report("The first arrival places an impression",
+            Stroke.ImpressionCount() == 1u,
+@@ -2837,7 +2837,7 @@ void VerifyStroke()
+     Ending.PositionAlong        = 0.7;
+     Ending.Arriving.Arrival     = StrokeTimeline.Advance();
+ 
+-    Stroke.Amend(Ending);
++    Disregard(Stroke.Amend(Ending));
+ 
+     Report("The path resamples at the brush's spacing",
+            Stroke.ImpressionCount() == 17u,
+@@ -2855,14 +2855,14 @@ void VerifyStroke()
+     Left.SurfaceResolved   = false;
+     Left.Arriving.Arrival  = StrokeTimeline.Advance();
+ 
+-    Stroke.Amend(Left);
++    Disregard(Stroke.Amend(Left));
+ 
+     Slate::StrokeArrival Returned = Beginning;
+     Returned.PositionAlong        = 0.1;
+     Returned.PositionAcross       = 0.1;
+     Returned.Arriving.Arrival     = StrokeTimeline.Advance();
+ 
+-    Stroke.Amend(Returned);
++    Disregard(Stroke.Amend(Returned));
+ 
+     Report("A broken path interpolates nothing",
+            Stroke.ImpressionCount() == BeforeBreak,
+@@ -2937,8 +2937,8 @@ void VerifyStroke()
+ 
+     Slate::ImpressionSequence Deferred;
+ 
+-    Deferred.Open(Deferring, Brush);
+-    Deferred.Amend(Beginning);
++    Disregard(Deferred.Open(Deferring, Brush));
++    Disregard(Deferred.Amend(Beginning));
+ 
+     const std::uint64_t DemandedBefore = Requesting.RecordedCount();
+ 
+@@ -2969,9 +2969,9 @@ void VerifyStroke()
+ 
+     Slate::ImpressionSequence Preview;
+ 
+-    Preview.Open(Previewing, Brush);
+-    Preview.Amend(Beginning);
+-    Preview.Resolve(Residency, Requesting, 3u);
++    Disregard(Preview.Open(Previewing, Brush));
++    Disregard(Preview.Amend(Beginning));
++    Disregard(Preview.Resolve(Residency, Requesting, 3u));
+ 
+     Report("A speculative extent pins nothing",
+            Preview.Accumulation().ClaimedCount() != 0u && Residency.Cells().UncommittedCount() == 0u,
+@@ -3006,8 +3006,8 @@ void VerifyPointer()
+     Positions[2].PositionX =  1.0;  Positions[2].PositionY =  1.0;
+     Positions[3].PositionX = -1.0;  Positions[3].PositionY =  1.0;
+ 
+-    Imported.DeclarePositions(Positions);
+-    Imported.DeclareFace({ 0u, 1u, 2u, 3u });
++    Disregard(Imported.DeclarePositions(Positions));
++    Disregard(Imported.DeclareFace({ 0u, 1u, 2u, 3u }));
+ 
+     std::vector<Slate::DomainCoordinate> Coordinates(4);
+     Coordinates[0].CoordinateAlong = 0.0f;  Coordinates[0].CoordinateAcross = 0.0f;
+@@ -3015,14 +3015,14 @@ void VerifyPointer()
+     Coordinates[2].CoordinateAlong = 1.0f;  Coordinates[2].CoordinateAcross = 1.0f;
+     Coordinates[3].CoordinateAlong = 0.0f;  Coordinates[3].CoordinateAcross = 1.0f;
+ 
+-    Imported.DeclareCoordinates(Coordinates);
+-    Imported.Seal();
++    Disregard(Imported.DeclareCoordinates(Coordinates));
++    Disregard(Imported.Seal());
+ 
+     Slate::TopologyConditioning Conditioned;
+-    Conditioned.Condition(Imported);
++    Disregard(Conditioned.Condition(Imported));
+ 
+     Slate::BoundingStructure Inner;
+-    Inner.Construct(Imported, Conditioned);
++    Disregard(Inner.Construct(Imported, Conditioned));
+ 
+     Slate::OccupantIdentity Subject;
+     Subject.SlotOrdinal    = 5u;
+@@ -3034,8 +3034,8 @@ void VerifyPointer()
+     Admitting.Extent   = Inner.Extent();
+ 
+     Slate::OctantSpace Outer;
+-    Outer.Admit(Admitting);
+-    Outer.Construct();
++    Disregard(Outer.Admit(Admitting));
++    Disregard(Outer.Construct());
+ 
+     Report("The subdivision surrenders its record",
+            Outer.Standing(Subject).ContentPresent
+@@ -3052,13 +3052,13 @@ void VerifyPointer()
+     CameraOccupant.SlotOrdinal    = 3u;
+     CameraOccupant.SlotGeneration = 1u;
+ 
+-    Camera.Declare(CameraOccupant, Declaring);
++    Disregard(Camera.Declare(CameraOccupant, Declaring));
+ 
+     Report("An unreconciled camera refuses a ray",
+            !Slate::ProjectPointerRay(Camera, 256.0, 256.0, 512u, 512u).ContentPresent,
+            "[-] the standing projection is stale");
+ 
+-    Camera.Reconcile();
++    Disregard(Camera.Reconcile());
+ 
+     const Slate::Deliver<Slate::ProjectedRay> Centred =
+         Slate::ProjectPointerRay(Camera, 256.0, 256.0, 512u, 512u);
+@@ -3117,7 +3117,7 @@ void VerifyPointer()
+     Placing.PlacingTransform.ScaleX                = 0.4;
+     Placing.PlacingTransform.ScaleY                = 0.4;
+ 
+-    Declared.Declare(Placing);
++    Disregard(Declared.Declare(Placing));
+ 
+     const Slate::ResolvedPointer Met =
+         Picking.Resolve(Centred.Resolve(), Outer, Subsets, Declared);
+@@ -3172,14 +3172,14 @@ void VerifyPointer()
+            Cornered.empty(),
+            "[-] classified exactly against the six planes, not against the bound");
+ 
+-    Subsets.Enrol(Subject, Slate::SubsetSubject::Lock);
++    Disregard(Subsets.Enrol(Subject, Slate::SubsetSubject::Lock));
+ 
+     Report("A locked occupant is neither picked nor enrolled",
+            !Picking.Resolve(Centred.Resolve(), Outer, Subsets, Declared).Resolved
+         && Picking.ResolveExtent(Camera, 0.0, 0.0, 512.0, 512.0, 512u, 512u, false, Outer, Subsets).empty(),
+            "[-] excluded before descent — `40` §3");
+ 
+-    Subsets.Unenrol(Subject, Slate::SubsetSubject::Lock);
++    Disregard(Subsets.Unenrol(Subject, Slate::SubsetSubject::Lock));
+ 
+     Report("Withdrawal removes the sources",
+            Picking.Withdraw(Subject).ContentPresent && Picking.AdmittedCount() == 0u,
+@@ -3213,7 +3213,7 @@ void VerifyTools()
+     Strength.Defaulted.Measured       = Slate::PropertyMeasure::Magnitude;
+     Strength.Defaulted.MagnitudeHeld  = 1.0;
+ 
+-    Painting.Parameters.Declare(Strength);
++    Disregard(Painting.Parameters.Declare(Strength));
+ 
+     const Slate::Deliver<std::uint32_t> Declared = Held.Tools().Declare(Painting);
+ 
+diff --git a/Engine/Application/EditorHost/Source/EditorHost.cpp b/Engine/Application/EditorHost/Source/EditorHost.cpp
+index b80cada..689c6f2 100644
+--- a/Engine/Application/EditorHost/Source/EditorHost.cpp
++++ b/Engine/Application/EditorHost/Source/EditorHost.cpp
+@@ -115,7 +115,11 @@ int main()
+         if (Lifetime.DisplayRecovered())
+         {
+             const DeviceOffering Offered = Lifetime.Offering();
+-            Viewport.Renegotiate(Offered.MinimumDisplayImageCount, Offered.DisplayImageCount);
++            // 🔴 Read, not discarded. An interface still holding the previous image counts records
++            //    against a chain depth that no longer exists, and the vendor reports that as a
++            //    descriptor mismatch several ticks later rather than as the resize that caused it.
++            if (!Viewport.Renegotiate(Offered.MinimumDisplayImageCount, Offered.DisplayImageCount))
++                std::printf("%s \u2014 the interface declined the restated image counts\n", HostName);
+         }
+ 
+         if (Pass.Standing != TickStanding::Recording)
+@@ -130,13 +134,20 @@ int main()
+             Viewport.DrawerPanels();
+ 
+             if (Viewport.SealPanels().ContentPresent)
+-                Viewport.Record(Pass.Recording);
++            {
++                // 🔴 Read. A refused Record presents the cleared ground with nothing on it, which is
++                //    indistinguishable from a panel that drew nothing — so the refusal is named here.
++                if (!Viewport.Record(Pass.Recording))
++                    std::printf("%s \u2014 the interface content was not recorded\n", HostName);
++            }
+             else
+-                Viewport.Abandon();
++            {
++                Disregard(Viewport.Abandon());
++            }
+         }
+         else
+         {
+-            Viewport.Abandon();
++            Disregard(Viewport.Abandon());
+         }
+ 
+         // ⑤ Close the scope, submit, present, advance. A refused present re-establishes the chain rather
+diff --git a/Engine/Application/InterfaceValidationHost/Source/InterfaceValidationHost.cpp b/Engine/Application/InterfaceValidationHost/Source/InterfaceValidationHost.cpp
+index cc7c46e..dfe46fc 100644
+--- a/Engine/Application/InterfaceValidationHost/Source/InterfaceValidationHost.cpp
++++ b/Engine/Application/InterfaceValidationHost/Source/InterfaceValidationHost.cpp
+@@ -379,7 +379,11 @@ int main()
+         if (Lifetime.DisplayRecovered())
+         {
+             const DeviceOffering Offered = Lifetime.Offering();
+-            Interface.Renegotiate(Offered.MinimumDisplayImageCount, Offered.DisplayImageCount);
++            // 🔴 Read, not discarded. An interface still holding the previous image counts records
++            //    against a chain depth that no longer exists, and the vendor reports that as a
++            //    descriptor mismatch several ticks later rather than as the resize that caused it.
++            if (!Interface.Renegotiate(Offered.MinimumDisplayImageCount, Offered.DisplayImageCount))
++                std::printf("%s \u2014 the interface declined the restated image counts\n", HostName);
+         }
+ 
+         if (Pass.Standing != TickStanding::Recording)
+@@ -394,7 +398,7 @@ int main()
+ 
+         if (ContentBuilt && !Surface.Adopt().ContentPresent)
+         {
+-            Interface.Abandon();
++            Disregard(Interface.Abandon());
+             ContentBuilt = false;
+         }
+ 
+@@ -585,9 +589,16 @@ int main()
+ 
+             // ⑫ Seal the tick and record it into the recording Await opened.
+             if (Interface.Seal().ContentPresent)
+-                Interface.Record(Pass.Recording);
++            {
++                // 🔴 Read. A refused Record presents the cleared ground with nothing on it, which is
++                //    indistinguishable from a panel that drew nothing — so the refusal is named here.
++                if (!Interface.Record(Pass.Recording))
++                    std::printf("%s \u2014 the interface content was not recorded\n", HostName);
++            }
+             else
+-                Interface.Abandon();
++            {
++                Disregard(Interface.Abandon());
++            }
+         }
+ 
+         // ⑬ Close the scope, submit, present, advance. A refused present re-establishes the chain rather
+diff --git a/Engine/Application/PaintHost/Source/PaintHost.cpp b/Engine/Application/PaintHost/Source/PaintHost.cpp
+index 93fe41a..14dae16 100644
+--- a/Engine/Application/PaintHost/Source/PaintHost.cpp
++++ b/Engine/Application/PaintHost/Source/PaintHost.cpp
+@@ -115,7 +115,11 @@ int main()
+         if (Lifetime.DisplayRecovered())
+         {
+             const DeviceOffering Offered = Lifetime.Offering();
+-            Viewport.Renegotiate(Offered.MinimumDisplayImageCount, Offered.DisplayImageCount);
++            // 🔴 Read, not discarded. An interface still holding the previous image counts records
++            //    against a chain depth that no longer exists, and the vendor reports that as a
++            //    descriptor mismatch several ticks later rather than as the resize that caused it.
++            if (!Viewport.Renegotiate(Offered.MinimumDisplayImageCount, Offered.DisplayImageCount))
++                std::printf("%s \u2014 the interface declined the restated image counts\n", HostName);
+         }
+ 
+         if (Pass.Standing != TickStanding::Recording)
+@@ -130,13 +134,20 @@ int main()
+             Viewport.DrawerPanels();
+ 
+             if (Viewport.SealPanels().ContentPresent)
+-                Viewport.Record(Pass.Recording);
++            {
++                // 🔴 Read. A refused Record presents the cleared ground with nothing on it, which is
++                //    indistinguishable from a panel that drew nothing — so the refusal is named here.
++                if (!Viewport.Record(Pass.Recording))
++                    std::printf("%s \u2014 the interface content was not recorded\n", HostName);
++            }
+             else
+-                Viewport.Abandon();
++            {
++                Disregard(Viewport.Abandon());
++            }
+         }
+         else
+         {
+-            Viewport.Abandon();
++            Disregard(Viewport.Abandon());
+         }
+ 
+         // ⑤ Close the scope, submit, present, advance. A refused present re-establishes the chain rather
+diff --git a/Engine/Contract/DeliveryContract.h b/Engine/Contract/DeliveryContract.h
+index 697ea65..3c1c97b 100644
+--- a/Engine/Contract/DeliveryContract.h
++++ b/Engine/Contract/DeliveryContract.h
+@@ -7,6 +7,10 @@
+ 
+ #include <cstdint>
+ 
++#ifdef SLATE_DEBUG
++#include <cstdio>
++#endif
++
+ namespace Slate
+ {
+ 
+@@ -52,11 +56,31 @@ struct Refusal
+ //                                                       DELIVERY
+ //------------------------------------------------------------------------------------------------------------------------
+ 
++// 🔍 Defined inline rather than in a translation unit, because `Contract/` is headers only — no unit
++//    gathers a .cpp from it, so an out-of-line definition would compile everywhere and link nowhere.
++// 📝 Debug builds alone. In a release build the call site inside Resolve is compiled out and neither this
++//    function nor <cstdio> is reached, so the release contract carries no standard streams.
++#ifdef SLATE_DEBUG
++inline void ReportResolvedRefusal(const Refusal& Declining)
++{
++    std::fprintf(stderr, "Slate \u2014 a refused delivery was resolved: reason %u, %s\n",
++                 static_cast<unsigned>(Declining.DeclaredReason),
++                 (Declining.Detail != nullptr) ? Declining.Detail : "");
++    std::fflush(stderr);
++}
++#endif
++
+ /// 🧩 Delivered content, or a refusal naming why it is absent. Used wherever a document reports a refusal.
+ /// note  ⚠️ Delivered is default-constructed when ContentPresent is false. Read it only through Resolve.
++/// note  🔴 `[[nodiscard]]`. A refusal nobody read is a refusal that did not happen: the caller carries on
++///        against state the callee declined to produce, and the defect surfaces later at a call that is
++///        correct. Applying it found `HostLifecycle` discarding the delivery from a presentation-chain
++///        re-establishment — a resize that failed would have reported success and ticked on against a chain
++///        that no longer existed. A delivery genuinely not worth reading is discarded through
++///        `Disregard`, which says so in one word at the site.
+ /// tag   contract, nonallocating, nonthrowing
+ template <typename Content>
+-struct ContentDelivery
++struct [[nodiscard]] ContentDelivery
+ {
+     Content  Delivered      = Content{};   // [-] - meaningful only while ContentPresent holds
+     Refusal  Declined       = {};          // [-] - meaningful only while ContentPresent is false
+@@ -86,16 +110,51 @@ struct ContentDelivery
+         return Constructed;
+     }
+ 
++    /// 🧩 Whether content was delivered, for a caller that wants the discriminant in a condition.
++    /// use   `if (const auto Opened = Commands.Open(Slot); Opened) { … }`
++    /// note  Explicit, so a delivery cannot be compared against an integer or silently narrowed. It reads
++    ///       the same discriminant `ContentPresent` does and exists only to make the condition shorter.
++    /// cost  ✔️
++    constexpr explicit operator bool() const
++    {
++        return ContentPresent;
++    }
++
+     /// 🧩 Reads the delivered content.
+     /// out   Content    [-]  the produced content
+     /// pre   ContentPresent holds
++    /// note  🔴 🔍 Under SLATE_DEBUG a read of refused content halts here, at the call that did it. Without
++    ///        the check it returns a default-constructed Content — a zero handle, an empty span, an identity
++    ///        of generation zero — and the defect surfaces wherever that value is finally used, which is
++    ///        never the call that failed to test the delivery.
+     /// cost  ✔️
+     constexpr const Content& Resolve() const
+     {
++#ifdef SLATE_DEBUG
++        if (!ContentPresent)
++        {
++            ReportResolvedRefusal(Declined);
++        }
++#endif
+         return Delivered;
+     }
+ };
+ 
++/// 🧩 Discards a delivery deliberately, saying so at the site.
++/// in    Delivered  [-]  the delivery whose outcome genuinely does not affect what follows
++/// use   `Disregard(NamingEdge->Declare(…));` — a debug label that the vendor declined changes nothing
++///       about the object it would have named.
++/// note  🔴 The one sanctioned way past `[[nodiscard]]`. A cast to void would do the same thing and say
++///        nothing; this spelling is greppable, so the set of deliberate discards can be read as a list and
++///        argued with. Every use should be able to complete the sentence "nothing downstream depends on
++///        this having succeeded, because…".
++/// cost  ✔️
++/// tag   contract, constexpr, nonallocating, nonthrowing
++template <typename Content>
++constexpr void Disregard(const ContentDelivery<Content>&)
++{
++}
++
+ /// 🧩 Public spelling for content delivered or refused across one fallible call.
+ /// note  An alias permits `Deliver<Content>::Deliver(Produced)`: a class named Deliver cannot declare a static
+ ///       function carrying its own name because C++ reserves that spelling for its constructor.
+diff --git a/Engine/SlateCompute/Compute/ImpressionSequence/Source/ImpressionSequence.cpp b/Engine/SlateCompute/Compute/ImpressionSequence/Source/ImpressionSequence.cpp
+index 1b9c12f..4711929 100644
+--- a/Engine/SlateCompute/Compute/ImpressionSequence/Source/ImpressionSequence.cpp
++++ b/Engine/SlateCompute/Compute/ImpressionSequence/Source/ImpressionSequence.cpp
+@@ -505,7 +505,7 @@ Deliver<bool> ImpressionSequence::ResolveOne(ImpressionSample& Impressing,
+             // ⚠️ A speculative extent never declares it — `22` §4.1. A brush preview that pinned every tile the
+             //    cursor passed over would exhaust residency while the artist painted nothing.
+             if (!Declared.Speculative)
+-                Residency.DeclareUncommitted(CellOrdinal.Resolve(), true);
++                Disregard(Residency.DeclareUncommitted(CellOrdinal.Resolve(), true));
+ 
+             Accumulated.Accumulate(TileOrdinal.Resolve(),
+                                    static_cast<std::uint32_t>(Along)  % CoverageTileTexels,
+@@ -568,7 +568,7 @@ void ImpressionSequence::Abandon(SurfaceTileSpace& Residency)
+     if (!Declared.Speculative)
+     {
+         for (const std::uint32_t CellOrdinal : Accumulated.TouchedCells())
+-            Residency.DeclareUncommitted(CellOrdinal, false);
++            Disregard(Residency.DeclareUncommitted(CellOrdinal, false));
+     }
+ 
+     Accumulated.Reclaim();
+@@ -736,7 +736,7 @@ Deliver<SealedStroke> ImpressionSequence::Seal(SurfaceLayerSequence& Content,
+         // 🔴 Withdrawn here rather than after the transaction seals. `20` §5: at this point the paint is in `56`
+         //    and the tile is a projection of it again, so the tile is evictable and re-resolvable — holding the
+         //    gate open past the write would pin tiles for a stroke that has already committed.
+-        Residency.DeclareUncommitted(CellOrdinal, false);
++        Disregard(Residency.DeclareUncommitted(CellOrdinal, false));
+     }
+ 
+     const Deliver<bool> Committed = Revised.Seal(SealedAt, false);
+diff --git a/Engine/SlateCompute/Compute/ReflectanceIntegrator/Source/ReflectanceIntegrator.cpp b/Engine/SlateCompute/Compute/ReflectanceIntegrator/Source/ReflectanceIntegrator.cpp
+index 94772e6..5a73c94 100644
+--- a/Engine/SlateCompute/Compute/ReflectanceIntegrator/Source/ReflectanceIntegrator.cpp
++++ b/Engine/SlateCompute/Compute/ReflectanceIntegrator/Source/ReflectanceIntegrator.cpp
+@@ -1148,8 +1148,8 @@ Deliver<AmbientContribution> ReflectanceIntegrator::IntegrateAmbient(
+     double SkyGreen = 0.0;
+     double SkyBlue  = 0.0;
+ 
+-    Atmosphere.SampleSkyView(Reflected.OrdinateX, Reflected.OrdinateY, Reflected.OrdinateZ,
+-                             SkyRed, SkyGreen, SkyBlue);
++    Disregard(Atmosphere.SampleSkyView(Reflected.OrdinateX, Reflected.OrdinateY, Reflected.OrdinateZ,
++                             SkyRed, SkyGreen, SkyBlue));
+ 
+     const SpatialSpan Incident0 = NormalIncidence(Resolved);
+ 
+@@ -1227,7 +1227,7 @@ Deliver<bool> ReflectanceIntegrator::IntegrateUnoccupied(const AtmosphereIntegra
+     // ⚠️ Without this class nothing in the whole schedule writes the background: every other dispatch is per
+     //    material over pixels that resolved to a surface, and an unoccupied pixel resolved to none. The image
+     //    would carry a hole exactly where the sky belongs, filled with whatever the cycle slot held before.
+-    Atmosphere.SampleSkyView(View.OrdinateX, View.OrdinateY, View.OrdinateZ, Red, Green, Blue);
++    Disregard(Atmosphere.SampleSkyView(View.OrdinateX, View.OrdinateY, View.OrdinateZ, Red, Green, Blue));
+ 
+     return Deliver<bool>::Deliver(true);
+ }
+diff --git a/Engine/SlateCompute/Compute/SurfaceTileSpace/Source/SurfaceTileSpace.cpp b/Engine/SlateCompute/Compute/SurfaceTileSpace/Source/SurfaceTileSpace.cpp
+index 8a8802b..0ad507a 100644
+--- a/Engine/SlateCompute/Compute/SurfaceTileSpace/Source/SurfaceTileSpace.cpp
++++ b/Engine/SlateCompute/Compute/SurfaceTileSpace/Source/SurfaceTileSpace.cpp
+@@ -468,7 +468,7 @@ Deliver<PromotionDisposition> SurfaceTileSpace::Promote(std::uint32_t        Cel
+         //    quarantine like any release, which is correct: nothing was written into it, and the depth costs one
+         //    slot for two rotations rather than a rule that has to distinguish an unwritten slot from a written
+         //    one.
+-        Tiles_.Release(Claimed.Resolve(), RecordingOrdinal);
++        Disregard(Tiles_.Release(Claimed.Resolve(), RecordingOrdinal));
+ 
+         Scheduling.DeferOne();
+         return Deliver<PromotionDisposition>::Deliver(PromotionDisposition::Deferred);
+diff --git a/Engine/SlateDocument/Document/AssetInterchange/Source/AssetInterchange.cpp b/Engine/SlateDocument/Document/AssetInterchange/Source/AssetInterchange.cpp
+index 1082def..ac89196 100644
+--- a/Engine/SlateDocument/Document/AssetInterchange/Source/AssetInterchange.cpp
++++ b/Engine/SlateDocument/Document/AssetInterchange/Source/AssetInterchange.cpp
+@@ -225,16 +225,16 @@ Deliver<bool> AssetInterchange::IntakeTopology(const DecodedTopology& Decoded,
+     }
+ 
+     if (!Decoded.CornerCoordinates.empty())
+-        Into.DeclareCoordinates(Decoded.CornerCoordinates);
++        Disregard(Into.DeclareCoordinates(Decoded.CornerCoordinates));
+ 
+     if (!Decoded.Perpendiculars.empty())
+-        Into.DeclarePerpendiculars(Decoded.Perpendiculars);
++        Disregard(Into.DeclarePerpendiculars(Decoded.Perpendiculars));
+ 
+     if (!Decoded.TangentBases.empty())
+-        Into.DeclareTangentBases(Decoded.TangentBases);
++        Disregard(Into.DeclareTangentBases(Decoded.TangentBases));
+ 
+     if (!Decoded.MaterialEnrollment.empty())
+-        Into.DeclareMaterialEnrollment(Decoded.MaterialEnrollment);
++        Disregard(Into.DeclareMaterialEnrollment(Decoded.MaterialEnrollment));
+ 
+     const Deliver<bool> Sealed = Into.Seal();
+ 
+diff --git a/Engine/SlateDocument/Document/EnrollmentIndex/Source/EnrollmentIndex.cpp b/Engine/SlateDocument/Document/EnrollmentIndex/Source/EnrollmentIndex.cpp
+index 7f09553..289bf90 100644
+--- a/Engine/SlateDocument/Document/EnrollmentIndex/Source/EnrollmentIndex.cpp
++++ b/Engine/SlateDocument/Document/EnrollmentIndex/Source/EnrollmentIndex.cpp
+@@ -163,7 +163,7 @@ Deliver<bool> EnrollmentIndex::Unenrol(OccupantIdentity Subject, SubsetSubject E
+ void EnrollmentIndex::UnenrolEverywhere(OccupantIdentity Subject)
+ {
+     for (std::uint32_t Ordinal = 0u; Ordinal < static_cast<std::uint32_t>(SubsetSubject::SubsetCount); ++Ordinal)
+-        Unenrol(Subject, static_cast<SubsetSubject>(Ordinal));
++        Disregard(Unenrol(Subject, static_cast<SubsetSubject>(Ordinal)));
+ }
+ 
+ //------------------------------------------------------------------------------------------------------------------------
+diff --git a/Engine/SlateDocument/Document/OutlinerSequence/Source/OutlinerSequence.cpp b/Engine/SlateDocument/Document/OutlinerSequence/Source/OutlinerSequence.cpp
+index 2c5da1e..5b968c6 100644
+--- a/Engine/SlateDocument/Document/OutlinerSequence/Source/OutlinerSequence.cpp
++++ b/Engine/SlateDocument/Document/OutlinerSequence/Source/OutlinerSequence.cpp
+@@ -27,12 +27,12 @@ Deliver<OccupantIdentity> OutlinerSequence::Enrol(const std::string& DeclaredNam
+     {
+         // 📝 The slot is withdrawn again rather than left enrolled in a population the relations do not hold.
+         //    A slot present in one and absent from the other is invariant 6 broken at the moment of arrival.
+-        Population.Withdraw(Arriving);
++        Disregard(Population.Withdraw(Arriving));
+         return Deliver<OccupantIdentity>::Refuse(Admitted.Declined);
+     }
+ 
+     if (!DeclaredName.empty())
+-        NameSearch.Declare(Arriving, DeclaredName);
++        Disregard(NameSearch.Declare(Arriving, DeclaredName));
+ 
+     const std::size_t Required = static_cast<std::size_t>(Arriving.SlotOrdinal) + 1u;
+ 
+@@ -400,7 +400,7 @@ Deliver<bool> OutlinerSequence::Reconcile(std::uint64_t SealedAt)
+     // ② Reconcile the population — retire the slots whose generation this tick advanced.
+     for (const OccupantIdentity& Departing : WithdrawnOccupants)
+     {
+-        Population.Withdraw(Departing);
++        Disregard(Population.Withdraw(Departing));
+ 
+         if (Departing.SlotOrdinal < LiveGenerations.size())
+             LiveGenerations[Departing.SlotOrdinal] = 0u;
+@@ -450,7 +450,7 @@ Deliver<bool> OutlinerSequence::Reconcile(std::uint64_t SealedAt)
+     //    carries its own name, so nothing here consults a run ① has already cleared.
+     for (const DeclaredIntent& Naming : RenamedDeclarations)
+     {
+-        NameSearch.Declare(Naming.Subject, Naming.DeclaredName);
++        Disregard(NameSearch.Declare(Naming.Subject, Naming.DeclaredName));
+         NarrowingOwed = true;
+     }
+ 
+diff --git a/Engine/SlateMath/Platform/FileInterchange/Source/FileInterchange.cpp b/Engine/SlateMath/Platform/FileInterchange/Source/FileInterchange.cpp
+index 37b730d..66b215b 100644
+--- a/Engine/SlateMath/Platform/FileInterchange/Source/FileInterchange.cpp
++++ b/Engine/SlateMath/Platform/FileInterchange/Source/FileInterchange.cpp
+@@ -316,7 +316,7 @@ Deliver<bool> FileInterchange::WriteStream(const std::string& Path, const std::v
+ 
+     if (Landed != Content.size())
+     {
+-        Reclaim(Staged);
++        Disregard(Reclaim(Staged));
+         return Deliver<bool>::Refuse({ RefusalReason::HostDenied, "the staged stream declined the write" });
+     }
+ 
+@@ -327,13 +327,13 @@ Deliver<bool> FileInterchange::WriteStream(const std::string& Path, const std::v
+ 
+     if (!Verified.ContentPresent)
+     {
+-        Reclaim(Staged);
++        Disregard(Reclaim(Staged));
+         return Deliver<bool>::Refuse(Verified.Declined);
+     }
+ 
+     if (Verified.Resolve() != Content)
+     {
+-        Reclaim(Staged);
++        Disregard(Reclaim(Staged));
+         return Deliver<bool>::Refuse({ RefusalReason::ExtentExhausted,
+                                        "what landed differs from what was written; the original stands" });
+     }
+@@ -354,7 +354,7 @@ Deliver<bool> FileInterchange::WriteStream(const std::string& Path, const std::v
+ 
+     if (std::rename(Staged.c_str(), Path.c_str()) != 0)
+     {
+-        Reclaim(Staged);
++        Disregard(Reclaim(Staged));
+         return Deliver<bool>::Refuse({ RefusalReason::HostDenied, "the verified stream could not replace the target" });
+     }
+ 
+diff --git a/Engine/SlateUI/Interface/ControlPanel/Api/ControlPanel.h b/Engine/SlateUI/Interface/ControlPanel/Api/ControlPanel.h
+deleted file mode 100644
+index 77183ae..0000000
+--- a/Engine/SlateUI/Interface/ControlPanel/Api/ControlPanel.h
++++ /dev/null
+@@ -1,343 +0,0 @@
+-//============================================================================================================================================
+-//                                                             CONTROLPANEL.H
+-//============================================================================================================================================
+-// 🧩 The eight declared controls — one contact arbitrated across them, one appearance read, and not one datum owned.
+-
+-#pragma once
+-
+-#include "Contract/DeliveryContract.h"
+-#include "Contract/PrecisionContract.h"
+-#include "SlateUI/Interface/AppearanceSpecification/Api/AppearanceSpecification.h"
+-#include "SlateUI/Interface/InteractionIndex/Api/InteractionIndex.h"
+-#include "SlateUI/Interface/InterfaceExchange/Api/RecordingSurface.h"
+-#include "SlateUI/Interface/SymbolSpecification/Api/SymbolSpecification.h"
+-
+-#include <cstdint>
+-
+-namespace Slate
+-{
+-
+-//------------------------------------------------------------------------------------------------------------------------
+-//                                                     WHAT A CARD ARRANGES
+-//------------------------------------------------------------------------------------------------------------------------
+-
+-/// 🧩 One panel card — the rounded ground the sheet groups its rows inside.
+-/// note  The card is arranged from its row count rather than measured from its content, because the sheet
+-///       states a fixed padding and a fixed inter-row gap and every row it holds is one of eight known
+-///       extents. A card that measured its content would disagree with the sheet the moment a run wrapped.
+-/// tag   contract, nonallocating, nonthrowing
+-struct CardArrangement
+-{
+-    PlaneExtent  Enclosure = {};     // [px] - the card's own extent, ground and edge
+-    PlaneExtent  Interior  = {};     // [px] - inside the padding; the first row begins here
+-    float        RowGap    = 0.0f;   // [px] - what a caller advances by between rows
+-};
+-
+-//------------------------------------------------------------------------------------------------------------------------
+-//                                                    WHAT EACH CONTROL TAKES
+-//------------------------------------------------------------------------------------------------------------------------
+-
+-/// 🧩 What one selection field presents — its label, its options, and how many there are.
+-/// note  🔴 The options are borrowed, never copied. `14` §1 forbids a panel storing what it presents, and an
+-///       array of captions copied into the panel is exactly that defect at its smallest.
+-/// tag   contract, nonallocating, nonthrowing
+-struct SelectionDeclaration
+-{
+-    const char*         Caption     = "";        // [-] - the leading label
+-    const char* const*  Options     = nullptr;   // [-] - borrowed; outlives the tick
+-    std::uint32_t       OptionCount = 0u;        // [-] - zero records the field and no menu
+-};
+-
+-/// 🧩 What one magnitude row presents — its label, its unit glyph, and the domain it spans.
+-/// note  📐 The domain is stated rather than assumed. The sheet declares 0 … 255 for all three of its rows,
+-///        but a percentage that ran to 255 would be a defect the sheet cannot report and a caller can.
+-/// tag   contract, nonallocating, nonthrowing
+-struct MagnitudeDeclaration
+-{
+-    const char*  Caption      = "";      // [-] - the leading label
+-    const char*  UnitGlyph    = "";      // [-] - the trailing cell's run — the degree sign, percent, or px
+-    double       LeastOrdinal = 0.0;     // [-] - the domain's floor
+-    double       MostOrdinal  = 255.0;   // [-] - the domain's ceiling; max="255"
+-};
+-
+-/// 🧩 What the rotation ruler presents — its label and the unit its captions carry.
+-/// tag   contract, nonallocating, nonthrowing
+-struct RulerDeclaration
+-{
+-    const char*  Caption   = "";   // [-] - the leading label
+-    const char*  UnitGlyph = "";   // [-] - the readout's trailing cell
+-};
+-
+-/// 🧩 What one toggle row presents.
+-/// tag   contract, nonallocating, nonthrowing
+-struct ToggleDeclaration
+-{
+-    const char*  Caption = "";   // [-] - the run right of the ring
+-};
+-
+-/// 🧩 What one multi-select row presents.
+-/// tag   contract, nonallocating, nonthrowing
+-struct SubsetDeclaration
+-{
+-    const char*  Caption = "";   // [-] - the run inside the row
+-};
+-
+-/// 🧩 What the magnitude stops present — the four captions, of which the taken one is drawn.
+-/// note  ⚠️ Exactly `StopCeiling` captions are read. The sheet declares four; a caller declaring more is
+-///        refused rather than silently truncated, because a fifth stop the artist can see and cannot reach
+-///        is worse than a refusal at bring-up.
+-/// tag   contract, nonallocating, nonthrowing
+-struct StopDeclaration
+-{
+-    const char*         Caption   = "";        // [-] - the leading label
+-    const char* const*  Stops     = nullptr;   // [-] - borrowed; the letter each stop carries
+-    std::uint32_t       StopCount = 0u;        // [-] - two to StopCeiling
+-};
+-
+-/// 🧩 Which of the sheet's two tooltip appearances one trigger carries.
+-/// tag   contract
+-enum class TooltipAppearance : std::uint32_t
+-{
+-    Light           = 0u,   // [-] - the white card and the white trigger
+-    Dark            = 1u,   // [-] - the near-black card and the near-black trigger
+-    AppearanceCount = 2u    // [-] - the closed count, never an appearance
+-};
+-
+-/// 🧩 What one tooltip trigger presents — its figure, and the card that discloses above it.
+-/// note  The body is borrowed and wrapped at record time against the card's stated extent. Nothing is
+-///       measured into storage, so a caller may change the run between two ticks.
+-/// tag   contract, nonallocating, nonthrowing
+-struct TooltipDeclaration
+-{
+-    const char*        Title      = "";                            // [-] - the card's heading
+-    const char*        Body       = "";                            // [-] - wrapped inside the card
+-    SymbolSubject      Figure     = SymbolSubject::BulbFilament;   // [-] - the trigger's own figure
+-    TooltipAppearance  Appearance = TooltipAppearance::Light;      // [-]
+-};
+-
+-//------------------------------------------------------------------------------------------------------------------------
+-//                                                          THE PANEL
+-//------------------------------------------------------------------------------------------------------------------------
+-
+-/// 🧩 Records the eight controls `References/Controls.html` declares, and arbitrates one contact across them.
+-/// note  🔴 Stores **no** artist-visible datum. Every value arrives by reference and is written back through
+-///        that same reference in the same call, so `14` §1's "a panel presents state owned elsewhere and
+-///        stores none of it" is a property of the signatures rather than a discipline. What is stored —
+-///        which control is seized, which menu stands open, what is fading — lives in `InteractionIndex`,
+-///        which is `14` §4.1's sanctioned home for it.
+-/// note  🔴 Two phases, never interleaved. `Advance` arbitrates and records nothing; the eight recording
+-///        methods draw and mutate no interaction. The separation is what lets every popup be recorded in a
+-///        second sweep after every row, which is how the sheet's z-20 and z-50 stacking is reproduced
+-///        without a layering mechanism nobody asked for.
+-/// note  ⚠️ `RecordDeferred` must be called once per tick, after the last control and before the seal.
+-///        A menu left undeferred is a menu recorded beneath the row below it.
+-/// tag   owning
+-class ControlPanel
+-{
+-public:
+-
+-    static constexpr std::uint32_t StopCeiling     = 8u;    // [-] - stops one row may carry; the sheet declares four
+-    static constexpr std::uint32_t DeferredCeiling = 16u;   // [-] - popups and tooltips deferred within one tick
+-    static constexpr std::uint32_t WrapCeiling     = 8u;    // [-] - lines one tooltip body may wrap to
+-
+-    ControlPanel()                               = default;
+-    ControlPanel(const ControlPanel&)            = delete;
+-    ControlPanel& operator=(const ControlPanel&) = delete;
+-    ~ControlPanel()                              = default;
+-
+-    /// 🧩 Borrows the ledger, the surface and the appearance every control reads.
+-    /// in    Ledger      [-]  the interaction ledger; borrowed and outlives this component
+-    /// in    Surface     [-]  the recording surface; borrowed and outlives this component
+-    /// in    Appearance  [-]  already resolved against the display scale; borrowed and outlives this
+-    /// out   Deliver     [-]  refuses with ContentUnsupported when a construction already stands
+-    /// cost  ✔️
+-    /// tag   api, nonallocating, nonthrowing
+-    Deliver<bool> Construct(InteractionIndex&              Ledger,
+-                            RecordingSurface&              Surface,
+-                            const AppearanceSpecification& Appearance);
+-
+-    /// 🧩 Advances one tick of arbitration — samples the contact and clears the deferred sweep.
+-    /// in    Arrived  [-]   what `RecordingSurface::Pointer` sampled this tick
+-    /// in    Elapsed  [ms]  what the same tick's display condition measured
+-    /// note  🔴 Advances the ledger too. A caller that advances both is advancing the ledger twice, which
+-    ///        retires a release before the control that seized it has run.
+-    /// post  the deferred sweep is empty; every recording method is valid until RecordDeferred
+-    /// cost  ✔️
+-    /// tag   api, nonallocating, nonthrowing
+-    void Advance(const PointerCondition& Arrived, double Elapsed);
+-
+-    /// 🧩 Arranges one card around a stated number of rows of stated extents.
+-    /// in    Along        [px] the card's leading edge
+-    /// in    Across       [px] the card's upper edge
+-    /// in    ExtentAlong  [px] the column's extent; the sheet states 800 before reduction
+-    /// in    RowExtents   [px] each row's own extent across; borrowed for the duration of the call
+-    /// in    RowCount     [-]  how many rows; zero arranges an empty card of padding alone
+-    /// out   Arranged     [-]  the enclosure to record and the interior the first row begins at
+-    /// cost  ✔️
+-    /// tag   api, nonallocating, nonthrowing
+-    CardArrangement ArrangeCard(float Along, float Across, float ExtentAlong,
+-                                const float* RowExtents, std::uint32_t RowCount) const;
+-
+-    /// 🧩 Records one card's ground and edge.
+-    /// cost  ✔️
+-    /// tag   api, nonthrowing
+-    void RecordCard(const CardArrangement& Arranged);
+-
+-    //--------------------------------------------------------------------------------------------------------
+-    //                                            THE EIGHT CONTROLS
+-    //--------------------------------------------------------------------------------------------------------
+-
+-    /// 🧩 The selection field — a black field, a chevron cell, and a menu that discloses beneath it.
+-    /// in    Claimed       [-]  the identity this field was enrolled under
+-    /// in    Row           [px] the extent the whole row occupies
+-    /// in    Declared      [-]  what it presents; borrowed
+-    /// in    TakenOrdinal  [-]  which option stands taken; written when the artist takes another
+-    /// out   Verdict       [-]  OrdinateAltered when TakenOrdinal was written this tick
+-    /// note  The menu is not recorded here. It is deferred, so that it draws above every row below it.
+-    /// cost  🚩
+-    /// tag   api, nonthrowing
+-    ControlVerdict SelectionField(ControlIdentity Claimed, const PlaneExtent& Row,
+-                                  const SelectionDeclaration& Declared, std::uint32_t& TakenOrdinal);
+-
+-    /// 🧩 One magnitude row — a numeric readout, a unit cell, and a slider spanning the declared domain.
+-    /// in    Ordinate  [-]  the presented magnitude; written while the thumb or track is held
+-    /// out   Verdict   [-]  OrdinateAltered on every tick the drag moved it
+-    /// note  📐 The drag reads the pointer's absolute position against the track, not an accumulated delta.
+-    ///        An accumulated delta drifts by a pixel for every tick the pointer left the track's extent.
+-    /// cost  🚩
+-    /// tag   api, nonthrowing
+-    ControlVerdict MagnitudeRow(ControlIdentity Claimed, const PlaneExtent& Row,
+-                                const MagnitudeDeclaration& Declared, double& Ordinate);
+-
+-    /// 🧩 The rotation ruler — a readout and a draggable tick strip that fades at both ends.
+-    /// in    Degrees  [deg] the presented rotation; written while the strip is dragged
+-    /// note  📐 The sheet's law is `Value = ValueAtArrival − ΔAlong / 10`, and the strip is translated by
+-    ///        `−Value × TickSpacing`. Dragging leftward therefore raises the reading, which is what a
+-    ///        physical dial does and is the opposite of what an accumulated pointer delta would give.
+-    /// cost  🔴
+-    /// tag   api, nonthrowing
+-    ControlVerdict RotationRuler(ControlIdentity Claimed, const PlaneExtent& Row,
+-                                 const RulerDeclaration& Declared, double& Degrees);
+-
+-    /// 🧩 One toggle row — a ring, a dot that scales in, and a label.
+-    /// in    Taken  [-]  written on the tick the row resolves a tap
+-    /// cost  🚩
+-    /// tag   api, nonthrowing
+-    ControlVerdict ToggleRow(ControlIdentity Claimed, const PlaneExtent& Row,
+-                             const ToggleDeclaration& Declared, bool& Taken);
+-
+-    /// 🧩 One multi-select row — a leading rail, a ground, and a label.
+-    /// in    Enrolled  [-]  written on the tick the row resolves a tap
+-    /// cost  🚩
+-    /// tag   api, nonthrowing
+-    ControlVerdict SubsetRow(ControlIdentity Claimed, const PlaneExtent& Row,
+-                             const SubsetDeclaration& Declared, bool& Enrolled);
+-
+-    /// 🧩 The magnitude stops — small discs, of which the taken one grows and carries its letter.
+-    /// in    TakenOrdinal  [-]  which stop stands taken; written when another is tapped
+-    /// cost  🚩
+-    /// tag   api, nonthrowing
+-    ControlVerdict MagnitudeStops(ControlIdentity Claimed, const PlaneExtent& Row,
+-                                  const StopDeclaration& Declared, std::uint32_t& TakenOrdinal);
+-
+-    /// 🧩 One tooltip trigger — a rounded button whose card discloses above it while the pointer rests on it.
+-    /// note  The card is deferred, so it draws above every control recorded after this one.
+-    /// cost  🚩
+-    /// tag   api, nonthrowing
+-    ControlVerdict TooltipTrigger(ControlIdentity Claimed, const PlaneExtent& Trigger,
+-                                  const TooltipDeclaration& Declared);
+-
+-    //--------------------------------------------------------------------------------------------------------
+-    //                                             THE DEFERRED SWEEP
+-    //--------------------------------------------------------------------------------------------------------
+-
+-    /// 🧩 Records every menu and tooltip deferred this tick, in the order they were declared.
+-    /// note  🔴 Once per tick, after the last control. The sheet stacks its menu at z-20 and its tooltips at
+-    ///        z-50 over content that is written after them in document order; recording order is how a
+-    ///        command list expresses that, and this is the call that supplies it.
+-    /// post  the deferred sweep is empty
+-    /// cost  🚩
+-    /// tag   api, nonthrowing
+-    void RecordDeferred();
+-
+-    /// 🧩 Whether any control holds the contact — what a host tests before treating it as a canvas stroke.
+-    /// cost  ✔️
+-    /// tag   api, nonallocating, nonthrowing
+-    bool ContactTaken() const;
+-
+-    /// 🧩 The dearest mark any control raised since the last Advance.
+-    /// cost  ✔️
+-    /// tag   api, nonallocating, nonthrowing
+-    RedrawMark StandingMark() const;
+-
+-    /// 🧩 Returns the panel to its constructed condition, forgetting every borrowed reference.
+-    /// cost  ✔️
+-    /// tag   api, nonallocating, nonthrowing
+-    void Reset();
+-
+-private:
+-
+-    /// 🧩 What one deferred popup will record, retained only until RecordDeferred runs.
+-    /// note  Every member is either a borrowed pointer into the caller's own storage or a resolved extent.
+-    ///       Nothing here is a copy of a datum the artist edits.
+-    struct DeferredRecording
+-    {
+-        ControlIdentity     Claimed     = {};                            // [-] - whose popup this is
+-        PlaneExtent         Anchor      = {};                            // [px] - the extent it hangs from
+-        const char* const*  Options     = nullptr;                       // [-] - borrowed, for a menu
+-        std::uint32_t       OptionCount = 0u;                            // [-]
+-        std::uint32_t       TakenOption = 0u;                            // [-] - which option stands taken
+-        const char*         Title       = nullptr;                       // [-] - borrowed, for a tooltip
+-        const char*         Body        = nullptr;                       // [-] - borrowed, for a tooltip
+-        TooltipAppearance   Appearance  = TooltipAppearance::Light;      // [-]
+-        bool                Menu        = false;                         // [-] - a menu, or else a tooltip
+-    };
+-
+-    void RecordMenu(const DeferredRecording& Deferred);
+-    void RecordTooltip(const DeferredRecording& Deferred);
+-    void FoldMark(RedrawMark Arriving);
+-
+-    /// 🧩 The extent an open menu occupies beneath its field.
+-    /// note  Derived from the field rather than retained, so the menu the pointer is tested against this tick
+-    ///       is the one that was recorded last tick by construction, not by two computations agreeing.
+-    PlaneExtent MenuEnclosure(const PlaneExtent& Field, std::uint32_t OptionCount) const;
+-
+-    /// 🧩 Which option the pointer stands over, or OptionCount when it stands over none.
+-    std::uint32_t OptionUnder(const PlaneExtent& Field, std::uint32_t OptionCount) const;
+-
+-    InteractionIndex*               Ledger                          = nullptr;   // [-] - borrowed
+-    RecordingSurface*               Surface                         = nullptr;   // [-] - borrowed
+-    const AppearanceSpecification*  Appearance                      = nullptr;   // [-] - borrowed
+-    PointerCondition                Arrived                         = {};        // [-] - this tick's pointer
+-    DeferredRecording               Deferred[DeferredCeiling]       = {};        // [-] - never allocated
+-    std::uint32_t                   DeferredCount                   = 0u;        // [-]
+-    RedrawMark                      Standing                        = RedrawMark::Quiet;   // [-]
+-    bool                            ContactHeldByPanel              = false;     // [-]
+-};
+-
+-//------------------------------------------------------------------------------------------------------------------------
+-//                                                   THE TWO PROJECTIONS
+-//------------------------------------------------------------------------------------------------------------------------
+-
+-/// 🧩 Projects a magnitude onto the fraction of its domain it occupies.
+-/// in    Ordinate  [-]  the magnitude; outside the domain it clamps rather than extrapolating
+-/// in    Least     [-]  the domain's floor
+-/// in    Most      [-]  the domain's ceiling; a domain of zero extent projects to zero
+-/// out   Fraction  [-]  zero at the floor, one at the ceiling
+-/// cost  ✔️
+-/// tag   api, nonallocating, nonthrowing
+-double MagnitudeFraction(double Ordinate, double Least, double Most);
+-SLATE_DECLARES_PRECISION(PrecisionGuarantee::Bounded, PrecisionGuarantee::Bounded);
+-
+-/// 🧩 Projects a rotation drag onto the degrees it turned through.
+-/// in    Departed      [deg]   the reading when the contact arrived
+-/// in    TravelAlong   [px]    how far the contact has travelled since
+-/// in    DegreesPerPixel [deg/px] what the sheet states as `deltaX / 10`
+-/// out   Degrees       [deg]   the new reading
+-/// note  📐 Subtractive, per the sheet: `startVal - (deltaX / 10)`.
+-/// cost  ✔️
+-/// tag   api, nonallocating, nonthrowing
+-double RotationDegrees(double Departed, double TravelAlong, double DegreesPerPixel);
+-SLATE_DECLARES_PRECISION(PrecisionGuarantee::Bounded, PrecisionGuarantee::Bounded);
+-
+-}   // namespace Slate
+diff --git a/Engine/SlateUI/Interface/ControlPanel/Source/ControlPanel.cpp b/Engine/SlateUI/Interface/ControlPanel/Source/ControlPanel.cpp
+deleted file mode 100644
+index 6af7914..0000000
+--- a/Engine/SlateUI/Interface/ControlPanel/Source/ControlPanel.cpp
++++ /dev/null
+@@ -1,1194 +0,0 @@
+-//============================================================================================================================================
+-//                                                            CONTROLPANEL.CPP
+-//============================================================================================================================================
+-// 🧩 The eight controls, arranged and recorded from the sheet's own figures, arbitrated against the ledger's one seizure.
+-
+-#include "SlateUI/Interface/ControlPanel/Api/ControlPanel.h"
+-
+-namespace Slate
+-{
+-
+-//------------------------------------------------------------------------------------------------------------------------
+-//                                                     SHARED ARITHMETIC
+-//------------------------------------------------------------------------------------------------------------------------
+-
+-namespace
+-{
+-
+-constexpr double RouseDuration    = 200.0;   // [ms] - the sheet's transition-colors on a hover
+-constexpr double DiscloseDuration = 150.0;   // [ms] - the accordion and the chevron's turn
+-constexpr double TooltipDuration  = 300.0;   // [ms] - duration-300 on the tooltip's opacity
+-
+-/// 🧩 Interpolates between two ordinates by a fraction already clamped to the unit interval.
+-/// cost  ✔️
+-constexpr float Between(float Departed, float Arriving, float Fraction)
+-{
+-    return Departed + (Arriving - Departed) * Fraction;
+-}
+-
+-/// 🧩 Blends two inks by a fraction, component by component, in the display-referred encoding they are in.
+-/// note  ⚠️ Blended where they are declared — display-referred — and not in a linear space. `08` §3.1 places
+-///       the interface after the tone projection, and a fade that linearised would disagree with the browser
+-///       the sheet was measured in, which interpolates sRGB ordinates exactly as this does.
+-/// cost  ✔️
+-constexpr std::uint8_t BlendOrdinate(std::uint8_t Departed, std::uint8_t Arriving, float Fraction)
+-{
+-    return static_cast<std::uint8_t>(
+-        Between(static_cast<float>(Departed), static_cast<float>(Arriving), Fraction) + 0.5f);
+-}
+-
+-constexpr InkOrdinate Blend(InkOrdinate Departed, InkOrdinate Arriving, float Fraction)
+-{
+-    const float Held = (Fraction < 0.0f) ? 0.0f : (Fraction > 1.0f) ? 1.0f : Fraction;
+-
+-    return InkOrdinate{ BlendOrdinate(Departed.Red,     Arriving.Red,     Held),
+-                        BlendOrdinate(Departed.Green,   Arriving.Green,   Held),
+-                        BlendOrdinate(Departed.Blue,    Arriving.Blue,    Held),
+-                        BlendOrdinate(Departed.Opacity, Arriving.Opacity, Held) };
+-}
+-
+-/// 🧩 Restates an ink at a fraction of its own coverage — what a fading tooltip records with.
+-/// cost  ✔️
+-constexpr InkOrdinate Faded(InkOrdinate Declared, float Fraction)
+-{
+-    const float Held = (Fraction < 0.0f) ? 0.0f : (Fraction > 1.0f) ? 1.0f : Fraction;
+-
+-    InkOrdinate Restated = Declared;
+-    Restated.Opacity     = static_cast<std::uint8_t>(static_cast<float>(Declared.Opacity) * Held + 0.5f);
+-
+-    return Restated;
+-}
+-
+-/// 🧩 Holds an ordinate inside a stated interval.
+-/// cost  ✔️
+-constexpr double Held(double Ordinate, double Least, double Most)
+-{
+-    return (Ordinate < Least) ? Least : (Ordinate > Most) ? Most : Ordinate;
+-}
+-
+-/// 🧩 The extent one run occupies, centred across a stated extent at its own leading.
+-/// note  📐 The vendor places a run by its upper edge, and every extent the sheet states is centred within
+-///        its row. Deriving the upper edge here rather than at nineteen call sites is what keeps a run from
+-///        sitting a pixel high in one control and correct in the next.
+-/// cost  ✔️
+-constexpr float CentredAcross(const PlaneExtent& Extent, float PointSize)
+-{
+-    return Extent.LeastAcross + (Extent.SpanAcross() - PointSize) * 0.5f;
+-}
+-
+-/// 🧩 Rounds an integral reading to its decimal run, without allocating.
+-/// in    Staging   [-]  receives the run; at least twelve characters
+-/// note  Written rather than reached for through a formatting call, because no formatting call in the
+-///       standard library is both non-allocating and available at this seam.
+-/// cost  ✔️
+-void IntegralRun(char* Staging, std::uint32_t StagingExtent, long long Reading)
+-{
+-    if (Staging == nullptr || StagingExtent < 2u)
+-        return;
+-
+-    char          Reversed[20] = {};
+-    std::uint32_t Digits       = 0u;
+-    const bool    Negative     = Reading < 0;
+-
+-    unsigned long long Magnitude = Negative ? static_cast<unsigned long long>(-(Reading + 1)) + 1ull
+-                                            : static_cast<unsigned long long>(Reading);
+-
+-    if (Magnitude == 0ull)
+-    {
+-        Reversed[Digits++] = '0';
+-    }
+-
+-    while (Magnitude > 0ull && Digits < 19u)
+-    {
+-        Reversed[Digits++] = static_cast<char>('0' + (Magnitude % 10ull));
+-        Magnitude /= 10ull;
+-    }
+-
+-    std::uint32_t Written = 0u;
+-
+-    if (Negative && Written + 1u < StagingExtent)
+-        Staging[Written++] = '-';
+-
+-    while (Digits > 0u && Written + 1u < StagingExtent)
+-        Staging[Written++] = Reversed[--Digits];
+-
+-    Staging[Written] = '\0';
+-}
+-
+-}   // namespace
+-
+-//------------------------------------------------------------------------------------------------------------------------
+-//                                                   THE TWO PROJECTIONS
+-//------------------------------------------------------------------------------------------------------------------------
+-
+-double MagnitudeFraction(double Ordinate, double Least, double Most)
+-{
+-    const double Span = Most - Least;
+-
+-    if (Span <= 0.0)
+-        return 0.0;
+-
+-    return Held((Ordinate - Least) / Span, 0.0, 1.0);
+-}
+-
+-double RotationDegrees(double Departed, double TravelAlong, double DegreesPerPixel)
+-{
+-    // 📐 The sheet: `rotationValue = startValRot - (deltaX / 10)`. Stated as a rate so that the reduction
+-    //    factor cannot silently change how far a drag turns the dial.
+-    return Departed - TravelAlong * DegreesPerPixel;
+-}
+-
+-//------------------------------------------------------------------------------------------------------------------------
+-//                                                        CONSTRUCTION
+-//------------------------------------------------------------------------------------------------------------------------
+-
+-Deliver<bool> ControlPanel::Construct(InteractionIndex&              ArrivingLedger,
+-                                      RecordingSurface&              ArrivingSurface,
+-                                      const AppearanceSpecification& ArrivingAppearance)
+-{
+-    if (Ledger != nullptr)
+-    {
+-        return Deliver<bool>::Refuse(Refusal{ RefusalReason::ContentUnsupported,
+-                                              "ControlPanel is already constructed" });
+-    }
+-
+-    Ledger     = &ArrivingLedger;
+-    Surface    = &ArrivingSurface;
+-    Appearance = &ArrivingAppearance;
+-
+-    return Deliver<bool>::Deliver(true);
+-}
+-
+-void ControlPanel::Advance(const PointerCondition& Arriving, double Elapsed)
+-{
+-    if (Ledger == nullptr)
+-        return;
+-
+-    Arrived       = Arriving;
+-    DeferredCount = 0u;
+-    Standing      = RedrawMark::Quiet;
+-
+-    Ledger->Advance(Arriving, Elapsed);
+-
+-    ContactHeldByPanel = Arriving.ContactHeld && ContactHeldByPanel;
+-}
+-
+-void ControlPanel::FoldMark(RedrawMark Arriving)
+-{
+-    Standing = Dearer(Standing, Arriving);
+-}
+-
+-bool ControlPanel::ContactTaken() const
+-{
+-    return ContactHeldByPanel;
+-}
+-
+-RedrawMark ControlPanel::StandingMark() const
+-{
+-    return Standing;
+-}
+-
+-void ControlPanel::Reset()
+-{
+-    Ledger             = nullptr;
+-    Surface            = nullptr;
+-    Appearance         = nullptr;
+-    Arrived            = {};
+-    DeferredCount      = 0u;
+-    Standing           = RedrawMark::Quiet;
+-    ContactHeldByPanel = false;
+-}
+-
+-//------------------------------------------------------------------------------------------------------------------------
+-//                                                          THE CARD
+-//------------------------------------------------------------------------------------------------------------------------
+-
+-CardArrangement ControlPanel::ArrangeCard(float Along, float Across, float ExtentAlong,
+-                                          const float* RowExtents, std::uint32_t RowCount) const
+-{
+-    CardArrangement Arranged;
+-
+-    if (Appearance == nullptr)
+-        return Arranged;
+-
+-    const ControlMetric& Measure = Appearance->ControlMeasure;
+-
+-    float Interior = 0.0f;
+-
+-    for (std::uint32_t Ordinal = 0u; Ordinal < RowCount; ++Ordinal)
+-    {
+-        if (RowExtents != nullptr)
+-            Interior += RowExtents[Ordinal];
+-
+-        if (Ordinal + 1u < RowCount)
+-            Interior += Measure.CardRowGap;
+-    }
+-
+-    Arranged.Enclosure = Spanning(Along, Across, ExtentAlong, Interior + Measure.CardPad * 2.0f);
+-    Arranged.Interior  = Spanning(Along + Measure.CardPad, Across + Measure.CardPad,
+-                                  ExtentAlong - Measure.CardPad * 2.0f, Interior);
+-    Arranged.RowGap    = Measure.CardRowGap;
+-
+-    return Arranged;
+-}
+-
+-void ControlPanel::RecordCard(const CardArrangement& Arranged)
+-{
+-    if (Surface == nullptr || Appearance == nullptr)
+-        return;
+-
+-    const ControlInk&    Ink     = Appearance->Control;
+-    const ControlMetric& Measure = Appearance->ControlMeasure;
+-
+-    Surface->Ground(Arranged.Enclosure, Ink.CardGround, Measure.CardRadius, CornerAll);
+-    Surface->Edge(Arranged.Enclosure, Ink.CardEdge, Measure.CardEdgeWeight, Measure.CardRadius, CornerAll);
+-}
+-
+-//------------------------------------------------------------------------------------------------------------------------
+-//                                                    THE SELECTION FIELD
+-//------------------------------------------------------------------------------------------------------------------------
+-
+-ControlVerdict ControlPanel::SelectionField(ControlIdentity Claimed, const PlaneExtent& Row,
+-                                            const SelectionDeclaration& Declared, std::uint32_t& TakenOrdinal)
+-{
+-    ControlVerdict Reported;
+-
+-    if (Ledger == nullptr || Surface == nullptr || Appearance == nullptr || !Ledger->Resolves(Claimed))
+-        return Reported;
+-
+-    const ControlInk&    Ink     = Appearance->Control;
+-    const ControlMetric& Measure = Appearance->ControlMeasure;
+-
+-    // ① The row divides into a leading label and the field that fills what remains.
+-    const PlaneExtent Label = Spanning(Row.LeastAlong, Row.LeastAcross, Measure.LabelAlong, Row.SpanAcross());
+-    const float       FieldAlong = Label.MostAlong + Measure.RowGapAlong;
+-    const PlaneExtent Field = PlaneExtent{ FieldAlong, Row.LeastAcross, Row.MostAlong,
+-                                           Row.LeastAcross + Measure.FieldAcross };
+-    const PlaneExtent Cell  = PlaneExtent{ Field.MostAlong - Measure.ChevronCellAlong, Field.LeastAcross,
+-                                           Field.MostAlong, Field.MostAcross };
+-
+-    // ② Arbitration. 🔴 The open menu is tested **before** the field, because it is recorded above it: a
+-    //    contact inside the menu's extent addresses the option under it and never the field it hangs from.
+-    //    Testing the field first is the defect where taking the last option instead re-toggles the menu.
+-    const bool OverField = Field.Encloses(Arrived.PositionAlong, Arrived.PositionAcross);
+-    const bool OverCell  = Cell.Encloses(Arrived.PositionAlong, Arrived.PositionAcross);
+-
+-    const bool StoodOpen = Ledger->Disclosed(Claimed);
+-    const PlaneExtent Menu = StoodOpen ? MenuEnclosure(Field, Declared.OptionCount) : PlaneExtent{};
+-    const bool OverMenu  = StoodOpen && Menu.Encloses(Arrived.PositionAlong, Arrived.PositionAcross);
+-
+-    if (Ledger->DeclareRoused(Claimed, OverCell, RouseDuration))
+-        FoldMark(RedrawMark::Recolour);
+-
+-    if (Arrived.ContactArrived && (OverField || OverMenu))
+-    {
+-        if (Ledger->Seize(Claimed, OverMenu  ? ControlPart::Option
+-                                 : OverCell  ? ControlPart::Chevron
+-                                             : ControlPart::Body))
+-            ContactHeldByPanel = true;
+-    }
+-
+-    if (Ledger->Released(Claimed))
+-    {
+-        if (StoodOpen && OverMenu)
+-        {
+-            // ③ An option was taken. The datum is written through the caller's own reference, here, in the
+-            //    call that presents it — the panel never holds it between two ticks.
+-            const std::uint32_t Chosen = OptionUnder(Field, Declared.OptionCount);
+-
+-            if (Chosen < Declared.OptionCount && Chosen != TakenOrdinal)
+-            {
+-                TakenOrdinal             = Chosen;
+-                Reported.OrdinateAltered = true;
+-            }
+-
+-            Ledger->Withdraw();
+-            FoldMark(RedrawMark::Rearrange);
+-        }
+-        else if (OverField)
+-        {
+-            // 🔴 A tap on the field toggles the menu. Disclosing through the ledger is what closes whichever
+-            //    other menu stood open, so no call site has to remember to.
+-            if (StoodOpen)
+-                Ledger->Withdraw();
+-            else
+-                Ledger->Disclose(Claimed);
+-
+-            FoldMark(RedrawMark::Rearrange);
+-        }
+-    }
+-
+-    // 📝 A contact that arrived outside both the field and its open menu withdraws it — the dismissal every
+-    //    menu the sheet declares performs, and the reason the test is on arrival rather than on release.
+-    if (StoodOpen && Arrived.ContactArrived && !OverField && !OverMenu)
+-    {
+-        Ledger->Withdraw();
+-        FoldMark(RedrawMark::Rearrange);
+-    }
+-
+-    const bool  Disclosed = Ledger->Disclosed(Claimed);
+-    const float Roused    = Ledger->RousedFraction(Claimed);
+-
+-    // ③ The label, then the field's two grounds.
+-    Surface->TextRun(Label.LeastAlong, CentredAcross(Label, Measure.LabelText), Ink.LabelQuiet,
+-                     Declared.Caption, Measure.LabelText, 0.0f, false);
+-
+-    const float Radius = Field.SpanAcross() * 0.5f;
+-
+-    Surface->Ground(Field, Ink.FieldGround, Radius, CornerAll);
+-    Surface->Ground(Cell, Blend(Ink.CellGround, Ink.CellGroundRoused, Roused), Radius,
+-                    CornerTrailingUpper | CornerTrailingLower);
+-    Surface->Edge(Field, Ink.CardEdge, Measure.CardEdgeWeight, Radius, CornerAll);
+-
+-    // ④ The taken option's caption, inside the black field.
+-    const char* Presented = (Declared.Options != nullptr && TakenOrdinal < Declared.OptionCount)
+-                          ? Declared.Options[TakenOrdinal]
+-                          : "";
+-
+-    Surface->TextRunTruncated(Field.LeastAlong + Measure.FieldPadAlong,
+-                              CentredAcross(Field, Measure.RowText),
+-                              Cell.LeastAlong - Field.LeastAlong - Measure.FieldPadAlong * 2.0f,
+-                              Ink.FieldInk, Presented, Measure.RowText, false);
+-
+-    // ⑤ The chevron, turned a half turn while the menu stands open. The sheet rotates it; the figure roster
+-    //    holds one chevron, so the turned pose is recorded as the upward figure rather than as a rotation
+-    //    the recording surface does not offer.
+-    const PlaneExtent Chevron = Spanning(Cell.LeastAlong + (Cell.SpanAlong() - Measure.ChevronSymbol) * 0.5f,
+-                                         Cell.LeastAcross + (Cell.SpanAcross() - Measure.ChevronSymbol) * 0.5f,
+-                                         Measure.ChevronSymbol, Measure.ChevronSymbol);
+-
+-    Surface->Stroke(SymbolSubject::ChevronDown, Chevron, Ink.CellInk);
+-
+-    // ⑥ The menu is deferred so that it records above every row beneath it.
+-    if (Disclosed && Declared.OptionCount > 0u && DeferredCount < DeferredCeiling)
+-    {
+-        DeferredRecording& Holding = Deferred[DeferredCount++];
+-
+-        Holding.Claimed     = Claimed;
+-        Holding.Anchor      = Field;
+-        Holding.Options     = Declared.Options;
+-        Holding.OptionCount = Declared.OptionCount;
+-        Holding.TakenOption = TakenOrdinal;
+-        Holding.Menu        = true;
+-    }
+-
+-    Reported.ContactTaken = Ledger->Holding(Claimed);
+-    Reported.Mark         = Standing;
+-
+-    return Reported;
+-}
+-
+-PlaneExtent ControlPanel::MenuEnclosure(const PlaneExtent& Field, std::uint32_t OptionCount) const
+-{
+-    if (Appearance == nullptr || OptionCount == 0u)
+-        return PlaneExtent{};
+-
+-    const ControlMetric& Measure = Appearance->ControlMeasure;
+-
+-    const float OptionAcross = Measure.RowText * 1.5f + Measure.OptionPadAcross * 2.0f;
+-    const float Interior     = OptionAcross * static_cast<float>(OptionCount)
+-                             + Measure.MenuGapAcross * static_cast<float>(OptionCount - 1u);
+-
+-    return Spanning(Field.LeastAlong, Field.MostAcross + Measure.MenuLift,
+-                    Field.SpanAlong(), Interior + Measure.MenuPad * 2.0f);
+-}
+-
+-std::uint32_t ControlPanel::OptionUnder(const PlaneExtent& Field, std::uint32_t OptionCount) const
+-{
+-    if (Appearance == nullptr || OptionCount == 0u)
+-        return OptionCount;
+-
+-    const ControlMetric& Measure = Appearance->ControlMeasure;
+-    const PlaneExtent    Menu    = MenuEnclosure(Field, OptionCount);
+-
+-    const float OptionAcross = Measure.RowText * 1.5f + Measure.OptionPadAcross * 2.0f;
+-    float       Cursor       = Menu.LeastAcross + Measure.MenuPad;
+-
+-    for (std::uint32_t Ordinal = 0u; Ordinal < OptionCount; ++Ordinal)
+-    {
+-        const PlaneExtent Option = Spanning(Menu.LeastAlong + Measure.MenuPad, Cursor,
+-                                            Menu.SpanAlong() - Measure.MenuPad * 2.0f, OptionAcross);
+-
+-        if (Option.Encloses(Arrived.PositionAlong, Arrived.PositionAcross))
+-            return Ordinal;
+-
+-        Cursor += OptionAcross + Measure.MenuGapAcross;
+-    }
+-
+-    return OptionCount;
+-}
+-
+-//------------------------------------------------------------------------------------------------------------------------
+-//                                                    THE MAGNITUDE ROW
+-//------------------------------------------------------------------------------------------------------------------------
+-
+-ControlVerdict ControlPanel::MagnitudeRow(ControlIdentity Claimed, const PlaneExtent& Row,
+-                                          const MagnitudeDeclaration& Declared, double& Ordinate)
+-{
+-    ControlVerdict Reported;
+-
+-    if (Ledger == nullptr || Surface == nullptr || Appearance == nullptr || !Ledger->Resolves(Claimed))
+-        return Reported;
+-
+-    const ControlInk&    Ink     = Appearance->Control;
+-    const ControlMetric& Measure = Appearance->ControlMeasure;
+-
+-    // ① The row is a label, a readout pill, and a slider — the sheet spaces them with one gap each.
+-    const PlaneExtent Label   = Spanning(Row.LeastAlong, Row.LeastAcross, Measure.LabelAlong, Row.SpanAcross());
+-    const PlaneExtent Readout = Spanning(Label.MostAlong + Measure.RowGapAlong, Row.LeastAcross,
+-                                         Measure.ReadoutAlong, Measure.FieldAcross);
+-    const PlaneExtent UnitCell = PlaneExtent{ Readout.MostAlong - Measure.UnitCellAlong, Readout.LeastAcross,
+-                                              Readout.MostAlong, Readout.MostAcross };
+-    const PlaneExtent Track    = Spanning(Row.MostAlong - Measure.SliderAlong,
+-                                          Row.LeastAcross + (Row.SpanAcross() - Measure.SliderAcross) * 0.5f,
+-                                          Measure.SliderAlong, Measure.SliderAcross);
+-
+-    // ② Arbitration. The thumb's centre may travel only between the two ends of the track's inner run, so
+-    //    the fraction is projected onto that inner run and never onto the track's whole extent.
+-    const float Radius     = Measure.ThumbExtent * 0.5f;
+-    const float TravelLeast = Track.LeastAlong + Radius;
+-    const float TravelMost  = Track.MostAlong  - Radius;
+-    const float TravelSpan  = (TravelMost > TravelLeast) ? (TravelMost - TravelLeast) : 0.0f;
+-
+-    const bool OverTrack = Track.Encloses(Arrived.PositionAlong, Arrived.PositionAcross);
+-
+-    if (Ledger->DeclareRoused(Claimed, OverTrack, RouseDuration))
+-        FoldMark(RedrawMark::Recolour);
+-
+-    if (Arrived.ContactArrived && OverTrack)
+-    {
+-        if (Ledger->Seize(Claimed, ControlPart::Thumb))
+-        {
+-            ContactHeldByPanel = true;
+-            Ledger->DepartFrom(Claimed, static_cast<float>(Ordinate));
+-        }
+-    }
+-
+-    // 📐 While held, the reading is projected from the pointer's absolute abscissa against the track — not
+-    //    accumulated from per-tick travel, which drifts by a pixel for every tick the pointer spent outside
+-    //    the extent and never returns to a round figure at either end.
+-    if (Ledger->Holding(Claimed) && TravelSpan > 0.0f)
+-    {
+-        const double Fraction = Held((static_cast<double>(Arrived.PositionAlong) -
+-                                      static_cast<double>(TravelLeast)) / static_cast<double>(TravelSpan),
+-                                     0.0, 1.0);
+-        const double Projected = Declared.LeastOrdinal +
+-                                 Fraction * (Declared.MostOrdinal - Declared.LeastOrdinal);
+-
+-        if (Projected != Ordinate)
+-        {
+-            Ordinate                 = Projected;
+-            Reported.OrdinateAltered = true;
+-            FoldMark(RedrawMark::Rerecord);
+-        }
+-    }
+-
+-    const double Fraction = MagnitudeFraction(Ordinate, Declared.LeastOrdinal, Declared.MostOrdinal);
+-
+-    // ③ The label.
+-    Surface->TextRun(Label.LeastAlong, CentredAcross(Label, Measure.LabelText), Ink.LabelQuiet,
+-                     Declared.Caption, Measure.LabelText, 0.0f, false);
+-
+-    // ④ The readout pill — a black value cell and a raised unit cell, rounded at the ends only.
+-    const float PillRadius = Readout.SpanAcross() * 0.5f;
+-
+-    Surface->Ground(Readout, Ink.FieldGround, PillRadius, CornerAll);
+-    Surface->Ground(UnitCell, Ink.CellGround, PillRadius, CornerTrailingUpper | CornerTrailingLower);
+-    Surface->Edge(Readout, Ink.CardEdge, Measure.CardEdgeWeight, PillRadius, CornerAll);
+-
+-    char Reading[24] = {};
+-    IntegralRun(Reading, 24u, static_cast<long long>(Ordinate + (Ordinate < 0.0 ? -0.5 : 0.5)));
+-
+-    const float ValueAlong = Readout.LeastAlong;
+-    const float ValueSpan  = UnitCell.LeastAlong - Readout.LeastAlong;
+-    const float ReadingRun = Surface->MeasureRun(Reading, Measure.ReadoutText, Measure.ReadoutTracking);
+-
+-    Surface->TextRun(ValueAlong + (ValueSpan - ReadingRun) * 0.5f,
+-                     CentredAcross(Readout, Measure.ReadoutText),
+-                     Ink.FieldInk, Reading, Measure.ReadoutText, Measure.ReadoutTracking, true);
+-
+-    const float UnitRun = Surface->MeasureRun(Declared.UnitGlyph, Measure.UnitText, 0.0f);
+-
+-    Surface->TextRun(UnitCell.LeastAlong + (UnitCell.SpanAlong() - UnitRun) * 0.5f,
+-                     CentredAcross(UnitCell, Measure.UnitText),
+-                     Ink.UnitInk, Declared.UnitGlyph, Measure.UnitText, 0.0f, false);
+-
+-    // ⑤ The track — taken below the fraction, quiet above it, and the thumb centred on the division.
+-    const float TrackRadius = Track.SpanAcross() * 0.5f;
+-    const float Division    = TravelLeast + TravelSpan * static_cast<float>(Fraction);
+-
+-    Surface->Ground(Track, Ink.TrackQuiet, TrackRadius, CornerAll);
+-
+-    if (Division > Track.LeastAlong)
+-    {
+-        const PlaneExtent Taken = PlaneExtent{ Track.LeastAlong, Track.LeastAcross,
+-                                               Division, Track.MostAcross };
+-        Surface->Ground(Taken, Ink.TrackTaken, TrackRadius, CornerLeadingUpper | CornerLeadingLower);
+-    }
+-
+-    Surface->Edge(Track, Ink.TrackEdge, Measure.CardEdgeWeight, TrackRadius, CornerAll);
+-    Surface->Medallion(Division, Track.LeastAcross + Track.SpanAcross() * 0.5f, Radius, Ink.ThumbGround);
+-
+-    Reported.ContactTaken = Ledger->Holding(Claimed);
+-    Reported.Mark         = Standing;
+-
+-    return Reported;
+-}
+-
+-//------------------------------------------------------------------------------------------------------------------------
+-//                                                    THE ROTATION RULER
+-//------------------------------------------------------------------------------------------------------------------------
+-
+-ControlVerdict ControlPanel::RotationRuler(ControlIdentity Claimed, const PlaneExtent& Row,
+-                                           const RulerDeclaration& Declared, double& Degrees)
+-{
+-    ControlVerdict Reported;
+-
+-    if (Ledger == nullptr || Surface == nullptr || Appearance == nullptr || !Ledger->Resolves(Claimed))
+-        return Reported;
+-
+-    const ControlInk&    Ink     = Appearance->Control;
+-    const ControlMetric& Measure = Appearance->ControlMeasure;
+-
+-    // ① The ruler stacks: a label and readout above, the tick strip beneath them.
+-    const PlaneExtent Head    = Spanning(Row.LeastAlong, Row.LeastAcross, Row.SpanAlong(), Measure.FieldAcross);
+-    const PlaneExtent Label   = Spanning(Head.LeastAlong, Head.LeastAcross, Measure.LabelAlong, Head.SpanAcross());
+-    const PlaneExtent Readout = Spanning(Head.MostAlong - Measure.ReadoutAlong, Head.LeastAcross,
+-                                         Measure.ReadoutAlong, Measure.FieldAcross);
+-    const PlaneExtent UnitCell = PlaneExtent{ Readout.MostAlong - Measure.UnitCellAlong, Readout.LeastAcross,
+-                                              Readout.MostAlong, Readout.MostAcross };
+-    const PlaneExtent Strip   = Spanning(Row.LeastAlong, Head.MostAcross + Measure.CardRowGap * 0.5f,
+-                                         Row.SpanAlong(), Measure.RulerAcross);
+-
+-    // ② Arbitration. The reading departs from where it stood when the contact arrived, so a drag that
+-    //    leaves and re-enters the strip resumes from the same origin rather than jumping.
+-    const bool OverStrip = Strip.Encloses(Arrived.PositionAlong, Arrived.PositionAcross);
+-
+-    if (Arrived.ContactArrived && OverStrip)
+-    {
+-        if (Ledger->Seize(Claimed, ControlPart::Strip))
+-        {
+-            ContactHeldByPanel = true;
+-            Ledger->DepartFrom(Claimed, static_cast<float>(Degrees));
+-        }
+-    }
+-
+-    if (Ledger->Holding(Claimed) && Ledger->HeldPart(Claimed) == ControlPart::Strip)
+-    {
+-        const Deliver<float> Departed = Ledger->DepartedOrdinate(Claimed);
+-
+-        if (Departed.ContentPresent)
+-        {
+-            const double Travel   = static_cast<double>(Arrived.PositionAlong) -
+-                                    static_cast<double>(Ledger->OriginAlong());
+-            const double Turned   = RotationDegrees(static_cast<double>(Departed.Resolve()), Travel,
+-                                                    static_cast<double>(Measure.RulerDegreesPerPixel));
+-
+-            if (Turned != Degrees)
+-            {
+-                Degrees                  = Turned;
+-                Reported.OrdinateAltered = true;
+-                FoldMark(RedrawMark::Rerecord);
+-            }
+-        }
+-    }
+-
+-    // ③ The label and the readout pill.
+-    Surface->TextRun(Label.LeastAlong, CentredAcross(Label, Measure.LabelText), Ink.LabelQuiet,
+-                     Declared.Caption, Measure.LabelText, 0.0f, false);
+-
+-    const float PillRadius = Readout.SpanAcross() * 0.5f;
+-
+-    Surface->Ground(Readout, Ink.FieldGround, PillRadius, CornerAll);
+-    Surface->Ground(UnitCell, Ink.CellGround, PillRadius, CornerTrailingUpper | CornerTrailingLower);
+-    Surface->Edge(Readout, Ink.CardEdge, Measure.CardEdgeWeight, PillRadius, CornerAll);
+-
+-    const long long Rounded = static_cast<long long>(Degrees + (Degrees < 0.0 ? -0.5 : 0.5));
+-
+-    char Reading[24] = {};
+-    IntegralRun(Reading, 24u, Rounded);
+-
+-    const float ValueSpan  = UnitCell.LeastAlong - Readout.LeastAlong;
+-    const float ReadingRun = Surface->MeasureRun(Reading, Measure.ReadoutText, Measure.ReadoutTracking);
+-
+-    Surface->TextRun(Readout.LeastAlong + (ValueSpan - ReadingRun) * 0.5f,
+-                     CentredAcross(Readout, Measure.ReadoutText),
+-                     Ink.FieldInk, Reading, Measure.ReadoutText, Measure.ReadoutTracking, true);
+-
+-    const float UnitRun = Surface->MeasureRun(Declared.UnitGlyph, Measure.UnitText, 0.0f);
+-
+-    Surface->TextRun(UnitCell.LeastAlong + (UnitCell.SpanAlong() - UnitRun) * 0.5f,
+-                     CentredAcross(UnitCell, Measure.UnitText),
+-                     Ink.UnitInk, Declared.UnitGlyph, Measure.UnitText, 0.0f, false);
+-
+-    // ④ The strip's ground, and every tick inside it, confined so nothing escapes the rounded extent.
+-    Surface->Ground(Strip, Ink.RulerGround, Measure.RulerRadius, CornerAll);
+-    Surface->Edge(Strip, Ink.CardEdge, Measure.CardEdgeWeight, Measure.RulerRadius, CornerAll);
+-    Surface->Confine(Strip);
+-
+-    const float CentreAlong  = Strip.LeastAlong + Strip.SpanAlong() * 0.5f;
+-    const float CentreAcross = Strip.LeastAcross + Strip.SpanAcross() * 0.5f;
+-    const long long Centred  = Rounded;
+-
+-    for (long long Tick = Centred - static_cast<long long>(Measure.TickReach);
+-         Tick <= Centred + static_cast<long long>(Measure.TickReach); ++Tick)
+-    {
+-        // 📐 The sheet places tick i at `i * TICK_SPACING` and then translates the whole strip by
+-        //    `-rotationValue * TICK_SPACING`. The two compose to this, which is what keeps the strip
+-        //    continuous while the reading is fractional.
+-        const float TickAlong = CentreAlong +
+-                                (static_cast<float>(Tick) - static_cast<float>(Degrees)) * Measure.TickSpacing;
+-
+-        if (TickAlong < Strip.LeastAlong - Measure.TickWeight ||
+-            TickAlong > Strip.MostAlong  + Measure.TickWeight)
+-            continue;
+-
+-        const long long Absolute = (Tick < 0) ? -Tick : Tick;
+-        const bool      Major    = (Absolute % 10) == 0;
+-        const bool      Medium   = !Major && (Absolute % 5) == 0;
+-
+-        const float       TickAcross = Major ? Measure.TickMajorAcross
+-                                     : Medium ? Measure.TickMediumAcross
+-                                              : Measure.TickMinorAcross;
+-        const InkOrdinate TickInk    = Major ? Ink.TickMajor : Medium ? Ink.TickMedium : Ink.TickMinor;
+-
+-        const PlaneExtent Mark = Spanning(TickAlong - Measure.TickWeight * 0.5f,
+-                                          CentreAcross - TickAcross * 0.5f,
+-                                          Measure.TickWeight, TickAcross);
+-
+-        Surface->Ground(Mark, TickInk, Measure.TickWeight * 0.5f, CornerAll);
+-
+-        if (!Major)
+-            continue;
+-
+-        char Caption[24] = {};
+-        IntegralRun(Caption, 22u, Tick);
+-
+-        // 📝 The degree sign is appended as its own two UTF-8 octets rather than spelled in the literal, so
+-        //    the run stays ASCII-safe at every call site that measures it.
+-        std::uint32_t Written = 0u;
+-        while (Caption[Written] != '\0' && Written < 20u) ++Written;
+-        Caption[Written++] = '\xC2';
+-        Caption[Written++] = '\xB0';
+-        Caption[Written]   = '\0';
+-
+-        const float CaptionRun = Surface->MeasureRun(Caption, Measure.TickCaptionText, 0.0f);
+-
+-        Surface->TextRun(TickAlong - CaptionRun * 0.5f, CentreAcross + Measure.TickCaptionLift,
+-                         Ink.TickCaption, Caption, Measure.TickCaptionText, 0.0f, true);
+-    }
+-
+-    // ⑤ The sheet's mask — transparent, opaque at a fifth, opaque to four fifths, transparent. Two Along
+-    //    scrims over the ruler's own ground reproduce it; the middle three fifths need nothing recorded.
+-    const InkOrdinate Opaque      = Ink.CardGround;
+-    const InkOrdinate Transparent = Faded(Ink.CardGround, 0.0f);
+-    const float       FadeAlong   = Strip.SpanAlong() * 0.2f;
+-
+-    Surface->Scrim(PlaneExtent{ Strip.LeastAlong, Strip.LeastAcross,
+-                                Strip.LeastAlong + FadeAlong, Strip.MostAcross },
+-                   Opaque, Transparent, ScrimAxis::Along);
+-
+-    Surface->Scrim(PlaneExtent{ Strip.MostAlong - FadeAlong, Strip.LeastAcross,
+-                                Strip.MostAlong, Strip.MostAcross },
+-                   Transparent, Opaque, ScrimAxis::Along);
+-
+-    // ⑥ The fixed centre pointer, recorded last so the fade never touches it.
+-    const PlaneExtent Pointer = Spanning(CentreAlong - Measure.PointerWeight * 0.5f,
+-                                         CentreAcross - Measure.PointerAcross * 0.5f,
+-                                         Measure.PointerWeight, Measure.PointerAcross);
+-
+-    Surface->Ground(Pointer, Ink.RulerPointer, Measure.PointerWeight * 0.5f, CornerAll);
+-    Surface->Medallion(CentreAlong, Strip.LeastAcross + Measure.PointerDotLift,
+-                       Measure.PointerDot * 0.5f, Ink.RulerPointer);
+-
+-    Surface->Release();
+-
+-    Reported.ContactTaken = Ledger->Holding(Claimed);
+-    Reported.Mark         = Standing;
+-
+-    return Reported;
+-}
+-
+-//------------------------------------------------------------------------------------------------------------------------
+-//                                                      THE TOGGLE ROW
+-//------------------------------------------------------------------------------------------------------------------------
+-
+-ControlVerdict ControlPanel::ToggleRow(ControlIdentity Claimed, const PlaneExtent& Row,
+-                                       const ToggleDeclaration& Declared, bool& Taken)
+-{
+-    ControlVerdict Reported;
+-
+-    if (Ledger == nullptr || Surface == nullptr || Appearance == nullptr || !Ledger->Resolves(Claimed))
+-        return Reported;
+-
+-    const ControlInk&    Ink     = Appearance->Control;
+-    const ControlMetric& Measure = Appearance->ControlMeasure;
+-
+-    const bool OverRow = Row.Encloses(Arrived.PositionAlong, Arrived.PositionAcross);
+-
+-    if (Ledger->DeclareRoused(Claimed, OverRow, RouseDuration))
+-        FoldMark(RedrawMark::Recolour);
+-
+-    if (Arrived.ContactArrived && OverRow)
+-    {
+-        if (Ledger->Seize(Claimed, ControlPart::Body))
+-            ContactHeldByPanel = true;
+-    }
+-
+-    if (Ledger->Released(Claimed) && OverRow)
+-    {
+-        Taken                    = !Taken;
+-        Reported.OrdinateAltered = true;
+-        FoldMark(RedrawMark::Rerecord);
+-    }
+-
+-    if (Ledger->DeclareTaken(Claimed, Taken, RouseDuration))
+-        FoldMark(RedrawMark::Recolour);
+-
+-    const float Roused = Ledger->RousedFraction(Claimed);
+-    const float Held   = Ledger->TakenFraction(Claimed);
+-
+-    // ① The ring — quiet, roused, or taken. The sheet fades the border colour and scales the dot.
+-    const PlaneExtent Ring = Spanning(Row.LeastAlong + Measure.ToggleRowPadAlong,
+-                                      Row.LeastAcross + (Row.SpanAcross() - Measure.RingExtent) * 0.5f,
+-                                      Measure.RingExtent, Measure.RingExtent);
+-
+-    const InkOrdinate Quiet   = Blend(Ink.RingQuiet, Ink.RingRoused, Roused);
+-    const InkOrdinate RingInk = Blend(Quiet, Ink.RingTaken, Held);
+-
+-    Surface->Edge(Ring, RingInk, Measure.RingWeight, Measure.RingExtent * 0.5f, CornerAll);
+-
+-    // ② The dot scales from nothing to its full extent, which is what `scale-0` to `scale-100` states.
+-    const float DotRadius = Measure.RingDotExtent * 0.5f * Held;
+-
+-    if (DotRadius > 0.0f)
+-    {
+-        Surface->Medallion(Ring.LeastAlong + Ring.SpanAlong() * 0.5f,
+-                           Ring.LeastAcross + Ring.SpanAcross() * 0.5f,
+-                           DotRadius, Ink.RingDot);
+-    }
+-
+-    // ③ The label, fading between its three declared inks.
+-    const InkOrdinate QuietLabel = Blend(Ink.LabelQuiet, Ink.LabelRoused, Roused);
+-    const InkOrdinate LabelInk   = Blend(QuietLabel, Ink.LabelTaken, Held);
+-
+-    Surface->TextRun(Ring.MostAlong + Measure.ToggleGapAlong, CentredAcross(Row, Measure.RowText),
+-                     LabelInk, Declared.Caption, Measure.RowText, 0.0f, false);
+-
+-    Reported.ContactTaken = Ledger->Holding(Claimed);
+-    Reported.Mark         = Standing;
+-
+-    return Reported;
+-}
+-
+-//------------------------------------------------------------------------------------------------------------------------
+-//                                                    THE MULTI-SELECT ROW
+-//------------------------------------------------------------------------------------------------------------------------
+-
+-ControlVerdict ControlPanel::SubsetRow(ControlIdentity Claimed, const PlaneExtent& Row,
+-                                       const SubsetDeclaration& Declared, bool& Enrolled)
+-{
+-    ControlVerdict Reported;
+-
+-    if (Ledger == nullptr || Surface == nullptr || Appearance == nullptr || !Ledger->Resolves(Claimed))
+-        return Reported;
+-
+-    const ControlInk&    Ink     = Appearance->Control;
+-    const ControlMetric& Measure = Appearance->ControlMeasure;
+-
+-    const bool OverRow = Row.Encloses(Arrived.PositionAlong, Arrived.PositionAcross);
+-
+-    if (Ledger->DeclareRoused(Claimed, OverRow, RouseDuration))
+-        FoldMark(RedrawMark::Recolour);
+-
+-    if (Arrived.ContactArrived && OverRow)
+-    {
+-        if (Ledger->Seize(Claimed, ControlPart::Body))
+-            ContactHeldByPanel = true;
+-    }
+-
+-    if (Ledger->Released(Claimed) && OverRow)
+-    {
+-        Enrolled                 = !Enrolled;
+-        Reported.OrdinateAltered = true;
+-        FoldMark(RedrawMark::Rerecord);
+-    }
+-
+-    if (Ledger->DeclareTaken(Claimed, Enrolled, RouseDuration))
+-        FoldMark(RedrawMark::Recolour);
+-
+-    const float Roused = Ledger->RousedFraction(Claimed);
+-    const float Held   = Ledger->TakenFraction(Claimed);
+-
+-    // ① The ground. The sheet gives a quiet row no ground at all, a roused one #222222, and a taken one
+-    //    #2a2a2a — and the taken ground wins over the roused one, which is why it is blended last.
+-    const InkOrdinate QuietGround = Blend(Ink.RowGroundQuiet, Ink.RowGroundRoused, Roused);
+-    const InkOrdinate RowGround   = Blend(QuietGround, Ink.RowGroundTaken, Held);
+-
+-    // 🔴 Square corners. The sheet states `rounded-none` on this row and rounds every other control; a
+-    //    radius here would be the one place the transcription quietly improved on the source.
+-    Surface->Ground(Row, RowGround, 0.0f, CornerNone);
+-
+-    // ② The rail, which the sheet grows from nothing along the row's whole extent across.
+-    const PlaneExtent Rail = Spanning(Row.LeastAlong, Row.LeastAcross, Measure.SubsetRailAlong, Row.SpanAcross());
+-
+-    Surface->Ground(Rail, Blend(Ink.RowRailQuiet, Ink.RowRailTaken, Held), 0.0f, CornerNone);
+-
+-    // ③ The label.
+-    const InkOrdinate LabelInk = Blend(Ink.LabelQuiet, Ink.LabelTaken, Held);
+-
+-    Surface->TextRun(Row.LeastAlong + Measure.SubsetRowPadAlong, CentredAcross(Row, Measure.RowText),
+-                     LabelInk, Declared.Caption, Measure.RowText, 0.0f, false);
+-
+-    Reported.ContactTaken = Ledger->Holding(Claimed);
+-    Reported.Mark         = Standing;
+-
+-    return Reported;
+-}
+-
+-//------------------------------------------------------------------------------------------------------------------------
+-//                                                   THE MAGNITUDE STOPS
+-//------------------------------------------------------------------------------------------------------------------------
+-
+-ControlVerdict ControlPanel::MagnitudeStops(ControlIdentity Claimed, const PlaneExtent& Row,
+-                                            const StopDeclaration& Declared, std::uint32_t& TakenOrdinal)
+-{
+-    ControlVerdict Reported;
+-
+-    if (Ledger == nullptr || Surface == nullptr || Appearance == nullptr || !Ledger->Resolves(Claimed))
+-        return Reported;
+-
+-    if (Declared.StopCount < 2u || Declared.StopCount > StopCeiling || Declared.Stops == nullptr)
+-        return Reported;
+-
+-    const ControlInk&    Ink     = Appearance->Control;
+-    const ControlMetric& Measure = Appearance->ControlMeasure;
+-
+-    const PlaneExtent Label = Spanning(Row.LeastAlong, Row.LeastAcross, Measure.LabelAlong, Row.SpanAcross());
+-    const float       StripLeast = Label.MostAlong + Measure.RowGapAlong + Measure.StopStripPadLeading;
+-    const float       StripMost  = Row.MostAlong - Measure.StopStripPadTrailing;
+-    const float       StripSpan  = (StripMost > StripLeast) ? (StripMost - StripLeast) : 0.0f;
+-    const float       CentreAcross = Row.LeastAcross + Row.SpanAcross() * 0.5f;
+-
+-    // 📐 The sheet spaces its stops with `justify-between`, which places the first and the last against the
+-    //    two ends and divides the remainder evenly. With one stop there is no remainder to divide, which is
+-    //    why the declaration refuses a count below two rather than dividing by zero here.
+-    const float Division = StripSpan / static_cast<float>(Declared.StopCount - 1u);
+-
+-    Surface->TextRun(Label.LeastAlong, CentredAcross(Label, Measure.LabelText), Ink.LabelQuiet,
+-                     Declared.Caption, Measure.LabelText, 0.0f, false);
+-
+-    std::uint32_t RousedOrdinal = Declared.StopCount;
+-
+-    for (std::uint32_t Ordinal = 0u; Ordinal < Declared.StopCount; ++Ordinal)
+-    {
+-        const float  StopAlong = StripLeast + Division * static_cast<float>(Ordinal);
+-        const bool   TakenStop = Ordinal == TakenOrdinal;
+-        const float  Extent    = TakenStop ? Measure.StopTakenExtent : Measure.StopQuietExtent;
+-        const float  Reach     = Extent * 0.5f;
+-
+-        const PlaneExtent Stop = Spanning(StopAlong - Reach, CentreAcross - Reach, Extent, Extent);
+-
+-        if (Stop.Encloses(Arrived.PositionAlong, Arrived.PositionAcross))
+-            RousedOrdinal = Ordinal;
+-    }
+-
+-    // ① One rouse fade serves the whole strip, because the sheet roues exactly one stop at a time.
+-    if (Ledger->DeclareRoused(Claimed, RousedOrdinal < Declared.StopCount, RouseDuration))
+-        FoldMark(RedrawMark::Recolour);
+-
+-    if (Arrived.ContactArrived && RousedOrdinal < Declared.StopCount)
+-    {
+-        if (Ledger->Seize(Claimed, ControlPart::Body))
+-            ContactHeldByPanel = true;
+-    }
+-
+-    if (Ledger->Released(Claimed) && RousedOrdinal < Declared.StopCount && RousedOrdinal != TakenOrdinal)
+-    {
+-        TakenOrdinal             = RousedOrdinal;
+-        Reported.OrdinateAltered = true;
+-        FoldMark(RedrawMark::Rearrange);
+-    }
+-
+-    const float Roused = Ledger->RousedFraction(Claimed);
+-
+-    // ② Every stop, the taken one grown and carrying its letter.
+-    for (std::uint32_t Ordinal = 0u; Ordinal < Declared.StopCount; ++Ordinal)
+-    {
+-        const float StopAlong = StripLeast + Division * static_cast<float>(Ordinal);
+-        const bool  TakenStop = Ordinal == TakenOrdinal;
+-        const float Extent    = TakenStop ? Measure.StopTakenExtent : Measure.StopQuietExtent;
+-
+-        const InkOrdinate Quiet = (Ordinal == RousedOrdinal) ? Blend(Ink.StopQuiet, Ink.StopRoused, Roused)
+-                                                             : Ink.StopQuiet;
+-        const InkOrdinate StopInk = TakenStop ? Ink.StopTaken : Quiet;
+-
+-        Surface->Medallion(StopAlong, CentreAcross, Extent * 0.5f, StopInk);
+-
+-        if (!TakenStop)
+-            continue;
+-
+-        const char* Letter = Declared.Stops[Ordinal];
+-
+-        if (Letter == nullptr || Letter[0] == '\0')
+-            continue;
+-
+-        const float LetterRun = Surface->MeasureRun(Letter, Measure.RowText, 0.0f);
+-
+-        Surface->TextRun(StopAlong - LetterRun * 0.5f, CentreAcross - Measure.RowText * 0.5f,
+-                         Ink.StopTakenInk, Letter, Measure.RowText, 0.0f, true);
+-    }
+-
+-    Reported.ContactTaken = Ledger->Holding(Claimed);
+-    Reported.Mark         = Standing;
+-
+-    return Reported;
+-}
+-
+-//------------------------------------------------------------------------------------------------------------------------
+-//                                                    THE TOOLTIP TRIGGER
+-//------------------------------------------------------------------------------------------------------------------------
+-
+-ControlVerdict ControlPanel::TooltipTrigger(ControlIdentity Claimed, const PlaneExtent& Trigger,
+-                                            const TooltipDeclaration& Declared)
+-{
+-    ControlVerdict Reported;
+-
+-    if (Ledger == nullptr || Surface == nullptr || Appearance == nullptr || !Ledger->Resolves(Claimed))
+-        return Reported;
+-
+-    const ControlInk&    Ink     = Appearance->Control;
+-    const ControlMetric& Measure = Appearance->ControlMeasure;
+-
+-    const bool Light   = Declared.Appearance == TooltipAppearance::Light;
+-    const bool OverIt  = Trigger.Encloses(Arrived.PositionAlong, Arrived.PositionAcross);
+-
+-    // 📝 The card is disclosed by rest rather than by tap — `group-hover` — so this is the one control that
+-    //    declares its take fade from the pointer's presence and never from a release.
+-    if (Ledger->DeclareRoused(Claimed, OverIt, RouseDuration))
+-        FoldMark(RedrawMark::Recolour);
+-
+-    if (Ledger->DeclareTaken(Claimed, OverIt, TooltipDuration))
+-        FoldMark(RedrawMark::Recolour);
+-
+-    if (Arrived.ContactArrived && OverIt)
+-    {
+-        if (Ledger->Seize(Claimed, ControlPart::Body))
+-            ContactHeldByPanel = true;
+-    }
+-
+-    const float Roused    = Ledger->RousedFraction(Claimed);
+-    const float Disclosed = Ledger->TakenFraction(Claimed);
+-    const bool  Seized    = Ledger->Holding(Claimed);
+-
+-    // ① The sheet scales the trigger to 1.05 on hover and 0.95 while it is held. Both are recorded as an
+-    //    inset of the declared extent, because the recording surface places extents and does not transform.
+-    const float Scaled  = Seized ? 0.95f : Between(1.0f, 1.05f, Roused);
+-    const float Inset   = Trigger.SpanAlong() * (1.0f - Scaled) * 0.5f;
+-
+-    const PlaneExtent Grown = PlaneExtent{ Trigger.LeastAlong  + Inset, Trigger.LeastAcross + Inset,
+-                                           Trigger.MostAlong   - Inset, Trigger.MostAcross  - Inset };
+-
+-    Surface->Ground(Grown, Light ? Ink.TriggerLightGround : Ink.TriggerDarkGround,
+-                    Measure.TriggerRadius, CornerAll);
+-
+-    const PlaneExtent Figure = Spanning(Grown.LeastAlong + (Grown.SpanAlong() - Measure.TriggerSymbol) * 0.5f,
+-                                        Grown.LeastAcross + (Grown.SpanAcross() - Measure.TriggerSymbol) * 0.5f,
+-                                        Measure.TriggerSymbol, Measure.TriggerSymbol);
+-
+-    Surface->Stroke(Declared.Figure, Figure, Light ? Ink.TriggerLightInk : Ink.TriggerDarkInk);
+-
+-    // ② The card is deferred while any of it is visible, so it records above every later control.
+-    if (Disclosed > 0.0f && DeferredCount < DeferredCeiling)
+-    {
+-        DeferredRecording& Holding = Deferred[DeferredCount++];
+-
+-        Holding.Claimed    = Claimed;
+-        Holding.Anchor     = Trigger;
+-        Holding.Title      = Declared.Title;
+-        Holding.Body       = Declared.Body;
+-        Holding.Appearance = Declared.Appearance;
+-        Holding.Menu       = false;
+-    }
+-
+-    Reported.ContactTaken = Seized;
+-    Reported.Mark         = Standing;
+-
+-    return Reported;
+-}
+-
+-//------------------------------------------------------------------------------------------------------------------------
+-//                                                   THE DEFERRED SWEEP
+-//------------------------------------------------------------------------------------------------------------------------
+-
+-void ControlPanel::RecordMenu(const DeferredRecording& Holding)
+-{
+-    const ControlInk&    Ink     = Appearance->Control;
+-    const ControlMetric& Measure = Appearance->ControlMeasure;
+-
+-    const PlaneExtent Menu = MenuEnclosure(Holding.Anchor, Holding.OptionCount);
+-
+-    Surface->Ground(Menu, Ink.MenuGround, Measure.MenuRadius, CornerAll);
+-    Surface->Edge(Menu, Ink.MenuEdge, Measure.CardEdgeWeight, Measure.MenuRadius, CornerAll);
+-
+-    const float OptionAcross = Measure.RowText * 1.5f + Measure.OptionPadAcross * 2.0f;
+-    float       Cursor       = Menu.LeastAcross + Measure.MenuPad;
+-
+-    for (std::uint32_t Ordinal = 0u; Ordinal < Holding.OptionCount; ++Ordinal)
+-    {
+-        const PlaneExtent Option = Spanning(Menu.LeastAlong + Measure.MenuPad, Cursor,
+-                                            Menu.SpanAlong() - Measure.MenuPad * 2.0f, OptionAcross);
+-
+-        const bool Over = Option.Encloses(Arrived.PositionAlong, Arrived.PositionAcross);
+-
+-        // 📝 The option's rouse is read from the pointer directly rather than from an enrolled fade. Every
+-        //    option would otherwise need its own identity, and the sheet fades an option in 150 ms — below
+-        //    the threshold at which the absence of a fade reads as a defect rather than as immediacy.
+-        if (Over)
+-        {
+-            Surface->Ground(Option, Ink.OptionGroundRoused, Option.SpanAcross() * 0.5f, CornerAll);
+-        }
+-
+-        const char* Caption = (Holding.Options != nullptr) ? Holding.Options[Ordinal] : "";
+-        const bool  Taken   = Ordinal == Holding.TakenOption;
+-
+-        Surface->TextRunTruncated(Option.LeastAlong + Measure.OptionPadAlong,
+-                                  CentredAcross(Option, Measure.RowText),
+-                                  Option.SpanAlong() - Measure.OptionPadAlong * 2.0f,
+-                                  (Over || Taken) ? Ink.OptionInkRoused : Ink.OptionInk,
+-                                  Caption, Measure.RowText, false);
+-
+-        Cursor += OptionAcross + Measure.MenuGapAcross;
+-    }
+-}
+-
+-void ControlPanel::RecordTooltip(const DeferredRecording& Holding)
+-{
+-    const ControlInk&    Ink     = Appearance->Control;
+-    const ControlMetric& Measure = Appearance->ControlMeasure;
+-
+-    const float Disclosed = Ledger->TakenFraction(Holding.Claimed);
+-
+-    if (Disclosed <= 0.0f)
+-        return;
+-
+-    const bool Light = Holding.Appearance == TooltipAppearance::Light;
+-
+-    const InkOrdinate Ground = Faded(Light ? Ink.TooltipLightGround : Ink.TooltipDarkGround, Disclosed);
+-    const InkOrdinate Title  = Faded(Light ? Ink.TooltipLightTitle  : Ink.TooltipDarkTitle,  Disclosed);
+-    const InkOrdinate Body   = Faded(Light ? Ink.TooltipLightBody   : Ink.TooltipDarkBody,   Disclosed);
+-
+-    // ① The body is wrapped first, because the card's extent across follows from how many lines it took.
+-    const float Interior = Measure.TooltipAlong - Measure.TooltipPad * 2.0f;
+-
+-    const char*   LineFirst[WrapCeiling] = {};
+-    std::uint32_t LineExtent[WrapCeiling] = {};
+-    std::uint32_t Lines = 0u;
+-
+-    const char* Sweeping = (Holding.Body != nullptr) ? Holding.Body : "";
+-
+-    while (*Sweeping != '\0' && Lines < WrapCeiling)
+-    {
+-        const char*   LineStart = Sweeping;
+-        const char*   LastBreak = nullptr;
+-        std::uint32_t Taken     = 0u;
+-
+-        while (Sweeping[Taken] != '\0')
+-        {
+-            if (Sweeping[Taken] == ' ')
+-            {
+-                char          Probe[256] = {};
+-                std::uint32_t Copied     = (Taken < 255u) ? Taken : 255u;
+-
+-                for (std::uint32_t Ordinal = 0u; Ordinal < Copied; ++Ordinal)
+-                    Probe[Ordinal] = LineStart[Ordinal];
+-
+-                Probe[Copied] = '\0';
+-
+-                if (Surface->MeasureRun(Probe, Measure.TooltipBodyText, 0.0f) > Interior)
+-                    break;
+-
+-                LastBreak = Sweeping + Taken;
+-            }
+-
+-            ++Taken;
+-        }
+-
+-        const char* Breaking = (LastBreak != nullptr && Sweeping[Taken] != '\0') ? LastBreak
+-                                                                                 : Sweeping + Taken;
+-
+-        LineFirst[Lines]  = LineStart;
+-        LineExtent[Lines] = static_cast<std::uint32_t>(Breaking - LineStart);
+-        ++Lines;
+-
+-        Sweeping = (*Breaking == ' ') ? Breaking + 1 : Breaking;
+-    }
+-
+-    const float BodyAcross  = Measure.TooltipBodyLeading * static_cast<float>(Lines);
+-    const float CardAcross  = Measure.TooltipPad * 2.0f + Measure.TooltipTitleText * 1.5f
+-                            + Measure.TooltipTitleGap + BodyAcross;
+-
+-    // ② The card hangs above its trigger by the declared lift, aligned to the trigger's leading edge.
+-    const PlaneExtent Card = Spanning(Holding.Anchor.LeastAlong,
+-                                      Holding.Anchor.LeastAcross - Measure.TooltipLift - CardAcross,
+-                                      Measure.TooltipAlong, CardAcross);
+-
+-    Surface->Ground(Card, Ground, Measure.TooltipRadius, CornerAll);
+-
+-    // ③ The arrow — a square turned a quarter turn, tucked under the card's lower edge. Recorded as four
+-    //    corners rather than as a rotated ground, because the recording surface places extents and the
+-    //    sheet's own arrow is a rotated div whose rounded corners are hidden behind the card regardless.
+-    const float ArrowReach  = Measure.TooltipArrowExtent * 0.5f;
+-    const float ArrowCentre = Card.LeastAlong + Measure.TooltipArrowAlong;
+-    const float ArrowAcross = Card.MostAcross - Measure.TooltipArrowSink;
+-
+-    const float Corners[8] = { ArrowCentre,              ArrowAcross - ArrowReach,
+-                               ArrowCentre + ArrowReach, ArrowAcross,
+-                               ArrowCentre,              ArrowAcross + ArrowReach,
+-                               ArrowCentre - ArrowReach, ArrowAcross };
+-
+-    Surface->Tongue(Corners, 4u, Ground);
+-
+-    // ④ The title, then every wrapped line of the body.
+-    Surface->TextRun(Card.LeastAlong + Measure.TooltipPad, Card.LeastAcross + Measure.TooltipPad,
+-                     Title, Holding.Title, Measure.TooltipTitleText, 0.0f, true);
+-
+-    float Cursor = Card.LeastAcross + Measure.TooltipPad + Measure.TooltipTitleText * 1.5f
+-                 + Measure.TooltipTitleGap;
+-
+-    for (std::uint32_t Ordinal = 0u; Ordinal < Lines; ++Ordinal)
+-    {
+-        char          Staging[256] = {};
+-        std::uint32_t Copied       = (LineExtent[Ordinal] < 255u) ? LineExtent[Ordinal] : 255u;
+-
+-        for (std::uint32_t Glyph = 0u; Glyph < Copied; ++Glyph)
+-            Staging[Glyph] = LineFirst[Ordinal][Glyph];
+-
+-        Staging[Copied] = '\0';
+-
+-        Surface->TextRun(Card.LeastAlong + Measure.TooltipPad, Cursor, Body,
+-                         Staging, Measure.TooltipBodyText, 0.0f, false);
+-
+-        Cursor += Measure.TooltipBodyLeading;
+-    }
+-}
+-
+-void ControlPanel::RecordDeferred()
+-{
+-    if (Surface == nullptr || Appearance == nullptr || Ledger == nullptr)
+-        return;
+-
+-    for (std::uint32_t Ordinal = 0u; Ordinal < DeferredCount; ++Ordinal)
+-    {
+-        const DeferredRecording& Holding = Deferred[Ordinal];
+-
+-        if (Holding.Menu)
+-            RecordMenu(Holding);
+-        else
+-            RecordTooltip(Holding);
+-    }
+-
+-    DeferredCount = 0u;
+-}
+-
+-}   // namespace Slate
+diff --git a/Engine/SlateUI/Interface/ViewportSequence/Source/ViewportSequence.cpp b/Engine/SlateUI/Interface/ViewportSequence/Source/ViewportSequence.cpp
+index c32e6d0..e9f14e7 100644
+--- a/Engine/SlateUI/Interface/ViewportSequence/Source/ViewportSequence.cpp
++++ b/Engine/SlateUI/Interface/ViewportSequence/Source/ViewportSequence.cpp
+@@ -44,7 +44,7 @@ Deliver<bool> ViewportSequence::Advance(double ElapsedMilliseconds)
+     const Deliver<bool> SurfaceAdopted = SurfaceOwned.Adopt();
+     if (!SurfaceAdopted.ContentPresent)
+     {
+-        Interface.Abandon();
++        Disregard(Interface.Abandon());
+         return SurfaceAdopted;
+     }
+ 
+@@ -60,7 +60,7 @@ Deliver<bool> ViewportSequence::Advance(double ElapsedMilliseconds)
+ 
+         if (!DrawersBuilt.ContentPresent)
+         {
+-            Interface.Abandon();
++            Disregard(Interface.Abandon());
+             return DrawersBuilt;
+         }
+ 
+@@ -178,7 +178,7 @@ bool ViewportSequence::Moving() const
+ 
+ void ViewportSequence::Reclaim()
+ {
+-    Interface.Abandon();
++    Disregard(Interface.Abandon());
+     Interface.Reclaim();
+ 
+     // 📝 🔴 The drawers are reset before the integrator, because their spring ordinals index into it. The
+diff --git a/Engine/SlateVulkan/Device/ByteSpace/Source/ByteSpace.cpp b/Engine/SlateVulkan/Device/ByteSpace/Source/ByteSpace.cpp
+index 2ec6937..98793f8 100644
+--- a/Engine/SlateVulkan/Device/ByteSpace/Source/ByteSpace.cpp
++++ b/Engine/SlateVulkan/Device/ByteSpace/Source/ByteSpace.cpp
+@@ -161,11 +161,11 @@ Deliver<std::uint32_t> ByteSpace::ConstructExtent(ExtentResidency Residency, VkD
+     // 📝 🔴 `06` §7's diagnostic-name gate. The refusal is discarded deliberately: an extent that stands and
+     //    could not be named is still an extent every later claim is sliced from, and refusing the allocation
+     //    over a name would make the diagnostic capability a requirement for drawing anything.
+-    NamingEdge->Declare(VK_OBJECT_TYPE_DEVICE_MEMORY,
++    Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_DEVICE_MEMORY,
+                         reinterpret_cast<std::uint64_t>(Arriving.DeviceExtent),
+                         Residency == ExtentResidency::DeviceLocal ? "ByteSpace device-local extent"
+                                                                   : "ByteSpace host-writable extent",
+-                        ExtentOrdinal);
++                        ExtentOrdinal));
+ 
+     return Deliver<std::uint32_t>::Deliver(ExtentOrdinal);
+ }
+diff --git a/Engine/SlateVulkan/Device/CommandSequence/Source/CommandSequence.cpp b/Engine/SlateVulkan/Device/CommandSequence/Source/CommandSequence.cpp
+index 80e1949..f4e5985 100644
+--- a/Engine/SlateVulkan/Device/CommandSequence/Source/CommandSequence.cpp
++++ b/Engine/SlateVulkan/Device/CommandSequence/Source/CommandSequence.cpp
+@@ -61,15 +61,15 @@ Deliver<bool> CommandSequence::Construct(const VulkanExchange& Exchange, const D
+ 
+         // 📝 🔴 `06` §7's diagnostic-name gate. The refusals are discarded for `ByteSpace`'s reason — a slot
+         //    that stands and could not be named is still the slot the rotation records into.
+-        NamingEdge->Declare(VK_OBJECT_TYPE_COMMAND_POOL,
++        Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_COMMAND_POOL,
+                             reinterpret_cast<std::uint64_t>(Slot.RecordingExtent),
+                             "CommandSequence rotation extent",
+-                            SlotOrdinal);
++                            SlotOrdinal));
+ 
+-        NamingEdge->Declare(VK_OBJECT_TYPE_COMMAND_BUFFER,
++        Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_COMMAND_BUFFER,
+                             reinterpret_cast<std::uint64_t>(Slot.Primary),
+                             "CommandSequence rotation recording",
+-                            SlotOrdinal);
++                            SlotOrdinal));
+     }
+ 
+     // 📝 The immediate extent is reset per use and therefore declares the resettable arrangement its slots do
+@@ -85,9 +85,9 @@ Deliver<bool> CommandSequence::Construct(const VulkanExchange& Exchange, const D
+ 
+     // 📝 🔴 `06` §7's gate, by the two-operand form: there is one immediate extent and an ordinal on a single
+     //    object reads as one of a set.
+-    NamingEdge->Declare(VK_OBJECT_TYPE_COMMAND_POOL,
++    Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_COMMAND_POOL,
+                         reinterpret_cast<std::uint64_t>(ImmediateExtent),
+-                        "CommandSequence immediate extent");
++                        "CommandSequence immediate extent"));
+ 
+     return Deliver<bool>::Deliver(true);
+ }
+@@ -239,9 +239,9 @@ Deliver<VkCommandBuffer> CommandSequence::OpenImmediate()
+ 
+     // 📝 🔴 `06` §7's gate reaches the immediate recording too, and carries no ordinal because this path holds
+     //    one at a time — `SurrenderImmediate` waits for it and returns it before bring-up asks for the next.
+-    NamingEdge->Declare(VK_OBJECT_TYPE_COMMAND_BUFFER,
++    Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_COMMAND_BUFFER,
+                         reinterpret_cast<std::uint64_t>(Arriving),
+-                        "CommandSequence immediate recording");
++                        "CommandSequence immediate recording"));
+ 
+     return Deliver<VkCommandBuffer>::Deliver(Arriving);
+ }
+@@ -279,9 +279,9 @@ Deliver<bool> CommandSequence::SurrenderImmediate(VkCommandBuffer Recorded)
+     // 📝 🔴 `06` §7's gate. Named although it is destroyed a few lines below, because the report that matters
+     //    here is the one raised **while** it stands — a device lost inside the wait names this point, and an
+     //    unnamed one makes that report the only place in the ordering the reader cannot attribute.
+-    NamingEdge->Declare(VK_OBJECT_TYPE_FENCE,
++    Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_FENCE,
+                         reinterpret_cast<std::uint64_t>(Completion),
+-                        "CommandSequence immediate completion");
++                        "CommandSequence immediate completion"));
+ 
+     VkSubmitInfo SurrenderDeclaration       = {};
+     SurrenderDeclaration.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+diff --git a/Engine/SlateVulkan/Device/CycleScheduler/Source/CycleScheduler.cpp b/Engine/SlateVulkan/Device/CycleScheduler/Source/CycleScheduler.cpp
+index 52f696a..63270c9 100644
+--- a/Engine/SlateVulkan/Device/CycleScheduler/Source/CycleScheduler.cpp
++++ b/Engine/SlateVulkan/Device/CycleScheduler/Source/CycleScheduler.cpp
+@@ -59,20 +59,20 @@ Deliver<bool> CycleScheduler::Construct(const VulkanExchange& Exchange, const Di
+         //    never arrived and one whose recording never signalled are different defects with different causes,
+         //    and the addresses alone say only that the cycle stopped. The refusals are discarded for
+         //    `ByteSpace`'s reason.
+-        NamingEdge->Declare(VK_OBJECT_TYPE_FENCE,
++        Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_FENCE,
+                             reinterpret_cast<std::uint64_t>(Slot.Completion),
+                             "CycleScheduler cycle completion",
+-                            SlotOrdinal);
++                            SlotOrdinal));
+ 
+-        NamingEdge->Declare(VK_OBJECT_TYPE_SEMAPHORE,
++        Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_SEMAPHORE,
+                             reinterpret_cast<std::uint64_t>(Slot.ImageArrived),
+                             "CycleScheduler cycle image arrival",
+-                            SlotOrdinal);
++                            SlotOrdinal));
+ 
+-        NamingEdge->Declare(VK_OBJECT_TYPE_SEMAPHORE,
++        Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_SEMAPHORE,
+                             reinterpret_cast<std::uint64_t>(Slot.RecordingDone),
+                             "CycleScheduler cycle recording completion",
+-                            SlotOrdinal);
++                            SlotOrdinal));
+     }
+ 
+     SlotStanding = 0u;
+diff --git a/Engine/SlateVulkan/Device/DescriptorIndex/Source/DescriptorIndex.cpp b/Engine/SlateVulkan/Device/DescriptorIndex/Source/DescriptorIndex.cpp
+index 5c2a3c2..3d0ea76 100644
+--- a/Engine/SlateVulkan/Device/DescriptorIndex/Source/DescriptorIndex.cpp
++++ b/Engine/SlateVulkan/Device/DescriptorIndex/Source/DescriptorIndex.cpp
+@@ -94,10 +94,10 @@ Deliver<std::uint32_t> DescriptorIndex::Declare(const std::vector<DescriptorSlot
+ 
+     // 📝 🔴 `06` §7's diagnostic-name gate. The refusal is discarded for `ByteSpace`'s reason — a layout that
+     //    stands and could not be named is still the layout every program is constructed against.
+-    NamingEdge->Declare(VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
++    Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
+                         reinterpret_cast<std::uint64_t>(Arriving.Constructed),
+                         "DescriptorIndex layout",
+-                        LayoutOrdinal);
++                        LayoutOrdinal));
+ 
+     return Deliver<std::uint32_t>::Deliver(LayoutOrdinal);
+ }
+@@ -171,9 +171,9 @@ Deliver<bool> DescriptorIndex::Fix(std::uint32_t ConcurrentSets)
+ 
+     // 📝 🔴 `06` §7's gate. Named by the two-operand form and carrying no ordinal, because there is exactly one
+     //    descriptor extent for the engine's whole life and an ordinal on a single object reads as one of many.
+-    NamingEdge->Declare(VK_OBJECT_TYPE_DESCRIPTOR_POOL,
++    Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_DESCRIPTOR_POOL,
+                         reinterpret_cast<std::uint64_t>(DescriptorExtent),
+-                        "DescriptorIndex descriptor extent");
++                        "DescriptorIndex descriptor extent"));
+ 
+     return Deliver<bool>::Deliver(true);
+ }
+@@ -222,10 +222,10 @@ Deliver<std::uint32_t> DescriptorIndex::Claim(std::uint32_t LayoutOrdinal)
+     //    defect the depth exists to catch.
+     for (std::uint32_t SlotOrdinal = 0u; SlotOrdinal < RecordingSlotCount; ++SlotOrdinal)
+     {
+-        NamingEdge->Declare(VK_OBJECT_TYPE_DESCRIPTOR_SET,
++        Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_DESCRIPTOR_SET,
+                             reinterpret_cast<std::uint64_t>(Arriving.PerSlot[SlotOrdinal]),
+                             "DescriptorIndex set",
+-                            ClaimOrdinal * RecordingSlotCount + SlotOrdinal);
++                            ClaimOrdinal * RecordingSlotCount + SlotOrdinal));
+     }
+ 
+     return Deliver<std::uint32_t>::Deliver(ClaimOrdinal);
+diff --git a/Engine/SlateVulkan/Device/DisplayScheduler/Source/DisplayScheduler.cpp b/Engine/SlateVulkan/Device/DisplayScheduler/Source/DisplayScheduler.cpp
+index fcfc77c..4f67764 100644
+--- a/Engine/SlateVulkan/Device/DisplayScheduler/Source/DisplayScheduler.cpp
++++ b/Engine/SlateVulkan/Device/DisplayScheduler/Source/DisplayScheduler.cpp
+@@ -217,10 +217,10 @@ Deliver<bool> DisplayScheduler::Establish()
+     //    declared so that the first chain is the nought-th. The refusal is discarded for `ByteSpace`'s reason.
+     const std::uint32_t ChainOrdinal = EstablishedCount++;
+ 
+-    NamingEdge->Declare(VK_OBJECT_TYPE_SWAPCHAIN_KHR,
++    Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_SWAPCHAIN_KHR,
+                         reinterpret_cast<std::uint64_t>(DisplayChain),
+                         "DisplayScheduler presentation chain",
+-                        ChainOrdinal);
++                        ChainOrdinal));
+ 
+     std::uint32_t ArrivedCount = 0u;
+     vkGetSwapchainImagesKHR(DeviceEdge->ActiveDevice(), DisplayChain, &ArrivedCount, nullptr);
+@@ -262,18 +262,18 @@ Deliver<bool> DisplayScheduler::Establish()
+         //    because the ordinal a display hands back is not the cycle slot — `Await` takes whichever image the
+         //    display releases — so a name carrying only one of the two cannot say which chain a stale view came
+         //    from after a resize.
+-        NamingEdge->Declare(VK_OBJECT_TYPE_IMAGE_VIEW,
++        Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_IMAGE_VIEW,
+                             reinterpret_cast<std::uint64_t>(ChainViews[ImageOrdinal]),
+                             "DisplayScheduler chain view",
+-                            ChainOrdinal * ArrivedCount + ImageOrdinal);
++                            ChainOrdinal * ArrivedCount + ImageOrdinal));
+ 
+         // 📝 The image is named although Slate did not create it, which is past what the gate asks. Every layout
+         //    transition `08` §3 ⑬ records is reported against the image and never against the view, so an unnamed
+         //    one leaves the single most frequent presentation error the one report that carries no name.
+-        NamingEdge->Declare(VK_OBJECT_TYPE_IMAGE,
++        Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_IMAGE,
+                             reinterpret_cast<std::uint64_t>(ChainImages[ImageOrdinal]),
+                             "DisplayScheduler chain image",
+-                            ChainOrdinal * ArrivedCount + ImageOrdinal);
++                            ChainOrdinal * ArrivedCount + ImageOrdinal));
+     }
+ 
+     TakenOrdinal     = AbsentDisplayImage;
+diff --git a/Engine/SlateVulkan/Device/HostLifecycle/Source/HostLifecycle.cpp b/Engine/SlateVulkan/Device/HostLifecycle/Source/HostLifecycle.cpp
+index ccf4dd6..2f5bfdc 100644
+--- a/Engine/SlateVulkan/Device/HostLifecycle/Source/HostLifecycle.cpp
++++ b/Engine/SlateVulkan/Device/HostLifecycle/Source/HostLifecycle.cpp
+@@ -133,9 +133,21 @@ bool HostLifecycle::RecoverDisplay()
+     //    one copy of it should exist.
+     vkDeviceWaitIdle(DeviceEdge.ActiveDevice());
+ 
+-    DisplayChain.Reclaim(Extent.Width, Extent.Height);
++    // 🔴 The re-establishment is READ. A refused Reclaim leaves no chain to acquire from, and reporting a
++    //    recovery that did not happen has the tick loop carry on against a chain that is gone — every
++    //    subsequent acquire refuses and the host presents nothing, with no diagnostic naming the cause.
++    //    Found by [[nodiscard]]: this delivery was discarded.
++    const Deliver<bool> Reestablished = DisplayChain.Reclaim(Extent.Width, Extent.Height);
++
+     Surface.AdoptExtent();
+ 
++    if (!Reestablished.ContentPresent)
++    {
++        Report(Declared.Naming, "the presentation chain could not be re-established");
++        LoopStanding = false;
++        return false;
++    }
++
+     DisplayAltered = true;
+ 
+     return true;
+diff --git a/Engine/SlateVulkan/Device/ImageSpace/Source/ImageSpace.cpp b/Engine/SlateVulkan/Device/ImageSpace/Source/ImageSpace.cpp
+index b214652..941af34 100644
+--- a/Engine/SlateVulkan/Device/ImageSpace/Source/ImageSpace.cpp
++++ b/Engine/SlateVulkan/Device/ImageSpace/Source/ImageSpace.cpp
+@@ -214,15 +214,15 @@ Deliver<ImageClaim> ImageSpace::Claim(const ImageShape& Declared)
+     // 📝 🔴 `06` §7's diagnostic-name gate. The image and its whole-image view are separate vendor objects and
+     //    are named separately, both by the ordinal the claimant resolves them by. The refusals are discarded
+     //    for `ByteSpace`'s reason — an unnamed image is still the image the claimant asked for.
+-    NamingEdge->Declare(VK_OBJECT_TYPE_IMAGE,
++    Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_IMAGE,
+                         reinterpret_cast<std::uint64_t>(Arriving),
+                         NameOf(Declared.Intent),
+-                        Ordinal);
++                        Ordinal));
+ 
+-    NamingEdge->Declare(VK_OBJECT_TYPE_IMAGE_VIEW,
++    Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_IMAGE_VIEW,
+                         reinterpret_cast<std::uint64_t>(Whole),
+                         "ImageSpace whole-image view",
+-                        Ordinal);
++                        Ordinal));
+ 
+     ImageClaim Handed;
+     Handed.Extent         = Arriving;
+@@ -407,10 +407,10 @@ Deliver<VkImageView> ImageSpace::LevelView(std::uint32_t ImageOrdinal, std::uint
+     //    because the chain `16` §2 walks constructs one per level over a single image — an ordinal naming the
+     //    image would give every view in the chain one name, and the driver's text could not say which level
+     //    the error was raised against.
+-    NamingEdge->Declare(VK_OBJECT_TYPE_IMAGE_VIEW,
++    Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_IMAGE_VIEW,
+                         reinterpret_cast<std::uint64_t>(Constructed),
+                         "ImageSpace level view",
+-                        LevelOrdinal);
++                        LevelOrdinal));
+ 
+     return Deliver<VkImageView>::Deliver(Constructed);
+ }
+diff --git a/Engine/SlateVulkan/Device/ProgramIndex/Source/ProgramIndex.cpp b/Engine/SlateVulkan/Device/ProgramIndex/Source/ProgramIndex.cpp
+index 2c5e5d8..9eaf663 100644
+--- a/Engine/SlateVulkan/Device/ProgramIndex/Source/ProgramIndex.cpp
++++ b/Engine/SlateVulkan/Device/ProgramIndex/Source/ProgramIndex.cpp
+@@ -222,15 +222,15 @@ Deliver<std::uint32_t> ProgramIndex::DeclareGraphics(const GraphicsDeclaration&
+     // 📝 🔴 `06` §7's diagnostic-name gate, and named here rather than inside `ReachLayout` because the ordinal
+     //    a layout is named by is the program's — the layout is constructed before the program stands and has no
+     //    ordinal of its own until this point. The refusals are discarded for `ByteSpace`'s reason.
+-    NamingEdge->Declare(VK_OBJECT_TYPE_PIPELINE,
++    Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_PIPELINE,
+                         reinterpret_cast<std::uint64_t>(Constructed),
+                         "ProgramIndex graphics program",
+-                        ProgramOrdinal);
++                        ProgramOrdinal));
+ 
+-    NamingEdge->Declare(VK_OBJECT_TYPE_PIPELINE_LAYOUT,
++    Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_PIPELINE_LAYOUT,
+                         reinterpret_cast<std::uint64_t>(ReachedLayout),
+                         "ProgramIndex graphics reach",
+-                        ProgramOrdinal);
++                        ProgramOrdinal));
+ 
+     return Deliver<std::uint32_t>::Deliver(ProgramOrdinal);
+ }
+@@ -285,15 +285,15 @@ Deliver<std::uint32_t> ProgramIndex::DeclareCompute(const ComputeDeclaration& De
+ 
+     // 📝 🔴 `06` §7's gate, as the graphics route names its two. The ordinal runs across both routes because
+     //    `Resolve` addresses one run, so a compute program and a graphics one never share one.
+-    NamingEdge->Declare(VK_OBJECT_TYPE_PIPELINE,
++    Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_PIPELINE,
+                         reinterpret_cast<std::uint64_t>(Constructed),
+                         "ProgramIndex compute program",
+-                        ProgramOrdinal);
++                        ProgramOrdinal));
+ 
+-    NamingEdge->Declare(VK_OBJECT_TYPE_PIPELINE_LAYOUT,
++    Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_PIPELINE_LAYOUT,
+                         reinterpret_cast<std::uint64_t>(ReachedLayout),
+                         "ProgramIndex compute reach",
+-                        ProgramOrdinal);
++                        ProgramOrdinal));
+ 
+     return Deliver<std::uint32_t>::Deliver(ProgramOrdinal);
+ }
+diff --git a/Engine/SlateVulkan/Device/SpanSpace/Source/SpanSpace.cpp b/Engine/SlateVulkan/Device/SpanSpace/Source/SpanSpace.cpp
+index b5b8b1f..f918b88 100644
+--- a/Engine/SlateVulkan/Device/SpanSpace/Source/SpanSpace.cpp
++++ b/Engine/SlateVulkan/Device/SpanSpace/Source/SpanSpace.cpp
+@@ -168,10 +168,10 @@ Deliver<SpanClaim> SpanSpace::Claim(const SpanShape& Declared)
+     // 📝 🔴 `06` §7's diagnostic-name gate, named by the ordinal the claimant resolves the span by. The
+     //    refusal is discarded for `ByteSpace`'s reason — a span that stands and could not be named is still
+     //    the span the claimant asked for.
+-    NamingEdge->Declare(VK_OBJECT_TYPE_BUFFER,
++    Disregard(NamingEdge->Declare(VK_OBJECT_TYPE_BUFFER,
+                         reinterpret_cast<std::uint64_t>(Arriving),
+                         NameOf(Declared.Intent),
+-                        SpanOrdinal);
++                        SpanOrdinal));
+ 
+     SpanClaim Claimed;
+     Claimed.Extent      = Arriving;
