@@ -1,0 +1,125 @@
+diff --git a/Build/Construct.ps1 b/Build/Construct.ps1
+index ddf258b..0866077 100644
+--- a/Build/Construct.ps1
++++ b/Build/Construct.ps1
+@@ -240,6 +240,77 @@ function Get-UnitSource([hashtable] $UnitEntry, [string] $Subject = '')
+ # 📝 MSVC writes its diagnostics to stdout, so nothing here redirects stderr. Redirecting a native
+ #    executable's stderr in Windows PowerShell wraps each line in an ErrorRecord and, under an Stop
+ #    preference, turns a plain warning into a thrown build failure.
++#---
++#                                        TRANSLATION FRESHNESS
++#---
++
++# 🔴 An object is stale when any header it included is newer than it — not merely when its own .cpp is.
++#    Comparing the .cpp alone is the defect this function exists to remove: editing a header rebuilt
++#    nothing, the link succeeded against yesterday's objects, and the executable ran code from the
++#    previous edit with no diagnostic anywhere. `32` §4.1 already states the shape of that failure for
++#    shaders — "an engine that runs correct code from the previous edit" — and it applied here too.
++#
++# 📝 cl.exe /sourceDependencies writes the full include closure as JSON beside the object. The record is
++#    written by the same invocation that produced the object, so the two cannot describe different
++#    translations.
++function Test-ObjectFresh([string] $ObjectPath, [string] $SourcePath, [string] $DependencyPath)
++{
++    if ($Rebuild)                        { return $false }
++    if (-not (Test-Path $ObjectPath))    { return $false }
++    if (-not (Test-Path $SourcePath))    { return $false }
++
++    $ObjectWritten = (Get-Item $ObjectPath).LastWriteTimeUtc
++
++    if ($ObjectWritten -le (Get-Item $SourcePath).LastWriteTimeUtc)
++    {
++        return $false
++    }
++
++    # 🔴 No record means no knowledge, and no knowledge means retranslate. Treating an absent record as
++    #    "probably fine" reinstates exactly the defect this function removes — on the one build where it
++    #    matters, which is the first build after someone deleted the scratch folder by hand.
++    if (-not (Test-Path $DependencyPath))
++    {
++        return $false
++    }
++
++    try
++    {
++        $Recorded = Get-Content $DependencyPath -Raw | ConvertFrom-Json
++        $Included = $Recorded.Data.Includes
++    }
++    catch
++    {
++        return $false
++    }
++
++    if ($null -eq $Included)
++    {
++        return $false
++    }
++
++    foreach ($Header in $Included)
++    {
++        # A header that has been deleted since the last translation changes the closure, so the object
++        # no longer describes the source it was built from.
++        if (-not (Test-Path $Header))
++        {
++            return $false
++        }
++
++        # ⚠️ `-ge` and not `-gt`. A header written inside the same filesystem tick as the object is not
++        #    provably older than it, and NTFS timestamps are coarse enough for that to happen on a fast
++        #    edit-and-build. Retranslating a fresh object costs seconds; trusting a stale one costs a
++        #    debugging session.
++        if ((Get-Item $Header).LastWriteTimeUtc -ge $ObjectWritten)
++        {
++            return $false
++        }
++    }
++
++    return $true
++}
++
+ function Invoke-Translation([hashtable] $UnitEntry, [string] $Selection, [string] $VulkanRoot, [string] $Subject = '')
+ {
+     $UnitName    = $UnitEntry.Name
+@@ -269,21 +340,25 @@ function Invoke-Translation([hashtable] $UnitEntry, [string] $Selection, [string
+ 
+     foreach ($Source in $Sources)
+     {
+-        $Stem       = [System.IO.Path]::GetFileNameWithoutExtension($Source)
+-        $ObjectPath = Join-Path $ObjectRoot "$Stem.obj"
++        $Stem           = [System.IO.Path]::GetFileNameWithoutExtension($Source)
++        $ObjectPath     = Join-Path $ObjectRoot "$Stem.obj"
++        $DependencyPath = Join-Path $ObjectRoot "$Stem.deps.json"
+         $Produced.Add($ObjectPath)
+ 
+-        if (-not $Rebuild -and (Test-Path $ObjectPath) -and
+-            (Get-Item $ObjectPath).LastWriteTimeUtc -gt (Get-Item $Source).LastWriteTimeUtc)
++        if (Test-ObjectFresh $ObjectPath $Source $DependencyPath)
+         {
+             continue
+         }
+ 
+         # 📝 /Fd names a per-unit database. Sharing one across units serialises the compiler on it, and
+         #    concurrent invocations corrupt it outright.
++        # 📝 /sourceDependencies writes the include closure beside the object, in the same invocation that
++        #    produces it. Written per translation unit rather than per unit, because two translation units
++        #    in one unit include different headers and a shared record would over-rebuild both.
+         $Arguments = $Flags + $IncludePath + @(
+             "/Fo$ObjectPath"
+             "/Fd$(Join-Path $ObjectRoot "$UnitName.pdb")"
++            "/sourceDependencies$DependencyPath"
+             $Source
+         )
+ 
+@@ -357,6 +432,12 @@ function Get-ShaderSource([hashtable] $UnitEntry)
+ #    stage exists to catch, since those two folders are precisely what the shader toolchain and the host
+ #    toolchain share. The newest write across both is folded into every comparison below. It is coarser than
+ #    a real include scan and deliberately so: it can only ever lower more than necessary, never less.
++# 📝 The shader path is guarded coarsely rather than by a per-entry-point include closure: the newest write
++#    anywhere under Contract/ or Shared/ invalidates every lowered stream. That over-lowers — a change to one
++#    shared header re-lowers shaders that never included it — and it is left that way deliberately, because
++#    the error is in the safe direction and slangc's dependency output is not the same shape as cl.exe's.
++#    The C++ path cannot afford the same coarseness: it would retranslate the whole engine on every edit.
++# 🚧 Worth replacing with slangc's own depfile once the shader toolchain of `32` §4.1 stage B exists.
+ function Get-SeamTimestamp
+ {
+     if ($null -ne $script:SeamTimestamp)
