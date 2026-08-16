@@ -1,0 +1,662 @@
+diff --git a/Build/Construct.ps1 b/Build/Construct.ps1
+index da32680..ddf258b 100644
+--- a/Build/Construct.ps1
++++ b/Build/Construct.ps1
+@@ -638,6 +638,18 @@ Import-ToolchainEnvironment
+ 
+ $VulkanRoot = Resolve-VulkanRoot
+ Write-Building "vulkan $VulkanRoot"
++
++# 🔴 Slate's ImGui divergence is applied before any unit is translated, because SlateUI compiles the
++#    vendored ImGui sources directly. Applied here rather than inside the SlateUI branch so that a
++#    -Unit SlateUI build and a whole-tree build patch the submodule identically. Re-running is a
++#    no-op: the script detects an applied patch and skips it.
++& powershell -File (Join-Path $ScriptRoot 'ApplyImGuiPatches.ps1')
++
++if ($LASTEXITCODE -ne 0)
++{
++    throw 'ApplyImGuiPatches.ps1 failed; the ImGui tab-shape patches were not applied'
++}
++
+ Write-Host ''
+ 
+ $Selected = if ($Unit) { @($UnitOrder | Where-Object { $_.Name -eq $Unit }) } else { $UnitOrder }
+diff --git a/Engine/SlateUI/Interface/AppearanceSpecification/Api/AppearanceSpecification.h b/Engine/SlateUI/Interface/AppearanceSpecification/Api/AppearanceSpecification.h
+index fb47833..e23bf39 100644
+--- a/Engine/SlateUI/Interface/AppearanceSpecification/Api/AppearanceSpecification.h
++++ b/Engine/SlateUI/Interface/AppearanceSpecification/Api/AppearanceSpecification.h
+@@ -513,6 +513,62 @@ struct ControlMetric
+     float           ArtistFactor   = 1.0f;                      // [-] - the artist's own preference
+ };
+ 
++//------------------------------------------------------------------------------------------------------------------------
++//                                                   THE WORKSPACE TABS
++//------------------------------------------------------------------------------------------------------------------------
++
++// 📐 `References/DockWorkspace.html` states its tab strip in raw hexadecimal, like the control sheet and
++//    unlike the neutral ladder. The seven below are its own figures, named once here so no recording site
++//    and no style seat transcribes a literal.
++inline constexpr std::uint32_t WorkspaceStrip        = 0x18181Cu;   // [-] - --strip, and --panel-footer-bg
++inline constexpr std::uint32_t WorkspaceTabQuiet     = 0x26262Cu;   // [-] - --tab-inactive
++inline constexpr std::uint32_t WorkspaceTabRoused    = 0x32323Au;   // [-] - --tab-hover
++inline constexpr std::uint32_t WorkspaceTabTaken     = 0x000000u;   // [-] - --tab-active
++inline constexpr std::uint32_t WorkspaceTabInkQuiet  = 0x9BA1ADu;   // [-] - --tab-inactive-text
++inline constexpr std::uint32_t WorkspaceTabInkTaken  = 0xFFFFFFu;   // [-] - --tab-active-text
++inline constexpr std::uint32_t WorkspaceFooterEdge   = 0x222228u;   // [-] - --panel-footer-border, --border
++
++/// 🧩 Every extent and ink the workspace tab strip is drawn with, stated at the sheet's authored density.
++/// note  🔴 These are read by whatever seats the interface library's style, and by the footer strip Slate
++///       records itself. The tab geometry is the vendor's — `Patches/` states how — but the figures it is
++///       driven by are declared here so the sheet can be compared against them line by line.
++/// note  ⚠️ TabPadAlong and TabOverlap are coupled. The sheet's 38 px horizontal padding exists to clear the
++///       slant plus the overlap; raising the overlap without raising the padding runs adjacent runs together.
++/// tag   contract, nonallocating, nonthrowing
++struct WorkspaceMetric
++{
++    float  TabAcross        =  24.0f;   // [px] - .tab height
++    float  TabSlant         =  14.0f;   // [px] - slant = min(14, w * 0.16)
++    float  TabOverlap       =  24.0f;   // [px] - .tab margin-right: -24px
++    float  TabPadAlong      =  38.0f;   // [px] - .tab padding: 0 38px
++    float  TabAlongFloor    = 170.0f;   // [px] - .tab min-width
++    float  TabAlongCeiling  = 320.0f;   // [px] - .tab max-width
++    float  TabRadius        =   0.0f;   // [px] - roundCorners is off; 5.0f turns it on
++    float  TabEdgeWeight    =   0.0f;   // [px] - no border requested; the sheet's stroke is 1.0f
++    float  StripAcross      =  28.0f;   // [px] - .tabstrip height
++    float  StripPadTop      =   4.0f;   // [px] - 28 px strip carrying a 24 px tab at flex-end
++    float  FooterAcross     =  22.0f;   // [px] - .panelfooter height
++    float  FooterEdgeWeight =   1.0f;   // [px] - .panelfooter border-top
++    float  TabText          =  10.0f;   // [px] - .tab .lbl font-size
++};
++
++/// 🧩 The inks the workspace tab strip and its footer are drawn with.
++/// tag   contract, nonallocating, nonthrowing
++struct WorkspaceInk
++{
++    InkOrdinate  StripGround   = Covering(WorkspaceStrip);         // [-] - behind the tabs
++    InkOrdinate  TabQuiet      = Covering(WorkspaceTabQuiet);      // [-] - an unselected tab
++    InkOrdinate  TabRoused     = Covering(WorkspaceTabRoused);     // [-] - hovered
++    InkOrdinate  TabTaken      = Covering(WorkspaceTabTaken);      // [-] - selected
++    InkOrdinate  TabInkQuiet   = Covering(WorkspaceTabInkQuiet);   // [-] - an unselected run
++    InkOrdinate  TabInkTaken   = Covering(WorkspaceTabInkTaken);   // [-] - the selected run
++    InkOrdinate  TabEdge       = Partial(AbsoluteBlack, 0.45);     // [-] - stroke rgba(0,0,0,.45)
++    InkOrdinate  TabEdgeRoused = Partial(0xFFFFFFu, 0.08);         // [-] - stroke rgba(255,255,255,.08)
++    InkOrdinate  FooterGround  = Covering(WorkspaceStrip);         // [-] - --panel-footer-bg
++    InkOrdinate  FooterEdge    = Covering(WorkspaceFooterEdge);    // [-] - --panel-footer-border
++    InkOrdinate  WorkspaceVoid = Covering(AbsoluteBlack);          // [-] - the OLED ground behind everything
++};
++
+ //------------------------------------------------------------------------------------------------------------------------
+ //                                                     THE MOTION SCALE
+ //------------------------------------------------------------------------------------------------------------------------
+@@ -559,8 +615,10 @@ struct AppearanceSpecification
+     SurfaceInk     Ink            = {};
+     MetricScale    Measure        = {};
+     MotionScale    Motion         = {};
+-    ControlInk     Control        = {};
+-    ControlMetric  ControlMeasure = {};
++    ControlInk       Control          = {};
++    ControlMetric    ControlMeasure   = {};
++    WorkspaceInk     Workspace        = {};
++    WorkspaceMetric  WorkspaceMeasure = {};
+ };
+ 
+ /// 🧩 The bounds the artist's own preference is admitted within.
+diff --git a/Engine/SlateUI/Interface/AppearanceSpecification/Source/AppearanceSpecification.cpp b/Engine/SlateUI/Interface/AppearanceSpecification/Source/AppearanceSpecification.cpp
+index d46fcf0..1121bd4 100644
+--- a/Engine/SlateUI/Interface/AppearanceSpecification/Source/AppearanceSpecification.cpp
++++ b/Engine/SlateUI/Interface/AppearanceSpecification/Source/AppearanceSpecification.cpp
+@@ -217,6 +217,31 @@ void FloorRuns(ControlMetric& Measure)
+     }
+ }
+ 
++/// 🧩 Scales the workspace tab figures. Every member is a length; none is a fraction or a count.
++/// note  The tab strip is authored at the engine's own density and not at the control sheet's 2x, so it
++///       takes the display and artist factors alone and never AuthoredReduction. A 24 px tab halved is
++///       twelve pixels, which no run fits inside.
++/// cost  ✔️
++void ScaleWorkspaceLengths(WorkspaceMetric& Measure, float AppliedScale)
++{
++    Measure.TabAcross        *= AppliedScale;
++    Measure.TabSlant         *= AppliedScale;
++    Measure.TabOverlap       *= AppliedScale;
++    Measure.TabPadAlong      *= AppliedScale;
++    Measure.TabAlongFloor    *= AppliedScale;
++    Measure.TabAlongCeiling  *= AppliedScale;
++    Measure.TabRadius        *= AppliedScale;
++    Measure.TabEdgeWeight    *= AppliedScale;
++    Measure.StripAcross      *= AppliedScale;
++    Measure.StripPadTop      *= AppliedScale;
++    Measure.FooterAcross     *= AppliedScale;
++    Measure.FooterEdgeWeight *= AppliedScale;
++    Measure.TabText          *= AppliedScale;
++
++    if (Measure.TabText < TextLegibilityFloor)
++        Measure.TabText = TextLegibilityFloor;
++}
++
+ }   // namespace
+ 
+ ComfortDensity ClassifyDensity(const MetricScale& Measure, float ExtentAlong)
+@@ -261,6 +286,12 @@ AppearanceSpecification Resolve(double DisplayScale, double ArtistScale, float E
+     ScaleControlLengths(Resolved.ControlMeasure, ControlScale);
+     FloorRuns(Resolved.ControlMeasure);
+ 
++    // 📝 The workspace strip is authored at engine density, so it takes the display and artist factors and
++    //    not the control sheet's reduction. Its own density factor still applies: a tab strip on a 4K panel
++    //    wants the same easing outward that every other extent gets.
++    ScaleWorkspaceLengths(Resolved.WorkspaceMeasure,
++                          DensityFactor(Classified) * AppliedScale * ArtistFactor);
++
+     Resolved.ControlMeasure.Density       = Classified;
+     Resolved.ControlMeasure.AppliedFactor = ControlScale;
+     Resolved.ControlMeasure.ArtistFactor  = ArtistFactor;
+diff --git a/Patches/PatchA-TrapezoidalTabs.patch b/Patches/PatchA-TrapezoidalTabs.patch
+new file mode 100644
+index 0000000..f5b06b7
+--- /dev/null
++++ b/Patches/PatchA-TrapezoidalTabs.patch
+@@ -0,0 +1,113 @@
++diff --git a/imgui.cpp b/imgui.cpp
++index 735deb9..5daa0dd 100644
++--- a/imgui.cpp
+++++ b/imgui.cpp
++@@ -1521,6 +1521,7 @@ ImGuiStyle::ImGuiStyle()
++     ImageBorderSize             = 0.0f;             // Thickness of border around tabs.
++     TabRounding                 = 5.0f;             // Radius of upper corners of a tab. Set to 0.0f to have rectangular tabs.
++     TabBorderSize               = 0.0f;             // Thickness of border around tabs.
+++    TabSlant                    = 0.0f;             // [SLATE PATCH A] Tab corner slant. Zero keeps stock ImGui; Slate seats 14.0f to match DockWorkspace.html.
++     TabMinWidthBase             = 1.0f;             // Minimum tab width, to make tabs larger than their contents. TabBar buttons are not affected.
++     TabMinWidthShrink           = 80.0f;            // Minimum tab width after shrinking, when using ImGuiTabBarFlags_FittingPolicyMixed policy. FLT_MAX: never shrink, will behave like ImGuiTabBarFlags_FittingPolicyScroll.
++     TabCloseButtonMinWidthSelected   = -1.0f;       // -1: always visible. 0.0f: visible when hovered. >0.0f: visible when hovered if minimum width.
++@@ -1603,6 +1604,7 @@ void ImGuiStyle::ScaleAllSizes(float scale_factor)
++     ImageBorderSize = ImTrunc(ImageBorderSize * scale_factor);
++     TabRounding = ImTrunc(TabRounding * scale_factor);
++     TabBorderSize = ImTrunc(TabBorderSize * scale_factor);
+++    TabSlant = ImTrunc(TabSlant * scale_factor);
++     TabMinWidthBase = ImTrunc(TabMinWidthBase * scale_factor);
++     TabMinWidthShrink = ImTrunc(TabMinWidthShrink * scale_factor);
++     TabCloseButtonMinWidthSelected = (TabCloseButtonMinWidthSelected > 0.0f && TabCloseButtonMinWidthSelected != FLT_MAX) ? ImTrunc(TabCloseButtonMinWidthSelected * scale_factor) : TabCloseButtonMinWidthSelected;
++diff --git a/imgui.h b/imgui.h
++index cc80fc8..f960a2b 100644
++--- a/imgui.h
+++++ b/imgui.h
++@@ -2321,6 +2321,7 @@ struct ImGuiStyle
++     float       ImageBorderSize;            // Thickness of border around Image() calls.
++     float       TabRounding;                // Radius of upper corners of a tab. Set to 0.0f to have rectangular tabs.
++     float       TabBorderSize;              // Thickness of border around tabs.
+++    float       TabSlant;                   // [SLATE PATCH A] Horizontal inset of a tab's two upper corners, in display pixels. 0.0f restores ImGui's rectangular tab.
++     float       TabMinWidthBase;            // Minimum tab width, to make tabs larger than their contents. TabBar buttons are not affected.
++     float       TabMinWidthShrink;          // Minimum tab width after shrinking, when using ImGuiTabBarFlags_FittingPolicyMixed policy.
++     float       TabCloseButtonMinWidthSelected;     // -1: always visible. 0.0f: visible when hovered. >0.0f: visible when hovered if minimum width. FLT_MAX: never shrink, will behave like ImGuiTabBarFlags_FittingPolicyScroll.
++diff --git a/imgui_widgets.cpp b/imgui_widgets.cpp
++index a98cb69..34b2f28 100644
++--- a/imgui_widgets.cpp
+++++ b/imgui_widgets.cpp
++@@ -10865,6 +10865,54 @@ ImVec2 ImGui::TabItemCalcSize(ImGuiWindow*)
++     return ImVec2(0.0f, 0.0f);
++ }
++ 
+++// [SLATE PATCH A] Trapezoidal tab silhouette, transcribed from References/DockWorkspace.html.
+++//   tabPath(w,h): slant = min(14, w * 0.16); the outline is [0,h] [slant,0] [w-slant,0] [w,h],
+++//   with the two upper corners rounded at radius 5 and the two lower corners left square.
+++//   The sheet rounds a corner by insetting along both incident edges and joining the two inset
+++//   points with a quadratic through the corner itself -- its roundedPath() -- which is exactly
+++//   PathBezierQuadraticCurveTo, so the curve is the browser's and not an approximation of it.
+++//   The slant is read from Style.TabSlant in display pixels so ScaleAllSizes carries it; a slant
+++//   fixed at 14 would be half as steep on a 2x display.
+++//   Hit-testing is untouched: ItemAdd() and every drag path use the rectangular bb, precisely as
+++//   the sheet's SVG is pointer-events:none over a rectangular <div>.
+++static void SlateTabOutline(ImDrawList* draw_list, const ImRect& bb, float slant, float rounding, float y1, float y2, float inset)
+++{
+++    const ImVec2 corner[4] = {
+++        ImVec2(bb.Min.x + inset,         y2),      // lower leading, square
+++        ImVec2(bb.Min.x + slant + inset, y1),      // upper leading, rounded
+++        ImVec2(bb.Max.x - slant - inset, y1),      // upper trailing, rounded
+++        ImVec2(bb.Max.x - inset,         y2),      // lower trailing, square
+++    };
+++    const float radius[4] = { 0.0f, rounding, rounding, 0.0f };
+++
+++    for (int n = 0; n < 4; n++)
+++    {
+++        const ImVec2& p0 = corner[(n + 3) & 3];
+++        const ImVec2& p  = corner[n];
+++        const ImVec2& p1 = corner[(n + 1) & 3];
+++
+++        const ImVec2 d0 = ImVec2(p0.x - p.x, p0.y - p.y);
+++        const ImVec2 d1 = ImVec2(p1.x - p.x, p1.y - p.y);
+++        const float  l0 = ImSqrt(d0.x * d0.x + d0.y * d0.y);
+++        const float  l1 = ImSqrt(d1.x * d1.x + d1.y * d1.y);
+++
+++        // The sheet clamps the radius to half of each incident edge, so a narrow tab degrades to a
+++        // plain corner instead of folding its own outline inside out.
+++        float r = radius[n];
+++        if (l0 > 0.0f) r = ImMin(r, l0 * 0.5f);
+++        if (l1 > 0.0f) r = ImMin(r, l1 * 0.5f);
+++
+++        if (r <= 0.1f || l0 <= 0.0f || l1 <= 0.0f)
+++        {
+++            draw_list->PathLineTo(p);
+++            continue;
+++        }
+++
+++        draw_list->PathLineTo(ImVec2(p.x + d0.x / l0 * r, p.y + d0.y / l0 * r));
+++        draw_list->PathBezierQuadraticCurveTo(p, ImVec2(p.x + d1.x / l1 * r, p.y + d1.y / l1 * r));
+++    }
+++}
+++
++ void ImGui::TabItemBackground(ImDrawList* draw_list, const ImRect& bb, ImGuiTabItemFlags flags, ImU32 col)
++ {
++     // While rendering tabs, we trim 1 pixel off the top of our bounding box so they can fit within a regular frame height while looking "detached" from it.
++@@ -10875,6 +10923,21 @@ void ImGui::TabItemBackground(ImDrawList* draw_list, const ImRect& bb, ImGuiTabI
++     const float rounding = ImMax(0.0f, ImMin((flags & ImGuiTabItemFlags_Button) ? g.Style.FrameRounding : g.Style.TabRounding, width * 0.5f - 1.0f));
++     const float y1 = bb.Min.y + 1.0f;
++     const float y2 = bb.Max.y - g.Style.TabBarBorderSize;
+++
+++    // [SLATE PATCH A] A button is a button and keeps its rectangle; only a genuine tab is slanted.
+++    const float slant = (flags & ImGuiTabItemFlags_Button) ? 0.0f : ImMin(g.Style.TabSlant, width * 0.16f);
+++    if (slant > 0.0f)
+++    {
+++        SlateTabOutline(draw_list, bb, slant, rounding, y1, y2, 0.0f);
+++        draw_list->PathFillConvex(col);
+++        if (g.Style.TabBorderSize > 0.0f)
+++        {
+++            SlateTabOutline(draw_list, bb, slant, rounding, y1 + 0.5f, y2, 0.5f);
+++            draw_list->PathStroke(GetColorU32(ImGuiCol_Border), ImDrawFlags_Closed, g.Style.TabBorderSize);
+++        }
+++        return;
+++    }
+++
++     draw_list->PathLineTo(ImVec2(bb.Min.x, y2));
++     draw_list->PathArcToFast(ImVec2(bb.Min.x + rounding, y1 + rounding), rounding, 6, 9);
++     draw_list->PathArcToFast(ImVec2(bb.Max.x - rounding, y1 + rounding), rounding, 9, 12);
+diff --git a/Patches/PatchB-TabOverlapZOrder.patch b/Patches/PatchB-TabOverlapZOrder.patch
+new file mode 100644
+index 0000000..3ded303
+--- /dev/null
++++ b/Patches/PatchB-TabOverlapZOrder.patch
+@@ -0,0 +1,138 @@
++diff --git a/imgui.h b/imgui.h
++--- a/imgui.h
+++++ b/imgui.h
++@@ -2322,6 +2322,9 @@
++     float       TabRounding;                // Radius of upper corners of a tab. Set to 0.0f to have rectangular tabs.
++     float       TabBorderSize;              // Thickness of border around tabs.
++     float       TabSlant;                   // [SLATE PATCH A] Horizontal inset of a tab's two upper corners, in display pixels. 0.0f restores ImGui's rectangular tab.
+++    float       TabOverlap;                 // [SLATE PATCH B] Horizontal overlap between adjacent tabs, in display pixels, so slanted edges interlock. 0.0f keeps ImGui's edge-to-edge layout.
+++    float       TabHeight;                  // [SLATE PATCH B] Tab-bar height override, in display pixels. 0.0f derives it from FontSize and FramePadding as ImGui does.
+++    float       TabStripPadTop;             // [SLATE PATCH B] Strip showing above the tabs, in display pixels. The tab is seated against the strip's lower edge.
++     float       TabMinWidthBase;            // Minimum tab width, to make tabs larger than their contents. TabBar buttons are not affected.
++     float       TabMinWidthShrink;          // Minimum tab width after shrinking, when using ImGuiTabBarFlags_FittingPolicyMixed policy.
++     float       TabCloseButtonMinWidthSelected;     // -1: always visible. 0.0f: visible when hovered. >0.0f: visible when hovered if minimum width. FLT_MAX: never shrink, will behave like ImGuiTabBarFlags_FittingPolicyScroll.
++diff --git a/imgui.cpp b/imgui.cpp
++--- a/imgui.cpp
+++++ b/imgui.cpp
++@@ -1522,6 +1522,9 @@
++     TabRounding                 = 5.0f;             // Radius of upper corners of a tab. Set to 0.0f to have rectangular tabs.
++     TabBorderSize               = 0.0f;             // Thickness of border around tabs.
++     TabSlant                    = 0.0f;             // [SLATE PATCH A] Tab corner slant. Zero keeps stock ImGui; Slate seats 14.0f to match DockWorkspace.html.
+++    TabOverlap                  = 0.0f;             // [SLATE PATCH B] Overlap between adjacent tabs. Zero keeps stock ImGui; the sheet states 24.0f.
+++    TabHeight                   = 0.0f;             // [SLATE PATCH B] Tab-bar height override. Zero derives it as ImGui does; the sheet states 24.0f.
+++    TabStripPadTop              = 0.0f;             // [SLATE PATCH B] Strip visible above the tabs. The sheet's 28 px strip over a 24 px tab states 4.0f.
++     TabMinWidthBase             = 1.0f;             // Minimum tab width, to make tabs larger than their contents. TabBar buttons are not affected.
++     TabMinWidthShrink           = 80.0f;            // Minimum tab width after shrinking, when using ImGuiTabBarFlags_FittingPolicyMixed policy. FLT_MAX: never shrink, will behave like ImGuiTabBarFlags_FittingPolicyScroll.
++     TabCloseButtonMinWidthSelected   = -1.0f;       // -1: always visible. 0.0f: visible when hovered. >0.0f: visible when hovered if minimum width.
++@@ -1605,6 +1608,9 @@
++     TabRounding = ImTrunc(TabRounding * scale_factor);
++     TabBorderSize = ImTrunc(TabBorderSize * scale_factor);
++     TabSlant = ImTrunc(TabSlant * scale_factor);
+++    TabOverlap = ImTrunc(TabOverlap * scale_factor);
+++    TabHeight = ImTrunc(TabHeight * scale_factor);
+++    TabStripPadTop = ImTrunc(TabStripPadTop * scale_factor);
++     TabMinWidthBase = ImTrunc(TabMinWidthBase * scale_factor);
++     TabMinWidthShrink = ImTrunc(TabMinWidthShrink * scale_factor);
++     TabCloseButtonMinWidthSelected = (TabCloseButtonMinWidthSelected > 0.0f && TabCloseButtonMinWidthSelected != FLT_MAX) ? ImTrunc(TabCloseButtonMinWidthSelected * scale_factor) : TabCloseButtonMinWidthSelected;
++diff --git a/imgui_internal.h b/imgui_internal.h
++--- a/imgui_internal.h
+++++ b/imgui_internal.h
++@@ -2869,6 +2869,8 @@
++     ImS16               TabsActiveCount;        // Number of tabs submitted this frame.
++     ImS16               LastTabItemIdx;         // Index of last BeginTabItem() tab for use by EndTabItem()
++     float               ItemSpacingY;
+++    ImDrawListSplitter  SlateZSplitter;         // [SLATE PATCH B] Two channels so the selected tab draws over its overlapping neighbours
+++    bool                SlateZSplit;            // [SLATE PATCH B] Whether the splitter above stands open this frame
++     ImVec2              FramePadding;           // style.FramePadding locked at the time of BeginTabBar()
++     ImVec2              BackupCursorPos;
++     ImGuiTextBuffer     TabsNames;              // For non-docking tab bar we re-append names in a contiguous buffer.
++diff --git a/imgui_widgets.cpp b/imgui_widgets.cpp
++--- a/imgui_widgets.cpp
+++++ b/imgui_widgets.cpp
++@@ -9808,7 +9808,10 @@
++ 
++     ImGuiID id = window->GetID(str_id);
++     ImGuiTabBar* tab_bar = g.TabBars.GetOrAddByKey(id);
++-    ImRect tab_bar_bb = ImRect(window->DC.CursorPos.x, window->DC.CursorPos.y, window->WorkRect.Max.x, window->DC.CursorPos.y + g.FontSize + g.Style.FramePadding.y * 2);
+++    // [SLATE PATCH B] TabHeight overrides the derived bar height, and TabStripPadTop reserves a strip above
+++    //   the tabs that the ground shows through -- the sheet's 28 px strip carrying a 24 px tab at flex-end.
+++    const float slate_tab_h = (g.Style.TabHeight > 0.0f) ? g.Style.TabHeight : (g.FontSize + g.Style.FramePadding.y * 2);
+++    ImRect tab_bar_bb = ImRect(window->DC.CursorPos.x, window->DC.CursorPos.y + g.Style.TabStripPadTop, window->WorkRect.Max.x, window->DC.CursorPos.y + g.Style.TabStripPadTop + slate_tab_h);
++     tab_bar->ID = id;
++     tab_bar->SeparatorMinX = tab_bar_bb.Min.x - IM_TRUNC(window->WindowPadding.x * 0.5f);
++     tab_bar->SeparatorMaxX = tab_bar_bb.Max.x + IM_TRUNC(window->WindowPadding.x * 0.5f);
++@@ -9875,6 +9878,18 @@
++         const float y = tab_bar->BarRect.Max.y;
++         window->DrawList->AddRectFilled(ImVec2(tab_bar->SeparatorMinX, y - g.Style.TabBarBorderSize), ImVec2(tab_bar->SeparatorMaxX, y), col);
++     }
+++
+++    // [SLATE PATCH B] Overlapping tabs are submitted leading-to-trailing, so a selected tab is buried under
+++    //   every tab after it -- the sheet gives the active tab z-index 100 for exactly this reason. Two draw
+++    //   channels reproduce that ordering: quiet tabs record into the lower, the selected tab into the upper,
+++    //   and the merge at EndTabBar concatenates them. Opened only when tabs actually overlap, so a stock
+++    //   configuration pays nothing and records the identical command stream it always did.
+++    tab_bar->SlateZSplit = (g.Style.TabOverlap > 0.0f);
+++    if (tab_bar->SlateZSplit)
+++    {
+++        tab_bar->SlateZSplitter.Split(window->DrawList, 2);
+++        tab_bar->SlateZSplitter.SetCurrentChannel(window->DrawList, 0);
+++    }
++     return true;
++ }
++ 
++@@ -9888,6 +9903,14 @@
++     ImGuiTabBar* tab_bar = g.CurrentTabBar;
++     IM_ASSERT_USER_ERROR_RET(tab_bar != NULL, "Mismatched BeginTabBar()/EndTabBar()!");
++ 
+++    // [SLATE PATCH B] Merge the two z channels before anything else records into this window. Merged here
+++    //   rather than at the end of the function because the layout fallback below may itself record.
+++    if (tab_bar->SlateZSplit)
+++    {
+++        tab_bar->SlateZSplitter.Merge(window->DrawList);
+++        tab_bar->SlateZSplit = false;
+++    }
+++
++     // Fallback in case no TabItem have been submitted
++     if (tab_bar->WantLayout)
++         TabBarLayout(tab_bar);
++@@ -10128,7 +10151,11 @@
++             ImGuiTabItem* tab = &tab_bar->Tabs[section_tab_index + tab_n];
++             tab->Offset = tab_offset;
++             tab->NameOffset = -1;
++-            tab_offset += tab->Width + (tab_n < section->TabCount - 1 ? g.Style.ItemInnerSpacing.x : 0.0f);
+++            // [SLATE PATCH B] The sheet interlocks its tabs with margin-right:-24px, so each tab's slanted
+++            //   leading edge tucks under its predecessor's trailing edge. Subtracting the overlap from the
+++            //   advance is the whole of it; every width, every hit rectangle and all the scroll arithmetic
+++            //   downstream continue to read tab->Width, which is unchanged.
+++            tab_offset += tab->Width + (tab_n < section->TabCount - 1 ? (g.Style.ItemInnerSpacing.x - g.Style.TabOverlap) : 0.0f);
++         }
++         tab_bar->WidthAllTabs += ImMax(section->Width + section->Spacing, 0.0f);
++         tab_offset += section->Spacing;
++@@ -10766,6 +10793,14 @@
++ 
++     // Render tab shape
++     const bool is_visible = (g.LastItemData.StatusFlags & ImGuiItemStatusFlags_Visible) && !(flags & ImGuiTabItemFlags_Invisible);
+++
+++    // [SLATE PATCH B] The selected tab, and a hovered one, record into the upper z channel so their slanted
+++    //   edges sit over their neighbours' -- the sheet's z-index 100 for .active and 80 for :hover. Everything
+++    //   else stays in the lower channel and keeps its submission order.
+++    const bool slate_raise = tab_bar->SlateZSplit && (tab_contents_visible || hovered || held);
+++    if (slate_raise)
+++        tab_bar->SlateZSplitter.SetCurrentChannel(window->DrawList, 1);
+++
++     if (is_visible)
++     {
++         ImDrawList* display_draw_list = window->DrawList;
++@@ -10820,6 +10855,12 @@
++                 SetItemTooltip("%.*s", (int)(FindRenderedTextEnd(label) - label), label);
++     }
++ 
+++    // [SLATE PATCH B] Lower the channel again. Raised across the shape AND the label so a selected tab's run
+++    //   travels with its own shape; left raised, every later tab would record into the upper channel too and
+++    //   the ordering would invert.
+++    if (slate_raise)
+++        tab_bar->SlateZSplitter.SetCurrentChannel(window->DrawList, 0);
+++
++     // Restore main window position so user can draw there
++     if (want_clip_rect)
++         PopClipRect();
+diff --git a/Patches/Patches.md b/Patches/Patches.md
+new file mode 100644
+index 0000000..feef80c
+--- /dev/null
++++ b/Patches/Patches.md
+@@ -0,0 +1,90 @@
++# Patches — Slate's divergence from vendored ImGui
++
++Two patches, both against `ExternalPackages/imgui` at commit `12b7977` (`1.92.9 WIP`, `docking` branch).
++They are the **whole** of Slate's divergence from upstream ImGui. `Scripts/ApplyImGuiPatches.ps1` applies
++them and `Build/Construct.ps1` invokes that script before any unit is translated.
++
++🔴 Never edit `ExternalPackages/` by hand. A silently adjusted vendored dependency is a defect that
++reproduces on one machine only — `14` §2. The divergence lives here, as a file a reader can open.
++
++## Why patch rather than write a docking system
++
++`References/DockWorkspace.html` wants trapezoidal, interlocking tabs. Everything else it does —
++splitters, dock trees, five-way drop targets, floating windows, layout persistence, tab reordering — is
++already in ImGui's docking branch and is the hard, boring 95 % of a docking system. The divergence
++needed to reach the sheet's appearance is 120 lines across four files, because ImGui already separates
++tab *shape* from tab *behaviour*: `ItemAdd()` and every drag path hit-test the rectangular `bb`, exactly
++as the sheet's SVG is `pointer-events:none` over a rectangular `<div>`.
++
++## The patches
++
++| Patch | Adds | Touches |
++|-------|------|---------|
++| `PatchA-TrapezoidalTabs.patch`  | `TabSlant` | `imgui.h`, `imgui.cpp`, `imgui_widgets.cpp` |
++
++| `PatchB-TabOverlapZOrder.patch` | `TabOverlap`, `TabHeight`, `TabStripPadTop` | all four files |
++
++`A` is independently applicable. `B` stacks on `A` and cannot apply first — its context includes A's
++lines.
++
++### A — the trapezoid
++
++Replaces the body of `TabItemBackground()`, the one function that paints tab geometry, reached from four
++call sites. The sheet's `tabPath(w,h)` states `slant = min(14, w * 0.16)` over the outline
++`[0,h] [slant,0] [w-slant,0] [w,h]`, upper corners rounded, lower corners square. The sheet's
++`roundedPath()` insets along both incident edges and joins the two inset points with a quadratic through
++the corner — which is `PathBezierQuadraticCurveTo` exactly, so the curve is the browser's own and not an
++approximation of it.
++
++### B — interlock, height, strip, and z-order
++
++- **Overlap** — one term subtracted from the tab advance in `TabBarLayout`, reproducing the sheet's
++  `margin-right:-24px`. Every width and hit rectangle still reads `tab->Width`, which is unchanged.
++- **Height and strip** — `TabHeight` overrides the derived bar height; `TabStripPadTop` reserves the
++  band above the tabs that the sheet's 28 px strip shows over a 24 px tab seated at `flex-end`.
++- **Z-order** — overlapping tabs are submitted leading-to-trailing, so a selected tab is buried under
++  every tab after it. An `ImDrawListSplitter` on the tab bar gives two channels: quiet tabs record into
++  the lower, the selected or hovered tab into the upper, merged at `EndTabBar`. This is the mechanism
++  ImGui already uses for tables. **The splitter opens only when `TabOverlap > 0`**, so a stock
++  configuration records the identical command stream it always did.
++
++## Every member defaults to zero
++
++`TabSlant`, `TabOverlap`, `TabHeight` and `TabStripPadTop` all default to `0.0f`, and each guards its
++own behaviour behind `> 0.0f`. With default style the patched build emits a **byte-identical** command
++stream to unpatched ImGui — verified by rasterising both and comparing the images. All four are carried
++by `ImGuiStyle::ScaleAllSizes`, so a slant fixed at 14 is not half as steep on a 2× display.
++
++## The sheet's own figures
++
++| Style member | Sheet | Source |
++|--------------|-------|--------|
++| `TabSlant`         | `14.0f` | `slant = Math.min(14, w * 0.16)` |
++| `TabOverlap`       | `24.0f` | `.tab { margin-right: -24px }` |
++| `TabHeight`        | `24.0f` | `.tab { height: 24px }` |
++| `TabStripPadTop`   | `4.0f`  | `.tabstrip { height: 28px }` at `align-items: flex-end` |
++| `TabRounding`      | `0.0f`  | the sheet's `roundCorners` is off by default |
++| `TabBorderSize`    | `0.0f`  | no border requested |
++| `FramePadding.x`   | `38.0f` | `.tab { padding: 0 38px }` |
++| `TabMinWidthShrink`| `170.0f`| `.tab { min-width: 170px }` |
++
++⚠️ `TabOverlap` and `FramePadding.x` are coupled. The sheet's 38 px horizontal padding exists to clear
++slant plus overlap; raising the overlap without raising the padding runs adjacent labels together.
++
++## Upgrading ImGui
++
++`ApplyImGuiPatches.ps1` reports when the submodule stands at a commit other than `12b7977` rather than
++asserting, because a deliberate upgrade should reach a message naming both commits. After an upgrade,
++re-cut both patches against the new tree and re-check `TabItemBackground`, `TabBarLayout` and
++`BeginTabBar` — those three are the only functions either patch touches.
++
++```powershell
++powershell -File Scripts\ApplyImGuiPatches.ps1            # apply, idempotent
++powershell -File Scripts\ApplyImGuiPatches.ps1 -Verify    # report which stand applied
++powershell -File Scripts\ApplyImGuiPatches.ps1 -Revert    # restore pristine, in reverse order
++```
++
++🔴 Application is detected by the `SLATE PATCH A` / `SLATE PATCH B` sentinels, **not** by
++`git apply --reverse --check`. B edits lines inside A's context, so once B is applied A no longer
++reverse-checks — a reverse-check would report A absent on a fully patched tree and re-apply it, aborting
++a build whose tree was perfectly healthy.
+diff --git a/Scripts/ApplyImGuiPatches.ps1 b/Scripts/ApplyImGuiPatches.ps1
+new file mode 100644
+index 0000000..5f6017e
+--- /dev/null
++++ b/Scripts/ApplyImGuiPatches.ps1
+@@ -0,0 +1,145 @@
++# ApplyImGuiPatches.ps1 — applies Slate's tab-shape patches to the vendored ImGui submodule.
++#
++# 🔴 `ExternalPackages/` is never edited by hand. The two patches below are the whole of Slate's
++#    divergence from upstream ImGui, they are tracked in `Patches/`, and this script is the only thing
++#    that applies them. A silently adjusted vendored dependency is a defect that reproduces on one
++#    machine only — `14` §2 — so the divergence is a file a reader can open rather than a local edit.
++#
++# 🔴 Both patches default every member they add to 0.0f. An unpatched build and a patched build with
++#    default style emit the same command stream, so applying these changes nothing until Slate opts in.
++#
++#     powershell -File Scripts\ApplyImGuiPatches.ps1
++#     powershell -File Scripts\ApplyImGuiPatches.ps1 -Revert
++#     powershell -File Scripts\ApplyImGuiPatches.ps1 -Verify
++
++[CmdletBinding()]
++param(
++    [switch] $Revert,
++    [switch] $Verify
++)
++
++$ErrorActionPreference = 'Stop'
++
++$RepositoryRoot = Split-Path -Parent $PSScriptRoot
++$ImGuiRoot      = Join-Path $RepositoryRoot 'ExternalPackages\imgui'
++$PatchRoot      = Join-Path $RepositoryRoot 'Patches'
++
++# 📝 The order is the stacking order. B's context includes A's lines, so B cannot apply first.
++# 🔴 Each patch is detected by a sentinel it introduces, NOT by `git apply --reverse --check`. Because B
++#    edits lines that sit inside A's own context, once B is applied A no longer reverse-checks — so a
++#    reverse-check would report A as absent on a fully patched tree and the script would try to apply it
++#    again, aborting a build whose tree was perfectly healthy. A sentinel is stable under stacking.
++$Declared = @(
++    @{ Name = 'PatchA-TrapezoidalTabs.patch';  Sentinel = 'SLATE PATCH A'; Witness = 'imgui_widgets.cpp' }
++    @{ Name = 'PatchB-TabOverlapZOrder.patch'; Sentinel = 'SLATE PATCH B'; Witness = 'imgui_widgets.cpp' }
++)
++
++# 🔴 The commit these patches were written against. `git apply` would fail loudly on a different tree,
++#    but it fails with three rejected hunks rather than with the one sentence a reader can act on.
++$ExpectedCommit = '12b797755501ae8eced5f6fb33105d8ddc1d1cbc'
++
++function Write-Report([string] $Tag, [System.ConsoleColor] $Colour, [string] $Message)
++{
++    Write-Host ("[$Tag]".PadRight(10)) -ForegroundColor $Colour -NoNewline
++    Write-Host " $Message"
++}
++
++function Write-Applied([string] $Message) { Write-Report 'ImGui'    Green    $Message }
++function Write-Skipped([string] $Message) { Write-Report 'SKIP'     Cyan     $Message }
++function Write-Refused([string] $Message) { Write-Report 'FAILED'   Red      $Message }
++function Write-Noted([string]   $Message) { Write-Report 'Patch'    DarkGray $Message }
++
++if (-not (Test-Path (Join-Path $ImGuiRoot 'imgui.cpp')))
++{
++    throw "the ImGui submodule is not checked out at $ImGuiRoot; run: git submodule update --init --recursive"
++}
++
++Push-Location $ImGuiRoot
++
++try
++{
++    # 📝 The pin is reported rather than enforced. A deliberate ImGui upgrade should reach a message
++    #    naming both commits, not an assertion that reads as a broken checkout.
++    $Standing = (& git rev-parse HEAD).Trim()
++
++    if ($Standing -ne $ExpectedCommit)
++    {
++        $Short   = $Standing.Substring(0, 7)
++        $Against = $ExpectedCommit.Substring(0, 7)
++        Write-Noted "submodule stands at $Short; patches were cut against $Against"
++        Write-Noted 'if ImGui was upgraded deliberately, re-cut the patches against the new commit'
++    }
++
++    # 🔴 Reverting runs the stack backwards. B sits on top of A, so reverting A first would leave B's
++    #    hunks referring to context that no longer exists.
++    $Ordered = if ($Revert) { $Declared[($Declared.Count - 1)..0] } else { $Declared }
++
++    foreach ($Entry in $Ordered)
++    {
++        $PatchName = $Entry.Name
++        $PatchPath = Join-Path $PatchRoot $PatchName
++
++        if (-not (Test-Path $PatchPath))
++        {
++            throw "declared patch $PatchName is absent from $PatchRoot"
++        }
++
++        $WitnessPath    = Join-Path $ImGuiRoot $Entry.Witness
++        $AlreadyApplied = (Select-String -Path $WitnessPath -Pattern $Entry.Sentinel -SimpleMatch -Quiet) -eq $true
++
++        if ($Verify)
++        {
++            if ($AlreadyApplied) { Write-Applied "$PatchName is applied" }
++            else                 { Write-Noted   "$PatchName is NOT applied" }
++            continue
++        }
++
++        if ($Revert)
++        {
++            if (-not $AlreadyApplied)
++            {
++                Write-Skipped "$PatchName was not applied"
++                continue
++            }
++
++            & git apply --reverse $PatchPath
++
++            if ($LASTEXITCODE -ne 0)
++            {
++                Write-Refused "could not revert $PatchName"
++                throw "git apply --reverse refused $PatchName"
++            }
++
++            Write-Applied "reverted $PatchName"
++            continue
++        }
++
++        if ($AlreadyApplied)
++        {
++            Write-Skipped "$PatchName already applied"
++            continue
++        }
++
++        & git apply --check $PatchPath
++
++        if ($LASTEXITCODE -ne 0)
++        {
++            Write-Refused "$PatchName does not apply to the standing ImGui tree"
++            throw "git apply --check refused $PatchName"
++        }
++
++        & git apply $PatchPath
++
++        if ($LASTEXITCODE -ne 0)
++        {
++            Write-Refused "could not apply $PatchName"
++            throw "git apply refused $PatchName"
++        }
++
++        Write-Applied "applied $PatchName"
++    }
++}
++finally
++{
++    Pop-Location
++}

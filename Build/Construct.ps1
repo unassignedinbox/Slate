@@ -638,6 +638,18 @@ Import-ToolchainEnvironment
 
 $VulkanRoot = Resolve-VulkanRoot
 Write-Building "vulkan $VulkanRoot"
+
+# 🔴 Slate's ImGui divergence is applied before any unit is translated, because SlateUI compiles the
+#    vendored ImGui sources directly. Applied here rather than inside the SlateUI branch so that a
+#    -Unit SlateUI build and a whole-tree build patch the submodule identically. Re-running is a
+#    no-op: the script detects an applied patch and skips it.
+& powershell -File (Join-Path $ScriptRoot 'ApplyImGuiPatches.ps1')
+
+if ($LASTEXITCODE -ne 0)
+{
+    throw 'ApplyImGuiPatches.ps1 failed; the ImGui tab-shape patches were not applied'
+}
+
 Write-Host ''
 
 $Selected = if ($Unit) { @($UnitOrder | Where-Object { $_.Name -eq $Unit }) } else { $UnitOrder }
