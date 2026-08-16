@@ -1,0 +1,280 @@
+diff --git a/Build/Construct.ps1 b/Build/Construct.ps1
+index 99719b8..6a219ef 100644
+--- a/Build/Construct.ps1
++++ b/Build/Construct.ps1
+@@ -56,6 +56,13 @@ function Write-Lowered([string]  $Message) { Write-Report 'SPIR-V'   Magenta  $M
+ # 📝 The order below IS the dependency DAG. A unit is compiled only after every unit it requires, and the
+ #    Requires list is what the linker is handed — reversed, since a static library only satisfies references
+ #    the linker has already seen.
++# 🔴 ⚠️ This array and the `[requires]` in each `Module.toml` are two statements of one graph, and they can
++#    drift. They mean different things and both are needed: this one is the LINK order, which must name
++#    every archive whose symbols the executable resolves against, while the manifest states what a unit is
++#    permitted to INCLUDE. SlateUI is exactly where the two part — it links against four archives and is
++#    permitted to include none of them.
++#    `Scripts/VerifyPartition.ps1` enforces the manifest and runs before anything is translated. Nothing yet
++#    checks that this array agrees with the manifests about ordering; folding the two together is Phase 4.
+ $UnitOrder = @(
+     @{ Name = 'SlateMath';     Product = 'StaticLibrary'; Requires = @() }
+     @{ Name = 'SlateDocument'; Product = 'StaticLibrary'; Requires = @('SlateMath') }
+@@ -817,6 +824,16 @@ if ($LASTEXITCODE -ne 0)
+     throw 'ApplyImGuiPatches.ps1 failed; the ImGui tab-shape patches were not applied'
+ }
+ 
++# 🔴 The dependency partition is proven before anything is translated, because a forbidden include should
++#    refuse at the start of a build rather than as an unresolved symbol at the end of one. The check is a
++#    scan of the include lines against what each Module.toml declares; it costs a fraction of a second.
++& powershell -File (Join-Path $ScriptRoot 'VerifyPartition.ps1')
++
++if ($LASTEXITCODE -ne 0)
++{
++    throw 'VerifyPartition.ps1 refused; a unit reaches past what it declares'
++}
++
+ Write-Host ''
+ 
+ $Selected = if ($Unit) { @($UnitOrder | Where-Object { $_.Name -eq $Unit }) } else { $UnitOrder }
+diff --git a/Engine/SlateUI/Module.toml b/Engine/SlateUI/Module.toml
+index df39cc5..382b701 100644
+--- a/Engine/SlateUI/Module.toml
++++ b/Engine/SlateUI/Module.toml
+@@ -6,8 +6,15 @@ name    = "SlateUI"
+ product = "StaticLibrary"
+ subject = [ "Interface" ]
+ 
++# 🔴 SlateUI declares no unit requirement, and that is not an omission. Its whole surface reaches Contract/,
++#    its own Api/, and the vendored interface library — it names no symbol from SlateMath, SlateVulkan,
++#    SlateDocument or SlateCompute, which VerifyPartition.ps1 checks rather than assumes. The four were
++#    declared here when the unit was younger and were carried forward unread; a requirement nothing uses is
++#    a permission nothing needs, and it grants exactly the reach the partition exists to withhold.
++# 📝 The link order is a separate question and stays whole: Application still names every archive, because
++#    the linker resolves against what it has already seen.
+ [requires]
+-unit = [ "SlateMath", "SlateVulkan", "SlateDocument", "SlateCompute" ]
++unit = []
+ 
+ # 🔴 `00` §2.2: exactly one copy of ImGui exists and it is compiled here. The vendored sources are listed
+ #    as unit sources rather than reached through a prebuilt library, so no second copy can be linked in.
+diff --git a/Scripts/VerifyPartition.ps1 b/Scripts/VerifyPartition.ps1
+new file mode 100644
+index 0000000..617163c
+--- /dev/null
++++ b/Scripts/VerifyPartition.ps1
+@@ -0,0 +1,218 @@
++# VerifyPartition.ps1 — proves the dependency partition rather than describing it.
++#
++# 🔴 `Module.toml` is the authority. This script reads it, derives what each unit is permitted to reach,
++#    and refuses when a translation unit reaches further. Until now the partition was enforced only by the
++#    link — SlateDocument was never handed SlateVulkan.lib, so a device reference failed to resolve — which
++#    reports a missing symbol at the end of a whole build rather than a forbidden include at its start.
++#
++# 🔴 It also refuses the two leaks `14` §2 and `10` §1 name by hand: an ImGui spelling outside SlateUI, and
++#    a vendored reader outside SlateDocument. Both are stated in prose in the existing comments; neither was
++#    checked by anything.
++#
++#     powershell -File Scripts\VerifyPartition.ps1
++#     powershell -File Scripts\VerifyPartition.ps1 -Detail
++
++[CmdletBinding()]
++param(
++    [switch] $Detail
++)
++
++$ErrorActionPreference = 'Stop'
++
++$RepositoryRoot = Split-Path -Parent $PSScriptRoot
++$EngineRoot     = Join-Path $RepositoryRoot 'Engine'
++
++function Write-Report([string] $Tag, [System.ConsoleColor] $Colour, [string] $Message)
++{
++    Write-Host ("[$Tag]".PadRight(10)) -ForegroundColor $Colour -NoNewline
++    Write-Host " $Message"
++}
++
++function Write-Held([string]    $Message) { Write-Report 'Partition' Green    $Message }
++function Write-Broken([string]  $Message) { Write-Report 'REFUSED'   Red      $Message }
++function Write-Noted([string]   $Message) { Write-Report 'Partition' DarkGray $Message }
++
++#---
++#                                   THE DECLARED PARTITION
++#---
++
++# 📝 Read from Module.toml and from nowhere else. A second copy of the graph is a second thing to keep
++#    agreeing, which is the whole reason this reads the declaration instead of restating it.
++function Read-DeclaredUnits
++{
++    $Declared = @{}
++
++    foreach ($Manifest in Get-ChildItem $EngineRoot -Filter 'Module.toml' -Recurse -File)
++    {
++        $UnitName = Split-Path -Leaf (Split-Path -Parent $Manifest.FullName)
++        $Content  = Get-Content $Manifest.FullName -Raw
++
++        $Requires = @()
++
++        if ($Content -match '(?ms)^\[requires\].*?^unit\s*=\s*\[(.*?)\]')
++        {
++            $Requires = [regex]::Matches($Matches[1], '"([^"]+)"') | ForEach-Object { $_.Groups[1].Value }
++        }
++
++        $Declared[$UnitName] = @{
++            Name     = $UnitName
++            Requires = @($Requires)
++            Root     = Split-Path -Parent $Manifest.FullName
++        }
++    }
++
++    return $Declared
++}
++
++# 🔴 A cycle is refused before anything else is checked. Every later question — what may this unit reach,
++#    in what order are they translated — assumes the graph is acyclic, and answers nonsense when it is not.
++function Test-Acyclic([hashtable] $Declared)
++{
++    $Broken = @()
++
++    foreach ($UnitName in $Declared.Keys)
++    {
++        $Seen  = @{}
++        $Stack = New-Object System.Collections.Generic.Stack[string]
++        $Stack.Push($UnitName)
++
++        while ($Stack.Count -gt 0)
++        {
++            $Standing = $Stack.Pop()
++
++            foreach ($Required in $Declared[$Standing].Requires)
++            {
++                if (-not $Declared.ContainsKey($Required))
++                {
++                    $Broken += "$Standing requires $Required, which declares no Module.toml"
++                    continue
++                }
++
++                if ($Required -eq $UnitName)
++                {
++                    $Broken += "$UnitName participates in a dependency cycle through $Standing"
++                    continue
++                }
++
++                if (-not $Seen.ContainsKey($Required))
++                {
++                    $Seen[$Required] = $true
++                    $Stack.Push($Required)
++                }
++            }
++        }
++    }
++
++    return $Broken
++}
++
++# 📝 The transitive closure, because a unit may name a type it reaches through one of its own requirements.
++#    SlateCompute requiring SlateVulkan means it may include SlateVulkan's Api, and SlateMath's through it.
++function Resolve-Reachable([hashtable] $Declared, [string] $UnitName)
++{
++    $Reached = @{}
++    $Stack   = New-Object System.Collections.Generic.Stack[string]
++    $Stack.Push($UnitName)
++
++    while ($Stack.Count -gt 0)
++    {
++        foreach ($Required in $Declared[$Stack.Pop()].Requires)
++        {
++            if ($Declared.ContainsKey($Required) -and -not $Reached.ContainsKey($Required))
++            {
++                $Reached[$Required] = $true
++                $Stack.Push($Required)
++            }
++        }
++    }
++
++    return $Reached
++}
++
++#---
++#                                        THE VERDICT
++#---
++
++$Declared = Read-DeclaredUnits
++
++if ($Declared.Count -eq 0)
++{
++    throw "no Module.toml was found under $EngineRoot"
++}
++
++$Refusals = @()
++$Refusals += Test-Acyclic $Declared
++
++# 🔴 Every include of the form "SlateX/..." is a unit reference. Contract/ and Shared/ are reachable from
++#    everywhere by declaration — they are the shared seam, not a unit — and a vendored header is neither.
++foreach ($UnitName in ($Declared.Keys | Sort-Object))
++{
++    $Entry     = $Declared[$UnitName]
++    $Reachable = Resolve-Reachable $Declared $UnitName
++    $Sources   = @(Get-ChildItem $Entry.Root -Recurse -File -Include '*.h', '*.cpp' -ErrorAction SilentlyContinue)
++
++    foreach ($Source in $Sources)
++    {
++        $Ordinal = 0
++
++        foreach ($Line in [System.IO.File]::ReadAllLines($Source.FullName))
++        {
++            ++$Ordinal
++
++            if ($Line -notmatch '^\s*#include\s+"([^"]+)"')
++            {
++                continue
++            }
++
++            $Included = $Matches[1]
++            $Relative = $Source.FullName.Substring($RepositoryRoot.Length + 1)
++
++            if ($Included -match '^(Slate[A-Za-z]+)/')
++            {
++                $Named = $Matches[1]
++
++                if ($Named -eq $UnitName)                { continue }
++                if ($Reachable.ContainsKey($Named))      { continue }
++
++                $Refusals += "$Relative($Ordinal): $UnitName includes $Named, which it does not require"
++                continue
++            }
++
++            # 🔴 `00` §2.2: exactly one copy of ImGui exists and SlateUI owns it. A host that includes
++            #    imgui.h is a defect regardless of whether it links.
++            if ($Included -match '^(imgui|backends/imgui)' -and $UnitName -ne 'SlateUI')
++            {
++                $Refusals += "$Relative($Ordinal): $UnitName names an ImGui header; only SlateUI may"
++                continue
++            }
++
++            # 🔴 `10` §1: the vendored readers are compiled into SlateDocument's codecs and nowhere else,
++            #    so exactly one copy of each implementation exists in the process.
++            if ($Included -match '^(stb|fast_obj|cgltf|ufbx)' -and $UnitName -ne 'SlateDocument')
++            {
++                $Refusals += "$Relative($Ordinal): $UnitName names a vendored reader; only SlateDocument may"
++            }
++        }
++    }
++
++    if ($Detail)
++    {
++        $Reaches = if ($Reachable.Count -gt 0) { ($Reachable.Keys | Sort-Object) -join ', ' } else { 'nothing' }
++        Write-Noted "$UnitName reaches $Reaches across $($Sources.Count) files"
++    }
++}
++
++Write-Host ''
++
++if ($Refusals.Count -gt 0)
++{
++    foreach ($Refusal in $Refusals)
++    {
++        Write-Broken $Refusal
++    }
++
++    Write-Host ''
++    throw "the dependency partition is broken in $($Refusals.Count) place(s)"
++}
++
++Write-Held "the dependency partition holds across $($Declared.Count) units"
