@@ -11,7 +11,11 @@
 param(
     [ValidateSet('Debug', 'Release')] [string] $Configuration = 'Release',
     [string]                                   $Unit          = '',
-    [switch]                                   $Rebuild
+    [switch]                                   $Rebuild,
+
+    # 📝 Zero means "one translation per logical processor", which is what /MP does when given no count.
+    #    A figure is accepted so a machine that is also doing something else can be told to leave room.
+    [int]                                      $Parallel      = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -143,6 +147,10 @@ function Get-CompilationFlags([string] $Selection)
         '/nologo'
         '/c'
         '/EHsc'
+        # 🔴 /MP compiles the batch across processes. It is incompatible with /Gm (retired), with #import,
+        #    and with a per-translation /Fd — which is why the object folder receives one shared database
+        #    below rather than each translation naming its own.
+        $(if ($Parallel -gt 0) { "/MP$Parallel" } else { '/MP' })
         '/MD'
         '/std:c++20'
         '/permissive-'
@@ -155,14 +163,17 @@ function Get-CompilationFlags([string] $Selection)
         '/DGLFW_DLL'
     )
 
+    # 📝 ⏱️ /Zf with /Zi. Debug records are otherwise serialised through mspdbsrv.exe, and under /MP that
+    #    single writer is what the parallel translations queue behind — the flag exists for exactly this
+    #    arrangement and costs nothing when only one translation is running.
     if ($Selection -eq 'Debug')
     {
         # 📝 🔴 SLATE_DEBUG selects every debug path in the engine. _DEBUG is never defined — it selects the
         #    debug CRT, and /MD is declared for every configuration, so the two cannot both be honoured.
-        return $Common + @('/Od', '/Zi', '/DSLATE_DEBUG=1')
+        return $Common + @('/Od', '/Zi', '/Zf', '/DSLATE_DEBUG=1')
     }
 
-    return $Common + @('/O2', '/Zi', '/DNDEBUG')
+    return $Common + @('/O2', '/Zi', '/Zf', '/DNDEBUG')
 }
 
 #---
@@ -240,6 +251,45 @@ function Get-UnitSource([hashtable] $UnitEntry, [string] $Subject = '')
 # 📝 MSVC writes its diagnostics to stdout, so nothing here redirects stderr. Redirecting a native
 #    executable's stderr in Windows PowerShell wraps each line in an ErrorRecord and, under an Stop
 #    preference, turns a plain warning into a thrown build failure.
+#---
+#                                          RESPONSE FILES
+#---
+
+# 🔴 cl.exe is handed its arguments in a response file rather than on the command line. A batch of
+#    thirty-five absolute source paths plus the include path passes the 32 767 character Windows command
+#    line on a deep checkout, and the truncation that follows names neither the build nor the file it cut.
+#
+# 🔴 Quoting follows CommandLineToArgvW, which is what cl.exe parses with: an argument is quoted only when
+#    it carries a space, a tab or a quote, and any run of backslashes immediately before the closing quote
+#    is doubled. `/FoC:\Program Files\build\` is exactly that case — unquoted it splits in two, and quoted
+#    without doubling the final backslash escapes the quote and swallows the next argument.
+function Write-ResponseFile([string] $ResponsePath, [string[]] $Arguments)
+{
+    $Quoted = foreach ($Argument in $Arguments)
+    {
+        if ($Argument -notmatch '[ \t"]')
+        {
+            $Argument
+        }
+        else
+        {
+            $Trailing = 0
+
+            while ($Trailing -lt $Argument.Length -and
+                   $Argument[$Argument.Length - 1 - $Trailing] -eq '\')
+            {
+                ++$Trailing
+            }
+
+            '"' + $Argument + ('\' * $Trailing) + '"'
+        }
+    }
+
+    # 📝 ASCII, and no byte-order mark. cl.exe reads a response file in the system code page and a UTF-8
+    #    BOM arrives as three stray characters at the head of the first argument.
+    Set-Content -Path $ResponsePath -Value ($Quoted -join "`r`n") -Encoding ASCII
+}
+
 #---
 #                                        TRANSLATION FRESHNESS
 #---
@@ -335,8 +385,8 @@ function Invoke-Translation([hashtable] $UnitEntry, [string] $Selection, [string
 
     Write-Building "$UnitName — $($Sources.Count) translation units"
 
-    $Produced  = New-Object System.Collections.Generic.List[string]
-    $Retranslated = 0
+    $Produced = New-Object System.Collections.Generic.List[string]
+    $Stale    = New-Object System.Collections.Generic.List[string]
 
     foreach ($Source in $Sources)
     {
@@ -345,44 +395,80 @@ function Invoke-Translation([hashtable] $UnitEntry, [string] $Selection, [string
         $DependencyPath = Join-Path $ObjectRoot "$Stem.deps.json"
         $Produced.Add($ObjectPath)
 
-        if (Test-ObjectFresh $ObjectPath $Source $DependencyPath)
+        if (-not (Test-ObjectFresh $ObjectPath $Source $DependencyPath))
         {
-            continue
-        }
-
-        # 📝 /Fd names a per-unit database. Sharing one across units serialises the compiler on it, and
-        #    concurrent invocations corrupt it outright.
-        # 📝 /sourceDependencies writes the include closure beside the object, in the same invocation that
-        #    produces it. Written per translation unit rather than per unit, because two translation units
-        #    in one unit include different headers and a shared record would over-rebuild both.
-        $Arguments = $Flags + $IncludePath + @(
-            "/Fo$ObjectPath"
-            "/Fd$(Join-Path $ObjectRoot "$UnitName.pdb")"
-            "/sourceDependencies$DependencyPath"
-            $Source
-        )
-
-        $Diagnostics = & cl.exe @Arguments
-        $Refused     = $LASTEXITCODE -ne 0
-        ++$Retranslated
-
-        $Notable = $Diagnostics | Where-Object { $_ -match ': (warning|error) ' }
-
-        if ($Notable)
-        {
-            $Notable | ForEach-Object { Write-Host "    $_" }
-        }
-
-        if ($Refused)
-        {
-            Write-Refused "$UnitName — cl.exe refused $([System.IO.Path]::GetFileName($Source))"
-            throw "$UnitName — cl.exe refused $([System.IO.Path]::GetFileName($Source))"
+            $Stale.Add($Source)
         }
     }
 
-    if ($Retranslated -eq 0)
+    if ($Stale.Count -eq 0)
     {
         Write-Skipped "$UnitName unchanged"
+        return $Produced.ToArray()
+    }
+
+    # 🔴 ⏱️ Every stale translation is handed to ONE cl.exe invocation, because /MP parallelises within an
+    #    invocation and not across them. One file per invocation — which is what this loop used to do —
+    #    pays process start-up and toolchain initialisation per translation unit and leaves every core but
+    #    one idle. Thirty-five translations in one call is the whole of the speed-up.
+    # 🔴 /Fo receives the object DIRECTORY and not a file. A batch cannot name one output per input, so the
+    #    compiler derives each object from its source stem. Verified safe: no unit carries two sources of
+    #    the same stem, including the six vendored ImGui translations SlateUI compiles.
+    # 📝 /Fd is one database for the whole object folder. /MP forbids a per-translation database, and two
+    #    invocations sharing one corrupt it — which is why the batch is single-invocation.
+    # 📝 /sourceDependencies:directory writes one record per translation, named after the source stem, so
+    #    the per-translation-unit precision the freshness predicate depends on survives batching.
+    $DependencyRoot = Join-Path $ObjectRoot 'Dependency'
+
+    if (-not (Test-Path $DependencyRoot))
+    {
+        New-Item -ItemType Directory -Force -Path $DependencyRoot | Out-Null
+    }
+
+    $Arguments = $Flags + $IncludePath + @(
+        "/Fo$ObjectRoot\\"
+        "/Fd$(Join-Path $ObjectRoot "$UnitName.pdb")"
+        "/sourceDependencies:directory"
+        $DependencyRoot
+    ) + $Stale
+
+    # 🔴 The argument list is handed over in a response file. Thirty-five absolute paths plus the include
+    #    path exceeds the 32 767 character command line on a deep checkout, and the failure that produces
+    #    names neither the build nor the file it truncated.
+    $ResponsePath = Join-Path $ObjectRoot "$UnitName.rsp"
+    Write-ResponseFile $ResponsePath $Arguments
+
+    Write-Building "$UnitName — translating $($Stale.Count) of $($Sources.Count)"
+
+    $Diagnostics = & cl.exe '/nologo' "@$ResponsePath"
+    $Refused     = $LASTEXITCODE -ne 0
+
+    $Notable = $Diagnostics | Where-Object { $_ -match ': (warning|error) ' }
+
+    if ($Notable)
+    {
+        $Notable | ForEach-Object { Write-Host "    $_" }
+    }
+
+    if ($Refused)
+    {
+        Write-Refused "$UnitName — cl.exe refused the translation batch"
+        throw "$UnitName — cl.exe refused the translation batch"
+    }
+
+    # 📝 The records land beside the objects under the name the predicate looks for. Moved rather than
+    #    written in place because /sourceDependencies:directory names each record for its source stem and
+    #    the predicate reads "<stem>.deps.json" next to the object.
+    foreach ($Source in $Stale)
+    {
+        $Stem    = [System.IO.Path]::GetFileNameWithoutExtension($Source)
+        $Written = Join-Path $DependencyRoot "$Stem.json"
+        $Wanted  = Join-Path $ObjectRoot     "$Stem.deps.json"
+
+        if (Test-Path $Written)
+        {
+            Move-Item $Written $Wanted -Force
+        }
     }
 
     return $Produced.ToArray()
