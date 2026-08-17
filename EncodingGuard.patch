@@ -1,0 +1,190 @@
+diff --git a/Build/Construct.bat b/Build/Construct.bat
+index 398610a..e181f7b 100644
+--- a/Build/Construct.bat
++++ b/Build/Construct.bat
+@@ -1,5 +1,5 @@
+ @echo off
+-REM Construct.bat — the shell entry point. Forwards to Construct.ps1, which holds the whole build.
++REM Construct.bat - the shell entry point. Forwards to Construct.ps1, which holds the whole build.
+ REM
+ REM   Build\Construct.bat
+ REM   Build\Construct.bat Debug
+diff --git a/Build/ImportFlatten.bat b/Build/ImportFlatten.bat
+index 069eee3..a6d3de0 100644
+--- a/Build/ImportFlatten.bat
++++ b/Build/ImportFlatten.bat
+@@ -1,5 +1,5 @@
+ @echo off
+-REM ImportFlatten.bat — the shell entry point. Forwards to Scripts\RunImportFlatten.py, which copies
++REM ImportFlatten.bat - the shell entry point. Forwards to Scripts\RunImportFlatten.py, which copies
+ REM every nested .cpp and .h of Import\ up to the Import top level, flat, without deleting anything.
+ REM
+ REM   Build\ImportFlatten.bat
+diff --git a/Scripts/ApplyImGuiPatches.ps1 b/Scripts/ApplyImGuiPatches.ps1
+index 5f6017e..74d21f5 100644
+--- a/Scripts/ApplyImGuiPatches.ps1
++++ b/Scripts/ApplyImGuiPatches.ps1
+@@ -1,4 +1,4 @@
+-# ApplyImGuiPatches.ps1 — applies Slate's tab-shape patches to the vendored ImGui submodule.
++﻿# ApplyImGuiPatches.ps1 — applies Slate's tab-shape patches to the vendored ImGui submodule.
+ #
+ # 🔴 `ExternalPackages/` is never edited by hand. The two patches below are the whole of Slate's
+ #    divergence from upstream ImGui, they are tracked in `Patches/`, and this script is the only thing
+diff --git a/Scripts/RunImportFlatten.bat b/Scripts/RunImportFlatten.bat
+index ae23a40..1c17a4d 100644
+--- a/Scripts/RunImportFlatten.bat
++++ b/Scripts/RunImportFlatten.bat
+@@ -1,5 +1,5 @@
+ @echo off
+-REM RunImportFlatten.bat — shell entry point forwarding to RunImportFlatten.py.
++REM RunImportFlatten.bat - shell entry point forwarding to RunImportFlatten.py.
+ 
+ setlocal
+ python "%~dp0RunImportFlatten.py" %*
+diff --git a/Scripts/RunImportFlatten.ps1 b/Scripts/RunImportFlatten.ps1
+index df7d83e..730aea5 100644
+--- a/Scripts/RunImportFlatten.ps1
++++ b/Scripts/RunImportFlatten.ps1
+@@ -1,4 +1,4 @@
+-#============================================================================================================================================
++﻿#============================================================================================================================================
+ #                                                           RUNIMPORTFLATTEN.PS1
+ #============================================================================================================================================
+ # 🧩 Invokes Scripts/RunImportFlatten.py to flatten nested sources in Import/.
+diff --git a/Scripts/RunSymbolIndex.bat b/Scripts/RunSymbolIndex.bat
+index 32293aa..971fada 100644
+--- a/Scripts/RunSymbolIndex.bat
++++ b/Scripts/RunSymbolIndex.bat
+@@ -1,5 +1,5 @@
+ @echo off
+-REM RunSymbolIndex.bat — shell entry point forwarding to RunSymbolIndex.py.
++REM RunSymbolIndex.bat - shell entry point forwarding to RunSymbolIndex.py.
+ 
+ setlocal
+ python "%~dp0RunSymbolIndex.py" %*
+diff --git a/Scripts/RunSymbolIndex.ps1 b/Scripts/RunSymbolIndex.ps1
+index 8154762..479f465 100644
+--- a/Scripts/RunSymbolIndex.ps1
++++ b/Scripts/RunSymbolIndex.ps1
+@@ -1,4 +1,4 @@
+-#============================================================================================================================================
++﻿#============================================================================================================================================
+ #                                                           RUNSYMBOLINDEX.PS1
+ #============================================================================================================================================
+ # 🧩 Invokes Scripts/RunSymbolIndex.py to build or query symbol index files.
+diff --git a/Scripts/RunSymbolIndexFlatten.bat b/Scripts/RunSymbolIndexFlatten.bat
+index 57c065c..4bce1c9 100644
+--- a/Scripts/RunSymbolIndexFlatten.bat
++++ b/Scripts/RunSymbolIndexFlatten.bat
+@@ -1,5 +1,5 @@
+ @echo off
+-REM RunSymbolIndexFlatten.bat — shell entry point forwarding to RunSymbolIndexFlatten.py.
++REM RunSymbolIndexFlatten.bat - shell entry point forwarding to RunSymbolIndexFlatten.py.
+ 
+ setlocal
+ python "%~dp0RunSymbolIndexFlatten.py" %*
+diff --git a/Scripts/RunSymbolIndexFlatten.ps1 b/Scripts/RunSymbolIndexFlatten.ps1
+index f554f8f..026741a 100644
+--- a/Scripts/RunSymbolIndexFlatten.ps1
++++ b/Scripts/RunSymbolIndexFlatten.ps1
+@@ -1,4 +1,4 @@
+-#============================================================================================================================================
++﻿#============================================================================================================================================
+ #                                                         RUNSYMBOLINDEXFLATTEN.PS1
+ #============================================================================================================================================
+ # 🧩 Invokes Scripts/RunSymbolIndexFlatten.py to mirror every Engine .symbolindex into the flat SymboLindex folder.
+diff --git a/Scripts/RunUploadTransfer.bat b/Scripts/RunUploadTransfer.bat
+index 34db305..062bc87 100644
+--- a/Scripts/RunUploadTransfer.bat
++++ b/Scripts/RunUploadTransfer.bat
+@@ -1,5 +1,5 @@
+ @echo off
+-REM RunUploadTransfer.bat — shell entry point forwarding to RunUploadTransfer.py.
++REM RunUploadTransfer.bat - shell entry point forwarding to RunUploadTransfer.py.
+ 
+ setlocal
+ python "%~dp0RunUploadTransfer.py" %*
+diff --git a/Scripts/RunUploadTransfer.ps1 b/Scripts/RunUploadTransfer.ps1
+index 7809008..34a0c2c 100644
+--- a/Scripts/RunUploadTransfer.ps1
++++ b/Scripts/RunUploadTransfer.ps1
+@@ -1,4 +1,4 @@
+-#============================================================================================================================================
++﻿#============================================================================================================================================
+ #                                                           RUNUPLOADTRANSFER.PS1
+ #============================================================================================================================================
+ # 🧩 Invokes Scripts/RunUploadTransfer.py to reclaim Upload, transfer sources (.h, .cpp, .slang.md), and write Engine-File-Structure.md.
+diff --git a/Scripts/VerifyPartition.ps1 b/Scripts/VerifyPartition.ps1
+index 617163c..667afda 100644
+--- a/Scripts/VerifyPartition.ps1
++++ b/Scripts/VerifyPartition.ps1
+@@ -1,4 +1,4 @@
+-# VerifyPartition.ps1 — proves the dependency partition rather than describing it.
++﻿# VerifyPartition.ps1 — proves the dependency partition rather than describing it.
+ #
+ # 🔴 `Module.toml` is the authority. This script reads it, derives what each unit is permitted to reach,
+ #    and refuses when a translation unit reaches further. Until now the partition was enforced only by the
+@@ -133,6 +133,55 @@ function Resolve-Reachable([hashtable] $Declared, [string] $UnitName)
+ #                                        THE VERDICT
+ #---
+ 
++#---
++#                                     SHELL FILE ENCODING
++#---
++
++# 🔴 A PowerShell file containing any non-ASCII byte MUST carry a UTF-8 BOM, and a batch file must carry
++#    none at all. Windows PowerShell 5.1 reads a BOM-less file in the system code page, so every multi-byte
++#    sequence arrives as mojibake and the parse fails at a line that looks unrelated to the character. A
++#    batch file has the opposite constraint: cmd.exe reads it in the OEM code page and executes the stray
++#    bytes, which is how a comment produced "'M' is not recognized as an internal or external command".
++#
++# 🔴 Both cost a build each to discover. Checked here so neither can be reintroduced by an editor that
++#    silently re-saves without the mark.
++function Test-ShellEncoding
++{
++    $Broken = @()
++    $Mark   = [byte[]] (0xEF, 0xBB, 0xBF)
++
++    foreach ($Shell in Get-ChildItem $RepositoryRoot -Include '*.ps1', '*.bat' -File -Recurse)
++    {
++        $Bytes = [System.IO.File]::ReadAllBytes($Shell.FullName)
++        $Named = $Shell.FullName.Substring($RepositoryRoot.Length + 1)
++
++        $Marked = ($Bytes.Length -ge 3) -and
++                  ($Bytes[0] -eq $Mark[0]) -and ($Bytes[1] -eq $Mark[1]) -and ($Bytes[2] -eq $Mark[2])
++
++        $Wide = 0
++
++        for ($Ordinal = $(if ($Marked) { 3 } else { 0 }); $Ordinal -lt $Bytes.Length; ++$Ordinal)
++        {
++            if ($Bytes[$Ordinal] -gt 127) { ++$Wide }
++        }
++
++        if ($Shell.Extension -eq '.bat')
++        {
++            if ($Wide -gt 0 -or $Marked)
++            {
++                $Carried = "$Wide non-ASCII byte(s)$(if ($Marked) { ' and a BOM' })"
++                $Broken  += "$Named carries $Carried; cmd.exe requires plain ASCII"
++            }
++        }
++        elseif ($Wide -gt 0 -and -not $Marked)
++        {
++            $Broken += "$Named carries $Wide non-ASCII byte(s) without a UTF-8 BOM; Windows PowerShell will misread them"
++        }
++    }
++
++    return $Broken
++}
++
+ $Declared = Read-DeclaredUnits
+ 
+ if ($Declared.Count -eq 0)
+@@ -141,6 +190,7 @@ if ($Declared.Count -eq 0)
+ }
+ 
+ $Refusals = @()
++$Refusals += Test-ShellEncoding
+ $Refusals += Test-Acyclic $Declared
+ 
+ # 🔴 Every include of the form "SlateX/..." is a unit reference. Contract/ and Shared/ are reachable from
