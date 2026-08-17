@@ -561,9 +561,13 @@ function Invoke-Translation([hashtable] $UnitEntry, [string] $Selection, [string
     #    the terminating backslash, and without it the first translation writes a FILE of that name and
     #    every later one in the batch overwrites it.
     $Arguments = $Flags + $IncludePath + @(
-        "/Fo$ObjectRoot\\"
+        ('/Fo' + $ObjectRoot + '\')
         "/Fd$(Join-Path $ObjectRoot "$UnitName.pdb")"
-        "/sourceDependencies:directory$DependencyRoot\\"
+        # 🔴 ONE trailing separator, produced by a joined literal. PowerShell does not treat a backslash as
+        #    an escape inside a double-quoted string, so "$DependencyRoot\\" emits TWO of them and cl.exe
+        #    refuses the whole batch — which is what "cl.exe refused the translation batch" was. The
+        #    neighbouring /Fo has the same shape and survived only because cl tolerates it there.
+        ('/sourceDependencies:directory' + $DependencyRoot + '\')
     ) + $Stale
 
     # 🔴 The argument list is handed over in a response file. Thirty-five absolute paths plus the include
