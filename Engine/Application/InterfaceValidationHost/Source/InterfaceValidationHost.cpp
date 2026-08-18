@@ -9,6 +9,7 @@
 #include "SlateUI/Interface/ControlCentrePanel/Api/ControlCentrePanel.h"
 #include "SlateUI/Interface/ControlPanel/Api/ControlPanel.h"
 #include "SlateUI/Interface/EditorPanel/Api/EditorPanel.h"
+#include "SlateUI/Interface/FacetPanel/Api/FacetPanel.h"
 #include "SlateUI/Interface/InteractionIndex/Api/InteractionIndex.h"
 #include "SlateUI/Interface/InterfaceExchange/Api/InterfaceExchange.h"
 #include "SlateUI/Interface/InterfaceExchange/Api/RecordingSurface.h"
@@ -94,6 +95,8 @@ struct ValidationOrdinates
     bool           OutlinePresent[5]  = { true, true, true, false, true };   // [-] - row presence action
     std::uint32_t  OutlineEnclosure[5] = { 5u, 0u, 1u, 1u, 0u };   // [-] - enclosing record; five is root
     std::uint32_t  OutlineOrder[5]     = { 0u, 0u, 0u, 1u, 1u };   // [-] - sibling position
+    bool           FacetEnabled[14]    = { true, true, true, true, true, false, false,
+                                           true, true, true, true, false, false, false };   // [-] - active filters
 };
 
 /// 🧩 Every identity the sheet's controls are enrolled under, claimed once at bring-up.
@@ -299,6 +302,7 @@ int main()
     RecordingSurface       Surface;
     ComponentSpecification  Panel;
     ControlPanel             ReferenceControls;
+    FacetPanel               Facets;
     EditorPanel              EditorPanels;
     PanelStructure           EditorPartition;
     EditorPanelOrdinates     EditorOrdinates;
@@ -332,6 +336,12 @@ int main()
     if (!ReferenceControls.Construct(Ledger, Surface, Appearance).ContentPresent)
     {
         std::printf("%s \u2014 the reference controls were refused\n", HostName);
+        return 1;
+    }
+
+    if (!Facets.Construct(Motion, Surface, Appearance).ContentPresent)
+    {
+        std::printf("%s \u2014 the facet panel was refused\n", HostName);
         return 1;
     }
 
@@ -441,6 +451,24 @@ int main()
     ColourPickerDeclaration AlbedoPicker;
     AlbedoPicker.Caption = "Albedo";
 
+    const char* FacetOptions[14] = {
+        "Base Colour", "Metallic", "Roughness", "Height", "Normal", "Opacity", "Emissive",
+        "Ambient Occlusion", "Anisotropy", "Anisotropy Angle", "Clearcoat", "Refraction Index",
+        "Sheen", "Subsurface"
+    };
+    const InkOrdinate FacetInks[14] = {
+        Covering(0xB87333u), Covering(0x8B5CF6u), Covering(0x3B82F6u), Covering(0x8A8A8Au),
+        Covering(0x10B981u), Covering(0x94A3B8u), Covering(0xF59E0Bu), Covering(0x6B7280u),
+        Covering(0x22D3EEu), Covering(0x0EA5E9u), Covering(0xE2E8F0u), Covering(0xA78BFAu),
+        Covering(0xF472B6u), Covering(0xFB7185u)
+    };
+    FacetDeclaration FacetCard;
+    FacetCard.Caption       = "Filters";
+    FacetCard.Options       = FacetOptions;
+    FacetCard.Inks          = FacetInks;
+    FacetCard.OptionCount   = 14u;
+    FacetCard.LockedOrdinal = 0u;
+
     OutlineDeclaration OutlineRows[5] = {
         { "Part",         0u, 2u, true,  true  },
         { "Bodies",       1u, 3u, true,  true  },
@@ -548,6 +576,7 @@ int main()
         Motion.Advance(ElapsedMs);
         Panel.Advance(Surface.Pointer(), ElapsedMs);
         ReferenceControls.Advance(Surface.Pointer(), ElapsedMs);
+        Facets.Advance(Surface.Pointer(), ElapsedMs);
         EditorPanels.Advance(Surface.Pointer(), ElapsedMs);
         ControlCentre.Advance(Surface.Pointer(), ElapsedMs);
 
@@ -696,7 +725,13 @@ int main()
 
         Panel.MagnitudeStops(Claimed.Size, RowAt(StopCard, StopRows, 0u), Size, Seated.SizeTaken);
 
-        // ⑩ The global-interface primitives — switch, segmented selector, inspector carousel, fold and dropdown.
+        // ⑩ The general-purpose filter card — wrapped active chips, removal, clear-all, and the shared dropdown.
+        const float FacetAcross = Facets.MeasureAcross(ColumnAlong, FacetCard, Seated.FacetEnabled);
+        const PlaneExtent FacetExtent = Spanning(ColumnLeast, Cursor, ColumnAlong, FacetAcross);
+        Disregard(Facets.Record(FacetExtent, FacetCard, Seated.FacetEnabled));
+        Cursor = FacetExtent.MostAcross + Measure.CardGapAcross;
+
+        // ⑪ The global-interface primitives — switch, segmented selector, inspector carousel, fold and dropdown.
         const float ReferenceRows[7] = { 32.0f, 38.0f, 31.0f, 154.0f, 129.0f, 124.0f, 341.0f };
         const CardArrangement ReferenceCard = AdvanceCard(ReferenceRows, 7u);
 
@@ -715,7 +750,7 @@ int main()
         ReferenceControls.ColourPicker(Claimed.AlbedoPicker, RowAt(ReferenceCard, ReferenceRows, 6u),
                                        AlbedoPicker, Seated.Albedo);
 
-        // ⑪ One identity-backed outline. A drop's destination is declared here; document ownership stays outside
+        // ⑫ One identity-backed outline. A drop's destination is declared here; document ownership stays outside
         //     the panel exactly as it does for selection and visibility.
         for (std::uint32_t RecordOrdinal = 0u; RecordOrdinal < 5u; ++RecordOrdinal)
         {
@@ -877,7 +912,7 @@ int main()
             }
         }
 
-        // ⑫ The revision timeline, presented from newest to oldest.
+        // ⑬ The revision timeline, presented from newest to oldest.
         const float RevisionRowExtents[3] = { 54.0f, 54.0f, 54.0f };
         const CardArrangement RevisionCard = AdvanceCard(RevisionRowExtents, 3u);
 
@@ -887,7 +922,7 @@ int main()
                                           RevisionRows[Ordinal], Ordinal == 0u);
         }
 
-        // ⑬ The reusable editor partition stands inside a workspace-sized page. Its leaf headers, footers,
+        // ⑭ The reusable editor partition stands inside a workspace-sized page. Its leaf headers, footers,
         //     menus, split rails, resizing and withdrawal are live; scene and UV GPU targets remain skeletal.
         const float EditorAlong = (Display.ExtentAlong - 32.0f < 1152.0f)
                                 ? Display.ExtentAlong - 32.0f : 1152.0f;
@@ -900,13 +935,14 @@ int main()
         Disregard(EditorPanels.Record(EditorExtent, EditorPartition, EditorOrdinates));
         Cursor = EditorExtent.MostAcross + Measure.CardGapAcross;
 
-        // ⑭ The complete notch Control Centre remains the final full display-sized page.
+        // ⑮ The complete notch Control Centre remains the final full display-sized page.
         const PlaneExtent ControlCentreExtent = Spanning(0.0f, Cursor, Display.ExtentAlong, Display.ExtentAcross);
         Disregard(ControlCentre.Record(ControlCentreExtent, ControlCentreValues));
         Cursor = ControlCentreExtent.MostAcross + Measure.CardGapAcross;
 
         // 🔴 The deferred sweep — every menu and every tooltip card, above every row recorded above.
         Panel.RecordDeferred();
+        Facets.RecordDeferred();
 
         // 📝 What the page sequence actually occupied, for the next tick's scroll to be held against. The
         //    trailing `py-32` is added so the Control Centre page can be carried clear of the lower edge.
@@ -966,6 +1002,7 @@ int main()
     ControlCentre.Reset();
     EditorPanels.Reset();
     EditorPartition.Reset();
+    Facets.Reset();
     ReferenceControls.Reset();
     Panel.Reset();
     Ledger.Reset();
