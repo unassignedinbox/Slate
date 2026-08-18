@@ -1,0 +1,6 @@
+{
+  "name": "Viewport Editor",
+  "description": "A dark-themed viewport editor with multiple tabs, customizable grid, and settings.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
