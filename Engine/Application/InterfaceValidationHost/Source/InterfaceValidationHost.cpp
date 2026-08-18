@@ -874,15 +874,18 @@ int main()
                                           RevisionRows[Ordinal], Ordinal == 0u);
         }
 
-        // ⑬ The complete notch Control Centre validation surface. It intentionally covers the component
-        //     column; navigation inside it reaches every reference route without a second executable.
-        Disregard(ControlCentre.Record(Page, ControlCentreValues));
+        // ⑬ The complete notch Control Centre follows the component column as a full display-sized page.
+        //     Keeping it in the page sequence leaves every validation card visible while preserving the
+        //     panel's own navigation, scrolling and controls used by EditorHost and PaintHost.
+        const PlaneExtent ControlCentreExtent = Spanning(0.0f, Cursor, Display.ExtentAlong, Display.ExtentAcross);
+        Disregard(ControlCentre.Record(ControlCentreExtent, ControlCentreValues));
+        Cursor = ControlCentreExtent.MostAcross + Measure.CardGapAcross;
 
         // 🔴 The deferred sweep — every menu and every tooltip card, above every row recorded above.
         Panel.RecordDeferred();
 
-        // 📝 What the column actually occupied, for the next tick's scroll to be held against. The sheet's
-        //    trailing `py-32` is added so the last card can be carried clear of the lower edge.
+        // 📝 What the page sequence actually occupied, for the next tick's scroll to be held against. The
+        //    trailing `py-32` is added so the Control Centre page can be carried clear of the lower edge.
         ColumnMeasured = Cursor + ScrollAcross + Measure.PagePadAcross;
 
 #ifdef SLATE_DEBUG
