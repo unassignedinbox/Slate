@@ -301,9 +301,7 @@ int main()
     ControlPanel             ReferenceControls;
     EditorPanel              EditorPanels;
     PanelStructure           EditorPartition;
-    PanelStructure           SecondaryEditorPartition;
     EditorPanelOrdinates     EditorOrdinates;
-    EditorPanelOrdinates     SecondaryEditorOrdinates;
     ControlCentrePanel       ControlCentre;
     ControlCentreOrdinates   ControlCentreValues;
 
@@ -344,13 +342,6 @@ int main()
     }
 
     EditorPartition.Construct(PanelSubject::Viewport);
-    SecondaryEditorPartition.Construct(PanelSubject::Viewport);
-    Disregard(EditorPartition.Divide(PanelStructure::RootOrdinal,
-                                     PanelDivisionAxis::Along,
-                                     PanelDivisionSide::Most));
-    Disregard(SecondaryEditorPartition.Divide(PanelStructure::RootOrdinal,
-                                              PanelDivisionAxis::Along,
-                                              PanelDivisionSide::Most));
 
     if (!ControlCentre.Construct(Motion, Surface, Appearance).ContentPresent)
     {
@@ -896,28 +887,17 @@ int main()
                                           RevisionRows[Ordinal], Ordinal == 0u);
         }
 
-        // ⑬ Two independently owned workspace partitions stand side by side. Opening a menu or dragging a
-        //     divider in one must leave the other unchanged; scene and UV GPU targets remain skeletal.
+        // ⑬ The reusable editor partition stands inside a workspace-sized page. Its leaf headers, footers,
+        //     menus, split rails, resizing and withdrawal are live; scene and UV GPU targets remain skeletal.
         const float EditorAlong = (Display.ExtentAlong - 32.0f < 1152.0f)
                                 ? Display.ExtentAlong - 32.0f : 1152.0f;
         const float EditorAcross = (Display.ExtentAcross - 48.0f > 600.0f)
                                  ? Display.ExtentAcross - 48.0f : 600.0f;
-        const float EditorGap = 12.0f;
-        const float WorkspaceAlong = (EditorAlong - EditorGap) * 0.5f;
-        const float EditorLeast = (Display.ExtentAlong - EditorAlong) * 0.5f;
-        const PlaneExtent EditorExtent = Spanning(EditorLeast,
+        const PlaneExtent EditorExtent = Spanning((Display.ExtentAlong - EditorAlong) * 0.5f,
                                                   Cursor,
-                                                  WorkspaceAlong,
+                                                  EditorAlong,
                                                   EditorAcross);
-        const PlaneExtent SecondaryEditorExtent = Spanning(EditorExtent.MostAlong + EditorGap,
-                                                           Cursor,
-                                                           WorkspaceAlong,
-                                                           EditorAcross);
-        Disregard(EditorPanels.Record(EditorExtent, EditorPartition, EditorOrdinates, 0u));
-        Disregard(EditorPanels.Record(SecondaryEditorExtent,
-                                      SecondaryEditorPartition,
-                                      SecondaryEditorOrdinates,
-                                      1u));
+        Disregard(EditorPanels.Record(EditorExtent, EditorPartition, EditorOrdinates));
         Cursor = EditorExtent.MostAcross + Measure.CardGapAcross;
 
         // ⑭ The complete notch Control Centre remains the final full display-sized page.
@@ -985,7 +965,6 @@ int main()
 
     ControlCentre.Reset();
     EditorPanels.Reset();
-    SecondaryEditorPartition.Reset();
     EditorPartition.Reset();
     ReferenceControls.Reset();
     Panel.Reset();
