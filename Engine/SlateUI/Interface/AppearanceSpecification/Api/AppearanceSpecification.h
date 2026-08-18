@@ -575,6 +575,79 @@ struct WorkspaceInk
 };
 
 //------------------------------------------------------------------------------------------------------------------------
+//                                                    THE EDITOR PANELS
+//------------------------------------------------------------------------------------------------------------------------
+
+// 📐 `References/Panels` declares a separate raw-hex ladder for editor chrome. These roles remain beside the
+//    workspace and control ladders so every editor panel reads one resolved appearance instead of retaining
+//    private colours in each viewport, UV, outliner or property presentation.
+inline constexpr std::uint32_t EditorWindowGround   = 0x0A0A0Cu;   // [-] - main window and vacant panel
+inline constexpr std::uint32_t EditorBodyGround     = 0x121212u;   // [-] - outliner and property body
+inline constexpr std::uint32_t EditorViewportGround = 0x1A1A1Fu;   // [-] - viewport and UV work area
+inline constexpr std::uint32_t EditorChromeGround   = 0x1E1E24u;   // [-] - panel header and footer
+inline constexpr std::uint32_t EditorEdge           = 0x2A2A30u;   // [-] - chrome borders and split rails
+inline constexpr std::uint32_t EditorRoused          = 0x3A3A40u;   // [-] - roused and selected controls
+inline constexpr std::uint32_t EditorInkPrimary      = 0xF3F4F6u;   // [-] - gray-100
+inline constexpr std::uint32_t EditorInkSecondary    = 0xD1D5DBu;   // [-] - gray-300
+inline constexpr std::uint32_t EditorInkQuiet        = 0x9CA3AFu;   // [-] - gray-400
+inline constexpr std::uint32_t EditorInkFaint        = 0x6B7280u;   // [-] - gray-500
+inline constexpr std::uint32_t EditorInkGhost        = 0x4B5563u;   // [-] - gray-600
+inline constexpr std::uint32_t EditorAccent          = 0x3B82F6u;   // [-] - blue-500
+inline constexpr std::uint32_t EditorPositive        = 0x22C55Eu;   // [-] - green-500
+inline constexpr std::uint32_t EditorNegative        = 0xF87171u;   // [-] - red-400
+
+/// 🧩 Semantic inks shared by every editor panel and its split controls.
+/// tag   contract, nonallocating, nonthrowing
+struct EditorPanelInk
+{
+    InkOrdinate  WindowGround   = Covering(EditorWindowGround);   // [-] - outside and vacant ground
+    InkOrdinate  BodyGround     = Covering(EditorBodyGround);     // [-] - outliner and property body
+    InkOrdinate  ViewGround     = Covering(EditorViewportGround); // [-] - viewport and UV render target
+    InkOrdinate  ChromeGround   = Covering(EditorChromeGround);   // [-] - header and footer
+    InkOrdinate  Edge           = Covering(EditorEdge);           // [-] - borders and split rail
+    InkOrdinate  Roused         = Covering(EditorRoused);         // [-] - selected and hovered control
+    InkOrdinate  InkPrimary     = Covering(EditorInkPrimary);     // [-] - selected runs
+    InkOrdinate  InkSecondary   = Covering(EditorInkSecondary);   // [-] - panel title
+    InkOrdinate  InkQuiet       = Covering(EditorInkQuiet);       // [-] - controls
+    InkOrdinate  InkFaint       = Covering(EditorInkFaint);       // [-] - inactive runs
+    InkOrdinate  InkGhost       = Covering(EditorInkGhost);       // [-] - empty body run
+    InkOrdinate  Accent         = Covering(EditorAccent);         // [-] - split and selection accent
+    InkOrdinate  Positive       = Covering(EditorPositive);       // [-] - active overlays
+    InkOrdinate  Negative       = Covering(EditorNegative);       // [-] - withdrawal action
+};
+
+/// 🧩 Exact editor-panel extents from `References/Panels`, resolved once against the display scale.
+/// tag   contract, nonallocating, nonthrowing
+struct EditorPanelMetric
+{
+    float  HeaderAcross       =  32.0f;   // [px] - h-8
+    float  FooterAcross       =  48.0f;   // [px] - h-12
+    float  SplitterAcross     =   6.0f;   // [px] - w-1.5 and h-1.5
+    float  EdgeWeight         =   1.0f;   // [px] - border
+    float  HeaderPadAlong     =   8.0f;   // [px] - px-2
+    float  FooterPadAlong     =  16.0f;   // [px] - px-4
+    float  HeaderAction       =  28.0f;   // [px] - p-1.5 around a 14 px symbol
+    float  HeaderSymbol       =  14.0f;   // [px] - lucide size 14 placeholder
+    float  HeaderTitleGap     =  16.0f;   // [px] - ml-4
+    float  FooterGap          =  12.0f;   // [px] - space-x-3
+    float  PillAcross         =  28.0f;   // [px] - py-1.5 around 16 px leading
+    float  PillRadius         =  14.0f;   // [px] - rounded-full
+    float  MenuAlong          = 160.0f;   // [px] - w-[160px]
+    float  SplitMenuAlong     = 140.0f;   // [px] - w-[140px]
+    float  MenuPadAcross      =   4.0f;   // [px] - py-1
+    float  MenuRowAcross      =  28.0f;   // [px] - py-1.5 around 16 px leading
+    float  MenuRadius         =   8.0f;   // [px] - rounded-lg
+    float  MenuLift           =   4.0f;   // [px] - mt-1
+    float  ChooserButtonAlong  = 128.0f;   // [px] - four choices in max-w-2xl
+    float  ChooserButtonAcross = 104.0f;   // [px] - p-5, symbol, gap and run
+    float  ChooserGap         =  12.0f;   // [px] - gap-3
+    float  ChooserRadius      =  12.0f;   // [px] - rounded-xl
+    float  TextFine           =  10.0f;   // [px] - workspace tabs and footer status
+    float  TextSmall          =  12.0f;   // [px] - header, footer and controls
+    float  TextBody           =  14.0f;   // [px] - menus and chooser labels
+};
+
+//------------------------------------------------------------------------------------------------------------------------
 //                                                     THE MOTION SCALE
 //------------------------------------------------------------------------------------------------------------------------
 
@@ -622,8 +695,10 @@ struct AppearanceSpecification
     MotionScale    Motion         = {};
     ControlInk       Control          = {};
     ControlMetric    ControlMeasure   = {};
-    WorkspaceInk     Workspace        = {};
-    WorkspaceMetric  WorkspaceMeasure = {};
+    WorkspaceInk      Workspace         = {};
+    WorkspaceMetric   WorkspaceMeasure  = {};
+    EditorPanelInk     EditorPanel        = {};
+    EditorPanelMetric  EditorPanelMeasure = {};
 };
 
 /// 🧩 The bounds the artist's own preference is admitted within.

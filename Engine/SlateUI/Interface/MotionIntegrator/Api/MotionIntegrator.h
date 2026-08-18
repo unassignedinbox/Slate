@@ -88,7 +88,7 @@ class MotionIntegrator
 {
 public:
 
-    static constexpr std::uint32_t InterpolantCapacity = 512u;   // [-] - live interpolants, never allocated
+    static constexpr std::uint32_t InterpolantCapacity = 1024u;   // [-] - live interpolants, never allocated
 
     MotionIntegrator()                                   = default;
     MotionIntegrator(const MotionIntegrator&)            = delete;

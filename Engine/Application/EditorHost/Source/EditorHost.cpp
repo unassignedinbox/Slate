@@ -5,6 +5,7 @@
 
 #include "Contract/DeliveryContract.h"
 #include "SlateUI/Interface/ControlCentrePanel/Api/ControlCentrePanel.h"
+#include "SlateUI/Interface/EditorPanel/Api/EditorPanel.h"
 #include "SlateUI/Interface/ViewportSequence/Api/ViewportSequence.h"
 #include "SlateUI/Interface/WorkspacePanel/Api/WorkspaceIndex.h"
 #include "SlateVulkan/Device/HostLifecycle/Api/HostLifecycle.h"
@@ -115,6 +116,9 @@ int main()
 
     WorkspaceIndex          Workspaces;
     WorkspacePanel          Workspace;
+    EditorPanel             WorkspacePanels;
+    PanelStructure          PanelPartitions[WorkspaceIndex::WorkspaceCeiling];
+    EditorPanelOrdinates    PanelOrdinates[WorkspaceIndex::WorkspaceCeiling];
     ControlCentrePanel      ControlCentre;
     ControlCentreOrdinates  ControlCentreValues;
 
@@ -124,6 +128,12 @@ int main()
     if (!Workspace.Construct(Viewport.Surface(), Viewport.Appearance()).ContentPresent)
     {
         std::printf("%s \u2014 the workspace panel was refused\n", HostName);
+        return 1;
+    }
+
+    if (!WorkspacePanels.Construct(Viewport.MotionSource(), Viewport.Surface(), Viewport.Appearance()).ContentPresent)
+    {
+        std::printf("%s \u2014 the editor panels were refused\n", HostName);
         return 1;
     }
 
@@ -137,11 +147,13 @@ int main()
     //    thing that distinguishes the two hosts, and it is the reason there are two: the editor carries
     //    every subject and cannot presume which the artist wants, so it presents a blank one and lets them
     //    say. A host that guessed would open a canvas for someone who came to sketch.
-    if (!Workspaces.Enrol(DefaultSubject).ContentPresent)
+    const Deliver<std::uint32_t> DefaultWorkspace = Workspaces.Enrol(DefaultSubject);
+    if (!DefaultWorkspace.ContentPresent)
     {
         std::printf("%s \u2014 the default workspace could not be opened\n", HostName);
         return 1;
     }
+    PanelPartitions[DefaultWorkspace.Resolve()].Construct(PanelSubject::Viewport);
 
     // 🔴 The sheet's tab figures seated into the vendor's style, including the four `Patches/` adds. They
     //    default to 0.0f, at which a patched build draws stock rectangular tabs — so this call is what
@@ -241,6 +253,8 @@ int main()
 
             EnrolIntoNode = 0u;
 
+            WorkspacePanels.Advance(Viewport.Surface().Pointer(), Pass.ElapsedMilliseconds);
+
             for (std::uint32_t Ordinal = 0u; Ordinal < OpenCount; ++Ordinal)
             {
                 const char* Titled = Workspaces.Titled(Ordinal);
@@ -250,8 +264,18 @@ int main()
 
                 bool Standing = true;
 
-                Viewport.Seam().RecordWorkspaceWindow(Titled, !Workspaces.Seated(Ordinal), SeatInto, Standing);
+                const PlaneExtent PanelExtent = Viewport.Seam().EnterWorkspaceWindow(
+                    Titled, !Workspaces.Seated(Ordinal), SeatInto, Standing);
                 Workspaces.Seat(Ordinal);
+
+                if (PanelExtent.SpanAlong() > 0.0f && PanelExtent.SpanAcross() > 0.0f)
+                {
+                    Disregard(Viewport.Surface().RelayerWindow());
+                    Disregard(WorkspacePanels.Record(PanelExtent, PanelPartitions[Ordinal], PanelOrdinates[Ordinal]));
+                }
+
+                Viewport.Seam().LeaveWorkspaceWindow();
+                Disregard(Viewport.Surface().Relayer(RecordingSurface::ShellLayer::Beneath));
 
                 // ⚠️ Recorded, never acted on inside the sweep. Withdrawing here edits the set being walked.
                 if (!Standing)
@@ -259,7 +283,16 @@ int main()
             }
 
             if (Withdrawing < OpenCount)
+            {
                 Disregard(Workspaces.Withdraw(Withdrawing));
+                for (std::uint32_t Moving = Withdrawing; Moving + 1u < OpenCount; ++Moving)
+                {
+                    PanelPartitions[Moving] = PanelPartitions[Moving + 1u];
+                    PanelOrdinates[Moving]   = PanelOrdinates[Moving + 1u];
+                }
+                PanelPartitions[OpenCount - 1u].Reset();
+                PanelOrdinates[OpenCount - 1u] = EditorPanelOrdinates{};
+            }
 
             // 📝 The `+`, seated inside the dock node's own tab bar so the vendor lays it after the last
             //    tab — always at the end, by construction rather than by arithmetic.
@@ -271,14 +304,20 @@ int main()
                 //    recorded until then. Seating it against the main space instead is what put a new
                 //    workspace in the wrong window.
                 EnrolIntoNode = AskingNode;
-                Disregard(Workspaces.Enrol(DefaultSubject));
+                const Deliver<std::uint32_t> EnrolledWorkspace = Workspaces.Enrol(DefaultSubject);
+                if (EnrolledWorkspace.ContentPresent)
+                    PanelPartitions[EnrolledWorkspace.Resolve()].Construct(PanelSubject::Viewport);
             }
 
             // 🔴 With nothing open there is no tab bar to seat a `+` in, so the empty shell carries the
             //    invitation itself. `WorkspacePanel` draws "CREATE PANEL" on plain black; a press anywhere
             //    on that ground enrols one, which is the way out of a state that otherwise has none.
             if (OpenCount == 0u && Viewport.Seam().VacantPressed(Whole))
-                Disregard(Workspaces.Enrol(DefaultSubject));
+            {
+                const Deliver<std::uint32_t> EnrolledWorkspace = Workspaces.Enrol(DefaultSubject);
+                if (EnrolledWorkspace.ContentPresent)
+                    PanelPartitions[EnrolledWorkspace.Resolve()].Construct(PanelSubject::Viewport);
+            }
 
             // 📝 The drawers last, so they sit ABOVE the workspace as the sheet lays them.
             Viewport.RecordDrawers();
@@ -326,6 +365,9 @@ int main()
     const std::uint32_t Serious = Lifetime.StateDiagnostics();
 
     ControlCentre.Reset();
+    WorkspacePanels.Reset();
+    for (std::uint32_t Ordinal = 0u; Ordinal < WorkspaceIndex::WorkspaceCeiling; ++Ordinal)
+        PanelPartitions[Ordinal].Reset();
     Workspace.Reset();
     Workspaces.Reset();
     Viewport.Reclaim();

@@ -8,6 +8,7 @@
 #include "SlateUI/Interface/ComponentSpecification/Api/ComponentSpecification.h"
 #include "SlateUI/Interface/ControlCentrePanel/Api/ControlCentrePanel.h"
 #include "SlateUI/Interface/ControlPanel/Api/ControlPanel.h"
+#include "SlateUI/Interface/EditorPanel/Api/EditorPanel.h"
 #include "SlateUI/Interface/InteractionIndex/Api/InteractionIndex.h"
 #include "SlateUI/Interface/InterfaceExchange/Api/InterfaceExchange.h"
 #include "SlateUI/Interface/InterfaceExchange/Api/RecordingSurface.h"
@@ -298,6 +299,9 @@ int main()
     RecordingSurface       Surface;
     ComponentSpecification  Panel;
     ControlPanel             ReferenceControls;
+    EditorPanel              EditorPanels;
+    PanelStructure           EditorPartition;
+    EditorPanelOrdinates     EditorOrdinates;
     ControlCentrePanel       ControlCentre;
     ControlCentreOrdinates   ControlCentreValues;
 
@@ -330,6 +334,14 @@ int main()
         std::printf("%s \u2014 the reference controls were refused\n", HostName);
         return 1;
     }
+
+    if (!EditorPanels.Construct(Motion, Surface, Appearance).ContentPresent)
+    {
+        std::printf("%s \u2014 the editor panels were refused\n", HostName);
+        return 1;
+    }
+
+    EditorPartition.Construct(PanelSubject::Viewport);
 
     if (!ControlCentre.Construct(Motion, Surface, Appearance).ContentPresent)
     {
@@ -536,6 +548,7 @@ int main()
         Motion.Advance(ElapsedMs);
         Panel.Advance(Surface.Pointer(), ElapsedMs);
         ReferenceControls.Advance(Surface.Pointer(), ElapsedMs);
+        EditorPanels.Advance(Surface.Pointer(), ElapsedMs);
         ControlCentre.Advance(Surface.Pointer(), ElapsedMs);
 
 #ifdef SLATE_DEBUG
@@ -874,9 +887,20 @@ int main()
                                           RevisionRows[Ordinal], Ordinal == 0u);
         }
 
-        // ⑬ The complete notch Control Centre follows the component column as a full display-sized page.
-        //     Keeping it in the page sequence leaves every validation card visible while preserving the
-        //     panel's own navigation, scrolling and controls used by EditorHost and PaintHost.
+        // ⑬ The reusable editor partition stands inside a workspace-sized page. Its leaf headers, footers,
+        //     menus, split rails, resizing and withdrawal are live; scene and UV GPU targets remain skeletal.
+        const float EditorAlong = (Display.ExtentAlong - 32.0f < 1152.0f)
+                                ? Display.ExtentAlong - 32.0f : 1152.0f;
+        const float EditorAcross = (Display.ExtentAcross - 48.0f > 600.0f)
+                                 ? Display.ExtentAcross - 48.0f : 600.0f;
+        const PlaneExtent EditorExtent = Spanning((Display.ExtentAlong - EditorAlong) * 0.5f,
+                                                  Cursor,
+                                                  EditorAlong,
+                                                  EditorAcross);
+        Disregard(EditorPanels.Record(EditorExtent, EditorPartition, EditorOrdinates));
+        Cursor = EditorExtent.MostAcross + Measure.CardGapAcross;
+
+        // ⑭ The complete notch Control Centre remains the final full display-sized page.
         const PlaneExtent ControlCentreExtent = Spanning(0.0f, Cursor, Display.ExtentAlong, Display.ExtentAcross);
         Disregard(ControlCentre.Record(ControlCentreExtent, ControlCentreValues));
         Cursor = ControlCentreExtent.MostAcross + Measure.CardGapAcross;
@@ -940,6 +964,8 @@ int main()
     const std::uint32_t Serious = Lifetime.StateDiagnostics();
 
     ControlCentre.Reset();
+    EditorPanels.Reset();
+    EditorPartition.Reset();
     ReferenceControls.Reset();
     Panel.Reset();
     Ledger.Reset();

@@ -199,6 +199,7 @@ void InterfaceExchange::Reclaim()
     ContextSlot      = nullptr;
     TickOpen         = false;
     ContentAssembled = false;
+    WorkspaceEntered = false;
     WindowAttached   = false;
     VendorAttached   = false;
     Attached         = {};
@@ -224,6 +225,7 @@ Deliver<bool> InterfaceExchange::Advance()
 
     TickOpen         = true;
     ContentAssembled = false;
+    WorkspaceEntered = false;
 
     return Deliver<bool>::Deliver(true);
 }
@@ -234,6 +236,7 @@ Deliver<bool> InterfaceExchange::Seal()
         return Deliver<bool>::Refuse({ RefusalReason::HostDenied, "no tick is open" });
 
     ImGui::SetCurrentContext(static_cast<ImGuiContext*>(ContextSlot));
+    LeaveWorkspaceWindow();
     ImGui::Render();
 
     TickOpen         = false;
@@ -248,6 +251,7 @@ Deliver<bool> InterfaceExchange::Abandon()
         return Deliver<bool>::Deliver(true);
 
     ImGui::SetCurrentContext(static_cast<ImGuiContext*>(ContextSlot));
+    LeaveWorkspaceWindow();
     ImGui::EndFrame();
 
     TickOpen         = false;
@@ -486,13 +490,22 @@ void InterfaceExchange::RecordDockSpace(const PlaneExtent& Extent)
     ImGui::PopStyleVar(2);
 }
 
-void InterfaceExchange::RecordWorkspaceWindow(const char*    Titled,
-                                             bool           Docked,
-                                             std::uint32_t  IntoNode,
-                                             bool&          Standing)
+void InterfaceExchange::RecordWorkspaceWindow(const char* Titled,
+                                                bool Docked,
+                                                std::uint32_t IntoNode,
+                                                bool& Standing)
 {
-    if (ContextSlot == nullptr || !TickOpen || Titled == nullptr)
-        return;
+    static_cast<void>(EnterWorkspaceWindow(Titled, Docked, IntoNode, Standing));
+    LeaveWorkspaceWindow();
+}
+
+PlaneExtent InterfaceExchange::EnterWorkspaceWindow(const char* Titled,
+                                                     bool Docked,
+                                                     std::uint32_t IntoNode,
+                                                     bool& Standing)
+{
+    if (ContextSlot == nullptr || !TickOpen || Titled == nullptr || WorkspaceEntered)
+        return {};
 
     ImGui::SetCurrentContext(static_cast<ImGuiContext*>(ContextSlot));
 
@@ -521,11 +534,30 @@ void InterfaceExchange::RecordWorkspaceWindow(const char*    Titled,
                                       | static_cast<ImGuiDockNodeFlags>(ImGuiDockNodeFlags_NoCloseButton);
 
     ImGui::SetNextWindowClass(&Declared);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 
-    ImGui::Begin(Titled, &Standing, ImGuiWindowFlags_NoScrollbar
-                                  | ImGuiWindowFlags_NoScrollWithMouse
-                                  | ImGuiWindowFlags_NoCollapse);
+    const bool Presented = ImGui::Begin(Titled, &Standing, ImGuiWindowFlags_NoScrollbar
+                                                           | ImGuiWindowFlags_NoScrollWithMouse
+                                                           | ImGuiWindowFlags_NoCollapse);
+    WorkspaceEntered = true;
+
+    if (!Presented)
+        return {};
+
+    const ImVec2 Origin    = ImGui::GetCursorScreenPos();
+    const ImVec2 Available = ImGui::GetContentRegionAvail();
+    return { Origin.x, Origin.y, Origin.x + Available.x, Origin.y + Available.y };
+}
+
+void InterfaceExchange::LeaveWorkspaceWindow()
+{
+    if (ContextSlot == nullptr || !WorkspaceEntered)
+        return;
+
+    ImGui::SetCurrentContext(static_cast<ImGuiContext*>(ContextSlot));
     ImGui::End();
+    ImGui::PopStyleVar();
+    WorkspaceEntered = false;
 }
 
 bool InterfaceExchange::WorkspacePresented(const char* Titled) const

@@ -142,6 +142,23 @@ public:
     /// in    IntoNode  [-]  the dock node to seat it into on its first tick; zero means the main space
     void RecordWorkspaceWindow(const char* Titled, bool Docked, std::uint32_t IntoNode, bool& Standing);
 
+    /// 🧩 Enters one dockable workspace window and reports its absolute content extent.
+    /// out   Extent    [px]  zero when the window is hidden or no interface tick stands
+    /// note  `LeaveWorkspaceWindow` must follow every successful entry, including a hidden dock tab whose
+    ///       delivered extent is zero. Between the pair, `RecordingSurface::RelayerWindow` seats panel content
+    ///       into the window's own clipped command list.
+    /// cost  🚩
+    /// tag   api, nonallocating, nonthrowing
+    PlaneExtent EnterWorkspaceWindow(const char* Titled,
+                                     bool Docked,
+                                     std::uint32_t IntoNode,
+                                     bool& Standing);
+
+    /// 🧩 Leaves the workspace window entered by `EnterWorkspaceWindow`.
+    /// cost  ✔️
+    /// tag   api, nonallocating, nonthrowing
+    void LeaveWorkspaceWindow();
+
     /// 🧩 Whether a dockable workspace window is the one the artist is looking at.
     /// cost  ✔️
     /// tag   api, nonallocating, nonthrowing
@@ -210,6 +227,7 @@ private:
     bool                 WindowAttached    = false;            // [-] - the window system attachment stands
     bool                 VendorAttached    = false;            // [-] - the vendor attachment stands
     bool                 StyleSeated       = false;            // [-] - a workspace style was seated once
+    bool                 WorkspaceEntered  = false;            // [-] - between workspace entry and leave
     WorkspaceMetric      SeatedMeasure     = {};               // [-] - retained, so Construct re-applies it
     WorkspaceInk         SeatedInk         = {};               // [-] - retained, so Construct re-applies it
 };

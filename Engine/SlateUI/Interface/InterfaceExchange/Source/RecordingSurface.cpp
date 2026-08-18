@@ -123,6 +123,18 @@ Deliver<bool> RecordingSurface::Relayer(ShellLayer Layer)
     return Deliver<bool>::Deliver(true);
 }
 
+Deliver<bool> RecordingSurface::RelayerWindow()
+{
+    if (CommandSlot == nullptr)
+        return Deliver<bool>::Refuse({ RefusalReason::CapabilityAbsent, "no tick stands adopted" });
+
+    if (ImGui::GetCurrentContext() == nullptr)
+        return Deliver<bool>::Refuse({ RefusalReason::CapabilityAbsent, "no interface context is current" });
+
+    CommandSlot = static_cast<void*>(ImGui::GetWindowDrawList());
+    return Deliver<bool>::Deliver(true);
+}
+
 void RecordingSurface::Retire()
 {
     // 📝 The command list belongs to the vendor and is assembled by the seal; only this surface's claim on

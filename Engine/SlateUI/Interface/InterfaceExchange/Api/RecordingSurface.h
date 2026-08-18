@@ -156,6 +156,14 @@ public:
     /// tag   api, nonallocating, nonthrowing
     Deliver<bool> Relayer(ShellLayer Layer);
 
+    /// 🧩 Moves subsequent primitives into the currently open workspace window's command list.
+    /// out   Deliver  [-]  refuses when no tick or no workspace window stands open
+    /// note  Used only between `InterfaceExchange::EnterWorkspaceWindow` and `LeaveWorkspaceWindow` so panel
+    ///       content clips and orders with its own dockable window instead of the global shell layers.
+    /// cost  ✔️
+    /// tag   api, nonallocating, nonthrowing
+    Deliver<bool> RelayerWindow();
+
     /// 🧩 What the pointer did this tick.
     /// cost  ✔️
     /// tag   api, nonallocating, nonthrowing

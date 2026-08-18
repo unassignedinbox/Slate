@@ -251,6 +251,41 @@ void ScaleWorkspaceLengths(WorkspaceMetric& Measure, float AppliedScale)
     //    scaled size on its own; multiplying it here would apply the scale to it a second time.
 }
 
+/// 🧩 Scales the editor-panel chrome transcribed from `References/Panels`.
+/// cost  ✔️
+void ScaleEditorPanelLengths(EditorPanelMetric& Measure, float AppliedScale)
+{
+    Measure.HeaderAcross        *= AppliedScale;
+    Measure.FooterAcross        *= AppliedScale;
+    Measure.SplitterAcross      *= AppliedScale;
+    Measure.EdgeWeight          *= AppliedScale;
+    Measure.HeaderPadAlong      *= AppliedScale;
+    Measure.FooterPadAlong      *= AppliedScale;
+    Measure.HeaderAction        *= AppliedScale;
+    Measure.HeaderSymbol        *= AppliedScale;
+    Measure.HeaderTitleGap      *= AppliedScale;
+    Measure.FooterGap           *= AppliedScale;
+    Measure.PillAcross          *= AppliedScale;
+    Measure.PillRadius          *= AppliedScale;
+    Measure.MenuAlong           *= AppliedScale;
+    Measure.SplitMenuAlong      *= AppliedScale;
+    Measure.MenuPadAcross       *= AppliedScale;
+    Measure.MenuRowAcross       *= AppliedScale;
+    Measure.MenuRadius          *= AppliedScale;
+    Measure.MenuLift            *= AppliedScale;
+    Measure.ChooserButtonAlong  *= AppliedScale;
+    Measure.ChooserButtonAcross *= AppliedScale;
+    Measure.ChooserGap          *= AppliedScale;
+    Measure.ChooserRadius       *= AppliedScale;
+    Measure.TextFine            *= AppliedScale;
+    Measure.TextSmall           *= AppliedScale;
+    Measure.TextBody            *= AppliedScale;
+
+    if (Measure.TextFine < TextLegibilityFloor)  Measure.TextFine = TextLegibilityFloor;
+    if (Measure.TextSmall < TextLegibilityFloor) Measure.TextSmall = TextLegibilityFloor;
+    if (Measure.TextBody < TextLegibilityFloor)  Measure.TextBody = TextLegibilityFloor;
+}
+
 }   // namespace
 
 ComfortDensity ClassifyDensity(const MetricScale& Measure, float ExtentAlong)
@@ -298,8 +333,9 @@ AppearanceSpecification Resolve(double DisplayScale, double ArtistScale, float E
     // 📝 The workspace strip is authored at engine density, so it takes the display and artist factors and
     //    not the control sheet's reduction. Its own density factor still applies: a tab strip on a 4K panel
     //    wants the same easing outward that every other extent gets.
-    ScaleWorkspaceLengths(Resolved.WorkspaceMeasure,
-                          DensityFactor(Classified) * AppliedScale * ArtistFactor);
+    const float InterfaceScale = DensityFactor(Classified) * AppliedScale * ArtistFactor;
+    ScaleWorkspaceLengths(Resolved.WorkspaceMeasure, InterfaceScale);
+    ScaleEditorPanelLengths(Resolved.EditorPanelMeasure, InterfaceScale);
 
     Resolved.ControlMeasure.Density       = Classified;
     Resolved.ControlMeasure.AppliedFactor = ControlScale;
