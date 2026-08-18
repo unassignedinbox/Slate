@@ -91,6 +91,9 @@ void EditorPanel::Advance(const PointerCondition& Arrived, double Elapsed)
     Pointer = Arrived;
     Interaction.Advance(Arrived, Elapsed);
     SharedControls.Sample(Arrived);
+
+    if (!Arrived.ContactHeld && !Arrived.ContactReleased)
+        CapturedPresentation = AbsentPresentation;
 }
 
 std::uint32_t EditorPanel::ControlOrdinal(std::uint32_t RecordOrdinal, ControlRole Role) const
@@ -104,12 +107,35 @@ bool EditorPanel::Pressed(std::uint32_t Ordinal, const PlaneExtent& Extent, bool
         return false;
 
     const ControlIdentity Claimed = Controls[Ordinal];
-    const bool Roused = Extent.Encloses(Pointer.PositionAlong, Pointer.PositionAcross);
-    if (Roused && Pointer.ContactArrived && (PopupAction || !Interaction.AnyDisclosed()))
-        Interaction.Seize(Claimed, ControlPart::Body);
+    const bool BoundaryPresent = DeferredBoundary.SpanAlong() > 0.0f && DeferredBoundary.SpanAcross() > 0.0f;
+    const bool WithinBoundary = !BoundaryPresent ||
+                                DeferredBoundary.Encloses(Pointer.PositionAlong, Pointer.PositionAcross);
+    const bool Roused = WithinBoundary && Extent.Encloses(Pointer.PositionAlong, Pointer.PositionAcross);
+    if (Roused && Pointer.ContactArrived && (PopupAction || !Interaction.AnyDisclosed()) &&
+        Interaction.Seize(Claimed, ControlPart::Body))
+    {
+        CapturedPresentation = CurrentPresentation;
+    }
 
     Interaction.DeclareRoused(Claimed, Roused, 130.0);
-    return Interaction.Released(Claimed) && Roused;
+    return CapturedPresentation == CurrentPresentation && Interaction.Released(Claimed) && Roused;
+}
+
+bool EditorPanel::Disclosed(ControlIdentity Claimed) const
+{
+    return DisclosedPresentation == CurrentPresentation && Interaction.Disclosed(Claimed);
+}
+
+void EditorPanel::Disclose(ControlIdentity Claimed)
+{
+    if (Interaction.Disclose(Claimed))
+        DisclosedPresentation = CurrentPresentation;
+}
+
+void EditorPanel::WithdrawDisclosure()
+{
+    Interaction.Withdraw();
+    DisclosedPresentation = AbsentPresentation;
 }
 
 void EditorPanel::Symbol(const PlaneExtent& Extent, InkOrdinate Ink)
@@ -123,7 +149,8 @@ void EditorPanel::Symbol(const PlaneExtent& Extent, InkOrdinate Ink)
 
 Deliver<bool> EditorPanel::Record(const PlaneExtent& Extent,
                                   PanelStructure& Partition,
-                                  EditorPanelOrdinates& Ordinates)
+                                  EditorPanelOrdinates& Ordinates,
+                                  std::uint32_t PresentationOrdinal)
 {
     if (Surface == nullptr || Appearance == nullptr || Motion == nullptr)
         return Deliver<bool>::Refuse({ RefusalReason::CapabilityAbsent, "no editor panel construction stands" });
@@ -131,15 +158,45 @@ Deliver<bool> EditorPanel::Record(const PlaneExtent& Extent,
     if (!Partition.Standing(PanelStructure::RootOrdinal).ContentPresent)
         Partition.Construct();
 
-    DeferredAnchor = {};
-    DeferredRecord = PanelStructure::RecordCeiling;
-    DeferredRole   = ControlRole::RoleCount;
+    CurrentPresentation = PresentationOrdinal;
+    DeferredAnchor       = {};
+    DeferredBoundary     = {};
+    DeferredRecord       = PanelStructure::RecordCeiling;
+    DeferredRole         = ControlRole::RoleCount;
 
     Surface->Ground(Extent, Appearance->EditorPanel.WindowGround);
     RecordBranch(PanelStructure::RootOrdinal, Extent, Partition, Ordinates);
     RecordDeferred(Partition, Ordinates);
 
     return Deliver<bool>::Deliver(true);
+}
+
+bool EditorPanel::PointerCaptured(std::uint32_t PresentationOrdinal) const
+{
+    const bool ContactStanding = Pointer.ContactHeld || Pointer.ContactReleased;
+    const bool PresentationCaptured = CapturedPresentation == PresentationOrdinal;
+    const bool PointerWithinPresentation = DeferredBoundary.Encloses(Pointer.PositionAlong, Pointer.PositionAcross);
+    const bool PopupCaptured = DisclosedPresentation == PresentationOrdinal && Interaction.AnyDisclosed() &&
+                               PointerWithinPresentation;
+    return ContactStanding && (PresentationCaptured || PopupCaptured);
+}
+
+void EditorPanel::WithdrawPresentation(std::uint32_t PresentationOrdinal)
+{
+    if (DisclosedPresentation == PresentationOrdinal)
+        WithdrawDisclosure();
+    else if (DisclosedPresentation != AbsentPresentation && DisclosedPresentation > PresentationOrdinal)
+        --DisclosedPresentation;
+
+    if (CapturedPresentation == PresentationOrdinal)
+    {
+        Interaction.Abandon();
+        CapturedPresentation = AbsentPresentation;
+    }
+    else if (CapturedPresentation != AbsentPresentation && CapturedPresentation > PresentationOrdinal)
+    {
+        --CapturedPresentation;
+    }
 }
 
 void EditorPanel::RecordBranch(std::uint32_t RecordOrdinal,
@@ -187,25 +244,29 @@ void EditorPanel::RecordBranch(std::uint32_t RecordOrdinal,
     const std::uint32_t SplitControl = ControlOrdinal(RecordOrdinal, ControlRole::DivisionMenu);
     const ControlIdentity Claimed = Controls[SplitControl];
     const bool Roused = SplitExtent.Encloses(Pointer.PositionAlong, Pointer.PositionAcross);
-    if (Roused && Pointer.ContactArrived && !Interaction.AnyDisclosed())
+    if (Roused && Pointer.ContactArrived && !Interaction.AnyDisclosed() &&
+        Interaction.Seize(Claimed, ControlPart::Body))
     {
-        Interaction.Seize(Claimed, ControlPart::Body);
         Interaction.DepartFrom(Claimed, Declared.LeastFraction);
-        DraggedDivision = RecordOrdinal;
-        DraggedExtent   = Extent;
+        CapturedPresentation = CurrentPresentation;
+        DraggedDivision      = RecordOrdinal;
+        DraggedExtent        = Extent;
     }
 
-    Interaction.DeclareRoused(Claimed, Roused || Interaction.Holding(Claimed), 130.0);
+    const bool DivisionCaptured = CapturedPresentation == CurrentPresentation;
+    const bool DivisionHeld = DivisionCaptured && Interaction.Holding(Claimed);
+    const bool DivisionReleased = DivisionCaptured && Interaction.Released(Claimed);
+    Interaction.DeclareRoused(Claimed, Roused || DivisionHeld, 130.0);
 
     float RequestedFraction = Declared.LeastFraction;
-    if (Interaction.Holding(Claimed) || Interaction.Released(Claimed))
+    if (DivisionHeld || DivisionReleased)
     {
         RequestedFraction = Along
                           ? (Pointer.PositionAlong - DraggedExtent.LeastAlong) / DraggedExtent.SpanAlong()
                           : (Pointer.PositionAcross - DraggedExtent.LeastAcross) / DraggedExtent.SpanAcross();
     }
 
-    if (Interaction.Released(Claimed))
+    if (DivisionReleased)
     {
         if (RequestedFraction < 0.05f)
         {
@@ -222,10 +283,10 @@ void EditorPanel::RecordBranch(std::uint32_t RecordOrdinal,
         }
     }
 
-    if (Interaction.Holding(Claimed))
+    if (DivisionHeld)
         Disregard(Partition.Proportion(RecordOrdinal, RequestedFraction));
 
-    Surface->Ground(SplitExtent, Roused || Interaction.Holding(Claimed) ? Ink.Accent : Ink.ChromeGround);
+    Surface->Ground(SplitExtent, Roused || DivisionHeld ? Ink.Accent : Ink.ChromeGround);
     Surface->Edge(SplitExtent, Ink.Edge, Measure.EdgeWeight);
 
     RecordBranch(Declared.LeastOrdinal, LeastExtent, Partition, Ordinates);
@@ -242,6 +303,8 @@ void EditorPanel::RecordLeaf(std::uint32_t RecordOrdinal,
                              PanelStructure& Partition,
                              EditorPanelOrdinates& Ordinates)
 {
+    CurrentLeafExtent = Extent;
+
     if (Declared.Subject == PanelSubject::Vacant)
     {
         RecordVacant(RecordOrdinal, Extent, Partition);
@@ -287,7 +350,7 @@ void EditorPanel::RecordHeader(std::uint32_t RecordOrdinal,
                                                44.0f,
                                                Measure.HeaderAction);
     const std::uint32_t SubjectControl = ControlOrdinal(RecordOrdinal, ControlRole::SubjectMenu);
-    const bool SubjectOpen = Interaction.Disclosed(Controls[SubjectControl]);
+    const bool SubjectOpen = Disclosed(Controls[SubjectControl]);
     if (SubjectOpen)
         Surface->Ground(SubjectButton, Ink.Roused, 4.0f, CornerAll);
 
@@ -306,25 +369,18 @@ void EditorPanel::RecordHeader(std::uint32_t RecordOrdinal,
     if (Pressed(SubjectControl, SubjectButton, true))
     {
         if (SubjectOpen)
-            Interaction.Withdraw();
+            WithdrawDisclosure();
         else
-            Interaction.Disclose(Controls[SubjectControl]);
+            Disclose(Controls[SubjectControl]);
     }
 
-    if (Interaction.Disclosed(Controls[SubjectControl]))
+    if (Disclosed(Controls[SubjectControl]))
     {
-        DeferredAnchor = SubjectButton;
-        DeferredRecord = RecordOrdinal;
-        DeferredRole   = ControlRole::SubjectMenu;
+        DeferredAnchor   = SubjectButton;
+        DeferredBoundary = CurrentLeafExtent;
+        DeferredRecord   = RecordOrdinal;
+        DeferredRole     = ControlRole::SubjectMenu;
     }
-
-    Surface->TextRun(SubjectButton.MostAlong + Measure.HeaderTitleGap,
-                     Extent.LeastAcross + 10.0f,
-                     Ink.InkSecondary,
-                     SubjectTitle(Subject),
-                     Measure.TextSmall,
-                     0.0f,
-                     false);
 
     const bool CanWithdraw = Partition.WithdrawalAdmitted();
     const float ActionCount = CanWithdraw ? 2.0f : 1.0f;
@@ -333,8 +389,25 @@ void EditorPanel::RecordHeader(std::uint32_t RecordOrdinal,
                                                Extent.LeastAcross + 2.0f,
                                                Measure.HeaderAction,
                                                Measure.HeaderAction);
+    const PlaneExtent TitleClip = { SubjectButton.MostAlong + Measure.HeaderTitleGap,
+                                    Extent.LeastAcross,
+                                    DivisionButton.LeastAlong - 4.0f,
+                                    Extent.MostAcross };
+    if (TitleClip.SpanAlong() > 0.0f)
+    {
+        Surface->Confine(TitleClip);
+        Surface->TextRunTruncated(TitleClip.LeastAlong,
+                                  Extent.LeastAcross + 10.0f,
+                                  TitleClip.MostAlong,
+                                  Ink.InkSecondary,
+                                  SubjectTitle(Subject),
+                                  Measure.TextSmall,
+                                  false);
+        Surface->Release();
+    }
+
     const std::uint32_t DivisionControl = ControlOrdinal(RecordOrdinal, ControlRole::DivisionMenu);
-    const bool DivisionOpen = Interaction.Disclosed(Controls[DivisionControl]);
+    const bool DivisionOpen = Disclosed(Controls[DivisionControl]);
     if (DivisionOpen)
         Surface->Ground(DivisionButton, Ink.Roused, 6.0f, CornerAll);
 
@@ -346,16 +419,17 @@ void EditorPanel::RecordHeader(std::uint32_t RecordOrdinal,
     if (Pressed(DivisionControl, DivisionButton, true))
     {
         if (DivisionOpen)
-            Interaction.Withdraw();
+            WithdrawDisclosure();
         else
-            Interaction.Disclose(Controls[DivisionControl]);
+            Disclose(Controls[DivisionControl]);
     }
 
-    if (Interaction.Disclosed(Controls[DivisionControl]))
+    if (Disclosed(Controls[DivisionControl]))
     {
-        DeferredAnchor = DivisionButton;
-        DeferredRecord = RecordOrdinal;
-        DeferredRole   = ControlRole::DivisionMenu;
+        DeferredAnchor   = DivisionButton;
+        DeferredBoundary = CurrentLeafExtent;
+        DeferredRecord   = RecordOrdinal;
+        DeferredRole     = ControlRole::DivisionMenu;
     }
 
     if (CanWithdraw)
@@ -414,17 +488,18 @@ void EditorPanel::RecordFooter(std::uint32_t RecordOrdinal,
     {
         const PlaneExtent Cameras = Pill("Cameras", 92.0f);
         const std::uint32_t CameraControl = ControlOrdinal(RecordOrdinal, ControlRole::CameraMenu);
-        const bool CameraOpen = Interaction.Disclosed(Controls[CameraControl]);
+        const bool CameraOpen = Disclosed(Controls[CameraControl]);
         if (Pressed(CameraControl, Cameras, true))
         {
             if (CameraOpen)
-                Interaction.Withdraw();
+                WithdrawDisclosure();
             else
-                Interaction.Disclose(Controls[CameraControl]);
+                Disclose(Controls[CameraControl]);
         }
-        if (Interaction.Disclosed(Controls[CameraControl]))
+        if (Disclosed(Controls[CameraControl]))
         {
-            DeferredAnchor = Cameras;
+            DeferredAnchor   = Cameras;
+        DeferredBoundary = CurrentLeafExtent;
             DeferredRecord = RecordOrdinal;
             DeferredRole   = ControlRole::CameraMenu;
         }
@@ -432,20 +507,21 @@ void EditorPanel::RecordFooter(std::uint32_t RecordOrdinal,
 
     const PlaneExtent LatticeButton = Pill("Grid", 72.0f);
     const std::uint32_t LatticeControl = ControlOrdinal(RecordOrdinal, ControlRole::LatticeMenu);
-    const bool LatticeOpen = Interaction.Disclosed(Controls[LatticeControl]);
+    const bool LatticeOpen = Disclosed(Controls[LatticeControl]);
     if (Pressed(LatticeControl, LatticeButton, true))
     {
         if (LatticeOpen)
-            Interaction.Withdraw();
+            WithdrawDisclosure();
         else
-            Interaction.Disclose(Controls[LatticeControl]);
+            Disclose(Controls[LatticeControl]);
     }
 
-    if (Interaction.Disclosed(Controls[LatticeControl]))
+    if (Disclosed(Controls[LatticeControl]))
     {
-        DeferredAnchor = LatticeButton;
-        DeferredRecord = RecordOrdinal;
-        DeferredRole   = ControlRole::LatticeMenu;
+        DeferredAnchor   = LatticeButton;
+        DeferredBoundary = CurrentLeafExtent;
+        DeferredRecord   = RecordOrdinal;
+        DeferredRole     = ControlRole::LatticeMenu;
     }
 
     const float TrailingFloor = Cursor + 20.0f;
@@ -472,10 +548,11 @@ void EditorPanel::RecordFooter(std::uint32_t RecordOrdinal,
         const PlaneExtent GizmoButton = TrailingPill(GizmoTitle(Ordinates.Gizmo), 78.0f, Ink.Edge);
         const std::uint32_t GizmoControl = ControlOrdinal(RecordOrdinal, ControlRole::Gizmo);
         if (Pressed(GizmoControl, GizmoButton, true))
-            Interaction.Disclose(Controls[GizmoControl]);
-        if (Interaction.Disclosed(Controls[GizmoControl]))
+            Disclose(Controls[GizmoControl]);
+        if (Disclosed(Controls[GizmoControl]))
         {
-            DeferredAnchor = GizmoButton;
+            DeferredAnchor   = GizmoButton;
+        DeferredBoundary = CurrentLeafExtent;
             DeferredRecord = RecordOrdinal;
             DeferredRole   = ControlRole::Gizmo;
         }
@@ -483,10 +560,11 @@ void EditorPanel::RecordFooter(std::uint32_t RecordOrdinal,
         const PlaneExtent ShadingButton = TrailingPill(ShadingTitle(Ordinates.Shading), 86.0f, Ink.Edge);
         const std::uint32_t ShadingControl = ControlOrdinal(RecordOrdinal, ControlRole::Shading);
         if (Pressed(ShadingControl, ShadingButton, true))
-            Interaction.Disclose(Controls[ShadingControl]);
-        if (Interaction.Disclosed(Controls[ShadingControl]))
+            Disclose(Controls[ShadingControl]);
+        if (Disclosed(Controls[ShadingControl]))
         {
-            DeferredAnchor = ShadingButton;
+            DeferredAnchor   = ShadingButton;
+        DeferredBoundary = CurrentLeafExtent;
             DeferredRecord = RecordOrdinal;
             DeferredRole   = ControlRole::Shading;
         }
@@ -500,10 +578,11 @@ void EditorPanel::RecordFooter(std::uint32_t RecordOrdinal,
                                                        OverlaysTaken ? Ink.Positive : Ink.Edge);
         const std::uint32_t OverlayControl = ControlOrdinal(RecordOrdinal, ControlRole::OverlayMenu);
         if (Pressed(OverlayControl, OverlayButton, true))
-            Interaction.Disclose(Controls[OverlayControl]);
-        if (Interaction.Disclosed(Controls[OverlayControl]))
+            Disclose(Controls[OverlayControl]);
+        if (Disclosed(Controls[OverlayControl]))
         {
-            DeferredAnchor = OverlayButton;
+            DeferredAnchor   = OverlayButton;
+        DeferredBoundary = CurrentLeafExtent;
             DeferredRecord = RecordOrdinal;
             DeferredRole   = ControlRole::OverlayMenu;
         }
@@ -537,12 +616,37 @@ void EditorPanel::RecordVacant(std::uint32_t RecordOrdinal,
             Disregard(Partition.Withdraw(RecordOrdinal));
     }
 
-    const float TotalAlong = Measure.ChooserButtonAlong * 4.0f + Measure.ChooserGap * 3.0f;
+    const float HorizontalPad = 16.0f;
+    const float AvailableAlong = (Extent.SpanAlong() > HorizontalPad * 2.0f)
+                               ? Extent.SpanAlong() - HorizontalPad * 2.0f : Extent.SpanAlong();
+    const std::uint32_t Columns = (AvailableAlong >= Measure.ChooserButtonAlong * 4.0f +
+                                                     Measure.ChooserGap * 3.0f) ? 4u
+                                : (AvailableAlong >= 212.0f) ? 2u : 1u;
+    const std::uint32_t Rows = (4u + Columns - 1u) / Columns;
+    const float ButtonAlong = (Measure.ChooserButtonAlong <
+                              (AvailableAlong - Measure.ChooserGap * static_cast<float>(Columns - 1u)) /
+                                  static_cast<float>(Columns))
+                            ? Measure.ChooserButtonAlong
+                            : (AvailableAlong - Measure.ChooserGap * static_cast<float>(Columns - 1u)) /
+                                  static_cast<float>(Columns);
+    const float AvailableAcross = (Extent.SpanAcross() > 96.0f)
+                                ? Extent.SpanAcross() - 96.0f : Extent.SpanAcross();
+    const float ButtonAcross = (Measure.ChooserButtonAcross <
+                               (AvailableAcross - Measure.ChooserGap * static_cast<float>(Rows - 1u)) /
+                                   static_cast<float>(Rows))
+                             ? Measure.ChooserButtonAcross
+                             : (AvailableAcross - Measure.ChooserGap * static_cast<float>(Rows - 1u)) /
+                                   static_cast<float>(Rows);
+    const float TotalAlong = ButtonAlong * static_cast<float>(Columns) +
+                             Measure.ChooserGap * static_cast<float>(Columns - 1u);
+    const float TotalAcross = ButtonAcross * static_cast<float>(Rows) +
+                              Measure.ChooserGap * static_cast<float>(Rows - 1u);
     const float LeastAlong = Extent.LeastAlong + (Extent.SpanAlong() - TotalAlong) * 0.5f;
-    const float ButtonAcross = Extent.LeastAcross + Extent.SpanAcross() * 0.5f - 18.0f;
+    const float LeastAcross = Extent.LeastAcross + (Extent.SpanAcross() - TotalAcross) * 0.5f + 14.0f;
 
+    Surface->Confine(Extent);
     Surface->TextRun(Extent.LeastAlong + Extent.SpanAlong() * 0.5f,
-                     ButtonAcross - 38.0f,
+                     LeastAcross - 34.0f,
                      Ink.InkSecondary,
                      "Choose Panel Type",
                      Measure.TextBody,
@@ -556,28 +660,40 @@ void EditorPanel::RecordVacant(std::uint32_t RecordOrdinal,
 
     for (std::uint32_t Ordinal = 0u; Ordinal < 4u; ++Ordinal)
     {
-        const PlaneExtent Button = Spanning(LeastAlong + static_cast<float>(Ordinal) *
-                                                        (Measure.ChooserButtonAlong + Measure.ChooserGap),
-                                            ButtonAcross,
-                                            Measure.ChooserButtonAlong,
-                                            Measure.ChooserButtonAcross);
+        const std::uint32_t Column = Ordinal % Columns;
+        const std::uint32_t Row = Ordinal / Columns;
+        const PlaneExtent Button = Spanning(LeastAlong + static_cast<float>(Column) *
+                                                        (ButtonAlong + Measure.ChooserGap),
+                                            LeastAcross + static_cast<float>(Row) *
+                                                        (ButtonAcross + Measure.ChooserGap),
+                                            ButtonAlong,
+                                            ButtonAcross);
         Surface->Ground(Button, Ink.BodyGround, Measure.ChooserRadius, CornerAll);
         Surface->Edge(Button, Ink.Edge, Measure.EdgeWeight, Measure.ChooserRadius, CornerAll);
+        const float SymbolAcross = Button.LeastAcross + ((ButtonAcross > 64.0f) ? 18.0f : 8.0f);
         Symbol(Spanning(Button.LeastAlong + Button.SpanAlong() * 0.5f - 12.0f,
-                        Button.LeastAcross + 20.0f,
+                        SymbolAcross,
                         24.0f,
                         24.0f), Ink.InkFaint);
-        Surface->TextRun(Button.LeastAlong + Button.SpanAlong() * 0.5f,
-                         Button.LeastAcross + 69.0f,
-                         Ink.InkQuiet,
-                         SubjectTitle(Subjects[Ordinal]),
-                         Measure.TextSmall,
-                         0.0f,
-                         true);
+        const PlaneExtent CaptionClip = { Button.LeastAlong + 6.0f,
+                                          Button.LeastAcross,
+                                          Button.MostAlong - 6.0f,
+                                          Button.MostAcross };
+        Surface->Confine(CaptionClip);
+        Surface->TextRunTruncated(Button.LeastAlong + Button.SpanAlong() * 0.5f,
+                                  Button.MostAcross - 27.0f,
+                                  CaptionClip.MostAlong,
+                                  Ink.InkQuiet,
+                                  SubjectTitle(Subjects[Ordinal]),
+                                  Measure.TextSmall,
+                                  true);
+        Surface->Release();
 
         if (Pressed(ControlOrdinal(RecordOrdinal, Roles[Ordinal]), Button))
             Disregard(Partition.Assign(RecordOrdinal, Subjects[Ordinal]));
     }
+
+    Surface->Release();
 }
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -588,6 +704,17 @@ void EditorPanel::RecordDeferred(PanelStructure& Partition, EditorPanelOrdinates
 {
     if (DeferredRecord >= PanelStructure::RecordCeiling)
         return;
+
+    const bool BoundaryPresent = DeferredBoundary.SpanAlong() > 0.0f && DeferredBoundary.SpanAcross() > 0.0f;
+    if (BoundaryPresent && Pointer.ContactArrived &&
+        !DeferredBoundary.Encloses(Pointer.PositionAlong, Pointer.PositionAcross))
+    {
+        WithdrawDisclosure();
+        return;
+    }
+
+    if (BoundaryPresent)
+        Surface->Confine(DeferredBoundary);
 
     switch (DeferredRole)
     {
@@ -609,6 +736,9 @@ void EditorPanel::RecordDeferred(PanelStructure& Partition, EditorPanelOrdinates
         default:
             break;
     }
+
+    if (BoundaryPresent)
+        Surface->Release();
 }
 
 void EditorPanel::RecordSubjectMenu(std::uint32_t RecordOrdinal,
@@ -617,9 +747,16 @@ void EditorPanel::RecordSubjectMenu(std::uint32_t RecordOrdinal,
 {
     const EditorPanelMetric& Measure = Appearance->EditorPanelMeasure;
     const EditorPanelInk&    Ink     = Appearance->EditorPanel;
-    const PlaneExtent Menu = Spanning(Anchor.LeastAlong,
+    const float MenuAlong = (Measure.MenuAlong < DeferredBoundary.SpanAlong())
+                          ? Measure.MenuAlong : DeferredBoundary.SpanAlong();
+    const float DesiredLeast = Anchor.LeastAlong;
+    const float MenuLeast = (DesiredLeast + MenuAlong > DeferredBoundary.MostAlong)
+                          ? DeferredBoundary.MostAlong - MenuAlong
+                          : (DesiredLeast < DeferredBoundary.LeastAlong)
+                          ? DeferredBoundary.LeastAlong : DesiredLeast;
+    const PlaneExtent Menu = Spanning(MenuLeast,
                                       Anchor.MostAcross + Measure.MenuLift,
-                                      Measure.MenuAlong,
+                                      MenuAlong,
                                       Measure.MenuPadAcross * 2.0f + Measure.MenuRowAcross * 4.0f);
     Surface->Ground(Menu, Ink.ChromeGround, Measure.MenuRadius, CornerAll);
     Surface->Edge(Menu, Ink.Edge, Measure.EdgeWeight, Measure.MenuRadius, CornerAll);
@@ -643,7 +780,7 @@ void EditorPanel::RecordSubjectMenu(std::uint32_t RecordOrdinal,
         if (Pressed(ControlOrdinal(RecordOrdinal, Roles[Ordinal]), Row, true))
         {
             Disregard(Partition.Assign(RecordOrdinal, Subjects[Ordinal]));
-            Interaction.Withdraw();
+            WithdrawDisclosure();
         }
     }
 }
@@ -654,9 +791,16 @@ void EditorPanel::RecordDivisionMenu(std::uint32_t RecordOrdinal,
 {
     const EditorPanelMetric& Measure = Appearance->EditorPanelMeasure;
     const EditorPanelInk&    Ink     = Appearance->EditorPanel;
-    const PlaneExtent Menu = Spanning(Anchor.MostAlong - Measure.SplitMenuAlong,
+    const float MenuAlong = (Measure.SplitMenuAlong < DeferredBoundary.SpanAlong())
+                          ? Measure.SplitMenuAlong : DeferredBoundary.SpanAlong();
+    const float DesiredLeast = Anchor.MostAlong - MenuAlong;
+    const float MenuLeast = (DesiredLeast + MenuAlong > DeferredBoundary.MostAlong)
+                          ? DeferredBoundary.MostAlong - MenuAlong
+                          : (DesiredLeast < DeferredBoundary.LeastAlong)
+                          ? DeferredBoundary.LeastAlong : DesiredLeast;
+    const PlaneExtent Menu = Spanning(MenuLeast,
                                       Anchor.MostAcross + Measure.MenuLift,
-                                      Measure.SplitMenuAlong,
+                                      MenuAlong,
                                       Measure.MenuPadAcross * 2.0f + Measure.MenuRowAcross * 4.0f + 1.0f);
     Surface->Ground(Menu, Ink.ChromeGround, Measure.MenuRadius, CornerAll);
     Surface->Edge(Menu, Ink.Edge, Measure.EdgeWeight, Measure.MenuRadius, CornerAll);
@@ -682,7 +826,7 @@ void EditorPanel::RecordDivisionMenu(std::uint32_t RecordOrdinal,
             const PanelDivisionSide Side = (Ordinal == 0u || Ordinal == 2u)
                                          ? PanelDivisionSide::Least : PanelDivisionSide::Most;
             Disregard(Partition.Divide(RecordOrdinal, Axis, Side));
-            Interaction.Withdraw();
+            WithdrawDisclosure();
         }
     }
 }
@@ -693,9 +837,15 @@ void EditorPanel::RecordLatticeMenu(std::uint32_t RecordOrdinal,
 {
     const EditorPanelMetric& Measure = Appearance->EditorPanelMeasure;
     const EditorPanelInk&    Ink     = Appearance->EditorPanel;
-    const PlaneExtent Menu = Spanning(Anchor.LeastAlong,
+    const float MenuAlong = (360.0f < DeferredBoundary.SpanAlong()) ? 360.0f : DeferredBoundary.SpanAlong();
+    const float DesiredLeast = Anchor.LeastAlong;
+    const float MenuLeast = (DesiredLeast + MenuAlong > DeferredBoundary.MostAlong)
+                          ? DeferredBoundary.MostAlong - MenuAlong
+                          : (DesiredLeast < DeferredBoundary.LeastAlong)
+                          ? DeferredBoundary.LeastAlong : DesiredLeast;
+    const PlaneExtent Menu = Spanning(MenuLeast,
                                       Anchor.LeastAcross - 316.0f,
-                                      360.0f,
+                                      MenuAlong,
                                       304.0f);
     Surface->Ground(Menu, Ink.ChromeGround, 12.0f, CornerAll);
     Surface->Edge(Menu, Ink.Edge, Measure.EdgeWeight, 12.0f, CornerAll);
@@ -770,10 +920,23 @@ void EditorPanel::RecordFooterMenu(std::uint32_t RecordOrdinal,
 {
     const EditorPanelMetric& Measure = Appearance->EditorPanelMeasure;
     const EditorPanelInk&    Ink     = Appearance->EditorPanel;
+    const auto FitExtent = [&](float DesiredLeast,
+                               float DesiredAlong,
+                               float LeastAcross,
+                               float ExtentAcross) -> PlaneExtent
+    {
+        const float ExtentAlong = (DesiredAlong < DeferredBoundary.SpanAlong())
+                                ? DesiredAlong : DeferredBoundary.SpanAlong();
+        const float LeastAlong = (DesiredLeast + ExtentAlong > DeferredBoundary.MostAlong)
+                               ? DeferredBoundary.MostAlong - ExtentAlong
+                               : (DesiredLeast < DeferredBoundary.LeastAlong)
+                               ? DeferredBoundary.LeastAlong : DesiredLeast;
+        return Spanning(LeastAlong, LeastAcross, ExtentAlong, ExtentAcross);
+    };
 
     if (Role == ControlRole::CameraMenu)
     {
-        const PlaneExtent Menu = Spanning(Anchor.LeastAlong, Anchor.LeastAcross - 116.0f, 240.0f, 104.0f);
+        const PlaneExtent Menu = FitExtent(Anchor.LeastAlong, 240.0f, Anchor.LeastAcross - 116.0f, 104.0f);
         Surface->Ground(Menu, Ink.ChromeGround, 12.0f, CornerAll);
         Surface->Edge(Menu, Ink.Edge, Measure.EdgeWeight, 12.0f, CornerAll);
         Surface->TextRun(Menu.LeastAlong + 12.0f, Menu.LeastAcross + 14.0f,
@@ -789,7 +952,10 @@ void EditorPanel::RecordFooterMenu(std::uint32_t RecordOrdinal,
 
     if (Role == ControlRole::OverlayMenu)
     {
-        const PlaneExtent Menu = Spanning(Anchor.MostAlong - 200.0f, Anchor.LeastAcross - 132.0f, 200.0f, 120.0f);
+        const PlaneExtent Menu = FitExtent(Anchor.MostAlong - 200.0f,
+                                           200.0f,
+                                           Anchor.LeastAcross - 132.0f,
+                                           120.0f);
         Surface->Ground(Menu, Ink.ChromeGround, 12.0f, CornerAll);
         Surface->Edge(Menu, Ink.Edge, Measure.EdgeWeight, 12.0f, CornerAll);
 
@@ -814,12 +980,12 @@ void EditorPanel::RecordFooterMenu(std::uint32_t RecordOrdinal,
 
     const std::uint32_t OptionCount = Role == ControlRole::Shading ? 6u : 2u;
     const float MenuAlong = Role == ControlRole::Shading ? 160.0f : 130.0f;
-    const PlaneExtent Menu = Spanning(Anchor.MostAlong - MenuAlong,
-                                      Anchor.LeastAcross - Measure.MenuPadAcross * 2.0f -
-                                          Measure.MenuRowAcross * static_cast<float>(OptionCount) - 12.0f,
-                                      MenuAlong,
-                                      Measure.MenuPadAcross * 2.0f +
-                                          Measure.MenuRowAcross * static_cast<float>(OptionCount));
+    const PlaneExtent Menu = FitExtent(Anchor.MostAlong - MenuAlong,
+                                       MenuAlong,
+                                       Anchor.LeastAcross - Measure.MenuPadAcross * 2.0f -
+                                           Measure.MenuRowAcross * static_cast<float>(OptionCount) - 12.0f,
+                                       Measure.MenuPadAcross * 2.0f +
+                                           Measure.MenuRowAcross * static_cast<float>(OptionCount));
     Surface->Ground(Menu, Ink.ChromeGround, Measure.MenuRadius, CornerAll);
     Surface->Edge(Menu, Ink.Edge, Measure.EdgeWeight, Measure.MenuRadius, CornerAll);
 
@@ -852,7 +1018,7 @@ void EditorPanel::RecordFooterMenu(std::uint32_t RecordOrdinal,
                 Ordinates.Shading = static_cast<PanelShading>(Ordinal);
             else
                 Ordinates.Gizmo = static_cast<PanelGizmo>(Ordinal);
-            Interaction.Withdraw();
+            WithdrawDisclosure();
         }
     }
 }
@@ -872,12 +1038,17 @@ void EditorPanel::Reset()
     Motion          = nullptr;
     Surface         = nullptr;
     Appearance      = nullptr;
-    Pointer         = {};
-    DeferredAnchor  = {};
-    DeferredRecord  = PanelStructure::RecordCeiling;
-    DeferredRole    = ControlRole::RoleCount;
-    DraggedDivision = PanelStructure::RecordCeiling;
-    DraggedExtent   = {};
+    Pointer                = {};
+    CurrentLeafExtent      = {};
+    DeferredAnchor         = {};
+    DeferredBoundary       = {};
+    DeferredRecord         = PanelStructure::RecordCeiling;
+    DeferredRole           = ControlRole::RoleCount;
+    CurrentPresentation    = 0u;
+    CapturedPresentation   = AbsentPresentation;
+    DisclosedPresentation  = AbsentPresentation;
+    DraggedDivision        = PanelStructure::RecordCeiling;
+    DraggedExtent          = {};
 
     for (std::uint32_t Ordinal = 0u; Ordinal < ControlCapacity; ++Ordinal)
         Controls[Ordinal] = {};

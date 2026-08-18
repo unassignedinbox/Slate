@@ -94,10 +94,15 @@ public:
     void Advance(const PointerCondition& Arrived, double Elapsed);
     Deliver<bool> Record(const PlaneExtent& Extent,
                          PanelStructure& Partition,
-                         EditorPanelOrdinates& Ordinates);
+                         EditorPanelOrdinates& Ordinates,
+                         std::uint32_t PresentationOrdinal = 0u);
+    bool PointerCaptured(std::uint32_t PresentationOrdinal) const;
+    void WithdrawPresentation(std::uint32_t PresentationOrdinal);
     void Reset();
 
 private:
+
+    static constexpr std::uint32_t AbsentPresentation = 0xFFFFFFFFu;
 
     enum class ControlRole : std::uint32_t
     {
@@ -128,6 +133,9 @@ private:
 
     std::uint32_t ControlOrdinal(std::uint32_t RecordOrdinal, ControlRole Role) const;
     bool Pressed(std::uint32_t ControlOrdinal, const PlaneExtent& Extent, bool PopupAction = false);
+    bool Disclosed(ControlIdentity Claimed) const;
+    void Disclose(ControlIdentity Claimed);
+    void WithdrawDisclosure();
     void RecordBranch(std::uint32_t RecordOrdinal,
                       const PlaneExtent& Extent,
                       PanelStructure& Partition,
@@ -175,9 +183,14 @@ private:
     PropertyPanel PropertyPresentation = {};
     ControlIdentity Controls[ControlCapacity] = {};
     PointerCondition Pointer = {};
+    PlaneExtent CurrentLeafExtent = {};
     PlaneExtent DeferredAnchor = {};
+    PlaneExtent DeferredBoundary = {};
     std::uint32_t DeferredRecord = PanelStructure::RecordCeiling;
     ControlRole DeferredRole = ControlRole::RoleCount;
+    std::uint32_t CurrentPresentation = 0u;
+    std::uint32_t CapturedPresentation = AbsentPresentation;
+    std::uint32_t DisclosedPresentation = AbsentPresentation;
     std::uint32_t DraggedDivision = PanelStructure::RecordCeiling;
     PlaneExtent DraggedExtent = {};
 };

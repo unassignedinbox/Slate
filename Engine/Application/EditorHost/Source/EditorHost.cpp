@@ -271,7 +271,12 @@ int main()
                 if (PanelExtent.SpanAlong() > 0.0f && PanelExtent.SpanAcross() > 0.0f)
                 {
                     Disregard(Viewport.Surface().RelayerWindow());
-                    Disregard(WorkspacePanels.Record(PanelExtent, PanelPartitions[Ordinal], PanelOrdinates[Ordinal]));
+                    Disregard(WorkspacePanels.Record(PanelExtent,
+                                                      PanelPartitions[Ordinal],
+                                                      PanelOrdinates[Ordinal],
+                                                      Ordinal));
+                    if (WorkspacePanels.PointerCaptured(Ordinal))
+                        Viewport.Seam().WithholdPointer();
                 }
 
                 Viewport.Seam().LeaveWorkspaceWindow();
@@ -285,6 +290,7 @@ int main()
             if (Withdrawing < OpenCount)
             {
                 Disregard(Workspaces.Withdraw(Withdrawing));
+                WorkspacePanels.WithdrawPresentation(Withdrawing);
                 for (std::uint32_t Moving = Withdrawing; Moving + 1u < OpenCount; ++Moving)
                 {
                     PanelPartitions[Moving] = PanelPartitions[Moving + 1u];
