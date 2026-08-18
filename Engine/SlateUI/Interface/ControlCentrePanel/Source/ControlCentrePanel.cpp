@@ -38,6 +38,58 @@ float CentredAcross(const PlaneExtent &Extent, float Size)
     return Extent.LeastAcross + (Extent.SpanAcross() - Size) * 0.5f;
 }
 
+std::uint32_t WrappedText(RecordingSurface &Surface, const PlaneExtent &Extent, InkOrdinate Ink,
+                          const char *Text, float Size, bool Record)
+{
+    char Line[256] = {};
+    std::uint32_t LineLength = 0u;
+    std::uint32_t LineCount = 0u;
+    std::uint32_t Cursor = 0u;
+
+    while (Text[Cursor] != '\0')
+    {
+        while (Text[Cursor] == ' ') ++Cursor;
+        const std::uint32_t WordBegin = Cursor;
+        while (Text[Cursor] != '\0' && Text[Cursor] != ' ') ++Cursor;
+        const std::uint32_t WordLength = Cursor - WordBegin;
+        if (WordLength == 0u) break;
+
+        char Candidate[256] = {};
+        std::uint32_t CandidateLength = 0u;
+        for (std::uint32_t Ordinal = 0u; Ordinal < LineLength && CandidateLength + 1u < 256u; ++Ordinal)
+            Candidate[CandidateLength++] = Line[Ordinal];
+        if (CandidateLength > 0u && CandidateLength + 1u < 256u) Candidate[CandidateLength++] = ' ';
+        for (std::uint32_t Ordinal = 0u; Ordinal < WordLength && CandidateLength + 1u < 256u; ++Ordinal)
+            Candidate[CandidateLength++] = Text[WordBegin + Ordinal];
+        Candidate[CandidateLength] = '\0';
+
+        if (LineLength > 0u && Surface.MeasureRun(Candidate, Size) > Extent.SpanAlong())
+        {
+            if (Record)
+                Surface.TextRunTruncated(Extent.LeastAlong,
+                                         Extent.LeastAcross + static_cast<float>(LineCount) * (Size + 4.0f),
+                                         Extent.MostAlong, Ink, Line, Size);
+            ++LineCount;
+            LineLength = 0u;
+        }
+
+        if (LineLength > 0u && LineLength + 1u < 256u) Line[LineLength++] = ' ';
+        for (std::uint32_t Ordinal = 0u; Ordinal < WordLength && LineLength + 1u < 256u; ++Ordinal)
+            Line[LineLength++] = Text[WordBegin + Ordinal];
+        Line[LineLength] = '\0';
+    }
+
+    if (LineLength > 0u)
+    {
+        if (Record)
+            Surface.TextRunTruncated(Extent.LeastAlong,
+                                     Extent.LeastAcross + static_cast<float>(LineCount) * (Size + 4.0f),
+                                     Extent.MostAlong, Ink, Line, Size);
+        ++LineCount;
+    }
+    return LineCount;
+}
+
 InkOrdinate WithOpacity(InkOrdinate Ink, float Fraction)
 {
     Ink.Opacity = static_cast<std::uint8_t>(static_cast<float>(Ink.Opacity) * Fraction + .5f);
@@ -368,12 +420,9 @@ void ControlCentrePanel::DashboardPage(const PlaneExtent &Extent, ControlCentreO
         Spanning(Left.LeastAlong, Left.LeastAcross + 42.0f + 3.0f * (TileAcross + 16.0f), Left.SpanAlong(), 64.0f);
     Surface->Ground(Monitor, Theme.Card, static_cast<float>(Ordinates.Radius), CornerAll);
     Symbol(Spanning(Monitor.LeastAlong + 22.0f, Monitor.LeastAcross + 22.0f, 20.0f, 20.0f), Theme.Secondary);
-    Surface->Ground(
-        Spanning(Monitor.LeastAlong + 58.0f, Monitor.LeastAcross + 29.0f, Monitor.SpanAlong() - 82.0f, 8.0f),
-        Theme.Edge, 4.0f, CornerAll);
-    Surface->Ground(
-        Spanning(Monitor.LeastAlong + 58.0f, Monitor.LeastAcross + 29.0f, (Monitor.SpanAlong() - 82.0f) * .667f, 8.0f),
-        Theme.Primary, 4.0f, CornerAll);
+    Slider(21u, Spanning(Monitor.LeastAlong + 58.0f, Monitor.LeastAcross + 12.0f,
+                         Monitor.SpanAlong() - 76.0f, 40.0f),
+           0u, 100u, Ordinates.MonitorLevel, "%", Theme.Edge, Accent);
 
     Surface->TextRun(Right.LeastAlong + 8.0f, Right.LeastAcross, Theme.Primary, "Notifications", 20.0f, 0.0f, true);
     const PlaneExtent Clear = Spanning(Right.MostAlong - 110.0f, Right.LeastAcross - 4.0f, 110.0f, 30.0f);
@@ -399,22 +448,34 @@ void ControlCentrePanel::DashboardPage(const PlaneExtent &Extent, ControlCentreO
                                    "security patches and performance improvements.",
                                    "Hey, are we still on for the design review tomorrow? I have some new "
                                    "mockups to share."};
+    float NotificationCursor = Right.LeastAcross + 42.0f;
     for (std::uint32_t Ordinal = 0u; Ordinal < 4u; ++Ordinal)
     {
-        const PlaneExtent Card =
-            Spanning(Right.LeastAlong, Right.LeastAcross + 42.0f + 118.0f * static_cast<float>(Ordinal),
-                     Right.SpanAlong(), 102.0f);
+        const PlaneExtent DescriptionMeasure = {Right.LeastAlong + 76.0f, 0.0f,
+                                                Right.MostAlong - 20.0f, 0.0f};
+        const std::uint32_t DescriptionLines = WrappedText(*Surface, DescriptionMeasure, Theme.Secondary,
+                                                           Descriptions[Ordinal], 13.0f, false);
+        const float RequiredHeight = 71.0f + static_cast<float>(DescriptionLines) * 17.0f;
+        const float CardHeight = RequiredHeight > 102.0f ? RequiredHeight : 102.0f;
+        const PlaneExtent Card = Spanning(Right.LeastAlong, NotificationCursor, Right.SpanAlong(), CardHeight);
         Surface->Ground(Card, Theme.Card, static_cast<float>(Ordinates.Radius), CornerAll);
         Surface->Edge(Card, Theme.Edge, 1.0f, static_cast<float>(Ordinates.Radius), CornerAll);
         Surface->Medallion(Card.LeastAlong + 36.0f, Card.LeastAcross + 38.0f, 24.0f, WithOpacity(Accent, .12f));
         Symbol(Spanning(Card.LeastAlong + 24.0f, Card.LeastAcross + 26.0f, 24.0f, 24.0f), Accent);
-        Surface->TextRun(Card.LeastAlong + 76.0f, Card.LeastAcross + 18.0f, Ordinal < 3u ? Accent : Theme.Primary,
-                         Titles[Ordinal], 16.0f, 0.0f, true);
+
         const float TimeAlong = Surface->MeasureRun(Times[Ordinal], 12.0f);
-        Surface->TextRun(Card.MostAlong - TimeAlong - 20.0f, Card.LeastAcross + 20.0f, Theme.Secondary, Times[Ordinal],
-                         12.0f);
-        Surface->TextRunTruncated(Card.LeastAlong + 76.0f, Card.LeastAcross + 51.0f, Card.MostAlong - 20.0f,
-                                  Theme.Secondary, Descriptions[Ordinal], 13.0f);
+        Surface->TextRunTruncated(Card.LeastAlong + 76.0f, Card.LeastAcross + 18.0f,
+                                  Card.MostAlong - TimeAlong - 36.0f,
+                                  Ordinal < 3u ? Accent : Theme.Primary, Titles[Ordinal], 16.0f, true);
+        Surface->TextRun(Card.MostAlong - TimeAlong - 20.0f, Card.LeastAcross + 20.0f,
+                         Theme.Secondary, Times[Ordinal], 12.0f);
+
+        const PlaneExtent DescriptionClip = {Card.LeastAlong + 76.0f, Card.LeastAcross + 51.0f,
+                                             Card.MostAlong - 20.0f, Card.MostAcross - 16.0f};
+        Surface->Confine(DescriptionClip);
+        WrappedText(*Surface, DescriptionClip, Theme.Secondary, Descriptions[Ordinal], 13.0f, true);
+        Surface->Release();
+        NotificationCursor = Card.MostAcross + 16.0f;
     }
 }
 

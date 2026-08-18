@@ -74,6 +74,7 @@ struct ControlCentreOrdinates
     std::uint32_t TypographySize[8] = {24u, 20u, 16u, 14u, 12u, 10u, 14u, 14u};
     std::uint32_t TypographyWeight[8] = {3u, 3u, 2u, 1u, 2u, 1u, 2u, 3u};
     std::uint32_t PointerSpeed = 5u;
+    std::uint32_t MonitorLevel = 67u;
     std::uint32_t TouchAction = 0u;
     bool TransparentSidebar = false;
     bool VsyncEnabled = true;
