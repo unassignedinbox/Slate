@@ -1,0 +1,257 @@
+Surfel GI Architecture Plan — Baked Hierarchical Surfels, Vulkan, GTX→RTX
+I read both references end to end, plus the two EA SEED/Frostbite talks they descend from (GIBS 2021 and the 2024 "Shipping Dynamic GI" update), the SurfelPlus Vulkan project, and Stachowiak's kajiya surfel work. Below is a diagnosis of why your two attempts failed, then a full architecture, then an honest comparison against Lumen.
+
+1. Why your two attempts failed (and why it wasn't your fault)
+Both of your references — W298/SurfelGI and Triglav's webgiya — are screen-space-spawned surfel systems. They inherit GIBS's original design decision: surfels are allocated from the G-buffer as geometry comes into view. That decision is correct for Frostbite's constraints (open worlds, no bake time, arbitrary streamed content) but it drags in four failure modes that you hit exactly:
+
+Geometric normal reconstruction fails on concave/creased meshes. When you spawn a surfel from a G-buffer texel, you need the geometric normal and a depth plane. On Suzanne — eye sockets, ear creases, the lip seam — depth-derived normals are garbage across the discontinuity. Frostbite hit this precisely and documented it in the 2024 talk: they tried depth-reconstructed normals, got "bogus normals or rejected spawns," and ultimately gave up and exported the vertex-interpolated normal into the G-buffer as a dedicated channel. Your "GI in some places, none in others" symptom is this exact bug.
+
+Non-persistent surfel identity causes flicker. Screen-space systems recycle surfels that leave the view (both references do). When you look back, they respawn cold and re-converge from zero. The recycling heuristic is stochastic, so the set of live surfels churns continuously. Every churn event is a temporal discontinuity in a signal that has no denoiser behind it. That is your flicker.
+
+Per-pixel resolve with a fixed K-nearest gather pops. Triglav flags this himself: if maxFetchedPerPixel is below the actual cell occupancy, you get a different subset of surfels each frame as the grid rebuilds, and pixels can come out with zero light while a bright surfel sat one slot beyond reach. Combined with surfels that move slightly each frame (they're re-derived from depth), you get a low-frequency shimmer that no amount of temporal blending removes, because the underlying estimate is genuinely different frame to frame.
+
+No radial depth function means leaking, and leaking looks like contrast pumping. Both references implement this (VSM moments / MSM), but if the surfel positions are themselves unstable, the depth moments are unstable too.
+
+Your Gemini-assisted second attempt failed for an orthogonal reason: a surfel GI system is ~50 compute dispatches with a global ray budget, variance-driven allocation, scalarized loads, indirect dispatch, and hash-grid maintenance. Frostbite spent three years going from 6–7 ms to 2.5 ms with zero new systems — purely incremental optimization of exactly those things. That is not work an LLM produces by being asked for "surfel GI."
+
+The structural conclusion: every one of these problems dissolves if surfels are baked into the mesh in object space with stable IDs. You proposed the right fix. What follows is how to build it properly.
+
+2. The core idea in one paragraph
+Bake each mesh into a hierarchy of surfels — a bounding-volume tree where leaves are dense surfels on the actual surface and interior nodes are area-weighted merges carrying aggregated position, normal cone, radius, albedo, and radiance. At runtime, per instance, select a cut through that tree so that surfel screen-space footprint is roughly constant (near = deep cut = many small surfels; far = shallow cut = few large ones). That cut is your Nanite-for-surfels LOD. Because interior nodes carry aggregated radiance, the hierarchy is simultaneously the radiance cache, the LOD structure, and the ray-tracing acceleration structure. On a GTX you cone-trace against the surfel hierarchy itself (no triangles, no BLAS, no SDF); on an RTX you swap the near field for VK_KHR_ray_query against triangles and resolve hits into the same cache. One codebase, one data structure, two tracers.
+
+That last point is the whole design. GIBS, SurfelPlus, and webgiya all need a separate acceleration structure (TLAS or three-mesh-bvh) because their surfels are an unstructured flat pool. Yours isn't.
+
+3. Offline bake (per mesh, cached to disk)
+This runs once per asset, in your importer, and serializes next to the mesh.
+
+Surfel sampling. Poisson-disk / blue-noise sample the mesh surface, area-weighted, at target leaf radius r0. Dart-throwing against a triangle BVH works; geometry-central's surface sampling or point-cloud-utils' parallel Poisson-disk implementation are both drop-in references if you don't want to write it. Make density adaptive: bias r0 down by local curvature (estimated from the dihedral angles of the one-ring) so creases, edges, and small features get finer coverage. This is the single most important quality knob — it's what makes Suzanne work where screen-space spawning doesn't.
+
+Per leaf surfel, store: local-space position, geometric normal (oct-packed), tangent frame, radius, base-color albedo sampled from the material at the surfel's UV with the mip chosen to match the surfel's texel footprint, emissive, the surfel's UV, and (for skinned meshes) up to four bone indices + weights interpolated barycentrically from the source triangle.
+
+Hierarchy build. Group leaves into clusters of 32 or 64 using spatial locality and normal similarity — Morton order followed by a normal-cone split, or METIS/k-means if you want higher quality. Recurse bottom-up. A parent node is:
+
+position = area-weighted centroid of children
+radius = sqrt(Σ child_area / π) (energy-preserving)
+normal cone = axis (area-weighted mean normal, normalized) + half-angle (max deviation of children)
+albedo, emissive = area-weighted averages
+bounding sphere over children
+Important simplification versus Nanite: you do not need a DAG. Nanite's DAG exists to guarantee crack-free triangle boundaries between clusters at different LODs. Surfels have no shared edges and no cracks, so a plain tree is sufficient and dramatically simpler to build and traverse. Skip METIS-based edge-locked group simplification entirely.
+
+The normal cone is not optional — it lets you reject entire backfacing subtrees during both LOD selection and cone tracing, which is a large fraction of your traversal savings.
+
+Optional pre-solve. For static assets and archviz-style content, run an offline multi-bounce solve (progressive radiosity over the leaf surfels, or just N frames of the runtime integrator run headless) and serialize the converged leaf radiance. At load, the scene starts converged. This is the "baked" half of "baked + dynamic," and it's essentially free quality for your asset-viewer use case.
+
+UV → surfel index. Build a coarse per-mesh UV grid mapping UV cells to surfel IDs. You need this for the texture-painting workflow (§10).
+
+Expect roughly 2k–20k leaf surfels for a typical prop, 50k–200k for an environment chunk. Serialized, a leaf is ~48 B plus the tree overhead — a few MB per heavy asset.
+
+4. Runtime data layout
+Split hot and cold data. The resolve pass runs at half-res every frame over every visible pixel and is purely bandwidth-bound; the integrate pass runs over a subset of surfels and can afford wide reads. Frostbite explicitly calls out scalarization of surfel loads as one of their biggest compute wins — you get most of that benefit for free by just not interleaving the cold data.
+
+Copy// Hot: touched by resolve + grid build every frame. 32 B, cache-line friendly.
+struct SurfelCore {
+    float3 posWS;        float  radius;      // 16
+    uint   normalOct;                        //  4  oct-encoded ws normal
+    uint   radiance;                         //  4  RGB9E5 (or index into SH block)
+    uint   packedAux;                        //  4  age:8 cutLevel:6 fade:8 flags:10
+    uint   instanceId;                       //  4
+};                                           // = 32 B
+
+// Cold: touched only by integrate. 64 B.
+struct SurfelPayload {
+    uint   albedoRGBE;   uint  emissiveRGBE;
+    float3 shortMean;    float shortVar;     // MSME short-term
+    float3 longMean;     float hysteresis;   // MSME long-term
+    uint   guidingTile;  uint  depthTile;    // atlas offsets
+    uint2  skinRef;                          // bone idx/weight block ptr
+};
+Side atlases: an 8×8 R8 guiding map per surfel (hemi-oct parameterized, plus one fp16 normalization scale) and a 4×4 RG16F radial-depth map per surfel holding E[z] and E[z²]. GIBS uses 6×6 guiding and 4×4 depth; Triglav uses 8×8 and 4×4. Start at 6×6/4×4 for the GTX tier and 8×8/4×4 above.
+
+At 200k live surfels: 6.4 MB core + 12.8 MB payload + ~13 MB guiding + ~13 MB depth ≈ 45 MB. Frostbite ships CFB25 and Skate inside a 100 MB surfel+probe budget, so you have room. Add the baked hierarchy residency on top (streamed per mesh, LRU-evicted).
+
+Radiance representation tiers. Scalar irradiance (RGB9E5) is enough for far-field. For near-field surfels, upgrade to L1 spherical harmonics (4 coefficients × RGB, 24 B as fp16). This costs you 24 B on the subset of surfels within the near cascade and buys directional bounce that responds to normal maps — which matters enormously for an asset viewer and a texture-painting tool, where the entire point is seeing normal-map detail react to bounce light. Neither of your reference implementations does this. Promote/demote on cut-level change.
+
+Spatial index. Camera-centered cascaded hash grid, 4–5 cascades, open-addressed, 64-bit key. Take Triglav's build (clear → count → segmented prefix sum → slot via atomic decrement) essentially verbatim; it's clean and it's the same structure kajiya uses. Two refinements:
+
+Match cascade cell size to cut level rather than to raw distance. Since your surfel radius is now a deterministic function of cut level, the "surfel radius ≤ cell size" invariant holds by construction instead of by clamping.
+Fold the normal octant into the hash key. Floor surfels and ceiling surfels in the same cell land in different buckets. This is three lines of code, it kills a meaningful fraction of leaks, and it shrinks the per-pixel gather because you only visit the bucket matching your pixel's normal octant.
+5. LOD cut selection — the "Nanite for surfels" pass
+One persistent-threads compute dispatch per frame with a GPU work queue, structurally identical to Nanite's cluster culling.
+
+Seed the queue with the root node of every instance that survives frustum+distance culling. Pop a node; compute its projected screen radius from radius / distance * focalScale, corrected for the instance's non-uniform scale. If projected radius exceeds the target footprint T (quality-tier constant; ~24 px on GTX, ~12 px on RTX), push children. Otherwise emit the node as an active surfel. Cull a subtree entirely if its bounding sphere is outside the frustum shell or if its normal cone is entirely backfacing relative to the camera.
+
+Three details that make or break it:
+
+Hysteresis. Use T_split = T and T_merge = 1.25 * T. Without a dead band the cut oscillates at the threshold and you get popping — which will look exactly like the flicker you already fought.
+
+Cross-fade, don't snap. When a node splits, run both the parent and the children for ~4 frames with a fade weight in packedAux, or dither the choice per-pixel with blue noise at resolve time. GIBS uses blue-noise dithering between clipmap levels for precisely this and reports it's nearly as good as true blending at half the cost. Do the same here.
+
+Keep an off-screen shell. "Only render what's on screen" is right for the resolve but wrong for the cache — the light bouncing onto your character comes off the wall behind the camera. Run the full cut inside the frustum, a cut two or three levels coarser in a shell extending ~15–30 m around the frustum, and root-node-only beyond that. Off-screen surfels get a tiny ray budget (§8) but they exist, so nothing goes black when you turn around. This is strictly better than GIBS's approach, where off-screen surfels get recycled and must re-converge — the source of one of their acknowledged artifacts.
+
+Output: a compacted active-surfel index buffer plus indirect dispatch args. Because the tree is temporally coherent, you can skip re-traversal for instances whose distance changed by less than the hysteresis band — track a per-instance lastCutDistance and early-out. In a typical frame, well under 10% of instances need re-cutting.
+
+6. The tracer — how one system spans GTX to RTX
+This is the crux of your hardware-scalability requirement, so let me be blunt about the constraint first.
+
+GTX cards cannot usefully hardware-ray-trace. GTX 10-series (Pascal) got DXR/VK_KHR_ray_tracing via driver-side compute emulation in 2019, but Tellusim's measurements put a GTX 1060 at 34.6 ms for the same workload a 2080 Ti does in 1.03 ms — and the 1060's emulated path was actually slower than a naive compute-shader BVH on the same card. GTX 16-series (TU116/TU117) is Turing but has the RT cores fused off; same story. So on GTX, hardware RT is not a fallback, it's a non-option, and driver-emulated DXR is actively worse than doing it yourself.
+
+Which is why the surfel hierarchy being its own acceleration structure matters so much.
+
+Tier 0 — GTX: point-hierarchy cone tracing
+This is Pixar's point-based GI (Christensen's PBGI, micro-rendering / cut selection) adapted to real-time. For each surfel, trace cones, not rays, over the hemisphere. Traverse a small global BVH over instance root nodes (GPU-refit each frame, cheap — hundreds to low thousands of instances), descending into a mesh's hierarchy only while the node's solid angle exceeds the cone's solid angle at that distance. When you stop descending, the node's aggregated radiance and projected area are the answer for that subtree.
+
+Composite front-to-back with alpha = (projected node area / cone footprint area), clamped. When accumulated alpha reaches 1, terminate — you've been fully occluded. That termination is your surfel shadow, computed by the same traversal that gathered radiance, for free. No shadow rays, no SDF, no separate occlusion structure.
+
+Properties that matter for you:
+
+Cost is logarithmic in scene surfel count and completely independent of triangle count. A 10-million-triangle scanned asset costs the same as a box, because you never touch a triangle.
+Cone aperture gives you built-in LOD within the trace, matching the LOD of the cache. Distant contributions are read from coarse nodes automatically.
+Thin geometry is handled correctly, unlike SDFs (which you've ruled out anyway) — a single-quad wall has surfels on it and occludes.
+Traversal is short and coherent, which is what Pascal needs.
+Budget: ~8–16 cones per updating surfel, ~64–128 node visits per cone. With variance-driven allocation (§8) you're only updating a fraction of surfels per frame, so a 1060 at 1080p with ~80k live surfels is a realistic target. I'd expect this in the 3–5 ms range on a 1060 after optimization; treat that as a hypothesis to measure, not a promise.
+
+Pascal-specific traversal notes. Pascal has no independent thread scheduling, so avoid divergent while loops. Use a stackless short-stack traversal with a fixed 16–32-entry stack kept in registers, and structure the loop so the whole wave iterates together with a lane mask. Pascal's fp16 arithmetic is 1:64 rate on GP104/106 — use fp16 for storage (conversion is cheap) but do all math in fp32 on that path. Turing GTX 16-series has 2× fp16 and independent thread scheduling, so it should be its own tier, not lumped with Pascal. Detect by architecture via VkPhysicalDeviceProperties device ID ranges or subgroup/feature probing, not by "does the name say GTX."
+
+Tier 1 — Turing GTX / entry RTX: hybrid split
+Near field (0–2 m, where contact detail lives) via a short high-resolution cut trace or a screen-space march; far field via the coarse cut. Stachowiak's kajiya does exactly this near/far split for a different reason — preserving contact detail through spatial filters — and it applies here too.
+
+Tier 2 — RTX: inline VK_KHR_ray_query
+Trace real rays against triangles for the primary surfel ray, then resolve the hit into the surfel cache rather than recursing: look up the hit's instance + primitive, map to the mesh's surfel hierarchy (store a triangle→surfel-cluster map at bake time, or just use the spatial hash), and read cached radiance. That's one bounce of true ray tracing plus infinite bounces from the cache. SurfelPlus demonstrates this convincingly — their comparison of "no surfel indirect, 6 bounces" vs "surfel indirect, 1 bounce" shows the latter both better and vastly cheaper.
+
+Apply the Frostbite 2024 optimizations: shorten rays to ~20 m and fall back to the coarse cut on miss. They measured a 60% reduction in surfel ray time from this alone, plus better convergence, because the fallback carries far-field energy that a long ray would take many samples to find. You get the same benefit but with a better fallback than theirs — they fall back to a probe clipmap, you fall back to a parent node in a hierarchy that's guaranteed to exist.
+
+Also cap traversal iterations. Frostbite's point about "bubbles of execution by single rays causing their wavefront to be long-running" is real and costs you utilization.
+
+The abstraction
+Copystruct TraceQuery  { float3 origin, dir; float coneHalfAngle, tMin, tMax; };
+struct TraceResult { float3 radiance; float  hitT; float3 hitNormal; float alpha; };
+
+TraceResult TraceGI(TraceQuery q);   // 3 impls, selected by spec constant
+Everything above this line — spawning, cut selection, guiding, MSME, occlusion, resolve — is identical across all three tiers. Use Vulkan specialization constants or Slang generics to compile the permutations. This is what makes "one engine, GTX to RTX" tractable rather than three renderers.
+
+7. Radiance cache and integration — and why you genuinely don't need a denoiser
+Per updating surfel, per frame:
+
+Direction selection. Mix cosine-hemisphere sampling with guided sampling from the surfel's 6×6 or 8×8 hemi-oct guiding map. Sample the guided direction with probability pGuide, which ramps from ~0 to ~0.7 as the surfel ages — new surfels explore, mature surfels exploit. Keep the estimator unbiased with the mixture PDF mixPdf = (1-pGuide)*pdfCos + pGuide*pdfGuide. Importance-sample the 2D discrete guiding function by walking its CDF; GIBS notes you can do this hierarchically via a 3×3 mip and a linear sampler if profiling says the walk is hot. Blue noise for the random source, screen-space-tiled and animated with the R2 golden-ratio sequence.
+
+Direct lighting at the hit. RIS reservoir sampling over 4–8 light candidates, one shadow test for the winner. Critically: if the chosen light has a shadow map, tap it instead of tracing. Frostbite added this in 2024 and it removes a large share of secondary rays. Since you already have a PBR pipeline with shadow maps, this is nearly free for you.
+
+Multi-bounce. At the hit point, add the cached radiance from the surfel hierarchy at that location. Infinite bounce over time, at zero extra ray cost.
+
+Temporal integration — the MSME. This is your denoiser, and it lives in the cache, not the framebuffer. Track a long-term mean, a short-term mean, and short-term variance per surfel. Drive the long-term blend factor from the disagreement between short and long means, damped by the short-term variance — so a genuine lighting change adapts fast, while a firefly gets ignored. It's Ray Tracing Gems ch. 25 (SEED's PICA PICA); both your references implement it and Triglav's interactive comparison against a plain EMA is the clearest demonstration of why it's worth the extra state.
+
+Here is why this replaces SVGF entirely, and why your constraint is actually the correct engineering call rather than a compromise:
+
+Temporal accumulation in screen space requires reprojection, which fails on disocclusion, needs motion vectors, ghosts on lighting changes, and needs a spatial filter to fill the holes it creates. Object-space accumulation has none of these failure modes. A surfel has a stable ID; its history is just its own history. There is no reprojection, no disocclusion, no ghosting, no history rejection heuristic. The surfel-to-surfel irradiance sharing (below) is your spatial filter, and it operates on a geometrically-coherent neighborhood defined by the hash grid rather than a screen-space kernel that doesn't know about geometry.
+
+You do still want (a) irradiance sharing — when variance is high, blend with neighbor surfels in the same grid cell weighted by normal alignment, distance, and age; GIBS's 64-sample comparison with and without sharing is night and day, and SurfelPlus reports the same — and (b) a joint bilateral upsample from half-res to full-res guided by depth and normal. The upsampler is not a denoiser; it's reconstructing a signal you deliberately computed at lower resolution. Keep TAA if you already have it, for geometric aliasing.
+
+8. Occlusion, leaking, and the ray budget
+Radial depth moments. Every surfel maintains a 4×4 hemi-oct map of E[z], E[z²] over its own hemisphere, updated opportunistically from the rays it's already tracing, initialized to the surfel diameter. Chebyshev's inequality on the mean and variance gives a smooth visibility test. Use it in two places: surfel-to-surfel during integration, and surfel-to-pixel during resolve. GIBS reports 4×4 is enough for the vast majority of cases; Triglav uses 4-moment MSM instead of 2-moment VSM for smoother transitions at surfel boundaries, which is worth trying if 2-moment light-bleeding annoys you.
+
+On Tier 0 you get a bonus: the cone tracer's alpha accumulation already produces directional occlusion, so the depth map is a refinement rather than the sole mechanism.
+
+Ray offset. Store a per-surfel numerical error bound. Frostbite's 2024 talk documents an underground-garage leak caused by a fixed conservative offset letting rays escape through a ceiling. Your case is easier than theirs — you're not reconstructing positions from a depth buffer, so your error bound is just the bake-time quantization plus the transform, which you can compute exactly.
+
+Global ray budget. Two-pass allocation. Pass one: every surfel atomically adds its requested ray count to a global counter, where the request is a function of variance, frames since it last contributed to a visible pixel, age, cut level, and whether it's in the off-screen shell. Pass two: each surfel receives budget * request / totalRequest. Expose the total as a user setting (100k rays on GTX, 200k+ on RTX — Frostbite ships Skate at 200k on Series X).
+
+Sleep. A converged surfel in an unchanged neighborhood drops to one ray every N frames, purely to detect change. GIBS calls this "almost dormant." Add an explicit invalidation path you have that they don't: when an instance transform changes or a light moves, mark the affected hash-grid cells dirty and bump the hysteresis of surfels inside them so they re-converge in a handful of frames instead of waiting for variance to notice.
+
+Freeze. For the asset viewer and for static scenes: converge, then stop integrating entirely. Only the resolve runs, at ~0.3–0.5 ms. This is exactly what College Football 25 does to fit GIBS into a 2 ms budget at 60 Hz.
+
+Serialize the converged cache. Because your surfels have stable (meshId, surfelId) identities, you can write converged radiance back to disk keyed by scene + lighting setup. An asset viewer or turntable then opens already lit. Neither Lumen nor GIBS can do this — their surfels/cards don't have stable persistent identity across sessions.
+
+9. Resolve
+Half-res compute. Classify screen tiles first (surfel-lit vs probe-lit vs sky) and dispatch specialized shaders per class — Frostbite calls this out as a win, and it's cheap to add.
+
+Per pixel: reconstruct world position from depth, hash into the grid using position and normal octant, gather up to K surfels, weight by anisotropic distance (squash the metric along the surfel normal so a wall surfel doesn't leak onto the floor), normal alignment (drop to zero at ~60–70°), age/confidence ramp-in over ~8 frames, Chebyshev visibility from the surfel's depth moments, and LOD cross-fade weight.
+
+If total weight < 1, fall back to the parent node's radiance. This is the structural advantage of the baked hierarchy: GIBS needs an entire 100k-probe clipmap volume as a coverage fallback because their surfels may simply not exist yet. Yours always have a parent, all the way to the mesh root. You can drop the probe volume for opaque geometry entirely.
+
+Keep a small clipmap probe volume anyway, but only for the things surfels genuinely can't cover: transparents, particles, volumetric fog, and very small fast-moving dynamic objects. GIBS's octahedral DDGI-style probes with variance depth attenuation is the right design here; 3 clips, ~25k probes is plenty for your scale.
+
+Then upsample to full res with a depth+normal joint bilateral, and feed the result into your existing deferred lighting as an indirect-diffuse term. Watch the albedo double-multiply: the surfel stores incoming irradiance, the screen pass multiplies by the pixel's albedo and the diffuse BRDF. Bake-time surfel albedo is used only for the bounce inside the cache.
+
+10. Dynamic geometry, rigs, and texture painting
+Rigid instances. Surfels are baked in local space; the runtime position is instanceTransform * localPos, normal by the inverse-transpose, radius by the max scale component. One trivially parallel dispatch over active surfels. This is exact — no drift, no re-derivation from a G-buffer. Non-uniform scale means the surfel is really an ellipse; either clamp radius to the max axis (conservative, slight over-coverage) or store an anisotropic radius pair if you care.
+
+Skinned meshes. You store real skin weights per surfel from the bake, so run a standard four-bone linear-blend skinning dispatch over the surfel array. This is strictly better than GIBS, which writes only the highest-weight bone ID into the G-buffer and accepts that "there are situations where the surfels don't follow exactly." You don't have to accept that. After skinning, refit the instance's hierarchy bottom-up — one dispatch per tree level, no rebuild, cheap.
+
+Skinned surfels should not sleep; keep them on a modest continuous ray allocation, and consider capping their cut depth (a character doesn't need 5 mm surfels for bouncing light, even if it needs them for receiving it).
+
+Fast, small, or highly dynamic objects. Mark these probe-lit rather than surfel-lit. Frostbite does exactly this for the crowd in College Football 25 — the stands and stadium are surfel-lit, the crowd and players sample the probe clipmap. Cheaper and more stable.
+
+Texture painting. This is a use case you have and Lumen effectively doesn't. When the user paints albedo, you know the affected UV rect. Use the bake-time UV→surfel map to find the touched surfels, re-sample their albedo from the updated texture (correct mip for the surfel footprint), and bump their hysteresis so they re-converge in a few frames. The bounce color updates as you paint. Do this on a debounced timer (e.g. 50 ms after the last stroke) so you're not thrashing during a drag. Same mechanism handles material parameter edits in the asset viewer.
+
+11. Specular, and where I'd tell you to be honest with yourself
+Diffuse-only GI on a PBR pipeline looks flat, so this matters for "as realistic as possible."
+
+Rough specular (roughness ≳ 0.3) can come directly from the surfel cache if you stored L1 SH or a small hemi-oct radiance map on near-field surfels — evaluate the cache in the reflected direction with a cone aperture from roughness. This is nearly free and covers most real-world materials.
+
+Sharp specular is the hard case. On RTX, do what SurfelPlus does: ray_query reflection rays at half-res with RIS, resolving hits into the surfel cache so one bounce suffices. On GTX, cone-trace the surfel hierarchy with a narrow aperture — this works but degrades as roughness drops, because a surfel hierarchy simply doesn't represent a mirror. Below roughness ~0.1 on GTX, fall back to SSR plus a prefiltered environment probe.
+
+Reflections are also the one place your no-denoiser constraint genuinely costs you, because specular has no object-space cache to accumulate in — the signal is view-dependent by definition. SurfelPlus needed spatial-temporal filtering plus a bilateral cleanup specifically for reflections. My recommendation: keep the no-denoiser rule for diffuse (where it's the right call), and accept a small temporal accumulate + bilateral for specular only, or restrict GTX to rough specular from the cache. Pretending otherwise would set you up for the same disappointment as attempt #1.
+
+Other honest limits to plan around: alpha-tested foliage is expensive in any ray-traced GI (Frostbite excludes it from their AS entirely and eats the error); very large open worlds need surfel hierarchy streaming and eviction, which is real work; and thin geometry will always need per-scene tuning of the occlusion strength, as Triglav found.
+
+12. Vulkan engineering notes
+Use VK_KHR_buffer_device_address throughout and pass pointers in push constants rather than rebinding descriptor sets per pass — with ~50 dispatches per frame, descriptor churn shows up. Bindless materials via VK_EXT_descriptor_indexing. VK_KHR_16bit_storage + shaderFloat16 for cache storage (guard the arithmetic on Pascal). Subgroup ops (subgroupExclusiveAdd, subgroupBallot) for the grid prefix sum and for compaction. vkCmdDispatchIndirect for every variable-workload pass — surfel integrate, cut selection, resolve tiles — never a CPU readback.
+
+Put surfel integration on the async compute queue overlapping your shadow map and G-buffer passes; that's where Frostbite hides a large share of the cost. Be careful with the barrier between grid build and integrate — that's a genuine serialization point.
+
+For radiance splatting into the guiding maps you'll want atomics. VK_EXT_shader_atomic_float is not available on Pascal, so use fixed-point atomicAdd on uint with a scale factor, or a compare-swap loop. Fixed-point is faster and precision is fine for a normalized guiding function.
+
+Since you're on ImGui already, build the tooling early — it will save you more time than any single optimization:
+
+Timestamp queries per pass with a rolling graph and per-pass budget lines
+Surfel debug views: cut level (color-coded), radius, variance heatmap, age, per-cell occupancy, guiding map, radial depth map, surfel ID hash
+Live sliders for every threshold: target footprint T, hysteresis band, ray budget, pGuide ramp, occlusion strength, resolve weight cutoffs
+A "freeze cut" and "freeze integration" toggle for isolating which subsystem is causing an artifact
+Ray-count-per-surfel visualization so you can see the budget allocator working
+Frostbite explicitly credits their AS-cost heatmap debug views with letting them find the optimizations that took 6 ms to 2.5 ms. Tooling is not a side quest here.
+
+13. Phased plan with acceptance criteria
+Each phase should be shippable and independently validated. Do not proceed past a phase whose criterion fails — that's how the previous attempts compounded.
+
+Phase 1 — Bake pipeline and visualization (no lighting). Poisson-disk sampler, curvature-adaptive density, hierarchy build with normal cones, serialization, GPU upload, splat-render surfels as discs. Accept when: Suzanne, Sponza, and a skinned character all show gap-free, evenly-distributed surfel coverage at every hierarchy level, with no coverage holes in concavities. This is the single test your first attempt failed. If it passes here, most of your flicker is already dead.
+
+Phase 2 — Cut selection and LOD. Persistent-threads traversal, hysteresis, cross-fade, off-screen shell. Accept when: flying the camera from 0.5 m to 500 m shows constant on-screen surfel density with no visible popping, and active surfel count stays roughly flat.
+
+Phase 3 — Hash grid and resolve, with fake radiance. Fill surfel radiance with a debug pattern or a single ambient term, build the grid, resolve to screen. Accept when: the resolved image is temporally stable while the camera moves, and the parent-node fallback produces no black pixels anywhere.
+
+Phase 4 — Tier 2 tracer (RTX first). Do hardware ray query first, even though GTX is your headline target — it's simpler, it gives you a reference image, and it isolates cache/resolve bugs from traversal bugs. Add MSME, guiding, radial depth, irradiance sharing. Accept when: Cornell box matches an offline path-traced reference within a few percent, and Sponza converges to a stable image in under a second with no visible noise and no denoiser.
+
+Phase 5 — Tier 0 cone tracer. Port the traversal to the surfel hierarchy. Validate against Phase 4's output on the same scenes. Accept when: the Tier 0 image is visually close to Tier 2 (expect softer contact shadows and slightly more energy in corners — that's inherent to cone tracing) and runs in budget on your lowest target card.
+
+Phase 6 — Dynamics. Rigid transforms, skinning, hierarchy refit, invalidation, probe clipmap for transparents and small dynamics. Accept when: a walking character receives and casts correct bounce light with no lag artifacts and no surfel drift off the skin.
+
+Phase 7 — Budget, sleep, freeze, serialize. The two-pass allocator, dormancy, freeze mode, disk cache. Accept when: GPU time is flat and predictable across a camera flythrough, with the peak under your target.
+
+Phase 8 — Specular, then optimization. Scalarized loads, tile classification, async overlap, Pascal traversal tuning.
+
+I would budget Phases 1–4 as the bulk of the work and expect Phase 5 to be surprisingly quick, because by then all the surrounding machinery is validated.
+
+14. Comparison against Unreal's Lumen
+Lumen's radiance cache is the Surface Cache: Unreal projects roughly 6–12 axis-aligned "cards" onto each mesh, captures material properties into a card atlas, and lights that atlas. It's a genuinely clever system, but the card parameterization is where it structurally differs from what you're building.
+
+Lumen   Proposed system
+Cache parameterization  Axis-aligned box cards projected onto the mesh  Surfels sampled on the actual surface
+Concave / interior geometry Known weak point — cards can't reach interiors; the "no practical way to get cards inside a doorway" problem is a standing complaint    Surfels sample the real surface; concavity is irrelevant
+Organic / high-genus meshes Cards approximate poorly; needs manual card count tuning per asset  Curvature-adaptive sampling handles it automatically
+Software tracing    Mesh Distance Fields — which you've ruled out, and which leak on thin geometry and cost memory  Surfel cone tracing; no SDF, thin geometry occludes correctly
+Skinned meshes  Not represented in software tracing (no MDF for skinned); needs HWRT    Real four-bone skinned surfels + hierarchy refit
+Low-end hardware    Software Lumen on a GTX 1060 is poor; hardware Lumen is unavailable Tier 0 cone tracing is designed for exactly this card
+Denoising   Full stack: screen probes, spatial/temporal filters, world radiance cache   Object-space MSME + irradiance sharing; no screen-space denoiser
+LOD of the cache    Card atlas mip levels, four resolution tiers    Continuous cut through a per-mesh hierarchy
+Persistence across sessions Surface cache is re-captured at runtime Converged radiance serializes to disk; instant-lit asset viewer
+Live material edits Requires card re-capture; coarse and laggy  UV→surfel invalidation; bounce updates as you paint
+Where Lumen beats you, and I want you to go in knowing this: sharp reflections are far more mature; world streaming for very large open worlds is solved and yours won't be for a long time; foliage and translucency have years of hardening behind them; Nanite integration is deep; and the whole thing has been battle-tested across hundreds of shipping projects. A first-party engine will not match that breadth. What you can beat it on is exactly the intersection you described: concave and organic assets, low-end GPUs, no SDFs, live material editing, and instant-lit asset viewing. That's a real and defensible niche, and it's the honest pitch.
+
+Against your two reference implementations specifically: W298/SurfelGI and webgiya are both faithful GIBS reproductions and worth reading for the grid build (Triglav's is the cleanest published version) and the MSME. SurfelPlus is the most directly useful to you because it's Vulkan and it demonstrates the surfel-cache-terminates-reflection-rays trick. But all three are screen-space-spawned, all three carry the coverage and identity problems that broke your first attempt, and none of them has a hierarchy — which means none of them has real LOD, none of them has a guaranteed fallback, and all of them need a separate acceleration structure. The bake is what buys you all three at once.
+
+15. The three biggest risks
+Bake-time surfel density is your entire quality ceiling. Get Phase 1 right or nothing downstream can save you. Budget real time for the adaptive sampler.
+
+Cut selection popping is the most likely source of new flicker. It will feel like your old bug returning and it isn't. Instrument the cut level as a debug view from day one so you can tell them apart instantly.
+
+Tier 0 cone tracing is the least battle-tested part of this design. PBGI is proven in film and the math is sound, but real-time interactive cone tracing over a dynamic surfel hierarchy is not something I can point you at a shipping implementation of. Build Tier 2 first so you always have a correct reference to validate against, and prototype the Tier 0 traversal in isolation on a single mesh before wiring it into the pipeline.

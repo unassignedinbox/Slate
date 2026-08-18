@@ -1,0 +1,11 @@
+Upload/
+DOC/
+_AgentScratch/
+Download/
+Patch/
+SymboLindex/
+ExternalPackages/EOS-SDK-*
+*.symbolindex
+Engine/Engine-File-Structure.md
+__pycache__/
+*.py[cod]
