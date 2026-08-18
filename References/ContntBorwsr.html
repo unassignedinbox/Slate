@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HELIX · Asset Browser</title>
+<style>
+/* ============ CORE TOKENS ============ */
+:root{
+  --bg:#0a0a0c; --bg2:#0e0f11;
+  --panel:#141517; --panel-2:#191b1e; --panel-3:#1f2225;
+  --line:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.12);
+  --txt:#ECEEF0; --txt-2:#9BA1A9; --txt-3:#5F666E;
+  --acc:#C8F751; --acc-d:#8FB92C; --acc-glow:rgba(200,247,81,.18);
+  --cy:#5EE9D5; --am:#F5B84B; --rd:#FF6B5E; --vi:#A78BFA;
+  --r-s:8px; --r-m:12px; --r-l:16px; --r-xl:22px;
+  --sh:0 12px 40px rgba(0,0,0,.55);
+  --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,monospace;
+  --ui:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  background:
+    radial-gradient(1200px 700px at 78% -12%, rgba(200,247,81,.055), transparent 62%),
+    radial-gradient(900px 600px at 8% 108%, rgba(94,233,213,.05), transparent 60%),
+    var(--bg);
+  color:var(--txt); font-family:var(--ui); font-size:13px; overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:9999;
+  background:repeating-linear-gradient(0deg,rgba(255,255,255,.014) 0 1px,transparent 1px 3px);
+  mix-blend-mode:overlay;opacity:.5}
+::selection{background:var(--acc);color:#0a0a0c}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+input{font:inherit;color:inherit;background:none;border:none;outline:none}
+svg{display:block;flex:none}
+.sc::-webkit-scrollbar{width:9px;height:9px}
+.sc::-webkit-scrollbar-track{background:transparent}
+.sc::-webkit-scrollbar-thumb{background:rgba(255,255,255,.09);border-radius:99px;border:2px solid transparent;background-clip:padding-box}
+.sc::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.2);background-clip:padding-box;border:2px solid transparent}
+
+/* ============ SHELL ============ */
+#app{height:100vh;display:flex;flex-direction:column;padding:10px;gap:10px}
+.glass{background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.012));
+  border:1px solid var(--line);border-radius:var(--r-l);backdrop-filter:blur(14px)}
+
+/* --- top bar --- */
+#top{height:52px;display:flex;align-items:center;gap:10px;padding:0 10px 0 14px;flex:none}
+.brand{display:flex;align-items:center;gap:9px;padding-right:12px;margin-right:2px;border-right:1px solid var(--line)}
+.brand b{font-size:13px;letter-spacing:.16em;font-weight:600}
+.brand span{font-size:9px;color:var(--txt-3);letter-spacing:.2em;font-family:var(--mono)}
+.mark{width:26px;height:26px;border-radius:9px;display:grid;place-items:center;
+  background:radial-gradient(120% 120% at 30% 20%,#2a2f22,#111);border:1px solid rgba(200,247,81,.3);
+  box-shadow:0 0 18px var(--acc-glow) inset}
+.seg{display:flex;align-items:center;gap:2px;background:rgba(255,255,255,.035);border:1px solid var(--line);
+  border-radius:99px;padding:3px}
+.seg button{padding:6px 11px;border-radius:99px;color:var(--txt-2);display:flex;align-items:center;gap:6px;
+  font-size:12px;transition:.16s}
+.seg button:hover{color:var(--txt);background:rgba(255,255,255,.05)}
+.seg button.on{background:var(--txt);color:#0b0b0d;font-weight:550}
+.seg button.on.acc{background:var(--acc);color:#0b0b0d;box-shadow:0 0 20px var(--acc-glow)}
+#search{flex:1;max-width:520px;display:flex;align-items:center;gap:9px;height:34px;padding:0 12px;
+  background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:99px;transition:.18s}
+#search:focus-within{border-color:rgba(200,247,81,.45);background:rgba(200,247,81,.05);box-shadow:0 0 0 3px var(--acc-glow)}
+#search input{flex:1;font-size:12.5px}
+#search input::placeholder{color:var(--txt-3)}
+kbd{font-family:var(--mono);font-size:9.5px;color:var(--txt-3);border:1px solid var(--line);
+  border-radius:5px;padding:2px 5px;background:rgba(0,0,0,.3)}
+.iconbtn{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;color:var(--txt-2);
+  border:1px solid transparent;transition:.16s;position:relative}
+.iconbtn:hover{color:var(--txt);background:rgba(255,255,255,.06);border-color:var(--line)}
+.iconbtn.on{color:var(--acc);border-color:rgba(200,247,81,.3);background:rgba(200,247,81,.08)}
+.btn{display:flex;align-items:center;gap:7px;height:32px;padding:0 13px;border-radius:99px;font-size:12px;
+  border:1px solid var(--line);color:var(--txt-2);transition:.16s;white-space:nowrap}
+.btn:hover{color:var(--txt);background:rgba(255,255,255,.06);border-color:var(--line-2)}
+.btn.p{background:var(--acc);color:#0b0b0d;border-color:transparent;font-weight:600;box-shadow:0 4px 22px var(--acc-glow)}
+.btn.p:hover{background:#d6ff62;color:#0b0b0d}
+.btn.w{background:#fff;color:#0b0b0d;border-color:transparent;font-weight:600}
+.btn.w:hover{background:#e9e9e9;color:#0b0b0d}
+.avatars{display:flex;align-items:center;gap:-6px;background:rgba(255,255,255,.05);border:1px solid var(--line);
+  padding:3px 10px 3px 4px;border-radius:99px}
+.av{width:24px;height:24px;border-radius:99px;margin-right:-8px;border:2px solid #141517;display:grid;place-items:center;
+  font-size:9.5px;font-weight:700;color:#0b0b0d}
+.badge{min-width:17px;height:17px;padding:0 5px;border-radius:99px;background:var(--acc);color:#0b0b0d;
+  font-size:9.5px;font-weight:700;display:grid;place-items:center;font-family:var(--mono)}
+.badge.d{background:rgba(255,255,255,.1);color:var(--txt-2)}
+
+/* --- body --- */
+#body{flex:1;display:flex;gap:10px;min-height:0}
+#rail{width:48px;flex:none;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 0}
+.rbtn{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;color:var(--txt-3);position:relative;transition:.18s}
+.rbtn:hover{color:var(--txt);background:rgba(255,255,255,.06)}
+.rbtn.on{color:#0b0b0d;background:var(--acc);box-shadow:0 0 22px var(--acc-glow)}
+.rbtn.on::before{content:"";position:absolute;left:-8px;top:50%;transform:translateY(-50%);width:2px;height:16px;
+  border-radius:2px;background:var(--acc)}
+.rbtn .dot{position:absolute;top:5px;right:5px;width:5px;height:5px;border-radius:99px;background:var(--cy)}
+.rsep{width:18px;height:1px;background:var(--line);margin:6px 0}
+
+/* --- left panel --- */
+#left{width:246px;flex:none;display:flex;flex-direction:column;overflow:hidden}
+.phead{display:flex;align-items:center;justify-content:space-between;padding:13px 14px 10px}
+.ptitle{font-size:9.5px;letter-spacing:.19em;color:var(--txt-3);text-transform:uppercase;font-weight:600}
+.stat{padding:2px 14px 14px}
+.stat .n{font-size:30px;font-weight:250;letter-spacing:-.03em;line-height:1;color:var(--txt-3)}
+.stat .n b{color:var(--txt);font-weight:300}
+.stat .l{font-size:10.5px;color:var(--txt-3);margin-top:5px}
+#tree{flex:1;overflow-y:auto;padding:0 8px 10px}
+.tgrp{margin-top:8px}
+.tgrp>.lbl{font-size:9.5px;letter-spacing:.18em;color:var(--txt-3);text-transform:uppercase;padding:8px 8px 5px;
+  display:flex;align-items:center;justify-content:space-between;font-weight:600}
+.row{display:flex;align-items:center;gap:9px;height:32px;padding:0 8px;border-radius:9px;cursor:pointer;
+  color:var(--txt-2);transition:.13s;position:relative;user-select:none}
+.row:hover{background:rgba(255,255,255,.05);color:var(--txt)}
+.row.on{background:linear-gradient(90deg,rgba(200,247,81,.14),rgba(200,247,81,.02));color:var(--txt)}
+.row.on::after{content:"";position:absolute;left:0;top:7px;bottom:7px;width:2px;border-radius:2px;background:var(--acc)}
+.row.drop{background:rgba(200,247,81,.14);box-shadow:inset 0 0 0 1px rgba(200,247,81,.5)}
+.row .nm{flex:1;font-size:12.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .ct{font-size:10px;color:var(--txt-3);font-family:var(--mono)}
+.caret{width:14px;display:grid;place-items:center;color:var(--txt-3);transition:.18s}
+.caret.o{transform:rotate(90deg)}
+.kids{overflow:hidden;transition:height .22s cubic-bezier(.4,0,.2,1)}
+.kids .row{padding-left:16px}
+#storage{flex:none;padding:12px 14px 14px;border-top:1px solid var(--line)}
+.bar{height:7px;border-radius:99px;background:rgba(255,255,255,.06);display:flex;gap:2px;padding:0;overflow:hidden}
+.bar i{display:block;height:100%}
+.hatch{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.28) 0 2px,transparent 2px 5px);
+  background-color:rgba(255,255,255,.07)}
+.lgd{display:flex;flex-wrap:wrap;gap:4px 11px;margin-top:9px}
+.lgd span{font-size:9.5px;color:var(--txt-3);display:flex;align-items:center;gap:5px}
+.lgd i{width:6px;height:6px;border-radius:2px}
+
+/* --- main --- */
+#main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+#crumbbar{height:46px;flex:none;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid var(--line)}
+#crumbs{display:flex;align-items:center;gap:2px;flex:1;min-width:0;overflow:hidden}
+.cr{display:flex;align-items:center;gap:7px;padding:5px 9px;border-radius:8px;color:var(--txt-2);font-size:12px;
+  cursor:pointer;white-space:nowrap;transition:.14s}
+.cr:hover{background:rgba(255,255,255,.06);color:var(--txt)}
+.cr.last{color:var(--txt);font-weight:550}
+.crs{color:var(--txt-3);opacity:.5}
+#chipbar{flex:none;display:flex;align-items:center;gap:7px;padding:10px 12px;overflow-x:auto;scrollbar-width:none}
+#chipbar::-webkit-scrollbar{display:none}
+.chip{display:flex;align-items:center;gap:6px;height:27px;padding:0 11px;border-radius:99px;font-size:11.5px;
+  color:var(--txt-2);border:1px solid var(--line);background:rgba(255,255,255,.028);white-space:nowrap;transition:.15s}
+.chip:hover{color:var(--txt);border-color:var(--line-2)}
+.chip.on{background:var(--txt);color:#0b0b0d;border-color:transparent;font-weight:600}
+.chip.on i{background:#0b0b0d!important}
+.chip i{width:6px;height:6px;border-radius:99px;flex:none}
+.chip .c{font-family:var(--mono);font-size:9.5px;opacity:.55}
+#stage{flex:1;position:relative;overflow-y:auto;overflow-x:hidden;padding:4px 12px 14px}
+#grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(var(--tile,168px),1fr))}
+/* tile */
+.tile{position:relative;border-radius:var(--r-m);background:var(--panel);border:1px solid var(--line);
+  overflow:hidden;cursor:pointer;transition:transform .18s cubic-bezier(.34,1.4,.5,1),border-color .16s,box-shadow .18s}
+.tile:hover{border-color:var(--line-2);transform:translateY(-2px);box-shadow:0 10px 26px rgba(0,0,0,.5)}
+.tile.sel{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc),0 10px 30px var(--acc-glow)}
+.tile.drag{opacity:.4}
+.th{position:relative;aspect-ratio:1/.82;display:grid;place-items:center;overflow:hidden}
+.th::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 0%,rgba(255,255,255,.07),transparent 65%)}
+.th .g{position:relative;z-index:1;transition:transform .3s cubic-bezier(.34,1.3,.5,1)}
+.tile:hover .th .g{transform:scale(1.07) translateY(-1px)}
+.tmeta{padding:8px 9px 9px;border-top:1px solid var(--line);background:rgba(0,0,0,.22)}
+.tmeta .n{font-size:11.8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.tmeta .s{display:flex;align-items:center;gap:6px;margin-top:3px;font-size:9.5px;color:var(--txt-3);font-family:var(--mono)}
+.ext{position:absolute;left:8px;top:8px;z-index:2;font-family:var(--mono);font-size:8.5px;letter-spacing:.06em;
+  padding:2.5px 6px;border-radius:6px;background:rgba(0,0,0,.55);border:1px solid var(--line);backdrop-filter:blur(6px);
+  text-transform:uppercase;font-weight:600}
+.tact{position:absolute;right:7px;top:7px;z-index:3;display:flex;gap:4px;opacity:0;transform:translateY(-4px);transition:.18s}
+.tile:hover .tact,.tile.sel .tact{opacity:1;transform:none}
+.mini{width:24px;height:24px;border-radius:8px;display:grid;place-items:center;background:rgba(10,10,12,.72);
+  border:1px solid var(--line);color:var(--txt-2);backdrop-filter:blur(8px);transition:.14s}
+.mini:hover{color:#0b0b0d;background:var(--acc);border-color:transparent}
+.mini.fav{color:var(--acc);opacity:1}
+.tile .fv{opacity:1;transform:none}
+.stbar{position:absolute;left:0;right:0;bottom:0;height:2px;z-index:2}
+.badge-st{position:absolute;left:8px;bottom:8px;z-index:2;font-size:9px;font-family:var(--mono);padding:2px 6px;
+  border-radius:5px;letter-spacing:.05em;text-transform:uppercase}
+/* list view */
+#grid.list{display:block}
+#grid.list .tile{display:flex;align-items:center;gap:12px;height:44px;padding:0 12px;margin-bottom:4px;border-radius:10px;transform:none!important}
+#grid.list .th{aspect-ratio:auto;width:28px;height:28px;flex:none}
+#grid.list .th .g svg{width:26px!important;height:26px!important}
+#grid.list .ext,#grid.list .badge-st{position:static;margin:0}
+#grid.list .tmeta{flex:1;border:0;background:none;padding:0;display:flex;align-items:center;gap:14px;min-width:0}
+#grid.list .tmeta .n{flex:1}
+#grid.list .tmeta .s{margin:0}
+#grid.list .tact{position:static;opacity:0}
+#grid.list .tile:hover .tact{opacity:1}
+#marquee{position:absolute;border:1px solid var(--acc);background:rgba(200,247,81,.09);border-radius:4px;
+  pointer-events:none;display:none;z-index:50}
+#empty{display:none;flex-direction:column;align-items:center;gap:14px;padding:70px 0;color:var(--txt-3);text-align:center}
+#dropveil{position:absolute;inset:8px;border:1.5px dashed rgba(200,247,81,.6);border-radius:var(--r-l);
+  background:rgba(200,247,81,.06);backdrop-filter:blur(3px);display:none;place-items:center;z-index:60;pointer-events:none}
+
+/* --- right panel --- */
+#right{width:290px;flex:none;display:flex;flex-direction:column;overflow:hidden}
+#insp{flex:1;overflow-y:auto;min-height:0}
+.prev{margin:12px;height:158px;border-radius:var(--r-m);position:relative;overflow:hidden;
+  background:radial-gradient(90% 80% at 50% 15%,#1e2126,#0d0e10);border:1px solid var(--line);display:grid;place-items:center}
+.prev .grid-bg{position:absolute;inset:0;opacity:.35;
+  background-image:linear-gradient(rgba(255,255,255,.055) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.055) 1px,transparent 1px);
+  background-size:22px 22px;mask-image:radial-gradient(70% 70% at 50% 50%,#000,transparent)}
+.prev .tag{position:absolute;top:9px;left:9px;font-family:var(--mono);font-size:9px;color:var(--txt-3);letter-spacing:.1em}
+.prev .tag.r{left:auto;right:9px;color:var(--acc)}
+.spin{animation:sp 14s linear infinite;transform-origin:50% 50%}
+@keyframes sp{to{transform:rotate(360deg)}}
+.float{animation:fl 4.5s ease-in-out infinite}
+@keyframes fl{0%,100%{transform:translateY(-3px)}50%{transform:translateY(3px)}}
+.ihead{padding:2px 14px 10px}
+.ihead .n{font-size:15px;font-weight:550;letter-spacing:-.01em;word-break:break-all}
+.ihead .p{font-size:10.5px;color:var(--txt-3);font-family:var(--mono);margin-top:3px}
+.big{padding:0 14px 12px;display:flex;align-items:baseline;gap:5px}
+.big .v{font-size:26px;font-weight:250;letter-spacing:-.03em;color:var(--txt-3)}
+.big .v b{color:var(--txt);font-weight:300}
+.big .u{font-size:11px;color:var(--txt-3);font-family:var(--mono)}
+.sect{border-top:1px solid var(--line);padding:11px 14px}
+.sect>.h{font-size:9.5px;letter-spacing:.19em;text-transform:uppercase;color:var(--txt-3);margin-bottom:9px;
+  display:flex;align-items:center;justify-content:space-between;font-weight:600}
+.kv{display:flex;justify-content:space-between;align-items:center;padding:4.5px 0;font-size:11.5px}
+.kv .k{color:var(--txt-3)}
+.kv .v{font-family:var(--mono);font-size:11px;color:var(--txt)}
+.tags{display:flex;flex-wrap:wrap;gap:5px}
+.tag-c{display:flex;align-items:center;gap:5px;font-size:10.5px;padding:3px 8px;border-radius:99px;
+  background:rgba(255,255,255,.055);border:1px solid var(--line);color:var(--txt-2)}
+.tag-c b{font-weight:500}
+.tag-c button{color:var(--txt-3);display:grid;place-items:center}
+.tag-c button:hover{color:var(--rd)}
+.tag-add{border-style:dashed;color:var(--txt-3)}
+.tag-add:hover{color:var(--acc);border-color:rgba(200,247,81,.4)}
+.actions{padding:12px 14px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:7px;flex:none}
+.actions .btn{height:36px;justify-content:center;width:100%}
+.dual{display:flex;gap:7px}
+.dual .btn{flex:1;padding:0}
+/* session outliner */
+#sess{flex:none;max-height:37%;display:flex;flex-direction:column;border-top:1px solid var(--line)}
+#sesslist{overflow-y:auto;padding:0 8px 8px}
+.sitem{display:flex;align-items:center;gap:8px;height:30px;padding:0 7px;border-radius:8px;color:var(--txt-2);cursor:pointer;transition:.13s}
+.sitem:hover{background:rgba(255,255,255,.05);color:var(--txt)}
+.sitem.on{background:rgba(200,247,81,.1);color:var(--txt)}
+.sitem .nm{flex:1;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sitem .tg{opacity:0;display:flex;gap:1px}
+.sitem:hover .tg,.sitem .tg.keep{opacity:1}
+.sitem.hid{opacity:.42}
+.tiny{width:21px;height:21px;border-radius:6px;display:grid;place-items:center;color:var(--txt-3)}
+.tiny:hover{background:rgba(255,255,255,.09);color:var(--txt)}
+.tiny.dg:hover{color:var(--rd)}
+/* --- bottom --- */
+#bot{height:34px;flex:none;display:flex;align-items:center;gap:12px;padding:0 14px;font-size:10.5px;color:var(--txt-3);
+  font-family:var(--mono)}
+#bot .sep{width:1px;height:13px;background:var(--line)}
+.live{display:flex;align-items:center;gap:6px;color:var(--acc)}
+.pulse{width:6px;height:6px;border-radius:99px;background:var(--acc);animation:pl 1.8s ease-in-out infinite}
+@keyframes pl{0%,100%{opacity:1;box-shadow:0 0 0 0 var(--acc-glow)}50%{opacity:.45;box-shadow:0 0 0 5px transparent}}
+#zoom{-webkit-appearance:none;width:96px;height:3px;border-radius:99px;background:rgba(255,255,255,.12);outline:none}
+#zoom::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:99px;background:var(--acc);
+  cursor:pointer;box-shadow:0 0 10px var(--acc-glow)}
+#zoom::-moz-range-thumb{width:11px;height:11px;border:0;border-radius:99px;background:var(--acc);cursor:pointer}
+
+/* ============ OVERLAYS ============ */
+.pop{position:fixed;z-index:400;background:rgba(20,21,23,.97);border:1px solid var(--line-2);border-radius:var(--r-m);
+  box-shadow:var(--sh);backdrop-filter:blur(20px);padding:5px;display:none;animation:pin .14s ease-out}
+@keyframes pin{from{opacity:0;transform:translateY(-5px) scale(.985)}}
+.mi{display:flex;align-items:center;gap:10px;height:31px;padding:0 10px;border-radius:8px;color:var(--txt-2);
+  font-size:12px;cursor:pointer;white-space:nowrap;transition:.1s}
+.mi:hover{background:rgba(255,255,255,.07);color:var(--txt)}
+.mi.dg:hover{background:rgba(255,107,94,.13);color:var(--rd)}
+.mi .sh{margin-left:auto;font-family:var(--mono);font-size:9.5px;color:var(--txt-3)}
+.msep{height:1px;background:var(--line);margin:4px 6px}
+.mlbl{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--txt-3);padding:8px 10px 5px;font-weight:600}
+/* create popover */
+#createPop{width:326px;padding:9px}
+.pgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.pcell{display:flex;flex-direction:column;align-items:center;gap:6px;padding:11px 4px 9px;border-radius:11px;
+  border:1px solid transparent;color:var(--txt-2);transition:.15s;cursor:pointer}
+.pcell:hover{background:rgba(200,247,81,.09);border-color:rgba(200,247,81,.28);color:var(--txt);transform:translateY(-1px)}
+.pcell span{font-size:9.5px}
+/* modal */
+#veil{position:fixed;inset:0;background:rgba(5,5,7,.68);backdrop-filter:blur(7px);z-index:500;display:none;
+  align-items:center;justify-content:center;animation:fi .16s}
+@keyframes fi{from{opacity:0}}
+.modal{width:min(690px,94vw);background:var(--panel);border:1px solid var(--line-2);border-radius:var(--r-xl);
+  box-shadow:var(--sh);overflow:hidden;animation:mup .22s cubic-bezier(.34,1.25,.5,1)}
+@keyframes mup{from{opacity:0;transform:translateY(14px) scale(.98)}}
+.mhead{display:flex;align-items:center;gap:11px;padding:15px 17px;border-bottom:1px solid var(--line)}
+.mhead .t{font-size:14px;font-weight:600;flex:1}
+.tabs{display:flex;gap:3px;padding:11px 15px 0}
+.tab{padding:7px 13px;border-radius:9px 9px 0 0;font-size:12px;color:var(--txt-3);position:relative;transition:.14s}
+.tab:hover{color:var(--txt)}
+.tab.on{color:var(--txt);background:rgba(255,255,255,.045)}
+.tab.on::after{content:"";position:absolute;left:11px;right:11px;bottom:0;height:2px;background:var(--acc);border-radius:2px}
+.mbody{padding:15px 17px 17px;max-height:60vh;overflow-y:auto}
+.dz{border:1.5px dashed var(--line-2);border-radius:var(--r-l);padding:34px 18px;text-align:center;transition:.18s;cursor:pointer}
+.dz:hover,.dz.hot{border-color:var(--acc);background:rgba(200,247,81,.06)}
+.dz .t{font-size:13.5px;margin-top:12px;font-weight:550}
+.dz .s{font-size:11px;color:var(--txt-3);margin-top:5px;line-height:1.6}
+.fmts{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin-top:14px}
+.fmt{font-family:var(--mono);font-size:9px;padding:3px 7px;border-radius:6px;background:rgba(255,255,255,.05);
+  color:var(--txt-3);border:1px solid var(--line)}
+.qlist{display:flex;flex-direction:column;gap:5px}
+.qrow{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:11px;border:1px solid var(--line);
+  background:rgba(255,255,255,.02);transition:.14s;cursor:pointer}
+.qrow:hover{border-color:var(--line-2);background:rgba(255,255,255,.05)}
+.qrow .i{flex:1;min-width:0}
+.qrow .n{font-size:12.5px;font-weight:500}
+.qrow .d{font-size:10.5px;color:var(--txt-3);font-family:var(--mono);margin-top:2px}
+.prog{height:3px;border-radius:99px;background:rgba(255,255,255,.09);overflow:hidden;margin-top:7px}
+.prog i{display:block;height:100%;background:var(--acc);width:0;transition:width .3s;box-shadow:0 0 10px var(--acc-glow)}
+.field{display:flex;align-items:center;gap:9px;height:38px;padding:0 13px;border-radius:11px;
+  border:1px solid var(--line);background:rgba(255,255,255,.03)}
+.field:focus-within{border-color:rgba(200,247,81,.45)}
+.field input{flex:1;font-size:12.5px}
+/* toasts */
+#toasts{position:fixed;right:16px;bottom:16px;z-index:700;display:flex;flex-direction:column-reverse;gap:8px}
+.toast{display:flex;align-items:center;gap:11px;padding:11px 14px;border-radius:12px;background:rgba(22,23,26,.97);
+  border:1px solid var(--line-2);box-shadow:var(--sh);backdrop-filter:blur(16px);min-width:250px;
+  animation:tin .26s cubic-bezier(.34,1.3,.5,1)}
+@keyframes tin{from{opacity:0;transform:translateX(22px)}}
+.toast.out{animation:tout .22s forwards}
+@keyframes tout{to{opacity:0;transform:translateX(22px)}}
+.toast .tt{font-size:12px;font-weight:550}
+.toast .ts{font-size:10.5px;color:var(--txt-3);margin-top:1px}
+.toast .ic{width:27px;height:27px;border-radius:9px;display:grid;place-items:center;flex:none}
+/* palette */
+#palette{position:fixed;inset:0;z-index:600;display:none;justify-content:center;padding-top:13vh;
+  background:rgba(5,5,7,.6);backdrop-filter:blur(6px)}
+.pal{width:min(600px,92vw);height:fit-content;max-height:64vh;background:var(--panel);border:1px solid var(--line-2);
+  border-radius:var(--r-l);box-shadow:var(--sh);overflow:hidden;animation:mup .2s cubic-bezier(.34,1.25,.5,1);display:flex;flex-direction:column}
+.pal .in{display:flex;align-items:center;gap:11px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.pal .in input{flex:1;font-size:15px}
+.pal .res{overflow-y:auto;padding:6px}
+.pres{display:flex;align-items:center;gap:11px;padding:8px 11px;border-radius:9px;cursor:pointer;color:var(--txt-2)}
+.pres.on,.pres:hover{background:rgba(200,247,81,.1);color:var(--txt)}
+.pres .n{flex:1;font-size:12.5px}
+.pres .t{font-family:var(--mono);font-size:9.5px;color:var(--txt-3)}
+@media(max-width:1180px){#left{width:210px}#right{width:258px}}
+@media(max-width:940px){#left{display:none}}
+@media(max-width:760px){#right{display:none}#search{max-width:none}}
+</style>
+</head>
+<body>
+
+<!-- shared gradient defs -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<defs>
+  <linearGradient id="gFace" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#4b5058" stop-opacity=".95"/><stop offset="1" stop-color="#25282d" stop-opacity=".95"/>
+  </linearGradient>
+  <linearGradient id="gBack" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#8e949c" stop-opacity=".55"/><stop offset="1" stop-color="#5b6067" stop-opacity=".35"/>
+  </linearGradient>
+  <linearGradient id="gPaper" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#3c4046" stop-opacity=".95"/><stop offset="1" stop-color="#1d2023" stop-opacity=".95"/>
+  </linearGradient>
+  <linearGradient id="gEdge" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#fff" stop-opacity=".26"/><stop offset=".5" stop-color="#fff" stop-opacity=".05"/>
+    <stop offset="1" stop-color="#fff" stop-opacity=".13"/>
+  </linearGradient>
+  <linearGradient id="gSheen" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#fff" stop-opacity=".18"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/>
+  </linearGradient>
+  <pattern id="pHatch" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+    <rect width="6" height="6" fill="rgba(255,255,255,.04)"/><rect width="2.2" height="6" fill="rgba(255,255,255,.16)"/>
+  </pattern>
+  <filter id="fSoft" x="-40%" y="-40%" width="180%" height="180%">
+    <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity=".55"/>
+  </filter>
+</defs>
+</svg>
+
+<div id="app">
+  <!-- ================= TOP ================= -->
+  <header id="top" class="glass">
+    <div class="brand">
+      <div class="mark">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C8F751" stroke-width="1.7">
+          <path d="M12 2.6l8.2 4.7v9.4L12 21.4 3.8 16.7V7.3z"/><path d="M3.8 7.3L12 12l8.2-4.7M12 12v9.4" opacity=".55"/>
+        </svg>
+      </div>
+      <div><b>HELIX</b><br><span>ASSET/OS</span></div>
+    </div>
+
+    <div class="seg" id="sourceSeg"></div>
+
+    <div id="search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6a7078" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+      <input id="q" placeholder="Search assets, tags, formats…" spellcheck="false">
+      <button class="iconbtn" id="clearQ" style="width:20px;height:20px;display:none" title="Clear">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <kbd>⌘K</kbd>
+    </div>
+
+    <div style="flex:1"></div>
+    <button class="btn" id="btnCreate">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
+      Create<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="opacity:.5"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <button class="btn p" id="btnImport">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 16V4M8 8l4-4 4 4"/><path d="M4 15v3.5A1.5 1.5 0 005.5 20h13a1.5 1.5 0 001.5-1.5V15"/></svg>
+      Import
+    </button>
+    <div class="avatars" title="Collaborators in session">
+      <div class="av" style="background:#C8F751">JD</div>
+      <div class="av" style="background:#5EE9D5">KW</div>
+      <div class="av" style="background:#A78BFA">MR</div>
+      <span class="badge" style="margin-left:12px">3</span>
+    </div>
+    <button class="iconbtn" id="btnSettings" title="Browser preferences">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-1.8-.3 1.6 1.6 0 00-1 1.5V21a2 2 0 11-4 0v-.1A1.6 1.6 0 008 19.4a1.6 1.6 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00.3-1.8 1.6 1.6 0 00-1.5-1H2a2 2 0 110-4h.1A1.6 1.6 0 003.6 8a1.6 1.6 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3H8a1.6 1.6 0 001-1.5V2a2 2 0 114 0v.1a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V8a1.6 1.6 0 001.5 1H22a2 2 0 110 4h-.1a1.6 1.6 0 00-1.5 1z"/></svg>
+    </button>
+  </header>
+
+  <!-- ================= BODY ================= -->
+  <div id="body">
+    <nav id="rail" class="glass"></nav>
+
+    <aside id="left" class="glass">
+      <div class="phead"><div class="ptitle">Vault</div>
+        <button class="iconbtn" id="btnNewFolder" title="New folder" style="width:24px;height:24px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </div>
+      <div class="stat"><div class="n">2,<b>481</b></div><div class="l">indexed assets · <span id="statSel">0 selected</span></div></div>
+      <div id="tree" class="sc"></div>
+      <div id="storage">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+          <span class="ptitle">Cache</span><span style="font-family:var(--mono);font-size:10px;color:var(--txt-2)"><b id="cacheUsed">148.6</b> / 512 GB</span>
+        </div>
+        <div class="bar">
+          <i style="width:34%;background:var(--acc)"></i><i style="width:17%;background:var(--am)"></i>
+          <i style="width:8%;background:var(--cy)"></i><i class="hatch" style="width:12%"></i><i style="flex:1;background:rgba(255,255,255,.05)"></i>
+        </div>
+        <div class="lgd">
+          <span><i style="background:var(--acc)"></i>Meshes</span><span><i style="background:var(--am)"></i>Textures</span>
+          <span><i style="background:var(--cy)"></i>Sims</span><span><i class="hatch" style="border-radius:2px"></i>Proxy</span>
+        </div>
+      </div>
+    </aside>
+
+    <main id="main" class="glass">
+      <div id="crumbbar">
+        <button class="iconbtn" id="navBack" title="Back"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <button class="iconbtn" id="navFwd" title="Forward"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M9 5l7 7-7 7"/></svg></button>
+        <div id="crumbs" class="sc"></div>
+        <button class="btn" id="btnSort" style="height:28px;padding:0 10px">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M6.5 12h11M9.5 17h5"/></svg>
+          <span id="sortLbl">Modified</span>
+        </button>
+        <div class="seg" style="padding:2px">
+          <button id="vGrid" class="on" title="Grid view"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/></svg></button>
+          <button id="vList" title="List view"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6.5h16M4 12h16M4 17.5h16"/></svg></button>
+        </div>
+      </div>
+      <div id="chipbar"></div>
+      <div id="stage" class="sc">
+        <div id="grid"></div>
+        <div id="empty">
+          <svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="#3b4048" stroke-width="1.2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.8-3.8"/><path d="M8.4 11h5.2"/></svg>
+          <div><div style="font-size:13.5px;color:var(--txt-2);font-weight:550">No assets match this view</div>
+          <div style="font-size:11.5px;margin-top:5px">Adjust filters, or drop files anywhere to import.</div></div>
+          <button class="btn" onclick="resetFilters()">Reset filters</button>
+        </div>
+        <div id="marquee"></div>
+      </div>
+      <div id="dropveil">
+        <div style="text-align:center">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#C8F751" stroke-width="1.5" style="margin:0 auto"><path d="M12 16V4M8 8l4-4 4 4"/><path d="M4 15v3.5A1.5 1.5 0 005.5 20h13a1.5 1.5 0 001.5-1.5V15"/></svg>
+          <div style="margin-top:10px;font-size:13px;color:var(--acc);font-weight:600;letter-spacing:.04em">RELEASE TO INGEST</div>
+        </div>
+      </div>
+    </main>
+
+    <aside id="right" class="glass">
+      <div id="insp" class="sc"></div>
+      <div id="sess">
+        <div class="phead" style="padding:11px 14px 8px">
+          <div class="ptitle">Session · Live</div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span class="badge" id="sessCount">0</span>
+            <button class="iconbtn" id="btnPurge" title="Clear session" style="width:22px;height:22px">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h16M9.5 7V5.2A1.2 1.2 0 0110.7 4h2.6a1.2 1.2 0 011.2 1.2V7"/><path d="M6.5 7l.8 12.1A1.5 1.5 0 008.8 20.5h6.4a1.5 1.5 0 001.5-1.4L17.5 7"/></svg>
+            </button>
+          </div>
+        </div>
+        <div id="sesslist" class="sc"></div>
+      </div>
+    </aside>
+  </div>
+
+  <footer id="bot" class="glass">
+    <span class="live"><i class="pulse"></i>RUNTIME LINKED</span>
+    <span class="sep"></span><span id="stCount">0 items</span>
+    <span class="sep"></span><span id="stSel">no selection</span>
+    <span class="sep"></span><span id="stPath">/library</span>
+    <div style="flex:1"></div>
+    <span id="stFps">GPU 34% · VRAM 6.2/24 GB · 120 fps</span>
+    <span class="sep"></span>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#5F666E" stroke-width="1.8"><rect x="4" y="7" width="7" height="7" rx="1.4"/><rect x="13" y="10" width="8" height="8" rx="1.6"/></svg>
+    <input type="range" id="zoom" min="118" max="248" value="168">
+  </footer>
+</div>
+
+<!-- overlays -->
+<div id="ctx" class="pop"></div>
+<div id="sortPop" class="pop"></div>
+<div id="createPop" class="pop"></div>
+<div id="setPop" class="pop"></div>
+<div id="veil"></div>
+<div id="palette"><div class="pal">
+  <div class="in"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#6a7078" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+  <input id="palIn" placeholder="Jump to asset or run a command…" spellcheck="false"><kbd>ESC</kbd></div>
+  <div class="res sc" id="palRes"></div>
+</div></div>
+<div id="toasts"></div>
+<input type="file" id="filePick" multiple style="display:none">
+
+<script>
+/* ══════════════════════ ICON SYSTEM ══════════════════════ */
+const S=(b,w)=>`<svg viewBox="0 0 24 24" width="${w||16}" height="${w||16}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${b}</svg>`;
+
+/* UI icons */
+const UI={
+ lib:'<path d="M4 5.5A1.5 1.5 0 015.5 4H9v16H5.5A1.5 1.5 0 014 18.5z"/><path d="M9 4h4.5A1.5 1.5 0 0115 5.5v13A1.5 1.5 0 0113.5 20H9z"/><path d="M16.6 4.9l2.6.7a1.5 1.5 0 011 1.9l-3.3 12.1"/>',
+ engine:'<path d="M12 2.6l8.2 4.7v9.4L12 21.4 3.8 16.7V7.3z"/><path d="M3.8 7.3L12 12l8.2-4.7M12 12v9.4" opacity=".55"/>',
+ project:'<path d="M3.5 7.2A1.7 1.7 0 015.2 5.5h3.4l1.9 2.3h8.3a1.7 1.7 0 011.7 1.7v7.8a1.7 1.7 0 01-1.7 1.7H5.2a1.7 1.7 0 01-1.7-1.7z"/>',
+ recent:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.2V12l3.2 2"/>',
+ fav:'<path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"/>',
+ cloud:'<path d="M7 18.5a4 4 0 01-.4-8A5.5 5.5 0 0117.4 10h.3a4.2 4.2 0 01.3 8.4z"/><path d="M12 11v6M9.4 14.4L12 17l2.6-2.6"/>',
+ trash:'<path d="M4 7h16M9.5 7V5.2A1.2 1.2 0 0110.7 4h2.6a1.2 1.2 0 011.2 1.2V7"/><path d="M6.5 7l.8 12.1A1.5 1.5 0 008.8 20.5h6.4a1.5 1.5 0 001.5-1.4L17.5 7"/>',
+ layers:'<path d="M12 3.5l8.5 4.2-8.5 4.2L3.5 7.7z"/><path d="M3.5 12l8.5 4.2 8.5-4.2M3.5 16.3l8.5 4.2 8.5-4.2"/>',
+ tag:'<path d="M3.8 11.3V5.4a1.6 1.6 0 011.6-1.6h5.9a1.6 1.6 0 011.1.5l7.4 7.4a1.6 1.6 0 010 2.3l-5.9 5.9a1.6 1.6 0 01-2.3 0l-7.4-7.4a1.6 1.6 0 01-.4-1.2z"/><circle cx="8" cy="8" r="1.3"/>',
+ eye:'<path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.9"/>',
+ eyeoff:'<path d="M9.6 5.9A8.6 8.6 0 0112 5.8c6 0 9.5 6.2 9.5 6.2a17 17 0 01-3 3.9M6.3 7.9A16.7 16.7 0 002.5 12s3.5 6.2 9.5 6.2a8.7 8.7 0 003.6-.8"/><path d="M4 4l16 16"/>',
+ lock:'<rect x="4.5" y="10.5" width="15" height="9.5" rx="2"/><path d="M8 10.5V7.8a4 4 0 018 0v2.7"/>',
+ unlock:'<rect x="4.5" y="10.5" width="15" height="9.5" rx="2"/><path d="M8 10.5V7.8a4 4 0 017.6-1.7"/>',
+ plus:'<path d="M12 5v14M5 12h14"/>',
+ up:'<path d="M12 16V4M8 8l4-4 4 4"/><path d="M4 15v3.5A1.5 1.5 0 005.5 20h13a1.5 1.5 0 001.5-1.5V15"/>',
+ dl:'<path d="M12 4v12M8 12l4 4 4-4"/><path d="M4 18.5h16"/>',
+ x:'<path d="M6 6l12 12M18 6L6 18"/>',
+ chev:'<path d="M9 5l7 7-7 7"/>',
+ check:'<path d="M4.5 12.5l5 5 10-11"/>',
+ copy:'<rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2"/><path d="M15.5 5.5A1.5 1.5 0 0014 4H5.5A1.5 1.5 0 004 5.5V14a1.5 1.5 0 001.5 1.5"/>',
+ rename:'<path d="M15.5 4.5l4 4-10.4 10.4-4.9.9.9-4.9z"/><path d="M13 7l4 4"/>',
+ info:'<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.2M12 7.9v.1"/>',
+ link:'<path d="M10.2 13.8a4 4 0 006 .4l2.4-2.4a4.2 4.2 0 00-6-6l-1.4 1.4"/><path d="M13.8 10.2a4 4 0 00-6-.4L5.4 12.2a4.2 4.2 0 006 6l1.4-1.4"/>',
+ sync:'<path d="M20 11.5A8 8 0 006.3 6.3L4 8.5"/><path d="M4 12.5a8 8 0 0013.7 5.2L20 15.5"/><path d="M4 4.5v4h4M20 19.5v-4h-4"/>',
+ grid:'<rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/>',
+ place:'<path d="M12 21.5s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10.4" r="2.6"/>',
+ bolt:'<path d="M13.2 2.5L4.6 13.4h6.1l-.9 8.1 8.6-10.9h-6.1z"/>',
+ folderPlus:'<path d="M3.5 7.2A1.7 1.7 0 015.2 5.5h3.4l1.9 2.3h8.3a1.7 1.7 0 011.7 1.7v7.8a1.7 1.7 0 01-1.7 1.7H5.2a1.7 1.7 0 01-1.7-1.7z"/><path d="M12 11.4v5M9.5 13.9h5"/>',
+ dots:'<circle cx="12" cy="5.5" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="18.5" r="1.3" fill="currentColor"/>',
+ filter:'<path d="M3.5 5.5h17l-6.6 7.8v5.4l-3.8 2v-7.4z"/>',
+ cpu:'<rect x="7" y="7" width="10" height="10" rx="2"/><rect x="3.8" y="3.8" width="16.4" height="16.4" rx="3.4" opacity=".45"/><path d="M10 1.8v2M14 1.8v2M10 20.2v2M14 20.2v2M1.8 10h2M1.8 14h2M20.2 10h2M20.2 14h2"/>'
+};
+const ui=(n,w)=>S(UI[n]||'',w);
+
+/* format glyphs — 24×24, stroke */
+const G={
+ image:'<rect x="3" y="4.2" width="18" height="15.6" rx="3"/><circle cx="8.6" cy="9.6" r="1.7"/><path d="M4 16.8l4.6-4.6 3 3L15.2 11l4.8 4.8"/>',
+ hdri:'<circle cx="12" cy="12" r="8.6"/><ellipse cx="12" cy="12" rx="3.7" ry="8.6"/><path d="M3.4 12h17.2"/><path d="M4.8 7.6h14.4M4.8 16.4h14.4" opacity=".5"/>',
+ vector:'<path d="M4.6 19.2C10 19.2 10.6 5.4 19.4 5.4"/><rect x="1.9" y="17" width="4.4" height="4.4" rx="1.2"/><rect x="17.7" y="3.2" width="4.4" height="4.4" rx="1.2"/><path d="M6.3 19.2h2M17.7 5.4h-2" opacity=".4"/>',
+ mesh:'<path d="M12 2.6l8.2 4.7v9.4L12 21.4 3.8 16.7V7.3z"/><path d="M3.8 7.3L12 12l8.2-4.7M12 12v9.4"/><path d="M7.9 4.95l8.2 4.7M16.1 4.95l-8.2 4.7" opacity=".35"/>',
+ cad:'<path d="M6.2 12.4V8.1A2.6 2.6 0 018.8 5.5h3.9a4.5 4.5 0 014.5 4.5v2.4"/><circle cx="11.8" cy="9.3" r="1.7"/><path d="M4 16.6h16"/><path d="M4 14.6v4M20 14.6v4"/><path d="M5.6 19.9h12.8" opacity=".35"/>',
+ point:'<circle cx="12" cy="4.9" r=".95" fill="currentColor" stroke="none"/><circle cx="7.6" cy="7" r=".95" fill="currentColor" stroke="none"/><circle cx="16.4" cy="7" r=".95" fill="currentColor" stroke="none"/><circle cx="5.2" cy="11" r=".95" fill="currentColor" stroke="none"/><circle cx="12" cy="10.2" r=".95" fill="currentColor" stroke="none"/><circle cx="18.8" cy="11" r=".95" fill="currentColor" stroke="none"/><circle cx="8.3" cy="13.4" r=".95" fill="currentColor" stroke="none"/><circle cx="15.7" cy="13.4" r=".95" fill="currentColor" stroke="none"/><circle cx="5.6" cy="16.2" r=".95" fill="currentColor" stroke="none"/><circle cx="11.6" cy="16.6" r=".95" fill="currentColor" stroke="none"/><circle cx="18.4" cy="16.2" r=".95" fill="currentColor" stroke="none"/><circle cx="9.2" cy="19.4" r=".95" fill="currentColor" stroke="none"/><circle cx="14.8" cy="19.4" r=".95" fill="currentColor" stroke="none"/>',
+ font:'<path d="M6.4 17.4L11.6 4.6h1.2l5.2 12.8"/><path d="M8.5 12.9h7.4"/><path d="M3.6 20.6h16.8" opacity=".45"/>',
+ material:'<circle cx="12" cy="12" r="8.6"/><path d="M5.8 16.2c2.4-5 7.2-7.6 12.4-7"/><ellipse cx="9" cy="8.8" rx="2" ry="1.5" transform="rotate(-30 9 8.8)" fill="currentColor" stroke="none" opacity=".75"/>',
+ shader:'<rect x="2.2" y="3.8" width="7.4" height="6.2" rx="1.7"/><rect x="14.4" y="12.6" width="7.4" height="6.2" rx="1.7"/><path d="M9.6 6.9h2.6a2 2 0 012 2v4.4"/><circle cx="14.2" cy="15.7" r="1.15" fill="currentColor" stroke="none"/><path d="M5.9 10v3.6M2.9 13.6h6" opacity=".45"/>',
+ script:'<path d="M8.8 6.6L4.4 12l4.4 5.4M15.2 6.6L19.6 12l-4.4 5.4"/><path d="M13.4 4.7l-2.8 14.6"/>',
+ scene:'<path d="M12 2.9l8.6 4.3-8.6 4.3-8.6-4.3z"/><path d="M3.4 11.9l8.6 4.3 8.6-4.3"/><path d="M3.4 16.4l8.6 4.3 8.6-4.3" opacity=".55"/>',
+ anim:'<path d="M2.6 12h3.2M18.2 12h3.2"/><path d="M9.6 8.4L13.2 12l-3.6 3.6L6 12z"/><path d="M16.4 9.6L18.8 12l-2.4 2.4L14 12z" opacity=".55"/>',
+ cloth:'<path d="M3 7.4c3-2.6 6 2.6 9 0s6-2.6 9 0"/><path d="M3 12c3-2.6 6 2.6 9 0s6-2.6 9 0"/><path d="M3 16.6c3-2.6 6 2.6 9 0s6-2.6 9 0"/><path d="M7.5 5.4v14M16.5 5.4v14" opacity=".3"/>',
+ audio:'<path d="M4 10.2v3.6M8 6.6v10.8M12 3.6v16.8M16 8v8M20 10.8v2.4"/>',
+ video:'<rect x="2.4" y="4.8" width="19.2" height="14.4" rx="2.6"/><path d="M2.4 8.8h19.2M2.4 15.2h19.2" opacity=".35"/><path d="M10 9.6l4.6 2.4-4.6 2.4z" fill="currentColor" stroke="none" opacity=".85"/><path d="M6.4 4.8v4M17.6 4.8v4" opacity=".35"/>',
+ archive:'<rect x="3.4" y="4.4" width="17.2" height="15.2" rx="2.6"/><path d="M9.6 4.4v6l2.4-1.6 2.4 1.6v-6"/><path d="M3.4 13.4h17.2" opacity=".35"/>',
+ doc:'<path d="M13.2 3.6H7.4A2.4 2.4 0 005 6v12a2.4 2.4 0 002.4 2.4h9.2A2.4 2.4 0 0019 18V9.4z"/><path d="M13.2 3.6v5.8H19"/><path d="M8.4 13.4h7.2M8.4 16.6h4.6"/>',
+ uv:'<rect x="3.4" y="3.4" width="17.2" height="17.2" rx="2.2"/><path d="M6.6 6.6h4.8v4.8H6.6z"/><path d="M13.6 8.6l4 1.8-1.6 4h-2.4z"/><path d="M6.6 14.6l3 3.4h5" stroke-dasharray="2 2"/>',
+ brush:'<path d="M14.6 3.9l5.5 5.5-8.2 8.2-5.5-5.5z"/><path d="M6.4 12.1l-2.8 6.1c-.3.7.4 1.4 1.1 1.1l6.1-2.8"/><path d="M12.4 6.1l5.5 5.5" opacity=".4"/>',
+ color:'<circle cx="9.4" cy="9.8" r="5.1"/><circle cx="14.6" cy="9.8" r="5.1"/><circle cx="12" cy="14.4" r="5.1"/>',
+ volume:'<path d="M12 3l8.2 4.6v8.8L12 21l-8.2-4.6V7.6z" stroke-dasharray="3.2 2.6"/><path d="M9.4 13.6a2.4 2.4 0 01.5-4.7 3.2 3.2 0 016.1.9 2 2 0 01-.2 3.8z"/>',
+ light:'<path d="M12 2.8v2.2M4.9 5.9l1.6 1.6M19.1 5.9l-1.6 1.6M2.6 13h2.2M19.2 13h2.2"/><path d="M8.4 16a4.6 4.6 0 117.2 0c-.7.9-1 1.5-1.1 2.4H9.5c-.1-.9-.4-1.5-1.1-2.4z"/><path d="M10 21h4"/>',
+ camera:'<rect x="2.6" y="7.6" width="11" height="9.4" rx="1.8"/><path d="M13.6 12.2l6.4-3.4v7.8l-6.4-3.4z"/><circle cx="5.6" cy="5" r="1.6"/><circle cx="9.6" cy="5" r="1.6" opacity=".5"/>',
+ sphere:'<circle cx="12" cy="12" r="8.6"/><ellipse cx="12" cy="12" rx="8.6" ry="3.5"/><ellipse cx="12" cy="12" rx="3.5" ry="8.6" opacity=".5"/>',
+ plane:'<path d="M2.4 14.4L12 8.8l9.6 5.6L12 20z"/><path d="M7.2 11.6l9.6 5.6M16.8 11.6l-9.6 5.6" opacity=".35"/><path d="M12 8.8V4" opacity=".45"/>',
+ cyl:'<ellipse cx="12" cy="6.4" rx="6.4" ry="2.8"/><path d="M5.6 6.4v11.2c0 1.5 2.9 2.8 6.4 2.8s6.4-1.3 6.4-2.8V6.4"/>',
+ cone:'<path d="M12 3l6.4 14.2M12 3L5.6 17.2"/><ellipse cx="12" cy="17.4" rx="6.4" ry="2.8"/>',
+ torus:'<ellipse cx="12" cy="12" rx="9" ry="5.8"/><ellipse cx="12" cy="12" rx="3.4" ry="1.9"/><path d="M3 12c0-2 4-3.4 9-3.4s9 1.4 9 3.4" opacity=".4"/>',
+ capsule:'<rect x="6.8" y="3.2" width="10.4" height="17.6" rx="5.2"/><ellipse cx="12" cy="8" rx="5.2" ry="2" opacity=".45"/>',
+ curve:'<path d="M3 18.4C7.4 18.4 8 5.6 12 5.6s4.6 12.8 9 12.8"/><rect x="1.3" y="16.7" width="3.4" height="3.4" rx="1"/><rect x="19.3" y="16.7" width="3.4" height="3.4" rx="1"/>',
+ text:'<path d="M4.2 7.4V5.2h15.6v2.2"/><path d="M12 5.2v13.6M9 18.8h6"/>',
+ bone:'<circle cx="6.2" cy="17.8" r="2.7"/><circle cx="17.8" cy="6.2" r="2.7"/><path d="M8.1 15.9L12 12l3.9-3.9"/><path d="M12 12l-2.4-2.4M12 12l2.4 2.4" opacity=".45"/>',
+ empty:'<rect x="3.4" y="3.4" width="17.2" height="17.2" rx="2.2"/><path d="M8.9 3.4v17.2M15.1 3.4v17.2M3.4 8.9h17.2M3.4 15.1h17.2" opacity=".4"/>',
+ folder:'<path d="M3.4 7.2A1.8 1.8 0 015.2 5.4h3.5l1.9 2.3h8.2a1.8 1.8 0 011.8 1.8v7.7a1.8 1.8 0 01-1.8 1.8H5.2a1.8 1.8 0 01-1.8-1.8z"/>'
+};
+
+const TYPE={
+ image:{l:'Image',c:'#7DD3FC',g:'image'},   hdri:{l:'HDRI',c:'#A78BFA',g:'hdri'},
+ vector:{l:'Vector',c:'#F472B6',g:'vector'},mesh:{l:'Mesh',c:'#C8F751',g:'mesh'},
+ cad:{l:'CAD',c:'#FDBA74',g:'cad'},         point:{l:'Point Cloud',c:'#67E8F9',g:'point'},
+ font:{l:'Font',c:'#E4E7EB',g:'font'},      material:{l:'Material',c:'#34D399',g:'material'},
+ shader:{l:'Shader',c:'#818CF8',g:'shader'},script:{l:'Script',c:'#94A3B8',g:'script'},
+ scene:{l:'Scene',c:'#FBBF24',g:'scene'},   anim:{l:'Animation',c:'#F0ABFC',g:'anim'},
+ cloth:{l:'Cloth/Sim',c:'#5EEAD4',g:'cloth'},audio:{l:'Audio',c:'#FCA5A5',g:'audio'},
+ video:{l:'Video',c:'#F87171',g:'video'},   archive:{l:'Archive',c:'#A3A3A3',g:'archive'},
+ doc:{l:'Document',c:'#D4D4D8',g:'doc'},    uv:{l:'UV Layout',c:'#FDE047',g:'uv'},
+ brush:{l:'Brush',c:'#FB923C',g:'brush'},   color:{l:'Color/LUT',c:'#4ADE80',g:'color'},
+ volume:{l:'Volume',c:'#93C5FD',g:'volume'},light:{l:'Light',c:'#FDE68A',g:'light'},
+ camera:{l:'Camera',c:'#CBD5E1',g:'camera'},prim:{l:'Primitive',c:'#C8F751',g:'sphere'}
+};
+const EXT2TYPE={png:'image',jpg:'image',jpeg:'image',tif:'image',tiff:'image',webp:'image',tga:'image',psd:'image',
+ exr:'hdri',hdr:'hdri',hdri:'hdri', svg:'vector',ai:'vector',eps:'vector',pdf:'doc',
+ obj:'mesh',fbx:'mesh',gltf:'mesh',glb:'mesh',usd:'mesh',usdz:'mesh',abc:'mesh',blend:'mesh',stl:'mesh','3ds':'mesh',
+ step:'cad',stp:'cad',iges:'cad',igs:'cad',dwg:'cad',dxf:'cad',sldprt:'cad',x_t:'cad',
+ ply:'point',las:'point',laz:'point',e57:'point', ttf:'font',otf:'font',woff:'font',woff2:'font',
+ mtl:'material',mat:'material',sbsar:'material', glsl:'shader',hlsl:'shader',osl:'shader',frag:'shader',
+ py:'script',js:'script',lua:'script',ts:'script', scene:'scene',lvl:'scene',helix:'scene',
+ bvh:'anim',anim:'anim',fbxanim:'anim', vcloth:'cloth',sim:'cloth',cache:'cloth',
+ wav:'audio',mp3:'audio',flac:'audio',aiff:'audio', mp4:'video',mov:'video',webm:'video',
+ zip:'archive',rar:'archive','7z':'archive',tar:'archive', txt:'doc',md:'doc',csv:'doc',json:'doc',
+ uvl:'uv',uv:'uv', abr:'brush',brush:'brush', cube:'color',lut:'color',icc:'color',
+ vdb:'volume',vol:'volume', ies:'light',lgt:'light', cam:'camera'};
+
+/* composite file icon: glass sheet + glyph + ext ribbon */
+function fileIcon(type,size){
+  const t=TYPE[type]||TYPE.doc,s=size||58;
+  return `<svg width="${s}" height="${s}" viewBox="0 0 64 64" fill="none">
+  <g filter="url(#fSoft)">
+    <path d="M17 51.5c-.6.4-1.4 0-1.3-.7l1.6-9.6L11.5 34c-.5-.5-.2-1.4.5-1.5l5.6-.9" stroke="rgba(255,255,255,.12)" stroke-width="1.2" opacity=".8"/>
+    <path d="M20 9.5h16.5L48 21v33a3.5 3.5 0 01-3.5 3.5h-24.5A3.5 3.5 0 0116 54V13a3.5 3.5 0 013.5-3.5z" fill="url(#gPaper)" transform="rotate(-7 32 33)" opacity=".45"/>
+    <path d="M20 8h17L49 20v34a3.6 3.6 0 01-3.6 3.6H20A3.6 3.6 0 0116.4 54V11.6A3.6 3.6 0 0120 8z" fill="url(#gPaper)"/>
+    <path d="M20 8h17L49 20v34a3.6 3.6 0 01-3.6 3.6H20A3.6 3.6 0 0116.4 54V11.6A3.6 3.6 0 0120 8z" stroke="url(#gEdge)" stroke-width="1.1"/>
+    <path d="M37 8l12 12h-9.6A2.4 2.4 0 0137 17.6z" fill="rgba(255,255,255,.13)" stroke="url(#gEdge)" stroke-width=".9"/>
+    <rect x="16.4" y="45" width="32.6" height="12.6" rx="3.6" fill="${t.c}" opacity=".1"/>
+    <path d="M16.4 45H49" stroke="${t.c}" stroke-opacity=".35" stroke-width="1"/>
+    <g transform="translate(20.6,20) scale(1.02)" stroke="${t.c}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity=".95">${G[t.g]}</g>
+    <circle cx="44" cy="51.2" r="2.1" fill="${t.c}" opacity=".85"/>
+  </g></svg>`;
+}
+/* composite folder icon: stacked sheets + glass folder + category glyph */
+function folderIcon(type,size,open){
+  const t=TYPE[type]||{c:'#9BA1A9',g:'folder'},s=size||58;
+  return `<svg width="${s}" height="${s}" viewBox="0 0 64 64" fill="none">
+  <g filter="url(#fSoft)">
+    <rect x="14" y="13" width="36" height="26" rx="4" fill="url(#gBack)" opacity=".5"/>
+    <rect x="17.5" y="10" width="29" height="26" rx="3.4" fill="#cfd4da" opacity=".16"/>
+    <path d="M20.5 10h16l3 3.4h-19z" fill="#fff" opacity=".08"/>
+    <path d="M8 20.6A4.6 4.6 0 0112.6 16h11.2a3 3 0 012.3 1.1l3 3.6h22.3A4.6 4.6 0 0156 25.3v22.1A4.6 4.6 0 0151.4 52H12.6A4.6 4.6 0 018 47.4z"
+      fill="url(#gFace)" ${open?'transform="skewY(-2)"':''}/>
+    <path d="M8 20.6A4.6 4.6 0 0112.6 16h11.2a3 3 0 012.3 1.1l3 3.6h22.3A4.6 4.6 0 0156 25.3v22.1A4.6 4.6 0 0151.4 52H12.6A4.6 4.6 0 018 47.4z"
+      stroke="url(#gEdge)" stroke-width="1.15"/>
+    <path d="M8 26h48v3H8z" fill="#fff" opacity=".045"/>
+    <g transform="translate(14.5,29) scale(.92)" stroke="${t.c}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity=".9">${G[t.g]||G.folder}</g>
+    <circle cx="47.5" cy="42.5" r="3.2" fill="${t.c}" opacity=".18"/><circle cx="47.5" cy="42.5" r="1.5" fill="${t.c}" opacity=".9"/>
+  </g></svg>`;
+}
+/* small inline glyph */
+const gly=(type,w,op)=>{const t=TYPE[type]||TYPE.doc;return `<svg width="${w||15}" height="${w||15}" viewBox="0 0 24 24" fill="none" stroke="${t.c}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" opacity="${op||1}">${G[t.g]}</svg>`};
+
+/* ══════════════════════ DATA ══════════════════════ */
+let UID=0; const uid=()=>'a'+(++UID);
+const TREE=[
+ {id:'lib',n:'Library',t:'lib',src:'library',kids:[
+   {id:'lib.tex',n:'Textures',t:'image'},{id:'lib.hdri',n:'HDRI / IBL',t:'hdri'},
+   {id:'lib.mat',n:'Materials',t:'material'},{id:'lib.mesh',n:'Meshes',t:'mesh'},
+   {id:'lib.cad',n:'CAD Parts',t:'cad'},{id:'lib.scan',n:'Scans',t:'point'},
+   {id:'lib.font',n:'Typefaces',t:'font'},{id:'lib.brush',n:'Brushes',t:'brush'},
+   {id:'lib.cloth',n:'Cloth Presets',t:'cloth'},{id:'lib.uv',n:'UV Templates',t:'uv'},
+   {id:'lib.lut',n:'LUT / Color',t:'color'},{id:'lib.av',n:'Audio & Video',t:'audio'}]},
+ {id:'eng',n:'Engine',t:'engine',src:'engine',kids:[
+   {id:'eng.prim',n:'Primitives',t:'prim'},{id:'eng.shd',n:'Shaders',t:'shader'},
+   {id:'eng.lit',n:'Lighting Rigs',t:'light'},{id:'eng.cam',n:'Camera Rigs',t:'camera'},
+   {id:'eng.vol',n:'Volumes',t:'volume'},{id:'eng.scr',n:'Scripts',t:'script'}]},
+ {id:'prj',n:'Project',t:'project',src:'project',kids:[
+   {id:'prj.scn',n:'Scenes',t:'scene'},{id:'prj.anim',n:'Animation',t:'anim'},
+   {id:'prj.ref',n:'References',t:'doc'},{id:'prj.exp',n:'Exports',t:'archive'}]}
+];
+const A=(n,e,f,mb,d,x={})=>({id:uid(),n,e,t:EXT2TYPE[e]||'doc',f,size:mb*1048576,mod:Date.now()-d*36e5,
+  tags:x.tags||[],fav:!!x.fav,st:x.st||'ready',meta:x.meta||{},src:f.split('.')[0]==='eng'?'engine':(f.split('.')[0]==='prj'?'project':'library')});
+
+const ASSETS=[
+ A('Concrete_Cast_02_BC','png','lib.tex',48.2,4,{tags:['pbr','4k'],meta:{res:'4096×4096',bits:'16-bit',space:'sRGB'}}),
+ A('Concrete_Cast_02_NRM','png','lib.tex',52.7,4,{tags:['pbr','normal'],meta:{res:'4096×4096',bits:'16-bit',space:'Linear'}}),
+ A('Brushed_Alu_Aniso','tif','lib.tex',96.4,29,{tags:['metal'],meta:{res:'8192×8192',bits:'32-bit'}}),
+ A('Fabric_Twill_Weave','png','lib.tex',31.5,60,{tags:['cloth'],meta:{res:'2048×2048'}}),
+ A('Rust_Decal_Pack_A','psd','lib.tex',214.8,120,{st:'proxy',meta:{res:'6000×4000',layers:'24'}}),
+ A('Studio_Softbox_4K','exr','lib.hdri',188.3,7,{fav:1,tags:['ibl','studio'],meta:{res:'4096×2048',ev:'+2.4 EV'}}),
+ A('Overcast_Dusk_8K','hdr','lib.hdri',402.1,52,{tags:['outdoor'],meta:{res:'8192×4096',ev:'-0.6 EV'}}),
+ A('Neon_Alley_Night','exr','lib.hdri',276.9,15,{tags:['cyber','ibl'],meta:{res:'6144×3072'}}),
+ A('CarbonWeave_Clear','sbsar','lib.mat',12.4,3,{fav:1,tags:['procedural'],meta:{params:'14',engine:'Substance'}}),
+ A('Anodized_Titanium','mat','lib.mat',3.1,22,{tags:['metal'],meta:{shader:'PBR-Std',params:'9'}}),
+ A('Ceramic_Glaze_Crackle','mat','lib.mat',4.7,88,{meta:{shader:'PBR-Std',params:'11'}}),
+ A('Velvet_Sheen_Deep','mat','lib.mat',2.2,140,{tags:['cloth'],meta:{shader:'Sheen',params:'7'}}),
+ A('Chassis_Frame_Rev4','fbx','lib.mesh',86.9,2,{fav:1,tags:['hardsurface'],meta:{tris:'482,110',uv:'2 sets',rig:'None'}}),
+ A('Turbine_Assembly','usd','lib.mesh',312.6,11,{tags:['mech'],meta:{tris:'2,914,880',uv:'1 set'}}),
+ A('Character_Base_F','blend','lib.mesh',148.2,36,{tags:['organic','rig'],meta:{tris:'96,420',rig:'Biped'}}),
+ A('Modular_Wall_Kit','glb','lib.mesh',54.3,72,{meta:{tris:'128,640',uv:'1 set'}}),
+ A('Drone_Shell_LP','obj','lib.mesh',18.7,96,{st:'missing',meta:{tris:'24,180'}}),
+ A('Foliage_Atlas_Cards','abc','lib.mesh',67.4,160,{tags:['nature'],meta:{tris:'310,020'}}),
+ A('Bracket_M8_Rev12','step','lib.cad',6.8,5,{fav:1,tags:['hardware'],meta:{units:'mm',solids:'3',tol:'±0.05'}}),
+ A('Gearbox_Housing','stp','lib.cad',44.2,26,{meta:{units:'mm',solids:'11'}}),
+ A('Frame_Weldment','dwg','lib.cad',9.4,64,{tags:['2d'],meta:{units:'mm',layers:'18'}}),
+ A('Hinge_Assembly_v3','iges','lib.cad',13.9,110,{st:'proxy',meta:{units:'in',solids:'6'}}),
+ A('Panel_Cutsheet','dxf','lib.cad',2.6,190,{meta:{units:'mm',layers:'7'}}),
+ A('Foundry_Bay_Scan','e57','lib.scan',1842.5,18,{tags:['lidar'],meta:{points:'184.2 M',reg:'6 stations'}}),
+ A('Statue_Photogram','ply','lib.scan',624.9,44,{meta:{points:'62.4 M',color:'Vertex'}}),
+ A('Terrain_Quarry','las','lib.scan',998.1,210,{st:'proxy',meta:{points:'110.6 M'}}),
+ A('NeueHaas_Grotesk','otf','lib.font',1.9,30,{fav:1,tags:['ui'],meta:{glyphs:'1,148',weights:'9'}}),
+ A('JetBrains_Mono','ttf','lib.font',2.4,58,{tags:['mono'],meta:{glyphs:'2,570',weights:'8'}}),
+ A('Orbitron_Display','ttf','lib.font',.9,300,{tags:['scifi'],meta:{glyphs:'420',weights:'5'}}),
+ A('Flat_Chisel_Set','abr','lib.brush',22.6,9,{tags:['sculpt'],meta:{brushes:'24',falloff:'Custom'}}),
+ A('Ink_Liner_Pack','brush','lib.brush',8.3,120,{meta:{brushes:'12'}}),
+ A('Damask_Alpha_Kit','abr','lib.brush',41.8,240,{tags:['alpha'],meta:{brushes:'36'}}),
+ A('Denim_Heavy_14oz','vcloth','lib.cloth',1.4,6,{fav:1,tags:['sim'],meta:{gsm:'420',bend:'0.68',iter:'32'}}),
+ A('Silk_Charmeuse','vcloth','lib.cloth',1.1,40,{tags:['sim'],meta:{gsm:'88',bend:'0.06'}}),
+ A('Leather_Rigid','vcloth','lib.cloth',1.6,190,{meta:{gsm:'760',bend:'0.94'}}),
+ A('Drape_Test_Cache','cache','lib.cloth',748.3,3,{st:'proxy',meta:{frames:'240',fps:'60'}}),
+ A('Humanoid_UV_Std','uvl','lib.uv',.6,80,{meta:{islands:'34',density:'10.24 px/cm'}}),
+ A('Hardsurface_Atlas','uvl','lib.uv',.9,150,{meta:{islands:'112',density:'20.48 px/cm'}}),
+ A('Filmic_Neutral','cube','lib.lut',1.2,12,{fav:1,meta:{size:'65³',space:'ACEScct'}}),
+ A('Cyber_Teal_Push','cube','lib.lut',1.2,33,{tags:['grade'],meta:{size:'33³'}}),
+ A('Display_P3','icc','lib.lut',.1,400,{meta:{gamut:'P3-D65'}}),
+ A('Impact_Metal_Hit','wav','lib.av',18.4,20,{meta:{rate:'96 kHz',len:'0:04'}}),
+ A('Ambient_Server_Room','wav','lib.av',122.6,90,{tags:['loop'],meta:{rate:'48 kHz',len:'2:40'}}),
+ A('Turntable_Ref_Shot','mp4','lib.av',486.2,50,{meta:{res:'3840×2160',len:'0:22',fps:'60'}}),
+ /* engine */
+ A('UnitSphere','prim','eng.prim',0,900,{meta:{tris:'960',segs:'32×16'}}),
+ A('UnitCube','prim','eng.prim',0,900,{meta:{tris:'12',segs:'1'}}),
+ A('GroundPlane','prim','eng.prim',0,900,{meta:{tris:'2',size:'10×10 m'}}),
+ A('Cylinder_32','prim','eng.prim',0,900,{meta:{tris:'188'}}),
+ A('Torus_48x24','prim','eng.prim',0,900,{meta:{tris:'2,304'}}),
+ A('PBR_Uber_v4','glsl','eng.shd',.4,14,{fav:1,tags:['core'],meta:{passes:'3',lang:'GLSL 460'}}),
+ A('Toon_Ramp_Outline','hlsl','eng.shd',.3,120,{meta:{passes:'2',lang:'HLSL 6.6'}}),
+ A('Triplanar_Blend','osl','eng.shd',.2,200,{meta:{lang:'OSL 1.12'}}),
+ A('SSS_Skin_Burley','glsl','eng.shd',.5,240,{tags:['organic'],meta:{passes:'4'}}),
+ A('ThreePoint_Studio','lgt','eng.lit',.1,60,{fav:1,meta:{lights:'3',temp:'5600 K'}}),
+ A('Neon_Practical_Rig','lgt','eng.lit',.2,25,{tags:['cyber'],meta:{lights:'11',temp:'Mixed'}}),
+ A('IES_Spot_Narrow','ies','eng.lit',.02,300,{meta:{cone:'18°',lm:'2,400'}}),
+ A('Anamorphic_40mm','cam','eng.cam',.05,70,{meta:{fl:'40 mm',squeeze:'2.0×'}}),
+ A('Orbit_Turntable','cam','eng.cam',.04,150,{meta:{frames:'240',fov:'35°'}}),
+ A('Smoke_Plume_HiRes','vdb','eng.vol',892.4,8,{st:'proxy',tags:['fx'],meta:{voxels:'1024³',frames:'180'}}),
+ A('Fog_Volume_Base','vdb','eng.vol',64.2,140,{meta:{voxels:'256³'}}),
+ A('batch_retopo','py','eng.scr',.06,10,{tags:['tool'],meta:{lang:'Python 3.12'}}),
+ A('uv_autopack','py','eng.scr',.04,48,{meta:{lang:'Python 3.12'}}),
+ A('exporter_usd','js','eng.scr',.09,180,{meta:{lang:'ES2023'}}),
+ /* project */
+ A('Hangar_Master','helix','prj.scn',248.6,1,{fav:1,tags:['wip'],meta:{objects:'1,284',layers:'12'}}),
+ A('Product_Studio_A','helix','prj.scn',96.2,16,{meta:{objects:'318'}}),
+ A('Cloth_Turntable','helix','prj.scn',54.9,120,{st:'proxy',meta:{objects:'42'}}),
+ A('Walk_Cycle_Loop','bvh','prj.anim',3.8,34,{tags:['locomotion'],meta:{frames:'48',fps:'30'}}),
+ A('Cloth_Drop_Take7','anim','prj.anim',126.4,5,{meta:{frames:'240',fps:'60'}}),
+ A('Design_Brief_R3','pdf','prj.ref',12.7,26,{meta:{pages:'34'}}),
+ A('Colorway_Notes','md','prj.ref',.02,2,{meta:{words:'840'}}),
+ A('Client_Board','jpg','prj.ref',8.9,66,{meta:{res:'4200×2800'}}),
+ A('Delivery_v12','zip','prj.exp',2410.6,12,{meta:{files:'1,204',ratio:'0.82'}}),
+ A('Turntable_Frames','zip','prj.exp',864.2,44,{st:'proxy',meta:{files:'240'}})
+];
+
+const PRIMS=[
+ {n:'Sphere',g:'sphere',tris:'960'},{n:'Cube',g:'mesh',tris:'12'},{n:'Plane',g:'plane',tris:'2'},
+ {n:'Cylinder',g:'cyl',tris:'188'},{n:'Cone',g:'cone',tris:'126'},{n:'Torus',g:'torus',tris:'2,304'},
+ {n:'Capsule',g:'capsule',tris:'768'},{n:'Grid',g:'empty',tris:'800'},
+ {n:'Curve',g:'curve',tris:'—'},{n:'Text',g:'text',tris:'Dyn'},{n:'Armature',g:'bone',tris:'—'},
+ {n:'Camera',g:'camera',tris:'—'},{n:'Area Light',g:'light',tris:'—'},{n:'Volume',g:'volume',tris:'—'},
+ {n:'Cloth Panel',g:'cloth',tris:'4,096'},{n:'Empty',g:'empty',tris:'—'}
+];
+
+/* ══════════════════════ STATE ══════════════════════ */
+const st={src:'library',folder:'lib',q:'',filter:'all',sort:'mod',view:'grid',sel:new Set(),
+  open:new Set(['lib','eng','prj']),last:null,hist:['lib'],hi:0,session:[],palIdx:0};
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const byId=id=>ASSETS.find(a=>a.id===id);
+const fmtSize=b=>b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':b<1073741824?(b/1048576).toFixed(1)+' MB':(b/1073741824).toFixed(2)+' GB';
+const fmtAgo=t=>{const m=(Date.now()-t)/6e4;if(m<60)return Math.max(1,m|0)+'m ago';const h=m/60;if(h<24)return (h|0)+'h ago';const d=h/24;return d<30?(d|0)+'d ago':((d/30)|0)+'mo ago'};
+const flat=()=>TREE.flatMap(r=>[r,...(r.kids||[])]);
+const nodeOf=id=>flat().find(n=>n.id===id);
+const hash=s=>{let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))|0;return Math.abs(h)};
+
+/* ══════════════════════ RAIL + SOURCES ══════════════════════ */
+const RAIL=[{k:'library',i:'lib',t:'Library'},{k:'engine',i:'engine',t:'Engine Assets'},{k:'project',i:'project',t:'Project Files'},
+ {k:'recent',i:'recent',t:'Recent'},{k:'fav',i:'fav',t:'Favorites'},{k:'session',i:'bolt',t:'Live Session',dot:1}];
+function renderRail(){
+  $('#rail').innerHTML=RAIL.map((r,i)=>
+    `${i===3?'<div class="rsep"></div>':''}<button class="rbtn ${st.src===r.k?'on':''}" data-src="${r.k}" title="${r.t}">${ui(r.i,17)}${r.dot&&st.session.length?'<i class="dot"></i>':''}</button>`).join('')
+   +`<div style="flex:1"></div><div class="rsep"></div>
+     <button class="rbtn" id="railSync" title="Re-index vault">${ui('sync',17)}</button>
+     <button class="rbtn" id="railTrash" title="Trash · 12 items">${ui('trash',17)}</button>`;
+  $('#sourceSeg').innerHTML=['library','engine','project'].map(k=>{
+    const m={library:['lib','Library'],engine:['engine','Engine'],project:['project','Project']}[k];
+    return `<button data-src="${k}" class="${st.src===k?'on acc':''}">${ui(m[0],13)}${m[1]}</button>`}).join('');
+
+  $$('[data-src]').forEach(b=>b.onclick=()=>setSource(b.dataset.src));
+  $('#railSync').onclick=()=>{toast('Vault re-indexed','2,481 assets · 0 conflicts','sync');};
+  $('#railTrash').onclick=()=>toast('Trash','12 items · purged automatically after 30 days','trash');
+}
+function setSource(k){
+  st.src=k; st.sel.clear();
+  if(k==='library')nav('lib'); else if(k==='engine')nav('eng'); else if(k==='project')nav('prj');
+  else{st.folder=k;pushHist(k);}
+  renderAll();
+}
+
+/* ══════════════════════ TREE ══════════════════════ */
+function countIn(id){return ASSETS.filter(a=>a.f===id||a.f.startsWith(id+'.')).length}
+function renderTree(){
+  const virt=[{id:'recent',n:'Recent',t:'anim'},{id:'fav',n:'Favorites',t:'color'},{id:'session',n:'Live Session',t:'prim'}];
+  let h=`<div class="tgrp"><div class="lbl">Sources</div>`;
+  for(const r of TREE){
+    const o=st.open.has(r.id);
+    h+=`<div class="row ${st.folder===r.id?'on':''}" data-f="${r.id}" data-drop="${r.id}">
+      <span class="caret ${o?'o':''}" data-t="${r.id}">${ui('chev',11)}</span>
+      ${ui(r.t,15)}<span class="nm">${r.n}</span><span class="ct">${countIn(r.id)}</span></div>
+      <div class="kids" style="height:${o?(r.kids.length*34)+'px':'0'}">`;
+    for(const k of r.kids)
+      h+=`<div class="row ${st.folder===k.id?'on':''}" data-f="${k.id}" data-drop="${k.id}">
+        <span style="width:14px"></span>${gly(k.t,15,.9)}<span class="nm">${k.n}</span><span class="ct">${countIn(k.id)}</span></div>`;
+    h+=`</div>`;
+  }
+  h+=`</div><div class="tgrp"><div class="lbl">Smart</div>`;
+  h+=virt.map(v=>`<div class="row ${st.folder===v.id?'on':''}" data-f="${v.id}">
+      <span style="width:14px"></span>${gly(v.t,15,.9)}<span class="nm">${v.n}</span>
+      <span class="ct">${v.id==='fav'?ASSETS.filter(a=>a.fav).length:v.id==='session'?st.session.length:24}</span></div>`).join('')+`</div>`;
+  $('#tree').innerHTML=h;
+
+  $$('#tree .row').forEach(r=>{
+    r.onclick=e=>{if(e.target.closest('.caret'))return;nav(r.dataset.f)};
+    r.oncontextmenu=e=>{e.preventDefault();folderMenu(e,r.dataset.f)};
+    if(r.dataset.drop){
+      r.ondragover=e=>{e.preventDefault();r.classList.add('drop')};
+      r.ondragleave=()=>r.classList.remove('drop');
+      r.ondrop=e=>{e.preventDefault();r.classList.remove('drop');
+        const ids=(e.dataTransfer.getData('text/helix')||'').split(',').filter(Boolean);
+        if(!ids.length)return;
+        ids.forEach(i=>{const a=byId(i);if(a)a.f=r.dataset.drop});
+        toast('Moved',`${ids.length} asset${ids.length>1?'s':''} → ${nodeOf(r.dataset.drop).n}`,'folderPlus');renderAll()};
+    }
+  });
+
+  $$('#tree .caret').forEach(c=>c.onclick=e=>{e.stopPropagation();const id=c.dataset.t;st.open.has(id)?st.open.delete(id):st.open.add(id);renderTree()});
+}
+function nav(f){if(st.folder!==f){st.folder=f;st.sel.clear();pushHist(f)}renderAll()}
+function pushHist(f){st.hist=st.hist.slice(0,st.hi+1);st.hist.push(f);st.hi=st.hist.length-1}
+
+/* ══════════════════════ FILTER / SORT / QUERY ══════════════════════ */
+const FILTERS=[{k:'all',l:'All'},{k:'mesh',l:'3D',ts:['mesh','point','prim']},{k:'image',l:'Images',ts:['image','hdri','vector']},
+ {k:'cad',l:'CAD',ts:['cad']},{k:'material',l:'Look',ts:['material','shader','color','uv']},{k:'cloth',l:'Sim',ts:['cloth','volume','anim']},
+ {k:'font',l:'Type',ts:['font','doc']},{k:'audio',l:'AV',ts:['audio','video']},{k:'fav',l:'★ Starred'},{k:'proxy',l:'Proxy only'}];
+function current(){
+  let list=ASSETS.slice();
+  if(st.folder==='recent')list=list.sort((a,b)=>b.mod-a.mod).slice(0,24);
+  else if(st.folder==='fav')list=list.filter(a=>a.fav);
+  else if(st.folder==='session')list=st.session.map(s=>s.asset).filter(Boolean);
+  else list=list.filter(a=>a.f===st.folder||a.f.startsWith(st.folder+'.'));
+  const f=FILTERS.find(x=>x.k===st.filter);
+  if(f&&f.ts)list=list.filter(a=>f.ts.includes(a.t));
+  if(st.filter==='fav')list=list.filter(a=>a.fav);
+  if(st.filter==='proxy')list=list.filter(a=>a.st!=='ready');
+  if(st.q){const q=st.q.toLowerCase();
+    list=list.filter(a=>a.n.toLowerCase().includes(q)||a.e.includes(q)||a.t.includes(q)||a.tags.some(t=>t.includes(q)));}
+  const S={name:(a,b)=>a.n.localeCompare(b.n),mod:(a,b)=>b.mod-a.mod,size:(a,b)=>b.size-a.size,type:(a,b)=>a.t.localeCompare(b.t)||a.n.localeCompare(b.n)};
+  return list.sort(S[st.sort]);
+}
+function renderChips(){
+  const base=st.folder==='fav'||st.folder==='session'?ASSETS:current.__all;
+  $('#chipbar').innerHTML=FILTERS.map(f=>{
+    const c=f.ts?ASSETS.filter(a=>f.ts.includes(a.t)).length:'';
+    return `<button class="chip ${st.filter===f.k?'on':''}" data-fl="${f.k}">
+      ${f.ts?`<i style="background:${TYPE[f.ts[0]].c}"></i>`:''}${f.l}${c?`<span class="c">${c}</span>`:''}</button>`}).join('')
+   +`<div style="flex:1;min-width:12px"></div>
+     <button class="chip" id="chipClear">${ui('x',11)}Clear</button>`;
+
+  $$('[data-fl]').forEach(b=>b.onclick=()=>{st.filter=b.dataset.fl;renderChips();renderGrid()});
+  $('#chipClear').onclick=resetFilters;
+}
+function resetFilters(){st.filter='all';st.q='';$('#q').value='';$('#clearQ').style.display='none';renderChips();renderGrid()}
+
+/* ══════════════════════ CRUMBS ══════════════════════ */
+function renderCrumbs(){
+  let path=[];
+  if(['recent','fav','session'].includes(st.folder))path=[{id:st.folder,n:{recent:'Recent',fav:'Favorites',session:'Live Session'}[st.folder],t:'anim'}];
+  else{const root=TREE.find(r=>st.folder.startsWith(r.id));path=[root];if(root.id!==st.folder)path.push(nodeOf(st.folder));}
+  $('#crumbs').innerHTML=path.map((p,i)=>
+    `${i?`<span class="crs">${ui('chev',10)}</span>`:''}<span class="cr ${i===path.length-1?'last':''}" data-c="${p.id}">${i?gly(p.t,13,.85):ui(p.t==='anim'?'recent':p.t,13)}${p.n}</span>`).join('');
+
+  $$('[data-c]').forEach(c=>c.onclick=()=>nav(c.dataset.c));
+  $('#stPath').textContent='/'+path.map(p=>p.n.toLowerCase().replace(/\s+/g,'-')).join('/');
+}
+
+/* ══════════════════════ GRID ══════════════════════ */
+function thumbBG(a){
+  const t=TYPE[a.t],h=hash(a.n);
+  return `linear-gradient(${140+h%60}deg, ${t.c}1F 0%, rgba(255,255,255,.02) 42%, rgba(0,0,0,.35) 100%), radial-gradient(90% 80% at ${25+h%40}% 12%, ${t.c}16, transparent 62%), #131417`;
+}
+function renderGrid(){
+  const list=current(); const g=$('#grid'); g.className=st.view==='list'?'list':'';
+  $('#empty').style.display=list.length?'none':'flex';
+  g.innerHTML=list.map(a=>{
+    const t=TYPE[a.t],sel=st.sel.has(a.id);
+    const stc=a.st==='ready'?'':a.st==='proxy'?`<div class="badge-st" style="background:rgba(245,184,75,.16);color:var(--am)">proxy</div>`
+      :`<div class="badge-st" style="background:rgba(255,107,94,.16);color:var(--rd)">offline</div>`;
+    return `<div class="tile ${sel?'sel':''}" data-id="${a.id}" draggable="true" tabindex="0">
+      <div class="th" style="background:${thumbBG(a)}">
+        ${a.st!=='ready'?`<svg style="position:absolute;inset:0;width:100%;height:100%;opacity:.5"><rect width="100%" height="100%" fill="url(#pHatch)"/></svg>`:''}
+        <div class="g">${fileIcon(a.t,st.view==='list'?30:64)}</div>
+        <div class="ext" style="color:${t.c}">${a.e}</div>${stc}
+        <div class="tact">
+          <button class="mini ${a.fav?'fav':''}" data-act="fav" title="Star">${a.fav?`<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3.6l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"/></svg>`:ui('fav',12)}</button>
+          <button class="mini" data-act="load" title="Import into session">${ui('bolt',12)}</button>
+          <button class="mini" data-act="menu" title="More">${ui('dots',12)}</button>
+        </div>
+        <div class="stbar" style="background:linear-gradient(90deg,${t.c},transparent)"></div>
+      </div>
+      <div class="tmeta"><div class="n">${a.n}</div>
+        <div class="s"><span style="color:${t.c}">${t.l}</span>·<span>${fmtSize(a.size)}</span>·<span>${fmtAgo(a.mod)}</span></div></div>
+    </div>`}).join('');
+  bindTiles();
+  $('#stCount').textContent=`${list.length} item${list.length!==1?'s':''}`;
+  updateSelUI();
+}
+function bindTiles(){
+
+  $$('.tile').forEach(el=>{
+    const id=el.dataset.id;
+    el.onclick=e=>{
+      const act=e.target.closest('[data-act]');
+      if(act){e.stopPropagation();const a=act.dataset.act;
+        if(a==='fav'){const x=byId(id);x.fav=!x.fav;toast(x.fav?'Starred':'Unstarred',x.n,'fav');renderGrid();renderTree()}
+        if(a==='load')loadToSession(id);
+        if(a==='menu'){const r=act.getBoundingClientRect();select(id,e);assetMenu({clientX:r.left-150,clientY:r.bottom+4})}
+        return;}
+      select(id,e);
+    };
+    el.ondblclick=()=>loadToSession(id);
+    el.oncontextmenu=e=>{e.preventDefault();if(!st.sel.has(id))select(id,{});assetMenu(e)};
+    el.ondragstart=e=>{if(!st.sel.has(id))select(id,{});
+      e.dataTransfer.setData('text/helix',[...st.sel].join(','));e.dataTransfer.effectAllowed='copyMove';el.classList.add('drag')};
+    el.ondragend=()=>el.classList.remove('drag');
+  });
+}
+function select(id,e){
+  const list=current().map(a=>a.id);
+  if(e&&e.shiftKey&&st.last!==null){
+    const a=list.indexOf(st.last),b=list.indexOf(id);
+    list.slice(Math.min(a,b),Math.max(a,b)+1).forEach(i=>st.sel.add(i));
+  }else if(e&&(e.metaKey||e.ctrlKey)){st.sel.has(id)?st.sel.delete(id):st.sel.add(id);st.last=id}
+  else{st.sel.clear();st.sel.add(id);st.last=id}
+
+  $$('.tile').forEach(t=>t.classList.toggle('sel',st.sel.has(t.dataset.id)));
+  updateSelUI();renderInspector();
+}
+function updateSelUI(){
+  const n=st.sel.size;
+  $('#statSel').textContent=n+' selected';
+  $('#stSel').textContent=n?`${n} selected · ${fmtSize([...st.sel].reduce((s,i)=>s+(byId(i)?.size||0),0))}`:'no selection';
+}
+
+/* ══════════════════════ INSPECTOR ══════════════════════ */
+function orbPreview(a){
+  const t=TYPE[a.t];
+  if(['mesh','prim','cad','point','volume','cloth'].includes(a.t))
+    return `<svg width="150" height="150" viewBox="0 0 120 120" class="float">
+      <g class="spin" style="transform-origin:60px 60px">
+        <ellipse cx="60" cy="60" rx="42" ry="14" fill="none" stroke="${t.c}" stroke-opacity=".55" stroke-width="1"/>
+        <ellipse cx="60" cy="60" rx="14" ry="42" fill="none" stroke="${t.c}" stroke-opacity=".3" stroke-width="1"/>
+        <ellipse cx="60" cy="60" rx="30" ry="30" fill="none" stroke="${t.c}" stroke-opacity=".18" stroke-width="1"/>
+      </g>
+      <circle cx="60" cy="60" r="42" fill="none" stroke="${t.c}" stroke-opacity=".5" stroke-width="1.1"/>
+      <g transform="translate(42,42) scale(1.5)" stroke="${t.c}" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-linejoin="round">${G[t.g]}</g>
+      <circle cx="60" cy="60" r="52" fill="none" stroke="${t.c}" stroke-opacity=".12" stroke-dasharray="2 6"/>
+    </svg>`;
+  return `<div class="float" style="filter:drop-shadow(0 8px 24px rgba(0,0,0,.6))">${fileIcon(a.t,104)}</div>`;
+}
+function renderInspector(){
+  const ids=[...st.sel], box=$('#insp');
+  if(!ids.length){
+    box.innerHTML=`<div class="prev"><div class="grid-bg"></div><div class="tag">INSPECTOR</div>
+      <div style="text-align:center;color:var(--txt-3)">${ui('layers',30)}<div style="font-size:11px;margin-top:9px">No selection</div></div></div>
+      <div class="sect" style="border:0"><div class="h">Quick actions</div>
+      <div class="dual"><button class="btn" onclick="openImport()">${ui('up',13)}Import</button>
+      <button class="btn" onclick="$('#btnCreate').click()">${ui('plus',13)}Create</button></div></div>
+      <div class="sect"><div class="h">Vault health</div>
+        <div class="kv"><span class="k">Indexed</span><span class="v">2,481</span></div>
+        <div class="kv"><span class="k">Proxy pending</span><span class="v" style="color:var(--am)">${ASSETS.filter(a=>a.st==='proxy').length}</span></div>
+        <div class="kv"><span class="k">Offline refs</span><span class="v" style="color:var(--rd)">${ASSETS.filter(a=>a.st==='missing').length}</span></div>
+        <div class="kv"><span class="k">Last sync</span><span class="v">2m ago</span></div></div>`;
+    return;
+  }
+  if(ids.length>1){
+    const sel=ids.map(byId).filter(Boolean),tot=sel.reduce((s,a)=>s+a.size,0);
+    const types=[...new Set(sel.map(a=>a.t))];
+    box.innerHTML=`<div class="prev"><div class="grid-bg"></div><div class="tag">MULTI-SELECT</div>
+      <div style="display:flex;gap:-14px">${sel.slice(0,4).map((a,i)=>`<div style="margin-left:${i?-22:0}px;transform:rotate(${(i-1.5)*7}deg)">${fileIcon(a.t,66)}</div>`).join('')}</div>
+      ${sel.length>4?`<div style="position:absolute;bottom:9px;right:11px;font-family:var(--mono);font-size:10px;color:var(--txt-3)">+${sel.length-4} more</div>`:''}</div>
+      <div class="ihead"><div class="n">${sel.length} assets selected</div><div class="p">${types.map(t=>TYPE[t].l).join(' · ')}</div></div>
+      <div class="big"><span class="v">${fmtSize(tot).split(' ')[0].split('.')[0]}<b>${fmtSize(tot).includes('.')?'.'+fmtSize(tot).split(' ')[0].split('.')[1]:''}</b></span><span class="u">${fmtSize(tot).split(' ')[1]}</span></div>
+      <div class="sect"><div class="h">Batch</div>
+        <div class="kv"><span class="k">Starred</span><span class="v">${sel.filter(a=>a.fav).length}/${sel.length}</span></div>
+        <div class="kv"><span class="k">Needs proxy</span><span class="v">${sel.filter(a=>a.st!=='ready').length}</span></div></div>
+      <div class="actions"><button class="btn p" onclick="loadSelection()">${ui('bolt',14)}Import ${sel.length} into session</button>
+      <div class="dual"><button class="btn" onclick="batchFav()">${ui('fav',13)}Star all</button>
+      <button class="btn" onclick="deleteSel()">${ui('trash',13)}Remove</button></div></div>`;
+    return;
+  }
+  const a=byId(ids[0]);if(!a)return;
+  const t=TYPE[a.t],sz=fmtSize(a.size),node=nodeOf(a.f);
+  const [num,unit]=sz.split(' ');const [ip,fp]=num.split('.');
+  box.innerHTML=`
+   <div class="prev"><div class="grid-bg"></div><div class="tag">${t.l.toUpperCase()}</div><div class="tag r">${a.st==='ready'?'● LINKED':a.st==='proxy'?'◐ PROXY':'○ OFFLINE'}</div>
+     ${orbPreview(a)}</div>
+   <div class="ihead"><div class="n">${a.n}<span style="color:var(--txt-3);font-weight:300">.${a.e}</span></div>
+     <div class="p">${node?node.n:'—'} / ${a.src}</div></div>
+   <div class="big"><span class="v">${ip}<b>${fp?'.'+fp:''}</b></span><span class="u">${unit} on disk</span></div>
+   <div class="sect"><div class="h">Properties</div>
+     ${Object.entries(a.meta).map(([k,v])=>`<div class="kv"><span class="k">${k[0].toUpperCase()+k.slice(1)}</span><span class="v">${v}</span></div>`).join('')||'<div class="kv"><span class="k">No extended metadata</span></div>'}
+     <div class="kv"><span class="k">Modified</span><span class="v">${fmtAgo(a.mod)}</span></div>
+     <div class="kv"><span class="k">Checksum</span><span class="v" style="color:var(--txt-3)">${(hash(a.n).toString(16)+'a4f').slice(0,10)}</span></div></div>
+   <div class="sect"><div class="h">Tags<button class="tiny" id="addTag" title="Add tag">${ui('plus',12)}</button></div>
+     <div class="tags">${a.tags.map(g=>`<span class="tag-c">${ui('tag',10)}<b>${g}</b><button data-rm="${g}">${ui('x',9)}</button></span>`).join('')}
+     <button class="tag-c tag-add" id="addTag2">${ui('plus',10)}add</button></div></div>
+   <div class="actions">
+     <button class="btn p" id="iLoad">${ui('bolt',14)}Import into session</button>
+     <div class="dual"><button class="btn" id="iPlace">${ui('place',13)}Place</button><button class="btn" id="iFav">${ui('fav',13)}${a.fav?'Unstar':'Star'}</button></div>
+     <div class="dual"><button class="btn" id="iRen">${ui('rename',13)}Rename</button><button class="btn" id="iDup">${ui('copy',13)}Duplicate</button></div>
+   </div>`;
+  $('#iLoad').onclick=()=>loadToSession(a.id);
+  $('#iPlace').onclick=()=>{loadToSession(a.id,true)};
+  $('#iFav').onclick=()=>{a.fav=!a.fav;renderGrid();renderTree();renderInspector()};
+  $('#iRen').onclick=()=>renameAsset(a.id);
+  $('#iDup').onclick=()=>dupAsset(a.id);
+  const add=()=>{const v=prompt('Add tag to '+a.n);if(v&&v.trim()){a.tags.push(v.trim().toLowerCase());renderInspector();toast('Tag added',v.trim(),'tag')}};
+  $('#addTag').onclick=add;$('#addTag2').onclick=add;
+
+  $$('[data-rm]').forEach(b=>b.onclick=()=>{a.tags=a.tags.filter(x=>x!==b.dataset.rm);renderInspector()});
+}
+function batchFav(){[...st.sel].forEach(i=>{const a=byId(i);if(a)a.fav=true});toast('Starred',st.sel.size+' assets','fav');renderGrid();renderTree();renderInspector()}
+function renameAsset(id){const a=byId(id);const v=prompt('Rename asset',a.n);if(v&&v.trim()){a.n=v.trim();renderAll();toast('Renamed',a.n,'rename')}}
+function dupAsset(id){const a=byId(id);const c={...a,id:uid(),n:a.n+'_copy',mod:Date.now(),tags:[...a.tags]};ASSETS.push(c);
+  st.sel.clear();st.sel.add(c.id);renderAll();toast('Duplicated',c.n,'copy')}
+function deleteSel(){const n=st.sel.size;if(!n)return;
+  [...st.sel].forEach(i=>{const k=ASSETS.findIndex(a=>a.id===i);if(k>-1)ASSETS.splice(k,1)});
+  st.sel.clear();renderAll();toast('Moved to trash',n+' asset'+(n>1?'s':''),'trash')}
+
+/* ══════════════════════ SESSION ══════════════════════ */
+function loadToSession(id,place){
+  const a=byId(id);if(!a)return;
+  if(a.st==='missing'){toast('Cannot import',a.n+' is offline — relink source','x','rd');return}
+  const o={oid:uid(),name:a.n,type:a.t,asset:a,vis:true,lock:false,live:true};
+  st.session.push(o);renderSession();renderRail();
+  toast(place?'Placed at origin':'Imported live',`${a.n} · ${TYPE[a.t].l}${a.meta.tris?' · '+a.meta.tris+' tris':''}`,'bolt');
+}
+function loadSelection(){const ids=[...st.sel];ids.forEach(i=>{const a=byId(i);if(a&&a.st!=='missing')st.session.push({oid:uid(),name:a.n,type:a.t,asset:a,vis:true,lock:false,live:true})});
+  renderSession();renderRail();toast('Batch import',ids.length+' assets streamed into session','bolt')}
+function createPrim(p){
+  const nm=p.n.replace(/\s/g,'')+'_'+String(st.session.filter(s=>s.name.startsWith(p.n.replace(/\s/g,''))).length+1).padStart(2,'0');
+  const t=p.g==='camera'?'camera':p.g==='light'?'light':p.g==='volume'?'volume':p.g==='cloth'?'cloth':'prim';
+  st.session.push({oid:uid(),name:nm,type:t,asset:null,vis:true,lock:false,live:true,glyph:p.g,tris:p.tris});
+  renderSession();renderRail();hide('#createPop');
+  toast('Object created',`${nm} · ${p.tris} tris · at world origin`,'plus');
+}
+function renderSession(){
+  $('#sessCount').textContent=st.session.length;
+  const box=$('#sesslist');
+  if(!st.session.length){box.innerHTML=`<div style="padding:14px 8px;color:var(--txt-3);font-size:11px;line-height:1.6">
+    Nothing live yet.<br>Double-click an asset or create a primitive to stream it into the running session.</div>`;return}
+  box.innerHTML=st.session.map(o=>{
+    const t=TYPE[o.type]||TYPE.prim;
+    const glyph=o.glyph?`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${t.c}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${G[o.glyph]}</svg>`:gly(o.type,14);
+    return `<div class="sitem ${o.vis?'':'hid'}" data-o="${o.oid}">${glyph}
+      <span class="nm">${o.name}</span>
+      <span class="tg ${o.lock?'keep':''}">
+        <button class="tiny" data-t="vis" title="Toggle visibility">${ui(o.vis?'eye':'eyeoff',12)}</button>
+        <button class="tiny" data-t="lock" title="Lock">${ui(o.lock?'lock':'unlock',12)}</button>
+        <button class="tiny dg" data-t="del" title="Remove from session">${ui('x',12)}</button></span></div>`}).join('');
+
+  $$('#sesslist .sitem').forEach(el=>{
+    const o=st.session.find(x=>x.oid===el.dataset.o);
+    el.onclick=e=>{const b=e.target.closest('[data-t]');
+      if(!b){toast('Focused',o.name+' framed in viewport','place');return}
+      const k=b.dataset.t;
+      if(k==='vis')o.vis=!o.vis; if(k==='lock')o.lock=!o.lock;
+      if(k==='del'){st.session=st.session.filter(x=>x.oid!==o.oid);toast('Removed',o.name+' unloaded','trash')}
+      renderSession();renderRail()};
+  });
+}
+$('#btnPurge').onclick=()=>{if(!st.session.length)return;const n=st.session.length;st.session=[];renderSession();renderRail();toast('Session cleared',n+' objects unloaded','trash')};
+
+/* ══════════════════════ MENUS ══════════════════════ */
+function showPop(sel,x,y){const p=$(sel);p.style.display='block';
+  const r=p.getBoundingClientRect();
+  p.style.left=Math.min(x,innerWidth-r.width-10)+'px';
+  p.style.top=Math.min(y,innerHeight-r.height-10)+'px';}
+function hide(s){$(s).style.display='none'}
+function hideAll(){['#ctx','#sortPop','#createPop','#setPop'].forEach(hide)}
+document.addEventListener('mousedown',e=>{if(!e.target.closest('.pop')&&!e.target.closest('#btnCreate,#btnSort,#btnSettings'))hideAll()});
+
+function assetMenu(e){
+  const n=st.sel.size,one=n===1?byId([...st.sel][0]):null;
+  $('#ctx').innerHTML=`<div class="mlbl">${one?one.n.slice(0,26):n+' assets'}</div>
+   <div class="mi" data-m="load">${ui('bolt',14)}Import into session<span class="sh">↵</span></div>
+   <div class="mi" data-m="place">${ui('place',14)}Place at origin</div>
+   <div class="mi" data-m="ref">${ui('link',14)}Link as reference</div>
+   <div class="msep"></div>
+   <div class="mi" data-m="fav">${ui('fav',14)}${one&&one.fav?'Remove star':'Add star'}</div>
+   ${one?`<div class="mi" data-m="ren">${ui('rename',14)}Rename<span class="sh">F2</span></div>
+   <div class="mi" data-m="dup">${ui('copy',14)}Duplicate<span class="sh">⌘D</span></div>`:''}
+   <div class="mi" data-m="proxy">${ui('cpu',14)}Rebuild proxy</div>
+   <div class="mi" data-m="exp">${ui('dl',14)}Export copy…</div>
+   <div class="msep"></div>
+   <div class="mi dg" data-m="del">${ui('trash',14)}Move to trash<span class="sh">⌫</span></div>`;
+  showPop('#ctx',e.clientX,e.clientY);
+
+  $$('#ctx .mi').forEach(m=>m.onclick=()=>{hideAll();const k=m.dataset.m;
+    if(k==='load')loadSelection();
+    if(k==='place'){loadSelection();toast('Placed',n+' object(s) at world origin','place')}
+    if(k==='ref')toast('Linked',n+' reference(s) — edits propagate live','link');
+    if(k==='fav')batchFavToggle();
+    if(k==='ren')renameAsset(one.id);
+    if(k==='dup')dupAsset(one.id);
+    if(k==='proxy')rebuildProxy();
+    if(k==='exp')toast('Export queued',n+' asset(s) → /exports','dl');
+    if(k==='del')deleteSel();});
+}
+function batchFavToggle(){const on=[...st.sel].every(i=>byId(i)?.fav);[...st.sel].forEach(i=>{const a=byId(i);if(a)a.fav=!on});renderGrid();renderTree();renderInspector()}
+function rebuildProxy(){const ids=[...st.sel];ids.forEach(i=>{const a=byId(i);if(a)a.st='ready'});renderGrid();renderInspector();toast('Proxies rebuilt',ids.length+' asset(s) now GPU-resident','cpu')}
+function folderMenu(e,fid){
+  const node=nodeOf(fid);if(!node)return;
+  $('#ctx').innerHTML=`<div class="mlbl">${node.n}</div>
+   <div class="mi" data-m="open">${ui('folderPlus',14)}Open</div>
+   <div class="mi" data-m="new">${ui('plus',14)}New subfolder</div>
+   <div class="mi" data-m="imp">${ui('up',14)}Import here…</div>
+   <div class="msep"></div>
+   <div class="mi" data-m="idx">${ui('sync',14)}Re-index (${countIn(fid)} items)</div>
+   <div class="mi" data-m="col">${ui('layers',14)}Collapse all</div>`;
+  showPop('#ctx',e.clientX,e.clientY);
+
+  $$('#ctx .mi').forEach(m=>m.onclick=()=>{hideAll();const k=m.dataset.m;
+    if(k==='open')nav(fid);
+    if(k==='new')newFolder(fid);
+    if(k==='imp'){nav(fid);openImport()}
+    if(k==='idx')toast('Re-indexed',node.n+' · '+countIn(fid)+' assets','sync');
+    if(k==='col'){st.open.clear();renderTree()}});
+}
+function newFolder(parent){
+  const root=TREE.find(r=>(parent||st.folder).startsWith(r.id))||TREE[0];
+  const v=prompt('New folder name','Untitled Collection');if(!v)return;
+  root.kids.push({id:root.id+'.'+v.toLowerCase().replace(/\W+/g,'')+UID,n:v,t:'folder'});
+  st.open.add(root.id);renderTree();toast('Folder created',v+' in '+root.n,'folderPlus');
+}
+$('#btnNewFolder').onclick=()=>newFolder();
+
+/* sort */
+$('#btnSort').onclick=e=>{
+  const o=[['mod','Modified','recent'],['name','Name','font'],['size','Size','archive'],['type','Type','layers']];
+  $('#sortPop').innerHTML=`<div class="mlbl">Sort by</div>`+o.map(([k,l,i])=>
+    `<div class="mi" data-s="${k}">${ui(i,14)}${l}${st.sort===k?`<span class="sh">${ui('check',12)}</span>`:''}</div>`).join('');
+  const r=e.currentTarget.getBoundingClientRect();showPop('#sortPop',r.right-160,r.bottom+6);
+
+  $$('#sortPop .mi').forEach(m=>m.onclick=()=>{st.sort=m.dataset.s;$('#sortLbl').textContent=o.find(x=>x[0]===m.dataset.s)[1];hideAll();renderGrid()});
+};
+/* create */
+$('#btnCreate').onclick=e=>{
+  $('#createPop').innerHTML=`<div class="mlbl">Create live object</div>
+   <div class="pgrid">${PRIMS.map((p,i)=>`<button class="pcell" data-p="${i}">
+     <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#C8F751" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${G[p.g]}</svg>
+     <span>${p.n}</span></button>`).join('')}</div>
+   <div class="msep"></div>
+   <div class="mi" data-x="folder">${ui('folderPlus',14)}New collection…</div>
+   <div class="mi" data-x="mat">${ui('material',14)}New material</div>
+   <div class="mi" data-x="import">${ui('up',14)}Import from disk…<span class="sh">⌘I</span></div>`;
+  const r=e.currentTarget.getBoundingClientRect();showPop('#createPop',r.left-190,r.bottom+7);
+
+  $$('#createPop .pcell').forEach(b=>b.onclick=()=>createPrim(PRIMS[+b.dataset.p]));
+
+  $$('#createPop .mi').forEach(m=>m.onclick=()=>{hideAll();const x=m.dataset.x;
+    if(x==='folder')newFolder();
+    if(x==='mat'){const a=A('New_Material_'+(UID),'mat','lib.mat',1.2,0,{meta:{shader:'PBR-Std',params:'0'}});ASSETS.push(a);nav('lib.mat');st.sel=new Set([a.id]);renderAll();toast('Material created',a.n,'material')}
+    if(x==='import')openImport();});
+};
+$('#btnSettings').onclick=e=>{
+  $('#setPop').innerHTML=`<div class="mlbl">Browser</div>
+   <div class="mi" data-k="thumb">${ui('grid',14)}Regenerate thumbnails</div>
+   <div class="mi" data-k="hide">${ui('eyeoff',14)}Hide offline assets</div>
+   <div class="mi" data-k="auto">${ui('bolt',14)}Auto-proxy on import<span class="sh">ON</span></div>
+   <div class="msep"></div>
+   <div class="mi" data-k="cache">${ui('cpu',14)}Flush GPU cache</div>
+   <div class="mi" data-k="about">${ui('info',14)}About HELIX Asset/OS</div>`;
+  const r=e.currentTarget.getBoundingClientRect();showPop('#setPop',r.right-210,r.bottom+7);
+
+  $$('#setPop .mi').forEach(m=>m.onclick=()=>{hideAll();const k=m.dataset.k;
+    if(k==='thumb')toast('Thumbnails','Regenerating 2,481 previews…','sync');
+    if(k==='hide'){ASSETS.forEach(a=>{if(a.st==='missing')a.st='ready'});renderGrid();toast('Offline assets relinked','Sources resolved from mirror','check')}
+    if(k==='auto')toast('Auto-proxy','Now disabled for this project','cpu');
+    if(k==='cache'){$('#cacheUsed').textContent='96.1';toast('GPU cache flushed','52.5 GB reclaimed','cpu')}
+    if(k==='about')toast('HELIX Asset/OS','Build 4.12.0 · runtime bridge v2','info');});
+};
+
+/* ══════════════════════ IMPORT MODAL ══════════════════════ */
+let impTab='disk';
+function openImport(){
+  hideAll();
+  const engine=ASSETS.filter(a=>a.src==='engine').slice(0,7);
+  $('#veil').innerHTML=`<div class="modal" onclick="event.stopPropagation()">
+    <div class="mhead">${ui('up',17)}<div class="t">Import assets</div>
+      <span style="font-size:10.5px;color:var(--txt-3);font-family:var(--mono)">→ ${nodeOf(st.folder)?nodeOf(st.folder).n:'Library'}</span>
+      <button class="iconbtn" id="mClose">${ui('x',15)}</button></div>
+    <div class="tabs">
+      <button class="tab ${impTab==='disk'?'on':''}" data-tab="disk">From disk</button>
+      <button class="tab ${impTab==='engine'?'on':''}" data-tab="engine">Engine assets</button>
+      <button class="tab ${impTab==='url'?'on':''}" data-tab="url">Remote / URL</button></div>
+    <div class="mbody" id="mBody"></div></div>`;
+  $('#veil').style.display='flex';
+  $('#veil').onclick=closeModal;$('#mClose').onclick=closeModal;
+
+  $$('#veil .tab').forEach(t=>t.onclick=()=>{impTab=t.dataset.tab;openImport()});
+  const b=$('#mBody');
+  if(impTab==='disk'){
+    b.innerHTML=`<div class="dz" id="dz">
+        <div style="display:flex;justify-content:center;gap:-14px">
+          ${['mesh','image','cad','font'].map((t,i)=>`<div style="margin-left:${i?-18:0}px;transform:rotate(${(i-1.5)*8}deg)">${fileIcon(t,54)}</div>`).join('')}
+        </div>
+        <div class="t">Drop files or folders here</div>
+        <div class="s">Formats are detected automatically and routed into the matching collection.<br>Proxies build in the background — you can keep working.</div>
+        <div class="fmts">${['obj','fbx','usd','glb','abc','step','dwg','ply','e57','exr','png','psd','ttf','otf','vdb','wav','mp4','sbsar'].map(x=>`<span class="fmt">.${x}</span>`).join('')}</div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:13px">
+        <button class="btn w" id="pick" style="flex:1;height:38px;justify-content:center">${ui('folderPlus',14)}Browse files…</button>
+        <button class="btn" id="pickFolder" style="flex:1;height:38px;justify-content:center">${ui('lib',14)}Import folder tree</button>
+      </div>
+      <div id="impLog" style="margin-top:12px"></div>`;
+    const dz=$('#dz');
+    dz.onclick=()=>$('#filePick').click();
+    $('#pick').onclick=()=>$('#filePick').click();
+    $('#pickFolder').onclick=()=>{$('#filePick').setAttribute('webkitdirectory','');$('#filePick').click()};
+    dz.ondragover=e=>{e.preventDefault();dz.classList.add('hot')};
+    dz.ondragleave=()=>dz.classList.remove('hot');
+    dz.ondrop=e=>{e.preventDefault();dz.classList.remove('hot');ingest([...e.dataTransfer.files])};
+  }
+  if(impTab==='engine'){
+    b.innerHTML=`<div style="font-size:11.5px;color:var(--txt-3);margin-bottom:11px">Engine-resident assets stream instantly — no copy, no proxy build.</div>
+     <div class="qlist">${engine.map(a=>`<div class="qrow" data-e="${a.id}">${fileIcon(a.t,38)}
+        <div class="i"><div class="n">${a.n}</div><div class="d">${TYPE[a.t].l} · ${Object.values(a.meta)[0]||'—'}</div></div>
+        <span class="btn p" style="height:28px;pointer-events:none">${ui('bolt',12)}Stream</span></div>`).join('')}</div>`;
+
+    $$('[data-e]').forEach(r=>r.onclick=()=>{loadToSession(r.dataset.e);closeModal()});
+  }
+  if(impTab==='url'){
+    b.innerHTML=`<div style="font-size:11.5px;color:var(--txt-3);margin-bottom:11px">Pull from a CDN, git-LFS endpoint or a teammate's share link.</div>
+     <div class="field">${ui('link',15)}<input id="urlIn" placeholder="https://cdn.studio/assets/turbine_v4.usdz" spellcheck="false"></div>
+     <div style="display:flex;gap:8px;margin-top:11px">
+       <button class="btn p" id="urlGo" style="flex:1;height:36px;justify-content:center">${ui('dl',13)}Fetch & index</button></div>
+     <div class="prog" id="urlProg" style="display:none"><i></i></div>`;
+    $('#urlGo').onclick=()=>{
+      const v=$('#urlIn').value.trim()||'https://cdn.studio/assets/turbine_v4.usdz';
+      const p=$('#urlProg');p.style.display='block';let w=0;
+      const iv=setInterval(()=>{w+=Math.random()*22;p.firstElementChild.style.width=Math.min(100,w)+'%';
+        if(w>=100){clearInterval(iv);
+          const nm=v.split('/').pop()||'remote_asset.usdz';ingestNames([{name:nm,size:1024*1024*(30+Math.random()*180)}]);}},220);
+    };
+  }
+}
+function closeModal(){$('#veil').style.display='none';$('#filePick').removeAttribute('webkitdirectory')}
+$('#filePick').onchange=e=>{ingest([...e.target.files]);e.target.value=''};
+$('#btnImport').onclick=openImport;
+function ingest(files){if(!files.length)return;ingestNames(files.map(f=>({name:f.name,size:f.size})))}
+function ingestNames(items){
+  const target=['recent','fav','session'].includes(st.folder)?'lib.mesh':st.folder;
+  const log=$('#impLog');
+  if(log)log.innerHTML=items.slice(0,6).map(f=>{
+    const ext=(f.name.split('.').pop()||'bin').toLowerCase(),t=EXT2TYPE[ext]||'doc';
+    return `<div class="qrow" style="cursor:default">${fileIcon(t,34)}
+      <div class="i"><div class="n">${f.name}</div><div class="d">${TYPE[t].l} · ${fmtSize(f.size)}</div>
+      <div class="prog"><i></i></div></div></div>`}).join('')+(items.length>6?`<div style="font-size:11px;color:var(--txt-3);padding:8px 2px">+${items.length-6} more queued…</div>`:'');
+  setTimeout(()=>$$('#impLog .prog i').forEach((b,i)=>setTimeout(()=>b.style.width='100%',i*130)),60);
+  const added=[];
+  items.forEach(f=>{
+    const ext=(f.name.split('.').pop()||'bin').toLowerCase(),t=EXT2TYPE[ext]||'doc';
+    const base=f.name.replace(/\.[^.]+$/,'');
+    const smart={image:'lib.tex',hdri:'lib.hdri',mesh:'lib.mesh',cad:'lib.cad',point:'lib.scan',font:'lib.font',
+      material:'lib.mat',brush:'lib.brush',cloth:'lib.cloth',uv:'lib.uv',color:'lib.lut',audio:'lib.av',video:'lib.av',
+      shader:'eng.shd',script:'eng.scr',volume:'eng.vol',scene:'prj.scn',anim:'prj.anim',doc:'prj.ref',archive:'prj.exp'}[t];
+    const a={id:uid(),n:base,e:ext,t,f:smart||target,size:f.size||1048576,mod:Date.now(),tags:['imported'],fav:false,
+      st:Math.random()>.75?'proxy':'ready',meta:{origin:'disk',ingested:'just now'},src:(smart||target).split('.')[0]==='eng'?'engine':(smart||target).split('.')[0]==='prj'?'project':'library'};
+    ASSETS.push(a);added.push(a);
+  });
+  setTimeout(()=>{
+    closeModal();
+    const dest=nodeOf(added[0].f);
+    if(dest)nav(added[0].f);
+    st.sel=new Set(added.map(a=>a.id));renderAll();
+    toast('Ingest complete',`${added.length} asset${added.length>1?'s':''} → ${dest?dest.n:'Library'}`,'check');
+  },items.length>1?900:700);
+}
+/* global drag-drop */
+const veil=$('#dropveil');let dc=0;
+window.addEventListener('dragenter',e=>{if(!e.dataTransfer.types.includes('Files'))return;dc++;veil.style.display='grid'});
+window.addEventListener('dragover',e=>e.preventDefault());
+window.addEventListener('dragleave',()=>{dc=Math.max(0,dc-1);if(!dc)veil.style.display='none'});
+window.addEventListener('drop',e=>{if(!e.dataTransfer.files.length)return;e.preventDefault();dc=0;veil.style.display='none';
+  openImport();setTimeout(()=>ingest([...e.dataTransfer.files]),120)});
+
+/* ══════════════════════ MARQUEE SELECT ══════════════════════ */
+(function(){
+  const stage=$('#stage'),m=$('#marquee');let on=false,sx,sy;
+  stage.addEventListener('mousedown',e=>{
+    if(e.button!==0||e.target.closest('.tile'))return;
+    on=true;const r=stage.getBoundingClientRect();
+    sx=e.clientX-r.left+stage.scrollLeft;sy=e.clientY-r.top+stage.scrollTop;
+    m.style.display='block';m.style.left=sx+'px';m.style.top=sy+'px';m.style.width=m.style.height='0px';
+    if(!e.metaKey&&!e.ctrlKey){st.sel.clear();$$('.tile').forEach(t=>t.classList.remove('sel'));updateSelUI();renderInspector()}
+  });
+  window.addEventListener('mousemove',e=>{
+    if(!on)return;const r=stage.getBoundingClientRect();
+    const x=e.clientX-r.left+stage.scrollLeft,y=e.clientY-r.top+stage.scrollTop;
+    const L=Math.min(x,sx),T=Math.min(y,sy),W=Math.abs(x-sx),H=Math.abs(y-sy);
+    Object.assign(m.style,{left:L+'px',top:T+'px',width:W+'px',height:H+'px'});
+
+    $$('.tile').forEach(t=>{
+      const b=t.getBoundingClientRect();
+      const tl=b.left-r.left+stage.scrollLeft,tt=b.top-r.top+stage.scrollTop;
+      const hit=tl<L+W&&tl+b.width>L&&tt<T+H&&tt+b.height>T;
+      t.classList.toggle('sel',hit||st.sel.has(t.dataset.id));
+    });
+  });
+  window.addEventListener('mouseup',()=>{
+    if(!on)return;on=false;m.style.display='none';
+
+    $$('.tile.sel').forEach(t=>st.sel.add(t.dataset.id));updateSelUI();renderInspector();
+  });
+})();
+
+/* ══════════════════════ COMMAND PALETTE ══════════════════════ */
+const CMDS=[
+ {n:'Import from disk…',t:'command',run:openImport},{n:'Create sphere',t:'create',run:()=>createPrim(PRIMS[0])},
+ {n:'Create cube',t:'create',run:()=>createPrim(PRIMS[1])},{n:'Create plane',t:'create',run:()=>createPrim(PRIMS[2])},
+ {n:'Create area light',t:'create',run:()=>createPrim(PRIMS[12])},{n:'New collection…',t:'command',run:()=>newFolder()},
+ {n:'Clear live session',t:'command',run:()=>$('#btnPurge').click()},{n:'Rebuild proxies (selection)',t:'command',run:rebuildProxy},
+ {n:'Toggle list view',t:'view',run:()=>setView(st.view==='grid'?'list':'grid')},{n:'Go to Favorites',t:'nav',run:()=>nav('fav')},
+ {n:'Go to Engine · Primitives',t:'nav',run:()=>nav('eng.prim')},{n:'Go to Library · CAD Parts',t:'nav',run:()=>nav('lib.cad')}];
+function openPal(){$('#palette').style.display='flex';$('#palIn').value='';st.palIdx=0;palRender('');$('#palIn').focus()}
+function palRender(q){
+  const ql=q.toLowerCase();
+  const cs=CMDS.filter(c=>c.n.toLowerCase().includes(ql)).map(c=>({...c,kind:'cmd'}));
+  const as=ASSETS.filter(a=>a.n.toLowerCase().includes(ql)||a.e.includes(ql)).slice(0,10).map(a=>({n:a.n+'.'+a.e,t:TYPE[a.t].l,kind:'asset',a}));
+  const all=[...cs,...as].slice(0,14);st.palList=all;
+  $('#palRes').innerHTML=all.length?all.map((r,i)=>`<div class="pres ${i===st.palIdx?'on':''}" data-i="${i}">
+    ${r.kind==='cmd'?ui(r.t==='create'?'plus':r.t==='nav'?'place':'bolt',15):gly(r.a.t,15)}
+    <span class="n">${r.n}</span><span class="t">${r.t}</span></div>`).join('')
+    :`<div style="padding:22px;text-align:center;color:var(--txt-3);font-size:12px">Nothing found</div>`;
+
+  $$('.pres').forEach(p=>p.onclick=()=>palRun(+p.dataset.i));
+}
+function palRun(i){const r=st.palList[i];if(!r)return;$('#palette').style.display='none';
+  if(r.kind==='cmd')r.run();else{nav(r.a.f);st.sel=new Set([r.a.id]);renderAll();
+    setTimeout(()=>{const el=document.querySelector(`.tile[data-id="${r.a.id}"]`);el&&el.scrollIntoView({block:'center',behavior:'smooth'})},60)}}
+$('#palIn').oninput=e=>{st.palIdx=0;palRender(e.target.value)};
+$('#palette').onclick=e=>{if(e.target.id==='palette')$('#palette').style.display='none'};
+
+/* ══════════════════════ TOASTS ══════════════════════ */
+function toast(t,s,i,col){
+  const c={rd:'var(--rd)',am:'var(--am)'}[col]||'var(--acc)';
+  const el=document.createElement('div');el.className='toast';
+  el.innerHTML=`<div class="ic" style="background:${col?'rgba(255,107,94,.14)':'rgba(200,247,81,.13)'};color:${c}">${ui(i||'check',14)}</div>
+    <div><div class="tt">${t}</div><div class="ts">${s}</div></div>`;
+  $('#toasts').appendChild(el);
+  setTimeout(()=>{el.classList.add('out');setTimeout(()=>el.remove(),240)},3000);
+}
+
+/* ══════════════════════ MISC BINDINGS ══════════════════════ */
+function setView(v){st.view=v;$('#vGrid').classList.toggle('on',v==='grid');$('#vList').classList.toggle('on',v==='list');renderGrid()}
+$('#vGrid').onclick=()=>setView('grid');$('#vList').onclick=()=>setView('list');
+$('#zoom').oninput=e=>document.documentElement.style.setProperty('--tile',e.target.value+'px');
+$('#q').oninput=e=>{st.q=e.target.value;$('#clearQ').style.display=st.q?'grid':'none';renderGrid()};
+$('#clearQ').onclick=()=>{st.q='';$('#q').value='';$('#clearQ').style.display='none';renderGrid()};
+$('#navBack').onclick=()=>{if(st.hi>0){st.hi--;st.folder=st.hist[st.hi];st.sel.clear();renderAll()}};
+$('#navFwd').onclick=()=>{if(st.hi<st.hist.length-1){st.hi++;st.folder=st.hist[st.hi];st.sel.clear();renderAll()}};
+document.addEventListener('keydown',e=>{
+  const typing=/INPUT|TEXTAREA/.test(document.activeElement.tagName);
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openPal();return}
+  if($('#palette').style.display==='flex'){
+    if(e.key==='Escape')$('#palette').style.display='none';
+    if(e.key==='ArrowDown'){e.preventDefault();st.palIdx=Math.min((st.palList||[]).length-1,st.palIdx+1);palRender($('#palIn').value)}
+    if(e.key==='ArrowUp'){e.preventDefault();st.palIdx=Math.max(0,st.palIdx-1);palRender($('#palIn').value)}
+    if(e.key==='Enter')palRun(st.palIdx);
+    return;}
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='i'){e.preventDefault();openImport();return}
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='f'){e.preventDefault();$('#q').focus();return}
+  if(typing)return;
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='a'){e.preventDefault();current().forEach(a=>st.sel.add(a.id));$$('.tile').forEach(t=>t.classList.add('sel'));updateSelUI();renderInspector();return}
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='d'&&st.sel.size===1){e.preventDefault();dupAsset([...st.sel][0]);return}
+  if(e.key==='Escape'){st.sel.clear();$$('.tile').forEach(t=>t.classList.remove('sel'));hideAll();closeModal();updateSelUI();renderInspector()}
+  if(e.key==='Enter'&&st.sel.size)loadSelection();
+  if(e.key==='F2'&&st.sel.size===1)renameAsset([...st.sel][0]);
+  if((e.key==='Delete'||e.key==='Backspace')&&st.sel.size){e.preventDefault();deleteSel()}
+  if(e.key==='ArrowRight'||e.key==='ArrowLeft'||e.key==='ArrowDown'||e.key==='ArrowUp'){
+    const l=current().map(a=>a.id);if(!l.length)return;e.preventDefault();
+    const cols=Math.max(1,Math.floor($('#grid').clientWidth/(parseInt(getComputedStyle(document.documentElement).getPropertyValue('--tile'))||168)));
+    let i=l.indexOf(st.last);if(i<0)i=0;
+    else i+= e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:e.key==='ArrowDown'?(st.view==='list'?1:cols):(st.view==='list'?-1:-cols);
+    i=Math.max(0,Math.min(l.length-1,i));select(l[i],{});
+    const el=document.querySelector(`.tile[data-id="${l[i]}"]`);el&&el.scrollIntoView({block:'nearest'});}
+});
+/* live telemetry flavour */
+setInterval(()=>{
+  const g=28+Math.round(Math.random()*22),v=(5.4+Math.random()*1.6).toFixed(1),f=110+Math.round(Math.random()*22);
+  $('#stFps').textContent

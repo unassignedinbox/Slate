@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ImGui Theme Prototype - Full HTML Export</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .custom-slider {
+            appearance: none;
+            outline: none;
+        }
+        .custom-slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 44px;
+            height: 44px;
+            background-color: #e0e0e0;
+            border-radius: 9999px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+        }
+        .custom-slider::-moz-range-thumb {
+            appearance: none;
+            border: none;
+            width: 44px;
+            height: 44px;
+            background-color: #e0e0e0;
+            border-radius: 9999px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+        }
+        .rotation-mask {
+            mask-image: linear-gradient(to right, transparent, black 20%, black 80%, transparent);
+            -webkit-mask-image: linear-gradient(to right, transparent, black 20%, black 80%, transparent);
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-[#050505] flex items-center justify-center p-12 font-sans selection:bg-white/10 py-32">
+
+    <div class="flex flex-col gap-6 w-full max-w-[800px] scale-110 transform-gpu origin-center">
+        
+        <!-- Top Controls Panel -->
+        <div class="bg-[#121212] rounded-[32px] p-8 flex flex-col gap-8 w-full shadow-2xl border border-white/5">
+            <!-- Dropdown -->
+            <div class="flex items-center justify-between gap-8 relative z-20">
+                <div class="text-[#888888] text-3xl font-medium w-40">Selection</div>
+                <div class="flex-1 relative w-full" id="dropdown-container">
+                    <div class="flex items-stretch w-full h-[52px] rounded-full overflow-hidden cursor-pointer border border-white/5 shadow-inner" id="dropdown-button">
+                        <div class="flex-1 bg-black flex items-center px-6 text-[#f0f0f0] text-2xl font-medium" id="dropdown-selected">Entry name</div>
+                        <div class="bg-[#1a1a1a] w-[60px] flex items-center justify-center border-l border-white/5 transition-colors hover:bg-[#222222]">
+                            <svg id="dropdown-icon" class="w-8 h-8 text-[#888888] transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                        </div>
+                    </div>
+                    <div id="dropdown-menu" class="hidden absolute top-[calc(100%+8px)] left-0 w-full bg-black border border-[#222222] rounded-[24px] p-2 flex flex-col gap-1 z-10 shadow-2xl">
+                        <div class="dropdown-option px-6 py-3 text-[#888888] text-2xl font-medium hover:bg-[#111111] hover:text-[#f0f0f0] rounded-full cursor-pointer transition-colors">Entry name</div>
+                        <div class="dropdown-option px-6 py-3 text-[#888888] text-2xl font-medium hover:bg-[#111111] hover:text-[#f0f0f0] rounded-full cursor-pointer transition-colors">Second Entry</div>
+                        <div class="dropdown-option px-6 py-3 text-[#888888] text-2xl font-medium hover:bg-[#111111] hover:text-[#f0f0f0] rounded-full cursor-pointer transition-colors">Third Entry</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Degree -->
+            <div class="flex items-center justify-between gap-8">
+                <div class="text-[#888888] text-3xl font-medium w-40">Degree</div>
+                <div class="flex items-stretch w-48 h-[52px] rounded-full overflow-hidden border border-white/5 shadow-inner">
+                    <div class="flex-1 bg-black flex items-center justify-center text-[#f0f0f0] text-3xl font-semibold tracking-wide" id="val-degree">123</div>
+                    <div class="bg-[#1a1a1a] w-[72px] flex items-center justify-center border-l border-white/5 text-[#666666] text-2xl font-medium">°</div>
+                </div>
+                <input type="range" min="0" max="255" value="123" class="custom-slider w-56 h-[44px] rounded-full cursor-pointer border border-black/20 shadow-inner slider-input" data-target="val-degree">
+            </div>
+
+            <!-- Percent -->
+            <div class="flex items-center justify-between gap-8">
+                <div class="text-[#888888] text-3xl font-medium w-40">Percent</div>
+                <div class="flex items-stretch w-48 h-[52px] rounded-full overflow-hidden border border-white/5 shadow-inner">
+                    <div class="flex-1 bg-black flex items-center justify-center text-[#f0f0f0] text-3xl font-semibold tracking-wide" id="val-percent">85</div>
+                    <div class="bg-[#1a1a1a] w-[72px] flex items-center justify-center border-l border-white/5 text-[#666666] text-2xl font-medium">%</div>
+                </div>
+                <input type="range" min="0" max="255" value="85" class="custom-slider w-56 h-[44px] rounded-full cursor-pointer border border-black/20 shadow-inner slider-input" data-target="val-percent">
+            </div>
+
+            <!-- Pixel -->
+            <div class="flex items-center justify-between gap-8">
+                <div class="text-[#888888] text-3xl font-medium w-40">Pixel</div>
+                <div class="flex items-stretch w-48 h-[52px] rounded-full overflow-hidden border border-white/5 shadow-inner">
+                    <div class="flex-1 bg-black flex items-center justify-center text-[#f0f0f0] text-3xl font-semibold tracking-wide" id="val-pixel">123</div>
+                    <div class="bg-[#1a1a1a] w-[72px] flex items-center justify-center border-l border-white/5 text-[#666666] text-2xl font-medium">px</div>
+                </div>
+                <input type="range" min="0" max="255" value="123" class="custom-slider w-56 h-[44px] rounded-full cursor-pointer border border-black/20 shadow-inner slider-input" data-target="val-pixel">
+            </div>
+        </div>
+
+        <!-- Tooltips Panel -->
+        <div class="bg-[#121212] rounded-[32px] p-8 flex flex-col gap-8 w-full shadow-2xl border border-white/5">
+            <div class="flex flex-col gap-6 w-full">
+                <div class="text-[#888888] text-3xl font-medium w-40">Tooltips</div>
+                <div class="flex items-end justify-center gap-32 bg-[#1a1a1a] p-12 rounded-[32px] border border-white/5 shadow-inner min-h-[340px]">
+                    <!-- Light Tooltip -->
+                    <div class="relative flex flex-col items-start group">
+                        <div class="absolute bottom-[calc(100%+24px)] left-0 w-[360px] p-6 rounded-[32px] bg-[#ffffff] shadow-[0_20px_40px_rgba(0,0,0,0.1)] opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-50 pointer-events-none">
+                            <div class="absolute -bottom-[8px] left-[48px] w-8 h-8 rotate-45 rounded-[6px] bg-[#ffffff]" style="z-index:-1"></div>
+                            <div class="relative z-10">
+                                <h4 class="text-lg font-bold mb-2 text-[#111111]">Tooltip</h4>
+                                <p class="text-[15px] font-medium leading-[1.6] text-[#777777]">Try connecting to another server. In case of a repeated error, please wait, if nothing happens, try to write a letter to the post office.</p>
+                            </div>
+                        </div>
+                        <button class="ml-8 w-16 h-16 rounded-[24px] flex items-center justify-center transition-transform hover:scale-105 active:scale-95 bg-white text-[#111111] shadow-[0_20px_40px_rgba(0,0,0,0.1)]">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.9 1.2 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- Dark Tooltip -->
+                    <div class="relative flex flex-col items-start group">
+                        <div class="absolute bottom-[calc(100%+24px)] left-0 w-[360px] p-6 rounded-[32px] bg-[#151515] shadow-[0_20px_40px_rgba(0,0,0,0.4)] opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-50 pointer-events-none">
+                            <div class="absolute -bottom-[8px] left-[48px] w-8 h-8 rotate-45 rounded-[6px] bg-[#151515]" style="z-index:-1"></div>
+                            <div class="relative z-10">
+                                <h4 class="text-lg font-bold mb-2 text-white">Tooltip</h4>
+                                <p class="text-[15px] font-medium leading-[1.6] text-[#888888]">Try connecting to another server. In case of a repeated error, please wait, if nothing happens, try to write a letter to the post office.</p>
+                            </div>
+                        </div>
+                        <button class="ml-8 w-16 h-16 rounded-[24px] flex items-center justify-center transition-transform hover:scale-105 active:scale-95 bg-[#151515] text-white shadow-[0_20px_40px_rgba(0,0,0,0.4)]">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.9 1.2 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rotation Panel -->
+        <div class="bg-[#121212] rounded-[32px] p-8 flex flex-col gap-8 w-full shadow-2xl border border-white/5">
+            <div class="flex flex-col items-center gap-6 w-full">
+                <div class="flex items-center justify-between w-full">
+                    <div class="text-[#888888] text-3xl font-medium w-40">Rotation</div>
+                    <div class="flex items-stretch w-48 h-[52px] rounded-full overflow-hidden border border-white/5 shadow-inner">
+                        <div class="flex-1 bg-black flex items-center justify-center text-[#f0f0f0] text-3xl font-semibold tracking-wide" id="rotation-val">0</div>
+                        <div class="bg-[#1a1a1a] w-[72px] flex items-center justify-center border-l border-white/5 text-[#666666] text-2xl font-medium">°</div>
+                    </div>
+                </div>
+                
+                <div id="rotation-area" class="relative w-full h-[100px] bg-[#222222] rounded-[32px] overflow-hidden cursor-grab active:cursor-grabbing shadow-inner border border-white/5 rotation-mask">
+                    <!-- Fixed Center Indicator Line -->
+                    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[3px] h-[40px] bg-[#6c77ff] rounded-full z-10 shadow-[0_0_12px_#6c77ff]"></div>
+                    <!-- Fixed Center Indicator Dot -->
+                    <div class="absolute top-[16px] left-1/2 -translate-x-1/2 w-[8px] h-[8px] bg-[#6c77ff] rounded-full z-10 shadow-[0_0_12px_#6c77ff]"></div>
+                    <!-- Ticks container -->
+                    <div id="rotation-ticks-container" class="absolute top-0 h-full w-0 flex items-center" style="left: 50%; transform: translateX(0px);"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toggles Panel -->
+        <div class="bg-[#121212] rounded-[32px] p-8 flex flex-col gap-8 w-full shadow-2xl border border-white/5">
+            <div class="flex flex-col gap-2">
+                <div class="text-[#888888] text-3xl font-medium w-40">Options</div>
+                <div class="flex flex-col gap-2 mt-4 bg-[#1a1a1a] p-4 rounded-[24px] border border-white/5 shadow-inner">
+                    <div class="toggle-row flex items-center gap-6 cursor-pointer group h-[52px] px-2" data-checked="true">
+                        <div class="toggle-visual relative flex items-center justify-center w-[32px] h-[32px] rounded-full border-[2px] transition-colors duration-200 shadow-inner border-[#f0f0f0]">
+                            <div class="toggle-dot w-[16px] h-[16px] rounded-full bg-[#f0f0f0] transition-transform duration-200 scale-100"></div>
+                        </div>
+                        <span class="toggle-label text-2xl font-medium select-none transition-colors duration-200 text-[#f0f0f0]">Enable Snapping</span>
+                    </div>
+                    <div class="toggle-row flex items-center gap-6 cursor-pointer group h-[52px] px-2" data-checked="false">
+                        <div class="toggle-visual relative flex items-center justify-center w-[32px] h-[32px] rounded-full border-[2px] transition-colors duration-200 shadow-inner border-[#444444] group-hover:border-[#666666]">
+                            <div class="toggle-dot w-[16px] h-[16px] rounded-full bg-[#f0f0f0] transition-transform duration-200 scale-0"></div>
+                        </div>
+                        <span class="toggle-label text-2xl font-medium select-none transition-colors duration-200 text-[#888888] group-hover:text-[#aaaaaa]">Show Grid Lines</span>
+                    </div>
+                    <div class="toggle-row flex items-center gap-6 cursor-pointer group h-[52px] px-2" data-checked="false">
+                        <div class="toggle-visual relative flex items-center justify-center w-[32px] h-[32px] rounded-full border-[2px] transition-colors duration-200 shadow-inner border-[#444444] group-hover:border-[#666666]">
+                            <div class="toggle-dot w-[16px] h-[16px] rounded-full bg-[#f0f0f0] transition-transform duration-200 scale-0"></div>
+                        </div>
+                        <span class="toggle-label text-2xl font-medium select-none transition-colors duration-200 text-[#888888] group-hover:text-[#aaaaaa]">Lock Aspect Ratio</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Multi-Select List Panel -->
+        <div class="bg-[#121212] rounded-[32px] p-8 flex flex-col gap-8 w-full shadow-2xl border border-white/5">
+            <div class="flex flex-col gap-6">
+                <div class="text-[#888888] text-3xl font-medium w-40">Multi-Select</div>
+                <div class="flex flex-col gap-2 w-full bg-[#1a1a1a] p-4 rounded-[24px] border border-white/5 shadow-inner">
+                    <div class="list-item relative flex items-center h-[52px] px-6 rounded-none cursor-pointer transition-colors bg-[#2a2a2a] text-[#f0f0f0]" data-checked="true">
+                        <div class="list-indicator absolute left-0 top-0 h-full w-[4px] transition-all duration-200 bg-[#f0f0f0]"></div>
+                        <span class="text-2xl font-medium select-none">Entry one</span>
+                    </div>
+                    <div class="list-item relative flex items-center h-[52px] px-6 rounded-none cursor-pointer transition-colors bg-transparent text-[#888888] hover:bg-[#222222]" data-checked="false">
+                        <div class="list-indicator absolute left-0 top-0 h-full w-[4px] transition-all duration-200 bg-transparent"></div>
+                        <span class="text-2xl font-medium select-none">Entry two</span>
+                    </div>
+                    <div class="list-item relative flex items-center h-[52px] px-6 rounded-none cursor-pointer transition-colors bg-[#2a2a2a] text-[#f0f0f0]" data-checked="true">
+                        <div class="list-indicator absolute left-0 top-0 h-full w-[4px] transition-all duration-200 bg-[#f0f0f0]"></div>
+                        <span class="text-2xl font-medium select-none">Entry three</span>
+                    </div>
+                    <div class="list-item relative flex items-center h-[52px] px-6 rounded-none cursor-pointer transition-colors bg-transparent text-[#888888] hover:bg-[#222222]" data-checked="false">
+                        <div class="list-indicator absolute left-0 top-0 h-full w-[4px] transition-all duration-200 bg-transparent"></div>
+                        <span class="text-2xl font-medium select-none">Entry four</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Size Panel -->
+        <div class="bg-[#121212] rounded-[32px] p-8 flex flex-col gap-8 w-full shadow-2xl border border-white/5">
+            <div class="flex items-center gap-8">
+                <div class="text-[#888888] text-3xl font-medium w-40">Size</div>
+                <div class="flex-1 flex items-center justify-between bg-transparent h-[60px] pl-8 pr-4">
+                    <button class="size-btn relative flex items-center justify-center transition-all duration-200 w-4 h-4 bg-[#333333] rounded-full hover:bg-[#555555]" data-size="S"></button>
+                    <button class="size-btn relative flex items-center justify-center transition-all duration-200 w-4 h-4 bg-[#333333] rounded-full hover:bg-[#555555]" data-size="M"></button>
+                    <button class="size-btn relative flex items-center justify-center transition-all duration-200 w-[52px] h-[52px] bg-[#e8e8e8] text-[#111111] rounded-full text-2xl font-semibold shadow-lg" data-size="L">L</button>
+                    <button class="size-btn relative flex items-center justify-center transition-all duration-200 w-4 h-4 bg-[#333333] rounded-full hover:bg-[#555555]" data-size="XL"></button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Dropdown Logic
+        const dropdownButton = document.getElementById('dropdown-button');
+        const dropdownMenu = document.getElementById('dropdown-menu');
+        const dropdownIcon = document.getElementById('dropdown-icon');
+        const dropdownSelected = document.getElementById('dropdown-selected');
+        let dropdownOpen = false;
+
+        dropdownButton.addEventListener('click', () => {
+            dropdownOpen = !dropdownOpen;
+            if (dropdownOpen) {
+                dropdownMenu.classList.remove('hidden');
+                dropdownIcon.classList.add('rotate-180');
+            } else {
+                dropdownMenu.classList.add('hidden');
+                dropdownIcon.classList.remove('rotate-180');
+            }
+        });
+
+        document.querySelectorAll('.dropdown-option').forEach(opt => {
+            opt.addEventListener('click', (e) => {
+                dropdownSelected.innerText = e.target.innerText;
+                dropdownOpen = false;
+                dropdownMenu.classList.add('hidden');
+                dropdownIcon.classList.remove('rotate-180');
+            });
+        });
+
+        // Sliders Logic
+        function updateSliderBackground(slider) {
+            const val = slider.value;
+            const percentage = (val / 255) * 100;
+            slider.style.background = `linear-gradient(to right, #7a7a7a ${percentage}%, #222222 ${percentage}%)`;
+        }
+
+        document.querySelectorAll('.slider-input').forEach(slider => {
+            updateSliderBackground(slider);
+            slider.addEventListener('input', (e) => {
+                const val = e.target.value;
+                document.getElementById(slider.getAttribute('data-target')).innerText = val;
+                updateSliderBackground(slider);
+            });
+        });
+
+        // Rotation Logic
+        const TICK_SPACING = 10;
+        let rotationValue = 0;
+        let isDraggingRot = false;
+        let startXRot = 0;
+        let startValRot = 0;
+
+        const rotationArea = document.getElementById('rotation-area');
+        const rotationTicksContainer = document.getElementById('rotation-ticks-container');
+        const rotationValDisplay = document.getElementById('rotation-val');
+
+        function renderTicks() {
+            rotationTicksContainer.innerHTML = '';
+            const centerTick = Math.round(rotationValue);
+            for (let i = centerTick - 60; i <= centerTick + 60; i++) {
+                const isMajor = Math.abs(i) % 10 === 0;
+                const isMedium = Math.abs(i) % 5 === 0 && !isMajor;
+                
+                const tickDiv = document.createElement('div');
+                tickDiv.className = "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center justify-start h-[40px]";
+                tickDiv.style.left = `${i * TICK_SPACING}px`;
+                
+                let tickHeightClass = isMajor ? 'bg-[#f0f0f0] h-[20px]' : isMedium ? 'bg-[#888888] h-[16px]' : 'bg-[#444444] h-[12px]';
+                let innerHTML = `<div class="w-[2px] rounded-full transition-colors ${tickHeightClass}"></div>`;
+                
+                if (isMajor) {
+                    innerHTML += `<div class="absolute top-[24px] text-[#666666] text-xs font-semibold select-none">${i}°</div>`;
+                }
+                
+                tickDiv.innerHTML = innerHTML;
+                rotationTicksContainer.appendChild(tickDiv);
+            }
+            rotationTicksContainer.style.transform = `translateX(${-rotationValue * TICK_SPACING}px)`;
+            rotationValDisplay.innerText = Math.round(rotationValue);
+        }
+
+        rotationArea.addEventListener('pointerdown', (e) => {
+            isDraggingRot = true;
+            startXRot = e.clientX;
+            startValRot = rotationValue;
+            rotationArea.setPointerCapture(e.pointerId);
+        });
+
+        rotationArea.addEventListener('pointermove', (e) => {
+            if (!isDraggingRot) return;
+            const deltaX = e.clientX - startXRot;
+            rotationValue = startValRot - (deltaX / 10);
+            renderTicks();
+        });
+
+        rotationArea.addEventListener('pointerup', (e) => {
+            isDraggingRot = false;
+            rotationArea.releasePointerCapture(e.pointerId);
+        });
+
+        renderTicks();
+
+        // Toggles Logic
+        document.querySelectorAll('.toggle-row').forEach(row => {
+            row.addEventListener('click', () => {
+                const isChecked = row.getAttribute('data-checked') === 'true';
+                const newChecked = !isChecked;
+                row.setAttribute('data-checked', newChecked);
+                
+                const visual = row.querySelector('.toggle-visual');
+                const dot = row.querySelector('.toggle-dot');
+                const label = row.querySelector('.toggle-label');
+                
+                if (newChecked) {
+                    visual.classList.remove('border-[#444444]', 'group-hover:border-[#666666]');
+                    visual.classList.add('border-[#f0f0f0]');
+                    dot.classList.remove('scale-0');
+                    dot.classList.add('scale-100');
+                    label.classList.remove('text-[#888888]', 'group-hover:text-[#aaaaaa]');
+                    label.classList.add('text-[#f0f0f0]');
+                } else {
+                    visual.classList.add('border-[#444444]', 'group-hover:border-[#666666]');
+                    visual.classList.remove('border-[#f0f0f0]');
+                    dot.classList.add('scale-0');
+                    dot.classList.remove('scale-100');
+                    label.classList.add('text-[#888888]', 'group-hover:text-[#aaaaaa]');
+                    label.classList.remove('text-[#f0f0f0]');
+                }
+            });
+        });
+
+        // Multi-Select Logic
+        document.querySelectorAll('.list-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const isChecked = item.getAttribute('data-checked') === 'true';
+                const newChecked = !isChecked;
+                item.setAttribute('data-checked', newChecked);
+                
+                const indicator = item.querySelector('.list-indicator');
+                
+                if (newChecked) {
+                    item.classList.remove('bg-transparent', 'text-[#888888]', 'hover:bg-[#222222]');
+                    item.classList.add('bg-[#2a2a2a]', 'text-[#f0f0f0]');
+                    indicator.classList.remove('bg-transparent');
+                    indicator.classList.add('bg-[#f0f0f0]');
+                } else {
+                    item.classList.add('bg-transparent', 'text-[#888888]', 'hover:bg-[#222222]');
+                    item.classList.remove('bg-[#2a2a2a]', 'text-[#f0f0f0]');
+                    indicator.classList.add('bg-transparent');
+                    indicator.classList.remove('bg-[#f0f0f0]');
+                }
+            });
+        });
+
+        // Size Selector Logic
+        const sizeBtns = document.querySelectorAll('.size-btn');
+        sizeBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                sizeBtns.forEach(b => {
+                    b.className = "size-btn relative flex items-center justify-center transition-all duration-200 w-4 h-4 bg-[#333333] rounded-full hover:bg-[#555555]";
+                    b.innerText = "";
+                });
+                btn.className = "size-btn relative flex items-center justify-center transition-all duration-200 w-[52px] h-[52px] bg-[#e8e8e8] text-[#111111] rounded-full text-2xl font-semibold shadow-lg";
+                btn.innerText = btn.getAttribute('data-size');
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Game Engine Icon Set — Realistic SVG</title>
+<style>
+  :root{ --acc:#5fe3a1; --bg:#000; }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:#e7e9ec;
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    background-image:radial-gradient(900px 500px at 50% -10%,#151922 0%,#000 62%);
+    min-height:100vh;
+  }
+  header{padding:44px 32px 22px;max-width:1400px;margin:0 auto}
+  h1{margin:0 0 6px;font-size:26px;letter-spacing:-.4px;font-weight:650}
+  h1 span{color:var(--acc)}
+  .sub{color:#7d848f;font-size:13.5px;margin:0}
+  .bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:20px}
+  input[type=search]{
+    flex:1 1 240px;max-width:340px;background:#0d1015;border:1px solid #23262d;color:#e7e9ec;
+    padding:10px 14px;border-radius:11px;outline:none;font-size:13.5px;
+  }
+  input[type=search]:focus{border-color:#39414d;box-shadow:0 0 0 3px rgba(95,227,161,.10)}
+  .btn{
+    background:#0d1015;border:1px solid #23262d;color:#c9ced6;padding:10px 15px;border-radius:11px;
+    cursor:pointer;font-size:13px;transition:.18s;
+  }
+  .btn:hover{border-color:#3a424e;color:#fff;background:#11151b}
+  .count{color:#5d646e;font-size:12.5px;margin-left:auto}
+  .grid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(146px,1fr));gap:16px;
+    max-width:1400px;margin:0 auto;padding:14px 32px 90px;
+  }
+  .card{
+    position:relative;background:#0a0c0f;border:1px solid #1a1e24;border-radius:20px;
+    padding:20px 10px 14px;text-align:center;cursor:pointer;transition:transform .18s,border-color .18s,box-shadow .18s,background .18s;
+    user-select:none;
+  }
+  .card:hover{transform:translateY(-4px);border-color:#333b46;background:#0e1116;box-shadow:0 16px 34px -18px #000,0 0 0 1px #1f242c inset}
+  .card.sel{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc),0 0 28px -6px rgba(95,227,161,.35)}
+  .card svg{width:76px;height:76px;display:block;margin:0 auto;pointer-events:none}
+  .nm{margin-top:12px;font-size:11.5px;color:#8a919b;letter-spacing:.2px;line-height:1.35}
+  .card:hover .nm{color:#dfe3e9}
+  .dl{
+    position:absolute;top:9px;right:9px;width:24px;height:24px;border-radius:8px;border:1px solid #262b33;
+    background:#12161c;color:#8f97a2;font-size:12px;line-height:22px;opacity:0;transition:.15s;
+  }
+  .card:hover .dl{opacity:1}
+  .dl:hover{color:#fff;border-color:#49525f}
+  .toast{
+    position:fixed;left:50%;bottom:30px;transform:translate(-50%,26px);opacity:0;pointer-events:none;
+    background:#12161c;border:1px solid #2b333d;color:#eaeef3;padding:11px 20px;border-radius:12px;
+    font-size:13px;transition:.25s;box-shadow:0 18px 40px -14px #000;
+  }
+  .toast.on{opacity:1;transform:translate(-50%,0)}
+  footer{color:#4c525b;font-size:12px;text-align:center;padding:0 20px 50px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Game Engine <span>Icon Set</span></h1>
+  <p class="sub">36 realistic, fully-vector SVG icons — gradients, bevels, specular highlights. Click an icon to copy its SVG.</p>
+  <div class="bar">
+    <input type="search" id="q" placeholder="Search icons… (mesh, audio, physics)">
+    <button class="btn" id="copyAll">Copy all SVG</button>
+    <button class="btn" id="dlAll">Download sprite</button>
+    <span class="count" id="count"></span>
+  </div>
+</header>
+
+<div class="grid" id="grid"></div>
+<div class="toast" id="toast">Copied</div>
+<footer>Each icon is a standalone 120×120 SVG with its own defs — safe to paste anywhere.</footer>
+
+<script>
+/* ---------- shared plate builders (unique ids per icon) ---------- */
+const base = (p,a,b) => `
+<defs>
+<linearGradient id="${p}b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient>
+<linearGradient id="${p}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".30"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient>
+<linearGradient id="${p}e" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".62"/><stop offset=".5" stop-color="#ffffff" stop-opacity=".05"/><stop offset="1" stop-color="#ffffff" stop-opacity=".20"/></linearGradient>
+<clipPath id="${p}c"><rect x="6" y="6" width="108" height="108" rx="27"/></clipPath>
+<filter id="${p}d" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="2.5" stdDeviation="2.6" flood-color="#000" flood-opacity=".55"/></filter>
+</defs>
+<rect x="6" y="6" width="108" height="108" rx="27" fill="url(#${p}b)"/>
+<g clip-path="url(#${p}c)"><path d="M6 6H114V44C92 60 28 60 6 44Z" fill="url(#${p}g)"/></g>`;
+const rim = p => `<rect x="6.75" y="6.75" width="106.5" height="106.5" rx="26.3" fill="none" stroke="url(#${p}e)" stroke-width="1.5"/>`;
+const D='#3a3f47', DK='#121418';   /* default dark plate */
+const wrap = i => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">${i}</svg>`;
+
+/* isometric helpers reused by cube-like icons */
+const ISO_TOP='60,26 94,46 60,66 26,46';
+
+const ICONS = [
+
+/* 1 — SCENE CAMERA */
+{n:'Scene Camera', k:'camera render viewport lens', s: base('cam','#40444a','#0f1013')+`
+<defs>
+<linearGradient id="camT" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fdfcf9"/><stop offset=".6" stop-color="#e7e3db"/><stop offset="1" stop-color="#bdb9b0"/></linearGradient>
+<linearGradient id="camL" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2d3035"/><stop offset="1" stop-color="#121316"/></linearGradient>
+<linearGradient id="camR" x1=".15" y1="0" x2=".85" y2="1"><stop offset="0" stop-color="#848a91"/><stop offset=".3" stop-color="#2b2e33"/><stop offset=".62" stop-color="#4c5157"/><stop offset="1" stop-color="#101215"/></linearGradient>
+<radialGradient id="camG" cx=".36" cy=".3" r=".92"><stop offset="0" stop-color="#82a492"/><stop offset=".3" stop-color="#24413a"/><stop offset=".62" stop-color="#0a1512"/><stop offset=".88" stop-color="#152724"/><stop offset="1" stop-color="#31423c"/></radialGradient>
+</defs>
+<g clip-path="url(#camc)">
+<rect x="6" y="6" width="108" height="31" fill="url(#camT)"/>
+<rect x="6" y="36" width="108" height="78" fill="url(#camL)"/>
+<rect x="6" y="35.4" width="108" height="1.8" fill="#000" opacity=".55"/>
+<circle cx="97" cy="20" r="5" fill="#33363b"/><circle cx="97" cy="20" r="3.4" fill="#0b0d0f"/><circle cx="95.6" cy="18.6" r="1.1" fill="#9fb8c6" opacity=".85"/>
+<path d="M6 6H114V29C92 43 28 43 6 29Z" fill="#ffffff" opacity=".16"/>
+<circle cx="41" cy="44" r="2.4" fill="#e04a3c"/>
+</g>
+<g filter="url(#camd)"><circle cx="60" cy="68" r="32" fill="url(#camR)"/></g>
+<circle cx="60" cy="68" r="32" fill="none" stroke="#000" stroke-opacity=".5"/>
+<circle cx="60" cy="68" r="28.5" fill="#0d0f11"/>
+<circle cx="60" cy="68" r="26" fill="url(#camG)"/>
+<circle cx="60" cy="68" r="26" fill="none" stroke="#000" stroke-opacity=".55" stroke-width="1.2"/>
+<circle cx="60" cy="68" r="13" fill="#04070a"/>
+<circle cx="60" cy="68" r="13" fill="none" stroke="#33463f" stroke-width="1" opacity=".75"/>
+<ellipse cx="49" cy="56" rx="11" ry="6.4" transform="rotate(-38 49 56)" fill="#eaf6ff" opacity=".22"/>
+<ellipse cx="72" cy="83" rx="7" ry="3.1" transform="rotate(-38 72 83)" fill="#bfe6d8" opacity=".12"/>
+<circle cx="60" cy="103" r="5.2" fill="none" stroke="#50555c" stroke-width="1.6"/>`+rim('cam')},
+
+/* 2 — CINEMATICS / CLAPPERBOARD */
+{n:'Cinematics', k:'clapperboard cutscene timeline film', s: base('clp','#494e55','#16181c')+`
+<defs>
+<linearGradient id="clpS" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#464b52"/><stop offset="1" stop-color="#1c1f23"/></linearGradient>
+<linearGradient id="clpW" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#cfccc6"/></linearGradient>
+<linearGradient id="clpR" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff8272"/><stop offset="1" stop-color="#c62d20"/></linearGradient>
+<clipPath id="clpT"><rect x="18" y="30" width="84" height="18" rx="4"/></clipPath>
+</defs>
+<g filter="url(#clpd)"><rect x="20" y="54" width="80" height="48" rx="7" fill="url(#clpS)"/></g>
+<rect x="20.7" y="54.7" width="78.6" height="46.6" rx="6.4" fill="none" stroke="#fff" stroke-opacity=".13"/>
+<path d="M28 86h64M28 95h64" stroke="#000" stroke-opacity=".4" stroke-width="2.6" stroke-linecap="round"/>
+<path d="M28 84.6h64M28 93.6h64" stroke="#fff" stroke-opacity=".07" stroke-width="2.2" stroke-linecap="round"/>
+<path d="M53 63l19 10.5L53 84z" fill="url(#clpR)"/>
+<path d="M53 63l19 10.5L53 84z" fill="none" stroke="#ffb4a8" stroke-opacity=".35"/>
+<g transform="rotate(-13 24 48)">
+  <rect x="18" y="30" width="84" height="18" rx="4" fill="url(#clpS)"/>
+  <g clip-path="url(#clpT)"><path d="M30 30l9 18h11l-9-18zM55 30l9 18h11l-9-18zM80 30l9 18h11l-9-18z" fill="url(#clpW)"/></g>
+  <rect x="18.6" y="30.6" width="82.8" height="16.8" rx="3.5" fill="none" stroke="#fff" stroke-opacity=".16"/>
+</g>
+<circle cx="24" cy="53" r="6.4" fill="#d43c2c"/><circle cx="24" cy="53" r="3" fill="#f3d9d3"/><circle cx="24" cy="53" r="1.3" fill="#7c8288"/>`+rim('clp')},
+
+/* 3 — AUDIO MIXER / TURNTABLE */
+{n:'Audio Mixer', k:'sound turntable music vinyl dsp', s: base('tt','#fdfcfa','#cdc8c1')+`
+<defs>
+<radialGradient id="ttV" cx=".42" cy=".38" r=".72"><stop offset="0" stop-color="#33343a"/><stop offset=".55" stop-color="#141519"/><stop offset="1" stop-color="#06070a"/></radialGradient>
+<radialGradient id="ttL" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#ff8b7d"/><stop offset="1" stop-color="#d5382a"/></radialGradient>
+<linearGradient id="ttA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".45" stop-color="#c4c8cd"/><stop offset="1" stop-color="#8d9299"/></linearGradient>
+<radialGradient id="ttG" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#a8ffbe"/><stop offset="1" stop-color="#26a34c"/></radialGradient>
+</defs>
+<ellipse cx="55" cy="98" rx="34" ry="5" fill="#000" opacity=".12"/>
+<g filter="url(#ttd)"><circle cx="55" cy="63" r="33" fill="url(#ttV)"/></g>
+<g fill="none" stroke="#ffffff" stroke-opacity=".07">
+<circle cx="55" cy="63" r="29"/><circle cx="55" cy="63" r="26"/><circle cx="55" cy="63" r="23"/><circle cx="55" cy="63" r="20"/><circle cx="55" cy="63" r="17"/>
+</g>
+<path d="M31 42a33 33 0 0 1 44-3l-6 7a24 24 0 0 0-31 2z" fill="#fff" opacity=".10"/>
+<circle cx="55" cy="63" r="13" fill="url(#ttL)"/>
+<circle cx="55" cy="63" r="13" fill="none" stroke="#000" stroke-opacity=".2"/>
+<circle cx="55" cy="63" r="2" fill="#fbf7f4"/>
+<g filter="url(#ttd)">
+<circle cx="94" cy="30" r="8" fill="url(#ttA)"/>
+<path d="M94 30 76 76" stroke="url(#ttA)" stroke-width="4.6" stroke-linecap="round"/>
+<rect x="70" y="72" width="12" height="9" rx="2.5" transform="rotate(22 76 76)" fill="#9aa0a7"/>
+</g>
+<circle cx="94" cy="30" r="3" fill="#eef1f4"/>
+<circle cx="26" cy="97" r="5" fill="url(#ttG)"/><circle cx="24.4" cy="95.4" r="1.5" fill="#fff" opacity=".8"/>`+rim('tt')},
+
+/* 4 — SCENE / WORLD */
+{n:'Scene', k:'world house level map home', s: base('hs',D,DK)+`
+<defs>
+<linearGradient id="hsR" x1="0" y1="0" x2=".3" y2="1"><stop offset="0" stop-color="#ffa15c"/><stop offset=".55" stop-color="#f4823c"/><stop offset="1" stop-color="#d2601f"/></linearGradient>
+<linearGradient id="hsW" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f6d4ae"/><stop offset=".6" stop-color="#e8bd92"/><stop offset="1" stop-color="#c8996e"/></linearGradient>
+<linearGradient id="hsD" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6f92ad"/><stop offset="1" stop-color="#3c5c78"/></linearGradient>
+</defs>
+<ellipse cx="60" cy="101" rx="34" ry="5.5" fill="#000" opacity=".35"/>
+<g filter="url(#hsd)">
+<path d="M60 22 104 60H16Z" fill="url(#hsR)"/>
+<path d="M28 58h64v40a4 4 0 0 1-4 4H32a4 4 0 0 1-4-4z" fill="url(#hsW)"/>
+</g>
+<path d="M60 22 104 60h-9L60 30 25 60h-9z" fill="#fff" opacity=".18"/>
+<path d="M28 58h64v4H28z" fill="#000" opacity=".18"/>
+<rect x="52" y="76" width="17" height="26" rx="2.5" fill="url(#hsD)"/>
+<rect x="52" y="76" width="17" height="26" rx="2.5" fill="none" stroke="#fff" stroke-opacity=".18"/>
+<circle cx="65" cy="90" r="1.4" fill="#e7eef4" opacity=".8"/>
+<rect x="34" y="68" width="13" height="13" rx="2.2" fill="url(#hsD)"/>
+<rect x="75" y="68" width="10" height="13" rx="2.2" fill="url(#hsD)" opacity=".82"/>
+<path d="M34 68h13v5H34zM75 68h10v5H75z" fill="#fff" opacity=".2"/>`+rim('hs')},
+
+/* 5 — RANDOM / DICE */
+{n:'Random', k:'dice rng seed chance roll', s: base('dc',D,DK)+`
+<defs>
+<linearGradient id="dcT" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e8eaed"/></linearGradient>
+<linearGradient id="dcL" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#dcdfe4"/><stop offset="1" stop-color="#b2b7be"/></linearGradient>
+<linearGradient id="dcR" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c6cad0"/><stop offset="1" stop-color="#93989f"/></linearGradient>
+</defs>
+<ellipse cx="60" cy="103" rx="30" ry="5" fill="#000" opacity=".38"/>
+<g filter="url(#dcd)">
+<polygon points="${ISO_TOP}" fill="url(#dcT)"/>
+<polygon points="26,46 60,66 60,102 26,82" fill="url(#dcL)"/>
+<polygon points="94,46 60,66 60,102 94,82" fill="url(#dcR)"/>
+</g>
+<polygon points="${ISO_TOP}" fill="none" stroke="#fff" stroke-opacity=".8"/>
+<ellipse cx="60" cy="45" rx="6" ry="3.5" fill="#24262a"/>
+<g transform="translate(26 46) matrix(1 .588 0 1 0 0)" fill="#24262a">
+<ellipse cx="9" cy="8" rx="4" ry="4.6"/><ellipse cx="17" cy="18" rx="4" ry="4.6"/><ellipse cx="25" cy="28" rx="4" ry="4.6"/>
+</g>
+<g transform="translate(60 66) matrix(1 -.588 0 1 0 0)" fill="#2b2e33">
+<ellipse cx="9" cy="9" rx="3.8" ry="4.4"/><ellipse cx="25" cy="9" rx="3.8" ry="4.4"/>
+<ellipse cx="17" cy="18" rx="3.8" ry="4.4"/>
+<ellipse cx="9" cy="27" rx="3.8" ry="4.4"/><ellipse cx="25" cy="27" rx="3.8" ry="4.4"/>
+</g>
+<polygon points="26,46 60,66 60,72 26,52" fill="#fff" opacity=".35"/>`+rim('dc')},
+
+/* 6 — RECORDER */
+{n:'Recorder', k:'video camera capture movie record', s: base('mv','#40464e','#131519')+`
+<defs>
+<linearGradient id="mvB" x1=".1" y1="0" x2=".9" y2="1"><stop offset="0" stop-color="#78838f"/><stop offset=".5" stop-color="#576470"/><stop offset="1" stop-color="#39434e"/></linearGradient>
+<linearGradient id="mvL" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6d7986"/><stop offset="1" stop-color="#414b56"/></linearGradient>
+</defs>
+<ellipse cx="60" cy="99" rx="32" ry="5" fill="#000" opacity=".35"/>
+<g filter="url(#mvd)">
+<circle cx="42" cy="40" r="12.5" fill="url(#mvB)"/>
+<circle cx="66" cy="37" r="15.5" fill="url(#mvB)"/>
+<rect x="22" y="50" width="58" height="42" rx="9" fill="url(#mvB)"/>
+<path d="M80 62 100 51v34L80 76z" fill="url(#mvL)"/>
+</g>
+<path d="M80 62 100 51v6L80 68z" fill="#fff" opacity=".14"/>
+<circle cx="42" cy="40" r="12.5" fill="none" stroke="#fff" stroke-opacity=".16"/>
+<circle cx="66" cy="37" r="15.5" fill="none" stroke="#fff" stroke-opacity=".16"/>
+<circle cx="66" cy="37" r="4" fill="#2f3841"/>
+<rect x="22" y="50" width="58" height="42" rx="9" fill="none" stroke="#fff" stroke-opacity=".15"/>
+<path d="M45 60l22 12-22 12z" fill="#cdd7e0"/>
+<path d="M45 60l22 12-22 12z" fill="none" stroke="#fff" stroke-opacity=".5"/>
+<rect x="26" y="54" width="50" height="10" rx="5" fill="#fff" opacity=".07"/>`+rim('mv')},
+
+/* 7 — ASSET LIBRARY */
+{n:'Asset Library', k:'assets files browser folders project', s: base('al',D,DK)+`
+<defs>
+<linearGradient id="alB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3d6bb8"/><stop offset="1" stop-color="#22417a"/></linearGradient>
+<linearGradient id="alF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5f8fdd"/><stop offset="1" stop-color="#2d54a0"/></linearGradient>
+</defs>
+<ellipse cx="60" cy="101" rx="33" ry="5" fill="#000" opacity=".35"/>
+<g filter="url(#ald)"><path d="M20 44h80v50a6 6 0 0 1-6 6H26a6 6 0 0 1-6-6z" fill="url(#alB)"/></g>
+<g>
+<rect x="28" y="30" width="56" height="46" rx="4" fill="#f2f4f7"/>
+<path d="M28 30h20v6h36v40H28z" fill="#2fbf87"/>
+<rect x="34" y="38" width="56" height="42" rx="4" fill="#fafbfc"/>
+<path d="M34 38h20v6h36v36H34z" fill="#ef8c34"/>
+<rect x="40" y="46" width="56" height="40" rx="4" fill="#f2f4f7"/>
+<path d="M40 46h20v6h36v34H40z" fill="#d63f96"/>
+<rect x="46" y="54" width="52" height="38" rx="4" fill="#fafbfc"/>
+<path d="M46 54h20v6h32v32H46z" fill="#f0c02e"/>
+</g>
+<path d="M20 62h80v32a6 6 0 0 1-6 6H26a6 6 0 0 1-6-6z" fill="url(#alF)"/>
+<path d="M20 62h80v6c-10 4-18 6-40 6s-30-2-40-6z" fill="#000" opacity=".14"/>
+<path d="M20 62h80v3H20z" fill="#fff" opacity=".18"/>
+<rect x="20.7" y="44.7" width="78.6" height="54.6" rx="5.6" fill="none" stroke="#fff" stroke-opacity=".16"/>`+rim('al')},
+
+/* 8 — TEXTURES */
+{n:'Textures', k:'texture image folder sprite atlas', s: base('tx',D,DK)+`
+<defs>
+<linearGradient id="txB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f5b73f"/><stop offset="1" stop-color="#d18d16"/></linearGradient>
+<linearGradient id="txF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd06a"/><stop offset="1" stop-color="#e79c1f"/></linearGradient>
+<linearGradient id="txS" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bfe4f2"/><stop offset="1" stop-color="#8fc9e6"/></linearGradient>
+</defs>
+<ellipse cx="60" cy="99" rx="32" ry="5" fill="#000" opacity=".35"/>
+<g filter="url(#txd)"><path d="M20 36h28l7 8h45v46a6 6 0 0 1-6 6H26a6 6 0 0 1-6-6z" fill="url(#txB)"/></g>
+<g transform="rotate(6 74 52)">
+<rect x="56" y="26" width="40" height="34" rx="3.5" fill="#f7f4ec"/>
+<rect x="59.5" y="29.5" width="33" height="27" rx="2" fill="url(#txS)"/>
+<path d="M59.5 48l10-11 8 9 6-6 9 10v4a2 2 0 0 1-2 2H61.5a2 2 0 0 1-2-2z" fill="#3fa06a"/>
+<circle cx="84" cy="37" r="4" fill="#f6c33e"/>
+</g>
+<path d="M22 54h76a4 4 0 0 1 4 4l-4 32a6 6 0 0 1-6 6H28a6 6 0 0 1-6-6L18 58a4 4 0 0 1 4-4z" fill="url(#txF)"/>
+<path d="M22 54h76a4 4 0 0 1 4 4l-.6 5H18.6L18 58a4 4 0 0 1 4-4z" fill="#fff" opacity=".22"/>
+<path d="M20 36h28l7 8H20z" fill="#fff" opacity=".14"/>`+rim('tx')},
+
+/* 9 — ARCADE BUILD */
+{n:'Arcade Build', k:'cabinet retro machine platform target', s: base('ar','#3a3f47','#111317')+`
+<defs>
+<linearGradient id="arC" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#e05244"/><stop offset=".5" stop-color="#b52d21"/><stop offset="1" stop-color="#7d1a12"/></linearGradient>
+<linearGradient id="arS" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d2733"/><stop offset=".5" stop-color="#080c11"/><stop offset="1" stop-color="#101922"/></linearGradient>
+<linearGradient id="arD" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3c4149"/><stop offset="1" stop-color="#1b1e23"/></linearGradient>
+</defs>
+<ellipse cx="60" cy="100" rx="32" ry="5" fill="#000" opacity=".4"/>
+<g filter="url(#ard)">
+<path d="M24 24h72a4 4 0 0 1 4 4v62a6 6 0 0 1-6 6H26a6 6 0 0 1-6-6V28a4 4 0 0 1 4-4z" fill="url(#arC)"/>
+</g>
+<rect x="26" y="20" width="68" height="12" rx="3" fill="#ef6a58"/>
+<rect x="26" y="20" width="68" height="5" rx="2.5" fill="#fff" opacity=".28"/>
+<rect x="28" y="36" width="64" height="34" rx="4" fill="url(#arS)"/>
+<rect x="28" y="36" width="64" height="34" rx="4" fill="none" stroke="#000" stroke-opacity=".5"/>
+<path d="M30 38h60v10c-16 7-44 7-60 0z" fill="#fff" opacity=".07"/>
+<g fill="#7de3a6"><rect x="36" y="58" width="6" height="6"/><rect x="46" y="52" width="6" height="12"/><rect x="56" y="46" width="6" height="18"/><rect x="66" y="55" width="6" height="9"/><rect x="76" y="50" width="6" height="14"/></g>
+<rect x="24" y="74" width="72" height="18" rx="4" fill="url(#arD)"/>
+<rect x="24" y="74" width="72" height="5" rx="2.5" fill="#fff" opacity=".12"/>
+<rect x="38.5" y="76" width="4" height="9" rx="2" fill="#b8bec5"/>
+<circle cx="40.5" cy="76" r="5.5" fill="#e34b3a"/><circle cx="38.6" cy="74.2" r="1.6" fill="#fff" opacity=".6"/>
+<g><circle cx="58" cy="84" r="4" fill="#3fae66"/><circle cx="68" cy="84" r="4" fill="#e8c33c"/><circle cx="78" cy="84" r="4" fill="#3f7fd6"/></g>
+<g fill="#fff" opacity=".35"><circle cx="56.8" cy="82.6" r="1.1"/><circle cx="66.8" cy="82.6" r="1.1"/><circle cx="76.8" cy="82.6" r="1.1"/></g>`+rim('ar')},
+
+/* 10 — INPUT / JOYSTICK */
+{n:'Input', k:'joystick controls arcade stick binding', s: base('jo','#343940','#0e1013')+`
+<defs>
+<linearGradient id="joB" x1=".1" y1="0" x2=".9" y2="1"><stop offset="0" stop-color="#3d434b"/><stop offset=".45" stop-color="#22262c"/><stop offset="1" stop-color="#0d0f12"/></linearGradient>
+<linearGradient id="joS" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6f7680"/><stop offset=".4" stop-color="#e2e6ea"/><stop offset="1" stop-color="#767d86"/></linearGradient>
+<radialGradient id="joR" cx=".33" cy=".28" r=".8"><stop offset="0" stop-color="#ff8a72"/><stop offset=".5" stop-color="#e33e28"/><stop offset="1" stop-color="#941a0d"/></radialGradient>
+</defs>
+<ellipse cx="60" cy="98" rx="33" ry="6" fill="#000" opacity=".42"/>
+<g filter="url(#jod)"><path d="M22 72l24-16h50a4 4 0 0 1 4 4v20a6 6 0 0 1-6 6H28a6 6 0 0 1-6-6z" fill="url(#joB)"/></g>
+<path d="M22 72l24-16h50a4 4 0 0 1 4 4v3H26z" fill="#fff" opacity=".10"/>
+<g fill="#1a1d21"><ellipse cx="56" cy="60" rx="15" ry="6"/><ellipse cx="56" cy="56" rx="12.5" ry="5"/><ellipse cx="56" cy="52" rx="10" ry="4"/></g>
+<rect x="53" y="30" width="6" height="24" fill="url(#joS)"/>
+<circle cx="56" cy="26" r="15" fill="url(#joR)"/>
+<ellipse cx="50" cy="19" rx="5.5" ry="3.8" transform="rotate(-30 50 19)" fill="#fff" opacity=".45"/>
+<ellipse cx="62" cy="35" rx="4" ry="2" fill="#ff9f8b" opacity=".25"/>
+<g><ellipse cx="86" cy="76" rx="8" ry="5" fill="#15181c"/><ellipse cx="86" cy="74.5" rx="7" ry="4.2" fill="#e0402c"/><ellipse cx="84" cy="73" rx="2.6" ry="1.4" fill="#fff" opacity=".45"/></g>
+<g><ellipse cx="40" cy="84" rx="8" ry="5" fill="#15181c"/><ellipse cx="40" cy="82.5" rx="7" ry="4.2" fill="#e0402c"/><ellipse cx="38" cy="81" rx="2.6" ry="1.4" fill="#fff" opacity=".45"/></g>`+rim('jo')},
+
+/* 11 — GAMEPAD */
+{n:'Gamepad', k:'controller input pad player device', s: base('gm','#3e444c','#131519')+`
+<defs>
+<linearGradient id="gmB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#eceef1"/><stop offset="1" stop-color="#c2c6cc"/></linearGradient>
+<linearGradient id="gmK" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5a606a"/><stop offset="1" stop-color="#33383f"/></linearGradient>
+<radialGradient id="gmT" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#585f69"/><stop offset="1" stop-color="#22262b"/></radialGradient>
+</defs>
+<ellipse cx="60" cy="96" rx="34" ry="5" fill="#000" opacity=".38"/>
+<g filter="url(#gmd)">
+<path d="M30 42h60a10 10 0 0 1 9 6l9 22c3 9-3 18-12 18-6 0-10-4-13-9-3-6-6-8-11-8H48c-5 0-8 2-11 8-3 5-7 9-13 9-9 0-15-9-12-18l9-22a10 10 0 0 1 9-6z" fill="url(#gmB)"/>
+</g>
+<path d="M30 42h60a10 10 0 0 1 9 6l2 5c-12-5-25-7-41-7s-29 2-41 7l2-5a10 10 0 0 1 9-6z" fill="#fff" opacity=".7"/>
+<path d="M26 44h20v5c-9 1-15 3-20 6z" fill="#9aa0a8" opacity=".25"/>
+<path d="M32 56h9v-9h6v9h9v6h-9v9h-6v-9h-9z" fill="url(#gmK)"/>
+<rect x="52" y="53" width="16" height="4" rx="2" fill="#4a5058"/>
+<circle cx="44" cy="76" r="9" fill="url(#gmT)"/><circle cx="44" cy="74.6" r="6.4" fill="#3a3f46"/><ellipse cx="41.6" cy="72" rx="2.6" ry="1.5" fill="#fff" opacity=".25"/>
+<circle cx="72" cy="76" r="9" fill="url(#gmT)"/><circle cx="72" cy="74.6" r="6.4" fill="#3a3f46"/><ellipse cx="69.6" cy="72" rx="2.6" ry="1.5" fill="#fff" opacity=".25"/>
+<g>
+<circle cx="86" cy="49" r="5.4" fill="#5cb2f0"/><circle cx="76" cy="56" r="5.4" fill="#b07af0"/><circle cx="96" cy="56" r="5.4" fill="#4fd6b4"/><circle cx="86" cy="63" r="5.4" fill="#f272ac"/>
+</g>
+<g fill="#fff" opacity=".45"><circle cx="84.4" cy="47.4" r="1.5"/><circle cx="74.4" cy="54.4" r="1.5"/><circle cx="94.4" cy="54.4" r="1.5"/><circle cx="84.4" cy="61.4" r="1.5"/></g>`+rim('gm')},
+
+/* 12 — CONSOLE / TERMINAL */
+{n:'Console', k:'terminal log command debug output', s: base('te','#33363b','#131416')+`
+<defs>
+<linearGradient id="teB" x1="0" y1="0" x2=".4" y2="1"><stop offset="0" stop-color="#efe7d4"/><stop offset=".55" stop-color="#dcd2bc"/><stop offset="1" stop-color="#b7ab93"/></linearGradient>
+<linearGradient id="teS" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1e2226"/><stop offset=".5" stop-color="#06080a"/><stop offset="1" stop-color="#141a1e"/></linearGradient>
+</defs>
+<g filter="url(#ted)"><rect x="18" y="18" width="84" height="84" rx="16" fill="url(#teB)"/></g>
+<rect x="19" y="19" width="82" height="82" rx="15" fill="none" stroke="#fff" stroke-opacity=".5"/>
+<rect x="28" y="28" width="64" height="46" rx="9" fill="#8e846f"/>
+<rect x="29.5" y="29.5" width="61" height="43" rx="8" fill="url(#teS)"/>
+<path d="M31 31h58v14c-14 8-44 8-58 0z" fill="#fff" opacity=".06"/>
+<path d="M40 44l7 6-7 6" fill="none" stroke="#6ff08a" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="52" y="55" width="12" height="3.4" rx="1.7" fill="#6ff08a"/>
+<rect x="52" y="82" width="34" height="6" rx="3" fill="#8d836f"/>
+<rect x="53" y="83" width="32" height="4" rx="2" fill="#2a2b2d"/>
+<circle cx="36" cy="85" r="4.4" fill="#3fae66"/><circle cx="34.6" cy="83.6" r="1.3" fill="#fff" opacity=".7"/>
+<g opacity=".8"><rect x="44" y="84" width="3" height="3" fill="#e05f4a"/><rect x="48" y="84" width="3" height="3" fill="#e8b93c"/></g>`+rim('te')},
+
+/* 13 — PLAY */
+{n:'Play', k:'run start playmode transport', s: base('pl','#3b4148','#111317')+`
+<defs>
+<radialGradient id="plC" cx=".35" cy=".28" r=".85"><stop offset="0" stop-color="#8affc0"/><stop offset=".45" stop-color="#2fca7e"/><stop offset="1" stop-color="#0e6b3f"/></radialGradient>
+<linearGradient id="plR" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e6f7ee"/><stop offset="1" stop-color="#5e8672"/></linearGradient>
+<filter id="plGl" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="5"/></filter>
+</defs>
+<circle cx="60" cy="60" r="34" fill="#2fca7e" opacity=".22" filter="url(#plGl)"/>
+<circle cx="60" cy="60" r="33" fill="url(#plR)"/>
+<circle cx="60" cy="60" r="30.5" fill="url(#plC)"/>
+<path d="M32 46a30 30 0 0 1 56 0c-8 10-48 10-56 0z" fill="#fff" opacity=".26"/>
+<path d="M51 44l28 16-28 16z" fill="#f4fff8"/>
+<path d="M51 44l28 16-28 16z" fill="none" stroke="#0d6b41" stroke-opacity=".35"/>
+<path d="M51 44l28 16-14 8z" fill="#fff" opacity=".55"/>`+rim('pl')},
+
+/* 14 — PAUSE */
+{n:'Pause', k:'transport hold suspend', s: base('pa','#3b4148','#111317')+`
+<defs>
+<radialGradient id="paC" cx=".35" cy=".28" r=".85"><stop offset="0" stop-color="#ffd98a"/><stop offset=".45" stop-color="#f2a52c"/><stop offset="1" stop-color="#8a4f06"/></radialGradient>
+<linearGradient id="paR" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff3dd"/><stop offset="1" stop-color="#7d6746"/></linearGradient>
+</defs>
+<circle cx="60" cy="60" r="33" fill="url(#paR)"/>
+<circle cx="60" cy="60" r="30.5" fill="url(#paC)"/>
+<path d="M32 46a30 30 0 0 1 56 0c-8 10-48 10-56 0z" fill="#fff" opacity=".26"/>
+<rect x="46" y="44" width="9.5" height="32" rx="3" fill="#fffaf1"/>
+<rect x="64.5" y="44" width="9.5" height="32" rx="3" fill="#fffaf1"/>
+<rect x="46" y="44" width="9.5" height="16" rx="3" fill="#fff" opacity=".5"/>
+<rect x="64.5" y="44" width="9.5" height="16" rx="3" fill="#fff" opacity=".5"/>`+rim('pa')},
+
+/* 15 — STOP */
+{n:'Stop', k:'transport halt exit playmode', s: base('sp','#3b4148','#111317')+`
+<defs>
+<radialGradient id="spC" cx=".35" cy=".28" r=".85"><stop offset="0" stop-color="#ff9c8a"/><stop offset=".45" stop-color="#e0402c"/><stop offset="1" stop-color="#7a1409"/></radialGradient>
+<linearGradient id="spR" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe6e1"/><stop offset="1" stop-color="#7c534d"/></linearGradient>
+</defs>
+<circle cx="60" cy="60" r="33" fill="url(#spR)"/>
+<circle cx="60" cy="60" r="30.5" fill="url(#spC)"/>
+<path d="M32 46a30 30 0 0 1 56 0c-8 10-48 10-56 0z" fill="#fff" opacity=".26"/>
+<rect x="47" y="47" width="26" height="26" rx="4.5" fill="#fff4f2"/>
+<rect x="47" y="47" width="26" height="13" rx="4.5" fill="#fff" opacity=".55"/>`+rim('sp')},
+
+/* 16 — PHYSICS */
+{n:'Physics', k:'rigidbody gravity simulation bounce', s: base('py',D,DK)+`
+<defs>
+<radialGradient id="pyB" cx=".33" cy=".28" r=".85"><stop offset="0" stop-color="#a9d8ff"/><stop offset=".45" stop-color="#3f8fe0"/><stop offset="1" stop-color="#11386c"/></radialGradient>
+<linearGradient id="pyG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#59616c"/><stop offset="1" stop-color="#2a2f36"/></linearGradient>
+</defs>
+<path d="M22 88c10-30 22-30 30 0" fill="none" stroke="#7ec2ff" stroke-opacity=".45" stroke-width="2" stroke-dasharray="4 4" stroke-linecap="round"/>
+<path d="M52 88c8-22 18-22 26 0" fill="none" stroke="#7ec2ff" stroke-opacity=".3" stroke-width="2" stroke-dasharray="4 4" stroke-linecap="round"/>
+<rect x="16" y="88" width="88" height="8" rx="3" fill="url(#pyG)"/>
+<rect x="16" y="88" width="88" height="2.5" rx="1.2" fill="#fff" opacity=".16"/>
+<circle cx="34" cy="66" r="8" fill="#4a90d9" opacity=".18"/>
+<circle cx="46" cy="52" r="10" fill="#4a90d9" opacity=".3"/>
+<ellipse cx="72" cy="86" rx="16" ry="3.4" fill="#000" opacity=".4"/>
+<g filter="url(#pyd)"><circle cx="72" cy="66" r="19" fill="url(#pyB)"/></g>
+<ellipse cx="65" cy="57" rx="7" ry="4.6" transform="rotate(-33 65 57)" fill="#fff" opacity=".5"/>
+<path d="M56 72a19 19 0 0 0 32 6" fill="none" stroke="#bfe0ff" stroke-opacity=".35" stroke-width="2"/>`+rim('py')},
+
+/* 17 — LIGHTING */
+{n:'Lighting', k:'light bulb lamp global illumination bake', s: base('li','#3d434b','#121417')+`
+<defs>
+<radialGradient id="liG" cx=".5" cy=".45" r=".5"><stop offset="0" stop-color="#ffe89a" stop-opacity=".85"/><stop offset="1" stop-color="#ffd15a" stop-opacity="0"/></radialGradient>
+<radialGradient id="liB" cx=".38" cy=".3" r=".82"><stop offset="0" stop-color="#fffbe8"/><stop offset=".5" stop-color="#ffe07a"/><stop offset="1" stop-color="#e2a318"/></radialGradient>
+<linearGradient id="liM" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6c737c"/><stop offset=".35" stop-color="#d8dde3"/><stop offset="1" stop-color="#767d86"/></linearGradient>
+</defs>
+<circle cx="60" cy="52" r="42" fill="url(#liG)"/>
+<g stroke="#ffd766" stroke-opacity=".55" stroke-width="3" stroke-linecap="round">
+<path d="M60 12v7"/><path d="M27 25l5 5"/><path d="M93 25l-5 5"/><path d="M14 56h7"/><path d="M106 56h-7"/>
+</g>
+<path d="M60 22a24 24 0 0 1 15 43c-3 2-4 4-4 7H49c0-3-1-5-4-7A24 24 0 0 1 60 22z" fill="url(#liB)"/>
+<path d="M50 30a20 20 0 0 1 16-5c-8 1-14 6-16 13-2 6 0 11 3 15-7-5-9-16-3-23z" fill="#fff" opacity=".5"/>
+<path d="M52 52c0-6 4-10 8-10s8 4 8 10" fill="none" stroke="#a7660c" stroke-width="2.4" stroke-linecap="round"/>
+<path d="M60 42v18" stroke="#a7660c" stroke-width="2" stroke-linecap="round"/>
+<rect x="48" y="72" width="24" height="7" rx="2.5" fill="url(#liM)"/>
+<rect x="49" y="80" width="22" height="6" rx="2.5" fill="url(#liM)"/>
+<path d="M52 87h16l-3 7a4 4 0 0 1-4 3h-2a4 4 0 0 1-4-3z" fill="#8d949c"/>
+<rect x="48" y="72" width="24" height="2" rx="1" fill="#fff" opacity=".55"/>`+rim('li')},
+
+/* 18 — MESH */
+{n:'Mesh', k:'wireframe topology model geometry poly', s: base('me',D,DK)+`
+<defs>
+<linearGradient id="meF" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#63e6ff" stop-opacity=".38"/><stop offset="1" stop-color="#1a6f8f" stop-opacity=".22"/></linearGradient>
+</defs>
+<polygon points="${ISO_TOP}" fill="url(#meF)"/>
+<polygon points="26,46 60,66 60,102 26,82" fill="#0e2d3a" opacity=".65"/>
+<polygon points="94,46 60,66 60,102 94,82" fill="#123c4d" opacity=".65"/>
+<g fill="none" stroke="#6fe9ff" stroke-width="1.8" stroke-linejoin="round">
+<polygon points="${ISO_TOP}"/>
+<polygon points="26,46 60,66 60,102 26,82"/>
+<polygon points="94,46 60,66 60,102 94,82"/>
+</g>
+<g fill="none" stroke="#6fe9ff" stroke-opacity=".45" stroke-width="1.1">
+<path d="M60 26 60 66M26 46 94 46M26 46 60 102M94 46 60 102M26 64 60 84M94 64 60 84M43 36 43 74M77 36 77 74"/>
+</g>
+<g fill="#eafcff">
+<circle cx="60" cy="26" r="2.6"/><circle cx="94" cy="46" r="2.6"/><circle cx="26" cy="46" r="2.6"/>
+<circle cx="60" cy="66" r="2.6"/><circle cx="26" cy="82" r="2.6"/><circle cx="94" cy="82" r="2.6"/><circle cx="60" cy="102" r="2.6"/>
+</g>`+rim('me')},
+
+/* 19 — MATERIAL */
+{n:'Material', k:'shaderball pbr surface sphere preview', s: base('ma',D,DK)+`
+<defs>
+<radialGradient id="maS" cx=".34" cy=".28" r=".9"><stop offset="0" stop-color="#ffb98a"/><stop offset=".42" stop-color="#e0642f"/><stop offset=".85" stop-color="#7a2408"/><stop offset="1" stop-color="#c46a3c"/></radialGradient>
+<pattern id="maP" width="14" height="14" patternUnits="userSpaceOnUse">
+<rect width="7" height="7" fill="#ffffff" fill-opacity=".16"/><rect x="7" y="7" width="7" height="7" fill="#ffffff" fill-opacity=".16"/>
+</pattern>
+<clipPath id="maCl"><circle cx="60" cy="58" r="31"/></clipPath>
+</defs>
+<ellipse cx="60" cy="97" rx="30" ry="5.5" fill="#000" opacity=".42"/>
+<g filter="url(#mad)"><circle cx="60" cy="58" r="31" fill="url(#maS)"/></g>
+<g clip-path="url(#maCl)"><rect x="29" y="27" width="62" height="62" fill="url(#maP)"/></g>
+<circle cx="60" cy="58" r="31" fill="none" stroke="#ffd3b3" stroke-opacity=".45"/>
+<ellipse cx="48" cy="43" rx="10" ry="6.4" transform="rotate(-34 48 43)" fill="#fff" opacity=".55"/>
+<ellipse cx="44" cy="38" rx="4" ry="2.4" transform="rotate(-34 44 38)" fill="#fff" opacity=".85"/>
+<path d="M36 76a31 31 0 0 0 46-6" fill="none" stroke="#ffd9b8" stroke-opacity=".35" stroke-width="2.6"/>`+rim('ma')},
+
+/* 20 — PARTICLES */
+{n:'Particles', k:'vfx emitter fx sparks system', s: base('pt','#2f3640','#101216')+`
+<defs>
+<radialGradient id="ptS" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fff8d8"/><stop offset=".4" stop-color="#ffc94d"/><stop offset="1" stop-color="#ff6a1f" stop-opacity="0"/></radialGradient>
+<linearGradient id="ptN" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4c545e"/><stop offset=".4" stop-color="#8b939d"/><stop offset="1" stop-color="#3a4149"/></linearGradient>
+<filter id="ptGl" x="-70%" y="-70%" width="240%" height="240%"><feGaussianBlur stdDeviation="2.4"/></filter>
+</defs>
+<path d="M60 92 30 30h60z" fill="#ffb347" opacity=".08"/>
+<g filter="url(#ptGl)" opacity=".9">
+<circle cx="60" cy="34" r="7" fill="url(#ptS)"/><circle cx="42" cy="46" r="5" fill="url(#ptS)"/><circle cx="78" cy="44" r="5.5" fill="url(#ptS)"/>
+<circle cx="50" cy="62" r="4" fill="url(#ptS)"/><circle cx="70" cy="60" r="4.5" fill="url(#ptS)"/><circle cx="60" cy="52" r="3.4" fill="url(#ptS)"/>
+<circle cx="34" cy="30" r="3.4" fill="url(#ptS)"/><circle cx="88" cy="30" r="3" fill="url(#ptS)"/><circle cx="60" cy="74" r="3.4" fill="url(#ptS)"/>
+</g>
+<g fill="#fffbe9">
+<circle cx="60" cy="34" r="2.6"/><circle cx="42" cy="46" r="1.9"/><circle cx="78" cy="44" r="2.1"/><circle cx="50" cy="62" r="1.5"/>
+<circle cx="70" cy="60" r="1.7"/><circle cx="60" cy="52" r="1.3"/><circle cx="34" cy="30" r="1.3"/><circle cx="88" cy="30" r="1.1"/><circle cx="60" cy="74" r="1.3"/>
+</g>
+<path d="M52 84h16l-3 12H55z" fill="url(#ptN)"/>
+<rect x="48" y="94" width="24" height="8" rx="3" fill="#4b535c"/>
+<rect x="48" y="94" width="24" height="2.6" rx="1.3" fill="#fff" opacity=".2"/>
+<ellipse cx="60" cy="84" rx="8" ry="2.4" fill="#ffd06b" opacity=".55"/>`+rim('pt')},
+
+/* 21 — ANIMATION */
+{n:'Animation', k:'keyframe timeline curve dope sheet', s: base('kf',D,DK)+`
+<defs>
+<linearGradient id="kfT" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#252a31"/><stop offset="1" stop-color="#14181d"/></linearGradient>
+<linearGradient id="kfK" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe08a"/><stop offset="1" stop-color="#e09214"/></linearGradient>
+</defs>
+<rect x="18" y="26" width="84" height="68" rx="8" fill="url(#kfT)"/>
+<rect x="18.7" y="26.7" width="82.6" height="66.6" rx="7.4" fill="none" stroke="#fff" stroke-opacity=".12"/>
+<rect x="18" y="26" width="84" height="12" rx="8" fill="#2f3views"/>
+<path d="M18 34a8 8 0 0 1 8-8h68a8 8 0 0 1 8 8v4H18z" fill="#343b44"/>
+<g stroke="#8f98a3" stroke-opacity=".5"><path d="M30 30v8M42 32v6M54 30v8M66 32v6M78 30v8M90 32v6"/></g>
+<g fill="#20252b"><rect x="24" y="46" width="72" height="10" rx="3"/><rect x="24" y="62" width="72" height="10" rx="3"/><rect x="24" y="78" width="72" height="10" rx="3"/></g>
+<g fill="#2c333b"><rect x="24" y="46" width="42" height="10" rx="3"/><rect x="24" y="62" width="60" height="10" rx="3"/><rect x="24" y="78" width="32" height="10" rx="3"/></g>
+<g fill="url(#kfK)" stroke="#7a4d05" stroke-opacity=".5">
+<rect x="30" y="46.6" width="9" height="9" rx="1.6" transform="rotate(45 34.5 51)"/>
+<rect x="57" y="46.6" width="9" height="9" rx="1.6" transform="rotate(45 61.5 51)"/>
+<rect x="40" y="62.6" width="9" height="9" rx="1.6" transform="rotate(45 44.5 67)"/>
+<rect x="75" y="62.6" width="9" height="9" rx="1.6" transform="rotate(45 79.5 67)"/>
+<rect x="47" y="78.6" width="9" height="9" rx="1.6" transform="rotate(45 51.5 83)"/>
+</g>
+<path d="M70 26v68" stroke="#ff5a45" stroke-width="2"/>
+<path d="M65 26h10l-5 6z" fill="#ff5a45"/>`+rim('kf')},
+
+/* 22 — TERRAIN */
+{n:'Terrain', k:'landscape heightmap world sculpt', s: base('tn','#3a4149','#111318')+`
+<defs>
+<linearGradient id="tnA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9fb3c2"/><stop offset=".3" stop-color="#5c7f6a"/><stop offset="1" stop-color="#254236"/></linearGradient>
+<linearGradient id="tnB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c9d6de"/><stop offset=".28" stop-color="#6d8f78"/><stop offset="1" stop-color="#1d3a2e"/></linearGradient>
+<linearGradient id="tnW" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4f9dd6" stop-opacity=".85"/><stop offset="1" stop-color="#1c4f7a" stop-opacity=".9"/></linearGradient>
+<clipPath id="tnC"><rect x="14" y="14" width="92" height="92" rx="20"/></clipPath>
+</defs>
+<g clip-path="url(#tnC)">
+<rect x="14" y="14" width="92" height="92" fill="#1a2029"/>
+<path d="M14 92 44 40l18 26 14-18 30 44z" fill="url(#tnA)"/>
+<path d="M28 92 62 36l44 56z" fill="url(#tnB)"/>
+<path d="M62 36l11 18c-7 4-14 3-20-1z" fill="#eef4f8"/>
+<path d="M44 40l8 12c-5 3-10 2-13 0z" fill="#e3ecf2" opacity=".85"/>
+<rect x="14" y="86" width="92" height="20" fill="url(#tnW)"/>
+<g stroke="#8ef0d4" stroke-opacity=".28" stroke-width=".9" fill="none">
+<path d="M14 92 44 40l18 26 14-18 30 44"/><path d="M20 92 48 52l16 22 12-14 24 32"/><path d="M30 92 52 62l12 16 10-10 18 24"/>
+<path d="M44 40 44 92M62 66 62 92M76 48 76 92M30 70 30 92M92 74 92 92"/>
+</g>
+<path d="M14 86h92" stroke="#a9e8ff" stroke-opacity=".5"/>
+</g>`+rim('tn')},
+
+/* 23 — SCRIPT */
+{n:'Script', k:'code csharp behaviour component file', s: base('sr',D,DK)+`
+<defs>
+<linearGradient id="srP" x1="0" y1="0" x2=".6" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d5dae0"/></linearGradient>
+</defs>
+<ellipse cx="60" cy="100" rx="28" ry="4.5" fill="#000" opacity=".35"/>
+<g filter="url(#srd)"><path d="M28 18h38l24 24v56a6 6 0 0 1-6 6H28a6 6 0 0 1-6-6V24a6 6 0 0 1 6-6z" fill="url(#srP)"/></g>
+<path d="M66 18l24 24H70a4 4 0 0 1-4-4z" fill="#aab2ba"/>
+<path d="M66 18l24 24h-6L66 24z" fill="#fff" opacity=".5"/>
+<g stroke-linecap="round" stroke-width="3.4">
+<path d="M32 54h14" stroke="#7d5bd6"/><path d="M50 54h22" stroke="#c7ccd3"/>
+<path d="M32 63h10" stroke="#2f9e6b"/><path d="M46 63h30" stroke="#c7ccd3"/>
+<path d="M38 72h14" stroke="#3f7fd6"/><path d="M56 72h20" stroke="#c7ccd3"/>
+<path d="M38 81h20" stroke="#d67f2f"/><path d="M62 81h14" stroke="#c7ccd3"/>
+<path d="M32 90h16" stroke="#7d5bd6"/>
+</g>
+<g fill="#5d6570" font-family="monospace"><text x="30" y="44" font-size="13" font-weight="700">{ }</text></g>
+<rect x="22.7" y="18.7" width="66.6" height="84.6" rx="5.6" fill="none" stroke="#fff" stroke-opacity=".6"/>`+rim('sr')},
+
+/* 24 — PREFAB */
+{n:'Prefab', k:'blueprint instance object cube entity', s: base('pf',D,DK)+`
+<defs>
+<linearGradient id="pfT" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8fd0ff"/><stop offset="1" stop-color="#4c9ae0"/></linearGradient>
+<linearGradient id="pfL" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f86cc"/><stop offset="1" stop-color="#1f4f83"/></linearGradient>
+<linearGradient id="pfR" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2e6ba8"/><stop offset="1" stop-color="#153c66"/></linearGradient>
+</defs>
+<ellipse cx="60" cy="103" rx="30" ry="5" fill="#000" opacity=".4"/>
+<g filter="url(#pfd)">
+<polygon points="${ISO_TOP}" fill="url(#pfT)"/>
+<polygon points="26,46 60,66 60,102 26,82" fill="url(#pfL)"/>
+<polygon points="94,46 60,66 60,102 94,82" fill="url(#pfR)"/>
+</g>
+<polygon points="${ISO_TOP}" fill="none" stroke="#dff0ff" stroke-opacity=".8"/>
+<path d="M26 46 60 66 60 72 26 52z" fill="#fff" opacity=".22"/>
+<path d="M60 26 84 40 60 54 36 40z" fill="#fff" opacity=".22"/>
+<g stroke="#bfe4ff" stroke-opacity=".5" stroke-dasharray="3 3" fill="none"><path d="M60 66v36M26 46v36M94 46v36"/></g>
+<circle cx="60" cy="66" r="3" fill="#eaf6ff"/>`+rim('pf')},
+
+/* 25 — SETTINGS */
+{n:'Settings', k:'gear preferences config project options', s: base('sg','#3b4149','#121417')+`
+<defs>
+<linearGradient id="sgM" x1=".15" y1="0" x2=".85" y2="1"><stop offset="0" stop-color="#e9edf1"/><stop offset=".35" stop-color="#9aa3ad"/><stop offset=".6" stop-color="#cdd4db"/><stop offset="1" stop-color="#6d757e"/></linearGradient>
+<radialGradient id="sgH" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#2b3038"/><stop offset="1" stop-color="#12151a"/></radialGradient>
+</defs>
+<g filter="url(#sgd)">
+<g fill="url(#sgM)">
+<rect x="54" y="16" width="12" height="20" rx="3"/><rect x="54" y="84" width="12" height="20" rx="3"/>
+<rect x="54" y="16" width="12" height="20" rx="3" transform="rotate(45 60 60)"/><rect x="54" y="84" width="12" height="20" rx="3" transform="rotate(45 60 60)"/>
+<rect x="54" y="16" width="12" height="20" rx="3" transform="rotate(90 60 60)"/><rect x="54" y="84" width="12" height="20" rx="3" transform="rotate(90 60 60)"/>
+<rect x="54" y="16" width="12" height="20" rx="3" transform="rotate(135 60 60)"/><rect x="54" y="84" width="12" height="20" rx="3" transform="rotate(135 60 60)"/>
+<rect x="54" y="16" width="12" height="20" rx="3" transform="rotate(22.5 60 60)"/><rect x="54" y="84" width="12" height="20" rx="3" transform="rotate(22.5 60 60)"/>
+<rect x="54" y="16" width="12" height="20" rx="3" transform="rotate(67.5 60 60)"/><rect x="54" y="84" width="12" height="20" rx="3" transform="rotate(67.5 60 60)"/>
+<circle cx="60" cy="60" r="30"/>
+</g>
+</g>
+<circle cx="60" cy="60" r="30" fill="none" stroke="#fff" stroke-opacity=".35"/>
+<circle cx="60" cy="60" r="24" fill="#8f98a2"/>
+<circle cx="60" cy="60" r="21" fill="url(#sgH)"/>
+<circle cx="60" cy="60" r="14" fill="#0e1114"/>
+<circle cx="60" cy="60" r="14" fill="none" stroke="#79828c" stroke-width="1.4"/>
+<path d="M40 44a30 30 0 0 1 40-4l-6 8a20 20 0 0 0-26 3z" fill="#fff" opacity=".28"/>`+rim('sg')},
+
+/* 26 — BUILD */
+{n:'Build', k:'compile hammer pipeline package deploy', s: base('bd',D,DK)+`
+<defs>
+<linearGradient id="bdW" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d59a58"/><stop offset=".5" stop-color="#a86f35"/><stop offset="1" stop-color="#6f4519"/></linearGradient>
+<linearGradient id="bdS" x1=".1" y1="0" x2=".9" y2="1"><stop offset="0" stop-color="#eef2f6"/><stop offset=".4" stop-color="#98a1ab"/><stop offset=".7" stop-color="#c9d1d8"/><stop offset="1" stop-color="#5d656f"/></linearGradient>
+<linearGradient id="bdA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5b636d"/><stop offset="1" stop-color="#2b3037"/></linearGradient>
+</defs>
+<ellipse cx="60" cy="99" rx="32" ry="5" fill="#000" opacity=".4"/>
+<path d="M34 84h52l6 12H28z" fill="url(#bdA)"/>
+<path d="M40 74h40c6 0 8 4 4 6l-6 4H42l-6-4c-4-2-2-6 4-6z" fill="url(#bdS)"/>
+<path d="M40 74h40c3 0 5 1 5 2H35c0-1 2-2 5-2z" fill="#fff" opacity=".45"/>
+<g transform="rotate(-32 60 46)">
+<rect x="56" y="34" width="8" height="38" rx="3" fill="url(#bdW)"/>
+<rect x="57.4" y="34" width="2.4" height="38" fill="#fff" opacity=".22"/>
+<path d="M40 22h30a6 6 0 0 1 6 6v6a6 6 0 0 1-6 6H40l-8-9z" fill="url(#bdS)"/>
+<path d="M40 22h30a6 6 0 0 1 6 6H38z" fill="#fff" opacity=".4"/>
+<rect x="53" y="20" width="9" height="24" rx="2" fill="#7d858f" opacity=".6"/>
+</g>
+<g fill="#ffd76b" opacity=".9"><circle cx="88" cy="40" r="2"/><circle cx="94" cy="48" r="1.4"/><circle cx="84" cy="30" r="1.4"/></g>`+rim('bd')},
+
+/* 27 — DEBUG */
+{n:'Debug', k:'bug error breakpoint inspect crash', s: base('db',D,DK)+`
+<defs>
+<radialGradient id="dbB" cx=".35" cy=".28" r=".85"><stop offset="0" stop-color="#ff9c6e"/><stop offset=".45" stop-color="#c8402a"/><stop offset="1" stop-color="#611307"/></radialGradient>
+<radialGradient id="dbH" cx=".4" cy=".3" r=".8"><stop offset="0" stop-color="#5a6069"/><stop offset="1" stop-color="#1e2228"/></radialGradient>
+</defs>
+<g stroke="#2a2f36" stroke-width="4.5" stroke-linecap="round" fill="none">
+<path d="M40 54 24 44M40 68H22M42 82 28 92M80 54l16-10M80 68h18M78 82l14 10"/>
+</g>
+<g stroke="#71797f" stroke-width="1.6" stroke-linecap="round" fill="none" opacity=".7">
+<path d="M40 54 24 44M40 68H22M42 82 28 92M80 54l16-10M80 68h18M78 82l14 10"/>
+</g>
+<path d="M46 34c2-6 6-9 14-9s12 3 14 9" fill="none" stroke="#2a2f36" stroke-width="3.4" stroke-linecap="round"/>
+<ellipse cx="60" cy="40" rx="14" ry="11" fill="url(#dbH)"/>
+<circle cx="54" cy="38" r="2.4" fill="#ffd9c9"/><circle cx="66" cy="38" r="2.4" fill="#ffd9c9"/>
+<ellipse cx="60" cy="70" rx="22" ry="27" fill="url(#dbB)"/>
+<path d="M60 45v50" stroke="#5c1a0b" stroke-width="2" opacity=".6"/>
+<g fill="#7d2412" opacity=".55"><ellipse cx="48" cy="62" rx="5" ry="4"/><ellipse cx="72" cy="66" rx="4" ry="3.4"/><ellipse cx="58" cy="84" rx="5" ry="4"/></g>
+<ellipse cx="51" cy="55" rx="7" ry="5" transform="rotate(-32 51 55)" fill="#fff" opacity=".28"/>`+rim('db')},
+
+/* 28 — MULTIPLAYER */
+{n:'Multiplayer', k:'network online netcode server sync', s: base('nt',D,DK)+`
+<defs>
+<radialGradient id="ntG" cx=".35" cy=".28" r=".9"><stop offset="0" stop-color="#7fd4ff"/><stop offset=".5" stop-color="#2274c4"/><stop offset="1" stop-color="#0a2c52"/></radialGradient>
+</defs>
+<g filter="url(#ntd)"><circle cx="60" cy="60" r="31" fill="url(#ntG)"/></g>
+<g fill="none" stroke="#d3efff" stroke-opacity=".55">
+<ellipse cx="60" cy="60" rx="31" ry="13"/><ellipse cx="60" cy="60" rx="31" ry="24"/><ellipse cx="60" cy="60" rx="13" ry="31"/><path d="M29 60h62"/>
+</g>
+<path d="M34 44a31 31 0 0 1 44-8l-8 9a20 20 0 0 0-26 5z" fill="#fff" opacity=".25"/>
+<g stroke="#9beaff" stroke-width="1.8" opacity=".95">
+<path d="M60 34 40 58M60 34l22 22M40 58l20 28M82 56 60 86"/>
+</g>
+<g><circle cx="60" cy="34" r="6" fill="#eafaff"/><circle cx="40" cy="58" r="5.4" fill="#eafaff"/><circle cx="82" cy="56" r="5.4" fill="#eafaff"/><circle cx="60" cy="86" r="5" fill="#eafaff"/></g>
+<g fill="#3f9fd6"><circle cx="60" cy="34" r="2.4"/><circle cx="40" cy="58" r="2.2"/><circle cx="82" cy="56" r="2.2"/><circle cx="60" cy="86" r="2"/></g>`+rim('nt')},
+
+/* 29 — SAVE */
+{n:'Save', k:'floppy serialize disk export data', s: base('sv',D,DK)+`
+<defs>
+<linearGradient id="svB" x1=".1" y1="0" x2=".9" y2="1"><stop offset="0" stop-color="#4a5563"/><stop offset=".5" stop-color="#2c343f"/><stop offset="1" stop-color="#161b21"/></linearGradient>
+<linearGradient id="svM" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e6eaee"/><stop offset="1" stop-color="#9aa3ad"/></linearGradient>
+</defs>
+<ellipse cx="60" cy="100" rx="30" ry="4.5" fill="#000" opacity=".38"/>
+<g filter="url(#svd)"><path d="M24 22h58l14 14v58a6 6 0 0 1-6 6H24a6 6 0 0 1-6-6V28a6 6 0 0 1 6-6z" fill="url(#svB)"/></g>
+<path d="M24 22h58l14 14v3H18V28a6 6 0 0 1 6-6z" fill="#fff" opacity=".10"/>
+<rect x="36" y="22" width="42" height="28" rx="2" fill="url(#svM)"/>
+<rect x="60" y="26" width="12" height="20" rx="1.6" fill="#39414b"/>
+<rect x="61" y="27" width="4" height="18" rx="1" fill="#5b6570"/>
+<rect x="30" y="60" width="60" height="34" rx="3" fill="#f2f5f8"/>
+<rect x="30" y="60" width="60" height="9" rx="3" fill="#dfe4ea"/>
+<g stroke="#b9c1c9" stroke-width="2.6" stroke-linecap="round"><path d="M36 76h34M36 84h48"/></g>
+<rect x="18.7" y="22.7" width="76.6" height="76.6" rx="5.6" fill="none" stroke="#fff" stroke-opacity=".16"/>`+rim('sv')},
+
+/* 30 — LAYERS */
+{n:'Layers', k:'sorting order stack tilemap depth', s: base('ly',D,DK)+`
+<defs>
+<linearGradient id="ly1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7bd8ff"/><stop offset="1" stop-color="#2f8ecb"/></linearGradient>
+<linearGradient id="ly2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a58bff"/><stop offset="1" stop-color="#5c3fc7"/></linearGradient>
+<linearGradient id="ly3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffb86b"/><stop offset="1" stop-color="#d1701c"/></linearGradient>
+</defs>
+<g filter="url(#lyd)">
+<polygon points="60,74 96,92 60,110 24,92" fill="url(#ly3)"/>
+<polygon points="60,74 96,92 60,110 24,92" fill="none" stroke="#fff" stroke-opacity=".4"/>
+<polygon points="60,52 96,70 60,88 24,70" fill="url(#ly2)"/>
+<polygon points="60,52 96,70 60,88 24,70" fill="none" stroke="#fff" stroke-opacity=".4"/>
+<polygon points="60,30 96,48 60,66 24,48" fill="url(#ly1)"/>
+<polygon points="60,30 96,48 60,66 24,48" fill="none" stroke="#fff" stroke-opacity=".5"/>
+</g>
+<polygon points="60,30 78,39 60,48 42,39" fill="#fff" opacity=".3"/>
+<polygon points="60,52 78,61 60,70 42,61" fill="#fff" opacity=".18"/>`+rim('ly')},
+
+/* 31 — PROFILER */
+{n:'Profiler', k:'performance stats fps graph memory', s: base('pr',D,DK)+`
+<defs>
+<linearGradient id="prP" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#232931"/><stop offset="1" stop-color="#12161b"/></linearGradient>
+<linearGradient id="prF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4fe0a4" stop-opacity=".55"/><stop offset="1" stop-color="#4fe0a4" stop-opacity="0"/></linearGradient>
+<filter id="prGl" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="2.4"/></filter>
+</defs>
+<rect x="18" y="24" width="84" height="72" rx="9" fill="url(#prP)"/>
+<rect x="18.7" y="24.7" width="82.6" height="70.6" rx="8.4" fill="none" stroke="#fff" stroke-opacity=".13"/>
+<g stroke="#4c5560" stroke-opacity=".45" stroke-width="1">
+<path d="M18 42h84M18 60h84M18 78h84M40 24v72M62 24v72M84 24v72"/>
+</g>
+<g fill="#3f8fd6" opacity=".7"><rect x="26" y="72" width="8" height="18" rx="2"/><rect x="40" y="64" width="8" height="26" rx="2"/><rect x="54" y="78" width="8" height="12" rx="2"/><rect x="68" y="58" width="8" height="32" rx="2"/><rect x="82" y="70" width="8" height="20" rx="2"/></g>
+<path d="M24 74 38 56l12 12 12-22 14 16 14-24v52H24z" fill="url(#prF)"/>
+<path d="M24 74 38 56l12 12 12-22 14 16 14-24" fill="none" stroke="#5fe3a1" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" filter="url(#prGl)"/>
+<path d="M24 74 38 56l12 12 12-22 14 16 14-24" fill="none" stroke="#c9ffe6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<g fill="#eafff5"><circle cx="38" cy="56" r="2.2"/><circle cx="62" cy="46" r="2.2"/><circle cx="76" cy="62" r="2.2"/></g>`+rim('pr')},
+
+/* 32 — SHADER GRAPH */
+{n:'Shader Graph', k:'node material editor pipeline visual', s: base('sh',D,DK)+`
+<defs>
+<linearGradient id="shN" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a424c"/><stop offset="1" stop-color="#1d232a"/></linearGradient>
+<linearGradient id="shH" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8f5cff"/><stop offset="1" stop-color="#4a7dff"/></linearGradient>
+<linearGradient id="shS" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd36b"/><stop offset=".5" stop-color="#ff6b9a"/><stop offset="1" stop-color="#6bc9ff"/></linearGradient>
+</defs>
+<path d="M46 42c16 0 6 34 24 34" fill="none" stroke="#6bd6ff" stroke-width="2.6"/>
+<path d="M46 78c14 0 8-14 24-14" fill="none" stroke="#ffb45c" stroke-width="2.6"/>
+<g filter="url(#shd)">
+<rect x="16" y="30" width="32" height="26" rx="5" fill="url(#shN)"/>
+<rect x="16" y="66" width="32" height="26" rx="5" fill="url(#shN)"/>
+<rect x="68" y="46" width="36" height="34" rx="6" fill="url(#shN)"/>
+</g>
+<path d="M16 35a5 5 0 0 1 5-5h22a5 5 0 0 1 5 5v4H16zM16 71a5 5 0 0 1 5-5h22a5 5 0 0 1 5 5v4H16z" fill="url(#shH)"/>
+<path d="M68 52a6 6 0 0 1 6-6h24a6 6 0 0 1 6 6v4H68z" fill="url(#shH)"/>
+<rect x="20" y="43" width="20" height="3" rx="1.5" fill="#727b86"/>
+<rect x="20" y="49" width="14" height="3" rx="1.5" fill="#5b636d"/>
+<rect x="20" y="79" width="20" height="3" rx="1.5" fill="#727b86"/>
+<rect x="20" y="85" width="14" height="3" rx="1.5" fill="#5b636d"/>
+<circle cx="86" cy="68" r="9" fill="url(#shS)"/>
+<ellipse cx="83" cy="64.5" rx="3.2" ry="2" transform="rotate(-32 83 64.5)" fill="#fff" opacity=".55"/>
+<g fill="#9fb0c0"><circle cx="48" cy="42" r="3"/><circle cx="48" cy="78" r="3"/><circle cx="68" cy="64" r="3"/></g>
+<g fill="#e8f4ff"><circle cx="48" cy="42" r="1.3"/><circle cx="48" cy="78" r="1.3"/><circle cx="68" cy="64" r="1.3"/></g>`+rim('sh')},
+
+/* 33 — RIG */
+{n:'Rig', k:'bone skeleton skinning armature joint', s: base('bn',D,DK)+`
+<defs>
+<linearGradient id="bnB" x1=".2" y1="0" x2=".8" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".45" stop-color="#e3e6ea"/><stop offset="1" stop-color="#a7aeb6"/></linearGradient>
+<radialGradient id="bnJ" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#8fd8ff"/><stop offset="1" stop-color="#1f6ca8"/></radialGradient>
+</defs>
+<ellipse cx="60" cy="98" rx="30" ry="4.5" fill="#000" opacity=".35"/>
+<g filter="url(#bnd)" transform="rotate(-38 60 60)">
+<path d="M36 44a10 10 0 1 1 14 12h20a10 10 0 1 1 0 12H50a10 10 0 1 1-14-12 10 10 0 0 1 0-12z" fill="url(#bnB)"/>
+</g>
+<g transform="rotate(-38 60 60)" opacity=".55">
+<path d="M50 56h20v3H50z" fill="#9aa2ab"/>
+</g>
+<circle cx="86" cy="34" r="8" fill="url(#bnJ)"/>
+<ellipse cx="83.6" cy="31.4" rx="2.6" ry="1.6" transform="rotate(-32 83.6 31.4)" fill="#fff" opacity=".6"/>
+<circle cx="34" cy="86" r="6.5" fill="url(#bnJ)"/>
+<ellipse cx="32" cy="84" rx="2.1" ry="1.3" transform="rotate(-32 32 84)" fill="#fff" opacity=".6"/>
+<g stroke="#6fc4ff" stroke-opacity=".5" stroke-dasharray="3 4"><path d="M86 34 34 86"/></g>`+rim('bn')},
+
+/* 34 — SFX */
+{n:'SFX', k:'sound speaker volume audio emitter', s: base('ad',D,DK)+`
+<defs>
+<linearGradient id="adB" x1=".15" y1="0" x2=".85" y2="1"><stop offset="0" stop-color="#5a636e"/><stop offset=".5" stop-color="#333a43"/><stop offset="1" stop-color="#171b20"/></linearGradient>
+<radialGradient id="adC" cx=".4" cy=".35" r=".75"><stop offset="0" stop-color="#4d5763"/><stop offset=".7" stop-color="#20262d"/><stop offset="1" stop-color="#0e1115"/></radialGradient>
+</defs>
+<g filter="url(#add)">
+<rect x="20" y="42" width="18" height="36" rx="4" fill="url(#adB)"/>
+<path d="M38 60 66 30v60L38 60z" fill="url(#adB)"/>
+</g>
+<path d="M38 60 66 30v10L44 60z" fill="#fff" opacity=".14"/>
+<ellipse cx="66" cy="60" rx="5" ry="30" fill="url(#adC)"/>
+<ellipse cx="66" cy="60" rx="2.4" ry="14" fill="#0d1014"/>
+<rect x="20" y="42" width="18" height="4" rx="2" fill="#fff" opacity=".16"/>
+<g fill="none" stroke="#6fe3c0" stroke-linecap="round">
+<path d="M78 46a20 20 0 0 1 0 28" stroke-width="3.4" opacity=".95"/>
+<path d="M87 38a32 32 0 0 1 0 44" stroke-width="3.2" opacity=".62"/>
+<path d="M96 30a44 44 0 0 1 0 60" stroke-width="3" opacity=".32"/>
+</g>`+rim('ad')},
+
+/* 35 — TRANSFORM */
+{n:'Transform', k:'gizmo move axis translate handle', s: base('gz',D,DK)+`
+<defs>
+<linearGradient id="gzX" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ff8f7d"/><stop offset="1" stop-color="#d02b16"/></linearGradient>
+<linearGradient id="gzY" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#a4f0b8"/><stop offset="1" stop-color="#1f9c47"/></linearGradient>
+<linearGradient id="gzZ" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8fc9ff"/><stop offset="1" stop-color="#1f66c4"/></linearGradient>
+<radialGradient id="gzO" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#f4f7fa"/><stop offset="1" stop-color="#8d959e"/></radialGradient>
+</defs>
+<g stroke-linecap="round" stroke-width="6">
+<path d="M60 62 96 44" stroke="url(#gzX)"/>
+<path d="M60 62V22" stroke="url(#gzY)"/>
+<path d="M60 62 26 82" stroke="url(#gzZ)"/>
+</g>
+<path d="M92 38l14 8-14 8z" fill="#d8391f"/>
+<path d="M92 38l14 8-7 4z" fill="#ff9c8a" opacity=".7"/>
+<path d="M52 26l8-14 8 14z" fill="#26a54f"/>
+<path d="M52 26l8-14 4 7z" fill="#b6f5c6" opacity=".7"/>
+<path d="M30 74l-12 8 14 8z" fill="#2a72cc"/>
+<path d="M30 74l-12 8 8 3z" fill="#a9d6ff" opacity=".7"/>
+<circle cx="60" cy="62" r="8" fill="url(#gzO)"/>
+<ellipse cx="57.4" cy="59.4" rx="2.6" ry="1.6" transform="rotate(-32 57.4 59.4)" fill="#fff" opacity=".8"/>`+rim('gz')},
+
+/* 36 — XR */
+{n:'XR / VR', k:'headset vr ar xr immersive device', s: base('vr','#3d434b','#131519')+`
+<defs>
+<linearGradient id="vrB" x1=".1" y1="0" x2=".9" y2="1"><stop offset="0" stop-color="#5a6270"/><stop offset=".45" stop-color="#333a45"/><stop offset="1" stop-color="#171b21"/></linearGradient>
+<radialGradient id="vrL" cx=".35" cy=".3" r=".85"><stop offset="0" stop-color="#7fdcff"/><stop offset=".55" stop-color="#1d6ba8"/><stop offset="1" stop-color="#08243d"/></radialGradient>
+</defs>
+<ellipse cx="60" cy="94" rx="32" ry="5" fill="#000" opacity=".38"/>
+<path d="M20 44c-6 0-8-6-3-9 12-8 74-8 86 0 5 3 3 9-3 9" fill="none" stroke="#2b313a" stroke-width="6" stroke-linecap="round"/>
+<g filter="url(#vrd)">
+<path d="M24 40h72a8 8 0 0 1 8 8v18a12 12 0 0 1-12 12H74c-5 0-7-2-9-5-2-3-8-3-10 0-2 3-4 5-9 5H28a12 12 0 0 1-12-12V48a8 8 0 0 1 8-8z" fill="url(#vrB)"/>
+</g>
+<path d="M24 40h72a8 8 0 0 1 8 8v3H16v-3a8 8 0 0 1 8-8z" fill="#fff" opacity=".13"/>
+<ellipse cx="40" cy="58" rx="13" ry="11" fill="#0b0f14"/>
+<ellipse cx="80" cy="58" rx="13" ry="11" fill="#0b0f14"/>
+<ellipse cx="40" cy="58" rx="11" ry="9" fill="url(#vrL)"/>
+<ellipse cx="80" cy="58" rx="11" ry="9" fill="url(#vrL)"/>
+<ellipse cx="35" cy="53" rx="4.4" ry="2.6" transform="rotate(-25 35 53)" fill="#fff" opacity=".45"/>
+<ellipse cx="75" cy="53" rx="4.4" ry="2.6" transform="rotate(-25 75 53)" fill="#fff" opacity=".45"/>
+<circle cx="60" cy="46" r="2" fill="#5fe3a1"/>`+rim('vr')},
+
+];
+
+/* ---------- render ---------- */
+const grid=document.getElementById('grid'), toast=document.getElementById('toast');
+let sel=null;
+function pretty(s){ return s.replace(/></g,'>\n<'); }
+function say(m){ toast.textContent=m; toast.classList.add('on'); clearTimeout(say._t); say._t=setTimeout(()=>toast.classList.remove('on'),1500); }
+function copy(t){
+  if(navigator.clipboard&&window.isSecureContext){ navigator.clipboard.writeText(t).catch(()=>fallback(t)); }
+  else fallback(t);
+}
+function fallback(t){ const a=document.createElement('textarea'); a.value=t; a.style.position='fixed'; a.style.opacity=0; document.body.appendChild(a); a.select(); try{document.execCommand('copy')}catch(e){} a.remove(); }
+function download(name,svg){
+  const b=new Blob([pretty(svg)],{type:'image/svg+xml'}), u=URL.createObjectURL(b), a=document.createElement('a');
+  a.href=u; a.download=name.toLowerCase().replace(/[^a-z0-9]+/g,'-')+'.svg'; a.click(); URL.revokeObjectURL(u);
+}
+function build(list){
+  grid.innerHTML='';
+  list.forEach(ic=>{
+    const svg=wrap(ic.s);
+    const card=document.createElement('div');
+    card.className='card';
+    card.innerHTML=svg+`<div class="nm">${ic.n}</div><button class="dl" title="Download SVG">↓</button>`;
+    card.addEventListener('click',e=>{
+      if(e.target.classList.contains('dl')){ download(ic.n,svg); say('Downloaded '+ic.n+'.svg'); return; }
+      if(sel) sel.classList.remove('sel');
+      card.classList.add('sel'); sel=card;
+      copy(pretty(svg)); say('Copied “'+ic.n+'” SVG to clipboard');
+    });
+    grid.appendChild(card);
+  });
+  document.getElementById('count').textContent=list.length+' icons';
+}
+build(ICONS);
+document.getElementById('q').addEventListener('input',e=>{
+  const v=e.target.value.trim().toLowerCase();
+  build(!v?ICONS:ICONS.filter(i=>(i.n+' '+i.k).toLowerCase().includes(v)));
+});
+document.getElementById('copyAll').addEventListener('click',()=>{
+  copy(ICONS.map(i=>'<!-- '+i.n+' -->\n'+pretty(wrap(i.s))).join('\n\n')); say('Copied all '+ICONS.length+' icons');
+});
+document.getElementById('dlAll').addEventListener('click',()=>{
+  const body=ICONS.map((i,x)=>`<symbol id="ge-${i.n.toLowerCase().replace(/[^a-z0-9]+/g,'-')}" viewBox="0 0 120 120">${i.s}</symbol>`).join('\n');
+  const b=new Blob([`<svg xmlns="http://www.w3.org/2000/svg" style="display:none">\n${body}\n</svg>`],{type:'image/svg+xml'});
+  const u=URL.createObjectURL(b), a=document.createElement('a'); a.href=u; a.download='game-engine-icons-sprite.svg'; a.click(); URL.revokeObjectURL(u);
+  say('Sprite sheet downloaded');
+});
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&sel){sel.classList.remove('sel');sel=null;} });
+</script>
+</body>
+</html>
