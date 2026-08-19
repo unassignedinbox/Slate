@@ -11,6 +11,8 @@
 param(
     [ValidateSet('Debug', 'Release')] [string] $Configuration = 'Release',
     [string]                                   $Unit          = '',
+    # Restricts an executable unit to one declared host while retaining the prerequisite library build.
+    [string]                                   $Subject       = '',
     [switch]                                   $Rebuild,
 
     # 📝 Zero means "one translation per logical processor", which is what /MP does when given no count.
@@ -988,6 +990,19 @@ if ($Selected.Count -eq 0)
     throw "no unit is named $Unit"
 }
 
+if ($Subject)
+{
+    $SubjectOwner = @($UnitOrder | Where-Object { $_.Subject -contains $Subject })
+    if ($SubjectOwner.Count -eq 0)
+    {
+        throw "no executable subject is named $Subject"
+    }
+    if ($Unit -and $SubjectOwner[0].Name -ne $Unit)
+    {
+        throw "subject $Subject is declared by $($SubjectOwner[0].Name), not $Unit"
+    }
+}
+
 foreach ($UnitEntry in $Selected)
 {
     if ($UnitEntry.Product -eq 'StaticLibrary')
@@ -1007,19 +1022,30 @@ foreach ($UnitEntry in $Selected)
         #    lowering them per subject would lower each of them as many times as there are hosts.
         Invoke-ShaderTranslation $UnitEntry $VulkanRoot
 
-        foreach ($Subject in $UnitEntry.Subject)
+        $Subjects = if ($Subject) { @($UnitEntry.Subject | Where-Object { $_ -eq $Subject }) }
+                    else          { @($UnitEntry.Subject) }
+
+        # A subject restriction applies only to its declaring executable unit. Other executable units remain
+        # empty here rather than accidentally compiling an unrelated host with the requested name.
+        if ($Subject -and $Subjects.Count -eq 0)
         {
-            $Produced = Invoke-Translation $UnitEntry $Configuration $VulkanRoot $Subject
-            Invoke-HostLink $UnitEntry $Produced $VulkanRoot $Subject
+            continue
+        }
+
+        foreach ($DeclaredSubject in $Subjects)
+        {
+            $Produced = Invoke-Translation $UnitEntry $Configuration $VulkanRoot $DeclaredSubject
+            Invoke-HostLink $UnitEntry $Produced $VulkanRoot $DeclaredSubject
         }
     }
 }
 
 Write-Host ''
 
-if ($Unit)
+if ($Unit -or $Subject)
 {
-    Write-Skipped "post-construction — $Unit alone was constructed"
+    $Restriction = if ($Subject) { "subject $Subject" } else { "$Unit alone" }
+    Write-Skipped "post-construction — $Restriction was constructed"
 }
 else
 {
