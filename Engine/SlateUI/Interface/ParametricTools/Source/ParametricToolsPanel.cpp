@@ -22,7 +22,10 @@ constexpr float LeftPaneX = 196.0f;
 //    unreachable from the catalogue. Nothing failed to compile and no gate went red, because a table
 //    nobody indexes into is still perfectly valid C++. They are now reachable AND split, because a
 //    dimension and a constraint are different kinds of statement about a drawing.
-constexpr std::uint32_t BandCount = 4u;
+// 📝 A FIFTH BAND: BOOLEANS. Union, Cut and Intersect over the sketch's closed regions get their own
+//    section, as the task asks -- separate from the Operations band's per-edge Trim/Fillet/Cut, because a
+//    boolean combines two whole regions rather than editing one edge.
+constexpr std::uint32_t BandCount = 5u;
 constexpr std::uint32_t PresetCount = 9u;
 
 struct OptionEntry
@@ -333,22 +336,31 @@ const ToolEntry SurfaceTools[] =
       { { "Sew Tolerance", "0.01 mm" }, { "Make Solid if Closed", "On" }, { "Report Open Edges", "On" } }, 3u },
 };
 
+// 🔴 THE BOOLEANS ARE 2D SKETCH TOOLS, NOT SOLID-MODELLING TOOLS. They were once listed as
+//    `ParametricToolDimension::Solid` with `MinimumSolid`/`ExactSolid` counts, so they could only ever
+//    arm on two finished solids -- and no band listed them, so they could not be reached at all. They
+//    operate on the CLOSED REGIONS of the sketch: two selected shapes (or a shape and an open curve for
+//    Cut), so the requirement is two selected sketch curves at `Edge` dimension and no solid at all. The
+//    engine that carries them out is `WorldSketchBoolean`, driven from the two-object selection gesture.
+// 📝 Keep Operands defaults ON, because the boolean is non-destructive: the originals stay and the result
+//    is added alongside them, exactly as `PerformWorldBoolean` declares it.
 const ToolEntry BooleanTools[] =
 {
-    { "Union", "⇧U", SymbolSubject::BooleanUnion, ParametricToolDimension::Solid,
+    { "Union", "⇧U", SymbolSubject::BooleanUnion, ParametricToolDimension::Edge,
       false, false, false, false, false, false, false, false, false, false, false, false, false, false,
-      2u, 0u, 2u, 0u, 0u, 0u, 0u,
-      { { "Keep Operands", "Off" }, { "Refine Result", "On" }, { "Fuzzy Tolerance", "0 mm" } }, 3u },
+      2u, 0u, 0u, 0u, 0u, 0u, 0u,
+      { { "Needs", "two regions" }, { "Keep Operands", "On" } }, 2u },
 
-    { "Cut", "⇧X", SymbolSubject::BooleanUnion, ParametricToolDimension::Solid,
+    { "Cut", "⇧X", SymbolSubject::BooleanUnion, ParametricToolDimension::Edge,
       false, false, false, false, false, false, false, false, false, false, false, false, false, false,
-      2u, 0u, 0u, 2u, 0u, 0u, 0u,
-      { { "Subtract", "Second from First" }, { "Keep Operands", "Off" } }, 2u },
+      2u, 0u, 0u, 0u, 0u, 0u, 0u,
+      { { "Subtract", "Second from First" }, { "Cutter", "region or open curve" },
+        { "Keep Operands", "On" } }, 3u },
 
-    { "Intersect", "⇧I", SymbolSubject::BooleanUnion, ParametricToolDimension::Solid,
+    { "Intersect", "⇧I", SymbolSubject::BooleanUnion, ParametricToolDimension::Edge,
       false, false, false, false, false, false, false, false, false, false, false, false, false, false,
-      2u, 0u, 2u, 0u, 0u, 0u, 0u,
-      { { "Keep Operands", "Off" }, { "Refine Result", "On" } }, 2u },
+      2u, 0u, 0u, 0u, 0u, 0u, 0u,
+      { { "Needs", "two regions" }, { "Keep Operands", "On" } }, 2u },
 };
 
 const ToolEntry PatternTools[] =
@@ -508,6 +520,8 @@ const BandEntry Bands[BandCount] =
       static_cast<std::uint32_t>(sizeof(DimensionTools) / sizeof(DimensionTools[0])) },
     { "Constraints", SymbolSubject::ConstraintDimension, ConstraintTools,
       static_cast<std::uint32_t>(sizeof(ConstraintTools) / sizeof(ConstraintTools[0])) },
+    { "Booleans", SymbolSubject::BooleanUnion, BooleanTools,
+      static_cast<std::uint32_t>(sizeof(BooleanTools) / sizeof(BooleanTools[0])) },
 };
 
 const PresetEntry Presets[PresetCount] =
@@ -606,6 +620,13 @@ ParametricToolSubject ToolSubjectOf(std::uint32_t BandIndex, std::uint32_t ToolI
                  : ToolIndex == 7u  ? ParametricToolSubject::MidpointConstraint
                  : ToolIndex == 8u  ? ParametricToolSubject::SymmetryConstraint
                                     : ParametricToolSubject::ConcentricConstraint;
+        // 🔴 BAND 4 IS THE BOOLEANS. Union, Cut and Intersect over the sketch's closed regions. The
+        //    subjects `Union` and `Cut` already existed for the old solid path; `Intersect` was appended
+        //    to the enum for the third region boolean. Indices restart at zero per band.
+        case 4u:
+            return ToolIndex == 0u ? ParametricToolSubject::Union
+                 : ToolIndex == 1u ? ParametricToolSubject::BooleanCut
+                                   : ParametricToolSubject::Intersect;
         default:
             return ParametricToolSubject::Select;
     }

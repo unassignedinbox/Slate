@@ -105,7 +105,15 @@ enum class ParametricToolSubject : std::uint32_t
     //    would silently reinterpret every stored tool.
     AngularDimension = 60u,
     RadialDimension = 61u,
-    SubjectCount = 62u
+    // 📝 THE 2D AREA BOOLEANS. `Union` (23u) already existed and was DEAD -- no tile, no consumer -- so
+    //    the boolean Union tile reuses it. `Cut` (24u) is NOT reused: it is the Operations band's
+    //    per-edge, trim-style cut (removes the whole edge under the pointer), a different operation, so
+    //    the boolean cut gets its own `BooleanCut`. `Intersect` had no subject at all. Both new values are
+    //    appended rather than slotted beside 23u/24u, because these values are written into saved
+    //    documents and renumbering would silently reinterpret every stored tool.
+    Intersect = 62u,
+    BooleanCut = 63u,
+    SubjectCount = 64u
 };
 
 struct ParametricToolsContext

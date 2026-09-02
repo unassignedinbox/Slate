@@ -33,6 +33,7 @@
 #include "SlateUI/Interface/ToolOptionsWidget/Api/ToolOptionsWidget.h"
 #include "SlateUI/Interface/ToolContextMenu/Api/ToolContextMenu.h"
 #include "SlateWorkspace/Discipline/SketchOperationDriver/Api/SketchOperationDriver.h"
+#include "SlateWorkspace/Discipline/SketchBooleanIntent/Api/SketchBooleanIntent.h"
 #include "SlateWorkspace/Discipline/AnnotationDriver/Api/AnnotationDriver.h"
 #include "SlateWorkspace/Discipline/WorldSketchDimensionProjection/Api/WorldSketchDimensionProjection.h"
 #include "SlateWorkspace/Discipline/WorldSketchPicking/Api/WorldSketchScreenPicking.h"
@@ -1603,6 +1604,64 @@ static std::vector<DimensionFigureChip> SketchDimensionFigures;
                                             if (FrameContext.Dispatch.Owner == PointerOwner::None)
                                                 FrameContext.Dispatch.AdoptLegacyOwner(
                                                     PointerOwner::DrawingTool);
+                                        }
+                                    }
+
+                                    // 🔴 THE BOOLEAN BAND RUNS HERE. Union, Cut and Intersect combine
+                                    //    two whole regions rather than editing one edge, so unlike the
+                                    //    operation arm above they read the STANDING SELECTION SET -- the
+                                    //    two objects the artist has selected -- rather than what the
+                                    //    pointer is over. A press with a boolean tool active and exactly
+                                    //    two operands selected commits the boolean; the result is
+                                    //    declared into the same world sketch every other tool edits, and
+                                    //    the originals are kept (the boolean is non-destructive).
+                                    // 📝 The resolution of a two-object selection into the ordered
+                                    //    operand pair -- either order, the manner deciding the roles --
+                                    //    lives in `SketchBooleanIntent`, which is proven headlessly.
+                                    if (BooleanToolStanding(ParametricToolsApplied.ActiveSubject) &&
+                                        !PointerTaken && BackgroundPointer.ContactPressed)
+                                    {
+                                        std::vector<WorldCurveName> BooleanSelection;
+                                        for (const SketchPick& Item : SketchSelectionSetState.Items)
+                                        {
+                                            WorldPick Held = {};
+                                            if (ResolveWorldPickForSketchPick(Sketch, SketchRecords,
+                                                                              SketchWorld,
+                                                                              SketchWorldMapping,
+                                                                              Item, Held) &&
+                                                Held.Subject == WorldPickSubject::Curve)
+                                                BooleanSelection.push_back(Held.Curve);
+                                        }
+
+                                        const SketchBooleanIntent BooleanWanted =
+                                            ResolveSketchBooleanIntent(
+                                                ParametricToolsApplied.ActiveSubject);
+                                        const WorldSketchAnalysis BooleanAnalysis =
+                                            AnalyzeWorldSketch(SketchWorld, 64u);
+                                        const SketchBooleanSelection BooleanOperands =
+                                            ResolveSketchBooleanSelection(SketchWorld, BooleanAnalysis,
+                                                                          BooleanWanted.Manner,
+                                                                          BooleanSelection);
+
+                                        if (BooleanOperands.Ready)
+                                        {
+                                            const Deliver<std::vector<WorldLoopName>> BooleanResult =
+                                                PerformWorldBoolean(SketchWorld,
+                                                                    BooleanOperands.First,
+                                                                    BooleanOperands.Second,
+                                                                    BooleanWanted.Manner);
+                                            if (BooleanResult.Resolved)
+                                            {
+                                                // 📝 The result stands; drop the old selection so the
+                                                //    next press does not re-run the boolean on the same
+                                                //    two operands.
+                                                SketchSelectionSetState.Clear();
+                                                SketchSemanticSelection = {};
+                                                PointerTaken = true;
+                                                if (FrameContext.Dispatch.Owner == PointerOwner::None)
+                                                    FrameContext.Dispatch.AdoptLegacyOwner(
+                                                        PointerOwner::DrawingTool);
+                                            }
                                         }
                                     }
 
