@@ -1,3 +1,13 @@
+// ---- on-screen diagnostics (we can't see the browser console) ----
+const diagEl = () => document.getElementById('diag');
+function diag(msg, ok = true) {
+  const el = diagEl(); if (!el) return;
+  el.textContent = msg;
+  el.style.color = ok ? '#7fe0a0' : '#ff8080';
+}
+window.addEventListener('error', (e) => diag('ERR: ' + (e.message || e.error), false));
+window.addEventListener('unhandledrejection', (e) => diag('PROMISE: ' + (e.reason?.message || e.reason), false));
+
 import { Sketch, seed } from './model.js';
 import { renderDirectory, initDirectoryToolbar } from './directory.js';
 import { renderBands, renderTiles, initPanel } from './panel.js';
@@ -9,7 +19,24 @@ seed();
 initPanel();
 initDirectoryToolbar();
 renderDirectory();
-initViewport();
+try { initViewport(); diag('viewport ready'); }
+catch (err) { diag('initViewport failed: ' + err.message, false); console.error(err); }
+
+// ---- Directory / Tools shared-space switch ----
+const paneDir = document.getElementById('panel-directory');
+const paneTools = document.getElementById('panel-tools');
+const tabDir = document.getElementById('tab-directory');
+const tabTools = document.getElementById('tab-tools');
+function showPane(which) {
+  const dir = which === 'directory';
+  paneDir.style.display = dir ? 'flex' : 'none';
+  paneTools.style.display = dir ? 'none' : 'flex';
+  tabDir.classList.toggle('active', dir);
+  tabTools.classList.toggle('active', !dir);
+}
+tabDir?.addEventListener('click', () => showPane('directory'));
+tabTools?.addEventListener('click', () => showPane('tools'));
+showPane('tools'); // start on Tools so drawing is one click away
 
 // re-render the directory whenever the model changes
 Sketch.on((reason) => {

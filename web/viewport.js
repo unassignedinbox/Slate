@@ -30,6 +30,11 @@ camera.position.set(5.5, 5, 6.5);
 const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, powerPreference:"high-performance" });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 
+// ---- on-screen diagnostics helper ----
+const _diag = (m, ok=true) => { const e=document.getElementById('diag'); if(e){ e.textContent=m; e.style.color=ok?'#7fe0a0':'#ff8080'; } };
+if (!renderer.getContext()) _diag('NO WEBGL CONTEXT', false);
+let _frames = 0;
+
 // 🔴 CONTEXT-LOSS RECOVERY. In a preview iframe the browser can throw away the
 //    WebGL context (tab backgrounded, GPU pressure, iframe re-layout); without
 //    a handler the canvas stays permanently blank. Prevent the default so the
@@ -541,6 +546,8 @@ function render(){
   if (contextLost || w < 2 || h < 2) return;
 
   try {
+    _frames++;
+    if (_frames % 60 === 0) _diag(`live · ${w}×${h} · cam ${camera.position.distanceTo(controls.target).toFixed(1)}u · f${_frames}`);
     controls.update();
     if(gizmo.visible){ const d=camera.position.distanceTo(gizmo.position); gizmo.scale.setScalar(d*0.11);
       gizmo.userData.ring.quaternion.copy(camera.quaternion); }
