@@ -50,13 +50,13 @@ canvas.addEventListener("webglcontextrestored", () => {
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true; controls.dampingFactor = 0.08;
 controls.target.set(0, 0, 0);
-// 🔴 ZOOM BEHAVIOUR. Keep the camera well in front of the near plane so zooming
-//    in can never dive "into" the grid and go black, zoom toward the cursor so
-//    it feels like a CAD app, and slow the wheel so one notch isn't a huge jump.
-controls.minDistance = 2.5;
-controls.maxDistance = 80;
-controls.zoomSpeed = 0.6;
-controls.zoomToCursor = true;
+// 🔴 ZOOM. zoomToCursor was letting a single wheel notch blow past maxDistance
+//    (it re-derives the target and ignores the clamp) -> the whole range in one
+//    scroll + black-outs. Use plain, clamped dolly with a gentle speed instead.
+controls.zoomToCursor = false;
+controls.zoomSpeed = 0.5;
+controls.minDistance = 3;
+controls.maxDistance = 60;
 // left is reserved for drawing/selection; orbit on middle-drag, pan on right, dolly on wheel
 controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN };
 
@@ -568,25 +568,43 @@ function translateEntity(ent, origin, dx, dz){
 //  CORNER NAV GIZMO
 // ============================================================================
 const navScene=new THREE.Scene();
-const navCam=new THREE.OrthographicCamera(-1.6,1.6,1.6,-1.6,0.1,10); navCam.position.set(0,0,4);
+const navCam=new THREE.OrthographicCamera(-1.7,1.7,1.7,-1.7,0.1,20); navCam.position.set(0,0,6);
 const navGroup=new THREE.Group(); navScene.add(navGroup);
-function navBall(dir,color,letter,filled){
-  const g=new THREE.Group();
-  const ball=new THREE.Mesh(new THREE.SphereGeometry(0.34,18,18),
-    filled?new THREE.MeshBasicMaterial({color}):new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.35}));
-  ball.position.copy(dir); g.add(ball);
-  if(filled){
-    g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),dir]),new THREE.LineBasicMaterial({color})));
-    const cv=document.createElement('canvas');cv.width=cv.height=64;const cx=cv.getContext('2d');
-    cx.fillStyle='#0a0a0a';cx.font='bold 44px sans-serif';cx.textAlign='center';cx.textBaseline='middle';cx.fillText(letter,32,34);
-    const spr=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),depthTest:false}));
-    spr.scale.set(0.5,0.5,0.5);spr.position.copy(dir);g.add(spr);
-  }
-  navGroup.add(g);
+
+// clean axis indicator: three colour-coded arms, solid labelled knob on the
+// positive end, small hollow knob on the negative end.
+function toHex(c){ return '#'+c.toString(16).padStart(6,'0'); }
+function labelTexture(letter,color){
+  const S=128, cv=document.createElement('canvas'); cv.width=cv.height=S;
+  const cx=cv.getContext('2d');
+  cx.beginPath(); cx.arc(S/2,S/2,S/2-4,0,Math.PI*2);
+  cx.fillStyle=toHex(color); cx.fill();
+  cx.fillStyle='#0a0a0a'; cx.font='bold 74px ui-sans-serif, system-ui, sans-serif';
+  cx.textAlign='center'; cx.textBaseline='middle'; cx.fillText(letter,S/2,S/2+4);
+  const t=new THREE.CanvasTexture(cv); t.anisotropy=4; return t;
 }
-navBall(new THREE.Vector3(1,0,0),COLORS.x,'X',true); navBall(new THREE.Vector3(-1,0,0),COLORS.x,'',false);
-navBall(new THREE.Vector3(0,1,0),COLORS.y,'Y',true); navBall(new THREE.Vector3(0,-1,0),COLORS.y,'',false);
-navBall(new THREE.Vector3(0,0,1),COLORS.z,'Z',true); navBall(new THREE.Vector3(0,0,-1),COLORS.z,'',false);
+function navArm(dir,color,letter){
+  const L=1.0;
+  // arm
+  const arm=new THREE.Line(new THREE.BufferGeometry().setFromPoints(
+    [new THREE.Vector3(), dir.clone().multiplyScalar(L)]),
+    new THREE.LineBasicMaterial({color, transparent:true, opacity:0.9}));
+  navGroup.add(arm);
+  // positive knob with label
+  const knob=new THREE.Sprite(new THREE.SpriteMaterial({map:labelTexture(letter,color),depthTest:false,depthWrite:false,transparent:true}));
+  knob.scale.set(0.62,0.62,0.62); knob.position.copy(dir.clone().multiplyScalar(L)); navGroup.add(knob);
+  // negative hollow knob
+  const cv=document.createElement('canvas'); cv.width=cv.height=128; const cx=cv.getContext('2d');
+  cx.beginPath(); cx.arc(64,64,56,0,Math.PI*2); cx.lineWidth=12; cx.strokeStyle=toHex(color); cx.stroke();
+  const neg=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),depthTest:false,depthWrite:false,transparent:true,opacity:0.85}));
+  neg.scale.set(0.4,0.4,0.4); neg.position.copy(dir.clone().multiplyScalar(-L)); navGroup.add(neg);
+}
+// central hub
+navGroup.add(new THREE.Mesh(new THREE.SphereGeometry(0.09,16,16),
+  new THREE.MeshBasicMaterial({color:0x3a4450})));
+navArm(new THREE.Vector3(1,0,0),COLORS.x,'X');
+navArm(new THREE.Vector3(0,1,0),COLORS.y,'Y');
+navArm(new THREE.Vector3(0,0,1),COLORS.z,'Z');
 
 // ============================================================================
 //  LOOP
