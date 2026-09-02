@@ -8,10 +8,32 @@
 <script type="importmap">
 {
   "imports": {
-    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    "three": "./vendor/three/three.module.js",
+    "three/addons/": "./vendor/three/addons/"
   }
 }
+</script>
+<script>
+  // Classic (non-module) trap: runs BEFORE any module, so it catches ES-module
+  // import/resolve failures that a module-level handler would miss (that was the
+  // "stuck on boot…" symptom). Writes the real reason onto the on-screen diag.
+  window.__slateErr = function (msg) {
+    var e = document.getElementById('diag');
+    if (e) { e.textContent = String(msg).slice(0, 180); e.style.color = '#ff8080'; }
+  };
+  window.addEventListener('error', function (ev) {
+    __slateErr('ERR: ' + (ev.message || (ev.error && ev.error.message) || ev.filename || 'load failed'));
+  }, true);
+  window.addEventListener('unhandledrejection', function (ev) {
+    __slateErr('REJECT: ' + ((ev.reason && ev.reason.message) || ev.reason));
+  });
+  // if modules never run, say so instead of freezing on "boot…"
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      var e = document.getElementById('diag');
+      if (e && e.textContent === 'boot…') __slateErr('modules did not execute (import failed?)');
+    }, 3500);
+  });
 </script>
 <style>
   html, body { margin:0; padding:0; height:100%; background:#0a0a0a; overflow:hidden;
