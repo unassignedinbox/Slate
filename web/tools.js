@@ -38,10 +38,10 @@ export const DRAW_SPEC = {
   polygon:     { kind:'polygon',     clicks:2, sides:6 },// centre, then radius
   slot:        { kind:'slot',        clicks:2 },        // two ends (radius fixed)
   polyline:    { kind:'polyline',    chain:true },
-  bezier:      { kind:'polyline',    chain:true, dashed:false },
-  hermite:     { kind:'polyline',    chain:true },
-  spline:      { kind:'polyline',    chain:true },
-  rspline:     { kind:'polyline',    chain:true },
+  bezier:      { kind:'bezier',      chain:true },   // control polygon -> smooth Bézier
+  hermite:     { kind:'spline',      chain:true },   // interpolating (Catmull-Rom)
+  spline:      { kind:'spline',      chain:true },   // interpolating B-spline-ish
+  rspline:     { kind:'spline',      chain:true },   // rational -> same visual here
   tangentarc:  { kind:'arc',         clicks:3 },
   construction:{ kind:'line',        clicks:2, construction:true },
 };

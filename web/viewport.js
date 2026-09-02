@@ -50,10 +50,13 @@ canvas.addEventListener("webglcontextrestored", () => {
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true; controls.dampingFactor = 0.08;
 controls.target.set(0, 0, 0);
-// 🔴 CLAMP DOLLY: without these the wheel drives the camera through the target
-//    and the whole scene falls behind the near plane -> the view goes black.
-controls.minDistance = 1.2;
-controls.maxDistance = 150;
+// 🔴 ZOOM BEHAVIOUR. Keep the camera well in front of the near plane so zooming
+//    in can never dive "into" the grid and go black, zoom toward the cursor so
+//    it feels like a CAD app, and slow the wheel so one notch isn't a huge jump.
+controls.minDistance = 2.5;
+controls.maxDistance = 80;
+controls.zoomSpeed = 0.6;
+controls.zoomToCursor = true;
 // left is reserved for drawing/selection; orbit on middle-drag, pan on right, dolly on wheel
 controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN };
 
@@ -118,10 +121,48 @@ function ringPoints(kind, g) {
       // through a,b with bulge at m
       const pts=arcThrough(g.a, g.m, g.b); return pts;
     }
+    case 'bezier':  return bezierCurve(g.pts);
+    case 'spline':  return catmullRom(g.pts);
     default: return [];
   }
 }
 function isClosed(kind){ return ['rectangle','circle','ellipse','polygon','slot'].includes(kind); }
+
+// ---- smooth curves ------------------------------------------------------
+// De Casteljau Bézier through an arbitrary number of control points.
+function bezierCurve(cps, perSeg=24){
+  if(!cps || cps.length<2) return cps? [...cps] : [];
+  if(cps.length===2) return [cps[0], cps[1]];
+  const out=[]; const N=Math.max(perSeg, cps.length*12);
+  for(let s=0;s<=N;s++){
+    const t=s/N; const pts=cps.map((p)=>({x:p.x,z:p.z}));
+    for(let k=1;k<pts.length;k++)
+      for(let i=0;i<pts.length-k;i++){
+        pts[i]={ x:pts[i].x+(pts[i+1].x-pts[i].x)*t, z:pts[i].z+(pts[i+1].z-pts[i].z)*t };
+      }
+    out.push(pts[0]);
+  }
+  return out;
+}
+// Catmull-Rom spline that passes THROUGH every control point (smooth, not kinked).
+function catmullRom(cps, perSeg=20){
+  if(!cps || cps.length<2) return cps? [...cps] : [];
+  if(cps.length===2) return [cps[0], cps[1]];
+  const p=cps; const out=[];
+  const pt=(i)=>p[Math.max(0,Math.min(p.length-1,i))];
+  for(let i=0;i<p.length-1;i++){
+    const p0=pt(i-1),p1=pt(i),p2=pt(i+1),p3=pt(i+2);
+    for(let s=0;s<perSeg;s++){
+      const t=s/perSeg, t2=t*t, t3=t2*t;
+      out.push({
+        x:0.5*((2*p1.x)+(-p0.x+p2.x)*t+(2*p0.x-5*p1.x+4*p2.x-p3.x)*t2+(-p0.x+3*p1.x-3*p2.x+p3.x)*t3),
+        z:0.5*((2*p1.z)+(-p0.z+p2.z)*t+(2*p0.z-5*p1.z+4*p2.z-p3.z)*t2+(-p0.z+3*p1.z-3*p2.z+p3.z)*t3),
+      });
+    }
+  }
+  out.push(p[p.length-1]);
+  return out;
+}
 
 function arcThrough(a,m,b){
   // circle through 3 points; fall back to straight if collinear
@@ -176,11 +217,24 @@ function buildEntityObjects(ent){
       objs.visuals.push(fill); objs.picks.push(fill);
       entityGroup.add(fill);
     }
-    // vertex handles
+    // control polygon (dashed) for curves so the controls are visible
+    if (ent.kind==='bezier' || ent.kind==='spline') {
+      const cps=(ent.geom.pts||[]).map(P);
+      if(cps.length>=2){
+        const cg=new THREE.BufferGeometry().setFromPoints(cps);
+        const cmat=new THREE.LineDashedMaterial({color:COLORS.construction, dashSize:0.18, gapSize:0.12, transparent:true, opacity:0.55});
+        const cline=new THREE.Line(cg,cmat); cline.computeLineDistances();
+        objs.visuals.push(cline); entityGroup.add(cline);
+      }
+    }
+    // vertex / control handles
     const vpts = ent.kind==='circle'||ent.kind==='polygon'||ent.kind==='ellipse'
-      ? [ent.geom.c] : ringPoints(ent.kind, ent.geom);
+      ? [ent.geom.c]
+      : ent.kind==='bezier'||ent.kind==='spline'||ent.kind==='polyline'
+      ? (ent.geom.pts||[])
+      : ringPoints(ent.kind, ent.geom);
     for (const vp of vpts) {
-      const h=new THREE.Mesh(new THREE.SphereGeometry(0.045,12,12),
+      const h=new THREE.Mesh(new THREE.SphereGeometry(0.05,12,12),
         new THREE.MeshBasicMaterial({color:0xffd166}));
       h.position.copy(P(vp)); h.visible=false; objs.visuals.push(h); entityGroup.add(h); objs.handles = objs.handles||[]; objs.handles.push(h);
     }
@@ -244,7 +298,7 @@ function groundPoint(e, snap){
 // ---- live preview objects ----
 const previewGroup = new THREE.Group(); scene.add(previewGroup);
 function clearPreview(){ [...previewGroup.children].forEach((c)=>{previewGroup.remove(c);c.geometry?.dispose?.();c.material?.dispose?.();}); }
-function drawPreviewOutline(pts, closed, color=COLORS.preview){
+function drawPreviewOutline(pts, closed, color=COLORS.preview, control=null){
   clearPreview();
   if(pts.length>=2){
     const v=pts.map(P);
@@ -252,7 +306,16 @@ function drawPreviewOutline(pts, closed, color=COLORS.preview){
       new THREE.LineBasicMaterial({color, transparent:true, opacity:0.9}));
     previewGroup.add(l);
   }
-  for(const p of pts){
+  // dashed control polygon for curves
+  if(control && control.length>=2){
+    const cv=control.map(P);
+    const cl=new THREE.Line(new THREE.BufferGeometry().setFromPoints(cv),
+      new THREE.LineDashedMaterial({color:COLORS.construction, dashSize:0.16, gapSize:0.11, transparent:true, opacity:0.5}));
+    cl.computeLineDistances(); previewGroup.add(cl);
+  }
+  // control/vertex dots: use control points for curves, else the outline
+  const dots = control || pts;
+  for(const p of dots){
     const d=new THREE.Mesh(new THREE.SphereGeometry(0.05,10,10), new THREE.MeshBasicMaterial({color:0xffd166}));
     d.position.copy(P(p)); previewGroup.add(d);
   }
@@ -271,6 +334,8 @@ function previewFor(glyph, pts, cursor){
   const all = cursor ? [...pts, cursor] : pts;
   if (kind==='line' || glyph==='construction') return { pts: all.slice(0,2), closed:false };
   if (kind==='polyline') return { pts: all, closed:false };
+  if (kind==='bezier') return { pts: bezierCurve(all), closed:false, control:all };
+  if (kind==='spline') return { pts: catmullRom(all), closed:false, control:all };
   if (kind==='rectangle' && all.length>=2){ const a=all[0],b=all[1];
     return { pts:[a,{x:b.x,z:a.z},b,{x:a.x,z:b.z},a], closed:true }; }
   if (kind==='circle' && all.length>=2){ const c=all[0]; const r=dist(c,all[1]);
@@ -302,6 +367,8 @@ function commitDraw(){
   else if (kind==='polygon') ent = { kind, glyph, geom:{c:pts[0], r:dist(pts[0],pts[1]), sides:spec.sides||6} };
   else if (kind==='slot') ent = { kind, glyph, geom:{a:pts[0],b:pts[1],r:0.4} };
   else if (kind==='polyline') ent = { kind, glyph, geom:{pts:[...pts]} };
+  else if (kind==='bezier') ent = { kind, glyph, geom:{pts:[...pts]} };
+  else if (kind==='spline') ent = { kind, glyph, geom:{pts:[...pts]} };
   else if (kind==='arc') ent = { kind, glyph, geom:{a:pts[0], b:pts[1], m:pts[2]} };
   if(!ent) { draw=null; clearPreview(); return; }
   ent.name = labelForEnt(ent);
@@ -322,6 +389,8 @@ function labelForEnt(ent){
     case 'polygon': return `Polygon · ${ent.geom.sides} sides`;
     case 'slot': return `Slot · ${round(dist(ent.geom.a,ent.geom.b))} m`;
     case 'polyline': return `Polyline · ${ent.geom.pts.length} pts`;
+    case 'bezier': return `Bézier · ${ent.geom.pts.length} ctrl pts`;
+    case 'spline': return `Spline · ${ent.geom.pts.length} pts`;
     case 'arc': return `Arc`;
     case 'point': return `Point`;
     default: return ent.kind;
@@ -349,7 +418,7 @@ renderer.domElement.addEventListener('pointermove',(e)=>{
     const cur = groundPoint(e, true);
     if (cur){
       const pv = previewFor(draw.glyph, draw.pts, cur);
-      drawPreviewOutline(pv.pts, pv.closed);
+      drawPreviewOutline(pv.pts, pv.closed, COLORS.preview, pv.control);
       const stepInfo = liveDimText(draw, cur);
       readout(stepInfo);
     }
@@ -373,7 +442,7 @@ renderer.domElement.addEventListener('pointerdown',(e)=>{
     draw.pts.push(p);
     const spec=draw.spec;
     if (spec.clicks && draw.pts.length>=spec.clicks) commitDraw();
-    else { const pv=previewFor(draw.glyph, draw.pts, p); drawPreviewOutline(pv.pts,pv.closed); }
+    else { const pv=previewFor(draw.glyph, draw.pts, p); drawPreviewOutline(pv.pts,pv.closed,COLORS.preview,pv.control); }
     return;
   }
   // selection pick
