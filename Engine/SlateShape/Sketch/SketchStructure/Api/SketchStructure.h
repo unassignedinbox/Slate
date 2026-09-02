@@ -28,6 +28,16 @@ struct SketchPlane
 struct DeclaredSketchCurve
 {
     CurveSpecification Geometry = {};
+
+    /// 🧩 Set when this curve has been removed by a Trim, mirrored from the world model.
+    /// note  🔴 THE COMPATIBILITY SKETCH IS DOWNSTREAM OF THE WORLD MODEL. An operation writes into the
+    ///        world sketch and the writeback copies each curve's geometry back here by index. A retired
+    ///        curve's geometry is empty on purpose, so without this flag `SketchStructure::Declared()`
+    ///        would read that emptiness as a malformed curve and fail the whole sketch -- which gates the
+    ///        workplane tools and the overlay. The flag travels with the geometry so this side agrees
+    ///        with the world side that the curve is gone rather than broken. Its index is kept, exactly
+    ///        as it is in the world model, so nothing that names a later curve is disturbed.
+    bool Retired = false;
 };
 
 //------------------------------------------------------------------------------------------------------------------------

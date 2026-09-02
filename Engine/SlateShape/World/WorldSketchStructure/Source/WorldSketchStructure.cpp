@@ -243,6 +243,12 @@ bool WorldSketchStructure::Declared() const
 {
     for (const DeclaredWorldCurve& Curve : HeldCurves)
     {
+        // 🔴 A RETIRED CURVE IS EMPTY ON PURPOSE. Trim removes a whole edge by clearing its geometry
+        //    and keeping its index, so the undeclared geometry here is the intended state, not a
+        //    malformed one -- checking `Declared()` on it would fail the entire sketch over a curve that
+        //    has been deliberately taken out.
+        if (Curve.Retired)
+            continue;
         if (!Curve.Geometry.Declared())
             return false;
         if (Curve.SupportFrameStanding && !Curve.SupportFrame.Declared())
@@ -319,6 +325,31 @@ bool WorldSketchStructure::Declared() const
             return false;
     }
 
+    return true;
+}
+
+bool WorldSketchStructure::RetireCurve(WorldCurveName Subject)
+{
+    DeclaredWorldCurve* const Held = Resolve(Subject);
+    if (Held == nullptr)
+        return false;
+
+    // 🔴 CLEARED, NOT ERASED. A default `CurveSpecification` is undeclared, which is precisely what every
+    //    consumer already skips -- the renderer, the analysis, the picker, the snapper and the operations
+    //    all guard on `Geometry.Declared()`. Clearing it here removes the curve from all of them at once
+    //    while its 1-based index stays put, so no name any loop, constraint, dimension or the cross-frame
+    //    mapping holds is disturbed. `Retired` records that the emptiness is deliberate, so `Declared()`
+    //    reads it as a removed curve rather than a malformed one.
+    Held->Geometry = {};
+    Held->SupportFrameStanding = false;
+    Held->SupportFrame = {};
+    Held->Retired = true;
+
+    // 📝 A LOOP THAT USED THIS EDGE IS NOW OPEN, AND SAYS SO WITHOUT BEING REWRITTEN. Its traversal still
+    //    names this index -- which stays valid -- but the edge no longer resolves, so the loop outline
+    //    reports a missing curve and its face stops being drawn. Trimming an edge off a shape opens it,
+    //    and an open shape has no face; leaving the traversal intact is what lets a re-declared edge, or
+    //    an undo, make the loop whole again with nothing to stitch back.
     return true;
 }
 

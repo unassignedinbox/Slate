@@ -1225,8 +1225,15 @@ bool SketchStructure::Declared() const
         return false;
 
     for (const DeclaredSketchCurve& Curve : HeldCurves)
+    {
+        // 🔴 A RETIRED CURVE IS EMPTY ON PURPOSE, mirrored from a world-model Trim. Its cleared geometry
+        //    is the intended state, not a malformed one, so it does not fail the sketch -- exactly as the
+        //    world model treats its own retired curves.
+        if (Curve.Retired)
+            continue;
         if (!Curve.Geometry.Declared())
             return false;
+    }
 
     for (const ProfileSpecification& Profile : HeldProfiles)
         if (!Profile.Declared())

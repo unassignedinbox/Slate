@@ -4,10 +4,13 @@
 
 #include "SlateShape/World/WorldSketchOperations/Api/WorldSketchOperations.h"
 
+#include "SlateShape/Sketch/SketchPolyline/Api/SketchPolyline.h"
+
 #include "Shared/IntersectionClassifier.slang.h"
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 namespace Slate
 {
@@ -221,6 +224,30 @@ void CollectCrossings(const WorldSketchStructure& Declared,
                      Parameters.end());
 }
 
+/// 🧩 The two ends of any curve, straight or curved, taken from its own polyline.
+/// 🔴 A WHOLE-EDGE TRIM IS NOT A LINE OPERATION. Removing an entire edge is the same act whatever the
+///    edge is -- a side of a rectangle, an arc of a slot, a circle -- so the span it shows the artist is
+///    read from the curve's polyline rather than from `LineCurve`, and an arc reports the trim it is
+///    about to receive instead of refusing as unsupported geometry.
+/// 📝 A closed curve -- a circle, a full ellipse -- has one point for both ends; the span it names is a
+///    marker on itself, which reads as "this whole ring goes" rather than as a segment across nothing.
+bool CurveEndpoints(const WorldSketchStructure& Declared, WorldCurveName Subject,
+                    SpatialPoint& Origin, SpatialPoint& Terminus)
+{
+    const DeclaredWorldCurve* const Held = Declared.Resolve(Subject);
+    if (Held == nullptr || !Held->Geometry.Declared())
+        return false;
+
+    std::vector<SpatialPoint> Polyline;
+    AppendCurvePolyline(Held->Geometry, Polyline, 8u);
+    if (Polyline.empty())
+        return false;
+
+    Origin   = Polyline.front();
+    Terminus = Polyline.back();
+    return true;
+}
+
 /// 🧩 Declares a line carrying the subject's support frame, so a piece belongs to the plane its parent did.
 WorldCurveName DeclareLike(WorldSketchStructure& Declared,
                            WorldCurveName Parent,
@@ -330,20 +357,49 @@ OperationVerdict TrimWorldCurve(WorldSketchStructure& Declared,
 {
     Remaining.clear();
 
-    const OperationVerdict Classified = ClassifySubject(Declared, Subject);
-    if (Classified != OperationVerdict::Produced)
-        return Classified;
+    // 🔴 A WHOLE EDGE CAN BE TRIMMED WHATEVER SHAPE IT IS. Only the crossing-bounded partial trim below
+    //    is line geometry; removing an entire edge is not, so a curve the classifier calls unsupported
+    //    is still eligible to be taken out in one piece. This is checked before the line refusal so an
+    //    arc reaches the whole-edge path instead of being turned away as unsupported.
+    const DeclaredWorldCurve* const Held = Declared.Resolve(Subject);
+    if (Held == nullptr || !Held->Geometry.Declared())
+        return OperationVerdict::SubjectMissing;
+
+    const bool IsLine = Held->Geometry.Subject() == CurveSubject::Line;
+
+    // 🔴 THE PIECE UNDER THE POINTER IS THE WHOLE CURVE WHEN NOTHING DIVIDES IT. An ordinary shape's edge
+    //    -- a side of a rectangle, an isolated line, an arc -- meets its neighbours only at its own ends,
+    //    which are junctions and not interior crossings, so there is exactly one piece to take and it is
+    //    all of it. Trim removes the piece the artist clicked; when that piece is the entire edge, the
+    //    entire edge goes. This is what the tool does on the geometry it is used on most, and refusing it
+    //    -- as this once did, on the argument that a whole-edge removal is a deletion -- is what made
+    //    Trim appear to do nothing at all on a drawn shape.
+    std::vector<double> Parameters;
+    if (IsLine)
+        CollectCrossings(Declared, Subject, Parameters);
+
+    if (Parameters.empty())
+    {
+        // 📝 A curved edge is only ever removed whole here, so the probe need only land on it. A straight
+        //    edge is held to the same tolerance the partial trim uses, so a click that misses the line is
+        //    refused rather than silently deleting whatever edge happened to be nearest.
+        if (IsLine)
+        {
+            const LineCurve Bare = *ResolveLine(Declared, Subject);
+            if (DistanceToInfiniteLine(Bare, Probe) > OnCurveTolerance)
+                return OperationVerdict::PointNotOnCurve;
+        }
+
+        if (!Declared.RetireCurve(Subject))
+            return OperationVerdict::SubjectMissing;
+        return OperationVerdict::Produced;
+    }
 
     const LineCurve Original = *ResolveLine(Declared, Subject);
     if (DistanceToInfiniteLine(Original, Probe) > OnCurveTolerance)
         return OperationVerdict::PointNotOnCurve;
 
     const double At = std::clamp(ParameterAlong(Original, Probe), 0.0, 1.0);
-
-    std::vector<double> Parameters;
-    CollectCrossings(Declared, Subject, Parameters);
-    if (Parameters.empty())
-        return OperationVerdict::NoIntersection;
 
     // 📐 The bounds of the piece the probe sits in: the nearest crossing below it and the nearest above.
     //    Absent either, that side runs to the curve's own end -- which is how an overhang is trimmed.
@@ -357,10 +413,16 @@ OperationVerdict TrimWorldCurve(WorldSketchStructure& Declared,
         else if (!HasUpper)  { Upper = Parameter; HasUpper = true; }
     }
 
-    // 📝 A curve with crossings, probed in a piece bounded by neither, would be removed entirely. That is
-    //    a deletion, not a trim, and the artist has a delete for it.
+    // 📝 A crossed curve probed in the piece beyond every crossing at BOTH ends is being asked to lose its
+    //    whole span between the outermost crossings -- which, with the ends kept, is the two overhangs and
+    //    the middle all at once. That is not one piece, so it is removed as the whole edge rather than
+    //    guessed at.
     if (!HasLower && !HasUpper)
-        return OperationVerdict::NoIntersection;
+    {
+        if (!Declared.RetireCurve(Subject))
+            return OperationVerdict::SubjectMissing;
+        return OperationVerdict::Produced;
+    }
 
     const SpatialPoint LowerPoint = PointAt(Original, Lower);
     const SpatialPoint UpperPoint = PointAt(Original, Upper);
@@ -400,23 +462,43 @@ OperationVerdict EvaluateWorldTrim(const WorldSketchStructure& Declared,
     DepartingFrom = {};
     DepartingTo   = {};
 
-    // 🔴 EVERY REFUSAL THE TRIM MAKES, IN THE SAME ORDER. A preview that accepted a case the commit
-    //    refuses would highlight a piece and then leave it there when the artist clicked -- which reads
-    //    as the tool being broken rather than as the trim being impossible.
-    const OperationVerdict Classified = ClassifySubject(Declared, Subject);
-    if (Classified != OperationVerdict::Produced)
-        return Classified;
+    // 🔴 THE PREVIEW IS THE COMMIT'S OWN ANSWER. Every case the trim accepts, this must accept and show,
+    //    and every case it refuses, this must refuse -- a highlight over a piece the click then leaves
+    //    standing reads as the tool being broken. So this mirrors `TrimWorldCurve` step for step: the
+    //    whole-edge case first, the crossing-bounded piece second.
+    const DeclaredWorldCurve* const Held = Declared.Resolve(Subject);
+    if (Held == nullptr || !Held->Geometry.Declared())
+        return OperationVerdict::SubjectMissing;
+
+    const bool IsLine = Held->Geometry.Subject() == CurveSubject::Line;
+
+    std::vector<double> Parameters;
+    if (IsLine)
+        CollectCrossings(Declared, Subject, Parameters);
+
+    // 📝 NOTHING DIVIDES THE EDGE, SO THE WHOLE EDGE IS THE PIECE. The span shown runs end to end of the
+    //    curve -- the same edge the click will remove -- so the artist sees exactly what will go. An
+    //    arc's ends are read from its polyline; a straight edge is held to the on-curve tolerance so a
+    //    miss is not highlighted.
+    if (Parameters.empty())
+    {
+        if (IsLine)
+        {
+            const LineCurve Bare = *ResolveLine(Declared, Subject);
+            if (DistanceToInfiniteLine(Bare, Probe) > OnCurveTolerance)
+                return OperationVerdict::PointNotOnCurve;
+        }
+
+        if (!CurveEndpoints(Declared, Subject, DepartingFrom, DepartingTo))
+            return OperationVerdict::SubjectMissing;
+        return OperationVerdict::Produced;
+    }
 
     const LineCurve Original = *ResolveLine(Declared, Subject);
     if (DistanceToInfiniteLine(Original, Probe) > OnCurveTolerance)
         return OperationVerdict::PointNotOnCurve;
 
     const double At = std::clamp(ParameterAlong(Original, Probe), 0.0, 1.0);
-
-    std::vector<double> Parameters;
-    CollectCrossings(Declared, Subject, Parameters);
-    if (Parameters.empty())
-        return OperationVerdict::NoIntersection;
 
     // 📐 The same bracket the trim resolves: the nearest crossing below the probe and the nearest above,
     //    each falling back to the curve's own end so an overhang reads as a piece rather than as nothing.
@@ -430,8 +512,14 @@ OperationVerdict EvaluateWorldTrim(const WorldSketchStructure& Declared,
         else if (!HasUpper)  { Upper = Parameter; HasUpper = true; }
     }
 
+    // 📝 Probed beyond every crossing at both ends: the whole span between the outermost crossings goes,
+    //    which the commit removes as the whole edge. The preview says the same by naming the edge's ends.
     if (!HasLower && !HasUpper)
-        return OperationVerdict::NoIntersection;
+    {
+        if (!CurveEndpoints(Declared, Subject, DepartingFrom, DepartingTo))
+            return OperationVerdict::SubjectMissing;
+        return OperationVerdict::Produced;
+    }
 
     // 📝 The piece that GOES is the one the probe sits in, which is bounded by the pair just found. The
     //    trim keeps everything outside it.

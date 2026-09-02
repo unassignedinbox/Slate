@@ -623,6 +623,10 @@ bool ApplyWorldSketchToSketch(const WorldSketchStructure& Declared,
         if (Source == nullptr)
             return false;
         Sketch.Curves()[CurveIndex - 1u].Geometry = Source->Geometry;
+        // 🔴 A RETIRED EDGE TRAVELS AS RETIRED. Copying only the geometry would hand the compatibility
+        //    sketch an empty curve with no word that its emptiness is intended, and `Declared()` would
+        //    fail the whole sketch over it. The flag rides along so both models agree the edge is gone.
+        Sketch.Curves()[CurveIndex - 1u].Retired = Source->Retired;
     }
 
     return true;
@@ -642,6 +646,9 @@ bool ApplyWorldSketchToSketch(const WorldSketchStructure& Declared,
          || Reference.Sketch.IssuedIndex > Sketch.Curves().size())
             return false;
         Sketch.Curves()[Reference.Sketch.IssuedIndex - 1u].Geometry = Source->Geometry;
+        // 🔴 A RETIRED EDGE TRAVELS AS RETIRED, so the compatibility sketch reads its empty geometry as a
+        //    removed curve rather than a broken one -- see the mapping-free writeback above.
+        Sketch.Curves()[Reference.Sketch.IssuedIndex - 1u].Retired = Source->Retired;
     }
 
     return true;

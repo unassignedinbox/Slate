@@ -91,16 +91,26 @@ OperationVerdict CutWorldCurveAtCrossings(WorldSketchStructure& Declared,
 //                                                          TRIM
 //------------------------------------------------------------------------------------------------------------------------
 
-/// 🧩 Removes the piece of a curve between the two crossings either side of a probe.
+/// 🧩 Removes the piece of a curve the probe sits in -- bounded by the crossings either side of it, or,
+///    when nothing crosses, the whole edge.
 /// in    Probe   [-] a point on the piece the artist wants gone
 /// note  🔴 THE ARTIST POINTS AT WHAT THEY WANT REMOVED, not at the bounds. Trim's whole appeal is that
 ///        the bounds are found for you: the nearest crossing on each side of the probe. Asking for them
 ///        would make it a two-click operation and no better than cutting twice and deleting.
 /// note  📝 With a crossing on only one side, the piece from the probe to the free END is removed --
-///        which is what an artist means by trimming an overhang. With no crossing at all the whole curve
-///        would go, and that is a deletion rather than a trim, so it refuses.
+///        which is what an artist means by trimming an overhang.
+/// note  🔴 WITH NOTHING CROSSING IT, THE WHOLE EDGE IS THE PIECE, AND IT GOES. An ordinary shape's side
+///        meets its neighbours only at its own ends -- junctions, not interior crossings -- so the one
+///        piece the probe can sit in is the entire edge. This once refused, calling a whole-edge removal
+///        a deletion rather than a trim; that refusal is exactly why Trim did nothing on a drawn shape,
+///        where every edge is uncrossed. The edge is retired in place: its geometry is cleared and its
+///        1-based index kept, so every loop, constraint, dimension and mapping that names a later curve
+///        is undisturbed, and a loop that used the edge simply reports itself open and stops filling.
+/// note  📝 The whole-edge removal is the one trim that is not line geometry -- an arc or a circle is
+///        taken out the same way, where the crossing-bounded partial trim below is straight-line only.
 /// note  🔴 A TRIM THROUGH THE MIDDLE LEAVES TWO PIECES. `Remaining` carries both, because a curve
-///        trimmed in its interior is not one shortened curve -- assuming it is loses the far piece.
+///        trimmed in its interior is not one shortened curve -- assuming it is loses the far piece. A
+///        whole-edge removal leaves `Remaining` empty: nothing of the edge is kept.
 /// cost  🚩🚩
 /// tag   api, nonthrowing
 OperationVerdict TrimWorldCurve(WorldSketchStructure& Declared,

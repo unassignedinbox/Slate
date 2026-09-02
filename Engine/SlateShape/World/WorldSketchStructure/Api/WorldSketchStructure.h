@@ -210,6 +210,18 @@ struct DeclaredWorldCurve
     CurveSpecification Geometry = {};
     WorldPlacementFrame SupportFrame = {};
     bool SupportFrameStanding = false;
+
+    /// 🧩 Set when Trim has removed this curve.
+    /// note  🔴 RETIRED IN PLACE, NEVER ERASED, exactly as a contradicted constraint is. A
+    ///        `WorldCurveName` IS its 1-based position in the curves vector, and loops, constraints,
+    ///        dimensions and the cross-frame `WorldSketchMapping` all store those names. Erasing element
+    ///        2 would silently renumber every curve after it, so each stored name would then point at
+    ///        its neighbour -- the drawing would keep resolving, against the wrong geometry, with
+    ///        nothing reporting an error. A retired curve keeps its index; its geometry is cleared so
+    ///        every consumer that already guards on `Geometry.Declared()` -- the renderer, the analysis,
+    ///        the picker, the snapper and the operations -- skips it without a line of new code, and
+    ///        this flag is what tells `Declared()` the empty geometry is intended rather than malformed.
+    bool Retired = false;
 };
 
 struct WorldCurveUse
@@ -274,6 +286,15 @@ public:
     WorldCurveName DeclareHermite(const HermiteCurve& Declared);
     WorldCurveName DeclareHermite(const HermiteCurve& Declared,
                                   const WorldPlacementFrame& SupportFrame);
+
+    /// 🧩 Removes a curve from the drawing without renumbering the ones after it.
+    /// note  🔴 A TRIM WITH NOTHING TO TRIM AGAINST REMOVES THE WHOLE EDGE, which is the only thing a
+    ///        trim CAN mean for an ordinary shape's side: its bounds are its own two ends, so the piece
+    ///        under the pointer IS the entire curve. The curve's index is kept and its geometry is
+    ///        cleared, so every consumer that already skips an undeclared curve stops seeing it while
+    ///        each name a loop, constraint, dimension or the mapping still holds keeps pointing where it
+    ///        did. Returns false only if the name resolves to nothing.
+    bool RetireCurve(WorldCurveName Subject);
 
     const DeclaredWorldCurve* Resolve(WorldCurveName Subject) const;
     DeclaredWorldCurve* Resolve(WorldCurveName Subject);

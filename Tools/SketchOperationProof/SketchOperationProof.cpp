@@ -276,14 +276,89 @@ void ProveTrimRemovesThePiece()
     Claim(Kept.size() == 1u && Near(LengthOf(Overhang, Kept[0u]), 70.0),
           "which runs from the free end to the crossing");
 
-    // ⚠️ With nothing crossing it at all, trimming would remove the whole curve. That is a deletion,
-    //    and a tool that deletes when the artist expected a trim is worse than one that declines.
+    // 🔴 NOTHING CROSSES IT, SO THE WHOLE EDGE IS THE PIECE UNDER THE POINTER, AND TRIM REMOVES IT. This
+    //    is the case the tool is used on most -- a side of a drawn shape, an isolated line -- and Trim
+    //    once refused it, on the argument that removing a whole edge is a deletion. That refusal is what
+    //    made Trim appear to do nothing on ordinary geometry: an edge meets its neighbours only at its
+    //    own ends, which are junctions rather than interior crossings, so a rectangle side never had a
+    //    bounded piece to take and the click fell on the floor. The piece the artist points at is the
+    //    whole edge, and clicking it takes the whole edge.
     WorldSketchStructure Bare;
     const WorldCurveName Only = Bare.DeclareLine({ 0.0, 0.0, 0.0 }, { 100.0, 0.0, 0.0 }, Ground);
     std::vector<WorldCurveName> Nothing;
-    Claim(TrimWorldCurve(Bare, Only, { 50.0, 0.0, 0.0 }, Nothing) == OperationVerdict::NoIntersection,
-          "a line nothing crosses refuses to be trimmed away entirely");
-    Claim(Bare.CurveCount() == 1u, "and survives the refusal intact");
+    Claim(TrimWorldCurve(Bare, Only, { 50.0, 0.0, 0.0 }, Nothing) == OperationVerdict::Produced,
+          "a line nothing crosses is trimmed away whole -- the piece under the pointer is all of it");
+    // 🔴 RETIRED IN PLACE, NOT ERASED. The curve keeps its 1-based index -- which every loop, constraint,
+    //    dimension and the cross-frame mapping stores by value -- and its geometry is cleared, so it is
+    //    gone from the drawing without renumbering anything after it.
+    Claim(Bare.CurveCount() == 1u, "its index is kept, so nothing that names a later curve is disturbed");
+    Claim(Bare.Resolve(Only) != nullptr && Bare.Resolve(Only)->Retired,
+          "and the edge itself is retired -- cleared, and marked so every consumer skips it");
+    Claim(!Bare.Resolve(Only)->Geometry.Declared(),
+          "its geometry is emptied, which is what the renderer, picker, snapper and analysis already skip");
+
+    // 🔴 A MISS IS STILL A MISS. Removing a whole edge on a bare click must not become "delete whatever
+    //    edge was nearest": a probe off the line is refused exactly as the partial trim refuses one.
+    WorldSketchStructure Missed;
+    const WorldCurveName Aimed = Missed.DeclareLine({ 0.0, 0.0, 0.0 }, { 100.0, 0.0, 0.0 }, Ground);
+    std::vector<WorldCurveName> Untouched;
+    Claim(TrimWorldCurve(Missed, Aimed, { 50.0, 0.0, 40.0 }, Untouched) == OperationVerdict::PointNotOnCurve,
+          "a click well off the line trims nothing, whole edge or not");
+    Claim(!Missed.Resolve(Aimed)->Retired, "and the edge it missed is left standing");
+
+    // 🔴 A CURVED EDGE IS TRIMMED WHOLE, NOT REFUSED AS UNSUPPORTED. The crossing-bounded partial trim is
+    //    line geometry, but removing an entire edge is the same act whatever the edge is -- so an arc,
+    //    which Trim once turned away outright, is taken out in one piece like any other whole edge. This
+    //    is what lets Trim clear a fillet's rounded corner or a slot's end.
+    WorldSketchStructure Curved;
+    const WorldCurveName Arc = Curved.DeclareThreePointArc({ 0.0, 0.0, 0.0 },
+                                                           { 50.0, 0.0, 50.0 },
+                                                           { 100.0, 0.0, 0.0 });
+    std::vector<WorldCurveName> ArcGone;
+    Claim(TrimWorldCurve(Curved, Arc, { 50.0, 0.0, 50.0 }, ArcGone) == OperationVerdict::Produced,
+          "an arc is trimmed away whole, where before it was refused as unsupported geometry");
+    Claim(Curved.Resolve(Arc)->Retired, "the arc is retired in place, its index kept like any other edge");
+
+    // 🔴 TRIMMING A SIDE OFF A CLOSED SHAPE OPENS IT, AND THE OPEN SHAPE HAS NO FACE. This is the case
+    //    the whole fix is for: a drawn rectangle, one side clicked, that side gone -- and the sketch that
+    //    remains is still valid, its other three sides intact, its loop reporting itself open so its fill
+    //    stops being drawn. That the sketch stays `Declared()` is what proves the removal was a retire in
+    //    place and not a corruption: an erased curve would have renumbered the loop's edges onto the
+    //    wrong geometry.
+    WorldSketchStructure Shape;
+    const WorldCurveName Bottom = Shape.DeclareLine({ 0.0, 0.0, 0.0 },   { 100.0, 0.0, 0.0 },   Ground);
+    const WorldCurveName Right  = Shape.DeclareLine({ 100.0, 0.0, 0.0 }, { 100.0, 0.0, 100.0 }, Ground);
+    const WorldCurveName Top    = Shape.DeclareLine({ 100.0, 0.0, 100.0 }, { 0.0, 0.0, 100.0 }, Ground);
+    const WorldCurveName Left   = Shape.DeclareLine({ 0.0, 0.0, 100.0 }, { 0.0, 0.0, 0.0 },     Ground);
+    const WorldLoopName Face = Shape.DeclareLoop({ { { Bottom, true }, { Right, true },
+                                                    { Top, true }, { Left, true } } });
+
+    const auto FaceRecord = [](const WorldSketchAnalysis& Analysis, WorldLoopName Name)
+        -> const WorldLoopAnalysisRecord*
+    {
+        for (const WorldLoopAnalysisRecord& Record : Analysis.Loops)
+            if (Record.Loop.IssuedIndex == Name.IssuedIndex)
+                return &Record;
+        return nullptr;
+    };
+
+    WorldSketchAnalysis Whole = AnalyzeWorldSketch(Shape, 48u, 0.05, 0.05);
+    const WorldLoopAnalysisRecord* WholeFace = FaceRecord(Whole, Face);
+    Claim(WholeFace != nullptr && WholeFace->FillEligible, "the closed rectangle fills before the trim");
+
+    std::vector<WorldCurveName> Left3;
+    Claim(TrimWorldCurve(Shape, Bottom, { 50.0, 0.0, 0.0 }, Left3) == OperationVerdict::Produced,
+          "clicking a side of the rectangle trims that whole side away");
+    Claim(Shape.Declared(),
+          "and the sketch that remains is still valid -- the retire renumbered nothing");
+    Claim(Shape.Resolve(Bottom)->Retired && !Shape.Resolve(Right)->Retired
+          && !Shape.Resolve(Top)->Retired && !Shape.Resolve(Left)->Retired,
+          "only the clicked side is gone; the other three stand untouched");
+
+    WorldSketchAnalysis Opened = AnalyzeWorldSketch(Shape, 48u, 0.05, 0.05);
+    const WorldLoopAnalysisRecord* OpenedFace = FaceRecord(Opened, Face);
+    Claim(OpenedFace != nullptr && !OpenedFace->FillEligible,
+          "the shape is open now, so its face no longer fills -- exactly as removing an edge should read");
 
     // ③ 🔴 A T-JUNCTION IS A DIVISION, AND TRIM COULD NOT SEE ONE. Every case above is built from
     //    segments that cross THROUGH the subject, and the crossing test accepted only that transversal
@@ -879,11 +954,24 @@ void ProveThePreviews()
               "the piece that survives ends exactly where the promise began -- one answer, not two");
     }
 
-    // ④ A CURVE WITH NOTHING CROSSING IT HAS NOTHING TO TRIM, and must not be highlighted.
+    // ④ A CURVE WITH NOTHING CROSSING IT IS THE WHOLE PIECE, and the preview highlights it end to end --
+    //    exactly the edge the click will remove, so the highlight and the commit are one answer.
     WorldSketchStructure Lone;
     const WorldCurveName Free = Lone.DeclareLine({ 0.0, 0.0, 0.0 }, { 100.0, 0.0, 0.0 }, Ground);
-    Claim(EvaluateWorldTrim(Lone, Free, { 50.0, 0.0, 0.0 }, From, To) == OperationVerdict::NoIntersection,
-          "an uncrossed curve offers no trim, rather than promising to delete the whole thing");
+    Claim(EvaluateWorldTrim(Lone, Free, { 50.0, 0.0, 0.0 }, From, To) == OperationVerdict::Produced,
+          "an uncrossed curve offers its whole self as the piece that would go");
+    Claim(Near(From.Left, 0.0, 1.0e-9) && Near(To.Left, 100.0, 1.0e-9),
+          "and the span it names runs end to end of the edge");
+    {
+        // 🔴 THE PREVIEW IS THE COMMIT, for the whole-edge case too. What the highlight promised is what
+        //    the click takes: the edge is retired, and it kept its index doing so.
+        WorldSketchStructure Copy = Lone;
+        std::vector<WorldCurveName> Gone;
+        Claim(TrimWorldCurve(Copy, Free, { 50.0, 0.0, 0.0 }, Gone) == OperationVerdict::Produced,
+              "and performing it removes the whole edge that was promised");
+        Claim(Copy.CurveCount() == 1u && Copy.Resolve(Free)->Retired,
+              "the edge is retired in place -- gone from the drawing, its index undisturbed");
+    }
 
     // ⑤ CUT SNAPS ONTO THE CURVE. The marker must sit on the line, not beside it.
     // 📝 `OnCurveTolerance` is 1e-3, so the probe must genuinely be ON the curve -- the driver hands
@@ -912,13 +1000,18 @@ void ProveThePreviews()
           Near(Trimming.DepartingTo.Left, 70.0, 1.0e-9),
           "and publishes the doomed span for the renderer to draw in red");
 
-    // ⑧ HOVERING AN UNCROSSED CURVE MUST NOT ARM. This used to report `Produced` on reach alone.
-    SketchOperationSession Hopeless;
-    Hopeless.Manner = OperationManner::Trim;
+    // ⑧ HOVERING AN UNCROSSED CURVE ARMS THE WHOLE-EDGE TRIM. The piece under the pointer is the whole
+    //    edge, so the session previews it end to end and publishes that span for the renderer to draw --
+    //    the artist sees the entire edge lit before the click takes it.
+    SketchOperationSession WholeEdge;
+    WholeEdge.Manner = OperationManner::Trim;
     AdvanceSketchOperationSession(Lone, NoChain, Ground,
-                                  { { 50.0, 0.0, 0.0 }, false, false, false, 12.0 }, Hopeless);
-    Claim(Hopeless.Preview != OperationVerdict::Produced,
-          "a trim that cannot succeed no longer previews as though it can");
+                                  { { 50.0, 0.0, 0.0 }, false, false, false, 12.0 }, WholeEdge);
+    Claim(WholeEdge.Preview == OperationVerdict::Produced,
+          "hovering an uncrossed edge arms the trim -- the whole edge is the piece that would go");
+    Claim(Near(WholeEdge.DepartingFrom.Left, 0.0, 1.0e-9) &&
+          Near(WholeEdge.DepartingTo.Left, 100.0, 1.0e-9),
+          "and the span it publishes runs the full length of the edge");
 
     // ⑨ 🔴 THE PROBE IS SNAPPED ONTO THE CURVE, AND THIS IS WHAT ACTUALLY KILLED TRIM AND CUT IN THE APP.
     //    Reaching a curve is deliberately generous -- twelve PIXELS, which at metre scale is a long way
