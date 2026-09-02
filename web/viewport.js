@@ -45,6 +45,10 @@ canvas.addEventListener("webglcontextrestored", () => {
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true; controls.dampingFactor = 0.08;
 controls.target.set(0, 0, 0);
+// 🔴 CLAMP DOLLY: without these the wheel drives the camera through the target
+//    and the whole scene falls behind the near plane -> the view goes black.
+controls.minDistance = 1.2;
+controls.maxDistance = 150;
 // left is reserved for drawing/selection; orbit on middle-drag, pan on right, dolly on wheel
 controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN };
 
