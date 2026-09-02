@@ -358,6 +358,26 @@ int main()
                 "and the widget, which was right all along");
     }
 
+    // 🔴 A HEADING-ONLY READOUT MUST STILL REACH ITS APPLY BUTTON. Fillet, Chamfer and Offset carry
+    //    their figure in the drag and so declare NO option rows -- the popup is a title plus Apply /
+    //    Cancel. The popup used to bail with `Standing` whenever `Rows == 0u`, BEFORE the Apply footer
+    //    was drawn or its press read: Apply could never fire, the corner session never left `Pending`,
+    //    `ApplyWorldCorner` was never called, and the fillet stayed a preview that never became geometry
+    //    while the next corner could not be started. Stated against the source because the defect is the
+    //    early-return condition itself, which no live-surface-free claim here can exercise.
+    {
+        const std::string Popup =
+            ReadWhole("Engine/SlateUI/Interface/ToolContextMenu/Source/ToolContextMenu.cpp");
+        Require(!Popup.empty(), "the popup source is readable");
+
+        // The guard that decides whether Record bails before drawing the footer must NOT mention the
+        // row count -- a zero-row popup is valid and must be recorded so its Apply can be pressed.
+        Require(Popup.find("!Opened || Declared.Rows == nullptr || Rows == 0u") == std::string::npos,
+                "the popup no longer refuses to record a heading-only (zero-row) readout");
+        Require(Popup.find("!Opened || Declared.Rows == nullptr") != std::string::npos,
+                "it bails only when closed or handed a null row array, so Apply/Cancel always draw");
+    }
+
     std::printf("[ToolOptionsWidgetProof] %u claims, %u failures\n", Claims, Failures);
     return Failures == 0u ? 0 : 1;
 }

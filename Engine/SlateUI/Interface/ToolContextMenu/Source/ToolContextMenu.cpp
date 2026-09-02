@@ -215,7 +215,14 @@ Deliver<PopupVerdict> ToolContextMenu::Record(const PlaneExtent& Bounds,
         ~AvoidSpend() { *Count = 0u; }
     } Spend{ &AvoidCount };
 
-    if (!Opened || Declared.Rows == nullptr || Rows == 0u)
+    // 🔴 A HEADING-ONLY READOUT IS VALID, AND IT MUST STILL REACH ITS FOOTER. Fillet, Chamfer and
+    //    Offset carry their figure in the drag, so their readout has NO option rows on purpose -- just a
+    //    title and the Apply / Cancel actions. Bailing here whenever `Rows == 0u` returned `Standing`
+    //    before the Apply button was ever drawn or its press ever read, so Apply could not fire, the
+    //    corner session never left `Pending`, and `ApplyWorldCorner` was never called: the fillet stayed
+    //    a live preview that never became geometry, and the next corner could not be started. Only a
+    //    CLOSED popup, or one handed a null row array, has nothing to record.
+    if (!Opened || Declared.Rows == nullptr)
     {
         Occupied = {};
         return Deliver<PopupVerdict>::Result(PopupVerdict::Standing);
