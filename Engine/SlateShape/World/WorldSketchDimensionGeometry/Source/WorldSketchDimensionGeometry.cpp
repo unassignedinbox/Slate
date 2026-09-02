@@ -6,6 +6,7 @@
 
 #include "SlateShape/World/WorldSketchPicking/Api/WorldSketchPicking.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace Slate
@@ -213,7 +214,100 @@ Deliver<DimensionGeometry> ResolveDimensionGeometry(const WorldSketchStructure& 
     }
 
     //------------------------------------------------------------------------------------------------------------------------
-    // ② Everything linear.
+    // ② An angle between two edges, drawn as an arc turning about their shared corner.
+    //------------------------------------------------------------------------------------------------------------------------
+    // 🔴 AN ANGLE IS ITS OWN SHAPE, NOT A LENGTH. Before this branch existed the angular tool fell
+    //    through to the linear one below: it measured the straight-line distance between two edges and
+    //    drew a dimension line across the drawing, which is why the angular figure read a millimetre
+    //    span and scribbled lines instead of an arc. An angle is an arc swept between two rays from the
+    //    corner they meet at, and it has to be derived as one.
+    if (Dimension.Subject == WorldDimensionSubject::Angle)
+    {
+        SpatialPoint BaseStart = {}, BaseEnd = {}, DrivenStart = {}, DrivenEnd = {};
+        WorldPlacementFrame BaseFrame = {};
+        WorldPlacementFrame DrivenFrame = {};
+        if (Dimension.Primary.Subject != WorldDimensionReferenceSubject::Curve ||
+            Dimension.Secondary.Subject != WorldDimensionReferenceSubject::Curve)
+            return Deliver<DimensionGeometry>::Refuse(
+                { RefusalReason::ContentUnsupported, "an angle is measured between two edges" });
+
+        std::vector<WorldPointPlacement> BasePoints;
+        std::vector<WorldPointPlacement> DrivenPoints;
+        const DeclaredWorldCurve* BaseCurve = Declared.Resolve(Dimension.Primary.Curve);
+        const DeclaredWorldCurve* DrivenCurve = Declared.Resolve(Dimension.Secondary.Curve);
+        if (BaseCurve == nullptr || DrivenCurve == nullptr ||
+            !ResolveWorldSketchPoints(Declared, Dimension.Primary.Curve, BasePoints) ||
+            !ResolveWorldSketchPoints(Declared, Dimension.Secondary.Curve, DrivenPoints) ||
+            BasePoints.size() < 2u || DrivenPoints.size() < 2u)
+            return Deliver<DimensionGeometry>::Refuse(
+                { RefusalReason::ContentUnsupported, "the dimensioned edges are absent" });
+
+        BaseStart = BasePoints.front().Position;
+        BaseEnd = BasePoints.back().Position;
+        DrivenStart = DrivenPoints.front().Position;
+        DrivenEnd = DrivenPoints.back().Position;
+        BaseFrame = FrameOfCurve(*BaseCurve, BaseStart);
+        DrivenFrame = FrameOfCurve(*DrivenCurve, DrivenStart);
+
+        // 🔴 THE CORNER IS THE PAIR OF ENDPOINTS THAT MEET. Two edges can be given either way round,
+        //    so the vertex is whichever of the four endpoint pairings is closest -- the point they
+        //    share. The rays then run FROM that corner OUT along each edge, which is what the arc turns
+        //    between.
+        const SpatialPoint BaseEnds[2] = { BaseStart, BaseEnd };
+        const SpatialPoint DrivenEnds[2] = { DrivenStart, DrivenEnd };
+        double Best = -1.0;
+        SpatialPoint Vertex = {};
+        SpatialDirection RayBase = {};
+        SpatialDirection RayDriven = {};
+        for (int I = 0; I < 2; ++I)
+            for (int J = 0; J < 2; ++J)
+            {
+                const double Gap = LengthSquared(Difference(BaseEnds[I], DrivenEnds[J]));
+                if (Best < 0.0 || Gap < Best)
+                {
+                    Best = Gap;
+                    Vertex = BaseEnds[I];
+                    RayBase = Difference(BaseEnds[I], BaseEnds[1 - I]);     // [-] - from corner outward
+                    RayDriven = Difference(DrivenEnds[J], DrivenEnds[1 - J]);
+                }
+            }
+
+        const double BaseLength = std::sqrt(LengthSquared(RayBase));
+        const double DrivenLength = std::sqrt(LengthSquared(RayDriven));
+        if (!(BaseLength > MeasureTolerance) || !(DrivenLength > MeasureTolerance))
+            return Deliver<DimensionGeometry>::Refuse(
+                { RefusalReason::ContentUnsupported, "an angle needs two edges with length" });
+
+        const SpatialDirection AlongBase = Normalize(RayBase);
+        const SpatialDirection AlongDriven = Normalize(RayDriven);
+        const double Between = std::acos(std::clamp(Dot(AlongBase, AlongDriven), -1.0, 1.0));
+
+        // 📝 The arc is drawn a fraction of the shorter edge out from the corner, plus whatever the
+        //    artist has dragged, so it clears the vertex and reads at any scale. `Offset` is the drag.
+        const double Reach = std::min(BaseLength, DrivenLength) * 0.5 + Dimension.Offset;
+        const double Radius = Reach > MeasureTolerance ? Reach : std::min(BaseLength, DrivenLength) * 0.5;
+
+        Resolved.Drawing = DimensionDrawing::Angular;
+        Resolved.Frame = BaseFrame;
+        Resolved.AngleVertex = Vertex;
+        Resolved.MeasuredStart = Added(Vertex, Scaled(AlongBase, Radius));
+        Resolved.MeasuredEnd = Added(Vertex, Scaled(AlongDriven, Radius));
+        Resolved.LineStart = Resolved.MeasuredStart;
+        Resolved.LineEnd = Resolved.MeasuredEnd;
+        Resolved.Measured = Between;                                        // [-] - radians
+
+        // 📝 The figure sits on the bisector, out past the arc, so it clears both rays.
+        const SpatialDirection Bisector = Normalize(Added(AlongBase, AlongDriven));
+        Resolved.TextAt = Added(Vertex, Scaled(Bisector, Radius * 1.12 + 0.001));
+        Resolved.TextAlong = Bisector;
+        Resolved.ArrowStart = AlongBase;
+        Resolved.ArrowEnd = AlongDriven;
+        static_cast<void>(DrivenFrame);
+        return Deliver<DimensionGeometry>::Result(Resolved);
+    }
+
+    //------------------------------------------------------------------------------------------------------------------------
+    // ③ Everything linear.
     //------------------------------------------------------------------------------------------------------------------------
     SpatialPoint Start = {};
     SpatialPoint End = {};
@@ -299,6 +393,21 @@ Deliver<double> ResolveDimensionOffsetFor(const WorldSketchStructure& Declared,
             return Deliver<double>::Refuse(
                 { RefusalReason::ContentUnsupported, "the dimensioned curve is not round" });
         return Deliver<double>::Result(std::sqrt(LengthSquared(Difference(Centre, Probe))) - Radius);
+    }
+
+    // 📝 An angular dimension's stand-off is how far out from the corner the arc is dragged. The arc is
+    //    born at half the shorter edge, so the offset is measured from there -- dragging out grows the
+    //    arc, dragging in shrinks it, and the geometry already resolves the corner and the edges.
+    if (Dimension.Subject == WorldDimensionSubject::Angle)
+    {
+        const Deliver<DimensionGeometry> Drawn = ResolveDimensionGeometry(Declared, Subject);
+        if (!Drawn.Resolved)
+            return Deliver<double>::Refuse(
+                { RefusalReason::ContentUnsupported, "the dimensioned angle is absent" });
+        const double Present = std::sqrt(LengthSquared(Difference(Drawn.Delivered.AngleVertex, Probe)));
+        const double Born = std::sqrt(LengthSquared(Difference(Drawn.Delivered.AngleVertex,
+                                                               Drawn.Delivered.MeasuredStart)));
+        return Deliver<double>::Result(Dimension.Offset + (Present - Born));
     }
 
     SpatialPoint Start = {};

@@ -201,7 +201,15 @@ AnnotationVerdict OfferAnnotationPick(WorldSketchStructure& Declared,
     //    the artist sees is already readable, and the drag that follows only refines it.
     WorldDimensionSpecification Born = Authored.Delivered;
     if (!(std::fabs(Born.Offset) > 0.0))
-        Born.Offset = std::fabs(Measured) * DimensionBirthFraction;
+    {
+        // 🔴 AN ANGLE IS BORN AT ZERO STAND-OFF, because its `Offset` is measured in millimetres out
+        //    from the corner while its `Measured` is an angle in radians -- multiplying the two would be
+        //    nonsense. The angular geometry already places its arc at half the shorter edge, so zero is
+        //    a legible starting arc, and the drag refines it from there.
+        Born.Offset = Session.Dimension == WorldDimensionSubject::Angle
+                          ? 0.0
+                          : std::fabs(Measured) * DimensionBirthFraction;
+    }
 
     Session.Placed = Declared.DeclareDimension(Born);
     if (!Session.Placed.Assigned())
@@ -392,6 +400,17 @@ void ComposeDimensionLabel(const WorldSketchStructure& Declared,
         return;
 
     const WorldDimensionSpecification& Dimension = Declared.Dimensions()[Subject.IssuedIndex - 1u];
+
+    // 🔴 AN ANGLE IS DEGREES, NOT LENGTH. Its measured value is radians, and running it through the
+    //    length unit would print a number of millimetres for a corner -- which is exactly the "2.30 mm"
+    //    the angular tool showed before it had geometry of its own. It is shown in degrees with a
+    //    degree sign, and never carries a length unit.
+    if (Dimension.Subject == WorldDimensionSubject::Angle)
+    {
+        const double Degrees = Drawn.Delivered.Measured * 180.0 / 3.14159265358979323846;
+        std::snprintf(Delivered, Capacity, "%.1f\xC2\xB0", Degrees);    // [-] - e.g. 90.0°
+        return;
+    }
 
     // 🔴 THE PREFIX BELONGS TO THE SUBJECT. A radius written without its R is indistinguishable from a
     //    length, and a diameter without ⌀ is off by a factor of two to anyone reading the drawing.

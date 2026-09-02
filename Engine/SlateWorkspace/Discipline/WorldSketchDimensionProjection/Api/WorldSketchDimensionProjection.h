@@ -37,16 +37,45 @@ namespace Slate
 //------------------------------------------------------------------------------------------------------------------------
 
 /// 🧩 How dimensions are drawn, kept apart from the curve style so annotation never restyles geometry.
+/// note  🔴 WHITE, NOT YELLOW. A dimension is annotation laid over the drawing, and it reads as a
+///        drafting figure only when it is the neutral white of ink on a plan -- a saturated yellow
+///        line is indistinguishable from a highlighted edge and turns a clean dimension into scribble.
+///        The selected figure brightens to full opacity rather than changing hue, so selection is
+///        legible without the annotation ever stopping being white.
 struct WorldDimensionRenderingStyle
 {
-    Unsigned32 LineColour         = PackWorkspaceCadColour(250u, 204u, 21u, 235u);
+    Unsigned32 LineColour         = PackWorkspaceCadColour(236u, 240u, 244u, 235u);
     Unsigned32 SelectedLineColour = PackWorkspaceCadColour(255u, 255u, 255u, 255u);
-    Unsigned32 WitnessColour      = PackWorkspaceCadColour(250u, 204u, 21u, 150u);
+    Unsigned32 WitnessColour      = PackWorkspaceCadColour(236u, 240u, 244u, 150u);
     Real32     LineThickness      = 1.3f;
     Real32     WitnessThickness   = 1.0f;
 
     /// 🧩 How wide an arrowhead opens, as a fraction of its reach.
     Real32 ArrowSpread = 0.36f;
+
+    //--------------------------------------------------------------------------------------------------------------------
+    // 🔴 THE DECORATION IS SIZED IN SCREEN PIXELS, NOT WORLD MILLIMETRES. An arrowhead measured in
+    //    millimetres is three millimetres long whether the feature is a metre wide or four millimetres
+    //    wide -- and on the small feature the arrowheads are nearly as long as the whole dimension, so
+    //    the outward-flip fires and the barbs shoot off both ends into the scribble the bug reports.
+    //    Every drafting tool draws its arrows, gaps and leaders at a fixed pixel size so a dimension
+    //    reads the same at every zoom; these are those sizes, in framebuffer pixels.
+    //--------------------------------------------------------------------------------------------------------------------
+
+    /// 🧩 How long an arrowhead is, along the dimension line, in screen pixels.
+    Real32 ArrowScreenLength = 11.0f;
+
+    /// 🧩 How far an arrowhead opens to each side, in screen pixels.
+    Real32 ArrowScreenHalfWidth = 3.6f;
+
+    /// 🧩 The small gap CAD drawings leave between an edge and the witness line that measures it.
+    Real32 WitnessScreenGap = 5.0f;
+
+    /// 🧩 How far a witness line runs on past the dimension line, in screen pixels.
+    Real32 WitnessScreenOvershoot = 7.0f;
+
+    /// 🧩 The radius of the dot drawn at a radial dimension's centre, in screen pixels.
+    Real32 CentreDotScreenRadius = 2.6f;
 
     /// 🧩 Half the size of the chip drawn behind a figure, in screen pixels.
     Real32 ChipPaddingX = 5.0f;

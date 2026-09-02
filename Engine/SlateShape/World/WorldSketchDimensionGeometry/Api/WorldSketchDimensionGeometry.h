@@ -50,8 +50,13 @@ struct DimensionGeometry
     DimensionDrawing Drawing = DimensionDrawing::Linear;
 
     /// 🧩 The measured span itself, on the geometry.
+    /// note  📝 For an angular dimension these are the two points where the arc crosses the rays, and
+    ///        `AngleVertex` is the corner they turn about.
     SpatialPoint MeasuredStart = {};
     SpatialPoint MeasuredEnd   = {};
+
+    /// 🧩 The corner an angular dimension is measured at -- meaningless for the other kinds.
+    SpatialPoint AngleVertex = {};
 
     /// 🧩 The dimension line, offset to the side by `Offset`.
     SpatialPoint LineStart = {};

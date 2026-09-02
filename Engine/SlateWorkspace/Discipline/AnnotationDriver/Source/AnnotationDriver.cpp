@@ -16,6 +16,30 @@ namespace
 {
 
 constexpr double ProjectionPi = 3.14159265358979323846;
+constexpr double RadiansToDegrees = 180.0 / ProjectionPi;
+constexpr double DegreesToRadians = ProjectionPi / 180.0;
+
+/// 🧩 Whether a tool measures an angle rather than a length.
+/// 🔴 AN ANGLE IS NOT A LENGTH, AND THE READOUT MUST KNOW IT. A dimension's figure is stored in the
+///    model's own unit -- millimetres for a length, RADIANS for an angle. The readout shows and takes
+///    degrees, and if the length conversion touched an angle it would offer the artist a value in
+///    millimetres for a corner. So the whole editing path forks here.
+constexpr bool MeasuresAngle(WorldDimensionSubject Subject)
+{
+    return Subject == WorldDimensionSubject::Angle;
+}
+
+/// 🧩 The stored figure, in whatever unit the readout should show.
+double FigureForDisplay(WorldDimensionSubject Subject, double Stored, MeasureUnit Unit)
+{
+    return MeasuresAngle(Subject) ? Stored * RadiansToDegrees : ToDisplay(Stored, Unit);
+}
+
+/// 🧩 A typed figure, back in the unit the model stores.
+double FigureForModel(WorldDimensionSubject Subject, double Typed, MeasureUnit Unit)
+{
+    return MeasuresAngle(Subject) ? Typed * DegreesToRadians : ToMillimetres(Typed, Unit);
+}
 
 /// 🧩 The ray under the pointer, in world space.
 bool RayUnderPointer(const ResolvedCamera& Camera,
@@ -121,7 +145,8 @@ void DriveAnnotations(const PlaneExtent& Bounds,
         State.Session.Phase != AnnotationPhase::Placing &&
         GraspDeclaredDimension(World, FigureUnderPointer, State.Session))
     {
-        State.Figure = static_cast<float>(ToDisplay(State.Session.Figure, State.Unit));
+        State.Figure = static_cast<float>(
+            FigureForDisplay(State.Session.Dimension, State.Session.Figure, State.Unit));
         PointerTaken = true;
     }
     else if (Pointer.ContactPressed && Hovered.Standing() &&
@@ -141,7 +166,8 @@ void DriveAnnotations(const PlaneExtent& Bounds,
         }
 
         if (Offered == AnnotationVerdict::Produced)
-            State.Figure = static_cast<float>(ToDisplay(State.Session.Figure, State.Unit));
+            State.Figure = static_cast<float>(
+                FigureForDisplay(State.Session.Dimension, State.Session.Figure, State.Unit));
     }
 
     if (State.Session.Constraining)
@@ -181,12 +207,14 @@ void DriveAnnotations(const PlaneExtent& Bounds,
     if (!Readout.Standing())
         return;
 
+    const bool Angular = MeasuresAngle(Intent.Dimension);
+
     OptionDeclaration Rows[1] = {};
     Rows[0].Kind    = OptionControl::Slider;
     Rows[0].Caption = "Value";
-    Rows[0].Unit    = MeasureUnitSuffix(State.Unit);
+    Rows[0].Unit    = Angular ? "\xC2\xB0" : MeasureUnitSuffix(State.Unit);
     Rows[0].Reading = &State.Figure;
-    Rows[0].Places  = MeasureUnitPlaces(State.Unit);
+    Rows[0].Places  = Angular ? 1u : MeasureUnitPlaces(State.Unit);
     Rows[0].Minimum = 0.0f;
 
     // 📝 A dimension has no natural upper bound, so the range simply follows the value: it is an entry
@@ -210,8 +238,9 @@ void DriveAnnotations(const PlaneExtent& Bounds,
     {
         // 🔴 THE TYPED FIGURE IS CONVERTED ON THE WAY IN, ONCE. Type 4.2 with metres showing and 4200
         //    millimetres is what the sketch is asked for -- the model never learns that metres exist.
-        const double Millimetres = ToMillimetres(static_cast<double>(State.Figure), State.Unit);
-        if (DeclareAnnotationFigure(State.Session, Millimetres) == AnnotationVerdict::Produced)
+        const double Stored =
+            FigureForModel(State.Session.Dimension, static_cast<double>(State.Figure), State.Unit);
+        if (DeclareAnnotationFigure(State.Session, Stored) == AnnotationVerdict::Produced)
         {
             // 🔴 A SOLVER REFUSAL LEAVES THE DRAWING ALONE and is reported, rather than being swallowed.
             //    This is the entire reason typed edits go through the solver instead of straight into the

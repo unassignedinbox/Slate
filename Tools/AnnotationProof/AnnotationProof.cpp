@@ -997,6 +997,87 @@ void ProveDimensionsOutrankConstraints()
     Claim(Near(LengthOf(Crowded, Driven), 50.0, 1.0e-3), "and the line still its original length");
 }
 
+//------------------------------------------------------------------------------------------------------------------------
+//                        13. AN ANGLE IS AN ARC BETWEEN TWO EDGES, NOT A LENGTH
+//------------------------------------------------------------------------------------------------------------------------
+
+/// 🔴 THE ANGULAR TOOL DREW A LENGTH. Before the angular kind had geometry of its own it fell through to
+///    the linear branch, so it measured the straight-line gap between two edges and drew a dimension line
+///    across the drawing -- the "2.30 mm" scribble the bug reported. An angle is an arc swept between two
+///    rays from the corner the edges share, its figure is degrees, and typing a value must turn the edge.
+void ProveAnglesAreArcs()
+{
+    std::printf("\n13. An angle is an arc between two edges, measured in degrees\n");
+
+    // 📐 Two edges meeting at the origin: one along +Left, one along +Forward. A right angle.
+    WorldSketchStructure Sketch;
+    const WorldCurveName Base   = Sketch.DeclareLine({ 0.0, 0.0, 0.0 }, { 100.0, 0.0, 0.0 }, Ground);
+    const WorldCurveName Driven = Sketch.DeclareLine({ 0.0, 0.0, 0.0 }, { 0.0, 0.0, 80.0 },  Ground);
+
+    WorldDimensionSpecification Declared = {};
+    Declared.Subject = WorldDimensionSubject::Angle;
+    Declared.Primary.Subject = WorldDimensionReferenceSubject::Curve;
+    Declared.Primary.Curve = Base;
+    Declared.Secondary.Subject = WorldDimensionReferenceSubject::Curve;
+    Declared.Secondary.Curve = Driven;
+    Declared.Target = 1.5707963267948966;
+    const WorldDimensionName Angle = Sketch.DeclareDimension(Declared);
+    Claim(Angle.Assigned(), "two edges carry an angular dimension");
+
+    const Deliver<DimensionGeometry> Drawn = ResolveDimensionGeometry(Sketch, Angle);
+    Claim(!!Drawn.Resolved, "which resolves to something drawable");
+    Claim(Drawn.Resolved && Drawn.Delivered.Drawing == DimensionDrawing::Angular,
+          "and it draws as an arc, not a line");
+
+    // 🔴 THE CORNER IS THE SHARED ENDPOINT, and the arc turns about it.
+    Claim(Drawn.Resolved && SamePoint(Drawn.Delivered.AngleVertex, { 0.0, 0.0, 0.0 }),
+          "the arc turns about the corner the two edges share");
+
+    // 🔴 THE FIGURE IS RADIANS IN THE MODEL, AND A RIGHT ANGLE IS HALF PI.
+    Claim(Drawn.Resolved && Near(Drawn.Delivered.Measured, 1.5707963267948966, 1.0e-9),
+          "and it measures the right angle between them, in radians");
+
+    // 🔴 THE LABEL IS DEGREES, NEVER MILLIMETRES. A "mm" on an angle is exactly the old bug.
+    char Figure[DimensionFigureLimit] = {};
+    ComposeDimensionLabel(Sketch, Angle, MeasureUnit::Millimetre, true, Figure, DimensionFigureLimit);
+    Claim(std::strcmp(Figure, "90.0\xC2\xB0") == 0, "the chip reads 90.0 degrees, with a degree sign");
+    Claim(std::strstr(Figure, "mm") == nullptr, "and never carries a length unit");
+
+    // 🔴 IT DRAWS AS AN ARC OF MANY SEGMENTS, not one straight line -- the drawing the bug lacked.
+    ResolvedCamera Camera = {};
+    Camera.Perspective = false;
+    Camera.OrthoScale = 2.0;
+    Camera.Frame.Eye = { 0.0, 200.0, 0.0 };
+    Camera.Frame.Right = { 1.0, 0.0, 0.0 };
+    Camera.Frame.Up = { 0.0, 0.0, -1.0 };
+    Camera.Frame.Forward = { 0.0, -1.0, 0.0 };
+    const PlaneExtent Body = Spanning(0.0f, 0.0f, 800.0f, 600.0f);
+
+    WorkspaceCadPacket Packet;
+    Packet.Reset();
+    std::vector<DimensionFigureChip> Figures;
+    Claim(ProjectWorldSketchDimensions(Sketch, Camera, Body, MeasureUnit::Millimetre,
+                                       Packet, Figures).Resolved,
+          "the angular projection answers");
+    Claim(Packet.SegmentCount > 8u, "and draws a many-segment arc, not a single straight line");
+    Claim(Figures.size() == 1u, "with exactly one figure chip");
+    Claim(std::strcmp(Figures[0u].Figure, "90.0\xC2\xB0") == 0, "reading 90.0 degrees");
+
+    // 🔴 TYPING A VALUE TURNS THE EDGE. Driving the angle to 45 degrees must swing the driven line to
+    //    half its former angle, proving the figure reshapes the geometry rather than just annotating it.
+    WorldDimensionSpecification* Held = Sketch.Resolve(Angle);
+    Claim(Held != nullptr, "the angle can be resolved for editing");
+    if (Held != nullptr)
+    {
+        Held->Target = 0.7853981633974483;                 // [-] - 45 degrees
+        const Deliver<bool> Applied = ApplyWorldDimensions(Sketch);
+        Claim(!!Applied.Resolved, "and the solver accepts the new angle");
+        const Deliver<DimensionGeometry> Reshaped = ResolveDimensionGeometry(Sketch, Angle);
+        Claim(Reshaped.Resolved && Near(Reshaped.Delivered.Measured, 0.7853981633974483, 1.0e-6),
+              "the geometry itself now stands at 45 degrees, driven by the typed figure");
+    }
+}
+
 } // namespace
 
 int main()
@@ -1015,6 +1096,7 @@ int main()
     ProveDimensionsOutrankConstraints();
     ProveDimensionsStandOffTheirOwnEdge();
     ProveAPlacedDimensionCanBeMovedAgain();
+    ProveAnglesAreArcs();
 
     std::printf("\n%u claims, %u failures\n", Claims, Failures);
     return Failures == 0u ? 0 : 1;
