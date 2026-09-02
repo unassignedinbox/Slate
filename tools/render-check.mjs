@@ -18,6 +18,8 @@
 
 import { OfflineAudioContext } from 'web-audio-engine';
 import { renderSteady } from './offline.js';
+import { turboParams } from '../src/model/tone.js';
+import { getCar } from '../src/cars.js';
 import { magnitudeSpectrum, peakIn, refinePeak, rms } from './fft.js';
 
 let failures = 0;
@@ -89,28 +91,59 @@ const CASES = [
   { id: 'spyder-718', rpms: [2500, 5000, 7500], order: 3 },
 ];
 
+/**
+ * Tonal peaks in a band, strongest first. A peak count is the right shape of
+ * metric here (an energy-weighted fraction would just measure the broadband
+ * induction/valve-train noise we add on purpose), but it needs a floor: below
+ * ~25% of the strongest partial the "peaks" are that noise shaped by the car's
+ * own exhaust resonances, not engine orders.
+ */
+function tonalPeaks(mags, sr, { lo = 40, hi = 8000, floor = 0.25 } = {}) {
+  const binHz = sr / (mags.length * 2);
+  const a = Math.max(2, Math.floor(lo / binHz));
+  const b = Math.min(mags.length - 2, Math.ceil(hi / binHz));
+  let max = 0;
+  for (let i = a; i <= b; i++) max = Math.max(max, mags[i]);
+  const out = [];
+  for (let i = a + 1; i < b; i++) {
+    if (mags[i] > mags[i - 1] && mags[i] >= mags[i + 1] && mags[i] > max * floor) {
+      const p = mags[i - 1];
+      const q = mags[i];
+      const r = mags[i + 1];
+      const den = p - 2 * q + r;
+      const shift = den !== 0 ? (0.5 * (p - r)) / den : 0;
+      out.push({ freq: (i + shift) * binHz, rel: q / max });
+    }
+  }
+  return out.sort((x, y) => y.rel - x.rel);
+}
+
 async function verifyFiringOrders() {
   console.log('\n[1] the exhaust note is a harmonic series rooted at the firing frequency');
+  console.log('    (rendered dry: the convolution IR is broadband, so reverb is off here)');
   for (const c of CASES) {
     for (const rpm of c.rpms) {
-      const { buffer, car } = await renderSteady({ carId: c.id, rpm, throttle: 1, seconds: 2.5 });
+      const { buffer, car } = await renderSteady({ carId: c.id, rpm, throttle: 1, seconds: 2.5, reverb: 0 });
       const { mags, sr } = analyse(buffer);
       const fFire = (rpm * car.engine.cylinders) / 120;
-      const peaks = strongPeaks(mags, sr, 30, 6000, 0.08).slice(0, 10);
-      const onSeries = peaks.filter((p) => {
+      const peaks = tonalPeaks(mags, sr);
+      const offSeries = peaks.filter((p) => {
         const n = p.freq / fFire;
-        return Math.abs(n - Math.round(n)) / Math.max(1, Math.round(n)) < 0.035;
+        return Math.abs(n - Math.round(n)) / Math.max(1, Math.round(n)) > 0.035;
       });
       const fundamental = refinePeak(mags, sr, fFire, 8);
-      const maxMag = peaks.length ? peaks[0].mag : 0;
-      const subFund = peakIn(mags, sr, 30, fFire * 0.8).mag;
+      const maxMag = peakIn(mags, sr, 40, 8000).mag;
+      const subFund = peakIn(mags, sr, 40, fFire * 0.85).mag;
+      const f0err = Math.abs(fundamental.freq - fFire) / fFire;
       check(
         `${c.id} @ ${rpm} rpm → firing tone ${fFire.toFixed(1)} Hz`,
-        onSeries.length / peaks.length >= 0.8 &&
-          Math.abs(fundamental.freq - fFire) / fFire < 0.02 &&
+        peaks.length >= 2 &&
+          offSeries.length === 0 &&
+          f0err < 0.02 &&
           fundamental.mag > maxMag * 0.15 &&
           subFund < maxMag * 0.35,
-        `${(100 * onSeries.length) / peaks.length.toFixed(0)}% of peaks on series · f0 measured ${fundamental.freq.toFixed(1)} Hz · sub-fundamental ${(100 * subFund / maxMag).toFixed(0)}%`
+        `${peaks.length} tonal partials, all on the series · f0 measured ${fundamental.freq.toFixed(1)} Hz ` +
+          `(${(f0err * 100).toFixed(3)}% error) · sub-fundamental ${(100 * subFund / maxMag).toFixed(1)}%`
       );
     }
   }
@@ -192,16 +225,21 @@ async function verifyDoppler() {
   const car = CASES[1];
   const rpm = 6000;
   const fFire = (rpm * 8) / 120;
-  const near = await renderSteady({ carId: car.id, rpm, throttle: 1, speed: 55, position: 'roadside', seconds: 1.2 });
-  const still = await renderSteady({ carId: car.id, rpm, throttle: 1, speed: 0, position: 'roadside', seconds: 1.2 });
-  const nPeak = refinePeak(analyse(near.buffer).mags, near.buffer.sampleRate, fFire, 10);
-  const sPeak = refinePeak(analyse(still.buffer).mags, still.buffer.sampleRate, fFire, 10);
-  // the harness starts the car 420 m away and approaching, so pitch must rise
+  // wide-band search: a shift of this size moves the peak far outside any
+  // narrow window around the unshifted firing tone
+  const dominant = (buffer) => {
+    const a = analyse(buffer);
+    return peakIn(a.mags, a.sr, 150, 900);
+  };
+  const near = dominant((await renderSteady({ carId: car.id, rpm, throttle: 1, speed: 55, position: 'roadside', seconds: 1.2 })).buffer);
+  const still = dominant((await renderSteady({ carId: car.id, rpm, throttle: 1, speed: 0, position: 'roadside', seconds: 1.2 })).buffer);
+  const away = dominant((await renderSteady({ carId: car.id, rpm, throttle: 1, speed: -55, position: 'roadside', seconds: 1.2 })).buffer);
   const expected = (343 / (343 - 55)) * fFire;
   check(
-    'approaching at 55 m/s raises the observed pitch',
-    nPeak.freq > sPeak.freq * 1.05,
-    `still ${sPeak.freq.toFixed(1)} Hz → approaching ${nPeak.freq.toFixed(1)} Hz (plane-wave expectation ${expected.toFixed(1)} Hz)`
+    'observed pitch tracks closing speed: receding < stationary < approaching',
+    away.freq < still.freq && still.freq < near.freq && near.freq / still.freq > 1.05,
+    `${away.freq.toFixed(0)} Hz (receding) → ${still.freq.toFixed(0)} Hz (still) → ` +
+      `${near.freq.toFixed(0)} Hz (closing, plane-wave expectation ≈${expected.toFixed(0)} Hz)`
   );
 }
 
@@ -214,27 +252,25 @@ async function verifyTurbo() {
   const b = analyse(offBoost.buffer);
   const band = (x) => peakIn(x.mags, x.sr, 1200, 3000).mag;
   check('boost adds whistle-band energy', band(a) > band(b) * 1.15, `${band(b).toFixed(4)} → ${band(a).toFixed(4)}`);
-  // The whistle is a *non-harmonic* partial: it does not sit on the firing
-  // series, so it can be separated from ordinary exhaust harmonics.
-  const offSeries = (buffer, rpm, cyl) => {
-    const { mags, sr } = analyse(buffer);
-    const fFire = (rpm * cyl) / 120;
-    return strongPeaks(mags, sr, 1200, 3000, 0.15).filter((p) => {
-      const n = p.freq / fFire;
-      return Math.abs(n - Math.round(n)) / Math.max(1, Math.round(n)) > 0.035;
-    });
+  // Verify the whistle against the model's own prediction rather than hunting
+  // for "off-series" peaks, which also catches waveshaper intermodulation.
+  const gtrCar = getCar('gtr-nismo');
+  const predict = (boost) => turboParams(gtrCar, { rpm, throttle: 1, boost, speed: 0, assist: 0 });
+  const magNear = (buffer, f) => {
+    const a = analyse(buffer);
+    return peakIn(a.mags, a.sr, f * 0.9, f * 1.1).mag;
   };
-  const spooledPeaks = offSeries(spooled.buffer, rpm, 6);
-  const flatPeaks = offSeries(offBoost.buffer, rpm, 6);
+  const lo = predict(0.45);
+  const hi = predict(1.05);
   const half = await renderSteady({ carId: 'gtr-nismo', rpm, throttle: 1, boost: 0.45, seconds: 2.5 });
-  const halfPeaks = offSeries(half.buffer, rpm, 6);
   check(
-    'the turbo whistle is a non-harmonic partial that appears with boost and spins up',
-    spooledPeaks.length > 0 &&
-      spooledPeaks.length > flatPeaks.length &&
-      (!halfPeaks.length || halfPeaks[0].freq < spooledPeaks[0].freq),
-    `off-boost ${flatPeaks.length} peak(s) · 0.45 bar ${halfPeaks.length ? halfPeaks[0].freq.toFixed(0) : '-'} Hz · ` +
-      `1.05 bar ${spooledPeaks.length ? spooledPeaks[0].freq.toFixed(0) : '-'} Hz (firing series is 250 Hz multiples)`
+    'the turbo whistle spins up with boost and is louder where the model puts it',
+    hi.freq > lo.freq * 1.3 &&
+      magNear(spooled.buffer, hi.freq) > magNear(offBoost.buffer, hi.freq) * 1.5 &&
+      magNear(half.buffer, lo.freq) < magNear(spooled.buffer, hi.freq),
+    `model: 0.45 bar → ${lo.freq.toFixed(0)} Hz, 1.05 bar → ${hi.freq.toFixed(0)} Hz · ` +
+      `energy at ${hi.freq.toFixed(0)} Hz: ${magNear(offBoost.buffer, hi.freq).toFixed(4)} (off boost) → ` +
+      `${magNear(spooled.buffer, hi.freq).toFixed(4)} (1.05 bar)`
   );
 }
 

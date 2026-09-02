@@ -85,27 +85,44 @@ sub-steps to 1/400 s so results never depend on the caller's frame rate.
 `web-audio-engine` `OfflineAudioContext` and measures the result — 26 checks, all
 passing:
 
-- the partials form a harmonic series rooted at `rpm/60 × cylinders/2`; 85–100 %
-  of strong peaks land on that series, and measured fundamentals come out at
-  99.9 Hz for a 2 000 rpm V6, 400.0 Hz for a 6 000 rpm V8, 899.9 Hz for a
-  9 000 rpm V12 — sub-0.2 % error;
+- every tonal partial above 25 % of the strongest lies on the firing series, at
+  all twelve engine-speed cases tested. Measured fundamentals: 99.9 Hz for a
+  2 000 rpm V6, 400.0 Hz for a 6 000 rpm V8, 899.9 Hz for a 9 000 rpm V12 —
+  worst error 0.076 %;
 - level and high-frequency content both rise with throttle;
 - the V12 carries ~6× the energy above 3 kHz of the turbo V6 at equal rpm;
-- the turbo whistle is a **non-harmonic** partial that appears with boost and
-  spins up (1 333 Hz at 0.45 bar → 2 150 Hz at 1.05 bar);
-- the flyby position shifts pitch with speed;
+- the turbo whistle appears with boost and spins up to where the model puts it
+  (1 230 Hz at 0.45 bar → 2 073 Hz at 1.05 bar);
+- the flyby position tracks closing speed: 311 Hz receding → 354 Hz stationary →
+  448 Hz approaching a 400 Hz firing tone;
 - a stopped engine measures exactly 0.00e+0 rms.
 
-`npm run export` renders full runs to WAV and re-measures them: across
-quasi-steady windows the loudest partial sits within ~1 % of the firing
-frequency the physics predicted.
+Two notes on method, both learned the hard way. The firing-series check renders
+with **reverb off**, because the convolution impulse response is broadband and
+would otherwise credit the room's own modes to the engine. And it counts *peaks*
+rather than energy fractions, because an energy fraction is dominated by the
+induction and valve-train noise that is added deliberately; below ~25 % of the
+strongest partial those noise peaks are shaped by each car's exhaust resonances
+(a 193 Hz peak between the LaFerrari's 120/240 Hz resonances, for instance) and
+are not engine orders at all.
 
-These checks have caught four real defects during development: an audio leak that
-kept amplitude-modulated noise audible with the engine off (the AM signal is
-summed *into* the gain `AudioParam`, so zeroing it is not enough — gate nodes are
-required), a stall-detection race that killed the engine during cranking, a rigid
-drivetrain coupling that made a stationary car impossible to idle, and a clutch
-spring stiff enough to diverge under explicit Euler.
+`npm run export` renders full runs to WAV, asserts headroom (peak < 99 %, zero
+clipped samples, RMS 25–32 %) and re-measures the pitch: across quasi-steady
+windows the loudest partial sits within ~1 % of what the physics predicted.
+
+`npm run check` statically verifies the browser side, which cannot run in Node:
+module imports, entry-point parse, all 31 `$('#id')` selectors against
+`index.html`, and every referenced asset on disk.
+
+These checks caught five real defects during development: an audio leak that kept
+amplitude-modulated noise audible with the engine off (the AM signal is summed
+*into* the gain `AudioParam`, so zeroing it is not enough — gate nodes are
+required); output hard-clipping at 100 % with 7 % of samples lost, because a
+synthesised pulse train has a high crest factor and the limiter alone could not
+catch it; a stall-detection race that killed the engine during cranking; a rigid
+drivetrain coupling that made a stationary car impossible to idle; and a clutch
+spring stiff enough to diverge under explicit Euler (the LaFerrari model reached
+33 146 rpm).
 
 ## Sources
 

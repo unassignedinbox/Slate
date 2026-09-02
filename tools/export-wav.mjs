@@ -28,6 +28,7 @@ const SCRIPT = [
 ];
 
 let total = 0;
+let failures = 0;
 for (const car of CARS) {
   const t0 = Date.now();
   const { buffer, states, info } = await renderTrajectory(car.id, SCRIPT, { position: 'track' });
@@ -35,6 +36,37 @@ for (const car of CARS) {
   const file = `${OUT}${car.id}-pull.wav`;
   writeFileSync(file, wav);
   total += wav.length;
+
+  // headroom: a synthesised pulse train has a high crest factor, and the 16-bit
+  // encode hard-clips at ±1, so verify nothing actually clipped
+  let peak = 0;
+  let clipped = 0;
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const d = buffer.getChannelData(c);
+    for (let i = 0; i < d.length; i++) {
+      const a = Math.abs(d[i]);
+      if (a > peak) peak = a;
+      if (a >= 0.9999) clipped++;
+    }
+  }
+  const rmsAll = (() => {
+    let s = 0;
+    let n = 0;
+    for (let c = 0; c < buffer.numberOfChannels; c++) {
+      const d = buffer.getChannelData(c);
+      for (let i = 0; i < d.length; i++) {
+        s += d[i] * d[i];
+        n++;
+      }
+    }
+    return Math.sqrt(s / n);
+  })();
+  const clean = clipped === 0 && peak < 0.99 && rmsAll > 0.05 && rmsAll < 0.45;
+  if (!clean) failures++;
+  console.log(
+    `  ${clean ? 'ok  ' : 'FAIL'} headroom: peak ${(peak * 100).toFixed(1)}%, rms ${(rmsAll * 100).toFixed(1)}%, ` +
+      `${clipped} clipped sample(s)`
+  );
 
   // measure what we just rendered: does the loudest partial near the expected
   // pitch actually sit on the engine's firing frequency?
@@ -75,3 +107,7 @@ for (const car of CARS) {
   );
 }
 console.log(`\nwrote ${(total / 1048576).toFixed(1)} MB to renders/`);
+if (failures) {
+  console.error(`${failures} render(s) failed the headroom check`);
+  process.exit(1);
+}

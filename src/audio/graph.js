@@ -66,10 +66,10 @@ export class EngineSynth {
     this.master.gain.value = 0.9;
 
     this.limiter = ctx.createDynamicsCompressor();
-    this.limiter.threshold.value = -8;
-    this.limiter.knee.value = 6;
-    this.limiter.ratio.value = 12;
-    this.limiter.attack.value = 0.003;
+    this.limiter.threshold.value = -6;
+    this.limiter.knee.value = 3;
+    this.limiter.ratio.value = 20;
+    this.limiter.attack.value = 0.002;
     this.limiter.release.value = 0.18;
 
     this.analyser = ctx.createAnalyser ? ctx.createAnalyser() : null;
@@ -128,7 +128,7 @@ export class EngineSynth {
     this.shaper.curve = saturationCurve(1.5);
     this.shaper.oversample = '2x';
     this.postGain = ctx.createGain();
-    this.postGain.gain.value = 0.8;
+    this.postGain.gain.value = 0.4;
     this.eq = (this.car.tone.eq || []).map((s) => {
       const f = ctx.createBiquadFilter();
       f.type = s.type;
@@ -478,7 +478,7 @@ export class EngineSynth {
     this.pulseOsc.frequency.setTargetAtTime(Math.max(fFire, 1), t, 0.01);
 
     /* --- turbulence / induction / mechanical / shimmer --- */
-    this.turbGate.gain.setTargetAtTime(on ? 0.22 + 0.5 * tone.load : 0, t, 0.05);
+    this.turbGate.gain.setTargetAtTime(on ? 0.1 + 0.22 * tone.load : 0, t, 0.05);
     this.turbFilter.frequency.setTargetAtTime(clamp(280 + 2400 * tone.load + state.rpm * 0.05, 120, 4000), t, 0.05);
     this.indGain.gain.setTargetAtTime(on ? tone.induction.gain : 0, t, 0.04);
     this.indFilter.frequency.setTargetAtTime(clamp(tone.induction.freq * freqScale, 80, 6000), t, 0.04);
@@ -486,7 +486,7 @@ export class EngineSynth {
       on ? tone.mechanical.gain * (1 + (this.position ? this.position.mechBoost : 0)) : 0,
       t, 0.06
     );
-    this.topGate.gain.setTargetAtTime(on ? tone.topEnd.gain * 0.5 : 0, t, 0.05);
+    this.topGate.gain.setTargetAtTime(on ? tone.topEnd.gain * 0.35 : 0, t, 0.05);
     this.topFilter.frequency.setTargetAtTime(clamp(tone.topEnd.center * freqScale, 200, 14000), t, 0.05);
 
     /* --- turbo --- */
@@ -574,12 +574,12 @@ export class EngineSynth {
       curve(this.oscBank[k].gain.gain, tones.map((t) => (t.harmonics[k] ? t.harmonics[k].gain : 0)));
     }
     curve(this.pulseOsc.frequency, states.map((s) => Math.max((s.rpm * this.car.engine.cylinders) / 120, 1)));
-    curve(this.turbGate.gain, tones.map((t) => (t.harmonics[0] && states[0].rpm > 30 ? 0.22 + 0.5 * t.load : 0)));
+    curve(this.turbGate.gain, tones.map((t) => (t.harmonics[0] && states[0].rpm > 30 ? 0.1 + 0.22 * t.load : 0)));
     curve(this.turbFilter.frequency, tones.map((t) => clamp(280 + 2400 * t.load, 120, 4000)));
     curve(this.indGain.gain, tones.map((t) => t.induction.gain));
     curve(this.indFilter.frequency, tones.map((t) => clamp(t.induction.freq, 80, 6000)));
     curve(this.mechGain.gain, tones.map((t) => t.mechanical.gain));
-    curve(this.topGate.gain, tones.map((t) => t.topEnd.gain * 0.5));
+    curve(this.topGate.gain, tones.map((t) => t.topEnd.gain * 0.35));
     curve(this.topFilter.frequency, tones.map((t) => clamp(t.topEnd.center, 200, 14000)));
 
     if (this.turbos.length) {
