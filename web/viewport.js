@@ -27,8 +27,20 @@ scene.background = new THREE.Color(COLORS.bg);
 const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 500);
 camera.position.set(5.5, 5, 6.5);
 
-const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, powerPreference:"high-performance" });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+
+// 🔴 CONTEXT-LOSS RECOVERY. In a preview iframe the browser can throw away the
+//    WebGL context (tab backgrounded, GPU pressure, iframe re-layout); without
+//    a handler the canvas stays permanently blank. Prevent the default so the
+//    context can be restored, then rebuild GPU resources when it comes back.
+let contextLost = false;
+canvas.addEventListener("webglcontextlost", (e) => { e.preventDefault(); contextLost = true; }, false);
+canvas.addEventListener("webglcontextrestored", () => {
+  contextLost = false;
+  resize();
+  rebuildAll();
+}, false);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true; controls.dampingFactor = 0.08;
@@ -501,22 +513,44 @@ navBall(new THREE.Vector3(0,0,1),COLORS.z,'Z',true); navBall(new THREE.Vector3(0
 // ============================================================================
 //  LOOP
 // ============================================================================
-function resize(){ const w=viewport.clientWidth,h=viewport.clientHeight;
-  renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); }
-new ResizeObserver(resize).observe(viewport); resize();
+function resize(){
+  // 🔴 A ZERO OR DEGENERATE SIZE MAKES camera.aspect NaN AND BLANKS THE VIEW.
+  //    The viewport can measure 0×0 for a frame during panel layout or when the
+  //    preview iframe is first shown; guard against it so the projection stays
+  //    finite and the canvas keeps drawing.
+  const w = Math.max(1, viewport.clientWidth);
+  const h = Math.max(1, viewport.clientHeight);
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(viewport);
+// re-measure when the tab/preview becomes visible again
+document.addEventListener('visibilitychange', () => { if (!document.hidden) resize(); });
+window.addEventListener('focus', resize);
+resize();
 
 function render(){
   requestAnimationFrame(render);
-  controls.update();
-  if(gizmo.visible){ const d=camera.position.distanceTo(gizmo.position); gizmo.scale.setScalar(d*0.11);
-    gizmo.userData.ring.quaternion.copy(camera.quaternion); }
-  renderer.setViewport(0,0,viewport.clientWidth,viewport.clientHeight); renderer.setScissorTest(false);
-  renderer.render(scene,camera);
-  const size=90,pad=12; navGroup.quaternion.copy(camera.quaternion).invert();
-  renderer.clearDepth(); renderer.setScissorTest(true);
-  const x=viewport.clientWidth-size-pad, y=viewport.clientHeight-size-pad;
-  renderer.setViewport(x,y,size,size); renderer.setScissor(x,y,size,size);
-  renderer.render(navScene,navCam); renderer.setScissorTest(false);
+  // don't touch a lost context, and skip frames where the panel has no size yet
+  const w = viewport.clientWidth, h = viewport.clientHeight;
+  if (contextLost || w < 2 || h < 2) return;
+
+  try {
+    controls.update();
+    if(gizmo.visible){ const d=camera.position.distanceTo(gizmo.position); gizmo.scale.setScalar(d*0.11);
+      gizmo.userData.ring.quaternion.copy(camera.quaternion); }
+    renderer.setViewport(0,0,w,h); renderer.setScissorTest(false);
+    renderer.render(scene,camera);
+    const size=90,pad=12; navGroup.quaternion.copy(camera.quaternion).invert();
+    renderer.clearDepth(); renderer.setScissorTest(true);
+    const x=w-size-pad, y=h-size-pad;
+    renderer.setViewport(x,y,size,size); renderer.setScissor(x,y,size,size);
+    renderer.render(navScene,navCam); renderer.setScissorTest(false);
+  } catch (err) {
+    // a transient error must never permanently stop the loop (rAF is already queued)
+    console.error('[viewport] frame error:', err);
+  }
 }
 render();
 
