@@ -26,6 +26,7 @@ npm test         # 32 unit tests on the physics and acoustics maths
 npm run verify   # renders the real graph offline and measures the output spectrum
 npm run export   # writes auditionable WAV renders of each car into renders/
 npm run check    # static wiring check of the browser side
+npm run check:ui # executes the UI frame loop against a stubbed DOM
 ```
 
 Browsers block audio until a user gesture, so nothing is instantiated until you
@@ -114,7 +115,14 @@ windows the loudest partial sits within ~1 % of what the physics predicted.
 module imports, entry-point parse, all 31 `$('#id')` selectors against
 `index.html`, and every referenced asset on disk.
 
-These checks caught five real defects during development: an audio leak that kept
+`npm run check:ui` goes further and actually **executes** `src/ui/app.js` against
+a stubbed DOM, driving the real frame loop with a real `EngineSynth` attached: it
+asserts the tach reads 0 with the engine off, that a held throttle key spins the
+engine to 7 460 rpm, that oscillator gains are genuinely scheduled from the frame
+loop, and that all four car switchers, the mode/gearbox chips, the listening
+positions and the keyboard handlers run without throwing.
+
+These checks caught six real defects during development: an audio leak that kept
 amplitude-modulated noise audible with the engine off (the AM signal is summed
 *into* the gain `AudioParam`, so zeroing it is not enough — gate nodes are
 required); output hard-clipping at 100 % with 7 % of samples lost, because a
@@ -122,7 +130,10 @@ synthesised pulse train has a high crest factor and the limiter alone could not
 catch it; a stall-detection race that killed the engine during cranking; a rigid
 drivetrain coupling that made a stationary car impossible to idle; and a clutch
 spring stiff enough to diverge under explicit Euler (the LaFerrari model reached
-33 146 rpm).
+33 146 rpm); and torque curves that were undefined below 1 000 rpm, which read as
+zero — so opening the throttle *while cranking* stalled the engine while it still
+reported itself as running. The UI harness is what caught that last one; no
+spectrum measurement would have.
 
 ## Sources
 

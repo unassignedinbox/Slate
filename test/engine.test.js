@@ -34,6 +34,19 @@ test('every car starts, cranks and settles at its idle speed', () => {
   }
 });
 
+test('holding the throttle while cranking still catches and revs', () => {
+  // regression: the torque curves used to be undefined below 1000 rpm, so an
+  // open throttle at cranking speed produced zero torque and killed the engine
+  for (const car of CARS) {
+    const pt = new Powertrain(car);
+    pt.start();
+    pt.setThrottle(1); // driver gives it gas while starting
+    const s = run(pt, 4);
+    assert.equal(s.phase, 'run', `${car.id} stalled while starting on throttle`);
+    assert.ok(s.rpm > 3000, `${car.id} only reached ${s.rpm.toFixed(0)} rpm on full throttle`);
+  }
+});
+
 test('a stalled engine stops turning', () => {
   const pt = new Powertrain(CARS[2]);
   pt.start();

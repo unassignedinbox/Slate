@@ -226,7 +226,9 @@ export class Powertrain {
     // idle governor: enough torque to hold idle, capped so the engine "catches"
     // from cranking speed instead of lurching
     const idleError = Math.max(0, Math.min(1.6, (this.idleTarget - this.rpm) / 220));
-    const idleNeed = fuelling ? idleError * 95 * Math.max(0, 1 - this.throttle * 1.4) : 0;
+    // Taper rather than cut off: an engine that is fired but slow still needs
+    // idle authority, otherwise opening the throttle during the catch stalls it.
+    const idleNeed = fuelling ? idleError * 95 * Math.max(0, 1 - this.throttle * 0.9) : 0;
     const frictionScale = e.displacement / 4000;
     const fric =
       (8 + 6 * (this.rpm / 1000) + 0.9 * Math.pow(this.rpm / 1000, 2)) *
@@ -330,10 +332,13 @@ export class Powertrain {
       this.speed = Math.max(0, this.speed + dv);
     }
 
-    // stall: only once the engine has had time to catch from cranking speed
-    if (this.phase === 'run' && this.runTimer > 0.35 && this.rpm < 320 && this.throttle < 0.05) {
-      this.phase = 'stopping';
-    }
+    // Stall. Two cases: dragged below idle with no throttle, or simply not
+    // turning fast enough to sustain combustion at any throttle.
+    const stalled =
+      this.phase === 'run' &&
+      this.runTimer > 0.35 &&
+      ((this.rpm < 320 && this.throttle < 0.05) || this.rpm < 60);
+    if (stalled) this.phase = 'stopping';
     if (this.phase === 'stopping' && this.rpm < 25) {
       this.phase = 'off';
       this.running = false;

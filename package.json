@@ -9,7 +9,8 @@
     "test": "node --test test/*.test.js",
     "verify": "node tools/render-check.mjs",
     "export": "node tools/export-wav.mjs",
-    "check": "node --experimental-vm-modules tools/check-wiring.mjs"
+    "check": "node --experimental-vm-modules tools/check-wiring.mjs",
+    "check:ui": "node tools/check-ui.mjs"
   },
   "devDependencies": {
     "web-audio-engine": "^0.13.4"
