@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SLATE — Engine Acoustics Lab</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="mark">SLATE</span>
+    <span class="sub">Engine Acoustics Lab</span>
+  </div>
+  <div class="status">
+    <span id="status-led" class="led off"></span>
+    <span id="status-text">engine off</span>
+    <span class="sep">·</span>
+    <span id="status-pos">cockpit</span>
+  </div>
+</header>
+
+<main class="layout">
+  <!-- ------------------------------------------------ left: car picker -->
+  <section class="panel cars">
+    <h2>Machines</h2>
+    <div id="car-list" class="car-list"></div>
+    <p class="hint">Press <kbd>1</kbd>–<kbd>4</kbd> to switch. Audio synthesis is fully
+      procedural — every sound is generated from the firing order, torque curve and
+      exhaust resonances below.</p>
+  </section>
+
+  <!-- ------------------------------------------------ centre: dash -->
+  <section class="panel dash">
+    <div class="tach-wrap">
+      <svg id="tach" viewBox="0 0 320 320" aria-label="tachometer"></svg>
+      <div class="tach-readout">
+        <div id="rpm-value" class="rpm">0</div>
+        <div class="rpm-unit">rpm</div>
+        <div id="gear-value" class="gear">N</div>
+        <div id="speed-value" class="speed">0 <span>km/h</span></div>
+      </div>
+    </div>
+
+    <div class="bars">
+      <label class="bar"><span>throttle</span><output id="thr-out">0%</output>
+        <div class="meter"><i id="thr-bar"></i></div></label>
+      <label class="bar"><span>load</span><output id="load-out">0%</output>
+        <div class="meter"><i id="load-bar"></i></div></label>
+      <label class="bar" id="boost-row"><span>boost</span><output id="boost-out">0.00 bar</output>
+        <div class="meter"><i id="boost-bar"></i></div></label>
+      <label class="bar" id="ers-row"><span>ERS</span><output id="ers-out">100%</output>
+        <div class="meter"><i id="ers-bar"></i></div></label>
+    </div>
+
+    <div class="throttle-block">
+      <label for="throttle" class="throttle-label">Throttle <em>hold W / ↑ / space</em></label>
+      <input id="throttle" type="range" min="0" max="100" value="0" step="1" />
+      <div class="dash-buttons">
+        <button id="start-btn" class="primary">Start engine</button>
+        <button id="rec-btn" title="Record the output to a file">● REC</button>
+        <button id="blip-btn" title="Blip the throttle">Blip</button>
+      </div>
+    </div>
+
+    <canvas id="spectrum" width="720" height="120" aria-label="output spectrum"></canvas>
+    <div class="spectrum-legend">
+      <span>output spectrum</span><span id="fire-note"></span>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------ right: controls -->
+  <section class="panel controls">
+    <h2>Listening position</h2>
+    <div id="positions" class="chips"></div>
+
+    <h2>Session</h2>
+    <div class="chips" id="modes">
+      <button data-mode="dyno" class="chip on">Dyno (free rev)</button>
+      <button data-mode="road" class="chip">Road (drive it)</button>
+    </div>
+    <div class="chips" id="gearbox">
+      <button data-auto="1" class="chip on">Auto gearbox</button>
+      <button data-auto="0" class="chip">Manual — Q / E</button>
+    </div>
+
+    <h2>Mix</h2>
+    <label class="slider"><span>Master</span><input id="volume" type="range" min="0" max="120" value="85" /></label>
+    <label class="slider"><span>Space (reverb)</span><input id="reverb" type="range" min="0" max="100" value="50" /></label>
+
+    <h2>Telemetry</h2>
+    <dl id="telemetry" class="telemetry"></dl>
+
+    <h2>Keys</h2>
+    <ul class="keys">
+      <li><kbd>W</kbd>/<kbd>↑</kbd>/<kbd>space</kbd> throttle</li>
+      <li><kbd>S</kbd>/<kbd>↓</kbd> brake</li>
+      <li><kbd>E</kbd> shift up · <kbd>Q</kbd> shift down</li>
+      <li><kbd>R</kbd> start / stop</li>
+      <li><kbd>B</kbd> throttle blip</li>
+    </ul>
+  </section>
+</main>
+
+<footer class="foot">
+  <p id="car-note"></p>
+  <p class="fine">Synthesis: 48 phase-coherent oscillators summed from the engine's firing
+    pattern (harmonics of the 720° four-stroke cycle), shaped by the exhaust pressure-pulse
+    spectrum and that car's measured runner/tail-pipe resonances, then saturated, filtered and
+    placed in a space. No samples are used.</p>
+</footer>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

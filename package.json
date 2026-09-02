@@ -1,0 +1,17 @@
+{
+  "name": "slate-engine-acoustics",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Physically-motivated procedural engine audio synthesis for the Nissan GT-R NISMO, Porsche 918 Spyder, Ferrari LaFerrari and Porsche 718 Spyder.",
+  "scripts": {
+    "start": "python3 -m http.server 8000 --bind 0.0.0.0",
+    "test": "node --test test/*.test.js",
+    "verify": "node tools/render-check.mjs",
+    "export": "node tools/export-wav.mjs",
+    "check": "node --experimental-vm-modules tools/check-wiring.mjs"
+  },
+  "devDependencies": {
+    "web-audio-engine": "^0.13.4"
+  }
+}
