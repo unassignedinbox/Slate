@@ -55,19 +55,25 @@
 
       <!-- ============ COLUMN 1: SKETCH DIRECTORY ============ -->
       <div class="w-[260px] shrink-0 bg-[#121212] rounded-[20px] border border-white/5 shadow-2xl flex flex-col overflow-hidden">
-        <div class="px-5 pt-4 pb-3 flex items-center gap-3 border-b border-white/5">
+        <div class="px-4 pt-4 pb-3 flex items-center gap-3 border-b border-white/5">
           <div class="w-8 h-8 rounded-[10px] bg-[#4a7fff] flex items-center justify-center shrink-0">
             <svg viewBox="0 0 24 24" class="ico w-4 h-4 text-white" style="stroke-width:2"><path d="M3 7h18M3 12h18M3 17h10"/></svg>
           </div>
-          <div class="leading-tight">
+          <div class="leading-tight flex-1 min-w-0">
             <div class="text-[13px] font-semibold text-[#f0f0f0]">Sketch Directory</div>
             <div class="text-[11px] text-[#666]">world sketch · Ground</div>
           </div>
+          <button id="new-folder" title="New folder" class="w-7 h-7 flex items-center justify-center rounded-lg text-[#888] hover:text-[#e8c07a] hover:bg-white/5 transition">
+            <svg viewBox="0 0 24 24" class="ico w-4 h-4"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M12 11v4M10 13h4"/></svg>
+          </button>
+          <button id="del-selected" title="Delete selected" class="w-7 h-7 flex items-center justify-center rounded-lg text-[#888] hover:text-[#ff6b6b] hover:bg-white/5 transition">
+            <svg viewBox="0 0 24 24" class="ico w-4 h-4"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>
+          </button>
         </div>
         <div id="directory" class="flex-1 overflow-y-auto no-scrollbar py-2"></div>
         <div class="px-5 py-2.5 border-t border-white/5 text-[11px] text-[#555] flex items-center justify-between">
           <span id="dir-count">— items</span>
-          <span>click to select</span>
+          <span>double-click to rename</span>
         </div>
       </div>
 
@@ -133,8 +139,8 @@
         <div id="viewport" class="relative flex-1 min-h-0">
           <canvas id="gl" class="absolute inset-0 w-full h-full"></canvas>
           <div id="readout" class="absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-lg bg-[#141a22]/85 border border-white/10 text-[#eef1f4] text-[12px] font-mono hidden"></div>
-          <div class="absolute top-3 left-3 text-[11px] text-[#8b93a0] leading-relaxed pointer-events-none select-none">
-            drag a handle to transform · hold Ctrl to snap
+          <div id="hint" class="absolute top-3 left-3 max-w-[60%] text-[11px] text-[#8b93a0] leading-relaxed pointer-events-none select-none">
+            pick a 2D primitive, then click on the Ground plane to draw · G toggles snap
           </div>
         </div>
       </div>
@@ -142,194 +148,9 @@
     </div>
   </div>
 
-  <!-- ================= UI DATA + WIRING ================= -->
-  <script>
-  // ---- glyph set (inline svg paths keyed by name) ----
-  const GLYPH = {
-    line:'<path d="M4 20 20 4"/>',
-    polyline:'<path d="M3 17 9 8l4 5 8-9"/>',
-    rectangle:'<rect x="4" y="6" width="16" height="12" rx="1"/>',
-    circle:'<circle cx="12" cy="12" r="8"/>',
-    arc:'<path d="M4 18a10 10 0 0 1 16 0"/>',
-    ellipse:'<ellipse cx="12" cy="12" rx="9" ry="6"/>',
-    point:'<circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="7"/>',
-    bezier:'<path d="M3 18C7 6 17 6 21 18"/><circle cx="3" cy="18" r="1.5" fill="currentColor" stroke="none"/><circle cx="21" cy="18" r="1.5" fill="currentColor" stroke="none"/>',
-    hermite:'<path d="M3 16c5 0 5-8 9-8s4 8 9 8"/>',
-    spline:'<path d="M3 18c3-10 7 2 9-4s5-2 9-6"/>',
-    rspline:'<path d="M3 18c4-12 14-12 18 0"/><circle cx="12" cy="6" r="1.4" fill="currentColor" stroke="none"/>',
-    construction:'<path d="M3 18 21 6" stroke-dasharray="3 3"/>',
-    tangentarc:'<path d="M3 20h7a7 7 0 0 0 7-7V6"/>',
-    polygon:'<path d="m12 3 8 6-3 10H7L4 9l8-6Z"/>',
-    slot:'<rect x="3" y="8" width="18" height="8" rx="4"/>',
-    fillet:'<path d="M5 19V9a4 4 0 0 1 4-4h10"/>',
-    chamfer:'<path d="M5 19V11l6-6h8"/>',
-    trim:'<path d="M6 6l12 12M9 15l-4 4M15 9l4-4"/><circle cx="7" cy="17" r="1.6"/>',
-    extend:'<path d="M3 12h11M11 8l4 4-4 4M18 6v12"/>',
-    offset:'<rect x="4" y="8" width="12" height="10" rx="1"/><path d="M8 4h12v12" stroke-dasharray="3 3"/>',
-    cut:'<path d="M6 6l12 12M18 6 6 18"/><circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/>',
-    lineardim:'<path d="M3 8v8M21 8v8M3 12h18"/><path d="M6 10l-3 2 3 2M18 10l3 2-3 2"/>',
-    angulardim:'<path d="M5 19 19 5M5 19h9"/><path d="M5 19a10 10 0 0 1 6-9"/>',
-    radialdim:'<circle cx="12" cy="12" r="7"/><path d="M12 12 19 7"/>',
-    horizontal:'<path d="M3 12h18"/><path d="M6 9v6M18 9v6"/>',
-    vertical:'<path d="M12 3v18"/><path d="M9 6h6M9 18h6"/>',
-    coincident:'<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7" stroke-dasharray="2 3"/>',
-    parallel:'<path d="M7 20 13 4M11 20 17 4"/>',
-    perpendicular:'<path d="M6 4v14h14"/><path d="M6 12h6v6"/>',
-    tangent:'<circle cx="9" cy="14" r="5"/><path d="M3 5h18"/>',
-    equal:'<path d="M5 9h14M5 15h14"/>',
-    midpoint:'<path d="M4 12h16"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/><path d="M4 9v6M20 9v6"/>',
-    symmetry:'<path d="M12 3v18" stroke-dasharray="3 3"/><path d="M9 7 4 12l5 5M15 7l5 5-5 5"/>',
-    concentric:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/>',
-    union:'<circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/>',
-    boolcut:'<circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6" fill="#121212"/>',
-    intersect:'<circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/><path d="M12 7a6 6 0 0 0 0 10 6 6 0 0 0 0-10Z" fill="currentColor" fill-opacity="0.25" stroke="none"/>',
-  };
+  <!-- ================= APP MODULES ================= -->
+  <script type="module" src="./main.js"></script>
 
-  // ---- bands (mirrors the real Slate catalogue, incl. the new Booleans band) ----
-  const BANDS = [
-    { name:'2DPrimitives', tools:[
-      ['Line','line'],['Polyline','polyline'],['Rectangle','rectangle'],['Circle','circle'],
-      ['Arc','arc'],['Ellipse','ellipse'],['Point','point'],['Bezier','bezier'],
-      ['Hermite','hermite'],['B-Spline','spline'],['Rational Spline','rspline'],
-      ['Construction','construction'],['Tangent Arc','tangentarc'],['Polygon','polygon'],['Slot','slot'],
-    ]},
-    { name:'Operations', tools:[
-      ['Fillet','fillet'],['Chamfer','chamfer'],['Trim','trim'],
-      ['Extend','extend'],['Offset','offset'],['Cut','cut'],
-    ]},
-    { name:'Dimensions', tools:[
-      ['Linear Dim.','lineardim'],['Angular Dim.','angulardim'],['Radial Dim.','radialdim'],
-    ]},
-    { name:'Constraints', tools:[
-      ['Horizontal','horizontal'],['Vertical','vertical'],['Coincident','coincident'],
-      ['Parallel','parallel'],['Perpendicular','perpendicular'],['Tangent','tangent'],
-      ['Equal','equal'],['Midpoint','midpoint'],['Symmetry','symmetry'],['Concentric','concentric'],
-    ]},
-    { name:'Booleans', tools:[
-      ['Union','union'],['Cut','boolcut'],['Intersect','intersect'],
-    ]},
-  ];
-
-  // ---- sketch directory contents ----
-  const DIRECTORY = [
-    { label:'Ground Plane', kind:'plane', icon:'<path d="M3 17 12 21l9-4M3 12l9 4 9-4M3 7l9-4 9 4-9 4Z"/>' },
-    { label:'Rectangle 01', kind:'loop', icon:GLYPH.rectangle, children:[
-      { label:'Edge 1', kind:'curve' },{ label:'Edge 2', kind:'curve' },
-      { label:'Edge 3', kind:'curve' },{ label:'Edge 4', kind:'curve' },
-    ]},
-    { label:'Circle 01', kind:'loop', icon:GLYPH.circle, children:[
-      { label:'Arc', kind:'curve' },
-    ]},
-    { label:'Guide Line', kind:'curve', icon:GLYPH.construction },
-    { label:'Linear Dim · 2.30 mm', kind:'dim', icon:GLYPH.lineardim },
-  ];
-
-  const iconSvg = (path, cls) =>
-    `<svg viewBox="0 0 24 24" class="ico ${cls||''}">${path}</svg>`;
-
-  // ---------- render band rail ----------
-  const bandsEl = document.getElementById('bands');
-  let activeBand = 1; // Operations, as in the screenshot
-  function renderBands(){
-    bandsEl.innerHTML = '';
-    BANDS.forEach((b,i)=>{
-      const on = i===activeBand;
-      const row = document.createElement('div');
-      row.className = 'relative mx-2 my-0.5 h-11 px-3 flex items-center gap-3 rounded-[12px] cursor-pointer transition-colors '
-        + (on ? 'bg-[#1e1e1e] text-[#f0f0f0]' : 'text-[#888] hover:bg-white/5 hover:text-[#bbb]');
-      row.innerHTML =
-        (on ? '<div class="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-[#4a7fff]"></div>' : '')
-        + iconSvg('<rect x="3" y="3" width="18" height="18" rx="4"/><path d="m8 12 3 3 5-6"/>', 'w-4 h-4 '+(on?'text-[#4a7fff]':'text-[#666]'))
-        + `<span class="flex-1 text-[13px] font-medium truncate">${b.name}</span>`
-        + `<span class="text-[11px] px-2 py-0.5 rounded-full ${on?'bg-[#4a7fff] text-white':'bg-[#1e1e1e] text-[#777]'}">${b.tools.length}</span>`;
-      row.onclick = ()=>{ activeBand=i; renderBands(); renderTiles(); };
-      bandsEl.appendChild(row);
-    });
-  }
-
-  // ---------- render tile grid ----------
-  const tilesEl = document.getElementById('tiles');
-  const bandTitle = document.getElementById('band-title');
-  const bandSub = document.getElementById('band-sub');
-  const toolsStatus = document.getElementById('tools-status');
-  let activeTool = { band:1, tool:1 }; // Chamfer selected, as in the screenshot
-  function renderTiles(){
-    const band = BANDS[activeBand];
-    bandTitle.textContent = band.name;
-    bandSub.textContent = `${band.tools.length} of ${band.tools.length} available`;
-    toolsStatus.textContent = `${band.tools.length} of ${band.tools.length} live · Tab = settings · double-click a tile`;
-    tilesEl.innerHTML = '';
-    band.tools.forEach(([name,glyph],i)=>{
-      const on = activeTool.band===activeBand && activeTool.tool===i;
-      const tile = document.createElement('button');
-      tile.className = 'group aspect-square rounded-[14px] flex flex-col items-center justify-center gap-2 border transition-all '
-        + (on
-            ? 'bg-[#171c26] border-[#4a7fff] shadow-[0_0_0_1px_#4a7fff55]'
-            : 'bg-[#1a1a1a] border-white/5 hover:bg-[#202020] hover:border-white/10');
-      tile.innerHTML =
-        iconSvg(GLYPH[glyph]||GLYPH.point, 'w-6 h-6 '+(on?'text-[#8fb0ff]':'text-[#cfd4dc] group-hover:text-white'))
-        + `<span class="text-[11px] ${on?'text-[#8fb0ff]':'text-[#8a9099]'} font-medium leading-none text-center px-1">${name}</span>`;
-      tile.onclick = ()=>{ activeTool={band:activeBand,tool:i}; renderTiles(); flashReadout(`${band.name} · ${name}`); };
-      tilesEl.appendChild(tile);
-    });
-  }
-
-  // ---------- render sketch directory ----------
-  const dirEl = document.getElementById('directory');
-  const dirCount = document.getElementById('dir-count');
-  let selectedRow = null;
-  function kindIcon(item){
-    if(item.icon) return item.icon;
-    if(item.kind==='curve') return GLYPH.line;
-    if(item.kind==='dim') return GLYPH.lineardim;
-    return GLYPH.point;
-  }
-  function kindColor(kind){
-    return kind==='plane' ? 'text-[#4a7fff]'
-      : kind==='loop' ? 'text-[#7ee787]'
-      : kind==='dim' ? 'text-[#ff8f5a]'
-      : 'text-[#9aa4b2]';
-  }
-  function renderDirectory(){
-    dirEl.innerHTML=''; let count=0;
-    const addRow = (item, depth)=>{
-      count++;
-      const row = document.createElement('div');
-      row.className='relative flex items-center gap-2.5 h-9 pr-3 cursor-pointer transition-colors text-[#aeb4bd] hover:bg-white/5';
-      row.style.paddingLeft = (14 + depth*18) + 'px';
-      row.innerHTML =
-        '<div class="dir-bar absolute left-0 top-0 h-full w-[3px] bg-transparent"></div>'
-        + iconSvg(kindIcon(item), 'w-4 h-4 '+kindColor(item.kind))
-        + `<span class="text-[12.5px] font-medium truncate">${item.label}</span>`;
-      row.onclick = ()=>{
-        if(selectedRow){ selectedRow.classList.remove('bg-[#20242c]','text-[#f0f0f0]');
-          selectedRow.querySelector('.dir-bar').classList.remove('bg-[#4a7fff]'); }
-        row.classList.add('bg-[#20242c]','text-[#f0f0f0]');
-        row.querySelector('.dir-bar').classList.add('bg-[#4a7fff]');
-        selectedRow = row;
-        flashReadout('selected · '+item.label);
-      };
-      dirEl.appendChild(row);
-      (item.children||[]).forEach(c=>addRow(c, depth+1));
-    };
-    DIRECTORY.forEach(it=>addRow(it,0));
-    dirCount.textContent = count + ' items';
-  }
-
-  // ---------- viewport readout ----------
-  const readoutEl = document.getElementById('readout');
-  let readoutTimer=null;
-  function flashReadout(text){
-    readoutEl.textContent=text; readoutEl.classList.remove('hidden');
-    clearTimeout(readoutTimer);
-    readoutTimer=setTimeout(()=>readoutEl.classList.add('hidden'), 1400);
-  }
-
-  renderBands(); renderTiles(); renderDirectory();
-  </script>
-
-  <!-- ================= VIEWPORT: GIZMO + PLANES ================= -->
-  <script type="module" src="./gizmo.js"></script>
 
 </body>
 </html>
