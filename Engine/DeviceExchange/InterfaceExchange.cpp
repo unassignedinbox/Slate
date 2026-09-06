@@ -269,8 +269,12 @@ bool InterfaceExchange::BringPipeline() noexcept
         Attachments[0].storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
         Attachments[0].stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         Attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        Attachments[0].initialLayout  = VK_IMAGE_LAYOUT_GENERAL;
-        Attachments[0].finalLayout    = VK_IMAGE_LAYOUT_GENERAL;
+        // The caller hands the colour target over in COLOR_ATTACHMENT_OPTIMAL and expects it back the same way
+        //    (SwapchainExchange.cpp brackets the overlay with the two barriers). Declaring GENERAL here instead
+        //    was a validation-layer error that NVIDIA happens to tolerate; other drivers need not.
+        //    Depth is left in GENERAL because nothing transitions it.
+        Attachments[0].initialLayout  = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        Attachments[0].finalLayout    = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
         if (DepthTested)
         {
@@ -285,7 +289,7 @@ bool InterfaceExchange::BringPipeline() noexcept
             AttachmentCount = 2u;
         }
 
-        VkAttachmentReference Colour{ 0u, VK_IMAGE_LAYOUT_GENERAL };
+        VkAttachmentReference Colour{ 0u, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
         VkAttachmentReference Depth { 1u, VK_IMAGE_LAYOUT_GENERAL };
 
         VkSubpassDescription Subpass{};

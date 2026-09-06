@@ -276,6 +276,16 @@ void InterfaceTrialSequence::ConstructTrialLayout(InterfaceStructure& Structure)
         (void)Structure.Attach(LampOrdinal, Face);
     }
 
+    // ── Facing ───────────────────────────────────────────────────────────────────────────────────────────────────
+    // This is a physical fascia standing in a room, not a VR heads-up layer: walking behind it must show its back,
+    //    not a mirror-imaged copy of the controls. The engine supports both and defaults to double-sided; choosing
+    //    single-sided is a property of THIS panel, so the project makes the call, not the engine.
+    for (uint32_t Ordinal = 0u; Ordinal < Structure.QueryCount(); ++Ordinal)
+    {
+        Structure.Access(Ordinal).DoubleSided = false;
+        Structure.MarkDirty(Ordinal);
+    }
+
     FigureCount = Structure.QueryCount();
 }
 
@@ -305,13 +315,25 @@ void InterfaceTrialSequence::AssignToggleEngaged(bool Engaged) noexcept
 //                                                 POINTER INTERACTION (P2)
 //------------------------------------------------------------------------------------------------------------------------
 
-void InterfaceTrialSequence::ApplyPointer(InterfaceStructure& Structure, const PointerContact& Contact, bool Pressed) noexcept
+void InterfaceTrialSequence::ApplyPointer(InterfaceStructure& Structure, const PointerContact& Contact,
+                                          bool Pressed, bool Held) noexcept
 {
+    // ── Pointer capture ──────────────────────────────────────────────────────────────────────────────────────────
+    // A press grabs the figure it landed on and keeps it until the button is released, exactly as a desktop control
+    //    does. Two bugs die here: the drag now keeps feeding the control it started on even when the pointer wanders
+    //    off it, and the highlight stops flickering between neighbours mid-drag.
+    if (Pressed && Contact.Valid) CapturedOrdinal = Contact.Ordinal;
+    if (!Held)                    CapturedOrdinal = InterfaceStructure::Detached;
+
+    const bool Capturing = CapturedOrdinal != InterfaceStructure::Detached;
+
     // ── Hover highlight ──────────────────────────────────────────────────────────────────────────────────────────
     // Clearing the previous highlight before setting the new one means a pointer that leaves the panel entirely
     //    still clears it, which a "set on hit" implementation silently gets wrong.
     const uint32_t Previous = HoveredOrdinal;
-    HoveredOrdinal = Contact.Valid ? Contact.Ordinal : InterfaceStructure::Detached;
+    HoveredOrdinal = Capturing              ? CapturedOrdinal
+                   : Contact.Valid          ? Contact.Ordinal
+                                            : InterfaceStructure::Detached;
 
     if (Previous != HoveredOrdinal)
     {
@@ -326,6 +348,17 @@ void InterfaceTrialSequence::ApplyPointer(InterfaceStructure& Structure, const P
         };
         ApplyHighlight(Previous, false);
         ApplyHighlight(HoveredOrdinal, true);
+    }
+
+    // ── Continuous drag ──────────────────────────────────────────────────────────────────────────────────────────
+    // The trough is the one continuous control, so it acts on the LEVEL, not the edge: every frame the button is
+    //    held, the captured trough tracks the pointer. This is what makes it a slider rather than a click target.
+    //    The pointer is allowed to leave the trough vertically while dragging — the value simply clamps — because
+    //    a slider that snaps back when your hand drifts a few pixels feels broken.
+    if (Capturing && Held && CapturedOrdinal == BarTrough && Contact.Valid)
+    {
+        PointerDriven = true;
+        AssignFillTarget(std::clamp((Contact.FractionX + 1.0f) * 0.5f, 0.0f, 1.0f));
     }
 
     if (!Contact.Valid || !Pressed) return;

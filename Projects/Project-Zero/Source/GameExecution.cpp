@@ -1002,7 +1002,7 @@ int main(int argc, char** argv)
                     const bool ScreenSettled = !InterfaceDirectorReady ||
                                                InterfaceDirector.QueryInteractiveScreen() == kTrialScreen;
                     InterfaceTrial.ApplyPointer(InterfaceFigures, ScreenSettled ? Contact : Frontier::PointerContact{},
-                                                ScreenSettled && Pressed);
+                                                ScreenSettled && Pressed, ScreenSettled && Held);
                 }
 
                 // P3 — TAB switches screens, on the key EDGE so holding it does not flip every frame.

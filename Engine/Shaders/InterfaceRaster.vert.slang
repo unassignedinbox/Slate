@@ -31,4 +31,11 @@ void main()
     OutFigure   = Ordinal;
     OutLocal    = Local;
     gl_Position = ViewClip * vec4(World, 1.0);
+
+    // Back-face rejection for single-sided figures. Done here rather than with pipeline culling because the quad's
+    //    winding depends on how the project oriented the panel, whereas the figure's own +Z axis is unambiguous:
+    //    if the eye is behind the plane, the viewer is looking at the back of the fascia and must see nothing.
+    //    Collapsing the vertex to the origin discards the whole quad before rasterisation, so no fragment runs.
+    if (!InterfaceIsDoubleSided(Figure) && InterfaceEyeSide(Figure, CameraOrigin.xyz) < 0.0)
+        gl_Position = vec4(0.0, 0.0, 0.0, 0.0);
 }

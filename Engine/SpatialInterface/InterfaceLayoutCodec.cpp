@@ -124,7 +124,10 @@ void InterfaceLayoutCodec::Encode(const InterfaceFigure& Figure, const WorldPlac
     //    encode → decode round trip in the proof harness stays exact.
     Slot.BaseColour      = (Figure.BaseColour >> 24) != 0u ? Figure.BaseColour : Slot.Tint;
     Slot.EmissiveWeight  = std::clamp(Figure.EmissiveWeight, 0.0f, 1.0f);
-    Slot.ReserveAlpha    = 0.0f;
+    // Facing. The reserved slot carries it rather than growing the record: 0 = single-sided (the vertex stage
+    //    discards the quad once the eye is behind the figure's plane), 1 = double-sided. Kept as a float because
+    //    the tail is already float-typed and the proof harness round-trips it bit-exactly.
+    Slot.ReserveAlpha    = Figure.DoubleSided ? 1.0f : 0.0f;
     Slot.ReserveBeta     = 0.0f;
 }
 

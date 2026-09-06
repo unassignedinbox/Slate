@@ -22,6 +22,7 @@
 #include "../Projects/Project-Zero/Source/InterfaceTrialSequence.h"
 
 #include <cmath>
+#include <vector>
 #include <cstdio>
 
 namespace {
@@ -319,7 +320,7 @@ int main()
         }
         CheckTrue("a ray reaches the right-hand end of the trough", Best.Valid && Best.FractionX > 0.5f);
 
-        Trial.ApplyPointer(Panel, Best, true);
+        Trial.ApplyPointer(Panel, Best, true, true);
         for (int Settle = 0; Settle < 240; ++Settle) Trial.AdvanceTrial(Panel, Motion, 1.0 / 60.0, true);
 
         const double Expected = (Best.FractionX + 1.0) * 0.5;
@@ -331,9 +332,124 @@ int main()
 
         // And a miss must clear the hover rather than latch it.
         Frontier::PointerContact Nothing;
-        Trial.ApplyPointer(Panel, Nothing, false);
+        Trial.ApplyPointer(Panel, Nothing, false, false);
         CheckTrue("a pointer off the panel clears the hover",
                   Trial.QueryHoveredOrdinal() == Frontier::InterfaceStructure::Detached);
+
+        //──────────────────────────────────────────────────────────────────────
+        // ⑦ Dragging the slider. The reported flicker was the hover highlight
+        //    ping-ponging as the pointer crossed figures mid-drag, and the value
+        //    only tracking the press EDGE so the drag did nothing at all.
+        //──────────────────────────────────────────────────────────────────────
+        std::printf("\n  slider drag (capture)\n");
+
+        // Collect a left-to-right sweep of contacts along the trough.
+        // The trough sits at a particular height on the panel; find the row that crosses the most of it rather
+        //    than hard-coding a height that a layout tweak would silently invalidate.
+        std::vector<Frontier::PointerContact> Sweep;
+        for (int Height = -40; Height <= 40 && Sweep.size() <= 4u; ++Height)
+        {
+            std::vector<Frontier::PointerContact> Row;
+            for (int Step = -60; Step <= 60; ++Step)
+            {
+                Frontier::PointerRay Ray;
+                Ray.OriginX = 0.01f * static_cast<float>(Step);
+                Ray.OriginY = -1.70f;
+                Ray.OriginZ = 1.45f + 0.01f * static_cast<float>(Height);
+                Ray.DirectionY = 1.0f;
+                const Frontier::PointerContact Contact =
+                    Frontier::InterfacePointerProjection::Project(Panel, PanelComposition, Ray);
+                if (Contact.Valid && Contact.Ordinal == Trough) Row.push_back(Contact);
+            }
+            if (Row.size() > Sweep.size()) Sweep = Row;
+        }
+        CheckTrue("the sweep crosses the trough", Sweep.size() > 4u);
+
+        if (Sweep.size() > 4u)
+        {
+            // Press at the left end, then drag right with the button HELD.
+            Trial.ApplyPointer(Panel, Sweep.front(), true, true);
+            const uint32_t HeldHover = Trial.QueryHoveredOrdinal();
+
+            bool HoverStable = true;
+            for (size_t Step = 1u; Step < Sweep.size(); ++Step)
+            {
+                Trial.ApplyPointer(Panel, Sweep[Step], false, true);
+                if (Trial.QueryHoveredOrdinal() != HeldHover) HoverStable = false;
+            }
+            for (int Settle = 0; Settle < 240; ++Settle) Trial.AdvanceTrial(Panel, Motion, 1.0 / 60.0, true);
+
+            // This is the actual bug report: the highlight must not change mid-drag.
+            CheckTrue("the highlight stays on the captured figure for the whole drag", HoverStable);
+
+            const double DragExpected = (Sweep.back().FractionX + 1.0) * 0.5;
+            CheckNear("the drag tracks the pointer, not just the press",
+                      static_cast<float>(Trial.QueryFillValue()), static_cast<float>(DragExpected), 0.05f);
+
+            // Releasing drops the capture, so a later hover elsewhere is free to move again.
+            Trial.ApplyPointer(Panel, Nothing, false, false);
+            CheckTrue("release clears the capture",
+                      Trial.QueryHoveredOrdinal() == Frontier::InterfaceStructure::Detached);
+
+            // While captured, a pointer wandering OFF the control must keep driving it rather than snapping back.
+            Trial.ApplyPointer(Panel, Sweep.front(), true, true);
+            for (int Settle = 0; Settle < 240; ++Settle) Trial.AdvanceTrial(Panel, Motion, 1.0 / 60.0, true);
+            const double BeforeStray = Trial.QueryFillValue();   // read once the spring has actually arrived
+
+            Trial.ApplyPointer(Panel, Nothing, false, true);      // pointer left the panel, button still down
+            for (int Settle = 0; Settle < 60; ++Settle) Trial.AdvanceTrial(Panel, Motion, 1.0 / 60.0, true);
+            CheckTrue("a stray pointer during a drag does not reset the control",
+                      std::fabs(Trial.QueryFillValue() - BeforeStray) < 0.05);
+            Trial.ApplyPointer(Panel, Nothing, false, false);
+        }
+    }
+
+    //──────────────────────────────────────────────────────────────────────────
+    // ⑧ Single-sided figures are not pickable from behind. A panel the viewer
+    //    cannot see must not swallow clicks — that is worse than drawing it.
+    //──────────────────────────────────────────────────────────────────────────
+    {
+        std::printf("\n  facing\n");
+
+        Frontier::InterfaceStructure Sided;
+        Frontier::InterfaceFigure Board;
+        Board.Category      = Frontier::InterfaceCategory::Surface;
+        Board.HalfWidth     = 0.40f;
+        Board.HalfHeight    = 0.25f;
+        Board.PointerTarget = true;
+        Board.Placement.Origin    = Frontier::PlaneOrigin{ 0.0f, 1.50f, 1.30f };
+        Board.Placement.RotationX = 1.57079633f;
+        const uint32_t BoardOrdinal = Sided.Construct(Board);
+
+        // In front (the standard view) and behind, mirrored through the panel's plane.
+        Frontier::PointerRay Front = AimAt(0.0f, 1.30f);
+        Frontier::PointerRay Behind;
+        Behind.OriginX = 0.0f; Behind.OriginY = 4.70f; Behind.OriginZ = 1.30f;
+        Behind.DirectionX = 0.0f; Behind.DirectionY = -1.0f; Behind.DirectionZ = 0.0f;
+
+        Frontier::InterfaceSequence SidedComposition;
+        Frontier::InterfaceViewConfiguration SidedView;
+        SidedView.EyeX = 0.0f; SidedView.EyeY = -1.70f; SidedView.EyeZ = 1.30f;
+        SidedView.ForwardY = 1.0f;
+        SidedComposition.AssignView(SidedView);
+
+        // Double-sided (the default) is pickable from both sides — unchanged behaviour.
+        Sided.Access(BoardOrdinal).DoubleSided = true;
+        Sided.MarkDirty(BoardOrdinal);
+        SidedComposition.Advance(Sided, 0.0);
+        CheckTrue("double-sided: pickable from the front",
+                  Frontier::InterfacePointerProjection::Project(Sided, SidedComposition, Front).Valid);
+        CheckTrue("double-sided: pickable from behind (VR-style layer)",
+                  Frontier::InterfacePointerProjection::Project(Sided, SidedComposition, Behind).Valid);
+
+        // Single-sided keeps the front and refuses the back.
+        Sided.Access(BoardOrdinal).DoubleSided = false;
+        Sided.MarkDirty(BoardOrdinal);
+        SidedComposition.Advance(Sided, 0.0);
+        CheckTrue("single-sided: still pickable from the front",
+                  Frontier::InterfacePointerProjection::Project(Sided, SidedComposition, Front).Valid);
+        CheckTrue("single-sided: NOT pickable from behind",
+                  !Frontier::InterfacePointerProjection::Project(Sided, SidedComposition, Behind).Valid);
     }
 
     std::printf(Failures ? "\n>>> %d FAILURE(S)\n\n" : "\n>>> ALL PASS (0 failures)\n\n", Failures);

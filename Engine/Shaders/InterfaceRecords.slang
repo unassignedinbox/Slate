@@ -74,6 +74,21 @@ vec3 InterfaceLocalToWorld(InterfaceInstanceFigure Figure, vec3 Local)
                 dot(Figure.RowZ.xyz, Local) + Figure.RowZ.w);
 }
 
+// Facing rides in the reserved slot: 1 = double-sided, 0 = single-sided. See InterfaceLayoutCodec.cpp.
+bool InterfaceIsDoubleSided(InterfaceInstanceFigure Figure)
+{
+    return Figure.ReserveAlpha > 0.5;
+}
+
+// Signed distance from the eye to the figure's plane, in metres, positive on the figure's +Z (front) side. The
+//    plane normal is the figure's local +Z axis, which is column 2 of the transform — NOT a row.
+float InterfaceEyeSide(InterfaceInstanceFigure Figure, vec3 Eye)
+{
+    vec3 Normal = vec3(Figure.RowX.z, Figure.RowY.z, Figure.RowZ.z);
+    vec3 Origin = vec3(Figure.RowX.w, Figure.RowY.w, Figure.RowZ.w);
+    return dot(Eye - Origin, Normal);
+}
+
 vec4 InterfaceUnpackTint(uint Packed)
 {
     return vec4(float( Packed        & 0xFFu),

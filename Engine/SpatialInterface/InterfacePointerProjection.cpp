@@ -70,6 +70,11 @@ PointerContact InterfacePointerProjection::Project(const InterfaceStructure& Str
         const float Travel = -LocalOriginZ / LocalDirectionZ;
         if (Travel <= 0.0f || Travel >= Nearest.Distance) continue;   // behind the eye, or already beaten
 
+        // A single-sided figure is not pickable from behind. LocalOriginZ is the eye's signed height above the
+        //    figure's plane, so a negative value means the ray starts on the back side. Without this a panel the
+        //    viewer cannot see would still swallow clicks, which is worse than drawing it.
+        if (!Figure.DoubleSided && LocalOriginZ < 0.0f) continue;
+
         const float HitX = Ray.OriginX + Ray.DirectionX * Travel - Placement.Row[0][3];
         const float HitY = Ray.OriginY + Ray.DirectionY * Travel - Placement.Row[1][3];
         const float HitZ = Ray.OriginZ + Ray.DirectionZ * Travel - Placement.Row[2][3];

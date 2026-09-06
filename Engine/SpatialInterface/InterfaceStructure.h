@@ -89,6 +89,12 @@ struct InterfaceFigure
     bool              PointerTarget = false;            // [-]
     uint32_t          OrderingRank  = 0u;               // [-]   whole-screen layer ordinal for the sort key (⑤)
     bool              Visible       = true;             // [-]   false → skipped entirely, descendants included
+
+    // A flat panel has a back. Left double-sided it stays fully legible from behind (mirror-imaged), which suits a
+    //    VR heads-up layer but not a physical fascia in a room. Single-sided figures are discarded once the eye
+    //    crosses to the far side of their plane. Default matches the historical behaviour, so nothing changes
+    //    unless a project opts in.
+    bool              DoubleSided   = true;             // [-]   false → invisible from behind its own plane
 };
 
 //------------------------------------------------------------------------------------------------------------------------

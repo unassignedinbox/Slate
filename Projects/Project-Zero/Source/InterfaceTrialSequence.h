@@ -74,7 +74,12 @@ public:
     //
     //    Pressed is the edge, not the level: pass true only on the frame the button goes down. Holding is handled
     //    by the caller so this stays free of input history.
-    void ApplyPointer(InterfaceStructure& Structure, const PointerContact& Contact, bool Pressed) noexcept;
+    //    Held is the LEVEL: true for every frame the button is down. The continuous control needs it — a slider
+    //    that only samples the press edge jumps to wherever you first clicked and then ignores the drag entirely.
+    //    While a press is captured the highlight stays on the captured figure, so sliding past a neighbour cannot
+    //    make the control flicker between two tints.
+    void ApplyPointer(InterfaceStructure& Structure, const PointerContact& Contact,
+                      bool Pressed, bool Held) noexcept;
 
     // Ordinal currently under the pointer, or Detached. Read for diagnostics; the highlight itself is applied by
     //    ApplyPointer so the tint and the reported state cannot disagree.
@@ -115,6 +120,7 @@ private:
     PlanePlacement PanelPlacement;
 
     uint32_t HoveredOrdinal = InterfaceStructure::Detached;   // [-] figure under the pointer, for the highlight
+    uint32_t CapturedOrdinal = InterfaceStructure::Detached;  // [-] figure the press landed on, held until release
     bool     PointerDriven  = false;                          // [-] true once the user has touched the panel
     double         LoopTime      = 0.0;
     uint32_t       FigureCount   = 0u;

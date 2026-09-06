@@ -139,7 +139,13 @@ int main()
     CheckTrue("node blob length matches",          Split.QueryNodeBlob().size() == Reference.QueryNodeBlob().size());
     CheckTrue("leaf blob length matches",          Split.QueryLeafBlob().size() == Reference.QueryLeafBlob().size());
     CheckTrue("node count matches",                SplitMetrics.NodeCount     == ReferenceMetrics.NodeCount);
-    CheckTrue("SAH cost matches exactly",          SplitMetrics.SahCost       == ReferenceMetrics.SahCost);
+    // SAH is compared with a tolerance, never for exact equality. tinybvh sums the cost across threads in a
+    //    non-deterministic order, so the value wobbles in its last digits between two runs of the SAME builder on
+    //    the SAME input. The blobs are the artifact that actually reaches the GPU and they hash identically every
+    //    time; SAH is a diagnostic. Gating on exact equality made this suite fail intermittently for a reason
+    //    unrelated to whatever change was under test. (SceneTraversalIdentityTest.cpp already reasons this way.)
+    CheckTrue("SAH cost matches within tolerance",
+              std::fabs(static_cast<double>(SplitMetrics.SahCost) - static_cast<double>(ReferenceMetrics.SahCost)) < 1e-3);
     CheckTrue("triangle count matches",            SplitMetrics.TriangleCount == ReferenceMetrics.TriangleCount);
 
     //──────────────────────────────────────────────────────────────────────────

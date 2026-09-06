@@ -137,7 +137,7 @@ int main()
                     (!RightHandEnd && Contact.FractionX < Best.FractionX)) Best = Contact;
             }
         if (!Best.Valid) return false;
-        Trial.ApplyPointer(Panel, Best, true);
+        Trial.ApplyPointer(Panel, Best, true, true);
         for (int Settle = 0; Settle < 240; ++Settle) Trial.AdvanceTrial(Panel, Motion, 1.0 / 60.0, true);
         Bridge.AdvanceAudio(Trial, 1.0f / 60.0f);
         return true;
