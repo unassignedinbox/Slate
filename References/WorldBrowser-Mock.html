@@ -175,8 +175,50 @@
   .field .clr{width:18px;height:18px;border:none;border-radius:50%;background:var(--raised);color:var(--text-dim);
     cursor:pointer;display:grid;place-items:center;font-size:11px;line-height:1;}
   .field .clr:hover{background:var(--danger);color:#fff;}
-  .search-row{display:flex;align-items:center;gap:8px;padding:0 20px 10px;}
+  .search-row{display:flex;align-items:center;gap:8px;padding:0 20px 8px;}
+  .search-row .dd{flex:0 0 150px;}
+
+  /* notes — OutlinerV2 .notes */
+  .notes{width:100%;min-height:76px;resize:vertical;background:var(--field);border:1px solid var(--stroke);
+    border-radius:12px;color:var(--text);font-size:12px;line-height:1.5;padding:10px 12px;outline:none;
+    user-select:text;font-family:inherit;transition:border-color .15s var(--ease);}
+  .notes:focus{border-color:var(--hi);}
+  .notes::placeholder{color:var(--text-faint);}
+
+  /* colour swatches — OutlinerV2 .swatch */
+  .swatches{display:flex;flex-wrap:wrap;gap:8px;flex:1;align-items:center;}
+  .swatch{width:22px;height:22px;border-radius:50%;cursor:pointer;border:1px solid rgba(255,255,255,.12);
+    transition:transform .15s var(--ease),box-shadow .15s var(--ease);}
+  .swatch:hover{transform:scale(1.15);}
+  .swatch.on{box-shadow:0 0 0 2px var(--inset),0 0 0 4px #fff;}
+  .swatch.none{background:transparent;position:relative;}
+  .swatch.none::after{content:"";position:absolute;left:2px;right:2px;top:50%;height:1.5px;background:var(--danger);
+    transform:rotate(-45deg);}
+
+  /* inline rename — used by both the tree row and the properties name field */
+  .nm input,.name-edit input{background:var(--field);border:1px solid var(--hi);color:var(--text);
+    font-size:12.5px;padding:1px 6px;outline:none;border-radius:6px;width:100%;font-family:inherit;
+    user-select:text;}
+  .name-edit{font-size:12.5px;cursor:text;padding:3px 7px;margin:-3px -7px;border-radius:6px;
+    transition:background .15s var(--ease);flex:1;}
+  .name-edit:hover{background:rgba(255,255,255,.05);}
+  .vfield input{cursor:text;}
+
+  /* animated open/close — the child block collapses its own height, and each row fades in behind it */
+  .kids{overflow:hidden;transition:height .26s var(--ease),opacity .2s var(--ease);}
+  .kids.shut{height:0 !important;opacity:0;}
+  @keyframes rowIn{from{opacity:0;transform:translateY(-3px);}to{opacity:1;transform:none;}}
+  .row.fresh{animation:rowIn .2s var(--ease);}
   .hitcount{font-size:11px;color:var(--text-faint);white-space:nowrap;font-variant-numeric:tabular-nums;}
+  /* active-filter pills — OutlinerV2 .pill, removable */
+  .filter-row{display:flex;align-items:center;flex-wrap:wrap;gap:7px;padding:0 20px 10px;min-height:0;}
+  .filter-row:empty{padding-bottom:0;}
+  .pill{height:26px;padding:0 5px 0 11px;border-radius:var(--r-pill);background:#fff;color:#000;
+    font-size:11px;font-weight:600;display:flex;align-items:center;gap:5px;animation:pillIn .22s var(--ease);}
+  @keyframes pillIn{from{transform:scale(.7);opacity:0;}to{transform:scale(1);opacity:1;}}
+  .pill .px{width:17px;height:17px;border-radius:50%;border:none;cursor:pointer;background:transparent;color:#000;
+    font-size:10px;display:grid;place-items:center;transition:background .15s var(--ease),color .15s var(--ease);}
+  .pill .px:hover{background:var(--danger);color:#fff;}
   mark{background:rgba(108,119,255,.35);color:var(--text);border-radius:2px;padding:0 1px;}
   .nohits{padding:18px 20px;color:var(--text-faint);font-size:12px;text-align:center;}
   /* plain readout for non-editable values (child counts, material names, status) */
@@ -210,6 +252,8 @@
     <div class="view" id="mainView">
       <div class="tree-pane">
         <div class="sec-label">Outliner</div>
+        <!-- Search and the filter dropdown share one line; the chips the dropdown adds appear on the row
+             below, so adding filters never reflows the search field. -->
         <div class="search-row">
           <div class="field">
             <span class="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -217,9 +261,6 @@
             <input id="search" type="text" placeholder="Search objects…" autocomplete="off" spellcheck="false">
             <button class="clr" id="clrSearch" title="Clear" style="display:none">✕</button>
           </div>
-          <span class="hitcount" id="hitcount"></span>
-        </div>
-        <div class="filter-row">
           <div class="dd" id="ddFilter">
             <div class="dd-btn"><div class="cur" id="ddCur">All types</div>
               <div class="caret"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -227,13 +268,15 @@
             <div class="dd-menu" id="ddMenu"></div>
           </div>
         </div>
+        <div class="filter-row" id="chipRow"></div>
         <div class="tree" id="tree"></div>
       </div>
       <div class="det-pane" id="details"></div>
     </div>
   </div>
 
-  <div class="card-foot"><span id="footSel">1 selected</span><div class="spacer"></div>
+  <div class="card-foot"><span id="footSel">1 selected</span>
+    <span class="hitcount" id="hitcount" style="margin-left:14px"></span><div class="spacer"></div>
     <span>InterfaceOutlinerSequence · design proof</span></div>
 </div>
 
@@ -252,6 +295,7 @@ const P={
   cube  :'<path d="M12 2 3 7v10l9 5 9-5V7z"/>',
 };
 const COL={folder:'#c9a24b',mesh:'#9aa0a6',light:'#f5d34b',camera:'#69c3ff',sky:'#8fd3ff',sun:'#ffb14b',moon:'#b8c4d6'};
+const PALETTE=['#c9a24b','#ef5350','#f59e0b','#22c55e','#3b82f6','#8b5cf6','#ec4899','#9aa0a6'];
 const IC={
   eye:()=>S('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>'),
   eyeoff:()=>S('<path d="M2 12s3.5-7 10-7c2 0 3.8.7 5.3 1.6M22 12s-3.5 7-10 7c-2 0-3.8-.7-5.3-1.6"/><path d="m3 3 18 18"/>'),
@@ -264,7 +308,7 @@ const IC={
 /* ── model ─────────────────────────────────────────────────────────────────────────────────── */
 let UID=0;
 const N=(name,type,kids,x)=>({id:++UID,name,type,kids:kids||[],open:true,vis:true,locked:false,dynamic:false,
-  pos:[0,0,0],rot:[0,0,0],...(x||{})});
+  pos:[0,0,0],rot:[0,0,0],color:null,notes:'',...(x||{})});
 const scene=[
   N('Environment','folder',[
     N('Sky Atmosphere','sky',[],{locked:true}),
@@ -326,12 +370,54 @@ function updateHeader(){
 }
 Object.entries(MODES).forEach(([k,id])=>document.getElementById(id).onclick=()=>setMode(k));
 
+/* ── inline rename ─────────────────────────────────────────────────────────────────────────── */
+/* Shared by the tree row and the properties name field so both behave identically: Enter commits,
+   Escape reverts, blur commits, and an empty name is refused rather than silently accepted. */
+function beginRename(n,host,after){
+  if(!host||host.querySelector('input')) return;
+  const before=n.name;
+  host.innerHTML=`<input value="${before.replace(/"/g,'&quot;')}">`;
+  const inp=host.querySelector('input');
+  inp.focus(); inp.select();
+  let done=false;
+  const finish=commit=>{
+    if(done) return; done=true;
+    const v=inp.value.trim();
+    n.name = (commit && v) ? v : before;
+    after();
+  };
+  inp.onkeydown=e=>{ e.stopPropagation();
+    if(e.key==='Enter') finish(true);
+    if(e.key==='Escape') finish(false); };
+  inp.onblur=()=>finish(true);
+  inp.onclick=e=>e.stopPropagation();
+  inp.ondblclick=e=>e.stopPropagation();
+}
+
 /* ── tree ──────────────────────────────────────────────────────────────────────────────────── */
 const treeEl=document.getElementById('tree');
-function renderTree(){
+/* Twirling a branch animates its child block from its measured height to zero (and back), rather than
+   re-rendering the tree. Re-rendering would snap, and would also destroy any inline rename in progress. */
+function toggleBranch(n,row){
+  const kids=row.nextElementSibling;
+  if(!kids||!kids.classList.contains('kids')) return;
+  const tw=row.querySelector('.tw');
+  n.open=!n.open;
+  tw.classList.toggle('open',n.open);
+  const h=kids.scrollHeight;
+  if(n.open){
+    kids.classList.remove('shut'); kids.style.height=h+'px';
+    setTimeout(()=>{ if(n.open) kids.style.height='auto'; },270);
+  }else{
+    kids.style.height=h+'px';
+    requestAnimationFrame(()=>{ kids.style.height='0px'; kids.classList.add('shut'); });
+  }
+}
+
+function renderTree(animateFresh){
   reflat(); treeEl.innerHTML='';
   let shown=0;
-  const build=list=>list.forEach(n=>{
+  const build=(list,host)=>list.forEach(n=>{
     if(!subtreeMatch(n)) return;
     shown++;
     const row=document.createElement('div');
@@ -342,23 +428,33 @@ function renderTree(){
     const open = query ? true : n.open;
     row.innerHTML=
       `<span class="tw ${leaf?'leaf':''} ${open?'open':''}">${IC.chev()}</span>`+
-      `<span class="ni">${S(P[n.type]||P.cube,COL[n.type],14)}</span>`+
+      `<span class="ni">${S(P[n.type]||P.cube,n.color||COL[n.type],14)}</span>`+
       `<span class="nm">${mark(n.name)}</span>`+
       (n.dynamic?`<span class="badge dyn">dyn</span>`:'')+
       (n.type!=='folder'?`<button class="st ${n.locked?'act':''}" data-a="lock" title="Locked">${n.locked?IC.lock():IC.unlock()}</button>`:'')+
       (n.type!=='folder'?`<button class="st ${n.dynamic?'act':''}" data-a="dyn" title="Dynamic">${IC.motion()}</button>`:'')+
       `<button class="st ${n.vis?'':'off'}" data-a="vis" title="Visible">${n.vis?IC.eye():IC.eyeoff()}</button>`;
-    if(!leaf) row.querySelector('.tw').onclick=e=>{e.stopPropagation();n.open=!n.open;renderTree();};
+    if(!leaf) row.querySelector('.tw').onclick=e=>{e.stopPropagation();toggleBranch(n,row);};
     row.querySelectorAll('.st').forEach(b=>b.onclick=e=>{
       e.stopPropagation(); const a=b.dataset.a;
       if(a==='vis')n.vis=!n.vis; if(a==='lock')n.locked=!n.locked; if(a==='dyn')n.dynamic=!n.dynamic;
       renderTree(); renderDetails();});
     row.onclick=()=>{selId=n.id;renderTree();renderDetails();updateHeader();};
-    treeEl.appendChild(row);
-    if(open) build(n.kids);
+    // Double click renames in place. Guarded so the click handler above does not re-render mid-edit.
+    row.ondblclick=e=>{e.stopPropagation();beginRename(n,row.querySelector('.nm'),()=>{renderTree();renderDetails();});};
+    host.appendChild(row);
+    if(!leaf){
+      const kids=document.createElement('div');
+      kids.className='kids'+(open?'':' shut');
+      if(!open) kids.style.height='0px';
+      host.appendChild(kids);
+      build(n.kids,kids);
+    }
   });
-  build(scene);
+  build(scene,treeEl);
   if(!shown) treeEl.innerHTML=`<div class="nohits">No objects match “${query}”</div>`;
+  // Children of collapsed branches are built but hidden, so a later twirl has a real height to animate to.
+  treeEl.querySelectorAll('.kids:not(.shut)').forEach(k=>k.style.height='auto');
   const hits=countHits();
   document.getElementById('hitcount').textContent=(query||filters.size)?`${hits} of ${flat.filter(n=>n.type!=='folder').length}`:'';
   document.getElementById('clrSearch').style.display=query?'grid':'none';
@@ -375,6 +471,10 @@ function renderFilters(){
         <span style="display:grid;place-items:center;width:14px">${S(P[t.toLowerCase()]||P.cube,COL[t.toLowerCase()],13)}</span>${t}</div>`).join('');
   cur.textContent = !filters.size ? 'All types'
     : filters.size===1 ? [...filters][0] : `${filters.size} types`;
+  // Active filters become removable chips on their own row.
+  const chips=document.getElementById('chipRow');
+  chips.innerHTML=[...filters].map(t=>`<span class="pill">${t}<button class="px" data-t="${t}">✕</button></span>`).join('');
+  chips.querySelectorAll('.px').forEach(b=>b.onclick=()=>{filters.delete(b.dataset.t);renderFilters();renderTree();});
   menu.querySelectorAll('.opt').forEach(o=>o.onclick=e=>{
     e.stopPropagation();
     if(o.dataset.all) filters.clear();
@@ -421,7 +521,48 @@ function paintSlider(el){
   const pill=el.parentElement.querySelector('.vpill .num');
   if(pill) pill.textContent=v.toFixed(dec);
 }
+/* Every numeric readout is type-in editable: click the pill's number, get an input, Enter commits and the
+   slider jumps to it. Clamped to the control's own range so a typo cannot push a value out of bounds. */
+function bindEditableNumbers(root){
+  root.querySelectorAll('.vpill .num').forEach(cell=>{
+    cell.style.cursor='text';
+    cell.onclick=()=>{
+      if(cell.querySelector('input')) return;
+      const sliderEl=cell.closest('.prow')?.querySelector('.kslider');
+      const before=cell.textContent;
+      cell.innerHTML=`<input value="${before}" style="width:100%;background:transparent;border:none;
+        color:var(--text);font:inherit;text-align:center;outline:none;user-select:text">`;
+      const inp=cell.querySelector('input'); inp.focus(); inp.select();
+      let done=false;
+      const finish=commit=>{
+        if(done) return; done=true;
+        const v=parseFloat(inp.value);
+        if(commit && isFinite(v) && sliderEl){
+          const min=+sliderEl.dataset.min, max=+sliderEl.dataset.max;
+          sliderEl.dataset.v=Math.min(max,Math.max(min,v)).toFixed(4);
+          paintSlider(sliderEl);
+        } else cell.textContent=before;
+      };
+      inp.onkeydown=e=>{ e.stopPropagation();
+        if(e.key==='Enter')finish(true); if(e.key==='Escape')finish(false); };
+      inp.onblur=()=>finish(true);
+    };
+  });
+  // Axis fields commit on Enter / blur and revert on Escape.
+  root.querySelectorAll('.vfield input').forEach(inp=>{
+    if(inp.disabled) return;
+    let before=inp.value;
+    inp.onfocus=()=>{before=inp.value;inp.select();};
+    inp.onkeydown=e=>{ e.stopPropagation();
+      if(e.key==='Enter'){inp.blur();}
+      if(e.key==='Escape'){inp.value=before;inp.blur();} };
+    inp.onblur=()=>{ const v=parseFloat(inp.value);
+      inp.value = isFinite(v) ? v.toFixed(2) : before; };
+  });
+}
+
 function bindControls(root){
+  bindEditableNumbers(root);
   root.querySelectorAll('.kslider').forEach(el=>{
     requestAnimationFrame(()=>paintSlider(el));
     const set=e=>{
@@ -445,43 +586,62 @@ function bindControls(root){
   });
 }
 
+const notesCard=n=>`<div class="pcard"><h4>Notes</h4>
+  <textarea class="notes" placeholder="Notes for ${n.name}…" spellcheck="false">${n.notes||''}</textarea></div>`;
+
 function bodyFor(n){
   if(n.type==='sun') return `<div class="pcard"><h4>Orbit</h4>
       ${sl('Elevation',34,-90,90,'°')}${sl('Azimuth',127,0,360,'°')}${sl('Time of day',14.2,0,24,' h')}
       ${sw('Animate',true)}${sl('Rate',60,0,600,'×')}</div>
-    <div class="pcard"><h4>Disc</h4>${sl('Angular size',0.53,0.1,3,'°')}${sl('Intensity',120,0,200,' klx')}</div>`;
+    <div class="pcard"><h4>Disc</h4>${sl('Angular size',0.53,0.1,3,'°')}${sl('Intensity',120,0,200,' klx')}</div>`+notesCard(n);
   if(n.type==='sky') return `<div class="pcard"><h4>Atmosphere</h4>
       ${sl('Planet radius',6360,1000,10000,' km')}${sl('Thickness',100,10,200,' km')}
       ${sl('Rayleigh height',8.0,1,20,' km')}${sl('Mie height',1.2,0.1,5,' km')}
       ${sl('Mie asymmetry',0.80,-1,1,'')}${sl('Ozone centre',25,0,60,' km')}</div>
-    <div class="pcard"><h4>Rendering</h4>${sw('Aerial perspective',true)}${sw('Sky lights scene',true)}</div>`;
+    <div class="pcard"><h4>Rendering</h4>${sw('Aerial perspective',true)}${sw('Sky lights scene',true)}</div>`+notesCard(n);
   if(n.type==='moon') return `<div class="pcard"><h4>Orbit</h4>
       ${sl('Period',27.3,1,100,' d')}${sl('Phase',0.62,0,1,'')}${sl('Inclination',5.1,0,90,'°')}</div>
-    <div class="pcard"><h4>Appearance</h4>${sl('Angular size',0.52,0.1,3,'°')}${sl('Albedo',0.12,0,1,'')}</div>`;
+    <div class="pcard"><h4>Appearance</h4>${sl('Angular size',0.52,0.1,3,'°')}${sl('Albedo',0.12,0,1,'')}</div>`+notesCard(n);
   if(n.type==='camera') return `<div class="pcard"><h4>Transform</h4>${vec(n,'pos','Position')}${vec(n,'rot','Rotation')}</div>
     <div class="pcard"><h4>Movement</h4>${sl('Speed',2.5,0.1,20,' m/s')}${sl('Field of view',55,20,120,'°')}
       ${sl('Boost',3,1,10,'×')}</div>
     <div class="pcard"><h4>Render Settings</h4>${sl('Candidates',4,1,64,'')}${sl('Extra candidates',2,0,16,'')}
       ${sl('Exposure',1.05,0.05,4,'')}${sw('Temporal reuse',true)}${sw('Spatial reuse',true)}
-      ${sw('Alias pick',true)}${sw('Denoise',true)}</div>`;
+      ${sw('Alias pick',true)}${sw('Denoise',true)}</div>`+notesCard(n);
   if(n.type==='light') return `<div class="pcard"><h4>Transform</h4>${vec(n,'pos','Position',n.locked)}</div>
-    <div class="pcard"><h4>Emission</h4>${sl('Illuminance',32,0,200,' lx')}${sw('Two sided',false)}</div>`;
+    <div class="pcard"><h4>Emission</h4>${sl('Illuminance',32,0,200,' lx')}${sw('Two sided',false)}</div>`+notesCard(n);
   if(n.type==='folder') return `<div class="pcard"><h4>Folder</h4>
     <div class="prow"><span class="pl">Children</span><span class="val">${n.kids.length}</span></div>
-    ${sw('Visible',n.vis)}${sw('Locked',n.locked)}</div>`;
+    ${sw('Visible',n.vis)}${sw('Locked',n.locked)}</div>
+    <div class="pcard"><h4>Colour</h4>
+      <div class="prow"><span class="pl">Tint</span><div class="swatches" data-swatches>
+        <span class="swatch none ${n.color?'':'on'}" data-c=""></span>
+        ${PALETTE.map(c=>`<span class="swatch ${n.color===c?'on':''}" data-c="${c}" style="background:${c}"></span>`).join('')}
+      </div></div></div>` + notesCard(n);
   return `<div class="pcard"><h4>Transform</h4>${vec(n,'pos','Position',n.locked)}${vec(n,'rot','Rotation',n.locked)}</div>
     <div class="pcard"><h4>Object</h4>${sw('Visible',n.vis)}${sw('Locked',n.locked)}${sw('Dynamic',n.dynamic)}
-    <div class="prow"><span class="pl">Material</span><span class="val">material_${(n.id%6)}</span></div></div>`;
+    <div class="prow"><span class="pl">Material</span><span class="val">material_${(n.id%6)}</span></div></div>`+notesCard(n);
 }
 function renderDetails(){
   const d=document.getElementById('details'), n=cur();
   if(!n){ d.innerHTML=`<div class="empty">Select an object to see its details</div>`; return; }
   d.innerHTML=`<div class="pcard"><h4>${LABEL[n.type]}</h4>
-      <div class="prow"><span class="pl">Name</span><span style="font-size:12.5px">${n.name}</span></div>
+      <div class="prow"><span class="pl">Name</span>
+        <span class="name-edit" id="nameEdit" title="Double click to rename">${n.name}</span></div>
       <div class="prow"><span class="pl">Status</span><span class="val" style="min-width:auto">
         ${n.vis?'visible':'hidden'}${n.locked?' · locked':''}${n.dynamic?' · dynamic':''}</span></div></div>`
     + bodyFor(n);
   bindControls(d);
+
+  const nameEl=document.getElementById('nameEdit');
+  if(nameEl) nameEl.ondblclick=()=>beginRename(n,nameEl,()=>{renderTree();renderDetails();updateHeader();});
+
+  // Folder tint — recolours the row icon in the tree immediately.
+  d.querySelectorAll('[data-swatches] .swatch').forEach(sw=>sw.onclick=()=>{
+    n.color = sw.dataset.c || null; renderDetails(); renderTree(); });
+
+  const notes=d.querySelector('.notes');
+  if(notes) notes.oninput=()=>{ n.notes=notes.value; };
 }
 
 /* ── boot ──────────────────────────────────────────────────────────────────────────────────── */
