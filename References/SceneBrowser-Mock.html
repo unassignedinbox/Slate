@@ -95,17 +95,53 @@
   .vfield .ax{font-weight:700;font-size:10px;}
   .vfield.x .ax{color:var(--ax-x);} .vfield.y .ax{color:var(--ax-y);} .vfield.z .ax{color:var(--ax-z);}
   .vfield input{background:none;border:none;color:var(--text);font-size:11.5px;width:100%;outline:none;font-family:inherit;}
-  .sw{width:42px;height:24px;border-radius:var(--r-pill);background:var(--raised);position:relative;cursor:pointer;
-    transition:background .2s var(--ease);flex:0 0 42px;}
-  .sw::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--text-dim);
-    transition:transform .2s var(--ease),background .2s var(--ease);}
-  .sw.on{background:var(--accent);}
-  .sw.on::after{transform:translateX(18px);background:#111;}
-  .sl{flex:1;height:6px;border-radius:3px;background:var(--field);position:relative;cursor:pointer;}
-  .sl .fill{position:absolute;inset:0 auto 0 0;background:var(--accent);border-radius:3px;}
-  .sl .knob{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;background:var(--accent);
-    transform:translate(-50%,-50%);box-shadow:0 2px 6px rgba(0,0,0,.6);}
-  .val{font-size:11px;color:var(--text-dim);min-width:44px;text-align:right;font-variant-numeric:tabular-nums;}
+  /* switch — UIComponents verbatim: 46 x 26, knob 20, on = accent fill + #111 knob */
+  .switch{width:46px;height:26px;border-radius:var(--r-pill);flex-shrink:0;cursor:pointer;
+    background:var(--raised);border:1px solid var(--stroke);position:relative;transition:background .18s var(--ease);}
+  .switch::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;
+    background:#bdbdbd;transition:transform .18s var(--ease),background .18s var(--ease);}
+  .switch[data-on="true"]{background:var(--accent);}
+  .switch[data-on="true"]::after{transform:translateX(20px);background:#111;}
+
+  /* slider — UIComponents verbatim: 28 px pill track, 26 px thumb, filled left side.
+     .thin is the quiet variant for dense property panels (10 px / 18 px). */
+  input[type=range].slider{appearance:none;-webkit-appearance:none;outline:none;flex:1;min-width:80px;
+    height:28px;border-radius:var(--r-pill);cursor:pointer;border:none;
+    background:linear-gradient(to right,#7a7a7a 50%,var(--raised) 50%);}
+  input[type=range].slider::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:26px;height:26px;
+    border-radius:50%;background:#e0e0e0;border:none;transition:transform .12s var(--ease);}
+  input[type=range].slider::-moz-range-thumb{width:26px;height:26px;border-radius:50%;background:#e0e0e0;border:none;}
+  input[type=range].slider:active::-webkit-slider-thumb{transform:scale(1.1);}
+  input[type=range].slider.thin{height:10px;}
+  input[type=range].slider.thin::-webkit-slider-thumb{width:18px;height:18px;}
+  input[type=range].slider.thin::-moz-range-thumb{width:18px;height:18px;}
+  input[type=range].slider.hi{background:linear-gradient(to right,var(--hi) 50%,var(--raised) 50%);}
+
+  /* value pill — UIComponents .vpill, 118 px: number cell + 44 px unit cell */
+  .vpill{width:118px;height:32px;flex:0 0 118px;display:flex;border-radius:var(--r-pill);overflow:hidden;
+    border:1px solid var(--stroke);}
+  .vpill .num{flex:1;background:var(--field);display:flex;align-items:center;justify-content:center;
+    font-size:13px;font-weight:600;letter-spacing:.4px;font-variant-numeric:tabular-nums;}
+  .vpill .unit{width:40px;background:var(--inset);border-left:1px solid var(--stroke);display:flex;
+    align-items:center;justify-content:center;color:var(--text-faint);font-size:11px;font-weight:500;}
+
+  /* search field — UIComponents .field */
+  .field{flex:1;height:34px;border-radius:var(--r-pill);background:var(--field);border:1px solid var(--stroke);
+    display:flex;align-items:center;gap:10px;padding:0 14px;min-width:0;}
+  .field:focus-within{border-color:var(--stroke-strong);}
+  .field input{flex:1;min-width:0;background:transparent;border:none;outline:none;color:var(--text);
+    font:inherit;font-size:12.5px;}
+  .field input::placeholder{color:var(--text-faint);}
+  .field .ic{color:var(--text-faint);display:grid;place-items:center;}
+  .field .clr{width:18px;height:18px;border:none;border-radius:50%;background:var(--raised);color:var(--text-dim);
+    cursor:pointer;display:grid;place-items:center;font-size:11px;line-height:1;}
+  .field .clr:hover{background:var(--danger);color:#fff;}
+  .search-row{display:flex;align-items:center;gap:8px;padding:0 20px 10px;}
+  .hitcount{font-size:11px;color:var(--text-faint);white-space:nowrap;font-variant-numeric:tabular-nums;}
+  mark{background:rgba(108,119,255,.35);color:var(--text);border-radius:2px;padding:0 1px;}
+  .nohits{padding:18px 20px;color:var(--text-faint);font-size:12px;text-align:center;}
+  /* plain readout for non-editable values (child counts, material names, status) */
+  .val{font-size:11.5px;color:var(--text-dim);min-width:44px;text-align:right;font-variant-numeric:tabular-nums;}
   .empty{display:grid;place-items:center;height:100%;color:var(--text-faint);font-size:12px;text-align:center;padding:24px;}
   .badge{font-size:9.5px;letter-spacing:.6px;text-transform:uppercase;padding:2px 7px;border-radius:var(--r-pill);
     background:var(--raised);color:var(--text-dim);font-weight:600;}
@@ -134,6 +170,15 @@
     <div class="view" id="mainView">
       <div class="tree-pane">
         <div class="sec-label">Outliner</div>
+        <div class="search-row">
+          <div class="field">
+            <span class="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+            <input id="search" type="text" placeholder="Search objects…" autocomplete="off" spellcheck="false">
+            <button class="clr" id="clrSearch" title="Clear" style="display:none">✕</button>
+          </div>
+          <span class="hitcount" id="hitcount"></span>
+        </div>
         <div class="filter-row" id="filters"></div>
         <div class="tree" id="tree"></div>
       </div>
@@ -197,8 +242,24 @@ const LABEL={folder:'Folder',mesh:'Mesh',light:'Light',camera:'Camera',sky:'Sky'
 
 const flat=[]; const walk=(l,d,p)=>l.forEach(n=>{n.depth=d;n.parent=p;flat.push(n);walk(n.kids,d+1,n);});
 const reflat=()=>{flat.length=0;walk(scene,0,null);};
-let selId=null; const filters=new Set();
+let selId=null; const filters=new Set(); let query='';
 const cur=()=>flat.find(n=>n.id===selId)||null;
+
+/* A node survives if it matches the search AND the type filter, or if a descendant does — otherwise searching
+   would hide the folders the hits live in and the tree would collapse into an unreadable flat list. */
+const selfMatch=n=>{
+  const q = !query || n.name.toLowerCase().includes(query);
+  const t = !filters.size || filters.has(LABEL[n.type]);
+  return q && t;
+};
+const subtreeMatch=n=>selfMatch(n)||n.kids.some(subtreeMatch);
+const countHits=()=>flat.filter(n=>n.type!=='folder'&&selfMatch(n)).length;
+const mark=name=>{
+  if(!query) return name;
+  const i=name.toLowerCase().indexOf(query);
+  if(i<0) return name;
+  return name.slice(0,i)+'<mark>'+name.slice(i,i+query.length)+'</mark>'+name.slice(i+query.length);
+};
 
 /* ── view slide ────────────────────────────────────────────────────────────────────────────── */
 const track=document.getElementById('viewTrack'), mainView=document.getElementById('mainView');
@@ -218,19 +279,22 @@ bComp.onclick=()=>{ const on=mainView.classList.toggle('compact'); bComp.classLi
 
 /* ── tree ──────────────────────────────────────────────────────────────────────────────────── */
 const treeEl=document.getElementById('tree');
-function pass(n){ if(!filters.size) return true; if(filters.has(LABEL[n.type])) return true; return n.kids.some(pass); }
 function renderTree(){
   reflat(); treeEl.innerHTML='';
+  let shown=0;
   const build=list=>list.forEach(n=>{
-    if(!pass(n)) return;
+    if(!subtreeMatch(n)) return;
+    shown++;
     const row=document.createElement('div');
     row.className='row'+(n.id===selId?' sel':'')+(n.locked?' locked':'');
     row.style.paddingLeft=(8+n.depth*18)+'px';
     const leaf=!n.kids.length;
+    // While a query is live every branch is forced open, otherwise a hit inside a collapsed folder is invisible.
+    const open = query ? true : n.open;
     row.innerHTML=
-      `<span class="tw ${leaf?'leaf':''} ${n.open?'open':''}">${IC.chev()}</span>`+
+      `<span class="tw ${leaf?'leaf':''} ${open?'open':''}">${IC.chev()}</span>`+
       `<span class="ni">${S(P[n.type]||P.cube,COL[n.type],14)}</span>`+
-      `<span class="nm">${n.name}</span>`+
+      `<span class="nm">${mark(n.name)}</span>`+
       (n.dynamic?`<span class="badge dyn">dyn</span>`:'')+
       (n.type!=='folder'?`<button class="st ${n.locked?'act':''}" data-a="lock" title="Locked">${n.locked?IC.lock():IC.unlock()}</button>`:'')+
       (n.type!=='folder'?`<button class="st ${n.dynamic?'act':''}" data-a="dyn" title="Dynamic">${IC.motion()}</button>`:'')+
@@ -243,9 +307,13 @@ function renderTree(){
     row.onclick=()=>{selId=n.id;renderTree();renderDetails();};
     row.ondblclick=()=>{selId=n.id;viewTo(1);};
     treeEl.appendChild(row);
-    if(n.open) build(n.kids);
+    if(open) build(n.kids);
   });
   build(scene);
+  if(!shown) treeEl.innerHTML=`<div class="nohits">No objects match “${query}”</div>`;
+  const hits=countHits();
+  document.getElementById('hitcount').textContent=(query||filters.size)?`${hits} of ${flat.filter(n=>n.type!=='folder').length}`:'';
+  document.getElementById('clrSearch').style.display=query?'grid':'none';
   document.getElementById('footSel').textContent=(selId?1:0)+' selected';
 }
 function renderFilters(){
@@ -263,10 +331,37 @@ function renderFilters(){
 const vec=(n,key,label,dis)=>`<div class="prow"><span class="pl">${label}</span><div class="vec">
   ${['x','y','z'].map((a,i)=>`<div class="vfield ${a}"><span class="ax">${a.toUpperCase()}</span>
   <input value="${n[key][i].toFixed(2)}" ${dis?'disabled':''}></div>`).join('')}</div></div>`;
-const sw=(label,on)=>`<div class="prow"><span class="pl">${label}</span><div class="sw ${on?'on':''}"></div></div>`;
-const sl=(label,v,min,max,unit)=>{const t=(v-min)/(max-min)*100;return`<div class="prow"><span class="pl">${label}</span>
-  <div class="sl"><div class="fill" style="width:${t}%"></div><div class="knob" style="left:${t}%"></div></div>
-  <span class="val">${v}${unit||''}</span></div>`;};
+const sw=(label,on)=>`<div class="prow"><span class="pl">${label}</span>
+  <div class="switch" data-on="${on?'true':'false'}"></div></div>`;
+
+/* Kit slider: a real input[type=range] carrying .slider so it inherits the 28 px track / 26 px thumb rules
+   verbatim, with the filled-left-side gradient recomputed on input. `.thin` is used in the dense property
+   panels, matching how UIComponents describes the quiet variant. */
+const sl=(label,v,min,max,unit,step)=>{
+  const st=step||((max-min)/200);
+  return `<div class="prow"><span class="pl">${label}</span>
+    <input type="range" class="slider thin" min="${min}" max="${max}" step="${st}" value="${v}"
+           data-unit="${unit||''}">
+    <div class="vpill"><div class="num">${v}</div><div class="unit">${(unit||'').trim()||'—'}</div></div></div>`;
+};
+
+/* Paint the filled portion, exactly as UIComponents does for its own sliders. */
+function paintSlider(el){
+  const t=(el.value-el.min)/(el.max-el.min)*100;
+  const lit=el.classList.contains('hi')?'var(--hi)':'#7a7a7a';
+  el.style.background=`linear-gradient(to right,${lit} ${t}%,var(--raised) ${t}%)`;
+  const pill=el.parentElement.querySelector('.vpill .num');
+  if(pill){ const d=(+el.step<1)?2:0; pill.textContent=(+el.value).toFixed(d); }
+}
+function bindControls(root){
+  root.querySelectorAll('input[type=range].slider').forEach(el=>{
+    paintSlider(el);
+    el.addEventListener('input',()=>paintSlider(el));
+  });
+  root.querySelectorAll('.switch').forEach(el=>{
+    el.addEventListener('click',()=>el.dataset.on = el.dataset.on==='true'?'false':'true');
+  });
+}
 
 function bodyFor(n){
   if(n.type==='sun') return `<div class="pcard"><h4>Orbit</h4>
@@ -304,10 +399,18 @@ function renderDetails(){
       <div class="prow"><span class="pl">Status</span><span class="val" style="min-width:auto">
         ${n.vis?'visible':'hidden'}${n.locked?' · locked':''}${n.dynamic?' · dynamic':''}</span></div></div>`
     + bodyFor(n);
+  bindControls(d);
 }
-function renderProps(){ const n=cur(); if(n) document.getElementById('props').innerHTML=bodyFor(n); }
+function renderProps(){ const n=cur(); if(!n) return;
+  const el=document.getElementById('props'); el.innerHTML=bodyFor(n); bindControls(el); }
 
 /* ── boot ──────────────────────────────────────────────────────────────────────────────────── */
+const searchEl=document.getElementById('search');
+searchEl.addEventListener('input',()=>{ query=searchEl.value.trim().toLowerCase(); renderTree(); });
+searchEl.addEventListener('keydown',e=>{ if(e.key==='Escape'){ searchEl.value=''; query=''; renderTree(); } });
+document.getElementById('clrSearch').addEventListener('click',()=>{
+  searchEl.value=''; query=''; renderTree(); searchEl.focus(); });
+
 reflat(); selId=flat.find(n=>n.name==='Sun').id;
 renderFilters(); renderTree(); renderDetails(); viewTo(0);
 </script>
