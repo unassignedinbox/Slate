@@ -80,6 +80,14 @@ grep -q 'AtrousDenoise' Projects/Project-Zero/Build/ToolchainSequence.ps1 \
 grep -q 'sampleVariance / count' Engine/Shaders/ReSTIRViewport.slang \
     || { echo "  kernel does not divide the sample variance by the sample count"; Fail=1; }
 
+# The ping-pong barrier must cover BOTH slots and BOTH hazard directions. Level L reads one slot and overwrites
+# the other — the slot the previous level was still reading. Ordering only write→read on the source leaves that
+# write-after-read hazard unsynchronised, which surfaces as a per-workgroup tile pattern across the image.
+grep -q 'VkImageMemoryBarrier Barriers\[2\]' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  the denoise level barrier does not cover both ping-pong slots"; Fail=1; }
+grep -q 'srcAccessMask               = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  the denoise barrier does not order write-after-read"; Fail=1; }
+
 # ── Dispatch coverage ────────────────────────────────────────────────────────────────────────────────────────────
 # The filter's workgroup size must match what the dispatch derives its group count from. Reusing the ReSTIR
 # kernel's 16x16 count for an 8x8 shader covered exactly the top-left quarter of the image.

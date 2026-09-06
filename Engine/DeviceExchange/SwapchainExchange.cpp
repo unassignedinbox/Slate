@@ -2270,21 +2270,30 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
 
             for (uint32_t Level = 0u; Level < kDenoiseLevelCount; ++Level)
             {
-                // The source of level 0 is the kernel's own write; later levels read the previous level's target.
-                VkImageMemoryBarrier Barrier{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
-                Barrier.oldLayout                       = VK_IMAGE_LAYOUT_GENERAL;
-                Barrier.newLayout                       = VK_IMAGE_LAYOUT_GENERAL;
-                Barrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-                Barrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-                Barrier.image                           = Vulkan->DenoiseImages[Level & 1u];
-                Barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-                Barrier.subresourceRange.levelCount     = 1u;
-                Barrier.subresourceRange.layerCount     = 1u;
-                Barrier.srcAccessMask                   = VK_ACCESS_SHADER_WRITE_BIT;
-                Barrier.dstAccessMask                   = VK_ACCESS_SHADER_READ_BIT;
+                // Both ping-pong slots must be ordered against the previous level, in BOTH directions:
+                //   · read-after-write  — this level reads what the previous level wrote;
+                //   · write-after-read  — this level OVERWRITES the slot the previous level was reading.
+                // Barriering only the source with WRITE→READ leaves the second hazard unordered, so a workgroup
+                //    of this level could clobber a texel a still-running workgroup of the previous level had not
+                //    yet consumed. That surfaces as a per-workgroup tile pattern across the image.
+                VkImageMemoryBarrier Barriers[2]{};
+                for (uint32_t Slot = 0u; Slot < 2u; ++Slot)
+                {
+                    Barriers[Slot].sType                       = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                    Barriers[Slot].oldLayout                   = VK_IMAGE_LAYOUT_GENERAL;
+                    Barriers[Slot].newLayout                   = VK_IMAGE_LAYOUT_GENERAL;
+                    Barriers[Slot].srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+                    Barriers[Slot].dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+                    Barriers[Slot].image                       = Vulkan->DenoiseImages[Slot];
+                    Barriers[Slot].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                    Barriers[Slot].subresourceRange.levelCount = 1u;
+                    Barriers[Slot].subresourceRange.layerCount = 1u;
+                    Barriers[Slot].srcAccessMask               = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+                    Barriers[Slot].dstAccessMask               = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+                }
                 vkCmdPipelineBarrier(Command,
                     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                    0u, 0u, nullptr, 0u, nullptr, 1u, &Barrier);
+                    0u, 0u, nullptr, 0u, nullptr, 2u, Barriers);
 
                 DenoisePushRecord Push{};
                 Push.Extent[0]      = RenderWidth;
