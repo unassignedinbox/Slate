@@ -91,7 +91,39 @@ if [ -n "$LutLine" ] && [ -n "$SetLine" ] && [ "$LutLine" -gt "$SetLine" ]; then
     echo "  BringAtmosphereTables runs after BringDescriptorSet — the LUTs would never be bound"; Fail=1
 fi
 
-[ "$Fail" = "0" ] && echo "  constants, LUT sizes, bindings and build order agree             PASS"
+# ── A4: the sun as a light ───────────────────────────────────────────────────────────────────────────────────────
+# 🔴 Emission must be read through ONE accessor. It used to be fetched inline at eleven separate sites, and
+# adding the sun to each would have been eleven chances to miss one — a missed site reads a scene material for
+# the sun, which is a plausible wrong colour rather than an obvious failure.
+InlineFetches=$(grep -c 'floatBitsToUint(Triangles\[LightTriangle' Engine/Shaders/ReSTIRViewport.slang)
+[ "$InlineFetches" = "1" ] \
+    || { echo "  $InlineFetches inline emission fetches; only LightEmission() may read a light's material"; Fail=1; }
+
+grep -q 'vec3 LightEmission(uint lightIndex)' Engine/Shaders/ReSTIRViewport.slang \
+    || { echo "  the LightEmission accessor is gone"; Fail=1; }
+grep -q 'vec3 SampleLightPointFor(' Engine/Shaders/ReSTIRViewport.slang \
+    || { echo "  the SampleLightPointFor accessor is gone"; Fail=1; }
+
+# The sun and the sky must consult the SAME transmittance, or the disc, the sky and the light on the ground
+# redden at different rates and the sunset comes apart.
+grep -q 'SampleTransmittance(max(CameraAltitude, 1.0), SunDirection.z) \* SunIlluminance' Engine/Shaders/ReSTIRViewport.slang \
+    || { echo "  the sun's radiance does not use the shared transmittance table"; Fail=1; }
+
+# A sun-only scene has no emissive triangle; gating direct lighting on the triangle count would leave it black.
+grep -q 'LightSlotCount() > 0u' Engine/Shaders/ReSTIRViewport.slang \
+    || { echo "  direct lighting is still gated on the triangle count — a sun-only scene would be black"; Fail=1; }
+
+# ⚠️ The second bounce must divide by the slot count it sampled from. Dividing by a different number is a bias
+# that scales the entire indirect term.
+grep -q 'bDist2 + 0.01) \* float(bSlots)' Engine/Shaders/ReSTIRViewport.slang \
+    || { echo "  the bounce estimator does not divide by the slot count it sampled from"; Fail=1; }
+
+# The sun must drop out of the candidate set once it is below the horizon, or samples are spent on a light that
+# cannot contribute.
+grep -q 'SunDirection.z > -0.05' Engine/Shaders/ReSTIRViewport.slang \
+    || { echo "  a set sun is still offered as a light candidate"; Fail=1; }
+
+[ "$Fail" = "0" ] && echo "  constants, LUT sizes, bindings, build order and sun wiring agree PASS"
 
 echo
 Glslang=""

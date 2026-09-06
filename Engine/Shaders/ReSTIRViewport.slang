@@ -526,12 +526,127 @@ vec3 SampleLightPoint(uint lightTriIdx, float u1, float u2)
     return (1.0 - r1) * v0 + r1 * (1.0 - u2) * v1 + r1 * u2 * v2;
 }
 
+//------------------------------------------------------------------------------------------------------------------------
+//                                          A2 — ATMOSPHERE TABLE SAMPLERS
+//------------------------------------------------------------------------------------------------------------------------
+// Declared here rather than beside the sky evaluators because A4's sun reads the same transmittance: the disc,
+//    the sky and the sunlight landing on the ground must redden together, which only happens if all three
+//    consult one table.
+
+vec3 SampleTransmittance(float Altitude, float CosSunZenith)
+{
+    return texture(TransmittanceLut, TransmittanceParameterisation(Altitude, CosSunZenith)).rgb;
+}
+
+vec3 SampleMultiScatter(float Altitude, float CosSunZenith)
+{
+    return texture(MultiScatterLut, TransmittanceParameterisation(Altitude, CosSunZenith)).rgb;
+}
+
+//------------------------------------------------------------------------------------------------------------------------
+//                                            A4 — THE SUN AS A LIGHT
+//------------------------------------------------------------------------------------------------------------------------
+// The sun has no triangle, so it is addressed by the index ONE PAST the last luminaire triangle. That keeps the
+//    reservoir's existing uint light index working untouched, which matters because the temporal and spatial
+//    reuse paths carry that index across frames and neighbours.
+//
+// 🔴 Every read of a light's emission or position now goes through these two accessors. The emission used to be
+//    fetched inline at eight separate sites; adding the sun to each of those would have been eight chances to
+//    forget one, and a missed site would have read a scene material for the sun — a plausible wrong colour
+//    rather than an obvious failure.
+
+bool IsSunLight(uint lightIndex) { return SunIlluminance > 0.0 && lightIndex >= LightTriangleCount; }
+
+// How many light "slots" a pixel can choose from: the emissive triangles, plus the sun when it is above the
+//    horizon. Below the horizon it is not a candidate at all, so no sample is ever wasted on a light that
+//    cannot contribute.
+uint LightSlotCount()
+{
+    return LightTriangleCount + ((SunIlluminance > 0.0 && SunDirection.z > -0.05) ? 1u : 0u);
+}
+
+// The sun's radiance, attenuated by the air it has already travelled through. This is the same transmittance
+//    the sky march uses, so the disc, the sky and the light on the ground all redden together at sunset instead
+//    of disagreeing.
+vec3 SunRadiance()
+{
+    return SampleTransmittance(max(CameraAltitude, 1.0), SunDirection.z) * SunIlluminance;
+}
+
+vec3 LightEmission(uint lightIndex)
+{
+    if (IsSunLight(lightIndex)) return SunRadiance();
+    return Materials[floatBitsToUint(Triangles[LightTriangle(lightIndex)].v0.w)].Emissive.xyz;
+}
+
+// A point on the sun's disc, expressed as somewhere far away along a jittered direction. Returning a POINT
+//    rather than a direction is what lets the existing shadow-ray and reuse machinery work unchanged — and the
+//    jitter across the 0.268° disc is exactly what produces a real penumbra instead of a hard edge.
+vec3 SampleSunPoint(vec3 origin, float u1, float u2)
+{
+    // Uniform on the cap: the radius must go as √u or samples bunch at the centre and the penumbra is too sharp.
+    const float CosMax = cos(kSunAngularRadius);
+    const float CosTheta = 1.0 - u1 * (1.0 - CosMax);
+    const float SinTheta = sqrt(max(0.0, 1.0 - CosTheta * CosTheta));
+    const float Phi      = 6.28318530 * u2;
+
+    // Any tangent frame will do; the disc is rotationally symmetric about the sun direction.
+    vec3 Up      = abs(SunDirection.z) < 0.99 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+    vec3 Tangent = normalize(cross(Up, SunDirection));
+    vec3 Bitangent = cross(SunDirection, Tangent);
+
+    const vec3 Direction = normalize(SunDirection * CosTheta
+                                   + Tangent   * (SinTheta * cos(Phi))
+                                   + Bitangent * (SinTheta * sin(Phi)));
+
+    // Far enough to be effectively directional, near enough that the squared-distance falloff in PHatFull does
+    //    not underflow to zero in a float.
+    return origin + Direction * 1.0e7;
+}
+
+vec3 SampleLightPointFor(uint lightIndex, vec3 origin, float u1, float u2)
+{
+    if (IsSunLight(lightIndex)) return SampleSunPoint(origin, u1, u2);
+    return SampleLightPoint(lightIndex, u1, u2);
+}
+
 // R6 row 3: light-triangle pick. Alias ON (F5, default): one Walker-alias probe — col uniform, accept on
 //    Threshold else redirect to AliasSlot, source pdf = Probability[z] (power/total, SceneStructure.cpp).
 //    Alias OFF: uniform over luminaires with p = 1/N — bit-for-bit the R0 estimator (identity proof).
 //    Any positive pSource keeps RIS unbiased: the converged image is unchanged, only the noise differs.
 uint PickLight(inout uint seed, out float pSource)
 {
+    const uint Slots = LightSlotCount();
+
+    // A4. The sun occupies the slot one past the last triangle. It is picked with a fixed share rather than
+    //    being folded into the alias table, because that table is built on the CPU from triangle power and the
+    //    sun's contribution changes every frame as it moves — rebuilding the table per frame would cost more
+    //    than the stratification is worth.
+    //
+    //    Half the samples when the sun is up. It is overwhelmingly the brightest light in an outdoor scene, so
+    //    an even split with the luminaires is far closer to importance-proportional than any fixed small share,
+    //    and RIS stays unbiased for ANY positive pSource — this choice only moves noise around.
+    if (Slots > LightTriangleCount)
+    {
+        const float SunShare = 0.5;
+        if (RandFloat(seed) < SunShare)
+        {
+            pSource = SunShare;
+            return LightTriangleCount;
+        }
+        // Fall through to a triangle, whose probability is scaled by the remaining share.
+        if ((FeatureFlags & kFeatureAliasPick) != 0u)
+        {
+            uint col = uint(RandFloat(seed) * float(LightTriangleCount));
+            col = min(col, LightTriangleCount - 1u);
+            uint z = RandFloat(seed) < Luminaires[col].Threshold ? col : Luminaires[col].AliasSlot;
+            pSource = Luminaires[z].Probability * (1.0 - SunShare);
+            return z;
+        }
+        pSource = (1.0 - SunShare) / float(LightTriangleCount);
+        return min(uint(RandFloat(seed) * float(LightTriangleCount)), LightTriangleCount - 1u);
+    }
+
     if ((FeatureFlags & kFeatureAliasPick) != 0u)
     {
         uint col = uint(RandFloat(seed) * float(LightTriangleCount));
@@ -726,16 +841,6 @@ void Resolve(uvec2 pixel, vec3 radiance)
 // These live here rather than in AtmosphereScattering.slang because they sample the kernel's own descriptors,
 //    and that header is deliberately free of bindings so the CPU proof can port it verbatim.
 
-vec3 SampleTransmittance(float Altitude, float CosSunZenith)
-{
-    return texture(TransmittanceLut, TransmittanceParameterisation(Altitude, CosSunZenith)).rgb;
-}
-
-vec3 SampleMultiScatter(float Altitude, float CosSunZenith)
-{
-    return texture(MultiScatterLut, TransmittanceParameterisation(Altitude, CosSunZenith)).rgb;
-}
-
 // The A3 march with its inner light march replaced by a texture fetch, plus the second-order term.
 vec3 SkyRadianceTabulated(float CameraAltitude, vec3 ViewDirection, vec3 SunDirection, vec3 SunIlluminance, int ViewSteps)
 {
@@ -880,7 +985,7 @@ void main()
     //    spatiotemporal neighbour taps, shade.
     //------------------------------------------------------------------------------------------------------------------
 
-    if (LightTriangleCount > 0u)
+    if (LightSlotCount() > 0u)   // A4: a scene lit only by the sun has no emissive triangle at all
     {
         // Initial reservoir from M = SamplesPerPixel candidates
         Reservoir res;
@@ -898,13 +1003,11 @@ void main()
             uint   li          = PickLight(seed, pSource);   // R6 row 3: alias (F5) or uniform (identity proof)
             float  u1          = RandFloat(seed);
             float  u2          = RandFloat(seed);
-            vec3   lp          = SampleLightPoint(li, u1, u2);
+            vec3   lp          = SampleLightPointFor(li, hitPos, u1, u2);
             vec3   toLight     = lp - hitPos;
 
             // Get light material
-            uint lMatIdx = floatBitsToUint(
-                Triangles[LightTriangle(li)].v0.w);
-            vec3 lEmissive = Materials[lMatIdx].Emissive.xyz;
+            vec3 lEmissive = LightEmission(li);
 
             // Target function: full-BSDF unshadowed direct contribution (R6 row 2)
             float pHat = PHatFull(frame, shading, layers, woLocal, lEmissive, toLight, dot(toLight, toLight));
@@ -918,8 +1021,7 @@ void main()
         {
             vec3  toSel    = res.SelectedPoint - hitPos;
 
-            uint selMatIdx = floatBitsToUint(Triangles[LightTriangle(res.SelectedLight)].v0.w);
-            vec3 selEmissive = Materials[selMatIdx].Emissive.xyz;
+            vec3 selEmissive = LightEmission(res.SelectedLight);
 
             float pHatSel = PHatFull(frame, shading, layers, woLocal, selEmissive, toSel, dot(toSel, toSel));
             if (pHatSel > 0.0)
@@ -933,10 +1035,9 @@ void main()
                 uint   nli    = PickLight(seed, npSource);   // R6 row 3: same alias/uniform gate as the initial loop
                 float  nu1    = RandFloat(seed);
                 float  nu2    = RandFloat(seed);
-                vec3   nlp    = SampleLightPoint(nli, nu1, nu2);
+                vec3   nlp    = SampleLightPointFor(nli, hitPos, nu1, nu2);
                 vec3   nToL   = nlp - hitPos;
-                uint   nMIdx  = floatBitsToUint(Triangles[LightTriangle(nli)].v0.w);
-                vec3   nEmit  = Materials[nMIdx].Emissive.xyz;
+                vec3   nEmit  = LightEmission(nli);
                 float  nPHat  = PHatFull(frame, shading, layers, woLocal, nEmit, nToL, dot(nToL, nToL));
                 float  nW     = nPHat / npSource;   // p̂ / p_source, same as the initial loop
                 ResampleCandidate(res, nlp, nli, vec2(nu1, nu2), nW, seed);
@@ -945,8 +1046,7 @@ void main()
             vec3  emit2  = vec3(0.0);
             {
                 vec3  toSel2   = res.SelectedPoint - hitPos;
-                uint  matE     = floatBitsToUint(Triangles[LightTriangle(res.SelectedLight)].v0.w);
-                emit2          = Materials[matE].Emissive.xyz;
+                emit2          = LightEmission(res.SelectedLight);
                 float pHat2 = PHatFull(frame, shading, layers, woLocal, emit2, toSel2, dot(toSel2, toSel2));
                 res.UnbiasedWeight = pHat2 > 0.0 ? res.WeightSum / (float(res.SampleCount) * pHat2) : 0.0;
             }
@@ -972,8 +1072,7 @@ void main()
                     if (valid)
                     {
                         uint mPrevCapped = min(prevM, kTemporalMClamp * res.SampleCount);
-                        uint prevMat = floatBitsToUint(Triangles[LightTriangle(prev.Counts.y)].v0.w);
-                        vec3 prevEmit = Materials[prevMat].Emissive.xyz;
+                        vec3 prevEmit = LightEmission(prev.Counts.y);
                         vec3 prevToL  = prev.Sample.xyz - hitPos;
                         float pPrev = PHatFull(frame, shading, layers, woLocal, prevEmit, prevToL, dot(prevToL, prevToL));
                         vec3  curToL  = res.SelectedPoint - hitPos;
@@ -990,8 +1089,7 @@ void main()
                         res.SampleCount = res.SampleCount + mPrevCapped;
                         res.WeightSum   = total;
                         resAge = prev.Counts.w + 1u;
-                        uint  finMat  = floatBitsToUint(Triangles[LightTriangle(res.SelectedLight)].v0.w);
-                        vec3  finEmit = Materials[finMat].Emissive.xyz;
+                        vec3  finEmit = LightEmission(res.SelectedLight);
                         vec3  finToL  = res.SelectedPoint - hitPos;
                         float pFin = PHatFull(frame, shading, layers, woLocal, finEmit, finToL, dot(finToL, finToL));
                         res.UnbiasedWeight = pFin > 0.0 ? total / (float(res.SampleCount) * pFin) : 0.0;
@@ -1029,13 +1127,11 @@ void main()
                         && abs(primaryT - neigh.UvDepth.w) / max(primaryT, 1e-3) < kTemporalDepthTol;
                     if (!nValid) continue;
                     uint mNeighCapped = min(neighM, kTemporalMClamp * res.SampleCount);
-                    uint neighMat = floatBitsToUint(Triangles[LightTriangle(neigh.Counts.y)].v0.w);
-                    vec3 neighEmit = Materials[neighMat].Emissive.xyz;
+                    vec3 neighEmit = LightEmission(neigh.Counts.y);
                     vec3 neighToL  = neigh.Sample.xyz - hitPos;
                     float pNeigh = PHatFull(frame, shading, layers, woLocal, neighEmit, neighToL, dot(neighToL, neighToL));
                     vec3  selfToL  = res.SelectedPoint - hitPos;
-                    uint  selfMat  = floatBitsToUint(Triangles[LightTriangle(res.SelectedLight)].v0.w);
-                    vec3  selfEmit = Materials[selfMat].Emissive.xyz;
+                    vec3  selfEmit = LightEmission(res.SelectedLight);
                     float pSelf = PHatFull(frame, shading, layers, woLocal, selfEmit, selfToL, dot(selfToL, selfToL));
                     float wSelf  = pSelf * res.UnbiasedWeight * float(res.SampleCount);
                     float wNeigh = pNeigh * neigh.UvDepth.z * float(mNeighCapped);
@@ -1051,8 +1147,7 @@ void main()
                     res.SampleCount = res.SampleCount + mNeighCapped;
                     res.WeightSum   = nTotal;
                     resAge = takeAge;
-                    uint  mMat  = floatBitsToUint(Triangles[LightTriangle(res.SelectedLight)].v0.w);
-                    vec3  mEmit = Materials[mMat].Emissive.xyz;
+                    vec3  mEmit = LightEmission(res.SelectedLight);
                     vec3  mToL  = res.SelectedPoint - hitPos;
                     float pM = PHatFull(frame, shading, layers, woLocal, mEmit, mToL, dot(mToL, mToL));
                     res.UnbiasedWeight = pM > 0.0 ? nTotal / (float(res.SampleCount) * pM) : 0.0;
@@ -1077,8 +1172,7 @@ void main()
                 vec3 shadeDir = normalize(res.SelectedPoint - hitPos);
                 float shadeCos = max(0.0, dot(hitNormal, shadeDir));
 
-                uint shadeMatIdx = floatBitsToUint(Triangles[LightTriangle(res.SelectedLight)].v0.w);
-                vec3 chosenEmit = Materials[shadeMatIdx].Emissive.xyz;
+                vec3 chosenEmit = LightEmission(res.SelectedLight);
 
                 float dist2 = dot(res.SelectedPoint - hitPos, res.SelectedPoint - hitPos);
                 vec3  wiLocal = ToLocal(frame, shadeDir);
@@ -1119,7 +1213,7 @@ void main()
                 {
                     accumulatedRadiance += throughput * bFrame.Emission;
                 }
-                else if (LightTriangleCount > 0u)
+                else if (LightSlotCount() > 0u)
                 {
                     vec3  bHitPos    = bounceHit.pos;
                     vec3  bHitNormal = bFrame.Geometric;
@@ -1127,22 +1221,28 @@ void main()
                     if (bWo.z <= 0.0) bWo = vec3(bWo.xy, 1e-3);
                     ResolvedLayers bLayers = ResolveLayers(bShading, bWo);
 
-                    uint  bLi  = uint(RandFloat(seed) * float(LightTriangleCount));
-                    vec3  bLp  = SampleLightPoint(bLi, RandFloat(seed), RandFloat(seed));
+                    // A4: the bounce samples the sun too, uniformly over all slots. The secondary bounce is a
+                    //    single unweighted sample rather than a reservoir, so a uniform pick is the correct
+                    //    estimator here — and outdoors the sun is what actually lights the second bounce.
+                    const uint bSlots = LightSlotCount();
+                    uint  bLi  = min(uint(RandFloat(seed) * float(bSlots)), bSlots - 1u);
+                    vec3  bLp  = SampleLightPointFor(bLi, bHitPos, RandFloat(seed), RandFloat(seed));
                     vec3  bToL = bLp - bHitPos;
                     float bDist = length(bToL);
                     vec3  bLDir = bToL / bDist;
                     float bCos  = max(0.0, dot(bHitNormal, bLDir));
                     vec3  bWi   = ToLocal(bFrame, bLDir);
 
-                    uint  bLMatIdx = floatBitsToUint(Triangles[LightTriangle(bLi)].v0.w);
-                    vec3 bLEmit = Materials[bLMatIdx].Emissive.xyz;
+                    vec3 bLEmit = LightEmission(bLi);
 
                     if (bCos > 0.0 && bWi.z > 0.0 && !TraceShadow(bHitPos + bHitNormal * kEps, bLp))
                     {
                         float bDist2 = bDist * bDist;
                         vec3  bF = EvaluateBsdf(bShading, bLayers, bWo, bWi);
-                        accumulatedRadiance += throughput * bF * bLEmit * bCos / ((bDist2 + 0.01) * float(LightTriangleCount));
+                        // ⚠️ Divide by the SLOT count, not the triangle count: the pick above chose from
+                        //    bSlots, and dividing by a different number than you sampled from is a bias that
+                        //    scales the whole second bounce.
+                        accumulatedRadiance += throughput * bF * bLEmit * bCos / ((bDist2 + 0.01) * float(bSlots));
                     }
                 }
             }

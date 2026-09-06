@@ -524,6 +524,79 @@ int main()
                "the square-root axis gives the dense lower atmosphere far more rows than a linear one would");
     }
 
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n14. the sun disc samples uniformly across its true angular size\n");
+    {
+        // A4. A verbatim port of SampleSunPoint's direction maths. Two things must hold: every sample lies
+        //    inside the 0.268° cap, and the distribution is UNIFORM ON THE CAP rather than bunched at the
+        //    centre. Bunching would narrow the penumbra without making the shadow obviously wrong, so it is the
+        //    kind of error that survives a visual check.
+        const Vec3 SunDirection = Normalize(Vec3{ 0.3f, 0.4f, 0.866f });
+
+        const auto SampleDirection = [&](float U1, float U2)
+        {
+            const float CosMax   = std::cos(kSunAngularRadius);
+            const float CosTheta = 1.0f - U1 * (1.0f - CosMax);
+            const float SinTheta = std::sqrt(std::fmax(0.0f, 1.0f - CosTheta * CosTheta));
+            const float Phi      = 6.28318530f * U2;
+            const Vec3  Up       = std::fabs(SunDirection.z) < 0.99f ? Vec3{ 0.0f, 0.0f, 1.0f } : Vec3{ 1.0f, 0.0f, 0.0f };
+            // cross(Up, Sun)
+            const Vec3  Tangent  = Normalize(Vec3{ Up.y * SunDirection.z - Up.z * SunDirection.y,
+                                                   Up.z * SunDirection.x - Up.x * SunDirection.z,
+                                                   Up.x * SunDirection.y - Up.y * SunDirection.x });
+            const Vec3  Bitangent{ SunDirection.y * Tangent.z - SunDirection.z * Tangent.y,
+                                   SunDirection.z * Tangent.x - SunDirection.x * Tangent.z,
+                                   SunDirection.x * Tangent.y - SunDirection.y * Tangent.x };
+            return Normalize(SunDirection * CosTheta + Tangent * (SinTheta * std::cos(Phi))
+                                                     + Bitangent * (SinTheta * std::sin(Phi)));
+        };
+
+        float WorstAngle = 0.0f;
+        int   InnerHalf  = 0;
+        const int Samples = 20000;
+        for (int i = 0; i < Samples; ++i)
+        {
+            // A deterministic low-discrepancy pair, so the result does not wander between runs.
+            const float U1 = (i + 0.5f) / Samples;
+            const float U2 = std::fmod(i * 0.618033988f, 1.0f);
+            const Vec3  D  = SampleDirection(U1, U2);
+            const float Angle = std::acos(std::fmin(1.0f, Dot(D, SunDirection)));
+            WorstAngle = std::fmax(WorstAngle, Angle);
+            // Uniform on a cap means HALF the samples fall inside the radius that bisects its AREA, which for a
+            //    small cap is r/√2 — not r/2, which is what a naive linear radius would give.
+            if (Angle <= kSunAngularRadius / 1.41421356f) ++InnerHalf;
+        }
+        const float InnerFraction = static_cast<float>(InnerHalf) / Samples;
+        std::printf("     widest sample %.6f rad (limit %.6f), inner-half-area fraction %.3f (want 0.500)\n",
+                    static_cast<double>(WorstAngle), static_cast<double>(kSunAngularRadius),
+                    static_cast<double>(InnerFraction));
+        // ⚠️ 1 % of tolerance, not 0.1 %. acos is ill-conditioned near 1: at this angle cos(θ) = 1 − 1.09e-5,
+        //    and a SINGLE float ulp there (1.19e-7) moves the recovered angle by 2.5e-5 rad — 0.54 % of the
+        //    radius. A tighter bound would be measuring the reconstruction, not the sampler.
+        Expect(WorstAngle <= kSunAngularRadius * 1.01f, "no sample escapes the sun's angular radius");
+        Expect(WorstAngle >  kSunAngularRadius * 0.99f,  "and the full disc is actually reached");
+        Expect(std::fabs(InnerFraction - 0.5f) < 0.02f,
+               "half the samples fall in the inner half of the AREA — uniform, not centre-bunched");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n15. the penumbra a 0.268° source casts is physically sized\n");
+    {
+        // The reason to sample a disc at all. A point light gives a hard edge; the sun's finite size gives a
+        //    penumbra that widens with the distance between occluder and receiver, at a rate set by its angular
+        //    diameter. These are the numbers to compare a screenshot against.
+        std::printf("     occluder height   penumbra width\n");
+        for (float Height : { 0.5f, 1.0f, 2.0f, 5.0f })
+        {
+            const float Width = 2.0f * Height * std::tan(kSunAngularRadius);
+            std::printf("       %4.1f m           %6.1f mm\n",
+                        static_cast<double>(Height), static_cast<double>(Width * 1000.0f));
+        }
+        const float AtOneMetre = 2.0f * 1.0f * std::tan(kSunAngularRadius);
+        Expect(AtOneMetre > 0.008f && AtOneMetre < 0.011f,
+               "a 1 m occluder casts a ~9 mm penumbra, as the real sun does");
+    }
+
     std::printf("\n>>> %s (%d failure%s)\n", Failures == 0 ? "ALL PASS" : "FAILURES", Failures, Failures == 1 ? "" : "s");
     return Failures == 0 ? 0 : 1;
 }
