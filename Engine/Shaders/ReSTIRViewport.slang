@@ -295,6 +295,7 @@ ShadingRecord ResolveMaterial(GpuMaterial mat, GpuInstance instance, uint primit
 }
 
 #include "TraversalCWBVH.slang"
+#include "AtmosphereScattering.slang"
 
 const uint kVisibilityInvalid = 0xFFFFFFFFu;
 uint VisibilityInstance(uint Packed)  { return (Packed >> 14) & 0x3FFFFu; }
@@ -322,6 +323,13 @@ layout(push_constant) uniform ReSTIRConstants
     uint    AlphaMaskedMaterialCount; // [cnt] R4b: materials flagged kMaterialFlagAlphaMask (0 ⇒ any-hit shadow rays) — was TriangleCount (unused here)
     uint    LightTriangleCount;     // [cnt] emissive triangles for DI sampling
     uint    FeatureFlags;           // [bit] kFeatureGlobalIllumination | kFeatureAntiAliasing
+    // A3 sky. 32 bytes, which is exactly the headroom left in Vulkan's guaranteed 128-byte push block.
+    vec3    SunDirection;           // [-]   toward the sun, unit, world space (Z-up)
+    float   SunIlluminance;         // [lx]  direct-beam illuminance above the atmosphere; 0 disables the sky
+    float   CameraAltitude;         // [m]   observer height above the planet surface
+    uint    SkyViewSteps;           // [cnt] quality tier: samples along the view ray
+    uint    SkyLightSteps;          // [cnt] quality tier: samples along the ray to the sun
+    uint    SkyPadding;             // [-]   keeps the block 16-byte aligned
 };
 
 const uint kFeatureGlobalIllumination = 1u;   // bit 0: trace the secondary bounce (section 4)
@@ -733,9 +741,28 @@ void main()
 
     if (visibility == kVisibilityInvalid)
     {
-        // Background: pure black. There is no sky and no environment light; anything the raster did not cover must
-        // read as a miss, never as a colour.
-        Resolve(pixel, vec3(0.0));
+        // A3 — the ray-miss path. This used to return pure black; it now returns the radiance of the sky in the
+        //    ray's direction, which is what turns the roof oculus from a hole into nothing into a window.
+        //
+        //    SunIlluminance of zero disables the sky entirely and restores the black background, so every image
+        //    made before A3 can still be reproduced exactly. That is the identity switch for this phase.
+        vec3 skyRadiance = vec3(0.0);
+        if (SunIlluminance > 0.0)
+        {
+            // The primary ray direction has to be rebuilt here: the visibility raster only stores hits, so a
+            //    miss carries no direction. Pixel centre, matching the raster's own convention.
+            const vec2 uv  = (vec2(pixel) + 0.5) / vec2(float(ViewportWidth), float(ViewportHeight));
+            const vec2 ndc = vec2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
+            const vec3 rayDirection = normalize(CameraForward
+                                              + CameraRight * (ndc.x * FieldOfViewTanHalf * AspectRatio)
+                                              + CameraUp    * (ndc.y * FieldOfViewTanHalf));
+
+            skyRadiance = SkyRadiance(CameraAltitude, rayDirection, SunDirection,
+                                      vec3(SunIlluminance), int(SkyViewSteps), int(SkyLightSteps))
+                        + SunDisc(CameraAltitude, rayDirection, SunDirection,
+                                  vec3(SunIlluminance), int(SkyLightSteps));
+        }
+        Resolve(pixel, skyRadiance);
         return;
     }
 

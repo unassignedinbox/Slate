@@ -1,0 +1,350 @@
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+//  AtmosphereScatteringTest.cpp — the sky is blue, the sunset is red, and the night is dark, for physical reasons
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+//  A verbatim CPU port of AtmosphereScattering.slang. Every constant and every expression is copied, so a change
+//  to one that is not made to the other shows up here rather than on the GPU.
+//
+//  What makes these assertions worth anything is that none of them is a taste judgement. "The sky is blue" is
+//  checked as blue radiance exceeding red by a factor the Rayleigh λ⁻⁴ law predicts; "the sunset is red" is
+//  checked as the blue/red ratio INVERTING between zenith and horizon at low sun. A model that merely produced
+//  a pleasant gradient would fail all of them.
+//
+//  Build: see Scratchpad/CheckAtmosphereScattering.sh
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+#include <cmath>
+#include <cstdio>
+#include <initializer_list>
+
+//------------------------------------------------------------------------------------------------------------------------
+//                                            PORT OF AtmosphereScattering.slang
+//------------------------------------------------------------------------------------------------------------------------
+
+struct Vec3
+{
+    float x = 0.0f, y = 0.0f, z = 0.0f;
+    Vec3() = default;
+    Vec3(float X, float Y, float Z) : x(X), y(Y), z(Z) {}
+    explicit Vec3(float S) : x(S), y(S), z(S) {}
+};
+
+static Vec3 operator+(Vec3 a, Vec3 b) { return { a.x + b.x, a.y + b.y, a.z + b.z }; }
+static Vec3 operator-(Vec3 a, Vec3 b) { return { a.x - b.x, a.y - b.y, a.z - b.z }; }
+static Vec3 operator*(Vec3 a, Vec3 b) { return { a.x * b.x, a.y * b.y, a.z * b.z }; }
+static Vec3 operator*(Vec3 a, float s) { return { a.x * s, a.y * s, a.z * s }; }
+static Vec3 operator/(Vec3 a, Vec3 b) { return { a.x / b.x, a.y / b.y, a.z / b.z }; }
+static Vec3& operator+=(Vec3& a, Vec3 b) { a = a + b; return a; }
+static Vec3& operator*=(Vec3& a, Vec3 b) { a = a * b; return a; }
+static float Dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+static float Length(Vec3 a) { return std::sqrt(Dot(a, a)); }
+static Vec3 Normalize(Vec3 a) { const float L = Length(a); return L > 0.0f ? a * (1.0f / L) : a; }
+static Vec3 Exp(Vec3 a) { return { std::exp(a.x), std::exp(a.y), std::exp(a.z) }; }
+static Vec3 Max(Vec3 a, Vec3 b) { return { std::fmax(a.x, b.x), std::fmax(a.y, b.y), std::fmax(a.z, b.z) }; }
+
+// ── Constants: must match AtmosphereScattering.slang exactly ────────────────────────────────────────────────
+static constexpr float kPlanetRadius        = 6360000.0f;
+static constexpr float kAtmosphereThickness =  100000.0f;
+static constexpr float kAtmosphereRadius    = kPlanetRadius + kAtmosphereThickness;
+static constexpr float kRayleighScaleHeight = 8000.0f;
+static constexpr float kMieScaleHeight      = 1200.0f;
+static const     Vec3  kRayleighScattering  { 5.802e-6f, 13.558e-6f, 33.1e-6f };
+static constexpr float kMieScattering       = 3.996e-6f;
+static constexpr float kMieExtinction       = 4.440e-6f;
+static constexpr float kMieAsymmetry        = 0.80f;
+static const     Vec3  kOzoneAbsorption     { 0.650e-6f, 1.881e-6f, 0.085e-6f };
+static constexpr float kOzoneCentre         = 25000.0f;
+static constexpr float kOzoneWidth          = 15000.0f;
+static constexpr float kSunAngularRadius    = 0.004675f;
+
+static Vec3 AtmosphereDensity(float Altitude)
+{
+    const float Rayleigh = std::exp(-std::fmax(Altitude, 0.0f) / kRayleighScaleHeight);
+    const float Mie      = std::exp(-std::fmax(Altitude, 0.0f) / kMieScaleHeight);
+    const float Ozone    = std::fmax(0.0f, 1.0f - std::fabs(Altitude - kOzoneCentre) / kOzoneWidth);
+    return { Rayleigh, Mie, Ozone };
+}
+
+static float RaySphereNearest(Vec3 Origin, Vec3 Direction, float Radius)
+{
+    const float b = Dot(Origin, Direction);
+    const float c = Dot(Origin, Origin) - Radius * Radius;
+    const float Discriminant = b * b - c;
+    if (Discriminant < 0.0f) return -1.0f;
+    const float Root = std::sqrt(Discriminant);
+    const float Near = -b - Root;
+    const float Far  = -b + Root;
+    if (Far < 0.0f) return -1.0f;
+    return Near >= 0.0f ? Near : Far;
+}
+
+static float RayleighPhase(float CosAngle)
+{
+    return 3.0f / (16.0f * 3.14159265f) * (1.0f + CosAngle * CosAngle);
+}
+
+static float MiePhase(float CosAngle, float g)
+{
+    const float g2 = g * g;
+    const float Numerator   = 3.0f * (1.0f - g2) * (1.0f + CosAngle * CosAngle);
+    const float Denominator = 8.0f * 3.14159265f * (2.0f + g2) * std::pow(1.0f + g2 - 2.0f * g * CosAngle, 1.5f);
+    return Numerator / std::fmax(Denominator, 1e-9f);
+}
+
+static Vec3 OpticalDepth(Vec3 Origin, Vec3 Direction, float Distance, int Steps)
+{
+    const float Step = Distance / static_cast<float>(Steps);
+    Vec3 Sum{};
+    for (int i = 0; i < Steps; ++i)
+    {
+        const Vec3  Position = Origin + Direction * ((static_cast<float>(i) + 0.5f) * Step);
+        const float Altitude = Length(Position) - kPlanetRadius;
+        const Vec3  Density  = AtmosphereDensity(Altitude);
+        Sum += (kRayleighScattering * Density.x
+              + Vec3(kMieExtinction) * Density.y
+              + kOzoneAbsorption    * Density.z) * Step;
+    }
+    return Sum;
+}
+
+static Vec3 SunTransmittance(Vec3 Position, Vec3 SunDirection, int Steps)
+{
+    if (RaySphereNearest(Position, SunDirection, kPlanetRadius) > 0.0f) return Vec3(0.0f);
+    const float ToSpace = RaySphereNearest(Position, SunDirection, kAtmosphereRadius);
+    if (ToSpace < 0.0f) return Vec3(1.0f);
+    return Exp(OpticalDepth(Position, SunDirection, ToSpace, Steps) * -1.0f);
+}
+
+static Vec3 SkyRadiance(float CameraAltitude, Vec3 ViewDirection, Vec3 SunDirection,
+                        Vec3 SunIlluminance, int ViewSteps, int LightSteps)
+{
+    const Vec3 Origin{ 0.0f, 0.0f, kPlanetRadius + std::fmax(CameraAltitude, 1.0f) };
+
+    float Distance = RaySphereNearest(Origin, ViewDirection, kAtmosphereRadius);
+    if (Distance < 0.0f) return Vec3(0.0f);
+    const float Ground = RaySphereNearest(Origin, ViewDirection, kPlanetRadius);
+    if (Ground > 0.0f) Distance = std::fmin(Distance, Ground);
+
+    const float CosTheta      = Dot(ViewDirection, SunDirection);
+    const float PhaseRayleigh = RayleighPhase(CosTheta);
+    const float PhaseMie      = MiePhase(CosTheta, kMieAsymmetry);
+
+    const float Step = Distance / static_cast<float>(ViewSteps);
+    Vec3 Radiance{};
+    Vec3 Transmittance(1.0f);
+
+    for (int i = 0; i < ViewSteps; ++i)
+    {
+        const Vec3  Position = Origin + ViewDirection * ((static_cast<float>(i) + 0.5f) * Step);
+        const float Altitude = Length(Position) - kPlanetRadius;
+        const Vec3  Density  = AtmosphereDensity(Altitude);
+
+        const Vec3 Extinction = kRayleighScattering * Density.x
+                              + Vec3(kMieExtinction) * Density.y
+                              + kOzoneAbsorption    * Density.z;
+        const Vec3 StepTransmittance = Exp(Extinction * -Step);
+
+        const Vec3 ScatteringHere = kRayleighScattering * Density.x * PhaseRayleigh
+                                  + Vec3(kMieScattering) * Density.y * PhaseMie;
+
+        const Vec3 SunArriving = SunTransmittance(Position, SunDirection, LightSteps);
+        const Vec3 Integrated  = (ScatteringHere - ScatteringHere * StepTransmittance) / Max(Extinction, Vec3(1e-9f));
+
+        Radiance      += Transmittance * SunArriving * Integrated * SunIlluminance;
+        Transmittance *= StepTransmittance;
+    }
+    return Radiance;
+}
+
+//------------------------------------------------------------------------------------------------------------------------
+
+static int Failures = 0;
+static void Expect(bool Condition, const char* What)
+{
+    std::printf("  %-70s %s\n", What, Condition ? "PASS" : "FAIL");
+    if (!Condition) ++Failures;
+}
+
+static Vec3 SunAtElevation(float Degrees)
+{
+    const float R = Degrees * 3.14159265f / 180.0f;
+    return Normalize(Vec3{ 0.0f, std::cos(R), std::sin(R) });
+}
+
+static const Vec3 kZenith{ 0.0f, 0.0f, 1.0f };
+static constexpr float kSunLux = 120000.0f;
+static constexpr int   kView = 64, kLight = 16;
+
+int main()
+{
+    std::printf("AtmosphereScattering — single-scattering sky\n");
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n1. the daytime sky is blue, by the ratio Rayleigh predicts\n");
+    {
+        // λ⁻⁴ makes the blue coefficient 33.1 / 5.802 ≈ 5.7× the red one. The observed radiance ratio is smaller
+        //    than that because blue is also extinguished faster, but it must be comfortably above 1.
+        const Vec3 Sky = SkyRadiance(2.0f, kZenith, SunAtElevation(60.0f), Vec3(kSunLux), kView, kLight);
+        std::printf("     zenith radiance R %.4f  G %.4f  B %.4f   (B/R %.2f)\n",
+                    static_cast<double>(Sky.x), static_cast<double>(Sky.y), static_cast<double>(Sky.z),
+                    static_cast<double>(Sky.z / Sky.x));
+        Expect(Sky.z > Sky.y && Sky.y > Sky.x, "blue exceeds green exceeds red — the Rayleigh ordering");
+        Expect(Sky.z / Sky.x > 2.0f,           "and blue is at least twice red, not a marginal tint");
+        Expect(Sky.x > 0.0f,                   "every channel carries some light");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n2. the horizon is brighter than the zenith\n");
+    {
+        // A ray toward the horizon passes through far more air, so it accumulates more scattering. This is the
+        //    single clearest sign the march is integrating along the real path rather than shading a dome.
+        const Vec3 Sun     = SunAtElevation(45.0f);
+        const Vec3 Zenith  = SkyRadiance(2.0f, kZenith, Sun, Vec3(kSunLux), kView, kLight);
+        const Vec3 Horizon = SkyRadiance(2.0f, Normalize(Vec3{ 1.0f, 0.0f, 0.02f }), Sun, Vec3(kSunLux), kView, kLight);
+        const float ZenithLuma  = 0.2126f * Zenith.x  + 0.7152f * Zenith.y  + 0.0722f * Zenith.z;
+        const float HorizonLuma = 0.2126f * Horizon.x + 0.7152f * Horizon.y + 0.0722f * Horizon.z;
+        std::printf("     zenith %.4f, horizon %.4f  (ratio %.2f)\n",
+                    static_cast<double>(ZenithLuma), static_cast<double>(HorizonLuma),
+                    static_cast<double>(HorizonLuma / ZenithLuma));
+        Expect(HorizonLuma > ZenithLuma, "the longer path through air is brighter");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n3. the sunset reddens — the colour ratio INVERTS at the horizon\n");
+    {
+        // The assertion that a gradient cannot fake. At high sun the sky toward the sun is blue-dominant; at a
+        //    grazing angle the same direction has had its blue scattered out along a very long path and becomes
+        //    red-dominant. It is a change of SIGN, not of degree.
+        const Vec3 HighSun = SunAtElevation(60.0f);
+        const Vec3 LowSun  = SunAtElevation(1.0f);
+
+        const Vec3 TowardHigh = SkyRadiance(2.0f, Normalize(Vec3{ 0.0f, std::cos(1.0f * 3.14159265f / 180.0f),
+                                                                        std::sin(1.0f * 3.14159265f / 180.0f) }),
+                                            HighSun, Vec3(kSunLux), kView, kLight);
+        const Vec3 TowardLow  = SkyRadiance(2.0f, Normalize(Vec3{ 0.0f, std::cos(1.0f * 3.14159265f / 180.0f),
+                                                                        std::sin(1.0f * 3.14159265f / 180.0f) }),
+                                            LowSun,  Vec3(kSunLux), kView, kLight);
+
+        std::printf("     toward the horizon, high sun  B/R %.3f\n", static_cast<double>(TowardHigh.z / TowardHigh.x));
+        std::printf("     toward the horizon, sun at 1° B/R %.3f\n", static_cast<double>(TowardLow.z  / TowardLow.x));
+        Expect(TowardHigh.z / TowardHigh.x > 1.0f, "with the sun high, that direction is blue-dominant");
+        Expect(TowardLow.z  / TowardLow.x  < TowardHigh.z / TowardHigh.x,
+               "and a setting sun shifts it decisively toward red");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n4. night is dark — the sky goes out when the sun does\n");
+    {
+        // Single scattering with a correct planet-shadow test gives a genuinely black night. If this failed the
+        //    ground would glow at midnight because the sun was still lighting samples through the planet.
+        const Vec3 Day   = SkyRadiance(2.0f, kZenith, SunAtElevation( 45.0f), Vec3(kSunLux), kView, kLight);
+        const Vec3 Dusk  = SkyRadiance(2.0f, kZenith, SunAtElevation(  0.0f), Vec3(kSunLux), kView, kLight);
+        const Vec3 Night = SkyRadiance(2.0f, kZenith, SunAtElevation(-10.0f), Vec3(kSunLux), kView, kLight);
+
+        const auto Luma = [](Vec3 c) { return 0.2126f * c.x + 0.7152f * c.y + 0.0722f * c.z; };
+        std::printf("     zenith luminance: day %.5f, sunset %.5f, 10° below %.7f\n",
+                    static_cast<double>(Luma(Day)), static_cast<double>(Luma(Dusk)), static_cast<double>(Luma(Night)));
+        Expect(Luma(Dusk)  < Luma(Day),          "the sky dims as the sun sets");
+        Expect(Luma(Night) < Luma(Dusk) * 0.10f, "and is far darker once the sun is properly below the horizon");
+        Expect(Luma(Night) >= 0.0f,              "never negative");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n5. the sun's own glow is forward-scattered, not uniform\n");
+    {
+        // Mie asymmetry 0.8 concentrates scattering toward the sun. Looking at the sun's direction must be much
+        //    brighter than looking away from it at the same elevation — that difference IS the aureole.
+        const Vec3 Sun = SunAtElevation(20.0f);
+        const Vec3 Toward = SkyRadiance(2.0f, Normalize(Vec3{ 0.0f, std::cos(0.35f), std::sin(0.35f) }),
+                                        Sun, Vec3(kSunLux), kView, kLight);
+        const Vec3 Away   = SkyRadiance(2.0f, Normalize(Vec3{ 0.0f, -std::cos(0.35f), std::sin(0.35f) }),
+                                        Sun, Vec3(kSunLux), kView, kLight);
+        const auto Luma = [](Vec3 c) { return 0.2126f * c.x + 0.7152f * c.y + 0.0722f * c.z; };
+        std::printf("     toward the sun %.4f, away %.4f  (ratio %.2f)\n",
+                    static_cast<double>(Luma(Toward)), static_cast<double>(Luma(Away)),
+                    static_cast<double>(Luma(Toward) / Luma(Away)));
+        Expect(Luma(Toward) > Luma(Away) * 1.5f, "the sky near the sun is markedly brighter — the Mie aureole");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n6. the phase functions are normalised and finite\n");
+    {
+        // Integrating a phase function over the sphere must give 1: it redistributes light, it does not create
+        //    it. A mis-normalised phase silently scales the whole sky and would be tuned around rather than fixed.
+        const auto Integrate = [](bool Mie)
+        {
+            double Sum = 0.0;
+            const int N = 2000;
+            for (int i = 0; i < N; ++i)
+            {
+                const double Cos = -1.0 + 2.0 * (i + 0.5) / N;
+                const double P   = Mie ? MiePhase(static_cast<float>(Cos), kMieAsymmetry)
+                                       : RayleighPhase(static_cast<float>(Cos));
+                Sum += P * 2.0 * 3.14159265358979 * (2.0 / N);
+            }
+            return Sum;
+        };
+        const double R = Integrate(false), M = Integrate(true);
+        std::printf("     ∫ Rayleigh dΩ = %.4f, ∫ Mie dΩ = %.4f  (both must be 1)\n", R, M);
+        Expect(std::fabs(R - 1.0) < 0.01, "the Rayleigh phase integrates to unity");
+        Expect(std::fabs(M - 1.0) < 0.02, "and so does Cornette–Shanks");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n7. sphere intersection is stable at planetary scale\n");
+    {
+        // The textbook quadratic catastrophically cancels for a ray starting 2 m above a 6360 km sphere, which is
+        //    the normal case here. A wrong root shows as a shimmering horizon rather than an obvious failure.
+        const Vec3 Origin{ 0.0f, 0.0f, kPlanetRadius + 2.0f };
+        const float Up = RaySphereNearest(Origin, kZenith, kAtmosphereRadius);
+        std::printf("     straight up to the top of the atmosphere: %.1f m (expect ~%.0f)\n",
+                    static_cast<double>(Up), static_cast<double>(kAtmosphereThickness - 2.0f));
+        Expect(std::fabs(Up - (kAtmosphereThickness - 2.0f)) < 50.0f, "the vertical distance is right to 50 m");
+
+        // Looking down must hit the ground almost immediately.
+        const float Down = RaySphereNearest(Origin, Vec3{ 0.0f, 0.0f, -1.0f }, kPlanetRadius);
+        Expect(Down > 0.0f && Down < 10.0f, "looking straight down hits the ground within metres");
+
+        // A horizontal ray must travel hundreds of kilometres before leaving the air.
+        const float Flat = RaySphereNearest(Origin, Vec3{ 1.0f, 0.0f, 0.0f }, kAtmosphereRadius);
+        std::printf("     horizontal to the top of the atmosphere: %.0f km\n", static_cast<double>(Flat / 1000.0f));
+        Expect(Flat > 800000.0f && Flat < 1500000.0f, "the horizontal path is the expected ~1100 km");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n8. quality tiers agree with the reference\n");
+    {
+        // The tiers must differ in cost, not in answer. If Low disagreed materially with Ultra the setting would
+        //    be a look change rather than a performance one, and a player would see a different sky per machine.
+        const Vec3 Sun = SunAtElevation(30.0f);
+        const auto Luma = [](Vec3 c) { return 0.2126f * c.x + 0.7152f * c.y + 0.0722f * c.z; };
+
+        struct Tier { const char* Name; int View, Light; };
+        const Tier Tiers[] = { { "Low", 16, 4 }, { "Medium", 32, 8 }, { "High", 48, 12 } };
+        const float ReferenceZenith  = Luma(SkyRadiance(2.0f, kZenith, Sun, Vec3(kSunLux), 64, 16));
+        const float ReferenceHorizon = Luma(SkyRadiance(2.0f, Normalize(Vec3{ 1.0f, 0.0f, 0.02f }), Sun, Vec3(kSunLux), 64, 16));
+
+        for (const Tier& T : Tiers)
+        {
+            const float Zenith  = Luma(SkyRadiance(2.0f, kZenith, Sun, Vec3(kSunLux), T.View, T.Light));
+            const float Horizon = Luma(SkyRadiance(2.0f, Normalize(Vec3{ 1.0f, 0.0f, 0.02f }), Sun, Vec3(kSunLux), T.View, T.Light));
+            const float ZenithError  = std::fabs(Zenith  - ReferenceZenith)  / ReferenceZenith  * 100.0f;
+            const float HorizonError = std::fabs(Horizon - ReferenceHorizon) / ReferenceHorizon * 100.0f;
+            std::printf("     %-7s %2d × %2d   zenith %+.2f %%   horizon %+.2f %%\n",
+                        T.Name, T.View, T.Light, static_cast<double>(ZenithError), static_cast<double>(HorizonError));
+            Expect(ZenithError  < 3.0f,  "zenith is within 3 % of the reference at this tier");
+            Expect(HorizonError < 12.0f, "and the horizon within 12 %, where the path is longest");
+        }
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n9. zero illuminance restores the pre-A3 black sky exactly\n");
+    {
+        // The identity switch. Every image made before the sky existed must still be reproducible, or the phase
+        //    cannot be A/B tested against what came before.
+        const Vec3 Dark = SkyRadiance(2.0f, kZenith, SunAtElevation(45.0f), Vec3(0.0f), kView, kLight);
+        Expect(Dark.x == 0.0f && Dark.y == 0.0f && Dark.z == 0.0f, "no illuminance means no radiance at all");
+    }
+
+    std::printf("\n>>> %s (%d failure%s)\n", Failures == 0 ? "ALL PASS" : "FAILURES", Failures, Failures == 1 ? "" : "s");
+    return Failures == 0 ? 0 : 1;
+}

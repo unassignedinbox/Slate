@@ -484,6 +484,13 @@ int main(int argc, char** argv)
     float BrowserLuminaire = 32.0f;
     bool  BrowserTemporal = true, BrowserSpatial = true, BrowserAlias = true, BrowserDenoise = true;
     bool  BrowserPointerDown = false, BrowserPointerWasDown = false, BrowserCoversPointer = false;
+    // A3 sky mirrors. Sliders speak float, so the quality enum rides as a float and is rounded on copy-back.
+    float BrowserSkyQuality = 2.0f, BrowserSunLux = 120000.0f, BrowserAltitude = 2.0f;
+    float BrowserTimeOfDay  = 12.0f, BrowserClockRate = 0.0f, BrowserLatitude = 45.0f;
+    char  BrowserSunElevationText[32]  = "-";
+    char  BrowserSunAzimuthText[32]    = "-";
+    char  BrowserMoonPhaseText[32]     = "-";
+    char  BrowserMoonElevationText[32] = "-";
     // Written inside the ImGui frame, read on the NEXT frame's camera gate: the gate runs before the frame that
     //    would answer it, so a same-frame read is impossible. One frame of lag on "is the cursor over the panel"
     //    is invisible, whereas flying the camera because the answer was not yet available is not.
@@ -575,11 +582,31 @@ int main(int argc, char** argv)
                     break;
 
                 case RowSky:
+                    Heading("Atmosphere");
+                    Slider("Quality",   &BrowserSkyQuality, 0.0f, 4.0f, "", 0u);   // Off … Ultra
+                    Slider("Sun lux",   &BrowserSunLux,     0.0f, 200000.0f, "lx", 0u);
+                    Slider("Altitude",  &BrowserAltitude,   0.0f, 10000.0f, "m", 0u);
+                    Readout("Model", "single scattering (A3)");
+                    break;
+
                 case RowSun:
+                    Heading("Clock");
+                    // Time of day is the authoritative quantity; elevation and azimuth are read back from it
+                    //    rather than being separately settable, so the two can never disagree.
+                    Slider("Time of day", &BrowserTimeOfDay, 0.0f, 24.0f, "h", 2u);
+                    Slider("Rate",        &BrowserClockRate, 0.0f, 3600.0f, "x", 0u);
+                    Heading("Position");
+                    Readout("Elevation", BrowserSunElevationText);
+                    Readout("Azimuth",   BrowserSunAzimuthText);
+                    Heading("Site");
+                    Slider("Latitude",  &BrowserLatitude,  -90.0f, 90.0f, "d", 1u);
+                    break;
+
                 case RowMoon:
-                    Heading(Tree.QueryType(Row.TypeOrdinal).Label);
-                    Readout("Status", "not implemented yet");
-                    Readout("Phase",  "sky and atmosphere is the next ladder");
+                    Heading("Moon");
+                    Readout("Phase",     BrowserMoonPhaseText);
+                    Readout("Elevation", BrowserMoonElevationText);
+                    Readout("Status",    "not yet a light source (A7)");
                     break;
 
                 case RowFolder:
@@ -1046,6 +1073,26 @@ int main(int argc, char** argv)
             BrowserAlias      = Cfg.AliasPick;
             BrowserDenoise    = Cfg.Denoise;
 
+            // A3 sky. Read-only rows are formatted here rather than in the builder so the builder stays a pure
+            //    description of the panel with no formatting state of its own.
+            BrowserSkyQuality = static_cast<float>(static_cast<uint32_t>(Cfg.SkyQuality));
+            BrowserSunLux     = Cfg.SunIlluminance;
+            BrowserAltitude   = Cfg.CameraAltitude;
+            BrowserClockRate  = static_cast<float>(Integrator.Celestial().QueryRate());
+            {
+                const Frontier::CelestialConfiguration& Site = Integrator.Celestial().QueryConfiguration();
+                BrowserLatitude = static_cast<float>(Site.LatitudeRadians * 180.0 / 3.14159265358979);
+                BrowserTimeOfDay = static_cast<float>(Integrator.Celestial().QuerySolarDayFraction(
+                                       Integrator.Celestial().QueryTime()) * 24.0);
+
+                const Frontier::HorizonDirection Sun  = Integrator.Celestial().QuerySunDirection();
+                const Frontier::HorizonDirection Moon = Integrator.Celestial().QueryMoonDirection();
+                std::snprintf(BrowserSunElevationText,  sizeof(BrowserSunElevationText),  "%+.1f deg", Sun.Elevation  * 180.0 / 3.14159265358979);
+                std::snprintf(BrowserSunAzimuthText,    sizeof(BrowserSunAzimuthText),    "%.1f deg",  Sun.Azimuth    * 180.0 / 3.14159265358979);
+                std::snprintf(BrowserMoonElevationText, sizeof(BrowserMoonElevationText), "%+.1f deg", Moon.Elevation * 180.0 / 3.14159265358979);
+                std::snprintf(BrowserMoonPhaseText,     sizeof(BrowserMoonPhaseText),     "%.0f %% lit", Integrator.Celestial().QueryMoonPhase() * 100.0);
+            }
+
             Browser.Advance(Δτ);
 
             // Drain the keyboard stream into whichever field has focus. Edit keys first, then characters: an
@@ -1148,6 +1195,35 @@ int main(int argc, char** argv)
             Integrator.AssignDenoise(BrowserDenoise);
 
             if (Camera.QueryFlightSpeed() != BrowserCameraSpeed) Camera.AssignFlightSpeed(BrowserCameraSpeed);
+
+            // A3 sky copy-back. Each setter is a no-op when unchanged, so merely hovering a slider never
+            //    restarts the accumulated image.
+            Integrator.AssignSkyQuality(static_cast<Frontier::SkyQualityCategory>(
+                static_cast<uint32_t>(BrowserSkyQuality + 0.5f)));
+            Integrator.AssignSunIlluminance(BrowserSunLux);
+
+            {
+                Frontier::CelestialConfiguration Site = Integrator.Celestial().QueryConfiguration();
+                const double WantLatitude = static_cast<double>(BrowserLatitude) * 3.14159265358979 / 180.0;
+                if (Site.LatitudeRadians != WantLatitude)
+                {
+                    Site.LatitudeRadians = WantLatitude;
+                    Integrator.Celestial().AssignConfiguration(Site);
+                }
+                Integrator.Celestial().AssignRate(static_cast<double>(BrowserClockRate));
+
+                // Dragging the time slider sets the clock directly. Comparing against the CURRENT fraction rather
+                //    than a remembered slider value means a running clock does not fight the user's drag: the
+                //    slider only writes when it genuinely differs from where time already is.
+                const double NowFraction  = Integrator.Celestial().QuerySolarDayFraction(Integrator.Celestial().QueryTime());
+                const double WantFraction = static_cast<double>(BrowserTimeOfDay) / 24.0;
+                if (std::fabs(NowFraction - WantFraction) > 1.0 / (24.0 * 60.0))   // one minute of slack
+                {
+                    const double Day = Integrator.Celestial().QueryConfiguration().DayLengthSeconds;
+                    const double Whole = std::floor(Integrator.Celestial().QueryTime() / Day);
+                    Integrator.Celestial().AssignTime((Whole + WantFraction) * Day);
+                }
+            }
         }
 
         // ④ Build dispatch configuration from live camera + integrator state (camera motion restarts accumulation)
@@ -1158,6 +1234,10 @@ int main(int argc, char** argv)
         const float    FixedFactor  = FixedRenderHeight > 0u ? std::min(1.0f, static_cast<float>(FixedRenderHeight) / static_cast<float>(std::max(1u, Surface.QueryHeight()))) : 1.0f;
         const uint32_t RenderWidth  = std::max(1u, static_cast<uint32_t>(static_cast<float>(Surface.QueryWidth())  * RenderScale * FixedFactor + 0.5f));
         const uint32_t RenderHeight = std::max(1u, static_cast<uint32_t>(static_cast<float>(Surface.QueryHeight()) * RenderScale * FixedFactor + 0.5f));
+        // A3 — advance the sky's clock. This is the ONLY place time moves; every sun, moon and star position is
+        //    derived from it, so there is nothing else to keep in step.
+        Integrator.Celestial().Advance(Δτ);
+
         Integrator.ObserveCamera(Camera, RenderWidth, RenderHeight);
         if (Telemetry.QueryRows().ShowScene)
         {

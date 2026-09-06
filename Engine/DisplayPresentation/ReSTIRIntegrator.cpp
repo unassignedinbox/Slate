@@ -44,8 +44,22 @@ void ReSTIRIntegrator::ObserveCamera(const ProjectZero::FlyThroughSolver& Camera
     const bool Turned  = ForwardDelta.LengthSquared() > DirectionTolerance * DirectionTolerance;
     const bool Resized = ViewportWidth != HistoryWidth || ViewportHeight != HistoryHeight;
 
-    if (Moved || Turned || Resized)
+    // A3 ⚠️ A MOVING SUN INVALIDATES THE HISTORY TOO. The camera can be perfectly still while the sky changes
+    //    underneath it, and accumulating across that blends two different skies — a sunset would smear into a
+    //    long grey dissolve and read as a denoiser fault rather than a stale history. The threshold is angular
+    //    so a paused clock costs nothing: 0.0001 rad is roughly a twentieth of the sun's own diameter, well
+    //    below what a frame can show, so a slow day/night cycle still accumulates between steps.
+    const HorizonDirection Sun = Sky.QuerySunDirection();
+    const float SunX = static_cast<float>(Sun.East), SunY = static_cast<float>(Sun.North), SunZ = static_cast<float>(Sun.Zenith);
+    const float SunDelta = (SunX - HistorySunX) * (SunX - HistorySunX)
+                         + (SunY - HistorySunY) * (SunY - HistorySunY)
+                         + (SunZ - HistorySunZ) * (SunZ - HistorySunZ);
+    constexpr float SunTolerance = 1e-4f;   // [rad] chord ≈ angle for small angles
+    const bool SunMoved = SunDelta > SunTolerance * SunTolerance;
+
+    if (Moved || Turned || Resized || SunMoved)
     {
+        HistorySunX = SunX; HistorySunY = SunY; HistorySunZ = SunZ;
         HistoryOrigin  = Origin;
         HistoryForward = Forward;
         HistoryWidth   = ViewportWidth;
@@ -104,6 +118,23 @@ DispatchConfiguration ReSTIRIntegrator::BuildDispatch(
                                    | (ActiveConfiguration.AliasPick          ? DispatchFeatureAliasPick          : 0u)
                                    | (ActiveConfiguration.TemporalReprojection ? DispatchFeatureTemporalReprojection : 0u)
                                    | (ActiveConfiguration.Denoise            ? DispatchFeatureDenoise            : 0u);
+
+    // A3 sky. The direction comes from the celestial clock, which is the single authoritative source — the
+    //    integrator never stores a sun of its own, or two would eventually disagree.
+    const HorizonDirection Sun = Sky.QuerySunDirection();
+    Dispatch.SunDirectionX = static_cast<float>(Sun.East);
+    Dispatch.SunDirectionY = static_cast<float>(Sun.North);
+    Dispatch.SunDirectionZ = static_cast<float>(Sun.Zenith);
+
+    const SkyStepCounts Steps = QuerySkySteps(ActiveConfiguration.SkyQuality);
+    Dispatch.SkyViewSteps  = Steps.View;
+    Dispatch.SkyLightSteps = Steps.Light;
+    Dispatch.SkyPadding    = 0u;
+    Dispatch.CameraAltitude = ActiveConfiguration.CameraAltitude;
+    // Quality Off zeroes the illuminance, which is what the shader tests — one condition rather than two that
+    //    could disagree about whether the sky is on.
+    Dispatch.SunIlluminance = (ActiveConfiguration.SkyQuality == SkyQualityCategory::Off)
+                            ? 0.0f : ActiveConfiguration.SunIlluminance;
 
     return Dispatch;
 }

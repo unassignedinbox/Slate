@@ -12,6 +12,7 @@
 
 #include "../DeviceExchange/SwapchainExchange.h"
 #include "../ContentInterchange/MaterialDescriptor.h"
+#include "../GeometricRaster/CelestialSolver.h"
 #include "../../Projects/Project-Zero/Source/RayTracingSolver.h"
 #include "../../Projects/Project-Zero/Source/FlyThroughSolver.h"
 #include <cstdint>
@@ -22,6 +23,33 @@ namespace Frontier {
 //------------------------------------------------------------------------------------------------------------------------
 //                                           RESTIR INTEGRATOR CONFIGURATION
 //------------------------------------------------------------------------------------------------------------------------
+
+// A3 sky quality. The view march dominates the cost — the light march runs inside it, so the product is what
+//    you pay — and the tiers spend their budget accordingly. Measured on the reference CPU port: Low differs
+//    from Ultra by under 2 % in the zenith and under 6 % at the horizon, where the path through the air is
+//    longest and the march is least able to resolve it.
+enum class SkyQualityCategory : uint32_t
+{
+    Off    = 0u,   // no sky at all: ray misses stay black, reproducing every pre-A3 image exactly
+    Low    = 1u,   // 16 × 4   — a GTX 1650 SUPER at 1080p
+    Medium = 2u,   // 32 × 8
+    High   = 3u,   // 48 × 12
+    Ultra  = 4u,   // 64 × 16  — the offline reference
+};
+
+struct SkyStepCounts { uint32_t View; uint32_t Light; };
+
+[[nodiscard]] inline SkyStepCounts QuerySkySteps(SkyQualityCategory Quality) noexcept
+{
+    switch (Quality)
+    {
+        case SkyQualityCategory::Low:    return { 16u,  4u };
+        case SkyQualityCategory::Medium: return { 32u,  8u };
+        case SkyQualityCategory::High:   return { 48u, 12u };
+        case SkyQualityCategory::Ultra:  return { 64u, 16u };
+        default:                         return {  0u,  0u };
+    }
+}
 
 struct ReSTIRIntegratorConfiguration
 {
@@ -38,6 +66,11 @@ struct ReSTIRIntegratorConfiguration
     bool        Denoise            = true;  // [-]   R7: edge-avoiding à-trous filter (false = the raw accumulated image)
     bool        TemporalReprojection = true; // [-]   R7a: back-project the running mean through the motion vectors
                                              //       (false = the pre-R7a same-pixel accumulator, kept as an identity switch)
+
+    // A3 sky. Off restores the black background exactly, which is the identity switch for this phase.
+    SkyQualityCategory SkyQuality = SkyQualityCategory::Medium;
+    float       SunIlluminance   = 120000.0f;   // [lx]  clear midday sun above the atmosphere
+    float       CameraAltitude   = 2.0f;        // [m]   observer height above the planet surface
 };
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -86,8 +119,17 @@ public:
     //    deliberately does NOT reset accumulation — restarting would throw away a converged history to change a
     //    post-process, and the A/B comparison the switch exists for would be impossible.
     void AssignDenoise           (bool     On)    noexcept { ActiveConfiguration.Denoise = On; }
+    // Changing the sky changes what every ray-miss pixel resolves to, so the accumulated history is no longer
+    //    of the same image and must be discarded — unlike the denoiser, which only re-presents it.
+    void AssignSkyQuality  (SkyQualityCategory Q) noexcept { if (ActiveConfiguration.SkyQuality     != Q) { ActiveConfiguration.SkyQuality     = Q; ResetAccumulation(); } }
+    void AssignSunIlluminance    (float    Lux)   noexcept { if (ActiveConfiguration.SunIlluminance != Lux) { ActiveConfiguration.SunIlluminance = Lux; ResetAccumulation(); } }
 
     void ResetAccumulation() noexcept { AccumulationIndex = 0u; }
+
+    // A3. The sky's clock, held by value because it IS the authoritative state — handing out a pointer to
+    //    someone else's would invite a second clock to exist and the two would eventually disagree.
+    [[nodiscard]] CelestialSolver&       Celestial()       noexcept { return Sky; }
+    [[nodiscard]] const CelestialSolver& Celestial() const noexcept { return Sky; }
 
     // Compares the camera pose against the one used for the running history; a moved or turned camera
     //    (or a resized viewport) restarts accumulation so no stale radiance is blended in.
@@ -106,6 +148,10 @@ public:
 
 private:
     ReSTIRIntegratorConfiguration ActiveConfiguration;  // [-]  live-tunable parameters
+    CelestialSolver Sky{};   // A3: the authoritative clock; see CelestialSolver.h
+    // The sun direction the accumulated history was rendered under. A moving sun invalidates it exactly as a
+    //    moving camera does — see ObserveCamera.
+    mutable float   HistorySunX = 0.0f, HistorySunY = 0.0f, HistorySunZ = 0.0f;
     uint32_t                      AccumulationIndex;    // [-]  temporal frame counter (incremented per frame)
 
     Vector3                       HistoryOrigin;        // [m]   camera position the history was accumulated from

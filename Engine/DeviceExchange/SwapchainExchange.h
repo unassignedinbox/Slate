@@ -103,6 +103,18 @@ struct DispatchConfiguration
     uint32_t AlphaMaskedMaterialCount;                             // [-]   R4b: materials with MaterialFlagAlphaMask (0 = any-hit shadow rays); was TriangleCount, unused by the kernel
     uint32_t LuminaireTriangleCount;                               // [-]   emissive triangles for DI sampling
     uint32_t FeatureFlags;                                         // [bit] DispatchFeature bits
+
+    // ── A3 sky ───────────────────────────────────────────────────────────────────────────────────────────────────
+    // 32 bytes, exactly the headroom left in Vulkan's guaranteed 128-byte push block. Anything further needs a
+    //    uniform buffer, so the LUT handles in A2 will go there rather than here.
+    float    SunDirectionX;                                        // [-]   toward the sun, unit, world space (Z-up)
+    float    SunDirectionY;
+    float    SunDirectionZ;
+    float    SunIlluminance;                                       // [lx]  direct beam above the atmosphere; 0 = no sky
+    float    CameraAltitude;                                       // [m]   observer height above the planet surface
+    uint32_t SkyViewSteps;                                         // [-]   quality tier: samples along the view ray
+    uint32_t SkyLightSteps;                                        // [-]   quality tier: samples toward the sun
+    uint32_t SkyPadding;                                           // [-]   keeps the block 16-byte aligned
 };
 
 // Bits of DispatchConfiguration::FeatureFlags — mirror kFeature* in ReSTIRViewport.slang.
@@ -119,8 +131,10 @@ enum DispatchFeature : uint32_t
 };
 
 // Mirrors `layout(push_constant) uniform ReSTIRConstants` in Engine/Shaders/ReSTIRViewport.slang.
-//    vec3 + float pairs pack to 16 bytes each (4 × 16) followed by 8 uints (32) = 96 bytes.
-static_assert(sizeof(DispatchConfiguration) == 96u, "DispatchConfiguration must match the shader push-constant block (96 bytes)");
+//    vec3 + float pairs pack to 16 bytes each (4 × 16) followed by 8 uints (32) = 96, plus A3's sky block (32).
+//    128 bytes is the minimum every Vulkan implementation must offer, so this is now exactly full: anything
+//    further has to become a uniform buffer, which is where A2's LUT handles will go.
+static_assert(sizeof(DispatchConfiguration) == 128u, "DispatchConfiguration must match the shader push-constant block (128 bytes)");
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                  SWAPCHAIN EXCHANGE
