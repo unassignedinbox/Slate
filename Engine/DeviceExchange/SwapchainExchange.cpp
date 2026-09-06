@@ -50,6 +50,9 @@ namespace Frontier {
 static constexpr uint32_t kCycleSlotCount  = 2u;
 static constexpr uint32_t kLocalGroupSizeX = 16u;
 static constexpr uint32_t kLocalGroupSizeY = 16u;
+// AtrousDenoise.slang declares 8×8, not the kernel's 16×16. Kept beside them so the difference is visible: they
+//    are different shaders and a dispatch must use the size of the shader it is actually dispatching.
+static constexpr uint32_t kDenoiseGroupSize = 8u;
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                              VULKAN RECORD DEFINITION
@@ -384,8 +387,11 @@ bool SwapchainExchange::Bring() noexcept
         { "BringStorageImage",     &SwapchainExchange::BringStorageImage     },
         { "BringCommandRecording", &SwapchainExchange::BringCommandRecording },
         { "BringComputePipeline",  &SwapchainExchange::BringComputePipeline  },
-        { "BringDescriptorSet",    &SwapchainExchange::BringDescriptorSet    },
+        // ⚠️ The denoiser must be brought up BEFORE BringDescriptorSet: that stage ends by calling
+        //     WriteDescriptorSet(), which is also what populates the denoiser's per-level sets. With the order
+        //     reversed the sets existed but were never written, so the filter sampled unbound images.
         { "BringDenoisePipeline",  &SwapchainExchange::BringDenoisePipeline  },
+        { "BringDescriptorSet",    &SwapchainExchange::BringDescriptorSet    },
         { "BringCycleSlots",       &SwapchainExchange::BringCycleSlots       },
         { "BringImGui",            &SwapchainExchange::BringImGui            },
         { "BringVisibility",       &SwapchainExchange::BringVisibility       },
@@ -2257,6 +2263,9 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
         //     Each level reads what the previous one wrote, so they are strictly ordered by a barrier.
         if ((Dispatch.FeatureFlags & DispatchFeatureDenoise) != 0u && Vulkan->DenoisePipeline)
         {
+            const uint32_t DenoiseGroupX = (RenderWidth  + kDenoiseGroupSize - 1u) / kDenoiseGroupSize;
+            const uint32_t DenoiseGroupY = (RenderHeight + kDenoiseGroupSize - 1u) / kDenoiseGroupSize;
+
             vkCmdBindPipeline(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Vulkan->DenoisePipeline);
 
             for (uint32_t Level = 0u; Level < kDenoiseLevelCount; ++Level)
@@ -2292,7 +2301,9 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
                                    0u, sizeof(Push), &Push);
                 vkCmdBindDescriptorSets(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Vulkan->DenoisePipelineLayout,
                                         0u, 1u, &Vulkan->DenoiseSets[Level], 0u, nullptr);
-                vkCmdDispatch(Command, GroupX, GroupY, 1u);
+                // ⚠️ The filter's workgroup is 8×8, NOT the kernel's 16×16. Reusing the kernel's group count here
+                //     covered only half the width and half the height — exactly the top-left quarter of the image.
+                vkCmdDispatch(Command, DenoiseGroupX, DenoiseGroupY, 1u);
             }
         }
     }

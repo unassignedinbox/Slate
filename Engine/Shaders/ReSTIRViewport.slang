@@ -675,10 +675,16 @@ void ResolveSurface(uvec2 pixel, vec3 radiance, vec3 normal, float depth)
     float luma = Luminance(radiance);
     moments   += (vec2(luma, luma * luma) - moments) / count;
     // Clamped at zero: with one sample the estimator is exactly zero and float error can push it slightly negative.
-    float variance = max(moments.y - moments.x * moments.x, 0.0);
-    // A single sample carries no information about its own spread. Reporting the luminance itself as the standard
-    //    deviation keeps the filter maximally permissive on brand-new pixels (disocclusions), which is exactly
-    //    where the most smoothing is needed.
+    float sampleVariance = max(moments.y - moments.x * moments.x, 0.0);
+
+    // ⚠️ The image being filtered is the MEAN of n samples, not one sample, so the noise the filter must reason
+    //    about is the variance OF THE MEAN — the sample variance divided by n. Handing it the raw sample variance
+    //    reports a noise level that never falls as the estimate converges, so the filter stays maximally
+    //    permissive forever and keeps blurring an image that no longer needs it.
+    float variance = sampleVariance / count;
+
+    // A single sample carries no information about its own spread. Reporting its luminance squared keeps the
+    //    filter permissive on brand-new pixels (disocclusions), which is exactly where smoothing is needed most.
     if (count < 2.0) variance = luma * luma;
 
     imageStore(HistoryImage,     ivec2(pixel), vec4(mean, count));

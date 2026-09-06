@@ -436,6 +436,95 @@ int main()
         Expect(FinalWriteSlot == 1, "five levels finish in slot 1");
     }
 
+    //--------------------------------------------------------------------------------------------------------------
+    std::printf("\n11. the dispatch covers every pixel\n");
+    {
+        // This is the check that would have caught the shipped bug. The filter's workgroup is 8x8 while the ReSTIR
+        //    kernel's is 16x16; the dispatch loop originally reused the kernel's group count, so the filter ran
+        //    over only half the width and half the height and tone-mapped exactly the top-left quarter of the
+        //    image, leaving the rest of the presentation image never written.
+        const uint32_t DenoiseGroup = 8u;   // must equal local_size in AtrousDenoise.slang
+        const uint32_t KernelGroup  = 16u;  // ReSTIRViewport.slang
+
+        struct Case { uint32_t Width, Height; };
+        const Case Cases[] = { { 1280u, 720u }, { 1920u, 1080u }, { 640u, 360u }, { 1u, 1u }, { 1279u, 719u } };
+
+        bool AllCovered = true;
+        bool KernelCountWouldFail = false;
+        for (const Case& C : Cases)
+        {
+            const uint32_t GroupX = (C.Width  + DenoiseGroup - 1u) / DenoiseGroup;
+            const uint32_t GroupY = (C.Height + DenoiseGroup - 1u) / DenoiseGroup;
+            if (GroupX * DenoiseGroup < C.Width || GroupY * DenoiseGroup < C.Height) AllCovered = false;
+
+            // And confirm the WRONG derivation really does leave pixels unwritten, so this test has teeth.
+            const uint32_t WrongX = (C.Width + KernelGroup - 1u) / KernelGroup;
+            if (WrongX * DenoiseGroup < C.Width) KernelCountWouldFail = true;
+        }
+        Expect(AllCovered, "8x8 groups derived from the filter's own size cover the whole image");
+        Expect(KernelCountWouldFail, "and reusing the kernel's 16x16 group count would NOT (the shipped bug)");
+
+        // Spell out the exact reported case.
+        const uint32_t WrongWidth  = ((1280u + 15u) / 16u) * 8u;
+        const uint32_t WrongHeight = ((720u  + 15u) / 16u) * 8u;
+        std::printf("     1280x720 with the kernel's group count covers %ux%u - the top-left quarter\n",
+                    WrongWidth, WrongHeight);
+        Expect(WrongWidth == 640u && WrongHeight == 360u, "which is exactly the quarter-render that was reported");
+    }
+
+    //--------------------------------------------------------------------------------------------------------------
+    std::printf("\n12. the filter fades out as the estimate converges\n");
+    {
+        // The kernel reports var(mean) = sample_variance / n, NOT the raw sample variance. That division is what
+        //    makes the denoiser back off: with many samples the reported noise is tiny, the luminance weight
+        //    becomes discriminating, and a converged image is left alone. Shipping the sample variance instead
+        //    reports a noise level that never falls, so the filter blurs a settled image forever — the muddy
+        //    patches and lost contact detail seen on hardware.
+        const float SampleVariance = 0.25f;   // the spread of ONE sample, constant as n grows
+        const float Truth          = 0.5f;
+
+        // A converged surface carrying a real feature: a step that is small in absolute terms but many standard
+        //    errors wide once n is large.
+        const auto MeasureContrast = [&](float Count)
+        {
+            Image Picture; Picture.Allocate(Size, Size);
+            for (int Y = 0; Y < Size; ++Y)
+            for (int X = 0; X < Size; ++X)
+            {
+                const size_t I = Picture.At(X, Y);
+                const float V = X < Size / 2 ? Truth + 0.05f : Truth - 0.05f;
+                Picture.Red[I] = Picture.Green[I] = Picture.Blue[I] = V;
+                Picture.Variance[I] = SampleVariance / Count;      // the corrected estimator
+            }
+            const Image Clean = Denoise(Picture, Levels, Settings);
+            return RegionMean(Clean, Size / 2 - 3, 8, Size / 2, Size - 8)
+                 - RegionMean(Clean, Size / 2, 8, Size / 2 + 3, Size - 8);
+        };
+
+        const float Few  = MeasureContrast(4.0f);      // barely started: noise dominates, blur it
+        const float Many = MeasureContrast(1024.0f);   // converged: the step is real, keep it
+        std::printf("     feature contrast at n=4 %.4f, at n=1024 %.4f (true 0.100)\n", Few, Many);
+
+        Expect(Many > Few,   "more samples means less filtering of the same feature");
+        Expect(Many > 0.09f, "a converged image keeps its detail instead of being blurred away");
+
+        // And the uncorrected estimator would NOT back off: same n, but reporting the raw sample variance.
+        Image Raw; Raw.Allocate(Size, Size);
+        for (int Y = 0; Y < Size; ++Y)
+        for (int X = 0; X < Size; ++X)
+        {
+            const size_t I = Raw.At(X, Y);
+            const float V = X < Size / 2 ? Truth + 0.05f : Truth - 0.05f;
+            Raw.Red[I] = Raw.Green[I] = Raw.Blue[I] = V;
+            Raw.Variance[I] = SampleVariance;          // the bug: never falls with n
+        }
+        const Image RawClean = Denoise(Raw, Levels, Settings);
+        const float RawContrast = RegionMean(RawClean, Size / 2 - 3, 8, Size / 2, Size - 8)
+                                - RegionMean(RawClean, Size / 2, 8, Size / 2 + 3, Size - 8);
+        std::printf("     with the raw sample variance: %.4f\n", RawContrast);
+        Expect(RawContrast < Many * 0.5f, "the uncorrected estimator really does blur the feature away");
+    }
+
     std::printf("\n>>> %s (%d failure%s)\n", Failures == 0 ? "ALL PASS" : "FAILURES", Failures, Failures == 1 ? "" : "s");
     return Failures == 0 ? 0 : 1;
 }

@@ -74,7 +74,33 @@ grep -q 'AtrousDenoise' CMakeLists.txt \
 grep -q 'AtrousDenoise' Projects/Project-Zero/Build/ToolchainSequence.ps1 \
     || { echo "  AtrousDenoise.slang is not in the Windows shader table"; Fail=1; }
 
-[ "$Fail" = "0" ] && echo "  constants, weights and wiring agree                              PASS"
+# The kernel must report the variance OF THE MEAN (sample variance / n), not the raw sample variance: the image
+# being filtered is a mean of n samples, and without the division the reported noise never falls, so the filter
+# keeps blurring a converged image.
+grep -q 'sampleVariance / count' Engine/Shaders/ReSTIRViewport.slang \
+    || { echo "  kernel does not divide the sample variance by the sample count"; Fail=1; }
+
+# ── Dispatch coverage ────────────────────────────────────────────────────────────────────────────────────────────
+# The filter's workgroup size must match what the dispatch derives its group count from. Reusing the ReSTIR
+# kernel's 16x16 count for an 8x8 shader covered exactly the top-left quarter of the image.
+ShaderGroup=$(grep -oP 'local_size_x = \K[0-9]+' Engine/Shaders/AtrousDenoise.slang)
+CppGroup=$(grep -oP 'kDenoiseGroupSize\s*=\s*\K[0-9]+' Engine/DeviceExchange/SwapchainExchange.cpp)
+[ -n "$CppGroup" ] || { echo "  kDenoiseGroupSize is not defined"; Fail=1; }
+[ "$ShaderGroup" = "$CppGroup" ] \
+    || { echo "  filter workgroup is $ShaderGroup but the dispatch uses $CppGroup"; Fail=1; }
+grep -q 'vkCmdDispatch(Command, DenoiseGroupX, DenoiseGroupY' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  the denoise dispatch does not use its own group count"; Fail=1; }
+
+# The denoiser's descriptor sets are populated by WriteDescriptorSet(), which BringDescriptorSet() calls at the end
+# of its own stage — so the pipeline must be brought up FIRST or the sets are never written.
+DenoiseLine=$(grep -n '"BringDenoisePipeline"' Engine/DeviceExchange/SwapchainExchange.cpp | head -1 | cut -d: -f1)
+SetLine=$(grep -n '"BringDescriptorSet"'   Engine/DeviceExchange/SwapchainExchange.cpp | head -1 | cut -d: -f1)
+if [ -n "$DenoiseLine" ] && [ -n "$SetLine" ] && [ "$DenoiseLine" -gt "$SetLine" ]; then
+    echo "  BringDenoisePipeline runs after BringDescriptorSet - its sets would never be written"
+    Fail=1
+fi
+
+[ "$Fail" = "0" ] && echo "  constants, weights, wiring and dispatch coverage agree           PASS"
 [ "$Fail" = "0" ] || exit 1
 
 if [ ! -x "$Glslang" ]; then
