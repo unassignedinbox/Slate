@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Slate — Scene Browser (design proof)</title>
+<title>Slate — World Browser (design proof)</title>
 <style>
   /* ══════════════════════════════════════════════════════════════════════════════════════════════════════════
-     SCENE BROWSER — design proof for the engine-side InterfaceOutlinerSequence.
+     WORLD BROWSER — design proof for the engine-side InterfaceOutlinerSequence.
      Tokens are lifted verbatim from References/UIComponents.html so the C++ renderer has one source of truth.
      Layout follows OutlinerV2: [ tree | details ] with a whole-card slide to per-object properties.
      ══════════════════════════════════════════════════════════════════════════════════════════════════════════ */
@@ -43,24 +43,24 @@
   .iconbtn.on{background:var(--accent);color:#000;}
 
   .view-wrap{flex:1;overflow:hidden;min-height:0;}
-  .view-track{display:flex;width:200%;height:100%;transition:transform .34s var(--ease);}
-  .view{flex:0 0 50%;height:100%;display:flex;min-width:0;}
+  .view{height:100%;display:flex;min-width:0;}
 
+  /* One page. The split is animated by flex-basis so either side can take the whole card without a
+     navigation step — no separate properties screen, no back button. */
   .tree-pane{flex:0 0 54%;min-width:0;display:flex;flex-direction:column;border-right:1px solid var(--stroke);
-    transition:flex-basis .32s var(--ease),border-color .32s var(--ease);}
+    transition:flex-basis .32s var(--ease),border-color .32s var(--ease),opacity .22s var(--ease);}
   .det-pane{flex:1;min-width:0;display:flex;flex-direction:column;overflow-y:auto;scrollbar-width:none;
-    padding:14px 18px 16px;transition:opacity .22s var(--ease);}
+    padding:14px 18px 16px;transition:opacity .22s var(--ease),padding .32s var(--ease);}
   .det-pane::-webkit-scrollbar{display:none;}
-  .view.compact .tree-pane{flex-basis:100%;border-right-color:transparent;}
-  .view.compact .det-pane{opacity:0;pointer-events:none;}
+
+  .view.only-tree  .tree-pane{flex-basis:100%;border-right-color:transparent;}
+  .view.only-tree  .det-pane {opacity:0;pointer-events:none;padding-left:0;padding-right:0;flex-basis:0;}
+  .view.only-props .tree-pane{flex-basis:0;opacity:0;pointer-events:none;border-right-color:transparent;}
+  .view.only-props .det-pane {flex:1;}
 
   .sec-label{font-size:10px;letter-spacing:1.6px;color:var(--text-faint);text-transform:uppercase;padding:14px 20px 8px;
     display:flex;align-items:center;gap:8px;}
   .filter-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:0 20px 12px;}
-  .chip{height:26px;padding:0 12px;border:none;border-radius:var(--r-pill);cursor:pointer;background:var(--field);
-    color:var(--text-dim);font-size:11.5px;font-weight:600;transition:all .16s var(--ease);}
-  .chip:hover{color:var(--text);}
-  .chip.on{background:var(--accent);color:#000;}
 
   .tree{flex:1;overflow-y:auto;padding:0 12px 10px;scrollbar-width:none;}
   .tree::-webkit-scrollbar{display:none;}
@@ -88,13 +88,43 @@
   .prow{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
   .prow:last-child{margin-bottom:0;}
   .prow .pl{flex:0 0 84px;font-size:11.5px;color:var(--text-dim);}
-  .vec{display:flex;gap:6px;flex:1;}
-  .vfield{flex:1;background:var(--field);border-radius:8px;height:30px;display:flex;align-items:center;
-    padding:0 8px;gap:6px;font-size:11.5px;border:1px solid transparent;transition:border-color .15s var(--ease);}
+  /* axis fields — .vpill geometry with the axis letter in the leading cell (ControlKit::ValuePill inverted:
+     the label cell leads instead of trailing, because X/Y/Z reads better before the number). */
+  .vec{display:flex;gap:6px;flex:1;min-width:0;}
+  .vfield{flex:1;min-width:0;height:32px;display:flex;border-radius:var(--r-pill);overflow:hidden;
+    border:1px solid var(--stroke);transition:border-color .15s var(--ease);}
   .vfield:hover{border-color:var(--stroke-strong);}
-  .vfield .ax{font-weight:700;font-size:10px;}
+  .vfield:focus-within{border-color:var(--hi);}
+  .vfield .ax{width:26px;flex:0 0 26px;background:var(--inset);border-right:1px solid var(--stroke);
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;}
   .vfield.x .ax{color:var(--ax-x);} .vfield.y .ax{color:var(--ax-y);} .vfield.z .ax{color:var(--ax-z);}
-  .vfield input{background:none;border:none;color:var(--text);font-size:11.5px;width:100%;outline:none;font-family:inherit;}
+  .vfield .num{flex:1;min-width:0;background:var(--field);display:flex;align-items:center;padding:0 8px;}
+  .vfield input{background:none;border:none;color:var(--text);font-size:12px;width:100%;outline:none;
+    font-family:inherit;font-variant-numeric:tabular-nums;}
+  .vfield input:disabled{color:var(--text-faint);}
+
+  /* dropdown — UIComponents .dd / .dd-btn / .dd-menu, verbatim geometry */
+  .dd{position:relative;min-width:0;}
+  .dd-btn{display:flex;align-items:stretch;height:34px;border-radius:var(--r-pill);overflow:hidden;
+    border:1px solid var(--stroke);cursor:pointer;}
+  .dd-btn .cur{flex:1;background:var(--field);display:flex;align-items:center;padding:0 14px;font-size:12.5px;
+    font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .dd-btn .caret{width:36px;background:var(--inset);border-left:1px solid var(--stroke);display:flex;
+    align-items:center;justify-content:center;color:var(--text-dim);transition:background .15s var(--ease);}
+  .dd-btn:hover .caret{background:var(--raised);}
+  .dd-btn .caret svg{transition:transform .2s var(--ease);}
+  .dd.open .caret svg{transform:rotate(180deg);}
+  .dd-menu{position:absolute;top:calc(100% + 8px);left:0;right:0;z-index:40;background:var(--field);
+    border:1px solid var(--stroke-strong);border-radius:18px;padding:6px;display:none;flex-direction:column;
+    gap:2px;box-shadow:0 24px 60px rgba(0,0,0,.75);min-width:190px;}
+  .dd.open .dd-menu{display:flex;}
+  .dd-menu .opt{padding:8px 12px;border-radius:var(--r-pill);cursor:pointer;color:var(--text-dim);font-size:12.5px;
+    font-weight:500;display:flex;align-items:center;gap:9px;transition:background .12s var(--ease),color .12s var(--ease);}
+  .dd-menu .opt:hover{background:#141414;color:var(--text);}
+  .dd-menu .opt.sel{color:var(--text);background:#181818;}
+  .dd-menu .opt .tick{width:14px;flex:0 0 14px;display:grid;place-items:center;opacity:0;}
+  .dd-menu .opt.sel .tick{opacity:1;}
+  .dd-menu .sep{height:1px;background:var(--stroke);margin:4px 8px;}
   /* switch — UIComponents verbatim: 46 x 26, knob 20, on = accent fill + #111 knob */
   .switch{width:46px;height:26px;border-radius:var(--r-pill);flex-shrink:0;cursor:pointer;
     background:var(--raised);border:1px solid var(--stroke);position:relative;transition:background .18s var(--ease);}
@@ -103,19 +133,22 @@
   .switch[data-on="true"]{background:var(--accent);}
   .switch[data-on="true"]::after{transform:translateX(20px);background:#111;}
 
-  /* slider — UIComponents verbatim: 28 px pill track, 26 px thumb, filled left side.
-     .thin is the quiet variant for dense property panels (10 px / 18 px). */
-  input[type=range].slider{appearance:none;-webkit-appearance:none;outline:none;flex:1;min-width:80px;
-    height:28px;border-radius:var(--r-pill);cursor:pointer;border:none;
-    background:linear-gradient(to right,#7a7a7a 50%,var(--raised) 50%);}
-  input[type=range].slider::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:26px;height:26px;
-    border-radius:50%;background:#e0e0e0;border:none;transition:transform .12s var(--ease);}
-  input[type=range].slider::-moz-range-thumb{width:26px;height:26px;border-radius:50%;background:#e0e0e0;border:none;}
-  input[type=range].slider:active::-webkit-slider-thumb{transform:scale(1.1);}
-  input[type=range].slider.thin{height:10px;}
-  input[type=range].slider.thin::-webkit-slider-thumb{width:18px;height:18px;}
-  input[type=range].slider.thin::-moz-range-thumb{width:18px;height:18px;}
-  input[type=range].slider.hi{background:linear-gradient(to right,var(--hi) 50%,var(--raised) 50%);}
+  /* slider — matches ControlKit::Slider, which is the authority. The C++ fills the left side with
+     FillRectangle(..., R = TrackH * 0.5), i.e. the fill is itself a PILL, not a hard-edged gradient stop.
+     A CSS linear-gradient cannot round its own end, so the track is built from real elements instead. */
+  .kslider{flex:1;min-width:90px;height:28px;position:relative;cursor:pointer;touch-action:none;}
+  .kslider .track{position:absolute;inset:0;border-radius:var(--r-pill);background:var(--raised);}
+  .kslider .kfill{position:absolute;left:0;top:0;height:100%;border-radius:var(--r-pill);background:#7a7a7a;
+    min-width:28px;}
+  .kslider.hi .kfill{background:var(--hi);}
+  .kslider .knob{position:absolute;top:50%;width:26px;height:26px;border-radius:50%;background:#e0e0e0;
+    transform:translate(-50%,-50%);transition:transform .12s var(--ease);}
+  .kslider.drag .knob{transform:translate(-50%,-50%) scale(1.1);}
+  /* .thin — the quiet variant for dense property panels: 10 px track, 18 px thumb */
+  .kslider.thin{height:18px;}
+  .kslider.thin .track{top:4px;bottom:4px;}
+  .kslider.thin .kfill{top:4px;height:10px;min-width:18px;}
+  .kslider.thin .knob{width:18px;height:18px;}
 
   /* value pill — UIComponents .vpill, 118 px: number cell + 44 px unit cell */
   .vpill{width:118px;height:32px;flex:0 0 118px;display:flex;border-radius:var(--r-pill);overflow:hidden;
@@ -151,22 +184,23 @@
 <body>
 <div class="card">
   <div class="card-head">
-    <button class="iconbtn" id="btnBack" style="display:none" title="Back">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-           stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
-    <div><div class="h-title" id="hTitle">Scene Browser</div>
+    <div><div class="h-title" id="hTitle">World Browser</div>
          <div class="h-sub" id="hSub">Cornell Box · 8 objects</div></div>
     <div class="spacer"></div>
-    <button class="iconbtn" id="btnCompact" title="Compact — tree only">
+    <!-- One page, two collapsible sides. Either pane can be given the whole card; there is no separate
+         properties screen to navigate to and back from. -->
+    <button class="iconbtn" id="btnOnlyTree" title="Outliner only">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-           stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
-    <button class="iconbtn props" id="btnProps" title="Properties">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-           stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></button>
+           stroke-linecap="round"><path d="M4 6h10M4 12h10M4 18h10"/><path d="M18 4v16" opacity=".35"/></svg></button>
+    <button class="iconbtn on" id="btnSplit" title="Split — outliner and properties">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round"><rect x="3" y="4" width="7" height="16" rx="1.5"/><rect x="14" y="4" width="7" height="16" rx="1.5"/></svg></button>
+    <button class="iconbtn" id="btnOnlyProps" title="Properties only">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round"><path d="M6 4v16" opacity=".35"/><path d="M10 6h10M10 12h10M10 18h10"/></svg></button>
   </div>
 
-  <div class="view-wrap"><div class="view-track" id="viewTrack">
-    <!-- view 0 -->
+  <div class="view-wrap">
     <div class="view" id="mainView">
       <div class="tree-pane">
         <div class="sec-label">Outliner</div>
@@ -179,14 +213,19 @@
           </div>
           <span class="hitcount" id="hitcount"></span>
         </div>
-        <div class="filter-row" id="filters"></div>
+        <div class="filter-row">
+          <div class="dd" id="ddFilter">
+            <div class="dd-btn"><div class="cur" id="ddCur">All types</div>
+              <div class="caret"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div>
+            <div class="dd-menu" id="ddMenu"></div>
+          </div>
+        </div>
         <div class="tree" id="tree"></div>
       </div>
       <div class="det-pane" id="details"></div>
     </div>
-    <!-- view 1 -->
-    <div class="view"><div style="flex:1;overflow-y:auto;padding:14px 20px 16px;scrollbar-width:none" id="props"></div></div>
-  </div></div>
+  </div>
 
   <div class="card-foot"><span id="footSel">1 selected</span><div class="spacer"></div>
     <span>InterfaceOutlinerSequence · design proof</span></div>
@@ -261,21 +300,25 @@ const mark=name=>{
   return name.slice(0,i)+'<mark>'+name.slice(i,i+query.length)+'</mark>'+name.slice(i+query.length);
 };
 
-/* ── view slide ────────────────────────────────────────────────────────────────────────────── */
-const track=document.getElementById('viewTrack'), mainView=document.getElementById('mainView');
+/* ── layout modes ──────────────────────────────────────────────────────────────────────────── */
+const mainView=document.getElementById('mainView');
 const hT=document.getElementById('hTitle'), hS=document.getElementById('hSub');
-const bBack=document.getElementById('btnBack'), bProps=document.getElementById('btnProps'), bComp=document.getElementById('btnCompact');
-function viewTo(i){
-  track.style.transform=`translateX(-${i*50}%)`;
-  const n=cur();
-  if(i===1&&n){ hT.textContent=n.name; hS.textContent=LABEL[n.type]+' Properties';
-    bBack.style.display=''; bComp.style.display='none'; bProps.style.display='none'; renderProps(); }
-  else{ hT.textContent='Scene Browser'; hS.textContent='Cornell Box · '+flat.filter(x=>x.type!=='folder').length+' objects';
-    bBack.style.display='none'; bComp.style.display=''; bProps.style.display=''; }
+const MODES={'only-tree':'btnOnlyTree','split':'btnSplit','only-props':'btnOnlyProps'};
+let mode='split';
+function setMode(m){
+  mode=m;
+  mainView.classList.remove('only-tree','only-props');
+  if(m!=='split') mainView.classList.add(m);
+  Object.entries(MODES).forEach(([k,id])=>document.getElementById(id).classList.toggle('on',k===m));
+  updateHeader();
 }
-bProps.onclick=()=>{ if(cur()) viewTo(1); };
-bBack.onclick=()=>viewTo(0);
-bComp.onclick=()=>{ const on=mainView.classList.toggle('compact'); bComp.classList.toggle('on',on); };
+function updateHeader(){
+  const n=cur();
+  if(mode==='only-props'&&n){ hT.textContent=n.name; hS.textContent=LABEL[n.type]+' Properties'; }
+  else{ hT.textContent='World Browser';
+        hS.textContent='Cornell Box · '+flat.filter(x=>x.type!=='folder').length+' objects'; }
+}
+Object.entries(MODES).forEach(([k,id])=>document.getElementById(id).onclick=()=>setMode(k));
 
 /* ── tree ──────────────────────────────────────────────────────────────────────────────────── */
 const treeEl=document.getElementById('tree');
@@ -304,8 +347,7 @@ function renderTree(){
       e.stopPropagation(); const a=b.dataset.a;
       if(a==='vis')n.vis=!n.vis; if(a==='lock')n.locked=!n.locked; if(a==='dyn')n.dynamic=!n.dynamic;
       renderTree(); renderDetails();});
-    row.onclick=()=>{selId=n.id;renderTree();renderDetails();};
-    row.ondblclick=()=>{selId=n.id;viewTo(1);};
+    row.onclick=()=>{selId=n.id;renderTree();renderDetails();updateHeader();};
     treeEl.appendChild(row);
     if(open) build(n.kids);
   });
@@ -316,47 +358,79 @@ function renderTree(){
   document.getElementById('clrSearch').style.display=query?'grid':'none';
   document.getElementById('footSel').textContent=(selId?1:0)+' selected';
 }
+const FILTER_TYPES=['Mesh','Light','Camera','Sky','Sun','Moon'];
 function renderFilters(){
-  const f=document.getElementById('filters');
-  f.innerHTML='';
-  ['Mesh','Light','Camera','Sky','Sun'].forEach(t=>{
-    const b=document.createElement('button');
-    b.className='chip'+(filters.has(t)?' on':''); b.textContent=t;
-    b.onclick=()=>{filters.has(t)?filters.delete(t):filters.add(t);renderFilters();renderTree();};
-    f.appendChild(b);
+  const menu=document.getElementById('ddMenu'), cur=document.getElementById('ddCur');
+  const tick='<span class="tick"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+           + ' stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m4 12 6 6L20 6"/></svg></span>';
+  menu.innerHTML=
+    `<div class="opt ${filters.size?'':'sel'}" data-all="1">${tick}All types</div><div class="sep"></div>`
+    + FILTER_TYPES.map(t=>`<div class="opt ${filters.has(t)?'sel':''}" data-t="${t}">${tick}
+        <span style="display:grid;place-items:center;width:14px">${S(P[t.toLowerCase()]||P.cube,COL[t.toLowerCase()],13)}</span>${t}</div>`).join('');
+  cur.textContent = !filters.size ? 'All types'
+    : filters.size===1 ? [...filters][0] : `${filters.size} types`;
+  menu.querySelectorAll('.opt').forEach(o=>o.onclick=e=>{
+    e.stopPropagation();
+    if(o.dataset.all) filters.clear();
+    else { const t=o.dataset.t; filters.has(t)?filters.delete(t):filters.add(t); }
+    renderFilters(); renderTree();
   });
 }
+document.getElementById('ddFilter').addEventListener('click',e=>{
+  if(e.target.closest('.dd-menu')) return;
+  document.getElementById('ddFilter').classList.toggle('open');
+});
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#ddFilter')) document.getElementById('ddFilter').classList.remove('open');
+});
 
 /* ── shared property blocks ────────────────────────────────────────────────────────────────── */
 const vec=(n,key,label,dis)=>`<div class="prow"><span class="pl">${label}</span><div class="vec">
   ${['x','y','z'].map((a,i)=>`<div class="vfield ${a}"><span class="ax">${a.toUpperCase()}</span>
-  <input value="${n[key][i].toFixed(2)}" ${dis?'disabled':''}></div>`).join('')}</div></div>`;
+  <span class="num"><input value="${n[key][i].toFixed(2)}" ${dis?'disabled':''}></span></div>`).join('')}</div></div>`;
 const sw=(label,on)=>`<div class="prow"><span class="pl">${label}</span>
   <div class="switch" data-on="${on?'true':'false'}"></div></div>`;
 
 /* Kit slider: a real input[type=range] carrying .slider so it inherits the 28 px track / 26 px thumb rules
    verbatim, with the filled-left-side gradient recomputed on input. `.thin` is used in the dense property
    panels, matching how UIComponents describes the quiet variant. */
-const sl=(label,v,min,max,unit,step)=>{
-  const st=step||((max-min)/200);
-  return `<div class="prow"><span class="pl">${label}</span>
-    <input type="range" class="slider thin" min="${min}" max="${max}" step="${st}" value="${v}"
-           data-unit="${unit||''}">
+const sl=(label,v,min,max,unit,dec)=>
+  `<div class="prow"><span class="pl">${label}</span>
+    <div class="kslider thin" data-min="${min}" data-max="${max}" data-v="${v}" data-dec="${dec??((max-min)<=4?2:0)}">
+      <div class="track"></div><div class="kfill"></div><div class="knob"></div></div>
     <div class="vpill"><div class="num">${v}</div><div class="unit">${(unit||'').trim()||'—'}</div></div></div>`;
-};
 
-/* Paint the filled portion, exactly as UIComponents does for its own sliders. */
+/* Geometry mirrors ControlKit::Slider exactly: the thumb centre travels [half-thumb, width − half-thumb],
+   and the fill is a pill from the left edge to that centre — never a hard-edged gradient stop. */
 function paintSlider(el){
-  const t=(el.value-el.min)/(el.max-el.min)*100;
-  const lit=el.classList.contains('hi')?'var(--hi)':'#7a7a7a';
-  el.style.background=`linear-gradient(to right,${lit} ${t}%,var(--raised) ${t}%)`;
+  const min=+el.dataset.min, max=+el.dataset.max, v=+el.dataset.v, dec=+el.dataset.dec;
+  const t=(v-min)/(max-min);
+  const thumb=el.classList.contains('thin')?18:26;
+  const w=el.clientWidth||160;
+  const cx=thumb/2 + t*Math.max(w-thumb,1);
+  el.querySelector('.knob').style.left=cx+'px';
+  el.querySelector('.kfill').style.width=Math.max(cx,thumb)+'px';
   const pill=el.parentElement.querySelector('.vpill .num');
-  if(pill){ const d=(+el.step<1)?2:0; pill.textContent=(+el.value).toFixed(d); }
+  if(pill) pill.textContent=v.toFixed(dec);
 }
 function bindControls(root){
-  root.querySelectorAll('input[type=range].slider').forEach(el=>{
-    paintSlider(el);
-    el.addEventListener('input',()=>paintSlider(el));
+  root.querySelectorAll('.kslider').forEach(el=>{
+    requestAnimationFrame(()=>paintSlider(el));
+    const set=e=>{
+      const r=el.getBoundingClientRect();
+      const thumb=el.classList.contains('thin')?18:26;
+      const t=Math.min(1,Math.max(0,(e.clientX-r.left-thumb/2)/Math.max(r.width-thumb,1)));
+      const min=+el.dataset.min,max=+el.dataset.max;
+      el.dataset.v=(min+t*(max-min)).toFixed(4);
+      paintSlider(el);
+    };
+    el.addEventListener('pointerdown',e=>{
+      el.setPointerCapture(e.pointerId); el.classList.add('drag'); set(e);
+      const mv=ev=>set(ev);
+      const up=()=>{el.classList.remove('drag');el.removeEventListener('pointermove',mv);
+                    el.removeEventListener('pointerup',up);};
+      el.addEventListener('pointermove',mv); el.addEventListener('pointerup',up);
+    });
   });
   root.querySelectorAll('.switch').forEach(el=>{
     el.addEventListener('click',()=>el.dataset.on = el.dataset.on==='true'?'false':'true');
@@ -401,8 +475,6 @@ function renderDetails(){
     + bodyFor(n);
   bindControls(d);
 }
-function renderProps(){ const n=cur(); if(!n) return;
-  const el=document.getElementById('props'); el.innerHTML=bodyFor(n); bindControls(el); }
 
 /* ── boot ──────────────────────────────────────────────────────────────────────────────────── */
 const searchEl=document.getElementById('search');
@@ -412,7 +484,8 @@ document.getElementById('clrSearch').addEventListener('click',()=>{
   searchEl.value=''; query=''; renderTree(); searchEl.focus(); });
 
 reflat(); selId=flat.find(n=>n.name==='Sun').id;
-renderFilters(); renderTree(); renderDetails(); viewTo(0);
+renderFilters(); renderTree(); renderDetails(); setMode('split');
+addEventListener('resize',()=>document.querySelectorAll('.kslider').forEach(paintSlider));
 </script>
 </body>
 </html>
