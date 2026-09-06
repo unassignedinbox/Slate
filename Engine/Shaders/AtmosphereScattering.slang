@@ -207,4 +207,124 @@ vec3 SunDisc(float CameraAltitude, vec3 ViewDirection, vec3 SunDirection, vec3 S
     return SunTransmittance(Origin, SunDirection, LightSteps) * SunIlluminance / SolidAngle;
 }
 
+//------------------------------------------------------------------------------------------------------------------------
+//                                                    LOOKUP TABLES (A2)
+//------------------------------------------------------------------------------------------------------------------------
+// Two tables, both CONSTANT for a given atmosphere, so they are built once and only rebuilt when a parameter
+//    changes. They replace the two costs the A3 march pays per pixel:
+//
+//      Transmittance   — replaces SunTransmittance()'s inner march. That march runs LightSteps times inside
+//                        every one of ViewSteps samples, so removing it takes the per-pixel cost from a product
+//                        to a sum. This is where nearly all of A2's speed comes from.
+//      Multi-scattering— adds what single scattering physically cannot: light that bounced more than once.
+//                        Without it the sky away from the sun is too dark and twilight is black rather than blue.
+
+const uint kTransmittanceWidth  = 256u;   // [px] along cos(sun zenith)
+const uint kTransmittanceHeight = 64u;    // [px] along altitude
+const uint kMultiScatterSize    = 32u;    // [px] square, in the same two parameters
+
+// ── Parameterisation ────────────────────────────────────────────────────────────────────────────────────────
+// u ← cos(sun zenith), v ← altitude. Both are stored with a SQUARE-ROOT distribution in altitude: density falls
+//    exponentially with height, so a linear table spends most of its rows on thin air where nothing changes and
+//    starves the first kilometre where everything does.
+
+vec2 TransmittanceParameterisation(float Altitude, float CosSunZenith)
+{
+    const float H = clamp(Altitude / kAtmosphereThickness, 0.0, 1.0);
+    return vec2(clamp(CosSunZenith * 0.5 + 0.5, 0.0, 1.0), sqrt(H));
+}
+
+void TransmittanceInverse(vec2 Uv, out float Altitude, out float CosSunZenith)
+{
+    Altitude     = Uv.y * Uv.y * kAtmosphereThickness;
+    CosSunZenith = Uv.x * 2.0 - 1.0;
+}
+
+// ── Building ────────────────────────────────────────────────────────────────────────────────────────────────
+// Evaluated once per texel by the build kernel. Deliberately expensive — 64 steps — because it runs 16 384 times
+//    at bring-up rather than millions of times per frame.
+vec3 ComputeTransmittanceTexel(vec2 Uv)
+{
+    float Altitude, CosSunZenith;
+    TransmittanceInverse(Uv, Altitude, CosSunZenith);
+
+    const vec3  Origin    = vec3(0.0, 0.0, kPlanetRadius + Altitude);
+    const float SinZenith = sqrt(max(0.0, 1.0 - CosSunZenith * CosSunZenith));
+    const vec3  Direction = vec3(SinZenith, 0.0, CosSunZenith);
+
+    // A direction that meets the ground transmits nothing. Without this the table would report sunlight arriving
+    //    through the planet and the ground would glow at night.
+    if (RaySphereNearest(Origin, Direction, kPlanetRadius) > 0.0) return vec3(0.0);
+
+    const float ToSpace = RaySphereNearest(Origin, Direction, kAtmosphereRadius);
+    if (ToSpace <= 0.0) return vec3(1.0);
+    return exp(-OpticalDepth(Origin, Direction, ToSpace, 64));
+}
+
+// The isotropic multiple-scattering transfer factor, following Hillaire's geometric-series closure: light that
+//    scatters twice is treated as scattering isotropically thereafter, and the infinite series 1 + f + f² + …
+//    collapses to 1/(1−f). That closure is what makes this a 32×32 table instead of a 4-D integral.
+vec3 ComputeMultiScatterTexel(vec2 Uv, int Directions, int Steps)
+{
+    float Altitude, CosSunZenith;
+    TransmittanceInverse(Uv, Altitude, CosSunZenith);
+
+    const vec3  Origin    = vec3(0.0, 0.0, kPlanetRadius + Altitude);
+    const float SinZenith = sqrt(max(0.0, 1.0 - CosSunZenith * CosSunZenith));
+    const vec3  SunDirection = vec3(SinZenith, 0.0, CosSunZenith);
+
+    vec3 SecondOrder = vec3(0.0);   // L₂: light scattered once, gathered from every direction
+    vec3 Transfer    = vec3(0.0);   // f_ms: the fraction that goes on to scatter again
+
+    // A Fibonacci sphere: uniform on the sphere without the pole clustering a latitude/longitude sweep gives,
+    //    which would bias the gather toward straight up and down.
+    for (int i = 0; i < Directions; ++i)
+    {
+        const float Fraction  = (float(i) + 0.5) / float(Directions);
+        const float CosTheta  = 1.0 - 2.0 * Fraction;
+        const float SinTheta  = sqrt(max(0.0, 1.0 - CosTheta * CosTheta));
+        const float Phi       = float(i) * 2.39996323;      // the golden angle
+        const vec3  Ray       = vec3(SinTheta * cos(Phi), SinTheta * sin(Phi), CosTheta);
+
+        float Distance = RaySphereNearest(Origin, Ray, kAtmosphereRadius);
+        const float Ground = RaySphereNearest(Origin, Ray, kPlanetRadius);
+        if (Ground > 0.0) Distance = min(Distance, Ground);
+        if (Distance <= 0.0) continue;
+
+        const float Step = Distance / float(Steps);
+        vec3 RayTransmittance = vec3(1.0);
+
+        for (int j = 0; j < Steps; ++j)
+        {
+            const vec3  Position = Origin + Ray * (float(j) + 0.5) * Step;
+            const float H        = length(Position) - kPlanetRadius;
+            const vec3  Density  = AtmosphereDensity(H);
+
+            const vec3 Extinction = kRayleighScattering * Density.x
+                                  + vec3(kMieExtinction) * Density.y
+                                  + kOzoneAbsorption    * Density.z;
+            const vec3 Scattering = kRayleighScattering * Density.x + vec3(kMieScattering) * Density.y;
+            const vec3 StepTransmittance = exp(-Extinction * Step);
+            const vec3 Integrated = (Scattering - Scattering * StepTransmittance) / max(Extinction, vec3(1e-9));
+
+            // Isotropic: the phase function is deliberately omitted, because by the second bounce the light has
+            //    lost its directional memory. Including it here would double-count the forward lobe.
+            const vec3 SunArriving = SunTransmittance(Position, SunDirection, 16);
+            SecondOrder += RayTransmittance * SunArriving * Integrated * (1.0 / (4.0 * 3.14159265));
+            Transfer    += RayTransmittance * Integrated * (1.0 / (4.0 * 3.14159265));
+
+            RayTransmittance *= StepTransmittance;
+        }
+    }
+
+    const float Weight = 4.0 * 3.14159265 / float(Directions);
+    SecondOrder *= Weight;
+    Transfer    *= Weight;
+
+    // 1 + f + f² + … = 1/(1 − f). Clamped below 1 because a transfer of exactly 1 would be an atmosphere that
+    //    never absorbs anything and the series would diverge.
+    const vec3 Series = vec3(1.0) / max(vec3(1.0) - min(Transfer, vec3(0.999)), vec3(1e-4));
+    return SecondOrder * Series;
+}
+
 #endif // ATMOSPHERE_SCATTERING_SLANG

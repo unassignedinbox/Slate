@@ -120,6 +120,15 @@ struct SwapchainExchange::VulkanRecord
     VkSampler                TextureSampler        = VK_NULL_HANDLE;
     ResidentTexture          ShadingTables[2];                       // R4b: 0 = GGX energy (A, B, E_avg), 1 = LTC sheen (aInv, bInv, R) — RGBA32F 32×32
     VkSampler                TableSampler          = VK_NULL_HANDLE; // linear, clamp-to-edge, no mips
+    // A2: 0 = transmittance 256×64, 1 = multiple scattering 32×32. Both RGBA32F, both constant for a given
+    //    atmosphere, so they are built once at bring-up and rebuilt only when a parameter changes.
+    ResidentTexture          AtmosphereTables[2];
+    bool                     AtmosphereTablesBuilt = false;
+    VkPipeline               AtmosphereLutPipeline = VK_NULL_HANDLE;
+    VkPipelineLayout         AtmosphereLutLayout   = VK_NULL_HANDLE;
+    VkDescriptorSetLayout    AtmosphereLutSetLayout= VK_NULL_HANDLE;
+    VkDescriptorPool         AtmosphereLutPool     = VK_NULL_HANDLE;
+    VkDescriptorSet          AtmosphereLutSets[2]  = { VK_NULL_HANDLE, VK_NULL_HANDLE };
     bool                     DescriptorIndexing    = false;   // runtimeDescriptorArray + partially bound granted by the driver
     VkBuffer                 TraversalNodeBuffer   = VK_NULL_HANDLE;   // R3 CWBVH nodes (binding 8)
     VkDeviceMemory           TraversalNodeMemory   = VK_NULL_HANDLE;
@@ -392,6 +401,9 @@ bool SwapchainExchange::Bring() noexcept
         //     WriteDescriptorSet(), which is also what populates the denoiser's per-level sets. With the order
         //     reversed the sets existed but were never written, so the filter sampled unbound images.
         { "BringDenoisePipeline",  &SwapchainExchange::BringDenoisePipeline  },
+        // A2 before BringDescriptorSet for the same reason as the denoiser: that stage ends by calling
+        //    WriteDescriptorSet(), which is what binds these tables into the kernel's set.
+        { "BringAtmosphereTables", &SwapchainExchange::BringAtmosphereTables },
         { "BringDescriptorSet",    &SwapchainExchange::BringDescriptorSet    },
         { "BringCycleSlots",       &SwapchainExchange::BringCycleSlots       },
         { "BringImGui",            &SwapchainExchange::BringImGui            },
@@ -447,6 +459,17 @@ void SwapchainExchange::Retire() noexcept
         if (T.Image)  vkDestroyImage    (Vulkan->Device, T.Image, nullptr);
         if (T.Memory) vkFreeMemory      (Vulkan->Device, T.Memory, nullptr);
     }
+    for (VulkanRecord::ResidentTexture& T : Vulkan->AtmosphereTables)
+    {
+        if (T.View)   vkDestroyImageView(Vulkan->Device, T.View, nullptr);
+        if (T.Image)  vkDestroyImage    (Vulkan->Device, T.Image, nullptr);
+        if (T.Memory) vkFreeMemory      (Vulkan->Device, T.Memory, nullptr);
+        T = VulkanRecord::ResidentTexture{};
+    }
+    if (Vulkan->AtmosphereLutPipeline)  vkDestroyPipeline(Vulkan->Device, Vulkan->AtmosphereLutPipeline, nullptr);
+    if (Vulkan->AtmosphereLutLayout)    vkDestroyPipelineLayout(Vulkan->Device, Vulkan->AtmosphereLutLayout, nullptr);
+    if (Vulkan->AtmosphereLutSetLayout) vkDestroyDescriptorSetLayout(Vulkan->Device, Vulkan->AtmosphereLutSetLayout, nullptr);
+    if (Vulkan->AtmosphereLutPool)      vkDestroyDescriptorPool(Vulkan->Device, Vulkan->AtmosphereLutPool, nullptr);
     if (Vulkan->TableSampler)    vkDestroySampler(Vulkan->Device, Vulkan->TableSampler, nullptr);
     if (Vulkan->TraversalNodeBuffer) vkDestroyBuffer(Vulkan->Device, Vulkan->TraversalNodeBuffer, nullptr);
     if (Vulkan->TraversalNodeMemory) vkFreeMemory   (Vulkan->Device, Vulkan->TraversalNodeMemory, nullptr);
@@ -1105,11 +1128,11 @@ bool SwapchainExchange::BringComputePipeline() noexcept
     for (uint32_t B = 4u; B < kComputeBindingCount - 1u; ++B)
     {
         LayoutBindings[B].binding         = B;
-        LayoutBindings[B].descriptorType  = (B < 6u || B == 18u || B == 19u || B == 20u) ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : (B == 13u || B == 14u || B == 15u) ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;   // 18 R7a surface · 19/20 R7 moments + denoise input
+        LayoutBindings[B].descriptorType  = (B < 6u || B == 18u || B == 19u || B == 20u) ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : (B == 13u || B == 14u || B == 15u || B == 21u || B == 22u) ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;   // 18 R7a surface · 19/20 R7 moments + denoise input · 21/22 A2 atmosphere LUTs (sampled, so filtering interpolates between texels)
         LayoutBindings[B].descriptorCount = 1u;
         LayoutBindings[B].stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
     }
-    const uint32_t TextureBinding = kComputeBindingCount - 1u;   // 19 (must be the highest binding)
+    const uint32_t TextureBinding = kComputeBindingCount - 1u;   // 23 (must be the highest binding)
     LayoutBindings[TextureBinding].binding         = TextureBinding;
     LayoutBindings[TextureBinding].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     LayoutBindings[TextureBinding].descriptorCount = Vulkan->DescriptorIndexing ? kTextureSlotCapacity : 1u;
@@ -1203,6 +1226,115 @@ struct DenoisePushRecord
     uint32_t FinalLevel;       // [-]  1 = also tone-map into the presentation image
 };
 
+namespace {
+// Mirrors AtmosphereLutConstants in AtmosphereLut.slang.
+struct AtmosphereLutPushRecord
+{
+    uint32_t Width;        // [px]
+    uint32_t Height;       // [px]
+    uint32_t Target;       // 0 = transmittance, 1 = multiple scattering
+    uint32_t Directions;   // [cnt]
+    uint32_t Steps;        // [cnt]
+    uint32_t Padding0, Padding1, Padding2;
+};
+} // namespace
+
+// A2. Builds the two constant atmosphere tables. Everything here runs ONCE at bring-up — the tables do not
+//    depend on the camera, the frame, or anything that changes between frames, only on the atmosphere itself.
+bool SwapchainExchange::BringAtmosphereTables() noexcept
+{
+    // ① The two images. RGBA32F because transmittance spans several orders of magnitude between a vertical and
+    //    a grazing path, and an 8-bit or even 16-bit table would band visibly across the sunset.
+    const VkExtent2D Sizes[2] = { { kTransmittanceLutWidth, kTransmittanceLutHeight },
+                                  { kMultiScatterLutSize,   kMultiScatterLutSize } };
+    for (uint32_t I = 0u; I < 2u; ++I)
+    {
+        // STORAGE for the build kernel to write, SAMPLED for the frame kernel to read.
+        if (!CreateStorageImage(Vulkan->Device, Vulkan->MemoryProperties, VK_FORMAT_R32G32B32A32_SFLOAT, Sizes[I],
+                                VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                                Vulkan->AtmosphereTables[I].Image, Vulkan->AtmosphereTables[I].Memory,
+                                Vulkan->AtmosphereTables[I].View, "atmosphere table"))
+            return false;
+    }
+
+    // ② A one-binding set, allocated twice — once per table.
+    VkDescriptorSetLayoutBinding Binding{};
+    Binding.binding         = 0u;
+    Binding.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    Binding.descriptorCount = 1u;
+    Binding.stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
+
+    VkDescriptorSetLayoutCreateInfo LayoutInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+    LayoutInfo.bindingCount = 1u;
+    LayoutInfo.pBindings    = &Binding;
+    if (vkCreateDescriptorSetLayout(Vulkan->Device, &LayoutInfo, nullptr, &Vulkan->AtmosphereLutSetLayout) != VK_SUCCESS)
+        return false;
+
+    VkPushConstantRange PushRange{};
+    PushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    PushRange.size       = static_cast<uint32_t>(sizeof(AtmosphereLutPushRecord));
+
+    VkPipelineLayoutCreateInfo PipelineLayoutInfo{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+    PipelineLayoutInfo.setLayoutCount         = 1u;
+    PipelineLayoutInfo.pSetLayouts            = &Vulkan->AtmosphereLutSetLayout;
+    PipelineLayoutInfo.pushConstantRangeCount = 1u;
+    PipelineLayoutInfo.pPushConstantRanges    = &PushRange;
+    if (vkCreatePipelineLayout(Vulkan->Device, &PipelineLayoutInfo, nullptr, &Vulkan->AtmosphereLutLayout) != VK_SUCCESS)
+        return false;
+
+    VkDescriptorPoolSize PoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2u };
+    VkDescriptorPoolCreateInfo PoolInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
+    PoolInfo.maxSets       = 2u;
+    PoolInfo.poolSizeCount = 1u;
+    PoolInfo.pPoolSizes    = &PoolSize;
+    if (vkCreateDescriptorPool(Vulkan->Device, &PoolInfo, nullptr, &Vulkan->AtmosphereLutPool) != VK_SUCCESS) return false;
+
+    VkDescriptorSetLayout SetLayouts[2] = { Vulkan->AtmosphereLutSetLayout, Vulkan->AtmosphereLutSetLayout };
+    VkDescriptorSetAllocateInfo AllocateInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+    AllocateInfo.descriptorPool     = Vulkan->AtmosphereLutPool;
+    AllocateInfo.descriptorSetCount = 2u;
+    AllocateInfo.pSetLayouts        = SetLayouts;
+    if (vkAllocateDescriptorSets(Vulkan->Device, &AllocateInfo, Vulkan->AtmosphereLutSets) != VK_SUCCESS) return false;
+
+    for (uint32_t I = 0u; I < 2u; ++I)
+    {
+        VkDescriptorImageInfo ImageInfo{ VK_NULL_HANDLE, Vulkan->AtmosphereTables[I].View, VK_IMAGE_LAYOUT_GENERAL };
+        VkWriteDescriptorSet Write{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+        Write.dstSet          = Vulkan->AtmosphereLutSets[I];
+        Write.dstBinding      = 0u;
+        Write.descriptorCount = 1u;
+        Write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        Write.pImageInfo      = &ImageInfo;
+        vkUpdateDescriptorSets(Vulkan->Device, 1u, &Write, 0u, nullptr);
+    }
+
+    // ③ Pipeline. A missing SPIR-V is not fatal here, unlike the denoiser: without the tables the kernel simply
+    //    keeps using the A3 march, which is slower but correct.
+    const std::vector<uint32_t> Spirv = LoadSpirv("Engine/Shaders/AtmosphereLut.spv");
+    if (Spirv.empty())
+    {
+        std::cerr << "[SwapchainExchange] AtmosphereLut.spv missing - falling back to the per-pixel sky march.\n";
+        return true;
+    }
+
+    VkShaderModuleCreateInfo ModuleInfo{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
+    ModuleInfo.codeSize = Spirv.size() * 4u;
+    ModuleInfo.pCode    = Spirv.data();
+    VkShaderModule Module = VK_NULL_HANDLE;
+    if (vkCreateShaderModule(Vulkan->Device, &ModuleInfo, nullptr, &Module) != VK_SUCCESS) return false;
+
+    VkComputePipelineCreateInfo ComputeInfo{ VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO };
+    ComputeInfo.stage.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    ComputeInfo.stage.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
+    ComputeInfo.stage.module = Module;
+    ComputeInfo.stage.pName  = "main";
+    ComputeInfo.layout       = Vulkan->AtmosphereLutLayout;
+    const VkResult Created = vkCreateComputePipelines(Vulkan->Device, VK_NULL_HANDLE, 1u, &ComputeInfo, nullptr,
+                                                      &Vulkan->AtmosphereLutPipeline);
+    vkDestroyShaderModule(Vulkan->Device, Module, nullptr);
+    return Created == VK_SUCCESS;
+}
+
 bool SwapchainExchange::BringDenoisePipeline() noexcept
 {
     // ① Set layout: source, target, surface, presentation.
@@ -1295,7 +1427,7 @@ bool SwapchainExchange::BringDescriptorSet() noexcept
     PoolSizes[1].type            = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     PoolSizes[1].descriptorCount = 11u;                         // 1, 2, 6-12, 16-17
     PoolSizes[2].type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    PoolSizes[2].descriptorCount = 3u + (Vulkan->DescriptorIndexing ? kTextureSlotCapacity : 1u);   // R6: two LUTs + motion + the bindless table
+    PoolSizes[2].descriptorCount = 5u + (Vulkan->DescriptorIndexing ? kTextureSlotCapacity : 1u);   // 13/14 material LUTs · 15 motion · 21/22 A2 atmosphere LUTs · the bindless table
 
     VkDescriptorPoolCreateInfo PoolInfo{};
     PoolInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -1375,6 +1507,8 @@ void SwapchainExchange::WriteDescriptorSet() noexcept
     VkDescriptorBufferInfo IndexInfo    { static_cast<VkBuffer>(Visibility.QueryIndexBuffer()),  0u, VK_WHOLE_SIZE };   // R4b
     VkDescriptorImageInfo  EnergyInfo   { Vulkan->TableSampler, Vulkan->ShadingTables[0].View, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
     VkDescriptorImageInfo  SheenInfo    { Vulkan->TableSampler, Vulkan->ShadingTables[1].View, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+    VkDescriptorImageInfo  TransmittanceInfo{ Vulkan->TableSampler, Vulkan->AtmosphereTables[0].View, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+    VkDescriptorImageInfo  MultiScatterInfo { Vulkan->TableSampler, Vulkan->AtmosphereTables[1].View, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
     VkDescriptorImageInfo  MotionInfo   { Vulkan->TableSampler, static_cast<VkImageView>(Visibility.QueryMotionView()), VK_IMAGE_LAYOUT_GENERAL };   // R6: texelFetch only; linear sampler harmless
     // R6: prev = the buffer last frame wrote, curr = the one this frame writes (parity flips per presented frame).
     const uint32_t PrevSlot = Vulkan->ReservoirParity ? 1u : 0u;
@@ -1467,6 +1601,8 @@ void SwapchainExchange::WriteDescriptorSet() noexcept
     WriteImage (18u, HistorySurfaceInfo);   // R7a: history (normal, depth) for running-mean reprojection
     WriteImage (19u, MomentInfo);           // R7:  luminance moments, for the variance estimate
     WriteImage (20u, DenoiseInputInfo);     // R7:  linear radiance + variance, the à-trous input
+    WriteSampled(21u, TransmittanceInfo);   // A2:  sun survival; skipped until the table is built
+    WriteSampled(22u, MultiScatterInfo);    // A2:  multiple-scattering transfer factor
 
     // R4a: the texture table. Written in one go (partially bound: slots past the resident count stay undefined and are
     //    never indexed — the material records only reference resident slots).
@@ -2246,6 +2382,70 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
     Frame.RenderWidth  = RenderWidth;
     Frame.RenderHeight = RenderHeight;
     Visibility.RecordFrame(Command, Vulkan->ActiveSlot, Frame);
+
+    // ①c A2 — build the atmosphere tables. Once, before the first frame that needs them. They depend only on the
+    //     atmosphere's own parameters, so rebuilding per frame would be pure waste; the latch is what makes this
+    //     a bring-up cost rather than a running one.
+    if (!Vulkan->AtmosphereTablesBuilt && Vulkan->AtmosphereLutPipeline)
+    {
+        // GENERAL for the build kernel's storage writes. The frame kernel samples them, so they are transitioned
+        //    to SHADER_READ_ONLY afterwards and never touched again.
+        std::array<VkImageMemoryBarrier, 2u> ToGeneral{};
+        for (uint32_t I = 0u; I < 2u; ++I)
+        {
+            ToGeneral[I].sType                       = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            ToGeneral[I].oldLayout                   = VK_IMAGE_LAYOUT_UNDEFINED;
+            ToGeneral[I].newLayout                   = VK_IMAGE_LAYOUT_GENERAL;
+            ToGeneral[I].srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+            ToGeneral[I].dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+            ToGeneral[I].image                       = Vulkan->AtmosphereTables[I].Image;
+            ToGeneral[I].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            ToGeneral[I].subresourceRange.levelCount = 1u;
+            ToGeneral[I].subresourceRange.layerCount = 1u;
+            ToGeneral[I].dstAccessMask               = VK_ACCESS_SHADER_WRITE_BIT;
+        }
+        vkCmdPipelineBarrier(Command, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                             0u, 0u, nullptr, 0u, nullptr, 2u, ToGeneral.data());
+
+        vkCmdBindPipeline(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Vulkan->AtmosphereLutPipeline);
+
+        const uint32_t Extents[2][2] = { { kTransmittanceLutWidth, kTransmittanceLutHeight },
+                                         { kMultiScatterLutSize,   kMultiScatterLutSize } };
+        for (uint32_t Table = 0u; Table < 2u; ++Table)
+        {
+            AtmosphereLutPushRecord Push{};
+            Push.Width      = Extents[Table][0];
+            Push.Height     = Extents[Table][1];
+            Push.Target     = Table;
+            Push.Directions = 64u;   // the sphere gather; only the multi-scatter pass reads these
+            Push.Steps      = 20u;
+
+            vkCmdPushConstants(Command, Vulkan->AtmosphereLutLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0u, sizeof(Push), &Push);
+            vkCmdBindDescriptorSets(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Vulkan->AtmosphereLutLayout,
+                                    0u, 1u, &Vulkan->AtmosphereLutSets[Table], 0u, nullptr);
+            vkCmdDispatch(Command, (Extents[Table][0] + 7u) / 8u, (Extents[Table][1] + 7u) / 8u, 1u);
+        }
+
+        std::array<VkImageMemoryBarrier, 2u> ToSampled{};
+        for (uint32_t I = 0u; I < 2u; ++I)
+        {
+            ToSampled[I].sType                       = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            ToSampled[I].oldLayout                   = VK_IMAGE_LAYOUT_GENERAL;
+            ToSampled[I].newLayout                   = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            ToSampled[I].srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+            ToSampled[I].dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+            ToSampled[I].image                       = Vulkan->AtmosphereTables[I].Image;
+            ToSampled[I].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            ToSampled[I].subresourceRange.levelCount = 1u;
+            ToSampled[I].subresourceRange.layerCount = 1u;
+            ToSampled[I].srcAccessMask               = VK_ACCESS_SHADER_WRITE_BIT;
+            ToSampled[I].dstAccessMask               = VK_ACCESS_SHADER_READ_BIT;
+        }
+        vkCmdPipelineBarrier(Command, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                             0u, 0u, nullptr, 0u, nullptr, 2u, ToSampled.data());
+
+        Vulkan->AtmosphereTablesBuilt = true;
+    }
 
     if (Frame.DebugView == DebugViewCategory::Off)
     {

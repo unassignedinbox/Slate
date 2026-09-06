@@ -39,7 +39,26 @@ enum class SkyQualityCategory : uint32_t
 
 struct SkyStepCounts { uint32_t View; uint32_t Light; };
 
+// A2 ⚠️ A Light count of ZERO selects the tabulated path: the transmittance LUT replaces the inner march
+//    entirely, so there are no light steps left to take. That is why every tier below reports zero — the tables
+//    made the inner loop obsolete, and the tiers now only choose how finely the VIEW ray is sampled.
+//
+//    A non-zero Light count still runs the A3 per-pixel march. It is kept reachable so the two can be compared
+//    on the same frame, which is how the tables were verified to be a speed-up rather than a different sky.
 [[nodiscard]] inline SkyStepCounts QuerySkySteps(SkyQualityCategory Quality) noexcept
+{
+    switch (Quality)
+    {
+        case SkyQualityCategory::Low:    return { 16u, 0u };
+        case SkyQualityCategory::Medium: return { 32u, 0u };
+        case SkyQualityCategory::High:   return { 48u, 0u };
+        case SkyQualityCategory::Ultra:  return { 64u, 0u };
+        default:                         return {  0u, 0u };
+    }
+}
+
+// The A3 march, for the comparison path only.
+[[nodiscard]] inline SkyStepCounts QuerySkyStepsMarched(SkyQualityCategory Quality) noexcept
 {
     switch (Quality)
     {

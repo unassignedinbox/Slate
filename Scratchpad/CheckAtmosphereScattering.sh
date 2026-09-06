@@ -54,7 +54,44 @@ grep -q 'Resized || SunMoved' Engine/DisplayPresentation/ReSTIRIntegrator.cpp \
 grep -q 'sizeof(DispatchConfiguration) == 128u' Engine/DeviceExchange/SwapchainExchange.h \
     || { echo "  the push-constant size assertion no longer states 128 bytes"; Fail=1; }
 
-[ "$Fail" = "0" ] && echo "  constants, ray-miss wiring and history invalidation agree        PASS"
+# ── A2 lookup tables ─────────────────────────────────────────────────────────────────────────────────────────────
+# Table sizes must agree between the shader that defines them, the C++ that allocates them, and the harness that
+# proves them. Three copies of a number is three chances to drift.
+for Pair in "kTransmittanceWidth:kTransmittanceLutWidth" "kTransmittanceHeight:kTransmittanceLutHeight" \
+            "kMultiScatterSize:kMultiScatterLutSize"; do
+    ShaderName="${Pair%%:*}"; CppName="${Pair##*:}"
+    ShaderValue=$(grep -oP "${ShaderName}\s*=\s*\K[0-9]+" Engine/Shaders/AtmosphereScattering.slang | head -1)
+    CppValue=$(grep -oP "${CppName}\s*=\s*\K[0-9]+" Engine/DeviceExchange/SwapchainExchange.h | head -1)
+    HarnessValue=$(grep -oP "${ShaderName}\s*=\s*\K[0-9]+" Scratchpad/AtmosphereScatteringTest.cpp | head -1)
+    if [ "$ShaderValue" != "$CppValue" ] || [ "$ShaderValue" != "$HarnessValue" ]; then
+        echo "  $ShaderName disagrees: shader $ShaderValue, C++ $CppValue, harness $HarnessValue"; Fail=1
+    fi
+done
+
+# ⚠️ Textures[] is a variable-count binding and Vulkan requires it on the HIGHEST binding number. The LUTs took
+# 21 and 22, so it had to move to 23; leaving it where it was silently breaks descriptor-indexing devices.
+TexturesBinding=$(grep -oP 'layout\(binding = \K[0-9]+(?=\) uniform sampler2D Textures)' Engine/Shaders/ReSTIRViewport.slang)
+BindingCount=$(grep -oP 'kComputeBindingCount\s*=\s*\K[0-9]+' Engine/DeviceExchange/SwapchainExchange.h)
+[ "$TexturesBinding" = "$((BindingCount - 1))" ] \
+    || { echo "  Textures[] is at $TexturesBinding but must be the highest of $BindingCount bindings"; Fail=1; }
+
+# The LUTs must be sampled, not storage, in the kernel's set — a storage image cannot filter, and an unfiltered
+# transmittance table bands visibly across the sunset.
+grep -q 'B == 21u || B == 22u' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  the atmosphere LUTs are not declared as sampled images"; Fail=1; }
+
+# The tables are constant per atmosphere; building them per frame would throw away the entire point.
+grep -q '!Vulkan->AtmosphereTablesBuilt' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  the LUT build has no once-only latch — it would run every frame"; Fail=1; }
+
+# Bring-up order: the tables must exist before WriteDescriptorSet binds them.
+LutLine=$(grep -n '"BringAtmosphereTables"' Engine/DeviceExchange/SwapchainExchange.cpp | head -1 | cut -d: -f1)
+SetLine=$(grep -n '"BringDescriptorSet"'    Engine/DeviceExchange/SwapchainExchange.cpp | head -1 | cut -d: -f1)
+if [ -n "$LutLine" ] && [ -n "$SetLine" ] && [ "$LutLine" -gt "$SetLine" ]; then
+    echo "  BringAtmosphereTables runs after BringDescriptorSet — the LUTs would never be bound"; Fail=1
+fi
+
+[ "$Fail" = "0" ] && echo "  constants, LUT sizes, bindings and build order agree             PASS"
 
 echo
 Glslang=""

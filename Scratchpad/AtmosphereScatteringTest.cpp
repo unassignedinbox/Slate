@@ -156,6 +156,81 @@ static Vec3 SkyRadiance(float CameraAltitude, Vec3 ViewDirection, Vec3 SunDirect
 }
 
 //------------------------------------------------------------------------------------------------------------------------
+//                                              PORT OF THE A2 LOOKUP TABLES
+//------------------------------------------------------------------------------------------------------------------------
+
+static constexpr unsigned kTransmittanceWidth  = 256u;
+static constexpr unsigned kTransmittanceHeight = 64u;
+static constexpr unsigned kMultiScatterSize    = 32u;
+
+static void TransmittanceInverse(float U, float V, float& Altitude, float& CosSunZenith)
+{
+    Altitude     = V * V * kAtmosphereThickness;
+    CosSunZenith = U * 2.0f - 1.0f;
+}
+
+static Vec3 ComputeTransmittanceTexel(float U, float V)
+{
+    float Altitude, CosSunZenith;
+    TransmittanceInverse(U, V, Altitude, CosSunZenith);
+    const Vec3  Origin{ 0.0f, 0.0f, kPlanetRadius + Altitude };
+    const float SinZenith = std::sqrt(std::fmax(0.0f, 1.0f - CosSunZenith * CosSunZenith));
+    const Vec3  Direction{ SinZenith, 0.0f, CosSunZenith };
+    if (RaySphereNearest(Origin, Direction, kPlanetRadius) > 0.0f) return Vec3(0.0f);
+    const float ToSpace = RaySphereNearest(Origin, Direction, kAtmosphereRadius);
+    if (ToSpace <= 0.0f) return Vec3(1.0f);
+    return Exp(OpticalDepth(Origin, Direction, ToSpace, 64) * -1.0f);
+}
+
+static Vec3 ComputeMultiScatterTexel(float U, float V, int Directions, int Steps)
+{
+    float Altitude, CosSunZenith;
+    TransmittanceInverse(U, V, Altitude, CosSunZenith);
+    const Vec3  Origin{ 0.0f, 0.0f, kPlanetRadius + Altitude };
+    const float SinZenith = std::sqrt(std::fmax(0.0f, 1.0f - CosSunZenith * CosSunZenith));
+    const Vec3  SunDirection{ SinZenith, 0.0f, CosSunZenith };
+
+    Vec3 SecondOrder{}, Transfer{};
+    for (int i = 0; i < Directions; ++i)
+    {
+        const float Fraction = (static_cast<float>(i) + 0.5f) / static_cast<float>(Directions);
+        const float CosTheta = 1.0f - 2.0f * Fraction;
+        const float SinTheta = std::sqrt(std::fmax(0.0f, 1.0f - CosTheta * CosTheta));
+        const float Phi      = static_cast<float>(i) * 2.39996323f;
+        const Vec3  Ray{ SinTheta * std::cos(Phi), SinTheta * std::sin(Phi), CosTheta };
+
+        float Distance = RaySphereNearest(Origin, Ray, kAtmosphereRadius);
+        const float Ground = RaySphereNearest(Origin, Ray, kPlanetRadius);
+        if (Ground > 0.0f) Distance = std::fmin(Distance, Ground);
+        if (Distance <= 0.0f) continue;
+
+        const float Step = Distance / static_cast<float>(Steps);
+        Vec3 RayTransmittance(1.0f);
+        for (int j = 0; j < Steps; ++j)
+        {
+            const Vec3  Position = Origin + Ray * ((static_cast<float>(j) + 0.5f) * Step);
+            const float H        = Length(Position) - kPlanetRadius;
+            const Vec3  Density  = AtmosphereDensity(H);
+            const Vec3  Extinction = kRayleighScattering * Density.x
+                                   + Vec3(kMieExtinction) * Density.y
+                                   + kOzoneAbsorption    * Density.z;
+            const Vec3  Scattering = kRayleighScattering * Density.x + Vec3(kMieScattering) * Density.y;
+            const Vec3  StepTransmittance = Exp(Extinction * -Step);
+            const Vec3  Integrated = (Scattering - Scattering * StepTransmittance) / Max(Extinction, Vec3(1e-9f));
+            const Vec3  SunArriving = SunTransmittance(Position, SunDirection, 16);
+            SecondOrder += RayTransmittance * SunArriving * Integrated * (1.0f / (4.0f * 3.14159265f));
+            Transfer    += RayTransmittance * Integrated * (1.0f / (4.0f * 3.14159265f));
+            RayTransmittance *= StepTransmittance;
+        }
+    }
+    const float Weight = 4.0f * 3.14159265f / static_cast<float>(Directions);
+    SecondOrder = SecondOrder * Weight;
+    Transfer    = Transfer * Weight;
+    const Vec3 Series = Vec3(1.0f) / Max(Vec3(1.0f) - Vec3(std::fmin(Transfer.x, 0.999f), std::fmin(Transfer.y, 0.999f), std::fmin(Transfer.z, 0.999f)), Vec3(1e-4f));
+    return SecondOrder * Series;
+}
+
+//------------------------------------------------------------------------------------------------------------------------
 
 static int Failures = 0;
 static void Expect(bool Condition, const char* What)
@@ -343,6 +418,110 @@ int main()
         //    cannot be A/B tested against what came before.
         const Vec3 Dark = SkyRadiance(2.0f, kZenith, SunAtElevation(45.0f), Vec3(0.0f), kView, kLight);
         Expect(Dark.x == 0.0f && Dark.y == 0.0f && Dark.z == 0.0f, "no illuminance means no radiance at all");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n10. the transmittance table reproduces the march it replaces\n");
+    {
+        // The table exists to remove SunTransmittance()'s inner march. It is only a speed-up if it returns the
+        //    same answer — otherwise it is a different sky that happens to render faster.
+        float Worst = 0.0f; float WorstAltitude = 0.0f, WorstCos = 0.0f;
+        for (int Row = 0; Row < 16; ++Row)
+            for (int Column = 0; Column < 32; ++Column)
+            {
+                const float U = (Column + 0.5f) / 32.0f, V = (Row + 0.5f) / 16.0f;
+                float Altitude, CosSunZenith;
+                TransmittanceInverse(U, V, Altitude, CosSunZenith);
+
+                const Vec3 Table = ComputeTransmittanceTexel(U, V);
+
+                const Vec3  Origin{ 0.0f, 0.0f, kPlanetRadius + Altitude };
+                const float SinZenith = std::sqrt(std::fmax(0.0f, 1.0f - CosSunZenith * CosSunZenith));
+                const Vec3  Marched = SunTransmittance(Origin, Vec3{ SinZenith, 0.0f, CosSunZenith }, 64);
+
+                const float Error = std::fmax(std::fabs(Table.x - Marched.x),
+                                    std::fmax(std::fabs(Table.y - Marched.y), std::fabs(Table.z - Marched.z)));
+                if (Error > Worst) { Worst = Error; WorstAltitude = Altitude; WorstCos = CosSunZenith; }
+            }
+        std::printf("     worst disagreement %.3e (at %.0f m, cos %.2f)\n",
+                    static_cast<double>(Worst), static_cast<double>(WorstAltitude), static_cast<double>(WorstCos));
+        Expect(Worst < 1e-5f, "the table and the march agree to five decimal places");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n11. transmittance behaves the way an atmosphere must\n");
+    {
+        // Overhead sun at sea level: most light gets through, and blue is attenuated hardest.
+        const Vec3 Overhead = ComputeTransmittanceTexel(1.0f, 0.0f);
+        std::printf("     sun overhead at sea level: R %.4f G %.4f B %.4f\n",
+                    static_cast<double>(Overhead.x), static_cast<double>(Overhead.y), static_cast<double>(Overhead.z));
+        Expect(Overhead.x > 0.85f && Overhead.x < 1.0f, "red mostly survives a vertical path");
+        Expect(Overhead.z < Overhead.x,                 "blue is attenuated more than red — why the sun looks warm");
+
+        // Sun below the horizon: the ground blocks it completely.
+        const Vec3 Below = ComputeTransmittanceTexel(0.0f, 0.0f);
+        Expect(Below.x == 0.0f && Below.y == 0.0f && Below.z == 0.0f,
+               "a sun below the horizon transmits nothing — no light through the planet");
+
+        // Higher up there is less air overhead, so more survives. Monotone in altitude.
+        bool Monotone = true;
+        float Previous = -1.0f;
+        for (int Row = 0; Row < 16; ++Row)
+        {
+            const float V = (Row + 0.5f) / 16.0f;
+            const float Value = ComputeTransmittanceTexel(1.0f, V).z;
+            if (Value < Previous - 1e-6f) Monotone = false;
+            Previous = Value;
+        }
+        Expect(Monotone, "transmittance rises with altitude, without wobble");
+
+        // A grazing sun travels through far more air than an overhead one.
+        const Vec3 Grazing = ComputeTransmittanceTexel(0.5f, 0.0f);   // cos = 0, exactly at the horizon
+        std::printf("     grazing sun at sea level:  R %.4f G %.4f B %.4f\n",
+                    static_cast<double>(Grazing.x), static_cast<double>(Grazing.y), static_cast<double>(Grazing.z));
+        Expect(Grazing.x < Overhead.x, "a grazing path attenuates more than a vertical one");
+        Expect(Grazing.z < Grazing.x,  "and reddens the beam, which is the sunset");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n12. multiple scattering adds light where single scattering cannot\n");
+    {
+        // The whole reason this table exists. Single scattering leaves the sky too dark away from the sun and
+        //    makes twilight black; the second-order term is what fills both in. It must be positive, bounded,
+        //    and largest where the single-scattering answer was weakest.
+        const Vec3 Overhead = ComputeMultiScatterTexel(1.0f, 0.0f, 64, 20);
+        const Vec3 Twilight = ComputeMultiScatterTexel(0.48f, 0.0f, 64, 20);   // sun just below the horizon
+
+        std::printf("     overhead sun: R %.5f G %.5f B %.5f\n",
+                    static_cast<double>(Overhead.x), static_cast<double>(Overhead.y), static_cast<double>(Overhead.z));
+        std::printf("     twilight:     R %.5f G %.5f B %.5f\n",
+                    static_cast<double>(Twilight.x), static_cast<double>(Twilight.y), static_cast<double>(Twilight.z));
+
+        Expect(Overhead.x > 0.0f && Overhead.y > 0.0f && Overhead.z > 0.0f,
+               "the transfer factor is positive — it adds light rather than removing it");
+        Expect(Overhead.z > Overhead.x, "and is blue-dominant, as multiply-scattered skylight is");
+        Expect(Overhead.x < 1.0f && Overhead.y < 1.0f && Overhead.z < 1.0f,
+               "and bounded below one, so the geometric series converged rather than running away");
+        Expect(Twilight.z > 0.0f, "twilight retains some scattered light instead of going black");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n13. the table parameterisation resolves the layer that matters\n");
+    {
+        // Density falls exponentially, so a LINEAR altitude axis spends its rows on thin air and starves the
+        //    first kilometre. The square-root distribution is what fixes that, and this measures the difference
+        //    rather than asserting it: how much of the table's range is spent below 10 km.
+        int SqrtRows = 0, LinearRows = 0;
+        for (unsigned Row = 0; Row < kTransmittanceHeight; ++Row)
+        {
+            const float V = (Row + 0.5f) / kTransmittanceHeight;
+            if (V * V * kAtmosphereThickness < 10000.0f) ++SqrtRows;      // the parameterisation in use
+            if (V * kAtmosphereThickness     < 10000.0f) ++LinearRows;    // the naive alternative
+        }
+        std::printf("     rows below 10 km: square-root %d of %u, linear %d of %u\n",
+                    SqrtRows, kTransmittanceHeight, LinearRows, kTransmittanceHeight);
+        Expect(SqrtRows > LinearRows * 2,
+               "the square-root axis gives the dense lower atmosphere far more rows than a linear one would");
     }
 
     std::printf("\n>>> %s (%d failure%s)\n", Failures == 0 ? "ALL PASS" : "FAILURES", Failures, Failures == 1 ? "" : "s");

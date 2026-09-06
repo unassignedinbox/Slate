@@ -146,6 +146,7 @@ set(SHADER_TABLE
     "ClusterCull.slang|compute|ClusterCull.spv"
     "HiZReduce.slang|compute|HiZReduce.spv"
     "AtrousDenoise.slang|compute|AtrousDenoise.spv"
+    "AtmosphereLut.slang|compute|AtmosphereLut.spv"
     "SurfaceResolve.slang|compute|SurfaceResolve.spv"
     "VisibilityRaster.vert.slang|vertex|VisibilityRaster.vert.spv"
     "VisibilityRaster.frag.slang|fragment|VisibilityRaster.frag.spv"

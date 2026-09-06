@@ -118,7 +118,9 @@ layout(std430, binding = 17) writeonly buffer CurrReservoirExtent { GpuReservoir
 layout(rgba16f, binding = 18) uniform image2D HistorySurfaceImage;   // R7a: xyz = normal, w = depth the history mean was shaded at (w ≤ 0 = no surface)
 layout(rgba32f, binding = 19) uniform image2D MomentImage;           // R7: x = E[luma], y = E[luma²], reprojected with the mean
 layout(rgba32f, binding = 20) uniform writeonly image2D DenoiseImage; // R7: xyz = linear radiance, w = variance — the à-trous input
-layout(binding = 21) uniform sampler2D Textures[];   // R4a bindless table — ⚠️ moved 11 → 15 in R4b → 18 in R6 → 19 in R7a → 21 in R7: a variable-count binding must be the last one in the set
+layout(binding = 21) uniform sampler2D TransmittanceLut;  // A2: sun survival, (cos sun zenith, sqrt altitude)
+layout(binding = 22) uniform sampler2D MultiScatterLut;   // A2: isotropic multiple-scattering transfer factor
+layout(binding = 23) uniform sampler2D Textures[];   // R4a bindless table — ⚠️ moved 11 → 15 in R4b → 18 in R6 → 19 in R7a → 21 in R7 → 23 in A2: a variable-count binding must be the last one in the set
 
 const float kTemporalNormalCos = 0.906308;   // cos(25°): temporal/spatial normal validation
 const float kTemporalDepthTol  = 0.10;       // 10% relative depth validation
@@ -719,6 +721,78 @@ void Resolve(uvec2 pixel, vec3 radiance)
 }
 
 //------------------------------------------------------------------------------------------------------------------------
+//                                            A2 — TABULATED ATMOSPHERE
+//------------------------------------------------------------------------------------------------------------------------
+// These live here rather than in AtmosphereScattering.slang because they sample the kernel's own descriptors,
+//    and that header is deliberately free of bindings so the CPU proof can port it verbatim.
+
+vec3 SampleTransmittance(float Altitude, float CosSunZenith)
+{
+    return texture(TransmittanceLut, TransmittanceParameterisation(Altitude, CosSunZenith)).rgb;
+}
+
+vec3 SampleMultiScatter(float Altitude, float CosSunZenith)
+{
+    return texture(MultiScatterLut, TransmittanceParameterisation(Altitude, CosSunZenith)).rgb;
+}
+
+// The A3 march with its inner light march replaced by a texture fetch, plus the second-order term.
+vec3 SkyRadianceTabulated(float CameraAltitude, vec3 ViewDirection, vec3 SunDirection, vec3 SunIlluminance, int ViewSteps)
+{
+    const vec3 Origin = vec3(0.0, 0.0, kPlanetRadius + max(CameraAltitude, 1.0));
+
+    float Distance = RaySphereNearest(Origin, ViewDirection, kAtmosphereRadius);
+    if (Distance < 0.0) return vec3(0.0);
+    const float Ground = RaySphereNearest(Origin, ViewDirection, kPlanetRadius);
+    if (Ground > 0.0) Distance = min(Distance, Ground);
+
+    const float CosTheta      = dot(ViewDirection, SunDirection);
+    const float PhaseRayleigh = RayleighPhase(CosTheta);
+    const float PhaseMie      = MiePhase(CosTheta, kMieAsymmetry);
+
+    const float Step = Distance / float(ViewSteps);
+    vec3 Radiance      = vec3(0.0);
+    vec3 Transmittance = vec3(1.0);
+
+    for (int i = 0; i < ViewSteps; ++i)
+    {
+        const vec3  Position = Origin + ViewDirection * (float(i) + 0.5) * Step;
+        const float Radius   = length(Position);
+        const float Altitude = Radius - kPlanetRadius;
+        const vec3  Density  = AtmosphereDensity(Altitude);
+
+        const vec3 Extinction = kRayleighScattering * Density.x
+                              + vec3(kMieExtinction) * Density.y
+                              + kOzoneAbsorption    * Density.z;
+        const vec3 StepTransmittance = exp(-Extinction * Step);
+
+        // The sun's zenith angle AT THIS SAMPLE, not at the camera. Using the camera's would make the whole ray
+        //    share one lighting condition and flatten the terminator into a hard edge.
+        const float CosSunZenith = dot(Position / Radius, SunDirection);
+        const vec3  SunArriving  = SampleTransmittance(Altitude, CosSunZenith);
+
+        const vec3 Phased    = kRayleighScattering * Density.x * PhaseRayleigh
+                             + vec3(kMieScattering) * Density.y * PhaseMie;
+        const vec3 Isotropic = (kRayleighScattering * Density.x + vec3(kMieScattering) * Density.y)
+                             * SampleMultiScatter(Altitude, CosSunZenith);
+
+        const vec3 Scattering = Phased * SunArriving + Isotropic;
+        const vec3 Integrated = (Scattering - Scattering * StepTransmittance) / max(Extinction, vec3(1e-9));
+
+        Radiance      += Transmittance * Integrated * SunIlluminance;
+        Transmittance *= StepTransmittance;
+    }
+    return Radiance;
+}
+
+vec3 SunDiscTabulated(float CameraAltitude, vec3 ViewDirection, vec3 SunDirection, vec3 SunIlluminance)
+{
+    if (dot(ViewDirection, SunDirection) < cos(kSunAngularRadius)) return vec3(0.0);
+    const float SolidAngle = 6.28318530 * (1.0 - cos(kSunAngularRadius));
+    return SampleTransmittance(max(CameraAltitude, 1.0), SunDirection.z) * SunIlluminance / SolidAngle;
+}
+
+//------------------------------------------------------------------------------------------------------------------------
 //                                                    MAIN COMPUTE KERNEL
 //------------------------------------------------------------------------------------------------------------------------
 
@@ -757,10 +831,18 @@ void main()
                                               + CameraRight * (ndc.x * FieldOfViewTanHalf * AspectRatio)
                                               + CameraUp    * (ndc.y * FieldOfViewTanHalf));
 
-            skyRadiance = SkyRadiance(CameraAltitude, rayDirection, SunDirection,
-                                      vec3(SunIlluminance), int(SkyViewSteps), int(SkyLightSteps))
-                        + SunDisc(CameraAltitude, rayDirection, SunDirection,
-                                  vec3(SunIlluminance), int(SkyLightSteps));
+            // A2 — the LUT path. The tables remove the inner light march, taking the per-pixel cost from
+            //    ViewSteps × LightSteps down to ViewSteps, and add the multiple scattering that single
+            //    scattering physically cannot produce. SkyLightSteps of 0 selects it; a non-zero value keeps
+            //    the A3 march, so the two can still be compared directly on the same frame.
+            if (SkyLightSteps == 0u)
+                skyRadiance = SkyRadianceTabulated(CameraAltitude, rayDirection, SunDirection,
+                                                   vec3(SunIlluminance), int(SkyViewSteps));
+            else
+                skyRadiance = SkyRadiance(CameraAltitude, rayDirection, SunDirection,
+                                          vec3(SunIlluminance), int(SkyViewSteps), int(SkyLightSteps));
+
+            skyRadiance += SunDiscTabulated(CameraAltitude, rayDirection, SunDirection, vec3(SunIlluminance));
         }
         Resolve(pixel, skyRadiance);
         return;

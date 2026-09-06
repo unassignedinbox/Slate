@@ -29,7 +29,12 @@ class TextureIndex;     // ContentInterchange/TextureIndex.h (R4a)
 //    5 x 25 taps instead of 6561 — the whole point of the "with holes" formulation.
 static constexpr uint32_t kDenoiseLevelCount    = 5u;
 
-static constexpr uint32_t kComputeBindingCount  = 22u;    // compute set 0: 0 out · 1 tris · 2 materials · 3 history · 4 surface · 5 normal · 6 instances · 7 luminaires · 8/9 CWBVH · 10 slabs · 11 vertices · 12 indices · 13 energy LUT · 14 sheen LUT · 15 motion · 16 prev reservoir · 17 curr reservoir · 18 history normal+depth (R7a) · 19 luminance moments (R7) · 20 denoise input (R7) · 21 Textures[] (variable-count binding MUST stay last — Vulkan requires it on the highest binding number)
+// A2 atmosphere tables. Sizes match AtmosphereScattering.slang; the gate checks they still agree.
+static constexpr uint32_t kTransmittanceLutWidth  = 256u;
+static constexpr uint32_t kTransmittanceLutHeight = 64u;
+static constexpr uint32_t kMultiScatterLutSize    = 32u;
+
+static constexpr uint32_t kComputeBindingCount  = 24u;    // compute set 0: 0 out · 1 tris · 2 materials · 3 history · 4 surface · 5 normal · 6 instances · 7 luminaires · 8/9 CWBVH · 10 slabs · 11 vertices · 12 indices · 13 energy LUT · 14 sheen LUT · 15 motion · 16 prev reservoir · 17 curr reservoir · 18 history normal+depth (R7a) · 19 luminance moments (R7) · 20 denoise input (R7) · 21 transmittance LUT (A2) · 22 multi-scatter LUT (A2) · 23 Textures[] (variable-count binding MUST stay last — Vulkan requires it on the highest binding number)
 static constexpr uint32_t kTextureSlotCapacity  = 1024u;  // bindless sampler2D[] size (variable-count binding; Pascal maxPerStageDescriptorSamplers ≥ 4000)
 class MaterialIndex;    // ContentInterchange/MaterialIndex.h (R4a)
 
@@ -257,6 +262,7 @@ private:
     [[nodiscard]] bool  BringComputePipeline()  noexcept;
     [[nodiscard]] bool  BringDescriptorSet()    noexcept;
     [[nodiscard]] bool  BringDenoisePipeline()  noexcept;   // R7: à-trous filter, its own small descriptor set
+    [[nodiscard]] bool  BringAtmosphereTables() noexcept;   // A2: the two constant atmosphere LUTs
     [[nodiscard]] bool  BringCommandRecording() noexcept;
     [[nodiscard]] bool  BringCycleSlots()       noexcept;
     [[nodiscard]] bool  BringImGui()            noexcept;
