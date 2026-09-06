@@ -40,7 +40,8 @@ Run CheckPanelSample
 Run CheckInterfaceAudio
 
 echo
-echo "=== ReSTIR (R6 - R7a) ==="
+echo "=== ReSTIR (R6 - R7) ==="
+Run CheckSpatialTapJitter
 Run CheckTemporalReprojection
 Run CheckAtrousDenoise
 

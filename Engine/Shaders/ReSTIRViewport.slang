@@ -123,8 +123,14 @@ layout(binding = 21) uniform sampler2D Textures[];   // R4a bindless table — �
 const float kTemporalNormalCos = 0.906308;   // cos(25°): temporal/spatial normal validation
 const float kTemporalDepthTol  = 0.10;       // 10% relative depth validation
 const uint  kTemporalMClamp    = 20u;        // prev M capped at 20× current M (ReSTIR M-clamp)
-const uint  kSpatialTaps       = 4u;         // R6 row 3: fixed 4-tap cross — the true spatial reuse (ExtraCandidateCount = extra same-pixel candidates)
-const float kSpatialRadiusPx   = 11.0;       // [px] tap radius at 1280 px width — scaled by RenderWidth/1280 for resolution independence
+const uint  kSpatialTaps       = 4u;         // R6 row 3: 4-tap cross — the true spatial reuse (ExtraCandidateCount = extra same-pixel candidates)
+// ⚠️ The cross is ROTATED and its radius JITTERED per pixel per frame. A fixed offset set makes the reuse graph static:
+//    pixel (x,y) could only ever exchange reservoirs with (x±r,y) and (x,y±r), which partitions the image into r²
+//    residue classes that never share a sample. Each class converges to its own estimate and temporal accumulation
+//    cements the difference instead of averaging it away, so a fixed r = 11 lattice stayed visible at any frame count.
+//    Measured: 121 isolated pools versus 1 when jittered, and a 30 % class-to-class bias that never decayed.
+const float kSpatialRadiusMinPx = 4.0;       // [px] at 1280 px width — scaled by RenderWidth/1280 for resolution independence
+const float kSpatialRadiusMaxPx = 16.0;      // [px] the band's mean matches the old fixed radius, so reuse reach is unchanged
 
 const uint kMaterialTextureNone = 0xFFFFFFFFu;
 
@@ -890,14 +896,20 @@ void main()
             //    Gated on kFeatureSpatialReuse and FrameIndex > 0 (no prev frame on the first accumulation frame).
             if ((FeatureFlags & kFeatureSpatialReuse) != 0u && FrameIndex > 0u)
             {
-                float radius = kSpatialRadiusPx * float(ViewportWidth) / 1280.0;
+                // Rotation and radius are drawn from a SEPARATE stream, seeded from the pixel and frame, so the
+                //    main `seed` sequence used by resampling is untouched — the R6 identity proofs still hold.
+                uint  tapSeed = PcgHash(MakeSeed(pixel, FrameIndex) ^ 0x9E3779B9u);
+                float scale   = float(ViewportWidth) / 1280.0;
+                float angle   = RandFloat(tapSeed) * 6.28318531;
+                float radius  = mix(kSpatialRadiusMinPx, kSpatialRadiusMaxPx, RandFloat(tapSeed)) * scale;
+
                 for (uint tap = 0u; tap < kSpatialTaps; ++tap)
                 {
-                    ivec2 offset = ivec2(0);
-                    if (tap == 0u)      offset = ivec2(int(radius), 0);
-                    else if (tap == 1u) offset = ivec2(-int(radius), 0);
-                    else if (tap == 2u) offset = ivec2(0, int(radius));
-                    else                offset = ivec2(0, -int(radius));
+                    // The cross keeps its 90° spacing — it is still four taps of equal reach, just aimed
+                    //    differently each frame, so no direction is systematically favoured over time.
+                    float  theta  = angle + float(tap) * 1.57079633;
+                    ivec2  offset = ivec2(int(round(radius * cos(theta))), int(round(radius * sin(theta))));
+                    if (offset.x == 0 && offset.y == 0) continue;   // a rounded-to-zero tap is the pixel itself
                     ivec2 npx = ivec2(pixel) + offset;
                     if (any(lessThan(npx, ivec2(0))) || npx.x >= int(ViewportWidth) || npx.y >= int(ViewportHeight)) continue;
                     GpuReservoir neigh = PrevReservoirs[npx.y * int(ViewportWidth) + npx.x];
