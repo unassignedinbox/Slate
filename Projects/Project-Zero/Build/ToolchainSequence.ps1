@@ -656,6 +656,7 @@ $EngineRelative = @(
     'Engine\DisplayPresentation\TextEntryState.cpp'
     'Engine\DisplayPresentation\InterfaceOutlinerSequence.cpp'
     'Engine\DisplayPresentation\InterfaceBrowserSequence.cpp'
+    'Engine\GeometricRaster\CelestialSolver.cpp'
     'Engine\DisplayPresentation\DialogueHost.cpp'
     'Engine\DisplayPresentation\AppearanceInspector.cpp'
     'Engine\DisplayPresentation\ConfigurationInspector.cpp'

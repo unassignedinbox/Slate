@@ -49,6 +49,7 @@ Run CheckAtrousDenoise
 
 echo
 echo "=== scene and dynamic geometry (D1 - D6) ==="
+Run CheckCelestialSolver
 Run CheckPrimitiveGeometry
 Run CheckShowroomGeometry
 Run CheckTraversalIdentity
