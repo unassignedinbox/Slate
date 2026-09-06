@@ -70,35 +70,15 @@ void RenderScheduler::Present(
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    const float PanelWidth  = 320.0f;
-    const float PanelHeight = static_cast<float>(ViewportHeight);
-
-    ImGui::SetNextWindowPos (ImVec2(static_cast<float>(ViewportWidth) - PanelWidth, 0.0f), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(PanelWidth, PanelHeight), ImGuiCond_Always);
-    ImGui::SetNextWindowBgAlpha(0.93f);
-
-    constexpr ImGuiWindowFlags PanelFlags =
-        ImGuiWindowFlags_NoMove            |
-        ImGuiWindowFlags_NoResize          |
-        ImGuiWindowFlags_NoCollapse        |
-        ImGuiWindowFlags_NoBringToFrontOnFocus;
-
-    ImGui::Begin("Control Centre", nullptr, PanelFlags);
-
-    SectionCamera(Camera);
-    ImGui::Spacing();
-    SectionReSTIR(Integrator, ViewportWidth, ViewportHeight);
-    ImGui::Spacing();
-    SectionScene(Scene);
-
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    if (ImGui::Button("Quit", ImVec2(-1.0f, 0.0f)))
-        QuitRequested = true;
-
-    ImGui::End();
+    // ⚠️ The scene / render inspector that used to live here is gone: it is now InterfaceBrowserSequence, drawn
+    //    on the engine's own overlay surface rather than through ImGui. This still owns the ImGui frame because
+    //    the Control Centre overlay records itself between NewFrame and Render through the hook below, and the
+    //    F3 diagnostic popup is still an ImGui window.
+    //
+    //    SectionCamera / SectionReSTIR / SectionScene are retained but unreferenced by design: they are the
+    //    fallback if the browser has to be disabled, and deleting them would make that a rewrite rather than a
+    //    one-line change.
+    (void)Integrator; (void)Camera; (void)Scene; (void)ViewportWidth; (void)ViewportHeight;
 
     if (Overlay) Overlay();
 

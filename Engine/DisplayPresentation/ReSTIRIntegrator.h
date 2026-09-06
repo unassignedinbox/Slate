@@ -82,6 +82,10 @@ public:
     void AssignTemporalReuse     (bool     On)    noexcept { if (ActiveConfiguration.TemporalReuse       != On)    { ActiveConfiguration.TemporalReuse       = On;    ResetAccumulation(); } }
     void AssignSpatialReuse      (bool     On)    noexcept { if (ActiveConfiguration.SpatialReuse        != On)    { ActiveConfiguration.SpatialReuse        = On;    ResetAccumulation(); } }
     void AssignAliasPick         (bool     On)    noexcept { if (ActiveConfiguration.AliasPick           != On)    { ActiveConfiguration.AliasPick           = On;    ResetAccumulation(); } }
+    // R7. Toggling the filter does not change what is SAMPLED, only how the accumulated image is presented, so it
+    //    deliberately does NOT reset accumulation — restarting would throw away a converged history to change a
+    //    post-process, and the A/B comparison the switch exists for would be impossible.
+    void AssignDenoise           (bool     On)    noexcept { ActiveConfiguration.Denoise = On; }
 
     void ResetAccumulation() noexcept { AccumulationIndex = 0u; }
 

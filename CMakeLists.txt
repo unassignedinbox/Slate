@@ -199,6 +199,7 @@ set(FRONTIER_ENGINE_SOURCES
     Engine/DisplayPresentation/ControlKit.cpp
     Engine/DisplayPresentation/TextEntryState.cpp
     Engine/DisplayPresentation/InterfaceOutlinerSequence.cpp
+    Engine/DisplayPresentation/InterfaceBrowserSequence.cpp
     Engine/DisplayPresentation/DialogueHost.cpp
     Engine/DisplayPresentation/AppearanceInspector.cpp
     Engine/DisplayPresentation/ConfigurationInspector.cpp

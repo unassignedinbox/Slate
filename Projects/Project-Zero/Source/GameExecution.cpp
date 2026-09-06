@@ -14,6 +14,7 @@
 #include "../../../Engine/DisplayPresentation/ShadingTableCodec.h"
 #include "../../../Engine/DisplayPresentation/RenderScheduler.h"
 #include "../../../Engine/DeviceExchange/DiagnosticMetrics.h"
+#include "../../../Engine/DisplayPresentation/InterfaceBrowserSequence.h"
 #include "../../../Engine/DisplayPresentation/ControlCentreHost.h"
 #include "../../../Engine/DisplayPresentation/PixelSpace.h"
 #include "../../../Engine/DisplayPresentation/FidelityClassifier.h"
@@ -451,6 +452,157 @@ int main(int argc, char** argv)
     // ImGui panel — apply theme once after context exists
     //──────────────────────────────────────────────────────────────────────────
     Frontier::RenderScheduler Panel;
+
+    //──────────────────────────────────────────────────────────────────────────
+    // World Browser — replaces the ImGui scene / render inspector. The notch Control Centre is a different
+    //    surface and is untouched: this is the right-hand panel only.
+    //    The engine ships a generic tree; everything below is Project-Zero saying what its rows MEAN.
+    //──────────────────────────────────────────────────────────────────────────
+    Frontier::InterfaceBrowserSequence Browser;
+    enum : uint32_t { RowFolder = 0u, RowMesh = 1u, RowLight = 2u, RowCamera = 3u, RowSky = 4u, RowSun = 5u, RowMoon = 6u };
+    {
+        using Frontier::OutlinerTypeRecord;
+        Browser.AssignTitle("World Browser", "Cornell Box");
+        Frontier::InterfaceOutlinerSequence& Tree = Browser.Outliner();
+        Tree.RegisterType(RowFolder, OutlinerTypeRecord{ "Folder", Frontier::ControlCentreIconCategory::SettingsGear,     { 0.788f, 0.635f, 0.294f, 1.0f }, true  });
+        Tree.RegisterType(RowMesh,   OutlinerTypeRecord{ "Mesh",   Frontier::ControlCentreIconCategory::DisplayMonitor,   { 0.604f, 0.627f, 0.651f, 1.0f }, false });
+        Tree.RegisterType(RowLight,  OutlinerTypeRecord{ "Light",  Frontier::ControlCentreIconCategory::SunIllumination,  { 0.961f, 0.827f, 0.294f, 1.0f }, false });
+        Tree.RegisterType(RowCamera, OutlinerTypeRecord{ "Camera", Frontier::ControlCentreIconCategory::VideoRenderScale, { 0.412f, 0.765f, 1.0f,   1.0f }, false });
+        Tree.RegisterType(RowSky,    OutlinerTypeRecord{ "Sky",    Frontier::ControlCentreIconCategory::WirelessSignal,   { 0.561f, 0.827f, 1.0f,   1.0f }, false });
+        Tree.RegisterType(RowSun,    OutlinerTypeRecord{ "Sun",    Frontier::ControlCentreIconCategory::SunIllumination,  { 1.0f,   0.694f, 0.294f, 1.0f }, false });
+        Tree.RegisterType(RowMoon,   OutlinerTypeRecord{ "Moon",   Frontier::ControlCentreIconCategory::MoonDisturbance,  { 0.722f, 0.769f, 0.839f, 1.0f }, false });
+    }
+    // Payload 0 means "no scene object": folders and the not-yet-implemented sky rows.
+    uint32_t BrowserCameraRow = Frontier::kOutlinerNoRow;
+
+    // The browser writes through float* / bool*, so live state is mirrored into these each frame and copied back
+    //    after. A mirror rather than a direct pointer because the sources are different shapes: the integrator
+    //    keeps uint32 counts, the camera keeps radians, and a slider only speaks float.
+    float BrowserCameraPosition[3] = { 0.0f, 0.0f, 0.0f };
+    float BrowserCameraSpeed = 2.5f, BrowserCameraFov = 55.0f;
+    float BrowserCandidates = 4.0f, BrowserExtra = 2.0f, BrowserExposure = 1.05f;
+    float BrowserLuminaire = 32.0f;
+    bool  BrowserTemporal = true, BrowserSpatial = true, BrowserAlias = true, BrowserDenoise = true;
+    bool  BrowserPointerDown = false, BrowserPointerWasDown = false, BrowserCoversPointer = false;
+    {
+        Frontier::InterfaceOutlinerSequence& Tree = Browser.Outliner();
+
+        const uint32_t Environment = Tree.Construct("Environment", RowFolder, Frontier::kOutlinerNoParent, 0u);
+        Tree.Construct("Sky Atmosphere", RowSky,  Environment, 0u);
+        Tree.Construct("Sun",            RowSun,  Environment, 0u);
+        Tree.Construct("Moon",           RowMoon, Environment, 0u);
+
+        // Geometry rows carry the MATERIAL ordinal as their payload: the Cornell box is one mesh split by material,
+        //    so a material is the finest thing the browser can currently address. When the scene grows real
+        //    per-object placements this becomes an instance ordinal and nothing else here changes.
+        const uint32_t Geometry = Tree.Construct("Geometry", RowFolder, Frontier::kOutlinerNoParent, 0u);
+        struct GeometryRow { const char* Name; uint32_t Material; bool Locked; };
+        static const GeometryRow Parts[] = {
+            { "Floor",              0u, true  }, { "Ceiling",            0u, true  },
+            { "Back Wall",          0u, true  }, { "Left Wall (Red)",    1u, true  },
+            { "Right Wall (Green)", 2u, true  }, { "Tall Box",           4u, false },
+            { "Short Box",          5u, false },
+        };
+        for (const GeometryRow& Part : Parts)
+        {
+            const uint32_t Row = Tree.Construct(Part.Name, RowMesh, Geometry, Part.Material);
+            Tree.Row(Row).Locked  = Part.Locked;      // the shell is fixed; only the boxes are movable
+            Tree.Row(Row).Dynamic = !Part.Locked;
+        }
+
+        const uint32_t Lighting = Tree.Construct("Lighting", RowFolder, Frontier::kOutlinerNoParent, 0u);
+        Tree.Construct("Ceiling Luminaire", RowLight, Lighting, 3u);
+
+        const uint32_t Cameras = Tree.Construct("Cameras", RowFolder, Frontier::kOutlinerNoParent, 0u);
+        BrowserCameraRow = Tree.Construct("Main Camera", RowCamera, Cameras, 0u);
+        Tree.AssignSelection(BrowserCameraRow);
+    }
+
+    // The browser asks for property rows each frame; this is where Project-Zero says what a row MEANS. Values are
+    //    written through raw pointers into live state, so an edit lands immediately with no copy-back step.
+    Browser.AssignPropertyBuilder(
+        [&](uint32_t RowOrdinal, std::vector<Frontier::PropertyRowRecord>& Rows)
+        {
+            using Frontier::PropertyRowRecord;
+            using Kind = Frontier::PropertyKindCategory;
+
+            const Frontier::InterfaceOutlinerSequence& Tree = Browser.Outliner();
+            if (RowOrdinal >= Tree.QueryRowCount()) return;
+            const Frontier::OutlinerRowRecord& Row = Tree.QueryRow(RowOrdinal);
+
+            PropertyRowRecord R{};
+            const auto Heading = [&](const char* Label) { R = {}; R.Kind = Kind::Heading; R.Label = Label; Rows.push_back(R); };
+            const auto Slider  = [&](const char* Label, float* Value, float Lo, float Hi, const char* Unit, uint32_t Dec)
+                                 { R = {}; R.Kind = Kind::Slider; R.Label = Label; R.Value = Value; R.Minimum = Lo;
+                                   R.Maximum = Hi; R.Unit = Unit; R.Decimals = Dec; Rows.push_back(R); };
+            const auto Toggle  = [&](const char* Label, bool* Flag)
+                                 { R = {}; R.Kind = Kind::Switch; R.Label = Label; R.Flag = Flag; Rows.push_back(R); };
+            const auto Readout = [&](const char* Label, const char* Text)
+                                 { R = {}; R.Kind = Kind::Readout; R.Label = Label; R.Text = Text; Rows.push_back(R); };
+
+            switch (Row.TypeOrdinal)
+            {
+                case RowCamera:
+                {
+                    Heading("Transform");
+                    R = {}; R.Kind = Kind::Vector; R.Label = "Position";
+                    R.Vector3 = BrowserCameraPosition; R.ReadOnly = true; Rows.push_back(R);
+
+                    Heading("Movement");
+                    Slider("Speed", &BrowserCameraSpeed, 0.1f, 20.0f, "m/s", 2u);
+                    Slider("Field of view", &BrowserCameraFov, 20.0f, 120.0f, "\u00B0", 1u);
+
+                    // The render settings hang off the camera, exactly as the mock proposed: they describe how
+                    //    THIS view is resolved, so they belong to the view rather than floating in a global panel.
+                    Heading("Render Settings");
+                    Slider("Candidates",      &BrowserCandidates, 1.0f, 32.0f, "", 0u);
+                    Slider("Extra candidates",&BrowserExtra,      0.0f,  8.0f, "", 0u);
+                    Slider("Exposure",        &BrowserExposure,   0.1f,  4.0f, "", 2u);
+                    Toggle("Temporal reuse",  &BrowserTemporal);
+                    Toggle("Spatial reuse",   &BrowserSpatial);
+                    Toggle("Alias pick",      &BrowserAlias);
+                    Toggle("Denoise",         &BrowserDenoise);
+                    break;
+                }
+                case RowLight:
+                    Heading("Emission");
+                    Readout("Material", "Ceiling Light");
+                    Slider("Illuminance", &BrowserLuminaire, 0.0f, 200.0f, "lx", 0u);
+                    break;
+
+                case RowSky:
+                case RowSun:
+                case RowMoon:
+                    Heading(Tree.QueryType(Row.TypeOrdinal).Label);
+                    Readout("Status", "not implemented yet");
+                    Readout("Phase",  "sky and atmosphere is the next ladder");
+                    break;
+
+                case RowFolder:
+                {
+                    Heading("Folder");
+                    Readout("Kind", "container");
+                    Heading("Colour");
+                    R = {}; R.Kind = Kind::Tint; R.Label = "Tint";
+                    R.Tint    = &Browser.Outliner().Row(RowOrdinal).Tint;
+                    R.HasTint = &Browser.Outliner().Row(RowOrdinal).HasTint;
+                    Rows.push_back(R);
+                    break;
+                }
+
+                default:
+                {
+                    Heading("Object");
+                    char Material[32];
+                    std::snprintf(Material, sizeof(Material), "material_%u", Row.Payload);
+                    static char MaterialText[32];
+                    std::snprintf(MaterialText, sizeof(MaterialText), "%s", Material);
+                    Readout("Material", MaterialText);
+                    Readout("State", Row.Locked ? "locked" : (Row.Dynamic ? "dynamic" : "static"));
+                    break;
+                }
+            }
+        });
     Panel.ApplyTheme();
 
     //──────────────────────────────────────────────────────────────────────────
@@ -864,8 +1016,36 @@ int main(int argc, char** argv)
             }
         }
 
-        // ② Advance camera kinematics (frozen while the overlay owns the pointer)
-        if (!ControlCentre.CoversPointer())
+        // ①c World Browser — mirror live state in, advance the animations, and decide whether it owns the pointer.
+        //    The panel occupies a fixed strip on the trailing edge; the camera must not fly while the cursor is
+        //    over it, and must not fly at all while a name is being typed.
+        {
+            const float PanelW    = 340.0f;
+            const float PointerLx = Input.QueryCursorPositionX() / InterfaceScale;
+            BrowserCoversPointer  = PointerLx >= static_cast<float>(LogicalWidth) - PanelW;
+
+            BrowserPointerWasDown = BrowserPointerDown;
+            BrowserPointerDown    = Input.IsMouseButtonPressed(Frontier::MouseButtonCategory::ButtonLeft);
+
+            const Frontier::Vector3 Eye = Camera.QuerySpatialLocation();
+            BrowserCameraPosition[0] = Eye.x; BrowserCameraPosition[1] = Eye.y; BrowserCameraPosition[2] = Eye.z;
+            BrowserCameraSpeed = Camera.QueryFlightSpeed();
+            BrowserCameraFov   = Camera.QueryConfiguration().BaseFlightSpeed > 0.0f ? BrowserCameraFov : BrowserCameraFov;
+
+            const Frontier::ReSTIRIntegratorConfiguration& Cfg = Integrator.QueryConfiguration();
+            BrowserCandidates = static_cast<float>(Cfg.CandidatesPerPixel);
+            BrowserExtra      = static_cast<float>(Cfg.ExtraCandidateCount);
+            BrowserExposure   = Cfg.Exposure;
+            BrowserTemporal   = Cfg.TemporalReuse;
+            BrowserSpatial    = Cfg.SpatialReuse;
+            BrowserAlias      = Cfg.AliasPick;
+            BrowserDenoise    = Cfg.Denoise;
+
+            Browser.Advance(Δτ);
+        }
+
+        // ② Advance camera kinematics (frozen while either overlay owns the pointer, or a field is being typed into)
+        if (!ControlCentre.CoversPointer() && !BrowserCoversPointer && !Browser.EditingText())
             Camera.AdvanceLocomotion(Input, Δτ);
         Camera.AssignAspectRatio(
             static_cast<float>(Surface.QueryWidth()) /
@@ -893,9 +1073,44 @@ int main(int argc, char** argv)
                                                                    Integrator.QueryConfiguration(), Level.QueryMaterials().QueryMetrics(),
                                                                    Textures.QueryMetrics(), MaxTextureLevels);
                               ControlCentre.ConstructControlLayout(OverlaySurface);
+
+                              // World Browser — the right-hand panel, below the notch line so the pull-down shade
+                              //    still covers it. Drawn before notifications so a toast lands on top.
+                              {
+                                  const float PanelW = 340.0f;
+                                  const Frontier::PlaneExtent BrowserExtent{
+                                      static_cast<float>(LogicalWidth) - PanelW, NotchLine,
+                                      static_cast<float>(LogicalWidth), static_cast<float>(LogicalHeight) };
+                                  Frontier::ControlPointer BrowserPointer{};
+                                  BrowserPointer.X        = Input.QueryCursorPositionX() / InterfaceScale;
+                                  BrowserPointer.Y        = Input.QueryCursorPositionY() / InterfaceScale;
+                                  BrowserPointer.Down     = BrowserPointerDown;
+                                  BrowserPointer.Pressed  = BrowserPointerDown && !BrowserPointerWasDown;
+                                  BrowserPointer.Released = !BrowserPointerDown && BrowserPointerWasDown;
+                                  BrowserPointer.Enabled  = !ControlCentre.CoversPointer();
+                                  Browser.Record(OverlaySurface, BrowserExtent, BrowserPointer);
+                              }
+
                               Notifications.ConstructNotificationLayout(OverlaySurface, NotchLine);
                           }
                       });
+
+        // ③b World Browser copy-back. Done after Record and BEFORE the dispatch is built, so a slider moved this
+        //     frame takes effect this frame rather than one frame late — a one-frame lag on Exposure reads as the
+        //     control being unresponsive.
+        {
+            // Each setter is a no-op when the value is unchanged and resets accumulation when it is not, so a
+            //    slider that is merely hovered never restarts the image.
+            Integrator.AssignCandidatesPerPixel(static_cast<uint32_t>(BrowserCandidates + 0.5f));
+            Integrator.AssignExtraCandidateCount(static_cast<uint32_t>(BrowserExtra + 0.5f));
+            Integrator.AssignExposure(BrowserExposure);
+            Integrator.AssignTemporalReuse(BrowserTemporal);
+            Integrator.AssignSpatialReuse(BrowserSpatial);
+            Integrator.AssignAliasPick(BrowserAlias);
+            Integrator.AssignDenoise(BrowserDenoise);
+
+            if (Camera.QueryFlightSpeed() != BrowserCameraSpeed) Camera.AssignFlightSpeed(BrowserCameraSpeed);
+        }
 
         // ④ Build dispatch configuration from live camera + integrator state (camera motion restarts accumulation)
         //    Render scale: the kernel runs on a sub-rectangle of the storage image and the blit stretches it.
