@@ -42,6 +42,7 @@ Run CheckInterfaceAudio
 echo
 echo "=== ReSTIR (R6 - R7a) ==="
 Run CheckTemporalReprojection
+Run CheckAtrousDenoise
 
 echo
 echo "=== scene and dynamic geometry (D1 - D6) ==="
