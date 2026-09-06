@@ -292,7 +292,9 @@ int main(int argc, char** argv)
 
     // Z-up: stand 1.95 m in front of the open face (Y < 0), eye height 1 m, looking along +Y into the box.
     Frontier::ProjectZero::FlyThroughSolver Camera(CameraConfig);
-    Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -1.95f, 1.0f });
+    // Pulled back and raised for the larger room (X ±2, Y 0-4, Z 0-3) so the whole box and the roof aperture are
+    //    in frame from the default position.
+    Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -3.30f, 1.55f });
     Camera.AssignOrientationEuler(0.0f, 0.0f, 0.0f);
     if (Level.QueryName() == "ShaderBall")
     {
