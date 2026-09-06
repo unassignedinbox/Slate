@@ -92,6 +92,16 @@ struct SwapchainExchange::VulkanRecord
     VkImage                  HistorySurfaceImage     = VK_NULL_HANDLE;
     VkDeviceMemory           HistorySurfaceMemory    = VK_NULL_HANDLE;
     VkImageView              HistorySurfaceImageView = VK_NULL_HANDLE;
+
+    // R7 denoiser. MomentImage persists across frames (it is reprojected with the mean); the two DenoiseImages
+    //    ping-pong between à-trous levels — level i reads one and writes the other.
+    VkImage                  MomentImage             = VK_NULL_HANDLE;
+    VkDeviceMemory           MomentMemory            = VK_NULL_HANDLE;
+    VkImageView              MomentImageView         = VK_NULL_HANDLE;
+    VkImage                  DenoiseImages[2]        = { VK_NULL_HANDLE, VK_NULL_HANDLE };
+    VkDeviceMemory           DenoiseMemory[2]        = { VK_NULL_HANDLE, VK_NULL_HANDLE };
+    VkImageView              DenoiseImageViews[2]    = { VK_NULL_HANDLE, VK_NULL_HANDLE };
+    bool                     DenoiseInitialised      = false;
     bool                     HistoryInitialised    = false;             // [-]  layout transitioned to GENERAL once
 
     // ── Scene SSBO geometry and materials ────────────────────────────────────────────────────────────────────────────
@@ -131,6 +141,14 @@ struct SwapchainExchange::VulkanRecord
     VkDescriptorSet          ComputeDescriptorSet    = VK_NULL_HANDLE;
     VkPipelineLayout         ComputePipelineLayout   = VK_NULL_HANDLE;
     VkPipeline               ComputePipeline         = VK_NULL_HANDLE;
+
+    // R7 denoiser: its own pipeline and a small per-level descriptor set. Six sets are allocated (five à-trous
+    //    levels plus one spare) so a level's bindings can be written once at bring-up instead of every frame.
+    VkPipelineLayout         DenoisePipelineLayout   = VK_NULL_HANDLE;
+    VkPipeline               DenoisePipeline         = VK_NULL_HANDLE;
+    VkDescriptorSetLayout    DenoiseSetLayout        = VK_NULL_HANDLE;
+    VkDescriptorPool         DenoisePool             = VK_NULL_HANDLE;
+    VkDescriptorSet          DenoiseSets[kDenoiseLevelCount] = {};
 
     // ── Command recording ─────────────────────────────────────────────────────────────────────────────────────────────
     VkCommandPool                ComputeCommandPool = VK_NULL_HANDLE;
@@ -367,6 +385,7 @@ bool SwapchainExchange::Bring() noexcept
         { "BringCommandRecording", &SwapchainExchange::BringCommandRecording },
         { "BringComputePipeline",  &SwapchainExchange::BringComputePipeline  },
         { "BringDescriptorSet",    &SwapchainExchange::BringDescriptorSet    },
+        { "BringDenoisePipeline",  &SwapchainExchange::BringDenoisePipeline  },
         { "BringCycleSlots",       &SwapchainExchange::BringCycleSlots       },
         { "BringImGui",            &SwapchainExchange::BringImGui            },
         { "BringVisibility",       &SwapchainExchange::BringVisibility       },
@@ -441,6 +460,10 @@ void SwapchainExchange::Retire() noexcept
     if (Vulkan->ComputeCommandPool)    vkDestroyCommandPool       (Vulkan->Device, Vulkan->ComputeCommandPool,    nullptr);
     if (Vulkan->ComputePipeline)       vkDestroyPipeline          (Vulkan->Device, Vulkan->ComputePipeline,       nullptr);
     if (Vulkan->ComputePipelineLayout) vkDestroyPipelineLayout    (Vulkan->Device, Vulkan->ComputePipelineLayout, nullptr);
+    if (Vulkan->DenoisePipeline)       vkDestroyPipeline          (Vulkan->Device, Vulkan->DenoisePipeline,       nullptr);
+    if (Vulkan->DenoisePipelineLayout) vkDestroyPipelineLayout    (Vulkan->Device, Vulkan->DenoisePipelineLayout, nullptr);
+    if (Vulkan->DenoiseSetLayout)      vkDestroyDescriptorSetLayout(Vulkan->Device, Vulkan->DenoiseSetLayout,     nullptr);
+    if (Vulkan->DenoisePool)           vkDestroyDescriptorPool    (Vulkan->Device, Vulkan->DenoisePool,           nullptr);
     if (Vulkan->ComputeDescriptorPool) vkDestroyDescriptorPool    (Vulkan->Device, Vulkan->ComputeDescriptorPool, nullptr);
     if (Vulkan->ComputeDescriptorLayout) vkDestroyDescriptorSetLayout(Vulkan->Device, Vulkan->ComputeDescriptorLayout, nullptr);
 
@@ -481,10 +504,27 @@ void SwapchainExchange::RetireSwapchain() noexcept
     if (Vulkan->HistorySurfaceImageView) vkDestroyImageView(Vulkan->Device, Vulkan->HistorySurfaceImageView, nullptr);
     if (Vulkan->HistorySurfaceImage)     vkDestroyImage    (Vulkan->Device, Vulkan->HistorySurfaceImage,     nullptr);
     if (Vulkan->HistorySurfaceMemory)    vkFreeMemory      (Vulkan->Device, Vulkan->HistorySurfaceMemory,    nullptr);
+    if (Vulkan->MomentImageView)         vkDestroyImageView(Vulkan->Device, Vulkan->MomentImageView,         nullptr);
+    if (Vulkan->MomentImage)             vkDestroyImage    (Vulkan->Device, Vulkan->MomentImage,             nullptr);
+    if (Vulkan->MomentMemory)            vkFreeMemory      (Vulkan->Device, Vulkan->MomentMemory,            nullptr);
+    for (uint32_t Slot = 0u; Slot < 2u; ++Slot)
+    {
+        if (Vulkan->DenoiseImageViews[Slot]) vkDestroyImageView(Vulkan->Device, Vulkan->DenoiseImageViews[Slot], nullptr);
+        if (Vulkan->DenoiseImages[Slot])     vkDestroyImage    (Vulkan->Device, Vulkan->DenoiseImages[Slot],     nullptr);
+        if (Vulkan->DenoiseMemory[Slot])     vkFreeMemory      (Vulkan->Device, Vulkan->DenoiseMemory[Slot],     nullptr);
+    }
     Vulkan->HistoryImageView   = VK_NULL_HANDLE;
     Vulkan->HistorySurfaceImageView = VK_NULL_HANDLE;
     Vulkan->HistorySurfaceImage     = VK_NULL_HANDLE;
     Vulkan->HistorySurfaceMemory    = VK_NULL_HANDLE;
+    Vulkan->MomentImageView = VK_NULL_HANDLE; Vulkan->MomentImage = VK_NULL_HANDLE; Vulkan->MomentMemory = VK_NULL_HANDLE;
+    for (uint32_t Slot = 0u; Slot < 2u; ++Slot)
+    {
+        Vulkan->DenoiseImageViews[Slot] = VK_NULL_HANDLE;
+        Vulkan->DenoiseImages[Slot]     = VK_NULL_HANDLE;
+        Vulkan->DenoiseMemory[Slot]     = VK_NULL_HANDLE;
+    }
+    Vulkan->DenoiseInitialised = false;
     Vulkan->HistoryImage       = VK_NULL_HANDLE;
     Vulkan->HistoryMemory      = VK_NULL_HANDLE;
     Vulkan->HistoryInitialised = false;
@@ -971,6 +1011,21 @@ bool SwapchainExchange::BringStorageImage() noexcept
                             Vulkan->HistorySurfaceImageView, "history surface image"))
         return false;
 
+    // ②c R7 denoiser images. The moments persist (reprojected with the mean); the pair ping-pongs between levels.
+    if (!CreateStorageImage(Vulkan->Device, Vulkan->MemoryProperties, VK_FORMAT_R32G32B32A32_SFLOAT, Extent,
+                            VK_IMAGE_USAGE_STORAGE_BIT,
+                            Vulkan->MomentImage, Vulkan->MomentMemory, Vulkan->MomentImageView, "moment image"))
+        return false;
+    for (uint32_t Slot = 0u; Slot < 2u; ++Slot)
+    {
+        if (!CreateStorageImage(Vulkan->Device, Vulkan->MemoryProperties, VK_FORMAT_R32G32B32A32_SFLOAT, Extent,
+                                VK_IMAGE_USAGE_STORAGE_BIT,
+                                Vulkan->DenoiseImages[Slot], Vulkan->DenoiseMemory[Slot],
+                                Vulkan->DenoiseImageViews[Slot], "denoise image"))
+            return false;
+    }
+    Vulkan->DenoiseInitialised = false;
+
     // ③ R6 temporal reservoirs — two full-extent 64 B/px SSBOs (bindings 16/17), device-local, zeroed on first dispatch.
     {
         Vulkan->ReservoirBytes =
@@ -1043,7 +1098,7 @@ bool SwapchainExchange::BringComputePipeline() noexcept
     for (uint32_t B = 4u; B < kComputeBindingCount - 1u; ++B)
     {
         LayoutBindings[B].binding         = B;
-        LayoutBindings[B].descriptorType  = (B < 6u || B == 18u) ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : (B == 13u || B == 14u || B == 15u) ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;   // 18 = R7a history normal+depth
+        LayoutBindings[B].descriptorType  = (B < 6u || B == 18u || B == 19u || B == 20u) ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : (B == 13u || B == 14u || B == 15u) ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;   // 18 R7a surface · 19/20 R7 moments + denoise input
         LayoutBindings[B].descriptorCount = 1u;
         LayoutBindings[B].stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
     }
@@ -1121,13 +1176,117 @@ bool SwapchainExchange::BringComputePipeline() noexcept
     return true;
 }
 
+//------------------------------------------------------------------------------------------------------------------------
+//                                            R7 DENOISER PIPELINE
+//------------------------------------------------------------------------------------------------------------------------
+// Deliberately a separate descriptor set from the ReSTIR kernel's. That set is already full to its variable-count
+//    bindless texture array, and a filter needing four images has no business forcing another renumber of it.
+
+struct DenoisePushRecord
+{
+    uint32_t Extent[2];        // [px]
+    uint32_t StepSize;         // [px] tap spacing for this level
+    uint32_t Enabled;          // [-]  0 = straight copy
+
+    float    NormalPower;      // [-]
+    float    DepthScale;       // [-]
+    float    LuminanceScale;   // [-]
+    float    Exposure;         // [-]
+
+    uint32_t FinalLevel;       // [-]  1 = also tone-map into the presentation image
+};
+
+bool SwapchainExchange::BringDenoisePipeline() noexcept
+{
+    // ① Set layout: source, target, surface, presentation.
+    std::array<VkDescriptorSetLayoutBinding, 4u> Bindings{};
+    for (uint32_t B = 0u; B < 4u; ++B)
+    {
+        Bindings[B].binding         = B;
+        Bindings[B].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        Bindings[B].descriptorCount = 1u;
+        Bindings[B].stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
+    }
+
+    VkDescriptorSetLayoutCreateInfo LayoutInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+    LayoutInfo.bindingCount = 4u;
+    LayoutInfo.pBindings    = Bindings.data();
+    if (vkCreateDescriptorSetLayout(Vulkan->Device, &LayoutInfo, nullptr, &Vulkan->DenoiseSetLayout) != VK_SUCCESS)
+        return false;
+
+    VkPushConstantRange PushRange{};
+    PushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    PushRange.size       = static_cast<uint32_t>(sizeof(DenoisePushRecord));
+
+    VkPipelineLayoutCreateInfo PipelineLayoutInfo{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+    PipelineLayoutInfo.setLayoutCount         = 1u;
+    PipelineLayoutInfo.pSetLayouts            = &Vulkan->DenoiseSetLayout;
+    PipelineLayoutInfo.pushConstantRangeCount = 1u;
+    PipelineLayoutInfo.pPushConstantRanges    = &PushRange;
+    if (vkCreatePipelineLayout(Vulkan->Device, &PipelineLayoutInfo, nullptr, &Vulkan->DenoisePipelineLayout) != VK_SUCCESS)
+        return false;
+
+    // ② Pool and one set per level.
+    VkDescriptorPoolSize PoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 4u * kDenoiseLevelCount };
+    VkDescriptorPoolCreateInfo PoolInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
+    PoolInfo.maxSets       = kDenoiseLevelCount;
+    PoolInfo.poolSizeCount = 1u;
+    PoolInfo.pPoolSizes    = &PoolSize;
+    if (vkCreateDescriptorPool(Vulkan->Device, &PoolInfo, nullptr, &Vulkan->DenoisePool) != VK_SUCCESS) return false;
+
+    std::array<VkDescriptorSetLayout, kDenoiseLevelCount> SetLayouts{};
+    SetLayouts.fill(Vulkan->DenoiseSetLayout);
+    VkDescriptorSetAllocateInfo AllocateInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+    AllocateInfo.descriptorPool     = Vulkan->DenoisePool;
+    AllocateInfo.descriptorSetCount = kDenoiseLevelCount;
+    AllocateInfo.pSetLayouts        = SetLayouts.data();
+    if (vkAllocateDescriptorSets(Vulkan->Device, &AllocateInfo, Vulkan->DenoiseSets) != VK_SUCCESS) return false;
+
+    // ③ Pipeline.
+    const std::vector<uint32_t> Spirv = LoadSpirv("Engine/Shaders/AtrousDenoise.spv");
+    if (Spirv.empty())
+    {
+        std::cerr << "[SwapchainExchange] AtrousDenoise.spv missing - the denoiser cannot be enabled.\n";
+        return false;
+    }
+
+    VkShaderModuleCreateInfo ModuleInfo{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
+    ModuleInfo.codeSize = Spirv.size() * 4u;
+    ModuleInfo.pCode    = Spirv.data();
+    VkShaderModule Module = VK_NULL_HANDLE;
+    if (vkCreateShaderModule(Vulkan->Device, &ModuleInfo, nullptr, &Module) != VK_SUCCESS) return false;
+
+    VkComputePipelineCreateInfo ComputeInfo{ VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO };
+    ComputeInfo.stage.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    ComputeInfo.stage.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
+    ComputeInfo.stage.module = Module;
+    ComputeInfo.stage.pName  = "main";
+    ComputeInfo.layout       = Vulkan->DenoisePipelineLayout;
+
+    const VkResult Result = vkCreateComputePipelines(Vulkan->Device, VK_NULL_HANDLE, 1u, &ComputeInfo, nullptr,
+                                                     &Vulkan->DenoisePipeline);
+    vkDestroyShaderModule(Vulkan->Device, Module, nullptr);
+    if (Result != VK_SUCCESS)
+    {
+        std::cerr << "[SwapchainExchange] denoiser vkCreateComputePipelines failed (VkResult "
+                  << static_cast<int>(Result) << ").\n";
+        return false;
+    }
+
+    std::cerr << "[SwapchainExchange] Denoiser: " << kDenoiseLevelCount << " a-trous levels.\n";
+    return true;
+}
+
 bool SwapchainExchange::BringDescriptorSet() noexcept
 {
     std::array<VkDescriptorPoolSize, 3u> PoolSizes{};
+    // Counted explicitly rather than derived from kComputeBindingCount: the mix of image and buffer bindings is
+    //    not a fixed offset from the total, and a wrong pool size fails allocation at bring-up with a message that
+    //    points nowhere near the cause.
     PoolSizes[0].type            = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    PoolSizes[0].descriptorCount = 4u;
+    PoolSizes[0].descriptorCount = 7u;                          // 0 out · 3 history · 4 surface · 5 normal · 18 R7a surface · 19 moments · 20 denoise
     PoolSizes[1].type            = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    PoolSizes[1].descriptorCount = kComputeBindingCount - 8u;   // 11 storage buffers (1, 2, 6-12, 16-17)
+    PoolSizes[1].descriptorCount = 11u;                         // 1, 2, 6-12, 16-17
     PoolSizes[2].type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     PoolSizes[2].descriptorCount = 3u + (Vulkan->DescriptorIndexing ? kTextureSlotCapacity : 1u);   // R6: two LUTs + motion + the bindless table
 
@@ -1187,6 +1346,16 @@ void SwapchainExchange::WriteDescriptorSet() noexcept
     VkDescriptorImageInfo HistorySurfaceInfo{};
     HistorySurfaceInfo.imageView   = Vulkan->HistorySurfaceImageView;
     HistorySurfaceInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+    VkDescriptorImageInfo MomentInfo{};
+    MomentInfo.imageView   = Vulkan->MomentImageView;
+    MomentInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+    // The kernel always writes denoise slot 0; the filter's first level reads it. Keeping the kernel's target fixed
+    //    means the ping-pong parity lives entirely inside the filter loop.
+    VkDescriptorImageInfo DenoiseInputInfo{};
+    DenoiseInputInfo.imageView   = Vulkan->DenoiseImageViews[0];
+    DenoiseInputInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
     VkDescriptorImageInfo SurfaceInfo{ VK_NULL_HANDLE, static_cast<VkImageView>(Visibility.QuerySurfaceView()), VK_IMAGE_LAYOUT_GENERAL };
     VkDescriptorImageInfo NormalInfo { VK_NULL_HANDLE, static_cast<VkImageView>(Visibility.QueryNormalView()),  VK_IMAGE_LAYOUT_GENERAL };
@@ -1289,6 +1458,8 @@ void SwapchainExchange::WriteDescriptorSet() noexcept
     WriteBuffer(16u, PrevReservoirInfo);    // R6: skipped until the reservoir SSBOs exist
     WriteBuffer(17u, CurrReservoirInfo);
     WriteImage (18u, HistorySurfaceInfo);   // R7a: history (normal, depth) for running-mean reprojection
+    WriteImage (19u, MomentInfo);           // R7:  luminance moments, for the variance estimate
+    WriteImage (20u, DenoiseInputInfo);     // R7:  linear radiance + variance, the à-trous input
 
     // R4a: the texture table. Written in one go (partially bound: slots past the resident count stay undefined and are
     //    never indexed — the material records only reference resident slots).
@@ -1311,6 +1482,47 @@ void SwapchainExchange::WriteDescriptorSet() noexcept
         vkUpdateDescriptorSets(Vulkan->Device, WriteCount, Writes.data(), 0u, nullptr);
     if (TextureWrite.descriptorCount > 0u)
         vkUpdateDescriptorSets(Vulkan->Device, 1u, &TextureWrite, 0u, nullptr);
+
+    // ── R7 denoiser sets ────────────────────────────────────────────────────────────────────────────────────────
+    // One set per à-trous level, written once here rather than per frame: the images never change, only the push
+    //    constants do. Level i reads slot (i & 1) and writes the other, so with an odd level count the final
+    //    result lands in slot 1 — but the last level also writes the presentation image, so nothing downstream
+    //    depends on which slot it ended in.
+    if (Vulkan->DenoiseSetLayout && Vulkan->DenoiseImageViews[0] && Vulkan->HistorySurfaceImageView)
+    {
+        std::array<VkDescriptorImageInfo,  4u * kDenoiseLevelCount> DenoiseInfos{};
+        std::array<VkWriteDescriptorSet,   4u * kDenoiseLevelCount> DenoiseWrites{};
+        uint32_t DenoiseCount = 0u;
+
+        for (uint32_t Level = 0u; Level < kDenoiseLevelCount; ++Level)
+        {
+            const uint32_t Source = Level & 1u;
+            const VkImageView Views[4] =
+            {
+                Vulkan->DenoiseImageViews[Source],        // 0 source
+                Vulkan->DenoiseImageViews[Source ^ 1u],   // 1 target
+                Vulkan->HistorySurfaceImageView,          // 2 normal + depth (shared with R7a)
+                Vulkan->StorageImageView                  // 3 presentation (written by the final level only)
+            };
+
+            for (uint32_t Binding = 0u; Binding < 4u; ++Binding)
+            {
+                VkDescriptorImageInfo& Info = DenoiseInfos[DenoiseCount];
+                Info.imageView   = Views[Binding];
+                Info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+                VkWriteDescriptorSet& Write = DenoiseWrites[DenoiseCount];
+                Write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                Write.dstSet          = Vulkan->DenoiseSets[Level];
+                Write.dstBinding      = Binding;
+                Write.descriptorCount = 1u;
+                Write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+                Write.pImageInfo      = &Info;
+                ++DenoiseCount;
+            }
+        }
+        vkUpdateDescriptorSets(Vulkan->Device, DenoiseCount, DenoiseWrites.data(), 0u, nullptr);
+    }
 }
 
 bool SwapchainExchange::BringCycleSlots() noexcept
@@ -1942,8 +2154,13 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
     //    R7a adds the history surface image: same lifetime, same access pattern (read the previous frame's value, write
     //    this frame's), so it rides the same barrier rather than a second one.
     {
-        const std::array<VkImage, 2u> HistoryImages{ Vulkan->HistoryImage, Vulkan->HistorySurfaceImage };
-        std::array<VkImageMemoryBarrier, 2u> Barriers{};
+        // R7 joins the same bracket: the moments persist exactly like the mean, and the two denoise images must
+        //    reach GENERAL before the kernel writes slot 0. All of them share the one HistoryInitialised latch
+        //    because they are created and destroyed together.
+        const std::array<VkImage, 5u> HistoryImages{ Vulkan->HistoryImage, Vulkan->HistorySurfaceImage,
+                                                     Vulkan->MomentImage,
+                                                     Vulkan->DenoiseImages[0], Vulkan->DenoiseImages[1] };
+        std::array<VkImageMemoryBarrier, 5u> Barriers{};
         uint32_t BarrierCount = 0u;
         for (VkImage Image : HistoryImages)
         {
@@ -2034,6 +2251,50 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
         const uint32_t GroupX = (RenderWidth  + kLocalGroupSizeX - 1u) / kLocalGroupSizeX;
         const uint32_t GroupY = (RenderHeight + kLocalGroupSizeY - 1u) / kLocalGroupSizeY;
         vkCmdDispatch(Command, GroupX, GroupY, 1u);
+
+        // ②a R7 à-trous denoise. The kernel wrote LINEAR radiance + variance into denoise slot 0 and, with the
+        //     feature on, skipped the tone map; the final level here performs it into the presentation image.
+        //     Each level reads what the previous one wrote, so they are strictly ordered by a barrier.
+        if ((Dispatch.FeatureFlags & DispatchFeatureDenoise) != 0u && Vulkan->DenoisePipeline)
+        {
+            vkCmdBindPipeline(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Vulkan->DenoisePipeline);
+
+            for (uint32_t Level = 0u; Level < kDenoiseLevelCount; ++Level)
+            {
+                // The source of level 0 is the kernel's own write; later levels read the previous level's target.
+                VkImageMemoryBarrier Barrier{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
+                Barrier.oldLayout                       = VK_IMAGE_LAYOUT_GENERAL;
+                Barrier.newLayout                       = VK_IMAGE_LAYOUT_GENERAL;
+                Barrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
+                Barrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
+                Barrier.image                           = Vulkan->DenoiseImages[Level & 1u];
+                Barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+                Barrier.subresourceRange.levelCount     = 1u;
+                Barrier.subresourceRange.layerCount     = 1u;
+                Barrier.srcAccessMask                   = VK_ACCESS_SHADER_WRITE_BIT;
+                Barrier.dstAccessMask                   = VK_ACCESS_SHADER_READ_BIT;
+                vkCmdPipelineBarrier(Command,
+                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    0u, 0u, nullptr, 0u, nullptr, 1u, &Barrier);
+
+                DenoisePushRecord Push{};
+                Push.Extent[0]      = RenderWidth;
+                Push.Extent[1]      = RenderHeight;
+                Push.StepSize       = 1u << Level;          // 1, 2, 4, 8, 16 — the "holes" widen each level
+                Push.Enabled        = 1u;
+                Push.NormalPower    = 64.0f;
+                Push.DepthScale     = 0.05f;
+                Push.LuminanceScale = 4.0f;
+                Push.Exposure       = Dispatch.Exposure;    // the filter owns the tone map, so it needs the exposure
+                Push.FinalLevel     = (Level + 1u == kDenoiseLevelCount) ? 1u : 0u;
+
+                vkCmdPushConstants(Command, Vulkan->DenoisePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT,
+                                   0u, sizeof(Push), &Push);
+                vkCmdBindDescriptorSets(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Vulkan->DenoisePipelineLayout,
+                                        0u, 1u, &Vulkan->DenoiseSets[Level], 0u, nullptr);
+                vkCmdDispatch(Command, GroupX, GroupY, 1u);
+            }
+        }
     }
     Visibility.RecordKernelEnd(Command, Vulkan->ActiveSlot);
 

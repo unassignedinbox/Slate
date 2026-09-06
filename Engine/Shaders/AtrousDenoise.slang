@@ -36,6 +36,7 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 layout(set = 0, binding = 0, rgba32f) uniform readonly  image2D SourceImage;    // xyz = radiance, w = variance
 layout(set = 0, binding = 1, rgba32f) uniform writeonly image2D TargetImage;    // xyz = radiance, w = variance
 layout(set = 0, binding = 2, rgba16f) uniform readonly  image2D SurfaceImage;   // xyz = normal, w = depth (≤ 0 = none)
+layout(set = 0, binding = 3, rgba8)   uniform writeonly image2D OutputImage;   // tone-mapped presentation image (final level only)
 
 layout(push_constant) uniform DenoiseConstants
 {
@@ -46,7 +47,9 @@ layout(push_constant) uniform DenoiseConstants
     float NormalPower;        // [-]   σn — exponent on the normal agreement
     float DepthScale;         // [-]   σz — relative depth tolerance
     float LuminanceScale;     // [-]   σl — how many standard deviations count as "the same"
-    float Reserved;
+    float Exposure;           // [-]   applied by the final level's tone map
+
+    uint  FinalLevel;         // [-]   1 = also tone-map into OutputImage
 };
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -56,6 +59,20 @@ layout(push_constant) uniform DenoiseConstants
 float Luminance(vec3 Colour)
 {
     return dot(Colour, vec3(0.2126, 0.7152, 0.0722));
+}
+
+// Identical to ReSTIRViewport.slang's tone map — the two must agree, because with the denoiser off the kernel
+//    writes the presentation image itself and toggling the filter must not change the grade.
+float AcesFilm(float x)
+{
+    float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
+vec3 ToneMap(vec3 Hdr)
+{
+    Hdr *= Exposure;
+    return pow(vec3(AcesFilm(Hdr.r), AcesFilm(Hdr.g), AcesFilm(Hdr.b)), vec3(1.0 / 2.2));
 }
 
 // The 5-tap B₃ spline kernel, separable: (1/16, 1/4, 3/8, 1/4, 1/16). The 2D weight is the outer product.
@@ -82,6 +99,7 @@ void main()
     if (Enabled == 0u || CentreSurface.w <= 0.0)
     {
         imageStore(TargetImage, Pixel, Centre);
+        if (FinalLevel != 0u) imageStore(OutputImage, Pixel, vec4(ToneMap(Centre.rgb), 1.0));
         return;
     }
 
@@ -155,4 +173,8 @@ void main()
                 : Centre;
 
     imageStore(TargetImage, Pixel, Result);
+
+    // The last level is also the presentation write. Doing it here rather than in a sixth pass saves a full-screen
+    //    round trip, and keeps the tone map the only place linear radiance becomes display values.
+    if (FinalLevel != 0u) imageStore(OutputImage, Pixel, vec4(ToneMap(Result.rgb), 1.0));
 }

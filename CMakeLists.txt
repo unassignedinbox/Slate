@@ -125,6 +125,7 @@ set(SHADER_TABLE
     "ReSTIRViewport.slang|compute|ReSTIRViewport.spv"
     "ClusterCull.slang|compute|ClusterCull.spv"
     "HiZReduce.slang|compute|HiZReduce.spv"
+    "AtrousDenoise.slang|compute|AtrousDenoise.spv"
     "SurfaceResolve.slang|compute|SurfaceResolve.spv"
     "VisibilityRaster.vert.slang|vertex|VisibilityRaster.vert.spv"
     "VisibilityRaster.frag.slang|fragment|VisibilityRaster.frag.spv"

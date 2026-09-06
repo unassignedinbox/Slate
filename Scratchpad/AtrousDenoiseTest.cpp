@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <vector>
@@ -389,6 +390,50 @@ int main()
             if (Copy.Red[I] != Picture.Red[I] || Copy.Green[I] != Picture.Green[I]
              || Copy.Blue[I] != Picture.Blue[I] || Copy.Variance[I] != Picture.Variance[I]) Identical = false;
         Expect(Identical, "every channel of every pixel is untouched");
+    }
+
+    //--------------------------------------------------------------------------------------------------------------
+    std::printf("\n9. the push-constant record matches the shader block\n");
+    {
+        // The C++ side pushes this struct straight at the shader. glslang reports DenoiseConstants as 36 bytes over
+        //    8 members; if the two ever disagree the filter reads garbage parameters and misbehaves in a way that
+        //    looks like a tuning problem rather than a layout bug.
+        struct DenoisePushRecord
+        {
+            uint32_t Extent[2];
+            uint32_t StepSize;
+            uint32_t Enabled;
+            float    NormalPower;
+            float    DepthScale;
+            float    LuminanceScale;
+            float    Exposure;
+            uint32_t FinalLevel;
+        };
+        Expect(sizeof(DenoisePushRecord) == 36u, "the push record is 36 bytes, as the shader block reflects");
+        Expect(offsetof(DenoisePushRecord, StepSize)       ==  8u, "StepSize sits at offset 8");
+        Expect(offsetof(DenoisePushRecord, Enabled)        == 12u, "Enabled sits at offset 12");
+        Expect(offsetof(DenoisePushRecord, NormalPower)    == 16u, "NormalPower sits at offset 16");
+        Expect(offsetof(DenoisePushRecord, LuminanceScale) == 24u, "LuminanceScale sits at offset 24");
+        Expect(offsetof(DenoisePushRecord, Exposure)       == 28u, "Exposure sits at offset 28");
+        Expect(offsetof(DenoisePushRecord, FinalLevel)     == 32u, "FinalLevel sits at offset 32");
+    }
+
+    //--------------------------------------------------------------------------------------------------------------
+    std::printf("\n10. the ping-pong reaches the level the dispatch loop expects\n");
+    {
+        // Level i reads slot (i & 1) and writes the other. With five levels the chain is
+        //    0->1, 1->0, 0->1, 1->0, 0->1, so the final result lands in slot 1 — and level 4 is the one flagged
+        //    FinalLevel, so the tone map happens on the pass that produced the finished image, not a stale one.
+        int Slot = 0;
+        int FinalWriteSlot = -1;
+        for (int Level = 0; Level < 5; ++Level)
+        {
+            const int Source = Level & 1;
+            Expect(Source == Slot, Level == 0 ? "level 0 reads the slot the kernel wrote" : "each level reads what the previous one wrote");
+            Slot = Source ^ 1;
+            if (Level == 4) FinalWriteSlot = Slot;
+        }
+        Expect(FinalWriteSlot == 1, "five levels finish in slot 1");
     }
 
     std::printf("\n>>> %s (%d failure%s)\n", Failures == 0 ? "ALL PASS" : "FAILURES", Failures, Failures == 1 ? "" : "s");

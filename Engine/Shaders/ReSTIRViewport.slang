@@ -116,7 +116,9 @@ struct GpuReservoir   // 64 B stride — mirrors ReservoirBufferRecord in Swapch
 layout(std430, binding = 16) readonly buffer PrevReservoirExtent { GpuReservoir PrevReservoirs[]; };
 layout(std430, binding = 17) writeonly buffer CurrReservoirExtent { GpuReservoir CurrReservoirs[]; };
 layout(rgba16f, binding = 18) uniform image2D HistorySurfaceImage;   // R7a: xyz = normal, w = depth the history mean was shaded at (w ≤ 0 = no surface)
-layout(binding = 19) uniform sampler2D Textures[];   // R4a bindless table — ⚠️ moved 11 → 15 in R4b → 18 in R6 → 19 in R7a: a variable-count binding must be the last one in the set
+layout(rgba32f, binding = 19) uniform image2D MomentImage;           // R7: x = E[luma], y = E[luma²], reprojected with the mean
+layout(rgba32f, binding = 20) uniform writeonly image2D DenoiseImage; // R7: xyz = linear radiance, w = variance — the à-trous input
+layout(binding = 21) uniform sampler2D Textures[];   // R4a bindless table — ⚠️ moved 11 → 15 in R4b → 18 in R6 → 19 in R7a → 21 in R7: a variable-count binding must be the last one in the set
 
 const float kTemporalNormalCos = 0.906308;   // cos(25°): temporal/spatial normal validation
 const float kTemporalDepthTol  = 0.10;       // 10% relative depth validation
@@ -322,7 +324,8 @@ const uint kFeatureAmbientFloor       = 4u;   // bit 2: add albedo × AmbientStr
 const uint kFeatureTemporalReuse      = 8u;   // bit 3: R6 row 2 — temporal reservoir reuse (back-projection + validation)
 const uint kFeatureSpatialReuse       = 16u;  // bit 4: R6 row 3 — spatiotemporal neighbour reuse (pairwise MIS)
 const uint kFeatureAliasPick          = 32u;  // bit 5: R6 row 3 — Walker-alias light pick (off = uniform, the R0 identity proof)
-const uint kFeatureTemporalReprojection = 64u; // bit 6: R7a — reproject the running mean through the R2 motion vectors
+const uint kFeatureTemporalReprojection = 64u;  // bit 6: R7a — reproject the running mean through the R2 motion vectors
+const uint kFeatureDenoise            = 128u; // bit 7: R7 — the à-trous filter runs, so the kernel defers the tone map to it
 
 float PixelSpreadAngle() { return 2.0 * FieldOfViewTanHalf / float(ViewportHeight); }   // [rad] R4b ray-cone spread per pixel
 
@@ -569,6 +572,14 @@ void ResampleCandidate(inout Reservoir res, vec3 point, uint light, vec2 uv, flo
 //                                              ACES FILMIC TONE MAPPING
 //------------------------------------------------------------------------------------------------------------------------
 
+// Rec. 709 luma. Must match AtrousDenoise.slang exactly: the kernel measures the variance of THIS quantity and the
+//    filter compares neighbours by it, so a mismatch would make the filter's noise estimate describe a different
+//    signal from the one it is filtering.
+float Luminance(vec3 colour)
+{
+    return dot(colour, vec3(0.2126, 0.7152, 0.0722));
+}
+
 float AcesFilm(float x)
 {
     float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
@@ -616,6 +627,8 @@ void ResolveSurface(uvec2 pixel, vec3 radiance, vec3 normal, float depth)
 
     const bool reproject = depth > 0.0 && (FeatureFlags & kFeatureTemporalReprojection) != 0u;
 
+    vec2 moments = vec2(0.0);   // R7: x = E[luma], y = E[luma²], carried alongside the mean
+
     if (FrameIndex > 0u && reproject)
     {
         vec2 extent = vec2(float(ViewportWidth), float(ViewportHeight));
@@ -633,6 +646,7 @@ void ResolveSurface(uvec2 pixel, vec3 radiance, vec3 normal, float depth)
             {
                 history  = imageLoad(HistoryImage, prevPx);
                 count    = history.a;
+                moments  = imageLoad(MomentImage, prevPx).xy;   // the moments follow the same reprojection
                 resolved = true;
             }
             // Failing validation is a real disocclusion: leave count at 0 so the mean restarts at n = 1 rather
@@ -649,14 +663,33 @@ void ResolveSurface(uvec2 pixel, vec3 radiance, vec3 normal, float depth)
         //    feature bit clear this function is byte-identical to the accumulator it replaced.
         history = imageLoad(HistoryImage, ivec2(pixel));
         count   = history.a;
+        moments = imageLoad(MomentImage, ivec2(pixel)).xy;
     }
 
     count      = count + 1.0;
     vec3 mean  = history.rgb + (radiance - history.rgb) / count;
 
+    // R7: the same incremental mean applied to the first two luminance moments. Variance is E[x²] − E[x]², which is
+    //    the noise estimate the à-trous filter divides by; a pixel with many samples reports a small variance and
+    //    is therefore barely filtered, which is how the denoiser fades out as the image converges.
+    float luma = Luminance(radiance);
+    moments   += (vec2(luma, luma * luma) - moments) / count;
+    // Clamped at zero: with one sample the estimator is exactly zero and float error can push it slightly negative.
+    float variance = max(moments.y - moments.x * moments.x, 0.0);
+    // A single sample carries no information about its own spread. Reporting the luminance itself as the standard
+    //    deviation keeps the filter maximally permissive on brand-new pixels (disocclusions), which is exactly
+    //    where the most smoothing is needed.
+    if (count < 2.0) variance = luma * luma;
+
     imageStore(HistoryImage,     ivec2(pixel), vec4(mean, count));
     imageStore(HistorySurfaceImage, ivec2(pixel), vec4(normal, depth));
-    imageStore(OutputImage,      ivec2(pixel), vec4(ToneMap(mean), 1.0));
+    imageStore(MomentImage,      ivec2(pixel), vec4(moments, 0.0, 0.0));
+
+    // With the denoiser on, the filter owns the tone map: it needs LINEAR radiance, and tone mapping before a blur
+    //    would average display-space values and darken every gradient. The final à-trous level writes OutputImage.
+    imageStore(DenoiseImage, ivec2(pixel), vec4(mean, variance));
+    if ((FeatureFlags & kFeatureDenoise) == 0u)
+        imageStore(OutputImage, ivec2(pixel), vec4(ToneMap(mean), 1.0));
 }
 
 // Background and other surface-less writes: no normal, no depth, never a reprojection source.

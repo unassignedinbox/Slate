@@ -25,7 +25,11 @@ namespace Frontier {
 class SceneStructure;
 class TraversalIndex;   // GeometricRaster/TraversalIndex.h (R3 CWBVH)
 class TextureIndex;     // ContentInterchange/TextureIndex.h (R4a)
-static constexpr uint32_t kComputeBindingCount  = 20u;    // compute set 0: 0 out · 1 tris · 2 materials · 3 history · 4 surface · 5 normal · 6 instances · 7 luminaires · 8/9 CWBVH · 10 slabs · 11 vertices · 12 indices · 13 energy LUT · 14 sheen LUT · 15 motion · 16 prev reservoir · 17 curr reservoir · 18 history normal+depth (R7a) · 19 Textures[] (variable-count binding MUST stay last — Vulkan requires it on the highest binding number)
+// R7 à-trous levels. Five doublings reach an 81x81 pixel footprint (1+2+4+8+16 taps either side of centre) for
+//    5 x 25 taps instead of 6561 — the whole point of the "with holes" formulation.
+static constexpr uint32_t kDenoiseLevelCount    = 5u;
+
+static constexpr uint32_t kComputeBindingCount  = 22u;    // compute set 0: 0 out · 1 tris · 2 materials · 3 history · 4 surface · 5 normal · 6 instances · 7 luminaires · 8/9 CWBVH · 10 slabs · 11 vertices · 12 indices · 13 energy LUT · 14 sheen LUT · 15 motion · 16 prev reservoir · 17 curr reservoir · 18 history normal+depth (R7a) · 19 luminance moments (R7) · 20 denoise input (R7) · 21 Textures[] (variable-count binding MUST stay last — Vulkan requires it on the highest binding number)
 static constexpr uint32_t kTextureSlotCapacity  = 1024u;  // bindless sampler2D[] size (variable-count binding; Pascal maxPerStageDescriptorSamplers ≥ 4000)
 class MaterialIndex;    // ContentInterchange/MaterialIndex.h (R4a)
 
@@ -110,7 +114,8 @@ enum DispatchFeature : uint32_t
     DispatchFeatureTemporalReuse      = 1u << 3,   // R6 row 2: temporal reservoir reuse
     DispatchFeatureSpatialReuse       = 1u << 4,   // R6 row 3: spatial neighbour reuse
     DispatchFeatureAliasPick          = 1u << 5,   // R6 row 3: Walker-alias light pick (off = uniform, R0 identity)
-    DispatchFeatureTemporalReprojection = 1u << 6  // R7a: reproject the running mean through the R2 motion vectors
+    DispatchFeatureTemporalReprojection = 1u << 6, // R7a: reproject the running mean through the R2 motion vectors
+    DispatchFeatureDenoise            = 1u << 7    // R7:  à-trous filter runs; the kernel defers the tone map to it
 };
 
 // Mirrors `layout(push_constant) uniform ReSTIRConstants` in Engine/Shaders/ReSTIRViewport.slang.
@@ -233,6 +238,7 @@ private:
     [[nodiscard]] bool  BringStorageImage()     noexcept;
     [[nodiscard]] bool  BringComputePipeline()  noexcept;
     [[nodiscard]] bool  BringDescriptorSet()    noexcept;
+    [[nodiscard]] bool  BringDenoisePipeline()  noexcept;   // R7: à-trous filter, its own small descriptor set
     [[nodiscard]] bool  BringCommandRecording() noexcept;
     [[nodiscard]] bool  BringCycleSlots()       noexcept;
     [[nodiscard]] bool  BringImGui()            noexcept;

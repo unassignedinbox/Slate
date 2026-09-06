@@ -35,6 +35,7 @@ struct ReSTIRIntegratorConfiguration
     bool        TemporalReuse      = true;  // [-]   R6 row 2: temporal reservoir reuse (back-projection + validation)
     bool        SpatialReuse       = true;  // [-]   R6 row 3: spatial neighbour reuse (pairwise MIS)
     bool        AliasPick          = true;  // [-]   R6 row 3: Walker-alias light pick (false = uniform, R0 identity; F5)
+    bool        Denoise            = true;  // [-]   R7: edge-avoiding à-trous filter (false = the raw accumulated image)
     bool        TemporalReprojection = true; // [-]   R7a: back-project the running mean through the motion vectors
                                              //       (false = the pre-R7a same-pixel accumulator, kept as an identity switch)
 };

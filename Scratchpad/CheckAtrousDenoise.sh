@@ -41,7 +41,40 @@ grep -q 'Weight \* Weight' Engine/Shaders/AtrousDenoise.slang || { echo "  shade
 [ "$(grep -c 'w <= 0.0' Engine/Shaders/AtrousDenoise.slang)" -ge 2 ] \
     || { echo "  shader is missing a background (depth <= 0) rejection"; Fail=1; }
 
-[ "$Fail" = "0" ] && echo "  constants and weights agree with the harness                     PASS"
+# ── Wiring ───────────────────────────────────────────────────────────────────────────────────────────────────────
+# The kernel and the filter must agree on the luminance definition: the kernel measures the VARIANCE of this
+# quantity and the filter compares neighbours by it. A mismatch makes the noise estimate describe a different
+# signal from the one being filtered.
+grep -q '0.2126, 0.7152, 0.0722' Engine/Shaders/ReSTIRViewport.slang \
+    || { echo "  kernel luminance does not match the filter's"; Fail=1; }
+
+# The kernel must skip its own tone map when the denoiser owns it, or the image is graded twice.
+grep -q 'FeatureFlags & kFeatureDenoise' Engine/Shaders/ReSTIRViewport.slang \
+    || { echo "  kernel does not defer the tone map to the filter"; Fail=1; }
+
+# Both tone maps must be the same curve, or toggling the denoiser would change the grade.
+for File in Engine/Shaders/ReSTIRViewport.slang Engine/Shaders/AtrousDenoise.slang; do
+    grep -q 'a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14' "$File" \
+        || { echo "  $File has a different ACES curve"; Fail=1; }
+done
+
+# Feature bit 7 must agree between the shader and the C++ mirror.
+ShaderBit=$(grep -oP 'kFeatureDenoise\s*=\s*\K[0-9]+' Engine/Shaders/ReSTIRViewport.slang)
+[ "$ShaderBit" = "128" ] || { echo "  shader denoise bit is $ShaderBit, expected 128 (1 << 7)"; Fail=1; }
+grep -q 'DispatchFeatureDenoise\s*=\s*1u << 7' Engine/DeviceExchange/SwapchainExchange.h \
+    || { echo "  C++ denoise bit mirror missing or not 1u << 7"; Fail=1; }
+
+# The filter must actually be dispatched, once per level, and registered with both build systems.
+grep -q 'Level < kDenoiseLevelCount' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  no per-level dispatch loop"; Fail=1; }
+grep -q 'AtrousDenoise.spv' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  the denoise pipeline never loads its SPIR-V"; Fail=1; }
+grep -q 'AtrousDenoise' CMakeLists.txt \
+    || { echo "  AtrousDenoise.slang is not in the CMake shader table"; Fail=1; }
+grep -q 'AtrousDenoise' Projects/Project-Zero/Build/ToolchainSequence.ps1 \
+    || { echo "  AtrousDenoise.slang is not in the Windows shader table"; Fail=1; }
+
+[ "$Fail" = "0" ] && echo "  constants, weights and wiring agree                              PASS"
 [ "$Fail" = "0" ] || exit 1
 
 if [ ! -x "$Glslang" ]; then
