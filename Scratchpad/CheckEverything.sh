@@ -27,6 +27,7 @@ Run()
 echo
 echo "=== build and toolchain ==="
 Run CheckBuildIntegrity
+Run CheckImGuiPatches
 
 echo
 echo "=== spatial interface (P0 - P4) ==="

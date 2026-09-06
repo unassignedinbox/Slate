@@ -29,6 +29,26 @@ foreach(PKG imgui glfw thorvg tomlpp jolt cgltf tinybvh clipper2 earcut fast_obj
     endif()
 endforeach()
 
+# ─── ImGui patches — Slate's divergence, applied before anything is compiled ────────────────────────────────────────────────────────────────
+# Configure time, not build time: the patched headers declare the style members Slate's sources reference, so a
+#    build that compiled first and patched later would fail on the first translation unit. The script is
+#    idempotent, so re-running cmake on an already-patched tree is a no-op.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/Scripts/ApplyImGuiPatches.py")
+    execute_process(
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/Scripts/ApplyImGuiPatches.py"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        RESULT_VARIABLE IMGUI_PATCH_RESULT
+        OUTPUT_VARIABLE IMGUI_PATCH_OUTPUT
+        ERROR_VARIABLE  IMGUI_PATCH_OUTPUT)
+    if(NOT IMGUI_PATCH_RESULT EQUAL 0)
+        message(FATAL_ERROR "[Frontier] ApplyImGuiPatches.py failed; refusing to configure against a half-patched ImGui:\n${IMGUI_PATCH_OUTPUT}")
+    endif()
+    message(STATUS "[Frontier] ImGui patches applied")
+else()
+    message(WARNING "[Frontier] Python3 or Scripts/ApplyImGuiPatches.py absent - building against pristine ImGui")
+endif()
+
 # ─── GLFW — built from source submodule (Linux static) ──────────────────────────────────────────────────────────────────────────────────────
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS    OFF CACHE BOOL "" FORCE)

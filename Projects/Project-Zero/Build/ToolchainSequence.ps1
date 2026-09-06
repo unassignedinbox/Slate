@@ -553,6 +553,29 @@ if (-not $UpdateOk)
 }
 Pop-Location
 
+# Apply Slate's ImGui divergence BEFORE anything is translated. `git submodule update` above restores the
+#    vendored tree to its pinned commit, which silently discards the patches -- that is exactly how the
+#    trapezoidal tabs disappeared once already. Re-applying here means the two steps can never be run out of
+#    order. The script is idempotent and every member it adds defaults to 0.0f, so a build that has already
+#    been patched skips, and an unpatched build is visually identical until Slate seats the style values.
+Write-Building 'Applying ImGui patches (Patches/) ...'
+Push-Location $RepositoryRoot
+$PatchScript = Join-Path $RepositoryRoot 'Scripts\ApplyImGuiPatches.ps1'
+if (Test-Path $PatchScript)
+{
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $PatchScript
+    if ($LASTEXITCODE -ne 0)
+    {
+        Pop-Location
+        throw 'ApplyImGuiPatches.ps1 failed; refusing to build against a half-patched ImGui'
+    }
+}
+else
+{
+    Write-Skipped 'Scripts\ApplyImGuiPatches.ps1 is absent - building against pristine ImGui'
+}
+Pop-Location
+
 # Build GLFW DLL if absent
 $GlfwLib = Join-Path $PackageRoot 'glfw\lib-vc2022\glfw3dll.lib'
 if ((-not (Test-Path $GlfwLib)) -and (-not $script:GlfwBuilt))
