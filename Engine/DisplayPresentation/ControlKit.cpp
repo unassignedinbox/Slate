@@ -452,4 +452,66 @@ PlaneExtent ControlKit::ControlRow(PixelSpace& Surface, float X, float Y, float 
     return PlaneExtent{ X + ControlKitTokens::LabelWidth + ControlKitTokens::RowGap, Y, Row.MaximumX, Row.MaximumY };
 }
 
+ControlHit ControlKit::TextEntry(PixelSpace& Surface, const PlaneExtent& Extent, TextEntryState& Entry,
+                                 const ControlPointer& Pointer, float FontSize, float Opacity) noexcept
+{
+    ControlHit Hit{};
+    Hit.Hovered = Over(Extent, Pointer);
+    Hit.Pressed = Hit.Hovered && Pointer.Pressed;
+    Hit.Clicked = Hit.Hovered && Pointer.Released;
+
+    const float R      = 6.0f;
+    const float PadX   = 6.0f;
+    const ColorQuad Edge = Entry.Active ? Palette().Highlight : Palette().Stroke;
+
+    Surface.FillRectangle(Extent, Faded(Palette().Field, Opacity), R);
+    OutlineRounded(Surface, Extent, Faded(Edge, Opacity), R, Entry.Active ? 1.5f : 1.0f);
+
+    // Everything below is clipped to the field: a long name must scroll inside its box, never paint over the
+    //    controls beside it.
+    Surface.PushClip(Extent);
+
+    const float TextY   = Extent.MinimumY + (Extent.Height() - FontSize) * 0.5f;
+    const float CaretPx = Surface.MeasureText(
+        [&]{ static char Head[TextEntryState::Capacity]; for (uint32_t I = 0u; I < Entry.Caret; ++I) Head[I] = Entry.Text[I];
+             Head[Entry.Caret] = '\0'; return Head; }(), FontSize).X;
+
+    // Keep the caret inside the visible span, scrolling only as far as needed in either direction.
+    const float Inner = Extent.Width() - PadX * 2.0f;
+    if (CaretPx - Entry.ScrollX > Inner) Entry.ScrollX = CaretPx - Inner;
+    if (CaretPx - Entry.ScrollX < 0.0f)  Entry.ScrollX = CaretPx;
+    if (Entry.ScrollX < 0.0f)            Entry.ScrollX = 0.0f;
+
+    const float OriginX = Extent.MinimumX + PadX - Entry.ScrollX;
+
+    if (Entry.Active && Entry.HasSelection())
+    {
+        static char Head[TextEntryState::Capacity];
+        const uint32_t From = Entry.SelectionStart(), To = Entry.SelectionEnd();
+        for (uint32_t I = 0u; I < From; ++I) Head[I] = Entry.Text[I];
+        Head[From] = '\0';
+        const float FromPx = Surface.MeasureText(Head, FontSize).X;
+        for (uint32_t I = 0u; I < To; ++I) Head[I] = Entry.Text[I];
+        Head[To] = '\0';
+        const float ToPx = Surface.MeasureText(Head, FontSize).X;
+        ColorQuad Wash = Palette().Highlight; Wash.Alpha *= 0.35f * Opacity;
+        Surface.FillRectangle(Spanning(OriginX + FromPx, Extent.MinimumY + 3.0f, ToPx - FromPx, Extent.Height() - 6.0f), Wash, 2.0f);
+    }
+
+    Surface.Text(OriginX, TextY, Faded(Palette().Text, Opacity), Entry.Text, FontSize);
+
+    // Blink at the kit period, always visible for the half-cycle right after a keystroke because Insert() resets
+    //    the phase — a caret that happens to be dark while you type reads as dropped input.
+    if (Entry.Active)
+    {
+        const float Phase = Entry.BlinkPhase - static_cast<float>(static_cast<int>(Entry.BlinkPhase / CaretBlinkSeconds)) * CaretBlinkSeconds;
+        if (Phase < CaretBlinkSeconds * 0.5f)
+            Surface.FillRectangle(Spanning(OriginX + CaretPx, Extent.MinimumY + 3.0f, 1.5f, Extent.Height() - 6.0f),
+                                  Faded(Palette().Text, Opacity));
+    }
+
+    Surface.PopClip();
+    return Hit;
+}
+
 } // namespace Frontier

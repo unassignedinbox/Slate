@@ -38,6 +38,7 @@ Run CheckVectorCodec
 Run CheckLightProjection
 Run CheckPanelSample
 Run CheckInterfaceAudio
+Run CheckOutlinerSequence
 
 echo
 echo "=== ReSTIR (R6 - R7) ==="

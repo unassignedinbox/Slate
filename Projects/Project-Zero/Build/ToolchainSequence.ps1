@@ -630,6 +630,8 @@ $EngineRelative = @(
     'Engine\DisplayPresentation\NotificationQueue.cpp'
     'Engine\DisplayPresentation\TelemetryMetrics.cpp'
     'Engine\DisplayPresentation\ControlKit.cpp'
+    'Engine\DisplayPresentation\TextEntryState.cpp'
+    'Engine\DisplayPresentation\InterfaceOutlinerSequence.cpp'
     'Engine\DisplayPresentation\DialogueHost.cpp'
     'Engine\DisplayPresentation\AppearanceInspector.cpp'
     'Engine\DisplayPresentation\ConfigurationInspector.cpp'

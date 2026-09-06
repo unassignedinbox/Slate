@@ -79,6 +79,46 @@ struct ControlPointer
     bool  Enabled    = true;   // [-] false while the page is mid-swap or a dialogue covers it
 };
 
+//------------------------------------------------------------------------------------------------------------------------
+//                                                     TEXT ENTRY
+//------------------------------------------------------------------------------------------------------------------------
+
+// One editable text site. The host creates it, hands it keystrokes, and reads Text back when Committed goes true.
+//    Editing is deliberately modal: Active is false until the host opens it (a double click, typically), so a tree of
+//    a hundred rows costs a hundred small records and no per-frame work until one is actually being typed into.
+struct TextEntryState
+{
+    static constexpr uint32_t Capacity = 128u;   // [ch] longest name we accept; refusal is better than truncation
+
+    char     Text[Capacity]   = {};   // [utf8] live buffer, always NUL terminated
+    char     Restore[Capacity]= {};   // [utf8] value on Begin(), used by Escape
+    uint32_t Length           = 0u;   // [ch] bytes in Text, excluding the NUL
+    uint32_t Caret            = 0u;   // [ch] insertion point, 0 … Length
+    uint32_t SelectionAnchor  = 0u;   // [ch] the other end of the selection; equal to Caret means no selection
+    bool     Active           = false;// [-] currently being edited
+    bool     Committed        = false;// [-] set for the single frame an Enter / focus-loss accepted the value
+    bool     Cancelled        = false;// [-] set for the single frame an Escape reverted it
+    float    BlinkPhase       = 0.0f; // [s] caret blink accumulator
+    float    ScrollX          = 0.0f; // [px] horizontal scroll when the text is wider than the field
+
+    void Begin(const char* Initial) noexcept;                    // copy in, select all, Active = true
+    void Insert(const char* Utf8) noexcept;                      // replaces the selection
+    void Backspace() noexcept;
+    void Delete() noexcept;
+    void MoveCaret(int Delta, bool Extend) noexcept;
+    void MoveHome(bool Extend) noexcept;
+    void MoveEnd(bool Extend) noexcept;
+    void SelectAll() noexcept;
+    void Commit() noexcept;                                      // Active = false, Committed = true
+    void Cancel() noexcept;                                      // restore, Active = false, Cancelled = true
+    void Advance(float DeltaSeconds) noexcept { BlinkPhase += DeltaSeconds; }
+
+    [[nodiscard]] bool     HasSelection() const noexcept { return SelectionAnchor != Caret; }
+    [[nodiscard]] uint32_t SelectionStart() const noexcept { return Caret < SelectionAnchor ? Caret : SelectionAnchor; }
+    [[nodiscard]] uint32_t SelectionEnd()   const noexcept { return Caret < SelectionAnchor ? SelectionAnchor : Caret; }
+    void DeleteSelection() noexcept;
+};
+
 enum class ButtonToneCategory : uint32_t { Primary = 0, Secondary = 1, Ghost = 2, Danger = 3, Tinted = 4 };
 
 struct ButtonStructure
@@ -180,6 +220,16 @@ public:
     // Notch 32 px round bordered icon button (w-8 h-8 rounded-full border, hover white/5).
     static ControlHit RoundIconButton(PixelSpace& Surface, float CentreX, float CentreY, ControlCentreIconCategory Icon, const ControlPointer& Pointer, float Opacity = 1.0f) noexcept;
     static constexpr float RoundIconDiameter = 32.0f;
+
+    // ── Text entry ───────────────────────────────────────────────────────────────────────────────────────────────────
+    // UIComponents has no text-entry widget: .field is a static shape with no caret, selection or key handling.
+    //    TextEntryState is that missing piece. The host owns one per editable site and feeds it keys; the widget only
+    //    draws and hit-tests, so it stays immediate-mode like the rest of the kit.
+    static ControlHit TextEntry(PixelSpace& Surface, const PlaneExtent& Extent, struct TextEntryState& Entry,
+                                const ControlPointer& Pointer, float FontSize = 12.5f, float Opacity = 1.0f) noexcept;
+
+    // Caret blink period; exposed so a host can align other animations to it.
+    static constexpr float CaretBlinkSeconds = 1.06f;
 
     // .crow  110 px dim label; returns the control extent to the right of the label.
     [[nodiscard]] static PlaneExtent ControlRow(PixelSpace& Surface, float X, float Y, float Width, const char* Label, ColorQuad LabelInk, float Opacity = 1.0f) noexcept;
