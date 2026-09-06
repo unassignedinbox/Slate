@@ -140,6 +140,10 @@ public:
 
     void                        PollInput(InputExchange& TargetInput) noexcept;
     [[nodiscard]] bool          CloseRequested() const noexcept;
+    // Escape no longer closes the window from the key callback: a text field needs it to abandon an edit, and the
+    //    callback cannot see whether one is open. The host asks for the close instead, once it knows nothing is
+    //    holding the keyboard.
+    void                        RequestClose() noexcept;
 
     void                        UploadTriangles   (const std::vector<TriangleIndex>&   Facets)    noexcept;
     void                        UploadMaterials(const MaterialIndex& Materials) noexcept;   // R4a: bindings 2 (headers) + 10 (slabs)
@@ -256,6 +260,7 @@ private:
     [[nodiscard]] uint32_t ResolveMemoryType(uint32_t TypeMask, uint32_t PropertyMask) const noexcept;
 
     static void OnKey         (GLFWwindow*, int Key, int Scancode, int Action, int Mods) noexcept;
+    static void OnCharacter   (GLFWwindow*, unsigned int Codepoint) noexcept;
     static void OnMouseButton (GLFWwindow*, int Button, int Action, int Mods) noexcept;
     static void OnCursorMove  (GLFWwindow*, double X, double Y) noexcept;
     static void OnScroll      (GLFWwindow*, double OffsetX, double OffsetY) noexcept;

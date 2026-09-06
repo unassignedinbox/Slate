@@ -365,6 +365,7 @@ bool SwapchainExchange::Bring() noexcept
 
     glfwSetWindowUserPointer      (GlfwWindow, this);
     glfwSetKeyCallback            (GlfwWindow, OnKey);
+    glfwSetCharCallback           (GlfwWindow, OnCharacter);
     glfwSetMouseButtonCallback    (GlfwWindow, OnMouseButton);
     glfwSetCursorPosCallback      (GlfwWindow, OnCursorMove);
     glfwSetScrollCallback         (GlfwWindow, OnScroll);
@@ -2597,6 +2598,11 @@ bool SwapchainExchange::CloseRequested() const noexcept
     return GlfwWindow && glfwWindowShouldClose(GlfwWindow);
 }
 
+void SwapchainExchange::RequestClose() noexcept
+{
+    if (GlfwWindow) glfwSetWindowShouldClose(GlfwWindow, GLFW_TRUE);
+}
+
 void SwapchainExchange::PollInput(InputExchange& TargetInput) noexcept
 {
     ForwardInput = &TargetInput;
@@ -2658,8 +2664,43 @@ void SwapchainExchange::OnKey(GLFWwindow* Window, int Key, int, int Action, int)
     MapKey(GLFW_KEY_RIGHT_SHIFT, VirtualKeyCategory::KeyRightShift);
     MapKey(GLFW_KEY_ESCAPE,      VirtualKeyCategory::KeyEscape);
 
-    if (Key == GLFW_KEY_ESCAPE && Action == GLFW_PRESS)
-        glfwSetWindowShouldClose(Window, GLFW_TRUE);
+    // Edit keys are queued as a STREAM for whichever overlay owns the keyboard. They produce no character, so the
+    //    character callback never sees them, and a held arrow must repeat — which a per-frame state sample cannot
+    //    express.
+    if (Pressed)
+    {
+        const bool Shift   = (glfwGetKey(Window, GLFW_KEY_LEFT_SHIFT)   == GLFW_PRESS)
+                          || (glfwGetKey(Window, GLFW_KEY_RIGHT_SHIFT)  == GLFW_PRESS);
+        const bool Control = (glfwGetKey(Window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
+                          || (glfwGetKey(Window, GLFW_KEY_RIGHT_CONTROL)== GLFW_PRESS);
+        switch (Key)
+        {
+            case GLFW_KEY_ENTER: case GLFW_KEY_KP_ENTER: case GLFW_KEY_ESCAPE:
+            case GLFW_KEY_BACKSPACE: case GLFW_KEY_DELETE:
+            case GLFW_KEY_LEFT: case GLFW_KEY_RIGHT: case GLFW_KEY_HOME: case GLFW_KEY_END:
+                Self->ForwardInput->PushEditKey(static_cast<uint32_t>(Key), Shift, Control);
+                break;
+            case GLFW_KEY_A:
+                if (Control) Self->ForwardInput->PushEditKey(static_cast<uint32_t>(Key), Shift, true);
+                break;
+            default: break;
+        }
+    }
+
+    // ⚠️ Escape no longer quits here. A text field uses Escape to abandon an edit, and closing the window instead
+    //    would be unrecoverable — you would lose the session for mistyping a name. The host decides: it quits only
+    //    when nothing is holding the keyboard, and that decision needs state this callback cannot see.
+}
+
+void SwapchainExchange::OnCharacter(GLFWwindow* Window, unsigned int Codepoint) noexcept
+{
+    auto* Self = static_cast<SwapchainExchange*>(glfwGetWindowUserPointer(Window));
+    if (!Self || !Self->ForwardInput) return;
+
+    // GLFW hands us a codepoint that is already keymap- and IME-resolved, which is why text must come from here
+    //    rather than being reconstructed from key codes: a non-US layout would otherwise type the wrong letters.
+    if (ImGui::GetCurrentContext() && ImGui::GetIO().WantCaptureKeyboard) return;
+    Self->ForwardInput->PushCharacter(static_cast<uint32_t>(Codepoint));
 }
 
 void SwapchainExchange::OnMouseButton(GLFWwindow* Window, int Button, int Action, int) noexcept

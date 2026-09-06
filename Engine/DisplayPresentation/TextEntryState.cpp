@@ -43,6 +43,9 @@ uint32_t StepBackward(const char* Text, uint32_t At) noexcept
 
 void TextEntryState::Begin(const char* Initial) noexcept
 {
+    // Initial is allowed to BE this->Text — re-focusing a field passes its own buffer back in. The copy below is
+    //    forward and index-aligned, so self-assignment is safe; noting it so nobody "optimises" it into a memmove
+    //    with a different direction.
     Length = 0u;
     if (Initial)
         while (Initial[Length] && Length < Capacity - 1u) { Text[Length] = Initial[Length]; ++Length; }

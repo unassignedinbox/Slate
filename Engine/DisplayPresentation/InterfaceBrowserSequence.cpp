@@ -51,9 +51,10 @@ void FormatValue(char* Out, uint32_t Capacity, float Value, uint32_t Decimals) n
 
 bool InterfaceBrowserSequence::EditingText() const noexcept
 {
-    return Tree.QueryRowCount() > 0u
-        && (const_cast<InterfaceOutlinerSequence&>(Tree).RenameEntry().Active
-         || const_cast<InterfaceOutlinerSequence&>(Tree).SearchEntry().Active);
+    // No row-count condition here. An empty tree can still have its search field focused, and reporting "not
+    //    editing" would hand those keystrokes to the camera.
+    InterfaceOutlinerSequence& Mutable = const_cast<InterfaceOutlinerSequence&>(Tree);
+    return Mutable.RenameEntry().Active || Mutable.SearchEntry().Active;
 }
 
 // GLFW key codes, spelled out rather than included: this header must not depend on the window backend.
@@ -298,7 +299,13 @@ void InterfaceBrowserSequence::RecordSearchRow(PixelSpace& Surface, const PlaneE
                                 "Search objects…", 12.5f);
     }
     if (ControlKit::Over(Field, Pointer) && Pointer.Released && !Tree.SearchEntry().Active)
-        Tree.SearchEntry().Begin(Tree.SearchEntry().Text);
+    {
+        // Re-entering an existing query puts the caret at the end rather than selecting all: a search is refined
+        //    far more often than it is replaced, and select-all would discard it on the next keystroke.
+        TextEntryState& Entry = Tree.SearchEntry();
+        Entry.Begin(Entry.Text);
+        Entry.MoveEnd(false);
+    }
 
     // Filter dropdown.
     const uint32_t Filters = Tree.FilterCount();

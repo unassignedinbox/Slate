@@ -1042,6 +1042,22 @@ int main(int argc, char** argv)
             BrowserDenoise    = Cfg.Denoise;
 
             Browser.Advance(Δτ);
+
+            // Drain the keyboard stream into whichever field has focus. Edit keys first, then characters: an
+            //    Enter that arrived before a character in the same frame must commit before that character is
+            //    inserted, or the keystroke lands in a field the user already closed.
+            for (uint32_t I = 0u; I < Input.QueryEditKeyCount(); ++I)
+                Browser.RecordKey(Input.QueryEditKey(I), Input.QueryEditKeyShift(I), Input.QueryEditKeyControl(I));
+            for (uint32_t I = 0u; I < Input.QueryCharacterCount(); ++I)
+                Browser.RecordCharacter(Input.QueryCharacter(I));
+
+            // Escape closes the window only when no field is holding it — the callback deliberately no longer
+            //    quits, because abandoning an edit must not be able to end the session.
+            if (!Browser.EditingText())
+                for (uint32_t I = 0u; I < Input.QueryEditKeyCount(); ++I)
+                    if (Input.QueryEditKey(I) == 256u) Surface.RequestClose();
+
+            Input.ClearTextQueue();
         }
 
         // ② Advance camera kinematics (frozen while either overlay owns the pointer, or a field is being typed into)

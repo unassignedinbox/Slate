@@ -289,6 +289,62 @@ int main()
         Expect(O.QueryRow(Row).Name[kOutlinerNameMax - 1u] == '\0',        "and remains NUL terminated");
     }
 
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n15. text entry: re-focusing an existing value keeps it\n");
+    {
+        // Begin() is called with the field's OWN buffer when a search field is re-focused. If that copy were not
+        //    self-assignment safe the query would be corrupted the moment it was clicked.
+        TextEntryState E{};
+        E.Begin("wall");
+        E.Commit();
+        E.Begin(E.Text);
+        Expect(std::strcmp(E.Text, "wall") == 0, "re-focusing with the field's own buffer preserves the value");
+
+        // And after MoveEnd the next keystroke appends rather than replacing — a search is refined more often
+        //    than it is retyped.
+        E.MoveEnd(false);
+        E.Insert("s");
+        Expect(std::strcmp(E.Text, "walls") == 0, "typing after a re-focus appends instead of replacing");
+    }
+
+    //------------------------------------------------------------------------------------------------------------
+    std::printf("\n16. text entry: a stream of keystrokes, not a per-frame sample\n");
+    {
+        // Two characters can arrive between two frames. A state-sampled input would collapse them to one; the
+        //    queue must preserve both, in order.
+        TextEntryState E{};
+        E.Begin("");
+        const char* Typed = "Box";
+        for (const char* C = Typed; *C; ++C) { const char One[2] = { *C, '\0' }; E.Insert(One); }
+        Expect(std::strcmp(E.Text, "Box") == 0, "characters arrive in order and none are dropped");
+
+        // Interleaving an edit key mid-stream behaves like a real field.
+        E.MoveCaret(-1, false);
+        E.Insert("-");
+        Expect(std::strcmp(E.Text, "Bo-x") == 0, "an edit key applied mid-stream lands at the right offset");
+    }
+
+    //------------------------------------------------------------------------------------------------------------
+    std::printf("\n17. outliner: renaming does not disturb the tree\n");
+    {
+        // The rename buffer is separate from the row, so a half-typed name must not be visible in the tree and
+        //    must not survive a cancel.
+        InterfaceOutlinerSequence O;
+        O.RegisterType(1u, OutlinerTypeRecord{ "Mesh", ControlCentreIconCategory::DisplayMonitor, {}, false });
+        const uint32_t A = O.Construct("Floor",    1u, kOutlinerNoParent, 0u);
+        const uint32_t B = O.Construct("Tall Box", 1u, kOutlinerNoParent, 1u);
+
+        O.BeginRename(B);
+        O.RenameEntry().Insert("Crate");
+        Expect(std::strcmp(O.QueryRow(B).Name, "Tall Box") == 0, "the row still shows its old name mid-edit");
+        Expect(std::strcmp(O.QueryRow(A).Name, "Floor") == 0,    "and the sibling is untouched");
+
+        O.RenameEntry().Commit();
+        O.Advance(1.0f / 60.0f);
+        Expect(std::strcmp(O.QueryRow(B).Name, "Crate") == 0, "the commit lands on the right row");
+        Expect(std::strcmp(O.QueryRow(A).Name, "Floor") == 0, "and still only that row");
+    }
+
     std::printf("\n>>> %s (%d failure%s)\n", Failures == 0 ? "ALL PASS" : "FAILURES", Failures, Failures == 1 ? "" : "s");
     return Failures == 0 ? 0 : 1;
 }

@@ -46,7 +46,33 @@ if grep -nE '(push_back|emplace_back|resize|reserve|new )' Engine/DisplayPresent
     echo "  Record() appears to allocate — the render loop must not touch the heap"; Fail=1
 fi
 
-[ "$Fail" = "0" ] && echo "  seam and vocabulary hold                                         PASS"
+# ── Keyboard plumbing ────────────────────────────────────────────────────────────────────────────────────────────
+# Text input needs GLFW's character callback: reconstructing characters from key codes types the wrong letters on
+# any non-US layout, and misses IME entirely.
+grep -q 'glfwSetCharCallback' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  the character callback is not installed — typing cannot work"; Fail=1; }
+grep -q 'PushCharacter' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  the character callback does not reach the input queue"; Fail=1; }
+grep -q 'PushEditKey' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  edit keys are not queued — Enter, Escape and the arrows would be lost"; Fail=1; }
+
+# Escape must NOT close the window from the key callback: a field uses it to abandon an edit, and the callback
+# cannot see whether one is open. Losing the session for mistyping a name is unrecoverable.
+if grep -q 'glfwSetWindowShouldClose(Window, GLFW_TRUE)' Engine/DeviceExchange/SwapchainExchange.cpp; then
+    echo "  the key callback still closes the window directly — Escape would quit mid-rename"; Fail=1
+fi
+
+# The host must drain the queue every frame, or a keystroke leaks into the next one.
+grep -q 'ClearTextQueue' Projects/Project-Zero/Source/GameExecution.cpp \
+    || { echo "  the host never clears the text queue"; Fail=1; }
+grep -q 'Browser.RecordCharacter' Projects/Project-Zero/Source/GameExecution.cpp \
+    || { echo "  typed characters are never delivered to the browser"; Fail=1; }
+
+# The camera must be frozen while a field has focus, or WASD flies the view while you type a name.
+grep -q 'Browser.EditingText()' Projects/Project-Zero/Source/GameExecution.cpp \
+    || { echo "  the camera is not gated on text editing"; Fail=1; }
+
+[ "$Fail" = "0" ] && echo "  seam, vocabulary and keyboard plumbing hold                      PASS"
 
 echo
 if [ "$Fail" = "0" ]; then echo "[Outliner] OK"; exit 0; else echo "[Outliner] FAILED"; exit 1; fi
