@@ -39,6 +39,12 @@ void RayTracingSolver::ConstructCornellBoxScene() noexcept
     Materials.push_back(AnalyticalMaterial{ Vector3{ 0.78f, 0.78f, 0.78f }, Vector3{ 0.0f, 0.0f, 0.0f }, 0.4f, 0.0f, 4 });
     // Material 5: Short Box (cool white diffuse)
     Materials.push_back(AnalyticalMaterial{ Vector3{ 0.78f, 0.78f, 0.78f }, Vector3{ 0.0f, 0.0f, 0.0f }, 0.4f, 0.0f, 5 });
+    // Material 6: Sphere (warm off-white, smoother than the boxes so the oculus highlight is visible on it)
+    Materials.push_back(AnalyticalMaterial{ Vector3{ 0.82f, 0.78f, 0.72f }, Vector3{ 0.0f, 0.0f, 0.0f }, 0.25f, 0.0f, 6 });
+    // Material 7: Cone (muted blue)
+    Materials.push_back(AnalyticalMaterial{ Vector3{ 0.35f, 0.45f, 0.70f }, Vector3{ 0.0f, 0.0f, 0.0f }, 0.4f, 0.0f, 7 });
+    // Material 8: Torus (muted amber)
+    Materials.push_back(AnalyticalMaterial{ Vector3{ 0.78f, 0.55f, 0.25f }, Vector3{ 0.0f, 0.0f, 0.0f }, 0.35f, 0.0f, 8 });
 
     // Cornell Box in the engine's right-handed Z-up world (CLAUDE.md §7):
     //      X ∈ [−2, +2]  right / east       (red wall at X = −2, green wall at X = +2)
@@ -57,19 +63,21 @@ void RayTracingSolver::ConstructCornellBoxScene() noexcept
     constexpr float RoomMinX = -2.0f, RoomMaxX = 2.0f;
     constexpr float RoomMinY =  0.0f, RoomMaxY = 4.0f;
     constexpr float RoomTopZ =  3.0f;
-    constexpr float HoleMinX = -0.70f, HoleMaxX = 0.70f;   // 1.4 m × 1.0 m opening, set back from the front wall so
-    constexpr float HoleMinY =  2.55f, HoleMaxY = 3.55f;   //    the shaft crosses the floor rather than the far wall
+    // A CIRCULAR oculus rather than a rectangle: a round opening throws an elliptical shaft that reads as
+    //    sunlight through a roof, and its silhouette is the clearest possible test that the sky is being sampled
+    //    through real geometry rather than painted on.
+    constexpr float HoleRadius   = 0.75f;                  // [m]
+    constexpr float HoleCentreX  = 0.0f;                   // [m]
+    constexpr float HoleCentreY  = 3.05f;                  // [m] set back so the shaft crosses the floor, not the far wall
+    constexpr uint32_t HoleSides = 48u;                    // 48 sides: the rim reads as a circle at room scale
 
     // Floor (Z = 0, normal +Z)
     AppendQuad(Vector3{ RoomMinX, RoomMinY, 0.0f }, Vector3{ RoomMaxX, RoomMinY, 0.0f }, Vector3{ RoomMaxX, RoomMaxY, 0.0f }, Vector3{ RoomMinX, RoomMaxY, 0.0f }, 0);
 
-    // Ceiling (Z = RoomTopZ, normal −Z) — FOUR strips leaving a rectangular hole open to the sky. The winding
-    //    (Xmin,Ymax) → (Xmax,Ymax) → (Xmax,Ymin) → (Xmin,Ymin) is what produces the −Z normal; every strip repeats it.
-    //    Until the sky exists the opening reads as black, which is correct: there is genuinely nothing above it yet.
-    AppendQuad(Vector3{ RoomMinX, RoomMaxY, RoomTopZ }, Vector3{ RoomMaxX, RoomMaxY, RoomTopZ }, Vector3{ RoomMaxX, HoleMaxY, RoomTopZ }, Vector3{ RoomMinX, HoleMaxY, RoomTopZ }, 0);   // behind the hole
-    AppendQuad(Vector3{ RoomMinX, HoleMinY, RoomTopZ }, Vector3{ RoomMaxX, HoleMinY, RoomTopZ }, Vector3{ RoomMaxX, RoomMinY, RoomTopZ }, Vector3{ RoomMinX, RoomMinY, RoomTopZ }, 0);   // in front of it
-    AppendQuad(Vector3{ RoomMinX, HoleMaxY, RoomTopZ }, Vector3{ HoleMinX, HoleMaxY, RoomTopZ }, Vector3{ HoleMinX, HoleMinY, RoomTopZ }, Vector3{ RoomMinX, HoleMinY, RoomTopZ }, 0);   // left of it
-    AppendQuad(Vector3{ HoleMaxX, HoleMaxY, RoomTopZ }, Vector3{ RoomMaxX, HoleMaxY, RoomTopZ }, Vector3{ RoomMaxX, HoleMinY, RoomTopZ }, Vector3{ HoleMaxX, HoleMinY, RoomTopZ }, 0);   // right of it
+    // Ceiling (Z = RoomTopZ, normal −Z) — a plate with the oculus cut out of it. Until the sky exists the
+    //    opening reads as black, which is correct: there is genuinely nothing above it yet.
+    AppendPlateWithCircularHole(RoomMinX, RoomMinY, RoomMaxX, RoomMaxY, RoomTopZ,
+                                Vector3{ HoleCentreX, HoleCentreY, RoomTopZ }, HoleRadius, HoleSides, true, 0);
 
     // Back Wall (Y = RoomMaxY, normal −Y)
     AppendQuad(Vector3{ RoomMinX, RoomMaxY, 0.0f }, Vector3{ RoomMaxX, RoomMaxY, 0.0f }, Vector3{ RoomMaxX, RoomMaxY, RoomTopZ }, Vector3{ RoomMinX, RoomMaxY, RoomTopZ }, 0);
@@ -83,6 +91,13 @@ void RayTracingSolver::ConstructCornellBoxScene() noexcept
     AppendBox(Vector3{ -0.90f, 2.70f, 0.90f }, Vector3{ 0.42f, 0.42f, 0.90f },  22.0f, 4);
     // Short Box (0.84 × 0.84 footprint, 0.9 m tall, rotated −18° about Z) — front right
     AppendBox(Vector3{  0.85f, 1.50f, 0.45f }, Vector3{ 0.42f, 0.42f, 0.45f }, -18.0f, 5);
+
+    // Parametric primitives, placed clear of the two boxes and of each other. Segment counts are chosen for a
+    //    GTX 1650 SUPER: together these three add ~2 400 triangles against the room's 40, which is the right
+    //    order for a test scene and still leaves headroom before the R8 GPU-BVH gate at ~15 000 moving triangles.
+    AppendSphere(Vector3{ -1.15f, 1.05f, 0.45f }, 0.45f, 32u, 16u, 6u);           //   960 tris
+    AppendCone  (Vector3{  1.30f, 3.05f, 0.00f }, 0.45f, 1.10f, 32u, 7u);         //    64 tris
+    AppendTorus (Vector3{  0.00f, 1.55f, 0.32f }, 0.42f, 0.14f, 36u, 18u, 8u);    // 1 296 tris
 
     // Ceiling Luminaire (Z = RoomTopZ − 0.005, normal −Z) — LAST, see note above. Kept clear of the aperture in Y so
     //    the two light sources stay visually separable once the sky is contributing through the hole.
@@ -150,6 +165,145 @@ void RayTracingSolver::AppendBox(const Vector3& Center, const Vector3& Extents, 
     AppendQuad(Corners[3], Corners[0], Corners[4], Corners[7], MaterialIdx);
     // Right (+X)
     AppendQuad(Corners[1], Corners[2], Corners[6], Corners[5], MaterialIdx);
+}
+
+//------------------------------------------------------------------------------------------------------------------------
+//                                             PARAMETRIC PRIMITIVES
+//------------------------------------------------------------------------------------------------------------------------
+// Winding is counter-clockwise seen from OUTSIDE the solid, matching AppendBox: AppendTriangle derives the
+//    geometric normal from the edge cross product, so a reversed winding produces a surface lit from inside and
+//    shadowed from outside. That failure looks like a shading bug rather than a geometry one, which is why the
+//    orientation of every ring below is stated explicitly.
+
+void RayTracingSolver::AppendSphere(const Vector3& Center, float Radius, uint32_t Segments, uint32_t Rings, uint32_t MaterialIdx) noexcept
+{
+    if (Segments < 3u || Rings < 2u || Radius <= 0.0f) return;
+
+    constexpr float Pi = 3.14159265359f;
+    const auto Point = [&](uint32_t Ring, uint32_t Segment) -> Vector3
+    {
+        const float Polar     = Pi * static_cast<float>(Ring) / static_cast<float>(Rings);          // 0 at +Z pole
+        const float Azimuth   = 2.0f * Pi * static_cast<float>(Segment % Segments) / static_cast<float>(Segments);
+        const float SinPolar  = std::sin(Polar);
+        return Center + Vector3{ Radius * SinPolar * std::cos(Azimuth),
+                                 Radius * SinPolar * std::sin(Azimuth),
+                                 Radius * std::cos(Polar) };
+    };
+
+    for (uint32_t Ring = 0u; Ring < Rings; ++Ring)
+    {
+        for (uint32_t Segment = 0u; Segment < Segments; ++Segment)
+        {
+            const Vector3 A = Point(Ring,      Segment);
+            const Vector3 B = Point(Ring,      Segment + 1u);
+            const Vector3 C = Point(Ring + 1u, Segment + 1u);
+            const Vector3 D = Point(Ring + 1u, Segment);
+
+            // The two polar rings collapse to a point on one side, so they are emitted as single triangles.
+            //    A quad there would carry a zero-area half that the BVH must still store and test.
+            // ⚠️ Ring advances from the +Z pole DOWNWARD while Segment advances anticlockwise about +Z, so the
+            //    natural (A,B,C,D) order traverses clockwise seen from outside and yields inward normals — the
+            //    surface then lights from within and shadows from without, which reads as a shading bug. The
+            //    order below is reversed for that reason.
+            if (Ring == 0u)                 AppendTriangle(A, D, C, MaterialIdx);
+            else if (Ring + 1u == Rings)    AppendTriangle(A, C, B, MaterialIdx);
+            else                            AppendQuad(A, D, C, B, MaterialIdx);
+        }
+    }
+}
+
+void RayTracingSolver::AppendCone(const Vector3& BaseCentre, float Radius, float Height, uint32_t Segments, uint32_t MaterialIdx) noexcept
+{
+    if (Segments < 3u || Radius <= 0.0f || Height <= 0.0f) return;
+
+    constexpr float Pi = 3.14159265359f;
+    const Vector3 Apex = BaseCentre + Vector3{ 0.0f, 0.0f, Height };
+    const auto Rim = [&](uint32_t Segment) -> Vector3
+    {
+        const float Azimuth = 2.0f * Pi * static_cast<float>(Segment % Segments) / static_cast<float>(Segments);
+        return BaseCentre + Vector3{ Radius * std::cos(Azimuth), Radius * std::sin(Azimuth), 0.0f };
+    };
+
+    for (uint32_t Segment = 0u; Segment < Segments; ++Segment)
+    {
+        const Vector3 A = Rim(Segment);
+        const Vector3 B = Rim(Segment + 1u);
+        AppendTriangle(A, B, Apex, MaterialIdx);        // side, outward
+        AppendTriangle(B, A, BaseCentre, MaterialIdx);  // base, downward (−Z)
+    }
+}
+
+void RayTracingSolver::AppendTorus(const Vector3& Center, float MajorRadius, float MinorRadius,
+                                   uint32_t MajorSegments, uint32_t MinorSegments, uint32_t MaterialIdx) noexcept
+{
+    if (MajorSegments < 3u || MinorSegments < 3u || MinorRadius <= 0.0f) return;
+    // A minor radius at or past the major one self-intersects through the hole; the surface is no longer a
+    //    torus and the normals invert where it passes through itself.
+    if (MinorRadius >= MajorRadius) return;
+
+    constexpr float Pi = 3.14159265359f;
+    const auto Point = [&](uint32_t Major, uint32_t Minor) -> Vector3
+    {
+        const float U = 2.0f * Pi * static_cast<float>(Major % MajorSegments) / static_cast<float>(MajorSegments);
+        const float V = 2.0f * Pi * static_cast<float>(Minor % MinorSegments) / static_cast<float>(MinorSegments);
+        const float RingRadius = MajorRadius + MinorRadius * std::cos(V);
+        return Center + Vector3{ RingRadius * std::cos(U), RingRadius * std::sin(U), MinorRadius * std::sin(V) };
+    };
+
+    for (uint32_t Major = 0u; Major < MajorSegments; ++Major)
+        for (uint32_t Minor = 0u; Minor < MinorSegments; ++Minor)
+            // U (around the ring) and V (around the tube) are both anticlockwise, and their cross product
+            //    already points away from the tube axis — so unlike the sphere this order is correct as written.
+            //    Reversing it inverts every face uniformly, which the audit reports against the nearest point on
+            //    the tube's centre circle rather than the torus centre: a torus is not star-shaped about its
+            //    centre, so its inner wall legitimately faces inward and a centre-based test is meaningless.
+            AppendQuad(Point(Major,      Minor),
+                       Point(Major + 1u, Minor),
+                       Point(Major + 1u, Minor + 1u),
+                       Point(Major,      Minor + 1u), MaterialIdx);
+}
+
+void RayTracingSolver::AppendPlateWithCircularHole(float MinimumX, float MinimumY, float MaximumX, float MaximumY,
+                                                   float Z, const Vector3& HoleCentre, float HoleRadius,
+                                                   uint32_t Segments, bool FaceDown, uint32_t MaterialIdx) noexcept
+{
+    if (Segments < 3u || HoleRadius <= 0.0f) return;
+
+    constexpr float Pi = 3.14159265359f;
+    const auto Rim = [&](uint32_t Segment) -> Vector3
+    {
+        const float Azimuth = 2.0f * Pi * static_cast<float>(Segment % Segments) / static_cast<float>(Segments);
+        return Vector3{ HoleCentre.x + HoleRadius * std::cos(Azimuth),
+                        HoleCentre.y + HoleRadius * std::sin(Azimuth), Z };
+    };
+
+    // Each rim vertex is joined to the point where a ray from the hole centre through it leaves the rectangle.
+    //    That keeps the ring a fan of quads with no T-junctions against the border, which a naive
+    //    rectangle-minus-circle would produce and which show as hairline cracks under a moving camera.
+    const auto Border = [&](uint32_t Segment) -> Vector3
+    {
+        const float Azimuth = 2.0f * Pi * static_cast<float>(Segment % Segments) / static_cast<float>(Segments);
+        const float Dx = std::cos(Azimuth), Dy = std::sin(Azimuth);
+        // Distance along the ray to each of the four edges; the nearest positive one is the exit.
+        float Travel = 1e30f;
+        if (Dx > 1e-6f)  Travel = std::min(Travel, (MaximumX - HoleCentre.x) / Dx);
+        if (Dx < -1e-6f) Travel = std::min(Travel, (MinimumX - HoleCentre.x) / Dx);
+        if (Dy > 1e-6f)  Travel = std::min(Travel, (MaximumY - HoleCentre.y) / Dy);
+        if (Dy < -1e-6f) Travel = std::min(Travel, (MinimumY - HoleCentre.y) / Dy);
+        return Vector3{ HoleCentre.x + Dx * Travel, HoleCentre.y + Dy * Travel, Z };
+    };
+
+    for (uint32_t Segment = 0u; Segment < Segments; ++Segment)
+    {
+        const Vector3 InnerA = Rim(Segment),      InnerB = Rim(Segment + 1u);
+        const Vector3 OuterA = Border(Segment),   OuterB = Border(Segment + 1u);
+        // ⚠️ The rim advances anticlockwise seen from +Z, so (Inner, Outer, Outer, Inner) in that order gives a
+        //    +Z normal. A ceiling is seen from BELOW and must face −Z, hence the swap: FaceDown takes the
+        //    reversed winding. Getting this backwards leaves the ceiling lit from above and black from the room,
+        //    which reads as the light being wrong rather than the geometry.
+        if (FaceDown) AppendQuad(InnerA, InnerB, OuterB, OuterA, MaterialIdx);
+        else          AppendQuad(InnerA, OuterA, OuterB, InnerB, MaterialIdx);
+    }
 }
 
 //------------------------------------------------------------------------------------------------------------------------
