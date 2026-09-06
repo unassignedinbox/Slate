@@ -88,6 +88,23 @@ grep -q 'VkImageMemoryBarrier Barriers\[2\]' Engine/DeviceExchange/SwapchainExch
 grep -q 'srcAccessMask               = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT' Engine/DeviceExchange/SwapchainExchange.cpp \
     || { echo "  the denoise barrier does not order write-after-read"; Fail=1; }
 
+# Every image the filter READS must be ordered against the kernel that WROTE it. The radiance/variance slots are
+# covered by the per-level barrier, but HistorySurfaceImage is written by the ReSTIR kernel and read by every
+# filter level for its normal, depth and background tests — it needs its own barrier before level 0. Missing it
+# lets taps see unwritten depth (0), reject them as background, and filter with fewer taps than their neighbours.
+grep -q 'KernelOutput.image                       = Vulkan->HistorySurfaceImage' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  the surface image is not ordered against the kernel before the filter reads it"; Fail=1; }
+
+# Every image sampled by the shader must appear in that ordering. If a new imageLoad target is added to the
+# filter, this list must grow with it.
+for Image in SourceImage SurfaceImage; do
+    grep -q "imageLoad($Image" Engine/Shaders/AtrousDenoise.slang \
+        || { echo "  expected the filter to read $Image"; Fail=1; }
+done
+ReadCount=$(grep -oP 'imageLoad\(\K[A-Za-z]+' Engine/Shaders/AtrousDenoise.slang | sort -u | wc -l)
+[ "$ReadCount" = "2" ] \
+    || { echo "  the filter now reads $ReadCount images - check each is barriered against its writer"; Fail=1; }
+
 # ── Dispatch coverage ────────────────────────────────────────────────────────────────────────────────────────────
 # The filter's workgroup size must match what the dispatch derives its group count from. Reusing the ReSTIR
 # kernel's 16x16 count for an 8x8 shader covered exactly the top-left quarter of the image.

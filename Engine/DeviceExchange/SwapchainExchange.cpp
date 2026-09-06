@@ -2268,6 +2268,30 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
 
             vkCmdBindPipeline(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Vulkan->DenoisePipeline);
 
+            // The filter reads HistorySurfaceImage for its normal, depth and background tests, and that image is
+            //    written by the ReSTIR kernel dispatched immediately above. Without ordering the kernel's writes
+            //    against these reads, a tap can sample a surface texel that has not been written yet: depth reads
+            //    as 0, the tap is rejected as background, and those pixels filter with fewer taps than their
+            //    neighbours. Because workgroups retire roughly in linear ID order the incomplete frontier follows
+            //    column boundaries, so it shows up as vertical banding rather than isolated speckle.
+            {
+                VkImageMemoryBarrier KernelOutput{};
+                KernelOutput.sType                       = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                KernelOutput.oldLayout                   = VK_IMAGE_LAYOUT_GENERAL;
+                KernelOutput.newLayout                   = VK_IMAGE_LAYOUT_GENERAL;
+                KernelOutput.srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+                KernelOutput.dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+                KernelOutput.image                       = Vulkan->HistorySurfaceImage;
+                KernelOutput.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                KernelOutput.subresourceRange.levelCount = 1u;
+                KernelOutput.subresourceRange.layerCount = 1u;
+                KernelOutput.srcAccessMask               = VK_ACCESS_SHADER_WRITE_BIT;
+                KernelOutput.dstAccessMask               = VK_ACCESS_SHADER_READ_BIT;
+                vkCmdPipelineBarrier(Command,
+                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    0u, 0u, nullptr, 0u, nullptr, 1u, &KernelOutput);
+            }
+
             for (uint32_t Level = 0u; Level < kDenoiseLevelCount; ++Level)
             {
                 // Both ping-pong slots must be ordered against the previous level, in BOTH directions:
