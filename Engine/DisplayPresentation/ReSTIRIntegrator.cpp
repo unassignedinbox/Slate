@@ -101,7 +101,8 @@ DispatchConfiguration ReSTIRIntegrator::BuildDispatch(
                                    | (ActiveConfiguration.AmbientFloor       ? DispatchFeatureAmbientFloor       : 0u)
                                    | (ActiveConfiguration.TemporalReuse      ? DispatchFeatureTemporalReuse      : 0u)
                                    | (ActiveConfiguration.SpatialReuse       ? DispatchFeatureSpatialReuse       : 0u)
-                                   | (ActiveConfiguration.AliasPick          ? DispatchFeatureAliasPick          : 0u);
+                                   | (ActiveConfiguration.AliasPick          ? DispatchFeatureAliasPick          : 0u)
+                                   | (ActiveConfiguration.TemporalReprojection ? DispatchFeatureTemporalReprojection : 0u);
 
     return Dispatch;
 }

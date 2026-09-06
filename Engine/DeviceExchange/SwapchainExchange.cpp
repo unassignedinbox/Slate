@@ -87,6 +87,11 @@ struct SwapchainExchange::VulkanRecord
     VkImage                  HistoryImage          = VK_NULL_HANDLE;
     VkDeviceMemory           HistoryMemory         = VK_NULL_HANDLE;
     VkImageView              HistoryImageView      = VK_NULL_HANDLE;
+    // R7a: the (normal, depth) of whatever the history pixel was shading, so the next frame can validate a
+    //    reprojection against the surface that produced the mean rather than against this frame's surface.
+    VkImage                  HistorySurfaceImage     = VK_NULL_HANDLE;
+    VkDeviceMemory           HistorySurfaceMemory    = VK_NULL_HANDLE;
+    VkImageView              HistorySurfaceImageView = VK_NULL_HANDLE;
     bool                     HistoryInitialised    = false;             // [-]  layout transitioned to GENERAL once
 
     // ── Scene SSBO geometry and materials ────────────────────────────────────────────────────────────────────────────
@@ -473,7 +478,13 @@ void SwapchainExchange::RetireSwapchain() noexcept
     if (Vulkan->HistoryImageView)  vkDestroyImageView(Vulkan->Device, Vulkan->HistoryImageView,  nullptr);
     if (Vulkan->HistoryImage)      vkDestroyImage    (Vulkan->Device, Vulkan->HistoryImage,      nullptr);
     if (Vulkan->HistoryMemory)     vkFreeMemory      (Vulkan->Device, Vulkan->HistoryMemory,     nullptr);
+    if (Vulkan->HistorySurfaceImageView) vkDestroyImageView(Vulkan->Device, Vulkan->HistorySurfaceImageView, nullptr);
+    if (Vulkan->HistorySurfaceImage)     vkDestroyImage    (Vulkan->Device, Vulkan->HistorySurfaceImage,     nullptr);
+    if (Vulkan->HistorySurfaceMemory)    vkFreeMemory      (Vulkan->Device, Vulkan->HistorySurfaceMemory,    nullptr);
     Vulkan->HistoryImageView   = VK_NULL_HANDLE;
+    Vulkan->HistorySurfaceImageView = VK_NULL_HANDLE;
+    Vulkan->HistorySurfaceImage     = VK_NULL_HANDLE;
+    Vulkan->HistorySurfaceMemory    = VK_NULL_HANDLE;
     Vulkan->HistoryImage       = VK_NULL_HANDLE;
     Vulkan->HistoryMemory      = VK_NULL_HANDLE;
     Vulkan->HistoryInitialised = false;
@@ -952,6 +963,14 @@ bool SwapchainExchange::BringStorageImage() noexcept
                             Vulkan->HistoryImage, Vulkan->HistoryMemory, Vulkan->HistoryImageView, "history image"))
         return false;
 
+    // ②b R7a history surface — the normal and depth the history mean was shaded at. rgba16f is ample: the normal
+    //     is unit length and the depth only has to survive a 10 % relative comparison.
+    if (!CreateStorageImage(Vulkan->Device, Vulkan->MemoryProperties, VK_FORMAT_R16G16B16A16_SFLOAT, Extent,
+                            VK_IMAGE_USAGE_STORAGE_BIT,
+                            Vulkan->HistorySurfaceImage, Vulkan->HistorySurfaceMemory,
+                            Vulkan->HistorySurfaceImageView, "history surface image"))
+        return false;
+
     // ③ R6 temporal reservoirs — two full-extent 64 B/px SSBOs (bindings 16/17), device-local, zeroed on first dispatch.
     {
         Vulkan->ReservoirBytes =
@@ -1024,11 +1043,11 @@ bool SwapchainExchange::BringComputePipeline() noexcept
     for (uint32_t B = 4u; B < kComputeBindingCount - 1u; ++B)
     {
         LayoutBindings[B].binding         = B;
-        LayoutBindings[B].descriptorType  = B < 6u ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : (B == 13u || B == 14u || B == 15u) ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        LayoutBindings[B].descriptorType  = (B < 6u || B == 18u) ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : (B == 13u || B == 14u || B == 15u) ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;   // 18 = R7a history normal+depth
         LayoutBindings[B].descriptorCount = 1u;
         LayoutBindings[B].stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
     }
-    const uint32_t TextureBinding = kComputeBindingCount - 1u;   // 15
+    const uint32_t TextureBinding = kComputeBindingCount - 1u;   // 19 (must be the highest binding)
     LayoutBindings[TextureBinding].binding         = TextureBinding;
     LayoutBindings[TextureBinding].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     LayoutBindings[TextureBinding].descriptorCount = Vulkan->DescriptorIndexing ? kTextureSlotCapacity : 1u;
@@ -1165,6 +1184,10 @@ void SwapchainExchange::WriteDescriptorSet() noexcept
     HistoryInfo.imageView   = Vulkan->HistoryImageView;
     HistoryInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
+    VkDescriptorImageInfo HistorySurfaceInfo{};
+    HistorySurfaceInfo.imageView   = Vulkan->HistorySurfaceImageView;
+    HistorySurfaceInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
     VkDescriptorImageInfo SurfaceInfo{ VK_NULL_HANDLE, static_cast<VkImageView>(Visibility.QuerySurfaceView()), VK_IMAGE_LAYOUT_GENERAL };
     VkDescriptorImageInfo NormalInfo { VK_NULL_HANDLE, static_cast<VkImageView>(Visibility.QueryNormalView()),  VK_IMAGE_LAYOUT_GENERAL };
     VkDescriptorBufferInfo InstanceInfo { static_cast<VkBuffer>(Visibility.QueryInstanceBuffer()),  0u, VK_WHOLE_SIZE };
@@ -1265,6 +1288,7 @@ void SwapchainExchange::WriteDescriptorSet() noexcept
     WriteSampled(15u, MotionInfo);          // R6: skipped until the motion target + table sampler exist
     WriteBuffer(16u, PrevReservoirInfo);    // R6: skipped until the reservoir SSBOs exist
     WriteBuffer(17u, CurrReservoirInfo);
+    WriteImage (18u, HistorySurfaceInfo);   // R7a: history (normal, depth) for running-mean reprojection
 
     // R4a: the texture table. Written in one go (partially bound: slots past the resident count stay undefined and are
     //    never indexed — the material records only reference resident slots).
@@ -1914,24 +1938,33 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
             0u, 0u, nullptr, 0u, nullptr, 1u, &Barrier);
     }
 
-    // ①b History image → GENERAL; first use transitions from UNDEFINED, later uses order the previous frame's writes
+    // ①b History images → GENERAL; first use transitions from UNDEFINED, later uses order the previous frame's writes.
+    //    R7a adds the history surface image: same lifetime, same access pattern (read the previous frame's value, write
+    //    this frame's), so it rides the same barrier rather than a second one.
     {
-        VkImageMemoryBarrier Barrier{};
-        Barrier.sType                           = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        Barrier.oldLayout                       = Vulkan->HistoryInitialised ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED;
-        Barrier.newLayout                       = VK_IMAGE_LAYOUT_GENERAL;
-        Barrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-        Barrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-        Barrier.image                           = Vulkan->HistoryImage;
-        Barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-        Barrier.subresourceRange.levelCount     = 1u;
-        Barrier.subresourceRange.layerCount     = 1u;
-        Barrier.srcAccessMask                   = Vulkan->HistoryInitialised ? static_cast<VkAccessFlags>(VK_ACCESS_SHADER_WRITE_BIT) : static_cast<VkAccessFlags>(0u);
-        Barrier.dstAccessMask                   = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        const std::array<VkImage, 2u> HistoryImages{ Vulkan->HistoryImage, Vulkan->HistorySurfaceImage };
+        std::array<VkImageMemoryBarrier, 2u> Barriers{};
+        uint32_t BarrierCount = 0u;
+        for (VkImage Image : HistoryImages)
+        {
+            if (!Image) continue;
+            VkImageMemoryBarrier& Barrier           = Barriers[BarrierCount++];
+            Barrier.sType                           = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            Barrier.oldLayout                       = Vulkan->HistoryInitialised ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED;
+            Barrier.newLayout                       = VK_IMAGE_LAYOUT_GENERAL;
+            Barrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
+            Barrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
+            Barrier.image                           = Image;
+            Barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+            Barrier.subresourceRange.levelCount     = 1u;
+            Barrier.subresourceRange.layerCount     = 1u;
+            Barrier.srcAccessMask                   = Vulkan->HistoryInitialised ? static_cast<VkAccessFlags>(VK_ACCESS_SHADER_WRITE_BIT) : static_cast<VkAccessFlags>(0u);
+            Barrier.dstAccessMask                   = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        }
         vkCmdPipelineBarrier(Command,
             Vulkan->HistoryInitialised ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            0u, 0u, nullptr, 0u, nullptr, 1u, &Barrier);
+            0u, 0u, nullptr, 0u, nullptr, BarrierCount, Barriers.data());
         Vulkan->HistoryInitialised = true;
     }
 

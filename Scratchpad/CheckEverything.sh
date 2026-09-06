@@ -40,6 +40,10 @@ Run CheckPanelSample
 Run CheckInterfaceAudio
 
 echo
+echo "=== ReSTIR (R6 - R7a) ==="
+Run CheckTemporalReprojection
+
+echo
 echo "=== scene and dynamic geometry (D1 - D6) ==="
 Run CheckShowroomGeometry
 Run CheckTraversalIdentity

@@ -25,7 +25,7 @@ namespace Frontier {
 class SceneStructure;
 class TraversalIndex;   // GeometricRaster/TraversalIndex.h (R3 CWBVH)
 class TextureIndex;     // ContentInterchange/TextureIndex.h (R4a)
-static constexpr uint32_t kComputeBindingCount  = 19u;    // compute set 0: 0 out · 1 tris · 2 materials · 3 history · 4 surface · 5 normal · 6 instances · 7 luminaires · 8/9 CWBVH · 10 slabs · 11 vertices · 12 indices · 13 energy LUT · 14 sheen LUT · 15 motion · 16 prev reservoir · 17 curr reservoir · 18 Textures[] (R6; variable-count binding stays last)
+static constexpr uint32_t kComputeBindingCount  = 20u;    // compute set 0: 0 out · 1 tris · 2 materials · 3 history · 4 surface · 5 normal · 6 instances · 7 luminaires · 8/9 CWBVH · 10 slabs · 11 vertices · 12 indices · 13 energy LUT · 14 sheen LUT · 15 motion · 16 prev reservoir · 17 curr reservoir · 18 history normal+depth (R7a) · 19 Textures[] (variable-count binding MUST stay last — Vulkan requires it on the highest binding number)
 static constexpr uint32_t kTextureSlotCapacity  = 1024u;  // bindless sampler2D[] size (variable-count binding; Pascal maxPerStageDescriptorSamplers ≥ 4000)
 class MaterialIndex;    // ContentInterchange/MaterialIndex.h (R4a)
 
@@ -109,7 +109,8 @@ enum DispatchFeature : uint32_t
     DispatchFeatureAmbientFloor       = 1u << 2,   // debug fill light (R0: off by default)
     DispatchFeatureTemporalReuse      = 1u << 3,   // R6 row 2: temporal reservoir reuse
     DispatchFeatureSpatialReuse       = 1u << 4,   // R6 row 3: spatial neighbour reuse
-    DispatchFeatureAliasPick          = 1u << 5    // R6 row 3: Walker-alias light pick (off = uniform, R0 identity)
+    DispatchFeatureAliasPick          = 1u << 5,   // R6 row 3: Walker-alias light pick (off = uniform, R0 identity)
+    DispatchFeatureTemporalReprojection = 1u << 6  // R7a: reproject the running mean through the R2 motion vectors
 };
 
 // Mirrors `layout(push_constant) uniform ReSTIRConstants` in Engine/Shaders/ReSTIRViewport.slang.

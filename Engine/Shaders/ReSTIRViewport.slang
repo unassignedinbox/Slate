@@ -115,7 +115,8 @@ struct GpuReservoir   // 64 B stride — mirrors ReservoirBufferRecord in Swapch
 };
 layout(std430, binding = 16) readonly buffer PrevReservoirExtent { GpuReservoir PrevReservoirs[]; };
 layout(std430, binding = 17) writeonly buffer CurrReservoirExtent { GpuReservoir CurrReservoirs[]; };
-layout(binding = 18) uniform sampler2D Textures[];   // R4a bindless table — ⚠️ moved 11 → 15 in R4b → 18 in R6: a variable-count binding must be the last one in the set
+layout(rgba16f, binding = 18) uniform image2D HistorySurfaceImage;   // R7a: xyz = normal, w = depth the history mean was shaded at (w ≤ 0 = no surface)
+layout(binding = 19) uniform sampler2D Textures[];   // R4a bindless table — ⚠️ moved 11 → 15 in R4b → 18 in R6 → 19 in R7a: a variable-count binding must be the last one in the set
 
 const float kTemporalNormalCos = 0.906308;   // cos(25°): temporal/spatial normal validation
 const float kTemporalDepthTol  = 0.10;       // 10% relative depth validation
@@ -321,6 +322,7 @@ const uint kFeatureAmbientFloor       = 4u;   // bit 2: add albedo × AmbientStr
 const uint kFeatureTemporalReuse      = 8u;   // bit 3: R6 row 2 — temporal reservoir reuse (back-projection + validation)
 const uint kFeatureSpatialReuse       = 16u;  // bit 4: R6 row 3 — spatiotemporal neighbour reuse (pairwise MIS)
 const uint kFeatureAliasPick          = 32u;  // bit 5: R6 row 3 — Walker-alias light pick (off = uniform, the R0 identity proof)
+const uint kFeatureTemporalReprojection = 64u; // bit 6: R7a — reproject the running mean through the R2 motion vectors
 
 float PixelSpreadAngle() { return 2.0 * FieldOfViewTanHalf / float(ViewportHeight); }   // [rad] R4b ray-cone spread per pixel
 
@@ -586,17 +588,81 @@ vec3 ToneMap(vec3 hdr)
 //------------------------------------------------------------------------------------------------------------------------
 //                                              TEMPORAL ACCUMULATION RESOLVE
 //------------------------------------------------------------------------------------------------------------------------
-// Running mean in linear radiance. AccumulationIndex == 0 restarts the history (camera moved / parameter changed);
-//    every later frame folds the new estimate in with weight 1/(n+1). Tone mapping is applied to the mean only.
+// Running mean in linear radiance, REPROJECTED through the R2 motion vectors (R7a).
+//
+// Before R7a the mean was read from the pixel's own address and the whole history was thrown away the instant the
+//    camera moved: the image went to one sample per pixel while moving and only resolved once the camera stopped.
+//    The motion vectors needed to do better already existed — R2 writes them and R6 back-projects temporal
+//    reservoirs through them — they simply were not consumed by the accumulator. This reads the history from where
+//    the surface WAS, so a pan keeps its samples.
+//
+// Validation is deliberately the same rule R6 row 2 uses for reservoirs — 25° normal, 10 % relative depth — rather
+//    than a second, subtly different one. A pixel that fails it is disocclusion: new geometry with no history, and
+//    the honest answer there is to restart rather than smear a neighbour's colour across the silhouette.
+//
+// The history's alpha channel carries the sample count. Reprojection preserves it, so a surface tracked across a
+//    pan keeps converging instead of restarting at n = 1; disocclusion resets it to 1. HistorySurfaceImage stores the
+//    matching (normal, depth) so the next frame can validate against what this frame actually shaded.
 
+const float kReprojectNormalCos = kTemporalNormalCos;   // 25°, identical to the reservoir rule
+const float kReprojectDepthTol  = kTemporalDepthTol;    // 10 % relative
+
+// Depth < 0 marks "no surface" (background); such a pixel never reprojects and never becomes a valid source.
+void ResolveSurface(uvec2 pixel, vec3 radiance, vec3 normal, float depth)
+{
+    vec4  history   = vec4(0.0);
+    float count     = 0.0;
+    bool  resolved  = false;   // did we already establish where this pixel's history comes from?
+
+    const bool reproject = depth > 0.0 && (FeatureFlags & kFeatureTemporalReprojection) != 0u;
+
+    if (FrameIndex > 0u && reproject)
+    {
+        vec2 extent = vec2(float(ViewportWidth), float(ViewportHeight));
+        vec2 cuv    = (vec2(pixel) + 0.5) / extent;
+        vec2 motion = texelFetch(MotionImage, ivec2(pixel), 0).rg;
+        ivec2 prevPx = ivec2(floor((cuv - motion) * extent));
+
+        if (all(greaterThanEqual(prevPx, ivec2(0))) && prevPx.x < int(ViewportWidth) && prevPx.y < int(ViewportHeight))
+        {
+            vec4 prevSurface = imageLoad(HistorySurfaceImage, prevPx);
+            // prevSurface.w <= 0 means that pixel held no surface last frame, so there is nothing to inherit.
+            if (prevSurface.w > 0.0
+                && dot(normal, prevSurface.xyz) > kReprojectNormalCos
+                && abs(depth - prevSurface.w) / max(depth, 1e-3) < kReprojectDepthTol)
+            {
+                history  = imageLoad(HistoryImage, prevPx);
+                count    = history.a;
+                resolved = true;
+            }
+            // Failing validation is a real disocclusion: leave count at 0 so the mean restarts at n = 1 rather
+            //    than smearing the surface that used to be behind this pixel.
+            else resolved = true;
+        }
+        else resolved = true;   // back-projected off screen — also a disocclusion
+    }
+
+    if (FrameIndex > 0u && !resolved)
+    {
+        // Either reprojection is disabled, or this pixel has no surface to reproject through (background, direct
+        //    emitters). Both read the pixel's own history, which is exactly the pre-R7a behaviour — so with the
+        //    feature bit clear this function is byte-identical to the accumulator it replaced.
+        history = imageLoad(HistoryImage, ivec2(pixel));
+        count   = history.a;
+    }
+
+    count      = count + 1.0;
+    vec3 mean  = history.rgb + (radiance - history.rgb) / count;
+
+    imageStore(HistoryImage,     ivec2(pixel), vec4(mean, count));
+    imageStore(HistorySurfaceImage, ivec2(pixel), vec4(normal, depth));
+    imageStore(OutputImage,      ivec2(pixel), vec4(ToneMap(mean), 1.0));
+}
+
+// Background and other surface-less writes: no normal, no depth, never a reprojection source.
 void Resolve(uvec2 pixel, vec3 radiance)
 {
-    vec4 history = (FrameIndex == 0u) ? vec4(0.0) : imageLoad(HistoryImage, ivec2(pixel));
-    float count  = history.a + 1.0;
-    vec3  mean   = history.rgb + (radiance - history.rgb) / count;
-
-    imageStore(HistoryImage, ivec2(pixel), vec4(mean, count));
-    imageStore(OutputImage,  ivec2(pixel), vec4(ToneMap(mean), 1.0));
+    ResolveSurface(pixel, radiance, vec3(0.0, 0.0, 1.0), -1.0);
 }
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -929,5 +995,7 @@ void main()
     if ((FeatureFlags & kFeatureAmbientFloor) != 0u)
         accumulatedRadiance += albedo * frame.Occlusion * AmbientStrength;
 
-    Resolve(pixel, accumulatedRadiance);
+    // R7a: the primary hit's geometric normal and camera distance are what the next frame validates its
+    //    back-projection against — the same pair R6 row 2 uses to validate reprojected reservoirs.
+    ResolveSurface(pixel, accumulatedRadiance, hitNormal, primaryT);
 }
