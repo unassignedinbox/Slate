@@ -46,6 +46,23 @@ if grep -nE '(push_back|emplace_back|resize|reserve|new )' Engine/DisplayPresent
     echo "  Record() appears to allocate — the render loop must not touch the heap"; Fail=1
 fi
 
+# ── Icons ────────────────────────────────────────────────────────────────────────────────────────────────────────
+# The glyph table is a fixed-size array indexed by the enum; if the two drift apart the build fails, but a
+# BORROWED glyph compiles happily. Assert the outliner names its own icons rather than reusing dashboard ones.
+for Borrowed in "ControlCentreIconCategory::DisplayMonitor" "ControlCentreIconCategory::ShieldInput" \
+                "ControlCentreIconCategory::GaugeFrameRate" "ControlCentreIconCategory::SettingsGear"; do
+    if grep -q "$Borrowed" Engine/DisplayPresentation/InterfaceOutlinerSequence.cpp; then
+        echo "  the outliner is borrowing $Borrowed instead of a row glyph"; Fail=1
+    fi
+done
+# Every new glyph must decode to real geometry — an empty or malformed path draws nothing and looks like a
+# missing feature rather than a broken icon.
+for Icon in EyeVisible EyeHidden LockClosed LockOpen MotionActivity FolderClosed FolderOpen CubeObject \
+            SearchGlass CameraBody LayoutSplit LayoutPanelLeft LayoutPanelRight; do
+    grep -q "\"$Icon\"" Engine/DisplayPresentation/VectorCodec.cpp \
+        || { echo "  glyph $Icon has no path data"; Fail=1; }
+done
+
 # ── Keyboard plumbing ────────────────────────────────────────────────────────────────────────────────────────────
 # Text input needs GLFW's character callback: reconstructing characters from key codes types the wrong letters on
 # any non-US layout, and misses IME entirely.

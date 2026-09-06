@@ -464,10 +464,10 @@ int main(int argc, char** argv)
         using Frontier::OutlinerTypeRecord;
         Browser.AssignTitle("World Browser", "Cornell Box");
         Frontier::InterfaceOutlinerSequence& Tree = Browser.Outliner();
-        Tree.RegisterType(RowFolder, OutlinerTypeRecord{ "Folder", Frontier::ControlCentreIconCategory::SettingsGear,     { 0.788f, 0.635f, 0.294f, 1.0f }, true  });
-        Tree.RegisterType(RowMesh,   OutlinerTypeRecord{ "Mesh",   Frontier::ControlCentreIconCategory::DisplayMonitor,   { 0.604f, 0.627f, 0.651f, 1.0f }, false });
+        Tree.RegisterType(RowFolder, OutlinerTypeRecord{ "Folder", Frontier::ControlCentreIconCategory::FolderClosed,     { 0.788f, 0.635f, 0.294f, 1.0f }, true  });
+        Tree.RegisterType(RowMesh,   OutlinerTypeRecord{ "Mesh",   Frontier::ControlCentreIconCategory::CubeObject,       { 0.604f, 0.627f, 0.651f, 1.0f }, false });
         Tree.RegisterType(RowLight,  OutlinerTypeRecord{ "Light",  Frontier::ControlCentreIconCategory::SunIllumination,  { 0.961f, 0.827f, 0.294f, 1.0f }, false });
-        Tree.RegisterType(RowCamera, OutlinerTypeRecord{ "Camera", Frontier::ControlCentreIconCategory::VideoRenderScale, { 0.412f, 0.765f, 1.0f,   1.0f }, false });
+        Tree.RegisterType(RowCamera, OutlinerTypeRecord{ "Camera", Frontier::ControlCentreIconCategory::CameraBody,       { 0.412f, 0.765f, 1.0f,   1.0f }, false });
         Tree.RegisterType(RowSky,    OutlinerTypeRecord{ "Sky",    Frontier::ControlCentreIconCategory::WirelessSignal,   { 0.561f, 0.827f, 1.0f,   1.0f }, false });
         Tree.RegisterType(RowSun,    OutlinerTypeRecord{ "Sun",    Frontier::ControlCentreIconCategory::SunIllumination,  { 1.0f,   0.694f, 0.294f, 1.0f }, false });
         Tree.RegisterType(RowMoon,   OutlinerTypeRecord{ "Moon",   Frontier::ControlCentreIconCategory::MoonDisturbance,  { 0.722f, 0.769f, 0.839f, 1.0f }, false });

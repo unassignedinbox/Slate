@@ -249,10 +249,12 @@ void InterfaceBrowserSequence::RecordHeader(PixelSpace& Surface, const PlaneExte
                             ControlKit::Faded(ControlKit::Palette().TextFaint, Opacity), Sub, 11.0f);
 
     // Three layout buttons on the trailing edge.
+    // The three modes read as what they DO to the layout: a left panel, a split, a right panel. Gear and sliders
+    //    were placeholders and said nothing about layout at all.
     const ControlCentreIconCategory Icons[3] = {
-        ControlCentreIconCategory::SlidersQuality,   // tree only
-        ControlCentreIconCategory::DisplayMonitor,   // split
-        ControlCentreIconCategory::SettingsGear,     // properties only
+        ControlCentreIconCategory::LayoutPanelLeft,   // tree only
+        ControlCentreIconCategory::LayoutSplit,       // split
+        ControlCentreIconCategory::LayoutPanelRight,  // properties only
     };
     float X = Extent.MaximumX - kPadX - 16.0f;
     for (int I = 2; I >= 0; --I)
@@ -284,7 +286,7 @@ void InterfaceBrowserSequence::RecordSearchRow(PixelSpace& Surface, const PlaneE
 
     ControlKit::GlyphCentred(Surface, Spanning(Field.MinimumX + 4.0f, Field.MinimumY + 9.0f, 16.0f, 16.0f), 12.0f,
                              ControlKit::Faded(ControlKit::Palette().TextFaint, Opacity),
-                             ControlCentreIconCategory::SettingsGear, 2.0f);
+                             ControlCentreIconCategory::SearchGlass, 2.0f);
 
     const PlaneExtent Inner = Spanning(Field.MinimumX + 24.0f, Field.MinimumY, Field.Width() - 30.0f, Field.Height());
     if (Tree.SearchEntry().Active || Tree.SearchEntry().Length > 0u)

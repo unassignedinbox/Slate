@@ -85,7 +85,27 @@ enum class ControlCentreIconCategory : uint32_t
     CircleCheck                         = 21,                   // ✓ lucide "circle-check-big" — success tone
     CircleInfo                          = 22,                   // ⓘ lucide "info" — info tone
     OctagonAlert                        = 23,                   // ⛔ lucide "octagon-alert" — caution / danger tone
-    Count                               = 24
+
+    // ── Outliner row columns and tree furniture ──────────────────────────────────────────────────────────────────
+    // Added for the World Browser. Before these existed the outliner borrowed DisplayMonitor for "visible" and
+    //    ShieldInput for "locked", which is why a row read as a monitor and a shield rather than an eye and a
+    //    padlock. A borrowed glyph is worse than a missing one: it looks deliberate.
+    EyeVisible                          = 24,                   // 👁 lucide "eye" — row is visible
+    EyeHidden                           = 25,                   // 👁̸ lucide "eye-off" — row is hidden
+    LockClosed                          = 26,                   // 🔒 lucide "lock" — row is locked
+    LockOpen                            = 27,                   // 🔓 lucide "lock-open" — row is editable
+    MotionActivity                      = 28,                   // ∿ lucide "activity" — row is dynamic
+    FolderClosed                        = 29,                   // 🗀 lucide "folder" — container row
+    FolderOpen                          = 30,                   // 🗁 lucide "folder-open" — expanded container
+    CubeObject                          = 31,                   // ⬢ lucide "box" — mesh / geometry row
+    SearchGlass                         = 32,                   // 🔍 lucide "search" — the search field
+    PlusAdd                             = 33,                   // ＋ lucide "plus" — add a row
+    TrashDelete                         = 34,                   // 🗑 lucide "trash-2" — remove a row
+    LayoutSplit                         = 35,                   // ▥ lucide "columns-2" — split layout mode
+    LayoutPanelLeft                     = 36,                   // ▤ lucide "panel-left" — outliner-only mode
+    LayoutPanelRight                    = 37,                   // ▤ lucide "panel-right" — properties-only mode
+    CameraBody                          = 38,                   // 🎥 lucide "video" — camera row
+    Count                               = 39
 };
 
 // Lucide glyphs are authored as several <path>/<circle>/<rect> children. VectorGlyphRecord stores them

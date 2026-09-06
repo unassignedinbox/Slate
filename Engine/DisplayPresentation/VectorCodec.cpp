@@ -233,7 +233,43 @@ const std::array<VectorGlyphRecord, static_cast<size_t>(ControlCentreIconCategor
     // 22: CircleInfo — lucide "info"
     VectorGlyphRecord{ "CircleInfo", "M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zM12 16v-4M12 8h.01", 24, 24, 2.0f },
     // 23: OctagonAlert — lucide "octagon-alert"
-    VectorGlyphRecord{ "OctagonAlert", "M12 16h.01M12 8v4M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z", 24, 24, 2.0f }
+    VectorGlyphRecord{ "OctagonAlert", "M12 16h.01M12 8v4M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z", 24, 24, 2.0f },
+
+    // ── Outliner row columns and tree furniture ──────────────────────────────────────────────────────────────────
+    // <circle cx cy r> is rewritten as two arcs, matching how the existing entries encode their circles: the
+    //    decoder handles one path grammar, so every primitive has to arrive as path data.
+
+    // 24: EyeVisible — lucide "eye". Lid outline plus a 3-radius pupil at (12,12).
+    VectorGlyphRecord{ "EyeVisible", "M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z", 24, 24, 2.0f },
+    // 25: EyeHidden — lucide "eye-off". Two lid arcs broken by the strike, plus the strike itself.
+    VectorGlyphRecord{ "EyeHidden", "M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49M14.084 14.158a3 3 0 0 1-4.242-4.242M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143M2 2l20 20", 24, 24, 2.0f },
+    // 26: LockClosed — lucide "lock". Body rect as an explicit rounded path, shackle above.
+    VectorGlyphRecord{ "LockClosed", "M5 13a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2zM7 11V7a5 5 0 0 1 10 0v4", 24, 24, 2.0f },
+    // 27: LockOpen — lucide "lock-open". Same body; the shackle is open on the trailing side.
+    VectorGlyphRecord{ "LockOpen", "M5 13a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2zM7 11V7a5 5 0 0 1 9.9-1", 24, 24, 2.0f },
+    // 28: MotionActivity — lucide "activity". The dynamic column: a pulse reads as motion at 13 px far better
+    //     than a gauge does.
+    VectorGlyphRecord{ "MotionActivity", "M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2", 24, 24, 2.0f },
+    // 29: FolderClosed — lucide "folder".
+    VectorGlyphRecord{ "FolderClosed", "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z", 24, 24, 2.0f },
+    // 30: FolderOpen — lucide "folder-open".
+    VectorGlyphRecord{ "FolderOpen", "M2 7.5V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v1.5M2.239 18.578A2 2 0 0 0 4 20h16a2 2 0 0 0 1.964-1.618l1.402-7A1 1 0 0 0 22.386 10H1.614a1 1 0 0 0-.98 1.382z", 24, 24, 2.0f },
+    // 31: CubeObject — lucide "box". The mesh row.
+    VectorGlyphRecord{ "CubeObject", "M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16zM3.3 7l8.7 5 8.7-5M12 22V12", 24, 24, 2.0f },
+    // 32: SearchGlass — lucide "search". Lens as two arcs, then the handle.
+    VectorGlyphRecord{ "SearchGlass", "M18 11a7 7 0 1 1-14 0 7 7 0 0 1 14 0zM21 21l-4.35-4.35", 24, 24, 2.0f },
+    // 33: PlusAdd — lucide "plus".
+    VectorGlyphRecord{ "PlusAdd", "M5 12h14M12 5v14", 24, 24, 2.0f },
+    // 34: TrashDelete — lucide "trash-2".
+    VectorGlyphRecord{ "TrashDelete", "M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6", 24, 24, 2.0f },
+    // 35: LayoutSplit — lucide "columns-2". Split layout mode.
+    VectorGlyphRecord{ "LayoutSplit", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM12 3v18", 24, 24, 2.0f },
+    // 36: LayoutPanelLeft — lucide "panel-left". Outliner-only mode.
+    VectorGlyphRecord{ "LayoutPanelLeft", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM9 3v18", 24, 24, 2.0f },
+    // 37: LayoutPanelRight — lucide "panel-right". Properties-only mode.
+    VectorGlyphRecord{ "LayoutPanelRight", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM15 3v18", 24, 24, 2.0f },
+    // 38: CameraBody — lucide "video". The camera row; VideoRenderScale is already spoken for by the dashboard.
+    VectorGlyphRecord{ "CameraBody", "M16 8a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2zM16 10l5.24-3.14a.5.5 0 0 1 .76.43v9.42a.5.5 0 0 1-.76.43L16 14", 24, 24, 2.0f }
 };
 
 //------------------------------------------------------------------------------------------------------------------------

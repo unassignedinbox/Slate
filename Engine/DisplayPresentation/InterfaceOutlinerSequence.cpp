@@ -277,8 +277,13 @@ uint32_t InterfaceOutlinerSequence::Record(PixelSpace& Surface, const PlaneExten
             X += 16.0f + 8.0f;
 
             const OutlinerTypeRecord& Type = QueryType(R.TypeOrdinal);
+            // A container's folder opens and closes with its own twirl, so the icon and the chevron never disagree.
+            const ControlCentreIconCategory RowIcon =
+                Type.Container ? (R.TwirlPhase > 0.5f ? ControlCentreIconCategory::FolderOpen
+                                                      : ControlCentreIconCategory::FolderClosed)
+                               : Type.Icon;
             ControlKit::GlyphCentred(Surface, Spanning(X, Cy - 8.0f, 16.0f, 16.0f), 13.0f,
-                ControlKit::Faded(R.HasTint ? R.Tint : Type.Colour, RowOpacity), Type.Icon, 1.9f);
+                ControlKit::Faded(R.HasTint ? R.Tint : Type.Colour, RowOpacity), RowIcon, 1.9f);
             X += 16.0f + 8.0f;
 
             // Three state columns on the trailing edge; the name gets whatever is left.
@@ -311,12 +316,18 @@ uint32_t InterfaceOutlinerSequence::Record(PixelSpace& Surface, const PlaneExten
                 return ControlKit::Over(Cell, Pointer) && Pointer.Released;
             };
 
+            // Each column shows the state it IS, not the action it performs: an open padlock means editable, a
+            //    struck-through eye means hidden. A column that showed the verb instead would invert on every
+            //    click and be unreadable at a glance down a long tree.
             if (!Type.Container)
             {
-                if (StateColumn(ControlCentreIconCategory::ShieldInput,  R.Locked,  true)) { Rows[Index].Locked  = !R.Locked;  Touched = Index; }
-                if (StateColumn(ControlCentreIconCategory::GaugeFrameRate, R.Dynamic, true)) { Rows[Index].Dynamic = !R.Dynamic; Touched = Index; }
+                if (StateColumn(R.Locked ? ControlCentreIconCategory::LockClosed : ControlCentreIconCategory::LockOpen,
+                                R.Locked, true))  { Rows[Index].Locked  = !R.Locked;  Touched = Index; }
+                if (StateColumn(ControlCentreIconCategory::MotionActivity, R.Dynamic, true))
+                                                  { Rows[Index].Dynamic = !R.Dynamic; Touched = Index; }
             }
-            if (StateColumn(ControlCentreIconCategory::DisplayMonitor, R.Visible, false)) { Rows[Index].Visible = !R.Visible; Touched = Index; }
+            if (StateColumn(R.Visible ? ControlCentreIconCategory::EyeVisible : ControlCentreIconCategory::EyeHidden,
+                            R.Visible, false))    { Rows[Index].Visible = !R.Visible; Touched = Index; }
 
             // Selection last, so a click that landed on a column above does not also move the selection.
             if (Hovered && Pointer.Released && Touched == kOutlinerNoRow)

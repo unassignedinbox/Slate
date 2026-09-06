@@ -345,6 +345,40 @@ int main()
         Expect(std::strcmp(O.QueryRow(A).Name, "Floor") == 0, "and still only that row");
     }
 
+    //------------------------------------------------------------------------------------------------------------
+    std::printf("\n18. every icon the outliner names actually exists\n");
+    {
+        // Before these glyphs were authored the outliner borrowed DisplayMonitor for "visible" and ShieldInput
+        //    for "locked". Both compiled, both drew, and both were wrong — a borrowed glyph is worse than a
+        //    missing one because it looks deliberate. An out-of-range ordinal silently falls back to icon 0, so
+        //    the only way to catch it is to assert the ordinal is in range and distinct.
+        const ControlCentreIconCategory Used[] = {
+            ControlCentreIconCategory::EyeVisible,   ControlCentreIconCategory::EyeHidden,
+            ControlCentreIconCategory::LockClosed,   ControlCentreIconCategory::LockOpen,
+            ControlCentreIconCategory::MotionActivity,
+            ControlCentreIconCategory::FolderClosed, ControlCentreIconCategory::FolderOpen,
+            ControlCentreIconCategory::CubeObject,   ControlCentreIconCategory::SearchGlass,
+            ControlCentreIconCategory::CameraBody,
+            ControlCentreIconCategory::LayoutSplit,  ControlCentreIconCategory::LayoutPanelLeft,
+            ControlCentreIconCategory::LayoutPanelRight,
+        };
+        bool AllInRange = true, AllDistinct = true;
+        for (uint32_t I = 0u; I < sizeof(Used) / sizeof(Used[0]); ++I)
+        {
+            if (static_cast<uint32_t>(Used[I]) >= static_cast<uint32_t>(ControlCentreIconCategory::Count)) AllInRange = false;
+            for (uint32_t J = I + 1u; J < sizeof(Used) / sizeof(Used[0]); ++J)
+                if (Used[I] == Used[J]) AllDistinct = false;
+        }
+        Expect(AllInRange,  "every icon the outliner uses is inside the table, not falling back to icon 0");
+        Expect(AllDistinct, "and no two row states share a glyph, so a row cannot read ambiguously");
+
+        // The eye and the padlock must differ between their two states, or the column shows nothing useful.
+        Expect(ControlCentreIconCategory::EyeVisible != ControlCentreIconCategory::EyeHidden,
+               "visible and hidden are different glyphs");
+        Expect(ControlCentreIconCategory::LockClosed != ControlCentreIconCategory::LockOpen,
+               "locked and editable are different glyphs");
+    }
+
     std::printf("\n>>> %s (%d failure%s)\n", Failures == 0 ? "ALL PASS" : "FAILURES", Failures, Failures == 1 ? "" : "s");
     return Failures == 0 ? 0 : 1;
 }
