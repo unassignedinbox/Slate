@@ -85,9 +85,10 @@
     animation:cardIn .28s var(--ease);}
   @keyframes cardIn{from{transform:translateY(8px);opacity:0;}to{transform:none;opacity:1;}}
   .pcard h4{font-size:10.5px;letter-spacing:1.4px;text-transform:uppercase;color:var(--text-faint);margin-bottom:12px;}
-  .prow{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  /* .crow equivalent: gap 14, min-height matches the control height so rows do not crowd */
+  .prow{display:flex;align-items:center;gap:12px;margin-bottom:10px;min-height:30px;}
   .prow:last-child{margin-bottom:0;}
-  .prow .pl{flex:0 0 84px;font-size:11.5px;color:var(--text-dim);}
+  .prow .pl{flex:0 0 76px;font-size:12px;font-weight:500;color:var(--text-dim);}
   /* axis fields — .vpill geometry with the axis letter in the leading cell (ControlKit::ValuePill inverted:
      the label cell leads instead of trailing, because X/Y/Z reads better before the number). */
   .vec{display:flex;gap:6px;flex:1;min-width:0;}
@@ -138,25 +139,30 @@
      A CSS linear-gradient cannot round its own end, so the track is built from real elements instead. */
   .kslider{flex:1;min-width:90px;height:28px;position:relative;cursor:pointer;touch-action:none;}
   .kslider .track{position:absolute;inset:0;border-radius:var(--r-pill);background:var(--raised);}
-  .kslider .kfill{position:absolute;left:0;top:0;height:100%;border-radius:var(--r-pill);background:#7a7a7a;
+  /* The filled side is #4a4a4a — dark, close to the track, so the thumb is what carries the eye.
+     A bright fill turns every row into a progress bar and the panel stops reading as controls. */
+  .kslider .kfill{position:absolute;left:0;top:0;height:100%;border-radius:var(--r-pill);background:#4a4a4a;
     min-width:28px;}
   .kslider.hi .kfill{background:var(--hi);}
   .kslider .knob{position:absolute;top:50%;width:26px;height:26px;border-radius:50%;background:#e0e0e0;
-    transform:translate(-50%,-50%);transition:transform .12s var(--ease);}
+    transform:translate(-50%,-50%);transition:transform .12s var(--ease);
+    box-shadow:0 1px 3px rgba(0,0,0,.5);}
   .kslider.drag .knob{transform:translate(-50%,-50%) scale(1.1);}
-  /* .thin — the quiet variant for dense property panels: 10 px track, 18 px thumb */
+  /* .thin — the quiet variant, kept for reference; the property panels use the full-height slider
+     because that is what the engine's validation build shows. */
   .kslider.thin{height:18px;}
   .kslider.thin .track{top:4px;bottom:4px;}
   .kslider.thin .kfill{top:4px;height:10px;min-width:18px;}
   .kslider.thin .knob{width:18px;height:18px;}
 
   /* value pill — UIComponents .vpill, 118 px: number cell + 44 px unit cell */
-  .vpill{width:118px;height:32px;flex:0 0 118px;display:flex;border-radius:var(--r-pill);overflow:hidden;
+  /* .vpill — kit geometry: 118 px wide, 44 px unit cell, number cell in --field, unit cell in --inset */
+  .vpill{width:104px;height:30px;flex:0 0 104px;display:flex;border-radius:var(--r-pill);overflow:hidden;
     border:1px solid var(--stroke);}
   .vpill .num{flex:1;background:var(--field);display:flex;align-items:center;justify-content:center;
-    font-size:13px;font-weight:600;letter-spacing:.4px;font-variant-numeric:tabular-nums;}
-  .vpill .unit{width:40px;background:var(--inset);border-left:1px solid var(--stroke);display:flex;
-    align-items:center;justify-content:center;color:var(--text-faint);font-size:11px;font-weight:500;}
+    font-size:13.5px;font-weight:600;letter-spacing:.4px;font-variant-numeric:tabular-nums;}
+  .vpill .unit{width:36px;background:var(--inset);border-left:1px solid var(--stroke);display:flex;
+    align-items:center;justify-content:center;color:var(--text-faint);font-size:11.5px;font-weight:500;}
 
   /* search field — UIComponents .field */
   .field{flex:1;height:34px;border-radius:var(--r-pill);background:var(--field);border:1px solid var(--stroke);
@@ -394,11 +400,13 @@ const sw=(label,on)=>`<div class="prow"><span class="pl">${label}</span>
 /* Kit slider: a real input[type=range] carrying .slider so it inherits the 28 px track / 26 px thumb rules
    verbatim, with the filled-left-side gradient recomputed on input. `.thin` is used in the dense property
    panels, matching how UIComponents describes the quiet variant. */
+/* Row order is the kit's .crow: label → value pill → slider. The pill leads so the numbers form a
+   readable column down the panel; the slider takes the remaining width. */
 const sl=(label,v,min,max,unit,dec)=>
   `<div class="prow"><span class="pl">${label}</span>
-    <div class="kslider thin" data-min="${min}" data-max="${max}" data-v="${v}" data-dec="${dec??((max-min)<=4?2:0)}">
-      <div class="track"></div><div class="kfill"></div><div class="knob"></div></div>
-    <div class="vpill"><div class="num">${v}</div><div class="unit">${(unit||'').trim()||'—'}</div></div></div>`;
+    <div class="vpill"><div class="num">${v}</div><div class="unit">${(unit||'').trim()||'°'}</div></div>
+    <div class="kslider" data-min="${min}" data-max="${max}" data-v="${v}" data-dec="${dec??((max-min)<=4?2:0)}">
+      <div class="track"></div><div class="kfill"></div><div class="knob"></div></div></div>`;
 
 /* Geometry mirrors ControlKit::Slider exactly: the thumb centre travels [half-thumb, width − half-thumb],
    and the fill is a pill from the left edge to that centre — never a hard-edged gradient stop. */
