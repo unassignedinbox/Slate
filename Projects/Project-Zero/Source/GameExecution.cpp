@@ -484,6 +484,10 @@ int main(int argc, char** argv)
     float BrowserLuminaire = 32.0f;
     bool  BrowserTemporal = true, BrowserSpatial = true, BrowserAlias = true, BrowserDenoise = true;
     bool  BrowserPointerDown = false, BrowserPointerWasDown = false, BrowserCoversPointer = false;
+    // Written inside the ImGui frame, read on the NEXT frame's camera gate: the gate runs before the frame that
+    //    would answer it, so a same-frame read is impossible. One frame of lag on "is the cursor over the panel"
+    //    is invisible, whereas flying the camera because the answer was not yet available is not.
+    bool  BrowserWindowHovered = false;
     {
         Frontier::InterfaceOutlinerSequence& Tree = Browser.Outliner();
 
@@ -1020,9 +1024,10 @@ int main(int argc, char** argv)
         //    The panel occupies a fixed strip on the trailing edge; the camera must not fly while the cursor is
         //    over it, and must not fly at all while a name is being typed.
         {
-            const float PanelW    = 340.0f;
-            const float PointerLx = Input.QueryCursorPositionX() / InterfaceScale;
-            BrowserCoversPointer  = PointerLx >= static_cast<float>(LogicalWidth) - PanelW;
+            // The panel is a movable window now, so its position cannot be assumed. ImGui reports whether the
+            //    cursor is over it — including its title bar, resize grip and dock tab, which a hand-computed
+            //    strip would miss entirely once the window is dragged anywhere.
+            BrowserCoversPointer = BrowserWindowHovered;
 
             BrowserPointerWasDown = BrowserPointerDown;
             BrowserPointerDown    = Input.IsMouseButtonPressed(Frontier::MouseButtonCategory::ButtonLeft);
@@ -1089,25 +1094,42 @@ int main(int argc, char** argv)
                                                                    Integrator.QueryConfiguration(), Level.QueryMaterials().QueryMetrics(),
                                                                    Textures.QueryMetrics(), MaxTextureLevels);
                               ControlCentre.ConstructControlLayout(OverlaySurface);
+                              Notifications.ConstructNotificationLayout(OverlaySurface, NotchLine);
+                          }
 
-                              // World Browser — the right-hand panel, below the notch line so the pull-down shade
-                              //    still covers it. Drawn before notifications so a toast lands on top.
+                          // ── World Browser — a real, movable window ─────────────────────────────────────────
+                          // It used to record onto the foreground list, which is screen-space and belongs to no
+                          //    window: nothing there can be dragged, resized, docked or z-ordered because there
+                          //    is nothing underneath to own those behaviours. FloatingPanel puts a window under
+                          //    the same Record() call, and not one widget inside had to change.
+                          //
+                          //    The notch stays on the foreground list deliberately. It is a system overlay and
+                          //    must cover this window when the shade is pulled down.
+                          {
+                              Frontier::FloatingPanel BrowserPanel(
+                                  "World Browser##Slate",
+                                  static_cast<float>(LogicalWidth) - 360.0f, 40.0f,
+                                  360.0f, static_cast<float>(LogicalHeight) - 80.0f,
+                                  InterfaceScale);
+
+                              BrowserWindowHovered = BrowserPanel.PointerOverWindow();
+
+                              if (BrowserPanel.IsOpen())
                               {
-                                  const float PanelW = 340.0f;
-                                  const Frontier::PlaneExtent BrowserExtent{
-                                      static_cast<float>(LogicalWidth) - PanelW, NotchLine,
-                                      static_cast<float>(LogicalWidth), static_cast<float>(LogicalHeight) };
                                   Frontier::ControlPointer BrowserPointer{};
                                   BrowserPointer.X        = Input.QueryCursorPositionX() / InterfaceScale;
                                   BrowserPointer.Y        = Input.QueryCursorPositionY() / InterfaceScale;
                                   BrowserPointer.Down     = BrowserPointerDown;
                                   BrowserPointer.Pressed  = BrowserPointerDown && !BrowserPointerWasDown;
                                   BrowserPointer.Released = !BrowserPointerDown && BrowserPointerWasDown;
-                                  BrowserPointer.Enabled  = !ControlCentre.CoversPointer();
-                                  Browser.Record(OverlaySurface, BrowserExtent, BrowserPointer);
-                              }
+                                  // Only the content owns the pointer. Over the title bar, the resize grip or the
+                                  //    dock tab it belongs to ImGui, and a widget that also saw it would move a
+                                  //    slider while the window was being dragged.
+                                  BrowserPointer.Enabled  = BrowserPanel.PointerInsideContent()
+                                                         && !ControlCentre.CoversPointer();
 
-                              Notifications.ConstructNotificationLayout(OverlaySurface, NotchLine);
+                                  Browser.Record(BrowserPanel.Surface(), BrowserPanel.ContentExtent(), BrowserPointer);
+                              }
                           }
                       });
 

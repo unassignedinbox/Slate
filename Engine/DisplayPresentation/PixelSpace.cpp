@@ -59,6 +59,24 @@ bool PixelSpace::Begin(SurfaceLayer Layer, float InDisplayWidth, float InDisplay
 
     // The foreground list sits in front of every ImGui window, so the notch and its shade cover the
     //    project's own panels when pulled down — exactly what a system overlay should do.
+    if (Layer == SurfaceLayer::Window)
+    {
+        // GetWindowDrawList() is only meaningful inside a Begin/End pair. Outside one it returns the list of
+        //    whatever window happened to be current last, which would paint this frame's panel into an unrelated
+        //    window — a failure that looks like corruption rather than a misuse, so it is refused here.
+        // ImGui::GetWindowDrawList() asserts rather than returning null when no window is current, so the guard
+        //    has to be a query that is safe outside a Begin/End pair. A zero-size window region is the public
+        //    signal that there is no current window.
+        const ImVec2 Region = ImGui::GetContentRegionAvail();
+        if (Region.x == 0.0f && Region.y == 0.0f)
+        {
+            Commands = nullptr;
+            return false;
+        }
+        Commands = static_cast<void*>(ImGui::GetWindowDrawList());
+        return true;
+    }
+
     Commands = (Layer == SurfaceLayer::Above)
              ? static_cast<void*>(ImGui::GetForegroundDrawList())
              : static_cast<void*>(ImGui::GetBackgroundDrawList());
@@ -198,6 +216,61 @@ PlanePoint PixelSpace::MeasureText(const char* Utf8, float FontSizePixels) const
     const float Size = FontSizePixels > 0.0f ? FontSizePixels : ImGui::GetFontSize();
     const ImVec2 Measured = Font->CalcTextSizeA(Size * Scale, FLT_MAX, 0.0f, Utf8);
     return PlanePoint{ Measured.x / Scale, Measured.y / Scale };
+}
+
+//------------------------------------------------------------------------------------------------------------------------
+//                                                    FLOATING PANEL
+//------------------------------------------------------------------------------------------------------------------------
+
+FloatingPanel::FloatingPanel(const char* Identity, float DefaultX, float DefaultY,
+                             float DefaultWidth, float DefaultHeight, float InterfaceScale) noexcept
+    : Scale(InterfaceScale > 0.05f ? InterfaceScale : 1.0f)
+{
+    if (ImGui::GetCurrentContext() == nullptr) return;
+
+    // Defaults are seeded once. ImGui restores the user's own position and size from imgui.ini afterwards, which
+    //    is the whole reason a movable panel is worth having: the layout survives the session.
+    ImGui::SetNextWindowPos (ImVec2(DefaultX * Scale, DefaultY * Scale), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(DefaultWidth * Scale, DefaultHeight * Scale), ImGuiCond_FirstUseEver);
+
+    // The panel paints its own background and its own padding, so ImGui must contribute neither. Without this
+    //    the kit's card radius sits inside a second, square frame.
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(0, 0, 0, 0));
+    StyleApplied = true;
+
+    Open = ImGui::Begin(Identity, nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+    // Hover is sampled here, while this window is current. Asking after End() would answer for whatever window
+    //    happened to be current next.
+    WindowHovered  = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows
+                                          | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+    ContentHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
+
+    if (Open)
+    {
+        const ImVec2 Origin = ImGui::GetCursorScreenPos();
+        const ImVec2 Avail  = ImGui::GetContentRegionAvail();
+        Content = PlaneExtent{ Origin.x / Scale, Origin.y / Scale,
+                               (Origin.x + Avail.x) / Scale, (Origin.y + Avail.y) / Scale };
+
+        // A collapsed or fully clipped window has no content to record into; reporting it as open would have the
+        //    caller lay out against a zero rectangle.
+        if (Avail.x <= 1.0f || Avail.y <= 1.0f) Open = false;
+        else if (!Recording.Begin(SurfaceLayer::Window, Avail.x, Avail.y, Scale)) Open = false;
+    }
+}
+
+FloatingPanel::~FloatingPanel() noexcept
+{
+    if (ImGui::GetCurrentContext() == nullptr) return;
+    // End() pairs with Begin() unconditionally — ImGui requires it even when Begin returned false.
+    ImGui::End();
+    if (StyleApplied)
+    {
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar();
+    }
 }
 
 } // namespace Frontier

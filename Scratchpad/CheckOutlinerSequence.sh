@@ -89,7 +89,35 @@ grep -q 'Browser.RecordCharacter' Projects/Project-Zero/Source/GameExecution.cpp
 grep -q 'Browser.EditingText()' Projects/Project-Zero/Source/GameExecution.cpp \
     || { echo "  the camera is not gated on text editing"; Fail=1; }
 
-[ "$Fail" = "0" ] && echo "  seam, vocabulary and keyboard plumbing hold                      PASS"
+# ── Floating window ──────────────────────────────────────────────────────────────────────────────────────────────
+# The panel must be a real window, not a foreground-list overlay: the foreground list belongs to no window, so
+# nothing recorded onto it can be dragged, resized, docked or z-ordered.
+grep -q 'SurfaceLayer::Window' Engine/DisplayPresentation/PixelSpace.h \
+    || { echo "  PixelSpace has no Window layer — the panel cannot be a real window"; Fail=1; }
+grep -q 'FloatingPanel' Projects/Project-Zero/Source/GameExecution.cpp \
+    || { echo "  the host does not put the browser in a floating panel"; Fail=1; }
+
+# The seam this header draws is load-bearing: hosts speak pixels, never ImGui. A single ImGui::Begin in project
+# code would undo it, which is exactly the shortcut a movable window invites.
+if grep -qE '^\s*(ImGui::|#include .*imgui)' Projects/Project-Zero/Source/GameExecution.cpp; then
+    echo "  the host names ImGui directly — FloatingPanel exists so it does not have to"; Fail=1
+fi
+
+# ⚠️ The left button must reach InputExchange even when ImGui wants the mouse. Panels inside an ImGui window read
+# their clicks from there, so swallowing the press makes every control dead while still looking interactive.
+grep -q 'The LEFT button is always recorded' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  the left button may be swallowed by WantCaptureMouse — panel controls would be dead"; Fail=1; }
+if grep -q 'if (Pressed && ImGui::GetCurrentContext() && ImGui::GetIO().WantCaptureMouse) return;' Engine/DeviceExchange/SwapchainExchange.cpp; then
+    echo "  the blanket WantCaptureMouse early-out is back — it swallows panel clicks"; Fail=1
+fi
+
+# Keyboard navigation must stay off. With it on, WantCaptureKeyboard goes true whenever an ImGui window is
+# focused, and the browser's own text fields would stop receiving characters.
+if grep -q 'ImGuiConfigFlags_NavEnableKeyboard' Engine/DeviceExchange/SwapchainExchange.cpp; then
+    echo "  ImGui keyboard navigation is enabled — it would capture the browser's typing"; Fail=1
+fi
+
+[ "$Fail" = "0" ] && echo "  seam, vocabulary, keyboard and window plumbing hold              PASS"
 
 echo
 if [ "$Fail" = "0" ]; then echo "[Outliner] OK"; exit 0; else echo "[Outliner] FAILED"; exit 1; fi

@@ -2709,18 +2709,25 @@ void SwapchainExchange::OnMouseButton(GLFWwindow* Window, int Button, int Action
     if (!Self || !Self->ForwardInput) return;
 
     const bool Pressed = (Action == GLFW_PRESS);
+    const bool ImGuiWantsMouse = ImGui::GetCurrentContext() && ImGui::GetIO().WantCaptureMouse;
 
-    // A press that lands on the overlay belongs to the overlay; releases always pass so nothing sticks.
-    if (Pressed && ImGui::GetCurrentContext() && ImGui::GetIO().WantCaptureMouse) return;
+    // ⚠️ The LEFT button is always recorded, even when ImGui wants the mouse. Panels drawn inside an ImGui window
+    //    read their clicks from InputExchange, so swallowing the press here would make every control in the World
+    //    Browser dead the moment it became a real window — while still looking perfectly interactive. Those panels
+    //    decide for themselves whether the pointer is theirs, using the window's own hover state.
+    if (Button == GLFW_MOUSE_BUTTON_LEFT)
+        Self->ForwardInput->AssignMouseButton(MouseButtonCategory::ButtonLeft,  Pressed);
 
+    // The right button drives camera look, which must never begin on an overlay click. Releases always pass so a
+    //    button cannot stick down.
     if (Button == GLFW_MOUSE_BUTTON_RIGHT)
     {
+        if (Pressed && ImGuiWantsMouse) return;
         Self->ForwardInput->AssignMouseButton(MouseButtonCategory::ButtonRight, Pressed);
         glfwSetInputMode(Window, GLFW_CURSOR, Pressed ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
         Self->CursorInitialised = false;
     }
-    if (Button == GLFW_MOUSE_BUTTON_LEFT)
-        Self->ForwardInput->AssignMouseButton(MouseButtonCategory::ButtonLeft,  Pressed);
+    if (Pressed && ImGuiWantsMouse) return;
     if (Button == GLFW_MOUSE_BUTTON_MIDDLE)
         Self->ForwardInput->AssignMouseButton(MouseButtonCategory::ButtonMiddle, Pressed);
 }
