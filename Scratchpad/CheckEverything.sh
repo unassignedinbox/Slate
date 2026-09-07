@@ -51,6 +51,7 @@ echo
 echo "=== scene and dynamic geometry (D1 - D6) ==="
 Run CheckCelestialSolver
 Run CheckAtmosphereScattering
+Run CheckExposureIntegrator
 Run CheckPrimitiveGeometry
 Run CheckShowroomGeometry
 Run CheckTraversalIdentity

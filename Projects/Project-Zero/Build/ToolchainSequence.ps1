@@ -362,6 +362,7 @@ $ShaderTable = @(
     @{ Source = 'HiZReduce.slang';             Stage = 'compute';  Output = 'HiZReduce.spv' }
     @{ Source = 'AtrousDenoise.slang';         Stage = 'compute';  Output = 'AtrousDenoise.spv' }
     @{ Source = 'AtmosphereLut.slang';         Stage = 'compute';  Output = 'AtmosphereLut.spv' }
+    @{ Source = 'LuminanceReduce.slang';       Stage = 'compute';  Output = 'LuminanceReduce.spv' }
     @{ Source = 'SurfaceResolve.slang';        Stage = 'compute';  Output = 'SurfaceResolve.spv' }
     @{ Source = 'VisibilityRaster.vert.slang'; Stage = 'vertex';   Output = 'VisibilityRaster.vert.spv' }
     @{ Source = 'VisibilityRaster.frag.slang'; Stage = 'fragment'; Output = 'VisibilityRaster.frag.spv' }
@@ -658,6 +659,7 @@ $EngineRelative = @(
     'Engine\DisplayPresentation\InterfaceOutlinerSequence.cpp'
     'Engine\DisplayPresentation\InterfaceBrowserSequence.cpp'
     'Engine\GeometricRaster\CelestialSolver.cpp'
+    'Engine\DisplayPresentation\ExposureIntegrator.cpp'
     'Engine\DisplayPresentation\DialogueHost.cpp'
     'Engine\DisplayPresentation\AppearanceInspector.cpp'
     'Engine\DisplayPresentation\ConfigurationInspector.cpp'

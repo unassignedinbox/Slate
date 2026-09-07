@@ -147,6 +147,7 @@ set(SHADER_TABLE
     "HiZReduce.slang|compute|HiZReduce.spv"
     "AtrousDenoise.slang|compute|AtrousDenoise.spv"
     "AtmosphereLut.slang|compute|AtmosphereLut.spv"
+    "LuminanceReduce.slang|compute|LuminanceReduce.spv"
     "SurfaceResolve.slang|compute|SurfaceResolve.spv"
     "VisibilityRaster.vert.slang|vertex|VisibilityRaster.vert.spv"
     "VisibilityRaster.frag.slang|fragment|VisibilityRaster.frag.spv"
@@ -222,6 +223,7 @@ set(FRONTIER_ENGINE_SOURCES
     Engine/DisplayPresentation/InterfaceOutlinerSequence.cpp
     Engine/DisplayPresentation/InterfaceBrowserSequence.cpp
     Engine/GeometricRaster/CelestialSolver.cpp
+    Engine/DisplayPresentation/ExposureIntegrator.cpp
     Engine/DisplayPresentation/DialogueHost.cpp
     Engine/DisplayPresentation/AppearanceInspector.cpp
     Engine/DisplayPresentation/ConfigurationInspector.cpp
