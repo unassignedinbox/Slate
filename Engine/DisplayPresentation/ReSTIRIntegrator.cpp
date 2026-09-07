@@ -178,6 +178,8 @@ SkyRecord ReSTIRIntegrator::BuildSkyRecord() const noexcept
     Record.StarBrightness  = (SkyOn && ActiveConfiguration.NightSky)
                            ? ActiveConfiguration.StarBrightness : 0.0f;
 
+    Record.MoonAngularScale = ActiveConfiguration.MoonAngularScale;
+
     return Record;
 }
 

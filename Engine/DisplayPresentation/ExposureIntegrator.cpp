@@ -44,10 +44,22 @@ void ExposureIntegrator::Advance(float DeltaSeconds) noexcept
     AdaptedLuminance = std::exp(LogAdapted + (LogObserved - LogAdapted) * Blend);
 }
 
+float ExposureIntegrator::KeyForLuminance(float Luminance, const ExposureConfiguration& Config) noexcept
+{
+    const float Safe = std::max(Luminance, Config.LuminanceFloor);
+    if (Safe >= Config.PhotopicLuminance) return Config.KeyValue;   // full daylight adaptation, unchanged
+
+    // A power law rather than a straight line, because perceived brightness follows the ratio of luminances,
+    //    not their difference. With the exponent at 0 this returns the constant key and the whole feature is
+    //    off, which is the identity switch back to the pre-A7c curve.
+    const float Ratio = Safe / Config.PhotopicLuminance;
+    return Config.KeyValue * std::pow(Ratio, Config.ScotopicExponent);
+}
+
 float ExposureIntegrator::ExposureForLuminance(float Luminance, const ExposureConfiguration& Config) noexcept
 {
     const float Safe = std::max(Luminance, Config.LuminanceFloor);
-    return std::clamp(Config.KeyValue / Safe, Config.MinimumExposure, Config.MaximumExposure);
+    return std::clamp(KeyForLuminance(Safe, Config) / Safe, Config.MinimumExposure, Config.MaximumExposure);
 }
 
 float ExposureIntegrator::QueryExposure() const noexcept

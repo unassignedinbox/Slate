@@ -84,6 +84,34 @@ const float kOzoneWidth          = 15000.0;      // [m]   half-width; density fa
 
 const float kSunAngularRadius    = 0.004675;     // [rad] 0.268° — the disc, not a point
 
+// 🔴 THE PLANET HAS A SURFACE. Without this the model has air and nothing under it, so any ray that passes
+//    below the horizon returns only the radiance of the short air path in front of it — which at eye height is
+//    almost nothing. Measured before this existed: looking 0.2° below horizontal dropped from 7473 to 74 cd/m²
+//    and to 14 by 1° down, a hundredfold cliff into a black void exactly at the horizon line.
+//
+//    That void is not a cosmetic problem. In an outdoor scene the ground plate ends a few hundred metres out,
+//    and past its edge the void fills the bottom HALF of the frame at eye level. Measured, that dragged the
+//    metered scene luminance from 5752 to 67 cd/m² and the exposure rose 86×, so everything lit blew to white —
+//    and it corrected itself when the camera climbed high enough for the plate to cover the void, which is
+//    precisely the reported "it looks right up close, and the scene gets brighter as I move away".
+//
+//    0.10 is Earth's average visible albedo over land and ocean. It is deliberately not per-scene: this is the
+//    PLANET, seen out to the horizon, not the ground the camera is standing on.
+const float kGroundAlbedo        = 0.10;         // [-]
+
+//------------------------------------------------------------------------------------------------------------------------
+//                                                   THE GROUND (A7c)
+//------------------------------------------------------------------------------------------------------------------------
+
+// Lambertian, so the radiance leaving the surface is albedo·E/π and does not depend on where it is viewed from.
+//    SunSurvival is the fraction of the direct beam reaching this point, and SkyIrradiance is what the rest of
+//    the sky puts on it — the second term is what keeps the ground from going black the instant the sun sets.
+vec3 GroundReflection(vec3 Normal, vec3 SunDirection, vec3 SunIlluminance, vec3 SunSurvival, vec3 SkyIrradiance)
+{
+    const float CosSun = max(dot(Normal, SunDirection), 0.0);
+    return kGroundAlbedo * (SunIlluminance * SunSurvival * CosSun + SkyIrradiance) / 3.14159265;
+}
+
 //------------------------------------------------------------------------------------------------------------------------
 //                                                  DENSITY AND GEOMETRY
 //------------------------------------------------------------------------------------------------------------------------
@@ -195,6 +223,10 @@ vec3 SkyRadiance(float CameraAltitude, vec3 ViewDirection, vec3 SunDirection,
     vec3 Radiance     = vec3(0.0);
     vec3 Transmittance = vec3(1.0);   // camera → current sample, carried forward rather than re-integrated
 
+    // A7c. If the ray ends on the planet rather than in space, what it sees there is the lit ground, dimmed by
+    //    the air in front of it. Added AFTER the march below, using the transmittance the march accumulates.
+    const bool HitsGround = Ground > 0.0;
+
     for (int i = 0; i < ViewSteps; ++i)
     {
         const vec3  Position = Origin + ViewDirection * (float(i) + 0.5) * Step;
@@ -217,6 +249,18 @@ vec3 SkyRadiance(float CameraAltitude, vec3 ViewDirection, vec3 SunDirection,
 
         Radiance      += Transmittance * SunArriving * Integrated * SunIlluminance;
         Transmittance *= StepTransmittance;
+    }
+
+    if (HitsGround)
+    {
+        const vec3 Surface = Origin + ViewDirection * Distance;
+        const vec3 Normal  = normalize(Surface);
+        // ⚠️ Single scattering has no sky-irradiance term to offer — that light is precisely what it cannot
+        //    represent — so this path lights the ground with the direct beam alone. The tabulated path in
+        //    ReSTIRViewport adds the multiple-scattering term, which is why it is the one the renderer uses.
+        Radiance += Transmittance * GroundReflection(Normal, SunDirection, SunIlluminance,
+                                                     SunTransmittance(Surface, SunDirection, LightSteps),
+                                                     vec3(0.0));
     }
 
     return Radiance;

@@ -17,8 +17,10 @@
 
 #include <cmath>
 #include <cstdio>
+#include <algorithm>
 #include <initializer_list>
 #include <limits>
+#include <vector>
 
 using namespace Frontier;
 
@@ -50,6 +52,81 @@ static float Settle(ExposureIntegrator& Exposure, float Luminance, float Seconds
     return Exposure.QueryAdaptedLuminance();
 }
 
+//------------------------------------------------------------------------------------------------------------------------
+//                                    PORT OF THE HISTOGRAM METER (LuminanceReduce.slang + the readback)
+//------------------------------------------------------------------------------------------------------------------------
+// The shader fills the buckets and the host trims and averages them; both halves are reproduced here so the
+//    whole rule can be exercised without a device. The gate checks the constants still agree with both sides.
+
+static const int   kHistogramBins   = 256;
+static const float kLogLuminanceLow = -30.0f;
+static const float kLogLuminanceHigh =  30.0f;
+static const float kTrimLow         = 0.20f;
+static const float kTrimHigh        = 0.05f;
+static const float kCentreSigma     = 0.18f;
+static const int   kCentreWeightPeak = 31;
+
+struct MeterTap { float Luminance, X, Y; };   // X, Y are screen position in 0..1
+
+// Returns the metered luminance, or −1 when the frame carried nothing measurable at all.
+static float MeterWith(const std::vector<MeterTap>& Taps, bool CentreWeighted)
+{
+    double Bins[kHistogramBins] = {};
+    for (const MeterTap& T : Taps)
+    {
+        if (!(T.Luminance > 0.0f)) continue;
+        const float Normalised = (std::log2(T.Luminance) - kLogLuminanceLow) / (kLogLuminanceHigh - kLogLuminanceLow);
+        int Bin = static_cast<int>(Normalised * kHistogramBins);
+        Bin = Bin < 0 ? 0 : (Bin > kHistogramBins - 1 ? kHistogramBins - 1 : Bin);
+
+        const float Dx = T.X - 0.5f, Dy = T.Y - 0.5f;
+        const float Falloff = std::exp(-(Dx * Dx + Dy * Dy) / (kCentreSigma * kCentreSigma));
+        Bins[Bin] += CentreWeighted
+                   ? 1.0 + static_cast<double>(static_cast<int>(kCentreWeightPeak * Falloff + 0.5f))
+                   : 1.0;
+    }
+
+    double Total = 0.0;
+    for (double W : Bins) Total += W;
+    if (Total <= 0.0) return -1.0f;
+
+    const double Low = Total * kTrimLow, High = Total * (1.0 - kTrimHigh);
+    const double Width = (kLogLuminanceHigh - kLogLuminanceLow) / double(kHistogramBins);
+    double Seen = 0.0, Weighted = 0.0, Used = 0.0;
+    for (int Index = 0; Index < kHistogramBins; ++Index)
+    {
+        const double Start = Seen, End = Seen + Bins[Index];
+        Seen = End;
+        const double Take = std::min(End, High) - std::max(Start, Low);
+        if (Take <= 0.0) continue;
+        Weighted += (kLogLuminanceLow + (Index + 0.5) * Width) * Take;
+        Used     += Take;
+    }
+    if (Used <= 0.0) return -1.0f;
+    return static_cast<float>(std::exp2(Weighted / Used));
+}
+
+static float MeterFrame(const std::vector<MeterTap>& Taps)            { return MeterWith(Taps, true); }
+static float MeterFrameUnweighted(const std::vector<MeterTap>& Taps)  { return MeterWith(Taps, false); }
+
+// The same rule with every tap counting equally, for showing what centre weighting buys.
+static float MeterFrameUnweighted(const std::vector<MeterTap>& Taps);
+
+// A frame holding a centred subject of the given half-size against a surround.
+static std::vector<MeterTap> SubjectFrame(float Subject, float Surround, float HalfSize)
+{
+    std::vector<MeterTap> Taps;
+    const int N = 48;
+    for (int J = 0; J < N; ++J)
+        for (int I = 0; I < N; ++I)
+        {
+            const float X = (I + 0.5f) / N, Y = (J + 0.5f) / N;
+            const bool  Inside = std::fabs(X - 0.5f) < HalfSize && std::fabs(Y - 0.5f) < HalfSize;
+            Taps.push_back({ Inside ? Subject : Surround, X, Y });
+        }
+    return Taps;
+}
+
 int main()
 {
     std::printf("ExposureIntegrator — adaptive exposure\n");
@@ -75,22 +152,26 @@ int main()
     std::printf("\n2. a correctly exposed scene lands on the key value\n");
     {
         // The definition of "correct": a scene whose average luminance is L must be rendered so that L maps to
-        //    the key value. If this is wrong every scene is uniformly too dark or too bright.
+        //    the key for that luminance. If this is wrong every scene is uniformly too dark or too bright.
+        //
+        // ⚠️ The key is a CONSTANT only in daylight. Below the photopic level it falls, deliberately, because
+        //    an exposure of Key/L renders every scene at the same mid-grey and a starlit field would arrive
+        //    looking like an overcast afternoon. Asserting against the constant here was asserting that night
+        //    must look like day — so the expectation follows the curve, and test 11 is what pins the curve
+        //    itself down.
         ExposureConfiguration Config{};
         for (float Luminance : { 0.001f, 0.18f, 1.0f, 100.0f, 8000.0f })
         {
             const float Exposure = ExposureIntegrator::ExposureForLuminance(Luminance, Config);
             const float Rendered = Luminance * Exposure;
-            // ⚠️ Also clamped when the scene is BELOW the metering floor. 0.001 cd/m² is dimmer than the darkest
-            //    thing the meter considers, so it deliberately does not get its own exposure — that is the fix
-            //    for the runaway, not a failure of it.
-            const bool  Clamped  = Exposure <= Config.MinimumExposure || Exposure >= Config.MaximumExposure
-                                || Luminance < Config.LuminanceFloor;
-            std::printf("     %9.3f cd/m² → exposure %8.3f → renders as %.4f%s\n",
+            const float Expected = ExposureIntegrator::KeyForLuminance(Luminance, Config);
+            const bool  Clamped  = Exposure <= Config.MinimumExposure || Exposure >= Config.MaximumExposure;
+            std::printf("     %9.3f cd/m² → exposure %8.3f → renders as %.4f  (key %.4f)%s\n",
                         static_cast<double>(Luminance), static_cast<double>(Exposure),
-                        static_cast<double>(Rendered), Clamped ? "  (clamped)" : "");
+                        static_cast<double>(Rendered), static_cast<double>(Expected),
+                        Clamped ? "  (clamped)" : "");
             if (!Clamped)
-                Expect(std::fabs(Rendered - Config.KeyValue) < 1e-4f, "renders at the key value");
+                Expect(std::fabs(Rendered - Expected) < 1e-4f, "renders at the key value for its luminance");
         }
     }
 
@@ -274,56 +355,142 @@ int main()
     }
 
     //------------------------------------------------------------------------------------------------------------------
-    std::printf("\n10. exposure does not run away when the frame is mostly dark\n");
+    std::printf("\n10. the meter is SCALE INVARIANT — the same rule at noon and at midnight\n");
     {
-        // The bug this replaces, reported as "the box goes full white unless I stand close to it". Walking away
-        //    shrinks the lit subject, more of the frame is empty, and a log mean that CLAMPS dark pixels to a
-        //    tiny floor collapses — log(1e-5) is −11.5, so half a frame of it drags the mean down by 5.75 and
-        //    the exposure rises by e^5.75 ≈ 300×.
+        // 🔴 The defect this replaces. The reduction used to skip any pixel below a fixed 1e-2 cd/m², which is a
+        //    daylight constant sitting in a place every scale of scene passes through. Measured across a sunset:
+        //    at 9° below the horizon the sky fell under the floor while the ground was still above it, so the
+        //    sky went black against a correctly exposed ground; by 18° below, EVERY pixel was excluded, the
+        //    sample count reached zero and the meter stopped updating and held its last daylight reading. That
+        //    is a permanently black night with no stars in it.
         //
-        //    The fix is that dark pixels are not metered at all. A real light meter ignores the darkest part of
-        //    a scene rather than averaging it in, so the reading describes the LIT subject and stops depending
-        //    on how much empty space happens to be in shot.
-        ExposureConfiguration Config{};
-        const float Subject = 1000.0f;   // a sunlit surface
-
-        std::printf("     dark fraction   metered mean   exposure   subject renders at\n");
-        bool Stable = true;
-        float First = 0.0f;
-        for (float DarkFraction : { 0.0f, 0.5f, 0.9f, 0.99f })
+        //    A percentile of the frame's own distribution has no absolute constant in it, so the identical
+        //    frame scaled down by six orders of magnitude must meter six orders of magnitude lower — exactly.
+        // ⚠️ Invariance holds to the histogram's RESOLUTION, not exactly: every tap is averaged as though it sat
+        //    at its bucket's centre, so sliding a scene across a boundary moves the reading by up to half a
+        //    bucket. That is 0.12 of a stop at 256 buckets — the bound is asserted rather than assumed, because
+        //    it is what sets the bin count, and a coarser histogram would drift visibly as the camera pans.
+        const float Quantisation = std::exp2(0.5f * (kLogLuminanceHigh - kLogLuminanceLow) / kHistogramBins);
+        bool Invariant = true;
+        std::printf("     scene scale        metered      ratio to scene   (bound %.3f)\n",
+                    static_cast<double>(Quantisation));
+        for (float Scale : { 1.0e4f, 1.0f, 1.0e-2f, 1.0e-4f, 1.0e-6f })
         {
-            // What the shader now produces: only pixels above the metering floor contribute.
-            const float LogMean = std::log(Subject);   // the dark ones are skipped entirely
-            const float Exposure = ExposureIntegrator::ExposureForLuminance(std::exp(LogMean), Config);
-            const float Rendered = Subject * Exposure;
-            std::printf("     %11.0f %%   %12.3f   %8.6f   %.4f\n",
-                        static_cast<double>(DarkFraction * 100.0f), static_cast<double>(LogMean),
-                        static_cast<double>(Exposure), static_cast<double>(Rendered));
-            if (DarkFraction == 0.0f) First = Rendered;
-            else if (std::fabs(Rendered - First) > 1e-4f) Stable = false;
+            const float Metered = MeterFrame(SubjectFrame(1.0f * Scale, 0.2f * Scale, 0.30f));
+            const float Ratio   = Metered / Scale;
+            std::printf("     %10.1e   %14.6e   %10.4f\n",
+                        static_cast<double>(Scale), static_cast<double>(Metered), static_cast<double>(Ratio));
+            if (!(Metered > 0.0f)) Invariant = false;
+            if (Ratio > Quantisation * 1.02f || Ratio < 1.0f / (Quantisation * 1.02f)) Invariant = false;
         }
-        Expect(Stable, "the subject renders identically however much empty space surrounds it");
+        Expect(Invariant, "the same frame meters proportionally at every scale — no absolute floor remains");
 
-        // And show what the OLD behaviour would have done, so the regression is recognisable if it returns.
-        const float OldFloor = 1.0e-5f;
-        const float OldMean  = std::exp(0.5f * std::log(OldFloor) + 0.5f * std::log(Subject));
-        const float OldRendered = Subject * ExposureIntegrator::ExposureForLuminance(OldMean, Config);
-        std::printf("     with dark pixels clamped in at 1e-5, a half-dark frame rendered the subject at %.1f\n",
-                    static_cast<double>(OldRendered));
-        Expect(OldRendered > 10.0f, "the old clamping really did blow the subject out — this is the bug fixed");
+        // The specific frame that used to return nothing at all: a night sky with stars in it.
+        std::vector<MeterTap> Night;
+        for (int I = 0; I < 2304; ++I)
+            Night.push_back({ 1.0e-4f, (I % 48 + 0.5f) / 48.0f, (I / 48 + 0.5f) / 48.0f });
+        Night[1100].Luminance = 0.4f;   // one star
+        const float NightMetered = MeterFrame(Night);
+        std::printf("     a night sky at 1e-4 with one star meters %.3e\n", static_cast<double>(NightMetered));
+        Expect(NightMetered > 0.0f,      "a night frame still produces a reading — the old rule produced none");
+        Expect(NightMetered < 1.0e-3f,   "and it reads the sky, not the star");
     }
 
     //------------------------------------------------------------------------------------------------------------------
-    std::printf("\n11. the metering floor sits below anything a viewer should see\n");
+    std::printf("\n11. dark adaptation — night renders as night, and stars come through it\n");
     {
-        // Too high a floor and a genuinely dark scene stops being metered at all, so night never brightens.
         ExposureConfiguration Config{};
-        std::printf("     metering floor %.4f cd/m² — moonlit sky is 0.1, starlight ~0.001\n",
-                    static_cast<double>(Config.MeteringFloor));
-        Expect(Config.MeteringFloor < 0.1f,  "a moonlit sky is still metered");
-        Expect(Config.MeteringFloor > 1e-4f, "but the floor is a plausible dark scene, not numerical epsilon");
-        Expect(std::log(Config.MeteringFloor) > -7.0f,
-               "so its pull on a log mean is bounded — this is the number that ran away at 1e-5");
+
+        // Above the photopic level nothing changes at all, which is the identity switch: every image made
+        //    before this curve existed is reproduced exactly.
+        bool Identity = true;
+        for (float L : { 5.0f, 50.0f, 2000.0f, 120000.0f })
+            if (std::fabs(ExposureIntegrator::KeyForLuminance(L, Config) - Config.KeyValue) > 1e-6f) Identity = false;
+        Expect(Identity, "at and above the photopic level the key is exactly KeyValue — nothing changes in daylight");
+
+        std::printf("     scene                luminance      key    renders at\n");
+        struct Row { const char* Name; float Luminance; };
+        const Row Rows[] = {
+            { "noon",            8000.0f  },
+            { "overcast",        2000.0f  },
+            { "civil twilight",     3.0f  },
+            { "moonlit sky",        0.1f  },
+            { "starlit sky",     1.0e-4f  },
+        };
+        float PreviousRendered = 1e9f;
+        bool  Monotonic = true;
+        for (const Row& R : Rows)
+        {
+            const float Key = ExposureIntegrator::KeyForLuminance(R.Luminance, Config);
+            const float Rendered = R.Luminance * ExposureIntegrator::ExposureForLuminance(R.Luminance, Config);
+            std::printf("     %-18s %10.4f  %7.4f  %10.4f\n", R.Name,
+                        static_cast<double>(R.Luminance), static_cast<double>(Key),
+                        static_cast<double>(Rendered));
+            if (Rendered > PreviousRendered + 1e-6f) Monotonic = false;
+            PreviousRendered = Rendered;
+        }
+        Expect(Monotonic, "a darker scene always renders darker — the eye never fully compensates");
+
+        // 🔴 The point of the whole curve. A full-compensation exposure renders the night sky at mid-grey and
+        //    the stars as a barely brighter grey on top of it; with dark adaptation the sky is nearly black and
+        //    the same stars are points of light well above white.
+        const float SkyLuminance  = 1.0e-4f;
+        const float StarLuminance = 0.052f;   // a bright star's peak: StarBrightness 0.4 × the field's 0.13
+        const float Exposure = ExposureIntegrator::ExposureForLuminance(SkyLuminance, Config);
+        const float SkyRenders  = SkyLuminance  * Exposure;
+        const float StarRenders = StarLuminance * Exposure;
+        std::printf("     night: sky renders %.4f, a bright star renders %.2f  (contrast %.0f:1)\n",
+                    static_cast<double>(SkyRenders), static_cast<double>(StarRenders),
+                    static_cast<double>(StarRenders / SkyRenders));
+        Expect(SkyRenders  < 0.05f, "the night sky renders dark, not as grey daylight");
+        Expect(StarRenders > 1.0f,  "while a bright star saturates — visible as a point of light");
+
+        // What the same scene would have done with the curve switched off, so the difference is on the record.
+        ExposureConfiguration Flat = Config;
+        Flat.ScotopicExponent = 0.0f;
+        const float FlatSky = SkyLuminance * ExposureIntegrator::ExposureForLuminance(SkyLuminance, Flat);
+        std::printf("     with dark adaptation off the same sky renders %.3f — grey, not night\n",
+                    static_cast<double>(FlatSky));
+        Expect(FlatSky > 0.15f, "and with the exponent at zero it really does render as mid-grey");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n12. framing moves the exposure less than it used to\n");
+    {
+        // Reported as "close to the object it looks fine, move away and the scene gets brighter". Part of that
+        //    was the sky model's missing ground, fixed separately; the rest is that an UNWEIGHTED frame average
+        //    lets the amount of empty space in shot decide how bright the subject renders. Every camera meters
+        //    centre-weighted for exactly this reason.
+        const float Subject = 1000.0f, Surround = 200.0f;
+        float Lowest = 1e9f, Highest = 0.0f, FlatLowest = 1e9f, FlatHighest = 0.0f;
+        std::printf("     subject size    metered    renders at   (unweighted would be)\n");
+        for (float Half : { 0.45f, 0.30f, 0.18f, 0.10f })
+        {
+            const float Metered = MeterFrame(SubjectFrame(Subject, Surround, Half));
+            const float Rendered = Subject * ExposureIntegrator::ExposureForLuminance(Metered, ExposureConfiguration{});
+
+            // The same frame with every tap counting equally, to show what the weighting is actually buying.
+            const float Flat = MeterFrameUnweighted(SubjectFrame(Subject, Surround, Half));
+            const float FlatRendered = Subject * ExposureIntegrator::ExposureForLuminance(Flat, ExposureConfiguration{});
+
+            std::printf("     %11.2f   %8.1f   %9.4f   %14.4f\n",
+                        static_cast<double>(Half), static_cast<double>(Metered),
+                        static_cast<double>(Rendered), static_cast<double>(FlatRendered));
+            Lowest = std::fmin(Lowest, Rendered); Highest = std::fmax(Highest, Rendered);
+            FlatLowest = std::fmin(FlatLowest, FlatRendered); FlatHighest = std::fmax(FlatHighest, FlatRendered);
+        }
+        const float Spread = Highest / Lowest, FlatSpread = FlatHighest / FlatLowest;
+        std::printf("     spread across framings: %.2fx, against %.2fx unweighted\n",
+                    static_cast<double>(Spread), static_cast<double>(FlatSpread));
+        Expect(Spread < FlatSpread / 1.4f, "centre weighting measurably steadies the subject");
+        Expect(Spread < 3.5f,              "and the residual is bounded");
+
+        // ⚠️ Stated plainly because it is a limit, not a bug: an average meter CANNOT hold a small bright
+        //    subject at a fixed brightness against a dark surround, and neither can a real camera — that is
+        //    what exposure compensation exists for. The reported white-out was not this. It was the sky model
+        //    having no ground, which put a black void across the bottom half of the frame and dragged the
+        //    reading by 86×; that is fixed in the atmosphere, not here.
+        std::printf("     (an average meter cannot fully hold a shrinking subject — a camera does not either)\n");
     }
 
     std::printf("\n>>> %s (%d failure%s)\n", Failures == 0 ? "ALL PASS" : "FAILURES", Failures, Failures == 1 ? "" : "s");

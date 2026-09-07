@@ -99,6 +99,9 @@ struct ReSTIRIntegratorConfiguration
     // A7. The moon disc and the star field. Off restores the pre-A7 image exactly.
     bool        NightSky         = true;
     float       StarBrightness   = 0.4f;        // [cd/m²] a dark-site sky; adaptive exposure is what reveals it
+    // A7c. The moon's apparent size, as a multiple of its true 0.259°. An admitted artistic control — the real
+    //    disc is about ten pixels at a 55° field of view, which is correct and smaller than anyone expects.
+    float       MoonAngularScale = 1.0f;        // [-]
 
     // A7b. Turbidity — the aerosol load, and the only reason a sunrise can look different from a sunset.
     //    1.0 is the clear reference atmosphere the Mie constants describe; 2.5 is a hazy city afternoon.
@@ -210,6 +213,7 @@ public:
     // A7b. Turbidity rebuilds the atmosphere tables as well as changing every sky pixel, so the accumulated
     //    history is of a different atmosphere and must go — same reasoning as the sky quality above.
     void AssignSkyTurbidity      (float    Value) noexcept { if (ActiveConfiguration.SkyTurbidity   != Value) { ActiveConfiguration.SkyTurbidity   = Value; ResetAccumulation(); } }
+    void AssignMoonAngularScale  (float    Value) noexcept { if (ActiveConfiguration.MoonAngularScale != Value) { ActiveConfiguration.MoonAngularScale = Value; ResetAccumulation(); } }
     void AssignTurbiditySwing    (float    Value) noexcept { if (ActiveConfiguration.TurbiditySwing != Value) { ActiveConfiguration.TurbiditySwing = Value; ResetAccumulation(); } }
 
     void ResetAccumulation() noexcept { AccumulationIndex = 0u; }

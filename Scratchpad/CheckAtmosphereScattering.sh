@@ -282,7 +282,52 @@ if grep -qE 'kRayleighScattering[^;]*gAerosolTurbidity|gAerosolTurbidity[^;]*kRa
     echo "  turbidity scales Rayleigh — it is a haze parameter, not a brightness one"; Fail=1
 fi
 
-[ "$Fail" = "0" ] && echo "  constants, LUTs, bindings, sun, sky lighting, night sky and turbidity agree PASS"
+# ── A7c: the planet has a surface ────────────────────────────────────────────────────────────────────────────────
+# 🔴 A view ray that ends on the planet must see LIT GROUND, not the thin slice of air in front of it. Without
+# this the world ended in a black void along the horizon: measured, 0.2 deg below horizontal fell from 7473 to
+# 74 cd/m2, and in an outdoor scene that void filled the bottom half of the frame, dragged the metered scene
+# luminance from 5752 to 67 and raised the exposure 86x. That is the reported "fine up close, and the whole
+# scene gets brighter as I move away".
+grep -q 'vec3 GroundReflection(' Engine/Shaders/AtmosphereScattering.slang \
+    || { echo "  the ground reflection is gone — the world would end at the horizon again"; Fail=1; }
+for Shader in Engine/Shaders/AtmosphereScattering.slang Engine/Shaders/ReSTIRViewport.slang; do
+    grep -q 'HitsGround' "$Shader" \
+        || { echo "  $Shader does not add the ground where the ray ends on it"; Fail=1; }
+done
+grep -q 'GroundReflection' Scratchpad/AtmosphereScatteringTest.cpp \
+    || { echo "  the harness no longer ports the ground, so it cannot prove the cliff is gone"; Fail=1; }
+
+# The albedo is duplicated in the shader and the harness.
+ShaderAlbedo=$(grep -oP 'kGroundAlbedo\s*=\s*\K[0-9.]+' Engine/Shaders/AtmosphereScattering.slang | head -1)
+HarnessAlbedo=$(grep -oP 'kGroundAlbedo\s*=\s*\K[0-9.]+' Scratchpad/AtmosphereScatteringTest.cpp | head -1)
+[ -n "$ShaderAlbedo" ] && [ "${ShaderAlbedo%f}" = "${HarnessAlbedo%f}" ] \
+    || { echo "  ground albedo differs: shader '$ShaderAlbedo', harness '$HarnessAlbedo'"; Fail=1; }
+
+# ⚠️ Lambertian, so the ground's brightness must NOT depend on the view direction. A view-dependent term here
+# would make the ground change brightness as the camera turns, which reads as a flickering horizon.
+if grep -A6 'vec3 GroundReflection(' Engine/Shaders/AtmosphereScattering.slang | grep -q 'ViewDirection'; then
+    echo "  the ground reflection depends on the view direction — it is meant to be lambertian"; Fail=1
+fi
+
+# ⚠️ The tabulated path must light the ground with the SKY as well as the sun, or the surface switches off the
+# instant the sun dips and the horizon goes black through the whole of twilight.
+grep -q 'SkyIrradiance = SampleMultiScatter' Engine/Shaders/ReSTIRViewport.slang \
+    || { echo "  the ground gets no skylight — the horizon would go black at dusk"; Fail=1; }
+
+# ── A7c: the moon's apparent size ────────────────────────────────────────────────────────────────────────────────
+# The scale is a MULTIPLE of the true angle, never a replacement for it, so 1.0 always means the real moon.
+grep -q 'kMoonAngularRadius \* clamp(MoonAngularScale' Engine/Shaders/ReSTIRViewport.slang \
+    || { echo "  the moon's size is no longer a multiple of its true angular radius"; Fail=1; }
+grep -q 'float    MoonAngularScale;' Engine/DeviceExchange/SwapchainExchange.h \
+    || { echo "  the C++ mirror of the sky record has no moon scale"; Fail=1; }
+
+# 🔴 The disc's radiance must be divided by the TRUE solid angle, not the scaled one. Dividing by the scaled
+# angle conserves flux, so an enlarged moon dims as it grows and reads as a flat grey disc instead of the moon.
+if grep -q 'SolidAngle = 6.28318530 \* (1.0 - cos(MoonRadius))' Engine/Shaders/ReSTIRViewport.slang; then
+    echo "  the moon's radiance is divided by its scaled solid angle — a larger moon would dim"; Fail=1
+fi
+
+[ "$Fail" = "0" ] && echo "  constants, LUTs, bindings, sun, sky lighting, night sky, turbidity, ground and moon agree PASS"
 
 echo
 Glslang=""

@@ -527,6 +527,12 @@ int main(int argc, char** argv)
     char  BrowserSunAzimuthText[32]    = "-";
     char  BrowserMoonPhaseText[32]     = "-";
     char  BrowserMoonElevationText[32] = "-";
+    // A7c moon. Scale is the one settable moon parameter; the rest are read back from the clock so they can
+    //    never disagree with it.
+    float BrowserMoonScale = 1.0f;
+    char  BrowserMoonAzimuthText[32]   = "-";
+    char  BrowserMoonSizeText[48]      = "-";
+    char  BrowserMoonLuminanceText[48] = "-";
     // Written inside the ImGui frame, read on the NEXT frame's camera gate: the gate runs before the frame that
     //    would answer it, so a same-frame read is impossible. One frame of lag on "is the cursor over the panel"
     //    is invisible, whereas flying the camera because the answer was not yet available is not.
@@ -653,6 +659,13 @@ int main(int argc, char** argv)
                     Heading("Moon");
                     Readout("Phase",     BrowserMoonPhaseText);
                     Readout("Elevation", BrowserMoonElevationText);
+                    Readout("Azimuth",   BrowserMoonAzimuthText);
+                    Heading("Disc");
+                    // ⚠️ A multiple of the TRUE angular size, never a replacement for it, so 1.0 always means
+                    //    the real moon and the readout below says what that works out to on screen.
+                    Slider("Size",       &BrowserMoonScale, 0.25f, 12.0f, "x", 2u);
+                    Readout("Subtends",  BrowserMoonSizeText);
+                    Readout("Surface",   BrowserMoonLuminanceText);
                     Readout("Status",    "not yet a light source (A7)");
                     break;
 
@@ -1129,6 +1142,7 @@ int main(int argc, char** argv)
             BrowserNightSky   = Cfg.NightSky;
             BrowserStarBrightness = Cfg.StarBrightness;
             BrowserTurbidity      = Cfg.SkyTurbidity;
+            BrowserMoonScale      = Cfg.MoonAngularScale;
             BrowserTurbiditySwing = Cfg.TurbiditySwing;
             {
                 // The turbidity the sky is ACTUALLY being rendered with this frame, from the same curve the
@@ -1158,6 +1172,24 @@ int main(int argc, char** argv)
                 std::snprintf(BrowserSunAzimuthText,    sizeof(BrowserSunAzimuthText),    "%.1f deg",  Sun.Azimuth    * 180.0 / 3.14159265358979);
                 std::snprintf(BrowserMoonElevationText, sizeof(BrowserMoonElevationText), "%+.1f deg", Moon.Elevation * 180.0 / 3.14159265358979);
                 std::snprintf(BrowserMoonPhaseText,     sizeof(BrowserMoonPhaseText),     "%.0f %% lit", Integrator.Celestial().QueryMoonPhase() * 100.0);
+                std::snprintf(BrowserMoonAzimuthText,   sizeof(BrowserMoonAzimuthText),   "%.1f deg", Moon.Azimuth * 180.0 / 3.14159265358979);
+                {
+                    // The real disc is 0.259° across. Reporting the pixel figure alongside it is the honest
+                    //    answer to "why is the moon so small" — it is not small, it is correct, and a 55° view
+                    //    across 1080 rows genuinely puts it at about ten pixels.
+                    const double TrueDegrees = 2.0 * 0.004526 * 180.0 / 3.14159265358979;
+                    const double Degrees     = TrueDegrees * static_cast<double>(BrowserMoonScale);
+                    const double Pixels      = Degrees / static_cast<double>(BrowserCameraFov)
+                                             * static_cast<double>(RenderHeight);
+                    std::snprintf(BrowserMoonSizeText, sizeof(BrowserMoonSizeText), "%.3f deg  (%.0f px)",
+                                  Degrees, Pixels);
+                    // Surface brightness is held constant as the disc is scaled, so this figure does not move
+                    //    with the slider — which is the point of scaling by the true solid angle.
+                    const double SolidAngle = 6.28318530 * (1.0 - std::cos(0.004526));
+                    const double Luminance  = static_cast<double>(Cfg.SunIlluminance) * 0.12 / SolidAngle;
+                    std::snprintf(BrowserMoonLuminanceText, sizeof(BrowserMoonLuminanceText),
+                                  "%.0f cd/m2 (unchanged by size)", Luminance);
+                }
             }
 
             Browser.Advance(Δτ);
@@ -1272,6 +1304,7 @@ int main(int argc, char** argv)
             Integrator.AssignNightSky(BrowserNightSky);
             Integrator.AssignStarBrightness(BrowserStarBrightness);
             Integrator.AssignSkyTurbidity(BrowserTurbidity);
+            Integrator.AssignMoonAngularScale(BrowserMoonScale);
             Integrator.AssignTurbiditySwing(BrowserTurbiditySwing);
             {
                 Frontier::ExposureConfiguration Adapt = Integrator.Exposure().QueryConfiguration();

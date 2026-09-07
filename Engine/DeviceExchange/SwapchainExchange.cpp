@@ -1316,13 +1316,55 @@ float SwapchainExchange::QueryAverageLogLuminance() const noexcept
     const void* Mapped = Vulkan->LuminanceMapped[Slot];
     if (!Mapped) return -1.0e9f;
 
-    struct Accumulator { int32_t SumFixedPoint; int32_t SampleCount; };
-    Accumulator Value{};
-    std::memcpy(&Value, Mapped, sizeof(Value));
-    if (Value.SampleCount <= 0) return -1.0e9f;   // first frames, before anything has been written
+    std::array<uint32_t, kLuminanceHistogramBins> Bins{};
+    std::memcpy(Bins.data(), Mapped, kLuminanceHistogramBytes);
 
-    constexpr float FixedScale = 4096.0f;   // must match kFixedScale in LuminanceReduce.slang
-    return (static_cast<float>(Value.SumFixedPoint) / FixedScale) / static_cast<float>(Value.SampleCount);
+    double Total = 0.0;
+    for (uint32_t Weight : Bins) Total += static_cast<double>(Weight);
+    if (Total <= 0.0) return -1.0e9f;   // first frames, before anything has been written
+
+    // ⚠️ A TRIMMED mean over a percentile window, not the whole histogram. The darkest fifth of the frame is
+    //    discarded because shadow and empty sky should not decide how bright a lit subject renders, and the
+    //    brightest twentieth because the sun's disc is nine orders of magnitude above the scene and would
+    //    otherwise dominate a mean it has no business being in.
+    //
+    //    Bins are split PROPORTIONALLY where a trim boundary falls inside one, rather than being taken or
+    //    dropped whole. Without that the reading steps by a whole bin as the camera pans — 0.39 of a stop —
+    //    and the exposure visibly ratchets instead of gliding.
+    const double Low  = Total * static_cast<double>(kLuminanceTrimLow);
+    const double High = Total * (1.0 - static_cast<double>(kLuminanceTrimHigh));
+
+    constexpr double BinWidth = (static_cast<double>(kLuminanceLog2High) - static_cast<double>(kLuminanceLog2Low))
+                              / static_cast<double>(kLuminanceHistogramBins);
+    double Seen = 0.0, WeightedLog2 = 0.0, Used = 0.0;
+    for (uint32_t Index = 0u; Index < kLuminanceHistogramBins; ++Index)
+    {
+        const double Start = Seen;
+        const double End   = Seen + static_cast<double>(Bins[Index]);
+        Seen = End;
+
+        const double Take = std::min(End, High) - std::max(Start, Low);
+        if (Take <= 0.0) continue;
+
+        const double Centre = static_cast<double>(kLuminanceLog2Low) + (static_cast<double>(Index) + 0.5) * BinWidth;
+        WeightedLog2 += Centre * Take;
+        Used         += Take;
+    }
+    // A window that collapsed to nothing — every tap in one bin — still has to answer, so fall back to the
+    //    untrimmed mean rather than reporting "no measurement" for a frame that plainly has one.
+    if (Used <= 0.0)
+    {
+        for (uint32_t Index = 0u; Index < kLuminanceHistogramBins; ++Index)
+        {
+            const double Centre = static_cast<double>(kLuminanceLog2Low) + (static_cast<double>(Index) + 0.5) * BinWidth;
+            WeightedLog2 += Centre * static_cast<double>(Bins[Index]);
+            Used         += static_cast<double>(Bins[Index]);
+        }
+    }
+
+    // The integrator speaks natural logs; the histogram is in log2.
+    constexpr double Ln2 = 0.6931471805599453;
+    return static_cast<float>(WeightedLog2 / Used * Ln2);
 }
 
 bool SwapchainExchange::BringLuminanceReduction() noexcept
@@ -1361,14 +1403,14 @@ bool SwapchainExchange::BringLuminanceReduction() noexcept
     constexpr uint32_t HostVisible = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     for (uint32_t Slot = 0u; Slot < kCycleSlotCount; ++Slot)
     {
-        AllocateBuffer(Vulkan->Device, Vulkan->MemoryProperties, 16u,
+        AllocateBuffer(Vulkan->Device, Vulkan->MemoryProperties, kLuminanceHistogramBytes,
                        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, HostVisible,
                        Vulkan->LuminanceBuffers[Slot], Vulkan->LuminanceMemory[Slot]);
         if (!Vulkan->LuminanceBuffers[Slot]) return false;
-        if (vkMapMemory(Vulkan->Device, Vulkan->LuminanceMemory[Slot], 0u, 16u, 0u,
+        if (vkMapMemory(Vulkan->Device, Vulkan->LuminanceMemory[Slot], 0u, kLuminanceHistogramBytes, 0u,
                         &Vulkan->LuminanceMapped[Slot]) != VK_SUCCESS)
             return false;
-        std::memset(Vulkan->LuminanceMapped[Slot], 0, 16u);
+        std::memset(Vulkan->LuminanceMapped[Slot], 0, kLuminanceHistogramBytes);
 
         // A7 sky record, same slot discipline: written by the CPU for the frame being recorded while the GPU
         //    still reads the other slot's copy.
@@ -2810,7 +2852,7 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
 
             // The accumulator is cleared on the GPU rather than the CPU: clearing the mapped pointer here would
             //    race the previous frame's dispatch, which may still be adding to it.
-            vkCmdFillBuffer(Command, Vulkan->LuminanceBuffers[Vulkan->ActiveSlot], 0u, 16u, 0u);
+            vkCmdFillBuffer(Command, Vulkan->LuminanceBuffers[Vulkan->ActiveSlot], 0u, kLuminanceHistogramBytes, 0u);
             VkBufferMemoryBarrier ClearBarrier{ VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER };
             ClearBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
             ClearBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;

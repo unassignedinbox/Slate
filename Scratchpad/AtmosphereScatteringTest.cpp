@@ -57,6 +57,7 @@ static const     Vec3  kOzoneAbsorption     { 0.650e-6f, 1.881e-6f, 0.085e-6f };
 static constexpr float kOzoneCentre         = 25000.0f;
 static constexpr float kOzoneWidth          = 15000.0f;
 static constexpr float kSunAngularRadius    = 0.004675f;
+static constexpr float kGroundAlbedo        = 0.10f;      // A7c: the planet has a surface
 
 // A7b turbidity. A mutable global exactly as in the shader, and for the same reason: the alternative is a float
 //    threaded through six functions, and the site that gets missed is silent.
@@ -122,6 +123,13 @@ static Vec3 SunTransmittance(Vec3 Position, Vec3 SunDirection, int Steps)
     return Exp(OpticalDepth(Position, SunDirection, ToSpace, Steps) * -1.0f);
 }
 
+// Lambertian, so the radiance leaving the surface does not depend on where it is viewed from.
+static Vec3 GroundReflection(Vec3 Normal, Vec3 SunDirection, Vec3 SunIlluminance, Vec3 SunSurvival, Vec3 SkyIrradiance)
+{
+    const float CosSun = std::fmax(Dot(Normal, SunDirection), 0.0f);
+    return (SunIlluminance * SunSurvival * CosSun + SkyIrradiance) * (kGroundAlbedo / 3.14159265f);
+}
+
 static Vec3 SkyRadiance(float CameraAltitude, Vec3 ViewDirection, Vec3 SunDirection,
                         Vec3 SunIlluminance, int ViewSteps, int LightSteps)
 {
@@ -139,6 +147,8 @@ static Vec3 SkyRadiance(float CameraAltitude, Vec3 ViewDirection, Vec3 SunDirect
     const float Step = Distance / static_cast<float>(ViewSteps);
     Vec3 Radiance{};
     Vec3 Transmittance(1.0f);
+
+    const bool HitsGround = Ground > 0.0f;   // A7c: the ray ends on the planet, not in space
 
     for (int i = 0; i < ViewSteps; ++i)
     {
@@ -159,6 +169,17 @@ static Vec3 SkyRadiance(float CameraAltitude, Vec3 ViewDirection, Vec3 SunDirect
 
         Radiance      += Transmittance * SunArriving * Integrated * SunIlluminance;
         Transmittance *= StepTransmittance;
+    }
+
+    // A7c — the ground. Single scattering has no sky-irradiance term to offer, so this path lights the surface
+    //    with the direct beam alone; the kernel's tabulated path adds the multiple-scattering term.
+    if (HitsGround)
+    {
+        const Vec3 Surface = Origin + ViewDirection * Distance;
+        const Vec3 Normal  = Normalize(Surface);
+        Radiance += Transmittance * GroundReflection(Normal, SunDirection, SunIlluminance,
+                                                     SunTransmittance(Surface, SunDirection, LightSteps),
+                                                     Vec3(0.0f));
     }
     return Radiance;
 }
@@ -1005,6 +1026,55 @@ int main()
         // And the floor, because turbidity multiplies EXTINCTION: zero or negative air amplifies light and the
         //    march diverges rather than merely looking wrong.
         Expect(Turbidity(0.1f, 5.0f, 6.0 / 24.0) >= 0.05f, "an over-large swing is floored, never negative");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n25. the world does not end at the horizon — the planet has a surface\n");
+    {
+        // 🔴 The defect this pins. With no ground in the model, a ray passing below the horizon returned only
+        //    the radiance of the short slice of air in front of it, which at eye height is almost nothing.
+        //    Measured before the fix: 0.2° below horizontal fell from 7473 to 74 cd/m², and to 15 by 1° down —
+        //    a hundredfold cliff into a black void, exactly along the horizon line.
+        //
+        //    That void is not cosmetic. In an outdoor scene the ground plate ends a few hundred metres out and
+        //    the void fills the bottom half of the frame, which dragged the metered scene luminance from 5752
+        //    to 67 cd/m² and raised the exposure 86× — everything lit blew to white, and it came right when the
+        //    camera climbed high enough to cover the void. That is the reported "fine up close, brighter as I
+        //    move away".
+        const Vec3 Sun = SunAtElevation(50.0f);
+        const auto Luma = [](Vec3 C) { return 0.2126f * C.x + 0.7152f * C.y + 0.0722f * C.z; };
+        const auto Look = [&](float Degrees)
+        {
+            const float R = Degrees * 3.14159265f / 180.0f;
+            return Luma(SkyRadiance(2.0f, Normalize(Vec3{ 0.0f, std::cos(R), std::sin(R) }), Sun,
+                                    Vec3(kSunLux), 48, 12));
+        };
+
+        std::printf("     view elevation   luminance\n");
+        for (float Degrees : { 1.0f, 0.1f, -0.1f, -1.0f, -5.0f, -20.0f })
+            std::printf("     %10.1f deg  %10.1f\n", static_cast<double>(Degrees), static_cast<double>(Look(Degrees)));
+
+        const float Above = Look(0.1f), Below = Look(-0.1f);
+        const float Cliff = Above / Below;
+        std::printf("     across the horizon the step is %.2fx\n", static_cast<double>(Cliff));
+        Expect(Cliff < 8.0f, "no cliff into a void at the horizon — the ground is lit and visible");
+
+        // Well below the horizon it must settle to a plausible sunlit ground, not to zero. 0.10 albedo under a
+        //    50° sun through clear air is a few thousand cd/m²; the assertion is only that it is in that world.
+        const float Ground = Look(-20.0f);
+        std::printf("     20 deg down reads %.1f cd/m2 (a 0.10-albedo surface under this sun)\n",
+                    static_cast<double>(Ground));
+        Expect(Ground > 100.0f,   "the ground is genuinely lit, not a dim remnant of the air in front of it");
+        Expect(Ground < 20000.0f, "and it is not brighter than the sky that lights it");
+
+        // ⚠️ And it must go out with the sun. A ground that stayed lit at night would be worse than the void:
+        //    the horizon would glow after dark for no reason a viewer could name.
+        const Vec3  Night = SunAtElevation(-10.0f);
+        const float NightGround = Luma(SkyRadiance(2.0f, Normalize(Vec3{ 0.0f, std::cos(-0.35f), std::sin(-0.35f) }),
+                                                   Night, Vec3(kSunLux), 48, 12));
+        std::printf("     with the sun 10 deg below, the same direction reads %.4f\n",
+                    static_cast<double>(NightGround));
+        Expect(NightGround < Ground * 0.01f, "and it goes dark when the sun sets, rather than glowing all night");
     }
 
     std::printf("\n>>> %s (%d failure%s)\n", Failures == 0 ? "ALL PASS" : "FAILURES", Failures, Failures == 1 ? "" : "s");

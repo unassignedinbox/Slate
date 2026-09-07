@@ -56,21 +56,31 @@ struct ExposureConfiguration
     float MinimumExposure  = 1.0e-10f;   // [-] below what the sun's disc alone would ask for
     float MaximumExposure  = 4000.0f;    // [-] a starlit sky at 0.001 cd/m² asks for 180
 
-    // ⚠️ The floor is a METERING floor, not numerical epsilon, and the difference is enormous. This measures a
-    //    LOG mean, so a floor of 1e-5 contributes log(1e-5) = −11.5 for every dark pixel. Half a frame of night
-    //    sky then drags the mean down by 5.75, the exposure rises by e^5.75 ≈ 300×, and everything lit blows to
-    //    white. That is exactly the reported "the box goes full white unless I stand close to it": walking away
-    //    shrinks the box, more of the frame is dark, and the meter runs away.
-    //
-    //    A real light meter does not average absolute black into its reading. 1e-2 cd/m² is below a moonlit sky
-    //    at 0.1 and well below anything a viewer is meant to resolve, while contributing only −4.6 instead of
-    //    −11.5 — a quarter of the pull.
-    float LuminanceFloor   = 1.0e-2f;  // [cd/m²]
+    // 🔴 Numerical epsilon ONLY, and it has to be tiny. This was 1e-2 cd/m² when it doubled as a metering
+    //    threshold, and that was a daylight constant standing in a place where every scale of scene passes
+    //    through: a night sky at 1e-4 clamped straight up to it, so the whole night metered as though it were
+    //    a hundred times brighter than it is and the adaptation curve below never engaged at all. The metering
+    //    decision now lives in the histogram, where it is a percentile of the frame and has no absolute value
+    //    in it, and this is left doing the one job it should ever have had: keeping log() finite.
+    float LuminanceFloor   = 1.0e-6f;  // [cd/m²] a moonless overcast night is around 1e-4
 
-    // ⚠️ And a floor alone is not enough: a frame that is 90 % black still drags the mean. Pixels darker than
-    //    this are EXCLUDED from the average rather than clamped into it, which is what a spot or centre-weighted
-    //    meter does. Without it, exposure depends on how much empty sky happens to be in shot.
-    float MeteringFloor    = 1.0e-2f;  // [cd/m²] below this a pixel is not metered at all
+    // ── Dark adaptation ─────────────────────────────────────────────────────────────────────────────────────
+    // 🔴 An exposure of Key/L renders EVERY scene at the same mid-grey, which means a starlit field and a
+    //    beach at noon arrive at the screen looking identical. That is not what eyes do. Below roughly the
+    //    luminance of a dim interior the retina switches from cone to rod vision and stops compensating fully:
+    //    a night scene genuinely looks darker, not merely bluer, and that incomplete compensation is the whole
+    //    reason a night sky reads as night instead of as grey daylight.
+    //
+    //    So the target grey itself falls with the adapted luminance, as a power law below the photopic level
+    //    and not at all above it. At and above PhotopicLuminance the key is exactly KeyValue, so every image
+    //    made before this existed is reproduced unchanged — the curve only does anything in the dark.
+    //
+    //    ⚠️ This is also what makes stars visible. Metered correctly, a night sky sits near 1e-4 cd/m²; a
+    //    full-compensation exposure would render it at 0.18 mid-grey and the stars, at 0.4 cd/m², would be a
+    //    barely brighter grey on top of it. With the curve the sky renders near 0.007 and the same stars come
+    //    through at several times white — points of light on black, which is what a night sky is.
+    float PhotopicLuminance = 5.0f;    // [cd/m²] at and above this the eye is fully light-adapted
+    float ScotopicExponent  = 0.30f;   // [-]     0 = no dark adaptation at all, 1 = night renders as day
 };
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -102,8 +112,12 @@ public:
     //    show the viewer several seconds of the previous scene's exposure.
     void Snap() noexcept { AdaptedLuminance = ObservedLuminance; }
 
-    // Exposure that would render a scene of the given luminance at the key value.
+    // Exposure that would render a scene of the given luminance at the key value for that luminance.
     [[nodiscard]] static float ExposureForLuminance(float Luminance, const ExposureConfiguration& Config) noexcept;
+
+    // The mid-grey a scene of this luminance should be rendered to. Constant in daylight, falling in the dark.
+    //    Exposed separately because it is the one part of the curve with a claim worth asserting on its own.
+    [[nodiscard]] static float KeyForLuminance(float Luminance, const ExposureConfiguration& Config) noexcept;
 
 private:
     ExposureConfiguration Config{};

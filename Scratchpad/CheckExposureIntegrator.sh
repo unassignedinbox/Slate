@@ -19,10 +19,11 @@ rm -f "$Binary"
 echo
 echo "[Exposure] design invariants"
 
-# 🔴 LOG mean, never linear. A linear average is dominated by the brightest thing in frame, so the sun disc
-# entering view blacks out the whole image.
-grep -q 'log(Luminance)' Engine/Shaders/LuminanceReduce.slang \
-    || { echo "  the reduction is not taking a logarithm — the sun would black out the frame"; Fail=1; }
+# 🔴 LOG, never linear. A linear average is dominated by the brightest thing in frame, so the sun disc entering
+# view blacks out the whole image. The histogram buckets are log2 slices, which is the same property expressed
+# as a distribution rather than as a sum.
+grep -q 'log2(Luminance)' Engine/Shaders/LuminanceReduce.slang \
+    || { echo "  the reduction is not working in log space — the sun would black out the frame"; Fail=1; }
 
 # ⚠️ Frame-rate independence. `* Rate * Delta` adapts faster on faster hardware, so the same transition looks
 # different per machine; 1 - exp(-dt/tau) does not.
@@ -41,19 +42,60 @@ awk -v f="$(grep -oP 'MinimumExposure\s*=\s*\K[0-9.e-]+' Engine/DisplayPresentat
     'BEGIN { exit !(f < 0.0000225) }' \
     || { echo "  MinimumExposure is too high — a noon sky would clamp to white"; Fail=1; }
 
-# ⚠️ Dark pixels must be EXCLUDED from the reading, not clamped into it. This is a log mean, so a clamped dark
-# pixel votes hard: at a 1e-5 floor each contributes -11.5, half a dark frame moved the mean by 5.75, and the
-# exposure ran away by ~300x. It presented as "everything blows white when I stand further away".
-grep -q 'if (Luminance < kMeteringFloor) return;' Engine/Shaders/LuminanceReduce.slang \
-    || { echo "  dark pixels are metered instead of skipped — exposure will run away on sparse frames"; Fail=1; }
-if grep -q 'max(dot(Radiance' Engine/Shaders/LuminanceReduce.slang; then
-    echo "  the reduction is clamping luminance up to the floor again rather than skipping"; Fail=1
+# ── A7c: the meter is a histogram, and has no absolute threshold in it ───────────────────────────────────────────
+# 🔴 No ABSOLUTE luminance may decide whether a pixel is metered. The rule used to skip anything below a fixed
+# 1e-2 cd/m², which is a daylight constant standing where every scale of scene passes through: measured across a
+# sunset, at 9 deg below the horizon the sky fell under it while the ground was still above it, so the sky went
+# black against a correctly exposed ground, and by 18 deg below EVERY pixel was excluded, the count reached zero
+# and the meter froze at its last daylight reading. A permanently black night with no stars in it.
+if grep -qE 'kMeteringFloor|Luminance < [0-9]' Engine/Shaders/LuminanceReduce.slang; then
+    echo "  the reduction has an absolute metering threshold again — it will go blind at night"; Fail=1
 fi
+grep -q 'atomicAdd(Bins\[Bin\], Weight)' Engine/Shaders/LuminanceReduce.slang \
+    || { echo "  the reduction no longer builds a histogram"; Fail=1; }
 
-# The metering floor must be a plausible dark scene, not numerical epsilon.
-awk -v f="$(grep -oP 'kMeteringFloor = \K[0-9.e-]+' Engine/Shaders/LuminanceReduce.slang)" \
-    'BEGIN { exit !(f > 0.0001 && f < 0.1) }' \
-    || { echo "  the metering floor is not a plausible dark-scene luminance"; Fail=1; }
+# The only rejection allowed is a value that is not a positive number, because a NaN lands in an undefined
+# bucket and one poisoned tap skews the whole frame's percentile.
+grep -q 'if (!(Luminance > 0.0)) return;' Engine/Shaders/LuminanceReduce.slang \
+    || { echo "  the reduction does not reject NaN and non-positive taps"; Fail=1; }
+
+# ⚠️ Centre weighted, as a camera is. An unweighted frame average lets the amount of empty space in shot decide
+# how bright the subject renders; measured, weighting cut that from 5.08x to 3.12x across realistic framings.
+grep -q 'kCentreWeightPeak' Engine/Shaders/LuminanceReduce.slang \
+    || { echo "  the meter is no longer centre weighted — framing would move the exposure again"; Fail=1; }
+
+# The histogram's shape is duplicated in the shader, the readback and the harness. Three copies of a number is
+# three chances to drift, and a drifted bin range silently rescales every measurement.
+for Triple in "kHistogramBins:kLuminanceHistogramBins:kHistogramBins" \
+              "kLogLuminanceLow:kLuminanceLog2Low:kLogLuminanceLow" \
+              "kLogLuminanceHigh:kLuminanceLog2High:kLogLuminanceHigh"; do
+    ShaderName="${Triple%%:*}"; Rest="${Triple#*:}"; CppName="${Rest%%:*}"; HarnessName="${Rest##*:}"
+    ShaderValue=$(grep -oP "${ShaderName}\s*=\s*\K-?[0-9.]+" Engine/Shaders/LuminanceReduce.slang | head -1)
+    CppValue=$(grep -oP "${CppName}\s*=\s*\K-?[0-9.]+" Engine/DeviceExchange/SwapchainExchange.h | head -1)
+    HarnessValue=$(grep -oP "${HarnessName}\s*=\s*\K-?[0-9.]+" Scratchpad/ExposureIntegratorTest.cpp | head -1)
+    if [ "${ShaderValue%.}" != "${CppValue%.}" ] || [ "${ShaderValue%.}" != "${HarnessValue%.}" ]; then
+        echo "  $ShaderName disagrees: shader $ShaderValue, readback $CppValue, harness $HarnessValue"; Fail=1
+    fi
+done
+
+# ⚠️ The trim boundaries must split a bucket PROPORTIONALLY. Taking or dropping whole buckets steps the reading
+# by a whole bin as the camera pans, and the exposure ratchets instead of gliding.
+grep -q 'std::min(End, High) - std::max(Start, Low)' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  the readback does not split bins proportionally at the trim boundary"; Fail=1; }
+
+# ── A7c: dark adaptation ─────────────────────────────────────────────────────────────────────────────────────────
+# 🔴 An exposure of Key/L renders every scene at the same mid-grey, so a starlit field arrives looking like an
+# overcast afternoon and its stars are a slightly brighter grey. The key must fall below the photopic level.
+grep -q 'KeyForLuminance' Engine/DisplayPresentation/ExposureIntegrator.cpp \
+    || { echo "  the key is constant again — night would render as grey daylight and hide the stars"; Fail=1; }
+grep -q 'if (Safe >= Config.PhotopicLuminance) return Config.KeyValue;' Engine/DisplayPresentation/ExposureIntegrator.cpp \
+    || { echo "  dark adaptation no longer leaves daylight exactly unchanged"; Fail=1; }
+
+# The numerical floor must be epsilon, not a scene luminance: at 1e-2 a night sky clamps straight up to it and
+# the adaptation curve never engages at all.
+awk -v f="$(grep -oP 'LuminanceFloor\s*=\s*\K[0-9.e-]+' Engine/DisplayPresentation/ExposureIntegrator.h)" \
+    'BEGIN { exit !(f < 0.00001) }' \
+    || { echo "  LuminanceFloor is a scene luminance again — it would clamp the night away"; Fail=1; }
 
 # The renderer must read ONE exposure value, or manual and adaptive become two code paths that disagree.
 grep -q 'float QueryExposure() const noexcept' Engine/DisplayPresentation/ExposureIntegrator.h \
@@ -83,11 +125,10 @@ grep -q 'vkCmdFillBuffer(Command, Vulkan->LuminanceBuffers' Engine/DeviceExchang
 grep -q '(Vulkan->ActiveSlot + 1u) % kCycleSlotCount' Engine/DeviceExchange/SwapchainExchange.cpp \
     || { echo "  the readback does not use the completed cycle slot — it would stall"; Fail=1; }
 
-# The fixed-point scale is duplicated in the shader and the readback; a mismatch scales every measurement.
-ShaderScale=$(grep -oP 'kFixedScale\s*=\s*\K[0-9.]+' Engine/Shaders/LuminanceReduce.slang)
-HostScale=$(grep -oP 'FixedScale = \K[0-9.]+' Engine/DeviceExchange/SwapchainExchange.cpp)
-[ "${ShaderScale%.*}" = "${HostScale%.*}" ] \
-    || { echo "  fixed-point scale differs: shader $ShaderScale, readback $HostScale"; Fail=1; }
+# The accumulator has to be big enough for the whole histogram; a short buffer would silently drop the top bins,
+# which are exactly where the sun and every highlight live.
+grep -q 'kLuminanceHistogramBytes' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  the accumulator is not sized from the histogram"; Fail=1; }
 
 # One exposure value reaches the shader, whichever mode is active.
 grep -q 'Dispatch.Exposure              = Adaptation.QueryExposure();' Engine/DisplayPresentation/ReSTIRIntegrator.cpp \

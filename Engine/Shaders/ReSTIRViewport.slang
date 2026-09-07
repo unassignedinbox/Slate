@@ -362,7 +362,7 @@ layout(binding = 24) uniform SkyRecord
     uint    SkyViewSteps;           // [cnt] quality tier: samples along the view ray
     uint    SkyLightSteps;          // [cnt] quality tier: 0 selects the tabulated path
     float   SkyTurbidity;           // [-]   aerosol load; 1 is the clear reference atmosphere (A7b)
-    uint    SkyReserve1;
+    float   MoonAngularScale;       // [-]   1 is the true 0.259°; larger is an artistic moon (A7c)
 };
 
 const uint kFeatureGlobalIllumination = 1u;   // bit 0: trace the secondary bounce (section 4)
@@ -892,6 +892,8 @@ vec3 SkyRadianceTabulated(float CameraAltitude, vec3 ViewDirection, vec3 SunDire
     vec3 Radiance      = vec3(0.0);
     vec3 Transmittance = vec3(1.0);
 
+    const bool HitsGround = Ground > 0.0;   // A7c: the ray ends on the planet, not in space
+
     for (int i = 0; i < ViewSteps; ++i)
     {
         const vec3  Position = Origin + ViewDirection * (float(i) + 0.5) * Step;
@@ -919,6 +921,25 @@ vec3 SkyRadianceTabulated(float CameraAltitude, vec3 ViewDirection, vec3 SunDire
 
         Radiance      += Transmittance * Integrated * SunIlluminance;
         Transmittance *= StepTransmittance;
+    }
+
+    // A7c — the ground. Before this, a ray passing below the horizon returned only the thin slice of air in
+    //    front of it, which at eye height is nearly nothing: the world ended in a black void along the horizon
+    //    line and the exposure meter read that void as most of the scene.
+    if (HitsGround)
+    {
+        const vec3  Surface = Origin + ViewDirection * Distance;
+        const vec3  Normal  = normalize(Surface);
+        const float CosSunAtSurface = dot(Normal, SunDirection);
+
+        // The sky's own light on the ground, which is what keeps the surface from switching off the moment the
+        //    sun dips. The multiple-scattering table already holds exactly this quantity — the isotropic
+        //    radiance arriving at an altitude for a sun angle — and a uniform hemisphere of radiance L delivers
+        //    an irradiance of πL, so the π cancels against the one inside GroundReflection.
+        const vec3 SkyIrradiance = SampleMultiScatter(0.0, CosSunAtSurface) * SunIlluminance * 3.14159265;
+
+        Radiance += Transmittance * GroundReflection(Normal, SunDirection, SunIlluminance,
+                                                     SampleTransmittance(0.0, CosSunAtSurface), SkyIrradiance);
     }
     return Radiance;
 }
@@ -1001,8 +1022,15 @@ void main()
 
                 if (MoonIlluminance > 0.0)
                 {
+                    // A7c ⚠️ The true moon is 0.259° across, which at a 55° field of view is about ten pixels
+                    //    — accurate, and far smaller than people expect, because the eye enlarges it near the
+                    //    horizon and every photograph of it is taken with a long lens. The scale is an
+                    //    admitted artistic control, so it is a multiplier on the real angle rather than a
+                    //    replacement for it: 1 is always the truth, and the readout says so.
+                    const float MoonRadius = kMoonAngularRadius * clamp(MoonAngularScale, 0.05, 40.0);
+
                     const float CosToMoon = dot(rayDirection, MoonDirection);
-                    if (CosToMoon > cos(kMoonAngularRadius))
+                    if (CosToMoon > cos(MoonRadius))
                     {
                         // Where on the disc this ray lands, in units of the moon's radius. Building a tangent
                         //    frame keeps the phase terminator oriented consistently as the moon moves, instead
@@ -1011,13 +1039,19 @@ void main()
                         const vec3 Tangent = normalize(cross(Up, MoonDirection));
                         const vec3 Bitan   = cross(MoonDirection, Tangent);
                         const vec3 Offset  = rayDirection / max(CosToMoon, 1e-6) - MoonDirection;
-                        const vec2 Disc    = vec2(dot(Offset, Tangent), dot(Offset, Bitan)) / kMoonAngularRadius;
+                        const vec2 Disc    = vec2(dot(Offset, Tangent), dot(Offset, Bitan)) / MoonRadius;
 
                         const float Lit = MoonLitFraction(Disc, MoonPhase);
                         if (Lit > 0.0)
                         {
                             // Radiance, not illuminance: divided by the solid angle it subtends, so its
                             //    brightness does not change with render resolution.
+                            //
+                            // ⚠️ The TRUE solid angle, deliberately, not the scaled one. Dividing by the scaled
+                            //    angle would conserve total flux, so an enlarged moon would dim as it grew and
+                            //    a big one would read as a flat grey disc. Keeping the true angle keeps the
+                            //    SURFACE BRIGHTNESS that of the real moon, which is what makes an enlarged one
+                            //    still look like the moon.
                             const float SolidAngle = 6.28318530 * (1.0 - cos(kMoonAngularRadius));
                             skyRadiance += vec3(MoonIlluminance) * kMoonAlbedo * Lit
                                          / SolidAngle * Attenuation;

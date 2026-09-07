@@ -29,6 +29,20 @@ class TextureIndex;     // ContentInterchange/TextureIndex.h (R4a)
 //    5 x 25 taps instead of 6561 — the whole point of the "with holes" formulation.
 static constexpr uint32_t kDenoiseLevelCount    = 5u;
 
+// A6b/A7c adaptive-exposure metering. These mirror LuminanceReduce.slang; the gate checks they still agree.
+//    A HISTOGRAM rather than a running sum, because a percentile of the frame's own distribution has no
+//    absolute constant in it and therefore behaves identically at noon and at midnight. The fixed 1e-2 cd/m²
+//    floor it replaced could not: below it the meter went blind, and a night sky is entirely below it.
+static constexpr uint32_t kLuminanceHistogramBins = 256u;
+static constexpr float    kLuminanceLog2Low       = -30.0f;   // 1e-9 cd/m², below anything the renderer makes
+static constexpr float    kLuminanceLog2High      =  30.0f;   // 1e9 cd/m², above the sun's own disc
+// The percentile window the exposure is taken from. The low trim discards the darkest fifth — shadow and sky
+//    that should not set the exposure for a lit subject — and the high trim discards the brightest twentieth,
+//    which is what stops the sun's disc or a specular highlight from stealing the whole reading.
+static constexpr float    kLuminanceTrimLow       = 0.20f;
+static constexpr float    kLuminanceTrimHigh      = 0.05f;
+static constexpr uint32_t kLuminanceHistogramBytes = kLuminanceHistogramBins * 4u;
+
 // A2 atmosphere tables. Sizes match AtmosphereScattering.slang; the gate checks they still agree.
 static constexpr uint32_t kTransmittanceLutWidth  = 256u;
 static constexpr uint32_t kTransmittanceLutHeight = 64u;
@@ -52,7 +66,7 @@ struct SkyRecord
     uint32_t SkyViewSteps;                                  // [-]    quality tier
     uint32_t SkyLightSteps;                                 // [-]    0 selects the tabulated path
     float    SkyTurbidity;                                  // [-]    A7b: aerosol load; 1 is the clear reference
-    uint32_t SkyReserve1;
+    float    MoonAngularScale;                              // [-]    A7c: 1 is the true 0.259° disc
 };
 static_assert(sizeof(SkyRecord) == 64u, "SkyRecord must match the shader's std140 uniform block (64 bytes)");
 
