@@ -223,7 +223,10 @@ uint32_t InterfaceOutlinerSequence::Record(PixelSpace& Surface, const PlaneExten
         if (SelfMatches(R) && !QueryType(R.TypeOrdinal).Container) ++MatchCount;
 
     Surface.PushClip(Extent);
-    float Y = Extent.MinimumY;
+    // Rows are laid out from the scrolled origin and clipped to the pane. Everything below — hit testing, the
+    //    twirl, the selection bar — then follows for free, because they all read RowExtent.
+    const float Origin = Extent.MinimumY - ScrollY;
+    float Y = Origin;
 
     for (uint32_t Index : Order)
     {

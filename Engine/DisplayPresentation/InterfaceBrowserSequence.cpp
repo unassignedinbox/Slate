@@ -17,8 +17,7 @@ constexpr float kCardRadius  = 18.0f;
 constexpr float kRowGap      = 10.0f;
 constexpr float kPropRowH    = 30.0f;
 constexpr float kLabelW      = 76.0f;
-constexpr float kPillW       = 104.0f;
-constexpr float kPillUnitW   = 36.0f;
+constexpr float kPillMinW    = 66.0f;    // the narrowest pill that still shows four digits and a unit
 constexpr float kSliderMinW  = 90.0f;
 constexpr float kSwatch      = 22.0f;
 constexpr float kDoubleClick = 0.35f;   // [s] window for the rename gesture
@@ -44,6 +43,61 @@ void FormatValue(char* Out, uint32_t Capacity, float Value, uint32_t Decimals) n
 }
 
 } // namespace
+
+//------------------------------------------------------------------------------------------------------------------------
+//                                                    ROW GEOMETRY
+//------------------------------------------------------------------------------------------------------------------------
+
+PropertyRowGeometry SolvePropertyRow(float InnerX, float InnerWidth) noexcept
+{
+    PropertyRowGeometry Out{};
+    const float Right = InnerX + InnerWidth;
+
+    // The label holds its width down to the point where holding it would leave the pill nothing at all. Below
+    //    that it yields too — a row of pure label with no value on it tells the user less than a cramped one,
+    //    and the alternative is arithmetic that goes negative and paints outside the card.
+    const float LabelWidth = std::clamp(InnerWidth - kPillMinW - 12.0f, 24.0f, kLabelW);
+
+    Out.PillX     = InnerX + LabelWidth + 12.0f;
+    Out.PillWidth = ControlKit::PropertyPillWidth;
+    Out.SliderX   = Out.PillX + Out.PillWidth + 12.0f;
+    Out.SliderWidth = Right - Out.SliderX;
+
+    // Space is given up in the order a designer would give it up: the slider first, because it stays usable
+    //    while it shrinks, then the pill down to the narrowest that still shows a number and a unit. The label
+    //    never moves — a row with no name is not worth showing.
+    if (Out.SliderWidth < kSliderMinW)
+    {
+        const float Wanted = kSliderMinW - Out.SliderWidth;
+        const float Spare  = std::max(Out.PillWidth - kPillMinW, 0.0f);
+        const float Given  = std::min(Wanted, Spare);
+        Out.PillWidth   -= Given;
+        Out.SliderX     -= Given;
+        Out.SliderWidth += Given;
+    }
+
+    // A slider narrower than its own thumb cannot express a position, so below that it is dropped and the pill
+    //    takes the room. A readable number beats a control nobody can aim at.
+    Out.SliderVisible = Out.SliderWidth >= ControlKit::SliderThumb + 6.0f;
+    if (!Out.SliderVisible)
+    {
+        Out.SliderWidth = 0.0f;
+        Out.PillWidth   = std::clamp(Right - Out.PillX, 24.0f, ControlKit::PropertyPillWidth);
+        Out.SliderX     = Out.PillX + Out.PillWidth;
+    }
+
+    // ⚠️ The last word, whatever the arithmetic above decided. Nothing may be drawn outside the card, because
+    //    the card is the only thing the pane clips to and a control painted past it is painted onto the window
+    //    frame. Belt and braces: this is the invariant the proof asserts, so it is enforced where it is stated.
+    Out.PillX     = std::min(Out.PillX, std::max(Right - 24.0f, InnerX));
+    Out.PillWidth = std::clamp(Out.PillWidth, 0.0f, std::max(Right - Out.PillX, 0.0f));
+    Out.SliderX   = std::max(Out.SliderX, Out.PillX + Out.PillWidth);
+    if (Out.SliderVisible && Out.SliderX + Out.SliderWidth > Right)
+        Out.SliderWidth = std::max(Right - Out.SliderX, 0.0f);
+
+    Out.PillUnitWidth = std::min(ControlKit::PropertyPillUnitWidth, Out.PillWidth * 0.4f);
+    return Out;
+}
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                        INPUT
@@ -175,7 +229,19 @@ void InterfaceBrowserSequence::Record(PixelSpace& Surface, const PlaneExtent& Ex
         }
 
         const PlaneExtent TreeArea = PlaneExtent{ Side.MinimumX + 12.0f, ChipY, Side.MaximumX - 6.0f, BodyBottom };
+
+        // The wheel is applied BEFORE the tree draws, against the height the previous frame measured. Applying
+        //    it after would show one frame at the old offset every time the wheel moved, which on a trackpad is
+        //    a continuous judder rather than a single missed frame.
+        if (Pointer.Wheel != 0.0f && Pointer.Enabled && ControlKit::Over(TreeArea, Pointer))
+            TreeScroll = ControlKit::AdvanceScroll(TreeScroll, Pointer.Wheel, Tree.QueryContentHeight(), TreeArea.Height());
+        // Re-clamped every frame, not only when the wheel moves: collapsing a branch shortens the content under
+        //    a scrolled pane, and without this the rows would stay parked below the last of them.
+        TreeScroll = ControlKit::AdvanceScroll(TreeScroll, 0.0f, Tree.QueryContentHeight(), TreeArea.Height());
+        Tree.AssignScroll(TreeScroll);
+
         const uint32_t Touched = Tree.Record(Surface, TreeArea, Pointer, Fade);
+        ControlKit::ScrollIndicator(Surface, TreeArea, TreeScroll, Tree.QueryContentHeight(), Fade);
 
         // Double click renames. Tracked here rather than in the outliner so the gesture policy lives with the host
         //    that owns the clock.
@@ -362,11 +428,19 @@ void InterfaceBrowserSequence::RecordProperties(PixelSpace& Surface, const Plane
     if (Builder_) Builder_(Selected, Properties);
     if (Properties.empty()) return;
 
+    if (Pointer.Wheel != 0.0f && Pointer.Enabled && ControlKit::Over(Extent, Pointer))
+        PropertyScroll = ControlKit::AdvanceScroll(PropertyScroll, Pointer.Wheel, PropertyContentHeight, Extent.Height());
+    // Selecting a shorter object shrinks the content under a scrolled pane, so this is re-clamped every frame.
+    PropertyScroll = ControlKit::AdvanceScroll(PropertyScroll, 0.0f, PropertyContentHeight, Extent.Height());
+
     Surface.PushClip(Extent);
 
     const float CardX = Extent.MinimumX + 18.0f;
     const float CardW = std::max(Extent.Width() - 36.0f, 120.0f);
-    float Y = Extent.MinimumY + 14.0f;
+    // Same discipline as the outliner: lay out from a scrolled origin and clip. The Sky panel alone is taller
+    //    than the pane on any normal window, so without this the lower half of it simply could not be reached.
+    const float Origin = Extent.MinimumY + 14.0f - PropertyScroll;
+    float Y = Origin;
 
     // Cards are opened by a Heading row and closed by the next one, so the project describes structure by
     //    ordering alone and never computes a rectangle.
@@ -421,9 +495,12 @@ void InterfaceBrowserSequence::RecordProperties(PixelSpace& Surface, const Plane
         const float RowH = (R.Kind == PropertyKindCategory::Notes) ? 80.0f : kPropRowH;
         const PlaneExtent Row = Spanning(InnerX, Y, InnerW, RowH);
 
+        // The one place row widths are decided, shared with the proof that asserts they stay inside the card.
+        const PropertyRowGeometry Geometry = SolvePropertyRow(InnerX, InnerW);
+
         if (R.Kind != PropertyKindCategory::Notes)
-            ControlKit::TextLeading(Surface, Spanning(InnerX, Y, kLabelW, RowH), 0.0f,
-                                    ControlKit::Faded(ControlKit::Palette().TextDim, Opacity), R.Label, 12.0f);
+            ControlKit::TextLeading(Surface, Spanning(InnerX, Y, std::max(Geometry.PillX - InnerX - 12.0f, 8.0f), RowH),
+                                    0.0f, ControlKit::Faded(ControlKit::Palette().TextDim, Opacity), R.Label, 12.0f);
 
         const float ControlX = InnerX + kLabelW + 12.0f;
         const float ControlW = std::max(Row.MaximumX - ControlX, 40.0f);
@@ -435,11 +512,13 @@ void InterfaceBrowserSequence::RecordProperties(PixelSpace& Surface, const Plane
                 // Row order is the kit's .crow: label → value pill → slider.
                 char Number[32];
                 FormatValue(Number, sizeof(Number), R.Value ? *R.Value : 0.0f, R.Decimals);
-                ControlKit::ValuePill(Surface, ControlX, Y + (RowH - 30.0f) * 0.5f, Number, R.Unit, Opacity);
+                // Drawn at the width the row reserved for it — the same number on both sides, which is the
+                //    whole reason ValuePill takes one.
+                ControlKit::ValuePill(Surface, Geometry.PillX, Y + (RowH - 30.0f) * 0.5f, Number, R.Unit, Opacity,
+                                      Geometry.PillWidth, Geometry.PillUnitWidth);
+                if (!Geometry.SliderVisible) break;
 
-                const float TrackX = ControlX + kPillW + 12.0f;
-                const float TrackW = std::max(Row.MaximumX - TrackX, kSliderMinW);
-                const PlaneExtent Track = Spanning(TrackX, Y, TrackW, RowH);
+                const PlaneExtent Track = Spanning(Geometry.SliderX, Y, Geometry.SliderWidth, RowH);
 
                 float Out = R.Value ? *R.Value : 0.0f;
                 const bool Dragging = (DragRow == Index);
@@ -546,6 +625,9 @@ void InterfaceBrowserSequence::RecordProperties(PixelSpace& Surface, const Plane
 
         Y += RowH + kRowGap;
     }
+
+    PropertyContentHeight = (Y - Origin) + 14.0f;
+    ControlKit::ScrollIndicator(Surface, Extent, PropertyScroll, PropertyContentHeight, Opacity);
 
     Surface.PopClip();
 }

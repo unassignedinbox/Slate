@@ -1252,11 +1252,17 @@ int main(int argc, char** argv)
                           //    The notch stays on the foreground list deliberately. It is a system overlay and
                           //    must cover this window when the shade is pulled down.
                           {
+                              // ⚠️ 720 wide, not 360. A property row is a 76 px label, a 104 px pill and a
+                              //    90 px slider with gaps — 294 px of content plus the card's own padding — and
+                              //    the properties pane is under half the panel in split mode. At 360 the row
+                              //    could not fit in any arrangement, which is what pushed the sliders off the
+                              //    edge. The minimum below is the same arithmetic, so the panel cannot be
+                              //    dragged back into that state.
                               Frontier::FloatingPanel BrowserPanel(
                                   "World Browser##Slate",
-                                  static_cast<float>(LogicalWidth) - 360.0f, 40.0f,
-                                  360.0f, static_cast<float>(LogicalHeight) - 80.0f,
-                                  InterfaceScale);
+                                  static_cast<float>(LogicalWidth) - 740.0f, 40.0f,
+                                  720.0f, static_cast<float>(LogicalHeight) - 80.0f,
+                                  InterfaceScale, 620.0f, 260.0f);
 
                               BrowserWindowHovered = BrowserPanel.PointerOverWindow();
 
@@ -1273,6 +1279,10 @@ int main(int argc, char** argv)
                                   //    slider while the window was being dragged.
                                   BrowserPointer.Enabled  = BrowserPanel.PointerInsideContent()
                                                          && !ControlCentre.CoversPointer();
+                                  // The panel is an ImGui window with NoScrollWithMouse, so ImGui will not
+                                  //    consume the wheel and the browser can route it to whichever pane the
+                                  //    pointer is over.
+                                  BrowserPointer.Wheel    = Input.QueryMouseScrollDelta();
 
                                   Browser.Record(BrowserPanel.Surface(), BrowserPanel.ContentExtent(), BrowserPointer);
                               }

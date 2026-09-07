@@ -5,6 +5,8 @@
 
 #include "PixelSpace.h"
 
+#include <cfloat>
+
 #include <algorithm>
 
 #include <imgui.h>
@@ -223,7 +225,8 @@ PlanePoint PixelSpace::MeasureText(const char* Utf8, float FontSizePixels) const
 //------------------------------------------------------------------------------------------------------------------------
 
 FloatingPanel::FloatingPanel(const char* Identity, float DefaultX, float DefaultY,
-                             float DefaultWidth, float DefaultHeight, float InterfaceScale) noexcept
+                             float DefaultWidth, float DefaultHeight, float InterfaceScale,
+                             float MinimumWidth, float MinimumHeight) noexcept
     : Scale(InterfaceScale > 0.05f ? InterfaceScale : 1.0f)
 {
     if (ImGui::GetCurrentContext() == nullptr) return;
@@ -232,6 +235,12 @@ FloatingPanel::FloatingPanel(const char* Identity, float DefaultX, float Default
     //    is the whole reason a movable panel is worth having: the layout survives the session.
     ImGui::SetNextWindowPos (ImVec2(DefaultX * Scale, DefaultY * Scale), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(DefaultWidth * Scale, DefaultHeight * Scale), ImGuiCond_FirstUseEver);
+
+    // ⚠️ Unlike the defaults above, the minimum applies EVERY frame, including to a size restored from imgui.ini.
+    //    A panel that was dragged too narrow in a previous session would otherwise come back too narrow.
+    if (MinimumWidth > 0.0f || MinimumHeight > 0.0f)
+        ImGui::SetNextWindowSizeConstraints(ImVec2(MinimumWidth * Scale, MinimumHeight * Scale),
+                                            ImVec2(FLT_MAX, FLT_MAX));
 
     // The panel paints its own background and its own padding, so ImGui must contribute neither. Without this
     //    the kit's card radius sits inside a second, square frame.
@@ -253,6 +262,23 @@ FloatingPanel::FloatingPanel(const char* Identity, float DefaultX, float Default
         const ImVec2 Avail  = ImGui::GetContentRegionAvail();
         Content = PlaneExtent{ Origin.x / Scale, Origin.y / Scale,
                                (Origin.x + Avail.x) / Scale, (Origin.y + Avail.y) / Scale };
+
+        // 🔴 Reserve the whole content region as one ImGui item. The panel's widgets are painted straight into
+        //    this window's draw list, so ImGui does not know they exist: from its point of view the entire body
+        //    is empty background, and pressing empty background is how a window is dragged. That is why moving a
+        //    slider also moved the window — every drag was doing both at once, and the widget was the one that
+        //    looked broken.
+        //
+        //    An invisible button is the fix rather than NoMove, because NoMove would also disable the title bar
+        //    and the panel could then never be moved at all. This claims presses in the BODY and leaves the title
+        //    bar, the resize grip and the dock tab doing exactly what they did.
+        ImGui::SetCursorScreenPos(Origin);
+        ImGui::InvisibleButton("##PanelContent", ImVec2(Avail.x > 1.0f ? Avail.x : 1.0f,
+                                                        Avail.y > 1.0f ? Avail.y : 1.0f),
+                               ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight
+                             | ImGuiButtonFlags_MouseButtonMiddle);
+        // Put the cursor back so the recording origin is the one the caller was told about.
+        ImGui::SetCursorScreenPos(Origin);
 
         // A collapsed or fully clipped window has no content to record into; reporting it as open would have the
         //    caller lay out against a zero rectangle.

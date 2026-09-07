@@ -77,6 +77,7 @@ struct ControlPointer
     bool  Pressed    = false;  // [-] transitioned up → down this frame
     bool  Released   = false;  // [-] transitioned down → up this frame
     bool  Enabled    = true;   // [-] false while the page is mid-swap or a dialogue covers it
+    float Wheel      = 0.0f;   // [clicks] scroll this frame, + is away from the user (content moves up)
 };
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -191,8 +192,26 @@ public:
     static constexpr float SliderHeight = 28.0f, SliderThinHeight = 10.0f, SliderThumb = 26.0f, SliderThinThumb = 18.0f;
 
     // .vpill  118 px: number cell (field) + 44 px unit cell (inset).
-    static void ValuePill(PixelSpace& Surface, float X, float Y, const char* Number, const char* Unit, float Opacity = 1.0f) noexcept;
     static constexpr float ValuePillWidth = 118.0f, ValuePillUnitWidth = 44.0f;
+    // The property rows in References/WorldBrowser-Mock.html: .vpill is 104 px with a 36 px unit cell.
+    static constexpr float PropertyPillWidth = 104.0f, PropertyPillUnitWidth = 36.0f;
+
+    // Width is a parameter because the mock's property rows use a 104 px pill with a 36 px unit cell while the
+    //    Notch inspectors use the wider 118/44. Drawing one width while the caller reserves another is what put
+    //    the slider on top of the unit cell and pushed the whole row off the edge of the card.
+    static void ValuePill(PixelSpace& Surface, float X, float Y, const char* Number, const char* Unit, float Opacity = 1.0f,
+                          float Width = ValuePillWidth, float UnitWidth = ValuePillUnitWidth) noexcept;
+
+    // ── Scrolling ────────────────────────────────────────────────────────────────────────────────────────────────
+    // Applies the wheel to Offset and clamps it to what the content actually needs, returning the clamped value.
+    //    The clamp is the whole job: an unclamped offset scrolls a short list into empty space and the pane looks
+    //    broken rather than merely scrolled.
+    [[nodiscard]] static float AdvanceScroll(float Offset, float Wheel, float ContentHeight, float ViewHeight) noexcept;
+
+    // A slim indicator, drawn only when there IS something to scroll. The mock hides its scrollbars, but a
+    //    desktop pane with no hint that content continues below the fold is a control nobody finds.
+    static void ScrollIndicator(PixelSpace& Surface, const PlaneExtent& View, float Offset,
+                                float ContentHeight, float Opacity = 1.0f) noexcept;
 
     // .dd-btn  pill with split caret cell. Returns Clicked when the button is clicked (host opens the menu).
     static ControlHit Dropdown(PixelSpace& Surface, const PlaneExtent& Extent, const char* Current, bool Open, const ControlPointer& Pointer, float Opacity = 1.0f) noexcept;

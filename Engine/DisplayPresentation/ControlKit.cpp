@@ -331,20 +331,51 @@ ControlHit ControlKit::Slider(PixelSpace& Surface, const PlaneExtent& Extent, fl
     return Hit;
 }
 
-void ControlKit::ValuePill(PixelSpace& Surface, float X, float Y, const char* Number, const char* Unit, float Opacity) noexcept
+void ControlKit::ValuePill(PixelSpace& Surface, float X, float Y, const char* Number, const char* Unit, float Opacity,
+                           float Width, float UnitWidth) noexcept
 {
     const float H = ControlKitTokens::ControlHeight;
-    const PlaneExtent Whole = Spanning(X, Y, ValuePillWidth, H);
-    const PlaneExtent Num   = Spanning(X, Y, ValuePillWidth - ValuePillUnitWidth, H);
-    const PlaneExtent Cell  = Spanning(X + ValuePillWidth - ValuePillUnitWidth, Y, ValuePillUnitWidth, H);
+    // A pill narrower than its own unit cell has no number cell left to draw, and the seam arithmetic below goes
+    //    negative. Clamped rather than asserted: a cramped panel should still render something readable.
+    UnitWidth = std::clamp(UnitWidth, 12.0f, std::max(Width - 24.0f, 12.0f));
+    const PlaneExtent Whole = Spanning(X, Y, Width, H);
+    const PlaneExtent Num   = Spanning(X, Y, Width - UnitWidth, H);
+    const PlaneExtent Cell  = Spanning(X + Width - UnitWidth, Y, UnitWidth, H);
     Surface.FillRectangle(Whole, Faded(Palette().Inset, Opacity), H * 0.5f);              // unit cell colour behind
-    Surface.FillRectangle(Spanning(X, Y, ValuePillWidth - ValuePillUnitWidth + H * 0.5f, H), Faded(Palette().Field, Opacity), H * 0.5f);   // number cell (left rounded)
+    Surface.FillRectangle(Spanning(X, Y, Width - UnitWidth + H * 0.5f, H), Faded(Palette().Field, Opacity), H * 0.5f);   // number cell (left rounded)
     Surface.FillRectangle(Spanning(Cell.MinimumX, Y, 1.0f, H), Faded(Palette().Stroke, Opacity));
     // square the seam: repaint the unit cell's left edge over the number cell's right rounding
     Surface.FillRectangle(Spanning(Cell.MinimumX, Y, H * 0.5f, H), Faded(Palette().Inset, Opacity));
     OutlineRounded(Surface, Whole, Faded(Palette().Stroke, Opacity), H * 0.5f);
     TextCentred(Surface, Num,  Faded(Palette().Text,      Opacity), Number, 15.0f);
     TextCentred(Surface, Cell, Faded(Palette().TextFaint, Opacity), Unit,   12.5f);
+}
+
+//------------------------------------------------------------------------------------------------------------------------
+//                                                       SCROLLING
+//------------------------------------------------------------------------------------------------------------------------
+
+float ControlKit::AdvanceScroll(float Offset, float Wheel, float ContentHeight, float ViewHeight) noexcept
+{
+    // 40 px a click, which is roughly a row and a half — the same order as every desktop list.
+    const float Travel  = std::max(ContentHeight - ViewHeight, 0.0f);
+    const float Moved   = Offset - Wheel * 40.0f;   // wheel away from the user moves the content up
+    return std::clamp(Moved, 0.0f, Travel);
+}
+
+void ControlKit::ScrollIndicator(PixelSpace& Surface, const PlaneExtent& View, float Offset,
+                                 float ContentHeight, float Opacity) noexcept
+{
+    const float ViewH = View.Height();
+    if (ContentHeight <= ViewH + 1.0f || ViewH <= 8.0f) return;   // nothing to scroll, nothing to say
+
+    const float Fraction = std::clamp(ViewH / ContentHeight, 0.06f, 1.0f);
+    const float ThumbH   = std::max(ViewH * Fraction, 24.0f);
+    const float Travel   = std::max(ContentHeight - ViewH, 1.0f);
+    const float ThumbY   = View.MinimumY + std::clamp(Offset / Travel, 0.0f, 1.0f) * (ViewH - ThumbH);
+
+    ColorQuad Ink = Palette().TextFaint; Ink.Alpha *= 0.55f;
+    Surface.FillRectangle(Spanning(View.MaximumX - 5.0f, ThumbY, 3.0f, ThumbH), Faded(Ink, Opacity), 1.5f);
 }
 
 //------------------------------------------------------------------------------------------------------------------------

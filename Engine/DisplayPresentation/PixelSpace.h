@@ -142,8 +142,10 @@ public:
     // Identity is the window title; the portion after "##" is ImGui's persistence key and never renders.
     // DefaultX/Y/Width/Height apply only the first time a layout is seen — after that the user's own position
     //    and size are restored from imgui.ini, which is the entire point of making this a window.
+    //    MinimumWidth/Height are a floor on the user's own resize. A panel dragged narrower than its content can
+    //    lay out has nowhere to put a row, and the result is controls painted outside their own card.
     FloatingPanel(const char* Identity, float DefaultX, float DefaultY, float DefaultWidth, float DefaultHeight,
-                  float InterfaceScale) noexcept;
+                  float InterfaceScale, float MinimumWidth = 0.0f, float MinimumHeight = 0.0f) noexcept;
     ~FloatingPanel() noexcept;
 
     FloatingPanel(const FloatingPanel&)            = delete;

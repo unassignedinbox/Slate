@@ -117,6 +117,13 @@ public:
     void     Advance(float DeltaSeconds) noexcept;
     uint32_t Record(PixelSpace& Surface, const PlaneExtent& Extent, const ControlPointer& Pointer, float Opacity = 1.0f) noexcept;
 
+    // ── Scrolling ────────────────────────────────────────────────────────────────────────────────────────────────
+    // The offset is owned by the host, not by the tree: the host is what knows whether the pointer is over this
+    //    pane or the properties one, and a wheel that scrolls both panes at once is worse than one that scrolls
+    //    neither. The height to clamp against is QueryContentHeight below, which already walks the same rows
+    //    under the same filter and collapse scales that Record lays out.
+    void AssignScroll(float Value) noexcept { ScrollY = Value; }
+
     // Row geometry, exposed so a host can scroll to a row or place a context menu against it.
     [[nodiscard]] float QueryContentHeight() const noexcept;
 
@@ -146,6 +153,7 @@ private:
     uint32_t       VisibleCount = 0u;
     uint32_t       MatchCount   = 0u;
     OutlinerLayoutMode LayoutMode = OutlinerLayoutMode::Split;
+    float              ScrollY       = 0.0f;   // [px] applied by Record, owned by the host
     mutable bool   OrderDirty   = true;
 };
 

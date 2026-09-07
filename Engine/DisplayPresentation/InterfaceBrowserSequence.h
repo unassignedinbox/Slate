@@ -64,6 +64,31 @@ struct PropertyRowRecord
 };
 
 //------------------------------------------------------------------------------------------------------------------------
+//                                                    ROW GEOMETRY
+//------------------------------------------------------------------------------------------------------------------------
+
+// The negotiated widths of one property row: label, value pill, slider. Pure arithmetic and a free function, so
+//    the proof can assert it at any pane width without a device, a window or an ImGui context.
+//
+//    🔴 It exists because the previous version did not negotiate at all. It reserved 104 px for a pill the kit
+//    drew at 118, then forced the slider to a 90 px minimum measured from wherever that left off. On a panel
+//    narrower than about 380 px the result was a track painted across the pill's unit cell and a slider running
+//    off the card, off the window and past the edge of the screen — a control that cannot be grabbed, on a row
+//    whose number is covered up.
+struct PropertyRowGeometry
+{
+    float PillX         = 0.0f;   // [px]
+    float PillWidth     = 0.0f;   // [px]
+    float PillUnitWidth = 0.0f;   // [px]
+    float SliderX       = 0.0f;   // [px]
+    float SliderWidth   = 0.0f;   // [px]
+    bool  SliderVisible = true;   // false when the row is too narrow for a slider to mean anything
+};
+
+// InnerX / InnerWidth are the card's content box: everything this returns lies inside it.
+[[nodiscard]] PropertyRowGeometry SolvePropertyRow(float InnerX, float InnerWidth) noexcept;
+
+//------------------------------------------------------------------------------------------------------------------------
 //                                                       SEQUENCE
 //------------------------------------------------------------------------------------------------------------------------
 
@@ -112,6 +137,11 @@ private:
     float              SplitNow  = 0.54f;   // animated toward the mode's target fraction
     bool               MenuOpen  = false;   // the type-filter dropdown
     uint32_t           DragRow   = kOutlinerNoRow;  // slider being dragged, index into Properties
+    // ⚠️ One offset per pane, and the wheel goes to whichever the pointer is over. A single shared offset moves
+    //    the pane the user is not looking at, which reads as the panel losing its place.
+    float              TreeScroll            = 0.0f;
+    float              PropertyScroll        = 0.0f;
+    float              PropertyContentHeight = 0.0f;
     uint32_t           DragAxis  = 0u;
     float              DoubleClickTimer = 0.0f;
     uint32_t           DoubleClickRow   = kOutlinerNoRow;
