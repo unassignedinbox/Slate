@@ -87,7 +87,36 @@ After="$(cd ExternalPackages/imgui && git status --porcelain | wc -l)"
 # Leave the tree patched: that is the state a build expects.
 python3 Scripts/ApplyImGuiPatches.py >/dev/null 2>&1
 
-[ "$Fail" = "0" ] && echo "  apply is idempotent, verify agrees, revert is clean               PASS"
+# ── The patches must actually DO something ───────────────────────────────────────────────────────────────────────
+# 🔴 Every style variable the patches add defaults to 0.0f, and 0.0f is stock rectangular ImGui exactly — that
+# default is deliberate, so a patched-but-unconfigured build is byte-identical to an unpatched one. Nothing in
+# Slate had ever set them: three patches were applied on every build, the log reported them applied, and the tabs
+# were square. A patch nobody configures is an elaborate way to change nothing.
+for Variable in TabSlant TabOverlap TabHeight TabStripPadTop; do
+    Seated=$(grep -oP "TabStyle\.${Variable}\s*=\s*\K[0-9.]+" Engine/DeviceExchange/SwapchainExchange.cpp | head -1)
+    if [ -z "$Seated" ]; then
+        echo "  $Variable is never set, so the patch that adds it draws stock ImGui"; Fail=1
+    else
+        awk -v v="$Seated" 'BEGIN { exit !(v > 0.0) }' \
+            || { echo "  $Variable is seated at $Seated, which IS stock ImGui"; Fail=1; }
+    fi
+done
+
+# ⚠️ And a tab is drawn by a dock node's tab bar, so without a dock space there is no node and no tab — the
+# geometry would be correct and invisible, which is the state this replaced.
+grep -q 'ImGui::DockSpaceOverViewport' Engine/DisplayPresentation/RenderScheduler.cpp \
+    || { echo "  there is no dock space, so no tab bar exists for the trapezoid to be drawn on"; Fail=1; }
+# PassthruCentralNode is what keeps the rendered scene visible under it; a dock space is opaque by default.
+grep -q 'ImGuiDockNodeFlags_PassthruCentralNode' Engine/DisplayPresentation/RenderScheduler.cpp \
+    || { echo "  the dock space is opaque — it would paint over the render"; Fail=1; }
+grep -q 'ImGuiConfigFlags_DockingEnable' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  docking is disabled, so nothing can be docked and no tab bar can appear"; Fail=1; }
+
+# The patches need the DOCKING branch, and a pin that drifts back to master takes docking away silently.
+grep -q 'branch = docking' .gitmodules \
+    || { echo "  .gitmodules does not pin imgui to docking — the pin can drift to master unnoticed"; Fail=1; }
+
+[ "$Fail" = "0" ] && echo "  apply is idempotent, the vars are seated, and a dock space exists    PASS"
 
 echo
 if [ "$Fail" = "0" ]; then echo "[ImGuiPatches] OK"; exit 0; else echo "[ImGuiPatches] FAILED"; exit 1; fi

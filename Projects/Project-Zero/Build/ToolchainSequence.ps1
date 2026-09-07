@@ -758,10 +758,24 @@ if (Test-Path $ExePath)
     }
     catch
     {
+        # ⚠️ The running copy may refuse to die — another user's session, a debugger attached, or simply a
+        #    process this shell has no right to touch. Stop-Process then throws, the throw escapes the catch,
+        #    and a build that had already succeeded reports failure at the very last step. Reported from a real
+        #    run: "Cannot stop process Project-Zero (19756) ... Access is denied".
+        #
+        #    So the kill is best-effort and the DELETE is what decides. If the file still cannot be replaced,
+        #    say plainly why rather than surfacing a Stop-Process stack trace that names the wrong problem.
         $Running = Get-Process -Name 'Project-Zero' -ErrorAction SilentlyContinue
-        if ($Running) { $Running | Stop-Process -Force }
-        Start-Sleep -Milliseconds 200
-        Remove-Item $ExePath -Force -ErrorAction Stop
+        if ($Running) { $Running | Stop-Process -Force -ErrorAction SilentlyContinue }
+        Start-Sleep -Milliseconds 400
+        try
+        {
+            Remove-Item $ExePath -Force -ErrorAction Stop
+        }
+        catch
+        {
+            throw "Cannot replace $ExePath - it is still running and could not be closed. Close Project-Zero and build again."
+        }
     }
 }
 

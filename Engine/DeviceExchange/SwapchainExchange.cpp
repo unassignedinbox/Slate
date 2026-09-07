@@ -2033,6 +2033,29 @@ bool SwapchainExchange::BringImGui() noexcept
 #endif // IMGUI_HAS_DOCK
     ImGui::StyleColorsDark();
 
+    // 🔴 THE PATCHES WERE DEAD CODE UNTIL THIS. Patches/PatchA and PatchB add four style variables to the
+    //    vendored ImGui, and every one of them defaults to 0.0f, which is stock rectangular ImGui exactly —
+    //    that default is deliberate, so an unpatched build and a patched-but-unconfigured one are
+    //    byte-identical. Nothing in Slate had ever set them, so the build applied three patches on every run
+    //    and drew square tabs, and the patch report in the log said "already applied" while nothing about the
+    //    tabs had changed.
+    //
+    //    The figures are References/DockWorkspace.html's, which is what the patches were cut to reproduce:
+    //    slant = min(14, w × 0.16), a 24 px tab, 24 px of overlap so adjacent tabs interlock, and a 4 px strip
+    //    of node above them (the sheet's 28 px strip over a 24 px tab).
+    //
+    //    ⚠️ NOT guarded behind an #ifdef, deliberately. Without the patches these are not members of ImGuiStyle
+    //    and the build fails to compile — which is the right failure. A guard would let an unpatched build
+    //    succeed and draw square tabs, and that is the exact state this commit found: three patches applied on
+    //    every run, reported as applied, and nothing on screen different for it.
+    {
+        ImGuiStyle& TabStyle    = ImGui::GetStyle();
+        TabStyle.TabSlant       = 14.0f;
+        TabStyle.TabOverlap     = 24.0f;
+        TabStyle.TabHeight      = 24.0f;
+        TabStyle.TabStripPadTop =  4.0f;
+    }
+
     ImGui_ImplGlfw_InitForVulkan(GlfwWindow, true);
 
     ImGui_ImplVulkan_InitInfo ImGuiVulkanInfo{};

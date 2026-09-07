@@ -70,6 +70,24 @@ void RenderScheduler::Present(
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
+    // 🔴 A dock space, so the trapezoidal tabs have somewhere to be. Patches/PatchA and PatchB give ImGui the
+    //    geometry, and SwapchainExchange seats the four style variables that switch it on — but a tab is drawn
+    //    by a dock node's tab bar, and until there was a dock space there was no node, so nothing in Slate had
+    //    ever drawn a tab at all. Three patches applied on every build, reported as applied, and no tab on
+    //    screen to carry them.
+    //
+    //    ⚠️ PassthruCentralNode is what keeps the rendered scene visible. Without it the central node paints its
+    //    own background over the whole viewport and the 3D image disappears behind a flat grey — a dock space is
+    //    a full-screen window, and by default it is opaque.
+    //
+    //    NoDockingOverCentralNode as well: a panel dropped into the middle would cover the render entirely, and
+    //    the one thing a viewport must never lose is the view. Panels dock to the edges, as the sheet has them.
+#ifdef IMGUI_HAS_DOCK
+    ImGui::DockSpaceOverViewport(0u, ImGui::GetMainViewport(),
+                                 ImGuiDockNodeFlags_PassthruCentralNode
+                               | ImGuiDockNodeFlags_NoDockingOverCentralNode);
+#endif
+
     // ⚠️ The scene / render inspector that used to live here is gone: it is now InterfaceBrowserSequence, drawn
     //    on the engine's own overlay surface rather than through ImGui. This still owns the ImGui frame because
     //    the Control Centre overlay records itself between NewFrame and Render through the hook below, and the
