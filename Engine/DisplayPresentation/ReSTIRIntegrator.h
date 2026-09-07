@@ -13,6 +13,7 @@
 #include "../DeviceExchange/SwapchainExchange.h"
 #include "../ContentInterchange/MaterialDescriptor.h"
 #include "../GeometricRaster/CelestialSolver.h"
+#include "ExposureIntegrator.h"
 #include "../../Projects/Project-Zero/Source/RayTracingSolver.h"
 #include "../../Projects/Project-Zero/Source/FlyThroughSolver.h"
 #include <cstdint>
@@ -132,7 +133,19 @@ public:
     // Any parameter change invalidates the temporal history; the accumulation restarts at index 0.
     void AssignCandidatesPerPixel(uint32_t Count) noexcept { if (ActiveConfiguration.CandidatesPerPixel != Count) { ActiveConfiguration.CandidatesPerPixel = Count; ResetAccumulation(); } }
     void AssignExtraCandidateCount  (uint32_t Count) noexcept { if (ActiveConfiguration.ExtraCandidateCount   != Count) { ActiveConfiguration.ExtraCandidateCount   = Count; ResetAccumulation(); } }
-    void AssignExposure          (float    Value) noexcept { if (ActiveConfiguration.Exposure            != Value) { ActiveConfiguration.Exposure            = Value; ResetAccumulation(); } }
+    // A6b ⚠️ The slider writes BOTH the configuration and the exposure integrator's manual value. Keeping two
+    //    copies and hoping they agree is exactly how a control ends up doing nothing in one mode.
+    void AssignExposure          (float    Value) noexcept
+    {
+        if (ActiveConfiguration.Exposure != Value)
+        {
+            ActiveConfiguration.Exposure = Value;
+            ExposureConfiguration Adapt = Adaptation.QueryConfiguration();
+            Adapt.ManualExposure = Value;
+            Adaptation.AssignConfiguration(Adapt);
+            ResetAccumulation();
+        }
+    }
     void AssignGlobalIllumination(bool     On)    noexcept { if (ActiveConfiguration.GlobalIllumination  != On)    { ActiveConfiguration.GlobalIllumination  = On;    ResetAccumulation(); } }
     void AssignAntiAliasing      (bool     On)    noexcept { if (ActiveConfiguration.AntiAliasing        != On)    { ActiveConfiguration.AntiAliasing        = On;    ResetAccumulation(); } }
     void AssignTemporalReuse     (bool     On)    noexcept { if (ActiveConfiguration.TemporalReuse       != On)    { ActiveConfiguration.TemporalReuse       = On;    ResetAccumulation(); } }
@@ -157,6 +170,11 @@ public:
     //    one world, so a second dome would be built and sampled while contributing to no pixel. Portals are the
     //    single thing that changes it — see CLAUDE.md §15b for where the assumption is baked in and what the
     //    change looks like.
+    // A6b. Adaptive exposure. Held here because BuildDispatch is what fills the Exposure push constant, so the
+    //    measured value and the value the shader receives cannot drift apart.
+    [[nodiscard]] ExposureIntegrator&       Exposure()       noexcept { return Adaptation; }
+    [[nodiscard]] const ExposureIntegrator& Exposure() const noexcept { return Adaptation; }
+
     [[nodiscard]] CelestialSolver&       Celestial()       noexcept { return Sky; }
     [[nodiscard]] const CelestialSolver& Celestial() const noexcept { return Sky; }
 
@@ -177,7 +195,8 @@ public:
 
 private:
     ReSTIRIntegratorConfiguration ActiveConfiguration;  // [-]  live-tunable parameters
-    CelestialSolver Sky{};   // A3: the authoritative clock; see CelestialSolver.h
+    CelestialSolver    Sky{};        // A3: the authoritative clock; see CelestialSolver.h
+    ExposureIntegrator Adaptation{};  // A6b: adaptive exposure
     // The sun direction the accumulated history was rendered under. A moving sun invalidates it exactly as a
     //    moving camera does — see ObserveCamera.
     mutable float   HistorySunX = 0.0f, HistorySunY = 0.0f, HistorySunZ = 0.0f;

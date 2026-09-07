@@ -53,6 +53,8 @@ static constexpr uint32_t kLocalGroupSizeY = 16u;
 // AtrousDenoise.slang declares 8×8, not the kernel's 16×16. Kept beside them so the difference is visible: they
 //    are different shaders and a dispatch must use the size of the shader it is actually dispatching.
 static constexpr uint32_t kDenoiseGroupSize = 8u;
+// A6b: exposure is a whole-frame property, so the reduction subsamples. 32 px gives ~2 000 taps at 1080p.
+static constexpr uint32_t kLuminanceSampleStride = 32u;
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                              VULKAN RECORD DEFINITION
@@ -122,6 +124,18 @@ struct SwapchainExchange::VulkanRecord
     VkSampler                TableSampler          = VK_NULL_HANDLE; // linear, clamp-to-edge, no mips
     // A2: 0 = transmittance 256×64, 1 = multiple scattering 32×32. Both RGBA32F, both constant for a given
     //    atmosphere, so they are built once at bring-up and rebuilt only when a parameter changes.
+    // A6b luminance reduction. One accumulator per cycle slot: the CPU reads slot N's result while the GPU is
+    //    writing slot N+1, so nothing is ever read while it is being written and no extra fence is needed.
+    //    Persistently mapped — mapping and unmapping every frame is a driver round trip for eight bytes.
+    VkBuffer                 LuminanceBuffers[kCycleSlotCount] = {};
+    VkDeviceMemory           LuminanceMemory [kCycleSlotCount] = {};
+    void*                    LuminanceMapped [kCycleSlotCount] = {};
+    VkPipeline               LuminancePipeline   = VK_NULL_HANDLE;
+    VkPipelineLayout         LuminanceLayout     = VK_NULL_HANDLE;
+    VkDescriptorSetLayout    LuminanceSetLayout  = VK_NULL_HANDLE;
+    VkDescriptorPool         LuminancePool       = VK_NULL_HANDLE;
+    VkDescriptorSet          LuminanceSets[kCycleSlotCount] = {};
+
     ResidentTexture          AtmosphereTables[2];
     bool                     AtmosphereTablesBuilt = false;
     VkPipeline               AtmosphereLutPipeline = VK_NULL_HANDLE;
@@ -404,6 +418,8 @@ bool SwapchainExchange::Bring() noexcept
         // A2 before BringDescriptorSet for the same reason as the denoiser: that stage ends by calling
         //    WriteDescriptorSet(), which is what binds these tables into the kernel's set.
         { "BringAtmosphereTables", &SwapchainExchange::BringAtmosphereTables },
+        // A6b after BringStorageImage (it binds HistoryImageView) and before BringDescriptorSet, same as above.
+        { "BringLuminanceReduction", &SwapchainExchange::BringLuminanceReduction },
         { "BringDescriptorSet",    &SwapchainExchange::BringDescriptorSet    },
         { "BringCycleSlots",       &SwapchainExchange::BringCycleSlots       },
         { "BringImGui",            &SwapchainExchange::BringImGui            },
@@ -459,6 +475,17 @@ void SwapchainExchange::Retire() noexcept
         if (T.Image)  vkDestroyImage    (Vulkan->Device, T.Image, nullptr);
         if (T.Memory) vkFreeMemory      (Vulkan->Device, T.Memory, nullptr);
     }
+    for (uint32_t Slot = 0u; Slot < kCycleSlotCount; ++Slot)
+    {
+        if (Vulkan->LuminanceMapped[Slot]) vkUnmapMemory(Vulkan->Device, Vulkan->LuminanceMemory[Slot]);
+        if (Vulkan->LuminanceBuffers[Slot]) vkDestroyBuffer(Vulkan->Device, Vulkan->LuminanceBuffers[Slot], nullptr);
+        if (Vulkan->LuminanceMemory[Slot])  vkFreeMemory(Vulkan->Device, Vulkan->LuminanceMemory[Slot], nullptr);
+    }
+    if (Vulkan->LuminancePipeline)   vkDestroyPipeline(Vulkan->Device, Vulkan->LuminancePipeline, nullptr);
+    if (Vulkan->LuminanceLayout)     vkDestroyPipelineLayout(Vulkan->Device, Vulkan->LuminanceLayout, nullptr);
+    if (Vulkan->LuminanceSetLayout)  vkDestroyDescriptorSetLayout(Vulkan->Device, Vulkan->LuminanceSetLayout, nullptr);
+    if (Vulkan->LuminancePool)       vkDestroyDescriptorPool(Vulkan->Device, Vulkan->LuminancePool, nullptr);
+
     for (VulkanRecord::ResidentTexture& T : Vulkan->AtmosphereTables)
     {
         if (T.View)   vkDestroyImageView(Vulkan->Device, T.View, nullptr);
@@ -1238,6 +1265,141 @@ struct AtmosphereLutPushRecord
     uint32_t Padding0, Padding1, Padding2;
 };
 } // namespace
+
+namespace {
+// Mirrors LuminanceConstants in LuminanceReduce.slang.
+struct LuminancePushRecord { uint32_t Width, Height, Stride, Padding; };
+} // namespace
+
+// A6b. The luminance reduction: one small compute pass that collapses the resolved HDR image to a single
+//    average log luminance, which drives adaptive exposure.
+float SwapchainExchange::QueryAverageLogLuminance() const noexcept
+{
+    if (!Vulkan || !Vulkan->LuminancePipeline) return -1.0e9f;
+
+    // Read the slot the GPU has FINISHED with, not the one being recorded. With two frames in flight that is
+    //    the other slot, and reading it needs no fence and cannot stall — the alternative, waiting for this
+    //    frame's own result, would serialise the CPU against the GPU for one scalar.
+    const uint32_t Slot = (Vulkan->ActiveSlot + 1u) % kCycleSlotCount;
+    const void* Mapped = Vulkan->LuminanceMapped[Slot];
+    if (!Mapped) return -1.0e9f;
+
+    struct Accumulator { int32_t SumFixedPoint; int32_t SampleCount; };
+    Accumulator Value{};
+    std::memcpy(&Value, Mapped, sizeof(Value));
+    if (Value.SampleCount <= 0) return -1.0e9f;   // first frames, before anything has been written
+
+    constexpr float FixedScale = 4096.0f;   // must match kFixedScale in LuminanceReduce.slang
+    return (static_cast<float>(Value.SumFixedPoint) / FixedScale) / static_cast<float>(Value.SampleCount);
+}
+
+bool SwapchainExchange::BringLuminanceReduction() noexcept
+{
+    // ① Two bindings: the HDR source to read, and the accumulator to atomically sum into.
+    std::array<VkDescriptorSetLayoutBinding, 2u> Bindings{};
+    Bindings[0].binding         = 0u;
+    Bindings[0].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    Bindings[0].descriptorCount = 1u;
+    Bindings[0].stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
+    Bindings[1].binding         = 1u;
+    Bindings[1].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    Bindings[1].descriptorCount = 1u;
+    Bindings[1].stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
+
+    VkDescriptorSetLayoutCreateInfo LayoutInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+    LayoutInfo.bindingCount = 2u;
+    LayoutInfo.pBindings    = Bindings.data();
+    if (vkCreateDescriptorSetLayout(Vulkan->Device, &LayoutInfo, nullptr, &Vulkan->LuminanceSetLayout) != VK_SUCCESS)
+        return false;
+
+    VkPushConstantRange PushRange{};
+    PushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    PushRange.size       = static_cast<uint32_t>(sizeof(LuminancePushRecord));
+
+    VkPipelineLayoutCreateInfo PipelineLayoutInfo{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+    PipelineLayoutInfo.setLayoutCount         = 1u;
+    PipelineLayoutInfo.pSetLayouts            = &Vulkan->LuminanceSetLayout;
+    PipelineLayoutInfo.pushConstantRangeCount = 1u;
+    PipelineLayoutInfo.pPushConstantRanges    = &PushRange;
+    if (vkCreatePipelineLayout(Vulkan->Device, &PipelineLayoutInfo, nullptr, &Vulkan->LuminanceLayout) != VK_SUCCESS)
+        return false;
+
+    // ② One accumulator per cycle slot, host visible and persistently mapped. Eight bytes each — mapping them
+    //    once costs nothing and avoids a driver round trip every frame.
+    constexpr uint32_t HostVisible = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    for (uint32_t Slot = 0u; Slot < kCycleSlotCount; ++Slot)
+    {
+        AllocateBuffer(Vulkan->Device, Vulkan->MemoryProperties, 16u,
+                       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, HostVisible,
+                       Vulkan->LuminanceBuffers[Slot], Vulkan->LuminanceMemory[Slot]);
+        if (!Vulkan->LuminanceBuffers[Slot]) return false;
+        if (vkMapMemory(Vulkan->Device, Vulkan->LuminanceMemory[Slot], 0u, 16u, 0u,
+                        &Vulkan->LuminanceMapped[Slot]) != VK_SUCCESS)
+            return false;
+        std::memset(Vulkan->LuminanceMapped[Slot], 0, 16u);
+    }
+
+    VkDescriptorPoolSize PoolSizes[2]{};
+    PoolSizes[0] = { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,  kCycleSlotCount };
+    PoolSizes[1] = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, kCycleSlotCount };
+    VkDescriptorPoolCreateInfo PoolInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
+    PoolInfo.maxSets       = kCycleSlotCount;
+    PoolInfo.poolSizeCount = 2u;
+    PoolInfo.pPoolSizes    = PoolSizes;
+    if (vkCreateDescriptorPool(Vulkan->Device, &PoolInfo, nullptr, &Vulkan->LuminancePool) != VK_SUCCESS) return false;
+
+    std::array<VkDescriptorSetLayout, kCycleSlotCount> SetLayouts{};
+    SetLayouts.fill(Vulkan->LuminanceSetLayout);
+    VkDescriptorSetAllocateInfo AllocateInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+    AllocateInfo.descriptorPool     = Vulkan->LuminancePool;
+    AllocateInfo.descriptorSetCount = kCycleSlotCount;
+    AllocateInfo.pSetLayouts        = SetLayouts.data();
+    if (vkAllocateDescriptorSets(Vulkan->Device, &AllocateInfo, Vulkan->LuminanceSets) != VK_SUCCESS) return false;
+
+    for (uint32_t Slot = 0u; Slot < kCycleSlotCount; ++Slot)
+    {
+        // ⚠️ The HISTORY image, not the presentation image: the reduction must see LINEAR radiance. Measuring
+        //    the tone-mapped output would feed the curve its own result and the exposure would chase itself.
+        VkDescriptorImageInfo  ImageInfo{ VK_NULL_HANDLE, Vulkan->HistoryImageView, VK_IMAGE_LAYOUT_GENERAL };
+        VkDescriptorBufferInfo BufferInfo{ Vulkan->LuminanceBuffers[Slot], 0u, VK_WHOLE_SIZE };
+
+        std::array<VkWriteDescriptorSet, 2u> Writes{};
+        Writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        Writes[0].dstSet = Vulkan->LuminanceSets[Slot]; Writes[0].dstBinding = 0u;
+        Writes[0].descriptorCount = 1u; Writes[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        Writes[0].pImageInfo = &ImageInfo;
+        Writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        Writes[1].dstSet = Vulkan->LuminanceSets[Slot]; Writes[1].dstBinding = 1u;
+        Writes[1].descriptorCount = 1u; Writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        Writes[1].pBufferInfo = &BufferInfo;
+        vkUpdateDescriptorSets(Vulkan->Device, 2u, Writes.data(), 0u, nullptr);
+    }
+
+    // ③ Pipeline. Missing SPIR-V is not fatal: without it the exposure simply stays manual.
+    const std::vector<uint32_t> Spirv = LoadSpirv("Engine/Shaders/LuminanceReduce.spv");
+    if (Spirv.empty())
+    {
+        std::cerr << "[SwapchainExchange] LuminanceReduce.spv missing - adaptive exposure disabled.\n";
+        return true;
+    }
+
+    VkShaderModuleCreateInfo ModuleInfo{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
+    ModuleInfo.codeSize = Spirv.size() * 4u;
+    ModuleInfo.pCode    = Spirv.data();
+    VkShaderModule Module = VK_NULL_HANDLE;
+    if (vkCreateShaderModule(Vulkan->Device, &ModuleInfo, nullptr, &Module) != VK_SUCCESS) return false;
+
+    VkComputePipelineCreateInfo ComputeInfo{ VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO };
+    ComputeInfo.stage.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    ComputeInfo.stage.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
+    ComputeInfo.stage.module = Module;
+    ComputeInfo.stage.pName  = "main";
+    ComputeInfo.layout       = Vulkan->LuminanceLayout;
+    const VkResult Created = vkCreateComputePipelines(Vulkan->Device, VK_NULL_HANDLE, 1u, &ComputeInfo, nullptr,
+                                                      &Vulkan->LuminancePipeline);
+    vkDestroyShaderModule(Vulkan->Device, Module, nullptr);
+    return Created == VK_SUCCESS;
+}
 
 // A2. Builds the two constant atmosphere tables. Everything here runs ONCE at bring-up — the tables do not
 //    depend on the camera, the frame, or anything that changes between frames, only on the atmosphere itself.
@@ -2540,7 +2702,59 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
                 vkCmdDispatch(Command, DenoiseGroupX, DenoiseGroupY, 1u);
             }
         }
+
+        // ②a2 A6b — measure the frame's average log luminance for adaptive exposure. Recorded INSIDE the
+        //      DebugView::Off branch: a debug view writes false colours into the presentation image, and
+        //      exposing for a normal-map visualisation would be meaningless.
+        if (Vulkan->LuminancePipeline && Dispatch.SunIlluminance >= 0.0f)
+        {
+            // The kernel wrote HistoryImage this frame; the reduction reads it. Without this the reduction
+            //    races the kernel and measures a half-written frame, which would make the exposure jitter.
+            VkImageMemoryBarrier HistoryBarrier{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
+            HistoryBarrier.oldLayout                   = VK_IMAGE_LAYOUT_GENERAL;
+            HistoryBarrier.newLayout                   = VK_IMAGE_LAYOUT_GENERAL;
+            HistoryBarrier.srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+            HistoryBarrier.dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+            HistoryBarrier.image                       = Vulkan->HistoryImage;
+            HistoryBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            HistoryBarrier.subresourceRange.levelCount = 1u;
+            HistoryBarrier.subresourceRange.layerCount = 1u;
+            HistoryBarrier.srcAccessMask               = VK_ACCESS_SHADER_WRITE_BIT;
+            HistoryBarrier.dstAccessMask               = VK_ACCESS_SHADER_READ_BIT;
+            vkCmdPipelineBarrier(Command, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                 0u, 0u, nullptr, 0u, nullptr, 1u, &HistoryBarrier);
+
+            // The accumulator is cleared on the GPU rather than the CPU: clearing the mapped pointer here would
+            //    race the previous frame's dispatch, which may still be adding to it.
+            vkCmdFillBuffer(Command, Vulkan->LuminanceBuffers[Vulkan->ActiveSlot], 0u, 16u, 0u);
+            VkBufferMemoryBarrier ClearBarrier{ VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER };
+            ClearBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            ClearBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            ClearBarrier.buffer              = Vulkan->LuminanceBuffers[Vulkan->ActiveSlot];
+            ClearBarrier.size                = VK_WHOLE_SIZE;
+            ClearBarrier.srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT;
+            ClearBarrier.dstAccessMask       = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+            vkCmdPipelineBarrier(Command, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                 0u, 0u, nullptr, 1u, &ClearBarrier, 0u, nullptr);
+
+            LuminancePushRecord Push{};
+            Push.Width  = RenderWidth;
+            Push.Height = RenderHeight;
+            // Exposure is a whole-frame property, so a subsample is plenty: at 1080p this is ~2 000 taps
+            //    rather than two million, and the pass does not appear in a frame time.
+            Push.Stride = kLuminanceSampleStride;
+
+            const uint32_t TapsX = (RenderWidth  + Push.Stride - 1u) / Push.Stride;
+            const uint32_t TapsY = (RenderHeight + Push.Stride - 1u) / Push.Stride;
+
+            vkCmdBindPipeline(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Vulkan->LuminancePipeline);
+            vkCmdPushConstants(Command, Vulkan->LuminanceLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0u, sizeof(Push), &Push);
+            vkCmdBindDescriptorSets(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Vulkan->LuminanceLayout,
+                                    0u, 1u, &Vulkan->LuminanceSets[Vulkan->ActiveSlot], 0u, nullptr);
+            vkCmdDispatch(Command, (TapsX + 7u) / 8u, (TapsY + 7u) / 8u, 1u);
+        }
     }
+
     Visibility.RecordKernelEnd(Command, Vulkan->ActiveSlot);
 
     // ②b Project overlay (SpatialInterface) — draws world-space figures onto the resolved scene before the blit, so

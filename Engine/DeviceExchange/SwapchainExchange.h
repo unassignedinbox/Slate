@@ -237,6 +237,11 @@ public:
     [[nodiscard]] uint32_t QueryDepthFormat()     const noexcept;   // VkFormat, or VK_FORMAT_UNDEFINED when depthless
     [[nodiscard]] uint32_t QueryCycleSlotCount()  const noexcept;   // frames in flight — the overlay sizes rings to this
     [[nodiscard]] uint32_t QueryCycleSlot()       const noexcept;   // slot the frame now being recorded belongs to
+
+    // A6b. The average LOG luminance the reduction pass measured, or a negative value when no measurement is
+    //    available yet. Reads the slot the GPU has already finished with, so it never stalls: the value is one
+    //    or two frames stale, which is invisible against adaptation time constants measured in seconds.
+    [[nodiscard]] float QueryAverageLogLuminance() const noexcept;
     [[nodiscard]] uint32_t QueryTargetGeneration() const noexcept { return TargetGeneration; }
 
     //--------------------------------------------------------------------------------------------------------------------
@@ -264,6 +269,7 @@ private:
     [[nodiscard]] bool  BringDescriptorSet()    noexcept;
     [[nodiscard]] bool  BringDenoisePipeline()  noexcept;   // R7: à-trous filter, its own small descriptor set
     [[nodiscard]] bool  BringAtmosphereTables() noexcept;   // A2: the two constant atmosphere LUTs
+    [[nodiscard]] bool  BringLuminanceReduction() noexcept; // A6b: the average-log-luminance pass
     [[nodiscard]] bool  BringCommandRecording() noexcept;
     [[nodiscard]] bool  BringCycleSlots()       noexcept;
     [[nodiscard]] bool  BringImGui()            noexcept;

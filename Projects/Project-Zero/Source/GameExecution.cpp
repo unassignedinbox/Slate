@@ -488,6 +488,8 @@ int main(int argc, char** argv)
     float BrowserSkyQuality = 2.0f, BrowserSunLux = 120000.0f, BrowserAltitude = 2.0f;
     float BrowserTimeOfDay  = 12.0f, BrowserClockRate = 0.0f, BrowserLatitude = 45.0f;
     bool  BrowserSkyLighting = true;
+    bool  BrowserAutoExposure = true;
+    char  BrowserExposureText[48] = "-";
     char  BrowserSunElevationText[32]  = "-";
     char  BrowserSunAzimuthText[32]    = "-";
     char  BrowserMoonPhaseText[32]     = "-";
@@ -569,7 +571,9 @@ int main(int argc, char** argv)
                     Heading("Render Settings");
                     Slider("Candidates",      &BrowserCandidates, 1.0f, 32.0f, "", 0u);
                     Slider("Extra candidates",&BrowserExtra,      0.0f,  8.0f, "", 0u);
+                    Toggle("Auto exposure",   &BrowserAutoExposure);
                     Slider("Exposure",        &BrowserExposure,   0.1f,  4.0f, "", 2u);
+                    Readout("Adapted",        BrowserExposureText);
                     Toggle("Temporal reuse",  &BrowserTemporal);
                     Toggle("Spatial reuse",   &BrowserSpatial);
                     Toggle("Alias pick",      &BrowserAlias);
@@ -1081,6 +1085,11 @@ int main(int argc, char** argv)
             BrowserSunLux     = Cfg.SunIlluminance;
             BrowserAltitude   = Cfg.CameraAltitude;
             BrowserSkyLighting= Cfg.SkyLighting;
+            BrowserAutoExposure = Integrator.Exposure().QueryConfiguration().Mode
+                                == Frontier::ExposureModeCategory::Adaptive;
+            std::snprintf(BrowserExposureText, sizeof(BrowserExposureText), "%.3f  (scene %.4f)",
+                          static_cast<double>(Integrator.Exposure().QueryExposure()),
+                          static_cast<double>(Integrator.Exposure().QueryAdaptedLuminance()));
             BrowserClockRate  = static_cast<float>(Integrator.Celestial().QueryRate());
             {
                 const Frontier::CelestialConfiguration& Site = Integrator.Celestial().QueryConfiguration();
@@ -1205,6 +1214,19 @@ int main(int argc, char** argv)
                 static_cast<uint32_t>(BrowserSkyQuality + 0.5f)));
             Integrator.AssignSunIlluminance(BrowserSunLux);
             Integrator.AssignSkyLighting(BrowserSkyLighting);
+            {
+                Frontier::ExposureConfiguration Adapt = Integrator.Exposure().QueryConfiguration();
+                const Frontier::ExposureModeCategory Want = BrowserAutoExposure
+                    ? Frontier::ExposureModeCategory::Adaptive : Frontier::ExposureModeCategory::Manual;
+                if (Adapt.Mode != Want)
+                {
+                    Adapt.Mode = Want;
+                    Integrator.Exposure().AssignConfiguration(Adapt);
+                    // Snap on the way into adaptive, or the first seconds show the manual exposure easing away
+                    //    from a value that was never a measurement.
+                    if (Want == Frontier::ExposureModeCategory::Adaptive) Integrator.Exposure().Snap();
+                }
+            }
 
             {
                 Frontier::CelestialConfiguration Site = Integrator.Celestial().QueryConfiguration();
@@ -1241,6 +1263,15 @@ int main(int argc, char** argv)
         // A3 — advance the sky's clock. This is the ONLY place time moves; every sun, moon and star position is
         //    derived from it, so there is nothing else to keep in step.
         Integrator.Celestial().Advance(Δτ);
+
+        // A6b — adaptive exposure. The measurement is one or two frames stale because it is read from the cycle
+        //    slot the GPU has already finished with; against time constants of half a second and up that is
+        //    invisible, and it is what keeps the read from stalling the CPU on the GPU.
+        {
+            const float Measured = Surface.QueryAverageLogLuminance();
+            if (Measured > -1.0e8f) Integrator.Exposure().ObserveLuminance(Measured);
+            Integrator.Exposure().Advance(Δτ);
+        }
 
         Integrator.ObserveCamera(Camera, RenderWidth, RenderHeight);
         if (Telemetry.QueryRows().ShowScene)

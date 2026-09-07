@@ -98,7 +98,10 @@ DispatchConfiguration ReSTIRIntegrator::BuildDispatch(
     Dispatch.CameraRightX          = Right.x;
     Dispatch.CameraRightY          = Right.y;
     Dispatch.CameraRightZ          = Right.z;
-    Dispatch.Exposure              = ActiveConfiguration.Exposure;
+    // A6b. ONE exposure value reaches the shader, whether it came from the slider or from adaptation. Manual
+    //    mode returns the configured value unchanged, so every pre-A6b image is still reproducible, and the two
+    //    modes cannot become two code paths that disagree about what the tone map receives.
+    Dispatch.Exposure              = Adaptation.QueryExposure();
     Dispatch.CameraUpX             = Up.x;
     Dispatch.CameraUpY             = Up.y;
     Dispatch.CameraUpZ             = Up.z;

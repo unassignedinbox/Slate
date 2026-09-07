@@ -49,7 +49,37 @@ grep -q 'float QueryExposure() const noexcept' Engine/DisplayPresentation/Exposu
 grep -q 'ExposureModeCategory::Manual) return Config.ManualExposure' Engine/DisplayPresentation/ExposureIntegrator.cpp \
     || { echo "  manual mode no longer bypasses adaptation — pre-A6b images are unreproducible"; Fail=1; }
 
-[ "$Fail" = "0" ] && echo "  log mean, frame-rate independence, asymmetry and bounds hold      PASS"
+# ── GPU wiring ───────────────────────────────────────────────────────────────────────────────────────────────────
+# ⚠️ The reduction must read the LINEAR history image, not the tone-mapped presentation image. Measuring the tone
+# map's own output feeds the curve its result and the exposure chases itself in a loop.
+grep -q 'Vulkan->HistoryImageView, VK_IMAGE_LAYOUT_GENERAL' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  the reduction is not reading the linear history image"; Fail=1; }
+
+# The kernel writes HistoryImage in the same command buffer; without a barrier the reduction measures a
+# half-written frame and the exposure jitters.
+grep -q 'HistoryBarrier.image                       = Vulkan->HistoryImage' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  the reduction does not wait for the kernel's history write"; Fail=1; }
+
+# ⚠️ The accumulator must be cleared ON THE GPU. Clearing the mapped pointer from the CPU races the previous
+# frame's dispatch, which may still be adding to it.
+grep -q 'vkCmdFillBuffer(Command, Vulkan->LuminanceBuffers' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  the accumulator is not cleared on the GPU — a CPU clear would race the previous frame"; Fail=1; }
+
+# The readback must use a slot the GPU has finished with, or it stalls the CPU for one scalar.
+grep -q '(Vulkan->ActiveSlot + 1u) % kCycleSlotCount' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  the readback does not use the completed cycle slot — it would stall"; Fail=1; }
+
+# The fixed-point scale is duplicated in the shader and the readback; a mismatch scales every measurement.
+ShaderScale=$(grep -oP 'kFixedScale\s*=\s*\K[0-9.]+' Engine/Shaders/LuminanceReduce.slang)
+HostScale=$(grep -oP 'FixedScale = \K[0-9.]+' Engine/DeviceExchange/SwapchainExchange.cpp)
+[ "${ShaderScale%.*}" = "${HostScale%.*}" ] \
+    || { echo "  fixed-point scale differs: shader $ShaderScale, readback $HostScale"; Fail=1; }
+
+# One exposure value reaches the shader, whichever mode is active.
+grep -q 'Dispatch.Exposure              = Adaptation.QueryExposure();' Engine/DisplayPresentation/ReSTIRIntegrator.cpp \
+    || { echo "  the dispatch does not take its exposure from the integrator"; Fail=1; }
+
+[ "$Fail" = "0" ] && echo "  log mean, frame-rate independence, bounds and GPU wiring hold     PASS"
 
 echo
 if [ "$Fail" = "0" ]; then echo "[Exposure] OK"; exit 0; else echo "[Exposure] FAILED"; exit 1; fi
