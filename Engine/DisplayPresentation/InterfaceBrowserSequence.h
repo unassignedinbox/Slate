@@ -77,16 +77,67 @@ struct PropertyRowRecord
 //    whose number is covered up.
 struct PropertyRowGeometry
 {
+    float LabelX        = 0.0f;   // [px]
+    float LabelY        = 0.0f;   // [px] relative to the row's top
+    float LabelWidth    = 0.0f;   // [px]
+    float ControlY      = 0.0f;   // [px] relative to the row's top
     float PillX         = 0.0f;   // [px]
     float PillWidth     = 0.0f;   // [px]
     float PillUnitWidth = 0.0f;   // [px]
     float SliderX       = 0.0f;   // [px]
     float SliderWidth   = 0.0f;   // [px]
     bool  SliderVisible = true;   // false when the row is too narrow for a slider to mean anything
+    bool  LabelAbove    = true;   // the control owns the full width on its own line
 };
 
 // InnerX / InnerWidth are the card's content box: everything this returns lies inside it.
-[[nodiscard]] PropertyRowGeometry SolvePropertyRow(float InnerX, float InnerWidth) noexcept;
+[[nodiscard]] PropertyRowGeometry SolvePropertyRow(float InnerX, float InnerWidth, PropertyKindCategory Kind) noexcept;
+
+// The height one row of this kind occupies, including the label line when it has one.
+[[nodiscard]] float QueryPropertyRowHeight(PropertyKindCategory Kind) noexcept;
+
+//------------------------------------------------------------------------------------------------------------------------
+//                                                    PANEL LAYOUT
+//------------------------------------------------------------------------------------------------------------------------
+
+// 🔴 ONE layout, consumed twice. The card backgrounds and the rows used to be positioned by two separate walks
+//    over the same list, each doing its own arithmetic — and they disagreed: a card was drawn 14 px taller than
+//    the space it had claimed, so every card overlapped the top of the one below it. Two passes that must agree
+//    about geometry will eventually not, so there is now one pass and both consumers read its output.
+struct PanelPlacement
+{
+    PlaneExtent Extent{};              // where it goes
+    uint32_t    Row = 0xFFFFFFFFu;     // index into the property list, or kOutlinerNoRow for a card background
+};
+
+struct PanelLayout
+{
+    std::vector<PanelPlacement> Cards;   // one per Heading, in order
+    std::vector<PanelPlacement> Rows;    // one per non-Heading row, in order
+    float Height = 0.0f;                 // [px] total, so the pane knows how far it can scroll
+};
+
+// Spacing is DERIVED from the tokens below rather than written out at each site, which is what makes it
+//    possible to state — and then assert — that nothing overlaps anything.
+//    They come from References/WorldBrowser-Mock.html: .pcard{padding:14px 16px 16px;margin-bottom:12px},
+//    h4{margin-bottom:12px}, .prow{min-height:30px;margin-bottom:10px}.
+struct PanelSpacing
+{
+    static constexpr float CardPadTop    = 14.0f;
+    static constexpr float CardPadSide   = 16.0f;
+    static constexpr float CardPadBottom = 16.0f;
+    static constexpr float CardGap       = 12.0f;
+    static constexpr float HeadingHeight = 14.0f;
+    static constexpr float HeadingGap    = 12.0f;
+    static constexpr float RowGap        = 10.0f;
+    static constexpr float ControlHeight = 30.0f;
+    static constexpr float LabelHeight   = 15.0f;
+    static constexpr float LabelGap      = 5.0f;
+    static constexpr float NotesHeight   = 72.0f;
+};
+
+[[nodiscard]] PanelLayout SolvePanelLayout(const std::vector<PropertyRowRecord>& Rows,
+                                           float CardX, float CardWidth, float TopY) noexcept;
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                       SEQUENCE

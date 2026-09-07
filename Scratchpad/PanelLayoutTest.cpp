@@ -23,6 +23,8 @@
 
 #include "DisplayPresentation/ControlKit.h"
 #include "DisplayPresentation/ThemeStructure.h"
+
+#include <vector>
 #include "DisplayPresentation/InterfaceBrowserSequence.h"
 
 #include <cmath>
@@ -54,7 +56,7 @@ int main()
         std::printf("     inner width   pill        slider          fits\n");
         for (float InnerWidth = 60.0f; InnerWidth <= 460.0f; InnerWidth += 1.0f)
         {
-            const PropertyRowGeometry G = SolvePropertyRow(InnerX, InnerWidth);
+            const PropertyRowGeometry G = SolvePropertyRow(InnerX, InnerWidth, PropertyKindCategory::Slider);
             const float Right = InnerX + InnerWidth;
 
             if (G.PillX + G.PillWidth > Right + 0.01f) Inside = false;
@@ -63,7 +65,7 @@ int main()
 
             // The pill leads and the slider follows, and they may not overlap — an overlap is what drew a track
             //    across the unit cell and hid the number the row exists to show.
-            if (G.SliderVisible && G.SliderX < G.PillX + G.PillWidth - 0.01f) Disjoint = false;
+            if (G.SliderVisible && G.PillX < G.SliderX + G.SliderWidth - 0.01f) Disjoint = false;
             if (G.PillWidth < 20.0f) Ordered = false;
 
             if (std::fmod(InnerWidth, 100.0f) < 0.5f)
@@ -74,7 +76,7 @@ int main()
                             G.SliderVisible ? "slider" : "pill only");
         }
         Expect(Inside,   "every element stays inside the card across a 400 px sweep of pane widths");
-        Expect(Disjoint, "the slider never overlaps the value pill");
+        Expect(Disjoint, "the value pill never overlaps the slider");
         Expect(Ordered,  "the pill always has width to draw into");
 
         // And the old arithmetic, so the regression is recognisable if it comes back. 104 reserved, 118 drawn,
@@ -100,7 +102,7 @@ int main()
         Expect(ControlKit::PropertyPillWidth < ControlKit::ValuePillWidth,
                "and it is a different, narrower pill from the Notch inspectors' — hence the parameter");
 
-        const PropertyRowGeometry G = SolvePropertyRow(0.0f, 400.0f);
+        const PropertyRowGeometry G = SolvePropertyRow(0.0f, 400.0f, PropertyKindCategory::Slider);
         Expect(std::fabs(G.PillWidth - ControlKit::PropertyPillWidth) < 0.01f,
                "a roomy row uses the full pill width unshrunk");
         Expect(G.PillUnitWidth < G.PillWidth,
@@ -108,38 +110,33 @@ int main()
     }
 
     //------------------------------------------------------------------------------------------------------------------
-    std::printf("\n3. space is given up in a defined order as the pane narrows\n");
+    std::printf("\n3. the label goes above, so the slider gets the whole width\n");
     {
-        // The slider yields first because it stays usable while it shrinks; the pill only starts giving up room
-        //    once the slider is at its minimum; the label never moves.
-        const PropertyRowGeometry Roomy  = SolvePropertyRow(0.0f, 400.0f);
-        const PropertyRowGeometry Tight  = SolvePropertyRow(0.0f, 300.0f);
-        const PropertyRowGeometry Narrow = SolvePropertyRow(0.0f, 250.0f);
+        // 🔴 The arrangement the reference editor uses, and the reason for it. Beside a 76 px label in a pane
+        //    this narrow the slider had about forty pixels — which is why the widths had to be negotiated at all,
+        //    and why the control was unusable. On its own line it gets the lot.
+        const float Inner = 250.0f;
+        const PropertyRowGeometry Above  = SolvePropertyRow(0.0f, Inner, PropertyKindCategory::Slider);
+        std::printf("     at %.0f px inner width the slider is %.0f px, the pill %.0f, label above: %s\n",
+                    static_cast<double>(Inner), static_cast<double>(Above.SliderWidth),
+                    static_cast<double>(Above.PillWidth), Above.LabelAbove ? "yes" : "no");
+        Expect(Above.LabelAbove,             "a slider row puts its label on its own line");
+        Expect(Above.SliderWidth > 120.0f,   "so the slider gets a usable width in a narrow pane");
+        Expect(Above.ControlY >= PanelSpacing::LabelHeight,
+               "and the control sits below the label rather than on top of it");
 
-        std::printf("     400 px: pill %.0f slider %.0f\n", static_cast<double>(Roomy.PillWidth),  static_cast<double>(Roomy.SliderWidth));
-        std::printf("     300 px: pill %.0f slider %.0f\n", static_cast<double>(Tight.PillWidth),  static_cast<double>(Tight.SliderWidth));
-        std::printf("     250 px: pill %.0f slider %.0f\n", static_cast<double>(Narrow.PillWidth), static_cast<double>(Narrow.SliderWidth));
+        // The compact kinds stay beside their label, because they do not need the width and a two-line readout
+        //    would make the panel twice as tall for nothing.
+        const PropertyRowGeometry Beside = SolvePropertyRow(0.0f, Inner, PropertyKindCategory::Readout);
+        Expect(!Beside.LabelAbove, "a readout stays on one line beside its label");
+        Expect(QueryPropertyRowHeight(PropertyKindCategory::Readout)
+             < QueryPropertyRowHeight(PropertyKindCategory::Slider),
+               "so it is the shorter of the two");
 
-        Expect(Tight.SliderWidth < Roomy.SliderWidth, "the slider is the first to give up room");
-        Expect(std::fabs(Tight.PillWidth - Roomy.PillWidth) < 0.01f,
-               "and the pill keeps its full width while the slider still has room to give");
-        Expect(Narrow.PillWidth < Roomy.PillWidth, "only then does the pill start to shrink");
-        Expect(Narrow.PillX == Roomy.PillX,        "the label holds its width while anything else can still give");
-
-        // It does yield eventually. Below the point where holding it would leave the pill nothing at all, a row
-        //    of pure label with no value on it tells the user less than a cramped one does.
-        const PropertyRowGeometry Extreme = SolvePropertyRow(0.0f, 100.0f);
-        Expect(Extreme.PillX < Roomy.PillX,   "at the extreme the label yields too, rather than crowding the value out");
-        Expect(Extreme.PillWidth >= 24.0f,    "and a value is still drawn");
-
-        // Below the point where a slider could express a position at all it is dropped rather than drawn as a
-        //    sliver nobody can aim at.
-        const PropertyRowGeometry Cramped = SolvePropertyRow(0.0f, 150.0f);
-        std::printf("     150 px: pill %.0f, slider %s\n", static_cast<double>(Cramped.PillWidth),
-                    Cramped.SliderVisible ? "drawn" : "dropped");
-        Expect(!Cramped.SliderVisible, "a slider narrower than its own thumb is dropped, not drawn");
-        Expect(Cramped.PillWidth > 0.0f && Cramped.PillX + Cramped.PillWidth <= 150.0f + 0.01f,
-               "and the number still fits and is still readable");
+        // Slider first, pill at the trailing edge, which is what gives every row the same right margin.
+        Expect(Above.SliderX < Above.PillX, "the slider leads and the pill trails, as the reference has it");
+        Expect(std::fabs((Above.PillX + Above.PillWidth) - Inner) < 0.01f,
+               "and the pill ends exactly at the content edge");
     }
 
     //------------------------------------------------------------------------------------------------------------------
@@ -178,6 +175,79 @@ int main()
         std::printf("     one wheel click moves %.0f px, against a %.0f px row\n",
                     static_cast<double>(Step), 32.0);
         Expect(Step > 16.0f && Step < 120.0f, "one click moves about a row and a half, not a page");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n4b. cards do not overlap, and every row is inside its own card\n");
+    {
+        // 🔴 Reported from a screenshot: the cards were drawn over one another. The backgrounds and the rows were
+        //    positioned by two separate walks over the same list, each doing its own arithmetic, and they
+        //    disagreed by exactly the card's bottom padding — so every card reached 14 px into the top of the one
+        //    below it. There is one layout now and both consumers read it, which is what makes this assertable.
+        std::vector<PropertyRowRecord> Rows;
+        const auto Add = [&](PropertyKindCategory Kind, const char* Label)
+        {
+            PropertyRowRecord R{}; R.Kind = Kind; R.Label = Label; Rows.push_back(R);
+        };
+        Add(PropertyKindCategory::Heading, "Clock");
+        Add(PropertyKindCategory::Slider,  "Time of day");
+        Add(PropertyKindCategory::Slider,  "Rate");
+        Add(PropertyKindCategory::Heading, "Position");
+        Add(PropertyKindCategory::Readout, "Elevation");
+        Add(PropertyKindCategory::Readout, "Azimuth");
+        Add(PropertyKindCategory::Heading, "Site");
+        Add(PropertyKindCategory::Slider,  "Latitude");
+
+        const PanelLayout Layout = SolvePanelLayout(Rows, 10.0f, 280.0f, 0.0f);
+        std::printf("     %zu cards, %zu rows, %.0f px tall\n",
+                    Layout.Cards.size(), Layout.Rows.size(), static_cast<double>(Layout.Height));
+        Expect(Layout.Cards.size() == 3u, "one card per heading");
+        Expect(Layout.Rows.size()  == 5u, "and one placement per non-heading row");
+
+        bool Separated = true, Ordered = true;
+        for (size_t I = 1; I < Layout.Cards.size(); ++I)
+        {
+            const float Gap = Layout.Cards[I].Extent.MinimumY - Layout.Cards[I - 1].Extent.MaximumY;
+            std::printf("     gap between card %zu and %zu: %.1f px\n", I - 1, I, static_cast<double>(Gap));
+            if (Gap < 0.0f) Separated = false;
+            if (std::fabs(Gap - PanelSpacing::CardGap) > 0.01f) Ordered = false;
+        }
+        Expect(Separated, "no card overlaps the one below it");
+        Expect(Ordered,   "and the gap between them is exactly the token, not an accident");
+
+        // Every row must lie inside a card, with the card's own padding respected on all four sides.
+        bool Contained = true;
+        for (const PanelPlacement& Row : Layout.Rows)
+        {
+            bool Inside = false;
+            for (const PanelPlacement& Card : Layout.Cards)
+            {
+                const bool Vertical = Row.Extent.MinimumY >= Card.Extent.MinimumY + PanelSpacing::CardPadTop - 0.01f
+                                   && Row.Extent.MaximumY <= Card.Extent.MaximumY - PanelSpacing::CardPadBottom + 0.01f;
+                const bool Horizontal = Row.Extent.MinimumX >= Card.Extent.MinimumX + PanelSpacing::CardPadSide - 0.01f
+                                     && Row.Extent.MaximumX <= Card.Extent.MaximumX - PanelSpacing::CardPadSide + 0.01f;
+                if (Vertical && Horizontal) Inside = true;
+            }
+            if (!Inside) Contained = false;
+        }
+        Expect(Contained, "every row sits inside a card, inside its padding");
+
+        // And rows must not overlap each other.
+        bool RowsApart = true;
+        for (size_t I = 1; I < Layout.Rows.size(); ++I)
+            if (Layout.Rows[I].Extent.MinimumY < Layout.Rows[I - 1].Extent.MaximumY - 0.01f) RowsApart = false;
+        Expect(RowsApart, "and no row overlaps the row above it");
+
+        // The old arithmetic, so the regression is recognisable: card height reached past the next card's top.
+        const float OldOverlap = 14.0f;   // the bottom padding, added after the last row's gap had already run
+        std::printf("     the previous layout drew each card %.0f px into the next one\n",
+                    static_cast<double>(OldOverlap));
+        Expect(OldOverlap > 0.0f, "the old layout really did overlap — this is the bug being fixed");
+
+        // Scroll extent must match the layout, or the pane cannot reach its own last row.
+        const float Bottom = Layout.Cards.back().Extent.MaximumY;
+        Expect(std::fabs(Bottom - Layout.Height) < 0.01f,
+               "the reported height reaches the bottom of the last card, so the pane can scroll to it");
     }
 
     //------------------------------------------------------------------------------------------------------------------

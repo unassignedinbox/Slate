@@ -14,11 +14,10 @@ namespace {
 
 constexpr float kPadX        = 20.0f;
 constexpr float kCardRadius  = 18.0f;
-constexpr float kRowGap      = 10.0f;
-constexpr float kPropRowH    = 30.0f;
-constexpr float kLabelW      = 76.0f;
-constexpr float kPillMinW    = 66.0f;    // the narrowest pill that still shows four digits and a unit
-constexpr float kSliderMinW  = 90.0f;
+// ⚠️ Spacing is NOT written out here any more. Every gap, pad and row height comes from PanelSpacing, which is
+//    transcribed from References/WorldBrowser-Mock.html, and the layout is derived from those rather than
+//    assembled from numbers chosen at each site. That is what makes "nothing overlaps anything" a property the
+//    proof can state, instead of something that happened to be true.
 constexpr float kSwatch      = 22.0f;
 constexpr float kDoubleClick = 0.35f;   // [s] window for the rename gesture
 
@@ -48,54 +47,114 @@ void FormatValue(char* Out, uint32_t Capacity, float Value, uint32_t Decimals) n
 //                                                    ROW GEOMETRY
 //------------------------------------------------------------------------------------------------------------------------
 
-PropertyRowGeometry SolvePropertyRow(float InnerX, float InnerWidth) noexcept
+float QueryPropertyRowHeight(PropertyKindCategory Kind) noexcept
 {
+    using S = PanelSpacing;
+    switch (Kind)
+    {
+        case PropertyKindCategory::Notes:  return S::LabelHeight + S::LabelGap + S::NotesHeight;
+        // 🔴 Two lines for the controls that need WIDTH. A slider beside a 76 px label in a pane this narrow had
+        //    about forty pixels left, which is a control nobody can aim at — it is why the widths had to be
+        //    negotiated at all. Given the whole row it is three hundred, which is what the reference shows.
+        case PropertyKindCategory::Slider:
+        case PropertyKindCategory::Vector: return S::LabelHeight + S::LabelGap + S::ControlHeight;
+        // Everything else is small and reads better beside its label than under it.
+        default:                           return S::ControlHeight;
+    }
+}
+
+PropertyRowGeometry SolvePropertyRow(float InnerX, float InnerWidth, PropertyKindCategory Kind) noexcept
+{
+    using S = PanelSpacing;
     PropertyRowGeometry Out{};
     const float Right = InnerX + InnerWidth;
 
-    // The label holds its width down to the point where holding it would leave the pill nothing at all. Below
-    //    that it yields too — a row of pure label with no value on it tells the user less than a cramped one,
-    //    and the alternative is arithmetic that goes negative and paints outside the card.
-    const float LabelWidth = std::clamp(InnerWidth - kPillMinW - 12.0f, 24.0f, kLabelW);
+    Out.LabelAbove = (Kind == PropertyKindCategory::Slider) || (Kind == PropertyKindCategory::Vector)
+                  || (Kind == PropertyKindCategory::Notes);
+    Out.LabelX     = InnerX;
+    Out.LabelY     = 0.0f;
 
-    Out.PillX     = InnerX + LabelWidth + 12.0f;
-    Out.PillWidth = ControlKit::PropertyPillWidth;
-    Out.SliderX   = Out.PillX + Out.PillWidth + 12.0f;
-    Out.SliderWidth = Right - Out.SliderX;
-
-    // Space is given up in the order a designer would give it up: the slider first, because it stays usable
-    //    while it shrinks, then the pill down to the narrowest that still shows a number and a unit. The label
-    //    never moves — a row with no name is not worth showing.
-    if (Out.SliderWidth < kSliderMinW)
+    if (!Out.LabelAbove)
     {
-        const float Wanted = kSliderMinW - Out.SliderWidth;
-        const float Spare  = std::max(Out.PillWidth - kPillMinW, 0.0f);
-        const float Given  = std::min(Wanted, Spare);
-        Out.PillWidth   -= Given;
-        Out.SliderX     -= Given;
-        Out.SliderWidth += Given;
+        // Beside: the label takes what it needs and the control sits at the trailing edge.
+        Out.LabelWidth = std::max(InnerWidth * 0.45f, 40.0f);
+        Out.ControlY   = 0.0f;
+        Out.PillWidth  = std::min(ControlKit::PropertyPillWidth, std::max(Right - (InnerX + Out.LabelWidth + 12.0f), 40.0f));
+        Out.PillX      = Right - Out.PillWidth;
+        Out.SliderVisible = false;
+        Out.SliderWidth   = 0.0f;
+        Out.SliderX       = Out.PillX;
+        Out.PillUnitWidth = std::min(ControlKit::PropertyPillUnitWidth, Out.PillWidth * 0.4f);
+        return Out;
     }
 
+    Out.LabelWidth = InnerWidth;
+    Out.ControlY   = S::LabelHeight + S::LabelGap;
+
+    // ⚠️ Slider FIRST, pill last, which is the reference's order and not the mock's. With the label above, the
+    //    numbers no longer form a column down the panel — that was the mock's reason for leading with the pill —
+    //    and putting the pill at the trailing edge gives every row the same right margin instead of a ragged one.
+    Out.PillWidth = ControlKit::PropertyPillWidth;
+    if (Out.PillWidth > InnerWidth * 0.5f) Out.PillWidth = std::max(InnerWidth * 0.5f, 40.0f);
+    Out.PillX     = Right - Out.PillWidth;
+
+    Out.SliderX     = InnerX;
+    Out.SliderWidth = std::max(Out.PillX - 12.0f - InnerX, 0.0f);
     // A slider narrower than its own thumb cannot express a position, so below that it is dropped and the pill
-    //    takes the room. A readable number beats a control nobody can aim at.
+    //    keeps the room. A readable number beats a control nobody can aim at.
     Out.SliderVisible = Out.SliderWidth >= ControlKit::SliderThumb + 6.0f;
     if (!Out.SliderVisible)
     {
         Out.SliderWidth = 0.0f;
-        Out.PillWidth   = std::clamp(Right - Out.PillX, 24.0f, ControlKit::PropertyPillWidth);
-        Out.SliderX     = Out.PillX + Out.PillWidth;
+        Out.PillWidth   = std::min(ControlKit::PropertyPillWidth, InnerWidth);
+        Out.PillX       = Right - Out.PillWidth;
     }
 
-    // ⚠️ The last word, whatever the arithmetic above decided. Nothing may be drawn outside the card, because
-    //    the card is the only thing the pane clips to and a control painted past it is painted onto the window
-    //    frame. Belt and braces: this is the invariant the proof asserts, so it is enforced where it is stated.
-    Out.PillX     = std::min(Out.PillX, std::max(Right - 24.0f, InnerX));
-    Out.PillWidth = std::clamp(Out.PillWidth, 0.0f, std::max(Right - Out.PillX, 0.0f));
-    Out.SliderX   = std::max(Out.SliderX, Out.PillX + Out.PillWidth);
-    if (Out.SliderVisible && Out.SliderX + Out.SliderWidth > Right)
-        Out.SliderWidth = std::max(Right - Out.SliderX, 0.0f);
-
     Out.PillUnitWidth = std::min(ControlKit::PropertyPillUnitWidth, Out.PillWidth * 0.4f);
+    return Out;
+}
+
+PanelLayout SolvePanelLayout(const std::vector<PropertyRowRecord>& Rows, float CardX, float CardWidth,
+                             float TopY) noexcept
+{
+    using S = PanelSpacing;
+    PanelLayout Out{};
+    float Y = TopY;
+
+    uint32_t Index = 0u;
+    while (Index < Rows.size())
+    {
+        // A card runs from a Heading to the row before the next one. A list that does not start with a Heading
+        //    still gets a card, because the rows have to live inside something.
+        const bool HasHeading = Rows[Index].Kind == PropertyKindCategory::Heading;
+        const float CardTop = Y;
+        float Inner = CardTop + S::CardPadTop;
+        if (HasHeading)
+        {
+            Inner += S::HeadingHeight + S::HeadingGap;
+            ++Index;
+        }
+
+        uint32_t First = Index;
+        for (; Index < Rows.size() && Rows[Index].Kind != PropertyKindCategory::Heading; ++Index)
+        {
+            const float Height = QueryPropertyRowHeight(Rows[Index].Kind);
+            // ⚠️ The gap belongs BETWEEN rows, not after every row. Adding it after the last one and then adding
+            //    the card's bottom padding on top is how the old layout ended up 14 px taller than the space it
+            //    had reserved, which is precisely the overlap.
+            if (Index > First) Inner += S::RowGap;
+            Out.Rows.push_back({ Spanning(CardX + S::CardPadSide, Inner,
+                                          std::max(CardWidth - S::CardPadSide * 2.0f, 1.0f), Height), Index });
+            Inner += Height;
+        }
+
+        const float CardBottom = Inner + S::CardPadBottom;
+        Out.Cards.push_back({ PlaneExtent{ CardX, CardTop, CardX + CardWidth, CardBottom }, kOutlinerNoRow });
+        Y = CardBottom + S::CardGap;
+    }
+
+    // The trailing gap is not content, so it does not count toward how far the pane can scroll.
+    Out.Height = Rows.empty() ? 0.0f : std::max(Y - S::CardGap - TopY, 0.0f);
     return Out;
 }
 
@@ -437,88 +496,80 @@ void InterfaceBrowserSequence::RecordProperties(PixelSpace& Surface, const Plane
 
     const float CardX = Extent.MinimumX + 18.0f;
     const float CardW = std::max(Extent.Width() - 36.0f, 120.0f);
-    // Same discipline as the outliner: lay out from a scrolled origin and clip. The Sky panel alone is taller
-    //    than the pane on any normal window, so without this the lower half of it simply could not be reached.
-    const float Origin = Extent.MinimumY + 14.0f - PropertyScroll;
-    float Y = Origin;
 
-    // Cards are opened by a Heading row and closed by the next one, so the project describes structure by
-    //    ordering alone and never computes a rectangle.
-    float CardTop   = Y;
-    bool  CardOpen  = false;
-    const auto CloseCard = [&]()
-    {
-        if (!CardOpen) return;
-        Surface.FillRectangle(Spanning(CardX, CardTop, CardW, Y - CardTop + 14.0f),
-                              ControlKit::Faded(ControlKit::Palette().Inset, Opacity), kCardRadius);
-        CardOpen = false;
-    };
+    if (Pointer.Wheel != 0.0f && Pointer.Enabled && ControlKit::Over(Extent, Pointer))
+        PropertyScroll = ControlKit::AdvanceScroll(PropertyScroll, Pointer.Wheel, PropertyContentHeight, Extent.Height());
+    // Selecting a shorter object shrinks the content under a scrolled pane, so this is re-clamped every frame.
+    PropertyScroll = ControlKit::AdvanceScroll(PropertyScroll, 0.0f, PropertyContentHeight, Extent.Height());
 
-    // First pass paints the card backgrounds behind the rows; the row pass then draws over them.
+    // 🔴 ONE layout, consumed twice. The backgrounds and the rows used to be placed by two separate walks doing
+    //    their own arithmetic, and they disagreed by exactly the card's bottom padding — so every card was drawn
+    //    14 px into the top of the one below it.
+    const PanelLayout Layout = SolvePanelLayout(Properties, CardX, CardW,
+                                                Extent.MinimumY + 14.0f - PropertyScroll);
+    PropertyContentHeight = Layout.Height + 28.0f;
+
+    for (const PanelPlacement& Card : Layout.Cards)
+        Surface.FillRectangle(Card.Extent, ControlKit::Faded(ControlKit::Palette().Inset, Opacity), kCardRadius);
+
+    // Headings sit in the padding their card reserved for them, so they cannot collide with the first row.
     {
-        float ScanY = Y; float ScanTop = Y; bool ScanOpen = false;
-        for (const PropertyRowRecord& R : Properties)
+        uint32_t CardIndex = 0u;
+        for (uint32_t Index = 0u; Index < Properties.size(); ++Index)
         {
-            if (R.Kind == PropertyKindCategory::Heading)
-            {
-                if (ScanOpen)
-                    Surface.FillRectangle(Spanning(CardX, ScanTop, CardW, ScanY - ScanTop + 14.0f),
-                                          ControlKit::Faded(ControlKit::Palette().Inset, Opacity), kCardRadius);
-                ScanTop = ScanY; ScanOpen = true;
-                ScanY += 30.0f;
-                continue;
-            }
-            ScanY += (R.Kind == PropertyKindCategory::Notes ? 80.0f : kPropRowH) + kRowGap;
+            if (Properties[Index].Kind != PropertyKindCategory::Heading) continue;
+            if (CardIndex >= Layout.Cards.size()) break;
+            const PlaneExtent& Card = Layout.Cards[CardIndex++].Extent;
+            ControlKit::TextLeading(Surface,
+                Spanning(Card.MinimumX + PanelSpacing::CardPadSide, Card.MinimumY + PanelSpacing::CardPadTop,
+                         std::max(Card.Width() - PanelSpacing::CardPadSide * 2.0f, 1.0f), PanelSpacing::HeadingHeight),
+                0.0f, ControlKit::Faded(ControlKit::Palette().TextFaint, Opacity), Properties[Index].Label, 10.5f);
         }
-        if (ScanOpen)
-            Surface.FillRectangle(Spanning(CardX, ScanTop, CardW, ScanY - ScanTop + 14.0f),
-                                  ControlKit::Faded(ControlKit::Palette().Inset, Opacity), kCardRadius);
     }
-    (void)CloseCard;
 
-    const float InnerX = CardX + 16.0f;
-    const float InnerW = CardW - 32.0f;
-
-    for (uint32_t Index = 0u; Index < Properties.size(); ++Index)
+    for (const PanelPlacement& Placement : Layout.Rows)
     {
+        const uint32_t Index = Placement.Row;
         PropertyRowRecord& R = Properties[Index];
 
-        if (R.Kind == PropertyKindCategory::Heading)
-        {
-            CardTop = Y; CardOpen = true;
-            ControlKit::TextLeading(Surface, Spanning(InnerX, Y + 12.0f, InnerW, 14.0f), 0.0f,
-                                    ControlKit::Faded(ControlKit::Palette().TextFaint, Opacity), R.Label, 10.5f);
-            Y += 30.0f;
-            continue;
-        }
+        const PlaneExtent Row = Placement.Extent;
+        const float Y     = Row.MinimumY;
+        const float RowH  = Row.Height();
+        const float InnerX = Row.MinimumX;
+        const float InnerW = Row.Width();
 
-        const float RowH = (R.Kind == PropertyKindCategory::Notes) ? 80.0f : kPropRowH;
-        const PlaneExtent Row = Spanning(InnerX, Y, InnerW, RowH);
+        // Rows entirely outside the pane are laid out but not drawn: the layout has to stay complete so the
+        //    scroll extent is right, while the drawing has no reason to touch what is off screen.
+        if (Row.MaximumY < Extent.MinimumY || Y > Extent.MaximumY) continue;
 
-        // The one place row widths are decided, shared with the proof that asserts they stay inside the card.
-        const PropertyRowGeometry Geometry = SolvePropertyRow(InnerX, InnerW);
+        const PropertyRowGeometry Geometry = SolvePropertyRow(InnerX, InnerW, R.Kind);
 
-        if (R.Kind != PropertyKindCategory::Notes)
-            ControlKit::TextLeading(Surface, Spanning(InnerX, Y, std::max(Geometry.PillX - InnerX - 12.0f, 8.0f), RowH),
-                                    0.0f, ControlKit::Faded(ControlKit::Palette().TextDim, Opacity), R.Label, 12.0f);
+        if (R.Kind != PropertyKindCategory::Notes || true)
+            ControlKit::TextLeading(Surface,
+                Spanning(Geometry.LabelX, Y + Geometry.LabelY, Geometry.LabelWidth,
+                         Geometry.LabelAbove ? PanelSpacing::LabelHeight : RowH),
+                0.0f, ControlKit::Faded(ControlKit::Palette().TextDim, Opacity), R.Label, 12.0f);
 
-        const float ControlX = InnerX + kLabelW + 12.0f;
-        const float ControlW = std::max(Row.MaximumX - ControlX, 40.0f);
+        const float ControlY = Y + Geometry.ControlY;
+        const float ControlX = Geometry.PillX;
+        const float ControlW = Geometry.PillWidth;
+        (void)ControlW;
 
         switch (R.Kind)
         {
             case PropertyKindCategory::Slider:
             {
-                // Row order is the kit's .crow: label → value pill → slider.
+                // Slider then pill, on the line under the label, matching the reference editor.
                 char Number[32];
                 FormatValue(Number, sizeof(Number), R.Value ? *R.Value : 0.0f, R.Decimals);
                 // Drawn at the width the row reserved for it — the same number on both sides, which is the
                 //    whole reason ValuePill takes one.
-                ControlKit::ValuePill(Surface, Geometry.PillX, Y + (RowH - 30.0f) * 0.5f, Number, R.Unit, Opacity,
+                ControlKit::ValuePill(Surface, Geometry.PillX, ControlY, Number, R.Unit, Opacity,
                                       Geometry.PillWidth, Geometry.PillUnitWidth);
                 if (!Geometry.SliderVisible) break;
 
-                const PlaneExtent Track = Spanning(Geometry.SliderX, Y, Geometry.SliderWidth, RowH);
+                const PlaneExtent Track = Spanning(Geometry.SliderX, ControlY, Geometry.SliderWidth,
+                                                   PanelSpacing::ControlHeight);
 
                 float Out = R.Value ? *R.Value : 0.0f;
                 const bool Dragging = (DragRow == Index);
@@ -535,7 +586,7 @@ void InterfaceBrowserSequence::RecordProperties(PixelSpace& Surface, const Plane
 
             case PropertyKindCategory::Switch:
             {
-                const float SwitchY = Y + (RowH - ControlKit::SwitchHeight) * 0.5f;
+                const float SwitchY = ControlY + (PanelSpacing::ControlHeight - ControlKit::SwitchHeight) * 0.5f;
                 const ControlHit Hit = ControlKit::Switch(Surface, ControlX, SwitchY, R.Flag && *R.Flag, Pointer, Opacity);
                 if (Hit.Clicked && R.Flag && !R.ReadOnly) *R.Flag = !*R.Flag;
                 break;
@@ -623,10 +674,8 @@ void InterfaceBrowserSequence::RecordProperties(PixelSpace& Surface, const Plane
             case PropertyKindCategory::Heading: break;   // handled above
         }
 
-        Y += RowH + kRowGap;
     }
 
-    PropertyContentHeight = (Y - Origin) + 14.0f;
     ControlKit::ScrollIndicator(Surface, Extent, PropertyScroll, PropertyContentHeight, Opacity);
 
     Surface.PopClip();

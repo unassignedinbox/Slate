@@ -91,14 +91,33 @@ grep -q 'width:104px;height:30px' References/WorldBrowser-Mock.html \
 grep -q 'PropertyPillWidth = 104.0f, PropertyPillUnitWidth = 36.0f' Engine/DisplayPresentation/ControlKit.h \
     || { echo "  the property pill constants no longer match the mock"; Fail=1; }
 
+# 🔴 ONE layout, consumed twice. The card backgrounds and the rows were positioned by two separate walks over the
+# same list, each doing its own arithmetic, and they disagreed by the card's bottom padding — so every card was
+# drawn 14 px into the top of the one below it. Two passes that must agree about geometry eventually will not.
+grep -q 'PanelLayout SolvePanelLayout' Engine/DisplayPresentation/InterfaceBrowserSequence.h \
+    || { echo "  the shared panel layout is gone — backgrounds and rows would drift apart again"; Fail=1; }
+grep -q 'const PanelLayout Layout = SolvePanelLayout' Engine/DisplayPresentation/InterfaceBrowserSequence.cpp \
+    || { echo "  the properties pane no longer draws from the shared layout"; Fail=1; }
+if grep -q 'float ScanY = Y; float ScanTop = Y;' Engine/DisplayPresentation/InterfaceBrowserSequence.cpp; then
+    echo "  the separate card-scanning pass is back — it is what caused the overlap"; Fail=1
+fi
+
+# ⚠️ Spacing is DERIVED from the tokens, not written at each site. Numbers chosen per call site are what made
+# "nothing overlaps anything" impossible to state, let alone assert.
+grep -q 'struct PanelSpacing' Engine/DisplayPresentation/InterfaceBrowserSequence.h \
+    || { echo "  the spacing tokens are gone"; Fail=1; }
+if grep -qE 'constexpr float k(RowGap|PropRowH|LabelW|SliderMinW|PillMinW)' Engine/DisplayPresentation/InterfaceBrowserSequence.cpp; then
+    echo "  loose spacing constants are back alongside PanelSpacing — there is one source or there are two"; Fail=1
+fi
+# The tokens are transcribed from the mock, which is the authority for them.
+grep -q 'padding:14px 16px 16px;margin-bottom:12px' References/WorldBrowser-Mock.html \
+    || { echo "  the mock's card padding changed — the tokens now describe nothing"; Fail=1; }
+
 # ⚠️ Row widths are solved in ONE place, shared with the proof. Layout arithmetic inlined into the drawing code is
 # arithmetic nothing can assert, which is how it drifted 14 px in the first place.
 grep -q 'PropertyRowGeometry SolvePropertyRow' Engine/DisplayPresentation/InterfaceBrowserSequence.h \
     || { echo "  the row solver is gone — its geometry would no longer be assertable"; Fail=1; }
-if grep -qE 'kSliderMinW\)' Engine/DisplayPresentation/InterfaceBrowserSequence.cpp \
-   && ! grep -q 'Out.SliderWidth < kSliderMinW' Engine/DisplayPresentation/InterfaceBrowserSequence.cpp; then
-    echo "  a slider minimum is being applied outside the solver again"; Fail=1
-fi
+
 
 # ── Scrolling ────────────────────────────────────────────────────────────────────────────────────────────────────
 # Both panes lay out from a scrolled origin and clip. Without the offset the rows below the fold are not merely
