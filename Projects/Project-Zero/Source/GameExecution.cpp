@@ -72,6 +72,8 @@ int main(int argc, char** argv)
     }
     if (ScenePath == "shaderball") ScenePath = "Projects/Project-Zero/Content/Scenes/ShaderBall.gltf";   // R4b material test level
     if (ScenePath == "showroom")   ScenePath = "Projects/Project-Zero/Content/Scenes/Showroom.gltf";     // P0 spatial-interface level
+    // A8: the open scene. The sky work can only be judged where the sky is actually visible.
+    if (ScenePath == "outdoor")    ScenePath = "Projects/Project-Zero/Content/Scenes/Outdoor.gltf";
     bool DropScene = false;
     if (ScenePath == "drop") { ScenePath = "Projects/Project-Zero/Content/Scenes/ShowroomDrop.gltf"; DropScene = true; }   // D4 physics level
 
@@ -110,6 +112,25 @@ int main(int argc, char** argv)
             else
                 std::cerr << "[Scene] Cornell export failed: " << Error << "\n";
         }
+        const bool IsOutdoor = ScenePath.find("Outdoor.gltf") != std::string::npos;
+        if (IsOutdoor && !std::filesystem::exists(ScenePath, FsError))
+        {
+            std::filesystem::create_directories(std::filesystem::path(ScenePath).parent_path(), FsError);
+            Frontier::ProjectZero::RayTracingSolver Open;
+            Open.ConstructOutdoorScene();
+            std::string Error;
+            // ⚠️ The encoder names the mesh "CornellBox" by default, and the camera branch below keys off that
+            //    name — without this the outdoor scene would load with the Cornell camera, indoors-facing.
+            Frontier::SceneEncodeConfiguration OutdoorNaming{};
+            OutdoorNaming.Name = "Outdoor";
+            if (Frontier::SceneCodec::Encode(ScenePath, Frontier::ReSTIRIntegrator::BuildTriangleIndex(Open),
+                                             Frontier::ReSTIRIntegrator::BuildMaterialDescriptors(Open), &Error,
+                                             OutdoorNaming))
+                std::cerr << "[Scene] Exported the outdoor scene to " << ScenePath << "\n";
+            else
+                std::cerr << "[Scene] Outdoor export failed: " << Error << "\n";
+        }
+
         const bool IsShaderBall = ScenePath.find("ShaderBall.gltf") != std::string::npos;
         if (IsShaderBall && !std::filesystem::exists(ScenePath, FsError))
         {
@@ -302,6 +323,13 @@ int main(int argc, char** argv)
         // Shader ball: 5 m back from the front row, 2.6 m up, pitched down ~22° so all four rows fit at 55° FoV.
         Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -6.2f, 2.6f });
         Camera.AssignOrientationEuler(-22.0f * 3.14159265f / 180.0f, 0.0f, 0.0f);
+    }
+    else if (Level.QueryName() == "Outdoor")
+    {
+        // Standing on open ground at eye height, looking north along +Y at the casters, pitched up 8° so the
+        //    horizon sits low in frame and most of the view is sky — which is the whole reason this scene exists.
+        Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -6.0f, 1.70f });
+        Camera.AssignOrientationEuler(8.0f * 3.14159265f / 180.0f, 0.0f, 0.0f);
     }
     else if (Level.QueryName() == "Showroom" || Level.QueryName() == "ShowroomDrop")
     {

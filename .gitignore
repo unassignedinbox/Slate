@@ -32,6 +32,8 @@ Scratchpad/InterfaceRasterTest
 #    bit-identity reference; the showroom is derived from ShowroomStructure.cpp and regenerates.
 Projects/Project-Zero/Content/Scenes/Showroom.gltf
 Projects/Project-Zero/Content/Scenes/ShowroomDrop.gltf
+# A8: regenerated on first run by --scene outdoor, same as the two above.
+Projects/Project-Zero/Content/Scenes/Outdoor.gltf
 
 # Jolt static library and Project-Physics build output (derived; rebuilt by Scripts/BuildJolt.sh and the toolchain scripts)
 ExternalPackages/jolt/lib/

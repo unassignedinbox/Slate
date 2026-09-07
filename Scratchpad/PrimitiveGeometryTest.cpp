@@ -151,6 +151,54 @@ int main(){
                "every rim vertex sits exactly on the 0.75 m radius");
     }
 
+    // ── Outdoor scene ────────────────────────────────────────────────────────────────────────────────────────
+    // A1-A7 built a sun, sky, sunset, moon, stars, skylight and adaptive exposure whose only window was a 13°
+    // oculus at 12.9° elevation. This scene exists to make that work visible, so what it must prove is exactly
+    // that: most of the frame is sky, and the sun is the only light.
+    printf("\noutdoor scene\n");
+    {
+        RayTracingSolver Open;
+        Open.ConstructOutdoorScene();
+
+        int Emissive = 0;
+        for (const auto& M : Open.QueryMaterials())
+            if (M.EmissiveRadiance.x > 0.0f || M.EmissiveRadiance.y > 0.0f || M.EmissiveRadiance.z > 0.0f) ++Emissive;
+
+        // Cast the default camera's frustum and count how much of it misses geometry.
+        const Vector3 Eye{ 0.0f, -6.0f, 1.70f };
+        const float Pitch = 8.0f * 3.14159265f / 180.0f;
+        const float TanHalf = std::tan(55.0f * 3.14159265f / 180.0f * 0.5f);
+        int Miss = 0, Total = 0, GroundHits = 0;
+        for (int Y = 0; Y < 90; ++Y)
+            for (int X = 0; X < 160; ++X)
+            {
+                const float Nx = ((X + 0.5f) / 160.0f * 2.0f - 1.0f) * TanHalf * (16.0f / 9.0f);
+                const float Ny = (1.0f - (Y + 0.5f) / 90.0f * 2.0f) * TanHalf;
+                Vector3 D{ Nx, std::cos(Pitch) - Ny * std::sin(Pitch), std::sin(Pitch) + Ny * std::cos(Pitch) };
+                const float L = std::sqrt(D.x * D.x + D.y * D.y + D.z * D.z);
+                D.x /= L; D.y /= L; D.z /= L;
+
+                RayStructure R{};
+                R.SpatialOrigin = Eye; R.RayDirection = D;
+                R.MinimumDistance = 0.001f; R.MaximumDistance = 1e30f;
+                const HitIntersection Hit = Open.EvaluateIntersection(R);
+                ++Total;
+                if (!Hit.ValidCondition) ++Miss;
+                else if (Hit.MaterialIndex == 0u) ++GroundHits;
+            }
+
+        const double SkyFraction = 100.0 * Miss / Total;
+        printf("  %zu triangles, %d emissive materials, %.1f%% of the frame is sky, %.1f%% is ground\n",
+               Open.QueryTriangles().size(), Emissive, SkyFraction, 100.0 * GroundHits / Total);
+
+        Expect(Emissive == 0,
+               "no emissive triangle — the sun is the only light, which is a live test of the A4 path");
+        Expect(SkyFraction > 40.0,
+               "most of the frame is sky, so a sunset can actually be judged");
+        Expect(GroundHits > 0,
+               "and the ground is still in shot, so shadows have somewhere to land");
+    }
+
     printf("\nassertions\n");
     Expect(Degenerate == 0, "no zero-area triangles reach the BVH");
     Expect(T.size() > 2000 && T.size() < 4000, "triangle budget is in the intended range for a 1650 SUPER");
