@@ -177,6 +177,41 @@ grep -q 'Push.ColourSaturation = Dispatch.ColourSaturation;' Engine/DeviceExchan
 grep -q 'if (Config.Mode == ExposureModeCategory::Manual) return 1.0f;' Engine/DisplayPresentation/ExposureIntegrator.cpp \
     || { echo "  manual exposure no longer keeps full colour — pre-A7d images are unreproducible"; Fail=1; }
 
+# ── A7e: incident metering ───────────────────────────────────────────────────────────────────────────────────────
+# 🔴 A frame changes when the camera moves; the light falling on the scene does not. Three metering rules in a row
+# reduced the sky's drift without removing it, because all three asked the frame. The anchor must come from the
+# SUN AND SKY, and the dead zone is what turns "smaller drift" into "no drift".
+grep -q 'void ExposureIntegrator::ObserveIlluminance' Engine/DisplayPresentation/ExposureIntegrator.cpp \
+    || { echo "  the exposure has no incident reading — the sky would drift with the camera again"; Fail=1; }
+grep -q 'Ease(Config.IncidentDeadZoneStops, Config.IncidentHandoverStops, Disagreement)' Engine/DisplayPresentation/ExposureIntegrator.cpp \
+    || { echo "  the dead zone is gone — the frame would always pull the exposure, however little"; Fail=1; }
+awk -v f="$(grep -oP 'IncidentDeadZoneStops\s*=\s*\K[0-9.]+' Engine/DisplayPresentation/ExposureIntegrator.h)" \
+    'BEGIN { exit !(f >= 1.0 && f <= 4.0) }' \
+    || { echo "  the dead zone is not a plausible width — too small drifts, too large ignores real scenes"; Fail=1; }
+
+# ⚠️ The incident figure must be camera-independent, which means it is derived from the SUN, not from anything
+# the camera carries. A solver that took a camera position would defeat the entire purpose.
+grep -q 'float QueryIlluminance(float SunIlluminance, float SunElevationRadians, float Turbidity)' Engine/DisplayPresentation/DaylightSolver.h \
+    || { echo "  the daylight solver's signature changed — check nothing camera-dependent crept into it"; Fail=1; }
+if grep -qE 'Camera|View|Pixel' Engine/DisplayPresentation/DaylightSolver.h; then
+    echo "  the daylight solver mentions the camera — an incident reading may not depend on where it stands"; Fail=1
+fi
+grep -q 'Adaptation.ObserveIlluminance' Engine/DisplayPresentation/ReSTIRIntegrator.cpp \
+    || { echo "  nothing supplies the incident reading, so the exposure falls back to the frame"; Fail=1; }
+grep -q 'Integrator.ObserveDaylight();' Projects/Project-Zero/Source/GameExecution.cpp \
+    || { echo "  the host never asks for the daylight reading"; Fail=1; }
+
+# 🔴 ONE description of the atmosphere on the CPU, shared by the exposure and the proofs. A second copy would
+# drift, and the drift would show as an exposure that disagreed with the sky it was exposing for.
+grep -q '#include "DisplayPresentation/AtmosphereModel.h"' Scratchpad/AtmosphereScatteringTest.cpp \
+    || { echo "  the atmosphere proof carries its own copy of the model again"; Fail=1; }
+grep -q '#include "AtmosphereModel.h"' Engine/DisplayPresentation/DaylightSolver.cpp \
+    || { echo "  the daylight solver is not using the shared atmosphere model"; Fail=1; }
+
+# Off restores pure frame metering, so every pre-A7e image is still reproducible.
+grep -q 'if (!Config.IncidentMetering || IncidentLuminance <= 0.0f)' Engine/DisplayPresentation/ExposureIntegrator.cpp \
+    || { echo "  incident metering can no longer be switched off"; Fail=1; }
+
 # ── The resize path ──────────────────────────────────────────────────────────────────────────────────────────────
 # 🔴 A resize destroys and recreates HistoryImageView, and the reduction's descriptor set binds it. Leaving that
 # set unwritten made the pass dispatch against a dead view every frame — "imageView 0x0 that is invalid or has

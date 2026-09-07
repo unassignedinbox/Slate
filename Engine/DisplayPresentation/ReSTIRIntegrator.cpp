@@ -28,6 +28,25 @@ ReSTIRIntegrator::ReSTIRIntegrator(ReSTIRIntegratorConfiguration InitialConfigur
 //                                                OBSERVE CAMERA
 //============================================================================================================================================
 
+void ReSTIRIntegrator::ObserveDaylight() noexcept
+{
+    // 🔴 The sun's own elevation and the air it shines through — nothing about where the camera is. That is the
+    //    property being bought: an exposure derived from these cannot move when the camera does.
+    const HorizonDirection Sun = Sky.QuerySunDirection();
+    const float Turbidity = QueryDiurnalTurbidity(ActiveConfiguration.SkyTurbidity,
+                                                  ActiveConfiguration.TurbiditySwing,
+                                                  Sky.QuerySolarDayFraction(Sky.QueryTime()));
+
+    // Sky off means there is no incident reading to give, and the exposure falls back to metering the frame —
+    //    which is right, because then the only light in the world is whatever the scene itself carries.
+    const bool SkyOn = ActiveConfiguration.SunIlluminance > 0.0f
+                    && ActiveConfiguration.SkyQuality != SkyQualityCategory::Off;
+    Adaptation.ObserveIlluminance(SkyOn
+        ? Daylight.QueryIlluminance(ActiveConfiguration.SunIlluminance,
+                                    static_cast<float>(Sun.Elevation), Turbidity)
+        : 0.0f);
+}
+
 void ReSTIRIntegrator::ObserveCamera(const ProjectZero::FlyThroughSolver& Camera,
                                      uint32_t ViewportWidth, uint32_t ViewportHeight) noexcept
 {

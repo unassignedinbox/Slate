@@ -1179,9 +1179,15 @@ int main(int argc, char** argv)
             }
             BrowserAutoExposure = Integrator.Exposure().QueryConfiguration().Mode
                                 == Frontier::ExposureModeCategory::Adaptive;
-            std::snprintf(BrowserExposureText, sizeof(BrowserExposureText), "%.3f  (scene %.4f)",
-                          static_cast<double>(Integrator.Exposure().QueryExposure()),
-                          static_cast<double>(Integrator.Exposure().QueryAdaptedLuminance()));
+            {
+                // The incident figure is shown beside the adapted one, because the whole question when the
+                //    exposure looks wrong is which of the two readings it is following.
+                const float Incident = Integrator.Exposure().QueryIncidentLuminance();
+                std::snprintf(BrowserExposureText, sizeof(BrowserExposureText), "%.3f  (scene %.4f, sky %.4f)",
+                              static_cast<double>(Integrator.Exposure().QueryExposure()),
+                              static_cast<double>(Integrator.Exposure().QueryAdaptedLuminance()),
+                              static_cast<double>(Incident));
+            }
             BrowserClockRate  = static_cast<float>(Integrator.Celestial().QueryRate());
             {
                 const Frontier::CelestialConfiguration& Site = Integrator.Celestial().QueryConfiguration();
@@ -1414,6 +1420,9 @@ int main(int argc, char** argv)
         //    slot the GPU has already finished with; against time constants of half a second and up that is
         //    invisible, and it is what keeps the read from stalling the CPU on the GPU.
         {
+            // A7e ⚠️ The incident reading FIRST, then the frame's. Both feed one reconciliation, and the order
+            //     only matters in that neither may be a frame stale with respect to the other.
+            Integrator.ObserveDaylight();
             const float Measured = Surface.QueryAverageLogLuminance();
             if (Measured > -1.0e8f) Integrator.Exposure().ObserveLuminance(Measured);
             Integrator.Exposure().Advance(Δτ);

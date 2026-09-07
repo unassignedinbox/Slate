@@ -9,7 +9,7 @@ Fail=0
 
 echo "[Atmosphere] physical behaviour"
 Binary="$(mktemp -u /tmp/Atmosphere.XXXXXX)"
-if ! g++ -std=c++20 -O2 -Wall -Wextra Scratchpad/AtmosphereScatteringTest.cpp -o "$Binary" 2>/tmp/Atmosphere.build; then
+if ! g++ -std=c++20 -O2 -Wall -Wextra -I Engine -I . Scratchpad/AtmosphereScatteringTest.cpp -o "$Binary" 2>/tmp/Atmosphere.build; then
     echo "  COMPILE FAILED"; sed 's/^/    /' /tmp/Atmosphere.build | head -20; exit 1
 fi
 "$Binary" || Fail=1
@@ -17,10 +17,14 @@ rm -f "$Binary"
 
 echo
 echo "[Atmosphere] the CPU port and the shader agree"
-# The harness is a verbatim port. If a constant is changed in one and not the other the proof silently stops
-# describing what the GPU runs, which is worse than having no proof.
+# The CPU port is verbatim. If a constant is changed in one and not the other the proof silently stops describing
+# what the GPU runs, which is worse than having no proof.
+#
+# ⚠️ The port lives in the ENGINE now, not in this harness: adaptive exposure needs the same model to work out
+# how much light the sky is putting on the scene, and a second copy would have been a third description of one
+# atmosphere. The proof and the exposure read the same file, and this is what keeps that file honest.
 Shader="Engine/Shaders/AtmosphereScattering.slang"
-Harness="Scratchpad/AtmosphereScatteringTest.cpp"
+Harness="Engine/DisplayPresentation/AtmosphereModel.h"
 for Constant in kPlanetRadius kAtmosphereThickness kRayleighScaleHeight kMieScaleHeight \
                 kMieScattering kMieExtinction kMieAsymmetry kOzoneCentre kOzoneWidth kSunAngularRadius; do
     ShaderValue=$(grep -oP "${Constant}\s*=\s*\K[0-9.e+-]+" "$Shader"  | head -1)
@@ -62,7 +66,7 @@ for Pair in "kTransmittanceWidth:kTransmittanceLutWidth" "kTransmittanceHeight:k
     ShaderName="${Pair%%:*}"; CppName="${Pair##*:}"
     ShaderValue=$(grep -oP "${ShaderName}\s*=\s*\K[0-9]+" Engine/Shaders/AtmosphereScattering.slang | head -1)
     CppValue=$(grep -oP "${CppName}\s*=\s*\K[0-9]+" Engine/DeviceExchange/SwapchainExchange.h | head -1)
-    HarnessValue=$(grep -oP "${ShaderName}\s*=\s*\K[0-9]+" Scratchpad/AtmosphereScatteringTest.cpp | head -1)
+    HarnessValue=$(grep -oP "${ShaderName}\s*=\s*\K[0-9]+" Engine/DisplayPresentation/AtmosphereModel.h | head -1)
     if [ "$ShaderValue" != "$CppValue" ] || [ "$ShaderValue" != "$HarnessValue" ]; then
         echo "  $ShaderName disagrees: shader $ShaderValue, C++ $CppValue, harness $HarnessValue"; Fail=1
     fi
@@ -170,7 +174,7 @@ for Pair in "Cells = :kCells     = " "H < :kThreshold = "; do
     ShaderToken="${Pair%%:*}"; HarnessToken="${Pair##*:}"
     ShaderValue=$(grep -oP "const float ${ShaderToken}\K[0-9.]+" Engine/Shaders/AtmosphereScattering.slang | head -1)
     [ -n "$ShaderValue" ] || ShaderValue=$(grep -oP "if \(${ShaderToken}\K[0-9.]+" Engine/Shaders/AtmosphereScattering.slang | head -1)
-    HarnessValue=$(grep -oP "${HarnessToken}\K[0-9.]+" Scratchpad/AtmosphereScatteringTest.cpp | head -1)
+    HarnessValue=$(grep -oP "${HarnessToken}\K[0-9.]+" Engine/DisplayPresentation/AtmosphereModel.h | head -1)
     if [ -n "$ShaderValue" ] && [ -n "$HarnessValue" ] && [ "${ShaderValue%f}" != "${HarnessValue%f}" ]; then
         echo "  star-field constant differs: shader $ShaderValue, harness $HarnessValue"; Fail=1
     fi
@@ -214,7 +218,7 @@ for Shader in Engine/Shaders/AtmosphereScattering.slang Engine/Shaders/ReSTIRVie
         echo "  $Shader still reads a raw Mie constant — that site would ignore turbidity"; Fail=1
     fi
 done
-if grep -qE 'Vec3\(kMie(Scattering|Extinction)\)' Scratchpad/AtmosphereScatteringTest.cpp; then
+if grep -qE 'Vec3\(kMie(Scattering|Extinction)\)' Engine/DisplayPresentation/AtmosphereModel.h; then
     echo "  the harness still reads a raw Mie constant — it would stop describing the shader"; Fail=1
 fi
 grep -q 'float MieScattering() { return kMieScattering \* gAerosolTurbidity; }' Engine/Shaders/AtmosphereScattering.slang \
@@ -294,12 +298,12 @@ for Shader in Engine/Shaders/AtmosphereScattering.slang Engine/Shaders/ReSTIRVie
     grep -q 'HitsGround' "$Shader" \
         || { echo "  $Shader does not add the ground where the ray ends on it"; Fail=1; }
 done
-grep -q 'GroundReflection' Scratchpad/AtmosphereScatteringTest.cpp \
+grep -q 'GroundReflection' Engine/DisplayPresentation/AtmosphereModel.h \
     || { echo "  the harness no longer ports the ground, so it cannot prove the cliff is gone"; Fail=1; }
 
 # The albedo is duplicated in the shader and the harness.
 ShaderAlbedo=$(grep -oP 'kGroundAlbedo\s*=\s*\K[0-9.]+' Engine/Shaders/AtmosphereScattering.slang | head -1)
-HarnessAlbedo=$(grep -oP 'kGroundAlbedo\s*=\s*\K[0-9.]+' Scratchpad/AtmosphereScatteringTest.cpp | head -1)
+HarnessAlbedo=$(grep -oP 'kGroundAlbedo\s*=\s*\K[0-9.]+' Engine/DisplayPresentation/AtmosphereModel.h | head -1)
 [ -n "$ShaderAlbedo" ] && [ "${ShaderAlbedo%f}" = "${HarnessAlbedo%f}" ] \
     || { echo "  ground albedo differs: shader '$ShaderAlbedo', harness '$HarnessAlbedo'"; Fail=1; }
 

@@ -93,6 +93,27 @@ struct ExposureConfiguration
     //    spend almost all of itself in the top decade and switch colour off like a light.
     float ScotopicCeiling   = 3.0f;    // [cd/m²] at and above this, colour is complete
     float ScotopicFloor     = 0.003f;  // [cd/m²] at and below this, vision is achromatic
+
+    // ── Incident metering ───────────────────────────────────────────────────────────────────────────────────
+    // 🔴 A frame changes when the camera moves; the light falling on the scene does not. Metering the frame is
+    //    why the sky kept changing brightness as the camera translated — reported four times, and each of the
+    //    three metering rules before this reduced it without being able to remove it, because all three asked
+    //    the frame. An incident reading is what a handheld meter gives with the dome on, and it is the same
+    //    wherever the camera stands.
+    //
+    //    ⚠️ It cannot simply REPLACE the frame reading, because the incident figure is the light on the OUTSIDE
+    //    of the world. Stand inside the Cornell box and the sky reaches the room through a hole in the roof; the
+    //    scene is then several stops darker than the sky above it, and exposing for the sky would render the
+    //    room black.
+    //
+    //    So there is a DEAD ZONE. While the frame agrees with the incident reading to within
+    //    IncidentDeadZoneStops, the incident reading wins outright — and that is what makes camera movement have
+    //    exactly no effect outdoors, rather than merely a reduced one. Past that the frame progressively takes
+    //    over, because a large disagreement is precisely the evidence that the camera is somewhere the sky
+    //    cannot reach.
+    bool  IncidentMetering       = true;    // false restores pure frame metering, the pre-A7e behaviour
+    float IncidentDeadZoneStops  = 2.0f;    // [stops] within this, the frame is ignored entirely
+    float IncidentHandoverStops  = 6.0f;    // [stops] beyond this, the frame is trusted entirely
 };
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -109,6 +130,15 @@ public:
     //    from Advance keeps this testable without a GPU: the whole adaptation curve is exercised by feeding a
     //    sequence of measurements.
     void ObserveLuminance(float AverageLogLuminance) noexcept;
+
+    // The scene's incident illuminance in lux, from DaylightSolver. Camera-independent by construction, which is
+    //    the entire point. Zero or negative means "not available", and the frame reading is used alone.
+    void ObserveIlluminance(float Lux) noexcept;
+
+    // What the adaptation is actually chasing, after the two readings have been reconciled. Exposed because the
+    //    reconciliation is the interesting part and a readout that showed only one of the inputs would hide it.
+    [[nodiscard]] float QueryObservedLuminance() const noexcept { return ObservedLuminance; }
+    [[nodiscard]] float QueryIncidentLuminance() const noexcept { return IncidentLuminance; }
 
     // Ease the adapted value toward the observed one. Δτ is the frame time.
     void Advance(float DeltaSeconds) noexcept;
@@ -136,8 +166,13 @@ public:
     [[nodiscard]] static float KeyForLuminance(float Luminance, const ExposureConfiguration& Config) noexcept;
 
 private:
+    // Reconciles the frame reading with the incident one into what the adaptation chases.
+    void Reconcile() noexcept;
+
     ExposureConfiguration Config{};
-    float ObservedLuminance = 0.18f;   // [cd/m²] the most recent measurement
+    float FrameLuminance    = 0.18f;   // [cd/m²] the most recent reading from the histogram
+    float IncidentLuminance = 0.0f;    // [cd/m²] an 18 % card under the scene's own light; 0 = unavailable
+    float ObservedLuminance = 0.18f;   // [cd/m²] the two reconciled — what the adaptation chases
     float AdaptedLuminance  = 0.18f;   // [cd/m²] what the eye currently believes
 };
 

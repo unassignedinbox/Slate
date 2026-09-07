@@ -9,6 +9,50 @@
 
 namespace Frontier {
 
+namespace {
+
+// Smoothstep, so the handover between the two readings has no corner in it. A hard switch would pop the moment
+//    the camera crossed a threshold, which is the very complaint this is answering.
+float Ease(float Edge0, float Edge1, float Value) noexcept
+{
+    if (Edge1 <= Edge0) return Value >= Edge1 ? 1.0f : 0.0f;
+    const float T = std::clamp((Value - Edge0) / (Edge1 - Edge0), 0.0f, 1.0f);
+    return T * T * (3.0f - 2.0f * T);
+}
+
+} // namespace
+
+void ExposureIntegrator::ObserveIlluminance(float Lux) noexcept
+{
+    // An incident meter is calibrated against an 18 % reflector: the luminance of a lambertian card of that
+    //    albedo under E lux is 0.18·E/π. That is the same 0.18 the key value uses, and not by coincidence — it
+    //    is what makes "expose for mid grey" and "read the light falling on the subject" the same instruction.
+    constexpr float kPi = 3.14159265358979f;
+    IncidentLuminance = (std::isfinite(Lux) && Lux > 0.0f) ? Lux * 0.18f / kPi : 0.0f;
+    Reconcile();
+}
+
+void ExposureIntegrator::Reconcile() noexcept
+{
+    if (!Config.IncidentMetering || IncidentLuminance <= 0.0f)
+    {
+        ObservedLuminance = FrameLuminance;   // the pre-A7e path, and the identity switch
+        return;
+    }
+
+    // 🔴 The dead zone is the whole mechanism. While the frame agrees with the incident reading, the incident
+    //    reading is used ALONE — so moving the camera about outdoors changes the frame, changes nothing that
+    //    reaches the exposure, and the sky holds absolutely still. A blend that always mixed in some frame
+    //    would only have made the drift smaller, and smaller was not what was asked for.
+    const float Disagreement = std::fabs(std::log2(std::max(FrameLuminance, 1.0e-9f)
+                                                 / std::max(IncidentLuminance, 1.0e-9f)));
+    const float Weight = Ease(Config.IncidentDeadZoneStops, Config.IncidentHandoverStops, Disagreement);
+
+    // Interpolated in LOG space: these differ by orders of magnitude, and a linear mix of 1e4 and 1e-1 is 1e4.
+    const float Blended = std::log(IncidentLuminance) * (1.0f - Weight) + std::log(FrameLuminance) * Weight;
+    ObservedLuminance = std::exp(Blended);
+}
+
 void ExposureIntegrator::ObserveLuminance(float AverageLogLuminance) noexcept
 {
     // The reduction pass reports a LOG mean; converting back here rather than there keeps the shader's job to
@@ -17,7 +61,8 @@ void ExposureIntegrator::ObserveLuminance(float AverageLogLuminance) noexcept
 
     // A NaN would propagate into the adapted value and never leave — every subsequent frame would compare
     //    against it and stay NaN, so the screen would go black permanently rather than for one frame.
-    ObservedLuminance = (std::isfinite(Linear) && Linear > Config.LuminanceFloor) ? Linear : Config.LuminanceFloor;
+    FrameLuminance = (std::isfinite(Linear) && Linear > Config.LuminanceFloor) ? Linear : Config.LuminanceFloor;
+    Reconcile();
 }
 
 void ExposureIntegrator::Advance(float DeltaSeconds) noexcept

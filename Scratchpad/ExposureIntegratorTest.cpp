@@ -664,6 +664,82 @@ int main()
                "manual exposure keeps full colour — every pre-A7d image is still reproducible");
     }
 
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n15. an incident reading makes camera movement a NO-OP, not merely a smaller one\n");
+    {
+        // 🔴 Reported four times: "the sky changes brightness when I move closer to or further from the box".
+        //    The observation that the SKY moves is what proves the cause — sky radiance depends on view
+        //    direction alone, so if it changes when the camera translates, it is the exposure. Three metering
+        //    rules in a row reduced it without removing it, because every one of them asked the frame, and a
+        //    frame changes when the framing does.
+        //
+        //    The light FALLING on a scene does not. Anchoring to that is the difference between a smaller drift
+        //    and no drift, and "smaller" is not what was asked for.
+        ExposureIntegrator Exposure;
+        ExposureConfiguration Config{};
+        Exposure.AssignConfiguration(Config);
+
+        const float Illuminance = 100000.0f;                       // a clear noon, from DaylightSolver
+        const float Anchor      = Illuminance * 0.18f / 3.14159265f;
+        Exposure.ObserveIlluminance(Illuminance);
+        std::printf("     100 klx incident -> an 18 %% card reads %.1f cd/m2\n",
+                    static_cast<double>(Exposure.QueryIncidentLuminance()));
+        Expect(std::fabs(Exposure.QueryIncidentLuminance() - Anchor) < 0.5f,
+               "the incident reading is the standard 0.18*E/pi calibration");
+
+        // Walk the camera about: the frame reading wanders, as it must. The exposure must not.
+        float Lowest = 1e30f, Highest = 0.0f;
+        std::printf("     frame reads      exposure\n");
+        for (float FrameStops : { -1.5f, -0.75f, 0.0f, 0.75f, 1.5f })
+        {
+            const float Frame = Anchor * std::exp2(FrameStops);
+            Exposure.ObserveLuminance(std::log(Frame));
+            Exposure.Snap();
+            const float E = Exposure.QueryExposure();
+            std::printf("     %11.1f   %.6e\n", static_cast<double>(Frame), static_cast<double>(E));
+            Lowest = std::fmin(Lowest, E); Highest = std::fmax(Highest, E);
+        }
+        std::printf("     across +/-1.5 stops of framing the exposure moved %.4f stops\n",
+                    static_cast<double>(std::log2(Highest / Lowest)));
+        Expect(std::log2(Highest / Lowest) < 1.0e-4f,
+               "inside the dead zone the exposure does not move AT ALL as the framing changes");
+
+        // ⚠️ And it must still be able to leave the dead zone. Standing inside the Cornell box, the room is
+        //    several stops below the sky over its roof, and exposing for the sky would render it black.
+        Exposure.ObserveLuminance(std::log(Anchor * std::exp2(-9.0f)));
+        Exposure.Snap();
+        const float Indoors = Exposure.QueryObservedLuminance();
+        std::printf("     nine stops below the sky, the reading follows the frame to %.4f\n",
+                    static_cast<double>(Indoors));
+        Expect(Indoors < Anchor * 0.05f, "a scene the sky cannot reach is metered from the frame, as it must be");
+
+        // The handover has no corner in it, or the image would pop as the camera crossed the threshold.
+        float Previous = 1e30f; bool Monotonic = true, Smooth = true;
+        float Last = -1.0f;
+        for (float Stops = 0.0f; Stops <= 9.0f; Stops += 0.25f)
+        {
+            ExposureIntegrator Probe; Probe.AssignConfiguration(Config);
+            Probe.ObserveIlluminance(Illuminance);
+            Probe.ObserveLuminance(std::log(Anchor * std::exp2(-Stops)));
+            Probe.Snap();
+            const float Observed = Probe.QueryObservedLuminance();
+            if (Observed > Previous + 1e-6f) Monotonic = false;
+            if (Last > 0.0f && std::log2(Last / std::fmax(Observed, 1e-12f)) > 0.75f) Smooth = false;
+            Previous = Observed; Last = Observed;
+        }
+        Expect(Monotonic, "a darker frame never raises the reading");
+        Expect(Smooth,    "and the handover is gradual — no step the camera could cross and make the image pop");
+
+        // Off, it is the pre-A7e behaviour exactly.
+        ExposureConfiguration Frame = Config;
+        Frame.IncidentMetering = false;
+        ExposureIntegrator Old; Old.AssignConfiguration(Frame);
+        Old.ObserveIlluminance(Illuminance);
+        Old.ObserveLuminance(std::log(1234.0f));
+        Expect(std::fabs(Old.QueryObservedLuminance() - 1234.0f) < 0.01f,
+               "with incident metering off the frame is used alone — the identity switch");
+    }
+
     std::printf("\n>>> %s (%d failure%s)\n", Failures == 0 ? "ALL PASS" : "FAILURES", Failures, Failures == 1 ? "" : "s");
     return Failures == 0 ? 0 : 1;
 }

@@ -13,6 +13,7 @@
 #include "../DeviceExchange/SwapchainExchange.h"
 #include "../ContentInterchange/MaterialDescriptor.h"
 #include "../GeometricRaster/CelestialSolver.h"
+#include "DaylightSolver.h"
 #include "ExposureIntegrator.h"
 #include "../../Projects/Project-Zero/Source/RayTracingSolver.h"
 #include "../../Projects/Project-Zero/Source/FlyThroughSolver.h"
@@ -235,6 +236,10 @@ public:
 
     // Compares the camera pose against the one used for the running history; a moved or turned camera
     //    (or a resized viewport) restarts accumulation so no stale radiance is blended in.
+    // A7e. Tell the exposure how much light the sky is putting on the scene. Camera-independent, so the sky
+    //    cannot change brightness when the camera moves — which no amount of metering the frame could achieve.
+    void ObserveDaylight() noexcept;
+
     void ObserveCamera(const ProjectZero::FlyThroughSolver& Camera, uint32_t ViewportWidth, uint32_t ViewportHeight) noexcept;
 
     [[nodiscard]] const ReSTIRIntegratorConfiguration& QueryConfiguration() const noexcept
@@ -252,6 +257,7 @@ private:
     ReSTIRIntegratorConfiguration ActiveConfiguration;  // [-]  live-tunable parameters
     CelestialSolver    Sky{};        // A3: the authoritative clock; see CelestialSolver.h
     ExposureIntegrator Adaptation{};  // A6b: adaptive exposure
+    DaylightSolver     Daylight{};    // A7e: the incident reading the exposure is anchored to
     // The sun direction the accumulated history was rendered under. A moving sun invalidates it exactly as a
     //    moving camera does — see ObserveCamera.
     mutable float   HistorySunX = 0.0f, HistorySunY = 0.0f, HistorySunZ = 0.0f;

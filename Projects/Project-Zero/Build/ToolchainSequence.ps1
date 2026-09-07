@@ -660,6 +660,7 @@ $EngineRelative = @(
     'Engine\DisplayPresentation\InterfaceBrowserSequence.cpp'
     'Engine\GeometricRaster\CelestialSolver.cpp'
     'Engine\DisplayPresentation\ExposureIntegrator.cpp'
+    'Engine\DisplayPresentation\DaylightSolver.cpp'
     'Engine\DisplayPresentation\DialogueHost.cpp'
     'Engine\DisplayPresentation\AppearanceInspector.cpp'
     'Engine\DisplayPresentation\ConfigurationInspector.cpp'
