@@ -81,6 +81,18 @@ struct ExposureConfiguration
     //    through at several times white — points of light on black, which is what a night sky is.
     float PhotopicLuminance = 5.0f;    // [cd/m²] at and above this the eye is fully light-adapted
     float ScotopicExponent  = 0.30f;   // [-]     0 = no dark adaptation at all, 1 = night renders as day
+
+    // ── Colour at low light ─────────────────────────────────────────────────────────────────────────────────
+    // 🔴 Cones stop responding before rods do, so below about 3 cd/m² colour drains out of what you see and by
+    //    0.003 it is gone entirely — you can still make out a landscape at midnight, but not what colour it is.
+    //    Rendering full saturation down there is what turns a faint pre-dawn glow into a lurid orange band:
+    //    measured on the deep-twilight sky, the horizon at 15° below the horizon is 0.078 cd/m² and every bit
+    //    of it is red, so the red channel saturates while blue stays black.
+    //
+    //    The ramp is in LOG luminance, because that span is three orders of magnitude and a linear ramp would
+    //    spend almost all of itself in the top decade and switch colour off like a light.
+    float ScotopicCeiling   = 3.0f;    // [cd/m²] at and above this, colour is complete
+    float ScotopicFloor     = 0.003f;  // [cd/m²] at and below this, vision is achromatic
 };
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -107,6 +119,10 @@ public:
 
     // The adapted scene luminance, for display.
     [[nodiscard]] float QueryAdaptedLuminance() const noexcept { return AdaptedLuminance; }
+
+    // How much colour the eye still has at the adapted level: 1 in daylight, 0 under starlight. The tone map
+    //    mixes toward grey by this, which is what keeps a faint glow faint instead of lurid.
+    [[nodiscard]] float QueryColourSaturation() const noexcept;
 
     // Jump straight to the measurement, with no easing. For a camera cut or a scene load, where easing would
     //    show the viewer several seconds of the previous scene's exposure.

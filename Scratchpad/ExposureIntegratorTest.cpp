@@ -587,6 +587,83 @@ int main()
                "a daylight landscape still meters as daylight, not as the darkest thing in it");
     }
 
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n14. colour drains out of the image at the light levels where it drains out of the eye\n");
+    {
+        // 🔴 Reported as "sunrise still looks like a sunset in reverse, there is no white line on the horizon",
+        //    with screenshots taken between 15 and 27 degrees BELOW the horizon — an hour or two before sunrise.
+        //    The model is right about the light there: the horizon glow at −15° measures 0.078 cd/m². What was
+        //    wrong is that it was rendered at full saturation, and it is almost entirely red, so the red channel
+        //    clipped while blue stayed black and a faint glow became a lurid orange band.
+        //
+        //    Cones give out before rods do. Below about 3 cd/m² colour drains from what a person sees and by
+        //    0.003 it is gone — you can still make out a landscape at midnight but not what colour it is.
+        ExposureIntegrator Exposure;
+        ExposureConfiguration Config{};
+        Exposure.AssignConfiguration(Config);
+
+        std::printf("     adapted luminance   colour\n");
+        struct Row { const char* Name; float Luminance; };
+        const Row Rows[] = {
+            { "noon",              8000.0f },
+            { "overcast",          2000.0f },
+            { "a lit room",           30.0f },
+            { "deep dusk",             1.0f },
+            { "pre-dawn glow",         0.05f },
+            { "starlight",           1.0e-4f },
+        };
+        float Previous = 2.0f;
+        bool  Monotonic = true;
+        for (const Row& R : Rows)
+        {
+            Exposure.ObserveLuminance(std::log(R.Luminance));
+            Exposure.Snap();
+            const float S = Exposure.QueryColourSaturation();
+            std::printf("     %-18s %10.4f  %6.2f\n", R.Name, static_cast<double>(R.Luminance),
+                        static_cast<double>(S));
+            if (S > Previous + 1e-6f) Monotonic = false;
+            Previous = S;
+        }
+        Expect(Monotonic, "colour never increases as the scene darkens");
+
+        Exposure.ObserveLuminance(std::log(8000.0f)); Exposure.Snap();
+        Expect(std::fabs(Exposure.QueryColourSaturation() - 1.0f) < 1e-6f,
+               "daylight is fully saturated — nothing about a normal scene changes");
+        Exposure.ObserveLuminance(std::log(1.0e-4f)); Exposure.Snap();
+        Expect(Exposure.QueryColourSaturation() < 0.01f,
+               "and starlight is achromatic, as it is to the eye");
+
+        // 🔴 The specific frame that was wrong. A red-dominated glow at 0.078 cd/m², rendered with and without.
+        Exposure.ObserveLuminance(std::log(0.0016f));   // what the meter anchors on in a pre-dawn frame
+        Exposure.Snap();
+        const float S = Exposure.QueryColourSaturation();
+        const float R = 0.150f, G = 0.017f, B = 0.0033f;          // the measured pre-dawn horizon, linear
+        const float Y = 0.2126f * R + 0.7152f * G + 0.0722f * B;
+        const float Rm = Y + (R - Y) * S, Bm = Y + (B - Y) * S;
+        std::printf("     the −15° horizon: R/B %.0f at full colour, %.2f after desaturation (sat %.2f)\n",
+                    static_cast<double>(R / B), static_cast<double>(Rm / std::fmax(Bm, 1e-9f)),
+                    static_cast<double>(S));
+        Expect(R / B > 20.0f,                     "the glow really is almost pure red — this is why it looked lurid");
+        Expect(Rm / std::fmax(Bm, 1e-9f) < 2.0f,  "and desaturated it is very nearly neutral — a pale band");
+
+        // ⚠️ And sunrise itself must be untouched: the whole point is to fix the hour BEFORE it, not to wash
+        //    the colour out of the thing the user is waiting for.
+        Exposure.ObserveLuminance(std::log(160.0f));   // the frame at actual sunrise
+        Exposure.Snap();
+        std::printf("     at sunrise the adapted level is photopic, colour %.2f\n",
+                    static_cast<double>(Exposure.QueryColourSaturation()));
+        Expect(Exposure.QueryColourSaturation() > 0.99f, "sunrise keeps all of its colour");
+
+        // Manual mode is the identity switch for the whole adaptive path, and that must include this.
+        ExposureConfiguration Manual = Config;
+        Manual.Mode = ExposureModeCategory::Manual;
+        ExposureIntegrator Fixed;
+        Fixed.AssignConfiguration(Manual);
+        Fixed.ObserveLuminance(std::log(1.0e-4f)); Fixed.Snap();
+        Expect(std::fabs(Fixed.QueryColourSaturation() - 1.0f) < 1e-6f,
+               "manual exposure keeps full colour — every pre-A7d image is still reproducible");
+    }
+
     std::printf("\n>>> %s (%d failure%s)\n", Failures == 0 ? "ALL PASS" : "FAILURES", Failures, Failures == 1 ? "" : "s");
     return Failures == 0 ? 0 : 1;
 }

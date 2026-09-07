@@ -50,6 +50,9 @@ layout(push_constant) uniform DenoiseConstants
     float Exposure;           // [-]   applied by the final level's tone map
 
     uint  FinalLevel;         // [-]   1 = also tone-map into OutputImage
+    // A7d. Must match the kernel's: with the denoiser on, THIS is the tone map the viewer sees, and a
+    //    saturation applied in only one of the two would change colour when the denoiser was toggled.
+    float ColourSaturation;   // [-]   1 in daylight, 0 under starlight
 };
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -71,6 +74,10 @@ float AcesFilm(float x)
 
 vec3 ToneMap(vec3 Hdr)
 {
+    // A7d, identical to the kernel's: below about 3 cd/m² the eye loses colour, and rendering full saturation
+    //    there turns a faint pre-dawn glow into a lurid orange band.
+    const float Grey = dot(Hdr, vec3(0.2126, 0.7152, 0.0722));
+    Hdr = mix(vec3(Grey), Hdr, clamp(ColourSaturation, 0.0, 1.0));
     Hdr *= Exposure;
     return pow(vec3(AcesFilm(Hdr.r), AcesFilm(Hdr.g), AcesFilm(Hdr.b)), vec3(1.0 / 2.2));
 }

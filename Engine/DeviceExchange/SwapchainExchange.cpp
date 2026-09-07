@@ -1267,6 +1267,7 @@ struct DenoisePushRecord
     float    Exposure;         // [-]
 
     uint32_t FinalLevel;       // [-]  1 = also tone-map into the presentation image
+    float    ColourSaturation; // [-]  A7d: must match the kernel's, or toggling the denoiser changes colour
 };
 
 namespace {
@@ -1362,6 +1363,35 @@ float SwapchainExchange::QueryAverageLogLuminance() const noexcept
     return static_cast<float>(WeightedLog2 / Used * Ln2);
 }
 
+// 🔴 Separate from bring-up because a RESIZE invalidates what it writes. BringStorageImage destroys and
+//    recreates HistoryImageView, WriteDescriptorSet rewrites the main compute set — and this set, which binds
+//    the very same view, was left pointing at the destroyed one. The reduction then dispatched against a dead
+//    image view every frame: "SourceImage is using imageView 0x0 that is invalid or has been destroyed", and
+//    on the reporting hardware the whole renderer went black from the first resize onward.
+void SwapchainExchange::WriteLuminanceDescriptors() noexcept
+{
+    if (!Vulkan || !Vulkan->HistoryImageView) return;
+    for (uint32_t Slot = 0u; Slot < kCycleSlotCount; ++Slot)
+    {
+        if (!Vulkan->LuminanceSets[Slot]) continue;
+        // ⚠️ The HISTORY image, not the presentation image: the reduction must see LINEAR radiance. Measuring
+        //    the tone-mapped output would feed the curve its own result and the exposure would chase itself.
+        VkDescriptorImageInfo  ImageInfo{ VK_NULL_HANDLE, Vulkan->HistoryImageView, VK_IMAGE_LAYOUT_GENERAL };
+        VkDescriptorBufferInfo BufferInfo{ Vulkan->LuminanceBuffers[Slot], 0u, VK_WHOLE_SIZE };
+
+        std::array<VkWriteDescriptorSet, 2u> Writes{};
+        Writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        Writes[0].dstSet = Vulkan->LuminanceSets[Slot]; Writes[0].dstBinding = 0u;
+        Writes[0].descriptorCount = 1u; Writes[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        Writes[0].pImageInfo = &ImageInfo;
+        Writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        Writes[1].dstSet = Vulkan->LuminanceSets[Slot]; Writes[1].dstBinding = 1u;
+        Writes[1].descriptorCount = 1u; Writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        Writes[1].pBufferInfo = &BufferInfo;
+        vkUpdateDescriptorSets(Vulkan->Device, 2u, Writes.data(), 0u, nullptr);
+    }
+}
+
 bool SwapchainExchange::BringLuminanceReduction() noexcept
 {
     // ① Two bindings: the HDR source to read, and the accumulator to atomically sum into.
@@ -1398,8 +1428,11 @@ bool SwapchainExchange::BringLuminanceReduction() noexcept
     constexpr uint32_t HostVisible = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     for (uint32_t Slot = 0u; Slot < kCycleSlotCount; ++Slot)
     {
+        // ⚠️ TRANSFER_DST as well as STORAGE. The histogram is cleared with vkCmdFillBuffer, which is a transfer
+        //    command, and a buffer that does not declare the usage is a spec violation the validation layer
+        //    reports on every single frame. It happens to work on this driver; that is not a reason to keep it.
         AllocateBuffer(Vulkan->Device, Vulkan->MemoryProperties, kLuminanceHistogramBytes,
-                       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, HostVisible,
+                       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, HostVisible,
                        Vulkan->LuminanceBuffers[Slot], Vulkan->LuminanceMemory[Slot]);
         if (!Vulkan->LuminanceBuffers[Slot]) return false;
         if (vkMapMemory(Vulkan->Device, Vulkan->LuminanceMemory[Slot], 0u, kLuminanceHistogramBytes, 0u,
@@ -1436,24 +1469,7 @@ bool SwapchainExchange::BringLuminanceReduction() noexcept
     AllocateInfo.pSetLayouts        = SetLayouts.data();
     if (vkAllocateDescriptorSets(Vulkan->Device, &AllocateInfo, Vulkan->LuminanceSets) != VK_SUCCESS) return false;
 
-    for (uint32_t Slot = 0u; Slot < kCycleSlotCount; ++Slot)
-    {
-        // ⚠️ The HISTORY image, not the presentation image: the reduction must see LINEAR radiance. Measuring
-        //    the tone-mapped output would feed the curve its own result and the exposure would chase itself.
-        VkDescriptorImageInfo  ImageInfo{ VK_NULL_HANDLE, Vulkan->HistoryImageView, VK_IMAGE_LAYOUT_GENERAL };
-        VkDescriptorBufferInfo BufferInfo{ Vulkan->LuminanceBuffers[Slot], 0u, VK_WHOLE_SIZE };
-
-        std::array<VkWriteDescriptorSet, 2u> Writes{};
-        Writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        Writes[0].dstSet = Vulkan->LuminanceSets[Slot]; Writes[0].dstBinding = 0u;
-        Writes[0].descriptorCount = 1u; Writes[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-        Writes[0].pImageInfo = &ImageInfo;
-        Writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        Writes[1].dstSet = Vulkan->LuminanceSets[Slot]; Writes[1].dstBinding = 1u;
-        Writes[1].descriptorCount = 1u; Writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        Writes[1].pBufferInfo = &BufferInfo;
-        vkUpdateDescriptorSets(Vulkan->Device, 2u, Writes.data(), 0u, nullptr);
-    }
+    WriteLuminanceDescriptors();
 
     // ③ Pipeline. Missing SPIR-V is not fatal: without it the exposure simply stays manual.
     const std::vector<uint32_t> Spirv = LoadSpirv("Engine/Shaders/LuminanceReduce.spv");
@@ -1667,7 +1683,10 @@ bool SwapchainExchange::BringDescriptorSet() noexcept
     PoolSizes[0].type            = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     PoolSizes[0].descriptorCount = 7u;                          // 0 out · 3 history · 4 surface · 5 normal · 18 R7a surface · 19 moments · 20 denoise
     PoolSizes[1].type            = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    PoolSizes[1].descriptorCount = 11u;                         // 1, 2, 6-12, 16-17
+    // ⚠️ Counted, and the count includes 23. It said 11 and the layout asks for 12, so every run began with
+    //    "trying to allocate 12 ... but this pool only has a total of 11": allowed to succeed on this driver,
+    //    guaranteed to fail on another.
+    PoolSizes[1].descriptorCount = 12u;                         // 1, 2, 6-12, 16-17, 23
     PoolSizes[2].type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     PoolSizes[2].descriptorCount = 5u + (Vulkan->DescriptorIndexing ? kTextureSlotCapacity : 1u);   // 13/14 material LUTs · 15 motion · 21/22 A2 atmosphere LUTs · the bindless table
 
@@ -2454,14 +2473,26 @@ void SwapchainExchange::RecordAndPresent(const DispatchConfiguration& Dispatch) 
 
     vkWaitForFences(Vulkan->Device, 1u, &Vulkan->CycleFences[ActiveSlot], VK_TRUE, UINT64_MAX);
 
+    // 🔴 A pending resize is handled BEFORE the acquire, not after it. Acquiring and then abandoning the frame
+    //    leaves the acquire semaphore SIGNALLED with nothing ever waiting on it, and the next acquire on the
+    //    same cycle slot is then illegal: "Semaphore must not be currently signaled". From there the slot's
+    //    fence and command buffer fall out of step with the queue and every frame after it is malformed — which
+    //    is the cascade of pending-fence and in-use-command-buffer errors that followed a window resize.
+    if (ResizePending)
+    {
+        ResizePending = false;
+        (void)RebuildSwapchain();
+        return;
+    }
+
     uint32_t ImageOrdinal = 0u;
     const VkResult AcquireResult = vkAcquireNextImageKHR(
         Vulkan->Device, Vulkan->Swapchain, UINT64_MAX,
         Vulkan->AcquireSemaphores[ActiveSlot], VK_NULL_HANDLE, &ImageOrdinal);
 
-    if (AcquireResult == VK_ERROR_OUT_OF_DATE_KHR || ResizePending)
+    // An out-of-date acquire does not signal, so rebuilding here is safe.
+    if (AcquireResult == VK_ERROR_OUT_OF_DATE_KHR)
     {
-        ResizePending = false;
         (void)RebuildSwapchain();
         return;
     }
@@ -2813,6 +2844,7 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
                 Push.LuminanceScale = 4.0f;
                 Push.Exposure       = Dispatch.Exposure;    // the filter owns the tone map, so it needs the exposure
                 Push.FinalLevel     = (Level + 1u == kDenoiseLevelCount) ? 1u : 0u;
+                Push.ColourSaturation = Dispatch.ColourSaturation;
 
                 vkCmdPushConstants(Command, Vulkan->DenoisePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT,
                                    0u, sizeof(Push), &Push);
@@ -3106,6 +3138,8 @@ bool SwapchainExchange::RebuildSwapchain() noexcept
     ++TargetGeneration;
 
     WriteDescriptorSet();
+    // The reduction binds HistoryImageView, which BringStorageImage has just replaced.
+    WriteLuminanceDescriptors();
 
     const uint32_t ImageCount = static_cast<uint32_t>(Vulkan->SwapchainImages.size());
     Vulkan->ImGuiFramebuffers.resize(ImageCount);

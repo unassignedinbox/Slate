@@ -149,6 +149,57 @@ grep -q '(Vulkan->ActiveSlot + 1u) % kCycleSlotCount' Engine/DeviceExchange/Swap
 grep -q 'kLuminanceHistogramBytes' Engine/DeviceExchange/SwapchainExchange.cpp \
     || { echo "  the accumulator is not sized from the histogram"; Fail=1; }
 
+# ── A7d: colour at low light ─────────────────────────────────────────────────────────────────────────────────────
+# 🔴 Both tone maps desaturate, and they must agree. With the denoiser on the FILTER owns the tone map, so a
+# saturation applied in only one of the two would change the image's colour when the denoiser was toggled.
+for Shader in Engine/Shaders/ReSTIRViewport.slang Engine/Shaders/AtrousDenoise.slang; do
+    grep -q 'mix(vec3(Grey), \(hdr\|Hdr\), clamp(ColourSaturation, 0.0, 1.0))' "$Shader" \
+        || { echo "  $Shader does not desaturate — a faint glow would render lurid"; Fail=1; }
+done
+
+# ⚠️ Desaturation happens in LINEAR radiance, BEFORE the exposure and the curve. Afterwards it would be mixing
+# display values, and a channel that had already clipped would drag the grey it is mixed toward.
+awk '/vec3 ToneMap/{f=1} f&&/ColourSaturation/{c=NR} f&&/\*= Exposure/{e=NR; exit} END{exit !(c && e && c < e)}' \
+    Engine/Shaders/ReSTIRViewport.slang \
+    || { echo "  the kernel desaturates after applying the exposure — it must come first"; Fail=1; }
+
+# It rides in a push RESERVE, so the block must still be 128 B: seven reserves left, not eight.
+grep -q 'uint32_t PushReserve\[7\]' Engine/DeviceExchange/SwapchainExchange.h \
+    || { echo "  the push block's reserve count no longer accounts for ColourSaturation"; Fail=1; }
+
+# The value comes from the integrator, so it can never describe different light from the exposure beside it.
+grep -q 'Dispatch.ColourSaturation      = Adaptation.QueryColourSaturation();' Engine/DisplayPresentation/ReSTIRIntegrator.cpp \
+    || { echo "  the dispatch does not take its saturation from the integrator"; Fail=1; }
+grep -q 'Push.ColourSaturation = Dispatch.ColourSaturation;' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  the denoiser is not given the saturation, so toggling it would change colour"; Fail=1; }
+
+# Manual mode is the identity switch for the whole adaptive path, and that has to include this.
+grep -q 'if (Config.Mode == ExposureModeCategory::Manual) return 1.0f;' Engine/DisplayPresentation/ExposureIntegrator.cpp \
+    || { echo "  manual exposure no longer keeps full colour — pre-A7d images are unreproducible"; Fail=1; }
+
+# ── The resize path ──────────────────────────────────────────────────────────────────────────────────────────────
+# 🔴 A resize destroys and recreates HistoryImageView, and the reduction's descriptor set binds it. Leaving that
+# set unwritten made the pass dispatch against a dead view every frame — "imageView 0x0 that is invalid or has
+# been destroyed" — and the renderer went black from the first resize onward.
+grep -q 'WriteLuminanceDescriptors();' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  the luminance descriptors are never rewritten"; Fail=1; }
+awk '/bool SwapchainExchange::RebuildSwapchain/{f=1} f&&/WriteLuminanceDescriptors/{ok=1} f&&/^}/{exit} END{exit !ok}' \
+    Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  a resize does not rewrite the luminance descriptors — the reduction would read a dead view"; Fail=1; }
+
+# ⚠️ The histogram is cleared with vkCmdFillBuffer, which is a transfer command.
+# ⚠️ Anchored on the HISTOGRAM's own allocation, not on the flag pair appearing anywhere in the file — another
+# buffer already carries the same pair, and a guard that matched it would have passed on a broken histogram.
+grep -A1 'kLuminanceHistogramBytes,$' Engine/DeviceExchange/SwapchainExchange.cpp \
+    | grep -q 'VK_BUFFER_USAGE_TRANSFER_DST_BIT' \
+    || { echo "  the histogram buffer cannot legally be the target of vkCmdFillBuffer"; Fail=1; }
+
+# ⚠️ A pending resize is handled BEFORE the acquire. Acquiring and then abandoning the frame leaves the semaphore
+# signalled with nothing waiting on it, and every later frame on that slot is malformed.
+awk '/void SwapchainExchange::RecordAndPresent/{f=1} f&&/if \(ResizePending\)/{r=NR} f&&/vkAcquireNextImageKHR/{a=NR; exit} END{exit !(r && a && r < a)}' \
+    Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  a pending resize is handled after the acquire — it would strand a signalled semaphore"; Fail=1; }
+
 # One exposure value reaches the shader, whichever mode is active.
 grep -q 'Dispatch.Exposure              = Adaptation.QueryExposure();' Engine/DisplayPresentation/ReSTIRIntegrator.cpp \
     || { echo "  the dispatch does not take its exposure from the integrator"; Fail=1; }

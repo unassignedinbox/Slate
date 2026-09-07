@@ -102,6 +102,9 @@ DispatchConfiguration ReSTIRIntegrator::BuildDispatch(
     //    mode returns the configured value unchanged, so every pre-A6b image is still reproducible, and the two
     //    modes cannot become two code paths that disagree about what the tone map receives.
     Dispatch.Exposure              = Adaptation.QueryExposure();
+    // A7d. The eye's remaining colour at this adapted level. Taken from the same integrator as the exposure so
+    //    the two can never describe different light.
+    Dispatch.ColourSaturation      = Adaptation.QueryColourSaturation();
     Dispatch.CameraUpX             = Up.x;
     Dispatch.CameraUpY             = Up.y;
     Dispatch.CameraUpZ             = Up.z;

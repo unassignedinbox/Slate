@@ -329,7 +329,8 @@ layout(push_constant) uniform ReSTIRConstants
     //    minimum. The moon and the star field need ~20 bytes more, and growing past the guarantee would work on
     //    a card that offers 256 and fail on one that offers only 128, i.e. break on someone else's machine.
     //    They now live in the SkyRecord uniform buffer, which is also the shape a per-world sky needs (M1).
-    uint    PushReserve0;           // [-]   freed by that move; kept so the block stays 128 B and 16-B aligned
+    // A7d. How much colour the eye still has at the adapted luminance: 1 in daylight, 0 under starlight.
+    float   ColourSaturation;       // [-]   taken from one of the reserves, so the block is still 128 B
     uint    PushReserve1;
     uint    PushReserve2;
     uint    PushReserve3;
@@ -752,6 +753,16 @@ float AcesFilm(float x)
 
 vec3 ToneMap(vec3 hdr)
 {
+    // A7d ⚠️ Desaturate BEFORE the exposure and the curve, in linear radiance, because that is where the colour
+    //    physically is. Doing it afterwards would mix display values, and a channel that had already clipped
+    //    would drag the grey it is mixed toward.
+    //
+    //    Below about 3 cd/m² the cones give out before the rods do, so colour drains from what the eye sees and
+    //    by 0.003 it is gone. Rendering full saturation down there is what turns a faint pre-dawn glow into a
+    //    lurid orange band: at 15° below the horizon the glow is 0.078 cd/m² and almost entirely red, so red
+    //    clips while blue stays black. Mixed to grey it reads as the pale band it actually is.
+    const float Grey = dot(hdr, vec3(0.2126, 0.7152, 0.0722));
+    hdr = mix(vec3(Grey), hdr, clamp(ColourSaturation, 0.0, 1.0));
     hdr *= Exposure;
     float r = AcesFilm(hdr.r);
     float g = AcesFilm(hdr.g);

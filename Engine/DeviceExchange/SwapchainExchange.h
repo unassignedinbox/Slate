@@ -167,7 +167,8 @@ struct DispatchConfiguration
     //    GUARANTEED MINIMUM. A7's moon and stars needed ~20 more, and growing past 128 would have worked on a
     //    card offering 256 and failed on one offering only the guarantee — a defect that appears on someone
     //    else's machine. They moved to SkyRecord, which is also the shape a per-world sky needs (CLAUDE.md §15b).
-    uint32_t PushReserve[8];                                       // [-] keeps the block 128 B and 16-B aligned
+    float    ColourSaturation;                                     // [-] A7d: 1 in daylight, 0 under starlight
+    uint32_t PushReserve[7];                                       // [-] keeps the block 128 B and 16-B aligned
 };
 
 // Bits of DispatchConfiguration::FeatureFlags — mirror kFeature* in ReSTIRViewport.slang.
@@ -323,6 +324,8 @@ private:
     [[nodiscard]] bool  BringDenoisePipeline()  noexcept;   // R7: à-trous filter, its own small descriptor set
     [[nodiscard]] bool  BringAtmosphereTables() noexcept;   // A2: the two constant atmosphere LUTs
     [[nodiscard]] bool  BringLuminanceReduction() noexcept; // A6b: the average-log-luminance pass
+    // Rewritten on every resize: this set binds HistoryImageView, which a resize destroys and recreates.
+    void                WriteLuminanceDescriptors() noexcept;
     [[nodiscard]] bool  BringCommandRecording() noexcept;
     [[nodiscard]] bool  BringCycleSlots()       noexcept;
     [[nodiscard]] bool  BringImGui()            noexcept;

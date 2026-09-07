@@ -62,6 +62,19 @@ float ExposureIntegrator::ExposureForLuminance(float Luminance, const ExposureCo
     return std::clamp(KeyForLuminance(Safe, Config) / Safe, Config.MinimumExposure, Config.MaximumExposure);
 }
 
+float ExposureIntegrator::QueryColourSaturation() const noexcept
+{
+    // Manual mode is an identity switch for the whole adaptive path, and that has to include this: an image
+    //    made before the curve existed must still be reproducible exactly.
+    if (Config.Mode == ExposureModeCategory::Manual) return 1.0f;
+
+    const float Floor   = std::max(Config.ScotopicFloor, 1.0e-9f);
+    const float Ceiling = std::max(Config.ScotopicCeiling, Floor * 1.001f);
+    const float Low     = std::log(Floor), High = std::log(Ceiling);
+    const float Here    = std::log(std::max(AdaptedLuminance, 1.0e-9f));
+    return std::clamp((Here - Low) / (High - Low), 0.0f, 1.0f);
+}
+
 float ExposureIntegrator::QueryExposure() const noexcept
 {
     if (Config.Mode == ExposureModeCategory::Manual) return Config.ManualExposure;
