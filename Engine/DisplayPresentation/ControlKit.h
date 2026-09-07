@@ -58,7 +58,8 @@ struct ControlKitPalette
     ColorQuad Info         { 0x3B / 255.0f, 0x82 / 255.0f, 0xF6 / 255.0f, 1.0f };   // info             ← Info swatch
     ColorQuad Warning      { 0xF5 / 255.0f, 0x9E / 255.0f, 0x0B / 255.0f, 1.0f };   // amber-500        ← Warning swatch
     ColorQuad Caution      { 0xEA / 255.0f, 0xB3 / 255.0f, 0x08 / 255.0f, 1.0f };   // yellow-500       ← Caution swatch
-    ColorQuad SliderFill   { 0x7A / 255.0f, 0x7A / 255.0f, 0x7A / 255.0f, 1.0f };   // slider filled side (kit default; Notch = accent)
+    ColorQuad SliderTrack  { 0x2F / 255.0f, 0x2F / 255.0f, 0x33 / 255.0f, 1.0f };   // slider rail, around the groove
+    ColorQuad SliderFill   { 0x8A / 255.0f, 0x8A / 255.0f, 0x8E / 255.0f, 1.0f };   // slider filled side, inside it
     ColorQuad SliderThumb  { 0xE0 / 255.0f, 0xE0 / 255.0f, 0xE0 / 255.0f, 1.0f };   // slider thumb
     ColorQuad SwitchKnobOff{ 0xBD / 255.0f, 0xBD / 255.0f, 0xBD / 255.0f, 1.0f };   // switch knob (off)
     bool      LightSurface = false;                                                    // true for Light / Sepia: hover tints go black instead of white

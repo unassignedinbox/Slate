@@ -272,7 +272,7 @@ int main()
                            + (A.Blue - B.Blue) * (A.Blue - B.Blue));
         };
 
-        std::printf("     track  luma %.3f\n", static_cast<double>(Luma(P.Raised)));
+        std::printf("     rail   luma %.3f\n", static_cast<double>(Luma(P.SliderTrack)));
         std::printf("     fill   luma %.3f  (%.3f from the track)\n",
                     static_cast<double>(Luma(P.SliderFill)),  static_cast<double>(Apart(P.SliderFill, P.Raised)));
         std::printf("     thumb  luma %.3f  (%.3f from the fill)\n",
@@ -282,8 +282,15 @@ int main()
         Expect(Apart(P.SliderThumb, P.SliderFill) > 0.25f,
                "the thumb is clearly distinct from the fill it sits on");
         // And the fill must stay near the track, so the eye goes to the thumb rather than to the bar.
-        Expect(Apart(P.SliderFill, P.Raised) < Apart(P.SliderThumb, P.SliderFill),
-               "the fill sits closer to the track than the thumb does to the fill");
+        // 🔴 Three distinct tones, in order: a dark rail, a mid fill inside it, a near-white knob over both.
+        //    Two of them the same is how it stopped reading as a control — a flush fill is a progress bar
+        //    however it is coloured, because there is nothing for the knob to sit IN.
+        std::printf("     rail -> fill %.3f, fill -> knob %.3f\n",
+                    static_cast<double>(Apart(P.SliderTrack, P.SliderFill)),
+                    static_cast<double>(Apart(P.SliderFill, P.SliderThumb)));
+        Expect(Luma(P.SliderTrack) < Luma(P.SliderFill), "the rail is darker than the fill it contains");
+        Expect(Luma(P.SliderFill)  < Luma(P.SliderThumb), "and the fill is darker than the knob over it");
+        Expect(Apart(P.SliderTrack, P.SliderFill) > 0.15f, "the rail is visibly distinct from the fill");
         Expect(std::fabs(Luma(P.SliderThumb) - Luma(P.SliderFill)) > 0.2f,
                "and the two differ in brightness, not merely in hue — hue alone fails for a colour-blind eye");
 

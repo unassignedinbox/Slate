@@ -89,8 +89,12 @@ void ControlKit::AssignTheme(const ThemeStructure& Theme, ColorQuad WarningColou
     //    lifted a little toward the text colour, which lands on the mock's #4a4a4a against a #222 track on the
     //    dark theme and stays legible on a light one; the thumb is the text colour, which is the brightest thing
     //    the theme owns and therefore the thing the eye goes to.
-    K.SliderFill   = Blend(P.ActiveBackground, P.TextMain, 0.18f);
-    K.SliderThumb  = P.TextMain;
+    //    The three tones come from the reference project's own tokens — track #2f2f33, fill #8a8a8e, knob
+    //    #f4f4f5 — reached by blending theme colours rather than written as literals, so a light theme still
+    //    gets a dark knob on a light rail instead of an invisible one.
+    K.SliderTrack  = Blend(P.InputBackground, P.ActiveBackground, 0.55f);
+    K.SliderFill   = Blend(P.ActiveBackground, P.TextMain, 0.55f);
+    K.SliderThumb  = Blend(P.TextMain, K.LightSurface ? P.MainBackground : ColorQuad{ 1.0f, 1.0f, 1.0f, 1.0f }, 0.35f);
     K.SwitchKnobOff= K.LightSurface ? P.TextMuted : ColorQuad{ 0xBD / 255.0f, 0xBD / 255.0f, 0xBD / 255.0f, 1.0f };
     K.Warning      = WarningColour;
     K.Ok           = SuccessColour;
@@ -121,6 +125,7 @@ void ControlKit::BlendPalette(const ControlKitPalette& From, const ControlKitPal
     K.Highlight = Mix(From.Highlight, To.Highlight);     K.Danger = Mix(From.Danger, To.Danger);
     K.Ok = Mix(From.Ok, To.Ok);                          K.Info = Mix(From.Info, To.Info);
     K.Warning = Mix(From.Warning, To.Warning);           K.Caution = Mix(From.Caution, To.Caution);
+    K.SliderTrack = Mix(From.SliderTrack, To.SliderTrack);
     K.SliderFill = Mix(From.SliderFill, To.SliderFill);  K.SliderThumb = Mix(From.SliderThumb, To.SliderThumb);
     K.SwitchKnobOff = Mix(From.SwitchKnobOff, To.SwitchKnobOff);
     K.LightSurface = E < 0.5f ? From.LightSurface : To.LightSurface;
@@ -342,11 +347,25 @@ ControlHit ControlKit::Slider(PixelSpace& Surface, const PlaneExtent& Extent, fl
         OutValue = Minimum + T * Span;
     }
 
-    const float R = TrackH * 0.5f;
-    Surface.FillRectangle(Track, Faded(Palette().Raised, Opacity), R);
+    // 🔴 A GROOVE, not a bar. The fill used to run flush with the track, which reads as a progress bar however
+    //    it is coloured — there is nothing for the eye to see the knob as sitting IN. Inset by 3 px on every
+    //    side there is a visible rail around it, and the knob overhangs that rail, which is what makes it look
+    //    like something you can take hold of. It is also what the reference does.
+    const float R     = TrackH * 0.5f;
+    const float Inset = Thin ? 1.5f : 3.0f;
+    Surface.FillRectangle(Track, Faded(Palette().SliderTrack, Opacity), R);
+
+    const PlaneExtent Groove = Spanning(Track.MinimumX + Inset, Track.MinimumY + Inset,
+                                        std::max(Track.Width() - Inset * 2.0f, 0.0f),
+                                        std::max(TrackH - Inset * 2.0f, 1.0f));
+    const float GrooveR = Groove.Height() * 0.5f;
+
     const float ThumbCx = Extent.MinimumX + Thumb * 0.5f + T * (Extent.Width() - Thumb);
-    if (ThumbCx - Extent.MinimumX > 0.5f)
-        Surface.FillRectangle(Spanning(Extent.MinimumX, Track.MinimumY, ThumbCx - Extent.MinimumX, TrackH), Faded(HighlightFill ? Palette().Highlight : Palette().SliderFill, Opacity), R);
+    const float FilledW = std::max(ThumbCx - Groove.MinimumX, 0.0f);
+    if (FilledW > 1.0f)
+        Surface.FillRectangle(Spanning(Groove.MinimumX, Groove.MinimumY, std::min(FilledW, Groove.Width()), Groove.Height()),
+                              Faded(HighlightFill ? Palette().Highlight : Palette().SliderFill, Opacity), GrooveR);
+
     const float ThumbR = Thumb * 0.5f * (Hit.Dragging && Pointer.Down ? 1.1f : 1.0f);   // :active scale(1.1)
     FillCircle(Surface, ThumbCx, Cy, ThumbR, Faded(Palette().SliderThumb, Opacity));
     return Hit;

@@ -67,6 +67,17 @@ if grep -qE 'K\.SliderThumb\s*=\s*K\.Accent' Engine/DisplayPresentation/ControlK
 fi
 grep -q 'K.SliderFill   = Blend(P.ActiveBackground, P.TextMain' Engine/DisplayPresentation/ControlKit.cpp \
     || { echo "  the slider fill is no longer derived from the theme"; Fail=1; }
+
+# 🔴 A GROOVE, not a bar. A fill flush with its track reads as a progress bar however it is coloured, because
+# there is nothing for the knob to sit IN. The reference insets the fill on every side and lets the knob overhang
+# the rail that leaves; that inset is the whole difference between a slider and a loading indicator.
+grep -q 'const PlaneExtent Groove = Spanning(Track.MinimumX + Inset' Engine/DisplayPresentation/ControlKit.cpp \
+    || { echo "  the slider fill is flush with its track again — it reads as a progress bar"; Fail=1; }
+grep -q 'ColorQuad SliderTrack' Engine/DisplayPresentation/ControlKit.h \
+    || { echo "  there is no separate rail colour, so the groove cannot be seen"; Fail=1; }
+# Three tones, and the transition must carry all three or a theme change would drop one.
+grep -q 'K.SliderTrack = Mix(From.SliderTrack, To.SliderTrack);' Engine/DisplayPresentation/ControlKit.cpp \
+    || { echo "  the rail colour is not interpolated across a theme change"; Fail=1; }
 # The mock is the authority for what the fill should look like.
 grep -q 'background:#4a4a4a' References/WorldBrowser-Mock.html \
     || { echo "  the mock no longer specifies a dark slider fill"; Fail=1; }
