@@ -39,6 +39,15 @@ ColorQuad HoverWash() noexcept
 
 float Luminance(ColorQuad C) noexcept { return 0.2126f * C.Red + 0.7152f * C.Green + 0.0722f * C.Blue; }
 
+// Linear blend between two theme colours, for the slots the theme does not name directly.
+ColorQuad Blend(ColorQuad From, ColorQuad To, float T) noexcept
+{
+    return ColorQuad{ From.Red   + (To.Red   - From.Red)   * T,
+                      From.Green + (To.Green - From.Green) * T,
+                      From.Blue  + (To.Blue  - From.Blue)  * T,
+                      From.Alpha + (To.Alpha - From.Alpha) * T };
+}
+
 } // namespace
 
 void ControlKit::AssignTheme(const ThemeStructure& Theme, ColorQuad WarningColour, ColorQuad SuccessColour, ColorQuad InfoColour, ColorQuad CautionColour) noexcept
@@ -68,8 +77,20 @@ void ControlKit::AssignTheme(const ThemeStructure& Theme, ColorQuad WarningColou
     K.AccentInk    = Luminance(K.Accent) > 0.8f ? ColorQuad{ 0x11 / 255.0f, 0x11 / 255.0f, 0x11 / 255.0f, 1.0f } : ColorQuad{ 1.0f, 1.0f, 1.0f, 1.0f };
     K.AccentSoft   = K.Accent; K.AccentSoft.Alpha = 0.12f;
     K.Highlight    = K.Accent;                     // dashboard pill fill follows the accent
-    K.SliderFill   = K.Accent;                     // Notch <Slider>: linear-gradient(accentColor …)
-    K.SliderThumb  = K.Accent;                     // --thumb-color: accentColor
+
+    // 🔴 The slider is NOT an accent bar. Both of these used to be the accent, which made every slider a solid
+    //    blue pill with a blue thumb on top of it — the thumb invisible against its own fill, and the control
+    //    reading as a progress bar rather than as something to grab. References/WorldBrowser-Mock.html is
+    //    explicit about why: the filled side is dark and close to the track "so the thumb is what carries the
+    //    eye". A slider says where a value SITS; a bar says how full something is, and they should not look
+    //    alike.
+    //
+    //    Derived from the theme rather than hard-coded, so both still follow it: the fill is the raised surface
+    //    lifted a little toward the text colour, which lands on the mock's #4a4a4a against a #222 track on the
+    //    dark theme and stays legible on a light one; the thumb is the text colour, which is the brightest thing
+    //    the theme owns and therefore the thing the eye goes to.
+    K.SliderFill   = Blend(P.ActiveBackground, P.TextMain, 0.18f);
+    K.SliderThumb  = P.TextMain;
     K.SwitchKnobOff= K.LightSurface ? P.TextMuted : ColorQuad{ 0xBD / 255.0f, 0xBD / 255.0f, 0xBD / 255.0f, 1.0f };
     K.Warning      = WarningColour;
     K.Ok           = SuccessColour;

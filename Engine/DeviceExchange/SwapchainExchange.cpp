@@ -1323,44 +1323,39 @@ float SwapchainExchange::QueryAverageLogLuminance() const noexcept
     for (uint32_t Weight : Bins) Total += static_cast<double>(Weight);
     if (Total <= 0.0) return -1.0e9f;   // first frames, before anything has been written
 
-    // ⚠️ A TRIMMED mean over a percentile window, not the whole histogram. The darkest fifth of the frame is
-    //    discarded because shadow and empty sky should not decide how bright a lit subject renders, and the
-    //    brightest twentieth because the sun's disc is nine orders of magnitude above the scene and would
-    //    otherwise dominate a mean it has no business being in.
-    //
-    //    Bins are split PROPORTIONALLY where a trim boundary falls inside one, rather than being taken or
-    //    dropped whole. Without that the reading steps by a whole bin as the camera pans — 0.39 of a stop —
-    //    and the exposure visibly ratchets instead of gliding.
-    const double Low  = Total * static_cast<double>(kLuminanceTrimLow);
-    const double High = Total * (1.0 - static_cast<double>(kLuminanceTrimHigh));
-
     constexpr double BinWidth = (static_cast<double>(kLuminanceLog2High) - static_cast<double>(kLuminanceLog2Low))
                               / static_cast<double>(kLuminanceHistogramBins);
-    double Seen = 0.0, WeightedLog2 = 0.0, Used = 0.0;
+    const auto BinLog2 = [](uint32_t Index)
+    {
+        return static_cast<double>(kLuminanceLog2Low) + (static_cast<double>(Index) + 0.5) * BinWidth;
+    };
+
+    // ① Where the scene is. The median is the one statistic no minority of very bright or very dark pixels can
+    //    move, however extreme they are — which is exactly the property the anchor needs.
+    double Seen = 0.0;
+    uint32_t MedianIndex = 0u;
     for (uint32_t Index = 0u; Index < kLuminanceHistogramBins; ++Index)
     {
-        const double Start = Seen;
-        const double End   = Seen + static_cast<double>(Bins[Index]);
-        Seen = End;
-
-        const double Take = std::min(End, High) - std::max(Start, Low);
-        if (Take <= 0.0) continue;
-
-        const double Centre = static_cast<double>(kLuminanceLog2Low) + (static_cast<double>(Index) + 0.5) * BinWidth;
-        WeightedLog2 += Centre * Take;
-        Used         += Take;
+        Seen += static_cast<double>(Bins[Index]);
+        if (Seen >= Total * 0.5) { MedianIndex = Index; break; }
     }
-    // A window that collapsed to nothing — every tap in one bin — still has to answer, so fall back to the
-    //    untrimmed mean rather than reporting "no measurement" for a frame that plainly has one.
-    if (Used <= 0.0)
+    const double Anchor = BinLog2(MedianIndex);
+
+    // ② Everything within a few stops of it, averaged. A distance in stops is what separates a bright OUTLIER
+    //    from a bright SUBJECT: sunlit ground sits about two stops from the sky it is lit by and belongs in the
+    //    reading, while a hole in a roof sits eleven stops above the room and is a light source in shot.
+    double WeightedLog2 = 0.0, Used = 0.0;
+    for (uint32_t Index = 0u; Index < kLuminanceHistogramBins; ++Index)
     {
-        for (uint32_t Index = 0u; Index < kLuminanceHistogramBins; ++Index)
-        {
-            const double Centre = static_cast<double>(kLuminanceLog2Low) + (static_cast<double>(Index) + 0.5) * BinWidth;
-            WeightedLog2 += Centre * static_cast<double>(Bins[Index]);
-            Used         += static_cast<double>(Bins[Index]);
-        }
+        if (Bins[Index] == 0u) continue;
+        const double Centre = BinLog2(Index);
+        if (std::fabs(Centre - Anchor) > static_cast<double>(kLuminanceMedianStops)) continue;
+        WeightedLog2 += Centre * static_cast<double>(Bins[Index]);
+        Used         += static_cast<double>(Bins[Index]);
     }
+    // The median's own bin always qualifies, so this cannot be empty — but a frame is not worth trusting to
+    //    that, and the anchor alone is the right answer if it ever were.
+    if (Used <= 0.0) { WeightedLog2 = Anchor; Used = 1.0; }
 
     // The integrator speaks natural logs; the histogram is in log2.
     constexpr double Ln2 = 0.6931471805599453;

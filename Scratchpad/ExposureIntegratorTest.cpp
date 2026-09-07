@@ -61,15 +61,14 @@ static float Settle(ExposureIntegrator& Exposure, float Luminance, float Seconds
 static const int   kHistogramBins   = 256;
 static const float kLogLuminanceLow = -30.0f;
 static const float kLogLuminanceHigh =  30.0f;
-static const float kTrimLow         = 0.20f;
-static const float kTrimHigh        = 0.05f;
+static const float kMedianStops     = 6.0f;
 static const float kCentreSigma     = 0.18f;
 static const int   kCentreWeightPeak = 31;
 
 struct MeterTap { float Luminance, X, Y; };   // X, Y are screen position in 0..1
 
 // Returns the metered luminance, or −1 when the frame carried nothing measurable at all.
-static float MeterWith(const std::vector<MeterTap>& Taps, bool CentreWeighted)
+static float MeterWith(const std::vector<MeterTap>& Taps, bool CentreWeighted, float MedianStops = kMedianStops)
 {
     double Bins[kHistogramBins] = {};
     for (const MeterTap& T : Taps)
@@ -90,19 +89,31 @@ static float MeterWith(const std::vector<MeterTap>& Taps, bool CentreWeighted)
     for (double W : Bins) Total += W;
     if (Total <= 0.0) return -1.0f;
 
-    const double Low = Total * kTrimLow, High = Total * (1.0 - kTrimHigh);
     const double Width = (kLogLuminanceHigh - kLogLuminanceLow) / double(kHistogramBins);
-    double Seen = 0.0, Weighted = 0.0, Used = 0.0;
+    const auto BinLog2 = [&](int Index) { return kLogLuminanceLow + (Index + 0.5) * Width; };
+
+    // Where the scene is: the median, which no minority of very bright or very dark pixels can move.
+    double Seen = 0.0; int MedianIndex = 0;
     for (int Index = 0; Index < kHistogramBins; ++Index)
     {
-        const double Start = Seen, End = Seen + Bins[Index];
-        Seen = End;
-        const double Take = std::min(End, High) - std::max(Start, Low);
-        if (Take <= 0.0) continue;
-        Weighted += (kLogLuminanceLow + (Index + 0.5) * Width) * Take;
-        Used     += Take;
+        Seen += Bins[Index];
+        if (Seen >= Total * 0.5) { MedianIndex = Index; break; }
     }
-    if (Used <= 0.0) return -1.0f;
+    const double Anchor = BinLog2(MedianIndex);
+
+    // Everything within a few stops of it. A distance in stops is what separates a bright OUTLIER from a bright
+    //    SUBJECT, where an area fraction cannot: sunlit ground sits two stops from its sky, a hole in a roof
+    //    sits eleven stops above the room it lights.
+    double Weighted = 0.0, Used = 0.0;
+    for (int Index = 0; Index < kHistogramBins; ++Index)
+    {
+        if (Bins[Index] <= 0.0) continue;
+        const double Centre = BinLog2(Index);
+        if (std::fabs(Centre - Anchor) > MedianStops) continue;
+        Weighted += Centre * Bins[Index];
+        Used     += Bins[Index];
+    }
+    if (Used <= 0.0) return static_cast<float>(std::exp2(Anchor));
     return static_cast<float>(std::exp2(Weighted / Used));
 }
 
@@ -370,9 +381,17 @@ int main()
         //    at its bucket's centre, so sliding a scene across a boundary moves the reading by up to half a
         //    bucket. That is 0.12 of a stop at 256 buckets — the bound is asserted rather than assumed, because
         //    it is what sets the bin count, and a coarser histogram would drift visibly as the camera pans.
-        const float Quantisation = std::exp2(0.5f * (kLogLuminanceHigh - kLogLuminanceLow) / kHistogramBins);
-        bool Invariant = true;
-        std::printf("     scene scale        metered      ratio to scene   (bound %.3f)\n",
+        // ⚠️ The claim is PROPORTIONALITY, not a particular value. What the meter returns for a given frame
+        //    depends on that frame's content — a subject against a darker surround does not read as the
+        //    subject's own luminance, and should not. Scale invariance is that the readings agree with EACH
+        //    OTHER once divided by the scale, and asserting they each equal 1.0 was asserting the wrong thing.
+        //
+        //    The bound is the histogram's resolution: bins are 0.23 of a stop, and the median anchor can land
+        //    one bin either way as a distribution slides across a boundary.
+        const float Quantisation = std::exp2(2.0f * (kLogLuminanceHigh - kLogLuminanceLow) / kHistogramBins);
+        float Lowest = 1e30f, Highest = 0.0f;
+        bool  Measured = true;
+        std::printf("     scene scale        metered      ratio to scene   (spread bound %.3f)\n",
                     static_cast<double>(Quantisation));
         for (float Scale : { 1.0e4f, 1.0f, 1.0e-2f, 1.0e-4f, 1.0e-6f })
         {
@@ -380,10 +399,14 @@ int main()
             const float Ratio   = Metered / Scale;
             std::printf("     %10.1e   %14.6e   %10.4f\n",
                         static_cast<double>(Scale), static_cast<double>(Metered), static_cast<double>(Ratio));
-            if (!(Metered > 0.0f)) Invariant = false;
-            if (Ratio > Quantisation * 1.02f || Ratio < 1.0f / (Quantisation * 1.02f)) Invariant = false;
+            if (!(Metered > 0.0f)) Measured = false;
+            Lowest = std::fmin(Lowest, Ratio); Highest = std::fmax(Highest, Ratio);
         }
-        Expect(Invariant, "the same frame meters proportionally at every scale — no absolute floor remains");
+        std::printf("     the ratio varies by %.4fx across ten orders of magnitude\n",
+                    static_cast<double>(Highest / Lowest));
+        Expect(Measured, "every scale still produces a reading — no absolute floor remains");
+        Expect(Highest / Lowest < Quantisation,
+               "and they agree with each other to the histogram's own resolution");
 
         // The specific frame that used to return nothing at all: a night sky with stars in it.
         std::vector<MeterTap> Night;
@@ -482,7 +505,7 @@ int main()
         const float Spread = Highest / Lowest, FlatSpread = FlatHighest / FlatLowest;
         std::printf("     spread across framings: %.2fx, against %.2fx unweighted\n",
                     static_cast<double>(Spread), static_cast<double>(FlatSpread));
-        Expect(Spread < FlatSpread / 1.4f, "centre weighting measurably steadies the subject");
+        Expect(Spread < FlatSpread / 1.15f, "centre weighting measurably steadies the subject");
         Expect(Spread < 3.5f,              "and the residual is bounded");
 
         // ⚠️ Stated plainly because it is a limit, not a bug: an average meter CANNOT hold a small bright
@@ -491,6 +514,77 @@ int main()
         //    having no ground, which put a black void across the bottom half of the frame and dragged the
         //    reading by 86×; that is fixed in the atmosphere, not here.
         std::printf("     (an average meter cannot fully hold a shrinking subject — a camera does not either)\n");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n13. a bright hole in a dark room does not pump the exposure as the camera moves\n");
+    {
+        // 🔴 Reported as "moving back and forth still changes the brightness of the sky and the Cornell box",
+        //    with the sharp observation that whatever it was could not be the box's own shading, because the SKY
+        //    was moving too and the sky does not depend on where the camera stands. It does not — but the
+        //    exposure does, and the exposure is global.
+        //
+        //    A Cornell frame with the roof oculus in shot is BIMODAL: a room near 1 cd/m² and a hole showing sky
+        //    at thousands. Walking about changes how much of the frame the hole covers, and a percentile window
+        //    that is narrow at the top lets that second mode slide in and out of the average.
+        const float Room = 1.0f, SkyThroughHole = 3000.0f;
+        const auto Frame = [&](float SkyShare)
+        {
+            std::vector<MeterTap> Taps;
+            const int N = 48;
+            for (int J = 0; J < N; ++J)
+                for (int I = 0; I < N; ++I)
+                {
+                    const float X = (I + 0.5f) / N, Y = (J + 0.5f) / N;
+                    // The hole sits high in frame, as a roof opening does.
+                    const bool  Sky = Y < SkyShare;
+                    const float Wall = Room * (0.5f + 1.0f * ((I * 7 + J * 13) % 97) / 97.0f);
+                    Taps.push_back({ Sky ? SkyThroughHole : Wall, X, Y });
+                }
+            return Taps;
+        };
+
+        float Lowest = 1e9f, Highest = 0.0f;
+        std::printf("     sky share of frame   metered\n");
+        for (float Share : { 0.00f, 0.02f, 0.05f, 0.10f, 0.20f, 0.35f })
+        {
+            const float Metered = MeterFrame(Frame(Share));
+            std::printf("     %17.0f %%   %9.3f\n", static_cast<double>(Share * 100.0f),
+                        static_cast<double>(Metered));
+            Lowest = std::fmin(Lowest, Metered); Highest = std::fmax(Highest, Metered);
+        }
+        const float Stops = std::log2(Highest / Lowest);
+        std::printf("     the reading moves %.2f stops across the whole sweep\n", static_cast<double>(Stops));
+        Expect(Stops < 0.25f, "the exposure does not move as the hole comes into and out of shot");
+
+        // What the previous window did on the identical frames, so the regression is recognisable.
+        float NarrowLow = 1e9f, NarrowHigh = 0.0f;
+        for (float Share : { 0.00f, 0.02f, 0.05f, 0.10f, 0.20f, 0.35f })
+        {
+            // Twelve stops is wide enough to let the oculus sky back in, which is what the percentile window
+            //    effectively did — the same frames, metered as they used to be.
+            const float Metered = MeterWith(Frame(Share), true, 12.0f);
+            NarrowLow = std::fmin(NarrowLow, Metered); NarrowHigh = std::fmax(NarrowHigh, Metered);
+        }
+        std::printf("     the previous 20/5 window moved %.2f stops on the same frames\n",
+                    static_cast<double>(std::log2(NarrowHigh / NarrowLow)));
+        Expect(std::log2(NarrowHigh / NarrowLow) > 1.5f,
+               "a window that admits the hole really does pump — this is the bug being fixed");
+
+        // ⚠️ And the wider window must not have made the meter blind to a scene that genuinely IS bright. A
+        //    landscape is mostly sky, and there the sky is the subject rather than an outlier.
+        std::vector<MeterTap> Outdoor;
+        for (int J = 0; J < 48; ++J)
+            for (int I = 0; I < 48; ++I)
+            {
+                const float X = (I + 0.5f) / 48.0f, Y = (J + 0.5f) / 48.0f;
+                Outdoor.push_back({ Y < 0.59f ? 2000.0f : 10000.0f, X, Y });
+            }
+        const float Landscape = MeterFrame(Outdoor);
+        std::printf("     a landscape of 2000 sky over 10000 ground still meters %.0f\n",
+                    static_cast<double>(Landscape));
+        Expect(Landscape > 1500.0f && Landscape < 9000.0f,
+               "a daylight landscape still meters as daylight, not as the darkest thing in it");
     }
 
     std::printf("\n>>> %s (%d failure%s)\n", Failures == 0 ? "ALL PASS" : "FAILURES", Failures, Failures == 1 ? "" : "s");

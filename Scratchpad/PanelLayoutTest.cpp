@@ -22,6 +22,7 @@
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 
 #include "DisplayPresentation/ControlKit.h"
+#include "DisplayPresentation/ThemeStructure.h"
 #include "DisplayPresentation/InterfaceBrowserSequence.h"
 
 #include <cmath>
@@ -177,6 +178,48 @@ int main()
         std::printf("     one wheel click moves %.0f px, against a %.0f px row\n",
                     static_cast<double>(Step), 32.0);
         Expect(Step > 16.0f && Step < 120.0f, "one click moves about a row and a half, not a page");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n5. the slider reads as something to grab, not as a progress bar\n");
+    {
+        // 🔴 Reported as "see how terrible it looks". The theme assigned the accent colour to BOTH the filled
+        //    side and the thumb, so every slider was a solid blue pill with a blue thumb somewhere inside it —
+        //    invisible against its own fill. References/WorldBrowser-Mock.html says why that is the wrong
+        //    reading: the fill is dark and close to the track "so the thumb is what carries the eye". A slider
+        //    says where a value SITS. A bar says how full something is. They must not look alike.
+        // The kit's palette is only populated once a theme has been applied; before that it holds the
+        //    geometry-free defaults, which would test nothing about the derivation.
+        ThemeStructure Theme;
+        ControlKit::AssignTheme(Theme, ColorQuad{ 1.0f, 0.7f, 0.2f, 1.0f }, ColorQuad{ 0.2f, 0.8f, 0.4f, 1.0f },
+                                       ColorQuad{ 0.3f, 0.6f, 1.0f, 1.0f }, ColorQuad{ 1.0f, 0.5f, 0.3f, 1.0f });
+        const ControlKitPalette& P = ControlKit::Palette();
+
+        const auto Luma = [](ColorQuad C) { return 0.2126f * C.Red + 0.7152f * C.Green + 0.0722f * C.Blue; };
+        const auto Apart = [&](ColorQuad A, ColorQuad B)
+        {
+            return std::sqrt((A.Red - B.Red) * (A.Red - B.Red) + (A.Green - B.Green) * (A.Green - B.Green)
+                           + (A.Blue - B.Blue) * (A.Blue - B.Blue));
+        };
+
+        std::printf("     track  luma %.3f\n", static_cast<double>(Luma(P.Raised)));
+        std::printf("     fill   luma %.3f  (%.3f from the track)\n",
+                    static_cast<double>(Luma(P.SliderFill)),  static_cast<double>(Apart(P.SliderFill, P.Raised)));
+        std::printf("     thumb  luma %.3f  (%.3f from the fill)\n",
+                    static_cast<double>(Luma(P.SliderThumb)), static_cast<double>(Apart(P.SliderThumb, P.SliderFill)));
+
+        // 🔴 The defect itself: a thumb the same colour as the fill it sits on cannot be seen at all.
+        Expect(Apart(P.SliderThumb, P.SliderFill) > 0.25f,
+               "the thumb is clearly distinct from the fill it sits on");
+        // And the fill must stay near the track, so the eye goes to the thumb rather than to the bar.
+        Expect(Apart(P.SliderFill, P.Raised) < Apart(P.SliderThumb, P.SliderFill),
+               "the fill sits closer to the track than the thumb does to the fill");
+        Expect(std::fabs(Luma(P.SliderThumb) - Luma(P.SliderFill)) > 0.2f,
+               "and the two differ in brightness, not merely in hue — hue alone fails for a colour-blind eye");
+
+        // The accent is still reachable, for the controls that genuinely are bars.
+        Expect(Apart(P.SliderFill, P.Accent) > 0.05f, "the slider fill is not simply the accent any more");
+        Expect(Apart(P.Highlight, P.Accent) < 0.01f,  "while the highlight fill still is, for the ones that want it");
     }
 
     std::printf("\n>>> %s (%d failure%s)\n", Failures == 0 ? "ALL PASS" : "FAILURES", Failures, Failures == 1 ? "" : "s");

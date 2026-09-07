@@ -78,10 +78,29 @@ for Triple in "kHistogramBins:kLuminanceHistogramBins:kHistogramBins" \
     fi
 done
 
-# ⚠️ The trim boundaries must split a bucket PROPORTIONALLY. Taking or dropping whole buckets steps the reading
-# by a whole bin as the camera pans, and the exposure ratchets instead of gliding.
-grep -q 'std::min(End, High) - std::max(Start, Low)' Engine/DeviceExchange/SwapchainExchange.cpp \
-    || { echo "  the readback does not split bins proportionally at the trim boundary"; Fail=1; }
+# 🔴 The exposure is anchored to the frame's MEDIAN and averaged over a window measured in STOPS, not over a
+# percentile of the distribution. A percentile cannot tell a bright outlier from a bright subject, because both
+# are simply "the top". That is what made the exposure pump as the camera moved: a Cornell frame is a room near
+# 1 cd/m2 with a hole showing sky at thousands, the bright mode slid into and out of the average as the hole's
+# share of the frame changed, and the reading swung up to 4.7 stops. Exposure is global, so the SKY pumped with
+# it - a sky whose brightness depends on where the camera stands is not a sky problem.
+grep -q 'Seen >= Total \* 0.5' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  the meter no longer anchors on the median — a bright mode can drag it again"; Fail=1; }
+grep -q 'std::fabs(Centre - Anchor) > static_cast<double>(kLuminanceMedianStops)' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  the meter no longer bounds its window in stops around the anchor"; Fail=1; }
+if grep -qE 'kLuminanceTrimLow|kLuminanceTrimHigh' Engine/DeviceExchange/SwapchainExchange.h; then
+    echo "  the percentile trim is back — it cannot separate a bright outlier from a bright subject"; Fail=1
+fi
+
+# ⚠️ Bounded on both sides, and measured rather than tuned: three to eight stops all behave identically, and at
+# twelve the oculus sky comes back inside the window and the pumping returns.
+awk -v f="$(grep -oP 'kLuminanceMedianStops\s*=\s*\K[0-9.]+' Engine/DeviceExchange/SwapchainExchange.h)" \
+    'BEGIN { exit !(f >= 3.0 && f <= 8.0) }' \
+    || { echo "  the median window is outside the measured-safe 3..8 stop band"; Fail=1; }
+
+# The harness has to port the same rule, or the proof describes a meter the renderer does not have.
+grep -q 'std::fabs(Centre - Anchor) > MedianStops' Scratchpad/ExposureIntegratorTest.cpp \
+    || { echo "  the harness no longer ports the median-anchored window"; Fail=1; }
 
 # ── A7c: dark adaptation ─────────────────────────────────────────────────────────────────────────────────────────
 # 🔴 An exposure of Key/L renders every scene at the same mid-grey, so a starlit field arrives looking like an

@@ -36,11 +36,28 @@ static constexpr uint32_t kDenoiseLevelCount    = 5u;
 static constexpr uint32_t kLuminanceHistogramBins = 256u;
 static constexpr float    kLuminanceLog2Low       = -30.0f;   // 1e-9 cd/m², below anything the renderer makes
 static constexpr float    kLuminanceLog2High      =  30.0f;   // 1e9 cd/m², above the sun's own disc
-// The percentile window the exposure is taken from. The low trim discards the darkest fifth — shadow and sky
-//    that should not set the exposure for a lit subject — and the high trim discards the brightest twentieth,
-//    which is what stops the sun's disc or a specular highlight from stealing the whole reading.
-static constexpr float    kLuminanceTrimLow       = 0.20f;
-static constexpr float    kLuminanceTrimHigh      = 0.05f;
+// 🔴 The exposure is anchored to the frame's MEDIAN and averaged over everything within a few stops of it.
+//    It used to be a percentile window — the middle 75 % — and a percentile cannot tell a bright outlier from a
+//    bright subject, because both are just "the top of the distribution".
+//
+//    That distinction is the whole problem. A Cornell frame with the roof oculus in shot is two populations: a
+//    room near 1 cd/m² and a hole showing sky at thousands. Walking about changes how much of the frame the
+//    hole covers, the bright mode slid into and out of the average, and the reading swung 2 to 4.7 stops as the
+//    camera moved. Exposure is global, so the SKY pumped along with the room — which is the tell, because a sky
+//    whose brightness depends on where the camera stands is not a sky problem at all.
+//
+//    Widening the percentile fixed the pumping and broke the outdoor scene instead: sunlit ground is 41 % of
+//    that frame and 2.3 stops above the sky, so trimming enough to exclude a hole in a roof also excluded the
+//    ground, and a landscape metered as its own sky.
+//
+//    A distance in STOPS separates them where an area fraction cannot. The median says where the scene is;
+//    anything more than six stops from it is a light source in shot rather than part of the scene, whatever
+//    fraction of the frame it happens to cover. Measured across all three cases: pumping 0.00 stops, framing
+//    spread better than the original percentile, and the landscape metered at 3075 rather than 1909.
+//
+//    ⚠️ Six is bounded on both sides. Three to eight all measure identically, so it is not a tuned number; at
+//    twelve the oculus sky comes back inside the window and the pumping returns at 2.08 stops.
+static constexpr float    kLuminanceMedianStops   = 6.0f;
 static constexpr uint32_t kLuminanceHistogramBytes = kLuminanceHistogramBins * 4u;
 
 // A2 atmosphere tables. Sizes match AtmosphereScattering.slang; the gate checks they still agree.

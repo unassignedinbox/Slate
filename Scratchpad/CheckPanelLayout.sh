@@ -43,6 +43,34 @@ fi
 grep -c 'ImGui::SetCursorScreenPos(Origin);' Engine/DisplayPresentation/PixelSpace.cpp | grep -q '^2$' \
     || { echo "  the content reservation does not restore the cursor — the whole panel would be offset"; Fail=1; }
 
+# 🔴 And the reservation must not make the panel deaf. IsWindowHovered reports "not hovered" the instant any
+# ImGui item is ACTIVE, and the invisible button above becomes active on the very press the panel is trying to
+# read — so gating the host's pointer on it killed every click and drag in the window. The content test has to
+# survive an active item and then be decided geometrically.
+grep -q 'ContentHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows' Engine/DisplayPresentation/PixelSpace.cpp \
+    || { echo "  the content-hover test is gone"; Fail=1; }
+grep -A3 'ContentHovered = ImGui::IsWindowHovered' Engine/DisplayPresentation/PixelSpace.cpp \
+    | grep -q 'AllowWhenBlockedByActiveItem' \
+    || { echo "  the content-hover test still blocks on an active item — every click would be discarded"; Fail=1; }
+grep -q 'Mouse.x >= Origin.x && Mouse.x < Origin.x + Avail.x' Engine/DisplayPresentation/PixelSpace.cpp \
+    || { echo "  the content test is not geometric, so it depends on ImGui's item state again"; Fail=1; }
+
+# ── The slider must not read as a progress bar ───────────────────────────────────────────────────────────────────
+# 🔴 Both the fill and the thumb were the accent colour, so every slider was a solid blue pill with an invisible
+# blue-on-blue thumb. The mock is explicit: the filled side is dark and close to the track "so the thumb is what
+# carries the eye". A slider says where a value SITS; a bar says how full something is.
+if grep -qE 'K\.SliderFill\s*=\s*K\.Accent' Engine/DisplayPresentation/ControlKit.cpp; then
+    echo "  the slider fill is the accent again — it would read as a progress bar"; Fail=1
+fi
+if grep -qE 'K\.SliderThumb\s*=\s*K\.Accent' Engine/DisplayPresentation/ControlKit.cpp; then
+    echo "  the slider thumb is the accent again — invisible against its own fill"; Fail=1
+fi
+grep -q 'K.SliderFill   = Blend(P.ActiveBackground, P.TextMain' Engine/DisplayPresentation/ControlKit.cpp \
+    || { echo "  the slider fill is no longer derived from the theme"; Fail=1; }
+# The mock is the authority for what the fill should look like.
+grep -q 'background:#4a4a4a' References/WorldBrowser-Mock.html \
+    || { echo "  the mock no longer specifies a dark slider fill"; Fail=1; }
+
 # A panel narrower than a row cannot lay one out, so the minimum is enforced every frame rather than seeded once:
 # a size restored from imgui.ini would otherwise bring back a window that was dragged too narrow last session.
 grep -q 'ImGui::SetNextWindowSizeConstraints' Engine/DisplayPresentation/PixelSpace.cpp \

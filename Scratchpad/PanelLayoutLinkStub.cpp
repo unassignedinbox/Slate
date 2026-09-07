@@ -42,10 +42,29 @@ void GlyphSpace::Stroke(PixelSpace&, std::string_view, const GlyphPlacement&, fl
 
 std::string_view VectorCodec::QueryControlCentreSvgPath(ControlCentreIconCategory) noexcept { return {}; }
 
+ThemeStructure::ThemeStructure() noexcept = default;
+
 const ThemePalette& ThemeStructure::QueryPalette() const noexcept
 {
-    static const ThemePalette Default{};
-    return Default;
+    // ⚠️ A realistic DARK palette, not a zeroed struct. The slider colours are derived from ActiveBackground
+    //    and TextMain, so a palette of black-on-black would make the derivation look correct while proving
+    //    nothing about it. These are the Notch dark values the kit is written against.
+    static ThemePalette Dark = []
+    {
+        ThemePalette P{};
+        P.MainBackground   = ColorQuad{ 0x0E / 255.0f, 0x0E / 255.0f, 0x0E / 255.0f, 1.0f };
+        P.PanelBackground  = ColorQuad{ 0x14 / 255.0f, 0x14 / 255.0f, 0x14 / 255.0f, 1.0f };
+        P.InputBackground  = ColorQuad{ 0x1A / 255.0f, 0x1A / 255.0f, 0x1A / 255.0f, 1.0f };
+        P.ActiveBackground = ColorQuad{ 0x22 / 255.0f, 0x22 / 255.0f, 0x22 / 255.0f, 1.0f };
+        P.CardBackground   = ColorQuad{ 0x18 / 255.0f, 0x18 / 255.0f, 0x18 / 255.0f, 1.0f };
+        P.CardSubBackground= ColorQuad{ 0x2A / 255.0f, 0x2A / 255.0f, 0x2A / 255.0f, 1.0f };
+        P.PanelBorder      = ColorQuad{ 0x2E / 255.0f, 0x2E / 255.0f, 0x2E / 255.0f, 1.0f };
+        P.DividerColor     = ColorQuad{ 0x26 / 255.0f, 0x26 / 255.0f, 0x26 / 255.0f, 1.0f };
+        P.TextMain         = ColorQuad{ 0xE0 / 255.0f, 0xE0 / 255.0f, 0xE0 / 255.0f, 1.0f };
+        P.TextMuted        = ColorQuad{ 0x8A / 255.0f, 0x8A / 255.0f, 0x8A / 255.0f, 1.0f };
+        return P;
+    }();
+    return Dark;
 }
 
 ColorQuad ThemeStructure::QueryAccentColor() const noexcept { return ColorQuad{ 0.231f, 0.510f, 0.965f, 1.0f }; }

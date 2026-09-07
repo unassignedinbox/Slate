@@ -254,7 +254,13 @@ FloatingPanel::FloatingPanel(const char* Identity, float DefaultX, float Default
     //    happened to be current next.
     WindowHovered  = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows
                                           | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
-    ContentHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
+    // 🔴 AllowWhenBlockedByActiveItem here too, and then a GEOMETRIC test below. Without the flag this asks a
+    //    question ImGui answers about its own widgets: it reports "not hovered" the instant any item is active,
+    //    and the invisible button that stops the window being dragged by its body becomes active on the very
+    //    press the panel is trying to read. The whole panel went dead — a click was discarded on release, and a
+    //    slider drag died one frame after it began — because the host gates its pointer on this answer.
+    ContentHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows
+                                          | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
 
     if (Open)
     {
@@ -279,6 +285,14 @@ FloatingPanel::FloatingPanel(const char* Identity, float DefaultX, float Default
                              | ImGuiButtonFlags_MouseButtonMiddle);
         // Put the cursor back so the recording origin is the one the caller was told about.
         ImGui::SetCursorScreenPos(Origin);
+
+        // ⚠️ And the content test is the RECTANGLE, not ImGui's notion of hovering. The title bar, the resize
+        //    grip and the dock tab all sit outside this rectangle, which is exactly the distinction the caller
+        //    needs, and it stays true whatever ImGui believes about which item is active.
+        const ImVec2 Mouse = ImGui::GetIO().MousePos;
+        ContentHovered = ContentHovered
+                      && Mouse.x >= Origin.x && Mouse.x < Origin.x + Avail.x
+                      && Mouse.y >= Origin.y && Mouse.y < Origin.y + Avail.y;
 
         // A collapsed or fully clipped window has no content to record into; reporting it as open would have the
         //    caller lay out against a zero rectangle.
