@@ -73,9 +73,16 @@ float RoundedDistance(float Px, float Py, const Frontier::PlaneExtent& E, float 
     const float Cx = (E.MinimumX + E.MaximumX) * 0.5f, Cy = (E.MinimumY + E.MaximumY) * 0.5f;
     const float Hx = std::max(E.Width()  * 0.5f - Radius, 0.0f);
     const float Hy = std::max(E.Height() * 0.5f - Radius, 0.0f);
-    const float Dx = std::max(std::fabs(Px - Cx) - Hx, 0.0f);
-    const float Dy = std::max(std::fabs(Py - Cy) - Hy, 0.0f);
-    return std::sqrt(Dx * Dx + Dy * Dy) - Radius;
+    // 🔴 The interior term is not optional. Clamping both axes at zero makes the distance zero for EVERY
+    //    interior pixel, so with Radius 0 the whole rectangle came out at coverage 0.5 - a flat 50 % wash
+    //    instead of a solid fill. That is invisible on a rounded fill, where the -Radius still drives the
+    //    interior negative, and total on a square one. It is why the value pill's squared-off edge appeared
+    //    to stay rounded: the square fill meant to cover the corner was painting at half alpha over it.
+    const float Qx = std::fabs(Px - Cx) - Hx;
+    const float Qy = std::fabs(Py - Cy) - Hy;
+    const float Outside = std::sqrt(std::max(Qx, 0.0f) * std::max(Qx, 0.0f)
+                                  + std::max(Qy, 0.0f) * std::max(Qy, 0.0f));
+    return std::min(std::max(Qx, Qy), 0.0f) + Outside - Radius;
 }
 
 void FillRounded(const Frontier::PlaneExtent& E, Frontier::ColorQuad Colour, float Radius) noexcept
@@ -288,7 +295,10 @@ int main()
     const PanelLayout Layout = SolvePanelLayout(Rows, CardX, CardW, Pane.MinimumY + 14.0f);
 
     for (const PanelPlacement& Card : Layout.Cards)
-        Surface.FillRectangle(Card.Extent, ControlKit::Palette().Inset, 18.0f);
+        // ⚠️ Card, not Inset. Filling the card with --inset made it the SAME colour as a value pill's unit
+        //    cell, so the unit cell disappeared into the card behind it and the pill read as a black box with a
+        //    stroke floating next to nothing. The proof was hiding the very thing it was built to show.
+        Surface.FillRectangle(Card.Extent, ControlKit::Palette().Card, 18.0f);
 
     uint32_t CardIndex = 0u;
     for (const PropertyRowRecord& R : Rows)

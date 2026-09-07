@@ -58,7 +58,12 @@ void ControlKit::AssignTheme(const ThemeStructure& Theme, ColorQuad WarningColou
     K.LightSurface = Luminance(P.MainBackground) > 0.5f;
     K.Panel        = P.PanelBackground;
     K.Inset        = P.InputBackground;
-    K.Field        = P.MainBackground;
+    // 🔴 NOT MainBackground. The mock keeps --bg (#050505) and --field (#000000) as separate tokens, and a
+    //    value pill's number cell is --field: the darkest thing on the panel, so it reads as a well cut into the
+    //    card. Deriving it from the canvas made it #0e0e0e under the shipped theme — one step from the card
+    //    behind it — and the pill stopped looking like a control at all. The field is the floor of the palette:
+    //    black on a dark surface, and the canvas only on a light one where black would be the wrong extreme.
+    K.Field        = K.LightSurface ? P.MainBackground : ColorQuad{ 0.0f, 0.0f, 0.0f, 1.0f };
     K.Raised       = P.ActiveBackground;
     K.Selected     = P.CardSubBackground;
     K.Stroke       = P.PanelBorder;
