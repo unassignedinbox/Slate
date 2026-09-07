@@ -185,14 +185,29 @@ grep -q 'void ExposureIntegrator::ObserveIlluminance' Engine/DisplayPresentation
     || { echo "  the exposure has no incident reading — the sky would drift with the camera again"; Fail=1; }
 grep -q 'Ease(Config.IncidentDeadZoneStops, Config.IncidentHandoverStops, Disagreement)' Engine/DisplayPresentation/ExposureIntegrator.cpp \
     || { echo "  the dead zone is gone — the frame would always pull the exposure, however little"; Fail=1; }
+# 🔴 This gate used to demand 1–4 stops and it was WRONG — it was guarding an assumption, not a measurement.
+# The dead zone has to be as wide as a SCENE, because that is what the camera swings across: at a 2° sun the
+# horizon band reads ~20 000 cd/m² and the lit ground under it ~440, five and a half stops apart in one frame.
+# Anything narrower is escaped by tilting down, which is exactly how the drift kept coming back at sunrise.
+# Measured worst anchor-to-frame disagreement: 1.9 stops at 45°, 4.4 at 10°, 4.5 at 0°, 4.3 at −4°, 7.0 at −8°.
+# Six holds every case with the sun above the horizon. Beyond about eight it would start ignoring real changes
+# in the light, so the band is bounded on both sides.
 awk -v f="$(grep -oP 'IncidentDeadZoneStops\s*=\s*\K[0-9.]+' Engine/DisplayPresentation/ExposureIntegrator.h)" \
-    'BEGIN { exit !(f >= 1.0 && f <= 4.0) }' \
-    || { echo "  the dead zone is not a plausible width — too small drifts, too large ignores real scenes"; Fail=1; }
+    'BEGIN { exit !(f >= 5.0 && f <= 8.0) }' \
+    || { echo "  the dead zone is not a plausible width — narrower than a scene drifts, wider ignores real light"; Fail=1; }
 
 # ⚠️ The incident figure must be camera-independent, which means it is derived from the SUN, not from anything
 # the camera carries. A solver that took a camera position would defeat the entire purpose.
 grep -q 'float QueryIlluminance(float SunIlluminance, float SunElevationRadians, float Turbidity)' Engine/DisplayPresentation/DaylightSolver.h \
     || { echo "  the daylight solver's signature changed — check nothing camera-dependent crept into it"; Fail=1; }
+
+# 🔴 The exposure must anchor to QueryAnchorLuminance, NOT to QueryIlluminance. Illuminance is cosine-weighted,
+# so at a low sun — where all the sky's light sits in a band a few degrees up, at cos≈0 — it collapses while the
+# screen stays bright. That put every sunrise outside the dead zone and handed metering back to the frame.
+grep -q 'QueryAnchorLuminance' Engine/DisplayPresentation/ReSTIRIntegrator.cpp \
+    || { echo "  the exposure is anchored to illuminance again — it will drift at sunrise and sunset"; Fail=1; }
+grep -q 'CachedMeanSky' Engine/DisplayPresentation/DaylightSolver.cpp \
+    || { echo "  the solid-angle sky mean is gone — the anchor is cosine-weighted and wrong near the horizon"; Fail=1; }
 if grep -qE 'Camera|View|Pixel' Engine/DisplayPresentation/DaylightSolver.h; then
     echo "  the daylight solver mentions the camera — an incident reading may not depend on where it stands"; Fail=1
 fi

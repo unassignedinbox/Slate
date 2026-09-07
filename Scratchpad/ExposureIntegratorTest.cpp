@@ -679,18 +679,19 @@ int main()
         ExposureConfiguration Config{};
         Exposure.AssignConfiguration(Config);
 
-        const float Illuminance = 100000.0f;                       // a clear noon, from DaylightSolver
-        const float Anchor      = Illuminance * 0.18f / 3.14159265f;
-        Exposure.ObserveIlluminance(Illuminance);
-        std::printf("     100 klx incident -> an 18 %% card reads %.1f cd/m2\n",
-                    static_cast<double>(Exposure.QueryIncidentLuminance()));
+        // The anchor is a LUMINANCE now: the mean a camera would see pointed anywhere, from DaylightSolver.
+        const float Anchor = 2161.0f;                              // a 45 deg sun, measured
+        Exposure.ObserveIlluminance(Anchor);
         Expect(std::fabs(Exposure.QueryIncidentLuminance() - Anchor) < 0.5f,
-               "the incident reading is the standard 0.18*E/pi calibration");
+               "the anchor is used as the luminance it is, not converted");
 
         // Walk the camera about: the frame reading wanders, as it must. The exposure must not.
         float Lowest = 1e30f, Highest = 0.0f;
         std::printf("     frame reads      exposure\n");
-        for (float FrameStops : { -1.5f, -0.75f, 0.0f, 0.75f, 1.5f })
+        // ⚠️ Swept over the range a real scene covers, not a token one: turning from the horizon band to the
+        //    lit ground under a low sun is five and a half stops, and a dead zone narrower than that is escaped
+        //    by simply looking down.
+        for (float FrameStops : { -5.0f, -2.5f, 0.0f, 2.5f, 5.0f })
         {
             const float Frame = Anchor * std::exp2(FrameStops);
             Exposure.ObserveLuminance(std::log(Frame));
@@ -699,27 +700,27 @@ int main()
             std::printf("     %11.1f   %.6e\n", static_cast<double>(Frame), static_cast<double>(E));
             Lowest = std::fmin(Lowest, E); Highest = std::fmax(Highest, E);
         }
-        std::printf("     across +/-1.5 stops of framing the exposure moved %.4f stops\n",
+        std::printf("     across +/-5 stops of framing the exposure moved %.4f stops\n",
                     static_cast<double>(std::log2(Highest / Lowest)));
         Expect(std::log2(Highest / Lowest) < 1.0e-4f,
                "inside the dead zone the exposure does not move AT ALL as the framing changes");
 
         // ⚠️ And it must still be able to leave the dead zone. Standing inside the Cornell box, the room is
         //    several stops below the sky over its roof, and exposing for the sky would render it black.
-        Exposure.ObserveLuminance(std::log(Anchor * std::exp2(-9.0f)));
+        Exposure.ObserveLuminance(std::log(Anchor * std::exp2(-14.0f)));
         Exposure.Snap();
         const float Indoors = Exposure.QueryObservedLuminance();
-        std::printf("     nine stops below the sky, the reading follows the frame to %.4f\n",
+        std::printf("     fourteen stops below the sky, the reading follows the frame to %.4f\n",
                     static_cast<double>(Indoors));
         Expect(Indoors < Anchor * 0.05f, "a scene the sky cannot reach is metered from the frame, as it must be");
 
         // The handover has no corner in it, or the image would pop as the camera crossed the threshold.
         float Previous = 1e30f; bool Monotonic = true, Smooth = true;
         float Last = -1.0f;
-        for (float Stops = 0.0f; Stops <= 9.0f; Stops += 0.25f)
+        for (float Stops = 0.0f; Stops <= 16.0f; Stops += 0.25f)
         {
             ExposureIntegrator Probe; Probe.AssignConfiguration(Config);
-            Probe.ObserveIlluminance(Illuminance);
+            Probe.ObserveIlluminance(Anchor);
             Probe.ObserveLuminance(std::log(Anchor * std::exp2(-Stops)));
             Probe.Snap();
             const float Observed = Probe.QueryObservedLuminance();
@@ -734,7 +735,7 @@ int main()
         ExposureConfiguration Frame = Config;
         Frame.IncidentMetering = false;
         ExposureIntegrator Old; Old.AssignConfiguration(Frame);
-        Old.ObserveIlluminance(Illuminance);
+        Old.ObserveIlluminance(Anchor);
         Old.ObserveLuminance(std::log(1234.0f));
         Expect(std::fabs(Old.QueryObservedLuminance() - 1234.0f) < 0.01f,
                "with incident metering off the frame is used alone — the identity switch");

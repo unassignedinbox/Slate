@@ -42,8 +42,8 @@ void ReSTIRIntegrator::ObserveDaylight() noexcept
     const bool SkyOn = ActiveConfiguration.SunIlluminance > 0.0f
                     && ActiveConfiguration.SkyQuality != SkyQualityCategory::Off;
     Adaptation.ObserveIlluminance(SkyOn
-        ? Daylight.QueryIlluminance(ActiveConfiguration.SunIlluminance,
-                                    static_cast<float>(Sun.Elevation), Turbidity)
+        ? Daylight.QueryAnchorLuminance(ActiveConfiguration.SunIlluminance,
+                                        static_cast<float>(Sun.Elevation), Turbidity)
         : 0.0f);
 }
 

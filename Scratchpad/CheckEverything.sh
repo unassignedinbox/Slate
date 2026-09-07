@@ -41,6 +41,7 @@ Run CheckPanelSample
 Run CheckInterfaceAudio
 Run CheckOutlinerSequence
 Run CheckPanelLayout
+Run CheckRasterProof
 
 echo
 echo "=== ReSTIR (R6 - R7) ==="

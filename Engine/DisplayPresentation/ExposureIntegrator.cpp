@@ -22,13 +22,12 @@ float Ease(float Edge0, float Edge1, float Value) noexcept
 
 } // namespace
 
-void ExposureIntegrator::ObserveIlluminance(float Lux) noexcept
+void ExposureIntegrator::ObserveIlluminance(float AnchorLuminance) noexcept
 {
-    // An incident meter is calibrated against an 18 % reflector: the luminance of a lambertian card of that
-    //    albedo under E lux is 0.18·E/π. That is the same 0.18 the key value uses, and not by coincidence — it
-    //    is what makes "expose for mid grey" and "read the light falling on the subject" the same instruction.
-    constexpr float kPi = 3.14159265358979f;
-    IncidentLuminance = (std::isfinite(Lux) && Lux > 0.0f) ? Lux * 0.18f / kPi : 0.0f;
+    // Used as given. The solver already answers "what will the camera be shown, on average, from here" — the
+    //    conversion this used to do turned that into "what does an 18 % card under this light read", which is a
+    //    different question and the wrong one whenever the sky is not overhead.
+    IncidentLuminance = (std::isfinite(AnchorLuminance) && AnchorLuminance > 0.0f) ? AnchorLuminance : 0.0f;
     Reconcile();
 }
 

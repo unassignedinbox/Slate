@@ -111,9 +111,19 @@ struct ExposureConfiguration
     //    exactly no effect outdoors, rather than merely a reduced one. Past that the frame progressively takes
     //    over, because a large disagreement is precisely the evidence that the camera is somewhere the sky
     //    cannot reach.
+    //    ⚠️ The dead zone has to be as wide as a SCENE, not as wide as a measurement error. At a low sun the
+    //    horizon band is around 20 000 cd/m² and the lit ground under it around 400 — five and a half stops
+    //    apart inside one frame — so no single anchor can sit within two stops of both ends, and a two-stop dead
+    //    zone was escaped by simply turning the camera from the sky to the ground. Measured across sun
+    //    elevations from 45° to −8°, the worst disagreement between the anchor and what the camera is pointed at
+    //    is 7 stops; six holds every case above the horizon outright.
+    //
+    //    🔴 The cost is stated rather than hidden: standing inside the Cornell box with the sky on, the room is
+    //    about nine stops below the anchor, which now lands mid-handover instead of fully on the frame. Sky off
+    //    hands metering back entirely, and that is the switch for an interior.
     bool  IncidentMetering       = true;    // false restores pure frame metering, the pre-A7e behaviour
-    float IncidentDeadZoneStops  = 2.0f;    // [stops] within this, the frame is ignored entirely
-    float IncidentHandoverStops  = 6.0f;    // [stops] beyond this, the frame is trusted entirely
+    float IncidentDeadZoneStops  = 6.0f;    // [stops] within this, the frame is ignored entirely
+    float IncidentHandoverStops  = 12.0f;   // [stops] beyond this, the frame is trusted entirely
 };
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -131,9 +141,14 @@ public:
     //    sequence of measurements.
     void ObserveLuminance(float AverageLogLuminance) noexcept;
 
-    // The scene's incident illuminance in lux, from DaylightSolver. Camera-independent by construction, which is
-    //    the entire point. Zero or negative means "not available", and the frame reading is used alone.
-    void ObserveIlluminance(float Lux) noexcept;
+    // The mean luminance a camera would see pointed anywhere, from DaylightSolver. Camera-independent by
+    //    construction — it averages over all directions rather than using any one — which is the entire point.
+    //    Zero or negative means "not available", and the frame reading is used alone.
+    //
+    //    ⚠️ A LUMINANCE, not lux. It was illuminance, and illuminance is cosine-weighted: at a low sun the
+    //    sky's light is all in a band near the horizon where the cosine is nearly zero, so the reading collapsed
+    //    while the screen stayed bright, and every sunrise fell outside the dead zone.
+    void ObserveIlluminance(float AnchorLuminance) noexcept;
 
     // What the adaptation is actually chasing, after the two readings have been reconciled. Exposed because the
     //    reconciliation is the interesting part and a readout that showed only one of the inputs would hide it.

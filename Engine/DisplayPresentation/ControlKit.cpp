@@ -378,17 +378,27 @@ void ControlKit::ValuePill(PixelSpace& Surface, float X, float Y, const char* Nu
     // A pill narrower than its own unit cell has no number cell left to draw, and the seam arithmetic below goes
     //    negative. Clamped rather than asserted: a cramped panel should still render something readable.
     UnitWidth = std::clamp(UnitWidth, 12.0f, std::max(Width - 24.0f, 12.0f));
+    // 🔴 ONE pill with a CHIP inside it, not two boxes butted together. The previous build filled a rounded
+    //    number cell, drew a hairline divider, and then painted the unit cell's left edge over the top to square
+    //    the seam — which erased the divider it had just drawn, in the same function, two lines later. What
+    //    reached the screen was a colour step with a rounding artefact in it and no rule at all.
+    //
+    //    The reference does it the other way round and it is plainly better: the pill is a single rounded
+    //    rectangle, and the unit sits in a smaller rounded chip inset within it. There is no seam to square,
+    //    because there is no seam.
+    const float ChipInset = 4.0f;
     const PlaneExtent Whole = Spanning(X, Y, Width, H);
-    const PlaneExtent Num   = Spanning(X, Y, Width - UnitWidth, H);
-    const PlaneExtent Cell  = Spanning(X + Width - UnitWidth, Y, UnitWidth, H);
-    Surface.FillRectangle(Whole, Faded(Palette().Inset, Opacity), H * 0.5f);              // unit cell colour behind
-    Surface.FillRectangle(Spanning(X, Y, Width - UnitWidth + H * 0.5f, H), Faded(Palette().Field, Opacity), H * 0.5f);   // number cell (left rounded)
-    Surface.FillRectangle(Spanning(Cell.MinimumX, Y, 1.0f, H), Faded(Palette().Stroke, Opacity));
-    // square the seam: repaint the unit cell's left edge over the number cell's right rounding
-    Surface.FillRectangle(Spanning(Cell.MinimumX, Y, H * 0.5f, H), Faded(Palette().Inset, Opacity));
+    const PlaneExtent Chip  = Spanning(X + Width - UnitWidth - ChipInset, Y + ChipInset,
+                                       UnitWidth, std::max(H - ChipInset * 2.0f, 1.0f));
+    const PlaneExtent Num   = Spanning(X, Y, Width - UnitWidth - ChipInset, H);
+
+    Surface.FillRectangle(Whole, Faded(Palette().Field, Opacity), H * 0.5f);
     OutlineRounded(Surface, Whole, Faded(Palette().Stroke, Opacity), H * 0.5f);
+    if (Unit && Unit[0])
+        Surface.FillRectangle(Chip, Faded(Palette().Inset, Opacity), Chip.Height() * 0.5f);
+
     TextCentred(Surface, Num,  Faded(Palette().Text,      Opacity), Number, 15.0f);
-    TextCentred(Surface, Cell, Faded(Palette().TextFaint, Opacity), Unit,   12.5f);
+    TextCentred(Surface, Chip, Faded(Palette().TextFaint, Opacity), Unit,   12.5f);
 }
 
 //------------------------------------------------------------------------------------------------------------------------

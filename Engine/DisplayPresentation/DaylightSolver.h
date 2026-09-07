@@ -43,6 +43,19 @@ public:
     [[nodiscard]] float QueryDirect()  const noexcept { return CachedDirect;  }
     [[nodiscard]] float QueryDiffuse() const noexcept { return CachedDiffuse; }
 
+    // 🔴 What the exposure should actually be anchored to, and NOT the illuminance above. Illuminance is
+    //    cosine-weighted — it answers "how much light lands on the ground" — and at a low sun nearly all of the
+    //    sky's light is in a band a few degrees above the horizon, where the cosine is almost zero. So the
+    //    illuminance collapses while the thing the camera is pointed at stays bright. Measured, the two
+    //    disagreed by 4.7 stops at a 10° sun and 22 by deep twilight, which put every sunrise and sunset
+    //    outside the exposure's dead zone and handed metering straight back to the frame — restoring the
+    //    camera dependence this was built to remove, exactly when it was being looked at.
+    //
+    //    This is the mean radiance a camera would see pointed in an arbitrary direction: the sky averaged over
+    //    the upper hemisphere by SOLID ANGLE, and the lit ground over the lower. Still camera-independent —
+    //    it averages over all directions rather than using any particular one — but it tracks what is on screen.
+    [[nodiscard]] float QueryAnchorLuminance(float SunIlluminance, float SunElevationRadians, float Turbidity) noexcept;
+
     // How far the sun may move, and the aerosol load change, before the integral is worth running again.
     static constexpr float kElevationTolerance = 0.0035f;   // [rad] 0.2°, well under a minute of a real day
     static constexpr float kTurbidityTolerance = 0.02f;     // [-]
@@ -54,6 +67,7 @@ private:
     float CachedDirect      = 0.0f;
     float CachedDiffuse     = 0.0f;
     float CachedIlluminance = 0.0f;
+    float CachedMeanSky     = 0.0f;   // [cd/m²] solid-angle mean over the upper hemisphere
 };
 
 } // namespace Frontier
