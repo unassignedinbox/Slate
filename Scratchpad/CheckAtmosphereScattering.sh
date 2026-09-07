@@ -183,6 +183,17 @@ grep -q 'StarField(rayDirection, StarRotation, StarBrightness) \* Attenuation' E
 grep -q 'kFeatureNightSky' Engine/Shaders/ReSTIRViewport.slang \
     || { echo "  the night sky has no feature bit — the pre-A7 image is unreproducible"; Fail=1; }
 
+# ⚠️ Stars must NOT be gated on time of day. They are in the sky at noon and are merely outshone; a
+# "skip stars when the sun is up" optimisation looks harmless and silently breaks every case where daylight
+# stars are real — high altitude, a total eclipse, deep twilight. The CPU side may only gate on the feature
+# toggle and on the sky being enabled at all.
+if grep -qE 'StarBrightness\s*=.*Sun(Direction|\.Zenith)' Engine/DisplayPresentation/ReSTIRIntegrator.cpp; then
+    echo "  star brightness is gated on the sun's position — daylight stars would be lost"; Fail=1
+fi
+if grep -qE 'SunDirection\.z\s*[<>].*StarField|StarField.*SunDirection\.z' Engine/Shaders/ReSTIRViewport.slang; then
+    echo "  the shader skips stars based on the sun's elevation"; Fail=1
+fi
+
 [ "$Fail" = "0" ] && echo "  constants, LUTs, bindings, sun, sky lighting and night sky agree PASS"
 
 echo

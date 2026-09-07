@@ -814,6 +814,43 @@ int main()
                "the star count is within a factor of ~1.6 of the real naked-eye sky");
     }
 
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n21. stars are hidden by daylight, not switched off by it\n");
+    {
+        // Stars are in the sky at noon — they are simply outshone. Nothing in the renderer gates them on time of
+        //    day, and that is deliberate: a time-of-day switch would get the common case right and every
+        //    interesting case wrong. High altitude, a total eclipse and deep twilight all reveal stars in
+        //    daylight, and all three fall out of the physics for free.
+        const Vec3  Sun      = SunAtElevation(57.0f);
+        const Vec3  Zenith{ 0.0f, 0.0f, 1.0f };
+        const float StarPeak = 0.4f;   // the StarBrightness default
+        const auto  Luma     = [](Vec3 C) { return 0.2126f * C.x + 0.7152f * C.y + 0.0722f * C.z; };
+
+        // At sea level the daytime sky must drown them: below one 8-bit step of the exposed image.
+        const float SeaLevel = Luma(SkyRadiance(2.0f, Zenith, Sun, Vec3(kSunLux), 48, 12));
+        const float SeaRatio = StarPeak / SeaLevel;
+        std::printf("     sea level noon: sky %.1f, star/sky %.2e\n",
+                    static_cast<double>(SeaLevel), static_cast<double>(SeaRatio));
+        Expect(SeaRatio < 1.0f / 255.0f, "at sea level the noon sky hides the stars, as it must");
+
+        // ⚠️ But the SAME code must reveal them from altitude, because there is less air overhead to scatter.
+        //    This is the check a time-of-day switch would fail: the sun is in exactly the same place.
+        const float HighUp    = Luma(SkyRadiance(40000.0f, Zenith, Sun, Vec3(kSunLux), 48, 12));
+        const float HighRatio = StarPeak / HighUp;
+        std::printf("     40 km noon:     sky %.4f, star/sky %.2e\n",
+                    static_cast<double>(HighUp), static_cast<double>(HighRatio));
+        Expect(HighRatio > 1.0f / 255.0f,
+               "from 40 km the same midday sun leaves the stars visible — altitude, not a flag");
+        Expect(HighUp < SeaLevel * 0.05f, "and the sky there is far darker for the physical reason");
+
+        // A total eclipse is the sun's illuminance collapsing, which the same parameter already expresses.
+        const float Eclipsed = Luma(SkyRadiance(2.0f, Zenith, Sun, Vec3(kSunLux * 0.0001f), 48, 12));
+        std::printf("     eclipse (0.01%% sun): sky %.4f, star/sky %.2e\n",
+                    static_cast<double>(Eclipsed), static_cast<double>(StarPeak / Eclipsed));
+        Expect(StarPeak / Eclipsed > 1.0f / 255.0f,
+               "and an eclipse reveals them too, through the same illuminance term");
+    }
+
     std::printf("\n>>> %s (%d failure%s)\n", Failures == 0 ? "ALL PASS" : "FAILURES", Failures, Failures == 1 ? "" : "s");
     return Failures == 0 ? 0 : 1;
 }
