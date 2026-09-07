@@ -63,7 +63,11 @@ static constexpr uint32_t kLuminanceHistogramBytes = kLuminanceHistogramBins * 4
 // A2 atmosphere tables. Sizes match AtmosphereScattering.slang; the gate checks they still agree.
 static constexpr uint32_t kTransmittanceLutWidth  = 256u;
 static constexpr uint32_t kTransmittanceLutHeight = 64u;
-static constexpr uint32_t kMultiScatterLutSize    = 32u;
+// 64, not 32. With the horizon-concentrated parameterisation the same 32 texels already cut the twilight error
+//    from 2.71x to 1.72x; doubling takes it to 1.13x, which is where it stops being visible as a colour shift on
+//    the dawn horizon. 4096 texels against the previous 1024 — the surface is 32 KiB rather than 8, and it is
+//    rebuilt only when the aerosol load moves, not per frame.
+static constexpr uint32_t kMultiScatterLutSize    = 64u;
 
 // A7. The sky, as a uniform buffer rather than push constants. Mirrors `SkyRecord` in ReSTIRViewport.slang.
 //    std140: a vec3 occupies 16 bytes, so each is paired with the float that follows it.

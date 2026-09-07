@@ -192,12 +192,13 @@ inline Vec3 SkyRadiance(float CameraAltitude, Vec3 ViewDirection, Vec3 SunDirect
 
 constexpr unsigned kTransmittanceWidth  = 256u;
 constexpr unsigned kTransmittanceHeight = 64u;
-constexpr unsigned kMultiScatterSize    = 32u;
+constexpr unsigned kMultiScatterSize    = 64u;
 
 inline void TransmittanceInverse(float U, float V, float& Altitude, float& CosSunZenith)
 {
-    Altitude     = V * V * kAtmosphereThickness;
-    CosSunZenith = U * 2.0f - 1.0f;
+    Altitude = V * V * kAtmosphereThickness;
+    const float T = U * 2.0f - 1.0f;
+    CosSunZenith = (T < 0.0f ? -1.0f : 1.0f) * T * T;
 }
 
 inline Vec3 ComputeTransmittanceTexel(float U, float V)

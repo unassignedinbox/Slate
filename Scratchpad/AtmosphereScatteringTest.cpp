@@ -834,6 +834,101 @@ int main()
         Expect(NightGround < Ground * 0.01f, "and it goes dark when the sun sets, rather than glowing all night");
     }
 
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n26. the tables resolve twilight, which is where the whole sunrise lives\n");
+    {
+        // 🔴 The reported defect, traced. Multiple scattering is what makes a dawn horizon PALE rather than
+        //    blood red — measured, it takes the horizon from R/B 238 down to 5.4 — so an error in that term
+        //    lands directly on the colour. The table storing it was parameterised LINEAR IN COSINE, which spends
+        //    its texels where nothing happens: at the horizon one texel of 32 spanned 3.58° of sun elevation, so
+        //    the whole of civil twilight fell inside two of them.
+        //
+        //    Reconstruction is compared against the integral evaluated AT the angle, which is the thing the
+        //    table is standing in for.
+        const auto Forward = [](float Cosine)
+        {
+            const float Sign = Cosine < 0.0f ? -1.0f : 1.0f;
+            return 0.5f + 0.5f * Sign * std::sqrt(std::fabs(Cosine));
+        };
+
+        // ⚠️ ComputeMultiScatterTexel takes a TEXEL COORDINATE and inverts the parameterisation itself, so
+        //    reaching a particular sun angle means going through the forward map. Passing cos*0.5+0.5 was what
+        //    that coordinate used to mean, and after the change it silently asks about a different angle — every
+        //    number in the first run of this section was wrong for exactly that reason.
+        const auto EvaluateAt = [&](float Cosine)
+        { return ComputeMultiScatterTexel(Forward(Cosine), 0.0f, 48, 16); };
+        const auto Sample = [&](float Cosine)
+        {
+            // Built through TransmittanceInverse and read through the forward map, exactly as the shader does.
+            const float X = std::fmin(std::fmax(Forward(Cosine) * float(kMultiScatterSize) - 0.5f, 0.0f),
+                                      float(kMultiScatterSize) - 1.0f);
+            const int   I = static_cast<int>(std::floor(X));
+            const float F = X - static_cast<float>(I);
+            const auto  Texel = [&](int K)
+            {
+                const int   Clamped = K < 0 ? 0 : (K > int(kMultiScatterSize) - 1 ? int(kMultiScatterSize) - 1 : K);
+                float Altitude = 0.0f, CosSunZenith = 0.0f;
+                TransmittanceInverse((static_cast<float>(Clamped) + 0.5f) / float(kMultiScatterSize), 0.0f,
+                                     Altitude, CosSunZenith);
+                return EvaluateAt(CosSunZenith);
+            };
+            return Texel(I) * (1.0f - F) + Texel(I + 1) * F;
+        };
+        const auto Luma = [](Vec3 C) { return 0.2126f * C.x + 0.7152f * C.y + 0.0722f * C.z; };
+
+        // ⚠️ The angle a single texel spans at the horizon is the whole point, so it is asserted directly.
+        float Altitude = 0.0f, EdgeCosine = 0.0f;
+        TransmittanceInverse(0.5f + 1.0f / float(kMultiScatterSize), 0.0f, Altitude, EdgeCosine);
+        const float TexelDegrees = std::asin(std::fmin(1.0f, std::fabs(EdgeCosine))) * 180.0f / 3.14159265f;
+        std::printf("     one texel spans %.3f deg of sun elevation at the horizon\n",
+                    static_cast<double>(TexelDegrees));
+        Expect(TexelDegrees < 0.5f, "a texel is a fraction of a degree at the horizon, not several degrees");
+
+        std::printf("     sun elev      exact   reconstructed   error\n");
+        float Worst = 1.0f;
+        for (float Degrees : { 10.0f, 2.0f, 0.0f, -2.0f, -4.0f, -6.0f })
+        {
+            const float Cosine = std::sin(Degrees * 3.14159265f / 180.0f);
+            const float Exact  = Luma(EvaluateAt(Cosine));
+            const float Table  = Luma(Sample(Cosine));
+            const float Error  = Exact > 0.0f ? std::fmax(Table / Exact, Exact / std::fmax(Table, 1e-12f)) : 1.0f;
+            Worst = std::fmax(Worst, Error);
+            std::printf("     %8.1f %10.6f %15.6f %7.2fx\n", static_cast<double>(Degrees),
+                        static_cast<double>(Exact), static_cast<double>(Table), static_cast<double>(Error));
+        }
+        std::printf("     worst reconstruction error through twilight: %.2fx\n", static_cast<double>(Worst));
+        Expect(Worst < 1.35f, "the table reproduces twilight to within a third of a stop");
+
+        // What actually shipped, on the same angles, so the regression is recognisable: 32 texels, linear in
+        //    cosine. Comparing against 64-texel linear would flatter the mapping by hiding the size behind it.
+        constexpr int kWas = 32;
+        const auto Linear = [&](float Cosine)
+        {
+            const float X = std::fmin(std::fmax((Cosine * 0.5f + 0.5f) * float(kWas) - 0.5f, 0.0f),
+                                      float(kWas) - 1.0f);
+            const int   I = static_cast<int>(std::floor(X));
+            const float F = X - static_cast<float>(I);
+            const auto  Texel = [&](int K)
+            {
+                const int Clamped = K < 0 ? 0 : (K > kWas - 1 ? kWas - 1 : K);
+                // The OLD mapping: the texel held the value at cosine = 2u - 1.
+                return EvaluateAt((static_cast<float>(Clamped) + 0.5f) / float(kWas) * 2.0f - 1.0f);
+            };
+            return Texel(I) * (1.0f - F) + Texel(I + 1) * F;
+        };
+        float WorstLinear = 1.0f;
+        for (float Degrees : { 0.0f, -2.0f, -4.0f })
+        {
+            const float Cosine = std::sin(Degrees * 3.14159265f / 180.0f);
+            const float Exact  = Luma(EvaluateAt(Cosine));
+            const float Table  = Luma(Linear(Cosine));
+            if (Exact > 0.0f) WorstLinear = std::fmax(WorstLinear, std::fmax(Table / Exact, Exact / Table));
+        }
+        std::printf("     what shipped (32 texels, linear) reached %.2fx on the same angles\n",
+                    static_cast<double>(WorstLinear));
+        Expect(WorstLinear > Worst * 1.5f, "the old table really was worse — this is the bug being fixed");
+    }
+
     std::printf("\n>>> %s (%d failure%s)\n", Failures == 0 ? "ALL PASS" : "FAILURES", Failures, Failures == 1 ? "" : "s");
     return Failures == 0 ? 0 : 1;
 }

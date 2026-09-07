@@ -331,6 +331,32 @@ if grep -q 'SolidAngle = 6.28318530 \* (1.0 - cos(MoonRadius))' Engine/Shaders/R
     echo "  the moon's radiance is divided by its scaled solid angle — a larger moon would dim"; Fail=1
 fi
 
+# ── A7f: the tables must resolve twilight ────────────────────────────────────────────────────────────────────────
+# 🔴 Multiple scattering is what makes a dawn horizon pale rather than blood red — it takes the horizon from
+# R/B 238 down to 5.4 — so an error in the table that stores it lands straight on the colour. Parameterised
+# LINEAR IN COSINE, one texel of 32 spanned 3.58 deg of sun elevation and the whole of civil twilight fell inside
+# two of them, for up to 2.51x error. The signed square root crowds texels toward the horizon instead.
+grep -q '0.5 + 0.5 \* S \* sqrt(abs(CosSunZenith))' Engine/Shaders/AtmosphereScattering.slang \
+    || { echo "  the sun-angle parameterisation is linear in cosine again — twilight would be two texels wide"; Fail=1; }
+grep -q 'CosSunZenith = (T < 0.0 ? -1.0 : 1.0) \* T \* T;' Engine/Shaders/AtmosphereScattering.slang \
+    || { echo "  the inverse does not undo the forward map — the tables would be filled for the wrong angles"; Fail=1; }
+grep -q 'CosSunZenith = (T < 0.0f ? -1.0f : 1.0f) \* T \* T;' Engine/DisplayPresentation/AtmosphereModel.h \
+    || { echo "  the CPU model still inverts the old mapping"; Fail=1; }
+
+# ⚠️ Forward and inverse are a PAIR. The tables are filled through the inverse and read through the forward, so
+# a mismatch does not fail loudly — it silently describes an atmosphere lit from a different sun angle.
+if grep -q 'CosSunZenith \* 0.5 + 0.5' Engine/Shaders/AtmosphereScattering.slang; then
+    echo "  a linear-in-cosine forward map survives somewhere — it cannot pair with the square-root inverse"; Fail=1
+fi
+
+# The multi-scatter surface's size is duplicated in the header and the CPU model.
+ShaderSize=$(grep -oP 'kMultiScatterLutSize\s*=\s*\K[0-9]+' Engine/DeviceExchange/SwapchainExchange.h | head -1)
+ModelSize=$(grep -oP 'kMultiScatterSize\s*=\s*\K[0-9]+' Engine/DisplayPresentation/AtmosphereModel.h | head -1)
+[ -n "$ShaderSize" ] && [ "$ShaderSize" = "$ModelSize" ] \
+    || { echo "  multi-scatter surface size differs: engine $ShaderSize, model $ModelSize"; Fail=1; }
+awk -v f="$ShaderSize" 'BEGIN { exit !(f >= 64) }' \
+    || { echo "  the multi-scatter surface is back below 64 — twilight error rises above a third of a stop"; Fail=1; }
+
 [ "$Fail" = "0" ] && echo "  constants, LUTs, bindings, sun, sky lighting, night sky, turbidity, ground and moon agree PASS"
 
 echo

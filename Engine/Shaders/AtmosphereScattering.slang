@@ -294,23 +294,41 @@ vec3 SunDisc(float CameraAltitude, vec3 ViewDirection, vec3 SunDirection, vec3 S
 
 const uint kTransmittanceWidth  = 256u;   // [px] along cos(sun zenith)
 const uint kTransmittanceHeight = 64u;    // [px] along altitude
-const uint kMultiScatterSize    = 32u;    // [px] square, in the same two parameters
+const uint kMultiScatterSize    = 64u;    // [px] square, in the same two parameters (A7f: was 32)
 
 // ── Parameterisation ────────────────────────────────────────────────────────────────────────────────────────
 // u ← cos(sun zenith), v ← altitude. Both are stored with a SQUARE-ROOT distribution in altitude: density falls
 //    exponentially with height, so a linear table spends most of its rows on thin air where nothing changes and
 //    starves the first kilometre where everything does.
 
+// 🔴 u is the SIGNED SQUARE ROOT of the sun's cosine, not the cosine itself. Linear-in-cosine spends its texels
+//    where nothing happens and starves the one place everything does: at the horizon, one texel of 32 spanned
+//    3.58° of sun elevation, so the whole of civil twilight — every sunrise and sunset there is — fell inside
+//    two of them. Measured against the exact integral, that cost up to 2.71× error in the multiple-scattering
+//    term, and multiple scattering is precisely what makes a dawn horizon pale rather than blood red: it takes
+//    the horizon from R/B 238 down to 5.4, so an error there lands straight on the colour.
+//
+//    The square root crowds texels toward cos = 0. The same 32 texels then span 0.224° at the horizon instead
+//    of 3.58°, and the error falls to 1.72×; at 64 it is 1.13×. Chosen by sweeping the exponent rather than
+//    picked: 0.4 is marginally better still in twilight but starts to starve the daytime sky, and 1.0 is what
+//    was there.
+//
+//    ⚠️ Whatever this becomes, the build and the sample must move together. The tables are FILLED through the
+//    inverse and READ through the forward, so a mismatch does not fail loudly — it silently describes an
+//    atmosphere lit from a different sun angle than the one being asked about.
 vec2 TransmittanceParameterisation(float Altitude, float CosSunZenith)
 {
     const float H = clamp(Altitude / kAtmosphereThickness, 0.0, 1.0);
-    return vec2(clamp(CosSunZenith * 0.5 + 0.5, 0.0, 1.0), sqrt(H));
+    const float S = CosSunZenith < 0.0 ? -1.0 : 1.0;
+    const float U = 0.5 + 0.5 * S * sqrt(abs(CosSunZenith));
+    return vec2(clamp(U, 0.0, 1.0), sqrt(H));
 }
 
 void TransmittanceInverse(vec2 Uv, out float Altitude, out float CosSunZenith)
 {
-    Altitude     = Uv.y * Uv.y * kAtmosphereThickness;
-    CosSunZenith = Uv.x * 2.0 - 1.0;
+    Altitude = Uv.y * Uv.y * kAtmosphereThickness;
+    const float T = Uv.x * 2.0 - 1.0;
+    CosSunZenith = (T < 0.0 ? -1.0 : 1.0) * T * T;
 }
 
 // ── Building ────────────────────────────────────────────────────────────────────────────────────────────────
