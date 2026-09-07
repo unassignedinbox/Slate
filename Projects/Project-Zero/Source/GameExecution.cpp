@@ -519,6 +519,9 @@ int main(int argc, char** argv)
     bool  BrowserAutoExposure = true;
     bool  BrowserNightSky = true;
     float BrowserStarBrightness = 0.4f;
+    // A7b turbidity: the day's mean aerosol load and how far it swings between dawn and dusk.
+    float BrowserTurbidity = 1.0f, BrowserTurbiditySwing = 0.35f;
+    char  BrowserTurbidityText[48] = "-";
     char  BrowserExposureText[48] = "-";
     char  BrowserSunElevationText[32]  = "-";
     char  BrowserSunAzimuthText[32]    = "-";
@@ -624,6 +627,12 @@ int main(int argc, char** argv)
                     Toggle("Lights scene", &BrowserSkyLighting);
                     Toggle("Night sky",    &BrowserNightSky);
                     Slider("Stars",        &BrowserStarBrightness, 0.0f, 2.0f, "", 2u);
+                    // A7b. Turbidity is what makes a sunrise differ from a sunset, so the two controls sit
+                    //    together: the day's mean haze, and how far it swings between clean dawn and dusty dusk.
+                    //    Swing 0 is the identity switch — every hour reverts to the pre-A7b sky.
+                    Slider("Turbidity",    &BrowserTurbidity,      0.0f, 4.0f, "", 2u);
+                    Slider("Dawn/dusk",    &BrowserTurbiditySwing, 0.0f, 1.5f, "", 2u);
+                    Readout("Air now",     BrowserTurbidityText);
                     Readout("Model", "LUT + multiple scattering (A2)");
                     break;
 
@@ -1119,6 +1128,18 @@ int main(int argc, char** argv)
             BrowserSkyLighting= Cfg.SkyLighting;
             BrowserNightSky   = Cfg.NightSky;
             BrowserStarBrightness = Cfg.StarBrightness;
+            BrowserTurbidity      = Cfg.SkyTurbidity;
+            BrowserTurbiditySwing = Cfg.TurbiditySwing;
+            {
+                // The turbidity the sky is ACTUALLY being rendered with this frame, from the same curve the
+                //    record is built from. Showing the mean instead would leave the one number the user watches
+                //    while dragging the clock frozen at a value nothing on screen corresponds to.
+                const double DayFraction = Integrator.Celestial().QuerySolarDayFraction(
+                                               Integrator.Celestial().QueryTime());
+                const float  Now = Frontier::QueryDiurnalTurbidity(Cfg.SkyTurbidity, Cfg.TurbiditySwing, DayFraction);
+                std::snprintf(BrowserTurbidityText, sizeof(BrowserTurbidityText), "%.2f  (%.1f h)",
+                              static_cast<double>(Now), DayFraction * 24.0);
+            }
             BrowserAutoExposure = Integrator.Exposure().QueryConfiguration().Mode
                                 == Frontier::ExposureModeCategory::Adaptive;
             std::snprintf(BrowserExposureText, sizeof(BrowserExposureText), "%.3f  (scene %.4f)",
@@ -1250,6 +1271,8 @@ int main(int argc, char** argv)
             Integrator.AssignSkyLighting(BrowserSkyLighting);
             Integrator.AssignNightSky(BrowserNightSky);
             Integrator.AssignStarBrightness(BrowserStarBrightness);
+            Integrator.AssignSkyTurbidity(BrowserTurbidity);
+            Integrator.AssignTurbiditySwing(BrowserTurbiditySwing);
             {
                 Frontier::ExposureConfiguration Adapt = Integrator.Exposure().QueryConfiguration();
                 const Frontier::ExposureModeCategory Want = BrowserAutoExposure

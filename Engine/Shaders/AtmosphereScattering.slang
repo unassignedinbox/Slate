@@ -43,9 +43,38 @@ const float kMieScaleHeight      = 1200.0;       // [m]   aerosols hug the groun
 const vec3  kRayleighScattering  = vec3(5.802e-6, 13.558e-6, 33.1e-6);
 
 // Mie is wavelength-neutral — aerosols are large compared with visible light — which is why haze is grey/white.
-const float kMieScattering       = 3.996e-6;     // [1/m]
-const float kMieExtinction       = 4.440e-6;     // [1/m] scattering plus absorption
+//    These two are the CLEAR reference atmosphere, i.e. turbidity 1. Everything that scatters off aerosols reads
+//    them through MieScattering()/MieExtinction() below rather than directly.
+const float kMieScattering       = 3.996e-6;     // [1/m]  at turbidity 1
+const float kMieExtinction       = 4.440e-6;     // [1/m]  at turbidity 1; scattering plus absorption
 const float kMieAsymmetry        = 0.80;         // [-]   forward-biased; this is the glow AROUND the sun
+
+//------------------------------------------------------------------------------------------------------------------------
+//                                                       TURBIDITY
+//------------------------------------------------------------------------------------------------------------------------
+// 🧩 The aerosol load, as a multiple of the clear reference above. 1 is clean maritime air; 2.5 is a hazy
+//    afternoon over a city. It scales Mie only — Rayleigh is the air molecules themselves and does not care how
+//    dusty the day is, which is why a hazy sky whitens near the horizon while the zenith barely changes.
+//
+//    🔴 WHY THIS EXISTS. A clear sunrise and a clear sunset at the same sun elevation are, in this model,
+//    IDENTICAL: scattering depends only on the geometry, and the geometry is symmetric about the horizon. That
+//    is physically right and visually wrong, because real dawns look different from real dusks — paler, whiter,
+//    the glow tighter to the horizon. The difference is not in the light path, it is in the air: overnight the
+//    boundary layer cools, convection stops and aerosols settle out, so dawn air is CLEANER. By late afternoon a
+//    day of heating has stirred dust and haze back up. So the parameter that must differ between them is the
+//    aerosol load, not anything about the sun.
+//
+//    ⚠️ A GLOBAL, not an argument. Threading a float through SkyRadiance, SunDisc, OpticalDepth,
+//    SunTransmittance, ComputeTransmittanceTexel and ComputeMultiScatterTexel is six signatures and six call
+//    sites, and the one that gets missed is silent: the tables would keep describing a different atmosphere from
+//    the march that samples them, which reads as a horizon that does not match the sky above it.
+//
+//    Each entry point assigns it ONCE at the top of main from its own uniform, so the whole invocation — sky,
+//    sun disc, and both table builders — sees the same air.
+float gAerosolTurbidity = 1.0;
+
+float MieScattering() { return kMieScattering * gAerosolTurbidity; }
+float MieExtinction() { return kMieExtinction * gAerosolTurbidity; }
 
 // Ozone. It scatters nothing and only absorbs, but it is what keeps a twilight sky blue instead of turning it
 //    muddy brown once the direct sunlight has been reddened away.
@@ -122,7 +151,7 @@ vec3 OpticalDepth(vec3 Origin, vec3 Direction, float Distance, int Steps)
         const float Altitude = length(Position) - kPlanetRadius;
         const vec3  Density  = AtmosphereDensity(Altitude);
         Sum += (kRayleighScattering * Density.x
-              + vec3(kMieExtinction) * Density.y
+              + vec3(MieExtinction()) * Density.y
               + kOzoneAbsorption    * Density.z) * Step;
     }
     return Sum;
@@ -173,12 +202,12 @@ vec3 SkyRadiance(float CameraAltitude, vec3 ViewDirection, vec3 SunDirection,
         const vec3  Density  = AtmosphereDensity(Altitude);
 
         const vec3 Extinction = kRayleighScattering * Density.x
-                              + vec3(kMieExtinction) * Density.y
+                              + vec3(MieExtinction()) * Density.y
                               + kOzoneAbsorption    * Density.z;
         const vec3 StepTransmittance = exp(-Extinction * Step);
 
         const vec3 ScatteringHere = kRayleighScattering * Density.x * PhaseRayleigh
-                                  + vec3(kMieScattering) * Density.y * PhaseMie;
+                                  + vec3(MieScattering()) * Density.y * PhaseMie;
 
         const vec3 SunArriving = SunTransmittance(Position, SunDirection, LightSteps);
 
@@ -301,9 +330,9 @@ vec3 ComputeMultiScatterTexel(vec2 Uv, int Directions, int Steps)
             const vec3  Density  = AtmosphereDensity(H);
 
             const vec3 Extinction = kRayleighScattering * Density.x
-                                  + vec3(kMieExtinction) * Density.y
+                                  + vec3(MieExtinction()) * Density.y
                                   + kOzoneAbsorption    * Density.z;
-            const vec3 Scattering = kRayleighScattering * Density.x + vec3(kMieScattering) * Density.y;
+            const vec3 Scattering = kRayleighScattering * Density.x + vec3(MieScattering()) * Density.y;
             const vec3 StepTransmittance = exp(-Extinction * Step);
             const vec3 Integrated = (Scattering - Scattering * StepTransmittance) / max(Extinction, vec3(1e-9));
 

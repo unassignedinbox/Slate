@@ -80,9 +80,9 @@ BindingCount=$(grep -oP 'kComputeBindingCount\s*=\s*\K[0-9]+' Engine/DeviceExcha
 grep -q 'B == 21u || B == 22u' Engine/DeviceExchange/SwapchainExchange.cpp \
     || { echo "  the atmosphere LUTs are not declared as sampled images"; Fail=1; }
 
-# The tables are constant per atmosphere; building them per frame would throw away the entire point.
+# The tables are constant FOR A GIVEN ATMOSPHERE; building them per frame would throw away the entire point.
 grep -q '!Vulkan->AtmosphereTablesBuilt' Engine/DeviceExchange/SwapchainExchange.cpp \
-    || { echo "  the LUT build has no once-only latch — it would run every frame"; Fail=1; }
+    || { echo "  the LUT build has no latch at all — it would run every frame"; Fail=1; }
 
 # Bring-up order: the tables must exist before WriteDescriptorSet binds them.
 LutLine=$(grep -n '"BringAtmosphereTables"' Engine/DeviceExchange/SwapchainExchange.cpp | head -1 | cut -d: -f1)
@@ -204,7 +204,85 @@ if grep -qE 'SunDirection\.z\s*[<>].*StarField|StarField.*SunDirection\.z' Engin
     echo "  the shader skips stars based on the sun's elevation"; Fail=1
 fi
 
-[ "$Fail" = "0" ] && echo "  constants, LUTs, bindings, sun, sky lighting and night sky agree PASS"
+# ── A7b: turbidity ───────────────────────────────────────────────────────────────────────────────────────────────
+# 🔴 Every aerosol term must go through the accessors. Turbidity scales Mie, and the whole point of routing it
+# through MieScattering()/MieExtinction() is that a site which still reads the raw constant is SILENT: it keeps
+# marching clear air while everything around it thickens. The worst case is a LUT builder that misses one, since
+# the table then describes different air from the march that samples it and the horizon stops matching the sky.
+for Shader in Engine/Shaders/AtmosphereScattering.slang Engine/Shaders/ReSTIRViewport.slang Engine/Shaders/AtmosphereLut.slang; do
+    if grep -qE 'vec3\(kMie(Scattering|Extinction)\)' "$Shader"; then
+        echo "  $Shader still reads a raw Mie constant — that site would ignore turbidity"; Fail=1
+    fi
+done
+if grep -qE 'Vec3\(kMie(Scattering|Extinction)\)' Scratchpad/AtmosphereScatteringTest.cpp; then
+    echo "  the harness still reads a raw Mie constant — it would stop describing the shader"; Fail=1
+fi
+grep -q 'float MieScattering() { return kMieScattering \* gAerosolTurbidity; }' Engine/Shaders/AtmosphereScattering.slang \
+    || { echo "  the Mie accessors no longer scale by turbidity"; Fail=1; }
+
+# ⚠️ Every entry point must set the global inside main, before anything can read it. The kernel evaluates the
+# sky, the sun disc and the bounce gather; whichever ran first would see clear air if the assignment came later.
+for Pair in "Engine/Shaders/ReSTIRViewport.slang:SkyTurbidity" "Engine/Shaders/AtmosphereLut.slang:Turbidity"; do
+    Shader="${Pair%%:*}"; Uniform="${Pair##*:}"
+    AssignLine=$(grep -n "gAerosolTurbidity = clamp(${Uniform}" "$Shader" | head -1 | cut -d: -f1)
+    MainLine=$(grep -n '^void main()' "$Shader" | head -1 | cut -d: -f1)
+    if [ -z "$AssignLine" ]; then
+        echo "  $Shader never assigns gAerosolTurbidity — it would render the clear reference atmosphere"; Fail=1
+    elif [ -n "$MainLine" ] && [ "$AssignLine" -lt "$MainLine" ]; then
+        echo "  $Shader assigns gAerosolTurbidity outside main()"; Fail=1
+    fi
+done
+
+# 🔴 The tables are a function of the ATMOSPHERE, and turbidity is now part of it. A plain "built once" latch
+# would leave them baked at whatever the air happened to be on frame one, so the sun's survival and the sky's
+# scattering would describe different days. Rebuild on a threshold, not on inequality: the diurnal curve moves
+# continuously and exact comparison would rebuild every frame.
+grep -q 'AtmosphereTablesTurbidity = FrameTurbidity' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  the LUTs never record the turbidity they were baked at — they would go stale"; Fail=1; }
+grep -q 'std::fabs(FrameTurbidity - Vulkan->AtmosphereTablesTurbidity)' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  nothing compares the frame's turbidity against the tables' — they would never rebuild"; Fail=1; }
+grep -q 'Push.Turbidity  = FrameTurbidity' Engine/DeviceExchange/SwapchainExchange.cpp \
+    || { echo "  the LUT build does not bake the frame's turbidity"; Fail=1; }
+
+# ⚠️ A rebuild is not the first build. With two frames in flight the previous frame's kernel may still be
+# sampling these images, so the transition into GENERAL must wait on the reading stage. TOP_OF_PIPE waits for
+# nothing, which was correct exactly once.
+if grep -B3 'ToGeneral.data()' Engine/DeviceExchange/SwapchainExchange.cpp | grep -q 'TOP_OF_PIPE'; then
+    echo "  the LUT rebuild barrier still waits on nothing — it can race a frame still sampling the tables"; Fail=1
+fi
+
+# The record must carry it on both sides, and the block must not have grown.
+grep -q 'float   SkyTurbidity;' Engine/Shaders/ReSTIRViewport.slang \
+    || { echo "  the sky record has no turbidity field"; Fail=1; }
+grep -q 'float    SkyTurbidity;' Engine/DeviceExchange/SwapchainExchange.h \
+    || { echo "  the C++ mirror of the sky record has no turbidity field"; Fail=1; }
+
+# Both shaders must clamp to the same ceiling, or the tables and the march diverge at the top of the slider.
+KernelClamp=$(grep -oP 'gAerosolTurbidity = clamp\(SkyTurbidity, 0.0, \K[0-9.]+' Engine/Shaders/ReSTIRViewport.slang)
+LutClamp=$(grep -oP 'gAerosolTurbidity = clamp\(Turbidity, 0.0, \K[0-9.]+' Engine/Shaders/AtmosphereLut.slang)
+[ -n "$KernelClamp" ] && [ "$KernelClamp" = "$LutClamp" ] \
+    || { echo "  turbidity is clamped to '$KernelClamp' in the kernel but '$LutClamp' in the LUT builder"; Fail=1; }
+
+# ⚠️ The diurnal curve is the mechanism that makes dawn differ from dusk, and the harness ports it verbatim.
+# If the two drift, the proof describes a day the renderer does not have.
+grep -q 'kTwoPi \* (Hour - 18.0) / 24.0' Engine/DisplayPresentation/ReSTIRIntegrator.h \
+    || { echo "  the aerosol curve no longer peaks at 18:00 — dawn and dusk would not differ as claimed"; Fail=1; }
+grep -q 'kTwoPi \* (Hour - 18.0) / 24.0' Scratchpad/AtmosphereScatteringTest.cpp \
+    || { echo "  the harness no longer ports the aerosol curve verbatim"; Fail=1; }
+for Side in Engine/DisplayPresentation/ReSTIRIntegrator.h Scratchpad/AtmosphereScatteringTest.cpp; do
+    grep -q 'Value < 0.05 ? 0.05 : Value' "$Side" \
+        || { echo "  $Side lost the turbidity floor — negative air amplifies light"; Fail=1; }
+done
+
+# 🔴 Turbidity must scale Mie ONLY. Rayleigh is the air molecules themselves and does not care how dusty the day
+# is; wiring turbidity into it would turn a haze control into a global brightness control, which would look
+# plausible on a single screenshot and be wrong everywhere else.
+if grep -qE 'kRayleighScattering[^;]*gAerosolTurbidity|gAerosolTurbidity[^;]*kRayleighScattering' \
+        Engine/Shaders/AtmosphereScattering.slang Engine/Shaders/ReSTIRViewport.slang; then
+    echo "  turbidity scales Rayleigh — it is a haze parameter, not a brightness one"; Fail=1
+fi
+
+[ "$Fail" = "0" ] && echo "  constants, LUTs, bindings, sun, sky lighting, night sky and turbidity agree PASS"
 
 echo
 Glslang=""
@@ -219,9 +297,18 @@ fi
 
 echo "[Atmosphere] compiling the kernel with the sky included"
 if ( cd Engine/Shaders && "$Glslang" -V --target-env vulkan1.2 -S comp ReSTIRViewport.slang -o /dev/null ) >/tmp/Atmosphere.spv.log 2>&1; then
-    echo "  SPIR-V compiles                                                  PASS"
+    echo "  the kernel compiles to SPIR-V                                    PASS"
 else
     sed 's/^/    /' /tmp/Atmosphere.spv.log | head -20; Fail=1
+fi
+
+# ⚠️ The table builder shares the header and is NOT part of the kernel's compilation, so a change that breaks
+# only the builder — a uniform it does not declare, a global assigned before it exists — compiles above and
+# fails at bring-up, where the symptom is a black sky rather than an error message.
+if ( cd Engine/Shaders && "$Glslang" -V --target-env vulkan1.2 -S comp AtmosphereLut.slang -o /dev/null ) >/tmp/AtmosphereLut.spv.log 2>&1; then
+    echo "  the table builder compiles to SPIR-V                             PASS"
+else
+    sed 's/^/    /' /tmp/AtmosphereLut.spv.log | head -20; Fail=1
 fi
 
 echo

@@ -361,7 +361,7 @@ layout(binding = 24) uniform SkyRecord
 
     uint    SkyViewSteps;           // [cnt] quality tier: samples along the view ray
     uint    SkyLightSteps;          // [cnt] quality tier: 0 selects the tabulated path
-    uint    SkyReserve0;
+    float   SkyTurbidity;           // [-]   aerosol load; 1 is the clear reference atmosphere (A7b)
     uint    SkyReserve1;
 };
 
@@ -900,7 +900,7 @@ vec3 SkyRadianceTabulated(float CameraAltitude, vec3 ViewDirection, vec3 SunDire
         const vec3  Density  = AtmosphereDensity(Altitude);
 
         const vec3 Extinction = kRayleighScattering * Density.x
-                              + vec3(kMieExtinction) * Density.y
+                              + vec3(MieExtinction()) * Density.y
                               + kOzoneAbsorption    * Density.z;
         const vec3 StepTransmittance = exp(-Extinction * Step);
 
@@ -910,8 +910,8 @@ vec3 SkyRadianceTabulated(float CameraAltitude, vec3 ViewDirection, vec3 SunDire
         const vec3  SunArriving  = SampleTransmittance(Altitude, CosSunZenith);
 
         const vec3 Phased    = kRayleighScattering * Density.x * PhaseRayleigh
-                             + vec3(kMieScattering) * Density.y * PhaseMie;
-        const vec3 Isotropic = (kRayleighScattering * Density.x + vec3(kMieScattering) * Density.y)
+                             + vec3(MieScattering()) * Density.y * PhaseMie;
+        const vec3 Isotropic = (kRayleighScattering * Density.x + vec3(MieScattering()) * Density.y)
                              * SampleMultiScatter(Altitude, CosSunZenith);
 
         const vec3 Scattering = Phased * SunArriving + Isotropic;
@@ -938,6 +938,13 @@ void main()
 {
     uvec2 pixel = gl_GlobalInvocationID.xy;
     if (pixel.x >= ViewportWidth || pixel.y >= ViewportHeight) return;
+
+    // A7b ⚠️ FIRST, before anything that can touch the atmosphere. Every Mie term in this invocation — the sky
+    //    march, the sun disc, and the bounce ray's sky gather — reads this global, so it must be set before the
+    //    first of them runs. Setting it later would leave whichever path ran first evaluating clear air.
+    //    Clamped rather than trusted: a negative turbidity is negative extinction, i.e. an atmosphere that
+    //    amplifies light, and the march would diverge into NaN rather than merely look wrong.
+    gAerosolTurbidity = clamp(SkyTurbidity, 0.0, 16.0);
 
     uint seed = MakeSeed(pixel, FrameIndex);
 

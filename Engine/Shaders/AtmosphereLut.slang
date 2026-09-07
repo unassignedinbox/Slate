@@ -31,13 +31,19 @@ layout(push_constant) uniform AtmosphereLutConstants
     uint Target;       // 0 = transmittance, 1 = multiple scattering
     uint Directions;   // [cnt] sphere samples for the multiple-scattering gather
     uint Steps;        // [cnt] march steps along each of those directions
-    uint Padding0;
+    float Turbidity;   // [-]   A7b: the aerosol load the tables are baked AT
     uint Padding1;
     uint Padding2;
 };
 
 void main()
 {
+    // A7b ⚠️ Baked at the same aerosol load the frame kernel will march with. A table built at one turbidity and
+    //    sampled at another is the worst kind of disagreement: the sun's survival comes from the table and the
+    //    sky's scattering from the march, so the horizon would be lit for a different atmosphere than the air
+    //    above it — and nothing about the image says which half is wrong.
+    gAerosolTurbidity = clamp(Turbidity, 0.0, 16.0);
+
     const uvec2 Texel = gl_GlobalInvocationID.xy;
     if (Texel.x >= Width || Texel.y >= Height) return;
 

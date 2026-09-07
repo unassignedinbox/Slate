@@ -158,6 +158,13 @@ SkyRecord ReSTIRIntegrator::BuildSkyRecord() const noexcept
     Record.SkyViewSteps  = Steps.View;
     Record.SkyLightSteps = Steps.Light;
 
+    // A7b. The aerosol load for this hour. Taken from the SAME clock as the sun above, so the air and the sun
+    //    can never describe different times of day — which would show as a clean-air glow under a low evening
+    //    sun, i.e. exactly the symptom this parameter exists to fix, but at the wrong end of the day.
+    Record.SkyTurbidity = QueryDiurnalTurbidity(ActiveConfiguration.SkyTurbidity,
+                                                ActiveConfiguration.TurbiditySwing,
+                                                Sky.QuerySolarDayFraction(Sky.QueryTime()));
+
     // Quality Off zeroes the illuminance, which is the single condition the shader tests. Two conditions could
     //    disagree about whether the sky is on.
     const bool SkyOn = ActiveConfiguration.SkyQuality != SkyQualityCategory::Off;

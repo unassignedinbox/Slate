@@ -51,7 +51,8 @@ struct SkyRecord
 
     uint32_t SkyViewSteps;                                  // [-]    quality tier
     uint32_t SkyLightSteps;                                 // [-]    0 selects the tabulated path
-    uint32_t SkyReserve0, SkyReserve1;
+    float    SkyTurbidity;                                  // [-]    A7b: aerosol load; 1 is the clear reference
+    uint32_t SkyReserve1;
 };
 static_assert(sizeof(SkyRecord) == 64u, "SkyRecord must match the shader's std140 uniform block (64 bytes)");
 

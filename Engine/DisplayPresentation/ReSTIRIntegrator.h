@@ -16,6 +16,7 @@
 #include "ExposureIntegrator.h"
 #include "../../Projects/Project-Zero/Source/RayTracingSolver.h"
 #include "../../Projects/Project-Zero/Source/FlyThroughSolver.h"
+#include <cmath>
 #include <cstdint>
 #include <vector>
 
@@ -98,7 +99,44 @@ struct ReSTIRIntegratorConfiguration
     // A7. The moon disc and the star field. Off restores the pre-A7 image exactly.
     bool        NightSky         = true;
     float       StarBrightness   = 0.4f;        // [cd/m²] a dark-site sky; adaptive exposure is what reveals it
+
+    // A7b. Turbidity — the aerosol load, and the only reason a sunrise can look different from a sunset.
+    //    1.0 is the clear reference atmosphere the Mie constants describe; 2.5 is a hazy city afternoon.
+    float       SkyTurbidity     = 1.0f;        // [-]   the day's MEAN aerosol load
+    // How far the load swings either side of that mean across the day: cleanest at 06:00, dirtiest at 18:00.
+    //    ⚠️ 0 is the identity switch and reproduces every pre-A7b image at every hour, because the curve is a
+    //    cosine about the mean and the mean IS the reference atmosphere. Even at the default swing, noon and
+    //    midnight land exactly on 1.0 — the curve crosses its mean there — so only the mornings and evenings
+    //    differ, which is precisely the claim being made.
+    float       TurbiditySwing   = 0.35f;       // [-]   dawn 0.65, dusk 1.35 at the defaults
 };
+
+//------------------------------------------------------------------------------------------------------------------------
+//                                            A7b — THE DAY'S AEROSOL CURVE
+//------------------------------------------------------------------------------------------------------------------------
+// 🧩 Turbidity as a function of the time of day. This is the entire mechanism by which a sunrise stops looking
+//    like a sunset, so it is worth being explicit about what it claims.
+//
+//    The scattering model itself is SYMMETRIC about the horizon: at equal sun elevation, morning and evening are
+//    the same geometry and therefore the same picture. That is physically correct, and it is why no amount of
+//    tuning the sky march would ever separate them. The real difference is in the air. Overnight the boundary
+//    layer cools, convection stops, and dust and haze settle out; by late afternoon a day of surface heating has
+//    stirred them back up. Dawn air is therefore CLEANER, and clean air means less Mie: the horizon glow is
+//    paler, whiter and tighter, instead of the broad orange of an evening.
+//
+//    A cosine with its minimum at 06:00 and maximum at 18:00 — continuous, periodic, and with no discontinuity
+//    at midnight. A piecewise curve would be easier to reason about and would step visibly at whatever hour the
+//    pieces met, which on a fast clock reads as the sky flickering once per simulated day.
+[[nodiscard]] inline float QueryDiurnalTurbidity(float Mean, float Swing, double SolarDayFraction) noexcept
+{
+    constexpr double kTwoPi = 6.283185307179586;
+    const double Hour  = SolarDayFraction * 24.0;
+    const double Phase = kTwoPi * (Hour - 18.0) / 24.0;
+    const double Value = static_cast<double>(Mean) + static_cast<double>(Swing) * std::cos(Phase);
+    // A floor rather than a raw value: turbidity is a multiplier on extinction, and zero or negative air is an
+    //    atmosphere that amplifies light. The march would not merely look wrong, it would diverge.
+    return static_cast<float>(Value < 0.05 ? 0.05 : Value);
+}
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                  RESTIR INTEGRATOR
@@ -169,6 +207,10 @@ public:
     void AssignSkyLighting       (bool     On)    noexcept { if (ActiveConfiguration.SkyLighting    != On)  { ActiveConfiguration.SkyLighting    = On;  ResetAccumulation(); } }
     void AssignNightSky          (bool     On)    noexcept { if (ActiveConfiguration.NightSky       != On)    { ActiveConfiguration.NightSky       = On;    ResetAccumulation(); } }
     void AssignStarBrightness    (float    Value) noexcept { if (ActiveConfiguration.StarBrightness != Value) { ActiveConfiguration.StarBrightness = Value; ResetAccumulation(); } }
+    // A7b. Turbidity rebuilds the atmosphere tables as well as changing every sky pixel, so the accumulated
+    //    history is of a different atmosphere and must go — same reasoning as the sky quality above.
+    void AssignSkyTurbidity      (float    Value) noexcept { if (ActiveConfiguration.SkyTurbidity   != Value) { ActiveConfiguration.SkyTurbidity   = Value; ResetAccumulation(); } }
+    void AssignTurbiditySwing    (float    Value) noexcept { if (ActiveConfiguration.TurbiditySwing != Value) { ActiveConfiguration.TurbiditySwing = Value; ResetAccumulation(); } }
 
     void ResetAccumulation() noexcept { AccumulationIndex = 0u; }
 

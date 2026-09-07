@@ -24,7 +24,9 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <cmath>
 #include <iostream>
+#include <limits>
 #include <vector>
 
 #if defined(_WIN32)
@@ -144,6 +146,11 @@ struct SwapchainExchange::VulkanRecord
 
     ResidentTexture          AtmosphereTables[2];
     bool                     AtmosphereTablesBuilt = false;
+    // A7b. The aerosol load the tables were last baked at. The tables are a function of the atmosphere, and
+    //    turbidity is now part of the atmosphere, so a plain "built once" latch would leave them describing air
+    //    the sky no longer has. NaN so the first comparison always misses and the first frame always builds.
+    float                    AtmosphereTablesTurbidity = std::numeric_limits<float>::quiet_NaN();
+    float                    SkyTurbidity              = 1.0f;   // written by AssignSkyRecord, read when recording
     VkPipeline               AtmosphereLutPipeline = VK_NULL_HANDLE;
     VkPipelineLayout         AtmosphereLutLayout   = VK_NULL_HANDLE;
     VkDescriptorSetLayout    AtmosphereLutSetLayout= VK_NULL_HANDLE;
@@ -1271,7 +1278,8 @@ struct AtmosphereLutPushRecord
     uint32_t Target;       // 0 = transmittance, 1 = multiple scattering
     uint32_t Directions;   // [cnt]
     uint32_t Steps;        // [cnt]
-    uint32_t Padding0, Padding1, Padding2;
+    float    Turbidity;    // [-]  A7b: the aerosol load the tables are baked at
+    uint32_t Padding1, Padding2;
 };
 } // namespace
 
@@ -1290,6 +1298,11 @@ void SwapchainExchange::AssignSkyRecord(const SkyRecord& Record) noexcept
     //    A per-slot descriptor is the alternative, and it is not worth a second descriptor set for 64 bytes that
     //    the GPU consumes within the same frame it is written.
     if (Vulkan->SkyMapped[0]) std::memcpy(Vulkan->SkyMapped[0], &Record, sizeof(SkyRecord));
+
+    // A7b. Kept alongside so RecordFrame can tell whether the atmosphere tables still describe this air. Read
+    //    from the record rather than taken as a second parameter: one value reaches the GPU, and the rebuild
+    //    decision is made about THAT value rather than about a copy that could disagree with it.
+    Vulkan->SkyTurbidity = Record.SkyTurbidity;
 }
 
 float SwapchainExchange::QueryAverageLogLuminance() const noexcept
@@ -2589,10 +2602,24 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
     Frame.RenderHeight = RenderHeight;
     Visibility.RecordFrame(Command, Vulkan->ActiveSlot, Frame);
 
-    // ①c A2 — build the atmosphere tables. Once, before the first frame that needs them. They depend only on the
-    //     atmosphere's own parameters, so rebuilding per frame would be pure waste; the latch is what makes this
-    //     a bring-up cost rather than a running one.
-    if (!Vulkan->AtmosphereTablesBuilt && Vulkan->AtmosphereLutPipeline)
+    // ①c A2 — build the atmosphere tables. Before the first frame that needs them, and again only when the
+    //     atmosphere they describe has actually changed. They depend only on the atmosphere's own parameters, so
+    //     rebuilding per frame would be pure waste; the latch is what makes this a bring-up cost rather than a
+    //     running one.
+    //
+    // A7b ⚠️ Turbidity IS one of those parameters, so the latch had to stop being "built once". Measured, a
+    //     rebuild is 17 408 texels against 2 million pixels of sky — about a third of one frame's sky cost — so
+    //     the cost of getting this wrong is not performance, it is a table that quietly describes different air
+    //     from the march that samples it.
+    //
+    //     Rebuilt on a THRESHOLD, not on inequality. The diurnal curve moves turbidity continuously, so exact
+    //     comparison would rebuild every single frame and turn a bring-up cost into a per-frame one for a
+    //     difference far below what the eye can see. 0.01 of turbidity is invisible; the curve crosses it in
+    //     tens of seconds of simulated time.
+    const float FrameTurbidity = Vulkan->SkyTurbidity;
+    const bool  TablesStale    = !Vulkan->AtmosphereTablesBuilt
+                              || !(std::fabs(FrameTurbidity - Vulkan->AtmosphereTablesTurbidity) <= 0.01f);
+    if (TablesStale && Vulkan->AtmosphereLutPipeline)
     {
         // GENERAL for the build kernel's storage writes. The frame kernel samples them, so they are transitioned
         //    to SHADER_READ_ONLY afterwards and never touched again.
@@ -2600,6 +2627,9 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
         for (uint32_t I = 0u; I < 2u; ++I)
         {
             ToGeneral[I].sType                       = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            // UNDEFINED on a REBUILD too, deliberately: it discards the old contents, which is exactly right
+            //    because every texel is about to be rewritten, and it is the one old layout that is legal from
+            //    both the first build and a later one without tracking which case this is.
             ToGeneral[I].oldLayout                   = VK_IMAGE_LAYOUT_UNDEFINED;
             ToGeneral[I].newLayout                   = VK_IMAGE_LAYOUT_GENERAL;
             ToGeneral[I].srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
@@ -2608,9 +2638,17 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
             ToGeneral[I].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             ToGeneral[I].subresourceRange.levelCount = 1u;
             ToGeneral[I].subresourceRange.layerCount = 1u;
+            ToGeneral[I].srcAccessMask               = VK_ACCESS_SHADER_READ_BIT;
             ToGeneral[I].dstAccessMask               = VK_ACCESS_SHADER_WRITE_BIT;
         }
-        vkCmdPipelineBarrier(Command, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        // A7b ⚠️ COMPUTE_SHADER as the source stage, not TOP_OF_PIPE. TOP_OF_PIPE waits for nothing, which was
+        //     correct while this ran once before any frame had ever sampled the tables. A REBUILD is a different
+        //     situation: with two frames in flight the previous frame's kernel may still be sampling these very
+        //     images, and overwriting them under it is a read-write race. Barriers include everything submitted
+        //     earlier to the same queue, so naming the reading stage here is what makes the rebuild safe.
+        //     The failure it prevents is one frame of a half-rebuilt table — intermittent, and only while
+        //     turbidity moves, which is the hardest kind to reproduce.
+        vkCmdPipelineBarrier(Command, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                              0u, 0u, nullptr, 0u, nullptr, 2u, ToGeneral.data());
 
         vkCmdBindPipeline(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Vulkan->AtmosphereLutPipeline);
@@ -2625,6 +2663,7 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
             Push.Target     = Table;
             Push.Directions = 64u;   // the sphere gather; only the multi-scatter pass reads these
             Push.Steps      = 20u;
+            Push.Turbidity  = FrameTurbidity;   // A7b: bake the air the kernel is about to march through
 
             vkCmdPushConstants(Command, Vulkan->AtmosphereLutLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0u, sizeof(Push), &Push);
             vkCmdBindDescriptorSets(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Vulkan->AtmosphereLutLayout,
@@ -2650,7 +2689,8 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
         vkCmdPipelineBarrier(Command, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                              0u, 0u, nullptr, 0u, nullptr, 2u, ToSampled.data());
 
-        Vulkan->AtmosphereTablesBuilt = true;
+        Vulkan->AtmosphereTablesBuilt     = true;
+        Vulkan->AtmosphereTablesTurbidity = FrameTurbidity;
     }
 
     if (Frame.DebugView == DebugViewCategory::Off)

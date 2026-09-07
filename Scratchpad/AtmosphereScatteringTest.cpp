@@ -50,13 +50,19 @@ static constexpr float kAtmosphereRadius    = kPlanetRadius + kAtmosphereThickne
 static constexpr float kRayleighScaleHeight = 8000.0f;
 static constexpr float kMieScaleHeight      = 1200.0f;
 static const     Vec3  kRayleighScattering  { 5.802e-6f, 13.558e-6f, 33.1e-6f };
-static constexpr float kMieScattering       = 3.996e-6f;
-static constexpr float kMieExtinction       = 4.440e-6f;
+static constexpr float kMieScattering       = 3.996e-6f;   // at turbidity 1
+static constexpr float kMieExtinction       = 4.440e-6f;   // at turbidity 1
 static constexpr float kMieAsymmetry        = 0.80f;
 static const     Vec3  kOzoneAbsorption     { 0.650e-6f, 1.881e-6f, 0.085e-6f };
 static constexpr float kOzoneCentre         = 25000.0f;
 static constexpr float kOzoneWidth          = 15000.0f;
 static constexpr float kSunAngularRadius    = 0.004675f;
+
+// A7b turbidity. A mutable global exactly as in the shader, and for the same reason: the alternative is a float
+//    threaded through six functions, and the site that gets missed is silent.
+static float gAerosolTurbidity = 1.0f;
+static float MieScattering() { return kMieScattering * gAerosolTurbidity; }
+static float MieExtinction() { return kMieExtinction * gAerosolTurbidity; }
 
 static Vec3 AtmosphereDensity(float Altitude)
 {
@@ -102,7 +108,7 @@ static Vec3 OpticalDepth(Vec3 Origin, Vec3 Direction, float Distance, int Steps)
         const float Altitude = Length(Position) - kPlanetRadius;
         const Vec3  Density  = AtmosphereDensity(Altitude);
         Sum += (kRayleighScattering * Density.x
-              + Vec3(kMieExtinction) * Density.y
+              + Vec3(MieExtinction()) * Density.y
               + kOzoneAbsorption    * Density.z) * Step;
     }
     return Sum;
@@ -141,12 +147,12 @@ static Vec3 SkyRadiance(float CameraAltitude, Vec3 ViewDirection, Vec3 SunDirect
         const Vec3  Density  = AtmosphereDensity(Altitude);
 
         const Vec3 Extinction = kRayleighScattering * Density.x
-                              + Vec3(kMieExtinction) * Density.y
+                              + Vec3(MieExtinction()) * Density.y
                               + kOzoneAbsorption    * Density.z;
         const Vec3 StepTransmittance = Exp(Extinction * -Step);
 
         const Vec3 ScatteringHere = kRayleighScattering * Density.x * PhaseRayleigh
-                                  + Vec3(kMieScattering) * Density.y * PhaseMie;
+                                  + Vec3(MieScattering()) * Density.y * PhaseMie;
 
         const Vec3 SunArriving = SunTransmittance(Position, SunDirection, LightSteps);
         const Vec3 Integrated  = (ScatteringHere - ScatteringHere * StepTransmittance) / Max(Extinction, Vec3(1e-9f));
@@ -214,9 +220,9 @@ static Vec3 ComputeMultiScatterTexel(float U, float V, int Directions, int Steps
             const float H        = Length(Position) - kPlanetRadius;
             const Vec3  Density  = AtmosphereDensity(H);
             const Vec3  Extinction = kRayleighScattering * Density.x
-                                   + Vec3(kMieExtinction) * Density.y
+                                   + Vec3(MieExtinction()) * Density.y
                                    + kOzoneAbsorption    * Density.z;
-            const Vec3  Scattering = kRayleighScattering * Density.x + Vec3(kMieScattering) * Density.y;
+            const Vec3  Scattering = kRayleighScattering * Density.x + Vec3(MieScattering()) * Density.y;
             const Vec3  StepTransmittance = Exp(Extinction * -Step);
             const Vec3  Integrated = (Scattering - Scattering * StepTransmittance) / Max(Extinction, Vec3(1e-9f));
             const Vec3  SunArriving = SunTransmittance(Position, SunDirection, 16);
@@ -885,6 +891,120 @@ int main()
         std::printf("     the previous falloff of 900 gave %.2f px — sub-pixel, hence the flicker\n",
                     static_cast<double>(Old));
         Expect(Old < 1.0f, "and the old value really was sub-pixel — this is the bug fixed");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n23. a clear sunrise differs from a clear sunset, and ONLY through the air\n");
+    {
+        // 🔴 The claim being tested. The scattering model is symmetric about the horizon: at equal sun elevation
+        //    morning and evening are the same geometry, so they are the same picture. That is correct physics and
+        //    it is why no change to the march could ever separate them. The difference is the AIR — overnight the
+        //    boundary layer cools, convection stops, aerosols settle out; an afternoon of heating stirs them back
+        //    up. So dawn is cleaner: paler, whiter, less orange.
+        const Vec3 LowSun  = SunAtElevation(2.0f);
+        const Vec3 Horizon = Normalize(Vec3{ 0.0f, std::cos(0.05f), std::sin(0.05f) });   // ~3° up, toward the sun
+        const auto Luma    = [](Vec3 C) { return 0.2126f * C.x + 0.7152f * C.y + 0.0722f * C.z; };
+
+        // First: with the SAME air, the two are identical. This is the negative result that makes the parameter
+        //    necessary rather than decorative — if these ever differ, something asymmetric has crept in.
+        gAerosolTurbidity = 1.0f;
+        const Vec3 Morning = SkyRadiance(2.0f, Horizon, LowSun, Vec3(kSunLux), kView, kLight);
+        gAerosolTurbidity = 1.0f;
+        const Vec3 Evening = SkyRadiance(2.0f, Horizon, LowSun, Vec3(kSunLux), kView, kLight);
+        Expect(Morning.x == Evening.x && Morning.z == Evening.z,
+               "at equal turbidity dawn and dusk are the SAME picture — the model is symmetric");
+
+        // Now the real pair, at the default curve's two extremes.
+        gAerosolTurbidity = 0.65f;                                        // 06:00
+        const Vec3 Dawn = SkyRadiance(2.0f, Horizon, LowSun, Vec3(kSunLux), kView, kLight);
+        gAerosolTurbidity = 1.35f;                                        // 18:00
+        const Vec3 Dusk = SkyRadiance(2.0f, Horizon, LowSun, Vec3(kSunLux), kView, kLight);
+
+        const float DawnWarmth = Dawn.x / Dawn.z;      // red over blue: how orange the glow is
+        const float DuskWarmth = Dusk.x / Dusk.z;
+        std::printf("     toward the sun at 2 deg:  dawn R/B %.3f   dusk R/B %.3f\n",
+                    static_cast<double>(DawnWarmth), static_cast<double>(DuskWarmth));
+        Expect(DuskWarmth > DawnWarmth, "the dusty evening glow is the redder of the two");
+        Expect(DawnWarmth < DuskWarmth * 0.95f, "and by a visible margin, not a rounding difference");
+
+        // Paler: less aerosol scatters less light into the line of sight near the horizon.
+        std::printf("     horizon luminance:        dawn %.2f     dusk %.2f\n",
+                    static_cast<double>(Luma(Dawn)), static_cast<double>(Luma(Dusk)));
+        Expect(Luma(Dawn) < Luma(Dusk), "the cleaner morning horizon is the fainter of the two");
+
+        // ⚠️ And the zenith must barely move. Turbidity scales Mie only — Rayleigh is the air molecules
+        //    themselves, which do not care how dusty the day is. If this ever changed much, turbidity would have
+        //    been wired into the wrong coefficient and would be acting as a global brightness control.
+        gAerosolTurbidity = 0.65f;
+        const float ZenithDawn = Luma(SkyRadiance(2.0f, kZenith, LowSun, Vec3(kSunLux), kView, kLight));
+        gAerosolTurbidity = 1.35f;
+        const float ZenithDusk = Luma(SkyRadiance(2.0f, kZenith, LowSun, Vec3(kSunLux), kView, kLight));
+        const float ZenithShift  = std::fabs(ZenithDusk - ZenithDawn) / ZenithDawn;
+        const float HorizonShift = std::fabs(Luma(Dusk) - Luma(Dawn)) / Luma(Dawn);
+        std::printf("     zenith moves %.1f%%, horizon moves %.1f%% — aerosols hug the ground\n",
+                    static_cast<double>(ZenithShift * 100.0f), static_cast<double>(HorizonShift * 100.0f));
+        Expect(ZenithShift < 0.15f,               "the zenith is nearly unchanged — Rayleigh is untouched");
+        Expect(HorizonShift > ZenithShift * 2.0f, "while the horizon, which is mostly aerosol, changes far more");
+
+        gAerosolTurbidity = 1.0f;   // leave the reference atmosphere for anything that follows
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n24. the day's aerosol curve is cleanest at dawn and dirtiest at dusk\n");
+    {
+        // A verbatim port of QueryDiurnalTurbidity in ReSTIRIntegrator.h.
+        const auto Turbidity = [](float Mean, float Swing, double DayFraction)
+        {
+            constexpr double kTwoPi = 6.283185307179586;
+            const double Hour  = DayFraction * 24.0;
+            const double Phase = kTwoPi * (Hour - 18.0) / 24.0;
+            const double Value = static_cast<double>(Mean) + static_cast<double>(Swing) * std::cos(Phase);
+            return static_cast<float>(Value < 0.05 ? 0.05 : Value);
+        };
+        constexpr float kMean = 1.0f, kSwing = 0.35f;
+
+        float Lowest = 1e9f, Highest = -1e9f; int LowestHour = -1, HighestHour = -1;
+        for (int Hour = 0; Hour < 24; ++Hour)
+        {
+            const float T = Turbidity(kMean, kSwing, Hour / 24.0);
+            if (T < Lowest)  { Lowest  = T; LowestHour  = Hour; }
+            if (T > Highest) { Highest = T; HighestHour = Hour; }
+        }
+        std::printf("     06:00 %.3f   12:00 %.3f   18:00 %.3f   00:00 %.3f\n",
+                    static_cast<double>(Turbidity(kMean, kSwing,  6.0 / 24.0)),
+                    static_cast<double>(Turbidity(kMean, kSwing, 12.0 / 24.0)),
+                    static_cast<double>(Turbidity(kMean, kSwing, 18.0 / 24.0)),
+                    static_cast<double>(Turbidity(kMean, kSwing,  0.0 / 24.0)));
+        Expect(LowestHour  == 6,  "the air is cleanest at 06:00");
+        Expect(HighestHour == 18, "and dirtiest at 18:00");
+
+        // Noon and midnight land exactly on the mean, which is what makes the default a superset of the pre-A7b
+        //    sky rather than a different one: at those hours the atmosphere IS the reference atmosphere.
+        Expect(std::fabs(Turbidity(kMean, kSwing, 12.0 / 24.0) - kMean) < 1e-5f, "noon sits exactly on the mean");
+        Expect(std::fabs(Turbidity(kMean, kSwing,  0.0 / 24.0) - kMean) < 1e-5f, "and so does midnight");
+
+        // ⚠️ Continuous everywhere INCLUDING across midnight. A piecewise curve is easier to reason about and
+        //    steps visibly wherever the pieces meet, which on a fast clock reads as the sky flickering once a day.
+        float LargestStep = 0.0f;
+        for (int Step = 0; Step < 1440; ++Step)
+        {
+            const float A = Turbidity(kMean, kSwing, Step / 1440.0);
+            const float B = Turbidity(kMean, kSwing, ((Step + 1) % 1440) / 1440.0);
+            LargestStep = std::fmax(LargestStep, std::fabs(B - A));
+        }
+        std::printf("     largest one-minute step %.6f (across midnight included)\n",
+                    static_cast<double>(LargestStep));
+        Expect(LargestStep < 0.002f, "no discontinuity anywhere on the day, midnight included");
+
+        // The identity switch: swing 0 reproduces the pre-A7b atmosphere at every hour.
+        bool Flat = true;
+        for (int Hour = 0; Hour < 24; ++Hour)
+            if (std::fabs(Turbidity(kMean, 0.0f, Hour / 24.0) - kMean) > 1e-6f) Flat = false;
+        Expect(Flat, "swing 0 is flat all day — the identity switch back to the pre-A7b sky");
+
+        // And the floor, because turbidity multiplies EXTINCTION: zero or negative air amplifies light and the
+        //    march diverges rather than merely looking wrong.
+        Expect(Turbidity(0.1f, 5.0f, 6.0 / 24.0) >= 0.05f, "an over-large swing is floored, never negative");
     }
 
     std::printf("\n>>> %s (%d failure%s)\n", Failures == 0 ? "ALL PASS" : "FAILURES", Failures, Failures == 1 ? "" : "s");
