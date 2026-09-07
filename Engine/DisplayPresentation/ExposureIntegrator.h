@@ -56,9 +56,21 @@ struct ExposureConfiguration
     float MinimumExposure  = 1.0e-10f;   // [-] below what the sun's disc alone would ask for
     float MaximumExposure  = 4000.0f;    // [-] a starlit sky at 0.001 cd/m² asks for 180
 
-    // Luminance below this is treated as absent rather than dark. A pixel of exactly zero has a log of −∞, and
-    //    one such pixel would otherwise poison the entire average.
-    float LuminanceFloor   = 1.0e-5f;  // [cd/m²]
+    // ⚠️ The floor is a METERING floor, not numerical epsilon, and the difference is enormous. This measures a
+    //    LOG mean, so a floor of 1e-5 contributes log(1e-5) = −11.5 for every dark pixel. Half a frame of night
+    //    sky then drags the mean down by 5.75, the exposure rises by e^5.75 ≈ 300×, and everything lit blows to
+    //    white. That is exactly the reported "the box goes full white unless I stand close to it": walking away
+    //    shrinks the box, more of the frame is dark, and the meter runs away.
+    //
+    //    A real light meter does not average absolute black into its reading. 1e-2 cd/m² is below a moonlit sky
+    //    at 0.1 and well below anything a viewer is meant to resolve, while contributing only −4.6 instead of
+    //    −11.5 — a quarter of the pull.
+    float LuminanceFloor   = 1.0e-2f;  // [cd/m²]
+
+    // ⚠️ And a floor alone is not enough: a frame that is 90 % black still drags the mean. Pixels darker than
+    //    this are EXCLUDED from the average rather than clamped into it, which is what a spot or centre-weighted
+    //    meter does. Without it, exposure depends on how much empty sky happens to be in shot.
+    float MeteringFloor    = 1.0e-2f;  // [cd/m²] below this a pixel is not metered at all
 };
 
 //------------------------------------------------------------------------------------------------------------------------

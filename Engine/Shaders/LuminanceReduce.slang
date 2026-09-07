@@ -41,7 +41,15 @@ layout(push_constant) uniform LuminanceConstants
 };
 
 const float kFixedScale = 4096.0;   // ~0.00024 of a log unit per step — far below perceptible
-const float kFloor      = 1.0e-5;   // matches ExposureConfiguration::LuminanceFloor
+
+// ⚠️ A METERING floor, not numerical epsilon, and pixels below it are EXCLUDED rather than clamped in. This is
+//    a log mean: at 1e-5 every dark pixel contributed log(1e-5) = −11.5, so half a frame of night sky dragged
+//    the mean down by 5.75 and the exposure ran away by a factor of ~300. Everything lit then blew to white,
+//    and it got worse the further the camera stood from anything — which is precisely how it was reported.
+//
+//    A real light meter ignores the darkest part of a scene rather than averaging it in. 1e-2 cd/m² is below a
+//    moonlit sky at 0.1 and far below anything a viewer is meant to resolve.
+const float kMeteringFloor = 1.0e-2;   // matches ExposureConfiguration::MeteringFloor
 
 void main()
 {
@@ -52,12 +60,14 @@ void main()
 
     // Rec. 709 luma, matching every other luminance in the renderer. A different weighting here would make the
     //    exposure disagree with the denoiser about what "bright" means.
-    const float Luminance = max(dot(Radiance, vec3(0.2126, 0.7152, 0.0722)), kFloor);
+    const float Luminance = dot(Radiance, vec3(0.2126, 0.7152, 0.0722));
 
-    // A pixel of exactly zero has a log of −∞; the floor above is what stops one such pixel poisoning the whole
-    //    average. Background pixels are legitimately near zero, so this is the common case, not an edge case.
-    const float LogLuminance = log(Luminance);
+    // Skip, do not clamp. A clamped dark pixel still votes, and votes hard because the log of a small number is
+    //    a large negative. Skipping means the reading describes the LIT part of the scene, which is what an
+    //    exposure is for. If nothing at all is lit the count stays zero and the host keeps the previous value
+    //    rather than adapting to a frame that carries no information.
+    if (Luminance < kMeteringFloor) return;
 
-    atomicAdd(SumFixedPoint, int(LogLuminance * kFixedScale));
+    atomicAdd(SumFixedPoint, int(log(Luminance) * kFixedScale));
     atomicAdd(SampleCount, 1);
 }

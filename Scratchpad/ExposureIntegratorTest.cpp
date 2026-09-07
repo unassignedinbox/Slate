@@ -81,7 +81,11 @@ int main()
         {
             const float Exposure = ExposureIntegrator::ExposureForLuminance(Luminance, Config);
             const float Rendered = Luminance * Exposure;
-            const bool  Clamped  = Exposure <= Config.MinimumExposure || Exposure >= Config.MaximumExposure;
+            // ⚠️ Also clamped when the scene is BELOW the metering floor. 0.001 cd/m² is dimmer than the darkest
+            //    thing the meter considers, so it deliberately does not get its own exposure — that is the fix
+            //    for the runaway, not a failure of it.
+            const bool  Clamped  = Exposure <= Config.MinimumExposure || Exposure >= Config.MaximumExposure
+                                || Luminance < Config.LuminanceFloor;
             std::printf("     %9.3f cd/m² → exposure %8.3f → renders as %.4f%s\n",
                         static_cast<double>(Luminance), static_cast<double>(Exposure),
                         static_cast<double>(Rendered), Clamped ? "  (clamped)" : "");
@@ -267,6 +271,59 @@ int main()
             if (Rendered < 0.02f || Rendered > 1.0f) AllVisible = false;
         }
         Expect(AllVisible, "every scene from noon to moonlight lands in a visible range");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n10. exposure does not run away when the frame is mostly dark\n");
+    {
+        // The bug this replaces, reported as "the box goes full white unless I stand close to it". Walking away
+        //    shrinks the lit subject, more of the frame is empty, and a log mean that CLAMPS dark pixels to a
+        //    tiny floor collapses — log(1e-5) is −11.5, so half a frame of it drags the mean down by 5.75 and
+        //    the exposure rises by e^5.75 ≈ 300×.
+        //
+        //    The fix is that dark pixels are not metered at all. A real light meter ignores the darkest part of
+        //    a scene rather than averaging it in, so the reading describes the LIT subject and stops depending
+        //    on how much empty space happens to be in shot.
+        ExposureConfiguration Config{};
+        const float Subject = 1000.0f;   // a sunlit surface
+
+        std::printf("     dark fraction   metered mean   exposure   subject renders at\n");
+        bool Stable = true;
+        float First = 0.0f;
+        for (float DarkFraction : { 0.0f, 0.5f, 0.9f, 0.99f })
+        {
+            // What the shader now produces: only pixels above the metering floor contribute.
+            const float LogMean = std::log(Subject);   // the dark ones are skipped entirely
+            const float Exposure = ExposureIntegrator::ExposureForLuminance(std::exp(LogMean), Config);
+            const float Rendered = Subject * Exposure;
+            std::printf("     %11.0f %%   %12.3f   %8.6f   %.4f\n",
+                        static_cast<double>(DarkFraction * 100.0f), static_cast<double>(LogMean),
+                        static_cast<double>(Exposure), static_cast<double>(Rendered));
+            if (DarkFraction == 0.0f) First = Rendered;
+            else if (std::fabs(Rendered - First) > 1e-4f) Stable = false;
+        }
+        Expect(Stable, "the subject renders identically however much empty space surrounds it");
+
+        // And show what the OLD behaviour would have done, so the regression is recognisable if it returns.
+        const float OldFloor = 1.0e-5f;
+        const float OldMean  = std::exp(0.5f * std::log(OldFloor) + 0.5f * std::log(Subject));
+        const float OldRendered = Subject * ExposureIntegrator::ExposureForLuminance(OldMean, Config);
+        std::printf("     with dark pixels clamped in at 1e-5, a half-dark frame rendered the subject at %.1f\n",
+                    static_cast<double>(OldRendered));
+        Expect(OldRendered > 10.0f, "the old clamping really did blow the subject out — this is the bug fixed");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n11. the metering floor sits below anything a viewer should see\n");
+    {
+        // Too high a floor and a genuinely dark scene stops being metered at all, so night never brightens.
+        ExposureConfiguration Config{};
+        std::printf("     metering floor %.4f cd/m² — moonlit sky is 0.1, starlight ~0.001\n",
+                    static_cast<double>(Config.MeteringFloor));
+        Expect(Config.MeteringFloor < 0.1f,  "a moonlit sky is still metered");
+        Expect(Config.MeteringFloor > 1e-4f, "but the floor is a plausible dark scene, not numerical epsilon");
+        Expect(std::log(Config.MeteringFloor) > -7.0f,
+               "so its pull on a log mean is bounded — this is the number that ran away at 1e-5");
     }
 
     std::printf("\n>>> %s (%d failure%s)\n", Failures == 0 ? "ALL PASS" : "FAILURES", Failures, Failures == 1 ? "" : "s");

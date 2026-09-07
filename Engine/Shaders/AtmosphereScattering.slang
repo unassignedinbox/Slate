@@ -401,8 +401,11 @@ vec3 StarField(vec3 Direction, float Rotation, float Brightness)
     const vec3  Centre   = vec3(H2, H3, H4);
     const float Distance = length(Within - Centre);
 
-    // A point source, softened just enough to survive resampling. Any wider and stars look like fuzzy blobs.
-    const float Intensity = exp(-Distance * Distance * 900.0);
+    // ⚠️ Wide enough to cover about two pixels, and no wider. A falloff of 900 gave a 0.72 px star at 1080p —
+    //    SUB-PIXEL — so whether a pixel centre happened to land inside it changed with the smallest camera
+    //    movement and the whole field blinked on and off. That reads as a rendering fault rather than as stars.
+    //    120 gives 2.0 px at 1080p and 3.9 px at 4K, which survives sub-pixel motion and still reads as a point.
+    const float Intensity = exp(-Distance * Distance * 120.0);
     if (Intensity < 0.002) return vec3(0.0);
 
     // Real stars are not white. A cheap colour temperature spread across the hash keeps the field from looking
@@ -411,8 +414,12 @@ vec3 StarField(vec3 Direction, float Rotation, float Brightness)
     const vec3  Colour = mix(vec3(0.72, 0.80, 1.00), vec3(1.00, 0.86, 0.68), Warmth);
 
     // Magnitude distribution: a few bright stars and many faint ones, which is what the eye reads as a real sky.
+    //
+    //    ⚠️ Normalised by the widening above. Making each star 2.8× wider in radius spreads its light over ~7.7×
+    //    the solid angle, so without this the field would have got dramatically brighter as a side effect of a
+    //    flicker fix — two changes for the price of one, and the second one unintended.
     const float Magnitude = pow(fract(H * 3319.0), 3.0);
-    return Colour * Intensity * Magnitude * Brightness;
+    return Colour * Intensity * Magnitude * Brightness * 0.13;
 }
 
 #endif // ATMOSPHERE_SCATTERING_SLANG

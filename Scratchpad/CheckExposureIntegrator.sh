@@ -41,6 +41,20 @@ awk -v f="$(grep -oP 'MinimumExposure\s*=\s*\K[0-9.e-]+' Engine/DisplayPresentat
     'BEGIN { exit !(f < 0.0000225) }' \
     || { echo "  MinimumExposure is too high — a noon sky would clamp to white"; Fail=1; }
 
+# ⚠️ Dark pixels must be EXCLUDED from the reading, not clamped into it. This is a log mean, so a clamped dark
+# pixel votes hard: at a 1e-5 floor each contributes -11.5, half a dark frame moved the mean by 5.75, and the
+# exposure ran away by ~300x. It presented as "everything blows white when I stand further away".
+grep -q 'if (Luminance < kMeteringFloor) return;' Engine/Shaders/LuminanceReduce.slang \
+    || { echo "  dark pixels are metered instead of skipped — exposure will run away on sparse frames"; Fail=1; }
+if grep -q 'max(dot(Radiance' Engine/Shaders/LuminanceReduce.slang; then
+    echo "  the reduction is clamping luminance up to the floor again rather than skipping"; Fail=1
+fi
+
+# The metering floor must be a plausible dark scene, not numerical epsilon.
+awk -v f="$(grep -oP 'kMeteringFloor = \K[0-9.e-]+' Engine/Shaders/LuminanceReduce.slang)" \
+    'BEGIN { exit !(f > 0.0001 && f < 0.1) }' \
+    || { echo "  the metering floor is not a plausible dark-scene luminance"; Fail=1; }
+
 # The renderer must read ONE exposure value, or manual and adaptive become two code paths that disagree.
 grep -q 'float QueryExposure() const noexcept' Engine/DisplayPresentation/ExposureIntegrator.h \
     || { echo "  there is no single exposure accessor"; Fail=1; }

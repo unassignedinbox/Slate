@@ -183,6 +183,16 @@ grep -q 'StarField(rayDirection, StarRotation, StarBrightness) \* Attenuation' E
 grep -q 'kFeatureNightSky' Engine/Shaders/ReSTIRViewport.slang \
     || { echo "  the night sky has no feature bit — the pre-A7 image is unreproducible"; Fail=1; }
 
+# ⚠️ Stars must be wide enough to survive sub-pixel camera motion. A falloff of 900 gave a 0.72 px star at
+# 1080p, so whether a pixel centre landed inside it changed as the camera moved and the field blinked on and
+# off — which reads as a rendering fault, not as stars.
+StarFalloff=$(grep -oP 'exp\(-Distance \* Distance \* \K[0-9.]+' Engine/Shaders/AtmosphereScattering.slang)
+HarnessFalloff=$(grep -oP 'kFalloff = \K[0-9.]+' Scratchpad/AtmosphereScatteringTest.cpp | head -1)
+awk -v f="$StarFalloff" 'BEGIN { exit !(f > 0 && f < 300) }' \
+    || { echo "  star falloff $StarFalloff makes them sub-pixel — they will flicker"; Fail=1; }
+[ "${StarFalloff%f}" = "${HarnessFalloff%f}" ] \
+    || { echo "  star falloff differs: shader $StarFalloff, harness $HarnessFalloff"; Fail=1; }
+
 # ⚠️ Stars must NOT be gated on time of day. They are in the sky at noon and are merely outshone; a
 # "skip stars when the sun is up" optimisation looks harmless and silently breaks every case where daylight
 # stars are real — high altitude, a total eclipse, deep twilight. The CPU side may only gate on the feature

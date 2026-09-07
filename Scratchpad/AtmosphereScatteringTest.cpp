@@ -851,6 +851,42 @@ int main()
                "and an eclipse reveals them too, through the same illuminance term");
     }
 
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n22. stars are wide enough not to flicker\n");
+    {
+        // Reported as "the stars flicker on and off". A point source narrower than about a pixel appears only
+        //    when a pixel centre happens to land inside it, so the smallest camera movement makes the whole
+        //    field blink. It reads as a rendering fault rather than as stars.
+        //
+        //    These must match StarField() in AtmosphereScattering.slang.
+        constexpr float kCells   = 260.0f;
+        constexpr float kFalloff = 120.0f;
+        constexpr float kCutoff  = 0.002f;
+
+        // exp(-d² · Falloff) = Cutoff  ⇒  d = √(−ln(Cutoff) / Falloff), in cell units.
+        const float CutoffCells   = std::sqrt(-std::log(kCutoff) / kFalloff);
+        const float AngularRadius = CutoffCells / kCells;
+        const float FovRadians    = 55.0f * 3.14159265f / 180.0f;
+
+        std::printf("     angular radius %.6f rad (%.4f°)\n",
+                    static_cast<double>(AngularRadius), static_cast<double>(AngularRadius * 180.0f / 3.14159265f));
+        for (int Height : { 720, 1080, 2160 })
+        {
+            const float Diameter = 2.0f * AngularRadius * (Height / FovRadians);
+            std::printf("     %4dp: %.2f px across\n", Height, static_cast<double>(Diameter));
+        }
+
+        const float At1080 = 2.0f * AngularRadius * (1080.0f / FovRadians);
+        Expect(At1080 > 1.5f, "a star covers more than 1.5 px at 1080p, so it survives sub-pixel motion");
+        Expect(At1080 < 4.0f, "but is still a point rather than a blob");
+
+        // The previous value, kept so the regression is recognisable if someone tightens it again.
+        const float Old = 2.0f * (std::sqrt(-std::log(kCutoff) / 900.0f) / kCells) * (1080.0f / FovRadians);
+        std::printf("     the previous falloff of 900 gave %.2f px — sub-pixel, hence the flicker\n",
+                    static_cast<double>(Old));
+        Expect(Old < 1.0f, "and the old value really was sub-pixel — this is the bug fixed");
+    }
+
     std::printf("\n>>> %s (%d failure%s)\n", Failures == 0 ? "ALL PASS" : "FAILURES", Failures, Failures == 1 ? "" : "s");
     return Failures == 0 ? 0 : 1;
 }
