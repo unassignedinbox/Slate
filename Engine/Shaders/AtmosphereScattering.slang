@@ -316,15 +316,68 @@ const uint kMultiScatterSize    = 64u;    // [px] square, in the same two parame
 //    ⚠️ Whatever this becomes, the build and the sample must move together. The tables are FILLED through the
 //    inverse and READ through the forward, so a mismatch does not fail loudly — it silently describes an
 //    atmosphere lit from a different sun angle than the one being asked about.
+// 🔴 Transmittance and multiple scattering used to share ONE parameterisation and must not: transmittance is
+//    only ever wanted for a ray that CLEARS the horizon (below it the ray meets the ground and the answer is
+//    zero), while multiple scattering is wanted precisely when the sun is BELOW the horizon, because that is
+//    what lights twilight. Sharing meant half the transmittance table stored zero and bilinear filtering
+//    interpolated across the discontinuity at the horizon.
+//
+//    Transmittance now uses Bruneton & Neyret's mapping, by DISTANCE to the atmosphere boundary rather than by
+//    a power of the cosine: near the horizon a 100 km change of path moves the cosine by 0.016, too little to
+//    resolve, but moves the distance ratio by 0.11. Measured worst reconstruction error vs exact integration:
+//
+//        size |  signed-sqrt cosine  |  Bruneton distance ratio
+//          32 |        7.27x         |          2.22x
+//          64 |        2.76x         |          1.43x
+//         128 |        1.86x         |          1.15x
+//
+//    ⚠️ Must stay identical to AtmosphereModel.h. The CPU harness greps both and compares them.
+float HorizonSpan()
+{
+    return sqrt(kAtmosphereRadius * kAtmosphereRadius - kPlanetRadius * kPlanetRadius);
+}
+
 vec2 TransmittanceParameterisation(float Altitude, float CosSunZenith)
 {
-    const float H = clamp(Altitude / kAtmosphereThickness, 0.0, 1.0);
-    const float S = CosSunZenith < 0.0 ? -1.0 : 1.0;
-    const float U = 0.5 + 0.5 * S * sqrt(abs(CosSunZenith));
-    return vec2(clamp(U, 0.0, 1.0), sqrt(H));
+    const float Span   = HorizonSpan();
+    const float Radius = kPlanetRadius + max(Altitude, 0.0);
+    const float Rho    = sqrt(max(0.0, Radius * Radius - kPlanetRadius * kPlanetRadius));
+
+    const float Discriminant = max(0.0, Radius * Radius * (CosSunZenith * CosSunZenith - 1.0)
+                                        + kAtmosphereRadius * kAtmosphereRadius);
+    const float Distance = max(0.0, -Radius * CosSunZenith + sqrt(Discriminant));
+    const float Nearest  = kAtmosphereRadius - Radius;
+    const float Farthest = Rho + Span;
+    return vec2(clamp((Distance - Nearest) / max(Farthest - Nearest, 1e-6), 0.0, 1.0),
+                min(1.0, Rho / Span));
 }
 
 void TransmittanceInverse(vec2 Uv, out float Altitude, out float CosSunZenith)
+{
+    const float Span   = HorizonSpan();
+    const float Rho    = Span * Uv.y;
+    const float Radius = sqrt(Rho * Rho + kPlanetRadius * kPlanetRadius);
+    Altitude = Radius - kPlanetRadius;
+
+    const float Nearest  = kAtmosphereRadius - Radius;
+    const float Farthest = Rho + Span;
+    const float Distance = Nearest + Uv.x * (Farthest - Nearest);
+    CosSunZenith = Distance <= 0.0
+        ? 1.0
+        : clamp((Span * Span - Rho * Rho - Distance * Distance) / (2.0 * Radius * Distance), -1.0, 1.0);
+}
+
+// ⚠️ The multiple-scattering table spans the FULL sun-zenith range, negative included, concentrated near the
+//    horizon by a signed square root. It must never be swapped for the mapping above: that one cannot express
+//    a sun below the horizon at all, and multiple scattering below the horizon is the whole of twilight.
+vec2 MultiScatterParameterisation(float Altitude, float CosSunZenith)
+{
+    const float H = clamp(Altitude / kAtmosphereThickness, 0.0, 1.0);
+    const float S = CosSunZenith < 0.0 ? -1.0 : 1.0;
+    return vec2(clamp(0.5 + 0.5 * S * sqrt(abs(CosSunZenith)), 0.0, 1.0), sqrt(H));
+}
+
+void MultiScatterInverse(vec2 Uv, out float Altitude, out float CosSunZenith)
 {
     Altitude = Uv.y * Uv.y * kAtmosphereThickness;
     const float T = Uv.x * 2.0 - 1.0;
@@ -358,7 +411,7 @@ vec3 ComputeTransmittanceTexel(vec2 Uv)
 vec3 ComputeMultiScatterTexel(vec2 Uv, int Directions, int Steps)
 {
     float Altitude, CosSunZenith;
-    TransmittanceInverse(Uv, Altitude, CosSunZenith);
+    MultiScatterInverse(Uv, Altitude, CosSunZenith);
 
     const vec3  Origin    = vec3(0.0, 0.0, kPlanetRadius + Altitude);
     const float SinZenith = sqrt(max(0.0, 1.0 - CosSunZenith * CosSunZenith));

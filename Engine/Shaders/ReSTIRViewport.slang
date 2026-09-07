@@ -574,7 +574,9 @@ vec3 SampleTransmittance(float Altitude, float CosSunZenith)
 
 vec3 SampleMultiScatter(float Altitude, float CosSunZenith)
 {
-    return texture(MultiScatterLut, TransmittanceParameterisation(Altitude, CosSunZenith)).rgb;
+    // ⚠️ Its OWN parameterisation, not the transmittance one. The transmittance mapping cannot express a sun
+    //    below the horizon, and a sun below the horizon is exactly when multiple scattering is what you see.
+    return texture(MultiScatterLut, MultiScatterParameterisation(Altitude, CosSunZenith)).rgb;
 }
 
 //------------------------------------------------------------------------------------------------------------------------

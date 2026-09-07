@@ -378,27 +378,48 @@ void ControlKit::ValuePill(PixelSpace& Surface, float X, float Y, const char* Nu
     // A pill narrower than its own unit cell has no number cell left to draw, and the seam arithmetic below goes
     //    negative. Clamped rather than asserted: a cramped panel should still render something readable.
     UnitWidth = std::clamp(UnitWidth, 12.0f, std::max(Width - 24.0f, 12.0f));
-    // 🔴 ONE pill with a CHIP inside it, not two boxes butted together. The previous build filled a rounded
-    //    number cell, drew a hairline divider, and then painted the unit cell's left edge over the top to square
-    //    the seam — which erased the divider it had just drawn, in the same function, two lines later. What
-    //    reached the screen was a colour step with a rounding artefact in it and no rule at all.
+    // 🔴 TWO CELLS butted together inside one fully-rounded outline — a black number cell and a grey unit
+    //    cell — NOT a chip floating inside a pill. From the mock, which is the spec:
     //
-    //    The reference does it the other way round and it is plainly better: the pill is a single rounded
-    //    rectangle, and the unit sits in a smaller rounded chip inset within it. There is no seam to square,
-    //    because there is no seam.
-    const float ChipInset = 4.0f;
+    //        .vpill { height:30px; border-radius:999px; overflow:hidden; border:1px solid --stroke }
+    //        .vpill .num  { flex:1;    background:--field  (#000000) }
+    //        .vpill .unit { width:36px; background:--inset (#1a1a1a); border-left:1px solid --stroke }
+    //
+    //    The cells fill the pill's full height and meet at a hard seam; the rounding is the PARENT's, applied
+    //    by clipping, so the number cell is round on the left and square on the right and the unit cell is the
+    //    reverse. Two earlier builds got this wrong in opposite directions — one drew a divider then painted
+    //    over it, the other inset a chip and lost the seam entirely.
+    //
+    // ⚠️ PixelSpace has no per-corner radius, so the square edge is made by overdrawing the rounded cell with
+    //    a plain rectangle in THE SAME COLOUR. That is safe precisely because it is the same colour; the
+    //    original bug was overdrawing a divider with a different one. The divider is drawn last, over both.
+    const float Radius = H * 0.5f;
+    UnitWidth = (Unit && Unit[0]) ? UnitWidth : 0.0f;
+    const float Seam  = X + Width - UnitWidth;
+
     const PlaneExtent Whole = Spanning(X, Y, Width, H);
-    const PlaneExtent Chip  = Spanning(X + Width - UnitWidth - ChipInset, Y + ChipInset,
-                                       UnitWidth, std::max(H - ChipInset * 2.0f, 1.0f));
-    const PlaneExtent Num   = Spanning(X, Y, Width - UnitWidth - ChipInset, H);
+    const PlaneExtent Num   = Spanning(X, Y, std::max(Width - UnitWidth, 1.0f), H);
+    const PlaneExtent UnitCell = Spanning(Seam, Y, UnitWidth, H);
 
-    Surface.FillRectangle(Whole, Faded(Palette().Field, Opacity), H * 0.5f);
-    OutlineRounded(Surface, Whole, Faded(Palette().Stroke, Opacity), H * 0.5f);
-    if (Unit && Unit[0])
-        Surface.FillRectangle(Chip, Faded(Palette().Inset, Opacity), Chip.Height() * 0.5f);
+    // The grey unit colour underneath the whole pill, so the right-hand corners come out rounded for free.
+    Surface.FillRectangle(Whole, Faded(Palette().Inset, Opacity), Radius);
 
-    TextCentred(Surface, Num,  Faded(Palette().Text,      Opacity), Number, 15.0f);
-    TextCentred(Surface, Chip, Faded(Palette().TextFaint, Opacity), Unit,   12.5f);
+    // The black number cell over it: rounded, then its right edge squared back with the same black.
+    Surface.FillRectangle(Num, Faded(Palette().Field, Opacity), Radius);
+    if (UnitWidth > 0.0f && Num.Width() > Radius)
+    {
+        Surface.FillRectangle(Spanning(X + Radius, Y, Num.Width() - Radius, H),
+                              Faded(Palette().Field, Opacity), 0.0f);
+
+        // The unit cell's border-left. Drawn after both fills, so nothing can erase it this time.
+        Surface.FillRectangle(Spanning(Seam, Y, 1.0f, H), Faded(Palette().Stroke, Opacity), 0.0f);
+    }
+
+    OutlineRounded(Surface, Whole, Faded(Palette().Stroke, Opacity), Radius);
+
+    TextCentred(Surface, Num, Faded(Palette().Text, Opacity), Number, 13.5f);
+    if (UnitWidth > 0.0f)
+        TextCentred(Surface, UnitCell, Faded(Palette().TextFaint, Opacity), Unit, 11.5f);
 }
 
 //------------------------------------------------------------------------------------------------------------------------

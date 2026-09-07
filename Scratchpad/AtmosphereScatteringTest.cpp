@@ -237,32 +237,46 @@ int main()
     //------------------------------------------------------------------------------------------------------------------
     std::printf("\n11. transmittance behaves the way an atmosphere must\n");
     {
+        // ⚠️ Asked in PHYSICAL terms and routed through the forward map, never by hardcoded texel coordinates.
+        //    This section used to name texels directly — U=1 for overhead, U=0.5 for grazing — which silently
+        //    encoded one particular parameterisation. When the transmittance table moved to Bruneton's
+        //    distance mapping (U=0 is the zenith, U=1 the horizon, and below the horizon is not stored at all)
+        //    those constants pointed at different angles and the section reported vertical and grazing swapped.
+        const auto At = [](float Altitude, float CosZenith)
+        {
+            float U, V;
+            TransmittanceParameterisation(Altitude, CosZenith, U, V);
+            return ComputeTransmittanceTexel(U, V);
+        };
+
         // Overhead sun at sea level: most light gets through, and blue is attenuated hardest.
-        const Vec3 Overhead = ComputeTransmittanceTexel(1.0f, 0.0f);
+        const Vec3 Overhead = At(0.0f, 1.0f);
         std::printf("     sun overhead at sea level: R %.4f G %.4f B %.4f\n",
                     static_cast<double>(Overhead.x), static_cast<double>(Overhead.y), static_cast<double>(Overhead.z));
         Expect(Overhead.x > 0.85f && Overhead.x < 1.0f, "red mostly survives a vertical path");
         Expect(Overhead.z < Overhead.x,                 "blue is attenuated more than red — why the sun looks warm");
 
-        // Sun below the horizon: the ground blocks it completely.
-        const Vec3 Below = ComputeTransmittanceTexel(0.0f, 0.0f);
+        // 🔴 Below the horizon the ground blocks the beam completely. The table no longer has a texel for that
+        //    case — Bruneton's mapping spans zenith to horizon and nothing beyond — so the claim is put to the
+        //    march itself, which is where it actually has to hold.
+        const Vec3 Below = SunTransmittance(Vec3{ 0.0f, 0.0f, kPlanetRadius + 1.0f },
+                                            Normalize(Vec3{ std::cos(-0.2f), 0.0f, std::sin(-0.2f) }), 64);
         Expect(Below.x == 0.0f && Below.y == 0.0f && Below.z == 0.0f,
                "a sun below the horizon transmits nothing — no light through the planet");
 
-        // Higher up there is less air overhead, so more survives. Monotone in altitude.
+        // Higher up there is less air overhead, so more survives. Monotone in altitude, straight up.
         bool Monotone = true;
         float Previous = -1.0f;
         for (int Row = 0; Row < 16; ++Row)
         {
-            const float V = (Row + 0.5f) / 16.0f;
-            const float Value = ComputeTransmittanceTexel(1.0f, V).z;
+            const float Value = At((Row + 0.5f) / 16.0f * kAtmosphereThickness, 1.0f).z;
             if (Value < Previous - 1e-6f) Monotone = false;
             Previous = Value;
         }
         Expect(Monotone, "transmittance rises with altitude, without wobble");
 
         // A grazing sun travels through far more air than an overhead one.
-        const Vec3 Grazing = ComputeTransmittanceTexel(0.5f, 0.0f);   // cos = 0, exactly at the horizon
+        const Vec3 Grazing = At(0.0f, 0.0f);   // cos = 0, exactly at the horizon
         std::printf("     grazing sun at sea level:  R %.4f G %.4f B %.4f\n",
                     static_cast<double>(Grazing.x), static_cast<double>(Grazing.y), static_cast<double>(Grazing.z));
         Expect(Grazing.x < Overhead.x, "a grazing path attenuates more than a vertical one");
@@ -868,7 +882,7 @@ int main()
             {
                 const int   Clamped = K < 0 ? 0 : (K > int(kMultiScatterSize) - 1 ? int(kMultiScatterSize) - 1 : K);
                 float Altitude = 0.0f, CosSunZenith = 0.0f;
-                TransmittanceInverse((static_cast<float>(Clamped) + 0.5f) / float(kMultiScatterSize), 0.0f,
+                MultiScatterInverse((static_cast<float>(Clamped) + 0.5f) / float(kMultiScatterSize), 0.0f,
                                      Altitude, CosSunZenith);
                 return EvaluateAt(CosSunZenith);
             };
@@ -878,7 +892,7 @@ int main()
 
         // ⚠️ The angle a single texel spans at the horizon is the whole point, so it is asserted directly.
         float Altitude = 0.0f, EdgeCosine = 0.0f;
-        TransmittanceInverse(0.5f + 1.0f / float(kMultiScatterSize), 0.0f, Altitude, EdgeCosine);
+        MultiScatterInverse(0.5f + 1.0f / float(kMultiScatterSize), 0.0f, Altitude, EdgeCosine);
         const float TexelDegrees = std::asin(std::fmin(1.0f, std::fabs(EdgeCosine))) * 180.0f / 3.14159265f;
         std::printf("     one texel spans %.3f deg of sun elevation at the horizon\n",
                     static_cast<double>(TexelDegrees));

@@ -387,4 +387,28 @@ else
 fi
 
 echo
+
+# ── A7f: the transmittance and multiple-scattering tables must NOT share a parameterisation ──────────────────
+# 🔴 They answer different questions. Transmittance is only ever wanted for a ray that clears the horizon;
+# multiple scattering is wanted precisely when the sun is BELOW it, because that is what lights twilight.
+# Sharing one mapping meant half the transmittance table stored zero and bilinear filtering interpolated across
+# the discontinuity at the horizon. Measured worst reconstruction error vs exact integration, over altitudes
+# 0/500/4000 m: signed-sqrt cosine 7.27x / 2.76x / 1.86x at 32 / 64 / 128 texels; Bruneton's distance ratio
+# 2.22x / 1.43x / 1.15x. Bruneton at 64 beats the old mapping at 128.
+grep -q 'MultiScatterParameterisation' Engine/Shaders/ReSTIRViewport.slang \
+    || { echo "  the multi-scatter table is sampled with the transmittance mapping — twilight cannot be expressed"; Fail=1; }
+for Source in Engine/Shaders/AtmosphereScattering.slang Engine/DisplayPresentation/AtmosphereModel.h; do
+    grep -q 'HorizonSpan' "$Source" \
+        || { echo "  $Source lost Bruneton's distance parameterisation"; Fail=1; }
+    # ⚠️ Anchored on the distance reconstruction itself, not on the word: a file could name HorizonSpan and
+    #    still map by the cosine.
+    grep -q 'Rho \* Rho - Distance \* Distance' "$Source" \
+        || { echo "  $Source no longer reconstructs the cosine from the boundary distance"; Fail=1; }
+done
+# The two mappings must remain textually distinct — collapsing them back is the exact regression guarded here.
+grep -q 'Uv.x \* 2.0 - 1.0' Engine/Shaders/AtmosphereScattering.slang \
+    || { echo "  the multi-scatter mapping lost its full-range sun-zenith span"; Fail=1; }
+
+
+
 if [ "$Fail" = "0" ]; then echo "[Atmosphere] OK"; exit 0; else echo "[Atmosphere] FAILED"; exit 1; fi
