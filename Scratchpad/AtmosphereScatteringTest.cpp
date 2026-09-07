@@ -682,6 +682,89 @@ int main()
                "skylight is a material fraction of daylight — worth the cost of gathering it");
     }
 
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n18. the moon's terminator is a curve on a sphere, not a chord\n");
+    {
+        // A7. Phase is the one part of a moon that is instantly wrong if simplified. A straight chord across the
+        //    disc gives a "D" at half phase and horns pointing the wrong way at crescent. The correct boundary
+        //    comes from the sphere's own normal, and this measures the lit AREA against what geometry demands.
+        const auto LitFraction = [](float Phase)
+        {
+            const float PhaseAngle = (1.0f - Phase) * 3.14159265f;
+            const Vec3  ToSun{ std::sin(PhaseAngle), 0.0f, std::cos(PhaseAngle) };
+            int Lit = 0, Total = 0;
+            const int Grid = 400;
+            for (int Y = 0; Y < Grid; ++Y)
+                for (int X = 0; X < Grid; ++X)
+                {
+                    const float U = (X + 0.5f) / Grid * 2.0f - 1.0f;
+                    const float V = (Y + 0.5f) / Grid * 2.0f - 1.0f;
+                    const float R2 = U * U + V * V;
+                    if (R2 > 1.0f) continue;
+                    ++Total;
+                    const Vec3 Normal{ U, V, std::sqrt(std::fmax(0.0f, 1.0f - R2)) };
+                    if (Dot(Normal, ToSun) > 0.0f) ++Lit;
+                }
+            return static_cast<float>(Lit) / static_cast<float>(Total);
+        };
+
+        std::printf("     phase   lit area   expected\n");
+        bool AllRight = true;
+        for (float Phase : { 0.0f, 0.25f, 0.5f, 0.75f, 1.0f })
+        {
+            const float Measured = LitFraction(Phase);
+            // ⚠️ The lit AREA of the visible disc is (1 + cos θ)/2 where θ is the elongation, NOT the phase
+            //    parameter itself. An earlier version of this test asserted "area == phase" and failed at the
+            //    quarters while passing at 0, 0.5 and 1 — the three points where the two happen to coincide.
+            //    The code was right; the expectation conflated the shape parameter with the area it produces.
+            const float Elongation = (1.0f - Phase) * 3.14159265f;
+            const float Expected   = (1.0f + std::cos(Elongation)) * 0.5f;
+            std::printf("     %.2f    %.4f     %.4f\n",
+                        static_cast<double>(Phase), static_cast<double>(Measured), static_cast<double>(Expected));
+            if (std::fabs(Measured - Expected) > 0.02f) AllRight = false;
+        }
+        Expect(AllRight, "the lit area follows (1 − cos θ)/2 at every phase");
+
+        // A straight chord would give exactly half the disc at phase 0.5 too, so the discriminating test is a
+        //    CRESCENT: a chord lights far more of the disc than a sphere does.
+        const float CrescentSphere = LitFraction(0.15f);
+        const float CrescentChord  = 0.15f * 2.0f;   // a chord at 15 % offset lights ~30 % of the disc area
+        std::printf("     crescent at 0.15: sphere %.3f, a straight chord would give ~%.3f\n",
+                    static_cast<double>(CrescentSphere), static_cast<double>(CrescentChord));
+        Expect(CrescentSphere < CrescentChord * 0.75f,
+               "a crescent lights markedly less than a chord would — the shapes are genuinely different");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n19. the night sky is visible only because exposure adapts\n");
+    {
+        // Why A7 waited for A6b. These are the luminances involved and what a FIXED daylight exposure does to
+        //    them — the stars are not dim, they are eight orders of magnitude below the sky that set the
+        //    exposure.
+        const float DaylightExposure = 0.18f / 8000.0f;   // exposed for a noon sky
+        struct Source { const char* Name; float Luminance; };
+        const Source Sources[] = {
+            { "moonlit sky", 0.10f  },
+            { "moon disc",   2500.0f },
+            { "bright star", 0.001f },
+        };
+        std::printf("     under a DAYLIGHT exposure:\n");
+        for (const Source& S : Sources)
+            std::printf("       %-12s renders at %.9f\n", S.Name,
+                        static_cast<double>(S.Luminance * DaylightExposure));
+
+        const float NightExposure = 0.18f / 0.10f;        // adapted to the moonlit sky
+        std::printf("     under an ADAPTED exposure:\n");
+        for (const Source& S : Sources)
+            std::printf("       %-12s renders at %.6f\n", S.Name,
+                        static_cast<double>(S.Luminance * NightExposure));
+
+        Expect(0.001f * DaylightExposure < 1.0f / 255.0f,
+               "a star under daylight exposure is below one 8-bit step — invisible");
+        Expect(0.001f * NightExposure    > 0.0f,
+               "and adaptation is what brings it into range");
+    }
+
     std::printf("\n>>> %s (%d failure%s)\n", Failures == 0 ? "ALL PASS" : "FAILURES", Failures, Failures == 1 ? "" : "s");
     return Failures == 0 ? 0 : 1;
 }

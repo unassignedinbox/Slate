@@ -327,4 +327,82 @@ vec3 ComputeMultiScatterTexel(vec2 Uv, int Directions, int Steps)
     return SecondOrder * Series;
 }
 
+//------------------------------------------------------------------------------------------------------------------------
+//                                                    NIGHT SKY (A7)
+//------------------------------------------------------------------------------------------------------------------------
+
+const float kMoonAngularRadius = 0.004526;   // [rad] 0.259° — very nearly the sun's, which is why eclipses work
+const float kMoonAlbedo        = 0.12;       // [-]   the moon is about as reflective as worn asphalt
+
+// The lit fraction of the moon's disc at a point on it, given the phase. Phase 0 is new, 1 is full.
+//
+// 🔴 The terminator is a COSINE boundary on a sphere, not a straight line across a circle. Drawing a straight
+//    chord gives a "D" shape at half phase instead of the correct half-disc, and at crescent phases the error is
+//    obvious — the horns point the wrong way. The sphere's own geometry is what produces the curve.
+float MoonLitFraction(vec2 DiscOffset, float Phase)
+{
+    const float R2 = dot(DiscOffset, DiscOffset);
+    if (R2 > 1.0) return 0.0;
+
+    // Reconstruct the sphere's surface normal at this point of the disc: the disc IS the sphere seen flat, so
+    //    the z component follows from the other two.
+    const vec3 Normal = vec3(DiscOffset, sqrt(max(0.0, 1.0 - R2)));
+
+    // The sun's direction relative to the moon, expressed as an angle around the disc. Phase 0.5 puts it exactly
+    //    to the side, which is the half moon.
+    const float PhaseAngle = (1.0 - Phase) * 3.14159265;
+    const vec3  ToSun = vec3(sin(PhaseAngle), 0.0, cos(PhaseAngle));
+
+    // Lambert. The soft edge is one disc-radius wide, which at 10 px across is under a pixel — enough to stop
+    //    the terminator aliasing without smearing the shape.
+    return clamp(dot(Normal, ToSun) * 4.0, 0.0, 1.0);
+}
+
+// A procedural star field. A hash over a direction grid rather than a catalogue: a real catalogue is the better
+//    answer eventually, but it needs a texture binding and an asset, and neither is worth spending before the
+//    exposure and the atmosphere are known to present stars correctly at all.
+//
+//    ⚠️ Cell-based, so the density is uniform over the sphere. Sampling a latitude/longitude grid instead
+//    clusters stars at the poles, which reads as two bright patches wherever the axis happens to point.
+vec3 StarField(vec3 Direction, float Rotation, float Brightness)
+{
+    if (Brightness <= 0.0) return vec3(0.0);
+
+    // Rotate with sidereal time so the field turns with the sky rather than being painted on the camera.
+    const float C = cos(Rotation), S = sin(Rotation);
+    const vec3 Turned = vec3(Direction.x * C - Direction.y * S,
+                             Direction.x * S + Direction.y * C,
+                             Direction.z);
+
+    // Quantise to a grid fine enough that two stars rarely share a cell.
+    const float Cells = 700.0;
+    const vec3  Scaled = Turned * Cells;
+    const vec3  Cell   = floor(Scaled);
+    const vec3  Within = Scaled - Cell;
+
+    // One hash per cell decides whether it holds a star, where in the cell, and how bright.
+    const float H = fract(sin(dot(Cell, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+    if (H < 0.982) return vec3(0.0);            // ~1.8 % of cells, which is a few thousand visible stars
+
+    const float H2 = fract(H * 7919.0);
+    const float H3 = fract(H * 6271.0);
+    const float H4 = fract(H * 4703.0);
+
+    const vec3  Centre   = vec3(H2, H3, H4);
+    const float Distance = length(Within - Centre);
+
+    // A point source, softened just enough to survive resampling. Any wider and stars look like fuzzy blobs.
+    const float Intensity = exp(-Distance * Distance * 900.0);
+    if (Intensity < 0.002) return vec3(0.0);
+
+    // Real stars are not white. A cheap colour temperature spread across the hash keeps the field from looking
+    //    like uniform pixel noise.
+    const float Warmth = fract(H * 2711.0);
+    const vec3  Colour = mix(vec3(0.72, 0.80, 1.00), vec3(1.00, 0.86, 0.68), Warmth);
+
+    // Magnitude distribution: a few bright stars and many faint ones, which is what the eye reads as a real sky.
+    const float Magnitude = pow(fract(H * 3319.0), 3.0);
+    return Colour * Intensity * Magnitude * Brightness;
+}
+
 #endif // ATMOSPHERE_SCATTERING_SLANG

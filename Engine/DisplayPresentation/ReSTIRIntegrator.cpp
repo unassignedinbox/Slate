@@ -121,26 +121,57 @@ DispatchConfiguration ReSTIRIntegrator::BuildDispatch(
                                    | (ActiveConfiguration.AliasPick          ? DispatchFeatureAliasPick          : 0u)
                                    | (ActiveConfiguration.TemporalReprojection ? DispatchFeatureTemporalReprojection : 0u)
                                    | (ActiveConfiguration.Denoise            ? DispatchFeatureDenoise            : 0u)
-                                   | (ActiveConfiguration.SkyLighting        ? DispatchFeatureSkyLighting        : 0u);
+                                   | (ActiveConfiguration.SkyLighting        ? DispatchFeatureSkyLighting        : 0u)
+                                   | (ActiveConfiguration.NightSky           ? DispatchFeatureNightSky           : 0u);
 
-    // A3 sky. The direction comes from the celestial clock, which is the single authoritative source — the
-    //    integrator never stores a sun of its own, or two would eventually disagree.
-    const HorizonDirection Sun = Sky.QuerySunDirection();
-    Dispatch.SunDirectionX = static_cast<float>(Sun.East);
-    Dispatch.SunDirectionY = static_cast<float>(Sun.North);
-    Dispatch.SunDirectionZ = static_cast<float>(Sun.Zenith);
-
-    const SkyStepCounts Steps = QuerySkySteps(ActiveConfiguration.SkyQuality);
-    Dispatch.SkyViewSteps  = Steps.View;
-    Dispatch.SkyLightSteps = Steps.Light;
-    Dispatch.SkyPadding    = 0u;
-    Dispatch.CameraAltitude = ActiveConfiguration.CameraAltitude;
-    // Quality Off zeroes the illuminance, which is what the shader tests — one condition rather than two that
-    //    could disagree about whether the sky is on.
-    Dispatch.SunIlluminance = (ActiveConfiguration.SkyQuality == SkyQualityCategory::Off)
-                            ? 0.0f : ActiveConfiguration.SunIlluminance;
+    for (uint32_t& Reserve : Dispatch.PushReserve) Reserve = 0u;
 
     return Dispatch;
+}
+
+//============================================================================================================================================
+//                                                  A7 — THE SKY RECORD
+//============================================================================================================================================
+
+SkyRecord ReSTIRIntegrator::BuildSkyRecord() const noexcept
+{
+    SkyRecord Record{};
+
+    // Every direction comes from the celestial clock, which is the single authoritative source. The integrator
+    //    never stores a sun or a moon of its own, or two copies would eventually disagree about the time.
+    const HorizonDirection Sun  = Sky.QuerySunDirection();
+    const HorizonDirection Moon = Sky.QueryMoonDirection();
+
+    Record.SunDirectionX = static_cast<float>(Sun.East);
+    Record.SunDirectionY = static_cast<float>(Sun.North);
+    Record.SunDirectionZ = static_cast<float>(Sun.Zenith);
+
+    Record.MoonDirectionX = static_cast<float>(Moon.East);
+    Record.MoonDirectionY = static_cast<float>(Moon.North);
+    Record.MoonDirectionZ = static_cast<float>(Moon.Zenith);
+    Record.MoonPhase      = static_cast<float>(Sky.QueryMoonPhase());
+
+    Record.CameraAltitude = ActiveConfiguration.CameraAltitude;
+    Record.StarRotation   = static_cast<float>(Sky.QuerySiderealAngle(Sky.QueryTime()));
+
+    const SkyStepCounts Steps = QuerySkySteps(ActiveConfiguration.SkyQuality);
+    Record.SkyViewSteps  = Steps.View;
+    Record.SkyLightSteps = Steps.Light;
+
+    // Quality Off zeroes the illuminance, which is the single condition the shader tests. Two conditions could
+    //    disagree about whether the sky is on.
+    const bool SkyOn = ActiveConfiguration.SkyQuality != SkyQualityCategory::Off;
+    Record.SunIlluminance = SkyOn ? ActiveConfiguration.SunIlluminance : 0.0f;
+
+    // The moon and the stars are only offered when they could actually be seen. Below the horizon the moon is
+    //    not drawn at all, and with the sun well up the stars are washed out anyway — but they are faded rather
+    //    than switched, so nothing pops at dawn.
+    Record.MoonIlluminance = (SkyOn && ActiveConfiguration.NightSky && Moon.Zenith > -0.05)
+                           ? ActiveConfiguration.SunIlluminance : 0.0f;
+    Record.StarBrightness  = (SkyOn && ActiveConfiguration.NightSky)
+                           ? ActiveConfiguration.StarBrightness : 0.0f;
+
+    return Record;
 }
 
 //============================================================================================================================================

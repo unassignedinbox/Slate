@@ -489,6 +489,8 @@ int main(int argc, char** argv)
     float BrowserTimeOfDay  = 12.0f, BrowserClockRate = 0.0f, BrowserLatitude = 45.0f;
     bool  BrowserSkyLighting = true;
     bool  BrowserAutoExposure = true;
+    bool  BrowserNightSky = true;
+    float BrowserStarBrightness = 0.4f;
     char  BrowserExposureText[48] = "-";
     char  BrowserSunElevationText[32]  = "-";
     char  BrowserSunAzimuthText[32]    = "-";
@@ -592,6 +594,8 @@ int main(int argc, char** argv)
                     Slider("Sun lux",   &BrowserSunLux,     0.0f, 200000.0f, "lx", 0u);
                     Slider("Altitude",  &BrowserAltitude,   0.0f, 10000.0f, "m", 0u);
                     Toggle("Lights scene", &BrowserSkyLighting);
+                    Toggle("Night sky",    &BrowserNightSky);
+                    Slider("Stars",        &BrowserStarBrightness, 0.0f, 2.0f, "", 2u);
                     Readout("Model", "LUT + multiple scattering (A2)");
                     break;
 
@@ -1085,6 +1089,8 @@ int main(int argc, char** argv)
             BrowserSunLux     = Cfg.SunIlluminance;
             BrowserAltitude   = Cfg.CameraAltitude;
             BrowserSkyLighting= Cfg.SkyLighting;
+            BrowserNightSky   = Cfg.NightSky;
+            BrowserStarBrightness = Cfg.StarBrightness;
             BrowserAutoExposure = Integrator.Exposure().QueryConfiguration().Mode
                                 == Frontier::ExposureModeCategory::Adaptive;
             std::snprintf(BrowserExposureText, sizeof(BrowserExposureText), "%.3f  (scene %.4f)",
@@ -1214,6 +1220,8 @@ int main(int argc, char** argv)
                 static_cast<uint32_t>(BrowserSkyQuality + 0.5f)));
             Integrator.AssignSunIlluminance(BrowserSunLux);
             Integrator.AssignSkyLighting(BrowserSkyLighting);
+            Integrator.AssignNightSky(BrowserNightSky);
+            Integrator.AssignStarBrightness(BrowserStarBrightness);
             {
                 Frontier::ExposureConfiguration Adapt = Integrator.Exposure().QueryConfiguration();
                 const Frontier::ExposureModeCategory Want = BrowserAutoExposure
@@ -1282,6 +1290,10 @@ int main(int argc, char** argv)
                           Frontier::RayTracingCapabilitySet::TierName(Surface.QueryRayTracingTier()));
             Frontier::TelemetryRowStructure Rows = Telemetry.QueryRows(); Rows.SceneLine = Line; Telemetry.AssignRows(Rows);
         }
+        // A7 — upload the frame's sky. Built from the same clock as the dispatch and written immediately before
+        //    it, so the two can never describe different instants.
+        Surface.AssignSkyRecord(Integrator.BuildSkyRecord());
+
         const Frontier::DispatchConfiguration Dispatch = Integrator.BuildDispatch(
             Camera,
             RenderWidth,

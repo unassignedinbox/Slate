@@ -136,6 +136,12 @@ struct SwapchainExchange::VulkanRecord
     VkDescriptorPool         LuminancePool       = VK_NULL_HANDLE;
     VkDescriptorSet          LuminanceSets[kCycleSlotCount] = {};
 
+    // A7. One small uniform buffer per cycle slot, persistently mapped. Per-slot because it changes every frame
+    //    and a single buffer would be rewritten while the previous frame still reads it.
+    VkBuffer                 SkyBuffers[kCycleSlotCount] = {};
+    VkDeviceMemory           SkyMemory  [kCycleSlotCount] = {};
+    void*                    SkyMapped  [kCycleSlotCount] = {};
+
     ResidentTexture          AtmosphereTables[2];
     bool                     AtmosphereTablesBuilt = false;
     VkPipeline               AtmosphereLutPipeline = VK_NULL_HANDLE;
@@ -477,6 +483,9 @@ void SwapchainExchange::Retire() noexcept
     }
     for (uint32_t Slot = 0u; Slot < kCycleSlotCount; ++Slot)
     {
+        if (Vulkan->SkyMapped[Slot])  vkUnmapMemory(Vulkan->Device, Vulkan->SkyMemory[Slot]);
+        if (Vulkan->SkyBuffers[Slot]) vkDestroyBuffer(Vulkan->Device, Vulkan->SkyBuffers[Slot], nullptr);
+        if (Vulkan->SkyMemory[Slot])  vkFreeMemory(Vulkan->Device, Vulkan->SkyMemory[Slot], nullptr);
         if (Vulkan->LuminanceMapped[Slot]) vkUnmapMemory(Vulkan->Device, Vulkan->LuminanceMemory[Slot]);
         if (Vulkan->LuminanceBuffers[Slot]) vkDestroyBuffer(Vulkan->Device, Vulkan->LuminanceBuffers[Slot], nullptr);
         if (Vulkan->LuminanceMemory[Slot])  vkFreeMemory(Vulkan->Device, Vulkan->LuminanceMemory[Slot], nullptr);
@@ -1155,7 +1164,7 @@ bool SwapchainExchange::BringComputePipeline() noexcept
     for (uint32_t B = 4u; B < kComputeBindingCount - 1u; ++B)
     {
         LayoutBindings[B].binding         = B;
-        LayoutBindings[B].descriptorType  = (B < 6u || B == 18u || B == 19u || B == 20u) ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : (B == 13u || B == 14u || B == 15u || B == 21u || B == 22u) ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;   // 18 R7a surface · 19/20 R7 moments + denoise input · 21/22 A2 atmosphere LUTs (sampled, so filtering interpolates between texels)
+        LayoutBindings[B].descriptorType  = (B < 6u || B == 18u || B == 19u || B == 20u) ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : (B == 13u || B == 14u || B == 15u || B == 21u || B == 22u) ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER : (B == 24u) ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;   // 18 R7a surface · 19/20 R7 moments + denoise input · 21/22 A2 atmosphere LUTs (sampled, so filtering interpolates between texels)
         LayoutBindings[B].descriptorCount = 1u;
         LayoutBindings[B].stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
     }
@@ -1273,6 +1282,16 @@ struct LuminancePushRecord { uint32_t Width, Height, Stride, Padding; };
 
 // A6b. The luminance reduction: one small compute pass that collapses the resolved HDR image to a single
 //    average log luminance, which drives adaptive exposure.
+void SwapchainExchange::AssignSkyRecord(const SkyRecord& Record) noexcept
+{
+    if (!Vulkan) return;
+    // ⚠️ Slot 0 only. Binding 24 points at slot 0's buffer, so writing any other slot would update memory the
+    //    kernel never reads — the sky would silently freeze at whatever it was when the descriptor was written.
+    //    A per-slot descriptor is the alternative, and it is not worth a second descriptor set for 64 bytes that
+    //    the GPU consumes within the same frame it is written.
+    if (Vulkan->SkyMapped[0]) std::memcpy(Vulkan->SkyMapped[0], &Record, sizeof(SkyRecord));
+}
+
 float SwapchainExchange::QueryAverageLogLuminance() const noexcept
 {
     if (!Vulkan || !Vulkan->LuminancePipeline) return -1.0e9f;
@@ -1337,6 +1356,17 @@ bool SwapchainExchange::BringLuminanceReduction() noexcept
                         &Vulkan->LuminanceMapped[Slot]) != VK_SUCCESS)
             return false;
         std::memset(Vulkan->LuminanceMapped[Slot], 0, 16u);
+
+        // A7 sky record, same slot discipline: written by the CPU for the frame being recorded while the GPU
+        //    still reads the other slot's copy.
+        AllocateBuffer(Vulkan->Device, Vulkan->MemoryProperties, sizeof(SkyRecord),
+                       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, HostVisible,
+                       Vulkan->SkyBuffers[Slot], Vulkan->SkyMemory[Slot]);
+        if (!Vulkan->SkyBuffers[Slot]) return false;
+        if (vkMapMemory(Vulkan->Device, Vulkan->SkyMemory[Slot], 0u, sizeof(SkyRecord), 0u,
+                        &Vulkan->SkyMapped[Slot]) != VK_SUCCESS)
+            return false;
+        std::memset(Vulkan->SkyMapped[Slot], 0, sizeof(SkyRecord));
     }
 
     VkDescriptorPoolSize PoolSizes[2]{};
@@ -1580,7 +1610,7 @@ bool SwapchainExchange::BringDenoisePipeline() noexcept
 
 bool SwapchainExchange::BringDescriptorSet() noexcept
 {
-    std::array<VkDescriptorPoolSize, 3u> PoolSizes{};
+    std::array<VkDescriptorPoolSize, 4u> PoolSizes{};
     // Counted explicitly rather than derived from kComputeBindingCount: the mix of image and buffer bindings is
     //    not a fixed offset from the total, and a wrong pool size fails allocation at bring-up with a message that
     //    points nowhere near the cause.
@@ -1595,7 +1625,9 @@ bool SwapchainExchange::BringDescriptorSet() noexcept
     PoolInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     PoolInfo.flags         = Vulkan->DescriptorIndexing ? static_cast<VkDescriptorPoolCreateFlags>(VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT) : 0u;
     PoolInfo.maxSets       = 1u;
-    PoolInfo.poolSizeCount = 3u;
+    PoolSizes[3].type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    PoolSizes[3].descriptorCount = 1u;                          // 24 A7 sky record
+    PoolInfo.poolSizeCount = 4u;
     PoolInfo.pPoolSizes    = PoolSizes.data();
     (void)vkCreateDescriptorPool(Vulkan->Device, &PoolInfo, nullptr, &Vulkan->ComputeDescriptorPool);
 
@@ -1765,6 +1797,18 @@ void SwapchainExchange::WriteDescriptorSet() noexcept
     WriteImage (20u, DenoiseInputInfo);     // R7:  linear radiance + variance, the à-trous input
     WriteSampled(21u, TransmittanceInfo);   // A2:  sun survival; skipped until the table is built
     WriteSampled(22u, MultiScatterInfo);    // A2:  multiple-scattering transfer factor
+
+    // A7: binding 24 is the sky record. Slot 0's buffer is bound; the per-frame contents are written through
+    //    the mapped pointer, so the descriptor itself never changes.
+    if (Vulkan->SkyBuffers[0])
+    {
+        static VkDescriptorBufferInfo SkyInfo{};
+        SkyInfo = VkDescriptorBufferInfo{ Vulkan->SkyBuffers[0], 0u, sizeof(SkyRecord) };
+        VkWriteDescriptorSet& Write = Writes[WriteCount++];
+        Write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET; Write.dstSet = Vulkan->ComputeDescriptorSet;
+        Write.dstBinding = 24u; Write.descriptorCount = 1u;
+        Write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; Write.pBufferInfo = &SkyInfo;
+    }
 
     // R4a: the texture table. Written in one go (partially bound: slots past the resident count stay undefined and are
     //    never indexed — the material records only reference resident slots).
@@ -2706,7 +2750,7 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
         // ②a2 A6b — measure the frame's average log luminance for adaptive exposure. Recorded INSIDE the
         //      DebugView::Off branch: a debug view writes false colours into the presentation image, and
         //      exposing for a normal-map visualisation would be meaningless.
-        if (Vulkan->LuminancePipeline && Dispatch.SunIlluminance >= 0.0f)
+        if (Vulkan->LuminancePipeline)
         {
             // The kernel wrote HistoryImage this frame; the reduction reads it. Without this the reduction
             //    races the kernel and measures a half-written frame, which would make the exposure jitter.

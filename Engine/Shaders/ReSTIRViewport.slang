@@ -120,7 +120,7 @@ layout(rgba32f, binding = 19) uniform image2D MomentImage;           // R7: x = 
 layout(rgba32f, binding = 20) uniform writeonly image2D DenoiseImage; // R7: xyz = linear radiance, w = variance — the à-trous input
 layout(binding = 21) uniform sampler2D TransmittanceLut;  // A2: sun survival, (cos sun zenith, sqrt altitude)
 layout(binding = 22) uniform sampler2D MultiScatterLut;   // A2: isotropic multiple-scattering transfer factor
-layout(binding = 23) uniform sampler2D Textures[];   // R4a bindless table — ⚠️ moved 11 → 15 in R4b → 18 in R6 → 19 in R7a → 21 in R7 → 23 in A2: a variable-count binding must be the last one in the set
+layout(binding = 25) uniform sampler2D Textures[];   // R4a bindless table — ⚠️ moved 11 → 15 in R4b → 18 in R6 → 19 in R7a → 21 in R7 → 23 in A2 → 25 in A7: a variable-count binding must be the last one in the set
 
 const float kTemporalNormalCos = 0.906308;   // cos(25°): temporal/spatial normal validation
 const float kTemporalDepthTol  = 0.10;       // 10% relative depth validation
@@ -325,13 +325,44 @@ layout(push_constant) uniform ReSTIRConstants
     uint    AlphaMaskedMaterialCount; // [cnt] R4b: materials flagged kMaterialFlagAlphaMask (0 ⇒ any-hit shadow rays) — was TriangleCount (unused here)
     uint    LightTriangleCount;     // [cnt] emissive triangles for DI sampling
     uint    FeatureFlags;           // [bit] kFeatureGlobalIllumination | kFeatureAntiAliasing
-    // A3 sky. 32 bytes, which is exactly the headroom left in Vulkan's guaranteed 128-byte push block.
+    // A7 ⚠️ The sky parameters used to live here and filled the block to exactly 128 bytes — Vulkan's guaranteed
+    //    minimum. The moon and the star field need ~20 bytes more, and growing past the guarantee would work on
+    //    a card that offers 256 and fail on one that offers only 128, i.e. break on someone else's machine.
+    //    They now live in the SkyRecord uniform buffer, which is also the shape a per-world sky needs (M1).
+    uint    PushReserve0;           // [-]   freed by that move; kept so the block stays 128 B and 16-B aligned
+    uint    PushReserve1;
+    uint    PushReserve2;
+    uint    PushReserve3;
+    uint    PushReserve4;
+    uint    PushReserve5;
+    uint    PushReserve6;
+    uint    PushReserve7;
+};
+
+//------------------------------------------------------------------------------------------------------------------------
+//                                                     SKY RECORD (A7)
+//------------------------------------------------------------------------------------------------------------------------
+// One uniform buffer describing the sky. A buffer rather than push constants because the block was full, and a
+//    buffer rather than more push bytes because this is the shape a PER-WORLD sky needs: when portals arrive
+//    this becomes an array indexed by world ordinal and nothing else about the kernel changes (CLAUDE.md §15b).
+
+layout(binding = 24) uniform SkyRecord
+{
     vec3    SunDirection;           // [-]   toward the sun, unit, world space (Z-up)
     float   SunIlluminance;         // [lx]  direct-beam illuminance above the atmosphere; 0 disables the sky
+
+    vec3    MoonDirection;          // [-]   toward the moon, unit
+    float   MoonPhase;              // [0..1] illuminated fraction; 0 new, 1 full
+
     float   CameraAltitude;         // [m]   observer height above the planet surface
+    float   StarRotation;           // [rad] sidereal rotation of the star field
+    float   StarBrightness;         // [cd/m²] 0 disables the stars
+    float   MoonIlluminance;        // [lx]  sunlight reaching the moon; 0 disables it
+
     uint    SkyViewSteps;           // [cnt] quality tier: samples along the view ray
-    uint    SkyLightSteps;          // [cnt] quality tier: samples along the ray to the sun
-    uint    SkyPadding;             // [-]   keeps the block 16-byte aligned
+    uint    SkyLightSteps;          // [cnt] quality tier: 0 selects the tabulated path
+    uint    SkyReserve0;
+    uint    SkyReserve1;
 };
 
 const uint kFeatureGlobalIllumination = 1u;   // bit 0: trace the secondary bounce (section 4)
@@ -343,6 +374,7 @@ const uint kFeatureAliasPick          = 32u;  // bit 5: R6 row 3 — Walker-alia
 const uint kFeatureTemporalReprojection = 64u;  // bit 6: R7a — reproject the running mean through the R2 motion vectors
 const uint kFeatureDenoise            = 128u; // bit 7: R7 — the à-trous filter runs, so the kernel defers the tone map to it
 const uint kFeatureSkyLighting        = 256u; // bit 8: A5 — an escaped bounce ray gathers sky radiance (off = the pre-A5 image)
+const uint kFeatureNightSky           = 512u; // bit 9: A7 — the moon disc and the star field (off = the pre-A7 image)
 
 float PixelSpreadAngle() { return 2.0 * FieldOfViewTanHalf / float(ViewportHeight); }   // [rad] R4b ray-cone spread per pixel
 
@@ -949,6 +981,43 @@ void main()
                                           vec3(SunIlluminance), int(SkyViewSteps), int(SkyLightSteps));
 
             skyRadiance += SunDiscTabulated(CameraAltitude, rayDirection, SunDirection, vec3(SunIlluminance));
+
+            // A7 — the night sky. Both are ADDED to the sky radiance and then attenuated by the atmosphere
+            //    between here and them, so they fade out at dawn exactly as the real ones do rather than being
+            //    switched off by a threshold. That is the whole reason they are not a separate "night" branch.
+            if ((FeatureFlags & kFeatureNightSky) != 0u)
+            {
+                const vec3 Attenuation = SampleTransmittance(max(CameraAltitude, 1.0), rayDirection.z);
+
+                // Stars first: the moon draws over them, which is correct — it is nearer and opaque.
+                skyRadiance += StarField(rayDirection, StarRotation, StarBrightness) * Attenuation;
+
+                if (MoonIlluminance > 0.0)
+                {
+                    const float CosToMoon = dot(rayDirection, MoonDirection);
+                    if (CosToMoon > cos(kMoonAngularRadius))
+                    {
+                        // Where on the disc this ray lands, in units of the moon's radius. Building a tangent
+                        //    frame keeps the phase terminator oriented consistently as the moon moves, instead
+                        //    of spinning with the camera.
+                        const vec3 Up      = abs(MoonDirection.z) < 0.99 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+                        const vec3 Tangent = normalize(cross(Up, MoonDirection));
+                        const vec3 Bitan   = cross(MoonDirection, Tangent);
+                        const vec3 Offset  = rayDirection / max(CosToMoon, 1e-6) - MoonDirection;
+                        const vec2 Disc    = vec2(dot(Offset, Tangent), dot(Offset, Bitan)) / kMoonAngularRadius;
+
+                        const float Lit = MoonLitFraction(Disc, MoonPhase);
+                        if (Lit > 0.0)
+                        {
+                            // Radiance, not illuminance: divided by the solid angle it subtends, so its
+                            //    brightness does not change with render resolution.
+                            const float SolidAngle = 6.28318530 * (1.0 - cos(kMoonAngularRadius));
+                            skyRadiance += vec3(MoonIlluminance) * kMoonAlbedo * Lit
+                                         / SolidAngle * Attenuation;
+                        }
+                    }
+                }
+            }
         }
         Resolve(pixel, skyRadiance);
         return;

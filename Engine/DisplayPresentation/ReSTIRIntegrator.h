@@ -95,6 +95,9 @@ struct ReSTIRIntegratorConfiguration
     //    Off restores the pre-A5 image exactly, which is the identity switch — and the A/B for how much of the
     //    room's light is actually coming through the oculus.
     bool        SkyLighting      = true;
+    // A7. The moon disc and the star field. Off restores the pre-A7 image exactly.
+    bool        NightSky         = true;
+    float       StarBrightness   = 0.4f;        // [cd/m²] a dark-site sky; adaptive exposure is what reveals it
 };
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -109,6 +112,10 @@ public:
 
     ReSTIRIntegrator(const ReSTIRIntegrator&)            = delete;
     ReSTIRIntegrator& operator=(const ReSTIRIntegrator&) = delete;
+
+    // A7. The frame's sky, for the uniform buffer the kernel reads. Separate from BuildDispatch because it goes
+    //    to a different destination, but built from the same clock so the two always agree.
+    [[nodiscard]] SkyRecord BuildSkyRecord() const noexcept;
 
     // Construct the DispatchConfiguration from live camera state and scene counts
     [[nodiscard]] DispatchConfiguration
@@ -160,6 +167,8 @@ public:
     void AssignSkyQuality  (SkyQualityCategory Q) noexcept { if (ActiveConfiguration.SkyQuality     != Q) { ActiveConfiguration.SkyQuality     = Q; ResetAccumulation(); } }
     void AssignSunIlluminance    (float    Lux)   noexcept { if (ActiveConfiguration.SunIlluminance != Lux) { ActiveConfiguration.SunIlluminance = Lux; ResetAccumulation(); } }
     void AssignSkyLighting       (bool     On)    noexcept { if (ActiveConfiguration.SkyLighting    != On)  { ActiveConfiguration.SkyLighting    = On;  ResetAccumulation(); } }
+    void AssignNightSky          (bool     On)    noexcept { if (ActiveConfiguration.NightSky       != On)    { ActiveConfiguration.NightSky       = On;    ResetAccumulation(); } }
+    void AssignStarBrightness    (float    Value) noexcept { if (ActiveConfiguration.StarBrightness != Value) { ActiveConfiguration.StarBrightness = Value; ResetAccumulation(); } }
 
     void ResetAccumulation() noexcept { AccumulationIndex = 0u; }
 

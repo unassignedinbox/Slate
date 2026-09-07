@@ -24,11 +24,11 @@ ShaderSurface=$(grep -oP 'layout\(rgba16f, binding = \K[0-9]+(?=\) uniform image
 ShaderTextures=$(grep -oP 'layout\(binding = \K[0-9]+(?=\) uniform sampler2D Textures)' Engine/Shaders/ReSTIRViewport.slang)
 
 Fail=0
-# 24 bindings since A2 added the two atmosphere LUTs at 21/22, pushing Textures[] to 23. HistorySurfaceImage
-# stayed at 18 and is still shared with the denoiser for its edge-stopping weights.
-[ "$Count" = "24" ]           || { echo "  kComputeBindingCount is $Count, expected 24"; Fail=1; }
+# 26 bindings since A7 added the sky-record UBO at 24, pushing Textures[] to 25. HistorySurfaceImage stayed at
+# 18 and is still shared with the denoiser for its edge-stopping weights.
+[ "$Count" = "26" ]           || { echo "  kComputeBindingCount is $Count, expected 26"; Fail=1; }
 [ "$ShaderSurface" = "18" ]   || { echo "  HistorySurfaceImage is at $ShaderSurface, expected 18"; Fail=1; }
-[ "$ShaderTextures" = "23" ]  || { echo "  Textures[] is at $ShaderTextures, expected 23"; Fail=1; }
+[ "$ShaderTextures" = "25" ]  || { echo "  Textures[] is at $ShaderTextures, expected 25"; Fail=1; }
 
 # The variable-count bindless array must be the highest binding in the set — Vulkan requires it.
 [ "$ShaderTextures" = "$((Count - 1))" ] \
@@ -66,8 +66,8 @@ cp Engine/Shaders/*.slang "$Stage/Shaders/"
 Reflection=$("$Glslang" -V --target-env vulkan1.2 -S comp -I"$Stage" -q "$Stage/Shaders/ReSTIRViewport.slang" 2>/dev/null)
 echo "$Reflection" | grep -q 'HistorySurfaceImage:.*binding 18' \
     || { echo "  reflection does not show HistorySurfaceImage at binding 18"; exit 1; }
-echo "$Reflection" | grep -q 'Textures:.*binding 23' \
-    || { echo "  reflection does not show Textures[] at binding 23"; exit 1; }
+echo "$Reflection" | grep -q 'Textures:.*binding 25' \
+    || { echo "  reflection does not show Textures[] at binding 25"; exit 1; }
 echo "  SPIR-V compiles and reflects the expected bindings              PASS"
 
 echo

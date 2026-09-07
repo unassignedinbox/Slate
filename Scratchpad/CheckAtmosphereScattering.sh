@@ -137,7 +137,40 @@ grep -q 'DispatchFeatureSkyLighting' Engine/DeviceExchange/SwapchainExchange.h \
 grep -q 'Deferred by Design — Single Sky Dome' CLAUDE.md \
     || { echo "  the single-dome note is gone from CLAUDE.md"; Fail=1; }
 
-[ "$Fail" = "0" ] && echo "  constants, LUTs, bindings, sun and sky-lighting wiring agree     PASS"
+# ── A7: the night sky ────────────────────────────────────────────────────────────────────────────────────────────
+# 🔴 The push block must stay at 128 bytes — Vulkan's GUARANTEED MINIMUM. A7's sky parameters moved to a uniform
+# buffer for exactly this reason: growing to 160 would work on a card offering 256 and fail on one offering the
+# guarantee, i.e. break on someone else's machine rather than here.
+grep -q 'sizeof(DispatchConfiguration) == 128u' Engine/DeviceExchange/SwapchainExchange.h \
+    || { echo "  the push block is no longer pinned at 128 bytes"; Fail=1; }
+grep -q 'sizeof(SkyRecord) == 64u' Engine/DeviceExchange/SwapchainExchange.h \
+    || { echo "  SkyRecord is not pinned to its std140 size"; Fail=1; }
+grep -q 'layout(binding = 24) uniform SkyRecord' Engine/Shaders/ReSTIRViewport.slang \
+    || { echo "  the sky record is not a uniform buffer at binding 24"; Fail=1; }
+
+# Textures[] must still be the highest binding.
+TexturesBinding=$(grep -oP 'layout\(binding = \K[0-9]+(?=\) uniform sampler2D Textures)' Engine/Shaders/ReSTIRViewport.slang)
+BindingCount=$(grep -oP 'kComputeBindingCount\s*=\s*\K[0-9]+' Engine/DeviceExchange/SwapchainExchange.h)
+[ "$TexturesBinding" = "$((BindingCount - 1))" ] \
+    || { echo "  Textures[] is at $TexturesBinding but must be the highest of $BindingCount"; Fail=1; }
+
+# ⚠️ The moon's terminator must come from the sphere's normal. A straight chord gives a "D" at half phase and
+# horns pointing the wrong way at crescent — instantly wrong, and not fixable by tuning.
+grep -q 'sqrt(max(0.0, 1.0 - R2))' Engine/Shaders/AtmosphereScattering.slang \
+    || { echo "  the moon phase is not derived from the sphere normal"; Fail=1; }
+
+# Stars must be cell-based, or a latitude/longitude grid clusters them at the poles as two bright patches.
+grep -q 'floor(Scaled)' Engine/Shaders/AtmosphereScattering.slang \
+    || { echo "  the star field is not cell-based — it would cluster at the poles"; Fail=1; }
+
+# The night sky must be attenuated by the atmosphere, so it fades at dawn rather than switching off.
+grep -q 'StarField(rayDirection, StarRotation, StarBrightness) \* Attenuation' Engine/Shaders/ReSTIRViewport.slang \
+    || { echo "  the stars are not attenuated by the atmosphere — they would pop at dawn"; Fail=1; }
+
+grep -q 'kFeatureNightSky' Engine/Shaders/ReSTIRViewport.slang \
+    || { echo "  the night sky has no feature bit — the pre-A7 image is unreproducible"; Fail=1; }
+
+[ "$Fail" = "0" ] && echo "  constants, LUTs, bindings, sun, sky lighting and night sky agree PASS"
 
 echo
 Glslang=""

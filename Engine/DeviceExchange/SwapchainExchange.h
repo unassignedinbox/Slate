@@ -34,7 +34,28 @@ static constexpr uint32_t kTransmittanceLutWidth  = 256u;
 static constexpr uint32_t kTransmittanceLutHeight = 64u;
 static constexpr uint32_t kMultiScatterLutSize    = 32u;
 
-static constexpr uint32_t kComputeBindingCount  = 24u;    // compute set 0: 0 out · 1 tris · 2 materials · 3 history · 4 surface · 5 normal · 6 instances · 7 luminaires · 8/9 CWBVH · 10 slabs · 11 vertices · 12 indices · 13 energy LUT · 14 sheen LUT · 15 motion · 16 prev reservoir · 17 curr reservoir · 18 history normal+depth (R7a) · 19 luminance moments (R7) · 20 denoise input (R7) · 21 transmittance LUT (A2) · 22 multi-scatter LUT (A2) · 23 Textures[] (variable-count binding MUST stay last — Vulkan requires it on the highest binding number)
+// A7. The sky, as a uniform buffer rather than push constants. Mirrors `SkyRecord` in ReSTIRViewport.slang.
+//    std140: a vec3 occupies 16 bytes, so each is paired with the float that follows it.
+struct SkyRecord
+{
+    float    SunDirectionX, SunDirectionY, SunDirectionZ;   // [-]    toward the sun, unit
+    float    SunIlluminance;                                // [lx]   0 disables the sky entirely
+
+    float    MoonDirectionX, MoonDirectionY, MoonDirectionZ;// [-]    toward the moon, unit
+    float    MoonPhase;                                     // [0..1] illuminated fraction
+
+    float    CameraAltitude;                                // [m]
+    float    StarRotation;                                  // [rad]  sidereal rotation of the field
+    float    StarBrightness;                                // [cd/m²] 0 disables the stars
+    float    MoonIlluminance;                               // [lx]   0 disables the moon
+
+    uint32_t SkyViewSteps;                                  // [-]    quality tier
+    uint32_t SkyLightSteps;                                 // [-]    0 selects the tabulated path
+    uint32_t SkyReserve0, SkyReserve1;
+};
+static_assert(sizeof(SkyRecord) == 64u, "SkyRecord must match the shader's std140 uniform block (64 bytes)");
+
+static constexpr uint32_t kComputeBindingCount  = 26u;    // compute set 0: 0 out · 1 tris · 2 materials · 3 history · 4 surface · 5 normal · 6 instances · 7 luminaires · 8/9 CWBVH · 10 slabs · 11 vertices · 12 indices · 13 energy LUT · 14 sheen LUT · 15 motion · 16 prev reservoir · 17 curr reservoir · 18 history normal+depth (R7a) · 19 luminance moments (R7) · 20 denoise input (R7) · 21 transmittance LUT (A2) · 22 multi-scatter LUT (A2) · 24 sky record UBO (A7) · 25 Textures[] (variable-count binding MUST stay last — Vulkan requires it on the highest binding number)
 static constexpr uint32_t kTextureSlotCapacity  = 1024u;  // bindless sampler2D[] size (variable-count binding; Pascal maxPerStageDescriptorSamplers ≥ 4000)
 class MaterialIndex;    // ContentInterchange/MaterialIndex.h (R4a)
 
@@ -109,17 +130,12 @@ struct DispatchConfiguration
     uint32_t LuminaireTriangleCount;                               // [-]   emissive triangles for DI sampling
     uint32_t FeatureFlags;                                         // [bit] DispatchFeature bits
 
-    // ── A3 sky ───────────────────────────────────────────────────────────────────────────────────────────────────
-    // 32 bytes, exactly the headroom left in Vulkan's guaranteed 128-byte push block. Anything further needs a
-    //    uniform buffer, so the LUT handles in A2 will go there rather than here.
-    float    SunDirectionX;                                        // [-]   toward the sun, unit, world space (Z-up)
-    float    SunDirectionY;
-    float    SunDirectionZ;
-    float    SunIlluminance;                                       // [lx]  direct beam above the atmosphere; 0 = no sky
-    float    CameraAltitude;                                       // [m]   observer height above the planet surface
-    uint32_t SkyViewSteps;                                         // [-]   quality tier: samples along the view ray
-    uint32_t SkyLightSteps;                                        // [-]   quality tier: samples toward the sun
-    uint32_t SkyPadding;                                           // [-]   keeps the block 16-byte aligned
+    // ── A7 reserve ───────────────────────────────────────────────────────────────────────────────────────────────
+    // ⚠️ The sky parameters used to live here and filled the block to exactly 128 bytes, which is Vulkan's
+    //    GUARANTEED MINIMUM. A7's moon and stars needed ~20 more, and growing past 128 would have worked on a
+    //    card offering 256 and failed on one offering only the guarantee — a defect that appears on someone
+    //    else's machine. They moved to SkyRecord, which is also the shape a per-world sky needs (CLAUDE.md §15b).
+    uint32_t PushReserve[8];                                       // [-] keeps the block 128 B and 16-B aligned
 };
 
 // Bits of DispatchConfiguration::FeatureFlags — mirror kFeature* in ReSTIRViewport.slang.
@@ -133,7 +149,8 @@ enum DispatchFeature : uint32_t
     DispatchFeatureAliasPick          = 1u << 5,   // R6 row 3: Walker-alias light pick (off = uniform, R0 identity)
     DispatchFeatureTemporalReprojection = 1u << 6, // R7a: reproject the running mean through the R2 motion vectors
     DispatchFeatureDenoise            = 1u << 7,   // R7:  à-trous filter runs; the kernel defers the tone map to it
-    DispatchFeatureSkyLighting        = 1u << 8    // A5:  an escaped bounce ray gathers sky radiance (off = the pre-A5 image)
+    DispatchFeatureSkyLighting        = 1u << 8,   // A5:  an escaped bounce ray gathers sky radiance (off = the pre-A5 image)
+    DispatchFeatureNightSky           = 1u << 9    // A7:  the moon disc and the star field (off = the pre-A7 image)
 };
 
 // Mirrors `layout(push_constant) uniform ReSTIRConstants` in Engine/Shaders/ReSTIRViewport.slang.
@@ -242,6 +259,10 @@ public:
     //    available yet. Reads the slot the GPU has already finished with, so it never stalls: the value is one
     //    or two frames stale, which is invisible against adaptation time constants measured in seconds.
     [[nodiscard]] float QueryAverageLogLuminance() const noexcept;
+
+    // A7. Write the frame's sky into the uniform buffer the kernel reads. Called before RecordComputeCommands,
+    //    from the same place the dispatch configuration is built, so the two cannot describe different frames.
+    void AssignSkyRecord(const SkyRecord& Record) noexcept;
     [[nodiscard]] uint32_t QueryTargetGeneration() const noexcept { return TargetGeneration; }
 
     //--------------------------------------------------------------------------------------------------------------------
