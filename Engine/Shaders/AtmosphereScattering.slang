@@ -375,14 +375,24 @@ vec3 StarField(vec3 Direction, float Rotation, float Brightness)
                              Direction.z);
 
     // Quantise to a grid fine enough that two stars rarely share a cell.
-    const float Cells = 700.0;
+    //
+    // ⚠️ These two numbers together set the STAR COUNT, and they were originally wrong by an order of
+    //    magnitude. 700 cells at a 0.982 threshold puts 120 352 stars on the sphere; the real naked-eye sky has
+    //    about 9 100 to magnitude 6.5. Thirteen times too many does not read as a rich sky, it reads as noise —
+    //    the eye stops seeing individual stars and sees texture instead, which is exactly why a real sky looks
+    //    sparser than people expect when they first try to render one.
+    //
+    //    260 and 0.990 give 9 056, measured by walking the sphere and counting distinct cells rather than by
+    //    estimating from the threshold — the shell only intersects a fraction of the grid, so the fraction of
+    //    CELLS holding a star is not the fraction of DIRECTIONS that land on one.
+    const float Cells = 260.0;
     const vec3  Scaled = Turned * Cells;
     const vec3  Cell   = floor(Scaled);
     const vec3  Within = Scaled - Cell;
 
     // One hash per cell decides whether it holds a star, where in the cell, and how bright.
     const float H = fract(sin(dot(Cell, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
-    if (H < 0.982) return vec3(0.0);            // ~1.8 % of cells, which is a few thousand visible stars
+    if (H < 0.990) return vec3(0.0);            // ≈ 9 100 stars on the sphere — the naked-eye sky
 
     const float H2 = fract(H * 7919.0);
     const float H3 = fract(H * 6271.0);

@@ -14,7 +14,9 @@
 
 #include <cmath>
 #include <cstdio>
+#include <algorithm>
 #include <initializer_list>
+#include <vector>
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                            PORT OF AtmosphereScattering.slang
@@ -763,6 +765,53 @@ int main()
                "a star under daylight exposure is below one 8-bit step — invisible");
         Expect(0.001f * NightExposure    > 0.0f,
                "and adaptation is what brings it into range");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n20. the procedural star field has the right NUMBER of stars\n");
+    {
+        // The grid resolution and the hash threshold together set the star count, and they are easy to get wrong
+        //    by an order of magnitude because the fraction of CELLS holding a star is not the fraction of
+        //    DIRECTIONS that land on one — the sphere shell only intersects a thin slice of the grid.
+        //
+        //    This shipped at 700 / 0.982, which is 120 352 stars: thirteen times the real sky. That does not
+        //    read as a rich sky, it reads as noise, because the eye stops resolving individual points and sees
+        //    texture. Counting is the only way to catch it; it looks plausible in a screenshot either way.
+        constexpr float kCells     = 260.0f;   // must match StarField() in AtmosphereScattering.slang
+        constexpr float kThreshold = 0.990f;
+
+        const auto Fract = [](float V) { return V - std::floor(V); };
+        const auto Hash  = [&](float Cx, float Cy, float Cz)
+        {
+            return Fract(std::sin(Cx * 12.9898f + Cy * 78.233f + Cz * 37.719f) * 43758.5453f);
+        };
+
+        // Walk the sphere far more densely than the grid, and count DISTINCT cells that pass the threshold.
+        static std::vector<unsigned char> Seen(1u << 22, 0u);
+        std::fill(Seen.begin(), Seen.end(), static_cast<unsigned char>(0));
+
+        long Stars = 0;
+        const int Probes = static_cast<int>(kCells * kCells * 40.0f);
+        for (int I = 0; I < Probes; ++I)
+        {
+            const double Fraction = (I + 0.5) / Probes;
+            const double CosTheta = 1.0 - 2.0 * Fraction;
+            const double SinTheta = std::sqrt(std::fmax(0.0, 1.0 - CosTheta * CosTheta));
+            const double Phi      = I * 2.39996323;
+            const float  Cx = std::floor(static_cast<float>(SinTheta * std::cos(Phi)) * kCells);
+            const float  Cy = std::floor(static_cast<float>(SinTheta * std::sin(Phi)) * kCells);
+            const float  Cz = std::floor(static_cast<float>(CosTheta) * kCells);
+            if (Hash(Cx, Cy, Cz) < kThreshold) continue;
+
+            const long Key = ((static_cast<long>(Cx) + 2048L) * 4093L + (static_cast<long>(Cy) + 2048L)) * 4093L
+                           + (static_cast<long>(Cz) + 2048L);
+            const size_t Slot = static_cast<size_t>((static_cast<unsigned long>(Key) * 2654435761UL) & ((1u << 22) - 1u));
+            if (!Seen[Slot]) { Seen[Slot] = 1u; ++Stars; }
+        }
+
+        std::printf("     %ld distinct stars on the sphere (naked-eye sky is ~9 100 to magnitude 6.5)\n", Stars);
+        Expect(Stars > 5000 && Stars < 15000,
+               "the star count is within a factor of ~1.6 of the real naked-eye sky");
     }
 
     std::printf("\n>>> %s (%d failure%s)\n", Failures == 0 ? "ALL PASS" : "FAILURES", Failures, Failures == 1 ? "" : "s");

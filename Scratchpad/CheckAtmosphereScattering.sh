@@ -163,6 +163,19 @@ grep -q 'sqrt(max(0.0, 1.0 - R2))' Engine/Shaders/AtmosphereScattering.slang \
 grep -q 'floor(Scaled)' Engine/Shaders/AtmosphereScattering.slang \
     || { echo "  the star field is not cell-based — it would cluster at the poles"; Fail=1; }
 
+# ⚠️ The grid resolution and hash threshold together set the STAR COUNT, and the harness measures it by walking
+# the sphere. They must agree with the shader or the harness is counting a field that is not the one rendered.
+# This shipped at 700 / 0.982 = 120 352 stars, thirteen times the real sky, and it looked plausible in a still.
+for Pair in "Cells = :kCells     = " "H < :kThreshold = "; do
+    ShaderToken="${Pair%%:*}"; HarnessToken="${Pair##*:}"
+    ShaderValue=$(grep -oP "const float ${ShaderToken}\K[0-9.]+" Engine/Shaders/AtmosphereScattering.slang | head -1)
+    [ -n "$ShaderValue" ] || ShaderValue=$(grep -oP "if \(${ShaderToken}\K[0-9.]+" Engine/Shaders/AtmosphereScattering.slang | head -1)
+    HarnessValue=$(grep -oP "${HarnessToken}\K[0-9.]+" Scratchpad/AtmosphereScatteringTest.cpp | head -1)
+    if [ -n "$ShaderValue" ] && [ -n "$HarnessValue" ] && [ "${ShaderValue%f}" != "${HarnessValue%f}" ]; then
+        echo "  star-field constant differs: shader $ShaderValue, harness $HarnessValue"; Fail=1
+    fi
+done
+
 # The night sky must be attenuated by the atmosphere, so it fades at dawn rather than switching off.
 grep -q 'StarField(rayDirection, StarRotation, StarBrightness) \* Attenuation' Engine/Shaders/ReSTIRViewport.slang \
     || { echo "  the stars are not attenuated by the atmosphere — they would pop at dawn"; Fail=1; }
