@@ -122,6 +122,12 @@ canvas.drag{cursor:grabbing}
         <input type="range" min="0" max="1" step="0.001" value="0.62"></div>
       <div class="vpill"><div class="num" id="v-phase">0.62</div><div class="unit">p</div></div>
     </div></div>
+    <div class="prow"><span class="pl">Apparent size</span><div class="ctl">
+      <div class="sl" id="sl-msize"><div class="rail"></div><div class="fill"></div><div class="knob"></div>
+        <input type="range" min="1" max="14" step="0.1" value="1"></div>
+      <div class="vpill"><div class="num" id="v-msize">1.0</div><div class="unit">x</div></div>
+    </div></div>
+    <div class="rdrow"><span class="k">Angular diameter</span><span class="v" id="r-mdia">0.53 deg</span></div>
     <div class="rdrow"><span class="k">Illuminated</span><span class="v" id="r-illum">—</span></div>
     <div class="rdrow"><span class="k">Elevation</span><span class="v" id="r-moonel">—</span></div>
   </div>
@@ -398,6 +404,7 @@ uniform sampler2D uSky;
 uniform float uSunElev, uSunAzi;
 uniform vec3  uMoonDir;
 uniform float uMoonPhase;
+uniform float uMoonSize;
 uniform float uAlt;
 uniform float uExposure;
 uniform mat3  uCam;
@@ -413,26 +420,38 @@ vec3 skyLookup(vec3 dir)
     return texture(uSky, vec2(u, v)).rgb;
 }
 
-// Procedural, never a catalogue: a hashed grid gives a stable field that does not swim or twinkle when the
-//    camera turns, which a per-pixel noise would.
+// Procedural, never a catalogue: a hashed direction grid, stable under rotation so nothing swims or twinkles.
 float hash31(vec3 p){ p = fract(p*0.3183099 + 0.1); p *= 17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+
+// 🔴 The falloff must be narrower than the CELL, or every star paints its own neighbourhood and the sky fills
+//    in. The first version used pow(cos, 90000) on a 340-cell grid: measured, that is still 0.67 a full cell
+//    away, and 6 % of 1.45 million shell cells is 87 160 stars -- fourteen times the naked-eye sky. The result
+//    was a noise field, not a starfield. Angular distance and an explicit radius now, so the size is a number
+//    that can be checked rather than an exponent that has to be guessed.
+const float kStarGrid = 110.0;          // ~152 000 shell cells
+const float kStarOdds = 0.962;          // the ~3.8 % that carry a star -> ~5 800, about the naked-eye count
+
 vec3 stars(vec3 dir)
 {
-    vec3 g = dir * 340.0;
-    vec3 c = floor(g);
-    float best = 0.0; vec3 tint = vec3(1.0);
+    vec3 c = floor(dir * kStarGrid);
+    vec3 acc = vec3(0.0);
     for (int i=-1;i<=1;++i) for (int j=-1;j<=1;++j) for (int k=-1;k<=1;++k)
     {
         vec3 cc = c + vec3(float(i),float(j),float(k));
         float r = hash31(cc);
-        if (r < 0.94) continue;
+        if (r < kStarOdds) continue;
         vec3 off = vec3(hash31(cc+11.0), hash31(cc+23.0), hash31(cc+37.0));
         vec3 pos = normalize(cc + off);
-        float d = max(0.0, dot(pos, dir));
-        float s = pow(d, 90000.0) * (r-0.94)/0.06;
-        if (s > best) { best = s; tint = mix(vec3(0.75,0.83,1.0), vec3(1.0,0.86,0.7), hash31(cc+53.0)); }
+        float cd = dot(pos, dir);
+        if (cd <= 0.0) continue;
+        float ang = sqrt(max(0.0, 2.0 - 2.0*cd));            // chord ~= angle at these scales
+        float mag = (r - kStarOdds)/(1.0 - kStarOdds);       // 0 faint .. 1 bright
+        float rad = 0.00045 + 0.00075*mag;                   // brighter stars read slightly larger
+        float s = exp(-(ang*ang)/(rad*rad));
+        vec3 tint = mix(vec3(0.72,0.80,1.00), vec3(1.00,0.84,0.66), hash31(cc+53.0));
+        acc += tint * s * (0.010 + 0.32*mag*mag);            // [cd/m2] -- a night sky, not a light source
     }
-    return tint * best * 9.0;
+    return acc;
 }
 
 void main()
@@ -444,6 +463,9 @@ void main()
 
     vec3 L = skyLookup(dir);
     float tg = raySphere(origin, dir, Rg);
+    // ⚠️ A real night sky is not zero. Airglow and starlight scattering put a genuine floor under it, and
+    //    without one the exposure has nothing to divide by and runs away.
+    if (tg <= 0.0) L += vec3(0.00020, 0.00026, 0.00042);
 
     if (tg > 0.0)
     {
@@ -473,7 +495,9 @@ void main()
         }
         // ── the moon: shade the actual sphere and let the phase fall out of the geometry ──
         float cosMoon = dot(dir, uMoonDir);
-        float moonAng = 0.00475;
+        // 0.00475 rad is the true half-angle -- the real moon is about half a degree across, which is
+        //    smaller than most people expect. uMoonSize scales it so the phase shading can be seen.
+        float moonAng = 0.00475 * uMoonSize;
         if (cosMoon > cos(moonAng))
         {
             vec3 up = normalize(cross(uMoonDir, vec3(0.0,0.0,1.0)) + vec3(1e-6));
@@ -565,7 +589,7 @@ function bind(p, name, tex, unit){
 }
 
 // ── state ────────────────────────────────────────────────────────────────────────────────────────────────
-const S = { time:6.2, rate:0, turb:1, ozone:1, alt:0.5, phase:0.62, expMode:0,
+const S = { time:6.2, rate:0, turb:1, ozone:1, alt:0.5, phase:0.62, moonSize:1, expMode:0,
             yaw:0.0, pitch:0.06, fov:1.0 };
 let lutDirty = true;
 
@@ -593,6 +617,9 @@ const slTurb  = slider('sl-turb','turb', f2,'v-turb',  ()=>lutDirty=true);
 const slOzone = slider('sl-ozone','ozone',f2,'v-ozone',()=>lutDirty=true);
 const slAlt   = slider('sl-alt','alt',   f1,'v-alt',   ()=>lutDirty=true);
 const slPhase = slider('sl-phase','phase',f2,'v-phase');
+const slMSize = slider('sl-msize','moonSize',f1,'v-msize', ()=>{
+  document.getElementById('r-mdia').textContent = (0.53*S.moonSize).toFixed(2)+' deg';
+});
 
 document.querySelectorAll('#seg-exp button').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('#seg-exp button').forEach(x=>x.classList.remove('on'));
@@ -650,7 +677,7 @@ function readAnchor(){
   return 0.2126*px[0] + 0.7152*px[1] + 0.0722*px[2];
 }
 
-let anchorReadFailed = false;
+let anchorReadFailed = false, tick = 0;
 let frameMeter = 0.02, anchor = 1.0, last = performance.now(), acc = 0, frames = 0;
 function resize(){
   const d = Math.min(window.devicePixelRatio||1, 1.75);
@@ -688,13 +715,18 @@ function frame(now){
     bind(p,'uTrans',TRANS.t,0); bind(p,'uMulti',MULTI.t,1);
   });
 
-  anchor = Math.max(readAnchor(), 1e-6);
+  // A readPixels is a hard GPU sync; the anchor moves slowly, so it does not need one every frame.
+  if ((tick++ % 3) === 0) anchor = Math.max(readAnchor(), 1e-9);
   // Half sky, half lit ground — an estimate of what the camera will be shown from anywhere, not a physical
   //    average of anything. Camera-independent by construction, which is the whole point.
   // Half the sphere a camera can point at is sky and half is lit ground; the ground returns its albedo
   //    against the irradiance the sky delivers. Both terms come from the same camera-independent mean, so
   //    the result cannot move when the camera turns — which is the entire property being demonstrated.
-  const anchorFull = 0.5*anchor + 0.5*(0.10*anchor);
+  // 🔴 Floored. A camera does not adapt without limit and neither should this: at night the sky mean tends
+  //    to zero, and 0.16/0 drove the gain into the millions, which is what turned a starfield into a white
+  //    page. The floor is roughly a moonless night sky, so the darkest scene stays dark.
+  const kNightFloor = 0.0016;
+  const anchorFull = Math.max(0.5*anchor + 0.5*(0.10*anchor), kNightFloor);
   const key = 0.16;
   let exposure;
   if (S.expMode === 0) exposure = key / Math.max(anchorFull, 1e-6);
@@ -719,6 +751,7 @@ function frame(now){
     gl.uniform1f(gl.getUniformLocation(p,'uSunAzi'), sun.az);
     gl.uniform3f(gl.getUniformLocation(p,'uMoonDir'), md[0], md[1], md[2]);
     gl.uniform1f(gl.getUniformLocation(p,'uMoonPhase'), S.phase);
+    gl.uniform1f(gl.getUniformLocation(p,'uMoonSize'), S.moonSize);
     gl.uniform1f(gl.getUniformLocation(p,'uAlt'), S.alt);
     gl.uniform1f(gl.getUniformLocation(p,'uExposure'), exposure);
     gl.uniform1f(gl.getUniformLocation(p,'uFov'), S.fov);
