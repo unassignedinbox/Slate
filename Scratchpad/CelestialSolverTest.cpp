@@ -287,12 +287,50 @@ int main()
         CelestialConfiguration Config{};
         Sky.AssignConfiguration(Config);
 
-        const double AfterOneSolarDay = Sky.QuerySiderealAngle(kDay);
-        const double Extra = AfterOneSolarDay;   // already wrapped, so this is the surplus past a full turn
+        // ⚠️ A DIFFERENCE between two samples, not the absolute angle after one day. The claim here is about the
+        //    RATE the world turns at, and a rate is a difference — reading the absolute angle only worked while
+        //    the rotation happened to start from zero, which was an accident of the epoch rather than anything
+        //    the sidereal day depends on. The clock is now phased so that 12:00 is solar noon, and this test
+        //    failed on that change while the physics it describes was untouched.
+        double Extra = Sky.QuerySiderealAngle(kDay) - Sky.QuerySiderealAngle(0.0);
+        while (Extra < 0.0)          Extra += 2.0 * kPi;
+        while (Extra >= 2.0 * kPi)   Extra -= 2.0 * kPi;
         const double ExtraMinutes = Extra / (2.0 * kPi) * 1440.0;
         std::printf("     after one solar day the stars have over-turned by %.2f minutes\n", ExtraMinutes);
         Expect(ExtraMinutes > 3.0 && ExtraMinutes < 5.0,
                "the surplus is the familiar ~3.9 minutes a day");
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n11b. the clock's noon is the sun's noon\n");
+    {
+        // 🔴 A user-facing invariant, and it was wrong. The world's rotation used to start from an arbitrary
+        //    zero, so the hour angle only reached zero once the world had turned as far as the sun's right
+        //    ascension at epoch — measured on Earth's defaults, solar noon fell at 06:55 EVERY day of the year.
+        //    Setting the clock to 12:00 gave a sun at 25° in midsummer and one below the horizon in winter,
+        //    which is not a clock anybody can reason with, and it put the diurnal turbidity curve — cleanest at
+        //    06:00, dirtiest at 18:00 — into near antiphase with the sun it describes.
+        for (double LatitudeDegrees : { 0.0, 45.0, -33.0 })
+        {
+            CelestialSolver Sky;
+            CelestialConfiguration Config{};
+            Config.LatitudeRadians = LatitudeDegrees * kPi / 180.0;
+            Sky.AssignConfiguration(Config);
+
+            double Highest = -99.0, HighestHour = 0.0;
+            for (int Minute = 0; Minute < 1440; ++Minute)
+            {
+                const double Hour = Minute / 60.0;
+                const double Elevation = Sky.QuerySunDirection(Hour * 3600.0).Elevation;
+                if (Elevation > Highest) { Highest = Elevation; HighestHour = Hour; }
+            }
+            std::printf("     latitude %+5.0f: the sun is highest at %.2f h\n", LatitudeDegrees, HighestHour);
+            // ⚠️ Not exactly 12:00, and it must not be: the equation of time moves true solar noon by up to a
+            //    quarter of an hour either way, and a solver that pinned it exactly would have thrown away the
+            //    obliquity and eccentricity terms that test 12 proves are present.
+            Expect(std::fabs(HighestHour - 12.0) < 0.30,
+                   "solar noon is within a quarter hour of 12:00 — the rest is the equation of time");
+        }
     }
 
     //------------------------------------------------------------------------------------------------------------------

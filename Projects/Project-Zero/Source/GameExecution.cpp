@@ -501,7 +501,8 @@ int main(int argc, char** argv)
         Tree.RegisterType(RowMoon,   OutlinerTypeRecord{ "Moon",   Frontier::ControlCentreIconCategory::MoonDisturbance,  { 0.722f, 0.769f, 0.839f, 1.0f }, false });
     }
     // Payload 0 means "no scene object": folders and the not-yet-implemented sky rows.
-    uint32_t BrowserCameraRow = Frontier::kOutlinerNoRow;
+    uint32_t BrowserCameraRow   = Frontier::kOutlinerNoRow;
+    uint32_t BrowserApertureRow = Frontier::kOutlinerNoRow;
 
     // The browser writes through float* / bool*, so live state is mirrored into these each frame and copied back
     //    after. A mirror rather than a direct pointer because the sources are different shapes: the integrator
@@ -533,6 +534,7 @@ int main(int argc, char** argv)
     char  BrowserMoonAzimuthText[32]   = "-";
     char  BrowserMoonSizeText[48]      = "-";
     char  BrowserMoonLuminanceText[48] = "-";
+    char  BrowserApertureText[64]      = "-";
     // Written inside the ImGui frame, read on the NEXT frame's camera gate: the gate runs before the frame that
     //    would answer it, so a same-frame read is impossible. One frame of lag on "is the cursor over the panel"
     //    is invisible, whereas flying the camera because the answer was not yet available is not.
@@ -555,6 +557,12 @@ int main(int argc, char** argv)
             { "Back Wall",          0u, true  }, { "Left Wall (Red)",    1u, true  },
             { "Right Wall (Green)", 2u, true  }, { "Tall Box",           4u, false },
             { "Short Box",          5u, false },
+            // The three parametric shapes. They have been in the scene since the aperture was cut, but not in
+            //    this list — so they rendered and could not be selected, which reads as the browser being out
+            //    of date with the room rather than as a missing row.
+            { "Sphere",             6u, false },
+            { "Cone",               7u, false },
+            { "Torus",              8u, false },
         };
         for (const GeometryRow& Part : Parts)
         {
@@ -565,6 +573,10 @@ int main(int argc, char** argv)
 
         const uint32_t Lighting = Tree.Construct("Lighting", RowFolder, Frontier::kOutlinerNoParent, 0u);
         Tree.Construct("Ceiling Luminaire", RowLight, Lighting, 3u);
+        // The aperture is an absence of geometry, so it has no material to address and is listed as a light:
+        //    that is what it is in this room, and it is the only row that explains where the daylight enters.
+        BrowserApertureRow = Tree.Construct("Roof Oculus", RowLight, Lighting, 0u);
+        Tree.Row(BrowserApertureRow).Locked = true;
 
         const uint32_t Cameras = Tree.Construct("Cameras", RowFolder, Frontier::kOutlinerNoParent, 0u);
         BrowserCameraRow = Tree.Construct("Main Camera", RowCamera, Cameras, 0u);
@@ -620,6 +632,17 @@ int main(int argc, char** argv)
                     break;
                 }
                 case RowLight:
+                    if (RowOrdinal == BrowserApertureRow)
+                    {
+                        // The aperture is a hole, so it has nothing to emit and nothing to set. What it has is
+                        //    an answer to the only question worth asking about it: is daylight coming through
+                        //    right now, and where is it landing?
+                        Heading("Roof Oculus");
+                        Readout("Opening",  "1.50 m circle, centred 2.10 m in");
+                        Readout("Daylight", BrowserApertureText);
+                        Readout("Note",     "the sky lights the room through this");
+                        break;
+                    }
                     Heading("Emission");
                     Readout("Material", "Ceiling Light");
                     Slider("Illuminance", &BrowserLuminaire, 0.0f, 200.0f, "lx", 0u);
@@ -1173,14 +1196,35 @@ int main(int argc, char** argv)
                 std::snprintf(BrowserMoonElevationText, sizeof(BrowserMoonElevationText), "%+.1f deg", Moon.Elevation * 180.0 / 3.14159265358979);
                 std::snprintf(BrowserMoonPhaseText,     sizeof(BrowserMoonPhaseText),     "%.0f %% lit", Integrator.Celestial().QueryMoonPhase() * 100.0);
                 std::snprintf(BrowserMoonAzimuthText,   sizeof(BrowserMoonAzimuthText),   "%.1f deg", Moon.Azimuth * 180.0 / 3.14159265358979);
+
+                {
+                    // Where the shaft from the roof opening lands, using the same arithmetic the proof asserts:
+                    //    the aperture translated by the sun's slope over the room's height.
+                    constexpr double HoleY = 2.10, TopZ = 3.0, RoomHalfX = 2.0, RoomMaxY = 4.0;
+                    if (Sun.Zenith <= 0.05)
+                        std::snprintf(BrowserApertureText, sizeof(BrowserApertureText), "none — the sun is down");
+                    else
+                    {
+                        const double Travel = TopZ / Sun.Zenith;
+                        const double ShaftX = 0.0   - Travel * Sun.East;
+                        const double ShaftY = HoleY - Travel * Sun.North;
+                        const bool   Inside = std::fabs(ShaftX) < RoomHalfX && ShaftY > 0.0 && ShaftY < RoomMaxY;
+                        std::snprintf(BrowserApertureText, sizeof(BrowserApertureText),
+                                      Inside ? "shaft on the floor at (%.1f, %.1f)"
+                                             : "sun too low — the shaft clears the room (%.1f, %.1f)",
+                                      ShaftX, ShaftY);
+                    }
+                }
                 {
                     // The real disc is 0.259° across. Reporting the pixel figure alongside it is the honest
                     //    answer to "why is the moon so small" — it is not small, it is correct, and a 55° view
                     //    across 1080 rows genuinely puts it at about ten pixels.
                     const double TrueDegrees = 2.0 * 0.004526 * 180.0 / 3.14159265358979;
                     const double Degrees     = TrueDegrees * static_cast<double>(BrowserMoonScale);
+                    // The swapchain's height, not the render target's: this block runs before the frame's
+                    //    render resolution is derived, and the figure is a "what you will see" number anyway.
                     const double Pixels      = Degrees / static_cast<double>(BrowserCameraFov)
-                                             * static_cast<double>(RenderHeight);
+                                             * static_cast<double>(std::max(1u, Surface.QueryHeight()));
                     std::snprintf(BrowserMoonSizeText, sizeof(BrowserMoonSizeText), "%.3f deg  (%.0f px)",
                                   Degrees, Pixels);
                     // Surface brightness is held constant as the disc is scaled, so this figure does not move

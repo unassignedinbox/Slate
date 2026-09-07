@@ -93,6 +93,16 @@ public:
     // All pure functions of the time argument. The no-argument forms use the clock; the explicit forms exist so a
     //    caller can ask about any instant without disturbing it — which is what a time-of-day preview needs.
     [[nodiscard]] HorizonDirection QuerySunDirection(double Seconds) const noexcept;
+
+    // The sun's right ascension, exposed because the clock's alignment is defined in terms of it: a day
+    //    fraction of 0.5 is solar noon, and that is only true if the world's rotation starts from the sun's
+    //    own position at epoch rather than from an arbitrary zero.
+    [[nodiscard]] double QuerySolarRightAscension(double Seconds) const noexcept;
+
+private:
+    // The constant that ties the world's rotation to the sun, so that a day fraction of 0.5 is solar noon.
+    [[nodiscard]] double SolarNoonPhase() const noexcept;
+public:
     [[nodiscard]] HorizonDirection QuerySunDirection() const noexcept { return QuerySunDirection(Elapsed); }
 
     [[nodiscard]] HorizonDirection QueryMoonDirection(double Seconds) const noexcept;

@@ -94,7 +94,39 @@ double CelestialSolver::QuerySiderealAngle(double Seconds) const noexcept
     if (Config.DayLengthSeconds <= 0.0) return 0.0;
     const double SolarTurns    = Seconds / Config.DayLengthSeconds;
     const double OrbitalTurns  = (Config.YearLengthSeconds > 0.0) ? Seconds / Config.YearLengthSeconds : 0.0;
-    return Wrap(kTwoPi * (SolarTurns + OrbitalTurns));
+
+    // 🔴 THE CLOCK MUST AGREE WITH THE SUN. Without the phase below the rotation starts from an arbitrary zero,
+    //    and the hour angle only reaches zero when the world has turned as far as the sun's right ascension at
+    //    epoch. Measured on Earth's defaults that put solar noon at 06:55 — every day of the year, so not the
+    //    equation of time but a straight five-hour epoch error. "Time of day 12:00" gave a sun at 25° in
+    //    midsummer and one BELOW THE HORIZON in winter, which is why a shaft of sunlight could not be found by
+    //    setting the clock to noon and looking.
+    //
+    //    ⚠️ It is also what the diurnal turbidity curve is measured against. That curve is cleanest at 06:00 and
+    //    dirtiest at 18:00, and with the clock five hours out its "dawn" fell an hour before solar noon — the
+    //    aerosol load was in almost perfect antiphase with the sun it was meant to describe.
+    //
+    //    Derived, not tuned: the phase is exactly the sun's right ascension at epoch, less the observer's
+    //    longitude, less half a turn. That makes a day fraction of 0.5 solar noon by construction, for any
+    //    latitude, obliquity, orbit or day length a project chooses.
+    return Wrap(kTwoPi * (SolarTurns + OrbitalTurns) + SolarNoonPhase());
+}
+
+double CelestialSolver::SolarNoonPhase() const noexcept
+{
+    return Wrap(QuerySolarRightAscension(0.0) - Config.LongitudeRadians - kPi);
+}
+
+double CelestialSolver::QuerySolarRightAscension(double Seconds) const noexcept
+{
+    if (Config.YearLengthSeconds <= 0.0) return 0.0;
+
+    const double MeanAnomaly = kTwoPi * Seconds / Config.YearLengthSeconds;
+    const double E           = SolveEccentricAnomaly(MeanAnomaly, Config.Eccentricity);
+    const double TrueAnomaly = 2.0 * std::atan2(std::sqrt(1.0 + Config.Eccentricity) * std::sin(E * 0.5),
+                                                std::sqrt(1.0 - Config.Eccentricity) * std::cos(E * 0.5));
+    const double Longitude   = Wrap(TrueAnomaly + Config.PerihelionRadians);
+    return std::atan2(std::cos(Config.ObliquityRadians) * std::sin(Longitude), std::cos(Longitude));
 }
 
 double CelestialSolver::QuerySolarDeclination(double Seconds) const noexcept
@@ -133,10 +165,9 @@ HorizonDirection CelestialSolver::QuerySunDirection(double Seconds) const noexce
                                                 std::sqrt(1.0 - Config.Eccentricity) * std::cos(E * 0.5));
     const double Longitude   = Wrap(TrueAnomaly + Config.PerihelionRadians);
 
-    const double CosObliquity = std::cos(Config.ObliquityRadians);
     const double SinObliquity = std::sin(Config.ObliquityRadians);
 
-    const double RightAscension = std::atan2(CosObliquity * std::sin(Longitude), std::cos(Longitude));
+    const double RightAscension = QuerySolarRightAscension(Seconds);
     const double SinDeclination = SinObliquity * std::sin(Longitude);
     const double Declination    = std::asin(SinDeclination > 1.0 ? 1.0 : (SinDeclination < -1.0 ? -1.0 : SinDeclination));
 

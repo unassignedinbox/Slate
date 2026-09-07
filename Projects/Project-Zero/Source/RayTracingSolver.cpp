@@ -68,7 +68,17 @@ void RayTracingSolver::ConstructCornellBoxScene() noexcept
     //    through real geometry rather than painted on.
     constexpr float HoleRadius   = 0.75f;                  // [m]
     constexpr float HoleCentreX  = 0.0f;                   // [m]
-    constexpr float HoleCentreY  = 3.05f;                  // [m] set back so the shaft crosses the floor, not the far wall
+    // 🔴 The shaft goes NORTH, so the hole belongs SOUTH of where the light should land. This was 3.05 — set
+    //    back toward the north wall on the reasoning that the shaft would cross the floor — and that is
+    //    backwards. At any northern latitude the midday sun stands to the south, so a roof opening throws its
+    //    shaft AWAY from the camera, toward +Y. From 3.05 the light landed at Y ≈ 4.3, which is behind the back
+    //    wall: measured over a day at latitude 45, the shaft was fully on the floor for 0 % of daylight.
+    //
+    //    Swept rather than guessed. 2.10 puts the noon shaft at Y ≈ 3.3 and holds the whole disc on the floor
+    //    for 32 % of daylight at latitude 45 and 39 % at the equator — the best either latitude achieves, since
+    //    what carries the shaft out of the room is the sun's EAST-WEST travel, not its height. It also clears
+    //    the luminaire, which occupies Y ∈ [0.9, 1.7] of the same ceiling.
+    constexpr float HoleCentreY  = 2.10f;                  // [m] south of the target, because the shaft runs north
     constexpr uint32_t HoleSides = 48u;                    // 48 sides: the rim reads as a circle at room scale
 
     // Floor (Z = 0, normal +Z)
@@ -99,9 +109,15 @@ void RayTracingSolver::ConstructCornellBoxScene() noexcept
     AppendCone  (Vector3{  1.30f, 3.05f, 0.00f }, 0.45f, 1.10f, 32u, 7u);         //    64 tris
     AppendTorus (Vector3{  0.00f, 1.55f, 0.32f }, 0.42f, 0.14f, 36u, 18u, 8u);    // 1 296 tris
 
-    // Ceiling Luminaire (Z = RoomTopZ − 0.005, normal −Z) — LAST, see note above. Kept clear of the aperture in Y so
-    //    the two light sources stay visually separable once the sky is contributing through the hole.
-    AppendQuad(Vector3{ -0.50f, 1.70f, RoomTopZ - 0.005f }, Vector3{ 0.50f, 1.70f, RoomTopZ - 0.005f }, Vector3{ 0.50f, 0.90f, RoomTopZ - 0.005f }, Vector3{ -0.50f, 0.90f, RoomTopZ - 0.005f }, 3);
+    // Ceiling Luminaire (Z = RoomTopZ − 0.005, normal −Z) — LAST, see note above.
+    //
+    // ⚠️ Moved forward with the aperture, and it MUST stay clear of it. The quad hangs 5 mm below the ceiling
+    //    plane, so any part of it inside the opening would be seen through the hole as a bright horizontal slab
+    //    with the sky behind it — the one thing the aperture exists to show, blocked by the lamp that the
+    //    aperture is meant to be compared against. The hole reaches Y = 1.35 at its nearest; this ends at 1.15.
+    constexpr float LampMinY = 0.35f, LampMaxY = 1.15f, LampZ = RoomTopZ - 0.005f;
+    AppendQuad(Vector3{ -0.50f, LampMaxY, LampZ }, Vector3{ 0.50f, LampMaxY, LampZ },
+               Vector3{  0.50f, LampMinY, LampZ }, Vector3{ -0.50f, LampMinY, LampZ }, 3);
 }
 
 void RayTracingSolver::AppendTriangle(const Vector3& v0, const Vector3& v1, const Vector3& v2, uint32_t MaterialIdx) noexcept

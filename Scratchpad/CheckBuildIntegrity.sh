@@ -55,6 +55,36 @@ for e in empty:
     print(f"       DECLARED BUT EMPTY (run git submodule update --init): {e}"); bad = 1
 
 print()
-print(">>> BUILD INTEGRITY OK" if not bad else ">>> BUILD INTEGRITY FAILURES ABOVE")
+if bad: print(">>> BUILD INTEGRITY FAILURES ABOVE")
 sys.exit(bad)
 PY
+Fail=$?
+
+# ── The project's own translation unit must actually PARSE ───────────────────────────────────────────────────────
+# 🔴 Everything above checks that the files a build system names exist. None of it compiles anything, and a
+# proof suite made entirely of small harnesses never touches GameExecution.cpp at all — so a symbol that is out
+# of scope there passes thirty green suites and fails on the developer's machine. That happened: a readout added
+# to the Moon panel referenced a render height declared two hundred lines further down, and it was committed.
+#
+# -fsyntax-only, so this is a parse rather than a build: about two seconds, no linking, no Vulkan runtime. The
+# headers come from Khronos rather than the LunarG SDK, which is not installable here.
+Vkh="${VKH:-/tmp/vkh/include}"
+[ -f "$Vkh/vulkan/vulkan.h" ] || git clone --depth 1 -q https://github.com/KhronosGroup/Vulkan-Headers.git "$(dirname "$Vkh")" 2>/dev/null
+if [ ! -f "$Vkh/vulkan/vulkan.h" ]; then
+    echo "  Vulkan headers unavailable — the GameExecution parse was SKIPPED"
+else
+    Includes="-I . -I $Vkh -I Projects/Project-Zero/Source -I Projects/Project-Dyno/Source -I Engine"
+    for Package in glfw/include imgui imgui/backends thorvg/inc jolt miniaudio stb tomlpp/include \
+                   cgltf tinybvh fast_obj ufbx earcut/include clipper2/CPP/Clipper2Lib/include; do
+        Includes="$Includes -I ExternalPackages/$Package"
+    done
+    if g++ -std=c++20 -fsyntax-only $Includes Projects/Project-Zero/Source/GameExecution.cpp 2>/tmp/BuildIntegrity.parse; then
+        echo "  Projects/Project-Zero/Source/GameExecution.cpp                     parses"
+    else
+        echo "  GameExecution.cpp DOES NOT PARSE:"; sed 's/^/       /' /tmp/BuildIntegrity.parse | head -20; Fail=1
+    fi
+fi
+
+echo
+if [ "$Fail" = "0" ]; then echo ">>> BUILD INTEGRITY OK"; else echo ">>> BUILD INTEGRITY FAILURES ABOVE"; fi
+exit "$Fail"

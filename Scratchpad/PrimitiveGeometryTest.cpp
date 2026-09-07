@@ -14,6 +14,7 @@
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 
 #include "RayTracingSolver.h"
+#include "GeometricRaster/CelestialSolver.h"
 #include <cstdio>
 #include <cmath>
 #include <map>
@@ -117,7 +118,7 @@ int main(){
             if (t.SurfaceNormal.z > -0.99f) ++WrongWay;
             for (const Vector3* v : { &t.VertexAlpha, &t.VertexBeta, &t.VertexGamma })
             {
-                const double R = std::sqrt((v->x) * (v->x) + (v->y - 3.05) * (v->y - 3.05));
+                const double R = std::sqrt((v->x) * (v->x) + (v->y - 2.10) * (v->y - 2.10));
                 if (R < 0.9) { MinRim = std::min(MinRim, R); MaxRim = std::max(MaxRim, R); }
             }
         }
@@ -144,11 +145,126 @@ int main(){
         printf("  %d ceiling tris, %d facing the wrong way, rim %.4f .. %.4f\n", Ceiling, WrongWay, MinRim, MaxRim);
         Expect(Ceiling > 0,        "the ceiling exists");
         Expect(WrongWay == 0,      "every ceiling triangle faces the room (-Z), not the sky");
-        Expect(Covers(0.0f, 3.05f) == 0,  "the oculus is genuinely open — no triangle covers its centre");
+        Expect(Covers(0.0f, 2.10f) == 0,  "the oculus is genuinely open — no triangle covers its centre");
         Expect(Covers(0.0f, 3.90f) >  0,  "the ceiling just outside the rim is solid");
         Expect(Covers(-1.8f, 0.3f) >  0,  "and so is the far corner, so the ring reaches the walls");
         Expect(std::fabs(MinRim - 0.75) < 1e-3 && std::fabs(MaxRim - 0.75) < 1e-3,
                "every rim vertex sits exactly on the 0.75 m radius");
+
+        // ⚠️ The luminaire hangs 5 mm below the ceiling plane, so any part of it inside the opening would be
+        //    seen through the hole as a bright slab in front of the sky — the lamp blocking the very thing the
+        //    aperture exists to show, and to be compared against.
+        double LampNearest = 1e9;
+        for (const auto& t : T)
+        {
+            if (t.MaterialIndex != 3u) continue;
+            for (const Vector3* v : { &t.VertexAlpha, &t.VertexBeta, &t.VertexGamma })
+                LampNearest = std::min(LampNearest,
+                                       std::sqrt((v->x) * (v->x) + (v->y - 2.10) * (v->y - 2.10)));
+        }
+        printf("  the luminaire's nearest corner is %.2f m from the aperture centre\n", LampNearest);
+        Expect(LampNearest > 0.75, "the luminaire stays out of the opening, so the sky is what shows through it");
+    }
+
+    // ── Does sunlight actually come through? ─────────────────────────────────────────────────────────────────
+    // 🔴 The point of the aperture, and the thing that was wrong about it. A roof opening only reads as sunlight
+    // if a shaft LANDS somewhere the camera can see. At any northern latitude the midday sun stands to the
+    // south, so the shaft runs north, AWAY from the camera — which means the hole belongs south of where the
+    // light should fall. It was at Y = 3.05, only 0.95 m from the back wall, and the light landed at Y ≈ 4.3:
+    // behind the wall, every hour of every day.
+    printf("\nsunlight through the aperture\n");
+    {
+        constexpr double TopZ = 3.0;
+        constexpr double MinX = -2.0, MaxX = 2.0, MinY = 0.0, MaxY = 4.0;
+
+        // ⚠️ MEASURED from the ceiling that was built, not copied from the solver's constant. A second copy of
+        //    the aperture's position would keep agreeing with itself after the real one moved, and this test
+        //    would then be asserting where the light falls through a hole that is somewhere else.
+        //
+        //    The rim vertices are the ceiling vertices that are not on the room's boundary rectangle; their
+        //    centroid is the centre and their mean distance from it is the radius.
+        double SumX = 0.0, SumY = 0.0; int RimCount = 0;
+        for (const auto& t : T)
+        {
+            if (t.MaterialIndex != 0u) continue;
+            if (std::fabs(t.VertexAlpha.z - 3.0f) > 1e-4f) continue;
+            for (const Vector3* v : { &t.VertexAlpha, &t.VertexBeta, &t.VertexGamma })
+            {
+                const bool OnBoundary = std::fabs(v->x - (-2.0f)) < 1e-3f || std::fabs(v->x - 2.0f) < 1e-3f
+                                     || std::fabs(v->y -   0.0f) < 1e-3f || std::fabs(v->y - 4.0f) < 1e-3f;
+                if (OnBoundary) continue;
+                SumX += v->x; SumY += v->y; ++RimCount;
+            }
+        }
+        const double HoleX = RimCount ? SumX / RimCount : 0.0;
+        const double HoleY = RimCount ? SumY / RimCount : 0.0;
+        double SumR = 0.0;
+        for (const auto& t : T)
+        {
+            if (t.MaterialIndex != 0u) continue;
+            if (std::fabs(t.VertexAlpha.z - 3.0f) > 1e-4f) continue;
+            for (const Vector3* v : { &t.VertexAlpha, &t.VertexBeta, &t.VertexGamma })
+            {
+                const bool OnBoundary = std::fabs(v->x - (-2.0f)) < 1e-3f || std::fabs(v->x - 2.0f) < 1e-3f
+                                     || std::fabs(v->y -   0.0f) < 1e-3f || std::fabs(v->y - 4.0f) < 1e-3f;
+                if (OnBoundary) continue;
+                SumR += std::sqrt((v->x - HoleX) * (v->x - HoleX) + (v->y - HoleY) * (v->y - HoleY));
+            }
+        }
+        const double HoleR = RimCount ? SumR / RimCount : 0.0;
+        printf("  measured from the built ceiling: centre (%.2f, %.2f), radius %.2f m, %d rim vertices\n",
+               HoleX, HoleY, HoleR, RimCount);
+        Expect(RimCount > 0, "the ceiling actually has a rim — there is a hole in it to measure");
+
+        // Where the disc of light falls: the aperture translated by the sun's slope over the room's height.
+        const auto Shaft = [&](const CelestialSolver& Sky, double Hour, double& Cx, double& Cy)
+        {
+            const HorizonDirection S = Sky.QuerySunDirection(Hour * 3600.0);
+            if (S.Zenith <= 0.05) return false;
+            const double T2 = TopZ / S.Zenith;
+            Cx = HoleX - T2 * S.East;
+            Cy = HoleY - T2 * S.North;
+            return true;
+        };
+
+        for (double LatitudeDegrees : { 45.0, 0.0 })
+        {
+            CelestialSolver Sky;
+            CelestialConfiguration Cfg{};
+            Cfg.LatitudeRadians = LatitudeDegrees * 3.14159265358979 / 180.0;
+            Sky.AssignConfiguration(Cfg);
+
+            // Noon first, because that is the setting the panel opens on: if a user sets the clock to 12 and
+            //    looks up, there has to be a shaft on the floor.
+            double Cx = 0.0, Cy = 0.0;
+            const bool Daylight = Shaft(Sky, 12.0, Cx, Cy);
+            printf("  latitude %2.0f: the noon shaft lands at (%.2f, %.2f)\n", LatitudeDegrees, Cx, Cy);
+            Expect(Daylight, "the sun is up at 12:00 — the clock's noon is the sun's noon");
+            Expect(Cx > MinX + HoleR && Cx < MaxX - HoleR, "and the noon shaft is between the side walls");
+            Expect(Cy > MinY && Cy < MaxY,                 "and lands on the floor, not beyond the back wall");
+
+            // And it stays there for a usable part of the day rather than for one instant.
+            int Lit = 0;
+            for (int Quarter = 0; Quarter < 96; ++Quarter)
+            {
+                const double Hour = Quarter / 4.0;
+                if (!Shaft(Sky, Hour, Cx, Cy)) continue;
+                if (Cx > MinX && Cx < MaxX && Cy > MinY && Cy < MaxY) ++Lit;
+            }
+            printf("  latitude %2.0f: on the floor for %.1f hours of the day\n", LatitudeDegrees, Lit / 4.0);
+            Expect(Lit >= 12, "the shaft is on the floor for at least three hours, not a passing instant");
+        }
+
+        // The old placement, so the regression is recognisable. Same sun, same room, hole at 3.05.
+        CelestialSolver Sky;
+        CelestialConfiguration Cfg{};
+        Cfg.LatitudeRadians = 45.0 * 3.14159265358979 / 180.0;
+        Sky.AssignConfiguration(Cfg);
+        const HorizonDirection S = Sky.QuerySunDirection(12.0 * 3600.0);
+        const double OldY = 3.05 - (TopZ / S.Zenith) * S.North;
+        printf("  from the old 3.05 the noon shaft would land at Y = %.2f, past the %.1f m back wall\n",
+               OldY, MaxY);
+        Expect(OldY > MaxY, "the old placement really did throw the light behind the wall — this is the fix");
     }
 
     // ── Outdoor scene ────────────────────────────────────────────────────────────────────────────────────────
