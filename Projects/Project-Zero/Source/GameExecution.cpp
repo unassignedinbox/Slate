@@ -487,6 +487,7 @@ int main(int argc, char** argv)
     // A3 sky mirrors. Sliders speak float, so the quality enum rides as a float and is rounded on copy-back.
     float BrowserSkyQuality = 2.0f, BrowserSunLux = 120000.0f, BrowserAltitude = 2.0f;
     float BrowserTimeOfDay  = 12.0f, BrowserClockRate = 0.0f, BrowserLatitude = 45.0f;
+    bool  BrowserSkyLighting = true;
     char  BrowserSunElevationText[32]  = "-";
     char  BrowserSunAzimuthText[32]    = "-";
     char  BrowserMoonPhaseText[32]     = "-";
@@ -586,7 +587,8 @@ int main(int argc, char** argv)
                     Slider("Quality",   &BrowserSkyQuality, 0.0f, 4.0f, "", 0u);   // Off … Ultra
                     Slider("Sun lux",   &BrowserSunLux,     0.0f, 200000.0f, "lx", 0u);
                     Slider("Altitude",  &BrowserAltitude,   0.0f, 10000.0f, "m", 0u);
-                    Readout("Model", "single scattering (A3)");
+                    Toggle("Lights scene", &BrowserSkyLighting);
+                    Readout("Model", "LUT + multiple scattering (A2)");
                     break;
 
                 case RowSun:
@@ -1078,6 +1080,7 @@ int main(int argc, char** argv)
             BrowserSkyQuality = static_cast<float>(static_cast<uint32_t>(Cfg.SkyQuality));
             BrowserSunLux     = Cfg.SunIlluminance;
             BrowserAltitude   = Cfg.CameraAltitude;
+            BrowserSkyLighting= Cfg.SkyLighting;
             BrowserClockRate  = static_cast<float>(Integrator.Celestial().QueryRate());
             {
                 const Frontier::CelestialConfiguration& Site = Integrator.Celestial().QueryConfiguration();
@@ -1201,6 +1204,7 @@ int main(int argc, char** argv)
             Integrator.AssignSkyQuality(static_cast<Frontier::SkyQualityCategory>(
                 static_cast<uint32_t>(BrowserSkyQuality + 0.5f)));
             Integrator.AssignSunIlluminance(BrowserSunLux);
+            Integrator.AssignSkyLighting(BrowserSkyLighting);
 
             {
                 Frontier::CelestialConfiguration Site = Integrator.Celestial().QueryConfiguration();

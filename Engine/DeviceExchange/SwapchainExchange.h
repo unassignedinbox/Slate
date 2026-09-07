@@ -132,7 +132,8 @@ enum DispatchFeature : uint32_t
     DispatchFeatureSpatialReuse       = 1u << 4,   // R6 row 3: spatial neighbour reuse
     DispatchFeatureAliasPick          = 1u << 5,   // R6 row 3: Walker-alias light pick (off = uniform, R0 identity)
     DispatchFeatureTemporalReprojection = 1u << 6, // R7a: reproject the running mean through the R2 motion vectors
-    DispatchFeatureDenoise            = 1u << 7    // R7:  à-trous filter runs; the kernel defers the tone map to it
+    DispatchFeatureDenoise            = 1u << 7,   // R7:  à-trous filter runs; the kernel defers the tone map to it
+    DispatchFeatureSkyLighting        = 1u << 8    // A5:  an escaped bounce ray gathers sky radiance (off = the pre-A5 image)
 };
 
 // Mirrors `layout(push_constant) uniform ReSTIRConstants` in Engine/Shaders/ReSTIRViewport.slang.

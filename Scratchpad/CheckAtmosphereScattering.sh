@@ -123,7 +123,21 @@ grep -q 'bDist2 + 0.01) \* float(bSlots)' Engine/Shaders/ReSTIRViewport.slang \
 grep -q 'SunDirection.z > -0.05' Engine/Shaders/ReSTIRViewport.slang \
     || { echo "  a set sun is still offered as a light candidate"; Fail=1; }
 
-[ "$Fail" = "0" ] && echo "  constants, LUT sizes, bindings, build order and sun wiring agree PASS"
+# ── A5: the sky as an environment light ──────────────────────────────────────────────────────────────────────────
+# An escaped bounce ray must gather sky radiance, or a surface facing the oculus receives no skylight at all.
+grep -q 'if (!bounceHit.valid' Engine/Shaders/ReSTIRViewport.slang \
+    || { echo "  an escaped bounce ray does not gather the sky — the room gets no skylight"; Fail=1; }
+grep -q 'kFeatureSkyLighting' Engine/Shaders/ReSTIRViewport.slang \
+    || { echo "  sky lighting has no feature bit, so the pre-A5 image cannot be reproduced"; Fail=1; }
+grep -q 'DispatchFeatureSkyLighting' Engine/DeviceExchange/SwapchainExchange.h \
+    || { echo "  the C++ mirror of the sky-lighting bit is missing"; Fail=1; }
+
+# ⚠️ Single dome, by design. CLAUDE.md 15b records why and what changes when portals arrive; losing that note
+# means the next reader either generalises speculatively or trips over the assumption without warning.
+grep -q 'Deferred by Design — Single Sky Dome' CLAUDE.md \
+    || { echo "  the single-dome note is gone from CLAUDE.md"; Fail=1; }
+
+[ "$Fail" = "0" ] && echo "  constants, LUTs, bindings, sun and sky-lighting wiring agree     PASS"
 
 echo
 Glslang=""

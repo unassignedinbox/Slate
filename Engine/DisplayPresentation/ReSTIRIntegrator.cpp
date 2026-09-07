@@ -117,7 +117,8 @@ DispatchConfiguration ReSTIRIntegrator::BuildDispatch(
                                    | (ActiveConfiguration.SpatialReuse       ? DispatchFeatureSpatialReuse       : 0u)
                                    | (ActiveConfiguration.AliasPick          ? DispatchFeatureAliasPick          : 0u)
                                    | (ActiveConfiguration.TemporalReprojection ? DispatchFeatureTemporalReprojection : 0u)
-                                   | (ActiveConfiguration.Denoise            ? DispatchFeatureDenoise            : 0u);
+                                   | (ActiveConfiguration.Denoise            ? DispatchFeatureDenoise            : 0u)
+                                   | (ActiveConfiguration.SkyLighting        ? DispatchFeatureSkyLighting        : 0u);
 
     // A3 sky. The direction comes from the celestial clock, which is the single authoritative source — the
     //    integrator never stores a sun of its own, or two would eventually disagree.

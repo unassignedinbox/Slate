@@ -597,6 +597,91 @@ int main()
                "a 1 m occluder casts a ~9 mm penumbra, as the real sun does");
     }
 
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n16. sky lighting converges on the correct irradiance\n");
+    {
+        // A5. An escaped bounce ray gathers sky radiance and is weighted by the BSDF throughput. For a diffuse
+        //    surface the BSDF sample is cosine-distributed, so summing radiance over those samples estimates
+        //    ∫ L(ω)·cosθ dω / π — the irradiance divided by π. Checked here against an explicit hemisphere
+        //    integral of the SAME sky, because if the estimator disagreed with the integral the room would be
+        //    lit to the wrong level and there would be nothing to compare it with in-engine.
+        const Vec3 Sun = SunAtElevation(50.0f);
+        const Vec3 Up{ 0.0f, 0.0f, 1.0f };
+
+        // Reference: integrate L·cosθ over the upper hemisphere on a regular grid.
+        double ReferenceR = 0.0, ReferenceG = 0.0, ReferenceB = 0.0;
+        const int Zeniths = 48, Azimuths = 96;
+        for (int i = 0; i < Zeniths; ++i)
+            for (int j = 0; j < Azimuths; ++j)
+            {
+                const float Theta = (i + 0.5f) / Zeniths * 1.57079633f;
+                const float Phi   = (j + 0.5f) / Azimuths * 6.28318530f;
+                const Vec3  D{ std::sin(Theta) * std::cos(Phi), std::sin(Theta) * std::sin(Phi), std::cos(Theta) };
+                const Vec3  L = SkyRadiance(2.0f, D, Sun, Vec3(kSunLux), 24, 8);
+                const float Weight = std::sin(Theta) * std::cos(Theta)
+                                   * (1.57079633f / Zeniths) * (6.28318530f / Azimuths);
+                ReferenceR += L.x * Weight; ReferenceG += L.y * Weight; ReferenceB += L.z * Weight;
+            }
+
+        // Estimator: cosine-distributed samples, averaged. That average IS irradiance / π, so multiply back.
+        double EstimateR = 0.0, EstimateG = 0.0, EstimateB = 0.0;
+        const int Samples = 4096;
+        for (int i = 0; i < Samples; ++i)
+        {
+            const float U1 = (i + 0.5f) / Samples;
+            const float U2 = std::fmod(i * 0.618033988f, 1.0f);
+            const float R  = std::sqrt(U1);                    // cosine-weighted: radius ∝ √u
+            const float Phi = 6.28318530f * U2;
+            const Vec3  D{ R * std::cos(Phi), R * std::sin(Phi), std::sqrt(std::fmax(0.0f, 1.0f - U1)) };
+            const Vec3  L = SkyRadiance(2.0f, D, Sun, Vec3(kSunLux), 24, 8);
+            EstimateR += L.x; EstimateG += L.y; EstimateB += L.z;
+        }
+        const double Scale = 3.14159265358979 / Samples;
+        EstimateR *= Scale; EstimateG *= Scale; EstimateB *= Scale;
+
+        std::printf("     hemisphere integral  R %.2f G %.2f B %.2f\n", ReferenceR, ReferenceG, ReferenceB);
+        std::printf("     cosine estimator     R %.2f G %.2f B %.2f\n", EstimateR, EstimateG, EstimateB);
+        const double ErrorB = std::fabs(EstimateB - ReferenceB) / ReferenceB * 100.0;
+        std::printf("     blue channel error   %.2f %%\n", ErrorB);
+
+        Expect(ErrorB < 3.0, "the escaped-bounce estimator matches an explicit hemisphere integral");
+        Expect(EstimateB > EstimateR, "and the skylight is blue, as diffuse daylight is");
+        (void)Up;
+    }
+
+    //------------------------------------------------------------------------------------------------------------------
+    std::printf("\n17. sky lighting is a real contribution, not a rounding error\n");
+    {
+        // Worth measuring rather than assuming: if skylight were a fraction of a percent of the sun there would
+        //    be no reason to pay for it. Irradiance from the whole sky against the sun's direct beam on a
+        //    horizontal surface — the familiar result is that the sky is a large minority of daylight, and
+        //    dominant in shadow, which is exactly why a shadowed wall is blue rather than black.
+        const Vec3 Sun = SunAtElevation(50.0f);
+
+        double SkyLuma = 0.0;
+        const int Zeniths = 32, Azimuths = 64;
+        for (int i = 0; i < Zeniths; ++i)
+            for (int j = 0; j < Azimuths; ++j)
+            {
+                const float Theta = (i + 0.5f) / Zeniths * 1.57079633f;
+                const float Phi   = (j + 0.5f) / Azimuths * 6.28318530f;
+                const Vec3  D{ std::sin(Theta) * std::cos(Phi), std::sin(Theta) * std::sin(Phi), std::cos(Theta) };
+                const Vec3  L = SkyRadiance(2.0f, D, Sun, Vec3(kSunLux), 24, 8);
+                const float Weight = std::sin(Theta) * std::cos(Theta)
+                                   * (1.57079633f / Zeniths) * (6.28318530f / Azimuths);
+                SkyLuma += (0.2126f * L.x + 0.7152f * L.y + 0.0722f * L.z) * Weight;
+            }
+
+        // Direct beam on a horizontal surface: illuminance × transmittance × cosine.
+        const Vec3  Beam = ComputeTransmittanceTexel(Sun.z * 0.5f + 0.5f, 0.0f);
+        const double SunLuma = (0.2126 * Beam.x + 0.7152 * Beam.y + 0.0722 * Beam.z) * kSunLux * Sun.z;
+
+        std::printf("     sky irradiance %.0f, direct sun %.0f  (sky is %.1f %% of the total)\n",
+                    SkyLuma, SunLuma, SkyLuma / (SkyLuma + SunLuma) * 100.0);
+        Expect(SkyLuma > SunLuma * 0.05,
+               "skylight is a material fraction of daylight — worth the cost of gathering it");
+    }
+
     std::printf("\n>>> %s (%d failure%s)\n", Failures == 0 ? "ALL PASS" : "FAILURES", Failures, Failures == 1 ? "" : "s");
     return Failures == 0 ? 0 : 1;
 }

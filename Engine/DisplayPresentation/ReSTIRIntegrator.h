@@ -90,6 +90,10 @@ struct ReSTIRIntegratorConfiguration
     SkyQualityCategory SkyQuality = SkyQualityCategory::Medium;
     float       SunIlluminance   = 120000.0f;   // [lx]  clear midday sun above the atmosphere
     float       CameraAltitude   = 2.0f;        // [m]   observer height above the planet surface
+    // A5. The sky lights the scene: a bounce ray that escapes gathers sky radiance instead of returning nothing.
+    //    Off restores the pre-A5 image exactly, which is the identity switch — and the A/B for how much of the
+    //    room's light is actually coming through the oculus.
+    bool        SkyLighting      = true;
 };
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -142,11 +146,17 @@ public:
     //    of the same image and must be discarded — unlike the denoiser, which only re-presents it.
     void AssignSkyQuality  (SkyQualityCategory Q) noexcept { if (ActiveConfiguration.SkyQuality     != Q) { ActiveConfiguration.SkyQuality     = Q; ResetAccumulation(); } }
     void AssignSunIlluminance    (float    Lux)   noexcept { if (ActiveConfiguration.SunIlluminance != Lux) { ActiveConfiguration.SunIlluminance = Lux; ResetAccumulation(); } }
+    void AssignSkyLighting       (bool     On)    noexcept { if (ActiveConfiguration.SkyLighting    != On)  { ActiveConfiguration.SkyLighting    = On;  ResetAccumulation(); } }
 
     void ResetAccumulation() noexcept { AccumulationIndex = 0u; }
 
     // A3. The sky's clock, held by value because it IS the authoritative state — handing out a pointer to
     //    someone else's would invite a second clock to exist and the two would eventually disagree.
+    //
+    // ⚠️ ONE clock, therefore ONE sun and ONE atmosphere. That is correct today: the camera can only be inside
+    //    one world, so a second dome would be built and sampled while contributing to no pixel. Portals are the
+    //    single thing that changes it — see CLAUDE.md §15b for where the assumption is baked in and what the
+    //    change looks like.
     [[nodiscard]] CelestialSolver&       Celestial()       noexcept { return Sky; }
     [[nodiscard]] const CelestialSolver& Celestial() const noexcept { return Sky; }
 

@@ -342,6 +342,7 @@ const uint kFeatureSpatialReuse       = 16u;  // bit 4: R6 row 3 — spatiotempo
 const uint kFeatureAliasPick          = 32u;  // bit 5: R6 row 3 — Walker-alias light pick (off = uniform, the R0 identity proof)
 const uint kFeatureTemporalReprojection = 64u;  // bit 6: R7a — reproject the running mean through the R2 motion vectors
 const uint kFeatureDenoise            = 128u; // bit 7: R7 — the à-trous filter runs, so the kernel defers the tone map to it
+const uint kFeatureSkyLighting        = 256u; // bit 8: A5 — an escaped bounce ray gathers sky radiance (off = the pre-A5 image)
 
 float PixelSpreadAngle() { return 2.0 * FieldOfViewTanHalf / float(ViewportHeight); }   // [rad] R4b ray-cone spread per pixel
 
@@ -1200,7 +1201,22 @@ void main()
             bounceRay.dir    = bounceDir;
 
             Hit bounceHit = TraceScene(bounceRay);
-            if (bounceHit.valid && dot(bounceDir, hitNormal) > 0.0)
+
+            // A5 — the sky as an environment light. A bounce ray that escapes the scene used to contribute
+            //    nothing, which is why the room stayed lit only by what it could see directly: a wall facing the
+            //    oculus received no skylight at all, however bright the sky outside was.
+            //
+            //    This is the whole of the environment term. No separate environment sampler and no second alias
+            //    table: the BSDF sample already chose a direction with the right distribution, so the escaped ray
+            //    IS the environment sample, and multiplying by throughput is the correct estimator. An explicit
+            //    environment sampler would add a second estimator to combine by MIS for no gain at this depth.
+            if (!bounceHit.valid && dot(bounceDir, hitNormal) > 0.0 && SunIlluminance > 0.0
+                && (FeatureFlags & kFeatureSkyLighting) != 0u)
+            {
+                accumulatedRadiance += throughput * SkyRadianceTabulated(
+                    CameraAltitude, bounceDir, SunDirection, vec3(SunIlluminance), int(max(SkyViewSteps / 2u, 8u)));
+            }
+            else if (bounceHit.valid && dot(bounceDir, hitNormal) > 0.0)
             {
                 GpuMaterial   bMat  = Materials[bounceHit.matIdx];
                 // D2: TraceScene already resolved the instance — reuse it rather than repeating the search here.
