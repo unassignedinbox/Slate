@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Card Gallery · Engine Vitals</title>
+<style>
+:root{--bg:#08090b;--card:#141417;--card2:#1b1b1f;--line:rgba(255,255,255,.08);
+--tx:#f2f2f4;--dim:#9a9aa2;--mut:#5c5c64;--green:#3ddc84;--red:#ff5a5a;--gold:#ffd75e;
+--mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,'Inter','Segoe UI',Roboto,sans-serif;padding:0 0 120px}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:'tnum'}
+button{font:inherit;color:inherit}
+.wrap{max-width:1180px;margin:0 auto;padding:26px 22px}
+.ghead h1{margin:0;font-size:30px;font-weight:700;letter-spacing:-.01em}
+.ghead>p{margin:6px 0 0;color:var(--dim);font-size:14px}
+.gbar{position:sticky;top:0;z-index:50;background:rgba(8,9,11,.88);backdrop-filter:blur(14px);padding:14px 0;border-bottom:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pill{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:8px 18px;font-size:13.5px;color:var(--dim);cursor:pointer}
+.pill.on{background:#fff;color:#0b0b0d;border-color:#fff;font-weight:600}
+.gcount{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--mut)}
+.sec{margin:34px 0 16px;font-size:13px;letter-spacing:.22em;color:var(--dim);font-weight:600}
+.sec small{color:var(--mut);letter-spacing:.1em}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:22px}
+@media(max-width:900px){.grid2,.grid3{grid-template-columns:1fr}}
+.full{grid-column:1/-1}
+.slot-tag{display:flex;align-items:center;justify-content:space-between;margin:0 4px 8px}
+.slot-tag span{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--mut)}
+.star{background:none;border:1px solid var(--line);border-radius:50%;width:27px;height:27px;color:var(--mut);cursor:pointer;font-size:14px;line-height:1}
+.slot.fav .star{color:var(--gold);border-color:var(--gold);text-shadow:0 0 12px rgba(255,215,94,.6)}
+.slot.fav .card{border-color:rgba(255,215,94,.45)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:18px;position:relative;overflow:hidden;transition:transform .15s,border-color .15s}
+.card:hover{transform:translateY(-2px)}
+.tick{position:absolute;left:0;top:18px;bottom:18px;width:3px;border-radius:3px;background:var(--ac,#fff)}
+.lab{font-size:11px;letter-spacing:.18em;color:var(--mut);font-weight:600}
+.big{font-weight:200;letter-spacing:-.02em}
+.big small{font-size:12px;font-weight:400;color:var(--dim);letter-spacing:.02em;margin-left:6px}
+.delta{display:inline-block;background:rgba(255,255,255,.07);border-radius:7px;padding:3px 9px;font-size:12px;font-weight:500}
+.delta.up{color:var(--green)} .delta.dn{color:var(--red)}
+.led{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green)}
+.led.warn{background:var(--red);box-shadow:0 0 10px var(--red)}
+/* ---------- A-01 vital ---------- */
+.vit{padding-left:22px}
+.vit .r1{display:flex;align-items:center;gap:8px}
+.vit .nm{font-size:16px;font-weight:600}
+.vit .tg{font-family:var(--mono);font-size:10.5px;color:var(--mut);letter-spacing:.12em;border:1px solid var(--line);border-radius:6px;padding:2px 7px}
+.vit .r1 .led{margin-left:auto}
+.vit .big{font-size:44px;margin:6px 0}
+.vit .r3{display:flex;align-items:center;gap:12px}
+.vit .dots{display:flex;gap:5px;margin-left:auto}
+.vit .dots i{width:5px;height:5px;border-radius:50%;background:var(--ac)}
+/* ---------- A-02 split ---------- */
+.split{display:flex;gap:14px;align-items:stretch}
+.split .L{flex:1}
+.split .nm{font-size:17px;font-weight:650}
+.split .st{font-size:12px;color:var(--green);margin:4px 0 8px}
+.split .big{font-size:40px}
+.split .R{display:flex;align-items:flex-end;gap:4px;padding:6px 0 2px}
+.split .R i{width:9px;border-radius:3px;background:linear-gradient(180deg,var(--ac),transparent);min-height:6px}
+/* ---------- A-03 rail ---------- */
+.rail{display:flex;align-items:center;gap:14px;padding:14px 20px}
+.rail .nm{font-size:15px;font-weight:600;white-space:nowrap}
+.rail .mbars{display:flex;align-items:flex-end;gap:3px;height:26px;flex:1}
+.rail .mbars i{width:7px;border-radius:2px;background:var(--ac);opacity:.85}
+.rail .rv{font-size:22px;font-weight:200}
+/* ---------- A-04 medallion ---------- */
+.med{text-align:center;padding:22px 18px}
+.med .ico{width:58px;height:58px;border-radius:50%;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-size:26px;background:radial-gradient(circle at 35% 30%,var(--ac),#0b0b0d 72%);box-shadow:0 0 26px -4px var(--ac)}
+.med .nm{font-size:17px;font-weight:650}
+.med .tagp{display:inline-block;margin-top:8px;font-size:11px;letter-spacing:.14em;color:var(--ac);border:1px solid color-mix(in srgb,var(--ac) 45%,transparent);border-radius:999px;padding:4px 14px}
+.med .srow2{display:flex;margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+.med .srow2 div{flex:1}
+.med .srow2 b{display:block;font-size:17px;font-weight:500}
+.med .srow2 span{font-size:11px;color:var(--mut);letter-spacing:.1em}
+/* ---------- A-05 gauge ---------- */
+.g5{display:flex;gap:6px;align-items:center}
+.g5 svg{flex:none}
+.g5 .gv{font-size:34px;font-weight:200}
+.g5 .mm{font-family:var(--mono);font-size:10.5px;color:var(--mut);margin-top:2px}
+/* ---------- A-06 stacks ---------- */
+.stk .nm{font-size:16px;font-weight:600;margin-bottom:12px}
+.stk .pr{margin:10px 0}
+.stk .pr .t{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);margin-bottom:5px}
+.stk .pr .t b{color:var(--tx);font-weight:500}
+.stk .bar{height:8px;border-radius:5px;background:rgba(255,255,255,.08);overflow:hidden}
+.stk .bar i{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,color-mix(in srgb,var(--ac) 40%,transparent),var(--ac))}
+/* ---------- A-07 duo ---------- */
+.duo7{display:flex;text-align:center}
+.duo7 .side{flex:1}
+.duo7 .vs{align-self:center;font-family:var(--mono);font-size:11px;color:var(--mut);border:1px solid var(--line);border-radius:50%;width:34px;height:34px;line-height:32px;flex:none}
+.duo7 .nm{font-size:13px;color:var(--dim)}
+.duo7 .big{font-size:32px;margin:4px 0}
+/* ---------- A-08 alert ---------- */
+.al8{border-color:rgba(255,90,90,.4);background:linear-gradient(180deg,rgba(255,90,90,.09),transparent 60%),var(--card)}
+.al8 .top{display:flex;align-items:center;gap:10px}
+.al8 .warn{width:36px;height:36px;border-radius:12px;background:rgba(255,90,90,.15);display:flex;align-items:center;justify-content:center;font-size:17px}
+.al8 .nm{font-size:15.5px;font-weight:650}
+.al8 .msg{color:var(--dim);font-size:13.5px;margin:10px 0 14px}
+.al8 .btn{background:#fff;color:#0b0b0d;border:none;border-radius:12px;padding:10px 22px;font-weight:650;cursor:pointer;font-size:14px}
+/* ---------- A-09 tiles ---------- */
+.tls .nm{font-size:16px;font-weight:600;margin-bottom:12px}
+.tls .t4{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tls .t{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.tls .t b{display:block;font-size:19px;font-weight:400}
+.tls .t span{font-size:10.5px;letter-spacing:.12em;color:var(--mut)}
+/* ---------- A-10 timeline ---------- */
+.tl10 .nm{font-size:16px;font-weight:600;margin-bottom:16px}
+.tl10 .line{position:relative;height:2px;background:rgba(255,255,255,.12);border-radius:2px;margin:0 8px}
+.tl10 .ev{position:absolute;top:-5px;transform:translateX(-50%);text-align:center;width:80px;margin-left:0}
+.tl10 .ev i{display:block;width:12px;height:12px;border-radius:50%;background:#0b0b0d;border:2.5px solid var(--ac);margin:0 auto 8px}
+.tl10 .ev.done i{background:var(--ac)}
+.tl10 .ev b{display:block;font-size:12px;font-weight:600}
+.tl10 .ev span{font-size:10.5px;color:var(--mut);font-family:var(--mono)}
+</style>
+</head>
+<style>
+.mlab{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.ro{font-size:38px;font-weight:200}
+.ro small{font-size:12px;color:var(--dim);margin-left:6px;font-weight:400}
+.mscale{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--mut);margin-top:8px}
+/* B-01 dot matrix */
+.mx{display:flex;gap:5px;margin-top:12px}
+.mx .mc{background:none;border:none;padding:0;display:flex;flex-direction:column-reverse;gap:4px;cursor:pointer}
+.mx .mc i{width:11px;height:11px;border-radius:50%;background:rgba(255,255,255,.1)}
+.mx .mc i.f{background:var(--ac);box-shadow:0 0 7px -1px var(--ac)}
+/* B-03 ring */
+.ring3{display:flex;align-items:center;gap:16px}
+.ring3 .c{position:relative;width:112px;height:112px;flex:none}
+.ring3 .c b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:300}
+/* B-04 seg bars */
+.seg4{display:flex;gap:6px;margin-top:14px}
+.seg4 button{flex:1;height:34px;border-radius:9px;border:none;background:rgba(255,255,255,.09);cursor:pointer;padding:0}
+.seg4 button.on{background:var(--ac);box-shadow:0 0 12px -2px var(--ac)}
+/* B-05 histogram */
+.histo{display:flex;align-items:flex-end;gap:4px;height:110px;margin-top:12px}
+.histo i{flex:1;border-radius:3px 3px 0 0;background:linear-gradient(180deg,var(--ac),color-mix(in srgb,var(--ac) 20%,transparent));min-height:4px}
+/* B-06 wave */
+.wave6 svg{width:100%;height:96px;display:block;margin-top:10px}
+.wave6 .flow{stroke-dasharray:6 10;animation:dash 1.2s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-16}}
+/* B-07 tacho */
+.tach{text-align:center}
+.tach svg{width:100%;max-width:250px}
+.tach .ro{font-size:32px;margin-top:-6px}
+/* B-08 bullet */
+.bul .track{height:22px;border-radius:7px;background:rgba(255,255,255,.08);position:relative;margin-top:14px}
+.bul .fill{position:absolute;left:0;top:0;bottom:0;border-radius:7px;background:linear-gradient(90deg,color-mix(in srgb,var(--ac) 45%,transparent),var(--ac))}
+.bul .tgt{position:absolute;top:-6px;bottom:-6px;width:3px;background:#fff;border-radius:2px}
+/* B-09 stackbar */
+.stb .track{display:flex;height:26px;border-radius:8px;overflow:hidden;margin-top:14px}
+.stb .track i{display:block}
+.stb .lg{display:flex;gap:14px;margin-top:10px;font-size:12px;color:var(--dim)}
+.stb .lg b{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px}
+/* B-10 bubbles */
+.bub{display:flex;align-items:flex-end;gap:14px;margin-top:14px;justify-content:space-around}
+.bub .b{text-align:center}
+.bub .b i{display:flex;align-items:center;justify-content:center;border-radius:50%;margin:0 auto 8px;background:radial-gradient(circle at 35% 30%,color-mix(in srgb,var(--ac) 70%,#fff),color-mix(in srgb,var(--ac) 30%,#0b0b0d));font-size:13px;font-weight:600}
+.bub .b span{font-size:11px;color:var(--dim)}
+/* B-11 heat */
+.heat{display:grid;grid-template-columns:repeat(14,1fr);gap:5px;margin-top:14px}
+.heat i{aspect-ratio:1;border-radius:5px;background:rgba(255,255,255,.07)}
+.heat i.h1{background:color-mix(in srgb,var(--ac) 30%,transparent)}
+.heat i.h2{background:color-mix(in srgb,var(--ac) 60%,transparent)}
+.heat i.h3{background:var(--ac);box-shadow:0 0 8px -1px var(--ac)}
+/* B-12 knob */
+.knob12{display:flex;align-items:center;gap:18px}
+.knob12 .k{width:104px;height:104px;border-radius:50%;flex:none;background:conic-gradient(from 210deg,var(--ac) 0 70%,rgba(255,255,255,.1) 70% 100%);-webkit-mask:radial-gradient(circle,transparent 55%,#000 56%);mask:radial-gradient(circle,transparent 55%,#000 56%);position:relative}
+.knob12 .kd{font-size:15px;color:var(--dim);margin-top:6px}
+/* B-13 ticker */
+.tick13{display:flex;gap:8px;margin-top:14px}
+.tick13 .dg{background:#000;border:1px solid var(--line);border-radius:12px;font-size:44px;font-weight:200;width:62px;text-align:center;padding:6px 0;box-shadow:inset 0 12px 18px -12px rgba(255,255,255,.25)}
+/* B-14 leds */
+.leds{display:flex;gap:8px;margin-top:14px}
+.leds button{flex:1;aspect-ratio:1;border-radius:50%;border:none;background:rgba(255,255,255,.08);cursor:pointer;padding:0}
+.leds button.on{background:var(--ac);box-shadow:0 0 14px -1px var(--ac)}
+/* B-15 ladder */
+.lad{display:flex;gap:14px;margin-top:6px;align-items:stretch}
+.lad .steps{display:flex;flex-direction:column-reverse;gap:6px;flex:1}
+.lad .steps button{border:1px solid var(--line);background:none;border-radius:10px;padding:9px;color:var(--mut);cursor:pointer;font-size:12.5px}
+.lad .steps button.on{background:rgba(255,255,255,.09);color:var(--tx);border-color:var(--ac)}
+/* B-16 phases */
+.phs{display:flex;justify-content:space-between;margin-top:16px}
+.phs button{background:none;border:none;cursor:pointer;font-size:27px;padding:2px;filter:grayscale(1);opacity:.4}
+.phs button.on{filter:none;opacity:1;transform:scale(1.2)}
+/* B-17 orbit */
+.orb{display:flex;align-items:center;gap:18px}
+.orb .o{width:120px;height:120px;flex:none;border:1px dashed rgba(255,255,255,.25);border-radius:50%;position:relative}
+.orb .o::before{content:'';position:absolute;inset:44px;background:var(--ac);border-radius:50%;box-shadow:0 0 18px var(--ac)}
+.orb .sat{position:absolute;width:14px;height:14px;background:#fff;border-radius:50%;box-shadow:0 0 10px #fff;top:8px;left:50%;margin-left:-7px}
+/* B-18 thermo */
+.thm{display:flex;gap:18px;align-items:stretch;margin-top:4px}
+.thm .tube{width:26px;border-radius:14px;background:rgba(255,255,255,.08);position:relative;overflow:hidden;min-height:150px}
+.thm .tube i{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(180deg,#fff,var(--ac));border-radius:14px}
+/* B-19 countdown */
+.cdn{display:flex;gap:10px;margin-top:14px}
+.cdn .cell{flex:1;background:var(--card2);border:1px solid var(--line);border-radius:16px;text-align:center;padding:12px 0}
+.cdn .cell b{display:block;font-size:34px;font-weight:200}
+.cdn .cell span{font-size:10.5px;letter-spacing:.14em;color:var(--mut)}
+/* B-20 ratio */
+.rat .frac{display:flex;align-items:baseline;gap:10px;margin:6px 0 12px}
+.rat .frac b{font-size:46px;font-weight:200}
+.rat .frac span{font-size:22px;color:var(--mut)}
+.rat .db{display:flex;height:12px;border-radius:7px;overflow:hidden;gap:3px}
+.rat .db i{display:block;border-radius:4px}
+/* B-21 sparktable */
+.st21 .r{display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--line)}
+.st21 .r:first-child{border-top:none}
+.st21 .k{width:110px;font-size:12.5px;color:var(--dim);flex:none}
+.st21 svg{flex:1;height:26px}
+.st21 .v{width:86px;text-align:right;font-size:14.5px;flex:none}
+/* B-22 checklist */
+.chk .r{display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--line);font-size:13.5px}
+.chk .r:first-child{border-top:none}
+.chk .d{width:10px;height:10px;border-radius:50%;flex:none}
+.chk .v{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--dim)}
+/* B-23 specsheet */
+.spec23 .r{display:flex;justify-content:space-between;padding:9px 2px;border-top:1px solid var(--line);font-size:13px}
+.spec23 .r:first-child{border-top:none}
+.spec23 .k{color:var(--mut);letter-spacing:.1em;font-size:11px;font-weight:600}
+.spec23 .v{font-weight:500}
+/* B-24 duel */
+.duel .row{display:flex;align-items:center;gap:12px;margin:10px 0}
+.duel .k{width:64px;font-size:12px;color:var(--dim);flex:none}
+.duel .bar{flex:1;height:16px;border-radius:6px;background:rgba(255,255,255,.07);overflow:hidden}
+.duel .bar i{display:block;height:100%}
+.duel .v{width:80px;text-align:right;font-size:14px;flex:none}
+/* ---------- chrome ---------- */
+.seg{display:flex;background:rgba(255,255,255,.07);border-radius:14px;padding:4px;gap:2px}
+.seg button{flex:1;border:none;background:none;border-radius:11px;padding:9px;color:var(--dim);cursor:pointer;font-size:13.5px}
+.seg button.on{background:#fff;color:#0b0b0d;font-weight:650}
+.und{display:flex;gap:22px;border-bottom:1px solid var(--line)}
+.und button{background:none;border:none;color:var(--dim);padding:10px 2px;cursor:pointer;font-size:14px;border-bottom:2px solid transparent;margin-bottom:-1px}
+.und button.on{color:var(--tx);border-color:var(--ac,#fff);font-weight:600}
+.ihead{display:flex;align-items:center;gap:14px}
+.cbtn{width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:none;font-size:20px;cursor:pointer;color:var(--dim);flex:none}
+.ititle h2{margin:0;font-size:21px;font-weight:650}
+.ititle p{margin:2px 0 0;font-size:11.5px;letter-spacing:.12em;color:var(--mut)}
+.ititle p b{color:var(--ac,#fff)}
+.srch{display:flex;align-items:center;gap:10px;background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:11px 14px}
+.srch input{flex:1;background:none;border:none;outline:none;color:var(--tx);font-size:14px;min-width:0}
+.srch .n{font-family:var(--mono);font-size:11.5px;color:var(--mut)}
+.duo6{display:flex;gap:12px}
+.duo6 .s{flex:1;background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:14px;text-align:center}
+.duo6 .t{font-size:11px;letter-spacing:.16em;color:var(--mut)}
+.duo6 .n{font-size:34px;font-weight:200;margin-top:2px}
+/* tray */
+#tray{position:fixed;left:0;right:0;bottom:0;z-index:60;background:rgba(16,16,20,.94);backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:12px 22px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#tray .tt{font-size:13px;color:var(--dim);font-weight:600}
+#tray .chip{font-family:var(--mono);font-size:12px;border:1px solid rgba(255,215,94,.5);color:var(--gold);border-radius:999px;padding:4px 12px;cursor:pointer;background:none}
+#tray .sp{flex:1}
+.tbtn{border:1px solid var(--line);background:var(--card2);border-radius:11px;padding:8px 18px;cursor:pointer;font-size:13px}
+.tbtn.pri{background:#fff;color:#0b0b0d;border-color:#fff;font-weight:650}
+#tray .hint{font-size:12px;color:var(--mut)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="ghead"><h1>Card Gallery</h1><p>40 candidates in the Engine Vitals theme · star your winners, then send the codes (e.g. A-02, B-07, C-01)</p></div>
+<div class="gbar" id="gbar">
+<button class="pill on" data-f="all">All</button>
+<button class="pill" data-f="entity">Entity</button>
+<button class="pill" data-f="metric">Metric</button>
+<button class="pill" data-f="chrome">Chrome</button>
+<span class="gcount" id="gcount"></span>
+</div>
+
+<div class="sec" data-sec="entity">A · ENTITY CARDS <small>10 — one per outliner asset</small></div>
+<div class="grid2" id="gridA">
+
+<div class="slot" data-id="A-01" data-cat="entity"><div class="slot-tag"><span>A-01 · VITAL</span><button class="star">☆</button></div>
+<div class="card vit num" style="--ac:#f5b942"><div class="tick"></div>
+<div class="r1"><span class="nm">Sun</span><span class="tg">STAR</span><span class="led"></span></div>
+<div class="big">32.0<small>klx · intensity</small></div>
+<div class="r3"><span class="delta up">+2.4 klx</span><span class="dots"><i style="opacity:.3"></i><i style="opacity:.4"></i><i style="opacity:.55"></i><i style="opacity:.7"></i><i style="opacity:.85"></i><i style="opacity:1"></i><i style="opacity:.9"></i><i style="opacity:.75"></i></span></div>
+</div></div>
+
+<div class="slot" data-id="A-02" data-cat="entity"><div class="slot-tag"><span>A-02 · SPLIT</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#7aa2ff"><div class="split">
+<div class="L"><div class="nm">Moon</div><div class="st">● tracking</div><div class="big">96.4<small>% lit</small></div></div>
+<div class="R"><i style="height:22%"></i><i style="height:35%"></i><i style="height:48%"></i><i style="height:64%"></i><i style="height:80%"></i><i style="height:100%"></i><i style="height:72%"></i><i style="height:55%"></i></div>
+</div></div></div>
+
+<div class="slot full" data-id="A-03" data-cat="entity"><div class="slot-tag"><span>A-03 · RAIL</span><button class="star">☆</button></div>
+<div class="card rail num" style="--ac:#9be8c9"><span class="led"></span><span class="nm">Height_Fog</span>
+<span class="mbars"><i style="height:30%"></i><i style="height:45%"></i><i style="height:38%"></i><i style="height:60%"></i><i style="height:52%"></i><i style="height:75%"></i><i style="height:66%"></i><i style="height:88%"></i><i style="height:70%"></i><i style="height:95%"></i><i style="height:80%"></i><i style="height:100%"></i></span>
+<span class="rv">0.082</span><span class="delta up">+0.011 σ</span>
+</div></div>
+
+<div class="slot" data-id="A-04" data-cat="entity"><div class="slot-tag"><span>A-04 · MEDALLION</span><button class="star">☆</button></div>
+<div class="card med num" style="--ac:#f5b942"><div class="ico">☀</div><div class="nm">Sun</div>
+<div><span class="tagp">DIRECTIONAL STAR</span></div>
+<div class="srow2"><div><b>38.0°</b><span>ELEVATION</span></div><div><b>5500K</b><span>TEMP</span></div></div>
+</div></div>
+
+<div class="slot" data-id="A-05" data-cat="entity"><div class="slot-tag"><span>A-05 · GAUGE</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#ffd75e"><div class="lab">KEY_SPOT · OUTPUT</div>
+<div class="g5"><svg width="120" height="80" viewBox="0 0 120 80"><path d="M 12 68 A 48 48 0 0 1 108 68" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="10" stroke-linecap="round"/><path d="M 12 68 A 48 48 0 0 1 96 30" fill="none" stroke="#ffd75e" stroke-width="10" stroke-linecap="round"/><line x1="60" y1="68" x2="96" y2="30" stroke="#fff" stroke-width="2.5"/><circle cx="60" cy="68" r="5" fill="#fff"/></svg>
+<div><div class="gv">78<small style="font-size:12px;color:var(--dim)"> %</small></div><div class="mm">0 ····· 3200 lm</div></div></div>
+</div></div>
+
+<div class="slot" data-id="A-06" data-cat="entity"><div class="slot-tag"><span>A-06 · STACKS</span><button class="star">☆</button></div>
+<div class="card stk num" style="--ac:#8fd0ff"><div class="nm">Sky_Dome</div>
+<div class="pr"><div class="t"><span>Brightness</span><b>8.4 kcd/m²</b></div><div class="bar"><i style="width:62%"></i></div></div>
+<div class="pr"><div class="t"><span>Coverage</span><b>100%</b></div><div class="bar"><i style="width:100%"></i></div></div>
+<div class="pr"><div class="t"><span>Render cost</span><b>0.4 ms</b></div><div class="bar"><i style="width:18%"></i></div></div>
+</div></div>
+
+<div class="slot" data-id="A-07" data-cat="entity"><div class="slot-tag"><span>A-07 · DUO</span><button class="star">☆</button></div>
+<div class="card duo7 num"><div class="side" style="--ac:#f5b942"><div class="nm">Sun</div><div class="big">32<small>klx</small></div><span class="delta dn">−4.1</span></div>
+<div class="vs">vs</div>
+<div class="side" style="--ac:#7aa2ff"><div class="nm">Moon</div><div class="big">119<small>mlx</small></div><span class="delta up">+6.2</span></div>
+</div></div>
+
+<div class="slot" data-id="A-08" data-cat="entity"><div class="slot-tag"><span>A-08 · ALERT</span><button class="star">☆</button></div>
+<div class="card al8"><div class="top"><div class="warn">▲</div><div class="nm">Cloud_Layer over budget</div></div>
+<div class="msg">Coverage 98% exceeds the 90% storm ceiling — shadows will fully close out within the hour.</div>
+<button class="btn">Inspect asset</button>
+</div></div>
+
+<div class="slot" data-id="A-09" data-cat="entity"><div class="slot-tag"><span>A-09 · TILES</span><button class="star">☆</button></div>
+<div class="card tls num" style="--ac:#4fd1a5"><div class="nm">Ocean</div>
+<div class="t4"><div class="t"><b>2.4 m</b><span>SWELL</span></div><div class="t"><b>0.62</b><span>CHOP</span></div><div class="t"><b>11 kn</b><span>WIND</span></div><div class="t"><b>1.8 ms</b><span>COST</span></div></div>
+</div></div>
+
+<div class="slot" data-id="A-10" data-cat="entity"><div class="slot-tag"><span>A-10 · TIMELINE</span><button class="star">☆</button></div>
+<div class="card tl10 num" style="--ac:#f5b942"><div class="nm">Sun · today</div>
+<div class="line" style="margin-top:34px;margin-bottom:44px">
+<div class="ev done" style="left:8%"><i></i><b>Dawn</b><span>06:12</span></div>
+<div class="ev done" style="left:38%"><i></i><b>Noon</b><span>12:04</span></div>
+<div class="ev" style="left:68%"><i></i><b>Dusk</b><span>18:41</span></div>
+<div class="ev" style="left:94%"><i></i><b>Nadir</b><span>00:00</span></div>
+</div></div></div>
+
+</div>
+<div class="sec" data-sec="metric">B · METRIC CARDS <small>24 — one per inspector property</small></div>
+<div class="grid3" id="gridB">
+
+<div class="slot" data-id="B-01" data-cat="metric"><div class="slot-tag"><span>B-01 · DOT MATRIX</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#f5b942"><div class="tick"></div><div class="mlab"><span class="lab">SUN · ELEVATION</span></div>
+<div class="ro" id="ro-b1">35.0<small>°</small></div>
+<div class="mx tappy" data-mode="meter" data-ro="ro-b1">
+<button class="mc" data-v="−13.1°"><i class="f"></i><i class="f"></i><i class="f"></i></button><button class="mc" data-v="−6.3°"><i class="f"></i><i class="f"></i><i class="f"></i></button><button class="mc" data-v="0.6°"><i class="f"></i><i class="f"></i><i class="f"></i></button><button class="mc" data-v="7.5°"><i class="f"></i><i class="f"></i><i class="f"></i></button><button class="mc" data-v="14.4°"><i class="f"></i><i class="f"></i><i class="f"></i></button><button class="mc" data-v="21.3°"><i class="f"></i><i class="f"></i><i class="f"></i></button><button class="mc" data-v="28.1°"><i class="f"></i><i class="f"></i><i class="f"></i></button><button class="mc on" data-v="35.0°"><i class="f"></i><i class="f"></i><i class="f"></i></button><button class="mc" data-v="41.9°"><i></i><i></i><i></i></button><button class="mc" data-v="48.8°"><i></i><i></i><i></i></button><button class="mc" data-v="55.6°"><i></i><i></i><i></i></button><button class="mc" data-v="62.5°"><i></i><i></i><i></i></button><button class="mc" data-v="69.4°"><i></i><i></i><i></i></button><button class="mc" data-v="76.3°"><i></i><i></i><i></i></button><button class="mc" data-v="83.1°"><i></i><i></i><i></i></button><button class="mc" data-v="90.0°"><i></i><i></i><i></i></button>
+</div><div class="mscale"><span>−20°</span><span>90°</span></div>
+</div></div>
+
+<div class="slot full" data-id="B-02" data-cat="metric"><div class="slot-tag"><span>B-02 · AREA GRAPH</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#f5b942"><div class="mlab"><span class="lab">SUN · ILLUMINANCE / 24H</span><span class="ro" style="font-size:26px">32.0<small>klx · now</small></span></div>
+<svg viewBox="0 0 340 150" style="width:100%;display:block;margin-top:8px"><defs><linearGradient id="ggb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f5b942" stop-opacity=".4"/><stop offset="1" stop-color="#f5b942" stop-opacity="0"/></linearGradient></defs>
+<line x1="6" y1="112" x2="296" y2="112" stroke="rgba(255,255,255,.08)"/><line x1="6" y1="72" x2="296" y2="72" stroke="rgba(255,255,255,.08)"/><line x1="6" y1="32" x2="296" y2="32" stroke="rgba(255,255,255,.08)"/>
+<path d="M 6 118 L 40 116 L 75 108 L 110 84 L 145 52 L 180 30 L 215 44 L 250 78 L 285 104 L 296 108 L 296 124 L 6 124 Z" fill="url(#ggb)"/>
+<path d="M 6 118 L 40 116 L 75 108 L 110 84 L 145 52 L 180 30 L 215 44 L 250 78 L 285 104 L 296 108" fill="none" stroke="#f5b942" stroke-width="2"/>
+<line x1="6" y1="60" x2="296" y2="60" stroke="rgba(255,255,255,.4)" stroke-dasharray="6 4"/>
+<text x="292" y="54" font-size="9.5" fill="#9a9aa2" text-anchor="end" font-family="var(--mono)">glare 25k</text>
+<circle cx="180" cy="30" r="3.4" fill="#fff" stroke="#f5b942" stroke-width="2"/><circle cx="110" cy="84" r="3" fill="#fff" stroke="#f5b942" stroke-width="2"/>
+<text x="6" y="140" font-size="9.5" fill="#5c5c64" font-family="var(--mono)">06:00</text><text x="173" y="140" font-size="9.5" fill="#5c5c64" font-family="var(--mono)" text-anchor="middle">13:00</text><text x="296" y="140" font-size="9.5" fill="#5c5c64" font-family="var(--mono)" text-anchor="end">21:00</text>
+</svg></div></div>
+
+<div class="slot" data-id="B-03" data-cat="metric"><div class="slot-tag"><span>B-03 · RING</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#4fd1a5"><div class="lab">CLOUD · COVERAGE</div>
+<div class="ring3"><div class="c"><svg width="112" height="112" viewBox="0 0 112 112"><circle cx="56" cy="56" r="44" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="11"/><circle cx="56" cy="56" r="44" fill="none" stroke="#4fd1a5" stroke-width="11" stroke-linecap="round" stroke-dasharray="199 276.5" transform="rotate(-90 56 56)"/></svg><b>72%</b></div>
+<div><div style="font-size:15px">Overcast</div><div style="font-size:12px;color:var(--dim);margin-top:4px">ceiling 1,800 m</div><div style="margin-top:8px"><span class="delta up">+6%</span></div></div></div>
+</div></div>
+
+<div class="slot" data-id="B-04" data-cat="metric"><div class="slot-tag"><span>B-04 · SEG BARS</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#ffd75e"><div class="tick"></div><div class="lab">SPOT · INTENSITY</div>
+<div class="ro" id="ro-b4">333<small>lx</small></div>
+<div class="seg4 tappy" data-mode="meter" data-ro="ro-b4"><button class="on" data-v="42 lx"></button><button class="on" data-v="83 lx"></button><button class="on" data-v="125 lx"></button><button class="on" data-v="167 lx"></button><button class="on" data-v="208 lx"></button><button class="on" data-v="250 lx"></button><button class="on" data-v="292 lx"></button><button class="on" data-v="333 lx"></button><button data-v="375 lx"></button><button data-v="417 lx"></button><button data-v="458 lx"></button><button data-v="500 lx"></button></div>
+<div class="mscale"><span>0</span><span>500 lx</span></div>
+</div></div>
+
+<div class="slot" data-id="B-05" data-cat="metric"><div class="slot-tag"><span>B-05 · HISTOGRAM</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#8fd0ff"><div class="mlab"><span class="lab">SKY · LUMINANCE BINS</span><span class="delta dn">−0.4 EV</span></div>
+<div class="histo"><i style="height:12%"></i><i style="height:20%"></i><i style="height:34%"></i><i style="height:52%"></i><i style="height:70%"></i><i style="height:88%"></i><i style="height:100%"></i><i style="height:92%"></i><i style="height:76%"></i><i style="height:60%"></i><i style="height:48%"></i><i style="height:38%"></i><i style="height:30%"></i><i style="height:24%"></i><i style="height:18%"></i><i style="height:14%"></i><i style="height:11%"></i><i style="height:9%"></i><i style="height:7%"></i><i style="height:6%"></i><i style="height:5%"></i><i style="height:4%"></i><i style="height:4%"></i><i style="height:3%"></i></div>
+<div class="mscale"><span>shadow</span><span>8.4 kcd/m² peak</span></div>
+</div></div>
+
+<div class="slot" data-id="B-06" data-cat="metric"><div class="slot-tag"><span>B-06 · WAVE</span><button class="star">☆</button></div>
+<div class="card wave6 num" style="--ac:#4fd1a5"><div class="mlab"><span class="lab">OCEAN · SWELL SIGNAL</span><span class="ro" style="font-size:26px">2.4<small>m</small></span></div>
+<svg viewBox="0 0 300 96"><path d="M 0 60 L 30 60 L 42 60 L 52 22 L 62 88 L 72 60 L 110 60 L 122 60 L 132 30 L 142 80 L 152 60 L 200 60 L 212 60 L 222 26 L 232 84 L 242 60 L 300 60" fill="none" stroke="rgba(79,209,165,.3)" stroke-width="2"/><path class="flow" d="M 0 60 L 30 60 L 42 60 L 52 22 L 62 88 L 72 60 L 110 60 L 122 60 L 132 30 L 142 80 L 152 60 L 200 60 L 212 60 L 222 26 L 232 84 L 242 60 L 300 60" fill="none" stroke="#4fd1a5" stroke-width="2.5"/></svg>
+<div class="mscale"><span>period 7.2 s</span><span>chop 0.62</span></div>
+</div></div>
+
+<div class="slot" data-id="B-07" data-cat="metric"><div class="slot-tag"><span>B-07 · TACHO</span><button class="star">☆</button></div>
+<div class="card tach num" style="--ac:#ff9d5c"><div class="lab">SPOT · BEAM ANGLE</div>
+<svg viewBox="0 0 250 120"><path d="M 37 110 A 88 88 0 0 1 213 110" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="12" stroke-linecap="round"/><path d="M 37 110 A 88 88 0 0 1 157 28" fill="none" stroke="#ff9d5c" stroke-width="12" stroke-linecap="round"/><line x1="45" y1="110" x2="55" y2="110" stroke="#5c5c64" stroke-width="2"/><line x1="63" y1="48" x2="57" y2="42" stroke="#5c5c64" stroke-width="2"/><line x1="125" y1="22" x2="125" y2="12" stroke="#5c5c64" stroke-width="2"/><line x1="187" y1="48" x2="193" y2="42" stroke="#5c5c64" stroke-width="2"/><line x1="205" y1="110" x2="195" y2="110" stroke="#5c5c64" stroke-width="2"/><line x1="125" y1="110" x2="154" y2="36" stroke="#fff" stroke-width="2.5"/><circle cx="125" cy="110" r="6" fill="#fff"/></svg>
+<div class="ro">28<small>° cone</small></div>
+</div></div>
+
+<div class="slot" data-id="B-08" data-cat="metric"><div class="slot-tag"><span>B-08 · BULLET</span><button class="star">☆</button></div>
+<div class="card bul num" style="--ac:#7aa2ff"><div class="tick"></div><div class="mlab"><span class="lab">MOON · ILLUMINANCE</span><span class="delta up">+6.2 mlx</span></div>
+<div class="ro">119.5<small>mlx</small></div>
+<div class="track"><div class="fill" style="width:64%"></div><div class="tgt" style="left:80%"></div></div>
+<div class="mscale"><span>0</span><span>target 150 · max 190 mlx</span></div>
+</div></div>
+
+<div class="slot" data-id="B-09" data-cat="metric"><div class="slot-tag"><span>B-09 · STACK BAR</span><button class="star">☆</button></div>
+<div class="card stb num"><div class="lab">SUN · LIGHT MIX</div>
+<div class="ro">32.0<small>klx total</small></div>
+<div class="track"><i style="width:55%;background:#f5b942"></i><i style="width:25%;background:#7aa2ff"></i><i style="width:20%;background:#4fd1a5"></i></div>
+<div class="lg"><span><b style="background:#f5b942"></b>direct 55%</span><span><b style="background:#7aa2ff"></b>sky 25%</span><span><b style="background:#4fd1a5"></b>bounce 20%</span></div>
+</div></div>
+
+<div class="slot" data-id="B-10" data-cat="metric"><div class="slot-tag"><span>B-10 · BUBBLES</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#8fd0ff"><div class="lab">SKY · LAYER COST</div>
+<div class="bub"><div class="b"><i style="width:84px;height:84px">1.2</i><span>scatter ms</span></div><div class="b"><i style="width:62px;height:62px">0.6</i><span>ozone ms</span></div><div class="b"><i style="width:48px;height:48px">0.3</i><span>aerial ms</span></div></div>
+</div></div>
+
+<div class="slot" data-id="B-11" data-cat="metric"><div class="slot-tag"><span>B-11 · HEAT STRIP</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#f5b942"><div class="mlab"><span class="lab">SUN · PEAK HOURS</span><span class="delta">11:00–15:00</span></div>
+<div class="heat"><i></i><i></i><i class="h1"></i><i class="h1"></i><i class="h2"></i><i class="h2"></i><i class="h3"></i><i class="h3"></i><i class="h3"></i><i class="h3"></i><i class="h2"></i><i class="h2"></i><i class="h1"></i><i></i><i></i><i></i><i class="h1"></i><i class="h2"></i><i class="h3"></i><i class="h3"></i><i class="h2"></i><i class="h1"></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+<div class="mscale"><span>00:00</span><span>24:00</span></div>
+</div></div>
+
+<div class="slot" data-id="B-12" data-cat="metric"><div class="slot-tag"><span>B-12 · KNOB</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#9be8c9"><div class="lab">FOG · FALLOFF</div>
+<div class="knob12"><div class="k"></div><div><div class="ro">70<small>%</small></div><div class="kd">height 40 m · σ 0.082</div></div></div>
+</div></div>
+
+<div class="slot" data-id="B-13" data-cat="metric"><div class="slot-tag"><span>B-13 · TICKER</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#c9b8ff"><div class="lab">STARS · VISIBLE COUNT</div>
+<div class="tick13"><div class="dg">4</div><div class="dg">2</div><div class="dg">0</div><div class="dg">0</div></div>
+<div class="mscale"><span>mag limit 6.5</span><span class="delta up">+120 tonight</span></div>
+</div></div>
+
+<div class="slot" data-id="B-14" data-cat="metric"><div class="slot-tag"><span>B-14 · LED ROW</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#c9b8ff"><div class="tick"></div><div class="lab">STARS · MAG LIMIT</div>
+<div class="ro" id="ro-b14">5.0<small>mag</small></div>
+<div class="leds tappy" data-mode="meter" data-ro="ro-b14"><button class="on" data-v="1.5 mag"></button><button class="on" data-v="2.2 mag"></button><button class="on" data-v="2.9 mag"></button><button class="on" data-v="3.6 mag"></button><button class="on" data-v="4.3 mag"></button><button class="on" data-v="5.0 mag"></button><button data-v="5.7 mag"></button><button data-v="6.4 mag"></button><button data-v="7.1 mag"></button><button data-v="7.8 mag"></button></div>
+<div class="mscale"><span>bright</span><span>faint</span></div>
+</div></div>
+
+<div class="slot" data-id="B-15" data-cat="metric"><div class="slot-tag"><span>B-15 · LADDER</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#4fd1a5"><div class="lab">OCEAN · WIND</div>
+<div class="lad"><div class="steps tappy" data-mode="meter" data-ro="ro-b15"><button class="on" data-v="4 kn · Calm">Calm</button><button class="on" data-v="11 kn · Breeze">Breeze</button><button data-v="28 kn · Gale">Gale</button><button data-v="55 kn · Storm">Storm</button><button data-v="80 kn · Hurricane">Hurricane</button></div>
+<div><div class="ro" id="ro-b15" style="font-size:30px">11 kn<small>· Breeze</small></div></div></div>
+</div></div>
+
+<div class="slot" data-id="B-16" data-cat="metric"><div class="slot-tag"><span>B-16 · PHASES</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#7aa2ff"><div class="lab">MOON · PHASE</div>
+<div class="ro" id="ro-b16">78<small>% lit</small></div>
+<div class="phs tappy" data-mode="single" data-ro="ro-b16"><button data-v="0% lit">🌑</button><button data-v="22% lit">🌒</button><button data-v="50% lit">🌓</button><button class="on" data-v="78% lit">🌔</button><button data-v="100% lit">🌕</button><button data-v="78% lit">🌖</button><button data-v="50% lit">🌗</button><button data-v="22% lit">🌘</button></div>
+<div class="mscale"><span>new</span><span>full</span><span>new</span></div>
+</div></div>
+
+<div class="slot" data-id="B-17" data-cat="metric"><div class="slot-tag"><span>B-17 · ORBIT</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#f5b942"><div class="lab">SUN · POSITION</div>
+<div class="orb"><div class="o"><div class="sat" style="left:76%;top:10%"></div></div>
+<div><div class="ro" style="font-size:30px">38.0<small>° elev</small></div><div style="color:var(--dim);font-size:13px;margin-top:4px">azimuth 282.0°</div></div></div>
+</div></div>
+
+<div class="slot" data-id="B-18" data-cat="metric"><div class="slot-tag"><span>B-18 · THERMO</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#ff9d5c"><div class="lab">FOG · AIR TEMP</div>
+<div class="thm"><div class="tube"><i style="height:64%"></i></div>
+<div><div class="ro">21.5<small>°C</small></div><div style="color:var(--dim);font-size:13px;margin-top:6px">dew point 17.2 °C<br>humidity 74%</div><div style="margin-top:8px"><span class="delta up">+1.3 °C</span></div></div></div>
+</div></div>
+
+<div class="slot" data-id="B-19" data-cat="metric"><div class="slot-tag"><span>B-19 · COUNTDOWN</span><button class="star">☆</button></div>
+<div class="card cdn num" style="--ac:#f5b942"><div class="lab">SUN · TO SUNRISE</div>
+<div class="cdn"><div class="cell"><b>04</b><span>HRS</span></div><div class="cell"><b>37</b><span>MIN</span></div><div class="cell"><b>52</b><span>SEC</span></div></div>
+</div></div>
+
+<div class="slot" data-id="B-20" data-cat="metric"><div class="slot-tag"><span>B-20 · RATIO</span><button class="star">☆</button></div>
+<div class="card rat num"><div class="lab">SUN · DIRECT SHARE</div>
+<div class="frac"><b>72</b><span>% direct · 28% sky</span></div>
+<div class="db"><i style="width:72%;background:#f5b942"></i><i style="width:28%;background:#7aa2ff"></i></div>
+<div class="mscale"><span>23.0 klx</span><span>9.0 klx</span></div>
+</div></div>
+
+<div class="slot full" data-id="B-21" data-cat="metric"><div class="slot-tag"><span>B-21 · SPARK TABLE</span><button class="star">☆</button></div>
+<div class="card st21 num" style="--ac:#f5b942"><div class="lab">SUN · ALL CHANNELS</div>
+<div class="r"><span class="k">Intensity</span><svg viewBox="0 0 200 26" preserveAspectRatio="none"><polyline points="0,20 25,19 50,17 75,12 100,7 125,9 150,14 175,17 200,18" fill="none" stroke="#f5b942" stroke-width="1.6"/></svg><span class="v">32.0 klx</span></div>
+<div class="r"><span class="k">Temp</span><svg viewBox="0 0 200 26" preserveAspectRatio="none"><polyline points="0,16 25,15 50,14 75,12 100,10 125,10 150,11 175,13 200,14" fill="none" stroke="#ff9d5c" stroke-width="1.6"/></svg><span class="v">5500 K</span></div>
+<div class="r"><span class="k">Elevation</span><svg viewBox="0 0 200 26" preserveAspectRatio="none"><polyline points="0,22 25,18 50,13 75,9 100,6 125,8 150,12 175,16 200,19" fill="none" stroke="#8fd0ff" stroke-width="1.6"/></svg><span class="v">38.0°</span></div>
+<div class="r"><span class="k">Disk size</span><svg viewBox="0 0 200 26" preserveAspectRatio="none"><polyline points="0,14 200,14" fill="none" stroke="#9a9aa2" stroke-width="1.6" stroke-dasharray="4 3"/></svg><span class="v">2.2°</span></div>
+</div></div>
+
+<div class="slot" data-id="B-22" data-cat="metric"><div class="slot-tag"><span>B-22 · CHECKLIST</span><button class="star">☆</button></div>
+<div class="card chk num"><div class="lab">SPOT · PIPELINE</div>
+<div class="r"><span class="d" style="background:var(--green);box-shadow:0 0 8px var(--green)"></span>Shadows<span class="v">2048 px</span></div>
+<div class="r"><span class="d" style="background:var(--green);box-shadow:0 0 8px var(--green)"></span>Bounce GI<span class="v">6 max</span></div>
+<div class="r"><span class="d" style="background:#ffd75e;box-shadow:0 0 8px #ffd75e"></span>Bloom<span class="v">0.35 soft</span></div>
+<div class="r"><span class="d" style="background:var(--red);box-shadow:0 0 8px var(--red)"></span>Lens dirt<span class="v">missing</span></div>
+</div></div>
+
+<div class="slot" data-id="B-23" data-cat="metric"><div class="slot-tag"><span>B-23 · SPEC SHEET</span><button class="star">☆</button></div>
+<div class="card spec23 num"><div class="lab">SUN · DERIVED</div>
+<div class="r"><span class="k">EXPOSURE</span><span class="v">EV100 13.6</span></div>
+<div class="r"><span class="k">DISK Ω</span><span class="v">1158 µsr</span></div>
+<div class="r"><span class="k">AIR MASS</span><span class="v">1.62</span></div>
+<div class="r"><span class="k">PHOTON FLUX</span><span class="v">≈9.6 ×10²⁰</span></div>
+<div class="r"><span class="k">WHITE</span><span class="v">5500 K</span></div>
+</div></div>
+
+<div class="slot" data-id="B-24" data-cat="metric"><div class="slot-tag"><span>B-24 · DELTA DUEL</span><button class="star">☆</button></div>
+<div class="card duel num" style="--ac:#f5b942"><div class="mlab"><span class="lab">SUN · TUNE RESULT</span><span class="delta up">+13.8%</span></div>
+<div class="row"><span class="k">Before</span><div class="bar"><i style="width:80%;background:rgba(255,255,255,.25)"></i></div><span class="v">32.0 klx</span></div>
+<div class="row"><span class="k">After</span><div class="bar"><i style="width:91%;background:#f5b942"></i></div><span class="v">36.4 klx</span></div>
+</div></div>
+
+</div>
+<div class="sec" data-sec="chrome">C · CHROME <small>6 — tabs, headers, search</small></div>
+<div class="grid2" id="gridC">
+
+<div class="slot" data-id="C-01" data-cat="chrome"><div class="slot-tag"><span>C-01 · PILL TABS</span><button class="star">☆</button></div>
+<div class="card"><div class="lab" style="margin-bottom:12px">SYSTEM FILTER</div>
+<div class="tappy" data-mode="single" style="display:flex;gap:8px;flex-wrap:wrap"><button class="pill on" data-v="">All</button><button class="pill" data-v="">Celestial</button><button class="pill" data-v="">Air</button><button class="pill" data-v="">Sea</button></div>
+</div></div>
+
+<div class="slot" data-id="C-02" data-cat="chrome"><div class="slot-tag"><span>C-02 · SEGMENTED</span><button class="star">☆</button></div>
+<div class="card"><div class="lab" style="margin-bottom:12px">INSPECTOR VIEW</div>
+<div class="seg tappy" data-mode="single"><button class="on" data-v="">Tune</button><button data-v="">Graph</button><button data-v="">Specs</button></div>
+</div></div>
+
+<div class="slot" data-id="C-03" data-cat="chrome"><div class="slot-tag"><span>C-03 · UNDERLINE TABS</span><button class="star">☆</button></div>
+<div class="card" style="--ac:#f5b942"><div class="lab" style="margin-bottom:12px">INSPECTOR VIEW</div>
+<div class="und tappy" data-mode="single"><button class="on" data-v="">Tune</button><button data-v="">Graph</button><button data-v="">Specs</button><button data-v="">History</button></div>
+</div></div>
+
+<div class="slot" data-id="C-04" data-cat="chrome"><div class="slot-tag"><span>C-04 · INSPECTOR HEAD</span><button class="star">☆</button></div>
+<div class="card" style="--ac:#f5b942"><div class="ihead"><button class="cbtn">‹</button>
+<div class="ititle"><h2>Sun</h2><p><b>STAR</b> · DIRECTIONAL STAR · CELESTIAL</p></div>
+<button class="cbtn" style="margin-left:auto">⟲</button></div>
+</div></div>
+
+<div class="slot" data-id="C-05" data-cat="chrome"><div class="slot-tag"><span>C-05 · SEARCH</span><button class="star">☆</button></div>
+<div class="card"><div class="lab" style="margin-bottom:12px">OUTLINER FIND</div>
+<div class="srch"><span style="color:var(--mut)">⌕</span><input value="spot" readonly><span class="n">1 / 8</span></div>
+</div></div>
+
+<div class="slot" data-id="C-06" data-cat="chrome"><div class="slot-tag"><span>C-06 · DUO STAT</span><button class="star">☆</button></div>
+<div class="card"><div class="lab" style="margin-bottom:12px">FLEET STATUS</div>
+<div class="duo6 num"><div class="s"><div class="t">ACTIVE</div><div class="n">8</div></div><div class="s"><div class="t">ALERTS</div><div class="n" style="color:var(--red)">1</div></div></div>
+</div></div>
+
+</div>
+</div>
+
+<div id="tray"><span class="tt">★ Picks <span id="pcount" class="num">0</span></span><span id="pchips" style="display:flex;gap:8px;flex-wrap:wrap"></span><span class="hint" id="phint">tap ☆ on any card to shortlist it</span><span class="sp"></span><button class="tbtn" id="pclear">Clear</button><button class="tbtn pri" id="pcopy">Copy picks</button></div>
+
+<script>
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+/* generic tappy: meter fills up to index (dots+segments get .f children), single marks one */
+$$('.tappy').forEach(box=>{
+  const kids=[...box.children];
+  kids.forEach((k,i)=>k.addEventListener('click',()=>{
+    if(box.dataset.mode==='meter'){ kids.forEach((o,j)=>{ const on=j<=i;
+        o.classList.toggle('on',on);
+        o.querySelectorAll('i').forEach(d=>d.classList.toggle('f',on)); }); }
+    else kids.forEach((o,j)=>o.classList.toggle('on',j===i));
+    if(box.dataset.ro){ const ro=document.getElementById(box.dataset.ro);
+      if(ro) ro.innerHTML=k.dataset.v.replace(/([a-z°%]+)$/,'<small>$1</small>'); }
+  }));
+});
+/* favorites */
+const KEY='cg-picks';
+let picks=[]; try{ picks=JSON.parse(localStorage.getItem(KEY)||'[]'); }catch(e){ picks=[]; }
+function syncTray(){
+  $$('.slot').forEach(s=>{ const on=picks.includes(s.dataset.id);
+    s.classList.toggle('fav',on);
+    s.querySelector('.star').textContent=on?'★':'☆'; });
+  $('#pcount').textContent=picks.length;
+  $('#phint').style.display=picks.length?'none':'inline';
+  const host=$('#pchips'); host.innerHTML='';
+  picks.forEach(id=>{ const c=document.createElement('button'); c.className='chip'; c.textContent=id;
+    c.title='remove'; c.addEventListener('click',()=>{ picks=picks.filter(p=>p!==id); save(); syncTray(); });
+    host.appendChild(c); });
+}
+function save(){ try{ localStorage.setItem(KEY,JSON.stringify(picks)); }catch(e){} }
+$$('.slot .star').forEach(b=>b.addEventListener('click',()=>{
+  const id=b.closest('.slot').dataset.id;
+  picks=picks.includes(id)?picks.filter(p=>p!==id):[...picks,id];
+  save(); syncTray(); }));
+$('#pclear').addEventListener('click',()=>{ picks=[]; save(); syncTray(); });
+$('#pcopy').addEventListener('click',()=>{
+  const t=picks.join(', ')||'(no picks yet)';
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(t).catch(()=>fallback(t));
+  else fallback(t);
+  function fallback(x){ const ta=document.createElement('textarea'); ta.value=x; document.body.appendChild(ta);
+    ta.select(); try{document.execCommand('copy');}catch(e){} ta.remove(); }
+});
+/* filter */
+$$('#gbar .pill').forEach(p=>p.addEventListener('click',()=>{
+  $$('#gbar .pill').forEach(o=>o.classList.toggle('on',o===p));
+  const f=p.dataset.f; let n=0;
+  $$('.slot').forEach(s=>{ const show=f==='all'||s.dataset.cat===f;
+    s.style.display=show?'':'none'; if(show)n++; });
+  $$('.sec').forEach(h=>{ h.style.display=(f==='all'||h.dataset.sec===f)?'':'none'; });
+  $('#gcount').textContent=n+' / '+$$('.slot').length+' shown';
+}));
+syncTray();
+$('#gcount').textContent=$$('.slot').length+' / '+$$('.slot').length+' shown';
+</script>
+</body>
+</html>

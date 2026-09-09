@@ -1,0 +1,1979 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slate — Inspector · Instruments Concept</title>
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+<link href="https://api.fontshare.com/v2/css?f[]=general-sans@200,300,400,500,600&display=swap" rel="stylesheet">
+<style>
+/* ================================================================
+   SLATE INSPECTOR — INSTRUMENTS. No sliders. No toggles.
+   Every property is an interactive chart / diagram / gauge with a
+   live value, honest units and metadata. Dark OLED card language
+   from the reference images.
+   ================================================================ */
+:root{
+  --bg:#060607;
+  --panel:#0e0e10;
+  --card:#141416;
+  --card-2:#19191d;
+  --inset:#1e1e22;
+  --field:#000000;
+  --raised:#26262c;
+  --selected:#232329;
+  --stroke:rgba(255,255,255,.07);
+  --stroke-soft:rgba(255,255,255,.045);
+  --text:#f4f4f5;
+  --dim:#9a9aa0;
+  --faint:#5b5b62;
+  --sun:#f2c267;
+  --cam:#7aa2ff;
+  --mesh:#b79cff;
+  --rend:#5fd68a;
+  --danger:#f25555;
+  --ok:#3ddc84;
+  --r-card:22px;
+  --r-pill:999px;
+  --ease:cubic-bezier(.22,.61,.36,1);
+  --shadow:0 24px 70px rgba(0,0,0,.65), inset 0 1px 0 rgba(255,255,255,.04);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:radial-gradient(1200px 700px at 70% -10%, #101014 0%, var(--bg) 55%) fixed, var(--bg);
+  color:var(--text);
+  font-family:'General Sans','Segoe UI',system-ui,sans-serif;
+  font-size:14px; user-select:none; -webkit-font-smoothing:antialiased;
+  display:flex; justify-content:center; padding:26px; min-height:100vh;
+}
+svg{display:block}
+.num{font-variant-numeric:tabular-nums}
+.top-wrap{display:flex; gap:22px; align-items:stretch; justify-content:center; flex-wrap:wrap}
+
+/* ============================ OUTLINER ============================ */
+.outliner{
+  width:296px; flex-shrink:0; background:var(--panel);
+  border:1px solid var(--stroke-soft); border-radius:28px;
+  box-shadow:var(--shadow); display:flex; flex-direction:column; overflow:hidden;
+  max-height:calc(100vh - 52px);
+}
+.ol-head{padding:22px 22px 14px; display:flex; align-items:center; gap:12px}
+.ol-title{font-size:17px; font-weight:600; letter-spacing:.2px}
+.count-pill{font-size:11.5px; font-weight:600; color:var(--dim); background:var(--inset);
+  border:1px solid var(--stroke); padding:3px 11px; border-radius:var(--r-pill)}
+.ol-search{margin:0 16px 12px; height:40px; border-radius:var(--r-pill); background:var(--field);
+  border:1px solid var(--stroke); display:flex; align-items:center; gap:10px; padding:0 16px; color:var(--faint)}
+.ol-search:focus-within{border-color:rgba(255,255,255,.16)}
+.ol-search input{flex:1; min-width:0; background:none; border:none; outline:none; color:var(--text); font:inherit; font-size:13px}
+.ol-search input::placeholder{color:var(--faint)}
+.ol-body{flex:1; overflow-y:auto; padding:2px 12px 16px; display:flex; flex-direction:column; gap:2px}
+.ol-body::-webkit-scrollbar,.insp-scroll::-webkit-scrollbar{width:0}
+.ol-group{font-size:10.5px; font-weight:600; letter-spacing:1.6px; color:var(--faint); padding:14px 12px 7px}
+.ol-item{position:relative; display:flex; align-items:center; gap:11px; padding:9px 12px 9px 14px;
+  border-radius:14px; cursor:pointer; color:var(--dim); font-size:13.5px; font-weight:500;
+  transition:background .14s var(--ease), color .14s var(--ease); border:1px solid transparent}
+.ol-item:hover{background:rgba(255,255,255,.035); color:var(--text)}
+.ol-item.sel{background:var(--selected); color:var(--text); border-color:var(--stroke)}
+.ol-item.sel::before{content:""; position:absolute; left:0; top:8px; bottom:8px; width:3px;
+  border-radius:2px; background:var(--ac,var(--text))}
+.ol-dot{width:8px; height:8px; border-radius:50%; background:var(--ac,var(--faint)); flex-shrink:0}
+.ol-item.sel .ol-dot{box-shadow:0 0 10px var(--ac,var(--faint))}
+.ol-name{flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.ol-tag{font-size:10px; font-weight:600; letter-spacing:.6px; color:var(--faint);
+  background:rgba(255,255,255,.04); border:1px solid var(--stroke-soft); padding:2px 8px; border-radius:var(--r-pill)}
+.ol-item.hidden{display:none}
+.ol-foot{padding:12px 22px 18px; border-top:1px solid var(--stroke-soft); color:var(--faint);
+  font-size:11.5px; display:flex; justify-content:space-between}
+.ol-foot b{color:var(--dim); font-weight:600}
+
+/* ============================ INSPECTOR ============================ */
+.inspector{width:400px; flex-shrink:0; background:var(--panel); border:1px solid var(--stroke-soft);
+  border-radius:28px; box-shadow:var(--shadow); display:flex; flex-direction:column; overflow:hidden;
+  max-height:calc(100vh - 52px); position:relative}
+.insp-scroll{flex:1; overflow-y:auto; padding:22px 20px 30px; display:flex; flex-direction:column; gap:16px}
+.insp-head{display:flex; align-items:flex-start; gap:13px; padding:2px 4px 0}
+.accent-tick{width:5px; align-self:stretch; min-height:44px; border-radius:3px;
+  background:var(--ac,var(--text)); box-shadow:0 0 14px -2px var(--ac,var(--text))}
+.insp-kicker{font-size:11px; font-weight:600; letter-spacing:1.8px; color:var(--faint); margin-bottom:3px}
+.insp-title{font-size:21px; font-weight:600; letter-spacing:.2px}
+.insp-sub{font-size:12px; color:var(--faint); margin-top:3px}
+.insp-head .spacer{flex:1}
+.live-dot{display:flex; align-items:center; gap:7px; font-size:11px; font-weight:600; color:var(--ok);
+  background:rgba(61,220,132,.08); border:1px solid rgba(61,220,132,.22); padding:5px 12px; border-radius:var(--r-pill)}
+.live-dot i{width:6px; height:6px; border-radius:50%; background:var(--ok); box-shadow:0 0 8px var(--ok); animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.45}}
+
+.card{background:var(--card); border:1px solid var(--stroke-soft); border-radius:var(--r-card);
+  padding:20px; position:relative}
+.card.tight{padding:15px 20px}
+.card-label{font-size:12px; font-weight:500; color:var(--dim); margin-bottom:2px}
+.card-label .hint{float:right; color:var(--faint); font-size:11px}
+
+/* hero numeral: bright integer, dim fraction + unit */
+.hero{display:flex; align-items:baseline; gap:6px; margin:2px 0 4px}
+.hero .int{font-size:52px; font-weight:200; letter-spacing:-1px; line-height:1}
+.hero .frac{font-size:52px; font-weight:200; letter-spacing:-1px; line-height:1; color:#6d6d75}
+.hero .unit{font-size:15px; font-weight:400; color:var(--faint); margin-left:2px}
+.delta-pill{display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600;
+  padding:5px 13px; border-radius:var(--r-pill); margin-top:8px;
+  background:rgba(255,255,255,.05); color:var(--dim); border:1px solid var(--stroke)}
+.delta-pill.hot{background:rgba(242,194,103,.12); color:var(--sun); border-color:rgba(242,194,103,.25)}
+.delta-pill.cool{background:rgba(122,162,255,.12); color:var(--cam); border-color:rgba(122,162,255,.25)}
+.delta-pill.grn{background:rgba(95,214,138,.12); color:var(--rend); border-color:rgba(95,214,138,.25)}
+
+/* preset buttons (functional shortcuts, not property editors) */
+.seg-row{display:flex; gap:8px; margin-top:14px}
+.seg-btn{flex:1; height:38px; border-radius:var(--r-pill); cursor:pointer; background:var(--field);
+  border:1px solid var(--stroke); color:var(--dim); font:inherit; font-size:12.5px; font-weight:600;
+  transition:all .15s var(--ease)}
+.seg-btn:hover{color:var(--text); border-color:rgba(255,255,255,.16)}
+.seg-btn.active{background:#f4f4f5; color:#111; border-color:transparent}
+
+/* generic instrument frame */
+.plot{background:var(--field); border:1px solid var(--stroke-soft); border-radius:16px;
+  margin-top:10px; position:relative; overflow:hidden}
+.plot svg{width:100%; height:auto}
+.axis{font-size:8.5px; fill:#55555c; font-weight:600; letter-spacing:.4px}
+.grid{stroke:rgba(255,255,255,.05); stroke-width:1}
+.xhair{stroke:var(--ac,#f4f4f5); stroke-width:1.2; stroke-dasharray:3 3}
+
+/* value strip under an instrument: live value + units + meta */
+.vstrip{display:flex; align-items:baseline; gap:8px; margin-top:10px}
+.vstrip .big{font-size:22px; font-weight:300}
+.vstrip .u{font-size:12px; color:var(--faint)}
+.vstrip .meta{margin-left:auto; font-size:11.5px; color:var(--faint); text-align:right}
+
+/* ---- spectrum bar (reference: kelvin with swatch) ---- */
+.kelvin-bar{position:relative; height:16px; border-radius:999px; cursor:ew-resize; touch-action:none;
+  background:linear-gradient(90deg,#ff5a00 0%,#ff8c1a 12%,#ffb469 24%,#ffd9b0 36%,#fff4e6 46%,#ffffff 54%,#e8efff 66%,#cfdcff 82%,#b6ccff 100%)}
+.kelvin-bar .kmark{position:absolute; top:-4px; left:var(--p,50%); width:2px; height:24px; background:#fff;
+  transform:translateX(-50%); box-shadow:0 0 6px rgba(0,0,0,.8); pointer-events:none}
+.kelvin-bar .kswatch{position:absolute; top:50%; left:var(--p,50%); width:22px; height:22px; border-radius:50%;
+  transform:translate(-50%,-50%); border:2px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,.6); pointer-events:none}
+.kelvin-ticks{display:flex; justify-content:space-between; font-size:9px; color:var(--faint); margin-top:8px; font-weight:600}
+/* ---- orbit hemisphere (reference: 3D orbit widget) ---- */
+#orb-svg .og{stroke:rgba(255,255,255,.06)}
+#orb-svg .ohz{fill:rgba(255,255,255,.02); stroke:rgba(255,255,255,.2)}
+#orb-svg .oc{fill:rgba(255,255,255,.4); font-size:11px; text-anchor:middle}
+#orb-svg .oc.n{fill:#fff}
+#orb-svg .oarc{fill:none; stroke:rgba(255,255,255,.15); stroke-dasharray:3 4}
+#orb-svg .odrop{stroke:rgba(255,255,255,.25); stroke-dasharray:2 3}
+#orb-svg .ofoot{fill:rgba(255,255,255,.35)}
+#orb-svg .osun{fill:#ffd166; filter:drop-shadow(0 0 6px #ffb454)}
+#orb-svg .oglow{fill:rgba(255,180,84,.2)}
+#orb-svg .dim{opacity:.3}
+#orb-svg .ostat{fill:rgba(255,255,255,.4); font-size:10px; letter-spacing:.08em}
+#orb-svg .ostat tspan{fill:#fff; font-size:12px}
+/* ---- daylight ladder ---- */
+.ladder{cursor:ew-resize; touch-action:none}
+.ladder .anchor{font-size:8px; fill:#55555c; font-weight:600; text-anchor:middle}
+.ladder .anchor b{fill:#8a8a92}
+
+/* ---- penumbra ---- */
+.penumbra{cursor:ew-resize; touch-action:none}
+
+/* ---- attitude ball ---- */
+.att-wrap{display:flex; gap:16px; align-items:center; margin-top:10px}
+.att-ball{position:relative; width:132px; height:132px; border-radius:50%; overflow:hidden; flex-shrink:0;
+  border:1px solid var(--stroke); cursor:move; touch-action:none; background:#101014}
+.att-sky{position:absolute; left:-40%; width:180%; height:200%; top:-100%;
+  background:linear-gradient(to bottom,#2b2b33 0%,#2b2b33 50%,#0c0c0e 50%,#0c0c0e 100%)}
+.att-horizon{position:absolute; left:0; right:0; top:50%; height:2px; background:var(--cam);
+  box-shadow:0 0 8px rgba(122,162,255,.7)}
+.att-ladder{position:absolute; left:50%; top:50%; width:70px; margin-left:-35px}
+.att-fixed{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none}
+.att-fixed .wings{width:64px; height:10px; position:relative}
+.att-fixed .wings::before,.att-fixed .wings::after{content:""; position:absolute; top:4px; width:22px; height:2px; background:#f4f4f5; border-radius:1px}
+.att-fixed .wings::before{left:0}.att-fixed .wings::after{right:0}
+.att-fixed .dot{position:absolute; left:50%; top:50%; width:6px; height:6px; margin:-3px 0 0 -3px;
+  border-radius:50%; background:var(--cam); box-shadow:0 0 8px var(--cam)}
+.yawtape{height:26px; border-radius:13px; background:var(--field); border:1px solid var(--stroke-soft);
+  overflow:hidden; position:relative; margin-top:10px}
+.yawtape .strip{position:absolute; top:0; bottom:0; display:flex; align-items:center; gap:0; white-space:nowrap;
+  font-size:10px; font-weight:600; color:var(--faint); letter-spacing:1px}
+.yawtape .strip b{color:var(--text); font-weight:600}
+.yawtape .caret{position:absolute; left:50%; top:0; bottom:0; width:2px; margin-left:-1px; background:var(--cam)}
+
+/* ---- sample matrix ---- */
+.matrix{display:grid; grid-template-columns:repeat(8,1fr); gap:9px; padding:16px; cursor:crosshair; touch-action:none}
+.matrix i{aspect-ratio:1; border-radius:50%; background:#222228; border:1px solid rgba(255,255,255,.05);
+  transition:transform .08s}
+.matrix i.on{background:var(--rend); border-color:transparent; box-shadow:0 0 10px -1px var(--rend)}
+
+/* ---- kv / stats ---- */
+.stat-row{display:flex; align-items:center; padding:8px 0; border-bottom:1px dashed rgba(255,255,255,.07); font-size:13px}
+.stat-row:last-child{border:none}
+.stat-row .k{color:var(--dim)}
+.stat-row .v{margin-left:auto; font-weight:600}
+.swatch{width:14px; height:14px; border-radius:50%; display:inline-block; vertical-align:-2px;
+  margin-right:8px; border:1px solid rgba(255,255,255,.2)}
+.kv-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px}
+.kv{background:var(--field); border:1px solid var(--stroke-soft); border-radius:14px; padding:10px 13px}
+.kv .k{font-size:10px; font-weight:600; letter-spacing:1.2px; color:var(--faint)}
+.kv .v{font-size:15px; font-weight:600; margin-top:2px}
+.kv .v em{font-style:normal; font-size:11px; color:var(--faint); font-weight:500}
+
+/* ---- render-path pills ---- */
+.pathrow{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:10px}
+.pathpill{border-radius:16px; border:1px solid var(--stroke); background:var(--field); color:var(--faint);
+  padding:10px 4px; display:flex; flex-direction:column; align-items:center; gap:5px; cursor:pointer;
+  font:inherit; font-size:11px; font-weight:700; letter-spacing:1px; transition:all .18s var(--ease)}
+.pathpill span{font-size:10px; font-weight:500; letter-spacing:0; color:var(--faint)}
+.pathpill i{width:8px; height:8px; border-radius:50%; background:var(--danger); box-shadow:0 0 8px var(--danger)}
+.pathpill.on{color:var(--text); border-color:rgba(95,214,138,.45)}
+.pathpill.on i{background:var(--rend); box-shadow:0 0 8px var(--rend)}
+.pathpill.on span{color:var(--dim)}
+/* ---- dome / dial / arc / fog / cone / wheel ---- */
+#sky-dome{cursor:ns-resize; touch-action:none}
+#ozone{cursor:ns-resize; touch-action:none}
+#phdial,#transit,#pbright{cursor:grab; touch-action:none}
+#fext,#fprof,#cone{cursor:crosshair; touch-action:none}
+#twheel{cursor:grab; touch-action:none}
+
+/* ---- material chips ---- */
+.chip-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
+.sw-chip{display:inline-flex; align-items:center; gap:7px; border-radius:999px; border:1px solid var(--stroke);
+  background:var(--field); color:var(--dim); font:inherit; font-size:11.5px; font-weight:600;
+  padding:7px 13px 7px 9px; cursor:pointer; transition:all .15s var(--ease)}
+.sw-chip:hover{color:var(--text); border-color:rgba(255,255,255,.25)}
+.sw-chip.sel{color:var(--text); border-color:var(--mesh); box-shadow:0 0 0 1px var(--mesh)}
+.sw-chip .swatch{width:14px; height:14px}
+
+/* ---- buttons ---- */
+.btn{height:42px; border-radius:var(--r-pill); border:1px solid var(--stroke); width:100%; cursor:pointer;
+  background:var(--inset); color:var(--text); font:inherit; font-size:13.5px; font-weight:600;
+  display:flex; align-items:center; justify-content:center; gap:9px; transition:all .14s var(--ease); margin-top:12px}
+.btn:hover{background:var(--raised)}
+.btn:active{transform:scale(.98)}
+.btn.primary{background:#f4f4f5; color:#111; border-color:transparent}
+.btn.primary:hover{background:#d7d7da}
+.btn .ic{width:15px; height:15px}
+
+/* toast */
+.toast-stack{position:absolute; left:20px; right:20px; bottom:18px; display:flex; flex-direction:column;
+  gap:8px; z-index:50; pointer-events:none}
+.toast{background:rgba(20,20,24,.94); border:1px solid var(--stroke); border-radius:16px; padding:11px 16px;
+  font-size:12.5px; font-weight:500; display:flex; gap:10px; align-items:center;
+  box-shadow:0 12px 32px rgba(0,0,0,.6); animation:tin .25s var(--ease)}
+.toast.out{opacity:0; transform:translateY(6px); transition:all .3s}
+@keyframes tin{from{opacity:0; transform:translateY(8px)}}
+.toast i{width:7px; height:7px; border-radius:50%; background:var(--ok); flex-shrink:0; box-shadow:0 0 8px var(--ok)}
+</style>
+</head>
+<body>
+<div class="top-wrap">
+
+<aside class="outliner">
+  <div class="ol-head"><div class="ol-title">Outliner</div><div class="count-pill" id="ol-count">–</div></div>
+  <div class="ol-search">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    <input id="ol-filter" type="text" placeholder="Filter entries…" spellcheck="false">
+  </div>
+  <div class="ol-body" id="ol-body"></div>
+  <div class="ol-foot"><span>Scene <b>CornellBox</b></span><span><b id="foot-tris">36</b> tris</span></div>
+</aside>
+
+<main class="inspector"><div class="insp-scroll" id="insp-scroll"></div><div class="toast-stack" id="toasts"></div></main>
+</div>
+
+<script>
+/* ================================================================
+   STATE — mirrors the engine records each instrument edits.
+   ================================================================ */
+const state = {
+  selection: 'sun',
+  sun:      { az: 142.5, el: 38.0, intensity: 32000, disk: 2.2, temp: 5600, diskVisible: true, limbDark: 0.6, day: 280, solarTime: 9.4 },
+  sky:      { turbidity: 3.4, haze: 6.0, ozone: 300, albedo: 0.35, saturation: 1.0, cover: 2.0, cloudAlt: 2500 },
+  moon:     { t: 22.4, phase: 0.62, gain: 1.0, distance: 384400, tintOffset: 0, earthshine: 0.15 },
+  fog:      { sigma: 0.9, falloff: 12.0, base: 0, aniso: 0.7, albedo: 0.95 },
+  spot:     { inner: 24, outer: 41, intensity: 900, temp: 3200, throw: 4.5, pos: [-1.6,-0.8,2.6], decay: 2, srcRadius: 4, range: 12, gelHue: 0, gelSat: 0 },
+  camera:   { x: 0.0, y: -1.95, z: 1.0, pitch: 0.0, yaw: 0.0, fov: 55.0, speed: 2.5, fstop: 5.6, focus: 3.0, near: 0.05, far: 200 },
+  renderer: { candidates: 8, spatial: 2, exposure: 1.05, gi: true, aa: true, ambientFloor: false, ambient: 0.015, inspectFrame: 256, bounces: 2, accumTarget: 64, clamp: 10, sampler: 'Halton' },
+};
+const CAM_DEF = { ...state.camera };
+
+const MESHES = {
+  floor:   { name:'Floor',     tag:'MESH',  tris:2,  mat:'Wall_White', albedo:'#c2c2c2', rough:.50, metal:0, emis:0,  xyz:[0,1.0,0],      sz:[2,2,0],          n:[0,0,1] },
+  ceiling: { name:'Ceiling',   tag:'MESH',  tris:2,  mat:'Wall_White', albedo:'#c2c2c2', rough:.50, metal:0, emis:0,  xyz:[0,1.0,2.0],    sz:[2,2,0],          n:[0,0,-1] },
+  wallL:   { name:'Wall_Left', tag:'MESH',  tris:2,  mat:'Wall_Red',   albedo:'#d91f1f', rough:.50, metal:0, emis:0,  xyz:[-1.0,1.0,1.0], sz:[0,2,2],          n:[1,0,0] },
+  wallR:   { name:'Wall_Right',tag:'MESH',  tris:2,  mat:'Wall_Green', albedo:'#1fd926', rough:.50, metal:0, emis:0,  xyz:[1.0,1.0,1.0],  sz:[0,2,2],          n:[-1,0,0] },
+  boxA:    { name:'Box_Tall',  tag:'MESH',  tris:12, mat:'Box_Warm',   albedo:'#c7c7c7', rough:.40, metal:0, emis:0,  xyz:[-0.35,1.35,0.6], sz:[0.56,0.56,1.2], n:[0,0,1] },
+  boxB:    { name:'Box_Short', tag:'MESH',  tris:12, mat:'Box_Cool',   albedo:'#c7c7c7', rough:.40, metal:0, emis:0,  xyz:[0.35,0.75,0.3],  sz:[0.56,0.56,0.6], n:[0,0,1] },
+  lamp:    { name:'Luminaire', tag:'LIGHT', tris:2,  mat:'Lamp_32lx',  albedo:'#ffffff', rough:.10, metal:0, emis:32, xyz:[0,1.0,1.995],   sz:[0.6,0.6,0],      n:[0,0,-1] },
+};
+const TOTAL_TRIS = Object.values(MESHES).reduce((a,m)=>a+m.tris,0);
+
+const OUTLINER = [
+  { group:'ENVIRONMENT' },
+  { id:'sun', name:'Sun', tag:'DIR', accent:'var(--sun)' },
+  { id:'sky', name:'Sky_Atmosphere', tag:'SKY', accent:'#8fc3ff' },
+  { id:'moon', name:'Moon', tag:'MOON', accent:'#cdd7ff' },
+  { id:'fog', name:'Height_Fog', tag:'FOG', accent:'#9fd8b4' },
+  { group:'LIGHTS' },
+  { id:'spot', name:'Key_Spot', tag:'SPOT', accent:'#ffb469' },
+  { group:'VIEW' },
+  { id:'camera', name:'Camera_Main', tag:'CAM', accent:'var(--cam)' },
+  { group:'GEOMETRY' },
+  ...Object.entries(MESHES).map(([id,m])=>({ id:'mesh:'+id, name:m.name, tag:m.tag, accent: m.tag==='LIGHT'?'var(--sun)':'var(--mesh)' })),
+  { group:'ENGINE' },
+  { id:'renderer', name:'Renderer', tag:'RST', accent:'var(--rend)' },
+];
+
+/* ---------------- helpers ---------------- */
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const NS='http://www.w3.org/2000/svg';
+function SVG(tag,attrs,parent){ const e=document.createElementNS(NS,tag);
+  for(const k in attrs) e.setAttribute(k,attrs[k]); if(parent) parent.appendChild(e); return e; }
+function toast(msg){ const box=document.getElementById('toasts');
+  const el=document.createElement('div'); el.className='toast';
+  el.innerHTML=`<i></i><span>${msg}</span>`; box.appendChild(el);
+  setTimeout(()=>el.classList.add('out'),2400); setTimeout(()=>el.remove(),2800); }
+function kelvinToRgb(k){ k=clamp(k,1800,12000)/100;
+  const r=k<=66?255:clamp(329.698727446*Math.pow(k-60,-0.1332047592),0,255);
+  const g=k<=66?clamp(99.4708025861*Math.log(k)-161.1195681661,0,255):clamp(288.1221695283*Math.pow(k-60,-0.0755148492),0,255);
+  const b=k>=66?255:(k<=19?0:clamp(138.5177312231*Math.log(k-10)-305.0447927307,0,255));
+  return [Math.round(r),Math.round(g),Math.round(b)]; }
+const rgbCss=c=>`rgb(${c[0]},${c[1]},${c[2]})`;
+function waveColor(l){ let r=0,g=0,b=0;
+  if(l<440){r=-(l-440)/60;b=1;}else if(l<490){g=(l-440)/50;b=1;}
+  else if(l<510){g=1;b=-(l-510)/20;}else if(l<580){r=(l-510)/70;g=1;}
+  else if(l<645){r=1;g=-(l-645)/65;}else{r=1;}
+  let f=1; if(l<420)f=.3+.7*(l-380)/40; else if(l>700)f=.3+.7*(780-l)/80;
+  return [Math.round(r*255*f),Math.round(g*255*f),Math.round(b*255*f)]; }
+function planckBars(T){ const out=[];
+  for(let i=0;i<26;i++){ const l=380+i*(400/25);
+    const x=1.4388e7/(l*T), b=Math.pow(l,-5)/(Math.exp(x)-1); out.push({l,b}); }
+  const m=Math.max(...out.map(o=>o.b)); out.forEach(o=>o.h=o.b/m); return out; }
+const wienPeak=T=>Math.round(2.8978e6/T);
+const ev100=lux=>Math.log2(Math.max(lux,.01)/2.5);
+const fmtLux=v=>v>=1000?(v/1000).toFixed(1)+'k':''+Math.round(v);
+const sunDir=()=>{ const S=state.sun,a=S.az*Math.PI/180,e=S.el*Math.PI/180;
+  return [Math.sin(a)*Math.cos(e),Math.cos(a)*Math.cos(e),Math.sin(e)]; };
+const focalMM=fov=>12/Math.tan(fov*Math.PI/360);           /* 24 mm tall full-frame sensor, vertical FoV */
+const fovFromFocal=f=>2*Math.atan(12/f)*180/Math.PI;
+function lensClass(f){ return f<21?'ultra-wide':f<28?'wide':f<55?'normal':f<100?'short tele':'telephoto'; }
+function heroHTML(i,f,u){ return `<div class="hero num"><span class="int">${i}</span><span class="frac">${f}</span><span class="unit">${u}</span></div>`; }
+function splitNum(v,dec){ const s=v.toFixed(dec).split('.'); return [s[0],dec?'.'+s[1]:'']; }
+function dragify(el,onMove){ let on=false;
+  el.addEventListener('pointerdown',e=>{on=true;el.setPointerCapture(e.pointerId);onMove(e);});
+  el.addEventListener('pointermove',e=>{if(on)onMove(e);});
+  el.addEventListener('pointerup',()=>on=false); }
+function headHTML(tick,kicker,title,sub){
+  return `<div class="insp-head" style="--ac:${tick}"><div class="accent-tick"></div>
+    <div><div class="insp-kicker">${kicker}</div><div class="insp-title">${title}</div><div class="insp-sub">${sub}</div></div>
+    <div class="spacer"></div><div class="live-dot"><i></i>LIVE</div></div>`; }
+function cardLabel(t,h){ return `<div class="card-label">${t}${h?` <span class="hint">${h}</span>`:''}</div>`; }
+function hsv2rgb(h,s,v){ h=((h%360)+360)%360; const c=v*s,x=c*(1-Math.abs((h/60)%2-1)),m=v-c;
+  let r,g,b; if(h<60){r=c;g=x;b=0;}else if(h<120){r=x;g=c;b=0;}else if(h<180){r=0;g=c;b=x;}
+  else if(h<240){r=0;g=x;b=c;}else if(h<300){r=x;g=0;b=c;}else{r=c;g=0;b=x;}
+  return [Math.round((r+m)*255),Math.round((g+m)*255),Math.round((b+m)*255)]; }
+function hexRGB(h){ return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]; }
+
+/* ================================================================ OUTLINER */
+function buildOutliner(){ const body=document.getElementById('ol-body'); body.innerHTML=''; let n=0;
+  OUTLINER.forEach(e=>{
+    if(e.group){ const g=document.createElement('div'); g.className='ol-group'; g.textContent=e.group; body.appendChild(g); return; }
+    n++; const el=document.createElement('div');
+    el.className='ol-item'+(state.selection===e.id?' sel':''); el.style.setProperty('--ac',e.accent);
+    el.dataset.name=e.name.toLowerCase();
+    el.innerHTML=`<span class="ol-dot"></span><span class="ol-name">${e.name}</span><span class="ol-tag">${e.tag}</span>`;
+    el.addEventListener('click',()=>{ state.selection=e.id; buildOutliner(); buildInspector(); });
+    body.appendChild(el); });
+  document.getElementById('ol-count').textContent=n;
+  document.getElementById('foot-tris').textContent=TOTAL_TRIS;
+}
+document.getElementById('ol-filter').addEventListener('input',e=>{
+  const q=e.target.value.trim().toLowerCase();
+  document.querySelectorAll('.ol-item').forEach(it=>it.classList.toggle('hidden',!!q&&!it.dataset.name.includes(q)));
+});
+function buildInspector(){ const host=document.getElementById('insp-scroll'); host.innerHTML=''; host.scrollTop=0;
+  const s=state.selection;
+  if(s==='sun')pageSun(host); else if(s==='camera')pageCamera(host);
+  else if(s==='sky')pageSky(host); else if(s==='moon')pageMoon(host);
+  else if(s==='fog')pageFog(host); else if(s==='spot')pageSpot(host);
+  else if(s==='renderer')pageRenderer(host); else if(s.startsWith('mesh:'))pageMesh(host,s.slice(5));
+}
+
+/* ================================================================ SUN */
+const LADDER=[[50,'dim room'],[100,'room'],[500,'office'],[1000,'overcast'],[5000,'bright sky'],[20000,'open shade'],[60000,'direct sun'],[120000,'peak']];
+const ladderT=v=>(Math.log(v)-Math.log(50))/(Math.log(120000)-Math.log(50));
+const ladderV=t=>50*Math.pow(120000/50,t);
+const ladderName=v=>{ let n=LADDER[0][1]; for(const [a,l] of LADDER) if(v>=a*.999) n=l; return n; };
+
+const SOLAR_LAT=-26.2;
+function solarPos(N,t){ const la=SOLAR_LAT*Math.PI/180;
+  const dec=-23.44*Math.cos(2*Math.PI*(N+10)/365)*Math.PI/180, H=(t-12)*15*Math.PI/180;
+  const cd=Math.cos(dec),sd=Math.sin(dec),cp=Math.cos(la),sp=Math.sin(la);
+  const x=-cd*Math.sin(H), y=sd*cp-cd*Math.cos(H)*sp, z=sd*sp+cd*Math.cos(H)*cp;
+  const el=Math.asin(clamp(z,-1,1))*180/Math.PI, az=(Math.atan2(x,y)*180/Math.PI+360)%360;
+  const m=el>0?1/Math.sin(Math.max(el,0.5)*Math.PI/180):40, dayF=clamp((el+2)/4,0,1);
+  return { az, el, lux:Math.round(135000*Math.exp(-0.25*m)*dayF),
+    K:Math.round(clamp(1800+4200*clamp(Math.sin(Math.max(el,0)*Math.PI/180)*2.2,0,1),1800,12000)) }; }
+function solarRiseSet(N){ const la=SOLAR_LAT*Math.PI/180;
+  const dec=-23.44*Math.cos(2*Math.PI*(N+10)/365)*Math.PI/180, c=-Math.tan(la)*Math.tan(dec);
+  if(c<=-1||c>=1)return [null,null];
+  const H=Math.acos(c)*180/Math.PI/15; return [12-H,12+H]; }
+function pageSun(host){ const S=state.sun;
+  host.insertAdjacentHTML('beforeend',headHTML('var(--sun)','DIRECTIONAL LIGHT','Sun','orbit · disk · power · kelvin · shadow'));
+
+  /* hero */
+  const hero=document.createElement('div'); hero.className='card';
+  hero.innerHTML=`${cardLabel('Azimuth','orbit below')}<div id="h-az"></div><div id="h-st"></div><div class="seg-row" id="pres"></div>`;
+  host.appendChild(hero);
+  const hAz=hero.querySelector('#h-az'), hSt=hero.querySelector('#h-st');
+  const pres=hero.querySelector('#pres');
+  [['Dawn',96,7,9000,2900],['Noon',178,64,80000,5600],['Golden',258,11,20000,3400],['Dusk',282,-3.5,2500,2300]]
+    .forEach(([n,az,el,it,tp])=>{ const b=document.createElement('button'); b.className='seg-btn'; b.textContent=n;
+      b.addEventListener('click',()=>{ Object.assign(S,{az,el,intensity:it,temp:tp});
+        pres.querySelectorAll('.seg-btn').forEach(x=>x.classList.remove('active')); b.classList.add('active');
+        render(); toast(`Sun preset “${n}” applied`); });
+      pres.appendChild(b); });
+  const dchip=document.createElement('button'); dchip.className='btn'; dchip.id='disk-chip'; dchip.style.marginTop='10px';
+  hero.appendChild(dchip);
+  const paintChip=()=>{ dchip.textContent=S.diskVisible?'◉ Solar disk — on':'○ Solar disk — off'; };
+  dchip.addEventListener('click',()=>{ S.diskVisible=!S.diskVisible; paintChip();
+    toast(S.diskVisible?'Solar disk enabled':'Solar disk hidden'); });
+  paintChip();
+
+  /* orbit hemisphere */
+  const orb=document.createElement('div'); orb.className='card';
+  orb.innerHTML=`${cardLabel('Orbit hemisphere','drag the sun over the plane')}
+    <div class="plot" id="orb" style="cursor:grab"><svg viewBox="0 0 340 200" id="orb-svg"></svg></div>
+    <div class="vstrip"><span class="big num" id="orb-v">—</span><span class="u">az / el</span>
+      <span class="meta" id="orb-m">—</span></div>
+    <div class="kv-grid"><div class="kv"><div class="k">DIRECTION (WORLD)</div>
+      <div class="v num" id="orb-d" style="font-size:12px">—</div></div>
+      <div class="kv"><div class="k">SUN STATE</div><div class="v num" id="orb-s" style="font-size:12px">—</div></div></div>`;
+  host.appendChild(orb);
+  const orbSvg=orb.querySelector('#orb-svg');
+  const OP=(x,y,z)=>[170+x*140, 118-y*52-z*96];
+  function orbPick(e){ const r=orbSvg.getBoundingClientRect();
+    const x=(e.clientX-r.left)/r.width*340, y=(e.clientY-r.top)/r.height*200;
+    let ba=0, be=0, bd=1e12;
+    for(let el=-20; el<=90; el+=2) for(let az=0; az<360; az+=3){
+      const a=az*Math.PI/180, v=el*Math.PI/180;
+      const [px,py]=OP(Math.sin(a)*Math.cos(v), Math.cos(a)*Math.cos(v), Math.sin(v));
+      const d=(px-x)*(px-x)+(py-y)*(py-y); if(d<bd){ bd=d; ba=az; be=el; } }
+    return [ba,be]; }
+  dragify(orb.querySelector('#orb'),e=>{ const [a,el]=orbPick(e);
+    S.az=Math.round(a*10)/10; S.el=Math.round(Math.max(-20,el)*10)/10; render(); });
+  /* daylight ladder (intensity chart) */
+  const pw=document.createElement('div'); pw.className='card';
+  pw.innerHTML=`${cardLabel('Daylight power chart','drag the sun marker along the log scale')}
+    <div class="plot ladder" id="ld"><svg viewBox="0 0 320 118">
+      <defs><linearGradient id="ldg" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#f2c267" stop-opacity=".05"/><stop offset="1" stop-color="#f2c267" stop-opacity=".5"/></linearGradient></defs>
+      <rect x="8" y="30" width="304" height="34" rx="17" fill="url(#ldg)"/>
+      <rect x="8" y="30" width="304" height="34" rx="17" fill="none" stroke="rgba(255,255,255,.08)"/>
+      <g id="ld-ticks"></g>
+      <line id="ld-x" y1="22" y2="72" class="xhair" style="--ac:var(--sun)"/>
+      <circle id="ld-dot" r="10" fill="#ffe9b8" stroke="#f2c267" stroke-width="3"
+        style="filter:drop-shadow(0 0 10px rgba(242,194,103,.9))"/></svg></div>
+    <div class="vstrip"><span class="big num" id="pw-v">—</span><span class="u" id="pw-u">lx</span>
+      <span class="meta" id="pw-m">—</span></div>`;
+  host.appendChild(pw);
+  const ldt=pw.querySelector('#ld-ticks');
+  LADDER.forEach(([v,l])=>{ const x=8+ladderT(v)*304;
+    SVG('line',{x1:x,y1:64,x2:x,y2:70,stroke:'#55555c','stroke-width':1.4},ldt);
+    const t=SVG('text',{x,y:82,class:'anchor'},ldt); t.textContent=v>=1000?(v/1000)+'k':v;
+    const t2=SVG('text',{x,y:94,class:'anchor'},ldt); t2.innerHTML=''; t2.textContent=l; });
+  const ldx=pw.querySelector('#ld-x'),ldd=pw.querySelector('#ld-dot');
+  dragify(pw.querySelector('#ld'),e=>{ const r=pw.querySelector('#ld').getBoundingClientRect();
+    S.intensity=Math.round(ladderV(clamp((e.clientX-r.left-8)/r.width*320/304,0,1)));
+    render(); });
+
+  /* penumbra diagram (disk size) */
+  const pn=document.createElement('div'); pn.className='card';
+  pn.innerHTML=`${cardLabel('Shadow diagram','horizontal: disk ⌀ · vertical: limb darkening')}
+    <div class="plot penumbra" id="pn"><svg viewBox="0 0 320 168">
+      <defs><linearGradient id="png" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#f2c267" stop-opacity=".34"/><stop offset="1" stop-color="#f2c267" stop-opacity="0"/></linearGradient>
+        <radialGradient id="pngd"><stop id="pn-s0" offset="0" stop-color="#fff6e2"/><stop id="pn-s1" offset="1" stop-color="#8f5e1e"/></radialGradient></defs>
+      <polygon id="pn-pen" fill="url(#png)"/><polygon id="pn-umb" fill="rgba(0,0,0,.55)"/>
+      <circle id="pn-disk" cx="54" cy="66" r="12" fill="url(#pngd)" stroke="#f2c267" stroke-width="2.5"
+        style="filter:drop-shadow(0 0 10px rgba(242,194,103,.8))"/>
+      <circle id="pn-handle" cx="66" cy="66" r="6" fill="#0c0c0e" stroke="#fff" stroke-width="2"/>
+      <rect x="146" y="38" width="10" height="62" rx="3" fill="#3a3a42" stroke="rgba(255,255,255,.2)"/>
+      <text x="151" y="116" class="axis" text-anchor="middle">occluder</text>
+      <line x1="8" y1="140" x2="312" y2="140" stroke="rgba(255,255,255,.18)"/>
+      <rect id="pn-band" x="200" y="133" width="80" height="7" rx="3.5" fill="rgba(0,0,0,.7)"/>
+      <text x="12" y="24" class="axis">DISK ⌀ (drag)</text>
+      <text x="308" y="24" class="axis" text-anchor="end">penumbra →</text></svg></div>
+    <div class="vstrip"><span class="big num" id="pn-v">—</span><span class="u">° angular ⌀</span>
+      <span class="meta" id="pn-m">—</span></div>
+    <div class="kv-grid"><div class="kv"><div class="k">LIMB DARKENING</div><div class="v num" id="pn-u" style="font-size:12px">—</div></div>
+      <div class="kv"><div class="k">LIMB / CENTRE</div><div class="v num" id="pn-e" style="font-size:12px">—</div></div></div>`;
+  host.appendChild(pn);
+  dragify(pn.querySelector('#pn'),e=>{ const r=pn.querySelector('#pn').getBoundingClientRect();
+    S.disk=Math.round(clamp((e.clientX-r.left)/r.width,0,1)*98+2)/10;
+    S.limbDark=Math.round(clamp(1-(e.clientY-r.top)/r.height,0,1)*100)/100;
+    render(); });
+
+  /* spectrum bar */
+  const KL=[[1850,'candle'],[2700,'tungsten'],[4000,'fluorescent'],[5600,'daylight D50'],[6500,'overcast D65'],[8000,'shade'],[10000,'blue sky']];
+  const klName=v=>{ let n=KL[0][1]; for(const [a,l] of KL) if(v>=a) n=l; return n; };
+  const bb=document.createElement('div'); bb.className='card';
+  bb.innerHTML=`${cardLabel('Spectrum bar','drag — anchored to real sources')}
+    <div class="plot" style="padding:16px 14px 12px"><div class="kelvin-bar" id="kloc"><i class="kmark"></i><span class="kswatch" id="ksw"></span></div>
+      <div class="kelvin-ticks"><span>2000 candle</span><span>3200 tungsten</span><span>5800 sun</span><span>9000 shade</span><span>12000</span></div></div>
+    <div class="vstrip"><span class="big num" id="bb-v">—</span><span class="u">K</span>
+      <span class="meta" id="bb-m">—</span></div>
+    <div class="kv-grid"><div class="kv"><div class="k">MIRED · λ PEAK</div><div class="v num" id="bb-p" style="font-size:12px">—</div></div>
+      <div class="kv"><div class="k">sRGB TINT</div><div class="v num" id="bb-t" style="font-size:12px">—</div></div></div>`;
+  host.appendChild(bb);
+  dragify(bb.querySelector('#kloc'),e=>{ const r=bb.querySelector('#kloc').getBoundingClientRect();
+    S.temp=Math.round(clamp((e.clientX-r.left)/r.width,0,1)*10200+1800); render(); });
+
+  /* solar time */
+  const st=document.createElement('div'); st.className='card';
+  st.innerHTML=`${cardLabel('Solar time','strip: day · dial: hour — syncs az/el/lux/K')}
+    <div class="plot" id="sol-d"><svg viewBox="0 0 320 64">
+      <defs><linearGradient id="solg" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#7aa2ff"/><stop offset=".25" stop-color="#9fd8b4"/><stop offset=".5" stop-color="#f2c267"/><stop offset=".75" stop-color="#c98a4b"/><stop offset="1" stop-color="#7aa2ff"/></linearGradient></defs>
+      <rect x="10" y="12" width="300" height="22" rx="11" fill="url(#solg)" opacity=".85"/>
+      <g id="sol-tk"></g>
+      <circle id="sol-k" r="7" cy="23" fill="#0c0c0e" stroke="#fff" stroke-width="2.5"/>
+      <text x="10" y="52" class="axis">JAN</text><text x="310" y="52" class="axis" text-anchor="end">DEC</text></svg></div>
+    <div class="plot" id="sol-h"><svg viewBox="0 0 320 150" id="sol-svg"></svg></div>
+    <div class="vstrip"><span class="big num" id="st-v">—</span><span class="u">solar time</span>
+      <span class="meta" id="st-m">—</span></div>`;
+  host.appendChild(st);
+  const solX=d=>10+(d-1)/364*300;
+  [[80,'MAR'],[172,'JUN'],[266,'SEP'],[355,'DEC']].forEach(([d,l])=>{
+    SVG('line',{x1:solX(d),y1:12,x2:solX(d),y2:34,stroke:'rgba(255,255,255,.6)','stroke-width':1.6},st.querySelector('#sol-tk'));
+    const t=SVG('text',{x:solX(d),y:52,class:'axis','text-anchor':'middle'},st.querySelector('#sol-tk')); t.textContent=l; });
+  const applySolar=()=>{ const p=solarPos(S.day,S.solarTime);
+    S.az=Math.round(p.az*10)/10; S.el=Math.round(p.el*10)/10; S.intensity=p.lux; S.temp=p.K; render(); };
+  dragify(st.querySelector('#sol-d'),e=>{ const r=st.querySelector('#sol-d').getBoundingClientRect();
+    S.day=Math.round(clamp(((e.clientX-r.left)/r.width*320-10)/300,0,1)*364+1); applySolar(); });
+  const solSvg=st.querySelector('#sol-svg');
+  dragify(st.querySelector('#sol-h'),e=>{ const r=st.querySelector('#sol-h').getBoundingClientRect();
+    const x=(e.clientX-r.left)/r.width*320-160, y=(e.clientY-r.top)/r.height*150-75;
+    let a=Math.atan2(x,-y); if(a<0)a+=2*Math.PI;
+    S.solarTime=Math.round(a/(2*Math.PI)*24*12)/12; applySolar(); });
+
+  /* disk physics */
+  const dp=document.createElement('div'); dp.className='card';
+  dp.innerHTML=`${cardLabel('Disk physics','read-only — derived from ⌀ + lux')}
+    <div class="stat-row"><span class="k">Solid angle</span><span class="v num" id="dp-o">—</span></div>
+    <div class="stat-row"><span class="k">Angular diameter</span><span class="v num" id="dp-a">—</span></div>
+    <div class="stat-row"><span class="k">Implied luminance</span><span class="v num" id="dp-l">—</span></div>
+    <div class="stat-row"><span class="k">Photon flux ≈</span><span class="v num" id="dp-p">—</span></div>`;
+  host.appendChild(dp);
+  /* -------- render -------- */
+  function render(){
+    const az=((S.az%360)+360)%360, [hi,hf]=splitNum(az,1);
+    hAz.innerHTML=heroHTML(hi,hf,'°');
+    hSt.innerHTML=`<span class="delta-pill ${S.el<0?'':'hot'}">${S.el<0?'▼ below horizon — night fill':'▲ elevation '+S.el.toFixed(1)+'° · '+(S.el>50?'high sun':S.el>15?'mid sun':'low sun')}</span>`;
+    /* orbit */
+    const sv=sunDir(), op=OP(sv[0],sv[1],sv[2]), gp=OP(sv[0],sv[1],0), up=S.el>0;
+    let ogrid=''; for(let i=0;i<7;i++){ const t=-1+i/3;
+      ogrid+=`<line x1="30" y1="${118+t*52}" x2="310" y2="${118+t*52}" class="og"/>`+
+             `<line x1="${170+t*140}" y1="66" x2="${170+t*140}" y2="170" class="og"/>`; }
+    const ocomp=[['N',0,1.14,0],['E',1.14,0,0],['S',0,-1.14,0],['W',-1.14,0,0]].map(([n,x,y,z])=>{
+      const [px,py]=OP(x,y,z); return `<text x="${px.toFixed(1)}" y="${(py+4).toFixed(1)}" class="oc${n==='N'?' n':''}">${n}</text>`; }).join('');
+    let oarc=''; for(let e=0;e<=90;e+=5){ const a=S.az*Math.PI/180, v=e*Math.PI/180;
+      const [px,py]=OP(Math.sin(a)*Math.cos(v), Math.cos(a)*Math.cos(v), Math.sin(v));
+      oarc+=`${e?'L':'M'}${px.toFixed(1)},${py.toFixed(1)}`; }
+    const azr=((S.az%360)+360)%360;
+    orbSvg.innerHTML=`<defs><clipPath id="ocl"><ellipse cx="170" cy="118" rx="140" ry="52"/></clipPath></defs>
+      <ellipse cx="170" cy="118" rx="140" ry="52" class="ohz"/><g clip-path="url(#ocl)">${ogrid}</g>${ocomp}
+      <path d="${oarc}" class="oarc"/>
+      <line x1="${gp[0].toFixed(1)}" y1="${gp[1].toFixed(1)}" x2="${op[0].toFixed(1)}" y2="${op[1].toFixed(1)}" class="odrop"/>
+      <ellipse cx="${gp[0].toFixed(1)}" cy="${gp[1].toFixed(1)}" rx="5" ry="2" class="ofoot"/>
+      <circle cx="${op[0].toFixed(1)}" cy="${op[1].toFixed(1)}" r="15" class="oglow${up?'':' dim'}"/>
+      <circle cx="${op[0].toFixed(1)}" cy="${op[1].toFixed(1)}" r="7" class="osun${up?'':' dim'}"/>
+      <text x="10" y="18" class="ostat">EL <tspan>${S.el>=0?'+':''}${S.el.toFixed(1)}°</tspan></text>
+      <text x="10" y="34" class="ostat">AZ <tspan>${azr.toFixed(0)}°</tspan></text>`;
+    orb.querySelector('#orb-v').textContent=`${azr.toFixed(1)}° / ${S.el.toFixed(1)}°`;
+    orb.querySelector('#orb-m').innerHTML=up?'above horizon':'below horizon';
+    orb.querySelector('#orb-d').textContent=`${sv[0].toFixed(2)} ${sv[1].toFixed(2)} ${sv[2].toFixed(2)}`;
+    orb.querySelector('#orb-s').textContent=S.el<0?'night':S.el>50?'high sun':S.el>15?'mid sun':'golden hour';
+    /* ladder */
+    const lx=8+ladderT(S.intensity)*304;
+    ldx.setAttribute('x1',lx); ldx.setAttribute('x2',lx);
+    ldd.setAttribute('cx',lx); ldd.setAttribute('cy',47);
+    pw.querySelector('#pw-v').textContent=fmtLux(S.intensity);
+    pw.querySelector('#pw-u').textContent=S.intensity>=1000?'k lx':'lx';
+    pw.querySelector('#pw-m').innerHTML=`EV100 ${ev100(S.intensity).toFixed(1)} · ≈ ${ladderName(S.intensity)}`;
+    /* penumbra */
+    const r=5+(S.disk-0.2)/9.8*24, dc=pn.querySelector('#pn-disk');
+    dc.setAttribute('r',r);
+    pn.querySelector('#pn-handle').setAttribute('cx',54+r);
+    const ray=(y0,y1)=>{ const m=(y1-y0)/(151-54); return y0+m*(312-54); };
+    const yT=ray(66-r,38),yB=ray(66+r,100), yTi=ray(66-r,100),yBi=ray(66+r,38);
+    pn.querySelector('#pn-pen').setAttribute('points',`156,38 156,100 312,${yB} 312,${yT}`);
+    pn.querySelector('#pn-umb').setAttribute('points',`156,50 156,88 312,${yBi} 312,${yTi}`);
+    const band=pn.querySelector('#pn-band');
+    band.setAttribute('x',236-r*3.2); band.setAttribute('width',40+r*6.4);
+    pn.querySelector('#pn-v').textContent=S.disk.toFixed(1);
+    const lbf=1-0.75*S.limbDark;
+    pn.querySelector('#pn-s1').setAttribute('stop-color',rgbCss([Math.round(255*lbf),Math.round(190*lbf),Math.round(110*lbf)]));
+    pn.querySelector('#pn-u').textContent=`u ${S.limbDark.toFixed(2)}`;
+    pn.querySelector('#pn-e').textContent=`${(lbf*100).toFixed(0)}%`;
+    pn.querySelector('#pn-m').innerHTML=S.disk<1?'hard-edged shadows':S.disk<4?'soft penumbra':'very soft · overcast-like';
+    /* spectrum */
+    const kfrac=clamp((S.temp-1800)/10200,0,1);
+    bb.querySelector('#kloc').style.setProperty('--p',(kfrac*100)+'%');
+    const tc=kelvinToRgb(S.temp);
+    bb.querySelector('#ksw').style.background=rgbCss(tc);
+    bb.querySelector('#bb-v').textContent=Math.round(S.temp);
+    bb.querySelector('#bb-m').innerHTML=`≈ ${klName(S.temp)}`;
+    bb.querySelector('#bb-t').innerHTML=`<span class="swatch" style="background:${rgbCss(tc)}"></span>${tc[0]} ${tc[1]} ${tc[2]}`;
+    bb.querySelector('#bb-p').textContent=`${Math.round(1e6/S.temp)} · ${wienPeak(S.temp)} nm`;
+    /* solar */
+    st.querySelector('#sol-k').setAttribute('cx',solX(S.day));
+    const [sRise,sSet]=solarRiseSet(S.day);
+    const sPt=(h,r)=>[160+r*Math.sin(h/24*2*Math.PI),75-r*Math.cos(h/24*2*Math.PI)];
+    let sTicks='';
+    for(let h=0;h<24;h+=3){ const [tx,ty]=sPt(h,52),[ux,uy]=sPt(h,62);
+      sTicks+=`<line x1="${tx.toFixed(1)}" y1="${ty.toFixed(1)}" x2="${ux.toFixed(1)}" y2="${uy.toFixed(1)}" stroke="rgba(255,255,255,.3)" stroke-width="2"/>`
+        +`<text x="${sPt(h,42)[0].toFixed(1)}" y="${(sPt(h,42)[1]+3).toFixed(1)}" class="axis" text-anchor="middle">${String(h).padStart(2,'0')}</text>`; }
+    let dayArc='';
+    if(sRise!==null){ dayArc=`M ${sPt(sRise,57).map(v=>v.toFixed(1)).join(' ')} A 57 57 0 ${(sSet-sRise)>12?1:0} 1 ${sPt(sSet,57).map(v=>v.toFixed(1)).join(' ')}`; }
+    const [kx,ky]=sPt(S.solarTime,57);
+    solSvg.innerHTML=`<circle cx="160" cy="75" r="62" fill="none" stroke="rgba(255,255,255,.12)"/>${sTicks}`
+      +(dayArc?`<path d="${dayArc}" fill="none" stroke="#f2c267" stroke-width="5" stroke-linecap="round"/>`:'')
+      +(sRise!==null?`<circle cx="${sPt(sRise,57)[0].toFixed(1)}" cy="${sPt(sRise,57)[1].toFixed(1)}" r="3.4" fill="#f2c267"/><circle cx="${sPt(sSet,57)[0].toFixed(1)}" cy="${sPt(sSet,57)[1].toFixed(1)}" r="3.4" fill="#f2c267"/>`:'')
+      +`<line x1="160" y1="75" x2="${kx.toFixed(1)}" y2="${ky.toFixed(1)}" stroke="rgba(255,255,255,.3)"/>
+      <circle cx="${kx.toFixed(1)}" cy="${ky.toFixed(1)}" r="6.5" fill="#0c0c0e" stroke="#fff" stroke-width="2.5"/>
+      <text x="160" y="79" text-anchor="middle" fill="#f4f4f5" font-size="15" font-weight="600" class="num">${fmtT(S.solarTime)}</text>`;
+    st.querySelector('#st-v').textContent=fmtT(S.solarTime);
+    st.querySelector('#st-m').innerHTML=`day ${S.day} · ↑${sRise!==null?fmtT(sRise):'—'} ↓${sSet!==null?fmtT(sSet):'—'} · φ −26.2°`;
+    /* disk physics */
+    const sOm=2*Math.PI*(1-Math.cos(S.disk/2*Math.PI/180)), sLum=S.el>0?S.intensity/(sOm*Math.sin(Math.max(S.el,0.5)*Math.PI/180)):0;
+    dp.querySelector('#dp-o').textContent=`${(sOm*1e6).toFixed(0)} µsr`;
+    dp.querySelector('#dp-a').textContent=`${(S.disk*60).toFixed(1)} arcmin`;
+    dp.querySelector('#dp-l').textContent=S.el>0?(sLum>=1e9?`${(sLum/1e9).toFixed(2)} Gcd/m²`:`${(sLum/1e6).toFixed(1)} Mcd/m²`):'— night';
+    dp.querySelector('#dp-p').textContent=`${(S.intensity*0.0003).toFixed(2)} ×10²⁰ /s/m²`;
+
+  }
+  render();
+}
+
+/* ================================================================ CAMERA */
+function pageCamera(host){ const C=state.camera;
+  host.insertAdjacentHTML('beforeend',headHTML('var(--cam)','PERSPECTIVE VIEW','Camera_Main','lens · horizon · speed'));
+
+  const hero=document.createElement('div'); hero.className='card';
+  hero.innerHTML=`${cardLabel('Field of view','lens diagram below')}<div id="h-f"></div><div id="h-s"></div>`;
+  host.appendChild(hero);
+
+  /* lens diagram */
+  const lens=document.createElement('div'); lens.className='card';
+  lens.innerHTML=`${cardLabel('Lens section','drag the focal group along the axis')}
+    <div class="plot" id="lz" style="cursor:ew-resize"><svg viewBox="0 0 320 176">
+      <line x1="8" y1="88" x2="312" y2="88" stroke="rgba(255,255,255,.1)"/>
+      <line x1="252" y1="54" x2="252" y2="122" stroke="#8a8a92" stroke-width="4" stroke-linecap="round"/>
+      <text x="252" y="140" class="axis" text-anchor="middle">SENSOR 24mm</text>
+      <line id="lz-r1" stroke="rgba(122,162,255,.75)" stroke-width="1.6"/>
+      <line id="lz-r2" stroke="rgba(122,162,255,.75)" stroke-width="1.6"/>
+      <path id="lz-arc" fill="none" stroke="#7aa2ff" stroke-width="1.6"/>
+      <ellipse id="lz-el" rx="7" ry="42" fill="rgba(122,162,255,.14)" stroke="#7aa2ff" stroke-width="2"/>
+      <circle id="lz-h" r="9" fill="#0c0c0e" stroke="#fff" stroke-width="2.5" style="filter:drop-shadow(0 0 8px rgba(122,162,255,.8))"/>
+      <text id="lz-t" y="30" class="axis" text-anchor="middle">55°</text></svg></div>
+    <div class="vstrip"><span class="big num" id="lz-v">—</span><span class="u">mm full-frame equiv</span>
+      <span class="meta" id="lz-m">—</span></div>`;
+  host.appendChild(lens);
+  dragify(lens.querySelector('#lz'),e=>{ const r=lens.querySelector('#lz').getBoundingClientRect();
+    const x=clamp((e.clientX-r.left)/r.width,0,1)*320;
+    const t=clamp((232-x)/162,0,1),f=8.4*Math.pow(68/8.4,t);
+    C.fov=Math.round(clamp(fovFromFocal(f),20,110)*10)/10; render(); });
+
+  /* attitude ball */
+  const att=document.createElement('div'); att.className='card';
+  att.innerHTML=`${cardLabel('Artificial horizon','drag — vertical pitch · horizontal yaw')}
+    <div class="att-wrap"><div class="att-ball" id="ab"><div class="att-sky" id="ab-s">
+      <div class="att-horizon"></div></div>
+      <div class="att-fixed"><div class="wings"></div><div class="dot"></div></div></div>
+      <div class="dial-side"><div class="row"><span class="k">Pitch</span><span class="v num" id="ab-p">—</span></div>
+        <div class="row"><span class="k">Yaw</span><span class="v num" id="ab-y">—</span></div>
+        <div class="row"><span class="k">Looking</span><span class="v num" id="ab-l">—</span></div></div></div>
+    <div class="yawtape"><div class="strip" id="yt-s"></div><div class="caret"></div></div>`;
+  host.appendChild(att);
+  const ytS=att.querySelector('#yt-s');
+  let tape=''; for(let d=-360;d<=360;d+=15){ const w=((d%360)+360)%360;
+    const lab=w===0?'N':w===90?'E':w===180?'S':w===270?'W':(w%45===0?['NE','SE','SW','NW'][(w/45|0)>>0&w/45===1?0:w/45===3?1:w/45===5?2:3]:w+'°');
+    tape+=`<span style="display:inline-block;width:30px;text-align:center;${w%90===0?'<b>'.length&&'font-weight:700;color:#f4f4f5':''}">${w%90===0?'<b>'+lab+'</b>':lab}</span>`; }
+  ytS.innerHTML=tape;
+  const abEl=att.querySelector('#ab'); let lx=0,ly=0,ad=false;
+  abEl.addEventListener('pointerdown',e=>{ad=true;lx=e.clientX;ly=e.clientY;abEl.setPointerCapture(e.pointerId);});
+  abEl.addEventListener('pointermove',e=>{ if(!ad)return;
+    C.yaw=((C.yaw+(e.clientX-lx)*.35+540)%360)-180;
+    C.pitch=clamp(C.pitch-(e.clientY-ly)*.3,-89,89);
+    C.yaw=Math.round(C.yaw*10)/10; C.pitch=Math.round(C.pitch*10)/10;
+    lx=e.clientX; ly=e.clientY; render(); });
+  abEl.addEventListener('pointerup',()=>ad=false);
+
+  /* speedometer */
+  const spd=document.createElement('div'); spd.className='card';
+  spd.innerHTML=`${cardLabel('Flight speedometer','drag along the arc · ⇧ boost ×3 in-engine')}
+    <div class="plot" id="sm" style="cursor:grab"><svg viewBox="0 0 320 168">
+      <path id="sm-bg" fill="none" stroke="#26262c" stroke-width="12" stroke-linecap="round"/>
+      <path id="sm-fg" fill="none" stroke="#7aa2ff" stroke-width="12" stroke-linecap="round"
+        style="filter:drop-shadow(0 0 8px rgba(122,162,255,.6))"/>
+      <g id="sm-tk"></g><line id="sm-nd" stroke="#f4f4f5" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="160" cy="128" r="7" fill="#0c0c0e" stroke="#fff" stroke-width="2.5"/>
+      <text x="160" y="112" text-anchor="middle" fill="#f4f4f5" font-size="24" font-weight="200" class="num" id="sm-v">2.5</text>
+      <text x="160" y="160" text-anchor="middle" class="axis">M / S</text></svg></div>
+    <div class="vstrip"><span class="big num" id="sm-b">—</span><span class="u">m/s with ⇧ boost</span>
+      <span class="meta" id="sm-m">—</span></div>`;
+  host.appendChild(spd);
+  const pol=(a,r)=>[160+Math.cos(a*Math.PI/180)*r,128+Math.sin(a*Math.PI/180)*r];
+  const arcPath=(a0,a1,r)=>{ const [x0,y0]=pol(a0,r),[x1,y1]=pol(a1,r);
+    return `M ${x0} ${y0} A ${r} ${r} 0 ${(a1-a0)>180?1:0} 1 ${x1} ${y1}`; };
+  spd.querySelector('#sm-bg').setAttribute('d',arcPath(150,390,84));
+  const smTk=spd.querySelector('#sm-tk');
+  for(let v=0;v<=12;v+=2){ const a=150+(v/12)*240,[x0,y0]=pol(a,70),[x1,y1]=pol(a,78);
+    SVG('line',{x1:x0,y1:y0,x2:x1,y2:y1,stroke:'#55555c','stroke-width':2},smTk);
+    const [tx,ty]=pol(a,60),t=SVG('text',{x:tx,y:ty+3,class:'axis','text-anchor':'middle'},smTk); t.textContent=v; }
+  dragify(spd.querySelector('#sm'),e=>{ const r=spd.querySelector('#sm').getBoundingClientRect();
+    const dx=e.clientX-(r.left+r.width/2),dy=(e.clientY-r.top)/r.height*168-128;
+    let a=Math.atan2(dy,dx)*180/Math.PI; if(a<0)a+=360;
+    let t;
+    if(a>=150) t=(a-150)/240; else if(a<=30) t=(a+210)/240; else t=(a<90)?1:0;
+    C.speed=Math.round((0.1+clamp(t,0,1)*11.9)*100)/100; render(); });
+
+  const meta=document.createElement('div'); meta.className='card tight';
+  meta.innerHTML=`<div class="stat-row"><span class="k">Position</span><span class="v num" id="m-p" style="font-size:12px">—</span></div>
+    <div class="stat-row"><span class="k">Near plane</span><span class="v num" id="m-n">0.05 m</span></div>
+    <div class="stat-row"><span class="k">Far plane</span><span class="v num" id="m-a">200 m</span></div>
+    <div class="stat-row"><span class="k">Aspect</span><span class="v num">16 : 9 · auto</span></div>
+    <div class="stat-row"><span class="k">Forward</span><span class="v num" id="m-f" style="font-size:12px">—</span></div>
+    <button class="btn" id="cam-r"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>Reset camera</button>`;
+  host.appendChild(meta);
+  meta.querySelector('#cam-r').addEventListener('click',()=>{ Object.assign(C,CAM_DEF); render(); toast('Camera reset to the Cornell view'); });
+
+  /* aperture iris */
+  const ir=document.createElement('div'); ir.className='card';
+  ir.innerHTML=`${cardLabel('Aperture iris','drag in / out — f-stop')}
+    <div class="plot" id="iris"><svg viewBox="0 0 200 168" id="ir-svg"></svg></div>
+    <div class="vstrip"><span class="big num" id="ir-v">—</span><span class="u">f-stop</span>
+      <span class="meta" id="ir-m">—</span></div>
+    <div class="kv-grid"><div class="kv"><div class="k">ENTRANCE PUPIL</div><div class="v num" id="ir-p" style="font-size:12px">—</div></div>
+      <div class="kv"><div class="k">NEAREST STANDARD</div><div class="v num" id="ir-s" style="font-size:12px">—</div></div></div>`;
+  host.appendChild(ir);
+  const irSvg=ir.querySelector('#ir-svg'), irEl=ir.querySelector('#iris');
+  dragify(irEl,e=>{ const r=irEl.getBoundingClientRect();
+    const x=(e.clientX-r.left)/r.width*200-100, y=(e.clientY-r.top)/r.height*168-84;
+    const d=Math.sqrt(x*x+y*y);
+    C.fstop=Math.round(clamp(1.2*Math.pow(22/1.2,clamp((76-d)/64,0,1)),1.2,22)*10)/10;
+    render(); });
+
+  /* focus rail */
+  const fr=document.createElement('div'); fr.className='card';
+  fr.innerHTML=`${cardLabel('Focus rail','knob: focus · flags: clip planes')}
+    <div class="plot" id="frail"><svg viewBox="0 0 320 118" id="fr-svg"></svg></div>
+    <div class="vstrip"><span class="big num" id="fr-v">—</span><span class="u">m focus</span>
+      <span class="meta" id="fr-m">—</span></div>
+    <div class="kv-grid"><div class="kv"><div class="k">DOF NEAR – FAR</div><div class="v num" id="fr-d" style="font-size:12px">—</div></div>
+      <div class="kv"><div class="k">HYPERFOCAL</div><div class="v num" id="fr-h" style="font-size:12px">—</div></div></div>`;
+  host.appendChild(fr);
+  const frSvg=fr.querySelector('#fr-svg'), frEl=fr.querySelector('#frail');
+  const frX=d=>10+(Math.log10(clamp(d,0.1,50))-Math.log10(0.1))/(Math.log10(50)-Math.log10(0.1))*300;
+  let frMode=null;
+  frEl.addEventListener('pointerdown',e=>{ const r=frEl.getBoundingClientRect();
+    const x=(e.clientX-r.left)/r.width*320, y=(e.clientY-r.top)/r.height*118;
+    if(y<48){ const nx=frX(C.near), fx2=frX(C.far);
+      frMode=Math.abs(x-nx)<Math.abs(x-fx2)?'near':'far'; }
+    else frMode='focus';
+    frEl.setPointerCapture(e.pointerId); frMove(e); });
+  frEl.addEventListener('pointermove',e=>{ if(frMode)frMove(e); });
+  frEl.addEventListener('pointerup',()=>frMode=null);
+  function frMove(e){ const r=frEl.getBoundingClientRect();
+    const t=clamp(((e.clientX-r.left)/r.width*320-10)/300,0,1);
+    if(frMode==='focus')C.focus=Math.round(0.1*Math.pow(500,t)*100)/100;
+    else if(frMode==='near')C.near=Math.round(0.01*Math.pow(100,t)*1000)/1000;
+    else C.far=Math.round(10*Math.pow(100,t));
+    render(); }
+
+  function render(){
+    const [hi,hf]=splitNum(C.fov,1);
+    hero.querySelector('#h-f').innerHTML=heroHTML(hi,hf,'°');
+    const f=focalMM(C.fov);
+    hero.querySelector('#h-s').innerHTML=`<span class="delta-pill cool">≈ ${f.toFixed(0)} mm · ${lensClass(f)}</span>`;
+    /* lens */
+    const t=(Math.log(f)-Math.log(8.4))/(Math.log(68)-Math.log(8.4)),lx=232-t*162;
+    lens.querySelector('#lz-el').setAttribute('cx',lx); lens.querySelector('#lz-el').setAttribute('cy',88);
+    lens.querySelector('#lz-h').setAttribute('cx',lx); lens.querySelector('#lz-h').setAttribute('cy',88);
+    const ext=(sy)=>{ const dx=lx-252,dy=88-sy,t2=(8-lx)/dx; return 88+dy*t2; };
+    const r1=lens.querySelector('#lz-r1'),r2=lens.querySelector('#lz-r2');
+    r1.setAttribute('x1',252);r1.setAttribute('y1',54);r1.setAttribute('x2',8);r1.setAttribute('y2',ext(54));
+    r2.setAttribute('x1',252);r2.setAttribute('y1',122);r2.setAttribute('x2',8);r2.setAttribute('y2',ext(122));
+    const a1=Math.atan2(ext(54)-88,8-lx)*180/Math.PI,a2=Math.atan2(ext(122)-88,8-lx)*180/Math.PI;
+    lens.querySelector('#lz-arc').setAttribute('d',
+      `M ${lx+Math.cos(a1*Math.PI/180)*34} ${88+Math.sin(a1*Math.PI/180)*34} A 34 34 0 0 1 ${lx+Math.cos(a2*Math.PI/180)*34} ${88+Math.sin(a2*Math.PI/180)*34}`);
+    const lt=lens.querySelector('#lz-t'); lt.setAttribute('x',lx); lt.textContent=C.fov.toFixed(1)+'°';
+    lens.querySelector('#lz-v').textContent=f.toFixed(1);
+    lens.querySelector('#lz-m').innerHTML=`${lensClass(f)} · vertical FoV`;
+    /* attitude */
+    att.querySelector('#ab-s').style.transform=`translateY(${C.pitch/90*66}px)`;
+    att.querySelector('#ab-p').textContent=C.pitch.toFixed(1)+'°';
+    att.querySelector('#ab-y').textContent=C.yaw.toFixed(1)+'°';
+    att.querySelector('#ab-l').textContent=['N','NE','E','SE','S','SW','W','NW'][Math.round((((C.yaw%360)+360)%360)/45)%8];
+    ytS.style.transform=`translateX(${-C.yaw*2}px)`; ytS.style.left='calc(50% + 720px - 15px)';
+    /* speedo */
+    const sa=150+(C.speed-0.1)/11.9*240;
+    spd.querySelector('#sm-fg').setAttribute('d',arcPath(150,Math.max(151,sa),84));
+    const [nx,ny]=pol(sa,58);
+    const nd=spd.querySelector('#sm-nd');
+    nd.setAttribute('x1',160);nd.setAttribute('y1',128);nd.setAttribute('x2',nx);nd.setAttribute('y2',ny);
+    spd.querySelector('#sm-v').textContent=C.speed.toFixed(1);
+    spd.querySelector('#sm-b').textContent=(C.speed*3).toFixed(1);
+    spd.querySelector('#sm-m').innerHTML=C.speed<2?'dolly · precise':C.speed<6?'walk · cruise':'fly · traverse';
+    /* meta */
+    const pr=C.pitch*Math.PI/180,yw=C.yaw*Math.PI/180;
+    meta.querySelector('#m-f').textContent=
+      `${(Math.sin(yw)*Math.cos(pr)).toFixed(2)} ${(Math.cos(yw)*Math.cos(pr)).toFixed(2)} ${Math.sin(pr).toFixed(2)}`;
+    meta.querySelector('#m-p').textContent=`${C.x.toFixed(2)} · ${C.y.toFixed(2)} · ${C.z.toFixed(2)} m`;
+    meta.querySelector('#m-n').textContent=`${C.near} m`;
+    meta.querySelector('#m-a').textContent=C.far>=1000?`${(C.far/1000).toFixed(1)} km`:`${C.far} m`;
+    /* iris */
+    const irFrac=(Math.log(22)-Math.log(C.fstop))/(Math.log(22)-Math.log(1.2));
+    const irR=8+irFrac*60, irRot=irFrac*30*Math.PI/180;
+    let irHex='';
+    for(let i=0;i<6;i++){ const ia=irRot+i/6*2*Math.PI;
+      irHex+=`${i?'L':'M'} ${(100+irR*Math.cos(ia)).toFixed(1)} ${(84+irR*Math.sin(ia)).toFixed(1)} `; }
+    const irStd=[1.2,1.4,2,2.8,4,5.6,8,11,16,22].reduce((a,b)=>Math.abs(b-C.fstop)<Math.abs(a-C.fstop)?b:a);
+    irSvg.innerHTML=`
+      <circle cx="100" cy="84" r="78" fill="#101014" stroke="rgba(255,255,255,.15)"/>
+      <circle cx="100" cy="84" r="70" fill="none" stroke="rgba(255,255,255,.08)"/>
+      <path d="${irHex}Z" fill="rgba(122,162,255,.18)" stroke="#7aa2ff" stroke-width="2.5"/>
+      <text x="100" y="89" text-anchor="middle" fill="#f4f4f5" font-size="17" font-weight="600" class="num">f/${C.fstop}</text>
+      <circle cx="100" cy="${(84-irR).toFixed(1)}" r="5.5" fill="#0c0c0e" stroke="#fff" stroke-width="2.5"/>`;
+    ir.querySelector('#ir-v').textContent=`f/${C.fstop}`;
+    ir.querySelector('#ir-m').innerHTML=irFrac>0.66?'wide open · thin DoF':irFrac>0.33?'mid · versatile':'stopped down · deep DoF';
+    ir.querySelector('#ir-p').textContent=`${(f/C.fstop).toFixed(1)} mm`;
+    ir.querySelector('#ir-s').textContent=`f/${irStd}`;
+    /* focus rail */
+    const Hmm=f*f/(C.fstop*0.029), Hm=Hmm/1000, Dmm=C.focus*1000;
+    const dNear=Dmm*Hmm/(Hmm+Dmm)/1000, dFar=Dmm<Hmm?Dmm*Hmm/(Hmm-Dmm)/1000:Infinity;
+    const frNX=frX(C.near), frFX=frX(C.far), frHx=Hm<=50?frX(Math.max(Hm,0.1)):null;
+    frSvg.innerHTML=`
+      <line x1="10" y1="70" x2="310" y2="70" stroke="rgba(255,255,255,.2)" stroke-width="3" stroke-linecap="round"/>
+      <rect x="${frX(dNear).toFixed(1)}" y="60" width="${Math.max(frX(Math.min(dFar,50))-frX(dNear),2).toFixed(1)}" height="20" rx="6" fill="rgba(122,162,255,.25)"/>
+      ${frHx!==null?`<line x1="${frHx.toFixed(1)}" y1="56" x2="${frHx.toFixed(1)}" y2="84" stroke="rgba(255,255,255,.4)" stroke-dasharray="3 3"/><text x="${frHx.toFixed(1)}" y="95" class="axis" text-anchor="middle">H</text>`:''}
+      <polygon points="${frNX.toFixed(1)},14 ${(frNX-8).toFixed(1)},30 ${(frNX+8).toFixed(1)},30" fill="#7aa2ff"/>
+      <line x1="${frNX.toFixed(1)}" y1="30" x2="${frNX.toFixed(1)}" y2="58" stroke="#7aa2ff" stroke-dasharray="3 3"/>
+      <polygon points="${frFX.toFixed(1)},14 ${(frFX-8).toFixed(1)},30 ${(frFX+8).toFixed(1)},30" fill="#7aa2ff"/>
+      <line x1="${frFX.toFixed(1)}" y1="30" x2="${frFX.toFixed(1)}" y2="58" stroke="#7aa2ff" stroke-dasharray="3 3"/>
+      <text x="10" y="108" class="axis">0.1</text><text x="121" y="108" class="axis">1</text><text x="232" y="108" class="axis">10</text><text x="310" y="108" class="axis" text-anchor="end">50 m</text>
+      <circle cx="${frX(C.focus).toFixed(1)}" cy="70" r="8" fill="#0c0c0e" stroke="#fff" stroke-width="2.5"/>`;
+    fr.querySelector('#fr-v').textContent=C.focus.toFixed(2);
+    fr.querySelector('#fr-m').innerHTML=`f/${C.fstop} · ${f.toFixed(0)} mm full-frame`;
+    fr.querySelector('#fr-d').textContent=`${dNear.toFixed(2)} – ${dFar===Infinity?'∞':dFar.toFixed(2)} m`;
+    fr.querySelector('#fr-h').textContent=`${Hm>=100?Hm.toFixed(0):Hm.toFixed(1)} m`;
+  }
+  render();
+}
+
+/* ================================================================ MESH / LUMINAIRE */
+function pageMesh(host,id){ const m=MESHES[id],isLamp=m.tag==='LIGHT';
+  host.insertAdjacentHTML('beforeend',headHTML(isLamp?'var(--sun)':'var(--mesh)',
+    isLamp?'EMISSIVE QUAD':'STATIC MESH',m.name,`${m.tris} triangles · ${m.mat}`));
+
+  if(isLamp){
+    const hero=document.createElement('div'); hero.className='card';
+    hero.innerHTML=`${cardLabel('Emission')}${heroHTML(...splitNum(m.emis,1),'lx')}<span class="delta-pill hot">ceiling quad · 0.6 × 0.6 m</span>`;
+    host.appendChild(hero);
+    /* falloff curve */
+    const fo=document.createElement('div'); fo.className='card';
+    fo.innerHTML=`${cardLabel('Falloff curve','horizontal: probe · vertical: emission')}
+      <div class="plot" id="fo" style="cursor:crosshair"><svg viewBox="0 0 320 150">
+        <defs><linearGradient id="fog" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#f2c267" stop-opacity=".45"/><stop offset="1" stop-color="#f2c267" stop-opacity="0"/></linearGradient></defs>
+        <g id="fo-g"></g><path id="fo-a" fill="url(#fog)" stroke="none"/>
+        <path id="fo-c" fill="none" stroke="#f2c267" stroke-width="2"/>
+        <line id="fo-x" y1="10" y2="122" class="xhair" style="--ac:var(--sun)"/>
+        <circle id="fo-d" r="5" fill="#ffe9b8" stroke="#f2c267" stroke-width="2.5"/>
+        <text x="10" y="140" class="axis">0.2 m</text><text x="310" y="140" class="axis" text-anchor="end">3.0 m</text>
+        <text x="10" y="20" class="axis" id="fo-eq">—</text></svg></div>
+      <div class="vstrip"><span class="big num" id="fo-v">—</span><span class="u">lx at distance</span>
+        <span class="meta" id="fo-m">—</span></div>
+      <div class="kv-grid"><div class="kv"><div class="k">SOURCE AREA</div><div class="v num">0.36<em> m²</em></div></div>
+        <div class="kv"><div class="k">FLUX ≈ π·L·A</div><div class="v num" id="fo-fl">—</div></div></div>`;
+    host.appendChild(fo);
+    const E=d=>m.emis*0.36/(d*d+0.02),X=d=>10+(d-0.2)/2.8*300,Ymax=()=>Math.max(200,E(0.2)*1.1),Y=e=>122-clamp(e/Ymax(),0,1)*112;
+    let fd=1.0; const emis0=m.emis;
+    const renderFo=()=>{ let cp='',ap='M 10 122 ';
+      for(let d=0.2;d<=3.001;d+=0.05){ cp+=`${d===0.2?'M':'L'} ${X(d).toFixed(1)} ${Y(E(d)).toFixed(1)} `; ap+=`L ${X(d).toFixed(1)} ${Y(E(d)).toFixed(1)} `; }
+      fo.querySelector('#fo-c').setAttribute('d',cp); fo.querySelector('#fo-a').setAttribute('d',ap+'L 310 122 Z');
+      fo.querySelector('#fo-x').setAttribute('x1',X(fd)); fo.querySelector('#fo-x').setAttribute('x2',X(fd));
+      fo.querySelector('#fo-d').setAttribute('cx',X(fd)); fo.querySelector('#fo-d').setAttribute('cy',Y(E(fd)));
+      fo.querySelector('#fo-v').textContent=E(fd)>=1000?(E(fd)/1000).toFixed(1)+'k':E(fd).toFixed(1);
+      fo.querySelector('#fo-m').innerHTML=`at ${fd.toFixed(2)} m · L ${m.emis} lx`;
+      fo.querySelector('#fo-eq').textContent=`E(d) = ${(m.emis*0.36).toFixed(2)} / d²`;
+      fo.querySelector('#fo-fl').innerHTML=`≈${Math.round(Math.PI*m.emis*0.36)}<em> lm</em>`; };
+    const foEl=fo.querySelector('#fo'); let foOn=false;
+    foEl.addEventListener('pointerdown',e=>{ foOn=true; foEl.setPointerCapture(e.pointerId); foMove(e); });
+    foEl.addEventListener('pointermove',e=>{ if(foOn)foMove(e); });
+    foEl.addEventListener('pointerup',()=>{ foOn=false; if(m.emis!==emis0)buildInspector(); });
+    function foMove(e){ const r=foEl.getBoundingClientRect();
+      fd=Math.round((0.2+clamp(((e.clientX-r.left)/r.width*320-10)/300,0,1)*2.8)*100)/100;
+      m.emis=Math.round(clamp(1-(e.clientY-r.top)/r.height,0,1)*200);
+      renderFo(); }
+    renderFo();
+  } else {
+    const hero=document.createElement('div'); hero.className='card';
+    const [hi,hf]=splitNum(m.tris,0);
+    hero.innerHTML=`${cardLabel('Triangle count')}${heroHTML(hi,hf,'tris')}
+      <span class="delta-pill">${(m.tris/TOTAL_TRIS*100).toFixed(0)}% of scene · ${m.mat}</span>`;
+    host.appendChild(hero);
+  }
+
+  /* material chips */
+  const mc=document.createElement('div'); mc.className='card';
+  mc.innerHTML=`${cardLabel('Material','tap to assign — models the authoring tool')}
+    <div class="chip-row" id="mc-al"></div>
+    <div class="chip-row" id="mc-fi"></div>
+    <div class="chip-row" id="mc-co"></div>`;
+  host.appendChild(mc);
+  const mkChip=(row,txt,val,sel,fn,sw)=>{ const b=document.createElement('button');
+    b.className='sw-chip'+(sel?' sel':'');
+    b.innerHTML=`${sw?`<span class="swatch" style="background:${sw}"></span>`:''}${txt}`;
+    b.addEventListener('click',()=>{ fn(val); buildInspector(); toast(`${m.name}: ${txt} assigned`); });
+    mc.querySelector(row).appendChild(b); };
+  [['Studio','#c7c7c7'],['Porcelain','#f2f4f6'],['Brick','#d91f1f'],['Moss','#1fd926'],['Ochre','#e0a458'],['Slate','#5a8ae0'],['Void','#151517']]
+    .forEach(([t,v])=>mkChip('#mc-al',t,v,m.albedo.toLowerCase()===v,v2=>m.albedo=v2,v));
+  [['Matte',0.9],['Satin',0.6],['Semi-gloss',0.4],['Gloss',0.2],['Mirror',0.05]]
+    .forEach(([t,v])=>mkChip('#mc-fi',t,v,Math.abs(m.rough-v)<0.03,v2=>m.rough=v2));
+  [['Dielectric',0],['Metal',1]]
+    .forEach(([t,v])=>mkChip('#mc-co',t,v,m.metal===v,v2=>m.metal=v2));
+
+  /* scale caliper */
+  const sc=document.createElement('div'); sc.className='card';
+  const scAcc=isLamp?'#f2c267':'#b79cff';
+  sc.innerHTML=`${cardLabel('Scale caliper','drag the corner — uniform scale')}
+    <div class="plot" id="calip"><svg viewBox="0 0 320 130" id="sc-svg"></svg></div>
+    <div class="vstrip"><span class="big num" id="sc-v">—</span><span class="u">× scale</span>
+      <span class="meta" id="sc-m">—</span></div>`;
+  host.appendChild(sc);
+  const scSvg=sc.querySelector('#sc-svg'), scEl=sc.querySelector('#calip');
+  const scK=100/Math.max(m.sz[0],m.sz[1],0.4), scCx=150, scCy=62;
+  const scW0=m.sz[0]*scK, scH0=m.sz[1]*scK, scD0=Math.hypot(Math.max(scW0,8),Math.max(scH0,8))/2;
+  let scF=1, scOn=false;
+  const scDraw=()=>{ const w=Math.max(scW0*scF,4), h=Math.max(scH0*scF,4), zh=m.sz[2]*scK*scF;
+    scSvg.innerHTML=`
+      <rect x="${(scCx-w/2).toFixed(1)}" y="${(scCy-h/2).toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="4" fill="rgba(183,156,255,.12)" stroke="${scAcc}" stroke-width="2"/>
+      <line x1="270" y1="110" x2="270" y2="${Math.max(110-zh,6).toFixed(1)}" stroke="${scAcc}" stroke-width="3"/>
+      <text x="270" y="122" class="axis" text-anchor="middle">Z</text>
+      <circle cx="150" cy="62" r="3" fill="rgba(255,255,255,.4)"/>
+      <circle cx="${(scCx+w/2).toFixed(1)}" cy="${(scCy-h/2).toFixed(1)}" r="7" fill="#0c0c0e" stroke="#fff" stroke-width="2.5"/>
+      <text x="14" y="20" class="axis">${(m.sz[0]*scF).toFixed(2)} × ${(m.sz[1]*scF).toFixed(2)} × ${(m.sz[2]*scF).toFixed(2)} m</text>`;
+    sc.querySelector('#sc-v').textContent=`×${scF.toFixed(2)}`;
+    sc.querySelector('#sc-m').innerHTML=`dims ${(m.sz[0]*scF).toFixed(2)} × ${(m.sz[1]*scF).toFixed(2)} × ${(m.sz[2]*scF).toFixed(2)} m`; };
+  scEl.addEventListener('pointerdown',e=>{ scOn=true; scEl.setPointerCapture(e.pointerId); scMove(e); });
+  scEl.addEventListener('pointermove',e=>{ if(scOn)scMove(e); });
+  scEl.addEventListener('pointerup',()=>{ if(!scOn)return; scOn=false;
+    if(Math.abs(scF-1)>0.005){ m.sz=m.sz.map(v=>Math.round(v*scF*1000)/1000);
+      toast(`${m.name} scaled ×${scF.toFixed(2)} — now ${m.sz.map(v=>v.toFixed(2)).join(' × ')} m`); }
+    buildInspector(); });
+  function scMove(e){ const r=scEl.getBoundingClientRect();
+    const x=(e.clientX-r.left)/r.width*320-scCx, y=(e.clientY-r.top)/r.height*130-scCy;
+    scF=Math.round(clamp(Math.hypot(x,y)/scD0,0.1,5)*200)/200; scDraw(); }
+  scDraw();
+  /* dolly curve — drag dollies Camera_Main */
+  const C=state.camera;
+  const mbr=0.5*Math.hypot(m.sz[0],m.sz[1],m.sz[2]);
+  const macc=isLamp?'#f2c267':'#b79cff';
+  const doX=d=>10+(d-0.3)/7.7*300, doY=f=>80-clamp(f,0,1.5)/1.5*66;
+  const doFill=d=>(2*Math.atan(mbr/Math.max(d,1e-3))*180/Math.PI)/C.fov;
+  let doPath='', doArea='M 10 80 ';
+  for(let d=0.3; d<=8.001; d+=0.1){ doPath+=`${d===0.3?'M':'L'} ${doX(d).toFixed(1)} ${doY(doFill(d)).toFixed(1)} `;
+    doArea+=`L ${doX(d).toFixed(1)} ${doY(doFill(d)).toFixed(1)} `; }
+  const ff=document.createElement('div'); ff.className='card';
+  ff.innerHTML=`${cardLabel('Dolly curve','drag along the curve — dollies Camera_Main')}
+    <div class="plot" id="dolly" style="cursor:ew-resize"><svg viewBox="0 0 320 96">
+      <defs><linearGradient id="dog" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${macc}" stop-opacity=".4"/><stop offset="1" stop-color="${macc}" stop-opacity="0"/></linearGradient></defs>
+      <path d="${doArea}L 310 80 Z" fill="url(#dog)"/><path d="${doPath}" fill="none" stroke="${macc}" stroke-width="2"/>
+      <line x1="10" y1="${doY(1).toFixed(1)}" x2="310" y2="${doY(1).toFixed(1)}" stroke="rgba(255,255,255,.3)" stroke-dasharray="4 3"/>
+      <text x="304" y="${(doY(1)-5).toFixed(1)}" class="axis" text-anchor="end">fills frame</text>
+      <line id="do-x" y1="8" y2="80" class="xhair" style="--ac:${macc}"/>
+      <circle id="do-k" r="5.5" fill="#0c0c0e" stroke="#fff" stroke-width="2.5"/>
+      <text x="10" y="93" class="axis">0.3 m</text><text x="310" y="93" class="axis" text-anchor="end">8 m</text></svg></div>
+    <div class="vstrip"><span class="big num" id="do-v">—</span><span class="u">m dolly</span>
+      <span class="meta" id="do-m">—</span></div>`;
+  host.appendChild(ff);
+  const doEl=ff.querySelector('#dolly');
+  function doRender(){ const dx=C.x-m.xyz[0], dy=C.y-m.xyz[1], dz=C.z-m.xyz[2];
+    const dd=Math.sqrt(dx*dx+dy*dy+dz*dz), f=doFill(clamp(dd,0.3,8));
+    ff.querySelector('#do-x').setAttribute('x1',doX(clamp(dd,0.3,8))); ff.querySelector('#do-x').setAttribute('x2',doX(clamp(dd,0.3,8)));
+    ff.querySelector('#do-k').setAttribute('cx',doX(clamp(dd,0.3,8))); ff.querySelector('#do-k').setAttribute('cy',doY(f));
+    ff.querySelector('#do-v').textContent=dd.toFixed(2);
+    ff.querySelector('#do-m').innerHTML=`fills ${(f*100).toFixed(0)}% of ${C.fov.toFixed(0)}° FoV`; }
+  let doOn=false;
+  doEl.addEventListener('pointerdown',e=>{ doOn=true; doEl.setPointerCapture(e.pointerId); doMove(e); });
+  doEl.addEventListener('pointermove',e=>{ if(doOn) doMove(e); });
+  doEl.addEventListener('pointerup',()=>{ if(doOn){ doOn=false;
+    const dx=C.x-m.xyz[0], dy=C.y-m.xyz[1], dz=C.z-m.xyz[2];
+    toast(`Camera dollied to ${Math.sqrt(dx*dx+dy*dy+dz*dz).toFixed(2)} m from ${m.name}`); } });
+  function doMove(e){ const r=doEl.getBoundingClientRect();
+    const d=0.3+clamp(((e.clientX-r.left)/r.width*320-10)/300,0,1)*7.7;
+    let vx=C.x-m.xyz[0], vy=C.y-m.xyz[1], vz=C.z-m.xyz[2];
+    let L=Math.sqrt(vx*vx+vy*vy+vz*vz);
+    if(L<1e-3){ vx=0; vy=-1; vz=0.3; L=Math.sqrt(vx*vx+vy*vy+vz*vz); }
+    C.x=m.xyz[0]+vx/L*d; C.y=m.xyz[1]+vy/L*d; C.z=Math.max(0.05,m.xyz[2]+vz/L*d);
+    doRender(); }
+  doRender();
+  /* sun incidence — unshadowed N·L at the centre */
+  const sL=sunDir(), cosT=m.n[0]*sL[0]+m.n[1]*sL[1]+m.n[2]*sL[2];
+  const isDay=state.sun.el>0, isLit=isDay&&cosT>0.02, surfE=isLit?state.sun.intensity*cosT:0;
+  const inD=document.createElement('div'); inD.className='card';
+  inD.innerHTML=`${cardLabel('Sun incidence','unshadowed N·L at the centre')}
+    <div class="plot"><svg viewBox="0 0 320 122">
+      <path d="M 100 104 A 60 60 0 0 1 220 104" fill="none" stroke="#26262c" stroke-width="12" stroke-linecap="round"/>
+      <path d="M 100 104 A 60 60 0 0 1 220 104" fill="none" stroke="${isLit?macc:'#3a3a40'}" stroke-width="12" stroke-linecap="round"
+        stroke-dasharray="${(clamp(cosT,0,1)*188.5).toFixed(1)} 188.5"${isLit?` style="filter:drop-shadow(0 0 8px ${macc})"`:''}/>
+      <text x="160" y="90" text-anchor="middle" fill="#f4f4f5" font-size="26" font-weight="200" class="num">${cosT.toFixed(2)}</text>
+      <text x="160" y="118" class="axis" text-anchor="middle">COS θ RESPONSE</text></svg></div>
+    <div class="vstrip"><span class="big num">${surfE>=1000?(surfE/1000).toFixed(1)+'k':Math.round(surfE)}</span><span class="u">lx on surface</span>
+      <span class="meta">${!isDay?'sun below horizon':'sun '+fmtLux(state.sun.intensity)+' lx × '+cosT.toFixed(2)}</span></div>
+    <div><span class="delta-pill ${isLit?'hot':''}">${!isDay?'▼ night':cosT>0.5?'▲ direct sun':cosT>0.02?'▲ grazing light':'▼ shadow side'}</span></div>`;
+  host.appendChild(inD);
+  /* placement + frame */
+  const mArea=(()=>{ const [aa,bb2,cc]=m.sz; return [aa,bb2,cc].some(v=>v<1e-6)?(aa*bb2+bb2*cc+cc*aa):2*(aa*bb2+bb2*cc+cc*aa); })();
+  const pl=document.createElement('div'); pl.className='card';
+  pl.innerHTML=`${cardLabel('Placement','read-only — authored in the modelling tool')}
+    <div class="stat-row"><span class="k">Centre (world)</span><span class="v num" style="font-size:12px">${m.xyz.map(v=>v.toFixed(2)).join(' · ')} m</span></div>
+    <div class="stat-row"><span class="k">Albedo</span><span class="v num"><span class="swatch" style="background:${m.albedo}"></span>${m.albedo}</span></div>
+    <div class="stat-row"><span class="k">Rough · Metal${m.emis?' · Emis':''}</span><span class="v num">${m.rough.toFixed(2)} · ${m.metal.toFixed(2)}${m.emis?' · '+m.emis+' lx':''}</span></div>
+    <div class="stat-row"><span class="k">Size</span><span class="v num" style="font-size:12px">${m.sz.map(v=>v.toFixed(2)).join(' × ')} m</span></div>
+    <div class="stat-row"><span class="k">Area · B-sphere</span><span class="v num">${mArea.toFixed(2)} m² · r ${mbr.toFixed(2)} m</span></div>
+    <div class="stat-row"><span class="k">Normal</span><span class="v num">${m.n.map(v=>v.toFixed(0)).join(' ')}</span></div>
+    <button class="btn primary" id="fr-b"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8V5a2 2 0 0 1 2-2h3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><circle cx="12" cy="12" r="3.2"/></svg>Frame in view</button>`;
+  host.appendChild(pl);
+  pl.querySelector('#fr-b').addEventListener('click',()=>{ const C=state.camera;
+    C.x=m.xyz[0]; C.y=m.xyz[1]-2.2; C.z=m.xyz[2]+0.6; C.pitch=-12; C.yaw=0;
+    toast(`Camera framed to ${m.name} — open Camera_Main to see it`); });
+}
+
+/* ================================================================ SKY */
+function skyColors(T){ const t=clamp((T-1)/9,0,1);
+  const mix=(a,b)=>a.map((v,i)=>Math.round(v+(b[i]-v)*t));
+  return { zen:mix([36,78,158],[148,168,188]), hor:mix([168,198,236],[216,216,208]) }; }
+function pageSky(host){ const K=state.sky;
+  host.insertAdjacentHTML('beforeend',headHTML('#8fc3ff','PHYSICAL SKY','Sky_Atmosphere','turbidity · haze · ozone'));
+  const hero=document.createElement('div'); hero.className='card';
+  hero.innerHTML=`${cardLabel('Turbidity')}<div id="h-t"></div><div><span class="delta-pill" id="h-pill">—</span></div>`;
+  host.appendChild(hero);
+
+  /* dome section */
+  const dm=document.createElement('div'); dm.className='card';
+  dm.innerHTML=`${cardLabel('Dome section','drag dome: turbidity · drag band edge: haze height')}
+    <div class="plot" id="sky-dome"><svg viewBox="0 0 320 168" id="dome-svg"></svg></div>
+    <div class="vstrip"><span class="big num" id="dm-v">—</span><span class="u">° haze band</span>
+      <span class="meta" id="dm-m">—</span></div>
+    <div class="kv-grid"><div class="kv"><div class="k">RAYLEIGH / MIE MIX</div><div class="v num" id="dm-x" style="font-size:12px">—</div></div>
+      <div class="kv"><div class="k">SECTION FACES</div><div class="v num" id="dm-s" style="font-size:12px">—</div></div></div>`;
+  host.appendChild(dm);
+  const dSvg=dm.querySelector('#dome-svg'), dEl=dm.querySelector('#sky-dome');
+  const dPos=e=>{ const r=dEl.getBoundingClientRect();
+    return [(e.clientX-r.left)/r.width*320,(e.clientY-r.top)/r.height*168]; };
+  let dMode=null;
+  dEl.addEventListener('pointerdown',e=>{ const [,y]=dPos(e);
+    dMode=Math.abs(y-(132-K.haze*2.6))<13?'haze':'turb';
+    dEl.setPointerCapture(e.pointerId); dMove(e); });
+  dEl.addEventListener('pointermove',e=>{ if(dMode) dMove(e); });
+  dEl.addEventListener('pointerup',()=>dMode=null);
+  function dMove(e){ const [,y]=dPos(e);
+    if(dMode==='haze') K.haze=Math.round(clamp((132-y)/2.6,0,20)*10)/10;
+    else K.turbidity=Math.round(clamp(1+(1-(y-14)/118)*9,1,10)*10)/10;
+    render(); }
+
+  /* ozone */
+  const oz=document.createElement('div'); oz.className='card';
+  oz.innerHTML=`${cardLabel('Ozone · Chappuis bands','drag vertically — scales the 600 nm dip')}
+    <div class="plot" id="ozone"><svg viewBox="0 0 320 122">
+      <text x="10" y="114" class="axis">500 nm</text>
+      <text x="160" y="114" class="axis" text-anchor="middle">600</text>
+      <text x="310" y="114" class="axis" text-anchor="end">700 nm</text>
+      <path id="oz-a" fill="rgba(143,195,255,.16)"/><path id="oz-c" fill="none" stroke="#8fc3ff" stroke-width="2"/>
+      <line id="oz-x" y1="8" y2="102" class="xhair" style="--ac:#8fc3ff"/>
+      <circle id="oz-d" r="5" fill="#0c0c0e" stroke="#fff" stroke-width="2.5"/></svg></div>
+    <div class="vstrip"><span class="big num" id="oz-v">—</span><span class="u">DU ozone</span>
+      <span class="meta" id="oz-m">—</span></div>`;
+  host.appendChild(oz);
+  const ozX=nm=>10+(nm-500)/200*300, ozY=t=>102-clamp(t,0,1)*94;
+  const ozShape=nm=>Math.exp(-Math.pow((nm-600)/28,2))+0.55*Math.exp(-Math.pow((nm-575)/18,2))+0.4*Math.exp(-Math.pow((nm-625)/20,2));
+  const ozT=nm=>1-(0.12+0.5*K.ozone/500)*ozShape(nm)/1.16;
+  dragify(oz.querySelector('#ozone'),e=>{ const r=oz.querySelector('#ozone').getBoundingClientRect();
+    K.ozone=Math.round(clamp(1-(e.clientY-r.top)/r.height,0,1)*400+100); render(); });
+
+  /* ground + grade */
+  const gg=document.createElement('div'); gg.className='card';
+  gg.innerHTML=`${cardLabel('Ground + grade','horizontal: albedo · vertical: saturation')}
+    <div class="plot" id="gg"><svg viewBox="0 0 320 96">
+      <defs><linearGradient id="ggg" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#2a2620"/><stop offset=".5" stop-color="#8a7a5c"/><stop offset="1" stop-color="#f2f4f6"/></linearGradient></defs>
+      <rect x="10" y="8" width="300" height="64" rx="10" fill="url(#ggg)"/>
+      <line id="gg-y" x1="10" x2="310" class="xhair" style="--ac:#fff"/>
+      <line id="gg-x" y1="8" y2="72" class="xhair" style="--ac:#fff"/>
+      <circle id="gg-d" r="6" fill="#0c0c0e" stroke="#fff" stroke-width="2.5"/>
+      <text x="10" y="86" class="axis">soil 0</text><text x="310" y="86" class="axis" text-anchor="end">snow 1</text>
+      <text x="310" y="20" class="axis" text-anchor="end">vivid ↑</text></svg></div>
+    <div class="vstrip"><span class="big num" id="gg-v">—</span><span class="u">ground albedo</span>
+      <span class="meta" id="gg-m">—</span></div>`;
+  host.appendChild(gg);
+  dragify(gg.querySelector('#gg'),e=>{ const r=gg.querySelector('#gg').getBoundingClientRect();
+    K.albedo=Math.round(clamp(((e.clientX-r.left)/r.width*320-10)/300,0,1)*100)/100;
+    K.saturation=Math.round(clamp(1-(e.clientY-r.top)/r.height,0,1)*150)/100;
+    render(); });
+
+  /* okta dial */
+  const ok=document.createElement('div'); ok.className='card';
+  ok.innerHTML=`${cardLabel('Cloud cover','angle: oktas · radius: altitude')}
+    <div class="plot" id="okta"><svg viewBox="0 0 200 200" id="ok-svg"></svg></div>
+    <div class="vstrip"><span class="big num" id="ok-v">—</span><span class="u">oktas</span>
+      <span class="meta" id="ok-m">—</span></div>
+    <div class="kv-grid"><div class="kv"><div class="k">COVERAGE</div><div class="v num" id="ok-c" style="font-size:12px">—</div></div>
+      <div class="kv"><div class="k">CLOUD BASE</div><div class="v num" id="ok-a" style="font-size:12px">—</div></div></div>`;
+  host.appendChild(ok);
+  const okSvg=ok.querySelector('#ok-svg'), okEl=ok.querySelector('#okta');
+  dragify(okEl,e=>{ const r=okEl.getBoundingClientRect();
+    const x=(e.clientX-r.left)/r.width*200-100, y=(e.clientY-r.top)/r.height*200-100;
+    let a=Math.atan2(y,x)+Math.PI/2; if(a<0)a+=2*Math.PI;
+    K.cover=Math.round(clamp(a/(2*Math.PI)*8,0,8)*10)/10;
+    const d=Math.sqrt(x*x+y*y);
+    K.cloudAlt=Math.round(500*Math.pow(12000/500,clamp((d-30)/62,0,1))/50)*50;
+    render(); });
+
+  /* coupling */
+  const cp=document.createElement('div'); cp.className='card';
+  cp.innerHTML=`${cardLabel('Sky–sun coupling','read-only — live from Sun.el')}
+    <div class="stat-row"><span class="k">Optical air mass</span><span class="v num" id="cp-m">—</span></div>
+    <div class="stat-row"><span class="k">Direct fraction ≈</span><span class="v num" id="cp-d">—</span></div>
+    <div class="stat-row"><span class="k">Diffuse fraction ≈</span><span class="v num" id="cp-f">—</span></div>
+    <div class="stat-row"><span class="k">Rayleigh depth τ</span><span class="v num" id="cp-t">—</span></div>
+    <div class="stat-row"><span class="k">Diffuse irradiance ≈</span><span class="v num" id="cp-h">—</span></div>`;
+  host.appendChild(cp);
+
+  /* -------- render -------- */
+  function render(){
+    const [hi,hf]=splitNum(K.turbidity,1);
+    hero.querySelector('#h-t').innerHTML=heroHTML(hi,hf,'T');
+    hero.querySelector('#h-pill').textContent=K.turbidity<2?'pristine alpine':K.turbidity<4?'clear day':K.turbidity<6?'hazy':K.turbidity<8?'smoggy':'overcast-like';
+    /* dome */
+    const c=skyColors(K.turbidity), zc=rgbCss(c.zen), hc=rgbCss(c.hor);
+    const edge=132-K.haze*2.6, S=state.sun, se=S.el*Math.PI/180;
+    const sunP=S.el>=0?[160+118*Math.cos(se),132-118*Math.sin(se)]:[262,146];
+    dSvg.innerHTML=`<defs><linearGradient id="dg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${zc}"/><stop offset="1" stop-color="${hc}"/></linearGradient></defs>
+      <rect x="0" y="132" width="320" height="36" fill="#0c0c0e"/>
+      <path d="M42,132 A118,118 0 0 1 278,132 Z" fill="url(#dg)" stroke="rgba(255,255,255,.2)"/>
+      <line x1="52" y1="73" x2="268" y2="73" stroke="rgba(255,255,255,.12)" stroke-dasharray="3 4"/>
+      <line x1="52" y1="29.8" x2="268" y2="29.8" stroke="rgba(255,255,255,.12)" stroke-dasharray="3 4"/>
+      <text x="46" y="70" class="axis">30°</text><text x="46" y="26.8" class="axis">60°</text>
+      <text x="160" y="12" class="axis" text-anchor="middle">ZENITH</text>
+      <rect x="42" y="${edge.toFixed(1)}" width="236" height="${Math.max(132-edge,0).toFixed(1)}" fill="${hc}" opacity=".55"/>
+      <line x1="42" y1="${edge.toFixed(1)}" x2="278" y2="${edge.toFixed(1)}" stroke="#fff" stroke-width="1.6" opacity=".8"/>
+      <circle cx="246" cy="${edge.toFixed(1)}" r="5.5" fill="#0c0c0e" stroke="#fff" stroke-width="2.5"/>
+      <line x1="8" y1="132" x2="312" y2="132" stroke="rgba(255,255,255,.3)"/>
+      <text x="312" y="145" class="axis" text-anchor="end">GROUND</text>
+      <circle cx="${sunP[0].toFixed(1)}" cy="${sunP[1].toFixed(1)}" r="7" fill="${S.el>=0?'#ffd166':'none'}" stroke="${S.el>=0?'none':'rgba(255,255,255,.4)'}" stroke-width="2"${S.el>=0?' style="filter:drop-shadow(0 0 8px #ffb454)"':''}/>`;
+    dm.querySelector('#dm-v').textContent=K.haze.toFixed(1);
+    dm.querySelector('#dm-m').innerHTML=`T ${K.turbidity.toFixed(1)} · band ×2 exaggerated`;
+    const mie=(K.turbidity-1)/9;
+    dm.querySelector('#dm-x').textContent=`${Math.round((1-mie)*100)} / ${Math.round(mie*100)} model`;
+    dm.querySelector('#dm-s').textContent=`sun az ${S.az.toFixed(0)}° · el ${S.el.toFixed(0)}°`;
+    /* ozone */
+    let c1='',a1='M 10 102 ';
+    for(let nm=500;nm<=700;nm+=4){ c1+=`${nm===500?'M':'L'} ${ozX(nm).toFixed(1)} ${ozY(ozT(nm)).toFixed(1)} `;
+      a1+=`L ${ozX(nm).toFixed(1)} ${ozY(ozT(nm)).toFixed(1)} `; }
+    oz.querySelector('#oz-c').setAttribute('d',c1);
+    oz.querySelector('#oz-a').setAttribute('d',a1+'L 310 102 Z');
+    oz.querySelector('#oz-x').setAttribute('x1',160); oz.querySelector('#oz-x').setAttribute('x2',160);
+    oz.querySelector('#oz-d').setAttribute('cx',160); oz.querySelector('#oz-d').setAttribute('cy',ozY(ozT(600)));
+    oz.querySelector('#oz-v').textContent=Math.round(K.ozone);
+    oz.querySelector('#oz-m').innerHTML=`dip ${((0.12+0.5*K.ozone/500)*100).toFixed(0)}% @ 600 nm · blue-hour ${K.ozone>350?'strong':'moderate'}`;
+    /* coupling */
+    const m=S.el>0?1/Math.sin(Math.max(S.el,0.5)*Math.PI/180):0;
+    const dir=S.el>0?Math.exp(-0.05*K.turbidity*m):0;
+    cp.querySelector('#cp-m').textContent=S.el>0?m.toFixed(2):'— night';
+    cp.querySelector('#cp-d').textContent=S.el>0?(dir*100).toFixed(0)+' %':'—';
+    cp.querySelector('#cp-f').textContent=S.el>0?((1-dir)*100).toFixed(0)+' %':'—';
+    const dhi=S.el>0?Math.round(S.intensity*(1-dir)):0;
+    cp.querySelector('#cp-t').textContent=(K.turbidity*0.00879).toFixed(4);
+    cp.querySelector('#cp-h').textContent=S.el>0?`${fmtLux(dhi)} lx`:'— night';
+    /* ground + grade */
+    const ggx=10+K.albedo*300, ggy=8+(1-K.saturation/1.5)*64;
+    gg.querySelector('#gg-x').setAttribute('x1',ggx); gg.querySelector('#gg-x').setAttribute('x2',ggx);
+    gg.querySelector('#gg-y').setAttribute('y1',ggy); gg.querySelector('#gg-y').setAttribute('y2',ggy);
+    gg.querySelector('#gg-d').setAttribute('cx',ggx); gg.querySelector('#gg-d').setAttribute('cy',ggy);
+    gg.querySelector('#gg-v').textContent=K.albedo.toFixed(2);
+    gg.querySelector('#gg-m').innerHTML=`bounce ≈ ${fmtLux(Math.round(K.albedo*dhi))} lx · sat ${K.saturation.toFixed(2)}×`;
+    /* okta */
+    const okW=(i)=>{ const a0=i/8*2*Math.PI-Math.PI/2, a1=(i+0.94)/8*2*Math.PI-Math.PI/2;
+      const p=(r,a)=>`${(100+r*Math.cos(a)).toFixed(1)} ${(100+r*Math.sin(a)).toFixed(1)}`;
+      return `M ${p(58,a0)} L ${p(78,a0)} A 78 78 0 0 1 ${p(78,a1)} L ${p(58,a1)} A 58 58 0 0 0 ${p(58,a0)} Z`; };
+    let okWedges='';
+    for(let i=0;i<8;i++){ const f=clamp(K.cover-i,0,1);
+      okWedges+=`<path d="${okW(i)}" fill="${f>0?'#8fc3ff':'none'}" opacity="${f>0?(0.25+0.65*f).toFixed(2):1}" stroke="rgba(255,255,255,${f>0?0:0.18})"/>`; }
+    const okT=Math.log(K.cloudAlt/500)/Math.log(12000/500), okR=30+okT*62;
+    const okA=K.cover/8*2*Math.PI-Math.PI/2;
+    const okHx=100+68*Math.cos(okA), okHy=100+68*Math.sin(okA);
+    const okDesc=K.cover<0.5?'clear':K.cover<2.5?'few':K.cover<4.5?'scattered':K.cover<6.5?'broken':'overcast';
+    okSvg.innerHTML=`${okWedges}
+      <circle cx="100" cy="100" r="${okR.toFixed(1)}" fill="none" stroke="rgba(143,195,255,.35)" stroke-dasharray="3 4"/>
+      <g fill="#e8edf5" opacity="${(0.2+0.7*K.cover/8).toFixed(2)}">
+        <circle cx="86" cy="104" r="13"/><circle cx="104" cy="98" r="16"/><circle cx="118" cy="106" r="11"/></g>
+      <text x="100" y="132" class="axis" text-anchor="middle">${K.cloudAlt>=1000?(K.cloudAlt/1000).toFixed(1)+' km':K.cloudAlt+' m'}</text>
+      <circle cx="${okHx.toFixed(1)}" cy="${okHy.toFixed(1)}" r="6" fill="#0c0c0e" stroke="#fff" stroke-width="2.5"/>
+      <text x="100" y="16" class="axis" text-anchor="middle">0 CLR</text>`;
+    ok.querySelector('#ok-v').textContent=K.cover.toFixed(1);
+    ok.querySelector('#ok-m').innerHTML=`${okDesc} · base ${K.cloudAlt>=1000?(K.cloudAlt/1000).toFixed(1)+' km':K.cloudAlt+' m'}`;
+    ok.querySelector('#ok-c').textContent=`${(K.cover/8*100).toFixed(0)} %`;
+    ok.querySelector('#ok-a').textContent=K.cloudAlt>=1000?`${(K.cloudAlt/1000).toFixed(1)} km`:`${K.cloudAlt} m`;
+  }
+  render();
+}
+
+/* ================================================================ MOON */
+const MOON_PHI=-26.19*Math.PI/180, MOON_DEC=-10*Math.PI/180;
+function moonDir(t){ const H=(t-24)*15*Math.PI/180;
+  const cd=Math.cos(MOON_DEC),sd=Math.sin(MOON_DEC),cp=Math.cos(MOON_PHI),sp=Math.sin(MOON_PHI);
+  const x=-cd*Math.sin(H), y=sd*cp-cd*Math.cos(H)*sp, z=sd*sp+cd*Math.cos(H)*cp;
+  return { az:(Math.atan2(x,y)*180/Math.PI+360)%360, el:Math.asin(clamp(z,-1,1))*180/Math.PI }; }
+const moonAlt=t=>moonDir(t).el;
+function moonRiseSet(){ let up=null,dn=null,prev=moonAlt(12);
+  for(let t=12.05;t<=36;t+=0.05){ const a=moonAlt(t);
+    if(prev<0&&a>=0&&up===null)up=t; if(prev>=0&&a<0)dn=t; prev=a; }
+  return [up,dn]; }
+const fmtT=t=>{ t=((t%24)+24)%24; const h=Math.floor(t),m=Math.floor((t-h)*60);
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; };
+const phaseName=p=>['New','Waxing crescent','First quarter','Waxing gibbous','Full moon','Waning gibbous','Last quarter','Waning crescent'][Math.floor((((p%1)+1)%1)*8+0.5)%8];
+const illumFrac=p=>(1-Math.cos(2*Math.PI*p))/2;
+const moonMlx=(p,g)=>105*Math.pow(Math.max(illumFrac(p),0),1.5)*g;
+function moonPhasePath(p,cx,cy,r){ const a=2*Math.PI*(((p%1)+1)%1);
+  if(a<0.06||a>2*Math.PI-0.06)return '';
+  if(Math.abs(a-Math.PI)<0.06)return `M ${cx-r} ${cy} A ${r} ${r} 0 1 0 ${cx+r} ${cy} A ${r} ${r} 0 1 0 ${cx-r} ${cy} Z`;
+  const wax=a<Math.PI, cres=Math.cos(a)>0, rx=Math.max(r*Math.abs(Math.cos(a)),0.01);
+  return `M ${cx} ${cy-r} A ${r} ${r} 0 0 ${wax?1:0} ${cx} ${cy+r} A ${rx.toFixed(2)} ${r} 0 0 ${(cres===wax)?0:1} ${cx} ${cy-r} Z`; }
+
+function pageMoon(host){ const M=state.moon;
+  host.insertAdjacentHTML('beforeend',headHTML('#cdd7ff','NIGHT LIGHT','Moon','phase · transit · glow'));
+  const hero=document.createElement('div'); hero.className='card';
+  hero.innerHTML=`${cardLabel('Illumination')}<div id="h-i"></div><div><span class="delta-pill" id="h-p">—</span></div>`;
+  host.appendChild(hero);
+
+  /* phase dial */
+  const ph=document.createElement('div'); ph.className='card';
+  ph.innerHTML=`${cardLabel('Phase dial','orbit: phase · radius: gain')}
+    <div class="plot" id="phdial"><svg viewBox="0 0 200 200" id="ph-svg"></svg></div>
+    <div class="vstrip"><span class="big num" id="ph-v">—</span><span class="u">% lit</span>
+      <span class="meta" id="ph-m">—</span></div>
+    <div class="kv-grid"><div class="kv"><div class="k">MOON AGE</div><div class="v num" id="ph-a" style="font-size:12px">—</div></div>
+      <div class="kv"><div class="k">GAIN · GROUND</div><div class="v num" id="ph-g" style="font-size:12px">—</div></div></div>`;
+  host.appendChild(ph);
+  const phSvg=ph.querySelector('#ph-svg'), phEl=ph.querySelector('#phdial');
+  dragify(phEl,e=>{ const r=phEl.getBoundingClientRect();
+    const x=(e.clientX-r.left)/r.width*200-100, y=(e.clientY-r.top)/r.height*200-100;
+    M.phase=(((Math.atan2(y,x)+Math.PI/2)/(2*Math.PI)%1)+1)%1;
+    const d=Math.sqrt(x*x+y*y);
+    M.gain=Math.round(Math.pow(10,-1+clamp((d-58)/16,0,1)*1.6)*100)/100;
+    render(); });
+
+  /* transit arc */
+  const tr=document.createElement('div'); tr.className='card';
+  tr.innerHTML=`${cardLabel('Transit arc','horizontal: time · vertical: earthshine')}
+    <div class="plot" id="transit"><svg viewBox="0 0 320 150" id="tr-svg"></svg></div>
+    <div class="vstrip"><span class="big num" id="tr-v">—</span><span class="u">az / el</span>
+      <span class="meta" id="tr-m">—</span></div>`;
+  host.appendChild(tr);
+  const trSvg=tr.querySelector('#tr-svg');
+  const trX=t=>10+(t-18)/12*300, trY=a=>132-(a+15)/105*124;
+  dragify(tr.querySelector('#transit'),e=>{ const r=tr.querySelector('#transit').getBoundingClientRect();
+    M.t=Math.round((18+clamp(((e.clientX-r.left)/r.width*320-10)/300,0,1)*12)*20)/20;
+    M.earthshine=Math.round(clamp(1-(e.clientY-r.top)/r.height,0,1)*100)/100; render(); });
+
+  /* phase brightness */
+  const pb=document.createElement('div'); pb.className='card';
+  pb.innerHTML=`${cardLabel('Phase brightness','horizontal: phase · vertical: distance')}
+    <div class="plot" id="pbright"><svg viewBox="0 0 320 118">
+      <path id="pb-a" fill="rgba(205,215,255,.14)"/><path id="pb-c" fill="none" stroke="#cdd7ff" stroke-width="2"/>
+      <line id="pb-r" x1="10" x2="310" y1="40" y2="40" stroke="rgba(255,255,255,.25)" stroke-dasharray="4 3"/>
+      <text id="pb-rl" x="304" y="35" class="axis" text-anchor="end">full-moon ref</text>
+      <line id="pb-x" y1="8" y2="102" class="xhair" style="--ac:#cdd7ff"/>
+      <circle id="pb-d" r="5" fill="#0c0c0e" stroke="#fff" stroke-width="2.5"/>
+      <text x="10" y="113" class="axis">new</text><text x="160" y="113" class="axis" text-anchor="middle">full</text>
+      <text x="310" y="113" class="axis" text-anchor="end">new</text></svg></div>
+    <div class="vstrip"><span class="big num" id="pb-v">—</span><span class="u">mlx on ground</span>
+      <span class="meta" id="pb-m">—</span></div>
+    <div class="kv-grid"><div class="kv"><div class="k">DISTANCE</div><div class="v num" id="pb-s" style="font-size:12px">—</div></div>
+      <div class="kv"><div class="k">ANGULAR ⌀</div><div class="v num" id="pb-z" style="font-size:12px">—</div></div></div>`;
+  host.appendChild(pb);
+  const pbX=p=>10+p*300, pbY=m=>102-(Math.log10(clamp(m,0.05,500))+1)/(Math.log10(500)+1)*94;
+  dragify(pb.querySelector('#pbright'),e=>{ const r=pb.querySelector('#pbright').getBoundingClientRect();
+    M.phase=Math.round(clamp(((e.clientX-r.left)/r.width*320-10)/300,0.001,0.999)*1000)/1000;
+    M.distance=Math.round(356400+clamp(1-(e.clientY-r.top)/r.height,0,1)*50300); render(); });
+
+  /* lunar tint */
+  const lt=document.createElement('div'); lt.className='card';
+  lt.innerHTML=`${cardLabel('Lunar tint','bipolar offset around auto base')}
+    <div class="plot" id="tint"><svg viewBox="0 0 320 84">
+      <defs><linearGradient id="ltg" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#ff9a3c"/><stop offset=".5" stop-color="#e8ecf5"/><stop offset="1" stop-color="#7aa2ff"/></linearGradient></defs>
+      <rect x="10" y="18" width="300" height="26" rx="13" fill="url(#ltg)"/>
+      <line x1="160" y1="12" x2="160" y2="50" stroke="#fff" stroke-width="2"/>
+      <line id="lt-x" y1="10" y2="52" class="xhair" style="--ac:#fff"/>
+      <circle id="lt-d" r="7" cy="31" fill="#0c0c0e" stroke="#fff" stroke-width="2.5"/>
+      <text x="10" y="66" class="axis">−1500 warm</text><text x="310" y="66" class="axis" text-anchor="end">+1500 cool</text></svg></div>
+    <div class="vstrip"><span class="big num" id="lt-v">—</span><span class="u">K effective</span>
+      <span class="meta" id="lt-m">—</span></div>
+    <div class="kv-grid"><div class="kv"><div class="k">AUTO BASE · OFFSET</div><div class="v num" id="lt-b" style="font-size:12px">—</div></div>
+      <div class="kv"><div class="k">MIRED</div><div class="v num" id="lt-r" style="font-size:12px">—</div></div></div>`;
+  host.appendChild(lt);
+  dragify(lt.querySelector('#tint'),e=>{ const r=lt.querySelector('#tint').getBoundingClientRect();
+    M.tintOffset=Math.round(clamp(((e.clientX-r.left)/r.width*320-10)/300,0,1)*3000-1500); render(); });
+
+  /* -------- render -------- */
+  function render(){
+    const k=illumFrac(M.phase), mlx=moonMlx(M.phase,M.gain);
+    const [hi,hf]=splitNum(k*100,1);
+    hero.querySelector('#h-i').innerHTML=heroHTML(hi,hf,'%');
+    hero.querySelector('#h-p').textContent=phaseName(M.phase);
+    /* dial */
+    const pa=2*Math.PI*M.phase-Math.PI/2;
+    const hx=100+78*Math.cos(pa), hy=100+78*Math.sin(pa);
+    const gr=58+16*(Math.log10(M.gain)+1)/1.6;
+    let ticks='';
+    for(let i=0;i<24;i++){ const a=i/24*2*Math.PI, big=i%6===0;
+      ticks+=`<line x1="${(100+72*Math.cos(a)).toFixed(1)}" y1="${(100+72*Math.sin(a)).toFixed(1)}" x2="${(100+(big?62:67)*Math.cos(a)).toFixed(1)}" y2="${(100+(big?62:67)*Math.sin(a)).toFixed(1)}" stroke="rgba(255,255,255,${big?0.4:0.15})" stroke-width="${big?2:1}"/>`; }
+    const lp=moonPhasePath(M.phase,100,100,54);
+    const eGlow=rgbCss([Math.round(20+M.earthshine*46),Math.round(22+M.earthshine*48),Math.round(28+M.earthshine*56)]);
+    phSvg.innerHTML=`<circle cx="100" cy="100" r="78" fill="none" stroke="rgba(255,255,255,.14)"/>${ticks}
+      <circle cx="100" cy="100" r="${gr.toFixed(1)}" fill="none" stroke="rgba(205,215,255,.3)" stroke-dasharray="3 4"/>
+      <circle cx="100" cy="100" r="54" fill="${eGlow}" stroke="rgba(255,255,255,.18)"/>
+      ${lp?`<clipPath id="mcl"><path d="${lp}"/></clipPath>
+      <path d="${lp}" fill="#e8ecf5" style="filter:drop-shadow(0 0 10px rgba(205,215,255,.45))"/>
+      <g clip-path="url(#mcl)" fill="rgba(120,130,150,.5)"><circle cx="86" cy="86" r="7"/><circle cx="112" cy="104" r="5"/><circle cx="96" cy="118" r="4"/><circle cx="116" cy="80" r="3.4"/></g>`:''}
+      <line x1="100" y1="100" x2="${hx.toFixed(1)}" y2="${hy.toFixed(1)}" stroke="rgba(255,255,255,.25)"/>
+      <circle cx="${hx.toFixed(1)}" cy="${hy.toFixed(1)}" r="6" fill="#0c0c0e" stroke="#fff" stroke-width="2.5"/>`;
+    ph.querySelector('#ph-v').textContent=(k*100).toFixed(1);
+    ph.querySelector('#ph-m').innerHTML=`${phaseName(M.phase)} · ${(M.phase*29.53).toFixed(1)} days · PA ${(Math.abs(M.phase-0.5)*2*180).toFixed(0)}°`;
+    ph.querySelector('#ph-a').textContent=`${(M.phase*29.53).toFixed(1)} days`;
+    ph.querySelector('#ph-g').textContent=`×${M.gain.toFixed(2)} · ${mlx<1?mlx.toFixed(2):mlx.toFixed(1)} mlx`;
+    /* transit */
+    const pts=[]; for(let t=18;t<=30.001;t+=0.12)pts.push([t,moonAlt(t)]);
+    const one=f=>pts.filter(f).map(([t,a],i)=>`${i?'L':'M'} ${trX(t).toFixed(1)} ${trY(a).toFixed(1)}`).join(' ');
+    const md=moonDir(M.t), mx=trX(M.t), my=trY(md.el), upM=md.el>=0;
+    const [rise,set]=moonRiseSet();
+    let grid='';
+    [[18,'18'],[21,'21'],[24,'00'],[27,'03'],[30,'06']].forEach(([t,l])=>{
+      grid+=`<line x1="${trX(t)}" y1="8" x2="${trX(t)}" y2="132" stroke="rgba(255,255,255,.07)"/>`
+        +`<text x="${trX(t)}" y="144" class="axis" text-anchor="middle">${l}:00</text>`; });
+    trSvg.innerHTML=`${grid}
+      <rect x="10" y="${trY(0).toFixed(1)}" width="300" height="${(132-trY(0)).toFixed(1)}" fill="rgba(0,0,0,.4)"/>
+      <line x1="10" y1="${trY(0).toFixed(1)}" x2="310" y2="${trY(0).toFixed(1)}" stroke="rgba(255,255,255,.3)"/>
+      <text x="304" y="${(trY(0)-5).toFixed(1)}" class="axis" text-anchor="end">horizon</text>
+      <path d="${one(q=>q[1]>=-0.5)}" fill="none" stroke="#cdd7ff" stroke-width="2"/>
+      <path d="${one(q=>q[1]<-0.5)}" fill="none" stroke="rgba(205,215,255,.3)" stroke-width="1.6" stroke-dasharray="4 3"/>
+      <line x1="${mx.toFixed(1)}" y1="8" x2="${mx.toFixed(1)}" y2="132" stroke="rgba(255,255,255,.2)"/>
+      <circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="12" fill="rgba(205,215,255,.15)"/>
+      <circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="6" fill="${upM?'#e8ecf5':'none'}" stroke="${upM?'none':'rgba(255,255,255,.4)'}" stroke-width="2"/>
+      <text x="${mx.toFixed(1)}" y="${(my-16).toFixed(1)}" class="axis" text-anchor="middle">${fmtT(M.t)}</text>`;
+    tr.querySelector('#tr-v').textContent=`${md.az.toFixed(1)}° / ${md.el.toFixed(1)}°`;
+    tr.querySelector('#tr-m').innerHTML=`${fmtT(M.t)} · rise ${rise?fmtT(rise):'—'} · set ${set?fmtT(set):'—'}${upM?'':' · below horizon'} · glow ${(M.earthshine*100).toFixed(0)}%`;
+    /* brightness */
+    let c2='',a2='M 10 102 ';
+    for(let p=0;p<=1.001;p+=0.02){ const m=moonMlx(p,M.gain);
+      c2+=`${p===0?'M':'L'} ${pbX(p).toFixed(1)} ${pbY(m).toFixed(1)} `;
+      a2+=`L ${pbX(p).toFixed(1)} ${pbY(m).toFixed(1)} `; }
+    pb.querySelector('#pb-c').setAttribute('d',c2);
+    pb.querySelector('#pb-a').setAttribute('d',a2+'L 310 102 Z');
+    const ry=pbY(105*M.gain);
+    pb.querySelector('#pb-r').setAttribute('y1',ry); pb.querySelector('#pb-r').setAttribute('y2',ry);
+    pb.querySelector('#pb-rl').setAttribute('y',ry-5);
+    pb.querySelector('#pb-x').setAttribute('x1',pbX(M.phase)); pb.querySelector('#pb-x').setAttribute('x2',pbX(M.phase));
+    pb.querySelector('#pb-d').setAttribute('cx',pbX(M.phase)); pb.querySelector('#pb-d').setAttribute('cy',pbY(mlx));
+    pb.querySelector('#pb-v').textContent=mlx<1?mlx.toFixed(2):mlx.toFixed(1);
+    pb.querySelector('#pb-m').innerHTML=`full-moon ref 105 mlx · gain ×${M.gain.toFixed(2)}`;
+    const mArcmin=2*Math.asin(1737.4/M.distance)*180/Math.PI*60;
+    pb.querySelector('#pb-s').textContent=`${M.distance.toLocaleString('en-US')} km`;
+    pb.querySelector('#pb-z').textContent=`${mArcmin.toFixed(1)}′${M.distance<360000?' · perigee':M.distance>405000?' · apogee':''}`;
+    /* tint */
+    const md2=moonDir(M.t), mBase=2500+2500*Math.sin(Math.max(md2.el,0)*Math.PI/180);
+    const mEff=clamp(Math.round(mBase+M.tintOffset),1800,12000), mEc=kelvinToRgb(mEff);
+    const ltx=10+(M.tintOffset+1500)/3000*300;
+    lt.querySelector('#lt-x').setAttribute('x1',ltx); lt.querySelector('#lt-x').setAttribute('x2',ltx);
+    lt.querySelector('#lt-d').setAttribute('cx',ltx);
+    lt.querySelector('#lt-d').style.fill=rgbCss(mEc);
+    lt.querySelector('#lt-v').textContent=mEff;
+    lt.querySelector('#lt-m').innerHTML=`<span class="swatch" style="background:${rgbCss(mEc)}"></span>${mEc[0]} ${mEc[1]} ${mEc[2]}`;
+    lt.querySelector('#lt-b').textContent=`${Math.round(mBase)} · ${M.tintOffset>=0?'+':''}${M.tintOffset}`;
+    lt.querySelector('#lt-r').textContent=`${Math.round(1e6/mEff)} mired`;
+  }
+  render();
+}
+
+
+/* ================================================================ FOG */
+const fmtDist=v=>v>=1000?(v/1000).toFixed(1)+' km':Math.round(v)+' m';
+function pageFog(host){ const F=state.fog;
+  host.insertAdjacentHTML('beforeend',headHTML('#9fd8b4','EXPONENTIAL FOG','Height_Fog','extinction · height falloff'));
+  const hero=document.createElement('div'); hero.className='card';
+  hero.innerHTML=`${cardLabel('Visibility · Koschmieder')}<div id="h-v"></div><div><span class="delta-pill" id="h-p">—</span></div>`;
+  host.appendChild(hero);
+
+  /* extinction curve */
+  const fx=document.createElement('div'); fx.className='card';
+  fx.innerHTML=`${cardLabel('Extinction curve','drag — draw the transmittance you want')}
+    <div class="plot" id="fext"><svg viewBox="0 0 320 128" id="fx-svg"></svg></div>
+    <div class="vstrip"><span class="big num" id="fx-v">—</span><span class="u">σ · 1/km</span>
+      <span class="meta" id="fx-m">—</span></div>
+    <div class="kv-grid"><div class="kv"><div class="k">HALF-DISTANCE d½</div><div class="v num" id="fx-h" style="font-size:12px">—</div></div>
+      <div class="kv"><div class="k">T @ 100 M</div><div class="v num" id="fx-t" style="font-size:12px">—</div></div>
+      <div class="kv"><div class="k">DECADIC</div><div class="v num" id="fx-d" style="font-size:12px">—</div></div></div>`;
+  host.appendChild(fx);
+  const fxSvg=fx.querySelector('#fx-svg'), fxEl=fx.querySelector('#fext');
+  const fxXMax=()=>{ const V=3912/F.sigma, d50=Math.LN2/F.sigma*1000, need=Math.max(d50*5,V*0.35);
+    for(const st of [100,200,500,1000,2000,5000,10000,20000,50000]) if(need<=st) return st; return 50000; };
+  let fxXm=5000, fxOn=false;
+  fxEl.addEventListener('pointerdown',e=>{ fxOn=true; fxXm=fxXMax(); fxEl.setPointerCapture(e.pointerId); fxMove(e); });
+  fxEl.addEventListener('pointermove',e=>{ if(fxOn)fxMove(e); });
+  fxEl.addEventListener('pointerup',()=>{ fxOn=false; render(); });
+  function fxMove(e){ const r=fxEl.getBoundingClientRect();
+    const d=clamp((e.clientX-r.left)/r.width*320-10,4,300)/300*fxXm;
+    const T=clamp(1-((e.clientY-r.top)/r.height*128-8)/96,0.01,0.99);
+    F.sigma=Math.round(clamp(-Math.log(T)/(Math.max(d,5)/1000),0.02,12)*1000)/1000;
+    render(); }
+
+  /* height profile */
+  const fp=document.createElement('div'); fp.className='card';
+  fp.innerHTML=`${cardLabel('Height profile','knees: base offset + falloff height')}
+    <div class="plot" id="fprof"><svg viewBox="0 0 320 128" id="fp-svg"></svg></div>
+    <div class="vstrip"><span class="big num" id="fh-v">—</span><span class="u">m falloff H</span>
+      <span class="meta" id="fh-m">—</span></div>`;
+  host.appendChild(fp);
+  const fpSvg=fp.querySelector('#fp-svg');
+  const fpY=h=>112-h/60*104;
+  const fpEl=fp.querySelector('#fprof'); let fpMode=null;
+  const fpPos=e=>{ const r=fpEl.getBoundingClientRect();
+    return [(e.clientX-r.left)/r.width*320,(e.clientY-r.top)/r.height*128]; };
+  fpEl.addEventListener('pointerdown',e=>{ const [,y]=fpPos(e);
+    fpMode=Math.abs(y-fpY(F.base))<Math.abs(y-fpY(F.falloff))?'base':'H';
+    if(F.base<0.5&&y>fpY(4))fpMode='base';
+    fpEl.setPointerCapture(e.pointerId); fpMove(e); });
+  fpEl.addEventListener('pointermove',e=>{ if(fpMode)fpMove(e); });
+  fpEl.addEventListener('pointerup',()=>fpMode=null);
+  function fpMove(e){ const [,y]=fpPos(e);
+    if(fpMode==='base')F.base=Math.round(clamp((112-y)/104*60,0,20)*10)/10;
+    else F.falloff=Math.round(clamp((112-y)/104*60,1,60)*10)/10; render(); }
+
+  /* scattering lobe */
+  const lb=document.createElement('div'); lb.className='card';
+  lb.innerHTML=`${cardLabel('Scattering lobe','horizontal: anisotropy · vertical: albedo')}
+    <div class="plot" id="lobe"><svg viewBox="0 0 320 150" id="lb-svg"></svg></div>
+    <div class="vstrip"><span class="big num" id="lb-v">—</span><span class="u">anisotropy g</span>
+      <span class="meta" id="lb-m">—</span></div>
+    <div class="kv-grid"><div class="kv"><div class="k">FORWARD GAIN</div><div class="v num" id="lb-f" style="font-size:12px">—</div></div>
+      <div class="kv"><div class="k">ALBEDO · ABSORB</div><div class="v num" id="lb-a" style="font-size:12px">—</div></div></div>`;
+  host.appendChild(lb);
+  const lbSvg=lb.querySelector('#lb-svg');
+  dragify(lb.querySelector('#lobe'),e=>{ const r=lb.querySelector('#lobe').getBoundingClientRect();
+    F.aniso=Math.round(clamp(((e.clientX-r.left)/r.width*320-10)/300,0,1)*180-90)/100;
+    F.albedo=Math.round(clamp(1-(e.clientY-r.top)/r.height,0,1)*50+50)/100;
+    render(); });
+
+  /* -------- render -------- */
+  function render(){
+    const V=3912/F.sigma, xm=fxXMax();
+    if(V>=1000){ const [hi,hf]=splitNum(V/1000,2); hero.querySelector('#h-v').innerHTML=heroHTML(hi,hf,'km'); }
+    else hero.querySelector('#h-v').innerHTML=heroHTML(String(Math.round(V)),'','m');
+    hero.querySelector('#h-p').textContent=F.sigma<0.2?'crystal clear':F.sigma<1?'light haze':F.sigma<3?'misty':'dense fog';
+    /* extinction */
+    const X=d=>10+d/xm*300, Y=t=>104-clamp(t,0,1)*96;
+    const T=d=>Math.exp(-F.sigma*d/1000);
+    let c='',a='M 10 104 ';
+    for(let i=0;i<=60;i++){ const d=i/60*xm;
+      c+=`${i?'L':'M'} ${X(d).toFixed(1)} ${Y(T(d)).toFixed(1)} `;
+      a+=`L ${X(d).toFixed(1)} ${Y(T(d)).toFixed(1)} `; }
+    const d50=Math.LN2/F.sigma*1000, vx=X(Math.min(V,xm)), hx=X(Math.min(d50,xm));
+    fxSvg.innerHTML=`
+      <line x1="10" y1="${Y(0.5)}" x2="310" y2="${Y(0.5)}" stroke="rgba(255,255,255,.1)" stroke-dasharray="3 4"/>
+      <text x="12" y="${Y(0.5)-4}" class="axis">50%</text>
+      <line x1="10" y1="104" x2="310" y2="104" stroke="rgba(255,255,255,.2)"/>
+      <text x="10" y="118" class="axis">0</text>
+      <text x="160" y="118" class="axis" text-anchor="middle">${fmtDist(xm/2)}</text>
+      <text x="310" y="118" class="axis" text-anchor="end">${fmtDist(xm)}</text>
+      <path d="${a}L 310 104 Z" fill="rgba(159,216,180,.14)"/>
+      <path d="${c}" fill="none" stroke="#9fd8b4" stroke-width="2"/>
+      <line x1="${vx.toFixed(1)}" y1="8" x2="${vx.toFixed(1)}" y2="104" stroke="rgba(255,255,255,.3)" stroke-dasharray="4 3"/>
+      <text x="${vx.toFixed(1)}" y="16" class="axis" text-anchor="middle">V</text>
+      <line x1="${hx.toFixed(1)}" y1="8" x2="${hx.toFixed(1)}" y2="104" class="xhair" style="--ac:#9fd8b4"/>
+      <circle cx="${hx.toFixed(1)}" cy="${Y(T(Math.min(d50,xm))).toFixed(1)}" r="5" fill="#0c0c0e" stroke="#fff" stroke-width="2.5"/>`;
+    fx.querySelector('#fx-v').textContent=F.sigma<1?F.sigma.toFixed(3):F.sigma.toFixed(2);
+    fx.querySelector('#fx-m').innerHTML=`V ${fmtDist(V)} · T = e^-σd`;
+    fx.querySelector('#fx-h').textContent=fmtDist(d50);
+    fx.querySelector('#fx-t').textContent=(T(100)*100).toFixed(1)+' %';
+    fx.querySelector('#fx-d').textContent=(F.sigma*4.343).toFixed(2)+' dB/km';
+    /* height */
+    let prof=`M 60 ${fpY(0)} `;
+    for(let h=0;h<=60;h+=2)prof+=`L ${(60+230*Math.exp(-h/F.falloff)).toFixed(1)} ${fpY(h).toFixed(1)} `;
+    prof+=`L 60 ${fpY(60)} Z`;
+    fpSvg.innerHTML=`
+      <text x="52" y="${fpY(60)+3}" class="axis" text-anchor="end">60</text>
+      <text x="52" y="${fpY(30)+3}" class="axis" text-anchor="end">30</text>
+      <text x="52" y="${fpY(0)+3}" class="axis" text-anchor="end">0 m</text>
+      <line x1="60" y1="8" x2="60" y2="112" stroke="rgba(255,255,255,.2)"/>
+      <path d="${prof}" fill="rgba(159,216,180,.2)" stroke="#9fd8b4" stroke-width="2"/>
+      <line x1="8" y1="112" x2="312" y2="112" stroke="rgba(255,255,255,.3)"/>
+      <text x="312" y="108" class="axis" text-anchor="end">GROUND</text>
+      <rect x="60" y="${fpY(F.base).toFixed(1)}" width="240" height="${(112-fpY(F.base)).toFixed(1)}" fill="#0c0c0e" opacity=".72"/>
+      <text x="292" y="${(112-4).toFixed(0)}" class="axis" text-anchor="end">CLEAR</text>
+      <line x1="60" y1="${fpY(F.base).toFixed(1)}" x2="300" y2="${fpY(F.base).toFixed(1)}" stroke="#f2c267" stroke-width="1.4" stroke-dasharray="5 3" opacity=".85"/>
+      <circle cx="80" cy="${fpY(F.base).toFixed(1)}" r="5.5" fill="#0c0c0e" stroke="#f2c267" stroke-width="2.5"/>
+      <line x1="60" y1="${fpY(F.falloff).toFixed(1)}" x2="300" y2="${fpY(F.falloff).toFixed(1)}" stroke="#fff" stroke-width="1.4" stroke-dasharray="5 3" opacity=".7"/>
+      <circle cx="290" cy="${fpY(F.falloff).toFixed(1)}" r="5.5" fill="#0c0c0e" stroke="#fff" stroke-width="2.5"/>
+      <text x="276" y="${(fpY(F.falloff)-8).toFixed(1)}" class="axis" text-anchor="end">H</text>`;
+    fp.querySelector('#fh-v').textContent=F.falloff.toFixed(1);
+    fp.querySelector('#fh-m').innerHTML=`half-density at ${(F.falloff*Math.LN2).toFixed(1)} m · surface σ ${F.sigma} /km · base ${F.base.toFixed(1)} m`;
+    /* lobe */
+    const hgF=(g,c)=>{ const d=1+g*g-2*g*c; return (1-g*g)/Math.pow(Math.max(d,1e-6),1.5); };
+    let lobe='';
+    for(let i=0;i<=72;i++){ const th=i/72*2*Math.PI, lc=Math.cos(th);
+      const lp=hgF(F.aniso,lc), lmax=hgF(F.aniso,F.aniso>=0?1:-1);
+      const lr=8+58*lp/lmax, lX=160+lr*lc, lY=75-lr*Math.sin(th);
+      lobe+=`${i?'L':'M'} ${lX.toFixed(1)} ${lY.toFixed(1)} `; }
+    const fgain=(1+F.aniso)/Math.pow(Math.max(1-F.aniso,0.05),2);
+    lbSvg.innerHTML=`
+      <line x1="10" y1="75" x2="310" y2="75" stroke="rgba(255,255,255,.12)"/>
+      <line x1="160" y1="10" x2="160" y2="140" stroke="rgba(255,255,255,.12)"/>
+      <circle cx="160" cy="75" r="66" fill="none" stroke="rgba(255,255,255,.08)" stroke-dasharray="3 4"/>
+      <text x="306" y="70" class="axis" text-anchor="end">sunward</text>
+      <path d="${lobe}Z" fill="rgba(159,216,180,${(0.1+0.5*F.albedo).toFixed(2)})" stroke="#9fd8b4" stroke-width="2"/>
+      <circle cx="160" cy="75" r="4" fill="#9fd8b4"/>`;
+    lb.querySelector('#lb-v').textContent=(F.aniso>=0?'+':'')+F.aniso.toFixed(2);
+    lb.querySelector('#lb-m').innerHTML=F.aniso>0.3?'strong forward throw':F.aniso<-0.3?'back-scatter glory':'near-isotropic';
+    lb.querySelector('#lb-f').textContent=`×${fgain>=10?fgain.toFixed(0):fgain.toFixed(1)}`;
+    lb.querySelector('#lb-a').textContent=`${F.albedo.toFixed(2)} · ${((1-F.albedo)*100).toFixed(0)}%`;
+  }
+  render();
+}
+
+/* ================================================================ SPOT */
+function pageSpot(host){ const P=state.spot;
+  const beamLm=()=>2*Math.PI*P.intensity*(1-Math.cos(P.outer/2*Math.PI/180));
+  host.insertAdjacentHTML('beforeend',headHTML('#ffb469','SPOT LIGHT','Key_Spot','cone · candela · kelvin'));
+  const hero=document.createElement('div'); hero.className='card';
+  hero.innerHTML=`${cardLabel('Peak intensity')}<div id="h-i"></div><div><span class="delta-pill" id="h-b">—</span></div>`;
+  host.appendChild(hero);
+
+  /* cone section */
+  const cn=document.createElement('div'); cn.className='card';
+  cn.innerHTML=`${cardLabel('Cone section','edges: angles · apex: cd · flag: range · plane: throw')}
+    <div class="plot" id="cone"><svg viewBox="0 0 320 190" id="cn-svg"></svg></div>
+    <div class="vstrip"><span class="big num" id="cn-v">—</span><span class="u">lx centre @ plane</span>
+      <span class="meta" id="cn-m">—</span></div>
+    <div class="kv-grid"><div class="kv"><div class="k">INNER / OUTER</div><div class="v num" id="cn-io" style="font-size:12px">—</div></div>
+      <div class="kv"><div class="k">BEAM LUMENS</div><div class="v num" id="cn-bm" style="font-size:12px">—</div></div>
+      <div class="kv"><div class="k">CONE SOLID ANGLE</div><div class="v num" id="cn-sr" style="font-size:12px">—</div></div></div>`;
+  host.appendChild(cn);
+  const cnSvg=cn.querySelector('#cn-svg'), cnEl=cn.querySelector('#cone');
+  const cnPlaneX=()=>70+(P.throw-1)/9*220;
+  const rgX=()=>70+(P.range-1)/19*220;
+  const cnPos=e=>{ const r=cnEl.getBoundingClientRect();
+    return [(e.clientX-r.left)/r.width*320,(e.clientY-r.top)/r.height*190]; };
+  const cnHandles=()=>{ const px=cnPlaneX(), len=px-36;
+    return { px, len,
+      iy:95-len*Math.tan(P.inner/2*Math.PI/180),
+      oy:95-len*Math.tan(P.outer/2*Math.PI/180) }; };
+  let cnMode=null;
+  cnEl.addEventListener('pointerdown',e=>{ const [x,y]=cnPos(e), h=cnHandles();
+    const dI=Math.hypot(x-h.px,y-clamp(h.iy,16,174)), dO=Math.hypot(x-h.px,y-clamp(h.oy,16,174));
+    const rgm=rgX();
+    cnMode=(Math.abs(x-rgm)<14&&y<50)?'range':(dI<22&&dI<=dO)?'inner':(dO<22?'outer':(x<70?'gain':'throw'));
+    cnEl.setPointerCapture(e.pointerId); cnMove(e); });
+  cnEl.addEventListener('pointermove',e=>{ if(cnMode)cnMove(e); });
+  cnEl.addEventListener('pointerup',()=>cnMode=null);
+  function cnMove(e){ const [x,y]=cnPos(e), h=cnHandles();
+    if(cnMode==='inner')P.inner=Math.round(clamp(2*Math.atan(Math.abs(y-95)/h.len)*180/Math.PI,5,P.outer-2)*10)/10;
+    else if(cnMode==='outer')P.outer=Math.round(clamp(2*Math.atan(Math.abs(y-95)/h.len)*180/Math.PI,P.inner+2,90)*10)/10;
+    else if(cnMode==='gain')P.intensity=Math.round(Math.pow(10,1+clamp(1-(y-15)/160,0,1)*3.3));
+    else if(cnMode==='range')P.range=Math.round((1+clamp((x-70)/220,0,1)*19)*10)/10;
+    else P.throw=Math.round((1+clamp((x-70)/220,0,1)*9)*10)/10;
+    render(); }
+
+  /* temp wheel */
+  const TN=[[1800,'candle'],[2700,'tungsten'],[3200,'halogen'],[5600,'daylight'],[6500,'overcast'],[9000,'shade']];
+  const tnName=v=>{ let n=TN[0][1]; for(const [a,l] of TN) if(v>=a) n=l; return n; };
+  const tw=document.createElement('div'); tw.className='card';
+  tw.innerHTML=`${cardLabel('Temperature wheel','drag around the arc')}
+    <div class="plot" id="twheel"><svg viewBox="0 0 320 158" id="tw-svg"></svg></div>
+    <div class="vstrip"><span class="big num" id="tw-v">—</span><span class="u">K</span>
+      <span class="meta" id="tw-m">—</span></div>
+    <div class="kv-grid"><div class="kv"><div class="k">MIRED</div><div class="v num" id="tw-r" style="font-size:12px">—</div></div>
+      <div class="kv"><div class="k">sRGB TINT</div><div class="v num" id="tw-t" style="font-size:12px">—</div></div></div>`;
+  host.appendChild(tw);
+  const twSvg=tw.querySelector('#tw-svg');
+  const twT=()=>Math.log(P.temp/1800)/Math.log(12000/1800);
+  dragify(tw.querySelector('#twheel'),e=>{ const r=tw.querySelector('#twheel').getBoundingClientRect();
+    const x=(e.clientX-r.left)/r.width*320-160, y=132-(e.clientY-r.top)/r.height*158;
+    const t=clamp(1-Math.atan2(Math.max(y,0),x)/Math.PI,0,1);
+    P.temp=Math.round(1800*Math.pow(12000/1800,t)); render(); });
+
+  /* placement */
+  const pl=document.createElement('div'); pl.className='card';
+  pl.innerHTML=`${cardLabel('Placement','read-only — authored in the modelling tool')}
+    <div class="stat-row"><span class="k">Fixture (world)</span><span class="v num" style="font-size:12px">${P.pos.map(v=>v.toFixed(2)).join(' · ')} m</span></div>
+    <div class="stat-row"><span class="k">Aimed at</span><span class="v num" style="font-size:12px">Box_Tall centre</span></div>`;
+  host.appendChild(pl);
+
+  /* decay curve */
+  const dc=document.createElement('div'); dc.className='card';
+  dc.innerHTML=`${cardLabel('Decay law','drag vertically — falloff exponent')}
+    <div class="plot" id="decay"><svg viewBox="0 0 320 118">
+      <path id="dc-a" fill="rgba(255,180,105,.13)"/><path id="dc-c" fill="none" stroke="#ffb469" stroke-width="2"/>
+      <path id="dc-r" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="1.4" stroke-dasharray="4 3"/>
+      <text x="304" y="20" class="axis" text-anchor="end">n = 2 physical</text>
+      <line id="dc-x" y1="8" y2="100" class="xhair" style="--ac:#ffb469"/>
+      <circle id="dc-d" r="5" fill="#0c0c0e" stroke="#fff" stroke-width="2.5"/>
+      <text x="10" y="112" class="axis">0.5 m</text><text x="310" y="112" class="axis" text-anchor="end">15 m</text></svg></div>
+    <div class="vstrip"><span class="big num" id="dc-v">—</span><span class="u">decay exponent</span>
+      <span class="meta" id="dc-m">—</span></div>`;
+  host.appendChild(dc);
+  const dcX=d=>10+(d-0.5)/14.5*300;
+  const dcMax=()=>P.intensity/Math.pow(0.5,P.decay);
+  const dcY=e=>100-clamp(e/dcMax(),0,1)*92;
+  dragify(dc.querySelector('#decay'),e=>{ const r=dc.querySelector('#decay').getBoundingClientRect();
+    P.decay=Math.round(clamp(1-(e.clientY-r.top)/r.height,0,1)*4*100)/100; render(); });
+
+  /* softness gauge */
+  const sg=document.createElement('div'); sg.className='card';
+  sg.innerHTML=`${cardLabel('Shadow softness','drag around the meter — source radius')}
+    <div class="plot" id="soft"><svg viewBox="0 0 320 130" id="sg-svg"></svg></div>
+    <div class="vstrip"><span class="big num" id="sg-v">—</span><span class="u">cm source radius</span>
+      <span class="meta" id="sg-m">—</span></div>`;
+  host.appendChild(sg);
+  const sgSvg=sg.querySelector('#sg-svg');
+  dragify(sg.querySelector('#soft'),e=>{ const r=sg.querySelector('#soft').getBoundingClientRect();
+    const x=(e.clientX-r.left)/r.width*320-160, y=112-(e.clientY-r.top)/r.height*130;
+    const t=clamp(1-Math.atan2(Math.max(y,0),x)/Math.PI,0,1);
+    P.srcRadius=Math.round(t*30*10)/10; render(); });
+
+  /* gel wheel */
+  const gw=document.createElement('div'); gw.className='card';
+  gw.innerHTML=`${cardLabel('Gel wheel','angle: hue · radius: saturation')}
+    <div class="plot" id="gel"><svg viewBox="0 0 200 168" id="gw-svg"></svg></div>
+    <div class="vstrip"><span class="big num" id="gw-v">—</span><span class="u">° gel hue</span>
+      <span class="meta" id="gw-m">—</span></div>`;
+  host.appendChild(gw);
+  const gwSvg=gw.querySelector('#gw-svg'), gwEl=gw.querySelector('#gel');
+  dragify(gwEl,e=>{ const r=gwEl.getBoundingClientRect();
+    const x=(e.clientX-r.left)/r.width*200-100, y=(e.clientY-r.top)/r.height*168-88;
+    let a=Math.atan2(x,-y)*180/Math.PI; if(a<0)a+=360;
+    P.gelHue=Math.round(a);
+    P.gelSat=Math.round(clamp((Math.sqrt(x*x+y*y)-8)/50,0,1)*100)/100;
+    render(); });
+
+  /* -------- render -------- */
+  function render(){
+    hero.querySelector('#h-i').innerHTML=P.intensity>=1000
+      ?heroHTML((P.intensity/1000).toFixed(1)+'k','','cd'):heroHTML(String(Math.round(P.intensity)),'','cd');
+    hero.querySelector('#h-b').textContent=`≈ ${Math.round(beamLm())} lm beam`;
+    /* cone */
+    const px=cnPlaneX(), len=px-36, rgx=rgX();
+    const hO=len*Math.tan(P.outer/2*Math.PI/180), hI=len*Math.tan(P.inner/2*Math.PI/180);
+    const pool=2*P.throw*Math.tan(P.outer/2*Math.PI/180), centre=P.throw<=P.range?P.intensity/Math.pow(P.throw,P.decay):0;
+    const edge=Math.pow(Math.cos(P.outer/2*Math.PI/180),3)*100;
+    cnSvg.innerHTML=`<defs><clipPath id="cncl"><rect x="8" y="14" width="304" height="162"/></clipPath></defs>
+      <g clip-path="url(#cncl)">
+        <polygon points="36,95 ${(px).toFixed(1)},${(95-hO).toFixed(1)} ${px.toFixed(1)},${(95+hO).toFixed(1)}" fill="rgba(255,180,105,.10)"/>
+        <polygon points="36,95 ${px.toFixed(1)},${(95-hI).toFixed(1)} ${px.toFixed(1)},${(95+hI).toFixed(1)}" fill="rgba(255,180,105,.22)"/>
+        <line x1="36" y1="95" x2="312" y2="95" stroke="rgba(255,255,255,.18)" stroke-dasharray="5 4"/>
+        <line x1="${px.toFixed(1)}" y1="${(95-hO).toFixed(1)}" x2="${px.toFixed(1)}" y2="${(95+hO).toFixed(1)}" stroke="rgba(255,255,255,.4)" stroke-width="2"/>
+        <line x1="${(px-6).toFixed(1)}" y1="${(95-hO).toFixed(1)}" x2="${(px+6).toFixed(1)}" y2="${(95-hO).toFixed(1)}" stroke="rgba(255,255,255,.4)" stroke-width="2"/>
+        <line x1="${(px-6).toFixed(1)}" y1="${(95+hO).toFixed(1)}" x2="${(px+6).toFixed(1)}" y2="${(95+hO).toFixed(1)}" stroke="rgba(255,255,255,.4)" stroke-width="2"/>
+      </g>
+      <rect x="24" y="84" width="16" height="22" rx="4" fill="#1c1c20" stroke="rgba(255,255,255,.25)"/>
+      <circle cx="40" cy="95" r="4" fill="#ffd9a8" style="filter:drop-shadow(0 0 6px #ffb469)"/>
+      <text x="14" y="30" class="axis">APEX = cd</text>
+      <text x="${px.toFixed(1)}" y="186" class="axis" text-anchor="middle">${P.throw.toFixed(1)} m</text>
+      <text x="308" y="186" class="axis" text-anchor="end">pool ${pool<10?pool.toFixed(2):pool.toFixed(1)} m</text>
+      <line x1="${px.toFixed(1)}" y1="14" x2="${px.toFixed(1)}" y2="176" stroke="rgba(255,255,255,.12)" stroke-dasharray="2 3"/>
+      <rect x="${rgx.toFixed(1)}" y="14" width="${(312-rgx).toFixed(1)}" height="162" fill="#000" opacity=".45"/>
+      <line x1="${rgx.toFixed(1)}" y1="14" x2="${rgx.toFixed(1)}" y2="176" stroke="#f2c267" stroke-width="1.6" stroke-dasharray="5 3"/>
+      <polygon points="${rgx.toFixed(1)},14 ${(rgx-9).toFixed(1)},26 ${(rgx+9).toFixed(1)},26" fill="#f2c267"/>
+      <text x="${rgx.toFixed(1)}" y="38" class="axis" text-anchor="middle">CUT</text>
+      <circle cx="${px.toFixed(1)}" cy="${clamp(95-hI,18,172).toFixed(1)}" r="6" fill="#0c0c0e" stroke="#ffb469" stroke-width="2.5"/>
+      <circle cx="${px.toFixed(1)}" cy="${clamp(95-hO,18,172).toFixed(1)}" r="6" fill="#0c0c0e" stroke="#fff" stroke-width="2.5"/>`;
+    cn.querySelector('#cn-v').textContent=centre>=1000?(centre/1000).toFixed(1)+'k':centre.toFixed(centre<10?1:0);
+    cn.querySelector('#cn-m').innerHTML=`throw ${P.throw.toFixed(1)} m · pool dia ${pool<10?pool.toFixed(2):pool.toFixed(1)} m · edge ≈ ${edge.toFixed(0)}% · cut ${P.range.toFixed(1)} m${P.throw>P.range?' · BEYOND RANGE':''}`;
+    cn.querySelector('#cn-io').textContent=`${P.inner.toFixed(1)}° / ${P.outer.toFixed(1)}°`;
+    cn.querySelector('#cn-bm').textContent=`≈ ${Math.round(beamLm())} lm`;
+    cn.querySelector('#cn-sr').textContent=`${(2*Math.PI*(1-Math.cos(P.outer/2*Math.PI/180))).toFixed(3)} sr`;
+    /* wheel */
+    const t=twT(), ang=Math.PI*(1-t);
+    const nx=160+96*Math.cos(ang), ny=132-96*Math.sin(ang);
+    let ticks='';
+    [[1800,'1.8k'],[3200,'3.2k'],[5600,'5.6k'],[9000,'9k'],[12000,'12k']].forEach(([T,l])=>{
+      const tt=Math.log(T/1800)/Math.log(12000/1800), aa=Math.PI*(1-tt);
+      ticks+=`<line x1="${(160+88*Math.cos(aa)).toFixed(1)}" y1="${(132-88*Math.sin(aa)).toFixed(1)}" x2="${(160+104*Math.cos(aa)).toFixed(1)}" y2="${(132-104*Math.sin(aa)).toFixed(1)}" stroke="rgba(255,255,255,.35)" stroke-width="2"/>`
+        +`<text x="${(160+76*Math.cos(aa)).toFixed(1)}" y="${(132-76*Math.sin(aa)+3).toFixed(1)}" class="axis" text-anchor="middle">${l}</text>`; });
+    const sw=kelvinToRgb(P.temp);
+    twSvg.innerHTML=`<defs><linearGradient id="twg" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#ff8a2a"/><stop offset=".45" stop-color="#ffffff"/><stop offset="1" stop-color="#7aa2ff"/></linearGradient></defs>
+      ${ticks}
+      <path d="M 64 132 A 96 96 0 0 1 256 132" fill="none" stroke="url(#twg)" stroke-width="10" stroke-linecap="round" opacity=".9"/>
+      <line x1="160" y1="132" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" stroke="rgba(255,255,255,.5)" stroke-width="2"/>
+      <circle cx="160" cy="132" r="6" fill="#1c1c20" stroke="rgba(255,255,255,.4)" stroke-width="2"/>
+      <circle cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="8" fill="${rgbCss(sw)}" stroke="#fff" stroke-width="2.5" style="filter:drop-shadow(0 0 8px rgba(0,0,0,.6))"/>`;
+    tw.querySelector('#tw-v').textContent=Math.round(P.temp);
+    tw.querySelector('#tw-m').innerHTML=`≈ ${tnName(P.temp)}`;
+    tw.querySelector('#tw-r').textContent=`${Math.round(1e6/P.temp)} mired`;
+    tw.querySelector('#tw-t').innerHTML=`<span class="swatch" style="background:${rgbCss(sw)}"></span>${sw[0]} ${sw[1]} ${sw[2]}`;
+    /* decay */
+    let dc1='',dc2='',dcA='M 10 100 ';
+    for(let dd=0.5;dd<=15.001;dd+=0.25){ const de=P.intensity/Math.pow(dd,P.decay), dr2=P.intensity/(dd*dd);
+      dc1+=`${dd===0.5?'M':'L'} ${dcX(dd).toFixed(1)} ${dcY(de).toFixed(1)} `;
+      dc2+=`${dd===0.5?'M':'L'} ${dcX(dd).toFixed(1)} ${dcY(dr2).toFixed(1)} `;
+      dcA+=`L ${dcX(dd).toFixed(1)} ${dcY(de).toFixed(1)} `; }
+    dc.querySelector('#dc-c').setAttribute('d',dc1);
+    dc.querySelector('#dc-r').setAttribute('d',dc2);
+    dc.querySelector('#dc-a').setAttribute('d',dcA+'L 310 100 Z');
+    dc.querySelector('#dc-x').setAttribute('x1',dcX(Math.min(P.throw,15)));
+    dc.querySelector('#dc-x').setAttribute('x2',dcX(Math.min(P.throw,15)));
+    dc.querySelector('#dc-d').setAttribute('cx',dcX(Math.min(P.throw,15)));
+    dc.querySelector('#dc-d').setAttribute('cy',dcY(P.intensity/Math.pow(Math.min(P.throw,15),P.decay)));
+    dc.querySelector('#dc-v').textContent=P.decay.toFixed(2);
+    dc.querySelector('#dc-m').innerHTML=Math.abs(P.decay-2)<0.05?'physical inverse-square':P.decay<2?'softer than physical':'harder than physical';
+    /* softness */
+    const sgA=Math.PI*(1-P.srcRadius/30);
+    const sgNx=160+88*Math.cos(sgA), sgNy=112-88*Math.sin(sgA);
+    let sgTk='';
+    for(let sv=0;sv<=30;sv+=5){ const sa=Math.PI*(1-sv/30);
+      sgTk+=`<line x1="${(160+78*Math.cos(sa)).toFixed(1)}" y1="${(112-78*Math.sin(sa)).toFixed(1)}" x2="${(160+96*Math.cos(sa)).toFixed(1)}" y2="${(112-96*Math.sin(sa)).toFixed(1)}" stroke="rgba(255,255,255,.35)" stroke-width="2"/>`
+        +`<text x="${(160+66*Math.cos(sa)).toFixed(1)}" y="${(112-66*Math.sin(sa)+3).toFixed(1)}" class="axis" text-anchor="middle">${sv}</text>`; }
+    sgSvg.innerHTML=`<path d="M 72 112 A 88 88 0 0 1 248 112" fill="none" stroke="#26262c" stroke-width="10" stroke-linecap="round"/>
+      <path d="M 72 112 A 88 88 0 0 1 248 112" fill="none" stroke="#ffb469" stroke-width="10" stroke-linecap="round" stroke-dasharray="${(P.srcRadius/30*276.5).toFixed(1)} 276.5"/>${sgTk}
+      <line x1="160" y1="112" x2="${sgNx.toFixed(1)}" y2="${sgNy.toFixed(1)}" stroke="rgba(255,255,255,.5)" stroke-width="2"/>
+      <circle cx="160" cy="112" r="6" fill="#1c1c20" stroke="rgba(255,255,255,.4)" stroke-width="2"/>
+      <circle cx="${sgNx.toFixed(1)}" cy="${sgNy.toFixed(1)}" r="6.5" fill="#0c0c0e" stroke="#fff" stroke-width="2.5"/>`;
+    sg.querySelector('#sg-v').textContent=P.srcRadius.toFixed(1);
+    sg.querySelector('#sg-m').innerHTML=`penumbra ≈ ${(Math.atan(P.srcRadius/100/P.throw)*180/Math.PI).toFixed(1)}° @ plane${P.srcRadius>20?' · noisy':''}`;
+    /* gel */
+    const gwP=(r,a)=>[100+r*Math.sin(a),88-r*Math.cos(a)];
+    let gwSeg='';
+    for(let gi=0;gi<24;gi++){ const ga0=gi/24*2*Math.PI, ga1=(gi+1.06)/24*2*Math.PI;
+      gwSeg+=`<path d="M ${gwP(64,ga0).map(v=>v.toFixed(1)).join(' ')} A 64 64 0 0 1 ${gwP(64,ga1).map(v=>v.toFixed(1)).join(' ')}" fill="none" stroke="hsl(${gi*15},75%,58%)" stroke-width="13"/>`; }
+    const gel=hsv2rgb(P.gelHue,P.gelSat,1);
+    const gmix=[Math.round(gel[0]*sw[0]/255),Math.round(gel[1]*sw[1]/255),Math.round(gel[2]*sw[2]/255)];
+    const ghex='#'+gmix.map(v=>v.toString(16).padStart(2,'0')).join('');
+    const gR=8+P.gelSat*50, gA2=P.gelHue*Math.PI/180;
+    gwSvg.innerHTML=`${gwSeg}
+      <circle cx="100" cy="88" r="46" fill="${ghex}" stroke="rgba(255,255,255,.25)" stroke-width="2"/>
+      <circle cx="${(100+gR*Math.sin(gA2)).toFixed(1)}" cy="${(88-gR*Math.cos(gA2)).toFixed(1)}" r="6.5" fill="#0c0c0e" stroke="#fff" stroke-width="2.5"/>
+      <text x="100" y="92" text-anchor="middle" fill="rgba(0,0,0,.55)" font-size="11" font-weight="700">${ghex}</text>`;
+    gw.querySelector('#gw-v').textContent=P.gelHue;
+    gw.querySelector('#gw-m').innerHTML=`sat ${(P.gelSat*100).toFixed(0)}% · ${ghex} × ${P.temp}K`;
+  }
+  render();
+}
+
+
+/* ================================================================ RENDERER */
+function pageRenderer(host){ const R=state.renderer;
+  host.insertAdjacentHTML('beforeend',headHTML('var(--rend)','RESTIR DI + GI','Renderer','budget · stops · pipeline · convergence'));
+  const hero=document.createElement('div'); hero.className='card';
+  hero.innerHTML=`${cardLabel('Primary candidates')}<div id="h-c"></div><div id="h-s"></div>`;
+  host.appendChild(hero);
+
+  /* sample matrix */
+  const mx=document.createElement('div'); mx.className='card';
+  mx.innerHTML=`${cardLabel('Reservoir matrix','paint dots — candidates per pixel')}
+    <div class="plot"><div class="matrix" id="mx"></div></div>
+    <div class="seg-row" id="mx-s"></div>
+    <div class="vstrip"><span class="big num" id="mx-v">—</span><span class="u">candidates / px</span>
+      <span class="meta" id="mx-m">—</span></div>`;
+  host.appendChild(mx);
+  const mxEl=mx.querySelector('#mx');
+  for(let i=0;i<32;i++) mxEl.appendChild(document.createElement('i'));
+  const dots=[...mxEl.children];
+  const setFromMatrix=e=>{ const r=mxEl.getBoundingClientRect();
+    const cols=8,dx=r.width/cols,rows=4,dy=r.height/rows;
+    const c=clamp(Math.floor((e.clientX-r.left)/dx),0,cols-1),rw=clamp(Math.floor((e.clientY-r.top)/dy),0,rows-1);
+    R.candidates=Math.max(1,rw*cols+c+1); render(); };
+  dragify(mxEl,setFromMatrix);
+  const mxSamp=mx.querySelector('#mx-s');
+  ['Halton','Sobol','Blue'].forEach(nm=>{ const b=document.createElement('button');
+    b.className='seg-btn'+(R.sampler===nm?' active':''); b.textContent=nm;
+    b.addEventListener('click',()=>{ R.sampler=nm; render();
+      mxSamp.querySelectorAll('.seg-btn').forEach(x=>x.classList.toggle('active',x===b));
+      toast(`Sampler ${nm} — accumulation restarted`); });
+    mxSamp.appendChild(b); });
+
+  /* pass ring */
+  const pr=document.createElement('div'); pr.className='card';
+  pr.innerHTML=`${cardLabel('Spatial ring','trace the arc — extra candidates')}
+    <div class="plot" id="pr" style="cursor:pointer"><svg viewBox="0 0 320 130">
+      <g id="pr-s"></g>
+      <text x="160" y="72" text-anchor="middle" fill="#f4f4f5" font-size="34" font-weight="200" class="num" id="pr-v">2</text>
+      <text x="160" y="92" text-anchor="middle" class="axis">PASSES</text></svg></div>
+    <div class="vstrip"><span class="big num" id="pr-t">—</span><span class="u">total candidates / px</span>
+      <span class="meta">M + passes</span></div>`;
+  host.appendChild(pr);
+  const prS=pr.querySelector('#pr-s');
+  for(let i=0;i<8;i++){ const a=(135+i*(270/8))*Math.PI/180;
+    const x=160+Math.cos(a)*52,y=72+Math.sin(a)*52;
+    SVG('circle',{cx:x,cy:y,r:9,fill:'#222228',stroke:'rgba(255,255,255,.08)',id:'prs'+i},prS); }
+  dragify(pr.querySelector('#pr'),e=>{ const r=pr.querySelector('#pr').getBoundingClientRect();
+    const dx=e.clientX-(r.left+r.width/2),dy=(e.clientY-r.top)/r.height*130-72;
+    let a=Math.atan2(dy,dx)*180/Math.PI; if(a<0)a+=360;
+    let t=(a-135)/270; R.spatial=(a>45&&a<135)?0:clamp(Math.round(clamp(t,0,1)*8),0,8); render(); });
+
+  /* exposure stops */
+  const ex=document.createElement('div'); ex.className='card';
+  ex.innerHTML=`${cardLabel('Exposure stops','horizontal: stops · vertical: clamp')}
+    <div class="plot" id="ex" style="cursor:ew-resize"><svg viewBox="0 0 320 96">
+      <defs><linearGradient id="exg" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#000"/><stop offset=".45" stop-color="#3a3a40"/>
+        <stop offset=".62" stop-color="#8a8a92"/><stop offset="1" stop-color="#fff"/></linearGradient></defs>
+      <rect x="8" y="26" width="304" height="30" rx="15" fill="url(#exg)" stroke="rgba(255,255,255,.1)"/>
+      <g id="ex-t"></g><line id="ex-x" y1="16" y2="66" class="xhair" style="--ac:var(--rend)"/>
+      <circle id="ex-d" r="9" fill="#0c0c0e" stroke="#fff" stroke-width="2.5"/>
+      <line id="ex-cl" x1="8" x2="306" y1="41" y2="41" stroke="#ffd166" stroke-width="1.6" stroke-dasharray="5 3"/>
+      <circle id="ex-ck" r="5" cx="306" cy="41" fill="#0c0c0e" stroke="#ffd166" stroke-width="2.5"/>
+      <text id="ex-clb" x="298" y="36" class="axis" text-anchor="end">clamp</text></svg></div>
+    <div class="vstrip"><span class="big num" id="ex-v">—</span><span class="u">× exposure</span>
+      <span class="meta" id="ex-m">—</span></div>`;
+  host.appendChild(ex);
+  const exT=e=>(Math.log2(e)-Math.log2(0.1))/(Math.log2(4)-Math.log2(0.1));
+  [-3,-2,-1,0,1,2].forEach(ev=>{ const x=8+exT(Math.pow(2,ev))*304;
+    SVG('line',{x1:x,y1:56,x2:x,y2:62,stroke:'rgba(255,255,255,.4)','stroke-width':1.4},ex.querySelector('#ex-t'));
+    const t=SVG('text',{x,y:76,class:'anchor',style:'font-size:8px;fill:#55555c;font-weight:600;text-anchor:middle'},ex.querySelector('#ex-t'));
+    t.textContent=(ev>0?'+':'')+ev; });
+  dragify(ex.querySelector('#ex'),e=>{ const r=ex.querySelector('#ex').getBoundingClientRect();
+    const t=clamp(((e.clientX-r.left)/r.width*320-8)/304,0,1);
+    R.exposure=Math.round(0.1*Math.pow(40,t)*100)/100;
+    R.clamp=Math.round(Math.pow(100,clamp(1-(e.clientY-r.top)/r.height,0,1))*10)/10; render(); });
+
+  /* render path */
+  const pg=document.createElement('div'); pg.className='card';
+  pg.innerHTML=`${cardLabel('Render path','tap a stage to engage / bypass')}
+    <div class="pathrow" id="pathrow">
+      <button class="pathpill" data-k="gi"><i></i>BOUNCE<span id="pg-gi">GI · 2B</span></button>
+      <button class="pathpill" data-k="aa"><i></i>JITTER<span id="pg-aa">AA · Halton</span></button>
+      <button class="pathpill" data-k="ambientFloor"><i></i>FILL<span>ambient</span></button>
+    </div>
+    <div class="vstrip"><span class="big num" id="pg-v" style="font-size:15px">—</span><span class="u">path</span>
+      <span class="meta" id="pg-m">—</span></div>`;
+  host.appendChild(pg);
+  pg.querySelectorAll('.pathpill').forEach(n=>n.addEventListener('click',()=>{
+    const k=n.dataset.k; R[k]=!R[k]; render();
+    toast(`${k==='gi'?'Global illumination':k==='aa'?'Anti-aliasing':'Ambient floor'} ${R[k]?'engaged':'bypassed'} — accumulation restarted`); }));
+  /* bounce stack */
+  const bs=document.createElement('div'); bs.className='card';
+  bs.innerHTML=`${cardLabel('Bounce stack','drag vertically — GI depth')}
+    <div class="plot" id="bstack"><svg viewBox="0 0 320 150" id="bs-svg"></svg></div>
+    <div class="vstrip"><span class="big num" id="bs-v">—</span><span class="u">GI bounces</span>
+      <span class="meta" id="bs-m">—</span></div>`;
+  host.appendChild(bs);
+  const bsSvg=bs.querySelector('#bs-svg');
+  dragify(bs.querySelector('#bstack'),e=>{ const r=bs.querySelector('#bstack').getBoundingClientRect();
+    R.bounces=clamp(Math.round((118-(e.clientY-r.top)/r.height*150)/13)+1,1,8); render(); });
+
+  /* fill ramp */
+  const fl=document.createElement('div'); fl.className='card';
+  fl.innerHTML=`${cardLabel('Fill ramp','drag — albedo × strength (auto-engages FILL)')}
+    <div class="plot" id="fl" style="cursor:ew-resize"><svg viewBox="0 0 320 84">
+      <defs><linearGradient id="flg" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#b9b9c0"/></linearGradient></defs>
+      <rect x="8" y="18" width="304" height="34" rx="17" fill="url(#flg)" stroke="rgba(255,255,255,.1)"/>
+      <line id="fl-x" y1="10" y2="60" class="xhair" style="--ac:var(--rend)"/>
+      <circle id="fl-d" r="8" fill="#0c0c0e" stroke="#fff" stroke-width="2.5"/></svg></div>
+    <div class="vstrip"><span class="big num" id="fl-v">—</span><span class="u">ambient strength</span>
+      <span class="meta">debug fill light</span></div>`;
+  host.appendChild(fl);
+  dragify(fl.querySelector('#fl'),e=>{ const r=fl.querySelector('#fl').getBoundingClientRect();
+    R.ambient=Math.round(clamp(((e.clientX-r.left)/r.width*320-8)/304,0,1)*0.2*1000)/1000;
+    if(!R.ambientFloor){R.ambientFloor=true;toast('Ambient floor engaged');} render(); });
+
+  /* convergence chart */
+  const cv=document.createElement('div'); cv.className='card';
+  cv.innerHTML=`${cardLabel('Convergence','horizontal: inspect · vertical: target')}
+    <div class="plot" id="cv" style="cursor:crosshair"><svg viewBox="0 0 320 140">
+      <defs><linearGradient id="cvg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#5fd68a" stop-opacity=".4"/><stop offset="1" stop-color="#5fd68a" stop-opacity="0"/></linearGradient></defs>
+      <path id="cv-a" fill="url(#cvg)"/><path id="cv-c" fill="none" stroke="#5fd68a" stroke-width="2"/>
+      <line x1="8" y1="112" x2="312" y2="112" stroke="rgba(255,255,255,.12)"/>
+      <circle cx="312" cy="12" r="5" fill="#5fd68a" style="filter:drop-shadow(0 0 6px #5fd68a)"/>
+      <text x="312" y="30" class="axis" text-anchor="end">NOW · 256</text>
+      <line id="cv-x" y1="8" y2="112" class="xhair" style="--ac:var(--rend)"/>
+      <circle id="cv-d" r="5" fill="#0c0c0e" stroke="#fff" stroke-width="2"/>
+      <line id="cv-t" y1="8" y2="112" stroke="#ffd166" stroke-width="1.6" stroke-dasharray="5 3"/>
+      <circle id="cv-g" r="5" fill="#0c0c0e" stroke="#ffd166" stroke-width="2.5"/>
+      <text x="10" y="128" class="axis">frame 1</text>
+      <text x="230" y="128" class="axis">frame 256</text></svg></div>
+    <div class="vstrip"><span class="big num" id="cv-v">—</span><span class="u">residual noise</span>
+      <span class="meta" id="cv-m">—</span></div>
+    <div class="kv-grid"><div class="kv"><div class="k">ACCUMULATION</div><div class="v num">256<em> frames</em></div></div>
+      <div class="kv"><div class="k">VIEWPORT</div><div class="v num">1280×720</div></div></div>`;
+  host.appendChild(cv);
+  const CX=n=>8+(n/256)*304,CY=n=>112-(1/Math.sqrt(n))*100;
+  let cP='',cA='M 8 112 '; for(let n=1;n<=256;n+=2){ cP+=`${n===1?'M':'L'} ${CX(n).toFixed(1)} ${CY(n).toFixed(1)} `; cA+=`L ${CX(n).toFixed(1)} ${CY(n).toFixed(1)} `; }
+  cv.querySelector('#cv-c').setAttribute('d',cP); cv.querySelector('#cv-a').setAttribute('d',cA+'L 312 112 Z');
+  dragify(cv.querySelector('#cv'),e=>{ const r=cv.querySelector('#cv').getBoundingClientRect();
+    R.inspectFrame=Math.round(clamp(((e.clientX-r.left)/r.width*320-8)/304,0,1)*255+1);
+    R.accumTarget=Math.round(clamp(1-(e.clientY-r.top)/r.height,0,1)*255+1); render(); });
+
+  function render(){
+    const [hi,hf]=splitNum(R.candidates,0);
+    hero.querySelector('#h-c').innerHTML=heroHTML(hi,hf,'/ px');
+    hero.querySelector('#h-s').innerHTML=`<span class="delta-pill grn">M ${R.candidates} + ${R.spatial} passes · frame 256</span>`;
+    dots.forEach((d,i)=>d.classList.toggle('on',i<R.candidates));
+    mx.querySelector('#mx-v').textContent=R.candidates;
+    mx.querySelector('#mx-m').innerHTML=`≈ ${R.candidates} shadow rays / px · ${R.sampler}`;
+    pr.querySelector('#pr-v').textContent=R.spatial;
+    for(let i=0;i<8;i++){ const s=pr.querySelector('#prs'+i);
+      s.setAttribute('fill',i<R.spatial?'#5fd68a':'#222228');
+      s.setAttribute('stroke',i<R.spatial?'#5fd68a':'rgba(255,255,255,.08)');
+      s.style.filter=i<R.spatial?'drop-shadow(0 0 6px #5fd68a)':'none'; }
+    pr.querySelector('#pr-t').textContent=R.candidates+R.spatial;
+    const exx=8+exT(R.exposure)*304,ev=Math.log2(R.exposure);
+    ex.querySelector('#ex-x').setAttribute('x1',exx); ex.querySelector('#ex-x').setAttribute('x2',exx);
+    ex.querySelector('#ex-d').setAttribute('cx',exx); ex.querySelector('#ex-d').setAttribute('cy',41);
+    ex.querySelector('#ex-v').textContent=R.exposure.toFixed(2);
+    ex.querySelector('#ex-m').innerHTML=`${ev>=0?'+':''}${ev.toFixed(1)} EV · ACES · clamp ${R.clamp>=10?R.clamp.toFixed(0):R.clamp.toFixed(1)}`;
+    const cly=56-Math.log10(Math.max(R.clamp,1))/2*30;
+    ex.querySelector('#ex-cl').setAttribute('y1',cly); ex.querySelector('#ex-cl').setAttribute('y2',cly);
+    ex.querySelector('#ex-ck').setAttribute('cy',cly);
+    ex.querySelector('#ex-clb').setAttribute('y',cly-5);
+    pg.querySelectorAll('.pathpill').forEach(n=>n.classList.toggle('on',!!R[n.dataset.k]));
+    pg.querySelector('#pg-v').textContent=`${R.aa?'AA':''}${R.aa&&R.gi?' · ':''}${R.gi?'GI':''}${(R.aa||R.gi)&&R.ambientFloor?' · ':''}${R.ambientFloor?'FILL':''}`||'direct only';
+    pg.querySelector('#pg-aa').textContent=`AA · ${R.sampler}`;
+    pg.querySelector('#pg-gi').textContent=`GI · ${R.bounces}B`;
+    pg.querySelector('#pg-m').innerHTML=R.gi?`${R.bounces} bounce${R.bounces>1?'es':''} + NEE`:'direct lighting only';
+    /* bounce stack */
+    let bsRows=`<rect x="8" y="126" width="304" height="12" rx="6" fill="#5fd68a"/><text x="160" y="135.5" text-anchor="middle" font-size="8" font-weight="700" fill="#0c0c0e">DIRECT</text>`;
+    for(let bi=0;bi<8;bi++){ const bOn=bi<R.bounces, by=112-bi*13, bx=8+bi*6, bw=304-bi*12;
+      bsRows+=`<rect x="${bx}" y="${by}" width="${bw}" height="10" rx="5" fill="${bOn?'#5fd68a':'none'}" opacity="${bOn?(1-bi*0.09).toFixed(2):1}" stroke="${bOn?'#5fd68a':'rgba(255,255,255,.15)'}"/>`
+        +`<text x="160" y="${by+8}" text-anchor="middle" font-size="7.5" font-weight="700" fill="${bOn?'#0c0c0e':'rgba(255,255,255,.3)'}">B${bi+1}</text>`; }
+    bsSvg.innerHTML=bsRows+`<text x="10" y="16" class="axis">DEPTH</text>`;
+    bs.querySelector('#bstack').style.opacity=R.gi?1:.4;
+    bs.querySelector('#bs-v').textContent=R.bounces;
+    bs.querySelector('#bs-m').innerHTML=`direct + ${R.bounces}×NEE${R.gi?'':' · BOUNCE bypassed'}`;
+    const flx=8+(R.ambient/0.2)*304;
+    fl.querySelector('#fl-x').setAttribute('x1',flx); fl.querySelector('#fl-x').setAttribute('x2',flx);
+    fl.querySelector('#fl-d').setAttribute('cx',flx); fl.querySelector('#fl-d').setAttribute('cy',35);
+    fl.querySelector('#fl-v').textContent=R.ambient.toFixed(3);
+    fl.querySelector('#fl').style.opacity=R.ambientFloor?1:.45;
+    const n=R.inspectFrame;
+    cv.querySelector('#cv-x').setAttribute('x1',CX(n)); cv.querySelector('#cv-x').setAttribute('x2',CX(n));
+    cv.querySelector('#cv-d').setAttribute('cx',CX(n)); cv.querySelector('#cv-d').setAttribute('cy',CY(n));
+    cv.querySelector('#cv-v').textContent=(100/Math.sqrt(n)).toFixed(1)+'%';
+    const cvt=CX(R.accumTarget);
+    cv.querySelector('#cv-t').setAttribute('x1',cvt); cv.querySelector('#cv-t').setAttribute('x2',cvt);
+    cv.querySelector('#cv-g').setAttribute('cx',cvt); cv.querySelector('#cv-g').setAttribute('cy',CY(R.accumTarget));
+    cv.querySelector('#cv-m').innerHTML=`frame ${n} of 256 · target ${R.accumTarget} · ${(100/Math.sqrt(R.accumTarget)).toFixed(1)}%`;
+  }
+  render();
+}
+
+/* ---------------- boot ---------------- */
+buildOutliner();
+buildInspector();
+</script>
+</body>
+</html>

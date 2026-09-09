@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Engine Vitals · Asset Health</title>
+<style>
+  :root{
+    --bg:#08090b; --card:#141417; --card2:#1c1e22; --inset:#0e0f12;
+    --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.14);
+    --txt:#f5f5f7; --dim:#9a9aa2; --faint:#5c5c64;
+    --grn:#34d17b; --red:#ff453a; --amber:#ffb340;
+    --mono:ui-monospace,'SF Mono','Cascadia Code',Menlo,Consolas,monospace;
+  }
+  html{box-sizing:border-box}
+  body,h1,h2,h3,p{margin:0}
+  body{background:var(--bg); color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif;
+    font-size:14px; -webkit-font-smoothing:antialiased;}
+  button{font:inherit; color:inherit;}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#26262c; border-radius:6px; border:2px solid var(--bg)}
+  ::-webkit-scrollbar-track{background:transparent}
+  .num{font-variant-numeric:tabular-nums;}
+
+  .app{max-width:1220px; margin:0 auto; padding:22px 24px 60px;
+    display:grid; grid-template-columns:348px 1fr; gap:18px; align-items:start;}
+
+  /* ================= outliner ================= */
+  .brand{display:flex; align-items:center; gap:12px; margin-bottom:16px;}
+  .pulse{width:34px; height:34px; border-radius:50%; background:var(--card);
+    border:1px solid var(--line2); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .pulse i{width:11px; height:11px; border-radius:50%; background:var(--grn);
+    box-shadow:0 0 12px var(--grn); animation:pp 2.4s ease-in-out infinite;}
+  @keyframes pp{50%{opacity:.45}}
+  .brand h1{font-size:19px; font-weight:800; letter-spacing:.5px;}
+  .brand p{font-size:11.5px; color:var(--dim); margin-top:2px; letter-spacing:.4px;}
+
+  .duo{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;}
+  .stat{background:var(--card); border:1px solid var(--line); border-radius:22px; padding:16px 18px 14px;}
+  .stat .ic{width:26px; height:26px; border-radius:50%; display:flex; align-items:center;
+    justify-content:center; font-size:13px; font-weight:800; margin-bottom:10px;}
+  .stat.g .ic{background:rgba(52,209,123,.16); color:var(--grn);}
+  .stat.r .ic{background:rgba(255,69,58,.14); color:var(--red);}
+  .stat .t{font-size:13px; color:var(--dim);}
+  .stat .n{font-size:44px; font-weight:200; line-height:1.05; margin-top:2px;}
+
+  .search{display:flex; align-items:center; gap:9px; background:var(--card);
+    border:1px solid var(--line); border-radius:999px; padding:11px 18px; margin-bottom:12px;}
+  .search svg{opacity:.45; flex-shrink:0}
+  .search input{flex:1; min-width:0; background:none; border:none; outline:none;
+    color:var(--txt); font-size:13.5px;}
+  .search input::placeholder{color:var(--faint)}
+
+  .pills{display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;}
+  .pill{border:1px solid transparent; background:var(--card2); color:var(--dim);
+    border-radius:999px; padding:9px 17px; font-size:12.5px; font-weight:600; cursor:pointer;
+    transition:all .16s ease;}
+  .pill:hover{color:var(--txt)}
+  .pill.on{background:#f5f5f7; color:#0b0b0d; font-weight:700;}
+
+  .alist{display:flex; flex-direction:column; gap:12px;}
+  .acard{--ac:#fff; position:relative; text-align:left; cursor:pointer;
+    background:var(--card); border:1px solid var(--line); border-radius:22px;
+    padding:16px 18px 14px; transition:border-color .16s ease, transform .12s ease;}
+  .acard:hover{border-color:var(--line2); transform:translateY(-1px);}
+  .acard.sel{border-color:var(--ac); box-shadow:0 0 0 1px var(--ac), 0 12px 34px -14px var(--ac);}
+  .acard .tick{position:absolute; left:18px; top:17px; width:4px; height:17px;
+    border-radius:2px; background:var(--ac);}
+  .acard .row1{display:flex; align-items:center; gap:8px; padding-left:13px;}
+  .acard .nm{font-size:14.5px; font-weight:700; letter-spacing:.2px;}
+  .acard .tg{font-family:var(--mono); font-size:9px; letter-spacing:1px; color:var(--faint);
+    border:1px solid var(--line); border-radius:5px; padding:2px 6px;}
+  .acard .led{margin-left:auto; width:8px; height:8px; border-radius:50%;
+    background:var(--grn); box-shadow:0 0 8px var(--grn); flex-shrink:0;}
+  .acard.alert .led{background:var(--red); box-shadow:0 0 8px var(--red); animation:pp 1.6s infinite;}
+  .acard .big{font-weight:200; font-size:41px; line-height:1.15; margin:7px 0 1px; letter-spacing:-.5px;}
+  .acard .big small{font-size:13px; font-weight:400; color:var(--dim); margin-left:7px; letter-spacing:0;}
+  .acard .row3{display:flex; align-items:center; gap:10px; margin-top:8px;}
+  .delta{font-size:11px; font-weight:700; border-radius:999px; padding:4px 11px;
+    background:rgba(255,255,255,.09); color:var(--txt); white-space:nowrap;}
+  .acard.alert .delta{background:rgba(255,69,58,.16); color:#ff8a80;}
+  .dots{flex:1; display:flex; gap:5px; align-items:flex-end; height:16px; justify-content:flex-end;}
+  .dots i{width:5px; height:5px; border-radius:50%; background:var(--ac);}
+
+  /* ================= inspector ================= */
+  .insp{background:var(--card); border:1px solid var(--line); border-radius:28px;
+    padding:22px 24px 26px; min-height:560px;}
+  .ihead{display:flex; align-items:center; gap:14px;}
+  .cbtn{width:44px; height:44px; border-radius:50%; flex-shrink:0; cursor:pointer;
+    background:var(--card2); border:1px solid var(--line); font-size:17px; color:var(--txt);
+    display:flex; align-items:center; justify-content:center; transition:all .15s;}
+  .cbtn:hover{border-color:var(--line2); background:#232529;}
+  .ititle{flex:1; min-width:0;}
+  .ititle h2{font-size:27px; font-weight:800; letter-spacing:-.3px;}
+  .ititle p{font-size:12px; color:var(--dim); margin-top:3px; letter-spacing:.6px;}
+  .ititle p b{color:var(--ac,#fff)}
+  .tabs{display:flex; gap:8px; margin:18px 0 16px;}
+  .tab{flex:1; border:none; background:var(--card2); color:var(--dim); border-radius:999px;
+    padding:12px 0; font-size:13px; font-weight:600; cursor:pointer; transition:all .16s;}
+  .tab.on{background:#f5f5f7; color:#0b0b0d; font-weight:700;}
+
+  .mcard{--ac:#fff; background:var(--inset); border:1px solid var(--line);
+    border-radius:24px; padding:20px 22px 18px; margin-bottom:14px; position:relative;}
+  .mcard .tick{position:absolute; left:22px; top:21px; width:4px; height:17px;
+    border-radius:2px; background:var(--ac);}
+  .mcard .lab{font-size:13px; font-weight:700; letter-spacing:1.6px; padding-left:13px; color:var(--dim);}
+  .mcard .val{font-weight:200; font-size:56px; line-height:1.1; letter-spacing:-1px; margin:6px 0 2px;}
+  .mcard .val .fr{font-size:30px; color:var(--dim);}
+  .mcard .val small{font-size:14px; font-weight:400; color:var(--dim); margin-left:8px; letter-spacing:0;}
+  .mcard .sub{display:flex; align-items:center; gap:10px; margin:4px 0 12px;
+    font-size:11.5px; color:var(--faint); font-family:var(--mono); letter-spacing:.4px;}
+
+  .matrix{display:flex; gap:6px; margin-top:6px;}
+  .mcol{flex:1; display:flex; flex-direction:column-reverse; gap:5px; cursor:pointer;
+    background:none; border:none; padding:4px 0 2px; min-width:0;}
+  .mcol i{width:100%; aspect-ratio:1/1; max-width:11px; margin:0 auto; border-radius:50%;
+    background:rgba(255,255,255,.10); transition:background .12s;}
+  .mcol i.f{background:var(--ac); box-shadow:0 0 7px -1px var(--ac);}
+  .mcol:hover i{background:rgba(255,255,255,.28);}
+  .mcol:hover i.f{background:var(--ac);}
+  .mscale{display:flex; justify-content:space-between; font-family:var(--mono);
+    font-size:9.5px; color:var(--faint); margin-top:7px; letter-spacing:.5px;}
+
+  .stepper{display:flex; align-items:center; gap:14px; background:var(--inset);
+    border:1px solid var(--line); border-radius:999px; padding:10px 12px; margin-bottom:14px;}
+  .stepper .sbtn{width:46px; height:46px; border-radius:50%; border:1px solid var(--line);
+    background:var(--card2); font-size:18px; cursor:pointer; flex-shrink:0; transition:all .15s;}
+  .stepper .sbtn:hover{background:#232529; border-color:var(--line2);}
+  .stepper .smid{flex:1; text-align:center;}
+  .stepper .sl{font-family:var(--mono); font-size:9.5px; letter-spacing:2px; color:var(--faint);}
+  .stepper .sv{font-size:16px; font-weight:700; margin-top:2px;}
+
+  .gcard{background:var(--inset); border:1px solid var(--line); border-radius:24px;
+    padding:20px 22px 14px; margin-bottom:14px;}
+  .gcard .gtop{display:flex; align-items:baseline; gap:10px;}
+  .gcard .gl{font-size:13px; font-weight:700; letter-spacing:1.6px; color:var(--dim);}
+  .gcard .gv{margin-left:auto; font-weight:200; font-size:34px;}
+  .gcard .gv small{font-size:12px; color:var(--dim); font-weight:400; margin-left:5px;}
+  .gcard svg{width:100%; height:auto; display:block; margin-top:8px; touch-action:none;}
+  .gcard .evrow{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 6px;}
+  .ev{font-family:var(--mono); font-size:10px; letter-spacing:.6px; color:var(--dim);
+    border:1px solid var(--line); border-radius:999px; padding:5px 12px;}
+  .ev b{color:var(--txt)}
+
+  .spec{background:var(--inset); border:1px solid var(--line); border-radius:20px;
+    padding:8px 22px; margin-bottom:14px;}
+  .srow{display:flex; align-items:baseline; padding:12px 0; border-bottom:1px solid var(--line);}
+  .srow:last-child{border:none}
+  .srow .k{font-family:var(--mono); font-size:10.5px; letter-spacing:1.8px; color:var(--faint);}
+  .srow .v{margin-left:auto; font-size:14px; font-weight:600; text-align:right;}
+  .srow.warn .k,.srow.warn .v{color:var(--red)}
+  .note{font-size:12px; color:var(--faint); line-height:1.6; padding:2px 4px 8px;}
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .mini{--ac:#fff; text-align:left; cursor:pointer; background:var(--inset);
+    border:1px solid var(--line); border-radius:20px; padding:15px 17px; position:relative;
+    transition:border-color .15s;}
+  .mini:hover{border-color:var(--ac)}
+  .mini .tick{position:absolute; left:17px; top:16px; width:4px; height:15px;
+    border-radius:2px; background:var(--ac);}
+  .mini .nm{font-size:12.5px; font-weight:700; padding-left:12px;}
+  .mini .big{font-weight:200; font-size:32px; margin-top:4px;}
+  .mini .big small{font-size:11.5px; color:var(--dim); font-weight:400; margin-left:5px;}
+
+  @media (max-width:960px){ .app{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+<div class="app">
+  <div>
+    <div class="brand"><span class="pulse"><i></i></span>
+      <div><h1>Vitals</h1><p>ENGINE ASSETS · HEALTH MONITOR</p></div>
+    </div>
+    <div class="duo" id="duo"></div>
+    <label class="search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></svg>
+      <input id="q" type="text" placeholder="Search assets…" autocomplete="off" spellcheck="false">
+    </label>
+    <div class="pills" id="pills"></div>
+    <div class="alist" id="alist"></div>
+  </div>
+  <div class="insp" id="insp"></div>
+</div>
+<script>
+/* ================= helpers ================= */
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const mulberry=s=>()=>{ s|=0; s=s+0x6D2B79F5|0; let t=Math.imul(s^s>>>15,1|s);
+  t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; };
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const fmtK=v=>v>=1000?(v/1000).toFixed(1)+'k':String(Math.round(v));
+const splitNum=(v,dec)=>{ const s=v.toFixed(dec).split('.'); return [s[0],dec?'.'+s[1]:'']; };
+const numHTML=(v,dec,unit)=>{ const [i,f]=splitNum(v,dec);
+  return `${i}<span class="fr">${f}</span><small>${esc(unit)}</small>`; };
+
+/* ================= data ================= */
+const SYSTEMS=[
+  {id:'cel', name:'CELESTIAL'},
+  {id:'air', name:'AIR'},
+  {id:'lgt', name:'LIGHT'},
+  {id:'sea', name:'SEA'}
+];
+const ASSETS=[
+ {id:'sun', sys:'cel', name:'Sun', tag:'DIR', accent:'#ffd166', sub:'DIRECTIONAL STAR · CELESTIAL',
+  blurb:'A G2V main-sequence lamp driving every shadow on the stage.',
+  props:[
+   {k:'el',label:'ELEVATION',min:-20,max:90,val:38,unit:'°',dec:1},
+   {k:'az',label:'AZIMUTH',min:0,max:360,val:142.5,unit:'°',dec:1},
+   {k:'lux',label:'INTENSITY',min:50,max:120000,val:32000,unit:'lx',dec:0,log:1},
+   {k:'kel',label:'TEMPERATURE',min:1800,max:12000,val:5600,unit:'K',dec:0},
+   {k:'disk',label:'DISK ⌀',min:0.2,max:10,val:2.2,unit:'°',dec:1}],
+  prime:{label:'INTENSITY',unit:'lx',get:v=>v.lux,fmt:fmtK},
+  step:{label:'DISK PRESET',prop:'disk',idx:1,options:[{t:'Real · 0.5°',v:0.5},{t:'Soft · 2.2°',v:2.2},{t:'Epic · 6°',v:6}]},
+  graph:{label:'DAYLIGHT',unit:'lx',seed:7,thr:5000,thrLabel:'civil line',
+    base:v=>v.lux*0.72, amp:v=>v.lux*0.3,
+    events:[{t:.16,l:'sunrise'},{t:.5,l:'solar noon'},{t:.84,l:'sunset'}]},
+  specs:v=>{ const m=v.el>0?1/Math.sin(Math.max(v.el,0.5)*Math.PI/180):0;
+    return [['EV100',Math.log2(Math.max(v.lux,.01)/2.5).toFixed(1)],
+    ['DISK Ω',(2*Math.PI*(1-Math.cos(v.disk/2*Math.PI/180))*1e6).toFixed(0)+' µsr'],
+    ['AIR MASS',v.el>0?m.toFixed(2):'— night'],
+    ['PHOTON FLUX','≈'+(v.lux*0.0003).toFixed(1)+' ×10²⁰/s/m²']]; },
+  alert:v=>v.el<0?'BELOW HORIZON':null},
+ {id:'moon', sys:'cel', name:'Moon', tag:'MOON', accent:'#cdd7ff', sub:'NIGHT LIGHT · CELESTIAL',
+  blurb:'A borrowed-light reflector governing the night exposure budget.',
+  props:[
+   {k:'ph',label:'PHASE',min:0,max:1,val:0.62,unit:'',dec:2},
+   {k:'gain',label:'GAIN',min:0.1,max:4,val:1,unit:'×',dec:2},
+   {k:'dist',label:'DISTANCE',min:356400,max:406700,val:384400,unit:'km',dec:0}],
+  prime:{label:'ILLUMINATION',unit:'%',get:v=>(1-Math.cos(2*Math.PI*v.ph))/2*100,fmt:x=>x.toFixed(1)},
+  step:{label:'PHASE',prop:'ph',idx:2,options:[{t:'Crescent',v:0.15},{t:'Quarter',v:0.25},{t:'Gibbous',v:0.4},{t:'Full',v:0.5}]},
+  graph:{label:'NIGHT GLOW',unit:'mlx',seed:21,thr:20,thrLabel:'quarter line',
+    base:v=>105*Math.pow(Math.max((1-Math.cos(2*Math.PI*v.ph))/2,0),1.5)*v.gain*0.8,
+    amp:v=>105*Math.pow(Math.max((1-Math.cos(2*Math.PI*v.ph))/2,0),1.5)*v.gain*0.3,
+    events:[{t:.2,l:'moonrise'},{t:.55,l:'transit'},{t:.88,l:'moonset'}]},
+  specs:v=>[['AGE',(v.ph*29.53).toFixed(1)+' d'],
+    ['SIZE',(2*Math.asin(1737.4/v.dist)*180/Math.PI*60).toFixed(1)+'′'],
+    ['PHASE ANGLE',(Math.abs(v.ph-0.5)*2*180).toFixed(0)+'°'],
+    ['GAIN','×'+v.gain.toFixed(2)]],
+  alert:v=>null},
+ {id:'stars', sys:'cel', name:'Star_Field', tag:'STR', accent:'#b79cff', sub:'STAR SPHERE · CELESTIAL',
+  blurb:'A procedural firmament — thousands of point lights for the cost of one.',
+  props:[
+   {k:'mag',label:'MAG LIMIT',min:2,max:8,val:6.5,unit:'mag',dec:1},
+   {k:'dens',label:'DENSITY',min:0,max:1,val:0.65,unit:'×',dec:2},
+   {k:'tw',label:'TWINKLE',min:0,max:1,val:0.4,unit:'×',dec:2}],
+  prime:{label:'STARS',unit:'',get:v=>30*Math.pow(2.512,v.mag-1)*v.dens,fmt:fmtK},
+  step:{label:'SKY',prop:'mag',idx:2,options:[{t:'Urban · 3.5',v:3.5},{t:'Suburb · 5.0',v:5},{t:'Rural · 6.5',v:6.5},{t:'Dark · 7.5',v:7.5}]},
+  graph:{label:'VISIBILITY',unit:'%',seed:33,thr:40,thrLabel:'urban wash',
+    base:v=>(v.mag-2)/6*88+8, amp:v=>8,
+    events:[{t:.12,l:'dusk'},{t:.5,l:'midnight'},{t:.88,l:'dawn'}]},
+  specs:v=>[['COUNT','≈'+Math.round(30*Math.pow(2.512,v.mag-1)*v.dens).toLocaleString('en-US')],
+    ['FAINTEST',v.mag.toFixed(1)+' mag'],['SKY',v.mag<4?'Bortle 8-9':v.mag<5.5?'Bortle 5':'Bortle 2-4']],
+  alert:v=>v.mag<4?'WASHED OUT':null},
+ {id:'sky', sys:'air', name:'Sky_Dome', tag:'SKY', accent:'#6ee7ff', sub:'ANALYTICAL SKY · AIR',
+  blurb:'A scattering volume that tints every pixel the camera sees.',
+  props:[
+   {k:'turb',label:'TURBIDITY',min:1,max:10,val:3.4,unit:'T',dec:1},
+   {k:'haze',label:'HAZE BAND',min:0,max:20,val:6,unit:'°',dec:1},
+   {k:'oz',label:'OZONE',min:100,max:500,val:300,unit:'DU',dec:0}],
+  prime:{label:'TURBIDITY',unit:'T',get:v=>v.turb,fmt:x=>x.toFixed(1)},
+  step:{label:'AIR',prop:'turb',idx:1,options:[{t:'Alpine · 1.5',v:1.5},{t:'Clear · 3.4',v:3.4},{t:'Hazy · 6.0',v:6},{t:'Smog · 8.5',v:8.5}]},
+  graph:{label:'CLARITY',unit:'%',seed:44,thr:60,thrLabel:'smog line',
+    base:v=>100-(v.turb-1)/9*58, amp:v=>6,
+    events:[{t:.25,l:'rush hour'},{t:.5,l:'solar noon'},{t:.8,l:'dusk'}]},
+  specs:v=>{ const sun=(ASSETS.find(a=>a.id==='sun')||{v:{el:38}}).v;
+    const m=sun.el>0?1/Math.sin(Math.max(sun.el,0.5)*Math.PI/180):0;
+    const dir=sun.el>0?Math.exp(-0.05*v.turb*m):0;
+    return [['RAYLEIGH τ',(v.turb*0.00879).toFixed(4)],
+    ['DIRECT ≈',(dir*100).toFixed(0)+' %'],['MODEL','Hosek-lite']]; },
+  alert:v=>v.turb>7?'SMOG ALERT':null},
+ {id:'cloud', sys:'air', name:'Cloud_Layer', tag:'CLD', accent:'#e8edf5', sub:'VOLUMETRIC SLAB · AIR',
+  blurb:'A billowed occluder field shaping god-rays and shade.',
+  props:[
+   {k:'cover',label:'COVER',min:0,max:8,val:2,unit:'okt',dec:1},
+   {k:'base',label:'BASE',min:500,max:12000,val:2500,unit:'m',dec:0,log:1},
+   {k:'thick',label:'THICKNESS',min:100,max:3000,val:800,unit:'m',dec:0}],
+  prime:{label:'COVER',unit:'okt',get:v=>v.cover,fmt:x=>x.toFixed(1)},
+  step:{label:'CLASS',prop:'cover',idx:1,options:[{t:'Few',v:1.5},{t:'Scattered',v:3.5},{t:'Broken',v:5.5},{t:'Overcast',v:7.5}]},
+  graph:{label:'COVERAGE',unit:'%',seed:55,thr:80,thrLabel:'overcast',
+    base:v=>v.cover/8*88+6, amp:v=>7,
+    events:[{t:.2,l:'front'},{t:.5,l:'break'},{t:.8,l:'buildup'}]},
+  specs:v=>[['COVERAGE',(v.cover/8*100).toFixed(0)+' %'],
+    ['CLASS',v.cover<0.5?'clear':v.cover<2.5?'few':v.cover<4.5?'scattered':v.cover<6.5?'broken':'overcast'],
+    ['TOPS',((v.base+v.thick)/1000).toFixed(1)+' km']],
+  alert:v=>v.cover>6.5?'OVERCAST':null},
+ {id:'fog', sys:'air', name:'Height_Fog', tag:'FOG', accent:'#9fd8b4', sub:'HEIGHT FOG · AIR',
+  blurb:'An exponential depth cue that swallows far geometry.',
+  props:[
+   {k:'sig',label:'DENSITY σ',min:0.02,max:12,val:0.9,unit:'/km',dec:2,log:1},
+   {k:'fall',label:'FALLOFF',min:1,max:60,val:12,unit:'m',dec:1},
+   {k:'base',label:'BASE',min:0,max:20,val:0,unit:'m',dec:1}],
+  prime:{label:'VISIBILITY',unit:'',get:v=>3912/v.sig,fmt:x=>x>=1000?(x/1000).toFixed(1)+' km':Math.round(x)+' m'},
+  step:{label:'DENSITY',prop:'sig',idx:1,options:[{t:'Thin · 0.2',v:0.2},{t:'Mist · 0.9',v:0.9},{t:'Dense · 3.5',v:3.5}]},
+  graph:{label:'TRANSMITTANCE',unit:'%',seed:66,thr:50,thrLabel:'dense',
+    base:v=>Math.exp(-v.sig*0.1)*100*0.94, amp:v=>5,
+    events:[{t:.18,l:'burn-off'},{t:.5,l:'midday'},{t:.85,l:'roll-in'}]},
+  specs:v=>[['VISIBILITY',3912/v.sig>=1000?(3912/v.sig/1000).toFixed(2)+' km':Math.round(3912/v.sig)+' m'],
+    ['EXTINCTION',(v.sig*4.343).toFixed(2)+' dB/km'],
+    ['HALF-DIST',(Math.LN2/v.sig*1000>=1000?(Math.LN2/v.sig).toFixed(2)+' km':Math.round(Math.LN2/v.sig*1000)+' m')]],
+  alert:v=>v.sig>3?'DENSE FOG':null},
+ {id:'spot', sys:'lgt', name:'Key_Spot', tag:'SPT', accent:'#ff8a5c', sub:'HERO SPOT · LIGHT',
+  blurb:'A theatrical key that sculpts the hero subject.',
+  props:[
+   {k:'inn',label:'INNER',min:5,max:80,val:24,unit:'°',dec:1},
+   {k:'out',label:'OUTER',min:10,max:90,val:41,unit:'°',dec:1},
+   {k:'cd',label:'CANDELA',min:10,max:20000,val:900,unit:'cd',dec:0,log:1},
+   {k:'kel',label:'TEMPERATURE',min:1800,max:12000,val:3200,unit:'K',dec:0}],
+  prime:{label:'CENTRE @4.5M',unit:'lx',get:v=>v.cd/(4.5*4.5),fmt:fmtK},
+  step:{label:'CONE',prop:'out',idx:1,options:[{t:'Narrow · 25°',v:25},{t:'Normal · 41°',v:41},{t:'Wide · 65°',v:65}]},
+  graph:{label:'OUTPUT',unit:'%',seed:77,thr:90,thrLabel:'thermal',
+    base:v=>94, amp:v=>3.5,
+    events:[{t:.1,l:'strike'},{t:.5,l:'steady'},{t:.9,l:'dim-check'}]},
+  specs:v=>[['BEAM','≈'+Math.round(2*Math.PI*v.cd*(1-Math.cos(v.out/2*Math.PI/180)))+' lm'],
+    ['POOL ⌀',(2*4.5*Math.tan(v.out/2*Math.PI/180)).toFixed(2)+' m'],
+    ['EDGE ≈','≈'+(Math.pow(Math.cos(v.out/2*Math.PI/180),3)*100).toFixed(0)+' %']],
+  alert:v=>v.cd>15000?'HOT LAMP':null},
+ {id:'ocean', sys:'sea', name:'Ocean', tag:'OCN', accent:'#4fc3ff', sub:'GERSTNER SWELL · SEA',
+  blurb:'A restless mirror doubling the sky — and the render cost.',
+  props:[
+   {k:'sw',label:'SWELL',min:0,max:12,val:1.8,unit:'m',dec:1},
+   {k:'ch',label:'CHOP',min:0,max:1,val:0.45,unit:'×',dec:2},
+   {k:'cl',label:'CLARITY',min:1,max:60,val:18,unit:'m',dec:0}],
+  prime:{label:'SWELL',unit:'m',get:v=>v.sw,fmt:x=>x.toFixed(1)},
+  step:{label:'SEA',prop:'sw',idx:1,options:[{t:'Calm · 0.5m',v:0.5},{t:'Moderate · 1.8m',v:1.8},{t:'Rough · 4.5m',v:4.5}]},
+  graph:{label:'SWELL HEIGHT',unit:'m',seed:88,thr:4,thrLabel:'rough',
+    base:v=>v.sw*0.92, amp:v=>Math.max(v.sw*0.25,0.08),
+    events:[{t:.22,l:'tide in'},{t:.5,l:'slack'},{t:.82,l:'tide out'}]},
+  specs:v=>[['SEA STATE',v.sw<0.1?'0 · glassy':v.sw<0.5?'2 · smooth':v.sw<1.25?'3 · slight':v.sw<2.5?'4 · moderate':v.sw<4?'5 · rough':v.sw<6?'6 · very rough':'7+ · high'],
+    ['WHITECAPS',v.sw>2.5?'yes':'no'],['FETCH','12 km']],
+  alert:v=>v.sw>4?'ROUGH SEAS':null}
+];
+
+/* ================= state ================= */
+const byId=id=>ASSETS.find(a=>a.id===id);
+ASSETS.forEach(a=>{ a.v={}; a.d={}; a.props.forEach(p=>{ a.v[p.k]=p.val; a.d[p.k]=p.val; }); });
+const state={ sel:'sun', tab:'tune', q:'', fsys:'all' };
+
+/* ================= series engine ================= */
+const HOURS=['06:00','09:00','12:00','15:00','18:00','21:00'];
+function series(a){ const g=a.graph, rnd=mulberry(g.seed), pts=[];
+  let n1=rnd(), n2=rnd();
+  for(let i=0;i<64;i++){ const t=i/63;
+    n1=n1*0.86+rnd()*0.14; n2=n2*0.93+rnd()*0.07;
+    const w=0.62*Math.sin(2*Math.PI*(t*1.25+g.seed%5))+0.28*Math.sin(2*Math.PI*(t*3.1+g.seed%3));
+    pts.push(Math.max(g.base(a.v)+g.amp(a.v)*(w*0.5+(n1-0.5)*1.4+(n2-0.5)*0.6),0)); }
+  return pts; }
+const tLabel=t=>{ const h=6+t*15, hh=Math.floor(h), mm=Math.round((h-hh)*60);
+  return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`; };
+const alerts=()=>ASSETS.filter(a=>a.alert(a.v));
+
+/* ================= outliner ================= */
+function renderDuo(){
+  const al=alerts().length;
+  document.getElementById('duo').innerHTML=
+    `<div class="stat g"><div class="ic">✓</div><div class="t">Active</div><div class="n num">${ASSETS.length-al}</div></div>
+     <div class="stat r"><div class="ic">▲</div><div class="t">Alerts</div><div class="n num">${al}</div></div>`;
+}
+function renderPills(){
+  const el=document.getElementById('pills'); el.innerHTML='';
+  const mk=(id,label)=>{ const b=document.createElement('button');
+    b.className='pill'+(state.fsys===id?' on':''); b.textContent=label;
+    b.addEventListener('click',()=>{ state.fsys=id; renderPills(); renderList(); });
+    el.appendChild(b); };
+  mk('all','All');
+  SYSTEMS.forEach(s=>mk(s.id,s.name.charAt(0)+s.name.slice(1).toLowerCase()));
+}
+function matches(a){
+  if(state.fsys!=='all'&&a.sys!==state.fsys) return false;
+  const q=state.q.trim().toLowerCase();
+  return !q||a.name.toLowerCase().includes(q)||a.tag.toLowerCase().includes(q);
+}
+function renderList(){
+  const host=document.getElementById('alist'); host.innerHTML='';
+  const list=ASSETS.filter(matches);
+  if(!list.length){ host.innerHTML=`<div class="stat"><div class="t">No assets match “${esc(state.q)}”.</div></div>`; return; }
+  list.forEach(a=>{
+    const pv=a.prime.get(a.v), dv=a.prime.get(a.d), df=pv-dv;
+    const dfmt=(df>=0?'+':'−')+a.prime.fmt(Math.abs(df));
+    const pts=series(a), mx=Math.max(...pts,1e-9);
+    let dots=''; for(let i=0;i<12;i++) dots+=`<i style="opacity:${(0.22+0.78*pts[Math.round(i/11*63)]/mx).toFixed(2)}"></i>`;
+    const b=document.createElement('button');
+    b.className='acard num'+(state.sel===a.id?' sel':'')+(a.alert(a.v)?' alert':'');
+    b.id='acard-'+a.id; b.style.setProperty('--ac',a.accent);
+    b.innerHTML=`<span class="tick"></span>
+      <span class="row1"><span class="nm">${esc(a.name)}</span><span class="tg">${a.tag}</span><span class="led"></span></span>
+      <span class="big">${esc(a.prime.fmt(pv))}<small>${esc(a.prime.unit)} · ${esc(a.prime.label.toLowerCase())}</small></span>
+      <span class="row3"><span class="delta">${esc(dfmt)}</span><span class="dots">${dots}</span></span>`;
+    b.addEventListener('click',()=>{ state.sel=a.id; renderList(); renderInsp(); });
+    host.appendChild(b);
+  });
+}
+
+/* ================= inspector ================= */
+const COLS=24, ROWS=4;
+const fracOf=(p,v)=>p.log?(Math.log(v)-Math.log(p.min))/(Math.log(p.max)-Math.log(p.min)):(v-p.min)/(p.max-p.min);
+const valOf=(p,i)=>{ const t=(i+1)/COLS;
+  const v=p.log?p.min*Math.pow(p.max/p.min,t):p.min+(p.max-p.min)*t;
+  return Math.round(v*Math.pow(10,p.dec))/Math.pow(10,p.dec); };
+const fmtS=(p,v)=>p.dec?v.toFixed(p.dec):fmtK(v);
+const fmtT=v=>v>=10000?(v/1000).toFixed(0)+'k':v>=1000?(v/1000).toFixed(1)+'k':v>=10?v.toFixed(0):v.toFixed(1);
+let lastGeom=null;
+
+function matrixHTML(a,p){
+  const total=clamp(fracOf(p,a.v[p.k]),0,1)*COLS*ROWS;
+  let h='<div class="matrix">';
+  for(let c=0;c<COLS;c++){ h+=`<button class="mcol" data-k="${p.k}" data-i="${c}" title="${esc(p.label)} step ${c+1}/${COLS}">`;
+    for(let r=0;r<ROWS;r++) h+=`<i class="${c*ROWS+r<total?'f':''}"></i>`;
+    h+=`</button>`; }
+  return h+'</div>';
+}
+function tuneView(a){
+  let h='';
+  if(a.alert(a.v)) h+=`<div class="mcard num" style="--ac:var(--red)"><div class="tick"></div><div class="lab">ATTENTION</div><div class="val" style="font-size:32px;letter-spacing:0;">${esc(a.alert(a.v))}</div></div>`;
+  a.props.forEach(p=>{ const v=a.v[p.k], df=v-p.val;
+    const dfmt=(df>=0?'+':'−')+(p.dec?Math.abs(df).toFixed(p.dec):fmtK(Math.abs(df)));
+    h+=`<div class="mcard num" style="--ac:${a.accent}"><div class="tick"></div>
+      <div class="lab">${esc(p.label)}</div>
+      <div class="val">${numHTML(v,p.dec,p.unit)}</div>
+      <div class="sub"><span class="delta">${esc(dfmt)} ${esc(p.unit)}</span><span>tap the dots to set</span></div>
+      ${matrixHTML(a,p)}
+      <div class="mscale"><span>${fmtS(p,p.min)}</span><span>${fmtS(p,p.max)} ${esc(p.unit)}</span></div></div>`; });
+  if(a.step){ const s=a.step;
+    h+=`<div class="stepper"><button class="sbtn" id="st-l" title="previous">‹</button>
+      <div class="smid"><div class="sl">${esc(s.label)}</div><div class="sv" id="st-v">${esc(s.options[s.idx].t)}</div></div>
+      <button class="sbtn" id="st-r" title="next">›</button></div>`; }
+  return h;
+}
+function graphView(a){
+  const g=a.graph, pts=series(a), cur=pts[63];
+  let lo=Math.min(...pts,g.thr), hi=Math.max(...pts,g.thr);
+  const pad=(hi-lo)*0.14||1; lo=Math.max(0,lo-pad); hi+=pad;
+  lastGeom={lo,hi,pts,unit:g.unit};
+  const X=t=>6+t*290, Y=v=>164-(v-lo)/(hi-lo)*152;
+  let line='',area='M 6 164 ';
+  pts.forEach((v,i)=>{ const t=i/63;
+    line+=`${i?'L':'M'} ${X(t).toFixed(1)} ${Y(v).toFixed(1)} `;
+    area+=`L ${X(t).toFixed(1)} ${Y(v).toFixed(1)} `; });
+  let grid='';
+  for(let i=0;i<4;i++){ const v=lo+(hi-lo)*i/3, y=Y(v);
+    grid+=`<line x1="6" y1="${y.toFixed(1)}" x2="296" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,${i?0.07:0.16})" stroke-dasharray="${i?'4 4':'0'}"/>
+      <text x="302" y="${(y+3.5).toFixed(1)}" font-size="9" fill="#5c5c64" font-family="var(--mono)" class="num">${fmtT(v)}</text>`; }
+  let xl='';
+  HOURS.forEach((l,i)=>{ xl+=`<text x="${(6+i/5*290).toFixed(1)}" y="183" font-size="9.5" fill="#5c5c64" text-anchor="middle" font-family="var(--mono)">${l}</text>`; });
+  const ty=Y(clamp(g.thr,lo,hi));
+  let evs='';
+  g.events.forEach(e=>{ const ex=X(e.t), ey=Y(clamp(pts[Math.round(e.t*63)],lo,hi));
+    evs+=`<circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="6.5" fill="${a.accent}" opacity=".25"/><circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="3.4" fill="#fff" stroke="${a.accent}" stroke-width="2"/>`; });
+  const evrow=g.events.map(e=>`<span class="ev"><b>${tLabel(e.t)}</b> · ${esc(e.l)}</span>`).join('');
+  return `<div class="gcard num" style="--ac:${a.accent}">
+    <div class="gtop"><span class="gl">${esc(g.label)}</span><span class="gv">${fmtT(cur)}<small>${esc(g.unit)} · now</small></span></div>
+    <svg viewBox="0 0 340 196" id="gsvg">
+      <defs><linearGradient id="gg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${a.accent}" stop-opacity=".38"/><stop offset="1" stop-color="${a.accent}" stop-opacity="0"/></linearGradient></defs>
+      ${grid}${xl}
+      <path d="${area}L 296 164 Z" fill="url(#gg)"/>
+      <path d="${line}" fill="none" stroke="${a.accent}" stroke-width="2"/>
+      <line x1="6" y1="${ty.toFixed(1)}" x2="296" y2="${ty.toFixed(1)}" stroke="rgba(255,255,255,.4)" stroke-dasharray="6 4"/>
+      <text x="292" y="${(ty-6).toFixed(1)}" font-size="9.5" fill="#9a9aa2" text-anchor="end" font-family="var(--mono)">${esc(g.thrLabel)} ${fmtT(g.thr)}</text>
+      ${evs}
+      <g id="gi" style="display:none">
+        <line id="gx" y1="12" y2="164" stroke="#fff" stroke-width="1.4"/>
+        <circle id="gd" r="4.5" fill="#0b0b0d" stroke="#fff" stroke-width="2.5"/>
+        <text id="gt" font-size="10.5" fill="#fff" text-anchor="middle" font-family="var(--mono)"></text>
+      </g>
+      <rect id="gx-zone" x="6" y="8" width="290" height="160" fill="transparent" style="cursor:crosshair"/>
+    </svg>
+    <div class="evrow">${evrow}</div></div>`;
+}
+function specsView(a){
+  let rows=a.specs(a.v).map(([k,v])=>`<div class="srow"><span class="k">${esc(k)}</span><span class="v num">${esc(v)}</span></div>`).join('');
+  if(a.alert(a.v)) rows=`<div class="srow warn"><span class="k">ALERT</span><span class="v">${esc(a.alert(a.v))}</span></div>`+rows;
+  rows+=`<div class="srow"><span class="k">CHANNELS</span><span class="v num">${a.props.length} tunable</span></div>`;
+  return `<div class="spec">${rows}</div><p class="note">${esc(a.blurb)} Deltas compare live values against authored defaults.</p>`;
+}
+function renderInsp(){
+  const host=document.getElementById('insp'), a=state.sel?byId(state.sel):null;
+  if(!a){
+    const minis=ASSETS.map(m=>{ const pv=m.prime.get(m.v);
+      return `<button class="mini num" data-id="${m.id}" style="--ac:${m.accent}"><span class="tick"></span>
+        <span class="nm">${esc(m.name)}</span><span class="big">${esc(m.prime.fmt(pv))}<small>${esc(m.prime.unit)}</small></span></button>`; }).join('');
+    host.innerHTML=`<div class="ihead"><div class="ititle"><h2>Fleet</h2><p>${ASSETS.length} ASSETS · ${alerts().length} ALERTS</p></div></div>
+      <div class="grid2" style="margin-top:18px">${minis}</div>`;
+    host.querySelectorAll('.mini').forEach(b=>b.addEventListener('click',()=>{
+      state.sel=b.dataset.id; renderList(); renderInsp(); }));
+    return;
+  }
+  host.style.setProperty('--ac',a.accent);
+  const tabs=[['tune','Tune'],['graph','Graph'],['specs','Specs']]
+    .map(([id,l])=>`<button class="tab${state.tab===id?' on':''}" data-t="${id}">${l}</button>`).join('');
+  const view=state.tab==='tune'?tuneView(a):state.tab==='graph'?graphView(a):specsView(a);
+  host.innerHTML=`<div class="ihead">
+      <button class="cbtn" id="bk" title="fleet overview">‹</button>
+      <div class="ititle"><h2>${esc(a.name)}</h2><p><b>${esc(a.tag)}</b> · ${esc(a.sub)}</p></div>
+      <button class="cbtn" id="rs" title="reset to defaults">⟲</button>
+    </div>
+    <div class="tabs">${tabs}</div>
+    <div id="view">${view}</div>`;
+  host.querySelector('#bk').addEventListener('click',()=>{ state.sel=null; renderList(); renderInsp(); });
+  host.querySelector('#rs').addEventListener('click',()=>{
+    a.props.forEach(p=>a.v[p.k]=p.val);
+    if(a.step){ const i=a.step.options.findIndex(o=>o.v===a.v[a.step.prop]); if(i>=0)a.step.idx=i; }
+    renderDuo(); renderList(); renderInsp(); });
+  host.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ state.tab=t.dataset.t; renderInsp(); }));
+  host.querySelectorAll('.mcol').forEach(c=>c.addEventListener('click',()=>{
+    const p=a.props.find(p=>p.k===c.dataset.k);
+    a.v[p.k]=valOf(p,+c.dataset.i);
+    renderDuo(); renderList(); renderInsp(); }));
+  const step=dir=>{ const s=a.step; s.idx=(s.idx+dir+s.options.length)%s.options.length;
+    a.v[s.prop]=s.options[s.idx].v;
+    renderDuo(); renderList(); renderInsp(); };
+  if(host.querySelector('#st-l')) host.querySelector('#st-l').addEventListener('click',()=>step(-1));
+  if(host.querySelector('#st-r')) host.querySelector('#st-r').addEventListener('click',()=>step(1));
+  const zone=host.querySelector('#gx-zone');
+  if(zone){ const svg=host.querySelector('#gsvg'), gi=svg.querySelector('#gi');
+    const move=e=>{ const r=svg.getBoundingClientRect(), G=lastGeom;
+      const t=clamp(((e.clientX-r.left)/r.width*340-6)/290,0,1), idx=Math.round(t*63);
+      const v=G.pts[idx], x=6+t*290, y=164-(v-G.lo)/(G.hi-G.lo)*152;
+      svg.querySelector('#gx').setAttribute('x1',x); svg.querySelector('#gx').setAttribute('x2',x);
+      const gd=svg.querySelector('#gd'); gd.setAttribute('cx',x); gd.setAttribute('cy',y);
+      const gt=svg.querySelector('#gt');
+      gt.setAttribute('x',clamp(x,52,288)); gt.setAttribute('y',Math.max(y-12,22));
+      gt.textContent=`${fmtT(v)} ${G.unit} · ${tLabel(t)}`;
+      gi.style.display='block'; };
+    zone.addEventListener('pointermove',move);
+    zone.addEventListener('pointerdown',move);
+    svg.addEventListener('pointerleave',()=>gi.style.display='none');
+  }
+}
+
+/* ================= boot ================= */
+document.getElementById('q').addEventListener('input',e=>{ state.q=e.target.value; renderList(); });
+renderDuo(); renderPills(); renderList(); renderInsp();
+</script>
+<style>.acard .big,.mini .big{display:block}.acard .row1,.acard .row3{width:100%}</style>
+</body>
+</html>
