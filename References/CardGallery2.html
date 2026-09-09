@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Card Gallery · Round 2</title>
+<style>
+:root{--bg:#08090b;--card:#141417;--card2:#1b1b1f;--line:rgba(255,255,255,.09);
+--tx:#f2f2f4;--dim:#9a9aa2;--mut:#5c5c64;--green:#3ddc84;--red:#ff5a5a;--gold:#ffd75e;
+--mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace}
+body{margin:0;background:radial-gradient(900px 400px at 50% -120px,rgba(255,255,255,.05),transparent),var(--bg);color:var(--tx);font-family:-apple-system,'Inter','Segoe UI',Roboto,sans-serif;padding:0 0 120px}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:'tnum'}
+button{font:inherit;color:inherit}
+.wrap{max-width:1220px;margin:0 auto;padding:28px 22px}
+.ghead h1{margin:0;font-size:32px;font-weight:750;letter-spacing:-.02em}
+.ghead h1 em{font-style:normal;background:linear-gradient(90deg,#f5b942,#ff7a59);-webkit-background-clip:text;background-clip:text;color:transparent}
+.ghead>p{margin:8px 0 0;color:var(--dim);font-size:14px}
+.gbar{position:sticky;top:0;z-index:50;background:rgba(8,9,11,.88);backdrop-filter:blur(14px);padding:14px 0;border-bottom:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pill{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:8px 18px;font-size:13.5px;color:var(--dim);cursor:pointer}
+.pill.on{background:#fff;color:#0b0b0d;border-color:#fff;font-weight:600}
+.gcount{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--mut)}
+.sec{margin:36px 0 16px;font-size:13px;letter-spacing:.22em;color:var(--dim);font-weight:600}
+.sec small{color:var(--mut);letter-spacing:.1em}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:22px}
+@media(max-width:940px){.grid2,.grid3{grid-template-columns:1fr}}
+.full{grid-column:1/-1}
+.slot-tag{display:flex;align-items:center;justify-content:space-between;margin:0 4px 8px}
+.slot-tag span{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--mut)}
+.star{background:none;border:1px solid var(--line);border-radius:50%;width:27px;height:27px;color:var(--mut);cursor:pointer;font-size:14px;line-height:1}
+.slot.fav .star{color:var(--gold);border-color:var(--gold);text-shadow:0 0 12px rgba(255,215,94,.6)}
+.slot.fav .card{border-color:rgba(255,215,94,.5)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:20px;position:relative;overflow:hidden;transition:transform .15s,border-color .15s}
+.card:hover{transform:translateY(-2px)}
+.card::before{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.055),transparent 26%);pointer-events:none}
+.glow{position:absolute;top:-70px;right:-60px;width:240px;height:180px;background:radial-gradient(closest-side,color-mix(in srgb,var(--ac) 32%,transparent),transparent);pointer-events:none}
+.lab{font-size:11px;letter-spacing:.18em;color:var(--mut);font-weight:600}
+.big{font-weight:200;letter-spacing:-.02em}
+.big small,.ro small{font-size:12px;font-weight:400;color:var(--dim);letter-spacing:.02em;margin-left:6px}
+.ro{font-size:38px;font-weight:200}
+.grad-text{background:linear-gradient(180deg,#fff 30%,var(--ac));-webkit-background-clip:text;background-clip:text;color:transparent}
+.delta{display:inline-block;background:rgba(255,255,255,.07);border-radius:7px;padding:3px 9px;font-size:12px;font-weight:500}
+.delta.up{color:var(--green);background:rgba(61,220,132,.12)} .delta.dn{color:var(--red);background:rgba(255,90,90,.12)}
+.live{display:inline-flex;align-items:center;gap:7px;font-size:11px;letter-spacing:.14em;color:var(--green);border:1px solid rgba(61,220,132,.4);border-radius:999px;padding:4px 12px;font-weight:600}
+.live i{width:7px;height:7px;border-radius:50%;background:var(--green);animation:blink 1.6s infinite}
+@keyframes blink{50%{opacity:.25}}
+.tile{width:40px;height:40px;border-radius:13px;flex:none;display:flex;align-items:center;justify-content:center;font-size:19px;background:color-mix(in srgb,var(--ac) 16%,transparent);border:1px solid color-mix(in srgb,var(--ac) 35%,transparent)}
+.btn-w{background:#fff;color:#0b0b0d;border:none;border-radius:13px;padding:11px 20px;font-weight:650;cursor:pointer;font-size:14px}
+.btn-g{background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:13px;padding:11px 20px;cursor:pointer;font-size:14px;color:var(--tx)}
+.foot{display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:13px;color:var(--dim)}
+.foot b{color:var(--tx)}
+.mlab{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.mscale{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--mut);margin-top:8px}
+.rline{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.rline:first-child{border-top:none}
+/* tick ring + conic ring */
+.ticks{border-radius:50%;background:repeating-conic-gradient(from -90deg,rgba(255,255,255,.25) 0 .9deg,transparent .9deg 6deg);-webkit-mask:radial-gradient(circle,transparent 60%,#000 61%,#000 74%,transparent 75%);mask:radial-gradient(circle,transparent 60%,#000 61%,#000 74%,transparent 75%)}
+.ringc{border-radius:50%;background:conic-gradient(from -90deg,var(--ac) calc(var(--p,70)*1%),rgba(255,255,255,.09) 0);-webkit-mask:radial-gradient(circle,transparent 63%,#000 64%);mask:radial-gradient(circle,transparent 63%,#000 64%)}
+</style>
+</head>
+<style>
+/* ---------- D entity ---------- */
+.heroKPI{padding-bottom:0}
+.heroKPI .top{display:flex;align-items:center;gap:12px}
+.heroKPI .nm{font-size:16px;font-weight:650}
+.heroKPI .big{font-size:72px;line-height:1;margin:10px 0 4px}
+.heroKPI .cap{color:var(--dim);font-size:13px;margin-bottom:6px}
+.heroKPI svg{display:block;width:100%;margin:0 -20px -6px}
+.glassrow{display:flex;align-items:center;gap:14px}
+.glassrow .nm{font-size:15.5px;font-weight:650}
+.glassrow .sub{font-size:12px;color:var(--dim);margin-top:3px}
+.glassrow svg{flex:1;height:40px;min-width:60px}
+.glassrow .rv{text-align:right}
+.glassrow .rv b{display:block;font-size:24px;font-weight:250}
+.neon{display:flex;padding:0;min-height:170px}
+.neon .L{flex:1.2;padding:20px}
+.neon .R{flex:1;background:linear-gradient(160deg,color-mix(in srgb,var(--ac) 55%,#0b0b0d),color-mix(in srgb,var(--ac) 18%,#0b0b0d));display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+.neon .nm{font-size:16px;font-weight:650}
+.neon .R b{font-size:46px;font-weight:200}
+.profile{text-align:center}
+.profile .ava{width:76px;height:76px;border-radius:50%;margin:2px auto 12px;display:flex;align-items:center;justify-content:center;font-size:34px;background:radial-gradient(circle at 35% 30%,var(--ac),#0b0b0d 75%);border:2px solid color-mix(in srgb,var(--ac) 60%,transparent);box-shadow:0 0 34px -6px var(--ac)}
+.profile .nm{font-size:19px;font-weight:700}
+.profile .hdl{font-family:var(--mono);font-size:11.5px;color:var(--mut);margin-top:3px}
+.profile .d3{display:flex;margin:16px 0}
+.profile .d3 div{flex:1;border-left:1px solid var(--line)}
+.profile .d3 div:first-child{border-left:none}
+.profile .d3 b{display:block;font-size:18px;font-weight:500}
+.profile .d3 span{font-size:10px;letter-spacing:.14em;color:var(--mut)}
+.profile .btn-w{width:100%}
+.mtable .r{display:flex;align-items:center;padding:9px 0;border-top:1px solid var(--line);font-size:13.5px}
+.mtable .r:first-child{border-top:none}
+.mtable .k{flex:1;color:var(--dim)}
+.mtable .v{font-weight:550;margin-right:12px}
+.vspro .faces{display:flex;align-items:center;gap:10px;margin:12px 0}
+.vspro .face{flex:1;display:flex;align-items:center;gap:10px;background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:10px 12px}
+.vspro .face b{display:block;font-size:14px}
+.vspro .face span{font-size:11.5px;color:var(--dim)}
+.vspro .badge{flex:none;font-family:var(--mono);font-size:11px;background:#fff;color:#0b0b0d;border-radius:999px;padding:5px 12px;font-weight:700}
+.alertpro{border:1px solid rgba(255,90,90,.45);background:linear-gradient(180deg,rgba(255,90,90,.1),transparent 55%),var(--card)}
+.alertpro .top{display:flex;gap:12px;align-items:center}
+.alertpro .warn{width:42px;height:42px;border-radius:14px;background:rgba(255,90,90,.16);display:flex;align-items:center;justify-content:center;font-size:20px;flex:none}
+.alertpro .btns{display:flex;gap:10px;margin-top:14px}
+.alertpro .btns button{flex:1}
+.alertpro .th{height:8px;border-radius:5px;background:rgba(255,255,255,.09);margin-top:14px;position:relative;overflow:hidden}
+.alertpro .th i{display:block;height:100%;background:linear-gradient(90deg,#ffd75e,var(--red))}
+.ghero{text-align:center}
+.ghero .wrap{position:relative;width:190px;height:190px;margin:6px auto}
+.ghero .ticks{position:absolute;inset:0}
+.ghero .ringc{position:absolute;inset:14px}
+.ghero .ndl{position:absolute;left:50%;bottom:50%;width:3px;height:64px;background:#fff;border-radius:2px;transform-origin:50% 100%;box-shadow:0 0 10px rgba(255,255,255,.7)}
+.ghero .hub{position:absolute;left:50%;top:50%;width:14px;height:14px;margin:-7px;background:#fff;border-radius:50%}
+.ghero .val{position:absolute;left:0;right:0;bottom:26px;font-size:30px;font-weight:250}
+.barspro .pr{margin:12px 0 0}
+.barspro .t{display:flex;justify-content:space-between;font-size:12.5px;color:var(--dim);margin-bottom:6px}
+.barspro .t b{color:var(--tx)}
+.barspro .bar{height:10px;border-radius:6px;background:rgba(255,255,255,.08);overflow:hidden}
+.barspro .bar i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,color-mix(in srgb,var(--ac) 35%,transparent),var(--ac));box-shadow:0 0 12px -2px var(--ac)}
+.vtl{position:relative;margin:6px 0 0 8px;padding-left:26px;border-left:2px solid rgba(255,255,255,.12)}
+.vtl .nd{position:relative;padding:0 0 18px}
+.vtl .nd:last-child{padding-bottom:2px}
+.vtl .nd::before{content:'';position:absolute;left:-34px;top:2px;width:12px;height:12px;border-radius:50%;background:#0b0b0d;border:2.5px solid var(--ac)}
+.vtl .nd.done::before{background:var(--ac);box-shadow:0 0 12px var(--ac)}
+.vtl .nd b{font-size:14px} .vtl .nd span{font-family:var(--mono);font-size:11px;color:var(--mut);margin-left:10px}
+.vtl .nd p{margin:3px 0 0;font-size:12.5px;color:var(--dim)}
+.tilespro .t4{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.tilespro .t{background:rgba(255,255,255,.045);border:1px solid var(--line);border-radius:16px;padding:12px}
+.tilespro .t .tt{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim);letter-spacing:.08em}
+.tilespro .t b{display:block;font-size:21px;font-weight:350;margin-top:6px}
+.orbhero{display:flex;gap:18px;align-items:center}
+.orbhero .o{width:132px;height:132px;flex:none;border:1px solid rgba(255,255,255,.2);border-radius:50%;position:relative}
+.orbhero .o::before{content:'';position:absolute;inset:46px;background:var(--ac);border-radius:50%;box-shadow:0 0 22px var(--ac)}
+.orbhero .o::after{content:'';position:absolute;inset:22px;border:1px dashed rgba(255,255,255,.18);border-radius:50%}
+.orbhero .sat{position:absolute;width:13px;height:13px;background:#fff;border-radius:50%;box-shadow:0 0 12px #fff;top:6px;left:60%}
+.orbhero .tele{font-size:12.5px;color:var(--dim);margin-top:8px;line-height:1.9}
+.orbhero .tele b{color:var(--tx);font-weight:550}
+.wavecard svg{display:block;width:100%;height:110px;margin-top:10px}
+.donutpro{display:flex;gap:18px;align-items:center}
+.donutpro .lg{flex:1}
+.donutpro .lr{display:flex;align-items:center;gap:10px;margin:9px 0;font-size:13px}
+.donutpro .lr i{width:10px;height:10px;border-radius:4px;flex:none}
+.donutpro .lr b{margin-left:auto;font-weight:550}
+.cap3{display:flex;gap:12px;margin-top:14px}
+.cap3 .c{flex:1;background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:12px;text-align:center}
+.cap3 .tube{width:100%;height:86px;border-radius:10px;background:rgba(255,255,255,.07);position:relative;overflow:hidden;margin-bottom:10px}
+.cap3 .tube i{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(180deg,#fff,var(--ac))}
+.cap3 b{font-size:16px;font-weight:500} .cap3 span{display:block;font-size:10.5px;color:var(--mut);letter-spacing:.1em;margin-top:2px}
+.feed .r{display:flex;gap:12px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--line)}
+.feed .r:first-child{border-top:none}
+.feed .txt{flex:1;font-size:13px}
+.feed .txt b{display:block;font-weight:600}
+.feed .txt span{color:var(--dim);font-size:12px}
+.feed time{font-family:var(--mono);font-size:11px;color:var(--mut);flex:none}
+/* ---------- E metric ---------- */
+.areaduo svg{display:block;width:100%;margin-top:10px}
+.mxpro{display:flex;gap:6px;margin-top:14px}
+.mxpro .mc{background:none;border:none;padding:3px 0 0;display:flex;flex-direction:column-reverse;gap:5px;cursor:pointer;border-top:2px solid transparent}
+.mxpro .mc.on{border-color:var(--ac)}
+.mxpro .mc i{width:13px;height:13px;border-radius:50%;background:rgba(255,255,255,.1)}
+.mxpro .mc i.f{background:var(--ac);box-shadow:0 0 9px -1px var(--ac)}
+.presets{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.presets button{border:1px solid var(--line);background:var(--card2);border-radius:999px;padding:6px 14px;font-size:12.5px;color:var(--dim);cursor:pointer}
+.presets button.on{color:var(--tx);border-color:var(--ac)}
+.ringgrad{display:flex;gap:18px;align-items:center}
+.ringgrad .c{position:relative;width:128px;height:128px;flex:none}
+.ringgrad .c .ringc{position:absolute;inset:0;background:conic-gradient(from -90deg,var(--ac) calc(var(--p)*1%),rgba(255,255,255,.09) 0)}
+.ringgrad .c b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:27px;font-weight:250}
+.segpro{display:flex;gap:5px;margin-top:14px}
+.segpro button{flex:1;height:40px;border:none;border-radius:8px;background:rgba(255,255,255,.08);cursor:pointer;padding:0;position:relative}
+.segpro button.on{background:linear-gradient(180deg,#fff,var(--ac))}
+.segpro button.pk::after{content:'';position:absolute;left:20%;right:20%;top:-9px;height:3px;border-radius:2px;background:#fff}
+.histpro{display:flex;align-items:flex-end;gap:5px;height:120px;margin-top:12px;position:relative}
+.histpro i{flex:1;border-radius:4px 4px 2px 2px;background:linear-gradient(180deg,var(--ac),color-mix(in srgb,var(--ac) 15%,transparent));min-height:5px}
+.histpro .peak{position:absolute;top:-4px;transform:translateX(-50%);background:#fff;color:#0b0b0d;font-size:10.5px;font-weight:700;border-radius:7px;padding:2px 8px}
+.livew svg{display:block;width:100%;height:100px;margin-top:10px}
+.livew .flow{stroke-dasharray:5 9;animation:dash2 1s linear infinite;filter:drop-shadow(0 0 6px var(--ac))}
+@keyframes dash2{to{stroke-dashoffset:-14}}
+.dialpro{text-align:center}
+.dialpro .wrap{position:relative;width:210px;height:120px;margin:0 auto;overflow:hidden}
+.dialpro .ticks{position:absolute;left:50%;top:0;width:190px;height:190px;margin-left:-95px}
+.dialpro .ndl{position:absolute;left:50%;bottom:0;width:3px;height:78px;background:var(--ac);border-radius:2px;transform-origin:50% 100%;box-shadow:0 0 12px var(--ac)}
+.bulletpro .track{height:26px;border-radius:9px;position:relative;margin-top:14px;background:linear-gradient(90deg,rgba(255,90,90,.18),rgba(255,215,94,.16) 55%,rgba(61,220,132,.16))}
+.bulletpro .fill{position:absolute;left:0;top:4px;bottom:4px;border-radius:6px;background:var(--ac);box-shadow:0 0 14px -2px var(--ac)}
+.bulletpro .tgt{position:absolute;top:-5px;bottom:-5px;width:3px;background:#fff;border-radius:2px;box-shadow:0 0 8px #fff}
+.stack100 .track{display:flex;height:30px;border-radius:10px;overflow:hidden;margin-top:14px;gap:3px}
+.stack100 .track i{display:block;border-radius:6px}
+.stack100 .lg{margin-top:12px}
+.stack100 .lr{display:flex;align-items:center;gap:10px;margin:7px 0;font-size:12.5px;color:var(--dim)}
+.stack100 .lr i{width:10px;height:10px;border-radius:4px}
+.stack100 .lr b{margin-left:auto;color:var(--tx)}
+.orbs{display:flex;justify-content:space-around;align-items:flex-end;margin-top:16px;text-align:center}
+.orbs .o i{display:flex;align-items:center;justify-content:center;border-radius:50%;margin:0 auto 8px;font-weight:650;background:radial-gradient(circle at 35% 30%,#fff,color-mix(in srgb,var(--c) 65%,#0b0b0d) 62%);box-shadow:0 0 26px -4px var(--c);color:#0b0b0d}
+.orbs .o span{font-size:11.5px;color:var(--dim)}
+.heatcal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:12px}
+.heatcal em{font-style:normal;text-align:center;font-size:10px;color:var(--mut);font-family:var(--mono)}
+.heatcal i{aspect-ratio:1.15;border-radius:6px;background:rgba(255,255,255,.07)}
+.heatcal i.h1{background:color-mix(in srgb,var(--ac) 32%,transparent)}
+.heatcal i.h2{background:color-mix(in srgb,var(--ac) 62%,transparent)}
+.heatcal i.h3{background:var(--ac);box-shadow:0 0 10px -2px var(--ac)}
+.knobpro{display:flex;align-items:center;gap:18px;margin-top:8px}
+.knobpro .k{position:relative;width:118px;height:118px;flex:none;border-radius:50%;background:conic-gradient(from -120deg,var(--ac) calc(var(--p,70)*.75*1%),rgba(255,255,255,.1) 0 75%,transparent 75%);-webkit-mask:radial-gradient(circle,transparent 58%,#000 59%);mask:radial-gradient(circle,transparent 58%,#000 59%)}
+.knobpro .ind{position:absolute;left:50%;top:50%;width:4px;height:52px;margin-left:-2px;background:#fff;border-radius:2px;transform-origin:50% 0;transform:rotate(var(--a,0deg)) translateY(6px)}
+.knobpro .step{display:flex;gap:8px;margin-top:10px}
+.knobpro .step button{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:var(--card2);font-size:18px;cursor:pointer}
+.odo{display:flex;gap:7px;margin-top:14px}
+.odo .dg{background:#000;border:1px solid var(--line);border-radius:13px;font-size:46px;font-weight:200;width:64px;text-align:center;padding:8px 0;box-shadow:inset 0 14px 16px -12px rgba(255,255,255,.3),inset 0 -14px 16px -12px rgba(0,0,0,.9);position:relative;overflow:hidden}
+.odo .dg::after{content:'';position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(255,255,255,.14)}
+.ledmx{display:grid;grid-template-columns:repeat(10,1fr);gap:8px;margin-top:14px}
+.ledmx button{aspect-ratio:1;border-radius:50%;border:none;background:rgba(255,255,255,.08);cursor:pointer;padding:0}
+.ledmx button.on{background:var(--ac);box-shadow:0 0 14px -1px var(--ac)}
+.ledmx button.hp{outline:2px solid #fff;outline-offset:2px}
+.hsteps{display:flex;align-items:center;margin-top:16px}
+.hsteps button{flex:none;width:34px;height:34px;border-radius:50%;border:1.5px solid var(--line);background:var(--card2);cursor:pointer;font-size:13px;color:var(--mut)}
+.hsteps button.on{background:var(--ac);border-color:var(--ac);color:#0b0b0d;font-weight:700;box-shadow:0 0 14px -2px var(--ac)}
+.hsteps .ln{flex:1;height:2px;background:rgba(255,255,255,.12);margin:0 4px}
+.hsteps .ln.on{background:var(--ac)}
+.pwheel{position:relative;width:190px;height:190px;margin:12px auto 0;border:1px solid var(--line);border-radius:50%}
+.pwheel button{position:absolute;width:34px;height:34px;margin:-17px;background:none;border:none;cursor:pointer;font-size:24px;filter:grayscale(1);opacity:.35}
+.pwheel button.on{filter:none;opacity:1;transform:scale(1.25)}
+.pwheel .mid{position:absolute;inset:56px;border-radius:50%;background:var(--card2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:11px;letter-spacing:.16em;color:var(--dim)}
+.sonar{display:flex;gap:18px;align-items:center}
+.sonar .dish{position:relative;width:132px;height:132px;flex:none;border-radius:50%;border:1px solid rgba(255,255,255,.2);overflow:hidden}
+.sonar .dish::before{content:'';position:absolute;inset:24px;border:1px solid rgba(255,255,255,.14);border-radius:50%}
+.sonar .dish::after{content:'';position:absolute;inset:44px;border:1px solid rgba(255,255,255,.14);border-radius:50%}
+.sonar .sw{position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,var(--ac),transparent 25%);animation:spin 3s linear infinite;opacity:.7}
+@keyframes spin{to{transform:rotate(360deg)}}
+.sonar .blip{position:absolute;width:11px;height:11px;border-radius:50%;background:#fff;box-shadow:0 0 12px #fff;left:68%;top:26%}
+.thmpro{display:flex;gap:18px;margin-top:6px}
+.thmpro .col{flex:none;width:34px;display:flex;flex-direction:column;align-items:center}
+.thmpro .tube{width:22px;height:150px;border-radius:12px;background:rgba(255,255,255,.08);position:relative;overflow:hidden}
+.thmpro .tube i{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(180deg,#fff,var(--ac))}
+.thmpro .bulb{width:34px;height:34px;border-radius:50%;background:var(--ac);margin-top:-8px;box-shadow:0 0 18px -2px var(--ac)}
+.thmpro .tk{display:flex;flex-direction:column;justify-content:space-between;height:150px;font-family:var(--mono);font-size:9px;color:var(--mut)}
+.cdnpro .cells{display:flex;gap:10px;margin-top:14px}
+.cdnpro .cell{flex:1;background:linear-gradient(180deg,var(--card2),#101013);border:1px solid var(--line);border-radius:16px;text-align:center;padding:12px 0}
+.cdnpro .cell b{display:block;font-size:36px;font-weight:200}
+.cdnpro .cell span{font-size:10px;letter-spacing:.16em;color:var(--mut)}
+.cdnpro .bar{height:8px;border-radius:5px;background:rgba(255,255,255,.08);margin-top:12px;overflow:hidden}
+.cdnpro .bar i{display:block;height:100%;background:var(--ac)}
+.divpro .r{display:flex;align-items:center;gap:10px;margin:11px 0}
+.divpro .k{width:92px;flex:none;font-size:12px;color:var(--dim)}
+.divpro .L,.divpro .R{flex:1;display:flex}
+.divpro .L{justify-content:flex-end}
+.divpro .L i,.divpro .R i{display:block;height:14px;border-radius:5px}
+.divpro .mid{flex:none;font-family:var(--mono);font-size:11px;color:var(--tx);width:64px;text-align:center}
+.mspark .r{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.mspark .r:first-child{border-top:none}
+.mspark .k{width:96px;flex:none;font-size:12.5px;color:var(--dim)}
+.mspark svg{flex:1;height:30px;min-width:50px}
+.mspark .v{width:92px;flex:none;text-align:right;font-size:14px}
+.sboard .r{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.sboard .r:first-child{border-top:none}
+.sboard .txt{flex:1}.sboard .txt b{display:block;font-size:13.5px;font-weight:600}
+.sboard .txt span{font-size:11.5px;color:var(--dim)}
+.sboard .pillv{font-family:var(--mono);font-size:11.5px;border:1px solid var(--line);border-radius:999px;padding:4px 12px}
+.specgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.specgrid .c{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.specgrid .c span{display:block;font-size:10px;letter-spacing:.14em;color:var(--mut)}
+.specgrid .c b{font-size:16.5px;font-weight:500}
+.duelpro{display:flex;align-items:flex-end;gap:18px;margin-top:14px}
+.duelpro .col{flex:1;text-align:center}
+.duelpro .bar{border-radius:12px;margin:0 auto 8px;width:70%}
+.duelpro .arr{align-self:center;font-size:26px;color:var(--green)}
+.ruler{display:flex;align-items:flex-end;gap:4px;height:76px;margin-top:14px}
+.ruler button{flex:1;border:none;border-radius:3px;background:rgba(255,255,255,.14);cursor:pointer;padding:0;min-height:14px}
+.ruler button.on{background:linear-gradient(180deg,#fff,var(--ac));box-shadow:0 0 10px -2px var(--ac)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.chips button{border:1px solid var(--line);background:var(--card2);border-radius:13px;padding:10px 16px;cursor:pointer;font-size:13px;color:var(--dim)}
+.chips button.on{border-color:var(--ac);color:var(--tx);background:color-mix(in srgb,var(--ac) 14%,var(--card2))}
+.chips button small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--mut);margin-top:2px}
+/* ---------- F chrome ---------- */
+.srchpro{display:flex;align-items:center;gap:10px;background:var(--card2);border:1px solid var(--line);border-radius:15px;padding:13px 16px}
+.srchpro input{flex:1;background:none;border:none;outline:none;color:var(--tx);font-size:15px;min-width:0}
+.srchpro kbd{font-family:var(--mono);font-size:11px;color:var(--mut);border:1px solid var(--line);border-radius:7px;padding:3px 8px}
+.fchips{display:flex;gap:8px;margin-top:12px}
+.fchips span{font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:5px 13px}
+.fchips span.on{background:#fff;color:#0b0b0d;border-color:#fff;font-weight:600}
+.tabbar{display:flex;background:var(--card2);border:1px solid var(--line);border-radius:20px;padding:8px}
+.tabbar button{flex:1;background:none;border:none;cursor:pointer;text-align:center;font-size:10.5px;color:var(--mut);padding:8px 0;border-radius:14px;letter-spacing:.06em}
+.tabbar button b{display:block;font-size:19px;margin-bottom:3px}
+.tabbar button.on{background:rgba(255,255,255,.1);color:var(--tx)}
+.hdpro{padding:0}
+.hdpro .cover{height:86px;background:linear-gradient(120deg,color-mix(in srgb,var(--ac) 45%,transparent),transparent),linear-gradient(180deg,rgba(255,255,255,.08),transparent)}
+.hdpro .body{padding:0 20px 20px;margin-top:-30px}
+.hdpro .ava{width:60px;height:60px;border-radius:20px;background:var(--card2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:28px}
+.hdpro .stats{display:flex;gap:8px;margin-top:12px}
+.hdpro .stats span{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:5px 13px;color:var(--dim)}
+.hdpro .stats b{color:var(--tx)}
+.sechead{display:flex;align-items:center;gap:12px}
+.sechead h3{margin:0;font-size:17px;font-weight:650}
+.sechead .cnt{font-family:var(--mono);font-size:11.5px;background:rgba(255,255,255,.09);border-radius:999px;padding:3px 11px}
+.sechead .sp{flex:1}
+.sechead button{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:7px 13px;font-size:12.5px;cursor:pointer;color:var(--dim)}
+.empty{text-align:center;padding:30px 20px}
+.empty .orb{width:110px;height:110px;margin:0 auto 16px;border:1px dashed rgba(255,255,255,.25);border-radius:50%;position:relative}
+.empty .orb::before{content:'';position:absolute;inset:40px;background:var(--ac);border-radius:50%;box-shadow:0 0 24px var(--ac)}
+.empty .orb::after{content:'';position:absolute;width:12px;height:12px;background:#fff;border-radius:50%;top:8px;left:64%;box-shadow:0 0 10px #fff}
+.toasts{display:flex;flex-direction:column;gap:10px}
+.toast{display:flex;gap:12px;align-items:center;background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:12px 14px;font-size:13.5px}
+.toast.ok{border-color:rgba(61,220,132,.4)} .toast.warn{border-color:rgba(255,90,90,.4)}
+.toast .t{width:32px;height:32px;flex:none;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px}
+/* tray */
+#tray{position:fixed;left:0;right:0;bottom:0;z-index:60;background:rgba(16,16,20,.94);backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:12px 22px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#tray .tt{font-size:13px;color:var(--dim);font-weight:600}
+#tray .chip{font-family:var(--mono);font-size:12px;border:1px solid rgba(255,215,94,.5);color:var(--gold);border-radius:999px;padding:4px 12px;cursor:pointer;background:none}
+#tray .sp{flex:1}
+.tbtn{border:1px solid var(--line);background:var(--card2);border-radius:11px;padding:8px 18px;cursor:pointer;font-size:13px}
+.tbtn.pri{background:#fff;color:#0b0b0d;border-color:#fff;font-weight:650}
+#tray .hint{font-size:12px;color:var(--mut)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="ghead"><h1>Card Gallery <em>· Round 2</em></h1><p>48 brand-new candidates · deeper, richer, all interactive · star winners, send codes like D-01, E-12, F-03</p></div>
+<div class="gbar" id="gbar">
+<button class="pill on" data-f="all">All</button>
+<button class="pill" data-f="entity">Entity</button>
+<button class="pill" data-f="metric">Metric</button>
+<button class="pill" data-f="chrome">Chrome</button>
+<span class="gcount" id="gcount"></span>
+</div>
+
+<div class="sec" data-sec="entity">D · ENTITY CARDS <small>16</small></div>
+<div class="grid2" id="gridD">
+
+<div class="slot full" data-id="D-01" data-cat="entity"><div class="slot-tag"><span>D-01 · HERO KPI</span><button class="star">☆</button></div>
+<div class="card heroKPI num" style="--ac:#f5b942"><div class="glow"></div>
+<div class="top"><span class="tile" style="--ac:#f5b942">☀</span><span class="nm">Sun</span><span class="lab">DIRECTIONAL STAR · CELESTIAL</span><span style="flex:1"></span><span class="live"><i></i>LIVE</span></div>
+<div class="big grad-text">32.0<small>klx · intensity</small></div>
+<div class="cap"><span class="delta up">+2.4 klx</span> &nbsp;vs yesterday · peak 36.4 at 13:10</div>
+<svg viewBox="0 0 600 120" preserveAspectRatio="none" style="height:120px"><defs><linearGradient id="gd1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f5b942" stop-opacity=".45"/><stop offset="1" stop-color="#f5b942" stop-opacity="0"/></linearGradient></defs>
+<path d="M 0 100 L 60 98 L 120 90 L 180 70 L 240 44 L 300 26 L 360 34 L 420 58 L 480 82 L 540 94 L 600 96 L 600 120 L 0 120 Z" fill="url(#gd1)"/>
+<path d="M 0 100 L 60 98 L 120 90 L 180 70 L 240 44 L 300 26 L 360 34 L 420 58 L 480 82 L 540 94 L 600 96" fill="none" stroke="#f5b942" stroke-width="2.5"/>
+<circle cx="300" cy="26" r="4" fill="#fff" stroke="#f5b942" stroke-width="2.5"/></svg>
+</div></div>
+
+<div class="slot" data-id="D-02" data-cat="entity"><div class="slot-tag"><span>D-02 · PROFILE</span><button class="star">☆</button></div>
+<div class="card profile num" style="--ac:#7aa2ff"><div class="glow"></div>
+<div class="ava">☾</div><div class="nm">Moon</div><div class="hdl">@night-light · celestial</div>
+<div class="d3"><div><b>96.4%</b><span>LIT</span></div><div><b>119.5</b><span>MLX</span></div><div><b>384k</b><span>KM</span></div></div>
+<button class="btn-w">Inspect asset</button>
+</div></div>
+
+<div class="slot" data-id="D-03" data-cat="entity"><div class="slot-tag"><span>D-03 · GLASS ROW</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#9be8c9"><div class="glassrow"><span class="tile" style="--ac:#9be8c9">≋</span>
+<div><div class="nm">Height_Fog</div><div class="sub">depth medium · air</div></div>
+<svg viewBox="0 0 120 40" preserveAspectRatio="none"><polyline points="0,30 15,28 30,29 45,24 60,25 75,20 90,21 105,15 120,16" fill="none" stroke="#9be8c9" stroke-width="2"/></svg>
+<div class="rv"><b>0.082</b><span class="delta up">+0.011 σ</span></div>
+</div></div></div>
+
+<div class="slot" data-id="D-04" data-cat="entity"><div class="slot-tag"><span>D-04 · SPLIT NEON</span><button class="star">☆</button></div>
+<div class="card neon num" style="--ac:#ffd75e"><div class="L"><div class="lab">HERO KEY · LIGHT</div>
+<div class="nm" style="margin:6px 0">Key_Spot</div>
+<div style="font-size:12.5px;color:var(--dim);line-height:1.8">3200 K · 28° cone<br>throw 14.5 m</div>
+<div style="margin-top:10px"><span class="delta up">+41 lx</span></div></div>
+<div class="R"><span class="lab" style="color:rgba(255,255,255,.7)">OUTPUT</span><b>333</b><span style="font-size:12px;opacity:.8">lx centre</span></div>
+</div></div>
+
+<div class="slot full" data-id="D-05" data-cat="entity"><div class="slot-tag"><span>D-05 · TABLE CARD</span><button class="star">☆</button></div>
+<div class="card mtable num" style="--ac:#8fd0ff"><div class="mlab"><span class="nm" style="font-size:16px;font-weight:650">Sky_Dome <span class="lab">· ANALYTICAL SKY</span></span><span class="live"><i></i>LIVE</span></div>
+<div class="r"><span class="k">☀ Brightness</span><span class="v">8.4 kcd/m²</span><span class="delta up">+0.3</span></div>
+<div class="r"><span class="k">◍ Turbidity</span><span class="v">3.2</span><span class="delta dn">−0.4</span></div>
+<div class="r"><span class="k">◎ Ozone</span><span class="v">300 DU</span><span class="delta">±0</span></div>
+<div class="r"><span class="k">⬢ Render cost</span><span class="v">0.4 ms</span><span class="delta up">−0.1</span></div>
+<div class="foot"><span>4 channels reporting</span><b>Full report →</b></div>
+</div></div>
+
+<div class="slot" data-id="D-06" data-cat="entity"><div class="slot-tag"><span>D-06 · VERSUS PRO</span><button class="star">☆</button></div>
+<div class="card vspro num"><div class="lab">DAY / NIGHT CROWN</div>
+<div class="faces"><div class="face"><span class="tile" style="--ac:#f5b942">☀</span><div><b>Sun</b><span>32.0 klx</span></div></div>
+<span class="badge">268×</span>
+<div class="face"><div style="text-align:right;flex:1"><b>Moon</b><span>119.5 mlx</span></div><span class="tile" style="--ac:#7aa2ff">☾</span></div></div>
+<div class="foot"><span>ratio at solar noon</span><b>Sun leads →</b></div>
+</div></div>
+
+<div class="slot" data-id="D-07" data-cat="entity"><div class="slot-tag"><span>D-07 · ALERT PRO</span><button class="star">☆</button></div>
+<div class="card alertpro num"><div class="top"><div class="warn">▲</div>
+<div><div style="font-size:15.5px;font-weight:700">Cloud_Layer over budget</div><div style="font-size:12px;color:var(--dim)">coverage 98% · ceiling 90%</div></div></div>
+<div class="th"><i style="width:98%"></i></div>
+<div class="mscale"><span>storm ceiling</span><span>98 / 90%</span></div>
+<div class="btns"><button class="btn-w">Inspect</button><button class="btn-g">Dismiss</button></div>
+</div></div>
+
+<div class="slot" data-id="D-08" data-cat="entity"><div class="slot-tag"><span>D-08 · GAUGE HERO</span><button class="star">☆</button></div>
+<div class="card ghero num" style="--ac:#ffd75e"><div class="lab">KEY_SPOT · OUTPUT</div>
+<div class="wrap"><div class="ticks"></div><div class="ringc" style="--p:78"></div>
+<div class="ndl" style="transform:rotate(100deg)"></div><div class="hub"></div><div class="val">78%</div></div>
+<div><span class="delta up">+6%</span> &nbsp;<span style="font-family:var(--mono);font-size:11px;color:var(--mut)">0 ···· 3200 lm</span></div>
+</div></div>
+
+<div class="slot" data-id="D-09" data-cat="entity"><div class="slot-tag"><span>D-09 · BAR STACK</span><button class="star">☆</button></div>
+<div class="card barspro num" style="--ac:#8fd0ff"><div class="mlab"><span class="nm" style="font-size:16px;font-weight:650">Ocean</span><span class="lab">GERSTNER SWELL</span></div>
+<div class="pr"><div class="t"><span>Swell energy</span><b>2.4 m</b></div><div class="bar"><i style="width:60%"></i></div></div>
+<div class="pr"><div class="t"><span>Chop</span><b>0.62</b></div><div class="bar"><i style="width:62%"></i></div></div>
+<div class="pr"><div class="t"><span>Wind fetch</span><b>11 kn</b></div><div class="bar"><i style="width:37%"></i></div></div>
+<div class="foot"><span>render cost</span><b>1.8 ms</b></div>
+</div></div>
+
+<div class="slot" data-id="D-10" data-cat="entity"><div class="slot-tag"><span>D-10 · TIMELINE PRO</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#f5b942"><div class="mlab"><span class="nm" style="font-size:16px;font-weight:650">Sun · today</span><span class="live"><i></i>LIVE</span></div>
+<div class="vtl"><div class="nd done"><b>Dawn</b><span>06:12</span><p>first light · 0.4 klx</p></div>
+<div class="nd done"><b>Solar noon</b><span>12:04</span><p>peak 36.4 klx · elev 71°</p></div>
+<div class="nd"><b>Dusk</b><span>18:41</span><p>golden hour in 3 h 12 m</p></div></div>
+</div></div>
+
+<div class="slot" data-id="D-11" data-cat="entity"><div class="slot-tag"><span>D-11 · TILES PRO</span><button class="star">☆</button></div>
+<div class="card tilespro num" style="--ac:#4fd1a5"><div class="mlab"><span class="nm" style="font-size:16px;font-weight:650">Ocean</span><span class="live"><i></i>LIVE</span></div>
+<div class="t4"><div class="t"><div class="tt">〜 SWELL</div><b>2.4 m</b></div><div class="t"><div class="tt">※ CHOP</div><b>0.62</b></div>
+<div class="t"><div class="tt">➶ WIND</div><b>11 kn</b></div><div class="t"><div class="tt">◔ COST</div><b>1.8 ms</b></div></div>
+</div></div>
+
+<div class="slot" data-id="D-12" data-cat="entity"><div class="slot-tag"><span>D-12 · ORBIT HERO</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#f5b942"><div class="lab">SUN · ORBITAL TRACK</div>
+<div class="orbhero" style="margin-top:12px"><div class="o"><div class="sat"></div></div>
+<div><div class="ro" style="font-size:34px">38.0<small>° elev</small></div>
+<div class="tele">azimuth <b>282.0°</b><br>distance <b>1.000 AU</b><br>rate <b>15.0 °/h</b></div></div></div>
+</div></div>
+
+<div class="slot" data-id="D-13" data-cat="entity"><div class="slot-tag"><span>D-13 · WAVEFORM</span><button class="star">☆</button></div>
+<div class="card wavecard num" style="--ac:#4fd1a5"><div class="mlab"><div><div class="lab">OCEAN · SWELL SIGNAL</div><div class="ro">2.4<small>m · period 7.2 s</small></div></div><span class="live"><i></i>LIVE</span></div>
+<svg viewBox="0 0 320 110"><path d="M 0 66 C 30 66 40 20 70 34 C 100 48 110 90 140 78 C 170 66 180 30 210 40 C 240 50 250 92 280 80 C 300 72 310 66 320 66" fill="none" stroke="#4fd1a5" stroke-width="2.5" style="filter:drop-shadow(0 0 8px #4fd1a5)"/><circle cx="280" cy="80" r="4.5" fill="#0b0b0d" stroke="#fff" stroke-width="2.5"/></svg>
+<div class="mscale"><span>−1.2 m</span><span>+1.2 m</span></div>
+</div></div>
+
+<div class="slot" data-id="D-14" data-cat="entity"><div class="slot-tag"><span>D-14 · DONUT SPLIT</span><button class="star">☆</button></div>
+<div class="card num"><div class="lab">SUN · ENERGY MIX</div>
+<div class="donutpro" style="margin-top:10px"><svg width="124" height="124" viewBox="0 0 124 124"><circle cx="62" cy="62" r="46" fill="none" stroke="rgba(255,255,255,.09)" stroke-width="16"/><circle cx="62" cy="62" r="46" fill="none" stroke="#f5b942" stroke-width="16" stroke-dasharray="159 289" transform="rotate(-90 62 62)"/><circle cx="62" cy="62" r="46" fill="none" stroke="#7aa2ff" stroke-width="16" stroke-dasharray="72 289" stroke-dashoffset="-159" transform="rotate(-90 62 62)"/><circle cx="62" cy="62" r="46" fill="none" stroke="#4fd1a5" stroke-width="16" stroke-dasharray="58 289" stroke-dashoffset="-231" transform="rotate(-90 62 62)"/></svg>
+<div class="lg"><div class="lr"><i style="background:#f5b942"></i>direct<b>55%</b></div><div class="lr"><i style="background:#7aa2ff"></i>sky<b>25%</b></div><div class="lr"><i style="background:#4fd1a5"></i>bounce<b>20%</b></div></div></div>
+</div></div>
+
+<div class="slot" data-id="D-15" data-cat="entity"><div class="slot-tag"><span>D-15 · CAPACITY</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#c9b8ff"><div class="mlab"><span class="nm" style="font-size:16px;font-weight:650">Star_Field</span><span class="delta up">+120</span></div>
+<div class="cap3"><div class="c"><div class="tube"><i style="height:82%"></i></div><b>4,200</b><span>VISIBLE</span></div>
+<div class="c"><div class="tube"><i style="height:64%"></i></div><b>6.4</b><span>MAG LIMIT</span></div>
+<div class="c"><div class="tube"><i style="height:22%"></i></div><b>0.3<span style="font-size:11px"> ms</span></b><span>COST</span></div></div>
+</div></div>
+
+<div class="slot" data-id="D-16" data-cat="entity"><div class="slot-tag"><span>D-16 · EVENT FEED</span><button class="star">☆</button></div>
+<div class="card feed num"><div class="mlab"><span class="nm" style="font-size:16px;font-weight:650">Fleet events</span><span class="live"><i></i>LIVE</span></div>
+<div class="r"><span class="tile" style="--ac:#f5b942">☀</span><div class="txt"><b>Sun passed solar noon</b><span>peak 36.4 klx recorded</span></div><time>12:04</time></div>
+<div class="r"><span class="tile" style="--ac:#ff5a5a">▲</span><div class="txt"><b>Cloud_Layer breached ceiling</b><span>coverage 98% · storm watch</span></div><time>11:47</time></div>
+<div class="r"><span class="tile" style="--ac:#7aa2ff">☾</span><div class="txt"><b>Moon rose over ridge</b><span>119.5 mlx and climbing</span></div><time>21:03</time></div>
+<div class="foot"><span>3 of 14 today</span><b>View all →</b></div>
+</div></div>
+
+</div>
+<div class="sec" data-sec="metric">E · METRIC CARDS <small>26</small></div>
+<div class="grid3" id="gridE">
+
+<div class="slot full" data-id="E-01" data-cat="metric"><div class="slot-tag"><span>E-01 · AREA DUO</span><button class="star">☆</button></div>
+<div class="card areaduo num"><div class="mlab"><span class="lab">SUN + SKY · DAY CURVE</span><span><span class="delta">☀ direct</span> <span class="delta">◍ sky</span></span></div>
+<svg viewBox="0 0 600 170" preserveAspectRatio="none" style="height:170px"><defs><linearGradient id="ge1a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f5b942" stop-opacity=".45"/><stop offset="1" stop-color="#f5b942" stop-opacity="0"/></linearGradient><linearGradient id="ge1b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7aa2ff" stop-opacity=".4"/><stop offset="1" stop-color="#7aa2ff" stop-opacity="0"/></linearGradient></defs>
+<line x1="0" y1="130" x2="600" y2="130" stroke="rgba(255,255,255,.08)"/><line x1="0" y1="85" x2="600" y2="85" stroke="rgba(255,255,255,.08)"/><line x1="0" y1="40" x2="600" y2="40" stroke="rgba(255,255,255,.08)"/>
+<path d="M 0 140 L 100 138 L 200 120 L 300 70 L 400 84 L 500 118 L 600 128 L 600 150 L 0 150 Z" fill="url(#ge1b)"/>
+<path d="M 0 142 L 100 140 L 200 118 L 300 56 L 400 76 L 500 116 L 600 130 L 600 150 L 0 150 Z" fill="url(#ge1a)"/>
+<path d="M 0 140 L 100 138 L 200 120 L 300 70 L 400 84 L 500 118 L 600 128" fill="none" stroke="#7aa2ff" stroke-width="2"/>
+<path d="M 0 142 L 100 140 L 200 118 L 300 56 L 400 76 L 500 116 L 600 130" fill="none" stroke="#f5b942" stroke-width="2.5"/>
+<line x1="0" y1="96" x2="600" y2="96" stroke="rgba(255,255,255,.35)" stroke-dasharray="7 5"/>
+<circle cx="300" cy="56" r="4.5" fill="#fff" stroke="#f5b942" stroke-width="2.5"/>
+<text x="8" y="20" font-size="11" fill="#5c5c64" font-family="var(--mono)">06:00</text><text x="592" y="20" font-size="11" fill="#5c5c64" text-anchor="end" font-family="var(--mono)">21:00</text></svg>
+<div class="mscale"><span>direct peak 36.4 klx</span><span>sky peak 9.8 klx</span><span>glare line 25k</span></div>
+</div></div>
+
+<div class="slot" data-id="E-02" data-cat="metric"><div class="slot-tag"><span>E-02 · MATRIX PRO</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#f5b942"><div class="tick" style="position:absolute;left:0;top:18px;bottom:18px;width:3px;border-radius:3px;background:var(--ac)"></div><div class="lab">SUN · ELEVATION</div>
+<div class="ro" id="ro-e2">35.0<small>°</small></div>
+<div class="mxpro tappy" data-mode="meter" data-ro="ro-e2" id="mx2">
+<button class="mc on" data-v="−12.1°"><i class="f"></i><i class="f"></i><i class="f"></i></button><button class="mc on" data-v="−4.3°"><i class="f"></i><i class="f"></i><i class="f"></i></button><button class="mc on" data-v="3.6°"><i class="f"></i><i class="f"></i><i class="f"></i></button><button class="mc on" data-v="11.4°"><i class="f"></i><i class="f"></i><i class="f"></i></button><button class="mc on" data-v="19.3°"><i class="f"></i><i class="f"></i><i class="f"></i></button><button class="mc on" data-v="27.1°"><i class="f"></i><i class="f"></i><i class="f"></i></button><button class="mc on" data-v="35.0°"><i class="f"></i><i class="f"></i><i class="f"></i></button><button class="mc" data-v="42.9°"><i></i><i></i><i></i></button><button class="mc" data-v="50.7°"><i></i><i></i><i></i></button><button class="mc" data-v="58.6°"><i></i><i></i><i></i></button><button class="mc" data-v="66.4°"><i></i><i></i><i></i></button><button class="mc" data-v="74.3°"><i></i><i></i><i></i></button><button class="mc" data-v="82.1°"><i></i><i></i><i></i></button><button class="mc" data-v="90.0°"><i></i><i></i><i></i></button>
+</div>
+<div class="presets" data-link="mx2"><button data-col="2">dawn</button><button data-col="10">noon</button><button data-col="3">dusk</button></div>
+<div class="mscale"><span>−20°</span><span>90°</span></div>
+</div></div>
+
+<div class="slot" data-id="E-03" data-cat="metric"><div class="slot-tag"><span>E-03 · RING GRAD</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#4fd1a5"><div class="lab">CLOUD · COVERAGE</div>
+<div class="ringgrad" style="margin-top:10px"><div class="c"><div class="ringc" style="--p:72"></div><b>72%</b></div>
+<div><div style="font-size:16px;font-weight:600">Overcast</div><div style="font-size:12.5px;color:var(--dim);margin-top:6px;line-height:1.8">ceiling 1,800 m<br>genus stratocumulus</div><div style="margin-top:8px"><span class="delta up">+6%</span></div></div></div>
+</div></div>
+
+<div class="slot" data-id="E-04" data-cat="metric"><div class="slot-tag"><span>E-04 · SEG METER</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#ffd75e"><div class="lab">SPOT · INTENSITY</div>
+<div class="ro" id="ro-e4">344<small>lx</small></div>
+<div class="segpro tappy" data-mode="meter" data-ro="ro-e4"><button class="on" data-v="31 lx"></button><button class="on" data-v="63 lx"></button><button class="on" data-v="94 lx"></button><button class="on" data-v="125 lx"></button><button class="on" data-v="156 lx"></button><button class="on" data-v="188 lx"></button><button class="on" data-v="219 lx"></button><button class="on" data-v="250 lx"></button><button class="on" data-v="281 lx"></button><button class="on" data-v="313 lx"></button><button class="on" data-v="344 lx"></button><button data-v="375 lx"></button><button class="pk" data-v="406 lx"></button><button data-v="438 lx"></button><button data-v="469 lx"></button><button data-v="500 lx"></button></div>
+<div class="mscale"><span>0</span><span>peak hold 406 · max 500 lx</span></div>
+</div></div>
+
+<div class="slot" data-id="E-05" data-cat="metric"><div class="slot-tag"><span>E-05 · HISTO PRO</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#8fd0ff"><div class="mlab"><span class="lab">SKY · LUMINANCE BINS</span><span class="delta dn">−0.4 EV</span></div>
+<div class="histpro"><span class="peak" style="left:37.5%">8.4k</span><i style="height:10%"></i><i style="height:16%"></i><i style="height:24%"></i><i style="height:36%"></i><i style="height:50%"></i><i style="height:66%"></i><i style="height:82%"></i><i style="height:96%"></i><i style="height:88%"></i><i style="height:72%"></i><i style="height:58%"></i><i style="height:46%"></i><i style="height:37%"></i><i style="height:30%"></i><i style="height:24%"></i><i style="height:19%"></i><i style="height:15%"></i><i style="height:12%"></i><i style="height:9%"></i><i style="height:7%"></i></div>
+<div class="mscale"><span>shadow</span><span>mean 2.1k · σ 1.4</span></div>
+</div></div>
+
+<div class="slot" data-id="E-06" data-cat="metric"><div class="slot-tag"><span>E-06 · LIVE WAVE</span><button class="star">☆</button></div>
+<div class="card livew num" style="--ac:#4fd1a5"><div class="mlab"><div class="lab">OCEAN · SWELL</div><span class="live"><i></i>LIVE</span></div>
+<div class="ro">2.4<small>m · period 7.2 s</small></div>
+<svg viewBox="0 0 300 100"><path class="flow" d="M 0 62 C 25 62 35 18 60 32 C 85 46 95 90 120 78 C 145 66 155 28 180 38 C 205 48 215 92 240 80 C 265 68 280 62 300 62" fill="none" stroke="#4fd1a5" stroke-width="2.5"/><circle cx="240" cy="80" r="4.5" fill="#0b0b0d" stroke="#fff" stroke-width="2.5"/></svg>
+<div class="mscale"><span>chop 0.62</span><span>11 kn fetch</span></div>
+</div></div>
+
+<div class="slot" data-id="E-07" data-cat="metric"><div class="slot-tag"><span>E-07 · DIAL PRO</span><button class="star">☆</button></div>
+<div class="card dialpro num" style="--ac:#ff9d5c"><div class="lab">SPOT · BEAM ANGLE</div>
+<div class="wrap"><div class="ticks"></div><div class="ndl" style="transform:rotate(-6deg)"></div></div>
+<div class="ro" style="font-size:34px">28<small>° cone · 14.5 m throw</small></div>
+</div></div>
+
+<div class="slot" data-id="E-08" data-cat="metric"><div class="slot-tag"><span>E-08 · BULLET PRO</span><button class="star">☆</button></div>
+<div class="card bulletpro num" style="--ac:#7aa2ff"><div class="mlab"><span class="lab">MOON · ILLUMINANCE</span><span class="delta up">+6.2 mlx</span></div>
+<div class="ro">119.5<small>mlx</small></div>
+<div class="track"><div class="fill" style="width:64%"></div><div class="tgt" style="left:80%"></div></div>
+<div class="mscale"><span>new 0</span><span>target 150 · full 190 mlx</span></div>
+</div></div>
+
+<div class="slot" data-id="E-09" data-cat="metric"><div class="slot-tag"><span>E-09 · STACK 100</span><button class="star">☆</button></div>
+<div class="card stack100 num"><div class="lab">SUN · LIGHT MIX</div>
+<div class="ro">32.0<small>klx total</small></div>
+<div class="track"><i style="width:55%;background:#f5b942"></i><i style="width:25%;background:#7aa2ff"></i><i style="width:20%;background:#4fd1a5"></i></div>
+<div class="lg"><div class="lr"><i style="background:#f5b942"></i>direct<b>17.6 klx</b></div><div class="lr"><i style="background:#7aa2ff"></i>sky<b>8.0 klx</b></div><div class="lr"><i style="background:#4fd1a5"></i>bounce<b>6.4 klx</b></div></div>
+</div></div>
+
+<div class="slot" data-id="E-10" data-cat="metric"><div class="slot-tag"><span>E-10 · ORBS</span><button class="star">☆</button></div>
+<div class="card num"><div class="lab">SKY · LAYER COST</div>
+<div class="orbs"><div class="o" style="--c:#8fd0ff"><i style="width:88px;height:88px">1.2</i><span>scatter ms</span></div><div class="o" style="--c:#c9b8ff"><i style="width:66px;height:66px">0.6</i><span>ozone ms</span></div><div class="o" style="--c:#4fd1a5"><i style="width:52px;height:52px">0.3</i><span>aerial ms</span></div></div>
+<div class="foot"><span>total frame</span><b>2.1 ms</b></div>
+</div></div>
+
+<div class="slot" data-id="E-11" data-cat="metric"><div class="slot-tag"><span>E-11 · HEAT CAL</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#f5b942"><div class="mlab"><span class="lab">SUN · PEAK DAYS</span><span class="delta">19 clear</span></div>
+<div class="heatcal"><em>M</em><em>T</em><em>W</em><em>T</em><em>F</em><em>S</em><em>S</em><i class="h3"></i><i class="h3"></i><i class="h2"></i><i class="h3"></i><i class="h1"></i><i></i><i class="h2"></i><i class="h3"></i><i class="h2"></i><i class="h3"></i><i class="h3"></i><i class="h1"></i><i class="h2"></i><i class="h3"></i><i class="h3"></i><i class="h1"></i><i></i><i class="h2"></i><i class="h3"></i><i class="h1"></i><i class="h2"></i><i class="h2"></i><i class="h3"></i><i class="h3"></i><i class="h1"></i><i></i><i class="h2"></i><i class="h3"></i></div>
+<div class="mscale"><span>overcast</span><span>clear peak 36.4 klx</span></div>
+</div></div>
+
+<div class="slot" data-id="E-12" data-cat="metric"><div class="slot-tag"><span>E-12 · KNOB PRO</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#9be8c9"><div class="lab">FOG · FALLOFF</div>
+<div class="knobpro"><div class="k" id="kb12" style="--p:70"><div class="ind" style="--a:0deg"></div></div>
+<div><div class="ro" id="ro-e12">70<small>%</small></div>
+<div class="step cycl" data-ro="ro-e12" data-knob="kb12" data-i="2" data-vals="60%|65%|70%|75%|80%" data-ang="-54|-27|0|27|54"><button data-dir="-1">−</button><button data-dir="1">+</button></div></div></div>
+<div class="mscale"><span>height 40 m</span><span>σ 0.082</span></div>
+</div></div>
+
+<div class="slot" data-id="E-13" data-cat="metric"><div class="slot-tag"><span>E-13 · ODOMETER</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#c9b8ff"><div class="mlab"><span class="lab">STARS · VISIBLE</span><span class="delta up">+120</span></div>
+<div class="odo"><div class="dg">4</div><div class="dg">2</div><div class="dg">0</div><div class="dg">0</div></div>
+<div class="mscale"><span>mag limit 6.5</span><span>milky way up</span></div>
+</div></div>
+
+<div class="slot" data-id="E-14" data-cat="metric"><div class="slot-tag"><span>E-14 · LED MATRIX</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#c9b8ff"><div class="lab">STARS · MAG LIMIT</div>
+<div class="ro" id="ro-e14">5.8<small>mag</small></div>
+<div class="ledmx tappy" data-mode="meter" data-ro="ro-e14"><button class="on" data-v="1.0 mag"></button><button class="on" data-v="1.4 mag"></button><button class="on" data-v="1.8 mag"></button><button class="on" data-v="2.2 mag"></button><button class="on" data-v="2.6 mag"></button><button class="on" data-v="3.0 mag"></button><button class="on" data-v="3.4 mag"></button><button class="on" data-v="3.8 mag"></button><button class="on" data-v="4.2 mag"></button><button class="on" data-v="4.6 mag"></button><button class="on" data-v="5.0 mag"></button><button class="on" data-v="5.4 mag"></button><button class="on" data-v="5.8 mag"></button><button data-v="6.2 mag"></button><button data-v="6.6 mag"></button><button class="hp" data-v="7.0 mag"></button><button data-v="7.4 mag"></button><button data-v="7.8 mag"></button><button data-v="8.2 mag"></button><button data-v="8.6 mag"></button></div>
+<div class="mscale"><span>bright 1.0</span><span>peak 7.0 · faint 8.6</span></div>
+</div></div>
+
+<div class="slot" data-id="E-15" data-cat="metric"><div class="slot-tag"><span>E-15 · H-STEPPER</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#4fd1a5"><div class="lab">OCEAN · WIND</div>
+<div class="ro" id="ro-e15">11<small>kn · breeze</small></div>
+<div class="hsteps tappy" data-mode="meter" data-ro="ro-e15"><button class="on" data-v="4 kn · calm">1</button><div class="ln on"></div><button class="on" data-v="11 kn · breeze">2</button><div class="ln"></div><button data-v="28 kn · gale">3</button><div class="ln"></div><button data-v="55 kn · storm">4</button><div class="ln"></div><button data-v="80 kn · hurricane">5</button></div>
+<div class="mscale"><span>calm</span><span>hurricane</span></div>
+</div></div>
+
+<div class="slot" data-id="E-16" data-cat="metric"><div class="slot-tag"><span>E-16 · PHASE WHEEL</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#7aa2ff"><div class="lab">MOON · PHASE</div>
+<div class="ro" id="ro-e16" style="text-align:center">100<small>% lit</small></div>
+<div class="pwheel tappy" data-mode="single" data-ro="ro-e16"><div class="mid">LUNA</div><button class="on" style="left:50%;top:12%" data-v="100% lit">🌕</button><button style="left:76.9%;top:23.1%" data-v="78% lit">🌖</button><button style="left:88%;top:50%" data-v="50% lit">🌗</button><button style="left:76.9%;top:76.9%" data-v="22% lit">🌘</button><button style="left:50%;top:88%" data-v="0% lit">🌑</button><button style="left:23.1%;top:76.9%" data-v="22% lit">🌒</button><button style="left:12%;top:50%" data-v="50% lit">🌓</button><button style="left:23.1%;top:23.1%" data-v="78% lit">🌔</button></div>
+</div></div>
+
+<div class="slot" data-id="E-17" data-cat="metric"><div class="slot-tag"><span>E-17 · SONAR</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#7aa2ff"><div class="mlab"><div class="lab">MOON · RANGE SWEEP</div><span class="live"><i></i>LIVE</span></div>
+<div class="sonar"><div class="dish"><div class="sw"></div><div class="blip"></div></div>
+<div><div class="ro" style="font-size:30px">384,400<small>km</small></div><div style="font-size:12.5px;color:var(--dim);margin-top:6px;line-height:1.9">bearing <b style="color:var(--tx)">142.0°</b><br>closing <b style="color:var(--tx)">3.8 cm/yr</b></div></div></div>
+</div></div>
+
+<div class="slot" data-id="E-18" data-cat="metric"><div class="slot-tag"><span>E-18 · THERMO PRO</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#ff9d5c"><div class="lab">FOG · AIR TEMP</div>
+<div class="thmpro" style="margin-top:10px"><div style="display:flex;gap:8px"><div class="tk"><span>40°</span><span>20°</span><span>0°</span><span>−20°</span></div><div class="col"><div class="tube"><i style="height:64%"></i></div><div class="bulb"></div></div></div>
+<div><div class="ro">21.5<small>°C</small></div><div style="font-size:12.5px;color:var(--dim);margin-top:6px;line-height:1.9">dew point <b style="color:var(--tx)">17.2 °C</b><br>humidity <b style="color:var(--tx)">74%</b></div><div style="margin-top:8px"><span class="delta up">+1.3 °C</span></div></div></div>
+</div></div>
+
+<div class="slot" data-id="E-19" data-cat="metric"><div class="slot-tag"><span>E-19 · COUNTDOWN</span><button class="star">☆</button></div>
+<div class="card cdnpro num" style="--ac:#f5b942"><div class="lab">SUN · TO SUNRISE 06:12</div>
+<div class="cells"><div class="cell"><b>04</b><span>HRS</span></div><div class="cell"><b>37</b><span>MIN</span></div><div class="cell"><b>52</b><span>SEC</span></div></div>
+<div class="bar"><i style="width:63%"></i></div>
+<div class="mscale"><span>night 63% elapsed</span><span>golden hour +22 m</span></div>
+</div></div>
+
+<div class="slot" data-id="E-20" data-cat="metric"><div class="slot-tag"><span>E-20 · DIVERGE</span><button class="star">☆</button></div>
+<div class="card divpro num"><div class="lab">SKY · EXPOSURE ZONES</div>
+<div class="r"><span class="k">highlights</span><div class="L"><i style="width:30%;background:rgba(255,255,255,.2)"></i></div><span class="mid">68 / 32</span><div class="R"><i style="width:70%;background:#f5b942"></i></div></div>
+<div class="r"><span class="k">mid sky</span><div class="L"><i style="width:48%;background:rgba(255,255,255,.2)"></i></div><span class="mid">48 / 52</span><div class="R"><i style="width:52%;background:#7aa2ff"></i></div></div>
+<div class="r"><span class="k">shadows</span><div class="L"><i style="width:74%;background:#4fd1a5"></i></div><span class="mid">74 / 26</span><div class="R"><i style="width:26%;background:rgba(255,255,255,.2)"></i></div></div>
+<div class="mscale"><span>◂ under</span><span>over ▸</span></div>
+</div></div>
+
+<div class="slot full" data-id="E-21" data-cat="metric"><div class="slot-tag"><span>E-21 · MULTI SPARK</span><button class="star">☆</button></div>
+<div class="card mspark num"><div class="lab">SUN · ALL CHANNELS</div>
+<div class="r"><span class="tile" style="--ac:#f5b942">☀</span><span class="k">Intensity</span><svg viewBox="0 0 200 30" preserveAspectRatio="none"><polyline points="0,24 25,23 50,21 75,15 100,8 125,10 150,16 175,20 200,21" fill="none" stroke="#f5b942" stroke-width="2"/></svg><span class="v">32.0 klx</span><span class="delta up">+2.4</span></div>
+<div class="r"><span class="tile" style="--ac:#ff9d5c">◍</span><span class="k">Temp</span><svg viewBox="0 0 200 30" preserveAspectRatio="none"><polyline points="0,18 50,16 100,12 150,13 200,15" fill="none" stroke="#ff9d5c" stroke-width="2"/></svg><span class="v">5500 K</span><span class="delta">±0</span></div>
+<div class="r"><span class="tile" style="--ac:#8fd0ff">➶</span><span class="k">Elevation</span><svg viewBox="0 0 200 30" preserveAspectRatio="none"><polyline points="0,26 50,19 100,10 150,13 200,18" fill="none" stroke="#8fd0ff" stroke-width="2"/></svg><span class="v">38.0°</span><span class="delta up">+1.2</span></div>
+<div class="r"><span class="tile" style="--ac:#c9b8ff">⬢</span><span class="k">Disk</span><svg viewBox="0 0 200 30" preserveAspectRatio="none"><polyline points="0,15 200,15" fill="none" stroke="#9a9aa2" stroke-width="2" stroke-dasharray="5 4"/></svg><span class="v">2.2°</span><span class="delta">fixed</span></div>
+</div></div>
+
+<div class="slot" data-id="E-22" data-cat="metric"><div class="slot-tag"><span>E-22 · STATUS BOARD</span><button class="star">☆</button></div>
+<div class="card sboard num"><div class="lab">SPOT · PIPELINE</div>
+<div class="r"><span class="tile" style="--ac:#3ddc84">◩</span><div class="txt"><b>Shadows</b><span>pcf soft · 4 taps</span></div><span class="pillv">2048 px</span></div>
+<div class="r"><span class="tile" style="--ac:#3ddc84">✦</span><div class="txt"><b>Bounce GI</b><span>path traced</span></div><span class="pillv">6 max</span></div>
+<div class="r"><span class="tile" style="--ac:#ffd75e">✺</span><div class="txt"><b>Bloom</b><span>soft knee</span></div><span class="pillv">0.35</span></div>
+<div class="r"><span class="tile" style="--ac:#ff5a5a">⬢</span><div class="txt"><b>Lens dirt</b><span>texture missing</span></div><span class="pillv" style="color:var(--red)">fix →</span></div>
+</div></div>
+
+<div class="slot" data-id="E-23" data-cat="metric"><div class="slot-tag"><span>E-23 · SPEC GRID</span><button class="star">☆</button></div>
+<div class="card num"><div class="lab">SUN · DERIVED</div>
+<div class="specgrid"><div class="c"><span>EXPOSURE</span><b>EV100 13.6</b></div><div class="c"><span>DISK Ω</span><b>1158 µsr</b></div><div class="c"><span>AIR MASS</span><b>1.62</b></div><div class="c"><span>WHITE</span><b>5500 K</b></div><div class="c"><span>FLUX</span><b>≈9.6 ×10²⁰</b></div><div class="c"><span>PARALLAX</span><b>8.79 ″</b></div></div>
+<div class="foot"><span>computed live</span><b>recompute ⟳</b></div>
+</div></div>
+
+<div class="slot" data-id="E-24" data-cat="metric"><div class="slot-tag"><span>E-24 · DUEL PRO</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#f5b942"><div class="mlab"><span class="lab">SUN · TUNE RESULT</span><span class="delta up">+13.8%</span></div>
+<div class="duelpro"><div class="col"><div class="bar" style="height:110px;background:rgba(255,255,255,.12)"></div><b>32.0</b><div class="lab">BEFORE</div></div>
+<div class="arr">→</div>
+<div class="col"><div class="bar" style="height:128px;background:linear-gradient(180deg,#fff,#f5b942);box-shadow:0 0 22px -4px #f5b942"></div><b>36.4</b><div class="lab">AFTER · klx</div></div></div>
+</div></div>
+
+<div class="slot" data-id="E-25" data-cat="metric"><div class="slot-tag"><span>E-25 · RULER</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#f5b942"><div class="lab">SUN · INTENSITY</div>
+<div class="ro" id="ro-e25">32<small>klx</small></div>
+<div class="ruler tappy" data-mode="meter" data-ro="ro-e25"><button class="on" style="height:100%" data-v="2 klx"></button><button class="on" style="height:42%" data-v="4 klx"></button><button class="on" style="height:58%" data-v="6 klx"></button><button class="on" style="height:42%" data-v="8 klx"></button><button class="on" style="height:58%" data-v="10 klx"></button><button class="on" style="height:100%" data-v="12 klx"></button><button class="on" style="height:42%" data-v="14 klx"></button><button class="on" style="height:58%" data-v="16 klx"></button><button class="on" style="height:42%" data-v="18 klx"></button><button class="on" style="height:58%" data-v="20 klx"></button><button class="on" style="height:100%" data-v="22 klx"></button><button class="on" style="height:42%" data-v="24 klx"></button><button class="on" style="height:58%" data-v="26 klx"></button><button class="on" style="height:42%" data-v="28 klx"></button><button class="on" style="height:58%" data-v="30 klx"></button><button class="on" style="height:100%" data-v="32 klx"></button><button style="height:42%" data-v="34 klx"></button><button style="height:58%" data-v="36 klx"></button><button style="height:42%" data-v="38 klx"></button><button style="height:100%" data-v="40 klx"></button></div>
+<div class="mscale"><span>0</span><span>10</span><span>20</span><span>30</span><span>40 klx</span></div>
+</div></div>
+
+<div class="slot" data-id="E-26" data-cat="metric"><div class="slot-tag"><span>E-26 · PRESET CHIPS</span><button class="star">☆</button></div>
+<div class="card num" style="--ac:#f5b942"><div class="lab">SUN · DISK PRESET</div>
+<div class="ro" id="ro-e26">4.0<small>° classic</small></div>
+<div class="chips tappy" data-mode="single" data-ro="ro-e26"><button data-v="2.2° soft">Soft<small>2.2° · filmic</small></button><button class="on" data-v="4.0° classic">Classic<small>4.0° · balanced</small></button><button data-v="6.0° epic">Epic<small>6.0° · dramatic</small></button><button data-v="9.5° vista">Vista<small>9.5° · alien</small></button></div>
+<div class="mscale"><span>limb-darkened</span><span>1158 µsr solid angle</span></div>
+</div></div>
+
+</div>
+<div class="sec" data-sec="chrome">F · CHROME <small>6</small></div>
+<div class="grid2" id="gridF">
+
+<div class="slot" data-id="F-01" data-cat="chrome"><div class="slot-tag"><span>F-01 · SEARCH PRO</span><button class="star">☆</button></div>
+<div class="card"><div class="lab" style="margin-bottom:12px">OUTLINER FIND</div>
+<div class="srchpro"><span style="color:var(--mut)">⌕</span><input value="o" readonly><kbd>⌘K</kbd></div>
+<div class="fchips"><span class="on">All 8</span><span>Celestial 3</span><span>Air 3</span><span>Light 1</span><span>Sea 1</span></div>
+</div></div>
+
+<div class="slot" data-id="F-02" data-cat="chrome"><div class="slot-tag"><span>F-02 · TAB BAR</span><button class="star">☆</button></div>
+<div class="card"><div class="lab" style="margin-bottom:12px">APP NAVIGATION</div>
+<div class="tabbar tappy" data-mode="single"><button class="on"><b>◧</b>Outline</button><button><b>☀</b>Tune</button><button><b>〜</b>Graph</button><button><b>⬢</b>Specs</button></div>
+</div></div>
+
+<div class="slot" data-id="F-03" data-cat="chrome"><div class="slot-tag"><span>F-03 · HEADER PRO</span><button class="star">☆</button></div>
+<div class="card hdpro" style="--ac:#f5b942"><div class="cover"></div><div class="body"><div class="ava">☀</div>
+<div style="display:flex;align-items:center;gap:10px;margin-top:10px"><span style="font-size:21px;font-weight:700">Sun</span><span class="live"><i></i>LIVE</span><span style="flex:1"></span><button class="btn-g" style="padding:8px 16px">⟲</button></div>
+<div class="lab" style="margin-top:4px">DIRECTIONAL STAR · CELESTIAL</div>
+<div class="stats"><span>intensity <b>32.0 klx</b></span><span>elev <b>38.0°</b></span><span>temp <b>5500 K</b></span></div>
+</div></div></div>
+
+<div class="slot" data-id="F-04" data-cat="chrome"><div class="slot-tag"><span>F-04 · SECTION HEAD</span><button class="star">☆</button></div>
+<div class="card"><div class="sechead"><h3>Celestial</h3><span class="cnt">3</span><span class="sp"></span><button>⇅ Sort</button><button>▦</button></div>
+</div></div>
+
+<div class="slot" data-id="F-05" data-cat="chrome"><div class="slot-tag"><span>F-05 · EMPTY STATE</span><button class="star">☆</button></div>
+<div class="card empty" style="--ac:#8fd0ff"><div class="orb"></div>
+<div style="font-size:16px;font-weight:650">No assets in this system</div>
+<div style="font-size:13px;color:var(--dim);margin:6px 0 14px">Nothing reports here yet — spawn an asset to begin.</div>
+<button class="btn-w">＋ New asset</button>
+</div></div>
+
+<div class="slot" data-id="F-06" data-cat="chrome"><div class="slot-tag"><span>F-06 · TOASTS</span><button class="star">☆</button></div>
+<div class="card"><div class="lab" style="margin-bottom:12px">NOTIFICATIONS</div>
+<div class="toasts"><div class="toast ok"><span class="t" style="background:rgba(61,220,132,.15)">✓</span><span>Sun preset <b>“Epic”</b> applied</span></div>
+<div class="toast warn"><span class="t" style="background:rgba(255,90,90,.15)">▲</span><span>Cloud_Layer breached <b>storm ceiling</b></span></div></div>
+</div></div>
+
+</div>
+</div>
+
+<div id="tray"><span class="tt">★ Picks <span id="pcount" class="num">0</span></span><span id="pchips" style="display:flex;gap:8px;flex-wrap:wrap"></span><span class="hint" id="phint">tap ☆ on any card to shortlist it</span><span class="sp"></span><button class="tbtn" id="pclear">Clear</button><button class="tbtn pri" id="pcopy">Copy picks</button></div>
+
+<script>
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+$$('.tappy').forEach(box=>{
+  const kids=[...box.querySelectorAll('button')];
+  kids.forEach((k,i)=>k.addEventListener('click',()=>{
+    if(box.dataset.mode==='meter'){ kids.forEach((o,j)=>{ const on=j<=i;
+        o.classList.toggle('on',on);
+        o.querySelectorAll('i').forEach(d=>d.classList.toggle('f',on)); });
+      box.querySelectorAll('.ln').forEach((l,j)=>l.classList.toggle('on',j<i)); }
+    else kids.forEach((o,j)=>o.classList.toggle('on',j===i));
+    if(box.dataset.ro){ const ro=document.getElementById(box.dataset.ro);
+      if(ro&&k.dataset.v) ro.innerHTML=k.dataset.v.replace(/([a-z°%]+)$/,'<small>$1</small>'); }
+  }));
+});
+/* preset pills that jump a meter */
+$$('[data-link]').forEach(box=>{
+  [...box.children].forEach(b=>b.addEventListener('click',()=>{
+    [...box.children].forEach(o=>o.classList.toggle('on',o===b));
+    const cols=document.getElementById(box.dataset.link).querySelectorAll('button');
+    if(cols[+b.dataset.col]) cols[+b.dataset.col].click();
+  }));
+});
+/* knob steppers */
+$$('.cycl').forEach(box=>{
+  const vals=box.dataset.vals.split('|'), ang=box.dataset.ang.split('|');
+  const ro=document.getElementById(box.dataset.ro), kb=document.getElementById(box.dataset.knob);
+  let i=+box.dataset.i||0;
+  box.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    i=(i+ +b.dataset.dir+vals.length)%vals.length;
+    ro.innerHTML=vals[i].replace(/([a-z°%]+)$/,'<small>$1</small>');
+    kb.style.setProperty('--p',parseFloat(vals[i]));
+    kb.querySelector('.ind').style.setProperty('--a',ang[i]+'deg');
+  }));
+});
+/* favorites */
+const KEY='cg2-picks';
+let picks=[]; try{ picks=JSON.parse(localStorage.getItem(KEY)||'[]'); }catch(e){ picks=[]; }
+function syncTray(){
+  $$('.slot').forEach(s=>{ const on=picks.includes(s.dataset.id);
+    s.classList.toggle('fav',on);
+    s.querySelector('.star').textContent=on?'★':'☆'; });
+  $('#pcount').textContent=picks.length;
+  $('#phint').style.display=picks.length?'none':'inline';
+  const host=$('#pchips'); host.innerHTML='';
+  picks.forEach(id=>{ const c=document.createElement('button'); c.className='chip'; c.textContent=id;
+    c.addEventListener('click',()=>{ picks=picks.filter(p=>p!==id); save(); syncTray(); });
+    host.appendChild(c); });
+}
+function save(){ try{ localStorage.setItem(KEY,JSON.stringify(picks)); }catch(e){} }
+$$('.slot .star').forEach(b=>b.addEventListener('click',()=>{
+  const id=b.closest('.slot').dataset.id;
+  picks=picks.includes(id)?picks.filter(p=>p!==id):[...picks,id];
+  save(); syncTray(); }));
+$('#pclear').addEventListener('click',()=>{ picks=[]; save(); syncTray(); });
+$('#pcopy').addEventListener('click',()=>{
+  const t=picks.join(', ')||'(no picks yet)';
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(t).catch(()=>fallback(t));
+  else fallback(t);
+  function fallback(x){ const ta=document.createElement('textarea'); ta.value=x; document.body.appendChild(ta);
+    ta.select(); try{document.execCommand('copy');}catch(e){} ta.remove(); }
+});
+/* filter */
+$$('#gbar .pill').forEach(p=>p.addEventListener('click',()=>{
+  $$('#gbar .pill').forEach(o=>o.classList.toggle('on',o===p));
+  const f=p.dataset.f; let n=0;
+  $$('.slot').forEach(s=>{ const show=f==='all'||s.dataset.cat===f;
+    s.style.display=show?'':'none'; if(show)n++; });
+  $$('.sec').forEach(h=>{ h.style.display=(f==='all'||h.dataset.sec===f)?'':'none'; });
+  $('#gcount').textContent=n+' / '+$$('.slot').length+' shown';
+}));
+syncTray();
+$('#gcount').textContent=$$('.slot').length+' / '+$$('.slot').length+' shown';
+</script>
+</body>
+</html>
