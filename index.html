@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SLATE — SDF Terrain Studio</title>
+<link rel="stylesheet" href="./src/theme.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='9' fill='%234fd8e0'/></svg>">
+</head>
+<body>
+<div id="bg"></div>
+<canvas id="gl"></canvas>
+
+<!-- ══ viewport overlays ══ -->
+<div id="vphud">
+  <div id="modebar" class="seg"></div>
+  <div id="caminfo" class="pill"></div>
+  <div id="hudhint">LMB orbit · ⇧LMB pan · wheel dolly · <kbd>F</kbd> frame · <kbd>Space</kbd> run · <kbd>Tab</kbd> graph · <kbd>?</kbd> help</div>
+</div>
+
+<!-- ══ header ══ -->
+<header id="topbar" class="glass">
+  <div class="brand"><span class="dot"></span><h1>SLATE</h1><span class="badge">SDF Terrain Studio</span></div>
+  <div class="transport">
+    <button id="btnPlay" class="tbtn primary" title="Run / pause erosion (Space)"><span id="playIco">▶</span><span id="playLbl">Run</span></button>
+    <button id="btnStep" class="tbtn" title="Single simulation step (.)">Step</button>
+    <button id="btnBake" class="tbtn" title="Rebuild graph field (B)">Rebuild</button>
+    <div id="speedSeg" class="seg small"></div>
+  </div>
+  <div class="stats">
+    <span id="fpsPill" class="pill"><span class="ax" style="background:var(--green)"></span><b>60</b>&nbsp;fps</span>
+    <span id="volPill" class="pill" title="Volume resolution">vol —</span>
+    <span id="parPill" class="pill" title="Active agents">◆ 0</span>
+    <button id="btnHelp" class="hbtn" title="Help (?)">?</button>
+  </div>
+</header>
+
+<!-- ══ outliner (left) ══ -->
+<aside id="outliner" class="glass">
+  <div class="panel-head"><h1><span class="dot" style="background:var(--cyan);box-shadow:0 0 14px var(--cyan)"></span>Graph</h1>
+    <div style="display:flex;gap:6px">
+      <button id="btnAddNode" class="hbtn" title="Add node (A)">＋</button>
+      <button id="btnPreset" class="hbtn" title="Load preset">⌸</button>
+    </div>
+  </div>
+  <div class="panel-sub">NODES</div>
+  <div id="nodeList" class="listwell"></div>
+  <div class="panel-sub">OVERLAYS</div>
+  <div id="overlayList" class="listwell"></div>
+  <div class="panel-foot">
+    <button id="btnSaveGraph" class="sbtn">Save</button>
+    <button id="btnLoadGraph" class="sbtn">Load</button>
+    <input type="file" id="fileGraph" accept=".slate,.json" hidden>
+  </div>
+</aside>
+
+<!-- ══ inspector (right) ══ -->
+<aside id="inspector" class="glass">
+  <div class="panel-head"><h1><span class="dot" style="background:var(--violet);box-shadow:0 0 14px var(--violet)"></span>Inspector</h1><span id="inspBadge" class="badge">node</span></div>
+  <div id="inspTabs" class="seg" style="margin:0 14px 10px"></div>
+  <div id="inspBody" class="insp-body"></div>
+</aside>
+
+<!-- ══ node graph drawer ══ -->
+<section id="graphdrawer" class="glass">
+  <div id="gdgrip"><span></span></div>
+  <div class="gd-head">
+    <span class="badge">NODE GRAPH</span>
+    <span id="gdhint">drag ports to connect · right-click to add · <kbd>⌫</kbd> delete · <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicate</span>
+    <div style="margin-left:auto;display:flex;gap:6px">
+      <button id="gdAuto" class="hbtn" title="Tidy layout">⌗</button>
+      <button id="gdClose" class="hbtn" title="Hide (Tab)">✕</button>
+    </div>
+  </div>
+  <div id="gdcanvas">
+    <svg id="gdwires"></svg>
+    <div id="gdnodes"></div>
+  </div>
+</section>
+
+<!-- ══ add-node menu ══ -->
+<div id="addmenu" class="glass"></div>
+<!-- ══ preset menu ══ -->
+<div id="presetmenu" class="glass"></div>
+
+<!-- ══ help overlay ══ -->
+<div id="help" hidden></div>
+<!-- ══ console overlay ══ -->
+<div id="consolep" class="glass" hidden>
+  <div class="panel-head" style="cursor:default"><h1 style="font-size:13px">Diagnostics</h1><button id="conClose" class="hbtn">✕</button></div>
+  <pre id="conBody"></pre>
+</div>
+<div id="toasts"></div>
+<div id="fatal" hidden><div class="glass fatal-card"><h2>WebGL2 float rendering unavailable</h2><p id="fatalMsg"></p></div></div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

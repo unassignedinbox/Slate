@@ -1,0 +1,10 @@
+{
+  "name": "slate-terrain-studio",
+  "version": "1.0.0",
+  "description": "SLATE — node-based SDF terrain sculpting with realtime particle erosion, rivers and wind. WebGL2.",
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 8080"
+  },
+  "license": "MIT"
+}
