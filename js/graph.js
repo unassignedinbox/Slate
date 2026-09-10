@@ -26,7 +26,7 @@ export const NODE_DEFS = {
   ridged: { title: 'Ridged Peaks', cat: 'source', desc: 'Sharp alpine ridges', inputs: [],
     params: [S('base', 'Base level', 0, 50, 0.5, 12), S('height', 'Peak height', 5, 70, 0.5, 46), S('freq', 'Frequency', 0.002, 0.06, 0.001, 0.014), I('oct', 'Octaves', 1, 8, 4), S('sharp', 'Sharpness', 0, 1, 0.01, 0.6), S('hard', 'Hardness', 0, 1, 0.01, 0.7), I('seed', 'Seed', 0, 9999, 202)] },
   mesa: { title: 'Mesa Plateau', cat: 'source', desc: 'Flat-top plateau + strata', inputs: [],
-    params: [S('base', 'Base level', 0, 50, 0.5, 16), S('height', 'Plateau height', 5, 60, 0.5, 30), S('freq', 'Frequency', 0.002, 0.05, 0.001, 0.01), S('flat', 'Flatness', 0, 1, 0.01, 0.75), S('strata', 'Strata bands', 0, 24, 1, 9), S('hard', 'Hardness', 0, 1, 0.01, 0.55), I('seed', 'Seed', 0, 9999, 303)] },
+    params: [S('base', 'Base level', 0, 50, 0.5, 16), S('height', 'Plateau height', 5, 60, 0.5, 30), S('freq', 'Frequency', 0.002, 0.05, 0.001, 0.01), S('flat', 'Flatness', 0, 1, 0.01, 0.55), S('strata', 'Strata bands', 0, 24, 1, 9), S('hard', 'Hardness', 0, 1, 0.01, 0.55), I('seed', 'Seed', 0, 9999, 303)] },
   island: { title: 'Volcanic Island', cat: 'source', desc: 'Radial island + crater option', inputs: [],
     params: [S('height', 'Peak height', 5, 70, 0.5, 38), S('radius', 'Radius', 20, 110, 1, 72), S('freq', 'Frequency', 0.002, 0.06, 0.001, 0.02), S('crater', 'Crater', 0, 1, 0.01, 0.45), S('hard', 'Hardness', 0, 1, 0.01, 0.5), I('seed', 'Seed', 0, 9999, 404)] },
   sphere: { title: 'Sphere', cat: 'source', desc: 'Primitive (combine it)', inputs: [],
@@ -61,11 +61,11 @@ export const NODE_DEFS = {
   paintHard: { title: 'Hardness Zone', cat: 'mask', desc: 'Override hardness by zone', inputs: ['in'],
     params: [O('mode', 'Zone', ['height', 'slope', 'cavity'], 'height'), S('min', 'Min', 0, 80, 0.5, 20), S('max', 'Max', 0, 80, 0.5, 50), S('feather', 'Feather', 0.5, 20, 0.5, 6), S('value', 'Hardness', 0, 1, 0.01, 0.2)] },
   hydraulic: { title: 'Hydraulic Erosion', cat: 'erode', desc: 'Rain droplets + rivers', inputs: ['in'],
-    params: [O('spawn', 'Spawn', ['rain', 'sources', 'both'], 'rain'), I('rate', 'Drops/frame', 50, 6000, 900), I('sources', 'River sources', 1, 12, 4), S('capacity', 'Capacity', 0.5, 20, 0.1, 5), S('erode', 'Erode rate', 0.05, 2, 0.05, 0.5), S('deposit', 'Deposit rate', 0.05, 2, 0.05, 0.5), S('evap', 'Evaporation', 0, 0.08, 0.002, 0.012), S('lateral', 'Undercut', 0, 1, 0.05, 0.35), S('radius', 'Drop radius×', 0.4, 3, 0.1, 1), I('life', 'Lifetime', 20, 400, 5, 90), S('riverW', 'River width', 0.5, 8, 0.1, 2.2), B('rivers', 'Extract rivers', true)] },
+    params: [O('spawn', 'Spawn', ['rain', 'sources', 'both'], 'rain'), I('rate', 'Drops/frame', 20, 3000, 90), I('sources', 'River sources', 1, 12, 4), S('capacity', 'Capacity', 0.2, 10, 0.1, 2.2), S('erode', 'Erode rate', 0.02, 1.5, 0.02, 0.2), S('deposit', 'Deposit rate', 0.05, 2, 0.05, 0.55), S('evap', 'Evaporation', 0, 0.08, 0.002, 0.012), S('lateral', 'Undercut', 0, 1, 0.02, 0.18), S('repose', 'Angle of repose', 0.4, 1.4, 0.05, 0.85), S('maxDepth', 'Max cut depth', 4, 40, 0.5, 14), S('maxFill', 'Max fill', 2, 20, 0.5, 6), S('radius', 'Drop radius×', 0.4, 3, 0.1, 1.1), I('life', 'Lifetime', 20, 400, 5, 70), S('riverW', 'River width', 0.5, 8, 0.1, 2.2), B('rivers', 'Extract rivers', true)] },
   thermal: { title: 'Thermal Erosion', cat: 'erode', desc: 'Talus / scree collapse', inputs: ['in'],
-    params: [S('talus', 'Talus slope', 0.2, 2, 0.02, 0.75), S('rate', 'Rate', 0.005, 0.4, 0.005, 0.06), I('samples', 'Samples/frame', 200, 30000, 100, 3500)] },
+    params: [S('talus', 'Talus slope', 0.2, 2, 0.02, 0.7), S('rate', 'Rate', 0.005, 0.4, 0.005, 0.1), I('samples', 'Samples/frame', 200, 30000, 100, 6000)] },
   wind: { title: 'Wind Erosion', cat: 'erode', desc: 'Abrasion + dunes', inputs: ['in'],
-    params: [S('direction', 'Direction°', 0, 360, 1, 35), S('speed', 'Speed', 2, 40, 0.5, 16), S('turb', 'Turbulence', 0, 1.5, 0.05, 0.55), I('rate', 'Grains/frame', 50, 5000, 50, 700), S('abrade', 'Abrasion', 0.05, 2, 0.05, 0.5), S('deposit', 'Deposit', 0.05, 2, 0.05, 0.6)] },
+    params: [S('direction', 'Direction°', 0, 360, 1, 35), S('speed', 'Speed', 2, 40, 0.5, 16), S('turb', 'Turbulence', 0, 1.5, 0.05, 0.55), I('rate', 'Grains/frame', 10, 1500, 10, 50), S('abrade', 'Abrasion', 0.02, 1.5, 0.02, 0.25), S('deposit', 'Deposit', 0.05, 2, 0.05, 0.7)] },
   output: { title: 'Terrain Output', cat: 'out', desc: 'Final landscape', inputs: ['in'], params: [] },
 };
 export function defaultParams(type) {
@@ -236,7 +236,9 @@ export class Evaluator {
         const dd = n.sim.delta;
         for (let i = 0; i < this.field.n; i++) n.cacheD[i] = inp.cacheD[i] + dd[i];
         n.cacheH.set(inp.cacheH);
-        n.sim.prepared = inp.cacheD ? true : n.sim.prepared;
+        n.sim.prepared = true;
+        if (!n.sim.baseSnap || n.sim.baseSnap.length !== this.field.n) n.sim.baseSnap = new Float32Array(this.field.n);
+        n.sim.baseSnap.set(inp.cacheD); // pre-erosion reference for bedrock depth
         return;
       }
       n.cacheD.set(inp.cacheD); n.cacheH.set(inp.cacheH);
@@ -298,7 +300,10 @@ export class Evaluator {
     } else if (n.type === 'mesa') {
       this.colLoop((x, z, i, k) => {
         let m = nz.fbm(x * p.freq, 5.1, z * p.freq, 4) * 0.5 + 0.5;
-        m = m * (1 - p.flat) + (m > 0.45 ? 1 : 0.2) * p.flat;
+        // smooth plateau push (no hard step -> no blocky terraces)
+        const t = Math.min(1, Math.max(0, (m - 0.35) / 0.25));
+        const plat = t * t * (3 - 2 * t);
+        m = m * (1 - p.flat) + plat * p.flat;
         const h = p.base + Math.min(1, Math.max(0, m)) * p.height;
         this.fillColumn(n, i, k, h, p.hard);
         if (p.strata > 0) { // strata hardness into column
@@ -552,10 +557,10 @@ export const PRESETS = {
   canyon: {
     label: 'Canyon Rivers', desc: 'Stratified plateau carved by rain + rivers',
     build(g) {
-      const m = g.addNode('mesa', -260, -40, { base: 12, height: 34, freq: 0.011, flat: 0.8, strata: 11, hard: 0.55, seed: 41 });
+      const m = g.addNode('mesa', -260, -40, { base: 15, height: 32, freq: 0.011, flat: 0.55, strata: 11, hard: 0.55, seed: 41 });
       const s = g.addNode('strata', -60, -40, { bands: 12, contrast: 0.75, jitter: 2.5, seed: 7 });
-      const h = g.addNode('hydraulic', 140, -40, { spawn: 'both', rate: 1100, sources: 5, capacity: 6, erode: 0.55, deposit: 0.5, evap: 0.012, lateral: 0.4, radius: 1, life: 100, riverW: 2.4, rivers: true });
-      const t = g.addNode('thermal', 340, -40, { talus: 0.7, rate: 0.07, samples: 3000 });
+      const h = g.addNode('hydraulic', 140, -40, { spawn: 'both', rate: 90, sources: 5, capacity: 2.4, erode: 0.22, deposit: 0.55, evap: 0.012, lateral: 0.18, repose: 0.85, maxDepth: 14, maxFill: 6, radius: 1.1, life: 70, riverW: 2.4, rivers: true });
+      const t = g.addNode('thermal', 340, -40, { talus: 0.7, rate: 0.1, samples: 6000 });
       const o = g.addNode('output', 520, -40);
       g.connect(m.id, 0, s.id, 0); g.connect(s.id, 0, h.id, 0); g.connect(h.id, 0, t.id, 0); g.connect(t.id, 0, o.id, 0);
     }
@@ -565,7 +570,7 @@ export const PRESETS = {
     build(g) {
       const m = g.addNode('island', -260, -40, { height: 44, radius: 78, freq: 0.02, crater: 0.55, hard: 0.5, seed: 77 });
       const d = g.addNode('displace', -60, -40, { amp: 3.5, freq: 0.03, oct: 3, seed: 12 });
-      const h = g.addNode('hydraulic', 140, -40, { spawn: 'both', rate: 1200, sources: 6, capacity: 5.5, erode: 0.5, deposit: 0.55, evap: 0.012, lateral: 0.3, radius: 1, life: 90, riverW: 2, rivers: true });
+      const h = g.addNode('hydraulic', 140, -40, { spawn: 'both', rate: 110, sources: 6, capacity: 2.4, erode: 0.2, deposit: 0.55, evap: 0.012, lateral: 0.16, repose: 0.85, maxDepth: 14, maxFill: 6, radius: 1.1, life: 70, riverW: 2, rivers: true });
       const o = g.addNode('output', 340, -40);
       g.connect(m.id, 0, d.id, 0); g.connect(d.id, 0, h.id, 0); g.connect(h.id, 0, o.id, 0);
     }
@@ -577,7 +582,7 @@ export const PRESETS = {
       const w = g.addNode('worm', -100, -80, { tunnels: 4, radius: 4.2, vary: 0.55, yTop: 30, yBot: 5, twist: 1.1, seed: 21 });
       const t = g.addNode('torus', -300, 140, { x: 30, y: 22, z: -20, R: 22, r: 7, hard: 0.6 });
       const u = g.addNode('smoothU', -100, 60, { k: 7 });
-      const h = g.addNode('hydraulic', 120, 0, { spawn: 'rain', rate: 700, sources: 3, capacity: 4, erode: 0.4, deposit: 0.5, evap: 0.014, lateral: 0.3, radius: 1, life: 80, riverW: 1.8, rivers: true });
+      const h = g.addNode('hydraulic', 120, 0, { spawn: 'rain', rate: 90, sources: 3, capacity: 2, erode: 0.18, deposit: 0.55, evap: 0.014, lateral: 0.15, repose: 0.85, maxDepth: 14, maxFill: 6, radius: 1.1, life: 70, riverW: 1.8, rivers: true });
       const o = g.addNode('output', 320, 0);
       g.connect(m.id, 0, w.id, 0); g.connect(w.id, 0, u.id, 0); g.connect(t.id, 0, u.id, 1);
       g.connect(u.id, 0, h.id, 0); g.connect(h.id, 0, o.id, 0);
@@ -588,8 +593,8 @@ export const PRESETS = {
     build(g) {
       const m = g.addNode('ground', -260, -40, { height: 16, rough: 3.5, freq: 0.02, hard: 0.3, seed: 5 });
       const w = g.addNode('warp', -60, -40, { amp: 10, freq: 0.012, seed: 3 });
-      const e = g.addNode('wind', 140, -40, { direction: 35, speed: 18, turb: 0.6, rate: 900, abrade: 0.6, deposit: 0.7 });
-      const t = g.addNode('thermal', 340, -40, { talus: 0.65, rate: 0.09, samples: 4000 });
+      const e = g.addNode('wind', 140, -40, { direction: 35, speed: 18, turb: 0.6, rate: 60, abrade: 0.25, deposit: 0.7 });
+      const t = g.addNode('thermal', 340, -40, { talus: 0.65, rate: 0.12, samples: 6000 });
       const o = g.addNode('output', 520, -40);
       g.connect(m.id, 0, w.id, 0); g.connect(w.id, 0, e.id, 0); g.connect(e.id, 0, t.id, 0); g.connect(t.id, 0, o.id, 0);
     }
@@ -603,3 +608,4 @@ export const PRESETS = {
     }
   }
 };
+;

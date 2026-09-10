@@ -1,5 +1,5 @@
 // STRATA boot + UI wiring + simulation loop.
-import { SdfField } from './sdf.js';
+import { SdfField, blurFieldInPlace } from './sdf.js';
 import { surfaceNets, buildRiverRibbons, scanHeightmap } from './mesher.js';
 import { FlowMap, defaultHydro, defaultThermal, defaultWind } from './erosion.js';
 import { Graph, Evaluator, NODE_DEFS, CATS, PRESETS, defaultParams } from './graph.js';
@@ -14,7 +14,7 @@ const S = {
   res: 80, playing: true, speed: 1,
   water: 12, shade: 0, sliceY: 55, sliceOn: false,
   showDrops: true, showWind: true, showWater: true, showWire: false, showGrid: true,
-  dropSize: 3.2, dropCap: 24000, remeshMs: 450, autoRemesh: true,
+  dropSize: 3.2, dropCap: 24000, remeshMs: 700, autoRemesh: true,
   sunAz: 135, sunEl: 42, exposure: 1.05,
   sel: null, lastMesh: null, lastEvalMs: 0,
 };
@@ -31,7 +31,7 @@ function toast(msg, kind = '') {
 function hydroP(n) {
   const p = n.params, d = defaultHydro();
   return { ...d, spawn: p.spawn, rate: p.rate, sources: p.sources, capacity: p.capacity, erode: p.erode,
-    deposit: p.deposit, evap: p.evap, lateral: p.lateral, radius: p.radius, maxLife: p.life,
+    deposit: p.deposit, evap: p.evap, lateral: p.lateral, repose: p.repose ?? 0.85, maxDepth: p.maxDepth ?? 14, maxFill: p.maxFill ?? 6, radius: p.radius, maxLife: p.life,
     riverWidth: p.riverW, useRivers: p.rivers };
 }
 function thermalP(n) { return { ...defaultThermal(), talus: n.params.talus, rate: n.params.rate, samples: n.params.samples }; }
@@ -69,7 +69,14 @@ function remesh(reason = '') {
   rivers.sort((a, b) => b.score - a.score);
   viewport.setRivers(buildRiverRibbons(rivers.slice(0, 40)));
 }
+let lastDiffuse = -10;
 function syncRemesh(reason = '') { // during play: refresh erosion caches + downstream, then remesh
+  // sediment diffusion: periodically relax erosion deltas so micro-spikes
+  // melt into smooth fans while channels (large features) survive
+  if (simTime - lastDiffuse > 2.0) {
+    lastDiffuse = simTime;
+    for (const n of eroNodes()) if (n.sim.delta) blurFieldInPlace(n.sim.delta, field.res, 0.08);
+  }
   for (const n of eroNodes()) evaluator.markDirty(graph, n.id);
   evaluator.evaluate(graph);
   remesh(reason);
@@ -90,7 +97,7 @@ function simStep(dt) {
     n.sim.active = true;
     if (n.type === 'hydraulic') {
       const P = hydroP(n), e = n.sim.engine;
-      e.spawn(field, Math.max(1, Math.round(P.rate * dt60 / 1)), P.spawn, P, n.sim.sources);
+      e.spawn(field, Math.max(1, Math.round(P.rate * dt60 / 1)), P.spawn, P, n.sim.sources, S.water);
       e.step(field, flowmap, dt, P, n.sim, S.water);
     } else if (n.type === 'thermal') {
       const P = thermalP(n);

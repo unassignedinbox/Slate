@@ -41,7 +41,7 @@ export function surfaceNets(field, opts = {}) {
         if (!cnt) continue;
         field.g2w(i + px / cnt, j + py / cnt, k + pz / cnt, pw);
         pos.push(pw[0], pw[1], pw[2]);
-        field.grad(d, pw[0], pw[1], pw[2], g);
+        field.gradFast(d, pw[0], pw[1], pw[2], g);
         let gl = Math.sqrt(g[0]*g[0] + g[1]*g[1] + g[2]*g[2]);
         if (gl < 1e-6) { g[0] = 0; g[1] = 1; g[2] = 0; gl = 1; }
         const nx = g[0]/gl, ny = g[1]/gl, nz = g[2]/gl;

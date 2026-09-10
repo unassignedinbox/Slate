@@ -50,11 +50,12 @@ void main(){
     vec3 sand = vec3(0.74,0.66,0.49);
     vec3 snow = vec3(0.88,0.91,0.94);
     vec3 silt = vec3(0.48,0.40,0.29);
-    vec3 alb = mix(grass, rock, smoothstep(0.22, 0.5, slope));
-    alb = mix(alb, rockDark, smoothstep(0.5, 0.95, slope));
+    vec3 alb = mix(grass, rock, smoothstep(0.3, 0.58, slope));
+    alb = mix(alb, rockDark, smoothstep(0.58, 1.0, slope));
     float beach = (1.0 - smoothstep(0.5, 3.2, abs(h - uWaterY))) * (1.0 - smoothstep(0.35, 0.65, slope));
     alb = mix(alb, sand, clamp(beach,0.0,1.0)*0.9);
-    alb = mix(alb, snow, smoothstep(46.0, 60.0, h + (1.0-min(slope,1.0))*10.0));
+    float snowM = smoothstep(56.0, 68.0, h + (1.0-min(slope,1.0))*6.0) * (1.0 - clamp(flowN*1.2,0.0,0.8));
+    alb = mix(alb, snow, snowM);
     alb = mix(alb, silt, clamp(sedN*0.85, 0.0, 0.85));
     alb *= 0.72 + 0.55*vA.z;
     float wet = clamp(flowN*1.6, 0.0, 1.0);

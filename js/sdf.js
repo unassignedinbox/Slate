@@ -1,6 +1,22 @@
 // Volumetric SDF field: storage, sampling, splats, primitives, CSG ops. DOM-free.
 export const AIR = 1e4;
 export const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+function tapLinear(a, R, R2, gx, gy, gz) {
+  gx = gx < 0 ? 0 : gx > R - 1.001 ? R - 1.001 : gx;
+  gy = gy < 0 ? 0 : gy > R - 1.001 ? R - 1.001 : gy;
+  gz = gz < 0 ? 0 : gz > R - 1.001 ? R - 1.001 : gz;
+  const ix = gx | 0, iy = gy | 0, iz = gz | 0;
+  const fx = gx - ix, fy = gy - iy, fz = gz - iz;
+  const i000 = (iz * R + iy) * R + ix, i100 = i000 + 1;
+  const i010 = i000 + R, i110 = i010 + 1;
+  const i001 = i000 + R2, i101 = i001 + 1, i011 = i001 + R, i111 = i011 + 1;
+  const x00 = a[i000] + (a[i100] - a[i000]) * fx;
+  const x10 = a[i010] + (a[i110] - a[i010]) * fx;
+  const x01 = a[i001] + (a[i101] - a[i001]) * fx;
+  const x11 = a[i011] + (a[i111] - a[i011]) * fx;
+  const y0 = x00 + (x10 - x00) * fy, y1 = x01 + (x11 - x01) * fy;
+  return y0 + (y1 - y0) * fz;
+}
 
 export class SdfField {
   // World box: x,z in [-halfXZ, halfXZ], y in [0, height]. d<0 solid, d>0 air.
@@ -13,6 +29,7 @@ export class SdfField {
     this.sed = new Float32Array(n);    // accumulated sediment deposit (viz)
     this.dx = (2 * halfXZ) / (res - 1);
     this.dy = height / (res - 1);
+    this._nx = 1 / (2 * this.dx * 0.75); this._ny = 1 / (2 * this.dy * 0.75);
     this.clear();
   }
   get n() { return this.d.length; }
@@ -65,6 +82,17 @@ export class SdfField {
     out[2] = (this.sample(a, x, y, z + ez) - this.sample(a, x, y, z - ez)) / (2 * ez);
     return out;
   }
+  // Faster gradient: single grid transform, direct trilinear taps (same math as grad).
+  gradFast(a, x, y, z, out) {
+    out = out || [0, 0, 0];
+    const R = this.res, R2 = R * R;
+    const sx = (R - 1) / (2 * this.hx), sy = (R - 1) / this.h;
+    const gx = (x + this.hx) * sx, gy = y * sy, gz = (z + this.hx) * sx;
+    out[0] = (tapLinear(a, R, R2, gx + 0.75, gy, gz) - tapLinear(a, R, R2, gx - 0.75, gy, gz)) * this._nx;
+    out[1] = (tapLinear(a, R, R2, gx, gy + 0.75, gz) - tapLinear(a, R, R2, gx, gy - 0.75, gz)) * this._ny;
+    out[2] = (tapLinear(a, R, R2, gx, gy, gz + 0.75) - tapLinear(a, R, R2, gx, gy, gz - 0.75)) * this._nx;
+    return out;
+  }
   // Add delta with smooth spherical falloff. Optional second array (delta recorder) + hardness gating.
   splat(a, x, y, z, rWorld, delta, second = null, hardGate = 0) {
     if (delta === 0 || rWorld <= 0) return;
@@ -84,7 +112,7 @@ export class SdfField {
           const dx = (i - g[0]) / rx;
           const q = dx * dx + dy * dy + dz * dz;
           if (q > 1) continue;
-          const fall = 0.5 + 0.5 * Math.cos(Math.PI * Math.min(1, Math.sqrt(q)));
+          const fall = SdfField._lut[(q * 64) | 0];
           let m = delta * fall;
           if (gate) m *= 1 - hardGate * hard[id];
           a[id] += m;
@@ -126,6 +154,7 @@ export class SdfField {
   }
 }
 SdfField._g = [0, 0, 0];
+SdfField._lut = (() => { const L = new Float32Array(65); for (let i = 0; i < 65; i++) L[i] = 0.5 + 0.5 * Math.cos(Math.PI * Math.sqrt(i / 64)); return L; })();
 
 // ---------- primitive SDFs (world space, negative inside) ----------
 export const sdfSphere = (x, y, z, cx, cy, cz, r) =>

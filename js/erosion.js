@@ -3,7 +3,7 @@
 import { Rng, makeNoise } from './noise.js';
 import { clamp01 } from './sdf.js';
 
-const TRAIL = 10; // recorded trail points per droplet (for river extraction)
+const TRAIL = 24; // recorded trail points per droplet (for river extraction)
 
 // 2D top-down discharge map feeding the water shader (flow dir + foam).
 export class FlowMap {
@@ -108,8 +108,11 @@ export class HydroSim {
     this.alive = 0; this.rCount = 0; this.rivers.length = 0;
     this.eroded = 0; this.deposited = 0; this.drops = 0;
   }
-  spawn(field, n, mode, P, srcPts) {
-    const rng = this.rng, R = field.res;
+  spawn(field, n, mode, P, srcPts, waterLevel = -1) {
+    const avail = this.cap - this.alive; // early-out: never scan a saturated pool
+    if (avail <= 0) return 0;
+    n = Math.min(n, avail);
+    const rng = this.rng;
     let spawned = 0, guard = n * 12 + 50;
     while (spawned < n && guard-- > 0) {
       let x, z;
@@ -126,7 +129,7 @@ export class HydroSim {
         z = rng.range(-field.hx * 0.98, field.hx * 0.98);
       }
       const y = field.findSurface(x, z);
-      if (y === null) continue;
+      if (y === null || y < waterLevel + 0.3) continue; // rain on lakes does nothing
       // find dead slot
       let idx = -1;
       for (let t = 0; t < this.cap; t++) {
@@ -148,13 +151,31 @@ export class HydroSim {
     return spawned;
   }
   kill(i, field, P, rec, finalize = true) {
-    // SETTLING: always deposit remaining sediment where the droplet dies.
+    // SETTLING: deposit remaining sediment, but slide below the angle of
+    // repose first so death-settling builds fans — never spires.
     const s = this.sed[i];
     if (s > 1e-4 && finalize) {
       const i3 = i * 3;
-      field.splat(field.d, this.pos[i3], this.pos[i3 + 1], this.pos[i3 + 2],
-        field.dx * P.radius * 1.2, -Math.min(s, P.maxSed) * P.settleScale, rec ? rec.delta : null);
-      if (rec) field.splat(rec.sedA, this.pos[i3], this.pos[i3 + 1], this.pos[i3 + 2], field.dx * P.radius * 1.2, s * 0.5);
+      const vox = (field.dx + field.dy) * 0.5;
+      let x = this.pos[i3], y = this.pos[i3 + 1], z = this.pos[i3 + 2];
+      const repose = P.repose || 0.85;
+      for (let t = 0; t < 6; t++) {
+        field.gradFast(field.d, x, y, z, _g);
+        const gl = Math.hypot(_g[0], _g[1], _g[2]) || 1;
+        const slope = Math.hypot(_g[0], _g[2]) / Math.max(0.2, _g[1] / gl);
+        if (slope < repose) break;
+        const dl = Math.hypot(_g[0], _g[2]) || 1;
+        x -= (_g[0] / dl) * vox * 1.5; z -= (_g[2] / dl) * vox * 1.5;
+        y -= vox * 0.8;
+      }
+      let amt = Math.min(s, P.maxSed) * P.settleScale;
+      if (rec && rec.baseSnap) {
+        const fill = field.sample(rec.baseSnap, x, y, z) - field.sample(field.d, x, y, z);
+        if (fill > 0) amt *= clamp01(1 - fill / (P.maxFill || 6));
+      }
+      const r = vox * P.radius * 2.4; // wide, soft fan
+      field.splat(field.d, x, y, z, r, -amt, rec ? rec.delta : null);
+      if (rec) field.splat(rec.sedA, x, y, z, r, s * 0.4);
       this.deposited += s;
     }
     // river candidacy from trail
@@ -189,9 +210,13 @@ export class HydroSim {
       // drowned in lake/sea -> rapid sedimentation, settle, die
       if (y < waterLevel - vox * 0.5) {
         const dep = this.sed[i];
+        if (dep > 1e-4 && rec && rec.baseSnap) {
+          const fill = field.sample(rec.baseSnap, x, y, z) - field.sample(field.d, x, y, z);
+          if (fill > (P.maxFill || 6)) { this.sed[i] = 0; this.kill(i, field, P, rec, false); continue; }
+        }
         if (dep > 1e-4) {
-          field.splat(field.d, x, y, z, vox * P.radius * 1.4, -dep * P.settleScale, rec ? rec.delta : null);
-          if (rec) field.splat(rec.sedA, x, y, z, vox * P.radius * 1.4, dep * 0.6);
+          field.splat(field.d, x, y, z, vox * P.radius * 2.4, -dep * P.settleScale, rec ? rec.delta : null);
+          if (rec) field.splat(rec.sedA, x, y, z, vox * P.radius * 2.4, dep * 0.6);
           this.deposited += dep; this.sed[i] = 0;
         }
         if (flowmap && this.speed[i] > 0.5) flowmap.splat(x, z, this.dir[i3], this.dir[i3 + 2], this.water[i], 0);
@@ -234,7 +259,7 @@ export class HydroSim {
         continue;
       }
       // ---- on surface ----
-      field.grad(field.d, x, y, z, _g);
+      field.gradFast(field.d, x, y, z, _g);
       let gl = Math.hypot(_g[0], _g[1], _g[2]);
       if (gl < 1e-5) { this.kill(i, field, P, rec, true); continue; }
       const nx = _g[0] / gl, ny = _g[1] / gl, nz = _g[2] / gl;
@@ -267,7 +292,7 @@ export class HydroSim {
         this.speed[i] = sp; this.state[i] = 3; this.vy[i] = 0;
         continue;
       }
-      field.grad(field.d, x, y, z, _g);
+      field.gradFast(field.d, x, y, z, _g);
       gl = Math.hypot(_g[0], _g[1], _g[2]) || 1;
       const corr = (pd - surfOff) / gl;
       x -= (_g[0] / gl) * corr; y -= (_g[1] / gl) * corr; z -= (_g[2] / gl) * corr;
@@ -280,12 +305,18 @@ export class HydroSim {
       if (this.sed[i] < cap && slope > P.minSlope) {
         let amt = Math.min((cap - this.sed[i]) * P.erode, P.maxErode * dt * 60);
         amt *= (1 - hard * P.hardness);
+        if (rec && rec.baseSnap) { // bedrock: incision limit + sediment shielding
+          const cur = field.sample(field.d, x, y, z);
+          const inc = cur - field.sample(rec.baseSnap, x, y, z);
+          if (inc > 0) amt *= clamp01(1 - inc / (P.maxDepth || 14));
+          amt *= clamp01(1 - field.sample(rec.sedA, x, y, z) / 6);
+        }
         if (amt > 1e-5) {
           field.splat(field.d, x, y, z, vox * P.radius, amt, rec ? rec.delta : null, 0);
           // lateral undercut: widens channels, undercuts banks -> overhangs
           if (P.lateral > 0.01) {
             field.splat(field.d, x - nx * vox * 0.8, y - vox * 0.4, z - nz * vox * 0.8,
-              vox * P.radius * 1.3, amt * P.lateral, rec ? rec.delta : null, 0);
+              vox * P.radius * 1.6, amt * P.lateral, rec ? rec.delta : null, 0);
           }
           this.sed[i] = Math.min(P.maxSed, this.sed[i] + amt * (1 + P.lateral));
           this.eroded += amt;
@@ -295,10 +326,18 @@ export class HydroSim {
       } else {
         let amt = Math.min((this.sed[i] - cap) * P.deposit, this.sed[i]);
         if (this.sed[i] > P.maxSed) amt = Math.max(amt, (this.sed[i] - P.maxSed) * 0.5);
+        if (slope > (P.repose || 0.85)) {
+          // too steep to settle: keep carrying (only bleed off hard overload)
+          amt = Math.min(amt, Math.max(0, this.sed[i] - P.maxSed) * 0.25);
+        }
+        if (rec && rec.baseSnap && amt > 1e-5) { // fill-cap: mounds can't pile forever
+          const fill = field.sample(rec.baseSnap, x, y, z) - field.sample(field.d, x, y, z);
+          if (fill > 0) amt *= clamp01(1 - fill / (P.maxFill || 6));
+        }
         if (amt > 1e-5) {
-          field.splat(field.d, x + dx * vox * 0.5, y, z + dz * vox * 0.5,
-            vox * P.radius * 1.15, -amt * P.settleScale, rec ? rec.delta : null);
-          if (rec) field.splat(rec.sedA, x, y, z, vox * P.radius * 1.3, amt * 0.7);
+          field.splat(field.d, x + dx * vox * 1.5, y, z + dz * vox * 1.5,
+            vox * P.radius * 2.3, -amt * P.settleScale, rec ? rec.delta : null);
+          if (rec) field.splat(rec.sedA, x, y, z, vox * P.radius * 2.0, amt * 0.6);
           this.sed[i] -= amt; this.deposited += amt;
           drew = 2;
         }
@@ -306,7 +345,7 @@ export class HydroSim {
       this.charge[i] += w * (0.5 + sp * 0.25) * dt * 60 * 0.05;
       if (flowmap) flowmap.splat(x, z, dx, dz, w * (0.4 + sp * 0.12) * dt * 60 * 0.08, this.sed[i] * dt);
       // trail record
-      if (++this.trailTick[i] >= 3) {
+      if (++this.trailTick[i] >= 4) {
         this.trailTick[i] = 0;
         let tn = this.trailN[i];
         if (tn >= TRAIL) { // shift
@@ -355,7 +394,7 @@ export class ThermalSim {
       const x = -field.hx + (i / (R - 1)) * 2 * field.hx;
       const y = (j / (R - 1)) * field.h;
       const z = -field.hx + (k / (R - 1)) * 2 * field.hx;
-      field.grad(field.d, x, y, z, _g);
+      field.gradFast(field.d, x, y, z, _g);
       const gl = Math.hypot(_g[0], _g[1], _g[2]) || 1;
       const ny = _g[1] / gl;
       const slope = Math.hypot(_g[0], _g[2]) / Math.max(0.2, ny); // tan of slope angle
@@ -396,6 +435,9 @@ export class WindSim {
   }
   reset() { this.state.fill(0); this.alive = 0; this.segN = 0; this.eroded = 0; this.deposited = 0; }
   spawn(field, n, P) {
+    const avail = this.cap - this.alive; // early-out: never scan a saturated pool
+    if (avail <= 0) return 0;
+    n = Math.min(n, avail);
     const rng = this.rng;
     const ang = (P.direction || 0) * Math.PI / 180;
     const wx = Math.cos(ang), wz = Math.sin(ang);
@@ -417,7 +459,7 @@ export class WindSim {
       this.pos[i3] = x; this.pos[i3 + 1] = Math.min(field.h - 1, y); this.pos[i3 + 2] = z;
       const sp = P.speed * rng.range(0.7, 1.3);
       this.vel[i3] = wx * sp; this.vel[i3 + 1] = rng.range(-1, 0.5); this.vel[i3 + 2] = wz * sp;
-      this.sed[idx] = 0; this.life[idx] = rng.range(120, 420);
+      this.sed[idx] = 0; this.life[idx] = rng.range(80, 200);
       this.state[idx] = 1;
       this.alive++; spawned++;
     }
@@ -445,7 +487,7 @@ export class WindSim {
       this.life[i] -= dt * 60;
       const dd = field.sample(field.d, x, y, z);
       if (dd < vox * 2.5 && y > 0.3) {
-        field.grad(field.d, x, y, z, _g);
+        field.gradFast(field.d, x, y, z, _g);
         const gl = Math.hypot(_g[0], _g[1], _g[2]) || 1;
         const nx = _g[0] / gl, ny = _g[1] / gl, nz = _g[2] / gl;
         const windward = -(wx * nx + wz * nz); // >0 facing the wind
@@ -455,6 +497,10 @@ export class WindSim {
           // abrasion: sandblast windward faces, polish (carve, hardness-gated hard)
           const hard = field.sample(field.hard, x, y, z);
           let amt = Math.min((cap - this.sed[i]) * P.abrade * dt * 4, 0.1) * windward * (1 - hard * P.hardness);
+          if (rec && rec.baseSnap) { // bedrock guard for abrasion
+            const inc = field.sample(field.d, x, y, z) - field.sample(rec.baseSnap, x, y, z);
+            if (inc > 0) amt *= clamp01(1 - inc / 10);
+          }
           if (amt > 1e-5) {
             field.splat(field.d, x, y, z, vox * 1.2, amt, rec ? rec.delta : null, 0);
             this.sed[i] += amt; this.eroded += amt;
@@ -505,16 +551,17 @@ export class WindSim {
 
 export function defaultHydro() {
   return {
-    inertia: 0.3, capacity: 5.0, erode: 0.5, deposit: 0.5, evap: 0.012, sink: 0.05,
-    gravity: 26, maxLife: 90, radius: 1.0, maxSed: 3.0, maxErode: 0.5,
-    minSlope: 0.03, hardness: 0.85, lateral: 0.35, settleScale: 1.0,
-    spawn: 'rain', rate: 900, sources: 4, sourceSpread: 8, riverMin: 26, riverWidth: 2.2
+    inertia: 0.3, capacity: 2.2, erode: 0.2, deposit: 0.55, evap: 0.012, sink: 0.08,
+    gravity: 26, maxLife: 70, radius: 1.1, maxSed: 2.0, maxErode: 0.12,
+    minSlope: 0.035, hardness: 0.85, lateral: 0.18, settleScale: 0.4,
+    repose: 0.85, maxDepth: 14, maxFill: 6,
+    spawn: 'rain', rate: 160, sources: 4, sourceSpread: 8, riverMin: 14, riverWidth: 2.2
   };
 }
-export function defaultThermal() { return { talus: 0.75, rate: 0.06, hardness: 0.7, samples: 3500 }; }
+export function defaultThermal() { return { talus: 0.7, rate: 0.1, hardness: 0.7, samples: 6000 }; }
 export function defaultWind() {
   return {
-    direction: 35, speed: 16, turbulence: 0.55, gravity: 3, capacity: 0.8,
-    abrade: 0.5, deposit: 0.6, hardness: 0.9, rate: 700
+    direction: 35, speed: 16, turbulence: 0.55, gravity: 3, capacity: 0.5,
+    abrade: 0.25, deposit: 0.7, hardness: 0.9, rate: 50
   };
 }
