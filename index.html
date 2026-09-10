@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STRATA — SDF Terrain Lab</title>
+<meta name="description" content="Node-based volumetric (SDF) terrain landscaping with particle hydraulic, thermal, wind erosion and river simulation.">
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="boot"><div class="boot-card"><div class="boot-logo">STRATA</div><div class="boot-sub">SDF TERRAIN LAB</div><div class="boot-bar"><i></i></div><div class="boot-msg" id="bootMsg">initialising…</div></div></div>
+
+<header id="topbar">
+  <div class="tb-group brand" title="STRATA — volumetric terrain lab">
+    <span class="logo">STRATA</span><span class="logo-sub">SDF&nbsp;TERRAIN&nbsp;LAB</span>
+  </div>
+  <div class="tb-group">
+    <button class="tbtn" id="btnNew" title="New empty graph">New</button>
+    <button class="tbtn" id="btnPresets" title="Open project presets">Presets</button>
+    <button class="tbtn" id="btnOpen" title="Load project JSON">Open</button>
+    <button class="tbtn" id="btnSave" title="Save project JSON (Ctrl+S)">Save</button>
+    <input type="file" id="fileOpen" accept=".json,application/json" hidden>
+  </div>
+  <div class="tb-sep"></div>
+  <div class="tb-group transport" title="Simulation transport">
+    <button class="tbtn icon" id="tReset" title="Reset all erosion simulations">⏮</button>
+    <button class="tbtn icon play" id="tPlay" title="Play / Pause (Space)">▶</button>
+    <button class="tbtn icon" id="tStep" title="Step one frame">⏭</button>
+    <select id="tSpeed" title="Simulation speed">
+      <option value="0.5">0.5×</option><option value="1" selected>1×</option>
+      <option value="2">2×</option><option value="4">4×</option>
+    </select>
+    <span class="sim-clock" id="simClock" title="Simulated droplets">0 drops</span>
+  </div>
+  <div class="tb-sep"></div>
+  <div class="tb-group">
+    <label class="tlabel">SDF
+      <select id="resSelect" title="Voxel resolution (cubic). Higher = finer caves & channels, slower rebuilds.">
+        <option value="48">48³</option><option value="64">64³</option>
+        <option value="80" selected>80³</option><option value="96">96³</option>
+        <option value="128">128³</option>
+      </select>
+    </label>
+    <button class="tbtn warn" id="btnRebuild" title="Force full geometry rebuild">Rebuild</button>
+  </div>
+  <div class="tb-spacer"></div>
+  <div class="tb-group">
+    <span class="chip" id="fpsChip" title="Frames per second">-- fps</span>
+    <span class="chip dim" id="triChip" title="Rendered triangles">-- tris</span>
+    <button class="tbtn" id="btnHelp" title="Workflow help (H)">?</button>
+  </div>
+</header>
+
+<div id="workbench">
+  <!-- LEFT -->
+  <aside id="left">
+    <div class="side-tabs">
+      <button class="stab active" data-tab="nodes">NODES</button>
+      <button class="stab" data-tab="layers">LAYERS</button>
+    </div>
+    <div class="tabpage" id="tab-nodes">
+      <input id="paletteSearch" type="search" placeholder="Search nodes…  (click to add)" autocomplete="off">
+      <div id="palette"></div>
+    </div>
+    <div class="tabpage hidden" id="tab-layers">
+      <div class="layers-head">GRAPH ORDER <span id="layerCount"></span></div>
+      <div id="layers"></div>
+    </div>
+  </aside>
+
+  <!-- CENTER -->
+  <main id="center">
+    <section id="viewportWrap">
+      <canvas id="viewport"></canvas>
+      <div class="vp-toolbar" id="vpToolbar">
+        <div class="vp-row">
+          <span class="vp-label">SHADE</span>
+          <button class="vbtn active" data-shade="0" title="Full PBR-ish (1)">Solid</button>
+          <button class="vbtn" data-shade="1" title="Clay + AO (2)">Clay</button>
+          <button class="vbtn" data-shade="2" title="Height ramp (3)">Height</button>
+          <button class="vbtn" data-shade="3" title="Slope (4)">Slope</button>
+          <button class="vbtn" data-shade="4" title="River discharge / wetness (5)">Flow</button>
+          <button class="vbtn" data-shade="5" title="Rock hardness (6)">Hard</button>
+          <button class="vbtn" data-shade="6" title="Normals (7)">Normal</button>
+        </div>
+        <div class="vp-row">
+          <span class="vp-label">VIEW</span>
+          <button class="vbtn tog active" id="tgParticles" title="Droplet particles">Drops</button>
+          <button class="vbtn tog active" id="tgWind" title="Wind streaks">Wind</button>
+          <button class="vbtn tog active" id="tgWater" title="Water + rivers">Water</button>
+          <button class="vbtn tog" id="tgWire" title="Wireframe overlay">Wire</button>
+          <button class="vbtn tog active" id="tgGrid" title="Ground grid">Grid</button>
+          <span class="vp-sep"></span>
+          <button class="vbtn" data-cam="iso" title="Isometric view">Iso</button>
+          <button class="vbtn" data-cam="top" title="Top view">Top</button>
+          <button class="vbtn" data-cam="front" title="Front view">Front</button>
+          <button class="vbtn" data-cam="side" title="Side view">Side</button>
+        </div>
+        <div class="vp-row">
+          <span class="vp-label">SLICE</span>
+          <button class="vbtn tog" id="tgSlice" title="Clip terrain above slice height">Cut</button>
+          <input type="range" id="sliceY" min="0" max="80" step="0.5" value="55" title="Slice height">
+          <span class="vp-val" id="sliceVal">55</span>
+        </div>
+      </div>
+      <div class="vp-hint" id="vpHint">drag&nbsp;·&nbsp;orbit&nbsp;&nbsp;&nbsp;wheel&nbsp;·&nbsp;zoom&nbsp;&nbsp;&nbsp;rmb&nbsp;·&nbsp;pan</div>
+      <div class="vp-badge" id="vpBadge"></div>
+    </section>
+
+    <div id="splitter" title="Drag to resize viewport / graph"></div>
+
+    <section id="graphWrap">
+      <div id="graphBar">
+        <span class="gb-title">NODE GRAPH</span>
+        <button class="vbtn" id="btnAdd" title="Add node at centre (double-click canvas also works)">+ Add</button>
+        <button class="vbtn" id="btnFit" title="Fit graph to view (F)">Fit</button>
+        <button class="vbtn" id="btnAuto" title="Auto-layout nodes">Layout</button>
+        <span class="gb-spacer"></span>
+        <span class="gb-status" id="graphStatus">—</span>
+      </div>
+      <canvas id="graph"></canvas>
+      <div id="quickAdd" class="hidden"></div>
+    </section>
+  </main>
+
+  <!-- RIGHT -->
+  <aside id="right">
+    <section class="panel" id="pInspector">
+      <h3>INSPECTOR <span class="p-sub" id="inspType"></span></h3>
+      <div class="insp-title" id="inspTitle">Nothing selected</div>
+      <div id="inspBody"><p class="dim">Select a node in the graph to edit its parameters.</p></div>
+    </section>
+    <section class="panel" id="pSim">
+      <h3>SIMULATION</h3>
+      <div id="simBody"></div>
+    </section>
+    <section class="panel" id="pPart">
+      <h3>PARTICLES</h3>
+      <div id="partBody"></div>
+    </section>
+    <section class="panel" id="pWater">
+      <h3>WATER &amp; LIGHT</h3>
+      <div id="waterBody"></div>
+    </section>
+    <section class="panel" id="pExport">
+      <h3>EXPORT</h3>
+      <div class="btn-grid">
+        <button class="tbtn" id="exObj">Mesh .obj</button>
+        <button class="tbtn" id="exHeight">Height .png</button>
+        <button class="tbtn" id="exFlow">Flow .png</button>
+        <button class="tbtn" id="exJson">Project .json</button>
+      </div>
+      <p class="dim small">OBJ carries vertex colours (flow/sediment tint). Heightmap is top-down SDF surface scan.</p>
+    </section>
+  </aside>
+</div>
+
+<footer id="statusbar">
+  <span id="stFps">-- fps</span><span class="st-sep"></span>
+  <span id="stTris">-- tris</span><span class="st-sep"></span>
+  <span id="stVox">SDF 80³</span><span class="st-sep"></span>
+  <span id="stPart">0 alive</span><span class="st-sep"></span>
+  <span id="stMass" title="Eroded vs deposited volume — settled sims conserve mass">Δ 0.00</span><span class="st-sep"></span>
+  <span id="stHint">space play · del remove node · dbl-click canvas add · 1-7 shade</span>
+</footer>
+
+<div id="toasts"></div>
+<div id="modal" class="hidden"><div id="modalCard"></div></div>
+
+<script type="module" src="js/ui.js"></script>
+</body>
+</html>
