@@ -13,9 +13,6 @@ function safeKey(name)
     return RESERVED.includes(name) ? `${name}_` : name;
 }
 
-// Placeholder so object-property expressions stay readable in the source below.
-safeKey('noop');
-
 function readPath(target, path)
 {
     return path.split('.').reduce((node, key) => (node ? node[safeKey(key)] : undefined), target);

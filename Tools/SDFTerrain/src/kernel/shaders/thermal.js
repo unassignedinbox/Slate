@@ -72,11 +72,12 @@ fn thermalStep(@builtin(global_invocation_id) gid : vec3u)
         let hardOther = gridAt(G_HARDNESS, other.x, other.y);
         let outward = talusFlux(hard, h, hOther, dist, repose, rate);
         let inward = talusFlux(hardOther, hOther, h, dist, repose, rate);
-        net += (inward - outward) / area;
+        // Positive means material left this column, which is the convention the planar delta
+        // field uses: the apply pass adds both to the distance field, where a positive value
+        // is the surface retreating. Signing this the other way made talus pile material into
+        // the places it should have emptied.
+        net += (outward - inward) / area;
     }
-
-    // Book the vertical change. A column that lost material dropped, which is a positive
-    // (outward) displacement for the distance field.
     let limit = max(frame.transport.w, 0.02) * frame.worldLo.w * 1.5;
     gridStore(G_THERMAL, cell.x, cell.y, clamp(net, -limit, limit));
 }
