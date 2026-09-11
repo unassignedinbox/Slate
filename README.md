@@ -14,8 +14,8 @@ The app is static HTML/CSS/JS and needs a browser with WebGL2 for the volumetric
 ## Prototype features
 
 - OLED-black, docked scene / viewport / inspector workspace with a live node graph.
-- Ray-marched SDF terrain with primitive union, Boolean cave/overhang cuts, strata detail, and an erosion-driven river bed modifier.
-- Typed small particle preview for rain, guided river transport, dry wind abrasion, and rockfall impact.
+- Ray-marched sampled 3D SDF terrain with primitive union, Boolean cave/overhang cuts, strata detail, and an erosion-driven river bed modifier.
+- Typed small particle preview for rain, guided river transport, dry wind abrasion, and rockfall impact. Particle contacts sample the same 3D field, stamp localized SDF removal, carry cargo, and stamp deposits when they settle.
 - Settled particle state, typed cargo, deposition counters, and a reset/audit workflow so agents do not endlessly cut one hole.
 - Flow-aligned procedural water shader with animated current streaks, foam, reflection tint, wave amplitude, water level, and independent transport visibility.
 - Live solver controls, terrain/water/erosion inspectors, camera orbit/pan/zoom, view modes, and draggable node cards.

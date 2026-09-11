@@ -33,6 +33,7 @@
     foam: 0.42,
     relief: 12,
     roughness: 0.48,
+    primitives: [],
     clock: 0,
     simTime: 0,
     steps: 482,
@@ -66,6 +67,26 @@
   let particleUniforms = {};
   let rendererReady = false;
 
+  // A real sampled 3D field backs the preview. The resolution is deliberately modest for
+  // browser iteration; the graph and inspector expose the same contracts a sparse-brick
+  // production backend will use. Negative values are solid, positive values are empty.
+  const VOLUME = {
+    nx: 72,
+    ny: 56,
+    nz: 72,
+    min: [-16, -4, -16],
+    max: [16, 14, 16],
+  };
+  VOLUME.cell = [
+    (VOLUME.max[0] - VOLUME.min[0]) / (VOLUME.nx - 1),
+    (VOLUME.max[1] - VOLUME.min[1]) / (VOLUME.ny - 1),
+    (VOLUME.max[2] - VOLUME.min[2]) / (VOLUME.nz - 1),
+  ];
+  const volumeField = new Float32Array(VOLUME.nx * VOLUME.ny * VOLUME.nz);
+  let volumeTexture = null;
+  let volumeDirty = false;
+  let rebuildTimer = 0;
+
   const terrainVertex = `#version 300 es
     in vec2 aPosition;
     out vec2 vUv;
@@ -77,6 +98,7 @@
 
   const terrainFragment = `#version 300 es
     precision highp float;
+    precision highp sampler3D;
     in vec2 vUv;
     out vec4 outColor;
 
@@ -94,15 +116,12 @@
     uniform int uViewMode;
     uniform vec3 uCamera;
     uniform vec3 uTarget;
+    uniform sampler3D uVolume;
+    uniform vec3 uVolumeMin;
+    uniform vec3 uVolumeMax;
 
     const float FAR_CLIP = 62.0;
     const vec3 SUN = vec3(-0.384, 0.790, 0.485);
-
-    float hash21(vec2 p) {
-      p = fract(p * vec2(123.34, 456.21));
-      p += dot(p, p + 45.32);
-      return fract(p.x * p.y);
-    }
 
     float hash31(vec3 p) {
       p = fract(p * 0.1031);
@@ -125,31 +144,6 @@
       return mix(mix(mix(n000,n100,f.x),mix(n010,n110,f.x),f.y), mix(mix(n001,n101,f.x),mix(n011,n111,f.x),f.y), f.z);
     }
 
-    float fbm(vec3 p) {
-      float value = 0.0;
-      float amp = 0.5;
-      for (int i = 0; i < 4; i++) {
-        value += amp * noise3(p);
-        p = p * 2.02 + vec3(13.1, 7.7, 4.3);
-        amp *= 0.5;
-      }
-      return value;
-    }
-
-    float sdBox(vec3 p, vec3 b) {
-      vec3 q = abs(p) - b;
-      return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
-    }
-
-    float sdRoundBox(vec3 p, vec3 b, float r) {
-      vec3 q = abs(p) - b + r;
-      return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - r;
-    }
-
-    float sdEllipsoid(vec3 p, vec3 r) {
-      return (length(p / r) - 1.0) * min(min(r.x, r.y), r.z);
-    }
-
     float riverCenter(float z) {
       return 0.76 * (2.4 * sin(z * 0.17 + 0.3) + 0.9 * sin(z * 0.39 - 0.6));
     }
@@ -165,37 +159,14 @@
       return uWaterLevel + uWave * (primary * 0.42 + cross * 0.12 + (detail - .5) * .18);
     }
 
-    // The canyon is a union of volumetric primitives followed by subtractions.
-    // It intentionally has finite walls, a cut channel, and true 3D cavities.
+    // Sampled field query shared by rendering and the CPU particle contact path.
     float terrainSdf(vec3 p) {
-      float d = 100.0;
-      d = min(d, sdRoundBox(p - vec3(0.0, -2.20, 0.0), vec3(12.9, 2.35, 10.8), 0.90));
-      d = min(d, sdRoundBox(p - vec3(-7.30, 2.10, -4.20), vec3(4.35, 5.10, 4.75), 0.72));
-      d = min(d, sdRoundBox(p - vec3(7.10, 1.72, -4.90), vec3(4.60, 4.72, 5.15), 0.82));
-      d = min(d, sdRoundBox(p - vec3(-1.10, 0.55, -8.00), vec3(3.60, 3.70, 2.45), 0.60));
-      d = min(d, sdRoundBox(p - vec3(10.0, -0.15, 4.0), vec3(2.5, 2.0, 3.0), 0.62));
-
-      // A bounded, open-top river cutter. bed - y means the region above the bed is removed.
-      float cx = riverCenter(p.z);
-      // Erosion is a real modifier in the preview: accumulated contact requests deepen
-      // and very slightly widen the channel instead of only tinting the material.
-      float wear = clamp(uErosion, 0.0, 1.6);
-      float bed = -1.06 - wear * 0.26 + 0.10 * sin(p.z * .42);
-      float channel = max(abs(p.x - cx) - riverWidth(p.z) - wear * 0.055, bed - p.y);
-      channel = max(channel, abs(p.z) - 11.4);
-      d = max(d, -channel);
-
-      // Side cave and a second undercut produce topology a height field cannot represent.
-      float cave = sdEllipsoid(p - vec3(-8.40, -0.35, 0.42), vec3(2.30, 1.65, 2.55));
-      d = max(d, -cave);
-      float undercut = sdEllipsoid(p - vec3(7.10, -0.55, 0.70), vec3(2.40, 1.28, 2.75));
-      d = max(d, -undercut);
-
-      // Bedding and wind-cut grooves stay in the signed field instead of a normal-map-only pass.
-      float bedding = 0.09 * sin(p.y * 5.0 + 0.7 * sin(p.z * .38)) + 0.035 * sin(p.y * 17.0 + p.x * .4);
-      float rough = (noise3(p * vec3(.32, .44, .32)) - .5) * (.09 + uRoughness * .08);
-      d += (bedding + rough) * (1.0 - smoothstep(0.0, 5.5, abs(d)));
-      return d;
+      vec3 uv = (p - uVolumeMin) / (uVolumeMax - uVolumeMin);
+      vec3 outside = max(max(uVolumeMin - p, p - uVolumeMax), vec3(0.0));
+      if (any(lessThan(uv, vec3(0.0))) || any(greaterThan(uv, vec3(1.0)))) {
+        return length(outside) + 0.08;
+      }
+      return texture(uVolume, clamp(uv, vec3(0.001), vec3(0.999))).r;
     }
 
     float waterSdf(vec3 p) {
@@ -206,12 +177,11 @@
     }
 
     vec3 terrainNormal(vec3 p) {
-      const float e = 0.018;
-      vec2 h = vec2(e, 0.0);
+      const float e = 0.026;
       return normalize(vec3(
-        terrainSdf(p + h.xyy) - terrainSdf(p - h.xyy),
-        terrainSdf(p + h.yxy) - terrainSdf(p - h.yxy),
-        terrainSdf(p + h.yyx) - terrainSdf(p - h.yyx)
+        terrainSdf(p + vec3(e,0,0)) - terrainSdf(p - vec3(e,0,0)),
+        terrainSdf(p + vec3(0,e,0)) - terrainSdf(p - vec3(0,e,0)),
+        terrainSdf(p + vec3(0,0,e)) - terrainSdf(p - vec3(0,0,e))
       ));
     }
 
@@ -226,11 +196,11 @@
 
     bool traceTerrain(vec3 ro, vec3 rd, out float hitT) {
       float t = 0.0;
-      for (int i = 0; i < 116; i++) {
+      for (int i = 0; i < 112; i++) {
         vec3 p = ro + rd * t;
         float d = terrainSdf(p);
-        if (d < 0.012) { hitT = t; return true; }
-        t += clamp(d * 0.72, 0.025, 0.78);
+        if (d < 0.014) { hitT = t; return true; }
+        t += clamp(d * 0.72, 0.025, 0.72);
         if (t > FAR_CLIP) break;
       }
       hitT = FAR_CLIP;
@@ -239,7 +209,7 @@
 
     bool traceWater(vec3 ro, vec3 rd, out float hitT) {
       float t = 0.0;
-      for (int i = 0; i < 72; i++) {
+      for (int i = 0; i < 70; i++) {
         vec3 p = ro + rd * t;
         float d = waterSdf(p);
         if (d < 0.009) { hitT = t; return true; }
@@ -253,7 +223,7 @@
     float softShadow(vec3 ro, vec3 rd) {
       float result = 1.0;
       float t = 0.08;
-      for (int i = 0; i < 22; i++) {
+      for (int i = 0; i < 20; i++) {
         float h = terrainSdf(ro + rd * t);
         result = min(result, 14.0 * h / t);
         t += clamp(h, 0.03, 0.48);
@@ -290,7 +260,6 @@
       sandstone = mix(sandstone, vec3(.70,.39,.22), strata * .33);
       float mineral = smoothstep(.48,.82,noise3(p * vec3(.8,3.0,.8) + 8.0));
       sandstone = mix(sandstone, vec3(.25,.16,.14), mineral * .25);
-      // Wet banks and the channel cut show the material exchange happening in the field.
       float wet = 1.0 - smoothstep(.9, 2.35, abs(p.x - riverCenter(p.z)));
       wet *= smoothstep(-1.4, .4, p.y);
       sandstone = mix(sandstone, vec3(.19,.25,.24), wet * .36);
@@ -346,7 +315,6 @@
           vec3 wp = ro + rd * waterT;
           vec3 wn = waterNormal(wp);
           color = shadeWater(wp, rd, wn);
-          // Bed depth tint keeps the water shader tied to the SDF channel instead of a flat decal.
           float depth = clamp((wp.y + 1.05) * .7, 0.0, 1.0);
           color = mix(color, color * vec3(.72, .82, .77), depth * .22);
         } else {
@@ -358,7 +326,6 @@
           float rim = pow(1.0 - max(dot(n, -rd),0.0), 3.0);
           color = base * (0.35 + .65 * light) * ao;
           color += vec3(.48,.20,.10) * rim * .16;
-          // Contact glow visualises the local particle/field interaction.
           float contact = exp(-abs(p.x - riverCenter(p.z)) * 1.8) * smoothstep(-1.2,.15,p.y);
           color += vec3(.12,.34,.33) * contact * .08 * (0.7 + uIntensity);
           if (uViewMode == 2) color = mix(color, vec3(.15,.26,.36), .12);
@@ -473,6 +440,9 @@
         viewMode: gl.getUniformLocation(terrainProgram, 'uViewMode'),
         camera: gl.getUniformLocation(terrainProgram, 'uCamera'),
         target: gl.getUniformLocation(terrainProgram, 'uTarget'),
+        volume: gl.getUniformLocation(terrainProgram, 'uVolume'),
+        volumeMin: gl.getUniformLocation(terrainProgram, 'uVolumeMin'),
+        volumeMax: gl.getUniformLocation(terrainProgram, 'uVolumeMax'),
       };
 
       particleUniforms = {
@@ -548,6 +518,188 @@
     ]);
   }
 
+
+  function volumeIndex(x, y, z) {
+    return (z * VOLUME.ny + y) * VOLUME.nx + x;
+  }
+
+  function hashVoxel(x, y, z) {
+    let h = Math.imul(x ^ Math.imul(y, 374761393), 668265263) ^ Math.imul(z, 1274126177);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+  }
+
+  function smoothNoise3(x, y, z) {
+    const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
+    const fx = x - ix, fy = y - iy, fz = z - iz;
+    const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy), sz = fz * fz * (3 - 2 * fz);
+    const n = (dx, dy, dz) => hashVoxel(ix + dx, iy + dy, iz + dz);
+    const x00 = lerp(n(0,0,0), n(1,0,0), sx);
+    const x10 = lerp(n(0,1,0), n(1,1,0), sx);
+    const x01 = lerp(n(0,0,1), n(1,0,1), sx);
+    const x11 = lerp(n(0,1,1), n(1,1,1), sx);
+    return lerp(lerp(x00, x10, sy), lerp(x01, x11, sy), sz);
+  }
+
+  function roundBoxSdf(x, y, z, bx, by, bz, radius) {
+    const qx = Math.abs(x) - bx + radius;
+    const qy = Math.abs(y) - by + radius;
+    const qz = Math.abs(z) - bz + radius;
+    return Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qy, qz), 0) - radius;
+  }
+
+  function ellipsoidSdf(x, y, z, rx, ry, rz) {
+    return (Math.hypot(x / rx, y / ry, z / rz) - 1) * Math.min(rx, ry, rz);
+  }
+
+  function primitiveSdf(primitive, x, y, z) {
+    const px = x - primitive.x;
+    const py = y - primitive.y;
+    const pz = z - primitive.z;
+    if (primitive.type === 'sphere') return ellipsoidSdf(px, py, pz, primitive.sx, primitive.sy, primitive.sz);
+    if (primitive.type === 'capsule') {
+      const cy = clamp(py, -primitive.sy, primitive.sy);
+      return Math.hypot(px, py - cy, pz) - primitive.sx;
+    }
+    return roundBoxSdf(px, py, pz, primitive.sx, primitive.sy, primitive.sz, Math.min(.28, primitive.sx * .24));
+  }
+
+  function baseVolumeSdf(x, y, z) {
+    const reliefScale = clamp(state.relief / 12, .55, 1.55);
+    let d = 100;
+    d = Math.min(d, roundBoxSdf(x, y + 2.2, z, 12.9, 2.35, 10.8, .9));
+    d = Math.min(d, roundBoxSdf(x + 7.3, y - 2.1 * reliefScale, z + 4.2, 4.35, 5.1 * reliefScale, 4.75, .72));
+    d = Math.min(d, roundBoxSdf(x - 7.1, y - 1.72 * reliefScale, z + 4.9, 4.6, 4.72 * reliefScale, 5.15, .82));
+    d = Math.min(d, roundBoxSdf(x + 1.1, y - .55 * reliefScale, z + 8, 3.6, 3.7 * reliefScale, 2.45, .6));
+    d = Math.min(d, roundBoxSdf(x - 10, y + .15, z - 4, 2.5, 2, 3, .62));
+    // Additive primitive nodes are evaluated into the same scalar field before cuts.
+    for (const primitive of state.primitives) d = Math.min(d, primitiveSdf(primitive, x, y, z));
+
+    const cx = riverCenterJS(z);
+    const bed = -1.06;
+    let channel = Math.max(Math.abs(x - cx) - (1.72 + .18 * Math.sin(z * .31 + 1.2)), bed - y);
+    channel = Math.max(channel, Math.abs(z) - 11.4);
+    d = Math.max(d, -channel);
+
+    // True 3D subtractions: each cavity is spherical/elliptic in XYZ, not a top-surface mask.
+    d = Math.max(d, -ellipsoidSdf(x + 8.4, y + .35, z - .42, 2.3, 1.65, 2.55));
+    d = Math.max(d, -ellipsoidSdf(x - 7.1, y + .55, z - .70, 2.4, 1.28, 2.75));
+
+    const bedding = .09 * Math.sin(y * 5 + .7 * Math.sin(z * .38)) + .035 * Math.sin(y * 17 + x * .4);
+    const rough = (smoothNoise3(x * .32, y * .44, z * .32) - .5) * (.09 + state.roughness * .08);
+    const surfaceWeight = 1 - clamp(Math.abs(d) / 5.5, 0, 1);
+    return d + (bedding + rough) * surfaceWeight;
+  }
+
+  function buildVolumeField() {
+    let ptr = 0;
+    for (let z = 0; z < VOLUME.nz; z++) {
+      const wz = VOLUME.min[2] + z * VOLUME.cell[2];
+      for (let y = 0; y < VOLUME.ny; y++) {
+        const wy = VOLUME.min[1] + y * VOLUME.cell[1];
+        for (let x = 0; x < VOLUME.nx; x++, ptr++) {
+          const wx = VOLUME.min[0] + x * VOLUME.cell[0];
+          volumeField[ptr] = baseVolumeSdf(wx, wy, wz);
+        }
+      }
+    }
+    volumeDirty = true;
+  }
+
+  function uploadVolumeTexture() {
+    if (!rendererReady || !gl) return;
+    if (!volumeTexture) {
+      volumeTexture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_3D, volumeTexture);
+      gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+      const linearFloat = gl.getExtension('OES_texture_float_linear');
+      gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, linearFloat ? gl.LINEAR : gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, linearFloat ? gl.LINEAR : gl.NEAREST);
+      gl.texImage3D(gl.TEXTURE_3D, 0, gl.R32F, VOLUME.nx, VOLUME.ny, VOLUME.nz, 0, gl.RED, gl.FLOAT, volumeField);
+    } else {
+      gl.bindTexture(gl.TEXTURE_3D, volumeTexture);
+      gl.texSubImage3D(gl.TEXTURE_3D, 0, 0, 0, 0, VOLUME.nx, VOLUME.ny, VOLUME.nz, gl.RED, gl.FLOAT, volumeField);
+    }
+    gl.bindTexture(gl.TEXTURE_3D, null);
+    volumeDirty = false;
+  }
+
+  function worldToGrid(p) {
+    return [
+      (p[0] - VOLUME.min[0]) / VOLUME.cell[0],
+      (p[1] - VOLUME.min[1]) / VOLUME.cell[1],
+      (p[2] - VOLUME.min[2]) / VOLUME.cell[2],
+    ];
+  }
+
+  function sampleVolume(p) {
+    const q = worldToGrid(p);
+    if (q[0] < 0 || q[1] < 0 || q[2] < 0 || q[0] > VOLUME.nx - 1 || q[1] > VOLUME.ny - 1 || q[2] > VOLUME.nz - 1) {
+      const ox = Math.max(VOLUME.min[0] - p[0], p[0] - VOLUME.max[0], 0);
+      const oy = Math.max(VOLUME.min[1] - p[1], p[1] - VOLUME.max[1], 0);
+      const oz = Math.max(VOLUME.min[2] - p[2], p[2] - VOLUME.max[2], 0);
+      return Math.hypot(ox, oy, oz) + .08;
+    }
+    const x0 = Math.floor(q[0]), y0 = Math.floor(q[1]), z0 = Math.floor(q[2]);
+    const x1 = Math.min(x0 + 1, VOLUME.nx - 1), y1 = Math.min(y0 + 1, VOLUME.ny - 1), z1 = Math.min(z0 + 1, VOLUME.nz - 1);
+    const fx = q[0] - x0, fy = q[1] - y0, fz = q[2] - z0;
+    const at = (x, y, z) => volumeField[volumeIndex(x, y, z)];
+    const a = lerp(lerp(at(x0,y0,z0), at(x1,y0,z0), fx), lerp(at(x0,y1,z0), at(x1,y1,z0), fx), fy);
+    const b = lerp(lerp(at(x0,y0,z1), at(x1,y0,z1), fx), lerp(at(x0,y1,z1), at(x1,y1,z1), fx), fy);
+    return lerp(a, b, fz);
+  }
+
+  function volumeNormal(p) {
+    const e = Math.max(VOLUME.cell[0], VOLUME.cell[1], VOLUME.cell[2]) * .9;
+    return normalize3([sampleVolume([p[0]+e,p[1],p[2]]) - sampleVolume([p[0]-e,p[1],p[2]]), sampleVolume([p[0],p[1]+e,p[2]]) - sampleVolume([p[0],p[1]-e,p[2]]), sampleVolume([p[0],p[1],p[2]+e]) - sampleVolume([p[0],p[1],p[2]-e])]);
+  }
+
+  function applyVolumeChange(position, radius, amount, deposit = false) {
+    const q = worldToGrid(position);
+    const rx = Math.ceil(radius / VOLUME.cell[0]);
+    const ry = Math.ceil(radius / VOLUME.cell[1]);
+    const rz = Math.ceil(radius / VOLUME.cell[2]);
+    const minX = clamp(Math.floor(q[0]) - rx, 0, VOLUME.nx - 1);
+    const maxX = clamp(Math.floor(q[0]) + rx, 0, VOLUME.nx - 1);
+    const minY = clamp(Math.floor(q[1]) - ry, 0, VOLUME.ny - 1);
+    const maxY = clamp(Math.floor(q[1]) + ry, 0, VOLUME.ny - 1);
+    const minZ = clamp(Math.floor(q[2]) - rz, 0, VOLUME.nz - 1);
+    const maxZ = clamp(Math.floor(q[2]) + rz, 0, VOLUME.nz - 1);
+    let changed = false;
+    for (let z = minZ; z <= maxZ; z++) {
+      for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
+          const wx = VOLUME.min[0] + x * VOLUME.cell[0];
+          const wy = VOLUME.min[1] + y * VOLUME.cell[1];
+          const wz = VOLUME.min[2] + z * VOLUME.cell[2];
+          const distance = Math.hypot(wx - position[0], (wy - position[1]) * 1.1, wz - position[2]);
+          if (distance > radius) continue;
+          const kernel = (1 - distance / radius) ** 2;
+          const index = volumeIndex(x, y, z);
+          const before = volumeField[index];
+          // Positive delta removes solid; negative delta puts loose material back.
+          if (!deposit && before < .38) volumeField[index] = Math.min(1.25, before + amount * kernel);
+          if (deposit && before > -.42) volumeField[index] = Math.max(-.72, before - amount * kernel);
+          if (volumeField[index] !== before) changed = true;
+        }
+      }
+    }
+    if (changed) volumeDirty = true;
+    return changed;
+  }
+
+  function scheduleVolumeRebuild(message = 'Volume rebuilt from node graph') {
+    window.clearTimeout(rebuildTimer);
+    rebuildTimer = window.setTimeout(() => {
+      buildVolumeField();
+      initParticles();
+      if (rendererReady) uploadVolumeTexture();
+      showToast(message);
+    }, 80);
+  }
+
   const PARTICLE_COUNT = 1024;
   const particles = [];
   const particlePositions = new Float32Array(PARTICLE_COUNT * 3);
@@ -567,7 +719,7 @@
   }
 
   function createParticle(kind) {
-    return { kind, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, age: 0, settled: 0, bounces: 0, energy: .35, phase: random(), cargo: .05 + random() * .12 };
+    return { kind, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, age: 0, settled: 0, bounces: 0, contactCooldown: 0, energy: .35, phase: random(), cargo: .05 + random() * .12 };
   }
 
   function respawnParticle(p, preferredKind = null) {
@@ -575,6 +727,7 @@
     p.age = random() * 1.2;
     p.settled = 0;
     p.bounces = 0;
+    p.contactCooldown = 0;
     p.phase = random() * TAU;
     p.cargo = .04 + random() * .16;
     p.energy = .3 + random() * .7;
@@ -632,28 +785,79 @@
     });
   }
 
+  function erodeFixedPoint(p, position, abrasion, contactScale = 1) {
+    if (p.contactCooldown > 0) return false;
+    const sdf = sampleVolume(position);
+    if (sdf > .065) return false;
+    const effectiveRadius = Math.max(.22, state.radius * .055) * contactScale;
+    const detached = abrasion * (.7 + state.intensity * .9) * (0.8 + p.energy * .35);
+    if (!applyVolumeChange(position, effectiveRadius, detached, false)) return false;
+    p.cargo = clamp(p.cargo + detached * .85, .02, 1.0);
+    state.removed += detached * .08;
+    state.erosion = clamp(state.erosion + detached * .045, .12, 1.6);
+    p.energy = clamp(p.energy + .12, .1, 1);
+    p.contactCooldown = .12 + p.phase * .12;
+    return true;
+  }
+
+  function collideAndErode(p, abrasion, contactScale = 1) {
+    const position = [p.x, p.y, p.z];
+    const sdf = sampleVolume(position);
+    if (sdf > .065) return false;
+    const normal = volumeNormal(position);
+    const correction = .075 - sdf;
+    p.x += normal[0] * correction;
+    p.y += normal[1] * correction;
+    p.z += normal[2] * correction;
+    if (p.contactCooldown <= 0) {
+      const effectiveRadius = Math.max(.22, state.radius * .055) * contactScale;
+      const detached = abrasion * (.7 + state.intensity * .9) * (0.8 + p.energy * .35);
+      if (applyVolumeChange([p.x, p.y, p.z], effectiveRadius, detached, false)) {
+        p.cargo = clamp(p.cargo + detached * .85, .02, 1.0);
+        state.removed += detached * .08;
+        state.erosion = clamp(state.erosion + detached * .045, .12, 1.6);
+        p.energy = clamp(p.energy + .12, .1, 1);
+      }
+      p.contactCooldown = .12 + p.phase * .12;
+    }
+    return true;
+  }
+
+  function depositAtParticle(p, scale = 1) {
+    if (p.cargo <= .01) return;
+    const amount = Math.min(.08, p.cargo * .045 * scale);
+    if (applyVolumeChange([p.x, p.y, p.z], Math.max(.22, state.radius * .065), amount, true)) {
+      p.cargo = Math.max(0, p.cargo - amount * 1.2);
+      state.deposited += amount * .08;
+      state.sediment = clamp(state.sediment + amount * .35, .05, .92);
+    }
+  }
+
   function updateParticles(dt) {
     if (!state.running) return;
     const intensity = .25 + state.intensity * 1.45;
     const riverFactor = state.riverEnabled ? 1 : 0;
+    let fieldChanged = false;
     for (const p of particles) {
       p.age += dt;
+      p.contactCooldown = Math.max(0, p.contactCooldown - dt);
       if (p.kind === 0) {
         p.vy -= 9.8 * dt;
         p.x += p.vx * dt;
         p.y += p.vy * dt;
         p.z += p.vz * dt;
-        const ground = surfaceHeight(p.x, p.z);
-        if (p.y <= ground + .035) {
-          p.y = ground + .04;
+        if (collideAndErode(p, .035, .72)) {
+          fieldChanged = true;
+          p.y += .06;
+          p.vx *= .25; p.vz *= .25; p.vy = 0;
           p.settled += dt;
-          p.energy = .24;
-          p.cargo = Math.min(1, p.cargo + dt * .38 * intensity);
-          state.erosion = clamp(state.erosion + dt * .008 * intensity, .12, 1.6);
-          state.removed += dt * .0024 * intensity;
-          state.deposited += dt * .0014 * state.deposition;
-          state.sediment = clamp(state.sediment + dt * .0015, .05, .92);
-          if (p.settled > .10 + p.phase * .08) respawnParticle(p);
+          p.energy = .2;
+          p.cargo = Math.min(1, p.cargo + dt * .34 * intensity);
+          // Rain leaves a small loose-material deposit before retiring.
+          if (p.settled > .12 + p.phase * .08) {
+            depositAtParticle(p, state.deposition);
+            respawnParticle(p);
+          }
         }
         if (p.age > 8.0) respawnParticle(p);
       } else if (p.kind === 1) {
@@ -667,46 +871,52 @@
           p.y = state.waterLevel + Math.sin(p.phase + state.clock * 2.0) * .035;
           p.energy = .42 + .34 * Math.sin(p.phase + state.clock * 3.0);
           p.cargo = clamp(p.cargo + dt * .018 * intensity - dt * .012 * state.deposition, .03, .9);
-          state.erosion = clamp(state.erosion + dt * .0048 * intensity * riverFactor, .12, 1.6);
-          state.removed += dt * .0045 * intensity * riverFactor;
-          state.deposited += dt * .0036 * state.deposition;
+          if (collideAndErode(p, .018, 1.0)) {
+            fieldChanged = true;
+            p.vx += (cx - p.x) * dt * 4;
+            p.vy = .05;
+          }
+          // Water particles stay at the free surface, so their contact query also samples
+          // the bed beneath them. This is the part that makes river transport modify the SDF.
+          if (erodeFixedPoint(p, [p.x, p.y - .72, p.z], .016, 1.0)) fieldChanged = true;
+          // Capacity falls as the river slows near the outlet; material settles there.
+          if (p.z > 7.8 || p.energy < .2) depositAtParticle(p, state.deposition * 1.8);
           state.sediment = clamp(state.sediment + dt * .002 * intensity, .05, .92);
         }
-        if (p.z > 11.9 || p.age > 18) respawnParticle(p);
+        if (p.z > 11.9 || p.age > 18) {
+          depositAtParticle(p, state.deposition * 2);
+          respawnParticle(p);
+        }
       } else if (p.kind === 2) {
         p.x += p.vx * dt;
         p.z += p.vz * dt;
         p.y += p.vy * dt + Math.sin(state.clock * 1.7 + p.phase) * dt * .12;
         p.vy += (3.7 + Math.sin(state.clock + p.phase) * .45 - p.y) * dt * .02;
-        const ground = surfaceHeight(p.x, p.z);
-        if (p.x > 12.0 || (p.y < ground + .12 && p.x > -6)) {
+        if (collideAndErode(p, .012, .55)) {
+          fieldChanged = true;
           p.settled += dt;
-          p.energy = .58;
-          state.erosion = clamp(state.erosion + dt * .0032 * intensity, .12, 1.6);
-          state.removed += dt * .0012 * intensity;
+          p.energy = .42;
+          depositAtParticle(p, state.deposition * .55);
           if (p.settled > .14) respawnParticle(p);
         }
-        if (p.age > 13) respawnParticle(p);
+        if (p.x > 12.0 || p.age > 13) respawnParticle(p);
       } else {
         p.vy -= 9.8 * dt;
         p.x += p.vx * dt;
         p.y += p.vy * dt;
         p.z += p.vz * dt;
-        const ground = surfaceHeight(p.x, p.z);
-        if (p.y <= ground + .08) {
-          p.y = ground + .08;
-          state.removed += .0028 * intensity;
-          state.erosion = clamp(state.erosion + .012 * intensity, .12, 1.6);
+        const hit = collideAndErode(p, .11, 1.45);
+        if (hit) {
+          fieldChanged = true;
           p.bounces += 1;
-          if (p.bounces < 2) {
-            p.vy = Math.abs(p.vy) * (.20 + (1 - state.deposition) * .12);
-            p.vx *= .48;
-            p.vz *= .48;
-            p.energy *= .56;
-          } else {
+          p.y += .10;
+          p.vy = Math.abs(p.vy) * (.20 + (1 - state.deposition) * .12);
+          p.vx *= .48;
+          p.vz *= .48;
+          p.energy *= .56;
+          if (p.bounces >= 2) {
             p.settled += dt;
-            p.energy = .9;
-            state.deposited += .0018 * state.deposition;
+            depositAtParticle(p, state.deposition);
             if (p.settled > .25) respawnParticle(p);
           }
         }
@@ -714,6 +924,7 @@
       }
     }
     state.steps += 1;
+    if (fieldChanged) volumeDirty = true;
     syncParticleBuffers();
   }
 
@@ -765,6 +976,7 @@
     const eye = cameraPosition();
     const view = lookAt(eye, camera.target);
     const projection = perspective(.74, width / Math.max(height, 1), .1, 100);
+    if (volumeDirty) uploadVolumeTexture();
 
     gl.viewport(0, 0, width, height);
     gl.clearColor(.025, .035, .05, 1);
@@ -788,7 +1000,13 @@
     gl.uniform1i(terrainUniforms.viewMode, state.viewMode);
     gl.uniform3fv(terrainUniforms.camera, eye);
     gl.uniform3fv(terrainUniforms.target, camera.target);
+    gl.uniform1i(terrainUniforms.volume, 0);
+    gl.uniform3fv(terrainUniforms.volumeMin, VOLUME.min);
+    gl.uniform3fv(terrainUniforms.volumeMax, VOLUME.max);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_3D, volumeTexture);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindTexture(gl.TEXTURE_3D, null);
 
     gl.useProgram(particleProgram);
     gl.enable(gl.BLEND);
@@ -910,8 +1128,8 @@
     bindRange('capacityRange', 'capacityValue', value => value.toFixed(2), value => { state.capacity = value; });
     bindRange('depositionRange', 'depositionValue', value => value.toFixed(2), value => { state.deposition = value; });
     bindRange('speedRange', 'speedValue', value => `${value.toFixed(1)} m/s`, value => { state.riverSpeed = value; $('#riverSpeedReadout').textContent = `${value.toFixed(1)} m/s`; });
-    bindRange('reliefRange', 'reliefValue', value => `${value.toFixed(1)} m`, () => {});
-    bindRange('roughnessRange', 'roughnessValue', value => value.toFixed(2), value => { state.roughness = value; });
+    bindRange('reliefRange', 'reliefValue', value => `${value.toFixed(1)} m`, value => { state.relief = value; scheduleVolumeRebuild('Relief node evaluated into 3D field'); });
+    bindRange('roughnessRange', 'roughnessValue', value => value.toFixed(2), value => { state.roughness = value; scheduleVolumeRebuild('Fractal strata node evaluated into 3D field'); });
     bindRange('levelRange', 'levelValue', value => `${value.toFixed(2)} m`, value => { state.waterLevel = value; });
     bindRange('waveRange', 'waveValue', value => `${value.toFixed(2)} m`, value => { state.wave = value; });
     bindRange('foamRange', 'foamValue', value => value.toFixed(2), value => { state.foam = value; });
@@ -964,6 +1182,8 @@
       $$('.top-tab').forEach(item => item.classList.toggle('active', item === button));
       showToast(`${button.textContent.trim().toLowerCase()} workspace selected`);
     }));
+    $$('[data-primitive-add]').forEach(button => button.addEventListener('click', () => addPrimitive(button.dataset.primitiveAdd)));
+    renderPrimitiveList();
     $('#addNodeButton').addEventListener('click', addGraphNode);
     $('#helpButton').addEventListener('click', () => openModal('helpModal'));
     $('#openResearch').addEventListener('click', () => openModal('researchModal'));
@@ -997,25 +1217,68 @@
     state.deposited = 7.08;
     state.sediment = .18;
     state.simTime = 0;
+    buildVolumeField();
+    if (rendererReady) uploadVolumeTexture();
     initParticles();
     updateStatsUI();
-    showToast('Erosion state reset · SDF modifiers retained');
+    showToast('Erosion state reset · volume restored to graph baseline');
+  }
+
+  function renderPrimitiveList() {
+    const list = $('#primitiveList');
+    if (!list) return;
+    if (!state.primitives.length) {
+      list.innerHTML = '<div class="primitive-empty">No additive inputs · base formation active</div>';
+      return;
+    }
+    list.innerHTML = '';
+    state.primitives.forEach((primitive, index) => {
+      const row = document.createElement('div');
+      row.className = 'primitive-row';
+      const title = primitive.type.charAt(0).toUpperCase() + primitive.type.slice(1);
+      row.innerHTML = `<i>${primitive.type === 'sphere' ? '○' : primitive.type === 'capsule' ? '◉' : '▱'}</i><span>${title} ${String(index + 1).padStart(2, '0')}</span><small>${primitive.sx.toFixed(1)} m</small><button class="primitive-remove" aria-label="Remove ${title}">×</button>`;
+      row.querySelector('.primitive-remove').addEventListener('click', () => {
+        state.primitives.splice(index, 1);
+        renderPrimitiveList();
+        scheduleVolumeRebuild(`${title} primitive removed`);
+      });
+      list.appendChild(row);
+    });
+  }
+
+  function addPrimitive(type, notify = true) {
+    const i = state.primitives.length;
+    const presets = {
+      box: { sx: 1.4, sy: .8, sz: 1.2 },
+      sphere: { sx: 1.15, sy: 1.15, sz: 1.15 },
+      capsule: { sx: .72, sy: 1.4, sz: .72 },
+    };
+    const size = presets[type] || presets.box;
+    const angle = i * 2.399;
+    state.primitives.push({ type, x: Math.cos(angle) * 3.2, y: .75 + (i % 2) * .55, z: Math.sin(angle) * 3.0 - 1.8, ...size });
+    renderPrimitiveList();
+    scheduleVolumeRebuild(`${type.charAt(0).toUpperCase() + type.slice(1)} primitive evaluated into CSG volume`);
+    if (notify) showToast(`${type.charAt(0).toUpperCase() + type.slice(1)} input added to terrain SDF`);
   }
 
   function addGraphNode() {
     const graph = $('#nodeGraph');
     const node = document.createElement('article');
     const id = `custom-${Date.now()}`;
+    const types = ['box', 'sphere', 'capsule'];
+    const type = types[state.primitives.length % types.length];
+    addPrimitive(type, false);
+    const title = type.charAt(0).toUpperCase() + type.slice(1);
     node.className = 'graph-node small-graph-node';
     node.dataset.node = id;
     node.style.left = `${55 + (graph.children.length * 31) % Math.max(440, graph.clientWidth - 200)}px`;
     node.style.top = `${graph.clientHeight > 130 ? 128 : 64}px`;
-    node.innerHTML = '<div class="node-topline"><span class="node-type-icon violet">＋</span><span>MODIFIER</span><button class="node-menu">•••</button></div><h3>Custom SDF stamp</h3><p>new live input</p><div class="node-port-row"><span class="port-row-label right-label">OUTPUT</span><i class="port output"></i></div>';
+    node.innerHTML = `<div class="node-topline"><span class="node-type-icon violet">＋</span><span>PRIMITIVE</span><button class="node-menu">•••</button></div><h3>${title} input</h3><p>live CSG union</p><div class="node-port-row"><span class="port-row-label right-label">SDF OUT</span><i class="port output" data-port="${id}-out"></i></div>`;
     graph.appendChild(node);
     node.addEventListener('click', event => { if (!event.target.closest('.node-menu')) setSelection(id); });
     attachNodeDrag(node);
     setSelection(id);
-    showToast('Live modifier node added');
+    showToast(`${title} node added · volume rebuild queued`);
     requestAnimationFrame(updateGraphConnections);
   }
 
@@ -1035,6 +1298,7 @@
     const connections = [
       ['primitive-out','csg-in', false], ['csg-out','cave-in', false], ['cave-out','erosion-in', true], ['erosion-out','water-in', true], ['wind-out','erosion-in', false], ['erosion-out','deposit-in', false],
     ];
+    graph.querySelectorAll('.graph-node[data-node^="custom-"]').forEach(node => connections.unshift([`${node.dataset.node}-out`, 'csg-in', false]));
     svg.innerHTML = '';
     for (const [from, to, active] of connections) {
       const a = graph.querySelector(`[data-port="${from}"]`);
@@ -1108,6 +1372,8 @@
   // ---------------------------------------------------------------------------
 
   initRenderer();
+  buildVolumeField();
+  uploadVolumeTexture();
   initParticles();
   initUI();
 

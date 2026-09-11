@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Strata is a node-based terrain authoring surface for AAA production rather than a heightmap toy. The current browser deliverable is a visual, interactive prototype: a WebGL2 ray-marched SDF preview, typed particle motion, a live water material, and the authoring graph. The production path should keep the same UX while moving field and particle state to GPU ping-pong resources.
+Strata is a node-based terrain authoring surface for AAA production rather than a heightmap toy. The current browser deliverable is a visual, interactive field prototype: a WebGL2 ray-marched 72 × 56 × 72 sampled SDF, typed particle motion with localized contact/deposition edits, a live water material, and the authoring graph. The production path should keep the same UX while moving field and particle state to GPU ping-pong resources.
 
 ## Why an SDF
 
