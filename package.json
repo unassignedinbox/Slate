@@ -1,0 +1,17 @@
+{
+  "name": "slate-terraforge",
+  "version": "1.0.0",
+  "description": "Slate — SDF Terrain Landscaping Lab for AAA (GTA 6+) — volumetric caves, particle erosion, wind & river simulation",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4173"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "vite": "^5.2.0"
+  }
+}

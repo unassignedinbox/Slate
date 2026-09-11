@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="theme-color" content="#07080A"/>
+  <title>Slate — SDF TerraForge | AAA Terrain Lab</title>
+  <link rel="stylesheet" href="/src/interface.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+<div id="app">
+  <header class="header">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 17 L9 5 L13 13 L16 7 L21 17 Z"/><path d="M3 14 H21 M6 10 H10 M14 10 H18"/></svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-name">SLATE</span>
+        <span class="brand-sub">SDF TERRAFORGE — LANDSCAPING LAB</span>
+      </div>
+      <span class="brand-badge">GTA 6+ VOLUMETRIC</span>
+    </div>
+
+    <div class="header-center">
+      <span class="live-dot"></span>
+      <span><strong>Volumetric SDF</strong> <span style="color:var(--muted)">· Real caves & overhangs</span></span>
+      <span class="divider"></span>
+      <span><strong>Particle Transport</strong> <span style="color:var(--muted)">· Erosion & sediment</span></span>
+    </div>
+
+    <div class="header-stats" id="header-stats">
+      <span>VOL <b id="stat-volume">96×56×96</b></span>
+      <span>MEM <b id="stat-mem">2.0 MB</b></span>
+      <span>FPS <b id="stat-fps">—</b></span>
+    </div>
+
+    <div class="header-actions">
+      <button class="btn btn-ghost btn-small" id="btn-reset" title="Reset terrain (R)"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7M3 3v6h6"/></svg> Reset</button>
+      <button class="btn btn-ghost btn-small" id="btn-randomize" title="Randomize seed"><svg viewBox="0 0 24 24"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg> Randomize</button>
+      <span class="divider"></span>
+      <button class="btn btn-dark btn-small" id="btn-export" title="Export SDF (E)"><svg viewBox="0 0 24 24"><path d="M12 3v12M8 11l4 4 4-4M3 17v3h18v-3"/></svg> Export</button>
+      <button class="btn btn-primary" id="btn-sim"><span id="sim-icon">▶</span> <span id="sim-label">Run Erosion</span></button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <!-- LEFT -->
+    <aside class="panel" id="panel-left">
+      <div class="panel-heading"><span>Node Library</span><b>OUTLINER</b></div>
+      <div class="tab-row">
+        <button class="tab active" data-tab="library">Library</button>
+        <button class="tab" data-tab="scene">Scene</button>
+      </div>
+
+      <div class="library" id="tab-library">
+        <div>
+          <div class="lib-group-label">Sources — Primitives</div>
+          <div class="node-palette">
+            <button class="palette-item source" data-type="box"><svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 3v18M4 7.5l8 4.5 8-4.5"/><path d="M4 12l8 4.5M20 12l-8 4.5"/></svg><strong>Box</strong><small>Cliff block</small></button>
+            <button class="palette-item source" data-type="sphere"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a12 8 0 0 1 0 16A12 8 0 0 1 12 4z"/><path d="M4 12h16"/></svg><strong>Sphere</strong><small>Hill / boulder</small></button>
+            <button class="palette-item source" data-type="torus"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="9" ry="5"/><ellipse cx="12" cy="12" rx="5" ry="2.5"/></svg><strong>Torus</strong><small>Arch / cave</small></button>
+            <button class="palette-item source" data-type="terrain"><svg viewBox="0 0 24 24"><path d="M3 17l5-6 4 4 3-5 6 7H3z"/><path d="M3 13h18"/></svg><strong>Terrain Base</strong><small>Stratified slab</small></button>
+            <button class="palette-item source" data-type="noise"><svg viewBox="0 0 24 24"><path d="M3 12h3l2-5 3 10 3-7 2 4h5"/></svg><strong>Fractal Noise</strong><small>Detail warp</small></button>
+            <button class="palette-item source" data-type="cylinder"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="8" rx="6" ry="3"/><path d="M6 8v8a6 3 0 0 0 12 0V8"/><ellipse cx="12" cy="16" rx="6" ry="3"/></svg><strong>Cylinder</strong><small>Pillar</small></button>
+          </div>
+        </div>
+
+        <div>
+          <div class="lib-group-label">Booleans — Compose</div>
+          <div class="node-palette">
+            <button class="palette-item bool" data-type="union"><svg viewBox="0 0 24 24"><circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5"/><path d="M12 9.5a5 5 0 0 1 0 5"/></svg><strong>Union</strong><small>Merge</small></button>
+            <button class="palette-item bool" data-type="subtract"><svg viewBox="0 0 24 24"><circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5" fill="currentColor" opacity=".15"/><path d="M14 12h-4"/><circle cx="15" cy="12" r="5" stroke-dasharray="3 3"/></svg><strong>Subtract</strong><small>Carve cave</small></button>
+            <button class="palette-item bool" data-type="intersect"><svg viewBox="0 0 24 24"><circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5"/><path d="M11 9.5a5 5 0 0 1 2 5"/></svg><strong>Intersect</strong><small>Clip</small></button>
+            <button class="palette-item bool" data-type="blend"><svg viewBox="0 0 24 24"><path d="M8 12a4 4 0 0 1 8 0a4 4 0 0 1 -8 0"/><path d="M12 8c2 0 4 1.8 4 4s-2 4-4 4"/><path d="M7 12h2M15 12h2"/></svg><strong>Smooth Blend</strong><small>k = 0.8</small></button>
+            <button class="palette-item bool" data-type="transform"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="3"/><path d="M12 8l3-3M12 8l-3-3"/></svg><strong>Transform</strong><small>Move / scale</small></button>
+            <button class="palette-item bool" data-type="terrace"><svg viewBox="0 0 24 24"><path d="M3 17h6v-3h6v-3h6v6H3z"/><path d="M9 14v-3M15 11V8"/></svg><strong>Terrace</strong><small>Strata steps</small></button>
+          </div>
+        </div>
+
+        <div>
+          <div class="lib-group-label">Erosion — Gaea Style</div>
+          <div class="node-palette">
+            <button class="palette-item erosion" data-type="hydraulic"><svg viewBox="0 0 24 24"><path d="M12 3l2 6h-4l2-6z"/><path d="M8 9c-2 2-3 4-3 6a5 5 0 0 0 10 0c0-2-1-4-3-6"/><path d="M8 14h8M9 16h6"/></svg><strong>Hydraulic</strong><small>Rain · rills</small></button>
+            <button class="palette-item erosion" data-type="thermal"><svg viewBox="0 0 24 24"><path d="M3 17l6-4 4 2 4-4 4 2v4H3z"/><path d="M9 13l2 3M15 11l2 3"/></svg><strong>Thermal</strong><small>Talus / scree</small></button>
+            <button class="palette-item erosion" data-type="wind"><svg viewBox="0 0 24 24"><path d="M3 12h9"/><path d="M12 8h6a2 2 0 1 1 0 4h-6"/><path d="M3 8h5a2 2 0 1 0 0-4H3"/><path d="M3 16h5a2 2 0 1 1 0 4H3"/></svg><strong>Wind</strong><small>Abrasion</small></button>
+            <button class="palette-item erosion" data-type="river"><svg viewBox="0 0 24 24"><path d="M4 6c2 0 3 1.5 5 1.5S12 6 14 6s3 1.5 5 1.5"/><path d="M4 12c2 0 3 1.5 5 1.5S12 12 14 12s3 1.5 5 1.5"/><path d="M4 18c2 0 3 1.5 5 1.5S12 18 14 18s3 1.5 5 1.5"/><path d="M9 6v12M15 6v12"/></svg><strong>River Carve</strong><small>Channel + flow</small></button>
+          </div>
+        </div>
+
+        <div class="hint" style="padding:8px 2px">
+          <b style="color:var(--text-2)">Tip:</b> Build real caves with <span style="color:#FFB84D">Sphere → Subtract</span>.<br>
+          Add <span style="color:var(--accent)">Hydraulic</span> after union to cut rills in realtime — see particlesกัด.
+        </div>
+      </div>
+
+      <div class="outliner hidden" id="tab-scene">
+        <div id="scene-list"></div>
+        <div class="object-count" id="node-count">0 NODES</div>
+      </div>
+
+      <div style="margin-top:auto;padding:10px 12px;border-top:1px solid var(--line);display:flex;gap:6px">
+        <button class="btn btn-ghost btn-small" style="flex:1" id="btn-autolayout">Auto-layout</button>
+        <button class="btn btn-ghost btn-small" style="flex:1" id="btn-clear">Clear</button>
+      </div>
+    </aside>
+
+    <!-- CENTER VIEWPORT -->
+    <section class="viewport-wrap">
+      <div class="viewport" id="viewport">
+        <canvas id="scene" tabindex="0" aria-label="3D SDF terrain viewport. Drag to orbit. Scroll to dolly."></canvas>
+        <div class="viewport-overlay">
+          <div class="viewport-top">
+            <div class="view-pill">
+              <span style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></span>
+              <b>PERSPECTIVE</b> <span class="sep"></span> <span id="cam-info">Az 42° · El 28°</span>
+              <span class="sep"></span> <span id="view-info">Marching Cubes · SDF Volumetric</span>
+            </div>
+            <div class="view-actions">
+              <button class="glass-btn" id="btn-wire">Wire</button>
+              <button class="glass-btn" id="btn-particles-toggle" title="Toggle particles (P)">● Particles</button>
+              <button class="glass-btn" id="btn-water-toggle" title="Toggle water (W)">≈ Water</button>
+              <div class="view-toggle" style="margin-left:6px">
+                <button class="active" data-view="solid">Solid</button>
+                <button data-view="xray">X-Ray</button>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:end;justify-content:space-between;gap:12px">
+            <div class="simulation-bar" id="sim-bar">
+              <div class="sim-left">
+                <button class="btn btn-primary btn-small" id="btn-step">Step</button>
+                <div>
+                  <div style="font:10px var(--mono);color:var(--muted);letter-spacing:.6px">SIMULATION</div>
+                  <div style="font:12px var(--mono);font-weight:700;color:var(--text)" id="sim-iteration">Iteration 0</div>
+                </div>
+                <div class="progress-track"><div class="progress-fill" id="sim-progress"></div></div>
+                <div class="sim-stat"><b id="sim-particles">0</b> particles<br><span id="sim-carry">0 g sediment</span></div>
+              </div>
+              <div class="sim-right">
+                <label style="font:10px var(--mono);color:var(--muted)">SPEED <input id="sim-speed" type="range" min="0" max="3" step="1" value="1" style="width:70px;--p:33%"></label>
+                <span style="font:9px var(--mono);color:var(--muted)" id="sim-speed-label">1×</span>
+              </div>
+            </div>
+
+            <div style="pointer-events:auto;display:flex;flex-direction:column;gap:6px;align-items:end">
+              <div class="view-pill" style="flex-direction:column;align-items:start;gap:4px;padding:10px 12px">
+                <span style="font:9px var(--mono);letter-spacing:1px;color:var(--accent)">SEDIMENT & DEPOSITION</span>
+                <span style="font:10px var(--mono);color:var(--text-2)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#8B6A2E;margin-right:6px"></span>Carried <b id="legend-carried">—</b></span>
+                <span style="font:10px var(--mono);color:var(--text-2)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#D9C7A0;margin-right:6px"></span>Deposited fan <b id="legend-deposit">—</b></span>
+                <span style="font:10px var(--mono);color:var(--text-2)"><span style="display:inline-block;width:8px;height:2px;background:var(--accent);margin-right:6px;vertical-align:middle"></span>River current → follows valley</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="toast" id="toast"><span class="toast-dot"></span><span id="toast-msg">Mesh rebuilt</span></div>
+      </div>
+    </section>
+
+    <!-- RIGHT INSPECTOR -->
+    <aside class="panel panel-right" id="panel-right">
+      <div class="panel-heading"><span>Inspector</span><b>PROPERTIES</b></div>
+      <div class="inspector" id="inspector">
+        <!-- Dynamic content injected by JS -->
+        <div class="inspector-section" id="inspector-empty">
+          <div style="text-align:center;padding:28px 12px;color:var(--muted)">
+            <div style="width:42px;height:42px;border-radius:10px;background:var(--panel-2);border:1px solid var(--line-2);display:grid;place-items:center;margin:0 auto 12px;color:var(--accent)">◈</div>
+            <div style="font-size:12px;font-weight:600;color:var(--text-2)">Select a node</div>
+            <div style="font:10px var(--mono);margin-top:6px;line-height:1.5">Click any node in the graph to edit its parameters, or add a new one from the Library.</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- BOTTOM NODE GRAPH -->
+    <section class="node-graph-wrap">
+      <div class="graph-header">
+        <h3>Node Graph</h3>
+        <span class="hint">Drag nodes · Drag from output dot to input dot to connect · Erosion nodes execute in graph order (topo sort) so particles see true SDF</span>
+        <div class="graph-tools">
+          <span style="font:10px var(--mono);color:var(--muted)" id="graph-info">8 nodes · 7 wires</span>
+          <button class="btn btn-ghost btn-small" id="btn-graph-fit">Fit view</button>
+          <button class="btn btn-ghost btn-small" id="btn-graph-run">Erode subgraph</button>
+        </div>
+      </div>
+      <div class="graph-canvas" id="graph-canvas">
+        <svg id="node-wires"></svg>
+        <!-- Nodes injected here -->
+      </div>
+    </section>
+  </div>
+</div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
