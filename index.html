@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#07090e" />
+    <title>Strata — SDF Terrain Lab</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="app" class="app-shell">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <div class="brand-mark" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </div>
+          <div class="brand-copy">
+            <div class="brand-name">STRATA <span>/</span> LAB</div>
+            <div class="brand-subtitle">SDF TERRAIN SYSTEMS</div>
+          </div>
+        </div>
+
+        <nav class="workspace-tabs" aria-label="Workspace">
+          <button class="top-tab active" data-workspace="terrain">TERRAIN</button>
+          <button class="top-tab" data-workspace="simulation">SIMULATION</button>
+          <button class="top-tab" data-workspace="export">EXPORT</button>
+        </nav>
+
+        <div class="top-actions">
+          <div class="pipeline-status"><span class="status-dot"></span><span>GPU PIPELINE</span><b>WEBGL2</b></div>
+          <button class="icon-button help-button" id="helpButton" aria-label="Open help">?</button>
+          <button class="icon-button" id="settingsButton" aria-label="Open settings">⚙</button>
+          <button class="run-button" id="runButton"><span class="run-glyph">▶</span><span id="runLabel">RUN</span><kbd>SPACE</kbd></button>
+        </div>
+      </header>
+
+      <div class="workspace">
+        <aside class="left-panel panel-surface" aria-label="Scene outliner">
+          <div class="panel-heading">
+            <div><span class="eyebrow">PROJECT</span><strong>DESERT / CANYON 04</strong></div>
+            <button class="small-icon" aria-label="Panel menu">•••</button>
+          </div>
+          <div class="scene-actions">
+            <button class="action-button" id="newSceneButton"><span class="plus">＋</span> NEW PLOT</button>
+            <button class="action-button secondary" id="addNodeButton"><span class="plus">＋</span> ADD NODE</button>
+          </div>
+          <div class="outliner-switcher">
+            <button class="switcher active" data-left-view="outliner">OUTLINER</button>
+            <button class="switcher" data-left-view="stack">STACK</button>
+          </div>
+          <div class="left-view outliner-view">
+            <div class="tree-section-label"><span>SCENE</span><span class="tree-count">06</span></div>
+            <div class="tree-list">
+              <button class="tree-row selected" data-select="terrain">
+                <span class="disclosure open">⌄</span><span class="tree-icon terrain-icon">◇</span><span class="tree-name">Terrain SDF</span><span class="visibility visible">◉</span>
+              </button>
+              <div class="tree-children">
+                <button class="tree-row child" data-select="base">
+                  <span class="tree-icon shape-icon">▱</span><span class="tree-name">Base formation</span><span class="visibility visible">◉</span>
+                </button>
+                <button class="tree-row child" data-select="cave">
+                  <span class="tree-icon cave-icon">◌</span><span class="tree-name">Cave / overhang cut</span><span class="visibility visible">◉</span>
+                </button>
+                <button class="tree-row child" data-select="strata">
+                  <span class="tree-icon strata-icon">≋</span><span class="tree-name">Strata detail</span><span class="visibility visible">◉</span>
+                </button>
+              </div>
+              <button class="tree-row" data-select="water">
+                <span class="disclosure">›</span><span class="tree-icon water-icon">≈</span><span class="tree-name">Water surface</span><span class="visibility visible">◉</span>
+              </button>
+              <button class="tree-row" data-select="erosion">
+                <span class="disclosure">›</span><span class="tree-icon erosion-icon">✣</span><span class="tree-name">Erosion system</span><span class="visibility visible">◉</span>
+              </button>
+              <button class="tree-row" data-select="wind">
+                <span class="disclosure">›</span><span class="tree-icon wind-icon">≋</span><span class="tree-name">Wind field</span><span class="visibility visible">◉</span>
+              </button>
+              <button class="tree-row" data-select="camera">
+                <span class="disclosure">›</span><span class="tree-icon camera-icon">⌾</span><span class="tree-name">Cinematic camera</span><span class="visibility visible">◉</span>
+              </button>
+            </div>
+
+            <div class="tree-section-label second"><span>SIMULATION CACHE</span><button class="refresh-cache" id="resetSimulation" title="Reset simulation">↻</button></div>
+            <div class="cache-card">
+              <div class="cache-head"><span class="cache-icon">◈</span><div><strong>Live erosion state</strong><small>Unsaved local cache</small></div><span class="cache-live">LIVE</span></div>
+              <div class="cache-progress"><span id="cacheProgress"></span></div>
+              <div class="cache-meta"><span id="cacheStep">step 00482</span><span id="cacheSize">18.4 MB</span></div>
+            </div>
+          </div>
+
+          <div class="left-view stack-view hidden">
+            <div class="tree-section-label"><span>MODIFIER STACK</span><span class="tree-count">07</span></div>
+            <div class="stack-list">
+              <button class="stack-item" data-select="base"><span class="stack-index">01</span><span><b>Primitive Union</b><small>Rounded boxes · 4 inputs</small></span><i>●</i></button>
+              <button class="stack-item" data-select="cave"><span class="stack-index">02</span><span><b>Boolean / Cave Cut</b><small>Subtract · live</small></span><i>●</i></button>
+              <button class="stack-item" data-select="strata"><span class="stack-index">03</span><span><b>Fractal Strata</b><small>3D domain warp</small></span><i>●</i></button>
+              <button class="stack-item" data-select="erosion"><span class="stack-index">04</span><span><b>Hydraulic Erosion</b><small>1,024 agents</small></span><i class="amber">●</i></button>
+              <button class="stack-item" data-select="water"><span class="stack-index">05</span><span><b>Water Shader</b><small>Flow-aligned surface</small></span><i class="cyan">●</i></button>
+              <button class="stack-item" data-select="wind"><span class="stack-index">06</span><span><b>Wind Abrasion</b><small>Directional field</small></span><i class="violet">●</i></button>
+              <button class="stack-item" data-select="deposit"><span class="stack-index">07</span><span><b>Sediment Deposit</b><small>Mass conserving</small></span><i class="amber">●</i></button>
+            </div>
+            <div class="stack-footnote"><span class="status-dot"></span> Non-destructive graph · changes preview live</div>
+          </div>
+
+          <div class="left-footer"><span>STRATA 0.1.0</span><span>METERS</span><span>⌘K COMMANDS</span></div>
+        </aside>
+
+        <main class="viewport-shell" aria-label="SDF terrain viewport">
+          <canvas id="viewport" aria-label="Realtime signed distance field terrain preview"></canvas>
+          <div class="viewport-vignette"></div>
+          <div class="viewport-toolbar">
+            <div class="toolbar-group"><button class="toolbar-button active" id="viewPerspective">PERSPECTIVE <span>⌄</span></button><span class="toolbar-separator"></span><button class="toolbar-button" id="viewModeButton">LIT + SDF <span>⌄</span></button></div>
+            <div class="toolbar-group right"><span class="view-readout"><i class="axis x"></i>X <b>38.0</b></span><span class="view-readout"><i class="axis y"></i>Y <b>26.0</b></span><span class="view-readout"><i class="axis z"></i>Z <b>34.0</b></span><button class="toolbar-button icon-only" id="frameButton">⌗</button></div>
+          </div>
+          <div class="viewport-title"><div class="eyebrow">LIVE VOLUME PREVIEW <span class="teal-dot"></span></div><h1>Desert canyon <em>/</em> 04</h1><p>3D SDF · caves + overhangs · artist-guided river</p></div>
+          <div class="viewport-corner top-right"><span class="coord-badge">0.00, 0.00, 0.00</span><div class="orientation-widget"><span class="orientation-ring"></span><span class="orientation-label y">Y</span><span class="orientation-label x">X</span><span class="orientation-label z">Z</span></div></div>
+          <div class="viewport-bottom-readout"><div><span class="legend-swatch rock"></span> ROCK <b>−1.00</b></div><div><span class="legend-swatch water"></span> WATER <b>0.35</b></div><div><span class="legend-swatch sed"></span> SEDIMENT <b id="sedimentReadout">0.18</b></div></div>
+          <div class="particle-legend"><span><i class="legend-dot rain"></i>RAIN</span><span><i class="legend-dot river"></i>RIVER</span><span><i class="legend-dot wind"></i>WIND</span><span><i class="legend-dot rockfall"></i>ROCKFALL</span></div>
+          <div class="viewport-tip"><kbd>LMB</kbd> orbit <kbd>MMB</kbd> pan <kbd>WHEEL</kbd> zoom</div>
+          <div class="webgl-fallback hidden" id="webglFallback"><strong>WebGL2 unavailable</strong><span>Preview renderer could not initialise. The node graph and simulation controls remain available.</span></div>
+
+          <section class="node-dock" id="nodeDock" aria-label="Terrain node graph">
+            <div class="node-dock-header">
+              <div class="node-dock-title"><span class="node-dock-icon">⌘</span><div><span class="eyebrow">NODE GRAPH</span><strong>erosion_pipeline.sdf</strong></div><span class="graph-status"><i></i> LIVE EVALUATION</span></div>
+              <div class="node-dock-actions"><span class="graph-meta">07 NODES <span>/</span> 03 BRANCHES</span><button class="dock-button" id="focusGraph">FOCUS</button><button class="dock-button" id="collapseGraph">—</button></div>
+            </div>
+            <div class="node-graph" id="nodeGraph">
+              <svg class="graph-connections" id="graphConnections" aria-hidden="true"></svg>
+              <div class="graph-grid"></div>
+              <article class="graph-node input-node" data-node="primitive" style="left:24px;top:27px">
+                <div class="node-topline"><span class="node-type-icon cube">◇</span><span>PRIMITIVE</span><button class="node-menu">•••</button></div><h3>Rounded formation</h3><p>BOX + noise</p><div class="node-port-row"><span class="port-row-label">SDF OUT</span><i class="port output" data-port="primitive-out"></i></div>
+              </article>
+              <article class="graph-node" data-node="csg" style="left:205px;top:27px">
+                <div class="node-topline"><span class="node-type-icon violet">∪</span><span>CSG / UNION</span><button class="node-menu">•••</button></div><h3>Terrain volume</h3><p>bounded 128³ field</p><div class="node-port-row"><i class="port input" data-port="csg-in"></i><span class="port-row-label">A</span><span class="port-row-label right-label">SDF OUT</span><i class="port output" data-port="csg-out"></i></div>
+              </article>
+              <article class="graph-node selected-node" data-node="cave" style="left:386px;top:27px">
+                <div class="node-topline"><span class="node-type-icon amber">◌</span><span>BOOLEAN / SUBTRACT</span><button class="node-menu">•••</button></div><h3>Cave + overhang</h3><p>ellipsoid cutter · live</p><div class="node-port-row"><i class="port input" data-port="cave-in"></i><span class="port-row-label">SDF IN</span><span class="port-row-label right-label">CUT OUT</span><i class="port output" data-port="cave-out"></i></div>
+              </article>
+              <article class="graph-node erosion-node" data-node="erosion" style="left:592px;top:27px">
+                <div class="node-topline"><span class="node-type-icon amber">✣</span><span>PARTICLE SOLVER</span><button class="node-menu">•••</button></div><h3>Hydraulic erosion</h3><p><b id="graphAgentCount">1,024</b> agents · GPU</p><div class="node-port-row"><i class="port input" data-port="erosion-in"></i><span class="port-row-label">FIELD IN</span><span class="port-row-label right-label">FIELD OUT</span><i class="port output" data-port="erosion-out"></i></div>
+              </article>
+              <article class="graph-node water-node" data-node="water" style="left:808px;top:27px">
+                <div class="node-topline"><span class="node-type-icon cyan">≈</span><span>SHADER</span><button class="node-menu">•••</button></div><h3>River surface</h3><p>flow-aligned / foam</p><div class="node-port-row"><i class="port input" data-port="water-in"></i><span class="port-row-label">FIELD IN</span><span class="port-row-label right-label">OUTPUT</span><i class="port output" data-port="water-out"></i></div>
+              </article>
+              <article class="graph-node small-graph-node" data-node="wind" style="left:604px;top:130px">
+                <div class="node-topline"><span class="node-type-icon violet">≋</span><span>FIELD</span></div><h3>Wind abrasion</h3><p>directional / 5.5 m/s</p><div class="node-port-row"><span class="port-row-label right-label">TO SOLVER</span><i class="port output" data-port="wind-out"></i></div>
+              </article>
+              <article class="graph-node small-graph-node" data-node="deposit" style="left:812px;top:130px">
+                <div class="node-topline"><span class="node-type-icon amber">◒</span><span>MATERIAL</span></div><h3>Sediment ledger</h3><p>deposit + settle</p><div class="node-port-row"><i class="port input" data-port="deposit-in"></i><span class="port-row-label">CARGO IN</span></div>
+              </article>
+            </div>
+          </section>
+        </main>
+
+        <aside class="right-panel panel-surface" aria-label="Inspector">
+          <div class="panel-heading inspector-heading"><div><span class="eyebrow">INSPECTOR</span><strong id="inspectorTitle">HYDRAULIC EROSION</strong></div><button class="small-icon" id="closeInspector" aria-label="Collapse inspector">×</button></div>
+          <div class="inspector-tabs"><button class="inspector-tab active" data-inspector="erosion">EROSION</button><button class="inspector-tab" data-inspector="terrain">TERRAIN</button><button class="inspector-tab" data-inspector="water">WATER</button></div>
+
+          <div class="inspector-view erosion-inspector">
+            <div class="inspector-node-summary"><div class="large-node-icon amber-bg">✣</div><div><span class="eyebrow">SELECTED NODE · 04</span><h2 id="selectedNodeName">Hydraulic erosion</h2><p>Independent particles · SDF contact</p></div><span class="live-pill"><i></i>LIVE</span></div>
+            <div class="inspector-section"><div class="section-title"><span>EMITTER PROFILE</span><button class="info-dot">i</button></div>
+              <div class="emitter-grid">
+                <button class="emitter-button active" data-emitter="rain"><span class="emitter-glyph">⌁</span><b>Rain</b><small>surface contact</small></button>
+                <button class="emitter-button" data-emitter="river"><span class="emitter-glyph">≈</span><b>River</b><small>guided current</small></button>
+                <button class="emitter-button" data-emitter="wind"><span class="emitter-glyph">≋</span><b>Wind</b><small>dry abrasion</small></button>
+                <button class="emitter-button" data-emitter="rockfall"><span class="emitter-glyph">◆</span><b>Rockfall</b><small>impact energy</small></button>
+              </div>
+            </div>
+            <div class="inspector-section parameter-section"><div class="section-title"><span>SOLVER PARAMETERS</span><span class="unit-note">METRIC</span></div>
+              <label class="range-row"><span>Intensity</span><output id="intensityValue">68%</output><input id="intensityRange" type="range" min="0" max="100" value="68" /></label>
+              <label class="range-row"><span>Particle radius</span><output id="radiusValue">3.0 mm</output><input id="radiusRange" type="range" min="1" max="12" step="0.5" value="3" /></label>
+              <label class="range-row"><span>Transport capacity</span><output id="capacityValue">0.62</output><input id="capacityRange" type="range" min="0" max="1" step="0.01" value="0.62" /></label>
+              <label class="range-row"><span>Deposition / settle</span><output id="depositionValue">0.34</output><input id="depositionRange" type="range" min="0" max="1" step="0.01" value="0.34" /></label>
+            </div>
+            <div class="inspector-section two-column-controls"><div class="mini-control"><span>AGENTS</span><strong id="agentCountValue">1,024</strong><small>active slots</small></div><div class="mini-control"><span>VOXEL FIELD</span><strong>128³</strong><small>XYZ / 16-bit</small></div></div>
+            <div class="inspector-section flow-card"><div class="flow-card-head"><div><span class="section-title plain">RIVER TRANSPORT</span><p>Current follows the carved channel</p></div><button class="toggle on" id="riverToggle"><span></span></button></div><div class="flow-meter"><span class="flow-meter-label">CURRENT</span><span class="flow-line"><i></i><i></i><i></i><i></i><i></i></span><b id="riverSpeedReadout">3.2 m/s</b></div><label class="range-row compact"><span>Speed</span><output id="speedValue">3.2 m/s</output><input id="speedRange" type="range" min="0" max="8" step="0.1" value="3.2" /></label></div>
+            <div class="inspector-section diagnostics-card"><div class="diagnostics-head"><span class="section-title plain">LIVE DIAGNOSTICS</span><span class="perf-good"><i></i>GOOD</span></div><div class="diagnostic-grid"><div><span>FRAME</span><b id="frameReadout">16.6 ms</b></div><div><span>STEPS</span><b id="stepsReadout">00482</b></div><div><span>REMOVED</span><b id="removedReadout">18.42 m³</b></div><div><span>DEPOSITED</span><b id="depositedReadout">7.08 m³</b></div></div><button class="audit-button" id="auditButton">RUN MASS AUDIT <span>→</span></button></div>
+          </div>
+
+          <div class="inspector-view terrain-inspector hidden">
+            <div class="inspector-node-summary"><div class="large-node-icon violet-bg">◇</div><div><span class="eyebrow">SELECTED NODE · 01</span><h2>Terrain SDF</h2><p>Signed distance volume / bounded</p></div><span class="live-pill"><i></i>LIVE</span></div>
+            <div class="inspector-section"><div class="section-title"><span>FORMATION</span><span class="unit-note">SDF / XYZ</span></div><div class="select-row"><span>Preset</span><button class="select-control">Desert canyon <span>⌄</span></button></div><div class="select-row"><span>Material</span><button class="select-control">Stratified sandstone <span>⌄</span></button></div><label class="range-row"><span>Relief</span><output id="reliefValue">12.0 m</output><input id="reliefRange" type="range" min="4" max="20" value="12" /></label><label class="range-row"><span>3D roughness</span><output id="roughnessValue">0.48</output><input id="roughnessRange" type="range" min="0" max="1" step="0.01" value="0.48" /></label></div>
+            <div class="inspector-section"><div class="section-title"><span>VOLUME BOUNDS</span><button class="info-dot">i</button></div><div class="bounds-grid"><div><span>WIDTH</span><b>38.0 m</b></div><div><span>HEIGHT</span><b>26.0 m</b></div><div><span>DEPTH</span><b>34.0 m</b></div><div><span>RESOLUTION</span><b>128³</b></div></div></div>
+            <div class="inspector-section cave-callout"><span class="large-node-icon amber-bg">◌</span><div><b>True 3D topology</b><p>Undercuts, caves, and overhangs stay addressable because this graph evaluates an XYZ SDF—not a heightmap.</p></div></div>
+          </div>
+
+          <div class="inspector-view water-inspector hidden">
+            <div class="inspector-node-summary"><div class="large-node-icon cyan-bg">≈</div><div><span class="eyebrow">SELECTED NODE · 05</span><h2>River surface</h2><p>Procedural flow-aligned shader</p></div><span class="live-pill"><i></i>LIVE</span></div>
+            <div class="inspector-section"><div class="section-title"><span>SURFACE MATERIAL</span><span class="unit-note">SHADER</span></div><label class="range-row"><span>Water level</span><output id="levelValue">−0.35 m</output><input id="levelRange" type="range" min="-1" max="1" step="0.05" value="-0.35" /></label><label class="range-row"><span>Wave amplitude</span><output id="waveValue">0.12 m</output><input id="waveRange" type="range" min="0" max="0.4" step="0.01" value="0.12" /></label><label class="range-row"><span>Foam reach</span><output id="foamValue">0.42</output><input id="foamRange" type="range" min="0" max="1" step="0.01" value="0.42" /></label></div>
+            <div class="inspector-section water-options"><div class="flow-card-head"><div><span class="section-title plain">SURFACE VISIBILITY</span><p>Transport remains independent</p></div><button class="toggle on" id="waterToggle"><span></span></button></div><div class="option-row"><span>Refraction</span><b>ACTIVE</b></div><div class="option-row"><span>Current vector</span><b class="cyan-text">+Z / 3.2 m/s</b></div><div class="option-row"><span>Sediment tint</span><b class="amber-text">0.18</b></div></div>
+            <div class="inspector-section material-preview"><div class="material-swatch"><span></span><i></i><b></b></div><div><span class="section-title plain">RIVERBED MATERIAL</span><p>Wet sandstone · fine sediment</p></div></div>
+          </div>
+
+          <div class="right-footer"><button id="openResearch">⌁ REQUIREMENTS</button><span>HELP <kbd>?</kbd></span></div>
+        </aside>
+      </div>
+
+      <div class="toast" id="toast"><span class="toast-icon">✓</span><span id="toastMessage">Simulation state updated</span></div>
+
+      <div class="modal-backdrop hidden" id="helpModal">
+        <section class="modal-window help-modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+          <button class="modal-close" data-close-modal>×</button>
+          <div class="modal-eyebrow">STRATA / QUICK REFERENCE</div><h2 id="helpTitle">SDF terrain lab</h2><p class="modal-lead">A volumetric authoring workflow for caves, overhangs, river carving, and material transport. The preview is intentionally bounded so artists can iterate while watching the field change.</p>
+          <div class="help-grid"><div><span class="help-key">SPACE</span><b>Run / pause solver</b><p>Particles retain velocity, cargo, and settled state when the emitter changes.</p></div><div><span class="help-key">LMB + DRAG</span><b>Orbit viewport</b><p>Middle drag pans. The wheel changes distance. Try framing the cave mouth.</p></div><div><span class="help-key">G / R / S</span><b>Transform selected node</b><p>Node graph edits stay live until a bake/export operation is chosen.</p></div><div><span class="help-key">A</span><b>Audit sediment</b><p>Checks removed, carried, and deposited mass in the local preview ledger.</p></div></div>
+          <div class="modal-divider"></div><div class="modal-footer-line"><span><i class="status-dot"></i> WebGL2 particle preview</span><button class="modal-secondary" data-close-modal>DISMISS</button></div>
+        </section>
+      </div>
+
+      <div class="modal-backdrop hidden" id="researchModal">
+        <section class="modal-window research-modal" role="dialog" aria-modal="true" aria-labelledby="researchTitle">
+          <button class="modal-close" data-close-modal>×</button><div class="modal-eyebrow">DESIGN NOTE / 2026.09</div><h2 id="researchTitle">AAA terrain requirements</h2><p class="modal-lead">The graph is built around the constraints that make an SDF erosion tool useful beyond a heightmap demo.</p>
+          <div class="research-list"><div><span class="research-num">01</span><div><b>Keep topology volumetric</b><p>Store signed distance, wetness, deposited volume, and solid fraction in a bounded 3D field. Caves and undercuts must not collapse into a single top surface.</p></div></div><div><span class="research-num">02</span><div><b>Separate alteration from transport</b><p>Particles detach material on contact, carry a typed cargo load, then deposit or settle when capacity and velocity drop. A settled particle cannot erode forever.</p></div></div><div><span class="research-num">03</span><div><b>Make water a guided material system</b><p>River agents and the surface shader share a flow path and current vector, while surface visibility stays independent from transport.</p></div></div><div><span class="research-num">04</span><div><b>Design for GPU scale</b><p>Ping-pong field passes, no per-step readback, stable particle metadata, deterministic seeds, and an audit path are the production direction for larger tiles.</p></div></div></div>
+          <div class="citation-line">Based on flexible particle/SDF erosion research and the supplied Frontier reference. Full notes: <code>docs/terrain-requirements.md</code></div><div class="modal-footer-line"><span><i class="status-dot"></i> Research notes attached to this prototype</span><button class="modal-secondary" data-close-modal>DONE</button></div>
+        </section>
+      </div>
+    </div>
+    <script src="app.js"></script>
+  </body>
+</html>
