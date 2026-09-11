@@ -144,9 +144,21 @@ const stubDevice = {
 // ---------------------------------------------------------------- drive the real engine
 const { TerrainEngine } = await import('../src/kernel/terrainEngine.js');
 const { defaultSettings, QUALITY_PRESETS, WORLD_EXTENT } = await import('../src/kernel/uniforms.js');
+const { compileGraph } = await import('../src/kernel/graph/compiler.js');
+const { presetDocument } = await import('../src/kernel/graph/doc.js');
 
 const settings = defaultSettings();
 settings.quality = 'draft';
+
+// Compile a real preset, exactly as boot does: an empty graph would not exercise the spliced
+// graph functions or the parameter block.
+const compiled = compileGraph(presetDocument('canyon'));
+check(compiled.errors.length === 0, `canyon preset does not compile: ${compiled.errors.join('; ')}`);
+const params = {};
+for (const node of presetDocument('canyon').nodes)
+{
+    params[node.id] = node.params;
+}
 
 const engine = new TerrainEngine(stubDevice, 'bgra8unorm', (message) => problems.push(`engine reported: ${message}`));
 engine.configure({ quality: settings.quality, world: settings.world ?? WORLD_EXTENT });
@@ -155,7 +167,8 @@ engine.setTargetSize(320, 180);
 // The exact call the studio makes at boot. Without it the pipelines are null, the first step of
 // the first frame throws, and the browser shows a black viewport with frozen counters. The check
 // below reports that as a failure instead of letting the throw escape.
-engine.buildPipelines('', 'none');
+engine.buildPipelines(compiled.wgsl, compiled.signature);
+engine.writeGraphParams(compiled, params);
 check(!!engine.pipelines, 'buildPipelines left engine.pipelines null');
 check(!!engine.renderPipelines, 'buildPipelines left engine.renderPipelines null');
 const camera =
