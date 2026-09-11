@@ -28,3 +28,5 @@ Projects/*/Content/Scenes/ShaderBall.gltf
 Tools/SDFTerrain/node_modules/
 Tools/SDFTerrain/tools/verify/*.png
 Tools/SDFTerrain/tools/verify/profile.txt
+Tools/SDFTerrain/tools/verify/__pycache__/
+Tools/SDFTerrain/**/__pycache__/

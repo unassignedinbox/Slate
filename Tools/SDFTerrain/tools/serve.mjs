@@ -2,6 +2,10 @@
 // Static host — serves the studio plus the WGSL sources it imports. WebGPU requires a secure
 // context, so localhost counts; opening index.html from the file system does not.
 //
+// No cross-origin isolation headers are sent. WebGPU does not need them (only a secure context
+// does), and COEP: require-corp narrows which pages may embed the studio in a frame, which is
+// exactly how it gets shared.
+//
 //   node tools/serve.mjs [port]
 //==========================================================================================
 
@@ -51,8 +55,6 @@ const server = createServer(async (request, response) => {
         response.writeHead(200, {
             'content-type': TYPES[path.extname(file).toLowerCase()] ?? 'application/octet-stream',
             'cache-control': 'no-store',
-            'cross-origin-opener-policy': 'same-origin',
-            'cross-origin-embedder-policy': 'require-corp',
         });
         response.end(body);
     }
