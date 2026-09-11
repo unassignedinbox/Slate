@@ -1,0 +1,344 @@
+{
+ "app": "slate-sdf-terrain-lab",
+ "v": 1,
+ "nodes": [
+  {
+   "id": "n1_fp1o",
+   "type": "output",
+   "x": 1180,
+   "y": 300,
+   "params": {
+    "resolution": "standard",
+    "seed": 1337,
+    "autoRebake": true
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n2_9m60",
+   "type": "fbmDisplace",
+   "x": 940,
+   "y": 300,
+   "params": {
+    "amount": 1.8,
+    "feature": 16,
+    "octaves": 4,
+    "range": 12,
+    "seed": 3
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n3_dt7m",
+   "type": "subtract",
+   "x": 720,
+   "y": 300,
+   "params": {},
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n4_i9m",
+   "type": "canyon",
+   "x": 720,
+   "y": 520,
+   "params": {
+    "centerX": 0,
+    "bedY": 4,
+    "width": 15,
+    "depth": 30,
+    "meander": 9,
+    "bends": 1,
+    "flare": 1.6,
+    "phase": 0
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n5_9bvy",
+   "type": "union",
+   "x": 500,
+   "y": 300,
+   "params": {},
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n6_cket",
+   "type": "union",
+   "x": 280,
+   "y": 300,
+   "params": {},
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n7_k3iu",
+   "type": "ground",
+   "x": 60,
+   "y": 180,
+   "params": {
+    "level": 10,
+    "bottom": -6
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n8_lfgn",
+   "type": "mesa",
+   "x": 60,
+   "y": 420,
+   "params": {
+    "center": [
+     52,
+     18,
+     -30
+    ],
+    "radiusTop": 12,
+    "radiusBottom": 26,
+    "halfHeight": 15,
+    "mat": 0
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n9_gvdq",
+   "type": "mesa",
+   "x": 280,
+   "y": 520,
+   "params": {
+    "center": [
+     -56,
+     15,
+     42
+    ],
+    "radiusTop": 9,
+    "radiusBottom": 20,
+    "halfHeight": 12,
+    "mat": 0
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n18_grbj",
+   "type": "river",
+   "x": 940,
+   "y": 560,
+   "params": {
+    "enabled": true,
+    "rate": 700,
+    "discharge": 6,
+    "brush": 1.4,
+    "capacity": 1.4,
+    "width": 7,
+    "speed": 5,
+    "showWater": true,
+    "points": [
+     {
+      "x": -7.3,
+      "z": -88
+     },
+     {
+      "x": 18,
+      "z": -74
+     },
+     {
+      "x": -18.1,
+      "z": -60
+     },
+     {
+      "x": -14.3,
+      "z": -46
+     },
+     {
+      "x": 30.4,
+      "z": -32
+     },
+     {
+      "x": -3.1,
+      "z": -18
+     },
+     {
+      "x": -16.5,
+      "z": -4
+     },
+     {
+      "x": 13.5,
+      "z": 10
+     },
+     {
+      "x": -11.9,
+      "z": 24
+     },
+     {
+      "x": -4.7,
+      "z": 38
+     },
+     {
+      "x": 29.3,
+      "z": 52
+     },
+     {
+      "x": -13.6,
+      "z": 66
+     },
+     {
+      "x": -21.1,
+      "z": 80
+     }
+    ]
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n19_k63u",
+   "type": "rain",
+   "x": 1180,
+   "y": 560,
+   "params": {
+    "enabled": true,
+    "rate": 900,
+    "dropSize": 3,
+    "brush": 1.1,
+    "capacity": 1,
+    "erode": 1,
+    "deposit": 1,
+    "evap": 0.35,
+    "center": [
+     0,
+     40,
+     0
+    ],
+    "size": [
+     150,
+     20,
+     150
+    ]
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n20_ibfq",
+   "type": "thermal",
+   "x": 1180,
+   "y": 100,
+   "params": {
+    "enabled": true,
+    "talus": 34,
+    "rate": 1,
+    "every": 4,
+    "samples": 1500
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n21_3nr4",
+   "type": "lake",
+   "x": 720,
+   "y": 100,
+   "params": {
+    "enabled": true,
+    "level": 5.5,
+    "cx": 25,
+    "cz": 82,
+    "rx": 30,
+    "rz": 20,
+    "flow": 0.35,
+    "showWater": true
+   },
+   "disabled": false,
+   "folded": false
+  }
+ ],
+ "links": [
+  {
+   "from": {
+    "node": "n7_k3iu",
+    "port": "f"
+   },
+   "to": {
+    "node": "n6_cket",
+    "port": "a"
+   }
+  },
+  {
+   "from": {
+    "node": "n8_lfgn",
+    "port": "f"
+   },
+   "to": {
+    "node": "n6_cket",
+    "port": "b"
+   }
+  },
+  {
+   "from": {
+    "node": "n6_cket",
+    "port": "f"
+   },
+   "to": {
+    "node": "n5_9bvy",
+    "port": "a"
+   }
+  },
+  {
+   "from": {
+    "node": "n9_gvdq",
+    "port": "f"
+   },
+   "to": {
+    "node": "n5_9bvy",
+    "port": "b"
+   }
+  },
+  {
+   "from": {
+    "node": "n5_9bvy",
+    "port": "f"
+   },
+   "to": {
+    "node": "n3_dt7m",
+    "port": "a"
+   }
+  },
+  {
+   "from": {
+    "node": "n4_i9m",
+    "port": "f"
+   },
+   "to": {
+    "node": "n3_dt7m",
+    "port": "b"
+   }
+  },
+  {
+   "from": {
+    "node": "n3_dt7m",
+    "port": "f"
+   },
+   "to": {
+    "node": "n2_9m60",
+    "port": "in"
+   }
+  },
+  {
+   "from": {
+    "node": "n2_9m60",
+    "port": "f"
+   },
+   "to": {
+    "node": "n1_fp1o",
+    "port": "field"
+   }
+  }
+ ]
+}

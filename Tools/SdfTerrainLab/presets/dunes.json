@@ -1,0 +1,194 @@
+{
+ "app": "slate-sdf-terrain-lab",
+ "v": 1,
+ "nodes": [
+  {
+   "id": "n43_c6bf",
+   "type": "output",
+   "x": 900,
+   "y": 260,
+   "params": {
+    "resolution": "standard",
+    "seed": 1337,
+    "autoRebake": true
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n44_fkgs",
+   "type": "warp",
+   "x": 680,
+   "y": 260,
+   "params": {
+    "amount": 4,
+    "feature": 60
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n45_e1l9",
+   "type": "dunes",
+   "x": 460,
+   "y": 260,
+   "params": {
+    "base": 7,
+    "height": 6,
+    "wavelength": 26,
+    "sharpness": 1.6,
+    "windDir": 35,
+    "bottom": -6,
+    "seed": 5
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n46_2kf5",
+   "type": "ground",
+   "x": 240,
+   "y": 260,
+   "params": {
+    "level": 4,
+    "bottom": -6
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n47_58kn",
+   "type": "smoothUnion",
+   "x": 460,
+   "y": 60,
+   "params": {
+    "smooth": 4
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n52_796x",
+   "type": "wind",
+   "x": 900,
+   "y": 60,
+   "params": {
+      "enabled": true,
+      "rate": 800,
+      "dir": 35,
+    "speed": 11,
+    "height": 14,
+    "band": 9,
+    "gust": 0.35,
+    "brush": 1,
+    "abrade": 0.9,
+    "capacity": 1.1
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n53_ezw",
+   "type": "rain",
+   "x": 680,
+   "y": 480,
+   "params": {
+    "enabled": true,
+    "rate": 120,
+    "dropSize": 2.5,
+    "brush": 1,
+    "capacity": 0.9,
+    "erode": 0.8,
+    "deposit": 1.2,
+    "evap": 0.8,
+    "center": [
+     0,
+     40,
+     0
+    ],
+    "size": [
+     170,
+     20,
+     170
+    ]
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n54_gtrh",
+   "type": "thermal",
+   "x": 900,
+   "y": 480,
+   "params": {
+    "enabled": true,
+    "talus": 32,
+    "rate": 1.2,
+    "every": 3,
+    "samples": 2000
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n55_53hz",
+   "type": "lake",
+   "x": 240,
+   "y": 480,
+   "params": {
+    "enabled": true,
+    "level": 5.6,
+    "cx": 30,
+    "cz": 40,
+    "rx": 15,
+    "rz": 10,
+    "flow": 0.15,
+    "showWater": true
+   },
+   "disabled": false,
+   "folded": false
+  }
+ ],
+ "links": [
+  {
+   "from": {
+    "node": "n46_2kf5",
+    "port": "f"
+   },
+   "to": {
+    "node": "n47_58kn",
+    "port": "a"
+   }
+  },
+  {
+   "from": {
+    "node": "n45_e1l9",
+    "port": "f"
+   },
+   "to": {
+    "node": "n47_58kn",
+    "port": "b"
+   }
+  },
+  {
+   "from": {
+    "node": "n47_58kn",
+    "port": "f"
+   },
+   "to": {
+    "node": "n44_fkgs",
+    "port": "in"
+   }
+  },
+  {
+   "from": {
+    "node": "n44_fkgs",
+    "port": "f"
+   },
+   "to": {
+    "node": "n43_c6bf",
+    "port": "field"
+   }
+  }
+ ]
+}

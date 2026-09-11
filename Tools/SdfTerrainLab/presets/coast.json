@@ -1,0 +1,303 @@
+{
+ "app": "slate-sdf-terrain-lab",
+ "v": 1,
+ "nodes": [
+  {
+   "id": "n22_dvsv",
+   "type": "output",
+   "x": 1180,
+   "y": 300,
+   "params": {
+    "resolution": "standard",
+    "seed": 1337,
+    "autoRebake": true
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n23_96cv",
+   "type": "subtract",
+   "x": 940,
+   "y": 300,
+   "params": {},
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n24_lf6h",
+   "type": "caves",
+   "x": 940,
+   "y": 540,
+   "params": {
+    "feature": 20,
+    "radius": 4,
+    "center": 0.05,
+    "warp": 6,
+    "yMin": 0,
+    "yMax": 12,
+    "worms": 3,
+    "seed": 21
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n25_ksmv",
+   "type": "fbmDisplace",
+   "x": 700,
+   "y": 300,
+   "params": {
+    "amount": 2.2,
+    "feature": 14,
+    "octaves": 4,
+    "range": 12,
+    "seed": 8
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n26_62tg",
+   "type": "union",
+   "x": 480,
+   "y": 300,
+   "params": {},
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n27_l789",
+   "type": "plateau",
+   "x": 240,
+   "y": 180,
+   "params": {
+    "center": [
+     -30,
+     0,
+     -15
+    ],
+    "radius": 75,
+    "baseLow": -4,
+    "baseHigh": 24,
+    "cliffWidth": 10,
+    "feature": 30,
+    "edgeNoise": 16,
+    "bottom": -6,
+    "seed": 9
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n28_5b5q",
+   "type": "cylinder",
+   "x": 240,
+   "y": 430,
+   "params": {
+    "center": [
+     42,
+     8,
+     38
+    ],
+    "radius": 7,
+    "halfHeight": 12,
+    "round": 1.5,
+    "mat": 0
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n29_hlsf",
+   "type": "torus",
+   "x": 480,
+   "y": 540,
+   "params": {
+    "center": [
+     -8,
+     7,
+     52
+    ],
+    "major": 9,
+    "minor": 2.6,
+    "mat": 0
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n32_7dwk",
+   "type": "union",
+   "x": 700,
+   "y": 120,
+   "params": {},
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n39_c9xk",
+   "type": "rain",
+   "x": 1180,
+   "y": 540,
+   "params": {
+    "enabled": true,
+    "rate": 700,
+    "dropSize": 3,
+    "brush": 1.1,
+    "capacity": 1,
+    "erode": 1,
+    "deposit": 1,
+    "evap": 0.3,
+    "center": [
+     -20,
+     40,
+     -10
+    ],
+    "size": [
+     170,
+     20,
+     170
+    ]
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n40_ahj6",
+   "type": "wind",
+   "x": 940,
+   "y": 100,
+   "params": {
+    "enabled": true,
+    "rate": 600,
+    "dir": 235,
+    "speed": 11,
+    "height": 16,
+    "band": 12,
+    "gust": 0.4,
+    "brush": 1,
+    "abrade": 0.8,
+    "capacity": 1
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n41_iaql",
+   "type": "rockfall",
+   "x": 1180,
+   "y": 100,
+   "params": {
+    "enabled": true,
+    "rate": 20,
+    "minSlope": 55,
+    "size": 260,
+    "restitution": 0.25,
+    "brush": 1.6
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n42_vbv",
+   "type": "lake",
+   "x": 700,
+   "y": 560,
+   "params": {
+    "enabled": true,
+    "level": 5.5,
+    "cx": 55,
+    "cz": 65,
+    "rx": 120,
+    "rz": 110,
+    "flow": 0.5,
+    "showWater": true
+   },
+   "disabled": false,
+   "folded": false
+  }
+ ],
+ "links": [
+  {
+   "from": {
+    "node": "n27_l789",
+    "port": "f"
+   },
+   "to": {
+    "node": "n26_62tg",
+    "port": "a"
+   }
+  },
+  {
+   "from": {
+    "node": "n28_5b5q",
+    "port": "f"
+   },
+   "to": {
+    "node": "n26_62tg",
+    "port": "b"
+   }
+  },
+  {
+   "from": {
+    "node": "n26_62tg",
+    "port": "f"
+   },
+   "to": {
+    "node": "n32_7dwk",
+    "port": "a"
+   }
+  },
+  {
+   "from": {
+    "node": "n29_hlsf",
+    "port": "f"
+   },
+   "to": {
+    "node": "n32_7dwk",
+    "port": "b"
+   }
+  },
+  {
+   "from": {
+    "node": "n32_7dwk",
+    "port": "f"
+   },
+   "to": {
+    "node": "n25_ksmv",
+    "port": "in"
+   }
+  },
+  {
+   "from": {
+    "node": "n25_ksmv",
+    "port": "f"
+   },
+   "to": {
+    "node": "n23_96cv",
+    "port": "a"
+   }
+  },
+  {
+   "from": {
+    "node": "n24_lf6h",
+    "port": "f"
+   },
+   "to": {
+    "node": "n23_96cv",
+    "port": "b"
+   }
+  },
+  {
+   "from": {
+    "node": "n23_96cv",
+    "port": "f"
+   },
+   "to": {
+    "node": "n22_dvsv",
+    "port": "field"
+   }
+  }
+ ]
+}

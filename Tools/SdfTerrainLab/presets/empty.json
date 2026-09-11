@@ -1,0 +1,43 @@
+{
+ "app": "slate-sdf-terrain-lab",
+ "v": 1,
+ "nodes": [
+  {
+   "id": "n56_3lsj",
+   "type": "output",
+   "x": 420,
+   "y": 60,
+   "params": {
+    "resolution": "standard",
+    "seed": 1337,
+    "autoRebake": true
+   },
+   "disabled": false,
+   "folded": false
+  },
+  {
+   "id": "n57_a0mr",
+   "type": "ground",
+   "x": 120,
+   "y": 120,
+   "params": {
+    "level": 8,
+    "bottom": -6
+   },
+   "disabled": false,
+   "folded": false
+  }
+ ],
+ "links": [
+  {
+   "from": {
+    "node": "n57_a0mr",
+    "port": "f"
+   },
+   "to": {
+    "node": "n56_3lsj",
+    "port": "field"
+   }
+  }
+ ]
+}

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SLATE · SDF Terrain Lab — node-based erosion studio</title>
+<link rel="stylesheet" href="./styles.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230e1116'/%3E%3Cpath d='M6 22 L12 10 L17 18 L21 12 L26 22 Z' fill='%23e8a33d'/%3E%3C/svg%3E">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+</head>
+<body>
+<div id="app">
+  <!-- ══ TOP BAR ══ -->
+  <header id="topbar">
+    <div class="tb-group tb-logo">
+      <svg width="22" height="22" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#161b22"/><path d="M6 22 L12 10 L17 18 L21 12 L26 22 Z" fill="#e8a33d"/></svg>
+      <div class="tb-title"><b>SLATE</b><span>SDF Terrain Lab</span></div>
+      <span class="tb-badge" id="engineBadge" title="Renderer backend">CPU SDF · WebGL view</span>
+    </div>
+    <div class="tb-group tb-file">
+      <button class="btn" id="btnNew" title="New graph (start from primitives)">New</button>
+      <button class="btn" id="btnOpen" title="Open graph .json">Open</button>
+      <button class="btn" id="btnSave" title="Save graph .json">Save</button>
+      <div class="tb-sep"></div>
+      <button class="btn ghost" id="btnPresetCanyon" title="Load preset: canyon + river + lake">Canyon</button>
+      <button class="btn ghost" id="btnPresetCoast" title="Load preset: coastal cliffs + caves">Coast</button>
+      <button class="btn ghost" id="btnPresetDunes" title="Load preset: dunes + wind">Dunes</button>
+    </div>
+    <div class="tb-group tb-transport" role="toolbar" aria-label="Simulation transport">
+      <button class="btn play" id="btnPlay" title="Play / pause erosion (Space)">▶ Run</button>
+      <button class="btn" id="btnStep" title="Advance one step (.)">Step</button>
+      <button class="btn warn" id="btnResetSim" title="Clear erosion &amp; particles, keep base field (R)">Reset sim</button>
+      <button class="btn accent" id="btnRebake" title="Re-evaluate node graph into SDF volume (B)">⟳ Rebake</button>
+      <label class="tb-speed" title="Simulation speed">×<select id="selSpeed"><option>0.25</option><option selected>1</option><option>2</option><option>4</option></select></label>
+    </div>
+    <div class="tb-group tb-view">
+      <button class="btn ghost on" id="btnDockBoth" title="Show viewport + graph">Split</button>
+      <button class="btn ghost" id="btnDockView" title="Viewport only">View</button>
+      <button class="btn ghost" id="btnDockGraph" title="Graph only">Graph</button>
+      <div class="tb-sep"></div>
+      <button class="btn ghost" id="btnDiag" title="Renderer / sim diagnostics">WebGL2 ✓</button>
+      <button class="btn ghost" id="btnHelp" title="Shortcuts &amp; about">?</button>
+    </div>
+  </header>
+
+  <!-- ══ MAIN ══ -->
+  <div id="main">
+    <aside id="outliner">
+      <div class="panel-head"><span>OUTLINER</span><button class="mini" id="btnAddNode2" title="Add node (Tab)">＋</button></div>
+      <div class="panel-body" id="outlinerBody"></div>
+      <div class="panel-head"><span>PRESETS</span></div>
+      <div id="presetStrip">
+        <button data-preset="canyon">Canyon rivers</button>
+        <button data-preset="coast">Sea cliffs + caves</button>
+        <button data-preset="dunes">Wind dunes</button>
+        <button data-preset="empty">Empty plot</button>
+      </div>
+    </aside>
+
+    <section id="center">
+      <div id="viewportWrap">
+        <div id="viewport"></div>
+        <div id="viewOverlayTL" class="vo">
+          <div class="vo-row" id="shadeModes">
+            <button data-shade="full" class="on" title="Full shading">Full</button><button data-shade="clay" title="Clay (shape check)">Clay</button><button data-shade="wire" title="Wireframe">Wire</button><button data-shade="flux" title="Water flux debug">Flux</button><button data-shade="wet" title="Wetness debug">Wet</button><button data-shade="sed" title="Sediment debug">Sed</button><button data-shade="mat" title="Material id debug">Mat</button>
+          </div>
+          <div class="vo-row">
+            <button id="btnIso" title="Isometric home (F)">Iso</button><button id="btnTop" title="Top view (7)">Top</button><button id="btnFront" title="Front view (1)">Front</button>
+            <span class="vo-sep"></span>
+            <button id="btnParticles" class="on" title="Show erosion particles (P)">Particles</button>
+            <button id="btnWaterVis" class="on" title="Show water">Water</button>
+            <button id="btnHelpers" class="on" title="Show emitter / spline helpers">Guides</button>
+          </div>
+        </div>
+        <div id="viewOverlayTR" class="vo">
+          <div id="fpsChip" title="Frames per second">60 fps</div>
+          <div id="simChip" title="Simulation state">paused</div>
+        </div>
+        <div id="pathBar" class="hidden">
+          <span id="pathLabel">River path: click terrain to append · drag points · <b>Enter</b> finish · <b>Esc</b> cancel</span>
+          <button class="btn mini" id="btnPathDone">Finish</button>
+        </div>
+        <div id="viewHint">LMB orbit · Shift+LMB pan · wheel dolly · R-drag look · Tab add node · Space run</div>
+      </div>
+      <div id="dockDivider" title="Drag to resize"></div>
+      <div id="graphWrap">
+        <div id="graphToolbar">
+          <span class="gt-title">NODE GRAPH</span>
+          <span class="gt-sub" id="graphStats">—</span>
+          <span class="gt-right">
+            <button class="btn mini" id="btnFitGraph" title="Fit graph to view (Home in graph)">Fit</button>
+            <button class="btn mini" id="btnAddNode" title="Add node at centre (Tab)">＋ Add</button>
+          </span>
+        </div>
+        <canvas id="graphCanvas"></canvas>
+        <div id="nodeMenu" class="hidden"></div>
+      </div>
+    </section>
+
+    <aside id="inspector">
+      <div class="panel-head tabs" id="inspTabs">
+        <button data-tab="node" class="on">Node</button><button data-tab="erosion">Erosion</button><button data-tab="water">Water</button><button data-tab="render">Render</button>
+      </div>
+      <div class="panel-body" id="inspBody"></div>
+    </aside>
+  </div>
+
+  <!-- ══ STATUS ══ -->
+  <footer id="statusbar">
+    <span id="stSim" title="Alive particles">◉ 0 particles</span>
+    <span class="st-sep"></span><span id="stMass" title="Eroded / deposited / suspended / exited (m³)">eroded 0 · deposited 0</span>
+    <span class="st-sep"></span><span id="stBal" title="Mass balance: (deposited+suspended+exited)/eroded">balance —</span>
+    <span class="st-sep"></span><span id="stVol">144×54×144</span>
+    <span class="st-sep"></span><span id="stMesh" title="Mesh rebuild time">mesh —</span>
+    <span class="st-right" id="stMsg">ready</span>
+  </footer>
+</div>
+
+<div id="diagPanel" class="hidden">
+  <div class="diag-head"><b>Diagnostics</b><button class="btn mini" id="btnDiagClose">Close</button></div>
+  <pre id="diagBody"></pre>
+  <div class="diag-foot"><button class="btn mini" id="btnDiagCopy">Copy diagnostics</button></div>
+</div>
+<div id="helpPanel" class="hidden">
+  <div class="diag-head"><b>SDF Terrain Lab — shortcuts</b><button class="btn mini" id="btnHelpClose">Close</button></div>
+  <div id="helpBody">
+    <div class="help-grid">
+      <div><b>Space</b> run / pause erosion</div><div><b>B</b> rebake graph → SDF</div>
+      <div><b>R</b> reset erosion (keep base)</div><div><b>.</b> single sim step</div>
+      <div><b>Tab</b> add-node menu</div><div><b>Del</b> delete selected node</div>
+      <div><b>F</b> frame terrain</div><div><b>P</b> toggle particles</div>
+      <div><b>1 / 7</b> front / top view</div><div><b>5</b> toggle ortho/persp</div>
+      <div><b>LMB</b> orbit</div><div><b>Shift+LMB / RMB</b> pan</div>
+      <div><b>Wheel</b> dolly</div><div><b>G</b> rebake + reset sim (clean)</div>
+    </div>
+    <p class="help-note">Field nodes (green) build the signed-distance volume — true 3D, so caves, arches and
+    overhangs are real geometry, not a heightmap. Sim nodes (blue) emit live particles that erode, transport and
+    deposit sediment with capacity limits and guaranteed settling. See <b>docs/research.md</b> for the method notes.</p>
+  </div>
+</div>
+<div id="bootError" class="hidden"></div>
+<input type="file" id="fileOpen" accept=".json,application/json" class="hidden">
+
+<script>
+window.addEventListener('error', function (e) {
+  if (!window.__labBooted) {
+    var el = document.getElementById('bootError');
+    el.classList.remove('hidden');
+    el.innerHTML = '<b>Failed to start.</b> ' +
+      'Serve this folder over HTTP (e.g. <code>python3 -m http.server</code> in <code>Tools/SdfTerrainLab</code>) ' +
+      'and open <code>http://localhost:8000</code> — ES modules are blocked on <code>file://</code>.<br>' +
+      '<span class="err-detail">' + String(e.message || e.error || 'module load error') + '</span>';
+  }
+}, true);
+setTimeout(function () {
+  if (!window.__labBooted) {
+    var el = document.getElementById('bootError');
+    el.classList.remove('hidden');
+    el.innerHTML = '<b>Still loading…</b> if this persists, serve over HTTP (see above) and use a WebGL2-capable browser.';
+  }
+}, 6000);
+</script>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>
