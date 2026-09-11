@@ -1,0 +1,12 @@
+{
+  "name": "strata-sdf-terrain-lab",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A node-based SDF terrain landscaping and erosion studio prototype.",
+  "scripts": {
+    "dev": "python3 -m http.server 5173 --bind 0.0.0.0",
+    "start": "python3 -m http.server 5173 --bind 0.0.0.0",
+    "build": "rm -rf dist && mkdir -p dist && cp index.html styles.css app.js dist/ && cp -r docs dist/docs",
+    "preview": "python3 -m http.server 4173 --bind 0.0.0.0"
+  }
+}
