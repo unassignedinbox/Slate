@@ -17,10 +17,24 @@ const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
 
-import * as naga from '@forgeax/engine-wgpu-wasm/pkg';
 import { readFile } from 'node:fs/promises';
 
-const pkgDir = path.dirname(require.resolve('@forgeax/engine-wgpu-wasm/package.json'));
+// The naga validator lives in a dev dependency, so a checkout without node_modules can still
+// run the graph, pipeline, interface and frame checks. Say so plainly instead of dying on an
+// unresolved import three lines up.
+let naga = null;
+try
+{
+    naga = await import('@forgeax/engine-wgpu-wasm/pkg');
+}
+catch (error)
+{
+    console.log('skipped: the naga validator needs the dev dependencies.');
+    console.log('run `npm install` in Tools/SDFTerrain to enable this check.');
+    void error;
+    process.exit(0);
+}
+const pkgDir = path.dirname(fileURLToPath(import.meta.resolve('@forgeax/engine-wgpu-wasm/package.json')));
 const wasmBytes = await readFile(path.join(pkgDir, 'pkg', 'wgpu_wasm_bg.wasm'));
 await naga.default({ module_or_path: new Uint8Array(wasmBytes.buffer, wasmBytes.byteOffset, wasmBytes.byteLength) });
 

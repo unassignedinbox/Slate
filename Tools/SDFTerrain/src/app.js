@@ -167,6 +167,18 @@ async function boot()
     chip.className = 'chip';
     document.getElementById('gpuLabel').textContent = state.adapter.vendor || 'WebGPU';
 
+    // Compile the graph and run the first bake before the loop starts. Without this the compute
+    // pipelines do not exist yet, the first step of the first frame has nothing to dispatch, and
+    // the viewport stays black with the counter readouts frozen at zero.
+    setOverlayBusy('Building the terrain', `compiling the graph, then baking ${engine.grid.nx}×${engine.grid.ny}×${engine.grid.nz} voxels`);
+    try
+    {
+        compileAndBake(1);
+    }
+    catch (error)
+    {
+        showFault(`The first bake failed: ${error && error.message ? error.message : error}`, error);
+    }
     hideDialog();
     cameraMoved = true;
     requestAnimationFrame(frame);
@@ -252,7 +264,51 @@ function collectParamValues()
 //------------------------------------------------------------------------------------------
 // Frame loop
 //------------------------------------------------------------------------------------------
+// A fault inside a frame is reported and then tolerated: the interface stays usable, the message
+// is on screen, and the loop keeps running so a transient device error can recover. The previous
+// version let the exception escape, which stopped the callback chain and left a black viewport
+// with a console nobody was looking at.
 function frame(now)
+{
+    try
+    {
+        renderFrame(now);
+    }
+    catch (error)
+    {
+        showFault(`Render loop faulted: ${error && error.message ? error.message : error}`, error);
+    }
+    requestAnimationFrame(frame);
+}
+
+let lastFault = null;
+
+function showFault(message, error)
+{
+    if (message !== lastFault)
+    {
+        lastFault = message;
+        report(message, 'error');
+        const host = document.getElementById('viewport');
+        if (host)
+        {
+            let banner = host.querySelector('.fault');
+            if (!banner)
+            {
+                banner = document.createElement('div');
+                banner.className = 'fault';
+                host.appendChild(banner);
+            }
+            banner.textContent = message;
+        }
+    }
+    if (error && error.stack)
+    {
+        console.error(error);
+    }
+}
+
+function renderFrame(now)
 {
     const start = performance.now();
     const delta = Math.min(0.1, (now - state.lastFrameTime) / 1000) || 0.016;
@@ -344,8 +400,6 @@ function frame(now)
     {
         updateHud(delta);
     }
-
-    requestAnimationFrame(frame);
 }
 
 function updateHud(delta)
@@ -428,6 +482,14 @@ function describeScene()
 //------------------------------------------------------------------------------------------
 function wireInterface()
 {
+    window.addEventListener('error', (event) => {
+        showFault(`Uncaught error: ${event.message}`, event.error);
+    });
+    window.addEventListener('unhandledrejection', (event) => {
+        const reason = event.reason && event.reason.message ? event.reason.message : String(event.reason);
+        showFault(`Unhandled rejection: ${reason}`, event.reason);
+    });
+
     document.getElementById('modeTabs').addEventListener('click', (event) => {
         const button = event.target.closest('.tab');
         if (!button)
