@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slate — SDF Terrain Studio</title>
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+<link href="https://api.fontshare.com/v2/css?f[]=general-sans@300,400,500,600,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles/slate.css">
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- ============================================================ top bar -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="mark"></div>
+      <div>
+        <div class="name">Slate Terrain</div>
+        <div class="sub">SDF Erosion Studio</div>
+      </div>
+    </div>
+
+    <div class="tabs" id="modeTabs">
+      <button class="tab active" data-mode="viewport">Viewport</button>
+      <button class="tab" data-mode="graph">Graph</button>
+      <button class="tab" data-mode="split">Split</button>
+    </div>
+
+    <div class="chip">
+      <span>Quality</span>
+      <select id="qualitySelect" style="height:22px;background:transparent;border:0;padding:0 4px">
+        <option value="draft">Draft</option>
+        <option value="standard" selected>Standard</option>
+        <option value="high">High</option>
+        <option value="ultra">Ultra</option>
+      </select>
+    </div>
+
+    <div class="chip"><span>Voxels</span><b id="statVoxels">—</b></div>
+    <div class="chip"><span>Voxel</span><b id="statVoxelSize">—</b></div>
+
+    <div class="spacer"></div>
+
+    <div class="chip" id="gpuChip"><span class="dot"></span><b id="gpuLabel">initialising</b></div>
+    <div class="chip"><span>FPS</span><b id="statFps">—</b></div>
+
+    <button class="btn sm" id="btnExport">Export ▾</button>
+    <button class="btn sm" id="btnSave">Save</button>
+    <button class="btn sm" id="btnLoad">Open</button>
+  </header>
+
+  <!-- ============================================================ left -->
+  <aside class="left">
+    <section class="panel" style="flex:1">
+      <div class="panel-head">
+        <span class="title">Scene</span>
+        <span class="hint" id="sceneHint">volumetric SDF</span>
+      </div>
+      <div class="panel-body" id="outliner"></div>
+      <div class="panel-foot">
+        <button class="btn sm ghost" id="btnSnapshot">Snapshot</button>
+        <button class="btn sm ghost" id="btnRestore">Restore</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <span class="title">Recipes</span>
+        <span class="hint">graph presets</span>
+      </div>
+      <div class="panel-body" id="presetList" style="max-height:170px"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <span class="title">Mass balance</span>
+        <span class="hint">per session</span>
+      </div>
+      <div class="panel-body">
+        <div class="stat-grid">
+          <div class="stat"><div class="k">Eroded</div><div class="v" id="balEroded">0<small>m³</small></div></div>
+          <div class="stat"><div class="k">Deposited</div><div class="v" id="balDeposited">0<small>m³</small></div></div>
+          <div class="stat"><div class="k">Suspended</div><div class="v" id="balCarried">0<small>m³</small></div></div>
+          <div class="stat"><div class="k">Left domain</div><div class="v" id="balEscaped">0<small>m³</small></div></div>
+        </div>
+        <div class="warn-text" id="balanceNote"></div>
+      </div>
+    </section>
+  </aside>
+
+  <!-- ============================================================ centre -->
+  <main class="center">
+    <div class="viewport" id="viewport">
+      <canvas id="gpuCanvas"></canvas>
+      <div class="hud">
+        <div class="hud-row">
+          <div class="hud-block" id="hudCamera">camera</div>
+          <div class="hud-block" id="hudSim">simulation</div>
+        </div>
+        <div class="hud-row">
+          <div class="hud-block hud-hint">
+            <b>LMB</b> orbit · <b>RMB / WASDQE</b> fly · <b>wheel</b> dolly · <b>F</b> frame · <b>1-8</b> views
+          </div>
+          <div class="hud-block">
+            <div class="scale-bar"><span id="scaleLabel">100 m</span><span class="bar"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="graph-wrap hidden" id="graphWrap" style="display:none">
+      <canvas id="graphCanvas"></canvas>
+      <div class="graph-hint">
+        <b>RMB / Tab</b> add node · <b>drag port</b> wire · <b>Del</b> remove · <b>Ctrl+D</b> duplicate ·
+        <b>Ctrl+Z</b> undo · <b>Space+drag</b> pan · <b>wheel</b> zoom · <b>F</b> fit
+      </div>
+      <div class="graph-legend" id="graphLegend"></div>
+    </div>
+  </main>
+
+  <!-- ============================================================ right -->
+  <aside class="right">
+    <section class="panel" style="flex:1;min-height:0">
+      <div class="panel-head">
+        <span class="title" id="inspectorTitle">Inspector</span>
+        <span class="hint" id="inspectorHint">terrain settings</span>
+      </div>
+      <div class="panel-body" id="inspector"></div>
+    </section>
+  </aside>
+
+  <!-- ============================================================ bottom -->
+  <footer class="bottom">
+    <button class="btn primary" id="btnRun">▶ Run</button>
+    <button class="btn icon" id="btnStep" title="Single step">⏭</button>
+    <button class="btn icon" id="btnReset" title="Reset erosion state">⟲</button>
+    <div class="timeline">
+      <div class="scrub"><div class="fill" id="scrubFill" style="width:0%"></div></div>
+      <span class="chip"><span>Step</span><b id="statStep">0</b></span>
+      <span class="chip"><span>Model time</span><b id="statTime">0 y</b></span>
+      <span class="chip"><span>Parcels</span><b id="statParticles">0</b></span>
+    </div>
+    <div class="balance">
+      <span class="neg">cut <b id="balCut">0</b></span>
+      <span class="pos">fill <b id="balFill">0</b></span>
+      <span>carry <b id="balCarry">0</b></span>
+    </div>
+    <div class="chip"><span>Speed</span><b id="statSpeed">1×</b></div>
+  </footer>
+</div>
+
+<div class="menu hidden" id="contextMenu" style="display:none"></div>
+<div class="toasts" id="toasts"></div>
+
+<div class="overlay" id="overlay">
+  <div class="dialog">
+    <h2 id="overlayTitle">Starting WebGPU</h2>
+    <p id="overlayText">Requesting a high-performance adapter…</p>
+    <div class="actions" id="overlayActions"></div>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept=".json,application/json" style="display:none">
+<script type="module" src="src/app.js"></script>
+</body>
+</html>

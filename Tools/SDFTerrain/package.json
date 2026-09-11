@@ -1,0 +1,20 @@
+{
+  "name": "slate-sdf-terrain",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Slate SDF Terrain Studio \u2014 node-graph volumetric terrain authoring with SDF erosion (fluvial, aeolian, thermal) for WebGPU.",
+  "scripts": {
+    "serve": "node tools/serve.mjs",
+    "verify:wgsl": "node tools/verify-wgsl.mjs",
+    "verify:graph": "node tools/verify-graph.mjs",
+    "verify:pipeline": "node tools/verify-pipeline.mjs",
+    "verify:ui": "node tools/verify-ui.mjs",
+    "verify": "npm run verify:wgsl && npm run verify:graph && npm run verify:pipeline && npm run verify:ui",
+    "tune": "python3 tools/tune-erosion.py",
+    "reference": "python3 tools/reference-sim.py"
+  },
+  "devDependencies": {
+    "@forgeax/engine-wgpu-wasm": "0.1.28"
+  }
+}
