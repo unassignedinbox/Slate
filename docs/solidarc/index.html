@@ -684,6 +684,37 @@ function ringOf(subs,d){ // offset every sub-segment by d[m] along its left norm
     const lim=(Math.abs(d1-d2)>1e-6*Math.max(1,Math.abs(d1)+Math.abs(d2))?1.5:4)*Math.max(Math.abs(d1),Math.abs(d2))+1e-6; /* unequal offsets (a bevel terminating against a neighbour): keep the joint close to the corner */const dx=X[0]-q.a[0],dy=X[1]-q.a[1];const L=Math.hypot(dx,dy);if(L>lim){const nx=(p.nl[0]+q.nl[0]),ny=(p.nl[1]+q.nl[1]);const l=Math.hypot(nx,ny)||1;const dd=Math.max(d1,d2)/Math.max(.2,Math.sqrt((1+cosT)/2));X=[q.a[0]+nx/l*dd,q.a[1]+ny/l*dd];}
     out.push(X);}
   return out;}
+/* Build one horizontal feature ring from independent per-sub-edge offsets.
+   This is deliberately separate from the legacy face-operation offset helper above. A bevel/chamfer ring is a
+   profile in its own right: each line is offset once, adjacent support lines are intersected once, and a bounded
+   fallback is used only when two supports are parallel or their miter would leave the local corner. No global
+   "last selected edge" state, loop-wide radius, or unbounded miter is allowed to leak into this calculation. */
+function bandRing(subs,d){
+  const n=subs.length,starts=new Array(n),eps=1e-9;
+  const shifted=(sb,dist)=>({a:[sb.a[0]+sb.nl[0]*dist,sb.a[1]+sb.nl[1]*dist],b:[sb.b[0]+sb.nl[0]*dist,sb.b[1]+sb.nl[1]*dist]});
+  const sameArc=(a,b)=>a.arc&&b.arc&&Math.hypot(a.arc.c[0]-b.arc.c[0],a.arc.c[1]-b.arc.c[1])<1e-6;
+  const join=(prev,cur,dPrev,dCur)=>{
+    const q=cur.a,pa=prev.b;
+    if(sameArc(prev,cur)){
+      const ar=cur.arc,dx=q[0]-ar.c[0],dy=q[1]-ar.c[1],l=Math.hypot(dx,dy)||1;
+      const inward=dx*cur.nl[0]+dy*cur.nl[1]<0,dist=(dPrev+dCur)*.5;
+      const rr=inward?Math.max(eps,l-dist):l+dist;return [ar.c[0]+dx/l*rr,ar.c[1]+dy/l*rr];
+    }
+    const p=shifted(prev,dPrev),c=shifted(cur,dCur),r1=[p.b[0]-p.a[0],p.b[1]-p.a[1]],r2=[c.b[0]-c.a[0],c.b[1]-c.a[1]];
+    const det=r1[0]*r2[1]-r1[1]*r2[0],l1=Math.hypot(...r1)||1,l2=Math.hypot(...r2)||1;
+    if(Math.abs(det)>eps*l1*l2){const vx=c.a[0]-p.a[0],vy=c.a[1]-p.a[1],t=(vx*r2[1]-vy*r2[0])/det,X=[p.a[0]+r1[0]*t,p.a[1]+r1[1]*t];
+      const miter=Math.max(Math.hypot(X[0]-q[0],X[1]-q[1]),Math.hypot(X[0]-pa[0],X[1]-pa[1]));
+      const peak=Math.max(Math.abs(dPrev),Math.abs(dCur));const limit=(Math.abs(dPrev-dCur)>1e-6*Math.max(1,peak)?1.5:4)*peak+1e-6;
+      if(isFinite(miter)&&miter<=limit)return X;
+    }
+    /* Parallel/tangent or over-limit joins must stay local. Averaging the two actual offset endpoints
+       preserves closure without manufacturing the long spikes produced by a raw miter intersection. */
+    const w1=Math.max(eps,l1),w2=Math.max(eps,l2),den=w1+w2;
+    return [(pa[0]*w2+q[0]*w1)/den,(pa[1]*w2+q[1]*w1)/den];
+  };
+  for(let m=0;m<n;m++){const prev=(m-1+n)%n;starts[m]=join(subs[prev],subs[m],d[prev]||0,d[m]||0);}
+  return starts;
+}
 function solidBuild(f){ // → mesh {tris,quads,lines,brep:{faces,edges,verts}}
   const prof=byId(f.profile)||byId(f.src);const loops0=prof?profileSegs(prof):null;if(!loops0||!loops0.length)return {tris:[],lines:[],quads:[]};
   const p=f.params;const h=+p.height||0;if(!h)return {tris:[],lines:[],quads:[]};const base=+p.base||0;const zb=(p.sym?-Math.abs(h)/2:Math.min(0,h))+base,zt=(p.sym?Math.abs(h)/2:Math.max(0,h))+base;const H=zt-zb;const draftK=Math.tan((+p.draft||0)*Math.PI/180);
@@ -713,7 +744,7 @@ function solidBuild(f){ // → mesh {tris,quads,lines,brep:{faces,edges,verts}}
     /* Keep the wall endpoints in the main stack. A band owns the opposite endpoint, so every ring has a
        single geometric location and the wall↔feature seam cannot leave a duplicate/open strip. */
     rings.push(...(botRings.length?botRings.slice(0,-1):[]),{z:z0,d:subs.map(()=>base(z0)),tilt:wallTilt,band:'wall'},{z:z1,d:subs.map(()=>base(z1)),tilt:wallTilt,band:'wall'},...(topRings.length?topRings.slice(1):[]));
-    const R=rings.map(rg=>({...rg,pts:ringOf(subs,rg.d)}));
+    const R=rings.map(rg=>({...rg,pts:bandRing(subs,rg.d)}));
     // per-vertex outward direction (2D) at each sub start / end
     const out2=(sb,q,atEnd)=>{if(sb.arc){const dx=q[0]-sb.arc.c[0],dy=q[1]-sb.arc.c[1];const l=Math.hypot(dx,dy)||1;let o=[dx/l,dy/l];if(o[0]*-sb.nl[0]+o[1]*-sb.nl[1]<0)o=[-o[0],-o[1]];return o;}return [-sb.nl[0],-sb.nl[1]];};
     const nrm=(o,tilt)=>tilt?norm([o[0]*tilt.c,o[1]*tilt.c,tilt.s]):null;
@@ -721,7 +752,7 @@ function solidBuild(f){ // → mesh {tris,quads,lines,brep:{faces,edges,verts}}
     for(let b=0;b<R.length-1;b++){const A=R[b],Bb=R[b+1];const stage=Bb.band==='top'||A.band==='top'?'top':Bb.band==='bot'||A.band==='bot'?'bot':'wall';const spec=stage==='top'?TB:stage==='bot'?BB:null;
       for(let m=0;m<n;m++){const sb=subs[m];const m1=(m+1)%n;const edit=bandEdit(spec,sb),w=wOf(spec,sb);const op=edit||(w>0&&spec?(spec.anyFillet&&!spec.anyChamfer?{type:'fillet'}:spec.anyChamfer&&!spec.anyFillet?{type:'chamfer'}:null):null);const moved=!!op&& (w>0||Math.abs((Bb.d[m]||0)-(A.d[m]||0))>1e-8||A.band!==Bb.band);const isFillet=moved&&op.type==='fillet',isCham=moved&&op.type==='chamfer';const bandKind=stage==='wall'?'wall':(isCham?'c':'f')+stage;const P0=V(A.pts[m],A.z),P1=V(A.pts[m1],A.z),P2=V(Bb.pts[m1],Bb.z),P3=V(Bb.pts[m],Bb.z);
         const fkey=moved?(pre+bandKind+':'+sb.eid):(pre+'side:'+sb.eid);const curvedKind=sb.analytic==='ellipse'?'ellipse':sb.analytic==='arc'?'curve':'plane';const F=face(fkey,moved?(isCham?(sb.arc?'cone':'plane'):(sb.arc?'torus':'cylinder')):(sb.arc?(draftK?'cone':'cylinder'):curvedKind));
-        const smooth=sb.smooth||isFillet;
+        const smooth=(sb.smooth||isFillet)&&!isCham;
         const chamTilt=(moved&&isCham&&sb.arc)?(()=>{const dz=Bb.z-A.z,dd=(Bb.d[m]||0)-(A.d[m]||0);const L=Math.hypot(dz,dd)||1;return {c:dz/L,s:dd/L};})():null;
         const filletTilt=z=>{const rr=op&&op.r||spec&&spec.maxR||1;const q=Math.max(0,Math.min(1,stage==='top'?(z-(zt-rr))/rr:((zb+rr)-z)/rr));return {c:Math.sqrt(Math.max(0,1-q*q)),s:stage==='top'?q:-q};};
         let nA0,nA1,nB0,nB1;if(smooth){const oa=out2(sb,A.pts[m]),ob=out2(sb,A.pts[m1]);const tA=chamTilt||(moved&&isFillet?filletTilt(A.z):wallTilt),tBt=chamTilt||(moved&&isFillet?filletTilt(Bb.z):wallTilt);const ta=tA||{c:1,s:0},tb=tBt||{c:1,s:0};

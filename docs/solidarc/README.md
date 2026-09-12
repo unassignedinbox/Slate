@@ -10,7 +10,7 @@ Serve this directory with any static HTTP server, then open `index.html`. For ex
 python3 -m http.server 8080 --bind 0.0.0.0 --directory docs/solidarc
 ```
 
-The prototype supports sketch primitives, analytic profile conversion, finite extrusion with holes, B-rep inspection, face features, and edge-specific fillet/chamfer edits. A single edge changes only that stable edge key; face-wide or loop-wide behavior is represented explicitly by a wildcard selection. Existing tangent/processed edges are not re-applied accidentally.
+The prototype supports sketch primitives, analytic profile conversion, finite extrusion with holes, B-rep inspection, face features, and edge-specific fillet/chamfer edits. Bevel bands are rebuilt from bounded per-edge offset supports with controlled corner joins, rather than a loop-wide last-operation shortcut. A single edge changes only that stable edge key; face-wide or loop-wide behavior is represented explicitly by a wildcard selection. Existing tangent/processed edges are not re-applied accidentally.
 
 ## Verification
 
