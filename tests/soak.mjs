@@ -1,0 +1,35 @@
+// Full-pipeline soak: canyon preset @96, all eroders, mesh. Not part of npm test.
+import { VoxelField, buildStack } from '../js/sim/field.js';
+import { runHydraulic } from '../js/sim/erode-hydraulic.js';
+import { runThermal } from '../js/sim/erode-thermal.js';
+import { runWind } from '../js/sim/erode-wind.js';
+import { runRivers } from '../js/sim/erode-river.js';
+import { surfaceMesh, colorize } from '../js/sim/mesher.js';
+import { PRESETS } from '../js/sim/presets.js';
+
+const N = parseInt(process.argv[2] || '96');
+const p = PRESETS.canyon;
+const project = { seed: 2026, resN: N, size: 120, seaLevel: 6.5, snowline: 40, warpAmp: 3, warpFreq: 0.02, ...p.project };
+const field = new VoxelField(N, Math.round(N / 2), N, 120, 60, 120, 0);
+let t = Date.now();
+const st = buildStack(field, p.layers(), project, null);
+console.log(`build ${N}: ${(Date.now() - t)}ms solid=${st.solid}`);
+const E = p.erosion();
+E.hydro.count = 30000; E.thermal.samples = 60000; E.wind.count = 20000;
+t = Date.now();
+let r = runHydraulic(field, E.hydro, project.seaLevel, {});
+console.log(`hydro: ${(Date.now() - t)}ms E=${r.eroded.toFixed(1)} D=${r.deposited.toFixed(1)} drift=${(100 * Math.abs(r.drift) / r.eroded).toFixed(2)}%`);
+t = Date.now();
+r = runThermal(field, E.thermal, {});
+console.log(`thermal: ${(Date.now() - t)}ms moved=${r.eroded.toFixed(1)}`);
+t = Date.now();
+r = runWind(field, E.wind, {});
+console.log(`wind: ${(Date.now() - t)}ms E=${r.eroded.toFixed(1)} D=${r.deposited.toFixed(1)}`);
+t = Date.now();
+r = runRivers(field, E.river, project.seaLevel, {});
+console.log(`rivers: ${(Date.now() - t)}ms paths=${r.paths.length} E=${r.eroded.toFixed(1)} D=${r.deposited.toFixed(1)}`);
+t = Date.now();
+const mesh = surfaceMesh(field);
+mesh.colors = colorize(mesh, field, 'material', project.seaLevel, project.snowline);
+console.log(`mesh: ${(Date.now() - t)}ms tris=${mesh.tris} verts=${mesh.nv}`);
+console.log('SOAK OK');

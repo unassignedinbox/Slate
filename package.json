@@ -1,0 +1,10 @@
+{
+  "name": "slate-terrain-lab",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "SDF-based terrain landscaping tool with particle erosion (hydraulic, thermal, wind, rivers). GTX-friendly CPU sim + WebGL2 viewport.",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "test": "node tests/smoke.mjs"
+  }
+}

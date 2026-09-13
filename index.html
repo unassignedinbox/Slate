@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slate Terrain Lab — SDF erosion workstation</title>
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo">⬢</span><div><b>SLATE</b><i>terrain lab · SDF erosion</i></div></div>
+  <div class="hgroup">
+    <button id="collapseL" class="btn ghost" title="toggle outliner">◧</button>
+    <select id="presetSel" class="sel" title="preset"></select>
+    <button id="buildBtn" class="btn accent">⬢ Build</button>
+    <button id="runAllBtn" class="btn go">▶ Erode all</button>
+    <button id="stopBtn" class="btn danger">⏹</button>
+  </div>
+  <div class="hgroup right">
+    <span id="buildLabel" class="dim"></span>
+    <div id="buildBar" class="pbar"><i></i></div>
+    <select id="resSel" class="sel" title="volume resolution"></select>
+    <button id="diagBtn" class="btn ghost" title="diagnostics">🛈</button>
+    <button id="collapseR" class="btn ghost" title="toggle inspector">◨</button>
+  </div>
+</header>
+<div class="main">
+  <aside class="left">
+    <section>
+      <h2>Terrain stack <span class="dim">— bottom builds first</span></h2>
+      <div id="layerList"></div>
+      <div class="addrow">
+        <select id="addKind" class="sel"></select>
+        <button id="addBtn" class="btn small">+ Add</button>
+      </div>
+    </section>
+    <section>
+      <h2>Erosion <span class="dim">— runs on the SDF volume</span></h2>
+      <div id="eroders"></div>
+    </section>
+  </aside>
+  <main class="view">
+    <div id="gl"></div>
+    <div id="chip" class="chip tl">—</div>
+    <div class="chip tr"><span id="fps">—</span></div>
+    <div class="chip bl">drag orbit · wheel zoom · right-drag pan · clip plane reveals caves</div>
+  </main>
+  <aside class="right">
+    <nav class="tabs">
+      <button class="tabbtn on" data-tab="layer">Layer</button>
+      <button class="tabbtn" data-tab="view">View</button>
+      <button class="tabbtn" data-tab="project">Project</button>
+    </nav>
+    <div id="tab-layer" class="tab on"></div>
+    <div id="tab-view" class="tab"></div>
+    <div id="tab-project" class="tab"></div>
+  </aside>
+</div>
+<footer class="status">
+  <span id="ledger">ledger —</span>
+  <span id="log" class="log">starting…</span>
+</footer>
+<input type="file" id="fileInput" accept=".json,.slate.json" hidden>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
