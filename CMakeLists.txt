@@ -225,6 +225,9 @@ set(FRONTIER_ENGINE_SOURCES
     Engine/DisplayPresentation/CycleScheduler.cpp
     Engine/DisplayPresentation/FidelityClassifier.cpp
     Engine/DisplayPresentation/FrontierHost.cpp
+    Engine/DisplayPresentation/EditorHost.cpp
+    Engine/DisplayPresentation/OutlinerPanel.cpp
+    Engine/DisplayPresentation/ViewportPanel.cpp
 )
 
 # ─── Engine common include dirs ─────────────────────────────────────────────────────────────────────────────────────────────────────────────

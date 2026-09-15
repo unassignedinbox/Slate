@@ -88,7 +88,43 @@ enum class ControlCentreIconCategory : uint32_t
     Count                               = 24
 };
 
-// Lucide glyphs are authored as several <path>/<circle>/<rect> children. VectorGlyphRecord stores them
+//------------------------------------------------------------------------------------------------------------------------
+//                                             OUTLINER ICON CATEGORY
+//------------------------------------------------------------------------------------------------------------------------
+
+enum class OutlinerIconCategory : uint32_t
+{
+    Globe                               = 0,                    // 🌐 wireframe globe / world / terrain
+    Sun                                 = 1,                    // ☀️ sun with rays
+    Atmosphere                          = 2,                    // 🌍 atmosphere sphere with meridians
+    Sky                                 = 3,                    // ☁️ sky dome / cloud silhouette
+    Stars                               = 4,                    // ✨ star cluster
+    Wind                                = 5,                    // 💨 wind streamlines
+    HeightFog                           = 6,                    // 🌫 height fog strata
+    AtmosphericFog                      = 7,                    // 🌫 atmospheric fog
+    VolumetricFog                       = 8,                    // 🧊 volumetric fog cube
+    Cloud                               = 9,                    // ☁️ single cloud
+    VolumetricClouds                    = 10,                   // ☁️ stacked volumetric cloud decks
+    Precipitation                       = 11,                   // 🌧 rain precipitation
+    LocalCloud                          = 12,                   // ☁️ bounded local cloud with dashed volume
+    Moon                                = 13,                   // 🌙 crescent moon
+    GroundPlane                         = 14,                   // ▱ perspective ground grid plane
+    PointLight                          = 15,                   // 💡 incandescent lightbulb
+    SpotLight                           = 16,                   // 🔦 spotlight flare
+    Camera                              = 17,                   // 🎥 perspective camera
+    CineCamera                          = 18,                   // 📷 cinematic camera aperture iris
+    PostProcess                         = 19,                   // 🪄 post process magic fx wand
+    EyeVisible                          = 20,                   // 👁 visible eye
+    EyeHidden                           = 21,                   // 👁‍🗨 hidden eye with slash
+    StatusCheck                         = 22,                   // ✓ checkmark ok
+    StatusWarn                          = 23,                   // ⚠ triangle warning
+    StatusDot                           = 24,                   // • dot status
+    ChevronRight                        = 25,                   // › chevron closed
+    ChevronDown                         = 26,                   // ⌄ chevron open
+    Search                              = 27,                   // 🔍 search glass
+    CompactToggle                       = 28,                   // ☰ compact mode bars
+    Count                               = 29
+};
 //    concatenated into one path string: circles and rects are rewritten as equivalent arc / line paths so a
 //    single SVG path decoder handles every glyph. Sub-paths are separated by their own M commands.
 
@@ -126,6 +162,10 @@ public:
     [[nodiscard]] static std::string_view QueryControlCentreSvgPath(ControlCentreIconCategory Icon) noexcept;
     [[nodiscard]] static uint32_t         QueryControlCentreIconCount() noexcept;
 
+    [[nodiscard]] static const VectorGlyphRecord& QueryOutlinerIcon(OutlinerIconCategory Icon) noexcept;
+    [[nodiscard]] static std::string_view QueryOutlinerSvgPath(OutlinerIconCategory Icon) noexcept;
+    [[nodiscard]] static uint32_t         QueryOutlinerIconCount() noexcept;
+
     // Single unified conversion operator for icon record
     template<typename TargetType>
     [[nodiscard]] static TargetType Convert(NavigationIconCategory Icon) noexcept;
@@ -133,9 +173,13 @@ public:
     template<typename TargetType>
     [[nodiscard]] static TargetType Convert(ControlCentreIconCategory Icon) noexcept;
 
+    template<typename TargetType>
+    [[nodiscard]] static TargetType Convert(OutlinerIconCategory Icon) noexcept;
+
 private:
     static const std::array<VectorGlyphRecord, static_cast<size_t>(NavigationIconCategory::Count)> NavigationGlyphTable;
     static const std::array<VectorGlyphRecord, static_cast<size_t>(ControlCentreIconCategory::Count)> ControlCentreGlyphTable;
+    static const std::array<VectorGlyphRecord, static_cast<size_t>(OutlinerIconCategory::Count)> OutlinerGlyphTable;
 };
 
 template<>
@@ -160,6 +204,18 @@ template<>
 inline const VectorGlyphRecord& VectorCodec::Convert<const VectorGlyphRecord&>(ControlCentreIconCategory Icon) noexcept
 {
     return QueryControlCentreIcon(Icon);
+}
+
+template<>
+inline std::string_view VectorCodec::Convert<std::string_view>(OutlinerIconCategory Icon) noexcept
+{
+    return QueryOutlinerSvgPath(Icon);
+}
+
+template<>
+inline const VectorGlyphRecord& VectorCodec::Convert<const VectorGlyphRecord&>(OutlinerIconCategory Icon) noexcept
+{
+    return QueryOutlinerIcon(Icon);
 }
 
 } // namespace Frontier

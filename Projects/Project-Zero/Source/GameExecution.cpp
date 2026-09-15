@@ -28,6 +28,10 @@
 #include "RayTracingSolver.h"
 #include "../../../Engine/ContentInterchange/ShaderBallStructure.h"
 
+#if defined(FRONTIER_DEVELOPMENT) || defined(EDITOR) || defined(FRONTIER_EDITOR) || defined(DEVELOPMENT)
+#include "../../../Engine/DisplayPresentation/EditorHost.h"
+#endif
+
 #include <algorithm>
 #include <chrono>
 #include <thread>
@@ -250,6 +254,11 @@ int main(int argc, char** argv)
     Frontier::ControlCentreHost ControlCentre;
     ControlCentre.AssignProjectName("Project-Zero");
     (void)ControlCentre.Initialize(Surface.QueryWidth(), Surface.QueryHeight());
+
+#if defined(FRONTIER_DEVELOPMENT) || defined(EDITOR) || defined(FRONTIER_EDITOR) || defined(DEVELOPMENT)
+    Frontier::EditorHost Editor;
+    (void)Editor.Initialize();
+#endif
 
     // The hosts are seeded from the configuration loaded before bring-up; every Apply / debounced dashboard change
     //    writes the file back.
@@ -528,6 +537,10 @@ int main(int argc, char** argv)
                               ControlCentre.ConstructControlLayout(OverlaySurface);
                               Notifications.ConstructNotificationLayout(OverlaySurface, NotchLine);
                           }
+
+#if defined(FRONTIER_DEVELOPMENT) || defined(EDITOR) || defined(FRONTIER_EDITOR) || defined(DEVELOPMENT)
+                          Editor.Present(Surface.QueryWidth(), Surface.QueryHeight());
+#endif
                       });
 
         // ④ Build dispatch configuration from live camera + integrator state (camera motion restarts accumulation)

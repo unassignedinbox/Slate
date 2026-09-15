@@ -280,4 +280,205 @@ uint32_t VectorCodec::QueryControlCentreIconCount() noexcept
     return static_cast<uint32_t>(ControlCentreGlyphTable.size());
 }
 
+//------------------------------------------------------------------------------------------------------------------------
+//                                            OUTLINER GLYPH LOOKUP TABLE
+//------------------------------------------------------------------------------------------------------------------------
+
+const std::array<VectorGlyphRecord, static_cast<size_t>(OutlinerIconCategory::Count)> VectorCodec::OutlinerGlyphTable = {
+    // 0: Globe (World / Terrain)
+    VectorGlyphRecord{
+        "Globe",
+        "M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18M3 12h18M12 3a14.5 14.5 0 0 1 0 18M12 3a14.5 14.5 0 0 0 0 18M4.6 7.5h14.8M4.6 16.5h14.8",
+        24, 24, 1.8f
+    },
+    // 1: Sun
+    VectorGlyphRecord{
+        "Sun",
+        "M12 8a4 4 0 1 0 0 8a4 4 0 0 0 0-8M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4",
+        24, 24, 1.8f
+    },
+    // 2: Atmosphere
+    VectorGlyphRecord{
+        "Atmosphere",
+        "M12 4a8 8 0 1 0 0 16a8 8 0 0 0 0-16M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16",
+        24, 24, 1.8f
+    },
+    // 3: Sky
+    VectorGlyphRecord{
+        "Sky",
+        "M3 16a4 4 0 0 1 4-4 6 6 0 0 1 11.5 1.5A3.5 3.5 0 0 1 18 20H7a4 4 0 0 1-4-4z",
+        24, 24, 1.8f
+    },
+    // 4: Stars
+    VectorGlyphRecord{
+        "Stars",
+        "M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4zM19 15l.7 1.8 1.8.7-1.8.7L19 20l-.7-1.8-1.8-.7 1.8-.7zM5 16l.5 1.3 1.3.5-1.3.5L5 19.6l-.5-1.3-1.3-.5 1.3-.5z",
+        24, 24, 1.6f
+    },
+    // 5: Wind
+    VectorGlyphRecord{
+        "Wind",
+        "M3 8h11a3 3 0 1 0-3-3M3 12h15a3 3 0 1 1-3 3M3 16h7a2 2 0 1 1-2 2",
+        24, 24, 1.8f
+    },
+    // 6: HeightFog
+    VectorGlyphRecord{
+        "HeightFog",
+        "M4 14h13M6 18h11M8 10h9M7 10a5 5 0 0 1 9.6-1.8A3.5 3.5 0 0 1 17 15",
+        24, 24, 1.8f
+    },
+    // 7: AtmosphericFog
+    VectorGlyphRecord{
+        "AtmosphericFog",
+        "M3 17h18M3 13c3-2 6-2 9 0s6 2 9 0M6 8c2-1.5 4-1.5 6 0s4 1.5 6 0M18 3a2 2 0 1 0 0 4a2 2 0 0 0 0-4",
+        24, 24, 1.8f
+    },
+    // 8: VolumetricFog
+    VectorGlyphRecord{
+        "VolumetricFog",
+        "M4 8l8-4l8 4l-8 4zM4 8v8l8 4l8-4V8M12 12v8M7.5 15.5c1.5-1 3-1 4.5 0s3 1 4.5 0",
+        24, 24, 1.8f
+    },
+    // 9: Cloud
+    VectorGlyphRecord{
+        "Cloud",
+        "M7 18.5h10.5a3.75 3.75 0 0 0 .6-7.45A5.5 5.5 0 0 0 7.6 9.3 4.6 4.6 0 0 0 7 18.5zM13.5 6.2a3.2 3.2 0 0 1 5.3 1.9",
+        24, 24, 1.8f
+    },
+    // 10: VolumetricClouds
+    VectorGlyphRecord{
+        "VolumetricClouds",
+        "M4.5 17.5h11a3.4 3.4 0 0 0 .5-6.77A5 5 0 0 0 6.3 9.6a4 4 0 0 0-1.8 7.9zM17.2 10.6a3 3 0 0 1 3.3 4.7M2.5 21h19M15 17.5h4.5a2.4 2.4 0 0 0 .4-4.76",
+        24, 24, 1.8f
+    },
+    // 11: Precipitation
+    VectorGlyphRecord{
+        "Precipitation",
+        "M7 13.5h9.5a3.3 3.3 0 0 0 .5-6.56A4.8 4.8 0 0 0 7.8 6.3 3.6 3.6 0 0 0 7 13.5zM8 17l-1 3M12 17l-1 3M16 17l-1 3",
+        24, 24, 1.8f
+    },
+    // 12: LocalCloud
+    VectorGlyphRecord{
+        "LocalCloud",
+        "M8 16.5h8.5a3.2 3.2 0 0 0 .5-6.37A4.6 4.6 0 0 0 8.2 8.9 3.9 3.9 0 0 0 8 16.5zM6 3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z",
+        24, 24, 1.8f
+    },
+    // 13: Moon
+    VectorGlyphRecord{
+        "Moon",
+        "M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z",
+        24, 24, 1.8f
+    },
+    // 14: GroundPlane
+    VectorGlyphRecord{
+        "GroundPlane",
+        "M3 15l9-5 9 5-9 5zM7.5 12.5l4.5 2.5 4.5-2.5M12 10v10",
+        24, 24, 1.8f
+    },
+    // 15: PointLight
+    VectorGlyphRecord{
+        "PointLight",
+        "M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z",
+        24, 24, 1.8f
+    },
+    // 16: SpotLight
+    VectorGlyphRecord{
+        "SpotLight",
+        "M12 9a3 3 0 1 0 0 6a3 3 0 0 0 0-6M12 2v4M12 18v4M2 12h4M18 12h4M12 4a8 8 0 1 0 0 16a8 8 0 0 0 0-16",
+        24, 24, 1.8f
+    },
+    // 17: Camera
+    VectorGlyphRecord{
+        "Camera",
+        "M5.5 7h8A2.5 2.5 0 0 1 16 9.5v6a2.5 2.5 0 0 1-2.5 2.5h-8A2.5 2.5 0 0 1 3 15.5v-6A2.5 2.5 0 0 1 5.5 7zM16 11l5-3v8l-5-3z",
+        24, 24, 1.8f
+    },
+    // 18: CineCamera
+    VectorGlyphRecord{
+        "CineCamera",
+        "M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18M14.3 15.5L8.5 5.4M9.7 8.5h11.6M12 12l-5.8 10M9.7 15.5h11.6M14.3 8.5l-5.8 10",
+        24, 24, 1.8f
+    },
+    // 19: PostProcess
+    VectorGlyphRecord{
+        "PostProcess",
+        "M4 20l11-11M14 4l1 2 2 1-2 1-1 2-1-2-2-1 2-1zM19 12l.6 1.4L21 14l-1.4.6L19 16l-.6-1.4L17 14l1.4-.6z",
+        24, 24, 1.8f
+    },
+    // 20: EyeVisible
+    VectorGlyphRecord{
+        "EyeVisible",
+        "M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12zM12 9a3 3 0 1 0 0 6a3 3 0 0 0 0-6",
+        24, 24, 1.8f
+    },
+    // 21: EyeHidden
+    VectorGlyphRecord{
+        "EyeHidden",
+        "M3 3l18 18M10.6 10.6a3 3 0 0 0 4.2 4.2M9.9 5.1A10.5 10.5 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4M6.2 6.2A17 17 0 0 0 2 12s3.5 7 10 7a10 10 0 0 0 4-.8",
+        24, 24, 1.8f
+    },
+    // 22: StatusCheck
+    VectorGlyphRecord{
+        "StatusCheck",
+        "M5 12.5l4.5 4.5L19 7.5",
+        24, 24, 2.2f
+    },
+    // 23: StatusWarn
+    VectorGlyphRecord{
+        "StatusWarn",
+        "M12 4l9 16H3zM12 10v4M12 17.5v.5",
+        24, 24, 1.8f
+    },
+    // 24: StatusDot
+    VectorGlyphRecord{
+        "StatusDot",
+        "M12 8a4 4 0 1 0 0 8a4 4 0 0 0 0-8",
+        24, 24, 2.0f
+    },
+    // 25: ChevronRight
+    VectorGlyphRecord{
+        "ChevronRight",
+        "M9 6l6 6-6 6",
+        24, 24, 2.0f
+    },
+    // 26: ChevronDown
+    VectorGlyphRecord{
+        "ChevronDown",
+        "M6 9l6 6 6-6",
+        24, 24, 2.0f
+    },
+    // 27: Search
+    VectorGlyphRecord{
+        "Search",
+        "M11 4a7 7 0 1 0 0 14a7 7 0 0 0 0-14M20 20l-3.5-3.5",
+        24, 24, 1.8f
+    },
+    // 28: CompactToggle
+    VectorGlyphRecord{
+        "CompactToggle",
+        "M4 8h16M4 16h16",
+        24, 24, 2.0f
+    }
+};
+
+const VectorGlyphRecord& VectorCodec::QueryOutlinerIcon(OutlinerIconCategory Icon) noexcept
+{
+    const size_t Index = static_cast<size_t>(Icon);
+    if (Index < OutlinerGlyphTable.size())
+    {
+        return OutlinerGlyphTable[Index];
+    }
+    return OutlinerGlyphTable[0];
+}
+
+std::string_view VectorCodec::QueryOutlinerSvgPath(OutlinerIconCategory Icon) noexcept
+{
+    return QueryOutlinerIcon(Icon).SvgPathString;
+}
+
+uint32_t VectorCodec::QueryOutlinerIconCount() noexcept
+{
+    return static_cast<uint32_t>(OutlinerGlyphTable.size());
+}
+
 } // namespace Frontier

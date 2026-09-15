@@ -10,3 +10,7 @@
 [submodule "ExternalPackages/stb"]
 	path = ExternalPackages/stb
 	url = https://github.com/nothings/stb.git
+[submodule "ExternalPackages/imgui"]
+	path = ExternalPackages/imgui
+	url = https://github.com/ocornut/imgui.git
+	branch = docking
