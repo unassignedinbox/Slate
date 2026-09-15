@@ -647,6 +647,7 @@ $EngineRelative = @(
     'Engine\PlatformInterchange\VoiceExchange.cpp'
     'Engine\PlatformInterchange\OnlineInterchange.cpp'
     'Projects\Project-Zero\Source\RayTracingSolver.cpp'
+    'Projects\Project-Zero\Source\RockTerrainSpace.cpp'
     'Projects\Project-Zero\Source\FlyThroughSolver.cpp'
     'Projects\Project-Zero\Source\GameExecution.cpp'
 )

@@ -235,6 +235,7 @@ int main(int argc, char** argv)
     //──────────────────────────────────────────────────────────────────────────
     // ImGui panel — apply theme once after context exists
     //──────────────────────────────────────────────────────────────────────────
+    Frontier::ProjectZero::RockTerrainSpace RockTerrain;
     Frontier::RenderScheduler Panel;
     Panel.ApplyTheme();
 
@@ -508,7 +509,7 @@ int main(int argc, char** argv)
 
         // ③ Build ImGui draw data (calls ImGui::NewFrame → ImGui::Render internally); the Control Centre records
         //    itself onto the foreground list between NewFrame and Render via the overlay hook.
-        Panel.Present(Integrator, Camera, Scene,
+        Panel.Present(Integrator, Camera, Scene, RockTerrain,
                       Surface.QueryWidth(), Surface.QueryHeight(),
                       [&]()
                       {

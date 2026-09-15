@@ -62,6 +62,7 @@ void RenderScheduler::Present(
     ReSTIRIntegrator&                    Integrator,
     const ProjectZero::FlyThroughSolver& Camera,
     const ProjectZero::RayTracingSolver& Scene,
+    ProjectZero::RockTerrainSpace&       Terrain,
     uint32_t                             ViewportWidth,
     uint32_t                             ViewportHeight,
     const OverlayHook&                   Overlay) noexcept
@@ -90,6 +91,8 @@ void RenderScheduler::Present(
     SectionReSTIR(Integrator, ViewportWidth, ViewportHeight);
     ImGui::Spacing();
     SectionScene(Scene);
+    ImGui::Spacing();
+    SectionRockTerrain(Integrator, Terrain);
 
     ImGui::Spacing();
     ImGui::Separator();
@@ -191,6 +194,93 @@ void RenderScheduler::SectionScene(const ProjectZero::RayTracingSolver& Scene) n
     ImGui::TextColored(ImVec4(1.00f, 0.95f, 0.80f, 1.0f), "CEILING  Area luminaire  32 lux");
     ImGui::TextColored(ImVec4(0.78f, 0.78f, 0.78f, 1.0f), "BOX A    Tall diffuse box");
     ImGui::TextColored(ImVec4(0.78f, 0.78f, 0.78f, 1.0f), "BOX B    Short diffuse box");
+}
+
+//========================================================================================================================
+//                                                   SECTION — ROCK TERRAIN
+//========================================================================================================================
+
+void RenderScheduler::SectionRockTerrain(ReSTIRIntegrator& Integrator, ProjectZero::RockTerrainSpace& Terrain) noexcept
+{
+    if (!ImGui::CollapsingHeader("SDF Rock Terrain", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    ProjectZero::RockTerrainConfiguration Configuration = Terrain.QueryConfiguration();
+    bool Changed = false;
+
+    const char* FormationNames[] = { "Granite", "Sandstone", "Basalt", "Chert", "Schist" };
+    int Formation = static_cast<int>(Configuration.Formation);
+    if (ImGui::Combo("Formation history", &Formation, FormationNames, IM_ARRAYSIZE(FormationNames)))
+    {
+        Configuration.Formation = static_cast<ProjectZero::RockFormationCategory>(std::clamp(Formation, 0, 4));
+        Changed = true;
+    }
+    if (ImGui::InputScalar("Geological seed", ImGuiDataType_U32, &Configuration.Seed)) Changed = true;
+
+    ImGui::TextDisabled("Continuous field • no tileable texture • geology-aware detail");
+    ImGui::Text("Sculpt strokes  %u", Terrain.QuerySculptStrokeCount());
+
+    if (ImGui::TreeNode("Formation detail"))
+    {
+        Changed |= ImGui::SliderFloat("Bedding spacing", &Configuration.BeddingSpacing, 0.15f, 4.0f, "%.2f m");
+        Changed |= ImGui::SliderFloat("Bedding variation", &Configuration.BeddingVariation, 0.0f, 1.2f, "%.2f m");
+        Changed |= ImGui::SliderFloat("Mineral grain scale", &Configuration.GrainScale, 0.02f, 0.35f, "%.3f m");
+        Changed |= ImGui::SliderFloat("Joint spacing", &Configuration.JointSpacing, 0.35f, 8.0f, "%.2f m");
+        Changed |= ImGui::SliderFloat("Joint aperture", &Configuration.JointAperture, 0.002f, 0.12f, "%.3f m");
+        Changed |= ImGui::SliderFloat("Column scale", &Configuration.ColumnScale, 0.3f, 5.0f, "%.2f m");
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNode("Weathering process"))
+    {
+        Changed |= ImGui::SliderFloat("Water exposure", &Configuration.WaterExposure, 0.0f, 1.0f, "%.2f");
+        Changed |= ImGui::SliderFloat("Salt crystallisation", &Configuration.SaltWeathering, 0.0f, 1.0f, "%.2f");
+        Changed |= ImGui::SliderFloat("Freeze / thaw", &Configuration.FreezeThaw, 0.0f, 1.0f, "%.2f");
+        Changed |= ImGui::SliderFloat("Insolation", &Configuration.Insolation, 0.0f, 1.0f, "%.2f");
+        Changed |= ImGui::SliderFloat("Wind abrasion", &Configuration.WindAbrasion, 0.0f, 1.0f, "%.2f");
+        Changed |= ImGui::SliderFloat("Tafoni event density", &Configuration.TafoniDensity, 0.0f, 1.0f, "%.2f");
+        ImGui::TreePop();
+    }
+
+    if (Changed)
+    {
+        Terrain.AssignConfiguration(Configuration);
+        Integrator.ResetAccumulation();
+    }
+
+    if (ImGui::TreeNode("Sculpt"))
+    {
+        float Center[3] = { SculptCenter.x, SculptCenter.y, SculptCenter.z };
+        if (ImGui::DragFloat3("Brush centre", Center, 0.05f, -20.0f, 20.0f, "%.2f m"))
+            SculptCenter = ProjectZero::RockTerrainVector3{ Center[0], Center[1], Center[2] };
+        ImGui::SliderFloat("Brush radius", &SculptRadius, 0.05f, 4.0f, "%.2f m");
+        ImGui::SliderFloat("Brush strength", &SculptStrength, 0.01f, 2.0f, "%.2f m");
+        const char* BrushNames[] = { "Add mass", "Remove mass", "Smooth formation", "Sharpen fracture" };
+        ImGui::Combo("Brush operation", &SculptCategory, BrushNames, IM_ARRAYSIZE(BrushNames));
+        if (ImGui::Button("Apply geological sculpt stroke"))
+        {
+            ProjectZero::RockBrushStroke Stroke;
+            Stroke.Center = SculptCenter;
+            Stroke.Radius = SculptRadius;
+            Stroke.Strength = SculptStrength;
+            Stroke.Hardness = 0.70f;
+            Stroke.Category = static_cast<ProjectZero::RockBrushCategory>(std::clamp(SculptCategory, 0, 3));
+            Terrain.AddSculptStroke(Stroke);
+            Integrator.ResetAccumulation();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Undo"))
+        {
+            if (Terrain.UndoSculptStroke()) Integrator.ResetAccumulation();
+        }
+        if (ImGui::Button("Clear sculpt layer"))
+        {
+            Terrain.ClearSculpting();
+            Integrator.ResetAccumulation();
+        }
+        const ProjectZero::RockTerrainSample Sample = Terrain.Sample(SculptCenter);
+        ImGui::Text("At brush: d %+.3f m  hardness %.2f  fracture %.2f", Sample.Distance, Sample.Hardness, Sample.Fracture);
+        ImGui::TreePop();
+    }
 }
 
 } // namespace Frontier

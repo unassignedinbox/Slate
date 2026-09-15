@@ -12,6 +12,7 @@
 #include "ReSTIRIntegrator.h"
 #include "../../Projects/Project-Zero/Source/FlyThroughSolver.h"
 #include "../../Projects/Project-Zero/Source/RayTracingSolver.h"
+#include "../../Projects/Project-Zero/Source/RockTerrainSpace.h"
 #include <cstdint>
 #include <functional>
 
@@ -42,6 +43,7 @@ public:
     void Present(ReSTIRIntegrator&                       Integrator,
                  const ProjectZero::FlyThroughSolver&    Camera,
                  const ProjectZero::RayTracingSolver&    Scene,
+                 ProjectZero::RockTerrainSpace&           Terrain,
                  uint32_t                                ViewportWidth,
                  uint32_t                                ViewportHeight,
                  const OverlayHook&                      Overlay = {}) noexcept;
@@ -51,10 +53,15 @@ public:
 
 private:
     bool QuitRequested = false;     // [-]  quit button pressed
+    ProjectZero::RockTerrainVector3 SculptCenter{ 0.0f, 0.0f, 2.0f }; // [m]
+    float SculptRadius   = 0.8f;    // [m]
+    float SculptStrength = 0.35f;   // [m]
+    int   SculptCategory = 1;       // [-]  RockBrushCategory
 
     void SectionCamera  (const ProjectZero::FlyThroughSolver& Camera) noexcept;
     void SectionReSTIR  (ReSTIRIntegrator& Integrator, uint32_t ViewportWidth, uint32_t ViewportHeight) noexcept;
     void SectionScene   (const ProjectZero::RayTracingSolver& Scene) noexcept;
+    void SectionRockTerrain(ReSTIRIntegrator& Integrator, ProjectZero::RockTerrainSpace& Terrain) noexcept;
 };
 
 template<>

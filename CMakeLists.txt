@@ -249,6 +249,7 @@ set(PROJECT_ZERO_SOURCES
     Engine/DisplayPresentation/ShadingTableCodec.cpp
     Engine/DisplayPresentation/RenderScheduler.cpp
     Projects/Project-Zero/Source/RayTracingSolver.cpp
+    Projects/Project-Zero/Source/RockTerrainSpace.cpp
     Projects/Project-Zero/Source/FlyThroughSolver.cpp
     Projects/Project-Zero/Source/GameExecution.cpp
     ${IMGUI_SOURCES}
