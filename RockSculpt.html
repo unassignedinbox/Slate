@@ -49,6 +49,8 @@ const errEl=document.getElementById('err');
 function showErr(m){ errEl.textContent=m; errEl.style.display='block'; console.error(m); }
 const gl=canvas.getContext('webgl2',{antialias:false,alpha:false,depth:false,stencil:false,preserveDrawingBuffer:true});
 if(!gl){ showErr('WebGL2 missing'); throw new Error('no webgl2'); }
+canvas.addEventListener('webglcontextlost',e=>{ e.preventDefault(); showErr('WebGL context lost — reloading lighter shader. Try Refresh.\nIf persists, shadows/terrain off reduces load.'); });
+canvas.addEventListener('webglcontextrestored',()=>location.reload());
 gl.getExtension('EXT_color_buffer_float');
 
 // lithology
@@ -92,7 +94,7 @@ function valueNoise3(p){
   const f=[p[0]-i[0],p[1]-i[1],p[2]-i[2]]; const ff=[f[0]*f[0]*(3-2*f[0]),f[1]*f[1]*(3-2*f[1]),f[2]*f[2]*(3-2*f[2])];
   let n=0; for(let k=0;k<2;k++) for(let j=0;j<2;j++) for(let ii=0;ii<2;ii++){ const w=(ii?ff[0]:1-ff[0])*(j?ff[1]:1-ff[1])*(k?ff[2]:1-ff[2]); const h=hash33([i[0]+ii,i[1]+j,i[2]+k]); n+=w*(h*2-1); } return n*0.5+0.5;
 }
-function fbm3(p){ let v=0,a=0.5,q=[...p]; for(let i=0;i<4;i++){ v+=a*valueNoise3(q); q=[q[0]*1.96,q[1]*1.96,q[2]*1.96]; a*=0.5; } return v; }
+function fbm3(p){ let v=0,a=0.5,q=[...p]; for(let i=0;i<3;i++){ v+=a*valueNoise3(q); q=[q[0]*1.96,q[1]*1.96,q[2]*1.96]; a*=0.5; } return v; }
 function warp3(p){ const s=0.55; return [(fbm3([p[0]*s,p[1]*s,p[2]*s])-0.5)*0.5,(fbm3([p[0]*s+5.2,p[1]*s+1.3,p[2]*s+2.7])-0.5)*0.5,(fbm3([p[0]*s+1.9,p[1]*s+6.7,p[2]*s+3.5])-0.5)*0.5]; }
 function sdRoundBox(p,b,r){ const dx=Math.abs(p[0])-b[0],dy=Math.abs(p[1])-b[1],dz=Math.abs(p[2])-b[2]; const mx=Math.max(dx,0),my=Math.max(dy,0),mz=Math.max(dz,0); const len=Math.hypot(mx,my,mz); const m=Math.max(dx,Math.max(dy,dz)); return len+Math.min(m,0)-r; }
 function smin(a,b,k){ const h=Math.max(k-Math.abs(a-b),0)/k; return Math.min(a,b)-h*h*k*0.25; }
@@ -118,7 +120,7 @@ function sceneSDF(p){
   } return d;
 }
 function estimateNormal(p){ const e=0.001; const dx=sceneSDF([p[0]+e,p[1],p[2]])-sceneSDF([p[0]-e,p[1],p[2]]); const dy=sceneSDF([p[0],p[1]+e,p[2]])-sceneSDF([p[0],p[1]-e,p[2]]); const dz=sceneSDF([p[0],p[1],p[2]+e])-sceneSDF([p[0],p[1],p[2]-e]); const l=Math.hypot(dx,dy,dz); return [dx/l,dy/l,dz/l]; }
-function raymarch(ro,rd){ let t=0; for(let i=0;i<80;i++){ const p=[ro[0]+rd[0]*t,ro[1]+rd[1]*t,ro[2]+rd[2]*t]; const d=sceneSDF(p); if(d<0.001) return {hit:true,t,pos:p,normal:estimateNormal(p)}; if(t>50) break; t+=Math.max(d*0.85,0.001); } return {hit:false,t}; }
+function raymarch(ro,rd){ let t=0; for(let i=0;i<64;i++){ const p=[ro[0]+rd[0]*t,ro[1]+rd[1]*t,ro[2]+rd[2]*t]; const d=sceneSDF(p); if(d<0.001) return {hit:true,t,pos:p,normal:estimateNormal(p)}; if(t>50) break; t+=Math.max(d*0.85,0.001); } return {hit:false,t}; }
 function getEye(){ const r=cam.distance*Math.cos(cam.pitch), z=cam.distance*Math.sin(cam.pitch)+cam.target[2], x=r*Math.sin(cam.yaw)+cam.target[0], y=r*Math.cos(cam.yaw)+cam.target[1]; return [x,y,z]; }
 function getRay(mx,my){ const rect=canvas.getBoundingClientRect(); const x=((mx-rect.left)/rect.width)*2-1, y=-(((my-rect.top)/rect.height)*2-1); const asp=rect.width/rect.height; const eye=getEye(), tgt=cam.target, up=[0,0,1]; let fwd=[tgt[0]-eye[0],tgt[1]-eye[1],tgt[2]-eye[2]]; const fl=Math.hypot(...fwd); fwd=fwd.map(v=>v/fl); let right=[fwd[1]*up[2]-fwd[2]*up[1],fwd[2]*up[0]-fwd[0]*up[2],fwd[0]*up[1]-fwd[1]*up[0]]; const rl=Math.hypot(...right); right=right.map(v=>v/rl); const camUp=[right[1]*fwd[2]-right[2]*fwd[1],right[2]*fwd[0]-right[0]*fwd[2],right[0]*fwd[1]-right[1]*fwd[0]]; const tf=Math.tan(cam.fov*Math.PI/180*0.5); const rd=[fwd[0]+right[0]*x*asp*tf+camUp[0]*y*tf, fwd[1]+right[1]*x*asp*tf+camUp[1]*y*tf, fwd[2]+right[2]*x*asp*tf+camUp[2]*y*tf]; const l=Math.hypot(...rd); return {ro:eye, rd:rd.map(v=>v/l)}; }
 function jsHitTest(mx,my,cb){ const {ro,rd}=getRay(mx,my); cb(raymarch(ro,rd)); }
@@ -163,7 +165,7 @@ float vNoise(vec3 p){
   float nxy0=mix(nx00,nx10,f.y), nxy1=mix(nx01,nx11,f.y);
   return mix(nxy0,nxy1,f.z)*2.-1.;
 }
-float fbm(vec3 p){ float v=0.,a=0.5; for(int i=0;i<4;i++){ v+=a*vNoise(p); p*=1.96; a*=0.5; } return v; }
+float fbm(vec3 p){ float v=0.,a=0.5; for(int i=0;i<3;i++){ v+=a*vNoise(p); p*=1.96; a*=0.5; } return v; }
 vec3 warp(vec3 p){ return vec3(fbm(p*0.55),fbm(p*0.55+vec3(5.2,1.3,2.7)),fbm(p*0.55+vec3(1.9,6.7,3.5)))*0.45; }
 float sdBox(vec3 p, vec3 b, float r){ vec3 q=abs(p)-b; return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.)-r; }
 float smin(float a,float b,float k){ float h=max(k-abs(a-b),0.)/k; return min(a,b)-h*h*k*0.25; }
@@ -197,7 +199,7 @@ void main(){
   vec3 eye=u_eye, tgt=u_tgt; vec3 fwd=normalize(tgt-eye); vec3 up=vec3(0,0,1); vec3 right=normalize(cross(fwd,up)); vec3 camUp=cross(right,fwd);
   float tf=tan(radians(u_fov*0.5)); vec3 rd=normalize(fwd + right*uv.x*tf + camUp*uv.y*tf); vec3 ro=eye;
   float t=0., hitT=-1.; vec3 hitP=vec3(0);
-  for(int i=0;i<80;i++){ vec3 p=ro+rd*t; float d=sceneSDF(p); if(d<0.001){ hitT=t; hitP=p; break; } if(t>50.) break; t+=max(d*0.85,0.001); }
+  for(int i=0;i<64;i++){ vec3 p=ro+rd*t; float d=sceneSDF(p); if(d<0.001){ hitT=t; hitP=p; break; } if(t>50.) break; t+=max(d*0.85,0.001); }
   vec3 col;
   if(hitT<0.){
     float h=clamp(rd.z*0.5+0.5,0.,1.); vec3 sky=mix(vec3(0.86,0.92,1.),vec3(0.55,0.75,0.98),pow(h,1.2)); col=sky;
@@ -216,9 +218,9 @@ void main(){
     else if(lith==6){ float band=(qw.z+warp(qw*0.7).y*0.35)*6.; float id=floor(band); float isM=step(0.58,fract(sin(id*48.233)*43758.5453)); albedo=isM>0.5?vec3(0.12,0.14,0.16):vec3(0.88,0.84,0.81); }
     else albedo=vec3(0.93,0.91,0.90);
     // lighting
-    float occ=0.,sca=1.; for(int i=0;i<3;i++){ float h=0.02+float(i)*0.05; float d=sceneSDF(p+n*h); occ+=(h-d)*sca; sca*=0.8; } float ao=clamp(1.-occ*0.9,0.25,1.);
+    float occ=0.,sca=1.; for(int i=0;i<2;i++){ float h=0.02+float(i)*0.05; float d=sceneSDF(p+n*h); occ+=(h-d)*sca; sca*=0.8; } float ao=clamp(1.-occ*0.9,0.25,1.);
     vec3 sun=normalize(vec3(1.,0.45,0.8)); float NdotL=max(dot(n,sun),0.);
-    float sh=1.; if(u_shad==1 && NdotL>0.01){ vec3 sp=p+n*0.006; float t2=0.02; float s=1.; for(int i=0;i<16;i++){ float d=sceneSDF(sp+sun*t2); if(d<0.0005){ s=0.; break; } s=min(s,6.*d/t2); t2+=max(d,0.015); if(t2>12.) break; } sh=clamp(s,0.,1.); }
+    float sh=1.; if(u_shad==1 && NdotL>0.01){ vec3 sp=p+n*0.006; float t2=0.02; float s=1.; for(int i=0;i<8;i++){ float d=sceneSDF(sp+sun*t2); if(d<0.0005){ s=0.; break; } s=min(s,6.*d/t2); t2+=max(d,0.015); if(t2>12.) break; } sh=clamp(s,0.,1.); }
     vec3 diff=albedo/PI * (0.55+0.45*ao);
     vec3 V=normalize(eye-p), H=normalize(sun+V); float NdotV=max(dot(n,V),0.), NdotH=max(dot(n,H),0.), VdotH=max(dot(V,H),0.);
     float rough=(lith==1?0.66: (lith==0?0.50:0.62)); float a=rough*rough, a2=a*a; float den=NdotH*NdotH*(a2-1.)+1.; float D=a2/(PI*den*den); float k=(rough+1.)*(rough+1.)/8.; float Gv=NdotV/(NdotV*(1.-k)+k), Gl=NdotL/(NdotL*(1.-k)+k); float G=Gv*Gl; vec3 F0=vec3(0.04); vec3 F=F0+(1.-F0)*pow(1.-VdotH,5.); vec3 spec=D*G*F / max(0.0001,4.*NdotL*NdotV);
@@ -235,7 +237,7 @@ void main(){
   outColor=vec4(col,1.);
 }
 `;
-function compile(t,src){ const s=gl.createShader(t); gl.shaderSource(s,src); gl.compileShader(s); if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){ showErr(gl.getShaderInfoLog(s)); throw new Error('compile'); } return s; }
+// compile helper reused (duplicate removed)
 const prog=gl.createProgram();
 const vs=compile(gl.VERTEX_SHADER, vert);
 const fs=compile(gl.FRAGMENT_SHADER, frag);
@@ -248,7 +250,7 @@ L.res=loc('u_res'); L.eye=loc('u_eye'); L.tgt=loc('u_tgt'); L.fov=loc('u_fov'); 
 L.bPos=[]; L.bRad=[]; L.bNorm=[]; L.bOp=[]; L.bStr=[];
 for(let i=0;i<8;i++){ L.bPos[i]=loc(`u_bPos[${i}]`); L.bRad[i]=loc(`u_bRad[${i}]`); L.bNorm[i]=loc(`u_bNorm[${i}]`); L.bOp[i]=loc(`u_bOp[${i}]`); L.bStr[i]=loc(`u_bStr[${i}]`); }
 L.terr=loc('u_terr'); L.shad=loc('u_shad');
-function resize(){ const dpr=Math.min(devicePixelRatio||1,1.6); const w=Math.round(canvas.clientWidth*dpr), h=Math.round(canvas.clientHeight*dpr); if(canvas.width!==w||canvas.height!==h){ canvas.width=w; canvas.height=h; gl.viewport(0,0,w,h); } }
+function resize(){ const dpr=Math.min(devicePixelRatio||1,1.0); const w=Math.round(canvas.clientWidth*dpr), h=Math.round(canvas.clientHeight*dpr); if(canvas.width!==w||canvas.height!==h){ canvas.width=w; canvas.height=h; gl.viewport(0,0,w,h); } }
 addEventListener('resize',resize); resize();
 let start=performance.now(), last=performance.now(), frames=0;
 function frame(now){
