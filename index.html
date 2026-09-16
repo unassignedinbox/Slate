@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Slate — Realistic Realtime Ocean Simulator</title>
+  <link rel="stylesheet" href="/src/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="scene"></canvas>
+
+    <div id="topbar">
+      <div class="brand">
+        <span class="brand-mark">≋</span>
+        <div>
+          <div class="brand-title">SLATE OCEAN</div>
+          <div class="brand-sub">FFT spectral waves · surf · cancellation · foam particles</div>
+        </div>
+      </div>
+      <div class="top-controls">
+        <select id="preset-select" title="Scenario preset"></select>
+        <button id="btn-play" class="tbtn" title="Pause / resume (space)">⏸</button>
+        <label class="speed">speed <input id="time-scale" type="range" min="0.05" max="3" step="0.05" value="1" /><span id="time-scale-val">1.0×</span></label>
+        <button id="btn-help" class="tbtn" title="Physics & help (H)">?</button>
+        <div id="fps" title="frames per second">-- fps</div>
+      </div>
+    </div>
+
+    <div id="panel-host"></div>
+
+    <div id="dock">
+      <div class="dock-card">
+        <div class="dock-title">Wave spectrum <span id="spectrum-info"></span></div>
+        <canvas id="spectrum-canvas" width="248" height="150"></canvas>
+      </div>
+      <div class="dock-card">
+        <div class="dock-title">Wave probes <span id="probe-info"></span></div>
+        <canvas id="probe-canvas" width="300" height="150"></canvas>
+      </div>
+    </div>
+
+    <div id="hint">drag&nbsp;·&nbsp;orbit&nbsp;&nbsp;&nbsp;wheel&nbsp;·&nbsp;zoom&nbsp;&nbsp;&nbsp;right-drag&nbsp;·&nbsp;pan&nbsp;&nbsp;&nbsp;click water&nbsp;·&nbsp;place probe/buoy</div>
+
+    <div id="help" class="hidden">
+      <div class="help-card">
+        <button id="btn-help-close">✕</button>
+        <h2>Slate Ocean — how it works</h2>
+        <div class="help-cols">
+          <div>
+            <h3>🌊 Spectral wave field (FFT)</h3>
+            <p>The open-ocean surface is synthesized from a physical wave spectrum with an inverse FFT on the GPU
+            (Tessendorf 1999 + JONSWAP/TMA oceanographic spectra). Wind speed, fetch and depth set the energy;
+            swell trains are added as narrow directional lobes. Three cascades (512 / 128 / 32 m tiles) partition the
+            spectrum so wavelengths from ~200 m down to ~25 cm are all resolved.</p>
+            <h3>🚫 Wave cancellation</h3>
+            <p>Water is linear for small waves: heights add. A <b>canceller buoy</b> senses the passing swell with an
+            up-wave probe, fits amplitude + phase (adaptive least-squares, like active noise control), then emits the
+            anti-phase wave — leaving a calm shadow down-wave. Place probes A (up-wave) and B (down-wave) to measure
+            the attenuation in dB. Real systems work exactly this way (dipole absorbers, 2024).</p>
+            <h3>🏄 Surf &amp; breaking waves</h3>
+            <p>Near shore the simulator applies finite-depth physics: group-velocity shoaling (Green's law),
+            depth-limited crest height (Miche ≈ 0.78·D), crest steepening and a pitching lip. Pick
+            <b>Pipeline</b> (reef barrel), <b>Mavericks</b> (deep big-wave reef) or <b>Beach break</b> and watch sets
+            peak, feather and detonate over the bathymetry.</p>
+          </div>
+          <div>
+            <h3>🫧 Foam &amp; spray particles</h3>
+            <p>Whitecaps are <b>not</b> a static texture: a persistent foam field is advected by the measured surface
+            velocity, fed where the surface folds (Jacobian), breaks, or runs up the beach, and decays over seconds.
+            Up to 262k GPU spray/foam <b>particles</b> are ballistically integrated with drag, spawned at folding
+            crests and pitching lips.</p>
+            <h3>📏 Probes</h3>
+            <p>Click the water to drop probe A, then B. Probes read back true GPU wave height and report RMS height,
+            significant height Hs and peak period from zero-crossings. Buoys ride the same field.</p>
+            <h3>⚙ Tips</h3>
+            <ul>
+              <li>Keys: <b>space</b> pause · <b>H</b> help · <b>1..7</b> presets · <b>C</b> place canceller · <b>P</b> place probe</li>
+              <li>Storm preset + whitecaps shows open-ocean foam; Pipeline shows surf foam.</li>
+              <li>If the frame rate drops, lower quality in <i>View &amp; Quality</i>.</li>
+            </ul>
+          </div>
+        </div>
+        <p class="help-foot">Methods: Tessendorf FFT ocean · JONSWAP/TMA spectra (Hasselmann, Bouws) · Donelan–Banner spreading ·
+        Dupuy–Bruneton whitecap criterion · adaptive feedforward cancellation · Miche breaking limit. See RESEARCH.md.</p>
+      </div>
+    </div>
+
+    <div id="loader"><div class="spin">≋</div><div>compiling ocean…</div></div>
+    <div id="fatal" class="hidden"></div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
