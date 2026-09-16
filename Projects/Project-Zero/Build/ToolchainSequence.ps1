@@ -350,6 +350,9 @@ $ShaderTable = @(
     @{ Source = 'SurfaceResolve.slang';        Stage = 'compute';  Output = 'SurfaceResolve.spv' }
     @{ Source = 'VisibilityRaster.vert.slang'; Stage = 'vertex';   Output = 'VisibilityRaster.vert.spv' }
     @{ Source = 'VisibilityRaster.frag.slang'; Stage = 'fragment'; Output = 'VisibilityRaster.frag.spv' }
+    @{ Source = 'OceanSurfaceEvaluate.slang';   Stage = 'vertex';   Output = 'OceanSurfaceEvaluate.spv' }
+    @{ Source = 'OceanParticleDraw.slang';      Stage = 'vertex';   Output = 'OceanParticleDraw.vert.spv' }
+    @{ Source = 'OceanParticleDraw.frag.slang'; Stage = 'fragment'; Output = 'OceanParticleDraw.frag.spv' }
 )
 $ShaderIncludeNames = @('SceneRecords.slang', 'RayGeneration.slang', 'TraversalCWBVH.slang')
 
@@ -642,6 +645,7 @@ $EngineRelative = @(
     'Engine\VolumetricDynamics\LevelSetSpace.cpp'
     'Engine\VolumetricDynamics\FluidSolver.cpp'
     'Engine\VolumetricDynamics\ParticleIntegrator.cpp'
+    'Engine\VolumetricDynamics\OceanSurfaceSolver.cpp'
     'Engine\PlatformInterchange\AcousticStructure.cpp'
     'Engine\PlatformInterchange\AcousticIntegrator.cpp'
     'Engine\PlatformInterchange\VoiceExchange.cpp'

@@ -126,7 +126,10 @@ set(SHADER_TABLE
     "HiZReduce.slang|compute|HiZReduce.spv"
     "SurfaceResolve.slang|compute|SurfaceResolve.spv"
     "VisibilityRaster.vert.slang|vertex|VisibilityRaster.vert.spv"
-    "VisibilityRaster.frag.slang|fragment|VisibilityRaster.frag.spv")
+    "VisibilityRaster.frag.slang|fragment|VisibilityRaster.frag.spv"
+    "OceanSurfaceEvaluate.slang|vertex|OceanSurfaceEvaluate.spv"
+    "OceanParticleDraw.slang|vertex|OceanParticleDraw.vert.spv"
+    "OceanParticleDraw.frag.slang|fragment|OceanParticleDraw.frag.spv")
 
 set(SPV_OUTPUTS)
 if(GLSLC_EXECUTABLE OR SLANGC_EXECUTABLE)
@@ -183,6 +186,7 @@ set(FRONTIER_ENGINE_SOURCES
     Engine/VolumetricDynamics/LevelSetSpace.cpp
     Engine/VolumetricDynamics/FluidSolver.cpp
     Engine/VolumetricDynamics/ParticleIntegrator.cpp
+    Engine/VolumetricDynamics/OceanSurfaceSolver.cpp
     Engine/GeometricRaster/GeometryStructure.cpp
     Engine/GeometricRaster/CameraProjection.cpp
     Engine/GeometricRaster/SceneStructure.cpp
