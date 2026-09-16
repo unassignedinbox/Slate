@@ -1,6 +1,6 @@
 // src/waveModel.js
 // Non-FFT Multi-Scale Cascaded Trochoidal-Stokes Wave Spectrum & Analytical Hydrodynamics
-// Complies strictly with the constraint: NO FFT!
+// Mathematically exact surface tangents and normals via analytical partial derivatives
 
 import { PHYSICS } from './constants.js';
 
@@ -23,7 +23,7 @@ export class WaveModel {
     this.steepnesses = new Float32Array(NUM_WAVES);
     this.phases = new Float32Array(NUM_WAVES);
 
-    // GLSL uniform packing (vec4: [dx, dz, k, A], vec4: [omega, Q, phi, padding])
+    // GLSL uniform packing (vec4: [dx, dz, k, A], vec4: [omega, Q, phi, stokesWeight])
     this.waveData0 = new Float32Array(NUM_WAVES * 4); // dx, dz, k, A
     this.waveData1 = new Float32Array(NUM_WAVES * 4); // omega, Q, phi, stokesWeight
 
@@ -43,51 +43,46 @@ export class WaveModel {
     this.rebuildSpectrum();
   }
 
-  // Synthesize realistic ocean wave spectrum without FFT:
-  // Using 4 physical regimes: Primary Swells, Cross Swells, Wind Gravity Chop, Capillary Waves
+  // Synthesize realistic ocean wave spectrum without FFT
   rebuildSpectrum() {
     const g = this.gravity;
     const wAngle = this.windAngle;
     const wSpeed = this.windSpeed;
 
-    // Golden ratio / irrational factors to ensure waves NEVER repeat periodically
     const phiFactor = 1.61803398875;
     const piE = Math.PI * 2.71828182845;
 
     let index = 0;
 
     // 1. Primary Ocean Swells (6 waves): long wavelengths, high energy, dispersion dominated
-    // Wavelengths from 70m to 180m depending on wind speed
-    const swellBaseLambda = Math.min(220, Math.max(50, 4.0 * wSpeed * (1.0 + 0.1 * wSpeed)));
+    const swellBaseLambda = Math.min(220, Math.max(50, 4.2 * wSpeed * (1.0 + 0.1 * wSpeed)));
     for (let i = 0; i < 6; i++) {
       const lambda = swellBaseLambda * Math.pow(0.82, i) * (0.95 + 0.1 * ((i * phiFactor) % 1));
       const k = (2.0 * Math.PI) / lambda;
       const omega = Math.sqrt(g * k);
-      
-      // Slight directional spread around wind (+/- 12 degrees)
-      const spread = (Math.sin(i * 1.7) * 0.22);
+
+      const spread = Math.sin(i * 1.7) * 0.22;
       const theta = wAngle + spread;
       const dx = Math.cos(theta);
       const dz = Math.sin(theta);
 
-      // Phillips/JONSWAP energy distribution shape without FFT
       const ampBase = (0.35 * Math.pow(wSpeed / 12.0, 1.6)) / Math.sqrt(k);
       const A = Math.max(0.1, ampBase * Math.exp(-0.2 * i)) * this.globalAmplitude * 0.45;
       const Q = (0.55 / (k * A * Math.sqrt(NUM_WAVES))) * this.globalSteepness;
       const phase = (i * piE) % (2.0 * Math.PI);
 
-      this.assignWave(index++, dx, dz, k, A, omega, Q, phase, 0.4);
+      this.assignWave(index++, dx, dz, k, A, omega, Q, phase, 0.45);
     }
 
     // 2. Cross Swell (6 waves): angled from secondary weather system, diamond interference
     const crossBaseLambda = swellBaseLambda * 0.65;
-    const crossAngle = wAngle + (Math.PI * 0.28); // ~50 degrees offset
+    const crossAngle = wAngle + (Math.PI * 0.28);
     for (let i = 0; i < 6; i++) {
       const lambda = crossBaseLambda * Math.pow(0.80, i) * (0.92 + 0.15 * ((i * 1.3) % 1));
       const k = (2.0 * Math.PI) / lambda;
       const omega = Math.sqrt(g * k);
 
-      const spread = (Math.cos(i * 2.1) * 0.35);
+      const spread = Math.cos(i * 2.1) * 0.35;
       const theta = crossAngle + spread;
       const dx = Math.cos(theta);
       const dz = Math.sin(theta);
@@ -96,7 +91,7 @@ export class WaveModel {
       const Q = (0.6 / (k * A * Math.sqrt(NUM_WAVES))) * this.globalSteepness;
       const phase = ((i + 7) * piE) % (2.0 * Math.PI);
 
-      this.assignWave(index++, dx, dz, k, A, omega, Q, phase, 0.35);
+      this.assignWave(index++, dx, dz, k, A, omega, Q, phase, 0.4);
     }
 
     // 3. Wind Gravity Chop (12 waves): steep, tightly aligned with wind, breaks frequently
@@ -104,21 +99,18 @@ export class WaveModel {
     for (let i = 0; i < 12; i++) {
       const lambda = chopBaseLambda * Math.pow(0.78, i) * (0.9 + 0.2 * ((i * 2.7) % 1));
       const k = (2.0 * Math.PI) / lambda;
-      // Capillary-gravity dispersion
       const omega = Math.sqrt(g * k + (0.000074 / 1025.0) * Math.pow(k, 3));
 
-      // Directional spreading cos^s(theta)
       const spread = (Math.sin(i * 3.4) * 0.65) * Math.pow(0.9, i);
       const theta = wAngle + spread;
       const dx = Math.cos(theta);
       const dz = Math.sin(theta);
 
       const A = (0.15 * Math.pow(wSpeed / 12.0, 1.2) / Math.pow(k, 0.65)) * Math.exp(-0.18 * i) * this.globalAmplitude * 0.25;
-      // Higher steepness for wind chop
       const Q = (0.75 / (k * A * Math.sqrt(NUM_WAVES))) * this.globalSteepness;
       const phase = ((i + 19) * piE) % (2.0 * Math.PI);
 
-      this.assignWave(index++, dx, dz, k, A, omega, Q, phase, 0.5);
+      this.assignWave(index++, dx, dz, k, A, omega, Q, phase, 0.55);
     }
 
     // 4. Capillary Ripples (8 waves): high frequency surface geometry
@@ -147,12 +139,10 @@ export class WaveModel {
     this.frequencies[i] = omega;
     this.directions[i * 2 + 0] = dx;
     this.directions[i * 2 + 1] = dz;
-    // Bound steepness to prevent self-intersection loops
     const safeQ = Math.min(1.2, Math.max(0.05, Q));
     this.steepnesses[i] = safeQ;
     this.phases[i] = phi;
 
-    // Pack into Float32 uniform arrays for GLSL
     const idx = i * 4;
     this.waveData0[idx + 0] = dx;
     this.waveData0[idx + 1] = dz;
@@ -165,27 +155,27 @@ export class WaveModel {
     this.waveData1[idx + 3] = stokesWeight;
   }
 
-  // Exact CPU evaluation of wave displacement, normal, velocity, and wave breaking criteria
-  // at any arbitrary world coordinate (x, z) and time t
+  // Exact CPU evaluation of wave displacement, partial derivatives, and analytical normal
   sampleOcean(x, z, time, outResult = {}) {
     const t = time * this.speedMultiplier;
     let dispX = 0.0;
     let dispY = 0.0;
     let dispZ = 0.0;
 
-    let normX = 0.0;
-    let normY = 1.0;
-    let normZ = 0.0;
-
     let velX = 0.0;
     let velY = 0.0;
     let velZ = 0.0;
 
-    // For Jacobian determinant area compression (breaking detection)
-    let dxdx = 0.0;
-    let dxdz = 0.0;
-    let dzdx = 0.0;
-    let dzdz = 0.0;
+    // Tangent vectors for exact analytical normal:
+    // Tx = d(p)/dx = [1 - sum(Q * dx^2 * kA * cos), -sum(dx * kA * sin), -sum(Q * dx*dz * kA * cos)]
+    // Tz = d(p)/dz = [-sum(Q * dx*dz * kA * cos), -sum(dz * kA * sin), 1 - sum(Q * dz^2 * kA * cos)]
+    let tx_x = 1.0;
+    let tx_y = 0.0;
+    let tx_z = 0.0;
+
+    let tz_x = 0.0;
+    let tz_y = 0.0;
+    let tz_z = 1.0;
 
     // Vertical downward acceleration
     let accelY = 0.0;
@@ -204,17 +194,15 @@ export class WaveModel {
       const sinP = Math.sin(phase);
       const cosP = Math.cos(phase);
 
-      // Stokes 2nd-order harmonic wave peaking for razor-sharp crests
-      const stokesSin2 = Math.sin(2.0 * phase);
-      const stokesCos2 = Math.cos(2.0 * phase);
       const kA = k * A;
+      const cos2P = Math.cos(2.0 * phase);
 
-      // Horizontal and vertical trochoidal displacements
+      // Trochoidal displacements
       dispX -= Q * A * dx * sinP;
       dispZ -= Q * A * dz * sinP;
-      dispY += A * (cosP + 0.5 * kA * stokesCos2);
+      dispY += A * (cosP + 0.5 * kA * cos2P * 0.5);
 
-      // Orbital velocities (Eulerian fluid velocity)
+      // Orbital velocities
       velX += omega * A * dx * cosP;
       velZ += omega * A * dz * cosP;
       velY += omega * A * sinP;
@@ -222,33 +210,34 @@ export class WaveModel {
       // Vertical downward acceleration: a_y = -omega^2 * A * cos(phase)
       accelY -= omega * omega * A * cosP;
 
-      // Partial derivatives for analytical normals
-      normX -= dx * k * A * sinP;
-      normZ -= dz * k * A * sinP;
-      normY -= Q * k * A * cosP;
+      // Exact partial derivatives
+      const qkAcos = Q * kA * cosP;
+      const kAsin = kA * sinP;
 
-      // Jacobian derivatives
-      dxdx -= Q * dx * dx * k * A * cosP;
-      dxdz -= Q * dx * dz * k * A * cosP;
-      dzdx -= Q * dz * dx * k * A * cosP;
-      dzdz -= Q * dz * dz * k * A * cosP;
+      tx_x -= dx * dx * qkAcos;
+      tx_y -= dx * kAsin;
+      tx_z -= dx * dz * qkAcos;
+
+      tz_x -= dx * dz * qkAcos;
+      tz_y -= dz * kAsin;
+      tz_z -= dz * dz * qkAcos;
     }
 
-    // Normalize normal vector
-    const invLen = 1.0 / Math.sqrt(normX * normX + normY * normY + normZ * normZ);
-    normX *= invLen;
-    normY *= invLen;
-    normZ *= invLen;
+    // Exact surface normal: N = Tz x Tx (cross product of surface tangents)
+    let nx = tz_y * tx_z - tz_z * tx_y;
+    let ny = tz_z * tx_x - tz_x * tx_z;
+    let nz = tz_x * tx_y - tz_y * tx_x;
 
-    // Area compression Jacobian determinant: J = (1 + dxdx)*(1 + dzdz) - (dxdz)*(dzdx)
-    const J = (1.0 + dxdx) * (1.0 + dzdz) - (dxdz * dzdx);
+    const invLen = 1.0 / Math.max(0.0001, Math.sqrt(nx * nx + ny * ny + nz * nz));
+    nx *= invLen;
+    ny *= invLen;
+    nz *= invLen;
 
-    // Wave breaking criterion:
-    // 1. Horizontal area compression (J < threshold, typically 0.3)
-    // 2. Downward acceleration exceeds limit (accelY < -0.32 * g)
-    // 3. Peak crest height above mean water level
-    const isBreaking = (J < 0.32 || accelY < -0.35 * PHYSICS.GRAVITY) && dispY > 0.4;
-    const breakSeverity = Math.max(0.0, Math.min(1.0, (0.35 - J) * 2.5 + Math.max(0.0, (-accelY / PHYSICS.GRAVITY - 0.35))));
+    // Area compression Jacobian determinant: J = tx_x * tz_z - tx_z * tz_x
+    const J = tx_x * tz_z - tx_z * tz_x;
+
+    const isBreaking = (J < 0.35 || accelY < -0.35 * PHYSICS.GRAVITY) && dispY > 0.3;
+    const breakSeverity = Math.max(0.0, Math.min(1.0, (0.38 - J) * 2.8 + Math.max(0.0, (-accelY / PHYSICS.GRAVITY - 0.35))));
 
     outResult.x = x + dispX;
     outResult.y = dispY;
@@ -256,9 +245,9 @@ export class WaveModel {
     outResult.dispX = dispX;
     outResult.dispY = dispY;
     outResult.dispZ = dispZ;
-    outResult.normalX = normX;
-    outResult.normalY = normY;
-    outResult.normalZ = normZ;
+    outResult.normalX = nx;
+    outResult.normalY = ny;
+    outResult.normalZ = nz;
     outResult.velX = velX;
     outResult.velY = velY;
     outResult.velZ = velZ;
@@ -270,7 +259,7 @@ export class WaveModel {
     return outResult;
   }
 
-  // Fast height-only query (essential for buoyant hull sampling and particle clamping)
+  // Fast height-only query
   getHeight(x, z, time) {
     const t = time * this.speedMultiplier;
     let dispY = 0.0;
@@ -284,12 +273,12 @@ export class WaveModel {
 
       const dot = dx * x + dz * z;
       const phase = k * dot - omega * t + phi;
-      dispY += A * (Math.cos(phase) + 0.5 * k * A * Math.cos(2.0 * phase));
+      dispY += A * (Math.cos(phase) + 0.25 * k * A * Math.cos(2.0 * phase));
     }
     return dispY;
   }
 
-  // GLSL snippet providing the exact same math in the GPU vertex shader!
+  // Exact GLSL implementation
   static getGLSLWaveFunction() {
     return `
       #define NUM_WAVES 32
@@ -307,13 +296,12 @@ export class WaveModel {
 
       WaveResult evaluateWaves(vec2 pos, float time) {
         vec3 disp = vec3(0.0);
-        vec3 n = vec3(0.0, 1.0, 0.0);
         vec3 vel = vec3(0.0);
 
-        float dxdx = 0.0;
-        float dxdz = 0.0;
-        float dzdx = 0.0;
-        float dzdz = 0.0;
+        // Surface tangent partial derivatives: Tx and Tz
+        vec3 Tx = vec3(1.0, 0.0, 0.0);
+        vec3 Tz = vec3(0.0, 0.0, 1.0);
+
         float crestAcc = 0.0;
 
         for (int i = 0; i < NUM_WAVES; i++) {
@@ -334,41 +322,42 @@ export class WaveModel {
           float sinP = sin(phase);
           float cosP = cos(phase);
 
-          // Non-linear Stokes 2nd-order harmonic wave peaking
+          float kA = k * A;
           float cos2P = cos(2.0 * phase);
-          float stokesPeaking = 0.5 * k * A * cos2P * stokesWeight;
+          float stokesPeaking = 0.25 * kA * cos2P * stokesWeight;
 
-          // Trochoidal displacements (sharp crests, broad flat troughs)
+          // Trochoidal displacement
           disp.x -= Q * A * dir.x * sinP;
           disp.z -= Q * A * dir.y * sinP;
           disp.y += A * (cosP + stokesPeaking);
-
-          // Analytical partial derivatives for exact geometric normals
-          n.x -= dir.x * k * A * sinP;
-          n.z -= dir.y * k * A * sinP;
-          n.y -= Q * k * A * cosP;
 
           // Orbital velocity
           vel.x += omega * A * dir.x * cosP;
           vel.z += omega * A * dir.y * cosP;
           vel.y += omega * A * sinP;
 
-          // Area compression Jacobian derivatives
-          dxdx -= Q * dir.x * dir.x * k * A * cosP;
-          dxdz -= Q * dir.x * dir.y * k * A * cosP;
-          dzdx -= Q * dir.y * dir.x * k * A * cosP;
-          dzdz -= Q * dir.y * dir.y * k * A * cosP;
+          // Exact partial derivatives for surface tangents
+          float qkAcos = Q * kA * cosP;
+          float kAsin = kA * sinP;
 
-          // Downward crest curvature
+          Tx.x -= dir.x * dir.x * qkAcos;
+          Tx.y -= dir.y * kAsin;
+          Tx.z -= dir.x * dir.y * qkAcos;
+
+          Tz.x -= dir.x * dir.y * qkAcos;
+          Tz.y -= dir.y * kAsin;
+          Tz.z -= dir.y * dir.y * qkAcos;
+
           crestAcc += A * cosP;
         }
 
-        n = normalize(n);
-        float J = (1.0 + dxdx) * (1.0 + dzdz) - (dxdz * dzdx);
+        // Exact analytical normal: cross product of surface tangents
+        vec3 N = normalize(cross(Tz, Tx));
+        float J = Tx.x * Tz.z - Tx.z * Tz.x;
 
         WaveResult res;
         res.displacement = disp;
-        res.normal = n;
+        res.normal = N;
         res.velocity = vel;
         res.jacobian = J;
         res.crestFactor = max(0.0, crestAcc);

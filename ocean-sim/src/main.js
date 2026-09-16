@@ -1,6 +1,6 @@
 // src/main.js
-// Next-Gen Real-time Ocean Fluid Simulation Engine
-// Complies with all constraints: NO FFT, NO SHADER FOAM (100% physical particles)
+// Next-Gen Realtime Ocean Fluid Simulation Engine
+// Complies with all constraints: NO FFT • NO SHADER FOAM (100% physical particles)
 // AAA Graphics (GTA 6 / Unreal Engine 5 tier) running smoothly at 60 FPS on GTX cards
 
 import * as THREE from 'three';
@@ -23,7 +23,7 @@ class OceanApplication {
     this.frameCount = 0;
     this.fpsTimer = 0;
 
-    this.cameraMode = 'chase'; // 'orbit', 'chase', 'helm', 'waterline'
+    this.cameraMode = 'chase'; // 'chase', 'helm', 'waterline', 'orbit'
 
     this.initScene();
     this.initSystems();
@@ -31,7 +31,11 @@ class OceanApplication {
     this.initGUI();
     this.applyPreset(PRESETS.OPEN_OCEAN);
 
+    // Precise resize handling using both ResizeObserver and window resize
+    const resizeObserver = new ResizeObserver(() => this.onResize());
+    resizeObserver.observe(this.container);
     window.addEventListener('resize', () => this.onResize());
+
     this.animate();
   }
 
@@ -43,25 +47,25 @@ class OceanApplication {
       stencil: false,
       depth: true
     });
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setSize(this.container.clientWidth || window.innerWidth, this.container.clientHeight || window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.15;
+    this.renderer.toneMappingExposure = 1.18;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.container.appendChild(this.renderer.domElement);
 
-    // 2. Scene & Camera
-    this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(54, window.innerWidth / window.innerHeight, 0.1, 3500);
+    // 2. Camera with high-precision depth range (near: 0.5, far: 4500)
+    const aspect = (this.container.clientWidth || window.innerWidth) / (this.container.clientHeight || window.innerHeight);
+    this.camera = new THREE.PerspectiveCamera(54, aspect, 0.5, 4500);
     this.camera.position.set(0, 10, 25);
 
     // 3. Orbit Controls
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.06;
-    this.controls.maxPolarAngle = Math.PI * 0.495; // Don't flip below water plane
+    this.controls.maxPolarAngle = Math.PI * 0.492; // Never clip underneath water plane
     this.controls.minDistance = 2.0;
-    this.controls.maxDistance = 250.0;
+    this.controls.maxDistance = 350.0;
     this.controls.target.set(0, 0, 0);
 
     // Vector caches
@@ -76,16 +80,16 @@ class OceanApplication {
     // 1. Sky & Atmospheric Scattering
     this.sky = new SkyAndAtmosphere(this.scene);
 
-    // 2. Multi-Octave Cascaded Trochoidal-Stokes Wave Model (NO FFT!)
+    // 2. Multi-Octave Cascaded Trochoidal-Stokes Wave Model (Strictly NO FFT!)
     this.waveModel = new WaveModel();
 
     // 3. Real-Time Dynamic 2D Fluid Simulation Grid (Wakes & Splashes)
     this.fluidGrid = new DynamicFluidGrid(192, 120.0);
 
-    // 4. Physical Particle Foam & Spray Simulation (NO SHADER FOAM!)
+    // 4. Physical Particle Foam & Spray Simulation (Strictly NO SHADER FOAM!)
     this.particleFoam = new PhysicalParticleFoamSystem(this.scene, this.waveModel, this.fluidGrid);
 
-    // 5. PBR Ocean Water Mesh (GTA 6 / Unreal Engine 5 tier)
+    // 5. PBR Ocean Water Mesh with Radial Horizon Skirt
     this.ocean = new OceanMesh(this.scene, this.waveModel, this.fluidGrid);
 
     // 6. Interactive 6-DOF Buoyant Offshore Boat
@@ -93,20 +97,20 @@ class OceanApplication {
   }
 
   initInteraction() {
-    // Raycasting for interactive mouse fluid disturbances
     const onPointerMove = (e) => {
-      this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-      this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      const rect = this.container.getBoundingClientRect();
+      this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
       if (this.isMouseDown) {
-        this.triggerFluidSplash(e.clientX, e.clientY, 1.2);
+        this.triggerFluidSplash(1.2);
       }
     };
 
     window.addEventListener('mousedown', (e) => {
       if (e.target.closest('#hud') || e.target.closest('.lil-gui') || e.target.closest('.modal')) return;
       this.isMouseDown = true;
-      this.triggerFluidSplash(e.clientX, e.clientY, 2.0);
+      this.triggerFluidSplash(2.2);
     });
 
     window.addEventListener('mouseup', () => {
@@ -155,22 +159,21 @@ class OceanApplication {
     }
   }
 
-  triggerFluidSplash(clientX, clientY, intensity) {
+  triggerFluidSplash(intensity) {
     this.raycaster.setFromCamera(this.mouse, this.camera);
-    // Intersect plane at Y = 0
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     const hitPoint = new THREE.Vector3();
     if (this.raycaster.ray.intersectPlane(plane, hitPoint)) {
-      this.fluidGrid.addDisturbance(hitPoint.x, hitPoint.z, 3.5, intensity);
+      this.fluidGrid.addDisturbance(hitPoint.x, hitPoint.z, 3.8, intensity);
 
-      // Spawn a burst of water spray particles at splash point
-      for (let i = 0; i < 12; i++) {
-        const sx = hitPoint.x + (Math.random() - 0.5) * 1.5;
-        const sz = hitPoint.z + (Math.random() - 0.5) * 1.5;
-        const sy = 0.2;
-        const svx = (Math.random() - 0.5) * 5.0;
-        const svy = 3.0 + Math.random() * 4.0;
-        const svz = (Math.random() - 0.5) * 5.0;
+      // Spawn burst of physical water spray particles
+      for (let i = 0; i < 14; i++) {
+        const sx = hitPoint.x + (Math.random() - 0.5) * 1.6;
+        const sz = hitPoint.z + (Math.random() - 0.5) * 1.6;
+        const sy = 0.25;
+        const svx = (Math.random() - 0.5) * 5.5;
+        const svy = 3.2 + Math.random() * 4.2;
+        const svz = (Math.random() - 0.5) * 5.5;
         this.particleFoam.spawnParticle(sx, sy, sz, svx, svy, svz, 0.35, 1.4, 0, 0.9);
       }
     }
@@ -301,7 +304,6 @@ class OceanApplication {
       this.ocean.setWireframe(v);
     });
 
-    // Default collapsed folders for clean look
     fWave.close();
     fWind.close();
     fParticles.close();
@@ -311,13 +313,17 @@ class OceanApplication {
   }
 
   onResize() {
-    this.camera.aspect = window.innerWidth / window.innerHeight;
+    const width = this.container.clientWidth || window.innerWidth;
+    const height = this.container.clientHeight || window.innerHeight;
+    if (width === 0 || height === 0) return;
+
+    this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setSize(width, height);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
   }
 
-  updateCamera(dt) {
+  updateCamera(dt, time) {
     if (this.cameraMode === 'chase') {
       this.boat.getChaseCameraTarget(this.camTargetPos, this.camTargetLook);
       this.camera.position.lerp(this.camTargetPos, dt * 6.5);
@@ -329,13 +335,22 @@ class OceanApplication {
       this.controls.target.copy(this.camTargetLook);
       this.camera.lookAt(this.camTargetLook);
     } else if (this.cameraMode === 'waterline') {
-      // Skim just 0.45m above wave surface ahead of boat
-      const waveH = this.waveModel.getHeight(this.boat.position.x - 8, this.boat.position.z + 8, performance.now() * 0.001);
-      this.camTargetPos.set(this.boat.position.x - 8, waveH + 0.45, this.boat.position.z + 8);
+      const cosH = Math.cos(this.boat.heading);
+      const sinH = Math.sin(this.boat.heading);
+      const camX = this.boat.position.x - sinH * 7.5;
+      const camZ = this.boat.position.z + cosH * 7.5;
+      const waveH = this.waveModel.getHeight(camX, camZ, time);
+      this.camTargetPos.set(camX, waveH + 0.55, camZ);
       this.camera.position.lerp(this.camTargetPos, dt * 8.0);
-      this.camera.lookAt(this.boat.position);
+      this.camera.lookAt(this.boat.position.x, this.boat.position.y + 0.8, this.boat.position.z);
     } else if (this.cameraMode === 'orbit') {
       this.controls.update();
+    }
+
+    // Safety check: ensure camera never clips inside a wave crest
+    const waveAtCam = this.waveModel.getHeight(this.camera.position.x, this.camera.position.z, time);
+    if (this.camera.position.y < waveAtCam + 0.45) {
+      this.camera.position.y = THREE.MathUtils.lerp(this.camera.position.y, waveAtCam + 0.5, dt * 15.0);
     }
   }
 
@@ -371,7 +386,6 @@ class OceanApplication {
     const now = performance.now();
     let dt = (now - this.lastTime) * 0.001;
     this.lastTime = now;
-    // Clamp delta time to avoid physics explosion on tab suspend
     dt = Math.min(0.06, Math.max(0.001, dt));
     const time = now * 0.001;
 
@@ -389,7 +403,7 @@ class OceanApplication {
       this.sky.skyColor
     );
 
-    // 4. Update Ocean Water Surface Shaders & Camera Snapping
+    // 4. Update Ocean Water Surface Shaders & Camera Tracking
     this.ocean.update(
       time,
       this.camera.position,
@@ -401,8 +415,8 @@ class OceanApplication {
     // 5. Update Atmospheric Sky Dome
     this.sky.update(this.camera.position, time);
 
-    // 6. Camera Controller
-    this.updateCamera(dt);
+    // 6. Camera Controller with Waterline Clearance
+    this.updateCamera(dt, time);
 
     // 7. Render Final Scene
     this.renderer.render(this.scene, this.camera);
@@ -412,7 +426,6 @@ class OceanApplication {
   }
 }
 
-// Boot application when DOM is ready
 window.addEventListener('DOMContentLoaded', () => {
   new OceanApplication();
 });

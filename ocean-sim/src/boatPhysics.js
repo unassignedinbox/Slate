@@ -1,6 +1,7 @@
 // src/boatPhysics.js
-// 6-DOF Hydrodynamic Buoyant Boat Simulation & Interactive Vessel
-// Features multi-probe hydrostatic buoyancy, wave riding, dynamic wake injection, and particle foam churn
+// 6-DOF Hydrodynamic Buoyant Rigid-Body Simulation
+// Simulates realistic waterline plane sampling, 2nd-order heave-pitch-roll mass inertia,
+// dynamic hull planing lift, banking roll in turns, and trailing wake fluid disturbances
 
 import * as THREE from 'three';
 import { PHYSICS } from './constants.js';
@@ -13,31 +14,39 @@ export class BoatController {
     this.particleSystem = particleSystem;
 
     // Rigid body state
-    this.position = new THREE.Vector3(0, 0, 0);
+    this.position = new THREE.Vector3(0, 0.25, 0);
     this.velocity = new THREE.Vector3(0, 0, 0);
-    this.heading = 0.0; // Yaw angle (radians)
-    this.pitch = 0.0;
-    this.roll = 0.0;
-    this.yawRate = 0.0;
+    this.heading = 0.0;     // Yaw angle (radians)
+    this.pitch = 0.0;       // Pitch angle (radians)
+    this.roll = 0.0;        // Roll angle (radians)
 
-    this.throttle = 0.0;      // [-1.0, 1.0]
-    this.rudder = 0.0;        // [-1.0, 1.0]
-    this.speed = 0.0;         // Forward speed (knots / m/s)
-    this.isBoosted = false;
+    // Dynamic velocities
+    this.velY = 0.0;
+    this.velPitch = 0.0;
+    this.velRoll = 0.0;
+    this.angularVelYaw = 0.0;
 
-    // Physical mass & dimensions
-    this.mass = 2800.0;       // kg
-    this.maxSpeed = 22.0;     // m/s (~43 knots)
-    this.acceleration = 12.0;
+    // Engine and control inputs
+    this.throttle = 0.0;
+    this.rudder = 0.0;
+    this.speed = 0.0;
 
-    // 6 Hydrodynamic Buoyancy Sampling Probes (relative to boat center)
+    // Physical mass, inertias, and hydrodynamic dimensions
+    this.mass = 3200.0;           // kg
+    this.maxForwardSpeed = 24.0;  // m/s (~46 knots)
+    this.maxReverseSpeed = -5.5;  // m/s
+    this.enginePower = 15.0;      // m/s^2
+
+    // 8-Point Hydrodynamic Waterline Sampling Probes (local coordinates)
     this.probes = [
-      { localPos: new THREE.Vector3( 0.0, -0.2,  4.2), area: 0.85, name: 'bow' },
-      { localPos: new THREE.Vector3(-1.3, -0.2,  0.8), area: 1.1,  name: 'mid-port' },
-      { localPos: new THREE.Vector3( 1.3, -0.2,  0.8), area: 1.1,  name: 'mid-starboard' },
-      { localPos: new THREE.Vector3(-1.2, -0.2, -3.4), area: 1.25, name: 'stern-port' },
-      { localPos: new THREE.Vector3( 1.2, -0.2, -3.4), area: 1.25, name: 'stern-starboard' },
-      { localPos: new THREE.Vector3( 0.0, -0.7, -0.5), area: 1.5,  name: 'keel' }
+      { localPos: new THREE.Vector3( 0.0, -0.2,  4.5), weight: 1.2, name: 'bow' },
+      { localPos: new THREE.Vector3(-0.95,-0.2,  2.4), weight: 1.0, name: 'bow-port' },
+      { localPos: new THREE.Vector3( 0.95,-0.2,  2.4), weight: 1.0, name: 'bow-starboard' },
+      { localPos: new THREE.Vector3(-1.35,-0.2,  0.0), weight: 1.1, name: 'mid-port' },
+      { localPos: new THREE.Vector3( 1.35,-0.2,  0.0), weight: 1.1, name: 'mid-starboard' },
+      { localPos: new THREE.Vector3(-1.15,-0.2, -3.2), weight: 1.3, name: 'stern-port' },
+      { localPos: new THREE.Vector3( 1.15,-0.2, -3.2), weight: 1.3, name: 'stern-starboard' },
+      { localPos: new THREE.Vector3( 0.0, -0.6, -0.2), weight: 1.6, name: 'keel' }
     ];
 
     this.buildBoatMesh();
@@ -49,70 +58,69 @@ export class BoatController {
 
     // High quality PBR materials
     const hullMat = new THREE.MeshStandardMaterial({
-      color: 0x111e2e, // Deep navy performance hull
-      roughness: 0.25,
-      metalness: 0.1
+      color: 0x0f1c2b,
+      roughness: 0.22,
+      metalness: 0.15
     });
 
     const deckMat = new THREE.MeshStandardMaterial({
-      color: 0xe8ecf0, // Clean yacht white deck
-      roughness: 0.4,
+      color: 0xeff3f8,
+      roughness: 0.35,
       metalness: 0.05
     });
 
-    const cabinGlassMat = new THREE.MeshPhysicalMaterial({
-      color: 0x051525,
-      roughness: 0.05,
-      metalness: 0.9,
-      transmission: 0.6,
+    const glassMat = new THREE.MeshPhysicalMaterial({
+      color: 0x031020,
+      roughness: 0.04,
+      metalness: 0.95,
+      transmission: 0.65,
       transparent: true,
-      opacity: 0.85
+      opacity: 0.88
     });
 
     const chromeMat = new THREE.MeshStandardMaterial({
-      color: 0xdddddd,
-      roughness: 0.15,
-      metalness: 0.95
+      color: 0xe0e0e0,
+      roughness: 0.12,
+      metalness: 0.96
     });
 
     const engineMat = new THREE.MeshStandardMaterial({
-      color: 0x1a1a1a,
-      roughness: 0.3,
-      metalness: 0.7
+      color: 0x181818,
+      roughness: 0.28,
+      metalness: 0.8
     });
 
     // 1. Sleek V-bottom offshore boat hull
     const hullGeo = new THREE.BufferGeometry();
-    // Procedural deep-V hull vertices
     const hullVerts = new Float32Array([
       // Bow stem wedge
-       0.0, -0.8,  4.5,   0.0,  0.6,  4.5,  -1.2,  0.5,  2.0,
-       0.0, -0.8,  4.5,  -1.2,  0.5,  2.0,  -0.5, -0.7,  2.0,
-       0.0, -0.8,  4.5,   1.2,  0.5,  2.0,   0.0,  0.6,  4.5,
-       0.0, -0.8,  4.5,   0.5, -0.7,  2.0,   1.2,  0.5,  2.0,
+       0.0, -0.85,  4.6,   0.0,  0.65,  4.6,  -1.2,  0.55,  2.0,
+       0.0, -0.85,  4.6,  -1.2,  0.55,  2.0,  -0.55,-0.72,  2.0,
+       0.0, -0.85,  4.6,   1.2,  0.55,  2.0,   0.0,  0.65,  4.6,
+       0.0, -0.85,  4.6,   0.55,-0.72,  2.0,   1.2,  0.55,  2.0,
 
       // Midship hull sections
-      -1.2,  0.5,  2.0,  -1.4,  0.5, -2.5,  -0.6, -0.7, -2.5,
-      -1.2,  0.5,  2.0,  -0.6, -0.7, -2.5,  -0.5, -0.7,  2.0,
-       1.2,  0.5,  2.0,   0.6, -0.7, -2.5,   1.4,  0.5, -2.5,
-       1.2,  0.5,  2.0,   0.5, -0.7,  2.0,   0.6, -0.7, -2.5,
+      -1.2,  0.55,  2.0,  -1.42, 0.55, -2.5,  -0.65,-0.72, -2.5,
+      -1.2,  0.55,  2.0,  -0.65,-0.72, -2.5,  -0.55,-0.72,  2.0,
+       1.2,  0.55,  2.0,   0.65,-0.72, -2.5,   1.42, 0.55, -2.5,
+       1.2,  0.55,  2.0,   0.55,-0.72,  2.0,   0.65,-0.72, -2.5,
 
       // Keel V bottom
-       0.0, -0.9,  2.0,  -0.5, -0.7,  2.0,  -0.6, -0.7, -2.5,
-       0.0, -0.9,  2.0,  -0.6, -0.7, -2.5,   0.0, -0.85,-2.5,
-       0.0, -0.9,  2.0,   0.6, -0.7, -2.5,   0.5, -0.7,  2.0,
-       0.0, -0.9,  2.0,   0.0, -0.85,-2.5,   0.6, -0.7, -2.5,
+       0.0, -0.92,  2.0,  -0.55,-0.72,  2.0,  -0.65,-0.72, -2.5,
+       0.0, -0.92,  2.0,  -0.65,-0.72, -2.5,   0.0, -0.88, -2.5,
+       0.0, -0.92,  2.0,   0.65,-0.72, -2.5,   0.55,-0.72,  2.0,
+       0.0, -0.92,  2.0,   0.0, -0.88, -2.5,   0.65,-0.72, -2.5,
 
       // Transom stern
-      -1.4,  0.5, -2.5,  -1.3,  0.5, -3.8,  -0.6, -0.7, -3.8,
-      -1.4,  0.5, -2.5,  -0.6, -0.7, -3.8,  -0.6, -0.7, -2.5,
-       1.4,  0.5, -2.5,   0.6, -0.7, -3.8,   1.3,  0.5, -3.8,
-       1.4,  0.5, -2.5,   0.6, -0.7, -2.5,   0.6, -0.7, -3.8,
+      -1.42, 0.55, -2.5,  -1.32, 0.55, -3.8,  -0.65,-0.72, -3.8,
+      -1.42, 0.55, -2.5,  -0.65,-0.72, -3.8,  -0.65,-0.72, -2.5,
+       1.42, 0.55, -2.5,   0.65,-0.72, -3.8,   1.32, 0.55, -3.8,
+       1.42, 0.55, -2.5,   0.65,-0.72, -2.5,   0.65,-0.72, -3.8,
 
       // Stern flat transom plate
-      -1.3,  0.5, -3.8,   1.3,  0.5, -3.8,   0.0, -0.85,-3.8,
-      -1.3,  0.5, -3.8,   0.0, -0.85,-3.8,  -0.6, -0.7, -3.8,
-       1.3,  0.5, -3.8,   0.6, -0.7, -3.8,   0.0, -0.85,-3.8,
+      -1.32, 0.55, -3.8,   1.32, 0.55, -3.8,   0.0, -0.88, -3.8,
+      -1.32, 0.55, -3.8,   0.0, -0.88, -3.8,  -0.65,-0.72, -3.8,
+       1.32, 0.55, -3.8,   0.65,-0.72, -3.8,   0.0, -0.88, -3.8,
     ]);
 
     hullGeo.setAttribute('position', new THREE.BufferAttribute(hullVerts, 3));
@@ -121,67 +129,65 @@ export class BoatController {
     this.root.add(hullMesh);
 
     // 2. Deck structure
-    const deckGeo = new THREE.BoxGeometry(2.5, 0.25, 7.6);
+    const deckGeo = new THREE.BoxGeometry(2.55, 0.25, 7.8);
     const deckMesh = new THREE.Mesh(deckGeo, deckMat);
-    deckMesh.position.set(0, 0.45, -0.1);
+    deckMesh.position.set(0, 0.48, -0.1);
     this.root.add(deckMesh);
 
-    // 3. Cockpit cabin & tinted windshield
-    const cabinGeo = new THREE.BoxGeometry(1.9, 0.85, 2.8);
+    // 3. Cabin & tinted windshield
+    const cabinGeo = new THREE.BoxGeometry(1.95, 0.88, 2.9);
     const cabinMesh = new THREE.Mesh(cabinGeo, deckMat);
-    cabinMesh.position.set(0, 0.95, 0.2);
+    cabinMesh.position.set(0, 0.98, 0.2);
     this.root.add(cabinMesh);
 
-    const glassGeo = new THREE.BoxGeometry(1.82, 0.65, 1.8);
-    const glassMesh = new THREE.Mesh(glassGeo, cabinGlassMat);
-    glassMesh.position.set(0, 1.35, 0.4);
-    glassMesh.rotation.x = -0.22;
+    const glassGeo = new THREE.BoxGeometry(1.88, 0.68, 1.85);
+    const glassMesh = new THREE.Mesh(glassGeo, glassMat);
+    glassMesh.position.set(0, 1.4, 0.45);
+    glassMesh.rotation.x = -0.25;
     this.root.add(glassMesh);
 
     // Hardtop roof
-    const roofGeo = new THREE.BoxGeometry(2.1, 0.12, 2.4);
+    const roofGeo = new THREE.BoxGeometry(2.15, 0.12, 2.45);
     const roofMesh = new THREE.Mesh(roofGeo, deckMat);
-    roofMesh.position.set(0, 1.75, 0.1);
+    roofMesh.position.set(0, 1.82, 0.15);
     this.root.add(roofMesh);
 
-    // Marine radar dome on roof
+    // Marine radar dome
     const radarGeo = new THREE.CylinderGeometry(0.35, 0.4, 0.22, 16);
     const radarMesh = new THREE.Mesh(radarGeo, chromeMat);
-    radarMesh.position.set(0, 1.95, 0.1);
+    radarMesh.position.set(0, 2.02, 0.15);
     this.root.add(radarMesh);
 
     // 4. Twin High-Performance Outboard Motors
     for (let side = -1; side <= 1; side += 2) {
       const motorGroup = new THREE.Group();
-      const motorGeo = new THREE.BoxGeometry(0.35, 0.9, 0.55);
+      const motorGeo = new THREE.BoxGeometry(0.36, 0.95, 0.58);
       const motorMesh = new THREE.Mesh(motorGeo, engineMat);
       motorGroup.add(motorMesh);
 
-      // Lower gearcase & prop shaft
-      const lowerGeo = new THREE.CylinderGeometry(0.12, 0.08, 0.6, 8);
+      const lowerGeo = new THREE.CylinderGeometry(0.12, 0.08, 0.65, 8);
       const lowerMesh = new THREE.Mesh(lowerGeo, chromeMat);
-      lowerMesh.position.set(0, -0.55, 0);
+      lowerMesh.position.set(0, -0.6, 0);
       motorGroup.add(lowerMesh);
 
-      motorGroup.position.set(side * 0.75, 0.2, -4.05);
+      motorGroup.position.set(side * 0.78, 0.2, -4.1);
       this.root.add(motorGroup);
     }
 
     // 5. Chrome bow railing
-    const railMat = chromeMat;
-    const railGeo = new THREE.TorusGeometry(1.15, 0.035, 8, 24, Math.PI);
-    const railMesh = new THREE.Mesh(railGeo, railMat);
+    const railGeo = new THREE.TorusGeometry(1.18, 0.035, 8, 24, Math.PI);
+    const railMesh = new THREE.Mesh(railGeo, chromeMat);
     railMesh.rotation.x = Math.PI * 0.5;
-    railMesh.position.set(0, 0.72, 2.5);
+    railMesh.position.set(0, 0.75, 2.6);
     this.root.add(railMesh);
 
-    // 6. Navigation lights (Port red, Starboard green)
+    // 6. Navigation lights
     const navRed = new THREE.Mesh(new THREE.SphereGeometry(0.06), new THREE.MeshBasicMaterial({ color: 0xff1122 }));
-    navRed.position.set(-1.1, 0.65, 2.2);
+    navRed.position.set(-1.15, 0.68, 2.3);
     this.root.add(navRed);
 
     const navGreen = new THREE.Mesh(new THREE.SphereGeometry(0.06), new THREE.MeshBasicMaterial({ color: 0x11ff44 }));
-    navGreen.position.set(1.1, 0.65, 2.2);
+    navGreen.position.set(1.15, 0.68, 2.3);
     this.root.add(navGreen);
 
     this.scene.add(this.root);
@@ -248,7 +254,7 @@ export class BoatController {
   }
 
   update(dt, time) {
-    // 1. Process Player Input Controls
+    // 1. Process Input Controls
     let targetThrottle = 0.0;
     if (this.keys.forward) targetThrottle += 1.0;
     if (this.keys.backward) targetThrottle -= 0.6;
@@ -258,77 +264,104 @@ export class BoatController {
     if (this.keys.left) targetRudder -= 1.0;
     if (this.keys.right) targetRudder += 1.0;
 
-    // Smooth throttle and steering input
-    this.throttle = THREE.MathUtils.lerp(this.throttle, targetThrottle, dt * 4.0);
+    this.throttle = THREE.MathUtils.lerp(this.throttle, targetThrottle, dt * 5.0);
     this.rudder = THREE.MathUtils.lerp(this.rudder, targetRudder, dt * 6.0);
 
     // Forward thrust and hull drag
-    const forwardAcc = this.throttle * (this.acceleration * (this.keys.boost ? 1.5 : 1.0));
-    const dragCoeff = 0.045 + (this.speed > 8.0 ? 0.015 : 0.035); // Lower planing drag at speed
+    const forwardAcc = this.throttle * (this.enginePower * (this.keys.boost ? 1.5 : 1.0));
+    const dragCoeff = 0.042 + (Math.abs(this.speed) > 7.0 ? 0.015 : 0.035);
     this.speed += (forwardAcc - Math.sign(this.speed) * dragCoeff * this.speed * this.speed) * dt;
 
-    // Cap speed
-    const maxSpd = this.keys.boost ? this.maxSpeed * 1.35 : this.maxSpeed;
-    this.speed = Math.max(-6.0, Math.min(maxSpd, this.speed));
+    const maxSpd = this.keys.boost ? this.maxForwardSpeed * 1.35 : this.maxForwardSpeed;
+    this.speed = Math.max(this.maxReverseSpeed, Math.min(maxSpd, this.speed));
 
-    // Turning dynamics (rudder torque is proportional to forward velocity)
-    const turnRate = this.rudder * (1.2 * Math.sign(this.speed) * Math.min(1.0, Math.abs(this.speed) * 0.2));
-    this.heading += turnRate * dt;
+    // Yaw turning dynamics
+    const turnSensitivity = 1.15 * Math.sign(this.speed) * Math.min(1.0, Math.abs(this.speed) * 0.22);
+    this.angularVelYaw = THREE.MathUtils.lerp(this.angularVelYaw, this.rudder * turnSensitivity, dt * 8.0);
+    this.heading += this.angularVelYaw * dt;
 
-    // Planing lift at high speed: boat bows up slightly and rises above waterline
-    const planingLift = Math.min(0.35, Math.max(0.0, (this.speed - 5.0) * 0.03));
-    const bowRise = Math.min(0.12, Math.max(0.0, this.speed * 0.008));
+    // Dynamic Planing Lift (as boat speeds up, water pressure lifts the hull and angles bow up)
+    const speedRatio = Math.max(0.0, Math.min(1.0, (Math.abs(this.speed) - 3.5) / 16.0));
+    const planingLift = speedRatio * 0.42;
+    const dynamicBowRise = speedRatio * 0.085;
 
-    // 2. 6-DOF Hydrodynamic Buoyancy Simulation (Multi-Probe Sampling)
-    // Transform probes into world space based on current heading, pitch, and roll
+    // Centrifugal Banking Roll (leans inward during turns)
+    const bankingRoll = -this.angularVelYaw * (this.speed * 0.09);
+
+    // 2. Hydrodynamic Waterline Plane Sampling
     const cosH = Math.cos(this.heading);
     const sinH = Math.sin(this.heading);
 
-    let totalBuoyancy = 0.0;
-    let targetPitch = bowRise;
-    let targetRoll = -turnRate * 0.25; // Inward bank while turning
-    let avgWaterHeight = 0.0;
+    let sumWaterHeight = 0.0;
+    let sumWeights = 0.0;
+
+    let bowHeight = 0.0;
+    let sternHeight = 0.0;
+    let portHeight = 0.0;
+    let starboardHeight = 0.0;
 
     for (let i = 0; i < this.probes.length; i++) {
       const probe = this.probes[i];
-      // World coordinates of probe
-      const pWorldX = this.position.x + (cosH * probe.localPos.x - sinH * probe.localPos.z);
-      const pWorldZ = this.position.z + (sinH * probe.localPos.x + cosH * probe.localPos.z);
-      const pWorldY = this.position.y + probe.localPos.y;
+      const lx = probe.localPos.x;
+      const lz = probe.localPos.z;
 
-      // Sample wave height + dynamic fluid simulation disturbance
-      const waveH = this.waveModel.getHeight(pWorldX, pWorldZ, time) + this.fluidGrid.sampleHeight(pWorldX, pWorldZ);
-      avgWaterHeight += waveH;
+      // Probe position in world coordinates (based on vessel heading)
+      const worldPx = this.position.x + (cosH * lx - sinH * lz);
+      const worldPz = this.position.z + (sinH * lx + cosH * lz);
 
-      const submersion = Math.max(0.0, waveH - pWorldY);
-      const force = submersion * probe.area * PHYSICS.GRAVITY * 180.0;
-      totalBuoyancy += force;
+      const h = this.waveModel.getHeight(worldPx, worldPz, time) +
+                this.fluidGrid.sampleHeight(worldPx, worldPz);
 
-      // Pitch torque contribution (Z offset)
-      targetPitch += (waveH - this.position.y) * (-probe.localPos.z * 0.04);
-      // Roll torque contribution (X offset)
-      targetRoll += (waveH - this.position.y) * (probe.localPos.x * 0.06);
+      sumWaterHeight += h * probe.weight;
+      sumWeights += probe.weight;
+
+      if (probe.name === 'bow') bowHeight = h;
+      if (probe.name === 'stern-port' || probe.name === 'stern-starboard') sternHeight += h * 0.5;
+      if (probe.name === 'mid-port') portHeight = h;
+      if (probe.name === 'mid-starboard') starboardHeight = h;
     }
 
-    avgWaterHeight /= this.probes.length;
+    const meanWaterHeight = sumWaterHeight / sumWeights;
 
-    // Vertical heave equilibrium (damped spring toward wave water height)
-    const targetY = avgWaterHeight + 0.25 + planingLift;
-    this.position.y = THREE.MathUtils.lerp(this.position.y, targetY, dt * 7.0);
+    // Physical waterline slopes:
+    // Pitch slope along centerline (bow is +4.5m, stern is -3.2m -> length = 7.7m)
+    // When bow is higher than stern, water slopes up towards the bow: boat pitches up (-pitch angle)
+    const targetPitchSlope = -Math.atan2(bowHeight - sternHeight, 7.7) + dynamicBowRise;
 
-    // Smooth pitch and roll toward hydro equilibrium
-    this.pitch = THREE.MathUtils.lerp(this.pitch, targetPitch, dt * 5.0);
-    this.roll = THREE.MathUtils.lerp(this.roll, targetRoll, dt * 6.0);
+    // Roll slope across vessel beam (port is -1.35m, starboard is +1.35m -> beam = 2.7m)
+    // When port is higher than starboard, boat rolls towards starboard
+    const targetRollSlope = Math.atan2(portHeight - starboardHeight, 2.7) + bankingRoll;
 
-    // Clamp angles to prevent extreme tilting in freak waves
-    this.pitch = Math.max(-0.45, Math.min(0.55, this.pitch));
+    // Equilibrium floating height (+0.25m deck waterline height + planing lift)
+    const targetHeave = meanWaterHeight + 0.25 + planingLift;
+
+    // 3. Critically Damped 2nd-Order Spring-Damper Physics Integration
+    // Natural frequencies (rad/s) and damping ratios
+    const omegaY = 5.8;
+    const zetaY = 0.86;
+    const accelY = (omegaY * omegaY) * (targetHeave - this.position.y) - (2.0 * zetaY * omegaY * this.velY);
+    this.velY += accelY * dt;
+    this.position.y += this.velY * dt;
+
+    const omegaP = 6.4;
+    const zetaP = 0.88;
+    const accelP = (omegaP * omegaP) * (targetPitchSlope - this.pitch) - (2.0 * zetaP * omegaP * this.velPitch);
+    this.velPitch += accelP * dt;
+    this.pitch += this.velPitch * dt;
+
+    const omegaR = 7.2;
+    const zetaR = 0.88;
+    const accelR = (omegaR * omegaR) * (targetRollSlope - this.roll) - (2.0 * zetaR * omegaR * this.velRoll);
+    this.velRoll += accelR * dt;
+    this.roll += this.velRoll * dt;
+
+    // Safe bounds to prevent unnatural inversion
+    this.pitch = Math.max(-0.48, Math.min(0.55, this.pitch));
     this.roll = Math.max(-0.45, Math.min(0.45, this.roll));
 
-    // 3. Advance World Position
-    // Direction vector of boat (heading: 0 = +Z forward)
+    // 4. Advance Horizontal World Position
     const moveX = -sinH * this.speed * dt;
     const moveZ = cosH * this.speed * dt;
-
     this.position.x += moveX;
     this.position.z += moveZ;
 
@@ -339,29 +372,24 @@ export class BoatController {
     this.root.rotateX(this.pitch);
     this.root.rotateZ(this.roll);
 
-    // 4. Update Dynamic Fluid Grid Center & Inject Boat Wake & Particle Foam
+    // 5. Dynamic Fluid Simulation Wake & Particle Foam
     this.fluidGrid.setCenter(this.position.x, this.position.z);
 
-    const bowX = this.position.x - sinH * 4.2;
-    const bowZ = this.position.z + cosH * 4.2;
+    const bowX = this.position.x - sinH * 4.3;
+    const bowZ = this.position.z + cosH * 4.3;
     const sternX = this.position.x + sinH * 3.8;
     const sternZ = this.position.z - cosH * 3.8;
 
-    // Inject physical wake displacement into dynamic wave PDE grid
     this.fluidGrid.addBoatWake(bowX, bowZ, sternX, sternZ, Math.abs(this.speed), this.heading);
-
-    // Emit trailing physical foam particles & spray from propeller & hull
     this.particleSystem.emitBoatWakeFoam(bowX, bowZ, sternX, sternZ, Math.abs(this.speed), this.heading);
   }
 
-  // Camera anchor positions
   getChaseCameraTarget(outPos, outLookAt) {
     const cosH = Math.cos(this.heading);
     const sinH = Math.sin(this.heading);
 
-    // 12m behind, 4.5m above boat
-    const dist = 12.0;
-    const height = 4.2;
+    const dist = 13.5;
+    const height = 4.6;
 
     outPos.set(
       this.position.x + sinH * dist,
@@ -369,11 +397,10 @@ export class BoatController {
       this.position.z - cosH * dist
     );
 
-    // Look slightly ahead of boat
     outLookAt.set(
-      this.position.x - sinH * 3.0,
+      this.position.x - sinH * 3.5,
       this.position.y + 1.2,
-      this.position.z + cosH * 3.0
+      this.position.z + cosH * 3.5
     );
   }
 
@@ -381,17 +408,16 @@ export class BoatController {
     const cosH = Math.cos(this.heading);
     const sinH = Math.sin(this.heading);
 
-    // At the cockpit helm
     outPos.set(
-      this.position.x - sinH * 0.2,
-      this.position.y + 1.45,
-      this.position.z + cosH * 0.2
+      this.position.x - sinH * 0.25,
+      this.position.y + 1.48,
+      this.position.z + cosH * 0.25
     );
 
     outLookAt.set(
-      this.position.x - sinH * 15.0,
+      this.position.x - sinH * 16.0,
       this.position.y + 1.2,
-      this.position.z + cosH * 15.0
+      this.position.z + cosH * 16.0
     );
   }
 }
