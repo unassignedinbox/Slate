@@ -1,0 +1,194 @@
+[
+  {
+    "category": "Ambience",
+    "files": [
+      {
+        "name": "Wind_Breeze_Light.wav",
+        "path": "Content/Audio/Ambience/Wind_Breeze_Light.wav"
+      },
+      {
+        "name": "Wind_Howling.wav",
+        "path": "Content/Audio/Ambience/Wind_Howling.wav"
+      },
+      {
+        "name": "Wind_Breeze_Medium.wav",
+        "path": "Content/Audio/Ambience/Wind_Breeze_Medium.wav"
+      },
+      {
+        "name": "Wind_Gust_Strong.wav",
+        "path": "Content/Audio/Ambience/Wind_Gust_Strong.wav"
+      },
+      {
+        "name": "Wind_Desert.wav",
+        "path": "Content/Audio/Ambience/Wind_Desert.wav"
+      },
+      {
+        "name": "Wind_Mountain.wav",
+        "path": "Content/Audio/Ambience/Wind_Mountain.wav"
+      },
+      {
+        "name": "Clouds_Light.wav",
+        "path": "Content/Audio/Ambience/Clouds_Light.wav"
+      }
+    ]
+  },
+  {
+    "category": "Foliage",
+    "files": [
+      {
+        "name": "Tree_Leaves_Rustle_Light.wav",
+        "path": "Content/Audio/Foliage/Tree_Leaves_Rustle_Light.wav"
+      },
+      {
+        "name": "Tree_Leaves_Rustle_Heavy.wav",
+        "path": "Content/Audio/Foliage/Tree_Leaves_Rustle_Heavy.wav"
+      },
+      {
+        "name": "Tree_Branches_Sway.wav",
+        "path": "Content/Audio/Foliage/Tree_Branches_Sway.wav"
+      },
+      {
+        "name": "Grass_Shuffle_Walk.wav",
+        "path": "Content/Audio/Foliage/Grass_Shuffle_Walk.wav"
+      },
+      {
+        "name": "Grass_Rustle_Wind.wav",
+        "path": "Content/Audio/Foliage/Grass_Rustle_Wind.wav"
+      }
+    ]
+  },
+  {
+    "category": "Terrain",
+    "files": [
+      {
+        "name": "Sand_Rolling.wav",
+        "path": "Content/Audio/Terrain/Sand_Rolling.wav"
+      },
+      {
+        "name": "Sand_Shifting_Wind.wav",
+        "path": "Content/Audio/Terrain/Sand_Shifting_Wind.wav"
+      },
+      {
+        "name": "Gravel_Roll_Light.wav",
+        "path": "Content/Audio/Terrain/Gravel_Roll_Light.wav"
+      },
+      {
+        "name": "Gravel_Crunch_Walk.wav",
+        "path": "Content/Audio/Terrain/Gravel_Crunch_Walk.wav"
+      }
+    ]
+  },
+  {
+    "category": "Vehicle/Surfaces",
+    "files": [
+      {
+        "name": "Car_Sand_Drive_Loop.wav",
+        "path": "Content/Audio/Vehicle/Surfaces/Car_Sand_Drive_Loop.wav"
+      },
+      {
+        "name": "Car_Gravel_Drive_Loop.wav",
+        "path": "Content/Audio/Vehicle/Surfaces/Car_Gravel_Drive_Loop.wav"
+      },
+      {
+        "name": "Car_Tarmac_Drive_Loop.wav",
+        "path": "Content/Audio/Vehicle/Surfaces/Car_Tarmac_Drive_Loop.wav"
+      },
+      {
+        "name": "Car_Wet_Tarmac_Drive.wav",
+        "path": "Content/Audio/Vehicle/Surfaces/Car_Wet_Tarmac_Drive.wav"
+      },
+      {
+        "name": "Car_Dirt_Drive_Loop.wav",
+        "path": "Content/Audio/Vehicle/Surfaces/Car_Dirt_Drive_Loop.wav"
+      },
+      {
+        "name": "Car_Mud_Drive.wav",
+        "path": "Content/Audio/Vehicle/Surfaces/Car_Mud_Drive.wav"
+      },
+      {
+        "name": "Car_Grass_Drive.wav",
+        "path": "Content/Audio/Vehicle/Surfaces/Car_Grass_Drive.wav"
+      }
+    ]
+  },
+  {
+    "category": "Vehicle/Tires",
+    "files": [
+      {
+        "name": "Tire_Screech_Short.wav",
+        "path": "Content/Audio/Vehicle/Tires/Tire_Screech_Short.wav"
+      },
+      {
+        "name": "Tire_Screech_Long.wav",
+        "path": "Content/Audio/Vehicle/Tires/Tire_Screech_Long.wav"
+      },
+      {
+        "name": "Tire_Screech_Drift.wav",
+        "path": "Content/Audio/Vehicle/Tires/Tire_Screech_Drift.wav"
+      },
+      {
+        "name": "Tire_Brake_Lock.wav",
+        "path": "Content/Audio/Vehicle/Tires/Tire_Brake_Lock.wav"
+      }
+    ]
+  },
+  {
+    "category": "Vehicle/Impacts",
+    "files": [
+      {
+        "name": "Car_Hit_Light.wav",
+        "path": "Content/Audio/Vehicle/Impacts/Car_Hit_Light.wav"
+      },
+      {
+        "name": "Car_Hit_Medium.wav",
+        "path": "Content/Audio/Vehicle/Impacts/Car_Hit_Medium.wav"
+      },
+      {
+        "name": "Car_Crash_Heavy.wav",
+        "path": "Content/Audio/Vehicle/Impacts/Car_Crash_Heavy.wav"
+      },
+      {
+        "name": "Car_Metal_Crunch.wav",
+        "path": "Content/Audio/Vehicle/Impacts/Car_Metal_Crunch.wav"
+      },
+      {
+        "name": "Car_Bumper_Thud.wav",
+        "path": "Content/Audio/Vehicle/Impacts/Car_Bumper_Thud.wav"
+      }
+    ]
+  },
+  {
+    "category": "Vehicle/Engine",
+    "files": [
+      {
+        "name": "Engine_Idle_Loop.wav",
+        "path": "Content/Audio/Vehicle/Engine/Engine_Idle_Loop.wav"
+      },
+      {
+        "name": "Engine_Rev_Low.wav",
+        "path": "Content/Audio/Vehicle/Engine/Engine_Rev_Low.wav"
+      },
+      {
+        "name": "Engine_Rev_High.wav",
+        "path": "Content/Audio/Vehicle/Engine/Engine_Rev_High.wav"
+      },
+      {
+        "name": "Engine_Turbo_Spool.wav",
+        "path": "Content/Audio/Vehicle/Engine/Engine_Turbo_Spool.wav"
+      }
+    ]
+  },
+  {
+    "category": "UI",
+    "files": [
+      {
+        "name": "UI_Hover.wav",
+        "path": "Content/Audio/UI/UI_Hover.wav"
+      },
+      {
+        "name": "UI_Click.wav",
+        "path": "Content/Audio/UI/UI_Click.wav"
+      }
+    ]
+  }
+]

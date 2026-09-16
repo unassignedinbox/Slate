@@ -1,0 +1,1427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AudioLab — Frontier Slate | Project Zero Racing Audio</title>
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+<link href="https://api.fontshare.com/v2/css?f[]=general-sans@300,400,500,600,700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   SLATE AUDIO LAB — SolidArc Theme Adaptation
+   Tokens from UIComponents.html + SolidArc layout
+   ============================================================ */
+:root{
+  --bg:#050505;
+  --panel:#121212;
+  --inset:#1a1a1a;
+  --field:#000000;
+  --raised:#222222;
+  --selected:#2a2a2a;
+  --stroke:rgba(255,255,255,.06);
+  --stroke-strong:#2e2e2e;
+  --text:#f0f0f0;
+  --text-dim:#888;
+  --text-faint:#5c5c5c;
+  --accent:#ffffff;
+  --accent-soft:rgba(255,255,255,.12);
+  --hi:#6c77ff;
+  --hi-glow:0 0 12px rgba(108,119,255,.8);
+  --ok:#22c55e;
+  --warn:#f59e0b;
+  --danger:#ef4444;
+  --r-panel:20px;
+  --r-inset:14px;
+  --r-pill:999px;
+  --ctl-h:36px;
+  --row-h:34px;
+  --ease:cubic-bezier(.22,.61,.36,1);
+  --shadow-panel:0 20px 60px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.03);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'General Sans','Segoe UI',system-ui,sans-serif;
+  font-size:13px;
+  -webkit-font-smoothing:antialiased;
+  display:flex;
+  flex-direction:column;
+  user-select:none;
+}
+
+/* ---------- Top Bar (SolidArc style) ---------- */
+.topbar{
+  height:56px;
+  background:var(--panel);
+  border-bottom:1px solid var(--stroke);
+  display:flex;
+  align-items:center;
+  gap:16px;
+  padding:0 18px;
+  flex-shrink:0;
+}
+.topbar .brand{
+  display:flex;align-items:center;gap:12px;
+}
+.topbar .logo{
+  width:32px;height:32px;border-radius:10px;
+  background:var(--field);border:1px solid var(--stroke);
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;letter-spacing:-0.5px;
+}
+.topbar .brand-t{font-weight:600;font-size:15px;letter-spacing:.2px}
+.topbar .brand-s{font-size:11px;color:var(--text-faint);margin-top:1px}
+.topbar .sep{width:1px;height:22px;background:var(--stroke);margin:0 4px}
+.topbar .toolgroup{
+  display:flex;align-items:center;gap:6px;
+  background:var(--field);border:1px solid var(--stroke);
+  border-radius:var(--r-pill);padding:4px;
+}
+.topbar .toolgroup button{
+  height:28px;padding:0 14px;border-radius:var(--r-pill);
+  border:none;background:transparent;color:var(--text-dim);
+  font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;
+  display:flex;align-items:center;gap:6px;
+  transition:all .15s var(--ease);
+}
+.topbar .toolgroup button:hover{color:var(--text);background:var(--inset)}
+.topbar .toolgroup button.active{background:var(--accent);color:#111;font-weight:600}
+.topbar .toolgroup button.play.active{background:var(--hi);color:#fff;box-shadow:var(--hi-glow)}
+
+.spacer{flex:1}
+.master-vol{
+  display:flex;align-items:center;gap:10px;
+  background:var(--inset);border:1px solid var(--stroke);
+  border-radius:var(--r-pill);padding:0 14px;height:36px;
+}
+.master-vol .label{font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+.master-vol input[type=range]{width:90px}
+
+/* ---------- Main 3-panel Layout ---------- */
+.main{
+  flex:1;display:grid;
+  grid-template-columns:320px 1fr 380px;
+  gap:1px;
+  background:var(--stroke);
+  overflow:hidden;
+  min-height:0;
+}
+.panel{
+  background:var(--panel);
+  display:flex;flex-direction:column;
+  overflow:hidden;
+  min-width:0;
+}
+.panel-header{
+  display:flex;align-items:center;gap:10px;
+  padding:12px 16px;
+  border-bottom:1px solid var(--stroke);
+  background:rgba(255,255,255,.015);
+  flex-shrink:0;
+  height:52px;
+}
+.ph-icon{
+  width:26px;height:26px;border-radius:8px;flex-shrink:0;
+  background:var(--inset);border:1px solid var(--stroke);
+  display:flex;align-items:center;justify-content:center;color:var(--text-dim);
+}
+.ph-title{font-size:13px;font-weight:600;letter-spacing:.2px}
+.ph-sub{font-size:11px;color:var(--text-faint);margin-top:1px}
+.panel-body{flex:1;overflow:auto;min-height:0;padding:12px;display:flex;flex-direction:column;gap:12px}
+.panel-body::-webkit-scrollbar{width:6px;height:6px}
+.panel-body::-webkit-scrollbar-thumb{background:var(--stroke-strong);border-radius:999px}
+.panel-footer{
+  display:flex;align-items:center;gap:8px;
+  padding:10px 14px;
+  border-top:1px solid var(--stroke);
+  background:rgba(255,255,255,.015);
+  flex-shrink:0;
+}
+
+/* ---------- Outliner Tree ---------- */
+.search-field{
+  display:flex;align-items:center;gap:8px;
+  background:var(--field);border:1px solid var(--stroke);
+  border-radius:var(--r-pill);padding:0 14px;height:36px;
+  flex-shrink:0;
+}
+.search-field input{
+  flex:1;background:transparent;border:none;outline:none;color:var(--text);
+  font:inherit;font-size:13px;
+}
+.search-field input::placeholder{color:var(--text-faint)}
+.search-field svg{color:var(--text-faint);flex-shrink:0}
+
+.tree{flex:1;overflow:auto}
+.tnode{position:relative}
+.trow{
+  display:flex;align-items:center;gap:6px;
+  height:32px;padding:0 8px 0 4px;border-radius:10px;
+  cursor:pointer;color:var(--text-dim);font-size:13px;font-weight:500;
+  transition:background .12s var(--ease),color .12s var(--ease);
+  position:relative;
+}
+.trow:hover{background:var(--raised);color:var(--text)}
+.trow.sel{background:var(--selected);color:var(--text)}
+.trow.sel::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:2px;background:var(--accent)}
+.trow .twisty{
+  width:20px;height:20px;flex-shrink:0;border:none;background:transparent;
+  color:var(--text-faint);display:flex;align-items:center;justify-content:center;
+  cursor:pointer;border-radius:6px;
+}
+.trow .twisty svg{transition:transform .18s var(--ease)}
+.tnode.open > .trow .twisty svg{transform:rotate(90deg)}
+.trow .ticon{color:var(--text-faint);display:flex}
+.trow.sel .ticon{color:var(--text-dim)}
+.trow .tname{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trow .badge{
+  font-size:10px;font-weight:600;letter-spacing:.3px;
+  background:var(--inset);border:1px solid var(--stroke);
+  padding:2px 6px;border-radius:999px;color:var(--text-faint);
+}
+.tkids{border-left:1px solid rgba(255,255,255,.06);margin-left:13px;padding-left:4px;display:none}
+.tnode.open > .tkids{display:block}
+
+.file-row{
+  display:flex;align-items:center;gap:8px;
+  height:36px;padding:0 10px;border-radius:10px;
+  cursor:pointer;color:var(--text-dim);font-size:12.5px;
+  transition:all .12s var(--ease);
+  border:1px solid transparent;
+}
+.file-row:hover{background:var(--raised);color:var(--text);border-color:var(--stroke)}
+.file-row.sel{background:var(--selected);color:var(--text);border-color:var(--stroke-strong)}
+.file-row.sel .bar{background:var(--hi)}
+.file-row .bar{width:3px;align-self:stretch;border-radius:2px;background:transparent;margin:-1px 0 -1px -11px;flex-shrink:0;transition:background .15s}
+.file-row .play-btn{
+  width:22px;height:22px;border-radius:50%;background:var(--field);border:1px solid var(--stroke);
+  display:flex;align-items:center;justify-content:center;color:var(--text-faint);
+  flex-shrink:0;transition:all .15s;
+}
+.file-row:hover .play-btn{background:var(--accent);color:#111;border-color:transparent}
+.file-row.playing .play-btn{background:var(--hi);color:#fff;box-shadow:var(--hi-glow)}
+.file-row .fname{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.file-row .fdur{font-size:10.5px;color:var(--text-faint);font-variant-numeric:tabular-nums}
+
+/* ---------- Viewport Center ---------- */
+.viewport-wrap{
+  display:flex;flex-direction:column;flex:1;min-height:0;background:#0a0a0a;
+}
+.vp-toolbar{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 12px;border-bottom:1px solid var(--stroke);
+  background:var(--panel);flex-shrink:0;
+}
+.vp-toolbar .seg{
+  display:inline-flex;background:var(--field);border:1px solid var(--stroke);
+  border-radius:var(--r-pill);padding:3px;gap:3px;height:32px;
+}
+.vp-toolbar .seg button{
+  border:none;background:transparent;color:var(--text-dim);cursor:pointer;
+  font:inherit;font-size:12px;font-weight:500;padding:0 12px;border-radius:var(--r-pill);
+  transition:all .15s var(--ease);
+}
+.vp-toolbar .seg button:hover{color:var(--text)}
+.vp-toolbar .seg button.active{background:var(--accent);color:#111;font-weight:600}
+
+.waveform-container{
+  flex:1;position:relative;background:#080808;overflow:hidden;min-height:0;
+}
+#waveform{width:100%;height:100%;display:block;cursor:crosshair}
+#spectrogram{position:absolute;inset:0;width:100%;height:100%;display:none}
+.playhead{
+  position:absolute;top:0;bottom:0;width:2px;background:var(--hi);
+  box-shadow:0 0 8px var(--hi);pointer-events:none;z-index:5;
+  display:none;
+}
+.loop-region{
+  position:absolute;top:0;bottom:0;background:rgba(108,119,255,.12);
+  border-left:1px dashed var(--hi);border-right:1px dashed var(--hi);
+  pointer-events:none;z-index:4;display:none;
+}
+.time-ruler{
+  height:28px;background:var(--inset);border-top:1px solid var(--stroke);
+  display:flex;align-items:center;padding:0 12px;gap:16px;flex-shrink:0;
+  font-size:11px;color:var(--text-faint);font-variant-numeric:tabular-nums;
+}
+.time-ruler .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok)}
+.time-ruler .dot.idle{background:var(--text-faint);box-shadow:none}
+
+/* racing sim mini */
+.racing-strip{
+  height:140px;background:var(--panel);border-top:1px solid var(--stroke);
+  display:flex;flex-direction:column;flex-shrink:0;
+}
+.racing-canvas-wrap{flex:1;position:relative;background:#0e0e0e;overflow:hidden}
+#racingCanvas{width:100%;height:100%;display:block}
+.racing-controls{
+  display:flex;align-items:center;gap:10px;padding:8px 12px;
+  border-top:1px solid var(--stroke);background:rgba(255,255,255,.02);
+}
+
+/* ---------- Inspector Right ---------- */
+.inspector-section{
+  background:var(--inset);border:1px solid var(--stroke);
+  border-radius:var(--r-inset);overflow:hidden;
+}
+.ins-sec-header{
+  display:flex;align-items:center;gap:8px;padding:10px 14px;
+  background:rgba(255,255,255,.02);border-bottom:1px solid var(--stroke);
+  cursor:pointer;
+}
+.ins-sec-header .title{font-size:12px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;color:var(--text-dim)}
+.ins-sec-header .spacer{flex:1}
+.ins-sec-header .chevron{color:var(--text-faint);transition:transform .18s}
+.ins-sec-header.collapsed .chevron{transform:rotate(-90deg)}
+.ins-sec-body{padding:12px 14px;display:flex;flex-direction:column;gap:14px}
+.ins-sec-body.collapsed{display:none}
+
+.crow{display:flex;align-items:center;gap:10px;min-height:32px}
+.crow > .clabel{width:84px;flex-shrink:0;color:var(--text-dim);font-size:12px;font-weight:500;letter-spacing:.2px}
+.crow .value{margin-left:auto;display:flex;align-items:center;gap:6px}
+
+.vpill{
+  display:flex;align-items:stretch;height:32px;width:92px;flex-shrink:0;
+  border-radius:var(--r-pill);overflow:hidden;border:1px solid var(--stroke);
+}
+.vpill .num{flex:1;background:var(--field);display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:600;letter-spacing:.3px;font-variant-numeric:tabular-nums}
+.vpill .unit{width:36px;background:var(--inset);border-left:1px solid var(--stroke);display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:11px;font-weight:500}
+
+input[type=range].slider{
+  appearance:none;-webkit-appearance:none;outline:none;flex:1;min-width:60px;
+  height:20px;border-radius:var(--r-pill);cursor:pointer;border:none;
+  background:linear-gradient(to right,#6c77ff 50%,var(--raised) 50%);
+}
+input[type=range].slider::-webkit-slider-thumb{
+  appearance:none;-webkit-appearance:none;width:18px;height:18px;border-radius:50%;
+  background:#e8e8e8;border:none;transition:transform .12s var(--ease);
+  box-shadow:0 1px 4px rgba(0,0,0,.5);
+}
+input[type=range].slider:active::-webkit-slider-thumb{transform:scale(1.15)}
+
+.btn{
+  height:32px;padding:0 14px;border-radius:var(--r-pill);
+  border:1px solid var(--stroke);background:var(--inset);color:var(--text);
+  font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  transition:all .15s var(--ease);
+}
+.btn:hover{background:var(--raised)}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--accent);color:#111;border-color:transparent;font-weight:600}
+.btn.hi{background:var(--hi);color:#fff;border-color:transparent;box-shadow:var(--hi-glow)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--text-dim)}
+.btn.ghost:hover{background:var(--inset);color:var(--text)}
+.btn.icon{width:32px;padding:0}
+.btn.small{height:26px;padding:0 10px;font-size:11.5px}
+
+.switch{
+  width:40px;height:22px;border-radius:var(--r-pill);flex-shrink:0;cursor:pointer;
+  background:var(--raised);border:1px solid var(--stroke);position:relative;
+  transition:background .18s var(--ease);
+}
+.switch::after{
+  content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;
+  background:#bdbdbd;transition:transform .18s var(--ease),background .18s var(--ease);
+}
+.switch[data-on="true"]{background:var(--accent)}
+.switch[data-on="true"]::after{transform:translateX(18px);background:#111}
+.switch.hi[data-on="true"]{background:var(--hi)}
+.switch.hi[data-on="true"]::after{background:#fff}
+
+.effect-chain{
+  display:flex;flex-direction:column;gap:6px;
+}
+.effect-node{
+  display:flex;align-items:center;gap:8px;
+  background:var(--field);border:1px solid var(--stroke);
+  border-radius:12px;padding:8px 10px;
+  cursor:grab;
+}
+.effect-node.dragging{opacity:.5}
+.effect-node .drag-handle{color:var(--text-faint);cursor:grab}
+.effect-node .ename{font-size:12px;font-weight:500;flex:1}
+.effect-node .bypass{font-size:10px;padding:2px 6px;border-radius:999px;background:var(--inset);border:1px solid var(--stroke);color:var(--text-faint);cursor:pointer}
+.effect-node .bypass.on{background:var(--hi);color:#fff;border-color:transparent}
+.effect-node .remove{width:18px;height:18px;border-radius:50%;border:none;background:transparent;color:var(--text-faint);cursor:pointer;display:flex;align-items:center;justify-content:center}
+.effect-node .remove:hover{background:rgba(239,68,68,.15);color:var(--danger)}
+
+.tag{
+  font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;
+  padding:3px 8px;border-radius:999px;background:var(--inset);border:1px solid var(--stroke);color:var(--text-faint);
+}
+.tag.hi{background:rgba(108,119,255,.15);color:var(--hi);border-color:rgba(108,119,255,.3)}
+.tag.ok{background:rgba(34,197,94,.12);color:var(--ok);border-color:rgba(34,197,94,.25)}
+
+/* footer */
+.statusbar{
+  height:28px;background:var(--panel);border-top:1px solid var(--stroke);
+  display:flex;align-items:center;gap:14px;padding:0 14px;
+  font-size:11px;color:var(--text-faint);flex-shrink:0;
+}
+.statusbar .sep{width:1px;height:14px;background:var(--stroke)}
+
+/* scrollbars */
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:#2a2a2a;border-radius:999px}
+::-webkit-scrollbar-thumb:hover{background:#333}
+
+/* responsive */
+@media (max-width:1100px){
+  .main{grid-template-columns:280px 1fr}
+  .panel:last-child{display:none}
+}
+@media (max-width:700px){
+  .main{grid-template-columns:1fr}
+  .panel:first-child{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="brand">
+    <div class="logo">Au</div>
+    <div>
+      <div class="brand-t">AudioLab — Slate</div>
+      <div class="brand-s">Project Zero · Racing Audio Suite · SolidArc Edition</div>
+    </div>
+  </div>
+  <div class="sep"></div>
+  <div class="toolgroup" id="transport">
+    <button id="btn-stop" title="Stop (Space)"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg> Stop</button>
+    <button id="btn-play" class="play" title="Play (Space)"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5.5v13l11-6.5z"/></svg> Play</button>
+    <button id="btn-loop" title="Loop"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg> Loop</button>
+  </div>
+  <div class="toolgroup">
+    <button data-view="wave" class="active">Waveform</button>
+    <button data-view="spec">Spectrogram</button>
+    <button data-view="racing">Racing Sim</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="master-vol">
+    <span class="label">Master</span>
+    <input type="range" class="slider" id="masterVol" min="0" max="100" value="80">
+    <div class="vpill" style="width:72px"><div class="num" id="masterVolVal">80</div><div class="unit">%</div></div>
+  </div>
+  <button class="btn primary" id="btn-export">Export Processed</button>
+</div>
+
+<!-- MAIN 3 PANEL -->
+<div class="main">
+  <!-- LEFT: OUTLINER -->
+  <div class="panel" id="panel-outliner">
+    <div class="panel-header">
+      <div class="ph-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h6"/><path d="M3 12h6"/><path d="M3 19h6"/><path d="M13 5h8"/><path d="M15 12h6"/><path d="M17 19h4"/></svg></div>
+      <div><div class="ph-title">Outliner · Audio Archives</div><div class="ph-sub">38 files · 5 categories · Content/Audio/</div></div>
+    </div>
+    <div class="panel-body" style="padding:10px;gap:10px">
+      <div class="search-field">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="search" placeholder="Filter audio… (wind, tire, crash)" spellcheck="false">
+      </div>
+      <div class="tree" id="audioTree"></div>
+    </div>
+    <div class="panel-footer">
+      <span class="tag hi" id="selectedCount">0 selected</span>
+      <span style="font-size:11px;color:var(--text-faint)">Drag to reorder · Right-click for actions</span>
+    </div>
+  </div>
+
+  <!-- CENTER: VIEWPORT -->
+  <div class="panel" style="background:#080808">
+    <div class="vp-toolbar">
+      <div class="seg" id="viewSeg">
+        <button class="active" data-mode="wave">Waveform</button>
+        <button data-mode="stereo">Stereo</button>
+        <button data-mode="mono">Mono Mix</button>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn small ghost" id="btn-zoom-in">Zoom +</button>
+      <button class="btn small ghost" id="btn-zoom-out">Zoom −</button>
+      <button class="btn small ghost" id="btn-fit">Fit</button>
+      <span class="tag" id="fileInfoTag">No file</span>
+    </div>
+    <div class="viewport-wrap">
+      <div class="waveform-container" id="waveContainer">
+        <canvas id="waveform"></canvas>
+        <canvas id="spectrogram"></canvas>
+        <div class="playhead" id="playhead"></div>
+        <div class="loop-region" id="loopRegion"></div>
+      </div>
+      <div class="time-ruler">
+        <div class="dot idle" id="statusDot"></div>
+        <span id="timeCurrent">00:00.000</span>
+        <span style="opacity:.4">/</span>
+        <span id="timeTotal">00:00.000</span>
+        <div class="sep" style="width:1px;height:14px;background:var(--stroke);margin:0 8px"></div>
+        <span id="sampleRateInfo">44.1 kHz · Stereo · 16-bit</span>
+        <div class="spacer"></div>
+        <span id="pitchInfo">Pitch: +0 st · Rate: 1.00×</span>
+      </div>
+      <div class="racing-strip" id="racingStrip" style="display:none">
+        <div class="racing-canvas-wrap"><canvas id="racingCanvas"></canvas></div>
+        <div class="racing-controls">
+          <span class="tag hi">Racing Surface Simulator</span>
+          <div class="seg" id="surfaceSeg">
+            <button class="active" data-surface="tarmac">Tarmac</button>
+            <button data-surface="gravel">Gravel</button>
+            <button data-surface="sand">Sand</button>
+            <button data-surface="dirt">Dirt</button>
+            <button data-surface="grass">Grass</button>
+            <button data-surface="mud">Mud</button>
+          </div>
+          <div class="sep" style="width:1px;height:18px;background:var(--stroke)"></div>
+          <span style="font-size:11px;color:var(--text-dim)">Speed</span>
+          <input type="range" class="slider" id="speedSlider" min="0" max="100" value="45" style="width:100px">
+          <span class="tag" id="speedVal">45 km/h</span>
+          <button class="btn small hi" id="btn-screech">Trigger Screech</button>
+          <button class="btn small" id="btn-crash">Crash!</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: INSPECTOR -->
+  <div class="panel" id="panel-inspector">
+    <div class="panel-header">
+      <div class="ph-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></div>
+      <div><div class="ph-title">Inspector · Audio Editor</div><div class="ph-sub">Modular · Real-time · WebAudio Graph</div></div>
+    </div>
+    <div class="panel-body" id="inspectorBody">
+
+      <!-- File Info -->
+      <div class="inspector-section">
+        <div class="ins-sec-header"><span class="title">File · Metadata</span><div class="spacer"></div><span class="tag" id="metaCategory">Ambience</span></div>
+        <div class="ins-sec-body">
+          <div class="crow"><span class="clabel">Name</span><span id="metaName" style="font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis">—</span></div>
+          <div class="crow"><span class="clabel">Path</span><span id="metaPath" style="font-size:11px;color:var(--text-faint);flex:1;overflow:hidden;text-overflow:ellipsis">Content/Audio/...</span></div>
+          <div class="crow"><span class="clabel">Duration</span><div class="vpill"><div class="num" id="metaDur">0.00</div><div class="unit">s</div></div><span class="tag ok" id="metaLoop">Loopable</span></div>
+          <div class="crow"><span class="clabel">Usage</span><span id="metaUsage" style="font-size:11px;color:var(--text-dim)">Racing ambience / wind layer</span></div>
+        </div>
+      </div>
+
+      <!-- Playback -->
+      <div class="inspector-section">
+        <div class="ins-sec-header"><span class="title">Playback · Pitch</span><div class="spacer"></div><span class="tag hi">Modular</span></div>
+        <div class="ins-sec-body">
+          <div class="crow"><span class="clabel">Pitch</span><div class="vpill"><div class="num" id="pitchVal">0</div><div class="unit">st</div></div><input type="range" class="slider" id="pitchSlider" min="-12" max="12" step="1" value="0"></div>
+          <div class="crow"><span class="clabel">Detune</span><div class="vpill"><div class="num" id="detuneVal">0</div><div class="unit">¢</div></div><input type="range" class="slider" id="detuneSlider" min="-100" max="100" step="1" value="0"></div>
+          <div class="crow"><span class="clabel">Rate</span><div class="vpill"><div class="num" id="rateVal">1.00</div><div class="unit">×</div></div><input type="range" class="slider" id="rateSlider" min="25" max="400" value="100"></div>
+          <div class="crow"><span class="clabel">Volume</span><div class="vpill"><div class="num" id="volVal">0</div><div class="unit">dB</div></div><input type="range" class="slider" id="volSlider" min="-40" max="6" value="0"></div>
+          <div class="crow"><span class="clabel">Pan</span><div class="vpill"><div class="num" id="panVal">0</div><div class="unit">L/R</div></div><input type="range" class="slider" id="panSlider" min="-100" max="100" value="0"></div>
+          <div class="crow"><span class="clabel">Loop</span><div class="switch hi" id="loopToggle" data-on="true"></div><span style="font-size:11px;color:var(--text-faint)">Seamless loop · crossfade 20ms</span></div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="inspector-section">
+        <div class="ins-sec-header"><span class="title">Filters · EQ</span><div class="spacer"></div><span class="tag">Biquad</span></div>
+        <div class="ins-sec-body">
+          <div class="crow"><span class="clabel">Lowpass</span><div class="vpill"><div class="num" id="lpVal">20000</div><div class="unit">Hz</div></div><input type="range" class="slider" id="lpSlider" min="20" max="20000" value="20000"></div>
+          <div class="crow"><span class="clabel">Highpass</span><div class="vpill"><div class="num" id="hpVal">20</div><div class="unit">Hz</div></div><input type="range" class="slider" id="hpSlider" min="20" max="1000" value="20"></div>
+          <div class="crow"><span class="clabel">Bandpass</span><div class="vpill"><div class="num" id="bpVal">1000</div><div class="unit">Hz</div></div><input type="range" class="slider" id="bpSlider" min="100" max="8000" value="1000"></div>
+          <div class="crow"><span class="clabel">Q / Res</span><div class="vpill"><div class="num" id="qVal">1.0</div><div class="unit">Q</div></div><input type="range" class="slider" id="qSlider" min="1" max="20" value="10"></div>
+          <div class="crow"><span class="clabel">Enable</span><div class="switch" id="filterToggle" data-on="false"></div><span style="font-size:11px;color:var(--text-faint)">Bypass filters when off</span></div>
+        </div>
+      </div>
+
+      <!-- Effects Chain -->
+      <div class="inspector-section">
+        <div class="ins-sec-header"><span class="title">Effects · Modular Chain</span><div class="spacer"></div><button class="btn small ghost" id="btn-add-effect">+ Add</button></div>
+        <div class="ins-sec-body">
+          <div class="effect-chain" id="effectChain">
+            <div class="effect-node" data-effect="reverb"><span class="drag-handle">⋮⋮</span><span class="ename">Reverb · Hall</span><span class="bypass">BYPASS</span><span class="vpill" style="width:64px"><span class="num" style="font-size:11px">35%</span></span><button class="remove">✕</button></div>
+            <div class="effect-node" data-effect="distortion"><span class="drag-handle">⋮⋮</span><span class="ename">Distortion · Soft Clip</span><span class="bypass">BYPASS</span><span class="vpill" style="width:64px"><span class="num" style="font-size:11px">12%</span></span><button class="remove">✕</button></div>
+            <div class="effect-node" data-effect="delay"><span class="drag-handle">⋮⋮</span><span class="ename">Delay · 280ms</span><span class="bypass on">ON</span><span class="vpill" style="width:64px"><span class="num" style="font-size:11px">22%</span></span><button class="remove">✕</button></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+            <div class="crow"><span class="clabel" style="width:50px">Reverb</span><input type="range" class="slider" id="reverbSlider" min="0" max="100" value="35"></div>
+            <div class="crow"><span class="clabel" style="width:50px">Dist</span><input type="range" class="slider" id="distSlider" min="0" max="100" value="12"></div>
+            <div class="crow"><span class="clabel" style="width:50px">Delay</span><input type="range" class="slider" id="delaySlider" min="0" max="100" value="22"></div>
+            <div class="crow"><span class="clabel" style="width:50px">Comp</span><input type="range" class="slider" id="compSlider" min="0" max="100" value="0"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Envelope -->
+      <div class="inspector-section">
+        <div class="ins-sec-header collapsed"><span class="title">Envelope · ADSR</span><div class="spacer"></div><span class="chevron">▼</span></div>
+        <div class="ins-sec-body collapsed">
+          <div class="crow"><span class="clabel">Attack</span><div class="vpill"><div class="num" id="atkVal">10</div><div class="unit">ms</div></div><input type="range" class="slider" id="atkSlider" min="0" max="500" value="10"></div>
+          <div class="crow"><span class="clabel">Decay</span><div class="vpill"><div class="num" id="decVal">120</div><div class="unit">ms</div></div><input type="range" class="slider" id="decSlider" min="0" max="1000" value="120"></div>
+          <div class="crow"><span class="clabel">Sustain</span><div class="vpill"><div class="num" id="susVal">85</div><div class="unit">%</div></div><input type="range" class="slider" id="susSlider" min="0" max="100" value="85"></div>
+          <div class="crow"><span class="clabel">Release</span><div class="vpill"><div class="num" id="relVal">180</div><div class="unit">ms</div></div><input type="range" class="slider" id="relSlider" min="0" max="2000" value="180"></div>
+        </div>
+      </div>
+
+      <!-- Project Zero Integration -->
+      <div class="inspector-section">
+        <div class="ins-sec-header"><span class="title">Project Zero · Integration</span><div class="spacer"></div><span class="tag ok">miniaudio</span></div>
+        <div class="ins-sec-body">
+          <div style="font-size:11px;line-height:1.5;color:var(--text-dim);background:var(--field);border:1px solid var(--stroke);border-radius:10px;padding:10px;font-family:JetBrains Mono,monospace">
+            <span style="color:var(--text-faint)">// C++ — AudioArchives</span><br>
+            <span style="color:#8ab4f8">auto</span> wind = <span style="color:#fbbc04">AudioArchive</span>::<span style="color:#81c995">Load</span>(<span style="color:#f28b82">"Ambience/Wind_Breeze_Light.wav"</span>);<br>
+            wind.<span style="color:#81c995">SetPitch</span>(<span id="codePitch">0.0</span>f); <span style="color:var(--text-faint)">// semitones</span><br>
+            wind.<span style="color:#81c995">SetPlaybackRate</span>(<span id="codeRate">1.0</span>f);<br>
+            wind.<span style="color:#81c995">SetVolumeDb</span>(<span id="codeVol">0.0</span>f);<br>
+            <span style="color:var(--text-faint)">// Surface blending via Speed</span><br>
+            <span style="color:#8ab4f8">float</span> tarmac = <span style="color:#81c995">Math::Lerp</span>(...);
+          </div>
+          <div style="display:flex;gap:6px;margin-top:8px">
+            <button class="btn small primary" id="btn-copy-path">Copy Path</button>
+            <button class="btn small" id="btn-copy-code">Copy C++ Snippet</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="panel-footer">
+      <span style="font-size:11px;color:var(--text-faint)">Frontier Slate · Experimental/AudioLab · 38 wavs · 44.1kHz</span>
+    </div>
+  </div>
+</div>
+
+<!-- STATUSBAR -->
+<div class="statusbar">
+  <span>60 fps · WebAudio · <span id="audioState">Idle</span></span>
+  <div class="sep"></div>
+  <span>X <span id="mouseX">0.0</span> · Y <span id="mouseY">0.0</span></span>
+  <div class="sep"></div>
+  <span id="statusMsg">Ready — Select an audio file to begin. Use Racing Sim to blend surfaces.</span>
+  <div class="spacer"></div>
+  <span style="color:var(--text-faint)">persp · az 45° · el 30° · d 260 · software raster · Z-up</span>
+</div>
+
+<script>
+/* ============================================================
+   AUDIO LAB — Core Data & Manifest
+   ============================================================ */
+const MANIFEST = [
+  {category:"Ambience", icon:"cloud", files:[
+    {name:"Clouds_Light.wav", path:"Content/Audio/Ambience/Clouds_Light.wav", dur:12.0, desc:"Soft atmospheric pad · high altitude clouds · loopable", tags:["ambient","pad","loop"]},
+    {name:"Wind_Breeze_Light.wav", path:"Content/Audio/Ambience/Wind_Breeze_Light.wav", dur:8.0, desc:"Gentle breeze · meadow · leaves barely moving", tags:["wind","light","nature"]},
+    {name:"Wind_Breeze_Medium.wav", path:"Content/Audio/Ambience/Wind_Breeze_Medium.wav", dur:8.0, desc:"Medium breeze · grass sway · pleasant", tags:["wind","medium"]},
+    {name:"Wind_Gust_Strong.wav", path:"Content/Audio/Ambience/Wind_Gust_Strong.wav", dur:10.0, desc:"Strong gusts · 4 bursts · dramatic", tags:["wind","gust","strong"]},
+    {name:"Wind_Howling.wav", path:"Content/Audio/Ambience/Wind_Howling.wav", dur:9.0, desc:"Eerie howling · 180Hz sine + noise · night", tags:["wind","howl","eerie"]},
+    {name:"Wind_Desert.wav", path:"Content/Audio/Ambience/Wind_Desert.wav", dur:10.0, desc:"Dry desert wind · sand hiss + low rumble", tags:["wind","desert","sand"]},
+    {name:"Wind_Mountain.wav", path:"Content/Audio/Ambience/Wind_Mountain.wav", dur:10.0, desc:"Cold mountain wind · wide stereo · strong", tags:["wind","mountain","cold"]},
+  ]},
+  {category:"Foliage", icon:"leaf", files:[
+    {name:"Tree_Leaves_Rustle_Light.wav", path:"Content/Audio/Foliage/Tree_Leaves_Rustle_Light.wav", dur:6.0, desc:"Light leaf rustle · granular · 120 grains", tags:["tree","leaves","rustle"]},
+    {name:"Tree_Leaves_Rustle_Heavy.wav", path:"Content/Audio/Foliage/Tree_Leaves_Rustle_Heavy.wav", dur:6.0, desc:"Heavy rustle · branches + low thumps", tags:["tree","heavy"]},
+    {name:"Tree_Branches_Sway.wav", path:"Content/Audio/Foliage/Tree_Branches_Sway.wav", dur:8.0, desc:"Branches swaying · creaks · low filtered", tags:["tree","branch","sway"]},
+    {name:"Grass_Shuffle_Walk.wav", path:"Content/Audio/Foliage/Grass_Shuffle_Walk.wav", dur:4.0, desc:"Footsteps in tall grass · 6 steps · shuffle", tags:["grass","footstep","shuffle"]},
+    {name:"Grass_Rustle_Wind.wav", path:"Content/Audio/Foliage/Grass_Rustle_Wind.wav", dur:7.0, desc:"Grass rustling in wind · 300 grains · windy meadow", tags:["grass","wind","rustle"]},
+  ]},
+  {category:"Terrain", icon:"mountain", files:[
+    {name:"Sand_Rolling.wav", path:"Content/Audio/Terrain/Sand_Rolling.wav", dur:6.0, desc:"Sand rolling · low-mid noise · granular sand", tags:["sand","rolling"]},
+    {name:"Sand_Shifting_Wind.wav", path:"Content/Audio/Terrain/Sand_Shifting_Wind.wav", dur:8.0, desc:"Sand shifting with wind · high hiss + low bed", tags:["sand","wind"]},
+    {name:"Gravel_Roll_Light.wav", path:"Content/Audio/Terrain/Gravel_Roll_Light.wav", dur:5.0, desc:"Light gravel roll · 400 clicks · stone", tags:["gravel","roll"]},
+    {name:"Gravel_Crunch_Walk.wav", path:"Content/Audio/Terrain/Gravel_Crunch_Walk.wav", dur:4.0, desc:"Gravel crunch walk · 6 steps · crunchy", tags:["gravel","crunch","walk"]},
+  ]},
+  {category:"Vehicle", icon:"car", subcategories:[
+    {name:"Surfaces", files:[
+      {name:"Car_Sand_Drive_Loop.wav", path:"Content/Audio/Vehicle/Surfaces/Car_Sand_Drive_Loop.wav", dur:6.0, desc:"Car on sand · soft hiss · 250Hz rumble", tags:["car","sand","drive","loop"]},
+      {name:"Car_Gravel_Drive_Loop.wav", path:"Content/Audio/Vehicle/Surfaces/Car_Gravel_Drive_Loop.wav", dur:6.0, desc:"Car on gravel · rough · 1.5-6kHz hiss", tags:["car","gravel","drive"]},
+      {name:"Car_Tarmac_Drive_Loop.wav", path:"Content/Audio/Vehicle/Surfaces/Car_Tarmac_Drive_Loop.wav", dur:6.0, desc:"Car on tarmac · smooth · 180Hz rumble", tags:["car","tarmac","drive","asphalt"]},
+      {name:"Car_Wet_Tarmac_Drive.wav", path:"Content/Audio/Vehicle/Surfaces/Car_Wet_Tarmac_Drive.wav", dur:6.0, desc:"Wet tarmac · spray · 2-7kHz", tags:["car","wet","tarmac"]},
+      {name:"Car_Dirt_Drive_Loop.wav", path:"Content/Audio/Vehicle/Surfaces/Car_Dirt_Drive_Loop.wav", dur:6.0, desc:"Dirt track · mid roughness · rally", tags:["car","dirt","rally"]},
+      {name:"Car_Mud_Drive.wav", path:"Content/Audio/Vehicle/Surfaces/Car_Mud_Drive.wav", dur:6.0, desc:"Mud · heavy · low 220Hz · suction", tags:["car","mud","heavy"]},
+      {name:"Car_Grass_Drive.wav", path:"Content/Audio/Vehicle/Surfaces/Car_Grass_Drive.wav", dur:6.0, desc:"Grass drive · soft · off-road", tags:["car","grass","offroad"]},
+    ]},
+    {name:"Tires", files:[
+      {name:"Tire_Screech_Short.wav", path:"Content/Audio/Vehicle/Tires/Tire_Screech_Short.wav", dur:1.2, desc:"Short screech · 800-2000Hz sweep · brake", tags:["tire","screech","short"]},
+      {name:"Tire_Screech_Long.wav", path:"Content/Audio/Vehicle/Tires/Tire_Screech_Long.wav", dur:3.0, desc:"Long screech · 1kHz + chatter · drift", tags:["tire","screech","long"]},
+      {name:"Tire_Screech_Drift.wav", path:"Content/Audio/Vehicle/Tires/Tire_Screech_Drift.wav", dur:4.0, desc:"Drift screech · oscillating · 900Hz", tags:["tire","drift","screech"]},
+      {name:"Tire_Brake_Lock.wav", path:"Content/Audio/Vehicle/Tires/Tire_Brake_Lock.wav", dur:1.8, desc:"Brake lock · thud + squeal · 600Hz", tags:["tire","brake","lock"]},
+    ]},
+    {name:"Impacts", files:[
+      {name:"Car_Hit_Light.wav", path:"Content/Audio/Vehicle/Impacts/Car_Hit_Light.wav", dur:0.8, desc:"Light hit · 120Hz thud · click", tags:["crash","hit","light"]},
+      {name:"Car_Hit_Medium.wav", path:"Content/Audio/Vehicle/Impacts/Car_Hit_Medium.wav", dur:1.2, desc:"Medium hit · 80+150Hz · metal", tags:["crash","medium"]},
+      {name:"Car_Crash_Heavy.wav", path:"Content/Audio/Vehicle/Impacts/Car_Crash_Heavy.wav", dur:2.5, desc:"Heavy crash · 50Hz boom + debris · 15 clatters", tags:["crash","heavy","boom"]},
+      {name:"Car_Metal_Crunch.wav", path:"Content/Audio/Vehicle/Impacts/Car_Metal_Crunch.wav", dur:1.5, desc:"Metal crunch · 5 resonances · deformation", tags:["metal","crunch"]},
+      {name:"Car_Bumper_Thud.wav", path:"Content/Audio/Vehicle/Impacts/Car_Bumper_Thud.wav", dur:0.6, desc:"Bumper thud · 100Hz · soft impact", tags:["bumper","thud"]},
+    ]},
+    {name:"Engine", files:[
+      {name:"Engine_Idle_Loop.wav", path:"Content/Audio/Vehicle/Engine/Engine_Idle_Loop.wav", dur:4.0, desc:"Idle loop · 35Hz base · 6 harmonics · seamless", tags:["engine","idle","loop"]},
+      {name:"Engine_Rev_Low.wav", path:"Content/Audio/Vehicle/Engine/Engine_Rev_Low.wav", dur:3.0, desc:"Low rev · 55Hz · rally · torque", tags:["engine","rev","low"]},
+      {name:"Engine_Rev_High.wav", path:"Content/Audio/Vehicle/Engine/Engine_Rev_High.wav", dur:3.0, desc:"High rev · 85Hz · 1.8x · scream", tags:["engine","rev","high"]},
+      {name:"Engine_Turbo_Spool.wav", path:"Content/Audio/Vehicle/Engine/Engine_Turbo_Spool.wav", dur:2.5, desc:"Turbo spool · 800-2800Hz rising whistle", tags:["engine","turbo","spool"]},
+    ]},
+  ]},
+  {category:"UI", icon:"bell", files:[
+    {name:"UI_Hover.wav", path:"Content/Audio/UI/UI_Hover.wav", dur:0.15, desc:"UI hover · 800Hz sine · soft", tags:["ui","hover"]},
+    {name:"UI_Click.wav", path:"Content/Audio/UI/UI_Click.wav", dur:0.12, desc:"UI click · 1200Hz · crisp", tags:["ui","click"]},
+  ]},
+];
+
+const ICONS = {
+  cloud:`<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>`,
+  leaf:`<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 3.18 2 6.02C21 12.19 15.5 19 11 20Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>`,
+  mountain:`<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>`,
+  car:`<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 12 10s-6.7.6-8.5 1.1C2.7 11.3 2 12.1 2 13v3c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>`,
+  bell:`<path d="M6 8a6 6 0 0 1 12 0c0 7 6 5 6 10H0c0-5 6-3 6-10"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>`,
+  box:`<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>`,
+  music:`<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>`,
+  wind:`<path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/>`,
+};
+
+function svgIcon(name, size=14){
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]||ICONS.box}</svg>`;
+}
+
+/* ============================================================
+   TREE RENDERING
+   ============================================================ */
+const treeEl = document.getElementById('audioTree');
+let selectedFile = null;
+let filterText = "";
+
+function renderTree(){
+  treeEl.innerHTML = "";
+  MANIFEST.forEach(cat=>{
+    const matchCat = !filterText || cat.category.toLowerCase().includes(filterText) || cat.files?.some(f=>f.name.toLowerCase().includes(filterText)||f.tags.some(t=>t.includes(filterText))) || cat.subcategories?.some(sc=>sc.files.some(f=>f.name.toLowerCase().includes(filterText)));
+    if(filterText && !matchCat) return;
+    const node = document.createElement('div');
+    node.className = 'tnode open';
+    const row = document.createElement('div');
+    row.className = 'trow';
+    row.innerHTML = `<button class="twisty"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg></button><span class="ticon">${svgIcon(cat.icon)}</span><span class="tname">${cat.category}</span><span class="badge">${cat.files?cat.files.length:cat.subcategories?.reduce((a,b)=>a+b.files.length,0)}</span>`;
+    row.querySelector('.twisty').addEventListener('click',e=>{e.stopPropagation(); node.classList.toggle('open')});
+    node.appendChild(row);
+    const kids = document.createElement('div');
+    kids.className = 'tkids';
+    if(cat.subcategories){
+      cat.subcategories.forEach(sub=>{
+        const subNode = document.createElement('div');
+        subNode.className = 'tnode open';
+        const subRow = document.createElement('div');
+        subRow.className = 'trow';
+        subRow.innerHTML = `<button class="twisty"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg></button><span class="ticon">${svgIcon('box',12)}</span><span class="tname">${sub.name}</span><span class="badge">${sub.files.length}</span>`;
+        subRow.querySelector('.twisty').addEventListener('click',e=>{e.stopPropagation(); subNode.classList.toggle('open')});
+        subNode.appendChild(subRow);
+        const subKids = document.createElement('div');
+        subKids.className = 'tkids';
+        sub.files.forEach(f=>{
+          if(filterText && !(f.name.toLowerCase().includes(filterText) || f.tags.some(t=>t.includes(filterText)) || sub.name.toLowerCase().includes(filterText))) return;
+          subKids.appendChild(createFileRow(f, cat.category+"/"+sub.name));
+        });
+        subNode.appendChild(subKids);
+        kids.appendChild(subNode);
+      });
+    } else {
+      cat.files.forEach(f=>{
+        if(filterText && !(f.name.toLowerCase().includes(filterText) || f.tags.some(t=>t.includes(filterText)))) return;
+        kids.appendChild(createFileRow(f, cat.category));
+      });
+    }
+    node.appendChild(kids);
+    treeEl.appendChild(node);
+  });
+}
+
+function createFileRow(file, catPath){
+  const div = document.createElement('div');
+  div.className = 'file-row' + (selectedFile && selectedFile.path===file.path ? ' sel' : '');
+  div.innerHTML = `<div class="bar"></div><div class="play-btn"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5.5v13l11-6.5z"/></svg></div><span class="fname">${file.name}</span><span class="fdur">${file.dur.toFixed(1)}s</span>`;
+  div.addEventListener('click',()=>selectFile(file, catPath));
+  div.querySelector('.play-btn').addEventListener('click',e=>{e.stopPropagation(); quickPlay(file);});
+  return div;
+}
+
+function selectFile(file, catPath){
+  selectedFile = {...file, catPath};
+  document.querySelectorAll('.file-row').forEach(el=>el.classList.remove('sel'));
+  // re-render to highlight
+  renderTree();
+  document.getElementById('metaName').textContent = file.name;
+  document.getElementById('metaPath').textContent = file.path;
+  document.getElementById('metaDur').textContent = file.dur.toFixed(2);
+  document.getElementById('metaCategory').textContent = catPath;
+  document.getElementById('metaUsage').textContent = file.desc;
+  document.getElementById('fileInfoTag').textContent = file.name;
+  document.getElementById('statusMsg').textContent = `Loaded ${file.name} — ${file.desc}`;
+  loadAudio(file.path);
+}
+
+/* ============================================================
+   WEB AUDIO ENGINE — Modular Graph
+   ============================================================ */
+let audioCtx = null;
+let masterGain = null;
+let currentBuffer = null;
+let sourceNode = null;
+let gainNode, panNode, lowpassNode, highpassNode, bandpassNode, convolverNode, delayNode, distortionNode, compressorNode;
+let isPlaying = false;
+let startTime = 0;
+let pauseOffset = 0;
+let loopEnabled = true;
+let playbackRate = 1.0;
+let animationId = null;
+
+function ensureAudio(){
+  if(!audioCtx){
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({sampleRate:44100});
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.8;
+    masterGain.connect(audioCtx.destination);
+    // create nodes
+    gainNode = audioCtx.createGain();
+    panNode = audioCtx.createStereoPanner();
+    lowpassNode = audioCtx.createBiquadFilter(); lowpassNode.type='lowpass'; lowpassNode.frequency.value=20000;
+    highpassNode = audioCtx.createBiquadFilter(); highpassNode.type='highpass'; highpassNode.frequency.value=20;
+    bandpassNode = audioCtx.createBiquadFilter(); bandpassNode.type='bandpass'; bandpassNode.frequency.value=1000; bandpassNode.Q.value=1;
+    convolverNode = audioCtx.createConvolver();
+    // simple reverb impulse
+    convolverNode.buffer = createReverbImpulse(2.5, 2.0);
+    delayNode = audioCtx.createDelay(2.0); delayNode.delayTime.value=0.28;
+    const delayGain = audioCtx.createGain(); delayGain.gain.value=0.22;
+    const delayFeedback = audioCtx.createGain(); delayFeedback.gain.value=0.35;
+    delayNode.connect(delayGain); delayGain.connect(delayFeedback); delayFeedback.connect(delayNode);
+    distortionNode = audioCtx.createWaveShaper();
+    distortionNode.curve = makeDistortionCurve(0);
+    compressorNode = audioCtx.createDynamicsCompressor();
+    // chain will be rebuilt per play
+  }
+}
+
+function createReverbImpulse(duration, decay){
+  const rate = audioCtx ? audioCtx.sampleRate : 44100;
+  const len = rate * duration;
+  const impulse = audioCtx.createBuffer(2, len, rate);
+  for(let ch=0; ch<2; ch++){
+    const data = impulse.getChannelData(ch);
+    for(let i=0;i<len;i++){
+      data[i] = (Math.random()*2-1) * Math.pow(1 - i/len, decay);
+    }
+  }
+  return impulse;
+}
+
+function makeDistortionCurve(amount){
+  const k = typeof amount==='number'?amount:50;
+  const n = 44100;
+  const curve = new Float32Array(n);
+  const deg = Math.PI/180;
+  for(let i=0;i<n;i++){
+    const x = i*2/n -1;
+    curve[i] = (3+k)*x*20*deg / (Math.PI + k*Math.abs(x));
+  }
+  return curve;
+}
+
+function rebuildGraph(){
+  if(!audioCtx) return;
+  // disconnect
+  try{ gainNode.disconnect(); panNode.disconnect(); lowpassNode.disconnect(); highpassNode.disconnect(); bandpassNode.disconnect(); convolverNode.disconnect(); delayNode.disconnect(); distortionNode.disconnect(); compressorNode.disconnect(); }catch(e){}
+  // build chain based on toggles
+  let last = gainNode;
+  // filters
+  if(document.getElementById('filterToggle').dataset.on==="true"){
+    last.connect(lowpassNode); last = lowpassNode;
+    last.connect(highpassNode); last = highpassNode;
+    // bandpass optional - only if not default
+    if(parseInt(document.getElementById('bpVal').textContent)!==1000){
+      last.connect(bandpassNode); last = bandpassNode;
+    }
+  }
+  // effects
+  const reverbAmt = parseInt(document.getElementById('reverbSlider').value);
+  const distAmt = parseInt(document.getElementById('distSlider').value);
+  const delayAmt = parseInt(document.getElementById('delaySlider').value);
+  const compAmt = parseInt(document.getElementById('compSlider').value);
+  
+  if(distAmt>0){
+    distortionNode.curve = makeDistortionCurve(distAmt*3);
+    last.connect(distortionNode); last = distortionNode;
+  }
+  if(delayAmt>0){
+    last.connect(delayNode);
+    // delay wet path
+    const wet = audioCtx.createGain(); wet.gain.value = delayAmt/100*0.5;
+    delayNode.connect(wet); wet.connect(panNode);
+    // dry continues
+  }
+  if(reverbAmt>0){
+    const wet = audioCtx.createGain(); wet.gain.value = reverbAmt/100*0.4;
+    const dry = audioCtx.createGain(); dry.gain.value = 1 - reverbAmt/100*0.3;
+    const split = audioCtx.createGain();
+    last.connect(split);
+    split.connect(dry); dry.connect(panNode);
+    split.connect(convolverNode); convolverNode.connect(wet); wet.connect(panNode);
+    last = panNode; // already connected via dry/wet
+  } else {
+    last.connect(panNode); last = panNode;
+  }
+  if(compAmt>0){
+    compressorNode.threshold.value = -24 - compAmt/2;
+    compressorNode.ratio.value = 2 + compAmt/10;
+    panNode.connect(compressorNode); compressorNode.connect(masterGain);
+  } else {
+    panNode.connect(masterGain);
+  }
+  // if no reverb branch, ensure connection
+  if(reverbAmt===0 && compAmt===0){
+    // pan already connected to master via above? Ensure
+    try{ panNode.disconnect(); }catch(e){}
+    panNode.connect(masterGain);
+  }
+}
+
+async function loadAudio(path){
+  ensureAudio();
+  stopPlayback();
+  document.getElementById('audioState').textContent = `Loading ${path}...`;
+  try{
+    const resp = await fetch(path);
+    if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const arrayBuf = await resp.arrayBuffer();
+    const decoded = await audioCtx.decodeAudioData(arrayBuf);
+    currentBuffer = decoded;
+    document.getElementById('timeTotal').textContent = formatTime(decoded.duration);
+    document.getElementById('sampleRateInfo').textContent = `${(decoded.sampleRate/1000).toFixed(1)} kHz · ${decoded.numberOfChannels===1?'Mono':'Stereo'} · 16-bit · ${decoded.length} samples`;
+    drawWaveform(decoded);
+    document.getElementById('audioState').textContent = `Loaded — ${decoded.duration.toFixed(2)}s`;
+    pauseOffset = 0;
+  }catch(e){
+    console.error(e);
+    document.getElementById('audioState').textContent = `Load failed: ${e.message}`;
+    document.getElementById('statusMsg').textContent = `Failed to load ${path} — ${e.message}. Ensure you're running via HTTP server.`;
+    // draw placeholder
+    drawPlaceholder();
+  }
+}
+
+function drawPlaceholder(){
+  const canvas = document.getElementById('waveform');
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio||1;
+  canvas.width = canvas.clientWidth*dpr;
+  canvas.height = canvas.clientHeight*dpr;
+  ctx.scale(dpr,dpr);
+  ctx.fillStyle = '#080808';
+  ctx.fillRect(0,0,canvas.clientWidth,canvas.clientHeight);
+  ctx.fillStyle = '#333';
+  ctx.font = '12px General Sans';
+  ctx.fillText('No audio loaded — run via local server for fetch to work', 20, 30);
+}
+
+function drawWaveform(buffer){
+  const canvas = document.getElementById('waveform');
+  const container = document.getElementById('waveContainer');
+  const dpr = window.devicePixelRatio||1;
+  canvas.width = container.clientWidth * dpr;
+  canvas.height = container.clientHeight * dpr;
+  canvas.style.width = container.clientWidth+'px';
+  canvas.style.height = container.clientHeight+'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  const W = container.clientWidth;
+  const H = container.clientHeight;
+  ctx.fillStyle = '#080808';
+  ctx.fillRect(0,0,W,H);
+  // grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 1;
+  for(let y=0;y<H;y+=40){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+  for(let x=0;x<W;x+=100){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  // waveform
+  const channels = buffer.numberOfChannels;
+  const dataL = buffer.getChannelData(0);
+  const dataR = channels>1 ? buffer.getChannelData(1) : dataL;
+  const step = Math.ceil(dataL.length / W);
+  const amp = H / (channels>1?2.5:2);
+  // left channel top half
+  ctx.fillStyle = 'rgba(108,119,255,0.9)';
+  ctx.beginPath();
+  for(let i=0;i<W;i++){
+    const start = i*step;
+    let min=1,max=-1;
+    for(let j=0;j<step;j++){
+      const v = dataL[start+j];
+      if(v<min) min=v;
+      if(v>max) max=v;
+    }
+    const y1 = H*0.25 + min*amp*0.8;
+    const y2 = H*0.25 + max*amp*0.8;
+    if(i===0) ctx.moveTo(i,y1);
+    else ctx.lineTo(i,y1);
+  }
+  for(let i=W-1;i>=0;i--){
+    const start = i*step;
+    let max=-1;
+    for(let j=0;j<step;j++){ const v=dataL[start+j]; if(v>max) max=v; }
+    const y = H*0.25 + max*amp*0.8;
+    ctx.lineTo(i,y);
+  }
+  ctx.closePath(); ctx.fill();
+  // right channel bottom half if stereo
+  if(channels>1){
+    ctx.fillStyle = 'rgba(108,119,255,0.5)';
+    ctx.beginPath();
+    for(let i=0;i<W;i++){
+      const start = i*step;
+      let min=1;
+      for(let j=0;j<step;j++){ const v=dataR[start+j]; if(v<min) min=v; }
+      const y = H*0.75 + min*amp*0.8;
+      if(i===0) ctx.moveTo(i,y); else ctx.lineTo(i,y);
+    }
+    for(let i=W-1;i>=0;i--){
+      const start = i*step;
+      let max=-1;
+      for(let j=0;j<step;j++){ const v=dataR[start+j]; if(v>max) max=v; }
+      const y = H*0.75 + max*amp*0.8;
+      ctx.lineTo(i,y);
+    }
+    ctx.closePath(); ctx.fill();
+  }
+  // center lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.beginPath(); ctx.moveTo(0,H*0.25); ctx.lineTo(W,H*0.25); ctx.stroke();
+  if(channels>1){ ctx.beginPath(); ctx.moveTo(0,H*0.75); ctx.lineTo(W,H*0.75); ctx.stroke(); }
+}
+
+function formatTime(s){
+  const m = Math.floor(s/60);
+  const sec = Math.floor(s%60);
+  const ms = Math.floor((s%1)*1000);
+  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}.${String(ms).padStart(3,'0')}`;
+}
+
+function playPlayback(){
+  if(!currentBuffer) return;
+  ensureAudio();
+  if(audioCtx.state==='suspended') audioCtx.resume();
+  stopPlayback(false);
+  sourceNode = audioCtx.createBufferSource();
+  sourceNode.buffer = currentBuffer;
+  sourceNode.loop = loopEnabled;
+  sourceNode.playbackRate.value = playbackRate;
+  // detune
+  const detune = parseInt(document.getElementById('detuneVal').textContent);
+  sourceNode.detune.value = detune + (parseInt(document.getElementById('pitchVal').textContent)*100);
+  // connect through gain chain
+  sourceNode.connect(gainNode);
+  rebuildGraph();
+  // envelope? simple gain ramp
+  const now = audioCtx.currentTime;
+  gainNode.gain.cancelScheduledValues(now);
+  gainNode.gain.setValueAtTime(0, now);
+  gainNode.gain.linearRampToValueAtTime(Math.pow(10, parseInt(document.getElementById('volVal').textContent)/20), now+0.02);
+  sourceNode.start(0, pauseOffset % currentBuffer.duration);
+  startTime = now - pauseOffset/playbackRate;
+  isPlaying = true;
+  document.getElementById('btn-play').classList.add('active');
+  document.getElementById('statusDot').classList.remove('idle');
+  document.getElementById('audioState').textContent = 'Playing';
+  document.getElementById('playhead').style.display = 'block';
+  animatePlayhead();
+  sourceNode.onended = ()=>{
+    if(!sourceNode.loop){
+      isPlaying=false;
+      document.getElementById('btn-play').classList.remove('active');
+      document.getElementById('statusDot').classList.add('idle');
+      document.getElementById('audioState').textContent = 'Stopped';
+      cancelAnimationFrame(animationId);
+      pauseOffset=0;
+    }
+  };
+}
+
+function stopPlayback(resetOffset=true){
+  if(sourceNode){
+    try{ sourceNode.stop(); sourceNode.disconnect(); }catch(e){}
+    sourceNode=null;
+  }
+  if(resetOffset) pauseOffset=0;
+  else if(audioCtx && isPlaying){
+    pauseOffset = (audioCtx.currentTime - startTime) * playbackRate;
+  }
+  isPlaying=false;
+  document.getElementById('btn-play').classList.remove('active');
+  document.getElementById('statusDot').classList.add('idle');
+  document.getElementById('playhead').style.display = 'none';
+  cancelAnimationFrame(animationId);
+}
+
+function pausePlayback(){
+  if(!isPlaying) return;
+  stopPlayback(false);
+  document.getElementById('audioState').textContent = 'Paused';
+}
+
+function animatePlayhead(){
+  if(!isPlaying || !currentBuffer) return;
+  const elapsed = (audioCtx.currentTime - startTime) * playbackRate;
+  const progress = (elapsed % currentBuffer.duration) / currentBuffer.duration;
+  const container = document.getElementById('waveContainer');
+  const playhead = document.getElementById('playhead');
+  playhead.style.left = (progress*container.clientWidth)+'px';
+  document.getElementById('timeCurrent').textContent = formatTime(elapsed % currentBuffer.duration);
+  animationId = requestAnimationFrame(animatePlayhead);
+}
+
+async function quickPlay(file){
+  // temporary play without selecting
+  ensureAudio();
+  try{
+    const resp = await fetch(file.path);
+    const buf = await resp.arrayBuffer();
+    const decoded = await audioCtx.decodeAudioData(buf);
+    const src = audioCtx.createBufferSource();
+    src.buffer = decoded;
+    src.connect(masterGain);
+    src.start();
+  }catch(e){ console.error(e); }
+}
+
+/* ============================================================
+   UI CONTROLS
+   ============================================================ */
+function initControls(){
+  // master vol
+  document.getElementById('masterVol').addEventListener('input',e=>{
+    const v = e.target.value;
+    document.getElementById('masterVolVal').textContent = v;
+    if(masterGain) masterGain.gain.value = v/100;
+  });
+  // play/stop/loop
+  document.getElementById('btn-play').addEventListener('click',()=>{
+    if(isPlaying) pausePlayback(); else playPlayback();
+  });
+  document.getElementById('btn-stop').addEventListener('click',()=>{ stopPlayback(true); document.getElementById('timeCurrent').textContent='00:00.000'; });
+  document.getElementById('btn-loop').addEventListener('click',function(){
+    this.classList.toggle('active');
+    loopEnabled = this.classList.contains('active');
+    if(sourceNode) sourceNode.loop = loopEnabled;
+  });
+  document.getElementById('btn-loop').classList.add('active');
+  // pitch
+  document.getElementById('pitchSlider').addEventListener('input',e=>{
+    document.getElementById('pitchVal').textContent = e.target.value;
+    document.getElementById('codePitch').textContent = (parseInt(e.target.value)).toFixed(1);
+    if(sourceNode) sourceNode.detune.value = parseInt(e.target.value)*100 + parseInt(document.getElementById('detuneVal').textContent);
+    updatePitchInfo();
+    e.target.style.background = `linear-gradient(to right, var(--hi) ${((parseInt(e.target.value)+12)/24)*100}%, var(--raised) ${((parseInt(e.target.value)+12)/24)*100}%)`;
+  });
+  document.getElementById('detuneSlider').addEventListener('input',e=>{
+    document.getElementById('detuneVal').textContent = e.target.value;
+    if(sourceNode) sourceNode.detune.value = parseInt(e.target.value) + parseInt(document.getElementById('pitchVal').textContent)*100;
+    updatePitchInfo();
+  });
+  document.getElementById('rateSlider').addEventListener('input',e=>{
+    const rate = e.target.value/100;
+    document.getElementById('rateVal').textContent = rate.toFixed(2);
+    document.getElementById('codeRate').textContent = rate.toFixed(2);
+    playbackRate = rate;
+    if(sourceNode) sourceNode.playbackRate.value = rate;
+    updatePitchInfo();
+    e.target.style.background = `linear-gradient(to right, #6c77ff ${((e.target.value-25)/375)*100}%, var(--raised) ${((e.target.value-25)/375)*100}%)`;
+  });
+  document.getElementById('volSlider').addEventListener('input',e=>{
+    document.getElementById('volVal').textContent = e.target.value;
+    document.getElementById('codeVol').textContent = e.target.value;
+    if(gainNode) gainNode.gain.value = Math.pow(10, e.target.value/20);
+  });
+  document.getElementById('panSlider').addEventListener('input',e=>{
+    document.getElementById('panVal').textContent = e.target.value;
+    if(panNode) panNode.pan.value = e.target.value/100;
+  });
+  // filters
+  document.getElementById('lpSlider').addEventListener('input',e=>{
+    document.getElementById('lpVal').textContent = e.target.value;
+    if(lowpassNode) lowpassNode.frequency.value = e.target.value;
+  });
+  document.getElementById('hpSlider').addEventListener('input',e=>{
+    document.getElementById('hpVal').textContent = e.target.value;
+    if(highpassNode) highpassNode.frequency.value = e.target.value;
+  });
+  document.getElementById('bpSlider').addEventListener('input',e=>{
+    document.getElementById('bpVal').textContent = e.target.value;
+    if(bandpassNode) bandpassNode.frequency.value = e.target.value;
+  });
+  document.getElementById('qSlider').addEventListener('input',e=>{
+    document.getElementById('qVal').textContent = (e.target.value/10).toFixed(1);
+    if(bandpassNode) bandpassNode.Q.value = e.target.value/10;
+    if(lowpassNode) lowpassNode.Q.value = e.target.value/10;
+    if(highpassNode) highpassNode.Q.value = e.target.value/10;
+  });
+  document.getElementById('filterToggle').addEventListener('click',function(){
+    this.dataset.on = this.dataset.on==="true"?"false":"true";
+    rebuildGraph();
+  });
+  // effects sliders
+  document.getElementById('reverbSlider').addEventListener('input',e=>{ rebuildGraph(); });
+  document.getElementById('distSlider').addEventListener('input',e=>{ rebuildGraph(); });
+  document.getElementById('delaySlider').addEventListener('input',e=>{ rebuildGraph(); });
+  document.getElementById('compSlider').addEventListener('input',e=>{ rebuildGraph(); });
+  // loop toggle
+  document.getElementById('loopToggle').addEventListener('click',function(){
+    this.dataset.on = this.dataset.on==="true"?"false":"true";
+    loopEnabled = this.dataset.on==="true";
+    if(sourceNode) sourceNode.loop = loopEnabled;
+  });
+  // view seg
+  document.querySelectorAll('#viewSeg button').forEach(b=>b.addEventListener('click',function(){
+    document.querySelectorAll('#viewSeg button').forEach(x=>x.classList.remove('active'));
+    this.classList.add('active');
+  }));
+  // top view seg
+  document.querySelectorAll('.topbar .toolgroup button[data-view]').forEach(b=>b.addEventListener('click',function(){
+    document.querySelectorAll('.topbar .toolgroup button[data-view]').forEach(x=>x.classList.remove('active'));
+    this.classList.add('active');
+    const view = this.dataset.view;
+    if(view==='racing'){
+      document.getElementById('racingStrip').style.display='flex';
+    } else {
+      document.getElementById('racingStrip').style.display='none';
+    }
+    if(view==='spec'){
+      document.getElementById('spectrogram').style.display='block';
+    } else {
+      document.getElementById('spectrogram').style.display='none';
+    }
+  }));
+  // collapsible sections
+  document.querySelectorAll('.ins-sec-header').forEach(h=>{
+    h.addEventListener('click',()=>{
+      h.classList.toggle('collapsed');
+      h.nextElementSibling.classList.toggle('collapsed');
+    });
+  });
+  // search
+  document.getElementById('search').addEventListener('input',e=>{
+    filterText = e.target.value.toLowerCase();
+    renderTree();
+  });
+  // export
+  document.getElementById('btn-export').addEventListener('click',()=>{
+    if(!currentBuffer){ alert('No audio loaded'); return; }
+    // create offline context to render with effects? For simplicity, export raw buffer as wav with current pitch/rate via offline
+    alert('Export: In production, this would render the processed graph via OfflineAudioContext and download as WAV. For now, use the original file at '+selectedFile.path);
+    // trigger download of original
+    const a = document.createElement('a');
+    a.href = selectedFile.path;
+    a.download = selectedFile.name;
+    a.click();
+  });
+  document.getElementById('btn-copy-path').addEventListener('click',()=>{
+    if(!selectedFile) return;
+    navigator.clipboard.writeText(selectedFile.path);
+    document.getElementById('statusMsg').textContent = `Copied path: ${selectedFile.path}`;
+  });
+  document.getElementById('btn-copy-code').addEventListener('click',()=>{
+    const pitch = document.getElementById('pitchVal').textContent;
+    const rate = document.getElementById('rateVal').textContent;
+    const vol = document.getElementById('volVal').textContent;
+    const code = `auto sfx = AudioArchive::Load("${selectedFile?.path||''}");\nsfx.SetPitch(${pitch}.0f);\nsfx.SetPlaybackRate(${rate}f);\nsfx.SetVolumeDb(${vol}.0f);`;
+    navigator.clipboard.writeText(code);
+    document.getElementById('statusMsg').textContent = 'Copied C++ snippet to clipboard';
+  });
+}
+
+function updatePitchInfo(){
+  const p = document.getElementById('pitchVal').textContent;
+  const r = document.getElementById('rateVal').textContent;
+  document.getElementById('pitchInfo').textContent = `Pitch: ${p>0?'+':''}${p} st · Rate: ${r}× · Detune: ${document.getElementById('detuneVal').textContent}¢`;
+}
+
+/* ============================================================
+   RACING SIMULATOR CANVAS
+   ============================================================ */
+function initRacingSim(){
+  const canvas = document.getElementById('racingCanvas');
+  const ctx = canvas.getContext('2d');
+  let surfaces = [];
+  let carX = 50;
+  let speed = 45;
+  let currentSurface = 'tarmac';
+  let screechTimer = 0;
+  let crashTimer = 0;
+
+  function resize(){
+    const dpr = window.devicePixelRatio||1;
+    canvas.width = canvas.clientWidth*dpr;
+    canvas.height = canvas.clientHeight*dpr;
+    ctx.scale(dpr,dpr);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // generate track
+  function genTrack(){
+    surfaces = [];
+    const types = ['tarmac','gravel','sand','dirt','grass','mud','tarmac'];
+    let x=0;
+    types.forEach(t=>{
+      const w = 200 + Math.random()*300;
+      surfaces.push({type:t, x:x, w:w});
+      x+=w;
+    });
+  }
+  genTrack();
+
+  function draw(){
+    const W = canvas.clientWidth;
+    const H = canvas.clientHeight;
+    ctx.fillStyle = '#0e0e0e';
+    ctx.fillRect(0,0,W,H);
+    // track
+    surfaces.forEach(s=>{
+      const sx = s.x - carX + 100;
+      if(sx+s.w<0 || sx>W) return;
+      let col = '#222';
+      switch(s.type){
+        case 'tarmac': col='#2a2a2a'; break;
+        case 'gravel': col='#3a3a2a'; break;
+        case 'sand': col='#4a3f2a'; break;
+        case 'dirt': col='#3a2a1a'; break;
+        case 'grass': col='#1a2a1a'; break;
+        case 'mud': col='#2a1f0f'; break;
+      }
+      ctx.fillStyle = col;
+      ctx.fillRect(sx, H*0.3, s.w, H*0.4);
+      // surface label
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.font = '10px General Sans';
+      ctx.fillText(s.type.toUpperCase(), sx+6, H*0.3+14);
+      // texture dots
+      ctx.fillStyle = 'rgba(255,255,255,0.06)';
+      for(let i=0;i<s.w;i+=20){
+        if(Math.random()>0.5) ctx.fillRect(sx+i, H*0.3+Math.random()*H*0.4, 2,2);
+      }
+    });
+    // car
+    const carY = H*0.5;
+    ctx.save();
+    ctx.translate(100, carY);
+    if(screechTimer>0){
+      ctx.rotate((Math.random()-0.5)*0.2);
+      ctx.fillStyle = 'rgba(108,119,255,0.3)';
+      ctx.beginPath(); ctx.arc(-10,0,20+screechTimer*2,0,Math.PI*2); ctx.fill();
+    }
+    if(crashTimer>0){
+      ctx.translate((Math.random()-0.5)*crashTimer, (Math.random()-0.5)*crashTimer);
+      ctx.fillStyle = 'rgba(239,68,68,0.4)';
+      ctx.beginPath(); ctx.arc(0,0,15+crashTimer,0,Math.PI*2); ctx.fill();
+    }
+    // car body
+    ctx.fillStyle = '#f0f0f0';
+    ctx.fillRect(-18,-10,36,20);
+    ctx.fillStyle = '#111';
+    ctx.fillRect(-14,-8,10,4); ctx.fillRect(4,-8,10,4);
+    ctx.fillRect(-14,4,10,4); ctx.fillRect(4,4,10,4);
+    // headlights
+    ctx.fillStyle = '#6c77ff';
+    ctx.fillRect(16,-6,4,3); ctx.fillRect(16,3,4,3);
+    ctx.restore();
+
+    // speed lines
+    if(speed>20){
+      ctx.strokeStyle = `rgba(255,255,255,${Math.min(0.3, speed/200)})`;
+      ctx.lineWidth=1;
+      for(let i=0;i<speed/5;i++){
+        const x = Math.random()*W;
+        const y = Math.random()*H;
+        ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x-speed/2,y); ctx.stroke();
+      }
+    }
+
+    // update
+    carX += speed*0.05;
+    if(carX > surfaces[ surfaces.length-1 ].x + surfaces[ surfaces.length-1 ].w){
+      carX = 0; genTrack();
+    }
+    // detect surface
+    const cur = surfaces.find(s=>carX>=s.x && carX < s.x+s.w);
+    if(cur && cur.type!==currentSurface){
+      currentSurface = cur.type;
+      document.getElementById('statusMsg').textContent = `Surface changed: ${currentSurface} — blending audio`;
+      // trigger surface audio
+      triggerSurfaceAudio(currentSurface);
+    }
+    if(screechTimer>0) screechTimer--;
+    if(crashTimer>0) crashTimer--;
+
+    requestAnimationFrame(draw);
+  }
+  draw();
+
+  document.getElementById('speedSlider').addEventListener('input',e=>{
+    speed = parseInt(e.target.value);
+    document.getElementById('speedVal').textContent = speed + ' km/h';
+  });
+  document.querySelectorAll('#surfaceSeg button').forEach(b=>b.addEventListener('click',function(){
+    document.querySelectorAll('#surfaceSeg button').forEach(x=>x.classList.remove('active'));
+    this.classList.add('active');
+    currentSurface = this.dataset.surface;
+    triggerSurfaceAudio(currentSurface);
+  }));
+  document.getElementById('btn-screech').addEventListener('click',()=>{
+    screechTimer = 30;
+    quickPlay({path:'Content/Audio/Vehicle/Tires/Tire_Screech_Drift.wav'});
+    document.getElementById('statusMsg').textContent = 'Tire screech triggered — drift!';
+  });
+  document.getElementById('btn-crash').addEventListener('click',()=>{
+    crashTimer = 20;
+    quickPlay({path:'Content/Audio/Vehicle/Impacts/Car_Crash_Heavy.wav'});
+    document.getElementById('statusMsg').textContent = 'Crash! — heavy impact';
+  });
+
+  function triggerSurfaceAudio(surface){
+    const map = {
+      tarmac:'Content/Audio/Vehicle/Surfaces/Car_Tarmac_Drive_Loop.wav',
+      gravel:'Content/Audio/Vehicle/Surfaces/Car_Gravel_Drive_Loop.wav',
+      sand:'Content/Audio/Vehicle/Surfaces/Car_Sand_Drive_Loop.wav',
+      dirt:'Content/Audio/Vehicle/Surfaces/Car_Dirt_Drive_Loop.wav',
+      grass:'Content/Audio/Vehicle/Surfaces/Car_Grass_Drive.wav',
+      mud:'Content/Audio/Vehicle/Surfaces/Car_Mud_Drive.wav',
+    };
+    if(map[surface]) quickPlay({path:map[surface]});
+  }
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+window.addEventListener('DOMContentLoaded',()=>{
+  renderTree();
+  initControls();
+  initRacingSim();
+  // auto-select first file
+  setTimeout(()=>{
+    if(MANIFEST[0]?.files?.[0]){
+      selectFile(MANIFEST[0].files[0], MANIFEST[0].category);
+    }
+  }, 300);
+  // keyboard
+  window.addEventListener('keydown',e=>{
+    if(e.code==='Space'){ e.preventDefault(); if(isPlaying) pausePlayback(); else playPlayback(); }
+    if(e.code==='Escape'){ stopPlayback(true); }
+  });
+  // waveform mouse move for X display
+  const waveContainer = document.getElementById('waveContainer');
+  waveContainer.addEventListener('mousemove',e=>{
+    const rect = waveContainer.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    document.getElementById('mouseX').textContent = (x).toFixed(1);
+    document.getElementById('mouseY').textContent = (e.clientY - rect.top).toFixed(1);
+  });
+  // paint sliders initially
+  document.querySelectorAll('input[type=range].slider').forEach(s=>{
+    const pct = ((s.value - s.min)/(s.max - s.min))*100;
+    s.style.background = `linear-gradient(to right, var(--hi) ${pct}%, var(--raised) ${pct}%)`;
+    s.addEventListener('input',()=>{
+      const pct2 = ((s.value - s.min)/(s.max - s.min))*100;
+      s.style.background = `linear-gradient(to right, var(--hi) ${pct2}%, var(--raised) ${pct2}%)`;
+    });
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+# AudioArchives descriptor — Frontier Slate
+# Replaces .manifest, parsed via tomlpp
+
+[archive]
+name = "AudioArchives"
+version = "1.0.0"
+sampleRate = 44100
+bitDepth = 16
+channels = "stereo"
+format = "wav"
+count = 38
+
+[categories]
+Ambience = 7
+Foliage = 5
+Terrain = 4
+Vehicle_Surfaces = 7
+Vehicle_Tires = 4
+Vehicle_Impacts = 5
+Vehicle_Engine = 4
+UI = 2
+
+[integration]
+engine = "miniaudio"
+path = "Projects/Project-Zero/Content/AudioArchives/"
+editor = "Experimental/AudioLab/index.html"
+generator = "Experimental/AudioLab/generate_audio.py"
+
+[usage]
+# Example: Load and blend surfaces based on physics material
+# auto sfx = AudioArchive::Load("Vehicle/Surfaces/Car_Tarmac_Drive_Loop.wav");
