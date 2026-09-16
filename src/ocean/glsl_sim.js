@@ -302,8 +302,8 @@ void main() {
   }
   if (D > 12.0) {                                              // open-ocean whitecaps
     float wcap = smoothstep(7.0, 15.0, uWindSpeed) * uWhitecap;
-    float patch = fbm3(p * 0.02 + vec2(uTime * 0.05, 0.0));
-    dep += smoothstep(0.04, 0.30, fold) * wcap * smoothstep(0.35, 0.75, patch) * 1.4;
+    float capPatch = fbm3(p * 0.02 + vec2(uTime * 0.05, 0.0));
+    dep += smoothstep(0.04, 0.30, fold) * wcap * smoothstep(0.35, 0.75, capPatch) * 1.4;
   }
   foam = clamp(foam + dep * uDeposit * uDt, 0.0, 1.6);
   float crest = clamp(max(B * 1.2, smoothstep(0.05, 0.6, fold)), 0.0, 1.5);

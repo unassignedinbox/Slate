@@ -103,6 +103,25 @@ for (const [name, mat] of mats) {
   console.log(`ok ${name}: ${(uV.size + uF.size)} uniforms bound, varyings match`);
 }
 
+// 7. no GLSL ES 3.00 reserved (future-use) words as identifiers
+const RESERVED = [
+  'common', 'partition', 'active', 'asm', 'class', 'union', 'enum', 'typedef',
+  'template', 'this', 'resource', 'goto', 'inline', 'noinline', 'volatile',
+  'public', 'static', 'extern', 'external', 'interface', 'flat', 'superp',
+  'input', 'output', 'filter', 'sizeof', 'cast', 'namespace', 'using',
+  'row_major', 'patch', 'sample', 'subroutine', 'half', 'fixed', 'long',
+  'short', 'unsigned',
+];
+for (const [name, mat] of mats) {
+  for (const [stage, src] of [['vert', mat.vertexShader], ['frag', mat.fragmentShader]]) {
+    const clean = stripComments(src);
+    for (const w of RESERVED) {
+      assert.ok(!new RegExp(`\\b${w}\\b`).test(clean), `${name}.${stage}: reserved word '${w}' used as identifier`);
+    }
+  }
+}
+console.log('ok no reserved identifiers');
+
 // shared-by-reference checks (updates propagate to all materials)
 assert.equal(water.material.uniforms.uTime, shared.uTime);
 assert.equal(foam.pass.material.uniforms.uWindSpeed, shared.uWindSpeed);

@@ -66,14 +66,16 @@ async function main() {
   ui.onResize();
   window.addEventListener('resize', () => ui.onResize());
 
-  const clock = new THREE.Clock();
+  let lastNow = performance.now();
   let time = 0;
   let frames = 0, fpsTime = 0;
   const fpsEl = document.getElementById('fps');
   let firstFrame = true;
 
   renderer.setAnimationLoop(() => {
-    const rawDt = Math.min(clock.getDelta(), 0.1);
+    const nowMs = performance.now();
+    const rawDt = Math.min((nowMs - lastNow) / 1000, 0.1);
+    lastNow = nowMs;
     const dt = ui.playing ? rawDt * ui.timeScale : 0;
     time += dt;
     shared.uTime.value = time;
@@ -97,6 +99,8 @@ async function main() {
     scene.fog.density = shared.uFogDensity.value;
 
     controls.update();
+    // Sim passes leave a sim RT bound; the scene must render to the canvas.
+    renderer.setRenderTarget(null);
     renderer.render(scene, camera);
     ui.updateGraphs();
     window.__slateFrames = (window.__slateFrames || 0) + 1;
