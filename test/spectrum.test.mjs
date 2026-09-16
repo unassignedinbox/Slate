@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   G, dispersionOmega, dispersionDeriv, fetchRelations, jonswapS, tmaPhi,
   donelanBeta, donelanD, pmSwellS, phillips, cosFade, defaultSeaParams,
-  cascadeBands, wavenumberSpectrum, predictedHs, dominantWave,
+  cascadeBands, wavenumberSpectrum, predictedHs, dominantWave, CASCADE_ROT,
 } from '../src/ocean/spectra.js';
 import { defaultBathyParams, depthAt, shoalingGain } from '../src/ocean/bathymetry.js';
 import { analyticHeightJS } from '../src/ocean/sources.js';
@@ -111,6 +111,13 @@ assert.ok(donelanBeta(0.5, 1) > 1 && donelanBeta(3, 1) < 1.5, 'beta shape');
   assert.equal(wavenumberSpectrum(0, 0, P, null, P.refDepth).psi, 0);
   const down = wavenumberSpectrum(0.1, 0, P, null, P.refDepth).psi;
   assert.ok(down > 0, 'downwind energy');
+}
+
+// --- cascade UV rotation mirror ---
+{
+  assert.equal(CASCADE_ROT.length, 3);
+  assert.equal(CASCADE_ROT[0], 0);
+  assert.ok(CASCADE_ROT[1] > 0.2 && CASCADE_ROT[2] > 1, 'detail cascades rotated');
 }
 
 // --- dominant wave ---

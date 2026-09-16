@@ -4,6 +4,10 @@
 
 export const G = 9.81;
 
+// UV rotation (radians) applied per cascade when sampling displacement.
+// [0] must stay 0 so swell direction matches the UI + sources. Mirrored in GLSL.
+export const CASCADE_ROT = [0.0, 0.6, 2.2];
+
 // Finite-depth linear dispersion: w^2 = g k tanh(k D)
 export function dispersionOmega(k, D) {
   if (!(k > 0)) return 0;

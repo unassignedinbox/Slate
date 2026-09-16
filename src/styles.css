@@ -80,3 +80,9 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--txt);
   background: rgba(10,4,4,.94); padding: 40px; text-align: center; font-size: 14px; line-height: 1.7; }
 #fatal.hidden { display: none; }
 #fatal b { color: var(--warn); }
+#diag { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); z-index: 5;
+  font-size: 11.5px; color: var(--accent); background: rgba(3,8,12,.62); padding: 6px 14px;
+  border-radius: 20px; border: 1px solid var(--line); white-space: nowrap;
+  font-variant-numeric: tabular-nums; pointer-events: none; }
+#diag.bad { color: #ff8a8a; border-color: rgba(255,90,90,.55); }
+#diag.hidden { display: none; }

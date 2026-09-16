@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { depthAt, shoalingGain } from './bathymetry.js';
 import { analyticHeightJS, SRC_CANCEL } from './sources.js';
+import { CASCADE_ROT } from './spectra.js';
 
 const PROBE_COLORS = { A: 0x46d6c4, B: 0xffb454, sensor: 0xff5f8f };
 const HIST_MAX = 1024;
@@ -99,9 +100,12 @@ export class ProbeManager {
   }
 
   // Read one displacement texel (handles float or half-float targets).
-  readDispY(cascade, L, N, x, z) {
-    const fx = ((((x / L + 0.5) % 1) + 1) % 1) * N;
-    const fz = ((((z / L + 0.5) % 1) + 1) % 1) * N;
+  readDispY(cascade, L, N, x, z, rot = 0) {
+    // mirror of the GLSL cascUV() rotation (mat2(c,-s,s,c) is column-major)
+    const cr = Math.cos(rot), sr = Math.sin(rot);
+    const rx = cr * x + sr * z, rz = -sr * x + cr * z;
+    const fx = ((((rx / L + 0.5) % 1) + 1) % 1) * N;
+    const fz = ((((rz / L + 0.5) % 1) + 1) % 1) * N;
     const ix = Math.min(N - 1, Math.max(0, Math.floor(fx)));
     const iy = Math.min(N - 1, Math.max(0, Math.floor(fz)));
     const rt = cascade.rtDisp;
@@ -117,7 +121,7 @@ export class ProbeManager {
   readHeight(x, z, t) {
     const field = this.field;
     let dy = 0;
-    for (let c = 0; c < 3; c++) dy += this.readDispY(field.cascades[c], field.tiles[c], field.N, x, z);
+    for (let c = 0; c < 3; c++) dy += this.readDispY(field.cascades[c], field.tiles[c], field.N, x, z, CASCADE_ROT[c]);
     const h0 = dy + analyticHeightJS(this.sources.sources, x, z, t);
     const P = this.getBathy();
     const D = depthAt(x, z, P);
@@ -157,7 +161,7 @@ export class ProbeManager {
         // FFT-only offset for buoy riding (analytic part handled on CPU)
         const field = this.field;
         let dy = 0;
-        for (let c = 0; c < 3; c++) dy += this.readDispY(field.cascades[c], field.tiles[c], field.N, job.s.x, job.s.z);
+        for (let c = 0; c < 3; c++) dy += this.readDispY(field.cascades[c], field.tiles[c], field.N, job.s.x, job.s.z, CASCADE_ROT[c]);
         const D = depthAt(job.s.x, job.s.z, this.getBathy());
         job.s.gpuTarget = dy * shoalingGain(this.shared.uPeakK.value, D);
       }

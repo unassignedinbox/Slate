@@ -14,11 +14,11 @@ varying vec2 vUv;
 ${NOISE_GLSL}
 uniform float uN;
 uniform float uNH;
-uniform int uStages;
+uniform float uStages; // float: int uniforms upload unreliably on some drivers
 uniform float uTileL;
 uniform float uTime;
 uniform float uSeed;
-uniform int uMode;
+uniform float uMode;
 // sea state
 uniform float uWindSpeed;
 uniform vec2 uWindDir;
@@ -40,7 +40,7 @@ float bitrev(float v) {
   float r = 0.0;
   float x = v;
   for (int i = 0; i < 16; i++) {
-    if (i >= uStages) break;
+    if (float(i) >= uStages) break;
     r = r * 2.0 + mod(x, 2.0);
     x = floor(x * 0.5);
   }
@@ -170,8 +170,8 @@ void main() {
   vec2 e2 = vec2(cos(w * uTime), sin(w * uTime));  // e^{+iwt}
   vec2 H = cmul(h0k, e1) + cmul(vec2(h0m.x, -h0m.y), e2);
   vec2 outv = H;
-  if (uMode == 1 || uMode == 2) {
-    float kk = uMode == 1 ? kx : ky;
+  if (uMode > 0.5) {
+    float kk = uMode < 1.5 ? kx : ky;
     float atten = uChop / ((1.0 + k * uChopLen) * max(k, 1e-4));
     vec2 imH = vec2(H.y, -H.x); // -i * H
     outv = imH * (kk * atten);
@@ -444,6 +444,7 @@ varying float vAlpha;
 varying float vType;
 varying float vSeed;
 varying float vFog;
+varying float vDist;
 uniform vec3 uFogColor; // unused here, keeps fog uniform shared
 uniform float uFogDensity;
 void main() {
@@ -456,13 +457,14 @@ void main() {
   if (life <= 0.0) {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     gl_PointSize = 0.0;
-    vAlpha = 0.0; vFog = 0.0;
+    vAlpha = 0.0; vFog = 0.0; vDist = 0.0;
     return;
   }
   vec4 mv = modelViewMatrix * vec4(P.xyz, 1.0);
   float dist = max(-mv.z, 0.1);
   float ws = (vType < 0.5 ? uSizeSpray : uSizeFoam) * (0.6 + 0.8 * vSeed);
-  gl_PointSize = clamp(ws * (uScaleH / dist), 0.0, 64.0);
+  gl_PointSize = clamp(ws * (uScaleH / dist), 0.0, 40.0);
+  vDist = dist;
   float age = 1.0 - life;
   vAlpha = (1.0 - smoothstep(0.5, 1.0, age)) * smoothstep(0.0, 0.05, age);
   float fd = dist * uFogDensity;
@@ -477,13 +479,15 @@ varying float vAlpha;
 varying float vType;
 varying float vSeed;
 varying float vFog;
+varying float vDist;
 uniform vec3 uFogColor;
 uniform float uOpacity;
 void main() {
   vec2 q = gl_PointCoord - 0.5;
   float d = length(q) * 2.0;
-  float a = smoothstep(1.0, 0.30, d);
-  a *= 0.65 + 0.5 * fract(vSeed * 7.0 + q.x * 3.0 - q.y * 5.0);
+  float a = smoothstep(1.0, 0.12, d);
+  a *= 0.45 + 0.85 * vnoise(gl_PointCoord * 3.0 + vSeed * 43.0);
+  a *= smoothstep(0.6, 2.2, vDist); // fade out inside the spray
   vec3 sprayCol = vec3(0.93, 0.96, 0.98);
   vec3 foamCol = vec3(0.80, 0.87, 0.89);
   vec3 col = mix(sprayCol, foamCol, step(0.5, vType));

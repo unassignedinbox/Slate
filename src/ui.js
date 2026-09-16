@@ -8,6 +8,7 @@ import {
 import { defaultBathyParams, BATHY_MODES } from './ocean/bathymetry.js';
 import { applySeaParams, applyBathyParams, applySky } from './ocean/shared.js';
 import { SRC_POINT, SRC_PLANE } from './ocean/sources.js';
+import { Diagnostics } from './ocean/diagnostics.js';
 
 export function createState() {
   return {
@@ -42,7 +43,7 @@ export const SCENARIOS = {
     sea: { windSpeed: 6, windDirDeg: 150, fetch: 120000, gamma: 3.3, swellHs: 1.8, swellTp: 10, swellDirDeg: 0, chop: 1.0 },
     bathy: { mode: 2, shoreX: 60, slope: 0.02, barX: 210, barH: 2.6, barW: 38 },
     sky: 'Day',
-    camera: { pos: [330, 42, 185], target: [80, 0, 0] },
+    camera: { pos: [228, 24, 152], target: [120, 0, 10] },
   },
   'Pipeline': {
     sea: { windSpeed: 5, windDirDeg: 180, fetch: 80000, gamma: 3.3, swellHs: 2.6, swellTp: 15, swellDirDeg: 0, chop: 1.1 },
@@ -87,6 +88,10 @@ export const SCENARIOS = {
 export function buildUI(ctx) {
   const { renderer, scene, camera, controls, shared, field, foam, spray, water, sources, probes, tuner } = ctx;
   const state = createState();
+  const diag = new Diagnostics(renderer, field, shared);
+  const diagEl = document.getElementById('diag');
+  let diagLast = 0;
+  let diagBooted = false;
   const ui = {
     state,
     playing: true,
@@ -323,6 +328,7 @@ export function buildUI(ctx) {
     else if (e.key >= '1' && e.key <= '7') applyPreset(Object.keys(SCENARIOS)[+e.key - 1]);
     else if (e.key === 'c' || e.key === 'C') { state.placeTool = 'cancel'; gui.controllersRecursive().forEach((c) => c.updateDisplay()); }
     else if (e.key === 'p' || e.key === 'P') { state.placeTool = 'probe'; gui.controllersRecursive().forEach((c) => c.updateDisplay()); }
+    else if (e.key === 'd' || e.key === 'D') diagEl.classList.toggle('hidden');
   });
 
   // ---------------- click to place ----------------
@@ -447,6 +453,11 @@ export function buildUI(ctx) {
 
   function updateGraphs() {
     if ((graphTick++ & 1) === 0) drawProbes();
+    const nowD = performance.now();
+    if (nowD - diagLast > 500) {
+      diagLast = nowD;
+      refreshDiag();
+    }
     // status lines
     const sA = probes.stats('A', state.measure.window);
     const sB = probes.stats('B', state.measure.window);
@@ -458,6 +469,22 @@ export function buildUI(ctx) {
     if (m) probeInfo.textContent = `B/A −${m.dB.toFixed(1)} dB`;
     else if (sA) probeInfo.textContent = `A: Hs ${sA.Hs.toFixed(2)} m`;
     else probeInfo.textContent = 'click water to place';
+  }
+
+  function refreshDiag() {
+    let modelHs = 0;
+    try { modelHs = predictedHs(state.sea, field.tiles, 64); } catch { modelHs = 0; }
+    const r = diag.sample(modelHs);
+    window.__slateDiag = r;
+    diagEl.className = r.verdict === 'OK' ? '' : 'bad';
+    diagEl.textContent = r.timeFrozen
+      ? `⏸ sim time frozen at t=${r.t.toFixed(1)}s — press play (space)`
+      : `t=${r.t.toFixed(1)}s · FFT sea Hs≈${r.Hs.toFixed(2)}m (model ${modelHs.toFixed(2)}m) · ${r.verdict}${r.nan > 0 ? ` · ⚠${r.nan} NaN` : ''}`;
+    if (!diagBooted && r.t > 4) {
+      diagBooted = true;
+      console.log(`[slate] boot sea check: ${diagEl.textContent}`, r);
+      if (r.verdict !== 'OK') console.error('[slate] SEA VERDICT:', r.verdict, 'per-cascade:', r.per);
+    }
   }
 
   function drawProbes() {

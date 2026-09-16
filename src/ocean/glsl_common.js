@@ -150,19 +150,26 @@ uniform sampler2D uDisp0;
 uniform sampler2D uDisp1;
 uniform sampler2D uDisp2;
 uniform vec3 uTiles; // tile lengths (m)
+// Per-cascade UV rotation kills visible tiling of the repeating tiles.
+// Cascade 0 stays axis-aligned (swell direction must match UI/sources);
+// detail cascades rotate. MUST match CASCADE_ROT in spectra.js.
+vec2 cascUV(vec2 p, float tile, float ang) {
+  float c = cos(ang), s = sin(ang);
+  return mat2(c, -s, s, c) * p / tile;
+}
 vec3 oceanDisp(vec2 p) {
   vec3 d = vec3(0.0);
-  d += texture2D(uDisp0, p / uTiles.x).rgb;
-  d += texture2D(uDisp1, p / uTiles.y).rgb;
-  d += texture2D(uDisp2, p / uTiles.z).rgb;
+  d += texture2D(uDisp0, cascUV(p, uTiles.x, 0.0)).rgb;
+  d += texture2D(uDisp1, cascUV(p, uTiles.y, 0.6)).rgb;
+  d += texture2D(uDisp2, cascUV(p, uTiles.z, 2.2)).rgb;
   return d;
 }
 float cascFade(float dist, vec2 r) { return 1.0 - smoothstep(r.x, r.y, dist); }
 vec3 oceanDispFaded(vec2 p, float dist) {
   vec3 d = vec3(0.0);
-  d += texture2D(uDisp0, p / uTiles.x).rgb * cascFade(dist, vec2(1500.0, 4200.0));
-  d += texture2D(uDisp1, p / uTiles.y).rgb * cascFade(dist, vec2(320.0, 950.0));
-  d += texture2D(uDisp2, p / uTiles.z).rgb * cascFade(dist, vec2(70.0, 240.0));
+  d += texture2D(uDisp0, cascUV(p, uTiles.x, 0.0)).rgb * cascFade(dist, vec2(1500.0, 4200.0));
+  d += texture2D(uDisp1, cascUV(p, uTiles.y, 0.6)).rgb * cascFade(dist, vec2(320.0, 950.0));
+  d += texture2D(uDisp2, cascUV(p, uTiles.z, 2.2)).rgb * cascFade(dist, vec2(70.0, 240.0));
   return d;
 }
 `;
