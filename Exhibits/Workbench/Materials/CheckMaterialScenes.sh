@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # M8 gate — full-scene validation + the Tier B decision data. Compiles MaterialSceneProof.cpp against the real
 #    engine TUs (ContentCodec + SceneCodec + MaterialCodec + ObjCodec + FbxCodec + UfbxTranslation + SceneStructure +
-#    GeometryStructure + OrientationClassifier + TextureIndex + MaterialIndex + ShaderBallStructure + the CPU
-#    shaderball exhibit as a SHADERBALL_PREVIEW_LIB TU): CornellBox, GlassProof, and the generated R4b shaderball
-#    level decode → Finalise at slab_limit 1/2/8 → census + fold review; synthetic multi-slab probes pin the fold;
-#    every material shades through the preview entry; the 128-cell consumption matrix re-pins M3. Sponza validates
-#    when present (fetch script), skipped otherwise.
+#    GeometryStructure + OrientationClassifier + TextureIndex + MaterialIndex + ShaderBallStructure +
+#    MaterialSwatchStructure + the CPU shaderball exhibit as a SHADERBALL_PREVIEW_LIB TU): CornellBox, GlassProof,
+#    the generated R4b shaderball level and the generated Project-Zero material grid (16 unique swatches, one per
+#    wall cell, all eight selections) decode → Finalise at slab_limit 1/2/8 → census + fold review; synthetic
+#    multi-slab probes pin the fold; every material shades through the preview entry; the 128-cell consumption
+#    matrix re-pins M3. Sponza validates when present (fetch script), skipped otherwise.
 #    Headers: Vulkan-Headers ($REPO/ExternalPackages, $MATERIAL_SCENES_EXT, or ~/.cache/m7) + the interchange
 #    headers (same candidates + $MATERIAL_CODEC_EXT + ~/.cache/m6: cgltf/ufbx/fast_obj, MANDATORY) + stb_image.h
 #    (ExternalPackages/stb, $MATERIAL_SCENES_EXT/stb, ~/.cache/m8/stb, or ~/.cache/sweep/stb — TextureIndex's only
@@ -59,6 +60,7 @@ if ! g++ -std=c++20 -O2 -Wall -Wextra -ffunction-sections -fdata-sections -Wl,--
      Engine/ContentInterchange/FbxCodec.cpp \
      Engine/ContentInterchange/UfbxTranslation.cpp \
      Engine/ContentInterchange/ShaderBallStructure.cpp \
+     Engine/ContentInterchange/MaterialSwatchStructure.cpp \
      Engine/ContentInterchange/TextureIndex.cpp \
      Engine/GeometricRaster/SceneStructure.cpp \
      Engine/GeometricRaster/GeometryStructure.cpp \

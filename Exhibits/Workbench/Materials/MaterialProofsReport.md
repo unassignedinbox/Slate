@@ -512,7 +512,60 @@ multi-slab content — the C probes prove the fold handles it deterministically 
 
 ---
 
-## 10. What's next
+## 10. Material grid — the Project-Zero exhibit (143/143, SHIPPED 2026-09-17)
+
+**What.** `--scene materialswatch` — a 4×4 wall of 0.45 m spheres (6.3 × 3.6 m, RH Z-up, metres)
+on an 8×8 m matte floor under one 2.5×2.5 m luminaire, built once by
+`Engine/ContentInterchange/MaterialSwatchStructure` and exported through the same
+export-once-then-import path as the shader ball (`Content/Scenes/MaterialSwatch.gltf`).
+**One unique material per cell — 16 pairwise-distinct descriptors covering all eight
+reflectance selections** (census 6/1/1/2/2/2/1/1):
+
+| wall row | cells |
+|---|---|
+| 0 (bottom) | matte_plastic · ceramic · polished_steel · gold — Standard (dielectric + metals) |
+| 1 | **bonnet_plastic_clearcoat** (blue, coat 1.0 / 0.03 / η 1.5) · brushed_aluminium (aniso 0.7 + 45° rotation) · copper · haze_polymer — M2 channels |
+| 2 | velvet · felt (Cloth, fuzz-only) · jade · skin (Subsurface, M5) |
+| 3 (top) | **clear_glossy_glass** (solid, η 1.52, rough 0.02) · tinted_glass (teal Beer, 0.4 m) · emitter (EmissiveOnly) · unlit_card (KHR_materials_unlit) — M4 + the special selections |
+
+`QuerySwatchMaterials()` exposes the 16 descriptors in wall order — the single source both the
+GPU scene and the CPU gallery sheet read from, so they agree by construction.
+
+**Gate (102 → 143).** `MaterialSceneProof.cpp` gains: **A9–A11** headless generate + decode
+(18 authored + fallback); the swatch as the **fifth limit-matrix scene** (1/2/8 — zero folds,
+resident 1 slab); a **B-swatch shape block** — 16 present by name, every swatch derives its
+authored selection, the 6/1/1/2/2/2/1/1 census, **pairwise distinctness** (one unique material
+per cell), and eight channel round-trips (bonnet coat, aniso+rotation, metal F0s, velvet fuzz,
+jade/skin SSS, both glasses' IOR/depth/tint, emitter `BaseWeight 0` + 8 nit, unlit flag); the
+**D-sweep** now shades all 63 scene materials (was 44) through the M7b entry, and the Tier
+verdict extends to 63 real materials (0 multi-slab — unchanged decision).
+
+**Preview entry (M1 path shortcuts ported).** The CPU tracer had no twin for the kernel's
+path-level selections, so an EmissiveOnly ball rendered black and an Unlit ball rendered as lit
+diffuse. `Radiance` now applies: Unlit → base colour IS the radiance (stop); emission > 0 →
+additive, stopping for EmissiveOnly (provably nothing reflective) — the kernel's rule, verbatim.
+Existing film panels are emission-free and Standard/Cloth/Transmissive, so the kept sheets stay
+byte-identical. Documented stage limit (`ShaderballPreview.h`): the ball is never a NEE light —
+emissive geometry lights the GPU scene through the luminaire table, which the stage has no twin
+for (the sheet's emitter cell glows but does not light the ground).
+
+**Visible proof.** `Exhibits/Gallery/Materials/SwatchSheet_FullWall.png` (1548×1548, 384 px/
+96 spp, `sha256 b5dc0fa4…a771f`) — 16 panels through the M7b preview entry (byte-identical
+rig/tables/encode), driven by `RunSwatchSheet.sh` (smoke + full render; not part of the gate).
+New `PngReadCounterpart.h` (read counterpart of the writer — decodes exactly the PNGs this
+harness emits; no stb dependency).
+
+Census (limit 1): swatch scene 16 swatches (6 Standard — 4 Simple + haze Single; 1 Anisotropic/
+Single; 1 ClearCoated/Single; 2 Cloth/Single; 2 Subsurface/Special; 2 Transmissive/Special; 1
+EmissiveOnly/Simple; 1 Unlit/Simple) + floor + luminaire + fallback, all Standard/Simple.
+
+**Honest scope.** The sheet's emitter cell is camera-radiance only (stage limit, above); the
+GPU render of the scene — where the emitter also joins the luminaire alias table — is
+render-pending like §5. No GPU, no window.
+
+---
+
+## 11. What's next
 
 1. ~~**M5 subsurface**~~ DONE 2026-09-16 (v1 wrap shipped, superseded by the v2 dipole — see 3).
 2. ~~**Kernel milestone**~~ DONE 2026-09-16 (K0–K5 shipped, §5; render-verification pending GPU).
@@ -521,5 +574,8 @@ multi-slab content — the C probes prove the fold handles it deterministically 
 5. ~~**M7a read-only inspector**~~ DONE 2026-09-17 (158/158 — see §7).
 6. ~~**M7b editable inspector**~~ DONE 2026-09-17 (229/229 — see §8).
 7. ~~**M8 Tier B + full-scene validation**~~ DONE 2026-09-17 (102/102 — see §9).
-8. **Denoiser + motion vectors** (parked per direction).
-9. **GPU render-verification** (kernel K0–K5 + M5 v2 triptych + M7a/M7b pixels — needs a GPU runner).
+8. ~~**Material grid in Project-Zero**~~ DONE 2026-09-17 (143/143 — see §10).
+9. **M9 — re-enable denoiser + motion vectors** (A/B proofs: converged image identical with and
+   without; sky-backed outdoor glass proof). The only remaining milestone of the plan.
+10. **GPU render-verification** (kernel K0–K5 + M5 v2 triptych + M7a/M7b pixels + the material
+    grid scene — needs a GPU runner).

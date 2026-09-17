@@ -11,7 +11,10 @@
 //      · constants only — bound textures are ignored (the CPU tracer has no texture pipeline);
 //      · cutout is not previewed (the ShadingRecord carries no alpha; the ball renders opaque);
 //      · single slab — Slabs[0]; multi-slab stacks preview their top authoring slab;
-//      · fixed rig — the standard 3-softbox stage, exposure 1 (the tungsten backlight is SSS-sheet-only).
+//      · fixed rig — the standard 3-softbox stage, exposure 1 (the tungsten backlight is SSS-sheet-only);
+//      · the ball is never a NEE light — the kernel's M1 path shortcuts are ported (Unlit radiance, the emission
+//        short-circuit; emission stays additive on reflective materials), but emissive geometry lights the
+//        stage in the GPU scene through the luminaire table, which the stage has no twin for.
 
 #pragma once
 

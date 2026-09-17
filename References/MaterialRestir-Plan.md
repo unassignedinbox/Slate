@@ -300,4 +300,27 @@ come in under budget.
   (c) skip SSS, transmission only.
 - **D4 — M7 editor:** (a) read-only inspector now, editing later *(recommended)*;
   (b) full editable in this phase; (c) no UI work.
-ull editable in this phase; (c) no UI work.
+
+## 9. Post-plan: the Project-Zero material grid (shipped 2026-09-17)
+
+Not an M-milestone — user content on top of the shipped channels: `--scene materialswatch`
+(`MaterialSwatchStructure` in `Engine/ContentInterchange`, export-once like the shaderball →
+`Content/Scenes/MaterialSwatch.gltf`). A 4×4 wall, **16 pairwise-unique materials, all eight
+reflectance selections live** (census 6/1/1/2/2/2/1/1):
+
+- row 0 — matte plastic · ceramic · polished steel · gold (Standard: dielectric + metals)
+- row 1 — **bonnet plastic clearcoat** · brushed aluminium (aniso 45°) · copper · hazy polymer (M2)
+- row 2 — velvet · felt (Cloth) · jade · skin (SSS)
+- row 3 — **clear glossy glass** (solid, η 1.52, rough 0.02) · tinted teal glass (0.4 m Beer) ·
+  emitter (EmissiveOnly — `BaseWeight 0` rides the export path, the M0-known glTF trap inverted) ·
+  unlit card (KHR_materials_unlit)
+
+Gate extended to **143/143** (proof §10): A9–A11 headless generate+decode, the swatch as the
+fifth limit-matrix scene, B-swatch name/selection/census/pairwise-distinct + eight channel
+round-trips, D-sweep now 63 materials. Gallery sheet `Exhibits/Gallery/Materials/
+SwatchSheet_FullWall.png` (16 panels through the M7b preview entry — byte-identical path;
+`RunSwatchSheet.sh`). The preview entry gained the kernel's M1 path shortcuts (Unlit radiance,
+emission short-circuit; additive on reflective mats) — stage limit documented: the ball is not
+a NEE light in the stage. **Remaining in this plan: M9 only** (re-enable denoiser +
+motion vectors, A/B proofs, sky-backed outdoor glass proof) — plus the standing GPU
+render-verification of K0–K5/M5v2/M7 (sandbox has no GPU runner).

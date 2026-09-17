@@ -3,11 +3,13 @@
 //============================================================================================================================================
 // M8 gate — full-scene validation + the Tier B decision data. CornellBox (committed), GlassProof (committed), the
 // R4b shaderball level (generated headless via ShaderBallStructure — the same export-once path GameExecution uses),
-// and Sponza when present (fetch script; skipped otherwise — the conditional idiom of the M7a runner's GameExecution
-// check): decode → Finalise at slab_limit 1/2/8 → census + fold review. Synthetic multi-slab probes pin the fold
-// (real content is all single-slab — itself the Tier datum); every material of every scene shades through the M7b
-// preview entry (Bad == 0); the 128-cell consumption matrix re-pins the M3 table the perf budget rests on. The Tier
-// verdict is printed AND asserted (section F). No GPU, no window.
+// the Project-Zero material grid (generated headless via MaterialSwatchStructure — 16 pairwise-distinct swatches,
+// one per wall cell, all eight reflectance selections), and Sponza when present (fetch script; skipped otherwise —
+// the conditional idiom of the M7a runner's GameExecution check): decode → Finalise at slab_limit 1/2/8 → census +
+// fold review. Synthetic multi-slab probes pin the fold (real content is all single-slab — itself the Tier datum);
+// every material of every scene shades through the M7b preview entry (Bad == 0); the 128-cell consumption matrix
+// re-pins the M3 table the perf budget rests on. The Tier verdict is printed AND asserted (section F). No GPU, no
+// window.
 
 #include "SlangCpuShim.h"
 #include "ContentCodec.h"
@@ -15,6 +17,7 @@
 #include "SceneStructure.h"
 #include "MaterialIndex.h"
 #include "ShaderBallStructure.h"
+#include "MaterialSwatchStructure.h"
 #include "ShaderballPreview.h"
 
 #include <clocale>
@@ -87,6 +90,19 @@ int FindByName(const Frontier::MaterialIndex& Index, const char* Name)
     return -1;
 }
 
+// Relative closeness through the %.9g glTF number round trip (M6 TIER-1 values land exact; this absorbs float
+//    re-association without hiding a real drift — 1e-6 is 100× looser than the %.9g digit budget).
+bool Near(float A, float B)
+{
+    return std::fabs(A - B) <= 1e-6f * std::fmax(std::fabs(A), std::fabs(B)) + 1e-7f;
+}
+
+Frontier::MaterialSlabDescriptor FrontSlab(const Frontier::MaterialDescriptor& D)
+{
+    uint32_t Folded = 0u;
+    return Frontier::MaterialIndex::Flatten(D, 1u, &Folded, nullptr).front();
+}
+
 } // namespace
 
 int main()
@@ -95,7 +111,7 @@ int main()
     using namespace Frontier;
 
     // ── A. Scene loads ──────────────────────────────────────────────────────────────────────────────────────────
-    SceneStructure Cornell, Glass, Ball;
+    SceneStructure Cornell, Glass, Ball, Swatch;
     std::string Error;
     SceneDecodeConfiguration Decode;
     Decode.SlabLimit = 1u;
@@ -110,6 +126,13 @@ int main()
         Check(ContentCodec::Decode("/tmp/MaterialScenes_ShaderBall.gltf", Ball, nullptr, Decode, &Error), "A6 generated shaderball decodes");
     }
     Check(Ball.QueryMaterials().QueryCount() == 29u, "A7 shaderball 28 authored + fallback");
+    {
+        MaterialSwatchStructure Gen;
+        Gen.Construct();
+        Check(Gen.Export("/tmp/MaterialScenes_Swatch.gltf", &Error), "A9 material grid generates headless (export-once path)");
+        Check(ContentCodec::Decode("/tmp/MaterialScenes_Swatch.gltf", Swatch, nullptr, Decode, &Error), "A10 generated material grid decodes");
+    }
+    Check(Swatch.QueryMaterials().QueryCount() == 19u, "A11 material grid 18 authored (16 swatch + floor + luminaire) + fallback");
     const bool HasSponza = FileExists("Projects/Project-Zero/Content/Scenes/Sponza/Sponza.gltf");
     SceneStructure Sponza;
     if (HasSponza)
@@ -121,10 +144,10 @@ int main()
 
     // ── B. Limit matrix 1/2/8: zero folds, resident == authored, census ──────────────────────────────────────────
     struct SceneCase { const char* Tag; SceneStructure* Level; uint32_t WantCount; };
-    SceneCase Cases[4] = { { "cornell", &Cornell, 10u }, { "glass", &Glass, 5u }, { "ball", &Ball, 29u }, { "sponza", &Sponza, SponzaCount } };
+    SceneCase Cases[5] = { { "cornell", &Cornell, 10u }, { "glass", &Glass, 5u }, { "ball", &Ball, 29u }, { "sponza", &Sponza, SponzaCount }, { "swatch", &Swatch, 19u } };
     const uint32_t Limits[3] = { 1u, 2u, 8u };
     uint32_t AuthoredTotal = 0u, MaterialsTotal = 0u;
-    for (uint32_t Ci = 0u; Ci < 4u; ++Ci)
+    for (uint32_t Ci = 0u; Ci < 5u; ++Ci)
     {
         if (Ci == 3u && !HasSponza) continue;
         SceneCase& C = Cases[Ci];
@@ -238,8 +261,112 @@ int main()
               "B-ball selection census (coat twins + cloth pair live; fuzz+spec/emitter=Standard)");
     }
 
+    // Material grid shape (by name — the 16 wall cells pin exactly, the user-facing Project Zero grid):
+    //    one unique material per cell, the eight selections all live, the M1-M5 channels exact through the
+    //    glTF round trip.
+    {
+        const MaterialIndex& Idx = Swatch.QueryMaterials();
+        struct SwatchSpec { const char* Name; MaterialReflectance Sel; };
+        const SwatchSpec Want[16] = {
+            { "matte_plastic",            MaterialReflectance::Standard },
+            { "ceramic",                  MaterialReflectance::Standard },
+            { "polished_steel",           MaterialReflectance::Standard },
+            { "gold",                     MaterialReflectance::Standard },
+            { "bonnet_plastic_clearcoat", MaterialReflectance::ClearCoated },
+            { "brushed_aluminium",        MaterialReflectance::Anisotropic },
+            { "copper",                   MaterialReflectance::Standard },
+            { "haze_polymer",             MaterialReflectance::Standard },
+            { "velvet",                   MaterialReflectance::Cloth },
+            { "felt",                     MaterialReflectance::Cloth },
+            { "jade",                     MaterialReflectance::Subsurface },
+            { "skin",                     MaterialReflectance::Subsurface },
+            { "clear_glossy_glass",       MaterialReflectance::Transmissive },
+            { "tinted_glass",             MaterialReflectance::Transmissive },
+            { "emitter",                  MaterialReflectance::EmissiveOnly },
+            { "unlit_card",               MaterialReflectance::Unlit } };
+        uint32_t Seen[8] = {};
+        bool NamesOk = true, SelOk = true;
+        for (int I = 0; I < 16; ++I)
+        {
+            const int Id = FindByName(Idx, Want[I].Name);
+            if (Id < 0) { NamesOk = false; std::printf("[scene] B-swatch MISSING %s\n", Want[I].Name); continue; }
+            const MaterialDescriptor& D = Idx.QueryDescriptors()[static_cast<uint32_t>(Id)];
+            const MaterialSlabDescriptor S = FrontSlab(D);
+            const MaterialReflectance Got = MaterialIndex::DeriveReflectance(D, S);
+            if (Got != Want[I].Sel)
+            {
+                SelOk = false;
+                std::printf("[scene] B-swatch SELECTION DRIFT %s: want %s got %s\n", Want[I].Name, SelName(Want[I].Sel), SelName(Got));
+            }
+            else
+                ++Seen[static_cast<uint32_t>(Got)];
+        }
+        Check(NamesOk, "B-swatch all 16 wall materials present by name");
+        Check(SelOk, "B-swatch every swatch derives its authored selection");
+        Check(Seen[static_cast<uint32_t>(MaterialReflectance::Standard)] == 6u &&
+              Seen[static_cast<uint32_t>(MaterialReflectance::Anisotropic)] == 1u &&
+              Seen[static_cast<uint32_t>(MaterialReflectance::ClearCoated)] == 1u &&
+              Seen[static_cast<uint32_t>(MaterialReflectance::Cloth)] == 2u &&
+              Seen[static_cast<uint32_t>(MaterialReflectance::Subsurface)] == 2u &&
+              Seen[static_cast<uint32_t>(MaterialReflectance::Transmissive)] == 2u &&
+              Seen[static_cast<uint32_t>(MaterialReflectance::EmissiveOnly)] == 1u &&
+              Seen[static_cast<uint32_t>(MaterialReflectance::Unlit)] == 1u,
+              "B-swatch selection census 6/1/1/2/2/2/1/1 — all eight selections live");
+        // One unique material per cell: the 16 swatch descriptors are pairwise distinct.
+        const std::vector<MaterialDescriptor>& Ds = Idx.QueryDescriptors();
+        bool Distinct = true;
+        for (int I = 0; I < 16 && Distinct; ++I)
+            for (int J = I + 1; J < 16; ++J)
+                if (Ds[static_cast<uint32_t>(FindByName(Idx, Want[I].Name))] == Ds[static_cast<uint32_t>(FindByName(Idx, Want[J].Name))])
+                {
+                    Distinct = false;
+                    std::printf("[scene] B-swatch DUPLICATE %s ≡ %s\n", Want[I].Name, Want[J].Name);
+                }
+        Check(Distinct, "B-swatch 16 swatch descriptors pairwise distinct (one unique material per cell)");
+        // Channel values through the round trip — the cells the user named plus the M1-M5 channel carriers.
+        const MaterialSlabDescriptor Bonnet = FrontSlab(Ds[static_cast<uint32_t>(FindByName(Idx, "bonnet_plastic_clearcoat"))]);
+        const MaterialSlabDescriptor Brush  = FrontSlab(Ds[static_cast<uint32_t>(FindByName(Idx, "brushed_aluminium"))]);
+        const MaterialSlabDescriptor Steel  = FrontSlab(Ds[static_cast<uint32_t>(FindByName(Idx, "polished_steel"))]);
+        const MaterialSlabDescriptor Gold   = FrontSlab(Ds[static_cast<uint32_t>(FindByName(Idx, "gold"))]);
+        const MaterialSlabDescriptor Copper = FrontSlab(Ds[static_cast<uint32_t>(FindByName(Idx, "copper"))]);
+        const MaterialSlabDescriptor Velvet = FrontSlab(Ds[static_cast<uint32_t>(FindByName(Idx, "velvet"))]);
+        const MaterialSlabDescriptor Jade   = FrontSlab(Ds[static_cast<uint32_t>(FindByName(Idx, "jade"))]);
+        const MaterialSlabDescriptor Skin   = FrontSlab(Ds[static_cast<uint32_t>(FindByName(Idx, "skin"))]);
+        const MaterialSlabDescriptor Glass  = FrontSlab(Ds[static_cast<uint32_t>(FindByName(Idx, "clear_glossy_glass"))]);
+        const MaterialSlabDescriptor Tint   = FrontSlab(Ds[static_cast<uint32_t>(FindByName(Idx, "tinted_glass"))]);
+        const MaterialSlabDescriptor Emitter = FrontSlab(Ds[static_cast<uint32_t>(FindByName(Idx, "emitter"))]);
+        const MaterialDescriptor& UnlitD    = Ds[static_cast<uint32_t>(FindByName(Idx, "unlit_card"))];
+        Check(Near(Bonnet.CoatWeight, 1.0f) && Near(Bonnet.CoatRoughness, 0.03f) && Near(Bonnet.CoatIor, 1.5f) &&
+              Near(Bonnet.BaseColor[2], 0.60f),
+              "B-swatch bonnet plastic: coat 1.0 / 0.03 / ior 1.5 + blue base round-trip");
+        Check(Near(Brush.SpecularRoughnessAnisotropy, 0.7f) && Near(Brush.SlateAnisotropyRotation, 0.25f * 3.14159265358979f) &&
+              Near(Brush.BaseMetalness, 1.0f),
+              "B-swatch brushed aluminium: aniso 0.7 + 45° rotation + metallic round-trip");
+        Check(Near(Steel.BaseMetalness, 1.0f) && Near(Steel.SpecularRoughness, 0.08f) &&
+              Near(Gold.BaseColor[0], 1.0f) && Near(Gold.BaseColor[1], 0.766f) &&
+              Near(Copper.BaseColor[0], 0.955f) && Near(Copper.BaseColor[1], 0.638f),
+              "B-swatch metals: steel/gold/copper metallic + F0 colours round-trip");
+        Check(Near(Velvet.FuzzWeight, 1.0f) && Near(Velvet.FuzzRoughness, 0.8f) && Near(Velvet.SpecularWeight, 0.0f) &&
+              Near(Velvet.FuzzColor[0], 1.0f) && Near(Velvet.FuzzColor[1], 0.9f),
+              "B-swatch velvet: fuzz 1.0 / 0.8 + fuzz colour round-trip (cloth without specular)");
+        Check(Near(Jade.SubsurfaceWeight, 1.0f) && Near(Jade.SubsurfaceRadius, 0.15f) &&
+              Near(Jade.SubsurfaceColor[1], 0.85f) &&
+              Near(Skin.SubsurfaceWeight, 0.65f) && Near(Skin.SubsurfaceRadius, 0.30f) &&
+              Near(Skin.SubsurfaceRadiusScale[1], 0.37f),
+              "B-swatch SSS: jade/skin weight + radius + scale round-trip");
+        Check(Near(Glass.TransmissionWeight, 1.0f) && Near(Glass.SpecularIor, 1.52f) && Near(Glass.SpecularRoughness, 0.02f) &&
+              Near(Glass.TransmissionDepth, 0.10f) &&
+              Near(Tint.TransmissionWeight, 1.0f) && Near(Tint.TransmissionColor[0], 0.20f) &&
+              Near(Tint.TransmissionColor[1], 0.80f) && Near(Tint.TransmissionDepth, 0.40f),
+              "B-swatch glass: solid glossy ior 1.52 / 0.02 + tinted teal 0.4 m round-trip");
+        Check(Near(Emitter.BaseWeight, 0.0f) && Near(Emitter.SpecularWeight, 0.0f) && Near(Emitter.EmissionLuminance, 8.0f) &&
+              Near(Emitter.EmissionColor[1], 0.6f),
+              "B-swatch emitter: base weight 0 + 8 nit (EmissiveOnly reachable through the export path)");
+        Check((UnlitD.Flags & MaterialFlagUnlit) != 0u, "B-swatch unlit card: KHR_materials_unlit flag round-trips");
+    }
+
     // Fallbacks: last slot of every scene, Standard, untextured.
-    for (uint32_t Ci = 0u; Ci < 4u; ++Ci)
+    for (uint32_t Ci = 0u; Ci < 5u; ++Ci)
     {
         if (Ci == 3u && !HasSponza) continue;
         const std::vector<MaterialDescriptor>& Ds = Cases[Ci].Level->AccessMaterials().QueryDescriptors();
@@ -322,7 +449,7 @@ int main()
     // ── D. Preview sweep: every material of every scene shades clean ────────────────────────────────────────────
     {
         uint32_t Serial_D = 0u;
-        for (uint32_t Ci = 0u; Ci < 4u; ++Ci)
+        for (uint32_t Ci = 0u; Ci < 5u; ++Ci)
         {
             if (Ci == 3u && !HasSponza) continue;
             const std::vector<MaterialDescriptor>& Ds = Cases[Ci].Level->AccessMaterials().QueryDescriptors();
@@ -404,6 +531,8 @@ int main()
 
     std::remove("/tmp/MaterialScenes_ShaderBall.gltf");
     std::remove("/tmp/MaterialScenes_ShaderBall.bin");
+    std::remove("/tmp/MaterialScenes_Swatch.gltf");
+    std::remove("/tmp/MaterialScenes_Swatch.bin");
 
     if (Failed == 0) std::printf("MATERIAL SCENES: PASS (%d/%d)\n", Passed, Passed + Failed);
     else std::printf("MATERIAL SCENES: FAIL (%d passed, %d failed)\n", Passed, Failed);

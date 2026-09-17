@@ -3,7 +3,9 @@
 //============================================================================================================================================
 // 🧩 Project-Zero entry point — opens the Vulkan window, makes a glTF level resident, runs the ReSTIR render loop.
 //
-//    Scene selection (R2): `Project-Zero.exe [--scene <file.gltf|glb|shaderball|showroom|showcase>] [--scale <float>]`
+//    Scene selection (R2): `Project-Zero.exe [--scene <file.gltf|glb|shaderball|showroom|showcase|materialswatch>] [--scale <float>]`
+//        materialswatch — the material grid: 4×4 wall, one unique material per cell (all eight reflectance
+//             selections), exported once from MaterialSwatchStructure then imported like any other
 //        showroom — P0 spatial-interface level, exported once from ShowroomStructure then imported like any other
 //        showcase — 100-object analytical field, exported once from RayTracingSolver::ConstructShowcaseScene
 //        default  Projects/Project-Zero/Content/Scenes/Showcase.gltf — regenerated from RayTracingSolver when missing
@@ -34,6 +36,7 @@
 #include "../../../Engine/ContentInterchange/ShaderballPreview.h"
 #include "../../../Engine/ContentInterchange/ShaderBallStructure.h"
 #include "ShowroomStructure.h"
+#include "../../../Engine/ContentInterchange/MaterialSwatchStructure.h"
 #include "EditorFeedSequence.h"
 #include "../../../Engine/DeviceExchange/InterfaceExchange.h"
 #include "../../../Engine/SpatialInterface/InterfaceSequence.h"
@@ -77,6 +80,7 @@ int main(int argc, char** argv)
         if (std::strcmp(argv[I], "--scale") == 0) SceneScale = static_cast<float>(std::atof(argv[++I]));
     }
     if (ScenePath == "shaderball") ScenePath = "Projects/Project-Zero/Content/Scenes/ShaderBall.gltf";   // R4b material test level
+    if (ScenePath == "materialswatch") ScenePath = "Projects/Project-Zero/Content/Scenes/MaterialSwatch.gltf";   // material grid level
     if (ScenePath == "showroom")   ScenePath = "Projects/Project-Zero/Content/Scenes/Showroom.gltf";     // P0 spatial-interface level
     // The open-air scene.
     if (ScenePath == "outdoor")    ScenePath = "Projects/Project-Zero/Content/Scenes/Outdoor.gltf";
@@ -171,6 +175,16 @@ int main(int argc, char** argv)
             Frontier::ShaderBallStructure ShaderBall; ShaderBall.Construct();
             if (ShaderBall.Export(ScenePath, &Error)) std::cerr << "[Scene] Exported the shader-ball level to " << ScenePath << "\n";
             else                                     std::cerr << "[Scene] Shader-ball export failed: " << Error << "\n";
+        }
+        // The material grid: 4×4 wall, one unique material per cell — the user-facing home of the M1-M5 channels.
+        const bool IsMaterialSwatch = ScenePath.find("MaterialSwatch.gltf") != std::string::npos;
+        if (IsMaterialSwatch && !std::filesystem::exists(ScenePath, FsError))
+        {
+            std::filesystem::create_directories(std::filesystem::path(ScenePath).parent_path(), FsError);
+            std::string Error;
+            Frontier::MaterialSwatchStructure MaterialSwatch; MaterialSwatch.Construct();
+            if (MaterialSwatch.Export(ScenePath, &Error)) std::cerr << "[Scene] Exported the material grid to " << ScenePath << "\n";
+            else                                          std::cerr << "[Scene] Material grid export failed: " << Error << "\n";
         }
         // P0 spatial-interface level. Same export-once-then-import discipline: the Cornell box stays the untouched
         //    bit-identity reference, and the showroom is a separate file the renderer only ever sees as glTF.
@@ -370,6 +384,13 @@ int main(int argc, char** argv)
         // Shader ball: 5 m back from the front row, 2.6 m up, pitched down ~22° so all four rows fit at 55° FoV.
         Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -6.2f, 2.6f });
         Camera.AssignOrientationEuler(-22.0f * 3.14159265f / 180.0f, 0.0f, 0.0f);
+    }
+    else if (Level.QueryName() == "MaterialSwatch")
+    {
+        // Material grid: the wall is 6.3 m wide × 3.6 m tall on the Y = 0 plane (X −3.15..3.15, Z 0..3.6). Stand 6 m
+        //    in front at the wall's mid-height (Z 1.8), pitched down ~2° — all four rows fit at 55° FoV.
+        Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -6.2f, 1.8f });
+        Camera.AssignOrientationEuler(-2.0f * 3.14159265f / 180.0f, 0.0f, 0.0f);
     }
     else if (Level.QueryName() == "Outdoor")
     {

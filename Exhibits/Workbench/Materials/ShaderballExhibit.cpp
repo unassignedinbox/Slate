@@ -599,6 +599,21 @@ vec3 Radiance(vec3 O, vec3 D, Rng& R)
             m.TransmissionWeight = 0.0f;   // v1: no nested dielectrics — shade R-only, stay inside (dead in
             solidHit = false;              // this scene: ball + opaque ground + lights cannot nest)
         }
+        // Kernel path-level shortcuts (M1), ported for the preview's material cells: Unlit's base colour IS the
+        // radiance; an EmissiveOnly surface returns its emission and stops (provably nothing reflective). Emission
+        // on a reflective material stays ADDITIVE (the kernel's rule) — only the stop is selection-gated. Stage
+        // limit (documented in ShaderballPreview.h): the ball is never a NEE light here — the GPU luminaire table
+        // sees emissive geometry; the stage has no mesh lights.
+        if (m.Selection == kReflectanceUnlit)
+        {
+            L += Beta * m.BaseColor;
+            break;
+        }
+        if (m.Emission.x + m.Emission.y + m.Emission.z > 0.0f)
+        {
+            L += Beta * m.Emission;
+            if (m.Selection == kReflectanceEmissiveOnly) break;
+        }
         if (!fromInside && m.SssWeight > 0.0f)   // M5: per-hit chord (opaque mats skip the raycast entirely;
             m.SssThickness = SssChord(P, Ns);              // interior-SSS is future work (NEE skips inside anyway))
         ResolvedLayers Lr = ResolveLayers(m, wo);
