@@ -365,8 +365,11 @@ ShadingRecord StandardMaterial(vec3 albedo, float roughness)
     return m;
 }
 
-ShadingRecord g_Mats[8];
-bool g_SolidBall = false;   // M4b: the ball (slot 0) is traversed as solid glass (medium tracking, not skip-ball)
+// M9 CPU scene counterpart uses the same slot-addressed material table as MaterialGridStructure (floor + 20 cells + luminaire).
+// The original exhibit occupies slots 0–7; the wider table is ABI-neutral for the existing shaderball sheets.
+ShadingRecord g_Mats[32];
+// M4b/M9: solid transmission is a per-material property in the Project-Zero grid, not a slot-0 global.
+bool g_SolidMaterials[32] = {};
 
 #ifndef SHADERBALL_PREVIEW_LIB
 void BuildMaterials(int Panel)
@@ -434,7 +437,8 @@ void BuildMaterials(int Panel)
             g_Mats[0] = m;
         }
     }
-    g_SolidBall = (Panel == 3);
+    std::fill(g_SolidMaterials, g_SolidMaterials + 32, false);
+    g_SolidMaterials[0] = (Panel == 3);
     g_Mats[1] = StandardMaterial(vec3(0.32f), 1.0f);   // matte studio ground
     g_Mats[1].SpecularWeight = 0.25f;
 }
@@ -592,7 +596,7 @@ vec3 Radiance(vec3 O, vec3 D, Rng& R)
         ShadingFrame(Ns, Tt, Bt);
         vec3 wo(dot(-D, Tt), dot(-D, Bt), dot(-D, Ns));
         ShadingRecord m = g_Mats[T.Mat];   // local copy: the v1 nested fallback below may zero transmission
-        bool solidHit = g_SolidBall && T.Mat == 0 && m.TransmissionWeight > 0.0f;
+        bool solidHit = T.Mat >= 0 && T.Mat < 32 && g_SolidMaterials[T.Mat] && m.TransmissionWeight > 0.0f;
         bool fromInside = Inside && T.Mat == EntryMat;
         if (Inside && T.Mat != EntryMat && m.TransmissionWeight > 0.0f)
         {
@@ -916,7 +920,8 @@ bool RenderShaderballPreview(const ShaderballPreviewRequest& Req, ShaderballPrev
     m.SssRadius = S.SubsurfaceRadius;
     m.SssRadiusScale = vec3(S.SubsurfaceRadiusScale[0], S.SubsurfaceRadiusScale[1], S.SubsurfaceRadiusScale[2]);
     g_Mats[0] = m;
-    g_SolidBall = (S.TransmissionWeight > 0.0f) && ((F & MaterialFlagThinWalled) == 0u);
+    std::fill(g_SolidMaterials, g_SolidMaterials + 32, false);
+    g_SolidMaterials[0] = (S.TransmissionWeight > 0.0f) && ((F & MaterialFlagThinWalled) == 0u);
     g_Mats[1] = StandardMaterial(vec3(0.32f), 1.0f);   // matte studio ground (BuildMaterials' line)
     g_Mats[1].SpecularWeight = 0.25f;
 

@@ -27,10 +27,18 @@ The grid is four rows by five columns. Every ball has a distinct material descri
 
 The set covers the standard, anisotropic, clear-coated, cloth, subsurface, transmissive, emissive-only, and unlit reflectance selections. It also gives the grid visible representatives for metalness, roughness, specular/F82 colour, emission, transmission, subsurface radius/colour, coat, fuzz, thin-film, anisotropy, haziness, opacity defaults, and EON diffuse roughness. The floor and luminaire are separate descriptors, so the 20 test materials remain one-to-one with the 20 grid cells.
 
-## Remaining material plan after M9
+## M9 CPU render and UI counterpart
 
-M0 through M9 are now implemented. M9 restores default-on denoising and motion-vector reprojection and adds explicit A/B controls plus a headless contract gate. See `Docs/MaterialM9.md` and run `bash Exhibits/Workbench/Materials/CheckMaterialM9.sh`.
+M9 is validated against the actual Project-Zero scene on the CPU, not only by source assertions. The Vulkan scene exporter and CPU renderer share `Engine/ContentInterchange/MaterialGridMaterials.h`; `Exhibits/Workbench/Materials/MaterialGridM9CpuRender.cpp` then uses the existing `MaterialEvaluation.slang` CPU port, the same 5×4 sphere layout, floor, luminaire, material slots, transmission/subsurface records, and a CPU-rasterized status strip.
 
-The remaining validation work is GPU-only: run the K0–K5 kernel, the M5 v2 dipole triptych, M7 inspector pixel checks, and the converged raw-vs-denoised / reprojected A/B scenes on a real Vulkan device. The sandbox has no GPU or shader compiler, so those renders are not claimed here.
+```text
+bash Exhibits/Workbench/Materials/RunMaterialGridM9Cpu.sh 256 2 Projects/Project-Zero/Diagnostics
+```
 
-Still explicitly out of scope: geometric displacement, volumetric interiors/random-walk SSS, nested dielectrics, and default-on spectral dispersion/glints. The displacement channel has no carrier yet; the others remain stored hooks or later work by design.
+This writes raw, enabled, `--no-denoise` and `--no-reprojection` A/B images, the UI-facing image, and a SHA-256 manifest. The source-contract gate remains useful for dispatch/barrier wiring:
+
+```text
+bash Exhibits/Workbench/Materials/CheckMaterialM9.sh
+```
+
+A real Vulkan device is still needed for final GPU shader compilation and GPU-vs-CPU pixel agreement. That is distinct from the completed CPU same-scene/same-math render validation. Still explicitly out of scope: geometric displacement, volumetric interiors/random-walk SSS, nested dielectrics, and default-on spectral dispersion/glints. The displacement channel has no carrier yet; the others remain stored hooks or later work by design.

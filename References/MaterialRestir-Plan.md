@@ -250,13 +250,17 @@ selection-switch retention test.
   (DONE 2026-09-17 — `MaterialSceneProof` 102/102, report §9: verdict keep Tier A + fold,
   0 multi-slab in 44 real materials; Sponza validate-if-present, absent here.)
 
-### M9 — Re-enable milestone (denoiser + motion vectors back on) — SHIPPED (headless)
+### M9 — Re-enable milestone (denoiser + motion vectors back on) — SHIPPED (CPU render + headless)
 - Defaults are back to true, with `--no-denoise` / `--no-reprojection` explicit A/B controls.
-- `CheckMaterialM9.sh` passes the source contract + CPU mirror for motion-vector lookup,
+- `CheckMaterialM9.sh` passes the source contract + CPU behavior mirror for motion-vector lookup,
   normal/depth disocclusion, running mean, à-trous early-out, barrier/dispatch ordering,
   and transmission/subsurface/sky path presence.
-- Final converged pixel A/B and the sky-backed outdoor-glass render require a Vulkan device;
-  they remain the only M9 gate items not runnable in this sandbox.
+- `RunMaterialGridM9Cpu.sh` compiles the same `MaterialEvaluation.slang` CPU port and renders the
+  Project-Zero material-grid scene, including the shared 22 material records, 20 unique spheres,
+  sky/area-light paths, enabled output, both A/B disables, and a CPU-rasterized UI presentation.
+  It writes five PNGs plus a SHA-256 manifest under `Projects/Project-Zero/Diagnostics/`.
+- A Vulkan device is still required only for final GPU shader compilation and GPU-vs-CPU pixel agreement;
+  the CPU same-scene/same-math/actual-pixel validation is complete in this sandbox.
 
 ## 5. How each channel meets ReSTIR (integration points, all phases)
 

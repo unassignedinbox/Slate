@@ -521,5 +521,5 @@ multi-slab content — the C probes prove the fold handles it deterministically 
 5. ~~**M7a read-only inspector**~~ DONE 2026-09-17 (158/158 — see §7).
 6. ~~**M7b editable inspector**~~ DONE 2026-09-17 (229/229 — see §8).
 7. ~~**M8 Tier B + full-scene validation**~~ DONE 2026-09-17 (102/102 — see §9).
-8. ~~**M9 denoiser + motion-vector re-enable**~~ DONE 2026-09-17 (headless gate `CheckMaterialM9.sh`, 20/20; default-on flags plus explicit raw A/B controls).
-9. **GPU render-verification** (kernel K0–K5 + M5 v2 triptych + M7a/M7b pixels + M9 converged A/B — needs a GPU runner).
+8. ~~**M9 denoiser + motion-vector re-enable**~~ DONE 2026-09-17 (headless gate `CheckMaterialM9.sh`, 20/20; CPU Project-Zero material-grid render `RunMaterialGridM9Cpu.sh`, five PNGs + SHA-256 manifest; default-on flags plus explicit raw A/B controls).
+9. **GPU render-verification** (kernel K0–K5 + M5 v2 triptych + M7a/M7b pixels + GPU-vs-CPU M9 agreement — needs a GPU runner).
