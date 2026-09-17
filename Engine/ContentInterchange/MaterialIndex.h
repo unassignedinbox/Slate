@@ -24,6 +24,16 @@ static constexpr uint32_t kMaterialSlabCeiling = 8u;   // hard ceiling of the GP
 
 enum MaterialComplexityClass : uint32_t { MaterialComplexitySimple = 0u, MaterialComplexitySingle = 1u, MaterialComplexityComplex = 2u, MaterialComplexitySpecial = 3u };
 
+// Reflectance selection is a per-material dispatch hint, not a replacement for authored channels. All channels remain
+// resident even when a selection does not consume them; this is what makes an inspector edit and a later selection
+// switch lossless. Bits 8..11 are spare in the original MaterialRecord flags word.
+enum class MaterialReflectance : uint32_t
+{
+    Standard = 0u, Anisotropic, ClearCoated, Cloth, Subsurface, Transmissive, EmissiveOnly, Unlit
+};
+static constexpr uint32_t kMaterialReflectanceShift = 8u;
+static constexpr uint32_t kMaterialReflectanceMask  = 0xFu << kMaterialReflectanceShift;
+
 struct MaterialRecord                       // 64 B — header, Tier A fast path
 {
     float    AlbedoR, AlbedoG, AlbedoB;     // [0..1] flattened base colour (linear Rec.709)
@@ -41,7 +51,7 @@ struct MaterialRecord                       // 64 B — header, Tier A fast path
 };
 static_assert(sizeof(MaterialRecord) == 64u, "MaterialRecord must be 64 bytes (std430 mirror)");
 
-struct MaterialSlabRecord                   // 288 B = 18 vec4 — float prefix mirrors MaterialSlabDescriptor exactly (memcpy)
+struct MaterialSlabRecord                   // 304 B = 19 vec4 — float prefix mirrors MaterialSlabDescriptor exactly (memcpy)
 {
     // OpenPBR §5 in spec order (58 floats — same order and count as MaterialSlabDescriptor's float prefix)
     float BaseWeight, BaseColorR, BaseColorG, BaseColorB, BaseMetalness, BaseDiffuseRoughness;
@@ -63,8 +73,14 @@ struct MaterialSlabRecord                   // 288 B = 18 vec4 — float prefix 
     uint32_t TextureUvSets;                 // 16 × 2 bits (uv set 0-3)
     float    NormalScale, OcclusionStrength;
     float    MixWeight;                     // constant HorizontalMix factor against the slab below (1 = vertical layer)
+    // Appended runtime lanes: channel metadata that is not part of the 58-float authoring prefix. Keeping the append
+    // explicit preserves the prefix ABI while carrying anisotropy direction and future normal-channel scales.
+    float    AnisotropyRotation;
+    float    CoatNormalScale;
+    float    ReservedRuntime0;
+    float    ReservedRuntime1;
 };
-static_assert(sizeof(MaterialSlabRecord) == 288u, "MaterialSlabRecord must be 288 bytes = 18 vec4 (std430 mirror)");
+static_assert(sizeof(MaterialSlabRecord) == 304u, "MaterialSlabRecord must be 304 bytes = 19 vec4 (std430 mirror)");
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                     MATERIAL INDEX
@@ -107,6 +123,9 @@ public:
 
     [[nodiscard]] static MaterialSlabRecord ConstructSlabRecord(const MaterialSlabDescriptor& Slab) noexcept;
     [[nodiscard]] static uint32_t           ClassifyComplexity(const std::vector<MaterialSlabDescriptor>& Slabs) noexcept;
+    [[nodiscard]] static MaterialReflectance DeriveReflectance(const MaterialDescriptor& Descriptor, const MaterialSlabDescriptor& Slab) noexcept;
+    [[nodiscard]] static MaterialReflectance ReflectanceFromFlags(uint32_t Flags) noexcept;
+    [[nodiscard]] static uint32_t PackReflectance(MaterialReflectance Selection) noexcept;
 
 private:
     std::vector<MaterialDescriptor> Descriptors;

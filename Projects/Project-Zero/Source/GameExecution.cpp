@@ -27,6 +27,7 @@
 #include "FlyThroughSolver.h"
 #include "RayTracingSolver.h"
 #include "../../../Engine/ContentInterchange/ShaderBallStructure.h"
+#include "../../../Engine/ContentInterchange/MaterialGridStructure.h"
 
 #include <algorithm>
 #include <chrono>
@@ -47,6 +48,7 @@ int main(int argc, char** argv)
         if (std::strcmp(argv[I], "--scale") == 0) SceneScale = static_cast<float>(std::atof(argv[++I]));
     }
     if (ScenePath == "shaderball") ScenePath = "Projects/Project-Zero/Content/Scenes/ShaderBall.gltf";   // R4b material test level
+    if (ScenePath == "materialgrid") ScenePath = "Projects/Project-Zero/Content/Scenes/MaterialGrid.gltf"; // channel coverage exhibit
 
     //──────────────────────────────────────────────────────────────────────────
     // Telemetry sink
@@ -91,6 +93,15 @@ int main(int argc, char** argv)
             Frontier::ShaderBallStructure ShaderBall; ShaderBall.Construct();
             if (ShaderBall.Export(ScenePath, &Error)) std::cerr << "[Scene] Exported the shader-ball level to " << ScenePath << "\n";
             else                                     std::cerr << "[Scene] Shader-ball export failed: " << Error << "\n";
+        }
+        const bool IsMaterialGrid = ScenePath.find("MaterialGrid.gltf") != std::string::npos;
+        if (IsMaterialGrid && !std::filesystem::exists(ScenePath, FsError))
+        {
+            std::filesystem::create_directories(std::filesystem::path(ScenePath).parent_path(), FsError);
+            std::string Error;
+            Frontier::MaterialGridStructure Grid; Grid.Construct();
+            if (Grid.Export(ScenePath, &Error)) std::cerr << "[Scene] Exported the material-channel grid to " << ScenePath << "\n";
+            else                                      std::cerr << "[Scene] Material-channel grid export failed: " << Error << "\n";
         }
     }
 
@@ -171,6 +182,13 @@ int main(int argc, char** argv)
         // Shader ball: 5 m back from the front row, 2.6 m up, pitched down ~22° so all four rows fit at 55° FoV.
         Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -6.2f, 2.6f });
         Camera.AssignOrientationEuler(-22.0f * 3.14159265f / 180.0f, 0.0f, 0.0f);
+    }
+    else if (Level.QueryName() == "MaterialGrid")
+    {
+        // Channel grid: the 11 m wide, four-row gallery needs a slightly wider establishing view than ShaderBall.
+        Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -7.5f, 3.0f });
+        Camera.AssignOrientationEuler(-17.0f * 3.14159265f / 180.0f, 0.0f, 0.0f);
+        Camera.AssignFieldOfView(60.0f);
     }
     else if (Level.QueryName() != "CornellBox")
     {

@@ -9,7 +9,7 @@
 //    InstanceRecord  160 B  World, PreviousWorld (column-major), mesh range, material, cluster range
 //    ClusterRecord    48 B  object-space bounding sphere + normal cone + triangle range   (cull unit, ≤ 128 triangles)
 //    LuminaireRecord  32 B  emissive triangle + Walker alias entry for O(1) light selection
-//    MaterialRecord   64 B  ContentInterchange/MaterialIndex.h (header) + MaterialSlabRecord 288 B per slab (R4a)
+//    MaterialRecord   64 B  ContentInterchange/MaterialIndex.h (header) + MaterialSlabRecord 304 B per slab (R4b channel metadata)
 //    TriangleIndex    64 B  SwapchainExchange.h — flattened world-space triangles addressed by the CWBVH primitive index
 //                           (R4a: carries per-vertex UVs for texture lookup; 🚧 R5 deletes it).
 //    PlacementRecord / CameraRecord / PunctualLuminaireRecord — CPU-only scene-graph rows (R4a, data only, no UI).

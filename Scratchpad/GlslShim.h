@@ -38,7 +38,7 @@ inline float max(float a, float b) { return std::max(a, b); } inline float min(f
 inline vec3 max(vec3 a, vec3 b) { return {std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z)}; } inline vec3 max(vec3 a, float b) { return max(a, vec3(b)); }
 inline vec3 min(vec3 a, vec3 b) { return {std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z)}; } inline vec3 min(vec3 a, float b) { return min(a, vec3(b)); }
 inline vec2 max(vec2 a, float b) { return {std::max(a.x, b), std::max(a.y, b)}; } inline vec2 max(vec2 a, vec2 b) { return {std::max(a.x, b.x), std::max(a.y, b.y)}; }
-inline vec3 sqrt(vec3 a) { return {std::sqrt(a.x), std::sqrt(a.y), std::sqrt(a.z)}; } inline vec3 exp(vec3 a) { return {std::exp(a.x), std::exp(a.y), std::exp(a.z)}; }
+inline vec3 sqrt(vec3 a) { return {std::sqrt(a.x), std::sqrt(a.y), std::sqrt(a.z)}; } inline vec3 exp(vec3 a) { return {std::exp(a.x), std::exp(a.y), std::exp(a.z)}; } inline vec3 log(vec3 a) { return {std::log(a.x), std::log(a.y), std::log(a.z)}; }
 inline vec3 cos(vec3 a) { return {std::cos(a.x), std::cos(a.y), std::cos(a.z)}; } inline vec3 sin(vec3 a) { return {std::sin(a.x), std::sin(a.y), std::sin(a.z)}; }
 inline vec3 pow(vec3 a, vec3 b) { return {std::pow(a.x, b.x), std::pow(a.y, b.y), std::pow(a.z, b.z)}; } inline vec3 pow(vec3 a, float b) { return pow(a, vec3(b)); }
 inline vec3 abs(vec3 a) { return {std::abs(a.x), std::abs(a.y), std::abs(a.z)}; }

@@ -77,7 +77,7 @@ struct MaterialRecord          // 64 B — ContentInterchange/MaterialIndex.h (R
     float NormalScale;
 };
 
-struct MaterialSlabRecord      // 288 B — ContentInterchange/MaterialIndex.h (OpenPBR §5 order + slate_ + 16 texture slots)
+struct MaterialSlabRecord      // 304 B — ContentInterchange/MaterialIndex.h (OpenPBR §5 order + slate_ + 16 texture slots)
 {
     vec4 Base;                 // base_weight, base_color.rgb
     vec4 BaseSpecular;         // base_metalness, base_diffuse_roughness, specular_weight, specular_color.r
@@ -97,6 +97,7 @@ struct MaterialSlabRecord      // 288 B — ContentInterchange/MaterialIndex.h (
     uvec4 TextureSlots0;       // 8 × uint16: base_color, metalness | specular_roughness, specular_color | geometry_normal, geometry_coat_normal | emission, geometry_opacity
     uvec4 TextureSlots1;       // 8 × uint16: transmission, subsurface | coat, fuzz | thin_film, anisotropy | occlusion, mask
     uvec4 Runtime;             // x = TextureUvSets (16 × 2 bits), y = floatBits(NormalScale), z = floatBits(OcclusionStrength), w = floatBits(MixWeight)
+    vec4 Slate2;                // x = anisotropy rotation, y = clear-coat normal scale, zw = reserved
 };
 
 const uint kMaterialFlagDoubleSided  = 1u;
@@ -105,7 +106,19 @@ const uint kMaterialFlagAlphaBlend   = 4u;
 const uint kMaterialFlagUnlit        = 8u;
 const uint kMaterialFlagThinWalled   = 16u;
 const uint kMaterialFlagEmissive     = 32u;
+// MaterialRecord.Flags bits 8..11: per-material reflectance selection (the 20 authored semantic channels remain
+// retained in the slab even when a selection does not consume one of them).
+const uint kMaterialReflectanceShift = 8u;
+const uint kMaterialReflectanceMask  = 0xF00u;
+const uint kReflectanceStandard = 0u, kReflectanceAnisotropic = 1u, kReflectanceClearCoated = 2u, kReflectanceCloth = 3u,
+           kReflectanceSubsurface = 4u, kReflectanceTransmissive = 5u, kReflectanceEmissiveOnly = 6u, kReflectanceUnlit = 7u;
 const uint kMaterialTextureNone      = 0xFFFFFFFFu;
+
+uint MaterialReflectanceSelection(uint Flags)
+{
+    uint Selection = (Flags & kMaterialReflectanceMask) >> kMaterialReflectanceShift;
+    return Selection <= 7u ? Selection : 0u;
+}
 
 // Texture slot of channel C (0-15) of a slab, 0xFFFF = none.
 uint MaterialSlabTexture(MaterialSlabRecord S, uint C)

@@ -51,12 +51,13 @@ struct GpuMaterial          // MaterialRecord (ContentInterchange/MaterialIndex.
     float NormalScale;
 };
 
-struct GpuMaterialSlab      // MaterialSlabRecord (288 B) — 18 vec4; field map in SceneRecords.slang. Read by R4b shading.
+struct GpuMaterialSlab      // MaterialSlabRecord (304 B) — 19 vec4; field map in SceneRecords.slang. Read by R4b shading.
 {
     vec4  Payload[15];
     uvec4 TextureSlots0;
     uvec4 TextureSlots1;
     uvec4 Runtime;
+    vec4  Slate2;             // x = anisotropy rotation, y = clear-coat normal scale
 };
 
 struct GpuInstance          // InstanceRecord (SceneStructure.h / SceneRecords.slang) — only MaterialIndex is read here
@@ -138,12 +139,13 @@ uint SlabTexture(GpuMaterialSlab S, uint C)
     return (Word >> ((C & 1u) * 16u)) & 0xFFFFu;
 }
 const uint kChannelBaseColor = 0u, kChannelMetalness = 1u, kChannelRoughness = 2u, kChannelSpecularColor = 3u, kChannelNormal = 4u,
-           kChannelCoatNormal = 5u, kChannelEmission = 6u, kChannelOpacity = 7u, kChannelCoat = 10u, kChannelFuzz = 11u,
-           kChannelThinFilm = 12u, kChannelOcclusion = 14u;
+           kChannelCoatNormal = 5u, kChannelEmission = 6u, kChannelOpacity = 7u, kChannelTransmission = 8u, kChannelSubsurface = 9u,
+           kChannelCoat = 10u, kChannelFuzz = 11u, kChannelThinFilm = 12u, kChannelAnisotropy = 13u, kChannelOcclusion = 14u;
 
 struct SurfaceFrame         // everything the kernel needs at a hit besides the ShadingRecord
 {
     vec3  Normal;           // shading normal (interpolated + normal map), facing the viewer side
+    vec3  CoatNormal;       // clear-coat orientation after its optional normal map
     vec3  Tangent;          // orthonormal frame axes for the local BSDF space
     vec3  Bitangent;
     vec3  Geometric;        // face normal facing the viewer side (ray offsets, shadow rays)
@@ -210,18 +212,23 @@ ShadingRecord ResolveMaterial(GpuMaterial mat, GpuInstance instance, uint primit
 
     ShadingRecord m;
     m.BaseColor = mat.Albedo.xyz; m.Metalness = mat.Emissive.w; m.DiffuseRoughness = 0.0;
-    m.SpecularWeight = 1.0; m.SpecularColor = vec3(1.0); m.SpecularRoughness = mat.Albedo.w; m.SpecularAnisotropy = 0.0; m.SpecularIor = 1.5;
+    m.SpecularWeight = 1.0; m.SpecularColor = vec3(1.0); m.SpecularRoughness = mat.Albedo.w; m.SpecularAnisotropy = 0.0; m.AnisotropyRotation = 0.0; m.SpecularIor = 1.5;
     m.ThinFilmWeight = 0.0; m.ThinFilmThickness = 0.5; m.ThinFilmIor = 1.4;
     m.HazinessWeight = 0.0; m.HazinessRoughness = 0.5;
     m.CoatWeight = 0.0; m.CoatColor = vec3(1.0); m.CoatRoughness = 0.0; m.CoatIor = 1.6; m.CoatDarkening = 1.0;
     m.FuzzWeight = 0.0; m.FuzzColor = vec3(1.0); m.FuzzRoughness = 0.5;
     m.Emission = mat.Emissive.xyz;
+    m.TransmissionWeight = 0.0; m.TransmissionColor = vec3(1.0); m.TransmissionDepth = 0.0;
+    m.TransmissionScatter = vec3(0.0); m.TransmissionDispersionScale = 0.0; m.TransmissionDispersionAbbeNumber = 20.0;
+    m.SubsurfaceWeight = 0.0; m.SubsurfaceColor = vec3(0.8); m.SubsurfaceRadius = 1.0; m.SubsurfaceRadiusScale = vec3(1.0, 0.5, 0.25);
+    m.GeometryOpacity = 1.0; m.ReflectanceSelection = (mat.Slabs.z >> 8u) & 0xFu;
     F.Emission = mat.Emissive.xyz; F.Opacity = 1.0; F.Occlusion = 1.0;
 
     if (mat.Slabs.y > 0u)
     {
         GpuMaterialSlab S = MaterialSlabs[mat.Slabs.x];   // Tier A: the bottom slab only (multi-slab stacks arrive with R5)
         vec4 P0 = S.Payload[0], P1 = S.Payload[1], P2 = S.Payload[2], P3 = S.Payload[3];
+        vec4 P4 = S.Payload[4], P5 = S.Payload[5], P6 = S.Payload[6], P7 = S.Payload[7];
         vec4 P8 = S.Payload[8], P9 = S.Payload[9], P10 = S.Payload[10], P11 = S.Payload[11], P12 = S.Payload[12], P13 = S.Payload[13];
         float normalScale = uintBitsToFloat(S.Runtime.y), occlusionStrength = uintBitsToFloat(S.Runtime.z);
 
@@ -232,8 +239,20 @@ ShadingRecord ResolveMaterial(GpuMaterial mat, GpuInstance instance, uint primit
         m.SpecularWeight     = P1.z;
         m.SpecularColor      = vec3(P1.w, P2.xy) * SampleChannel(S, kChannelSpecularColor, uv, F.LodBias, vec4(1.0)).xyz;
         m.SpecularRoughness  = P2.z * SampleChannel(S, kChannelRoughness, uv, F.LodBias, vec4(1.0)).y;   // glTF: G
-        m.SpecularAnisotropy = P2.w;
+        vec4 anisoTex         = SampleChannel(S, kChannelAnisotropy, uv, F.LodBias, vec4(1.0, 0.0, 1.0, 1.0));
+        m.SpecularAnisotropy = P2.w * anisoTex.z;
+        m.AnisotropyRotation = S.Slate2.x + atan(anisoTex.y, anisoTex.x);
         m.SpecularIor        = P3.x;
+        m.TransmissionWeight = P3.y * SampleChannel(S, kChannelTransmission, uv, F.LodBias, vec4(1.0)).x;
+        m.TransmissionColor  = vec3(P3.zw, P4.x);
+        m.TransmissionDepth  = P4.y;
+        m.TransmissionScatter = vec3(P4.zw, P5.x);
+        m.TransmissionDispersionScale = P5.z;
+        m.TransmissionDispersionAbbeNumber = P5.w;
+        m.SubsurfaceWeight   = P6.x * SampleChannel(S, kChannelSubsurface, uv, F.LodBias, vec4(1.0)).a;
+        m.SubsurfaceColor    = P6.yzw;
+        m.SubsurfaceRadius   = P7.x;
+        m.SubsurfaceRadiusScale = P7.yzw;
         m.CoatWeight         = P8.y * SampleChannel(S, kChannelCoat, uv, F.LodBias, vec4(1.0)).x;
         m.CoatColor          = vec3(P8.zw, P9.x);
         m.CoatRoughness      = P9.y;
@@ -250,6 +269,7 @@ ShadingRecord ResolveMaterial(GpuMaterial mat, GpuInstance instance, uint primit
         m.HazinessRoughness  = P13.w;
         F.Emission  = m.Emission;
         F.Opacity   = P13.y * SampleChannel(S, kChannelOpacity, uv, F.LodBias, vec4(1.0)).w;   // glTF: A of base colour
+        m.GeometryOpacity = F.Opacity;
         F.Occlusion = mix(1.0, SampleChannel(S, kChannelOcclusion, uv, F.LodBias, vec4(1.0)).x, occlusionStrength);
 
         uint normalSlot = SlabTexture(S, kChannelNormal);
@@ -261,8 +281,22 @@ ShadingRecord ResolveMaterial(GpuMaterial mat, GpuInstance instance, uint primit
             if (dot(nm, ng) > 0.0) n = nm;                         // reject maps that push the normal below the surface
             t = normalize(t - n * dot(n, t)); b = cross(n, t) * handed;
         }
+
+        // Clear-coat orientation is a separate channel. Resolve it after the base normal map so coat highlights remain
+        // attached to the final surface frame; the scale lives in the appended Slate2 runtime lane.
+        F.CoatNormal = n;
+        uint coatNormalSlot = SlabTexture(S, kChannelCoatNormal);
+        if (coatNormalSlot != 0xFFFFu)
+        {
+            vec3 ctn = SampleChannel(S, kChannelCoatNormal, uv, F.LodBias, vec4(0.5, 0.5, 1.0, 1.0)).xyz * 2.0 - 1.0;
+            float coatScale = S.Slate2.y;
+            ctn.xy *= coatScale;
+            vec3 cn = normalize(t * ctn.x + b * ctn.y + n * ctn.z);
+            if (dot(cn, ng) > 0.0) F.CoatNormal = cn;
+        }
     }
 
+    if (mat.Slabs.y == 0u) F.CoatNormal = n;
     F.Normal = n; F.Tangent = t; F.Bitangent = b; F.Geometric = ng;
     return m;
 }
@@ -553,6 +587,11 @@ void main()
         Resolve(pixel, frame.Emission);
         return;
     }
+    if (shading.ReflectanceSelection == 7u) // Unlit: the base colour is radiance, not a reflectance
+    {
+        Resolve(pixel, shading.BaseColor);
+        return;
+    }
 
     vec3 hitNormal = frame.Geometric;                             // shadow-ray offsets and the DI target function stay geometric
     vec3 woLocal   = ToLocal(frame, viewDir);
@@ -691,13 +730,15 @@ void main()
         if (bounce.w > 0.0)
         {
             vec3 bounceDir = FromLocal(frame, bounce.xyz);
-            vec3 throughput = EvaluateBsdf(shading, layers, woLocal, bounce.xyz) * bounce.z / bounce.w;   // f · cosθ / pdf
+            vec3 throughput = EvaluateBsdf(shading, layers, woLocal, bounce.xyz) * abs(bounce.z) / bounce.w;   // f · |cosθ| / pdf (reflection or transmission)
             Ray  bounceRay;
-            bounceRay.origin = hitPos + hitNormal * kEps;
+            // Transmission samples travel through the surface. Offset on the outgoing side rather than assuming every
+            // bounce is reflection; opaque scenes retain the old +normal path bit-for-bit.
+            bounceRay.origin = hitPos + hitNormal * (dot(bounceDir, hitNormal) >= 0.0 ? kEps : -kEps);
             bounceRay.dir    = bounceDir;
 
             Hit bounceHit = TraceScene(bounceRay);
-            if (bounceHit.valid && dot(bounceDir, hitNormal) > 0.0)
+            if (bounceHit.valid && abs(dot(bounceDir, hitNormal)) > 1.0e-5)
             {
                 GpuMaterial   bMat  = Materials[bounceHit.matIdx];
                 uint          bInst = 0u;   // the flat primitive index already addresses Triangles[]; find its instance for the vertex range

@@ -17,7 +17,8 @@
 //
 // Conventions: local shading frame, +Z = shading normal, wo = towards the viewer, wi = towards the light; both point
 //    away from the surface. Every Evaluate* returns f (no cosine). Sample* returns wi and the pdf of the whole mixture.
-//    Colours linear Rec.709. Not evaluated here (R4b scope line): transmission, subsurface, dispersion, glints.
+//    Colours linear Rec.709. Transmission and subsurface use the bounded Tier-A arms at the end of this file; volumetric
+//    interiors, nested media, spectral dispersion, and glints remain deferred by the material plan.
 
 #ifndef FRONTIER_MATERIAL_EVALUATION
 #define FRONTIER_MATERIAL_EVALUATION
@@ -48,6 +49,7 @@ struct ShadingRecord
     vec3  SpecularColor;      // specular_color (dielectric tint / F82 edge tint)
     float SpecularRoughness;  // specular_roughness r  (α = r²)
     float SpecularAnisotropy; // specular_roughness_anisotropy
+    float AnisotropyRotation; // anisotropy direction texture / rotation, radians
     float SpecularIor;        // specular_ior
     float ThinFilmWeight;     // thin_film_weight
     float ThinFilmThickness;  // thin_film_thickness [µm]
@@ -63,6 +65,22 @@ struct ShadingRecord
     vec3  FuzzColor;          // fuzz_color
     float FuzzRoughness;      // fuzz_roughness
     vec3  Emission;           // emission_luminance × emission_color [nit]
+
+    // The remaining OpenPBR channels are carried into the evaluator even when a selection gates their lobe. Keeping
+    // them here prevents a material edit/selection switch from requiring a re-import. M4/M5 use the transmission and
+    // subsurface values; the compact Tier-A path uses the same fields for its bounded one-bounce approximation.
+    float TransmissionWeight;
+    vec3  TransmissionColor;
+    float TransmissionDepth;
+    vec3  TransmissionScatter;
+    float TransmissionDispersionScale;
+    float TransmissionDispersionAbbeNumber;
+    float SubsurfaceWeight;
+    vec3  SubsurfaceColor;
+    float SubsurfaceRadius;
+    vec3  SubsurfaceRadiusScale;
+    float GeometryOpacity;
+    uint  ReflectanceSelection;
 };
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -392,6 +410,7 @@ struct LobeWeights
     float Coat;         // … coat GGX
     float Specular;     // … base GGX (dielectric + metal, incl. haziness)
     float Diffuse;      // … EON
+    float Transmission; // bounded below-surface transmission sample
 };
 
 struct ResolvedLayers   // per-(record, wo) constants shared by Evaluate / Sample / Pdf
@@ -428,6 +447,16 @@ vec3 CoatAbsorption(vec3 coatColor, float mu, float eta)   // T^(1/μt) for one 
 
 ResolvedLayers ResolveLayers(ShadingRecord m, vec3 wo)
 {
+    // Selection is derived once per material. Retained channels are still present in `m`, but an inactive closure
+    // cannot accidentally cost a texture fetch or contribute a second primary lobe.
+    if (m.ReflectanceSelection == 3u) // Cloth / sheen-primary
+    {
+        m.Metalness = 0.0;
+        m.SpecularWeight = 0.04;
+        m.SpecularAnisotropy = 0.0;
+        m.CoatWeight = 0.0;
+        m.HazinessWeight = 0.0;
+    }
     ResolvedLayers L;
     float muO = max(wo.z, kMinCos);
     float c = m.CoatWeight;
@@ -481,11 +510,15 @@ ResolvedLayers ResolveLayers(ShadingRecord m, vec3 wo)
     float lumMetal  = dot(L.MetalF0, vec3(0.2126, 0.7152, 0.0722));
     float lumDiel   = dot(L.DielectricAlbedoO, vec3(0.2126, 0.7152, 0.0722));
     float specMass  = underCoat * mix(lumDiel, min(1.0, lumMetal + 0.04), m.Metalness);
-    float diffMass  = underCoat * (1.0 - m.Metalness) * (1.0 - lumDiel) * dot(EonAlbedo(m.BaseColor, m.DiffuseRoughness, muO), vec3(0.2126, 0.7152, 0.0722));
+    float diffuseAlbedo = dot(EonAlbedo(m.BaseColor, m.DiffuseRoughness, muO), vec3(0.2126, 0.7152, 0.0722));
+    float transmissionMass = clamp(m.TransmissionWeight * (1.0 - m.Metalness), 0.0, 1.0);
+    float diffMass  = underCoat * (1.0 - m.Metalness) * (1.0 - lumDiel) * diffuseAlbedo * (1.0 - transmissionMass);
     LobeWeights w;
-    w.Fuzz = L.FuzzAlbedoO; w.Coat = underFuzz * L.CoatAlbedoO; w.Specular = max(specMass, 0.02 * underCoat); w.Diffuse = max(diffMass, (1.0 - m.Metalness) * 0.02 * underCoat);
-    float total = w.Fuzz + w.Coat + w.Specular + w.Diffuse;
-    w.Fuzz /= total; w.Coat /= total; w.Specular /= total; w.Diffuse /= total;
+    w.Fuzz = L.FuzzAlbedoO; w.Coat = underFuzz * L.CoatAlbedoO; w.Specular = max(specMass, 0.02 * underCoat);
+    w.Diffuse = max(diffMass, (1.0 - m.Metalness) * 0.02 * underCoat * (1.0 - transmissionMass));
+    w.Transmission = transmissionMass;
+    float total = w.Fuzz + w.Coat + w.Specular + w.Diffuse + w.Transmission;
+    w.Fuzz /= total; w.Coat /= total; w.Specular /= total; w.Diffuse /= total; w.Transmission /= total;
     L.Weights = w;
     return L;
 }
@@ -494,11 +527,24 @@ ResolvedLayers ResolveLayers(ShadingRecord m, vec3 wo)
 //                                                    EVALUATE
 //------------------------------------------------------------------------------------------------------------------------
 
+vec3 RotateAnisotropy(vec3 v, float angle)
+{
+    float c = cos(angle), s = sin(angle);
+    return vec3(c * v.x - s * v.y, s * v.x + c * v.y, v.z);
+}
+
+vec3 UnrotateAnisotropy(vec3 v, float angle)
+{
+    return RotateAnisotropy(v, -angle);
+}
+
 // Base specular (dielectric + metal mix, thin film, haziness) — f only.
 vec3 EvaluateBaseSpecular(ShadingRecord m, ResolvedLayers L, vec3 wo, vec3 wi)
 {
-    vec3 h = normalize(wo + wi);
-    float muH = max(dot(wo, h), 0.0);
+    vec3 woA = RotateAnisotropy(wo, m.AnisotropyRotation);
+    vec3 wiA = RotateAnisotropy(wi, m.AnisotropyRotation);
+    vec3 h = normalize(woA + wiA);
+    float muH = max(dot(woA, h), 0.0);
 
     // Fresnel of the two substrates.
     float fD = FresnelDielectric(muH, L.SpecularEta);
@@ -518,11 +564,11 @@ vec3 EvaluateBaseSpecular(ShadingRecord m, ResolvedLayers L, vec3 wo, vec3 wi)
 
     // Main GGX + haze GGX (mixed by weight), each single-scatter lobe plus its Kulla–Conty multiple-scatter term.
     vec3 f0 = mix(L.DielectricF0, m.SpecularWeight * L.MetalF0, m.Metalness);
-    float dMain = GgxD(h, L.SpecularAlpha) * GgxG2(wo, wi, L.SpecularAlpha) / (4.0 * max(wo.z, kMinCos) * max(wi.z, kMinCos));
+    float dMain = GgxD(h, L.SpecularAlpha) * GgxG2(woA, wiA, L.SpecularAlpha) / (4.0 * max(wo.z, kMinCos) * max(wi.z, kMinCos));
     vec3 spec = f * dMain + GgxMultiScatter(f0, wo.z, wi.z, L.SpecularAlpha);
     if (m.HazinessWeight > 0.0)
     {
-        float dHaze = GgxD(h, L.HazeAlpha) * GgxG2(wo, wi, L.HazeAlpha) / (4.0 * max(wo.z, kMinCos) * max(wi.z, kMinCos));
+        float dHaze = GgxD(h, L.HazeAlpha) * GgxG2(woA, wiA, L.HazeAlpha) / (4.0 * max(wo.z, kMinCos) * max(wi.z, kMinCos));
         spec = mix(spec, f * dHaze + GgxMultiScatter(f0, wo.z, wi.z, L.HazeAlpha), m.HazinessWeight);
     }
     return spec;
@@ -530,11 +576,25 @@ vec3 EvaluateBaseSpecular(ShadingRecord m, ResolvedLayers L, vec3 wo, vec3 wi)
 
 vec3 EvaluateBsdf(ShadingRecord m, ResolvedLayers L, vec3 wo, vec3 wi)
 {
-    if (wo.z <= 0.0 || wi.z <= 0.0) return vec3(0.0);
+    if (wo.z <= 0.0) return vec3(0.0);
+
+    // Tier-A bounded transmission arm. It is deliberately a separate hemisphere: the direct-light stratum remains
+    // opaque and the BSDF bounce carries the below-surface sample through the existing traversal path. Beer uses the
+    // authored depth as a stable single-segment approximation; nested media and multiple internal bounces are M9+.
+    if (wi.z < 0.0)
+    {
+        if (m.TransmissionWeight <= 0.0 || m.Metalness > 0.0) return vec3(0.0);
+        float eta = max(m.SpecularIor, 1.0001);
+        float fresnel = FresnelDielectric(abs(dot(wo, vec3(0.0, 0.0, 1.0))), eta);
+        float path = m.TransmissionDepth / max(abs(wi.z), 0.05);
+        vec3 beer = exp(log(max(m.TransmissionColor, vec3(1.0e-4))) * path);
+        return m.TransmissionWeight * (1.0 - fresnel) * beer * kInvPi;
+    }
     float muI = wi.z;
 
     // Bottom: diffuse, scaled by what the dielectric interface lets through (eq. 42, non-reciprocal albedo scaling).
-    vec3 diffuse = (1.0 - m.Metalness) * (vec3(1.0) - L.DielectricAlbedoO) * EonEvaluate(m.BaseColor, m.DiffuseRoughness, wi, wo);
+    vec3 diffuseColor = mix(m.BaseColor, m.SubsurfaceColor, clamp(m.SubsurfaceWeight, 0.0, 1.0));
+    vec3 diffuse = (1.0 - m.Metalness) * (1.0 - clamp(m.TransmissionWeight, 0.0, 1.0)) * (vec3(1.0) - L.DielectricAlbedoO) * EonEvaluate(diffuseColor, m.DiffuseRoughness, wi, wo);
     vec3 base = diffuse + EvaluateBaseSpecular(m, L, wo, wi);
 
     // Coat layer on top of the base.
@@ -564,14 +624,21 @@ vec3 EvaluateBsdf(ShadingRecord m, ResolvedLayers L, vec3 wo, vec3 wi)
 
 float PdfBsdf(ShadingRecord m, ResolvedLayers L, vec3 wo, vec3 wi)
 {
-    if (wo.z <= 0.0 || wi.z <= 0.0) return 0.0;
-    vec3 h = normalize(wo + wi);
-    float jac = 1.0 / (4.0 * max(dot(wo, h), kMinCos));
+    if (wo.z <= 0.0) return 0.0;
+    if (wi.z < 0.0) return L.Weights.Transmission * abs(wi.z) * kInvPi;
+    vec3 woA = RotateAnisotropy(wo, m.AnisotropyRotation);
+    vec3 wiA = RotateAnisotropy(wi, m.AnisotropyRotation);
+    vec3 h = normalize(woA + wiA);
+    float jac = 1.0 / (4.0 * max(dot(woA, h), kMinCos));
     float pdf = L.Weights.Diffuse * EonPdfCltc(wo, wi, m.DiffuseRoughness);
-    float pSpec = GgxVndfPdf(wo, h, L.SpecularAlpha) * jac;
-    if (m.HazinessWeight > 0.0) pSpec = mix(pSpec, GgxVndfPdf(wo, h, L.HazeAlpha) * jac, m.HazinessWeight);
+    float pSpec = GgxVndfPdf(woA, h, L.SpecularAlpha) * jac;
+    if (m.HazinessWeight > 0.0) pSpec = mix(pSpec, GgxVndfPdf(woA, h, L.HazeAlpha) * jac, m.HazinessWeight);
     pdf += L.Weights.Specular * pSpec;
-    if (L.Weights.Coat > 0.0) pdf += L.Weights.Coat * GgxVndfPdf(wo, h, L.CoatAlpha) * jac;
+    if (L.Weights.Coat > 0.0)
+    {
+        vec3 hCoat = normalize(wo + wi);
+        pdf += L.Weights.Coat * GgxVndfPdf(wo, hCoat, L.CoatAlpha) / (4.0 * max(dot(wo, hCoat), kMinCos));
+    }
     if (L.Weights.Fuzz > 0.0) pdf += L.Weights.Fuzz * SheenPdf(clamp(m.FuzzRoughness, 0.0, 1.0), wo, wi);
     return pdf;
 }
@@ -581,26 +648,34 @@ vec4 SampleBsdf(ShadingRecord m, ResolvedLayers L, vec3 wo, vec3 u)
 {
     vec3 wi;
     float pick = u.x;
-    if (pick < L.Weights.Fuzz)
+    if (pick < L.Weights.Transmission)
+    {
+        // Cosine sample on the opposite hemisphere. The caller offsets the ray on the transmitted side and the
+        // existing CWBVH traversal supplies the solid/glass hit; a later phase replaces this with VNDF BTDF sampling.
+        float r = sqrt(u.y); float phi = 2.0 * kPi * u.z;
+        wi = vec3(r * cos(phi), r * sin(phi), -sqrt(max(0.0, 1.0 - u.y)));
+    }
+    else if (pick < L.Weights.Transmission + L.Weights.Fuzz)
     {
         wi = SheenSample(clamp(m.FuzzRoughness, 0.0, 1.0), wo, u.yz).xyz;
     }
-    else if (pick < L.Weights.Fuzz + L.Weights.Coat)
+    else if (pick < L.Weights.Transmission + L.Weights.Fuzz + L.Weights.Coat)
     {
         vec3 h = SampleGgxVndf(wo, L.CoatAlpha, u.yz);
         wi = reflect(-wo, h);
     }
-    else if (pick < L.Weights.Fuzz + L.Weights.Coat + L.Weights.Specular)
+    else if (pick < L.Weights.Transmission + L.Weights.Fuzz + L.Weights.Coat + L.Weights.Specular)
     {
-        float hazePick = (pick - L.Weights.Fuzz - L.Weights.Coat) / max(L.Weights.Specular, 1.0e-6);
-        vec3 h = SampleGgxVndf(wo, hazePick < m.HazinessWeight ? L.HazeAlpha : L.SpecularAlpha, u.yz);
-        wi = reflect(-wo, h);
+        float hazePick = (pick - L.Weights.Transmission - L.Weights.Fuzz - L.Weights.Coat) / max(L.Weights.Specular, 1.0e-6);
+        vec3 woA = RotateAnisotropy(wo, m.AnisotropyRotation);
+        vec3 hA = SampleGgxVndf(woA, hazePick < m.HazinessWeight ? L.HazeAlpha : L.SpecularAlpha, u.yz);
+        wi = UnrotateAnisotropy(reflect(-woA, hA), m.AnisotropyRotation);
     }
     else
     {
         wi = EonSampleCltc(wo, m.DiffuseRoughness, u.y, u.z).xyz;
     }
-    if (wi.z <= 0.0) return vec4(0.0);
+    if (abs(wi.z) <= kMinCos) return vec4(0.0);
     return vec4(wi, PdfBsdf(m, L, wo, wi));
 }
 

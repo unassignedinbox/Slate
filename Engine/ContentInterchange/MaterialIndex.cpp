@@ -226,6 +226,8 @@ MaterialSlabRecord MaterialIndex::ConstructSlabRecord(const MaterialSlabDescript
     R.NormalScale         = S.Texture(MaterialTextureChannel::GeometryNormal).Scalar;
     R.OcclusionStrength   = S.Texture(MaterialTextureChannel::Occlusion).Scalar;
     R.MixWeight           = 1.0f;
+    R.AnisotropyRotation  = S.Texture(MaterialTextureChannel::Anisotropy).Scalar;
+    R.CoatNormalScale     = S.Texture(MaterialTextureChannel::GeometryCoatNormal).Scalar;
     return R;
 }
 
@@ -235,8 +237,42 @@ uint32_t MaterialIndex::ClassifyComplexity(const std::vector<MaterialSlabDescrip
     const MaterialSlabDescriptor& S = Slabs.empty() ? MaterialSlabDescriptor{} : Slabs.front();
     const bool Special = S.TransmissionWeight > 0.0f || S.SubsurfaceWeight > 0.0f || S.SlateGlintDensity > 0.0f || S.ThinFilmWeight > 0.0f;
     if (Special) return MaterialComplexitySpecial;
-    const bool Extra = S.CoatWeight > 0.0f || S.FuzzWeight > 0.0f || S.SlateHazinessWeight > 0.0f || S.SpecularRoughnessAnisotropy > 0.0f;
+    const bool Extra = S.CoatWeight > 0.0f || S.FuzzWeight > 0.0f || S.SlateHazinessWeight > 0.0f || S.SpecularRoughnessAnisotropy != 0.0f;
     return Extra ? MaterialComplexitySingle : MaterialComplexitySimple;
+}
+
+MaterialReflectance MaterialIndex::DeriveReflectance(const MaterialDescriptor& Descriptor, const MaterialSlabDescriptor& S) noexcept
+{
+    // Priority is intentional: an unlit material must never accidentally become an emissive-only material, and a
+    // transmissive slab must own the below-surface path even when it also carries a coat or sheen.
+    if ((Descriptor.Flags & MaterialFlagUnlit) != 0u) return MaterialReflectance::Unlit;
+    if (S.TransmissionWeight > 1.0e-5f) return MaterialReflectance::Transmissive;
+    if (S.SubsurfaceWeight > 1.0e-5f) return MaterialReflectance::Subsurface;
+
+    const bool HasReflectance = S.BaseMetalness > 1.0e-5f || S.SpecularWeight > 1.0e-5f || S.CoatWeight > 1.0e-5f ||
+                                S.FuzzWeight > 1.0e-5f || S.ThinFilmWeight > 1.0e-5f || S.SlateHazinessWeight > 1.0e-5f;
+    const bool EmissiveOnly = S.EmissionLuminance > 1.0e-5f && S.BaseWeight <= 1.0e-5f && !HasReflectance;
+    if (EmissiveOnly) return MaterialReflectance::EmissiveOnly;
+
+    // Cloth wins over anisotropy because a sheen-primary material cannot also be an anisotropic GGX primary. The
+    // anisotropy channel is retained and becomes active again if the selection is changed by an editor.
+    if (S.FuzzWeight > 1.0e-5f && S.SpecularWeight <= 0.05f && S.BaseMetalness <= 1.0e-5f)
+        return MaterialReflectance::Cloth;
+    if (S.CoatWeight > 1.0e-5f) return MaterialReflectance::ClearCoated;
+    if (S.SpecularRoughnessAnisotropy != 0.0f || S.Texture(MaterialTextureChannel::Anisotropy).IsBound())
+        return MaterialReflectance::Anisotropic;
+    return MaterialReflectance::Standard;
+}
+
+MaterialReflectance MaterialIndex::ReflectanceFromFlags(uint32_t Flags) noexcept
+{
+    const uint32_t Value = (Flags & kMaterialReflectanceMask) >> kMaterialReflectanceShift;
+    return Value <= static_cast<uint32_t>(MaterialReflectance::Unlit) ? static_cast<MaterialReflectance>(Value) : MaterialReflectance::Standard;
+}
+
+uint32_t MaterialIndex::PackReflectance(MaterialReflectance Selection) noexcept
+{
+    return (static_cast<uint32_t>(Selection) << kMaterialReflectanceShift) & kMaterialReflectanceMask;
 }
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -279,9 +315,10 @@ void MaterialIndex::Finalise(uint32_t SlabLimit, std::vector<std::string>* Repor
         for (const MaterialSlabDescriptor& S : Slabs)
             for (int C = 0; C < 3; ++C) Emission[C] += S.EmissionLuminance * S.EmissionColor[C];
         R.EmissiveR = Emission[0]; R.EmissiveG = Emission[1]; R.EmissiveB = Emission[2];
-        R.Flags      = D.Flags & ~MaterialFlagEmissive;
+        R.Flags      = D.Flags & ~MaterialFlagEmissive & ~kMaterialReflectanceMask;
         if (Emission[0] + Emission[1] + Emission[2] > 0.0f) R.Flags |= MaterialFlagEmissive;
         if (Bottom.GeometryThinWalled) R.Flags |= MaterialFlagThinWalled;
+        R.Flags     |= PackReflectance(DeriveReflectance(D, Bottom));
         R.Complexity = ClassifyComplexity(Slabs);
         R.BaseColourTexture = Bottom.Texture(MaterialTextureChannel::BaseColor).Texture;
         R.NormalTexture     = Bottom.Texture(MaterialTextureChannel::GeometryNormal).Texture;

@@ -27,6 +27,25 @@ static constexpr uint32_t kMaterialTextureNone = 0xFFFFFFFFu;
 
 enum class TextureChannelSelection : uint8_t { Rgb = 0, R = 1, G = 2, B = 3, A = 4 };
 
+// The authoring/reporting vocabulary is deliberately separate from the sixteen texture slots below. A semantic
+// channel may be constant, textured, or derived from another channel (for example reflectance is normally derived
+// from IOR). Keeping this list explicit means coverage tools can audit a material without mistaking a storage slot for
+// a shading feature. The order is the stable ABI used by material census/proof code.
+enum class MaterialSemanticChannel : uint8_t
+{
+    BaseColor = 0, Metallic, Roughness, Reflectance, SurfaceOrientation, AmbientOcclusion, Emission, Opacity,
+    Anisotropy, AnisotropyDirection, ClearCoat, ClearCoatRoughness, ClearCoatOrientation, SheenColor, SheenRoughness,
+    SubsurfaceColor, SubsurfaceThickness, Transmission, Ior, Displacement,
+    Count
+};
+static constexpr uint32_t kMaterialSemanticChannelCount = static_cast<uint32_t>(MaterialSemanticChannel::Count);
+
+inline constexpr const char* kMaterialSemanticChannelNames[kMaterialSemanticChannelCount] = {
+    "base_color", "metallic", "roughness", "reflectance", "surface_orientation", "ambient_occlusion", "emission", "opacity",
+    "anisotropy", "anisotropy_direction", "clear_coat", "clear_coat_roughness", "clear_coat_orientation", "sheen_color", "sheen_roughness",
+    "subsurface_color", "subsurface_thickness", "transmission", "ior", "displacement"
+};
+
 struct TextureReference
 {
     uint32_t                Texture   = kMaterialTextureNone;   // [idx] TextureIndex slot; kMaterialTextureNone = constant only
