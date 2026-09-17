@@ -5,8 +5,9 @@
 //
 //    Scene selection (R2): `Project-Zero.exe [--scene <file.gltf|glb|shaderball|materialgrid|showroom|showcase>] [--scale <float>] [--no-denoise] [--no-reprojection]`
 //        showroom — P0 spatial-interface level, exported once from ShowroomStructure then imported like any other
-//        showcase — 100-object analytical field, exported once from RayTracingSolver::ConstructShowcaseScene
-//        default  Projects/Project-Zero/Content/Scenes/Showcase.gltf — regenerated from RayTracingSolver when missing
+//        showcase — original 100-object analytical field plus the M9 5×4 authored material grid, exported from
+//                 RayTracingSolver::ConstructShowcaseScene with the sun/sky/cloud/celestial presentation intact
+//        default  Projects/Project-Zero/Content/Scenes/Showcase.gltf — upgraded in-place with an M9 sidecar version
 //                 (the Cornell box stays one --scene path away, untouched as the reference).
 //        Sponza   Projects/Project-Zero/Content/Scenes/Sponza/Sponza.gltf (fetched by the build script, not committed).
 
@@ -56,6 +57,7 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 
 int main(int argc, char** argv)
@@ -152,7 +154,18 @@ int main(int argc, char** argv)
         }
 
         const bool IsShowcase = ScenePath.find("Showcase.gltf") != std::string::npos;
-        if (IsShowcase && !std::filesystem::exists(ScenePath, FsError))
+        // M9 changed the default Showcase file in-place: an old generated file must not silently hide the appended
+        //    grid. The sidecar is deliberately regenerable and keeps the export-once path after the first upgrade.
+        const std::string ShowcaseVersionPath = ScenePath + ".m9grid.version";
+        bool ShowcaseNeedsExport = IsShowcase && !std::filesystem::exists(ScenePath, FsError);
+        if (IsShowcase && std::filesystem::exists(ScenePath, FsError))
+        {
+            std::ifstream Version(ShowcaseVersionPath);
+            std::string Tag;
+            std::getline(Version, Tag);
+            ShowcaseNeedsExport = Tag != "M9_SHOWCASE_GRID_V1";
+        }
+        if (ShowcaseNeedsExport)
         {
             std::filesystem::create_directories(std::filesystem::path(ScenePath).parent_path(), FsError);
             Frontier::ProjectZero::RayTracingSolver Field;
@@ -164,7 +177,11 @@ int main(int argc, char** argv)
             if (Frontier::SceneCodec::Encode(ScenePath, Frontier::ReSTIRIntegrator::BuildTriangleIndex(Field),
                                              Frontier::ReSTIRIntegrator::BuildMaterialDescriptors(Field), &Error,
                                              ShowcaseNaming))
-                std::cerr << "[Scene] Exported the showcase scene to " << ScenePath << "\n";
+            {
+                std::ofstream Version(ShowcaseVersionPath, std::ios::trunc);
+                Version << "M9_SHOWCASE_GRID_V1\n";
+                std::cerr << "[Scene] Exported the Showcase + Material Grid default level to " << ScenePath << "\n";
+            }
             else
                 std::cerr << "[Scene] Showcase export failed: " << Error << "\n";
         }

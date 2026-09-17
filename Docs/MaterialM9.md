@@ -24,7 +24,15 @@ The GPU is not available in this checkout, so M9 is validated with the same CPU-
 bash Exhibits/Workbench/Materials/RunMaterialGridM9Cpu.sh 256 2 Projects/Project-Zero/Diagnostics
 ```
 
-`MaterialGridM9CpuRender.cpp` includes the existing Slang CPU port (`MaterialEvaluation.slang`, `SlangCpuShim.h`, the BVH/NEE/MIS tracer, ACES and PNG writer), and renders the Project-Zero material-grid scene itself. `MaterialGridMaterials.h` is shared by the Vulkan scene exporter and the CPU renderer, so the floor, all 20 unique material slots, glass/transmission, subsurface, unlit/emissive coverage, and the luminaire use the same authored records. The CPU geometry mirrors the exporter’s 24-ring/48-segment spheres, 5×4 layout, floor and 4×2.3 luminaire; the smoke log reports 44,164 triangles, 22 descriptors, and one light.
+`MaterialGridM9CpuRender.cpp` includes the existing Slang CPU port (`MaterialEvaluation.slang`, `SlangCpuShim.h`, the BVH/NEE/MIS tracer, ACES and PNG writer), and renders the material-grid component. `MaterialGridMaterials.h` is shared by the Vulkan scene exporter and the CPU renderer, so all 20 unique material slots, glass/transmission, subsurface, unlit/emissive coverage, and the luminaire use the same authored records. The CPU geometry mirrors the exporter’s 24-ring/48-segment spheres and 5×4 layout.
+
+The actual Project-Zero default is now `Showcase.gltf` with the grid appended to the original 100-object analytical field. `RayTracingSolver::ConstructShowcaseScene()` preserves the existing sun, sky, clouds, moon, stars, ground mist and lens-flare path, then appends the grid descriptors and geometry. The CPU reference for that combined default is rendered at high quality with:
+
+```text
+bash Projects/Project-Zero/RunHighQualityShowcaseCpu.sh 1280 720 12 4
+```
+
+The latest combined render completed successfully in 18.1 seconds at 1280×720.
 
 The command produces actual PNGs and a SHA-256 manifest:
 

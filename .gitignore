@@ -14,6 +14,9 @@ Projects/Project-Zero/bin/
 Projects/Project-Zero/build/
 Projects/Project-Zero/Content/Scenes/MaterialGrid.gltf
 Projects/Project-Zero/Content/Scenes/MaterialGrid.bin
+Projects/Project-Zero/Content/Scenes/Showcase.gltf
+Projects/Project-Zero/Content/Scenes/Showcase.bin
+Projects/Project-Zero/Content/Scenes/Showcase.gltf.m9grid.version
 Projects/Project-Zero/Diagnostics/*.ppm
 Projects/Project-Zero/Diagnostics/*.png
 

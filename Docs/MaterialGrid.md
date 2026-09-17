@@ -1,6 +1,10 @@
 # Project-Zero material grid
 
-`MaterialGridStructure` is the Project-Zero exhibit for the resolved material channels. It is an export-once fixture, not a renderer shortcut:
+`MaterialGridStructure` is the Project-Zero exhibit for the resolved material channels. The 5×4 grid is also appended to the default `Showcase.gltf`; it is not a replacement level. The original 100 scattered analytical shapes and their sun/sky/cloud/celestial/lens-flare presentation remain in the same default scene. `MaterialGridStructure` remains available as the isolated `--scene materialgrid` fixture for focused tests.
+
+The default level is regenerated in place when its `Showcase.gltf.m9grid.version` sidecar is absent or stale, so an older generated Showcase cannot hide the grid.
+
+`MaterialGridStructure` is an export-once fixture, not a renderer shortcut:
 
 1. `Construct()` creates one `MaterialDescriptor` for each ball.
 2. `Export()` writes `Projects/Project-Zero/Content/Scenes/MaterialGrid.gltf`.
@@ -34,6 +38,14 @@ M9 is validated against the actual Project-Zero scene on the CPU, not only by so
 ```text
 bash Exhibits/Workbench/Materials/RunMaterialGridM9Cpu.sh 256 2 Projects/Project-Zero/Diagnostics
 ```
+
+For the complete default scene, including the original scattered shapes, sunset sun/sky, clouds, moon, stars, ground mist and lens flare, render the high-quality CPU reference:
+
+```text
+bash Projects/Project-Zero/RunHighQualityShowcaseCpu.sh 1280 720 12 4
+```
+
+This writes `Projects/Project-Zero/Diagnostics/ProjectZero_Showcase.png`; the reference run is 1280×720, 12 bounce candidates and four spatial passes. The latest run completed in 18.1 seconds and produced SHA-256 `0835f41ca708cfd4d2493386187b752fe8f0ee48cf8a1e66b7deca39cde181b8`.
 
 This writes raw, enabled, `--no-denoise` and `--no-reprojection` A/B images, the UI-facing image, and a SHA-256 manifest. The source-contract gate remains useful for dispatch/barrier wiring:
 

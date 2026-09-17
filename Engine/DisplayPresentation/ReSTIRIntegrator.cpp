@@ -179,6 +179,14 @@ std::vector<MaterialDescriptor> ReSTIRIntegrator::BuildMaterialDescriptors(
 
     for (const auto& Material : Materials)
     {
+        if (Material.HasAuthoredDescriptor)
+        {
+            // The combined Showcase+MaterialGrid level carries the original authored descriptor, rather than
+            // collapsing transmission, subsurface, thin-film, fuzz and unlit channels into the old analytical
+            // Lambert fallback. Copying here keeps the default scene on the same ContentCodec/MaterialIndex path.
+            Records.push_back(Material.AuthoredDescriptor);
+            continue;
+        }
         MaterialDescriptor D;
         // The R2 fallback path keeps its pinned material_N names (see SceneCodecR4Test): object names ride the
         //    spans, not the materials, so the null-spans encode stays byte-identical.

@@ -3,10 +3,12 @@
 //============================================================================================================================================
 
 #include "RayTracingSolver.h"
+#include "../../../Engine/ContentInterchange/MaterialGridMaterials.h"
 #include <cmath>
 #include <limits>
 #include <algorithm>
 #include <random>
+#include <utility>
 
 namespace Frontier::ProjectZero {
 
@@ -821,6 +823,55 @@ void RayTracingSolver::ConstructShowcaseScene() noexcept
         Placed.push_back(Spot);
         ++Built;
     }
+
+    // M9 default-level integration: keep the original 100-object sunset field intact and add the material grid as
+    //    a foreground exhibit. It is not a replacement scene: this Showcase export still owns the sun/sky/cloud,
+    //    celestial, flare and scattered-shape presentation. The grid is appended after the original field, so the
+    //    old deterministic object set remains unchanged and is never replaced by a second level.
+    const std::vector<Frontier::MaterialDescriptor> GridMaterials = Frontier::ConstructMaterialGridMaterials();
+    const uint32_t GridMaterialBase = static_cast<uint32_t>(Materials.size());
+    for (uint32_t G = 0u; G < static_cast<uint32_t>(GridMaterials.size()); ++G)
+    {
+        const Frontier::MaterialDescriptor& D = GridMaterials[G];
+        const Frontier::MaterialSlabDescriptor& S = D.Slabs.front();
+        AnalyticalMaterial M{};
+        M.AlbedoColor = Vector3{ S.BaseWeight * S.BaseColor[0], S.BaseWeight * S.BaseColor[1], S.BaseWeight * S.BaseColor[2] };
+        M.EmissiveRadiance = Vector3{ S.EmissionLuminance * S.EmissionColor[0], S.EmissionLuminance * S.EmissionColor[1], S.EmissionLuminance * S.EmissionColor[2] };
+        M.RoughnessValue = S.SpecularRoughness;
+        M.MetallicValue = S.BaseMetalness;
+        M.MaterialIdentifier = GridMaterialBase + G;
+        M.AuthoredDescriptor = D;
+        M.HasAuthoredDescriptor = true;
+        Materials.push_back(std::move(M));
+    }
+
+    // The launch camera faces southwest from (0,-14,2.2). Put the 5×4 grid in that existing foreground sightline,
+    //    on the same soil plane as the old shapes. The world offset is only presentation placement; each cell remains
+    //    a unique authored descriptor and the default Showcase level remains the single imported scene.
+    // Shifted a little toward the camera's screen-right so the grid reads as a deliberate exhibit beside, not on top
+    //    of, the original scattered field.
+    constexpr float GridOffsetX = -12.5f;
+    constexpr float GridOffsetY = -18.6f;
+    constexpr float GridRadius = 0.72f;
+    constexpr float GridXStep = 2.40f;
+    constexpr float GridYStep = 2.22f;
+    uint32_t GridSlot = GridMaterialBase + 1u; // descriptor 0 is the existing-soil-compatible grid floor
+    for (uint32_t Row = 0u; Row < 4u; ++Row)
+        for (uint32_t Column = 0u; Column < 5u; ++Column, ++GridSlot)
+        {
+            const Vector3 Centre{
+                GridOffsetX - 4.8f + GridXStep * static_cast<float>(Column),
+                GridOffsetY - 1.45f + GridYStep * static_cast<float>(Row),
+                GridRadius
+            };
+            char GridName[96];
+            std::snprintf(GridName, sizeof(GridName), "Material Grid %u,%u · %s", Row + 1u, Column + 1u,
+                          GridMaterials[GridSlot - GridMaterialBase].Name.c_str());
+            const auto GridSpan = OpenSpan(GridName);
+            (void)GridSpan;
+            AppendSphere(Centre, GridRadius, 48u, 24u, GridSlot);
+        }
+
     BuildBvh();
 }
 

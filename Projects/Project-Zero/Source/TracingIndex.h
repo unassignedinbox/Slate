@@ -10,6 +10,7 @@
 
 #include "../../../Engine/DeviceExchange/OrientationClassifier.h"
 #include "../../../Engine/DeviceExchange/TriangleSpan.h"
+#include "../../../Engine/ContentInterchange/MaterialDescriptor.h"
 #include <cstdint>
 #include <vector>
 
@@ -26,6 +27,10 @@ struct AnalyticalMaterial
     float                   RoughnessValue;                     // [0..1] microfacet surface roughness
     float                   MetallicValue;                      // [0..1] conductor or dielectric parameter
     uint32_t                MaterialIdentifier;                 // [id] unique material index
+    // Optional authored descriptor used by the Showcase+MaterialGrid default level. Legacy analytical materials keep
+    //    the five fields above and continue through the pinned Lambert fallback in ReSTIRIntegrator.
+    Frontier::MaterialDescriptor AuthoredDescriptor;
+    bool                    HasAuthoredDescriptor = false;
 };
 
 //------------------------------------------------------------------------------------------------------------------------

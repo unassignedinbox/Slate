@@ -42,8 +42,8 @@ public:
     //    this is the framing complement — most of the default view misses geometry.
     void                    ConstructOutdoorScene() noexcept;
 
-    // Showcase: 100 analytical objects over soil with per-object spans. Additive to the pattern's scenes;
-    //    the only scene that builds the BVH below.
+    // Showcase: 100 analytical objects over soil plus the M9 5×4 authored material grid. The grid is additive to
+    //    the original sun/sky/celestial presentation; this remains the single default Showcase scene and BVH.
     void                    ConstructShowcaseScene() noexcept;
     void                    AppendTriangle(const Vector3& v0, const Vector3& v1, const Vector3& v2, uint32_t MaterialIdx) noexcept;
     void                    AppendQuad(const Vector3& v0, const Vector3& v1, const Vector3& v2, const Vector3& v3, uint32_t MaterialIdx) noexcept;

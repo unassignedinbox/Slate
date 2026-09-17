@@ -21,10 +21,12 @@ int main(int ArgumentCount, char** ArgumentValues)
     double SunHour = 17.93;
     double LensYaw = 220.0;
     double LensPitch = -2.0;
-    uint32_t ViewportWidth = 640;
-    uint32_t ViewportHeight = 480;
-    uint32_t BounceCount = 8;
-    uint32_t SpatialPasses = 2;
+    // High-quality default: the CPU reference now renders the combined Showcase + Material Grid level at the same
+    //    16:9 presentation size used by Project-Zero's window. CLI flags still allow quick smoke renders.
+    uint32_t ViewportWidth = 1280;
+    uint32_t ViewportHeight = 720;
+    uint32_t BounceCount = 12;
+    uint32_t SpatialPasses = 4;
     bool FlareEnabled = true;
     float FlareVariety = 0.0f;
     bool CloudShadows = true;
@@ -150,8 +152,8 @@ int main(int ArgumentCount, char** ArgumentValues)
     std::cout << "================================================================================\n";
     std::cout << "                 PROJECT-ZERO — RESTIR PHOTOMETRIC TEST GROUND                  \n";
     std::cout << "================================================================================\n";
-    std::cout << "[Project-Zero] Showcase: soil plain, one hundred analytical shapes, sunset sky,\n";
-    std::cout << "[Project-Zero] moon, stars, clouds, and ground mist through ReSTIR DI + GI.\n";
+    std::cout << "[Project-Zero] Showcase: soil plain, one hundred analytical shapes plus the 5x4 material grid,\n";
+    std::cout << "[Project-Zero] sunset sky, moon, stars, clouds, lens flare, and ground mist through ReSTIR DI + GI.\n";
 
     Frontier::DiagnosticConfiguration ReportConfig{};
     ReportConfig.DestinationFolder          = "Diagnostics";
