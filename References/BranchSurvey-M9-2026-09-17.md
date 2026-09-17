@@ -111,3 +111,66 @@ Trunk = this branch. Merge order: (a) af3e's swatch level + gates (adapted to th
 integration with its `RendererHost` shading replaced by the kernel-true structure. Then one
 `--scene` family: `materialgrid` (glTF, 18 archetypes), the outdoor field default, and the exhibits remain
 the proof layer. GPU render-verification stays user-side, as everywhere since K0.
+
+---
+
+# RE-REVIEW 2 — the branches as of 17 Sep ~16:00 (post-survey updates)
+
+## What changed since the first survey
+
+- **af43** added `MaterialLevelViewport.cpp` (905 lines) + 4 `MaterialLibrary_*.png` sheets: a Project-Zero
+  CPU viewport over `MaterialSwatchStructure` that is **kernel-true end to end** — records through
+  `MaterialIndex::Register/Finalise` + a transcription of the kernel's `ResolveMaterial`, the 1:1 BSDF,
+  **NEE on the level's six emissive triangles with power-heuristic MIS against the BSDF strategy**, the sun
+  as a disc light with **escape-direction MIS**, M4b Beer over interior segments, the SSS chord,
+  thin-wall continuation, and Project-Zero's own SkySpecification at the product staging. Their hero sheet
+  shows real reflections and studio lighting. **This is now the best-looking PZ-side render of any branch,
+  and it is the correct way to render.** Their denoise stack (97-check proof through the shader's own
+  `main()` + 7 sheets + include-time substitutions) stands as the best denoise artifact anywhere.
+- **af54** pushed `931f388` ("render authored materials in combined Showcase", minutes after my survey): a
+  path continuation with the real `EvaluateBsdf/SampleBsdf` on secondary rays. Their new
+  `ProjectZero_Showcase.png` is visibly better (chrome reflects), **but the constant-ambient term and the
+  point-direction sun remain**, so the wash persists — mid-tier, fixed skeleton.
+- **af3e** unchanged (`02f83bf`): still the best grid-as-scene level (16 materials, all 8 selections,
+  143-check gate) with the best material sheet.
+
+## Honest self-assessment — is the 01a0af3d work better?
+
+**Where this branch is ahead (uncontested):** the verified M-chain lineage itself; the **in-kernel
+two-stratum MIS** (sun/mesh arms at W_L + the pure-SSS virtual at W_B — no sibling implements the kernel
+MIS); `MaterialReuseProof` (§A–§D, bitwise ReSTIR-sync algebra); `SkyGlassProof` (seam parity vs
+`AtmosphereModel`, sun-arm parity, GI dome closure, foil invariant); the outdoor scene + 18-archetype grid
+with kernel-true transport; kernel compile verification (87763-word SPIR-V).
+
+**Where af43 is ahead (conceded):** the **denoiser**. This branch includes `AtrousDenoise.slang` 1:1 and
+proves the filter's algebra (§C identity/edge/fade gates) and its ToneMap, but the *rendered panels* are raw
+MC — **no denoise pass is applied to any pretty picture here**. af43 drives the shader's own `main()` through
+97 checks, ships 7 sheets, and does it with include-time substitutions that leave the GPU file byte-pristine
+(this branch edited the .slang in place with C++-compatible spellings — GLSL-identical and SPIR-V-verified,
+but a diff nonetheless). Their denoise work is better; integrate it.
+
+## The consolidation plan (user decision: trunk = 01a0af3d + af43's denoiser + af3e's features)
+
+1. **Trunk stays `arena/01a0af3d-slate`.** Cherry-pick **files**, not merges — all siblings branched from
+   M8, a merge would drag 60k+ lines of pre-chain kernel back in.
+2. **Port af43's denoise stack** (`DenoiseReprojectionProof.cpp`, `AtrousDenoiseMirror.{h,cpp}`,
+   `DenoiseCpuShim.h`, `CheckMaterialDenoise.sh`, 7 sheets) and **revert `AtrousDenoise.slang` to the pure
+   GPU spelling** (pre-edit text from the K5 commit) — one substitution layer, both proofs (§C of
+   `MaterialReuseProof` included) consume the shader through it. End state: pristine GPU file, the strongest
+   denoise gate, zero duplicated shims.
+3. **Apply the denoiser to the outdoor grid**: re-render the panels raw + à-trous-filtered (the filter's
+   first real scene) — "all features at once" preview ①.
+4. **Port af3e's `MaterialSwatchStructure`** (`--scene materialswatch` level + B-block gates), aligned to
+   the chain's `MaterialIndex` (same 304-B ABI — drop-in), its 16 materials reconciled with this branch's
+   18 archetypes (superset, all 8 selections).
+5. **Celestial features into the outdoor preview** (user ask): moon(s) via `MoonRecords` (real MoonControl
+   rows; the texture fetch stays stubbed — flat-tinted disc acceptable for preview), stars via
+   `PostRecords::StarAlong` with a small deterministic catalogue packed into `StarCells/StarStars`, lens
+   flare via `FlareAlong`, clouds/rainbow from the PZ SkyFog core (cloud shadow via `CloudShadow.slang`),
+   and the rainbow's rain gate exercised. One dusk panel: sun disc + aureole + flare + clouds + moon +
+   early stars + the material grid in front — "all features at once" preview ②.
+6. **af54**: adopt concepts only (the additive-grid default, A/B artifact hashes, the cloud-shadow hook);
+   do not merge the branch (pre-chain lineage, 60k-line conflicts, and its transport is now the weakest of
+   the three fixed renderers).
+
+Sequence: (2)→(3)→(5) on this branch immediately; (4) after; GPU render-verification user-side as always.
