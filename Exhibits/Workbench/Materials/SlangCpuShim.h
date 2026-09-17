@@ -43,12 +43,13 @@ struct vec4
     float x, y, z, w;
     struct Read3 { const float* a; const float* b; const float* c; operator vec3() const { return vec3(*a, *b, *c); } };
     Read3 xyz;
-    vec4() : x(0.0f), y(0.0f), z(0.0f), w(0.0f), xyz{ &x, &y, &z } {}
-    vec4(float s) : x(s), y(s), z(s), w(s), xyz{ &x, &y, &z } {}
-    vec4(float x_, float y_, float z_, float w_) : x(x_), y(y_), z(z_), w(w_), xyz{ &x, &y, &z } {}
-    vec4(const vec3& a, float b) : x(a.x), y(a.y), z(a.z), w(b), xyz{ &x, &y, &z } {}
-    vec4(const vec4& o) : x(o.x), y(o.y), z(o.z), w(o.w), xyz{ &x, &y, &z } {}
-    vec4(vec4&& o) noexcept : x(o.x), y(o.y), z(o.z), w(o.w), xyz{ &x, &y, &z } {}
+    Read3 rgb;   // M9: AtrousDenoise.slang reads .rgb — same three lanes, colour-named alias
+    vec4() : x(0.0f), y(0.0f), z(0.0f), w(0.0f), xyz{ &x, &y, &z }, rgb{ &x, &y, &z } {}
+    vec4(float s) : x(s), y(s), z(s), w(s), xyz{ &x, &y, &z }, rgb{ &x, &y, &z } {}
+    vec4(float x_, float y_, float z_, float w_) : x(x_), y(y_), z(z_), w(w_), xyz{ &x, &y, &z }, rgb{ &x, &y, &z } {}
+    vec4(const vec3& a, float b) : x(a.x), y(a.y), z(a.z), w(b), xyz{ &x, &y, &z }, rgb{ &x, &y, &z } {}
+    vec4(const vec4& o) : x(o.x), y(o.y), z(o.z), w(o.w), xyz{ &x, &y, &z }, rgb{ &x, &y, &z } {}
+    vec4(vec4&& o) noexcept : x(o.x), y(o.y), z(o.z), w(o.w), xyz{ &x, &y, &z }, rgb{ &x, &y, &z } {}
     vec4& operator=(const vec4& o) { x = o.x; y = o.y; z = o.z; w = o.w; return *this; }
     vec4& operator=(vec4&& o) noexcept { x = o.x; y = o.y; z = o.z; w = o.w; return *this; }
 };

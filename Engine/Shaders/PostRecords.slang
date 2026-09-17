@@ -24,6 +24,8 @@
 
 // 128 bytes, std140 — the mirror is PostConstantRecord, and its static_asserts pin every offset. Per-frame scalars
 //    only; the star tables are static and ride binding 23 instead.
+//    M9 seam: the CPU port declares the PostConstants members and the star tables as plain globals/arrays.
+#ifndef FRONTIER_CPU_PORT
 layout(std140, binding = 24) uniform PostConstants
 {
     vec4 PostStar;      // x = LST [deg], y = latitude [deg], z = point size [x], w = brightness (0 = off)
@@ -55,6 +57,7 @@ layout(std430, binding = 23) readonly buffer StarTable
     uvec2     StarCells[1024];   // (First, Count) into Stars[] per octahedral cell
     StarEntry StarStars[];
 };
+#endif // FRONTIER_CPU_PORT
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                     HELPERS

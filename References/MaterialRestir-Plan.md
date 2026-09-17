@@ -65,14 +65,18 @@ the R6/R7 ReSTIR (temporal + spatial reuse, alias pick, à-trous, adaptive expos
 sky/sun/atmosphere are in-tree. No cherry-pick portability discipline is needed anymore —
 but the kernel-wiring diffs vs the old R4b kernel are still recorded per phase where they matter.
 
-**Deferral (decided with the merge):** the à-trous **denoiser** and **motion-vector**
-temporal reprojection stay in-tree but default **off**
+**Deferral (decided with the merge) — and its correction:** the plan was for the à-trous
+**denoiser** and **motion-vector** temporal reprojection to stay in-tree but default **off**
 (`ReSTIRIntegratorConfiguration::Denoise = false`, `TemporalReprojection = false`, with the
-previously-missing `AssignTemporalReprojection` setter added). Rationale: new lobes are
-validated on raw accumulated images so the filter can never hide or fake lobe energy; motion
-vectors are still *produced* by R2, only their consumption is off. Both re-enable at M9 with
-the A/B proofs (converged image must match with and without). M9 is therefore a
-re-enable-and-validate milestone, not a branch sync.
+previously-missing `AssignTemporalReprojection` setter added), re-enabling at M9. **Correction
+(M9, 2026-09-17): the defaults were never actually flipped in code** — both are `= true` in
+`ReSTIRIntegrator.h` in this branch's baseline (since 2be1647), no caller overrides them
+(`ConfigurationRegistry` default-inits the struct; Project Zero only sets the level count),
+and the dispatch bits pass through untouched. The rationale still held in practice — new
+lobes were validated on raw accumulated images in the CPU proofs, and the A/B "converged
+image identical with and without" guarantees are carried by the §C/§D exhibit proofs
+(`MaterialReuseProof`) rather than a flag flip. M9 therefore reduced to: verify no caller
+overrides the defaults (done — see M9 below) + validate reuse/denoise over the new lobes.
 
 ## 2. Scope line
 
@@ -252,10 +256,20 @@ selection-switch retention test.
   0 multi-slab in 44 real materials; Sponza validate-if-present, absent here.)
 
 ### M9 — Re-enable milestone (denoiser + motion vectors back on)
-- Re-enable `Denoise` and `TemporalReprojection` (defaults back to true); validate the new
-  lobes under temporal + spatial reuse + à-trous (revalidation re-evaluates the BSDF — must
-  pick up BTDF/SSS automatically); A/B proofs (converged image identical with and without);
-  sky-backed outdoor glass proof.
+- ~~Re-enable `Denoise` and `TemporalReprojection` (defaults back to true)~~ — **resolved
+  2026-09-17:** the defaults were never off in code (both `= true` since 2be1647, no caller
+  overrides them — verified: registry default-init, passthrough FeatureFlags, Project Zero
+  sets only `AssignDenoiseLevelCount`); the plan's §1 deferral note carries the correction.
+- Validate the new lobes under temporal + spatial reuse + à-trous (revalidation re-evaluates
+  the BSDF — picks up BTDF/SSS automatically); A/B proofs (converged image identical with
+  and without); sky-backed outdoor glass proof.
+  (DONE in part 2026-09-17 — `Exhibits/Workbench/Materials/MaterialReuseProof.cpp` PASS:
+  §A carried-p̂ ReSTIR-sync bitwise revalidation; §B two-stratum MIS closure — the kernel
+  MIS scheduled here as "M9+" was implemented in-kernel this milestone (sun/mesh arms at
+  W_L, pure-SSS virtual walk at W_B, sky at weight 1) and proven on the CPU port; §C
+  à-trous converged-identity A/B 1:1 with `AtrousDenoise.slang`; §D ResolveSurface
+  reprojection A/B. Sky-backed outdoor glass proof pending — needs the Sky/Moon/Post
+  CPU-port seams.)
 
 ## 5. How each channel meets ReSTIR (integration points, all phases)
 

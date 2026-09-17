@@ -1288,7 +1288,15 @@ void main()
             {
                 vec3  sF = EvaluateBsdf(shading, layers, woLocal, sWi);   // below-branch: SSS (+ T when mixed)
                 float pPick = LightTriangleCount > 0u ? kSunPickProbability : 1.0;
-                accumulatedRadiance += sF * SunEmission() * sCos * SunSolidAngle() / pPick;
+                // M9: two-stratum MIS against the BSDF-sampled below arm (the dipole branch for pure SSS — the
+                //    M9 virtual walk below; the T arm for mixed). Power heuristic over the solid-angle measure:
+                //    pl = the sun candidate's density (pPick/Ω), pb = PdfBsdf at this wi (the dipole mass below,
+                //    furnace-pinned). pb = 0 can't happen here (SssMix > 0 gates the stratum), but the guard keeps
+                //    W = 1 if it ever does — the stratum then stays the exact pre-M9 estimator.
+                float sPl  = pPick / max(SunSolidAngle(), 1e-12);
+                float sPb  = PdfBsdf(shading, layers, woLocal, sWi);
+                float sMis = (sPl * sPl) / (sPl * sPl + sPb * sPb + 1e-12);
+                accumulatedRadiance += sF * SunEmission() * sCos * SunSolidAngle() / pPick * sMis;
             }
         }
         else
@@ -1309,8 +1317,15 @@ void main()
                 float sDist2 = sDist * sDist;
                 vec3  sF = EvaluateBsdf(shading, layers, woLocal, sWi);
                 float pMesh = sunUp ? 1.0 - kSunPickProbability : 1.0;
+                // M9: the same two-stratum MIS, mesh arm — pl is the candidate's solid-angle density
+                //    (pMesh·D²/(sSlots·Area·cosL); the estimator below is exactly f·L·cos/pl, so the weight
+                //    multiplies in clean). pb is the same PdfBsdf call the sun arm makes; the pairing (same
+                //    strata, same heuristic) is what makes the two arms one strategy.
+                float sPl = pMesh * sDist2 / (float(sSlots) * max(Luminaires[sLi].Area, 1e-12) * sCosL);
+                float sPb = PdfBsdf(shading, layers, woLocal, sWi);
+                float sMis = (sPl * sPl) / (sPl * sPl + sPb * sPb + 1e-12);
                 accumulatedRadiance += sF * LightEmission(sLi) * sCos * sCosL
-                                     * Luminaires[sLi].Area * float(sSlots) / ((sDist2 + 0.01) * pMesh);
+                                     * Luminaires[sLi].Area * float(sSlots) / ((sDist2 + 0.01) * pMesh) * sMis;
             }
         }
     }
@@ -1324,12 +1339,69 @@ void main()
         //    sample IS a cosine sample, but one extra random number is drawn for the lobe pick — the converged image is
         //    unchanged, the per-frame noise pattern is not.
         vec4 bounce = SampleBsdf(shading, layers, woLocal, vec4(RandFloat(seed), RandFloat(seed), RandFloat(seed), RandFloat(seed)));   // K1: u.w seeds the M4 R/T branch — vec3 never compiled
-        // M5 v2: dipole-virtuals die here — a below-bounce from a pure-SSS mat is a BSDF-sampled backlight
-        // direction, not a transport vertex, and the K5 light-sampled below-stratum already estimates that same
-        // integral every primary. Using one estimator and dropping the other is unbiased (just no variance
-        // reduction); collecting both without MIS would double-count. The CPU exhibit runs both strata WITH MIS
-        // (furnace-⑩) — the kernel follows when it grows MIS (M9+). One wasted sample, no ray traced.
-        if (bounce.w > 0.0 && !(bounce.z < 0.0 && layers.TransmitMix <= 0.0 && layers.SssMix > 0.0))
+        // M5 v2 → M9: dipole-virtuals are now COLLECTED, not dropped. A below-bounce from a pure-SSS mat is a
+        //    BSDF-sampled backlight direction, not a transport vertex — the K5 light-sampled below-stratum
+        //    estimates the same integral, and v2 shipped with the virtual killed (one estimator, unbiased, no
+        //    variance reduction; collecting both WITHOUT MIS would double-count — and for mixed T+SSS, where the
+        //    T arm owns below and its emitter hits are real transport, the K5 stratum at W = 1 DID overlap them).
+        //    M9 grows the kernel the exhibit's two-stratum MIS (furnace-⑩): K5 carries the light-stratum weight
+        //    W_L = pl²/(pl²+pb²), this walk carries the complement W_B = pb²/(pl²+pb²), sky takes weight 1 (the
+        //    light stratum has no density for it). RNG STREAM UNTOUCHED: the walk draws no random numbers, only
+        //    geometry — every other estimator's noise pattern is bit-preserved.
+        if (bounce.w > 0.0 && bounce.z < 0.0 && layers.TransmitMix <= 0.0 && layers.SssMix > 0.0)
+        {
+            vec3  vDir = FromLocal(frame, bounce.xyz);
+            vec3  vOrg = hitPos + vDir * 3e-4;   // pure ray offset (K4-analog — never lands on-surface)
+            float vPb  = max(bounce.w, 1e-12);   // the dipole branch's pdf (wSss·|cos|/π, furnace-pinned)
+            vec3  vLight = vec3(0.0);
+            float vPl    = 0.0;                  // light-stratum density [1/sr] of what the walk finds; 0 = none (sky)
+            bool  vFound = false;
+            for (uint vStep = 0u; vStep < 4u && !vFound; ++vStep)   // translucent see-through, the M4 shadow-walk bound
+            {
+                Hit vHit = TraceScene(Ray(vOrg, vDir));
+                if (!vHit.valid) break;
+                // A luminaire, hit on its EMITTING face (one-sided, like the shade term's cosL gate)? The walk
+                //    hit's (instance, primitive) pair matched against the DI table. Back-faces and plain
+                //    occluders are stepped past, exactly like the CPU exhibit's virtual walk.
+                bool vFront = dot(vDir, vHit.normal) < 0.0;
+                if (vFront)
+                {
+                    for (uint li = 0u; li < LightTriangleCount; ++li)
+                    {
+                        if (Luminaires[li].PrimitiveIndex == vHit.primitive && Luminaires[li].InstanceIndex == vHit.instance)
+                        {
+                            vec3  vToL  = vHit.pos - hitPos;
+                            float vD2   = dot(vToL, vToL);
+                            vec3  vLd   = vToL * inversesqrt(max(vD2, 1e-12));
+                            float vCosL = dot(LightNormal(li), -vLd);
+                            // The K5 mesh arm's density at THIS emitter point (same coin, same area pdf — the
+                            //    two weights must divide the same integral to be complements).
+                            float pMesh9 = sunUp ? 1.0 - kSunPickProbability : 1.0;
+                            vPl    = vCosL > 1e-3 ? pMesh9 * vD2 / (float(LightTriangleCount) * max(Luminaires[li].Area, 1e-12) * vCosL) : 0.0;
+                            vLight = LightEmission(li);
+                            vFound = true;
+                            break;
+                        }
+                    }
+                }
+                if (!vFound) vOrg = vHit.pos + vDir * 3e-4;
+            }
+            if (!vFound && sunUp && dot(vDir, SkySunDirection.xyz) >= cos(kSunAngularRadius))
+            {
+                // The escaped direction lands inside the sun disc — the sun candidate's density, as K5 draws it.
+                float pPick9 = LightTriangleCount > 0u ? kSunPickProbability : 1.0;
+                vPl    = pPick9 / max(SunSolidAngle(), 1e-12);
+                vLight = SunEmission();
+                vFound = true;
+            }
+            // f·|cos|/pdf over the below measure (K3's |cos| transport; pure SSS evaluates the dipole lobe only
+            //    below — furnace-⑧ exclusivity), firefly-clamped like the K4 arm, times the MIS weight.
+            vec3 vF = EvaluateBsdf(shading, layers, woLocal, bounce.xyz);
+            vec3 vW = min(vF * (-bounce.z / vPb), vec3(8.0));
+            float vMis = vFound ? (vPb * vPb) / (vPb * vPb + vPl * vPl + 1e-12) : 1.0;
+            accumulatedRadiance += vW * vLight * vMis;
+        }
+        else if (bounce.w > 0.0)
         {
             vec3 bounceDir = FromLocal(frame, bounce.xyz);
             // K4: medium entry — below-horizon exit from a solid primary crosses into the glass (CPU mirror: wi.z < 0

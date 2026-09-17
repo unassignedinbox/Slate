@@ -220,8 +220,11 @@ below-hemisphere backlight closes EXACTLY per view (E(wo) = mix·ρ·T·T_exit(�
 for pure-SSS mats; mixed T+SSS keeps the T arm owning below by exact-zero exclusivity — no flag needed, the
 dipole eval rides along in f); the opaque-below rule is selection-aware. The exhibit consumes dipole-virtuals
 by translucent see-through (skip non-emitters, bound 4, then environment — the BSDF-sampled twin of the
-light-sampled NEE-below, meeting in MIS); the kernel kills virtuals (its K5 light-stratum owns SSS-direct —
-collecting both without MIS would double-count; kernel MIS is M9+). v1's wrap is fully superseded (SssBeer /
+light-sampled NEE-below, meeting in MIS); at M9 the kernel stopped killing them: it grew the two-stratum
+MIS (K5 light-stratum at W_L = pl²/(pl²+pb²), the pure-SSS virtual walk at the complementary W_B, sky at
+weight 1 — the light stratum has no density for it), compile-verified (87721-word SPIR-V) and CPU-proven
+(`MaterialReuseProof` §B: W_L+W_B == 1 pointwise, wax closes 3.4σ, mixed balanced pair within joint MC
+noise). GPU render-verification of the applied weights still pending. v1's wrap is fully superseded (SssBeer /
 SssWrapBacklight removed — git keeps them); v1's ③ view-independence lock is deliberately replaced by the
 exit-shape lock. Bonus fix: v1's NEE-below ran at MIS 1, which silently double-counted mixed T+SSS (the T
 stratum also sampled below) — v2's two-strategy MIS closes that hole. Thickness stays the tracer-side per-hit
@@ -263,7 +266,11 @@ chord (reused unchanged, open-plane rule intact); r·s ≤ 0 stays opaque (the r
   `ResolveMaterial` (garbage-read UB); K3 below-horizon bounce gate + NEE-below for T; K4 M4b medium-stack
   tracing; K5 SSS/ch9 resolve + thickness raycast + the open-plane thickness rule.
 - **M6 displacement** (channel 20, acked as none).
-- **Denoiser + motion vectors** — parked by direction; after the material system, not inside it.
+- ~~**Denoiser + motion vectors** — parked by direction~~ RESOLVED 2026-09-17 (M9): the defaults were never
+  actually off in code (both `= true` in `ReSTIRIntegrator.h` since 2be1647; no caller overrides them), so
+  nothing needed flipping — the milestone reduced to validation. `MaterialReuseProof` carries the A/B
+  guarantees (§C converged à-trous identity, §D reprojection accumulator) plus the §B kernel-MIS closure.
+  Remaining M9 item: the sky-backed outdoor glass proof (needs the Sky/Moon/Post CPU-port seams).
 - ~~R-below-horizon mixture~~ DONE 2026-09-16 (block ①c): transmissive keeps below-horizon R/EON/coat samples
   with the full-mixture pdf (degenerate half-vector at wi = −wo guarded — old code NaN'd there). Post-fix
   analysis showed rejection was unbiased all along (the T-sampler covers every below-wi), so this was variance
@@ -521,5 +528,7 @@ multi-slab content — the C probes prove the fold handles it deterministically 
 5. ~~**M7a read-only inspector**~~ DONE 2026-09-17 (158/158 — see §7).
 6. ~~**M7b editable inspector**~~ DONE 2026-09-17 (229/229 — see §8).
 7. ~~**M8 Tier B + full-scene validation**~~ DONE 2026-09-17 (102/102 — see §9).
-8. **Denoiser + motion vectors** (parked per direction).
+8. ~~**Denoiser + motion vectors**~~ (was parked per direction) — RESOLVED 2026-09-17: defaults were never
+   off in code; validation done via `MaterialReuseProof` (PASS) + in-kernel two-stratum MIS. Sky-backed
+   outdoor glass proof pending (Sky/Moon/Post CPU-port seams).
 9. **GPU render-verification** (kernel K0–K5 + M5 v2 triptych + M7a/M7b pixels — needs a GPU runner).

@@ -25,6 +25,10 @@
 // 144 bytes, std140. Sized against Vulkan's guaranteed 128-byte push limit deliberately NOT applying here: the
 //    push block is already at that limit with five uint reserves left, and the sky needs 108 bytes of medium and
 //    control. A uniform buffer is the only place it fits, which is what the binding reservation anticipated.
+//
+//    M9 seam: the CPU port (FRONTIER_CPU_PORT) declares the same names as plain globals and includes this file
+//    1:1 — the MaterialEvaluation.slang pattern. The GPU text inside the guard is untouched.
+#ifndef FRONTIER_CPU_PORT
 layout(std140, binding = 21) uniform SkyConstants
 {
     vec4 SkySunDirection;    // xyz = unit, toward the sun (CelestialSolver's convention); w = elevation [deg]
@@ -37,6 +41,7 @@ layout(std140, binding = 21) uniform SkyConstants
     vec4 SkyTwilight;        // x = glow intensity, y = line intensity, z = 1 when the line is civil-only, w = shadow enabled 0/1
     vec4 SkySunDirect;       // xyz = panel direct-sun factor 0.11·gain·colour·T (kernel: ÷Ω, ×Ω back); w = unused
 };
+#endif // FRONTIER_CPU_PORT
 
 // The sun's angular RADIUS, one definition for the three consumers: the disc below draws this body, the
 //    viewport's next-event estimator samples it, and the CPU raster draws it a third time — a disc and a light

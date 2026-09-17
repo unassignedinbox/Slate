@@ -24,6 +24,10 @@
 
 // 288 bytes, std140 — the mirror is MoonConstantRecord, and its static_asserts pin every offset. Round 9 vacated
 //    21-24; the sky filled 21 and the moons fill 22. 23-24 stay reserved.
+//
+//    M9 seam: the CPU port declares the same names as plain globals (plus a stub Textures[] — with
+//    MoonControl.x = 0 the fetch below is unreachable, but the compiler still wants the symbol).
+#ifndef FRONTIER_CPU_PORT
 layout(std140, binding = 22) uniform MoonConstants
 {
     uvec4 MoonControl;       // x = moons drawn [0..4]
@@ -33,6 +37,7 @@ layout(std140, binding = 22) uniform MoonConstants
     vec4  MoonParams[4];     // x = angular RADIUS [rad], y = brightness, z = phase (0 = full), w = glow
     vec4  MoonSurface[4];    // x = spin [rad], y = tilt [rad], z = haze, w = gamma
 };
+#endif // FRONTIER_CPU_PORT
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                  THE DISCS AND THE LIGHT

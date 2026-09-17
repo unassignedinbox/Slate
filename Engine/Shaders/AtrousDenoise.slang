@@ -22,9 +22,13 @@
 // Variance is carried in the alpha channel and filtered alongside the colour with the SQUARE of the colour weights,
 //    which is the correct propagation for a weighted mean of independent samples.
 //
-// NOTE: GLSL source lowered by glslc -fshader-stage=compute.
+// NOTE: GLSL source lowered through the glslang frontend (the K0 compile story). No #version line — like every
+//    other shader in this folder, the lowering harness supplies the 460 core default, which also lets the CPU
+//    port include the file 1:1 (a #version directive cannot sit inside a preprocessor conditional).
 
-#version 460
+//    M9 seam: the CPU port (FRONTIER_CPU_PORT) supplies the images and push constants as plain globals and
+//    includes this file 1:1 — the MaterialEvaluation.slang pattern. GPU text inside the guard is untouched.
+#ifndef FRONTIER_CPU_PORT
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -36,7 +40,7 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 layout(set = 0, binding = 0, rgba32f) uniform readonly  image2D SourceImage;    // xyz = radiance, w = variance
 layout(set = 0, binding = 1, rgba32f) uniform writeonly image2D TargetImage;    // xyz = radiance, w = variance
 layout(set = 0, binding = 2, rgba16f) uniform readonly  image2D SurfaceImage;   // xyz = normal, w = depth (≤ 0 = none)
-layout(set = 0, binding = 3, rgba8)   uniform writeonly image2D OutputImage;   // tone-mapped presentation image (final level only)
+layout(set = 0, binding = 3, rgba8)   uniform writeonly image2D OutputImage;    // tone-mapped presentation image (final level only)
 
 layout(push_constant) uniform DenoiseConstants
 {
@@ -44,16 +48,17 @@ layout(push_constant) uniform DenoiseConstants
     uint  StepSize;           // [px]  tap spacing for this level: 1, 2, 4, 8, 16
     uint  Enabled;            // [-]   0 = straight copy, so the pass is an identity switch
 
-    float NormalPower;        // [-]   σn — exponent on the normal agreement
-    float DepthScale;         // [-]   σz — relative depth tolerance
-    float LuminanceScale;     // [-]   σl — how many standard deviations count as "the same"
-    float Exposure;           // [-]   applied by the final level's tone map
+    float NormalPower;        // [-]  σn — exponent on the normal agreement
+    float DepthScale;         // [-]  σz — relative depth tolerance
+    float LuminanceScale;     // [-]  σl — how many standard deviations count as "the same"
+    float Exposure;           // [-]  applied by the final level's tone map
 
-    uint  FinalLevel;         // [-]   1 = also tone-map into OutputImage
+    uint  FinalLevel;         // [-]  1 = also tone-map into OutputImage
     // A7d. Must match the kernel's: with the denoiser on, THIS is the tone map the viewer sees, and a
     //    saturation applied in only one of the two would change colour when the denoiser was toggled.
-    float ColourSaturation;   // [-]   1 in daylight, 0 under starlight
+    float ColourSaturation;   // [-]  1 in daylight, 0 under starlight
 };
+#endif // FRONTIER_CPU_PORT
 
 // R10 #9. The convergence threshold for the per-pixel early-out, as a VARIANCE. Expressed as the square of a
 //    fraction of an 8-bit quantisation step so the intent survives: below this, the pixel cannot move by enough
@@ -87,13 +92,15 @@ vec3 ToneMap(vec3 Hdr)
     const float Grey = dot(Hdr, vec3(0.2126, 0.7152, 0.0722));
     Hdr = mix(vec3(Grey), Hdr, clamp(ColourSaturation, 0.0, 1.0));
     Hdr *= Exposure;
-    return pow(vec3(AcesFilm(Hdr.r), AcesFilm(Hdr.g), AcesFilm(Hdr.b)), vec3(1.0 / 2.2));
+    return pow(vec3(AcesFilm(Hdr.x), AcesFilm(Hdr.y), AcesFilm(Hdr.z)), vec3(1.0 / 2.2));   // .xyz == .rgb — spelled C++-compatibly for the 1:1 CPU include
 }
 
 // The 5-tap B₃ spline kernel, separable: (1/16, 1/4, 3/8, 1/4, 1/16). The 2D weight is the outer product.
+//    (Brace initialisation, not GLSL's float[5](…) constructor: identical meaning in GLSL, and the only form
+//    that is also legal C++ — this file compiles 1:1 on the CPU port.)
 float KernelWeight(int Offset)
 {
-    const float Weights[5] = float[5](0.0625, 0.25, 0.375, 0.25, 0.0625);
+    const float Weights[5] = { 0.0625, 0.25, 0.375, 0.25, 0.0625 };
     return Weights[Offset + 2];
 }
 
@@ -103,7 +110,7 @@ float KernelWeight(int Offset)
 
 void main()
 {
-    ivec2 Pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 Pixel = ivec2(int(gl_GlobalInvocationID.x), int(gl_GlobalInvocationID.y));
     if (Pixel.x >= int(Extent.x) || Pixel.y >= int(Extent.y)) return;
 
     vec4 Centre = imageLoad(SourceImage, Pixel);
@@ -131,7 +138,7 @@ void main()
         {
             ivec2 Tap = clamp(Pixel + ivec2(X, Y), ivec2(0), ivec2(Extent) - 1);
             float W   = KernelWeight(X) * KernelWeight(Y);
-            VarianceSum    += imageLoad(SourceImage, Tap).a * W;
+            VarianceSum    += imageLoad(SourceImage, Tap).w * W;   // .w == alpha lane: the variance (same lane, .w spells it in C++ too)
             VarianceWeight += W;
         }
     float LocalVariance = VarianceWeight > 0.0 ? max(VarianceSum / VarianceWeight, 0.0) : 0.0;
@@ -207,7 +214,7 @@ void main()
             float Weight = Base * NormalWeight * DepthWeight * LuminanceWeight;
 
             ColourSum   += TapColour.rgb * Weight;
-            VarianceOut += TapColour.a   * Weight * Weight;        // variance of a weighted mean
+            VarianceOut += TapColour.w   * Weight * Weight;        // variance of a weighted mean (.w == the alpha lane)
             WeightSum   += Weight;
         }
     }
