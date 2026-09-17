@@ -98,12 +98,14 @@ vec3 BowSpectral(float Nanometres)
 //    by AtmosphericOptics::RainbowAngle itself (the bow probe in CheckPostKernel.sh re-derives them and the gate
 //    diffs), so these literals are pinned, not trusted. Primary red (700 nm) 0.74046 = 42.43°, secondary red
 //    0.87730 = 50.27° — the published figures, and note the secondary runs BACKWARD (extra reflection).
-const float kBowPrimary[14] = float[14](0.7038212, 0.7098362, 0.7148807, 0.7191508, 0.7227967, 0.7259333,
-                                        0.7286513, 0.7310209, 0.7330999, 0.7349327, 0.7365577, 0.7380037,
-                                        0.7392967, 0.7404578);
-const float kBowSecondary[14] = float[14](0.9434741, 0.9325821, 0.9234555, 0.9157355, 0.9091494, 0.9034860,
-                                          0.8985817, 0.8943064, 0.8905585, 0.8872540, 0.8843257, 0.8817198,
-                                          0.8793910, 0.8772995);
+//    (Brace initialisation, not GLSL's float[14](…) constructor: identical meaning in GLSL, and the only form
+//    that is also legal C++ — this file compiles 1:1 on the CPU port, same rule as the Atrous kernel weights.)
+const float kBowPrimary[14] = { 0.7038212, 0.7098362, 0.7148807, 0.7191508, 0.7227967, 0.7259333,
+                                0.7286513, 0.7310209, 0.7330999, 0.7349327, 0.7365577, 0.7380037,
+                                0.7392967, 0.7404578 };
+const float kBowSecondary[14] = { 0.9434741, 0.9325821, 0.9234555, 0.9157355, 0.9091494, 0.9034860,
+                                  0.8985817, 0.8943064, 0.8905585, 0.8872540, 0.8843257, 0.8817198,
+                                  0.8793910, 0.8772995 };
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                        STARS

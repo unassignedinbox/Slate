@@ -269,8 +269,10 @@ chord (reused unchanged, open-plane rule intact); r·s ≤ 0 stays opaque (the r
 - ~~**Denoiser + motion vectors** — parked by direction~~ RESOLVED 2026-09-17 (M9): the defaults were never
   actually off in code (both `= true` in `ReSTIRIntegrator.h` since 2be1647; no caller overrides them), so
   nothing needed flipping — the milestone reduced to validation. `MaterialReuseProof` carries the A/B
-  guarantees (§C converged à-trous identity, §D reprojection accumulator) plus the §B kernel-MIS closure.
-  Remaining M9 item: the sky-backed outdoor glass proof (needs the Sky/Moon/Post CPU-port seams).
+  guarantees (§C converged à-trous identity, §D reprojection accumulator) plus the §B kernel-MIS closure, and
+  `SkyGlassProof` (gate `CheckSkyGlassProof.sh`) closes the last M9 item: the sky-backed outdoor glass proof —
+  celestial records 1:1 over the host-packed record (seam parity vs `AtmosphereModel::Integrate`, the K5 sun
+  arm on the packed factor, the GI dome closure for wax/mixed/solid/foil, visual sheet to /tmp/SkyGlass_*.png).
 - ~~R-below-horizon mixture~~ DONE 2026-09-16 (block ①c): transmissive keeps below-horizon R/EON/coat samples
   with the full-mixture pdf (degenerate half-vector at wi = −wo guarded — old code NaN'd there). Post-fix
   analysis showed rejection was unbiased all along (the T-sampler covers every below-wi), so this was variance

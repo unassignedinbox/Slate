@@ -131,6 +131,7 @@ inline vec2  max(vec2 a, vec2 b) { return vec2(max(a.x, b.x), max(a.y, b.y)); }
 inline vec3  min(vec3 a, vec3 b) { return vec3(min(a.x, b.x), min(a.y, b.y), min(a.z, b.z)); }
 inline vec3  max(vec3 a, vec3 b) { return vec3(max(a.x, b.x), max(a.y, b.y), max(a.z, b.z)); }
 inline float abs(float x) { return x < 0.0f ? -x : x; }   // M4: |cos| in the transmission half-vector (GLSL abs, 1:1)
+inline double abs(double x) { return x < 0.0 ? -x : x; }  // M9: the celestial records mix un-suffixed literals (sin(θ·0.5+0.3) → double) — an exact double match keeps the set unambiguous
 inline vec3  abs(vec3 x) { return vec3(abs(x.x), abs(x.y), abs(x.z)); }
 inline vec3  log(vec3 x) { return vec3(std::log(x.x), std::log(x.y), std::log(x.z)); }   // M4: σ = −ln(color)/depth
 
@@ -152,3 +153,54 @@ inline float smoothstep(float e0, float e1, float x)
     float t = clamp((x - e0) / (e1 - e0), 0.0f, 1.0f);
     return t * t * (3.0f - 2.0f * t);
 }
+
+//------------------------------------------------------------------------------------------------------------------------
+//  M9 SKY SEAM — the scalar maths and the texture stubs the guarded celestial records read (SkyRecords /
+//  MoonRecords / PostRecords.slang under FRONTIER_CPU_PORT). ivec2/uvec2 stay OUT on purpose: the Atrous
+//  consumers define those in their own CpuPortMath namespace, and a second definition here would break them.
+//------------------------------------------------------------------------------------------------------------------------
+
+inline float degrees(float Rad) { return Rad * (180.0f / 3.14159265358979323846f); }
+inline float radians(float Deg) { return Deg * (3.14159265358979323846f / 180.0f); }
+inline float asin(float x) { return std::asin(x); }
+inline float acos(float x) { return std::acos(x); }
+inline float atan(float y, float x) { return std::atan2(y, x); }   // GLSL's two-argument form
+inline float atan(float x) { return std::atan(x); }
+inline float fract(float x) { return x - std::floor(x); }
+inline float floor(float x) { return std::floor(x); }
+
+inline vec3 operator+(float s, vec3 v) { return vec3(s + v.x, s + v.y, s + v.z); }
+inline vec3 operator-(vec3 v, float s) { return vec3(v.x - s, v.y - s, v.z - s); }
+inline vec3 operator-(float s, vec3 v) { return vec3(s - v.x, s - v.y, s - v.z); }
+
+struct uvec4
+{
+    unsigned int x, y, z, w;
+    uvec4() : x(0u), y(0u), z(0u), w(0u) {}
+    uvec4(unsigned int x_, unsigned int y_, unsigned int z_, unsigned int w_) : x(x_), y(y_), z(z_), w(w_) {}
+    unsigned int&  operator[](int I) { return (&x)[I]; }
+    const unsigned int& operator[](int I) const { return (&x)[I]; }
+};
+
+inline vec4 operator+(vec4 a, vec4 b) { return vec4(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w); }
+inline vec4 operator*(vec4 a, float s) { return vec4(a.x * s, a.y * s, a.z * s, a.w * s); }
+inline vec4 operator*(float s, vec4 a) { return vec4(s * a.x, s * a.y, s * a.z, s * a.w); }
+
+// Mixed-literal pow: the celestial records write pow(float, un-suffixed-literal) (pow(ndl, 0.8)), and a bare
+//    double argument is ambiguous between the shim's pow(float,float) and the C library's pow(double,double).
+inline float  pow(float x, double y) { return std::pow(x, float(y)); }
+inline double pow(double x, float y) { return std::pow(x, double(y)); }
+
+// The bindless-table seam: MoonAlong's fetch is unreachable with MoonControl.x = 0, but the symbols must exist.
+//    The texel is a dedicated struct (NOT a vec4) because the records read .rgb — a lane set the shim's vec4
+//    deliberately does not carry beyond the Atrous alias (the swizzle rule: xyz/w spellings elsewhere).
+struct sampler2D { int Slot = 0; };
+struct Texel
+{
+    float r = 0.0f, g = 0.0f, b = 0.0f, a = 1.0f;
+    struct Read3 { const float* a_; const float* b_; const float* c_; operator vec3() const { return vec3(*a_, *b_, *c_); } };
+    Read3 rgb{ &r, &g, &b };   // the records read textureLod(...).rgb — the vec3-convertible proxy, not a vec4 lane
+};
+inline Texel textureLod(sampler2D, vec2, float) { return Texel(); }
+inline Texel texture(sampler2D, vec2) { return Texel(); }
+inline int nonuniformEXT(int v) { return v; }   // the GPU's sub-uniform index hint — identity on the CPU port

@@ -268,11 +268,21 @@ selection-switch retention test.
   MIS scheduled here as "M9+" was implemented in-kernel this milestone (sun/mesh arms at
   W_L, pure-SSS virtual walk at W_B, sky at weight 1) and proven on the CPU port; §C
   à-trous converged-identity A/B 1:1 with `AtrousDenoise.slang`; §D ResolveSurface
-  reprojection A/B. Sky-backed outdoor glass proof pending — needs the Sky/Moon/Post
-  CPU-port seams; the Project-Zero material grid (merged from the parallel branch M9:
-  `MaterialGridStructure` + `--scene materialgrid`, 4×5 gallery) re-runs the channel set
-  through direct lighting, the shadow walk, and the one-bounce GI path with per-class
-  costs on the F3 diagnostics surface.)
+  reprojection A/B. Sky-backed outdoor glass proof DONE 2026-09-17 — `SkyGlassProof` (gate
+  `CheckSkyGlassProof.sh`): the Sky/Moon/Post CPU-port seams now have their consumer — the
+  guarded records included 1:1 over the host-packed record (PackSkyConstants): SkyRadiance ==
+  AtmosphereModel::Integrate over 400 directions (worst 3.2e-6 rel), the off-flag guards and
+  the w=0 disabled-sky signal exact, the K5 sun arm closes on disc MC over the packed
+  direct-sun factor, the GI sky-dome closure (one BSDF walk, escape → SkyAlong at W=1)
+  closes for wax / mixed T+SSS / solid glass / foil (joint 5σ — the visible disc's heavy MC
+  tail sits in both sides), and the visual sheet renders the panorama + the rig on black vs
+  sky-backed + the 1-spp frame (the noise the denoiser/reprojection own) to /tmp/SkyGlass_*.png.
+  En route the sky integral was restructured to the C++-legal spelling (SkyIntersect packs
+  Near/Far/hit into a vec3 return; SkyRadiance returns a SkySample struct — every call site
+  file-local, GPU-verified 87763-word SPIR-V). The Project-Zero material grid (merged from
+  the parallel branch M9: `MaterialGridStructure` + `--scene materialgrid`, 4×5 gallery)
+  re-runs the channel set through direct lighting, the shadow walk, and the one-bounce GI
+  path with per-class costs on the F3 diagnostics surface.)
 
 ## 5. How each channel meets ReSTIR (integration points, all phases)
 

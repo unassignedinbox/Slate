@@ -53,17 +53,18 @@ const float kSunAngularRadius = 0.53 * (3.14159265358979323846 / 180.0) * 0.5;
 //                                                    THE INTEGRAL
 //------------------------------------------------------------------------------------------------------------------------
 
-// Ray-sphere about the planet centre. Returns false on a miss; Near/Far may be negative and the caller clamps.
-bool SkyIntersect(vec3 Origin, vec3 Direction, float Radius, out float Near, out float Far)
+// Ray-sphere about the planet centre. x = Near, y = Far (either may be negative; the caller clamps), z = 1 on a
+//    hit / 0 on a miss. (Packed return instead of out-params: a vec return is the spelling that is valid GLSL
+//    AND legal C++ for the 1:1 CPU port — the same rule as the bow tables and the Atrous weights — and every
+//    call site is in this file, so nothing outside re-spells.)
+vec3 SkyIntersect(vec3 Origin, vec3 Direction, float Radius)
 {
     float B = dot(Origin, Direction);
     float C = dot(Origin, Origin) - Radius * Radius;
     float D = B * B - C;
-    if (D < 0.0) { Near = 0.0; Far = 0.0; return false; }
+    if (D < 0.0) return vec3(0.0, 0.0, 0.0);
     float S = sqrt(D);
-    Near = -B - S;
-    Far  = -B + S;
-    return true;
+    return vec3(-B - S, -B + S, 1.0);
 }
 
 // Single-scattering sky radiance along a direction, and the transmittance along it.
@@ -71,30 +72,42 @@ bool SkyIntersect(vec3 Origin, vec3 Direction, float Radius, out float Near, out
 //    Transcribed from AtmosphereModel::Integrate. The quadratic sample spacing (s*s below) is what makes 16
 //    samples look like far more: the near half of the ray holds nearly all the density, so uniform spacing
 //    wastes most of its samples in near-vacuum.
-vec3 SkyRadiance(vec3 Direction, out vec3 OutTransmittance, out bool OutHitGround)
+// The integral's whole answer in one value — the out-parameter form spelled as a struct, valid GLSL and legal
+//    C++ at once (the CPU-port rule above). Radiance, the per-channel transmittance the moons ride, and whether
+//    the ray met the planet (every disc/star/twilight term gates on it).
+struct SkySample
 {
-    OutTransmittance = vec3(1.0);
-    OutHitGround = false;
-    if (SkySunRadiance.w <= 0.0) return vec3(0.0);
+    vec3 Radiance;
+    vec3 Transmittance;
+    bool HitGround;
+};
+
+SkySample SkyRadiance(vec3 Direction)
+{
+    SkySample Out;
+    Out.Transmittance = vec3(1.0);
+    Out.HitGround = false;
+    Out.Radiance = vec3(0.0);
+    if (SkySunRadiance.w <= 0.0) return Out;
 
     float PlanetRadius = SkyPlanet.x;
     float TopRadius    = PlanetRadius + SkyPlanet.y;
     vec3  Origin       = vec3(0.0, 0.0, PlanetRadius + max(SkyPlanet.z, 0.0));
 
-    float Near, Far;
-    if (!SkyIntersect(Origin, Direction, TopRadius, Near, Far) || Far < 0.0) return vec3(0.0);
+    vec3 Top = SkyIntersect(Origin, Direction, TopRadius);
+    if (Top.z < 0.5 || Top.y < 0.0) return Out;
 
-    float Start = max(Near, 0.0);
-    float End   = Far;
+    float Start = max(Top.x, 0.0);
+    float End   = Top.y;
 
     // A ray that meets the ground stops there — everything beyond is rock, not air.
-    float GroundNear, GroundFar;
-    if (SkyIntersect(Origin, Direction, PlanetRadius, GroundNear, GroundFar) && GroundNear > 0.0)
+    vec3 Ground = SkyIntersect(Origin, Direction, PlanetRadius);
+    if (Ground.z > 0.5 && Ground.x > 0.0)
     {
-        End = GroundNear;
-        OutHitGround = true;
+        End = Ground.x;
+        Out.HitGround = true;
     }
-    if (End <= Start) return vec3(0.0);
+    if (End <= Start) return Out;
 
     vec3  BetaR = SkyRayleigh.xyz;
     float BetaM = SkyMie.x;
@@ -135,8 +148,8 @@ vec3 SkyRadiance(vec3 Direction, out vec3 OutTransmittance, out bool OutHitGroun
         OpticalR += DensityR;
         OpticalM += DensityM;
 
-        float LightNear, LightFar;
-        if (!SkyIntersect(P, SkySunDirection.xyz, TopRadius, LightNear, LightFar)) continue;
+        vec3 Light = SkyIntersect(P, SkySunDirection.xyz, TopRadius);
+        if (Light.z < 0.5) continue;
 
         float LightR = 0.0, LightM = 0.0;
         bool  Lit = true;
@@ -145,8 +158,8 @@ vec3 SkyRadiance(vec3 Direction, out vec3 OutTransmittance, out bool OutHitGroun
             float Q0 = float(J)      / float(NL);
             float Q1 = float(J + 1u) / float(NL);
             Q0 *= Q0; Q1 *= Q1;
-            float SegL = LightFar * (Q1 - Q0);
-            float Tq   = LightFar * 0.5 * (Q0 + Q1);
+            float SegL = Light.y * (Q1 - Q0);
+            float Tq   = Light.y * 0.5 * (Q0 + Q1);
             vec3  Q    = P + SkySunDirection.xyz * Tq;
             float Hq   = length(Q) - PlanetRadius;
             if (Hq < 0.0) { Lit = false; break; }
@@ -162,8 +175,9 @@ vec3 SkyRadiance(vec3 Direction, out vec3 OutTransmittance, out bool OutHitGroun
         SumM += Attenuation * DensityM;
     }
 
-    OutTransmittance = exp(-(BetaR * OpticalR + BetaM * 1.1 * OpticalM + BetaO * OpticalR));
-    return (SumR * BetaR * PhaseR + SumM * BetaM * PhaseM) * SkySunRadiance.xyz;
+    Out.Transmittance = exp(-(BetaR * OpticalR + BetaM * 1.1 * OpticalM + BetaO * OpticalR));
+    Out.Radiance = (SumR * BetaR * PhaseR + SumM * BetaM * PhaseM) * SkySunRadiance.xyz;
+    return Out;
 }
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -237,9 +251,10 @@ vec3 SkyTwilightGlow(vec3 Direction)
 vec3 SkyAlong(vec3 Direction)
 {
     if (SkySunRadiance.w <= 0.0) return vec3(0.0);
-    vec3 Transmittance;
-    bool HitGround;
-    vec3 Radiance = SkyRadiance(Direction, Transmittance, HitGround);
+    SkySample March = SkyRadiance(Direction);
+    vec3 Transmittance = March.Transmittance;
+    bool HitGround = March.HitGround;
+    vec3 Radiance = March.Radiance;
     // Aureole compression. Art-directed, twilight precedent: the single-scatter integral near the sun reaches
     //    ~1.5 linear and the ACES curve renders that as near-white — no edge survives, so the sun reads as a
     //    faded blob with no disk. The reference caps its halo the same way ("normalised to its own peak, so it
