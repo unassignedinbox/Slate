@@ -26,7 +26,8 @@ struct PhotometricReservoir
     Vector3                 SampledRadiance;                    // [lux] candidate radiant flux
     float                   WeightSum;                          // [-] accumulated candidate weights
     uint32_t                SampleCount;                        // [count] considered candidate count M
-    float                   UnbiasedWeight;                     // [-] normalization weight W
+    float                   UnbiasedWeight;                     // [-]   normalization weight W
+    float                   SelectedTarget;                      // [-]   target function of the retained candidate
 
     void ResampleCandidate(const Vector3& LightPoint, const Vector3& Radiance, float Weight, float RandomScalar) noexcept
     {
@@ -36,6 +37,7 @@ struct PhotometricReservoir
         {
             SampledLightPoint = LightPoint;
             SampledRadiance   = Radiance;
+            SelectedTarget    = Weight;
         }
     }
 };

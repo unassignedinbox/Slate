@@ -3,6 +3,7 @@
 //============================================================================================================================================
 
 #include "RendererHost.h"
+#include "CpuMaterialShading.h"
 #include <fstream>
 #include <cmath>
 #include <algorithm>
@@ -106,6 +107,28 @@ void RendererHost::RenderShowcaseFrame(const Frontier::CameraProjection& ActiveC
     SkyFog.AssignCloudShadow(CloudShadows, CloudTime, CloudType, CloudCoverage, CloudScale, CloudBase, CloudThickness, CloudDensity);
 
     const auto& Materials = Scene.QueryMaterials();
+    // Authored showcase/grid records stay on the same OpenPBR/MaterialEvaluation.slang CPU path as the GPU
+    // material descriptors. Legacy analytical objects retain their historical Lambert fallback below.
+    std::vector<CpuMaterial::ShadingRecord> AuthoredRecords(Materials.size());
+    std::vector<uint8_t> HasAuthoredMaterial(Materials.size(), 0u);
+    std::vector<uint8_t> AuthoredUnlit(Materials.size(), 0u);
+    uint32_t AuthoredCount = 0u;
+    uint32_t TransmissionCount = 0u;
+    uint32_t SubsurfaceCount = 0u;
+    for (size_t MaterialIndex = 0u; MaterialIndex < Materials.size(); ++MaterialIndex)
+    {
+        if (!Materials[MaterialIndex].HasAuthoredDescriptor || Materials[MaterialIndex].AuthoredDescriptor.Slabs.empty()) continue;
+        const auto& Descriptor = Materials[MaterialIndex].AuthoredDescriptor;
+        AuthoredRecords[MaterialIndex] = CpuMaterial::BuildRecord(Descriptor);
+        HasAuthoredMaterial[MaterialIndex] = 1u;
+        AuthoredUnlit[MaterialIndex] = CpuMaterial::IsUnlit(Descriptor) ? 1u : 0u;
+        ++AuthoredCount;
+        const auto& Slab = Descriptor.Slabs.front();
+        if (Slab.TransmissionWeight > 0.0f) ++TransmissionCount;
+        if (Slab.SubsurfaceWeight > 0.0f) ++SubsurfaceCount;
+    }
+    std::printf("[Project-Zero CPU] authored materials=%u transmission=%u subsurface=%u; MaterialEvaluation.slang + ReSTIR DI/GI + M9 presentation active\n",
+                AuthoredCount, TransmissionCount, SubsurfaceCount);
     const Vector3 SunWorld = SkyFog.QuerySunDirectionWorld();
     const Vector3 SunRadiance = SkyFog.QuerySunRadiance();
     const Vector3 MoonWorld = SkyFog.QueryMoonDirectionWorld();
@@ -133,6 +156,7 @@ void RendererHost::RenderShowcaseFrame(const Frontier::CameraProjection& ActiveC
         {
             size_t idx = y * Width + x;
             const auto& Hit = PrimaryHits[idx];
+            const RayStructure PrimaryRay = GeneratePrimaryRay(ActiveCamera, x, y, 0.5f, 0.5f);
 
             if (!Hit.ValidCondition)
             {
@@ -140,18 +164,68 @@ void RendererHost::RenderShowcaseFrame(const Frontier::CameraProjection& ActiveC
             }
 
             const auto& Mat = Materials[Hit.MaterialIndex];
-            float SunCos = std::max(0.0f, OrientationClassifier::DotProduct(Hit.SurfaceNormal, SunWorld));
-            float SunVisible = Scene.EvaluateOcclusion(Hit.HitLocation + Hit.SurfaceNormal * 0.001f, Hit.HitLocation + SunWorld * 1000.0f) ? 0.0f : 1.0f;
-            float MoonCos = std::max(0.0f, OrientationClassifier::DotProduct(Hit.SurfaceNormal, MoonWorld));
-            float MoonVisible = Scene.EvaluateOcclusion(Hit.HitLocation + Hit.SurfaceNormal * 0.001f, Hit.HitLocation + MoonWorld * 1000.0f) ? 0.0f : 1.0f;
-            float CloudShade = SkyFog.QueryCloudShadow(Hit.HitLocation, SunWorld);
-            const float Emission = Mat.EmissiveRadiance.x + Mat.EmissiveRadiance.y + Mat.EmissiveRadiance.z;
-            // The combined CPU reference keeps the authored grid luminaire visible without turning the legacy
-            // diffuse ReSTIR proof into a second area-light integrator. The Vulkan path samples this same descriptor
-            // through the normal emissive/luminaire table.
-            DirectLight[idx] = Emission > 0.0f
-                             ? Mat.EmissiveRadiance
-                             : Mat.AlbedoColor * (SunRadiance * (SunCos * SunVisible * CloudShade) + MoonRadiance * (MoonCos * MoonVisible));
+            const float SunCos = std::max(0.0f, OrientationClassifier::DotProduct(Hit.SurfaceNormal, SunWorld));
+            const float SunVisible = Scene.EvaluateOcclusion(Hit.HitLocation + Hit.SurfaceNormal * 0.001f, Hit.HitLocation + SunWorld * 1000.0f) ? 0.0f : 1.0f;
+            const float MoonCos = std::max(0.0f, OrientationClassifier::DotProduct(Hit.SurfaceNormal, MoonWorld));
+            const float MoonVisible = Scene.EvaluateOcclusion(Hit.HitLocation + Hit.SurfaceNormal * 0.001f, Hit.HitLocation + MoonWorld * 1000.0f) ? 0.0f : 1.0f;
+            const float CloudShade = SkyFog.QueryCloudShadow(Hit.HitLocation, SunWorld);
+            PhotometricReservoir DirectReservoir{};
+            Vector3 SunCandidate{ 0.0f, 0.0f, 0.0f };
+            Vector3 MoonCandidate{ 0.0f, 0.0f, 0.0f };
+            Vector3 BackCandidate{ 0.0f, 0.0f, 0.0f };
+            const bool Authored = Hit.MaterialIndex < HasAuthoredMaterial.size() && HasAuthoredMaterial[Hit.MaterialIndex] != 0u;
+            const bool Unlit = Authored && AuthoredUnlit[Hit.MaterialIndex] != 0u;
+            if (Authored)
+            {
+                const auto& Record = AuthoredRecords[Hit.MaterialIndex];
+                const Vector3 View = Vector3{ -PrimaryRay.RayDirection.x, -PrimaryRay.RayDirection.y, -PrimaryRay.RayDirection.z };
+                if (Unlit)
+                {
+                    DirectLight[idx] = Mat.AlbedoColor + Mat.EmissiveRadiance;
+                    DirectReservoirs[idx] = DirectReservoir;
+                    continue;
+                }
+                const Vector3 SunF = CpuMaterial::Evaluate(Record, Hit.SurfaceNormal, View, SunWorld);
+                const Vector3 MoonF = CpuMaterial::Evaluate(Record, Hit.SurfaceNormal, View, MoonWorld);
+                SunCandidate = SunF * SunRadiance * (SunVisible * CloudShade);
+                MoonCandidate = MoonF * MoonRadiance * MoonVisible;
+
+                // Transmission and M5 SSS are below-surface arms of the same MaterialEvaluation.slang record. The
+                // sky supplies the CPU reference's missing far-side visibility; this is not a flat base-colour path.
+                const Vector3 Back = Vector3{ -Hit.SurfaceNormal.x, -Hit.SurfaceNormal.y, -Hit.SurfaceNormal.z };
+                const Vector3 ThroughF = CpuMaterial::Evaluate(Record, Hit.SurfaceNormal, View, Back);
+                const Vector3 BackSky = SkyFog.ComputeSkyRadiance(SkyFogIntegrator::RenderFromWorld(Back));
+                BackCandidate = ThroughF * BackSky;
+            }
+            else
+            {
+                // Legacy analytical shapes keep their original pinned Lambert material response, but still pass their
+                // sun and moon candidates through the same CPU DI reservoir as the authored grid.
+                SunCandidate = Mat.AlbedoColor * (SunRadiance * (SunCos * SunVisible * CloudShade));
+                MoonCandidate = Mat.AlbedoColor * (MoonRadiance * (MoonCos * MoonVisible));
+            }
+
+            const auto Target = [](const Vector3& Value) noexcept
+            {
+                return std::max(0.0f, 0.2126f * Value.x + 0.7152f * Value.y + 0.0722f * Value.z);
+            };
+            const float SunTarget = Target(SunCandidate);
+            const float MoonTarget = Target(MoonCandidate);
+            const float BackTarget = Target(BackCandidate);
+            DirectReservoir.ResampleCandidate(Hit.HitLocation + SunWorld * 1000.0f, SunCandidate, SunTarget, Dist(Rng));
+            DirectReservoir.ResampleCandidate(Hit.HitLocation + MoonWorld * 1000.0f, MoonCandidate, MoonTarget, Dist(Rng));
+            if (Authored) DirectReservoir.ResampleCandidate(Hit.HitLocation - Hit.SurfaceNormal, BackCandidate, BackTarget, Dist(Rng));
+            if (DirectReservoir.SampleCount > 0u && DirectReservoir.SelectedTarget > 1e-7f)
+            {
+                DirectReservoir.UnbiasedWeight = DirectReservoir.WeightSum /
+                                                  (static_cast<float>(DirectReservoir.SampleCount) * DirectReservoir.SelectedTarget);
+                DirectLight[idx] = Mat.EmissiveRadiance + DirectReservoir.SampledRadiance * DirectReservoir.UnbiasedWeight;
+            }
+            else
+            {
+                DirectLight[idx] = Mat.EmissiveRadiance + SunCandidate + MoonCandidate + BackCandidate;
+            }
+            DirectReservoirs[idx] = DirectReservoir;
         }
     }
 
@@ -187,7 +261,21 @@ void RendererHost::RenderShowcaseFrame(const Frontier::CameraProjection& ActiveC
                     float BounceMoonCos = std::max(0.0f, OrientationClassifier::DotProduct(BounceHit.SurfaceNormal, MoonWorld));
                     float BounceMoonVis = Scene.EvaluateOcclusion(BounceHit.HitLocation + BounceHit.SurfaceNormal * 0.001f, BounceHit.HitLocation + MoonWorld * 1000.0f) ? 0.0f : 1.0f;
                     float BounceCloudShade = SkyFog.QueryCloudShadow(BounceHit.HitLocation, SunWorld);
-                    BounceRadiance = BounceMat.AlbedoColor * (SunRadiance * (BounceSunCos * BounceSunVis * BounceCloudShade) + MoonRadiance * (BounceMoonCos * BounceMoonVis) + SkyAmbient);
+                    if (BounceHit.MaterialIndex < HasAuthoredMaterial.size() && HasAuthoredMaterial[BounceHit.MaterialIndex] != 0u &&
+                        AuthoredUnlit[BounceHit.MaterialIndex] == 0u)
+                    {
+                        const auto& BounceRecord = AuthoredRecords[BounceHit.MaterialIndex];
+                        const Vector3 BounceView = Vector3{ -BounceDir.x, -BounceDir.y, -BounceDir.z };
+                        const Vector3 SunF = CpuMaterial::Evaluate(BounceRecord, BounceHit.SurfaceNormal, BounceView, SunWorld);
+                        const Vector3 MoonF = CpuMaterial::Evaluate(BounceRecord, BounceHit.SurfaceNormal, BounceView, MoonWorld);
+                        BounceRadiance = SunF * SunRadiance * (BounceSunVis * BounceCloudShade)
+                                       + MoonF * MoonRadiance * BounceMoonVis
+                                       + SkyAmbient;
+                    }
+                    else
+                    {
+                        BounceRadiance = BounceMat.AlbedoColor * (SunRadiance * (BounceSunCos * BounceSunVis * BounceCloudShade) + MoonRadiance * (BounceMoonCos * BounceMoonVis) + SkyAmbient);
+                    }
                     BouncePos = BounceHit.HitLocation;
                     BounceNormal = BounceHit.SurfaceNormal;
                 }
@@ -384,7 +472,14 @@ void RendererHost::RenderShowcaseFrame(const Frontier::CameraProjection& ActiveC
             }
 
             const auto& HitMat = Materials[Hit.MaterialIndex];
-            Vector3 Surface = DirectLight[idx] + HitMat.AlbedoColor * FilteredIndirect[idx];
+            Vector3 Surface;
+            if (Hit.MaterialIndex < HasAuthoredMaterial.size() && HasAuthoredMaterial[Hit.MaterialIndex] != 0u &&
+                AuthoredUnlit[Hit.MaterialIndex] == 0u)
+                Surface = DirectLight[idx] + CpuMaterial::IndirectAlbedo(AuthoredRecords[Hit.MaterialIndex]) * FilteredIndirect[idx];
+            else if (Hit.MaterialIndex < HasAuthoredMaterial.size() && AuthoredUnlit[Hit.MaterialIndex] != 0u)
+                Surface = DirectLight[idx];
+            else
+                Surface = DirectLight[idx] + HitMat.AlbedoColor * FilteredIndirect[idx];
             Vector3 Aerial = SkyFog.ApplyAerialPerspective(Surface, RenderOrigin, RenderDir, Hit.RayDistance);
             const Vector3 MidPoint = PrimaryRay.SpatialOrigin + PrimaryRay.RayDirection * (Hit.RayDistance * 0.5f);
             float FogVisible = Scene.EvaluateOcclusion(MidPoint, MidPoint + FogLightWorld * 1000.0f) ? 0.0f : 1.0f;

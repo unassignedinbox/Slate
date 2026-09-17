@@ -13,11 +13,12 @@ SRCS := \
 	Source/SkyFogIntegrator.cpp \
 	../../Engine/GeometricRaster/CameraProjection.cpp \
 	../../Engine/DeviceExchange/OrientationClassifier.cpp \
-	../../Engine/DeviceExchange/DiagnosticMetrics.cpp
+	../../Engine/DeviceExchange/DiagnosticMetrics.cpp \
+	../../Engine/DisplayPresentation/ShadingTableCodec.cpp
 
 OBJS := $(addprefix $(OBJDIR)/,$(notdir $(SRCS:.cpp=.o)))
 
-vpath %.cpp Source ../../Engine/GeometricRaster ../../Engine/DeviceExchange
+vpath %.cpp Source ../../Engine/GeometricRaster ../../Engine/DeviceExchange ../../Engine/DisplayPresentation
 
 .PHONY: all clean run
 
