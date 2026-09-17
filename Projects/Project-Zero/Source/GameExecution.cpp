@@ -47,6 +47,7 @@
 #include "../../../Engine/SpatialInterface/InterfaceTextProjection.h"
 #include "../../../Engine/SpatialInterface/InterfaceVectorCodec.h"
 #include "../../../Engine/SpatialInterface/InterfaceLightProjection.h"
+#include "../../../Engine/ContentInterchange/MaterialGridStructure.h"
 
 #include <algorithm>
 #include <chrono>
@@ -84,6 +85,7 @@ int main(int argc, char** argv)
     if (ScenePath == "showcase")   ScenePath = "Projects/Project-Zero/Content/Scenes/Showcase.gltf";
     bool DropScene = false;
     if (ScenePath == "drop") { ScenePath = "Projects/Project-Zero/Content/Scenes/ShowroomDrop.gltf"; DropScene = true; }   // D4 physics level
+    if (ScenePath == "materialgrid") ScenePath = "Projects/Project-Zero/Content/Scenes/MaterialGrid.gltf"; // channel coverage exhibit
 
     //──────────────────────────────────────────────────────────────────────────
     // Telemetry sink
@@ -182,6 +184,14 @@ int main(int argc, char** argv)
             Frontier::ProjectZero::ShowroomStructure Showroom; Showroom.Construct(DropScene ? kDropBodyCount : 0u);
             if (Showroom.Export(ScenePath, &Error)) std::cerr << "[Scene] Exported the showroom level to " << ScenePath << "\n";
             else                                    std::cerr << "[Scene] Showroom export failed: " << Error << "\n";
+        const bool IsMaterialGrid = ScenePath.find("MaterialGrid.gltf") != std::string::npos;
+        if (IsMaterialGrid && !std::filesystem::exists(ScenePath, FsError))
+        {
+            std::filesystem::create_directories(std::filesystem::path(ScenePath).parent_path(), FsError);
+            std::string Error;
+            Frontier::MaterialGridStructure Grid; Grid.Construct();
+            if (Grid.Export(ScenePath, &Error)) std::cerr << "[Scene] Exported the material-channel grid to " << ScenePath << "\n";
+            else                                      std::cerr << "[Scene] Material-channel grid export failed: " << Error << "\n";
         }
     }
 
@@ -392,6 +402,12 @@ int main(int argc, char** argv)
         //    reflection are both in shot the moment the level opens.
         Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -1.70f, 1.45f });
         Camera.AssignOrientationEuler(0.0f, 0.0f, 0.0f);
+    else if (Level.QueryName() == "MaterialGrid")
+    {
+        // Channel grid: the 11 m wide, four-row gallery needs a slightly wider establishing view than ShaderBall.
+        Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -7.5f, 3.0f });
+        Camera.AssignOrientationEuler(-17.0f * 3.14159265f / 180.0f, 0.0f, 0.0f);
+        Camera.AssignFieldOfView(60.0f);
     }
     else if (Level.QueryName() != "CornellBox")
     {

@@ -269,7 +269,10 @@ selection-switch retention test.
   W_L, pure-SSS virtual walk at W_B, sky at weight 1) and proven on the CPU port; §C
   à-trous converged-identity A/B 1:1 with `AtrousDenoise.slang`; §D ResolveSurface
   reprojection A/B. Sky-backed outdoor glass proof pending — needs the Sky/Moon/Post
-  CPU-port seams.)
+  CPU-port seams; the Project-Zero material grid (merged from the parallel branch M9:
+  `MaterialGridStructure` + `--scene materialgrid`, 4×5 gallery) re-runs the channel set
+  through direct lighting, the shadow walk, and the one-bounce GI path with per-class
+  costs on the F3 diagnostics surface.)
 
 ## 5. How each channel meets ReSTIR (integration points, all phases)
 
