@@ -46,6 +46,9 @@ public:
     //    the original sun/sky/celestial presentation; this remains the single default Showcase scene and BVH.
     void                    ConstructShowcaseScene() noexcept;
     void                    AppendTriangle(const Vector3& v0, const Vector3& v1, const Vector3& v2, uint32_t MaterialIdx) noexcept;
+    void                    AppendSmoothTriangle(const Vector3& v0, const Vector3& v1, const Vector3& v2,
+                                                 const Vector3& n0, const Vector3& n1, const Vector3& n2,
+                                                 uint32_t MaterialIdx) noexcept;
     void                    AppendQuad(const Vector3& v0, const Vector3& v1, const Vector3& v2, const Vector3& v3, uint32_t MaterialIdx) noexcept;
     void                    AppendBox(const Vector3& Center, const Vector3& Extents, float RotationDegrees, uint32_t MaterialIdx) noexcept;
 

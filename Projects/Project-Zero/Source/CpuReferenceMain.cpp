@@ -28,6 +28,8 @@ int main(int ArgumentCount, char** ArgumentValues)
     uint32_t BounceCount = 12;
     uint32_t SpatialPasses = 4;
     bool FlareEnabled = true;
+    bool DenoiseEnabled = true;
+    bool ReprojectionEnabled = true;
     float FlareVariety = 0.0f;
     bool CloudShadows = true;
     float CloudTime = Frontier::kCloudShadowShowcaseDiorama.TimeSeconds;
@@ -76,6 +78,14 @@ int main(int ArgumentCount, char** ArgumentValues)
         else if (Arg == "--flarevar" && i + 1 < ArgumentCount)
         {
             FlareVariety = static_cast<float>(std::atof(ArgumentValues[++i]));
+        }
+        else if (Arg == "--no-denoise")
+        {
+            DenoiseEnabled = false;
+        }
+        else if (Arg == "--no-reprojection")
+        {
+            ReprojectionEnabled = false;
         }
         else if (Arg == "--fog" && i + 1 < ArgumentCount)
         {
@@ -179,6 +189,8 @@ int main(int ArgumentCount, char** ArgumentValues)
 
     std::cout << "[Project-Zero] Viewport: " << ViewportWidth << "x" << ViewportHeight << " pixels.\n";
     std::cout << "[Project-Zero] Sun hour " << SunHour << ", yaw " << LensYaw << " deg, pitch " << LensPitch << " deg.\n";
+    std::cout << "[Project-Zero] M8 ReSTIR DI/GI: ON; M9 denoise " << (DenoiseEnabled ? "ON" : "OFF")
+              << "; temporal reprojection " << (ReprojectionEnabled ? "ON" : "OFF") << ".\n";
 
     std::error_code DirCode;
     std::filesystem::create_directories("Diagnostics", DirCode);
@@ -190,7 +202,8 @@ int main(int ArgumentCount, char** ArgumentValues)
         auto StartTime = std::chrono::high_resolution_clock::now();
         ActiveRenderer.RenderShowcaseFrame(Camera, SunHour, FogChoice, SpatialPasses, BounceCount, FlareEnabled, FlareVariety,
                                             CloudShadows, CloudTime, CloudType, CloudCoverage,
-                                            CloudScale, CloudBase, CloudThickness, CloudDensity);
+                                            CloudScale, CloudBase, CloudThickness, CloudDensity,
+                                            DenoiseEnabled, ReprojectionEnabled);
         auto EndTime = std::chrono::high_resolution_clock::now();
         double DurationMs = std::chrono::duration<double, std::milli>(EndTime - StartTime).count();
         std::cout << "[Project-Zero] " << Label << " completed in " << DurationMs << " ms.\n";

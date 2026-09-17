@@ -164,7 +164,7 @@ int main(int argc, char** argv)
             std::ifstream Version(ShowcaseVersionPath);
             std::string Tag;
             std::getline(Version, Tag);
-            ShowcaseNeedsExport = Tag != "M9_SHOWCASE_GRID_V2";
+            ShowcaseNeedsExport = Tag != "M9_SHOWCASE_GRID_V3";
         }
         if (ShowcaseNeedsExport)
         {
@@ -184,7 +184,7 @@ int main(int argc, char** argv)
                                              ShowcaseNaming))
             {
                 std::ofstream Version(ShowcaseVersionPath, std::ios::trunc);
-                Version << "M9_SHOWCASE_GRID_V2\n";
+                Version << "M9_SHOWCASE_GRID_V3\n";
                 std::cerr << "[Scene] Exported the Showcase + Material Grid default level to " << ScenePath << "\n";
             }
             else

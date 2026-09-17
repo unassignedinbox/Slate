@@ -43,6 +43,12 @@ struct TriangleGeometry
     Vector3                 VertexBeta;                         // [m] second triangle vertex
     Vector3                 VertexGamma;                        // [m] third triangle vertex
     Vector3                 SurfaceNormal;                      // [-] geometric surface normal
+    // Optional vertex normals keep CPU reference spheres smooth like the GPU CornerNormals stream. Flat analytical
+    // primitives leave this flag false and continue to use SurfaceNormal exactly as before.
+    Vector3                 VertexNormalAlpha;
+    Vector3                 VertexNormalBeta;
+    Vector3                 VertexNormalGamma;
+    bool                    HasVertexNormals = false;
     uint32_t                MaterialIndex;                      // [index] assigned material slot
     uint32_t                TriangleIndex;                      // [index] unique primitive index
 };

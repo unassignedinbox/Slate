@@ -213,6 +213,24 @@ void RayTracingSolver::AppendTriangle(const Vector3& v0, const Vector3& v1, cons
     Triangles.push_back(Tri);
 }
 
+void RayTracingSolver::AppendSmoothTriangle(const Vector3& v0, const Vector3& v1, const Vector3& v2,
+                                               const Vector3& n0, const Vector3& n1, const Vector3& n2,
+                                               uint32_t MaterialIdx) noexcept
+{
+    TriangleGeometry Tri{};
+    Tri.VertexAlpha    = v0;
+    Tri.VertexBeta     = v1;
+    Tri.VertexGamma    = v2;
+    Tri.SurfaceNormal  = OrientationClassifier::CrossProduct(v1 - v0, v2 - v0).Normalized();
+    Tri.VertexNormalAlpha = n0.Normalized();
+    Tri.VertexNormalBeta  = n1.Normalized();
+    Tri.VertexNormalGamma = n2.Normalized();
+    Tri.HasVertexNormals = true;
+    Tri.MaterialIndex  = MaterialIdx;
+    Tri.TriangleIndex  = static_cast<uint32_t>(Triangles.size());
+    Triangles.push_back(Tri);
+}
+
 void RayTracingSolver::AppendQuad(const Vector3& v0, const Vector3& v1, const Vector3& v2, const Vector3& v3, uint32_t MaterialIdx) noexcept
 {
     // Quad formed of two triangles with CCW outward normal
@@ -373,9 +391,19 @@ void RayTracingSolver::AppendSphere(const Vector3& Center, float Radius, uint32_
             //    natural (A,B,C,D) order traverses clockwise seen from outside and yields inward normals — the
             //    surface then lights from within and shadows from without, which reads as a shading bug. The
             //    order below is reversed for that reason.
-            if (Ring == 0u)                 AppendTriangle(A, D, C, MaterialIdx);
-            else if (Ring + 1u == Rings)    AppendTriangle(A, C, B, MaterialIdx);
-            else                            AppendQuad(A, D, C, B, MaterialIdx);
+            const Vector3 NA = (A - Center).Normalized();
+            const Vector3 NB = (B - Center).Normalized();
+            const Vector3 NC = (C - Center).Normalized();
+            const Vector3 ND = (D - Center).Normalized();
+            if (Ring == 0u)
+                AppendSmoothTriangle(A, D, C, NA, ND, NC, MaterialIdx);
+            else if (Ring + 1u == Rings)
+                AppendSmoothTriangle(A, C, B, NA, NC, NB, MaterialIdx);
+            else
+            {
+                AppendSmoothTriangle(A, D, C, NA, ND, NC, MaterialIdx);
+                AppendSmoothTriangle(A, C, B, NA, NC, NB, MaterialIdx);
+            }
         }
     }
 }
@@ -528,7 +556,10 @@ HitIntersection RayTracingSolver::EvaluateIntersection(const RayStructure& Ray) 
         {
             ClosestHit.RayDistance    = t;
             ClosestHit.HitLocation    = Ray.SpatialOrigin + Ray.RayDirection * t;
-            ClosestHit.SurfaceNormal  = Tri.SurfaceNormal;
+            const float w = 1.0f - u - v;
+            ClosestHit.SurfaceNormal  = Tri.HasVertexNormals
+                ? (Tri.VertexNormalAlpha * w + Tri.VertexNormalBeta * u + Tri.VertexNormalGamma * v).Normalized()
+                : Tri.SurfaceNormal;
             ClosestHit.MaterialIndex  = Tri.MaterialIndex;
             ClosestHit.TriangleIndex  = Tri.TriangleIndex;
             ClosestHit.ValidCondition = true;
@@ -830,32 +861,38 @@ void RayTracingSolver::ConstructShowcaseScene() noexcept
     // The existing launch camera faces southwest from (0,-14,2.2). Keep the original sun/sky field behind it and
     // put the additive exhibit in the near foreground, entirely in front of the camera rather than replacing the
     // old scene or hiding most of the grid behind the eye point.
-    constexpr float GridOffsetX = -12.5f;
-    constexpr float GridOffsetY = -22.0f;
-    constexpr float GridRadius = 0.72f;
-    constexpr float GridXStep = 2.40f;
-    constexpr float GridYStep = 2.22f;
-    // The original Showcase already owns a kilometer-scale soil plane and the sun/sky/weather rig. Add the grid's
-    // authored floor as a thin presentation plinth (not a second scene), then keep every cell one-to-one with its
-    // own descriptor. The luminaire is also retained as an emissive triangle so the grid remains readable at dusk.
+    // Rotate the additive exhibit toward the existing southwest launch camera instead of changing that camera or
+    // replacing the landscape. This keeps all four rows visible, so glass, metals, plastic, bone and SSS can be judged.
+    constexpr float GridCentreX = -11.9f;
+    constexpr float GridCentreY = -19.7f;
+    constexpr float GridLayoutCentreX = 0.6f;
+    constexpr float GridLayoutCentreY = 2.3f;
+    constexpr float GridRotation = 1.53589f; // 88 degrees: a readable oblique grid, without changing the launch camera
+    const float GridCos = std::cos(GridRotation);
+    const float GridSin = std::sin(GridRotation);
+    const auto PlaceGrid = [&](float X, float Y, float Z = 0.0f) noexcept
+    {
+        return Vector3{ GridCentreX + (X - GridLayoutCentreX) * GridCos - (Y - GridLayoutCentreY) * GridSin,
+                        GridCentreY + (X - GridLayoutCentreX) * GridSin + (Y - GridLayoutCentreY) * GridCos, Z };
+    };
+    // The original Showcase owns the kilometer-scale soil plane and sun/sky/weather rig. This is only an authored
+    // presentation plinth on that soil plane; its emissive triangle remains part of the same scene.
+    constexpr float GridRadius = 0.90f;
+    constexpr float GridXStep = 2.50f;
+    constexpr float GridYStep = 2.60f;
     {
         const auto GridFloorSpan = OpenSpan("Material Grid Floor");
         (void)GridFloorSpan;
-        AppendQuad(Vector3{ GridOffsetX - 7.0f, GridOffsetY - 3.0f, 0.015f },
-                   Vector3{ GridOffsetX + 7.0f, GridOffsetY - 3.0f, 0.015f },
-                   Vector3{ GridOffsetX + 7.0f, GridOffsetY + 7.2f, 0.015f },
-                   Vector3{ GridOffsetX - 7.0f, GridOffsetY + 7.2f, 0.015f }, GridMaterialBase);
+        AppendQuad(PlaceGrid(-7.0f, -3.0f, 0.015f), PlaceGrid(7.0f, -3.0f, 0.015f),
+                   PlaceGrid(7.0f, 7.2f, 0.015f), PlaceGrid(-7.0f, 7.2f, 0.015f), GridMaterialBase);
     }
 
     uint32_t GridSlot = GridMaterialBase + 1u; // descriptor 0 is the authored grid floor
     for (uint32_t Row = 0u; Row < 4u; ++Row)
         for (uint32_t Column = 0u; Column < 5u; ++Column, ++GridSlot)
         {
-            const Vector3 Centre{
-                GridOffsetX - 4.8f + GridXStep * static_cast<float>(Column),
-                GridOffsetY - 1.45f + GridYStep * static_cast<float>(Row),
-                GridRadius
-            };
+            const Vector3 Centre = PlaceGrid(-4.8f + GridXStep * static_cast<float>(Column),
+                                              -1.45f + GridYStep * static_cast<float>(Row), GridRadius);
             char GridName[96];
             std::snprintf(GridName, sizeof(GridName), "Material Grid %u,%u · %s", Row + 1u, Column + 1u,
                           GridMaterials[GridSlot - GridMaterialBase].Name.c_str());
@@ -867,10 +904,8 @@ void RayTracingSolver::ConstructShowcaseScene() noexcept
     {
         const auto GridLuminaireSpan = OpenSpan("Material Grid Luminaire");
         (void)GridLuminaireSpan;
-        AppendQuad(Vector3{ GridOffsetX - 2.0f, GridOffsetY + 1.65f, 5.6f },
-                   Vector3{ GridOffsetX + 2.0f, GridOffsetY + 1.65f, 5.6f },
-                   Vector3{ GridOffsetX + 2.0f, GridOffsetY - 0.65f, 5.6f },
-                   Vector3{ GridOffsetX - 2.0f, GridOffsetY - 0.65f, 5.6f }, GridMaterialBase + 21u);
+        AppendQuad(PlaceGrid(-2.0f, 1.65f, 5.6f), PlaceGrid(2.0f, 1.65f, 5.6f),
+                   PlaceGrid(2.0f, -0.65f, 5.6f), PlaceGrid(-2.0f, -0.65f, 5.6f), GridMaterialBase + 21u);
     }
 
     BuildBvh();
@@ -916,18 +951,22 @@ void RayTracingSolver::AppendSphere(const Vector3& Center, float Radius, uint32_
     Vector3 Bottom{ Center.x, Center.y, Center.z - Radius };
     for (int i = 0; i < LonSteps; ++i)
     {
-        AppendTriangle(Top, Point(1, i), Point(1, i + 1), MaterialIdx);
+        const Vector3 A = Point(1, i), B = Point(1, i + 1);
+        AppendSmoothTriangle(Top, A, B, (Top - Center).Normalized(), (A - Center).Normalized(), (B - Center).Normalized(), MaterialIdx);
     }
     for (int j = 1; j < LatBands - 1; ++j)
     {
         for (int i = 0; i < LonSteps; ++i)
         {
-            AppendQuad(Point(j, i), Point(j + 1, i), Point(j + 1, i + 1), Point(j, i + 1), MaterialIdx);
+            const Vector3 A = Point(j, i), B = Point(j + 1, i), C = Point(j + 1, i + 1), D = Point(j, i + 1);
+            AppendSmoothTriangle(A, B, C, (A - Center).Normalized(), (B - Center).Normalized(), (C - Center).Normalized(), MaterialIdx);
+            AppendSmoothTriangle(A, C, D, (A - Center).Normalized(), (C - Center).Normalized(), (D - Center).Normalized(), MaterialIdx);
         }
     }
     for (int i = 0; i < LonSteps; ++i)
     {
-        AppendTriangle(Bottom, Point(LatBands - 1, i + 1), Point(LatBands - 1, i), MaterialIdx);
+        const Vector3 A = Point(LatBands - 1, i + 1), B = Point(LatBands - 1, i);
+        AppendSmoothTriangle(Bottom, A, B, (Bottom - Center).Normalized(), (A - Center).Normalized(), (B - Center).Normalized(), MaterialIdx);
     }
 }
 
@@ -1038,7 +1077,8 @@ namespace {
 //                                                  BVH TRAVERSAL
 //------------------------------------------------------------------------------------------------------------------------
 
-bool TriHit(const TriangleGeometry& Tri, const Vector3& Origin, const Vector3& Dir, float TMin, float TMax, float& THit) noexcept
+bool TriHit(const TriangleGeometry& Tri, const Vector3& Origin, const Vector3& Dir, float TMin, float TMax,
+            float& THit, float* OutU = nullptr, float* OutV = nullptr) noexcept
 {
     constexpr float Epsilon = 1e-7f;
     Vector3 Edge1 = Tri.VertexBeta - Tri.VertexAlpha;
@@ -1068,7 +1108,16 @@ bool TriHit(const TriangleGeometry& Tri, const Vector3& Origin, const Vector3& D
         return false;
     }
     THit = t;
+    if (OutU != nullptr) *OutU = u;
+    if (OutV != nullptr) *OutV = v;
     return true;
+}
+
+Vector3 HitNormal(const TriangleGeometry& Tri, float U, float V) noexcept
+{
+    if (!Tri.HasVertexNormals) return Tri.SurfaceNormal;
+    const float W = 1.0f - U - V;
+    return (Tri.VertexNormalAlpha * W + Tri.VertexNormalBeta * U + Tri.VertexNormalGamma * V).Normalized();
 }
 
 bool SlabHit(const Vector3& MinB, const Vector3& MaxB, const Vector3& Origin, const Vector3& Dir, float TMin, float TMax) noexcept
@@ -1114,12 +1163,12 @@ HitIntersection RayTracingSolver::EvaluateIntersectionBvh(const RayStructure& Ra
     {
         for (const auto& Tri : Triangles)
         {
-            float t = 0.0f;
-            if (TriHit(Tri, Ray.SpatialOrigin, Ray.RayDirection, Ray.MinimumDistance, ClosestHit.RayDistance, t))
+            float t = 0.0f, u = 0.0f, v = 0.0f;
+            if (TriHit(Tri, Ray.SpatialOrigin, Ray.RayDirection, Ray.MinimumDistance, ClosestHit.RayDistance, t, &u, &v))
             {
                 ClosestHit.RayDistance = t;
                 ClosestHit.HitLocation = Ray.SpatialOrigin + Ray.RayDirection * t;
-                ClosestHit.SurfaceNormal = Tri.SurfaceNormal;
+                ClosestHit.SurfaceNormal = HitNormal(Tri, u, v);
                 ClosestHit.MaterialIndex = Tri.MaterialIndex;
                 ClosestHit.TriangleIndex = Tri.TriangleIndex;
                 ClosestHit.ValidCondition = true;
@@ -1142,12 +1191,12 @@ HitIntersection RayTracingSolver::EvaluateIntersectionBvh(const RayStructure& Ra
             for (int32_t i = 0; i < Node.PrimCount; ++i)
             {
                 const auto& Tri = Triangles[BvhOrder[static_cast<size_t>(Node.StartIndex + i)]];
-                float t = 0.0f;
-                if (TriHit(Tri, Ray.SpatialOrigin, Ray.RayDirection, Ray.MinimumDistance, ClosestHit.RayDistance, t))
+                float t = 0.0f, u = 0.0f, v = 0.0f;
+                if (TriHit(Tri, Ray.SpatialOrigin, Ray.RayDirection, Ray.MinimumDistance, ClosestHit.RayDistance, t, &u, &v))
                 {
                     ClosestHit.RayDistance = t;
                     ClosestHit.HitLocation = Ray.SpatialOrigin + Ray.RayDirection * t;
-                    ClosestHit.SurfaceNormal = Tri.SurfaceNormal;
+                    ClosestHit.SurfaceNormal = HitNormal(Tri, u, v);
                     ClosestHit.MaterialIndex = Tri.MaterialIndex;
                     ClosestHit.TriangleIndex = Tri.TriangleIndex;
                     ClosestHit.ValidCondition = true;

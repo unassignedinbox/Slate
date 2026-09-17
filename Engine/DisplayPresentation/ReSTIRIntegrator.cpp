@@ -189,11 +189,18 @@ std::vector<Vector3> ReSTIRIntegrator::BuildCornerNormals(const ProjectZero::Ray
     // These are the additive showcase placement constants. They deliberately mirror ConstructShowcaseScene's
     // foreground placement; only the authored sphere slots receive smooth normals, while the old 100-shape field
     // retains its historical face normals byte-for-byte.
-    constexpr float GridOffsetX = -12.5f;
-    constexpr float GridOffsetY = -22.0f;
-    constexpr float Radius = 0.72f;
-    constexpr float XStep = 2.40f;
-    constexpr float YStep = 2.22f;
+    // Must mirror ConstructShowcaseScene's rotated additive placement. The CPU and GPU streams need identical
+    // smooth grid corner normals or the material grid will look faceted in one path and smooth in the other.
+    constexpr float GridCentreX = -11.9f;
+    constexpr float GridCentreY = -19.7f;
+    constexpr float LayoutCentreX = 0.6f;
+    constexpr float LayoutCentreY = 2.3f;
+    constexpr float Rotation = 1.53589f;
+    const float GridCos = std::cos(Rotation);
+    const float GridSin = std::sin(Rotation);
+    constexpr float Radius = 0.90f;
+    constexpr float XStep = 2.50f;
+    constexpr float YStep = 2.60f;
 
     for (const TriangleGeometry& Triangle : Triangles)
     {
@@ -206,8 +213,13 @@ std::vector<Vector3> ReSTIRIntegrator::BuildCornerNormals(const ProjectZero::Ray
             const uint32_t Cell = Triangle.MaterialIndex - GridBase - 1u;
             const uint32_t Row = Cell / 5u;
             const uint32_t Column = Cell % 5u;
-            const Vector3 Centre{ GridOffsetX - 4.8f + XStep * static_cast<float>(Column),
-                                  GridOffsetY - 1.45f + YStep * static_cast<float>(Row), Radius };
+            const float LocalX = -4.8f + XStep * static_cast<float>(Column);
+            const float LocalY = -1.45f + YStep * static_cast<float>(Row);
+            const Vector3 Centre{
+                GridCentreX + (LocalX - LayoutCentreX) * GridCos - (LocalY - LayoutCentreY) * GridSin,
+                GridCentreY + (LocalX - LayoutCentreX) * GridSin + (LocalY - LayoutCentreY) * GridCos,
+                Radius
+            };
             A = (Triangle.VertexAlpha - Centre).Normalized();
             B = (Triangle.VertexBeta  - Centre).Normalized();
             C = (Triangle.VertexGamma - Centre).Normalized();

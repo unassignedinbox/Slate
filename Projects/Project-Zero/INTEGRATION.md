@@ -66,9 +66,10 @@ CPU reference — headless, no GPU needed (sandbox stand-in):
 
 ```sh
 cd Projects/Project-Zero && make
-./bin/Project-Zero-CpuReference                                   # sunset showcase, 640x480
+./bin/Project-Zero-CpuReference                                   # combined Showcase + authored 5x4 grid, 1280x720
 ./bin/Project-Zero-CpuReference --sun 18.3 --yaw 0 --pitch 2      # moonlit night + stars + moon
 ./bin/Project-Zero-CpuReference --flarevar 1                      # anamorphic streak variety
+./bin/Project-Zero-CpuReference --no-denoise --no-reprojection    # M9 raw A/B leg
 ```
 
 Windows: `Build/Construct.ps1 [-Run]` builds
@@ -80,8 +81,9 @@ Release --target Project-Zero-CpuReference`.
 Flags: `--sun H`, `--yaw D` `--pitch D` (default `220 -20`, facing the
 sunset), `--fog clear|morning|backlit`, `--width W` `--height H`,
 `--bounce N` (default 8), `--passes N` (default 2), `--flare 0|1`,
-`--flarevar 0|1|2|3` (cinematic/anamorphic/starburst/halo). Output
-lands in `./Diagnostics/`: `ProjectZero_Showcase.ppm` always, plus
+`--flarevar 0|1|2|3` (cinematic/anamorphic/starburst/halo), `--no-denoise`,
+`--no-reprojection`. Output lands in `./Diagnostics/`:
+`ProjectZero_Showcase.ppm` always, plus
 `.png` when Python is found. The PPM is byte-identical run to run
 (`5f2b610d…e31` default, `d81cf940…03e` anamorphic, `78d6096b…2dd`
 night, after the 0003 moon dimming; determinism verified by repeat
