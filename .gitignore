@@ -12,6 +12,8 @@ Projects/Project-Zero/Diagnostics/Proof/fog.csv
 EngineContent/CelestialTextures/Moons/
 Projects/Project-Zero/bin/
 Projects/Project-Zero/build/
+Projects/Project-Zero/Content/Scenes/MaterialGrid.gltf
+Projects/Project-Zero/Content/Scenes/MaterialGrid.bin
 Projects/Project-Zero/Diagnostics/*.ppm
 Projects/Project-Zero/Diagnostics/*.png
 

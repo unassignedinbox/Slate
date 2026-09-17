@@ -64,6 +64,11 @@ gate — the one thing this sandbox cannot do is compile the Slang-only shell
   sun-only lens flare/halo/streak, `--sun 18.3` for a starry night);
   sky matches the harness within 3 LDR, runs are byte-identical.
   See `INTEGRATION.md`.
+
+## Material channel grid
+
+Run `Project-Zero.exe --scene materialgrid` to generate and load `Content/Scenes/MaterialGrid.gltf`. The export-once exhibit presents 20 unique material descriptors in a 5 × 4 grid: plastic, bone, clearcoat, glossy/clear glass, gold/silver/copper/iron/brushed metals, cloth, wax, jade, thin film, emissive, and unlit. It uses the normal glTF interchange path, so the renderer and material inspector see the same records as authored content. See `../../Docs/MaterialGrid.md` for the channel map and remaining validation work.
+
 - Background: the review that specified this work is
   `Reviews/SunSky-Parity-2026-09-14.md`; the mirror proof answering the
   white-line question is `Reviews/SunSky-Mirror-Report-2026-09-14.md`.

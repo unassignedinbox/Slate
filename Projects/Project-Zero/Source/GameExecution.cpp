@@ -3,7 +3,7 @@
 //============================================================================================================================================
 // 🧩 Project-Zero entry point — opens the Vulkan window, makes a glTF level resident, runs the ReSTIR render loop.
 //
-//    Scene selection (R2): `Project-Zero.exe [--scene <file.gltf|glb|shaderball|showroom|showcase>] [--scale <float>]`
+//    Scene selection (R2): `Project-Zero.exe [--scene <file.gltf|glb|shaderball|materialgrid|showroom|showcase>] [--scale <float>]`
 //        showroom — P0 spatial-interface level, exported once from ShowroomStructure then imported like any other
 //        showcase — 100-object analytical field, exported once from RayTracingSolver::ConstructShowcaseScene
 //        default  Projects/Project-Zero/Content/Scenes/Showcase.gltf — regenerated from RayTracingSolver when missing
@@ -33,6 +33,7 @@
 #include "RayTracingSolver.h"
 #include "../../../Engine/ContentInterchange/ShaderballPreview.h"
 #include "../../../Engine/ContentInterchange/ShaderBallStructure.h"
+#include "../../../Engine/ContentInterchange/MaterialGridStructure.h"
 #include "ShowroomStructure.h"
 #include "EditorFeedSequence.h"
 #include "../../../Engine/DeviceExchange/InterfaceExchange.h"
@@ -76,7 +77,8 @@ int main(int argc, char** argv)
         if (std::strcmp(argv[I], "--scene") == 0) ScenePath  = argv[++I];
         if (std::strcmp(argv[I], "--scale") == 0) SceneScale = static_cast<float>(std::atof(argv[++I]));
     }
-    if (ScenePath == "shaderball") ScenePath = "Projects/Project-Zero/Content/Scenes/ShaderBall.gltf";   // R4b material test level
+    if (ScenePath == "shaderball")   ScenePath = "Projects/Project-Zero/Content/Scenes/ShaderBall.gltf";   // R4b material test level
+    if (ScenePath == "materialgrid") ScenePath = "Projects/Project-Zero/Content/Scenes/MaterialGrid.gltf"; // material channel exhibit
     if (ScenePath == "showroom")   ScenePath = "Projects/Project-Zero/Content/Scenes/Showroom.gltf";     // P0 spatial-interface level
     // The open-air scene.
     if (ScenePath == "outdoor")    ScenePath = "Projects/Project-Zero/Content/Scenes/Outdoor.gltf";
@@ -172,6 +174,17 @@ int main(int argc, char** argv)
             if (ShaderBall.Export(ScenePath, &Error)) std::cerr << "[Scene] Exported the shader-ball level to " << ScenePath << "\n";
             else                                     std::cerr << "[Scene] Shader-ball export failed: " << Error << "\n";
         }
+        const bool IsMaterialGrid = ScenePath.find("MaterialGrid.gltf") != std::string::npos;
+        if (IsMaterialGrid && !std::filesystem::exists(ScenePath, FsError))
+        {
+            std::filesystem::create_directories(std::filesystem::path(ScenePath).parent_path(), FsError);
+            std::string Error;
+            Frontier::MaterialGridStructure Grid;
+            Grid.Construct();
+            if (Grid.Export(ScenePath, &Error)) std::cerr << "[Scene] Exported the material-grid level to " << ScenePath << "\n";
+            else                                  std::cerr << "[Scene] Material-grid export failed: " << Error << "\n";
+        }
+
         // P0 spatial-interface level. Same export-once-then-import discipline: the Cornell box stays the untouched
         //    bit-identity reference, and the showroom is a separate file the renderer only ever sees as glTF.
         const bool IsShowroom = ScenePath.find("Showroom.gltf") != std::string::npos || DropScene;
@@ -370,6 +383,13 @@ int main(int argc, char** argv)
         // Shader ball: 5 m back from the front row, 2.6 m up, pitched down ~22° so all four rows fit at 55° FoV.
         Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -6.2f, 2.6f });
         Camera.AssignOrientationEuler(-22.0f * 3.14159265f / 180.0f, 0.0f, 0.0f);
+    }
+    else if (Level.QueryName() == "MaterialGrid")
+    {
+        // Material grid: the 5 × 4 exhibit spans ±6 m and reaches y ≈ 5.2 m. Frame every unique channel material
+        // from the south, with enough elevation to keep the overhead luminaire just above the top row.
+        Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -9.2f, 4.0f });
+        Camera.AssignOrientationEuler(-12.0f * 3.14159265f / 180.0f, 0.0f, 0.0f);
     }
     else if (Level.QueryName() == "Outdoor")
     {
