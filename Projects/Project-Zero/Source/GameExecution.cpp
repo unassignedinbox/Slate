@@ -3,7 +3,7 @@
 //============================================================================================================================================
 // 🧩 Project-Zero entry point — opens the Vulkan window, makes a glTF level resident, runs the ReSTIR render loop.
 //
-//    Scene selection (R2): `Project-Zero.exe [--scene <file.gltf|glb|shaderball|materialgrid|showroom|showcase>] [--scale <float>]`
+//    Scene selection (R2): `Project-Zero.exe [--scene <file.gltf|glb|shaderball|materialgrid|showroom|showcase>] [--scale <float>] [--no-denoise] [--no-reprojection]`
 //        showroom — P0 spatial-interface level, exported once from ShowroomStructure then imported like any other
 //        showcase — 100-object analytical field, exported once from RayTracingSolver::ConstructShowcaseScene
 //        default  Projects/Project-Zero/Content/Scenes/Showcase.gltf — regenerated from RayTracingSolver when missing
@@ -67,12 +67,16 @@ int main(int argc, char** argv)
     // Showcase is the default level (the Cornell box stays one --scene path away, untouched as the reference).
     std::string ScenePath  = "Projects/Project-Zero/Content/Scenes/Showcase.gltf";
     float       SceneScale = 1.0f;
-    bool        AnimateInstances = false;   // D3: --animate drives instance transforms from a scripted path
-    bool        SilentAudio      = false;   // --silent: open the null audio driver (no sound card, or CI)
+    bool        AnimateInstances       = false; // D3: --animate drives instance transforms from a scripted path
+    bool        SilentAudio            = false; // --silent: open the null audio driver (no sound card, or CI)
+    bool        DenoiseEnabled         = true;  // M9: default-on; --no-denoise is the raw accumulation A/B leg
+    bool        ReprojectionEnabled    = true;  // M9: default-on; --no-reprojection is the same-pixel A/B leg
     for (int I = 1; I < argc; ++I)
     {
-        if (std::strcmp(argv[I], "--animate") == 0) { AnimateInstances = true; continue; }
-        if (std::strcmp(argv[I], "--silent")  == 0) { SilentAudio      = true; continue; }   // null audio driver
+        if (std::strcmp(argv[I], "--animate") == 0)          { AnimateInstances    = true;  continue; }
+        if (std::strcmp(argv[I], "--silent")  == 0)          { SilentAudio         = true;  continue; } // null audio driver
+        if (std::strcmp(argv[I], "--no-denoise") == 0)       { DenoiseEnabled      = false; continue; } // M9 A/B: raw linear accumulation
+        if (std::strcmp(argv[I], "--no-reprojection") == 0)  { ReprojectionEnabled = false; continue; } // M9 A/B: same-pixel history
         if (I + 1 >= argc) break;
         if (std::strcmp(argv[I], "--scene") == 0) ScenePath  = argv[++I];
         if (std::strcmp(argv[I], "--scale") == 0) SceneScale = static_cast<float>(std::atof(argv[++I]));
@@ -433,10 +437,12 @@ int main(int argc, char** argv)
     //    be inserted anywhere without quietly repointing every value after it.
     Frontier::ReSTIRIntegratorConfiguration IntegratorConfig
     {
-        .CandidatesPerPixel  = 8u,      // [-]  primary DI candidates per pixel
-        .ExtraCandidateCount = 2u,      // [-]  extra same-pixel candidates
-        .Exposure            = 1.05f,   // [-]  ACES exposure
-        .AmbientStrength     = 0.015f   // [-]  ambient strength
+        .CandidatesPerPixel    = 8u,      // [-]  primary DI candidates per pixel
+        .ExtraCandidateCount   = 2u,      // [-]  extra same-pixel candidates
+        .Exposure              = 1.05f,   // [-]  ACES exposure
+        .AmbientStrength       = 0.015f,   // [-]  ambient strength
+        .Denoise               = DenoiseEnabled,      // M9: à-trous is default-on; CLI exposes the raw A/B leg
+        .TemporalReprojection  = ReprojectionEnabled // M9: motion-vector history is default-on; CLI exposes the A/B leg
     };
 
     Frontier::ReSTIRIntegrator Integrator(IntegratorConfig);

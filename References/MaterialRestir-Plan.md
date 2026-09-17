@@ -65,14 +65,13 @@ the R6/R7 ReSTIR (temporal + spatial reuse, alias pick, à-trous, adaptive expos
 sky/sun/atmosphere are in-tree. No cherry-pick portability discipline is needed anymore —
 but the kernel-wiring diffs vs the old R4b kernel are still recorded per phase where they matter.
 
-**Deferral (decided with the merge):** the à-trous **denoiser** and **motion-vector**
-temporal reprojection stay in-tree but default **off**
-(`ReSTIRIntegratorConfiguration::Denoise = false`, `TemporalReprojection = false`, with the
-previously-missing `AssignTemporalReprojection` setter added). Rationale: new lobes are
-validated on raw accumulated images so the filter can never hide or fake lobe energy; motion
-vectors are still *produced* by R2, only their consumption is off. Both re-enable at M9 with
-the A/B proofs (converged image must match with and without). M9 is therefore a
-re-enable-and-validate milestone, not a branch sync.
+**Historical deferral (resolved at M9):** the à-trous **denoiser** and **motion-vector**
+temporal reprojection stayed in-tree while the new lobes were validated on raw accumulated
+images. M9 now restores both as default-on
+(`ReSTIRIntegratorConfiguration::Denoise = true`, `TemporalReprojection = true`) and keeps
+`--no-denoise` / `--no-reprojection` in Project-Zero as explicit A/B controls. The motion
+vectors remain produced by R2; M9 proves that their consumption is gated, validated, and
+reset-safe. This is a re-enable-and-validate milestone, not a branch sync.
 
 ## 2. Scope line
 
@@ -251,11 +250,13 @@ selection-switch retention test.
   (DONE 2026-09-17 — `MaterialSceneProof` 102/102, report §9: verdict keep Tier A + fold,
   0 multi-slab in 44 real materials; Sponza validate-if-present, absent here.)
 
-### M9 — Re-enable milestone (denoiser + motion vectors back on)
-- Re-enable `Denoise` and `TemporalReprojection` (defaults back to true); validate the new
-  lobes under temporal + spatial reuse + à-trous (revalidation re-evaluates the BSDF — must
-  pick up BTDF/SSS automatically); A/B proofs (converged image identical with and without);
-  sky-backed outdoor glass proof.
+### M9 — Re-enable milestone (denoiser + motion vectors back on) — SHIPPED (headless)
+- Defaults are back to true, with `--no-denoise` / `--no-reprojection` explicit A/B controls.
+- `CheckMaterialM9.sh` passes the source contract + CPU mirror for motion-vector lookup,
+  normal/depth disocclusion, running mean, à-trous early-out, barrier/dispatch ordering,
+  and transmission/subsurface/sky path presence.
+- Final converged pixel A/B and the sky-backed outdoor-glass render require a Vulkan device;
+  they remain the only M9 gate items not runnable in this sandbox.
 
 ## 5. How each channel meets ReSTIR (integration points, all phases)
 

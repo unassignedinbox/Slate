@@ -27,10 +27,10 @@ The grid is four rows by five columns. Every ball has a distinct material descri
 
 The set covers the standard, anisotropic, clear-coated, cloth, subsurface, transmissive, emissive-only, and unlit reflectance selections. It also gives the grid visible representatives for metalness, roughness, specular/F82 colour, emission, transmission, subsurface radius/colour, coat, fuzz, thin-film, anisotropy, haziness, opacity defaults, and EON diffuse roughness. The floor and luminaire are separate descriptors, so the 20 test materials remain one-to-one with the 20 grid cells.
 
-## Remaining material plan after M8
+## Remaining material plan after M9
 
-M0 through M8 are shipped at `1872def` and the M8 gate is green. The plan's remaining validation work is:
+M0 through M9 are now implemented. M9 restores default-on denoising and motion-vector reprojection and adds explicit A/B controls plus a headless contract gate. See `Docs/MaterialM9.md` and run `bash Exhibits/Workbench/Materials/CheckMaterialM9.sh`.
 
-- **M9 / re-enable validation:** turn temporal reprojection and the à-trous denoiser back on, then A/B the converged image against the raw accumulation for the transmission and subsurface lobes under temporal and spatial reuse.
-- **GPU render verification:** run the K0–K5 kernel, the M5 v2 dipole triptych, and the M7 inspector pixel checks on a real GPU. The headless proofs do not replace this.
-- **Still explicitly out of scope:** geometric displacement, volumetric interiors/random-walk SSS, nested dielectrics, and default-on spectral dispersion/glints. The displacement channel has no carrier yet; the others remain stored hooks or later work by design.
+The remaining validation work is GPU-only: run the K0–K5 kernel, the M5 v2 dipole triptych, M7 inspector pixel checks, and the converged raw-vs-denoised / reprojected A/B scenes on a real Vulkan device. The sandbox has no GPU or shader compiler, so those renders are not claimed here.
+
+Still explicitly out of scope: geometric displacement, volumetric interiors/random-walk SSS, nested dielectrics, and default-on spectral dispersion/glints. The displacement channel has no carrier yet; the others remain stored hooks or later work by design.
