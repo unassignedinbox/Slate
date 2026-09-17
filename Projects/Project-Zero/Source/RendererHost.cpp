@@ -145,7 +145,13 @@ void RendererHost::RenderShowcaseFrame(const Frontier::CameraProjection& ActiveC
             float MoonCos = std::max(0.0f, OrientationClassifier::DotProduct(Hit.SurfaceNormal, MoonWorld));
             float MoonVisible = Scene.EvaluateOcclusion(Hit.HitLocation + Hit.SurfaceNormal * 0.001f, Hit.HitLocation + MoonWorld * 1000.0f) ? 0.0f : 1.0f;
             float CloudShade = SkyFog.QueryCloudShadow(Hit.HitLocation, SunWorld);
-            DirectLight[idx] = Mat.AlbedoColor * (SunRadiance * (SunCos * SunVisible * CloudShade) + MoonRadiance * (MoonCos * MoonVisible));
+            const float Emission = Mat.EmissiveRadiance.x + Mat.EmissiveRadiance.y + Mat.EmissiveRadiance.z;
+            // The combined CPU reference keeps the authored grid luminaire visible without turning the legacy
+            // diffuse ReSTIR proof into a second area-light integrator. The Vulkan path samples this same descriptor
+            // through the normal emissive/luminaire table.
+            DirectLight[idx] = Emission > 0.0f
+                             ? Mat.EmissiveRadiance
+                             : Mat.AlbedoColor * (SunRadiance * (SunCos * SunVisible * CloudShade) + MoonRadiance * (MoonCos * MoonVisible));
         }
     }
 

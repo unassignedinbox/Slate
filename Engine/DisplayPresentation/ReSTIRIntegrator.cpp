@@ -169,6 +169,56 @@ std::vector<TriangleIndex> ReSTIRIntegrator::BuildTriangleIndex(
     return Records;
 }
 
+std::vector<Vector3> ReSTIRIntegrator::BuildCornerNormals(const ProjectZero::RayTracingSolver& Scene) noexcept
+{
+    const auto& Triangles = Scene.QueryTriangles();
+    const auto& Materials = Scene.QueryMaterials();
+    std::vector<Vector3> Normals;
+    Normals.reserve(Triangles.size() * 3u);
+
+    uint32_t GridBase = 0xFFFFFFFFu;
+    for (uint32_t I = 0u; I < static_cast<uint32_t>(Materials.size()); ++I)
+    {
+        if (Materials[I].HasAuthoredDescriptor && Materials[I].AuthoredDescriptor.Name == "grid_floor")
+        {
+            GridBase = I;
+            break;
+        }
+    }
+
+    // These are the additive showcase placement constants. They deliberately mirror ConstructShowcaseScene's
+    // foreground placement; only the authored sphere slots receive smooth normals, while the old 100-shape field
+    // retains its historical face normals byte-for-byte.
+    constexpr float GridOffsetX = -12.5f;
+    constexpr float GridOffsetY = -22.0f;
+    constexpr float Radius = 0.72f;
+    constexpr float XStep = 2.40f;
+    constexpr float YStep = 2.22f;
+
+    for (const TriangleGeometry& Triangle : Triangles)
+    {
+        Vector3 A = Triangle.SurfaceNormal;
+        Vector3 B = Triangle.SurfaceNormal;
+        Vector3 C = Triangle.SurfaceNormal;
+        if (GridBase != 0xFFFFFFFFu && Triangle.MaterialIndex > GridBase &&
+            Triangle.MaterialIndex <= GridBase + 20u)
+        {
+            const uint32_t Cell = Triangle.MaterialIndex - GridBase - 1u;
+            const uint32_t Row = Cell / 5u;
+            const uint32_t Column = Cell % 5u;
+            const Vector3 Centre{ GridOffsetX - 4.8f + XStep * static_cast<float>(Column),
+                                  GridOffsetY - 1.45f + YStep * static_cast<float>(Row), Radius };
+            A = (Triangle.VertexAlpha - Centre).Normalized();
+            B = (Triangle.VertexBeta  - Centre).Normalized();
+            C = (Triangle.VertexGamma - Centre).Normalized();
+        }
+        Normals.push_back(A);
+        Normals.push_back(B);
+        Normals.push_back(C);
+    }
+    return Normals;
+}
+
 std::vector<MaterialDescriptor> ReSTIRIntegrator::BuildMaterialDescriptors(
     const ProjectZero::RayTracingSolver& Scene) noexcept
 {

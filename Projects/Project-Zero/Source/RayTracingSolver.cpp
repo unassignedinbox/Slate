@@ -850,12 +850,27 @@ void RayTracingSolver::ConstructShowcaseScene() noexcept
     //    a unique authored descriptor and the default Showcase level remains the single imported scene.
     // Shifted a little toward the camera's screen-right so the grid reads as a deliberate exhibit beside, not on top
     //    of, the original scattered field.
+    // The existing launch camera faces southwest from (0,-14,2.2). Keep the original sun/sky field behind it and
+    // put the additive exhibit in the near foreground, entirely in front of the camera rather than replacing the
+    // old scene or hiding most of the grid behind the eye point.
     constexpr float GridOffsetX = -12.5f;
-    constexpr float GridOffsetY = -18.6f;
+    constexpr float GridOffsetY = -22.0f;
     constexpr float GridRadius = 0.72f;
     constexpr float GridXStep = 2.40f;
     constexpr float GridYStep = 2.22f;
-    uint32_t GridSlot = GridMaterialBase + 1u; // descriptor 0 is the existing-soil-compatible grid floor
+    // The original Showcase already owns a kilometer-scale soil plane and the sun/sky/weather rig. Add the grid's
+    // authored floor as a thin presentation plinth (not a second scene), then keep every cell one-to-one with its
+    // own descriptor. The luminaire is also retained as an emissive triangle so the grid remains readable at dusk.
+    {
+        const auto GridFloorSpan = OpenSpan("Material Grid Floor");
+        (void)GridFloorSpan;
+        AppendQuad(Vector3{ GridOffsetX - 7.0f, GridOffsetY - 3.0f, 0.015f },
+                   Vector3{ GridOffsetX + 7.0f, GridOffsetY - 3.0f, 0.015f },
+                   Vector3{ GridOffsetX + 7.0f, GridOffsetY + 7.2f, 0.015f },
+                   Vector3{ GridOffsetX - 7.0f, GridOffsetY + 7.2f, 0.015f }, GridMaterialBase);
+    }
+
+    uint32_t GridSlot = GridMaterialBase + 1u; // descriptor 0 is the authored grid floor
     for (uint32_t Row = 0u; Row < 4u; ++Row)
         for (uint32_t Column = 0u; Column < 5u; ++Column, ++GridSlot)
         {
@@ -871,6 +886,15 @@ void RayTracingSolver::ConstructShowcaseScene() noexcept
             (void)GridSpan;
             AppendSphere(Centre, GridRadius, 48u, 24u, GridSlot);
         }
+
+    {
+        const auto GridLuminaireSpan = OpenSpan("Material Grid Luminaire");
+        (void)GridLuminaireSpan;
+        AppendQuad(Vector3{ GridOffsetX - 2.0f, GridOffsetY + 1.65f, 5.6f },
+                   Vector3{ GridOffsetX + 2.0f, GridOffsetY + 1.65f, 5.6f },
+                   Vector3{ GridOffsetX + 2.0f, GridOffsetY - 0.65f, 5.6f },
+                   Vector3{ GridOffsetX - 2.0f, GridOffsetY - 0.65f, 5.6f }, GridMaterialBase + 21u);
+    }
 
     BuildBvh();
 }

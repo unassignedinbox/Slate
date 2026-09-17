@@ -59,6 +59,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <vector>
 
 int main(int argc, char** argv)
 {
@@ -163,7 +164,7 @@ int main(int argc, char** argv)
             std::ifstream Version(ShowcaseVersionPath);
             std::string Tag;
             std::getline(Version, Tag);
-            ShowcaseNeedsExport = Tag != "M9_SHOWCASE_GRID_V1";
+            ShowcaseNeedsExport = Tag != "M9_SHOWCASE_GRID_V2";
         }
         if (ShowcaseNeedsExport)
         {
@@ -174,12 +175,16 @@ int main(int argc, char** argv)
             Frontier::SceneEncodeConfiguration ShowcaseNaming{};
             ShowcaseNaming.Name  = "Showcase";
             ShowcaseNaming.Spans = &Field.QuerySpans();
-            if (Frontier::SceneCodec::Encode(ScenePath, Frontier::ReSTIRIntegrator::BuildTriangleIndex(Field),
+            ShowcaseNaming.WriteTexcoords = true;
+            const std::vector<Frontier::TriangleIndex> ShowcaseTriangles = Frontier::ReSTIRIntegrator::BuildTriangleIndex(Field);
+            const std::vector<Frontier::Vector3> ShowcaseCornerNormals = Frontier::ReSTIRIntegrator::BuildCornerNormals(Field);
+            ShowcaseNaming.CornerNormals = &ShowcaseCornerNormals;
+            if (Frontier::SceneCodec::Encode(ScenePath, ShowcaseTriangles,
                                              Frontier::ReSTIRIntegrator::BuildMaterialDescriptors(Field), &Error,
                                              ShowcaseNaming))
             {
                 std::ofstream Version(ShowcaseVersionPath, std::ios::trunc);
-                Version << "M9_SHOWCASE_GRID_V1\n";
+                Version << "M9_SHOWCASE_GRID_V2\n";
                 std::cerr << "[Scene] Exported the Showcase + Material Grid default level to " << ScenePath << "\n";
             }
             else
@@ -272,6 +277,32 @@ int main(int argc, char** argv)
             std::snprintf(Line, sizeof(Line), "Materials: %u descriptors -> %u records, %u slabs (limit %u, %u folded), %zu placements, %zu cameras, %zu punctual lights",
                           M.DescriptorCount, M.DescriptorCount, M.SlabCount, M.SlabLimit, M.FoldedCount, Level.QueryPlacements().size(), Level.QueryCameras().size(), Level.QueryPunctualLuminaires().size());
             Logger.RecordMessage(Frontier::DiagnosticSeverity::Information, "Materials", Line);
+
+            if (Level.QueryName() == "Showcase")
+            {
+                const auto& Descriptors = Level.QueryMaterials().QueryDescriptors();
+                uint32_t GridBase = 0xFFFFFFFFu;
+                uint32_t Transmission = 0u, Subsurface = 0u, Unlit = 0u, Emissive = 0u;
+                for (uint32_t I = 0u; I < static_cast<uint32_t>(Descriptors.size()); ++I)
+                {
+                    const Frontier::MaterialDescriptor& D = Descriptors[I];
+                    if (D.Name == "grid_floor") GridBase = I;
+                    if (D.Slabs.empty()) continue;
+                    const Frontier::MaterialSlabDescriptor& S = D.Slabs.front();
+                    if (S.TransmissionWeight > 0.0f) ++Transmission;
+                    if (S.SubsurfaceWeight > 0.0f) ++Subsurface;
+                    if ((D.Flags & Frontier::MaterialFlagUnlit) != 0u) ++Unlit;
+                    if (S.EmissionLuminance > 0.0f) ++Emissive;
+                }
+                const bool GridRecords = GridBase != 0xFFFFFFFFu && GridBase + 21u < Descriptors.size();
+                std::snprintf(Line, sizeof(Line),
+                              "M9 authored grid %s: %u unique cells + floor/luminaire; transmission=%u, subsurface=%u, unlit=%u, emissive=%u (full MaterialEvaluation path, not flat fallback).",
+                              GridRecords ? "resident" : "MISSING", GridRecords ? 20u : 0u,
+                              Transmission, Subsurface, Unlit, Emissive);
+                Logger.RecordMessage(GridRecords ? Frontier::DiagnosticSeverity::Information
+                                                 : Frontier::DiagnosticSeverity::Warning,
+                                     "Materials", Line);
+            }
         }
     }
     const uint32_t LuminaireCount = static_cast<uint32_t>(Level.QueryLuminaires().size());
@@ -421,10 +452,12 @@ int main(int argc, char** argv)
     }
     else if (Level.QueryName() == "Showcase")
     {
-        // Showcase: stand south of the field at 2.2 m, facing the sunset (yaw 220°, pitch −2°) so the
-        //    sun-only flare is in frame on launch — the same framing the CPU reference renders by default.
-        Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -14.0f, 2.2f });
-        Camera.AssignOrientationEuler(-2.0f * 3.14159265f / 180.0f, 220.0f * 3.14159265f / 180.0f, 0.0f);
+        // Showcase: stand south of the field, facing the sunset (yaw 220°, pitch −15°) so the
+        //    sun-only flare and the additive foreground grid are in frame on launch.
+        Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -14.0f, 4.5f });
+        // Slightly lower pitch keeps the original sunset/sky/cloud/celestial presentation while bringing the
+        // additive foreground grid's four rows into view; the old scene remains the same camera branch.
+        Camera.AssignOrientationEuler(-15.0f * 3.14159265f / 180.0f, 220.0f * 3.14159265f / 180.0f, 0.0f);
     }
     else if (Level.QueryName() == "Showroom" || Level.QueryName() == "ShowroomDrop")
     {
@@ -454,12 +487,20 @@ int main(int argc, char** argv)
     //    be inserted anywhere without quietly repointing every value after it.
     Frontier::ReSTIRIntegratorConfiguration IntegratorConfig
     {
-        .CandidatesPerPixel    = 8u,      // [-]  primary DI candidates per pixel
-        .ExtraCandidateCount   = 2u,      // [-]  extra same-pixel candidates
-        .Exposure              = 1.05f,   // [-]  ACES exposure
-        .AmbientStrength       = 0.015f,   // [-]  ambient strength
-        .Denoise               = DenoiseEnabled,      // M9: à-trous is default-on; CLI exposes the raw A/B leg
-        .TemporalReprojection  = ReprojectionEnabled // M9: motion-vector history is default-on; CLI exposes the A/B leg
+        .CandidatesPerPixel       = 8u,      // M8: ReSTIR DI candidates per pixel
+        .ExtraCandidateCount      = 2u,      // M8: extra same-pixel RIS candidates
+        .SpatialTapCount          = 4u,      // M8: spatial reservoir neighbours
+        .DenoiseLevelCount        = 5u,      // M9: full à-trous chain
+        .Exposure                 = 1.05f,   // ACES exposure
+        .AmbientStrength          = 0.015f,  // ambient fallback
+        .GlobalIllumination       = true,    // M8: one-bounce GI stays live in the default scene
+        .AntiAliasing             = true,    // M8: sub-pixel camera jitter
+        .AmbientFloor             = false,
+        .TemporalReuse            = true,    // M8: temporal reservoir reuse
+        .SpatialReuse             = true,    // M8: spatial reservoir reuse
+        .AliasPick                = true,    // M8: alias-table light selection
+        .Denoise               = DenoiseEnabled,      // M9: default-on; --no-denoise is the A/B leg
+        .TemporalReprojection  = ReprojectionEnabled // M9: default-on; --no-reprojection is the A/B leg
     };
 
     Frontier::ReSTIRIntegrator Integrator(IntegratorConfig);

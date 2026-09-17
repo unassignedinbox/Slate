@@ -77,7 +77,7 @@ Windows: `Build/Construct.ps1 [-Run]` builds
 Vulkan entry point lives). CMake: `cmake --build build --config
 Release --target Project-Zero-CpuReference`.
 
-Flags: `--sun H`, `--yaw D` `--pitch D` (default `220 -2`, facing the
+Flags: `--sun H`, `--yaw D` `--pitch D` (default `220 -20`, facing the
 sunset), `--fog clear|morning|backlit`, `--width W` `--height H`,
 `--bounce N` (default 8), `--passes N` (default 2), `--flare 0|1`,
 `--flarevar 0|1|2|3` (cinematic/anamorphic/starburst/halo). Output

@@ -27,4 +27,12 @@ for Name in raw enabled no_denoise no_reprojection ui; do
     sha256sum "$File" | tee -a "$Manifest"
 done
 printf '[MaterialGridM9Cpu] hashes: %s\n' "$Manifest"
-printf '[MaterialGridM9Cpu] CPU RENDER: PASS\n'
+
+# The Slang A/B sheet above is the exact material math gate. Also render the actual default Project-Zero scene so
+# the old scattered shapes, sun/sky/clouds, lens flare, moon/stars and ReSTIR CPU reference remain in the same proof.
+if [[ "${M9_SKIP_COMBINED:-0}" != "1" ]]; then
+    bash Projects/Project-Zero/RunHighQualityShowcaseCpu.sh \
+        "${M9_SHOWCASE_WIDTH:-1280}" "${M9_SHOWCASE_HEIGHT:-720}" \
+        "${M9_SHOWCASE_BOUNCES:-12}" "${M9_SHOWCASE_PASSES:-4}"
+fi
+printf '[MaterialGridM9Cpu] CPU RENDER: PASS (Slang grid A/B + combined Project-Zero showcase)\n'

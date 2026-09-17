@@ -20,7 +20,7 @@ int main(int ArgumentCount, char** ArgumentValues)
 {
     double SunHour = 17.93;
     double LensYaw = 220.0;
-    double LensPitch = -2.0;
+    double LensPitch = -20.0; // keeps the old celestial field while framing all four rows of the additive grid
     // High-quality default: the CPU reference now renders the combined Showcase + Material Grid level at the same
     //    16:9 presentation size used by Project-Zero's window. CLI flags still allow quick smoke renders.
     uint32_t ViewportWidth = 1280;
@@ -136,7 +136,7 @@ int main(int ArgumentCount, char** ArgumentValues)
                       << "                      [--cloudscale F] [--cloudbase M] [--cloudthick M] [--clouddensity F]\n"
                       << "                      [--cloudtype stratus|stratocumulus|cumulus|cumulonimbus|altostratus|cirrus]\n"
                       << "                      (headless-only: this binary always renders and exits)\n"
-                      << "       defaults face the sunset (yaw 220, pitch -2); night moon view: --sun 18.3 --yaw 0 --pitch 2\n";
+                      << "       defaults face the sunset + foreground material grid (yaw 220, pitch -20); night moon view: --sun 18.3 --yaw 0 --pitch 2\n";
             return 0;
         }
     }
@@ -172,7 +172,7 @@ int main(int ArgumentCount, char** ArgumentValues)
 
     constexpr float Deg2Rad = 3.14159265359f / 180.0f;
     Frontier::CameraProjection Camera;
-    Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -14.0f, 2.2f });
+    Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -14.0f, 4.5f });
     Camera.AssignOrientationEuler(static_cast<float>(LensPitch) * Deg2Rad, static_cast<float>(LensYaw) * Deg2Rad, 0.0f);
     Camera.AssignFieldOfView(60.0f);
     Camera.AssignAspectRatio(static_cast<float>(ViewportWidth) / static_cast<float>(ViewportHeight));

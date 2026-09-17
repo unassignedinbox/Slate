@@ -1,8 +1,8 @@
 //============================================================================================================================================
 //                                                      RESTIRINTEGRATOR.H
 //============================================================================================================================================
-// 🧩 Drives the interim progressive path-tracing kernel (RIS direct lighting + one NEE bounce, running-mean accumulation).
-//    🚧 Not yet ReSTIR proper — see the status block at the top of Engine/Shaders/ReSTIRViewport.slang and plan v2.1.
+// 🧩 Drives Project-Zero's M8 ReSTIR viewport: RIS direct lighting, temporal/spatial reservoir reuse, one NEE GI
+//    bounce, running-mean accumulation, and the M9 motion-reprojection/à-trous presentation chain.
 
 #pragma once
 
@@ -75,6 +75,12 @@ public:
     // Build GPU triangle and material records from the CPU scene
     [[nodiscard]] static std::vector<TriangleIndex>
     BuildTriangleIndex(const ProjectZero::RayTracingSolver& Scene) noexcept;
+
+    // Showcase export companion: preserve flat normals for the legacy analytical field, but emit smooth sphere
+    // normals for the authored material-grid cells so the default combined scene is not a faceted/flat-textured
+    // replacement of the old showcase.
+    [[nodiscard]] static std::vector<Vector3>
+    BuildCornerNormals(const ProjectZero::RayTracingSolver& Scene) noexcept;
 
     [[nodiscard]] static std::vector<MaterialDescriptor>
     BuildMaterialDescriptors(const ProjectZero::RayTracingSolver& Scene) noexcept;
