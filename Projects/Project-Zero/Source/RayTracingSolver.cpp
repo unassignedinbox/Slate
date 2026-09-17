@@ -12,6 +12,26 @@
 
 namespace Frontier::ProjectZero {
 
+namespace
+{
+
+AnalyticalMaterial FromAuthoredDescriptor(const Frontier::MaterialDescriptor& Descriptor, uint32_t MaterialIdentifier)
+{
+    const Frontier::MaterialSlabDescriptor& S = Descriptor.Slabs.front();
+    AnalyticalMaterial M{};
+    M.AlbedoColor = Vector3{ S.BaseWeight * S.BaseColor[0], S.BaseWeight * S.BaseColor[1], S.BaseWeight * S.BaseColor[2] };
+    M.EmissiveRadiance = Vector3{ S.EmissionLuminance * S.EmissionColor[0], S.EmissionLuminance * S.EmissionColor[1],
+                                  S.EmissionLuminance * S.EmissionColor[2] };
+    M.RoughnessValue = S.SpecularRoughness;
+    M.MetallicValue = S.BaseMetalness;
+    M.MaterialIdentifier = MaterialIdentifier;
+    M.AuthoredDescriptor = Descriptor;
+    M.HasAuthoredDescriptor = true;
+    return M;
+}
+
+} // namespace
+
 //------------------------------------------------------------------------------------------------------------------------
 //                                                LIFECYCLE IMPLEMENTATION
 //------------------------------------------------------------------------------------------------------------------------
@@ -602,40 +622,6 @@ Vector3 RotateZVector(const Vector3& p, float CosA, float SinA) noexcept
     return Vector3{ p.x * CosA - p.y * SinA, p.x * SinA + p.y * CosA, p.z };
 }
 
-Vector3 HslToRgb(float H, float S, float L) noexcept
-{
-    float C = (1.0f - std::abs(2.0f * L - 1.0f)) * S;
-    float X = C * (1.0f - std::abs(std::fmod(H * 6.0f, 2.0f) - 1.0f));
-    float M = L - C * 0.5f;
-    float Sector = std::fmod(H * 6.0f, 6.0f);
-    Vector3 Rgb{ 0.0f, 0.0f, 0.0f };
-    if (Sector < 1.0f)
-    {
-        Rgb = Vector3{ C, X, 0.0f };
-    }
-    else if (Sector < 2.0f)
-    {
-        Rgb = Vector3{ X, C, 0.0f };
-    }
-    else if (Sector < 3.0f)
-    {
-        Rgb = Vector3{ 0.0f, C, X };
-    }
-    else if (Sector < 4.0f)
-    {
-        Rgb = Vector3{ 0.0f, X, C };
-    }
-    else if (Sector < 5.0f)
-    {
-        Rgb = Vector3{ X, 0.0f, C };
-    }
-    else
-    {
-        Rgb = Vector3{ C, 0.0f, X };
-    }
-    return Vector3{ Rgb.x + M, Rgb.y + M, Rgb.z + M };
-}
-
 Vector3 TriCentroid(const TriangleGeometry& Tri) noexcept
 {
     return (Tri.VertexAlpha + Tri.VertexBeta + Tri.VertexGamma) / 3.0f;
@@ -745,8 +731,10 @@ void RayTracingSolver::ConstructShowcaseScene() noexcept
         AppendQuad(Vector3{ -500.0f, -500.0f, 0.0f }, Vector3{ 500.0f, -500.0f, 0.0f }, Vector3{ 500.0f, 500.0f, 0.0f }, Vector3{ -500.0f, 500.0f, 0.0f }, 0);
     }
 
-    // One hundred analytical shapes scattered near and far, each with a
-    // unique material. Deterministic seed: the same field every run.
+    // The same authored material palette drives both the additive 5×4 grid and the original scattered field. The
+    // 100 objects cycle through the 20 authored surface records rather than using the old HSL/Lambert placeholder.
+    // Their geometry, sun/sky/cloud/celestial placement and deterministic seed remain unchanged.
+    const std::vector<Frontier::MaterialDescriptor> GridMaterials = Frontier::ConstructMaterialGridMaterials();
     std::mt19937 Rng(2026);
     std::uniform_real_distribution<float> Unit(0.0f, 1.0f);
     std::vector<Vector3> Placed;
@@ -786,11 +774,13 @@ void RayTracingSolver::ConstructShowcaseScene() noexcept
         }
         float Size = (0.6f + Unit(Rng) * 2.2f) * (1.0f + Radius / 60.0f);
         float Spin = Unit(Rng) * 360.0f;
-        float Hue = std::fmod(float(Built) * 0.61803398875f + 0.13f * float(Built % 3), 1.0f);
-        float Sat = 0.50f + Unit(Rng) * 0.25f;
-        float Lit = 0.40f + Unit(Rng) * 0.20f;
+        // Preserve the old field's random stream (the former HSL/roughness placeholder consumed three samples) while
+        // replacing its flat material record with a real authored descriptor. The palette includes plastic, bone/SSS,
+        // coat, glass, metals, cloth, wax, jade, thin-film, emissive and unlit records from the material grid.
+        (void)Unit(Rng); (void)Unit(Rng); (void)Unit(Rng);
+        const Frontier::MaterialDescriptor& Authored = GridMaterials[1u + (Built % 20u)]; // skip grid floor
         uint32_t MatIdx = static_cast<uint32_t>(Materials.size());
-        Materials.push_back(AnalyticalMaterial{ HslToRgb(Hue, Sat, Lit), Vector3{ 0.0f, 0.0f, 0.0f }, 0.35f + Unit(Rng) * 0.50f, (Built % 4 == 0) ? 0.6f : 0.0f, MatIdx });
+        Materials.push_back(FromAuthoredDescriptor(Authored, MatIdx));
         static const char* const ShapeNames[8] = { "Box", "Cube", "Sphere", "Cone", "Cylinder", "Pyramid", "Tetra", "Wedge" };
         const auto ObjectSpan = OpenSpan(ShapeNames[Built % 8]);
         switch (Built % 8)
@@ -828,22 +818,9 @@ void RayTracingSolver::ConstructShowcaseScene() noexcept
     //    a foreground exhibit. It is not a replacement scene: this Showcase export still owns the sun/sky/cloud,
     //    celestial, flare and scattered-shape presentation. The grid is appended after the original field, so the
     //    old deterministic object set remains unchanged and is never replaced by a second level.
-    const std::vector<Frontier::MaterialDescriptor> GridMaterials = Frontier::ConstructMaterialGridMaterials();
     const uint32_t GridMaterialBase = static_cast<uint32_t>(Materials.size());
     for (uint32_t G = 0u; G < static_cast<uint32_t>(GridMaterials.size()); ++G)
-    {
-        const Frontier::MaterialDescriptor& D = GridMaterials[G];
-        const Frontier::MaterialSlabDescriptor& S = D.Slabs.front();
-        AnalyticalMaterial M{};
-        M.AlbedoColor = Vector3{ S.BaseWeight * S.BaseColor[0], S.BaseWeight * S.BaseColor[1], S.BaseWeight * S.BaseColor[2] };
-        M.EmissiveRadiance = Vector3{ S.EmissionLuminance * S.EmissionColor[0], S.EmissionLuminance * S.EmissionColor[1], S.EmissionLuminance * S.EmissionColor[2] };
-        M.RoughnessValue = S.SpecularRoughness;
-        M.MetallicValue = S.BaseMetalness;
-        M.MaterialIdentifier = GridMaterialBase + G;
-        M.AuthoredDescriptor = D;
-        M.HasAuthoredDescriptor = true;
-        Materials.push_back(std::move(M));
-    }
+        Materials.push_back(FromAuthoredDescriptor(GridMaterials[G], GridMaterialBase + G));
 
     // The launch camera faces southwest from (0,-14,2.2). Put the 5×4 grid in that existing foreground sightline,
     //    on the same soil plane as the old shapes. The world offset is only presentation placement; each cell remains
