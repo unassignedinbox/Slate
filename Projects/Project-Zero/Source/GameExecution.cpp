@@ -452,12 +452,10 @@ int main(int argc, char** argv)
     }
     else if (Level.QueryName() == "Showcase")
     {
-        // Showcase: stand south of the field, facing the sunset (yaw 220°, pitch −15°) so the
-        //    sun-only flare and the additive foreground grid are in frame on launch.
-        Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -14.0f, 4.5f });
-        // Slightly lower pitch keeps the original sunset/sky/cloud/celestial presentation while bringing the
-        // additive foreground grid's four rows into view; the old scene remains the same camera branch.
-        Camera.AssignOrientationEuler(-15.0f * 3.14159265f / 180.0f, 220.0f * 3.14159265f / 180.0f, 0.0f);
+        // Preserve the original Showcase launch camera: the material grid is additive geometry in the old scattered
+        // field, not a replacement level or a new camera presentation.
+        Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -14.0f, 2.2f });
+        Camera.AssignOrientationEuler(-2.0f * 3.14159265f / 180.0f, 220.0f * 3.14159265f / 180.0f, 0.0f);
     }
     else if (Level.QueryName() == "Showroom" || Level.QueryName() == "ShowroomDrop")
     {

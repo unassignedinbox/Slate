@@ -17,7 +17,205 @@
 #undef in
 #undef uniform
 
-namespace Frontier::ProjectZero {
+namespace Frontier::ProjectZero
+{
+namespace
+{
+
+// M9 CPU reference transport. The previous Showcase CPU path evaluated authored materials only at the primary hit and
+// then multiplied a diffuse proxy into the ReSTIR GI buffer. That is a valid source-contract check, but it cannot show
+// metal reflections or glass transmission. This small path continuation uses the exact MaterialEvaluation.slang
+// EvaluateBsdf/SampleBsdf pair for authored secondary rays while keeping the existing sun, moon, sky and cloud queries.
+struct ShowcasePathRng
+{
+    uint32_t State;
+    explicit ShowcasePathRng(uint32_t Seed) noexcept : State(Seed * 747796405u + 2891336453u) {}
+    float Next() noexcept
+    {
+        State = State * 747796405u + 2891336453u;
+        uint32_t Word = ((State >> ((State >> 28u) + 4u)) ^ State) * 277803737u;
+        Word = (Word >> 22u) ^ Word;
+        return static_cast<float>(Word) * (1.0f / 4294967296.0f);
+    }
+};
+
+Vector3 CpuWorldFromLocal(const CpuMaterial::vec3& Local, const Vector3& N) noexcept
+{
+    CpuMaterial::vec3 T, B;
+    CpuMaterial::Frame(CpuMaterial::normalize(CpuMaterial::ToShader(N)), T, B);
+    return CpuMaterial::ToEngine(T * Local.x + B * Local.y + CpuMaterial::normalize(CpuMaterial::ToShader(N)) * Local.z);
+}
+
+Vector3 TraceAuthoredIndirect(const RayTracingSolver& Scene,
+                              const std::vector<AnalyticalMaterial>& Materials,
+                              const std::vector<CpuMaterial::ShadingRecord>& Records,
+                              const std::vector<uint8_t>& HasAuthoredMaterial,
+                              const SkyFogIntegrator& SkyFog,
+                              const Vector3& SunWorld, const Vector3& SunRadiance,
+                              const Vector3& MoonWorld, const Vector3& MoonRadiance,
+                              const Vector3& PrimaryPoint, const Vector3& PrimaryNormal,
+                              const Vector3& PrimaryView, uint32_t PrimaryMaterial,
+                              uint32_t SampleCount, uint32_t MaxDepth, uint32_t Seed) noexcept
+{
+    if (PrimaryMaterial >= HasAuthoredMaterial.size() || HasAuthoredMaterial[PrimaryMaterial] == 0u ||
+        PrimaryMaterial >= Records.size() || SampleCount == 0u)
+        return Vector3{ 0.0f, 0.0f, 0.0f };
+
+    const CpuMaterial::ShadingRecord& PrimaryRecord = Records[PrimaryMaterial];
+    Vector3 Sum{ 0.0f, 0.0f, 0.0f };
+    ShowcasePathRng Rng(Seed);
+    for (uint32_t Sample = 0u; Sample < SampleCount; ++Sample)
+    {
+        Vector3 NWorld = PrimaryNormal;
+        if (OrientationClassifier::DotProduct(NWorld, PrimaryView) < 0.0f) NWorld = Vector3{ -NWorld.x, -NWorld.y, -NWorld.z };
+        CpuMaterial::vec3 T, B;
+        const CpuMaterial::vec3 N = CpuMaterial::normalize(CpuMaterial::ToShader(NWorld));
+        CpuMaterial::Frame(N, T, B);
+        const CpuMaterial::vec3 Wo(CpuMaterial::dot(CpuMaterial::ToShader(PrimaryView), T),
+                                   CpuMaterial::dot(CpuMaterial::ToShader(PrimaryView), B),
+                                   CpuMaterial::dot(CpuMaterial::ToShader(PrimaryView), N));
+        if (Wo.z <= 0.0f) continue;
+        const CpuMaterial::ResolvedLayers PrimaryLayers = CpuMaterial::ResolveLayers(PrimaryRecord, Wo);
+        const CpuMaterial::vec4 BsdfSample( Rng.Next(), Rng.Next(), Rng.Next(), Rng.Next() );
+        const CpuMaterial::vec4 Sampled = CpuMaterial::SampleBsdf(PrimaryRecord, PrimaryLayers, Wo, BsdfSample);
+        if (Sampled.w <= 1e-8f) continue;
+        const CpuMaterial::vec3 PrimaryF = CpuMaterial::EvaluateBsdf(PrimaryRecord, PrimaryLayers, Wo, Sampled.xyz);
+        CpuMaterial::vec3 Throughput = PrimaryF * (std::fabs(Sampled.z) / Sampled.w);
+        Vector3 Direction = CpuWorldFromLocal(Sampled.xyz, NWorld);
+        Vector3 Origin = PrimaryPoint + Direction * 0.001f;
+        Vector3 Radiance{ 0.0f, 0.0f, 0.0f };
+
+        for (uint32_t Depth = 1u; Depth <= MaxDepth; ++Depth)
+        {
+            const RayStructure Ray{ Origin, Direction, 0.001f, 1000.0f };
+            const HitIntersection Hit = Scene.EvaluateIntersection(Ray);
+            if (!Hit.ValidCondition)
+            {
+                const Vector3 SkyDirection = SkyFogIntegrator::RenderFromWorld(Direction);
+                Radiance += CpuMaterial::ToEngine(Throughput) * SkyFog.ComputeSkyRadiance(SkyDirection);
+                break;
+            }
+            if (Hit.MaterialIndex >= Materials.size()) break;
+
+            const bool Authored = Hit.MaterialIndex < HasAuthoredMaterial.size() && HasAuthoredMaterial[Hit.MaterialIndex] != 0u;
+            const AnalyticalMaterial& HitMaterial = Materials[Hit.MaterialIndex];
+            if (!Authored)
+            {
+                const float SunCos = std::max(0.0f, OrientationClassifier::DotProduct(Hit.SurfaceNormal, SunWorld));
+                const float MoonCos = std::max(0.0f, OrientationClassifier::DotProduct(Hit.SurfaceNormal, MoonWorld));
+                const bool SunVisible = !Scene.EvaluateOcclusion(Hit.HitLocation + Hit.SurfaceNormal * 0.001f,
+                                                                  Hit.HitLocation + SunWorld * 1000.0f);
+                const bool MoonVisible = !Scene.EvaluateOcclusion(Hit.HitLocation + Hit.SurfaceNormal * 0.001f,
+                                                                   Hit.HitLocation + MoonWorld * 1000.0f);
+                const float Cloud = SkyFog.QueryCloudShadow(Hit.HitLocation, SunWorld);
+                Radiance += CpuMaterial::ToEngine(Throughput) * HitMaterial.AlbedoColor *
+                            (SunRadiance * (SunCos * (SunVisible ? 1.0f : 0.0f) * Cloud) +
+                             MoonRadiance * (MoonCos * (MoonVisible ? 1.0f : 0.0f)));
+                break;
+            }
+
+            const CpuMaterial::ShadingRecord& Material = Records[Hit.MaterialIndex];
+            if (CpuMaterial::IsEmissive(Material))
+            {
+                Radiance += CpuMaterial::ToEngine(Throughput) * CpuMaterial::ToEngine(Material.Emission);
+                break;
+            }
+
+            Vector3 NHit = Hit.SurfaceNormal;
+            const Vector3 View{ -Direction.x, -Direction.y, -Direction.z };
+            if (OrientationClassifier::DotProduct(NHit, View) < 0.0f) NHit = Vector3{ -NHit.x, -NHit.y, -NHit.z };
+            const Vector3 SunF = CpuMaterial::Evaluate(Material, NHit, View, SunWorld);
+            const Vector3 MoonF = CpuMaterial::Evaluate(Material, NHit, View, MoonWorld);
+            const float Cloud = SkyFog.QueryCloudShadow(Hit.HitLocation, SunWorld);
+            const bool SunVisible = !Scene.EvaluateOcclusion(Hit.HitLocation + NHit * 0.001f,
+                                                              Hit.HitLocation + SunWorld * 1000.0f);
+            const bool MoonVisible = !Scene.EvaluateOcclusion(Hit.HitLocation + NHit * 0.001f,
+                                                               Hit.HitLocation + MoonWorld * 1000.0f);
+            Radiance += CpuMaterial::ToEngine(Throughput) * (SunF * SunRadiance * (SunVisible ? Cloud : 0.0f) +
+                                     MoonF * MoonRadiance * (MoonVisible ? 1.0f : 0.0f));
+
+            CpuMaterial::vec3 HitT, HitB;
+            const CpuMaterial::vec3 HitN = CpuMaterial::normalize(CpuMaterial::ToShader(NHit));
+            CpuMaterial::Frame(HitN, HitT, HitB);
+            const CpuMaterial::vec3 HitWo(CpuMaterial::dot(CpuMaterial::ToShader(View), HitT),
+                                          CpuMaterial::dot(CpuMaterial::ToShader(View), HitB),
+                                          CpuMaterial::dot(CpuMaterial::ToShader(View), HitN));
+            if (HitWo.z <= 0.0f) break;
+            const CpuMaterial::ResolvedLayers Layers = CpuMaterial::ResolveLayers(Material, HitWo);
+            const CpuMaterial::vec4 NextSample(Rng.Next(), Rng.Next(), Rng.Next(), Rng.Next());
+            const CpuMaterial::vec4 Next = CpuMaterial::SampleBsdf(Material, Layers, HitWo, NextSample);
+            if (Next.w <= 1e-8f) break;
+            const CpuMaterial::vec3 F = CpuMaterial::EvaluateBsdf(Material, Layers, HitWo, Next.xyz);
+            Throughput *= F * (std::fabs(Next.z) / Next.w);
+            Throughput = CpuMaterial::min(Throughput, CpuMaterial::vec3(16.0f));
+            Direction = CpuWorldFromLocal(Next.xyz, NHit);
+            Origin = Hit.HitLocation + Direction * 0.001f;
+
+            if (Depth >= 3u)
+            {
+                const float Continue = std::clamp(0.2126f * Throughput.x + 0.7152f * Throughput.y + 0.0722f * Throughput.z,
+                                                  0.05f, 0.95f);
+                if (Rng.Next() > Continue) break;
+                Throughput *= 1.0f / Continue;
+            }
+        }
+        Sum += Radiance;
+    }
+    return Sum * (1.0f / static_cast<float>(SampleCount));
+}
+
+std::vector<Vector3> AtrousAuthoredIndirect(const std::vector<Vector3>& Input,
+                                             const std::vector<HitIntersection>& Hits,
+                                             const std::vector<uint8_t>& HasAuthoredMaterial,
+                                             uint32_t Width, uint32_t Height) noexcept
+{
+    std::vector<Vector3> A = Input;
+    std::vector<Vector3> B(Input.size(), Vector3{ 0.0f, 0.0f, 0.0f });
+    // CPU counterpart of the enabled M9 presentation filter: five à-trous levels, with normal/depth rejection so
+    // glossy reflections are averaged without bleeding across the scattered-field silhouettes or the grid cells.
+    for (uint32_t Level = 0u; Level < 5u; ++Level)
+    {
+        const int Step = 1 << Level;
+        for (uint32_t Y = 0u; Y < Height; ++Y)
+            for (uint32_t X = 0u; X < Width; ++X)
+            {
+                const size_t CenterIndex = static_cast<size_t>(Y) * Width + X;
+                const HitIntersection& CenterHit = Hits[CenterIndex];
+                if (!CenterHit.ValidCondition || CenterHit.MaterialIndex >= HasAuthoredMaterial.size() ||
+                    HasAuthoredMaterial[CenterHit.MaterialIndex] == 0u)
+                {
+                    B[CenterIndex] = Vector3{ 0.0f, 0.0f, 0.0f };
+                    continue;
+                }
+                Vector3 Sum = A[CenterIndex];
+                float Weight = 1.0f;
+                const int OffsetX[4] = { -Step, Step, 0, 0 };
+                const int OffsetY[4] = { 0, 0, -Step, Step };
+                for (uint32_t Tap = 0u; Tap < 4u; ++Tap)
+                {
+                    const int NX = static_cast<int>(X) + OffsetX[Tap];
+                    const int NY = static_cast<int>(Y) + OffsetY[Tap];
+                    if (NX < 0 || NY < 0 || NX >= static_cast<int>(Width) || NY >= static_cast<int>(Height)) continue;
+                    const size_t NeighborIndex = static_cast<size_t>(NY) * Width + static_cast<size_t>(NX);
+                    const HitIntersection& NeighborHit = Hits[NeighborIndex];
+                    if (!NeighborHit.ValidCondition || NeighborHit.MaterialIndex >= HasAuthoredMaterial.size() ||
+                        HasAuthoredMaterial[NeighborHit.MaterialIndex] == 0u)
+                        continue;
+                    const float NormalWeight = std::pow(std::max(0.0f,
+                        OrientationClassifier::DotProduct(CenterHit.SurfaceNormal, NeighborHit.SurfaceNormal)), 24.0f);
+                    const float DepthWeight = std::exp(-std::abs(CenterHit.RayDistance - NeighborHit.RayDistance) * 5.0f);
+                    const float TapWeight = NormalWeight * DepthWeight;
+                    Sum += A[NeighborIndex] * TapWeight;
+                    Weight += TapWeight;
+                }
+                B[CenterIndex] = Sum / std::max(Weight, 1e-6f);
+            }
+        A.swap(B);
+    }
+    return A;
+}
+
+} // namespace
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                LIFECYCLE IMPLEMENTATION
@@ -228,6 +426,33 @@ void RendererHost::RenderShowcaseFrame(const Frontier::CameraProjection& ActiveC
             DirectReservoirs[idx] = DirectReservoir;
         }
     }
+
+    // Authored transport continuation. ReSTIR DI above still owns the first-hit direct candidates; this companion
+    // path supplies the reflected/refracted radiance that a Lambert-only composition cannot represent. It is kept
+    // separate from FilteredIndirect so the legacy showcase field and its ReSTIR proof remain unchanged.
+    std::vector<Vector3> AuthoredIndirect(Width * Height, Vector3{ 0.0f, 0.0f, 0.0f });
+    const uint32_t PathSamples = std::clamp(std::max(4u, SpatialPassCount * 4u), 4u, 16u);
+    const uint32_t PathDepth = std::clamp(BounceCount, 2u, 8u);
+    for (uint32_t y = 0; y < Height; ++y)
+    {
+        for (uint32_t x = 0; x < Width; ++x)
+        {
+            const size_t idx = static_cast<size_t>(y) * Width + x;
+            const HitIntersection& Hit = PrimaryHits[idx];
+            if (!Hit.ValidCondition || Hit.MaterialIndex >= HasAuthoredMaterial.size() ||
+                HasAuthoredMaterial[Hit.MaterialIndex] == 0u)
+                continue;
+            const RayStructure PrimaryRay = GeneratePrimaryRay(ActiveCamera, x, y, 0.5f, 0.5f);
+            const Vector3 View{ -PrimaryRay.RayDirection.x, -PrimaryRay.RayDirection.y, -PrimaryRay.RayDirection.z };
+            AuthoredIndirect[idx] = TraceAuthoredIndirect(Scene, Materials, AuthoredRecords, HasAuthoredMaterial, SkyFog,
+                                                           SunWorld, SunRadiance, MoonWorld, MoonRadiance,
+                                                           Hit.HitLocation, Hit.SurfaceNormal, View, Hit.MaterialIndex,
+                                                           PathSamples, PathDepth,
+                                                           static_cast<uint32_t>(idx * 2654435761u + 0x9E3779B9u));
+        }
+    }
+    std::vector<Vector3> FilteredAuthoredIndirect = AtrousAuthoredIndirect(AuthoredIndirect, PrimaryHits,
+                                                                            HasAuthoredMaterial, Width, Height);
 
     // Phase 3: ReSTIR GI Initial Candidate Bounce Ray Tracing (8 samples)
     for (uint32_t y = 0; y < Height; ++y)
@@ -475,7 +700,17 @@ void RendererHost::RenderShowcaseFrame(const Frontier::CameraProjection& ActiveC
             Vector3 Surface;
             if (Hit.MaterialIndex < HasAuthoredMaterial.size() && HasAuthoredMaterial[Hit.MaterialIndex] != 0u &&
                 AuthoredUnlit[Hit.MaterialIndex] == 0u)
-                Surface = DirectLight[idx] + CpuMaterial::IndirectAlbedo(AuthoredRecords[Hit.MaterialIndex]) * FilteredIndirect[idx];
+            {
+                const CpuMaterial::ShadingRecord& Record = AuthoredRecords[Hit.MaterialIndex];
+                // ReSTIR GI remains the low-noise diffuse base. The exact BSDF continuation supplies reflected and
+                // refracted transport for the non-Lambert arms, so metal, coat, thin-film and glass cannot collapse
+                // to a flat albedo when the GPU/CPU showcase is rendered without a Vulkan device.
+                const float Transport = std::clamp(Record.Metalness + Record.TransmissionWeight +
+                                                    0.75f * Record.CoatWeight + 0.50f * Record.ThinFilmWeight +
+                                                    0.40f * Record.SssWeight + 0.20f * Record.FuzzWeight, 0.0f, 1.0f);
+                Surface = DirectLight[idx] + CpuMaterial::IndirectAlbedo(Record) * FilteredIndirect[idx]
+                        + FilteredAuthoredIndirect[idx] * Transport;
+            }
             else if (Hit.MaterialIndex < HasAuthoredMaterial.size() && AuthoredUnlit[Hit.MaterialIndex] != 0u)
                 Surface = DirectLight[idx];
             else

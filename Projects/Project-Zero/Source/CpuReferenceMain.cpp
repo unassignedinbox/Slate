@@ -20,7 +20,7 @@ int main(int ArgumentCount, char** ArgumentValues)
 {
     double SunHour = 17.93;
     double LensYaw = 220.0;
-    double LensPitch = -20.0; // keeps the old celestial field while framing all four rows of the additive grid
+    double LensPitch = -2.0;
     // High-quality default: the CPU reference now renders the combined Showcase + Material Grid level at the same
     //    16:9 presentation size used by Project-Zero's window. CLI flags still allow quick smoke renders.
     uint32_t ViewportWidth = 1280;
@@ -172,7 +172,7 @@ int main(int ArgumentCount, char** ArgumentValues)
 
     constexpr float Deg2Rad = 3.14159265359f / 180.0f;
     Frontier::CameraProjection Camera;
-    Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -14.0f, 4.5f });
+    Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -14.0f, 2.2f });
     Camera.AssignOrientationEuler(static_cast<float>(LensPitch) * Deg2Rad, static_cast<float>(LensYaw) * Deg2Rad, 0.0f);
     Camera.AssignFieldOfView(60.0f);
     Camera.AssignAspectRatio(static_cast<float>(ViewportWidth) / static_cast<float>(ViewportHeight));
@@ -205,6 +205,10 @@ int main(int ArgumentCount, char** ArgumentValues)
         }
         std::cout << "[Project-Zero] Exported raw PPM image to: " << PpmPath << "\n";
 #if !defined(_WIN32)
+        // Do not accept an older PNG as proof of this frame. The optional Python converter is absent in some
+        // checkouts; RunHighQualityShowcaseCpu.sh supplies the ImageMagick fallback after this export.
+        std::error_code RemovePngError;
+        std::filesystem::remove(PngPath, RemovePngError);
         std::string ConvertPy3 = "python3 ../../Tools/PpmToPng.py " + PpmPath + " " + PngPath + " > /dev/null 2>&1";
         std::string ConvertPy = "python ../../Tools/PpmToPng.py " + PpmPath + " " + PngPath + " > /dev/null 2>&1";
         (void)std::system(ConvertPy3.c_str());

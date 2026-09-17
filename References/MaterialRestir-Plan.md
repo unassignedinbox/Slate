@@ -260,7 +260,8 @@ selection-switch retention test.
   sky/area-light paths, enabled output, both A/B disables, and a CPU-rasterized UI presentation.
   The default Showcase exporter now appends those authored grid records and geometry to the original
   100-object sun/sky/cloud/celestial/lens-flare level; `RunHighQualityShowcaseCpu.sh` renders that
-  combined default at 1280×720 with 12 bounce candidates and four spatial passes. The focused gate
+  combined default at 1280×720 with 12 bounce candidates and four spatial passes, including exact authored
+  secondary BSDF transport and the five-level CPU à-trous presentation filter. The focused gate
   writes five PNGs plus a SHA-256 manifest under `Projects/Project-Zero/Diagnostics/`.
 - A Vulkan device is still required only for final GPU shader compilation and GPU-vs-CPU pixel agreement;
   the CPU same-scene/same-math/actual-pixel validation is complete in this sandbox.

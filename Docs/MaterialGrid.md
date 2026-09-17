@@ -45,7 +45,7 @@ For the complete default scene, including the original scattered shapes, sunset 
 bash Projects/Project-Zero/RunHighQualityShowcaseCpu.sh 1280 720 12 4
 ```
 
-This writes `Projects/Project-Zero/Diagnostics/ProjectZero_Showcase.png`; the reference run is 1280×720, 12 bounce candidates and four spatial passes. The latest run completed in 18.1 seconds and produced SHA-256 `0835f41ca708cfd4d2493386187b752fe8f0ee48cf8a1e66b7deca39cde181b8`.
+This writes `Projects/Project-Zero/Diagnostics/ProjectZero_Showcase.png`; the reference run is 1280×720, 12 bounce candidates and four spatial passes. The latest run completed in 73.1 seconds and produced SHA-256 `1997ba09637afcb814d87ac8ed6df1634fdf2bff93e69bb8deeb924640517504`. The CPU authored path now continues the exact `MaterialEvaluation.slang` BSDF through reflected/refracted secondary rays and applies a five-level normal/depth-aware à-trous filter, so metals and glass are not reduced to the old Lambert/albedo fallback.
 
 This writes raw, enabled, `--no-denoise` and `--no-reprojection` A/B images, the UI-facing image, and a SHA-256 manifest. It then renders the combined default Showcase at 1280×720 through the CPU ReSTIR DI/GI reference, preserving the original scattered shapes, sun/sky/clouds, lens flare, moon/stars and ground mist while the grid is additive. The source-contract gate remains useful for dispatch/barrier wiring:
 
