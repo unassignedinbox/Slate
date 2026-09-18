@@ -715,6 +715,7 @@ $EngineRelative = @(
     'Engine\ContentInterchange\MaterialIndex.cpp'
     'Engine\ContentInterchange\MaterialCodec.cpp'
     'Engine\ContentInterchange\TextureIndex.cpp'
+    'Engine\ContentInterchange\TextureRegistration.cpp'     # texture-slot registration without stb_image; CPU Space proofs use this seam
     'Engine\ContentInterchange\SceneCodec.cpp'
     'Engine\ContentInterchange\ShaderBallStructure.cpp'
     'Engine\ContentInterchange\ShowcaseStructure.cpp'

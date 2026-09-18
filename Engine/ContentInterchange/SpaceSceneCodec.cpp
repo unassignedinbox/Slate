@@ -163,12 +163,6 @@ namespace
                           const std::filesystem::path& MaterialPath, TextureIndex* Textures, std::string& Error)
     {
         if (References.empty()) return true;
-#if defined(FRONTIER_CPU_PORT)
-        (void)Material;
-        (void)Textures;
-        Error = MaterialPath.string() + " has authored texture references; resolving image assets is unavailable in the CPU format proof";
-        return false;
-#else
         if (!Textures)
         {
             Error = MaterialPath.string() + " has authored texture references but no TextureIndex was supplied";
@@ -194,14 +188,10 @@ namespace
             Target.Scalar = Reference.Scalar;
         }
         return true;
-#endif
     }
 
     bool ResolveEnvironment(const std::filesystem::path& Path, SceneStructure& Out, TextureIndex* Textures, std::string& Error)
     {
-#if defined(FRONTIER_CPU_PORT)
-        (void)Textures;
-#endif
         SpaceTomlEnvironment Authored;
         if (!SpaceTomlReadEnvironmentFile(Path.string(), Authored, Error)) return false;
         SceneEnvironmentRecord Resident;
@@ -228,11 +218,7 @@ namespace
         {
             const std::filesystem::path Probe = (Path.parent_path() / Authored.SkyProbe).lexically_normal();
             Resident.SkyProbePath = Probe.string();
-#if defined(FRONTIER_CPU_PORT)
-            (void)Textures;
-#else
             if (Textures) Resident.SkyProbeTexture = Textures->RegisterPath(Probe.string(), /*Linear=*/false);
-#endif
         }
         Out.AssignEnvironment(std::move(Resident));
         return true;

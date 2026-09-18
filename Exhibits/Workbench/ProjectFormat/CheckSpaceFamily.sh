@@ -37,7 +37,7 @@ Engine="Engine/ContentInterchange/SpaceCodec.cpp Engine/ContentInterchange/Space
         Engine/DeviceExchange/OrientationClassifier.cpp Projects/Project-Zero/Source/CommandLine.cpp"
 RuntimeEngine="Engine/ContentInterchange/SpaceCodec.cpp Engine/ContentInterchange/SpaceExport.cpp
         Engine/ContentInterchange/SpaceToml.cpp Engine/ContentInterchange/SpaceSceneCodec.cpp
-        Engine/ContentInterchange/MaterialIndex.cpp Engine/GeometricRaster/GeometryStructure.cpp
+        Engine/ContentInterchange/TextureRegistration.cpp Engine/ContentInterchange/MaterialIndex.cpp Engine/GeometricRaster/GeometryStructure.cpp
         Engine/GeometricRaster/SceneStructure.cpp Engine/DeviceExchange/OrientationClassifier.cpp"
 
 Proof=$(mktemp -u /tmp/SpaceFamily.XXXXXX)

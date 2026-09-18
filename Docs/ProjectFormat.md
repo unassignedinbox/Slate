@@ -78,8 +78,10 @@ mips. Supported channel names are `base_color`, `metalness`, `specular_roughness
 
 The format gate is CPU-only: `TriangleIndex` now lives in the data-only
 `Engine/GeometricRaster/TriangleIndex.h`, not `SwapchainExchange.h`; no Vulkan header, loader, device, or software ICD
-is obtained to compile or run `CheckSpaceFamily.sh`. `SpaceRuntimeProof.cpp` writes a TOML project/material and FSPC
-geometry then makes the selected level resident, with no glTF input.
+is obtained to compile or run `CheckSpaceFamily.sh`. `SpaceRuntimeProof.cpp` writes project, material, instance, and
+environment TOML plus FSPC geometry; it resolves a selected external instance, retains world staging, and registers a
+material map slot without glTF input or image decoding. `TextureRegistration.cpp` deliberately separates path/byte
+registration from the `stb_image` decoding TU so this validation remains package-free.
 
 ---
 

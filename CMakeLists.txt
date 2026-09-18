@@ -211,6 +211,7 @@ set(FRONTIER_ENGINE_SOURCES
     Engine/ContentInterchange/MaterialIndex.cpp
     Engine/ContentInterchange/MaterialCodec.cpp
     Engine/ContentInterchange/TextureIndex.cpp
+    Engine/ContentInterchange/TextureRegistration.cpp # texture-slot registration without stb_image; used by CPU Space proofs too
     Engine/ContentInterchange/SceneCodec.cpp
     Engine/ContentInterchange/ShaderBallStructure.cpp
     Engine/ContentInterchange/ShowcaseStructure.cpp

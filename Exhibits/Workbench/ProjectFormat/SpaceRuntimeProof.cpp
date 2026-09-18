@@ -7,6 +7,7 @@
 #include "SpaceExport.h"
 #include "SpaceSceneCodec.h"
 #include "SpaceToml.h"
+#include "TextureIndex.h"
 
 #include <cstdio>
 #include <cstring>
@@ -103,7 +104,7 @@ int main()
     Second.Name = "Second triangle";
     Second.Level = "Second";
     Second.Geometry = "../Geometry/ProofTriangle.geometry";
-    Second.Material = "../Materials/ProofGold.material";
+    Second.Material = "../Materials/ProofMappedGold.material";
     Second.Flags = kSpaceInstanceCastShadow;
     Second.Transform[12] = -2.0f;
     const std::filesystem::path InstancePath = Root / "Content" / "Instances" / "Second.instance";
@@ -144,17 +145,19 @@ int main()
     else if (Failures == 0) Pass("TOML project, material, instance, environment, and texture references round-trip");
 
     SceneStructure Scene;
+    TextureIndex Textures;
     SceneDecodeConfiguration Decode;
     Decode.SlabLimit = 4u;
     Decode.LevelName = "Second";
-    if (Failures == 0 && !SpaceSceneCodec::Decode(ProjectPath.string(), Scene, nullptr, Decode, &Error)) Fail(Error);
+    if (Failures == 0 && !SpaceSceneCodec::Decode(ProjectPath.string(), Scene, &Textures, Decode, &Error)) Fail(Error);
     else if (Failures == 0 && (Scene.QueryName() != "Second" || Scene.QueryTriangleCount() != 1u ||
                                Scene.QueryInstances().size() != 1u || Scene.QueryMaterials().QueryCount() != 1u ||
                                Scene.QueryVertices().empty() || Scene.QueryInstances()[0].World[12] != -2.0f ||
                                Scene.QueryEnvironment().Name != Environment.Name || Scene.QueryEnvironment().TerrainPath.empty() ||
-                               Scene.QueryEnvironment().SunHour != Environment.SunHour))
-        Fail("the runtime loader did not select and make the named Space level and environment resident");
-    else if (Failures == 0) Pass("CPU runtime resolves .instance and .environment files with FSPC geometry and TOML material without glTF");
+                               Scene.QueryEnvironment().SunHour != Environment.SunHour || Textures.QueryCount() != 1u ||
+                               !Scene.QueryMaterials().QueryDescriptors()[0].Slabs[0].Texture(MaterialTextureChannel::BaseColor).IsBound()))
+        Fail("the runtime loader did not register the named Space level, map, and environment");
+    else if (Failures == 0) Pass("CPU runtime resolves .instance, .environment, and texture references without glTF or image decoding");
 
     std::filesystem::remove_all(Root, Ec);
     if (Failures == 0) std::printf("[space-runtime] GREEN — no Vulkan header, driver, device, or glTF input was used\n");
