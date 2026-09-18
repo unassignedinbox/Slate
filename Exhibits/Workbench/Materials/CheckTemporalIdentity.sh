@@ -35,9 +35,9 @@
 #         So the A/B is also run with no motion at all: the two arms must agree to within a couple of percent of pixels,
 #         and the refused-read count must stay at the level of genuine silhouettes.
 #
-#    The shader side of the contract (bit 9, the identity in the moment image, the widened reservoir record, the host's
-#    80 B mirror of it) is checked by Tools/Build/CheckShaders.sh and by the static assertions in the shader and host
-#    sources; this gate checks the behaviour.
+#    The shader side of the contract (bit 9, the identity in the moment image, and the compact reservoir record whose
+#    final std430 word is a native uint identity) is checked by Tools/Build/CheckShaders.sh and by the matching host
+#    static assertion; this gate checks the behaviour.
 #    Usage: CheckTemporalIdentity.sh [fast]
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.." || exit 1
@@ -83,8 +83,10 @@ grep -q "kFeatureTemporalIdentity" Engine/Shaders/ReSTIRViewport.slang \
     && Pass "the kernel still declares the identity feature bit (bit 9)" || Fail "the kernel lost kFeatureTemporalIdentity"
 grep -q "IdentityObject" Engine/Shaders/ReSTIRViewport.slang \
     && Pass "the kernel validates on the OBJECT (the tesselation cannot flip the identity)" || Fail "the kernel lost IdentityObject"
-grep -q "uint32_t Identity\[4\]" Engine/DeviceExchange/SwapchainExchange.cpp \
-    && Pass "the host's reservoir record is the shader's (80 B with Identity[4], static_asserted)" || Fail "the host record lost Identity"
+grep -q "offsetof(ReservoirBufferRecord, Identity) == 60u" Engine/DeviceExchange/SwapchainExchange.cpp \
+    && grep -q "sizeof(ReservoirBufferRecord) == 64u" Engine/DeviceExchange/SwapchainExchange.cpp \
+    && grep -q "uint  Identity;" Engine/Shaders/ReSTIRViewport.slang \
+    && Pass "the host and shader agree on the compact 64 B record with a native identity" || Fail "the compact record lost identity or its 64 B layout"
 
 # ── ① the shadow follows the object ─────────────────────────────────────────────────────────────────────────────────
 echo "[D10] ① does the moving object's shadow follow it?"

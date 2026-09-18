@@ -511,8 +511,8 @@ function Invoke-DependencyScript([string] $ScriptPath, [string[]] $Arguments)
 #                                           THE RUN
 #---
 
-$BuildKind = if ($DevelopmentBuild) { 'editor / instrumentation' } else { 'shipping' }
-Write-Host "Project-Zero - $Configuration ($BuildKind)"
+$BuildProfile = if ($DevelopmentBuild) { 'editor / instrumentation' } else { 'shipping' }
+Write-Host "Project-Zero - $Configuration ($BuildProfile)"
 
 Import-ToolchainEnvironment
 $VulkanRoot = Resolve-VulkanRoot

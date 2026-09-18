@@ -292,11 +292,13 @@ public:
     void                        AssignFullscreen(bool Desired) noexcept;
     [[nodiscard]] PresentPacingCategory QueryPresentPacing() const noexcept { return Pacing; }
 
-    // Ray-tracing capability (plan v2.1 §3.4): probed once the physical device is chosen. The request comes from
-    //    Slate.config.toml [render] ray_tracing_tier; the resolved tier is what the renderer must build for.
+    // Ray-tracing capability: probed once the physical device is chosen. The request comes from Slate.config.toml
+    //    [render] ray_tracing_tier and remains a recorded hardware preference; the current renderer has only its
+    //    software CWBVH compute backend, so it must never report a probed hardware capability as an active backend.
     void                        AssignRayTracingRequest(RayTracingRequestCategory Request) noexcept { RayTracingRequest = Request; }
     [[nodiscard]] const RayTracingCapabilitySet& QueryRayTracingCapabilities() const noexcept { return Capabilities; }
-    [[nodiscard]] RayTracingTierCategory QueryRayTracingTier() const noexcept { return Capabilities.ResolveTier(RayTracingRequest); }
+    [[nodiscard]] RayTracingTierCategory QueryRayTracingTier() const noexcept { return RayTracingTierCategory::Software; }
+    [[nodiscard]] RayTracingTierCategory QueryRequestedRayTracingTier() const noexcept { return Capabilities.ResolveTier(RayTracingRequest); }
     [[nodiscard]] RayTracingRequestCategory QueryRayTracingRequest() const noexcept { return RayTracingRequest; }
     [[nodiscard]] bool          QueryFullscreen() const noexcept { return FullscreenActive; }
     [[nodiscard]] const char*   QueryPresentModeName() const noexcept;   // resolved VkPresentModeKHR, for diagnostics

@@ -31,7 +31,7 @@ void Check(bool Condition, const char* Message)
     if (!Condition) ++Failures;
 }
 
-// The development executable alone needs file inspection and calibrated work. Keep even the test helpers out of
+// The development executable alone needs file inspection and calibrated work. Keep even the proof helpers out of
 // the shipping compilation, so a warning-as-error build proves the production half has no vestigial timing code.
 #ifdef FRONTIER_DEVELOPMENT
 std::string Slurp(const std::string& Path)
@@ -178,7 +178,7 @@ int main()
 
     // Production sources use #ifdef FRONTIER_DEVELOPMENT around every call. Consequently the header deliberately
     // offers no no-op API in this mode: an unguarded telemetry use is a compiler error instead of silent production
-    // baggage. This test includes the header but must find no public macro from the facility.
+    // baggage. This gate includes the header but must find no public macro from the facility.
 #if defined(FRONTIER_TELEMETRY_SCOPE) || defined(FRONTIER_TELEMETRY_STARTUP) || \
     defined(FRONTIER_TELEMETRY_FLUSH) || defined(FRONTIER_TELEMETRY_VALUE)
     Check(false, "shipping header leaked a telemetry API");

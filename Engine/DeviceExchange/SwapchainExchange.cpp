@@ -25,6 +25,7 @@
 #include "../GeometricRaster/SceneStructure.h"
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -195,29 +196,34 @@ struct SwapchainExchange::VulkanRecord
     VkBuffer                 StarBuffer            = VK_NULL_HANDLE;
     VkDeviceMemory           StarMemory            = VK_NULL_HANDLE;
     void*                    StarMapped            = nullptr;
-    // R6 temporal reservoirs: two W×H×80 B SSBOs (bindings 16/17), ping-ponged per presented frame. Record layout
+    // R6 temporal reservoirs: two W×H×64 B SSBOs (bindings 16/17), ping-ponged per presented frame. Record layout
     //    (std430, mirrors GpuReservoir in ReSTIRViewport.slang): Sample(xyz point, w WeightSum) · Counts(M, light,
-    //    Visible, Age) · UvDepth(uv, W, view depth) · Normal(xyz geometric normal, w stride guard).
-    // ⚠️ D10 widened this from 64 B to 80 B: the record now carries the IDENTITY of the surface it was built on
-    //    (Identity[0] = instance << 14 | primitive — the same packing the visibility raster uses). Both pools validate
-    //    their temporal reuse against it, because normal + depth agree for two different objects often enough to
-    //    inherit another object's light sample. The static_assert is the contract with the shader's GpuReservoir:
-    //    changing one without the other is a stride mismatch that reads as garbage rather than as an error.
+    //    Visible, Age) · Details(W, view depth, identity bits, stride guard) · Normal(xyz geometric normal, padding).
+    // The chosen triangle uv was carried but never consumed for temporal or spatial re-evaluation: the stored world
+    //    point supplies all required geometry. Its two floats and the formerly unused fourth normal word preserve the
+    //    direct uint identity inside Normal's std430 16 B slot, so identity validation remains exact. The static_assert
+    //    is the contract with the shader's GpuReservoir: changing one without the other is a stride mismatch that
+    //    reads as garbage rather than as an error.
     struct ReservoirBufferRecord
     {
         float    Sample[4];    // xyz = light sample point, w = WeightSum
         uint32_t Counts[4];    // x = M, y = SelectedLight, z = Visible, w = Age
-        float    UvDepth[4];   // xy = SelectedUv, z = W, w = view depth at the build pixel [m]
-        float    Normal[4];    // xyz = normal, w = stride guard (ViewportWidth)
-        uint32_t Identity[4];  // D10: x = instance << 14 | primitive; yzw reserved
+        float    Details[4];   // x = W, y = view depth [m], z = render-width stride, w = padding
+        float    Normal[3];    // xyz = normal; the next uint takes the fourth std430 word
+        uint32_t Identity;     // packed (instance, primitive) surface identity
     };
-    static_assert(sizeof(ReservoirBufferRecord) == 80u, "GpuReservoir stride must be 80 B (matches the shader)");
+    static_assert(sizeof(ReservoirBufferRecord) == 64u, "GpuReservoir stride must be 64 B (matches the shader)");
+    static_assert(offsetof(ReservoirBufferRecord, Sample)   ==  0u, "GpuReservoir.Sample offset must match std430");
+    static_assert(offsetof(ReservoirBufferRecord, Counts)   == 16u, "GpuReservoir.Counts offset must match std430");
+    static_assert(offsetof(ReservoirBufferRecord, Details)  == 32u, "GpuReservoir.Details offset must match std430");
+    static_assert(offsetof(ReservoirBufferRecord, Normal)   == 48u, "GpuReservoir.Normal offset must match std430");
+    static_assert(offsetof(ReservoirBufferRecord, Identity) == 60u, "GpuReservoir.Identity offset must match std430");
     VkBuffer                 ReservoirBuffers[2]   = { VK_NULL_HANDLE, VK_NULL_HANDLE };
     VkDeviceMemory           ReservoirMemories[2]  = { VK_NULL_HANDLE, VK_NULL_HANDLE };
-    VkDeviceSize             ReservoirBytes        = 0u;   // [B] per buffer (W×H×80 — D10 added the identity)
+    VkDeviceSize             ReservoirBytes        = 0u;   // [B] per buffer (W×H×64, identity in Normal's fourth word)
     bool                     ReservoirParity       = false;   // [-]  false: 0 = prev / 1 = curr; flipped per frame
     bool                     ReservoirsInitialised = false;   // [-]  zero-filled once before first dispatch
-    // kFeatureGiReuse: the indirect pool's own pair (bindings 25/26), same 80 B record (D10), same ping-pong. Separate from
+    // kFeatureGiReuse: the indirect pool's own pair (bindings 25/26), same compact 64 B record, same ping-pong. Separate from
     //    the DI pair because the two pools reproject the same pixel but hold different quantities (this one's Sample
     //    is a light point sampled at the FIRST-BOUNCE VERTEX), so a DI reservoir can never be read as a GI one.
     VkBuffer                 GiReservoirBuffers[2]   = { VK_NULL_HANDLE, VK_NULL_HANDLE };
@@ -863,22 +869,24 @@ bool SwapchainExchange::BringPhysicalDevice() noexcept
 
     std::cerr << "[SwapchainExchange] Using GPU: " << ChosenName << " (queue family " << ChosenFamily << ")\n";
 
-    // Ray-tracing tier (extension-first probe; see RayTracingCapabilitySet.h for why the feature struct alone is not trusted).
+    // Hardware capability is intentionally reported separately from the active backend. The current shader uses
+    // CWBVH traversal and this logical device does not enable the RT extension/feature chain, so a probe result is
+    // useful future-hardware information but cannot be presented as a selected RayQuery or pipeline path.
     Capabilities = RayTracingCapabilitySet::Probe(Vulkan->PhysicalDevice);
     const RayTracingTierCategory Supported = Capabilities.QuerySupportedTier();
-    const RayTracingTierCategory Resolved  = Capabilities.ResolveTier(RayTracingRequest);
-    std::cerr << "[SwapchainExchange] Ray tracing: supported = " << RayTracingCapabilitySet::TierName(Supported)
+    const RayTracingTierCategory Requested = Capabilities.ResolveTier(RayTracingRequest);
+    std::cerr << "[SwapchainExchange] Ray tracing: hardware capability = " << RayTracingCapabilitySet::TierName(Supported)
               << ", requested = " << RayTracingCapabilitySet::RequestName(RayTracingRequest)
-              << ", using = " << RayTracingCapabilitySet::TierName(Resolved)
+              << " (device resolves to " << RayTracingCapabilitySet::TierName(Requested) << ")"
+              << ", active backend = " << RayTracingCapabilitySet::TierName(RayTracingTierCategory::Software) << " (CWBVH compute)"
               << "  [AS ext " << Capabilities.AccelerationStructureExtension << " feat " << Capabilities.AccelerationStructureFeature
               << " | RQ ext " << Capabilities.RayQueryExtension << " feat " << Capabilities.RayQueryFeature
               << " | RP ext " << Capabilities.RayTracingPipelineExtension
               << " | BDA " << Capabilities.BufferDeviceAddress << " | bindless " << Capabilities.DescriptorIndexing
               << " | subgroup " << Capabilities.SubgroupSize << "]  driver: " << Capabilities.DriverInfo << "\n";
-    if (RayTracingRequest != RayTracingRequestCategory::Auto
-        && static_cast<uint32_t>(Resolved) < static_cast<uint32_t>(RayTracingRequest) - 1u)
-        std::cerr << "[SwapchainExchange] Requested ray-tracing tier is not available on this device; downgraded to "
-                  << RayTracingCapabilitySet::TierName(Resolved) << ".\n";
+    if (RayTracingRequest == RayTracingRequestCategory::RayQuery || RayTracingRequest == RayTracingRequestCategory::Pipeline)
+        std::cerr << "[SwapchainExchange] Hardware RT was requested, but this build has no hardware traversal backend; "
+                  << "CWBVH compute remains active.\n";
     return true;
 }
 
@@ -1195,7 +1203,7 @@ bool SwapchainExchange::BringStorageImage() noexcept
     }
     Vulkan->DenoiseInitialised = false;
 
-    // ③ R6 temporal reservoirs — two full-extent 80 B/px SSBOs (bindings 16/17), device-local, zeroed on first dispatch.
+    // ③ R6 temporal reservoirs — two full-extent 64 B/px SSBOs (bindings 16/17), device-local, zeroed on first dispatch.
     {
         Vulkan->ReservoirBytes =
             static_cast<VkDeviceSize>(Extent.width) * static_cast<VkDeviceSize>(Extent.height) * sizeof(VulkanRecord::ReservoirBufferRecord);
@@ -1206,11 +1214,11 @@ bool SwapchainExchange::BringStorageImage() noexcept
                            Vulkan->ReservoirBuffers[I], Vulkan->ReservoirMemories[I]);
         Vulkan->ReservoirParity       = false;
         Vulkan->ReservoirsInitialised = false;
-        std::cerr << "[SwapchainExchange] Reservoirs: 2 x " << (Vulkan->ReservoirBytes >> 20u) << " MB (80 B/px temporal DI state, D10 identity included).\n";
+        std::cerr << "[SwapchainExchange] Reservoirs: 2 x " << (Vulkan->ReservoirBytes >> 20u) << " MB (64 B/px temporal DI state, native uint identity).\n";
 
-        // kFeatureGiReuse — the indirect pool's pair. Allocated unconditionally, like the DI pair: it is the same
-        //    80 B/px record, the cost is one more 80 B/px buffer pair, and a buffer that only exists when a flag is
-        //    set is a buffer the descriptor write has to branch on.
+        // kFeatureGiReuse — the indirect pool's pair. It is allocated unconditionally, like DI, so the descriptor
+        //    layout remains valid when the live feature flag changes. A future sparse or lazily allocated GI pool can
+        //    retain that descriptor contract while avoiding this full-extent pair when indirect reuse is disabled.
         Vulkan->GiReservoirBytes = Vulkan->ReservoirBytes;
         for (uint32_t I = 0u; I < 2u; ++I)
             AllocateBuffer(Vulkan->Device, Vulkan->MemoryProperties, Vulkan->GiReservoirBytes,
@@ -1220,7 +1228,7 @@ bool SwapchainExchange::BringStorageImage() noexcept
         Vulkan->GiReservoirParity       = false;
         Vulkan->GiReservoirsInitialised = false;
         std::cerr << "[SwapchainExchange] Indirect pool: 2 x " << (Vulkan->GiReservoirBytes >> 20u)
-                  << " MB (80 B/px first-bounce-vertex state, kFeatureGiReuse; D10 identity included).\n";
+                  << " MB (64 B/px first-bounce-vertex state, kFeatureGiReuse; native uint identity).\n";
     }
 
     Vulkan->HistoryInitialised = false;

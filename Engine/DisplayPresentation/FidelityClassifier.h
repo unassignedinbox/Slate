@@ -151,7 +151,9 @@ struct FidelityCriteria
     float                   CloudCoverageMargin;                // [0..1] early-out slack on the coverage probe
     bool                    GlobalIlluminationEnabled;          // [bool] indirect radiosity ReSTIR GI
     bool                    AntiAliasingEnabled;                // [bool] sub-pixel jitter + temporal accumulation
-    bool                    HardwareRayQueryEnabled;            // [bool] hardware ray tracing acceleration
+    // Reserved for a future RayQuery backend. It remains false in every current tier: a quality profile must not
+    // imply hardware acceleration before the device extension chain and shader traversal exist.
+    bool                    HardwareRayQueryEnabled;
 };
 
 // Applies the Control Centre's shadow-resolution dropdown over a tier's criteria. FollowQualityTier leaves the tier

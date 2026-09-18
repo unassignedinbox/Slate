@@ -114,7 +114,7 @@ FidelityCriteria FidelityClassifier::ConstructCriteria(FidelityCategory Category
             Criteria.ShadowFilterTapCount        = 7;
             Criteria.GlobalIlluminationEnabled   = true;
             Criteria.AntiAliasingEnabled         = true;
-            Criteria.HardwareRayQueryEnabled     = true;
+            Criteria.HardwareRayQueryEnabled     = false;  // reserved: current renderer always uses software CWBVH
             Criteria.CloudMarchStepCount         = 36;
             Criteria.CloudLightTapCount          = 5;
             Criteria.LocalVolumeStepCount        = 36;
@@ -140,7 +140,7 @@ FidelityCriteria FidelityClassifier::ConstructCriteria(FidelityCategory Category
             Criteria.ShadowFilterTapCount        = 9;
             Criteria.GlobalIlluminationEnabled   = true;
             Criteria.AntiAliasingEnabled         = true;
-            Criteria.HardwareRayQueryEnabled     = true;
+            Criteria.HardwareRayQueryEnabled     = false;  // reserved: current renderer always uses software CWBVH
             Criteria.CloudMarchStepCount         = 64;
             Criteria.CloudLightTapCount          = 5;
             Criteria.LocalVolumeStepCount        = 64;

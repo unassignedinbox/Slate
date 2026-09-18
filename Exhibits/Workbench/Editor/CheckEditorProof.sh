@@ -32,6 +32,7 @@ if ! g++ -std=c++20 -O2 -Wall -Wextra -DFRONTIER_DEVELOPMENT \
      Engine/Editor/InspectorPanel.cpp \
      Engine/Editor/ShadeTick.cpp \
      Engine/DisplayPresentation/ControlCentreHost.cpp \
+     Engine/DisplayPresentation/MaterialInspector.cpp \
      Engine/DisplayPresentation/PixelSpace.cpp \
      Engine/DisplayPresentation/MotionIntegrator.cpp \
      Engine/DisplayPresentation/ThemeStructure.cpp \
@@ -46,6 +47,8 @@ if ! g++ -std=c++20 -O2 -Wall -Wextra -DFRONTIER_DEVELOPMENT \
      Engine/DisplayPresentation/TypefaceRegistry.cpp \
      Engine/DisplayPresentation/GlyphSpace.cpp \
      Engine/DisplayPresentation/FontCodec.cpp \
+     Engine/ContentInterchange/AssetResolution.cpp \
+     Engine/ContentInterchange/MaterialIndex.cpp \
      Engine/DeviceExchange/InputExchange.cpp \
      Projects/Project-Zero/Source/RayTracingSolver.cpp \
      Projects/Project-Zero/Source/FlyThroughSolver.cpp \

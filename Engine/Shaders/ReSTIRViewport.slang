@@ -21,9 +21,9 @@
 //         7 843/7 623/8 082) with M bounded (41.7 mean / 64 max at frame 16, 50.4 / 84 at frame 32).
 //       • the indirect half's own pool — ReSTIR GI-style reuse of the FIRST-BOUNCE VERTEX's NEE stratum — landed as
 //         kFeatureGiReuse (bit 8, ON by default; the Control Centre's "Indirect reuse (GI pool)" checkbox and
-//         ReSTIRIntegratorConfiguration::GlobalIlluminationReuse turn it off for the A/B). A second 80 B/px
-//         reservoir pair (bindings 25/26 — same GpuReservoir, D10 widened it from 64 B, so the two pools share the
-//         stride and the Identity tail) holds light samples DRAWN AT THE VERTEX; temporal reuse reprojects by the
+//         ReSTIRIntegratorConfiguration::GlobalIlluminationReuse turn it off for the A/B). A second compact 64 B/px
+//         reservoir pair (bindings 25/26 — same GpuReservoir) holds light samples DRAWN AT THE VERTEX; temporal reuse
+//         reprojects by the
 //         pixel's motion and validates on the PRIMARY surface (25° / 10 % / stride guard), and spatial reuse runs the
 //         same cross as the direct pool with the neighbour's reservoir re-evaluated at THIS pixel's vertex. (No
 //         vertex-proximity test: the transferred quantity is a light SAMPLE — a world point on an emitter — so the
@@ -143,21 +143,24 @@ layout(std430, binding = 11) readonly buffer VertexExtent { GpuVertex Vertices[]
 layout(std430, binding = 12) readonly buffer IndexExtent  { uint      Indices[];  };   // R4b
 // 13 = EnergyLut, 14 = SheenLut (declared in MaterialEvaluation.slang)
 layout(binding = 15) uniform sampler2D MotionImage;   // R6: R2 motion (CurrentUv − PreviousUv, [0,1] uv units) — texelFetch only
-struct GpuReservoir   // 80 B stride (D10) — mirrors ReservoirBufferRecord in SwapchainExchange.cpp
+struct GpuReservoir   // 64 B std430 stride — mirrors ReservoirBufferRecord in SwapchainExchange.cpp
 {
     vec4  Sample;    // xyz = light sample point, w = WeightSum
     uvec4 Counts;    // x = M, y = SelectedLight, z = Visible, w = Age
-    vec4  UvDepth;   // xy = SelectedUv, z = W, w = view depth at the build pixel [m]
-    vec4  Normal;    // xyz = viewer-facing geometric normal at the build pixel, w = stride guard (ViewportWidth)
-    uvec4 Identity;  // D10: x = the packed (instance, primitive) this reservoir was built on; yzw reserved
+    // SelectedUv was carried but never read during a temporal or spatial re-evaluation: the stored world point is
+    // sufficient. Reclaim those two floats and the former 16 B identity tail. std430 permits the scalar identity to
+    // occupy the fourth word after Normal.xyz, preserving every packed visibility bit without treating it as a float.
+    vec4  Details;   // x = W, y = view depth [m], z = render-width stride guard, w = padding
+    vec3  Normal;    // viewer-facing geometric normal at the build pixel
+    uint  Identity;  // packed (instance, primitive) identity; shares Normal's 16 B std430 slot
 };
 layout(std430, binding = 16) readonly buffer PrevReservoirExtent { GpuReservoir PrevReservoirs[]; };
 layout(std430, binding = 17) writeonly buffer CurrReservoirExtent { GpuReservoir CurrReservoirs[]; };
-// The indirect pool's own pair (kFeatureGiReuse). Same 80 B record (D10; 64 B before the Identity tail) and the same
+// The indirect pool's own pair (kFeatureGiReuse). Same compact 64 B record and the same
 //    field meanings, but the sample inside lives
 //    on the FIRST-BOUNCE VERTEX rather than on the primary surface: Sample.xyz is a light point sampled from that
-//    vertex (for the sun, a far point along a cone-sampled direction from it), UvDepth.xy its uv, and the record's
-//    Normal/primaryT are the PRIMARY pixel's validation pair — the same pair the direct pool validates, because the
+//    vertex (for the sun, a far point along a cone-sampled direction from it). Details/Normal carry the PRIMARY
+//    pixel's validation pair — the same pair the direct pool validates, because the
 //    pool is reprojected by the pixel's motion vector whatever point the light sample came from. The vertex itself
 //    needs no buffer: this kernel is one dispatch, so the receiver's vertex is in registers where it was built.
 layout(std430, binding = 25) readonly buffer GiPrevReservoirExtent { GpuReservoir GiPrevReservoirs[]; };
@@ -930,11 +933,10 @@ struct Reservoir
     uint  SampleCount;      // M: number of considered candidates
     float UnbiasedWeight;   // W: final unbiased contribution weight (WeightSum / (M · p̂(z)))
     uint  SelectedLight;    // R6: luminaire-table index of the chosen sample (kills the O(L) nearest-emissive searches)
-    vec2  SelectedUv;       // R6: area-sample uv of the chosen sample on its triangle (p̂ re-evaluation on reuse)
     uint  Visible;          // R6: visibility of the chosen sample at the shading pixel (1 = lit; re-traced on reuse)
 };
 
-void ResampleCandidate(inout Reservoir res, vec3 point, uint light, vec2 uv, float weight, inout uint seed)
+void ResampleCandidate(inout Reservoir res, vec3 point, uint light, float weight, inout uint seed)
 {
     res.WeightSum    += weight;
     res.SampleCount  += 1u;
@@ -942,7 +944,6 @@ void ResampleCandidate(inout Reservoir res, vec3 point, uint light, vec2 uv, flo
     {
         res.SelectedPoint = point;
         res.SelectedLight = light;
-        res.SelectedUv    = uv;
     }
 }
 
@@ -954,7 +955,7 @@ void ResampleCandidate(inout Reservoir res, vec3 point, uint light, vec2 uv, flo
 //    the corrected scale against quadrature. HitPos anchors the sun's far point; SunUp (any direct radiance)
 //    decides whether the coin is flipped at all.
 void DrawDirectCandidate(SurfaceFrame F, ShadingRecord m, ResolvedLayers L, vec3 wo, vec3 hitPos, bool sunUp,
-                         out vec3 point, out uint light, out vec2 uv, out float weight, inout uint seed)
+                         out vec3 point, out uint light, out float weight, inout uint seed)
 {
     bool sun = sunUp && (LightTriangleCount == 0u || RandFloat(seed) < kSunPickProbability);
     if (sun)
@@ -964,7 +965,6 @@ void DrawDirectCandidate(SurfaceFrame F, ShadingRecord m, ResolvedLayers L, vec3
         vec3 sunDir = SampleSunDirection(SkySunDirection.xyz, u1, u2);
         point  = hitPos + sunDir * kSunShadowDistance;
         light  = kSunLightIndex;
-        uv     = vec2(u1, u2);
         float pHat = PHatSun(F, m, L, wo, SunEmission() * CloudShadowTransmittance(hitPos, sunDir), sunDir);
         float pPick = LightTriangleCount > 0u ? kSunPickProbability : 1.0;
         weight = pHat * SunSolidAngle() / pPick;
@@ -977,7 +977,6 @@ void DrawDirectCandidate(SurfaceFrame F, ShadingRecord m, ResolvedLayers L, vec3
         float  u2 = RandFloat(seed);
         point = SampleLightPointFor(li, u1, u2);
         light = li;
-        uv    = vec2(u1, u2);
         vec3 toLight = point - hitPos;
         float pHat = PHatFull(F, m, L, wo, LightEmission(li), toLight, dot(toLight, toLight), LightNormal(li));
         float pPick = sunUp ? 1.0 - kSunPickProbability : 1.0;
@@ -1200,7 +1199,6 @@ vec3 GiPoolShade(SurfaceFrame F, ShadingRecord m, ResolvedLayers L, vec3 wo, vec
     Reservoir ris;
     ris.SelectedPoint  = vec3(0.0);
     ris.SelectedLight  = kSunLightIndex;
-    ris.SelectedUv     = vec2(0.0);
     ris.WeightSum      = 0.0;
     ris.SampleCount    = 0u;
     ris.UnbiasedWeight = 0.0;
@@ -1209,17 +1207,17 @@ vec3 GiPoolShade(SurfaceFrame F, ShadingRecord m, ResolvedLayers L, vec3 wo, vec
     //    triangle-uniform point are the ones the shading estimate divides by (shade and target must agree).
     for (uint s = 0u; s < SamplesPerPixel; ++s)
     {
-        vec3  lp; uint li; vec2 uv; float w;
-        DrawDirectCandidate(F, m, L, wo, hitPos, sunUp, lp, li, uv, w, seed);
-        ResampleCandidate(ris, lp, li, uv, w, seed);
+        vec3  lp; uint li; float w;
+        DrawDirectCandidate(F, m, L, wo, hitPos, sunUp, lp, li, w, seed);
+        ResampleCandidate(ris, lp, li, w, seed);
     }
     // The tier's extra same-pixel candidates count for the indirect pool too: it is the same dial, and leaving them to
     //    the direct pool alone would make the tiers mean two different things.
     for (uint e = 0u; e < ExtraCandidateCount; ++e)
     {
-        vec3  lp; uint li; vec2 uv; float w;
-        DrawDirectCandidate(F, m, L, wo, hitPos, sunUp, lp, li, uv, w, seed);
-        ResampleCandidate(ris, lp, li, uv, w, seed);
+        vec3  lp; uint li; float w;
+        DrawDirectCandidate(F, m, L, wo, hitPos, sunUp, lp, li, w, seed);
+        ResampleCandidate(ris, lp, li, w, seed);
     }
 
     float pSelected = 0.0;
@@ -1242,27 +1240,26 @@ vec3 GiPoolShade(SurfaceFrame F, ShadingRecord m, ResolvedLayers L, vec3 wo, vec
             GpuReservoir prev = GiPrevReservoirs[prevPx.y * int(ViewportWidth) + prevPx.x];
             uint prevM = prev.Counts.x;
             bool valid = prevM > 0u
-                && prev.Normal.w == float(ViewportWidth)   // stride guard (render-scale change)
+                && prev.Details.z == float(ViewportWidth)   // stride guard (render-scale change)
                 && dot(primaryNormal, prev.Normal.xyz) > kTemporalNormalCos
-                && abs(primaryT - prev.UvDepth.w) / max(primaryT, 1e-3) < kTemporalDepthTol
+                && abs(primaryT - prev.Details.y) / max(primaryT, 1e-3) < kTemporalDepthTol
                 // D10: the same surface. It matters more here than in the direct pool: the pooled sample is a light
                 //    point chosen at the FIRST-BOUNCE VERTEX, so inheriting one across a surface change inherits an
                 //    occlusion test and a BRDF evaluated somewhere else — which reads as a reflection of an object
                 //    that is no longer there, and clears only as 1/n.
                 && ((FeatureFlags & kFeatureTemporalIdentity) == 0u
-                    || IdentityObject(prev.Identity.x) == IdentityObject(primaryIdentity));
+                    || IdentityObject(prev.Identity) == IdentityObject(primaryIdentity));
             if (valid)
             {
                 uint mPrevCapped = min(prevM, kTemporalMClamp * ris.SampleCount);
                 float pPrev = PHatSelected(F, m, L, wo, prev.Counts.y, prev.Sample.xyz - hitPos, hitPos);
                 float wCur  = pSelected * ris.UnbiasedWeight * float(ris.SampleCount);
-                float wPrev = pPrev * prev.UvDepth.z * float(mPrevCapped);
+                float wPrev = pPrev * prev.Details.x * float(mPrevCapped);
                 float total = wCur + wPrev;
                 if (total > 0.0 && RandFloat(seed) * total <= wPrev)
                 {
                     ris.SelectedPoint = prev.Sample.xyz;
                     ris.SelectedLight = prev.Counts.y;
-                    ris.SelectedUv    = prev.UvDepth.xy;
                     pSelected         = pPrev;
                 }
                 ris.SampleCount = ris.SampleCount + mPrevCapped;
@@ -1279,9 +1276,9 @@ vec3 GiPoolShade(SurfaceFrame F, ShadingRecord m, ResolvedLayers L, vec3 wo, vec
         GpuReservoir hist;
         hist.Sample  = vec4(ris.SelectedPoint, ris.WeightSum);
         hist.Counts  = uvec4(ris.SampleCount, ris.SelectedLight, 1u, giAge);
-        hist.UvDepth = vec4(ris.SelectedUv, ris.UnbiasedWeight, primaryT);
-        hist.Normal   = vec4(primaryNormal, float(ViewportWidth));
-        hist.Identity = uvec4(primaryIdentity, 0u, 0u, 0u);   // D10: which surface this reservoir belongs to
+        hist.Details = vec4(ris.UnbiasedWeight, primaryT, float(ViewportWidth), 0.0);
+        hist.Normal   = primaryNormal;
+        hist.Identity = primaryIdentity;
         GiCurrReservoirs[pixel.y * ViewportWidth + pixel.x] = hist;
     }
 
@@ -1305,21 +1302,20 @@ vec3 GiPoolShade(SurfaceFrame F, ShadingRecord m, ResolvedLayers L, vec3 wo, vec
             GpuReservoir neigh = GiPrevReservoirs[npx.y * int(ViewportWidth) + npx.x];
             uint neighM = neigh.Counts.x;
             bool nValid = neighM > 0u
-                && neigh.Normal.w == float(ViewportWidth)
+                && neigh.Details.z == float(ViewportWidth)
                 && dot(primaryNormal, neigh.Normal.xyz) > kTemporalNormalCos
-                && abs(primaryT - neigh.UvDepth.w) / max(primaryT, 1e-3) < kTemporalDepthTol;
+                && abs(primaryT - neigh.Details.y) / max(primaryT, 1e-3) < kTemporalDepthTol;
             if (!nValid) continue;
             uint mNeighCapped = min(neighM, kTemporalMClamp * capReference);
             float pNeigh = PHatSelected(F, m, L, wo, neigh.Counts.y, neigh.Sample.xyz - hitPos, hitPos);
             float wSelf  = pSelected * ris.UnbiasedWeight * float(ris.SampleCount);
-            float wNeigh = pNeigh * neigh.UvDepth.z * float(mNeighCapped);
+            float wNeigh = pNeigh * neigh.Details.x * float(mNeighCapped);
             float total  = wSelf + wNeigh;
             uint  takeAge = giAge;
             if (total > 0.0 && RandFloat(seed) * total <= wNeigh)
             {
                 ris.SelectedPoint = neigh.Sample.xyz;
                 ris.SelectedLight = neigh.Counts.y;
-                ris.SelectedUv    = neigh.UvDepth.xy;
                 takeAge   = neigh.Counts.w + 1u;
                 pSelected = pNeigh;
             }
@@ -1368,11 +1364,11 @@ void main()
         GpuReservoir giClear;
         giClear.Sample  = vec4(0.0);
         giClear.Counts  = uvec4(0u);
-        giClear.UvDepth = vec4(0.0);
-        giClear.Normal   = vec4(0.0, 0.0, 1.0, float(ViewportWidth));
+        giClear.Details = vec4(0.0, -1.0, float(ViewportWidth), 0.0);
+        giClear.Normal   = vec3(0.0, 0.0, 1.0);
+        giClear.Identity = kIdentityNone;
         // M = 0 is what makes this slot invalid; the identity still says "no surface" rather than "instance 0,
         //    primitive 0", which is a real surface and would read as a match if a decode ever looked at it.
-        giClear.Identity = uvec4(kIdentityNone, 0u, 0u, 0u);
         GiCurrReservoirs[pixel.y * ViewportWidth + pixel.x] = giClear;
     }
 
@@ -1473,14 +1469,13 @@ void main()
         res.SampleCount    = 0u;
         res.UnbiasedWeight = 0.0;
         res.SelectedLight  = 0u;
-        res.SelectedUv     = vec2(0.0);
         res.Visible        = 0u;
 
         for (uint s = 0u; s < SamplesPerPixel; ++s)
         {
-            vec3  lp; uint li; vec2 luv; float w;
-            DrawDirectCandidate(frame, shading, layers, woLocal, hitPos, sunUp, lp, li, luv, w, seed);
-            ResampleCandidate(res, lp, li, luv, w, seed);
+            vec3  lp; uint li; float w;
+            DrawDirectCandidate(frame, shading, layers, woLocal, hitPos, sunUp, lp, li, w, seed);
+            ResampleCandidate(res, lp, li, w, seed);
         }
 
         // Compute unbiased weight W (R6: the chosen light comes from the reservoir — no nearest-emissive search)
@@ -1504,9 +1499,9 @@ void main()
             //    from THIS pixel, resampled with the same target function so the reservoir stays a valid RIS estimate.
             for (uint sp = 0u; sp < ExtraCandidateCount; ++sp)
             {
-                vec3  nlp; uint nli; vec2 nuv; float nW;
-                DrawDirectCandidate(frame, shading, layers, woLocal, hitPos, sunUp, nlp, nli, nuv, nW, seed);
-                ResampleCandidate(res, nlp, nli, nuv, nW, seed);
+                vec3  nlp; uint nli; float nW;
+                DrawDirectCandidate(frame, shading, layers, woLocal, hitPos, sunUp, nlp, nli, nW, seed);
+                ResampleCandidate(res, nlp, nli, nW, seed);
             }
             // W for the final selection (the selected point may have changed in the loop above). This is the one
             //    evaluation that establishes pSelected; everything downstream carries it. PHatSelected answers for
@@ -1532,14 +1527,14 @@ void main()
                     GpuReservoir prev = PrevReservoirs[prevPx.y * int(ViewportWidth) + prevPx.x];
                     uint prevM = prev.Counts.x;
                     bool valid = prevM > 0u
-                        && prev.Normal.w == float(ViewportWidth)   // stride guard (render-scale change)
+                        && prev.Details.z == float(ViewportWidth)   // stride guard (render-scale change)
                         && dot(hitNormal, prev.Normal.xyz) > kTemporalNormalCos
-                        && abs(primaryT - prev.UvDepth.w) / max(primaryT, 1e-3) < kTemporalDepthTol
+                        && abs(primaryT - prev.Details.y) / max(primaryT, 1e-3) < kTemporalDepthTol
                         // D10: and the same surface. Two objects exchanging places pass the normal and the depth test
                         //    at both pixels; without this the reservoir carries the other object's light sample, so the
                         //    pixel is lit by a sample chosen for geometry that is no longer there.
                         && ((FeatureFlags & kFeatureTemporalIdentity) == 0u
-                            || IdentityObject(prev.Identity.x) == IdentityObject(primaryIdentity));
+                            || IdentityObject(prev.Identity) == IdentityObject(primaryIdentity));
                     if (valid)
                     {
                         uint mPrevCapped = min(prevM, kTemporalMClamp * res.SampleCount);
@@ -1549,13 +1544,12 @@ void main()
                         //    established — so it IS pSelected, not something to evaluate again.
                         float pCur  = pSelected;
                         float wCur  = pCur * res.UnbiasedWeight * float(res.SampleCount);
-                        float wPrev = pPrev * prev.UvDepth.z * float(mPrevCapped);
+                        float wPrev = pPrev * prev.Details.x * float(mPrevCapped);
                         float total = wCur + wPrev;
                         if (total > 0.0 && RandFloat(seed) * total <= wPrev)
                         {
                             res.SelectedPoint = prev.Sample.xyz;
                             res.SelectedLight = prev.Counts.y;
-                            res.SelectedUv    = prev.UvDepth.xy;
                             pSelected         = pPrev;   // the winner's p̂, already in hand from the merge test
                         }
                         res.SampleCount = res.SampleCount + mPrevCapped;
@@ -1582,7 +1576,6 @@ void main()
             // The temporal reservoir is what the history takes (see the publish block at the end of the DI block):
             //    snapshot the four quantities the reservoir is made of before the spatial taps touch them.
             vec3     histPoint     = res.SelectedPoint;
-            vec2     histUv        = res.SelectedUv;   // vec2: UvDepth packs (uv, W, view depth) as one vec4 below
             uint     histLight     = res.SelectedLight;
             uint     histCount     = res.SampleCount;
             uint     histVisible   = res.Visible;
@@ -1623,9 +1616,9 @@ void main()
                     GpuReservoir neigh = PrevReservoirs[npx.y * int(ViewportWidth) + npx.x];
                     uint neighM = neigh.Counts.x;
                     bool nValid = neighM > 0u
-                        && neigh.Normal.w == float(ViewportWidth)   // stride guard (render-scale change)
+                        && neigh.Details.z == float(ViewportWidth)   // stride guard (render-scale change)
                         && dot(hitNormal, neigh.Normal.xyz) > kTemporalNormalCos
-                        && abs(primaryT - neigh.UvDepth.w) / max(primaryT, 1e-3) < kTemporalDepthTol;
+                        && abs(primaryT - neigh.Details.y) / max(primaryT, 1e-3) < kTemporalDepthTol;
                     if (!nValid) continue;
                     uint mNeighCapped = min(neighM, kTemporalMClamp * capReference);
                     vec3 neighToL  = neigh.Sample.xyz - hitPos;
@@ -1633,14 +1626,13 @@ void main()
                     // Same identity as the temporal merge: p̂ at the current selection is the carried value.
                     float pSelf  = pSelected;
                     float wSelf  = pSelf * res.UnbiasedWeight * float(res.SampleCount);
-                    float wNeigh = pNeigh * neigh.UvDepth.z * float(mNeighCapped);
+                    float wNeigh = pNeigh * neigh.Details.x * float(mNeighCapped);
                     float nTotal = wSelf + wNeigh;
                     uint  takeAge = resAge;
                     if (nTotal > 0.0 && RandFloat(seed) * nTotal <= wNeigh)
                     {
                         res.SelectedPoint = neigh.Sample.xyz;
                         res.SelectedLight = neigh.Counts.y;
-                        res.SelectedUv    = neigh.UvDepth.xy;
                         takeAge = neigh.Counts.w + 1u;
                         pSelected         = pNeigh;   // the winner's p̂, already in hand
                     }
@@ -1670,9 +1662,9 @@ void main()
             GpuReservoir histRes;
             histRes.Sample  = vec4(histPoint, histWeightSum);
             histRes.Counts  = uvec4(histCount, histLight, histVisible, histAge);
-            histRes.UvDepth = vec4(histUv, histW, primaryT);
-            histRes.Normal   = vec4(hitNormal, float(ViewportWidth));
-            histRes.Identity = uvec4(primaryIdentity, 0u, 0u, 0u);   // D10: which surface this reservoir belongs to
+            histRes.Details = vec4(histW, primaryT, float(ViewportWidth), 0.0);
+            histRes.Normal   = hitNormal;
+            histRes.Identity = primaryIdentity;
             CurrReservoirs[pixel.y * ViewportWidth + pixel.x] = histRes;
 
             // Shade (R6: the stored selection carries its light — no search). The sun divides by nothing: it is at

@@ -523,8 +523,9 @@ int main(int argc, char** argv)
         true        // validation layers — set true for debugging
     };
 
-    // Frontier.config.toml is read before the device comes up: [render] ray_tracing_tier decides which traversal backend
-    //    the swapchain resolves (missing file = defaults = Auto).
+    // Frontier.config.toml is read before the device comes up: [render] ray_tracing_tier records a hardware preference
+    //    and is resolved against the device for diagnostics. This build's active traversal remains software CWBVH until
+    //    a RayQuery or ray-pipeline backend is implemented and enabled (missing file = defaults = Auto).
 
     Frontier::SwapchainExchange Surface(SurfaceConfig);
     Surface.AssignRayTracingRequest(static_cast<Frontier::RayTracingRequestCategory>(Configuration.Query().Backend.RayTracingTier));
@@ -826,15 +827,18 @@ int main(int argc, char** argv)
     Frontier::NotificationQueue  Notifications;
     Frontier::TelemetryMetrics   Telemetry;
     {
-        // R1: announce the resolved ray-tracing backend once; a downgrade from an explicit request is an Info toast.
+        // Report a hardware request truthfully: probing a capable device does not activate a backend the shader and
+        // logical device never created. The scene row below consequently reports the active CWBVH path, not a tier
+        // that is only a capability result.
         const Frontier::RayTracingRequestCategory Req = Surface.QueryRayTracingRequest();
-        const Frontier::RayTracingTierCategory    Use = Surface.QueryRayTracingTier();
-        const bool Downgraded = Req != Frontier::RayTracingRequestCategory::Auto && static_cast<uint32_t>(Use) + 1u < static_cast<uint32_t>(Req);
-        if (Downgraded)
+        if (Req == Frontier::RayTracingRequestCategory::RayQuery || Req == Frontier::RayTracingRequestCategory::Pipeline)
         {
-            char Body[128];
-            std::snprintf(Body, sizeof(Body), "%s requested, device supports %s", Frontier::RayTracingCapabilitySet::RequestName(Req), Frontier::RayTracingCapabilitySet::TierName(Use));
-            Notifications.Push("Ray-tracing tier downgraded", Body);
+            const Frontier::RayTracingTierCategory DeviceTier = Surface.QueryRequestedRayTracingTier();
+            char Body[160];
+            std::snprintf(Body, sizeof(Body), "%s requested; software CWBVH remains active (device capability: %s)",
+                          Frontier::RayTracingCapabilitySet::RequestName(Req),
+                          Frontier::RayTracingCapabilitySet::TierName(DeviceTier));
+            Notifications.Push("Software traversal active", Body);
         }
     }
     uint32_t AppliedSettingsRevision = ~0u;   // forces the first application
@@ -918,11 +922,16 @@ int main(int argc, char** argv)
 
         if (Announce)
         {
+            // Display → Match Quality explicitly owns the active scale when enabled; otherwise retain the dashboard's
+            // manual slider. This is also the scale the dispatch below will use, so the toast never reports a stale
+            // slider value while a tier is driving the target size.
+            const Frontier::AppearanceSettings& Appearance = ControlCentre.QueryAppearance().QueryApplied();
+            const float EffectiveRenderScale = Appearance.MatchQualityTier ? Criteria.ResolutionScale : S.RenderScale;
             char Body[96];
             std::snprintf(Body, sizeof(Body), "%s  |  %u candidates, %u extra, GI %s, AA %s, scale %d%%",
                           Frontier::FidelityLabel(S.Quality), Criteria.ReSTIRCandidateSampleCount,
                           Criteria.ReSTIRExtraCandidateCount, S.GlobalIllumination ? "on" : "off",
-                          S.AntiAliasing ? "on" : "off", static_cast<int>(S.RenderScale * 100.0f + 0.5f));
+                          S.AntiAliasing ? "on" : "off", static_cast<int>(EffectiveRenderScale * 100.0f + 0.5f));
             if (ControlCentre.QueryNotifications().QueryApplied().RenderFinished) Notifications.Push("Render settings applied", Body);
         }
     };
@@ -1608,10 +1617,13 @@ int main(int argc, char** argv)
 #endif
 
         // ④ Build dispatch configuration from live camera + integrator state (camera motion restarts accumulation)
-        //    Render scale: the kernel runs on a sub-rectangle of the storage image and the blit stretches it.
-        //    Display → Resolution: Native follows the dashboard render-scale slider; a fixed preset renders at that
-        //    height (window aspect preserved), never above the swapchain size, and the scale slider still multiplies it.
-        const float    RenderScale  = ControlCentre.QuerySettings().RenderScale;
+        //    Render scale: the kernel runs on a sub-rectangle of the storage image and the blit stretches it. Display
+        //    → Match Quality chooses the active tier's scale (Minimal 50 %, Economy 75 %, Standard and above 100 %);
+        //    when it is off, the dashboard slider is the deliberate manual override. A fixed display resolution then
+        //    multiplies either scale, preserving the window aspect and never exceeding the swapchain size.
+        const Frontier::AppearanceSettings& Appearance = ControlCentre.QueryAppearance().QueryApplied();
+        const Frontier::FidelityCriteria ActiveCriteria = Fidelity.QueryActiveCriteria();
+        const float    RenderScale  = Appearance.MatchQualityTier ? ActiveCriteria.ResolutionScale : ControlCentre.QuerySettings().RenderScale;
         const float    FixedFactor  = FixedRenderHeight > 0u ? std::min(1.0f, static_cast<float>(FixedRenderHeight) / static_cast<float>(std::max(1u, Surface.QueryHeight()))) : 1.0f;
         const uint32_t RenderWidth  = std::max(1u, static_cast<uint32_t>(static_cast<float>(Surface.QueryWidth())  * RenderScale * FixedFactor + 0.5f));
         const uint32_t RenderHeight = std::max(1u, static_cast<uint32_t>(static_cast<float>(Surface.QueryHeight()) * RenderScale * FixedFactor + 0.5f));
