@@ -6,6 +6,9 @@
 
 #include <vulkan/vulkan.h>
 #include "VisibilityExchange.h"
+#ifdef FRONTIER_DEVELOPMENT
+#include "../../Projects/Project-Zero/Source/FrameTelemetryLedger.h"
+#endif
 #include "../GeometricRaster/SceneStructure.h"
 #include <algorithm>
 #include <array>
@@ -145,6 +148,9 @@ struct VisibilityExchange::VulkanRecord
     // Timing
     VkQueryPool           Timestamps = VK_NULL_HANDLE;
     bool                  SlotRecorded[kMaximumCycleSlots]{};
+#ifdef FRONTIER_DEVELOPMENT
+    uint32_t              RecordedFrame[kMaximumCycleSlots]{}; // frame that wrote each timestamp-query slot
+#endif
 };
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -430,6 +436,9 @@ void VisibilityExchange::RetireTargets() noexcept
 
 bool VisibilityExchange::BringPipelines() noexcept
 {
+#ifdef FRONTIER_DEVELOPMENT
+    FRONTIER_TELEMETRY_SHADER("Startup/Shader/VisibilityPipelineSuite");
+#endif
     VkDevice D = Vulkan->Device;
 
     const auto Binding = [](uint32_t Index, VkDescriptorType Type, VkShaderStageFlags Stages) { VkDescriptorSetLayoutBinding B{}; B.binding = Index; B.descriptorType = Type; B.descriptorCount = 1u; B.stageFlags = Stages; return B; };
@@ -467,7 +476,14 @@ bool VisibilityExchange::BringPipelines() noexcept
     // ① Cull: 0 frame, 1 instances, 2 clusters, 3 draws, 4 counters, 5 previous bits, 6 current bits, 7 HiZ
     if (!MakeLayout({ Binding(0, UBO, CS), Binding(1, SSBO, CS), Binding(2, SSBO, CS), Binding(3, SSBO, CS), Binding(4, SSBO, CS), Binding(5, SSBO, CS), Binding(6, SSBO, CS), Binding(7, TEX, CS) }, Vulkan->CullLayout)) return false;
     if (!MakePipelineLayout(Vulkan->CullLayout, 0u, 0u, Vulkan->CullPipelineLayout)) return false;
+    #ifdef FRONTIER_DEVELOPMENT
+    {
+        FRONTIER_TELEMETRY_SHADER("Startup/Shader/ClusterCull/LoadModuleAndPipeline");
+#endif
     if (!MakeCompute("Engine/Shaders/ClusterCull.spv", Vulkan->CullPipelineLayout, Vulkan->CullPipeline)) return false;
+#ifdef FRONTIER_DEVELOPMENT
+    }
+#endif
 
     // ② Raster: 0 frame, 1 instances, 2 clusters, 3 vertices — R4b: 4 (unused), 5 materials, 6 slabs, 7 Textures[] (variable count, last) for the alpha mask
     {
@@ -494,13 +510,27 @@ bool VisibilityExchange::BringPipelines() noexcept
     // ③ HiZ: 0 source (sampled), 1 target level (storage)
     if (!MakeLayout({ Binding(0, TEX, CS), Binding(1, IMG, CS) }, Vulkan->HiZLayout)) return false;
     if (!MakePipelineLayout(Vulkan->HiZLayout, sizeof(HiZPushRecord), CS, Vulkan->HiZPipelineLayout)) return false;
+    #ifdef FRONTIER_DEVELOPMENT
+    {
+        FRONTIER_TELEMETRY_SHADER("Startup/Shader/HiZReduce/LoadModuleAndPipeline");
+#endif
     if (!MakeCompute("Engine/Shaders/HiZReduce.spv", Vulkan->HiZPipelineLayout, Vulkan->HiZPipeline)) return false;
+#ifdef FRONTIER_DEVELOPMENT
+    }
+#endif
 
     // ④ Resolve: 0 frame, 1 instances, 2 clusters, 3 vertices, 4 indices, 5 materials, 6 visibility, 7 motion, 8 depth, 9 HiZ, 10 surface, 11 normal, 12 presentation, 13 reservoirs (R6 row 3, M/W/Age views)
     if (!MakeLayout({ Binding(0, UBO, CS), Binding(1, SSBO, CS), Binding(2, SSBO, CS), Binding(3, SSBO, CS), Binding(4, SSBO, CS), Binding(5, SSBO, CS),
                       Binding(6, TEX, CS), Binding(7, TEX, CS), Binding(8, TEX, CS), Binding(9, TEX, CS), Binding(10, IMG, CS), Binding(11, IMG, CS), Binding(12, IMG, CS), Binding(13, SSBO, CS) }, Vulkan->ResolveLayout)) return false;
     if (!MakePipelineLayout(Vulkan->ResolveLayout, 0u, 0u, Vulkan->ResolvePipelineLayout)) return false;
+    #ifdef FRONTIER_DEVELOPMENT
+    {
+        FRONTIER_TELEMETRY_SHADER("Startup/Shader/SurfaceResolve/LoadModuleAndPipeline");
+#endif
     if (!MakeCompute("Engine/Shaders/SurfaceResolve.spv", Vulkan->ResolvePipelineLayout, Vulkan->ResolvePipeline)) return false;
+#ifdef FRONTIER_DEVELOPMENT
+    }
+#endif
 
     // ⑤ Visibility render passes: attachments 0 visId R32_UINT, 1 motion RG16F, 2 depth D32. Clear (phase 1) / Load (phase 2).
     for (int Variant = 0; Variant < 2; ++Variant)
@@ -531,12 +561,6 @@ bool VisibilityExchange::BringPipelines() noexcept
     }
 
     // ⑥ Raster graphics pipeline (dynamic viewport/scissor; reverse-Z GREATER; no culling — the cone test decides, and the kernel is two-sided)
-    VkShaderModule Vertex = LoadShader(D, "Engine/Shaders/VisibilityRaster.vert.spv");
-    VkShaderModule Fragment = LoadShader(D, "Engine/Shaders/VisibilityRaster.frag.spv");
-    if (!Vertex || !Fragment) return false;
-    VkPipelineShaderStageCreateInfo Stages[2] = {
-        { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0u, VK_SHADER_STAGE_VERTEX_BIT,   Vertex,   "main", nullptr },
-        { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0u, VK_SHADER_STAGE_FRAGMENT_BIT, Fragment, "main", nullptr } };
     VkPipelineVertexInputStateCreateInfo   VertexInput{ VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };   // pulled from the SSBO
     VkPipelineInputAssemblyStateCreateInfo Assembly{ VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
     Assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -556,6 +580,17 @@ bool VisibilityExchange::BringPipelines() noexcept
     VkPipelineDynamicStateCreateInfo DynamicState{ VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
     DynamicState.dynamicStateCount = 2u; DynamicState.pDynamicStates = Dynamic;
 
+#ifdef FRONTIER_DEVELOPMENT
+    {
+        FRONTIER_TELEMETRY_SHADER("Startup/Shader/VisibilityRaster/LoadModulesAndPipelines");
+#endif
+    VkShaderModule Vertex = LoadShader(D, "Engine/Shaders/VisibilityRaster.vert.spv");
+    VkShaderModule Fragment = LoadShader(D, "Engine/Shaders/VisibilityRaster.frag.spv");
+    if (!Vertex || !Fragment) return false;
+    VkPipelineShaderStageCreateInfo Stages[2] = {
+        { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0u, VK_SHADER_STAGE_VERTEX_BIT,   Vertex,   "main", nullptr },
+        { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0u, VK_SHADER_STAGE_FRAGMENT_BIT, Fragment, "main", nullptr } };
+
     VkGraphicsPipelineCreateInfo Graphics{ VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
     Graphics.stageCount = 2u; Graphics.pStages = Stages;
     Graphics.pVertexInputState = &VertexInput; Graphics.pInputAssemblyState = &Assembly; Graphics.pViewportState = &Viewport;
@@ -569,6 +604,9 @@ bool VisibilityExchange::BringPipelines() noexcept
     vkDestroyShaderModule(D, Vertex, nullptr);
     vkDestroyShaderModule(D, Fragment, nullptr);
     if (R != VK_SUCCESS) { std::cerr << "[VisibilityExchange] visibility raster pipeline failed (VkResult " << static_cast<int>(R) << ").\n"; return false; }
+#ifdef FRONTIER_DEVELOPMENT
+    }
+#endif
 
     // ⑦ R10 shadow stage. Everything here is OPTIONAL: a tree whose shadow SPIR-V has not been compiled still gets
     //    a working engine, just without GI-off shadows, rather than a hard failure at device creation. Every exit
@@ -643,6 +681,10 @@ bool VisibilityExchange::BringPipelines() noexcept
             return BringDescriptorSets();
         }
 
+#ifdef FRONTIER_DEVELOPMENT
+        {
+            FRONTIER_TELEMETRY_SHADER("Startup/Shader/ShadowRaster/LoadModulesAndPipeline");
+#endif
         VkShaderModule ShadowVertex   = LoadShader(D, "Engine/Shaders/ShadowRaster.vert.spv");
         VkShaderModule ShadowFragment = LoadShader(D, "Engine/Shaders/ShadowRaster.frag.spv");
         if (!ShadowVertex || !ShadowFragment)
@@ -694,12 +736,22 @@ bool VisibilityExchange::BringPipelines() noexcept
             std::cerr << "[VisibilityExchange] shadow raster pipeline failed - GI-off shadows disabled.\n";
             return BringDescriptorSets();
         }
+#ifdef FRONTIER_DEVELOPMENT
+        }
+#endif
 
+#ifdef FRONTIER_DEVELOPMENT
+        {
+            FRONTIER_TELEMETRY_SHADER("Startup/Shader/ShadowResolve/LoadModuleAndPipeline");
+#endif
         if (!MakeCompute("Engine/Shaders/ShadowResolve.spv", Vulkan->ShadowResolvePipelineLayout, Vulkan->ShadowResolvePipeline))
         {
             std::cerr << "[VisibilityExchange] shadow resolve pipeline failed - GI-off shadows disabled.\n";
             return BringDescriptorSets();
         }
+#ifdef FRONTIER_DEVELOPMENT
+        }
+#endif
 
         // NEAREST, and clamped. The filters fetch individual texels and average them themselves — a linear sampler
         //    would silently pre-blend depths, and averaging DEPTHS either side of a silhouette produces a value
@@ -1072,6 +1124,11 @@ void VisibilityExchange::ReadTelemetry(uint32_t Slot) noexcept
                               sizeof(Stamps), Stamps, sizeof(uint64_t) * 2u,
                               VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT) == VK_SUCCESS)
     {
+#ifdef FRONTIER_DEVELOPMENT
+        // This is the index supplied when the slot was recorded, rather than the index of the CPU frame now
+        // reading it. The verbose development ledger consumes it to align GPU timestamps with their true frame.
+        Telemetry.FrameIndex = Vulkan->RecordedFrame[Slot];
+#endif
         const auto Have  = [&](uint32_t I) { return Stamps[I * 2u + 1u] != 0u; };
         const auto Value = [&](uint32_t I) { return Stamps[I * 2u]; };
         const auto Ms = [&](uint32_t A, uint32_t B) {
@@ -1280,6 +1337,9 @@ void VisibilityExchange::RecordFrame(void* CommandHandle, uint32_t Slot, const V
     BufferBarrier(Command, Vulkan->Counters.Buffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, Compute, Transfer);
     VkBufferCopy Copy{ 0u, 0u, kCounterCount * 4u };
     vkCmdCopyBuffer(Command, Vulkan->Counters.Buffer, Vulkan->CounterReadback[Slot].Buffer, 1u, &Copy);
+#ifdef FRONTIER_DEVELOPMENT
+    Vulkan->RecordedFrame[Slot] = Frame.FrameIndex + 1u; // Integrator frame 0 is the ledger's displayed frame 1.
+#endif
     Vulkan->SlotRecorded[Slot] = true;
 }
 

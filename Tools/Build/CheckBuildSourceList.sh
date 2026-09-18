@@ -16,10 +16,11 @@
 #        would have caught 2026-09-18 before the user ever ran the build;
 #      ④ every .cpp under Engine/ and Projects/Project-Zero/Source/ is either in a list or named in the allowlist
 #        below with a reason — so a new TU cannot quietly land in neither build system;
-#      ⑤ per-file overrides agree: every TU CMake gives extra defines/include dirs gets the same treatment here.
-#      ⑥ the headless CPU reference agrees across all THREE of its lists (CMake, the Makefile, Construct.ps1) — it is
+#      ⑤ editor/Debug-only TUs are absent from production batches and present behind the same condition in both paths;
+#      ⑥ per-file overrides agree: every TU CMake gives extra defines/include dirs gets the same treatment here.
+#      ⑦ the headless CPU reference agrees across all THREE of its lists (CMake, the Makefile, Construct.ps1) — it is
 #        built on the sandbox side too, so a divergence there breaks the CPU work as well as the product;
-#      ⑦ Project-Dyno agrees between CMake and its own ToolchainSequence.ps1.
+#      ⑧ Project-Dyno agrees between CMake and its own ToolchainSequence.ps1.
 #
 #    Every list in the repo that names .cpp files by hand is covered here. If a new build target grows one, add it.
 #
@@ -89,6 +90,7 @@ cat > "$Work/allow.txt" <<'ALLOW'
 Engine\GeometricRaster\VisibilityRaster.cpp|the CPU visibility mirror the shadow proofs read; no exe consumer yet
 Projects\Project-Zero\Source\RendererHost.cpp|linked into the separate Project-Zero-CpuReference target, not the showroom
 Projects\Project-Zero\Source\SkyFogIntegrator.cpp|RendererHost's dependency; CpuReference target only
+Projects\Project-Zero\Source\FrameTelemetryLedger.cpp|Debug/editor-only; conditionally added after the production source list in both build paths
 ALLOW
 
 cut -d'|' -f1 < "$Work/allow.txt" | sort -u > "$Work/allow_paths.txt"
@@ -114,32 +116,44 @@ else
     Pass "④ every engine/app TU without its own main() is in a build list or explicitly accounted for"
 fi
 
-# ⑤ per-file overrides agree on both sides
-grep -q "SHADERBALL_PREVIEW_LIB" "$CMakeFile" || Fail "⑤ CMake no longer sets SHADERBALL_PREVIEW_LIB on the preview TU"
-grep -q "SHADERBALL_PREVIEW_LIB" "$Ps1File"   || Fail "⑤ the PowerShell script does not set SHADERBALL_PREVIEW_LIB on the preview TU"
-#    ShaderballExhibit.cpp is the editor's material-preview renderer and is DEVELOPMENT-ONLY: it #includes
-#    MaterialEvaluation.slang as host C++, which a shipping build has no use for. It therefore no longer sits in the
-#    unconditional list on either side — CMake adds it under FRONTIER_ZERO_DEVELOPMENT, the PowerShell batch under
-#    -Development. What must still agree is that BOTH gate it and BOTH set SHADERBALL_PREVIEW_LIB on it; a file
-#    conditional on one side and unconditional on the other is the rot this check exists to catch.
-if grep -q "SHADERBALL_PREVIEW_LIB" "$CMakeFile" && grep -q "SHADERBALL_PREVIEW_LIB" "$Ps1File"; then
-    CmakeGated=0; Ps1Gated=0
-    grep -q "FRONTIER_ZERO_DEVELOPMENT" "$CMakeFile" && \
-        grep -A3 "if(FRONTIER_ZERO_DEVELOPMENT)" "$CMakeFile" | grep -q "ShaderballExhibit.cpp" && CmakeGated=1
-    grep -B3 "ShaderballExhibit.cpp'   # M7b preview entry" "$Ps1File" | grep -q 'if ($Development)' && Ps1Gated=1
-
-    if [ "$CmakeGated" -eq 1 ] && [ "$Ps1Gated" -eq 1 ]; then
-        Pass "⑤ ShaderballExhibit.cpp is development-only in BOTH build systems, with SHADERBALL_PREVIEW_LIB on both"
-    elif [ "$CmakeGated" -eq 0 ] && [ "$Ps1Gated" -eq 0 ] && \
-         grep -q "ShaderballExhibit.cpp" "$Work/cmake.txt" && \
-         grep -qxF 'Exhibits\Workbench\Materials\ShaderballExhibit.cpp' "$Work/ps1.txt"; then
-        Pass "⑤ ShaderballExhibit.cpp is unconditional in both batches, with SHADERBALL_PREVIEW_LIB on both"
-    else
-        Fail "⑤ ShaderballExhibit.cpp is gated in one build system and not the other (CMake gated=$CmakeGated, PowerShell gated=$Ps1Gated)"
+# ⑤ Debug/editor-only translation units must never be listed in the production batch. They are added under the
+#    Debug-or-explicit-editor condition after the base lists, because a release command must not even compile the
+#    64 MiB telemetry ledger or ShaderballExhibit (which includes MaterialEvaluation.slang through SlangCpuShim.h).
+for Conditional in 'Projects\Project-Zero\Source\FrameTelemetryLedger.cpp' 'Exhibits\Workbench\Materials\ShaderballExhibit.cpp'; do
+    if grep -qxF "$Conditional" "$Work/ps1.txt" || grep -qxF "$Conditional" "$Work/cmake.txt"; then
+        Fail "⑤ $Conditional leaked into an unconditional production source list"
     fi
+done
+
+CmakeDevTUs=0
+if grep -q 'FRONTIER_ZERO_DEVELOPMENT_CONDITION' "$CMakeFile" && \
+   grep -q 'FrameTelemetryLedger.cpp' "$CMakeFile" && \
+   grep -q 'ShaderballExhibit.cpp' "$CMakeFile"; then
+    CmakeDevTUs=1
+fi
+Ps1DevTUs=0
+if grep -q '\$DevelopmentBuild' "$Ps1File" && \
+   grep -B5 "FrameTelemetryLedger.cpp' # RAM-only verbose ledger" "$Ps1File" | grep -q 'if (\$DevelopmentBuild)' && \
+   grep -B5 "ShaderballExhibit.cpp'     # M7b preview entry" "$Ps1File" | grep -q 'if (\$DevelopmentBuild)'; then
+    Ps1DevTUs=1
+fi
+if [ "$CmakeDevTUs" -eq 1 ] && [ "$Ps1DevTUs" -eq 1 ]; then
+    Pass "⑤ FrameTelemetryLedger.cpp and ShaderballExhibit.cpp are Debug/editor-only in BOTH build systems"
+else
+    Fail "⑤ development-only source condition disagrees (CMake=$CmakeDevTUs, PowerShell=$Ps1DevTUs)"
 fi
 
-# ── ⑥/⑦ the other hand-maintained lists ──────────────────────────────────────────────────────────────────────────────
+# ⑥ per-file overrides agree on both sides
+#    ShaderballExhibit is the preview entry. SHADERBALL_PREVIEW_LIB suppresses its standalone main(), allowing the
+#    editor to link RenderShaderballPreview without a duplicate entry point — but only when the source itself is
+#    selected by the development condition above.
+grep -q "SHADERBALL_PREVIEW_LIB" "$CMakeFile" || Fail "⑥ CMake no longer sets SHADERBALL_PREVIEW_LIB on the preview TU"
+grep -q "SHADERBALL_PREVIEW_LIB" "$Ps1File"   || Fail "⑥ the PowerShell script does not set SHADERBALL_PREVIEW_LIB on the preview TU"
+if grep -q "SHADERBALL_PREVIEW_LIB" "$CMakeFile" && grep -q "SHADERBALL_PREVIEW_LIB" "$Ps1File"; then
+    Pass "⑥ ShaderballExhibit.cpp retains SHADERBALL_PREVIEW_LIB on both development paths"
+fi
+
+# ── ⑦/⑧ the other hand-maintained lists ──────────────────────────────────────────────────────────────────────────────
 Compare() { # $1 = label, $2/$3 = files with one TU per line, $4/$5 = their names
     if diff -q "$2" "$3" > /dev/null; then
         Pass "$1"
@@ -174,15 +188,15 @@ done < "$Work/construct.raw"
 sort -u "$Work/cpu_construct.txt" -o "$Work/cpu_construct.txt"
 
 CmakeList PROJECT_ZERO_CPU_SOURCES | sort -u > "$Work/cpu_cmake.txt"
-Compare "⑥ the CPU reference names the same TUs in CMake, the Makefile and Construct.ps1" \
+Compare "⑦ the CPU reference names the same TUs in CMake, the Makefile and Construct.ps1" \
         "$Work/cpu_cmake.txt" "$Work/cpu_make.txt" CMake Makefile
-Compare "⑥ …and Construct.ps1 agrees with CMake too" \
+Compare "⑦ …and Construct.ps1 agrees with CMake too" \
         "$Work/cpu_cmake.txt" "$Work/cpu_construct.txt" CMake Construct.ps1
 
 CmakeList PROJECT_DYNO_SOURCES | sort -u > "$Work/dyno_cmake.txt"
 sed -n '/^\$EngineRelative = @(/,/^)/p' Projects/Project-Dyno/Build/ToolchainSequence.ps1 \
     | grep -oE "'[A-Za-z][^']*\.cpp'" | tr -d "'" | sed 's|\\\\|\\|g' | sort -u > "$Work/dyno_ps.txt"
-Compare "⑦ Project-Dyno names the same TUs in CMake and its ToolchainSequence.ps1" \
+Compare "⑧ Project-Dyno names the same TUs in CMake and its ToolchainSequence.ps1" \
         "$Work/dyno_cmake.txt" "$Work/dyno_ps.txt" CMake Dyno.ps1
 
 echo

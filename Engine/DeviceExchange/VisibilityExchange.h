@@ -80,6 +80,11 @@ struct VisibilityFrameConfiguration
 
 struct VisibilityTelemetry
 {
+#ifdef FRONTIER_DEVELOPMENT
+    // The originating renderer frame. Timestamp queries are read only after the matching cycle slot has completed,
+    // so the development ledger attributes a result to its renderer frame rather than the later CPU readback.
+    uint32_t FrameIndex        = 0u;
+#endif
     uint32_t ClusterTotal      = 0u;    // [cnt] clusters tested in phase 2
     uint32_t FrustumPassed     = 0u;    // [cnt]
     uint32_t ConePassed        = 0u;    // [cnt]

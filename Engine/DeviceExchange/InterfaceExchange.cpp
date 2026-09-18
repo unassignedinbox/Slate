@@ -7,6 +7,9 @@
 
 #include <vulkan/vulkan.h>
 #include "InterfaceExchange.h"
+#ifdef FRONTIER_DEVELOPMENT
+#include "../../Projects/Project-Zero/Source/FrameTelemetryLedger.h"
+#endif
 #include "../SpatialInterface/InterfaceLayoutCodec.h"
 
 #include <algorithm>
@@ -256,6 +259,9 @@ void InterfaceExchange::Retire() noexcept
 
 bool InterfaceExchange::BringPipeline() noexcept
 {
+#ifdef FRONTIER_DEVELOPMENT
+    FRONTIER_TELEMETRY_SHADER("Startup/Shader/InterfaceRaster/LoadModulesAndPipeline");
+#endif
     VkDevice D = Vulkan->Device;
 
     // ── Render pass: load the resolved scene colour, keep it, never clear. Depth is loaded read-only when present.

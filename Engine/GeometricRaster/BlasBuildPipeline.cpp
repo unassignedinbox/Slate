@@ -6,6 +6,9 @@
 //    mirror actually builds. If the plan and the kernels disagree about the stage order, the gate catches it there — this
 //    file only turns each plan entry into a dispatch and puts a barrier between them.
 #include "BlasBuildPipeline.h"
+#ifdef FRONTIER_DEVELOPMENT
+#include "../../Projects/Project-Zero/Source/FrameTelemetryLedger.h"
+#endif
 
 #include <algorithm>
 #include <array>
@@ -199,6 +202,9 @@ bool VulkanSourced::Complete() const noexcept
 bool BlasBuildPipeline::Build(VkDevice InDevice, const VulkanSourced& InApi, const std::string& ShaderDir,
                               std::string& OutError) noexcept
 {
+#ifdef FRONTIER_DEVELOPMENT
+    FRONTIER_TELEMETRY_SHADER("Startup/Shader/BlasBuildAndRefit/LoadModulesAndPipelines");
+#endif
     Device = InDevice;
     Api    = InApi;
     if (!Api.Complete()) { OutError = "the VulkanSourced table is incomplete"; return false; }

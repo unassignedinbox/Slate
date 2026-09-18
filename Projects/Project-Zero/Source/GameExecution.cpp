@@ -51,7 +51,9 @@
 #include "InterfaceTrialSequence.h"
 #include "InstanceMotionSequence.h"
 #include "PerformanceTelemetrySequence.h"
+#ifdef FRONTIER_DEVELOPMENT
 #include "FrameTelemetryLedger.h"
+#endif
 #include "PhysicsInstanceSequence.h"
 #include "InterfaceAudioSequence.h"
 #include "../../../Engine/SpatialInterface/InterfaceScreenSequence.h"
@@ -70,6 +72,12 @@
 
 int main(int argc, char** argv)
 {
+#ifdef FRONTIER_DEVELOPMENT
+    // Reserve before any startup work. This is intentionally the first ledger call so the origin covers all real
+    // startup work below; Reserve itself happens once before the first frame, never on the hot path.
+    FRONTIER_TELEMETRY_RESERVE(2u * 1000u * 1000u);
+#endif
+
     // D4: how many rigid bodies the --scene drop level contains. Fixed so the exported glTF and the solver agree
     //    on instance ordinals without either having to inspect the other.
     constexpr uint32_t kDropBodyCount = 12u;
@@ -224,8 +232,15 @@ int main(int argc, char** argv)
     }
 
     Frontier::ConfigurationRegistry Configuration;
+#ifdef FRONTIER_DEVELOPMENT
+    {
+        FRONTIER_TELEMETRY_STARTUP("Startup/ConfigurationLoad");
+#endif
     if (!Configuration.Load("Projects/Project-Zero/Content/Frontier.config.toml"))
         std::cerr << "[Configuration] " << Configuration.QueryPath() << ": " << Configuration.QueryLastError() << " - using defaults\n";
+#ifdef FRONTIER_DEVELOPMENT
+    }
+#endif
 
     Frontier::SceneStructure Level;
     Frontier::TextureIndex   Textures;
@@ -236,6 +251,9 @@ int main(int argc, char** argv)
     uint32_t MoonSlots[Frontier::kMoonAtlasCount];
     for (uint32_t M = 0u; M < Frontier::kMoonAtlasCount; ++M) MoonSlots[M] = 0xFFFFFFFFu;
     {
+#ifdef FRONTIER_DEVELOPMENT
+        FRONTIER_TELEMETRY_CONTENT("Startup/Content/DecodeAndRegisterTextures");
+#endif
         Frontier::SceneDecodeConfiguration Decode;
         Decode.UniformScale = SceneScale;
         Decode.SlabLimit    = Configuration.Query().Backend.SlabLimit;
@@ -272,7 +290,9 @@ int main(int argc, char** argv)
             {
                 // JPEG/PNG decode plus the mip chains. Seconds on a cold cache, and worth seeing separately from
                 //    the upload it precedes.
-                FRONTIER_TELEMETRY_CONTENT("Bootstrap/TextureDecode");
+#ifdef FRONTIER_DEVELOPMENT
+                FRONTIER_TELEMETRY_CONTENT("Startup/Content/TextureDecode");
+#endif
                 (void)Textures.Decode(Configuration.Query().Backend.TextureEdgeLimit, &TextureReport);
             }
             for (const Frontier::TextureDescriptor& T : Textures.QueryTextures())
@@ -377,6 +397,9 @@ int main(int argc, char** argv)
     //     (Scratchpad/CheckTraversalIdentity.sh is the gate). Per-instance transforms arrive in D2/D3.
     Frontier::TraversalIndex Traversal;
     {
+#ifdef FRONTIER_DEVELOPMENT
+        FRONTIER_TELEMETRY_CONTENT("Startup/Content/BuildTraversal");
+#endif
         // SBVH; ~2× build time for ~10 % fewer steps. The drop level opts OUT: spatial splits cut triangles,
         //    which makes the tree unrefittable, and movable geometry is worth more here than the traversal gain.
         const bool HighQuality = !DropScene && Level.QueryTriangleCount() <= 2'000'000u;
@@ -511,7 +534,9 @@ int main(int argc, char** argv)
         // Device, window, swapchain, every pipeline and every shader module: the single largest startup cost and,
         //    until now, an unmeasured one. The ledger records it as a phase so "why does it take so long to open"
         //    has an answer that is a number.
-        FRONTIER_TELEMETRY_STARTUP("Bootstrap/SwapchainBring");
+#ifdef FRONTIER_DEVELOPMENT
+        FRONTIER_TELEMETRY_STARTUP("Startup/Vulkan/Bring");
+#endif
         SurfaceUp = Surface.Bring();
     }
     if (!SurfaceUp)
@@ -528,14 +553,18 @@ int main(int argc, char** argv)
                          "Bootstrap", "Window and Vulkan swapchain ready.");
 
     {
-        FRONTIER_TELEMETRY_STARTUP("Bootstrap/ShadingTableBake");
+#ifdef FRONTIER_DEVELOPMENT
+        FRONTIER_TELEMETRY_CONTENT("Startup/Content/ShadingTableBake");
+#endif
         const Frontier::ShadingTableSet Tables = Frontier::ShadingTableCodec::Bake();   // R4b: GGX energy + LTC sheen LUTs
         Surface.UploadShadingTables(Tables.Energy.data(), Tables.Sheen.data(), Frontier::ShadingTableSet::kResolution);
     }
     {
         // Vertex/index/cluster/material/texture upload plus the acceleration structures — the other half of the
         //    startup bill, and the half that scales with the level.
-        FRONTIER_TELEMETRY_CONTENT("Bootstrap/UploadScene");
+#ifdef FRONTIER_DEVELOPMENT
+        FRONTIER_TELEMETRY_CONTENT("Startup/Content/UploadScene");
+#endif
         Surface.UploadScene(Level, Traversal, &Textures);
     }
 
@@ -939,9 +968,21 @@ int main(int argc, char** argv)
     // P2: previous-frame mouse state, so a press is detected as an edge rather than a level.
     bool PointerHeldLastFrame = false;
 
-    if (Interface.Bring(Surface.QueryDevice(), Surface.QueryPhysicalDevice(),
-                        Surface.QueryCycleSlotCount(), Surface.QueryColourFormat(), Surface.QueryDepthFormat()))
+    bool InterfaceBrought = false;
+#ifdef FRONTIER_DEVELOPMENT
     {
+        FRONTIER_TELEMETRY_STARTUP("Startup/Interface/Bring");
+#endif
+    InterfaceBrought = Interface.Bring(Surface.QueryDevice(), Surface.QueryPhysicalDevice(),
+                                       Surface.QueryCycleSlotCount(), Surface.QueryColourFormat(), Surface.QueryDepthFormat());
+#ifdef FRONTIER_DEVELOPMENT
+    }
+#endif
+    if (InterfaceBrought)
+    {
+#ifdef FRONTIER_DEVELOPMENT
+        FRONTIER_TELEMETRY_STARTUP("Startup/Interface/BuildContentAndAudio");
+#endif
         // Place the panel in the ROOM rather than at the world origin. ShowroomStructure publishes the anchor it
         //    reserved for exactly this — above the plinth, tilted toward the eye — so the level owns where the
         //    interface hangs and the trial sequence owns what is on it. Any other level keeps the default upright
@@ -1083,12 +1124,16 @@ int main(int argc, char** argv)
 
     // Everything up to here was one-off. Close the startup phase so the report can separate "what it cost to open"
     //    from "what it costs per frame" — two numbers that a single average would blend into something meaningless.
+#ifdef FRONTIER_DEVELOPMENT
     FRONTIER_TELEMETRY_FIRST_FRAME();
+#endif
 
     while (!Surface.CloseRequested() && !Panel.Convert<bool>())
     {
+#ifdef FRONTIER_DEVELOPMENT
         FRONTIER_TELEMETRY_ADVANCE_FRAME();
-        FRONTIER_TELEMETRY_SCOPE("Frame");
+        FRONTIER_TELEMETRY_SCOPE("Frame/Total");
+#endif
         const auto  NowTime = Clock::now();
         float       Δτ      = std::chrono::duration_cast<Duration>(NowTime - PreviousTime).count();
         PreviousTime        = NowTime;
@@ -1097,25 +1142,42 @@ int main(int argc, char** argv)
         if (Δτ > 0.1f) Δτ = 0.1f;
 
         // ① Poll input — GLFW callbacks forward into Input
+#ifdef FRONTIER_DEVELOPMENT
+        {
+            FRONTIER_TELEMETRY_SCOPE("Frame/InputPoll");
+#endif
         Surface.PollInput(Input);
+#ifdef FRONTIER_DEVELOPMENT
+        }
+#endif
 
         // ①b Control Centre owns the pointer while hovered / grabbed / pulled down; the camera never sees those clicks
         //    Display → UI Scale: the overlay lives in logical pixels (physical ÷ scale); the pointer is mapped the same way.
         const float    InterfaceScale = std::clamp(ControlCentre.QueryAppearance().QueryApplied().InterfaceScale / 100.0f, 0.5f, 2.0f);
         const uint32_t LogicalWidth   = std::max(1u, static_cast<uint32_t>(static_cast<float>(Surface.QueryWidth())  / InterfaceScale + 0.5f));
         const uint32_t LogicalHeight  = std::max(1u, static_cast<uint32_t>(static_cast<float>(Surface.QueryHeight()) / InterfaceScale + 0.5f));
+#ifdef FRONTIER_DEVELOPMENT
+        {
+            FRONTIER_TELEMETRY_SCOPE("Frame/DashboardAndHousekeeping");
+#endif
         ControlCentre.Resize(LogicalWidth, LogicalHeight);
         ControlCentre.AdvanceInteraction(Input, Input.QueryCursorPositionX() / InterfaceScale, Input.QueryCursorPositionY() / InterfaceScale);
         ControlCentre.AdvanceLocomotion(Δτ);
         Notifications.Advance(Δτ);
         Configuration.Advance(Δτ);
         Telemetry.RecordFrame(Δτ);
+#ifdef FRONTIER_DEVELOPMENT
+        }
+#endif
 
         // ①a' The sky and the weather. Ticked here, beside the other per-frame advances, so the clock, the wind
         //     phase and the precipitation pool all move exactly once and in a fixed order. The camera position
         //     is what the precipitation emitter follows — it is a world-space cylinder about the viewer, with no
         //     view direction, which is what keeps rain from following where you look.
         {
+#ifdef FRONTIER_DEVELOPMENT
+            FRONTIER_TELEMETRY_SCOPE("Frame/CelestialTick");
+#endif
             const Frontier::Vector3 Eye = Camera.Convert<Frontier::Vector3>();
             const float CameraWorld[3] = { Eye.x, Eye.y, Eye.z };
             Celestial.Tick(static_cast<float>(Δτ), CameraWorld, 0.0f);
@@ -1137,6 +1199,9 @@ int main(int argc, char** argv)
 
         // ①c Dashboard settings → renderer (only when something changed)
         {
+#ifdef FRONTIER_DEVELOPMENT
+            FRONTIER_TELEMETRY_SCOPE("Frame/ApplyRenderSettings");
+#endif
             const Frontier::ControlCentreSettings& S = ControlCentre.QuerySettings();
             if (S.Revision != AppliedSettingsRevision)
             {
@@ -1162,6 +1227,9 @@ int main(int argc, char** argv)
         //    here: V-Sync → swapchain present mode, fullscreen → GLFW monitor switch, frame cap → loop pacing below,
         //    resolution → render-target size (step ④).
         {
+#ifdef FRONTIER_DEVELOPMENT
+            FRONTIER_TELEMETRY_SCOPE("Frame/ApplyAppearance");
+#endif
             const Frontier::AppearanceInspector& A = ControlCentre.QueryAppearance();
             if (A.QueryRevision() != AppliedAppearanceRevision)
             {
@@ -1199,6 +1267,9 @@ int main(int argc, char** argv)
         //    Invert Y-Axis into the fly-through configuration. Profile / shortcut fields are persisted but not yet
         //    consumed by the solver (flagged in the step report).
         {
+#ifdef FRONTIER_DEVELOPMENT
+            FRONTIER_TELEMETRY_SCOPE("Frame/ApplyInputPreferences");
+#endif
             const Frontier::InputInspector& I = ControlCentre.QueryInput();
             if (I.QueryRevision() != AppliedInputRevision)
             {
@@ -1223,6 +1294,9 @@ int main(int argc, char** argv)
 
         // ①f Notifications page → Save Preferences: overlay rows, toast dwell, alert gates.
         {
+#ifdef FRONTIER_DEVELOPMENT
+            FRONTIER_TELEMETRY_SCOPE("Frame/ApplyNotificationPreferences");
+#endif
             const Frontier::NotificationInspector& N = ControlCentre.QueryNotifications();
             if (N.QueryRevision() != AppliedNotifyRevision)
             {
@@ -1249,6 +1323,9 @@ int main(int argc, char** argv)
         //    the flag, and a preview request renders the shaderball PNG + stamps the header line. Selection alone
         //    never restarts the accumulation.
         {
+#ifdef FRONTIER_DEVELOPMENT
+            FRONTIER_TELEMETRY_SCOPE("Frame/ApplyMaterialEdits");
+#endif
             Frontier::MaterialInspector& M = ControlCentre.AccessMaterials();
             M.Rebuild(&Level.AccessMaterials());
             if (M.QueryRevision() != AppliedMaterialsRevision)
@@ -1340,6 +1417,9 @@ int main(int argc, char** argv)
         // ①g Alert gates: "Autosave Errors" (preference writes), "Baking Complete" (accumulation converged),
         //    "Frame-rate Drops" (2 s average under 30 fps, once per episode).
         {
+#ifdef FRONTIER_DEVELOPMENT
+            FRONTIER_TELEMETRY_SCOPE("Frame/NotificationGates");
+#endif
             const Frontier::NotificationPreferences& P = ControlCentre.QueryNotifications().QueryApplied();
             if (P.AutosaveErrors && !Configuration.QueryLastError().empty() && Configuration.QueryLastError() != LastSaveError)
             {
@@ -1468,6 +1548,10 @@ int main(int argc, char** argv)
         (void)SceneReady; (void)SceneRowCount; (void)SheetFor; (void)TintMirror; (void)AppliedOrbit;
 #endif
 
+#ifdef FRONTIER_DEVELOPMENT
+        {
+            FRONTIER_TELEMETRY_SCOPE("Frame/EditorPanelPresent");
+#endif
         Panel.Present(Integrator, Camera, Scene,
                       Surface.QueryWidth(), Surface.QueryHeight(),
                       SceneInstances, SceneRowCount, &PickedSheet,
@@ -1494,8 +1578,12 @@ int main(int argc, char** argv)
                           }
 
                       });
+#ifdef FRONTIER_DEVELOPMENT
+        }
+#endif
 
 #ifdef FRONTIER_DEVELOPMENT
+        FRONTIER_TELEMETRY_SCOPE("Frame/EditorFeedAndOverlay");
         // ②d The tint write-back: a folder tint edited in the sheet lands back on its row.
         if (TintMirror != nullptr && PickedNow < SceneRowCount)
         {
@@ -1557,6 +1645,9 @@ int main(int argc, char** argv)
         // ④b R2 front end: same camera, reverse-Z infinite projection; AA jitter is a per-frame Halton(2,3) offset shared
         //    by the raster and the resolve (pixel centre when AA is off).
         {
+#ifdef FRONTIER_DEVELOPMENT
+            FRONTIER_TELEMETRY_SCOPE("Frame/VisibilityFrameSetup");
+#endif
             Frontier::VisibilityFrameConfiguration Frame{};
             Frame.Camera.Origin             = Camera.QuerySpatialLocation();
             Frame.Camera.Forward            = Camera.QueryForwardVector();
@@ -1581,6 +1672,9 @@ int main(int argc, char** argv)
         // ④b Spatial interface — animate the figures, re-bind on a swapchain rebuild, publish this frame's view.
         if (InterfaceReady)
         {
+#ifdef FRONTIER_DEVELOPMENT
+            FRONTIER_TELEMETRY_SCOPE("Frame/SpatialInterface");
+#endif
             // Every image view the interface renders into is destroyed by a swapchain rebuild, so re-Resize whenever
             //    the generation moves. Comparing generations (rather than extents) also catches a rebuild that keeps
             //    the same size, e.g. a present-pacing change.
@@ -1704,6 +1798,9 @@ int main(int argc, char** argv)
         //     unlike UploadScene this is safe every frame; the VkBuffer handle is unchanged so descriptors stand.
         if (PhysicsReady)
         {
+#ifdef FRONTIER_DEVELOPMENT
+            FRONTIER_TELEMETRY_SCOPE("Frame/PhysicsAndAccelerationUpdate");
+#endif
             BodyBridge.AdvancePhysics(BodySolver, AnimatedInstances, Δτ);
             if (!Surface.RefreshInstances(AnimatedInstances.data(), static_cast<uint32_t>(AnimatedInstances.size())))
             {
@@ -1771,6 +1868,9 @@ int main(int argc, char** argv)
         }
         else if (InstanceMotionReady)
         {
+#ifdef FRONTIER_DEVELOPMENT
+            FRONTIER_TELEMETRY_SCOPE("Frame/ScriptedInstanceMotion");
+#endif
             InstanceMotionElapsed += static_cast<double>(Δτ);
             InstanceMotion.AdvanceMotion(AnimatedInstances, InstanceMotionElapsed);
             if (!Surface.RefreshInstances(AnimatedInstances.data(), static_cast<uint32_t>(AnimatedInstances.size())))
@@ -1787,6 +1887,9 @@ int main(int argc, char** argv)
         //     away — there is nothing to fall back to, and the previous contents stand, which is a stale sky
         //     rather than a torn one.
         {
+#ifdef FRONTIER_DEVELOPMENT
+            FRONTIER_TELEMETRY_SCOPE("Frame/UploadSkyConstants");
+#endif
             const Frontier::SkyConstantRecord Sky = Celestial.PackSkyRecord();
             (void)Surface.RefreshSky(&Sky, sizeof(Sky));
 
@@ -1828,6 +1931,9 @@ int main(int argc, char** argv)
         //     and Luna moves. Same no-fallback shape as the sky — the previous roster stands, which is stale
         //     moons rather than torn ones.
         {
+#ifdef FRONTIER_DEVELOPMENT
+            FRONTIER_TELEMETRY_SCOPE("Frame/UploadMoonConstants");
+#endif
             const Frontier::MoonConstantRecord Moons = Celestial.PackMoonRecord();
             (void)Surface.RefreshMoons(&Moons, sizeof(Moons));
 
@@ -1891,6 +1997,9 @@ int main(int argc, char** argv)
         //     demands (light that never entered the lens cannot bounce in it). Pushed every frame beside the
         //     sky and moons, and compared like them, so star/flare/bow sliders land the tick they move.
         {
+#ifdef FRONTIER_DEVELOPMENT
+            FRONTIER_TELEMETRY_SCOPE("Frame/UploadPostConstants");
+#endif
             const Frontier::Vector3 Eye = Camera.QuerySpatialLocation();
             const float EyeArray[3] = { Eye.x, Eye.y, Eye.z };
             const Frontier::CelestialFrame& Frame = Celestial.Frame();
@@ -1919,7 +2028,31 @@ int main(int argc, char** argv)
         }
 
         // ⑤ Cull → raster → HiZ → resolve → kernel, blit to swapchain, submit ImGui, present
+#ifdef FRONTIER_DEVELOPMENT
+        {
+            FRONTIER_TELEMETRY_SCOPE("Frame/VulkanRecordSubmitPresent");
+#endif
         Surface.RecordAndPresent(Dispatch);
+#ifdef FRONTIER_DEVELOPMENT
+        }
+
+        // GPU stage durations come from Vulkan timestamp queries, not the CPU submission clock above. A cycle slot
+        // completes later, but VisibilityTelemetry retains its source frame so the verbose ledger files each value
+        // against the frame that actually ran it.
+        const Frontier::VisibilityTelemetry& GpuTiming = Surface.QueryVisibilityTelemetry();
+        if (GpuTiming.Valid)
+        {
+            FRONTIER_TELEMETRY_VALUE("GPU/Cull",    kTelemetryGpu, GpuTiming.CullMilliseconds    * 1000.0, GpuTiming.FrameIndex);
+            FRONTIER_TELEMETRY_VALUE("GPU/Raster",  kTelemetryGpu, GpuTiming.RasterMilliseconds  * 1000.0, GpuTiming.FrameIndex);
+            FRONTIER_TELEMETRY_VALUE("GPU/HiZ",     kTelemetryGpu, GpuTiming.HiZMilliseconds     * 1000.0, GpuTiming.FrameIndex);
+            FRONTIER_TELEMETRY_VALUE("GPU/Resolve", kTelemetryGpu, GpuTiming.ResolveMilliseconds * 1000.0, GpuTiming.FrameIndex);
+            FRONTIER_TELEMETRY_VALUE("GPU/ReSTIR",  kTelemetryGpu, GpuTiming.RestirMilliseconds  * 1000.0, GpuTiming.FrameIndex);
+            FRONTIER_TELEMETRY_VALUE("GPU/Shadow",  kTelemetryGpu, GpuTiming.ShadowMilliseconds  * 1000.0, GpuTiming.FrameIndex);
+            FRONTIER_TELEMETRY_VALUE("GPU/Post",    kTelemetryGpu, GpuTiming.PostMilliseconds    * 1000.0, GpuTiming.FrameIndex);
+            FRONTIER_TELEMETRY_VALUE("GPU/Sky",     kTelemetryGpu, GpuTiming.SkyMilliseconds     * 1000.0, GpuTiming.FrameIndex);
+            FRONTIER_TELEMETRY_VALUE("GPU/Volume",  kTelemetryGpu, GpuTiming.VolumeMilliseconds  * 1000.0, GpuTiming.FrameIndex);
+        }
+#endif
 
         Integrator.IncrementAccumulationIndex();
 
@@ -1927,6 +2060,9 @@ int main(int argc, char** argv)
         //    the cap holds on Windows' 1 ms timer granularity). Unlimited = 0 → no pacing.
         if (FrameCapSeconds > 0.0f)
         {
+#ifdef FRONTIER_DEVELOPMENT
+            FRONTIER_TELEMETRY_SCOPE("Frame/PacingSleep");
+#endif
             const auto Deadline = NowTime + std::chrono::duration_cast<Clock::duration>(Duration(FrameCapSeconds));
             const auto Coarse   = Deadline - std::chrono::milliseconds(1);
             if (Clock::now() < Coarse) std::this_thread::sleep_until(Coarse);
@@ -1941,6 +2077,9 @@ int main(int argc, char** argv)
         //    all, because everything the frame loop knew was written with RecordMessage (a sentence) and never with
         //    RecordMeasurement (a row).
         {
+#ifdef FRONTIER_DEVELOPMENT
+            FRONTIER_TELEMETRY_SCOPE("Frame/PerformanceSummary");
+#endif
             Frontier::ProjectZero::PerformanceWorkload Workload;
             Workload.RenderWidth     = Surface.QueryWidth();
             Workload.RenderHeight    = Surface.QueryHeight();
@@ -1968,16 +2107,25 @@ int main(int argc, char** argv)
     //──────────────────────────────────────────────────────────────────────────
     // Shutdown
     //──────────────────────────────────────────────────────────────────────────
+#ifdef FRONTIER_DEVELOPMENT
+    {
+        FRONTIER_TELEMETRY_SCOPE_CATEGORY("Shutdown/VulkanRetire", kTelemetryShutdown);
+        Surface.Retire();
+    }
+#else
     Surface.Retire();
+#endif
 
     Logger.RecordMessage(Frontier::DiagnosticSeverity::Information,
                          "Shutdown", "Render loop exited cleanly.");
 
     // ⚠️ THIS is the only point the verbose ledger touches the disk. Every scope timed during the run lived in a
     //    preallocated RAM ring so that measuring the renderer could not perturb it; the whole run is serialised
-    //    here, once, into a summary table and a per-sample log. Development builds only — on a ship build the macro
-    //    is `(false)` and none of this exists.
+    //    here, once, into a summary table and a per-sample log. This call and the ledger TU do not compile into a
+    //    shipping build.
+#ifdef FRONTIER_DEVELOPMENT
     (void)FRONTIER_TELEMETRY_FLUSH("Projects/Project-Zero/Diagnostics", "ProjectZero_FrameTelemetry");
+#endif
 
     if (RefitMillisecondsPeak > 0.0f)
     {

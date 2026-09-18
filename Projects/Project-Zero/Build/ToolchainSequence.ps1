@@ -3,9 +3,10 @@
 #   Compatible with Windows PowerShell 5.1 and PowerShell 7+.
 #
 #     powershell -File Projects\Project-Zero\Build\ToolchainSequence.ps1
-#     powershell -File Projects\Project-Zero\Build\ToolchainSequence.ps1 -Configuration Debug
+#     powershell -File Projects\Project-Zero\Build\ToolchainSequence.ps1 -Configuration Debug     # editor + frame telemetry
 #     powershell -File Projects\Project-Zero\Build\ToolchainSequence.ps1 -Rebuild -Run
-#     powershell -File Projects\Project-Zero\Build\ToolchainSequence.ps1 -Development:$false   # ship build: no editor
+#     powershell -File Projects\Project-Zero\Build\ToolchainSequence.ps1 -Configuration Release   # shipping (the default)
+#     powershell -File Projects\Project-Zero\Build\ToolchainSequence.ps1 -Configuration Release -Development  # optimised editor
 
 [CmdletBinding()]
 param(
@@ -21,9 +22,9 @@ param(
     # This must match Scripts/BuildJolt.ps1 and every other project script: Jolt derives JPH_USE_AVX/SSE4_2/SSE4_1
     #    from the compiler's __AVX__ macros and RegisterTypes() aborts on a library/client mismatch.
     [ValidateSet('SSE2', 'AVX', 'AVX2')] [string] $Isa = 'SSE2',
-    # Development editor (outliner / viewport / inspector over the live scene). On by default; pass
-    #    -Development:$false for a ship build — the editor compiles out and the game runs without it.
-    [switch] $Development = $true
+    # Editor / instrumentation override. Omitted: Debug enables it, Release is a shipping build. Pass
+    #    -Development for an optimised editor build or -Development:$false to force a bare Debug game.
+    [switch] $Development
 )
 
 $ErrorActionPreference = 'Stop'
@@ -34,6 +35,13 @@ $PackageRoot    = Join-Path $RepositoryRoot 'ExternalPackages'
 $ScriptRoot     = Join-Path $RepositoryRoot 'Scripts'
 $ProjectRoot    = Join-Path $RepositoryRoot 'Projects\Project-Zero'
 $OutputRoot     = Join-Path $ProjectRoot    "Build\Output\Windows\$Configuration"
+
+# An optimisation configuration alone is not an editor decision. The previous default made a plain Release command
+# compile the editor-only ShaderballExhibit TU, which includes MaterialEvaluation.slang through SlangCpuShim.h and
+# produced the misleading wall of C4244/C4305 warnings in an otherwise shipping build. Debug is instrumented by
+# default; Release is production unless the caller explicitly requests the editor.
+$DevelopmentBuild = $Configuration -eq 'Debug'
+if ($PSBoundParameters.ContainsKey('Development')) { $DevelopmentBuild = [bool]$Development }
 
 $script:GlfwBuilt   = $false
 $script:ThorVGBuilt = $false
@@ -503,7 +511,8 @@ function Invoke-DependencyScript([string] $ScriptPath, [string[]] $Arguments)
 #                                           THE RUN
 #---
 
-Write-Host "Project-Zero - $Configuration"
+$BuildKind = if ($DevelopmentBuild) { 'editor / instrumentation' } else { 'shipping' }
+Write-Host "Project-Zero - $Configuration ($BuildKind)"
 
 Import-ToolchainEnvironment
 $VulkanRoot = Resolve-VulkanRoot
@@ -641,7 +650,7 @@ if ($Rebuild -and (Test-Path $OutputRoot))
 New-Item -ItemType Directory -Force -Path $OutputRoot | Out-Null
 $ObjectRoot = Join-Path $OutputRoot 'Object'
 
-$Flags        = Get-CompilationFlags $Configuration $Development
+$Flags        = Get-CompilationFlags $Configuration $DevelopmentBuild
 $IncludePaths = Get-IncludePaths $VulkanRoot
 
 # Collect sources
@@ -727,7 +736,6 @@ $EngineRelative = @(
     'Projects\Project-Zero\Source\InterfaceTrialSequence.cpp'
     'Projects\Project-Zero\Source\InstanceMotionSequence.cpp'
     'Projects\Project-Zero\Source\PerformanceTelemetrySequence.cpp'
-    'Projects\Project-Zero\Source\FrameTelemetryLedger.cpp'   # verbose ledger; compiles to an empty TU without -Development
     'Projects\Project-Zero\Source\PhysicsInstanceSequence.cpp'
     'Projects\Project-Zero\Source\InterfaceAudioSequence.cpp'
     'Projects\Project-Dyno\Source\CrankClickIntegrator.cpp'
@@ -760,18 +768,15 @@ $EngineRelative = @(
     'Projects\Project-Zero\Source\CommandLine.cpp'             # P4 the launch line both hosts parse
 )
 
-# ── Development-only translation units ───────────────────────────────────────────────────────────────────────────────
-#    ShaderballExhibit.cpp is the EDITOR's material-preview renderer. It #includes Engine/Shaders/MaterialEvaluation.slang
-#    as host C++ (through Exhibits/Workbench/Materials/SlangCpuShim.h) so the inspector can show a material without a
-#    GPU. A shipping build has no inspector and never calls it, so on -Development:$false it is dropped from the batch
-#    entirely rather than compiled and left unreferenced.
-#
-#    This is also where the long C4244/C4305 'conversion from double to float' run in a Release log comes from: those
-#    are the shader source being compiled as C++, not the GPU build. Dropping the TU drops the warnings with it, and
-#    the remaining Release output is the three known third-party lines (APIENTRY, tinybvh AVX, TraversalIndex pragma).
-if ($Development)
+# ── Editor / Debug-only translation units ────────────────────────────────────────────────────────────────────────────
+#    These files are ABSENT from a shipping compilation, not merely empty after preprocessing. FrameTelemetryLedger
+#    owns the verbose RAM ring; ShaderballExhibit is the editor preview that #includes MaterialEvaluation.slang as C++
+#    through SlangCpuShim.h. That second TU is exactly where the MaterialEvaluation C4244/C4305 run originates.
+#    `$DevelopmentBuild` is true for Debug or an explicitly requested editor profile; a plain Release build is shipping.
+if ($DevelopmentBuild)
 {
-    $EngineRelative += 'Exhibits\Workbench\Materials\ShaderballExhibit.cpp'   # M7b preview entry — see the override below
+    $EngineRelative += 'Projects\Project-Zero\Source\FrameTelemetryLedger.cpp' # RAM-only verbose ledger
+    $EngineRelative += 'Exhibits\Workbench\Materials\ShaderballExhibit.cpp'     # M7b preview entry — see override below
 }
 
 $EngineSources = New-Object System.Collections.Generic.List[string]
@@ -799,7 +804,7 @@ if ($MissingSources.Count -gt 0) { throw ('missing source files in the translati
 #    The override is Development-only for the same reason the source is: on a ship build the file is not in the batch
 #    at all, and an override naming a file nobody compiles would silently produce an object the linker never sees.
 $Overrides = @()
-if ($Development)
+if ($DevelopmentBuild)
 {
     $Overrides += @{ Source = (Join-Path $RepositoryRoot 'Exhibits\Workbench\Materials\ShaderballExhibit.cpp')
                      Flags  = @('/DSHADERBALL_PREVIEW_LIB')

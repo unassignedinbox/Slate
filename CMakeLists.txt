@@ -277,7 +277,6 @@ set(PROJECT_ZERO_SOURCES
     Projects/Project-Zero/Source/InterfaceTrialSequence.cpp
     Projects/Project-Zero/Source/InstanceMotionSequence.cpp
     Projects/Project-Zero/Source/PerformanceTelemetrySequence.cpp
-    Projects/Project-Zero/Source/FrameTelemetryLedger.cpp
     Projects/Project-Zero/Source/PhysicsInstanceSequence.cpp
     Projects/Project-Zero/Source/InterfaceAudioSequence.cpp
     Projects/Project-Dyno/Source/CrankClickIntegrator.cpp
@@ -340,21 +339,26 @@ target_include_directories(Project-Zero PRIVATE
     ${EXT}/fast_obj
 )
 
-# ── The editor's material-preview renderer ──────────────────────────────────────────────────────────────────────────
-#    ShaderballExhibit.cpp #includes Engine/Shaders/MaterialEvaluation.slang as host C++ (via SlangCpuShim.h) so the
-#    inspector can preview a material without a GPU. It is an EDITOR feature: a shipping build never calls it, so it
-#    is only added when FRONTIER_DEVELOPMENT is on. The PowerShell batch gates the same file on -Development.
-#    Dropping it also drops the long C4244/C4305 double->float warning run it produces on MSVC, which comes from the
-#    shader being compiled as C++ and not from anything in the GPU build.
-option(FRONTIER_ZERO_DEVELOPMENT "Build Project-Zero with the development editor and its preview renderer" ON)
-if(FRONTIER_ZERO_DEVELOPMENT)
-    target_sources(Project-Zero PRIVATE Exhibits/Workbench/Materials/ShaderballExhibit.cpp)
-endif()
+# ── Editor / Debug-only instrumentation and material preview ───────────────────────────────────────────────────────
+#    FrameTelemetryLedger.cpp and ShaderballExhibit.cpp are deliberately absent from PROJECT_ZERO_SOURCES above. A
+#    shipping target must not compile either one: the ledger has a 64 MiB RAM ring and the preview includes
+#    MaterialEvaluation.slang as host C++ through SlangCpuShim.h. That host compilation is the source of the long
+#    C4244/C4305 MaterialEvaluation warning run — it is neither a GPU shader error nor production code.
+#
+#    Debug is instrumented by default. FRONTIER_ZERO_EDITOR=ON explicitly builds an editor/instrumented target in any
+#    configuration (for example, an optimised editor profile); that target is not a shipping build. The PowerShell
+#    toolchain uses the identical Debug-or-explicit-editor rule.
+option(FRONTIER_ZERO_EDITOR "Build Project-Zero's editor, frame ledger and shaderball preview" OFF)
+set(FRONTIER_ZERO_DEVELOPMENT_CONDITION
+    "$<OR:$<CONFIG:Debug>,$<BOOL:${FRONTIER_ZERO_EDITOR}>>")
+target_sources(Project-Zero PRIVATE
+    "$<${FRONTIER_ZERO_DEVELOPMENT_CONDITION}:Projects/Project-Zero/Source/FrameTelemetryLedger.cpp>"
+    "$<${FRONTIER_ZERO_DEVELOPMENT_CONDITION}:Exhibits/Workbench/Materials/ShaderballExhibit.cpp>")
 
 target_link_libraries(Project-Zero PRIVATE Jolt)   # D4: rigid bodies drive instance transforms
 set_source_files_properties(Engine/PlatformInterchange/MiniaudioTranslation.cpp PROPERTIES COMPILE_OPTIONS "-w")   # third-party TU
 target_compile_definitions(Project-Zero PRIVATE
-    $<$<BOOL:${FRONTIER_ZERO_DEVELOPMENT}>:FRONTIER_DEVELOPMENT>
+    "$<${FRONTIER_ZERO_DEVELOPMENT_CONDITION}:FRONTIER_DEVELOPMENT>"
     FRONTIER_ENABLE_GLFW
 )
 

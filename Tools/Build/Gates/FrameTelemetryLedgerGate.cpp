@@ -8,9 +8,9 @@
 //    ② In a SHIPPING build it must vanish. Not "be disabled": the class, the ring, the timers and every call site
 //       must not exist, so a release binary carries neither the 64 MB buffer nor a single branch.
 //
-//    This gate is compiled TWICE by its driver script — once with FRONTIER_DEVELOPMENT and once without — and
-//    asserts the appropriate half each time. The script additionally greps the two object files' symbol tables,
-//    because "it compiled" is not the same claim as "the code is gone".
+//    This gate is compiled twice by its driver script. The development executable links the ledger and exercises it.
+//    The shipping executable includes only this header — it must expose neither a macro nor a symbol — and the driver
+//    additionally proves the production source lists do not name FrameTelemetryLedger.cpp.
 //
 //    usage: bash Tools/Build/CheckFrameTelemetry.sh
 
@@ -31,6 +31,9 @@ void Check(bool Condition, const char* Message)
     if (!Condition) ++Failures;
 }
 
+// The development executable alone needs file inspection and calibrated work. Keep even the test helpers out of
+// the shipping compilation, so a warning-as-error build proves the production half has no vestigial timing code.
+#ifdef FRONTIER_DEVELOPMENT
 std::string Slurp(const std::string& Path)
 {
     std::ifstream In(Path);
@@ -47,6 +50,7 @@ void BurnMicroseconds()
     for (int I = 1; I < 20000; ++I) Accumulator += 1.0 / static_cast<double>(I);
     g_Sink = Accumulator;
 }
+#endif
 
 } // namespace
 
@@ -142,13 +146,18 @@ int main()
         Check(Occurrences == 12u, "every frame's innermost scope appears exactly once — no sampling, no loss");
     }
 
+    // GPU data is a value rather than a host scope. It arrives after the originating frame completed, so preserving
+    // that source frame matters: a GPU result read later must not be attributed to the readback frame.
+    Ledger.SubmitValue("GPU/ReSTIR", kTelemetryGpu, 1234.5, 7u);
+    Check(Ledger.QuerySampleCount() > 0u, "completed GPU timestamp values join the same RAM-only ring");
+
     // ── the ring wraps rather than growing ──────────────────────────────────────────────────────────────────────
     {
         FrameTelemetryLedger& Small = FrameTelemetryLedger::Instance();
         Small.Reserve(64u);
         for (int I = 0; I < 500; ++I) { FRONTIER_TELEMETRY_SCOPE("Overflow"); }
-        Check(Small.QueryDroppedCount() > 0u,
-              "an overrun ring drops the OLDEST samples and says so, rather than allocating mid-frame");
+        Check(Small.QueryDroppedCount() == 436u,
+              "an overrun ring drops exactly the overwritten oldest samples, never allocates mid-frame");
     }
 
     std::remove(Summary.c_str());
@@ -164,27 +173,24 @@ int main()
 int main()
 {
     std::printf("================================================================================\n");
-    std::printf("   FRAME TELEMETRY LEDGER GATE — shipping build: it must not exist\n");
+    std::printf("   FRAME TELEMETRY LEDGER GATE — shipping build: it is not available\n");
     std::printf("================================================================================\n");
 
-    // Every macro must still be a legal statement with the facility compiled out, including in a bare if/else with
-    //    no braces — a macro that expanded to nothing at all would silently capture the else branch.
-    if (true) FRONTIER_TELEMETRY_SCOPE("ShouldNotExist"); else BurnMicroseconds();
-    FRONTIER_TELEMETRY_STARTUP("ShouldNotExist");
-    FRONTIER_TELEMETRY_SHADER("ShouldNotExist");
-    FRONTIER_TELEMETRY_CONTENT("ShouldNotExist");
-    FRONTIER_TELEMETRY_ADVANCE_FRAME();
-    FRONTIER_TELEMETRY_FIRST_FRAME();
-    FRONTIER_TELEMETRY_RESERVE(1024u);
-
-    const bool Flushed = FRONTIER_TELEMETRY_FLUSH(".", "ShouldNotExist");
-    Check(!Flushed, "the flush is a no-op returning false, so callers need no ifdef of their own");
+    // Production sources use #ifdef FRONTIER_DEVELOPMENT around every call. Consequently the header deliberately
+    // offers no no-op API in this mode: an unguarded telemetry use is a compiler error instead of silent production
+    // baggage. This test includes the header but must find no public macro from the facility.
+#if defined(FRONTIER_TELEMETRY_SCOPE) || defined(FRONTIER_TELEMETRY_STARTUP) || \
+    defined(FRONTIER_TELEMETRY_FLUSH) || defined(FRONTIER_TELEMETRY_VALUE)
+    Check(false, "shipping header leaked a telemetry API");
+#else
+    Check(true, "shipping header exposes no telemetry API — every caller must be explicitly #ifdef-gated");
+#endif
 
     std::ifstream Probe("./ShouldNotExist_Summary.md");
-    Check(!Probe.good(), "a shipping build writes no telemetry file at all");
+    Check(!Probe.good(), "a shipping gate links no ledger and writes no telemetry file");
 
     std::printf(Failures ? "\nRED — %d check(s) failed\n"
-                         : "\nGREEN — the facility compiles out cleanly and the macros stay statement-safe\n", Failures);
+                         : "\nGREEN — shipping code has no telemetry API or ledger dependency\n", Failures);
     return Failures ? 1 : 0;
 }
 

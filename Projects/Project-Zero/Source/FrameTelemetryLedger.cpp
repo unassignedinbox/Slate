@@ -34,6 +34,7 @@ const char* CategoryName(uint16_t Category) noexcept
         case kTelemetryShader:   return "shader";
         case kTelemetryContent:  return "content";
         case kTelemetryShutdown: return "shutdown";
+        case kTelemetryGpu:      return "gpu";
         default:                 return "other";
     }
 }
@@ -68,10 +69,30 @@ void FrameTelemetryLedger::Reserve(size_t SampleCapacity) noexcept
 void FrameTelemetryLedger::Submit(const TelemetrySample& Sample) noexcept
 {
     if (Capacity == 0u) return;
-    Samples[WriteCursor] = Sample;
-    WriteCursor = (WriteCursor + 1u) % Capacity;
-    if (WriteCursor == 0u) Wrapped = true;
+
+    // The first Capacity writes fill the ring. Only the next write overwrites its oldest entry, so count drops
+    // before advancing the cursor when the ring was already full; the old code reported one phantom drop on fill.
     if (Wrapped) ++DroppedSamples;
+    Samples[WriteCursor] = Sample;
+    ++WriteCursor;
+    if (WriteCursor == Capacity)
+    {
+        WriteCursor = 0u;
+        Wrapped = true;
+    }
+}
+
+void FrameTelemetryLedger::SubmitValue(const char* Label, TelemetryCategory Category,
+                                       double Microseconds, uint32_t SourceFrame) noexcept
+{
+    TelemetrySample Sample;
+    Sample.Label        = Label;
+    Sample.Microseconds = Microseconds;
+    Sample.FrameIndex   = SourceFrame;
+    Sample.Depth        = 1u;  // GPU values are children of the matching per-frame total in the rendered report.
+    Sample.Category     = static_cast<uint16_t>(Category);
+    Sample.OpenOrder    = NextOpenOrder();
+    Submit(Sample);
 }
 
 void FrameTelemetryLedger::MarkFirstFrame() noexcept
@@ -130,9 +151,9 @@ bool FrameTelemetryLedger::Serialise(const std::string& DirectoryPath, const std
 
         Out << "# " << Stem << " - timing summary\n\n";
         Out << "Buffered in RAM for the whole run and written once at shutdown, so the measurement never touches\n"
-               "the disk on the hot path. CPU wall times from steady_clock; for GPU stages these are SUBMISSION\n"
-               "times, not device execution - the device's own timestamps are the Gpu*Ms rows in the telemetry\n"
-               "report, and the two must not be confused.\n\n";
+               "the disk on the hot path. Frame/startup/shader scopes are CPU wall times from steady_clock. GPU\n"
+               "rows are the device timestamp-query results and retain the frame that generated them; they become\n"
+               "available a cycle slot later and are therefore not CPU submission times.\n\n";
         Out << "- run length: " << TotalSeconds << " s\n";
         Out << "- startup (main to first frame): " << (StartupMicroseconds / 1000.0) << " ms\n";
         Out << "- frames: " << FrameIndex << "\n";

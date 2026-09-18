@@ -9,11 +9,10 @@
 //    does with that log is conclude the renderer is slow. So the ledger stores fixed-size binary samples in a
 //    preallocated buffer — no allocation, no formatting, no I/O on the hot path — and serialises once at shutdown.
 //
-//    Why it is development-only. Every macro below compiles to nothing unless FRONTIER_DEVELOPMENT is defined, which
-//    is the same switch the editor already uses (ToolchainSequence.ps1 -Development, CMake FRONTIER_ZERO_DEVELOPMENT).
-//    A shipping build carries no ledger, no ring, no timer objects and no call sites — not a disabled branch, no
-//    code at all. Verify with Tools/Build/CheckTelemetryCompileOut.sh, which compiles a TU both ways and asserts the
-//    symbols vanish.
+//    Why it is development-only. The build system only adds this translation unit to an editor or Debug target, and
+//    every production call site is explicitly wrapped in #ifdef FRONTIER_DEVELOPMENT. A shipping build therefore
+//    carries no ledger, no ring, no timer objects and no call sites — not a disabled branch, no code at all.
+//    Tools/Build/CheckFrameTelemetry.sh proves both the development ledger and the production source-list exclusion.
 //
 //    What it measures.
 //      · STARTUP phases — every one-off cost between main() and the first frame, individually: device bring-up,
@@ -66,6 +65,7 @@ enum TelemetryCategory : uint16_t
     kTelemetryShader  = 2u,   // shader module load / pipeline creation
     kTelemetryContent = 3u,   // scene, textures, BVH
     kTelemetryShutdown= 4u,
+    kTelemetryGpu     = 5u,   // device timestamp result; submitted after its GPU frame has completed
 };
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -86,6 +86,11 @@ public:
     //    allocating mid-frame or losing the end, which is where the interesting frames usually are.
     void Submit(const TelemetrySample& Sample) noexcept;
 
+    // Device timestamp queries are produced after their command slot retires, not while the CPU records that frame.
+    // Preserve the originating frame index so GPU/Cull for frame 41 remains on frame 41 even if it is read on frame 43.
+    // Like Submit, this only stores a fixed POD sample in the already-reserved ring.
+    void SubmitValue(const char* Label, TelemetryCategory Category, double Microseconds, uint32_t SourceFrame) noexcept;
+
     // The frame counter every per-frame sample is stamped with. Advanced once per frame by the host.
     void AdvanceFrame() noexcept { ++FrameIndex; }
     [[nodiscard]] uint32_t QueryFrameIndex() const noexcept { return FrameIndex; }
@@ -102,7 +107,7 @@ public:
     //    summary that aggregates by label (count, total, mean, min, max, and the worst single occurrence).
     [[nodiscard]] bool Serialise(const std::string& DirectoryPath, const std::string& Stem) noexcept;
 
-    [[nodiscard]] size_t QuerySampleCount()  const noexcept { return Samples.size(); }
+    [[nodiscard]] size_t QuerySampleCount()  const noexcept { return Wrapped ? Capacity : WriteCursor; }
     [[nodiscard]] size_t QueryDroppedCount() const noexcept { return DroppedSamples; }
 
 private:
@@ -169,8 +174,8 @@ private:
 //------------------------------------------------------------------------------------------------------------------------
 //                                                         THE MACROS
 //------------------------------------------------------------------------------------------------------------------------
-// Label must be a string LITERAL — the sample stores the pointer, it does not copy. That is what keeps Submit free
-//    of allocation, and a literal's lifetime is the program's.
+// Label must have process-lifetime storage (normally a string literal; the Vulkan stage table also owns static
+//    names). The sample stores the pointer rather than copying it, which keeps Submit free of allocation.
 
 #define FRONTIER_TELEMETRY_CONCAT_(A, B) A##B
 #define FRONTIER_TELEMETRY_CONCAT(A, B)  FRONTIER_TELEMETRY_CONCAT_(A, B)
@@ -193,19 +198,8 @@ private:
 #define FRONTIER_TELEMETRY_FLUSH(Dir, Stem) \
     ::Frontier::ProjectZero::FrameTelemetryLedger::Instance().Serialise(Dir, Stem)
 
-#else // !FRONTIER_DEVELOPMENT
-
-//    A shipping build gets NOTHING: no ledger, no ring, no timers, no call sites. Each macro expands to a statement
-//    that compiles away entirely, and the (void) forms keep an unused-variable warning from appearing where a label
-//    was the only use of something.
-#define FRONTIER_TELEMETRY_SCOPE(Label)                   do { } while (false)
-#define FRONTIER_TELEMETRY_SCOPE_CATEGORY(Label, Cat)     do { } while (false)
-#define FRONTIER_TELEMETRY_STARTUP(Label)                 do { } while (false)
-#define FRONTIER_TELEMETRY_SHADER(Label)                  do { } while (false)
-#define FRONTIER_TELEMETRY_CONTENT(Label)                 do { } while (false)
-#define FRONTIER_TELEMETRY_ADVANCE_FRAME()                do { } while (false)
-#define FRONTIER_TELEMETRY_FIRST_FRAME()                  do { } while (false)
-#define FRONTIER_TELEMETRY_RESERVE(N)                     do { } while (false)
-#define FRONTIER_TELEMETRY_FLUSH(Dir, Stem)               (false)
+#define FRONTIER_TELEMETRY_VALUE(Label, Cat, Microseconds, SourceFrame) \
+    ::Frontier::ProjectZero::FrameTelemetryLedger::Instance().SubmitValue( \
+        Label, ::Frontier::ProjectZero::Cat, Microseconds, SourceFrame)
 
 #endif // FRONTIER_DEVELOPMENT

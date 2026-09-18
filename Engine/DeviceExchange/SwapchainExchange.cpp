@@ -15,6 +15,9 @@
 #include <thorvg.h>
 
 #include "SwapchainExchange.h"
+#ifdef FRONTIER_DEVELOPMENT
+#include "../../Projects/Project-Zero/Source/FrameTelemetryLedger.h"
+#endif
 #include "../ContentInterchange/MaterialIndex.h"
 #include "../ContentInterchange/TextureIndex.h"
 #include "../GeometricRaster/TraversalIndex.h"
@@ -423,6 +426,10 @@ static void OnGlfwError(int Code, const char* Description) noexcept
 
 bool SwapchainExchange::Bring() noexcept
 {
+#ifdef FRONTIER_DEVELOPMENT
+    {
+        FRONTIER_TELEMETRY_STARTUP("Startup/Vulkan/GlfwWindowAndThorVG");
+#endif
     glfwSetErrorCallback(OnGlfwError);
 
     if (!glfwInit())
@@ -464,6 +471,9 @@ bool SwapchainExchange::Bring() noexcept
     std::cerr << "[SwapchainExchange] Window created: " << Configuration.Width << "x" << Configuration.Height << "\n";
 
     tvg::Initializer::init(0u);
+#ifdef FRONTIER_DEVELOPMENT
+    }
+#endif
 
     // Each stage reports its own failure reason to stderr; the name here tells the reader which one stopped.
     struct Stage { const char* Name; bool (SwapchainExchange::*Fn)() noexcept; };
@@ -498,11 +508,18 @@ bool SwapchainExchange::Bring() noexcept
 
     for (const Stage& Current : Stages)
     {
+#ifdef FRONTIER_DEVELOPMENT
+        {
+            FRONTIER_TELEMETRY_STARTUP(Current.Name);
+#endif
         if (!(this->*Current.Fn)())
         {
             std::cerr << "[SwapchainExchange] Bring-up stopped at stage " << Current.Name << ".\n";
             return false;
         }
+#ifdef FRONTIER_DEVELOPMENT
+        }
+#endif
     }
 
     std::cerr << "[SwapchainExchange] Bring-up complete.\n";
@@ -1274,6 +1291,9 @@ static_assert(ComputeBindingTypeCount(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
 
 bool SwapchainExchange::BringComputePipeline() noexcept
 {
+#ifdef FRONTIER_DEVELOPMENT
+    FRONTIER_TELEMETRY_SHADER("Startup/Shader/ReSTIRViewport/LoadModuleAndPipeline");
+#endif
     // ① Descriptor set layout — 0: output image, 1: triangle SSBO, 2: material SSBO, 3: history image,
     //    R2: 4: surface image, 5: normal image, 6: instance SSBO, 7: luminaire SSBO
     //    R3: 8: CWBVH node SSBO, 9: CWBVH triangle SSBO
@@ -1502,6 +1522,9 @@ void SwapchainExchange::WriteLuminanceDescriptors() noexcept
 
 bool SwapchainExchange::BringLuminanceReduction() noexcept
 {
+#ifdef FRONTIER_DEVELOPMENT
+    FRONTIER_TELEMETRY_SHADER("Startup/Shader/LuminanceReduce/LoadModuleAndPipeline");
+#endif
     // ① Two bindings: the HDR source to read, and the accumulator to atomically sum into.
     std::array<VkDescriptorSetLayoutBinding, 2u> Bindings{};
     Bindings[0].binding         = 0u;
@@ -1596,6 +1619,9 @@ bool SwapchainExchange::BringLuminanceReduction() noexcept
 
 bool SwapchainExchange::BringDenoisePipeline() noexcept
 {
+#ifdef FRONTIER_DEVELOPMENT
+    FRONTIER_TELEMETRY_SHADER("Startup/Shader/AtrousDenoise/LoadModuleAndPipeline");
+#endif
     // ① Set layout: source, target, surface, presentation.
     std::array<VkDescriptorSetLayoutBinding, 4u> Bindings{};
     for (uint32_t B = 0u; B < 4u; ++B)
@@ -2766,6 +2792,9 @@ bool SwapchainExchange::BringVisibility() noexcept
 
 void SwapchainExchange::RecordAndPresent(const DispatchConfiguration& Dispatch) noexcept
 {
+#ifdef FRONTIER_DEVELOPMENT
+    FRONTIER_TELEMETRY_SCOPE("Frame/Vulkan/RecordAndPresentInside");
+#endif
     const uint32_t ActiveSlot = Vulkan->ActiveSlot;
 
     vkWaitForFences(Vulkan->Device, 1u, &Vulkan->CycleFences[ActiveSlot], VK_TRUE, UINT64_MAX);
@@ -2852,6 +2881,9 @@ void SwapchainExchange::RecordAndPresent(const DispatchConfiguration& Dispatch) 
 
 void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const DispatchConfiguration& Dispatch) noexcept
 {
+#ifdef FRONTIER_DEVELOPMENT
+    FRONTIER_TELEMETRY_SCOPE("Frame/Vulkan/RecordCommandBuffer");
+#endif
     VkCommandBuffer Command = Vulkan->ComputeCommands[ImageOrdinal];
 
     VkCommandBufferBeginInfo BeginInfo{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
@@ -3412,6 +3444,9 @@ void SwapchainExchange::AssignFullscreen(bool Desired) noexcept
 
 bool SwapchainExchange::RebuildSwapchain() noexcept
 {
+#ifdef FRONTIER_DEVELOPMENT
+    FRONTIER_TELEMETRY_SCOPE("Frame/Vulkan/RebuildSwapchain");
+#endif
     int FramebufferW = 0, FramebufferH = 0;
     glfwGetFramebufferSize(GlfwWindow, &FramebufferW, &FramebufferH);
     while (FramebufferW == 0 || FramebufferH == 0)
