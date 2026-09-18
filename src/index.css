@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  
+  /* Custom scrollbar for pro workstation feel */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #11131a;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #282c3c;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3e445b;
+  }
+}
+
+input[type="range"] {
+  accent-color: #3b82f6;
+}
