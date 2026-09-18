@@ -26,6 +26,7 @@
 #include "../../../Engine/DisplayPresentation/FidelityClassifier.h"
 #include "../../../Engine/DisplayPresentation/NotificationQueue.h"
 #include "../../../Engine/DisplayPresentation/TelemetryMetrics.h"
+#include "../../../Engine/DisplayPresentation/PerformanceLog.h"   // frame time + GPU stage breakdown into the log
 #include "../../../Engine/DisplayPresentation/TypefaceRegistry.h"
 #include "../../../Engine/DisplayPresentation/ConfigurationRegistry.h"
 #include "../../../Engine/DisplayPresentation/DiagnosticInspector.h"
@@ -765,6 +766,10 @@ int main(int argc, char** argv)
     Frontier::FidelityClassifier Fidelity;
     Frontier::NotificationQueue  Notifications;
     Frontier::TelemetryMetrics   Telemetry;
+    // The log-side view of the same frame interval (see PerformanceLog.h): the overlay shows a frame rate, this writes
+    //    where the frame went — CPU percentiles, the distribution, and the per-stage GPU breakdown — into the report a
+    //    bug report can be copied from.
+    Frontier::FramePerformanceLog Performance;
     {
         // R1: announce the resolved ray-tracing backend once; a downgrade from an explicit request is an Info toast.
         const Frontier::RayTracingRequestCategory Req = Surface.QueryRayTracingRequest();
@@ -858,6 +863,25 @@ int main(int argc, char** argv)
     Camera.AssignAspectRatio(
         static_cast<float>(Surface.QueryWidth()) /
         static_cast<float>(Surface.QueryHeight()));
+
+    // One line describing what the renderer was ASKED to do, before a single frame is presented. It exists because
+    //    "no shadows" and "no GI" have a first question that a frame rate cannot answer and a screenshot answers
+    //    slowly: did the run enable the feature at all? With this line in the log, a report that says "GI is missing"
+    //    and a log that says `GI off` are read together in one pass instead of a round trip.
+    {
+        const Frontier::ReSTIRIntegratorConfiguration C = Integrator.QueryConfiguration();
+        char Line[512];
+        std::snprintf(Line, sizeof(Line),
+                      "GI %s (indirect reuse %s) - DI %u + %u candidates - %u spatial taps - temporal %s - AA %s - "
+                      "denoise %s (%u levels) - alias pick %s - sun occlusion: %s",
+                      C.GlobalIllumination ? "ON" : "off", C.GlobalIlluminationReuse ? "on" : "OFF",
+                      C.CandidatesPerPixel, C.ExtraCandidateCount, C.SpatialTapCount,
+                      C.TemporalReuse ? "on" : "OFF", C.AntiAliasing ? "on" : "off",
+                      C.Denoise ? "on" : "off", C.DenoiseLevelCount, C.AliasPick ? "on" : "off",
+                      C.GlobalIllumination ? "the kernel's shadow ray (shadow maps are the GI-OFF path)"
+                                           : "the shadow-map stage (GI is off)");
+        Logger.RecordMessage(Frontier::DiagnosticSeverity::Information, "Render", Line);
+    }
 
     Logger.RecordMessage(Frontier::DiagnosticSeverity::Information,
                          "Bootstrap", "Entering render loop.");
@@ -1057,6 +1081,27 @@ int main(int argc, char** argv)
         Notifications.Advance(Δτ);
         Configuration.Advance(Δτ);
         Telemetry.RecordFrame(Δτ);
+
+        // Frame-performance telemetry. The GPU half comes from the device seam's own readback; it lags by a frame or two
+        //    (the query pool is read the frame after it is written), which is exactly right for an average and is why
+        //    the first window says "no GPU readback yet" rather than reporting zeros as measurements.
+        {
+            const Frontier::VisibilityTelemetry& Gpu = Swapchain.QueryVisibilityTelemetry();
+            Frontier::PerformanceStageTimes Stages;
+            Stages.Cull    = Gpu.CullMilliseconds;
+            Stages.Raster  = Gpu.RasterMilliseconds;
+            Stages.HiZ     = Gpu.HiZMilliseconds;
+            Stages.Resolve = Gpu.ResolveMilliseconds;
+            Stages.Kernel  = Gpu.KernelMilliseconds;
+            Stages.Shadow  = Gpu.ShadowMilliseconds;
+            Stages.Restir  = Gpu.RestirMilliseconds;
+            Stages.Sky     = Gpu.SkyMilliseconds;
+            Stages.Volume  = Gpu.VolumeMilliseconds;
+            Stages.Post    = Gpu.PostMilliseconds;
+            Stages.Valid   = Gpu.Valid;
+            Performance.RecordFrame(Δτ, Stages);
+            Performance.FlushIfDue(Logger, Performance.QueryFrameCount());
+        }
 
         // ①a' The sky and the weather. Ticked here, beside the other per-frame advances, so the clock, the wind
         //     phase and the precipitation pool all move exactly once and in a fixed order. The camera position
@@ -1812,6 +1857,9 @@ int main(int argc, char** argv)
 
     Logger.RecordMessage(Frontier::DiagnosticSeverity::Information,
                          "Shutdown", "Render loop exited cleanly.");
+
+    // The run's performance record, emitted before the sink closes so it lands in the same file as everything else.
+    Performance.WriteSummary(Logger);
 
     if (RefitMillisecondsPeak > 0.0f)
     {

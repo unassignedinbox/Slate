@@ -683,6 +683,7 @@ $EngineRelative = @(
     'Engine\DisplayPresentation\ControlCentreHost.cpp'
     'Engine\DisplayPresentation\FontCodec.cpp'
     'Engine\DisplayPresentation\PixelSpace.cpp'
+    'Engine\DisplayPresentation\PerformanceLog.cpp'
     'Engine\DisplayPresentation\MotionIntegrator.cpp'
     'Engine\DisplayPresentation\GlyphSpace.cpp'
     'Engine\DisplayPresentation\NotificationQueue.cpp'

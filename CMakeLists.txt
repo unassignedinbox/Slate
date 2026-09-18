@@ -226,6 +226,7 @@ set(FRONTIER_ENGINE_SOURCES
     Engine/DisplayPresentation/FontCodec.cpp
     Engine/DisplayPresentation/ConfigurationRegistry.cpp
     Engine/DisplayPresentation/ControlCentreHost.cpp
+    Engine/DisplayPresentation/PerformanceLog.cpp    # frame time + GPU stage breakdown into the diagnostic log
     Engine/DisplayPresentation/PixelSpace.cpp
     Engine/DisplayPresentation/MotionIntegrator.cpp
     Engine/DisplayPresentation/GlyphSpace.cpp
