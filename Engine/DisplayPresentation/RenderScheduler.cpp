@@ -259,12 +259,20 @@ void RenderScheduler::SectionReSTIR(
 
     bool Temporal = Config.TemporalReuse;   // R6: off-switches for the A/B proofs (converged image must match)
     bool Spatial  = Config.SpatialReuse;
+    // A/B gates are deliberately off by default: normal/depth-only remains the control condition. Each change resets
+    // the sampling history in the integrator, so the on/off images never mix estimators in one temporal sequence.
+    bool SpatialMaterial = Config.SpatialMaterialCompatibility;
+    bool SpatialObject   = Config.SpatialObjectIdentity;
     bool GiReuse  = Config.GlobalIlluminationReuse;   // the indirect pool's off-switch (kFeatureGiReuse, ON by default)
     bool Alias    = Config.AliasPick;       // R6 row 3: off = uniform pick (R0 identity); F5 in the F3 popup flips the same flag
     if (ImGui::Checkbox("Temporal reuse", &Temporal))
         Integrator.AssignTemporalReuse(Temporal);
     if (ImGui::Checkbox("Spatial reuse", &Spatial))
         Integrator.AssignSpatialReuse(Spatial);
+    if (ImGui::Checkbox("Spatial material + roughness", &SpatialMaterial))
+        Integrator.AssignSpatialMaterialCompatibility(SpatialMaterial);
+    if (ImGui::Checkbox("Spatial same-object only", &SpatialObject))
+        Integrator.AssignSpatialObjectIdentity(SpatialObject);
     if (ImGui::Checkbox("Indirect reuse (GI pool)", &GiReuse))
         Integrator.AssignGlobalIlluminationReuse(GiReuse);
 

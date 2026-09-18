@@ -41,6 +41,11 @@ struct ReSTIRIntegratorConfiguration
     bool        AmbientFloor       = false; // [-]   debug fill light (albedo × AmbientStrength); off by default since R0
     bool        TemporalReuse      = true;  // [-]   R6 row 2: temporal reservoir reuse (back-projection + validation)
     bool        SpatialReuse       = true;  // [-]   R6 row 3: spatial neighbour reuse (pairwise MIS)
+    // Spatial reuse A/B gates. Leaving both off preserves the historical normal/depth-only acceptance test. They are
+    // intentionally independent: a material/roughness test measures BRDF compatibility, while object identity is the
+    // stricter geometry-boundary rejection requested for scenes whose adjacent meshes should never exchange samples.
+    bool        SpatialMaterialCompatibility = false; // [-] require equal material descriptor plus compatible roughness
+    bool        SpatialObjectIdentity        = false; // [-] require neighbour and receiver to share an object instance
     bool        GlobalIlluminationReuse = true; // [-] the indirect half's pool (kFeatureGiReuse) — ReSTIR GI-style reuse
                                            //       of the first-bounce vertex's NEE stratum, temporal + spatial. ON by
                                            //       default; off restores the single-sample vertex NEE (the A/B)
@@ -105,6 +110,8 @@ public:
     void AssignAntiAliasing      (bool     On)    noexcept { if (ActiveConfiguration.AntiAliasing        != On)    { ActiveConfiguration.AntiAliasing        = On;    ResetAccumulation(); } }
     void AssignTemporalReuse     (bool     On)    noexcept { if (ActiveConfiguration.TemporalReuse       != On)    { ActiveConfiguration.TemporalReuse       = On;    ResetAccumulation(); } }
     void AssignSpatialReuse      (bool     On)    noexcept { if (ActiveConfiguration.SpatialReuse        != On)    { ActiveConfiguration.SpatialReuse        = On;    ResetAccumulation(); } }
+    void AssignSpatialMaterialCompatibility(bool On) noexcept { if (ActiveConfiguration.SpatialMaterialCompatibility != On) { ActiveConfiguration.SpatialMaterialCompatibility = On; ResetAccumulation(); } }
+    void AssignSpatialObjectIdentity(bool On) noexcept { if (ActiveConfiguration.SpatialObjectIdentity != On) { ActiveConfiguration.SpatialObjectIdentity = On; ResetAccumulation(); } }
     // The indirect pool changes what is SAMPLED at the first-bounce vertex (a reservoir instead of one light sample),
     //    so it resets accumulation like every other sampling switch — an A/B with a stale history would compare two
     //    different histories rather than two estimators.

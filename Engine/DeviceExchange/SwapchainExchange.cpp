@@ -1478,6 +1478,9 @@ struct DenoisePushRecord
     uint32_t WriteFilteredHistory; // [-] 1 only at first wavelet level
     float    ColourSaturation; // [-]  A7d: must match the kernel's, or toggling the denoiser changes colour
 };
+static_assert(offsetof(DenoisePushRecord, WriteFilteredHistory) == 36u && offsetof(DenoisePushRecord, ColourSaturation) == 40u
+              && sizeof(DenoisePushRecord) == 44u,
+              "DenoisePushRecord must match AtrousDenoise.slang after first-wavelet history fields");
 
 namespace {
 // Mirrors LuminanceConstants in LuminanceReduce.slang.

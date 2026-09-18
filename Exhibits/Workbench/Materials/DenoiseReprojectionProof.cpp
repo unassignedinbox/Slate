@@ -170,6 +170,24 @@ int main()
         }
         Check(Combinations, "A10 all four denoise × reprojection combinations drive exactly their own bits");
 
+        // Spatial reuse now has a measured A/B surface too. Normal/depth-only remains the control, while each
+        // compatibility gate maps to one unique shader bit and restarts history because it changes the estimator.
+        Check(!Defaults.SpatialMaterialCompatibility && !Defaults.SpatialObjectIdentity
+              && (Dispatch.FeatureFlags & (DispatchFeatureSpatialMaterialCompatibility | DispatchFeatureSpatialObjectIdentity)) == 0u,
+              "A10b spatial material/object gates default OFF (normal/depth-only control)");
+        {
+            ReSTIRIntegrator Trial(Defaults);
+            Trial.AssignSpatialMaterialCompatibility(true);
+            const DispatchConfiguration Material = Trial.BuildDispatch(Camera, 1280u, 720u, 0u, 4u);
+            Trial.AssignSpatialObjectIdentity(true);
+            const DispatchConfiguration Both = Trial.BuildDispatch(Camera, 1280u, 720u, 0u, 4u);
+            Check((Material.FeatureFlags & DispatchFeatureSpatialMaterialCompatibility) != 0u
+                  && (Material.FeatureFlags & DispatchFeatureSpatialObjectIdentity) == 0u
+                  && (Both.FeatureFlags & (DispatchFeatureSpatialMaterialCompatibility | DispatchFeatureSpatialObjectIdentity))
+                         == (DispatchFeatureSpatialMaterialCompatibility | DispatchFeatureSpatialObjectIdentity),
+                  "A10c spatial material/roughness and object gates drive independent dispatch bits");
+        }
+
         // Toggle semantics: the filter is a post-process (no reset); reprojection changes what is sampled (reset).
         {
             ReSTIRIntegrator Trial(Defaults);
@@ -268,6 +286,10 @@ int main()
             { "ReSTIRViewport", "vec3 mean  = history.rgb + (radiance - history.rgb) / count;", 1u, "B11 capped running mean" },
             { "ReSTIRViewport", "float variance = sampleVariance / count;", 1u, "B12 filter input = variance OF THE MEAN" },
             { "ReSTIRViewport", "if (count < 2.0) variance = luma * luma;", 1u, "B13 a first sample stays permissive (disocclusion)" },
+            { "ReSTIRViewport", "const uint kFeatureSpatialMaterialCompatibility = 1024u;", 1u, "B13b spatial material/roughness bit matches the engine" },
+            { "ReSTIRViewport", "const uint kFeatureSpatialObjectIdentity        = 2048u;", 1u, "B13c spatial object identity bit matches the engine" },
+            { "ReSTIRViewport", "bool SpatialReuseCompatible(GpuReservoir neighbour, uint receiverIdentity, float receiverRoughness)", 1u, "B13d spatial compatibility is one common direct/GI policy" },
+            { "ReSTIRViewport", "&& SpatialReuseCompatible(neigh, primaryIdentity,", 2u, "B13e both direct and GI spatial taps apply the A/B policy" },
             { "ReSTIRViewport", "imageStore(DenoiseImage, ivec2(pixel), vec4(mean, variance));", 1u, "B10 one denoise store site for every material" },
             { "ReSTIRViewport", "imageStore(DenoiseImage", 1u, "B11 the denoise store is not duplicated per lobe (material-agnostic)" },
             { "ReSTIRViewport", "if ((FeatureFlags & kFeatureDenoise) == 0u)\n        imageStore(OutputImage", 1u, "B12 with the filter off the kernel tone-maps itself" },

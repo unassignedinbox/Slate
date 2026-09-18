@@ -158,7 +158,7 @@ struct GpuReservoir   // 64 B std430 stride — mirrors ReservoirBufferRecord in
     // SelectedUv was carried but never read during a temporal or spatial re-evaluation: the stored world point is
     // sufficient. Reclaim those two floats and the former 16 B identity tail. std430 permits the scalar identity to
     // occupy the fourth word after Normal.xyz, preserving every packed visibility bit without treating it as a float.
-    vec4  Details;   // x = W, y = view depth [m], z = render-width stride guard, w = padding
+    vec4  Details;   // x = W, y = view depth [m], z = render-width stride guard, w = resolved specular roughness
     vec3  Normal;    // viewer-facing geometric normal at the build pixel
     uint  Identity;  // packed (instance, primitive) identity; shares Normal's 16 B std430 slot
 };
@@ -518,9 +518,30 @@ const uint kFeatureGiReuse            = 256u; // bit 8: the indirect half's pool
 //    ⚠️ Off by default, and byte-identical when off: with the bit clear the resolve reads, validates and stores exactly
 //    what it did before this existed, which is what makes the exhibit's A/B a comparison rather than a rewrite.
 const uint kFeatureTemporalIdentity   = 512u; // bit 9: D10 — identity-based validation of the reprojected history
-                                              //    vertex's NEE stratum, temporally and over the same kSpatialTapCount cross.
-                                              //    ON by default (the host sets it); clearing the bit restores the
-                                              //    single-sample NEE arm, which is the A/B the CPU mirror measures.
+                                              //    vertex's NEE stratum. The Engine enum reserves this bit; temporal
+                                              //    identity remains opt-in until its own host control is surfaced.
+// Measured spatial-reuse A/B controls. Both are OFF by default, preserving the original normal/depth-only control.
+const uint kFeatureSpatialMaterialCompatibility = 1024u; // bit 10: material descriptor + roughness compatibility
+const uint kFeatureSpatialObjectIdentity        = 2048u; // bit 11: require the same object instance
+const float kSpatialRoughnessTolerance = 0.125; // [-] enough texture quantisation room; rejects distinct glossy/diffuse lobes
+
+// The reservoir retains the resolved roughness because a descriptor's base roughness can be texture-modulated. Reading
+// it from Details.w compares what was actually shaded, rather than comparing two material headers which happen to share
+// an index. Identity still gives the descriptor index, making the material A/B conservative by design.
+bool SpatialReuseCompatible(GpuReservoir neighbour, uint receiverIdentity, float receiverRoughness)
+{
+    if (neighbour.Identity == kIdentityNone || receiverIdentity == kIdentityNone) return false;
+    if ((FeatureFlags & kFeatureSpatialObjectIdentity) != 0u
+        && IdentityObject(neighbour.Identity) != IdentityObject(receiverIdentity)) return false;
+    if ((FeatureFlags & kFeatureSpatialMaterialCompatibility) != 0u)
+    {
+        const uint neighbourMaterial = Instances[IdentityObject(neighbour.Identity)].MaterialIndex;
+        const uint receiverMaterial  = Instances[IdentityObject(receiverIdentity)].MaterialIndex;
+        if (neighbourMaterial != receiverMaterial
+            || abs(neighbour.Details.w - receiverRoughness) > kSpatialRoughnessTolerance) return false;
+    }
+    return true;
+}
 
 float PixelSpreadAngle() { return 2.0 * FieldOfViewTanHalf / float(ViewportHeight); }   // [rad] R4b ray-cone spread per pixel
 
@@ -1342,7 +1363,7 @@ vec3 GiPoolShade(SurfaceFrame F, ShadingRecord m, ResolvedLayers L, vec3 wo, vec
         GpuReservoir hist;
         hist.Sample  = vec4(ris.SelectedPoint, ris.WeightSum);
         hist.Counts  = uvec4(ris.SampleCount, ris.SelectedLight, 1u, giAge);
-        hist.Details = vec4(ris.UnbiasedWeight, primaryT, float(ViewportWidth), 0.0);
+        hist.Details = vec4(ris.UnbiasedWeight, primaryT, float(ViewportWidth), m.SpecularRoughness);
         hist.Normal   = primaryNormal;
         hist.Identity = primaryIdentity;
         GiCurrReservoirs[pixel.y * ViewportWidth + pixel.x] = hist;
@@ -1370,7 +1391,8 @@ vec3 GiPoolShade(SurfaceFrame F, ShadingRecord m, ResolvedLayers L, vec3 wo, vec
             bool nValid = neighM > 0u
                 && neigh.Details.z == float(ViewportWidth)
                 && dot(primaryNormal, neigh.Normal.xyz) > kTemporalNormalCos
-                && abs(primaryT - neigh.Details.y) / max(primaryT, 1e-3) < kTemporalDepthTol;
+                && abs(primaryT - neigh.Details.y) / max(primaryT, 1e-3) < kTemporalDepthTol
+                && SpatialReuseCompatible(neigh, primaryIdentity, m.SpecularRoughness);
             if (!nValid) continue;
             uint mNeighCapped = min(neighM, kTemporalMClamp * capReference);
             float pNeigh = PHatSelected(F, m, L, wo, neigh.Counts.y, neigh.Sample.xyz - hitPos, hitPos);
@@ -1684,7 +1706,8 @@ void main()
                     bool nValid = neighM > 0u
                         && neigh.Details.z == float(ViewportWidth)   // stride guard (render-scale change)
                         && dot(hitNormal, neigh.Normal.xyz) > kTemporalNormalCos
-                        && abs(primaryT - neigh.Details.y) / max(primaryT, 1e-3) < kTemporalDepthTol;
+                        && abs(primaryT - neigh.Details.y) / max(primaryT, 1e-3) < kTemporalDepthTol
+                        && SpatialReuseCompatible(neigh, primaryIdentity, shading.SpecularRoughness);
                     if (!nValid) continue;
                     uint mNeighCapped = min(neighM, kTemporalMClamp * capReference);
                     vec3 neighToL  = neigh.Sample.xyz - hitPos;
@@ -1728,7 +1751,7 @@ void main()
             GpuReservoir histRes;
             histRes.Sample  = vec4(histPoint, histWeightSum);
             histRes.Counts  = uvec4(histCount, histLight, histVisible, histAge);
-            histRes.Details = vec4(histW, primaryT, float(ViewportWidth), 0.0);
+            histRes.Details = vec4(histW, primaryT, float(ViewportWidth), shading.SpecularRoughness);
             histRes.Normal   = hitNormal;
             histRes.Identity = primaryIdentity;
             CurrReservoirs[pixel.y * ViewportWidth + pixel.x] = histRes;
