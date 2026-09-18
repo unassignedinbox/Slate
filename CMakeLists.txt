@@ -318,7 +318,7 @@ add_dependencies(Project-Zero ReSTIRViewportSpirv)
 set_source_files_properties(Engine/GeometricRaster/TraversalIndex.cpp PROPERTIES COMPILE_OPTIONS "-mavx2;-mfma;-msse4.2")   # tinybvh SIMD build
 set_source_files_properties(Engine/GeometricRaster/InstanceAcceleration.cpp PROPERTIES COMPILE_OPTIONS "-mavx2;-mfma;-msse4.2")   # D6/D9: tiny_bvh.h's SIMD types, and the same flags the traversal batch is compiled with
 set_source_files_properties(Exhibits/Workbench/Materials/ShaderballExhibit.cpp PROPERTIES COMPILE_DEFINITIONS SHADERBALL_PREVIEW_LIB
-    INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/Engine/DisplayPresentation;${CMAKE_CURRENT_SOURCE_DIR}/Engine/Shaders;${CMAKE_CURRENT_SOURCE_DIR}/Exhibits/Workbench/Editor;${CMAKE_CURRENT_SOURCE_DIR}/Engine/ContentInterchange")   # M7b preview TU (FRONTIER_CPU_PORT is vestigial — no ifdefs — and intentionally not passed)
+    INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/Engine/DisplayPresentation;${CMAKE_CURRENT_SOURCE_DIR}/Engine/Shaders;${CMAKE_CURRENT_SOURCE_DIR}/Exhibits/Workbench/Editor;${CMAKE_CURRENT_SOURCE_DIR}/Engine/ContentInterchange")   # M7b preview TU. ⚠️ FRONTIER_CPU_PORT is NOT vestigial: MaterialEvaluation.slang guards its GLSL-only block with it, and SlangCpuShim.h now defines it for any host that did not — that is why it is deliberately not passed here.
 
 target_include_directories(Project-Zero PRIVATE
     ${FRONTIER_ENGINE_INCLUDES}

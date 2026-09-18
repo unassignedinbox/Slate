@@ -171,6 +171,31 @@ sed -n '/^\$EngineRelative = @(/,/^)/p' Projects/Project-Dyno/Build/ToolchainSeq
 Compare "⑦ Project-Dyno names the same TUs in CMake and its ToolchainSequence.ps1" \
         "$Work/dyno_cmake.txt" "$Work/dyno_ps.txt" CMake Dyno.ps1
 
+# ── ⑧ the shader tables, which rot the same way ──────────────────────────────────────────────────────────────────────
+#    The Windows script lowered 10 of the 15 entries CMake's SHADER_TABLE carries (the shadow raster, ShadowResolve and
+#    the two D9 BLAS kernels were missing), and the engine loads all 15 at bring-up — a fresh clone had no .spv for
+#    five of them and the app failed at load time. Same shape as the source-list failure, so it gets the same check.
+sed -n '/^set(SHADER_TABLE/,/^    )/p' "$CMakeFile" \
+    | grep -oE '"[^"|]+\.slang\|[a-z]+\|[^"|]+\.spv"' | tr -d '"' | sort -u > "$Work/shaders_cmake.txt"
+#    (three quoted fields per entry, joined the way CMake spells them: source|stage|output)
+{
+    sed -n '/^\$ShaderTable = @(/,/^)/p' "$Ps1File" | grep 'Source = ' | while IFS= read -r Line; do
+        printf '%s\n' "$Line" | grep -oE "'[^']+'" | tr -d "'" | paste -sd'|' -
+    done
+} | sort -u > "$Work/shaders_ps1.txt"
+if diff -q "$Work/shaders_cmake.txt" "$Work/shaders_ps1.txt" > /dev/null; then
+    Pass "⑧ the shader tables agree — $(wc -l < "$Work/shaders_cmake.txt") entries in CMake and in the script"
+else
+    Fail "⑧ the shader tables disagree (a missing entry means the app loads a .spv nobody built):"
+    diff "$Work/shaders_cmake.txt" "$Work/shaders_ps1.txt" | sed 's/^</        only in CMake: /; s/^>/        only in the script: /' | grep -v '^[0-9-]'
+fi
+
+# The include stamp: every .slang an entry point #includes must be listed, or an edit to it never re-lowers anything.
+for Include in ShadowRecords.slang ShadowSample.slang SceneRecords.slang RayGeneration.slang TraversalCWBVH.slang SkyRecords.slang MoonRecords.slang PostRecords.slang MaterialEvaluation.slang; do
+    grep -q "'$Include'" "$Ps1File" || { Fail "⑧ $Include is not in the script's include stamp (editing it would leave stale SPIR-V)"; IncludeMissing=1; }
+done
+[ "${IncludeMissing:-0}" -eq 0 ] && Pass "⑧ every shader include is in the script's staleness stamp"
+
 echo
 if [ "$Failures" -eq 0 ]; then
     echo "[BuildSourceList] GREEN — every hand-maintained source list names the same translation units"

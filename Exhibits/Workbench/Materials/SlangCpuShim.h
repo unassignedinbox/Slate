@@ -9,8 +9,20 @@
 //    because the temporary outlives the full expression. M9 added .r/.g/.b/.a and vec4.rgb for AtrousDenoise.slang's
 //    tone map — same proxy discipline, read-only. Float builtins are new overloads (the C library only declares
 //    the double versions globally), so double intermediates from un-suffixed literals still resolve to ::sqrt etc.
+//
+//    ⚠️ This header DEFINES FRONTIER_CPU_PORT if the build did not. MaterialEvaluation.slang guards its GLSL-only block
+//    with `#ifndef FRONTIER_CPU_PORT` — `layout(binding = ...) uniform sampler2D` and `textureLod(...)` are not C++ —
+//    so without the macro the shader cannot be parsed by MSVC at all, and the failure reads as a syntax error in a
+//    shader rather than a missing flag. It used to be passed per build system (the Makefile does; CMake's comment
+//    claimed it was "vestigial — no ifdefs" and stopped; ToolchainSequence.ps1 never did), so the Windows build could
+//    not compile the M7b preview TU. Defining it here makes the shim self-sufficient: including the shim IS the
+//    statement "this translation unit is the CPU port".
 
 #pragma once
+
+#ifndef FRONTIER_CPU_PORT
+#define FRONTIER_CPU_PORT 1
+#endif
 
 #include <cmath>
 
@@ -134,22 +146,38 @@ inline vec2  min(vec2 a, vec2 b) { return vec2(min(a.x, b.x), min(a.y, b.y)); }
 inline vec2  max(vec2 a, vec2 b) { return vec2(max(a.x, b.x), max(a.y, b.y)); }
 inline vec3  min(vec3 a, vec3 b) { return vec3(min(a.x, b.x), min(a.y, b.y), min(a.z, b.z)); }
 inline vec3  max(vec3 a, vec3 b) { return vec3(max(a.x, b.x), max(a.y, b.y), max(a.z, b.z)); }
+// ⚠️ The six scalar overloads below (abs · sqrt · cos · sin · exp · pow) already exist for `float` in MSVC's GLOBAL
+//    namespace once <cmath> is in: the CRT's <math.h> declares the C++ float overloads there, `noexcept`. Redefining
+//    them here is error C2382 ("redefinition; different exception specifications") — every Windows build of the M7b
+//    preview TU hit it. So the scalar definitions are guarded and, on MSVC, the standard ones are USING-DECLARED
+//    instead: call sites in the shader text are unqualified (`abs(x)`), which is exactly how GLSL calls them, and
+//    unqualified lookup still resolves them. The using-declarations MUST precede the vec3 overloads below, because
+//    those call the scalar form from their bodies and lookup happens at the point of definition.
+#if defined(_MSC_VER)
+using std::abs;
+using std::sqrt;
+using std::cos;
+using std::sin;
+using std::exp;
+using std::pow;
+#else
 inline float abs(float x) { return x < 0.0f ? -x : x; }   // M4: |cos| in the transmission half-vector (GLSL abs, 1:1)
+inline float sqrt(float x) { return std::sqrt(x); }
+inline float cos(float x) { return std::cos(x); }
+inline float sin(float x) { return std::sin(x); }   // M2: aniso-basis construction
+inline float exp(float x) { return std::exp(x); }
+inline float pow(float x, float y) { return std::pow(x, y); }
+#endif
+
 inline vec3  abs(vec3 x) { return vec3(abs(x.x), abs(x.y), abs(x.z)); }
 inline vec3  log(vec3 x) { return vec3(std::log(x.x), std::log(x.y), std::log(x.z)); }   // M4: σ = −ln(color)/depth
-
-inline float sqrt(float x) { return std::sqrt(x); }
 inline vec3  sqrt(vec3 x) { return vec3(std::sqrt(x.x), std::sqrt(x.y), std::sqrt(x.z)); }
-inline float cos(float x) { return std::cos(x); }
 inline vec3  cos(vec3 x) { return vec3(std::cos(x.x), std::cos(x.y), std::cos(x.z)); }
-inline float sin(float x) { return std::sin(x); }   // M2: aniso-basis construction
 inline vec3  cross(vec3 a, vec3 b)   // M2: coat bitangent
 {
     return vec3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
 }
-inline float exp(float x) { return std::exp(x); }
 inline vec3  exp(vec3 x) { return vec3(std::exp(x.x), std::exp(x.y), std::exp(x.z)); }
-inline float pow(float x, float y) { return std::pow(x, y); }
 inline vec3  pow(vec3 x, vec3 y) { return vec3(std::pow(x.x, y.x), std::pow(x.y, y.y), std::pow(x.z, y.z)); }
 inline float smoothstep(float e0, float e1, float x)
 {

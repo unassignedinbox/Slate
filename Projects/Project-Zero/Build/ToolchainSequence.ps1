@@ -380,8 +380,24 @@ $ShaderTable = @(
     @{ Source = 'VisibilityRaster.frag.slang'; Stage = 'fragment'; Output = 'VisibilityRaster.frag.spv' }
     @{ Source = 'InterfaceRaster.vert.slang';  Stage = 'vertex';   Output = 'InterfaceRaster.vert.spv' }
     @{ Source = 'InterfaceRaster.frag.slang';  Stage = 'fragment'; Output = 'InterfaceRaster.frag.spv' }
+    # ── Added 2026-09-18. The engine loads these five at bring-up — the shadow raster the VisibilityExchange records,
+    #    and the two D9 kerneks that build/refit the BLASes — but this table never lowered them, so a fresh clone had
+    #    no .spv for them at all (on a machine that had built once, older files sat there and hid it). The user's
+    #    Windows run hand-added exactly these five; CMakeLists.txt's SHADER_TABLE has carried them all along, and
+    #    Tools/Build/CheckShaders.sh lowers the same 15. `CheckBuildSourceList.sh` now cross-checks this table against
+    #    CMake's, so a shader cannot be lowered by one build system only.
+    @{ Source = 'ShadowResolve.slang';         Stage = 'compute';  Output = 'ShadowResolve.spv' }
+    @{ Source = 'ShadowRaster.vert.slang';     Stage = 'vertex';   Output = 'ShadowRaster.vert.spv' }
+    @{ Source = 'ShadowRaster.frag.slang';     Stage = 'fragment'; Output = 'ShadowRaster.frag.spv' }
+    @{ Source = 'BlasRefit.slang';             Stage = 'compute';  Output = 'BlasRefit.spv' }
+    @{ Source = 'BlasBuild.slang';             Stage = 'compute';  Output = 'BlasBuild.spv' }
 )
-$ShaderIncludeNames = @('SceneRecords.slang', 'RayGeneration.slang', 'TraversalCWBVH.slang', 'InterfaceRecords.slang', 'InterfaceSignedDistance.slang', 'SkyRecords.slang', 'MoonRecords.slang', 'PostRecords.slang', 'MaterialEvaluation.slang')
+# Every .slang that is #included by a lowered entry point belongs here: the stamp is what re-lowers the entries when an
+#    include changes. ShadowRecords / ShadowSample were missing, so a shadow-shader edit could leave stale SPIR-V in
+#    place indefinitely — the same class of omission as the five missing table entries below.
+$ShaderIncludeNames = @('SceneRecords.slang', 'RayGeneration.slang', 'TraversalCWBVH.slang', 'InterfaceRecords.slang',
+                        'InterfaceSignedDistance.slang', 'ShadowRecords.slang', 'ShadowSample.slang',
+                        'SkyRecords.slang', 'MoonRecords.slang', 'PostRecords.slang', 'MaterialEvaluation.slang')
 
 function Invoke-ShaderLowering([string] $VulkanRoot)
 {
@@ -858,6 +874,8 @@ $LinkArgs.Add($JoltLib)
 $LinkArgs.Add('gdi32.lib')
 $LinkArgs.Add('user32.lib')
 $LinkArgs.Add('shell32.lib')
+# TelemetryMetrics' "Show RAM usage" reads the process working set with GetProcessMemoryInfo (psapi.h / K32GetProcessMemoryInfo).
+$LinkArgs.Add('psapi.lib')
 
 Write-Building 'Linking Project-Zero.exe...'
 $Diagnostics = & link.exe @($LinkArgs.ToArray())
