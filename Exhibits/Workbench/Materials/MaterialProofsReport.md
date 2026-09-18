@@ -1281,10 +1281,12 @@ exposes: below ~0.006° elevation (`SunDirection.z <= 1e-4`) the transmittance *
 noted here: the atmosphere's own transmittance fades the direct beam over the same span, so the product is not the
 step it looks like in isolation — but if a horizon flash is ever reported, this is the line to look at.
 
-⚠️ Lowering was **not** re-verified in this sandbox: there is no cmake, ninja, slangc, glslc or glslangValidator here
-(and no way to seat one), so `CheckShaders.sh` reports SKIPPED. The edit is verified structurally instead — every
-argument's type at every call site, brace/paren balance, and the declarations of the functions it calls — and the
-lowering itself is covered by the Windows build, which compiles all 15 shaders and would fail loudly.
+✅ Lowering re-verified: `Tools/Build/BuildGlslang.sh` (the repository's own cmake-free glslang bootstrap — the sandbox
+has no cmake or ninja, and the release archives are not fetchable here) seated a validator at
+`/tmp/glslang-build/StandAlone`, and `CheckShaders.sh` then lowered **15/15 shaders GREEN**, `ReSTIRViewport.slang`
+included. Before that the edit was verified structurally as well — every argument's type at all seven call sites,
+brace/paren balance, the callee signatures — because a shader gate that reports SKIPPED is a gate that is not holding
+the bar it exists for.
 
 ### 15.4 The default level is now the material library — the scatter with one material per sphere
 
