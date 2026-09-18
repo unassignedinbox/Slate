@@ -23,18 +23,15 @@ BuildOnly=0
 # ─── the tool, built if it is not there (Build/ is regenerable and gitignored) ────────────────────────────────────────
 Tool="Build/SpaceTool"
 if [ ! -x "$Tool" ] || [ -n "$(find Exhibits/Workbench/ProjectFormat Engine/ContentInterchange Projects/Project-Zero/Source -newer "$Tool" -name '*.cpp' -o -newer "$Tool" -name '*.h' 2>/dev/null | head -1)" ]; then
-    Vk=""
-    for candidate in "$PWD/ExternalPackages" "${MATERIAL_SCENES_EXT:-}" "$HOME/.cache/m7"; do
-        [ -n "$candidate" ] && [ -f "$candidate/Vulkan-Headers/include/vulkan/vulkan.h" ] && Vk="$candidate" && break
-    done
-    [ -z "$Vk" ] && { echo "[PackProject] Vulkan-Headers not found (see CheckSpaceFamily.sh)"; exit 1; }
+    # SpaceTool is a byte/record tool. It intentionally has no Vulkan-Headers preflight: the data-only
+    # TriangleIndex declaration keeps this build CPU-only.
     mkdir -p Build
     echo "[PackProject] building $Tool"
     # -ffunction-sections/-fdata-sections/--gc-sections drop MaterialSwatchStructure::Export and the glTF writer behind it:
     #   the tool reads the level's records, it never writes glTF.
     g++ -std=c++20 -O2 -DFRONTIER_CPU_PORT -ffunction-sections -fdata-sections -Wl,--gc-sections \
         -I Engine/GeometricRaster -I Engine/DeviceExchange -I Engine/ContentInterchange -I Engine/DisplayPresentation \
-        -I Projects/Project-Zero/Source -I "$Vk/Vulkan-Headers/include" \
+        -I Projects/Project-Zero/Source \
         Exhibits/Workbench/ProjectFormat/SpaceTool.cpp \
         Engine/ContentInterchange/SpaceCodec.cpp Engine/ContentInterchange/SpaceExport.cpp \
         Engine/ContentInterchange/MaterialSwatchStructure.cpp Engine/ContentInterchange/MaterialIndex.cpp \

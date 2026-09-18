@@ -1,7 +1,7 @@
 //============================================================================================================================================
 //                                                      GAMEEXECUTION.CPP
 //============================================================================================================================================
-// 🧩 Project-Zero entry point — opens the Vulkan window, makes a glTF level resident, runs the ReSTIR render loop.
+// 🧩 Project-Zero entry point — opens the Vulkan window, makes a Slate-owned project level resident, runs the ReSTIR render loop.
 //
 //    Scene selection (R2): `Project-Zero.exe [--scene <file.gltf|glb|shaderball|materials|showroom|showcase>] [--scale <float>]`
 //        showroom — P0 spatial-interface level, exported once from ShowroomStructure then imported like any other
@@ -10,9 +10,8 @@
 //        showcase — the default level: a 6x6 grid of OpenPBR spheres (anisotropic metals, IOR glass, subsurface,
 //                    coat, cloth/fuzz, thin film, haziness, EON, emission, glints) over a scattered field of boxes,
 //                    cylinders and cones, lit by two area luminaires. Exported once from ShowcaseStructure.
-//        default  Projects/Project-Zero/Content/Scenes/Showcase.gltf — regenerated from ShowcaseStructure when the
-//                 file is missing OR was written by an older kShowcaseRevision
-//                 (the Cornell box stays one --scene path away, untouched as the reference).
+//        default  Projects/Project-Zero/Project-Zero.projectspace — TOML project manifest with FSPC geometry and
+//                 Slate TOML material files. glTF remains available only through explicit --scene compatibility import.
 //        Sponza   Projects/Project-Zero/Content/Scenes/Sponza/Sponza.gltf (fetched by the build script, not committed).
 
 #include "../../../Engine/DeviceExchange/SwapchainExchange.h"
@@ -38,6 +37,7 @@
 #include "../../../Engine/GeometricRaster/InstanceAcceleration.h"   // D6/D7 two-level: BLASes + instance top level
 #include "FlyThroughSolver.h"
 #include "RayTracingSolver.h"
+#include "CommandLine.h"
 #include "../../../Engine/ContentInterchange/ShaderballPreview.h"
 #include "../../../Engine/ContentInterchange/ShaderBallStructure.h"
 #include "../../../Engine/ContentInterchange/ShowcaseStructure.h"
@@ -82,38 +82,53 @@ int main(int argc, char** argv)
     //    on instance ordinals without either having to inspect the other.
     constexpr uint32_t kDropBodyCount = 12u;
 
-    // Showcase is the default level (the Cornell box stays one --scene path away, untouched as the reference).
-    std::string ScenePath  = "Projects/Project-Zero/Content/Scenes/Showcase.gltf";
+    // Slate-owned project content is the default. `--scene` remains a deliberate compatibility/import route; it is
+    // never the default startup path. The project manifest chooses Showcase unless -Level explicitly selects another
+    // declared level.
+    std::string ScenePath;
     float       SceneScale = 1.0f;
     bool        AnimateInstances = false;   // D3: --animate drives instance transforms from a scripted path
-    bool        SilentAudio      = false;   // --silent: open the null audio driver (no sound card, or CI)
+    bool        SilentAudio      = false;   // -silent/--silent: open the null audio driver (no sound card, or CI)
+    const std::filesystem::path ContentRoot = Frontier::QueryContentRoot();
+    const std::string ProjectRoot = ContentRoot.empty() ? std::string("Projects") : (ContentRoot / "Projects").string();
+    Frontier::CommandOptions Launch;
+    std::string LaunchError;
+    if (!Frontier::ParseCommandLine(argc, argv, "Project-Zero", ProjectRoot, Launch, LaunchError))
+    {
+        std::cerr << "[Project-Zero] " << LaunchError << "\n";
+        return 2;
+    }
+    SilentAudio = Launch.Silent;
+    SceneScale = Launch.HasScale ? Launch.Scale : 1.0f;
     for (int I = 1; I < argc; ++I)
     {
-        if (std::strcmp(argv[I], "--animate") == 0) { AnimateInstances = true; continue; }
-        if (std::strcmp(argv[I], "--silent")  == 0) { SilentAudio      = true; continue; }   // null audio driver
-        if (I + 1 >= argc) break;
-        if (std::strcmp(argv[I], "--scene") == 0) ScenePath  = argv[++I];
-        if (std::strcmp(argv[I], "--scale") == 0) SceneScale = static_cast<float>(std::atof(argv[++I]));
+        if (std::strcmp(argv[I], "--animate") == 0) AnimateInstances = true;
+        if (std::strcmp(argv[I], "--silent") == 0) SilentAudio = true;  // retained alias for existing launch scripts
     }
-    if (ScenePath == "shaderball") ScenePath = "Projects/Project-Zero/Content/Scenes/ShaderBall.gltf";   // R4b material test level
-    if (ScenePath == "materials")  ScenePath = "Projects/Project-Zero/Content/Scenes/Materials.gltf";    // M10 material library level
-    if (ScenePath == "showroom")   ScenePath = "Projects/Project-Zero/Content/Scenes/Showroom.gltf";     // P0 spatial-interface level
-    // The open-air scene.
-    if (ScenePath == "outdoor")    ScenePath = "Projects/Project-Zero/Content/Scenes/Outdoor.gltf";
-    // The showcase field (default level).
-    if (ScenePath == "showcase")   ScenePath = "Projects/Project-Zero/Content/Scenes/Showcase.gltf";
-    bool DropScene = false;
-    if (ScenePath == "drop") { ScenePath = "Projects/Project-Zero/Content/Scenes/ShowroomDrop.gltf"; DropScene = true; }   // D4 physics level
 
-    // Anchor every repository-relative path to the content root before anything opens a file. Levels are exported
-    //    once and then imported forever, so a run whose working directory is not the repository root would otherwise
-    //    export a SECOND copy of the level next to the executable and read that one — which is exactly how the
-    //    renderer ended up showing a stale Showcase while the repository held a newer one.
+    // `--scene` is intentionally secondary to -Project: it continues to let artists import an interchange scene, but
+    // a normal Project-Zero launch does not touch a glTF file.
+    if (Launch.SceneAlias.empty())
     {
-        const std::filesystem::path ContentRoot = Frontier::QueryContentRoot();
-        if (!ContentRoot.empty() && !std::filesystem::path(ScenePath).is_absolute())
-            ScenePath = (ContentRoot / ScenePath).string();
+        ScenePath = Launch.ProjectPath;
     }
+    else
+    {
+        ScenePath = Launch.SceneAlias;
+        if (ScenePath == "shaderball") ScenePath = "Projects/Project-Zero/Content/Scenes/ShaderBall.gltf";
+        if (ScenePath == "materials")  ScenePath = "Projects/Project-Zero/Content/Scenes/Materials.gltf";
+        if (ScenePath == "showroom")   ScenePath = "Projects/Project-Zero/Content/Scenes/Showroom.gltf";
+        if (ScenePath == "outdoor")    ScenePath = "Projects/Project-Zero/Content/Scenes/Outdoor.gltf";
+        if (ScenePath == "showcase")   ScenePath = "Projects/Project-Zero/Content/Scenes/Showcase.gltf";
+    }
+    bool DropScene = ScenePath == "drop";
+    if (DropScene) ScenePath = "Projects/Project-Zero/Content/Scenes/ShowroomDrop.gltf";
+
+    // Anchor every repository-relative path to the content root before anything opens a file. The command-line parser
+    // already yields an absolute project path when a content root was found; this keeps an explicit legacy --scene path
+    // equally reliable when the executable is launched outside the repository root.
+    if (!ContentRoot.empty() && !std::filesystem::path(ScenePath).is_absolute())
+        ScenePath = (ContentRoot / ScenePath).string();
 
     //──────────────────────────────────────────────────────────────────────────
     // Telemetry sink
@@ -133,8 +148,8 @@ int main(int argc, char** argv)
                          "Bootstrap", "Project-Zero windowed ReSTIR renderer starting.");
 
     //──────────────────────────────────────────────────────────────────────────
-    // Scene — glTF level made resident (R2). The Cornell box is exported once from the analytical solver so the
-    //    reference image goes through the same import path as any other level.
+    // Scene — Slate project made resident. The normal path resolves a .projectspace TOML manifest directly to FSPC
+    // geometry and Slate materials; the old glTF builders below run only for an explicit --scene compatibility import.
     //──────────────────────────────────────────────────────────────────────────
     Frontier::ProjectZero::RayTracingSolver Scene;   // CPU reference geometry (Cornell exporter + ImGui scene section)
     {
@@ -257,8 +272,9 @@ int main(int argc, char** argv)
         Frontier::SceneDecodeConfiguration Decode;
         Decode.UniformScale = SceneScale;
         Decode.SlabLimit    = Configuration.Query().Backend.SlabLimit;
+        Decode.LevelName     = Launch.Level;
         std::string Error;
-        if (!Frontier::ContentCodec::Decode(ScenePath, Level, &Textures, Decode, &Error))   // .gltf/.glb/.fbx/.obj by extension
+        if (!Frontier::ContentCodec::Decode(ScenePath, Level, &Textures, Decode, &Error))   // .projectspace or explicit interchange import
         {
             Logger.RecordMessage(Frontier::DiagnosticSeverity::Fatal, "Scene", ("Cannot import " + ScenePath + ": " + Error).c_str());
             Logger.TerminateSink();
@@ -277,7 +293,7 @@ int main(int argc, char** argv)
                           Frontier::kMoonTextureDirectory, Frontier::kMoonAtlas[M].File);
             MoonSlots[M] = Textures.RegisterPath(MoonPath, /*Linear=*/false);
         }
-        Level.AssignName(std::filesystem::path(ScenePath).stem().string());
+        if (Level.QueryName().empty()) Level.AssignName(std::filesystem::path(ScenePath).stem().string());
         const Frontier::Vector3 Lo = Level.QueryBoundsMinimum(), Hi = Level.QueryBoundsMaximum();
         char Line[256];
         std::snprintf(Line, sizeof(Line), "%s: %u triangles, %zu instances, %zu clusters, %zu materials, %zu luminaires, bounds [%.2f %.2f %.2f]..[%.2f %.2f %.2f] m",
@@ -741,7 +757,7 @@ int main(int argc, char** argv)
     //    (visible broken shadow on its 46 m of ground), every other level the panel kilometre deck. Both
     //    instants are single-sourced in CloudShadowStaging.h; time stays frozen for accumulation parity.
     {
-        const bool IsShowcaseLevel = ScenePath.find("Showcase.gltf") != std::string::npos;
+        const bool IsShowcaseLevel = Level.QueryName() == "Showcase";
         Celestial.AssignCloudShadowStaging(IsShowcaseLevel ? Frontier::kCloudShadowShowcaseDiorama
                                                            : Frontier::kCloudShadowPanelKm);
     }

@@ -1,0 +1,1045 @@
+# Frontier Space authoring manifest. Geometry payloads remain checksummed binary FSPC containers.
+
+[project]
+format = "FrontierProjectSpace"
+version = 1
+name = "Project-Zero"
+default_level = "Showcase"
+
+[[level]]
+name = "Showcase"
+
+[[instance]]
+name = "Ground"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/0_Ground.geometry"
+material = "Content/Space/Showcase/Materials/ground_concrete.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 01 (aniso_gold)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/1_Sphere_01__aniso_gold_.geometry"
+material = "Content/Space/Showcase/Materials/aniso_gold.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 02 (aniso_silver)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/2_Sphere_02__aniso_silver_.geometry"
+material = "Content/Space/Showcase/Materials/aniso_silver.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 03 (aniso_copper)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/3_Sphere_03__aniso_copper_.geometry"
+material = "Content/Space/Showcase/Materials/aniso_copper.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 04 (aniso_aluminium)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/4_Sphere_04__aniso_aluminium_.geometry"
+material = "Content/Space/Showcase/Materials/aniso_aluminium.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 05 (aniso_iron_f82)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/5_Sphere_05__aniso_iron_f82_.geometry"
+material = "Content/Space/Showcase/Materials/aniso_iron_f82.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 06 (brushed_steel)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/6_Sphere_06__brushed_steel_.geometry"
+material = "Content/Space/Showcase/Materials/brushed_steel.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 07 (glass_water_133)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/7_Sphere_07__glass_water_133_.geometry"
+material = "Content/Space/Showcase/Materials/glass_water_133.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 08 (glass_acrylic_145)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/8_Sphere_08__glass_acrylic_145_.geometry"
+material = "Content/Space/Showcase/Materials/glass_acrylic_145.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 09 (glass_crown_152)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/9_Sphere_09__glass_crown_152_.geometry"
+material = "Content/Space/Showcase/Materials/glass_crown_152.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 10 (glass_flint_177)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/10_Sphere_10__glass_flint_177_.geometry"
+material = "Content/Space/Showcase/Materials/glass_flint_177.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 11 (glass_diamond_242)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/11_Sphere_11__glass_diamond_242_.geometry"
+material = "Content/Space/Showcase/Materials/glass_diamond_242.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 12 (glass_absorbing)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/12_Sphere_12__glass_absorbing_.geometry"
+material = "Content/Space/Showcase/Materials/glass_absorbing.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 13 (sss_marble)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/13_Sphere_13__sss_marble_.geometry"
+material = "Content/Space/Showcase/Materials/sss_marble.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 14 (sss_skin)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/14_Sphere_14__sss_skin_.geometry"
+material = "Content/Space/Showcase/Materials/sss_skin.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 15 (sss_jade)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/15_Sphere_15__sss_jade_.geometry"
+material = "Content/Space/Showcase/Materials/sss_jade.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 16 (sss_wax)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/16_Sphere_16__sss_wax_.geometry"
+material = "Content/Space/Showcase/Materials/sss_wax.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 17 (sss_milk)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/17_Sphere_17__sss_milk_.geometry"
+material = "Content/Space/Showcase/Materials/sss_milk.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 18 (sss_alabaster)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/18_Sphere_18__sss_alabaster_.geometry"
+material = "Content/Space/Showcase/Materials/sss_alabaster.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 19 (film_025)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/19_Sphere_19__film_025_.geometry"
+material = "Content/Space/Showcase/Materials/film_025.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 20 (film_055)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/20_Sphere_20__film_055_.geometry"
+material = "Content/Space/Showcase/Materials/film_055.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 21 (film_on_gold)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/21_Sphere_21__film_on_gold_.geometry"
+material = "Content/Space/Showcase/Materials/film_on_gold.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 22 (film_dark_iri)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/22_Sphere_22__film_dark_iri_.geometry"
+material = "Content/Space/Showcase/Materials/film_dark_iri.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 23 (film_soap)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/23_Sphere_23__film_soap_.geometry"
+material = "Content/Space/Showcase/Materials/film_soap.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 24 (film_oil_slick)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/24_Sphere_24__film_oil_slick_.geometry"
+material = "Content/Space/Showcase/Materials/film_oil_slick.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 25 (cloth_velvet)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/25_Sphere_25__cloth_velvet_.geometry"
+material = "Content/Space/Showcase/Materials/cloth_velvet.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 26 (cloth_felt)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/26_Sphere_26__cloth_felt_.geometry"
+material = "Content/Space/Showcase/Materials/cloth_felt.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 27 (fuzz_04)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/27_Sphere_27__fuzz_04_.geometry"
+material = "Content/Space/Showcase/Materials/fuzz_04.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 28 (fuzz_10)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/28_Sphere_28__fuzz_10_.geometry"
+material = "Content/Space/Showcase/Materials/fuzz_10.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 29 (carpaint_coat_r0)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/29_Sphere_29__carpaint_coat_r0_.geometry"
+material = "Content/Space/Showcase/Materials/carpaint_coat_r0.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 30 (carpaint_coat_r035)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/30_Sphere_30__carpaint_coat_r035_.geometry"
+material = "Content/Space/Showcase/Materials/carpaint_coat_r035.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 31 (emitter_warm)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/31_Sphere_31__emitter_warm_.geometry"
+material = "Content/Space/Showcase/Materials/emitter_warm.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 32 (haze_02)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/32_Sphere_32__haze_02_.geometry"
+material = "Content/Space/Showcase/Materials/haze_02.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 33 (haze_09)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/33_Sphere_33__haze_09_.geometry"
+material = "Content/Space/Showcase/Materials/haze_09.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 34 (eon_r0)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/34_Sphere_34__eon_r0_.geometry"
+material = "Content/Space/Showcase/Materials/eon_r0.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 35 (eon_r1)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/35_Sphere_35__eon_r1_.geometry"
+material = "Content/Space/Showcase/Materials/eon_r1.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Sphere 36 (glint_flakes)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/36_Sphere_36__glint_flakes_.geometry"
+material = "Content/Space/Showcase/Materials/glint_flakes.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow", "dynamic"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 01"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/37_Plinth_01.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 02"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/38_Plinth_02.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 03"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/39_Plinth_03.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 04"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/40_Plinth_04.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 05"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/41_Plinth_05.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 06"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/42_Plinth_06.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 07"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/43_Plinth_07.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 08"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/44_Plinth_08.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 09"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/45_Plinth_09.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 10"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/46_Plinth_10.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 11"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/47_Plinth_11.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 12"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/48_Plinth_12.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 13"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/49_Plinth_13.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 14"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/50_Plinth_14.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 15"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/51_Plinth_15.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 16"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/52_Plinth_16.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 17"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/53_Plinth_17.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 18"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/54_Plinth_18.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 19"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/55_Plinth_19.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 20"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/56_Plinth_20.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 21"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/57_Plinth_21.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 22"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/58_Plinth_22.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 23"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/59_Plinth_23.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 24"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/60_Plinth_24.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 25"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/61_Plinth_25.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 26"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/62_Plinth_26.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 27"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/63_Plinth_27.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 28"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/64_Plinth_28.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 29"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/65_Plinth_29.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 30"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/66_Plinth_30.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 31"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/67_Plinth_31.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 32"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/68_Plinth_32.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 33"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/69_Plinth_33.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 34"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/70_Plinth_34.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 35"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/71_Plinth_35.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Plinth 36"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/72_Plinth_36.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 00 (Box)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/73_Scatter_00__Box_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_terracotta.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 01 (Cylinder)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/74_Scatter_01__Cylinder_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 02 (Cone)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/75_Scatter_02__Cone_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_brass.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 03 (Sphere)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/76_Scatter_03__Sphere_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_plastic.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 04 (Box)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/77_Scatter_04__Box_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_chrome.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 05 (Cylinder)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/78_Scatter_05__Cylinder_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_amber.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 06 (Cone)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/79_Scatter_06__Cone_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_chalk.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 07 (Sphere)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/80_Scatter_07__Sphere_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_rubber.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 08 (Box)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/81_Scatter_08__Box_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_terracotta.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 09 (Cylinder)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/82_Scatter_09__Cylinder_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 10 (Cone)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/83_Scatter_10__Cone_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_brass.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 11 (Sphere)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/84_Scatter_11__Sphere_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_plastic.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 12 (Box)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/85_Scatter_12__Box_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_chrome.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 13 (Cylinder)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/86_Scatter_13__Cylinder_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_amber.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 14 (Cone)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/87_Scatter_14__Cone_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_chalk.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 15 (Sphere)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/88_Scatter_15__Sphere_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_rubber.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 16 (Box)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/89_Scatter_16__Box_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_terracotta.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 17 (Cylinder)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/90_Scatter_17__Cylinder_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 18 (Cone)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/91_Scatter_18__Cone_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_brass.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 19 (Sphere)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/92_Scatter_19__Sphere_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_plastic.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 20 (Box)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/93_Scatter_20__Box_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_chrome.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 21 (Cylinder)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/94_Scatter_21__Cylinder_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_amber.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 22 (Cone)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/95_Scatter_22__Cone_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_chalk.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 23 (Sphere)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/96_Scatter_23__Sphere_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_rubber.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 24 (Box)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/97_Scatter_24__Box_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_terracotta.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 25 (Cylinder)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/98_Scatter_25__Cylinder_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 26 (Cone)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/99_Scatter_26__Cone_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_brass.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 27 (Sphere)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/100_Scatter_27__Sphere_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_plastic.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 28 (Box)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/101_Scatter_28__Box_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_chrome.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 29 (Cylinder)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/102_Scatter_29__Cylinder_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_amber.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 30 (Cone)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/103_Scatter_30__Cone_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_chalk.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 31 (Sphere)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/104_Scatter_31__Sphere_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_rubber.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 32 (Box)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/105_Scatter_32__Box_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_terracotta.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 33 (Cylinder)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/106_Scatter_33__Cylinder_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_slate.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 34 (Cone)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/107_Scatter_34__Cone_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_brass.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 35 (Sphere)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/108_Scatter_35__Sphere_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_plastic.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 36 (Box)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/109_Scatter_36__Box_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_chrome.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 37 (Cylinder)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/110_Scatter_37__Cylinder_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_amber.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 38 (Cone)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/111_Scatter_38__Cone_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_chalk.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Scatter 39 (Sphere)"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/112_Scatter_39__Sphere_.geometry"
+material = "Content/Space/Showcase/Materials/scatter_rubber.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Luminaire Key"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/113_Luminaire_Key.geometry"
+material = "Content/Space/Showcase/Materials/luminaire_key.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+[[instance]]
+name = "Luminaire Fill"
+level = "Showcase"
+geometry = "Content/Space/Showcase/Geometry/114_Luminaire_Fill.geometry"
+material = "Content/Space/Showcase/Materials/luminaire_fill.material"
+material_mode = "copy_on_write"
+flags = ["cast_shadow"]
+transform = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]

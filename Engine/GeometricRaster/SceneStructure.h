@@ -25,7 +25,7 @@
 #endif
 
 #include "GeometryStructure.h"
-#include "../DeviceExchange/SwapchainExchange.h"
+#include "TriangleIndex.h"
 #include "../ContentInterchange/MaterialIndex.h"
 #include <cstdint>
 #include <string>

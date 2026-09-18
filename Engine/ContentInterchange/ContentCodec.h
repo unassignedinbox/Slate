@@ -1,8 +1,9 @@
 //============================================================================================================================================
 //                                                        CONTENTCODEC.H
 //============================================================================================================================================
-// 🧩 Format dispatcher (ContentInterchange): picks SceneCodec (.gltf/.glb), FbxCodec (.fbx) or ObjCodec (.obj) from the
-//    file extension so callers (GameExecution, harnesses, the future Docket) hold one entry point.
+// 🧩 Format dispatcher (ContentInterchange): picks Slate's Space project loader (.projectspace) or an interchange
+//    importer (glTF/GLB, FBX, OBJ) from the file extension so callers hold one entry point. glTF is retained for
+//    authoring import and compatibility; Project-Zero starts from its Slate-owned project manifest.
 
 #pragma once
 
@@ -10,7 +11,7 @@
 
 namespace Frontier {
 
-enum class ContentFormatCategory : uint8_t { Unknown = 0, Gltf, Fbx, Obj };
+enum class ContentFormatCategory : uint8_t { Unknown = 0, FrontierSpace, Gltf, Fbx, Obj };
 
 class ContentCodec
 {

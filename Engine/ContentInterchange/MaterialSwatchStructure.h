@@ -24,7 +24,9 @@
 #pragma once
 
 #include "MaterialDescriptor.h"
-#include "../DeviceExchange/SwapchainExchange.h"
+#include "../GeometricRaster/TriangleIndex.h"
+#include "../DeviceExchange/OrientationClassifier.h"
+#include "../DeviceExchange/TriangleSpan.h"
 #include <string>
 #include <vector>
 

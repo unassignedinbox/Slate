@@ -763,8 +763,10 @@ $EngineRelative = @(
     'Engine\GeometricRaster\BlasBuildMirror.cpp'                # its QuantiseNode dependency (D9's refit kernel source)
     'Engine\GeometricRaster\BlasDevicePayload.cpp'              # D9 device payload layout
     'Engine\GeometricRaster\BlasBuildPipeline.cpp'              # D9 build/refit dispatch
-    'Engine\ContentInterchange\SpaceCodec.cpp'                  # P1/P3 .space container
-    'Engine\ContentInterchange\SpaceExport.cpp'                 # P2/P6 exporters
+    'Engine\ContentInterchange\SpaceCodec.cpp'                  # P1/P3 binary FSPC container
+    'Engine\ContentInterchange\SpaceExport.cpp'                 # P2/P6 record exporters
+    'Engine\ContentInterchange\SpaceToml.cpp'                   # authored .projectspace/.material TOML
+    'Engine\ContentInterchange\SpaceSceneCodec.cpp'             # runtime Space startup loader
     'Projects\Project-Zero\Source\CommandLine.cpp'             # P4 the launch line both hosts parse
 )
 

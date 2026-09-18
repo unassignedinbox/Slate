@@ -22,15 +22,8 @@ cd "$(dirname "${BASH_SOURCE[0]}")/../../.." || exit 1
 Verbose=0
 [ "${1:-}" = "-v" ] && Verbose=1
 
-Vk=""
-for candidate in "$PWD/ExternalPackages" "${MATERIAL_SCENES_EXT:-}" "$HOME/.cache/m7"; do
-    [ -n "$candidate" ] && [ -f "$candidate/Vulkan-Headers/include/vulkan/vulkan.h" ] && Vk="$candidate" && break
-done
-if [ -z "$Vk" ]; then
-    echo "[SpaceFamily] RED — Vulkan-Headers not found (tried ExternalPackages/, \$MATERIAL_SCENES_EXT, ~/.cache/m7)"
-    echo "    git clone --depth 1 https://github.com/KhronosGroup/Vulkan-Headers \$HOME/.cache/m7/Vulkan-Headers"
-    exit 1
-fi
+# This is deliberately CPU-only. Frontier Space codecs operate on bytes and resident records; Vulkan headers,
+# a Vulkan loader, and a GPU/CPU Vulkan ICD are neither located nor required by this gate.
 
 # -ffunction-sections -fdata-sections -Wl,--gc-sections drops MaterialSwatchStructure::Export (and the glTF writer behind
 #   it): this gate reads the level's records, it never writes glTF. -DFRONTIER_CPU_PORT as the other CPU-side proofs set.
@@ -38,20 +31,28 @@ Flags="-std=c++20 -O2 -Wall -Wextra -Werror -Wno-uninitialized -Wno-array-bounds
        -Wno-missing-field-initializers -mavx2 -mfma -msse4.2 -DFRONTIER_CPU_PORT
        -ffunction-sections -fdata-sections -Wl,--gc-sections
        -I Engine/GeometricRaster -I Engine/DeviceExchange -I Engine/ContentInterchange -I Engine/DisplayPresentation
-       -I Projects/Project-Zero/Source -I $Vk/Vulkan-Headers/include"
+       -I Projects/Project-Zero/Source"
 Engine="Engine/ContentInterchange/SpaceCodec.cpp Engine/ContentInterchange/SpaceExport.cpp
         Engine/ContentInterchange/MaterialSwatchStructure.cpp Engine/ContentInterchange/MaterialIndex.cpp
         Engine/DeviceExchange/OrientationClassifier.cpp Projects/Project-Zero/Source/CommandLine.cpp"
+RuntimeEngine="Engine/ContentInterchange/SpaceCodec.cpp Engine/ContentInterchange/SpaceExport.cpp
+        Engine/ContentInterchange/SpaceToml.cpp Engine/ContentInterchange/SpaceSceneCodec.cpp
+        Engine/ContentInterchange/MaterialIndex.cpp Engine/GeometricRaster/GeometryStructure.cpp
+        Engine/GeometricRaster/SceneStructure.cpp Engine/DeviceExchange/OrientationClassifier.cpp"
 
 Proof=$(mktemp -u /tmp/SpaceFamily.XXXXXX)
 Tool=$(mktemp -u /tmp/SpaceTool.XXXXXX)
+Runtime=$(mktemp -u /tmp/SpaceRuntime.XXXXXX)
 
-echo "[SpaceFamily] compiling the proof and the tool"
+echo "[SpaceFamily] compiling CPU-only proofs and the tool (no Vulkan headers)"
 if ! g++ $Flags Exhibits/Workbench/ProjectFormat/SpaceFamilyProof.cpp $Engine -o "$Proof" 2>/tmp/SpaceFamily.build; then
     echo "[SpaceFamily] COMPILE FAILED (proof)"; sed 's/^/    /' /tmp/SpaceFamily.build | head -30; exit 1
 fi
 if ! g++ $Flags Exhibits/Workbench/ProjectFormat/SpaceTool.cpp $Engine -o "$Tool" 2>/tmp/SpaceTool.build; then
     echo "[SpaceFamily] COMPILE FAILED (tool)"; sed 's/^/    /' /tmp/SpaceTool.build | head -30; exit 1
+fi
+if ! g++ $Flags Exhibits/Workbench/ProjectFormat/SpaceRuntimeProof.cpp $RuntimeEngine -o "$Runtime" 2>/tmp/SpaceRuntime.build; then
+    echo "[SpaceFamily] COMPILE FAILED (runtime proof)"; sed 's/^/    /' /tmp/SpaceRuntime.build | head -30; exit 1
 fi
 [ -s /tmp/SpaceFamily.build ] && { echo "[SpaceFamily] proof warnings:"; sed 's/^/    /' /tmp/SpaceFamily.build | head -10; }
 [ -s /tmp/SpaceTool.build ] && { echo "[SpaceFamily] tool warnings:"; sed 's/^/    /' /tmp/SpaceTool.build | head -10; }
@@ -64,6 +65,8 @@ Log=/tmp/SpaceFamily.log
 : > "$Log"
 
 "$Proof" 2>&1 | tee -a "$Log"
+[ "${PIPESTATUS[0]}" -ne 0 ] && Status=1
+"$Runtime" 2>&1 | tee -a "$Log"
 [ "${PIPESTATUS[0]}" -ne 0 ] && Status=1
 
 echo "[SpaceFamily] ── the command line (§6): export, verify, info, pack, explode"
@@ -113,7 +116,7 @@ claim $? "P5/P6 -Bake=Sky bakes a real equirect probe from the atmosphere model 
 grep -q "\.runtime" "$Log" && grep -q "\.environment" "$Log"
 claim $? "P5 .runtime and .environment are written with their own META and tables"
 
-rm -f "$Proof" "$Tool"
+rm -f "$Proof" "$Tool" "$Runtime"
 echo "[SpaceFamily] ── $(grep -c '  PASS  ' "$Log") claims passed, $(grep -c '  FAIL  ' "$Log") failed, $(grep -c '  SKIP  ' "$Log") skipped"
 if [ "$Status" -ne 0 ]; then
     echo "[SpaceFamily] RED"

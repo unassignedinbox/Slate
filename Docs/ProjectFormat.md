@@ -1,8 +1,9 @@
-# The Space family — one container format, one file per part of a project
+# The Space family — TOML project files and FSPC payloads
 
-*Status: **shipped** — P1–P6 are implemented, gated and green (§12). Two claims are image comparisons and need a device;
-they are reported as SKIPPED by the gate with their CPU half stated. The plan below is kept as written: where the code
-diverged from it, the divergence is listed in §12 and explained in the source's own header.*
+*Status: **shipped** — P1–P6 are implemented, gated and green (§12). Project-Zero now starts from
+`Projects/Project-Zero/Project-Zero.projectspace`, not a glTF file. Two claims are image comparisons and need a device;
+they are reported as SKIPPED by the gate with their CPU half stated. The binary-container plan below remains the pack and
+payload representation; the authored TOML layer adopted after the original plan is recorded first in §0.*
 
 The ask, in the owner's words: stop loading `Projects/Project-Zero/Content/Scenes/*.gltf` at startup; give a project
 one binary container of its own — like a font file, self-contained, with duplicate objects stored once as references;
@@ -11,20 +12,60 @@ project. And then the sharper half: the container should not be a single format 
 UV file, a texture-paint file, a script, a terrain/environment file, each with its own extension, each of which can be
 a file on its own *or* a part of a bigger file, and the project file contains them all or points at them.
 
-The names chosen for that family are §2. The byte format is §3. What goes in which file is §4, how parts are embedded
-and referenced is §5, how it opens is §6.
+The names chosen for that family are §2. The binary payload container is §3. What goes in which file is §4, how parts
+are embedded and referenced is §5, how it opens is §6.
+
+---
+
+## 0. Authoring TOML and runtime FSPC payloads — the implemented boundary
+
+The original plan chose **one binary format for every family member**. The owner subsequently chose readable TOML for
+authored project content. Slate now uses a deliberate hybrid rather than trying to express mesh and image byte streams
+as text:
+
+| content | authored/runtime file | encoding | reason |
+|---|---|---|---|
+| project root, level membership, object references/transforms | `.projectspace` | TOML | reviewable, mergeable project source; opens directly at game startup |
+| material parameters and slab values | `.material` | TOML | individual material source is editable without a glTF re-import |
+| mesh vertices, indices, normals, UVs | `.geometry` | binary `FSPC` | bounded, checksummed, direct record loading; no multi-megabyte TOML arrays |
+| copied/packed materials, maps, archives and blobs | `FSPC` tables/blobs | binary `FSPC` | deterministic hashes, deduplication and embedding |
+
+`Engine/ContentInterchange/SpaceToml.{h,cpp}` defines the versioned TOML profile (`FrontierProjectSpace` and
+`FrontierMaterial`, revision 1) and its deterministic writer. `SpaceSceneCodec` resolves a TOML project to geometry and
+materials with no glTF parse. It also reads the earlier all-binary `FSPC` `.projectspace` form so existing packed assets
+and `SpaceTool` exports remain valid.
+
+The checked-in default is an actual project, not a placeholder:
+
+```text
+Projects/Project-Zero/Project-Zero.projectspace      TOML root, default level Showcase
+Projects/Project-Zero/Content/Space/Showcase/        115 FSPC .geometry files + 47 TOML .material files
+```
+
+Run `bash Tools/Scripts/BakeProjectSpace.sh` to reproduce that content from `ShowcaseStructure` without reading or
+writing glTF. The build script is CPU-only and is intentionally separate from application startup: shipped content is
+baked before launch, then the game only reads Slate-owned files.
+
+`--scene <file.gltf|glb|fbx|obj>` remains an explicit interchange/import compatibility path. A normal Project-Zero
+launch and `-Project=Project-Zero` take the `.projectspace` path. `-Level=<name>` selects a declared TOML or binary
+project level.
+
+The format gate is CPU-only: `TriangleIndex` now lives in the data-only
+`Engine/GeometricRaster/TriangleIndex.h`, not `SwapchainExchange.h`; no Vulkan header, loader, device, or software ICD
+is obtained to compile or run `CheckSpaceFamily.sh`. `SpaceRuntimeProof.cpp` writes a TOML project/material and FSPC
+geometry then makes the selected level resident, with no glTF input.
 
 ---
 
 ## 1. What exists today, and what is actually wrong with it
 
-A level is a `.gltf` file under `Projects/Project-Zero/Content/Scenes/`. Some are committed (`CornellBox.gltf`,
-`GlassProof.gltf`), the rest are **exported once on first run** from C++ that builds them analytically
-(`RayTracingSolver`, `ShowroomStructure`, `MaterialStructure`, `ShaderBallStructure`) and then re-imported through
-`SceneCodec` (`Engine/ContentInterchange/SceneCodec.cpp`) so every level takes the same path
-(`GameExecution.cpp:76–98`).
+Before this migration, a level was a `.gltf` file under `Projects/Project-Zero/Content/Scenes/`. Some remain committed
+(`CornellBox.gltf`, `GlassProof.gltf`), and the rest can still be **exported once on first explicit `--scene` use** from
+C++ authoring structures then re-imported through `SceneCodec`.
 
-That is a good *interchange* discipline and a poor *project* format:
+Project-Zero's normal startup is now `Projects/Project-Zero/Project-Zero.projectspace`. `ContentCodec` classifies that
+extension as `FrontierSpace` and `SpaceSceneCodec` resolves the manifest directly into `SceneStructure`. The old table
+below records why the former glTF startup route was replaced; glTF/GLB, FBX, and OBJ remain useful *interchange* paths:
 
 | | today | consequence |
 |---|---|---|
@@ -42,18 +83,19 @@ for **our** files, in our own records.
 
 ## 2. The family (the chosen names)
 
-One structural rule makes the family work: **every file in it is the same byte format** (§3) and the extension says
-what the file *is*. A `.geometry` is a container whose required table is `MESH`; a `.pigment` requires `PIGM`; a
-`.projectspace` requires `META` + `SCEN`. The directory inside says what else it happens to carry. That is what makes
-"individual file *or* embedded part" free: the same bytes are a file on disk, or a blob inside a bigger file.
+One structural rule makes the family work: **the extension says what the file is, and every binary payload uses the
+same FSPC container** (§3). Authored `.projectspace` and `.material` source files use the versioned TOML profile in §0;
+the original all-binary form is still accepted for packed projects. A `.geometry` is a binary container whose required
+table is `MESH`; a `.pigment` requires `PIGM`; and a packed `.projectspace` requires `META` + `SCEN`. The tagged
+directory makes an individual binary payload and the same payload embedded in a bigger file byte-identical.
 
 | ext. | name | holds | writer | committed? |
 |---|---|---|---|---|
-| `.projectspace` | **Project Space** | the root: `META`, the level table (`SCEN`), project config, and a reference to every asset the project owns | editor / packager | yes — the thing you open |
+| `.projectspace` | **Project Space** | authored TOML root: project identity, declared levels, instances, transforms, and references to every asset; the packed equivalent uses `META` + `SCEN` | editor / packager | yes — the thing you open |
 | `.solution` | **Solution** | a bundle of projects: engine revision pin, content roots, toolchain, the list of `.projectspace` files | repo / CI | yes |
 | `.geometry` | **Geometry** | vertices, indices, normals, tangents, bounds, LOD/cluster ranges | modelling / import | yes |
 | `.uvspace` | **UV Space** | UV islands, seams, packing, texel density, the mapping a paint layer is authored against | UV editor | yes |
-| `.material` | **Material** | **one self-contained material**: its parameters (the `MaterialRecord` + 288 B slab graph) *and* its textures — either embedded blobs or references to `.pigment`/image files. An object uses it by copying it in or referencing it (§4.2) | material editor | yes |
+| `.material` | **Material** | **one self-contained material**: authored TOML OpenPBR/Slate parameter slabs (and, in the packed representation, `MaterialRecord` + slab graph plus embedded/referenced maps). An object references or copies it (§4.2) | material editor | yes |
 | `.pigment` | **Pigment** | a texture-paint document: layers, strokes, channels, resolution, brush refs; bakes into the `.material` that uses it | paint editor | yes |
 | `.instance` | **Instance** | one placed object: transform + a `.geometry` + exactly one `.material`, copied or referenced (§4.2) | editor | yes |
 | `.environment` | **Environment** | world staging: sun hour, fog scenario, atmosphere/moon/star settings, terrain heightfield and its material refs, the baked sky probe | terrain / sky editor | yes |

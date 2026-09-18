@@ -16,7 +16,9 @@
 #pragma once
 
 #include "../../../Engine/ContentInterchange/MaterialDescriptor.h"
-#include "../../../Engine/DeviceExchange/SwapchainExchange.h"
+#include "../../../Engine/GeometricRaster/TriangleIndex.h"
+#include "../../../Engine/DeviceExchange/OrientationClassifier.h"
+#include "../../../Engine/DeviceExchange/TriangleSpan.h"
 
 #include <string>
 #include <vector>

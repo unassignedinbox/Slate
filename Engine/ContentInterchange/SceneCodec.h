@@ -27,6 +27,8 @@ struct SceneDecodeConfiguration
     float    EmissiveRadiance = 1.0f;    // [-] multiplier on emissiveFactor × emissiveStrength
     uint32_t SlabLimit        = 1u;      // [cnt] [render] slab_limit — MaterialIndex flatten cap
     bool     MergePrimitives  = false;   // [-] reserved: merge same-material primitives before clustering
+    // Frontier Space only: the named level selected from a .projectspace manifest. Empty selects its declared default.
+    std::string LevelName;
 };
 
 struct SceneEncodeConfiguration

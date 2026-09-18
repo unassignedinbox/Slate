@@ -1,0 +1,54 @@
+# Frontier Space authored material. Values are OpenPBR/Slate parameters in engine units.
+
+[material]
+format = "FrontierMaterial"
+version = 1
+name = "glass_crown_152"
+flags = []
+alpha_cutoff = 0.5
+volume_thickness = 1.39999998
+
+[[slab]]
+base_weight = 1
+base_color = [1, 1, 1]
+base_metalness = 0
+base_diffuse_roughness = 0
+specular_weight = 1
+specular_color = [1, 1, 1]
+specular_roughness = 0.0199999996
+specular_roughness_anisotropy = 0
+specular_ior = 1.51999998
+transmission_weight = 1
+transmission_color = [0.980000019, 1, 0.980000019]
+transmission_depth = 0
+transmission_scatter = [0, 0, 0]
+transmission_scatter_anisotropy = 0
+transmission_dispersion_scale = 0.200000003
+transmission_dispersion_abbe_number = 20
+subsurface_weight = 0
+subsurface_color = [0.800000012, 0.800000012, 0.800000012]
+subsurface_radius = 1
+subsurface_radius_scale = [1, 0.5, 0.25]
+subsurface_scatter_anisotropy = 0
+coat_weight = 0
+coat_color = [1, 1, 1]
+coat_roughness = 0
+coat_roughness_anisotropy = 0
+coat_ior = 1.60000002
+coat_darkening = 1
+fuzz_weight = 0
+fuzz_color = [1, 1, 1]
+fuzz_roughness = 0.5
+emission_luminance = 0
+emission_color = [1, 1, 1]
+thin_film_weight = 0
+thin_film_thickness = 0.5
+thin_film_ior = 1.39999998
+geometry_opacity = 1
+slate_haziness_weight = 0
+slate_haziness_roughness = 0.600000024
+slate_glint_density = 0
+slate_glint_uv_scale = 1
+slate_anisotropy_rotation = 0
+slate_direct_f0_weight = 0
+geometry_thin_walled = false

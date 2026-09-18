@@ -14,6 +14,7 @@
 #include "OrientationClassifier.h"
 #include "VisibilityExchange.h"
 #include "TriangleSpan.h"
+#include "../GeometricRaster/TriangleIndex.h"
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -93,25 +94,9 @@ struct SwapchainConfiguration
 
 //------------------------------------------------------------------------------------------------------------------------
 //                             FACET STRUCTURE  (GPU SSBO — triangle geometry topology)
-//
-// Mechanism: three world-space vertex positions, material slot, triangle slot and the three vertex UVs, packed as a
-//    contiguous 64-byte SSBO slot addressed by the CWBVH primitive index (R3). R4a replaced the stored face normal
-//    with the UVs — the kernel derives the normal from the edges — so texture lookup at secondary hits needs no
-//    vertex/index indirection. 🚧 R5 deletes this buffer in favour of VertexRecord/index/instance.
 //------------------------------------------------------------------------------------------------------------------------
-
-struct TriangleIndex
-{
-    float    VertexAlphaX,  VertexAlphaY,  VertexAlphaZ;   // [m]   vertex α world position
-    float    MaterialSlot;                                   // [-]   material index (uint reinterpreted)
-    float    VertexBetaX,   VertexBetaY,   VertexBetaZ;    // [m]   vertex β world position
-    float    TextureGammaU;                                  // [uv]  γ u   (R4a: replaced TriangleSlot — the slot IS the array index)
-    float    VertexGammaX,  VertexGammaY,  VertexGammaZ;   // [m]   vertex γ world position
-    float    TextureGammaV;                                  // [uv]  γ v
-    float    TextureAlphaU, TextureAlphaV;                   // [uv]  α
-    float    TextureBetaU,  TextureBetaV;                    // [uv]  β
-};
-static_assert(sizeof(TriangleIndex) == 64u, "TriangleIndex must be 64 bytes (std430 mirror)");
+// TriangleIndex is declared in GeometricRaster/TriangleIndex.h. It remains the exact 64-byte GPU SSBO record, but the
+// data-only declaration no longer drags Vulkan headers into scene import, project-format tooling, or CPU-only proofs.
 
 //------------------------------------------------------------------------------------------------------------------------
 //                          TRIANGLE SPAN RECORD  (CPU only — object identity over a soup)
