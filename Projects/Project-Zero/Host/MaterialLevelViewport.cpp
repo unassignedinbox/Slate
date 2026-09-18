@@ -971,6 +971,10 @@ CpuReservoir RestirTemporalReservoir(const RestirSurface& Surface, int Candidate
                 const bool GeometryOk = Prev.StrideWidth == static_cast<float>(Width)
                     && dot(Ng, Prev.Normal) > kRestirNormalCos
                     && fabsf(Surface.Depth - Prev.Depth) / max(Surface.Depth, 1.0e-3f) < kRestirDepthTol;
+                // The standalone CPU mirror has no renderer instance table: its identity is the hit triangle's
+                // ordinal, whereas the live shader intentionally reduces (instance, primitive) to OBJECT identity
+                // before comparison so per-frame jitter cannot reject a tessellated surface. This is a stricter
+                // stress/control for this analytic harness, not bit-for-bit evidence of the GPU's object-level rule.
                 const bool IdentityDiffers = Prev.Identity != Surface.Identity;
                 const bool IdentityOk = !g_RestirIdentity || !IdentityDiffers;
                 const bool Valid = PrevM > 0u && GeometryOk && IdentityOk;

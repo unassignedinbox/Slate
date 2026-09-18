@@ -1,14 +1,15 @@
 //============================================================================================================================================
 // 📦 Engine/Shaders/ReSTIRViewport.slang — Progressive path tracer with RIS direct lighting (interim kernel)
 //============================================================================================================================================
-// 🚧 HONEST STATUS (plan v2.1 R0): this is NOT ReSTIR as published. Per pixel it does
+// 🚧 HONEST STATUS (plan v2.1 R0): this is a project-specific, approximate ReSTIR DI/GI implementation, not a
+//    complete production implementation of every estimator and shift mapping described in the ReSTIR literature. Per pixel it does
 //       • primary visibility from the R2 visibility raster (SurfaceImage / NormalImage, no primary rays),
 //       • shadow / bounce rays traverse the R3 CWBVH (TraversalCWBVH.slang, bindings 8-9) — O(log N), not O(N),
-//       • ReSTIR-DI *initial candidates only*: M light samples resampled with a weighted reservoir (correct RIS),
-//         with ExtraCandidateCount further same-pixel candidates folded in, plus temporal (R6 row 2) and
-//         spatiotemporal neighbour reuse (R6 row 3),
-//       • one BSDF-sampled bounce with next-event estimation — plain 1-bounce path tracing, no GI reservoir (R6),
-//         and this is where the two convergence faults lived. Both are fixed and both are measured in the CPU
+//       • ReSTIR-DI candidates: M light samples resampled with a weighted reservoir, ExtraCandidateCount further
+//         same-pixel candidates, temporal reuse (R6 row 2), and stochastic spatial neighbour reuse (R6 row 3),
+//       • one BSDF-sampled bounce with next-event estimation, including an optional ReSTIR-GI-style reservoir for
+//         its first-bounce vertex's NEE stratum; this is not a general multi-bounce ReSTIR PT shift-mapping system,
+//         and the historical convergence faults below are measured in the CPU
 //         mirror (Exhibits/Workbench/Materials/RunRestirConvergence.sh, sheet RestirConvergenceSheet.png):
 //           · the next frame's history takes the TEMPORAL reservoir only — spatial reuse is a shading-time
 //             refinement, so a frame's spatial merges cannot inflate the M the temporal cap reasons about (the
@@ -36,8 +37,10 @@
 //         7 680 at N=128, pool shaded on ~16 % of surface pixels (the share whose own BSDF sample hits geometry).
 //       • R4b: surfaces are shaded with the OpenPBR lobe set of MaterialEvaluation.slang (one resolved slab, interpolated
 //         normals + normal maps from the VertexRecord buffer, ray-cone texture LOD, GGX energy / LTC sheen LUTs),
-//       • a running-mean accumulation that restarts on camera motion; motion vectors exist (R2) but are consumed only
-//         by the R6 temporal reservoir (row 2), no denoiser (R7).
+//       • a reprojected running-mean accumulator and its first two luminance moments. R2 motion vectors feed that
+//         accumulation and both reservoir temporal paths; normal, depth and object identity reject invalid history.
+//         The five-level à-trous pass then filters this unfiltered temporal mean. It does not feed filtered output
+//         back into the next temporal history, so it is not a literal full-SVGF history arrangement.
 //    It is kept as the reference image source until the staged frame graph replaces it.
 // NOTE: GLSL source lowered to SPIR-V by the build scripts (glslc -fshader-stage=compute --target-env=vulkan1.2 -I Engine).
 //       World space is right-handed Z-up (CLAUDE.md §7); the pixel→ray mapping (Shaders/RayGeneration.slang) is applied by
