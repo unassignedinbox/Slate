@@ -145,12 +145,97 @@ namespace
         return true;
     }
 
-    bool LoadMaterialFile(const std::filesystem::path& Path, MaterialDescriptor& Out, std::string& Error)
+    bool LoadMaterialFile(const std::filesystem::path& Path, MaterialDescriptor& Out,
+                          std::vector<SpaceTomlTexture>& OutTextures, std::string& Error)
     {
+        OutTextures.clear();
         std::vector<uint8_t> Bytes;
         if (!ReadWholeFile(Path, Bytes, Error)) return false;
         if (IsContainer(Bytes)) return DecodeBinaryMaterial(Bytes, Path.string(), Out, Error);
-        return SpaceTomlReadMaterialFile(Path.string(), Out, Error);
+        SpaceTomlMaterial Material;
+        if (!SpaceTomlReadMaterialDocumentFile(Path.string(), Material, Error)) return false;
+        Out = std::move(Material.Descriptor);
+        OutTextures = std::move(Material.Textures);
+        return true;
+    }
+
+    bool BindTomlTextures(MaterialDescriptor& Material, const std::vector<SpaceTomlTexture>& References,
+                          const std::filesystem::path& MaterialPath, TextureIndex* Textures, std::string& Error)
+    {
+        if (References.empty()) return true;
+#if defined(FRONTIER_CPU_PORT)
+        (void)Material;
+        (void)Textures;
+        Error = MaterialPath.string() + " has authored texture references; resolving image assets is unavailable in the CPU format proof";
+        return false;
+#else
+        if (!Textures)
+        {
+            Error = MaterialPath.string() + " has authored texture references but no TextureIndex was supplied";
+            return false;
+        }
+        for (const SpaceTomlTexture& Reference : References)
+        {
+            if (Reference.Slab >= Material.Slabs.size())
+            {
+                Error = MaterialPath.string() + " has a texture reference outside its slab range";
+                return false;
+            }
+            const std::filesystem::path TexturePath = (MaterialPath.parent_path() / Reference.Path).lexically_normal();
+            TextureReference& Target = Material.Slabs[Reference.Slab].Texture(Reference.Channel);
+            Target.Texture = Textures->RegisterPath(TexturePath.string(), Reference.Linear);
+            Target.UvSet = Reference.UvSet;
+            Target.Channel = Reference.Component;
+            Target.OffsetU = Reference.OffsetU;
+            Target.OffsetV = Reference.OffsetV;
+            Target.ScaleU = Reference.ScaleU;
+            Target.ScaleV = Reference.ScaleV;
+            Target.Rotation = Reference.Rotation;
+            Target.Scalar = Reference.Scalar;
+        }
+        return true;
+#endif
+    }
+
+    bool ResolveEnvironment(const std::filesystem::path& Path, SceneStructure& Out, TextureIndex* Textures, std::string& Error)
+    {
+#if defined(FRONTIER_CPU_PORT)
+        (void)Textures;
+#endif
+        SpaceTomlEnvironment Authored;
+        if (!SpaceTomlReadEnvironmentFile(Path.string(), Authored, Error)) return false;
+        SceneEnvironmentRecord Resident;
+        Resident.Name = Authored.Name;
+        Resident.SunHour = Authored.SunHour;
+        Resident.FogDensity = Authored.FogDensity;
+        Resident.AtmosphereScale = Authored.AtmosphereScale;
+        Resident.MoonPhase = Authored.MoonPhase;
+        Resident.SkyProbeLevels = Authored.SkyProbeLevels;
+        if (!Authored.Terrain.empty())
+        {
+            const std::filesystem::path Terrain = (Path.parent_path() / Authored.Terrain).lexically_normal();
+            std::vector<uint8_t> Bytes;
+            if (!ReadWholeFile(Terrain, Bytes, Error)) return false;
+            SpaceReader Reader;
+            if (!Reader.Open(Bytes, Error) || !Reader.Type() || Reader.Type()->Tag != SpaceTag("GEOM"))
+            {
+                Error = Terrain.string() + " is not the .geometry terrain named by " + Path.string();
+                return false;
+            }
+            Resident.TerrainPath = Terrain.string();
+        }
+        if (!Authored.SkyProbe.empty())
+        {
+            const std::filesystem::path Probe = (Path.parent_path() / Authored.SkyProbe).lexically_normal();
+            Resident.SkyProbePath = Probe.string();
+#if defined(FRONTIER_CPU_PORT)
+            (void)Textures;
+#else
+            if (Textures) Resident.SkyProbeTexture = Textures->RegisterPath(Probe.string(), /*Linear=*/false);
+#endif
+        }
+        Out.AssignEnvironment(std::move(Resident));
+        return true;
     }
 
     Matrix4x4 MatrixFrom(const float Source[16], float UniformScale)
@@ -190,38 +275,66 @@ namespace
         return true;
     }
 
-    bool DecodeTomlProject(const std::filesystem::path& Path, SceneStructure& Out, const SceneDecodeConfiguration& Config, std::string& Error)
+    bool DecodeTomlProject(const std::filesystem::path& Path, SceneStructure& Out, TextureIndex* Textures,
+                           const SceneDecodeConfiguration& Config, std::string& Error)
     {
         SpaceTomlProject Project;
         if (!SpaceTomlReadProjectFile(Path.string(), Project, Error)) return false;
         const std::string Selected = Config.LevelName.empty() ? Project.DefaultLevel : Config.LevelName;
-        if (std::none_of(Project.Levels.begin(), Project.Levels.end(), [&](const SpaceTomlLevel& Level) { return Level.Name == Selected; }))
+        const auto HasLevel = [&](const std::string& Name)
+        {
+            return std::any_of(Project.Levels.begin(), Project.Levels.end(), [&](const SpaceTomlLevel& Level) { return Level.Name == Name; });
+        };
+        if (!HasLevel(Selected))
         {
             Error = Path.string() + ": no level named '" + Selected + "'";
             return false;
         }
-        const std::filesystem::path Base = Path.parent_path();
+        const std::filesystem::path ProjectBase = Path.parent_path();
         std::map<uint64_t, CachedMaterial> Materials;
         size_t Loaded = 0u;
-        for (const SpaceTomlInstance& Instance : Project.Instances)
+        const auto LoadInstance = [&](const SpaceTomlInstance& Instance, const std::filesystem::path& Base) -> bool
         {
-            if (Instance.Level != Selected) continue;
+            if (!HasLevel(Instance.Level))
+            {
+                Error = Path.string() + ": instance '" + Instance.Name + "' names undeclared level '" + Instance.Level + "'";
+                return false;
+            }
+            if (Instance.Level != Selected) return true;
+            const std::filesystem::path GeometryPath = (Base / Instance.Geometry).lexically_normal();
+            const std::filesystem::path MaterialPath = (Base / Instance.Material).lexically_normal();
             std::vector<uint8_t> Geometry;
-            if (!ReadWholeFile(Base / Instance.Geometry, Geometry, Error)) return false;
+            if (!ReadWholeFile(GeometryPath, Geometry, Error)) return false;
             MaterialDescriptor Material;
-            if (!LoadMaterialFile(Base / Instance.Material, Material, Error)) return false;
-            const uint64_t MaterialIdentity = SpaceHash64(Instance.Material.data(), Instance.Material.size());
-            if (!AddInstance(Out, Instance.Name, Geometry, std::move(Material), MaterialIdentity, Instance.Transform, Instance.Flags, Config, Materials, Error)) return false;
+            std::vector<SpaceTomlTexture> MaterialTextures;
+            if (!LoadMaterialFile(MaterialPath, Material, MaterialTextures, Error)) return false;
+            if (!BindTomlTextures(Material, MaterialTextures, MaterialPath, Textures, Error)) return false;
+            const std::string IdentityPath = MaterialPath.generic_string();
+            const uint64_t MaterialIdentity = SpaceHash64(IdentityPath.data(), IdentityPath.size());
+            if (!AddInstance(Out, Instance.Name, Geometry, std::move(Material), MaterialIdentity, Instance.Transform,
+                             Instance.Flags, Config, Materials, Error)) return false;
             ++Loaded;
+            return true;
+        };
+
+        for (const SpaceTomlInstance& Instance : Project.Instances)
+            if (!LoadInstance(Instance, ProjectBase)) return false;
+        for (const std::string& InstanceFile : Project.InstanceFiles)
+        {
+            const std::filesystem::path InstancePath = (ProjectBase / InstanceFile).lexically_normal();
+            SpaceTomlInstance Instance;
+            if (!SpaceTomlReadInstanceFile(InstancePath.string(), Instance, Error)) return false;
+            if (!LoadInstance(Instance, InstancePath.parent_path())) return false;
         }
         if (Loaded == 0u) { Error = Path.string() + ": level '" + Selected + "' has no instances"; return false; }
+        if (!Project.Environment.empty() && !ResolveEnvironment((ProjectBase / Project.Environment).lexically_normal(), Out, Textures, Error)) return false;
         Out.Finalise(std::max(1u, Config.SlabLimit));
         Out.AssignName(Selected);
         return true;
     }
 
     bool ReadSlotMaterial(const SpaceReader& Project, const SpaceMaterialSlot& Slot, const std::filesystem::path& Base,
-                          MaterialDescriptor& Out, std::string& Error)
+                          TextureIndex* Textures, MaterialDescriptor& Out, std::string& Error)
     {
         std::vector<uint8_t> Bytes;
         if ((Slot.Mode == kSpaceMaterialCopied || Slot.Mode == kSpaceMaterialCopyOnWrite) && Slot.BlobIndex != kNoIndex)
@@ -238,7 +351,9 @@ namespace
             return false;
         }
         const std::filesystem::path MaterialPath = Base / Path;
-        if (!LoadMaterialFile(MaterialPath, Out, Error)) return false;
+        std::vector<SpaceTomlTexture> MaterialTextures;
+        if (!LoadMaterialFile(MaterialPath, Out, MaterialTextures, Error) ||
+            !BindTomlTextures(Out, MaterialTextures, MaterialPath, Textures, Error)) return false;
         if (Slot.MaterialHash != 0u)
         {
             if (!ReadWholeFile(MaterialPath, Bytes, Error) || !CheckContentHash(Bytes, Slot.MaterialHash, MaterialPath.string(), Error)) return false;
@@ -247,7 +362,7 @@ namespace
     }
 
     bool DecodeBinaryProject(const std::filesystem::path& Path, const std::vector<uint8_t>& Bytes,
-                             SceneStructure& Out, const SceneDecodeConfiguration& Config, std::string& Error)
+                             SceneStructure& Out, TextureIndex* Textures, const SceneDecodeConfiguration& Config, std::string& Error)
     {
         SpaceReader Project;
         if (!Project.Open(Bytes, Error)) return false;
@@ -291,7 +406,7 @@ namespace
             if (!SpaceLoadReference(Project, Reference, Base.string(), {}, Geometry, Error)) return false;
             if (!CheckContentHash(Geometry, Reference.ContentHash, "geometry reference", Error)) return false;
             MaterialDescriptor Material;
-            if (!ReadSlotMaterial(Project, Slots[Instance.MaterialSlot], Base, Material, Error)) return false;
+            if (!ReadSlotMaterial(Project, Slots[Instance.MaterialSlot], Base, Textures, Material, Error)) return false;
             const uint64_t MaterialIdentity = Slots[Instance.MaterialSlot].MaterialHash != 0u
                                                 ? Slots[Instance.MaterialSlot].MaterialHash
                                                 : static_cast<uint64_t>(Instance.MaterialSlot) + 1u;
@@ -307,7 +422,6 @@ namespace
 bool SpaceSceneCodec::Decode(const std::string& Path, SceneStructure& Out, TextureIndex* Textures,
                              const SceneDecodeConfiguration& Config, std::string* Error) noexcept
 {
-    (void)Textures; // TOML texture maps are a follow-up schema revision; current material values are fully CPU resident.
     std::string LocalError;
     Out.Clear();
     const std::filesystem::path File(Path);
@@ -317,8 +431,8 @@ bool SpaceSceneCodec::Decode(const std::string& Path, SceneStructure& Out, Textu
         if (Error) *Error = LocalError;
         return false;
     }
-    const bool Loaded = IsContainer(Bytes) ? DecodeBinaryProject(File, Bytes, Out, Config, LocalError)
-                                           : DecodeTomlProject(File, Out, Config, LocalError);
+    const bool Loaded = IsContainer(Bytes) ? DecodeBinaryProject(File, Bytes, Out, Textures, Config, LocalError)
+                                           : DecodeTomlProject(File, Out, Textures, Config, LocalError);
     if (!Loaded) Out.Clear();
     if (Error) *Error = LocalError;
     return Loaded;

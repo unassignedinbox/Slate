@@ -362,6 +362,7 @@ set_source_files_properties(Engine/PlatformInterchange/MiniaudioTranslation.cpp 
 target_compile_definitions(Project-Zero PRIVATE
     "$<${FRONTIER_ZERO_DEVELOPMENT_CONDITION}:FRONTIER_DEVELOPMENT>"
     FRONTIER_ENABLE_GLFW
+    FRONTIER_USE_TOMLPP=1
 )
 
 target_link_libraries(Project-Zero PRIVATE
@@ -441,6 +442,7 @@ add_executable(FrontierEngine
     ${FRONTIER_ENGINE_SOURCES}
 )
 target_include_directories(FrontierEngine PRIVATE ${FRONTIER_ENGINE_INCLUDES})
+target_compile_definitions(FrontierEngine PRIVATE FRONTIER_USE_TOMLPP=1)
 target_link_libraries(FrontierEngine PRIVATE pthread)
 
 #============================================================================================================================================

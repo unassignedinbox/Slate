@@ -26,20 +26,26 @@ as text:
 | content | authored/runtime file | encoding | reason |
 |---|---|---|---|
 | project root, level membership, object references/transforms | `.projectspace` | TOML | reviewable, mergeable project source; opens directly at game startup |
-| material parameters and slab values | `.material` | TOML | individual material source is editable without a glTF re-import |
+| material parameters, slab values, and image-map references | `.material` | TOML | individual material source is editable without a glTF re-import |
+| one placed object and its material ownership mode | `.instance` | TOML | a portable placement may be referenced by a project rather than inlined |
+| world staging, terrain, and sky-probe references | `.environment` | TOML | runtime retains authored environment settings separately from scene geometry |
 | mesh vertices, indices, normals, UVs | `.geometry` | binary `FSPC` | bounded, checksummed, direct record loading; no multi-megabyte TOML arrays |
 | copied/packed materials, maps, archives and blobs | `FSPC` tables/blobs | binary `FSPC` | deterministic hashes, deduplication and embedding |
 
-`Engine/ContentInterchange/SpaceToml.{h,cpp}` defines the versioned TOML profile (`FrontierProjectSpace` and
-`FrontierMaterial`, revision 1) and its deterministic writer. `SpaceSceneCodec` resolves a TOML project to geometry and
-materials with no glTF parse. It also reads the earlier all-binary `FSPC` `.projectspace` form so existing packed assets
-and `SpaceTool` exports remain valid.
+`Engine/ContentInterchange/SpaceToml.{h,cpp}` defines the versioned TOML profile (`FrontierProjectSpace`,
+`FrontierMaterial`, `FrontierInstance`, and `FrontierEnvironment`, revision 1) and deterministic writers. The normal
+Project-Zero build parses these custom-extension documents with the repository's `toml++` dependency; the CPU proof uses
+a narrow Space-profile reader so it can remain independent of unmaterialised third-party source. That proof reader is
+not presented as a full TOML implementation; production accepts the grammar supplied by `toml++`. `SpaceSceneCodec`
+resolves project, instance, material, texture-reference, and environment documents to geometry, resident material
+records, `TextureIndex` slots, and `SceneEnvironmentRecord` without a glTF parse. It also reads the earlier all-binary
+`FSPC` `.projectspace` form so existing packed assets and `SpaceTool` exports remain valid.
 
 The checked-in default is an actual project, not a placeholder:
 
 ```text
-Projects/Project-Zero/Project-Zero.projectspace      TOML root, default level Showcase
-Projects/Project-Zero/Content/Space/Showcase/        115 FSPC .geometry files + 47 TOML .material files
+Projects/Project-Zero/Project-Zero.projectspace      TOML root, default level Showcase, environment reference
+Projects/Project-Zero/Content/Space/Showcase/        115 FSPC .geometry files + 47 TOML .material files + Showcase.environment
 ```
 
 Run `bash Tools/Scripts/BakeProjectSpace.sh` to reproduce that content from `ShowcaseStructure` without reading or
@@ -49,6 +55,26 @@ baked before launch, then the game only reads Slate-owned files.
 `--scene <file.gltf|glb|fbx|obj>` remains an explicit interchange/import compatibility path. A normal Project-Zero
 launch and `-Project=Project-Zero` take the `.projectspace` path. `-Level=<name>` selects a declared TOML or binary
 project level.
+
+### 0.1 Authoring references
+
+A project can keep placements inline as `[[instance]]` tables, or list portable placement documents with
+`[project].instance_files = ["Content/Instances/Chair.instance"]`. Each `.instance` has an `[instance]` table with
+`format`, `version`, `name`, `level`, relative `geometry` and `material` paths, `material_mode` (`shared`, `copied`, or
+`copy_on_write`), `flags`, and a column-major 16-float `transform`. External placement asset paths are resolved relative
+to the `.instance` document; inline ones are resolved relative to the `.projectspace` document.
+
+`[project].environment` may name one relative `.environment` document. Its `[environment]` table carries `name`,
+`sun_hour`, `fog_density`, `atmosphere_scale`, `moon_phase`, optional relative `terrain` `.geometry`, optional
+`sky_probe`, and `sky_probe_levels`. The loader validates the terrain FSPC payload, records all setting values in the
+resident `SceneEnvironmentRecord`, and registers a sky probe through `TextureIndex` when the runtime provides one.
+
+Material maps use zero or more `[[texture]]` tables in a `.material`: `slab`, `channel`, relative `path`, `linear`,
+`uv_set`, `component`, UV offset/scale/rotation, and scalar strength. The loader maps each one to the selected
+`MaterialSlabDescriptor::Texture` reference, then registers the image path before `TextureIndex::Decode` builds its
+mips. Supported channel names are `base_color`, `metalness`, `specular_roughness`, `specular_color`,
+`geometry_normal`, `geometry_coat_normal`, `emission`, `geometry_opacity`, `transmission`, `subsurface`, `coat`,
+`fuzz`, `thin_film`, `anisotropy`, `occlusion`, and `mask`.
 
 The format gate is CPU-only: `TriangleIndex` now lives in the data-only
 `Engine/GeometricRaster/TriangleIndex.h`, not `SwapchainExchange.h`; no Vulkan header, loader, device, or software ICD
@@ -498,7 +524,7 @@ what it points at, which is the whole point of a reference. `-Verify` reports 49
   CPU half is proven here and the gate says SKIPPED, never PASS.
 * **Committing the exported artefacts.** `-Export` writes into `Build/Space` (gitignored) because it is 13 MB of
   regenerable bytes; `Tools/Scripts/PackProject.sh` is what a packaging run uses to write them where they ship.
-* **The editors** (§11.3): `.uvspace`, `.pigment`, `.environment` authoring are format-defined and editor-defined later.
+* **The editors** (§11.3): `.uvspace`, `.pigment`, and the visual terrain/environment authoring workflow are editor-defined later. The TOML `.environment` reader and runtime staging record are present; the editor that creates and previews those settings is not.
 
 ### 12.4 Where the code diverges from this plan, and why
 

@@ -1,0 +1,10 @@
+# Frontier Space authored environment.
+
+[environment]
+format = "FrontierEnvironment"
+version = 1
+name = "Showcase Diorama"
+sun_hour = 17.9300003
+fog_density = 0.0109999999
+atmosphere_scale = 1
+moon_phase = 0.5

@@ -198,6 +198,20 @@ int main(int argc, char** argv)
     Project.Name = "Project-Zero";
     Project.DefaultLevel = "Showcase";
     Project.Levels.push_back({ "Showcase" });
+    SpaceTomlEnvironment Environment;
+    Environment.Name = "Showcase Diorama";
+    Environment.SunHour = 17.93f;
+    Environment.FogDensity = 0.011f;
+    Environment.AtmosphereScale = 1.0f;
+    Environment.MoonPhase = 0.5f;
+    const std::filesystem::path EnvironmentPath = Content / "Showcase.environment";
+    std::string EnvironmentError;
+    if (!SpaceTomlWriteEnvironmentFile(EnvironmentPath.string(), Environment, EnvironmentError))
+    {
+        std::fprintf(stderr, "[space-bake] %s\n", EnvironmentError.c_str());
+        return 1;
+    }
+    Project.Environment = (std::filesystem::path("Content") / "Space" / "Showcase" / "Showcase.environment").generic_string();
     for (uint32_t I = 0u; I < Objects.size(); ++I)
     {
         const BakedObject& Object = Objects[I];

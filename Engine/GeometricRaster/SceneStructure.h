@@ -145,6 +145,21 @@ struct PunctualLuminaireRecord                      // 🚧 stored only in R4a; 
     float                     OuterConeAngle = 0.7853982f;
 };
 
+// The authored world's resolved settings. No renderer header belongs here: a host consumes this alongside its own sky
+// and terrain systems, while the content loader owns path resolution and the optional TextureIndex sky-probe slot.
+struct SceneEnvironmentRecord
+{
+    std::string Name;
+    std::string TerrainPath;
+    std::string SkyProbePath;
+    float       SunHour = 12.0f;
+    float       FogDensity = 0.0f;
+    float       AtmosphereScale = 1.0f;
+    float       MoonPhase = 0.0f;
+    uint32_t    SkyProbeLevels = 0u;
+    uint32_t    SkyProbeTexture = 0xFFFFFFFFu;
+};
+
 //------------------------------------------------------------------------------------------------------------------------
 //                                                     SCENE STRUCTURE
 //------------------------------------------------------------------------------------------------------------------------
@@ -168,6 +183,7 @@ public:
     uint32_t                RegisterCamera(const CameraRecord& Camera, uint32_t Placement) noexcept;
     uint32_t                RegisterPunctualLuminaire(const PunctualLuminaireRecord& Luminaire, uint32_t Placement) noexcept;
     void                    AttachInstances(uint32_t Placement, uint32_t FirstInstance, uint32_t InstanceCount) noexcept;
+    void                    AssignEnvironment(SceneEnvironmentRecord Environment_) noexcept { Environment = std::move(Environment_); }
     void                    AttachCamera(uint32_t Placement, uint32_t Camera) noexcept            { if (Placement < Placements.size() && Camera < Cameras.size()) Placements[Placement].Camera = Camera; }
     void                    AttachPunctualLuminaire(uint32_t Placement, uint32_t Luminaire) noexcept { if (Placement < Placements.size() && Luminaire < PunctualLuminaires.size()) Placements[Placement].Luminaire = Luminaire; }
     void                    AssignPlacementDynamic(uint32_t Placement, bool Dynamic) noexcept { if (Placement < Placements.size()) Placements[Placement].Dynamic = Dynamic; }
@@ -188,6 +204,7 @@ public:
     [[nodiscard]] const std::vector<PlacementRecord>&   QueryPlacements() const noexcept { return Placements; }
     [[nodiscard]] const std::vector<CameraRecord>&      QueryCameras()    const noexcept { return Cameras; }
     [[nodiscard]] const std::vector<PunctualLuminaireRecord>& QueryPunctualLuminaires() const noexcept { return PunctualLuminaires; }
+    [[nodiscard]] const SceneEnvironmentRecord&          QueryEnvironment() const noexcept { return Environment; }
     [[nodiscard]] const std::vector<LuminaireRecord>&   QueryLuminaires() const noexcept { return Luminaires; }
     [[nodiscard]] const std::vector<TriangleIndex>&     QueryFlatTriangles() const noexcept { return FlatTriangles; }
     [[nodiscard]] float                                 QueryLuminairePower() const noexcept { return TotalLuminairePower; }
@@ -214,6 +231,7 @@ private:
     std::vector<PlacementRecord>   Placements;
     std::vector<CameraRecord>      Cameras;
     std::vector<PunctualLuminaireRecord> PunctualLuminaires;
+    SceneEnvironmentRecord          Environment;
     std::vector<TriangleIndex>     FlatTriangles;
     float                          TotalLuminairePower = 0.0f;
     Vector3                        BoundsMinimum;

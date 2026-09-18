@@ -161,6 +161,7 @@ function Get-CompilationFlags([string] $Selection, [bool] $Development)
         '/D_CRT_SECURE_NO_WARNINGS'   # third-party C (cgltf) uses fopen/strcpy; deprecation warnings are noise
         '/DGLFW_DLL'
         '/DFRONTIER_ENABLE_GLFW'
+        '/DFRONTIER_USE_TOMLPP=1'   # authored Slate content uses the repository toml++ dependency in the product
     )
     # The editor lives behind FRONTIER_DEVELOPMENT: defined, the panels record over the live scene;
     #    undefined, the host compiles to empty shells and the game runs without them.

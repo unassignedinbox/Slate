@@ -335,6 +335,8 @@ void SceneStructure::Clear() noexcept
     Vertices.clear(); Indices.clear(); Instances.clear(); Clusters.clear();
     Materials.Clear(); Luminaires.clear(); FlatTriangles.clear();
     Placements.clear(); Cameras.clear(); PunctualLuminaires.clear();
+    Environment = SceneEnvironmentRecord{};
+    Name.clear();
     TotalLuminairePower = 0.0f;
 }
 

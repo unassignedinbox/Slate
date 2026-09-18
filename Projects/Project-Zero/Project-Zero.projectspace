@@ -5,6 +5,7 @@ format = "FrontierProjectSpace"
 version = 1
 name = "Project-Zero"
 default_level = "Showcase"
+environment = "Content/Space/Showcase/Showcase.environment"
 
 [[level]]
 name = "Showcase"
