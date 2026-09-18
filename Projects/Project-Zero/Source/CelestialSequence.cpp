@@ -4,6 +4,8 @@
 
 #include "CelestialSequence.h"
 
+#include "../../../Engine/DeviceExchange/AssetPath.h"   // Frontier::ResolveAssetPath
+
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -297,7 +299,11 @@ void CelestialSequence::Prepare() noexcept
 
     // The catalogue is optional: a missing asset must leave a working sky rather than refusing to start, so the
     //    result is deliberately not checked. StarCatalogueIndex reports Empty() and the star loop skips.
-    (void)Catalogue.Load("EngineContent/StarCatalogue/BrightStars.bin");
+    // ⚠️ Resolved, not opened raw: the binary runs from its own directory (Build\ mirrored copy, or the Release\Binary
+    //    output), and a raw relative path there is the difference between a night sky and "Catalogue empty or missing —
+    //    the night sky renders starless" (the 2026-09-18 Windows run). The result is still deliberately unchecked:
+    //    StarCatalogueIndex reports Empty() and the star loop skips.
+    (void)Catalogue.Load(Frontier::ResolveAssetPath("EngineContent/StarCatalogue/BrightStars.bin").string());
 
     // The roster opens the way the reference panel does: one moon, Luna — except ours follows the solved lunar
     //    frame rather than sitting at a fixed chart position, because this engine HAS an ephemeris. The other

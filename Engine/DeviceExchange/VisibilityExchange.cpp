@@ -11,6 +11,7 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include "AssetPath.h"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -153,21 +154,7 @@ struct VisibilityExchange::VulkanRecord
 
 namespace {
 
-std::filesystem::path ResolveAssetPath(const std::string& Relative)
-{
-    std::error_code Error;
-    if (std::filesystem::exists(Relative, Error)) return Relative;
-    std::filesystem::path Probe = std::filesystem::current_path(Error);
-    for (int Depth = 0; Depth < 12 && !Probe.empty(); ++Depth)
-    {
-        const std::filesystem::path Candidate = Probe / Relative;
-        if (std::filesystem::exists(Candidate, Error)) return Candidate;
-        const std::filesystem::path Parent = Probe.parent_path();
-        if (Parent == Probe) break;
-        Probe = Parent;
-    }
-    return Relative;
-}
+using Frontier::ResolveAssetPath;   // DeviceExchange/AssetPath.h — one search for shaders AND content
 
 VkShaderModule LoadShader(VkDevice Device, const char* Relative)
 {

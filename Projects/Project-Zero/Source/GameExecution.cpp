@@ -722,7 +722,8 @@ int main(int argc, char** argv)
     // Typefaces: every static face under EngineContent/FontArchives, loaded once into the dynamic atlas (Vulkan backend
     //    rasterises glyphs on demand). The Fonts tab reads the registry; PixelSpace text honours the applied face.
     Frontier::TypefaceRegistry Typefaces;
-    (void)Typefaces.Load("EngineContent/FontArchives");
+    // Resolved for the same reason the star catalogue is: the archives are repository-relative and the binary is not.
+    (void)Typefaces.Load(Frontier::ResolveAssetPath("EngineContent/FontArchives").string());
     Frontier::TypefaceRegistry::Install(&Typefaces);
 
     Frontier::ControlCentreHost ControlCentre;

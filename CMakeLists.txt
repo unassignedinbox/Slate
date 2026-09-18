@@ -197,6 +197,7 @@ else()
     add_custom_target(ReSTIRViewportSpirv)
 endif()
 set(FRONTIER_ENGINE_SOURCES
+    Engine/DeviceExchange/AssetPath.cpp        # repository-relative -> openable: one search, used by shaders AND content
     Engine/DeviceExchange/OrientationClassifier.cpp
     Engine/DeviceExchange/InputExchange.cpp
     Engine/DeviceExchange/DiagnosticMetrics.cpp

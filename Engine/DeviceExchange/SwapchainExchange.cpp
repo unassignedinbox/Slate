@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include "AssetPath.h"   // QueryExecutableDirectory / ResolveAssetPath (shared with the content loaders)
 #include <filesystem>
 #include <fstream>
 #include <cmath>
@@ -277,48 +278,12 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL ValidationCallback(
 //                                               SPIRV LOADER
 //------------------------------------------------------------------------------------------------------------------------
 
-static std::filesystem::path QueryExecutableDirectory()
-{
-#if defined(_WIN32)
-    wchar_t Buffer[MAX_PATH]{};
-    const DWORD Length = GetModuleFileNameW(nullptr, Buffer, MAX_PATH);
-    if (Length == 0u) return {};
-    return std::filesystem::path(Buffer).parent_path();
-#elif defined(__APPLE__)
-    char     Buffer[4096]{};
-    uint32_t Size = sizeof(Buffer);
-    if (_NSGetExecutablePath(Buffer, &Size) != 0) return {};
-    return std::filesystem::path(Buffer).parent_path();
-#else
-    char Buffer[4096]{};
-    const ssize_t Length = readlink("/proc/self/exe", Buffer, sizeof(Buffer) - 1u);
-    if (Length <= 0) return {};
-    return std::filesystem::path(std::string(Buffer, static_cast<size_t>(Length))).parent_path();
-#endif
-}
-
-// Resolves a repository-relative asset path. Order of preference:
-//    ① relative to the current working directory (running from the repository root)
-//    ② next to the executable, then walking up its parents (double-clicking the .exe in Build\Output\...\Binary)
-static std::filesystem::path ResolveAssetPath(const std::string& RelativePath)
-{
-    std::error_code Error;
-
-    if (std::filesystem::exists(RelativePath, Error)) return RelativePath;
-
-    std::filesystem::path Probe = QueryExecutableDirectory();
-    for (int Depth = 0; Depth < 12 && !Probe.empty(); ++Depth)
-    {
-        const std::filesystem::path Candidate = Probe / RelativePath;
-        if (std::filesystem::exists(Candidate, Error)) return Candidate;
-
-        const std::filesystem::path Parent = Probe.parent_path();
-        if (Parent == Probe) break;
-        Probe = Parent;
-    }
-
-    return RelativePath;
-}
+// The asset-path search used to live here (and, separately, in VisibilityExchange.cpp). It is now one function in
+//    DeviceExchange/AssetPath.cpp, because the CONTENT loaders — textures, the star catalogue, the typeface archives —
+//    needed the same search and had none, which is how a run started from Build\ lost its moon atlas and its star
+//    catalogue while the shaders (which did go through this) loaded fine.
+using Frontier::QueryExecutableDirectory;
+using Frontier::ResolveAssetPath;
 
 static std::vector<uint32_t> LoadSpirv(const std::string& RelativePath)
 {

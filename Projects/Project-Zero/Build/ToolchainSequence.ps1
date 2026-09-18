@@ -669,6 +669,7 @@ $EngineRelative = @(
     #    files, P1-P6's container/exporters/CLI) — 14 unresolved externals at link time. The guard below catches a
     #    renamed/deleted entry; `Tools/Build/CheckBuildSourceList.sh` catches an absent one and holds the CMake
     #    agreement, so run it with any build-system change.
+    'Engine\DeviceExchange\AssetPath.cpp'
     'Engine\DeviceExchange\SwapchainExchange.cpp'
     'Engine\DeviceExchange\RayTracingCapabilitySet.cpp'
     'Engine\DeviceExchange\InputExchange.cpp'

@@ -10,6 +10,8 @@
 #include <stb_image.h>
 
 #include "TextureIndex.h"
+
+#include "../DeviceExchange/AssetPath.h"   // Frontier::ResolveAssetPath (working dir → executable parents)
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -182,18 +184,28 @@ uint32_t TextureIndex::Decode(uint32_t MaximumEdge, std::vector<std::string>* Re
         TextureDescriptor& T = Textures[I];
 
         int W = 0, H = 0, Channels = 0;
+        // ⚠️ Registered paths are repository-relative ("EngineContent/CelestialTextures/luna_2k.jpg" for the moon atlas,
+        //    a scene-relative URI for a glTF's images) and the product binary does not run from the repository root, so
+        //    the path is resolved through the same search the SPIR-V loader uses — working directory, then the
+        //    executable's parents. Before this, launching the .exe from Build\ left the moon atlas as six 1x1
+        //    placeholders (the 2026-09-18 Windows run), because stb_image was handed the raw relative path.
+        const std::string ResolvedPath = T.Path.empty() ? std::string() : Frontier::ResolveAssetPath(T.Path).string();
         const bool Hdr = T.Path.empty() ? stbi_is_hdr_from_memory(P.Encoded.data(), static_cast<int>(P.Encoded.size())) != 0
-                                        : stbi_is_hdr(T.Path.c_str()) != 0;
+                                        : stbi_is_hdr(ResolvedPath.c_str()) != 0;
         void* Pixels = nullptr;
         if (Hdr)
             Pixels = T.Path.empty() ? static_cast<void*>(stbi_loadf_from_memory(P.Encoded.data(), static_cast<int>(P.Encoded.size()), &W, &H, &Channels, 4))
-                                    : static_cast<void*>(stbi_loadf(T.Path.c_str(), &W, &H, &Channels, 4));
+                                    : static_cast<void*>(stbi_loadf(ResolvedPath.c_str(), &W, &H, &Channels, 4));
         else
             Pixels = T.Path.empty() ? static_cast<void*>(stbi_load_from_memory(P.Encoded.data(), static_cast<int>(P.Encoded.size()), &W, &H, &Channels, 4))
-                                    : static_cast<void*>(stbi_load(T.Path.c_str(), &W, &H, &Channels, 4));
+                                    : static_cast<void*>(stbi_load(ResolvedPath.c_str(), &W, &H, &Channels, 4));
         if (!Pixels || W <= 0 || H <= 0)
         {
-            if (Report) Report->push_back("texture '" + T.Name + "': " + (stbi_failure_reason() ? stbi_failure_reason() : "decode failed") + " -> 1x1 placeholder");
+            // The message names the path that was SEARCHED as well as the one that was asked for: "can't fopen" with a
+            //    bare relative path is what made the original report hard to place.
+            const std::string Tried = T.Path.empty() || ResolvedPath == T.Path ? T.Path
+                                                                              : T.Path + " (searched, resolved to " + ResolvedPath + ")";
+            if (Report) Report->push_back("texture '" + T.Name + "': " + (stbi_failure_reason() ? stbi_failure_reason() : "decode failed") + " [" + Tried + "] -> 1x1 placeholder");
             MakePlaceholder(T);
             ++Failures;
             continue;
