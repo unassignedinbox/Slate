@@ -131,8 +131,10 @@ public:
     [[nodiscard]] ExposureIntegrator&       Exposure()       noexcept { return Adaptation; }
     [[nodiscard]] const ExposureIntegrator& Exposure() const noexcept { return Adaptation; }
 
-    // Compares the camera pose against the one used for the running history; a moved or turned camera
-    //    (or a resized viewport) restarts accumulation so no stale radiance is blended in.
+    // Tracks the camera pose behind the running history. Camera motion keeps the temporal sequence alive:
+    //    the raster front end supplies current-to-previous motion and the shader rejects invalid history per
+    //    pixel using normal, depth and packed surface identity. Only a viewport resize invalidates the whole
+    //    history because its image lattice is reallocated.
     void ObserveCamera(const ProjectZero::FlyThroughSolver& Camera, uint32_t ViewportWidth, uint32_t ViewportHeight) noexcept;
 
     // D6/D7 — how many top-level instances the resident two-level structure carries. The integrator never holds the

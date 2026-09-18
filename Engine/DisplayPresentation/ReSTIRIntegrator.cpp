@@ -48,11 +48,20 @@ void ReSTIRIntegrator::ObserveCamera(const ProjectZero::FlyThroughSolver& Camera
 
     if (Moved || Turned || Resized)
     {
+        // SurfaceResolve writes a current-to-previous motion vector from its current and previous view-clip
+        // matrices. ReSTIRViewport validates that reprojection per pixel (normal, depth and packed surface
+        // identity) before it accepts a mean or either reservoir. Throwing away the global history merely
+        // because the eye moved prevented that proven path from ever running during navigation, leaving the
+        // denoiser with one raw sample on every moving frame. Keep the temporal sequence alive for motion;
+        // invalid/off-screen/disoccluded pixels still restart individually in the shader.
+        //
+        // A resize is different: the history images are reallocated and a pixel address no longer denotes the
+        // same sample lattice, so it remains a genuine whole-history reset.
         HistoryOrigin  = Origin;
         HistoryForward = Forward;
         HistoryWidth   = ViewportWidth;
         HistoryHeight  = ViewportHeight;
-        ResetAccumulation();
+        if (Resized) ResetAccumulation();
     }
 }
 

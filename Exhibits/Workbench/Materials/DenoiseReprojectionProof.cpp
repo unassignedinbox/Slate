@@ -192,6 +192,35 @@ int main()
                   "A12 AssignTemporalReprojection restarts accumulation (sampling change), spending the reset flag");
         }
 
+        // The first call correctly starts a new image, but later camera translation and rotation must retain
+        //    its frame index. SurfaceResolve carries CurrentUv - PreviousUv from the current/previous view-clip
+        //    matrices, then ResolveSurface and both reservoir paths validate that reprojected history per pixel.
+        // This executes the real integrator TU, so a future global camera reset makes the regression observable
+        // without pretending to execute Vulkan on this host.
+        {
+            ReSTIRIntegrator Trial(Defaults);
+            ProjectZero::FlyThroughSolver MotionCamera(Flight);
+            Trial.ObserveCamera(MotionCamera, 1280u, 720u);       // first extent establishes the history lattice
+            Trial.IncrementAccumulationIndex();                    // spends the resize reset
+            Trial.IncrementAccumulationIndex();                    // first reusable history frame
+            MotionCamera.AssignSpatialLocation(Vector3{ 0.25f, 0.0f, 0.0f });
+            Trial.ObserveCamera(MotionCamera, 1280u, 720u);
+            const uint32_t AfterTranslation = Trial.QueryAccumulationIndex();
+            Trial.IncrementAccumulationIndex();
+            MotionCamera.AssignOrientationEuler(0.0f, 0.05f, 0.0f);
+            Trial.ObserveCamera(MotionCamera, 1280u, 720u);
+            const uint32_t AfterRotation = Trial.QueryAccumulationIndex();
+            Trial.IncrementAccumulationIndex();
+            Trial.ObserveCamera(MotionCamera, 960u, 540u);        // a new image lattice cannot be reprojected
+            const uint32_t AfterResize = Trial.QueryAccumulationIndex();
+            Trial.IncrementAccumulationIndex();
+            const uint32_t AfterResizeResetSpend = Trial.QueryAccumulationIndex();
+            Trial.IncrementAccumulationIndex();
+            Check(AfterTranslation == 1u && AfterRotation == 2u && AfterResize == 0u
+                  && AfterResizeResetSpend == 0u && Trial.QueryAccumulationIndex() == 1u,
+                  "A13 camera translation/rotation preserve temporal history; resize alone resets it");
+        }
+
         // The tier ladder scales the chain but never disables it: a tier that silently switched the denoiser off
         //    would leave quality presets meaning something other than their labels claim.
         FidelityClassifier Classifier;
@@ -203,7 +232,7 @@ int main()
             std::printf("[denoise] tier %-9s denoise levels %u\n", FidelityLabel(static_cast<FidelityCategory>(Tier)), Criteria.DenoiseLevelCount);
             if (!InRange) LadderOk = false;
         }
-        Check(LadderOk, "A13 every tier's à-trous chain sits in 1..kDenoiseLevelCount (never zero, never over the ceiling)");
+        Check(LadderOk, "A14 every tier's à-trous chain sits in 1..kDenoiseLevelCount (never zero, never over the ceiling)");
     }
 
     //──────────────────────────────────────────────────────────────────────────────────────────────────────────────
