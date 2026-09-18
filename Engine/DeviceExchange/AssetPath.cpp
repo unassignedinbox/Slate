@@ -81,4 +81,45 @@ std::filesystem::path Resolve(const std::string& Relative)
 
 std::filesystem::path ResolveAssetPath(const std::string& RelativePath) { return Resolve(RelativePath); }
 std::filesystem::path ResolveAssetDirectory(const std::string& RelativePath) { return Resolve(RelativePath); }
+
+std::filesystem::path QueryRepositoryRoot()
+{
+    std::error_code Error;
+    // The marker PAIR: no other directory in the tree holds both, which is what stops a stray EngineContent copy
+    //    sitting next to the binary from stealing the answer.
+    const auto LooksLikeRoot = [&](const std::filesystem::path& P) -> bool
+    {
+        if (P.empty()) return false;
+        return std::filesystem::is_directory(P / "EngineContent", Error) &&
+               std::filesystem::is_directory(P / "Projects", Error);
+    };
+
+    for (std::filesystem::path Probe = QueryExecutableDirectory(); !Probe.empty(); )
+    {
+        if (LooksLikeRoot(Probe)) return Probe;
+        const std::filesystem::path Parent = Probe.parent_path();
+        if (Parent == Probe) break;
+        Probe = Parent;
+    }
+    for (std::filesystem::path Probe = std::filesystem::current_path(Error); !Probe.empty(); )
+    {
+        if (LooksLikeRoot(Probe)) return Probe;
+        const std::filesystem::path Parent = Probe.parent_path();
+        if (Parent == Probe) break;
+        Probe = Parent;
+    }
+    return {};
+}
+
+std::filesystem::path ResolveAssetPathForWrite(const std::string& RelativePath)
+{
+    // An existing file wins wherever it already is: rewriting a level in place is what the export-once discipline
+    //    expects, and it keeps a tree that already has the file self-consistent.
+    const std::filesystem::path Existing = Resolve(RelativePath);
+    std::error_code Error;
+    if (std::filesystem::exists(Existing, Error)) return Existing;
+
+    if (const std::filesystem::path Root = QueryRepositoryRoot(); !Root.empty()) return Root / RelativePath;
+    return RelativePath;
+}
 }   // namespace Frontier

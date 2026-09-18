@@ -229,7 +229,15 @@ struct SwapchainExchange::VulkanRecord
     // ── Compute pipeline ──────────────────────────────────────────────────────────────────────────────────────────────
     VkDescriptorSetLayout    ComputeDescriptorLayout = VK_NULL_HANDLE;
     VkDescriptorPool         ComputeDescriptorPool   = VK_NULL_HANDLE;
-    VkDescriptorSet          ComputeDescriptorSet    = VK_NULL_HANDLE;
+    // ⚠️ One compute set PER CYCLE SLOT, not one shared set. The bindings that change every presented frame are the
+    //    two reservoir pairs (16/17 direct, 25/26 indirect): their prev/curr roles swap at the frame boundary, which
+    //    used to mean rewriting the one shared set while the other cycle slot's submission could still be executing —
+    //    vkUpdateDescriptorSets against a set a pending command buffer references, VUID-vkUpdateDescriptorSets-None-03047,
+    //    which the 2026-09-18 Windows run reported on bindings 25/26 (the indirect pool, i.e. exactly the history GI
+    //    accumulates in). RecordAndPresent waits only its OWN cycle slot's fence before recording, so with a shared
+    //    set the guarantee was never there to begin with. Per-slot sets make the wait sufficient: the set written at
+    //    the top of frame N belongs to the slot whose fence was just waited on, and no other slot ever touches it.
+    VkDescriptorSet          ComputeDescriptorSets[kCycleSlotCount] = {};
     VkPipelineLayout         ComputePipelineLayout   = VK_NULL_HANDLE;
     VkPipeline               ComputePipeline         = VK_NULL_HANDLE;
 
@@ -1710,7 +1718,7 @@ bool SwapchainExchange::BringDescriptorSet() noexcept
     VkDescriptorPoolCreateInfo PoolInfo{};
     PoolInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     PoolInfo.flags         = Vulkan->DescriptorIndexing ? static_cast<VkDescriptorPoolCreateFlags>(VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT) : 0u;
-    PoolInfo.maxSets       = 1u;
+    PoolInfo.maxSets       = kCycleSlotCount;   // one compute set per cycle slot (see the record's note)
     PoolSizes[3].type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     PoolSizes[3].descriptorCount = ComputeBindingTypeCount(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);   // 21 live sky record · 22 live moon record · 24 live post record
     PoolInfo.poolSizeCount = 4u;
@@ -1718,16 +1726,19 @@ bool SwapchainExchange::BringDescriptorSet() noexcept
     (void)vkCreateDescriptorPool(Vulkan->Device, &PoolInfo, nullptr, &Vulkan->ComputeDescriptorPool);
 
     const uint32_t VariableCount = Vulkan->DescriptorIndexing ? kTextureSlotCapacity : 1u;
+    // The bindless table's variable count is a PER-SET property, so it needs one entry per allocated set.
+    const uint32_t VariableCounts[kCycleSlotCount] = { VariableCount, VariableCount };
     VkDescriptorSetVariableDescriptorCountAllocateInfo VariableInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO };
-    VariableInfo.descriptorSetCount = 1u;
-    VariableInfo.pDescriptorCounts  = &VariableCount;
+    VariableInfo.descriptorSetCount = kCycleSlotCount;
+    VariableInfo.pDescriptorCounts  = VariableCounts;
+    const VkDescriptorSetLayout Layouts[kCycleSlotCount] = { Vulkan->ComputeDescriptorLayout, Vulkan->ComputeDescriptorLayout };
     VkDescriptorSetAllocateInfo AllocateInfo{};
     AllocateInfo.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     AllocateInfo.pNext              = &VariableInfo;
     AllocateInfo.descriptorPool     = Vulkan->ComputeDescriptorPool;
-    AllocateInfo.descriptorSetCount = 1u;
-    AllocateInfo.pSetLayouts        = &Vulkan->ComputeDescriptorLayout;
-    if (vkAllocateDescriptorSets(Vulkan->Device, &AllocateInfo, &Vulkan->ComputeDescriptorSet) != VK_SUCCESS)
+    AllocateInfo.descriptorSetCount = kCycleSlotCount;
+    AllocateInfo.pSetLayouts        = Layouts;
+    if (vkAllocateDescriptorSets(Vulkan->Device, &AllocateInfo, Vulkan->ComputeDescriptorSets) != VK_SUCCESS)
     {
         std::cerr << "[SwapchainExchange] vkAllocateDescriptorSets failed.\n";
         return false;
@@ -1742,7 +1753,11 @@ bool SwapchainExchange::BringDescriptorSet() noexcept
 
 void SwapchainExchange::WriteDescriptorSet() noexcept
 {
-    if (!Vulkan->ComputeDescriptorSet) return;
+    // Writes every cycle slot's set. Every caller is quiescent by the time it gets here — the uploads drain with
+    //    vkDeviceWaitIdle, RebuildSwapchain drains, and bring-up has nothing in flight — so no slot's set can be in
+    //    use. The ONE writer that runs mid-frame is SwapReservoirParity, which touches only the active slot's set on
+    //    purpose (see its own note).
+    if (!Vulkan->ComputeDescriptorSets[0u]) return;
 
     VkDescriptorImageInfo ImageInfo{};
     ImageInfo.imageView   = Vulkan->StorageImageView;
@@ -1804,6 +1819,11 @@ void SwapchainExchange::WriteDescriptorSet() noexcept
     VkDescriptorBufferInfo StarInfo{ Vulkan->StarBuffer, 0u, VK_WHOLE_SIZE }; // Star tables (binding 23)
     VkDescriptorBufferInfo PostInfo{ Vulkan->PostBuffer, 0u, VK_WHOLE_SIZE }; // Celestial post record (binding 24)
 
+    for (uint32_t Slot = 0u; Slot < kCycleSlotCount; ++Slot)
+    {
+    const VkDescriptorSet Target = Vulkan->ComputeDescriptorSets[Slot];
+    if (!Target) continue;
+
     std::array<VkWriteDescriptorSet, kComputeBindingCount> Writes{};
     uint32_t WriteCount = 0u;
 
@@ -1811,7 +1831,7 @@ void SwapchainExchange::WriteDescriptorSet() noexcept
     {
         VkWriteDescriptorSet& Write = Writes[WriteCount++];
         Write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        Write.dstSet          = Vulkan->ComputeDescriptorSet;
+        Write.dstSet          = Target;
         Write.dstBinding      = 0u;
         Write.descriptorCount = 1u;
         Write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
@@ -1822,7 +1842,7 @@ void SwapchainExchange::WriteDescriptorSet() noexcept
     {
         VkWriteDescriptorSet& Write = Writes[WriteCount++];
         Write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        Write.dstSet          = Vulkan->ComputeDescriptorSet;
+        Write.dstSet          = Target;
         Write.dstBinding      = 1u;
         Write.descriptorCount = 1u;
         Write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -1833,7 +1853,7 @@ void SwapchainExchange::WriteDescriptorSet() noexcept
     {
         VkWriteDescriptorSet& Write = Writes[WriteCount++];
         Write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        Write.dstSet          = Vulkan->ComputeDescriptorSet;
+        Write.dstSet          = Target;
         Write.dstBinding      = 2u;
         Write.descriptorCount = 1u;
         Write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -1844,7 +1864,7 @@ void SwapchainExchange::WriteDescriptorSet() noexcept
     {
         VkWriteDescriptorSet& Write = Writes[WriteCount++];
         Write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        Write.dstSet          = Vulkan->ComputeDescriptorSet;
+        Write.dstSet          = Target;
         Write.dstBinding      = 3u;
         Write.descriptorCount = 1u;
         Write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
@@ -1856,14 +1876,14 @@ void SwapchainExchange::WriteDescriptorSet() noexcept
     {
         if (!Info.imageView) return;
         VkWriteDescriptorSet& Write = Writes[WriteCount++];
-        Write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET; Write.dstSet = Vulkan->ComputeDescriptorSet; Write.dstBinding = Binding;
+        Write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET; Write.dstSet = Target; Write.dstBinding = Binding;
         Write.descriptorCount = 1u; Write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE; Write.pImageInfo = &Info;
     };
     const auto WriteBuffer = [&](uint32_t Binding, const VkDescriptorBufferInfo& Info)
     {
         if (!Info.buffer) return;
         VkWriteDescriptorSet& Write = Writes[WriteCount++];
-        Write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET; Write.dstSet = Vulkan->ComputeDescriptorSet; Write.dstBinding = Binding;
+        Write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET; Write.dstSet = Target; Write.dstBinding = Binding;
         Write.descriptorCount = 1u; Write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; Write.pBufferInfo = &Info;
     };
     // The sky record is the compute set's only UNIFORM buffer. A write's descriptorType must equal the layout's,
@@ -1872,7 +1892,7 @@ void SwapchainExchange::WriteDescriptorSet() noexcept
     {
         if (!Info.buffer) return;
         VkWriteDescriptorSet& Write = Writes[WriteCount++];
-        Write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET; Write.dstSet = Vulkan->ComputeDescriptorSet; Write.dstBinding = Binding;
+        Write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET; Write.dstSet = Target; Write.dstBinding = Binding;
         Write.descriptorCount = 1u; Write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; Write.pBufferInfo = &Info;
     };
     WriteImage (4u, SurfaceInfo);
@@ -1888,7 +1908,7 @@ void SwapchainExchange::WriteDescriptorSet() noexcept
     {
         if (!Info.imageView || !Info.sampler) return;
         VkWriteDescriptorSet& Write = Writes[WriteCount++];
-        Write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET; Write.dstSet = Vulkan->ComputeDescriptorSet; Write.dstBinding = Binding;
+        Write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET; Write.dstSet = Target; Write.dstBinding = Binding;
         Write.descriptorCount = 1u; Write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; Write.pImageInfo = &Info;
     };
     WriteSampled(13u, EnergyInfo);
@@ -1924,7 +1944,7 @@ void SwapchainExchange::WriteDescriptorSet() noexcept
         TextureInfos.reserve(Vulkan->Textures.size());
         for (const VulkanRecord::ResidentTexture& T : Vulkan->Textures)
             TextureInfos.push_back(VkDescriptorImageInfo{ Vulkan->TextureSampler, T.View, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
-        TextureWrite.dstSet          = Vulkan->ComputeDescriptorSet;
+        TextureWrite.dstSet          = Target;
         TextureWrite.dstBinding      = kComputeBindingCount - 1u;
         TextureWrite.dstArrayElement = 0u;
         TextureWrite.descriptorCount = static_cast<uint32_t>(TextureInfos.size());
@@ -1936,6 +1956,7 @@ void SwapchainExchange::WriteDescriptorSet() noexcept
         vkUpdateDescriptorSets(Vulkan->Device, WriteCount, Writes.data(), 0u, nullptr);
     if (TextureWrite.descriptorCount > 0u)
         vkUpdateDescriptorSets(Vulkan->Device, 1u, &TextureWrite, 0u, nullptr);
+    }   // per cycle slot
 
     // ── R7 denoiser sets ────────────────────────────────────────────────────────────────────────────────────────
     // One set per à-trous level, written once here rather than per frame: the images never change, only the push
@@ -2419,8 +2440,13 @@ void SwapchainExchange::UploadShadingTables(const float* Energy, const float* Sh
 
 void* SwapchainExchange::SwapReservoirParity() noexcept
 {
-    if (!Vulkan->Device || !Vulkan->ComputeDescriptorSet) return nullptr;
+    if (!Vulkan->Device || !Vulkan->ComputeDescriptorSets[0u]) return nullptr;
     if (!Vulkan->ReservoirBuffers[0u] || !Vulkan->ReservoirBuffers[1u]) return nullptr;
+    // The set that will be RECORDED this frame — and only that one. RecordAndPresent waited this slot's fence before
+    //    calling here, so nothing is executing against it; the other slot's set still holds the parity its own frame
+    //    was recorded with, which is exactly what its in-flight submission needs. This is the fix for the
+    //    VUID-vkUpdateDescriptorSets-None-03047 the 2026-09-18 run reported on bindings 25/26.
+    const uint32_t WriteSlot = Vulkan->ActiveSlot;
     Vulkan->ReservoirParity = !Vulkan->ReservoirParity;
     // Rewrite only bindings 16/17 (the full WriteDescriptorSet also writes them — same values, harmless).
     const uint32_t PrevSlot = Vulkan->ReservoirParity ? 1u : 0u;
@@ -2433,7 +2459,7 @@ void* SwapchainExchange::SwapReservoirParity() noexcept
     for (uint32_t I = 0u; I < 2u; ++I)
     {
         Writes[I].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        Writes[I].dstSet          = Vulkan->ComputeDescriptorSet;
+        Writes[I].dstSet          = Vulkan->ComputeDescriptorSets[WriteSlot];
         Writes[I].dstBinding      = 16u + I;
         Writes[I].descriptorCount = 1u;
         Writes[I].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -2456,6 +2482,7 @@ void* SwapchainExchange::SwapReservoirParity() noexcept
         {
             Writes[I].dstBinding  = 25u + I;
             Writes[I].pBufferInfo = &GiInfos[I];
+            // (dstSet already carries WriteSlot — the same set this frame's command buffer binds below.)
         }
         vkUpdateDescriptorSets(Vulkan->Device, 2u, Writes, 0u, nullptr);
     }
@@ -2535,6 +2562,10 @@ void SwapchainExchange::UploadInstanceTraversal(const InstanceAcceleration& Inst
     // D6/D7 → bindings 27-30. The single-blob pair above and this pair are uploaded independently: a scene keeps its
     //    world-space CWBVH either way, and only the dispatcher's TlasInstanceCount decides which one the kernel walks.
     if (!Vulkan || !Vulkan->Device) return;
+    // Drains before destroying, exactly as UploadTraversal does — every line below frees a buffer a recorded frame may
+    //    still be reading. The call sites are load-time today, so this is a guard against the shape, not a live fault:
+    //    the moment a re-upload runs against a live frame it would be a destroy-in-use rather than a stale binding.
+    vkDeviceWaitIdle(Vulkan->Device);
     if (Vulkan->TlasNodeBuffer)      vkDestroyBuffer(Vulkan->Device, Vulkan->TlasNodeBuffer, nullptr);
     if (Vulkan->TlasPrimitiveBuffer) vkDestroyBuffer(Vulkan->Device, Vulkan->TlasPrimitiveBuffer, nullptr);
     if (Vulkan->TlasInstanceBuffer)  vkDestroyBuffer(Vulkan->Device, Vulkan->TlasInstanceBuffer, nullptr);
@@ -2654,7 +2685,7 @@ void SwapchainExchange::UploadStarTables(const void* CellBytes, uint32_t CellCou
 {
     // Raw bytes, not catalogue types: DeviceExchange takes void* the way RefreshSky does, so no layer above
     //    leaks in. The caller skips the call entirely when the catalogue is empty — the bring-up zeros stand.
-    if (!Vulkan->Device || !Vulkan->ComputeDescriptorSet) return;
+    if (!Vulkan->Device || !Vulkan->ComputeDescriptorSets[0u]) return;
     if (CellCount != kStarCellCount || !CellBytes || (StarCount > 0u && !StarBytes)) return;
     constexpr uint32_t HostVisible = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     const uint32_t TotalBytes = CellCount * kStarCellBytes + StarCount * kStarRecordBytes;
@@ -2683,12 +2714,15 @@ void SwapchainExchange::UploadStarTables(const void* CellBytes, uint32_t CellCou
     //    per-frame texture table state that UploadScene established after bring-up.
     VkDescriptorBufferInfo StarInfo{ Vulkan->StarBuffer, 0u, VK_WHOLE_SIZE };
     VkWriteDescriptorSet Write{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
-    Write.dstSet = Vulkan->ComputeDescriptorSet;
     Write.dstBinding = 23u;
     Write.descriptorCount = 1u;
     Write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     Write.pBufferInfo = &StarInfo;
-    vkUpdateDescriptorSets(Vulkan->Device, 1u, &Write, 0u, nullptr);
+    for (uint32_t Slot = 0u; Slot < kCycleSlotCount; ++Slot)   // every slot's set: which one is active depends on the run
+    {
+        Write.dstSet = Vulkan->ComputeDescriptorSets[Slot];
+        if (Write.dstSet) vkUpdateDescriptorSets(Vulkan->Device, 1u, &Write, 0u, nullptr);
+    }
 }
 
 void SwapchainExchange::UploadScene(const SceneStructure& Scene, const TraversalIndex& Traversal, const TextureIndex* Textures) noexcept
@@ -2958,7 +2992,7 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
         // ② Dispatch ReSTIR compute
         vkCmdBindPipeline(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Vulkan->ComputePipeline);
         vkCmdBindDescriptorSets(Command, VK_PIPELINE_BIND_POINT_COMPUTE,
-            Vulkan->ComputePipelineLayout, 0u, 1u, &Vulkan->ComputeDescriptorSet, 0u, nullptr);
+            Vulkan->ComputePipelineLayout, 0u, 1u, &Vulkan->ComputeDescriptorSets[Vulkan->ActiveSlot], 0u, nullptr);
         vkCmdPushConstants(Command, Vulkan->ComputePipelineLayout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0u, sizeof(DispatchConfiguration), &Dispatch);
         const uint32_t GroupX = (RenderWidth  + kLocalGroupSizeX - 1u) / kLocalGroupSizeX;

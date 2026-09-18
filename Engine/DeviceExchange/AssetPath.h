@@ -39,4 +39,15 @@ namespace Frontier
 // Same, for a directory (asset archives: "EngineContent/FontArchives"). Exists separately so the intent is legible at
 // the call site; the search is identical.
 [[nodiscard]] std::filesystem::path ResolveAssetDirectory(const std::string& RelativePath);
+
+// Where to WRITE a generated asset — a level exported on first run, for example. Reads have a search order; writes
+//    need a destination, and "the working directory" is the wrong one when the binary was launched from Build\: the
+//    level would land in Build\Projects\...\Scenes, and the next run would find it only because it looks there too.
+//    The repository root is located by MARKER — a directory holding both `EngineContent` and `Projects` — searched from
+//    the executable's directory upwards, then from the working directory upwards. Without a marker the relative path
+//    is returned unchanged, so an installed copy writes where it always did.
+[[nodiscard]] std::filesystem::path ResolveAssetPathForWrite(const std::string& RelativePath);
+
+// The repository root by marker, or an empty path when the tree does not look like the repository.
+[[nodiscard]] std::filesystem::path QueryRepositoryRoot();
 }   // namespace Frontier

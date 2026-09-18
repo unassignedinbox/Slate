@@ -18,6 +18,7 @@
 #include "../../../Engine/DisplayPresentation/RenderScheduler.h"
 #include "../../../Engine/DisplayPresentation/CelestialTier.h"
 #include "CelestialSequence.h"
+#include "../../../Engine/DeviceExchange/AssetPath.h"   // Frontier::ResolveAssetPathForWrite (level export/import)
 #include "../../../Engine/Editor/EditorInstance.h"
 #include "../../../Engine/DeviceExchange/DiagnosticMetrics.h"
 #include "../../../Engine/DisplayPresentation/ControlCentreHost.h"
@@ -67,8 +68,14 @@ int main(int argc, char** argv)
     //    on instance ordinals without either having to inspect the other.
     constexpr uint32_t kDropBodyCount = 12u;
 
-    // Showcase is the default level (the Cornell box stays one --scene path away, untouched as the reference).
-    std::string ScenePath  = "Projects/Project-Zero/Content/Scenes/Showcase.gltf";
+    // ⚠️ DEFAULT LEVEL: the M10 material library — the studio with the scatter of swatch spheres, each carrying its own
+    //    material (42 in all: plastics and clear coats, the metals including the two anisotropic ones, the glass family
+    //    with their IORs and transmission colours, and the subsurface set). It replaced the outdoor showcase as the
+    //    default because it is the level that shows what the renderer actually does — every lobe the material system
+    //    implements, on one floor, under the sky — and because it is the level the CPU proofs are measured on, so what
+    //    the window shows and what the gates assert are the same content. The showcase and the Cornell box stay one
+    //    `--scene` away; Cornell remains the untouched bit-identity reference.
+    std::string ScenePath  = "Projects/Project-Zero/Content/Scenes/Materials.gltf";
     float       SceneScale = 1.0f;
     bool        AnimateInstances = false;   // D3: --animate drives instance transforms from a scripted path
     bool        SilentAudio      = false;   // --silent: open the null audio driver (no sound card, or CI)
@@ -81,14 +88,22 @@ int main(int argc, char** argv)
         if (std::strcmp(argv[I], "--scale") == 0) SceneScale = static_cast<float>(std::atof(argv[++I]));
     }
     if (ScenePath == "shaderball") ScenePath = "Projects/Project-Zero/Content/Scenes/ShaderBall.gltf";   // R4b material test level
-    if (ScenePath == "materials")  ScenePath = "Projects/Project-Zero/Content/Scenes/Materials.gltf";    // M10 material library level
+    if (ScenePath == "materials")  ScenePath = "Projects/Project-Zero/Content/Scenes/Materials.gltf";    // M10 material library level (the default)
     if (ScenePath == "showroom")   ScenePath = "Projects/Project-Zero/Content/Scenes/Showroom.gltf";     // P0 spatial-interface level
     // The open-air scene.
     if (ScenePath == "outdoor")    ScenePath = "Projects/Project-Zero/Content/Scenes/Outdoor.gltf";
-    // The showcase field (default level).
+    // The showcase field (was the default; still the level the owner's sun/sky reports were made against).
     if (ScenePath == "showcase")   ScenePath = "Projects/Project-Zero/Content/Scenes/Showcase.gltf";
     bool DropScene = false;
     if (ScenePath == "drop") { ScenePath = "Projects/Project-Zero/Content/Scenes/ShowroomDrop.gltf"; DropScene = true; }   // D4 physics level
+
+    // Resolve ONCE, here, and let everything below work on an openable path: the exists() check, the generators'
+    //    export, the codec's decode, and the texture paths the codec derives from the level's own directory. Before
+    //    this, a run launched from Build\ exported the level into Build\Projects\... and read it back from there —
+    //    self-consistent but invisible to the repository, which is how a tree can end up with the level existing in
+    //    two places. ResolveAssetPathForWrite returns an existing level wherever it is and the repository root
+    //    otherwise (marker: a directory holding both EngineContent and Projects).
+    ScenePath = Frontier::ResolveAssetPathForWrite(ScenePath).string();
 
     //──────────────────────────────────────────────────────────────────────────
     // Telemetry sink
