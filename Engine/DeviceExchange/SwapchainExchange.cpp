@@ -111,31 +111,30 @@ struct SwapchainExchange::VulkanRecord
     VkDeviceMemory           StorageMemory         = VK_NULL_HANDLE;
     VkImageView              StorageImageView      = VK_NULL_HANDLE;
 
-    // ── History image (linear HDR running mean for temporal accumulation; rgba32f, .a = sample count) ────────────────
-    VkImage                  HistoryImage          = VK_NULL_HANDLE;
-    VkDeviceMemory           HistoryMemory         = VK_NULL_HANDLE;
-    VkImageView              HistoryImageView      = VK_NULL_HANDLE;
-    // First-wavelet color history is intentionally distinct from the raw mean/count above. The next ResolveSurface
-    // uses this locally filtered color while raw moments and explicit confidence remain sample-space statistics.
-    VkImage                  FilteredHistoryImage      = VK_NULL_HANDLE;
-    VkDeviceMemory           FilteredHistoryMemory     = VK_NULL_HANDLE;
-    VkImageView              FilteredHistoryImageView = VK_NULL_HANDLE;
-    // R7a: the (normal, depth) of whatever the history pixel was shading, so the next frame can validate a
-    //    reprojection against the surface that produced the mean rather than against this frame's surface.
-    VkImage                  HistorySurfaceImage     = VK_NULL_HANDLE;
-    VkDeviceMemory           HistorySurfaceMemory    = VK_NULL_HANDLE;
-    VkImageView              HistorySurfaceImageView = VK_NULL_HANDLE;
+    // ── Temporal image state — TWO complete copies, selected by the fenced cycle slot ────────────────────────────────
+    // A history read and its replacement must never alias in one dispatch. Slot N reads N^1 (the preceding presented
+    // frame) and writes N. Since RecordAndPresent waits N's fence before recording it again, descriptor bindings are
+    // immutable for every in-flight command buffer; this is ownership, not a same-image barrier pretending to be it.
+    VkImage        HistoryImages[kCycleSlotCount]       = {};
+    VkDeviceMemory HistoryMemories[kCycleSlotCount]     = {};
+    VkImageView    HistoryImageViews[kCycleSlotCount]   = {};
+    VkImage        FilteredHistoryImages[kCycleSlotCount]       = {};
+    VkDeviceMemory FilteredHistoryMemories[kCycleSlotCount]     = {};
+    VkImageView    FilteredHistoryImageViews[kCycleSlotCount]   = {};
+    VkImage        HistorySurfaceImages[kCycleSlotCount]       = {};
+    VkDeviceMemory HistorySurfaceMemories[kCycleSlotCount]     = {};
+    VkImageView    HistorySurfaceImageViews[kCycleSlotCount]   = {};
+    VkImage        MomentImages[kCycleSlotCount]       = {};
+    VkDeviceMemory MomentMemories[kCycleSlotCount]     = {};
+    VkImageView    MomentImageViews[kCycleSlotCount]   = {};
+    bool           TemporalImagesInitialised[kCycleSlotCount] = {};
 
-    // R7 denoiser. MomentImage persists across frames (it is reprojected with the mean); the two DenoiseImages
-    //    ping-pong between à-trous levels — level i reads one and writes the other.
-    VkImage                  MomentImage             = VK_NULL_HANDLE;
-    VkDeviceMemory           MomentMemory            = VK_NULL_HANDLE;
-    VkImageView              MomentImageView         = VK_NULL_HANDLE;
+    // The filter's intra-frame ping-pong is deliberately separate. The graphics queue serialises frames; it needs no
+    // cross-frame descriptor rewrites, whereas every temporal source/target above has fixed slot ownership.
     VkImage                  DenoiseImages[2]        = { VK_NULL_HANDLE, VK_NULL_HANDLE };
     VkDeviceMemory           DenoiseMemory[2]        = { VK_NULL_HANDLE, VK_NULL_HANDLE };
     VkImageView              DenoiseImageViews[2]    = { VK_NULL_HANDLE, VK_NULL_HANDLE };
     bool                     DenoiseInitialised      = false;
-    bool                     HistoryInitialised    = false;             // [-]  layout transitioned to GENERAL once
 
     // ── Scene SSBO geometry and materials ────────────────────────────────────────────────────────────────────────────
     VkBuffer                 TriangleBuffer        = VK_NULL_HANDLE;
@@ -226,7 +225,6 @@ struct SwapchainExchange::VulkanRecord
     VkBuffer                 ReservoirBuffers[2]   = { VK_NULL_HANDLE, VK_NULL_HANDLE };
     VkDeviceMemory           ReservoirMemories[2]  = { VK_NULL_HANDLE, VK_NULL_HANDLE };
     VkDeviceSize             ReservoirBytes        = 0u;   // [B] per buffer (W×H×64, identity in Normal's fourth word)
-    bool                     ReservoirParity       = false;   // [-]  false: 0 = prev / 1 = curr; flipped per frame
     bool                     ReservoirsInitialised = false;   // [-]  zero-filled once before first dispatch
     // kFeatureGiReuse: the indirect pool's own pair (bindings 25/26), same compact 64 B record, same ping-pong. Separate from
     //    the DI pair because the two pools reproject the same pixel but hold different quantities (this one's Sample
@@ -234,7 +232,6 @@ struct SwapchainExchange::VulkanRecord
     VkBuffer                 GiReservoirBuffers[2]   = { VK_NULL_HANDLE, VK_NULL_HANDLE };
     VkDeviceMemory           GiReservoirMemories[2]  = { VK_NULL_HANDLE, VK_NULL_HANDLE };
     VkDeviceSize             GiReservoirBytes        = 0u;
-    bool                     GiReservoirParity       = false;
     bool                     GiReservoirsInitialised = false;
     uint32_t                 TriangleCount         = 0u;
     uint32_t                 MaterialCount         = 0u;
@@ -242,21 +239,22 @@ struct SwapchainExchange::VulkanRecord
     // ── Compute pipeline ──────────────────────────────────────────────────────────────────────────────────────────────
     VkDescriptorSetLayout    ComputeDescriptorLayout = VK_NULL_HANDLE;
     VkDescriptorPool         ComputeDescriptorPool   = VK_NULL_HANDLE;
-    VkDescriptorSet          ComputeDescriptorSet    = VK_NULL_HANDLE;
-    // Set 1 stays deliberately tiny so first-wavelet history does not displace set 0's variable-count texture table.
+    VkDescriptorSet          ComputeDescriptorSets[kCycleSlotCount] = {};
+    // Set 1 carries current temporal targets plus prior filtered color. It is also immutable per fenced cycle slot,
+    // so the descriptor lifetime matches the images it owns rather than relying on UPDATE_AFTER_BIND.
     VkDescriptorSetLayout    ComputeTemporalDescriptorLayout = VK_NULL_HANDLE;
     VkDescriptorPool         ComputeTemporalDescriptorPool   = VK_NULL_HANDLE;
-    VkDescriptorSet          ComputeTemporalDescriptorSet    = VK_NULL_HANDLE;
+    VkDescriptorSet          ComputeTemporalDescriptorSets[kCycleSlotCount] = {};
     VkPipelineLayout         ComputePipelineLayout   = VK_NULL_HANDLE;
     VkPipeline               ComputePipeline         = VK_NULL_HANDLE;
 
-    // R7 denoiser: its own pipeline and one descriptor set per allocated à-trous level. The fifth binding is the
-    //    separate first-wavelet feedback image; push constants restrict writes to level zero.
+    // R7 denoiser: one descriptor set per (fenced temporal slot, à-trous level). Its surface guide and first-wavelet
+    // feedback target are slot-owned, so level descriptors cannot be rewritten while an earlier command buffer uses them.
     VkPipelineLayout         DenoisePipelineLayout   = VK_NULL_HANDLE;
     VkPipeline               DenoisePipeline         = VK_NULL_HANDLE;
     VkDescriptorSetLayout    DenoiseSetLayout        = VK_NULL_HANDLE;
     VkDescriptorPool         DenoisePool             = VK_NULL_HANDLE;
-    VkDescriptorSet          DenoiseSets[kDenoiseLevelCount] = {};
+    VkDescriptorSet          DenoiseSets[kCycleSlotCount][kDenoiseLevelCount] = {};
 
     // ── Command recording ─────────────────────────────────────────────────────────────────────────────────────────────
     VkCommandPool                ComputeCommandPool = VK_NULL_HANDLE;
@@ -506,7 +504,7 @@ bool SwapchainExchange::Bring() noexcept
         //     WriteDescriptorSet(), which is also what populates the denoiser's per-level sets. With the order
         //     reversed the sets existed but were never written, so the filter sampled unbound images.
         { "BringDenoisePipeline",  &SwapchainExchange::BringDenoisePipeline  },
-        // A6b after BringStorageImage (it binds HistoryImageView) and before BringDescriptorSet, same as above.
+        // A6b after BringStorageImage (it binds slot-owned raw-history views) and before BringDescriptorSet, same as above.
         { "BringLuminanceReduction", &SwapchainExchange::BringLuminanceReduction },
         // The sky, moon, post and star buffers must exist before BringDescriptorSet: that stage ends by
         //    calling WriteDescriptorSet(), which writes bindings 21-24 once the buffers are there and skips them
@@ -675,32 +673,34 @@ void SwapchainExchange::RetireSwapchain() noexcept
     Vulkan->StorageImage     = VK_NULL_HANDLE;
     Vulkan->StorageMemory    = VK_NULL_HANDLE;
 
-    if (Vulkan->HistoryImageView)  vkDestroyImageView(Vulkan->Device, Vulkan->HistoryImageView,  nullptr);
-    if (Vulkan->HistoryImage)      vkDestroyImage    (Vulkan->Device, Vulkan->HistoryImage,      nullptr);
-    if (Vulkan->HistoryMemory)     vkFreeMemory      (Vulkan->Device, Vulkan->HistoryMemory,     nullptr);
-    if (Vulkan->FilteredHistoryImageView) vkDestroyImageView(Vulkan->Device, Vulkan->FilteredHistoryImageView, nullptr);
-    if (Vulkan->FilteredHistoryImage)     vkDestroyImage    (Vulkan->Device, Vulkan->FilteredHistoryImage,     nullptr);
-    if (Vulkan->FilteredHistoryMemory)    vkFreeMemory      (Vulkan->Device, Vulkan->FilteredHistoryMemory,    nullptr);
-    if (Vulkan->HistorySurfaceImageView) vkDestroyImageView(Vulkan->Device, Vulkan->HistorySurfaceImageView, nullptr);
-    if (Vulkan->HistorySurfaceImage)     vkDestroyImage    (Vulkan->Device, Vulkan->HistorySurfaceImage,     nullptr);
-    if (Vulkan->HistorySurfaceMemory)    vkFreeMemory      (Vulkan->Device, Vulkan->HistorySurfaceMemory,    nullptr);
-    if (Vulkan->MomentImageView)         vkDestroyImageView(Vulkan->Device, Vulkan->MomentImageView,         nullptr);
-    if (Vulkan->MomentImage)             vkDestroyImage    (Vulkan->Device, Vulkan->MomentImage,             nullptr);
-    if (Vulkan->MomentMemory)            vkFreeMemory      (Vulkan->Device, Vulkan->MomentMemory,            nullptr);
+    // Temporal images belong to the cycle slot, and RetireSwapchain only runs after the caller has quiesced the
+    // device. Destroy each previous/current pair together; no descriptor can still point at one.
+    for (uint32_t Slot = 0u; Slot < kCycleSlotCount; ++Slot)
+    {
+        if (Vulkan->HistoryImageViews[Slot]) vkDestroyImageView(Vulkan->Device, Vulkan->HistoryImageViews[Slot], nullptr);
+        if (Vulkan->HistoryImages[Slot])     vkDestroyImage    (Vulkan->Device, Vulkan->HistoryImages[Slot], nullptr);
+        if (Vulkan->HistoryMemories[Slot])   vkFreeMemory      (Vulkan->Device, Vulkan->HistoryMemories[Slot], nullptr);
+        if (Vulkan->FilteredHistoryImageViews[Slot]) vkDestroyImageView(Vulkan->Device, Vulkan->FilteredHistoryImageViews[Slot], nullptr);
+        if (Vulkan->FilteredHistoryImages[Slot])     vkDestroyImage    (Vulkan->Device, Vulkan->FilteredHistoryImages[Slot], nullptr);
+        if (Vulkan->FilteredHistoryMemories[Slot])   vkFreeMemory      (Vulkan->Device, Vulkan->FilteredHistoryMemories[Slot], nullptr);
+        if (Vulkan->HistorySurfaceImageViews[Slot]) vkDestroyImageView(Vulkan->Device, Vulkan->HistorySurfaceImageViews[Slot], nullptr);
+        if (Vulkan->HistorySurfaceImages[Slot])     vkDestroyImage    (Vulkan->Device, Vulkan->HistorySurfaceImages[Slot], nullptr);
+        if (Vulkan->HistorySurfaceMemories[Slot])   vkFreeMemory      (Vulkan->Device, Vulkan->HistorySurfaceMemories[Slot], nullptr);
+        if (Vulkan->MomentImageViews[Slot]) vkDestroyImageView(Vulkan->Device, Vulkan->MomentImageViews[Slot], nullptr);
+        if (Vulkan->MomentImages[Slot])     vkDestroyImage    (Vulkan->Device, Vulkan->MomentImages[Slot], nullptr);
+        if (Vulkan->MomentMemories[Slot])   vkFreeMemory      (Vulkan->Device, Vulkan->MomentMemories[Slot], nullptr);
+        Vulkan->HistoryImageViews[Slot] = VK_NULL_HANDLE; Vulkan->HistoryImages[Slot] = VK_NULL_HANDLE; Vulkan->HistoryMemories[Slot] = VK_NULL_HANDLE;
+        Vulkan->FilteredHistoryImageViews[Slot] = VK_NULL_HANDLE; Vulkan->FilteredHistoryImages[Slot] = VK_NULL_HANDLE; Vulkan->FilteredHistoryMemories[Slot] = VK_NULL_HANDLE;
+        Vulkan->HistorySurfaceImageViews[Slot] = VK_NULL_HANDLE; Vulkan->HistorySurfaceImages[Slot] = VK_NULL_HANDLE; Vulkan->HistorySurfaceMemories[Slot] = VK_NULL_HANDLE;
+        Vulkan->MomentImageViews[Slot] = VK_NULL_HANDLE; Vulkan->MomentImages[Slot] = VK_NULL_HANDLE; Vulkan->MomentMemories[Slot] = VK_NULL_HANDLE;
+        Vulkan->TemporalImagesInitialised[Slot] = false;
+    }
     for (uint32_t Slot = 0u; Slot < 2u; ++Slot)
     {
         if (Vulkan->DenoiseImageViews[Slot]) vkDestroyImageView(Vulkan->Device, Vulkan->DenoiseImageViews[Slot], nullptr);
         if (Vulkan->DenoiseImages[Slot])     vkDestroyImage    (Vulkan->Device, Vulkan->DenoiseImages[Slot],     nullptr);
         if (Vulkan->DenoiseMemory[Slot])     vkFreeMemory      (Vulkan->Device, Vulkan->DenoiseMemory[Slot],     nullptr);
     }
-    Vulkan->HistoryImageView   = VK_NULL_HANDLE;
-    Vulkan->FilteredHistoryImageView = VK_NULL_HANDLE;
-    Vulkan->FilteredHistoryImage = VK_NULL_HANDLE;
-    Vulkan->FilteredHistoryMemory = VK_NULL_HANDLE;
-    Vulkan->HistorySurfaceImageView = VK_NULL_HANDLE;
-    Vulkan->HistorySurfaceImage     = VK_NULL_HANDLE;
-    Vulkan->HistorySurfaceMemory    = VK_NULL_HANDLE;
-    Vulkan->MomentImageView = VK_NULL_HANDLE; Vulkan->MomentImage = VK_NULL_HANDLE; Vulkan->MomentMemory = VK_NULL_HANDLE;
     for (uint32_t Slot = 0u; Slot < 2u; ++Slot)
     {
         Vulkan->DenoiseImageViews[Slot] = VK_NULL_HANDLE;
@@ -708,9 +708,6 @@ void SwapchainExchange::RetireSwapchain() noexcept
         Vulkan->DenoiseMemory[Slot]     = VK_NULL_HANDLE;
     }
     Vulkan->DenoiseInitialised = false;
-    Vulkan->HistoryImage       = VK_NULL_HANDLE;
-    Vulkan->HistoryMemory      = VK_NULL_HANDLE;
-    Vulkan->HistoryInitialised = false;
 
     for (uint32_t I = 0u; I < 2u; ++I)   // R6 temporal reservoirs (size-dependent, like storage/history)
     {
@@ -1191,33 +1188,26 @@ bool SwapchainExchange::BringStorageImage() noexcept
                             Vulkan->StorageImage, Vulkan->StorageMemory, Vulkan->StorageImageView, "storage image"))
         return false;
 
-    // ② History image — linear HDR running mean, persists across frames (temporal accumulation).
-    if (!CreateStorageImage(Vulkan->Device, Vulkan->MemoryProperties, VK_FORMAT_R32G32B32A32_SFLOAT, Extent,
-                            VK_IMAGE_USAGE_STORAGE_BIT,
-                            Vulkan->HistoryImage, Vulkan->HistoryMemory, Vulkan->HistoryImageView, "raw history image"))
-        return false;
+    // ② Four complete temporal histories, one for every fenced cycle slot. Slot N is the current write target and
+    // reads slot N^1; no shader invocation ever aliases a previous temporal sample with its output.
+    for (uint32_t Slot = 0u; Slot < kCycleSlotCount; ++Slot)
+    {
+        if (!CreateStorageImage(Vulkan->Device, Vulkan->MemoryProperties, VK_FORMAT_R32G32B32A32_SFLOAT, Extent,
+                                VK_IMAGE_USAGE_STORAGE_BIT, Vulkan->HistoryImages[Slot], Vulkan->HistoryMemories[Slot],
+                                Vulkan->HistoryImageViews[Slot], "raw history image")) return false;
+        if (!CreateStorageImage(Vulkan->Device, Vulkan->MemoryProperties, VK_FORMAT_R32G32B32A32_SFLOAT, Extent,
+                                VK_IMAGE_USAGE_STORAGE_BIT, Vulkan->FilteredHistoryImages[Slot], Vulkan->FilteredHistoryMemories[Slot],
+                                Vulkan->FilteredHistoryImageViews[Slot], "first-wavelet history image")) return false;
+        if (!CreateStorageImage(Vulkan->Device, Vulkan->MemoryProperties, VK_FORMAT_R16G16B16A16_SFLOAT, Extent,
+                                VK_IMAGE_USAGE_STORAGE_BIT, Vulkan->HistorySurfaceImages[Slot], Vulkan->HistorySurfaceMemories[Slot],
+                                Vulkan->HistorySurfaceImageViews[Slot], "history surface image")) return false;
+        if (!CreateStorageImage(Vulkan->Device, Vulkan->MemoryProperties, VK_FORMAT_R32G32B32A32_SFLOAT, Extent,
+                                VK_IMAGE_USAGE_STORAGE_BIT, Vulkan->MomentImages[Slot], Vulkan->MomentMemories[Slot],
+                                Vulkan->MomentImageViews[Slot], "moment image")) return false;
+        Vulkan->TemporalImagesInitialised[Slot] = false;
+    }
 
-    // ②a First-wavelet color history. Raw mean/count and moments above remain the reactive estimator; this stores only
-    //     the level-zero à-trous result that becomes next frame's temporal color (SVGF's filtered-history convention).
-    if (!CreateStorageImage(Vulkan->Device, Vulkan->MemoryProperties, VK_FORMAT_R32G32B32A32_SFLOAT, Extent,
-                            VK_IMAGE_USAGE_STORAGE_BIT,
-                            Vulkan->FilteredHistoryImage, Vulkan->FilteredHistoryMemory,
-                            Vulkan->FilteredHistoryImageView, "first-wavelet history image"))
-        return false;
-
-    // ②b R7a history surface — the normal and depth the history mean was shaded at. rgba16f is ample: the normal
-    //     is unit length and the depth only has to survive a 10 % relative comparison.
-    if (!CreateStorageImage(Vulkan->Device, Vulkan->MemoryProperties, VK_FORMAT_R16G16B16A16_SFLOAT, Extent,
-                            VK_IMAGE_USAGE_STORAGE_BIT,
-                            Vulkan->HistorySurfaceImage, Vulkan->HistorySurfaceMemory,
-                            Vulkan->HistorySurfaceImageView, "history surface image"))
-        return false;
-
-    // ②c R7 denoiser images. The moments persist (reprojected with the mean); the pair ping-pongs between levels.
-    if (!CreateStorageImage(Vulkan->Device, Vulkan->MemoryProperties, VK_FORMAT_R32G32B32A32_SFLOAT, Extent,
-                            VK_IMAGE_USAGE_STORAGE_BIT,
-                            Vulkan->MomentImage, Vulkan->MomentMemory, Vulkan->MomentImageView, "moment image"))
-        return false;
+    // ②c R7 denoiser images are only intra-frame ping-pong surfaces; their descriptors never change after bring-up.
     for (uint32_t Slot = 0u; Slot < 2u; ++Slot)
     {
         if (!CreateStorageImage(Vulkan->Device, Vulkan->MemoryProperties, VK_FORMAT_R32G32B32A32_SFLOAT, Extent,
@@ -1237,7 +1227,6 @@ bool SwapchainExchange::BringStorageImage() noexcept
                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                            Vulkan->ReservoirBuffers[I], Vulkan->ReservoirMemories[I]);
-        Vulkan->ReservoirParity       = false;
         Vulkan->ReservoirsInitialised = false;
         std::cerr << "[SwapchainExchange] Reservoirs: 2 x " << (Vulkan->ReservoirBytes >> 20u) << " MB (64 B/px temporal DI state, native uint identity).\n";
 
@@ -1250,13 +1239,11 @@ bool SwapchainExchange::BringStorageImage() noexcept
                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                            Vulkan->GiReservoirBuffers[I], Vulkan->GiReservoirMemories[I]);
-        Vulkan->GiReservoirParity       = false;
         Vulkan->GiReservoirsInitialised = false;
         std::cerr << "[SwapchainExchange] Indirect pool: 2 x " << (Vulkan->GiReservoirBytes >> 20u)
                   << " MB (64 B/px first-bounce-vertex state, kFeatureGiReuse; native uint identity).\n";
     }
 
-    Vulkan->HistoryInitialised = false;
     return true;
 }
 
@@ -1367,16 +1354,9 @@ bool SwapchainExchange::BringComputePipeline() noexcept
     if (Vulkan->DescriptorIndexing)
     {
         BindingFlags[TextureBinding] = static_cast<VkDescriptorBindingFlags>(VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT);
-        BindingFlags[16u]            = static_cast<VkDescriptorBindingFlags>(VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT);
-        BindingFlags[17u]            = static_cast<VkDescriptorBindingFlags>(VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT);
-        // ⚠️ 25/26 are the indirect pool's ping-pong (kFeatureGiReuse) and they are rewritten every frame for exactly
-        //    the same reason 16/17 are: the pair swaps as history/target. They were added after the flags above and
-        //    never joined them, so every frame rewrote a binding on a set still pending on the previous frame's
-        //    command buffer — VUID-vkUpdateDescriptorSets-None-03047, which the validation layer reported ten times
-        //    before hitting its duplicate limit. Without UPDATE_AFTER_BIND the write is undefined behaviour, not just
-        //    a warning: the dispatch may read whichever buffer the driver happened to leave bound.
-        BindingFlags[25u]            = static_cast<VkDescriptorBindingFlags>(VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT);
-        BindingFlags[26u]            = static_cast<VkDescriptorBindingFlags>(VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT);
+        // Reservoir and temporal bindings do NOT request UPDATE_AFTER_BIND: each frame slot owns an immutable set
+        // whose previous/current resources are fixed at bring-up. The lone bindless texture table remains the only
+        // update-after-bind binding in this layout.
     }
     VkDescriptorSetLayoutBindingFlagsCreateInfo FlagsInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO };
     FlagsInfo.bindingCount  = kComputeBindingCount;
@@ -1390,16 +1370,20 @@ bool SwapchainExchange::BringComputePipeline() noexcept
     LayoutInfo.pBindings    = LayoutBindings.data();
     (void)vkCreateDescriptorSetLayout(Vulkan->Device, &LayoutInfo, nullptr, &Vulkan->ComputeDescriptorLayout);
 
-    // Set 1: the filtered color history has a separate descriptor contract from set 0's raw mean/moments and bindless
-    // textures. Keeping this set separate avoids a churn-prone renumber of the variable descriptor-count binding.
-    VkDescriptorSetLayoutBinding TemporalBinding{};
-    TemporalBinding.binding         = 0u;
-    TemporalBinding.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    TemporalBinding.descriptorCount = 1u;
-    TemporalBinding.stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
+    // Set 1: current history, surface, moments and filtered feedback, then the PREVIOUS filtered feedback. Set 0
+    // retains the previous raw images and the bindless table; keeping writes here avoids renumbering that variable
+    // descriptor binding while making every current/previous choice explicit in the shader contract.
+    std::array<VkDescriptorSetLayoutBinding, 5u> TemporalBindings{};
+    for (uint32_t Binding = 0u; Binding < TemporalBindings.size(); ++Binding)
+    {
+        TemporalBindings[Binding].binding         = Binding;
+        TemporalBindings[Binding].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        TemporalBindings[Binding].descriptorCount = 1u;
+        TemporalBindings[Binding].stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
+    }
     VkDescriptorSetLayoutCreateInfo TemporalLayoutInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-    TemporalLayoutInfo.bindingCount = 1u;
-    TemporalLayoutInfo.pBindings    = &TemporalBinding;
+    TemporalLayoutInfo.bindingCount = static_cast<uint32_t>(TemporalBindings.size());
+    TemporalLayoutInfo.pBindings    = TemporalBindings.data();
     if (vkCreateDescriptorSetLayout(Vulkan->Device, &TemporalLayoutInfo, nullptr,
                                     &Vulkan->ComputeTemporalDescriptorLayout) != VK_SUCCESS)
         return false;
@@ -1546,20 +1530,18 @@ float SwapchainExchange::QueryAverageLogLuminance() const noexcept
     return static_cast<float>(WeightedLog2 / Used * Ln2);
 }
 
-// 🔴 Separate from bring-up because a RESIZE invalidates what it writes. BringStorageImage destroys and
-//    recreates HistoryImageView, WriteDescriptorSet rewrites the main compute set — and this set, which binds
-//    the very same view, was left pointing at the destroyed one. The reduction then dispatched against a dead
-//    image view every frame: "SourceImage is using imageView 0x0 that is invalid or has been destroyed", and
-//    on the reporting hardware the whole renderer went black from the first resize onward.
+// 🔴 Separate from bring-up because a RESIZE invalidates what it writes. BringStorageImage recreates every
+//    slot-owned HistoryImageView, so every slot's reduction set must be rewritten while the device is quiescent.
+//    Leaving a reduction set pointing at a retired view dispatches against a dead image and turns the renderer black.
 void SwapchainExchange::WriteLuminanceDescriptors() noexcept
 {
-    if (!Vulkan || !Vulkan->HistoryImageView) return;
+    if (!Vulkan || !Vulkan->HistoryImageViews[0]) return;
     for (uint32_t Slot = 0u; Slot < kCycleSlotCount; ++Slot)
     {
         if (!Vulkan->LuminanceSets[Slot]) continue;
-        // ⚠️ The HISTORY image, not the presentation image: the reduction must see LINEAR radiance. Measuring
-        //    the tone-mapped output would feed the curve its own result and the exposure would chase itself.
-        VkDescriptorImageInfo  ImageInfo{ VK_NULL_HANDLE, Vulkan->HistoryImageView, VK_IMAGE_LAYOUT_GENERAL };
+        // Slot N's reduction reads slot N's current linear history after its ReSTIR dispatch. This set is immutable
+        // during the frame and its accumulator is also slot-owned, so it remains valid with more than one frame queued.
+        VkDescriptorImageInfo  ImageInfo{ VK_NULL_HANDLE, Vulkan->HistoryImageViews[Slot], VK_IMAGE_LAYOUT_GENERAL };
         VkDescriptorBufferInfo BufferInfo{ Vulkan->LuminanceBuffers[Slot], 0u, VK_WHOLE_SIZE };
 
         std::array<VkWriteDescriptorSet, 2u> Writes{};
@@ -1705,21 +1687,23 @@ bool SwapchainExchange::BringDenoisePipeline() noexcept
     if (vkCreatePipelineLayout(Vulkan->Device, &PipelineLayoutInfo, nullptr, &Vulkan->DenoisePipelineLayout) != VK_SUCCESS)
         return false;
 
-    // ② Pool and one set per level.
-    VkDescriptorPoolSize PoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 5u * kDenoiseLevelCount };
+    // ② Pool and one immutable set per (fenced temporal slot, level). The slot-specific set is what makes the surface
+    // guide and first-wavelet history safe without updating a descriptor retained by an in-flight command buffer.
+    constexpr uint32_t DenoiseSetCount = kCycleSlotCount * kDenoiseLevelCount;
+    VkDescriptorPoolSize PoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 5u * DenoiseSetCount };
     VkDescriptorPoolCreateInfo PoolInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
-    PoolInfo.maxSets       = kDenoiseLevelCount;
+    PoolInfo.maxSets       = DenoiseSetCount;
     PoolInfo.poolSizeCount = 1u;
     PoolInfo.pPoolSizes    = &PoolSize;
     if (vkCreateDescriptorPool(Vulkan->Device, &PoolInfo, nullptr, &Vulkan->DenoisePool) != VK_SUCCESS) return false;
 
-    std::array<VkDescriptorSetLayout, kDenoiseLevelCount> SetLayouts{};
+    std::array<VkDescriptorSetLayout, DenoiseSetCount> SetLayouts{};
     SetLayouts.fill(Vulkan->DenoiseSetLayout);
     VkDescriptorSetAllocateInfo AllocateInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
     AllocateInfo.descriptorPool     = Vulkan->DenoisePool;
-    AllocateInfo.descriptorSetCount = kDenoiseLevelCount;
+    AllocateInfo.descriptorSetCount = DenoiseSetCount;
     AllocateInfo.pSetLayouts        = SetLayouts.data();
-    if (vkAllocateDescriptorSets(Vulkan->Device, &AllocateInfo, Vulkan->DenoiseSets) != VK_SUCCESS) return false;
+    if (vkAllocateDescriptorSets(Vulkan->Device, &AllocateInfo, &Vulkan->DenoiseSets[0][0]) != VK_SUCCESS) return false;
 
     // ③ Pipeline.
     const std::vector<uint32_t> Spirv = LoadSpirv("Engine/Shaders/AtrousDenoise.spv");
@@ -1825,52 +1809,59 @@ bool SwapchainExchange::BringDescriptorSet() noexcept
     //    the hand-kept counts had gone stale twice, most recently by the GI reservoir pair (25/26) and D6/D7's four
     //    two-level buffers (27-30), which together are six buffers the 16 did not cover.
     PoolSizes[0].type            = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    PoolSizes[0].descriptorCount = ComputeBindingTypeCount(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);   // 0 out · 3 history · 4 surface · 5 normal · 18 R7a surface · 19 moments · 20 denoise
+    PoolSizes[0].descriptorCount = kCycleSlotCount * ComputeBindingTypeCount(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);   // one immutable set per fenced slot
     PoolSizes[1].type            = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    PoolSizes[1].descriptorCount = ComputeBindingTypeCount(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);   // 1, 2, 6-12, 16-17, 23 star tables, 25/26 GI reservoirs, 27-30 D6/D7
+    PoolSizes[1].descriptorCount = kCycleSlotCount * ComputeBindingTypeCount(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
     PoolSizes[2].type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    PoolSizes[2].descriptorCount = ComputeBindingTypeCount(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) + (Vulkan->DescriptorIndexing ? kTextureSlotCapacity : 1u);   // 13/14 material LUTs · 15 motion · the bindless table
+    PoolSizes[2].descriptorCount = kCycleSlotCount * (ComputeBindingTypeCount(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) + (Vulkan->DescriptorIndexing ? kTextureSlotCapacity : 1u));
 
     VkDescriptorPoolCreateInfo PoolInfo{};
     PoolInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     PoolInfo.flags         = Vulkan->DescriptorIndexing ? static_cast<VkDescriptorPoolCreateFlags>(VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT) : 0u;
-    PoolInfo.maxSets       = 1u;
+    PoolInfo.maxSets       = kCycleSlotCount;
     PoolSizes[3].type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    PoolSizes[3].descriptorCount = ComputeBindingTypeCount(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);   // 21 live sky record · 22 live moon record · 24 live post record
+    PoolSizes[3].descriptorCount = kCycleSlotCount * ComputeBindingTypeCount(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
     PoolInfo.poolSizeCount = 4u;
     PoolInfo.pPoolSizes    = PoolSizes.data();
     (void)vkCreateDescriptorPool(Vulkan->Device, &PoolInfo, nullptr, &Vulkan->ComputeDescriptorPool);
 
     const uint32_t VariableCount = Vulkan->DescriptorIndexing ? kTextureSlotCapacity : 1u;
+    std::array<uint32_t, kCycleSlotCount> VariableCounts{};
+    VariableCounts.fill(VariableCount);
     VkDescriptorSetVariableDescriptorCountAllocateInfo VariableInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO };
-    VariableInfo.descriptorSetCount = 1u;
-    VariableInfo.pDescriptorCounts  = &VariableCount;
+    VariableInfo.descriptorSetCount = kCycleSlotCount;
+    VariableInfo.pDescriptorCounts  = VariableCounts.data();
+    std::array<VkDescriptorSetLayout, kCycleSlotCount> ComputeSetLayouts{};
+    ComputeSetLayouts.fill(Vulkan->ComputeDescriptorLayout);
     VkDescriptorSetAllocateInfo AllocateInfo{};
     AllocateInfo.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    AllocateInfo.pNext              = &VariableInfo;
+    // Variable descriptor counts are legal only when binding 31 actually carries VARIABLE_DESCRIPTOR_COUNT.
+    AllocateInfo.pNext              = Vulkan->DescriptorIndexing ? &VariableInfo : nullptr;
     AllocateInfo.descriptorPool     = Vulkan->ComputeDescriptorPool;
-    AllocateInfo.descriptorSetCount = 1u;
-    AllocateInfo.pSetLayouts        = &Vulkan->ComputeDescriptorLayout;
-    if (vkAllocateDescriptorSets(Vulkan->Device, &AllocateInfo, &Vulkan->ComputeDescriptorSet) != VK_SUCCESS)
+    AllocateInfo.descriptorSetCount = kCycleSlotCount;
+    AllocateInfo.pSetLayouts        = ComputeSetLayouts.data();
+    if (vkAllocateDescriptorSets(Vulkan->Device, &AllocateInfo, Vulkan->ComputeDescriptorSets) != VK_SUCCESS)
     {
         std::cerr << "[SwapchainExchange] vkAllocateDescriptorSets failed.\n";
         return false;
     }
 
-    // The first-wavelet history has its own one-image set. It is allocated independently so this set can later be
-    // ping-ponged without touching the main bindless descriptor set while a previous frame is pending.
-    VkDescriptorPoolSize TemporalPoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1u };
+    // Five temporal images × two fenced slots. These descriptor sets are fully populated once per bring-up/resize and
+    // never patched on the frame path, even with descriptor indexing enabled.
+    VkDescriptorPoolSize TemporalPoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 5u * kCycleSlotCount };
     VkDescriptorPoolCreateInfo TemporalPoolInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
-    TemporalPoolInfo.maxSets       = 1u;
+    TemporalPoolInfo.maxSets       = kCycleSlotCount;
     TemporalPoolInfo.poolSizeCount = 1u;
     TemporalPoolInfo.pPoolSizes    = &TemporalPoolSize;
     if (vkCreateDescriptorPool(Vulkan->Device, &TemporalPoolInfo, nullptr, &Vulkan->ComputeTemporalDescriptorPool) != VK_SUCCESS)
         return false;
+    std::array<VkDescriptorSetLayout, kCycleSlotCount> TemporalSetLayouts{};
+    TemporalSetLayouts.fill(Vulkan->ComputeTemporalDescriptorLayout);
     VkDescriptorSetAllocateInfo TemporalAllocate{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
     TemporalAllocate.descriptorPool     = Vulkan->ComputeTemporalDescriptorPool;
-    TemporalAllocate.descriptorSetCount = 1u;
-    TemporalAllocate.pSetLayouts        = &Vulkan->ComputeTemporalDescriptorLayout;
-    if (vkAllocateDescriptorSets(Vulkan->Device, &TemporalAllocate, &Vulkan->ComputeTemporalDescriptorSet) != VK_SUCCESS)
+    TemporalAllocate.descriptorSetCount = kCycleSlotCount;
+    TemporalAllocate.pSetLayouts        = TemporalSetLayouts.data();
+    if (vkAllocateDescriptorSets(Vulkan->Device, &TemporalAllocate, Vulkan->ComputeTemporalDescriptorSets) != VK_SUCCESS)
         return false;
 
     // The scene SSBOs do not exist yet (UploadTriangles / UploadRadiance run after Bring()).
@@ -1882,257 +1873,145 @@ bool SwapchainExchange::BringDescriptorSet() noexcept
 
 void SwapchainExchange::WriteDescriptorSet() noexcept
 {
-    if (!Vulkan->ComputeDescriptorSet) return;
+    if (!Vulkan || !Vulkan->ComputeDescriptorSets[0] || !Vulkan->ComputeTemporalDescriptorSets[0]) return;
 
-    VkDescriptorImageInfo ImageInfo{};
-    ImageInfo.imageView   = Vulkan->StorageImageView;
-    ImageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-    VkDescriptorBufferInfo TriangleBufferInfo{};
-    TriangleBufferInfo.buffer = Vulkan->TriangleBuffer;
-    TriangleBufferInfo.offset = 0u;
-    TriangleBufferInfo.range  = VK_WHOLE_SIZE;
-
-    VkDescriptorBufferInfo MaterialBufferInfo{};
-    MaterialBufferInfo.buffer = Vulkan->MaterialBuffer;
-    MaterialBufferInfo.offset = 0u;
-    MaterialBufferInfo.range  = VK_WHOLE_SIZE;
-
-    VkDescriptorImageInfo HistoryInfo{};
-    HistoryInfo.imageView   = Vulkan->HistoryImageView;
-    HistoryInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-    VkDescriptorImageInfo FilteredHistoryInfo{};
-    FilteredHistoryInfo.imageView   = Vulkan->FilteredHistoryImageView;
-    FilteredHistoryInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-    VkDescriptorImageInfo HistorySurfaceInfo{};
-    HistorySurfaceInfo.imageView   = Vulkan->HistorySurfaceImageView;
-    HistorySurfaceInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-    VkDescriptorImageInfo MomentInfo{};
-    MomentInfo.imageView   = Vulkan->MomentImageView;
-    MomentInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-    // The kernel always writes denoise slot 0; the filter's first level reads it. Keeping the kernel's target fixed
-    //    means the ping-pong parity lives entirely inside the filter loop.
-    VkDescriptorImageInfo DenoiseInputInfo{};
-    DenoiseInputInfo.imageView   = Vulkan->DenoiseImageViews[0];
-    DenoiseInputInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-    VkDescriptorImageInfo SurfaceInfo{ VK_NULL_HANDLE, static_cast<VkImageView>(Visibility.QuerySurfaceView()), VK_IMAGE_LAYOUT_GENERAL };
-    VkDescriptorImageInfo NormalInfo { VK_NULL_HANDLE, static_cast<VkImageView>(Visibility.QueryNormalView()),  VK_IMAGE_LAYOUT_GENERAL };
-    VkDescriptorBufferInfo InstanceInfo { static_cast<VkBuffer>(Visibility.QueryInstanceBuffer()),  0u, VK_WHOLE_SIZE };
-    VkDescriptorBufferInfo LuminaireInfo{ static_cast<VkBuffer>(Visibility.QueryLuminaireBuffer()), 0u, VK_WHOLE_SIZE };
-    VkDescriptorBufferInfo NodeInfo     { Vulkan->TraversalNodeBuffer, 0u, VK_WHOLE_SIZE };
-    VkDescriptorBufferInfo TlasNodeInfo  { Vulkan->TlasNodeBuffer,      0u, VK_WHOLE_SIZE };   // D6/D7 (binding 27)
-    VkDescriptorBufferInfo TlasPrimInfo  { Vulkan->TlasPrimitiveBuffer, 0u, VK_WHOLE_SIZE };   //              28
-    VkDescriptorBufferInfo TlasInstInfo  { Vulkan->TlasInstanceBuffer,  0u, VK_WHOLE_SIZE };   //              29
-    VkDescriptorBufferInfo BlasPlaceInfo { Vulkan->BlasPlacementBuffer, 0u, VK_WHOLE_SIZE };   //              30
-    VkDescriptorBufferInfo LeafInfo     { Vulkan->TraversalLeafBuffer, 0u, VK_WHOLE_SIZE };
-    VkDescriptorBufferInfo SlabInfo     { Vulkan->SlabBuffer, 0u, VK_WHOLE_SIZE };
-    VkDescriptorBufferInfo VertexInfo   { static_cast<VkBuffer>(Visibility.QueryVertexBuffer()), 0u, VK_WHOLE_SIZE };   // R4b
-    VkDescriptorBufferInfo IndexInfo    { static_cast<VkBuffer>(Visibility.QueryIndexBuffer()),  0u, VK_WHOLE_SIZE };   // R4b
-    VkDescriptorImageInfo  EnergyInfo   { Vulkan->TableSampler, Vulkan->ShadingTables[0].View, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-    VkDescriptorImageInfo  SheenInfo    { Vulkan->TableSampler, Vulkan->ShadingTables[1].View, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-    VkDescriptorImageInfo  MotionInfo   { Vulkan->TableSampler, static_cast<VkImageView>(Visibility.QueryMotionView()), VK_IMAGE_LAYOUT_GENERAL };   // R6: texelFetch only; linear sampler harmless
-    // R6: prev = the buffer last frame wrote, curr = the one this frame writes (parity flips per presented frame).
-    const uint32_t PrevSlot = Vulkan->ReservoirParity ? 1u : 0u;
-    VkDescriptorBufferInfo PrevReservoirInfo{ Vulkan->ReservoirBuffers[PrevSlot],      0u, VK_WHOLE_SIZE };
-    VkDescriptorBufferInfo CurrReservoirInfo{ Vulkan->ReservoirBuffers[PrevSlot ^ 1u], 0u, VK_WHOLE_SIZE };
-    const uint32_t GiPrevSlot = Vulkan->GiReservoirParity ? 1u : 0u;
-    VkDescriptorBufferInfo GiPrevReservoirInfo{ Vulkan->GiReservoirBuffers[GiPrevSlot],      0u, VK_WHOLE_SIZE };
-    VkDescriptorBufferInfo GiCurrReservoirInfo{ Vulkan->GiReservoirBuffers[GiPrevSlot ^ 1u], 0u, VK_WHOLE_SIZE };
-    VkDescriptorBufferInfo SkyInfo{ Vulkan->SkyBuffer, 0u, VK_WHOLE_SIZE };   // Celestial sky record (binding 21)
-    VkDescriptorBufferInfo MoonInfo{ Vulkan->MoonBuffer, 0u, VK_WHOLE_SIZE }; // Celestial moon record (binding 22)
-    VkDescriptorBufferInfo StarInfo{ Vulkan->StarBuffer, 0u, VK_WHOLE_SIZE }; // Star tables (binding 23)
-    VkDescriptorBufferInfo PostInfo{ Vulkan->PostBuffer, 0u, VK_WHOLE_SIZE }; // Celestial post record (binding 24)
-
-    std::array<VkWriteDescriptorSet, kComputeBindingCount> Writes{};
-    uint32_t WriteCount = 0u;
-
-    if (Vulkan->StorageImageView)
+    // Each set is permanently assigned to a cycle slot: CurrentSlot writes its own temporal state and reads only the
+    // other slot. Updating happens only during bring-up, scene replacement or swapchain rebuild (all quiescent), never
+    // between frame submissions.
+    for (uint32_t CurrentSlot = 0u; CurrentSlot < kCycleSlotCount; ++CurrentSlot)
     {
-        VkWriteDescriptorSet& Write = Writes[WriteCount++];
-        Write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        Write.dstSet          = Vulkan->ComputeDescriptorSet;
-        Write.dstBinding      = 0u;
-        Write.descriptorCount = 1u;
-        Write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-        Write.pImageInfo      = &ImageInfo;
-    }
+        const uint32_t PreviousSlot = CurrentSlot ^ 1u;
+        const VkDescriptorSet TargetSet = Vulkan->ComputeDescriptorSets[CurrentSlot];
+        std::array<VkWriteDescriptorSet, kComputeBindingCount> Writes{};
+        uint32_t WriteCount = 0u;
 
-    if (Vulkan->TriangleBuffer)
-    {
-        VkWriteDescriptorSet& Write = Writes[WriteCount++];
-        Write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        Write.dstSet          = Vulkan->ComputeDescriptorSet;
-        Write.dstBinding      = 1u;
-        Write.descriptorCount = 1u;
-        Write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        Write.pBufferInfo     = &TriangleBufferInfo;
-    }
+        const VkDescriptorImageInfo OutputInfo { VK_NULL_HANDLE, Vulkan->StorageImageView, VK_IMAGE_LAYOUT_GENERAL };
+        const VkDescriptorImageInfo HistoryInfo{ VK_NULL_HANDLE, Vulkan->HistoryImageViews[PreviousSlot], VK_IMAGE_LAYOUT_GENERAL };
+        const VkDescriptorImageInfo SurfaceInfo{ VK_NULL_HANDLE, static_cast<VkImageView>(Visibility.QuerySurfaceView()), VK_IMAGE_LAYOUT_GENERAL };
+        const VkDescriptorImageInfo NormalInfo { VK_NULL_HANDLE, static_cast<VkImageView>(Visibility.QueryNormalView()), VK_IMAGE_LAYOUT_GENERAL };
+        const VkDescriptorImageInfo HistorySurfaceInfo{ VK_NULL_HANDLE, Vulkan->HistorySurfaceImageViews[PreviousSlot], VK_IMAGE_LAYOUT_GENERAL };
+        const VkDescriptorImageInfo MomentInfo{ VK_NULL_HANDLE, Vulkan->MomentImageViews[PreviousSlot], VK_IMAGE_LAYOUT_GENERAL };
+        const VkDescriptorImageInfo DenoiseInputInfo{ VK_NULL_HANDLE, Vulkan->DenoiseImageViews[0], VK_IMAGE_LAYOUT_GENERAL };
+        const VkDescriptorImageInfo EnergyInfo{ Vulkan->TableSampler, Vulkan->ShadingTables[0].View, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+        const VkDescriptorImageInfo SheenInfo { Vulkan->TableSampler, Vulkan->ShadingTables[1].View, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+        const VkDescriptorImageInfo MotionInfo{ Vulkan->TableSampler, static_cast<VkImageView>(Visibility.QueryMotionView()), VK_IMAGE_LAYOUT_GENERAL };
 
-    if (Vulkan->MaterialBuffer)
-    {
-        VkWriteDescriptorSet& Write = Writes[WriteCount++];
-        Write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        Write.dstSet          = Vulkan->ComputeDescriptorSet;
-        Write.dstBinding      = 2u;
-        Write.descriptorCount = 1u;
-        Write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        Write.pBufferInfo     = &MaterialBufferInfo;
-    }
+        const VkDescriptorBufferInfo TriangleInfo { Vulkan->TriangleBuffer, 0u, VK_WHOLE_SIZE };
+        const VkDescriptorBufferInfo MaterialInfo { Vulkan->MaterialBuffer, 0u, VK_WHOLE_SIZE };
+        const VkDescriptorBufferInfo InstanceInfo { static_cast<VkBuffer>(Visibility.QueryInstanceBuffer()), 0u, VK_WHOLE_SIZE };
+        const VkDescriptorBufferInfo LuminaireInfo{ static_cast<VkBuffer>(Visibility.QueryLuminaireBuffer()), 0u, VK_WHOLE_SIZE };
+        const VkDescriptorBufferInfo NodeInfo     { Vulkan->TraversalNodeBuffer, 0u, VK_WHOLE_SIZE };
+        const VkDescriptorBufferInfo LeafInfo     { Vulkan->TraversalLeafBuffer, 0u, VK_WHOLE_SIZE };
+        const VkDescriptorBufferInfo SlabInfo     { Vulkan->SlabBuffer, 0u, VK_WHOLE_SIZE };
+        const VkDescriptorBufferInfo VertexInfo   { static_cast<VkBuffer>(Visibility.QueryVertexBuffer()), 0u, VK_WHOLE_SIZE };
+        const VkDescriptorBufferInfo IndexInfo    { static_cast<VkBuffer>(Visibility.QueryIndexBuffer()), 0u, VK_WHOLE_SIZE };
+        const VkDescriptorBufferInfo PreviousReservoirInfo{ Vulkan->ReservoirBuffers[PreviousSlot], 0u, VK_WHOLE_SIZE };
+        const VkDescriptorBufferInfo CurrentReservoirInfo { Vulkan->ReservoirBuffers[CurrentSlot],  0u, VK_WHOLE_SIZE };
+        const VkDescriptorBufferInfo SkyInfo      { Vulkan->SkyBuffer, 0u, VK_WHOLE_SIZE };
+        const VkDescriptorBufferInfo MoonInfo     { Vulkan->MoonBuffer, 0u, VK_WHOLE_SIZE };
+        const VkDescriptorBufferInfo StarInfo     { Vulkan->StarBuffer, 0u, VK_WHOLE_SIZE };
+        const VkDescriptorBufferInfo PostInfo     { Vulkan->PostBuffer, 0u, VK_WHOLE_SIZE };
+        const VkDescriptorBufferInfo GiPreviousInfo{ Vulkan->GiReservoirBuffers[PreviousSlot], 0u, VK_WHOLE_SIZE };
+        const VkDescriptorBufferInfo GiCurrentInfo { Vulkan->GiReservoirBuffers[CurrentSlot],  0u, VK_WHOLE_SIZE };
+        const VkDescriptorBufferInfo TlasNodeInfo { Vulkan->TlasNodeBuffer, 0u, VK_WHOLE_SIZE };
+        const VkDescriptorBufferInfo TlasPrimInfo { Vulkan->TlasPrimitiveBuffer, 0u, VK_WHOLE_SIZE };
+        const VkDescriptorBufferInfo TlasInstInfo { Vulkan->TlasInstanceBuffer, 0u, VK_WHOLE_SIZE };
+        const VkDescriptorBufferInfo BlasPlaceInfo{ Vulkan->BlasPlacementBuffer, 0u, VK_WHOLE_SIZE };
 
-    if (Vulkan->HistoryImageView)
-    {
-        VkWriteDescriptorSet& Write = Writes[WriteCount++];
-        Write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        Write.dstSet          = Vulkan->ComputeDescriptorSet;
-        Write.dstBinding      = 3u;
-        Write.descriptorCount = 1u;
-        Write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-        Write.pImageInfo      = &HistoryInfo;
-    }
-
-    // R2 bindings — written once the visibility targets / scene exist.
-    const auto WriteImage = [&](uint32_t Binding, const VkDescriptorImageInfo& Info)
-    {
-        if (!Info.imageView) return;
-        VkWriteDescriptorSet& Write = Writes[WriteCount++];
-        Write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET; Write.dstSet = Vulkan->ComputeDescriptorSet; Write.dstBinding = Binding;
-        Write.descriptorCount = 1u; Write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE; Write.pImageInfo = &Info;
-    };
-    const auto WriteBuffer = [&](uint32_t Binding, const VkDescriptorBufferInfo& Info)
-    {
-        if (!Info.buffer) return;
-        VkWriteDescriptorSet& Write = Writes[WriteCount++];
-        Write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET; Write.dstSet = Vulkan->ComputeDescriptorSet; Write.dstBinding = Binding;
-        Write.descriptorCount = 1u; Write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; Write.pBufferInfo = &Info;
-    };
-    // The sky record is the compute set's only UNIFORM buffer. A write's descriptorType must equal the layout's,
-    //    so this cannot go through WriteBuffer — one wrong constant here and binding 21 reads as the wrong kind.
-    const auto WriteUniform = [&](uint32_t Binding, const VkDescriptorBufferInfo& Info)
-    {
-        if (!Info.buffer) return;
-        VkWriteDescriptorSet& Write = Writes[WriteCount++];
-        Write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET; Write.dstSet = Vulkan->ComputeDescriptorSet; Write.dstBinding = Binding;
-        Write.descriptorCount = 1u; Write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; Write.pBufferInfo = &Info;
-    };
-    WriteImage (4u, SurfaceInfo);
-    WriteImage (5u, NormalInfo);
-    WriteBuffer(6u, InstanceInfo);
-    WriteBuffer(7u, LuminaireInfo);
-    WriteBuffer(8u, NodeInfo);
-    WriteBuffer(9u, LeafInfo);
-    WriteBuffer(10u, SlabInfo);
-    WriteBuffer(11u, VertexInfo);
-    WriteBuffer(12u, IndexInfo);
-    const auto WriteSampled = [&](uint32_t Binding, const VkDescriptorImageInfo& Info)
-    {
-        if (!Info.imageView || !Info.sampler) return;
-        VkWriteDescriptorSet& Write = Writes[WriteCount++];
-        Write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET; Write.dstSet = Vulkan->ComputeDescriptorSet; Write.dstBinding = Binding;
-        Write.descriptorCount = 1u; Write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; Write.pImageInfo = &Info;
-    };
-    WriteSampled(13u, EnergyInfo);
-    WriteSampled(14u, SheenInfo);
-    WriteSampled(15u, MotionInfo);          // R6: skipped until the motion target + table sampler exist
-    WriteBuffer(16u, PrevReservoirInfo);    // R6: skipped until the reservoir SSBOs exist
-    WriteBuffer(17u, CurrReservoirInfo);
-    WriteImage (18u, HistorySurfaceInfo);   // R7a: history (normal, depth) for running-mean reprojection
-    WriteImage (19u, MomentInfo);           // R7:  luminance moments, for the variance estimate
-    WriteImage (20u, DenoiseInputInfo);     // R7:  linear radiance + variance, the à-trous input
-    WriteUniform(21u, SkyInfo);             // Celestial sky record, for the kernel's miss branches
-    WriteUniform(22u, MoonInfo);            // Celestial moon record, for the discs and the moonlight
-    WriteBuffer(23u, StarInfo);             // Star tables, for the catalogue (cells alone until UploadStarTables)
-    WriteUniform(24u, PostInfo);            // Celestial post record, for stars/flare/rainbow params
-    WriteBuffer(25u, GiPrevReservoirInfo);  // kFeatureGiReuse: the indirect pool's history (read)
-    WriteBuffer(26u, GiCurrReservoirInfo);  // kFeatureGiReuse: the indirect pool's write target
-    // D6/D7 two-level traversal. Written only when UploadInstanceTraversal has allocated them; the kernel reads them
-    //    only when the dispatch's TlasInstanceCount is non-zero, so an un-uploaded scene walks bindings 8/9 alone.
-    //    ⚠️ Guarded: before the first UploadInstanceTraversal there is no buffer to point at, and a descriptor write
-    //    with VK_NULL_HANDLE is invalid rather than merely useless. Leaving them unwritten is sound because the kernel
-    //    reads them only where TlasInstanceCount is non-zero, and that count is only ever set after an upload.
-    if (Vulkan->TlasNodeBuffer)      WriteBuffer(27u, TlasNodeInfo);      // top-level nodes, 8 floats each
-    if (Vulkan->TlasPrimitiveBuffer) WriteBuffer(28u, TlasPrimInfo);      // the instance list the top-level leaves index
-    if (Vulkan->TlasInstanceBuffer)  WriteBuffer(29u, TlasInstInfo);      // per-instance inverse + world AABB + BLAS index
-    if (Vulkan->BlasPlacementBuffer) WriteBuffer(30u, BlasPlaceInfo);     // per-BLAS blob offsets inside bindings 8/9
-
-    // R4a: the texture table. Written in one go (partially bound: slots past the resident count stay undefined and are
-    //    never indexed — the material records only reference resident slots).
-    std::vector<VkDescriptorImageInfo> TextureInfos;
-    VkWriteDescriptorSet TextureWrite{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
-    if (Vulkan->DescriptorIndexing && Vulkan->TextureSampler && !Vulkan->Textures.empty())
-    {
-        TextureInfos.reserve(Vulkan->Textures.size());
-        for (const VulkanRecord::ResidentTexture& T : Vulkan->Textures)
-            TextureInfos.push_back(VkDescriptorImageInfo{ Vulkan->TextureSampler, T.View, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
-        TextureWrite.dstSet          = Vulkan->ComputeDescriptorSet;
-        TextureWrite.dstBinding      = kComputeBindingCount - 1u;
-        TextureWrite.dstArrayElement = 0u;
-        TextureWrite.descriptorCount = static_cast<uint32_t>(TextureInfos.size());
-        TextureWrite.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        TextureWrite.pImageInfo      = TextureInfos.data();
-    }
-
-    if (WriteCount > 0u)
-        vkUpdateDescriptorSets(Vulkan->Device, WriteCount, Writes.data(), 0u, nullptr);
-    if (TextureWrite.descriptorCount > 0u)
-        vkUpdateDescriptorSets(Vulkan->Device, 1u, &TextureWrite, 0u, nullptr);
-
-    if (Vulkan->ComputeTemporalDescriptorSet && FilteredHistoryInfo.imageView)
-    {
-        VkWriteDescriptorSet Write{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
-        Write.dstSet          = Vulkan->ComputeTemporalDescriptorSet;
-        Write.dstBinding      = 0u;
-        Write.descriptorCount = 1u;
-        Write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-        Write.pImageInfo      = &FilteredHistoryInfo;
-        vkUpdateDescriptorSets(Vulkan->Device, 1u, &Write, 0u, nullptr);
-    }
-
-    // ── R7 denoiser sets ────────────────────────────────────────────────────────────────────────────────────────
-    // One set per à-trous level, written once here rather than per frame: the images never change, only the push
-    //    constants do. Level i reads slot (i & 1) and writes the other, so with an odd level count the final
-    //    result lands in slot 1 — but the last level also writes the presentation image, so nothing downstream
-    //    depends on which slot it ended in.
-    if (Vulkan->DenoiseSetLayout && Vulkan->DenoiseImageViews[0] && Vulkan->HistorySurfaceImageView
-        && Vulkan->FilteredHistoryImageView)
-    {
-        std::array<VkDescriptorImageInfo,  5u * kDenoiseLevelCount> DenoiseInfos{};
-        std::array<VkWriteDescriptorSet,   5u * kDenoiseLevelCount> DenoiseWrites{};
-        uint32_t DenoiseCount = 0u;
-
-        for (uint32_t Level = 0u; Level < kDenoiseLevelCount; ++Level)
+        const auto WriteImage = [&](uint32_t Binding, const VkDescriptorImageInfo& Info)
         {
-            const uint32_t Source = Level & 1u;
-            const VkImageView Views[5] =
-            {
-                Vulkan->DenoiseImageViews[Source],        // 0 source
-                Vulkan->DenoiseImageViews[Source ^ 1u],   // 1 target
-                Vulkan->HistorySurfaceImageView,          // 2 normal + depth (shared with R7a)
-                Vulkan->StorageImageView,                 // 3 presentation (written by the final level only)
-                Vulkan->FilteredHistoryImageView          // 4 level-zero filtered history (all levels bind, push selects)
-            };
+            if (!Info.imageView) return;
+            VkWriteDescriptorSet& W = Writes[WriteCount++];
+            W.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET; W.dstSet = TargetSet; W.dstBinding = Binding;
+            W.descriptorCount = 1u; W.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE; W.pImageInfo = &Info;
+        };
+        const auto WriteBuffer = [&](uint32_t Binding, const VkDescriptorBufferInfo& Info)
+        {
+            if (!Info.buffer) return;
+            VkWriteDescriptorSet& W = Writes[WriteCount++];
+            W.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET; W.dstSet = TargetSet; W.dstBinding = Binding;
+            W.descriptorCount = 1u; W.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; W.pBufferInfo = &Info;
+        };
+        const auto WriteUniform = [&](uint32_t Binding, const VkDescriptorBufferInfo& Info)
+        {
+            if (!Info.buffer) return;
+            VkWriteDescriptorSet& W = Writes[WriteCount++];
+            W.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET; W.dstSet = TargetSet; W.dstBinding = Binding;
+            W.descriptorCount = 1u; W.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; W.pBufferInfo = &Info;
+        };
+        const auto WriteSampled = [&](uint32_t Binding, const VkDescriptorImageInfo& Info)
+        {
+            if (!Info.imageView || !Info.sampler) return;
+            VkWriteDescriptorSet& W = Writes[WriteCount++];
+            W.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET; W.dstSet = TargetSet; W.dstBinding = Binding;
+            W.descriptorCount = 1u; W.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; W.pImageInfo = &Info;
+        };
 
-            for (uint32_t Binding = 0u; Binding < 5u; ++Binding)
-            {
-                VkDescriptorImageInfo& Info = DenoiseInfos[DenoiseCount];
-                Info.imageView   = Views[Binding];
-                Info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        WriteImage(0u, OutputInfo); WriteBuffer(1u, TriangleInfo); WriteBuffer(2u, MaterialInfo); WriteImage(3u, HistoryInfo);
+        WriteImage(4u, SurfaceInfo); WriteImage(5u, NormalInfo); WriteBuffer(6u, InstanceInfo); WriteBuffer(7u, LuminaireInfo);
+        WriteBuffer(8u, NodeInfo); WriteBuffer(9u, LeafInfo); WriteBuffer(10u, SlabInfo); WriteBuffer(11u, VertexInfo); WriteBuffer(12u, IndexInfo);
+        WriteSampled(13u, EnergyInfo); WriteSampled(14u, SheenInfo); WriteSampled(15u, MotionInfo);
+        WriteBuffer(16u, PreviousReservoirInfo); WriteBuffer(17u, CurrentReservoirInfo);
+        WriteImage(18u, HistorySurfaceInfo); WriteImage(19u, MomentInfo); WriteImage(20u, DenoiseInputInfo);
+        WriteUniform(21u, SkyInfo); WriteUniform(22u, MoonInfo); WriteBuffer(23u, StarInfo); WriteUniform(24u, PostInfo);
+        WriteBuffer(25u, GiPreviousInfo); WriteBuffer(26u, GiCurrentInfo);
+        WriteBuffer(27u, TlasNodeInfo); WriteBuffer(28u, TlasPrimInfo); WriteBuffer(29u, TlasInstInfo); WriteBuffer(30u, BlasPlaceInfo);
 
-                VkWriteDescriptorSet& Write = DenoiseWrites[DenoiseCount];
-                Write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                Write.dstSet          = Vulkan->DenoiseSets[Level];
-                Write.dstBinding      = Binding;
-                Write.descriptorCount = 1u;
-                Write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-                Write.pImageInfo      = &Info;
-                ++DenoiseCount;
-            }
+        std::vector<VkDescriptorImageInfo> TextureInfos;
+        VkWriteDescriptorSet TextureWrite{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+        if (Vulkan->DescriptorIndexing && Vulkan->TextureSampler && !Vulkan->Textures.empty())
+        {
+            TextureInfos.reserve(Vulkan->Textures.size());
+            for (const VulkanRecord::ResidentTexture& T : Vulkan->Textures)
+                TextureInfos.push_back(VkDescriptorImageInfo{ Vulkan->TextureSampler, T.View, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
+            TextureWrite.dstSet = TargetSet; TextureWrite.dstBinding = kComputeBindingCount - 1u;
+            TextureWrite.descriptorCount = static_cast<uint32_t>(TextureInfos.size());
+            TextureWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; TextureWrite.pImageInfo = TextureInfos.data();
         }
-        vkUpdateDescriptorSets(Vulkan->Device, DenoiseCount, DenoiseWrites.data(), 0u, nullptr);
+        if (WriteCount) vkUpdateDescriptorSets(Vulkan->Device, WriteCount, Writes.data(), 0u, nullptr);
+        if (TextureWrite.descriptorCount) vkUpdateDescriptorSets(Vulkan->Device, 1u, &TextureWrite, 0u, nullptr);
+
+        const VkDescriptorImageInfo TemporalInfos[5] =
+        {
+            { VK_NULL_HANDLE, Vulkan->HistoryImageViews[CurrentSlot], VK_IMAGE_LAYOUT_GENERAL },
+            { VK_NULL_HANDLE, Vulkan->HistorySurfaceImageViews[CurrentSlot], VK_IMAGE_LAYOUT_GENERAL },
+            { VK_NULL_HANDLE, Vulkan->MomentImageViews[CurrentSlot], VK_IMAGE_LAYOUT_GENERAL },
+            { VK_NULL_HANDLE, Vulkan->FilteredHistoryImageViews[CurrentSlot], VK_IMAGE_LAYOUT_GENERAL },
+            { VK_NULL_HANDLE, Vulkan->FilteredHistoryImageViews[PreviousSlot], VK_IMAGE_LAYOUT_GENERAL }
+        };
+        std::array<VkWriteDescriptorSet, 5u> TemporalWrites{};
+        for (uint32_t Binding = 0u; Binding < TemporalWrites.size(); ++Binding)
+        {
+            TemporalWrites[Binding].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            TemporalWrites[Binding].dstSet = Vulkan->ComputeTemporalDescriptorSets[CurrentSlot];
+            TemporalWrites[Binding].dstBinding = Binding; TemporalWrites[Binding].descriptorCount = 1u;
+            TemporalWrites[Binding].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            TemporalWrites[Binding].pImageInfo = &TemporalInfos[Binding];
+        }
+        vkUpdateDescriptorSets(Vulkan->Device, static_cast<uint32_t>(TemporalWrites.size()), TemporalWrites.data(), 0u, nullptr);
+    }
+
+    if (!Vulkan->DenoiseSetLayout || !Vulkan->DenoiseImageViews[0] || !Vulkan->HistorySurfaceImageViews[0]) return;
+    for (uint32_t CurrentSlot = 0u; CurrentSlot < kCycleSlotCount; ++CurrentSlot)
+    for (uint32_t Level = 0u; Level < kDenoiseLevelCount; ++Level)
+    {
+        const uint32_t Source = Level & 1u;
+        const VkImageView Views[5] =
+        {
+            Vulkan->DenoiseImageViews[Source], Vulkan->DenoiseImageViews[Source ^ 1u],
+            Vulkan->HistorySurfaceImageViews[CurrentSlot], Vulkan->StorageImageView,
+            Vulkan->FilteredHistoryImageViews[CurrentSlot]
+        };
+        std::array<VkDescriptorImageInfo, 5u> Infos{};
+        std::array<VkWriteDescriptorSet, 5u> Writes{};
+        for (uint32_t Binding = 0u; Binding < Writes.size(); ++Binding)
+        {
+            Infos[Binding].imageView = Views[Binding]; Infos[Binding].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+            Writes[Binding].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET; Writes[Binding].dstSet = Vulkan->DenoiseSets[CurrentSlot][Level];
+            Writes[Binding].dstBinding = Binding; Writes[Binding].descriptorCount = 1u;
+            Writes[Binding].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE; Writes[Binding].pImageInfo = &Infos[Binding];
+        }
+        vkUpdateDescriptorSets(Vulkan->Device, static_cast<uint32_t>(Writes.size()), Writes.data(), 0u, nullptr);
     }
 }
 
@@ -2576,47 +2455,10 @@ void SwapchainExchange::UploadShadingTables(const float* Energy, const float* Sh
 
 void* SwapchainExchange::SwapReservoirParity() noexcept
 {
-    if (!Vulkan->Device || !Vulkan->ComputeDescriptorSet) return nullptr;
-    if (!Vulkan->ReservoirBuffers[0u] || !Vulkan->ReservoirBuffers[1u]) return nullptr;
-    Vulkan->ReservoirParity = !Vulkan->ReservoirParity;
-    // Rewrite only bindings 16/17 (the full WriteDescriptorSet also writes them — same values, harmless).
-    const uint32_t PrevSlot = Vulkan->ReservoirParity ? 1u : 0u;
-    VkDescriptorBufferInfo Infos[2] =
-    {
-        { Vulkan->ReservoirBuffers[PrevSlot],      0u, VK_WHOLE_SIZE },
-        { Vulkan->ReservoirBuffers[PrevSlot ^ 1u], 0u, VK_WHOLE_SIZE }
-    };
-    VkWriteDescriptorSet Writes[2] = {};
-    for (uint32_t I = 0u; I < 2u; ++I)
-    {
-        Writes[I].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        Writes[I].dstSet          = Vulkan->ComputeDescriptorSet;
-        Writes[I].dstBinding      = 16u + I;
-        Writes[I].descriptorCount = 1u;
-        Writes[I].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        Writes[I].pBufferInfo     = &Infos[I];
-    }
-    vkUpdateDescriptorSets(Vulkan->Device, 2u, Writes, 0u, nullptr);
-
-    // The indirect pool rides the same presented-frame boundary: its pair flips with the DI pair, in the same call,
-    //    so the two histories can never describe different frames.
-    if (Vulkan->GiReservoirBuffers[0u] && Vulkan->GiReservoirBuffers[1u])
-    {
-        Vulkan->GiReservoirParity = !Vulkan->GiReservoirParity;
-        const uint32_t GiPrev = Vulkan->GiReservoirParity ? 1u : 0u;
-        VkDescriptorBufferInfo GiInfos[2] =
-        {
-            { Vulkan->GiReservoirBuffers[GiPrev],      0u, VK_WHOLE_SIZE },
-            { Vulkan->GiReservoirBuffers[GiPrev ^ 1u], 0u, VK_WHOLE_SIZE }
-        };
-        for (uint32_t I = 0u; I < 2u; ++I)
-        {
-            Writes[I].dstBinding  = 25u + I;
-            Writes[I].pBufferInfo = &GiInfos[I];
-        }
-        vkUpdateDescriptorSets(Vulkan->Device, 2u, Writes, 0u, nullptr);
-    }
-    return Vulkan->ReservoirBuffers[PrevSlot];
+    // Compatibility name retained for the visibility front-end. Parity is derived from the fenced frame slot rather
+    // than flipping a descriptor after an earlier command buffer may have captured it.
+    if (!Vulkan || !Vulkan->ReservoirBuffers[0u] || !Vulkan->ReservoirBuffers[1u]) return nullptr;
+    return Vulkan->ReservoirBuffers[Vulkan->ActiveSlot ^ 1u];
 }
 
 void SwapchainExchange::UploadTraversal(const TraversalIndex& Traversal) noexcept
@@ -2692,6 +2534,9 @@ void SwapchainExchange::UploadInstanceTraversal(const InstanceAcceleration& Inst
     // D6/D7 → bindings 27-30. The single-blob pair above and this pair are uploaded independently: a scene keeps its
     //    world-space CWBVH either way, and only the dispatcher's TlasInstanceCount decides which one the kernel walks.
     if (!Vulkan || !Vulkan->Device) return;
+    // Full structure replacement invalidates descriptors. It is an infrequent load/rebuild operation, so quiesce
+    // rather than patch a set that could still be retained by a submitted command buffer.
+    vkDeviceWaitIdle(Vulkan->Device);
     if (Vulkan->TlasNodeBuffer)      vkDestroyBuffer(Vulkan->Device, Vulkan->TlasNodeBuffer, nullptr);
     if (Vulkan->TlasPrimitiveBuffer) vkDestroyBuffer(Vulkan->Device, Vulkan->TlasPrimitiveBuffer, nullptr);
     if (Vulkan->TlasInstanceBuffer)  vkDestroyBuffer(Vulkan->Device, Vulkan->TlasInstanceBuffer, nullptr);
@@ -2811,8 +2656,11 @@ void SwapchainExchange::UploadStarTables(const void* CellBytes, uint32_t CellCou
 {
     // Raw bytes, not catalogue types: DeviceExchange takes void* the way RefreshSky does, so no layer above
     //    leaks in. The caller skips the call entirely when the catalogue is empty — the bring-up zeros stand.
-    if (!Vulkan->Device || !Vulkan->ComputeDescriptorSet) return;
+    if (!Vulkan->Device || !Vulkan->ComputeDescriptorSets[0]) return;
     if (CellCount != kStarCellCount || !CellBytes || (StarCount > 0u && !StarBytes)) return;
+    // This is a resource replacement, never a per-frame update. Quiesce before retiring the old storage and writing
+    // all immutable slot descriptors; otherwise an already-submitted shader could dereference destroyed memory.
+    vkDeviceWaitIdle(Vulkan->Device);
     constexpr uint32_t HostVisible = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     const uint32_t TotalBytes = CellCount * kStarCellBytes + StarCount * kStarRecordBytes;
     VkBuffer NewBuffer = VK_NULL_HANDLE; VkDeviceMemory NewMemory = VK_NULL_HANDLE; void* NewMapped = nullptr;
@@ -2836,16 +2684,9 @@ void SwapchainExchange::UploadStarTables(const void* CellBytes, uint32_t CellCou
     if (Vulkan->StarBuffer) vkDestroyBuffer(Vulkan->Device, Vulkan->StarBuffer, nullptr);
     if (Vulkan->StarMemory) vkFreeMemory(Vulkan->Device, Vulkan->StarMemory, nullptr);
     Vulkan->StarBuffer = NewBuffer; Vulkan->StarMemory = NewMemory; Vulkan->StarMapped = NewMapped;
-    // Re-point binding 23 at the reallocated buffer. A single write — re-running the whole set would stomp the
-    //    per-frame texture table state that UploadScene established after bring-up.
-    VkDescriptorBufferInfo StarInfo{ Vulkan->StarBuffer, 0u, VK_WHOLE_SIZE };
-    VkWriteDescriptorSet Write{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
-    Write.dstSet = Vulkan->ComputeDescriptorSet;
-    Write.dstBinding = 23u;
-    Write.descriptorCount = 1u;
-    Write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    Write.pBufferInfo = &StarInfo;
-    vkUpdateDescriptorSets(Vulkan->Device, 1u, &Write, 0u, nullptr);
+    // Re-point every immutable slot descriptor after the device is quiescent. The full writer preserves the bindless
+    // table and all other bindings while replacing this resource in both sets.
+    WriteDescriptorSet();
 }
 
 void SwapchainExchange::UploadScene(const SceneStructure& Scene, const TraversalIndex& Traversal, const TextureIndex* Textures) noexcept
@@ -2899,6 +2740,14 @@ void SwapchainExchange::RecordAndPresent(const DispatchConfiguration& Dispatch) 
         return;
     }
 
+    // Validate scene descriptors before acquire. Returning after vkAcquireNextImageKHR without a matching queue
+    // submit leaves this slot's acquire semaphore signalled, which makes the next acquire/submit invalid.
+    if (!Vulkan->TriangleBuffer || !Vulkan->MaterialBuffer || !TraversalResident || !Visibility.IsReady() || !VisibilityFrameValid)
+    {
+        std::cerr << "[SwapchainExchange] RecordAndPresent called before UploadScene / AssignVisibilityFrame - frame skipped.\n";
+        return;
+    }
+
     uint32_t ImageOrdinal = 0u;
     const VkResult AcquireResult = vkAcquireNextImageKHR(
         Vulkan->Device, Vulkan->Swapchain, UINT64_MAX,
@@ -2917,18 +2766,11 @@ void SwapchainExchange::RecordAndPresent(const DispatchConfiguration& Dispatch) 
         return;
     }
 
-    if (!Vulkan->TriangleBuffer || !Vulkan->MaterialBuffer || !TraversalResident || !Visibility.IsReady() || !VisibilityFrameValid)
-    {
-        // Descriptors for bindings 1/2/4-7 are unwritten until the scene is uploaded; dispatching now would be UB.
-        std::cerr << "[SwapchainExchange] RecordAndPresent called before UploadScene / AssignVisibilityFrame - frame skipped.\n";
-        return;
-    }
-
     if (Vulkan->ImageOrdinalFences[ImageOrdinal] != VK_NULL_HANDLE)
         vkWaitForFences(Vulkan->Device, 1u, &Vulkan->ImageOrdinalFences[ImageOrdinal], VK_TRUE, UINT64_MAX);
     Vulkan->ImageOrdinalFences[ImageOrdinal] = Vulkan->CycleFences[ActiveSlot];
 
-    void* PrevReservoirs = SwapReservoirParity();   // R6: prev = last frame's curr before recording the new frame
+    void* PrevReservoirs = SwapReservoirParity();    // R6: ActiveSlot^1 is the last completed reservoir bundle
     Visibility.AssignReservoirView(PrevReservoirs);   // R6 row 3: resolve binding 13 follows the kernel's prev buffer (M/W/Age views)
     RecordComputeCommands(ImageOrdinal, Dispatch);
 
@@ -2997,39 +2839,54 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
             0u, 0u, nullptr, 0u, nullptr, 1u, &Barrier);
     }
 
-    // ①b History images → GENERAL; first use transitions from UNDEFINED, later uses order the previous frame's writes.
-    //    R7a adds the history surface image: same lifetime, same access pattern (read the previous frame's value, write
-    //    this frame's), so it rides the same barrier rather than a second one.
+    // ①b Bring every slot-owned temporal image into GENERAL before any slot can be read or written. A frame only
+    // accesses ActiveSlot (current) and ActiveSlot^1 (previous), but transitioning both pairs on first use makes a
+    // skipped/debug frame harmless and keeps the layout state explicit. Later barriers make preceding same-queue
+    // writes visible without claiming a read/write alias inside the dispatch.
     {
-        // R7 joins the same bracket: the moments persist exactly like the mean, and the two denoise images must
-        //    reach GENERAL before the kernel writes slot 0. All of them share the one HistoryInitialised latch
-        //    because they are created and destroyed together.
-        const std::array<VkImage, 6u> HistoryImages{ Vulkan->HistoryImage, Vulkan->FilteredHistoryImage,
-                                                     Vulkan->HistorySurfaceImage, Vulkan->MomentImage,
-                                                     Vulkan->DenoiseImages[0], Vulkan->DenoiseImages[1] };
-        std::array<VkImageMemoryBarrier, 6u> Barriers{};
+        std::array<VkImageMemoryBarrier, kCycleSlotCount * 4u + 2u> Barriers{};
         uint32_t BarrierCount = 0u;
-        for (VkImage Image : HistoryImages)
+        bool AnyPriorWrite = false;
+        for (uint32_t Slot = 0u; Slot < kCycleSlotCount; ++Slot)
         {
-            if (!Image) continue;
-            VkImageMemoryBarrier& Barrier           = Barriers[BarrierCount++];
-            Barrier.sType                           = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            Barrier.oldLayout                       = Vulkan->HistoryInitialised ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED;
-            Barrier.newLayout                       = VK_IMAGE_LAYOUT_GENERAL;
-            Barrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-            Barrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-            Barrier.image                           = Image;
-            Barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-            Barrier.subresourceRange.levelCount     = 1u;
-            Barrier.subresourceRange.layerCount     = 1u;
-            Barrier.srcAccessMask                   = Vulkan->HistoryInitialised ? static_cast<VkAccessFlags>(VK_ACCESS_SHADER_WRITE_BIT) : static_cast<VkAccessFlags>(0u);
-            Barrier.dstAccessMask                   = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+            const VkImage Images[4] = { Vulkan->HistoryImages[Slot], Vulkan->FilteredHistoryImages[Slot],
+                                        Vulkan->HistorySurfaceImages[Slot], Vulkan->MomentImages[Slot] };
+            for (VkImage Image : Images)
+            {
+                if (!Image) continue;
+                VkImageMemoryBarrier& B = Barriers[BarrierCount++];
+                B.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                B.oldLayout = Vulkan->TemporalImagesInitialised[Slot] ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED;
+                B.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+                B.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED; B.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                B.image = Image; B.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                B.subresourceRange.levelCount = 1u; B.subresourceRange.layerCount = 1u;
+                B.srcAccessMask = Vulkan->TemporalImagesInitialised[Slot]
+                                ? static_cast<VkAccessFlags>(VK_ACCESS_SHADER_WRITE_BIT) : static_cast<VkAccessFlags>(0u);
+                B.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+                AnyPriorWrite = AnyPriorWrite || Vulkan->TemporalImagesInitialised[Slot];
+            }
+            Vulkan->TemporalImagesInitialised[Slot] = true;
         }
-        vkCmdPipelineBarrier(Command,
-            Vulkan->HistoryInitialised ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            0u, 0u, nullptr, 0u, nullptr, BarrierCount, Barriers.data());
-        Vulkan->HistoryInitialised = true;
+        for (uint32_t Slot = 0u; Slot < 2u; ++Slot)
+        {
+            if (!Vulkan->DenoiseImages[Slot]) continue;
+            VkImageMemoryBarrier& B = Barriers[BarrierCount++];
+            B.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            B.oldLayout = Vulkan->DenoiseInitialised ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED;
+            B.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+            B.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED; B.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            B.image = Vulkan->DenoiseImages[Slot]; B.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            B.subresourceRange.levelCount = 1u; B.subresourceRange.layerCount = 1u;
+            B.srcAccessMask = Vulkan->DenoiseInitialised
+                            ? static_cast<VkAccessFlags>(VK_ACCESS_SHADER_WRITE_BIT) : static_cast<VkAccessFlags>(0u);
+            B.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+            AnyPriorWrite = AnyPriorWrite || Vulkan->DenoiseInitialised;
+        }
+        if (BarrierCount)
+            vkCmdPipelineBarrier(Command, AnyPriorWrite ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0u, 0u, nullptr, 0u, nullptr, BarrierCount, Barriers.data());
+        Vulkan->DenoiseInitialised = true;
     }
 
     // ①c R6 reservoirs: zero-fill once, then order the previous frame's writes before this frame's access. The
@@ -3120,7 +2977,10 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
     {
         // ② Dispatch ReSTIR compute
         vkCmdBindPipeline(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Vulkan->ComputePipeline);
-        const VkDescriptorSet ComputeSets[2] = { Vulkan->ComputeDescriptorSet, Vulkan->ComputeTemporalDescriptorSet };
+        // These are immutable descriptors for the already-fenced ActiveSlot: set 0 reads previous raw history and
+        // set 1 writes current history. No vkUpdateDescriptorSets occurs on this frame path.
+        const VkDescriptorSet ComputeSets[2] = { Vulkan->ComputeDescriptorSets[Vulkan->ActiveSlot],
+                                                  Vulkan->ComputeTemporalDescriptorSets[Vulkan->ActiveSlot] };
         vkCmdBindDescriptorSets(Command, VK_PIPELINE_BIND_POINT_COMPUTE,
             Vulkan->ComputePipelineLayout, 0u, 2u, ComputeSets, 0u, nullptr);
         vkCmdPushConstants(Command, Vulkan->ComputePipelineLayout,
@@ -3167,8 +3027,8 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
                     Barrier.srcAccessMask               = VK_ACCESS_SHADER_WRITE_BIT;
                     Barrier.dstAccessMask               = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
                 }
-                KernelOutputs[0].image = Vulkan->HistorySurfaceImage;
-                KernelOutputs[1].image = Vulkan->FilteredHistoryImage;
+                KernelOutputs[0].image = Vulkan->HistorySurfaceImages[Vulkan->ActiveSlot];
+                KernelOutputs[1].image = Vulkan->FilteredHistoryImages[Vulkan->ActiveSlot];
                 vkCmdPipelineBarrier(Command,
                     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                     0u, 0u, nullptr, 0u, nullptr, 2u, KernelOutputs);
@@ -3227,7 +3087,7 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
                 vkCmdPushConstants(Command, Vulkan->DenoisePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT,
                                    0u, sizeof(Push), &Push);
                 vkCmdBindDescriptorSets(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Vulkan->DenoisePipelineLayout,
-                                        0u, 1u, &Vulkan->DenoiseSets[Level], 0u, nullptr);
+                                        0u, 1u, &Vulkan->DenoiseSets[Vulkan->ActiveSlot][Level], 0u, nullptr);
                 // ⚠️ The filter's workgroup is 8×8, NOT the kernel's 16×16. Reusing the kernel's group count here
                 //     covered only half the width and half the height — exactly the top-left quarter of the image.
                 vkCmdDispatch(Command, DenoiseGroupX, DenoiseGroupY, 1u);
@@ -3246,7 +3106,7 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
             HistoryBarrier.newLayout                   = VK_IMAGE_LAYOUT_GENERAL;
             HistoryBarrier.srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
             HistoryBarrier.dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
-            HistoryBarrier.image                       = Vulkan->HistoryImage;
+            HistoryBarrier.image                       = Vulkan->HistoryImages[Vulkan->ActiveSlot];
             HistoryBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             HistoryBarrier.subresourceRange.levelCount = 1u;
             HistoryBarrier.subresourceRange.layerCount = 1u;
@@ -3570,7 +3430,7 @@ bool SwapchainExchange::RebuildSwapchain() noexcept
     BringSceneViewSet();
 
     WriteDescriptorSet();
-    // The reduction binds HistoryImageView, which BringStorageImage has just replaced.
+    // The reduction binds each slot's HistoryImageView, all of which BringStorageImage has just replaced.
     WriteLuminanceDescriptors();
 
     const uint32_t ImageCount = static_cast<uint32_t>(Vulkan->SwapchainImages.size());

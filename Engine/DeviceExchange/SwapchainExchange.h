@@ -67,7 +67,7 @@ static constexpr float    kLuminanceLog2High      =  30.0f;   // 1e9 cd/m², abo
 static constexpr float    kLuminanceMedianStops   = 6.0f;
 static constexpr uint32_t kLuminanceHistogramBytes = kLuminanceHistogramBins * 4u;
 
-static constexpr uint32_t kComputeBindingCount  = 32u;    // compute set 0: 0 out · 1 tris · 2 materials · 3 history · 4 surface · 5 normal · 6 instances · 7 luminaires · 8/9 CWBVH · 10 slabs · 11 vertices · 12 indices · 13 energy LUT · 14 sheen LUT · 15 motion · 16 prev reservoir · 17 curr reservoir · 18 history normal+depth (R7a) · 19 luminance moments (R7) · 20 denoise input (R7) · 21 sky record · 22 moon record · 23 star tables · 24 post record · 25/26 GI prev/curr reservoir (kFeatureGiReuse) · 27-30 D6/D7 two-level traversal (TLAS nodes · instance list · instance rows · BLAS placements) · 31 Textures[] (variable-count binding MUST stay last — Vulkan requires it on the highest binding number)
+static constexpr uint32_t kComputeBindingCount  = 32u;    // compute set 0: 0 out · 1 tris · 2 materials · 3 PREVIOUS raw history · 4 surface · 5 normal · 6 instances · 7 luminaires · 8/9 CWBVH · 10 slabs · 11 vertices · 12 indices · 13 energy LUT · 14 sheen LUT · 15 motion · 16 prev reservoir · 17 curr reservoir · 18 PREVIOUS history normal+depth · 19 PREVIOUS luminance moments · 20 denoise input · 21 sky record · 22 moon record · 23 star tables · 24 post record · 25/26 GI prev/curr reservoir · 27-30 D6/D7 two-level traversal (TLAS nodes · instance list · instance rows · BLAS placements) · 31 Textures[] (variable-count binding MUST stay last — Vulkan requires it on the highest binding number); compute set 1 bindings 0-4 are current raw/surface/moments/filtered temporal outputs plus previous filtered feedback
 static constexpr uint32_t kTextureSlotCapacity  = 1024u;  // bindless sampler2D[] size (variable-count binding; Pascal maxPerStageDescriptorSamplers ≥ 4000)
 class MaterialIndex;    // ContentInterchange/MaterialIndex.h (R4a)
 
@@ -271,7 +271,7 @@ public:
     //    is empty — the bring-up zeros stand. A refused upload keeps the previous tables, never a hole.
     void                        UploadStarTables(const void* CellBytes, uint32_t CellCount,
                                                  const void* StarBytes, uint32_t StarCount) noexcept;
-    void*                       SwapReservoirParity() noexcept;   // R6: flip prev/curr reservoir bindings (16/17); returns the new prev buffer (null when unavailable)
+    void*                       SwapReservoirParity() noexcept;   // R6 compatibility seam: returns ActiveSlot^1 previous reservoir; never rewrites descriptors
 
     // R2 frame front end (cull → visibility raster → HiZ → resolve) recorded before the kernel each frame.
     void                        AssignVisibilityFrame(const VisibilityFrameConfiguration& Frame) noexcept { VisibilityFrame = Frame; VisibilityFrameValid = true; }

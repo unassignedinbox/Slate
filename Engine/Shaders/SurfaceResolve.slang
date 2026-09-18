@@ -33,21 +33,19 @@ layout(set = 0, binding = 10, rgba32f) uniform writeonly image2D SurfaceImage;
 layout(set = 0, binding = 11, rgba16f) uniform writeonly image2D NormalImage;
 layout(set = 0, binding = 12, rgba8)   uniform writeonly image2D OutputImage;
 
-// R6 row 3: prev-frame reservoirs for the M / W / Age debug views — the same buffer the kernel reads as
-//    binding 16 (written per frame by VisibilityExchange::RecordFrame), so the views show the last completed
-//    kernel frame. The kernel is skipped in debug views, so Curr is never fresher than this by design.
+// R6 row 3: previous-frame reservoirs for the M / W / Age debug views. This is the *same 64-byte std430 record*
+// as GpuReservoir in ReSTIRViewport.slang and ReservoirBufferRecord on the host: vec3+uint shares its final 16-byte
+// word. Keeping a stale 80-byte debug declaration would stride into the next pixel and make M/W/Age look plausible
+// while reading unrelated state.
 struct GpuReservoirView
 {
     vec4  Sample;    // xyz = light sample point, w = WeightSum
     uvec4 Counts;    // x = M, y = SelectedLight, z = Visible, w = Age
-    vec4  UvDepth;   // xy = SelectedUv, z = W, w = view depth at the build pixel [m]
-    vec4  Normal;    // xyz = geometric normal at the build pixel, w = stride guard (ViewportWidth)
-    // ⚠️ D10 widened the record to 80 B. This view must carry the tail even though no debug view reads it: an array
-    //    stride is the whole struct, so a 64 B view over an 80 B buffer drifts one field every 80 bytes and the M / W /
-    //    Age views would be reading a neighbouring pixel's data — wrong on screen, and wrong in a way that looks
-    //    plausible. Keep this in step with GpuReservoir (ReSTIRViewport.slang) and ReservoirBufferRecord (host).
-    uvec4 Identity;  // D10: x = instance << 14 | primitive; yzw reserved
+    vec4  Details;   // x = unbiased W, y = view depth, z = render-width stride, w = roughness
+    vec3  Normal;    // viewer-facing geometric normal
+    uint  Identity;  // packed (instance, primitive), shares Normal's std430 word
 };
+// The kernel is skipped in debug views, so this source intentionally remains the previously completed reservoir.
 layout(std430, set = 0, binding = 13) readonly buffer ReservoirExtent { GpuReservoirView Reservoirs[]; };
 
 // Debug views — mirror DebugViewCategory in Engine/DeviceExchange/VisibilityExchange.h
@@ -167,7 +165,7 @@ void main()
         GpuReservoirView R = Reservoirs[Pixel.y * Extent.x + Pixel.x];
         if (View == kDebugReservoirM)         Colour = vec3(clamp(float(R.Counts.x) / 256.0, 0.0, 1.0));
         else if (View == kDebugReservoirAge)  Colour = vec3(clamp(float(R.Counts.w) / 16.0, 0.0, 1.0));
-        else                                  Colour = vec3(1.0 - exp(-R.UvDepth.z * 0.25));
+        else                                  Colour = vec3(1.0 - exp(-R.Details.x * 0.25));
     }
 
     imageStore(OutputImage, ivec2(Pixel), vec4(Colour, 1.0));

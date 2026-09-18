@@ -1064,8 +1064,8 @@ void VisibilityExchange::AssignRasterMaterials(void* SlabBuffer, void* Sampler, 
 void VisibilityExchange::AssignReservoirView(void* PrevReservoirBuffer) noexcept
 {
     Vulkan->BorrowedReservoir = static_cast<VkBuffer>(PrevReservoirBuffer);
-    // No WriteDescriptorSets here: the resolve set's binding 13 is rewritten per frame in RecordFrame (parity swaps
-    //    every frame), so a full rewrite on every assign would be redundant.
+    // No WriteDescriptorSets here: RecordFrame updates only the current cycle slot's resolve set, after
+    //    SwapchainExchange waited that slot's fence. A full all-slot rewrite on every assign would be redundant.
 }
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -1311,10 +1311,10 @@ void VisibilityExchange::RecordFrame(void* CommandHandle, uint32_t Slot, const V
     vkCmdWriteTimestamp(Command, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, Vulkan->Timestamps, Q + 9u);
 
     // ⑤ Surface resolve (thin G-buffer; debug view straight to the presentation image).
-    // R6 row 3: binding 13 tracks the kernel's prev-frame reservoir buffer, which swaps parity every frame — hence
-    //    the per-frame rewrite here instead of once in WriteDescriptorSets. Skipped while null (no reservoir buffers
-    //    yet): the M/W/Age views cannot be selected before the first kernel frame anyway, and an unbound binding
-    //    is only UB if the shader actually reads it.
+    // R6 row 3: binding 13 tracks the kernel's ActiveSlot^1 reservoir. Updating ResolveSets[Slot] is safe because
+    //    the caller waited the same cycle-slot fence before recording this command buffer. Skipped while null (no
+    //    reservoir buffers yet): the M/W/Age views cannot be selected before the first kernel frame anyway, and an
+    //    unbound binding is only UB if the shader actually reads it.
     if (Vulkan->BorrowedReservoir)
     {
         VkDescriptorBufferInfo ReservoirInfo{ Vulkan->BorrowedReservoir, 0u, VK_WHOLE_SIZE };

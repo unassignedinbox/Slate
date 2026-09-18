@@ -151,11 +151,10 @@ public:
     //    borrowed into raster bindings 6 / 7. Call after UploadScene / UploadTextures; the fragment stage reads them.
     void                AssignRasterMaterials(void* SlabBuffer, void* Sampler, const void* const* Views, uint32_t ViewCount) noexcept;
 
-    // R6 row 3: the kernel's prev-frame reservoir buffer (VkBuffer) borrowed into resolve binding 13 for the
-    //    M / W / Age debug views. Called once per frame with the same buffer the kernel reads as binding 16
-    //    (SwapchainExchange::RecordAndPresent, right after the parity swap); RecordFrame writes binding 13
-    //    before the resolve dispatch. Null clears the binding (views then read zeros — never dispatched unbound
-    //    because RecordFrame skips the write while null).
+    // R6 row 3: the kernel's previous-frame reservoir buffer (VkBuffer), borrowed into resolve binding 13 for
+    //    M / W / Age debug views. Called once per frame with the same ActiveSlot^1 buffer the kernel reads at
+    //    binding 16; RecordFrame writes the already-fenced cycle slot's resolve set before dispatch. Null clears
+    //    the binding (views then read zeros — never dispatched unbound because RecordFrame skips the write while null).
     void                AssignReservoirView(void* PrevReservoirBuffer) noexcept;
 
     // Records cull → raster → HiZ → cull → raster → resolve into Command (a VkCommandBuffer). Call once per frame after
