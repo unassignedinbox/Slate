@@ -53,6 +53,9 @@ struct ReSTIRIntegratorConfiguration
     bool        Denoise            = true;  // [-]   R7: edge-avoiding à-trous filter (false = the raw accumulated image)
     bool        TemporalReprojection = true; // [-]   R7a: back-project the running mean through the motion vectors
                                              //       (false = the pre-R7a same-pixel accumulator, kept as an identity switch)
+    // D10: normal/depth alone cannot distinguish coplanar objects that exchange places. Keep the object-identity
+    // test on for every supported runtime dispatch; callers can still make a controlled A/B through the setter.
+    bool        TemporalIdentity = true;    // [-] validate reprojected mean, DI and GI history by object identity
 };
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -124,6 +127,9 @@ public:
     // R7a. Reprojection changes what is SAMPLED (which history texel feeds the mean), so unlike the denoise toggle
     //    it resets accumulation — the same rule as every other sampling change.
     void AssignTemporalReprojection(bool On)    noexcept { if (ActiveConfiguration.TemporalReprojection != On) { ActiveConfiguration.TemporalReprojection = On; ResetAccumulation(); } }
+    // Identity changes which history is eligible for all three temporal consumers (mean, DI reservoir and GI pool),
+    // so it is a sampling change rather than a presentation preference and must restart accumulation.
+    void AssignTemporalIdentity(bool On)         noexcept { if (ActiveConfiguration.TemporalIdentity != On) { ActiveConfiguration.TemporalIdentity = On; ResetAccumulation(); } }
 
     // ⚠️ THE INCREMENT MUST NOT SWALLOW THE RESET. The frame loop reads the index for the dispatch,
     //    the §8 record comparisons reset it when the sky changes, and the loop unconditionally increments it

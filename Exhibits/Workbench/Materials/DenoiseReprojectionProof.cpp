@@ -140,10 +140,12 @@ int main()
         //    which is exactly how this expectation went stale for one commit when the pool arrived.
         const uint32_t Expected = DispatchFeatureGlobalIllumination | DispatchFeatureAntiAliasing | DispatchFeatureTemporalReuse
                                 | DispatchFeatureSpatialReuse | DispatchFeatureAliasPick | DispatchFeatureTemporalReprojection
-                                | DispatchFeatureDenoise | DispatchFeatureGiReuse;
-        Check(Dispatch.FeatureFlags == Expected, "A5 default dispatch carries exactly the R6/R7/GI feature bits (8 bits named)");
+                                | DispatchFeatureDenoise | DispatchFeatureGiReuse | DispatchFeatureTemporalIdentity;
+        Check(Dispatch.FeatureFlags == Expected, "A5 default dispatch carries exactly the R6/R7/GI/D10 feature bits (9 bits named)");
         Check((Dispatch.FeatureFlags & DispatchFeatureDenoise) != 0u, "A6 DispatchFeatureDenoise set (kernel defers the tone map)");
         Check((Dispatch.FeatureFlags & DispatchFeatureTemporalReprojection) != 0u, "A7 DispatchFeatureTemporalReprojection set");
+        Check(Defaults.TemporalIdentity && (Dispatch.FeatureFlags & DispatchFeatureTemporalIdentity) != 0u,
+              "A7b D10 temporal identity defaults ON and reaches the shader dispatch");
         Check(Dispatch.DenoiseLevelCount == kDenoiseLevelCount, "A8 dispatch carries the 5-level chain");
 
         // The shader reads bits 6 and 7 (pinned in §B); the enum must agree with them numerically.
@@ -209,6 +211,12 @@ int main()
             Trial.IncrementAccumulationIndex();
             Check(AfterReprojection == 0u && AfterResetSpend == 0u && Trial.QueryAccumulationIndex() == 1u,
                   "A12 AssignTemporalReprojection restarts accumulation (sampling change), spending the reset flag");
+
+            Trial.AssignTemporalIdentity(false);
+            const DispatchConfiguration WithoutIdentity = Trial.BuildDispatch(Camera, 1280u, 720u, 0u, 4u);
+            Check(Trial.QueryAccumulationIndex() == 0u
+                  && (WithoutIdentity.FeatureFlags & DispatchFeatureTemporalIdentity) == 0u,
+                  "A12b AssignTemporalIdentity restarts accumulation and exclusively clears D10's dispatch bit");
         }
 
         // The first call correctly starts a new image, but later camera translation and rotation must retain
@@ -330,6 +338,7 @@ int main()
 
             { "ReSTIRIntegrator.h", "bool        Denoise            = true;", 1u, "B30 the header's default is ON (as §A asserts by value)" },
             { "ReSTIRIntegrator.h", "bool        TemporalReprojection = true;", 1u, "B31 the header's reprojection default is ON" },
+            { "ReSTIRIntegrator.h", "bool        TemporalIdentity = true;", 1u, "B31b the D10 identity default is ON" },
         };
         for (const TextPin& Pin : Pins)
         {

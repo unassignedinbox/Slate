@@ -130,6 +130,9 @@ DispatchConfiguration ReSTIRIntegrator::BuildDispatch(
                                    | (ActiveConfiguration.GlobalIlluminationReuse ? DispatchFeatureGiReuse        : 0u)
                                    | (ActiveConfiguration.AliasPick          ? DispatchFeatureAliasPick          : 0u)
                                    | (ActiveConfiguration.TemporalReprojection ? DispatchFeatureTemporalReprojection : 0u)
+                                   // D10 must be propagated with the normal/depth temporal gates. Leaving this bit out
+                                   // silently made the shader's object-identity rejection unreachable in production.
+                                   | (ActiveConfiguration.TemporalIdentity    ? DispatchFeatureTemporalIdentity    : 0u)
                                    | (ActiveConfiguration.Denoise            ? DispatchFeatureDenoise            : 0u);
 
     for (uint32_t& Reserve : Dispatch.PushReserve) Reserve = 0u;

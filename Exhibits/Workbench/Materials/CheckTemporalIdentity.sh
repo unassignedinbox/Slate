@@ -83,6 +83,10 @@ grep -q "kFeatureTemporalIdentity" Engine/Shaders/ReSTIRViewport.slang \
     && Pass "the kernel still declares the identity feature bit (bit 9)" || Fail "the kernel lost kFeatureTemporalIdentity"
 grep -q "IdentityObject" Engine/Shaders/ReSTIRViewport.slang \
     && Pass "the kernel validates on the OBJECT (the tesselation cannot flip the identity)" || Fail "the kernel lost IdentityObject"
+grep -q "bool        TemporalIdentity = true;" Engine/DisplayPresentation/ReSTIRIntegrator.h \
+    && grep -q "ActiveConfiguration.TemporalIdentity    ? DispatchFeatureTemporalIdentity" Engine/DisplayPresentation/ReSTIRIntegrator.cpp \
+    && Pass "the supported host defaults D10 ON and propagates bit 9 into every dispatch" \
+    || Fail "the identity rule is present in the shader but not live in the host dispatch"
 grep -q "offsetof(ReservoirBufferRecord, Identity) == 60u" Engine/DeviceExchange/SwapchainExchange.cpp \
     && grep -q "sizeof(ReservoirBufferRecord) == 64u" Engine/DeviceExchange/SwapchainExchange.cpp \
     && grep -q "uint  Identity;" Engine/Shaders/ReSTIRViewport.slang \

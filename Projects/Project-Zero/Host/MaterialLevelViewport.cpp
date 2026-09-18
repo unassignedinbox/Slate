@@ -977,7 +977,10 @@ CpuReservoir RestirTemporalReservoir(const RestirSurface& Surface, int Candidate
                 // stress/control for this analytic harness, not bit-for-bit evidence of the GPU's object-level rule.
                 const bool IdentityDiffers = Prev.Identity != Surface.Identity;
                 const bool IdentityOk = !g_RestirIdentity || !IdentityDiffers;
-                const bool Valid = PrevM > 0u && GeometryOk && IdentityOk;
+                // An occluded direct reservoir retains M for diagnostics but has W = 0. Treating that M as
+                // a proposal would enlarge this reservoir's denominator with no numerator contribution.
+                const bool Valid = PrevM > 0u && Prev.Visible != 0u && Prev.UnbiasedWeight > 0.0f
+                                && GeometryOk && IdentityOk;
                 // D10: a temporal merge that the geometry test alone would have allowed and the identity refuses. With
                 //    the rule off this is the count of light samples the pixel inherited from ANOTHER surface.
                 // D10: the case the rule exists for — a merge the GEOMETRY test allowed and the identity refuses. Off
@@ -1007,6 +1010,18 @@ CpuReservoir RestirTemporalReservoir(const RestirSurface& Surface, int Candidate
                 }
             }
         }
+    }
+
+    // The live kernel publishes its temporal DI reservoir after this current-pixel visibility re-trace and before
+    // spatial reuse. Keeping the same ordering in the CPU mirror makes a blocked history entry proveably ineligible
+    // next frame rather than merely carrying a zero W beside a non-zero M.
+    if (Res.WeightSum > 0.0f && Res.SampleCount > 0u)
+    {
+        const bool Blocked = Res.SelectedLight == kRestirSunLight
+            ? Occluded(P + Ng * 1.0e-4f, P + normalize(Res.SelectedPoint - P) * 1.0e4f)
+            : Occluded(P + Ng * 1.0e-4f, Res.SelectedPoint - normalize(Res.SelectedPoint - P) * 1.0e-3f);
+        Res.Visible = Blocked ? 0u : 1u;
+        if (Res.Visible == 0u) Res.UnbiasedWeight = 0.0f;
     }
     return Res;
 }
@@ -1054,7 +1069,8 @@ vec3 RestirSpatialShade(const CpuReservoir& Temporal, const RestirSurface& Surfa
             if (NX < 0 || NY < 0 || NX >= Width || NY >= Height) continue;
             const CpuReservoir& Neigh = State.Temporal[static_cast<size_t>(NY) * Width + NX];
             const uint32_t NeighM = Neigh.SampleCount;
-            const bool NValid = NeighM > 0u
+            // Match the shader: only a visible, non-zero-W temporal proposal may donate M at a spatial tap.
+            const bool NValid = NeighM > 0u && Neigh.Visible != 0u && Neigh.UnbiasedWeight > 0.0f
                 && Neigh.StrideWidth == static_cast<float>(Width)
                 && dot(Ng, Neigh.Normal) > kRestirNormalCos
                 && fabsf(Surface.Depth - Neigh.Depth) / max(Surface.Depth, 1.0e-3f) < kRestirDepthTol;

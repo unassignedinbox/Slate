@@ -167,7 +167,7 @@ enum DispatchFeature : uint32_t
     DispatchFeatureGiReuse            = 1u << 8,   // the indirect half's pool: ReSTIR GI-style reuse of the first-bounce
                                                    //     vertex's NEE stratum (temporal + the spatial cross). ON by
                                                    //     default — see ReSTIRIntegratorConfiguration::GlobalIlluminationReuse.
-    DispatchFeatureTemporalIdentity  = 1u << 9,   // D10 shader validation bit; reserved until its host control is surfaced
+    DispatchFeatureTemporalIdentity  = 1u << 9,   // D10 object-identity validation for reprojected mean, DI and GI history
     // Spatial A/B controls. Both default OFF, retaining the prior normal/depth-only neighbour acceptance exactly.
     DispatchFeatureSpatialMaterialCompatibility = 1u << 10, // require material identity and compatible roughness
     DispatchFeatureSpatialObjectIdentity        = 1u << 11  // reject a neighbour from another object instance

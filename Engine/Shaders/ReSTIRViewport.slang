@@ -520,11 +520,10 @@ const uint kFeatureTemporalReprojection = 64u;  // bit 6: R7a — reproject the 
 const uint kFeatureDenoise            = 128u; // bit 7: R7 — the à-trous filter runs, so the kernel defers the tone map to it
 const uint kFeatureGiReuse            = 256u; // bit 8: the indirect half's pool — ReSTIR GI-style reuse of the first-bounce
 // D10: bit 9 — validate a reprojected history against the IDENTITY of the surface, not only its normal and depth.
-//    ⚠️ Off by default, and byte-identical when off: with the bit clear the resolve reads, validates and stores exactly
-//    what it did before this existed, which is what makes the exhibit's A/B a comparison rather than a rewrite.
+//    The supported host defaults this ON. Keeping a bit gate still provides the controlled pre-D10 A/B: with it
+//    clear the resolve reads, validates and stores exactly as the normal/depth-only path did.
 const uint kFeatureTemporalIdentity   = 512u; // bit 9: D10 — identity-based validation of the reprojected history
-                                              //    vertex's NEE stratum. The Engine enum reserves this bit; temporal
-                                              //    identity remains opt-in until its own host control is surfaced.
+                                              //    (mean, DI reservoir, and first-bounce NEE pool).
 // Measured spatial-reuse A/B controls. Both are OFF by default, preserving the original normal/depth-only control.
 const uint kFeatureSpatialMaterialCompatibility = 1024u; // bit 10: material descriptor + roughness compatibility
 const uint kFeatureSpatialObjectIdentity        = 2048u; // bit 11: require the same object instance
@@ -1331,7 +1330,11 @@ vec3 GiPoolShade(SurfaceFrame F, ShadingRecord m, ResolvedLayers L, vec3 wo, vec
         {
             GpuReservoir prev = GiPrevReservoirs[prevPx.y * int(ViewportWidth) + prevPx.x];
             uint prevM = prev.Counts.x;
+            // GI history publishes a pre-visibility NEE proposal, so the visibility word is currently 1. Still
+            // reject an empty/zero-W record (for example a degenerate target) rather than adding its M alone.
             bool valid = prevM > 0u
+                && prev.Counts.z != 0u
+                && prev.Details.x > 0.0
                 && prev.Details.z == float(ViewportWidth)   // stride guard (render-scale change)
                 && dot(primaryNormal, prev.Normal.xyz) > kTemporalNormalCos
                 && abs(primaryT - prev.Details.y) / max(primaryT, 1e-3) < kTemporalDepthTol
@@ -1393,7 +1396,10 @@ vec3 GiPoolShade(SurfaceFrame F, ShadingRecord m, ResolvedLayers L, vec3 wo, vec
             if (any(lessThan(npx, ivec2(0))) || npx.x >= int(ViewportWidth) || npx.y >= int(ViewportHeight)) continue;
             GpuReservoir neigh = GiPrevReservoirs[npx.y * int(ViewportWidth) + npx.x];
             uint neighM = neigh.Counts.x;
+            // As with the GI temporal path, only an actual non-zero proposal may donate M.
             bool nValid = neighM > 0u
+                && neigh.Counts.z != 0u
+                && neigh.Details.x > 0.0
                 && neigh.Details.z == float(ViewportWidth)
                 && dot(primaryNormal, neigh.Normal.xyz) > kTemporalNormalCos
                 && abs(primaryT - neigh.Details.y) / max(primaryT, 1e-3) < kTemporalDepthTol
@@ -1619,7 +1625,11 @@ void main()
                 {
                     GpuReservoir prev = PrevReservoirs[prevPx.y * int(ViewportWidth) + prevPx.x];
                     uint prevM = prev.Counts.x;
+                    // A previously occluded direct sample has W = 0 but retains M for debugging. It must not
+                    // merge: a zero numerator with a non-zero denominator biases the current estimate dark.
                     bool valid = prevM > 0u
+                        && prev.Counts.z != 0u
+                        && prev.Details.x > 0.0
                         && prev.Details.z == float(ViewportWidth)   // stride guard (render-scale change)
                         && dot(hitNormal, prev.Normal.xyz) > kTemporalNormalCos
                         && abs(primaryT - prev.Details.y) / max(primaryT, 1e-3) < kTemporalDepthTol
@@ -1708,7 +1718,10 @@ void main()
                     if (any(lessThan(npx, ivec2(0))) || npx.x >= int(ViewportWidth) || npx.y >= int(ViewportHeight)) continue;
                     GpuReservoir neigh = PrevReservoirs[npx.y * int(ViewportWidth) + npx.x];
                     uint neighM = neigh.Counts.x;
+                    // See the temporal gate: an occluded neighbour's retained M has no estimand behind it.
                     bool nValid = neighM > 0u
+                        && neigh.Counts.z != 0u
+                        && neigh.Details.x > 0.0
                         && neigh.Details.z == float(ViewportWidth)   // stride guard (render-scale change)
                         && dot(hitNormal, neigh.Normal.xyz) > kTemporalNormalCos
                         && abs(primaryT - neigh.Details.y) / max(primaryT, 1e-3) < kTemporalDepthTol

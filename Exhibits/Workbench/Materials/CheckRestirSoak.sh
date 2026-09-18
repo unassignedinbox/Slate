@@ -72,6 +72,19 @@ if ! make -C "$Host" MaterialLevelViewport > "$Work/build.log" 2>&1; then
     echo "  FAIL  the mirror did not build"; sed 's/^/    /' "$Work/build.log" | tail -20; exit 1
 fi
 
+# An occluded direct reservoir intentionally retains its M for diagnostics, but it carries W = 0. It must never donate
+# that M to a later temporal/spatial merge: doing so divides the current estimate by samples with no contribution.
+# Pin both shipped shader paths (DI + first-bounce NEE pool) and the executable CPU mirror before measuring the soak.
+PrevEligible=$(grep -c '&& prev.Counts.z != 0u' Engine/Shaders/ReSTIRViewport.slang || true)
+NeighbourEligible=$(grep -c '&& neigh.Counts.z != 0u' Engine/Shaders/ReSTIRViewport.slang || true)
+if [ "$PrevEligible" -eq 2 ] && [ "$NeighbourEligible" -eq 2 ] \
+   && grep -q 'Prev.Visible != 0u && Prev.UnbiasedWeight > 0.0f' Projects/Project-Zero/Host/MaterialLevelViewport.cpp \
+   && grep -q 'Neigh.Visible != 0u && Neigh.UnbiasedWeight > 0.0f' Projects/Project-Zero/Host/MaterialLevelViewport.cpp; then
+    Pass "⓪ zero-W / occluded reservoirs are excluded before their M can enter temporal or spatial reuse"
+else
+    Fail "⓪ an occluded or zero-W reservoir can still donate M to a reuse merge"
+fi
+
 echo "[Soak] ${Frames} frames at ${Size}x${Height}, 4 candidates, 2 taps — one resolve per frame, the app's own rate"
 if ! "$Bin" --width "$Size" --height "$Height" --spp 4 --frames "$Frames" --restir --taps 2 \
         --out "$Work/soak.png" > "$Work/soak.log" 2>&1; then
