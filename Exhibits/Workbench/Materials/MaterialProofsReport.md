@@ -1150,3 +1150,195 @@ escape on two framings) and `ReportGiClassError.sh` (§14.6, `[fast|full]`, GREE
 Harness: `Exhibits/Workbench/Materials/ReportGiCoverage.sh [frames]` re-runs both configurations and prints exactly the
 two tables above (≈ 1 min). The shares are config-robust — at 128×72 the same run reads escape 68.9 %, covered
 11.9 %, unusable 4.5 %, emitter 2.8 % — so the gap is a property of the estimator, not of the viewpoint.
+
+---
+
+## 15. The Windows run's six defects — three of them were one bug each in this repository (2026-09-18)
+
+The run's own summary: the imgui submodule re-pinned, `ApplyImGuiPatches.ps1` clean, the engine built (15 shaders, 91
+TUs, exe + the `Build\Project-Zero.exe` mirror), the window opened and entered the ReSTIR loop. Then six defects —
+no shadows · fireflies at sunset · moon textureless · starless sky · "still using old scene" · no GI — and two asks
+(build scripts for Windows, and performance + GPU-timing logs). The build-script half closed in `25fbacd`; this section
+is the render half as the sandbox can address it: **there is no GPU here**, so every claim below is either measured on
+the CPU mirrors, read out of the shipped code, or explicitly marked as a hypothesis handed back with the experiment
+that discriminates it.
+
+The telemetry the run pasted carried three facts that decided the whole triage:
+
+```
+[Textures] texture 'EngineContent/CelestialTextures/luna_2k.jpg': can't fopen -> 1x1 placeholder      (x6)
+[Stars]    Catalogue empty or missing — the night sky renders starless.
+[Vulkan Validation] VUID-vkUpdateDescriptorSets-None-03047 ... dstBinding=25
+[Vulkan Validation] VUID-vkUpdateDescriptorSets-None-03047 ... dstBinding=26
+```
+
+### 15.1 The moon and the stars were one bug: content paths were opened raw
+
+Both lines above are the same defect. The engine addresses content the way the repository is laid out —
+`EngineContent/CelestialTextures/luna_2k.jpg`, `EngineContent/StarCatalogue/BrightStars.bin` — and the product binary
+does not run from the repository root: the Windows build puts `Project-Zero.exe` in
+`Projects/Project-Zero/Build/Output/Windows/Release/Binary/` and mirrors it to `Build/`, and a launched .exe starts with
+its own directory as the working directory. Every one of those relative paths was handed to `std::ifstream`/stb_image
+unchanged, so six celestial textures decoded to the 1×1 placeholder (a textureless moon) and the 249 776-byte star
+catalogue was never opened (a starless sky) — while the **shaders loaded fine in the same run, and that is the tell**:
+the SPIR-V loader already searched for its assets, twice, in two private copies (`SwapchainExchange.cpp` and
+`VisibilityExchange.cpp`). The content loaders had no search at all.
+
+One search now, in `Engine/DeviceExchange/AssetPath.{h,cpp}`: working directory → the executable's parents → the
+target's own parents, and the input returned **unchanged** when nothing matches so the caller's error message stays
+truthful. Routed through it: `TextureIndex::Decode` (every registered texture, scene images included),
+`CelestialSequence` (the catalogue) and `GameExecution` (the typeface archives). The two private copies are gone. The
+texture failure message now names the path that was *searched* as well as the one that was asked for — "can't fopen"
+against a bare relative path is what made the original report hard to place.
+
+The same class of defect applied to the **write** side, which is how a level can exist in two places at once: a run
+launched from `Build\` exported `Showcase.gltf` into `Build\Projects\...\Scenes` and read it back from there.
+`ResolveAssetPathForWrite` finds the repository root by marker (`EngineContent` **and** `Projects` side by side),
+prefers an existing file wherever it already is, and falls back to the path as given when the tree does not look like
+the repository.
+
+Gate: `Tools/Build/CheckAssetPath.sh` reproduces the production failure — a probe binary in a directory shaped like the
+real output tree, both real content files at a fake repository root, the working directory somewhere else entirely.
+① the moon texture, ② the star catalogue (the two reported symptoms), ③ a shader path (no regression), ④ a
+repository-root launch (no rewrite), ⑤ an absent asset (returned unchanged, not invented). GREEN on all five.
+
+### 15.2 The GI reservoir's descriptor set was rewritten while a frame was still using it
+
+Bindings 25/26 are the indirect pool's reservoir pair — the history GI accumulates in — and their prev/curr roles swap
+every presented frame at `SwapReservoirParity()`. That function rewrote **the one compute descriptor set**, while
+`RecordAndPresent` waits only its *own* cycle slot's fence before recording: the other slot's submission could still be
+executing against that set. Validation was right, and the writes it was flagging are exactly the ones the indirect half
+depends on for temporal reuse — indistinguishable, in a still image, from "GI is not working".
+
+The compute set is now per cycle slot: pool `maxSets`, one allocation per slot, each carrying the full bindless
+variable count — and the per-frame write touches only the slot being recorded, whose fence was just waited on. The
+other slot's set keeps the parity its own in-flight frame was recorded with, which is what it must keep. Full-set
+rewrites (`WriteDescriptorSet`) still write every slot, which is sound because every caller drains first
+(`vkDeviceWaitIdle` in the uploads, `RebuildSwapchain`, or bring-up with nothing in flight).
+
+Hardened while there: `UploadInstanceTraversal` destroyed four buffers with no drain — load-time today, a
+destroy-in-use the moment it runs against a live frame.
+
+Gate: `Exhibits/Workbench/Traversal/CheckFrameSynchronization.sh` pins the whole argument in source — per-slot
+allocation, the scoped write, fence-before-swap, the bind, that every full-set rewrite is drained or a `Bring()` stage
+(the stage table is read, not assumed), and that no bare single-set reference survives. GREEN (9 checks),
+negative-tested: reverting the scoped write turns ⑤ RED.
+
+### 15.3 The sun was divided by its own cloud shadow — a 40× to 1 000× over-bright, at sunset most of all
+
+The estimator's target p̂ and its shade disagreed, and it is a one-term disagreement:
+
+```slang
+// p-hat (DrawDirectCandidate and PHatSelected both build it this way)
+PHatSun(F, m, L, wo, SunEmission() * CloudShadowTransmittance(hitPos, sunDir), sunDir)
+// shade  — BEFORE
+return f * SunEmission() * shadeCos * ris.UnbiasedWeight;
+```
+
+A reservoir's weight is `W = Σ p̂/p`, and the shader returns `integrand × W`. Here the integrand *omitted* the cloud
+transmittance that the p̂ *included*, so the returned radiance is the correct sun term **divided by T** — and T is the
+cloud deck's transmittance, which is smallest exactly where the shadow is deepest and exactly when the sun grazes:
+
+| sun elevation | min T | max T | mean T |
+|---|---|---|---|
+| 45° | 0.065 | 1.000 | 0.656 |
+| 20° | 0.045 | 0.715 | 0.362 |
+| 10° | 0.001 | 0.726 | 0.082 |
+| 5° | 0.000 | 0.193 | 0.024 |
+| 3° | 0.000 | 0.021 | 0.005 |
+| ≤ 1.5° | 0.000 | 0.018 | 0.000–0.002 |
+
+(measured with this repository's own `VolumetricMedia::SunTransmittanceAt`, the CPU mirror `CloudShadow.slang` is
+transcribed from; 900 m deck, 1 100 m thick, coverage 0.55, 8 m ground sampling over 3.2 km)
+
+At a 5° sun the mean transmittance is 0.024, so a pixel whose sun sample wins the reservoir was over-bright by ~40×;
+at 1.5° it is ~1 000×. That is the reported **"fireflies, occasionally at sunset"**: the deck's grazing path is longest
+then, T is smallest, and the affected pixels are isolated outliers against their neighbours. It is also why the frame
+read as **shadowless** — a shadow inverted to 40× brighter is not a shadow — and why the **indirect half was
+invisible** underneath it. Three of the six defects, one omitted factor.
+
+All seven sun-sample sites now read through one helper, so no site can drift from the others:
+
+```slang
+vec3 SunRadianceAt(vec3 Receiver, vec3 SunDirection)
+{
+    return SunEmission() * CloudShadowTransmittance(Receiver, SunDirection);
+}
+```
+
+— the two p̂ sites (unchanged value, one definition), the two shades (primary and the bounce vertex — the fix), and the
+three fresh-sample sites (the below-stratum SSS NEE, the bounce NEE and the vertex NEE), whose integrand owns the same
+factor. The transmittance stays a property of the **receiver**, recomputed where the sample lands, so a reused sample
+is attenuated at the pixel it lands on — the rule `CloudShadow.slang` already documented.
+
+**A refuted hypothesis, recorded as one.** The first suspect was the cloud march aliasing at grazing angles: 8 taps
+spanning ~12 km at a 5° sun, each tap 1.6 km apart against a ~900 m feature scale. Measured on the CPU mirror across a
+ground sweep, adjacent 8 m samples disagree by at most 0.02–0.05 in transmittance at *every* elevation — the march is
+smooth pixel-to-pixel and the hypothesis is dead. The field does have a long tail (mean 0.08, max 0.73 at 10°), which
+is dappled cloud shadow, not speckle. What survives from that investigation is the discontinuity the table above
+exposes: below ~0.006° elevation (`SunDirection.z <= 1e-4`) the transmittance *returns 1.0*, so the ground goes from
+"fully shadowed by deck" to "full sun" within a fraction of a degree of the horizon. That is left as it is for now and
+noted here: the atmosphere's own transmittance fades the direct beam over the same span, so the product is not the
+step it looks like in isolation — but if a horizon flash is ever reported, this is the line to look at.
+
+⚠️ Lowering was **not** re-verified in this sandbox: there is no cmake, ninja, slangc, glslc or glslangValidator here
+(and no way to seat one), so `CheckShaders.sh` reports SKIPPED. The edit is verified structurally instead — every
+argument's type at every call site, brace/paren balance, and the declarations of the functions it calls — and the
+lowering itself is covered by the Windows build, which compiles all 15 shaders and would fail loudly.
+
+### 15.4 The default level is now the material library — the scatter with one material per sphere
+
+"Still using the old scene" was accurate and is now answered in code: the default `--scene` was the outdoor showcase,
+and the level being asked for — scattered objects plus a grid of spheres, **each carrying its own material** (metals,
+anisotropic, IOR, glass, SSS) — has existed since M10 as `MaterialSwatchStructure`: a studio floor, a backdrop, 42
+swatch spheres with 42 distinct resident records and 42 distinct names, four panel signs, and per-swatch material
+descriptors spanning plastics and clear coats, the two anisotropic metals, the glass family with their IORs and
+transmission colours, and the subsurface set. It was one `--scene materials` away and is now the default, so the window
+shows exactly what the CPU proofs measure: `CheckMaterialSwatches.sh` (65 checks) asserts that library's inventory, and
+those assertions now describe the default level rather than a level nobody opened. The showcase and the Cornell box
+stay one `--scene` away, Cornell untouched as the bit-identity reference.
+
+### 15.5 Performance and GPU timings in the log (the second ask)
+
+The FPS overlay answered "is it smooth?" and the device layer already measured seventeen stages into
+`VisibilityTelemetry`, but none of it reached the log. `Engine/DisplayPresentation/PerformanceLog.{h,cpp}` writes it:
+a window line every 120 frames or 4 s, and a run summary at exit (totals, CPU percentiles, the frame-time distribution
+as log2 buckets, per-stage GPU means) — see the commit for the literal lines. Two properties matter for reading it:
+
+- **Bounded by construction**: a 256-frame ring for percentiles, running sums plus an 8-bucket histogram for the run.
+  A ten-hour session costs the memory of a ten-second one, and the distribution line still exposes the hitch pattern a
+  mean hides.
+- **`-` means NOT MEASURED, never "measured zero"**, and the summary explains each stage that reads that way —
+  including the case that will matter most here: `shadow stage recorded in 0 of the frames this run: shadow maps are
+  the GI-OFF path, so with Global Illumination ON every sun occluder comes from the kernel's shadow ray instead`.
+
+A one-shot `[Render]` line at startup states what the renderer was asked to do (GI and indirect reuse, candidate and
+tap budgets, temporal reuse, AA, denoise levels, alias pick, and where sun occlusion comes from in that configuration),
+because "no shadows" and "no GI" both have a first question a frame rate cannot answer: whether the run enabled the
+feature at all.
+
+### 15.6 What is still open, and the experiment that closes each one
+
+| defect | status after this change |
+|---|---|
+| moon textureless | **fixed** — 15.1, gate ① |
+| starless sky | **fixed** — 15.1, gate ② |
+| no GI | **one cause removed** — 15.2 (the reservoir pair was being written while in use); 15.3 removes the 40–1 000× direct sun that buried the indirect term |
+| fireflies at sunset | **cause identified and fixed in code** — 15.3; the refuted alternative is recorded there |
+| "old scene" | **fixed** — 15.4, the M10 library is the default |
+| no shadows | **partly explained** — 15.3 inverts cloud shadow into over-bright; object shadows are a separate question, below |
+
+**Object shadows, the one still genuinely open.** With GI ON the shadow-map stage is *structurally not used* — that
+branch is `GlobalIlluminationOff && ShadowFrameValid && IsShadowReady()` — so every sun occluder must come from the
+kernel's `TraceShadow`. With GI OFF it still cannot run in *this* scene, because `PlaceShadowTaps` refuses when the
+scene has no emissive triangles and the run's own log says `0 luminaires`. So the discriminating experiments are:
+
+1. **GI ON (the default), clouds disabled in the editor's Cloud Shadows sheet** — if the sun is then still unshadowed
+   by objects, `TraceShadow` and the sun candidate are the suspects and the new `restir`/`kernel` numbers say whether
+   the kernel is even running; if shadows *do* appear, 15.3's over-bright was hiding them, as the table predicts.
+2. **Add an emissive luminaire** (any mesh light) and toggle GI off — this is the only way the shadow-map stage can
+   run at all, and it exercises D9's two-level traversal on the occluder side. Its `shadow` column should read non-`-`
+   in the log; if it stays `-`, `PlaceShadowTaps`/`IsShadowReady` are refusing and the log will now say so.
+
+The next run's `[Render]` line plus the first two `[Performance]` windows answer 1 and 2 in one paste, which is what
+15.5 was built for.

@@ -847,6 +847,26 @@ vec3 SunEmission()
     return SkySunDirect.xyz / SunSolidAngle();
 }
 
+// ⚠️ THE SUN'S RADIANCE ARRIVING AT A POINT — the disc divided by Ω, attenuated by the cloud deck standing over
+//    `receiver`. Every site that shades a sun sample takes it from here, because the estimator is only unbiased when
+//    the integrand it evaluates is the same one the reservoir's p-hat was computed from: PHatSun and DrawDirectCandidate
+//    both build p-hat from SunEmission() × CloudShadowTransmittance(hitPos, sunDir), so a SHADE that omits the
+//    transmittance returns p-hat × W / T — the physically correct sun term divided by the transmittance it was
+//    shadowed by. Measured on this repository's own VolumetricMedia::SunTransmittanceAt (exhibits probe, 900 m deck,
+//    coverage 0.55): T averages 0.024 at a 5° sun, 0.005 at 3°, and rounds to 0.000 below 1.5° — so the omission is a
+//    40x to 1000x over-bright sun on precisely the pixels the cloud shadow is deepest on. That is what the 2026-09-18
+//    run reported as "fireflies, occasionally at sunset": the deck's grazing path is longest exactly then, T is
+//    smallest, and a pixel whose sun sample wins the reservoir is a blown-out outlier beside its neighbours. The
+//    same factor is why the frame read as shadowless — a shadow that is inverted to 40x brighter is not a shadow —
+//    and why the indirect half disappeared under it.
+//
+//    The transmittance is a property of the RECEIVER (CloudShadow.slang's own note), recomputed here at the point
+//    being shaded rather than carried in a reservoir, so reused samples are attenuated at the pixel they land on.
+vec3 SunRadianceAt(vec3 Receiver, vec3 SunDirection)
+{
+    return SunEmission() * CloudShadowTransmittance(Receiver, SunDirection);
+}
+
 // R6 row 3: light-triangle pick. Alias ON (F5, default): one Walker-alias probe — col uniform, accept on
 //    Threshold else redirect to AliasSlot, source pdf = Probability[z] (power/total, SceneStructure.cpp).
 //    Alias OFF: uniform over luminaires with p = 1/N — bit-for-bit the R0 estimator (identity proof).
@@ -905,7 +925,7 @@ float PHatSelected(SurfaceFrame F, ShadingRecord m, ResolvedLayers L, vec3 wo, u
     if (light == kSunLightIndex)
     {
         vec3 sunDir = normalize(toLight);
-        return PHatSun(F, m, L, wo, SunEmission() * CloudShadowTransmittance(hitPos, sunDir), sunDir);
+        return PHatSun(F, m, L, wo, SunRadianceAt(hitPos, sunDir), sunDir);
     }
     return PHatFull(F, m, L, wo, LightEmission(light), toLight, dot(toLight, toLight), LightNormal(light));
 }
@@ -952,7 +972,7 @@ void DrawDirectCandidate(SurfaceFrame F, ShadingRecord m, ResolvedLayers L, vec3
         point  = hitPos + sunDir * kSunShadowDistance;
         light  = kSunLightIndex;
         uv     = vec2(u1, u2);
-        float pHat = PHatSun(F, m, L, wo, SunEmission() * CloudShadowTransmittance(hitPos, sunDir), sunDir);
+        float pHat = PHatSun(F, m, L, wo, SunRadianceAt(hitPos, sunDir), sunDir);
         float pPick = LightTriangleCount > 0u ? kSunPickProbability : 1.0;
         weight = pHat * SunSolidAngle() / pPick;
     }
@@ -1330,7 +1350,9 @@ vec3 GiPoolShade(SurfaceFrame F, ShadingRecord m, ResolvedLayers L, vec3 wo, vec
     vec3 wiLocal = ToLocal(F, shadeDir);
     vec3 f = wiLocal.z > 0.0 ? EvaluateBsdf(m, L, wo, wiLocal) : vec3(0.0);
     if (ris.SelectedLight == kSunLightIndex)
-        return f * SunEmission() * shadeCos * ris.UnbiasedWeight;
+        return f * SunRadianceAt(hitPos, shadeDir) * shadeCos * ris.UnbiasedWeight;   // ⚠️ the shade MUST carry the
+        //    same cloud transmittance the p-hat was built with — see SunRadianceAt's note; this line without it is
+        //    the 1/T over-bright sun that reads as fireflies at sunset and as missing cloud shadow everywhere.
     vec3 chosenEmit = LightEmission(ris.SelectedLight);
     float shadeCosL = max(0.0, dot(LightNormal(ris.SelectedLight), -shadeDir));
     float dist2 = dot(ris.SelectedPoint - hitPos, ris.SelectedPoint - hitPos);
@@ -1673,7 +1695,7 @@ void main()
                 vec3  wiLocal = ToLocal(frame, shadeDir);
                 vec3  f = wiLocal.z > 0.0 ? EvaluateBsdf(shading, layers, woLocal, wiLocal) : vec3(0.0);   // R4b: full lobe stack
                 if (res.SelectedLight == kSunLightIndex)
-                    accumulatedRadiance += f * SunEmission() * shadeCos * res.UnbiasedWeight;
+                    accumulatedRadiance += f * SunRadianceAt(hitPos, shadeDir) * shadeCos * res.UnbiasedWeight;   // ⚠️ same rule at the bounce vertex (the indirect pool's p-hat carries the transmittance too)
                 else
                 {
                     vec3 chosenEmit = LightEmission(res.SelectedLight);
@@ -1704,7 +1726,7 @@ void main()
             {
                 vec3  sF = EvaluateBsdf(shading, layers, woLocal, sWi);   // below-branch: SSS (+ T when mixed)
                 float pPick = LightTriangleCount > 0u ? kSunPickProbability : 1.0;
-                accumulatedRadiance += sF * SunEmission() * sCos * SunSolidAngle() / pPick;
+                accumulatedRadiance += sF * SunRadianceAt(hitPos, sSunDir) * sCos * SunSolidAngle() / pPick;
             }
         }
         else
@@ -1847,7 +1869,7 @@ void main()
                         {
                             vec3  bF = EvaluateBsdf(bShading, bLayers, bWo, bWi);
                             float pPick = LightTriangleCount > 0u ? kSunPickProbability : 1.0;
-                            accumulatedRadiance += throughput * bF * SunEmission() * bCos * SunSolidAngle() / pPick;
+                            accumulatedRadiance += throughput * bF * SunRadianceAt(bHitPos, bSunDir) * bCos * SunSolidAngle() / pPick;
                         }
                     }
                     else
@@ -1893,7 +1915,7 @@ void main()
                             {
                                 vec3  vF = EvaluateBsdf(bShading, bLayers, bWo, vWi);
                                 float vPick = LightTriangleCount > 0u ? kSunPickProbability : 1.0;
-                                accumulatedRadiance += throughput * vF * SunEmission() * vCos * SunSolidAngle() / vPick;
+                                accumulatedRadiance += throughput * vF * SunRadianceAt(bHitPos, vSunDir) * vCos * SunSolidAngle() / vPick;
                             }
                         }
                         else

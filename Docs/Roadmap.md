@@ -79,7 +79,12 @@ See `Docs/ProjectFormat.md` for the plan, the divergences and the measured sizes
 
 1. 🔎 Run the current tip on the GPU with the HUD's ReSTIR row open ("indirect pool on/off · N taps") and report
    commit + tier + whether the blur/fireflies survive — closes #4 and #12 together, and §B is where the P1–P6 device
-   parity run (#20) belongs too.
+   parity run (#20) belongs too. **Updated 2026-09-18**: the first such run reported six defects, three of which are
+   now fixed in code (§15 — content paths resolved, the GI reservoir's descriptor set made per-cycle-slot, and the sun
+   no longer divided by its own cloud shadow). The run to ask for next is the same one plus two settings: clouds off
+   with GI on (isolates object shadows against the kernel's shadow ray) and one emissive luminaire with GI off (the
+   only configuration in which the shadow-map stage can run at all — its absence from the scene is why `0 luminaires`
+   matters).
 2. ✅ Done since this list was written: #7 (independent reference — the floor is measured, and §14.3's headline is
    5.1× not 7.8×) and #2's 1 000-frame soak (`CheckRestirSoak.sh` GREEN; the clamp bounds M *and* the error, so it is
    also the floor — more frames buy nothing past ~250, coverage and dials do).
