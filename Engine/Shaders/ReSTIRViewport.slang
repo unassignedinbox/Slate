@@ -1047,6 +1047,15 @@ vec3 ToneMap(vec3 hdr)
 const float kReprojectNormalCos = kTemporalNormalCos;   // 25°, identical to the reservoir rule
 const float kReprojectDepthTol  = kTemporalDepthTol;    // 10 % relative
 
+// Reactive temporal accumulation: finite confidence prevents a years-old image from owning a pixel forever, while the
+// moment-derived allowance distinguishes a material's ordinary Monte-Carlo noise from a persistent illumination step.
+// These values are deliberately shared with ReactiveTemporalMirror.h, whose dynamic-shadow and animated-emission tests
+// run before this policy is changed. The input is scene-linear radiance — display exposure is only applied in ToneMap.
+const float kTemporalHistoryLengthCap = 32.0;
+const float kReactiveRelativeThreshold = 0.25;
+const float kReactiveAbsoluteThreshold = 0.02;
+const float kReactiveStandardErrors    = 3.0;
+
 // ⚠️ D10: normal + depth agree for TWO DIFFERENT OBJECTS more often than it is comfortable to admit — two objects
 //    exchanging places, a tumble that brings a different face to the same pixel at the same distance, an object leaving
 //    a wall while another arrives to take its place. All of those reproject cleanly under the 25°/10 % rule and inherit
@@ -1060,6 +1069,24 @@ const float kReprojectDepthTol  = kTemporalDepthTol;    // 10 % relative
 //
 // Depth < 0 marks "no surface" (background); such a pixel never reprojects and never becomes a valid source.
 // `identity` is 0xFFFFFFFF for a pixel with no surface.
+//
+// Direct visibility is not available as an extra G-buffer bit in this one-kernel path. Its change is nevertheless
+// visible in the new linear radiance sample, so this test is a visibility/luminance proxy: moving shadows, animated
+// emission and a changed normal-mapped lobe are rejected once their step is larger than the old estimate's uncertainty.
+// The standard error is deliberately based on the *mean* (σ/sqrt(n)); this is conservative for glossy transport and
+// avoids turning every plausible bright path sample into a reset.
+bool RejectHistoryForReactiveChange(vec2 previousMoments, float previousCount, vec3 currentRadiance)
+{
+    if (previousCount <= 0.0) return false;
+    float currentLuma = Luminance(currentRadiance);
+    float sampleVariance = max(previousMoments.y - previousMoments.x * previousMoments.x, 0.0);
+    float standardError = sqrt(sampleVariance / max(previousCount, 1.0));
+    float scale = max(max(abs(currentLuma), abs(previousMoments.x)), kReactiveAbsoluteThreshold);
+    float allowance = max(kReactiveAbsoluteThreshold, kReactiveRelativeThreshold * scale)
+                    + kReactiveStandardErrors * standardError;
+    return abs(currentLuma - previousMoments.x) > allowance;
+}
+
 void ResolveSurface(uvec2 pixel, vec3 radiance, vec3 normal, float depth, uint identity)
 {
     vec4  history   = vec4(0.0);
@@ -1125,7 +1152,21 @@ void ResolveSurface(uvec2 pixel, vec3 radiance, vec3 normal, float depth, uint i
         radiance += FlareAlong((vec2(pixel) + 0.5) / extent, extent.x / max(extent.y, 1.0));
     }
 
-    count      = count + 1.0;
+    // This happens after the flare is part of the sample, so a camera-dependent flare cannot leak its old intensity
+    // through a valid reprojection. It deliberately happens before ToneMap: adaptive exposure is a presentation
+    // concern and must never make the scene-linear history reject itself.
+    if (RejectHistoryForReactiveChange(moments, count, radiance))
+    {
+        history = vec4(0.0);
+        moments = vec2(0.0);
+        count   = 0.0;
+    }
+
+    // A capped EMA, not an unbounded average. `count` is explicit history confidence: it grows through 32 accepted
+    // samples, then stays at the cap and gives each new sample a 1/32 response. This converges stably while allowing
+    // illumination that evolves slowly (or a conservative missed change) to decay out in a bounded time.
+    count      = min(count, kTemporalHistoryLengthCap);
+    count      = min(count + 1.0, kTemporalHistoryLengthCap);
     vec3 mean  = history.rgb + (radiance - history.rgb) / count;
 
     // R7: the same incremental mean applied to the first two luminance moments. Variance is E[x²] − E[x]², which is

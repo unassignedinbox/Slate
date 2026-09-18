@@ -25,6 +25,7 @@
 #include "FidelityClassifier.h"
 #include "AtrousDenoiseMirror.h"
 #include "ReprojectionMirror.h"   // the rule itself — shared with the exhibit, so §D and the sheets cannot drift apart
+#include "ReactiveTemporalMirror.h" // CPU control for the shader's reactive luminance/visibility policy
 #include "DenoiseStreams.h"       // and the §E measurement, shared with the exhibit's chart of the same numbers
 
 #include <algorithm>
@@ -259,10 +260,14 @@ int main()
             //    indirect (GI) reservoir — the indirect pool reprojects by the same pixel motion the direct one does.
             { "ReSTIRViewport", "vec2 motion = texelFetch(MotionImage, ivec2(pixel), 0).rg;", 3u, "B4 motion vector read at all three reuse sites (accumulator + direct reservoir + GI reservoir)" },
             { "ReSTIRViewport", "ivec2 prevPx = ivec2(floor((cuv - motion) * extent));", 1u, "B5 back-projection rule (§D mirrors this line)" },
-            { "ReSTIRViewport", "count      = count + 1.0;", 1u, "B6 running-mean sample count" },
-            { "ReSTIRViewport", "vec3 mean  = history.rgb + (radiance - history.rgb) / count;", 1u, "B7 running mean" },
-            { "ReSTIRViewport", "float variance = sampleVariance / count;", 1u, "B8 filter input = variance OF THE MEAN" },
-            { "ReSTIRViewport", "if (count < 2.0) variance = luma * luma;", 1u, "B9 a first sample stays permissive (disocclusion)" },
+            { "ReSTIRViewport", "const float kTemporalHistoryLengthCap = 32.0;", 1u, "B6 reactive history confidence is capped at 32 accepted samples" },
+            { "ReSTIRViewport", "bool RejectHistoryForReactiveChange(vec2 previousMoments, float previousCount, vec3 currentRadiance)", 1u, "B7 luminance/visibility proxy is a named policy with prior moments" },
+            { "ReSTIRViewport", "float standardError = sqrt(sampleVariance / max(previousCount, 1.0));", 1u, "B8 reactive policy allows three-sigma-style mean uncertainty" },
+            { "ReSTIRViewport", "if (RejectHistoryForReactiveChange(moments, count, radiance))", 1u, "B9 illumination steps reset accepted geometry history" },
+            { "ReSTIRViewport", "count      = min(count + 1.0, kTemporalHistoryLengthCap);", 1u, "B10 confidence remains at the finite history cap" },
+            { "ReSTIRViewport", "vec3 mean  = history.rgb + (radiance - history.rgb) / count;", 1u, "B11 capped running mean" },
+            { "ReSTIRViewport", "float variance = sampleVariance / count;", 1u, "B12 filter input = variance OF THE MEAN" },
+            { "ReSTIRViewport", "if (count < 2.0) variance = luma * luma;", 1u, "B13 a first sample stays permissive (disocclusion)" },
             { "ReSTIRViewport", "imageStore(DenoiseImage, ivec2(pixel), vec4(mean, variance));", 1u, "B10 one denoise store site for every material" },
             { "ReSTIRViewport", "imageStore(DenoiseImage", 1u, "B11 the denoise store is not duplicated per lobe (material-agnostic)" },
             { "ReSTIRViewport", "if ((FeatureFlags & kFeatureDenoise) == 0u)", 1u, "B12 with the filter off the kernel tone-maps itself" },
@@ -766,7 +771,91 @@ int main()
     }
 
     //──────────────────────────────────────────────────────────────────────────────────────────────────────────────
-    //  §E  A/B over three lobe-like streams: helpful before convergence, mean-preserving at it, and bit-identical on
+    //  §E  Reactive temporal history. This is the CPU dynamic-shadow proof that gates the live shader policy below:
+    //      geometry may remain valid while direct visibility, emission or a normal-mapped response changes. The policy
+    //      must flush only those persistent changes, cap its effective history, and never see display exposure.
+    //──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+    {
+        using namespace ReactiveTemporalMirror;
+        auto Settled = [](float Value, float Variance = 0.0f)
+        {
+            History H{};
+            H.Mean[0] = H.Mean[1] = H.Mean[2] = Value;
+            H.Moments[0] = Value;
+            H.Moments[1] = Value * Value + Variance;
+            H.Confidence = kTemporalHistoryLengthCap;
+            return H;
+        };
+
+        // Same normal, depth, object identity and pixel — only the shadow ray's visibility changed. Keeping the old
+        // 32-frame mean here would make a shadow crawl for a second; the step must become a one-frame history.
+        {
+            const float Lit[3] = { 1.0f, 1.0f, 1.0f };
+            const float Shadow[3] = { 0.08f, 0.08f, 0.08f };
+            const Result Shadowed = Resolve(Settled(1.0f), Shadow, true);
+            const Result LitAgain = Resolve(Shadowed.Value, Lit, true);
+            Check(Shadowed.Rejected && Shadowed.Value.Confidence == 1.0f && std::fabs(Shadowed.Value.Mean[0] - 0.08f) < 1.0e-6f,
+                  "E1 moving direct-shadow visibility flushes geometrically valid stale history");
+            Check(LitAgain.Rejected && LitAgain.Value.Confidence == 1.0f && std::fabs(LitAgain.Value.Mean[0] - 1.0f) < 1.0e-6f,
+                  "E2 shadow removal is also reactive; no dark trail survives on the lit receiver");
+        }
+
+        // An emissive animation has the same temporal failure mode but no occluder. The test does not call it a
+        // visibility event: it proves the explicit luminance path covers animation authored in material emission.
+        {
+            const float EmissiveNow[3] = { 8.0f, 3.0f, 0.5f };
+            const Result AnimatedEmission = Resolve(Settled(0.25f), EmissiveNow, true);
+            Check(AnimatedEmission.Rejected && AnimatedEmission.Value.Confidence == 1.0f
+                  && std::fabs(AnimatedEmission.Value.Mean[0] - EmissiveNow[0]) < 1.0e-6f,
+                  "E3 animated emissive radiance rejects an otherwise valid temporal sample");
+        }
+
+        // A normal map can change the shaded lobe without moving the coarse geometric normal stored in the history.
+        // A large changed highlight must reset; a tiny Monte-Carlo perturbation must retain the stable history.
+        {
+            const float ChangedNormalMap[3] = { 1.10f, 1.10f, 1.10f };
+            const float SmallNoise[3]       = { 0.64f, 0.64f, 0.64f };
+            const Result NormalMapStep = Resolve(Settled(0.60f), ChangedNormalMap, true);
+            const Result NormalMapNoise = Resolve(Settled(0.60f, 0.04f), SmallNoise, true);
+            Check(NormalMapStep.Rejected && NormalMapStep.Value.Confidence == 1.0f,
+                  "E4 normal-mapped lighting step is rejected even when geometric reprojection accepts");
+            Check(!NormalMapNoise.Rejected && NormalMapNoise.Value.Confidence == kTemporalHistoryLengthCap,
+                  "E5 ordinary normal-map sample noise retains capped history instead of flickering resets");
+        }
+
+        // Separate glossy treatment is intentionally conservative: large prior Monte-Carlo spread becomes a standard
+        // error allowance. A statistically plausible reflection sample keeps its history; a true new lighting state
+        // still wins once it clears the allowance.
+        {
+            const float PlausibleGlossy[3] = { 2.0f, 2.0f, 2.0f };
+            const float NewGlossyState[3] = { 6.0f, 6.0f, 6.0f };
+            const History Glossy = Settled(1.0f, 4.0f); // σ = 2, standard error = 2 / sqrt(32)
+            const Result StableGloss = Resolve(Glossy, PlausibleGlossy, true);
+            const Result ChangedGloss = Resolve(Glossy, NewGlossyState, true);
+            Check(!StableGloss.Rejected && StableGloss.Value.Confidence == kTemporalHistoryLengthCap,
+                  "E6 glossy material uses the moment-derived uncertainty allowance conservatively");
+            Check(ChangedGloss.Rejected && ChangedGloss.Value.Confidence == 1.0f,
+                  "E7 a persistent glossy lighting step still rejects stale history");
+        }
+
+        // Geometric rejection remains authoritative, and the effective history is a fixed-length EMA after it fills.
+        // There is no exposure input anywhere in Resolve: changing display exposure after this call cannot change raw
+        // history, which is how adaptive exposure avoids becoming a temporal feedback signal.
+        {
+            const float Disoccluded[3] = { 0.9f, 0.9f, 0.9f };
+            const Result Disocclusion = Resolve(Settled(0.1f), Disoccluded, false);
+            const float SameRawRadiance[3] = { 0.7f, 0.7f, 0.7f };
+            const Result ExposureIndependent = Resolve(Settled(0.7f), SameRawRadiance, true);
+            Check(!Disocclusion.Rejected && Disocclusion.Value.Confidence == 1.0f
+                  && std::fabs(Disocclusion.Value.Mean[0] - Disoccluded[0]) < 1.0e-6f,
+                  "E8 disocclusion restarts through geometry before reactive classification");
+            Check(!ExposureIndependent.Rejected && ExposureIndependent.Value.Confidence == kTemporalHistoryLengthCap,
+                  "E9 raw temporal history is independent of display exposure");
+        }
+    }
+
+    //──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+    //  §F  A/B over three lobe-like streams: helpful before convergence, mean-preserving at it, and bit-identical on
     //      every pixel the shipped early-out judges converged.
     //──────────────────────────────────────────────────────────────────────────────────────────────────────────────
     {
