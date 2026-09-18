@@ -39,8 +39,10 @@
 //         normals + normal maps from the VertexRecord buffer, ray-cone texture LOD, GGX energy / LTC sheen LUTs),
 //       • a reprojected running-mean accumulator and its first two luminance moments. R2 motion vectors feed that
 //         accumulation and both reservoir temporal paths; normal, depth and object identity reject invalid history.
-//         The five-level à-trous pass then filters this unfiltered temporal mean. It does not feed filtered output
-//         back into the next temporal history, so it is not a literal full-SVGF history arrangement.
+//         Raw first/second luminance moments and capped confidence stay distinct from a first-wavelet filtered color
+//         history: the first à-trous level feeds next frame's temporal color, while the raw quantities drive reactive
+//         luminance/visibility rejection. This is the canonical SVGF history separation; diffuse demodulation and a
+//         dedicated specular history remain staged work, so this is still not a complete general SVGF implementation.
 //    It is kept as the reference image source until the staged frame graph replaces it.
 // NOTE: GLSL source lowered to SPIR-V by the build scripts (glslc -fshader-stage=compute --target-env=vulkan1.2 -I Engine).
 //       World space is right-handed Z-up (CLAUDE.md §7); the pixel→ray mapping (Shaders/RayGeneration.slang) is applied by
@@ -56,7 +58,10 @@ layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 //------------------------------------------------------------------------------------------------------------------------
 
 layout(rgba8,   binding = 0) uniform writeonly image2D OutputImage;    // tone-mapped 8-bit presentation image
-layout(rgba32f, binding = 3) uniform          image2D HistoryImage;   // linear HDR running mean, .a = sample count
+// Raw temporal mean + explicit confidence remain separate from the first-wavelet color used as the next frame's
+// visual history. The distinct allocation is in compute descriptor set 1 so set 0 can retain its bindless table.
+layout(rgba32f, binding = 3) uniform          image2D HistoryImage;   // raw linear HDR mean, .a = effective history confidence
+layout(set = 1, binding = 0, rgba32f) uniform image2D FilteredHistoryImage; // first-wavelet color history; .a unused
 layout(rgba32f, binding = 4) uniform readonly image2D SurfaceImage;   // R2 SurfaceResolve: xyz = world position, w = visibility id bits
 layout(rgba16f, binding = 5) uniform readonly image2D NormalImage;    // R2 SurfaceResolve: xyz = camera-facing geometric normal
 
@@ -1092,6 +1097,9 @@ void ResolveSurface(uvec2 pixel, vec3 radiance, vec3 normal, float depth, uint i
     vec4  history   = vec4(0.0);
     float count     = 0.0;
     bool  resolved  = false;   // did we already establish where this pixel's history comes from?
+    // The cap is for a history that actually crossed pixels. A zero-motion still frame remains a true progressive
+    // estimate and can reach the denoiser's convergence early-out; a moved surface gets bounded responsiveness.
+    bool  reprojectedHistory = false;
 
     const bool reproject = depth > 0.0 && (FeatureFlags & kFeatureTemporalReprojection) != 0u;
 
@@ -1120,9 +1128,14 @@ void ResolveSurface(uvec2 pixel, vec3 radiance, vec3 normal, float depth, uint i
                 && dot(normal, prevSurface.xyz) > kReprojectNormalCos
                 && abs(depth - prevSurface.w) / max(depth, 1e-3) < kReprojectDepthTol)
             {
-                history  = imageLoad(HistoryImage, prevPx);
+                history  = imageLoad(HistoryImage, prevPx);             // raw confidence and raw moments stay authoritative
                 count    = history.a;
+                // The temporal color itself is the first local wavelet output. It is deliberately separate from the
+                // raw mean above: moments/confidence describe the samples, while this is the SVGF-style filtered color.
+                if (count > 0.0 && (FeatureFlags & kFeatureDenoise) != 0u)
+                    history.rgb = imageLoad(FilteredHistoryImage, prevPx).rgb;
                 moments  = prevMoments.xy;   // the moments follow the same reprojection
+                reprojectedHistory = any(notEqual(motion, vec2(0.0)));
                 resolved = true;
             }
             // Failing validation is a real disocclusion: leave count at 0 so the mean restarts at n = 1 rather
@@ -1139,6 +1152,8 @@ void ResolveSurface(uvec2 pixel, vec3 radiance, vec3 normal, float depth, uint i
         //    feature bit clear this function is byte-identical to the accumulator it replaced.
         history = imageLoad(HistoryImage, ivec2(pixel));
         count   = history.a;
+        if (count > 0.0 && (FeatureFlags & kFeatureDenoise) != 0u)
+            history.rgb = imageLoad(FilteredHistoryImage, ivec2(pixel)).rgb;
         moments = imageLoad(MomentImage, ivec2(pixel)).xy;
     }
 
@@ -1162,11 +1177,13 @@ void ResolveSurface(uvec2 pixel, vec3 radiance, vec3 normal, float depth, uint i
         count   = 0.0;
     }
 
-    // A capped EMA, not an unbounded average. `count` is explicit history confidence: it grows through 32 accepted
-    // samples, then stays at the cap and gives each new sample a 1/32 response. This converges stably while allowing
-    // illumination that evolves slowly (or a conservative missed change) to decay out in a bounded time.
-    count      = min(count, kTemporalHistoryLengthCap);
-    count      = min(count + 1.0, kTemporalHistoryLengthCap);
+    // A moved/reprojected surface is a capped EMA, not an unbounded average. `count` is explicit history confidence:
+    // it grows through 32 accepted moved samples, then stays at the cap and gives each new sample a 1/32 response.
+    // A zero-motion still frame remains an unbounded progressive estimate, preserving final-frame convergence and the
+    // à-trous early-out. This is deliberately per pixel — a moving character can be responsive while static terrain
+    // behind it continues to refine.
+    if (reprojectedHistory) count = min(count, kTemporalHistoryLengthCap);
+    count      = reprojectedHistory ? min(count + 1.0, kTemporalHistoryLengthCap) : count + 1.0;
     vec3 mean  = history.rgb + (radiance - history.rgb) / count;
 
     // R7: the same incremental mean applied to the first two luminance moments. Variance is E[x²] − E[x]², which is
@@ -1187,7 +1204,12 @@ void ResolveSurface(uvec2 pixel, vec3 radiance, vec3 normal, float depth, uint i
     //    filter permissive on brand-new pixels (disocclusions), which is exactly where smoothing is needed most.
     if (count < 2.0) variance = luma * luma;
 
-    imageStore(HistoryImage,     ivec2(pixel), vec4(mean, count));
+    imageStore(HistoryImage,     ivec2(pixel), vec4(mean, count));      // raw sample-space mean + explicit confidence
+    // Denoise-off fallback. With filtering enabled the kernel only READS FilteredHistoryImage and level zero writes it
+    // later, avoiding a same-dispatch read/write feedback hazard. With filtering disabled it is not read at all, so a
+    // raw fallback makes a later enable valid without changing the established raw temporal estimate.
+    if ((FeatureFlags & kFeatureDenoise) == 0u)
+        imageStore(FilteredHistoryImage, ivec2(pixel), vec4(mean, 1.0));
     imageStore(HistorySurfaceImage, ivec2(pixel), vec4(normal, depth));
     // D10: WHICH surface this mean was shaded from, in the moment image's reserved z/w. Stored on every frame whether
     //    the feature is on or not — it is one channel write, and a history written while the feature was off must not

@@ -264,17 +264,20 @@ int main()
             { "ReSTIRViewport", "bool RejectHistoryForReactiveChange(vec2 previousMoments, float previousCount, vec3 currentRadiance)", 1u, "B7 luminance/visibility proxy is a named policy with prior moments" },
             { "ReSTIRViewport", "float standardError = sqrt(sampleVariance / max(previousCount, 1.0));", 1u, "B8 reactive policy allows three-sigma-style mean uncertainty" },
             { "ReSTIRViewport", "if (RejectHistoryForReactiveChange(moments, count, radiance))", 1u, "B9 illumination steps reset accepted geometry history" },
-            { "ReSTIRViewport", "count      = min(count + 1.0, kTemporalHistoryLengthCap);", 1u, "B10 confidence remains at the finite history cap" },
+            { "ReSTIRViewport", "count      = reprojectedHistory ? min(count + 1.0, kTemporalHistoryLengthCap) : count + 1.0;", 1u, "B10 moved-pixel confidence remains at the finite history cap" },
             { "ReSTIRViewport", "vec3 mean  = history.rgb + (radiance - history.rgb) / count;", 1u, "B11 capped running mean" },
             { "ReSTIRViewport", "float variance = sampleVariance / count;", 1u, "B12 filter input = variance OF THE MEAN" },
             { "ReSTIRViewport", "if (count < 2.0) variance = luma * luma;", 1u, "B13 a first sample stays permissive (disocclusion)" },
             { "ReSTIRViewport", "imageStore(DenoiseImage, ivec2(pixel), vec4(mean, variance));", 1u, "B10 one denoise store site for every material" },
             { "ReSTIRViewport", "imageStore(DenoiseImage", 1u, "B11 the denoise store is not duplicated per lobe (material-agnostic)" },
-            { "ReSTIRViewport", "if ((FeatureFlags & kFeatureDenoise) == 0u)", 1u, "B12 with the filter off the kernel tone-maps itself" },
+            { "ReSTIRViewport", "if ((FeatureFlags & kFeatureDenoise) == 0u)\n        imageStore(OutputImage", 1u, "B12 with the filter off the kernel tone-maps itself" },
             { "ReSTIRViewport", "imageStore(OutputImage, ivec2(pixel), vec4(ToneMap(mean), 1.0));", 1u, "B13 ...through the same tone map the filter uses" },
 
             { "AtrousDenoise", "layout(set = 0, binding = 0, rgba32f) uniform readonly  image2D SourceImage;", 1u, "B14 filter binding 0: radiance + variance" },
             { "AtrousDenoise", "layout(set = 0, binding = 3, rgba8)   uniform writeonly image2D OutputImage;", 1u, "B15 filter binding 3: the presentation image" },
+            { "AtrousDenoise", "layout(set = 0, binding = 4, rgba32f) uniform writeonly image2D FilteredHistoryImage;", 1u, "B15b filter binding 4: distinct first-wavelet feedback history" },
+            { "AtrousDenoise", "uint  WriteFilteredHistory;", 1u, "B15c only level zero may write filtered history" },
+            { "AtrousDenoise", "if (WriteFilteredHistory != 0u) imageStore(FilteredHistoryImage, Pixel, vec4(Result.rgb, 1.0));", 1u, "B15d final level never replaces level-zero feedback" },
             { "AtrousDenoise", "const float kEarlyOutStepFraction = 0.2;", 1u, "B16 early-out is derived from an 8-bit step" },
             { "AtrousDenoise", "const float kEarlyOutVariance     = (kEarlyOutStepFraction / 255.0)", 1u, "B17 ...as a variance, not a tuned constant" },
             { "AtrousDenoise", "float NormalWeight = pow(max(dot(CentreNormal, TapSurface.xyz), 0.0), NormalPower);", 1u, "B18 normal edge stop" },
@@ -289,6 +292,7 @@ int main()
             { "SwapchainExchange", "Push.DepthScale     = 0.05f;", 1u, "B26 the engine's σz reaches the shader" },
             { "SwapchainExchange", "Push.LuminanceScale = 4.0f;", 1u, "B27 the engine's σl reaches the shader" },
             { "SwapchainExchange", "Push.FinalLevel     = (Level + 1u == LiveDenoiseLevels) ? 1u : 0u;", 1u, "B28 the tone map happens exactly once, at the last live level" },
+            { "SwapchainExchange", "Push.WriteFilteredHistory = Level == 0u ? 1u : 0u;", 1u, "B28b first-wavelet output is the sole filtered history writer" },
             { "SwapchainExchange", "1u, kDenoiseLevelCount);", 1u, "B29 the level count is clamped into the allocated sets" },
 
             { "ReSTIRIntegrator.h", "bool        Denoise            = true;", 1u, "B30 the header's default is ON (as §A asserts by value)" },
@@ -446,6 +450,38 @@ int main()
                 Worst = std::max(Worst, std::fabs(T[2] - 0.5f));
             }
         Check(Worst <= 1.0e-6f, "C2 a uniform radiance field survives the 25-tap weighted mean unchanged (no energy added)");
+    }
+
+    // §C2b — the SVGF feedback has its own image and receives precisely level zero, rather than the raw temporal
+    // mean or the last (much wider) wavelet level. The compiled shader is called directly for this assertion.
+    {
+        Field Source, Surface, Target, FilteredHistory;
+        Source.Resize(kExtent); Surface.Resize(kExtent); Target.Resize(kExtent); FilteredHistory.Resize(kExtent);
+        for (uint32_t Y = 0u; Y < kExtent; ++Y)
+            for (uint32_t X = 0u; X < kExtent; ++X)
+            {
+                const float Noise = ((X + 3u * Y) & 1u) != 0u ? 0.12f : -0.12f;
+                float* S = Source.At(X, Y);
+                S[0] = 0.8f + Noise; S[1] = 0.6f + Noise; S[2] = 0.4f + Noise; S[3] = kNoiseVariance;
+                float* F = Surface.At(X, Y);
+                F[0] = 0.0f; F[1] = 0.0f; F[2] = 1.0f; F[3] = 1.0f;
+            }
+        DenoiseMirror::RunConfiguration Config;
+        Config.Extent = kExtent; Config.StepSize = 1u; Config.Enabled = true; Config.FinalLevel = false;
+        Config.WriteFilteredHistory = true;
+        DenoiseMirror::Run(Config, Source.Values.data(), Surface.Values.data(), Target.Values.data(), nullptr,
+                           FilteredHistory.Values.data());
+        bool EqualFirstLevel = true;
+        uint32_t ChangedFromRaw = 0u;
+        for (size_t I = 0u; I < Target.Values.size(); I += 4u)
+        {
+            EqualFirstLevel = EqualFirstLevel && Target.Values[I] == FilteredHistory.Values[I]
+                            && Target.Values[I + 1u] == FilteredHistory.Values[I + 1u]
+                            && Target.Values[I + 2u] == FilteredHistory.Values[I + 2u];
+            if (Source.Values[I] != FilteredHistory.Values[I]) ++ChangedFromRaw;
+        }
+        Check(EqualFirstLevel && ChangedFromRaw > kExtent * kExtent / 2u,
+              "C2b first-wavelet feedback is distinct from raw history and equals the shader's level-zero result");
     }
 
     // §C3 — THE A/B: at convergence the filtered and unfiltered presentation images are bit-identical, because a

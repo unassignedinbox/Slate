@@ -3,8 +3,8 @@
 //============================================================================================================================================
 // 🧩 CPU control for the reactive part of ReSTIRViewport.slang's temporal accumulator.
 //
-// This deliberately models *radiance history*, not exposure. Exposure belongs to tone mapping after accumulation, so
-// changing it cannot poison the linear mean. A reprojected sample is reset when its current linear luminance differs
+// This deliberately models a *moved/reprojected* radiance history, not exposure. Exposure belongs to tone mapping after
+// accumulation, so changing it cannot poison the linear mean. A reprojected sample is reset when its current linear luminance differs
 // from the prior mean by more than a relative visibility/luminance threshold plus the prior estimate's standard error.
 // The standard-error allowance preserves ordinary Monte-Carlo variation; an abrupt direct-visibility change (moving
 // shadow), an animated emitter, or a material response that changes beyond its sampled uncertainty starts new history.

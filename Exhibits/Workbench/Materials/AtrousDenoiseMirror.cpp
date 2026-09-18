@@ -12,6 +12,8 @@
 #include "AtrousDenoiseMirror.h"
 #include "DenoiseCpuShim.h"
 
+#include <algorithm>
+
 #define main AtrousDenoiseEntry
 #include "AtrousDenoise.cpu.1.h"
 
@@ -25,6 +27,7 @@
 #define LuminanceScale   DenoiseParameters.LuminanceScale
 #define Exposure         DenoiseParameters.Exposure
 #define FinalLevel       DenoiseParameters.FinalLevel
+#define WriteFilteredHistory DenoiseParameters.WriteFilteredHistory
 #define ColourSaturation DenoiseParameters.ColourSaturation
 
 #include "AtrousDenoise.cpu.2.h"
@@ -37,6 +40,7 @@
 #undef LuminanceScale
 #undef Exposure
 #undef FinalLevel
+#undef WriteFilteredHistory
 #undef ColourSaturation
 #undef main
 
@@ -79,12 +83,16 @@ void StoreImage(const image2D& Image, uint32_t ExtentPixels, float* Values)
 //                                                       DISPATCH
 //------------------------------------------------------------------------------------------------------------------------
 
-void Run(const RunConfiguration& Configuration, const float* Source, const float* Surface, float* Target, float* Output)
+void Run(const RunConfiguration& Configuration, const float* Source, const float* Surface, float* Target, float* Output,
+         float* FilteredHistory)
 {
     const uint32_t ExtentPixels = Configuration.Extent;
     LoadImage(SourceImage, ExtentPixels, Source);
     LoadImage(SurfaceImage, ExtentPixels, Surface);
     LoadImage(TargetImage, ExtentPixels, Source);        // pre-fill: an untouched texel must be visibly untouched, not zero
+    // Pre-fill makes a disabled/non-history-writing invocation observable without inventing a value the shader never
+    // writes. Level zero replaces every texel whenever WriteFilteredHistory is set.
+    LoadImage(FilteredHistoryImage, ExtentPixels, Source);
     OutputImage.Assign(static_cast<int>(ExtentPixels), static_cast<int>(ExtentPixels));
 
     DenoiseParameters.Extent[0]        = ExtentPixels;
@@ -96,6 +104,7 @@ void Run(const RunConfiguration& Configuration, const float* Source, const float
     DenoiseParameters.LuminanceScale   = Configuration.LuminanceScale;
     DenoiseParameters.Exposure         = Configuration.Exposure;
     DenoiseParameters.FinalLevel       = Configuration.FinalLevel ? 1u : 0u;
+    DenoiseParameters.WriteFilteredHistory = Configuration.WriteFilteredHistory ? 1u : 0u;
     DenoiseParameters.ColourSaturation = Configuration.ColourSaturation;
 
     for (uint32_t Y = 0u; Y < ExtentPixels; ++Y)
@@ -108,6 +117,7 @@ void Run(const RunConfiguration& Configuration, const float* Source, const float
 
     if (Target != nullptr) StoreImage(TargetImage, ExtentPixels, Target);
     if (Output != nullptr) StoreImage(OutputImage, ExtentPixels, Output);
+    if (FilteredHistory != nullptr) StoreImage(FilteredHistoryImage, ExtentPixels, FilteredHistory);
 }
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -136,6 +146,10 @@ void Accumulator::Resolve(const float SampleRadiance[3], float* OutRadiance, flo
 {
     // ReSTIRViewport.slang `ResolveSurface`, in order: count += 1; mean += (x − mean)/count; moments += (luma,
     //    luma² − moments)/count; variance = max(E[x²] − E[x]², 0)/count; a first sample reports luma².
+    // This mirror is the zero-motion progressive path. ReSTIRViewport.slang applies its finite 32-sample confidence
+    // only when a validated history actually reprojects across pixels; a still pixel stays an unbiased progressive
+    // mean and can reach the filter early-out. ReactiveTemporalMirror.h separately executes the capped moved-history
+    // policy, including moving shadows and animated emission.
     Count += 1.0f;
     for (int C = 0; C < 3; ++C) Mean[C] += (SampleRadiance[C] - Mean[C]) / Count;
 

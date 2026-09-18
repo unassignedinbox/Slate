@@ -22,6 +22,7 @@ struct RunConfiguration
     uint32_t StepSize         = 1u;     // [px]  tap spacing for this level (1, 2, 4, 8, 16)
     bool     Enabled          = true;   // [-]   0 = straight copy, the identity switch
     bool     FinalLevel       = true;   // [-]   also tone-map into the output image
+    bool     WriteFilteredHistory = false; // [-] level zero persists its result for next-frame temporal history
     float    NormalPower      = 64.0f;  // [-]   σn — the engine's Push.NormalPower
     float    DepthScale       = 0.05f;  // [-]   σz — the engine's Push.DepthScale
     float    LuminanceScale   = 4.0f;   // [-]   σl — the engine's Push.LuminanceScale
@@ -30,9 +31,11 @@ struct RunConfiguration
 };
 
 // One dispatch over an Extent × Extent image. `Source` and `Surface` are 4-float texels (xyz = linear radiance,
-//    w = variance / depth ≤ 0 = none); `Target` receives the filtered texels and `Output`, when non-null, the
-//    tone-mapped presentation texels. All four arrays are Extent × Extent × 4 floats.
-void Run(const RunConfiguration& Configuration, const float* Source, const float* Surface, float* Target, float* Output);
+//    w = variance / depth ≤ 0 = none); `Target` receives the filtered texels, `Output`, when non-null, receives
+//    tone-mapped presentation texels, and `FilteredHistory`, when non-null, observes the optional first-wavelet
+//    feedback image. All arrays are Extent × Extent × 4 floats.
+void Run(const RunConfiguration& Configuration, const float* Source, const float* Surface, float* Target, float* Output,
+         float* FilteredHistory = nullptr);
 
 // The shader's own functions and constants, for the proof's parity and sanity checks.
 float AcesFilm(float X);

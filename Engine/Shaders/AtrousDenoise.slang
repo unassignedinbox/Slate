@@ -37,6 +37,9 @@ layout(set = 0, binding = 0, rgba32f) uniform readonly  image2D SourceImage;    
 layout(set = 0, binding = 1, rgba32f) uniform writeonly image2D TargetImage;    // xyz = radiance, w = variance
 layout(set = 0, binding = 2, rgba16f) uniform readonly  image2D SurfaceImage;   // xyz = normal, w = depth (≤ 0 = none)
 layout(set = 0, binding = 3, rgba8)   uniform writeonly image2D OutputImage;   // tone-mapped presentation image (final level only)
+// SVGF-style color history is separate from the raw temporal mean and moments. Only the first à-trous iteration writes
+// it; ReSTIRViewport reads it on the next frame while retaining raw moments/confidence for reactive validation.
+layout(set = 0, binding = 4, rgba32f) uniform writeonly image2D FilteredHistoryImage;
 
 layout(push_constant) uniform DenoiseConstants
 {
@@ -49,10 +52,11 @@ layout(push_constant) uniform DenoiseConstants
     float LuminanceScale;     // [-]   σl — how many standard deviations count as "the same"
     float Exposure;           // [-]   applied by the final level's tone map
 
-    uint  FinalLevel;         // [-]   1 = also tone-map into OutputImage
+    uint  FinalLevel;         // [-]  1 = also tone-map into OutputImage
+    uint  WriteFilteredHistory; // [-] 1 only for level zero: preserve the first-wavelet color for next frame
     // A7d. Must match the kernel's: with the denoiser on, THIS is the tone map the viewer sees, and a
     //    saturation applied in only one of the two would change colour when the denoiser was toggled.
-    float ColourSaturation;   // [-]   1 in daylight, 0 under starlight
+    float ColourSaturation;   // [-]  1 in daylight, 0 under starlight
 };
 
 // R10 #9. The convergence threshold for the per-pixel early-out, as a VARIANCE. Expressed as the square of a
@@ -114,6 +118,7 @@ void main()
     if (Enabled == 0u || CentreSurface.w <= 0.0)
     {
         imageStore(TargetImage, Pixel, Centre);
+        if (WriteFilteredHistory != 0u) imageStore(FilteredHistoryImage, Pixel, vec4(Centre.rgb, 1.0));
         if (FinalLevel != 0u) imageStore(OutputImage, Pixel, vec4(ToneMap(Centre.rgb), 1.0));
         return;
     }
@@ -159,9 +164,10 @@ void main()
     //    no pixel ever qualifies at levels 0-3. The convergence test is its own gate.
     if (LocalVariance < kEarlyOutVariance)
     {
-        // Still write BOTH outputs. The ping-pong target must carry this pixel forward or the next level reads a
-        //    stale slot, and the presentation image must be written or a skipped pixel keeps last frame's colour.
+        // Still write every dependent output. The ping-pong target must carry this pixel forward, and level zero must
+        // preserve its first-wavelet history even when it early-outs or the next temporal resolve reads a stale color.
         imageStore(TargetImage, Pixel, Centre);
+        if (WriteFilteredHistory != 0u) imageStore(FilteredHistoryImage, Pixel, vec4(Centre.rgb, 1.0));
         if (FinalLevel != 0u) imageStore(OutputImage, Pixel, vec4(ToneMap(Centre.rgb), 1.0));
         return;
     }
@@ -219,6 +225,9 @@ void main()
                 : Centre;
 
     imageStore(TargetImage, Pixel, Result);
+    // Canonical SVGF carries the first wavelet reconstruction into the next frame, not the final wide filter. Keeping
+    // this write on level zero preserves detail while taking the temporal feedback from a locally de-noised estimate.
+    if (WriteFilteredHistory != 0u) imageStore(FilteredHistoryImage, Pixel, vec4(Result.rgb, 1.0));
 
     // The last level is also the presentation write. Doing it here rather than in a sixth pass saves a full-screen
     //    round trip, and keeps the tone map the only place linear radiance becomes display values.

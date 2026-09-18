@@ -11,7 +11,7 @@
 //        ② `layout(local_size_x = 8, ...) in;`  — dropped (the wrapper sets the workgroup id instead)
 //        ③ `float[5](a, b, c, d, e)`            — GLSL's array constructor → C++ brace init, values identical
 //    and the push-constant block is split out of the file so that the block's members can be reached unqualified the
-//    way GLSL reaches them (the nine `DenoiseParameters.` macros below; the shader names them bare).
+//    way GLSL reaches them (the ten `DenoiseParameters.` macros below; the shader names them bare).
 //
 //    Bounds are checked, not clamped: a tap outside the image is a defect in the port (the shader's own guards exist
 //    precisely to prevent it), and a silent zero would turn that defect into a plausible-looking picture.

@@ -115,6 +115,11 @@ struct SwapchainExchange::VulkanRecord
     VkImage                  HistoryImage          = VK_NULL_HANDLE;
     VkDeviceMemory           HistoryMemory         = VK_NULL_HANDLE;
     VkImageView              HistoryImageView      = VK_NULL_HANDLE;
+    // First-wavelet color history is intentionally distinct from the raw mean/count above. The next ResolveSurface
+    // uses this locally filtered color while raw moments and explicit confidence remain sample-space statistics.
+    VkImage                  FilteredHistoryImage      = VK_NULL_HANDLE;
+    VkDeviceMemory           FilteredHistoryMemory     = VK_NULL_HANDLE;
+    VkImageView              FilteredHistoryImageView = VK_NULL_HANDLE;
     // R7a: the (normal, depth) of whatever the history pixel was shading, so the next frame can validate a
     //    reprojection against the surface that produced the mean rather than against this frame's surface.
     VkImage                  HistorySurfaceImage     = VK_NULL_HANDLE;
@@ -238,11 +243,15 @@ struct SwapchainExchange::VulkanRecord
     VkDescriptorSetLayout    ComputeDescriptorLayout = VK_NULL_HANDLE;
     VkDescriptorPool         ComputeDescriptorPool   = VK_NULL_HANDLE;
     VkDescriptorSet          ComputeDescriptorSet    = VK_NULL_HANDLE;
+    // Set 1 stays deliberately tiny so first-wavelet history does not displace set 0's variable-count texture table.
+    VkDescriptorSetLayout    ComputeTemporalDescriptorLayout = VK_NULL_HANDLE;
+    VkDescriptorPool         ComputeTemporalDescriptorPool   = VK_NULL_HANDLE;
+    VkDescriptorSet          ComputeTemporalDescriptorSet    = VK_NULL_HANDLE;
     VkPipelineLayout         ComputePipelineLayout   = VK_NULL_HANDLE;
     VkPipeline               ComputePipeline         = VK_NULL_HANDLE;
 
-    // R7 denoiser: its own pipeline and a small per-level descriptor set. Six sets are allocated (five à-trous
-    //    levels plus one spare) so a level's bindings can be written once at bring-up instead of every frame.
+    // R7 denoiser: its own pipeline and one descriptor set per allocated à-trous level. The fifth binding is the
+    //    separate first-wavelet feedback image; push constants restrict writes to level zero.
     VkPipelineLayout         DenoisePipelineLayout   = VK_NULL_HANDLE;
     VkPipeline               DenoisePipeline         = VK_NULL_HANDLE;
     VkDescriptorSetLayout    DenoiseSetLayout        = VK_NULL_HANDLE;
@@ -630,7 +639,9 @@ void SwapchainExchange::Retire() noexcept
     if (Vulkan->DenoisePipelineLayout) vkDestroyPipelineLayout    (Vulkan->Device, Vulkan->DenoisePipelineLayout, nullptr);
     if (Vulkan->DenoiseSetLayout)      vkDestroyDescriptorSetLayout(Vulkan->Device, Vulkan->DenoiseSetLayout,     nullptr);
     if (Vulkan->DenoisePool)           vkDestroyDescriptorPool    (Vulkan->Device, Vulkan->DenoisePool,           nullptr);
+    if (Vulkan->ComputeTemporalDescriptorPool) vkDestroyDescriptorPool(Vulkan->Device, Vulkan->ComputeTemporalDescriptorPool, nullptr);
     if (Vulkan->ComputeDescriptorPool) vkDestroyDescriptorPool    (Vulkan->Device, Vulkan->ComputeDescriptorPool, nullptr);
+    if (Vulkan->ComputeTemporalDescriptorLayout) vkDestroyDescriptorSetLayout(Vulkan->Device, Vulkan->ComputeTemporalDescriptorLayout, nullptr);
     if (Vulkan->ComputeDescriptorLayout) vkDestroyDescriptorSetLayout(Vulkan->Device, Vulkan->ComputeDescriptorLayout, nullptr);
 
     if (Vulkan->Device)   vkDestroyDevice             (Vulkan->Device,             nullptr);
@@ -667,6 +678,9 @@ void SwapchainExchange::RetireSwapchain() noexcept
     if (Vulkan->HistoryImageView)  vkDestroyImageView(Vulkan->Device, Vulkan->HistoryImageView,  nullptr);
     if (Vulkan->HistoryImage)      vkDestroyImage    (Vulkan->Device, Vulkan->HistoryImage,      nullptr);
     if (Vulkan->HistoryMemory)     vkFreeMemory      (Vulkan->Device, Vulkan->HistoryMemory,     nullptr);
+    if (Vulkan->FilteredHistoryImageView) vkDestroyImageView(Vulkan->Device, Vulkan->FilteredHistoryImageView, nullptr);
+    if (Vulkan->FilteredHistoryImage)     vkDestroyImage    (Vulkan->Device, Vulkan->FilteredHistoryImage,     nullptr);
+    if (Vulkan->FilteredHistoryMemory)    vkFreeMemory      (Vulkan->Device, Vulkan->FilteredHistoryMemory,    nullptr);
     if (Vulkan->HistorySurfaceImageView) vkDestroyImageView(Vulkan->Device, Vulkan->HistorySurfaceImageView, nullptr);
     if (Vulkan->HistorySurfaceImage)     vkDestroyImage    (Vulkan->Device, Vulkan->HistorySurfaceImage,     nullptr);
     if (Vulkan->HistorySurfaceMemory)    vkFreeMemory      (Vulkan->Device, Vulkan->HistorySurfaceMemory,    nullptr);
@@ -680,6 +694,9 @@ void SwapchainExchange::RetireSwapchain() noexcept
         if (Vulkan->DenoiseMemory[Slot])     vkFreeMemory      (Vulkan->Device, Vulkan->DenoiseMemory[Slot],     nullptr);
     }
     Vulkan->HistoryImageView   = VK_NULL_HANDLE;
+    Vulkan->FilteredHistoryImageView = VK_NULL_HANDLE;
+    Vulkan->FilteredHistoryImage = VK_NULL_HANDLE;
+    Vulkan->FilteredHistoryMemory = VK_NULL_HANDLE;
     Vulkan->HistorySurfaceImageView = VK_NULL_HANDLE;
     Vulkan->HistorySurfaceImage     = VK_NULL_HANDLE;
     Vulkan->HistorySurfaceMemory    = VK_NULL_HANDLE;
@@ -1177,7 +1194,15 @@ bool SwapchainExchange::BringStorageImage() noexcept
     // ② History image — linear HDR running mean, persists across frames (temporal accumulation).
     if (!CreateStorageImage(Vulkan->Device, Vulkan->MemoryProperties, VK_FORMAT_R32G32B32A32_SFLOAT, Extent,
                             VK_IMAGE_USAGE_STORAGE_BIT,
-                            Vulkan->HistoryImage, Vulkan->HistoryMemory, Vulkan->HistoryImageView, "history image"))
+                            Vulkan->HistoryImage, Vulkan->HistoryMemory, Vulkan->HistoryImageView, "raw history image"))
+        return false;
+
+    // ②a First-wavelet color history. Raw mean/count and moments above remain the reactive estimator; this stores only
+    //     the level-zero à-trous result that becomes next frame's temporal color (SVGF's filtered-history convention).
+    if (!CreateStorageImage(Vulkan->Device, Vulkan->MemoryProperties, VK_FORMAT_R32G32B32A32_SFLOAT, Extent,
+                            VK_IMAGE_USAGE_STORAGE_BIT,
+                            Vulkan->FilteredHistoryImage, Vulkan->FilteredHistoryMemory,
+                            Vulkan->FilteredHistoryImageView, "first-wavelet history image"))
         return false;
 
     // ②b R7a history surface — the normal and depth the history mean was shaded at. rgba16f is ample: the normal
@@ -1365,16 +1390,34 @@ bool SwapchainExchange::BringComputePipeline() noexcept
     LayoutInfo.pBindings    = LayoutBindings.data();
     (void)vkCreateDescriptorSetLayout(Vulkan->Device, &LayoutInfo, nullptr, &Vulkan->ComputeDescriptorLayout);
 
+    // Set 1: the filtered color history has a separate descriptor contract from set 0's raw mean/moments and bindless
+    // textures. Keeping this set separate avoids a churn-prone renumber of the variable descriptor-count binding.
+    VkDescriptorSetLayoutBinding TemporalBinding{};
+    TemporalBinding.binding         = 0u;
+    TemporalBinding.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    TemporalBinding.descriptorCount = 1u;
+    TemporalBinding.stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
+    VkDescriptorSetLayoutCreateInfo TemporalLayoutInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+    TemporalLayoutInfo.bindingCount = 1u;
+    TemporalLayoutInfo.pBindings    = &TemporalBinding;
+    if (vkCreateDescriptorSetLayout(Vulkan->Device, &TemporalLayoutInfo, nullptr,
+                                    &Vulkan->ComputeTemporalDescriptorLayout) != VK_SUCCESS)
+        return false;
+
     // ② Push constant range — matches DispatchConfiguration exactly (96 bytes, static_assert in ReSTIRIntegrator.h)
     VkPushConstantRange PushRange{};
     PushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
     PushRange.offset     = 0u;
     PushRange.size       = static_cast<uint32_t>(sizeof(DispatchConfiguration));
 
+    const VkDescriptorSetLayout ComputeSetLayouts[2] =
+    {
+        Vulkan->ComputeDescriptorLayout, Vulkan->ComputeTemporalDescriptorLayout
+    };
     VkPipelineLayoutCreateInfo PipelineLayoutInfo{};
     PipelineLayoutInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    PipelineLayoutInfo.setLayoutCount         = 1u;
-    PipelineLayoutInfo.pSetLayouts            = &Vulkan->ComputeDescriptorLayout;
+    PipelineLayoutInfo.setLayoutCount         = 2u;
+    PipelineLayoutInfo.pSetLayouts            = ComputeSetLayouts;
     PipelineLayoutInfo.pushConstantRangeCount = 1u;
     PipelineLayoutInfo.pPushConstantRanges    = &PushRange;
     (void)vkCreatePipelineLayout(Vulkan->Device, &PipelineLayoutInfo, nullptr, &Vulkan->ComputePipelineLayout);
@@ -1418,7 +1461,7 @@ bool SwapchainExchange::BringComputePipeline() noexcept
 //                                            R7 DENOISER PIPELINE
 //------------------------------------------------------------------------------------------------------------------------
 // Deliberately a separate descriptor set from the ReSTIR kernel's. That set is already full to its variable-count
-//    bindless texture array, and a filter needing four images has no business forcing another renumber of it.
+// bindless texture array, and a filter needing five images has no business forcing another renumber of it.
 
 struct DenoisePushRecord
 {
@@ -1432,6 +1475,7 @@ struct DenoisePushRecord
     float    Exposure;         // [-]
 
     uint32_t FinalLevel;       // [-]  1 = also tone-map into the presentation image
+    uint32_t WriteFilteredHistory; // [-] 1 only at first wavelet level
     float    ColourSaturation; // [-]  A7d: must match the kernel's, or toggling the denoiser changes colour
 };
 
@@ -1630,9 +1674,9 @@ bool SwapchainExchange::BringDenoisePipeline() noexcept
 #ifdef FRONTIER_DEVELOPMENT
     FRONTIER_TELEMETRY_SHADER("Startup/Shader/AtrousDenoise/LoadModuleAndPipeline");
 #endif
-    // ① Set layout: source, target, surface, presentation.
-    std::array<VkDescriptorSetLayoutBinding, 4u> Bindings{};
-    for (uint32_t B = 0u; B < 4u; ++B)
+    // ① Set layout: source, target, surface, presentation, first-wavelet filtered history.
+    std::array<VkDescriptorSetLayoutBinding, 5u> Bindings{};
+    for (uint32_t B = 0u; B < 5u; ++B)
     {
         Bindings[B].binding         = B;
         Bindings[B].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
@@ -1641,7 +1685,7 @@ bool SwapchainExchange::BringDenoisePipeline() noexcept
     }
 
     VkDescriptorSetLayoutCreateInfo LayoutInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-    LayoutInfo.bindingCount = 4u;
+    LayoutInfo.bindingCount = 5u;
     LayoutInfo.pBindings    = Bindings.data();
     if (vkCreateDescriptorSetLayout(Vulkan->Device, &LayoutInfo, nullptr, &Vulkan->DenoiseSetLayout) != VK_SUCCESS)
         return false;
@@ -1659,7 +1703,7 @@ bool SwapchainExchange::BringDenoisePipeline() noexcept
         return false;
 
     // ② Pool and one set per level.
-    VkDescriptorPoolSize PoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 4u * kDenoiseLevelCount };
+    VkDescriptorPoolSize PoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 5u * kDenoiseLevelCount };
     VkDescriptorPoolCreateInfo PoolInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
     PoolInfo.maxSets       = kDenoiseLevelCount;
     PoolInfo.poolSizeCount = 1u;
@@ -1810,6 +1854,22 @@ bool SwapchainExchange::BringDescriptorSet() noexcept
         return false;
     }
 
+    // The first-wavelet history has its own one-image set. It is allocated independently so this set can later be
+    // ping-ponged without touching the main bindless descriptor set while a previous frame is pending.
+    VkDescriptorPoolSize TemporalPoolSize{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1u };
+    VkDescriptorPoolCreateInfo TemporalPoolInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
+    TemporalPoolInfo.maxSets       = 1u;
+    TemporalPoolInfo.poolSizeCount = 1u;
+    TemporalPoolInfo.pPoolSizes    = &TemporalPoolSize;
+    if (vkCreateDescriptorPool(Vulkan->Device, &TemporalPoolInfo, nullptr, &Vulkan->ComputeTemporalDescriptorPool) != VK_SUCCESS)
+        return false;
+    VkDescriptorSetAllocateInfo TemporalAllocate{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+    TemporalAllocate.descriptorPool     = Vulkan->ComputeTemporalDescriptorPool;
+    TemporalAllocate.descriptorSetCount = 1u;
+    TemporalAllocate.pSetLayouts        = &Vulkan->ComputeTemporalDescriptorLayout;
+    if (vkAllocateDescriptorSets(Vulkan->Device, &TemporalAllocate, &Vulkan->ComputeTemporalDescriptorSet) != VK_SUCCESS)
+        return false;
+
     // The scene SSBOs do not exist yet (UploadTriangles / UploadRadiance run after Bring()).
     //    WriteDescriptorSet() only writes the bindings whose resources exist - writing a VK_NULL_HANDLE
     //    buffer into a descriptor is invalid and crashes most drivers when validation is off.
@@ -1838,6 +1898,10 @@ void SwapchainExchange::WriteDescriptorSet() noexcept
     VkDescriptorImageInfo HistoryInfo{};
     HistoryInfo.imageView   = Vulkan->HistoryImageView;
     HistoryInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+    VkDescriptorImageInfo FilteredHistoryInfo{};
+    FilteredHistoryInfo.imageView   = Vulkan->FilteredHistoryImageView;
+    FilteredHistoryInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
     VkDescriptorImageInfo HistorySurfaceInfo{};
     HistorySurfaceInfo.imageView   = Vulkan->HistorySurfaceImageView;
@@ -2014,29 +2078,42 @@ void SwapchainExchange::WriteDescriptorSet() noexcept
     if (TextureWrite.descriptorCount > 0u)
         vkUpdateDescriptorSets(Vulkan->Device, 1u, &TextureWrite, 0u, nullptr);
 
+    if (Vulkan->ComputeTemporalDescriptorSet && FilteredHistoryInfo.imageView)
+    {
+        VkWriteDescriptorSet Write{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+        Write.dstSet          = Vulkan->ComputeTemporalDescriptorSet;
+        Write.dstBinding      = 0u;
+        Write.descriptorCount = 1u;
+        Write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        Write.pImageInfo      = &FilteredHistoryInfo;
+        vkUpdateDescriptorSets(Vulkan->Device, 1u, &Write, 0u, nullptr);
+    }
+
     // ── R7 denoiser sets ────────────────────────────────────────────────────────────────────────────────────────
     // One set per à-trous level, written once here rather than per frame: the images never change, only the push
     //    constants do. Level i reads slot (i & 1) and writes the other, so with an odd level count the final
     //    result lands in slot 1 — but the last level also writes the presentation image, so nothing downstream
     //    depends on which slot it ended in.
-    if (Vulkan->DenoiseSetLayout && Vulkan->DenoiseImageViews[0] && Vulkan->HistorySurfaceImageView)
+    if (Vulkan->DenoiseSetLayout && Vulkan->DenoiseImageViews[0] && Vulkan->HistorySurfaceImageView
+        && Vulkan->FilteredHistoryImageView)
     {
-        std::array<VkDescriptorImageInfo,  4u * kDenoiseLevelCount> DenoiseInfos{};
-        std::array<VkWriteDescriptorSet,   4u * kDenoiseLevelCount> DenoiseWrites{};
+        std::array<VkDescriptorImageInfo,  5u * kDenoiseLevelCount> DenoiseInfos{};
+        std::array<VkWriteDescriptorSet,   5u * kDenoiseLevelCount> DenoiseWrites{};
         uint32_t DenoiseCount = 0u;
 
         for (uint32_t Level = 0u; Level < kDenoiseLevelCount; ++Level)
         {
             const uint32_t Source = Level & 1u;
-            const VkImageView Views[4] =
+            const VkImageView Views[5] =
             {
                 Vulkan->DenoiseImageViews[Source],        // 0 source
                 Vulkan->DenoiseImageViews[Source ^ 1u],   // 1 target
                 Vulkan->HistorySurfaceImageView,          // 2 normal + depth (shared with R7a)
-                Vulkan->StorageImageView                  // 3 presentation (written by the final level only)
+                Vulkan->StorageImageView,                 // 3 presentation (written by the final level only)
+                Vulkan->FilteredHistoryImageView          // 4 level-zero filtered history (all levels bind, push selects)
             };
 
-            for (uint32_t Binding = 0u; Binding < 4u; ++Binding)
+            for (uint32_t Binding = 0u; Binding < 5u; ++Binding)
             {
                 VkDescriptorImageInfo& Info = DenoiseInfos[DenoiseCount];
                 Info.imageView   = Views[Binding];
@@ -2924,10 +3001,10 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
         // R7 joins the same bracket: the moments persist exactly like the mean, and the two denoise images must
         //    reach GENERAL before the kernel writes slot 0. All of them share the one HistoryInitialised latch
         //    because they are created and destroyed together.
-        const std::array<VkImage, 5u> HistoryImages{ Vulkan->HistoryImage, Vulkan->HistorySurfaceImage,
-                                                     Vulkan->MomentImage,
+        const std::array<VkImage, 6u> HistoryImages{ Vulkan->HistoryImage, Vulkan->FilteredHistoryImage,
+                                                     Vulkan->HistorySurfaceImage, Vulkan->MomentImage,
                                                      Vulkan->DenoiseImages[0], Vulkan->DenoiseImages[1] };
-        std::array<VkImageMemoryBarrier, 5u> Barriers{};
+        std::array<VkImageMemoryBarrier, 6u> Barriers{};
         uint32_t BarrierCount = 0u;
         for (VkImage Image : HistoryImages)
         {
@@ -3040,8 +3117,9 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
     {
         // ② Dispatch ReSTIR compute
         vkCmdBindPipeline(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Vulkan->ComputePipeline);
+        const VkDescriptorSet ComputeSets[2] = { Vulkan->ComputeDescriptorSet, Vulkan->ComputeTemporalDescriptorSet };
         vkCmdBindDescriptorSets(Command, VK_PIPELINE_BIND_POINT_COMPUTE,
-            Vulkan->ComputePipelineLayout, 0u, 1u, &Vulkan->ComputeDescriptorSet, 0u, nullptr);
+            Vulkan->ComputePipelineLayout, 0u, 2u, ComputeSets, 0u, nullptr);
         vkCmdPushConstants(Command, Vulkan->ComputePipelineLayout,
             VK_SHADER_STAGE_COMPUTE_BIT, 0u, sizeof(DispatchConfiguration), &Dispatch);
         const uint32_t GroupX = (RenderWidth  + kLocalGroupSizeX - 1u) / kLocalGroupSizeX;
@@ -3070,21 +3148,27 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
             //    neighbours. Because workgroups retire roughly in linear ID order the incomplete frontier follows
             //    column boundaries, so it shows up as vertical banding rather than isolated speckle.
             {
-                VkImageMemoryBarrier KernelOutput{};
-                KernelOutput.sType                       = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-                KernelOutput.oldLayout                   = VK_IMAGE_LAYOUT_GENERAL;
-                KernelOutput.newLayout                   = VK_IMAGE_LAYOUT_GENERAL;
-                KernelOutput.srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
-                KernelOutput.dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
-                KernelOutput.image                       = Vulkan->HistorySurfaceImage;
-                KernelOutput.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                KernelOutput.subresourceRange.levelCount = 1u;
-                KernelOutput.subresourceRange.layerCount = 1u;
-                KernelOutput.srcAccessMask               = VK_ACCESS_SHADER_WRITE_BIT;
-                KernelOutput.dstAccessMask               = VK_ACCESS_SHADER_READ_BIT;
+                // ReSTIR writes the surface guide and a raw-color fallback into filtered history. Level zero reads the
+                // former and overwrites the latter, so this is both guide WRITE→READ and history WRITE→WRITE ordering.
+                VkImageMemoryBarrier KernelOutputs[2]{};
+                for (VkImageMemoryBarrier& Barrier : KernelOutputs)
+                {
+                    Barrier.sType                       = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                    Barrier.oldLayout                   = VK_IMAGE_LAYOUT_GENERAL;
+                    Barrier.newLayout                   = VK_IMAGE_LAYOUT_GENERAL;
+                    Barrier.srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+                    Barrier.dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+                    Barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                    Barrier.subresourceRange.levelCount = 1u;
+                    Barrier.subresourceRange.layerCount = 1u;
+                    Barrier.srcAccessMask               = VK_ACCESS_SHADER_WRITE_BIT;
+                    Barrier.dstAccessMask               = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+                }
+                KernelOutputs[0].image = Vulkan->HistorySurfaceImage;
+                KernelOutputs[1].image = Vulkan->FilteredHistoryImage;
                 vkCmdPipelineBarrier(Command,
                     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                    0u, 0u, nullptr, 0u, nullptr, 1u, &KernelOutput);
+                    0u, 0u, nullptr, 0u, nullptr, 2u, KernelOutputs);
             }
 
             // R10 #8: how many levels run is tier-keyed. Descriptor sets exist for kDenoiseLevelCount, so a
@@ -3132,6 +3216,9 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
                 Push.LuminanceScale = 4.0f;
                 Push.Exposure       = Dispatch.Exposure;    // the filter owns the tone map, so it needs the exposure
                 Push.FinalLevel     = (Level + 1u == LiveDenoiseLevels) ? 1u : 0u;
+                // The first wavelet result is the history feedback (canonical SVGF), independent of how many wider
+                // levels this quality tier chooses for presentation.
+                Push.WriteFilteredHistory = Level == 0u ? 1u : 0u;
                 Push.ColourSaturation = Dispatch.ColourSaturation;
 
                 vkCmdPushConstants(Command, Vulkan->DenoisePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT,
