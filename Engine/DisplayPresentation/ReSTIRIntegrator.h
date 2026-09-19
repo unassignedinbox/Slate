@@ -156,6 +156,12 @@ public:
     void AssignInstanceCount(uint32_t Count) noexcept { ResidentInstanceCount = Count; }
     [[nodiscard]] uint32_t QueryInstanceCount() const noexcept { return ResidentInstanceCount; }
 
+    // Dev diagnostics (shadow probe, binding 31): extra DispatchFeature bits OR'ed into every dispatch's
+    //    FeatureFlags verbatim. The integrator owns no policy here — the project arms and disarms them — so
+    //    steady-state rendering pays exactly one uint OR.
+    void AssignDebugFeatureFlags(uint32_t Bits) noexcept { DebugFeatureFlags = Bits; }
+    [[nodiscard]] uint32_t QueryDebugFeatureFlags() const noexcept { return DebugFeatureFlags; }
+
     [[nodiscard]] const ReSTIRIntegratorConfiguration& QueryConfiguration() const noexcept
     {
         return ActiveConfiguration;
@@ -173,6 +179,7 @@ private:
     uint32_t                      AccumulationIndex;    // [-]  temporal frame counter (incremented per frame)
     uint32_t                      ResidentInstanceCount = 0u;   // [cnt] D6/D7: top-level instances the kernel should walk
                                                           //       (0 = the single-blob path; see AssignInstanceCount)
+    uint32_t                      DebugFeatureFlags = 0u;       // [bit] dev-only extra DispatchFeature bits (shadow probe)
     float                         SunPickProbability = 0.0f;    // [-]  power-proportional sun-vs-lamps pick; 0 = the
                                                           //       kernel's legacy fixed 0.5 coin (see AssignSunPickProbability)
     bool                          ResetPending = false; // [-]  a reset landed after the dispatch read the index

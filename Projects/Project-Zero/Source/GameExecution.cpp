@@ -52,6 +52,7 @@
 #include "InstanceMotionSequence.h"
 #include "PerformanceTelemetrySequence.h"
 #include "../../../Engine/DeviceExchange/TelemetryProbe.h"   // dev/debug-only in-RAM probe; every FRONTIER_PROBE_* call compiles out of ship builds
+#include "../../../Engine/DeviceExchange/ShadowProbeRecord.h"   // dev diagnostic: the GPU's shadow/traversal witness (binding 31)
 #include "PhysicsInstanceSequence.h"
 #include "InterfaceAudioSequence.h"
 #include "../../../Engine/SpatialInterface/InterfaceScreenSequence.h"
@@ -60,7 +61,10 @@
 #include "../../../Engine/SpatialInterface/InterfaceLightProjection.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
+#include <cfloat>
+#include <cmath>
 #include <thread>
 #include <string>
 #include <cstdio>
@@ -711,6 +715,257 @@ int main(int argc, char** argv)
         {
             Logger.RecordMessage(Frontier::DiagnosticSeverity::Warning, "Traversal",
                                  "Two-level build refused - the kernel keeps the single world-space structure.");
+        }
+    }
+
+    //──────────────────────────────────────────────────────────────────────────
+    // Shadow probe — the GPU-side witness for the no-shadow hunt (ShadowProbeRecord.h)
+    //──────────────────────────────────────────────────────────────────────────
+    // Every shadow proof this engine ships runs in the CPU mirror; the SPIR-V the user's GPU executes was never
+    //    asked a question with a known answer. This block composes known rays from the level's own bounds, answers
+    //    them on the CPU (the same structures the device buffers were uploaded from), and arms the kernel's probe
+    //    page. Two frames into the loop the kernel's answers — through the SAME TraceShadow the lighting uses —
+    //    are read back and compared: a disagreement here IS the no-shadow bug, located; agreement moves the
+    //    suspicion into the lighting path, which the counters then measure.
+    struct ShadowProbeRayExpect
+    {
+        float    Origin[3], Target[3];
+        float    CpuT = 0.0f;
+        uint32_t CpuPrimitive = 0xFFFFFFFFu;
+        bool     ExpectedOccluded = false;
+    };
+    struct ShadowProbeState
+    {
+        bool     Armed = false, Completed = false;
+        uint32_t FramesSinceArm = 0u;
+        uint32_t RayCount = 0u;
+        uint32_t ExpectedMask = 0u;
+        ShadowProbeRayExpect Rays[Frontier::kShadowProbeRayCapacity];
+    } ShadowProbe;
+    const auto ShadowProbeEvaluate = [&](const std::array<uint32_t, Frontier::kShadowProbeWords>& Page) noexcept
+    {
+        char Line[384];
+        uint32_t RaysMatched = 0u;
+        for (uint32_t I = 0u; I < ShadowProbe.RayCount; ++I)
+        {
+            const ShadowProbeRayExpect& Expect = ShadowProbe.Rays[I];
+            const uint32_t Base = Frontier::kShadowProbeWordRayOut + I * Frontier::kShadowProbeRayOutStride;
+            const bool     GpuBlocked = Page[Base + 0u] != 0u;
+            float          GpuT = -1.0f;  std::memcpy(&GpuT, &Page[Base + 1u], sizeof(float));
+            const uint32_t GpuPrim = Page[Base + 2u];
+            const bool     GpuValid  = Page[Base + 3u] != 0u;
+            const bool Match = GpuBlocked == Expect.ExpectedOccluded;
+            if (Match) ++RaysMatched;
+            const float  Tol = std::fmax(1e-3f, std::fabs(Expect.CpuT) * 1e-3f);
+            const bool   TAgree = GpuValid && Expect.CpuPrimitive != 0xFFFFFFFFu &&
+                                  std::fabs(GpuT - Expect.CpuT) <= Tol;
+            std::snprintf(Line, sizeof(Line),
+                          "ray %u (%s): GPU blocked=%u t=%.4f prim=%u | CPU blocked=%u t=%.4f prim=%u -> %s%s",
+                          I, GpuBlocked ? "occluded" : "lit", GpuBlocked ? 1u : 0u, double(GpuT), GpuPrim,
+                          Expect.ExpectedOccluded ? 1u : 0u, double(Expect.CpuT), Expect.CpuPrimitive,
+                          Match ? "MATCH" : "MISMATCH",
+                          !Match ? "" : (TAgree ? " (t agrees)" : " (t differs — INFO)"));
+            Logger.RecordMessage(Match ? Frontier::DiagnosticSeverity::Information
+                                       : Frontier::DiagnosticSeverity::Warning, "ShadowProbe", Line);
+        }
+
+        // Blob echoes, byte-for-byte against the host copies the device buffers were uploaded from.
+        const auto EchoCheck = [&](const char* Name, const float* Host, uint32_t HostWords,
+                                   uint32_t PageOffset, uint32_t EchoWords) noexcept -> uint32_t
+        {
+            uint32_t Wrong = 0u;
+            for (uint32_t W = 0u; W < EchoWords; ++W)
+            {
+                uint32_t HostBits = 0xFFFFFFFFu;
+                if (W < HostWords) std::memcpy(&HostBits, Host + W, sizeof(uint32_t));
+                if (Page[PageOffset + W] != HostBits) ++Wrong;
+            }
+            std::snprintf(Line, sizeof(Line), "%s echo: %u/%u words differ -> %s",
+                          Name, Wrong, EchoWords, Wrong == 0u ? "IDENTICAL" : "CORRUPT-ON-DEVICE");
+            Logger.RecordMessage(Wrong == 0u ? Frontier::DiagnosticSeverity::Information
+                                             : Frontier::DiagnosticSeverity::Warning, "ShadowProbe", Line);
+            return Wrong;
+        };
+        uint32_t EchoWrong = 0u;
+        {
+            const std::vector<float>& Nodes = Traversal.QueryNodeBlob();
+            const std::vector<float>& Leafs = Traversal.QueryLeafBlob();
+            EchoWrong += EchoCheck("CWBVH nodes", Nodes.data(), static_cast<uint32_t>(Nodes.size()),
+                                   Frontier::kShadowProbeWordNodeEcho, 20u);
+            EchoWrong += EchoCheck("CWBVH leafs", Leafs.data(), static_cast<uint32_t>(Leafs.size()),
+                                   Frontier::kShadowProbeWordLeafEcho, 12u);
+            if (InstancesResident)
+            {
+                const std::vector<float>& Tlas = InstanceStructure.QueryTlasNodePayload();
+                EchoWrong += EchoCheck("TLAS root", Tlas.data(), static_cast<uint32_t>(Tlas.size()),
+                                       Frontier::kShadowProbeWordTlasEcho, 8u);
+                const std::vector<Frontier::TlasInstanceRecord>& Rows = InstanceStructure.QueryInstances();
+                const float* RowFloats = Rows.empty() ? nullptr : reinterpret_cast<const float*>(Rows.data());
+                EchoWrong += EchoCheck("instance row 0", RowFloats,
+                                       Rows.empty() ? 0u : (sizeof(Frontier::TlasInstanceRecord) / sizeof(float)),
+                                       Frontier::kShadowProbeWordInstEcho, 28u);
+            }
+        }
+
+        // The push constants exactly as the kernel read them — an offset drift shows up here in one number.
+        {
+            const uint32_t PE = Frontier::kShadowProbeWordPushEcho;
+            std::snprintf(Line, sizeof(Line),
+                          "push echo: FeatureFlags=0x%08x TlasInstances=%u (host %u) LuminaireTris=%u AlphaMats=%u "
+                          "viewport=%ux%u frame=%u taps=%u spp=%u",
+                          Page[PE + 0u], Page[PE + 1u], Integrator.QueryInstanceCount(), Page[PE + 2u], Page[PE + 3u],
+                          Page[PE + 4u], Page[PE + 5u], Page[PE + 6u], Page[PE + 7u], Page[PE + 8u]);
+            Logger.RecordMessage(Frontier::DiagnosticSeverity::Information, "ShadowProbe", Line);
+        }
+
+        // The per-type tallies the lighting path accumulated across the armed frames.
+        {
+            const uint32_t CB = Frontier::kShadowProbeWordCounters;
+            std::snprintf(Line, sizeof(Line),
+                          "counters: candidates sun=%u mesh=%u | selected sun=%u mesh=%u | shadow rays sun=%u mesh=%u "
+                          "| blocked sun=%u mesh=%u | spatial-late rejects=%u",
+                          Page[CB + 0u], Page[CB + 1u], Page[CB + 2u], Page[CB + 3u],
+                          Page[CB + 4u], Page[CB + 5u], Page[CB + 6u], Page[CB + 7u], Page[CB + 8u]);
+            Logger.RecordMessage(Frontier::DiagnosticSeverity::Information, "ShadowProbe", Line);
+        }
+
+        // The verdict — the one line this whole exercise exists for.
+        const uint32_t C = Frontier::kShadowProbeWordCounters;
+        const uint32_t RaysTraced = Page[C + 4u] + Page[C + 5u];
+        const uint32_t RaysBlocked = Page[C + 6u] + Page[C + 7u];
+        if (RaysMatched == ShadowProbe.RayCount && EchoWrong == 0u)
+            std::snprintf(Line, sizeof(Line),
+                          "VERDICT: GPU traversal VERIFIED (%u/%u rays match, blobs byte-identical). Lighting counters: "
+                          "%u shadow rays, %u blocked. %s",
+                          RaysMatched, ShadowProbe.RayCount, RaysTraced, RaysBlocked,
+                          RaysTraced > 0u && RaysBlocked == 0u
+                              ? "Rays run but NOTHING occludes — suspicion moves to light selection/energy, not the walker."
+                              : "Shadow machinery produces occlusion on this device — if the viewport still lacks shadows, "
+                                "suspicion moves to exposure/denoise or reservoir W.");
+        else if (EchoWrong > 0u)
+            std::snprintf(Line, sizeof(Line),
+                          "VERDICT: TRAVERSAL DATA CORRUPT ON DEVICE (%u echo words differ; %u/%u rays match). "
+                          "The BVH the GPU reads is not the BVH the host uploaded — descriptor, stride or lifetime bug. "
+                          "Shadows cannot form until this is fixed.",
+                          EchoWrong, RaysMatched, ShadowProbe.RayCount);
+        else
+            std::snprintf(Line, sizeof(Line),
+                          "VERDICT: GPU TRAVERSAL DIVERGES (%u/%u rays match) with byte-identical blobs — the walker "
+                          "itself behaves differently on this driver (layout/NaN/stack). Shadows cannot form until this is fixed.",
+                          RaysMatched, ShadowProbe.RayCount);
+        Logger.RecordMessage((RaysMatched == ShadowProbe.RayCount && EchoWrong == 0u)
+                                 ? Frontier::DiagnosticSeverity::Information
+                                 : Frontier::DiagnosticSeverity::Warning, "ShadowProbe", Line);
+        std::cout << "[ShadowProbe] " << Line << '\n';
+    };
+    if (!TracedFacets.empty())
+    {
+        // Level bounds from the flat soup.
+        float BMin[3] = { FLT_MAX, FLT_MAX, FLT_MAX }, BMax[3] = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
+        float Highest[3] = { 0.0f, 0.0f, -FLT_MAX };
+        for (const Frontier::TriangleIndex& F : TracedFacets)
+        {
+            const float V[9] = { F.VertexAlphaX, F.VertexAlphaY, F.VertexAlphaZ,
+                                 F.VertexBetaX,  F.VertexBetaY,  F.VertexBetaZ,
+                                 F.VertexGammaX, F.VertexGammaY, F.VertexGammaZ };
+            for (uint32_t K = 0u; K < 3u; ++K)
+            {
+                BMin[K] = std::fmin(BMin[K], std::fmin(V[0u + K], std::fmin(V[3u + K], V[6u + K])));
+                BMax[K] = std::fmax(BMax[K], std::fmax(V[0u + K], std::fmax(V[3u + K], V[6u + K])));
+            }
+            const float CenZ = (V[2] + V[5] + V[8]) / 3.0f;
+            if (CenZ > Highest[2]) { Highest[0] = (V[0] + V[3] + V[6]) / 3.0f; Highest[1] = (V[1] + V[4] + V[7]) / 3.0f; Highest[2] = CenZ; }
+        }
+        const float Cx = 0.5f * (BMin[0] + BMax[0]), Cy = 0.5f * (BMin[1] + BMax[1]), Cz = 0.5f * (BMin[2] + BMax[2]);
+        // CPU ground truth for a ray: the same steps TraceShadow() takes on the device (kEps = 1e-4, bounded).
+        const auto CpuOccluded = [&](const float O[3], const float T[3], float& OutT, uint32_t& OutPrim) noexcept -> bool
+        {
+            constexpr float kEps = 1e-4f;   // mirror ReSTIRViewport.slang's kEps
+            const float D[3] = { T[0] - O[0], T[1] - O[1], T[2] - O[2] };
+            const float Dist = std::sqrt(D[0] * D[0] + D[1] * D[1] + D[2] * D[2]);
+            if (Dist <= 3.0f * kEps) { OutT = 0.0f; OutPrim = 0xFFFFFFFFu; return false; }
+            const float Dir[3] = { D[0] / Dist, D[1] / Dist, D[2] / Dist };
+            const float TMax = Dist - 2.0f * kEps;
+            const float O2[3]  = { O[0] + Dir[0] * kEps, O[1] + Dir[1] * kEps, O[2] + Dir[2] * kEps };
+            if (InstancesResident)
+            {
+                uint32_t Inst = 0u;  float T = 0.0f;
+                if (!InstanceStructure.TraceClosest(O2, Dir, TMax, Inst, OutPrim, T)) { OutT = 0.0f; OutPrim = 0xFFFFFFFFu; return false; }
+                OutT = T;
+                return T < TMax;
+            }
+            if (!Traversal.TraceClosest(O2, Dir, OutT, OutPrim)) { OutT = 0.0f; OutPrim = 0xFFFFFFFFu; return false; }
+            return OutT < TMax;
+        };
+        const auto AddRay = [&](float Ox, float Oy, float Oz, float Tx, float Ty, float Tz) noexcept
+        {
+            if (ShadowProbe.RayCount >= Frontier::kShadowProbeRayCapacity) return;
+            ShadowProbeRayExpect& R = ShadowProbe.Rays[ShadowProbe.RayCount++];
+            R.Origin[0] = Ox; R.Origin[1] = Oy; R.Origin[2] = Oz;
+            R.Target[0] = Tx; R.Target[1] = Ty; R.Target[2] = Tz;
+            R.ExpectedOccluded = CpuOccluded(R.Origin, R.Target, R.CpuT, R.CpuPrimitive);
+            if (R.ExpectedOccluded) ShadowProbe.ExpectedMask |= 1u << (ShadowProbe.RayCount - 1u);
+        };
+        // R0 from above the scene down into its centre — must reach geometry on a sane device.
+        AddRay(Cx, Cy, BMax[2] + 10.0f, Cx, Cy, Cz);
+        // R1 from the same perch straight up — must escape (a hit here means the top level eats rays).
+        AddRay(Cx, Cy, BMax[2] + 10.0f, Cx, Cy, BMax[2] + 110.0f);
+        // R2 lateral, from just outside the box, heading away — must escape.
+        AddRay(BMin[0] - 5.0f, Cy, Cz, BMin[0] - 105.0f, Cy, Cz);
+        // R3 from the ground under the level's highest triangle to that centroid — occluded by its own body.
+        AddRay(Highest[0], Highest[1], BMin[2] + 0.02f, Highest[0], Highest[1], Highest[2]);
+        // R4 = R0 truncated well short of its CPU hit — must report CLEAR; proves the tMax bound is honoured.
+        {
+            const ShadowProbeRayExpect& R0 = ShadowProbe.Rays[0u];
+            const float D[3] = { R0.Target[0] - R0.Origin[0], R0.Target[1] - R0.Origin[1], R0.Target[2] - R0.Origin[2] };
+            const float Dist = std::sqrt(D[0] * D[0] + D[1] * D[1] + D[2] * D[2]);
+            const float Reach = (R0.CpuPrimitive != 0xFFFFFFFFu && R0.CpuT > 0.0f) ? 0.5f * R0.CpuT : 0.5f * Dist;
+            AddRay(R0.Origin[0], R0.Origin[1], R0.Origin[2],
+                   R0.Origin[0] + D[0] / Dist * Reach, R0.Origin[1] + D[1] / Dist * Reach, R0.Origin[2] + D[2] / Dist * Reach);
+        }
+        // R5 a diagonal across the box from an offset perch — whatever the CPU decides.
+        AddRay(Cx + 0.185f * (BMax[0] - BMin[0]), Cy - 0.205f * (BMax[1] - BMin[1]), BMax[2] + 10.0f, Cx, Cy, Cz);
+
+        // Fill and upload the page.
+        std::array<uint32_t, Frontier::kShadowProbeWords> Page{};
+        Page[Frontier::kShadowProbeWordMagic]      = Frontier::kShadowProbeMagicArmed;
+        Page[Frontier::kShadowProbeWordRayCount]   = ShadowProbe.RayCount;
+        Page[Frontier::kShadowProbeWordExpectMask] = ShadowProbe.ExpectedMask;
+        const std::vector<float>& Nodes = Traversal.QueryNodeBlob();
+        const std::vector<float>& Leafs = Traversal.QueryLeafBlob();
+        Page[Frontier::kShadowProbeWordNodeWords] = std::min(20u, static_cast<uint32_t>(Nodes.size()));
+        Page[Frontier::kShadowProbeWordLeafWords] = std::min(12u, static_cast<uint32_t>(Leafs.size()));
+        uint32_t TlasAvail = 0u, InstAvail = 0u;
+        if (InstancesResident)
+        {
+            TlasAvail = std::min(8u, static_cast<uint32_t>(InstanceStructure.QueryTlasNodePayload().size()));
+            InstAvail = InstanceStructure.QueryInstances().empty() ? 0u : (sizeof(Frontier::TlasInstanceRecord) / sizeof(float));
+        }
+        Page[Frontier::kShadowProbeWordTlasWords] = TlasAvail;
+        Page[Frontier::kShadowProbeWordInstWords] = InstAvail;
+        for (uint32_t I = 0u; I < ShadowProbe.RayCount; ++I)
+        {
+            const ShadowProbeRayExpect& R = ShadowProbe.Rays[I];
+            const uint32_t Base = Frontier::kShadowProbeWordRayIn + I * Frontier::kShadowProbeRayInStride;
+            const float Words[8] = { R.Origin[0], R.Origin[1], R.Origin[2], 0.0f, R.Target[0], R.Target[1], R.Target[2], 0.0f };
+            static_assert(sizeof(Words) == 8u * sizeof(uint32_t), "ray words are 8 floats");
+            std::memcpy(&Page[Base], Words, sizeof(Words));
+            Page[Base + 7u] = R.ExpectedOccluded ? 1u : 0u;
+        }
+        if (Surface.WriteShadowProbePage(Page.data(), Frontier::kShadowProbeWords))
+        {
+            Integrator.AssignDebugFeatureFlags(Frontier::DispatchFeatureShadowProbe | Frontier::DispatchFeatureShadowCounters);
+            ShadowProbe.Armed = true;
+            char Note[256];
+            std::snprintf(Note, sizeof(Note),
+                          "Armed: %u known rays (expect mask 0x%02x), %s — the GPU answers through its own TraceShadow within 2 frames.",
+                          ShadowProbe.RayCount, ShadowProbe.ExpectedMask, InstancesResident ? "two-level arm" : "single-blob arm");
+            Logger.RecordMessage(Frontier::DiagnosticSeverity::Information, "ShadowProbe", Note);
+        }
+        else
+        {
+            Logger.RecordMessage(Frontier::DiagnosticSeverity::Warning, "ShadowProbe",
+                                 "Page write refused — the GPU witness stays silent (buffer missing).");
         }
     }
 
@@ -1997,6 +2252,34 @@ int main(int argc, char** argv)
         // ⑤ Cull → raster → HiZ → resolve → kernel, blit to swapchain, submit ImGui, present
         Surface.RecordAndPresent(Dispatch);
         FRONTIER_PROBE_LAP(RecordAndPresent);
+
+        // Shadow probe: the kernel answers the page on the first dispatch after arming and flips the magic word;
+        //    reading is safe only once that frame's fence has been waited, which RecordAndPresent's per-image fence
+        //    guarantees two presented frames later. Anything longer means the kernel never ran the probe block.
+        if (ShadowProbe.Armed && !ShadowProbe.Completed)
+        {
+            ++ShadowProbe.FramesSinceArm;
+            if (ShadowProbe.FramesSinceArm >= 2u)
+            {
+                std::array<uint32_t, Frontier::kShadowProbeWords> Page{};
+                if (Surface.ReadShadowProbePage(Page.data(), Frontier::kShadowProbeWords) &&
+                    Page[Frontier::kShadowProbeWordMagic] == Frontier::kShadowProbeMagicDone)
+                {
+                    ShadowProbeEvaluate(Page);
+                    Integrator.AssignDebugFeatureFlags(0u);   // counters stop here — steady state pays nothing
+                    ShadowProbe.Completed = true;
+                }
+                else if (ShadowProbe.FramesSinceArm >= 240u)
+                {
+                    Logger.RecordMessage(Frontier::DiagnosticSeverity::Warning, "ShadowProbe",
+                                         "The kernel never answered the probe page in 240 presented frames — the probe "
+                                         "block did not execute (shader variant or pipeline older than this build?). "
+                                         "Counters disarmed to protect performance.");
+                    Integrator.AssignDebugFeatureFlags(0u);
+                    ShadowProbe.Completed = true;
+                }
+            }
+        }
 
         Integrator.IncrementAccumulationIndex();
 

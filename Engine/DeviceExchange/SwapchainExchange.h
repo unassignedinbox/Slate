@@ -67,7 +67,7 @@ static constexpr float    kLuminanceLog2High      =  30.0f;   // 1e9 cd/m², abo
 static constexpr float    kLuminanceMedianStops   = 6.0f;
 static constexpr uint32_t kLuminanceHistogramBytes = kLuminanceHistogramBins * 4u;
 
-static constexpr uint32_t kComputeBindingCount  = 32u;    // compute set 0: 0 out · 1 tris · 2 materials · 3 history · 4 surface · 5 normal · 6 instances · 7 luminaires · 8/9 CWBVH · 10 slabs · 11 vertices · 12 indices · 13 energy LUT · 14 sheen LUT · 15 motion · 16 prev reservoir · 17 curr reservoir · 18 history normal+depth (R7a) · 19 luminance moments (R7) · 20 denoise input (R7) · 21 sky record · 22 moon record · 23 star tables · 24 post record · 25/26 GI prev/curr reservoir (kFeatureGiReuse) · 27-30 D6/D7 two-level traversal (TLAS nodes · instance list · instance rows · BLAS placements) · 31 Textures[] (variable-count binding MUST stay last — Vulkan requires it on the highest binding number)
+static constexpr uint32_t kComputeBindingCount  = 33u;    // compute set 0: 0 out · 1 tris · 2 materials · 3 history · 4 surface · 5 normal · 6 instances · 7 luminaires · 8/9 CWBVH · 10 slabs · 11 vertices · 12 indices · 13 energy LUT · 14 sheen LUT · 15 motion · 16 prev reservoir · 17 curr reservoir · 18 history normal+depth (R7a) · 19 luminance moments (R7) · 20 denoise input (R7) · 21 sky record · 22 moon record · 23 star tables · 24 post record · 25/26 GI prev/curr reservoir (kFeatureGiReuse) · 27-30 D6/D7 two-level traversal (TLAS nodes · instance list · instance rows · BLAS placements) · 31 shadow-probe diagnostic page (ShadowProbeRecord.h) · 32 Textures[] (variable-count binding MUST stay last — Vulkan requires it on the highest binding number)
 static constexpr uint32_t kTextureSlotCapacity  = 1024u;  // bindless sampler2D[] size (variable-count binding; Pascal maxPerStageDescriptorSamplers ≥ 4000)
 class MaterialIndex;    // ContentInterchange/MaterialIndex.h (R4a)
 
@@ -186,6 +186,9 @@ enum DispatchFeature : uint32_t
     DispatchFeatureGiReuse            = 1u << 8,   // the indirect half's pool: ReSTIR GI-style reuse of the first-bounce
                                                    //     vertex's NEE stratum (temporal + the spatial cross). ON by
                                                    //     default — see ReSTIRIntegratorConfiguration::GlobalIlluminationReuse.
+    DispatchFeatureTemporalIdentity   = 1u << 9,   // D10: validate reprojected history by surface identity (kernel bit 9)
+    DispatchFeatureShadowProbe        = 1u << 10,  // dev diagnostic: the kernel answers the known-ray page at binding 31
+    DispatchFeatureShadowCounters     = 1u << 11,  // dev diagnostic: per-type shadow/candidate tallies while armed
 };
 
 // Mirrors `layout(push_constant) uniform ReSTIRConstants` in Engine/Shaders/ReSTIRViewport.slang.
@@ -251,6 +254,15 @@ public:
     //    outgrew its allocation; a rebuild over the same instance count never does (the top level is bounded by
     //    2 × instances).
     [[nodiscard]] bool          RefreshInstanceTraversal(const InstanceAcceleration& Instances) noexcept;
+
+    // Shadow-probe diagnostic page → binding 31 (ShadowProbeRecord.h, the dev GPU witness). The buffer is
+    //    host-visible + coherent and is allocated with the compute pipeline; these two map it, copy a full page
+    //    in or out, and unmap. Write BEFORE the probe feature bit reaches a dispatch (the page carries the armed
+    //    magic word); read only after the armed frame's fence has been waited — GameExecution polls two frames
+    //    on. Both false when the device or the buffer is missing; a refusal leaves the page unchanged, which the
+    //    caller logs rather than swallows.
+    [[nodiscard]] bool          WriteShadowProbePage(const uint32_t* Words, uint32_t WordCount) noexcept;
+    [[nodiscard]] bool          ReadShadowProbePage(uint32_t* OutWords, uint32_t WordCount) noexcept;
     // Celestial sky record → binding 21, safe every frame: a memcpy into the persistently mapped uniform buffer,
     //    no reallocation and no descriptor rewrite. DeviceExchange must not include DisplayPresentation (it is the
     //    layer below it), so the caller packs with SkyConstantRecord/PackSkyConstants and hands over plain bytes —

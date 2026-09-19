@@ -21,6 +21,7 @@
 #include "../GeometricRaster/TraversalIndex.h"
 #include "../GeometricRaster/InstanceAcceleration.h"   // D6/D7 two-level: what bindings 27-30 are uploaded from
 #include "../GeometricRaster/SceneStructure.h"
+#include "ShadowProbeRecord.h"   // binding 31: the dev shadow/traversal diagnostic page's word layout
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -175,6 +176,11 @@ struct SwapchainExchange::VulkanRecord
     VkDeviceMemory           TlasInstanceMemory    = VK_NULL_HANDLE;
     VkBuffer                 BlasPlacementBuffer   = VK_NULL_HANDLE;   // BlasPlacement rows (binding 30)
     VkDeviceMemory           BlasPlacementMemory   = VK_NULL_HANDLE;
+    // Shadow-probe diagnostic page (binding 31, ShadowProbeRecord.h): one small host-visible page the kernel
+    //    fills with known-ray answers, blob echoes and counters when the dev feature bits arm it. Allocated with
+    //    the descriptor set; never reallocated, never per-frame.
+    VkBuffer                 ShadowProbeBuffer     = VK_NULL_HANDLE;
+    VkDeviceMemory           ShadowProbeMemory     = VK_NULL_HANDLE;
     // Celestial sky record (binding 21). One 144 B uniform buffer, host-visible and persistently mapped: the
     //    project re-packs it every frame and RefreshSky is a memcpy, never a reallocation or a descriptor
     //    rewrite. Zeroed at bring-up, which is the sky disabled (SunRadiance.w = 0) — a caller that never
@@ -580,6 +586,8 @@ void SwapchainExchange::Retire() noexcept
     if (Vulkan->TlasPrimitiveMemory) vkFreeMemory   (Vulkan->Device, Vulkan->TlasPrimitiveMemory, nullptr);
     if (Vulkan->TlasInstanceMemory)  vkFreeMemory   (Vulkan->Device, Vulkan->TlasInstanceMemory, nullptr);
     if (Vulkan->BlasPlacementMemory) vkFreeMemory   (Vulkan->Device, Vulkan->BlasPlacementMemory, nullptr);
+    if (Vulkan->ShadowProbeBuffer)   vkDestroyBuffer(Vulkan->Device, Vulkan->ShadowProbeBuffer, nullptr);
+    if (Vulkan->ShadowProbeMemory)   vkFreeMemory   (Vulkan->Device, Vulkan->ShadowProbeMemory, nullptr);
     // The sky record is permanent, not swapchain-sized: it is torn down here, in Retire, and never in
     //    RetireSwapchain — a resize must not unbind the sky.
     if (Vulkan->SkyMapped)  vkUnmapMemory (Vulkan->Device, Vulkan->SkyMemory);
@@ -1257,7 +1265,7 @@ bool SwapchainExchange::BringCommandRecording() noexcept
     if (B == 13u || B == 14u) return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;   // GGX energy LUT · LTC sheen LUT
     if (B == 15u) return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;   // R6 motion
     if (B == 21u || B == 22u || B == 24u) return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;   // live sky · moon · post records
-    return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;   // 1 tris · 2 materials · 6 instances · 7 luminaires · 8/9 CWBVH · 10 slabs · 11 vertices · 12 indices · 16/17 reservoirs · 23 star tables · 25/26 GI reservoirs · 27-30 two-level
+    return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;   // 1 tris · 2 materials · 6 instances · 7 luminaires · 8/9 CWBVH · 10 slabs · 11 vertices · 12 indices · 16/17 reservoirs · 23 star tables · 25/26 GI reservoirs · 27-30 two-level · 31 shadow probe
 }
 
 // The variable-count bindless table lives at the highest binding and is counted by its own capacity, never here.
@@ -1271,14 +1279,14 @@ bool SwapchainExchange::BringCommandRecording() noexcept
 
 // Compile-time proof that the pool cannot drift from the layout again. If a binding is added, re-classified, or the
 //    table's last slot moves, this fails the build instead of failing descriptor allocation on somebody's driver.
-static_assert(ComputeBindingTypeCount(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER) == 18u,
-              "compute set 0 storage buffers: 1 · 2 · 6 · 7 · 8 · 9 · 10 · 11 · 12 · 16 · 17 · 23 · 25 · 26 · 27 · 28 · 29 · 30");
+static_assert(ComputeBindingTypeCount(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER) == 19u,
+              "compute set 0 storage buffers: 1 · 2 · 6 · 7 · 8 · 9 · 10 · 11 · 12 · 16 · 17 · 23 · 25 · 26 · 27 · 28 · 29 · 30 · 31 shadow probe");
 static_assert(ComputeBindingTypeCount(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE) == 7u,
               "compute set 0 storage images: 0 · 3 · 4 · 5 · 18 · 19 · 20");
 static_assert(ComputeBindingTypeCount(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER) == 3u,
               "compute set 0 uniform buffers: 21 sky · 22 moon · 24 post");
 static_assert(ComputeBindingTypeCount(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) == 3u,
-              "compute set 0 fixed samplers: 13 energy LUT · 14 sheen LUT · 15 motion (31 is the variable-count table)");
+              "compute set 0 fixed samplers: 13 energy LUT · 14 sheen LUT · 15 motion (32 is the variable-count table)");
 
 bool SwapchainExchange::BringComputePipeline() noexcept
 {
@@ -1784,6 +1792,15 @@ bool SwapchainExchange::BringDescriptorSet() noexcept
         return false;
     }
 
+    // The shadow-probe page (binding 31): one small host-visible buffer for the whole run — the dev diagnostic
+    //    reads and writes it through this one allocation, so it exists before WriteDescriptorSet names it.
+    AllocateBuffer(Vulkan->Device, Vulkan->MemoryProperties, Frontier::kShadowProbeBytes,
+                   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                   Vulkan->ShadowProbeBuffer, Vulkan->ShadowProbeMemory);
+    if (!Vulkan->ShadowProbeBuffer)
+        std::cerr << "[SwapchainExchange] Shadow-probe page allocation failed — the dev diagnostic will report itself disarmed.\n";
+
     // The scene SSBOs do not exist yet (UploadTriangles / UploadRadiance run after Bring()).
     //    WriteDescriptorSet() only writes the bindings whose resources exist - writing a VK_NULL_HANDLE
     //    buffer into a descriptor is invalid and crashes most drivers when validation is off.
@@ -1965,6 +1982,10 @@ void SwapchainExchange::WriteDescriptorSet() noexcept
     if (Vulkan->TlasPrimitiveBuffer) WriteBuffer(28u, TlasPrimInfo);      // the instance list the top-level leaves index
     if (Vulkan->TlasInstanceBuffer)  WriteBuffer(29u, TlasInstInfo);      // per-instance inverse + world AABB + BLAS index
     if (Vulkan->BlasPlacementBuffer) WriteBuffer(30u, BlasPlaceInfo);     // per-BLAS blob offsets inside bindings 8/9
+    // Binding 31: the shadow-probe diagnostic page. Unconditional (it is allocated with the set); the kernel only
+    //    touches it while the dev feature bits are armed, so its steady-state cost is exactly one descriptor.
+    VkDescriptorBufferInfo ProbeInfo{ Vulkan->ShadowProbeBuffer, 0u, VK_WHOLE_SIZE };
+    WriteBuffer(31u, ProbeInfo);
 
     // R4a: the texture table. Written in one go (partially bound: slots past the resident count stay undefined and are
     //    never indexed — the material records only reference resident slots).
@@ -2531,8 +2552,13 @@ void SwapchainExchange::UploadTraversal(const TraversalIndex& Traversal) noexcep
     if (Vulkan->BlasPlacementMemory) vkFreeMemory   (Vulkan->Device, Vulkan->BlasPlacementMemory, nullptr);
     Vulkan->TraversalNodeBuffer = Vulkan->TraversalLeafBuffer = VK_NULL_HANDLE;
     Vulkan->TraversalNodeMemory = Vulkan->TraversalLeafMemory = VK_NULL_HANDLE;
-    // The two-level buffers are NOT reset here: they are a separate upload (UploadInstanceTraversal) and a re-upload of
-    //    the single-blob pair must not orphan them. Their own upload path resets them, keeping the two lifetimes apart.
+    // The two-level buffers are re-created by UploadInstanceTraversal, whose first act is
+    //    `if (handle) vkDestroyBuffer(handle)`. With the handles left DANGLING here, that was a double destroy of
+    //    the same VkBuffer / double free of the same VkDeviceMemory, and — until the re-upload — WriteDescriptorSet
+    //    below would write bindings 27-30 with DESTROYED buffer handles: undefined behaviour twice over, and the
+    //    kind a driver can answer by recycling the handle into an unrelated live object. Null them like the pair.
+    Vulkan->TlasNodeBuffer = Vulkan->TlasPrimitiveBuffer = Vulkan->TlasInstanceBuffer = Vulkan->BlasPlacementBuffer = VK_NULL_HANDLE;
+    Vulkan->TlasNodeMemory = Vulkan->TlasPrimitiveMemory = Vulkan->TlasInstanceMemory = Vulkan->BlasPlacementMemory = VK_NULL_HANDLE;
 
     constexpr uint32_t HostVisible = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     const auto Upload = [&](const std::vector<float>& Blob, VkBuffer& Buffer, VkDeviceMemory& Memory)
@@ -2655,6 +2681,34 @@ bool SwapchainExchange::RefreshInstanceTraversal(const InstanceAcceleration& Ins
     if (!Refresh(Primitives.data(), Primitives.size(), sizeof(uint32_t), Vulkan->TlasPrimitiveMemory, TlasPrimitiveCapacity)) return false;
     if (!Refresh(Rows.data(), Rows.size(), sizeof(TlasInstanceRecord), Vulkan->TlasInstanceMemory, TlasInstanceCapacity)) return false;
     if (!Refresh(Places.data(), Places.size(), sizeof(BlasPlacement), Vulkan->BlasPlacementMemory, BlasPlacementCapacity)) return false;
+    return true;
+}
+
+bool SwapchainExchange::WriteShadowProbePage(const uint32_t* Words, uint32_t WordCount) noexcept
+{
+    // The whole page in one map — inputs, magic word and all — BEFORE the probe feature bit may reach a
+    //    dispatch. Host-coherent, so no flush; the copy is bounded by the page, never by the caller's enthusiasm.
+    if (!Vulkan || !Vulkan->Device || !Vulkan->ShadowProbeMemory || !Words) return false;
+    if (WordCount == 0u || WordCount > Frontier::kShadowProbeWords) return false;
+    void* Mapped = nullptr;
+    if (vkMapMemory(Vulkan->Device, Vulkan->ShadowProbeMemory, 0u, Frontier::kShadowProbeBytes, 0u, &Mapped) != VK_SUCCESS || !Mapped)
+        return false;
+    std::memcpy(Mapped, Words, static_cast<size_t>(WordCount) * sizeof(uint32_t));
+    vkUnmapMemory(Vulkan->Device, Vulkan->ShadowProbeMemory);
+    return true;
+}
+
+bool SwapchainExchange::ReadShadowProbePage(uint32_t* OutWords, uint32_t WordCount) noexcept
+{
+    // Caller guarantees the armed frame's fence has been waited (GameExecution polls two frames after arming), so
+    //    the kernel's stores — probe answers and whatever counters landed since — are complete and visible.
+    if (!Vulkan || !Vulkan->Device || !Vulkan->ShadowProbeMemory || !OutWords) return false;
+    if (WordCount == 0u || WordCount > Frontier::kShadowProbeWords) return false;
+    void* Mapped = nullptr;
+    if (vkMapMemory(Vulkan->Device, Vulkan->ShadowProbeMemory, 0u, Frontier::kShadowProbeBytes, 0u, &Mapped) != VK_SUCCESS || !Mapped)
+        return false;
+    std::memcpy(OutWords, Mapped, static_cast<size_t>(WordCount) * sizeof(uint32_t));
+    vkUnmapMemory(Vulkan->Device, Vulkan->ShadowProbeMemory);
     return true;
 }
 

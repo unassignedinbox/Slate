@@ -172,7 +172,49 @@ layout(rgba32f, binding = 20) uniform writeonly image2D DenoiseImage; // R7: xyz
 //    ⚠️ The bindless table is declared BEFORE the includes: MoonAlong samples it, and SkyAlong calls MoonAlong,
 //    so the table and the moons must both be visible where the sky is defined. 27 is still the highest binding
 //    NUMBER in the set, which is what the variable-count rule constrains — source order is free.
-layout(binding = 31) uniform sampler2D Textures[];   // R4a bindless table — ⚠️ moved 11 → 15 → 18 → 19 → 21 → 23 → 25 → 27 → 31 (the GI reservoir pair took 25/26, D6/D7's four instance buffers took 27-30): a variable-count binding must be the last one in the set
+layout(binding = 32) uniform sampler2D Textures[];   // R4a bindless table — ⚠️ moved 11 → 15 → 18 → 19 → 21 → 23 → 25 → 27 → 31 → 32 (the GI reservoir pair took 25/26, D6/D7's four instance buffers took 27-30, the shadow-probe diagnostic took 31): a variable-count binding must be the LAST one in the set
+
+// ── Shadow-probe diagnostic (binding 31) — dev instrumentation, layout mirrored 1:1 in C++ ─────────────────────────
+// Engine/DeviceExchange/ShadowProbeRecord.h is the single source of these offsets; both sides move together.
+//    Disarmed (the shipped state) the cost is one word read at one invocation. Armed, invocation (0,0) answers the
+//    host's known rays through the SAME TraceShadow the lighting uses, echoes the traversal-blob heads and the push
+//    constants it sees, then flips the magic word; and while the counter bit is set the lighting path atomicAdds
+//    per-type tallies below. This is the GPU-side witness the CPU mirror can never provide.
+layout(std430, binding = 31) buffer ShadowProbeExtent { uint ShadowProbeIO[]; };
+
+const uint kFeatureShadowProbe    = 1024u;   // bit 10: run the probe block at invocation (0,0)
+const uint kFeatureShadowCounters = 2048u;   // bit 11: per-type shadow/candidate tallies while armed
+
+const uint kProbeWordMagic      = 0u;
+const uint kProbeMagicArmed     = 0x5AFE0001u;
+const uint kProbeMagicDone      = 0x5AFE0002u;
+const uint kProbeWordRayCount   = 1u;
+const uint kProbeWordNodeWords  = 4u;
+const uint kProbeWordLeafWords  = 5u;
+const uint kProbeWordTlasWords  = 6u;
+const uint kProbeWordInstWords  = 7u;
+const uint kProbeWordRayIn      = 8u;    // 8 rays × 8 words: {origin.xyz, 0, target.xyz, expected}
+const uint kProbeWordRayOut     = 72u;   // 8 × 4: {blocked, closestT bits, closest primitive, valid}
+const uint kProbeWordPushEcho   = 104u;  // 16 words: the push constants as THIS kernel sees them
+const uint kProbeWordNodeEcho   = 120u;  // 20
+const uint kProbeWordLeafEcho   = 140u;  // 12
+const uint kProbeWordTlasEcho   = 152u;  // 8
+const uint kProbeWordInstEcho   = 160u;  // 28 — the 112 B instance row 0
+const uint kProbeWordCounters   = 188u;  // 32
+const uint kProbeCtrCandSun      = 0u;
+const uint kProbeCtrCandMesh     = 1u;
+const uint kProbeCtrSelectedSun  = 2u;
+const uint kProbeCtrSelectedMesh = 3u;
+const uint kProbeCtrRaysSun      = 4u;
+const uint kProbeCtrRaysMesh     = 5u;
+const uint kProbeCtrBlockedSun   = 6u;
+const uint kProbeCtrBlockedMesh  = 7u;
+const uint kProbeCtrSpatialLate  = 8u;
+
+// Defined just before main() (they walk TraceShadow/TraceTraversal); the counter call sites sit much earlier.
+void ProbeCount(uint Counter);
+void RunShadowProbe();
+
 #include "Shaders/MoonRecords.slang"
 #include "Shaders/PostRecords.slang"
 #include "Shaders/SkyRecords.slang"
@@ -984,6 +1026,7 @@ void DrawDirectCandidate(SurfaceFrame F, ShadingRecord m, ResolvedLayers L, vec3
                          out vec3 point, out uint light, out vec2 uv, out float weight, inout uint seed)
 {
     bool sun = sunUp && (LightTriangleCount == 0u || RandFloat(seed) < SunPickChance());
+    ProbeCount(sun ? kProbeCtrCandSun : kProbeCtrCandMesh);   // dev diagnostic (binding 31), disarmed = one uniform read
     if (sun)
     {
         float u1 = RandFloat(seed);
@@ -1392,12 +1435,111 @@ vec3 GiPoolShade(SurfaceFrame F, ShadingRecord m, ResolvedLayers L, vec3 wo, vec
 
 
 //------------------------------------------------------------------------------------------------------------------------
+//                                          SHADOW PROBE (binding 31; constants declared up top)
+//------------------------------------------------------------------------------------------------------------------------
+
+void ProbeCount(uint Counter)
+{
+    // Push constants are uniform reads; the atomic is the cost, and it only runs while the host arms the bit —
+    //    a couple of frames at a time, never in steady state.
+    if ((FeatureFlags & kFeatureShadowCounters) != 0u) atomicAdd(ShadowProbeIO[kProbeWordCounters + Counter], 1u);
+}
+
+void RunShadowProbe()
+{
+    // ③ push echo — an offset drift in the push block shows up here as one wrong number, not a week of hunting.
+    ShadowProbeIO[kProbeWordPushEcho + 0u] = FeatureFlags;
+    ShadowProbeIO[kProbeWordPushEcho + 1u] = TlasInstanceCount;
+    ShadowProbeIO[kProbeWordPushEcho + 2u] = LightTriangleCount;
+    ShadowProbeIO[kProbeWordPushEcho + 3u] = AlphaMaskedMaterialCount;
+    ShadowProbeIO[kProbeWordPushEcho + 4u] = ViewportWidth;
+    ShadowProbeIO[kProbeWordPushEcho + 5u] = ViewportHeight;
+    ShadowProbeIO[kProbeWordPushEcho + 6u] = FrameIndex;
+    ShadowProbeIO[kProbeWordPushEcho + 7u] = SpatialTapCount;
+    ShadowProbeIO[kProbeWordPushEcho + 8u] = SamplesPerPixel;
+    for (uint i = 9u; i < 16u; ++i) ShadowProbeIO[kProbeWordPushEcho + i] = 0u;
+
+    // ② blob echo — the traversal data exactly as the kernel reads it, for the host's byte-for-byte compare.
+    //    The host-supplied word counts guard short blobs (a one-instance scene still has a full node head).
+    uint nw = min(ShadowProbeIO[kProbeWordNodeWords], 20u);
+    for (uint i = 0u; i < 20u; ++i)
+        ShadowProbeIO[kProbeWordNodeEcho + i] = i < nw ? floatBitsToUint(CwbvhNodes[i >> 2u][i & 3u]) : 0xFFFFFFFFu;
+    uint lw = min(ShadowProbeIO[kProbeWordLeafWords], 12u);
+    for (uint i = 0u; i < 12u; ++i)
+        ShadowProbeIO[kProbeWordLeafEcho + i] = i < lw ? floatBitsToUint(CwbvhTris[i >> 2u][i & 3u]) : 0xFFFFFFFFu;
+    uint tw = min(ShadowProbeIO[kProbeWordTlasWords], 8u);
+    for (uint i = 0u; i < 8u; ++i)
+        ShadowProbeIO[kProbeWordTlasEcho + i] = (TlasInstanceCount != 0u && i < tw)
+            ? floatBitsToUint(i < 4u ? TlasNodes[0].MinAndLeftFirst[i] : TlasNodes[0].MaxAndPrimCount[i - 4u])
+            : 0xFFFFFFFFu;
+    uint iw = min(ShadowProbeIO[kProbeWordInstWords], 28u);
+    for (uint i = 0u; i < 28u; ++i)
+    {
+        uint w = 0xFFFFFFFFu;
+        if (TlasInstanceCount != 0u && i < iw)
+        {
+            TraversalTlasInstance Row = TlasInstances[0];
+            if (i < 4u)       w = floatBitsToUint(Row.Inv0[i]);
+            else if (i < 8u)  w = floatBitsToUint(Row.Inv1[i - 4u]);
+            else if (i < 12u) w = floatBitsToUint(Row.Inv2[i - 8u]);
+            else if (i < 16u) w = floatBitsToUint(Row.Inv3[i - 12u]);
+            else if (i < 20u) w = floatBitsToUint(Row.AabbMin[i - 16u]);
+            else if (i < 24u) w = floatBitsToUint(Row.AabbMax[i - 20u]);
+            else w = i == 24u ? Row.BlasIndex : (i == 25u ? Row.FirstTriangle : (i == 26u ? Row.Flags : Row.Pad));
+        }
+        ShadowProbeIO[kProbeWordInstEcho + i] = w;
+    }
+
+    // ① the known rays — answered through the SAME TraceShadow the direct lighting uses (both traversal arms).
+    uint rayCount = min(ShadowProbeIO[kProbeWordRayCount], 8u);
+    for (uint r = 0u; r < 8u; ++r)
+    {
+        uint ob = kProbeWordRayOut + r * 4u;
+        if (r >= rayCount)
+        {
+            ShadowProbeIO[ob + 0u] = 0u; ShadowProbeIO[ob + 1u] = 0xFFFFFFFFu;
+            ShadowProbeIO[ob + 2u] = 0xFFFFFFFFu; ShadowProbeIO[ob + 3u] = 0u;
+            continue;
+        }
+        uint ib = kProbeWordRayIn + r * 8u;
+        vec3 o = vec3(uintBitsToFloat(ShadowProbeIO[ib + 0u]), uintBitsToFloat(ShadowProbeIO[ib + 1u]), uintBitsToFloat(ShadowProbeIO[ib + 2u]));
+        vec3 t = vec3(uintBitsToFloat(ShadowProbeIO[ib + 4u]), uintBitsToFloat(ShadowProbeIO[ib + 5u]), uintBitsToFloat(ShadowProbeIO[ib + 6u]));
+
+        bool blocked = TraceShadow(o, t);
+
+        // Reachability detail for the log: where the closest-hit walk lands along the same segment (bounded).
+        vec3  delta = t - o;
+        float dist  = length(delta);
+        uint  hitT = 0xFFFFFFFFu, hitPrim = 0xFFFFFFFFu, hitOk = 0u;
+        if (dist > 3.0 * kEps)
+        {
+            vec3 dir = delta / dist;
+            TraversalResult h = TraceTraversal(o + dir * kEps, dir, vec3(1.0) / dir, dist);
+            if (h.valid) { hitOk = 1u; hitT = floatBitsToUint(h.t); hitPrim = h.primitive; }
+        }
+        ShadowProbeIO[ob + 0u] = blocked ? 1u : 0u;
+        ShadowProbeIO[ob + 1u] = hitT;
+        ShadowProbeIO[ob + 2u] = hitPrim;
+        ShadowProbeIO[ob + 3u] = hitOk;
+    }
+
+    // The completion word goes LAST: the host polls it after the armed frame's fence, so by then every plain
+    //    store above is complete — but nothing downstream may rely on a half-written page either.
+    atomicExchange(ShadowProbeIO[kProbeWordMagic], kProbeMagicDone);
+}
+
+//------------------------------------------------------------------------------------------------------------------------
 //                                                    MAIN COMPUTE KERNEL
 //------------------------------------------------------------------------------------------------------------------------
 
 void main()
 {
     uvec2 pixel = gl_GlobalInvocationID.xy;
+    // Dev diagnostic: one invocation answers the probe page the host armed (known rays through the same TraceShadow,
+    //    blob + push echoes, then self-disarms). Runs before every early-out so even an all-sky pixel cannot skip it.
+    if ((FeatureFlags & kFeatureShadowProbe) != 0u && pixel.x == 0u && pixel.y == 0u &&
+        ShadowProbeIO[kProbeWordMagic] == kProbeMagicArmed)
+        RunShadowProbe();
     if (pixel.x >= ViewportWidth || pixel.y >= ViewportHeight) return;
 
     // The indirect pool's slot for this pixel is cleared up front (kFeatureGiReuse): every early return below — sky,
@@ -1612,9 +1754,13 @@ void main()
             //    honest weight, and the two passes are two dispatches — the spatial pass cannot validate a value it
             //    is not allowed to write back. The spatial pass re-traces for whichever sample it ends up shading.
             {
-                bool histBlocked = res.SelectedLight == kSunLightIndex
+                bool histSun = res.SelectedLight == kSunLightIndex;
+                bool histBlocked = histSun
                     ? TraceShadow(hitPos + hitNormal * kEps, res.SelectedPoint)
                     : TraceShadow(hitPos + hitNormal * kEps, res.SelectedPoint - normalize(res.SelectedPoint - hitPos) * 1e-3);
+                ProbeCount(histSun ? kProbeCtrSelectedSun : kProbeCtrSelectedMesh);
+                ProbeCount(histSun ? kProbeCtrRaysSun : kProbeCtrRaysMesh);
+                if (histBlocked) ProbeCount(histSun ? kProbeCtrBlockedSun : kProbeCtrBlockedMesh);
                 res.Visible = histBlocked ? 0u : 1u;
                 if (res.Visible == 0u) res.UnbiasedWeight = 0.0;
             }
@@ -1709,6 +1855,7 @@ void main()
                 bool spatialBlocked = res.SelectedLight == kSunLightIndex
                     ? TraceShadow(hitPos + hitNormal * kEps, res.SelectedPoint)
                     : TraceShadow(hitPos + hitNormal * kEps, res.SelectedPoint - normalize(res.SelectedPoint - hitPos) * 1e-3);
+                if (spatialBlocked) ProbeCount(kProbeCtrSpatialLate);   // the R11 recheck actually catching a leak
                 res.Visible = spatialBlocked ? 0u : 1u;
                 if (res.Visible == 0u) res.UnbiasedWeight = 0.0;
             }

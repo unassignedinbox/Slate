@@ -117,7 +117,10 @@ DispatchConfiguration ReSTIRIntegrator::BuildDispatch(
                                    | (ActiveConfiguration.GlobalIlluminationReuse ? DispatchFeatureGiReuse        : 0u)
                                    | (ActiveConfiguration.AliasPick          ? DispatchFeatureAliasPick          : 0u)
                                    | (ActiveConfiguration.TemporalReprojection ? DispatchFeatureTemporalReprojection : 0u)
-                                   | (ActiveConfiguration.Denoise            ? DispatchFeatureDenoise            : 0u);
+                                   | (ActiveConfiguration.Denoise            ? DispatchFeatureDenoise            : 0u)
+                                   // Dev diagnostics (shadow probe / counters) — armed by the project, 0 in a
+                                   //    normal run, so steady-state kernels never see a stray bit.
+                                   | DebugFeatureFlags;
 
     // The power-proportional sun coin (0 = the kernel's legacy fixed 0.5); see AssignSunPickProbability.
     Dispatch.SunPickProbability    = SunPickProbability;
