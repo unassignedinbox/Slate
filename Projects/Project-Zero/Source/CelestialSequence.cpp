@@ -873,6 +873,7 @@ void CelestialSequence::BuildSheet(CelestialEntity Entity, EditorSheet& Sheet) c
         EditorPropertyGroup& Beam = OpenGroup(Sheet, "Light");
         Push(Beam, MakeSlider("Intensity", 0.0f, 60.0f, Light.Intensity, 1, "x"));
         Push(Beam, MakeSlider("Direct", 0.0f, 5.0f, SunDirect, 2, "x"));
+        Push(Beam, MakeSlider("Sky fill", 0.0f, 1.0f, SkyFill, 2, "x"));
 
         // Read-outs rather than sliders: these are SOLVED, and offering to edit them would imply the solver
         //    could be overridden, which it cannot.
@@ -1143,6 +1144,7 @@ void CelestialSequence::ApplySheet(CelestialEntity Entity, const EditorSheet& Sh
         Observation.Month      = static_cast<int32_t>(ReadSlider(Sheet, "Month", static_cast<float>(Observation.Month)));
         Light.Intensity        = ReadSlider(Sheet, "Intensity", Light.Intensity);
         SunDirect              = ReadSlider(Sheet, "Direct", SunDirect);
+        SkyFill                = ReadSlider(Sheet, "Sky fill", SkyFill);
         break;
     }
     case CelestialEntity::Sky:

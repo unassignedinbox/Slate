@@ -99,6 +99,18 @@ public:
                            : Probability > 0.95f ? 0.95f
                            : Probability;
     }
+    // R14 skylight GI fill (the ambient/sky-intensity dial). Unlike the sun pick this CHANGES the radiance the
+    //    estimator converges to, so a slider move must restart the history — an absorbed 1/n step would read as
+    //    the fill "not moving", the same fault the sky-record memcmp reset fixed. Clamp [0, 1]: 0 is a legitimate
+    //    value (skylight off entirely — the soot-black demo), anything above 1 is a brighter fill the slider does
+    //    not offer. The kernel answers < 0 (host predates the field) with the legacy unscaled sky.
+    void AssignSkyFillScale(float Scale) noexcept
+    {
+        const float Clamped = Scale < 0.0f ? 0.0f : Scale > 1.0f ? 1.0f : Scale;
+        if (SkyFillScale != Clamped) { SkyFillScale = Clamped; ResetAccumulation(); }
+    }
+    [[nodiscard]] float QuerySkyFillScale()    const noexcept { return SkyFillScale;    }
+    [[nodiscard]] float QuerySunPickProbability() const noexcept { return SunPickProbability; }
     void AssignExtraCandidateCount  (uint32_t Count) noexcept { if (ActiveConfiguration.ExtraCandidateCount   != Count) { ActiveConfiguration.ExtraCandidateCount   = Count; ResetAccumulation(); } }
     void AssignSpatialTapCount      (uint32_t Count) noexcept { if (ActiveConfiguration.SpatialTapCount       != Count) { ActiveConfiguration.SpatialTapCount       = Count; ResetAccumulation(); } }
     void AssignDenoiseLevelCount    (uint32_t Count) noexcept { if (ActiveConfiguration.DenoiseLevelCount     != Count) { ActiveConfiguration.DenoiseLevelCount     = Count; ResetAccumulation(); } }
@@ -175,6 +187,10 @@ private:
                                                           //       (0 = the single-blob path; see AssignInstanceCount)
     float                         SunPickProbability = 0.0f;    // [-]  power-proportional sun-vs-lamps pick; 0 = the
                                                           //       kernel's legacy fixed 0.5 coin (see AssignSunPickProbability)
+    float                         SkyFillScale = 0.35f;         // [-]  R14 skylight GI fill (see AssignSkyFillScale);
+                                                          //       0.35 is the sun-key default measured in the CPU mirror:
+                                                          //       1.0 left the Showcase floor ~55 % skylight by film mean
+                                                          //       and flattened every key-light shadow (2026-09-19)
     bool                          ResetPending = false; // [-]  a reset landed after the dispatch read the index
 
     Vector3                       HistoryOrigin;        // [m]   camera position the history was accumulated from

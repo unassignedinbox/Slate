@@ -912,6 +912,27 @@ int main(int argc, char** argv)
                                   Shadow.MapSide, Shadow.FilterTaps);
                 Logger.RecordMessage(Frontier::DiagnosticSeverity::Information, "Shadows", ShadowLine);
             }
+
+            // R14 — the LIGHTING state, stated in the log with the same bluntness as the shadow path, so a run
+            //    report never has to infer why a frame looks the way it does. These are the four numbers the
+            //    shadow-contrast diagnosis runs on: how strong the key light is (sun Direct gain), how much
+            //    skylight fill carpets over it (Sky fill), how the tone map is driven (adaptive or manual
+            //    exposure + value), and which way the sun-vs-lamps coin leans right now.
+            {
+                const Frontier::ExposureConfiguration ExposureCfg = Integrator.Exposure().QueryConfiguration();
+                char LightLine[384];
+                std::snprintf(LightLine, sizeof(LightLine),
+                              "Lighting: sun direct %.2fx, sky fill %.2fx (escaped-bounce skylight scale; 1.00 = "
+                              "legacy flooded look, 0 = skylight off), exposure %s %.2f, sun-vs-lamps pick %.3f, "
+                              "total emissive power %.1f.",
+                              static_cast<double>(Celestial.SunDirect),
+                              static_cast<double>(Celestial.SkyFill),
+                              ExposureCfg.Mode == Frontier::ExposureModeCategory::Adaptive ? "adaptive" : "manual",
+                              static_cast<double>(Integrator.Exposure().QueryExposure()),
+                              static_cast<double>(Integrator.QuerySunPickProbability()),
+                              static_cast<double>(Level.QueryLuminairePower()));
+                Logger.RecordMessage(Frontier::DiagnosticSeverity::Information, "Lighting", LightLine);
+            }
         }
 
         // The celestial budget comes from the SAME tier, through CelestialTier — the one translation from a
@@ -1895,6 +1916,11 @@ int main(int argc, char** argv)
                 const float LampFlux  = Level.QueryLuminairePower() * 3.14159265f;
                 Integrator.AssignSunPickProbability(SunFlux + LampFlux > 0.0f ? SunFlux / (SunFlux + LampFlux) : 0.0f);
             }
+            // R14 skylight GI fill rides beside it: the celestial Sun row's "Sky fill" slider reaches the kernel
+            //    as a push-constant lane (Dispatch.SkyFillScale), scaling only the escaped bounce-ray sky
+            //    collection — the environment's fill light. The assigner resets accumulation only on an actual
+            //    value change, so a quiet per-frame re-send costs nothing.
+            Integrator.AssignSkyFillScale(Celestial.SkyFill);
         }
 
         // ④e GPU moons — the roster reads the packed record at binding 22 on every miss and every escaped

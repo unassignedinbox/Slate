@@ -166,7 +166,14 @@ struct DispatchConfiguration
                                                                    //     (power-proportional, host-computed; 0 = kernel falls back
                                                                    //     to the legacy fixed 0.5 coin). From the reserve, block
                                                                    //     still 128 B — mirrors ReSTIRViewport.slang.
-    uint32_t PushReserve[3];                                       // [-] keeps the block 128 B and 16-B aligned
+    float    SkyFillScale;                                         // [-] R14: skylight GI fill multiplier — scales ONLY the
+                                                                   //     escaped bounce-ray sky collection (the environment's fill
+                                                                   //     light), never the primary-miss backdrop or the sun's terms.
+                                                                   //     The ambient/sky-intensity dial: at 1.0 the open Showcase's
+                                                                   //     sky dome contributed ~55 % of the film mean and flattened
+                                                                   //     every sun shadow (CPU-mirror A/B, 2026-09-19). Product
+                                                                   //     default 0.35 (Celestial "Sky fill" slider); < 0 = legacy 1.0.
+    uint32_t PushReserve[2];                                       // [-] keeps the block 128 B and 16-B aligned
     uint32_t TlasInstanceCount;                                    // [cnt] D6/D7: resident top-level instances (0 = single
                                                                    //       world-space blob, the pre-D6 path). Mirrors
                                                                    //       ReSTIRViewport.slang's last reserve slot.

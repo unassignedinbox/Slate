@@ -202,6 +202,12 @@ public:
                                    //     Raised 1.0 → 2.5 (2026-09-19 shadow diagnosis): at gain 1 the sun's ground
                                    //     irradiance in the Showcase was ~1/37th of the key panel's, so its shadows
                                    //     were invisible. 2.5 + the panel-luminance cut makes the sun the key light.
+    float SkyFill        = 0.35f;  // [-] skylight GI fill — the "ambient/sky intensity" dial (the Sun row's Sky fill
+                                   //     slider). Scales ONLY the escaped bounce-ray sky collection on transport
+                                   //     paths; the backdrop and the sun's terms are untouched. Shipped 2026-09-19:
+                                   //     at 1.0 the open Showcase's sky dome carried ~55 % of the film mean and
+                                   //     flattened every key-light shadow (CPU-mirror A/B + the GTX 1650 SUPER
+                                   //     "no shadows" reports). 1.0 replays the legacy look; 0 = skylight off.
     float GroundAlbedo[3] = { 0.19f, 0.17f, 0.14f };
     float StarBrightness = 1.0f;
     float StarSize       = 1.0f;

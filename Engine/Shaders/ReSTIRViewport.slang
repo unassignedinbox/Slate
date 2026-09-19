@@ -489,7 +489,13 @@ layout(push_constant) uniform ReSTIRConstants
     float   SunPickProbability;     // [-]   chance a DI candidate samples the sun instead of a lamp. Host-computed,
                                     //       power-proportional (sun power vs total lamp power); 0 ⇒ fall back to
                                     //       the legacy fixed 0.5 coin so old captures replay bit-for-bit.
-    uint    PushReserve4;
+    float   SkyFillScale;           // [-]   R14: skylight GI fill (escaped bounce-ray sky collection only — the
+                                    //       primary-miss backdrop and every NEE term are untouched). The
+                                    //       "ambient/sky intensity" dial every production pipeline exposes;
+                                    //       at 1.0 the open Showcase's 2π sky dome flooded the floor with
+                                    //       ~55 % of the film mean and buried every sun shadow (measured in
+                                    //       the CPU mirror, 2026-09-19). Product default 0.35 (Celestial "Sky
+                                    //       fill" slider). < 0 ⇒ legacy 1.0, so old captures replay unchanged.
     uint    PushReserve5;
     uint    PushReserve6;
     uint    TlasInstanceCount;  // [cnt] D6/D7: resident top-level instances (0 ⇒ single world-space blob, the pre-D6 path)
@@ -839,6 +845,13 @@ const float kSunPickProbability = 0.5;   // legacy fixed coin — the fallback w
 float SunPickChance()
 {
     return SunPickProbability > 0.0 ? SunPickProbability : kSunPickProbability;
+}
+
+// R14 skylight fill: the host always sends the slider value (clamped [0, 1], product default 0.35); a negative
+//    lane means "host predates the field" and answers the legacy unscaled sky so old captures replay unchanged.
+float SkyGiFill()
+{
+    return SkyFillScale >= 0.0 ? SkyFillScale : 1.0;
 }
 const uint  kSunLightIndex      = 0xFFFFFFFFu;   // SelectedLight sentinel: the sample is a sun direction, not a triangle
 const float kSunShadowDistance  = 1.0e4;   // [m] the far point sun samples are stored as — past any scene, inside float range
@@ -1855,10 +1868,15 @@ void main()
             if (!bounceHit.valid)
             {
                 // K4: entered solid but never exited (open mesh / numeric leak — CPU mirror): nominal-Beer fallback
-                // over the slab thickness, then out. Thickness is 0 (not in the slab) so this is ×1 today — live
-                // the day the slab carries it. Closed meshes never land here.
+                //    over the slab thickness, then out. Thickness is 0 (not in the slab) so this is ×1 today — live
+                //    the day the slab carries it. Closed meshes never land here.
                 if (enteredSolid) throughput *= exp(-layers.TransmissionSigma * shading.TransmissionThickness);
-                accumulatedRadiance += throughput * SkyAlong(bounceDir);
+                // R14: × SkyGiFill(). This escape is the environment's FILL light; unscaled it was the majority of
+                //    the floor's irradiance in the open Showcase and washed every key-light shadow flat (the
+                //    "no shadows" reports on the GTX 1650 SUPER, reproduced in the CPU mirror A/B: sky-gi 1.0
+                //    film mean 0.364 flat vs 0.25 film mean 0.214 crisp). The primary backdrop (SkyAlong on a
+                //    missed camera ray) and the sun's disc are NOT scaled — art direction only interns the fill.
+                accumulatedRadiance += throughput * SkyAlong(bounceDir) * SkyGiFill();
             }
             if (bounceHit.valid)
             {

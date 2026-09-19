@@ -696,6 +696,12 @@ float SunSolidAngleRender()
 //    exactly colour·gain·transmittance (SkyFogIntegrator.cpp:257, zeroed below the horizon like the packer's
 //    elevation gate), and g_SunDirectGain mirrors the product's Direct slider (CelestialSequence default).
 float g_SunDirectGain = 2.5f;             // [-] the panel's Direct slider; product default (CelestialSequence.h)
+// ⚗️ Shadow-contrast probe (2026-09-19): scales ONLY the sky radiance collected by escaped TRANSPORT rays (the GI
+//    sky fill washing every surface). The primary-miss background and the sun's NEE/disc terms are untouched, so
+//    --sky-gi 0.25 answers "are the shadows drowning in skylight?" without touching the backdrop or the key light.
+//    Default 0.35 = the product's new "Sky fill" default (CelestialSequence.h SkyFill → kernel SkyFillScale);
+//    --sky-gi 1.0 replays the legacy flooded look the field had before the shadow diagnosis.
+float g_SkyGiScale = 0.35f;
 
 vec3 SunEmissionRender()
 {
@@ -1253,7 +1259,7 @@ CpuGiReservoir RestirGiTemporalReservoir(const RestirSurface& Surface, int Candi
             const float W = (S.w * S.w) / (S.w * S.w + PdfSolid * PdfSolid + 1e-12f);
             E = E * W;
         }
-        V.Terminal = Beta * E;
+        V.Terminal = Beta * E * g_SkyGiScale;   // transport-path escape: the GI sky fill (--sky-gi probe)
         ++g_GiEscape;
         MarkClass(kGiClassEscape);
         return Res;
@@ -1623,7 +1629,7 @@ float SssChord(const vec3& P, const vec3& N)
 }
 
 vec3 Radiance(vec3 O, vec3 D, Rng& R, int Bounces, bool SkipPrimaryDirect = false,
-              float InitialLastPdf = 0.0f, vec3 InitialBeta = vec3(1.0f))
+              float InitialLastPdf = 0.0f, vec3 InitialBeta = vec3(1.0f), bool GiPath = false)
 {
     vec3 L(0.0f), Beta(InitialBeta);
     int Skip = -1;
@@ -1656,6 +1662,7 @@ vec3 Radiance(vec3 O, vec3 D, Rng& R, int Bounces, bool SkipPrimaryDirect = fals
                 const float W = (LastPdf * LastPdf) / (LastPdf * LastPdf + PdfSolid * PdfSolid + 1e-12f);
                 E = E * W;
             }
+            if (GiPath) E = E * g_SkyGiScale;
             L += Beta * E;
             break;
         }
@@ -1758,7 +1765,7 @@ vec3 Radiance(vec3 O, vec3 D, Rng& R, int Bounces, bool SkipPrimaryDirect = fals
                 { Vl = g_Mat[Vt.Material].Emission; Vhit = true; }
                 else Vo = Vo + Dw * (Vh.T + 3e-4f);
             }
-            if (!Vhit) Vl = SkyRadianceWorld(Dw);
+            if (!Vhit) Vl = SkyRadianceWorld(Dw) * g_SkyGiScale;   // virtual-light escape is GI fill too
             L += Beta * Vl;
             break;
         }
@@ -2423,7 +2430,7 @@ SequenceResult RenderSequence(const Viewpoint& VP, int Width, int Height, int Sp
                     //    included) rather than returning before the DI block. Radiance walks it from the camera.
                     Rng R((static_cast<uint32_t>(Y) * 40503u) ^ (static_cast<uint32_t>(X) * 2654435761u)
                           ^ (static_cast<uint32_t>(F + 1) * 2246822519u));
-                    L = Radiance(Surf.O, Surf.D, R, Bounces, true);
+                    L = Radiance(Surf.O, Surf.D, R, Bounces, true, 0.0f, vec3(1.0f), /*GiPath=*/true);
                 }
                 else
                 {
@@ -2461,7 +2468,7 @@ SequenceResult RenderSequence(const Viewpoint& VP, int Width, int Height, int Sp
                         Indirect += V.Beta * V.Terminal;
                         if (Bounces > 1)
                             Indirect += Radiance(V.P + V.Ng * 1.0e-4f, V.WiOut, R, Bounces - 1, false,
-                                                 V.BsdfPdf, V.DeeperBeta);
+                                                 V.BsdfPdf, V.DeeperBeta, /*GiPath=*/true);
                         T.MSumGi += static_cast<double>(GiPublished.SampleCount);
                         T.OccludedGi += GiPublished.Visible == 0u ? 1.0 : 0.0;
                         T.CoveredGi += 1.0;
@@ -2469,7 +2476,7 @@ SequenceResult RenderSequence(const Viewpoint& VP, int Width, int Height, int Sp
                     else
                     {
                         const Hit Skip = {}; (void)Skip;
-                        Indirect = Radiance(Surf.P + Surf.Ng * 1.0e-4f, Surf.D, R, Bounces, true);
+                        Indirect = Radiance(Surf.P + Surf.Ng * 1.0e-4f, Surf.D, R, Bounces, true, 0.0f, vec3(1.0f), /*GiPath=*/true);
                         State.GiHistory[Pixel] = CpuGiReservoir{};
                         State.VertexHistory[Pixel] = RestirVertex{};
                     }
@@ -2961,6 +2968,7 @@ int main(int ArgumentCount, char** ArgumentValues)
         else if (A == "--no-sun")   g_SunNee = false;
         else if (A == "--sun-direct") g_SunDirectGain = static_cast<float>(std::atof(Next("--sun-direct")));   // panel Direct slider (default = product default)
         else if (A == "--sun-pick")   g_SunPickProbability = static_cast<float>(std::atof(Next("--sun-pick"))); // override the power-proportional sun coin (A/B; 0.5 = legacy)
+        else if (A == "--sky-gi")    g_SkyGiScale = static_cast<float>(std::atof(Next("--sky-gi")));           // ⚗️ GI sky-fill scale (shadow-contrast probe; 1.0 = shipped)
         else if (A == "--row")      g_RowFilter = std::atoi(Next("--row"));
         else if (A == "--frames")   Frames = std::atoi(Next("--frames"));
         else if (A == "--pan")      PanPerFrame = static_cast<float>(std::atof(Next("--pan")));
@@ -3004,7 +3012,9 @@ int main(int ArgumentCount, char** ArgumentValues)
                         "                            [--class-map file.png] (roadmap #5: per-pixel GI class, grey = class * 32)\n"
                         "                            [--drift-axis x|y|z]\n"
                         "                            [--denoise] [--denoise-levels N]\n"
-                        "                            [--panel-gain X] (showcase: the interface panel's luminaire gain; 0 = widget only)\n");
+                        "                            [--panel-gain X] (showcase: the interface panel's luminaire gain; 0 = widget only)\n"
+                        "                            [--sun-direct X] (sun Direct slider, default 2.5) [--sun-pick X] (sun coin, A/B)\n"
+                        "                            [--sky-gi X] (skylight GI fill scale, default 0.35 = product; 1.0 = legacy look)\n");
             return 0;
         }
         else { std::printf("[material-level] unknown argument '%s' (try --help)\n", A.c_str()); return 2; }

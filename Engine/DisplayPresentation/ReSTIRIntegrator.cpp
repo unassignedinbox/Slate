@@ -121,6 +121,8 @@ DispatchConfiguration ReSTIRIntegrator::BuildDispatch(
 
     // The power-proportional sun coin (0 = the kernel's legacy fixed 0.5); see AssignSunPickProbability.
     Dispatch.SunPickProbability    = SunPickProbability;
+    // R14 skylight GI fill — the escaped bounce-ray sky-collection scale; see AssignSkyFillScale.
+    Dispatch.SkyFillScale          = SkyFillScale;
 
     for (uint32_t& Reserve : Dispatch.PushReserve) Reserve = 0u;
 
