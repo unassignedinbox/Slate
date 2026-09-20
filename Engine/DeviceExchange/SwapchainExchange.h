@@ -211,6 +211,7 @@ public:
     void                Retire() noexcept;
 
     void                        PollInput(InputExchange& TargetInput) noexcept;
+    void                        PollEvents() noexcept;
     [[nodiscard]] bool          CloseRequested() const noexcept;
     // Escape no longer closes the window from the key callback: a text field needs it to abandon an edit, and the
     //    callback cannot see whether one is open. The host asks for the close instead, once it knows nothing is

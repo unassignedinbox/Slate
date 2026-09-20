@@ -569,7 +569,7 @@ int main(int argc, char** argv)
     {
         while (TraversalBuildFuture.wait_for(std::chrono::milliseconds(20)) != std::future_status::ready)
         {
-            glfwPollEvents();
+            Surface.PollEvents();
         }
         TraversalBuildFuture.get();
         const Frontier::TraversalMetrics& M = Traversal.QueryMetrics();
@@ -586,7 +586,7 @@ int main(int argc, char** argv)
     {
         while (TextureDecodeFuture.wait_for(std::chrono::milliseconds(20)) != std::future_status::ready)
         {
-            glfwPollEvents();
+            Surface.PollEvents();
         }
         const TextureDecodeAsyncResult TextureResult = TextureDecodeFuture.get();
         MaxTextureLevels = std::max(MaxTextureLevels, TextureResult.DeepestLevelCount);

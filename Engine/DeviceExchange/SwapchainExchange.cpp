@@ -3662,6 +3662,11 @@ void SwapchainExchange::RequestClose() noexcept
     if (GlfwWindow) glfwSetWindowShouldClose(GlfwWindow, GLFW_TRUE);
 }
 
+void SwapchainExchange::PollEvents() noexcept
+{
+    if (GlfwWindow) glfwPollEvents();
+}
+
 void SwapchainExchange::PollInput(InputExchange& TargetInput) noexcept
 {
     ForwardInput = &TargetInput;
