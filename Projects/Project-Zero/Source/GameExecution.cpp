@@ -535,7 +535,7 @@ int main(int argc, char** argv)
         1280u,
         720u,
         "Project-Zero  |  ReSTIR GI  |  Frontier Engine",
-        true        // validation layers — set true for debugging
+        false       // validation layers — false for zero-overhead startup and runtime
     };
 
     // Frontier.config.toml is read before the device comes up: [render] ray_tracing_tier decides which traversal backend
