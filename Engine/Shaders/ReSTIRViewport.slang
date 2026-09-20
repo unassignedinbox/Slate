@@ -702,40 +702,6 @@ Hit TraceScene(Ray ray)
     return closest;
 }
 
-bool TraceContactOccluded(vec3 origin, vec3 dir, float maxDist)
-{
-    float stepDist = min(maxDist * 0.1666f, 0.08f);
-    if (stepDist < 0.005f) return false;
-    float aspect = float(ViewportWidth) / max(float(ViewportHeight), 1.0);
-
-    for (int i = 1; i <= 6; ++i)
-    {
-        vec3 p = origin + dir * (float(i) * stepDist);
-        vec3 v = p - CameraOrigin;
-        float z_c = dot(v, CameraForward);
-        if (z_c <= 0.1) continue;
-
-        float x_c = dot(v, CameraRight);
-        float y_c = -dot(v, CameraUp);
-        vec2 ndc = vec2(x_c / (z_c * FieldOfViewTanHalf * aspect), y_c / (z_c * FieldOfViewTanHalf));
-        vec2 uv = ndc * 0.5 + 0.5;
-        if (uv.x < 0.0 || uv.x >= 1.0 || uv.y < 0.0 || uv.y >= 1.0) break;
-
-        ivec2 ssPx = ivec2(uv * vec2(float(ViewportWidth), float(ViewportHeight)));
-        vec4 ssSurf = imageLoad(SurfaceImage, ssPx);
-        if (floatBitsToUint(ssSurf.w) == kVisibilityInvalid) continue;
-
-        vec3 ssv = ssSurf.xyz - CameraOrigin;
-        float surfZ = dot(ssv, CameraForward);
-        float dz = z_c - surfZ;
-        if (dz > 0.002 && dz < 0.06 && length(ssSurf.xyz - origin) > 0.008)
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
 bool TraceShadow(vec3 origin, vec3 target)
 {
     vec3  delta = target - origin;

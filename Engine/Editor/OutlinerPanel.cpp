@@ -880,14 +880,12 @@ bool OutlinerPanel::MoveRun(EditorInstance* Instances, uint32_t InstanceCount, u
 
     // Lift the run into scratch, re-based to the seat's depth.
     const int32_t DepthShift = static_cast<int32_t>(NewDepth) - static_cast<int32_t>(Instances[Lifted].Depth);
+    std::vector<EditorInstance> Scratch(RunLen);
+    std::vector<bool>           LiftedShut(RunLen);
     for (uint32_t k = 0u; k < RunLen; ++k)
     {
-        Scratch_[k] = Instances[Lifted + k];
-        Scratch_[k].Depth = static_cast<uint32_t>(static_cast<int32_t>(Scratch_[k].Depth) + DepthShift);
-    }
-    bool LiftedShut[kMaxEditorInstances] = {};
-    for (uint32_t k = 0u; k < RunLen; ++k)
-    {
+        Scratch[k] = Instances[Lifted + k];
+        Scratch[k].Depth = static_cast<uint32_t>(static_cast<int32_t>(Scratch[k].Depth) + DepthShift);
         LiftedShut[k] = Shut_[Lifted + k];
     }
 
@@ -911,7 +909,7 @@ bool OutlinerPanel::MoveRun(EditorInstance* Instances, uint32_t InstanceCount, u
     }
     for (uint32_t k = 0u; k < RunLen; ++k)
     {
-        Instances[Seat + k] = Scratch_[k];
+        Instances[Seat + k] = Scratch[k];
         Shut_[Seat + k]     = LiftedShut[k];
     }
 

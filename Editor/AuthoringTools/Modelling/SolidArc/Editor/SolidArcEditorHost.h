@@ -44,8 +44,8 @@ private:
     ImGuiID RightColumn_  = 0u;
     bool LayoutSeated_    = false;
 
-    EditorInstance Rows_[kMaxEditorInstances] = {};
-    SolidArcOutlinerBinding Bindings_[kMaxEditorInstances] = {};
+    std::vector<EditorInstance> Rows_{kMaxEditorInstances};
+    std::vector<SolidArcOutlinerBinding> Bindings_{kMaxEditorInstances};
     uint32_t RowCount_ = 0u;
     EditorReadout Readout_ = {};
     EditorSheet PickedSheet_ = {};

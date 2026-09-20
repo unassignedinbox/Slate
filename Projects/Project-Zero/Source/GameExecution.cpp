@@ -1173,10 +1173,10 @@ int main(int argc, char** argv)
     auto PreviousTime = Clock::now();
 
     // Scene editor feed — the roster fills once from the live level; the sheet rebuilds whenever the
-//    pick moves. One write-back crosses back every tick: the folder tint mirror; the orbit's home
-//    seats from the fly camera below.
+    //    pick moves. One write-back crosses back every tick: the folder tint mirror; the orbit's home
+    //    seats from the fly camera below.
     //    Without FRONTIER_DEVELOPMENT the panel below ignores all of this (see the ifdef at the feed block).
-    Frontier::EditorInstance   SceneInstances[Frontier::kMaxEditorInstances] = {};
+    std::vector<Frontier::EditorInstance> SceneInstances(Frontier::kMaxEditorInstances);
     Frontier::EditorSheet    PickedSheet = {};
     bool                     SceneReady = false;
 #ifdef FRONTIER_DEVELOPMENT
@@ -1482,11 +1482,11 @@ int main(int argc, char** argv)
 #ifdef FRONTIER_DEVELOPMENT
         if (!SceneReady)
         {
-            SceneRowCount = Feed.FillRoster(SceneInstances, Level, Frontier::kMaxEditorInstances);
+            SceneRowCount = Feed.FillRoster(SceneInstances.data(), Level, Frontier::kMaxEditorInstances);
             // The celestial entities follow the scene's own rows, under their own folder. Appended rather
             //    than merged so the scene walk stays exactly what it was.
             CelestialFirstRow = SceneRowCount;
-            SceneRowCount += Celestial.AppendRoster(SceneInstances, SceneRowCount, Frontier::kMaxEditorInstances);
+            SceneRowCount += Celestial.AppendRoster(SceneInstances.data(), SceneRowCount, Frontier::kMaxEditorInstances);
             Frontier::ViewportOrbit Home;
             float Middle[3] = { 0.0f, 0.0f, 0.0f };
             Frontier::ProjectZero::QueryLevelCentre(Level, Middle);
@@ -1516,7 +1516,7 @@ int main(int argc, char** argv)
             }
             else
             {
-                TintMirror = Feed.BuildSheet(PickedNow, SceneInstances, SceneRowCount, &PickedSheet,
+                TintMirror = Feed.BuildSheet(PickedNow, SceneInstances.data(), SceneRowCount, &PickedSheet,
                                              Camera, Level, AnimatedInstances);
             }
             SheetFor   = PickedNow;
@@ -1542,7 +1542,7 @@ int main(int argc, char** argv)
         //    every tick; the footer readout is seated the same way, and the viewport panel is handed the scene
         //    image whenever a swapchain rebuild has re-created it.
         if (CelestialFirstRow != Frontier::kNoEditorInstance)
-            Celestial.RefreshRoster(SceneInstances, CelestialFirstRow, SceneRowCount);
+            Celestial.RefreshRoster(SceneInstances.data(), CelestialFirstRow, SceneRowCount);
 
         {
             EditorFooter.Fps = Telemetry.QueryAverageFramesPerSecond();
@@ -1578,7 +1578,7 @@ int main(int argc, char** argv)
 
         Panel.Present(Integrator, Camera, Scene,
                       Surface.QueryWidth(), Surface.QueryHeight(),
-                      SceneInstances, SceneRowCount, &PickedSheet,
+                      SceneInstances.data(), SceneRowCount, &PickedSheet,
                       [&]()
                       {
                           if (OverlaySurface.Begin(Frontier::SurfaceLayer::Above,

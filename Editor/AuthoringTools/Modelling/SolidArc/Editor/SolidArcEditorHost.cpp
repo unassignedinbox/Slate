@@ -113,7 +113,7 @@ void SolidArcEditorHost::Record(ConsoleHost& Host) noexcept
 {
     Host.Render();
     ViewImage_ = Host.Raster().Readback();
-    RowCount_ = BuildSolidArcOutliner(Host, Rows_, Bindings_, kMaxEditorInstances, &Readout_);
+    RowCount_ = BuildSolidArcOutliner(Host, Rows_.data(), Bindings_.data(), kMaxEditorInstances, &Readout_);
     if (!ViewImage_.Pixels.empty())
         Viewport_.AssignView(ViewImage_.Pixels.data(), ViewImage_.Width, ViewImage_.Height);
     else
@@ -142,8 +142,8 @@ void SolidArcEditorHost::Record(ConsoleHost& Host) noexcept
     ImGui::End();
     ImGui::PopStyleVar(2);
 
-    Outliner_.Record(Rows_, RowCount_);
-    Viewport_.Record(Rows_, RowCount_);
+    Outliner_.Record(Rows_.data(), RowCount_);
+    Viewport_.Record(Rows_.data(), RowCount_);
 
     const uint32_t Picked = Outliner_.QueryPicked();
     EditorInstance* PickedRow = (Picked < RowCount_) ? &Rows_[Picked] : nullptr;
@@ -153,7 +153,7 @@ void SolidArcEditorHost::Record(ConsoleHost& Host) noexcept
         BuildSolidArcInspectorSheet(Host, SolidArcOutlinerBinding{}, &PickedSheet_);
     Inspector_.Record(PickedRow, Picked, &PickedSheet_);
 
-    ApplySolidArcOutlinerVisibility(Host, Rows_, Bindings_, RowCount_);
+    ApplySolidArcOutlinerVisibility(Host, Rows_.data(), Bindings_.data(), RowCount_);
     if (Picked < RowCount_)
         ApplySolidArcInspectorSheet(Host, Bindings_[Picked], PickedSheet_);
 }

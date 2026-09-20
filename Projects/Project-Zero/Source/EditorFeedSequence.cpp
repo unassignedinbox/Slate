@@ -24,11 +24,11 @@ struct FeedRow
     uint32_t    Ordinal = 0u;
 };
 
-constexpr uint32_t kFolderRoom        = 0u;
-constexpr uint32_t kFolderObjects     = 1u;
-constexpr uint32_t kFolderLighting    = 2u;
-constexpr uint32_t kFolderCameras     = 3u;
-constexpr const char* kFolderLabels[] = { "Room", "Objects", "Lighting", "Cameras" };
+constexpr uint32_t kFolderCameras     = 0u;
+constexpr uint32_t kFolderLighting    = 1u;
+constexpr uint32_t kFolderObjects     = 2u;
+constexpr uint32_t kFolderRoom        = 3u;
+constexpr const char* kFolderLabels[] = { "Cameras", "Lighting", "Objects", "Room" };
 
 constexpr float kFolderTint[3]      = { 0.788f, 0.635f, 0.294f };   // amber, shared by every folder
 constexpr float kLightTint[3]       = { 0.961f, 0.827f, 0.294f };   // the lamp rows
@@ -88,7 +88,7 @@ uint32_t PlacementDepth(uint32_t Ordinal, const SceneStructure& Level) noexcept
     return Depth;
 }
 
-// The shared row layout: each folder followed by its placements, the fly camera first under Cameras.
+// The shared row layout: Cameras -> Lighting -> Objects -> Room (scenery/plinths).
 //    Both builders run this, so the sheet's row means what the roster showed.
 uint32_t BuildLayout(const SceneStructure& Level, FeedRow* Layout, uint32_t Capacity) noexcept
 {
@@ -98,13 +98,8 @@ uint32_t BuildLayout(const SceneStructure& Level, FeedRow* Layout, uint32_t Capa
     {
         if (Rows < Capacity) { Layout[Rows].Kind = Kind; Layout[Rows].Ordinal = Ordinal; ++Rows; }
     };
-    for (uint32_t Folder = 0u; Folder < kFolderCameras; ++Folder)
-    {
-        Push(FeedRowKind::Folder, Folder);
-        for (uint32_t P = 0u; P < Placements.size(); ++P)
-            if (PlacementFolder(Placements[P], Level) == Folder)
-                Push(FeedRowKind::Placement, P);
-    }
+
+    // 1. Cameras folder + cameras
     Push(FeedRowKind::Folder, kFolderCameras);
     Push(FeedRowKind::FlyCamera, 0u);
     Push(FeedRowKind::CineCamera, 0u);
@@ -112,6 +107,25 @@ uint32_t BuildLayout(const SceneStructure& Level, FeedRow* Layout, uint32_t Capa
     for (uint32_t P = 0u; P < Placements.size(); ++P)
         if (PlacementFolder(Placements[P], Level) == kFolderCameras)
             Push(FeedRowKind::Placement, P);
+
+    // 2. Lighting folder + luminaires
+    Push(FeedRowKind::Folder, kFolderLighting);
+    for (uint32_t P = 0u; P < Placements.size(); ++P)
+        if (PlacementFolder(Placements[P], Level) == kFolderLighting)
+            Push(FeedRowKind::Placement, P);
+
+    // 3. Objects folder + dynamic objects
+    Push(FeedRowKind::Folder, kFolderObjects);
+    for (uint32_t P = 0u; P < Placements.size(); ++P)
+        if (PlacementFolder(Placements[P], Level) == kFolderObjects)
+            Push(FeedRowKind::Placement, P);
+
+    // 4. Room folder + static scenery / plinths
+    Push(FeedRowKind::Folder, kFolderRoom);
+    for (uint32_t P = 0u; P < Placements.size(); ++P)
+        if (PlacementFolder(Placements[P], Level) == kFolderRoom)
+            Push(FeedRowKind::Placement, P);
+
     return Rows;
 }
 
@@ -260,9 +274,9 @@ uint32_t EditorFeedSequence::FillRoster(EditorInstance* Instances, const SceneSt
 {
     if (Instances == nullptr || Capacity == 0u)
         return 0u;
-    FeedRow Layout[kMaxEditorInstances];
     const uint32_t TargetCapacity = std::min(Capacity, kMaxEditorInstances);
-    const uint32_t Rows = BuildLayout(Level, Layout, TargetCapacity);
+    std::vector<FeedRow> Layout(TargetCapacity);
+    const uint32_t Rows = BuildLayout(Level, Layout.data(), TargetCapacity);
     const auto& Placements = Level.QueryPlacements();
     const auto& LevelInstances = Level.QueryInstances();
     const auto& Records = Level.QueryMaterials().QueryRecords();
@@ -418,8 +432,8 @@ EditorProperty* EditorFeedSequence::BuildSheet(uint32_t Index, EditorInstance* I
 
     using Frontier::EditorPropertyCategory;
     constexpr float kRadToDeg = 57.29578f;
-    FeedRow Layout[kMaxEditorInstances];
-    const uint32_t StockRows = BuildLayout(Level, Layout, RowCount);
+    std::vector<FeedRow> Layout(RowCount);
+    const uint32_t StockRows = BuildLayout(Level, Layout.data(), RowCount);
     if (Index >= StockRows)
         return nullptr;
     const FeedRow& Picked = Layout[Index];

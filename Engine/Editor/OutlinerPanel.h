@@ -109,8 +109,6 @@ private:
     uint32_t OrderRevision_ = 0u;
     bool     Shown_[kMaxEditorInstances] = {};                                 // this tick's search / narrowing hits
     bool     TreeHovered_  = false;
-
-    EditorInstance Scratch_[kMaxEditorInstances] = {};                         // MoveRun's lifted run
 };
 
 } // namespace Frontier
