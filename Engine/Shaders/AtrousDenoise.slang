@@ -124,17 +124,30 @@ void main()
 
     // The luminance denominator uses a 3×3 pre-filtered variance so a single bright fireflier cannot declare itself
     //    an edge and survive every level. ε keeps a fully converged (zero-variance) region from dividing by zero.
-    float VarianceSum = 0.0;
+    // RELAX extension: local log-luminance statistics clamp extreme outlier fireflies before wavelet accumulation.
+    float VarianceSum    = 0.0;
     float VarianceWeight = 0.0;
+    float LogLumSum      = 0.0;
+    float LogLumSqSum    = 0.0;
     for (int Y = -1; Y <= 1; ++Y)
+    {
         for (int X = -1; X <= 1; ++X)
         {
             ivec2 Tap = clamp(Pixel + ivec2(X, Y), ivec2(0), ivec2(Extent) - 1);
             float W   = KernelWeight(X) * KernelWeight(Y);
-            VarianceSum    += imageLoad(SourceImage, Tap).a * W;
+            vec4 Sample = imageLoad(SourceImage, Tap);
+            VarianceSum    += Sample.a * W;
             VarianceWeight += W;
+            float LLum = log(1.0 + Luminance(Sample.rgb));
+            LogLumSum      += LLum * W;
+            LogLumSqSum    += (LLum * LLum) * W;
         }
-    float LocalVariance = VarianceWeight > 0.0 ? max(VarianceSum / VarianceWeight, 0.0) : 0.0;
+    }
+    float LocalVariance     = VarianceWeight > 0.0 ? max(VarianceSum / VarianceWeight, 0.0) : 0.0;
+    float MeanLogLum        = VarianceWeight > 0.0 ? LogLumSum / VarianceWeight : 0.0;
+    float VarLogLum         = VarianceWeight > 0.0 ? max(0.0, (LogLumSqSum / VarianceWeight) - (MeanLogLum * MeanLogLum)) : 0.0;
+    float MaxAllowedLogLum  = MeanLogLum + 2.5 * sqrt(VarLogLum) + 0.15;
+    float MaxAllowedLum     = exp(MaxAllowedLogLum) - 1.0;
 
     // R10 #9. A pixel whose neighbourhood has already converged has nothing left for a wider kernel to remove:
     //    the filter would compute a weighted mean of 25 values that already agree and hand back what it started
@@ -189,6 +202,11 @@ void main()
             if (TapSurface.w <= 0.0) continue;                     // background never bleeds into a surface
 
             vec4  TapColour = imageLoad(SourceImage, Tap);
+            float TapLum    = Luminance(TapColour.rgb);
+            if (TapLum > MaxAllowedLum && TapLum > 1.0e-4)
+            {
+                TapColour.rgb *= (MaxAllowedLum / TapLum);
+            }
             float Base      = KernelWeight(X) * KernelWeight(Y);
 
             // ① Normal agreement.

@@ -1854,168 +1854,176 @@ void main()
             //    The bound is on the CONTRIBUTION, not the estimator, and it is generous (well above any legitimate
             //    indirect sample at these exposures) so converged energy is untouched — it only removes the tail
             //    that the running mean cannot average away in a viewer's lifetime.
-            Ray  bounceRay;
-            // K4: solid segments take a pure ray offset (CPU mirror — the normal term lands on-surface at near-normal
-            // exits and re-hits the exit face); foil/R keep the K3 ray-side normal offset.
-            bounceRay.origin = enteredSolid ? hitPos + bounceDir * 3e-4 : hitPos + hitNormal * (dot(bounceDir, hitNormal) > 0.0 ? kEps : -kEps);
-            bounceRay.dir    = bounceDir;
-
-            Hit bounceHit = TraceScene(bounceRay);
-
-            // ⚠️ An escaped bounce ray now collects the sky, and this is the half that changes the LIGHTING
-            //    rather than the background. In an outdoor scene the sky is the largest emitter present: it is
-            //    what makes an upward-facing surface read cool and an unlit face take the colour of the air
-            //    above it. Dropping it was correct when there was no environment light and is a missing light
-            //    source now.
-            //
-            //    The throughput already carries the BSDF and the cosine from the bounce, so the sky enters
-            //    exactly as any other emitter would — no separate ambient term, no second light path.
-            // K3: no above-horizon gate — below-horizon w > 0 bounces exist only when TransmitMix > 0 (opaque kills
-            // them in SampleBsdf), so opaque is untouched and T-paths collect the environment / endpoints below.
-            if (!bounceHit.valid)
+            // Unbiased Russian Roulette path termination: paths with negligible throughput terminate early
+            //    without tracing expensive BVH rays; surviving paths are scaled by 1/pSurvive.
+            float pSurvive = clamp(max(throughput.r, max(throughput.g, throughput.b)), 0.05, 1.0);
+            if (RandFloat(seed) <= pSurvive)
             {
-                // K4: entered solid but never exited (open mesh / numeric leak — CPU mirror): nominal-Beer fallback
-                // over the slab thickness, then out. Thickness is 0 (not in the slab) so this is ×1 today — live
-                // the day the slab carries it. Closed meshes never land here.
-                if (enteredSolid) throughput *= exp(-layers.TransmissionSigma * shading.TransmissionThickness);
-                accumulatedRadiance += throughput * SkyAlong(bounceDir);
-            }
-            if (bounceHit.valid)
-            {
-                // K4: Beer over the true interior segment just travelled (CPU mirror — EntrySigma captured at entry,
-                // here the primary resolve's sigma; the segment is entry→endpoint for exits AND embedded hits).
-                if (enteredSolid) throughput *= exp(-layers.TransmissionSigma * bounceHit.t);
-                GpuMaterial   bMat  = Materials[bounceHit.matIdx];
-                // D2: TraceScene already resolved the instance — reuse it rather than repeating the search here.
-                GpuInstance   bInstance = Instances[bounceHit.instance];
-                SurfaceFrame  bFrame;
-                float         bCone = coneWidth + bounceHit.t * PixelSpreadAngle();
-                if (isRoughDiffuse)
+                throughput /= pSurvive;
+
+                Ray  bounceRay;
+                // K4: solid segments take a pure ray offset (CPU mirror — the normal term lands on-surface at near-normal
+                // exits and re-hits the exit face); foil/R keep the K3 ray-side normal offset.
+                bounceRay.origin = enteredSolid ? hitPos + bounceDir * 3e-4 : hitPos + hitNormal * (dot(bounceDir, hitNormal) > 0.0 ? kEps : -kEps);
+                bounceRay.dir    = bounceDir;
+
+                Hit bounceHit = TraceScene(bounceRay);
+
+                // ⚠️ An escaped bounce ray now collects the sky, and this is the half that changes the LIGHTING
+                //    rather than the background. In an outdoor scene the sky is the largest emitter present: it is
+                //    what makes an upward-facing surface read cool and an unlit face take the colour of the air
+                //    above it. Dropping it was correct when there was no environment light and is a missing light
+                //    source now.
+                //
+                //    The throughput already carries the BSDF and the cosine from the bounce, so the sky enters
+                //    exactly as any other emitter would — no separate ambient term, no second light path.
+                // K3: no above-horizon gate — below-horizon w > 0 bounces exist only when TransmitMix > 0 (opaque kills
+                // them in SampleBsdf), so opaque is untouched and T-paths collect the environment / endpoints below.
+                if (!bounceHit.valid)
                 {
-                    bCone *= 2.828427f; // +1.5 mip bias (2^1.5 ≈ 2.828) for rough diffuse bounces to prevent texture cache thrashing
+                    // K4: entered solid but never exited (open mesh / numeric leak — CPU mirror): nominal-Beer fallback
+                    // over the slab thickness, then out. Thickness is 0 (not in the slab) so this is ×1 today — live
+                    // the day the slab carries it. Closed meshes never land here.
+                    if (enteredSolid) throughput *= exp(-layers.TransmissionSigma * shading.TransmissionThickness);
+                    accumulatedRadiance += throughput * SkyAlong(bounceDir);
                 }
-                ShadingRecord bShading = ResolveMaterial(bMat, bInstance, LocalPrimitive(bounceHit.primitive, bounceHit.instance), bounceHit.pos, -bounceDir, bCone, bFrame);
-                // K4: medium context at the endpoint (CPU mirror). A same-material hit from inside is the exit
-                // backface (glass→air override below); a DIFFERENT transmissive object embedded in the glass
-                // shades R-only (v1: no nested dielectrics — and the ray stays inside).
-                bool bFromInside = enteredSolid && bounceHit.matIdx == primaryInstance.MaterialIndex;
-                if (enteredSolid && !bFromInside && bShading.TransmissionWeight > 0.0) bShading.TransmissionWeight = 0.0;
-                // K5: endpoint chord (CPU mirror — interior-SSS is future work, and NEE skips inside anyway).
-                if (!bFromInside && bShading.SssWeight > 0.0) bShading.SssThickness = SssChord(bounceHit.pos, bFrame.Normal);
-
-                // M1: an unlit bounce endpoint contributes its base colour exactly like an emitter (constant radiance).
-                vec3 bUnlit = MaterialSelection(bMat) == kReflectanceUnlit ? bShading.BaseColor : vec3(0.0);
-                if (dot(bFrame.Emission, bFrame.Emission) > 0.0 || dot(bUnlit, bUnlit) > 0.0)
+                if (bounceHit.valid)
                 {
-                    accumulatedRadiance += throughput * (bFrame.Emission + bUnlit);
-                }
-                // K4: interior endpoints skip NEE (CPU mirror) — shadow rays treat glass as opaque, so every NEE
-                // ray from inside would block at the exit wall; refracted NEE is future work. Emitters above still
-                // collect (with the interior Beer already in the throughput).
-                else if ((sunUp || LightTriangleCount > 0u) && !bFromInside)
-                {
-                    vec3  bHitPos    = bounceHit.pos;
-                    vec3  bHitNormal = bFrame.Geometric;
-                    vec3  bWo        = ToLocal(bFrame, -bounceDir);
-                    if (bWo.z <= 0.0) bWo = vec3(bWo.xy, 1e-3);
-                    ResolvedLayers bLayers = ResolveLayers(bShading, bWo);
-                    // K4: exit interface — the transmitted side is air (IncidentIor rides the medium stack: the
-                    // primary glass's eta captured at entry; CPU mirror).
-                    if (bFromInside) { bLayers.SolidInterface = true; bLayers.IncidentIor = layers.SpecularEta; }
-
-                    // ── 4b. The indirect pool owns this vertex's NEE when it can (kFeatureGiReuse): it REPLACES the
-                    //    single sample below, never adds to it, and the deeper bounces carry on from the same
-                    //    direction afterwards. A dielectric vertex, an SSS vertex and an interior vertex keep the
-                    //    single-sample arm — the candidate drawer has no below-stratum and a refraction site is not a
-                    //    NEE site. (Mirror: RestirGiTemporalReservoir's eligibility gate, and the same partition.)
-                    bool giPoolOwns = (FeatureFlags & kFeatureGiReuse) != 0u
-                        && !enteredSolid
-                        && bShading.TransmissionWeight <= 0.0
-                        && bShading.SssWeight <= 0.0;
-                    if (giPoolOwns)
-                        accumulatedRadiance += BoundIndirect(throughput * GiPoolShade(bFrame, bShading, bLayers, bWo, bHitPos,
-                                                                        hitNormal, primaryT, primaryIdentity, pixel, sunUp, seed));
-                    else if (true)
+                    // K4: Beer over the true interior segment just travelled (CPU mirror — EntrySigma captured at entry,
+                    // here the primary resolve's sigma; the segment is entry→endpoint for exits AND embedded hits).
+                    if (enteredSolid) throughput *= exp(-layers.TransmissionSigma * bounceHit.t);
+                    GpuMaterial   bMat  = Materials[bounceHit.matIdx];
+                    // D2: TraceScene already resolved the instance — reuse it rather than repeating the search here.
+                    GpuInstance   bInstance = Instances[bounceHit.instance];
+                    SurfaceFrame  bFrame;
+                    float         bCone = coneWidth + bounceHit.t * PixelSpreadAngle();
+                    if (isRoughDiffuse)
                     {
-                    // The bounce draws one light the same way the reservoir candidates do — sun or lamp by the same
-                    //    coin — because a single unweighted sample is a one-candidate reservoir and the pdfs are the
-                    //    same ones DrawDirectCandidate divides by. (The old mesh-only line divided by the slot count
-                    //    but not the area: the same 1/A bias the reservoir had, fixed here too.)
-                    bool sunBounce = sunUp && (LightTriangleCount == 0u || RandFloat(seed) < SunPickChance());
-                    if (sunBounce)
-                    {
-                        vec3 bSunDir = SampleSunDirection(SkySunDirection.xyz, RandFloat(seed), RandFloat(seed));
-                        float bCos = max(0.0, dot(bHitNormal, bSunDir));
-                        vec3  bWi  = ToLocal(bFrame, bSunDir);
-                        if (bCos > 0.0 && bWi.z > 0.0
-                            && !TraceShadow(bHitPos + bHitNormal * kEps, bHitPos + bSunDir * kSunShadowDistance))
-                        {
-                            vec3  bF = EvaluateBsdf(bShading, bLayers, bWo, bWi);
-                            float pPick = LightTriangleCount > 0u ? SunPickChance() : 1.0;
-                            accumulatedRadiance += BoundIndirect(throughput * bF * SunEmission() * bCos * SunSolidAngle() / pPick);
-                        }
+                        bCone *= 2.828427f; // +1.5 mip bias (2^1.5 ≈ 2.828) for rough diffuse bounces to prevent texture cache thrashing
                     }
-                    else
-                    {
-                        float bPSource = 1.0;
-                        uint  bLi  = PickLight(seed, bPSource);
-                        vec3  bLp  = SampleLightPointFor(bLi, RandFloat(seed), RandFloat(seed));
-                        vec3  bToL = bLp - bHitPos;
-                        float bDist = length(bToL);
-                        vec3  bLDir = bToL / bDist;
-                        float bCos  = max(0.0, dot(bHitNormal, bLDir));
-                        float bCosL = max(0.0, dot(LightNormal(bLi), -bLDir));
-                        vec3  bWi   = ToLocal(bFrame, bLDir);
+                    ShadingRecord bShading = ResolveMaterial(bMat, bInstance, LocalPrimitive(bounceHit.primitive, bounceHit.instance), bounceHit.pos, -bounceDir, bCone, bFrame);
+                    // K4: medium context at the endpoint (CPU mirror). A same-material hit from inside is the exit
+                    // backface (glass→air override below); a DIFFERENT transmissive object embedded in the glass
+                    // shades R-only (v1: no nested dielectrics — and the ray stays inside).
+                    bool bFromInside = enteredSolid && bounceHit.matIdx == primaryInstance.MaterialIndex;
+                    if (enteredSolid && !bFromInside && bShading.TransmissionWeight > 0.0) bShading.TransmissionWeight = 0.0;
+                    // K5: endpoint chord (CPU mirror — interior-SSS is future work, and NEE skips inside anyway).
+                    if (!bFromInside && bShading.SssWeight > 0.0) bShading.SssThickness = SssChord(bounceHit.pos, bFrame.Normal);
 
-                        vec3 bLEmit = LightEmission(bLi);
-
-                        if (bCos > 0.0 && bCosL > 0.0 && bWi.z > 0.0 && !TraceShadow(bHitPos + bHitNormal * kEps, bLp))
-                        {
-                            float bDist2 = bDist * bDist;
-                            vec3  bF = EvaluateBsdf(bShading, bLayers, bWo, bWi);
-                            float pMesh = (sunUp ? 1.0 - SunPickChance() : 1.0) * bPSource;
-                            accumulatedRadiance += BoundIndirect(throughput * bF * bLEmit * bCos * bCosL
-                                                 * Luminaires[bLi].Area / ((bDist2 + 0.01) * max(pMesh, 1e-8)));
-                        }
-                    }
-                    }
-                    // K5: endpoint below-stratum (the same SSS mirror in the bounce frame; inside the !bFromInside
-                    // gate — interior endpoints skip both strata. v-prefix: the bounce frame's below-stratum draws).
-                    if (bLayers.SssMix > 0.0)
+                    // M1: an unlit bounce endpoint contributes its base colour exactly like an emitter (constant radiance).
+                    vec3 bUnlit = MaterialSelection(bMat) == kReflectanceUnlit ? bShading.BaseColor : vec3(0.0);
+                    if (dot(bFrame.Emission, bFrame.Emission) > 0.0 || dot(bUnlit, bUnlit) > 0.0)
                     {
-                        bool sunBelowV = sunUp && (LightTriangleCount == 0u || RandFloat(seed) < SunPickChance());
-                        if (sunBelowV)
+                        accumulatedRadiance += throughput * (bFrame.Emission + bUnlit);
+                    }
+                    // K4: interior endpoints skip NEE (CPU mirror) — shadow rays treat glass as opaque, so every NEE
+                    // ray from inside would block at the exit wall; refracted NEE is future work. Emitters above still
+                    // collect (with the interior Beer already in the throughput).
+                    else if ((sunUp || LightTriangleCount > 0u) && !bFromInside)
+                    {
+                        vec3  bHitPos    = bounceHit.pos;
+                        vec3  bHitNormal = bFrame.Geometric;
+                        vec3  bWo        = ToLocal(bFrame, -bounceDir);
+                        if (bWo.z <= 0.0) bWo = vec3(bWo.xy, 1e-3);
+                        ResolvedLayers bLayers = ResolveLayers(bShading, bWo);
+                        // K4: exit interface — the transmitted side is air (IncidentIor rides the medium stack: the
+                        // primary glass's eta captured at entry; CPU mirror).
+                        if (bFromInside) { bLayers.SolidInterface = true; bLayers.IncidentIor = layers.SpecularEta; }
+
+                        // ── 4b. The indirect pool owns this vertex's NEE when it can (kFeatureGiReuse): it REPLACES the
+                        //    single sample below, never adds to it, and the deeper bounces carry on from the same
+                        //    direction afterwards. A dielectric vertex, an SSS vertex and an interior vertex keep the
+                        //    single-sample arm — the candidate drawer has no below-stratum and a refraction site is not a
+                        //    NEE site. (Mirror: RestirGiTemporalReservoir's eligibility gate, and the same partition.)
+                        bool giPoolOwns = (FeatureFlags & kFeatureGiReuse) != 0u
+                            && !enteredSolid
+                            && bShading.TransmissionWeight <= 0.0
+                            && bShading.SssWeight <= 0.0;
+                        if (giPoolOwns)
+                            accumulatedRadiance += BoundIndirect(throughput * GiPoolShade(bFrame, bShading, bLayers, bWo, bHitPos,
+                                                                            hitNormal, primaryT, primaryIdentity, pixel, sunUp, seed));
+                        else if (true)
                         {
-                            vec3 vSunDir = SampleSunDirection(SkySunDirection.xyz, RandFloat(seed), RandFloat(seed));
-                            float vCos = -dot(bHitNormal, vSunDir);
-                            vec3  vWi  = ToLocal(bFrame, vSunDir);
-                            if (vCos > 0.0 && vWi.z < 0.0)
+                        // The bounce draws one light the same way the reservoir candidates do — sun or lamp by the same
+                        //    coin — because a single unweighted sample is a one-candidate reservoir and the pdfs are the
+                        //    same ones DrawDirectCandidate divides by. (The old mesh-only line divided by the slot count
+                        //    but not the area: the same 1/A bias the reservoir had, fixed here too.)
+                        bool sunBounce = sunUp && (LightTriangleCount == 0u || RandFloat(seed) < SunPickChance());
+                        if (sunBounce)
+                        {
+                            vec3 bSunDir = SampleSunDirection(SkySunDirection.xyz, RandFloat(seed), RandFloat(seed));
+                            float bCos = max(0.0, dot(bHitNormal, bSunDir));
+                            vec3  bWi  = ToLocal(bFrame, bSunDir);
+                            if (bCos > 0.0 && bWi.z > 0.0
+                                && !TraceShadow(bHitPos + bHitNormal * kEps, bHitPos + bSunDir * kSunShadowDistance))
                             {
-                                vec3  vF = EvaluateBsdf(bShading, bLayers, bWo, vWi);
-                                float vPick = LightTriangleCount > 0u ? SunPickChance() : 1.0;
-                                accumulatedRadiance += BoundIndirect(throughput * vF * SunEmission() * vCos * SunSolidAngle() / vPick);
+                                vec3  bF = EvaluateBsdf(bShading, bLayers, bWo, bWi);
+                                float pPick = LightTriangleCount > 0u ? SunPickChance() : 1.0;
+                                accumulatedRadiance += BoundIndirect(throughput * bF * SunEmission() * bCos * SunSolidAngle() / pPick);
                             }
                         }
                         else
                         {
-                            float vPSource = 1.0;
-                            uint  vLi  = PickLight(seed, vPSource);
-                            vec3  vLp  = SampleLightPointFor(vLi, RandFloat(seed), RandFloat(seed));
-                            vec3  vToL = vLp - bHitPos;
-                            float vDist = length(vToL);
-                            vec3  vLDir = vToL / vDist;
-                            float vCos  = -dot(bHitNormal, vLDir);
-                            float vCosL = dot(LightNormal(vLi), -vLDir);
-                            vec3  vWi   = ToLocal(bFrame, vLDir);
+                            float bPSource = 1.0;
+                            uint  bLi  = PickLight(seed, bPSource);
+                            vec3  bLp  = SampleLightPointFor(bLi, RandFloat(seed), RandFloat(seed));
+                            vec3  bToL = bLp - bHitPos;
+                            float bDist = length(bToL);
+                            vec3  bLDir = bToL / bDist;
+                            float bCos  = max(0.0, dot(bHitNormal, bLDir));
+                            float bCosL = max(0.0, dot(LightNormal(bLi), -bLDir));
+                            vec3  bWi   = ToLocal(bFrame, bLDir);
 
-                            if (vCos > 0.0 && vCosL > 1e-3 && vWi.z < 0.0)
+                            vec3 bLEmit = LightEmission(bLi);
+
+                            if (bCos > 0.0 && bCosL > 0.0 && bWi.z > 0.0 && !TraceShadow(bHitPos + bHitNormal * kEps, bLp))
                             {
-                                float vDist2 = vDist * vDist;
-                                vec3  vF = EvaluateBsdf(bShading, bLayers, bWo, vWi);
-                                vec3  vLEmit = LightEmission(vLi);
-                                float pMeshV = (sunUp ? 1.0 - SunPickChance() : 1.0) * vPSource;
-                                accumulatedRadiance += BoundIndirect(throughput * vF * vLEmit * vCos * vCosL
-                                                     * Luminaires[vLi].Area / ((vDist2 + 0.01) * max(pMeshV, 1e-8)));
+                                float bDist2 = bDist * bDist;
+                                vec3  bF = EvaluateBsdf(bShading, bLayers, bWo, bWi);
+                                float pMesh = (sunUp ? 1.0 - SunPickChance() : 1.0) * bPSource;
+                                accumulatedRadiance += BoundIndirect(throughput * bF * bLEmit * bCos * bCosL
+                                                     * Luminaires[bLi].Area / ((bDist2 + 0.01) * max(pMesh, 1e-8)));
+                            }
+                        }
+                        }
+                        // K5: endpoint below-stratum (the same SSS mirror in the bounce frame; inside the !bFromInside
+                        // gate — interior endpoints skip both strata. v-prefix: the bounce frame's below-stratum draws).
+                        if (bLayers.SssMix > 0.0)
+                        {
+                            bool sunBelowV = sunUp && (LightTriangleCount == 0u || RandFloat(seed) < SunPickChance());
+                            if (sunBelowV)
+                            {
+                                vec3 vSunDir = SampleSunDirection(SkySunDirection.xyz, RandFloat(seed), RandFloat(seed));
+                                float vCos = -dot(bHitNormal, vSunDir);
+                                vec3  vWi  = ToLocal(bFrame, vSunDir);
+                                if (vCos > 0.0 && vWi.z < 0.0)
+                                {
+                                    vec3  vF = EvaluateBsdf(bShading, bLayers, bWo, vWi);
+                                    float vPick = LightTriangleCount > 0u ? SunPickChance() : 1.0;
+                                    accumulatedRadiance += BoundIndirect(throughput * vF * SunEmission() * vCos * SunSolidAngle() / vPick);
+                                }
+                            }
+                            else
+                            {
+                                float vPSource = 1.0;
+                                uint  vLi  = PickLight(seed, vPSource);
+                                vec3  vLp  = SampleLightPointFor(vLi, RandFloat(seed), RandFloat(seed));
+                                vec3  vToL = vLp - bHitPos;
+                                float vDist = length(vToL);
+                                vec3  vLDir = vToL / vDist;
+                                float vCos  = -dot(bHitNormal, vLDir);
+                                float vCosL = dot(LightNormal(vLi), -vLDir);
+                                vec3  vWi   = ToLocal(bFrame, vLDir);
+
+                                if (vCos > 0.0 && vCosL > 1e-3 && vWi.z < 0.0)
+                                {
+                                    float vDist2 = vDist * vDist;
+                                    vec3  vF = EvaluateBsdf(bShading, bLayers, bWo, vWi);
+                                    vec3  vLEmit = LightEmission(vLi);
+                                    float pMeshV = (sunUp ? 1.0 - SunPickChance() : 1.0) * vPSource;
+                                    accumulatedRadiance += BoundIndirect(throughput * vF * vLEmit * vCos * vCosL
+                                                         * Luminaires[vLi].Area / ((vDist2 + 0.01) * max(pMeshV, 1e-8)));
+                                }
                             }
                         }
                     }
