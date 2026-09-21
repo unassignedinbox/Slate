@@ -61,6 +61,12 @@ public:
     // The editor's primary pick — the instance PickedSheet must describe. kNoEditorInstance when nothing is
     //    picked, or when the build carries no editor at all.
     [[nodiscard]] uint32_t QueryPickedInstance() const noexcept;
+    [[nodiscard]] uint32_t QueryPickedCount() const noexcept;
+    [[nodiscard]] uint32_t QueryPickedAt(uint32_t Slot) const noexcept;
+    [[nodiscard]] bool     IsPicked(uint32_t Index) const noexcept;
+    void                   TogglePick(uint32_t Index) noexcept;
+    void                   AddPick(uint32_t Index) noexcept;
+    void                   ClearPicks() noexcept;
 
     // Drives the pick from the game.
     void PickInstance(uint32_t Index) noexcept;

@@ -121,6 +121,60 @@ uint32_t RenderScheduler::QueryPickedInstance() const noexcept
 #endif
 }
 
+uint32_t RenderScheduler::QueryPickedCount() const noexcept
+{
+#ifdef FRONTIER_DEVELOPMENT
+    return Editor_.QueryPickedCount();
+#else
+    return 0u;
+#endif
+}
+
+uint32_t RenderScheduler::QueryPickedAt(uint32_t Slot) const noexcept
+{
+#ifdef FRONTIER_DEVELOPMENT
+    return Editor_.QueryPickedAt(Slot);
+#else
+    (void)Slot;
+    return kNoEditorInstance;
+#endif
+}
+
+bool RenderScheduler::IsPicked(uint32_t Index) const noexcept
+{
+#ifdef FRONTIER_DEVELOPMENT
+    return Editor_.IsPicked(Index);
+#else
+    (void)Index;
+    return false;
+#endif
+}
+
+void RenderScheduler::TogglePick(uint32_t Index) noexcept
+{
+#ifdef FRONTIER_DEVELOPMENT
+    Editor_.TogglePick(Index);
+#else
+    (void)Index;
+#endif
+}
+
+void RenderScheduler::AddPick(uint32_t Index) noexcept
+{
+#ifdef FRONTIER_DEVELOPMENT
+    Editor_.AddPick(Index);
+#else
+    (void)Index;
+#endif
+}
+
+void RenderScheduler::ClearPicks() noexcept
+{
+#ifdef FRONTIER_DEVELOPMENT
+    Editor_.ClearPicks();
+#endif
+}
+
 void RenderScheduler::PickInstance(uint32_t Index) noexcept
 {
 #ifdef FRONTIER_DEVELOPMENT

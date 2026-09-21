@@ -64,20 +64,23 @@ void FlyThroughSolver::AdvanceLocomotion(const InputExchange& Input, float Δτ)
         AssignOrientationEuler(NewPitch, NewYaw, 0.0f);
     }
 
-    // 3. 6-DOF Directional Flight (WASD + Q/E)
+    // 3. 6-DOF Directional Flight (WASD + Q/E) — engaged when RMB steering is held
     Vector3 DesiredDirection{ 0.0f, 0.0f, 0.0f };
 
-    // Forward / Backward
-    if (Input.IsKeyPressed(VirtualKeyCategory::KeyW)) DesiredDirection += ForwardVector;
-    if (Input.IsKeyPressed(VirtualKeyCategory::KeyS)) DesiredDirection -= ForwardVector;
+    if (SteeringActive)
+    {
+        // Forward / Backward
+        if (Input.IsKeyPressed(VirtualKeyCategory::KeyW)) DesiredDirection += ForwardVector;
+        if (Input.IsKeyPressed(VirtualKeyCategory::KeyS)) DesiredDirection -= ForwardVector;
 
-    // Strafe Right / Left
-    if (Input.IsKeyPressed(VirtualKeyCategory::KeyD)) DesiredDirection += RightVector;
-    if (Input.IsKeyPressed(VirtualKeyCategory::KeyA)) DesiredDirection -= RightVector;
+        // Strafe Right / Left
+        if (Input.IsKeyPressed(VirtualKeyCategory::KeyD)) DesiredDirection += RightVector;
+        if (Input.IsKeyPressed(VirtualKeyCategory::KeyA)) DesiredDirection -= RightVector;
 
-    // Vertical Up (E) / Down (Q) — Strict +Z Up Axis
-    if (Input.IsKeyPressed(VirtualKeyCategory::KeyE)) DesiredDirection += Vector3{ 0.0f, 0.0f, 1.0f };
-    if (Input.IsKeyPressed(VirtualKeyCategory::KeyQ)) DesiredDirection -= Vector3{ 0.0f, 0.0f, 1.0f };
+        // Vertical Up (E) / Down (Q) — Strict +Z Up Axis
+        if (Input.IsKeyPressed(VirtualKeyCategory::KeyE)) DesiredDirection += Vector3{ 0.0f, 0.0f, 1.0f };
+        if (Input.IsKeyPressed(VirtualKeyCategory::KeyQ)) DesiredDirection -= Vector3{ 0.0f, 0.0f, 1.0f };
+    }
 
     float LengthSq = DesiredDirection.LengthSquared();
     if (LengthSq > 1e-6f)

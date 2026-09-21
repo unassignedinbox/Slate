@@ -103,6 +103,12 @@ public:
 
     // The primary pick — the instance the sheet must describe. kNoEditorInstance when nothing is picked.
     [[nodiscard]] uint32_t QueryPickedInstance() const noexcept;
+    [[nodiscard]] uint32_t QueryPickedCount() const noexcept { return Outliner_.QueryPickedCount(); }
+    [[nodiscard]] uint32_t QueryPickedAt(uint32_t Slot) const noexcept { return Outliner_.QueryPickedAt(Slot); }
+    [[nodiscard]] bool     IsPicked(uint32_t Index) const noexcept { return Outliner_.IsPicked(Index); }
+    void                   TogglePick(uint32_t Index) noexcept { Outliner_.TogglePick(Index); }
+    void                   AddPick(uint32_t Index) noexcept { Outliner_.AddPick(Index); }
+    void                   ClearPicks() noexcept { Outliner_.PickInstance(kNoEditorInstance); }
 
     // Faces seated by ApplyTheme (four when both archives resolve, zero without the define).
     [[nodiscard]] int QueryFontCount() const noexcept;
