@@ -216,6 +216,14 @@ const char* CelestialEntityName(CelestialEntity Entity) noexcept
     case CelestialEntity::Sky:            return "Sky";
     case CelestialEntity::Stars:          return "Stars";
     case CelestialEntity::Moons:          return "Moons";
+    case CelestialEntity::HeightFog:      return "Height Fog";
+    case CelestialEntity::AtmosphericFog: return "Atmospheric Fog";
+    case CelestialEntity::CloudLayer:     return "Cloud Layer";
+    case CelestialEntity::LocalCloud:     return "Local Cloud";
+    case CelestialEntity::LocalFog:       return "Local Volumetric Fog";
+    case CelestialEntity::Wind:           return "Wind";
+    case CelestialEntity::Precipitation:  return "Precipitation";
+    case CelestialEntity::Rainbow:        return "Rainbow";
     case CelestialEntity::LensFlare:      return "Lens Flare";
     default:                              return "?";
     }
@@ -230,6 +238,14 @@ const char* CelestialEntityKind(CelestialEntity Entity) noexcept
     case CelestialEntity::Sky:            return "Sky Atmosphere";
     case CelestialEntity::Stars:          return "Star Field";
     case CelestialEntity::Moons:          return "Atlas";
+    case CelestialEntity::HeightFog:      return "Volumetrics";
+    case CelestialEntity::AtmosphericFog: return "Aerial Perspective";
+    case CelestialEntity::CloudLayer:     return "Clouds";
+    case CelestialEntity::LocalCloud:     return "Cloud Volume";
+    case CelestialEntity::LocalFog:       return "Fog Volume";
+    case CelestialEntity::Wind:           return "Wind Field";
+    case CelestialEntity::Precipitation:  return "Component";
+    case CelestialEntity::Rainbow:        return "Optics";
     case CelestialEntity::LensFlare:      return "Component";
     default:                              return "?";
     }
@@ -624,6 +640,20 @@ float AirMassOf(float ElevationDegrees) noexcept
 
 } // namespace
 
+namespace {
+
+constexpr CelestialEntity kOutlinerEntities[] = {
+    CelestialEntity::Atmosphere,
+    CelestialEntity::Sun,
+    CelestialEntity::Sky,
+    CelestialEntity::Stars,
+    CelestialEntity::Moons,
+    CelestialEntity::LensFlare
+};
+constexpr uint32_t kOutlinerEntityCount = static_cast<uint32_t>(sizeof(kOutlinerEntities) / sizeof(kOutlinerEntities[0]));
+
+} // namespace
+
 uint32_t CelestialSequence::AppendRoster(EditorInstance* Instances, uint32_t Written, uint32_t Capacity) const noexcept
 {
     if (Instances == nullptr || Written >= Capacity) return 0u;
@@ -644,15 +674,16 @@ uint32_t CelestialSequence::AppendRoster(EditorInstance* Instances, uint32_t Wri
     CopyTint(Folder.Tint, kTintFolder);
     ++Count;
 
-    for (uint32_t I = 0; I < kCelestialEntityCount; ++I)
+    for (uint32_t I = 0; I < kOutlinerEntityCount; ++I)
     {
         if (Written + Count >= Capacity) break;
-        const CelestialEntity Entity = static_cast<CelestialEntity>(I);
+        const CelestialEntity Entity = kOutlinerEntities[I];
+        const uint32_t EntityIdx = static_cast<uint32_t>(Entity);
         EditorInstance& Row = Instances[Written + Count];
         Row = EditorInstance{};
         std::snprintf(Row.Label, sizeof(Row.Label), "%s", CelestialEntityName(Entity));
         Row.Depth   = 1u;
-        Row.Visible = Shown[I];
+        Row.Visible = Shown[EntityIdx];
         // A Light row for the sun (it is one), Geometry for the rest; the narrowing pills read the page's own
         //    groups (Sky for the medium, Bodies for the moons, Lights for the sun).
         Row.Category = (Entity == CelestialEntity::Sun) ? EditorInstanceCategory::Light
@@ -660,9 +691,7 @@ uint32_t CelestialSequence::AppendRoster(EditorInstance* Instances, uint32_t Wri
         Row.Narrowing = (Entity == CelestialEntity::Sun)   ? EditorNarrowing::Lights
                       : (Entity == CelestialEntity::Moons) ? EditorNarrowing::Bodies
                                                            : EditorNarrowing::Sky;
-        Row.Dynamic = Entity == CelestialEntity::Sun || Entity == CelestialEntity::CloudLayer
-                   || Entity == CelestialEntity::Wind || Entity == CelestialEntity::Precipitation
-                   || Entity == CelestialEntity::Stars || Entity == CelestialEntity::Moons;
+        Row.Dynamic = (Entity == CelestialEntity::Sun || Entity == CelestialEntity::Stars || Entity == CelestialEntity::Moons);
         RefreshRow(Entity, Row);
         ++Count;
         ++Folder.KidCount;
@@ -727,6 +756,50 @@ void CelestialSequence::RefreshRow(CelestialEntity Entity, EditorInstance& Row) 
         }
         break;
     }
+    case CelestialEntity::HeightFog:
+        CopyTint(Row.Tint, kTintFog); Row.Glyph = EditorGlyph::Fog;
+        if (!Fog.HeightEnabled) std::snprintf(Row.Meta, sizeof(Row.Meta), "off");
+        else std::snprintf(Row.Meta, sizeof(Row.Meta), "%.0f m",
+                           static_cast<double>(std::sqrt(-std::log(0.02f)) / (Fog.HeightDensity > 1e-4f ? Fog.HeightDensity : 1e-4f)));
+        break;
+    case CelestialEntity::AtmosphericFog:
+    {
+        CopyTint(Row.Tint, kTintFog); Row.Glyph = EditorGlyph::AerialFog;
+        const float Beta = Medium.MieScattering * (Fog.AerialDensity > 0.0f ? Fog.AerialDensity : 1.0f);
+        std::snprintf(Row.Meta, sizeof(Row.Meta), "%.0f km", static_cast<double>(3.912f / (Beta > 1e-7f ? Beta : 1e-7f) / 1000.0f));
+        break;
+    }
+    case CelestialEntity::LocalFog:
+        CopyTint(Row.Tint, kTintFog); Row.Glyph = EditorGlyph::VolumeFog;
+        std::snprintf(Row.Meta, sizeof(Row.Meta), "%.0f\xc3\x97%.0f m",
+                      static_cast<double>(LocalFog.HalfSize[0] * 2.0f), static_cast<double>(LocalFog.HalfSize[1] * 2.0f));
+        break;
+    case CelestialEntity::CloudLayer:
+        CopyTint(Row.Tint, kTintCloud); Row.Glyph = EditorGlyph::VolumeClouds;
+        std::snprintf(Row.Meta, sizeof(Row.Meta), "%s \xc2\xb7 %.0f%%", CloudTypeWord(Cloud.Type), static_cast<double>(Cloud.Coverage * 100.0f));
+        break;
+    case CelestialEntity::LocalCloud:
+        CopyTint(Row.Tint, kTintCloud); Row.Glyph = EditorGlyph::LocalCloud;
+        std::snprintf(Row.Meta, sizeof(Row.Meta), "%.0f\xc3\x97%.0f m",
+                      static_cast<double>(LocalCloud.HalfSize[0] * 2.0f), static_cast<double>(LocalCloud.HalfSize[1] * 2.0f));
+        break;
+    case CelestialEntity::Wind:
+        CopyTint(Row.Tint, kTintWind); Row.Glyph = EditorGlyph::Wind;
+        std::snprintf(Row.Meta, sizeof(Row.Meta), "%.1f m/s %s", static_cast<double>(Wind.Speed), CompassOf(Wind.Bearing));
+        break;
+    case CelestialEntity::Precipitation:
+        CopyTint(Row.Tint, kTintPrecip); Row.Glyph = EditorGlyph::Rain;
+        std::snprintf(Row.Meta, sizeof(Row.Meta), "%s %.0f mm/h",
+                      Precip.Category == PrecipitationCategory::Rain ? "Rain"
+                    : Precip.Category == PrecipitationCategory::Drizzle ? "Drizzle"
+                    : Precip.Category == PrecipitationCategory::Hail ? "Hail"
+                    : Precip.Category == PrecipitationCategory::Sleet ? "Sleet" : "Snow",
+                      static_cast<double>(Precip.RateMillimetresPerHour));
+        break;
+    case CelestialEntity::Rainbow:
+        CopyTint(Row.Tint, kTintOptics); Row.Glyph = EditorGlyph::Rainbow;
+        std::snprintf(Row.Meta, sizeof(Row.Meta), "%.0f%%", static_cast<double>(Rainbow.Intensity * 100.0f));
+        break;
     case CelestialEntity::LensFlare:
     default:
         CopyTint(Row.Tint, kTintOptics); Row.Glyph = EditorGlyph::Flare;
@@ -738,13 +811,13 @@ void CelestialSequence::RefreshRow(CelestialEntity Entity, EditorInstance& Row) 
 void CelestialSequence::RefreshRoster(EditorInstance* Instances, uint32_t FirstRow, uint32_t InstanceCount) const noexcept
 {
     if (Instances == nullptr) return;
-    for (uint32_t E = 0u; E < kCelestialEntityCount; ++E)
+    for (uint32_t I = 0u; I < kOutlinerEntityCount; ++I)
     {
-        const uint32_t Row = FirstRow + 1u + E;
+        const uint32_t Row = FirstRow + 1u + I;
         if (Row >= InstanceCount) break;
-        // Only the rows that are still ours: a drag may have moved them, so match on the label.
-        if (std::strcmp(Instances[Row].Label, CelestialEntityName(static_cast<CelestialEntity>(E))) != 0) continue;
-        RefreshRow(static_cast<CelestialEntity>(E), Instances[Row]);
+        const CelestialEntity Entity = kOutlinerEntities[I];
+        if (std::strcmp(Instances[Row].Label, CelestialEntityName(Entity)) != 0) continue;
+        RefreshRow(Entity, Instances[Row]);
     }
 }
 
@@ -753,8 +826,8 @@ bool CelestialSequence::Owns(uint32_t RosterIndex, uint32_t FirstRow, CelestialE
     // FirstRow is the folder; the entities follow it.
     if (RosterIndex <= FirstRow) return false;
     const uint32_t Offset = RosterIndex - FirstRow - 1u;
-    if (Offset >= kCelestialEntityCount) return false;
-    Entity = static_cast<CelestialEntity>(Offset);
+    if (Offset >= kOutlinerEntityCount) return false;
+    Entity = kOutlinerEntities[Offset];
     return true;
 }
 
@@ -892,6 +965,150 @@ void CelestialSequence::BuildSheet(CelestialEntity Entity, EditorSheet& Sheet) c
         }
         break;
     }
+    case CelestialEntity::HeightFog:
+    {
+        EditorPropertyGroup& Medium2 = OpenGroup(Sheet, "Medium");
+        Push(Medium2, MakeSwitch("Enabled", Fog.HeightEnabled));
+        Push(Medium2, MakeSlider("Density", 0.0f, 0.2f, Fog.HeightDensity, 4, ""));
+        Push(Medium2, MakeSlider("Falloff Height", 10.0f, 3000.0f, Fog.FalloffHeight, 0, "m"));
+        Push(Medium2, MakeSlider("Sun Scatter", 0.0f, 2.0f, Fog.SunScatter, 2, "x"));
+        Push(Medium2, MakeColour("Colour", Fog.HeightColour));
+        break;
+    }
+    case CelestialEntity::AtmosphericFog:
+    {
+        EditorPropertyGroup& Aerial = OpenGroup(Sheet, "Aerial Perspective");
+        Push(Aerial, MakeSwitch("Enabled", Fog.AerialEnabled));
+        Push(Aerial, MakeSlider("Density", 0.0f, 4.0f, Fog.AerialDensity, 2, "x"));
+        Push(Aerial, MakeSlider("Start", 0.0f, 2000.0f, Fog.AerialStart, 0, "m"));
+        Push(Aerial, MakeSlider("Mie Blend", 0.0f, 1.0f, Fog.AerialMie, 2, ""));
+        break;
+    }
+    case CelestialEntity::CloudLayer:
+    {
+        EditorPropertyGroup& Shape = OpenGroup(Sheet, "Shape");
+        Push(Shape, MakeSwitch("Enabled", Cloud.Enabled));
+        {
+            static const char* const Types[] = { "Stratus", "Stratocum", "Cumulus", "Cumulonim", "Altostrat", "Cirrus" };
+            Push(Shape, MakeSelect("Type", Types, 6u, static_cast<uint32_t>(Cloud.Type)));
+        }
+        Push(Shape, MakeSlider("Coverage", 0.0f, 1.0f, Cloud.Coverage, 2, ""));
+        Push(Shape, MakeSlider("Density", 0.0f, 4.0f, Cloud.Density, 2, "x"));
+        Push(Shape, MakeSlider("Feature Scale", 0.2f, 3.0f, Cloud.Scale, 2, "x"));
+
+        EditorPropertyGroup& Slab = OpenGroup(Sheet, "Altitude");
+        // Ranges stop at the ceiling rather than above it, so no slider can propose a cloud in orbit.
+        Push(Slab, MakeSlider("Base", 100.0f, Cloud.CeilingMetres, Cloud.Base, 0, "m"));
+        Push(Slab, MakeSlider("Thickness", 100.0f, 6000.0f, Cloud.Thickness, 0, "m"));
+        Push(Slab, MakeSlider("Ceiling", 4000.0f, 20000.0f, Cloud.CeilingMetres, 0, "m"));
+        Push(Slab, MakeSwitch("Follow Wind", Cloud.FollowWind));
+
+        EditorPropertyGroup& Spend = OpenGroup(Sheet, "Tier Budget");
+        std::snprintf(Text, sizeof(Text), "%u steps", Budget.Volumetrics.CloudSteps);
+        Push(Spend, MakeReadout("Cloud March", Text));
+        std::snprintf(Text, sizeof(Text), "%u taps", Budget.Volumetrics.LightTaps);
+        Push(Spend, MakeReadout("Light Taps", Text));
+
+        // The GPU shadow weather (CloudShadow.slang): the staged instant the level owner seated at load —
+        //    FIN3 diorama deck on the showcase, panel kilometre deck elsewhere. Labels carry the Shadow
+        //    prefix because sheet reads are by label: bare "Coverage"/"Type" would land on Shape's rows.
+        //    Every edit restarts the accumulation through the ④d record compare, so the shade lands at once.
+        EditorPropertyGroup& Shade = OpenGroup(Sheet, "Cloud Shadows");
+        Push(Shade, MakeSwitch("Shadow Enabled", ShadowStaging.Enabled));
+        {
+            static const char* const Types[] = { "Stratus", "Stratocum", "Cumulus", "Cumulonim", "Altostrat", "Cirrus" };
+            Push(Shade, MakeSelect("Shadow Type", Types, 6u, ShadowStaging.Type < 6u ? ShadowStaging.Type : 2u));
+        }
+        Push(Shade, MakeSlider("Shadow Coverage", 0.0f, 1.0f, ShadowStaging.Coverage, 2, ""));
+        Push(Shade, MakeSlider("Shadow Density", 0.0f, 6.0f, ShadowStaging.Density, 2, "x"));
+        Push(Shade, MakeSlider("Shadow Scale", 0.01f, 1.0f, ShadowStaging.Scale, 3, ""));
+        Push(Shade, MakeSlider("Shadow Anvil", 0.0f, 1.0f, ShadowStaging.Anvil, 2, ""));
+        Push(Shade, MakeSlider("Shadow Base", 0.0f, 3000.0f, ShadowStaging.Base, 0, "m"));
+        Push(Shade, MakeSlider("Shadow Thick", 50.0f, 3000.0f, ShadowStaging.Thickness, 0, "m"));
+        Push(Shade, MakeSlider("Shadow Ceil", 4000.0f, 20000.0f, ShadowStaging.CeilingMetres, 0, "m"));
+
+        // The weather instant + the drift wind: the scrub slider 0005 promised. Time is seconds since local
+        //    midnight (FIN3 froze t = 40 s); scrubbing re-folds the drift and re-converges the frame.
+        EditorPropertyGroup& ShadeClock = OpenGroup(Sheet, "Shadow Clock");
+        Push(ShadeClock, MakeSlider("Shadow Time", 0.0f, 86399.0f, ShadowTimeSeconds, 0, "s"));
+        Push(ShadeClock, MakeSlider("Shadow Wind", 0.0f, 40.0f, ShadowStaging.WindSpeed, 1, "m/s"));
+        Push(ShadeClock, MakeSlider("Shadow Dir", 0.0f, 360.0f, ShadowStaging.WindBearing, 0, "deg"));
+        break;
+    }
+    case CelestialEntity::LocalCloud:
+    case CelestialEntity::LocalFog:
+    {
+        const LocalVolumeSettings& V = (Entity == CelestialEntity::LocalCloud) ? LocalCloud : LocalFog;
+        EditorPropertyGroup& Transform = OpenGroup(Sheet, "Transform");
+        Push(Transform, MakeSwitch("Enabled", V.Enabled));
+        Push(Transform, MakeAxes("Centre", V.Centre, 1.0f));
+        Push(Transform, MakeAxes("Half Size", V.HalfSize, 1.0f));
+
+        EditorPropertyGroup& Body = OpenGroup(Sheet, "Body");
+        Push(Body, MakeSlider("Density", 0.0f, 4.0f, V.Density, 2, "x"));
+        Push(Body, MakeSlider("Coverage", 0.0f, 1.0f, V.Coverage, 2, ""));
+        Push(Body, MakeSlider("Feature Scale", 10.0f, 600.0f, V.Scale, 0, "m"));
+        Push(Body, MakeSlider("Anisotropy", -0.9f, 0.9f, V.Anisotropy, 2, ""));
+        Push(Body, MakeSwitch("Follow Wind", V.FollowWind));
+        break;
+    }
+    case CelestialEntity::Wind:
+    {
+        EditorPropertyGroup& Flow = OpenGroup(Sheet, "Flow");
+        Push(Flow, MakeSlider("Speed", 0.0f, 40.0f, Wind.Speed, 1, "m/s"));
+        Push(Flow, MakeSlider("Bearing", 0.0f, 360.0f, Wind.Bearing, 0, "deg"));
+        Push(Flow, MakeSlider("Shear", 0.0f, 2.0f, Wind.Shear, 2, "/km"));
+        Push(Flow, MakeSlider("Veer", -60.0f, 60.0f, Wind.Veer, 0, "d/km"));
+
+        EditorPropertyGroup& Gust = OpenGroup(Sheet, "Gust");
+        Push(Gust, MakeSlider("Gust", 0.0f, 1.0f, Wind.Gust, 2, ""));
+        Push(Gust, MakeSlider("Turbulence", 0.0f, 1.0f, Wind.Turbulence, 2, ""));
+        Push(Gust, MakeSlider("Steadiness", 0.0f, 1.0f, Wind.Steadiness, 2, ""));
+
+        EditorPropertyGroup& Live = OpenGroup(Sheet, "Beaufort");
+        const uint32_t Force = WindField::BeaufortForce(Wind.Speed);
+        std::snprintf(Text, sizeof(Text), "%u %s", Force, WindField::BeaufortName(Force));
+        Push(Live, MakeReadout("Force", Text));
+        break;
+    }
+    case CelestialEntity::Precipitation:
+    {
+        EditorPropertyGroup& Kind = OpenGroup(Sheet, "Type");
+        Push(Kind, MakeSwitch("Enabled", Precip.Enabled));
+        {
+            static const char* const Types[] = { "Rain", "Drizzle", "Hail", "Snow", "Sleet" };
+            Push(Kind, MakeSelect("Precipitation", Types, 5u, static_cast<uint32_t>(Precip.Category)));
+        }
+        Push(Kind, MakeSlider("Intensity", 0.0f, 100.0f, Precip.RateMillimetresPerHour, 1, "mm/h"));
+        Push(Kind, MakeSlider("Density", 0.1f, 6.0f, Precip.Density, 2, "x"));
+        Push(Kind, MakeSlider("Particle Size", 0.3f, 3.0f, Precip.SizeScale, 2, "x"));
+
+        EditorPropertyGroup& Drift = OpenGroup(Sheet, "Wind");
+        Push(Drift, MakeSlider("Wind Drift", 0.0f, 1.0f, Precip.WindDrift, 2, ""));
+        Push(Drift, MakeSwitch("Follow Wind", Precip.FollowWind));
+        Push(Drift, MakeSwitch("Spawn from Clouds", Precip.SpawnFromClouds));
+
+        EditorPropertyGroup& Land = OpenGroup(Sheet, "Collision");
+        Push(Land, MakeSwitch("Ground Collision", Precip.GroundCollision));
+        Push(Land, MakeSlider("Accumulation", 0.0f, 1.0f, Precip.Accumulation, 2, ""));
+
+        EditorPropertyGroup& Live = OpenGroup(Sheet, "Live");
+        std::snprintf(Text, sizeof(Text), "%u alive", Rain.Telemetry().Alive);
+        Push(Live, MakeReadout("Particles", Text));
+        std::snprintf(Text, sizeof(Text), "%.3f m", static_cast<double>(Rain.Field().DeepestMetres()));
+        Push(Live, MakeReadout("Snow Depth", Text));
+        break;
+    }
+    case CelestialEntity::Rainbow:
+    {
+        EditorPropertyGroup& Bow = OpenGroup(Sheet, "Bow");
+        Push(Bow, MakeSwitch("Enabled", Rainbow.Enabled));
+        Push(Bow, MakeSlider("Intensity", 0.0f, 3.0f, Rainbow.Intensity, 2, "x"));
+        Push(Bow, MakeSlider("Width", 0.1f, 4.0f, Rainbow.Width, 2, "x"));
+        Push(Bow, MakeSlider("Secondary", 0.0f, 1.0f, Rainbow.SecondaryGain, 2, ""));
+        Push(Bow, MakeSwitch("Alexander's Band", Rainbow.AlexanderBand));
+        break;
+    }
     case CelestialEntity::LensFlare:
     {
         EditorPropertyGroup& Lens = OpenGroup(Sheet, "Lens");
@@ -998,6 +1215,89 @@ void CelestialSequence::ApplySheet(CelestialEntity Entity, const EditorSheet& Sh
         }
         break;
     }
+    case CelestialEntity::HeightFog:
+    {
+        Fog.HeightEnabled = ReadSwitch(Sheet, "Enabled", Fog.HeightEnabled);
+        Fog.HeightDensity = ReadSlider(Sheet, "Density", Fog.HeightDensity);
+        Fog.FalloffHeight = ReadSlider(Sheet, "Falloff Height", Fog.FalloffHeight);
+        Fog.SunScatter    = ReadSlider(Sheet, "Sun Scatter", Fog.SunScatter);
+        const EditorProperty* Colour = Find(Sheet, "Colour");
+        if (Colour != nullptr) for (int C = 0; C < 3; ++C) Fog.HeightColour[C] = Colour->ColourTint[C];
+        break;
+    }
+    case CelestialEntity::AtmosphericFog:
+        Fog.AerialEnabled = ReadSwitch(Sheet, "Enabled", Fog.AerialEnabled);
+        Fog.AerialDensity = ReadSlider(Sheet, "Density", Fog.AerialDensity);
+        Fog.AerialStart   = ReadSlider(Sheet, "Start", Fog.AerialStart);
+        Fog.AerialMie     = ReadSlider(Sheet, "Mie Blend", Fog.AerialMie);
+        break;
+    case CelestialEntity::CloudLayer:
+        Cloud.Enabled       = ReadSwitch(Sheet, "Enabled", Cloud.Enabled);
+        Cloud.Type          = static_cast<CloudTypeCategory>(ReadSelect(Sheet, "Type", static_cast<uint32_t>(Cloud.Type)));
+        Cloud.Coverage      = ReadSlider(Sheet, "Coverage", Cloud.Coverage);
+        Cloud.Density       = ReadSlider(Sheet, "Density", Cloud.Density);
+        Cloud.Scale         = ReadSlider(Sheet, "Feature Scale", Cloud.Scale);
+        Cloud.Base          = ReadSlider(Sheet, "Base", Cloud.Base);
+        Cloud.Thickness     = ReadSlider(Sheet, "Thickness", Cloud.Thickness);
+        Cloud.CeilingMetres = ReadSlider(Sheet, "Ceiling", Cloud.CeilingMetres);
+        Cloud.FollowWind    = ReadSwitch(Sheet, "Follow Wind", Cloud.FollowWind);
+        ShadowStaging.Enabled   = ReadSwitch(Sheet, "Shadow Enabled", ShadowStaging.Enabled);
+        ShadowStaging.Type      = ReadSelect(Sheet, "Shadow Type", ShadowStaging.Type);
+        if (ShadowStaging.Type > 5u) ShadowStaging.Type = 2u;
+        ShadowStaging.Coverage  = ReadSlider(Sheet, "Shadow Coverage", ShadowStaging.Coverage);
+        ShadowStaging.Density   = ReadSlider(Sheet, "Shadow Density", ShadowStaging.Density);
+        ShadowStaging.Scale     = ReadSlider(Sheet, "Shadow Scale", ShadowStaging.Scale);
+        ShadowStaging.Anvil     = ReadSlider(Sheet, "Shadow Anvil", ShadowStaging.Anvil);
+        ShadowStaging.Base      = ReadSlider(Sheet, "Shadow Base", ShadowStaging.Base);
+        ShadowStaging.Thickness = ReadSlider(Sheet, "Shadow Thick", ShadowStaging.Thickness);
+        ShadowStaging.CeilingMetres = ReadSlider(Sheet, "Shadow Ceil", ShadowStaging.CeilingMetres);
+        ShadowTimeSeconds       = ReadSlider(Sheet, "Shadow Time", ShadowTimeSeconds);
+        ShadowStaging.WindSpeed   = ReadSlider(Sheet, "Shadow Wind", ShadowStaging.WindSpeed);
+        ShadowStaging.WindBearing = ReadSlider(Sheet, "Shadow Dir", ShadowStaging.WindBearing);
+        break;
+    case CelestialEntity::LocalCloud:
+    case CelestialEntity::LocalFog:
+    {
+        LocalVolumeSettings& V = (Entity == CelestialEntity::LocalCloud) ? LocalCloud : LocalFog;
+        V.Enabled    = ReadSwitch(Sheet, "Enabled", V.Enabled);
+        ReadAxes(Sheet, "Centre", V.Centre);
+        ReadAxes(Sheet, "Half Size", V.HalfSize);
+        V.Density    = ReadSlider(Sheet, "Density", V.Density);
+        V.Coverage   = ReadSlider(Sheet, "Coverage", V.Coverage);
+        V.Scale      = ReadSlider(Sheet, "Feature Scale", V.Scale);
+        V.Anisotropy = ReadSlider(Sheet, "Anisotropy", V.Anisotropy);
+        V.FollowWind = ReadSwitch(Sheet, "Follow Wind", V.FollowWind);
+        break;
+    }
+    case CelestialEntity::Wind:
+        Wind.Speed      = ReadSlider(Sheet, "Speed", Wind.Speed);
+        Wind.Bearing    = ReadSlider(Sheet, "Bearing", Wind.Bearing);
+        Wind.Shear      = ReadSlider(Sheet, "Shear", Wind.Shear);
+        Wind.Veer       = ReadSlider(Sheet, "Veer", Wind.Veer);
+        Wind.Gust       = ReadSlider(Sheet, "Gust", Wind.Gust);
+        Wind.Turbulence = ReadSlider(Sheet, "Turbulence", Wind.Turbulence);
+        Wind.Steadiness = ReadSlider(Sheet, "Steadiness", Wind.Steadiness);
+        break;
+    case CelestialEntity::Precipitation:
+        Precip.Enabled                = ReadSwitch(Sheet, "Enabled", Precip.Enabled);
+        Precip.Category               = static_cast<PrecipitationCategory>(
+                                            ReadSelect(Sheet, "Precipitation", static_cast<uint32_t>(Precip.Category)));
+        Precip.RateMillimetresPerHour = ReadSlider(Sheet, "Intensity", Precip.RateMillimetresPerHour);
+        Precip.Density                = ReadSlider(Sheet, "Density", Precip.Density);
+        Precip.SizeScale              = ReadSlider(Sheet, "Particle Size", Precip.SizeScale);
+        Precip.WindDrift              = ReadSlider(Sheet, "Wind Drift", Precip.WindDrift);
+        Precip.FollowWind             = ReadSwitch(Sheet, "Follow Wind", Precip.FollowWind);
+        Precip.SpawnFromClouds        = ReadSwitch(Sheet, "Spawn from Clouds", Precip.SpawnFromClouds);
+        Precip.GroundCollision        = ReadSwitch(Sheet, "Ground Collision", Precip.GroundCollision);
+        Precip.Accumulation           = ReadSlider(Sheet, "Accumulation", Precip.Accumulation);
+        break;
+    case CelestialEntity::Rainbow:
+        Rainbow.Enabled       = ReadSwitch(Sheet, "Enabled", Rainbow.Enabled);
+        Rainbow.Intensity     = ReadSlider(Sheet, "Intensity", Rainbow.Intensity);
+        Rainbow.Width         = ReadSlider(Sheet, "Width", Rainbow.Width);
+        Rainbow.SecondaryGain = ReadSlider(Sheet, "Secondary", Rainbow.SecondaryGain);
+        Rainbow.AlexanderBand = ReadSwitch(Sheet, "Alexander's Band", Rainbow.AlexanderBand);
+        break;
     case CelestialEntity::LensFlare:
         Flare.Enabled        = ReadSwitch(Sheet, "Enabled", Flare.Enabled);
         Flare.Category       = static_cast<AtmosphericOptics::LensFlareCategory>(
@@ -1018,15 +1318,35 @@ void CelestialSequence::ApplySheet(CelestialEntity Entity, const EditorSheet& Sh
 
 uint32_t CelestialSequence::CollectMarkers(VolumeMarker* Markers, uint32_t Capacity) const noexcept
 {
-    (void)Markers;
-    (void)Capacity;
-    return 0u;
+    if (Markers == nullptr) return 0u;
+    uint32_t Count = 0u;
+    if (Count < Capacity && LocalCloud.Enabled)
+    {
+        VolumeMarker& M = Markers[Count++];
+        M = VolumeMarker{};
+        M.Category = VolumeMarkerCategory::LocalCloud;
+        for (int C = 0; C < 3; ++C) M.World[C] = LocalCloud.Centre[C];
+        M.Identifier = static_cast<uint32_t>(CelestialEntity::LocalCloud);
+        M.Visible = Shown[static_cast<uint32_t>(CelestialEntity::LocalCloud)];
+    }
+    if (Count < Capacity && LocalFog.Enabled)
+    {
+        VolumeMarker& M = Markers[Count++];
+        M = VolumeMarker{};
+        M.Category = VolumeMarkerCategory::LocalFog;
+        for (int C = 0; C < 3; ++C) M.World[C] = LocalFog.Centre[C];
+        M.Identifier = static_cast<uint32_t>(CelestialEntity::LocalFog);
+        M.Visible = Shown[static_cast<uint32_t>(CelestialEntity::LocalFog)];
+    }
+    return Count;
 }
 
 void CelestialSequence::MoveMarker(uint32_t Identifier, const float World[3]) noexcept
 {
-    (void)Identifier;
-    (void)World;
+    if (Identifier == static_cast<uint32_t>(CelestialEntity::LocalCloud))
+        for (int C = 0; C < 3; ++C) LocalCloud.Centre[C] = World[C];
+    else if (Identifier == static_cast<uint32_t>(CelestialEntity::LocalFog))
+        for (int C = 0; C < 3; ++C) LocalFog.Centre[C] = World[C];
 }
 
 } // namespace Frontier::ProjectZero

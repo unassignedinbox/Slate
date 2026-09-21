@@ -55,6 +55,14 @@ enum class CelestialEntity : uint32_t
     Sky,
     Stars,
     Moons,
+    HeightFog,
+    AtmosphericFog,
+    CloudLayer,
+    LocalCloud,
+    LocalFog,
+    Wind,
+    Precipitation,
+    Rainbow,
     LensFlare,
     Count
 };

@@ -1533,10 +1533,11 @@ int main(int argc, char** argv)
         if (CelestialFirstRow != Frontier::kNoEditorInstance)
         {
             Celestial.Enabled = SceneInstances[CelestialFirstRow].Visible;
-            for (uint32_t E = 0; E < Frontier::ProjectZero::kCelestialEntityCount; ++E)
+            for (uint32_t R = CelestialFirstRow + 1u; R < SceneRowCount; ++R)
             {
-                const uint32_t Row = CelestialFirstRow + 1u + E;
-                if (Row < SceneRowCount) Celestial.Shown[E] = SceneInstances[Row].Visible;
+                Frontier::ProjectZero::CelestialEntity E{};
+                if (Celestial.Owns(R, CelestialFirstRow, E))
+                    Celestial.Shown[static_cast<uint32_t>(E)] = SceneInstances[R].Visible;
             }
         }
         // ②e The metas move with the clock (sun degrees, air mass, wind rose), so the celestial rows are re-derived
