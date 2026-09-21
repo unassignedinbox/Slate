@@ -3710,8 +3710,8 @@ void SwapchainExchange::OnKey(GLFWwindow* Window, int Key, int, int Action, int)
 
     const bool Pressed = (Action == GLFW_PRESS || Action == GLFW_REPEAT);
 
-    // Text fields in the overlay own the keyboard while focused; releases always pass so nothing sticks.
-    if (Pressed && ImGui::GetCurrentContext() && ImGui::GetIO().WantCaptureKeyboard) return;
+    // Text fields in the overlay own the keyboard while typing; releases always pass so nothing sticks.
+    if (Pressed && ImGui::GetCurrentContext() && ImGui::GetIO().WantTextInput) return;
 
     auto MapKey = [&](int GlfwKey, VirtualKeyCategory EngineKey)
     {
@@ -3782,11 +3782,9 @@ void SwapchainExchange::OnMouseButton(GLFWwindow* Window, int Button, int Action
     if (Button == GLFW_MOUSE_BUTTON_LEFT)
         Self->ForwardInput->AssignMouseButton(MouseButtonCategory::ButtonLeft,  Pressed);
 
-    // The right button drives camera look, which must never begin on an overlay click. Releases always pass so a
-    //    button cannot stick down.
+    // The right button drives camera look / WASD fly navigation.
     if (Button == GLFW_MOUSE_BUTTON_RIGHT)
     {
-        if (Pressed && ImGuiWantsMouse) return;
         Self->ForwardInput->AssignMouseButton(MouseButtonCategory::ButtonRight, Pressed);
         glfwSetInputMode(Window, GLFW_CURSOR, Pressed ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
         Self->CursorInitialised = false;

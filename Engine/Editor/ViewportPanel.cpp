@@ -1380,53 +1380,57 @@ void ViewportPanel::RecordView() noexcept
     }
     ImGui::PopFont();
 
-    // Full viewport canvas interaction: clicking and dragging across the 3D viewport canvas
+    // CAD canvas interaction (SolidArc): clicking and dragging across the CAD viewport canvas
     //    orbits the camera, middle-drag or Shift+left-drag pans the target, and scroll wheel dollies.
-    const bool CanvasHover = ImGui::IsMouseHoveringRect(Min, Max) && !OrbHover && !OrbHeld_;
-    if (CanvasHover && (ImGui::IsMouseClicked(0) || ImGui::IsMouseClicked(1) || ImGui::IsMouseClicked(2)))
+    //    For standard game viewports, RMB look and WASD flight are handled by the FlyThrough camera.
+    if (Chrome_ == ViewportPanelChrome::SolidArcCad)
     {
-        CanvasDragging_ = true;
-    }
-    if (CanvasDragging_)
-    {
-        if (!ImGui::IsMouseDown(0) && !ImGui::IsMouseDown(1) && !ImGui::IsMouseDown(2))
+        const bool CanvasHover = ImGui::IsMouseHoveringRect(Min, Max) && !OrbHover && !OrbHeld_;
+        if (CanvasHover && (ImGui::IsMouseClicked(0) || ImGui::IsMouseClicked(1) || ImGui::IsMouseClicked(2)))
         {
-            CanvasDragging_ = false;
+            CanvasDragging_ = true;
         }
-        else
+        if (CanvasDragging_)
         {
-            const ImVec2 Delta = ImGui::GetIO().MouseDelta;
-            if (Delta.x != 0.0f || Delta.y != 0.0f)
+            if (!ImGui::IsMouseDown(0) && !ImGui::IsMouseDown(1) && !ImGui::IsMouseDown(2))
             {
-                if (ImGui::IsMouseDown(2) || (ImGui::IsMouseDown(0) && ImGui::GetIO().KeyShift))
+                CanvasDragging_ = false;
+            }
+            else
+            {
+                const ImVec2 Delta = ImGui::GetIO().MouseDelta;
+                if (Delta.x != 0.0f || Delta.y != 0.0f)
                 {
-                    const float PanFactor = std::max(0.1f, Orbit_.Distance) * 0.002f;
-                    Orbit_.Target[0] += (-Gr[0] * Delta.x + Gu[0] * Delta.y) * PanFactor;
-                    Orbit_.Target[1] += (-Gr[1] * Delta.x + Gu[1] * Delta.y) * PanFactor;
-                    Orbit_.Target[2] += (-Gr[2] * Delta.x + Gu[2] * Delta.y) * PanFactor;
+                    if (ImGui::IsMouseDown(2) || (ImGui::IsMouseDown(0) && ImGui::GetIO().KeyShift))
+                    {
+                        const float PanFactor = std::max(0.1f, Orbit_.Distance) * 0.002f;
+                        Orbit_.Target[0] += (-Gr[0] * Delta.x + Gu[0] * Delta.y) * PanFactor;
+                        Orbit_.Target[1] += (-Gr[1] * Delta.x + Gu[1] * Delta.y) * PanFactor;
+                        Orbit_.Target[2] += (-Gr[2] * Delta.x + Gu[2] * Delta.y) * PanFactor;
+                    }
+                    else
+                    {
+                        Orbit_.Yaw   -= Delta.x * 0.0055f;
+                        Orbit_.Pitch += Delta.y * 0.0055f;
+                        if (Orbit_.Pitch > 1.55f)  Orbit_.Pitch = 1.55f;
+                        if (Orbit_.Pitch < -1.55f) Orbit_.Pitch = -1.55f;
+                        while (Orbit_.Yaw > kOrbitPi)  Orbit_.Yaw -= 2.0f * kOrbitPi;
+                        while (Orbit_.Yaw < -kOrbitPi) Orbit_.Yaw += 2.0f * kOrbitPi;
+                        Orbit_.ViewPoint = 0u;
+                    }
+                    ++Orbit_.Revision;
                 }
-                else
-                {
-                    Orbit_.Yaw   -= Delta.x * 0.0055f;
-                    Orbit_.Pitch += Delta.y * 0.0055f;
-                    if (Orbit_.Pitch > 1.55f)  Orbit_.Pitch = 1.55f;
-                    if (Orbit_.Pitch < -1.55f) Orbit_.Pitch = -1.55f;
-                    while (Orbit_.Yaw > kOrbitPi)  Orbit_.Yaw -= 2.0f * kOrbitPi;
-                    while (Orbit_.Yaw < -kOrbitPi) Orbit_.Yaw += 2.0f * kOrbitPi;
-                    Orbit_.ViewPoint = 0u;
-                }
-                ++Orbit_.Revision;
             }
         }
-    }
 
-    // The wheel dollies over the view: crowd the target or back off, the compass snap staying put.
-    if (ImGui::IsMouseHoveringRect(Min, Max) && ImGui::GetIO().MouseWheel != 0.0f)
-    {
-        Orbit_.Distance *= ImGui::GetIO().MouseWheel > 0.0f ? 0.88f : 1.13f;
-        if (Orbit_.Distance < 0.2f)   Orbit_.Distance = 0.2f;
-        if (Orbit_.Distance > 120.0f) Orbit_.Distance = 120.0f;
-        ++Orbit_.Revision;
+        // The wheel dollies over the view: crowd the target or back off, the compass snap staying put.
+        if (ImGui::IsMouseHoveringRect(Min, Max) && ImGui::GetIO().MouseWheel != 0.0f)
+        {
+            Orbit_.Distance *= ImGui::GetIO().MouseWheel > 0.0f ? 0.88f : 1.13f;
+            if (Orbit_.Distance < 0.2f)   Orbit_.Distance = 0.2f;
+            if (Orbit_.Distance > 120.0f) Orbit_.Distance = 120.0f;
+            ++Orbit_.Revision;
+        }
     }
     LastW_ = Max.x - Min.x;
     LastH_ = Max.y - Min.y;

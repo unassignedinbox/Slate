@@ -1464,11 +1464,12 @@ int main(int argc, char** argv)
             if (Input.QueryEditKey(I) == 256u) Surface.RequestClose();
         Input.ClearTextQueue();
 
-        // ② Advance camera kinematics (frozen while the Control Centre owns the pointer, or an ImGui
-        //    window has captured the pointer or keyboard — a drag that started on a panel must not fly
-        //    the camera, and a keystroke typed into one must not fire a shortcut).
-        if (!ControlCentre.CoversPointer() && !Panel.QueryEditorCapturesPointer()
-            && !Panel.QueryEditorCapturesKeyboard())
+        // ② Advance camera kinematics: WASD flight and RMB steering.
+        // Frozen only if Control Centre dropdown owns pointer, or user is actively typing in an ImGui text field.
+        // Holding RMB always grants viewport steering + flight.
+        const bool RmbDown = Input.IsMouseButtonPressed(Frontier::MouseButtonCategory::ButtonRight);
+        const bool TypingText = ImGui::GetCurrentContext() && ImGui::GetIO().WantTextInput;
+        if (!ControlCentre.CoversPointer() && (!TypingText || RmbDown))
             Camera.AdvanceLocomotion(Input, Δτ);
         Camera.AssignAspectRatio(
             static_cast<float>(Surface.QueryWidth()) /
@@ -1612,16 +1613,19 @@ int main(int argc, char** argv)
             SceneInstances[PickedNow].Tint[2] = TintMirror->ColourTint[2];
         }
         // ②f The view write-back: a fresh orbit revision poses the fly camera (the eye off the orbit's
-        //    figures), so the views menu and the gizmo steer the rendered view.
+        //    figures), so the views menu and the gizmo steer the rendered view when explicitly changed.
         const Frontier::ViewportOrbit& Orbit = Panel.QueryViewportOrbit();
         if (Orbit.Revision != AppliedOrbit)
         {
             const float Cy = std::cos(Orbit.Yaw), Sy = std::sin(Orbit.Yaw);
             const float Cp = std::cos(Orbit.Pitch), Sp = std::sin(Orbit.Pitch);
             const float Fx = Sy * Cp, Fy = Cy * Cp, Fz = Sp;
-            Camera.AssignSpatialLocation(Frontier::Vector3{ Orbit.Target[0] - Fx * Orbit.Distance,
-                                                            Orbit.Target[1] - Fy * Orbit.Distance,
-                                                            Orbit.Target[2] - Fz * Orbit.Distance });
+            if (Orbit.ViewPoint != 0u || Orbit.Ortho)
+            {
+                Camera.AssignSpatialLocation(Frontier::Vector3{ Orbit.Target[0] - Fx * Orbit.Distance,
+                                                                Orbit.Target[1] - Fy * Orbit.Distance,
+                                                                Orbit.Target[2] - Fz * Orbit.Distance });
+            }
             Camera.AssignOrientationEuler(Orbit.Pitch, Orbit.Yaw, 0.0f);
             AppliedOrbit = Orbit.Revision;
         }
