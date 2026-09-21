@@ -97,11 +97,12 @@ enum class AppearanceSubTabCategory : uint32_t { Display = 0, Fonts = 1, Theme =
 enum class QuickTileCategory : uint32_t
 {
     GlobalIllumination = 0,
-    AntiAliasing       = 1,
-    FrameRateOverlay   = 2,
-    Notifications      = 3,
-    Quality            = 4,
-    Count              = 5
+    Reflections        = 1,
+    AntiAliasing       = 2,
+    FrameRateOverlay   = 3,
+    Notifications      = 4,
+    Quality            = 5,
+    Count              = 6
 };
 
 // One entry of the 4 × 2 quick-settings grid. Slots ≥ Count are empty and draw nothing.
@@ -125,6 +126,9 @@ struct ControlCentreSettings
     // Shadow map side, chosen on the Render page. Auto follows the Quality tier (256 … 2048); any other entry
     //    pins the map at that side and outranks the tier. The filter itself is always the tier's.
     ShadowResolutionCategory ShadowResolution = ShadowResolutionCategory::FollowQualityTier;
+    uint32_t         ReflectionBounces  = 3u;       // [-] 0 = Off, 1, 2, 3, 4
+    uint32_t         GiBounces          = 2u;       // [-] 0 = Off, 1, 2, 3, 4
+    bool             SkyAmbient         = true;     // [-] Physical sky ambient illumination
     uint32_t         Revision           = 0u;       // [-] bumps on every change; projects compare to react
 };
 

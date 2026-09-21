@@ -914,7 +914,10 @@ int main(int argc, char** argv)
         Integrator.AssignExtraCandidateCount(Criteria.ReSTIRExtraCandidateCount);
         Integrator.AssignSpatialTapCount(Criteria.ReSTIRSpatialTapCount);
         Integrator.AssignDenoiseLevelCount(Criteria.DenoiseLevelCount);
-        Integrator.AssignGlobalIllumination(S.GlobalIllumination);
+        Integrator.AssignGlobalIllumination(S.GlobalIllumination && S.GiBounces > 0u);
+        Integrator.AssignMaxReflectionBounces(S.ReflectionBounces);
+        Integrator.AssignMaxGiBounces(S.GlobalIllumination ? S.GiBounces : 0u);
+        Integrator.AssignSkyAmbient(S.SkyAmbient);
         Integrator.AssignAntiAliasing(S.AntiAliasing);
         Notifications.AssignEnabled(S.Notifications);
 

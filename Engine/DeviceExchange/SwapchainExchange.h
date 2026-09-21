@@ -166,7 +166,9 @@ struct DispatchConfiguration
                                                                    //     (power-proportional, host-computed; 0 = kernel falls back
                                                                    //     to the legacy fixed 0.5 coin). From the reserve, block
                                                                    //     still 128 B — mirrors ReSTIRViewport.slang.
-    uint32_t PushReserve[3];                                       // [-] keeps the block 128 B and 16-B aligned
+    uint32_t MaxReflectionBounces;                                 // [cnt] max specular / reflection bounces (0..4)
+    uint32_t MaxGiBounces;                                         // [cnt] max diffuse / GI bounces (0..4)
+    uint32_t SkyAmbientEnabled;                                    // [bit] 1 = physical atmospheric sky ambient direct fill enabled
     uint32_t TlasInstanceCount;                                    // [cnt] D6/D7: resident top-level instances (0 = single
                                                                    //       world-space blob, the pre-D6 path). Mirrors
                                                                    //       ReSTIRViewport.slang's last reserve slot.

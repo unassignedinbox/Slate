@@ -122,7 +122,9 @@ DispatchConfiguration ReSTIRIntegrator::BuildDispatch(
     // The power-proportional sun coin (0 = the kernel's legacy fixed 0.5); see AssignSunPickProbability.
     Dispatch.SunPickProbability    = SunPickProbability;
 
-    for (uint32_t& Reserve : Dispatch.PushReserve) Reserve = 0u;
+    Dispatch.MaxReflectionBounces  = ActiveConfiguration.MaxReflectionBounces;
+    Dispatch.MaxGiBounces          = ActiveConfiguration.GlobalIllumination ? ActiveConfiguration.MaxGiBounces : 0u;
+    Dispatch.SkyAmbientEnabled     = ActiveConfiguration.SkyAmbientEnabled ? 1u : 0u;
 
     return Dispatch;
 }

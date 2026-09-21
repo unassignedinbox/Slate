@@ -48,6 +48,9 @@ struct ReSTIRIntegratorConfiguration
     bool        Denoise            = true;  // [-]   R7: edge-avoiding à-trous filter (false = the raw accumulated image)
     bool        TemporalReprojection = true; // [-]   R7a: back-project the running mean through the motion vectors
                                              //       (false = the pre-R7a same-pixel accumulator, kept as an identity switch)
+    uint32_t    MaxReflectionBounces = 3u;  // [-]   max specular reflection bounces (0 = off, 1, 2, 3, 4)
+    uint32_t    MaxGiBounces         = 2u;  // [-]   max diffuse GI bounces (0 = off, 1, 2, 3, 4)
+    bool        SkyAmbientEnabled    = true; // [-]   physical atmospheric sky dome ambient direct illumination
 };
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -131,6 +134,9 @@ public:
     // R7a. Reprojection changes what is SAMPLED (which history texel feeds the mean), so unlike the denoise toggle
     //    it resets accumulation — the same rule as every other sampling change.
     void AssignTemporalReprojection(bool On)    noexcept { if (ActiveConfiguration.TemporalReprojection != On) { ActiveConfiguration.TemporalReprojection = On; ResetAccumulation(); } }
+    void AssignMaxReflectionBounces(uint32_t Bounces) noexcept { if (ActiveConfiguration.MaxReflectionBounces != Bounces) { ActiveConfiguration.MaxReflectionBounces = Bounces; ResetAccumulation(); } }
+    void AssignMaxGiBounces(uint32_t Bounces) noexcept { if (ActiveConfiguration.MaxGiBounces != Bounces) { ActiveConfiguration.MaxGiBounces = Bounces; ResetAccumulation(); } }
+    void AssignSkyAmbient(bool On) noexcept { if (ActiveConfiguration.SkyAmbientEnabled != On) { ActiveConfiguration.SkyAmbientEnabled = On; ResetAccumulation(); } }
 
     // ⚠️ THE INCREMENT MUST NOT SWALLOW THE RESET. The frame loop reads the index for the dispatch,
     //    the §8 record comparisons reset it when the sky changes, and the loop unconditionally increments it

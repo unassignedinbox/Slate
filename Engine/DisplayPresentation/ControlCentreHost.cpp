@@ -823,7 +823,8 @@ namespace {
 
 constexpr QuickTileStructure TileTable[static_cast<size_t>(QuickTileCategory::Count)] =
 {
-    { QuickTileCategory::GlobalIllumination, ControlCentreIconCategory::SunIllumination,      "Global Illumination", false },
+    { QuickTileCategory::GlobalIllumination, ControlCentreIconCategory::SunIllumination,      "Global Illumination", true },
+    { QuickTileCategory::Reflections,        ControlCentreIconCategory::SparklesAntiAliasing, "Reflections",         true },
     { QuickTileCategory::AntiAliasing,       ControlCentreIconCategory::SparklesAntiAliasing, "Anti-Aliasing",       false },
     { QuickTileCategory::FrameRateOverlay,   ControlCentreIconCategory::GaugeFrameRate,       "FPS Overlay",         false },
     { QuickTileCategory::Notifications,      ControlCentreIconCategory::NotificationsBell,    "Notifications",       false },
@@ -906,7 +907,8 @@ bool ControlCentreHost::IsTileActive(QuickTileCategory Tile) const noexcept
 {
     switch (Tile)
     {
-        case QuickTileCategory::GlobalIllumination: return Settings.GlobalIllumination;
+        case QuickTileCategory::GlobalIllumination: return Settings.GlobalIllumination && Settings.GiBounces > 0u;
+        case QuickTileCategory::Reflections:        return Settings.ReflectionBounces > 0u;
         case QuickTileCategory::AntiAliasing:       return Settings.AntiAliasing;
         case QuickTileCategory::FrameRateOverlay:   return Settings.FrameRateOverlay;
         case QuickTileCategory::Notifications:      return Settings.Notifications;
@@ -919,7 +921,13 @@ void ControlCentreHost::ToggleTile(QuickTileCategory Tile) noexcept
 {
     switch (Tile)
     {
-        case QuickTileCategory::GlobalIllumination: Settings.GlobalIllumination = !Settings.GlobalIllumination; break;
+        case QuickTileCategory::GlobalIllumination:
+            Settings.GiBounces = (Settings.GiBounces + 1u) % 5u;
+            Settings.GlobalIllumination = (Settings.GiBounces > 0u);
+            break;
+        case QuickTileCategory::Reflections:
+            Settings.ReflectionBounces = (Settings.ReflectionBounces + 1u) % 5u;
+            break;
         case QuickTileCategory::AntiAliasing:       Settings.AntiAliasing       = !Settings.AntiAliasing;       break;
         case QuickTileCategory::FrameRateOverlay:   Settings.FrameRateOverlay   = !Settings.FrameRateOverlay; NotificationPage.MirrorFrameRateOverlay(Settings.FrameRateOverlay); break;
         case QuickTileCategory::Notifications:      Settings.Notifications      = !Settings.Notifications;      break;
@@ -1070,7 +1078,26 @@ void ControlCentreHost::ConstructTileLayout(PixelSpace& Surface, uint32_t Slot, 
     if (Active) GlyphSpace::Fill(Surface, Path, Glyph);     // Notch: className "fill-current" on the active icon
     GlyphSpace::Stroke(Surface, Path, Glyph);
 
-    const char* Label = Tile.Cycles ? FidelityLabel(Settings.Quality) : Tile.Label;
+    char DynamicLabel[32];
+    const char* Label = Tile.Label;
+    if (Tile.Category == QuickTileCategory::Quality)
+    {
+        Label = FidelityLabel(Settings.Quality);
+    }
+    else if (Tile.Category == QuickTileCategory::Reflections)
+    {
+        if (Settings.ReflectionBounces == 0u) std::snprintf(DynamicLabel, sizeof(DynamicLabel), "Refl: Off");
+        else if (Settings.ReflectionBounces == 1u) std::snprintf(DynamicLabel, sizeof(DynamicLabel), "Refl: 1 Bounce");
+        else std::snprintf(DynamicLabel, sizeof(DynamicLabel), "Refl: %u Bounces", Settings.ReflectionBounces);
+        Label = DynamicLabel;
+    }
+    else if (Tile.Category == QuickTileCategory::GlobalIllumination)
+    {
+        if (!Settings.GlobalIllumination || Settings.GiBounces == 0u) std::snprintf(DynamicLabel, sizeof(DynamicLabel), "GI: Off");
+        else if (Settings.GiBounces == 1u) std::snprintf(DynamicLabel, sizeof(DynamicLabel), "GI: 1 Bounce");
+        else std::snprintf(DynamicLabel, sizeof(DynamicLabel), "GI: %u Bounces", Settings.GiBounces);
+        Label = DynamicLabel;
+    }
     const PlanePoint LabelSize = Surface.MeasureText(Label, TileLabelSize);
     const float LabelX = Disc.MinimumX + (TileDisc - LabelSize.X) * 0.5f;
     Surface.Text(LabelX, Disc.MaximumY + TileLabelGap, Faded(Ink70(), Opacity), Label, TileLabelSize);
@@ -1482,7 +1509,61 @@ float ControlCentreHost::ConstructRenderPageLayout(PixelSpace& Surface, const Pl
         Surface.Text(Ctl.MinimumX, RowY + (RowH - Size.Y) * 0.5f, Faded(Ink50(), Opacity), Line, 13.0f);
     }
 
-    return SectionH;
+    // Section 2: Ray Tracing & Bounces
+    const float Section2H = ControlKit::SectionPadding * 2.0f + HeadingH + RowH * 3.0f + RowGap * 2.0f;
+    const PlaneExtent Card2 = Spanning(X, Y + SectionH + 20.0f, W, Section2H);
+    const PlaneExtent Content2 = ControlKit::SectionCard(Surface, Card2, Radius, Opacity);
+    ControlKit::SectionHeading(Surface, Content2.MinimumX, Content2.MinimumY, Content2.Width(),
+                               "Ray Tracing & Bounces", "Multi-bounce GI, specular reflections and physical sky ambient fill", Ink90(), Ink50(), Opacity);
+
+    float Row2Y = Content2.MinimumY + HeadingH;
+    {
+        const PlaneExtent Ctl = ControlKit::ControlRow(Surface, Content2.MinimumX, Row2Y, Content2.Width(), "Reflections",
+                                                       ControlKit::Palette().TextDim, Opacity);
+        char ReflLabel[32];
+        if (Settings.ReflectionBounces == 0u) std::snprintf(ReflLabel, sizeof(ReflLabel), "Off");
+        else if (Settings.ReflectionBounces == 1u) std::snprintf(ReflLabel, sizeof(ReflLabel), "1 Bounce");
+        else std::snprintf(ReflLabel, sizeof(ReflLabel), "%u Bounces", Settings.ReflectionBounces);
+        ButtonStructure Btn{}; Btn.Label = ReflLabel; Btn.Tone = ButtonToneCategory::Secondary; Btn.Height = RowH;
+        const PlaneExtent BtnExt = Spanning(Ctl.MinimumX, Row2Y, std::min(Ctl.Width(), 160.0f), RowH);
+        if (ControlKit::PillButton(Surface, BtnExt, Btn, Inner, Opacity).Clicked)
+        {
+            Settings.ReflectionBounces = (Settings.ReflectionBounces + 1u) % 5u;
+            ++Settings.Revision;
+        }
+        Row2Y += RowH + RowGap;
+    }
+    {
+        const PlaneExtent Ctl = ControlKit::ControlRow(Surface, Content2.MinimumX, Row2Y, Content2.Width(), "Global Illumination",
+                                                       ControlKit::Palette().TextDim, Opacity);
+        char GiLabel[32];
+        if (!Settings.GlobalIllumination || Settings.GiBounces == 0u) std::snprintf(GiLabel, sizeof(GiLabel), "Off");
+        else if (Settings.GiBounces == 1u) std::snprintf(GiLabel, sizeof(GiLabel), "1 Bounce");
+        else std::snprintf(GiLabel, sizeof(GiLabel), "%u Bounces", Settings.GiBounces);
+        ButtonStructure Btn{}; Btn.Label = GiLabel; Btn.Tone = ButtonToneCategory::Secondary; Btn.Height = RowH;
+        const PlaneExtent BtnExt = Spanning(Ctl.MinimumX, Row2Y, std::min(Ctl.Width(), 160.0f), RowH);
+        if (ControlKit::PillButton(Surface, BtnExt, Btn, Inner, Opacity).Clicked)
+        {
+            Settings.GiBounces = (Settings.GiBounces + 1u) % 5u;
+            Settings.GlobalIllumination = (Settings.GiBounces > 0u);
+            ++Settings.Revision;
+        }
+        Row2Y += RowH + RowGap;
+    }
+    {
+        const PlaneExtent Ctl = ControlKit::ControlRow(Surface, Content2.MinimumX, Row2Y, Content2.Width(), "Sky Ambient Fill",
+                                                       ControlKit::Palette().TextDim, Opacity);
+        ButtonStructure Btn{}; Btn.Label = Settings.SkyAmbient ? "Enabled" : "Disabled";
+        Btn.Tone = Settings.SkyAmbient ? ButtonToneCategory::Primary : ButtonToneCategory::Ghost; Btn.Height = RowH;
+        const PlaneExtent BtnExt = Spanning(Ctl.MinimumX, Row2Y, std::min(Ctl.Width(), 160.0f), RowH);
+        if (ControlKit::PillButton(Surface, BtnExt, Btn, Inner, Opacity).Clicked)
+        {
+            Settings.SkyAmbient = !Settings.SkyAmbient;
+            ++Settings.Revision;
+        }
+    }
+
+    return SectionH + 20.0f + Section2H;
 }
 
 void ControlCentreHost::ConstructRenderFloatingLayout(PixelSpace& Surface, float Opacity) noexcept

@@ -131,6 +131,9 @@ std::string ConfigurationRegistry::Serialise(const SlateConfiguration& P) noexce
 
     Root.insert("render", toml::table{
         { "global_illumination", P.Render.GlobalIllumination },
+        { "reflection_bounces",  static_cast<int64_t>(P.Render.ReflectionBounces) },
+        { "gi_bounces",          static_cast<int64_t>(P.Render.GiBounces) },
+        { "sky_ambient",         P.Render.SkyAmbient },
         { "anti_aliasing",       P.Render.AntiAliasing },
         { "frame_rate_overlay",  P.Render.FrameRateOverlay },
         { "notifications",       P.Render.Notifications },
@@ -226,6 +229,9 @@ bool ConfigurationRegistry::Deserialise(std::string_view Toml, SlateConfiguratio
     {
         Reader S = R.Sub("render");
         S.Get("global_illumination", Out.Render.GlobalIllumination);
+        S.Get("reflection_bounces",  Out.Render.ReflectionBounces);   Out.Render.ReflectionBounces = std::clamp(Out.Render.ReflectionBounces, 0u, 4u);
+        S.Get("gi_bounces",          Out.Render.GiBounces);           Out.Render.GiBounces         = std::clamp(Out.Render.GiBounces, 0u, 4u);
+        S.Get("sky_ambient",         Out.Render.SkyAmbient);
         S.Get("anti_aliasing",       Out.Render.AntiAliasing);
         S.Get("frame_rate_overlay",  Out.Render.FrameRateOverlay);
         S.Get("notifications",       Out.Render.Notifications);
