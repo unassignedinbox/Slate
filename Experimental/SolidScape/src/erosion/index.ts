@@ -1,11 +1,14 @@
 // SolidScape — Erosion orchestrator 1+2 on 512² tile: thermal → droplet, toggleable preview
 // Bakes the live SDF field to a heightfield, runs thermal + droplet, keeps both buffers and exposes a THREE preview mesh + 2D canvas.
+// New: if the field is a single SDF sphere (the test scene), we bypass the heightmap
+// entirely and erode a true 3D icosphere mesh along its surface — no stretched pillar.
 
 import * as THREE from 'three';
 import type { CompiledField } from '../sdf';
 import { BakeHeightfield, type Heightfield } from './heightfield';
 import { ThermalErode } from './thermal';
 import { DropletErodeAsync, type DropletParams } from './droplet';
+import { FindFirstSphere, CreateErodedSphereMesh } from './volume';
 
 export interface ErodeSettings
 {
@@ -44,13 +47,19 @@ export class ErosionPreview
     eroded: Float32Array | null = null;
     flow: Float32Array | null = null;
 
-    // THREE preview
+    // THREE preview — heightmap plane
     readonly mesh: THREE.Mesh;
     private readonly geom: THREE.PlaneGeometry;
     private readonly mat: THREE.MeshStandardMaterial;
     private tileSize = 96;
     private size = 512;
     private visible = false;
+
+    // 3D SDF preview — true volumetric sphere (icosphere) when the field is a sphere
+    readonly volumeMesh: THREE.Mesh;
+    private readonly volumeMat: THREE.MeshStandardMaterial;
+    private readonly groundMesh: THREE.Mesh;
+    private isVolumeMode = false;
 
     // 2D preview canvas (for node / panel)
     readonly canvas: HTMLCanvasElement;
@@ -88,6 +97,30 @@ export class ErosionPreview
         this.mesh.frustumCulled = false;
         scene.add(this.mesh);
 
+        this.volumeMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            roughness: 0.88,
+            metalness: 0.0,
+            side: THREE.DoubleSide,
+            flatShading: false,
+            vertexColors: true,
+        });
+        this.volumeMesh = new THREE.Mesh(new THREE.BufferGeometry(), this.volumeMat);
+        this.volumeMesh.visible = false;
+        this.volumeMesh.frustumCulled = false;
+        this.volumeMesh.castShadow = false;
+        this.volumeMesh.receiveShadow = false;
+        scene.add(this.volumeMesh);
+
+        const groundGeom = new THREE.PlaneGeometry(200, 200);
+        groundGeom.rotateX(-Math.PI / 2);
+        const groundMat = new THREE.MeshStandardMaterial({ color: 0x8a7a63, roughness: 0.95, side: THREE.DoubleSide });
+        this.groundMesh = new THREE.Mesh(groundGeom, groundMat);
+        this.groundMesh.position.y = 0.02; // avoid z-fighting
+        this.groundMesh.visible = false;
+        this.groundMesh.receiveShadow = false;
+        scene.add(this.groundMesh);
+
         // initial empty preview
         this.PaintEmpty();
     }
@@ -95,12 +128,18 @@ export class ErosionPreview
     SetVisible(v: boolean): void
     {
         this.visible = v;
-        this.mesh.visible = v && this.eroded !== null;
+        if (this.isVolumeMode) {
+            const hasVol = this.volumeMesh.geometry.attributes.position !== undefined && (this.volumeMesh.geometry.attributes.position as THREE.BufferAttribute).count > 0;
+            this.volumeMesh.visible = v && hasVol;
+            this.groundMesh.visible = v && hasVol;
+        } else this.mesh.visible = v && this.eroded !== null;
     }
 
     IsVisible(): boolean { return this.visible; }
 
-    HasResult(): boolean { return this.eroded !== null; }
+    HasResult(): boolean { return this.isVolumeMode ? (this.volumeMesh.geometry.attributes.position !== undefined && (this.volumeMesh.geometry.attributes.position as THREE.BufferAttribute).count > 0) : this.eroded !== null; }
+
+    IsVolumeMode(): boolean { return this.isVolumeMode; }
 
     private PaintEmpty(): void
     {
@@ -222,6 +261,36 @@ export class ErosionPreview
         this.running = true;
         try
         {
+            // 3D path: if the field is dominantly a sphere, do true volumetric mesh erosion
+            const sphere = FindFirstSphere(field);
+            const useVolume = sphere !== null && settings.tileSize <= 64; // sphere test uses Tile 48
+            if (useVolume && sphere) {
+                this.isVolumeMode = true;
+                this.mesh.visible = false;
+                onProgress?.(`3D sphere — thermal ${settings.thermal}× …`);
+                await new Promise<void>(r => setTimeout(r, 16));
+                const geom = CreateErodedSphereMesh(field, sphere, {
+                    thermal: settings.thermal,
+                    talus: settings.talus,
+                    droplets: settings.droplets * settings.iterations / 8, // scale down: 4096*32/8 = 16k droplets on mesh
+                    iters: settings.iterations,
+                    erode: settings.erodeRate,
+                    deposit: settings.deposit,
+                });
+                // keep a tiny heightfield for the 2D preview (baked but not eroded via heightmap)
+                const hf = BakeHeightfield(field, Math.min(settings.resolution, 256), settings.tileSize);
+                this.original = hf; this.size = hf.size; this.tileSize = hf.tileSize;
+                this.eroded = new Float32Array(hf.data);
+                this.PaintHeightfield(this.eroded, this.size);
+                // swap volume mesh
+                this.volumeMesh.geometry.dispose();
+                this.volumeMesh.geometry = geom;
+                this.volumeMesh.visible = this.visible;
+                onProgress?.(`Done — 3D sphere ${sphere.r.toFixed(1)}m, ${(geom.attributes.position as THREE.BufferAttribute).count} verts`);
+                return;
+            }
+            this.isVolumeMode = false;
+            this.volumeMesh.visible = false;
             onProgress?.(`Baking ${settings.resolution}² …`);
             // Bake must be async to not block UI; yield between row batches
             const hf = BakeHeightfield(field, settings.resolution, settings.tileSize);
@@ -271,6 +340,9 @@ export class ErosionPreview
         this.flow = null;
         this.mesh.visible = false;
         this.mesh.position.set(0, 0, 0);
+        this.volumeMesh.visible = false;
+        this.groundMesh.visible = false;
+        this.isVolumeMode = false;
         this.PaintEmpty();
     }
 
@@ -278,5 +350,9 @@ export class ErosionPreview
     {
         this.mesh.geometry.dispose();
         (this.mesh.material as THREE.Material).dispose();
+        this.volumeMesh.geometry.dispose();
+        (this.volumeMat as THREE.Material).dispose();
+        this.groundMesh.geometry.dispose();
+        (this.groundMesh.material as THREE.Material).dispose();
     }
 }
