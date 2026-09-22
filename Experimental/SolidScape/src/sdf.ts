@@ -4,11 +4,11 @@
 // The node graph is compiled into a flat instruction tape (see docs/SDF-Research.md §10). Each instruction is 3 RGBA32F
 // texels; the same tape is interpreted by the GPU raymarcher (sdfPass.ts) and by the CPU evaluator below for brush picking.
 //
-//   OP_PUSH    push a primitive distance onto the stack        a=[0, shape, 0, 0]        b=[x,y,z, p0]   c=[p1, 0,0,0]
+//   OP_PUSH    push a primitive distance onto the stack        a=[0, shape, 0, 0]        b=[x,y,z, p0]   c=[p1, ax, ay, az]  (ax/ay/az only for capsule shape 4)
 //   OP_COMBINE pop two, push boolean combination               a=[1, mode,  k, 0]
-//   OP_DAB     modify top of stack with a sculpt dab           a=[2, shape, k, mode]     b=[x,y,z, r]    c=[p1, 0,0,0]
+//   OP_DAB     modify top of stack with a sculpt dab           a=[2, shape, k, mode]     b=[x,y,z, r]    c=[p1, ax, ay, az]
 //
-//   shape: 0 sphere · 1 rounded box · 2 capped cylinder · 3 ground plane
+//   shape: 0 sphere · 1 rounded box · 2 capped cylinder · 3 ground plane · 4 capsule (axis = (ax,ay,az), halfLen = p1)
 //   mode:  0 add (smooth union) · 1 carve (smooth subtraction) · 2 intersect (smooth intersection)
 //============================================================================================================================================
 
@@ -19,7 +19,7 @@ export const MaxInstructions     = 1024;
 export const TexelsPerInstruction = 3;
 export const FloatsPerInstruction = TexelsPerInstruction * 4;
 
-export type ShapeType = 0 | 1 | 2 | 3;
+export type ShapeType = 0 | 1 | 2 | 3 | 4;
 export type BoolMode  = 0 | 1 | 2;
 
 export const OP_PUSH    = 0;
@@ -33,7 +33,8 @@ export interface DabRecord
     x: number; y: number; z: number;
     r: number;                                        // radius / half-extent            [m]
     k: number;                                        // blend smoothness                [m]
-    p1: number;                                       // shape extra (cylinder height…)  [m]
+    p1: number;                                       // shape extra (cylinder height / capsule halfLen) [m]
+    ax?: number; ay?: number; az?: number;            // capsule axis (unit) — only for shape 4
 }
 
 export interface StrokeRecord
@@ -131,7 +132,8 @@ export function CompileField(graph: GraphSurface, strokes: StrokeRecord[]): Comp
                 {
                     for (const d of dabsByNode.get(uid) ?? [])
                     {
-                        if (!Emit([OP_DAB, d.shape, d.k, d.mode], [d.x, d.y, d.z, d.r], [d.p1, 0, 0, 0])) break;
+                        if (!Emit([OP_DAB, d.shape, d.k, d.mode], [d.x, d.y, d.z, d.r],
+                                  [d.p1, d.ax ?? 0, d.ay ?? 0, d.az ?? 0])) break;
                     }
                     ranges.set(uid, { start, end: count });
                     produced = true;
@@ -215,7 +217,8 @@ function SmoothIntersect(a: number, b: number, k: number): number
 }
 
 function ShapeDistance(shape: number, px: number, py: number, pz: number,
-                       cx: number, cy: number, cz: number, p0: number, p1: number): number
+                       cx: number, cy: number, cz: number, p0: number, p1: number,
+                       ax = 0, ay = 0, az = 0): number
 {
     const dx = px - cx, dy = py - cy, dz = pz - cz;
     switch (shape)
@@ -238,6 +241,18 @@ function ShapeDistance(shape: number, px: number, py: number, pz: number,
         }
         case 3:                                                            // ground plane at y = cy
             return py - cy;
+        case 4:                                                            // capsule: segment centre c, halfLen p1, axis (ax,ay,az), radius p0
+        {
+            // closest point on segment [-axis*h, +axis*h] through c
+            const h = p1;
+            if (h <= 0.001) return Math.hypot(dx, dy, dz) - p0;            // degenerate → sphere
+            // project pa onto axis
+            const paX = dx, paY = dy, paZ = dz;
+            const proj = paX * ax + paY * ay + paZ * az;
+            const cproj = Math.max(-h, Math.min(h, proj));
+            const cx2 = cproj * ax, cy2 = cproj * ay, cz2 = cproj * az;
+            return Math.hypot(paX - cx2, paY - cy2, paZ - cz2) - p0;
+        }
         default:
             return 1e9;
     }
@@ -260,7 +275,8 @@ export function EvalField(data: Float32Array, count: number,
         {
             if (sp < 16)
                 stack[sp++] = ShapeDistance(data[o + 1], px, py, pz,
-                    data[o + 4], data[o + 5], data[o + 6], data[o + 7], data[o + 8]);
+                    data[o + 4], data[o + 5], data[o + 6], data[o + 7], data[o + 8],
+                    data[o + 9], data[o + 10], data[o + 11]);
         }
         else if (op === OP_COMBINE && sp >= 2)
         {
@@ -275,7 +291,8 @@ export function EvalField(data: Float32Array, count: number,
         else if (op === OP_DAB && sp >= 1)
         {
             const d = ShapeDistance(data[o + 1], px, py, pz,
-                data[o + 4], data[o + 5], data[o + 6], data[o + 7], data[o + 8]);
+                data[o + 4], data[o + 5], data[o + 6], data[o + 7], data[o + 8],
+                data[o + 9], data[o + 10], data[o + 11]);
             const k = data[o + 2];
             const mode = data[o + 3];
             const a = stack[sp - 1];
@@ -347,6 +364,130 @@ export function FieldNormalCpu(data: Float32Array, count: number,
 }
 
 //--------------------------------------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------------------------------------
+// Stroke coalescing — replaces runs of overlapping sphere dabs with oriented capsules
+//
+// A raw stroke for the sphere tip is hundreds of overlapping spheres at spacing 0.45r.
+// For straight sections the union of those spheres is indistinguishable from a single
+// capsule that spans the same endpoints, so we collapse the run using a polyline
+// simplification (Ramer–Douglas–Peucker) and emit one capsule per kept segment.
+// Typical straight strokes compress 10–50×; curved strokes 3–8× — the same win quoted
+// in the erosion report's Part A. Debug: brick cache (Phase 2) will make the residual
+// cost O(1) anyway, but coalescing keeps the tape short until then and is a strict
+// improvement to the document (shorter edit list, same surface).
+//--------------------------------------------------------------------------------------------------------------------------
+
+function DistPointToSegment(px: number, py: number, pz: number,
+                            ax: number, ay: number, az: number,
+                            bx: number, by: number, bz: number): number
+{
+    const abx = bx - ax, aby = by - ay, abz = bz - az;
+    const apx = px - ax, apy = py - ay, apz = pz - az;
+    const ab2 = abx * abx + aby * aby + abz * abz;
+    if (ab2 < 1e-12) return Math.hypot(apx, apy, apz);
+    const t = Math.max(0, Math.min(1, (apx * abx + apy * aby + apz * abz) / ab2));
+    return Math.hypot(px - (ax + abx * t), py - (ay + aby * t), pz - (az + abz * t));
+}
+
+function SimplifyRDP(points: DabRecord[], eps: number, first: number, last: number, keep: boolean[]): void
+{
+    let maxDist = 0;
+    let idx = -1;
+    const ax = points[first].x, ay = points[first].y, az = points[first].z;
+    const bx = points[last].x,  by = points[last].y,  bz = points[last].z;
+    for (let i = first + 1; i < last; i++)
+    {
+        const d = DistPointToSegment(points[i].x, points[i].y, points[i].z, ax, ay, az, bx, by, bz);
+        if (d > maxDist) { maxDist = d; idx = i; }
+    }
+    if (idx !== -1 && maxDist > eps)
+    {
+        keep[idx] = true;
+        SimplifyRDP(points, eps, first, idx, keep);
+        SimplifyRDP(points, eps, idx, last, keep);
+    }
+}
+
+export interface CoalesceResult
+{
+    dabs: DabRecord[];
+    raw: number;                                                   // input count
+    kept: number;                                                  // output count
+    ratio: number;                                                 // raw / max(kept,1)
+}
+
+/** Coalesce a single stroke's dab array. Non-sphere strokes pass through unchanged. */
+export function CoalesceStroke(dabs: DabRecord[]): CoalesceResult
+{
+    const raw = dabs.length;
+    if (raw < 4) return { dabs, raw, kept: raw, ratio: 1 };
+
+    // only coalesce homogeneous sphere runs — box / cylinder / mixed-mode strokes stay verbatim
+    const mode0 = dabs[0].mode;
+    const k0    = dabs[0].k;
+    const r0    = dabs[0].r;
+    const isSphereRun = dabs.every((d) => d.shape === 0 && d.mode === mode0);
+    if (!isSphereRun) return { dabs, raw, kept: raw, ratio: 1 };
+
+    // reject strokes with wildly varying k/r (pressure-varying) — averaging would be lossy
+    let kMin = k0, kMax = k0, rMin = r0, rMax = r0;
+    for (const d of dabs) { kMin = Math.min(kMin, d.k); kMax = Math.max(kMax, d.k); rMin = Math.min(rMin, d.r); rMax = Math.max(rMax, d.r); }
+    if (kMax - kMin > 0.6 || rMax - rMin > r0 * 0.5) return { dabs, raw, kept: raw, ratio: 1 };
+
+    const eps = r0 * 0.28;                                         // collinearity tolerance — tuned so straight strokes collapse to 1 capsule
+    const keep = new Array<boolean>(raw).fill(false);
+    keep[0] = true; keep[raw - 1] = true;
+    SimplifyRDP(dabs, eps, 0, raw - 1, keep);
+
+    const indices: number[] = [];
+    for (let i = 0; i < raw; i++) if (keep[i]) indices.push(i);
+
+    const out: DabRecord[] = [];
+    const avgK = dabs.reduce((s, d) => s + d.k, 0) / raw;
+    const avgR = dabs.reduce((s, d) => s + d.r, 0) / raw;
+
+    for (let s = 0; s < indices.length - 1; s++)
+    {
+        const a = dabs[indices[s]];
+        const b = dabs[indices[s + 1]];
+        const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+        const len = Math.hypot(dx, dy, dz);
+
+        // degenerate segment — emit a single sphere at the midpoint
+        if (len < 0.08)
+        {
+            out.push({ shape: 0, mode: mode0, x: a.x, y: a.y, z: a.z, r: avgR, k: avgK, p1: 0 });
+            continue;
+        }
+
+        // very short segment relative to radius — also a sphere avoids a near-zero halfLen capsule
+        if (len < avgR * 0.55)
+        {
+            const mx = (a.x + b.x) * 0.5, my = (a.y + b.y) * 0.5, mz = (a.z + b.z) * 0.5;
+            out.push({ shape: 0, mode: mode0, x: mx, y: my, z: mz, r: avgR, k: avgK, p1: 0 });
+            continue;
+        }
+
+        const half = len * 0.5;
+        const ax = dx / len, ay = dy / len, az = dz / len;
+        const cx = (a.x + b.x) * 0.5, cy = (a.y + b.y) * 0.5, cz = (a.z + b.z) * 0.5;
+        out.push({ shape: 4, mode: mode0, x: cx, y: cy, z: cz, r: avgR, k: avgK, p1: half, ax, ay, az });
+    }
+
+    if (out.length === 0) return { dabs, raw, kept: raw, ratio: 1 };
+    const ratio = raw / out.length;
+    // only keep coalescing if it actually compressed by ≥25% — otherwise the capsule error isn't worth it
+    if (ratio < 1.25) return { dabs, raw, kept: raw, ratio: 1 };
+    return { dabs: out, raw, kept: out.length, ratio };
+}
+
+export function CoalesceStrokeRecord(rec: StrokeRecord): CoalesceResult
+{
+    const res = CoalesceStroke(rec.dabs);
+    if (res.dabs !== rec.dabs) rec.dabs = res.dabs;                // in-place update for the caller
+    return res;
+}
+
 // Dab attribution — which primitive owns the surface at a point (smallest sub-field wins)
 //--------------------------------------------------------------------------------------------------------------------------
 export function AttributePoint(field: CompiledField, x: number, y: number, z: number): string | null

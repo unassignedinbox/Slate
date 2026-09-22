@@ -11,7 +11,7 @@ import type { ViewportPresentation } from './viewport';
 import type { FieldPass } from './sdfPass';
 import {
     type CompiledField, type DabRecord, type StrokeRecord, type ShapeType, type BoolMode,
-    RaycastField, AttributePoint, FieldNormalCpu,
+    RaycastField, AttributePoint, FieldNormalCpu, CoalesceStroke,
 } from './sdf';
 
 export type SculptTool = 'select' | 'build' | 'carve' | 'smooth';
@@ -32,9 +32,13 @@ export class SculptController
 
     onStrokeLive:      (() => void) | null = null;    // dab appended mid-stroke → recompile
     onStrokeCommitted: ((stroke: StrokeRecord) => void) | null = null;
+    /** fired at stroke end with the raw vs kept dab counts after coalescing */
+    onStrokeCoalesced: ((raw: number, kept: number, ratio: number) => void) | null = null;
     onToolChanged:     ((tool: SculptTool) => void) | null = null;
     onBrushChanged:    (() => void) | null = null;
     onMissedSurface:   (() => void) | null = null;    // stroke began over empty space
+
+    coalesceEnabled = true;
 
     liveStroke: StrokeRecord | null = null;
 
@@ -223,7 +227,22 @@ export class SculptController
             this.strokeSnapshot = null;
             this.pointerId = -1;
             if (c.hasPointerCapture(e.pointerId)) c.releasePointerCapture(e.pointerId);
-            if (stroke.dabs.length > 0) this.onStrokeCommitted?.(stroke);
+            if (stroke.dabs.length === 0) return;
+
+            const raw = stroke.dabs.length;
+            if (this.coalesceEnabled && raw >= 4)
+            {
+                const coalesced = CoalesceStroke(stroke.dabs);
+                (stroke as unknown as { __raw?: number }).__raw = raw;
+                stroke.dabs = coalesced.dabs;
+                this.onStrokeCoalesced?.(coalesced.raw, coalesced.kept, coalesced.ratio);
+            }
+            else
+            {
+                (stroke as unknown as { __raw?: number }).__raw = raw;
+                this.onStrokeCoalesced?.(raw, raw, 1);
+            }
+            this.onStrokeCommitted?.(stroke);
         };
         c.addEventListener('pointerup', finish, true);
         c.addEventListener('pointercancel', finish, true);

@@ -9,6 +9,7 @@ import { HydrateGlyphs, RenderGlyph } from './icons';
 import { CompileField, type StrokeRecord, type ShapeType } from './sdf';
 import { FieldPass } from './sdfPass';
 import { SculptController, type SculptTool } from './sculpt';
+import { BrickPool } from './bricks';
 
 const Q  = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 
@@ -246,7 +247,7 @@ function BuildSkyPanel(): void
             <div class="chip" id="doc-undo"><i data-icon="undo"></i>&nbsp;Undo</div>
             <div class="chip" id="doc-redo"><i data-icon="redo"></i>&nbsp;Redo</div>
         </div>
-        <div class="sec-label">Terrain Field</div>
+        <div class="sec-label">Terrain Field — Part A</div>
         <div class="crow">
             <div class="clabel">Resolution</div>
             <div class="chips" id="res-chips" style="flex:1">
@@ -262,6 +263,15 @@ function BuildSkyPanel(): void
                 <div class="chip sel" data-steps="200">Balanced</div>
                 <div class="chip" data-steps="320">Fine</div>
             </div>
+        </div>
+        <div class="crow">
+            <div class="clabel">Tape</div>
+            <div class="switch" id="opt-coalesce" data-on="true" title="Coalesce sphere runs into capsules"></div>
+            <span id="coalesce-read" class="mono" style="font-size:11px;color:var(--text-faint);margin-left:8px">coalesce on · ×–</span>
+        </div>
+        <div class="crow">
+            <div class="clabel">Bricks</div>
+            <span id="brick-read" class="mono" style="font-size:11px;color:var(--text-faint)">0 bricks · 0 dirty/stroke</span>
         </div>
         <div class="sec-label">Reference</div>
         <div class="crow">
@@ -314,6 +324,8 @@ function BuildSkyPanel(): void
 
     BindSwitch(Q('#opt-grid'),  (on) => { viewport.sky.showGrid  = on; viewport.ApplySky(); });
     BindSwitch(Q('#opt-gizmo'), (on) => { viewport.sky.showGizmo = on; viewport.ApplySky(); });
+
+    // Part-A wiring is bound after sculpt exists — see below (RefreshBrickRead is patched post-sculpt)
 
     Q('#sky-presets').querySelectorAll<HTMLElement>('.chip').forEach((chip) =>
     {
@@ -414,7 +426,7 @@ function SeedGraph(): void
 SeedGraph();
 
 //--------------------------------------------------------------------------------------------------------------------------
-// Field document: strokes + compiled tape + undo/redo
+// Field document: strokes + compiled tape + undo/redo + Part-A brick scaffold
 //--------------------------------------------------------------------------------------------------------------------------
 let strokes: StrokeRecord[] = [];
 
@@ -429,6 +441,12 @@ const stEdits = Q('#st-edits');
 let compiled = CompileField(graph, strokes);
 let tapeWarned = false;
 
+// Part-A scaffold — tracks what a sparse 8³ brick cache *would* dirty each stroke.
+// Today this is instrumentation only (the analytic raymarcher is still the display path);
+// once the volume raymarcher lands, dirty bricks become the incremental rebuild work.
+const brickPool = new BrickPool();
+let totalRawDabs = 0, totalKeptDabs = 0;
+
 function RebuildField(): void
 {
     // drop strokes whose primitive node no longer exists
@@ -438,13 +456,17 @@ function RebuildField(): void
     compiled = CompileField(graph, live ? [...strokes, live] : strokes);
     fieldPass.UploadTape(compiled.data, compiled.count);
     sculpt.SetField(compiled);
+    // EDITS chip shows tape instructions; the tooltip shows raw→coalesced compression when active
     stEdits.textContent = String(compiled.count);
+    const eff = totalKeptDabs > 0 ? (totalRawDabs / totalKeptDabs).toFixed(1) : '–';
+    stEdits.title = `Tape ${compiled.count} instr · ${totalKeptDabs} dabs stored (×${eff} coalesced) · ${brickPool.bricks.size} bricks touched`;
 
     if (compiled.truncated && !tapeWarned)
     {
         tapeWarned = true;
         ShowToast('Edit tape full — older detail is being dropped. Brick cache lands in Phase 2.');
     }
+    RefreshBrickRead?.();
 }
 
 let rebuildQueued = false;
@@ -507,6 +529,8 @@ function LoadDocument(json: string): void
     strokes = [];
     undoStack.length = 0;
     redoStack.length = 0;
+    brickPool.Reset();
+    totalRawDabs = totalKeptDabs = 0;
 
     const remap = new Map<string, string>();
     for (const n of doc.nodes ?? [])
@@ -531,11 +555,15 @@ function LoadDocument(json: string): void
                                toNode: to, toPort: w.toPort, type: w.type as 'field' });
     }
 
+    let loadedStored = 0;
     for (const s of doc.strokes ?? [])
     {
         const node = remap.get(s.node);
-        if (node) strokes.push({ node, dabs: s.dabs });
+        if (node) { strokes.push({ node, dabs: s.dabs }); brickPool.MarkDabs(s.dabs); loadedStored += s.dabs.length; }
     }
+    if (strokes.length) brickPool.CommitStroke(loadedStored, loadedStored);
+    totalRawDabs = loadedStored;
+    totalKeptDabs = loadedStored;
 
     graph.Hydrate();
     graph.RedrawWires();
@@ -563,23 +591,69 @@ function NewDocument(): void
     undoStack.length = 0;
     redoStack.length = 0;
     tapeWarned = false;
+    brickPool.Reset();
+    totalRawDabs = totalKeptDabs = 0;
     SeedGraph();
     RebuildField();
     ShowToast('New terrain');
 }
 
 //--------------------------------------------------------------------------------------------------------------------------
-// Sculpt controller
+// Sculpt controller + Part-A wiring
 //--------------------------------------------------------------------------------------------------------------------------
 const sculpt = new SculptController(viewport, fieldPass, Q<HTMLCanvasElement>('#viewport-canvas'));
 
+let RefreshBrickRead: (() => void) | null = null;
+function InstallPartAReadouts(): void
+{
+    const brickRead = Q<HTMLElement>('#brick-read');
+    const coalesceRead = Q<HTMLElement>('#coalesce-read');
+    const sw = Q<HTMLElement>('#opt-coalesce');
+    if (!brickRead || !coalesceRead || !sw) return;
+
+    RefreshBrickRead = () =>
+    {
+        const eff = totalKeptDabs > 0 ? (totalRawDabs / totalKeptDabs).toFixed(1) : '–';
+        coalesceRead.textContent = sculpt.coalesceEnabled ? `coalesce on · ×${eff}` : 'coalesce off';
+        const last = brickPool.lastDirty ? `${brickPool.lastDirty} dirty last stroke · ` : '';
+        brickRead.textContent = `${last}${brickPool.bricks.size} bricks touched`;
+        (brickRead as HTMLElement).title = `Brick voxel ${brickPool.voxel.toFixed(2)} m · brick world ${(8 * brickPool.voxel).toFixed(1)} m · adapts with band ${ (6 * brickPool.voxel).toFixed(2)} m`;
+    };
+    BindSwitch(sw, (on) => { sculpt.coalesceEnabled = on; RefreshBrickRead?.(); });
+    RefreshBrickRead();
+}
+// Install after the panel DOM exists (BuildSkyPanel already ran) — deferred via rAF to guarantee #brick-read exists
+requestAnimationFrame(() => InstallPartAReadouts());
+
 sculpt.onStrokeLive = () => QueueRebuild();
+
+sculpt.onStrokeCoalesced = (raw, kept, ratio) =>
+{
+    void raw; void kept; void ratio;
+};
 
 sculpt.onStrokeCommitted = (stroke) =>
 {
+    // stroke.dabs is already coalesced at this point (sculpt.ts); retrieve coalesce counts by
+    // comparing to a synthetic raw that was recorded in onStrokeCoalesced — easiest is to capture
+    // there, but to keep sculpt.ts dependency-free we recompute here: the stroke we receive IS the
+    // kept set, so we need the raw count from the coalescer side-channel. Store it on the stroke
+    // via a temporary property stashed on window is ugly; instead track via lastCommittedRaw below.
     strokes.push(stroke);
     undoStack.push({ kind: 'stroke', stroke });
     redoStack.length = 0;
+
+    const kept = stroke.dabs.length;
+    const raw = (stroke as unknown as { __raw?: number }).__raw ?? kept;
+    // don't persist the side-channel property in the document
+    delete (stroke as unknown as { __raw?: number }).__raw;
+    brickPool.MarkDabs(stroke.dabs);
+    const metrics = brickPool.CommitStroke(raw, kept);
+    totalRawDabs += metrics.rawDabs;
+    totalKeptDabs += metrics.keptDabs;
+    if (raw !== kept)
+        ShowToast(`Stroke ${raw} dabs → ${kept} ${kept === 1 ? 'capsule' : 'capsules/spheres'} (×${metrics.coalesceRatio.toFixed(1)}) · ${metrics.dirtyBricks} bricks dirty`);
+
     RebuildField();
 };
 
@@ -591,7 +665,7 @@ sculpt.onMissedSurface = () =>
         ShowToast('Click on a surface to sculpt — strokes bind to the shape under the cursor');
 };
 
-graph.onParamChanged = () => QueueRebuild();
+graph.onParamChanged = () => { brickPool.InvalidateAll(); QueueRebuild(); };
 
 RebuildField();
 
@@ -734,6 +808,7 @@ const bpLabel = Q('#bp-label');
 
 graph.onGraphChanged = () =>
 {
+    brickPool.InvalidateAll();
     QueueRebuild();
     bpLabel.textContent = 'Building';
     bpFill.style.width = '18%';

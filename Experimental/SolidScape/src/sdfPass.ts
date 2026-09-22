@@ -1,9 +1,10 @@
 //============================================================================================================================================
 // SolidScape — GPU field pass: full-screen raymarcher that renders the compiled edit tape inside the three.js scene
 //
-// Phase-1 brute-force analytic raymarcher (docs/SDF-Research.md §18, Phase 1). The whole tape is interpreted per step,
-// per pixel — deliberately simple, expected to fall over around a few hundred edits, at which point the brick cache
-// (Phase 2+) replaces it. gl_FragDepth is written so the field composites correctly with the grid and ground plane.
+// Phase-1 brute-force analytic raymarcher plus Part-A mitigations: capsule primitive and tape windowing
+// (bound-sphere early-out per dab). The brick cache (Phase 2) will eventually replace the per-step tape walk
+// entirely, but coalescing + windowing already push the cliff from hundreds to thousands of dabs.
+// gl_FragDepth is written so the field composites correctly with the grid and ground plane.
 //============================================================================================================================================
 
 import * as THREE from 'three';
@@ -50,7 +51,7 @@ vec4 Texel(int instr, int part)
 }
 
 //------------------------------------------------------------------ primitives
-float ShapeDist(float shape, vec3 p, vec3 c, float p0, float p1)
+float ShapeDist(float shape, vec3 p, vec3 c, float p0, float p1, vec3 axis)
 {
     vec3 d = p - c;
     if (shape < 0.5)                                   // sphere
@@ -62,12 +63,24 @@ float ShapeDist(float shape, vec3 p, vec3 c, float p0, float p1)
         vec3 q = abs(d) - vec3(p0 - p1);
         return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - p1;
     }
-    else if (shape < 2.5)                              // capped cylinder
+    else if (shape < 2.5)                              // capped cylinder (Y-axis)
     {
         vec2 w = vec2(length(d.xz) - p0, abs(d.y) - p1 * 0.5);
         return min(max(w.x, w.y), 0.0) + length(max(w, 0.0));
     }
-    return p.y - c.y;                                  // ground plane
+    else if (shape < 3.5)                              // ground plane
+    {
+        return p.y - c.y;
+    }
+    else                                               // capsule (shape 4): p1 = halfLen, axis = normalised segment direction
+    {
+        float h = p1;
+        if (h <= 0.001) return length(d) - p0;
+        float proj = dot(d, axis);
+        float cproj = clamp(proj, -h, h);
+        vec3 closest = axis * cproj;
+        return length(d - closest) - p0;
+    }
 }
 
 //------------------------------------------------------------------ smooth operators
@@ -91,6 +104,11 @@ float OpIntersect(float a, float b, float k)
 }
 
 //------------------------------------------------------------------ tape interpreter
+// Part-A tape windowing: each dab has a cheap sphere bound (centre + r + |k| + halfLen). If the bound distance
+// to p exceeds the current stack top by more than the blend radius, the smooth union cannot improve the field
+// (h saturates to 1), so the expensive shape distance is skipped. For the sculpting workload most dabs are
+// localised spheres/capsules within ~22 m influence, so distant dabs cost a single length() instead of a full
+// SDF + blend. When the brick cache lands, this whole loop becomes a single texture fetch.
 float Field(vec3 p)
 {
     float stack[8];
@@ -106,7 +124,8 @@ float Field(vec3 p)
         {
             vec4 b = Texel(i, 1);
             vec4 c = Texel(i, 2);
-            if (sp < 8) { stack[sp] = ShapeDist(a.y, p, b.xyz, b.w, c.x); sp++; }
+            vec3 axis = vec3(c.y, c.z, c.w);
+            if (sp < 8) { stack[sp] = ShapeDist(a.y, p, b.xyz, b.w, c.x, axis); sp++; }
         }
         else if (op < 1.5)                             // COMBINE
         {
@@ -120,17 +139,26 @@ float Field(vec3 p)
                               :             OpIntersect(va, vb, a.z);
             }
         }
-        else                                           // DAB
+        else                                           // DAB — windowing lives here (the hot path)
         {
             if (sp >= 1)
             {
                 vec4 b = Texel(i, 1);
                 vec4 c = Texel(i, 2);
-                float d = ShapeDist(a.y, p, b.xyz, b.w, c.x);
-                float va = stack[sp - 1];
-                stack[sp - 1] = a.w < 0.5 ? OpUnion(va, d, a.z)
-                              : a.w < 1.5 ? OpSubtract(va, d, a.z)
-                              :             OpIntersect(va, d, a.z);
+                float k = a.z;
+                float cur = stack[sp - 1];
+                // cheap sphere bound: for капсуле add halfLen, for others just r
+                float boundR = b.w + abs(k) + (a.y > 3.9 ? c.x : 0.0);   // capsule halfLen in c.x when shape ~4
+                // sphere lower bound to p: |p - centre| - boundR  (conservative — if this already > cur + k, dab cannot win)
+                float boundDist = length(p - b.xyz) - boundR;
+                if (boundDist > cur + k + 2.0) continue;                // 2 m hysteresis — keeps correctness near blends
+
+                vec3 axis = vec3(c.y, c.z, c.w);
+                float d = ShapeDist(a.y, p, b.xyz, b.w, c.x, axis);
+                float va = cur;
+                stack[sp - 1] = a.w < 0.5 ? OpUnion(va, d, k)
+                              : a.w < 1.5 ? OpSubtract(va, d, k)
+                              :             OpIntersect(va, d, k);
             }
         }
     }
