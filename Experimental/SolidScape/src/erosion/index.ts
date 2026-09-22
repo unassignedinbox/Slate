@@ -270,12 +270,12 @@ export class ErosionPreview
                 onProgress?.(`3D sphere — thermal ${settings.thermal}× …`);
                 await new Promise<void>(r => setTimeout(r, 16));
                 const geom = CreateErodedSphereMesh(field, sphere, {
-                    thermal: settings.thermal,
+                    thermal: Math.min(settings.thermal, 2),
                     talus: settings.talus,
-                    droplets: settings.droplets * settings.iterations / 8, // scale down: 4096*32/8 = 16k droplets on mesh
+                    droplets: 1400,
                     iters: settings.iterations,
-                    erode: settings.erodeRate,
-                    deposit: settings.deposit,
+                    erode: Math.min(settings.erodeRate, 0.09),
+                    deposit: Math.min(settings.deposit, 0.06),
                 });
                 // keep a tiny heightfield for the 2D preview (baked but not eroded via heightmap)
                 const hf = BakeHeightfield(field, Math.min(settings.resolution, 256), settings.tileSize);
