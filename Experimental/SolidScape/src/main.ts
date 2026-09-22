@@ -487,79 +487,149 @@ function UpdateErosionHint(): void
     if (!erosion.HasResult() && stats) stats.textContent = `ready — thermal ${s.thermal}× talus ${s.talus}° · erode ${s.erodeRate.toFixed(2)} deposit ${s.deposit.toFixed(2)}`;
 }
 
-// mount the 2D canvas into the host div once DOM exists
-requestAnimationFrame(() =>
+function EnsureErosionPanel(): HTMLElement | null
 {
-    const host = document.getElementById('erosion-canvas-host');
-    if (host) { host.innerHTML = ''; host.appendChild(erosion.canvas); }
-    UpdateErosionHint();
-});
+    let panel = document.getElementById('erosion-panel') as HTMLElement | null;
+    let fab   = document.getElementById('erosion-fab') as HTMLElement | null;
+    const viewportEl = document.getElementById('viewport');
+    if (!viewportEl) return null;
+    // Create panel dynamically if index.html is stale (Arena preview caching)
+    if (!panel || !fab)
+    {
+        // remove stale partials
+        panel?.remove(); fab?.remove();
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = `
+        <div class="erosion-panel" id="erosion-panel">
+            <div class="erosion-head">
+                <i data-icon="erosion"></i>
+                <div>
+                    <div class="erosion-title">Erode — 1+2 preview</div>
+                    <div class="erosion-sub">512² tile · thermal + droplet · sphere</div>
+                </div>
+                <div class="spacer"></div>
+                <button class="btn ghost icon small" id="erosion-close" data-icon="close" title="Hide"></button>
+            </div>
+            <div class="erosion-body">
+                <div id="erosion-canvas-host" class="erosion-canvas-host"></div>
+                <div class="erosion-stats mono" id="erosion-stats">idle — connect Erode node</div>
+            </div>
+            <div class="erosion-actions">
+                <button class="btn small" id="erosion-run">▶ Run 1+2</button>
+                <button class="btn small ghost" id="erosion-reset">Reset</button>
+                <label class="erosion-toggle"><span>3D</span><div class="switch" id="erosion-3d" data-on="false"></div></label>
+                <span class="spacer"></span>
+                <span class="hint mono" id="erosion-hint">no bake yet</span>
+            </div>
+        </div>
+        <button class="round-btn erosion-fab" id="erosion-fab" title="Erosion preview (1+2)" data-icon="erosion"></button>`;
+        while (wrapper.firstChild) viewportEl.appendChild(wrapper.firstChild);
+        HydrateGlyphs(viewportEl);
+        panel = document.getElementById('erosion-panel') as HTMLElement;
+        fab   = document.getElementById('erosion-fab') as HTMLElement;
+    }
+    return panel;
+}
 
-// wire FAB / panel toggles
-requestAnimationFrame(() =>
+function InitErosionUI(): void
 {
+    const panel = EnsureErosionPanel();
     const fab   = document.getElementById('erosion-fab') as HTMLElement | null;
-    const panel = document.getElementById('erosion-panel') as HTMLElement | null;
+    const host  = document.getElementById('erosion-canvas-host') as HTMLElement | null;
     const close = document.getElementById('erosion-close') as HTMLElement | null;
     const run   = document.getElementById('erosion-run') as HTMLButtonElement | null;
     const reset = document.getElementById('erosion-reset') as HTMLButtonElement | null;
     const sw3d  = document.getElementById('erosion-3d') as HTMLElement | null;
     const stats = document.getElementById('erosion-stats') as HTMLElement | null;
-    if (!fab || !panel || !run || !reset || !sw3d) return;
+    if (!panel || !fab || !host || !run || !reset || !sw3d) { console.warn('[Erosion] UI missing', {panel:!!panel, fab:!!fab, host:!!host}); return; }
+
+    // mount canvas
+    host.innerHTML = ''; host.appendChild(erosion.canvas);
+    UpdateErosionHint();
+    HydrateGlyphs(panel);
 
     const togglePanel = (show?: boolean) =>
     {
         const willShow = show ?? !panel.classList.contains('show');
         panel.classList.toggle('show', willShow);
         fab.classList.toggle('active', willShow);
-        // HydrateGlyphs for icon inside panel header (erosion icon)
-        // @ts-ignore
-        try { (window as any).HydrateGlyphs?.(panel); } catch {}
     };
-    fab.addEventListener('click', () => togglePanel());
-    close?.addEventListener('click', () => togglePanel(false));
+    fab.onclick = () => togglePanel();
+    if (close) close.onclick = () => togglePanel(false);
 
-    sw3d.addEventListener('click', () =>
+    sw3d.onclick = () =>
     {
         const on = sw3d.dataset.on !== 'true';
         sw3d.dataset.on = String(on);
         erosion.SetVisible(on);
-        // when showing 3D, hide SDF raymarcher to avoid z-fighting on the tile
         (fieldPass.mesh as unknown as { visible: boolean }).visible = !on;
-    });
-
-    reset.addEventListener('click', () =>
+        if (on && !erosion.HasResult()) ShowToast('Press Run 1+2 first to generate the eroded tile');
+    };
+    reset.onclick = () =>
     {
         erosion.Reset();
         (fieldPass.mesh as unknown as { visible: boolean }).visible = true;
         sw3d.dataset.on = 'false';
         erosion.SetVisible(false);
         if (stats) stats.textContent = 'reset — original heightfield';
-    });
-
-    run.addEventListener('click', async () =>
+        ShowToast('Erosion reset — SDF restored');
+    };
+    run.onclick = async () =>
     {
         const node = ErodeNode();
-        if (!node) { ShowToast('Connect SDF → Erode → Terrain Output to erode'); return; }
+        console.log('[Erosion] Run clicked, node:', node);
+        if (!node) { ShowToast('Connect SDF → Erode → Terrain Output (field blue) to erode'); togglePanel(true); return; }
         const s = ReadErodeSettings(node.params);
-        run.disabled = true; const prev = run.textContent; run.textContent = '⏳ Baking…';
+        console.log('[Erosion] settings', s, 'compiled', compiled.count);
+        if (compiled.count === 0) { ShowToast('No SDF to erode — add a primitive'); return; }
+        run.disabled = true; const prev = run.textContent; run.textContent = '⏳ Baking…'; if (stats) stats.textContent = 'Baking heightfield…';
         try
         {
-            // ensure field is up to date (includes recent sculpt)
-            // compiled is up to date via RebuildField; bake from it
-            await erosion.BakeAndErode(compiled, s, (msg) => { if (stats) stats.textContent = msg; });
+            await erosion.BakeAndErode(compiled, s, (msg) => { if (stats) stats.textContent = msg; console.log('[Erosion]', msg); });
             const has = erosion.HasResult();
-            if (has) ShowToast(`Eroded sphere ${s.resolution}² tile — toggle 3D to view mesh`);
+            console.log('[Erosion] done, hasResult', has);
+            if (has) { ShowToast(`Eroded ${s.resolution}² sphere — toggle 3D to view`); togglePanel(true); }
             UpdateErosionHint();
         } catch (e) { console.error(e); ShowToast('Erosion failed — see console'); if (stats) stats.textContent = String(e); }
-        finally { run.disabled = false; run.textContent = prev; }
-    });
+        finally { run.disabled = false; run.textContent = prev ?? '▶ Run 1+2'; }
+    };
 
-    // allow Enter on panel to re-run? no
+    // Inject a Run button directly into the Erode node card for discoverability
+    const injectNodeButton = () =>
+    {
+        const node = ErodeNode();
+        if (!node) return;
+        const card = document.querySelector(`.node[data-uid="${node.uid}"]`) as HTMLElement | null;
+        if (!card) return;
+        if (card.querySelector('.erode-run-inline')) return;
+        const paramsBox = card.querySelector('.node-params') as HTMLElement | null;
+        if (!paramsBox) return;
+        const btn = document.createElement('button');
+        btn.className = 'btn small erode-run-inline';
+        btn.textContent = '▶ Erode sphere';
+        btn.style.marginTop = '6px'; btn.style.width = '100%';
+        btn.title = 'Bakes 512² tile and runs 1+2 (thermal+droplet)';
+        btn.onclick = (e) => { e.stopPropagation(); (document.getElementById('erosion-run') as HTMLButtonElement)?.click(); const p = document.getElementById('erosion-panel'); if (p) p.classList.add('show'); const f = document.getElementById('erosion-fab'); if (f) f.classList.add('active'); };
+        paramsBox.appendChild(btn);
+    };
+    // try now and after graph changes
+    injectNodeButton();
+    const obs = new MutationObserver(() => injectNodeButton());
+    obs.observe(document.getElementById('graph-layer')!, { childList: true, subtree: true });
 
-    // show panel by default when an Erode node exists at load
     if (ErodeNode()) togglePanel(true);
-});
+    console.log('[Erosion] UI initialised');
+}
+
+// initialise after a tick to ensure viewport/graph exist, retry if needed
+let erosionInitTries = 0;
+function TryInitErosion(): void
+{
+    try { InitErosionUI(); } catch (e) { console.error('[Erosion] init failed', e); }
+    if (!document.getElementById('erosion-fab') && erosionInitTries < 5) { erosionInitTries++; setTimeout(TryInitErosion, 300); }
+}
+requestAnimationFrame(() => setTimeout(TryInitErosion, 100));
+setTimeout(TryInitErosion, 800);
 
 
 function RebuildField(): void
