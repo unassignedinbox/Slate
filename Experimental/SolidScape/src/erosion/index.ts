@@ -8,7 +8,7 @@ import type { CompiledField } from '../sdf';
 import { BakeHeightfield, type Heightfield } from './heightfield';
 import { ThermalErode } from './thermal';
 import { DropletErodeAsync, type DropletParams } from './droplet';
-import { FindFirstSphere, CreateErodedSphereMesh } from './volume';
+import { FindFirstSphere, CreateSphereFromHeightfield } from './volume';
 
 export interface ErodeSettings
 {
@@ -262,31 +262,50 @@ export class ErosionPreview
         try
         {
             // 3D path: if the field is dominantly a sphere, do true volumetric mesh erosion
+            // Hybrid: run the proven 512² heightfield sim, then displace a real icosphere
+            // with its delta — so gullies have the quality of the heightfield sim but
+            // wrap around the sphere in 3D (no pillar).
             const sphere = FindFirstSphere(field);
-            const useVolume = sphere !== null && settings.tileSize <= 64; // sphere test uses Tile 48
+            const useVolume = sphere !== null;
             if (useVolume && sphere) {
                 this.isVolumeMode = true;
                 this.mesh.visible = false;
-                onProgress?.(`3D sphere — thermal ${settings.thermal}× …`);
-                await new Promise<void>(r => setTimeout(r, 16));
-                const geom = CreateErodedSphereMesh(field, sphere, {
-                    thermal: Math.min(settings.thermal, 2),
-                    talus: settings.talus,
-                    droplets: 1400,
-                    iters: settings.iterations,
-                    erode: Math.min(settings.erodeRate, 0.09),
-                    deposit: Math.min(settings.deposit, 0.06),
-                });
-                // keep a tiny heightfield for the 2D preview (baked but not eroded via heightmap)
-                const hf = BakeHeightfield(field, Math.min(settings.resolution, 256), settings.tileSize);
+                onProgress?.(`Baking ${settings.resolution}² heightfield for 3D displacement …`);
+                const hf = BakeHeightfield(field, settings.resolution, settings.tileSize);
                 this.original = hf; this.size = hf.size; this.tileSize = hf.tileSize;
                 this.eroded = new Float32Array(hf.data);
                 this.PaintHeightfield(this.eroded, this.size);
-                // swap volume mesh
+                await new Promise<void>(r => setTimeout(r, 16));
+                if (settings.thermal > 0) {
+                    onProgress?.(`Thermal ${settings.thermal}× talus ${settings.talus}° …`);
+                    ThermalErode(this.eroded, this.size, hf.cellSize, { talusDeg: settings.talus, iterations: settings.thermal });
+                    this.PaintHeightfield(this.eroded, this.size);
+                    await new Promise<void>(r => setTimeout(r, 16));
+                }
+                {
+                    onProgress?.(`Droplets ${settings.iterations}×${settings.droplets} …`);
+                    const dParams: DropletParams = {
+                        iterations: settings.iterations,
+                        droplets: settings.droplets,
+                        inertia: settings.inertia,
+                        capacity: settings.capacity,
+                        erosionRate: settings.erodeRate,
+                        depositionRate: settings.deposit,
+                        evaporation: settings.evaporation,
+                        minSlope: 0.01,
+                    };
+                    const { flow } = await DropletErodeAsync(this.eroded, this.size, hf.cellSize, dParams, 4,
+                        (done, total) => onProgress?.(`Droplets ${done}/${total} …`));
+                    this.flow = flow;
+                    this.PaintFlow(flow, this.size);
+                    this.PaintHeightfield(this.eroded, this.size);
+                }
+                onProgress?.(`Displacing 3D sphere with heightfield …`);
+                const geom = CreateSphereFromHeightfield(sphere, hf.data, this.eroded, this.size, this.tileSize);
                 this.volumeMesh.geometry.dispose();
                 this.volumeMesh.geometry = geom;
                 this.volumeMesh.visible = this.visible;
-                onProgress?.(`Done — 3D sphere ${sphere.r.toFixed(1)}m, ${(geom.attributes.position as THREE.BufferAttribute).count} verts`);
+                { let minE = Infinity; for (let i = 0; i < this.eroded.length; i++) if (this.eroded[i] < minE) minE = this.eroded[i]; onProgress?.(`Done — 3D sphere ${sphere.r.toFixed(1)}m, ${(geom.attributes.position as THREE.BufferAttribute).count} verts, Δh ${(hf.maxH - minE).toFixed(2)}m`); }
                 return;
             }
             this.isVolumeMode = false;

@@ -175,6 +175,72 @@ export function ThermalErodeMesh(geom: THREE.BufferGeometry, talusDeg: number, i
 }
 
 // Create a dedicated 3D sphere mesh for the SDF sphere test (not a heightfield)
+// Hybrid: use the well-tuned heightfield erosion to drive a radial displacement
+// on an icosphere. This gives the visual quality of the 512² droplet sim
+// but wrapped around the sphere — no pillar, true 3D.
+export function CreateSphereFromHeightfield(
+    sphere: SphereInfo,
+    heightsOrig: Float32Array,
+    heightsEroded: Float32Array,
+    size: number,
+    tileSize: number
+): THREE.BufferGeometry {
+    const geom = new THREE.IcosahedronGeometry(sphere.r, 5); // 10k verts for crisp gullies
+    geom.translate(sphere.x, sphere.y, sphere.z);
+    geom.computeVertexNormals();
+    const pos = geom.attributes.position as THREE.BufferAttribute;
+    const nattr = geom.attributes.normal as THREE.BufferAttribute;
+    const worldMin = -tileSize * 0.5;
+    const cell = tileSize / (size - 1);
+    const n = pos.count;
+    // sample delta and displace along normal
+    for (let i = 0; i < n; i++) {
+        const wx = pos.getX(i), wy = pos.getY(i), wz = pos.getZ(i);
+        // only displace upper hemisphere and sides (y > sphere.y - r*0.6) — bottom is hidden by ground
+        if (wy < sphere.y - sphere.r * 0.55) continue;
+        // map (wx,wz) to heightfield cell
+        const fx = (wx - worldMin) / cell;
+        const fz = (wz - worldMin) / cell;
+        const ix = Math.floor(fx), iz = Math.floor(fz);
+        if (ix < 0 || iz < 0 || ix >= size - 1 || iz >= size - 1) continue;
+        const tx = fx - ix, tz = fz - iz;
+        // bilinear sample original and eroded
+        const h00o = heightsOrig[iz * size + ix], h10o = heightsOrig[iz * size + ix + 1], h01o = heightsOrig[(iz + 1) * size + ix], h11o = heightsOrig[(iz + 1) * size + ix + 1];
+        const h00e = heightsEroded[iz * size + ix], h10e = heightsEroded[iz * size + ix + 1], h01e = heightsEroded[(iz + 1) * size + ix], h11e = heightsEroded[(iz + 1) * size + ix + 1];
+        const ho = h00o * (1 - tx) * (1 - tz) + h10o * tx * (1 - tz) + h01o * (1 - tx) * tz + h11o * tx * tz;
+        const he = h00e * (1 - tx) * (1 - tz) + h10e * tx * (1 - tz) + h01e * (1 - tx) * tz + h11e * tx * tz;
+        const delta = he - ho; // negative = eroded (carved), positive = deposited
+        // only carve where delta is negative (erosion) — deposition on sphere looks blobby, skip for now
+        if (delta >= -0.02) continue;
+        // scale delta to normal displacement — 0.85 keeps 1m heightfield carve ≈ 0.85m radial carve
+        const disp = delta * 0.85;
+        // clamp to avoid extreme spikes (max 1.8m inwards)
+        const c = Math.max(disp, -1.8);
+        const nx = nattr.getX(i), ny = nattr.getY(i), nz = nattr.getZ(i);
+        pos.setXYZ(i, wx + nx * c, wy + ny * c, wz + nz * c);
+    }
+    pos.needsUpdate = true;
+    geom.computeVertexNormals();
+    // gentle vertex-color by delta for visual flow
+    const colors = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+        const wx = pos.getX(i), wz = pos.getZ(i);
+        const fx = (wx - worldMin) / cell, fz = (wz - worldMin) / cell;
+        const ix = Math.floor(fx), iz = Math.floor(fz);
+        let t = 0;
+        if (ix >= 0 && iz >= 0 && ix < size && iz < size) {
+            const idx = Math.min(size - 1, iz) * size + Math.min(size - 1, ix);
+            const d = heightsEroded[idx] - heightsOrig[idx];
+            t = Math.min(Math.max(-d / 1.2, 0), 1);
+        }
+        colors[i * 3] = 0.68 - t * 0.12;
+        colors[i * 3 + 1] = 0.60 - t * 0.08;
+        colors[i * 3 + 2] = 0.52 - t * 0.06;
+    }
+    geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    return geom;
+}
+
 export function CreateErodedSphereMesh(
     _field: CompiledField,
     sphere: SphereInfo,
