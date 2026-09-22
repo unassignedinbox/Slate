@@ -175,14 +175,14 @@ export const NodeCatalogue: NodeSpecification[] =
         inputs:  [P('in', 'Field', 'field'), P('rain', 'Rain', 'scalar')],
         outputs: [P('out', 'Field', 'field'), P('flowMap', 'Flow', 'flow')],
         params:  [
-            V('tileSize',   'Tile',     32, 256,  8,   96,  ' m'),
+            V('tileSize',   'Tile',     32, 256,  8,   48,  ' m'),
             V('resolution', 'Res',     128, 512,  64,  512, ' px'),
             V('iterations', 'Iters',     1, 200,  1,   32),
             V('droplets',   'Drops',  1024, 16384,1024, 4096),
             V('erodeRate',  'Erode',     0, 1,  0.01, 0.28),
             V('deposit',    'Deposit',   0, 1,  0.01, 0.30),
-            V('talus',      'Talus',    15, 45, 0.5,  33,  '°'),
-            V('thermal',    'Thermal',   0, 8,    1,   3),
+            V('talus',      'Talus',    15, 45, 0.5,  30,  '°'),
+            V('thermal',    'Thermal',   0, 8,    1,   6),
         ],
     },
     {

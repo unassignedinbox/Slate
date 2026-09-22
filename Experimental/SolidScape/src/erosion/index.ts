@@ -24,14 +24,14 @@ export interface ErodeSettings
 }
 
 export const DefaultErodeSettings: ErodeSettings = {
-    tileSize: 96,
+    tileSize: 48, // tight enough for sphere test (r8 dome = 16m) — 96 was showing a huge flat apron around the pillar
     resolution: 512,
     iterations: 32,
     droplets: 4096,
     erodeRate: 0.28,
     deposit: 0.30,
-    talus: 33,
-    thermal: 3,
+    talus: 30,
+    thermal: 6, // extra slump so the 8m sphere→ground cliff becomes a talus cone instead of a vertical pillar
     inertia: 0.06,
     capacity: 0.07,
     evaporation: 0.012,
@@ -116,19 +116,38 @@ export class ErosionPreview
     private RebuildMesh(heights: Float32Array, size: number, tileSize: number): void
     {
         this.tileSize = tileSize; this.size = size;
-        // cap preview segments to 256 for perf/memory — bake is still 512², display is downsampled
-        const disp = Math.min(size, 256);
-        const step = Math.max(1, Math.round(size / disp));
+        // SDF vs heightmap: a sphere on a plane bakes to a dome with an 8m vertical cliff at r=8.
+        // Showing the full 96m tile makes that cliff look like a stretched pillar on a table.
+        // Crop the preview mesh to the content bounds (≈ dome + talus) so it reads as a rock, not a table.
+        const worldMin = -tileSize * 0.5;
+        const cellSize = tileSize / (size - 1);
+        const hThresh = 0.08; // above ground
+        let minX = size, maxX = -1, minZ = size, maxZ = -1;
+        for (let z = 0; z < size; z++) for (let x = 0; x < size; x++) if (heights[z * size + x] > hThresh) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (z < minZ) minZ = z; if (z > maxZ) maxZ = z; }
+        let meshW = tileSize, meshD = tileSize, offX = 0, offZ = 0, srcMinX = 0, srcMaxX = size - 1, srcMinZ = 0, srcMaxZ = size - 1;
+        if (maxX >= 0 && (maxX - minX) < size * 0.85)
+        {
+            const pad = Math.ceil(2 / cellSize) + 2; // ~2m apron + 2 cells for filtering
+            srcMinX = Math.max(0, minX - pad); srcMaxX = Math.min(size - 1, maxX + pad);
+            srcMinZ = Math.max(0, minZ - pad); srcMaxZ = Math.min(size - 1, maxZ + pad);
+            meshW = (srcMaxX - srcMinX) * cellSize; meshD = (srcMaxZ - srcMinZ) * cellSize;
+            offX = worldMin + (srcMinX + srcMaxX) * 0.5 * cellSize;
+            offZ = worldMin + (srcMinZ + srcMaxZ) * 0.5 * cellSize;
+        }
+        // cap preview segments to 256 for perf/memory — bake is still 512², display is downsampled but cropped
+        const disp = Math.min(256, Math.max(srcMaxX - srcMinX + 1, srcMaxZ - srcMinZ + 1, 64));
         const seg = disp - 1;
-        const newGeom = new THREE.PlaneGeometry(tileSize, tileSize, seg, seg);
+        const newGeom = new THREE.PlaneGeometry(meshW, meshD, seg, seg);
         const pos = newGeom.attributes.position as THREE.BufferAttribute;
         for (let iz = 0; iz < disp; iz++)
         {
-            const srcZ = Math.min(Math.floor(iz * step), size - 1);
+            const t = disp === 1 ? 0 : iz / seg;
+            const srcZ = Math.round(srcMinZ + t * (srcMaxZ - srcMinZ));
             for (let ix = 0; ix < disp; ix++)
             {
-                const srcX = Math.min(Math.floor(ix * step), size - 1);
-                const h = heights[srcZ * size + srcX];
+                const s = disp === 1 ? 0 : ix / seg;
+                const srcX = Math.round(srcMinX + s * (srcMaxX - srcMinX));
+                const h = heights[Math.min(size - 1, srcZ) * size + Math.min(size - 1, srcX)];
                 const iy = disp - 1 - iz;
                 const vIdx = iy * disp + ix;
                 pos.setZ(vIdx, h);
@@ -139,8 +158,8 @@ export class ErosionPreview
         const old = this.mesh.geometry as THREE.BufferGeometry;
         this.mesh.geometry = newGeom;
         old.dispose();
-        // keep reference for Dispose()
         (this as unknown as { geom: THREE.BufferGeometry }).geom = newGeom as unknown as THREE.PlaneGeometry;
+        this.mesh.position.set(offX, 0, offZ);
         this.mesh.visible = this.visible && this.eroded !== null;
     }
 
@@ -251,6 +270,7 @@ export class ErosionPreview
         this.eroded = null;
         this.flow = null;
         this.mesh.visible = false;
+        this.mesh.position.set(0, 0, 0);
         this.PaintEmpty();
     }
 
