@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SolidScape — SDF Terrain Authoring</title>
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+<link href="https://api.fontshare.com/v2/css?f[]=general-sans@300,400,500,600,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+
+<div class="workspace" id="workspace">
+
+    <!-- ===================== LEFT — VIEWPORT ===================== -->
+    <section class="viewport" id="viewport">
+        <canvas id="viewport-canvas"></canvas>
+
+        <!-- floating top pill toolbar -->
+        <div class="vp-toolbar">
+            <button class="tbtn" title="New Terrain" data-icon="file-plus"></button>
+            <button class="tbtn" title="Save" data-icon="save"></button>
+            <span class="tsep"></span>
+            <button class="tbtn" title="Undo" data-icon="undo"></button>
+            <button class="tbtn" title="Redo" data-icon="redo"></button>
+            <span class="tsep"></span>
+            <button class="tbtn" title="Shaded" data-icon="cube"></button>
+            <button class="tbtn" title="Wireframe" data-icon="monitor"></button>
+            <button class="tbtn" title="Bake Preview" data-icon="briefcase"></button>
+            <button class="tbtn" title="Snapshot" data-icon="camera"></button>
+            <button class="tbtn" title="Settings" data-icon="sliders"></button>
+            <span class="tsep"></span>
+            <div class="tfield" id="doc-title">Untitled <em>*</em></div>
+            <button class="tbtn danger" title="Close" data-icon="close"></button>
+        </div>
+
+        <!-- left vertical tool rail -->
+        <div class="vp-rail">
+            <button class="rbtn active" title="Select" data-icon="cursor"></button>
+            <button class="rbtn" title="Sculpt Brush" data-icon="brush"></button>
+            <button class="rbtn" title="Erode" data-icon="droplet"></button>
+            <button class="rbtn" title="Terrace" data-icon="layers"></button>
+            <span class="rsep"></span>
+            <button class="rbtn" title="Sun Placement" data-icon="sun"></button>
+            <button class="rbtn" title="Measure" data-icon="ruler"></button>
+            <button class="rbtn" title="Bookmarks" data-icon="bookmark"></button>
+            <span class="rsep"></span>
+            <button class="rbtn" title="Frame Scene" data-icon="focus"></button>
+            <button class="rbtn" title="Sky Preset" data-icon="sparkles"></button>
+            <button class="rbtn" title="Safe Bounds" data-icon="shield"></button>
+        </div>
+
+        <!-- camera scheme switch -->
+        <div class="vp-camera-switch">
+            <div class="seg" id="camera-scheme">
+                <button class="active" data-scheme="fly">Fly · Unreal</button>
+                <button data-scheme="orbit">Orbit · Blender</button>
+            </div>
+            <button class="round-btn" id="sky-toggle" title="Sun &amp; Sky" data-icon="sun"></button>
+        </div>
+
+        <!-- sun / sky panel -->
+        <div class="panel sky-panel" id="sky-panel">
+            <div class="panel-header">
+                <div class="ph-icon" data-icon="sun"></div>
+                <div>
+                    <div class="ph-title">Sun &amp; Sky</div>
+                    <div class="ph-sub">atmosphere · solar disc · exposure</div>
+                </div>
+                <div class="spacer"></div>
+                <button class="btn ghost icon small" id="sky-close" data-icon="close"></button>
+            </div>
+            <div class="panel-body" id="sky-controls"></div>
+            <div class="panel-footer">
+                <div class="hint">Drag values horizontally · double-click to reset</div>
+                <button class="btn ghost small" id="sky-reset">Reset</button>
+            </div>
+        </div>
+
+        <!-- bottom status strip -->
+        <div class="vp-status">
+            <span class="st-key">CAM</span><span class="st-val" id="st-mode">Fly</span>
+            <span class="st-key">SPEED</span>
+            <div class="mini-bar"><i id="st-speed-bar"></i></div>
+            <span class="st-val" id="st-speed">6.0 m/s</span>
+            <span class="st-key">POS</span><span class="st-val mono" id="st-pos">0.0, 0.0, 0.0</span>
+            <span class="st-key">SUN</span><span class="st-val mono" id="st-sun">32° / 165°</span>
+            <div class="spacer"></div>
+            <span class="st-val mono" id="st-fps">60 fps</span>
+        </div>
+
+        <!-- control hints -->
+        <div class="vp-hints" id="vp-hints"></div>
+    </section>
+
+    <div class="splitter" id="splitter"></div>
+
+    <!-- ===================== RIGHT — NODE EDITOR ===================== -->
+    <section class="editor" id="editor">
+        <div class="graph-surface" id="graph-surface">
+            <div class="graph-background" id="graph-background"></div>
+            <svg class="graph-wires" id="graph-wires"></svg>
+            <div class="graph-layer" id="graph-layer"></div>
+            <div class="marquee" id="marquee"></div>
+        </div>
+
+        <!-- floating pill toolbar -->
+        <div class="graph-toolbar">
+            <button class="gbtn active" id="tool-grid" title="Snap to grid" data-icon="grid"></button>
+            <button class="gbtn" id="tool-tune" title="Graph parameters" data-icon="sliders"></button>
+            <span class="gsep"></span>
+            <button class="gbtn" id="tool-build" title="Build graph" data-icon="play"></button>
+        </div>
+
+        <!-- top-right circular settings button -->
+        <button class="round-btn graph-settings-btn" id="graph-settings-btn" data-icon="sliders"></button>
+
+        <!-- settings dropdown -->
+        <div class="dropdown-panel" id="graph-settings">
+            <div class="dp-label">View</div>
+            <div class="dp-row">
+                <span>Canvas Controls</span>
+                <div class="switch" id="opt-canvas-controls" data-on="false"></div>
+            </div>
+            <div class="dp-row">
+                <span>Snap to Grid</span>
+                <div class="switch" id="opt-snap" data-on="true"></div>
+            </div>
+            <div class="dp-label">Background</div>
+            <div class="dp-opt sel" data-bg="dots">Dotted Grid<i data-icon="check"></i></div>
+            <div class="dp-opt" data-bg="lines">Line Grid<i data-icon="check"></i></div>
+            <div class="dp-opt" data-bg="blank">Blank<i data-icon="check"></i></div>
+        </div>
+
+        <!-- canvas controls (zoom cluster) -->
+        <div class="canvas-controls" id="canvas-controls">
+            <button class="gbtn" id="zoom-out" data-icon="minus"></button>
+            <div class="zoom-read" id="zoom-read">100%</div>
+            <button class="gbtn" id="zoom-in" data-icon="plus"></button>
+            <span class="gsep"></span>
+            <button class="gbtn" id="zoom-fit" title="Frame graph" data-icon="focus"></button>
+        </div>
+
+        <!-- node search palette -->
+        <div class="palette" id="palette">
+            <div class="palette-search">
+                <div class="field">
+                    <i data-icon="search"></i>
+                    <input type="text" id="palette-input" placeholder="Search nodes…" spellcheck="false">
+                </div>
+            </div>
+            <div class="palette-list" id="palette-list"></div>
+            <div class="palette-foot"><span class="hint">Tab · open palette</span><span class="kbd">⏎</span></div>
+        </div>
+
+        <!-- selection context toolbar -->
+        <div class="node-toolbar" id="node-toolbar">
+            <button class="ntbtn" title="Collapse" data-act="collapse" data-icon="minus"></button>
+            <button class="ntbtn" title="Preview" data-act="preview" data-icon="eye"></button>
+            <button class="ntbtn" title="Pin output" data-act="pin" data-icon="diamond"></button>
+            <button class="ntbtn" title="Lock" data-act="lock" data-icon="lock"></button>
+            <button class="ntbtn" title="Rename" data-act="rename" data-icon="text"></button>
+            <button class="ntbtn" title="Inspect" data-act="inspect" data-icon="search"></button>
+            <button class="ntbtn danger" title="Delete" data-act="delete" data-icon="close"></button>
+        </div>
+
+        <!-- context menu -->
+        <div class="ctx" id="graph-ctx"></div>
+
+        <!-- bottom-left build status pill -->
+        <div class="build-pill">
+            <div class="bp-row"><span class="bp-label" id="bp-label">Built</span><span class="bp-pct" id="bp-pct">100%</span></div>
+            <div class="bp-bar"><i id="bp-fill"></i></div>
+        </div>
+    </section>
+
+</div>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
