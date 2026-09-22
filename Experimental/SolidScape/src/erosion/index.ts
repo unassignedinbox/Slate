@@ -116,35 +116,32 @@ export class ErosionPreview
     private RebuildMesh(heights: Float32Array, size: number, tileSize: number): void
     {
         this.tileSize = tileSize; this.size = size;
-        // rebuild geometry with correct segments
-        const newGeom = new THREE.PlaneGeometry(tileSize, tileSize, size - 1, size - 1);
+        // cap preview segments to 256 for perf/memory — bake is still 512², display is downsampled
+        const disp = Math.min(size, 256);
+        const step = Math.max(1, Math.round(size / disp));
+        const seg = disp - 1;
+        const newGeom = new THREE.PlaneGeometry(tileSize, tileSize, seg, seg);
         const pos = newGeom.attributes.position as THREE.BufferAttribute;
-        // PlaneGeometry is XY plane centred at 0; after rotation.x = -π/2, Z becomes world Y (height)
-        // But easier: write heights into pos.y before rotation? Actually plane's vertices are (x, y, 0) then rotated.
-        // After rotation, y = original z? Let's just write into pos.z and let rotation map it.
-        // PlaneGeometry: x∈[-w/2,w/2], y∈[-h/2,h/2], z=0. After rotX -90°, y->z, z->y. So height should be z.
-        for (let iz = 0; iz < size; iz++)
+        for (let iz = 0; iz < disp; iz++)
         {
-            for (let ix = 0; ix < size; ix++)
+            const srcZ = Math.min(Math.floor(iz * step), size - 1);
+            for (let ix = 0; ix < disp; ix++)
             {
-                const idx = iz * size + ix;
-                // Plane vertex order is row-major y then x? THREE builds row x then y: index = iy* (nx+1)+ix
-                // Our iz corresponds to y = tileSize/2 - iz*cellSize ?? Need to map.
-                // PlaneGeometry y = (1 - v)*h - h/2 where v = iy/(ny). So iy=0 → y=+h/2 (top). Our iz=0 → worldMin (-tile/2) bottom.
-                // So invert iz.
-                const iy = size - 1 - iz;
-                const vIdx = iy * size + ix;
-                pos.setZ(vIdx, heights[idx]);
+                const srcX = Math.min(Math.floor(ix * step), size - 1);
+                const h = heights[srcZ * size + srcX];
+                const iy = disp - 1 - iz;
+                const vIdx = iy * disp + ix;
+                pos.setZ(vIdx, h);
             }
         }
         pos.needsUpdate = true;
         newGeom.computeVertexNormals();
-        // swap
-        this.mesh.geometry.dispose();
-        (this.mesh.geometry as THREE.BufferGeometry) = newGeom;
-        // keep reference for future dispose
+        const old = this.mesh.geometry as THREE.BufferGeometry;
+        this.mesh.geometry = newGeom;
+        old.dispose();
+        // keep reference for Dispose()
         (this as unknown as { geom: THREE.BufferGeometry }).geom = newGeom as unknown as THREE.PlaneGeometry;
-        this.mesh.visible = this.visible;
+        this.mesh.visible = this.visible && this.eroded !== null;
     }
 
     PaintHeightfield(heights: Float32Array, size: number): void
@@ -244,7 +241,7 @@ export class ErosionPreview
 
             onProgress?.(`Building preview mesh …`);
             this.RebuildMesh(this.eroded, this.size, this.tileSize);
-            onProgress?.(`Done — Δh max ${(this.original.maxH - Math.min(...this.eroded)).toFixed(3)} m`);
+            { let minE = Infinity; for (let i = 0; i < this.eroded.length; i++) if (this.eroded[i] < minE) minE = this.eroded[i]; onProgress?.(`Done — Δh max ${(this.original.maxH - minE).toFixed(3)} m`); }
         } finally { this.running = false; }
     }
 

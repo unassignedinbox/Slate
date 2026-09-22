@@ -588,7 +588,13 @@ function InitErosionUI(): void
             await erosion.BakeAndErode(compiled, s, (msg) => { if (stats) stats.textContent = msg; console.log('[Erosion]', msg); });
             const has = erosion.HasResult();
             console.log('[Erosion] done, hasResult', has);
-            if (has) { ShowToast(`Eroded ${s.resolution}² sphere — toggle 3D to view`); togglePanel(true); }
+            if (has) {
+                sw3d.dataset.on = 'true';
+                erosion.SetVisible(true);
+                (fieldPass.mesh as unknown as { visible: boolean }).visible = false;
+                ShowToast(`Eroded ${s.resolution}² — auto-switched to 3D (toggle off to see SDF sphere)`);
+                togglePanel(true);
+            }
             UpdateErosionHint();
         } catch (e) { console.error(e); ShowToast('Erosion failed — see console'); if (stats) stats.textContent = String(e); }
         finally { run.disabled = false; run.textContent = prev ?? '▶ Run 1+2'; }
