@@ -60,22 +60,13 @@ viewport.onFrame = (time) =>
         viewport.sky.sunIntensity, viewport.FogColour(), viewport.sky.fogDensity, time);
 };
 
-const stMode  = Q('#st-mode');
-const stPos   = Q('#st-pos');
-const stSpeed = Q('#st-speed');
-const stSpeedBar = Q('#st-speed-bar');
-const stSun   = Q('#st-sun');
-const stFps   = Q('#st-fps');
-
+const stFps = Q('#st-fps');
 let telemetryGate = 0;
-viewport.onTelemetry = (pos, speed, fps) =>
+viewport.onTelemetry = (_pos, _speed, fps) =>
 {
     telemetryGate += 1;
     if (telemetryGate % 6 !== 0) return;
-    stPos.textContent   = `${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}`;
-    stSpeed.textContent = `${speed.toFixed(1)} m/s`;
-    stSpeedBar.style.width = `${Math.min((speed / 60) * 100, 100)}%`;
-    stFps.textContent   = `${fps.toFixed(0)} fps`;
+    stFps.textContent = `${fps.toFixed(0)} fps`;
 };
 
 //---------------------------------------------------------------- transient toast
@@ -125,7 +116,6 @@ Q('#camera-scheme').querySelectorAll('button').forEach((b) =>
         b.classList.add('active');
         const scheme = b.dataset.scheme as CameraScheme;
         viewport.SetScheme(scheme);
-        stMode.textContent = scheme === 'fly' ? 'Fly' : 'Orbit';
         PaintHints(scheme);
     });
 });
@@ -349,7 +339,7 @@ function RepaintSkyScrubs(): void
 
 function RefreshSunRead(): void
 {
-    stSun.textContent = `${viewport.sky.elevation.toFixed(0)}° / ${viewport.sky.azimuth.toFixed(0)}°`;
+    // Sun is now only inside the viewport settings panel; the bottom bar is the brush bar.
 }
 
 function BindSwitch(el: HTMLElement, onChange: (on: boolean) => void): void
@@ -695,6 +685,8 @@ function SetActiveTool(tool: SculptTool): void
     sculpt.SetTool(tool);
     Q('#sculpt-toolbar').querySelectorAll<HTMLElement>('.tbtn.tool').forEach((b) =>
         b.classList.toggle('active', b.dataset.tool === tool));
+    // dim bottom brush bar when in select mode — mirrors Blender's header dimming
+    Q('#vp-status').classList.toggle('brush-off', tool === 'select');
 
     if (tool === 'select')
     {
@@ -723,51 +715,98 @@ Q('#sculpt-toolbar').querySelectorAll<HTMLElement>('.tbtn.shape').forEach((b) =>
     });
 });
 
-//---------------------------------------------------------------- brush scrubbers
-function BindBrushScrub(el: HTMLElement, get: () => number, set: (v: number) => void,
-                        min: number, max: number, format: (v: number) => string): void
+//---------------------------------------------------------------- bottom brush bar — size / intensity / falloff / spacing (ZBrush/Blender-style)
+function formatSize(v: number): string
 {
-    const read = el.querySelector('b')!;
-    const paint = () => { read.textContent = format(get()); };
-    (el as HTMLElement & { repaint?: () => void }).repaint = paint;
+    return v >= 10 ? `${v.toFixed(1)} m` : v >= 1 ? `${v.toFixed(2)} m` : `${(v * 100).toFixed(0)} cm`;
+}
+function formatIntensity(v: number): string { return v.toFixed(2); }
+function formatFalloff(v: number): string
+{
+    if (v < 0.2) return 'Soft';
+    if (v < 0.45) return 'Smooth';
+    if (v < 0.70) return 'Sharp';
+    return 'Hard';
+}
+function formatSpacing(v: number): string { return `${Math.round(v * 100)}%`; }
+
+type Repaintable = HTMLElement & { repaint?: () => void };
+const bottomRepaints: Repaintable[] = [];
+
+function BindBottomScrub(
+    id: string, get: () => number, set: (v: number) => void,
+    min: number, max: number, format: (v: number) => string): Repaintable
+{
+    const root = Q<HTMLElement>(id);
+    const fill = root.querySelector<HTMLElement>('.fill')!;
+    const val  = root.querySelector<HTMLElement>('.val')!;
+    const paint = () =>
+    {
+        const v = get();
+        val.textContent = format(v);
+        const t = (v - min) / (max - min);
+        fill.style.transform = `scaleX(${Math.min(Math.max(t, 0), 1)})`;
+        root.title = `${root.querySelector('.st-key')?.textContent ?? ''} — ${val.textContent} · drag, double-click to reset`;
+    };
+    (root as Repaintable).repaint = paint;
+    bottomRepaints.push(root as Repaintable);
     paint();
 
     let dragging = false;
     let lastX = 0;
-    el.addEventListener('pointerdown', (e) =>
+    root.addEventListener('pointerdown', (e) =>
     {
         dragging = true; lastX = e.clientX;
-        el.classList.add('dragging');
-        el.setPointerCapture(e.pointerId);
+        root.classList.add('dragging');
+        root.setPointerCapture(e.pointerId);
+        e.preventDefault();
     });
-    el.addEventListener('pointermove', (e) =>
+    root.addEventListener('pointermove', (e) =>
     {
         if (!dragging) return;
         const dx = e.clientX - lastX;
         lastX = e.clientX;
-        const rate = (e.shiftKey ? 0.15 : 1) * (max - min) / 240;
-        set(Math.min(max, Math.max(min, get() + dx * rate)));
+        const rate = (e.shiftKey ? 0.18 : 1) * (max - min) / 220;
+        const next = Math.min(max, Math.max(min, get() + dx * rate));
+        set(next);
         paint();
     });
     const stop = (e: PointerEvent) =>
     {
         dragging = false;
-        el.classList.remove('dragging');
-        if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+        root.classList.remove('dragging');
+        if (root.hasPointerCapture(e.pointerId)) root.releasePointerCapture(e.pointerId);
     };
-    el.addEventListener('pointerup', stop);
-    el.addEventListener('pointercancel', stop);
+    root.addEventListener('pointerup', stop);
+    root.addEventListener('pointercancel', stop);
+    root.addEventListener('dblclick', () =>
+    {
+        const defaults: Record<string, number> = { '#vb-size': 2.0, '#vb-intensity': 0.5, '#vb-falloff': 0.5, '#vb-spacing': 0.45 };
+        set(defaults[id] ?? (min + max) * 0.5);
+        paint();
+    });
+    return root as Repaintable;
 }
 
-BindBrushScrub(Q('#brush-radius'),
-    () => sculpt.brush.radius, (v) => { sculpt.brush.radius = v; },
-    0.1, 40, (v) => `${v.toFixed(1)} m`);
-BindBrushScrub(Q('#brush-strength'),
-    () => sculpt.brush.strength, (v) => { sculpt.brush.strength = v; },
-    0, 1, (v) => v.toFixed(2));
+BindBottomScrub('#vb-size',      () => sculpt.brush.radius,   (v) => { sculpt.brush.radius = v; },   0.1, 40, formatSize);
+BindBottomScrub('#vb-intensity', () => sculpt.brush.strength, (v) => { sculpt.brush.strength = v; }, 0, 1, formatIntensity);
+BindBottomScrub('#vb-falloff',   () => sculpt.brush.falloff,  (v) => { sculpt.brush.falloff = v; },  0, 1, formatFalloff);
+BindBottomScrub('#vb-spacing',   () => sculpt.brush.spacing,  (v) => { sculpt.brush.spacing = v; },  0.05, 1.0, formatSpacing);
 
-sculpt.onBrushChanged = () =>
-    Q<HTMLElement & { repaint?: () => void }>('#brush-radius').repaint?.();
+// autosmooth toggle at the end of the brush strip
+{
+    const tog = Q('#vb-autosmooth');
+    const sw  = tog.querySelector<HTMLElement>('.switch')!;
+    const sync = () => { sw.dataset.on = String(sculpt.brush.autosmooth); };
+    sync();
+    const flip = () => { sculpt.brush.autosmooth = !sculpt.brush.autosmooth; sync(); };
+    tog.addEventListener('click', flip);
+    sw.addEventListener('click', (e) => { e.stopPropagation(); flip(); });
+}
+
+sculpt.onBrushChanged = () => bottomRepaints.forEach((r) => r.repaint?.());
+sculpt.onToolChanged  = () => bottomRepaints.forEach((r) => r.repaint?.());
+Q('#vp-status').classList.add('brush-off');
 
 //---------------------------------------------------------------- selection toolbar
 const nodeToolbar = Q('#node-toolbar');

@@ -18,17 +18,19 @@ export type SculptTool = 'select' | 'build' | 'carve' | 'smooth';
 
 export interface BrushState
 {
-    shape:    ShapeType;                              // dab primitive: 0 sphere · 1 box · 2 cylinder
-    radius:   number;                                 // [m]
-    strength: number;                                 // 0..1 → blend smoothness
-    spacing:  number;                                 // dab spacing as a fraction of radius
+    shape:      ShapeType;                            // dab primitive: 0 sphere · 1 box · 2 cylinder
+    radius:    number;                                // [m]
+    strength:  number;                                // 0..1 → blend smoothness / intensity
+    spacing:   number;                                // dab spacing as a fraction of radius
+    falloff:   number;                                // 0 soft → 1 hard
+    autosmooth: boolean;                              // lightly relax neighbours per dab
 }
 
 //--------------------------------------------------------------------------------------------------------------------------
 export class SculptController
 {
     tool: SculptTool = 'select';
-    brush: BrushState = { shape: 0, radius: 2.0, strength: 0.5, spacing: 0.45 };
+    brush: BrushState = { shape: 0, radius: 2.0, strength: 0.5, spacing: 0.45, falloff: 0.5, autosmooth: false };
 
     onStrokeLive:      (() => void) | null = null;    // dab appended mid-stroke → recompile
     onStrokeCommitted: ((stroke: StrokeRecord) => void) | null = null;
@@ -119,7 +121,9 @@ export class SculptController
 
         let cx = p.x, cy = p.y, cz = p.z;
         let radius = r;
-        let k = r * (0.25 + this.brush.strength * 0.9);
+        // falloff reshapes the blend: 0 = soft (×1.45), 0.5 = neutral, 1 = hard (×0.45)
+        const falloffMult = 1.45 - this.brush.falloff * 1.0;
+        let k = r * (0.25 + this.brush.strength * 0.9) * falloffMult;
 
         if (this.tool === 'smooth')
         {
@@ -127,7 +131,7 @@ export class SculptController
             const sink = r * 0.42;
             cx -= nx * sink; cy -= ny * sink; cz -= nz * sink;
             radius = r * 0.8;
-            k = r * (0.9 + this.brush.strength * 1.4);
+            k = r * (0.9 + this.brush.strength * 1.4) * falloffMult;
         }
         else if (mode === 0)
         {
@@ -139,6 +143,9 @@ export class SculptController
             const sink = r * 0.22;                    // carve: bite below the surface
             cx -= nx * sink; cy -= ny * sink; cz -= nz * sink;
         }
+
+        // autosmooth slightly softens each dab, like Blender/ZBrush's autsmooth — keeps ridges from stacking
+        if (this.brush.autosmooth && this.tool !== 'smooth') k *= 1.22;
 
         const dab: DabRecord = {
             shape: this.brush.shape, mode,

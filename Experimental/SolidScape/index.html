@@ -26,9 +26,6 @@
             <button class="tbtn shape active" data-shape="0" title="Sphere tip" data-icon="circle"></button>
             <button class="tbtn shape" data-shape="1" title="Box tip" data-icon="square"></button>
             <button class="tbtn shape" data-shape="2" title="Cylinder tip" data-icon="cylinder"></button>
-            <span class="tsep"></span>
-            <div class="bscrub" id="brush-radius" title="Brush radius — drag · [ ] or Ctrl+Wheel">R&nbsp;<b>2.0 m</b></div>
-            <div class="bscrub" id="brush-strength" title="Brush blend strength — drag">S&nbsp;<b>0.50</b></div>
         </div>
 
         <!-- camera scheme switch + viewport settings -->
@@ -59,16 +56,32 @@
         </div>
         <input type="file" id="load-file" accept=".solidscape,.json" style="display:none">
 
-        <!-- bottom status strip -->
-        <div class="vp-status">
-            <span class="st-key">CAM</span><span class="st-val" id="st-mode">Fly</span>
-            <span class="st-key">SPEED</span>
-            <div class="mini-bar"><i id="st-speed-bar"></i></div>
-            <span class="st-val" id="st-speed">6.0 m/s</span>
-            <span class="st-key">POS</span><span class="st-val mono" id="st-pos">0.0, 0.0, 0.0</span>
-            <span class="st-key">SUN</span><span class="st-val mono" id="st-sun">32° / 165°</span>
-            <span class="st-key">EDITS</span><span class="st-val mono" id="st-edits">0</span>
+        <!-- bottom brush bar — size / intensity / falloff / spacing + FPS (replaces old sun/camera stats) -->
+        <div class="vp-status" id="vp-status">
+            <div class="vb-group" id="vb-group">
+                <div class="vb-ctl" id="vb-size" title="Size — drag · [ ] or Ctrl+Wheel">
+                    <span class="st-key">Size</span>
+                    <div class="scrub-mini"><i class="fill"></i><span class="val mono">2.0 m</span></div>
+                </div>
+                <div class="vb-ctl" id="vb-intensity" title="Intensity — drag">
+                    <span class="st-key">Intensity</span>
+                    <div class="scrub-mini"><i class="fill"></i><span class="val mono">0.50</span></div>
+                </div>
+                <div class="vb-ctl" id="vb-falloff" title="Falloff — soft → hard">
+                    <span class="st-key">Falloff</span>
+                    <div class="scrub-mini"><i class="fill"></i><span class="val">Smooth</span></div>
+                </div>
+                <div class="vb-ctl" id="vb-spacing" title="Spacing — dab distance · % of radius">
+                    <span class="st-key">Spacing</span>
+                    <div class="scrub-mini"><i class="fill"></i><span class="val mono">45%</span></div>
+                </div>
+                <div class="vb-tog" id="vb-autosmooth" title="Autosmooth — relax neighbouring surface as you sculpt">
+                    <span class="st-key">Smooth</span>
+                    <div class="switch" data-on="false"></div>
+                </div>
+            </div>
             <div class="spacer"></div>
+            <span class="st-key">Edits</span><span class="st-val mono" id="st-edits" title="Tape instructions">0</span>
             <span class="st-val mono" id="st-fps">60 fps</span>
         </div>
 
