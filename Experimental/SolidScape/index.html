@@ -90,6 +90,31 @@
 
         <!-- transient notice -->
         <div class="vp-toast" id="vp-toast"></div>
+
+        <!-- erosion preview — toggleable, behind Erode node (1+2 droplet+thermal on 512²) -->
+        <div class="erosion-panel" id="erosion-panel">
+            <div class="erosion-head">
+                <i data-icon="erosion"></i>
+                <div>
+                    <div class="erosion-title">Erode — 1+2 preview</div>
+                    <div class="erosion-sub">512² tile · thermal + droplet · sphere</div>
+                </div>
+                <div class="spacer"></div>
+                <button class="btn ghost icon small" id="erosion-close" data-icon="close" title="Hide"></button>
+            </div>
+            <div class="erosion-body">
+                <div id="erosion-canvas-host" class="erosion-canvas-host"></div>
+                <div class="erosion-stats mono" id="erosion-stats">idle — connect Erode node</div>
+            </div>
+            <div class="erosion-actions">
+                <button class="btn small" id="erosion-run">▶ Run 1+2</button>
+                <button class="btn small ghost" id="erosion-reset">Reset</button>
+                <label class="erosion-toggle"><span>3D</span><div class="switch" id="erosion-3d" data-on="false"></div></label>
+                <span class="spacer"></span>
+                <span class="hint mono" id="erosion-hint">no bake yet</span>
+            </div>
+        </div>
+        <button class="round-btn erosion-fab" id="erosion-fab" title="Erosion preview (1+2)" data-icon="erosion"></button>
     </section>
 
     <div class="splitter" id="splitter"></div>

@@ -10,6 +10,7 @@ import { CompileField, type StrokeRecord, type ShapeType } from './sdf';
 import { FieldPass } from './sdfPass';
 import { SculptController, type SculptTool } from './sculpt';
 import { BrickPool } from './bricks';
+import { ErosionPreview, DefaultErodeSettings, type ErodeSettings } from './erosion';
 
 const Q  = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 
@@ -437,6 +438,130 @@ let tapeWarned = false;
 const brickPool = new BrickPool();
 let totalRawDabs = 0, totalKeptDabs = 0;
 
+//--------------------------------------------------------------------------------------------------------------------------
+// Erosion preview — 1+2 droplet+thermal on 512² tile, toggleable behind Erode node
+//--------------------------------------------------------------------------------------------------------------------------
+const erosion = new ErosionPreview(viewport.scene);
+let erosionDirty = true; void erosionDirty; // bake needed after field changes (manual Run)
+
+function ErodeNode(): { uid: string; params: Record<string, number> } | null
+{
+    for (const n of graph.nodes.values())
+    {
+        if (n.specId === 'erode' && !n.muted)
+        {
+            // must have an incoming field wire to be considered connected
+            const hasField = [...graph.wires.values()].some(w => w.toNode === n.uid);
+            if (!hasField) continue;
+            return { uid: n.uid, params: n.params };
+        }
+    }
+    return null;
+}
+
+function ReadErodeSettings(p: Record<string, number>): ErodeSettings
+{
+    const s: ErodeSettings = { ...DefaultErodeSettings };
+    s.tileSize   = p['tileSize']   ?? s.tileSize;
+    s.resolution = Math.min(Math.max(Math.round(p['resolution'] ?? s.resolution), 128), 512);
+    // snap to 64 for geometry
+    s.resolution = Math.round(s.resolution / 64) * 64;
+    s.iterations = Math.round(p['iterations'] ?? s.iterations);
+    s.droplets   = Math.round(p['droplets'] ?? s.droplets);
+    s.erodeRate  = p['erodeRate']  ?? s.erodeRate;
+    s.deposit    = p['deposit']    ?? s.deposit;
+    s.talus      = p['talus']      ?? s.talus;
+    s.thermal    = Math.round(p['thermal'] ?? s.thermal);
+    return s;
+}
+
+function UpdateErosionHint(): void
+{
+    const hint = document.getElementById('erosion-hint') as HTMLElement | null;
+    const stats = document.getElementById('erosion-stats') as HTMLElement | null;
+    if (!hint) return;
+    const node = ErodeNode();
+    if (!node) { hint.textContent = 'connect Erode node (SDF → Erode → Output)'; if (stats) stats.textContent = 'idle — connect Erode node'; return; }
+    const s = ReadErodeSettings(node.params);
+    hint.textContent = `${s.resolution}² · tile ${s.tileSize} m · iters ${s.iterations} · drops ${s.droplets}`;
+    if (!erosion.HasResult() && stats) stats.textContent = `ready — thermal ${s.thermal}× talus ${s.talus}° · erode ${s.erodeRate.toFixed(2)} deposit ${s.deposit.toFixed(2)}`;
+}
+
+// mount the 2D canvas into the host div once DOM exists
+requestAnimationFrame(() =>
+{
+    const host = document.getElementById('erosion-canvas-host');
+    if (host) { host.innerHTML = ''; host.appendChild(erosion.canvas); }
+    UpdateErosionHint();
+});
+
+// wire FAB / panel toggles
+requestAnimationFrame(() =>
+{
+    const fab   = document.getElementById('erosion-fab') as HTMLElement | null;
+    const panel = document.getElementById('erosion-panel') as HTMLElement | null;
+    const close = document.getElementById('erosion-close') as HTMLElement | null;
+    const run   = document.getElementById('erosion-run') as HTMLButtonElement | null;
+    const reset = document.getElementById('erosion-reset') as HTMLButtonElement | null;
+    const sw3d  = document.getElementById('erosion-3d') as HTMLElement | null;
+    const stats = document.getElementById('erosion-stats') as HTMLElement | null;
+    if (!fab || !panel || !run || !reset || !sw3d) return;
+
+    const togglePanel = (show?: boolean) =>
+    {
+        const willShow = show ?? !panel.classList.contains('show');
+        panel.classList.toggle('show', willShow);
+        fab.classList.toggle('active', willShow);
+        // HydrateGlyphs for icon inside panel header (erosion icon)
+        // @ts-ignore
+        try { (window as any).HydrateGlyphs?.(panel); } catch {}
+    };
+    fab.addEventListener('click', () => togglePanel());
+    close?.addEventListener('click', () => togglePanel(false));
+
+    sw3d.addEventListener('click', () =>
+    {
+        const on = sw3d.dataset.on !== 'true';
+        sw3d.dataset.on = String(on);
+        erosion.SetVisible(on);
+        // when showing 3D, hide SDF raymarcher to avoid z-fighting on the tile
+        (fieldPass.mesh as unknown as { visible: boolean }).visible = !on;
+    });
+
+    reset.addEventListener('click', () =>
+    {
+        erosion.Reset();
+        (fieldPass.mesh as unknown as { visible: boolean }).visible = true;
+        sw3d.dataset.on = 'false';
+        erosion.SetVisible(false);
+        if (stats) stats.textContent = 'reset — original heightfield';
+    });
+
+    run.addEventListener('click', async () =>
+    {
+        const node = ErodeNode();
+        if (!node) { ShowToast('Connect SDF → Erode → Terrain Output to erode'); return; }
+        const s = ReadErodeSettings(node.params);
+        run.disabled = true; const prev = run.textContent; run.textContent = '⏳ Baking…';
+        try
+        {
+            // ensure field is up to date (includes recent sculpt)
+            // compiled is up to date via RebuildField; bake from it
+            await erosion.BakeAndErode(compiled, s, (msg) => { if (stats) stats.textContent = msg; });
+            const has = erosion.HasResult();
+            if (has) ShowToast(`Eroded sphere ${s.resolution}² tile — toggle 3D to view mesh`);
+            UpdateErosionHint();
+        } catch (e) { console.error(e); ShowToast('Erosion failed — see console'); if (stats) stats.textContent = String(e); }
+        finally { run.disabled = false; run.textContent = prev; }
+    });
+
+    // allow Enter on panel to re-run? no
+
+    // show panel by default when an Erode node exists at load
+    if (ErodeNode()) togglePanel(true);
+});
+
+
 function RebuildField(): void
 {
     // drop strokes whose primitive node no longer exists
@@ -457,6 +582,9 @@ function RebuildField(): void
         ShowToast('Edit tape full — older detail is being dropped. Brick cache lands in Phase 2.');
     }
     RefreshBrickRead?.();
+    // erosion tile is now stale — next Run will re-bake from this compiled field
+    erosionDirty = true;
+    UpdateErosionHint();
 }
 
 let rebuildQueued = false;
@@ -655,7 +783,7 @@ sculpt.onMissedSurface = () =>
         ShowToast('Click on a surface to sculpt — strokes bind to the shape under the cursor');
 };
 
-graph.onParamChanged = () => { brickPool.InvalidateAll(); QueueRebuild(); };
+graph.onParamChanged = () => { brickPool.InvalidateAll(); erosionDirty = true; UpdateErosionHint(); QueueRebuild(); };
 
 RebuildField();
 
@@ -848,6 +976,8 @@ const bpLabel = Q('#bp-label');
 graph.onGraphChanged = () =>
 {
     brickPool.InvalidateAll();
+    erosionDirty = true;
+    UpdateErosionHint();
     QueueRebuild();
     bpLabel.textContent = 'Building';
     bpFill.style.width = '18%';

@@ -619,3 +619,28 @@ svg{display:block}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:#262626;border-radius:6px;border:2px solid transparent;background-clip:content-box}
 ::-webkit-scrollbar-thumb:hover{background:#3a3a3a;background-clip:content-box}
+
+/* erosion preview — 1+2 droplet+thermal behind Erode node */
+.erosion-panel{
+    position:absolute;z-index:23;right:14px;bottom:66px;width:300px;
+    background:rgba(18,18,18,.94);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);
+    border:1px solid var(--stroke);border-radius:20px;box-shadow:var(--shadow-panel);
+    display:flex;flex-direction:column;overflow:hidden;
+    opacity:0;transform:translateY(8px) scale(.98);pointer-events:none;
+    transition:opacity .18s var(--ease),transform .18s var(--ease);
+}
+.erosion-panel.show{opacity:1;transform:none;pointer-events:auto}
+.erosion-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--stroke);background:rgba(255,255,255,.02)}
+.erosion-head i[data-icon]{width:28px;height:28px;border-radius:9px;background:var(--inset);border:1px solid var(--stroke);display:flex;align-items:center;justify-content:center;color:var(--text-dim)}
+.erosion-title{font-size:12.5px;font-weight:600}
+.erosion-sub{font-size:10.5px;color:var(--text-faint);margin-top:1px}
+.erosion-body{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.erosion-canvas-host{width:256px;height:256px;margin:0 auto;background:#0a0a0a;border:1px solid var(--stroke);border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.erosion-canvas-host canvas{width:256px;height:256px;display:block;image-rendering:pixelated}
+.erosion-stats{font-size:10px;color:var(--text-dim);text-align:center;min-height:14px}
+.erosion-actions{display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid var(--stroke);background:rgba(255,255,255,.02)}
+.erosion-toggle{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim)}
+.erosion-toggle .switch{width:34px;height:20px}
+.erosion-toggle .switch::after{width:14px;height:14px}
+.erosion-fab{position:absolute;z-index:22;right:14px;bottom:66px}
+.erosion-fab.active{background:var(--accent);color:#111}
