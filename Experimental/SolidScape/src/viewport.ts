@@ -58,8 +58,10 @@ export class ViewportPresentation
     scheme:     CameraScheme = 'fly';
     flySpeed    = 6.0;                                   // [m/s]
     orbitTarget = new THREE.Vector3(0, 0, 0);
+    primaryFree = true;                                  // false while a sculpt tool owns LMB
 
     onTelemetry: ((pos: THREE.Vector3, speed: number, fps: number) => void) | null = null;
+    onFrame:     ((time: number, dt: number) => void) | null = null;
 
     private readonly host:     HTMLElement;
     private readonly canvas:   HTMLCanvasElement;
@@ -82,6 +84,7 @@ export class ViewportPresentation
     private pitch = -0.22;                               // [rad]
     private orbitRadius = 26;                            // [m]
 
+    private renderScale = 1;
     private pointerActive: 'none' | 'fly-look' | 'orbit-turn' | 'orbit-pan' = 'none';
     private readonly clock = new THREE.Clock();
     private frameAccum = 0;
@@ -221,6 +224,21 @@ export class ViewportPresentation
         }
     }
 
+    SunDirection(): THREE.Vector3
+    {
+        return this.sunVector.clone();
+    }
+
+    SunColour(): THREE.Color
+    {
+        return this.sunLight.color;
+    }
+
+    FogColour(): THREE.Color
+    {
+        return (this.scene.fog as THREE.FogExp2).color;
+    }
+
     FrameScene(): void
     {
         this.orbitTarget.set(0, 0, 0);
@@ -228,6 +246,13 @@ export class ViewportPresentation
         this.camera.position.set(18, 11, 22);
         this.camera.lookAt(this.orbitTarget);
         this.SetScheme(this.scheme);
+    }
+
+    SetRenderScale(scale: number): void
+    {
+        this.renderScale = Math.min(Math.max(scale, 0.25), 2);
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2) * this.renderScale);
+        this.Resize();
     }
 
     Dispose(): void
@@ -260,7 +285,7 @@ export class ViewportPresentation
             c.focus();
             if (this.scheme === 'fly')
             {
-                if (e.button === 1 || e.button === 2 || e.button === 0)
+                if (e.button === 1 || e.button === 2 || (e.button === 0 && this.primaryFree))
                 {
                     this.pointerActive = 'fly-look';
                     c.setPointerCapture(e.pointerId);
@@ -270,13 +295,17 @@ export class ViewportPresentation
             else
             {
                 // Blender scheme: MMB orbits, Shift+MMB pans (LMB/RMB mirrored for trackpad parity)
-                if (e.button === 1 || e.button === 0)
+                if (e.button === 1 || (e.button === 0 && this.primaryFree))
                 {
                     this.pointerActive = e.shiftKey ? 'orbit-pan' : 'orbit-turn';
                 }
                 else if (e.button === 2)
                 {
                     this.pointerActive = 'orbit-pan';
+                }
+                else
+                {
+                    return;
                 }
                 c.setPointerCapture(e.pointerId);
                 e.preventDefault();
@@ -329,6 +358,8 @@ export class ViewportPresentation
 
         c.addEventListener('wheel', (e) =>
         {
+            // a sculpt tool owns Ctrl+Wheel (brush radius) while active
+            if (!this.primaryFree && (e.ctrlKey || e.metaKey)) return;
             e.preventDefault();
             if (this.scheme === 'fly')
             {
@@ -419,6 +450,7 @@ export class ViewportPresentation
 
         const dt = Math.min(this.clock.getDelta(), 0.1);                                        // [s]
         this.Advance(dt);
+        this.onFrame?.(this.clock.elapsedTime, dt);
 
         this.frameAccum += dt;
         this.frameCount += 1;

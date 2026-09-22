@@ -16,56 +16,37 @@
     <section class="viewport" id="viewport">
         <canvas id="viewport-canvas"></canvas>
 
-        <!-- floating top pill toolbar -->
-        <div class="vp-toolbar">
-            <button class="tbtn" title="New Terrain" data-icon="file-plus"></button>
-            <button class="tbtn" title="Save" data-icon="save"></button>
+        <!-- floating top pill toolbar — sculpt tools -->
+        <div class="vp-toolbar" id="sculpt-toolbar">
+            <button class="tbtn tool active" data-tool="select" title="Select · navigate (1)" data-icon="cursor"></button>
+            <button class="tbtn tool" data-tool="build" title="Build · add material (2)" data-icon="brush"></button>
+            <button class="tbtn tool" data-tool="carve" title="Carve · subtract material (3)" data-icon="eraser"></button>
+            <button class="tbtn tool" data-tool="smooth" title="Smooth · relax surface (4)" data-icon="droplet"></button>
             <span class="tsep"></span>
-            <button class="tbtn" title="Undo" data-icon="undo"></button>
-            <button class="tbtn" title="Redo" data-icon="redo"></button>
+            <button class="tbtn shape active" data-shape="0" title="Sphere tip" data-icon="circle"></button>
+            <button class="tbtn shape" data-shape="1" title="Box tip" data-icon="square"></button>
+            <button class="tbtn shape" data-shape="2" title="Cylinder tip" data-icon="cylinder"></button>
             <span class="tsep"></span>
-            <button class="tbtn" title="Shaded" data-icon="cube"></button>
-            <button class="tbtn" title="Wireframe" data-icon="monitor"></button>
-            <button class="tbtn" title="Bake Preview" data-icon="briefcase"></button>
-            <button class="tbtn" title="Snapshot" data-icon="camera"></button>
-            <button class="tbtn" title="Settings" data-icon="sliders"></button>
-            <span class="tsep"></span>
-            <div class="tfield" id="doc-title">Untitled <em>*</em></div>
-            <button class="tbtn danger" title="Close" data-icon="close"></button>
+            <div class="bscrub" id="brush-radius" title="Brush radius — drag · [ ] or Ctrl+Wheel">R&nbsp;<b>2.0 m</b></div>
+            <div class="bscrub" id="brush-strength" title="Brush blend strength — drag">S&nbsp;<b>0.50</b></div>
         </div>
 
-        <!-- left vertical tool rail -->
-        <div class="vp-rail">
-            <button class="rbtn active" title="Select" data-icon="cursor"></button>
-            <button class="rbtn" title="Sculpt Brush" data-icon="brush"></button>
-            <button class="rbtn" title="Erode" data-icon="droplet"></button>
-            <button class="rbtn" title="Terrace" data-icon="layers"></button>
-            <span class="rsep"></span>
-            <button class="rbtn" title="Sun Placement" data-icon="sun"></button>
-            <button class="rbtn" title="Measure" data-icon="ruler"></button>
-            <button class="rbtn" title="Bookmarks" data-icon="bookmark"></button>
-            <span class="rsep"></span>
-            <button class="rbtn" title="Frame Scene" data-icon="focus"></button>
-            <button class="rbtn" title="Sky Preset" data-icon="sparkles"></button>
-            <button class="rbtn" title="Safe Bounds" data-icon="shield"></button>
-        </div>
-
-        <!-- camera scheme switch -->
+        <!-- camera scheme switch + viewport settings -->
         <div class="vp-camera-switch">
             <div class="seg" id="camera-scheme">
                 <button class="active" data-scheme="fly">Fly · Unreal</button>
                 <button data-scheme="orbit">Orbit · Blender</button>
             </div>
-            <button class="round-btn" id="sky-toggle" title="Sun &amp; Sky" data-icon="sun"></button>
+            <button class="round-btn" id="sky-toggle" title="Viewport Settings" data-icon="sun"></button>
         </div>
 
-        <!-- sun / sky panel -->
+        <!-- viewport settings panel: document · terrain field · sun & sky -->
         <div class="panel sky-panel" id="sky-panel">
             <div class="panel-header">
                 <div class="ph-icon" data-icon="sun"></div>
                 <div>
-                    <div class="ph-title">Sun &amp; Sky</div>
-                    <div class="ph-sub">atmosphere · solar disc · exposure</div>
+                    <div class="ph-title">Viewport Settings</div>
+                    <div class="ph-sub">document · terrain field · sun &amp; sky</div>
                 </div>
                 <div class="spacer"></div>
                 <button class="btn ghost icon small" id="sky-close" data-icon="close"></button>
@@ -73,9 +54,10 @@
             <div class="panel-body" id="sky-controls"></div>
             <div class="panel-footer">
                 <div class="hint">Drag values horizontally · double-click to reset</div>
-                <button class="btn ghost small" id="sky-reset">Reset</button>
+                <button class="btn ghost small" id="sky-reset">Reset Sky</button>
             </div>
         </div>
+        <input type="file" id="load-file" accept=".solidscape,.json" style="display:none">
 
         <!-- bottom status strip -->
         <div class="vp-status">
@@ -85,12 +67,16 @@
             <span class="st-val" id="st-speed">6.0 m/s</span>
             <span class="st-key">POS</span><span class="st-val mono" id="st-pos">0.0, 0.0, 0.0</span>
             <span class="st-key">SUN</span><span class="st-val mono" id="st-sun">32° / 165°</span>
+            <span class="st-key">EDITS</span><span class="st-val mono" id="st-edits">0</span>
             <div class="spacer"></div>
             <span class="st-val mono" id="st-fps">60 fps</span>
         </div>
 
         <!-- control hints -->
         <div class="vp-hints" id="vp-hints"></div>
+
+        <!-- transient notice -->
+        <div class="vp-toast" id="vp-toast"></div>
     </section>
 
     <div class="splitter" id="splitter"></div>

@@ -48,6 +48,7 @@ export class GraphSurface
 
     onSelectionChanged: (() => void) | null = null;
     onGraphChanged:     (() => void) | null = null;
+    onParamChanged:     (() => void) | null = null;
 
     private readonly surface: HTMLElement;
     private readonly layer:   HTMLElement;
@@ -270,6 +271,7 @@ export class GraphSurface
                 if (node) node.params[key] = v;
                 fill.style.transform = `scaleX(${(v - min) / (max - min)})`;
                 text.textContent = `${FormatParam(v, step)}${suffix}`;
+                this.onParamChanged?.();
             };
 
             cell.addEventListener('pointerdown', (e) =>
@@ -685,6 +687,35 @@ export class GraphSurface
             const badge = n.root.querySelector('.node-badge');
             badge?.classList.toggle('off', n.muted);
         }
+        this.onGraphChanged?.();
+    }
+
+    RemoveNode(uid: string): void
+    {
+        const n = this.nodes.get(uid);
+        if (!n) return;
+        n.root.remove();
+        this.nodes.delete(uid);
+        this.selection.delete(uid);
+        for (const [wid, w] of this.wires)
+        {
+            if (w.fromNode === uid || w.toNode === uid) this.wires.delete(wid);
+        }
+        this.RedrawWires();
+        this.RefreshSelection();
+        this.onGraphChanged?.();
+    }
+
+    ClearGraph(): void
+    {
+        for (const n of this.nodes.values()) n.root.remove();
+        this.nodes.clear();
+        this.wires.clear();
+        this.selection.clear();
+        this.selectedWire = null;
+        this.RedrawWires();
+        this.RefreshSelection();
+        this.onGraphChanged?.();
     }
 
     SetBackground(mode: 'dots' | 'lines' | 'blank'): void

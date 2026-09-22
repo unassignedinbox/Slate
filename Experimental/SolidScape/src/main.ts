@@ -4,8 +4,11 @@
 
 import { ViewportPresentation, DefaultSky, type CameraScheme } from './viewport';
 import { GraphSurface } from './graph';
-import { NodeCatalogue, GroupOrder, GroupGlyphs, type NodeSpecification } from './nodeCatalogue';
+import { NodeCatalogue, GroupOrder, GroupGlyphs, CatalogueIndex, type NodeSpecification } from './nodeCatalogue';
 import { HydrateGlyphs, RenderGlyph } from './icons';
+import { CompileField, type StrokeRecord, type ShapeType } from './sdf';
+import { FieldPass } from './sdfPass';
+import { SculptController, type SculptTool } from './sculpt';
 
 const Q  = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 
@@ -47,6 +50,15 @@ HydrateGlyphs();
 //--------------------------------------------------------------------------------------------------------------------------
 const viewport = new ViewportPresentation(Q('#viewport'), Q<HTMLCanvasElement>('#viewport-canvas'));
 
+//---------------------------------------------------------------- SDF field pass (see docs/SDF-Research.md — Phase 1)
+const fieldPass = new FieldPass();
+viewport.scene.add(fieldPass.mesh);
+viewport.onFrame = (time) =>
+{
+    fieldPass.UpdateFrame(viewport.camera, viewport.SunDirection(), viewport.SunColour(),
+        viewport.sky.sunIntensity, viewport.FogColour(), viewport.sky.fogDensity, time);
+};
+
 const stMode  = Q('#st-mode');
 const stPos   = Q('#st-pos');
 const stSpeed = Q('#st-speed');
@@ -64,6 +76,17 @@ viewport.onTelemetry = (pos, speed, fps) =>
     stSpeedBar.style.width = `${Math.min((speed / 60) * 100, 100)}%`;
     stFps.textContent   = `${fps.toFixed(0)} fps`;
 };
+
+//---------------------------------------------------------------- transient toast
+const toast = Q('#vp-toast');
+let toastTimer = 0;
+function ShowToast(message: string): void
+{
+    toast.textContent = message;
+    toast.classList.add('show');
+    window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => toast.classList.remove('show'), 2600);
+}
 
 //---------------------------------------------------------------- camera scheme
 const HintSets: Record<CameraScheme, [string, string][]> =
@@ -212,9 +235,34 @@ function BuildSkyPanel(): void
         });
     }
 
-    // ground tone + toggles + presets
+    // document actions + terrain field quality + ground tone + toggles + presets
     const extra = document.createElement('div');
     extra.innerHTML = `
+        <div class="sec-label">Document</div>
+        <div class="chips" style="margin-top:2px">
+            <div class="chip" id="doc-new"><i data-icon="file-plus"></i>&nbsp;New</div>
+            <div class="chip" id="doc-save"><i data-icon="save"></i>&nbsp;Save</div>
+            <div class="chip" id="doc-load"><i data-icon="folder-open"></i>&nbsp;Load</div>
+            <div class="chip" id="doc-undo"><i data-icon="undo"></i>&nbsp;Undo</div>
+            <div class="chip" id="doc-redo"><i data-icon="redo"></i>&nbsp;Redo</div>
+        </div>
+        <div class="sec-label">Terrain Field</div>
+        <div class="crow">
+            <div class="clabel">Resolution</div>
+            <div class="chips" id="res-chips" style="flex:1">
+                <div class="chip" data-scale="0.5">Half</div>
+                <div class="chip sel" data-scale="1">Full</div>
+                <div class="chip" data-scale="1.5">Super</div>
+            </div>
+        </div>
+        <div class="crow">
+            <div class="clabel">March Quality</div>
+            <div class="chips" id="march-chips" style="flex:1">
+                <div class="chip" data-steps="120">Draft</div>
+                <div class="chip sel" data-steps="200">Balanced</div>
+                <div class="chip" data-steps="320">Fine</div>
+            </div>
+        </div>
         <div class="sec-label">Reference</div>
         <div class="crow">
             <div class="clabel">Ground</div>
@@ -230,6 +278,31 @@ function BuildSkyPanel(): void
             ${Object.keys(SkyPresets).map((k) => `<div class="chip" data-preset="${k}">${k}</div>`).join('')}
         </div>`;
     host.appendChild(extra);
+
+    Q('#doc-new').addEventListener('click',  () => NewDocument());
+    Q('#doc-save').addEventListener('click', () => SaveDocument());
+    Q('#doc-load').addEventListener('click', () => Q<HTMLInputElement>('#load-file').click());
+    Q('#doc-undo').addEventListener('click', () => UndoDoc());
+    Q('#doc-redo').addEventListener('click', () => RedoDoc());
+
+    Q('#res-chips').querySelectorAll<HTMLElement>('.chip').forEach((chip) =>
+    {
+        chip.addEventListener('click', () =>
+        {
+            Q('#res-chips').querySelectorAll('.chip').forEach((c) => c.classList.remove('sel'));
+            chip.classList.add('sel');
+            viewport.SetRenderScale(Number(chip.dataset.scale));
+        });
+    });
+    Q('#march-chips').querySelectorAll<HTMLElement>('.chip').forEach((chip) =>
+    {
+        chip.addEventListener('click', () =>
+        {
+            Q('#march-chips').querySelectorAll('.chip').forEach((c) => c.classList.remove('sel'));
+            chip.classList.add('sel');
+            fieldPass.SetQuality(Number(chip.dataset.steps));
+        });
+    });
 
     const tone = Q<HTMLInputElement>('#ground-tone');
     tone.addEventListener('input', () =>
@@ -300,22 +373,7 @@ Q('#sky-reset').addEventListener('click', () =>
     Q('#sky-presets').querySelectorAll('.chip').forEach((c) => c.classList.remove('sel'));
 });
 
-// viewport rail: exclusive active tool, frame-scene shortcut
-Q('#viewport').querySelectorAll<HTMLElement>('.rbtn').forEach((b) =>
-{
-    b.addEventListener('click', () =>
-    {
-        if (b.title === 'Frame Scene') { viewport.FrameScene(); return; }
-        if (b.title === 'Sun Placement' || b.title === 'Sky Preset')
-        {
-            skyPanel.classList.add('show');
-            Q('#sky-toggle').classList.add('active');
-            return;
-        }
-        Q('#viewport').querySelectorAll('.rbtn').forEach((x) => x.classList.remove('active'));
-        b.classList.add('active');
-    });
-});
+
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Node graph
@@ -328,34 +386,314 @@ const graph = new GraphSurface(
 graph.SetBackground('dots');
 
 //---------------------------------------------------------------- seed graph
-(function SeedGraph()
+function LinkNodes(a: { uid: string; root: HTMLElement } | null, ap: string,
+                   b: { uid: string } | null, bp: string): void
 {
-    const start   = graph.AddNode('start',        -60, 120);
-    const simplex = graph.AddNode('simplex',       260, -60);
-    const ridged  = graph.AddNode('multifractal',  260, 240);
-    const union   = graph.AddNode('union',         600,  80);
-    const erode   = graph.AddNode('erode',         920,  60);
-    const slope   = graph.AddNode('slope-mask',    920, 360);
-    const out     = graph.AddNode('terrain-out',  1260, 180);
-    void start;
+    if (!a || !b) return;
+    const wid = `w-seed-${Math.random().toString(36).slice(2, 8)}`;
+    const type = (a.root.querySelector<HTMLElement>(`.port-dot[data-port="${ap}"][data-side="out"]`)
+        ?.dataset.type ?? 'field') as 'field';
+    graph.wires.set(wid, { uid: wid, fromNode: a.uid, fromPort: ap, toNode: b.uid, toPort: bp, type });
+}
 
-    const Link = (a: typeof simplex, ap: string, b: typeof union, bp: string) =>
-    {
-        if (!a || !b) return;
-        const wid = `w-seed-${Math.random().toString(36).slice(2, 8)}`;
-        const type = (a.root.querySelector<HTMLElement>(`.port-dot[data-port="${ap}"][data-side="out"]`)
-            ?.dataset.type ?? 'field') as 'field';
-        graph.wires.set(wid, { uid: wid, fromNode: a.uid, fromPort: ap, toNode: b.uid, toPort: bp, type });
-    };
+function SeedGraph(): void
+{
+    const ground = graph.AddNode('sdf-plane',   -40,  -40);
+    const sphere = graph.AddNode('sdf-sphere',  -40,  260);
+    const union  = graph.AddNode('union',        340,  100);
+    const erode  = graph.AddNode('erode',        680,  90);
+    const out    = graph.AddNode('terrain-out', 1040, 130);
 
-    Link(simplex, 'height', union, 'a');
-    Link(ridged,  'height', union, 'b');
-    Link(union,   'sdf',    erode, 'in');
-    Link(erode,   'out',    out,   'sdf');
-    Link(erode,   'out',    slope, 'in');
+    LinkNodes(ground, 'sdf', union, 'a');
+    LinkNodes(sphere, 'sdf', union, 'b');
+    LinkNodes(union,  'sdf', erode, 'in');
+    LinkNodes(erode,  'out', out,   'sdf');
 
     requestAnimationFrame(() => { graph.RedrawWires(); graph.FrameGraph(); });
-})();
+}
+SeedGraph();
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Field document: strokes + compiled tape + undo/redo
+//--------------------------------------------------------------------------------------------------------------------------
+let strokes: StrokeRecord[] = [];
+
+type DocAction =
+    | { kind: 'stroke'; stroke: StrokeRecord }
+    | { kind: 'clear-strokes'; strokes: StrokeRecord[] };
+
+const undoStack: DocAction[] = [];
+const redoStack: DocAction[] = [];
+
+const stEdits = Q('#st-edits');
+let compiled = CompileField(graph, strokes);
+let tapeWarned = false;
+
+function RebuildField(): void
+{
+    // drop strokes whose primitive node no longer exists
+    strokes = strokes.filter((s) => graph.nodes.has(s.node));
+
+    const live = sculpt.liveStroke;
+    compiled = CompileField(graph, live ? [...strokes, live] : strokes);
+    fieldPass.UploadTape(compiled.data, compiled.count);
+    sculpt.SetField(compiled);
+    stEdits.textContent = String(compiled.count);
+
+    if (compiled.truncated && !tapeWarned)
+    {
+        tapeWarned = true;
+        ShowToast('Edit tape full — older detail is being dropped. Brick cache lands in Phase 2.');
+    }
+}
+
+let rebuildQueued = false;
+function QueueRebuild(): void
+{
+    if (rebuildQueued) return;
+    rebuildQueued = true;
+    requestAnimationFrame(() => { rebuildQueued = false; RebuildField(); });
+}
+
+function UndoDoc(): void
+{
+    const action = undoStack.pop();
+    if (!action) { ShowToast('Nothing to undo'); return; }
+    if (action.kind === 'stroke')
+    {
+        const i = strokes.lastIndexOf(action.stroke);
+        if (i >= 0) strokes.splice(i, 1);
+    }
+    else strokes = action.strokes;
+    redoStack.push(action);
+    RebuildField();
+}
+
+function RedoDoc(): void
+{
+    const action = redoStack.pop();
+    if (!action) { ShowToast('Nothing to redo'); return; }
+    if (action.kind === 'stroke') strokes.push(action.stroke);
+    else strokes = [];
+    undoStack.push(action);
+    RebuildField();
+}
+
+//---------------------------------------------------------------- save / load / new
+function SerialiseDocument(): string
+{
+    const nodes = [...graph.nodes.values()].map((n) => ({
+        uid: n.uid, spec: n.specId, x: n.x, y: n.y,
+        collapsed: n.collapsed, muted: n.muted, params: n.params,
+    }));
+    const wires = [...graph.wires.values()].map((w) => ({
+        from: w.fromNode, fromPort: w.fromPort, to: w.toNode, toPort: w.toPort, type: w.type,
+    }));
+    return JSON.stringify({ app: 'SolidScape', version: 1, nodes, wires, strokes }, null, 1);
+}
+
+function LoadDocument(json: string): void
+{
+    const doc = JSON.parse(json) as {
+        app?: string;
+        nodes?: { uid: string; spec: string; x: number; y: number; collapsed?: boolean; muted?: boolean;
+                  params?: Record<string, number> }[];
+        wires?: { from: string; fromPort: string; to: string; toPort: string; type: string }[];
+        strokes?: StrokeRecord[];
+    };
+    if (doc.app !== 'SolidScape') throw new Error('not a SolidScape document');
+
+    graph.ClearGraph();
+    strokes = [];
+    undoStack.length = 0;
+    redoStack.length = 0;
+
+    const remap = new Map<string, string>();
+    for (const n of doc.nodes ?? [])
+    {
+        if (!CatalogueIndex.has(n.spec)) continue;
+        const node = graph.AddNode(n.spec, n.x, n.y);
+        if (!node) continue;
+        remap.set(n.uid, node.uid);
+        if (n.params) Object.assign(node.params, n.params);
+        if (n.collapsed) { graph.selection.clear(); graph.selection.add(node.uid); graph.ToggleCollapse(); }
+        if (n.muted)     { graph.selection.clear(); graph.selection.add(node.uid); graph.ToggleMute(); }
+    }
+    graph.selection.clear();
+
+    for (const w of doc.wires ?? [])
+    {
+        const from = remap.get(w.from);
+        const to   = remap.get(w.to);
+        if (!from || !to) continue;
+        const wid = `w-load-${Math.random().toString(36).slice(2, 8)}`;
+        graph.wires.set(wid, { uid: wid, fromNode: from, fromPort: w.fromPort,
+                               toNode: to, toPort: w.toPort, type: w.type as 'field' });
+    }
+
+    for (const s of doc.strokes ?? [])
+    {
+        const node = remap.get(s.node);
+        if (node) strokes.push({ node, dabs: s.dabs });
+    }
+
+    graph.Hydrate();
+    graph.RedrawWires();
+    graph.FrameGraph();
+    RebuildField();
+    ShowToast(`Loaded — ${graph.nodes.size} nodes · ${strokes.length} strokes`);
+}
+
+function SaveDocument(): void
+{
+    const blob = new Blob([SerialiseDocument()], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'terrain.solidscape';
+    a.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+    ShowToast('Document saved');
+}
+
+function NewDocument(): void
+{
+    graph.ClearGraph();
+    strokes = [];
+    undoStack.length = 0;
+    redoStack.length = 0;
+    tapeWarned = false;
+    SeedGraph();
+    RebuildField();
+    ShowToast('New terrain');
+}
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Sculpt controller
+//--------------------------------------------------------------------------------------------------------------------------
+const sculpt = new SculptController(viewport, fieldPass, Q<HTMLCanvasElement>('#viewport-canvas'));
+
+sculpt.onStrokeLive = () => QueueRebuild();
+
+sculpt.onStrokeCommitted = (stroke) =>
+{
+    strokes.push(stroke);
+    undoStack.push({ kind: 'stroke', stroke });
+    redoStack.length = 0;
+    RebuildField();
+};
+
+sculpt.onMissedSurface = () =>
+{
+    if (compiled.count === 0)
+        ShowToast('No shapes yet — add an SDF Sphere / Box / Cylinder node to sculpt on');
+    else
+        ShowToast('Click on a surface to sculpt — strokes bind to the shape under the cursor');
+};
+
+graph.onParamChanged = () => QueueRebuild();
+
+RebuildField();
+
+Q<HTMLInputElement>('#load-file').addEventListener('change', (e) =>
+{
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    file.text()
+        .then((json) => LoadDocument(json))
+        .catch(() => ShowToast('Could not read that file'));
+    (e.target as HTMLInputElement).value = '';
+});
+
+//---------------------------------------------------------------- sculpt toolbar
+const SculptHints: [string, string][] =
+[
+    ['LMB drag', 'sculpt on surface'],
+    ['Ctrl + LMB', 'invert (build ⇄ carve)'],
+    ['[ · ]', 'brush radius'],
+    ['Ctrl + Wheel', 'brush radius'],
+    ['RMB / MMB', 'camera still works'],
+    ['1 2 3 4', 'switch tool'],
+];
+
+function SetActiveTool(tool: SculptTool): void
+{
+    sculpt.SetTool(tool);
+    Q('#sculpt-toolbar').querySelectorAll<HTMLElement>('.tbtn.tool').forEach((b) =>
+        b.classList.toggle('active', b.dataset.tool === tool));
+
+    if (tool === 'select')
+    {
+        PaintHints(viewport.scheme);
+    }
+    else
+    {
+        Q('#vp-hints').innerHTML = SculptHints
+            .map(([k, v]) => `<div class="hint-row"><span class="kbd">${k}</span><span>${v}</span></div>`)
+            .join('');
+    }
+}
+
+Q('#sculpt-toolbar').querySelectorAll<HTMLElement>('.tbtn.tool').forEach((b) =>
+{
+    b.addEventListener('click', () => SetActiveTool(b.dataset.tool as SculptTool));
+});
+
+Q('#sculpt-toolbar').querySelectorAll<HTMLElement>('.tbtn.shape').forEach((b) =>
+{
+    b.addEventListener('click', () =>
+    {
+        Q('#sculpt-toolbar').querySelectorAll('.tbtn.shape').forEach((x) => x.classList.remove('active'));
+        b.classList.add('active');
+        sculpt.brush.shape = Number(b.dataset.shape) as ShapeType;
+    });
+});
+
+//---------------------------------------------------------------- brush scrubbers
+function BindBrushScrub(el: HTMLElement, get: () => number, set: (v: number) => void,
+                        min: number, max: number, format: (v: number) => string): void
+{
+    const read = el.querySelector('b')!;
+    const paint = () => { read.textContent = format(get()); };
+    (el as HTMLElement & { repaint?: () => void }).repaint = paint;
+    paint();
+
+    let dragging = false;
+    let lastX = 0;
+    el.addEventListener('pointerdown', (e) =>
+    {
+        dragging = true; lastX = e.clientX;
+        el.classList.add('dragging');
+        el.setPointerCapture(e.pointerId);
+    });
+    el.addEventListener('pointermove', (e) =>
+    {
+        if (!dragging) return;
+        const dx = e.clientX - lastX;
+        lastX = e.clientX;
+        const rate = (e.shiftKey ? 0.15 : 1) * (max - min) / 240;
+        set(Math.min(max, Math.max(min, get() + dx * rate)));
+        paint();
+    });
+    const stop = (e: PointerEvent) =>
+    {
+        dragging = false;
+        el.classList.remove('dragging');
+        if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+    };
+    el.addEventListener('pointerup', stop);
+    el.addEventListener('pointercancel', stop);
+}
+
+BindBrushScrub(Q('#brush-radius'),
+    () => sculpt.brush.radius, (v) => { sculpt.brush.radius = v; },
+    0.1, 40, (v) => `${v.toFixed(1)} m`);
+BindBrushScrub(Q('#brush-strength'),
+    () => sculpt.brush.strength, (v) => { sculpt.brush.strength = v; },
+    0, 1, (v) => v.toFixed(2));
+
+sculpt.onBrushChanged = () =>
+    Q<HTMLElement & { repaint?: () => void }>('#brush-radius').repaint?.();
 
 //---------------------------------------------------------------- selection toolbar
 const nodeToolbar = Q('#node-toolbar');
@@ -396,6 +734,7 @@ const bpLabel = Q('#bp-label');
 
 graph.onGraphChanged = () =>
 {
+    QueueRebuild();
     bpLabel.textContent = 'Building';
     bpFill.style.width = '18%';
     bpPct.textContent = '18%';
@@ -678,6 +1017,35 @@ document.addEventListener('keydown', (e) =>
 
     const overEditor = document.activeElement !== Q('#viewport-canvas');
 
+    //---------------------------------------------------------------- document-wide shortcuts
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey)
+    {
+        e.preventDefault();
+        UndoDoc();
+        return;
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey)))
+    {
+        e.preventDefault();
+        RedoDoc();
+        return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's')
+    {
+        e.preventDefault();
+        SaveDocument();
+        return;
+    }
+
+    //---------------------------------------------------------------- sculpt tool switching (viewport side)
+    if (!overEditor && !e.ctrlKey && !e.metaKey)
+    {
+        const toolByKey: Record<string, SculptTool> =
+            { Digit1: 'select', Digit2: 'build', Digit3: 'carve', Digit4: 'smooth' };
+        const tool = toolByKey[e.code];
+        if (tool) { SetActiveTool(tool); return; }
+    }
+
     if (e.key === 'Tab' && overEditor)
     {
         e.preventDefault();
@@ -707,9 +1075,6 @@ document.addEventListener('keydown', (e) =>
         ToggleDropdown(false);
     }
 });
-
-//---------------------------------------------------------------- doc title flourish
-Q('#doc-title').addEventListener('click', () => Q('#doc-title').innerHTML = 'SolidScape_01 <em>*</em>');
 
 // glyphs added after dynamic construction
 graph.Hydrate();

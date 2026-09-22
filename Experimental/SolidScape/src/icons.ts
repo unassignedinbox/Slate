@@ -44,6 +44,12 @@ export const IconGlyphs: Record<string, string> = {
     'output':      '<path d="M4 20V8.5L12 3l8 5.5V20a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 20Z"/><path d="M9.5 21.5V14h5v7.5"/>',
     'texture':     '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18" opacity=".5"/>',
     'erosion':     '<path d="M4 18h16"/><path d="M4 18c2-6 4 1 6-5s3 6 5 1 3 2 5 4"/>',
+    'move':        '<path d="M12 2v20M2 12h20"/><path d="m8.5 5.5 3.5-3.5 3.5 3.5M8.5 18.5l3.5 3.5 3.5-3.5M5.5 8.5 2 12l3.5 3.5M18.5 8.5 22 12l-3.5 3.5"/>',
+    'eraser':      '<path d="m7 21-4.3-4.3a2.4 2.4 0 0 1 0-3.4l9.6-9.6a2.4 2.4 0 0 1 3.4 0l5.6 5.6a2.4 2.4 0 0 1 0 3.4L13.7 21Z"/><path d="M22 21H7"/><path d="m5.5 11.5 8 8"/>',
+    'circle':      '<circle cx="12" cy="12" r="8.5"/>',
+    'square':      '<rect x="4.5" y="4.5" width="15" height="15" rx="2.5"/>',
+    'cylinder':    '<ellipse cx="12" cy="5.5" rx="7.5" ry="3"/><path d="M4.5 5.5v13c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-13"/>',
+    'folder-open': '<path d="m6.2 14.5 1.4-2.7a2 2 0 0 1 1.8-1.1H21a1.4 1.4 0 0 1 1.35 1.8l-1.6 5.9A2 2 0 0 1 18.8 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.6a2 2 0 0 1 1.65.9l.7 1.05a2 2 0 0 0 1.67.9H17a2 2 0 0 1 2 2v2.65"/>',
 };
 
 export function RenderGlyph(name: string): string
