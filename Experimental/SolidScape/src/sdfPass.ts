@@ -23,6 +23,7 @@ void main()
 const FRAG = /* glsl */`
 precision highp float;
 precision highp sampler2D;
+precision highp sampler3D;
 
 in vec2 vNdc;
 layout(location = 0) out vec4 outColour;
@@ -50,6 +51,10 @@ uniform vec2  uErosionWorldMin;
 uniform vec3  uErosionSphereCentre;
 uniform float uErosionSphereRadius;
 uniform float uErosionMode; // 0 vertical (terrain), 1 radial (sphere)
+uniform sampler3D uErosionVol;
+uniform vec3  uErosionVolMin;
+uniform float uErosionVolSize;
+uniform float uErosionVolOn;
 
 //------------------------------------------------------------------ tape fetch
 vec4 Texel(int instr, int part)
@@ -173,22 +178,32 @@ float Field(vec3 p)
     if (sp == 0) return 1e9;
     float r = stack[0];
     for (int i = 1; i < 8; i++) { if (i >= sp) break; r = min(r, stack[i]); }
-    // ── SDF erosion displacement (heightfield delta texture) ──
-    // This is true SDF erosion: the distance field itself is offset by the
-    // eroded delta sampled at (p.x,p.z). No separate mesh — the raymarcher
-    // sees the carved SDF directly.
-    if (uErosionOn > 0.5) {
+    // ── SDF erosion: volumetric (preferred) or heightfield fallback ──
+    if (uErosionVolOn > 0.5) {
+        // true 3D volume — no projection stretch, samples at p itself
+        vec3 vMin = uErosionVolMin;
+        vec3 vMax = vMin + vec3(uErosionVolSize);
+        if (p.x >= vMin.x && p.x <= vMax.x && p.y >= vMin.y && p.y <= vMax.y && p.z >= vMin.z && p.z <= vMax.z) {
+            vec3 uvw = (p - vMin) / uErosionVolSize;
+            // clamp to avoid border artefacts
+            uvw = clamp(uvw, 0.001, 0.999);
+            float volSdf = texture(uErosionVol, uvw).r;
+            // blend only near surface to avoid popping far field; inside the volume the voxel SDF is authoritative
+            float w = exp(-abs(r) * 1.1);
+            // smooth transition at volume border (2 voxels)
+            vec3 border = min(p - vMin, vMax - p);
+            float borderW = min(min(border.x, border.y), border.z) / (uErosionVolSize * 0.025);
+            borderW = clamp(borderW, 0.0, 1.0);
+            w *= borderW;
+            r = mix(r, volSdf, w);
+        }
+    } else if (uErosionOn > 0.5) {
+        // fallback 2D heightfield (terrain)
         vec2 uv = (p.xz - uErosionWorldMin) / uErosionTileSize;
         if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
             float delta = texture(uErosionTex, uv).r; // eroded - original (m), negative = carved
             if (abs(delta) > 0.001) {
                 float w = exp(-abs(r) * 1.4); // only near surface
-                if (uErosionMode > 0.5) {
-                    // sphere: weight by how vertical the surface is at p (top gets full carve)
-                    vec3 dir = normalize(p - uErosionSphereCentre);
-                    float up = abs(dot(dir, vec3(0.0, 1.0, 0.0)));
-                    w *= mix(0.35, 1.0, up);
-                }
                 r -= delta * w * 0.92;
             }
         }
@@ -326,6 +341,7 @@ export class FieldPass
     private readonly material: THREE.RawShaderMaterial;
     private readonly tape: THREE.DataTexture;
     private readonly erosionTex: THREE.DataTexture;
+    private erosionVol: THREE.Data3DTexture;
 
     constructor()
     {
@@ -347,6 +363,14 @@ export class FieldPass
         this.erosionTex.minFilter = THREE.LinearFilter;
         this.erosionTex.needsUpdate = false;
 
+        this.erosionVol = new THREE.Data3DTexture(new Float32Array(2*2*2), 2, 2, 2);
+        this.erosionVol.format = THREE.RedFormat;
+        this.erosionVol.type = THREE.FloatType;
+        this.erosionVol.minFilter = THREE.LinearFilter;
+        this.erosionVol.magFilter = THREE.LinearFilter;
+        this.erosionVol.unpackAlignment = 1;
+        this.erosionVol.needsUpdate = false;
+
         this.material = new THREE.RawShaderMaterial({
             glslVersion: THREE.GLSL3,
             vertexShader: VERT,
@@ -360,6 +384,10 @@ export class FieldPass
                 uErosionSphereCentre: { value: new THREE.Vector3(0, 8, 0) },
                 uErosionSphereRadius: { value: 8 },
                 uErosionMode:  { value: 0 },
+                uErosionVol:   { value: this.erosionVol },
+                uErosionVolMin:{ value: new THREE.Vector3(0,0,0) },
+                uErosionVolSize:{ value: 20 },
+                uErosionVolOn: { value: 0 },
                 uCount:        { value: 0 },
                 uCamPos:       { value: new THREE.Vector3() },
                 uInvProj:      { value: new THREE.Matrix4() },
@@ -403,6 +431,7 @@ export class FieldPass
     SetErosion(delta: Float32Array | null, size: number, tileSize: number, sphere: { x: number; y: number; z: number; r: number } | null): void
     {
         const u = this.material.uniforms;
+        u['uErosionVolOn'].value = 0;
         if (!delta) {
             u['uErosionOn'].value = 0;
             return;
@@ -442,7 +471,33 @@ export class FieldPass
 
     ClearErosion(): void {
         this.material.uniforms['uErosionOn'].value = 0;
+        this.material.uniforms['uErosionVolOn'].value = 0;
     }
+
+    SetErosionVolume(data: Float32Array, N: number, min: THREE.Vector3, size: number): void {
+        const u = this.material.uniforms;
+        // (re)create Data3DTexture with correct dimensions — three.js needs new object when size changes
+        if (this.erosionVol.image.width !== N || this.erosionVol.image.height !== N || this.erosionVol.image.depth !== N) {
+            this.erosionVol.dispose();
+            this.erosionVol = new THREE.Data3DTexture(data.slice(), N, N, N);
+            this.erosionVol.format = THREE.RedFormat;
+            this.erosionVol.type = THREE.FloatType;
+            this.erosionVol.minFilter = THREE.LinearFilter;
+            this.erosionVol.magFilter = THREE.LinearFilter;
+            this.erosionVol.unpackAlignment = 1;
+            this.erosionVol.needsUpdate = true;
+            u['uErosionVol'].value = this.erosionVol;
+        } else {
+            (this.erosionVol.image.data as Float32Array).set(data);
+            this.erosionVol.needsUpdate = true;
+        }
+        (u['uErosionVolMin'].value as THREE.Vector3).copy(min);
+        u['uErosionVolSize'].value = size;
+        u['uErosionVolOn'].value = 1;
+        u['uErosionOn'].value = 0;
+    }
+
+    ClearErosionVolume(): void { this.material.uniforms['uErosionVolOn'].value = 0; }
 
     SetQuality(maxSteps: number): void
     {
