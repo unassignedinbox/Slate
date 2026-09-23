@@ -43,6 +43,13 @@ uniform float uBrushRadius;
 uniform float uBrushMode;          // <0 hidden · 0 add · 1 carve · 2 smooth-mode tint
 uniform float uTime;
 uniform int   uMaxSteps;
+uniform sampler2D uErosionTex;
+uniform float uErosionOn;
+uniform float uErosionTileSize;
+uniform vec2  uErosionWorldMin;
+uniform vec3  uErosionSphereCentre;
+uniform float uErosionSphereRadius;
+uniform float uErosionMode; // 0 vertical (terrain), 1 radial (sphere)
 
 //------------------------------------------------------------------ tape fetch
 vec4 Texel(int instr, int part)
@@ -166,6 +173,26 @@ float Field(vec3 p)
     if (sp == 0) return 1e9;
     float r = stack[0];
     for (int i = 1; i < 8; i++) { if (i >= sp) break; r = min(r, stack[i]); }
+    // ── SDF erosion displacement (heightfield delta texture) ──
+    // This is true SDF erosion: the distance field itself is offset by the
+    // eroded delta sampled at (p.x,p.z). No separate mesh — the raymarcher
+    // sees the carved SDF directly.
+    if (uErosionOn > 0.5) {
+        vec2 uv = (p.xz - uErosionWorldMin) / uErosionTileSize;
+        if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
+            float delta = texture(uErosionTex, uv).r; // eroded - original (m), negative = carved
+            if (abs(delta) > 0.001) {
+                float w = exp(-abs(r) * 1.4); // only near surface
+                if (uErosionMode > 0.5) {
+                    // sphere: weight by how vertical the surface is at p (top gets full carve)
+                    vec3 dir = normalize(p - uErosionSphereCentre);
+                    float up = abs(dot(dir, vec3(0.0, 1.0, 0.0)));
+                    w *= mix(0.35, 1.0, up);
+                }
+                r -= delta * w * 0.92;
+            }
+        }
+    }
     return r;
 }
 
@@ -298,6 +325,7 @@ export class FieldPass
     readonly mesh: THREE.Mesh;
     private readonly material: THREE.RawShaderMaterial;
     private readonly tape: THREE.DataTexture;
+    private readonly erosionTex: THREE.DataTexture;
 
     constructor()
     {
@@ -310,12 +338,28 @@ export class FieldPass
         this.tape.minFilter = THREE.NearestFilter;
         this.tape.needsUpdate = true;
 
+        this.erosionTex = new THREE.DataTexture(
+            new Float32Array(512 * 512),
+            512, 512,
+            THREE.RedFormat, THREE.FloatType,
+        );
+        this.erosionTex.magFilter = THREE.LinearFilter;
+        this.erosionTex.minFilter = THREE.LinearFilter;
+        this.erosionTex.needsUpdate = false;
+
         this.material = new THREE.RawShaderMaterial({
             glslVersion: THREE.GLSL3,
             vertexShader: VERT,
             fragmentShader: FRAG,
             uniforms: {
                 uTape:         { value: this.tape },
+                uErosionTex:   { value: this.erosionTex },
+                uErosionOn:    { value: 0 },
+                uErosionTileSize: { value: 48 },
+                uErosionWorldMin: { value: new THREE.Vector2(-24, -24) },
+                uErosionSphereCentre: { value: new THREE.Vector3(0, 8, 0) },
+                uErosionSphereRadius: { value: 8 },
+                uErosionMode:  { value: 0 },
                 uCount:        { value: 0 },
                 uCamPos:       { value: new THREE.Vector3() },
                 uInvProj:      { value: new THREE.Matrix4() },
@@ -354,6 +398,50 @@ export class FieldPass
         this.tape.needsUpdate = true;
         this.material.uniforms['uCount'].value = count;
         this.mesh.visible = count > 0;
+    }
+
+    SetErosion(delta: Float32Array | null, size: number, tileSize: number, sphere: { x: number; y: number; z: number; r: number } | null): void
+    {
+        const u = this.material.uniforms;
+        if (!delta) {
+            u['uErosionOn'].value = 0;
+            return;
+        }
+        // resample delta (size×size) into the 512² erosionTex (bilinear)
+        const tex = this.erosionTex.image.data as Float32Array;
+        const N = 512;
+        if (size === N) {
+            tex.set(delta);
+        } else {
+            for (let y = 0; y < N; y++) {
+                const sy = (y / (N - 1)) * (size - 1);
+                const y0 = Math.floor(sy), y1 = Math.min(size - 1, y0 + 1);
+                const ty = sy - y0;
+                for (let x = 0; x < N; x++) {
+                    const sx = (x / (N - 1)) * (size - 1);
+                    const x0 = Math.floor(sx), x1 = Math.min(size - 1, x0 + 1);
+                    const tx = sx - x0;
+                    const v00 = delta[y0 * size + x0], v10 = delta[y0 * size + x1], v01 = delta[y1 * size + x0], v11 = delta[y1 * size + x1];
+                    tex[y * N + x] = v00 * (1 - tx) * (1 - ty) + v10 * tx * (1 - ty) + v01 * (1 - tx) * ty + v11 * tx * ty;
+                }
+            }
+        }
+        this.erosionTex.needsUpdate = true;
+        u['uErosionOn'].value = 1;
+        u['uErosionTileSize'].value = tileSize;
+        const half = tileSize * 0.5;
+        (u['uErosionWorldMin'].value as THREE.Vector2).set(-half, -half);
+        if (sphere) {
+            (u['uErosionSphereCentre'].value as THREE.Vector3).set(sphere.x, sphere.y, sphere.z);
+            u['uErosionSphereRadius'].value = sphere.r;
+            u['uErosionMode'].value = 1;
+        } else {
+            u['uErosionMode'].value = 0;
+        }
+    }
+
+    ClearErosion(): void {
+        this.material.uniforms['uErosionOn'].value = 0;
     }
 
     SetQuality(maxSteps: number): void

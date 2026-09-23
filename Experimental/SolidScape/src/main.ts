@@ -441,7 +441,7 @@ let totalRawDabs = 0, totalKeptDabs = 0;
 //--------------------------------------------------------------------------------------------------------------------------
 // Erosion preview — 1+2 droplet+thermal on 512² tile, toggleable behind Erode node
 //--------------------------------------------------------------------------------------------------------------------------
-const erosion = new ErosionPreview(viewport.scene);
+const erosion = new ErosionPreview(viewport.scene, fieldPass);
 let erosionDirty = true; void erosionDirty; // bake needed after field changes (manual Run)
 
 function ErodeNode(): { uid: string; params: Record<string, number> } | null
@@ -562,16 +562,15 @@ function InitErosionUI(): void
         const on = sw3d.dataset.on !== 'true';
         sw3d.dataset.on = String(on);
         erosion.SetVisible(on);
-        (fieldPass.mesh as unknown as { visible: boolean }).visible = !on;
-        if (on && !erosion.HasResult()) ShowToast('Press Run 1+2 first to generate the eroded tile');
+        // SDF erosion toggles inside FieldPass — field mesh always stays visible
+        if (on && !erosion.HasResult()) ShowToast('Press Run 1+2 first to generate eroded SDF');
     };
     reset.onclick = () =>
     {
         erosion.Reset();
-        (fieldPass.mesh as unknown as { visible: boolean }).visible = true;
         sw3d.dataset.on = 'false';
         erosion.SetVisible(false);
-        if (stats) stats.textContent = 'reset — original heightfield';
+        if (stats) stats.textContent = 'reset — original SDF';
         ShowToast('Erosion reset — SDF restored');
     };
     run.onclick = async () =>
@@ -591,8 +590,7 @@ function InitErosionUI(): void
             if (has) {
                 sw3d.dataset.on = 'true';
                 erosion.SetVisible(true);
-                (fieldPass.mesh as unknown as { visible: boolean }).visible = false;
-                ShowToast(`Eroded ${s.resolution}² — auto-switched to 3D (toggle off to see SDF sphere)`);
+                ShowToast(`Eroded ${s.resolution}² — SDF erosion active (toggle 3D off to see original SDF)`);
                 togglePanel(true);
             }
             UpdateErosionHint();
