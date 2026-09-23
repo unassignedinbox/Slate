@@ -169,22 +169,12 @@ export const NodeCatalogue: NodeSpecification[] =
         outputs: [P('out', 'Field', 'field')],
         params:  [V('steps', 'Steps', 2, 64, 1, 12), V('sharp', 'Sharp', 0, 1, 0.01, 0.6)],
     },
-    {
-        id: 'erode', name: 'Erode', kind: 'Deformer', glyph: 'erosion', group: 'Deformers',
-        desc: 'Droplet + thermal erosion — 512² tile, toggleable preview',
-        inputs:  [P('in', 'Field', 'field'), P('rain', 'Rain', 'scalar')],
-        outputs: [P('out', 'Field', 'field'), P('flowMap', 'Flow', 'flow')],
-        params:  [
-            V('tileSize',   'Tile',     32, 256,  8,   48,  ' m'),
-            V('resolution', 'Res',     128, 512,  64,  512, ' px'),
-            V('iterations', 'Iters',     1, 200,  1,   32),
-            V('droplets',   'Drops',  1024, 16384,1024, 4096),
-            V('erodeRate',  'Erode',     0, 1,  0.01, 0.28),
-            V('deposit',    'Deposit',   0, 1,  0.01, 0.30),
-            V('talus',      'Talus',    15, 45, 0.5,  30,  '°'),
-            V('thermal',    'Thermal',   0, 8,    1,   6),
-        ],
-    },
+    // Erode node removed 2026-05-14 — see docs/Erosion-Attempts-and-Failures.md
+    // All 7 SDF erosion algorithms (heightfield pillar, mesh icosphere shred/hybrid,
+    // SDF heightfield, 68³-128³ voxels, y-weighted 512² dome) produced pillars / holes /
+    // blocky 0.38m voxels / fence curtains. Code deleted: src/erosion/*, sdfPass uErosion*,
+    // main ErosionPreview panel. Node kept hidden for old saves — not shown in palette filter.
+
     {
         id: 'displace', name: 'Displace', kind: 'Deformer', glyph: 'warp', group: 'Deformers',
         desc: 'Adds a field along the normal',

@@ -10,8 +10,6 @@ import { CompileField, type StrokeRecord, type ShapeType } from './sdf';
 import { FieldPass } from './sdfPass';
 import { SculptController, type SculptTool } from './sculpt';
 import { BrickPool } from './bricks';
-import { ErosionPreview, DefaultErodeSettings, type ErodeSettings } from './erosion';
-import { FindFirstSphere } from './erosion/volume';
 
 const Q  = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 
@@ -62,13 +60,22 @@ viewport.onFrame = (time) =>
         viewport.sky.sunIntensity, viewport.FogColour(), viewport.sky.fogDensity, time);
 };
 
-const stFps = Q('#st-fps');
+const stMode  = Q('#st-mode');
+const stPos   = Q('#st-pos');
+const stSpeed = Q('#st-speed');
+const stSpeedBar = Q('#st-speed-bar');
+const stSun   = Q('#st-sun');
+const stFps   = Q('#st-fps');
+
 let telemetryGate = 0;
-viewport.onTelemetry = (_pos, _speed, fps) =>
+viewport.onTelemetry = (pos, speed, fps) =>
 {
     telemetryGate += 1;
     if (telemetryGate % 6 !== 0) return;
-    stFps.textContent = `${fps.toFixed(0)} fps`;
+    stPos.textContent   = `${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}`;
+    stSpeed.textContent = `${speed.toFixed(1)} m/s`;
+    stSpeedBar.style.width = `${Math.min((speed / 60) * 100, 100)}%`;
+    stFps.textContent   = `${fps.toFixed(0)} fps`;
 };
 
 //---------------------------------------------------------------- transient toast
@@ -118,6 +125,7 @@ Q('#camera-scheme').querySelectorAll('button').forEach((b) =>
         b.classList.add('active');
         const scheme = b.dataset.scheme as CameraScheme;
         viewport.SetScheme(scheme);
+        stMode.textContent = scheme === 'fly' ? 'Fly' : 'Orbit';
         PaintHints(scheme);
     });
 });
@@ -341,7 +349,7 @@ function RepaintSkyScrubs(): void
 
 function RefreshSunRead(): void
 {
-    // Sun is now only inside the viewport settings panel; the bottom bar is the brush bar.
+    stSun.textContent = `${viewport.sky.elevation.toFixed(0)}° / ${viewport.sky.azimuth.toFixed(0)}°`;
 }
 
 function BindSwitch(el: HTMLElement, onChange: (on: boolean) => void): void
@@ -439,296 +447,6 @@ let tapeWarned = false;
 const brickPool = new BrickPool();
 let totalRawDabs = 0, totalKeptDabs = 0;
 
-//--------------------------------------------------------------------------------------------------------------------------
-// Erosion preview — 1+2 droplet+thermal on 512² tile, toggleable behind Erode node
-//--------------------------------------------------------------------------------------------------------------------------
-const erosion = new ErosionPreview(viewport.scene, fieldPass);
-let erosionDirty = true; void erosionDirty; // bake needed after field changes (manual Run)
-
-function ErodeNode(): { uid: string; params: Record<string, number> } | null
-{
-    for (const n of graph.nodes.values())
-    {
-        if (n.specId === 'erode' && !n.muted)
-        {
-            // must have an incoming field wire to be considered connected
-            const hasField = [...graph.wires.values()].some(w => w.toNode === n.uid);
-            if (!hasField) continue;
-            return { uid: n.uid, params: n.params };
-        }
-    }
-    return null;
-}
-
-function ReadErodeSettings(p: Record<string, number>): ErodeSettings
-{
-    const s: ErodeSettings = { ...DefaultErodeSettings };
-    s.tileSize   = p['tileSize']   ?? s.tileSize;
-    s.resolution = Math.min(Math.max(Math.round(p['resolution'] ?? s.resolution), 128), 512);
-    // snap to 64 for geometry
-    s.resolution = Math.round(s.resolution / 64) * 64;
-    s.iterations = Math.round(p['iterations'] ?? s.iterations);
-    s.droplets   = Math.round(p['droplets'] ?? s.droplets);
-    s.erodeRate  = p['erodeRate']  ?? s.erodeRate;
-    s.deposit    = p['deposit']    ?? s.deposit;
-    s.talus      = p['talus']      ?? s.talus;
-    s.thermal    = Math.round(p['thermal'] ?? s.thermal);
-    return s;
-}
-
-function UpdateErosionHint(): void
-{
-    const hint = document.getElementById('erosion-hint') as HTMLElement | null;
-    const stats = document.getElementById('erosion-stats') as HTMLElement | null;
-    const sub = document.getElementById('erosion-sub') as HTMLElement | null;
-    if (!hint) return;
-    const node = ErodeNode();
-    if (!node) {
-        hint.textContent = 'connect Erode node (SDF → Erode → Output)';
-        if (stats) stats.textContent = 'idle — connect Erode node';
-        if (sub) sub.textContent = '—';
-        return;
-    }
-    const s = ReadErodeSettings(node.params);
-    hint.textContent = `${s.resolution}² · tile ${s.tileSize} m · iters ${s.iterations} · drops ${s.droplets}`;
-    if (sub) {
-        const hasSphere = FindFirstSphere(compiled)!==null;
-        const isVol = erosion.IsVolumeMode();
-        if (isVol) {
-            const volN = Math.max(64, Math.min(128, Math.round(s.resolution/4/8)*8));
-            const volSize = Math.max(s.tileSize, 22);
-            sub.textContent = `${volN}³ vol · tile ${volSize.toFixed(0)}m · thermal+droplet · SDF`;
-        } else if (hasSphere) {
-            sub.textContent = `${s.resolution}² dome y-wt · tile ${s.tileSize} m · SDF erosion`;
-        } else {
-            sub.textContent = `${s.resolution}² tile · thermal + droplet · SDF`;
-        }
-    }
-    if (!erosion.HasResult() && stats) stats.textContent = `ready — thermal ${s.thermal}× talus ${s.talus}° · erode ${s.erodeRate.toFixed(2)} deposit ${s.deposit.toFixed(2)}`;
-}
-
-// shared erosion trigger — used by both viewport panel and Erode node button + auto-run
-let erosionRunSeq = 0;
-async function RunErosion(trigger: string = 'panel'): Promise<void> {
-    const node = ErodeNode();
-    if (!node) { ShowToast('Connect SDF → Erode → Terrain Output to erode'); return; }
-    const s = ReadErodeSettings(node.params);
-    if (compiled.count===0) { ShowToast('No SDF to erode — add a primitive'); return; }
-    const stats = document.getElementById('erosion-stats') as HTMLElement | null;
-    const runBtn = document.getElementById('erosion-run') as HTMLButtonElement | null;
-    const sw3d = document.getElementById('erosion-3d') as HTMLElement | null;
-    const panel = document.getElementById('erosion-panel') as HTMLElement | null;
-    const fab = document.getElementById('erosion-fab') as HTMLElement | null;
-    console.log(`[Erosion] Run via ${trigger}`, s);
-    if (runBtn) { runBtn.disabled=true; runBtn.textContent='⏳ Baking…'; }
-    if (stats) stats.textContent='Baking…';
-    // show node baking state
-    const card = document.querySelector(`.node[data-uid="${node.uid}"]`) as HTMLElement | null;
-    card?.classList.add('baking');
-    try{
-        await erosion.BakeAndErode(compiled, s, (msg)=>{ if(stats) stats.textContent=msg; console.log('[Erosion]',msg); });
-        if(erosion.HasResult()){
-            erosion.SetVisible(true);
-            if(sw3d) sw3d.dataset.on='true';
-            if(panel) panel.classList.add('show'); if(fab) fab.classList.add('active');
-            ShowToast(`Eroded — SDF erosion active (${trigger})`);
-            UpdateErosionHint();
-            SyncNodePreview();
-        }
-    }catch(e){ console.error(e); ShowToast('Erosion failed — see console'); if(stats) stats.textContent=String(e); }
-    finally{
-        if(runBtn){ runBtn.disabled=false; runBtn.textContent='▶ Run 1+2'; }
-        card?.classList.remove('baking');
-        erosionRunSeq++;
-        SyncNodePreview();
-    }
-}
-let autoErodeTimer: number|undefined;
-function ScheduleAutoErode(){
-    const node=ErodeNode();
-    if(!node){
-        if(erosion.HasResult()){
-            erosion.Reset();
-            const sw=document.getElementById('erosion-3d') as HTMLElement|null;
-            if(sw) sw.dataset.on='false';
-            UpdateErosionHint();
-            SyncNodePreview();
-        }
-        return;
-    }
-    if(erosion.IsRunning()) return;
-    window.clearTimeout(autoErodeTimer);
-    autoErodeTimer = window.setTimeout(()=>{ RunErosion('auto'); }, 650);
-}
-function SyncNodePreview(){
-    const node=ErodeNode(); if(!node) return;
-    const card=document.querySelector(`.node[data-uid="${node.uid}"]`) as HTMLElement|null;
-    const nodeCanvas=card?.querySelector<HTMLCanvasElement>('.erode-node-canvas');
-    if(nodeCanvas){
-        const c=erosion.canvas;
-        nodeCanvas.width=c.width; nodeCanvas.height=c.height;
-        const ctx=nodeCanvas.getContext('2d')!;
-        ctx.clearRect(0,0,nodeCanvas.width,nodeCanvas.height);
-        ctx.drawImage(c,0,0);
-    }
-}
-let paintPatched=false;
-
-function EnsureErosionPanel(): HTMLElement | null
-{
-    let panel = document.getElementById('erosion-panel') as HTMLElement | null;
-    let fab   = document.getElementById('erosion-fab') as HTMLElement | null;
-    const viewportEl = document.getElementById('viewport');
-    if (!viewportEl) return null;
-    // Create panel dynamically if index.html is stale (Arena preview caching)
-    if (!panel || !fab)
-    {
-        // remove stale partials
-        panel?.remove(); fab?.remove();
-        const wrapper = document.createElement('div');
-        wrapper.innerHTML = `
-        <div class="erosion-panel" id="erosion-panel">
-            <div class="erosion-head">
-                <i data-icon="erosion"></i>
-                <div>
-                    <div class="erosion-title">Erode — 1+2 preview</div>
-                    <div class="erosion-sub" id="erosion-sub">—</div>
-                </div>
-                <div class="spacer"></div>
-                <button class="btn ghost icon small" id="erosion-close" data-icon="close" title="Hide"></button>
-            </div>
-            <div class="erosion-body">
-                <div id="erosion-canvas-host" class="erosion-canvas-host"></div>
-                <div class="erosion-stats mono" id="erosion-stats">idle — connect Erode node</div>
-            </div>
-            <div class="erosion-actions">
-                <button class="btn small" id="erosion-run">▶ Run 1+2</button>
-                <button class="btn small ghost" id="erosion-reset">Reset</button>
-                <label class="erosion-toggle"><span>3D</span><div class="switch" id="erosion-3d" data-on="false"></div></label>
-                <span class="spacer"></span>
-                <span class="hint mono" id="erosion-hint">no bake yet</span>
-            </div>
-        </div>
-        <button class="round-btn erosion-fab" id="erosion-fab" title="Erosion preview (1+2)" data-icon="erosion"></button>`;
-        while (wrapper.firstChild) viewportEl.appendChild(wrapper.firstChild);
-        HydrateGlyphs(viewportEl);
-        panel = document.getElementById('erosion-panel') as HTMLElement;
-        fab   = document.getElementById('erosion-fab') as HTMLElement;
-    }
-    return panel;
-}
-
-function InitErosionUI(): void
-{
-    const panel = EnsureErosionPanel();
-    const fab   = document.getElementById('erosion-fab') as HTMLElement | null;
-    const host  = document.getElementById('erosion-canvas-host') as HTMLElement | null;
-    const close = document.getElementById('erosion-close') as HTMLElement | null;
-    const run   = document.getElementById('erosion-run') as HTMLButtonElement | null;
-    const reset = document.getElementById('erosion-reset') as HTMLButtonElement | null;
-    const sw3d  = document.getElementById('erosion-3d') as HTMLElement | null;
-    const stats = document.getElementById('erosion-stats') as HTMLElement | null;
-    if (!panel || !fab || !host || !run || !reset || !sw3d) { console.warn('[Erosion] UI missing', {panel:!!panel, fab:!!fab, host:!!host}); return; }
-
-    // mount canvas
-    host.innerHTML = ''; host.appendChild(erosion.canvas);
-    if(!paintPatched){
-        paintPatched=true;
-        const orig=erosion.PaintHeightfield.bind(erosion);
-        (erosion as any).PaintHeightfield=(h:Float32Array,s:number)=>{ orig(h,s); SyncNodePreview(); };
-    }
-    UpdateErosionHint();
-    HydrateGlyphs(panel);
-
-    const togglePanel = (show?: boolean) =>
-    {
-        const willShow = show ?? !panel.classList.contains('show');
-        panel.classList.toggle('show', willShow);
-        fab.classList.toggle('active', willShow);
-    };
-    fab.onclick = () => togglePanel();
-    if (close) close.onclick = () => togglePanel(false);
-
-    sw3d.onclick = () =>
-    {
-        const on = sw3d.dataset.on !== 'true';
-        sw3d.dataset.on = String(on);
-        erosion.SetVisible(on);
-        if (on && !erosion.HasResult()) ShowToast('Press Run 1+2 first to generate eroded SDF');
-    };
-    reset.onclick = () =>
-    {
-        erosion.Reset();
-        sw3d.dataset.on = 'false';
-        erosion.SetVisible(false);
-        if (stats) stats.textContent = 'reset — original SDF';
-        ShowToast('Erosion reset — SDF restored');
-    };
-    run.onclick = () => RunErosion('panel');
-
-    function SyncNodePreview(){
-        const node=ErodeNode(); if(!node) return;
-        const card=document.querySelector(`.node[data-uid="${node.uid}"]`) as HTMLElement|null;
-        const nodeCanvas=card?.querySelector<HTMLCanvasElement>('.erode-node-canvas');
-        if(nodeCanvas){
-            const c=erosion.canvas;
-            nodeCanvas.width=c.width; nodeCanvas.height=c.height;
-            const ctx=nodeCanvas.getContext('2d')!;
-            ctx.drawImage(c,0,0);
-        }
-    }
-    // Inject a Run button + live preview canvas directly into the Erode node card
-    const injectNodeButton = () =>
-    {
-        const node = ErodeNode();
-        if (!node) return;
-        const card = document.querySelector(`.node[data-uid="${node.uid}"]`) as HTMLElement | null;
-        if (!card) return;
-        if (card.querySelector('.erode-run-inline')) return;
-        const paramsBox = card.querySelector('.node-params') as HTMLElement | null;
-        if (!paramsBox) return;
-        const btn = document.createElement('button');
-        btn.className = 'btn small erode-run-inline';
-        btn.textContent = '▶ Bake Erosion';
-        btn.style.marginTop = '8px'; btn.style.width = '100%'; btn.style.background='var(--accent)';
-        btn.style.color='#fff'; btn.style.border='none';
-        btn.title = 'Bake SDF erosion from Erode node params (also auto-bakes)';
-        btn.onclick = (e) => { e.stopPropagation(); RunErosion('node'); };
-        paramsBox.appendChild(btn);
-        const hint = document.createElement('div');
-        hint.className='mono'; hint.style.fontSize='10px'; hint.style.color='var(--text-faint)'; hint.style.marginTop='4px'; hint.style.textAlign='center';
-        hint.textContent='Auto-bakes when graph changes';
-        paramsBox.appendChild(hint);
-        // live preview canvas (mirrors the FAB preview) — so Erode 1+2 preview is not hardcoded in FAB only
-        const wrap=document.createElement('div');
-        wrap.style.marginTop='8px'; wrap.style.borderRadius='6px'; wrap.style.overflow='hidden'; wrap.style.border='1px solid var(--border)';
-        wrap.style.background='#111';
-        const cvs=document.createElement('canvas');
-        cvs.className='erode-node-canvas'; cvs.width=256; cvs.height=256;
-        cvs.style.width='100%'; cvs.style.display='block'; cvs.style.aspectRatio='1';
-        wrap.appendChild(cvs); paramsBox.appendChild(wrap);
-        setTimeout(SyncNodePreview, 60);
-    };
-    // try now and after graph changes
-    injectNodeButton();
-    const obs = new MutationObserver(() => injectNodeButton());
-    obs.observe(document.getElementById('graph-layer')!, { childList: true, subtree: true });
-
-    if (ErodeNode()) togglePanel(true);
-    console.log('[Erosion] UI initialised');
-}
-
-// initialise after a tick to ensure viewport/graph exist, retry if needed
-let erosionInitTries = 0;
-function TryInitErosion(): void
-{
-    try { InitErosionUI(); } catch (e) { console.error('[Erosion] init failed', e); }
-    if (!document.getElementById('erosion-fab') && erosionInitTries < 5) { erosionInitTries++; setTimeout(TryInitErosion, 300); }
-}
-requestAnimationFrame(() => setTimeout(TryInitErosion, 100));
-setTimeout(TryInitErosion, 800);
-
-
 function RebuildField(): void
 {
     // drop strokes whose primitive node no longer exists
@@ -749,9 +467,6 @@ function RebuildField(): void
         ShowToast('Edit tape full — older detail is being dropped. Brick cache lands in Phase 2.');
     }
     RefreshBrickRead?.();
-    // erosion tile is now stale — next Run will re-bake from this compiled field
-    erosionDirty = true;
-    UpdateErosionHint();
 }
 
 let rebuildQueued = false;
@@ -950,18 +665,9 @@ sculpt.onMissedSurface = () =>
         ShowToast('Click on a surface to sculpt — strokes bind to the shape under the cursor');
 };
 
-graph.onParamChanged = () => {
-    brickPool.InvalidateAll();
-    erosionDirty = true;
-    UpdateErosionHint();
-    QueueRebuild();
-    // auto-bake when Erode params change
-    if (ErodeNode()) ScheduleAutoErode();
-};
+graph.onParamChanged = () => { brickPool.InvalidateAll(); QueueRebuild(); };
 
 RebuildField();
-// kick off an initial auto-bake for the seed graph (sphere+erode)
-setTimeout(()=>{ if(ErodeNode() && !erosion.HasResult()) ScheduleAutoErode(); }, 900);
 
 Q<HTMLInputElement>('#load-file').addEventListener('change', (e) =>
 {
@@ -989,8 +695,6 @@ function SetActiveTool(tool: SculptTool): void
     sculpt.SetTool(tool);
     Q('#sculpt-toolbar').querySelectorAll<HTMLElement>('.tbtn.tool').forEach((b) =>
         b.classList.toggle('active', b.dataset.tool === tool));
-    // dim bottom brush bar when in select mode — mirrors Blender's header dimming
-    Q('#vp-status').classList.toggle('brush-off', tool === 'select');
 
     if (tool === 'select')
     {
@@ -1019,98 +723,51 @@ Q('#sculpt-toolbar').querySelectorAll<HTMLElement>('.tbtn.shape').forEach((b) =>
     });
 });
 
-//---------------------------------------------------------------- bottom brush bar — size / intensity / falloff / spacing (ZBrush/Blender-style)
-function formatSize(v: number): string
+//---------------------------------------------------------------- brush scrubbers
+function BindBrushScrub(el: HTMLElement, get: () => number, set: (v: number) => void,
+                        min: number, max: number, format: (v: number) => string): void
 {
-    return v >= 10 ? `${v.toFixed(1)} m` : v >= 1 ? `${v.toFixed(2)} m` : `${(v * 100).toFixed(0)} cm`;
-}
-function formatIntensity(v: number): string { return v.toFixed(2); }
-function formatFalloff(v: number): string
-{
-    if (v < 0.2) return 'Soft';
-    if (v < 0.45) return 'Smooth';
-    if (v < 0.70) return 'Sharp';
-    return 'Hard';
-}
-function formatSpacing(v: number): string { return `${Math.round(v * 100)}%`; }
-
-type Repaintable = HTMLElement & { repaint?: () => void };
-const bottomRepaints: Repaintable[] = [];
-
-function BindBottomScrub(
-    id: string, get: () => number, set: (v: number) => void,
-    min: number, max: number, format: (v: number) => string): Repaintable
-{
-    const root = Q<HTMLElement>(id);
-    const fill = root.querySelector<HTMLElement>('.fill')!;
-    const val  = root.querySelector<HTMLElement>('.val')!;
-    const paint = () =>
-    {
-        const v = get();
-        val.textContent = format(v);
-        const t = (v - min) / (max - min);
-        fill.style.transform = `scaleX(${Math.min(Math.max(t, 0), 1)})`;
-        root.title = `${root.querySelector('.st-key')?.textContent ?? ''} — ${val.textContent} · drag, double-click to reset`;
-    };
-    (root as Repaintable).repaint = paint;
-    bottomRepaints.push(root as Repaintable);
+    const read = el.querySelector('b')!;
+    const paint = () => { read.textContent = format(get()); };
+    (el as HTMLElement & { repaint?: () => void }).repaint = paint;
     paint();
 
     let dragging = false;
     let lastX = 0;
-    root.addEventListener('pointerdown', (e) =>
+    el.addEventListener('pointerdown', (e) =>
     {
         dragging = true; lastX = e.clientX;
-        root.classList.add('dragging');
-        root.setPointerCapture(e.pointerId);
-        e.preventDefault();
+        el.classList.add('dragging');
+        el.setPointerCapture(e.pointerId);
     });
-    root.addEventListener('pointermove', (e) =>
+    el.addEventListener('pointermove', (e) =>
     {
         if (!dragging) return;
         const dx = e.clientX - lastX;
         lastX = e.clientX;
-        const rate = (e.shiftKey ? 0.18 : 1) * (max - min) / 220;
-        const next = Math.min(max, Math.max(min, get() + dx * rate));
-        set(next);
+        const rate = (e.shiftKey ? 0.15 : 1) * (max - min) / 240;
+        set(Math.min(max, Math.max(min, get() + dx * rate)));
         paint();
     });
     const stop = (e: PointerEvent) =>
     {
         dragging = false;
-        root.classList.remove('dragging');
-        if (root.hasPointerCapture(e.pointerId)) root.releasePointerCapture(e.pointerId);
+        el.classList.remove('dragging');
+        if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
     };
-    root.addEventListener('pointerup', stop);
-    root.addEventListener('pointercancel', stop);
-    root.addEventListener('dblclick', () =>
-    {
-        const defaults: Record<string, number> = { '#vb-size': 2.0, '#vb-intensity': 0.5, '#vb-falloff': 0.5, '#vb-spacing': 0.45 };
-        set(defaults[id] ?? (min + max) * 0.5);
-        paint();
-    });
-    return root as Repaintable;
+    el.addEventListener('pointerup', stop);
+    el.addEventListener('pointercancel', stop);
 }
 
-BindBottomScrub('#vb-size',      () => sculpt.brush.radius,   (v) => { sculpt.brush.radius = v; },   0.1, 40, formatSize);
-BindBottomScrub('#vb-intensity', () => sculpt.brush.strength, (v) => { sculpt.brush.strength = v; }, 0, 1, formatIntensity);
-BindBottomScrub('#vb-falloff',   () => sculpt.brush.falloff,  (v) => { sculpt.brush.falloff = v; },  0, 1, formatFalloff);
-BindBottomScrub('#vb-spacing',   () => sculpt.brush.spacing,  (v) => { sculpt.brush.spacing = v; },  0.05, 1.0, formatSpacing);
+BindBrushScrub(Q('#brush-radius'),
+    () => sculpt.brush.radius, (v) => { sculpt.brush.radius = v; },
+    0.1, 40, (v) => `${v.toFixed(1)} m`);
+BindBrushScrub(Q('#brush-strength'),
+    () => sculpt.brush.strength, (v) => { sculpt.brush.strength = v; },
+    0, 1, (v) => v.toFixed(2));
 
-// autosmooth toggle at the end of the brush strip
-{
-    const tog = Q('#vb-autosmooth');
-    const sw  = tog.querySelector<HTMLElement>('.switch')!;
-    const sync = () => { sw.dataset.on = String(sculpt.brush.autosmooth); };
-    sync();
-    const flip = () => { sculpt.brush.autosmooth = !sculpt.brush.autosmooth; sync(); };
-    tog.addEventListener('click', flip);
-    sw.addEventListener('click', (e) => { e.stopPropagation(); flip(); });
-}
-
-sculpt.onBrushChanged = () => bottomRepaints.forEach((r) => r.repaint?.());
-sculpt.onToolChanged  = () => bottomRepaints.forEach((r) => r.repaint?.());
-Q('#vp-status').classList.add('brush-off');
+sculpt.onBrushChanged = () =>
+    Q<HTMLElement & { repaint?: () => void }>('#brush-radius').repaint?.();
 
 //---------------------------------------------------------------- selection toolbar
 const nodeToolbar = Q('#node-toolbar');
@@ -1152,10 +809,7 @@ const bpLabel = Q('#bp-label');
 graph.onGraphChanged = () =>
 {
     brickPool.InvalidateAll();
-    erosionDirty = true;
-    UpdateErosionHint();
     QueueRebuild();
-    if (ErodeNode()) ScheduleAutoErode();
     bpLabel.textContent = 'Building';
     bpFill.style.width = '18%';
     bpPct.textContent = '18%';
