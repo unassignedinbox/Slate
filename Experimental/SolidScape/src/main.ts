@@ -11,6 +11,7 @@ import { FieldPass } from './sdfPass';
 import { SculptController, type SculptTool } from './sculpt';
 import { BrickPool } from './bricks';
 import { ErosionPreview, DefaultErodeSettings, type ErodeSettings } from './erosion';
+import { FindFirstSphere } from './erosion/volume';
 
 const Q  = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 
@@ -479,11 +480,30 @@ function UpdateErosionHint(): void
 {
     const hint = document.getElementById('erosion-hint') as HTMLElement | null;
     const stats = document.getElementById('erosion-stats') as HTMLElement | null;
+    const sub = document.getElementById('erosion-sub') as HTMLElement | null;
     if (!hint) return;
     const node = ErodeNode();
-    if (!node) { hint.textContent = 'connect Erode node (SDF → Erode → Output)'; if (stats) stats.textContent = 'idle — connect Erode node'; return; }
+    if (!node) {
+        hint.textContent = 'connect Erode node (SDF → Erode → Output)';
+        if (stats) stats.textContent = 'idle — connect Erode node';
+        if (sub) sub.textContent = '—';
+        return;
+    }
     const s = ReadErodeSettings(node.params);
     hint.textContent = `${s.resolution}² · tile ${s.tileSize} m · iters ${s.iterations} · drops ${s.droplets}`;
+    if (sub) {
+        const sphere = erosion.IsVolumeMode() || FindFirstSphere(compiled)!==null;
+        void sphere;
+        // show what will be baked: for sphere it's volN³, for terrain it's res²
+        const isVol = erosion.IsVolumeMode() || (!erosion.HasResult() && FindFirstSphere(compiled)!==null);
+        if (isVol) {
+            const volN = Math.max(64, Math.min(128, Math.round(s.resolution/4/8)*8));
+            const volSize = Math.max(s.tileSize, 22);
+            sub.textContent = `${volN}³ vol · tile ${volSize.toFixed(0)}m · thermal+droplet · SDF`;
+        } else {
+            sub.textContent = `${s.resolution}² tile · thermal + droplet · SDF`;
+        }
+    }
     if (!erosion.HasResult() && stats) stats.textContent = `ready — thermal ${s.thermal}× talus ${s.talus}° · erode ${s.erodeRate.toFixed(2)} deposit ${s.deposit.toFixed(2)}`;
 }
 
@@ -513,24 +533,26 @@ async function RunErosion(trigger: string = 'panel'): Promise<void> {
             if(panel) panel.classList.add('show'); if(fab) fab.classList.add('active');
             ShowToast(`Eroded — SDF erosion active (${trigger})`);
             UpdateErosionHint();
+            SyncNodePreview();
         }
     }catch(e){ console.error(e); ShowToast('Erosion failed — see console'); if(stats) stats.textContent=String(e); }
     finally{
         if(runBtn){ runBtn.disabled=false; runBtn.textContent='▶ Run 1+2'; }
         card?.classList.remove('baking');
         erosionRunSeq++;
+        SyncNodePreview();
     }
 }
 let autoErodeTimer: number|undefined;
 function ScheduleAutoErode(){
     const node=ErodeNode();
     if(!node){
-        // no erode node -> clear any stale erosion
         if(erosion.HasResult()){
             erosion.Reset();
             const sw=document.getElementById('erosion-3d') as HTMLElement|null;
             if(sw) sw.dataset.on='false';
             UpdateErosionHint();
+            SyncNodePreview();
         }
         return;
     }
@@ -538,6 +560,19 @@ function ScheduleAutoErode(){
     window.clearTimeout(autoErodeTimer);
     autoErodeTimer = window.setTimeout(()=>{ RunErosion('auto'); }, 650);
 }
+function SyncNodePreview(){
+    const node=ErodeNode(); if(!node) return;
+    const card=document.querySelector(`.node[data-uid="${node.uid}"]`) as HTMLElement|null;
+    const nodeCanvas=card?.querySelector<HTMLCanvasElement>('.erode-node-canvas');
+    if(nodeCanvas){
+        const c=erosion.canvas;
+        nodeCanvas.width=c.width; nodeCanvas.height=c.height;
+        const ctx=nodeCanvas.getContext('2d')!;
+        ctx.clearRect(0,0,nodeCanvas.width,nodeCanvas.height);
+        ctx.drawImage(c,0,0);
+    }
+}
+let paintPatched=false;
 
 function EnsureErosionPanel(): HTMLElement | null
 {
@@ -557,7 +592,7 @@ function EnsureErosionPanel(): HTMLElement | null
                 <i data-icon="erosion"></i>
                 <div>
                     <div class="erosion-title">Erode — 1+2 preview</div>
-                    <div class="erosion-sub">512² tile · thermal + droplet · sphere</div>
+                    <div class="erosion-sub" id="erosion-sub">—</div>
                 </div>
                 <div class="spacer"></div>
                 <button class="btn ghost icon small" id="erosion-close" data-icon="close" title="Hide"></button>
@@ -597,6 +632,11 @@ function InitErosionUI(): void
 
     // mount canvas
     host.innerHTML = ''; host.appendChild(erosion.canvas);
+    if(!paintPatched){
+        paintPatched=true;
+        const orig=erosion.PaintHeightfield.bind(erosion);
+        (erosion as any).PaintHeightfield=(h:Float32Array,s:number)=>{ orig(h,s); SyncNodePreview(); };
+    }
     UpdateErosionHint();
     HydrateGlyphs(panel);
 
@@ -626,7 +666,18 @@ function InitErosionUI(): void
     };
     run.onclick = () => RunErosion('panel');
 
-    // Inject a Run button directly into the Erode node card — now calls shared RunErosion, not panel click
+    function SyncNodePreview(){
+        const node=ErodeNode(); if(!node) return;
+        const card=document.querySelector(`.node[data-uid="${node.uid}"]`) as HTMLElement|null;
+        const nodeCanvas=card?.querySelector<HTMLCanvasElement>('.erode-node-canvas');
+        if(nodeCanvas){
+            const c=erosion.canvas;
+            nodeCanvas.width=c.width; nodeCanvas.height=c.height;
+            const ctx=nodeCanvas.getContext('2d')!;
+            ctx.drawImage(c,0,0);
+        }
+    }
+    // Inject a Run button + live preview canvas directly into the Erode node card
     const injectNodeButton = () =>
     {
         const node = ErodeNode();
@@ -641,14 +692,22 @@ function InitErosionUI(): void
         btn.textContent = '▶ Bake Erosion';
         btn.style.marginTop = '8px'; btn.style.width = '100%'; btn.style.background='var(--accent)';
         btn.style.color='#fff'; btn.style.border='none';
-        btn.title = 'Bake SDF erosion from Erode node params';
+        btn.title = 'Bake SDF erosion from Erode node params (also auto-bakes)';
         btn.onclick = (e) => { e.stopPropagation(); RunErosion('node'); };
         paramsBox.appendChild(btn);
-        // add hint that auto-bake is enabled
         const hint = document.createElement('div');
         hint.className='mono'; hint.style.fontSize='10px'; hint.style.color='var(--text-faint)'; hint.style.marginTop='4px'; hint.style.textAlign='center';
         hint.textContent='Auto-bakes when graph changes';
         paramsBox.appendChild(hint);
+        // live preview canvas (mirrors the FAB preview) — so Erode 1+2 preview is not hardcoded in FAB only
+        const wrap=document.createElement('div');
+        wrap.style.marginTop='8px'; wrap.style.borderRadius='6px'; wrap.style.overflow='hidden'; wrap.style.border='1px solid var(--border)';
+        wrap.style.background='#111';
+        const cvs=document.createElement('canvas');
+        cvs.className='erode-node-canvas'; cvs.width=256; cvs.height=256;
+        cvs.style.width='100%'; cvs.style.display='block'; cvs.style.aspectRatio='1';
+        wrap.appendChild(cvs); paramsBox.appendChild(wrap);
+        setTimeout(SyncNodePreview, 60);
     };
     // try now and after graph changes
     injectNodeButton();

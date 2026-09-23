@@ -178,38 +178,48 @@ export class ErosionPreview
             const sphere = FindFirstSphere(field);
             this.isVolumeMode = sphere!==null;
             if (sphere) {
-                // ── TRUE 3D VOXEL PATH ──
-                const N = 68; // ~314k voxels, cell ~0.35m for r=8
-                const size = sphere.r * 2.6;
-                const min = new THREE.Vector3(sphere.x - size*0.5, sphere.y - size*0.5, sphere.z - size*0.5);
-                // Clamp min.y to just below ground so volume includes plane
+                // ── TRUE 3D VOXEL PATH — now respects Erode node tile/resolution ──
+                // map Erode resolution (128-512) → voxel N (64-128) so sliders actually do something
+                const volN = Math.max(64, Math.min(128, Math.round(settings.resolution / 4 / 8) * 8));
+                const volSize = Math.max(settings.tileSize, sphere.r * 2.8);
+                const min = new THREE.Vector3(sphere.x - volSize*0.5, sphere.y - volSize*0.5, sphere.z - volSize*0.5);
                 if (min.y > -2) min.y = -2;
-                onProgress?.(`Voxelizing ${N}³ SDF …`);
-                const vol = VoxelizeField(field, N, min, size);
+                onProgress?.(`Voxelizing ${volN}³ SDF (tile ${volSize.toFixed(0)}m, ${settings.resolution}px→${volN}³) …`);
+                const vol = VoxelizeField(field, volN, min, volSize);
+                const origData = vol.data.slice(); // keep for delta preview
                 const mask = new Uint8Array(vol.data.length);
-                // surface mask
                 {
                     const thresh = vol.cell*1.45;
                     for(let i=0;i<vol.data.length;i++) mask[i] = Math.abs(vol.data[i]) < thresh ? 1:0;
                 }
-                onProgress?.(`Thermal ${settings.thermal}× …`);
+                onProgress?.(`Thermal ${settings.thermal}× talus ${settings.talus}° …`);
                 ThermalErodeVoxels(vol, mask, settings.talus, Math.min(settings.thermal, 3));
                 await new Promise<void>(r=>setTimeout(r,16));
-                onProgress?.(`Droplets ${settings.droplets}× (3D) …`);
+                onProgress?.(`Droplets ${settings.iterations}×${settings.droplets} (3D ${volN}³) …`);
                 await DropletErodeVoxelsAsync(vol, mask, settings, (done,total)=>onProgress?.(`Droplets ${done}/${total} …`));
-                // preview via top-down heightmap extracted from volume
-                const top = VoxelTopHeightmap(vol, 256);
-                this.PaintHeightfield(top.heights, 256);
+                // preview: show *eroded delta* top height so 0.5m gullies are visible, not washed out by 16m dome range
+                const origVol = { data: origData, N: volN, min, size: volSize, cell: vol.cell };
+                const topOrig = VoxelTopHeightmap(origVol as any, 256);
+                const topEroded = VoxelTopHeightmap(vol, 256);
+                const deltaHeights = new Float32Array(256*256);
+                let dMin=Infinity,dMax=-Infinity;
+                for(let i=0;i<deltaHeights.length;i++){ const d=topEroded.heights[i]-topOrig.heights[i]; deltaHeights[i]=d; if(d<dMin) dMin=d; if(d>dMax) dMax=d; }
+                // paint delta with high-contrast erosion colormap (brown→sand→grey for carve)
+                // re-use PaintHeightfield but with delta range centered on 0 for visibility
+                this.PaintHeightfield(deltaHeights, 256);
+                // overwrite label to show delta range
+                this.ctx.fillStyle='rgba(0,0,0,0.62)'; this.ctx.fillRect(0,236,256,20);
+                this.ctx.fillStyle='#ffd28a'; this.ctx.font='10px ui-monospace, monospace'; this.ctx.textAlign='left';
+                this.ctx.fillText(`Δ ${dMin.toFixed(2)} to ${dMax.toFixed(2)} m  (vol ${volN}³)`,6,249);
                 // store for FieldPass volume
-                this.volData = vol.data; this.volN = N; this.volMin = min.clone(); this.volSize = size;
-                this.erosionDelta = null; // ensure 2D off
-                // also keep a heightfield for flow preview? not needed
+                this.volData = vol.data; this.volN = volN; this.volMin = min.clone(); this.volSize = volSize;
+                this.erosionDelta = null;
                 if (this.fieldPass) {
-                    this.fieldPass.SetErosionVolume(vol.data, N, min, size);
+                    this.fieldPass.SetErosionVolume(vol.data, volN, min, volSize);
                     this.visible = true;
                 }
                 this.volumeMesh.visible=false; this.groundMesh.visible=false; this.mesh.visible=false;
-                { let maxD=0; for(let i=0;i<vol.data.length;i++){const a=Math.abs(vol.data[i]); if(a>maxD) maxD=a;} onProgress?.(`Done — SDF volume ${N}³ Δmax ${maxD.toFixed(2)}m erosion active`); }
+                { let maxD=Math.max(Math.abs(dMin),Math.abs(dMax)); onProgress?.(`Done — SDF volume ${volN}³ tile${volSize.toFixed(0)} Δmax ${maxD.toFixed(2)}m erosion active`); }
                 return;
             }
 

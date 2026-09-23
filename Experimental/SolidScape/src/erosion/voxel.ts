@@ -213,18 +213,20 @@ export async function DropletErodeVoxelsAsync(
         }
     }
     onProgress?.(totalDroplets,totalDroplets);
-    // light post-smooth to kill single-voxel noise but keep channels
-    const copy = data.slice();
-    for(let z=1;z<N-1;z++) for(let y=1;y<N-1;y++) for(let x=1;x<N-1;x++){
-        const i=idx3(x,y,z,N);
-        if(!mask[i]) continue;
-        // average of 6 neighbours, 12% blend
-        let avg=0, cnt=0;
-        for(const [dx,dy,dz] of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]] as const){
-            const n=idx3(x+dx,y+dy,z+dz,N);
-            if(mask[n]){ avg+=copy[n]; cnt++; }
+    // two-pass 26-neighbour smooth (18% blend) to kill voxel stair-step while keeping gullies
+    for(let pass=0; pass<2; pass++){
+        const copy2 = data.slice();
+        for(let z=1;z<N-1;z++) for(let y=1;y<N-1;y++) for(let x=1;x<N-1;x++){
+            const i=idx3(x,y,z,N);
+            if(!mask[i]) continue;
+            let avg=0,cnt=0;
+            for(let dz=-1;dz<=1;dz++) for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+                if(dx===0&&dy===0&&dz===0) continue;
+                const n=idx3(x+dx,y+dy,z+dz,N);
+                if(mask[n]){ avg+=copy2[n]; cnt++; }
+            }
+            if(cnt>=8) data[i] = data[i]*0.82 + (avg/cnt)*0.18;
         }
-        if(cnt>3) data[i] = data[i]*0.88 + (avg/cnt)*0.12;
     }
 }
 
