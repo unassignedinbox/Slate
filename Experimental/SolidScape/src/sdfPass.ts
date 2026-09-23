@@ -45,6 +45,7 @@ uniform float uBrushMode;          // <0 hidden · 0 add · 1 carve · 2 smooth-
 uniform float uTime;
 uniform int   uMaxSteps;
 uniform sampler2D uErosionTex;
+uniform sampler2D uErosionOrigTex;
 uniform float uErosionOn;
 uniform float uErosionTileSize;
 uniform vec2  uErosionWorldMin;
@@ -198,13 +199,19 @@ float Field(vec3 p)
             r = mix(r, volSdf, w);
         }
     } else if (uErosionOn > 0.5) {
-        // fallback 2D heightfield (terrain)
         vec2 uv = (p.xz - uErosionWorldMin) / uErosionTileSize;
         if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
             float delta = texture(uErosionTex, uv).r; // eroded - original (m), negative = carved
+            float hOrig = texture(uErosionOrigTex, uv).r;
             if (abs(delta) > 0.001) {
-                float w = exp(-abs(r) * 1.4); // only near surface
-                r -= delta * w * 0.92;
+                float w = exp(-abs(r) * 1.2);
+                // y-distance weight — only near the heightfield surface (dome top), kills vertical curtains
+                float wy = exp(-abs(p.y - hOrig) * 1.32);
+                float yBoost = uErosionMode > 0.5 ? 1.35 : 1.0;
+                w *= mix(1.0, wy * yBoost, 0.82);
+                // stronger so Erode sliders actually matter (was 0.92, too subtle)
+                float strength = 1.75;
+                r -= delta * w * strength;
             }
         }
     }
@@ -341,6 +348,7 @@ export class FieldPass
     private readonly material: THREE.RawShaderMaterial;
     private readonly tape: THREE.DataTexture;
     private readonly erosionTex: THREE.DataTexture;
+    private readonly erosionOrigTex: THREE.DataTexture;
     private erosionVol: THREE.Data3DTexture;
 
     constructor()
@@ -363,6 +371,15 @@ export class FieldPass
         this.erosionTex.minFilter = THREE.LinearFilter;
         this.erosionTex.needsUpdate = false;
 
+        this.erosionOrigTex = new THREE.DataTexture(
+            new Float32Array(512 * 512),
+            512, 512,
+            THREE.RedFormat, THREE.FloatType,
+        );
+        this.erosionOrigTex.magFilter = THREE.LinearFilter;
+        this.erosionOrigTex.minFilter = THREE.LinearFilter;
+        this.erosionOrigTex.needsUpdate = false;
+
         this.erosionVol = new THREE.Data3DTexture(new Float32Array(2*2*2), 2, 2, 2);
         this.erosionVol.format = THREE.RedFormat;
         this.erosionVol.type = THREE.FloatType;
@@ -378,6 +395,7 @@ export class FieldPass
             uniforms: {
                 uTape:         { value: this.tape },
                 uErosionTex:   { value: this.erosionTex },
+                uErosionOrigTex:{ value: this.erosionOrigTex },
                 uErosionOn:    { value: 0 },
                 uErosionTileSize: { value: 48 },
                 uErosionWorldMin: { value: new THREE.Vector2(-24, -24) },
@@ -428,19 +446,20 @@ export class FieldPass
         this.mesh.visible = count > 0;
     }
 
-    SetErosion(delta: Float32Array | null, size: number, tileSize: number, sphere: { x: number; y: number; z: number; r: number } | null): void
+    // heightfield SDF erosion — now stores both delta and original height so shader can y-weight (no curtains) and scale strongly
+    SetErosion(delta: Float32Array | null, orig: Float32Array | null, size: number, tileSize: number, sphere: { x: number; y: number; z: number; r: number } | null): void
     {
         const u = this.material.uniforms;
         u['uErosionVolOn'].value = 0;
-        if (!delta) {
+        if (!delta || !orig) {
             u['uErosionOn'].value = 0;
             return;
         }
-        // resample delta (size×size) into the 512² erosionTex (bilinear)
-        const tex = this.erosionTex.image.data as Float32Array;
         const N = 512;
+        const tex = this.erosionTex.image.data as Float32Array;
+        const origTex = this.erosionOrigTex.image.data as Float32Array;
         if (size === N) {
-            tex.set(delta);
+            tex.set(delta); origTex.set(orig);
         } else {
             for (let y = 0; y < N; y++) {
                 const sy = (y / (N - 1)) * (size - 1);
@@ -450,12 +469,14 @@ export class FieldPass
                     const sx = (x / (N - 1)) * (size - 1);
                     const x0 = Math.floor(sx), x1 = Math.min(size - 1, x0 + 1);
                     const tx = sx - x0;
-                    const v00 = delta[y0 * size + x0], v10 = delta[y0 * size + x1], v01 = delta[y1 * size + x0], v11 = delta[y1 * size + x1];
-                    tex[y * N + x] = v00 * (1 - tx) * (1 - ty) + v10 * tx * (1 - ty) + v01 * (1 - tx) * ty + v11 * tx * ty;
+                    const i00=y0*size+x0, i10=y0*size+x1, i01=y1*size+x0, i11=y1*size+x1;
+                    tex[y*N+x] = delta[i00]*(1-tx)*(1-ty) + delta[i10]*tx*(1-ty) + delta[i01]*(1-tx)*ty + delta[i11]*tx*ty;
+                    origTex[y*N+x] = orig[i00]*(1-tx)*(1-ty) + orig[i10]*tx*(1-ty) + orig[i01]*(1-tx)*ty + orig[i11]*tx*ty;
                 }
             }
         }
         this.erosionTex.needsUpdate = true;
+        this.erosionOrigTex.needsUpdate = true;
         u['uErosionOn'].value = 1;
         u['uErosionTileSize'].value = tileSize;
         const half = tileSize * 0.5;
@@ -467,6 +488,12 @@ export class FieldPass
         } else {
             u['uErosionMode'].value = 0;
         }
+    }
+    // backwardscompat: allow old single-arg calls (terrain without orig) — treat orig as 0
+    SetErosionFromDelta(delta: Float32Array | null, size: number, tileSize: number, sphere: any): void {
+        if(!delta) { this.ClearErosion(); return; }
+        const zero=new Float32Array(delta.length);
+        this.SetErosion(delta, zero, size, tileSize, sphere);
     }
 
     ClearErosion(): void {

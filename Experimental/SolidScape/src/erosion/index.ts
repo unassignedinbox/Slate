@@ -9,7 +9,8 @@ import { BakeHeightfield, type Heightfield } from './heightfield';
 import { ThermalErode } from './thermal';
 import { DropletErodeAsync, type DropletParams } from './droplet';
 import { FindFirstSphere } from './volume';
-import { VoxelizeField, ThermalErodeVoxels, DropletErodeVoxelsAsync, VoxelTopHeightmap } from './voxel';
+// legacy volume imports kept for reference — dome now uses 512² y-weighted heightfield for smooth SDF (see voxel.ts for true-3D fallback)
+// import { VoxelizeField, ThermalErodeVoxels, DropletErodeVoxelsAsync, VoxelTopHeightmap } from './voxel';
 import type { FieldPass } from '../sdfPass';
 
 export interface ErodeSettings
@@ -49,6 +50,7 @@ export class ErosionPreview
 
     private fieldPass: FieldPass | null = null;
     private erosionDelta: Float32Array | null = null;
+    private erosionOrig: Float32Array | null = null;
     private erosionSize = 0;
     private erosionTile = 0;
     private erosionSphere: { x: number; y: number; z: number; r: number } | null = null;
@@ -115,7 +117,7 @@ export class ErosionPreview
         this.fieldPass = pass;
         if (this.visible) {
             if (this.volData && this.volMin) pass.SetErosionVolume(this.volData, this.volN, this.volMin, this.volSize);
-            else if (this.erosionDelta) pass.SetErosion(this.erosionDelta, this.erosionSize, this.erosionTile, this.erosionSphere);
+            else if (this.erosionDelta && this.erosionOrig) pass.SetErosion(this.erosionDelta, this.erosionOrig, this.erosionSize, this.erosionTile, this.erosionSphere);
         }
     }
 
@@ -124,7 +126,7 @@ export class ErosionPreview
         if (this.fieldPass) {
             if (v) {
                 if (this.volData && this.volMin) this.fieldPass.SetErosionVolume(this.volData, this.volN, this.volMin, this.volSize);
-                else if (this.erosionDelta) this.fieldPass.SetErosion(this.erosionDelta, this.erosionSize, this.erosionTile, this.erosionSphere);
+                else if (this.erosionDelta && this.erosionOrig) this.fieldPass.SetErosion(this.erosionDelta, this.erosionOrig, this.erosionSize, this.erosionTile, this.erosionSphere);
             } else this.fieldPass.ClearErosion();
         }
         this.volumeMesh.visible = false; this.groundMesh.visible = false; this.mesh.visible = false;
@@ -178,48 +180,48 @@ export class ErosionPreview
             const sphere = FindFirstSphere(field);
             this.isVolumeMode = sphere!==null;
             if (sphere) {
-                // ── TRUE 3D VOXEL PATH — now respects Erode node tile/resolution ──
-                // map Erode resolution (128-512) → voxel N (64-128) so sliders actually do something
-                const volN = Math.max(64, Math.min(128, Math.round(settings.resolution / 4 / 8) * 8));
-                const volSize = Math.max(settings.tileSize, sphere.r * 2.8);
-                const min = new THREE.Vector3(sphere.x - volSize*0.5, sphere.y - volSize*0.5, sphere.z - volSize*0.5);
-                if (min.y > -2) min.y = -2;
-                onProgress?.(`Voxelizing ${volN}³ SDF (tile ${volSize.toFixed(0)}m, ${settings.resolution}px→${volN}³) …`);
-                const vol = VoxelizeField(field, volN, min, volSize);
-                const origData = vol.data.slice(); // keep for delta preview
-                const mask = new Uint8Array(vol.data.length);
-                {
-                    const thresh = vol.cell*1.45;
-                    for(let i=0;i<vol.data.length;i++) mask[i] = Math.abs(vol.data[i]) < thresh ? 1:0;
-                }
-                onProgress?.(`Thermal ${settings.thermal}× talus ${settings.talus}° …`);
-                ThermalErodeVoxels(vol, mask, settings.talus, Math.min(settings.thermal, 3));
+                // ── SPHERE DOME: y-weighted heightfield SDF path at 512² (smooth, not 68³ blocky) ──
+                // Same 512² bake the terrain uses, but sphere flag lets the SDF shader y-weight the
+                // displacement (kills vertical curtains on sides, keeps dome eroded). Cell ≈0.094m
+                // vs voxels 0.38m → far smoother gullies. Still true SDF erosion (field is displaced
+                // via delta texture sampled in FieldPass), not a mesh.
+                onProgress?.(`Baking dome ${settings.resolution}² for SDF sphere …`);
+                const hf = BakeHeightfield(field, settings.resolution, settings.tileSize);
+                this.original = hf;
+                const origCopy = new Float32Array(hf.data);
+                this.eroded = new Float32Array(hf.data);
+                this.PaintHeightfield(this.eroded, hf.size);
                 await new Promise<void>(r=>setTimeout(r,16));
-                onProgress?.(`Droplets ${settings.iterations}×${settings.droplets} (3D ${volN}³) …`);
-                await DropletErodeVoxelsAsync(vol, mask, settings, (done,total)=>onProgress?.(`Droplets ${done}/${total} …`));
-                // preview: show *eroded delta* top height so 0.5m gullies are visible, not washed out by 16m dome range
-                const origVol = { data: origData, N: volN, min, size: volSize, cell: vol.cell };
-                const topOrig = VoxelTopHeightmap(origVol as any, 256);
-                const topEroded = VoxelTopHeightmap(vol, 256);
-                const deltaHeights = new Float32Array(256*256);
+                if (settings.thermal > 0) {
+                    onProgress?.(`Thermal ${settings.thermal}× talus ${settings.talus}° …`);
+                    ThermalErode(this.eroded, hf.size, hf.cellSize, { talusDeg: settings.talus, iterations: settings.thermal });
+                    this.PaintHeightfield(this.eroded, hf.size);
+                    await new Promise<void>(r=>setTimeout(r,16));
+                }
+                onProgress?.(`Droplets ${settings.iterations}×${settings.droplets} (sphere dome) …`);
+                const sphereErodeRate = Math.min(1.0, settings.erodeRate * 1.45);
+                const dParams: DropletParams = {
+                    iterations: settings.iterations, droplets: settings.droplets, inertia: settings.inertia,
+                    capacity: settings.capacity * 1.18, erosionRate: sphereErodeRate,
+                    depositionRate: settings.deposit, evaporation: settings.evaporation, minSlope: 0.01,
+                };
+                const { flow } = await DropletErodeAsync(this.eroded, hf.size, hf.cellSize, dParams, 4,
+                    (done,total)=> onProgress?.(`Droplets ${done}/${total} …`));
+                this.flow = flow; this.PaintFlow(flow, hf.size);
+                const delta = new Float32Array(this.eroded.length);
                 let dMin=Infinity,dMax=-Infinity;
-                for(let i=0;i<deltaHeights.length;i++){ const d=topEroded.heights[i]-topOrig.heights[i]; deltaHeights[i]=d; if(d<dMin) dMin=d; if(d>dMax) dMax=d; }
-                // paint delta with high-contrast erosion colormap (brown→sand→grey for carve)
-                // re-use PaintHeightfield but with delta range centered on 0 for visibility
-                this.PaintHeightfield(deltaHeights, 256);
-                // overwrite label to show delta range
+                for (let i=0;i<delta.length;i++){ const d=this.eroded[i]-origCopy[i]; delta[i]=d; if(d<dMin) dMin=d; if(d>dMax) dMax=d; }
+                this.PaintHeightfield(this.eroded, hf.size);
                 this.ctx.fillStyle='rgba(0,0,0,0.62)'; this.ctx.fillRect(0,236,256,20);
                 this.ctx.fillStyle='#ffd28a'; this.ctx.font='10px ui-monospace, monospace'; this.ctx.textAlign='left';
-                this.ctx.fillText(`Δ ${dMin.toFixed(2)} to ${dMax.toFixed(2)} m  (vol ${volN}³)`,6,249);
-                // store for FieldPass volume
-                this.volData = vol.data; this.volN = volN; this.volMin = min.clone(); this.volSize = volSize;
-                this.erosionDelta = null;
-                if (this.fieldPass) {
-                    this.fieldPass.SetErosionVolume(vol.data, volN, min, volSize);
-                    this.visible = true;
-                }
+                this.ctx.fillText(`Δ ${dMin.toFixed(2)}→${dMax.toFixed(2)} m  dome ${hf.size}² y-wt`,6,249);
+                this.erosionDelta = delta; this.erosionOrig = origCopy; this.erosionSize = hf.size; this.erosionTile = hf.tileSize;
+                this.erosionSphere = { x: sphere.x, y: sphere.y, z: sphere.z, r: sphere.r };
+                this.volData = null; this.volMin = null;
+                this.isVolumeMode = false;
+                if (this.fieldPass) { this.fieldPass.SetErosion(delta, origCopy, hf.size, hf.tileSize, this.erosionSphere); this.visible = true; }
                 this.volumeMesh.visible=false; this.groundMesh.visible=false; this.mesh.visible=false;
-                { let maxD=Math.max(Math.abs(dMin),Math.abs(dMax)); onProgress?.(`Done — SDF volume ${volN}³ tile${volSize.toFixed(0)} Δmax ${maxD.toFixed(2)}m erosion active`); }
+                { const maxD=Math.max(Math.abs(dMin),Math.abs(dMax)); onProgress?.(`Done — SDF sphere dome ${hf.size}² Δmax ${maxD.toFixed(2)}m (y-weighted strength×1.75)`); }
                 return;
             }
 
@@ -242,9 +244,9 @@ export class ErosionPreview
             }
             const delta=new Float32Array(this.eroded.length);
             for(let i=0;i<delta.length;i++) delta[i]=this.eroded[i]-hf.data[i];
-            this.erosionDelta=delta; this.erosionSize=hf.size; this.erosionTile=hf.tileSize; this.erosionSphere=null;
+            this.erosionDelta=delta; this.erosionOrig=new Float32Array(hf.data); this.erosionSize=hf.size; this.erosionTile=hf.tileSize; this.erosionSphere=null;
             this.volData=null; this.volMin=null;
-            if(this.fieldPass){ this.fieldPass.SetErosion(delta,hf.size,hf.tileSize,null); this.visible=true; }
+            if(this.fieldPass){ this.fieldPass.SetErosion(delta, this.erosionOrig, hf.size,hf.tileSize,null); this.visible=true; }
             this.volumeMesh.visible=false; this.groundMesh.visible=false; this.mesh.visible=false;
             { let maxD=0; for(let i=0;i<delta.length;i++){const a=Math.abs(delta[i]); if(a>maxD) maxD=a;} onProgress?.(`Done — SDF ${modeLabel} ${hf.size}² Δmax ${maxD.toFixed(3)}m erosion active`); }
         } finally { this.running=false; }
@@ -252,7 +254,7 @@ export class ErosionPreview
 
     Reset(): void {
         this.original=null; this.eroded=null; this.flow=null;
-        this.erosionDelta=null; this.erosionSize=0; this.erosionSphere=null;
+        this.erosionDelta=null; this.erosionOrig=null; this.erosionSize=0; this.erosionSphere=null;
         this.volData=null; this.volMin=null; this.volSize=0; this.volN=0;
         this.visible=false; this.mesh.visible=false; this.mesh.position.set(0,0,0);
         this.volumeMesh.visible=false; this.groundMesh.visible=false; this.isVolumeMode=false;

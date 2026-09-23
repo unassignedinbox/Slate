@@ -119,9 +119,9 @@ export async function DropletErodeVoxelsAsync(
 ): Promise<void> {
     const { data, N, cell, min } = vol;
     // scale droplets with iterations but cap for interactivity
-    const totalDroplets = Math.min(settings.droplets * Math.max(1, Math.floor(settings.iterations/6)), 7000);
+    const totalDroplets = Math.min(settings.droplets * Math.max(1, Math.floor(settings.iterations/4)), 8500);
     const inertia = settings.inertia;
-    const erodeRate = Math.min(settings.erodeRate, 0.14);
+    const erodeRate = Math.min(settings.erodeRate, 0.36);
     const evaporation = settings.evaporation;
 
     let surfaceList: number[] = [];
@@ -194,12 +194,12 @@ export async function DropletErodeVoxelsAsync(
                     sediment -= cdep;
                 }
             }else{
-                let erodeAmt=Math.min((capacity - sediment)*erodeRate, heightDiff*0.62);
-                erodeAmt=Math.min(Math.max(0,erodeAmt), 0.13);
+                let erodeAmt=Math.min((capacity - sediment)*erodeRate, heightDiff*0.72);
+                erodeAmt=Math.min(Math.max(0,erodeAmt), 0.26);
                 erodeAmt *= widen;
                 if(erodeAmt>1e-4){
-                    Splat3D(data,N,curX,curY,curZ,erodeAmt*0.58,1.1);
-                    Splat3D(data,N,bestX,bestY,bestZ,erodeAmt*0.22,1.0);
+                    Splat3D(data,N,curX,curY,curZ,erodeAmt*0.62,1.45);
+                    Splat3D(data,N,bestX,bestY,bestZ,erodeAmt*0.26,1.25);
                     sediment += erodeAmt*0.9;
                 }
             }

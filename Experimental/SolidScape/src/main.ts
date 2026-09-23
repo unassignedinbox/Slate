@@ -492,14 +492,14 @@ function UpdateErosionHint(): void
     const s = ReadErodeSettings(node.params);
     hint.textContent = `${s.resolution}² · tile ${s.tileSize} m · iters ${s.iterations} · drops ${s.droplets}`;
     if (sub) {
-        const sphere = erosion.IsVolumeMode() || FindFirstSphere(compiled)!==null;
-        void sphere;
-        // show what will be baked: for sphere it's volN³, for terrain it's res²
-        const isVol = erosion.IsVolumeMode() || (!erosion.HasResult() && FindFirstSphere(compiled)!==null);
+        const hasSphere = FindFirstSphere(compiled)!==null;
+        const isVol = erosion.IsVolumeMode();
         if (isVol) {
             const volN = Math.max(64, Math.min(128, Math.round(s.resolution/4/8)*8));
             const volSize = Math.max(s.tileSize, 22);
             sub.textContent = `${volN}³ vol · tile ${volSize.toFixed(0)}m · thermal+droplet · SDF`;
+        } else if (hasSphere) {
+            sub.textContent = `${s.resolution}² dome y-wt · tile ${s.tileSize} m · SDF erosion`;
         } else {
             sub.textContent = `${s.resolution}² tile · thermal + droplet · SDF`;
         }
