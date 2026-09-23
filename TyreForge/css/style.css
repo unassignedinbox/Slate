@@ -1,0 +1,153 @@
+/* TyreForge — dark pit-lane UI */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg: #0c0e11;
+  --panel: #14171c;
+  --panel2: #181c22;
+  --line: #262c34;
+  --txt: #d7dce2;
+  --dim: #8a94a0;
+  --acc: #ffb43c;
+  --acc2: #e23b2e;
+  --mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+}
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--txt);
+  font: 13px/1.45 "Segoe UI", Roboto, system-ui, sans-serif;
+  overflow: hidden;
+}
+
+/* ---------- top bar ---------- */
+#topbar {
+  height: 48px; display: flex; align-items: center; gap: 16px;
+  padding: 0 14px; background: linear-gradient(#181c22, #12151a);
+  border-bottom: 1px solid var(--line);
+}
+.logo { font: 900 20px/1 var(--mono); letter-spacing: 2px; }
+.logo span { color: var(--acc); }
+.logo em { font: italic 11px/1 var(--mono); color: var(--dim); margin-left: 10px; letter-spacing: 1px; }
+.top-actions { margin-left: auto; display: flex; gap: 8px; }
+.chip-btn {
+  background: var(--panel2); color: var(--txt); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 12px; cursor: pointer; font: 600 12px var(--mono);
+}
+.chip-btn:hover { border-color: var(--acc); color: var(--acc); }
+.chip-btn.on { background: #2a2318; border-color: var(--acc); color: var(--acc); }
+
+/* ---------- layout ---------- */
+#layout {
+  display: grid; grid-template-columns: 250px 1fr 340px;
+  height: calc(100vh - 48px);
+}
+aside { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; }
+#deck { border-right: none; border-left: 1px solid var(--line); }
+
+/* ---------- garage ---------- */
+#garage h2 { font: 800 13px var(--mono); letter-spacing: 2px; padding: 12px 12px 6px; color: var(--dim); }
+#type-filter { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 10px 10px; }
+#type-filter button {
+  font: 600 10px var(--mono); padding: 3px 8px; border-radius: 10px;
+  background: var(--panel2); color: var(--dim); border: 1px solid var(--line); cursor: pointer;
+}
+#type-filter button.on { color: #0c0e11; background: var(--acc); border-color: var(--acc); }
+#preset-list { display: flex; flex-direction: column; gap: 6px; padding: 0 10px 14px; }
+.preset {
+  text-align: left; background: var(--panel2); border: 1px solid var(--line);
+  border-radius: 8px; padding: 9px 10px; cursor: pointer; color: var(--txt);
+}
+.preset:hover { border-color: #3d4652; transform: translateX(2px); }
+.preset.on { border-color: var(--acc); background: #251f14; }
+.preset .pn { font: 800 13px var(--mono); letter-spacing: 1px; }
+.preset.on .pn { color: var(--acc); }
+.preset .pt { font-size: 10px; color: var(--acc2); text-transform: uppercase; letter-spacing: 1.5px; }
+.preset .pd { font-size: 11px; color: var(--dim); margin-top: 2px; }
+
+/* ---------- viewport ---------- */
+#viewport { position: relative; min-width: 0; background: radial-gradient(120% 90% at 50% 30%, #171b21 0%, #0c0e11 70%); }
+#gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#hud-name { position: absolute; top: 18px; left: 22px; pointer-events: none; }
+.tyre-name { font: 900 34px var(--mono); letter-spacing: 3px; color: #f2f5f8; text-shadow: 0 2px 14px rgba(0,0,0,.6); }
+.tyre-type { font: 600 11px var(--mono); letter-spacing: 3px; color: var(--acc2); text-transform: uppercase; }
+#hud-stats {
+  position: absolute; left: 22px; bottom: 52px; pointer-events: none;
+  font: 12px/1.7 var(--mono); color: #b9c2cb;
+  background: rgba(10,12,15,.72); border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 14px; backdrop-filter: blur(4px);
+}
+#hud-stats b { color: var(--acc); font-weight: 700; }
+#hud-hint { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; font-size: 11px; color: #59616b; pointer-events: none; }
+
+/* ---------- deck ---------- */
+#tabs { display: flex; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); z-index: 2; }
+#tabs button {
+  flex: 1; padding: 11px 4px; background: none; border: none; color: var(--dim);
+  font: 700 10px var(--mono); letter-spacing: 1px; cursor: pointer; border-bottom: 2px solid transparent;
+}
+#tabs button.on { color: var(--acc); border-bottom-color: var(--acc); }
+.tab-page { display: none; padding: 12px; }
+.tab-page.on { display: block; }
+.tab-page h3 { font: 800 11px var(--mono); letter-spacing: 2px; color: var(--dim); margin: 12px 0 8px; }
+.tab-page h3:first-child { margin-top: 0; }
+
+.ctl { margin-bottom: 10px; }
+.ctl label { display: flex; justify-content: space-between; font-size: 12px; color: var(--dim); margin-bottom: 3px; }
+.ctl label t { color: var(--acc); font: 700 12px var(--mono); }
+.ctl input[type=range], .ed-row input[type=range] {
+  width: 100%; accent-color: var(--acc); height: 22px;
+}
+.ctl input[type=text] {
+  width: 100%; background: var(--panel2); border: 1px solid var(--line); color: var(--txt);
+  border-radius: 6px; padding: 7px 9px; font: 600 13px var(--mono);
+}
+.ctl input[type=color] { width: 100%; height: 30px; background: none; border: 1px solid var(--line); border-radius: 6px; }
+.note { font-size: 11px; color: var(--dim); background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; margin: 10px 0; }
+
+#profile-view, #wall-view { width: 100%; background: #0f1114; border: 1px solid var(--line); border-radius: 8px; margin-top: 6px; }
+#size-read { font: 11px/1.8 var(--mono); color: var(--dim); margin-top: 8px; }
+#size-read b { color: var(--txt); }
+
+.wear-marks { display: flex; justify-content: space-between; font: 600 9px var(--mono); color: #59616b; }
+
+/* ---------- export ---------- */
+.big-btn {
+  display: block; width: 100%; margin: 6px 0; padding: 10px; cursor: pointer;
+  background: linear-gradient(#20262e, #181c22); color: var(--txt);
+  border: 1px solid var(--line); border-radius: 8px; font: 700 12px var(--mono); text-align: center;
+}
+.big-btn:hover { border-color: var(--acc); color: var(--acc); }
+.map-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.map-btns .big-btn { margin: 2px 0; font-size: 10px; padding: 8px 4px; }
+.bool-row { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 12px; cursor: pointer; }
+
+/* ---------- tread editor ---------- */
+.ed-canvas-wrap { position: relative; }
+.ed-canvas { width: 100%; display: block; background: #0f1114; border: 1px solid var(--line); border-radius: 8px; cursor: crosshair; touch-action: none; }
+.ed-canvas-tag { position: absolute; left: 8px; bottom: 6px; font: 600 9px var(--mono); color: #59616b; pointer-events: none; }
+.ed-row { margin: 8px 0; }
+.ed-row label { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim); margin-bottom: 2px; }
+.ed-row label t { color: var(--acc); font: 700 11px var(--mono); }
+.ed-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 10px 0; }
+.tool-btn {
+  padding: 7px 4px; font: 700 10px var(--mono); cursor: pointer; text-align: left;
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; color: var(--txt);
+}
+.tool-btn:hover { border-color: var(--acc); color: var(--acc); }
+.ed-prims { display: flex; flex-direction: column; gap: 5px; }
+.prim { background: var(--panel2); border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.prim.sel { border-color: var(--acc); }
+.prim-head { display: flex; justify-content: space-between; align-items: center; padding: 7px 9px; cursor: pointer; font-size: 12px; }
+.prim.sel .prim-head { color: var(--acc); }
+.prim-btns { display: flex; gap: 3px; }
+.prim-btns button {
+  background: none; border: 1px solid var(--line); border-radius: 4px; color: var(--dim);
+  width: 19px; height: 19px; cursor: pointer; font-size: 9px; line-height: 1;
+}
+.prim-btns button:hover { color: var(--acc2); border-color: var(--acc2); }
+.prim-body { padding: 2px 9px 8px; border-top: 1px dashed var(--line); }
+.ed-hint { font-size: 10px; color: #59616b; margin-top: 8px; text-align: center; }
+
+/* scrollbars */
+::-webkit-scrollbar { width: 9px; }
+::-webkit-scrollbar-thumb { background: #262c34; border-radius: 5px; }
+::-webkit-scrollbar-track { background: transparent; }

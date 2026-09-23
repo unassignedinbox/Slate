@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TyreForge — Racing Tyre Lab</title>
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.js",
+    "three/addons/": "./vendor/addons/"
+  }
+}
+</script>
+</head>
+<body>
+<header id="topbar">
+  <div class="logo">TYRE<span>FORGE</span><em>racing tyre lab</em></div>
+  <div class="top-actions">
+    <button id="btn-spin" class="chip-btn" title="Turntable">⟳ spin</button>
+    <button id="btn-rim" class="chip-btn on" title="Show / hide rim">◉ rim</button>
+    <button id="btn-random" class="chip-btn" title="Random new tyre name">⚄ random name</button>
+  </div>
+</header>
+
+<main id="layout">
+  <!-- ======================= left: preset garage ======================= -->
+  <aside id="garage">
+    <h2>GARAGE <span id="garage-count"></span></h2>
+    <div id="type-filter"></div>
+    <div id="preset-list"></div>
+  </aside>
+
+  <!-- ======================= centre: 3D viewport ======================= -->
+  <section id="viewport">
+    <canvas id="gl"></canvas>
+    <div id="hud-name">
+      <div class="tyre-name" id="hud-tyre-name">GZERO RS</div>
+      <div class="tyre-type" id="hud-tyre-type">RACING SLICK</div>
+    </div>
+    <div id="hud-stats"></div>
+    <div id="hud-hint">drag — orbit · wheel — zoom · right-drag — pan</div>
+  </section>
+
+  <!-- ======================= right: control deck ======================= -->
+  <aside id="deck">
+    <nav id="tabs">
+      <button data-tab="size" class="on">SIZE</button>
+      <button data-tab="tread">TREAD LAB</button>
+      <button data-tab="wall">SIDEWALL</button>
+      <button data-tab="out">SCENE · EXPORT</button>
+    </nav>
+
+    <div class="tab-page on" data-page="size">
+      <h3>Procedural profile</h3>
+      <div class="ctl"><label>Section width <t id="v-sw"></t></label><input id="s-sw" type="range" min="155" max="345" step="5"></div>
+      <div class="ctl"><label>Aspect ratio <t id="v-ar"></t></label><input id="s-ar" type="range" min="20" max="85" step="5"></div>
+      <div class="ctl"><label>Rim diameter <t id="v-rim"></t></label><input id="s-rim" type="range" min="13" max="22" step="1"></div>
+      <div class="ctl"><label>Rim width <t id="v-rimw"></t></label><input id="s-rimw" type="range" min="5" max="14" step="0.5"></div>
+      <div class="ctl"><label>Tread width <t id="v-twf"></t></label><input id="s-twf" type="range" min="0.65" max="0.92" step="0.01"></div>
+      <div class="ctl"><label>Shoulder arc <t id="v-sh"></t></label><input id="s-sh" type="range" min="4" max="20" step="1"></div>
+      <div class="ctl"><label>Crown <t id="v-crown"></t></label><input id="s-crown" type="range" min="0.5" max="5" step="0.1"></div>
+      <canvas id="profile-view" width="320" height="240"></canvas>
+      <div id="size-read"></div>
+    </div>
+
+    <div class="tab-page" data-page="tread">
+      <h3>Tread lab</h3>
+      <div class="ctl wear-ctl">
+        <label>Wear <t id="v-wear"></t></label><input id="s-wear" type="range" min="0" max="0.95" step="0.01">
+        <div class="wear-marks"><span>NEW</span><span>SCRUBBED</span><span>CORDED</span></div>
+      </div>
+      <div class="ctl"><label>Camber wear <t id="v-camber"></t></label><input id="s-camber" type="range" min="0" max="1" step="0.05"></div>
+      <div id="tread-editor"></div>
+    </div>
+
+    <div class="tab-page" data-page="wall">
+      <h3>Sidewall print</h3>
+      <div class="ctl"><label>Brand</label><input id="w-brand" type="text" maxlength="16"></div>
+      <div class="ctl"><label>Model</label><input id="w-model" type="text" maxlength="20"></div>
+      <div class="ctl"><label>Service desc.</label><input id="w-load" type="text" maxlength="6" placeholder="94Y"></div>
+      <div class="ctl"><label>Ring colour</label><input id="w-ring" type="color"></div>
+      <p class="note">Sidewall is fully procedural: brand, model, size code,
+      load index, wear markers and rotation arrows are all painted per tyre.
+      Directional patterns automatically get rotation arrows.</p>
+      <canvas id="wall-view" width="300" height="150"></canvas>
+    </div>
+
+    <div class="tab-page" data-page="out">
+      <h3>Scene</h3>
+      <div class="ctl"><label>Compound colour</label><input id="o-col" type="color" value="#1c1c1c"></div>
+      <div class="ctl"><label>Compound gloss <t id="v-rough"></t></label><input id="o-rough" type="range" min="0.2" max="1" step="0.01"></div>
+      <div class="ctl btn-col">
+        <label class="bool-row"><input id="o-flip" type="checkbox"> Flip pattern</label>
+      </div>
+      <h3>Export for your game</h3>
+      <button class="big-btn" id="x-glb">⬇ Tyre.GLB (baked geometry, metres)</button>
+      <div class="map-btns">
+        <button class="big-btn" id="x-height">⬇ Heightmap PNG</button>
+        <button class="big-btn" id="x-normal">⬇ Normal map PNG</button>
+        <button class="big-btn" id="x-albedo">⬇ Albedo PNG</button>
+        <button class="big-btn" id="x-rough">⬇ Roughness PNG</button>
+        <button class="big-btn" id="x-wall">⬇ Sidewall PNG</button>
+        <button class="big-btn" id="x-json">⧉ Copy spec JSON</button>
+      </div>
+      <p class="note">GLB includes the displacement-baked tread (current wear),
+      carcass, sidewall textures and rim — drop it straight into your scene.</p>
+    </div>
+  </aside>
+</main>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
