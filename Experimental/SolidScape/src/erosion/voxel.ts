@@ -95,121 +95,137 @@ export function ThermalErodeVoxels(vol: VoxelVolume, mask: Uint8Array, talusDeg:
     }
 }
 
-/** Async hydraulic droplet erosion on voxels — walks downhill by gravity (decreasing y). */
+/** 3D splat: distribute amount to 3x3x3 neighbourhood with trilinear falloff */
+function Splat3D(data: Float32Array, N: number, cx: number, cy: number, cz: number, amount: number, radius = 1): void {
+    const rInt = Math.ceil(radius);
+    for (let dz=-rInt; dz<=rInt; dz++) for (let dy=-rInt; dy<=rInt; dy++) for (let dx=-rInt; dx<=rInt; dx++) {
+        const nx=cx+dx, ny=cy+dy, nz=cz+dz;
+        if(nx<0||ny<0||nz<0||nx>=N||ny>=N||nz>=N) continue;
+        const dist = Math.sqrt(dx*dx+dy*dy+dz*dz);
+        if(dist>radius+1e-6) continue;
+        const w = Math.max(0, 1 - dist/(radius+0.9));
+        const idx=idx3(nx,ny,nz,N);
+        data[idx] += amount * w * 0.42; // spread, conserve ~ mass
+    }
+}
+
+/** Async hydraulic droplet erosion on voxels — walks downhill by effective surface height (y - SDF) so carved valleys attract flow */
 export async function DropletErodeVoxelsAsync(
     vol: VoxelVolume,
     mask: Uint8Array,
     settings: ErodeSettings,
     onProgress?: (done: number, total: number) => void,
-    yieldEvery = 600
+    yieldEvery = 500
 ): Promise<void> {
     const { data, N, cell, min } = vol;
-    const totalDroplets = Math.min(settings.droplets * Math.max(1, Math.floor(settings.iterations/4)), 5000);
-    // inertia, capacity, erodeRate from settings
+    // scale droplets with iterations but cap for interactivity
+    const totalDroplets = Math.min(settings.droplets * Math.max(1, Math.floor(settings.iterations/6)), 7000);
     const inertia = settings.inertia;
-    const erodeRate = Math.min(settings.erodeRate, 0.12);
+    const erodeRate = Math.min(settings.erodeRate, 0.14);
     const evaporation = settings.evaporation;
 
-    // Build list of surface indices for fast random pick
     let surfaceList: number[] = [];
-    for (let i = 0; i < mask.length; i++) if (mask[i]) surfaceList.push(i);
-    if (surfaceList.length === 0) return;
+    for (let i=0;i<mask.length;i++) if(mask[i]) surfaceList.push(i);
+    if(surfaceList.length===0) return;
 
-    // Precompute y world per y index
-    const yWorldFor = (yIdx: number) => min.y + yIdx * cell;
+    const yWorldFor = (yIdx:number)=> min.y + yIdx*cell;
+    // effective surface height ≈ y - SDF (for top region SDF≈y - surf) -> carved valleys (higher SDF) become lower
+    const effHeight = (idx:number, yIdx:number)=> yWorldFor(yIdx) - data[idx]*0.75;
 
-    // To avoid walking on bottom ground plane, filter to y > min.y + size*0.35 ?
-    const startCandidates = surfaceList.filter(i => {
-        const yIdx = Math.floor((i / N) % N);
-        const y = yWorldFor(yIdx);
-        // keep upper 65% of volume and inside sphere (negative SDF)
-        return y > min.y + vol.size*0.42 && data[i] < 0.22;
+    const startCandidates = surfaceList.filter(i=>{
+        const yIdx=Math.floor((i/N)%N);
+        const y=yWorldFor(yIdx);
+        return y > min.y + vol.size*0.38 && data[i] < 0.35;
     });
-    const pool = startCandidates.length > 500 ? startCandidates : surfaceList;
+    const pool = startCandidates.length>600 ? startCandidates : surfaceList;
 
-    let flow = new Float32Array(data.length); void flow;
+    const neighOffsets:[number,number,number][]=[];
+    for(let dz=-1;dz<=1;dz++) for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++) if(dx||dy||dz) neighOffsets.push([dx,dy,dz]);
 
-    const neighOffsets: [number, number, number][] = [];
-    for (let dz=-1; dz<=1; dz++) for (let dy=-1; dy<=1; dy++) for (let dx=-1; dx<=1; dx++) if (dx||dy||dz) neighOffsets.push([dx,dy,dz]);
+    // flow accumulation for widening (where many droplets pass, erode more)
+    const flowCount = new Uint16Array(data.length);
 
-    for (let d = 0; d < totalDroplets; d++) {
-        // pick start biased to higher y
+    for(let d=0; d<totalDroplets; d++){
         let curIdx = pool[Math.floor(Math.random()*pool.length)];
-        // optionally try to pick higher one
-        for (let k=0;k<2;k++) {
-            const cand = pool[Math.floor(Math.random()*pool.length)];
-            const yC = yWorldFor(Math.floor((cand / N)% N));
-            const yCur = yWorldFor(Math.floor((curIdx / N)% N));
-            if (yC > yCur) curIdx = cand;
+        for(let k=0;k<2;k++){
+            const cand=pool[Math.floor(Math.random()*pool.length)];
+            if(effHeight(cand, Math.floor((cand/N)%N)) > effHeight(curIdx, Math.floor((curIdx/N)%N))) curIdx=cand;
         }
-
-        let water = 1.0;
-        let sediment = 0;
-        let vel = 0;
-        let curX = curIdx % N;
-        let curY = Math.floor((curIdx / N) % N);
-        let curZ = Math.floor(curIdx / (N*N));
-
-        for (let step=0; step<34; step++) {
-            if (water < 0.02) break;
-            const yCurWorld = yWorldFor(curY);
-            // find steepest downhill surface neighbor with lower y
-            let bestIdx = -1;
-            let bestY = yCurWorld;
-            let bestDist = 1;
-            let bestX = curX, bestYIdx = curY, bestZ = curZ;
-            for (const [dx, dy, dz] of neighOffsets) {
-                const nx = curX+dx, ny = curY+dy, nz = curZ+dz;
-                if (nx<0||ny<0||nz<0||nx>=N||ny>=N||nz>=N) continue;
-                const nIdx = idx3(nx,ny,nz,N);
-                if (!mask[nIdx]) continue;
-                const yNb = yWorldFor(ny);
-                // only downhill
-                if (yNb >= bestY) continue;
-                // require some slope, but allow gentle
-                bestY = yNb; bestIdx = nIdx; bestX = nx; bestYIdx = ny; bestZ = nz;
-                bestDist = Math.sqrt(dx*dx+dy*dy+dz*dz)*cell;
+        let water=1.0, sediment=0, vel=0;
+        let curX=curIdx%N, curY=Math.floor((curIdx/N)%N), curZ=Math.floor(curIdx/(N*N));
+        let prevDir:[number,number,number]=[0,0,0];
+        for(let step=0; step<42; step++){
+            if(water<0.015) break;
+            const curEff = effHeight(curIdx, curY);
+            let bestIdx=-1;
+            let bestEff = curEff;
+            let bestDist=cell;
+            let bestX=curX,bestY=curY,bestZ=curZ;
+            let bestDir:[number,number,number]=[0,0,0];
+            for(const [dx,dy,dz] of neighOffsets){
+                const nx=curX+dx, ny=curY+dy, nz=curZ+dz;
+                if(nx<0||ny<0||nz<0||nx>=N||ny>=N||nz>=N) continue;
+                const nIdx=idx3(nx,ny,nz,N);
+                if(!mask[nIdx]) continue;
+                const eff = effHeight(nIdx, ny);
+                // inertia: slight preference to continue same direction
+                const dot = dx*prevDir[0]+dy*prevDir[1]+dz*prevDir[2];
+                const bias = dot>0 ? 0.015*dot : 0;
+                const score = eff - bias;
+                if(score < bestEff - 1e-5){
+                    bestEff=score; bestIdx=nIdx; bestX=nx; bestY=ny; bestZ=nz;
+                    bestDist=Math.sqrt(dx*dx+dy*dy+dz*dz)*cell;
+                    bestDir=[dx,dy,dz];
+                }
             }
-            if (bestIdx === -1) break;
-
-            const heightDiff = yCurWorld - bestY; // >0
-            const slope = Math.max(heightDiff / Math.max(bestDist, cell*0.7), 0.015);
+            if(bestIdx===-1) break;
+            const heightDiff = curEff - bestEff; // >0 downhill
+            const slope = Math.max(heightDiff / Math.max(bestDist, cell*0.6), 0.012);
             vel = vel*inertia + slope*(1-inertia);
-            vel = Math.max(vel, 0.05);
-            const capacity = slope * vel * water * 0.45;
-
-            if (sediment > capacity) {
-                // deposit a little at current
-                const dep = Math.min((sediment - capacity)* settings.deposit *0.5, heightDiff*0.4);
-                const cdep = Math.min(dep, 0.07);
-                if (cdep > 1e-4) {
-                    // deposit decreases SDF (adds material)
-                    data[curIdx] -= cdep * 0.6;
+            vel = Math.max(vel, 0.04);
+            const capacity = slope * vel * water * (settings.capacity*6.5 + 0.18);
+            flowCount[curIdx] = Math.min(65535, flowCount[curIdx]+1);
+            const widen = Math.min(1.4, 0.85 + Math.log2(1+flowCount[curIdx])*0.18);
+            if(sediment > capacity){
+                const dep=Math.min((sediment-capacity)*settings.deposit*0.55, heightDiff*0.45);
+                const cdep=Math.min(dep, 0.08);
+                if(cdep>1e-4){
+                    Splat3D(data,N,curX,curY,curZ,-cdep*0.55,1.2);
                     sediment -= cdep;
                 }
-            } else {
-                let erodeAmt = Math.min((capacity - sediment)*erodeRate, heightDiff*0.55);
-                erodeAmt = Math.min(Math.max(0, erodeAmt), 0.11);
-                if (erodeAmt > 1e-4) {
-                    // erode current (increase SDF, carve inward)
-                    // weight by how vertical the surface is? For sphere, carving deeper on sides looks wrong? Keep uniform.
-                    data[curIdx] += erodeAmt * 0.72;
-                    // also slightly carve best to make continuous groove
-                    data[bestIdx] += erodeAmt * 0.18;
-                    sediment += erodeAmt;
+            }else{
+                let erodeAmt=Math.min((capacity - sediment)*erodeRate, heightDiff*0.62);
+                erodeAmt=Math.min(Math.max(0,erodeAmt), 0.13);
+                erodeAmt *= widen;
+                if(erodeAmt>1e-4){
+                    Splat3D(data,N,curX,curY,curZ,erodeAmt*0.58,1.1);
+                    Splat3D(data,N,bestX,bestY,bestZ,erodeAmt*0.22,1.0);
+                    sediment += erodeAmt*0.9;
                 }
             }
-            water *= (1 - evaporation);
-            curX = bestX; curY = bestYIdx; curZ = bestZ;
-            curIdx = bestIdx;
+            water *= (1 - evaporation*0.9);
+            prevDir=bestDir;
+            curX=bestX; curY=bestY; curZ=bestZ; curIdx=bestIdx;
         }
-
-        if (d % yieldEvery === 0) {
-            onProgress?.(d, totalDroplets);
-            await new Promise<void>(r => setTimeout(r, 0));
+        if(d%yieldEvery===0){
+            onProgress?.(d,totalDroplets);
+            await new Promise<void>(r=>setTimeout(r,0));
         }
     }
-    onProgress?.(totalDroplets, totalDroplets);
+    onProgress?.(totalDroplets,totalDroplets);
+    // light post-smooth to kill single-voxel noise but keep channels
+    const copy = data.slice();
+    for(let z=1;z<N-1;z++) for(let y=1;y<N-1;y++) for(let x=1;x<N-1;x++){
+        const i=idx3(x,y,z,N);
+        if(!mask[i]) continue;
+        // average of 6 neighbours, 12% blend
+        let avg=0, cnt=0;
+        for(const [dx,dy,dz] of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]] as const){
+            const n=idx3(x+dx,y+dy,z+dz,N);
+            if(mask[n]){ avg+=copy[n]; cnt++; }
+        }
+        if(cnt>3) data[i] = data[i]*0.88 + (avg/cnt)*0.12;
+    }
 }
 
 /** Generate a top-down preview heightmap from voxel volume (find highest zero-crossing per column). */

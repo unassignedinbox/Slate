@@ -132,6 +132,7 @@ export class ErosionPreview
 
     IsVisible(): boolean { return this.visible; }
     HasResult(): boolean { return !!(this.volData || this.erosionDelta || this.eroded); }
+    IsRunning(): boolean { return this.running; }
     IsVolumeMode(): boolean { return this.isVolumeMode; }
     GetDelta(): Float32Array | null { return this.erosionDelta; }
 

@@ -487,6 +487,58 @@ function UpdateErosionHint(): void
     if (!erosion.HasResult() && stats) stats.textContent = `ready — thermal ${s.thermal}× talus ${s.talus}° · erode ${s.erodeRate.toFixed(2)} deposit ${s.deposit.toFixed(2)}`;
 }
 
+// shared erosion trigger — used by both viewport panel and Erode node button + auto-run
+let erosionRunSeq = 0;
+async function RunErosion(trigger: string = 'panel'): Promise<void> {
+    const node = ErodeNode();
+    if (!node) { ShowToast('Connect SDF → Erode → Terrain Output to erode'); return; }
+    const s = ReadErodeSettings(node.params);
+    if (compiled.count===0) { ShowToast('No SDF to erode — add a primitive'); return; }
+    const stats = document.getElementById('erosion-stats') as HTMLElement | null;
+    const runBtn = document.getElementById('erosion-run') as HTMLButtonElement | null;
+    const sw3d = document.getElementById('erosion-3d') as HTMLElement | null;
+    const panel = document.getElementById('erosion-panel') as HTMLElement | null;
+    const fab = document.getElementById('erosion-fab') as HTMLElement | null;
+    console.log(`[Erosion] Run via ${trigger}`, s);
+    if (runBtn) { runBtn.disabled=true; runBtn.textContent='⏳ Baking…'; }
+    if (stats) stats.textContent='Baking…';
+    // show node baking state
+    const card = document.querySelector(`.node[data-uid="${node.uid}"]`) as HTMLElement | null;
+    card?.classList.add('baking');
+    try{
+        await erosion.BakeAndErode(compiled, s, (msg)=>{ if(stats) stats.textContent=msg; console.log('[Erosion]',msg); });
+        if(erosion.HasResult()){
+            erosion.SetVisible(true);
+            if(sw3d) sw3d.dataset.on='true';
+            if(panel) panel.classList.add('show'); if(fab) fab.classList.add('active');
+            ShowToast(`Eroded — SDF erosion active (${trigger})`);
+            UpdateErosionHint();
+        }
+    }catch(e){ console.error(e); ShowToast('Erosion failed — see console'); if(stats) stats.textContent=String(e); }
+    finally{
+        if(runBtn){ runBtn.disabled=false; runBtn.textContent='▶ Run 1+2'; }
+        card?.classList.remove('baking');
+        erosionRunSeq++;
+    }
+}
+let autoErodeTimer: number|undefined;
+function ScheduleAutoErode(){
+    const node=ErodeNode();
+    if(!node){
+        // no erode node -> clear any stale erosion
+        if(erosion.HasResult()){
+            erosion.Reset();
+            const sw=document.getElementById('erosion-3d') as HTMLElement|null;
+            if(sw) sw.dataset.on='false';
+            UpdateErosionHint();
+        }
+        return;
+    }
+    if(erosion.IsRunning()) return;
+    window.clearTimeout(autoErodeTimer);
+    autoErodeTimer = window.setTimeout(()=>{ RunErosion('auto'); }, 650);
+}
+
 function EnsureErosionPanel(): HTMLElement | null
 {
     let panel = document.getElementById('erosion-panel') as HTMLElement | null;
@@ -562,7 +614,6 @@ function InitErosionUI(): void
         const on = sw3d.dataset.on !== 'true';
         sw3d.dataset.on = String(on);
         erosion.SetVisible(on);
-        // SDF erosion toggles inside FieldPass — field mesh always stays visible
         if (on && !erosion.HasResult()) ShowToast('Press Run 1+2 first to generate eroded SDF');
     };
     reset.onclick = () =>
@@ -573,32 +624,9 @@ function InitErosionUI(): void
         if (stats) stats.textContent = 'reset — original SDF';
         ShowToast('Erosion reset — SDF restored');
     };
-    run.onclick = async () =>
-    {
-        const node = ErodeNode();
-        console.log('[Erosion] Run clicked, node:', node);
-        if (!node) { ShowToast('Connect SDF → Erode → Terrain Output (field blue) to erode'); togglePanel(true); return; }
-        const s = ReadErodeSettings(node.params);
-        console.log('[Erosion] settings', s, 'compiled', compiled.count);
-        if (compiled.count === 0) { ShowToast('No SDF to erode — add a primitive'); return; }
-        run.disabled = true; const prev = run.textContent; run.textContent = '⏳ Baking…'; if (stats) stats.textContent = 'Baking heightfield…';
-        try
-        {
-            await erosion.BakeAndErode(compiled, s, (msg) => { if (stats) stats.textContent = msg; console.log('[Erosion]', msg); });
-            const has = erosion.HasResult();
-            console.log('[Erosion] done, hasResult', has);
-            if (has) {
-                sw3d.dataset.on = 'true';
-                erosion.SetVisible(true);
-                ShowToast(`Eroded ${s.resolution}² — SDF erosion active (toggle 3D off to see original SDF)`);
-                togglePanel(true);
-            }
-            UpdateErosionHint();
-        } catch (e) { console.error(e); ShowToast('Erosion failed — see console'); if (stats) stats.textContent = String(e); }
-        finally { run.disabled = false; run.textContent = prev ?? '▶ Run 1+2'; }
-    };
+    run.onclick = () => RunErosion('panel');
 
-    // Inject a Run button directly into the Erode node card for discoverability
+    // Inject a Run button directly into the Erode node card — now calls shared RunErosion, not panel click
     const injectNodeButton = () =>
     {
         const node = ErodeNode();
@@ -610,11 +638,17 @@ function InitErosionUI(): void
         if (!paramsBox) return;
         const btn = document.createElement('button');
         btn.className = 'btn small erode-run-inline';
-        btn.textContent = '▶ Erode sphere';
-        btn.style.marginTop = '6px'; btn.style.width = '100%';
-        btn.title = 'Bakes 512² tile and runs 1+2 (thermal+droplet)';
-        btn.onclick = (e) => { e.stopPropagation(); (document.getElementById('erosion-run') as HTMLButtonElement)?.click(); const p = document.getElementById('erosion-panel'); if (p) p.classList.add('show'); const f = document.getElementById('erosion-fab'); if (f) f.classList.add('active'); };
+        btn.textContent = '▶ Bake Erosion';
+        btn.style.marginTop = '8px'; btn.style.width = '100%'; btn.style.background='var(--accent)';
+        btn.style.color='#fff'; btn.style.border='none';
+        btn.title = 'Bake SDF erosion from Erode node params';
+        btn.onclick = (e) => { e.stopPropagation(); RunErosion('node'); };
         paramsBox.appendChild(btn);
+        // add hint that auto-bake is enabled
+        const hint = document.createElement('div');
+        hint.className='mono'; hint.style.fontSize='10px'; hint.style.color='var(--text-faint)'; hint.style.marginTop='4px'; hint.style.textAlign='center';
+        hint.textContent='Auto-bakes when graph changes';
+        paramsBox.appendChild(hint);
     };
     // try now and after graph changes
     injectNodeButton();
@@ -857,9 +891,18 @@ sculpt.onMissedSurface = () =>
         ShowToast('Click on a surface to sculpt — strokes bind to the shape under the cursor');
 };
 
-graph.onParamChanged = () => { brickPool.InvalidateAll(); erosionDirty = true; UpdateErosionHint(); QueueRebuild(); };
+graph.onParamChanged = () => {
+    brickPool.InvalidateAll();
+    erosionDirty = true;
+    UpdateErosionHint();
+    QueueRebuild();
+    // auto-bake when Erode params change
+    if (ErodeNode()) ScheduleAutoErode();
+};
 
 RebuildField();
+// kick off an initial auto-bake for the seed graph (sphere+erode)
+setTimeout(()=>{ if(ErodeNode() && !erosion.HasResult()) ScheduleAutoErode(); }, 900);
 
 Q<HTMLInputElement>('#load-file').addEventListener('change', (e) =>
 {
@@ -1053,6 +1096,7 @@ graph.onGraphChanged = () =>
     erosionDirty = true;
     UpdateErosionHint();
     QueueRebuild();
+    if (ErodeNode()) ScheduleAutoErode();
     bpLabel.textContent = 'Building';
     bpFill.style.width = '18%';
     bpPct.textContent = '18%';
