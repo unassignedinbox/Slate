@@ -412,15 +412,18 @@ function SeedGraph(): void
 {
     const ground = graph.AddNode('sdf-plane',   -40,  -40);
     const sphere = graph.AddNode('sdf-sphere',  -40,  260);
+    // smaller dome per user request — 4 m radius (was 8 m) at y=4
+    if (sphere) { sphere.params['radius'] = 4; sphere.params['posY'] = 4; sphere.params['posX'] = 0; sphere.params['posZ'] = 0; }
     const union  = graph.AddNode('union',        340,  100);
-    const erode  = graph.AddNode('erode',        680,  90);
-    const out    = graph.AddNode('terrain-out', 1040, 130);
+    if (union) union.params['smooth'] = 1.2;
+    const out    = graph.AddNode('terrain-out',  680, 130);
 
     LinkNodes(ground, 'sdf', union, 'a');
     LinkNodes(sphere, 'sdf', union, 'b');
-    LinkNodes(union,  'sdf', erode, 'in');
-    LinkNodes(erode,  'out', out,   'sdf');
+    LinkNodes(union,  'sdf', out,   'sdf');
 
+    // refresh node UI to show the smaller radius
+    graph.Hydrate();
     requestAnimationFrame(() => { graph.RedrawWires(); graph.FrameGraph(); });
 }
 SeedGraph();
