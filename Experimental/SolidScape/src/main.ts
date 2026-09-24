@@ -410,6 +410,8 @@ function LinkNodes(a: { uid: string; root: HTMLElement } | null, ap: string,
 
 function SeedGraph(): void
 {
+    // Start node (entry point) + basic SDF primitives, no preview canvases
+    void graph.AddNode('start',       -340,  -80);
     const ground = graph.AddNode('sdf-plane',   -40,  -40);
     const sphere = graph.AddNode('sdf-sphere',  -40,  260);
     // smaller dome per user request — 4 m radius (was 8 m) at y=4
@@ -421,6 +423,7 @@ function SeedGraph(): void
     LinkNodes(ground, 'sdf', union, 'a');
     LinkNodes(sphere, 'sdf', union, 'b');
     LinkNodes(union,  'sdf', out,   'sdf');
+    // start has flow output — leave unconnected as clean entry point (no canvases/images)
 
     // refresh node UI to show the smaller radius
     graph.Hydrate();
