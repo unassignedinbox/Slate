@@ -28,13 +28,9 @@
             <button class="tbtn shape" data-shape="2" title="Cylinder tip" data-icon="cylinder"></button>
         </div>
 
-        <!-- camera scheme switch + viewport settings -->
+        <!-- settings toggle — sun IS settings -->
         <div class="vp-camera-switch">
-            <div class="seg" id="camera-scheme">
-                <button class="active" data-scheme="fly">Fly · Unreal</button>
-                <button data-scheme="orbit">Orbit · Blender</button>
-            </div>
-            <button class="round-btn" id="sky-toggle" title="Viewport Settings" data-icon="sun"></button>
+            <button class="round-btn" id="sky-toggle" title="Settings" data-icon="sun"></button>
         </div>
 
         <!-- viewport settings panel: document · terrain field · sun & sky -->
@@ -42,11 +38,19 @@
             <div class="panel-header">
                 <div class="ph-icon" data-icon="sun"></div>
                 <div>
-                    <div class="ph-title">Viewport Settings</div>
-                    <div class="ph-sub">document · terrain field · sun &amp; sky</div>
+                    <div class="ph-title">Settings</div>
+                    <div class="ph-sub">viewport · document · sun &amp; sky</div>
                 </div>
                 <div class="spacer"></div>
                 <button class="btn ghost icon small" id="sky-close" data-icon="close"></button>
+            </div>
+            <!-- camera / navigation — moved inside Settings per request -->
+            <div class="panel-section" style="padding:12px 16px 0">
+                <div class="sec-label">Navigation</div>
+                <div class="seg" id="camera-scheme" style="width:100%; margin-top:6px">
+                    <button class="active" data-scheme="fly" style="flex:1">Fly · Unreal</button>
+                    <button data-scheme="orbit" style="flex:1">Orbit · Blender</button>
+                </div>
             </div>
             <div class="panel-body" id="sky-controls"></div>
             <div class="panel-footer">
@@ -136,8 +140,8 @@
             <button class="gbtn" id="tool-build" title="Build graph" data-icon="play"></button>
         </div>
 
-        <!-- top-right circular settings button -->
-        <button class="round-btn graph-settings-btn" id="graph-settings-btn" data-icon="sliders"></button>
+        <!-- top-right circular settings button — sun IS settings for node editor too -->
+        <button class="round-btn graph-settings-btn" id="graph-settings-btn" data-icon="sun" title="Settings"></button>
 
         <!-- settings dropdown -->
         <div class="dropdown-panel" id="graph-settings">
