@@ -12,6 +12,74 @@ async function loadEngine() {
   throw lastError || new Error('Unable to load the 3D engine.');
 }
 
+function startCompatibilityMode() {
+  // Canvas fallback keeps the mission playable in previews where WebGL or an ESM CDN is unavailable.
+  const canvas = document.querySelector('#game');
+  const ctx = canvas.getContext('2d');
+  const intro = document.querySelector('#intro');
+  const launch = document.querySelector('#launch');
+  const note = document.querySelector('#engine-status');
+  const healthText = document.querySelector('#health-number');
+  const healthBar = document.querySelector('#health-bar');
+  const tideText = document.querySelector('#tide-number');
+  const tideBar = document.querySelector('#tide-bar');
+  const distanceText = document.querySelector('#distance');
+  const notice = document.querySelector('#message');
+  canvas.tabIndex = 0;
+  let width = 0, height = 0, active = false, finished = false, px = -13, pz = 184, heading = 0, speed = 0, health = 100, elapsed = 0, last = performance.now();
+  const keys = {}, mines = [[24,121],[11,67],[-8,45],[55,-34],[41,-53],[5,-111],[-11,-145],[-30,-207],[17,-246],[43,-287],[8,-325],[-16,-362],[-63,-59],[92,-175],[-84,-284]];
+  const route = [[-13,184],[43,137],[13,82],[-37,30],[20,-22],[61,-70],[22,-120],[-48,-166],[-20,-222],[48,-267],[27,-322],[1,-386]];
+  const mounds = [[-160,112,31],[130,90,36],[-80,12,27],[150,-35,42],[-148,-65,36],[99,-132,28],[-114,-194,42],[147,-250,35],[-85,-302,45],[96,-352,33]];
+  const paint = { sand:'#b89d6d', road:'#5f5746', edge:'#948a6b', water:'#3b91a0', wall:'#827f74', mound:'#715b3e', dark:'#34342c', mine:'#202421', yellow:'#e0a245', red:'#c54b35' };
+  function resize() { width = canvas.width = window.innerWidth * Math.min(devicePixelRatio, 1.5); height = canvas.height = window.innerHeight * Math.min(devicePixelRatio, 1.5); canvas.style.width = `${window.innerWidth}px`; canvas.style.height = `${window.innerHeight}px`; ctx.setTransform(Math.min(devicePixelRatio,1.5),0,0,Math.min(devicePixelRatio,1.5),0,0); width = window.innerWidth; height = window.innerHeight; }
+  function message(title, sub) { notice.innerHTML = `${title}${sub ? `<span>${sub}</span>` : ''}`; notice.classList.remove('hidden'); clearTimeout(message.timer); message.timer = setTimeout(()=>notice.classList.add('hidden'), 2100); }
+  function start() { if (active) return; active = true; finished = false; intro.classList.add('dismissed'); canvas.focus({ preventScroll:true }); message('GO. GO. GO.', 'Thread the minefield and reach the wall breach.'); }
+  function reset() { px=-13; pz=184; heading=0; speed=0; health=100; elapsed=0; finished=false; active=true; intro.classList.add('dismissed'); canvas.focus({ preventScroll:true }); }
+  function key(e, down) { const k=e.code; if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(k)) e.preventDefault(); if(k==='KeyR'&&down) reset(); keys[k]=down; }
+  window.addEventListener('keydown', e=>key(e,true)); window.addEventListener('keyup', e=>key(e,false));
+  launch.addEventListener('click', start); canvas.addEventListener('pointerdown', ()=>{ canvas.focus({preventScroll:true}); if (!active && !finished) start(); });
+  window.startDday = start;
+  if (note) note.textContent = 'Compatibility renderer active. Click the game, then use WASD or arrow keys.';
+  if (window.__ddayStartRequested) start();
+  resize(); window.addEventListener('resize',resize);
+  function map(wx,wz,scale) { return [width*.5+(wx-px)*scale, height*.60+(wz-pz)*scale]; }
+  function line(points, stroke, size, scale) { ctx.beginPath(); points.forEach((p,i)=>{const q=map(p[0],p[1],scale); i?ctx.lineTo(...q):ctx.moveTo(...q);}); ctx.strokeStyle=stroke;ctx.lineWidth=size*scale;ctx.lineJoin='round';ctx.stroke(); }
+  function drawObject(wx,wz,fn,scale) { const q=map(wx,wz,scale); if(q[0] < -90 || q[0] > width+90 || q[1] < -90 || q[1] > height+90) return; ctx.save();ctx.translate(...q);fn();ctx.restore(); }
+  function draw() {
+    const now=performance.now(), dt=Math.min(.045,(now-last)/1000); last=now;
+    if(active) {
+      elapsed+=dt; const throttle=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0); const steer=(keys.KeyA||keys.ArrowLeft?1:0)-(keys.KeyD||keys.ArrowRight?1:0);
+      speed += throttle*18*dt; if(!throttle) speed*=Math.pow(.18,dt); if(keys.Space) speed*=Math.pow(.03,dt); speed=Math.max(-9,Math.min((keys.ShiftLeft||keys.ShiftRight)?35:25,speed));
+      if(Math.abs(speed)>.4) heading += steer*Math.sign(speed)*dt*1.7;
+      px += -Math.sin(heading)*speed*dt; pz += -Math.cos(heading)*speed*dt; px=Math.max(-270,Math.min(265,px)); pz=Math.max(-409,Math.min(205,pz));
+      for (const mine of mines) if(!mine.hit && Math.hypot(mine[0]-px,mine[1]-pz)<4.1) {mine.hit=true;health=Math.max(0,health-31);speed*=.35;message('TANK MINE','Armor shredded — keep moving.');}
+      if (health<=0) {active=false;finished=true;message('VEHICLE DISABLED','Press R to restart the beach run.');}
+      if (pz<-404 && px>-14 && px<22) {active=false;finished=true;message('WALL BREACH REACHED','Mission complete.');}
+    }
+    const scale=Math.max(1.15,Math.min(1.85,width/800));
+    ctx.fillStyle=paint.sand;ctx.fillRect(0,0,width,height);
+    // Rising sea to the west.
+    const sea=map(-285,0,scale)[0] + Math.min(75,elapsed*1.2); ctx.fillStyle=paint.water;ctx.fillRect(0,0,sea,height);
+    ctx.strokeStyle='#86c4c8';ctx.lineWidth=2; for(let y=12;y<height;y+=24){ctx.beginPath();for(let x=0;x<sea;x+=16){const yy=y+Math.sin(x*.055+elapsed*2)*3;x?ctx.lineTo(x,yy):ctx.moveTo(x,yy);}ctx.stroke();}
+    // Mounds, trenches, and wire belts.
+    for(const m of mounds) drawObject(m[0],m[1],()=>{ctx.fillStyle=paint.mound;ctx.beginPath();ctx.moveTo(-m[2]*scale*.55,8);ctx.lineTo(0,-m[2]*scale*.34);ctx.lineTo(m[2]*scale*.6,10);ctx.fill();},scale);
+    [[-123,68,48], [118,-18,58],[-112,-245,64],[125,-312,55]].forEach(t=>line([[t[0]-t[2]/2,t[1]],[t[0]+t[2]/2,t[1]]],paint.dark,3.5,scale));
+    // Road itself is intentionally a series of bends.
+    line(route,paint.edge,12,scale); line(route,paint.road,9.4,scale);
+    for(const mine of mines) if(!mine.hit) drawObject(mine[0],mine[1],()=>{ctx.fillStyle=paint.mine;ctx.beginPath();ctx.arc(0,0,6,0,Math.PI*2);ctx.fill();ctx.strokeStyle=paint.yellow;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-4,-4);ctx.lineTo(4,4);ctx.moveTo(4,-4);ctx.lineTo(-4,4);ctx.stroke();},scale);
+    // Static tanks and their bunker positions.
+    [[-88,103],[135,-115],[-106,-220],[112,-342]].forEach(t=>drawObject(t[0],t[1],()=>{ctx.fillStyle='#3f4a3e';ctx.fillRect(-11,-7,22,14);ctx.fillStyle='#202622';ctx.fillRect(-2,-12,4,13);},scale));
+    [[-103,-73],[119,-177],[-94,-315],[103,-372]].forEach(t=>drawObject(t[0],t[1],()=>{ctx.fillStyle=paint.wall;ctx.fillRect(-12,-10,24,20);ctx.fillStyle=paint.dark;ctx.fillRect(-2,-16,4,15);},scale));
+    // Giant sea wall and its breach.
+    line([[-275,-414],[-17,-414]],paint.wall,11,scale);line([[25,-414],[275,-414]],paint.wall,11,scale);
+    // Sedan: a faceted compact car, always centered in the tactical view.
+    ctx.save();ctx.translate(width*.5,height*.60);ctx.rotate(heading);ctx.fillStyle=paint.red;ctx.beginPath();ctx.moveTo(-8,15);ctx.lineTo(8,15);ctx.lineTo(10,-4);ctx.lineTo(5,-14);ctx.lineTo(-5,-14);ctx.lineTo(-10,-4);ctx.closePath();ctx.fill();ctx.fillStyle='#25424a';ctx.fillRect(-5,-7,10,8);ctx.fillStyle='#1d211e';ctx.fillRect(-11,-8,3,7);ctx.fillRect(8,-8,3,7);ctx.fillRect(-11,7,3,7);ctx.fillRect(8,7,3,7);ctx.restore();
+    const tide=Math.min(100,Math.round(18+elapsed*.55)); healthText.textContent=`${Math.round(health)}%`; healthBar.style.width=`${health}%`; tideText.textContent=`${tide}%`; tideBar.style.width=`${tide}%`; distanceText.textContent=finished&&pz<-404?'SECURED':`${Math.max(0,Math.round((pz+404)*1.18))}m`;
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+}
+
 loadEngine().then((THREE) => {
 const canvas = document.querySelector('#game');
 const scene = new THREE.Scene();
@@ -420,10 +488,14 @@ const state = {
   tideStart:-7.8, nearObstacle:0
 };
 const keys={};
+canvas.tabIndex = 0;
 window.addEventListener('keydown',e=>{ keys[e.code]=true; if(e.code==='KeyR') reset(); if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault(); });
 window.addEventListener('keyup',e=>keys[e.code]=false);
+canvas.addEventListener('pointerdown', () => canvas.focus({ preventScroll: true }));
 function startDday() {
   if (state.active) return;
+  canvas.tabIndex = 0;
+  canvas.focus({ preventScroll: true });
   ui.intro.classList.add('dismissed');
   state.active=true;
   const status = document.querySelector('#engine-status');
@@ -574,10 +646,6 @@ function animate() {
 animate();
 window.addEventListener('resize',()=>{camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();renderer.setSize(window.innerWidth,window.innerHeight);});
 }).catch((error) => {
-  console.error('D-DAY engine failed to load:', error);
-  const note = document.querySelector('#engine-status');
-  if (note) {
-    note.textContent = '3D engine could not load. Refresh the preview and try again.';
-    note.classList.add('engine-error');
-  }
+  console.warn('D-DAY switched to its compatibility renderer:', error);
+  startCompatibilityMode();
 });
