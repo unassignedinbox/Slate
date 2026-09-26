@@ -368,11 +368,13 @@ export class Game {
     const speedT = clamp(Math.abs(car.speed) / CAR.maxSpeed, 0, 1);
 
     if (this.cameraMode === 1) {
-      // Bonnet camera
-      const p = car.object.localToWorld(this._tmp.set(0, 1.24, 0.55));
+      // Bonnet camera: sits on the scuttle, clear of the tinted windscreen.
+      const p = car.object.localToWorld(this._tmp.set(0, 1.17, 1.52));
       cam.position.copy(p);
-      const look = car.object.localToWorld(this._tmp2.set(0, 1.05, 14));
+      const look = car.object.localToWorld(this._tmp2.set(0, 0.7, 16));
       cam.lookAt(look);
+      cam.fov = damp(cam.fov, 68, 3, dt);
+      cam.updateProjectionMatrix();
     } else {
       const dist = this.cameraMode === 2 ? 17 : lerp(8.4, 11.6, speedT);
       const height = this.cameraMode === 2 ? 8.4 : lerp(3.5, 4.5, speedT);

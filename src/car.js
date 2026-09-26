@@ -335,6 +335,7 @@ export function createCarModel(paint = 0xb9c3c7) {
   bonnetPlate.rotation.x = 0.1;
   bonnetPlate.castShadow = true;
   kit.add(bonnetPlate);
+
   for (const sx of [-0.34, 0.3]) {
     const wire = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.09, 0.72), mat(0x3a3d3f));
     wire.position.set(sx, 0.895, 1.7);

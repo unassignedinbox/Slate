@@ -185,6 +185,49 @@ ok(!run2.nan, 'no NaN in car state (run 2)');
 }
 
 /* ---------------------------------------------------------------- */
+console.log('\nedges and drowning');
+{
+  // Nothing should let the player leave the playfield.
+  const corners = [
+    [400, 0], [-400, 0], [0, 400], [0, -400], [400, 400], [-400, -400],
+  ];
+  let escaped = null;
+  for (const [tx, tz] of corners) {
+    car.reset();
+    const run = makeAutopilot(car, colliders, { speedCap: 40 });
+    for (let i = 0; i < 1400; i++) {
+      ocean.update(dt, false);
+      car.update(dt, run(tx, tz), {});
+      colliders.resolveCar(car, dt, {});
+      if (!car.alive) break;
+    }
+    const outX = Math.abs(car.pos.x) > terrain.maxX + 1;
+    const outZ = car.pos.z > terrain.maxZ + 1 || car.pos.z < terrain.minZ + 1;
+    if (outX || outZ) escaped = `(${car.pos.x.toFixed(0)}, ${car.pos.z.toFixed(0)}) heading (${tx},${tz})`;
+  }
+  ok(!escaped, 'the car cannot leave the playfield', escaped || 'all six headings contained');
+
+  // Deep water has to be fatal, or the tide is just scenery.
+  car.reset();
+  ocean.elapsed = TIDE.duration;
+  ocean.update(0, true);
+  car.pos.set(SPAWN.x, 0, 250);
+  car.pos.y = terrain.heightAt(car.pos.x, car.pos.z);
+  car.vel.set(0, 0, 0);
+  let drownT = 0;
+  for (let i = 0; i < 3000 && car.alive; i++) {
+    ocean.update(dt, false);
+    car.update(dt, { throttle: 0, brake: 0, steer: 0, handbrake: false }, {});
+    colliders.resolveCar(car, dt, {});
+    drownT += dt;
+  }
+  ok(!car.alive && car.deathCause === 'drown', 'deep water drowns the car', `${drownT.toFixed(1)}s, cause=${car.deathCause}`);
+  ok(drownT > 4 && drownT < 40, 'drowning takes long enough to escape', `${drownT.toFixed(1)}s`);
+  car.reset();
+  ocean.elapsed = 0;
+  ocean.update(0, false);
+}
+
 console.log('\ntide');
 {
   ocean.elapsed = 0;

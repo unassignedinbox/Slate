@@ -121,6 +121,30 @@ const VIEWS = {
     placeCar(30, -220);
     return { pos: [34, 26, -232], look: [30, 29.5, -258], fov: 34 };
   },
+  bonnet: () => {
+    placeCar(6, 60, Math.PI);
+    const p = car.object.position;
+    // mirrors the in-game bonnet camera
+    const yaw = Math.PI;
+    const lx = Math.sin(yaw), lz = Math.cos(yaw);
+    return {
+      pos: [p.x + lx * 1.52, p.y + 1.17, p.z + lz * 1.52],
+      look: [p.x + lx * 16, p.y + 0.7, p.z + lz * 16],
+      fov: 68,
+    };
+  },
+  driver: () => {
+    placeCar(6, 60, Math.PI * 0.72);
+    const p = car.object.position;
+    return {
+      pos: [p.x - 3.1, p.y + 2.2, p.z - 2.6],
+      look: [p.x, p.y + 1.1, p.z + 0.2],
+      fov: 34,
+      // the software rasteriser has no alpha blending, so drop the glass to
+      // see what the player sees through it
+      skip: (o) => o.material && o.material.transparent,
+    };
+  },
   minefield: () => {
     placeCar(40, 4, Math.PI);
     const p = car.object.position;
@@ -164,7 +188,7 @@ for (const name of names) {
   const start = Date.now();
   raster.renderScene(scene, camera, {
     waterColor: 0x2f7d86,
-    skip: (o) => o.isPoints,
+    skip: (o) => o.isPoints || (spec.skip ? spec.skip(o) : false),
   });
   fs.writeFileSync(`${OUT}/${name}.png`, raster.toPNG(1.0));
   console.log(`${name}: ${raster.tris} tris in ${Date.now() - start}ms`);
