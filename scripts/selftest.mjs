@@ -89,6 +89,16 @@ console.log('\nterrain');
   let onRoadMines = 0;
   for (const m of minefield.mines) if (terrain.roadMaskAt(m.x, m.z) > 0.2) onRoadMines++;
   ok(onRoadMines === 0, 'roads are swept of mines', `${onRoadMines} found`);
+  // The breach must be physically reachable: a clear lane up the middle.
+  let blocked = 0;
+  for (let z = -196; z >= OBJECTIVE.z; z -= 2) {
+    for (const it of colliders.nearby(0, z, 6)) {
+      if (it.kind !== 'solid') continue;
+      if (Colliders.penetration(it, 0, z, 2.2)) blocked++;
+    }
+  }
+  ok(blocked === 0, 'the gate corridor is clear of solid obstacles', `${blocked} blockers`);
+
   const roadTypes = new Set();
   for (let z = 240; z > -200; z -= 20) roadTypes.add(terrain.typeAt(4 + z * 0.02, z));
   ok(
