@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>D-DAY: Breakwater Run</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main id="game-shell">
+      <canvas id="game"></canvas>
+
+      <section class="brand" aria-label="Game title">
+        <p class="eyebrow">OPERATION BREAKWATER / SECTOR 07</p>
+        <h1>D-DAY <span>RUN</span></h1>
+        <p class="mission">Drive the beachhead. Reach the sea wall breach.</p>
+      </section>
+
+      <section id="hud" aria-label="Mission status">
+        <div class="hud-card health-card">
+          <div class="hud-label"><span>VEHICLE INTEGRITY</span><b id="health-number">100%</b></div>
+          <div class="bar"><i id="health-bar"></i></div>
+        </div>
+        <div class="hud-card tide-card">
+          <div class="hud-label"><span>RISING TIDE</span><b id="tide-number">18%</b></div>
+          <div class="bar tide"><i id="tide-bar"></i></div>
+        </div>
+        <div class="distance-readout">
+          <span>WALL BREACH</span>
+          <strong id="distance">640m</strong>
+        </div>
+      </section>
+
+      <section class="objective-panel">
+        <div class="objective-icon">◈</div>
+        <div>
+          <p class="eyebrow">PRIMARY OBJECTIVE</p>
+          <p>Thread the defenses and reach the <b>concrete sea wall.</b></p>
+        </div>
+      </section>
+
+      <section id="intro" class="overlay">
+        <div class="intro-card">
+          <p class="eyebrow">D-DAY / DRIVING SURVIVAL</p>
+          <h2>THE BEACH IS NOT A ROAD.</h2>
+          <p class="intro-copy">A broken supply route cuts between a rising sea and a fortified wall. Avoid mines, trench lines, sentry fire, bomb runs, and the wreckage left on the beach.</p>
+          <div class="controls-grid">
+            <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>DRIVE / STEER</span></div>
+            <div><kbd>SPACE</kbd><span>HANDBRAKE</span></div>
+            <div><kbd>SHIFT</kbd><span>BOOST</span></div>
+          </div>
+          <button id="launch">BEGIN THE RUN <span>↗</span></button>
+          <p class="subtle">The tide rises continuously. Press <b>R</b> to reset.</p>
+        </div>
+      </section>
+
+      <section id="message" class="message hidden" aria-live="polite"></section>
+      <div class="reticle" aria-hidden="true"><i></i></div>
+      <div class="vignette" aria-hidden="true"></div>
+      <p class="help">WASD drive &nbsp;·&nbsp; SHIFT boost &nbsp;·&nbsp; SPACE brake &nbsp;·&nbsp; R restart</p>
+    </main>
+    <script type="module" src="./game.js"></script>
+  </body>
+</html>
