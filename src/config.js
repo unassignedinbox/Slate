@@ -274,6 +274,7 @@ export const COLORS = {
   sandPale: 0xe3d5ac,
   sandWet: 0x9c8a67,
   sandDeep: 0x6e6248,
+  mineGround: 0xb5a37c, // scraped, re-filled sand over a buried charge
   grass: 0x6f7a4a,
   grassDark: 0x5b6640,
   dirt: 0x8a7350,

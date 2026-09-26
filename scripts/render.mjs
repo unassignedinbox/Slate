@@ -121,6 +121,11 @@ const VIEWS = {
     placeCar(30, -220);
     return { pos: [34, 26, -232], look: [30, 29.5, -258], fov: 34 };
   },
+  minefield: () => {
+    placeCar(40, 4, Math.PI);
+    const p = car.object.position;
+    return { pos: [p.x + 2, p.y + 3.4, p.z + 8], look: [p.x - 2, p.y - 0.4, p.z - 26], fov: 58 };
+  },
   headland: () => {
     placeCar(140, -40);
     return { pos: [40, 48, 60], look: [250, 10, -170], fov: 58 };

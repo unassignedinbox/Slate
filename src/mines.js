@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mat, mergeParts } from './materials.js';
-import { DIFFICULTY, WALL } from './config.js';
+import { COLORS, DIFFICULTY, WALL } from './config.js';
 import { Rng, clamp } from './util.js';
 
 function apMineGeometry() {
@@ -111,6 +111,42 @@ export class Minefield {
 
     this.apMesh = this._buildInstances(apMineGeometry(), apMat, apTransforms, scene);
     this.tellerMesh = this._buildInstances(tellerMineGeometry(), tellerMat, tellerTransforms, scene);
+
+    // Every mine sits in a patch of scraped, re-filled sand. Historically
+    // accurate and, more to the point, it is what makes a minefield readable
+    // from a moving car instead of a surprise at forty metres.
+    this._buildDisturbedGround(scene);
+  }
+
+  /** Flat discs of churned sand under each mine, as one instanced draw. */
+  _buildDisturbedGround(scene) {
+    if (!this.mines.length) return;
+    const geo = new THREE.CircleGeometry(1, 11);
+    geo.rotateX(-Math.PI / 2);
+    const material = mat(COLORS.mineGround, {
+      roughness: 1,
+      polygonOffset: true,
+      polygonOffsetFactor: -3,
+      polygonOffsetUnits: -3,
+    });
+    const mesh = new THREE.InstancedMesh(geo, material, this.mines.length);
+    mesh.receiveShadow = true;
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const up = new THREE.Vector3(0, 1, 0);
+    const pos = new THREE.Vector3();
+    const scale = new THREE.Vector3();
+    this.mines.forEach((mine, i) => {
+      const r = (mine.kind === 'teller' ? 1.85 : 1.05) * (0.85 + ((i * 37) % 7) / 20);
+      pos.set(mine.x, this.terrain.heightAt(mine.x, mine.z) + 0.05, mine.z);
+      q.setFromUnitVectors(up, this.terrain.normalAt(mine.x, mine.z));
+      scale.set(r, 1, r);
+      m.compose(pos, q, scale);
+      mesh.setMatrixAt(i, m);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    scene.add(mesh);
+    this.groundMesh = mesh;
   }
 
   _addMine(x, z, kind, transformList, rng) {
