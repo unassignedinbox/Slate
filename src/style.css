@@ -9,8 +9,12 @@
 
 * { box-sizing: border-box; }
 html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #05060b; }
+#app { position: relative; }
 body { color: var(--ink); font-family: "DM Mono", monospace; user-select: none; }
 canvas { display: block; width: 100%; height: 100%; outline: none; }
+#race-canvas { position: fixed; inset: 0; z-index: 1; }
+.circuit-fallback { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: #05060b; }
+.circuit-fallback svg { width: 100%; height: 100%; display: block; }
 
 .loading {
   background: #05060b;
@@ -23,8 +27,10 @@ canvas { display: block; width: 100%; height: 100%; outline: none; }
   align-items: center;
   justify-content: center;
   transition: opacity .65s ease, visibility .65s ease;
+  animation: loadingFailSafe .45s ease 5s forwards;
 }
-.loading.done { opacity: 0; visibility: hidden; }
+.loading.done { opacity: 0; visibility: hidden; animation: none; }
+@keyframes loadingFailSafe { to { opacity: 0; visibility: hidden; } }
 .loading-mark {
   height: 66px; width: 66px; border: 1px solid var(--red); color: var(--red);
   display: grid; place-items: center; font: 800 27px "Barlow Condensed", sans-serif;
