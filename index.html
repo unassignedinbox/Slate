@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STEEL TIDE — D-Day Beach Assault</title>
+<style>
+  :root {
+    --amber: #ffb84d;
+    --red: #ff5a3c;
+    --ink: #0d1216;
+    --panel: rgba(10, 14, 18, 0.72);
+    --line: rgba(255, 255, 255, 0.14);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0d1216; }
+  body { font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #e8ecef; }
+  #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  .label { font-size: 10px; letter-spacing: 0.22em; color: rgba(232, 236, 239, 0.55); text-transform: uppercase; }
+  #objCard {
+    position: absolute; top: 18px; left: 18px; background: var(--panel);
+    border: 1px solid var(--line); border-left: 3px solid var(--amber);
+    padding: 10px 14px; min-width: 190px;
+  }
+  #objText { font-size: 15px; font-weight: 700; letter-spacing: 0.12em; margin-top: 2px; }
+  #objDist { font-size: 26px; font-weight: 800; color: var(--amber); margin-top: 2px; font-variant-numeric: tabular-nums; }
+  #tideCard {
+    position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
+    background: var(--panel); border: 1px solid var(--line); padding: 10px 16px; width: 300px;
+  }
+  #tideCard .label { display: flex; justify-content: space-between; }
+  #tideState { color: #4fc3f7; letter-spacing: 0.18em; }
+  .bar { height: 10px; background: rgba(255,255,255,0.09); margin-top: 6px; position: relative; overflow: hidden; }
+  .bar > div { height: 100%; width: 0%; transition: width 0.25s linear; }
+  #tideFill { background: linear-gradient(90deg, #2e6f9e, #4fc3f7); }
+  #hpCard {
+    position: absolute; left: 18px; bottom: 18px; background: var(--panel);
+    border: 1px solid var(--line); padding: 10px 14px; width: 220px;
+  }
+  #hpFill { background: linear-gradient(90deg, #7fbf5f, #b9e38a); }
+  #hpFill.low { background: linear-gradient(90deg, #c2372a, #ff5a3c); }
+  #vehCard {
+    position: absolute; left: 18px; bottom: 96px; background: var(--panel);
+    border: 1px solid var(--line); padding: 10px 14px; width: 220px;
+  }
+  #vehFill { background: linear-gradient(90deg, #b8862e, #ffd27a); }
+  #vehFill.low { background: linear-gradient(90deg, #c2372a, #ff5a3c); }
+  #hint {
+    position: absolute; bottom: 92px; left: 50%; transform: translateX(-50%);
+    font-size: 13px; letter-spacing: 0.16em; color: var(--amber); text-transform: uppercase;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+  }
+  #banner {
+    position: absolute; top: 84px; left: 50%; transform: translateX(-50%);
+    font-size: 17px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.9); opacity: 0; transition: opacity 0.3s; white-space: nowrap;
+  }
+  #controls {
+    position: absolute; right: 18px; bottom: 18px; background: var(--panel);
+    border: 1px solid var(--line); padding: 9px 12px;
+    font-size: 11px; letter-spacing: 0.08em; color: rgba(232,236,239,0.75); text-align: right; line-height: 1.7;
+  }
+  #controls b { color: var(--amber); font-weight: 700; }
+  #dot {
+    position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px;
+    background: rgba(255,255,255,0.85); border-radius: 50%; box-shadow: 0 0 4px rgba(0,0,0,0.8);
+  }
+  #vignette {
+    position: absolute; inset: 0; opacity: 0; transition: opacity 0.3s;
+    background: radial-gradient(ellipse at center, transparent 42%, rgba(160, 10, 0, 0.55) 100%);
+  }
+  #waterFx {
+    position: absolute; inset: 0; opacity: 0; transition: opacity 0.25s;
+    background: rgba(24, 66, 96, 0.55);
+  }
+
+  /* ---------- overlays ---------- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at center, rgba(13, 18, 22, 0.82), rgba(5, 8, 10, 0.95));
+    backdrop-filter: blur(3px);
+  }
+  .overlay.hidden { display: none; }
+  .panel {
+    max-width: 680px; width: min(92vw, 680px); text-align: center;
+    border: 1px solid var(--line); background: rgba(10, 14, 18, 0.8); padding: 42px 46px;
+  }
+  .kicker { font-size: 11px; letter-spacing: 0.5em; color: var(--amber); text-transform: uppercase; }
+  h1 { font-size: 58px; letter-spacing: 0.08em; margin: 10px 0 4px; font-weight: 900; }
+  h1 .tide { color: #4fc3f7; }
+  .sub { font-size: 13px; letter-spacing: 0.3em; color: rgba(232,236,239,0.6); text-transform: uppercase; }
+  .brief {
+    margin: 26px auto; text-align: left; font-size: 14.5px; line-height: 1.75; color: rgba(232,236,239,0.88);
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 18px 6px;
+  }
+  .brief b { color: var(--amber); }
+  .brief .red { color: var(--red); font-weight: 700; }
+  .ctrlgrid {
+    display: grid; grid-template-columns: repeat(4, auto); gap: 8px 22px; justify-content: center;
+    font-size: 12px; letter-spacing: 0.08em; color: rgba(232,236,239,0.75); margin-bottom: 28px;
+  }
+  .ctrlgrid b { color: var(--amber); font-weight: 700; margin-right: 6px; }
+  button {
+    pointer-events: auto; cursor: pointer; font: inherit; font-weight: 800; letter-spacing: 0.28em;
+    text-transform: uppercase; font-size: 15px; color: var(--ink);
+    background: linear-gradient(180deg, #ffd27a, var(--amber));
+    border: none; padding: 15px 44px; transition: transform 0.08s, filter 0.15s;
+  }
+  button:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 26px 0; }
+  .stat { border: 1px solid var(--line); padding: 14px 8px; }
+  .stat .v { font-size: 24px; font-weight: 800; color: var(--amber); margin-top: 4px; }
+  #deathCause { color: var(--red); letter-spacing: 0.12em; text-transform: uppercase; font-size: 15px; margin-top: 8px; }
+  .foot { margin-top: 22px; font-size: 10.5px; letter-spacing: 0.2em; color: rgba(232,236,239,0.35); text-transform: uppercase; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud">
+  <div id="objCard">
+    <div class="label">Objective</div>
+    <div id="objText">REACH THE WALL</div>
+    <div id="objDist">— m</div>
+  </div>
+  <div id="tideCard">
+    <div class="label"><span>Ocean Tide</span><span id="tideState">RISING</span></div>
+    <div class="bar"><div id="tideFill"></div></div>
+  </div>
+  <div id="vehCard" style="display:none">
+    <div class="label">Vehicle</div>
+    <div class="bar"><div id="vehFill"></div></div>
+  </div>
+  <div id="hpCard">
+    <div class="label">Integrity</div>
+    <div class="bar"><div id="hpFill"></div></div>
+  </div>
+  <div id="banner"></div>
+  <div id="hint"></div>
+  <div id="controls">
+    <b>WASD</b> move &nbsp; <b>SHIFT</b> sprint &nbsp; <b>SPACE</b> jump / brake<br>
+    <b>E</b> vehicle &nbsp; <b>C</b> camera &nbsp; <b>M</b> sound &nbsp; <b>ESC</b> pause
+  </div>
+  <div id="dot"></div>
+  <div id="vignette"></div>
+  <div id="waterFx"></div>
+</div>
+
+<div id="intro" class="overlay">
+  <div class="panel">
+    <div class="kicker">Operation Slate · 06:00</div>
+    <h1>STEEL <span class="tide">TIDE</span></h1>
+    <div class="sub">A D-Day Beach Assault</div>
+    <div class="brief">
+      The landing is done. Behind you the <b class="red">ocean tide is rising</b> and it will not stop — stay on
+      the beach and you drown. Ahead: <b>barricades</b>, <b>barbed wire</b>, <b>minefields</b>, <b>trenches</b>,
+      great <b>mounds of earth</b> and, at the far end of the killing field, <b class="red">THE WALL</b>.<br><br>
+      Its <b>sentry bunkers</b> are on lookout — <span class="red">they shoot vehicles on sight</span>.
+      Your sedan is fast but it will not survive their attention for long, and the tank mines on the roads
+      are live. Ditch the car, work the trenches, thread the wire — and <b>reach the Wall</b>.
+    </div>
+    <div class="ctrlgrid">
+      <span><b>WASD</b>Move</span><span><b>SHIFT</b>Sprint</span><span><b>SPACE</b>Jump / Brake</span><span><b>MOUSE</b>Look</span>
+      <span><b>E</b>Enter / Exit car</span><span><b>C</b>Orbit camera</span><span><b>M</b>Mute</span><span><b>ESC</b>Pause</span>
+    </div>
+    <button id="startBtn">Start the assault</button>
+    <div class="foot">Low-poly · desktop · mouse + keyboard</div>
+  </div>
+</div>
+
+<div id="pause" class="overlay hidden">
+  <div class="panel">
+    <div class="kicker">Paused</div>
+    <h1>HOLD</h1>
+    <div class="sub">The tide waits for no one</div>
+    <br>
+    <button id="resumeBtn">Resume</button>
+  </div>
+</div>
+
+<div id="death" class="overlay hidden">
+  <div class="panel">
+    <div class="kicker">Casualty</div>
+    <h1 style="color:var(--red)">K.I.A.</h1>
+    <div id="deathCause">killed in action</div>
+    <br>
+    <button id="redeployBtn">Redeploy</button>
+    <div class="foot">The tide keeps rising while you are down</div>
+  </div>
+</div>
+
+<div id="win" class="overlay hidden">
+  <div class="panel">
+    <div class="kicker">Objective reached</div>
+    <h1>THE <span class="tide">WALL</span></h1>
+    <div class="sub">You made it across the killing field</div>
+    <div class="stats">
+      <div class="stat"><div class="label">Time</div><div class="v" id="statTime">—</div></div>
+      <div class="stat"><div class="label">Deaths</div><div class="v" id="statDeaths">—</div></div>
+      <div class="stat"><div class="label">Mines tripped</div><div class="v" id="statMines">—</div></div>
+      <div class="stat"><div class="label">Vehicle</div><div class="v" id="statVehicle">—</div></div>
+    </div>
+    <button id="restartBtn">Run it again</button>
+  </div>
+</div>
+
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>
