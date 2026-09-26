@@ -48,10 +48,12 @@ every mesh, texture and sound in the game is generated procedurally at boot.
 
 - **The wall** — 514 m of concrete, 23.5 m tall, with gate towers, a raised blast door and
   a barbed-wire crown. The only way through is the breach at `x = 0`, marked by a green beam.
-- **Sentries** — 13 emplacements. Nine pillboxes on the apron and four nests on the wall top,
-  a mix of MG posts and anti-tank guns. They need about a second to lock on, they lose you
-  behind wrecked armour, earth mounds and sandbag walls, and only three of them may open up at
-  once, so the fire is survivable if you keep something solid between you and the wall.
+- **Sentries** — 13 crewed emplacements. Nine pillboxes on the apron and four nests on the wall
+  top, a mix of MG posts and anti-tank guns. They need about a second to lock on, they lose you
+  behind wrecked armour, earth mounds and sandbag walls, only two may open up at once, and each
+  burst carries its own aim error — so changing speed and using cover genuinely works.
+
+![A casemate MG tracking the beach](docs/bunker.png)
 - **Mines** — anti-personnel scatter mines (small damage) and Teller anti-tank plates (they
   will end a run). Both are visible on the sand and the HUD pings as you close on one. Roads
   are swept, so they are the clean line — and the exposed one.

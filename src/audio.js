@@ -1,5 +1,8 @@
 import { clamp, lerp } from './util.js';
 
+/** Discrete pan positions shared by every one-shot sound. */
+const PAN_STEPS = 9;
+
 /**
  * Tiny procedural sound bank — no asset files, everything is synthesised
  * with the WebAudio API so the game stays a single JS bundle.
@@ -114,15 +117,25 @@ export class Audio {
     return { gain, pan, dist: d };
   }
 
+  /**
+   * Panning output. One-shots fire hundreds of times a run, so instead of
+   * creating (and leaking) a StereoPannerNode per sound we keep a fixed ladder
+   * of panners and snap to the nearest one.
+   */
   _out(pan = 0) {
     const ctx = this.ctx;
-    if (ctx.createStereoPanner) {
-      const p = ctx.createStereoPanner();
-      p.pan.value = pan;
-      p.connect(this.master);
-      return p;
+    if (!ctx.createStereoPanner) return this.master;
+    if (!this._panners) {
+      this._panners = [];
+      for (let i = 0; i < PAN_STEPS; i++) {
+        const p = ctx.createStereoPanner();
+        p.pan.value = (i / (PAN_STEPS - 1)) * 2 - 1;
+        p.connect(this.master);
+        this._panners.push(p);
+      }
     }
-    return this.master;
+    const idx = Math.round(((clamp(pan, -1, 1) + 1) / 2) * (PAN_STEPS - 1));
+    return this._panners[idx];
   }
 
   noiseBurst({ duration = 0.4, gain = 0.4, freq = 900, sweep = 120, type = 'lowpass', pan = 0, q = 1 }) {
