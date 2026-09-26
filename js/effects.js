@@ -54,10 +54,10 @@ export class Effects {
     this.smoke = [];
     for (let i = 0; i < this.smokeN; i++) this.smoke.push({ on: false, p: new THREE.Vector3(), v: new THREE.Vector3(), life: 0, ttl: 1, s0: 1, s1: 2 });
 
-    // --- tracer pool ---
-    const trGeo = new THREE.BoxGeometry(0.06, 0.06, 2.6);
-    this.trMat = new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
-    this.trN = 130;
+    // --- tracer pool: short fast dashes (machine-gun rounds, not laser beams)
+    const trGeo = new THREE.BoxGeometry(0.05, 0.05, 1.15);
+    this.trMat = new THREE.MeshBasicMaterial({ color: 0xffcf8e, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
+    this.trN = 150;
     this.trIM = new THREE.InstancedMesh(trGeo, this.trMat, this.trN);
     this.trIM.frustumCulled = false;
     this.trIM.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -183,9 +183,9 @@ export class Effects {
     t.p.copy(from);
     _v.copy(to).sub(from);
     const dist = _v.length();
-    _v.normalize().multiplyScalar(165);
+    _v.normalize().multiplyScalar(300);
     t.v.copy(_v);
-    t.ttl = dist / 165;
+    t.ttl = dist / 300;
     t.cb = onArrive || null;
   }
 

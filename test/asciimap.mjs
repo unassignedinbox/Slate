@@ -9,14 +9,14 @@ import { S } from '../js/state.js';
 S.scene = new THREE.Scene();
 buildProps();
 
-const COLS = 122, ROWS = 92;
-const X0 = -180, X1 = 180, Z0 = -268, Z1 = 188;
+const COLS = 124, ROWS = 132;
+const X0 = -196, X1 = 196, Z0 = -452, Z1 = 188;
 const WATER = -3.2;
 
 const SENTRY_XS = [-140, -75, -30, 30, 90, 145];
-const TANKS = [[-30, -122], [42, -130], [-78, -108], [10, 28], [-95, 48], [128, 58], [-140, 100]];
-const FWD_BUNKERS = [[112, 74], [-156, 112]];
-const CRAFT = [4, -158];
+const TANKS = [[-30, -382], [44, -390], [-84, -366], [12, -206], [-58, -186], [-95, -16], [128, -12], [-142, 64], [74, 76]];
+const FWD_BUNKERS = [[-80, 44], [146, 120]];
+const CRAFT = [-10, -424];
 
 const grid = [];
 for (let r = 0; r < ROWS; r++) {
@@ -30,6 +30,7 @@ for (let r = 0; r < ROWS; r++) {
     if (z > 167 && z < 177 && Math.abs(x) < 178 && !(Math.abs(x) < 5 && z < 171)) ch = '#';      // wall
     else if (z > 160 && z < 167 && SENTRY_XS.some((sx) => near(sx, 166, 4))) ch = 'S';           // wall bunkers
     else if (FWD_BUNKERS.some(([bx, bz]) => near(bx, bz, 4))) ch = 'S';
+    else if (S.sentries.some((sn) => near(sn.x, sn.z, 3))) ch = 'S';
     else if (near(CFG.carSpawn.x, CFG.carSpawn.z, 2.5)) ch = 'C';
     else if (near(CFG.spawn.x, CFG.spawn.z, 2.5)) ch = 'P';
     else if (near(CRAFT[0], CRAFT[1], 5)) ch = 'U';
@@ -54,7 +55,7 @@ for (let r = 0; r < ROWS; r++) {
       else if (cf) ch = '0';
       else if (mf > 0.45) ch = h > 8 ? 'M' : 'm';
       else if (h < 0.6) ch = '.';
-      else if (z < -70) ch = ':';
+      else if (z < -210) ch = ':';
       else ch = '"';
     }
     row += ch;

@@ -94,7 +94,7 @@ export class Player {
       }
     }
     this.pos.x = clamp(this.pos.x, CFG.minX + 1.5, CFG.maxX - 1.5);
-    this.pos.z = clamp(this.pos.z, -238, 165.7);
+    this.pos.z = clamp(this.pos.z, CFG.minZ + 10, 165.7);
 
     // ---- drowning ----
     if (depth > 1.25) {
@@ -163,13 +163,21 @@ export class Player {
   }
 
   respawn() {
-    const x = clamp(this.pos.x, -24, 24) + (Math.random() - 0.5) * 8;
-    let z = S.waterlineZ + 16;
-    for (let i = 0; i < 12; i++) {
-      if (H(x, z) > S.waterLevel + 0.7) break;
-      z += 4;
+    const car = S.car;
+    if (car && car.alive) {
+      // come back beside the vehicle — this run is vehicle-first
+      const fx = Math.sin(car.yaw), fz = Math.cos(car.yaw);
+      this.pos.set(car.pos.x - fz * 2.3, 0, car.pos.z + fx * 2.3);
+      this.pos.y = H(this.pos.x, this.pos.z);
+    } else {
+      const x = clamp(this.pos.x, -24, 24) + (Math.random() - 0.5) * 8;
+      let z = S.waterlineZ + 16;
+      for (let i = 0; i < 12; i++) {
+        if (H(x, z) > S.waterLevel + 0.7) break;
+        z += 4;
+      }
+      this.pos.set(x, H(x, z), z);
     }
-    this.pos.set(x, H(x, z), z);
     this.vel.set(0, 0, 0);
     this.vy = 0;
     this.health = 100;

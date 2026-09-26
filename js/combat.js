@@ -53,7 +53,7 @@ function triggerTankMine(m) {
   m.alive = false;
   hideInst(S.tankMineMesh, m.i);
   S.stats.minesTripped++;
-  explode(new THREE.Vector3(m.x, H(m.x, m.z) + 0.3, m.z), { radius: 6.5, playerDmg: 55, carDmg: 135, big: true });
+  explode(new THREE.Vector3(m.x, H(m.x, m.z) + 0.3, m.z), { radius: 6.5, playerDmg: 55, carDmg: 165, big: true });
 }
 
 function triggerAPMine(m) {
@@ -161,7 +161,7 @@ export function updateTide(dt) {
 // ------------------------------------------------------------------
 function sentryMuzzleWorld(s, out) {
   s.group.updateMatrixWorld(true);
-  return out.set(0, -0.03, 2.55).applyMatrix4(s.pitchNode.matrixWorld);
+  return out.set(0, 0.02, 1.95).applyMatrix4(s.pitchNode.matrixWorld);
 }
 
 function losClear(from, to) {
@@ -208,7 +208,7 @@ function updateSentries(dt) {
     let firing = false;
     if (s.target === 'car' && car && car.alive) {
       const d = Math.hypot(car.pos.x - s.x, car.pos.z - s.z);
-      const lead = (d / 165) * 0.85;
+      const lead = (d / 260) * 0.8;
       _aim.set(
         car.pos.x + Math.sin(car.yaw) * car.speed * lead,
         car.pos.y + 0.75,
@@ -216,14 +216,15 @@ function updateSentries(dt) {
       );
       firing = aimSentry(s, _aim, dt);
       if (firing && s.cd <= 0 && s.burstLeft <= 0) {
-        s.burstLeft = 4 + Math.floor(Math.random() * 3);
+        // a proper machine-gun burst: 10-15 rounds down range
+        s.burstLeft = 10 + Math.floor(Math.random() * 6);
         s.cd = 3; // locked while bursting; reset when the burst ends
       }
     } else if (s.target === 'player' && p && p.alive) {
       _aim.set(p.pos.x, p.eyeY() - 0.15, p.pos.z);
       firing = aimSentry(s, _aim, dt);
       if (firing && s.cd <= 0 && s.burstLeft <= 0) {
-        s.burstLeft = 4;
+        s.burstLeft = 5;
         s.cd = 3;
       }
     } else {
@@ -238,11 +239,11 @@ function updateSentries(dt) {
       if (!s.target) s.burstLeft = 0;
       s.fireT -= dt;
       if (s.fireT <= 0) {
-        s.fireT = 0.085;
+        s.fireT = 0.082; // ~12 rounds per second
         s.burstLeft--;
         fireSentryRound(s);
         if (s.burstLeft === 0) {
-          s.cd = s.target === 'car' ? 0.7 + Math.random() * 0.8 : 1.3 + Math.random() * 1.2;
+          s.cd = s.target === 'car' ? 0.55 + Math.random() * 0.7 : 1.2 + Math.random() * 1.1;
         }
       }
     }
@@ -254,13 +255,13 @@ function updateSentries(dt) {
 }
 
 function aimSentry(s, aim, dt) {
-  const dx = aim.x - s.x, dy = aim.y - (s.y + 0.9), dz = aim.z - s.z;
+  const dx = aim.x - s.x, dy = aim.y - (s.y + 1.0), dz = aim.z - s.z;
   const distXZ = Math.hypot(dx, dz);
   const desiredYaw = Math.atan2(dx, dz) - s.baseYaw;
   const desiredPitch = -Math.atan2(dy, distXZ);
   const errY = normAngle(desiredYaw - s.yaw);
   const errP = desiredPitch - s.pitch;
-  const rate = 2.2;
+  const rate = 1.9; // heavy MG mount — tracks fast but not instantly
   s.yaw += clamp(errY, -rate * dt, rate * dt);
   s.pitch += clamp(errP, -rate * dt, rate * dt);
   s.yawNode.rotation.y = s.yaw;
@@ -284,12 +285,12 @@ function fireSentryRound(s) {
       car.pos.y + 0.75 + (Math.random() - 0.5) * spread * 0.5,
       car.pos.z + (Math.random() - 0.5) * spread
     );
-    const pHit = clamp(0.34 - d / 680 - Math.abs(car.speed) * 0.005, 0.05, 0.34);
+    const pHit = clamp(0.3 - d / 640 - Math.abs(car.speed) * 0.0042, 0.035, 0.3);
     const hit = Math.random() < pHit;
     S.effects.tracer(_muzzle.clone(), _aim.clone(), () => {
       if (hit && S.car && S.car.alive) {
-        S.car.damage(6 + Math.random() * 5, 'sentry fire');
-        if (S.car.alive) S.effects.spark(S.car.pos.x, S.car.pos.y + 0.9, S.car.pos.z, 6);
+        S.car.damage(4 + Math.random() * 3, 'machine-gun fire');
+        if (S.car.alive) S.effects.spark(S.car.pos.x, S.car.pos.y + 0.9, S.car.pos.z, 5);
       }
     });
   } else if (p && p.alive) {
@@ -302,7 +303,7 @@ function fireSentryRound(s) {
     );
     const hit = Math.random() < 0.055;
     S.effects.tracer(_muzzle.clone(), _aim.clone(), () => {
-      if (hit && S.player && S.player.alive) S.player.damage(5, 'cut down by sentry fire');
+      if (hit && S.player && S.player.alive) S.player.damage(5, 'cut down by machine-gun fire');
     });
   }
 }

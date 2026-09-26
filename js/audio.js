@@ -265,6 +265,64 @@ export class AudioSys {
     this.engineS = s01;
   }
 
+  // ---- bomber engine drone (persistent, spatialised roughly) ----
+  planeSet(pos) {
+    if (!this.ready || !pos) return;
+    if (!this.drone) {
+      const ctx = this.ctx;
+      const g = ctx.createGain();
+      g.gain.value = 0;
+      const f = ctx.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.value = 480;
+      const o1 = ctx.createOscillator();
+      o1.type = 'sawtooth';
+      o1.frequency.value = 82;
+      const o2 = ctx.createOscillator();
+      o2.type = 'sawtooth';
+      o2.frequency.value = 87; // beat against o1
+      const p = ctx.createOscillator();
+      p.type = 'triangle';
+      p.frequency.value = 26; // prop chop
+      const pg = ctx.createGain();
+      pg.gain.value = 0.5;
+      const mix = ctx.createGain();
+      mix.gain.value = 1;
+      o1.connect(f); o2.connect(f);
+      p.connect(pg); pg.connect(mix.gain); // modulate amplitude at prop rate
+      f.connect(mix);
+      mix.connect(g);
+      g.connect(this.master);
+      o1.start(); o2.start(); p.start();
+      this.drone = { g, o1, o2, p };
+    }
+    const sp = this._spatial(pos, 900);
+    const vol = sp ? sp.vol * 0.3 : 0.03;
+    const t0 = this.ctx.currentTime;
+    this.drone.g.gain.setTargetAtTime(vol, t0, 0.12);
+    if (sp) {
+      this.drone.o1.frequency.setTargetAtTime(80 + sp.dist * 0.02, t0, 0.2); // faint doppler
+      this.drone.o2.frequency.setTargetAtTime(85 + sp.dist * 0.02, t0, 0.2);
+    }
+  }
+
+  planeClear() {
+    if (!this.ready || !this.drone) return;
+    this.drone.g.gain.setTargetAtTime(0, this.ctx.currentTime, 0.3);
+  }
+
+  bombWhistle(pos) {
+    if (!this.ready) return;
+    const sp = this._spatial(pos, 700);
+    if (!sp) return;
+    const ctx = this.ctx;
+    const t0 = ctx.currentTime;
+    const out = this._out(1, sp.pan);
+    const v = sp.vol * 0.16;
+    this._tone(out, t0, 1.7, 'sine', 1500, 340, v);
+    this._tone(out, t0 + 0.05, 1.6, 'sawtooth', 900, 260, v * 0.25);
+  }
+
   update(dt, time) {
     if (!this.ready) return;
     // engine

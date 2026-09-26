@@ -3,7 +3,7 @@
 import * as THREE from './vendor/three.module.min.js';
 import { TAU, mulberry32, part, mergeGeoms, instMesh, setInst, setInstScale, hideInst, signTexture, hash2 } from './utils.js';
 import { S, CFG } from './state.js';
-import { H, moundF, trenchNear, roadDist, MOUNDS, TRENCHES, CROSSINGS, WIRES, HEDGEHOGS, ROADS } from './world.js';
+import { H, moundF, trenchNear, roadDist, MOUNDS, TRENCHES, CROSSINGS, WIRES, HEDGEHOGS, ROADS, ROAD_CRATERS } from './world.js';
 import { buildCarMesh } from './car.js';
 
 export function walkPoly(pts, step, fn) {
@@ -155,7 +155,7 @@ function buildWallBunker(x) {
 
 // forward bunkers dug into two of the great earth mounds
 export function buildForwardBunkers() {
-  const spots = [[112, 74], [-156, 112]];
+  const spots = [[-80, 44], [146, 120]];
   for (const [x, z] of spots) {
     const gy = H(x, z);
     const P = [
@@ -184,38 +184,66 @@ export function buildForwardBunkers() {
 }
 
 // ------------------------------------------------------------------
-// sentry turret (the things that shred vehicles)
+// MG turret — heavy machine gun on a cast pedestal, the things that
+// shred vehicles. MG42-style: barrel jacket, top cover, ammo box,
+// spade grips, and a curved shield with a vision slit.
 // ------------------------------------------------------------------
 export function makeSentry(x, y, z, baseYaw) {
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.55, metalness: 0.55 });
+  // concrete pedestal + bearing ring
   const base = new THREE.Mesh(mergeGeoms([
-    part(new THREE.CylinderGeometry(0.55, 0.75, 0.4, 10), 0x2c3036, { p: [0, 0.2, 0] }),
-    part(new THREE.CylinderGeometry(0.3, 0.3, 0.3, 8), 0x23262b, { p: [0, 0.45, 0] }),
-  ]), mat);
+    part(new THREE.CylinderGeometry(0.72, 0.95, 0.34, 8), 0x8f897f, { p: [0, 0.17, 0] }),
+    part(new THREE.CylinderGeometry(0.5, 0.6, 0.22, 8), 0x77726a, { p: [0, 0.42, 0] }),
+    part(new THREE.CylinderGeometry(0.3, 0.3, 0.2, 8), 0x3a3f45, { p: [0, 0.58, 0] }),
+  ]), new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 }));
   const yawNode = new THREE.Group();
-  yawNode.position.set(0, 0.55, 0);
+  yawNode.position.set(0, 0.68, 0);
+  // turntable: platform, ammo box with belt, seat post
   const yoke = new THREE.Mesh(mergeGeoms([
-    part(new THREE.BoxGeometry(1.05, 0.5, 0.9), 0x3a3f45, { p: [0, 0.12, -0.05] }),
-    part(new THREE.BoxGeometry(0.5, 0.42, 0.75), 0x33373d, { p: [-0.62, 0.02, -0.25] }),
-    part(new THREE.BoxGeometry(0.34, 0.1, 0.75), 0xc9a53a, { p: [-0.62, 0.24, -0.25] }),
+    part(new THREE.CylinderGeometry(0.42, 0.5, 0.16, 8), 0x33373d, { p: [0, 0.08, 0] }),
+    part(new THREE.BoxGeometry(0.52, 0.4, 0.72), 0x3d434a, { p: [-0.44, 0.28, -0.3] }),
+    part(new THREE.BoxGeometry(0.56, 0.1, 0.76), 0x2c3138, { p: [-0.44, 0.5, -0.3] }),
+    // ammo belt leaving the box toward the gun
+    part(new THREE.BoxGeometry(0.34, 0.05, 0.05), 0xb99b34, { p: [-0.18, 0.34, -0.02], r: [0, 0.35, 0] }),
+    part(new THREE.BoxGeometry(0.07, 0.5, 0.07), 0x33373d, { p: [0.34, 0.28, -0.42] }),
+    part(new THREE.BoxGeometry(0.3, 0.06, 0.3), 0x2c3138, { p: [0.34, 0.55, -0.42] }),
   ]), mat);
   const pitchNode = new THREE.Group();
-  pitchNode.position.set(0, 0.34, 0.42);
+  pitchNode.position.set(0, 0.28, 0.3);
   const gun = new THREE.Mesh(mergeGeoms([
-    part(new THREE.BoxGeometry(0.58, 0.42, 0.85), 0x33373d, { p: [0, 0, 0.15] }),
-    part(new THREE.CylinderGeometry(0.075, 0.075, 1.9, 8), 0x26292e, { p: [-0.17, -0.03, 1.45], r: [Math.PI / 2, 0, 0] }),
-    part(new THREE.CylinderGeometry(0.075, 0.075, 1.9, 8), 0x26292e, { p: [0.17, -0.03, 1.45], r: [Math.PI / 2, 0, 0] }),
-    part(new THREE.BoxGeometry(0.18, 0.18, 0.34), 0x1d1f23, { p: [-0.17, -0.03, 2.45] }),
-    part(new THREE.BoxGeometry(0.18, 0.18, 0.34), 0x1d1f23, { p: [0.17, -0.03, 2.45] }),
-    part(new THREE.SphereGeometry(0.18, 8, 6), 0x3f444b, { p: [0, 0.34, -0.25] }),
-    part(new THREE.BoxGeometry(0.1, 0.07, 0.1), 0x551111, { p: [0, 0.34, -0.06] }),
+    // receiver
+    part(new THREE.BoxGeometry(0.3, 0.3, 0.95), 0x33373d, { p: [0, 0, -0.1] }),
+    // top cover + rear sight
+    part(new THREE.BoxGeometry(0.26, 0.1, 0.5), 0x3d434a, { p: [0, 0.2, -0.12] }),
+    part(new THREE.BoxGeometry(0.05, 0.12, 0.05), 0x26292e, { p: [0, 0.3, -0.5] }),
+    // barrel cooling jacket (rings)
+    part(new THREE.CylinderGeometry(0.085, 0.085, 1.15, 8), 0x2c3138, { p: [0, 0.02, 0.85], r: [Math.PI / 2, 0, 0] }),
+    part(new THREE.TorusGeometry(0.095, 0.02, 4, 8), 0x26292e, { p: [0, 0.02, 0.5], r: [Math.PI / 2, 0, 0] }),
+    part(new THREE.TorusGeometry(0.095, 0.02, 4, 8), 0x26292e, { p: [0, 0.02, 0.85], r: [Math.PI / 2, 0, 0] }),
+    part(new THREE.TorusGeometry(0.095, 0.02, 4, 8), 0x26292e, { p: [0, 0.02, 1.2], r: [Math.PI / 2, 0, 0] }),
+    // muzzle booster + flash hider
+    part(new THREE.CylinderGeometry(0.1, 0.1, 0.18, 8), 0x232629, { p: [0, 0.02, 1.48], r: [Math.PI / 2, 0, 0] }),
+    part(new THREE.CylinderGeometry(0.05, 0.07, 0.22, 6), 0x1d1f23, { p: [0, 0.02, 1.68], r: [Math.PI / 2, 0, 0] }),
+    // spade grips
+    part(new THREE.BoxGeometry(0.05, 0.24, 0.05), 0x26292e, { p: [0.14, -0.16, -0.62], r: [0.5, 0, 0] }),
+    part(new THREE.BoxGeometry(0.05, 0.24, 0.05), 0x26292e, { p: [-0.14, -0.16, -0.62], r: [0.5, 0, 0] }),
+    part(new THREE.TorusGeometry(0.07, 0.02, 4, 8), 0x3d434a, { p: [0.14, -0.26, -0.66], r: [Math.PI / 2, 0, 0] }),
+    part(new THREE.TorusGeometry(0.07, 0.02, 4, 8), 0x3d434a, { p: [-0.14, -0.26, -0.66], r: [Math.PI / 2, 0, 0] }),
   ]), mat);
   pitchNode.add(gun);
+  // curved gun shield with a slit, riding the yoke front
+  const shield = new THREE.Mesh(mergeGeoms([
+    part(new THREE.BoxGeometry(1.0, 0.72, 0.05), 0x474d54, { p: [0, 0.42, 0.42], r: [-0.12, 0, 0] }),
+    part(new THREE.BoxGeometry(0.34, 0.1, 0.06), 0x14161a, { p: [0, 0.6, 0.47], r: [-0.12, 0, 0] }),
+    part(new THREE.BoxGeometry(1.14, 0.08, 0.08), 0x3a3f45, { p: [0, 0.1, 0.42] }),
+  ]), mat);
+  shield.position.set(0, 0.1, 0.12);
+  yawNode.add(shield);
   const flash = new THREE.Mesh(
-    new THREE.OctahedronGeometry(0.42, 0),
+    new THREE.OctahedronGeometry(0.36, 0),
     new THREE.MeshBasicMaterial({ color: 0xffd070, transparent: true, opacity: 0.95 })
   );
-  flash.position.set(0, -0.03, 2.6);
+  flash.position.set(0, 0.02, 1.95);
   flash.visible = false;
   pitchNode.add(flash);
   yawNode.add(yoke, pitchNode);
@@ -231,7 +259,7 @@ export function makeSentry(x, y, z, baseYaw) {
     state: 'sweep', phase: Math.random() * TAU,
     target: null, targetPos: new THREE.Vector3(), losT: Math.random() * 0.3,
     burstLeft: 0, fireT: 0, cd: 1 + Math.random() * 2,
-    range: 200, flashT: 0,
+    range: 250, flashT: 0,
   });
 }
 
@@ -246,21 +274,28 @@ S.beaconMat = () => {
 // ==================================================================
 export function buildTanks() {
   const defs = [
-    { x: -30, z: -122, yaw: 0.45, kind: 'wreck', turretYaw: 0.55, smoke: true },
-    { x: 42, z: -130, yaw: -0.25, kind: 'wreck', turretYaw: -0.4 },
-    { x: -78, z: -108, yaw: 0.9, kind: 'wreck', turretOff: true, smoke: true },
-    { x: 10, z: 28, yaw: 2.2, kind: 'wreck', turretOff: true },
-    { x: -95, z: 48, yaw: Math.PI + 0.15, kind: 'defense', turretYaw: -0.1 },
-    { x: 128, z: 58, yaw: Math.PI - 0.3, kind: 'defense', turretYaw: 0.18 },
-    { x: -140, z: 100, yaw: Math.PI + 0.05, kind: 'defense', turretYaw: -0.05 },
+    // burnt-out wrecks on the landing shelf
+    { x: -30, z: -382, yaw: 0.45, kind: 'wreck', turretYaw: 0.55, smoke: true },
+    { x: 44, z: -390, yaw: -0.25, kind: 'wreck', turretYaw: -0.4 },
+    { x: -84, z: -366, yaw: 0.9, kind: 'wreck', turretOff: true, smoke: true },
+    // a wreck blocking the kill plain
+    { x: 12, z: -206, yaw: 2.2, kind: 'wreck', turretOff: true },
+    { x: -58, z: -186, yaw: 1.4, kind: 'wreck', turretYaw: 1.9, smoke: true },
+    // dug-in defenders behind the trench lines
+    { x: -95, z: -16, yaw: Math.PI + 0.2, kind: 'defense', turretYaw: -0.1 },
+    { x: 128, z: -12, yaw: Math.PI - 0.3, kind: 'defense', turretYaw: 0.18 },
+    { x: -142, z: 64, yaw: Math.PI + 0.05, kind: 'defense', turretYaw: -0.05 },
+    { x: 74, z: 76, yaw: Math.PI - 0.15, kind: 'defense', turretYaw: 0.1 },
   ];
   for (const d of defs) {
     buildTank(d);
     obstacles().push({ x: d.x, z: d.z, r: 3.5, type: 'tank' });
   }
   // sandbag collars for the dug-in defenders
-  bagArc(-95, 44.2, 3.6, Math.PI, 2);
-  bagArc(128, 54.2, 3.6, Math.PI, 2);
+  bagArc(-95, -20.2, 3.6, Math.PI, 2);
+  bagArc(128, -16.2, 3.6, Math.PI, 2);
+  bagArc(-142, 59.8, 3.6, Math.PI, 2);
+  bagArc(74, 71.8, 3.6, Math.PI, 2);
 }
 
 function buildTank(d) {
@@ -338,7 +373,7 @@ function tankMat() {
 // LANDING CRAFT (spawn cover)
 // ==================================================================
 export function buildLandingCraft() {
-  const x = 4, z = -158, gy = H(x, z);
+  const x = -10, z = -424, gy = H(x, z);
   const P = [
     part(new THREE.BoxGeometry(6.4, 0.55, 12.5), 0x474340, { p: [0, 0.3, 0] }),
     part(new THREE.BoxGeometry(0.55, 2.7, 12.5), 0x504a45, { p: [-3.2, 1.35, 0] }),
@@ -392,10 +427,15 @@ export function buildBarriers() {
   shape.closePath();
   const geo = part(new THREE.ExtrudeGeometry(shape, { depth: 2.3, bevelEnabled: false }), 0xa8a49b);
   const defs = [
-    [-66, -84, 0.1], [-53, -86, -0.08], [49, -84, 0.06], [62, -86, -0.1],
+    // gate chicane
     [-10, 142, 0.35], [10, 142, -0.35], [-17, 149, 0.25], [17, 149, -0.25],
     [-9, 156, 0.3], [9, 156, -0.3],
+    // blocks at the road-crater detours
+    [-4, -318, 0.5], [-17, -332, -0.4], [-2, -116, -0.5], [-15, -130, 0.4],
+    [-14, 43, 0.5], [9, 27, -0.45], [-2, 140, 0.4], [12, 124, -0.5],
+    // scattered blocks on the plain
     [-60, -22, 0.12], [55, 34, -0.1], [-28, 88, 0.2], [68, 102, -0.15],
+    [96, -98, 0.15], [-88, -70, -0.2],
   ];
   const im = instMesh([geo], defs.length, { roughness: 0.95 });
   defs.forEach((b, i) => {
@@ -404,19 +444,28 @@ export function buildBarriers() {
   });
   S.scene.add(im);
 
-  // dragon teeth row
+  // dragon teeth — three staggered rows; the gap in each row is a chicane
+  // slit offset from the road line, so the car must slalom or detour
   const tooth = part(new THREE.CylinderGeometry(0.42, 0.88, 1.3, 4, 1), 0x94908a, { r: [0, Math.PI / 4, 0] });
+  const rows = [
+    { z: -92, gap: -3 },
+    { z: -66, gap: 3 },
+    { z: 118, gap: 0 },
+  ];
   const teeth = [];
-  for (let x = -162; x <= 162; x += 4.4) {
-    if (roadDist(x, 132) < 4.6) continue;
-    if (moundF(x, 132) > 0.2) continue;
-    teeth.push(x);
+  for (const row of rows) {
+    for (let x = -168; x <= 168; x += 4.4) {
+      if (Math.abs(x - row.gap) < 5.2) continue; // the chicane slit
+      if (roadDist(x, row.z) < 1.2) continue;
+      if (moundF(x, row.z) > 0.2) continue;
+      teeth.push([x, row.z]);
+    }
   }
   const imT = instMesh([tooth], teeth.length, { roughness: 0.98 });
-  teeth.forEach((x, i) => {
-    const sc = 0.85 + hash2(x, 132) * 0.3;
-    setInstScale(imT, i, x, H(x, 132), 132, hash2(x, 7) * TAU, sc, sc * (0.9 + hash2(x, 3) * 0.25), sc);
-    obstacles().push({ x, z: 132, r: 1.0, type: 'teeth' });
+  teeth.forEach((t, i) => {
+    const sc = 0.85 + hash2(t[0], t[1]) * 0.3;
+    setInstScale(imT, i, t[0], H(t[0], t[1]), t[1], hash2(t[0], 7) * TAU, sc, sc * (0.9 + hash2(t[0], 3) * 0.25), sc);
+    obstacles().push({ x: t[0], z: t[1], r: 1.0, type: 'teeth' });
   });
   S.scene.add(imT);
 }
@@ -425,32 +474,64 @@ export function buildBarriers() {
 // MINES — tank mines (pressure plates for vehicles) + AP mines
 // ==================================================================
 export function buildMines() {
-  // ---- tank mines ----
+  // ---- tank mines: squat pressure plates with the crossed X handle ----
   const tmGeo = mergeGeoms([
-    part(new THREE.CylinderGeometry(0.55, 0.62, 0.17, 12), 0x4c5538, { p: [0, 0.085, 0] }),
-    part(new THREE.TorusGeometry(0.44, 0.05, 4, 14), 0xc9a53a, { p: [0, 0.16, 0], r: [Math.PI / 2, 0, 0] }),
-    part(new THREE.CylinderGeometry(0.035, 0.035, 0.16, 6), 0x3a4230, { p: [0.24, 0.2, 0] }),
-    part(new THREE.CylinderGeometry(0.035, 0.035, 0.16, 6), 0x3a4230, { p: [-0.12, 0.2, 0.21] }),
-    part(new THREE.CylinderGeometry(0.035, 0.035, 0.16, 6), 0x3a4230, { p: [-0.12, 0.2, -0.21] }),
+    // main case
+    part(new THREE.CylinderGeometry(0.56, 0.62, 0.18, 12), 0x454f37, { p: [0, 0.09, 0] }),
+    // rim band
+    part(new THREE.TorusGeometry(0.585, 0.028, 4, 12), 0x333b28, { p: [0, 0.1, 0], r: [Math.PI / 2, 0, 0] }),
+    // THE X — two crossed steel bars raised on four corner posts
+    part(new THREE.BoxGeometry(0.1, 0.1, 1.02), 0x2c3326, { p: [0, 0.27, 0], r: [0, Math.PI / 4, 0] }),
+    part(new THREE.BoxGeometry(0.1, 0.1, 1.02), 0x2c3326, { p: [0, 0.27, 0], r: [0, -Math.PI / 4, 0] }),
+    part(new THREE.BoxGeometry(0.07, 0.13, 0.07), 0x2c3326, { p: [0.3, 0.2, 0.3], r: [0, Math.PI / 4, 0] }),
+    part(new THREE.BoxGeometry(0.07, 0.13, 0.07), 0x2c3326, { p: [-0.3, 0.2, 0.3], r: [0, Math.PI / 4, 0] }),
+    part(new THREE.BoxGeometry(0.07, 0.13, 0.07), 0x2c3326, { p: [0.3, 0.2, -0.3], r: [0, Math.PI / 4, 0] }),
+    part(new THREE.BoxGeometry(0.07, 0.13, 0.07), 0x2c3326, { p: [-0.3, 0.2, -0.3], r: [0, Math.PI / 4, 0] }),
+    // side carry handle
+    part(new THREE.BoxGeometry(0.06, 0.06, 0.34), 0x1f2419, { p: [0.63, 0.13, 0] }),
+    // faint yellow ID disc
+    part(new THREE.CylinderGeometry(0.09, 0.09, 0.02, 8), 0xb99b34, { p: [-0.34, 0.185, 0.34] }),
   ]);
   const list = [];
-  // mined roads
-  const roadMines = [
-    [-60, -25], [-60, -3], [-61, 19], [-59, 41], [-58, 63], [-56, 85], [-53, 107],
-    [55, -25], [55, -3], [56, 19], [57, 41], [58, 63], [56, 85], [52, 107],
-  ];
-  for (const r of roadMines) list.push(r);
-  // the field belt
+  // mines scattered ALONG the winding road (drive the slalom)
   const rng = mulberry32(90210);
+  walkPoly(ROADS[0].pts, 9, (x, z, ux, uz) => {
+    if (z > 150) return; // gate flats handled below
+    if (rng() < 0.34) {
+      const jx = x + (rng() - 0.5) * 2.2, jz = z + (rng() - 0.5) * 2.2;
+      if (roadDist(jx, jz) < 2.6) list.push([jx, jz]);
+    }
+  });
+  // flanking rows at every road crater — the detour is mined
+  for (const c of ROAD_CRATERS) {
+    for (const side of [-1, 1]) {
+      list.push([c[0] + side * (c[2] + 2.4), c[1] + side * 1.6]);
+      list.push([c[0] - side * (c[2] + 2.4), c[1] - side * 1.6]);
+    }
+  }
+  // the great field belt behind the hedgehogs
   let guard = 0;
-  while (list.length < 58 && guard++ < 900) {
-    const x = -158 + rng() * 316;
-    const z = -36 + rng() * 38;
+  while (list.length < 96 && guard++ < 2200) {
+    const x = -178 + rng() * 356;
+    const z = -322 + rng() * 44;
     if (trenchNear(x, z) < 8) continue;
     if (roadDist(x, z) < 3) continue;
     if (moundF(x, z) > 0.5) continue;
     let ok = true;
-    for (const m of list) if (Math.hypot(x - m[0], z - m[1]) < 4.2) { ok = false; break; }
+    for (const m of list) if (Math.hypot(x - m[0], z - m[1]) < 4.0) { ok = false; break; }
+    if (!ok) continue;
+    list.push([x, z]);
+  }
+  // a second, thinner belt across the kill plain
+  guard = 0;
+  while (list.length < 118 && guard++ < 2200) {
+    const x = -178 + rng() * 356;
+    const z = -156 + rng() * 40;
+    if (trenchNear(x, z) < 8) continue;
+    if (roadDist(x, z) < 3) continue;
+    if (moundF(x, z) > 0.5) continue;
+    let ok = true;
+    for (const m of list) if (Math.hypot(x - m[0], z - m[1]) < 4.0) { ok = false; break; }
     if (!ok) continue;
     list.push([x, z]);
   }
@@ -484,15 +565,27 @@ export function buildMines() {
       aps.push([x, z]); n--;
     }
   };
-  pushCluster(0, -86, 7, 8);       // centre wire gap
-  pushCluster(0, -53, 4, 3);       // trench crossing
-  pushCluster(-60, -51.5, 3, 2);
-  pushCluster(55, -53, 3, 2);
-  pushCluster(-44, 128, 4, 3);     // dragon teeth gaps
-  pushCluster(47, 128, 4, 3);
+  pushCluster(0, -345, 6, 6);      // W1 gaps
+  pushCluster(-90, -346, 4, 3);
+  pushCluster(46, -345, 4, 3);
+  pushCluster(0, -261, 5, 4);      // W2 gaps
+  pushCluster(-34, -260, 4, 3);
+  pushCluster(0, -99, 5, 4);       // W3 gaps
+  pushCluster(-50, -99, 4, 3);
+  pushCluster(24, -99, 4, 3);
+  pushCluster(-8, -232, 4, 3);     // T1 crossing
+  pushCluster(-5, -40, 4, 3);      // T2 crossings
+  pushCluster(-119, -41, 4, 3);
+  pushCluster(0, 101, 4, 3);       // T3 crossings
+  pushCluster(-34, 101, 4, 3);
+  pushCluster(-34, 37, 4, 3);      // W4 gaps
+  pushCluster(42, 36, 4, 3);
+  pushCluster(-24, 132, 4, 3);     // W5 gaps
+  pushCluster(50, 133, 4, 3);
+  for (const c of ROAD_CRATERS) pushCluster(c[0] + c[2] + 2, c[1] - c[2] - 2, 2.5, 2); // crater rims
   let g2 = 0;
-  while (aps.length < 38 && g2++ < 500) {
-    const x = -150 + rng2() * 300, z = -30 + rng2() * 160;
+  while (aps.length < 56 && g2++ < 900) {
+    const x = -170 + rng2() * 340, z = -260 + rng2() * 400;
     if (roadDist(x, z) < 2.5) continue;
     if (trenchNear(x, z) < 3.5) continue;
     if (moundF(x, z) > 0.4) continue;
@@ -515,25 +608,53 @@ export function buildMines() {
 }
 
 // ==================================================================
-// BARBED WIRE — belts of screw pickets, wire lines and concertina coils
+// BARBED WIRE — screw pickets, sagging barbed strands, concertina coils
 // ==================================================================
+function makeConcertinaGeo(len) {
+  // a real helix of wire, low-poly
+  const pts = [];
+  const turns = 4.5, n = 46;
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const a = t * TAU * turns;
+    pts.push(new THREE.Vector3(Math.cos(a) * 0.42, Math.sin(a) * 0.42, t * len));
+  }
+  const curve = new THREE.CatmullRomCurve3(pts);
+  return new THREE.TubeGeometry(curve, 40, 0.032, 3, false);
+}
+
 export function buildWire() {
   let segId = 0;
   for (const belt of WIRES) {
     // collect post positions
     const posts = [];
-    walkPoly(belt.pts, 2.6, (x, z, ux, uz) => posts.push([x, z, ux, uz]));
+    walkPoly(belt.pts, 2.4, (x, z, ux, uz) => posts.push([x, z, ux, uz]));
     const postGeo = mergeGeoms([
-      part(new THREE.BoxGeometry(0.09, 1.32, 0.09), 0x5d6b70, { p: [0, 0.66, 0] }),
-      part(new THREE.BoxGeometry(0.06, 0.06, 0.52), 0x525f64, { p: [0, 0.34, 0.1], r: [0, 0.5, 0] }),
-      part(new THREE.BoxGeometry(0.06, 0.06, 0.52), 0x525f64, { p: [0, 0.7, -0.08], r: [0, 1.6, 0] }),
-      part(new THREE.BoxGeometry(0.06, 0.06, 0.52), 0x525f64, { p: [0, 1.06, 0.06], r: [0, 2.6, 0] }),
+      part(new THREE.BoxGeometry(0.09, 1.34, 0.09), 0x5d6b70, { p: [0, 0.67, 0] }),
+      part(new THREE.BoxGeometry(0.06, 0.06, 0.5), 0x525f64, { p: [0, 0.32, 0.1], r: [0, 0.5, 0] }),
+      part(new THREE.BoxGeometry(0.06, 0.06, 0.5), 0x525f64, { p: [0, 0.68, -0.08], r: [0, 1.6, 0] }),
+      part(new THREE.BoxGeometry(0.06, 0.06, 0.5), 0x525f64, { p: [0, 1.04, 0.06], r: [0, 2.6, 0] }),
     ]);
     const imPost = instMesh([postGeo], posts.length, { castShadow: false, roughness: 0.6, metalness: 0.5 });
-    const coilGeo = part(new THREE.TorusGeometry(0.5, 0.05, 4, 12), 0x4a5257, { r: [Math.PI / 2, 0, 0] });
-    const imCoil = instMesh([coilGeo], Math.max(1, posts.length - 1), { castShadow: false, roughness: 0.6, metalness: 0.5 });
+    const coilGeo = makeConcertinaGeo(2.4);
+    const coilMat = new THREE.MeshStandardMaterial({ color: 0x5a5148, roughness: 0.55, metalness: 0.6 });
+    const imCoil = new THREE.InstancedMesh(coilGeo, coilMat, Math.max(1, posts.length - 1));
+    imCoil.castShadow = false;
+    // barbs: little crossed knives along every strand
+    const barbGeo = mergeGeoms([
+      part(new THREE.BoxGeometry(0.15, 0.02, 0.02), 0x6e6357, {}),
+      part(new THREE.BoxGeometry(0.02, 0.02, 0.15), 0x6e6357, {}),
+    ]);
+    const barbCount = (posts.length - 1) * 6;
+    const imBarb = new THREE.InstancedMesh(barbGeo, new THREE.MeshStandardMaterial({ color: 0x6e6357, roughness: 0.7, metalness: 0.4 }), Math.max(1, barbCount));
+    imBarb.castShadow = false;
+
     const wireMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.6, metalness: 0.4 });
     const chunks = [];
+    let barbIdx = 0;
+    const _m4 = new THREE.Matrix4();
+    const _q = new THREE.Quaternion();
+    const _e = new THREE.Euler();
     for (let i = 0; i < posts.length - 1; i += 4) {
       const end = Math.min(i + 4, posts.length - 1);
       const P = [];
@@ -541,21 +662,42 @@ export function buildWire() {
       for (let k = i; k < end; k++) {
         const a = posts[k], b = posts[k + 1];
         const dx = b[0] - a[0], dz = b[1] - a[1];
-        const len = Math.hypot(dx, dz);
+        const segLen = Math.hypot(dx, dz);
         const yaw = Math.atan2(dx, dz);
-        const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
-        const gy = (H(a[0], a[1]) + H(b[0], b[1])) / 2;
-        for (const h of [0.35, 0.72, 1.08]) {
-          P.push(part(new THREE.BoxGeometry(0.045, 0.045, len), 0x3f464b, { p: [mx, gy + h, mz], r: [0, yaw, 0] }));
-        }
+        const ya = H(a[0], a[1]), yb = H(b[0], b[1]);
         segs.push({ ax: a[0], az: a[1], bx: b[0], bz: b[1], id: segId++ });
+        // three strands, each as two sagging half-spans with a barb at post & mid
+        for (const h of [0.34, 0.7, 1.06]) {
+          const y1 = ya + h, y2 = yb + h;
+          const ym = (y1 + y2) / 2 - 0.09; // sag
+          const xm = (a[0] + b[0]) / 2, zm = (a[1] + b[1]) / 2;
+          for (const [px, pz, py, qx, qz, qy] of [[a[0], a[1], y1, xm, zm, ym], [xm, zm, ym, b[0], b[1], y2]]) {
+            const sx = qx - px, sy = qy - py, sz = qz - pz;
+            const L = Math.hypot(sx, sy, sz);
+            P.push(part(new THREE.BoxGeometry(0.04, L, 0.04), 0x514840, {
+              p: [(px + qx) / 2, py + sy / 2, (pz + qz) / 2],
+              dir: [sx / L, sy / L, sz / L],
+            }));
+          }
+          // barbs at the post and at midspan
+          for (const [bx2, bz2, by2] of [[a[0], a[1], y1], [xm, zm, ym + 0.02]]) {
+            if (barbIdx < barbCount) {
+              _q.setFromEuler(_e.set(hash2(bx2, bz2) * 0.4, yaw, 0));
+              _m4.compose(new THREE.Vector3(bx2, by2, bz2), _q, new THREE.Vector3(1, 1, 1));
+              imBarb.setMatrixAt(barbIdx++, _m4);
+            }
+          }
+        }
       }
       const mesh = new THREE.Mesh(mergeGeoms(P), wireMat);
       S.scene.add(mesh);
-      const postIds = [], coilIds = [];
+      const postIds = [], coilIds = [], barbIds = [];
       for (let k = i; k <= end; k++) if (!postIds.includes(k)) postIds.push(k);
-      for (let k = i; k < end; k++) coilIds.push(k);
-      const chunk = { mesh, postIds, coilIds, segs, destroyed: false };
+      for (let k = i; k < end; k++) {
+        coilIds.push(k);
+        for (let b = 0; b < 6; b++) barbIds.push(k * 6 + b);
+      }
+      const chunk = { mesh, postIds, coilIds, barbIds, segs, destroyed: false };
       segs.forEach((sg) => { sg.chunk = chunk; S.wireSegs.push(sg); });
       chunks.push(chunk);
     }
@@ -564,12 +706,17 @@ export function buildWire() {
       setInst(imPost, idx, p[0], H(p[0], p[1]), p[1], Math.atan2(p[2], p[3]) + Math.PI / 2);
       if (idx < posts.length - 1) {
         const b = posts[idx + 1];
-        setInstScale(imCoil, idx, (p[0] + b[0]) / 2, (H(p[0], p[1]) + H(b[0], b[1])) / 2 + 1.34, (p[1] + b[1]) / 2,
-          Math.atan2(b[0] - p[0], b[1] - p[1]), 1, 0.5, 1);
+        const ym = (H(p[0], p[1]) + H(b[0], b[1])) / 2;
+        setInstScale(imCoil, idx, (p[0] + b[0]) / 2, ym + 0.5, (p[1] + b[1]) / 2,
+          Math.atan2(b[0] - p[0], b[1] - p[1]), 1, 1, 1);
       }
     });
-    S.scene.add(imPost, imCoil);
-    S.wires.push({ imPost, imCoil, chunks });
+    for (let i = barbIdx; i < barbCount; i++) {
+      _m4.makeScale(0.0001, 0.0001, 0.0001);
+      imBarb.setMatrixAt(i, _m4);
+    }
+    S.scene.add(imPost, imCoil, imBarb);
+    S.wires.push({ imPost, imCoil, imBarb, chunks });
   }
 }
 
@@ -581,6 +728,7 @@ export function destroyWireChunk(chunk) {
   if (belt) {
     for (const id of chunk.postIds) hideInst(belt.imPost, id);
     for (const id of chunk.coilIds) hideInst(belt.imCoil, id);
+    for (const id of chunk.barbIds) hideInst(belt.imBarb, id);
   }
   for (const sg of chunk.segs) {
     const i = S.wireSegs.indexOf(sg);
@@ -634,39 +782,31 @@ function buildSandbagMesh() {
 }
 
 function buildNests() {
+  // MG turret strongpoints — sandbagged arcs on the mound tops, each with a
+  // live turret (makeSentry) watching the seaward approaches
   const nests = [
-    [-95, -54, Math.PI], [30, -57, Math.PI],
-    [-70, 33.4, Math.PI], [10, 33.6, Math.PI],
-    [-55, 119.6, Math.PI], [70, 117.4, Math.PI],
+    [-70, -224, Math.PI],            // T1 line west
+    [86, -218, Math.PI],             // T1 line east
+    [-14, -92, Math.PI],             // teeth chicane overwatch
+    [-126, -24, Math.PI + 0.45],     // west flank, covers the bypass
+    [118, -30, Math.PI - 0.35],      // east flank
+    [96, 52, Math.PI],               // mid-field pair
+    [-24, 132, Math.PI],             // final belt gap overwatch
+    [50, 133, Math.PI],
   ];
   const P = [];
   for (const [x, z, yaw] of nests) {
-    bagArc(x, z, 1.9, yaw, 2);
+    bagArc(x, z, 2.2, yaw, 3);
     const gy = H(x, z);
-    // MG prop on plinth
-    const g = new THREE.Group();
-    g.position.set(x, gy, z);
-    g.rotation.y = yaw;
-    const mg = new THREE.Mesh(mergeGeoms([
-      part(new THREE.BoxGeometry(1.3, 0.5, 1.3), 0x6a5c44, { p: [0, 0.25, 0] }),
-      part(new THREE.BoxGeometry(0.24, 0.26, 0.95), 0x363b3d, { p: [0, 0.85, 0] }),
-      part(new THREE.CylinderGeometry(0.05, 0.05, 0.95, 6), 0x2c3033, { p: [0, 0.88, 0.85], r: [Math.PI / 2, 0, 0] }),
-      part(new THREE.BoxGeometry(0.6, 0.42, 0.05), 0x3d4247, { p: [0, 1.0, 0.5] }),
-      part(new THREE.BoxGeometry(0.07, 0.6, 0.07), 0x2c3033, { p: [0.22, 0.55, 0], r: [0, 0, 0.4] }),
-      part(new THREE.BoxGeometry(0.07, 0.6, 0.07), 0x2c3033, { p: [-0.22, 0.55, 0], r: [0, 0, -0.4] }),
-      part(new THREE.BoxGeometry(0.07, 0.6, 0.07), 0x2c3033, { p: [0, 0.55, -0.28], r: [0.5, 0, 0] }),
-      part(new THREE.BoxGeometry(0.34, 0.2, 0.3), 0x50565b, { p: [-0.35, 0.78, -0.4] }),
-    ]), new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.8, metalness: 0.3 }));
-    mg.castShadow = true;
-    g.add(mg);
-    S.scene.add(g);
-    // ammo crates
+    makeSentry(x, gy, z, yaw);
+    // ammo crates + a wooden plank floor
+    P.push(part(new THREE.BoxGeometry(1.9, 0.07, 1.9), 0x7d654a, { p: [x, gy + 0.04, z], r: [0, yaw, 0] }));
     P.push(part(new THREE.BoxGeometry(0.7, 0.45, 0.5), 0x6d5e42, { p: [x + 1.6, gy + 0.22, z + 0.4], r: [0, 0.6, 0] }));
     P.push(part(new THREE.BoxGeometry(0.6, 0.4, 0.55), 0x7a6a4c, { p: [x - 1.7, gy + 0.2, z - 0.5], r: [0, -0.4, 0] }));
   }
   if (P.length) {
     const m = new THREE.Mesh(mergeGeoms(P), new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95 }));
-    m.castShadow = true;
+    m.castShadow = true; m.receiveShadow = true;
     S.scene.add(m);
   }
 }
@@ -730,7 +870,7 @@ function addSign(l1, l2, x, y, z, yaw, bg, fg, w = 1.15, h = 0.8, skull = true) 
 
 function buildSignsAndCrateClusters() {
   const signPos = [
-    [-24, -42], [24, -40], [-80, -2], [80, -2], [-52, -46], [48, -44], [-44, 122], [46, 121],
+    [-30, -332], [26, -286], [-30, -252], [24, -108], [-30, -88], [30, 42], [-24, 126],
   ];
   for (const [x, z] of signPos) {
     addSign('DANGER', 'MINES', x, H(x, z) + 1.35, z, Math.PI + (hash2(x, z) - 0.5) * 0.3, '#c9b98c', '#8a1c12');
@@ -739,8 +879,8 @@ function buildSignsAndCrateClusters() {
   const rng = mulberry32(31337);
   const P = [];
   const clusters = [
-    [-92, -50], [34, -55], [-66, 30], [14, 34], [88, 32], [-48, 120], [75, 118],
-    [-58, -90], [58, -88], [-6, 145], [22, 150],
+    [-76, -218], [92, -212], [-20, -86], [-120, -20], [122, -26], [-66, 40], [90, 48],
+    [-30, 128], [46, 129], [-6, 145], [22, 150], [-96, -34], [70, -40], [-44, 106],
   ];
   for (const [cx, cz] of clusters) {
     const n = 2 + Math.floor(rng() * 3);
@@ -777,7 +917,7 @@ function buildFlags() {
 
 function buildWreckedCars() {
   const defs = [
-    { x: -38, z: -66, yaw: 1.2 }, { x: 35, z: 118, yaw: 2.8 },
+    { x: -46, z: -140, yaw: 1.2 }, { x: 30, z: -70, yaw: 2.8 }, { x: -20, z: 60, yaw: 0.4 },
   ];
   for (const d of defs) {
     const car = buildCarMesh(0x4a4038, true);

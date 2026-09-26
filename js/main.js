@@ -3,6 +3,7 @@ import * as THREE from './vendor/three.module.min.js';
 import { S, CFG } from './state.js';
 import * as world from './world.js';
 import { buildProps } from './props.js';
+import { Planes } from './planes.js';
 import { Car } from './car.js';
 import { Player } from './player.js';
 import { Effects } from './effects.js';
@@ -28,7 +29,7 @@ function init() {
   renderer.toneMappingExposure = 1.05;
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0xc3d2da, 150, 560);
+  scene.fog = new THREE.Fog(0xc3d2da, 170, 680);
   camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 1400);
   S.scene = scene;
   S.camera = camera;
@@ -59,6 +60,7 @@ function init() {
   S.car = new Car();
   scene.add(S.car.mesh);
   S.player = new Player();
+  S.planes = new Planes(scene);
   S.audio = new AudioSys();
 
   // ---- UI refs ----
@@ -111,6 +113,11 @@ function startGame(canvas) {
   S.t = 0;
   S.stats = { deaths: 0, minesTripped: 0, carLost: false };
   S.mode = 'play';
+  // you start BEHIND THE WHEEL — the tide is already turning
+  S.player.inCar = true;
+  S.player.pos.copy(S.car.pos);
+  S.camMode = 'fp';
+  S.banners.push({ text: 'DRIVE FOR THE WALL — 560 METRES OF FORTIFICATIONS', ttl: 5, color: '#ffd27a' });
   ui.intro.classList.add('hidden');
   tryLock(canvas);
 }
@@ -199,9 +206,10 @@ function applyCamera(dt) {
 }
 
 function introCamera() {
-  const a = S.realT * 0.06;
-  camera.position.set(Math.sin(a) * 130, 52 + Math.sin(a * 0.7) * 10, -60 + Math.cos(a) * 110);
-  camera.lookAt(0, 8, 40);
+  const a = S.realT * 0.09;
+  const c = S.car ? S.car.pos : CFG.spawn;
+  camera.position.set(c.x + Math.sin(a) * 17, c.y + 4.6 + Math.sin(a * 0.7) * 1.2, c.z - 11 + Math.cos(a) * 6);
+  camera.lookAt(c.x, c.y + 1.4, c.z + 30);
 }
 
 function orbitCamera() {
@@ -307,6 +315,7 @@ function loop() {
       car.update(dt, { throttle: 0, steer: 0, brake: false });
     }
     updateCombat(dt);
+    S.planes.update(dt);
     S.effects.update(dt);
     S.audio.setEngine(p.inCar && car.alive && !car.disabled, Math.abs(car.speed) / 23);
     S.audio.update(dt, S.realT);

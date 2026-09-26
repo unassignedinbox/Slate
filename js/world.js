@@ -5,67 +5,94 @@ import { S, CFG } from './state.js';
 
 // ------------------------------------------------------------------
 // LAYOUT — ocean at -Z, the Great Wall at +Z. Players land between.
+// A 560 m run up a layered defence: shelf → hedgehogs → minebelt A →
+// wire → T1 trench → kill plain (craters, wrecks) → wire → dragon teeth →
+// wire → strongpoint mounds + T2 → wire → final belt + gate flats → WALL.
+// The road is a winding dirt track; craters punch holes in it and every
+// wire belt sits across it — gaps are deliberately offset.
 // ------------------------------------------------------------------
 export const KNOTS = [
-  [-260, -8], [-190, -7], [-100, 1.0], [-80, 1.8],
-  [60, 2.6], [150, 3.0], [168, 3.3], [300, 3.3],
+  [-640, -9], [-505, -7.4], [-425, -5.2], [-345, -3.1], [-262, -1.5], [-192, 0.2],
+  [-100, 1.15], [-80, 1.85], [0, 2.45], [60, 2.75], [150, 3.05], [168, 3.4], [320, 3.4],
 ];
 
-export const MOUNDS = [ // [x, z, radius, height]
-  [-95, -12, 26, 11],
-  [-8, -2, 21, 9],
-  [92, 2, 24, 10],
-  [-118, 62, 20, 8],
-  [112, 74, 24, 11],
-  [28, 98, 17, 7],
-  [152, 118, 20, 9],
-  [-156, 112, 21, 10],
+export const MOUNDS = [ // [x, z, radius, height] — strongpoint hillocks + blind rises
+  [-70, -224, 22, 9], [86, -218, 20, 8],        // SP behind T1
+  [-14, -92, 19, 8],                             // covers the teeth chicane
+  [-126, -24, 20, 8], [118, -30, 21, 9],         // west/east strongpoints
+  [-80, 44, 20, 9], [96, 52, 18, 8],             // mid-field pair
+  [-38, 124, 17, 7], [146, 120, 19, 9],          // final belt
+  [52, -160, 24, 10], [-120, -140, 22, 9], [140, -160, 23, 10],
+  [-52, -40, 21, 9], [40, -20, 18, 8], [-160, 80, 22, 10], [150, -70, 20, 9],
 ];
 
 export const TRENCHES = [ // zig-zag fire trenches
-  { pts: [[-125, -50], [-95, -58], [-62, -52], [-30, -60], [0, -54], [30, -62], [60, -52], [95, -58], [125, -52]], w: 2.1, depth: 2.35, par: 0.55 },
-  { pts: [[-140, 32], [-100, 38], [-70, 30]], w: 2.1, depth: 2.35, par: 0.55 },
-  { pts: [[-30, 36], [10, 30], [45, 38]], w: 2.1, depth: 2.35, par: 0.55 },
-  { pts: [[85, 34], [120, 28]], w: 2.1, depth: 2.35, par: 0.55 },
-  { pts: [[-135, 118], [-95, 124], [-55, 116], [-35, 122]], w: 2.1, depth: 2.3, par: 0.5 },
-  { pts: [[30, 120], [70, 114], [110, 122]], w: 2.1, depth: 2.3, par: 0.5 },
+  { pts: [[-165, -236], [-125, -228], [-88, -234], [-52, -227], [-16, -232], [18, -226], [52, -233], [88, -227], [124, -234], [162, -228]], w: 2.1, depth: 2.35, par: 0.55 },
+  { pts: [[-140, -46], [-102, -38], [-70, -44], [-38, -36], [-8, -42], [26, -36], [56, -43], [92, -37], [126, -43]], w: 2.1, depth: 2.35, par: 0.55 },
+  { pts: [[-150, 100], [-105, 108], [-62, 98], [-30, 106], [6, 98], [42, 106], [76, 99], [116, 106]], w: 2.1, depth: 2.3, par: 0.5 },
 ];
 
 export const CROSSINGS = [ // where roads bridge the trenches (carve suppressed)
-  [-60, -52.5, 6], [55, -54, 6], [0, -54, 3.6],
-  [-46, 118, 5], [50, 116, 5],
+  [-8, -232, 5], [-5, -40, 5], [-119, -41, 5], [-2, 102, 5], [-34, 102, 5],
 ];
 
-export const ROADS = [ // dirt roads from the beach gaps to the gate
-  { pts: [[-60, -104], [-60, -40], [-61, 10], [-58, 60], [-50, 100], [-38, 130], [-20, 152], [-6, 164]], halfW: 3.6 },
-  { pts: [[55, -104], [55, -40], [56, 10], [58, 60], [54, 100], [46, 132], [26, 156], [8, 166]], halfW: 3.6 },
+export const ROADS = [ // the winding dirt road + a longer, riskier western bypass
+  {
+    pts: [[-6, -436], [-27, -386], [6, -348], [-24, -306], [16, -268], [-14, -238],
+      [10, -206], [-24, -172], [8, -140], [-20, -108], [14, -76], [-16, -44],
+      [10, -14], [-22, 18], [16, 52], [-14, 86], [8, 118], [-6, 146], [0, 164]],
+    halfW: 3.4,
+  },
+  {
+    pts: [[-24, -172], [-62, -150], [-98, -116], [-118, -74], [-122, -30],
+      [-100, 12], [-70, 52], [-42, 92], [-24, 120], [-12, 146]],
+    halfW: 3.0,
+  },
 ];
 
-export const WIRES = [ // barbed wire belts (split polylines leave gaps/lanes)
-  { pts: [[-172, -88], [-64, -84]] },
-  { pts: [[-56, -86], [-5, -88]] },
-  { pts: [[5, -86], [51, -84]] },
-  { pts: [[59, -86], [172, -88]] },
-  { pts: [[-172, 10], [-75, 6], [-33, 13]] },
-  { pts: [[15, 15], [35, 10]] },
-  { pts: [[46, 10], [66, 7], [117, 12]] },
-  { pts: [[127, 10], [172, 8]] },
-  { pts: [[-172, 127], [-49, 126]] },
-  { pts: [[-37, 128], [41, 127]] },
-  { pts: [[53, 126], [172, 124]] },
+// deliberate road craters — the roadbed is blown in, forcing a detour
+export const ROAD_CRATERS = [
+  [-10, -326, 5.6, 1.3], [-8, -124, 5.2, 1.25], [-3, 35, 5.4, 1.3], [1, 132, 5.0, 1.2],
+];
+
+export const WIRES = [ // barbed wire belts; gaps are offset from the road
+  { pts: [[-185, -350], [-96, -344]] },
+  { pts: [[-84, -348], [-30, -342]] },
+  { pts: [[-18, -346], [40, -342]] },
+  { pts: [[52, -348], [130, -344]] },
+  { pts: [[142, -346], [185, -350]] },
+  { pts: [[-185, -266], [-110, -260]] },
+  { pts: [[-98, -264], [-40, -258]] },
+  { pts: [[-28, -262], [30, -258]] },
+  { pts: [[42, -264], [110, -260]] },
+  { pts: [[122, -262], [185, -266]] },
+  { pts: [[-185, -104], [-120, -98]] },
+  { pts: [[-108, -102], [-56, -96]] },
+  { pts: [[-44, -100], [18, -96]] },
+  { pts: [[30, -102], [92, -98]] },
+  { pts: [[104, -100], [185, -104]] },
+  { pts: [[-185, 42], [-120, 36]] },
+  { pts: [[-108, 40], [-40, 34]] },
+  { pts: [[-28, 38], [36, 34]] },
+  { pts: [[48, 40], [120, 36]] },
+  { pts: [[132, 38], [185, 42]] },
+  { pts: [[-185, 138], [-110, 132]] },
+  { pts: [[-98, 136], [-30, 130]] },
+  { pts: [[-18, 134], [44, 130]] },
+  { pts: [[56, 136], [128, 132]] },
 ];
 
 export const CRATERS = (() => {
   const rng = mulberry32(1337);
-  const out = [];
+  const out = ROAD_CRATERS.map((c) => [c[0], c[1], c[2], c[3], true]);
   let guard = 0;
-  while (out.length < 15 && guard++ < 400) {
-    const x = -150 + rng() * 300;
-    const z = -75 + rng() * 215;
-    const r = 2.6 + rng() * 2.2;
+  while (out.length < 42 && guard++ < 900) {
+    const x = -170 + rng() * 340;
+    const z = -250 + rng() * 400;
+    const r = 2.6 + rng() * 2.4;
     if (roadDistRaw(x, z) < 6) continue;
     if (trenchNear(x, z) < r + 4) continue;
-    out.push([x, z, r, 0.7 + rng() * 0.5]);
+    out.push([x, z, r, 0.7 + rng() * 0.5, false]);
   }
   return out;
 })();
@@ -74,14 +101,12 @@ export const HEDGEHOGS = (() => {
   const rng = mulberry32(4242);
   const out = [];
   let guard = 0;
-  while (out.length < 30 && guard++ < 600) {
-    const x = -160 + rng() * 320;
-    const z = -142 + rng() * 46;
-    if (Math.hypot(x - 0, z + 140) < 16) continue;             // spawn area
-    if (Math.hypot(x - 4, z + 160) < 14) continue;             // landing craft
-    if (Math.abs(x + 60) < 10) continue;                       // west lane
-    if (Math.abs(x - 55) < 10) continue;                       // east lane
-    if (Math.abs(x) < 12) continue;                            // centre lane
+  while (out.length < 46 && guard++ < 900) {
+    const x = -180 + rng() * 360;
+    const z = -378 + rng() * 62;               // belt seaward of minebelt A
+    if (Math.hypot(x, z + 398) < 18) continue;  // spawn shelf stays clear
+    if (roadDistRaw(x, z) < 7) continue;        // the road threads through
+    if (trenchNear(x, z) < 6) continue;
     let ok = true;
     for (const h of out) if (Math.hypot(x - h[0], z - h[1]) < 5.2) { ok = false; break; }
     if (!ok) continue;
@@ -119,7 +144,7 @@ function noise2(x, z) {
   return 0.22 * (Math.sin(x * 0.043 + z * 0.027 + 2.1) * 0.6 + Math.sin(x * 0.019 - z * 0.051) * 0.4);
 }
 function plainNoiseF(z) {
-  return smoothstep(-70, -20, z) * (1 - smoothstep(148, 168, z));
+  return smoothstep(-390, -300, z) * (1 - smoothstep(148, 168, z));
 }
 
 const TF = { carve: 0, par: 0 };
@@ -231,8 +256,8 @@ export function H(x, z) {
 
 export function waterlineZ(level) {
   // furthest inland the water reaches at x=0 (ignores bumps that poke through)
-  let last = -170;
-  for (let z = -170; z < 40; z += 2) {
+  let last = -500;
+  for (let z = -500; z < 40; z += 2) {
     if (H(0, z) < level) last = z;
   }
   return last;
@@ -258,12 +283,12 @@ const C_ROAD2 = new THREE.Color(0x8d714c);
 const C_ROADEDGE = new THREE.Color(0x8a7355);
 
 export function buildTerrain() {
-  const NX = 120;
+  const NX = 100;
   const xs = new Array(NX);
-  for (let i = 0; i < NX; i++) xs[i] = -178 + (356 * i) / (NX - 1);
+  for (let i = 0; i < NX; i++) xs[i] = -196 + (392 * i) / (NX - 1);
   const zs = [];
-  for (let z = -260; z < -85.9; z += 7.25) zs.push(z);
-  for (let z = -86; z <= 180.001; z += 2.4) zs.push(z);
+  for (let z = -452; z < -262; z += 6.9) zs.push(z);
+  for (let z = -262; z <= 182.001; z += 2.4) zs.push(z);
   const NZ = zs.length;
 
   const grid = new Float32Array(NX * NZ);
@@ -322,10 +347,10 @@ function faceColor(cx, cz, cy, out) {
   const cf = craterF(cx, cz);
   const mf = moundF(cx, cz);
 
-  if (cy < -1.4) out.copy(C_DEEPSAND);
-  else if (cy < 0.55) out.copy(C_WETSAND);
-  else if (cz < -88 + h * 8 && cy < 1.5) out.copy(C_SAND);
-  else if (cz < -72 + h * 8) out.copy(h < 0.45 ? C_DUNE : C_SAND);
+  if (cy < -3.4) out.copy(C_DEEPSAND);
+  else if (cy < -0.9) out.copy(C_WETSAND);
+  else if (cz < -244 + h * 8 && cy < 1.5) out.copy(C_SAND);
+  else if (cz < -208 + h * 8) out.copy(h < 0.45 ? C_DUNE : C_SAND);
   else out.copy(h < 0.34 ? C_GRASS1 : h < 0.67 ? C_GRASS2 : C_GRASS3);
 
   if (mf > 0.34) out.copy(h < 0.5 ? C_EARTH : C_EARTH2);
@@ -334,7 +359,7 @@ function faceColor(cx, cz, cy, out) {
   if (tf.par > 0.16) out.copy(h < 0.5 ? C_EARTH2 : C_EARTH);
   if (tf.carve > 0.02) out.copy(tf.carve > 1.25 ? C_TRENCHFLOOR : C_TRENCHWALL);
   if (road < 0.05) out.copy(h < 0.5 ? C_ROAD : C_ROAD2);
-  else if (road < 1.2 && cz > -96) out.copy(C_ROADEDGE);
+  else if (road < 1.2 && cz > -420) out.copy(C_ROADEDGE);
 
   const jit = 0.94 + h * 0.1;
   out.multiplyScalar(jit);
@@ -344,7 +369,7 @@ function faceColor(cx, cz, cy, out) {
 // OCEAN — rising tide, low-poly animated waves
 // ------------------------------------------------------------------
 export function buildWater() {
-  const geo = new THREE.PlaneGeometry(780, 720, 104, 96);
+  const geo = new THREE.PlaneGeometry(560, 800, 96, 136);
   geo.rotateX(-Math.PI / 2);
   const mat = new THREE.MeshPhongMaterial({
     color: 0x2f6f8f, transparent: true, opacity: 0.8,
@@ -352,7 +377,7 @@ export function buildWater() {
     side: THREE.DoubleSide,
   });
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.set(0, 0, -160);
+  mesh.position.set(0, 0, -135);
   mesh.receiveShadow = false;
   S.scene.add(mesh);
   const pos = geo.attributes.position;

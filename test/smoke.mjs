@@ -30,11 +30,11 @@ S.mode = 'play';
 console.log(`  built in ${Date.now() - t0}ms`);
 
 console.log('== assertions on the battlefield ==');
-assert(S.tankMines.length >= 40, `tank mines (${S.tankMines.length})`);
-assert(S.apMines.length >= 25, `ap mines (${S.apMines.length})`);
-assert(S.sentries.length === 8, `sentries = ${S.sentries.length} (want 8)`);
-assert(S.obstacles.length > 60, `obstacles (${S.obstacles.length})`);
-assert(S.wireSegs.length > 40, `wire segments (${S.wireSegs.length})`);
+assert(S.tankMines.length >= 80, `tank mines (${S.tankMines.length})`);
+assert(S.apMines.length >= 40, `ap mines (${S.apMines.length})`);
+assert(S.sentries.length === 16, `MG turrets = ${S.sentries.length} (want 16)`);
+assert(S.obstacles.length > 120, `obstacles (${S.obstacles.length})`);
+assert(S.wireSegs.length > 200, `wire segments (${S.wireSegs.length})`);
 assert(S.smokeSpots && S.smokeSpots.length >= 3, 'smoke spots');
 
 const posAttr = S.terrainMesh.geometry.attributes.position;
@@ -43,14 +43,16 @@ for (let i = 0; i < posAttr.array.length; i++) if (!Number.isFinite(posAttr.arra
 assert(bad === 0, `terrain NaN verts (${bad})`);
 assert(posAttr.count > 50000, `terrain verts (${posAttr.count})`);
 
-for (const [x, z] of [[0, -140], [0, 0], [60, 60], [-100, -60], [0, 160], [-170, -200], [120, 120]]) {
+for (const [x, z] of [[0, -400], [0, -250], [0, 0], [60, 60], [-100, -60], [0, 160], [-170, -300], [120, 120]]) {
   assert(Number.isFinite(world.H(x, z)), `H finite at ${x},${z} = ${world.H(x, z)}`);
 }
-// trench is actually carved (test away from the road crossings)
-const t1c = world.H(15, -58), t1p = world.H(15, -52);
+// trench T1 is actually carved (test away from the road crossing at -8,-232)
+const t1c = world.H(52, -233), t1p = world.H(52, -225);
 assert(t1c < t1p - 1.5, `trench carved (floor ${t1c.toFixed(2)} vs rim ${t1p.toFixed(2)})`);
 // mound rises
-assert(world.H(92, 2) > world.H(92, 40) + 6, 'mound M3 rises');
+assert(world.H(-70, -224) > world.H(-70, -190) + 6, 'strongpoint mound rises');
+// spawn shelf is dry at low tide
+assert(world.H(0, -400) > CFG.tideStart + 1, `spawn dry (H=${world.H(0, -400).toFixed(2)} vs tide ${CFG.tideStart})`);
 // wall zone flat-ish
 assert(world.H(0, 165) > 2.8, `wall base height ${world.H(0, 165).toFixed(2)}`);
 
@@ -68,9 +70,9 @@ for (let i = 0; i < 1500; i++) {
 console.log(`  z=${S.player.pos.z.toFixed(1)} hp=${S.player.health.toFixed(0)} alive=${S.player.alive} waterline=${S.waterlineZ.toFixed(1)} deaths=${S.stats.deaths} mines=${S.stats.minesTripped}`);
 if (!S.player.alive) { S.player.respawn(); S.mode = 'play'; }
 assert(S.player.alive, 'player respawned');
-assert(S.waterlineZ > -155, `tide advanced (${S.waterlineZ.toFixed(1)})`);
+assert(S.waterlineZ > -480, `tide advanced (${S.waterlineZ.toFixed(1)})`);
 
-console.log('== simulating car run up the west road (25s full throttle) ==');
+console.log('== simulating car run from the landing shelf (25s full throttle) ==');
 S.player.inCar = true;
 S.player.pos.copy(S.car.pos);
 let carStartHP = S.car.health;
@@ -83,7 +85,7 @@ for (let i = 0; i < 1500; i++) {
   S.effects.update(dt);
 }
 console.log(`  car z=${S.car.pos.z.toFixed(1)} hp=${S.car.health.toFixed(0)} alive=${S.car.alive} disabled=${S.car.disabled} mines=${S.stats.minesTripped} deaths=${S.stats.deaths}`);
-assert(S.car.pos.z > -80, 'car made progress inland');
+assert(S.car.pos.z > -380, 'car made progress inland');
 assert(S.stats.minesTripped > 0 || S.car.health < carStartHP, 'car got hurt by something (mines/sentries)');
 
 console.log('== sentry engagement (fresh car in the open) ==');
@@ -105,11 +107,11 @@ for (let i = 0; i < 420; i++) {
 }
 console.log(`  car hp=${S.car.health.toFixed(0)} alive=${S.car.alive} frames-with-target=${sentryFrames}/420`);
 assert(sentryFrames > 30, `sentries acquired the car (${sentryFrames} frames)`);
-assert(S.car.health < 100, `sentries (or mines) damaged the car (hp ${S.car.health.toFixed(0)})`);
+assert(S.car.health < 120, `turrets (or mines) damaged the car (hp ${S.car.health.toFixed(0)})`);
 
 console.log('== wire damages the player ==');
 S.player.respawn();
-S.player.pos.set(-100, world.H(-100, -86), -86);
+S.player.pos.set(-152, world.H(-152, -101), -101);
 const hpWire = S.player.health;
 S.wireSlow = 0;
 for (let i = 0; i < 30; i++) updateCombat(1 / 60);
@@ -134,8 +136,8 @@ assert(Math.abs(S.waterLevel - CFG.tideMax) < 0.01, 'tide reached max');
 
 console.log('== wire destruction by car ==');
 const wireBefore = S.wireSegs.length;
-S.car.alive = true; S.car.health = 100; S.car.disabled = false; S.car.speed = 15;
-S.car.pos.set(-100, 0, -84);
+S.car.alive = true; S.car.health = 120; S.car.disabled = false; S.car.speed = 15; S.car.yaw = 0;
+S.car.pos.set(-152, 0, -106);
 for (let i = 0; i < 40; i++) {
   S.car.update(1 / 60, { throttle: 1, steer: 0, brake: false });
   updateCombat(1 / 60);

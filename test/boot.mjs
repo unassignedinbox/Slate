@@ -138,11 +138,13 @@ console.log('== importing main.js (full game boot) ==');
 await import('../js/main.js');
 
 const S = (await import('../js/state.js')).S;
+const { CFG } = await import('../js/state.js');
+const world = await import('../js/world.js');
 
 assert(S.scene && S.camera && S.renderer, 'renderer/scene/camera created');
 assert(S.terrainMesh, 'terrain built');
 assert(S.car && S.player, 'car & player created');
-assert(S.sentries.length === 8, '8 sentries');
+assert(S.sentries.length === 16, '16 sentries');
 assert(S.effects && S.audio, 'effects & audio systems exist');
 
 // all HUD elements must have been found (no nulls used)
@@ -156,6 +158,7 @@ for (const id of uiIds) assert(els.has(id), `element #${id}`);
 console.log('== simulate: start game, run 600 frames, drive, pause/resume ==');
 fire('el:startBtn', 'click');
 assert(S.mode === 'play', `mode is play after START (got ${S.mode})`);
+assert(S.player.inCar === true, 'player starts behind the wheel');
 
 // hold W, run frames via the renderer's animation loop (rAF stub)
 const keyDown = (code) => fire('document', 'keydown', { code, preventDefault: noop });
@@ -166,12 +169,16 @@ const frames = async (n) => {
   }
 };
 
+// step out, then leg it inland
+fire('document', 'keydown', { code: 'KeyE', preventDefault: noop });
+await frames(3);
+assert(S.player.inCar === false, 'KeyE steps out of the car');
 keyDown('KeyW');
 await frames(300);
 console.log(`  after 300 frames: t=${S.t.toFixed(1)}s player.z=${S.player.pos.z.toFixed(1)} water=${S.waterLevel.toFixed(2)} waterline=${S.waterlineZ.toFixed(0)}`);
 assert(S.t > 3, 'mission clock advanced');
-assert(S.player.pos.z > -145, 'player moved inland');
-assert(S.waterLevel > -3.6, 'tide started rising');
+assert(S.player.pos.z > CFG.spawn.z + 15, `player moved inland (z=${S.player.pos.z.toFixed(1)})`);
+assert(S.waterLevel > CFG.tideStart + 0.05, 'tide started rising');
 
 // enter the car (teleport next to it first)
 S.player.pos.set(S.car.pos.x + 2, S.car.pos.y, S.car.pos.z);
@@ -181,7 +188,48 @@ keyUp('KeyW');
 keyDown('KeyW');
 await frames(240);
 console.log(`  car z=${S.car.pos.z.toFixed(1)} speed=${S.car.speed.toFixed(1)} hp=${S.car.health.toFixed(0)}`);
-assert(S.car.pos.z > -130, 'car drove inland');
+assert(S.car.pos.z > -380, `car drove inland (z=${S.car.pos.z.toFixed(1)})`);
+
+console.log('== bomber run on the vehicle ==');
+keyUp('KeyW');
+await frames(10); // settle
+// step out and stand well clear — the bombs are for the car
+fire('document', 'keydown', { code: 'KeyE', preventDefault: noop });
+await frames(2);
+S.player.pos.set(CFG.spawn.x + 40, 0, CFG.spawn.z - 8);
+S.player.pos.y = world.H(S.player.pos.x, S.player.pos.z);
+const carHP0 = S.car.health;
+S.planes.spawnRun();
+assert(!!S.planes.active, 'bomber spawned');
+assert(S.banners.some((b) => b.text.includes('AIRCRAFT')), 'aircraft warning banner shown');
+// pull the plane close so the run completes quickly
+S.planes.active.grp.position.set(S.car.pos.x, S.car.pos.y + 26, S.car.pos.z - 120);
+let sawBomb = false;
+let planeFrames = 0;
+while (planeFrames < 700) {
+  await frames(1);
+  planeFrames++;
+  if (S.planes._bombs.length > 0) sawBomb = true;
+  if (sawBomb && !S.planes.active && S.planes._bombs.length === 0) break;
+}
+assert(sawBomb, `bombs were released (frames=${planeFrames})`);
+console.log(`  after bombing run: car hp=${S.car.health.toFixed(0)} (was ${carHP0.toFixed(0)})`);
+assert(S.car.health < carHP0 || !S.car.alive, `bomber damaged the vehicle (hp ${S.car.health.toFixed(0)})`);
+// repair/revive the car so the rest of the run can proceed (test harness only)
+if (!S.car.alive) {
+  S.car.alive = true; S.car.wrecked = false; S.car.disabled = false;
+  S.car.mats.body.color.set(0xd0492e);
+  S.car.mats.glass.color.set(0x9db8c6);
+  S.car.mats.light.emissiveIntensity = 0.8;
+  S.car.mats.tail.emissiveIntensity = 0.7;
+  for (const k of Object.keys(S.car.wheels)) S.car.wheels[k].pivot.scale.y = 1;
+}
+S.car.health = 120;
+// get back in for the pause/mine sections
+S.player.pos.set(S.car.pos.x + 2, S.car.pos.y, S.car.pos.z);
+fire('document', 'keydown', { code: 'KeyE', preventDefault: noop });
+await frames(2);
+assert(S.player.inCar, 'back behind the wheel after the raid');
 
 // orbit cam + mute + pause/resume via Esc fallback path
 const uiEls = (id) => els.get(id);
@@ -211,7 +259,6 @@ assert(uiEls('pause').classList.contains('hidden'), 'pause overlay hidden again'
 console.log('== mine death + redeploy ==');
 // drive the car onto a live tank mine: mine → car destroyed → player killed
 keyUp('KeyW');
-const world = await import('../js/world.js');
 const mine = S.tankMines.find((m) => m.alive);
 // place the car so a WHEEL sits exactly on the mine (trigger checks wheels)
 S.car.pos.set(mine.x, 0, mine.z);
@@ -252,7 +299,6 @@ const tideW1 = parseFloat(uiEls('tideFill').style.width);
 assert(tideW1 > tideW0, `tide bar creeping up (${tideW0.toFixed(1)}% -> ${tideW1.toFixed(1)}%)`);
 
 console.log('== barbed wire (on foot) ==');
-const { CFG } = await import('../js/state.js');
 const wireSeg = S.wireSegs.find((sg) => {
   const mx = (sg.ax + sg.bx) / 2, mz = (sg.az + sg.bz) / 2;
   return Math.abs(mx) > 30 && S.apMines.every((m) => !m.alive || Math.hypot(m.x - mx, m.z - mz) > 3);
@@ -306,7 +352,7 @@ if (exposed) {
   }
   Math.random = realRandom;
   assert(deadBySentry, `sentry fire killed the exposed player (mode=${S.mode}, hp=${S.player.health})`);
-  assert(S.player.deathCause === 'cut down by sentry fire', `sentry death cause (got "${S.player.deathCause}")`);
+  assert(S.player.deathCause === 'cut down by machine-gun fire', `sentry death cause (got "${S.player.deathCause}")`);
   fire('el:redeployBtn', 'click');
   await frames(3);
   assert(S.mode === 'play', `redeployed after sentry death (got ${S.mode})`);

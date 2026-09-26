@@ -12,8 +12,13 @@ import { explode } from './combat.js';
 export function buildCarMesh(bodyColor = 0xd0492e, wrecked = false) {
   const group = new THREE.Group();
   const mats = {
-    body: new THREE.MeshStandardMaterial({ color: bodyColor, flatShading: true, roughness: 0.45, metalness: 0.35 }),
-    glass: new THREE.MeshStandardMaterial({ color: wrecked ? 0x14181c : 0x18242f, flatShading: true, roughness: 0.15, metalness: 0.6 }),
+    body: new THREE.MeshStandardMaterial({ color: bodyColor, flatShading: true, roughness: 0.45, metalness: 0.35, side: THREE.DoubleSide }),
+    glass: new THREE.MeshStandardMaterial({
+      color: wrecked ? 0x14181c : 0x9db8c6,
+      flatShading: true, roughness: 0.18, metalness: 0.15,
+      transparent: !wrecked, opacity: wrecked ? 1 : 0.62,
+      side: THREE.DoubleSide,
+    }),
     trim: new THREE.MeshStandardMaterial({ color: 0x2e3338, flatShading: true, roughness: 0.6, metalness: 0.3 }),
     tire: new THREE.MeshStandardMaterial({ color: 0x23262a, flatShading: true, roughness: 0.95 }),
     hub: new THREE.MeshStandardMaterial({ color: wrecked ? 0x4a4c50 : 0xb9bcc0, flatShading: true, roughness: 0.4, metalness: 0.6 }),
@@ -21,38 +26,49 @@ export function buildCarMesh(bodyColor = 0xd0492e, wrecked = false) {
     tail: new THREE.MeshStandardMaterial({ color: 0x7a1410, emissive: 0xff2211, emissiveIntensity: wrecked ? 0 : 0.7 }),
   };
 
-  // body shell profile (x = length, nose at +x)
+  // body shell profile (x = length, nose at +x).
+  // Points are ordered COUNTER-clockwise so ExtrudeGeometry side normals
+  // point outward without relying on its internal winding auto-fix.
+  const shellPts = [
+    [-2.30, 0.34],   // front bottom
+    [2.30, 0.34],    // rear bottom (mirrored below: profile x → world z)
+    [2.34, 0.56],    // bumper top
+    [2.26, 0.80],    // nose
+    [1.92, 0.92],    // hood
+    [1.14, 0.99],    // windshield base
+    [0.44, 1.38],    // roof front
+    [-0.70, 1.34],   // roof rear
+    [-1.32, 0.92],   // C-pillar base
+    [-1.52, 0.90],   // trunk
+    [-2.24, 0.84],   // trunk lip (little ducktail)
+    [-2.34, 0.62],
+    [-2.30, 0.34],
+  ];
   const shell = new THREE.Shape();
-  shell.moveTo(-2.30, 0.34);
-  shell.lineTo(-2.34, 0.62);
-  shell.lineTo(-2.24, 0.84);   // trunk lip (little ducktail)
-  shell.lineTo(-1.52, 0.90);   // trunk
-  shell.lineTo(-1.32, 0.92);   // C-pillar base
-  shell.lineTo(-0.70, 1.34);   // roof rear
-  shell.lineTo(0.44, 1.38);    // roof front
-  shell.lineTo(1.14, 0.99);    // windshield base
-  shell.lineTo(1.92, 0.92);    // hood
-  shell.lineTo(2.26, 0.80);    // nose
-  shell.lineTo(2.34, 0.56);    // bumper top
-  shell.lineTo(2.30, 0.34);    // front bottom
+  // contour runs: rear-bottom → front-bottom → up the nose → back along the
+  // roof → down the tail = counter-clockwise in shape space
+  shell.moveTo(shellPts[0][0], shellPts[0][1]);
+  for (let i = 1; i < shellPts.length; i++) shell.lineTo(shellPts[i][0], shellPts[i][1]);
   shell.closePath();
   const bodyGeo = new THREE.ExtrudeGeometry(shell, { depth: 1.62, bevelEnabled: false });
   bodyGeo.rotateY(-Math.PI / 2);
   bodyGeo.translate(0.81, 0, 0);
+  bodyGeo.computeVertexNormals();
   const body = new THREE.Mesh(bodyGeo, mats.body);
   body.castShadow = true;
   group.add(body);
 
   // greenhouse glass band (slightly proud of the body)
   const glassShape = new THREE.Shape();
-  glassShape.moveTo(-1.26, 0.94);
-  glassShape.lineTo(-0.66, 1.30);
-  glassShape.lineTo(0.40, 1.33);
-  glassShape.lineTo(1.06, 0.99);
+  glassShape.moveTo(-1.06, 0.99);
+  glassShape.lineTo(-0.40, 1.33);
+  glassShape.lineTo(0.66, 1.30);
+  glassShape.lineTo(1.26, 0.94);
   glassShape.closePath();
   const glassGeo = new THREE.ExtrudeGeometry(glassShape, { depth: 1.66, bevelEnabled: false });
   glassGeo.rotateY(-Math.PI / 2);
   glassGeo.translate(0.83, 0, 0);
+  glassGeo.computeVertexNormals();
   const glass = new THREE.Mesh(glassGeo, mats.glass);
   glass.castShadow = true;
   group.add(glass);
@@ -132,7 +148,7 @@ export class Car {
     this.visYaw = this.yaw;
     this.pitch = 0; this.roll = 0;
     this.speed = 0; this.steer = 0;
-    this.health = 100;
+    this.health = 120;
     this.alive = true;
     this.disabled = false;
     this.wrecked = false;
@@ -203,7 +219,7 @@ export class Car {
       this.speed *= -0.15;
     }
     this.pos.x = clamp(this.pos.x, CFG.minX + 2, CFG.maxX - 2);
-    this.pos.z = clamp(this.pos.z, -240, 165.6);
+    this.pos.z = clamp(this.pos.z, CFG.minZ + 10, 165.6);
 
     // flood the engine
     if (!this.disabled && depth > 1.1) {
