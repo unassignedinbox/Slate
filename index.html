@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>OPERATION SLATE — Breach the Wall</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🚗</text></svg>" />
+    <style>
+      :root {
+        --sand: #e6dcc2;
+        --amber: #ffb648;
+        --red: #ff5a45;
+        --green: #7fe0a8;
+        --teal: #6cf0c4;
+        --ink: rgba(10, 13, 16, 0.62);
+        --ink-solid: #0c1013;
+        --line: rgba(230, 220, 194, 0.22);
+        --mono: ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Consolas, monospace;
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #0c1013;
+        color: var(--sand);
+        font-family: var(--mono);
+        -webkit-font-smoothing: antialiased;
+        user-select: none;
+        touch-action: none;
+      }
+
+      canvas { display: block; }
+
+      #app { position: fixed; inset: 0; }
+
+      /* ---------- HUD ---------- */
+      #hud {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 10;
+        font-size: 12px;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+
+      .panel {
+        position: absolute;
+        background: var(--ink);
+        border: 1px solid var(--line);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        padding: 9px 12px;
+        box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
+      }
+
+      .label { opacity: 0.55; font-size: 9.5px; letter-spacing: 0.22em; }
+      .value { font-size: 17px; font-weight: 600; letter-spacing: 0.04em; }
+
+      #objective { top: 14px; left: 14px; min-width: 210px; }
+      #objective .value { color: var(--teal); }
+      #objective .sub { margin-top: 3px; font-size: 10px; opacity: 0.7; }
+
+      #status { top: 14px; right: 14px; text-align: right; min-width: 150px; }
+      #status .value { color: var(--sand); }
+
+      #tidewrap { top: 14px; left: 50%; transform: translateX(-50%); width: 280px; }
+      #tidebar, #hpbar {
+        position: relative;
+        height: 8px;
+        margin-top: 6px;
+        background: rgba(255, 255, 255, 0.09);
+        border: 1px solid var(--line);
+        overflow: hidden;
+      }
+      #tidefill {
+        position: absolute; inset: 0 auto 0 0; width: 0%;
+        background: linear-gradient(90deg, #2f7d86, #6cf0c4);
+        transition: width 0.25s linear;
+      }
+      #tidewrap .row { display: flex; justify-content: space-between; align-items: baseline; }
+      #tidewrap .value { font-size: 13px; }
+
+      #vehicle { bottom: 14px; left: 14px; width: 250px; }
+      #hpfill {
+        position: absolute; inset: 0 auto 0 0; width: 100%;
+        background: linear-gradient(90deg, #7fe0a8, #d8e06a);
+        transition: width 0.18s ease-out;
+      }
+      #hpfill.warn { background: linear-gradient(90deg, #ffb648, #ff8a3d); }
+      #hpfill.crit { background: linear-gradient(90deg, #ff5a45, #ff2d1a); }
+      #vehicle .row { display: flex; justify-content: space-between; align-items: baseline; }
+      #vehicle .chips { margin-top: 7px; display: flex; gap: 5px; flex-wrap: wrap; }
+      .chip {
+        font-size: 9px; padding: 2px 6px; border: 1px solid var(--line);
+        opacity: 0.45; letter-spacing: 0.14em;
+      }
+      .chip.on { opacity: 1; color: var(--ink-solid); background: var(--amber); border-color: var(--amber); }
+      .chip.danger { opacity: 1; color: #fff; background: var(--red); border-color: var(--red); }
+
+      #speedo { bottom: 14px; left: 50%; transform: translateX(-50%); text-align: center; min-width: 132px; }
+      #speedo .value { font-size: 30px; line-height: 1; }
+      #speedo .unit { font-size: 9px; opacity: 0.55; letter-spacing: 0.24em; }
+
+      #mapwrap { bottom: 14px; right: 14px; padding: 8px; }
+      #minimap { display: block; width: 168px; height: 168px; }
+      #mapwrap .label { margin-bottom: 5px; }
+
+      #warnings {
+        position: absolute; top: 96px; left: 50%; transform: translateX(-50%);
+        display: flex; flex-direction: column; gap: 6px; align-items: center;
+      }
+      .warn {
+        padding: 5px 14px; border: 1px solid currentColor; font-size: 11px;
+        letter-spacing: 0.26em; background: rgba(10, 13, 16, 0.55);
+        animation: pulse 0.85s ease-in-out infinite;
+      }
+      .warn.fire { color: var(--red); }
+      .warn.mine { color: var(--amber); }
+      .warn.water { color: #7fd8ff; }
+      @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.42; } }
+
+      #hint {
+        position: absolute; bottom: 104px; left: 50%; transform: translateX(-50%);
+        font-size: 10.5px; letter-spacing: 0.2em; opacity: 0; transition: opacity 0.3s;
+        background: rgba(10, 13, 16, 0.6); padding: 6px 14px; border: 1px solid var(--line);
+      }
+      #hint.show { opacity: 0.92; }
+
+      #damageFlash {
+        position: fixed; inset: 0; pointer-events: none; z-index: 9;
+        box-shadow: inset 0 0 180px rgba(180, 30, 20, 0);
+        transition: box-shadow 0.25s ease-out;
+      }
+      #vignette {
+        position: fixed; inset: 0; pointer-events: none; z-index: 8;
+        background: radial-gradient(ellipse at center, rgba(0,0,0,0) 46%, rgba(0,0,0,0.5) 100%);
+      }
+
+      /* ---------- Screens ---------- */
+      .screen {
+        position: fixed; inset: 0; z-index: 20;
+        display: flex; align-items: center; justify-content: center;
+        background: radial-gradient(ellipse at 50% 40%, rgba(12,16,20,0.72), rgba(6,9,11,0.95));
+        backdrop-filter: blur(3px);
+        -webkit-backdrop-filter: blur(3px);
+      }
+      .screen.hidden { display: none; }
+      .card {
+        width: min(760px, 92vw);
+        border: 1px solid var(--line);
+        background: rgba(9, 12, 15, 0.82);
+        padding: 30px 34px;
+        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+      }
+      .kicker { font-size: 10px; letter-spacing: 0.42em; opacity: 0.6; text-transform: uppercase; }
+      h1 {
+        margin: 8px 0 4px; font-size: clamp(30px, 5.4vw, 52px);
+        letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700;
+      }
+      h1 .accent { color: var(--amber); }
+      .lede { font-size: 12.5px; line-height: 1.75; opacity: 0.86; letter-spacing: 0.05em; max-width: 62ch; }
+      .grid {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 12px; margin: 22px 0 6px;
+      }
+      .cell { border-left: 2px solid var(--amber); padding: 4px 0 4px 10px; }
+      .cell .t { font-size: 9.5px; letter-spacing: 0.22em; opacity: 0.55; text-transform: uppercase; }
+      .cell .d { font-size: 12px; line-height: 1.55; margin-top: 3px; }
+      .keys { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 11px; opacity: 0.8; }
+      kbd {
+        display: inline-block; min-width: 20px; text-align: center;
+        border: 1px solid var(--line); border-bottom-width: 2px; padding: 2px 6px;
+        margin-right: 6px; font-family: var(--mono); font-size: 10px; background: rgba(255,255,255,0.05);
+      }
+      .actions { margin-top: 26px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+      button.cta {
+        pointer-events: auto; cursor: pointer; font-family: var(--mono); font-size: 12px;
+        letter-spacing: 0.24em; text-transform: uppercase; padding: 13px 30px;
+        background: var(--amber); color: #14110a; border: none; font-weight: 700;
+        transition: transform 0.12s ease, filter 0.12s ease;
+      }
+      button.cta:hover { transform: translateY(-1px); filter: brightness(1.08); }
+      button.ghost {
+        pointer-events: auto; cursor: pointer; font-family: var(--mono); font-size: 11px;
+        letter-spacing: 0.2em; text-transform: uppercase; padding: 12px 22px;
+        background: transparent; color: var(--sand); border: 1px solid var(--line);
+      }
+      button.ghost:hover { border-color: var(--sand); }
+      .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 14px; margin-top: 20px; }
+      .stat .n { font-size: 24px; letter-spacing: 0.04em; }
+      .stat .k { font-size: 9.5px; letter-spacing: 0.2em; opacity: 0.55; text-transform: uppercase; margin-top: 2px; }
+
+      #loading { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center;
+        background: #0c1013; flex-direction: column; gap: 16px; }
+      #loading .bar { width: min(340px, 70vw); height: 3px; background: rgba(255,255,255,0.12); }
+      #loading .fill { height: 100%; width: 12%; background: var(--amber); transition: width 0.3s ease; }
+      #loading .t { font-size: 10px; letter-spacing: 0.3em; opacity: 0.7; text-transform: uppercase; }
+
+      /* ---------- touch ---------- */
+      #touch { position: fixed; inset: auto 0 0 0; z-index: 12; display: none; pointer-events: none; }
+      #touch.on { display: block; }
+      .tbtn {
+        position: fixed; pointer-events: auto; width: 74px; height: 74px; border-radius: 50%;
+        border: 1px solid var(--line); background: rgba(10,13,16,0.5); color: var(--sand);
+        display: flex; align-items: center; justify-content: center; font-size: 18px;
+      }
+      .tbtn:active { background: rgba(255,182,72,0.35); }
+      #tLeft { left: 18px; bottom: 96px; }
+      #tRight { left: 106px; bottom: 96px; }
+      #tGas { right: 18px; bottom: 140px; }
+      #tBrake { right: 18px; bottom: 52px; }
+
+      @media (max-width: 720px) {
+        #mapwrap { display: none; }
+        #vehicle { width: 190px; }
+        #tidewrap { width: 190px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <div id="hud">
+      <div class="panel" id="objective">
+        <div class="label">Objective</div>
+        <div class="value" id="objText">Reach the breach</div>
+        <div class="sub" id="objSub">Distance 000 m · Sector —</div>
+      </div>
+
+      <div class="panel" id="tidewrap">
+        <div class="row">
+          <span class="label">Tide</span>
+          <span class="value" id="tideText">LOW</span>
+        </div>
+        <div id="tidebar"><div id="tidefill"></div></div>
+      </div>
+
+      <div class="panel" id="status">
+        <div class="label">Mission clock</div>
+        <div class="value" id="clock">0:00</div>
+        <div class="sub label" id="fps" style="margin-top:4px">— fps</div>
+      </div>
+
+      <div class="panel" id="vehicle">
+        <div class="row">
+          <span class="label">Vehicle integrity</span>
+          <span class="value" id="hpText" style="font-size:13px">100%</span>
+        </div>
+        <div id="hpbar"><div id="hpfill"></div></div>
+        <div class="chips">
+          <span class="chip" id="chipRoad">Road</span>
+          <span class="chip" id="chipSand">Sand</span>
+          <span class="chip" id="chipWater">Water</span>
+          <span class="chip" id="chipWire">Wire</span>
+          <span class="chip" id="chipAir">Air</span>
+        </div>
+      </div>
+
+      <div class="panel" id="speedo">
+        <div class="value" id="speed">0</div>
+        <div class="unit">km/h</div>
+      </div>
+
+      <div class="panel" id="mapwrap">
+        <div class="label">Sector map</div>
+        <canvas id="minimap" width="336" height="336"></canvas>
+      </div>
+
+      <div id="warnings"></div>
+      <div id="hint"></div>
+    </div>
+
+    <div id="damageFlash"></div>
+    <div id="vignette"></div>
+
+    <div id="touch">
+      <div class="tbtn" id="tLeft">◀</div>
+      <div class="tbtn" id="tRight">▶</div>
+      <div class="tbtn" id="tGas">▲</div>
+      <div class="tbtn" id="tBrake">▼</div>
+    </div>
+
+    <div class="screen" id="briefing">
+      <div class="card">
+        <div class="kicker">Operation Slate · D+0 · 06:31</div>
+        <h1>Breach the <span class="accent">Wall</span></h1>
+        <p class="lede">
+          You are the only thing still running on this beach — a beaten-up compact saloon with
+          sandbags wired to the roof. The garrison wall is 450 metres inland. Between you and the
+          breach: minefields, hedgehogs, dragon's teeth, wire, trenches and bunkers full of
+          sentries who shoot anything with wheels. Behind you the tide is coming in, and it does
+          not stop.
+        </p>
+        <div class="grid">
+          <div class="cell">
+            <div class="t">Get to the breach</div>
+            <div class="d">Drive north to the glowing gate in the sea wall.</div>
+          </div>
+          <div class="cell">
+            <div class="t">Use cover</div>
+            <div class="d">Wrecked tanks, earth mounds and sandbags break the sentries' line of sight.</div>
+          </div>
+          <div class="cell">
+            <div class="t">Roads are fast, roads are exposed</div>
+            <div class="d">The gravel tracks are mine-free — and in full view of the wall.</div>
+          </div>
+          <div class="cell">
+            <div class="t">Beat the tide</div>
+            <div class="d">Low ground floods first. Drown and the mission is over.</div>
+          </div>
+        </div>
+        <div class="keys">
+          <span><kbd>W</kbd><kbd>↑</kbd> throttle</span>
+          <span><kbd>S</kbd><kbd>↓</kbd> brake / reverse</span>
+          <span><kbd>A</kbd><kbd>D</kbd> steer</span>
+          <span><kbd>SPACE</kbd> handbrake</span>
+          <span><kbd>C</kbd> camera</span>
+          <span><kbd>R</kbd> hold to recover</span>
+          <span><kbd>M</kbd> mute</span>
+          <span><kbd>P</kbd> pause</span>
+        </div>
+        <div class="actions">
+          <button class="cta" id="startBtn">Start the run</button>
+          <button class="ghost" id="tourBtn">Watch the beach</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen hidden" id="endScreen">
+      <div class="card">
+        <div class="kicker" id="endKicker">Mission report</div>
+        <h1 id="endTitle">Wall reached</h1>
+        <p class="lede" id="endText"></p>
+        <div class="stats">
+          <div class="stat"><div class="n" id="sTime">0:00</div><div class="k">Run time</div></div>
+          <div class="stat"><div class="n" id="sDist">0 m</div><div class="k">Ground covered</div></div>
+          <div class="stat"><div class="n" id="sHp">0%</div><div class="k">Integrity left</div></div>
+          <div class="stat"><div class="n" id="sMines">0</div><div class="k">Mines set off</div></div>
+          <div class="stat"><div class="n" id="sTide">0%</div><div class="k">Tide at finish</div></div>
+        </div>
+        <div class="actions">
+          <button class="cta" id="againBtn">Run it again</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="loading">
+      <div class="t" id="loadText">Shaping the beach…</div>
+      <div class="bar"><div class="fill" id="loadFill"></div></div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

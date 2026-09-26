@@ -1,0 +1,21 @@
+{
+  "name": "operation-slate",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Operation Slate - a low-poly D-Day beach assault driving game",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node scripts/selftest.mjs",
+    "sim": "node scripts/sim.mjs 240 road",
+    "shots": "node scripts/render.mjs"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "vite": "^8.3.1"
+  }
+}
