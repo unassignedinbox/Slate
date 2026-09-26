@@ -50,7 +50,7 @@
             <div><kbd>SHIFT</kbd><span>BOOST</span></div>
           </div>
           <button id="launch">BEGIN THE RUN <span>↗</span></button>
-          <p class="subtle">The tide rises continuously. Press <b>R</b> to reset.</p>
+          <p id="engine-status" class="subtle">The tide rises continuously. Press <b>R</b> to reset.</p>
         </div>
       </section>
 
@@ -59,6 +59,17 @@
       <div class="vignette" aria-hidden="true"></div>
       <p class="help">WASD drive &nbsp;·&nbsp; SHIFT boost &nbsp;·&nbsp; SPACE brake &nbsp;·&nbsp; R restart</p>
     </main>
+    <script>
+      // Keep the launch control responsive while the ESM game engine is fetching.
+      (() => {
+        const launch = document.querySelector('#launch');
+        launch.addEventListener('click', () => {
+          window.__ddayStartRequested = true;
+          if (typeof window.startDday === 'function') window.startDday();
+          else launch.firstChild.textContent = 'LOADING THE BEACHHEAD ';
+        });
+      })();
+    </script>
     <script type="module" src="./game.js"></script>
   </body>
 </html>

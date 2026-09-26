@@ -1,5 +1,18 @@
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js';
+// Try several trusted ESM mirrors. Preview sandboxes occasionally block one CDN while allowing another.
+const engineSources = [
+  'https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js',
+  'https://unpkg.com/three@0.160.1/build/three.module.js',
+  'https://esm.sh/three@0.160.1'
+];
+async function loadEngine() {
+  let lastError;
+  for (const source of engineSources) {
+    try { return await import(source); } catch (error) { lastError = error; }
+  }
+  throw lastError || new Error('Unable to load the 3D engine.');
+}
 
+loadEngine().then((THREE) => {
 const canvas = document.querySelector('#game');
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x94adb3);
@@ -409,7 +422,16 @@ const state = {
 const keys={};
 window.addEventListener('keydown',e=>{ keys[e.code]=true; if(e.code==='KeyR') reset(); if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault(); });
 window.addEventListener('keyup',e=>keys[e.code]=false);
-ui.launch.addEventListener('click',()=>{ ui.intro.classList.add('dismissed'); state.active=true; flashMessage('GO. GO. GO.', 'The breach is 640 meters inland.'); });
+function startDday() {
+  if (state.active) return;
+  ui.intro.classList.add('dismissed');
+  state.active=true;
+  const status = document.querySelector('#engine-status');
+  if (status) status.textContent = 'The tide rises continuously. Press R to reset.';
+  flashMessage('GO. GO. GO.', 'The breach is 640 meters inland.');
+}
+window.startDday = startDday;
+ui.launch.addEventListener('click', startDday);
 
 function reset() {
   state.active=true; state.complete=false; state.health=100; state.elapsed=0; state.speed=0; state.shake=0;
@@ -422,6 +444,8 @@ function reset() {
   ui.intro.classList.add('dismissed'); flashMessage('RUN RESET', 'The tide starts climbing again.');
 }
 reset(); state.active=false;
+window.__ddayEngineReady = true;
+if (window.__ddayStartRequested) startDday();
 
 function spawnBullet(turret) {
   const start = new THREE.Vector3(); turret.turret.getWorldPosition(start);
@@ -549,3 +573,11 @@ function animate() {
 }
 animate();
 window.addEventListener('resize',()=>{camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();renderer.setSize(window.innerWidth,window.innerHeight);});
+}).catch((error) => {
+  console.error('D-DAY engine failed to load:', error);
+  const note = document.querySelector('#engine-status');
+  if (note) {
+    note.textContent = '3D engine could not load. Refresh the preview and try again.';
+    note.classList.add('engine-error');
+  }
+});
