@@ -56,6 +56,8 @@ No build step, no assets — everything (geometry, textures, sound) is generated
 
 ```bash
 node test/smoke.mjs    # headless logic test: builds the world, simulates gameplay
+node test/boot.mjs     # full E2E: boots the real main.js in a fake DOM + fake GL,
+                       #   plays through every path (81 asserts)
 node test/mapview.mjs  # renders test/map.png (top-down battlefield map)
 node test/asciimap.mjs # ASCII overview of the layout
 ```

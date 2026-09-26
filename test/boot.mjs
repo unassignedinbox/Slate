@@ -22,11 +22,9 @@ const INIT_HIDDEN = new Set(['pause', 'death', 'win']); // match index.html over
 function makeEl(id) {
   const cls = new Set();
   if (INIT_HIDDEN.has(id)) cls.add('hidden');
-  return {
+  const el = {
     id,
     style: {},
-    textContent: '',
-    innerHTML: '',
     classList: {
       add: (...a) => a.forEach((c) => cls.add(c)),
       remove: (...a) => a.forEach((c) => cls.delete(c)),
@@ -39,6 +37,11 @@ function makeEl(id) {
     width: 300, height: 150,
     getContext: () => fakeGL,
   };
+  // real DOM stringifies these on assignment
+  let text = '', html = '';
+  Object.defineProperty(el, 'textContent', { get: () => text, set: (v) => { text = String(v); } });
+  Object.defineProperty(el, 'innerHTML', { get: () => html, set: (v) => { html = String(v); } });
+  return el;
 }
 const els = new Map();
 const canvasEl = makeEl('c');
@@ -231,6 +234,85 @@ assert(S.mode === 'play', `redeploy returned to play (got ${S.mode})`);
 assert(S.player.pos.z < -120, `player respawned at the waterline (z=${S.player.pos.z.toFixed(1)})`);
 assert(uiEls('death').classList.contains('hidden'), 'death overlay hidden after redeploy');
 
+console.log('== HUD live updates ==');
+await frames(15); // let the throttled HUD refresh post-redeploy
+const objDist0 = uiEls('objDist').textContent;
+assert(/^\d+ m$/.test(objDist0), `objective distance rendered (got "${objDist0}")`);
+const tideW0 = parseFloat(uiEls('tideFill').style.width);
+assert(Number.isFinite(tideW0) && tideW0 > 0, `tide bar has width (got ${uiEls('tideFill').style.width})`);
+assert(uiEls('tideState').textContent === 'RISING', `tide state label (got ${uiEls('tideState').textContent})`);
+assert(uiEls('hpFill').style.width === '100%', `hp bar full after respawn (got ${uiEls('hpFill').style.width})`);
+assert(uiEls('vehCard').style.display === 'none', 'vehicle card hidden (car destroyed)');
+keyDown('KeyW');
+await frames(50);
+keyUp('KeyW');
+const objDist1 = uiEls('objDist').textContent;
+assert(parseInt(objDist1) < parseInt(objDist0), `objective distance shrinks while advancing (${objDist0} -> ${objDist1})`);
+const tideW1 = parseFloat(uiEls('tideFill').style.width);
+assert(tideW1 > tideW0, `tide bar creeping up (${tideW0.toFixed(1)}% -> ${tideW1.toFixed(1)}%)`);
+
+console.log('== barbed wire (on foot) ==');
+const { CFG } = await import('../js/state.js');
+const wireSeg = S.wireSegs.find((sg) => {
+  const mx = (sg.ax + sg.bx) / 2, mz = (sg.az + sg.bz) / 2;
+  return Math.abs(mx) > 30 && S.apMines.every((m) => !m.alive || Math.hypot(m.x - mx, m.z - mz) > 3);
+});
+S.player.pos.set((wireSeg.ax + wireSeg.bx) / 2, 0, (wireSeg.az + wireSeg.bz) / 2);
+S.player.pos.y = world.H(S.player.pos.x, S.player.pos.z);
+await frames(3);
+assert(S.wireSlow === 1, `wire slows the player (got ${S.wireSlow})`);
+await frames(40);
+assert(S.player.health < 100, `wire damages the player (hp=${S.player.health.toFixed(1)})`);
+assert(uiEls('hint').textContent.includes('BARBED WIRE'), `wire hint shown (got "${uiEls('hint').textContent}")`);
+
+console.log('== tide drowning (the trap closes) ==');
+// back to the low beach (the wire belt sits above even the max tide line)
+S.player.pos.set(CFG.spawn.x, 0, CFG.spawn.z);
+S.player.pos.y = world.H(CFG.spawn.x, CFG.spawn.z);
+S.waterLevel = CFG.tideMax;
+S.player.health = 20;
+await frames(8);
+assert(uiEls('tideState').textContent === 'MAX', `tide shows MAX at peak (got ${uiEls('tideState').textContent})`);
+assert(S.banners.some((b) => b.text.includes('OVER YOUR HEAD')), 'drowning warning banner shown');
+await frames(160);
+assert(S.mode === 'dead', `player drowned in the rising tide (got ${S.mode})`);
+assert(S.player.deathCause === 'drowned in the rising tide', `death cause recorded (got "${S.player.deathCause}")`);
+fire('el:redeployBtn', 'click');
+S.waterLevel = CFG.tideStart; // test convenience only: reset the tide
+await frames(3);
+assert(S.mode === 'play', `redeployed after drowning (got ${S.mode})`);
+
+console.log('== sentry fire on exposed player ==');
+// find a spot where a sentry actually acquires the player (its own LOS check decides)
+let exposed = false;
+for (const s of S.sentries) {
+  for (const dz of [40, 60, 80]) {
+    S.player.pos.set(s.x, 0, s.z - dz);
+    S.player.pos.y = world.H(s.x, s.z - dz);
+    await frames(30);
+    if (S.sentries.some((q) => q.target === 'player')) { exposed = true; break; }
+  }
+  if (exposed) break;
+}
+assert(exposed, 'a sentry acquired the exposed player');
+if (exposed) {
+  const realRandom = Math.random;
+  Math.random = () => 0; // force every sentry round to hit (we're testing wiring, not RNG)
+  S.player.health = 5;
+  let deadBySentry = false;
+  for (let i = 0; i < 220 && !deadBySentry; i++) {
+    await frames(1);
+    if (S.mode === 'dead') deadBySentry = true;
+  }
+  Math.random = realRandom;
+  assert(deadBySentry, `sentry fire killed the exposed player (mode=${S.mode}, hp=${S.player.health})`);
+  assert(S.player.deathCause === 'cut down by sentry fire', `sentry death cause (got "${S.player.deathCause}")`);
+  fire('el:redeployBtn', 'click');
+  await frames(3);
+  assert(S.mode === 'play', `redeployed after sentry death (got ${S.mode})`);
+  assert(S.stats.deaths === 3, `three deaths recorded (got ${S.stats.deaths})`);
+}
+
 console.log('== fast-forward: teleport to the wall, check WIN ==');
 S.player.inCar = false;
 S.player.pos.set(0, 0, 163);
@@ -238,6 +320,10 @@ S.player.pos.y = world.H(0, 163);
 await frames(10);
 assert(S.mode === 'win', `mode is win at the wall (got ${S.mode})`);
 assert(uiEls('win').classList.contains('hidden') === false, 'win overlay shown');
+assert(/^\d+:\d{2}$/.test(uiEls('statTime').textContent), `mission time on win screen (got "${uiEls('statTime').textContent}")`);
+assert(uiEls('statDeaths').textContent === String(S.stats.deaths), `death stat matches (got ${uiEls('statDeaths').textContent}, want ${S.stats.deaths})`);
+assert(uiEls('statMines').textContent === String(S.stats.minesTripped), `mine stat matches (got ${uiEls('statMines').textContent})`);
+assert(uiEls('statVehicle').textContent === 'LOST', `vehicle stat (got ${uiEls('statVehicle').textContent})`);
 
 // restart button wired
 fire('el:restartBtn', 'click');
