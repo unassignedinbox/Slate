@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#05060b" />
+    <title>Motorball // Test Circuit</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <main id="app">
+      <div id="loading" class="loading">
+        <div class="loading-mark">MB</div>
+        <p>BUILDING THE CIRCUIT</p>
+      </div>
+
+      <canvas id="race-canvas"></canvas>
+
+      <div class="vignette"></div>
+      <div class="scanlines"></div>
+
+      <section class="brand-panel hud-panel">
+        <div class="eyebrow"><span></span> SCRAPYARD LEAGUE / 09</div>
+        <h1>MOTOR<span>BALL</span></h1>
+        <p>TEST CIRCUIT <b>—</b> NIGHT SHIFT</p>
+      </section>
+
+      <section class="telemetry hud-panel">
+        <div class="gear" id="gear">N</div>
+        <div class="speed-readout"><strong id="speed">000</strong><span>KM/H</span></div>
+        <div class="boost-meter"><div class="meter-label"><span>NITRO</span><span id="nitro-label">100%</span></div><div class="meter-track"><i id="nitro-fill"></i></div></div>
+      </section>
+
+      <section class="race-card hud-panel">
+        <div class="race-line"><span>TRACK</span><b>RUST BELT // A-13</b></div>
+        <div class="race-line"><span>LAP</span><b id="lap">01 <em>/ 03</em></b></div>
+        <div class="race-line"><span>TIME</span><b id="time">00:00.000</b></div>
+        <div class="race-line"><span>BEST</span><b id="best">--:--.---</b></div>
+      </section>
+
+      <section class="controls hud-panel">
+        <div class="controls-title">DRIVER INPUT</div>
+        <div class="key-grid">
+          <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>DRIVE</span></div>
+          <div><kbd>SHIFT</kbd><span>NITRO</span></div>
+          <div><kbd>C</kbd><span>CAMERA</span></div>
+          <div><kbd>R</kbd><span>RESET</span></div>
+        </div>
+      </section>
+
+      <div class="center-message" id="center-message">
+        <div class="message-kicker">FREERIDE SESSION</div>
+        <div class="message-main">LINE UP</div>
+        <div class="message-sub">THROTTLE UP TO ENTER THE CIRCUIT</div>
+      </div>
+
+      <div class="track-warning" id="track-warning">RETURN TO CIRCUIT</div>
+      <div class="crosshair"></div>
+    </main>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
