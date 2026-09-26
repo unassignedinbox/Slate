@@ -375,6 +375,20 @@ export function createCarModel(paint = 0xb9c3c7) {
 /* Vehicle physics                                                     */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Pacejka's magic formula, the short version used for lateral force:
+ *   F = D sin(C atan(B a - E (B a - atan(B a))))
+ * D is the peak (mu * vertical load), B sets how quickly grip builds with
+ * slip angle, C the shape, E how sharply it falls away past the peak.
+ */
+function magicFormula(slip, D, stiffness = 1) {
+  const B = CAR.tyreB * stiffness;
+  const C = CAR.tyreC;
+  const E = CAR.tyreE;
+  const bs = B * slip;
+  return D * Math.sin(C * Math.atan(bs - E * (bs - Math.atan(bs))));
+}
+
 export class Car {
   constructor(terrain, ocean) {
     this.terrain = terrain;
@@ -390,8 +404,13 @@ export class Car {
     this.pos = new THREE.Vector3();
     this.vel = new THREE.Vector3();
     this.yaw = SPAWN.heading;
+    this.yawRate = 0;
     this.steer = 0;
     this.speed = 0;
+    this.accelLong = 0;
+    this.slipFront = 0;
+    this.slipRear = 0;
+    this.tyreLoad = 0;
     this.airborne = false;
     this.health = CAR.maxHealth;
     this.alive = true;
@@ -426,7 +445,10 @@ export class Car {
     this.pos.set(SPAWN.x, this.terrain.heightAt(SPAWN.x, SPAWN.z), SPAWN.z);
     this.vel.set(0, 0, 0);
     this.yaw = SPAWN.heading;
+    this.yawRate = 0;
+    this.steer = 0;
     this.speed = 0;
+    this.accelLong = 0;
     this.health = CAR.maxHealth;
     this.alive = true;
     this.airborne = false;
@@ -499,72 +521,186 @@ export class Car {
       this.damage(DIFFICULTY.drownDps * dt * smoothstep(0.9, 1.9, waterDepth), 'drown');
     }
 
-    /* ---- steering ---- */
-    const steerTarget = dead ? 0 : input.steer * CAR.maxSteer * lerp(1, 0.38, clamp(Math.abs(this.speed) / 26, 0, 1));
+    /* ---- steering ---------------------------------------------------
+     * Speed-sensitive lock, plus a light counter-steer assist: a keyboard
+     * gives no analogue control, so the car helps catch its own slides. */
+    const fwd0 = this.forward.clone();
+    const right0 = this.right.clone();
+    let vx = this.vel.dot(fwd0); // longitudinal, + forward
+    let vy = this.vel.dot(right0); // lateral, + to the right
+    let yawRate = this.yawRate;
+    const speedAbs = Math.abs(vx);
+
+    // Steering budget: the angle that would demand exactly the lateral
+    // acceleration the tyres can deliver, a little over so you can still
+    // provoke a slide. This is what stops full lock at 80 km/h spinning the
+    // car, and it scales with the surface for free.
+    const gripNow = CAR.muPeak * surfaceGrip * lerp(1, 0.55, clamp(waterDepth / 1.1, 0, 1));
+    const ayMax = gripNow * 9.81 * CAR.steerGripBudget;
+    const steerLimit = clamp(
+      (ayMax * CAR.wheelBase) / Math.max(speedAbs * speedAbs, 1),
+      CAR.steerMin,
+      CAR.maxSteer
+    );
+    let steerCmd = dead ? 0 : clamp(input.steer, -1, 1);
+    if (!dead && speedAbs > 6) {
+      // Slide angle of the chassis; steering into it is what a driver does.
+      const slideAngle = Math.atan2(vy, Math.max(speedAbs, 1));
+      const assist = clamp(-slideAngle / CAR.maxSteer, -1, 1) * CAR.counterSteerAssist;
+      steerCmd = clamp(steerCmd + assist * (1 - Math.abs(steerCmd) * 0.55), -1, 1);
+    }
+    const steerTarget = steerCmd * steerLimit;
     const steerRate = Math.abs(steerTarget) > Math.abs(this.steer) ? CAR.steerSpeed : CAR.steerReturn;
     this.steer = moveTowards(this.steer, steerTarget, steerRate * dt);
+    const delta = this.steer;
 
-    /* ---- longitudinal forces ---- */
-    const fwd = this.forward.clone();
-    const right = this.right.clone();
-    let vLong = this.vel.dot(fwd);
-    let vLat = this.vel.dot(right);
+    /* ---- tyre model: simplified Pacejka bicycle ---------------------- */
+    const m = CAR.mass;
+    const L = CAR.wheelBase;
+    const aF = L * (1 - CAR.weightFront); // CG to front axle
+    const bR = L * CAR.weightFront; // CG to rear axle
+    const handbrake = !!input.handbrake && !dead;
+
+    const normal = terrain.normalAt(this.pos.x, this.pos.z, this._normal);
+    const slopeLong = 9.81 * normal.y * (normal.x * fwd0.x + normal.z * fwd0.z);
+    const slopeLat = 9.81 * normal.y * (normal.x * right0.x + normal.z * right0.z);
 
     const waterPower = drowning ? 0.12 : lerp(1, 0.45, clamp(waterDepth / 1.4, 0, 1));
-    const powerCurve = 1 - clamp(Math.abs(vLong) / CAR.maxSpeed, 0, 1) * 0.82;
-    let force = 0;
-    if (throttleIn > 0) {
-      force += throttleIn * CAR.engineForce * powerCurve * surfaceGrip * waterPower;
-    }
+    const waterGrip = lerp(1, 0.55, clamp(waterDepth / 1.1, 0, 1));
+    const mu = CAR.muPeak * surfaceGrip * waterGrip;
+
+    // Vertical load per axle, including longitudinal weight transfer.
+    const axPrev = clamp(this.accelLong || 0, -14, 14);
+    const FzF = Math.max(500, m * 9.81 * (bR / L) - m * axPrev * (CAR.cgHeight / L));
+    const FzR = Math.max(500, m * 9.81 * (aF / L) + m * axPrev * (CAR.cgHeight / L));
+
+    // Longitudinal demand, before the tyres get a say.
+    const powerCurve = 1 - clamp(speedAbs / CAR.maxSpeed, 0, 1) * 0.7;
+    const drive = throttleIn * CAR.engineForce * powerCurve * waterPower;
+    let FxF = drive * CAR.driveFront;
+    let FxR = drive * (1 - CAR.driveFront);
     if (brakeIn > 0) {
-      if (vLong > 0.4) force -= brakeIn * CAR.brakeForce * surfaceGrip;
-      else force -= brakeIn * CAR.reverseForce * waterPower;
+      if (vx > 0.6) {
+        FxF -= brakeIn * CAR.brakeForce * CAR.brakeBiasFront;
+        FxR -= brakeIn * CAR.brakeForce * (1 - CAR.brakeBiasFront);
+      } else {
+        // Brake doubles as reverse once stopped.
+        const rev = brakeIn * CAR.reverseForce * waterPower;
+        FxF -= rev * CAR.driveFront;
+        FxR -= rev * (1 - CAR.driveFront);
+      }
     }
-    this.engineLoad = damp(this.engineLoad, throttleIn, 6, dt);
+    if (handbrake) FxR -= Math.sign(vx || 1) * CAR.handbrakeForce;
 
-    // Resistance
-    const dragC = CAR.dragCoef * (1 + this.submerged * 5.5) * (1 + (1 - surfaceGrip) * 0.8);
-    force -= dragC * vLong * Math.abs(vLong);
-    force -= CAR.rollResist * vLong * (2 - surfaceGrip) * 10;
-    if (world && world.dragPenalty) force -= world.dragPenalty * vLong * 90;
+    let FyF = 0;
+    let FyR = 0;
+    let satF = 0;
+    let satR = 0;
 
-    // Slope
-    const normal = terrain.normalAt(this.pos.x, this.pos.z, this._normal);
-    const slopeAccel = 9.81 * normal.y * (normal.x * fwd.x + normal.z * fwd.z);
-    vLong += (force / CAR.mass + slopeAccel) * dt;
+    if (this.airborne) {
+      FxF = 0;
+      FxR = 0;
+    } else {
+      // Slip angles. |vx| is regularised so the model stays finite at rest.
+      const u = Math.max(speedAbs, 1.4);
+      const dirSign = vx >= 0 ? 1 : -1;
+      const alphaF = Math.atan2(vy + aF * yawRate, u) - delta * dirSign;
+      const alphaR = Math.atan2(vy - bR * yawRate, u);
+      this.slipFront = alphaF;
+      this.slipRear = alphaR;
 
-    if (Math.abs(vLong) < 0.12 && throttleIn === 0 && brakeIn === 0) vLong = 0;
-    vLong = clamp(vLong, -CAR.maxReverse, CAR.maxSpeed);
+      FyF = -magicFormula(alphaF, mu * FzF);
+      FyR =
+        -magicFormula(alphaR, mu * CAR.rearGrip * FzR, CAR.rearStiffness) *
+        (handbrake ? CAR.handbrakeGrip : 1);
 
-    /* ---- yaw ---- */
-    const speedFactor = clamp(Math.abs(vLong) / 4.5, 0, 1);
-    const handbrake = input.handbrake && !dead;
-    const yawRate =
-      (vLong / CAR.wheelBase) * Math.tan(this.steer) * (handbrake ? 1.45 : 1) * speedFactor;
-    if (!this.airborne) this.yaw += yawRate * dt;
-
-    // Escape assist. Steering authority scales with speed, so a car shunted
-    // nose-first between two hedgehogs would otherwise be pinned there for
-    // good. After a second and a half of fruitless effort, let it pivot.
-    if (this.stuckTimer > 1.4 && !this.airborne && Math.abs(vLong) < 1.8) {
-      const effort = Math.max(Math.abs(throttleIn), Math.abs(brakeIn));
-      if (effort > 0.1) {
-        this.yaw += this.steer * 1.1 * effort * dt;
-        this.wheelSpin += dt * 7;
+      // Combined slip: one contact patch cannot do full grip in both axes.
+      const capF = mu * FzF;
+      const capR = mu * CAR.rearGrip * FzR;
+      satF = Math.hypot(FxF / capF, FyF / capF);
+      satR = Math.hypot(FxR / capR, FyR / capR);
+      if (satF > 1) {
+        FxF /= satF;
+        FyF /= satF;
+      }
+      if (satR > 1) {
+        FxR /= satR;
+        FyR /= satR;
       }
     }
 
-    /* ---- lateral grip ---- */
-    const gripBase = CAR.gripBase * surfaceGrip * (handbrake ? 0.22 : 1) * (this.airborne ? 0.15 : 1);
-    vLat *= Math.exp(-gripBase * dt);
-    this.slip = damp(this.slip, clamp(Math.abs(vLat) / 7, 0, 1), 8, dt);
+    const cd = Math.cos(delta);
+    const sd = Math.sin(delta);
+    let Fx = FxF * cd - FyF * sd + FxR;
+    let Fy = FxF * sd + FyF * cd + FyR;
+
+    // Resistance and slope.
+    const dragC = CAR.dragCoef * (1 + this.submerged * 5.5) * (1 + (1 - surfaceGrip) * 0.8);
+    Fx -= dragC * vx * Math.abs(vx);
+    if (!this.airborne) Fx -= CAR.rollResist * vx * (2 - surfaceGrip) * 10;
+    if (world && world.dragPenalty) Fx -= world.dragPenalty * vx * 90;
+    Fx += m * slopeLong;
+    Fy += m * slopeLat;
+
+    const Mz =
+      aF * (FyF * cd + FxF * sd) - bR * FyR - (this.airborne ? 0 : CAR.yawDamp * yawRate);
+
+    // Body-frame accelerations (the cross terms are the rotating frame).
+    const ax = Fx / m + yawRate * vy;
+    const ay = Fy / m - yawRate * vx;
+    vx += ax * dt;
+    vy += ay * dt;
+    yawRate += (Mz / CAR.yawInertia) * dt;
+
+    if (!this.airborne) {
+      // Below walking pace the magic formula is all noise, so fade into the
+      // kinematic bicycle: predictable parking, no jitter at rest.
+      const lowT = clamp((Math.abs(vx) - 0.5) / 2.4, 0, 1);
+      const kinematic = (vx / L) * Math.tan(delta);
+      yawRate = lerp(kinematic, yawRate, lowT);
+      vy *= lerp(0.12, 1, lowT);
+
+      // Escape assist: shunted nose-first between two hedgehogs, steering
+      // authority is zero because it scales with speed. Let it pivot.
+      if (this.stuckTimer > 1.4 && Math.abs(vx) < 1.8) {
+        const effort = Math.max(Math.abs(throttleIn), Math.abs(brakeIn));
+        if (effort > 0.1) {
+          yawRate += this.steer * 1.6 * effort;
+          this.wheelSpin += dt * 7;
+        }
+      }
+    }
+
+    this.engineLoad = damp(this.engineLoad, throttleIn, 6, dt);
+    this.accelLong = ax;
+    this.yawRate = clamp(yawRate, -CAR.maxYawRate, CAR.maxYawRate);
+    this.yaw += this.yawRate * dt;
+
+    if (Math.abs(vx) < 0.14 && throttleIn === 0 && brakeIn === 0) vx = 0;
+    vx = clamp(vx, -CAR.maxReverse, CAR.maxSpeed);
+    vy = clamp(vy, -22, 22);
+
+    // How hard the tyres are working, for dust, squeal and the HUD.
+    const slipMag = Math.max(
+      Math.abs(this.slipFront || 0),
+      Math.abs(this.slipRear || 0)
+    );
+    this.slip = damp(
+      this.slip,
+      clamp(Math.max(slipMag / 0.42, (Math.max(satF, satR) - 0.85) / 0.35), 0, 1),
+      9,
+      dt
+    );
+    this.tyreLoad = Math.max(satF, satR);
 
     /* ---- recompose horizontal velocity ---- */
     const newFwd = this.forward;
     const newRight = this.right;
-    this.vel.x = newFwd.x * vLong + newRight.x * vLat;
-    this.vel.z = newFwd.z * vLong + newRight.z * vLat;
-    this.speed = vLong;
+    const vLong = vx;
+    const vLat = vy;
+    this.vel.x = newFwd.x * vx + newRight.x * vy;
+    this.vel.z = newFwd.z * vx + newRight.z * vy;
+    this.speed = vx;
 
     /* ---- integrate position ---- */
     this.pos.x += this.vel.x * dt;

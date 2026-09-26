@@ -18,6 +18,7 @@ import { Car } from '../src/car.js';
 import { OBJECTIVE, SPAWN, WALL, TIDE, DIFFICULTY } from '../src/config.js';
 import { clamp } from '../src/util.js';
 import { makeAutopilot } from './lib/autopilot.mjs';
+import { ChaseCamera } from '../src/camera.js';
 
 let failures = 0;
 const ok = (cond, label, extra = '') => {
@@ -139,7 +140,20 @@ ok(
   'car crosses the beach',
   `${car.distanceTravelled.toFixed(0)}m, ended at z=${run1.z.toFixed(0)} hp=${run1.hp.toFixed(0)}`
 );
-ok(minefield.triggered > 0, 'mines detonate under the car', `${minefield.triggered}`);
+{
+  // Deterministic: park the car on a live mine and make sure it goes off.
+  const before = minefield.triggered;
+  const target = minefield.mines.find((mm) => mm.alive && Math.abs(mm.z) < 120);
+  const keepHp = car.health;
+  car.pos.set(target.x, terrain.heightAt(target.x, target.z), target.z);
+  car.vel.set(0, 0, 0);
+  for (let i = 0; i < 120; i++) {
+    colliders.resolveCar(car, dt, {});
+    minefield.update(dt, { car });
+  }
+  ok(minefield.triggered > before, 'driving onto a mine detonates it');
+  ok(car.health < keepHp, 'the blast damages the car', `${(keepHp - car.health).toFixed(0)} hp`);
+}
 ok(defense.bullets.length >= 0 && Number.isFinite(defense.bullets.length), 'bullet pool sane');
 
 const detonated = minefield.triggered;
@@ -185,6 +199,54 @@ ok(!run2.nan, 'no NaN in car state (run 2)');
 }
 
 /* ---------------------------------------------------------------- */
+console.log('\ncamera');
+{
+  const camera = new THREE.PerspectiveCamera(58, 16 / 9, 0.4, 4600);
+  const chase = new ChaseCamera(camera, terrain, ocean);
+  car.reset();
+  car.pos.set(8, terrain.heightAt(8, 240), 240);
+  car.yaw = Math.PI;
+  chase.snap(car);
+  const dir = new THREE.Vector3();
+  const prevDir = new THREE.Vector3(0, 0, -1);
+  let prevOmega = 0;
+  let maxJerk = 0;
+  let peakAt = '';
+  let sumJerk = 0;
+  let n = 0;
+  let behind = 0;
+  for (let i = 0; i < 60 * 14; i++) {
+    const t = i * dt;
+    car.update(
+      dt,
+      { throttle: car.speedKmh < 70 ? 1 : 0.25, brake: 0, steer: Math.sin(t * 1.5) * 0.9, handbrake: false },
+      {}
+    );
+    chase.update(dt, car, { state: 'running', shake: 0 });
+    camera.getWorldDirection(dir);
+    if (i > 60) {
+      const omega = dir.angleTo(prevDir) / dt;
+      // the first sample has no previous omega to difference against
+      const jerk = n === 0 ? 0 : Math.abs(omega - prevOmega) / dt;
+      if (jerk > maxJerk) {
+        maxJerk = jerk;
+        peakAt = `f=${i} car=(${car.pos.x.toFixed(0)},${car.pos.y.toFixed(1)},${car.pos.z.toFixed(0)}) v=${car.speedKmh.toFixed(0)} air=${car.airborne} hp=${car.health.toFixed(0)}`;
+      }
+      sumJerk += jerk;
+      n++;
+      prevOmega = omega;
+      // the rig should stay behind and above the car
+      const toCar = new THREE.Vector3().subVectors(car.pos, camera.position);
+      if (toCar.length() > 4 && toCar.length() < 22 && camera.position.y > car.pos.y + 1) behind++;
+    }
+    prevDir.copy(dir);
+  }
+  ok(maxJerk < 8, 'camera never snaps', `peak jerk ${maxJerk.toFixed(1)} rad/s^2 ${peakAt}`);
+  ok(sumJerk / n < 0.4, 'camera stays smooth through a slalom', `mean jerk ${(sumJerk / n).toFixed(2)}`);
+  ok(behind / n > 0.97, 'camera holds station behind the car', `${((behind / n) * 100).toFixed(0)}% of frames`);
+  car.reset();
+}
+
 console.log('\nedges and drowning');
 {
   // Nothing should let the player leave the playfield.

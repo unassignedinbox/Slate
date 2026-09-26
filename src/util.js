@@ -189,3 +189,19 @@ export function formatTime(seconds) {
   const r = Math.floor(s % 60);
   return `${m}:${r.toString().padStart(2, '0')}`;
 }
+
+/** Shortest-path angular damping, for anything that follows a heading. */
+export function dampAngle(current, target, lambda, dt) {
+  let diff = target - current;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  return current + diff * (1 - Math.exp(-lambda * dt));
+}
+
+/** Signed shortest angular difference b - a, wrapped to (-pi, pi]. */
+export function angleDelta(a, b) {
+  let diff = b - a;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  return diff;
+}

@@ -66,13 +66,38 @@ every mesh, texture and sound in the game is generated procedurally at boot.
   of water by the time the tide is full.
 - **Repair crates** — six of them, +28% integrity, usually somewhere unwise.
 
+## Driving model
+
+The car is a two-axle bicycle model on a simplified Pacejka magic formula:
+
+```
+Fy = D sin(C atan(B a - E (B a - atan(B a))))      D = mu * Fz
+```
+
+Slip angles come from the body-frame velocity and yaw rate, vertical load per
+axle includes longitudinal weight transfer, and each axle is capped by a
+friction ellipse so a tyre cannot deliver full grip in both directions at once
+— brake hard mid-corner and the nose washes out, exactly as it should.
+
+It is front-wheel drive with 62% static front weight and a stiffer rear axle,
+which makes it understeer rather than snap into oversteer. Steering is budgeted
+against available grip (`delta_max = mu g L / v^2`), so full lock at 90 km/h
+asks for a few degrees rather than a spin, and the budget scales with the
+surface for free: less steering on wet sand, more on gravel. Below walking pace
+the model fades into a kinematic bicycle so parking stays predictable.
+
+Measured on the bench in `npm test`: 0-100 km/h in 8.7 s, 100-0 in 67 m,
+21.8 m skidpad radius at 50 km/h, 0.13 s yaw rise on a step input, 8.8 m
+turning circle.
+
 ## Code layout
 
 | File | What lives there |
 | --- | --- |
 | `src/terrain.js` | Heightfield, beach profile, roads, trenches, mounds, craters, headlands, per-vertex surface colouring, surface types and the height texture the ocean samples |
 | `src/water.js` | Tide simulation and the ocean shader (Gerstner-ish wave sum, depth-based colour, shoreline foam) |
-| `src/car.js` | The saloon: a hand-lofted low-poly body (not a box), wheels, suspension, and an arcade-but-grippy vehicle model with surface-dependent traction |
+| `src/car.js` | The saloon: a hand-lofted low-poly body (not a box), and the vehicle model — a bicycle chassis on simplified Pacejka tyres |
+| `src/camera.js` | Chase / bonnet / wide rigs. The chase rig carries its own damped heading so the view never snaps |
 | `src/physics.js` | Broad-phase collider grid, car-vs-world resolution, wire drag, line-of-sight occluders |
 | `src/wall.js` | The wall, gate towers, blast door, buttresses, wire crown and the gun mount contract |
 | `src/defense.js` | Sentry AI (scan → lock → burst → cool), bullets, AT shells, engagement budget |

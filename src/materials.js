@@ -1,7 +1,9 @@
 import * as THREE from 'three';
+import { mulberry32 } from './util.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 const cache = new Map();
+let tintSeed = 1000;
 
 /**
  * Shared flat-shaded material cache so the whole scene keeps the same
@@ -11,17 +13,17 @@ export function mat(color, opts = {}) {
   const key = `${color}|${JSON.stringify(opts)}`;
   let m = cache.get(key);
   if (m) return m;
+  // Defaults first, then everything the caller asked for. Spreading the rest
+  // matters: an explicit whitelist silently swallowed vertexColors and
+  // polygonOffset, which is a very quiet way to lose a material's whole look.
+  const { flatShading, roughness, metalness, emissive, ...rest } = opts;
   m = new THREE.MeshStandardMaterial({
     color,
-    flatShading: opts.flatShading !== false,
-    roughness: opts.roughness !== undefined ? opts.roughness : 0.92,
-    metalness: opts.metalness !== undefined ? opts.metalness : 0.04,
-    transparent: !!opts.transparent,
-    opacity: opts.opacity !== undefined ? opts.opacity : 1,
-    emissive: opts.emissive !== undefined ? new THREE.Color(opts.emissive) : new THREE.Color(0x000000),
-    emissiveIntensity: opts.emissiveIntensity !== undefined ? opts.emissiveIntensity : 1,
-    side: opts.side || THREE.FrontSide,
-    depthWrite: opts.depthWrite !== undefined ? opts.depthWrite : true,
+    flatShading: flatShading !== false,
+    roughness: roughness !== undefined ? roughness : 0.92,
+    metalness: metalness !== undefined ? metalness : 0.04,
+    emissive: emissive !== undefined ? new THREE.Color(emissive) : new THREE.Color(0x000000),
+    ...rest,
   });
   cache.set(key, m);
   return m;
@@ -169,7 +171,7 @@ export function mergeParts(parts) {
  * child's transform. Purely a draw-call optimisation — only use it on things
  * that never move or animate after construction.
  */
-export function flattenStatic(root) {
+export function flattenStatic(root, { tint = 0 } = {}) {
   root.updateMatrixWorld(true);
   const inv = root.matrixWorld.clone().invert();
   const buckets = new Map();
@@ -202,7 +204,18 @@ export function flattenStatic(root) {
     if (flat.every((g) => attrKey(g) === attrKey(flat[0]))) {
       geo = mergeGeometries(flat, false);
     }
-    const mesh = new THREE.Mesh(geo || mergeParts(b.parts), b.material);
+    let geometry = geo || mergeParts(b.parts);
+    let material = b.material;
+    // Optional per-facet tonal variation, so big flat castings and slab-sided
+    // hulls do not read as plastic.
+    if (tint > 0 && !material.map && !material.transparent && !material.vertexColors) {
+      geometry = tintFaces(geometry, `#${material.color.getHexString()}`, tint, ++tintSeed);
+      material = tintedMaterial({
+        roughness: material.roughness,
+        metalness: material.metalness,
+      });
+    }
+    const mesh = new THREE.Mesh(geometry, material);
     mesh.castShadow = b.cast;
     mesh.receiveShadow = b.receive;
     mesh.matrixAutoUpdate = false;
@@ -210,4 +223,41 @@ export function flattenStatic(root) {
     root.add(mesh);
   }
   return root;
+}
+
+/**
+ * Give a merged geometry a per-face colour jitter. Cast concrete, sandbags and
+ * sheet steel all read as plastic without it; a couple of percent of tonal
+ * variation per facet is enough to make a big flat wall look poured.
+ *
+ * The geometry must be non-indexed (everything from mergeParts is). Pair it
+ * with a white material that has vertexColors enabled.
+ */
+export function tintFaces(geo, baseHex, amount = 0.055, seed = 7) {
+  const g = geo.index ? geo.toNonIndexed() : geo;
+  const pos = g.attributes.position;
+  const n = pos.count;
+  const colors = new Float32Array(n * 3);
+  const base = new THREE.Color(baseHex);
+  const rand = mulberry32(seed);
+  for (let i = 0; i < n; i += 3) {
+    const k = 1 + (rand() - 0.5) * 2 * amount;
+    // a touch of warm/cool drift as well as brightness
+    const warm = 1 + (rand() - 0.5) * amount * 0.7;
+    const r = Math.min(1, base.r * k * warm);
+    const gg = Math.min(1, base.g * k);
+    const b = Math.min(1, (base.b * k) / warm);
+    for (let v = 0; v < 3 && i + v < n; v++) {
+      colors[(i + v) * 3] = r;
+      colors[(i + v) * 3 + 1] = gg;
+      colors[(i + v) * 3 + 2] = b;
+    }
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  return g;
+}
+
+/** White base material that takes its colour from per-face vertex colours. */
+export function tintedMaterial(opts = {}) {
+  return mat(0xffffff, { vertexColors: true, ...opts });
 }

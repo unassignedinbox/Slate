@@ -248,6 +248,9 @@ export class Minefield {
     const sc = new THREE.Vector3();
     let dirty = { ap: false, teller: false };
     for (const mine of this.mines) {
+      // queued survives an explosion, so it has to be cleared for every mine,
+      // not just the spent ones, or a re-armed field never fires again.
+      mine.queued = false;
       if (mine.alive) continue;
       mine.alive = true;
       const mesh = mine.mesh === 'teller' ? this.tellerMesh : this.apMesh;

@@ -159,9 +159,14 @@ function signTexture(label = 'MINEN') {
 /* ------------------------------------------------------------------ */
 
 class InstanceSet {
-  constructor(geometry, material, castShadow = true) {
+  /**
+   * @param tint per-instance brightness jitter (0 = every copy identical).
+   *             A field of 200 identical hedgehogs looks stamped without it.
+   */
+  constructor(geometry, material, castShadow = true, tint = 0.08) {
     this.geometry = geometry;
     this.material = material;
+    this.tint = tint;
     this.matrices = [];
     this.castShadow = castShadow;
     this._m = new THREE.Matrix4();
@@ -186,6 +191,19 @@ class InstanceSet {
     const mesh = new THREE.InstancedMesh(this.geometry, this.material, this.matrices.length);
     this.matrices.forEach((m, i) => mesh.setMatrixAt(i, m));
     mesh.instanceMatrix.needsUpdate = true;
+    if (this.tint > 0) {
+      // instanceColor multiplies the material colour, so jitter around 1.0.
+      const c = new THREE.Color();
+      for (let i = 0; i < this.matrices.length; i++) {
+        const h = Math.abs(Math.sin(i * 12.9898 + 4.1) * 43758.5453) % 1;
+        const h2 = Math.abs(Math.sin(i * 78.233 + 1.7) * 43758.5453) % 1;
+        const k = 1 + (h - 0.5) * 2 * this.tint;
+        const warm = 1 + (h2 - 0.5) * this.tint;
+        c.setRGB(k * warm, k, k / warm);
+        mesh.setColorAt(i, c);
+      }
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    }
     mesh.castShadow = this.castShadow;
     mesh.receiveShadow = true;
     parent.add(mesh);

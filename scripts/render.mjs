@@ -16,6 +16,7 @@ import { buildObstacles } from '../src/obstacles.js';
 import { Minefield } from '../src/mines.js';
 import { DefenseNetwork } from '../src/defense.js';
 import { Car } from '../src/car.js';
+import { ChaseCamera } from '../src/camera.js';
 import { OBJECTIVE, TIDE, WALL } from '../src/config.js';
 
 const OUT = 'screenshots';
@@ -58,9 +59,16 @@ const VIEWS = {
     return { pos: [150, 96, 300], look: [-10, 6, -120], fov: 52 };
   },
   chase: () => {
-    placeCar(6, 120);
-    const p = car.object.position;
-    return { pos: [p.x + 2, p.y + 4.6, p.z + 10.5], look: [p.x - 2, p.y + 1.8, p.z - 14], fov: 60 };
+    placeCar(6, 120, Math.PI);
+    car.speed = 18;
+    car.vel.set(Math.sin(car.yaw) * 18, 0, Math.cos(car.yaw) * 18);
+    return { rig: 0 }; // use the real ChaseCamera
+  },
+  chaseWide: () => {
+    placeCar(6, 120, Math.PI);
+    car.speed = 18;
+    car.vel.set(Math.sin(car.yaw) * 18, 0, Math.cos(car.yaw) * 18);
+    return { rig: 2 };
   },
   car: () => {
     placeCar(6, 120, Math.PI * 0.82);
@@ -172,9 +180,18 @@ for (const name of names) {
     continue;
   }
   const spec = make();
-  const camera = new THREE.PerspectiveCamera(spec.fov, W / H, 0.5, 4000);
-  camera.position.set(...spec.pos);
-  camera.lookAt(new THREE.Vector3(...spec.look));
+  const camera = new THREE.PerspectiveCamera(spec.fov || 58, W / H, 0.5, 4000);
+  if (spec.rig !== undefined) {
+    // Drive the real chase rig for a few seconds so the preview shows exactly
+    // what the player sees.
+    const chase = new ChaseCamera(camera, terrain, ocean);
+    chase.setMode(spec.rig);
+    chase.snap(car);
+    for (let i = 0; i < 90; i++) chase.update(1 / 60, car, { state: 'running', shake: 0 });
+  } else {
+    camera.position.set(...spec.pos);
+    camera.lookAt(new THREE.Vector3(...spec.look));
+  }
 
   const raster = new Raster(W, H, {
     sun: sunDir,

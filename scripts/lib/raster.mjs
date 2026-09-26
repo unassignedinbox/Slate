@@ -236,14 +236,21 @@ export class Raster {
       const unlit = !!material.isMeshBasicMaterial;
 
       if (obj.isInstancedMesh) {
+        const instColor = obj.instanceColor;
+        const ic = new THREE.Color();
         for (let i = 0; i < obj.count; i++) {
           obj.getMatrixAt(i, instMatrix);
           m.multiplyMatrices(obj.matrixWorld, instMatrix);
           if (obj.geometry.boundingSphere === null) obj.geometry.computeBoundingSphere();
           sphere.copy(obj.geometry.boundingSphere).applyMatrix4(m);
           if (!frustum.intersectsSphere(sphere)) continue;
-          if (alpha < 1) transparents.push({ mesh: obj, matrix: m.clone(), color, alpha, unlit });
-          else drawMesh(obj, m, color, alpha, unlit);
+          let c = color;
+          if (instColor) {
+            ic.fromBufferAttribute(instColor, i);
+            c = ic.clone().multiply(color);
+          }
+          if (alpha < 1) transparents.push({ mesh: obj, matrix: m.clone(), color: c, alpha, unlit });
+          else drawMesh(obj, m, c, alpha, unlit);
         }
         return;
       }

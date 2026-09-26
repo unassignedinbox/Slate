@@ -39,21 +39,49 @@ export const TIDE = {
 export const CAR = {
   mass: 1300,
   maxHealth: 100,
-  engineForce: 15200,
+  engineForce: 14000, // traction-limited in practice, see the friction ellipse
   reverseForce: 6200,
-  brakeForce: 20000,
+  brakeForce: 17500,
   maxSpeed: 40, // m/s ~ 145 km/h
   maxReverse: 9,
   dragCoef: 0.52,
-  rollResist: 7.6,
-  maxSteer: 0.62,
-  steerSpeed: 3.4,
-  steerReturn: 5.2,
-  gripBase: 7.4,
+  rollResist: 4.2,
   wheelBase: 2.62,
   trackWidth: 1.58,
   wheelRadius: 0.33,
   bodyRadius: 1.75, // collision proxy
+
+  /* ---- steering ---- */
+  maxSteer: 0.6, // rad at the road wheel, parking lock
+  steerGripBudget: 0.88, // fraction of the grip-limited angle you may ask for
+  steerMin: 0.035, // never take the wheel away completely
+  steerSpeed: 3.6, // rad/s toward lock
+  steerReturn: 5.4, // rad/s back to centre
+  counterSteerAssist: 0.5, // how much of the slide the car catches for you
+
+  /* ---- chassis ---- */
+  weightFront: 0.62, // static front weight fraction (transverse engine, FWD)
+  cgHeight: 0.52,
+  yawInertia: 1750, // kg m^2
+  yawDamp: 340, // N m s. The tyres do the real damping; this only settles keyboard wobble
+  maxYawRate: 2.2, // rad/s
+
+  /* ---- tyres: simplified Pacejka magic formula ----
+   * Fy = D sin(C atan(B a - E (B a - atan(B a)))), D = mu * Fz
+   * B stiffness, C shape, E curvature. Road tyres on sand are soft and
+   * forgiving: a low B (slow build-up) and a peak that falls away gently. */
+  tyreB: 8.4,
+  tyreC: 1.56,
+  tyreE: 0.92,
+  muPeak: 1.15, // multiplied by the surface grip table
+  // Understeer bias: a stiffer, grippier rear axle means the nose washes out
+  // before the tail steps out. Forgiving, and true to a family saloon.
+  rearStiffness: 1.22,
+  rearGrip: 1.05,
+  driveFront: 1.0, // front-wheel drive, so power-on pushes into understeer
+  brakeBiasFront: 0.62,
+  handbrakeForce: 9500,
+  handbrakeGrip: 0.4, // rear lateral grip while the lever is up
 };
 
 export const DIFFICULTY = {

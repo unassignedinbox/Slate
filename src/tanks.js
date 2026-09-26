@@ -220,7 +220,7 @@ export function buildTanks(scene, terrain, colliders, fx) {
     const n = terrain.normalAt(spot.x, spot.z);
     tank.rotation.x = Math.atan2(-n.z, n.y) * 0.8 + (spot.v === 'sunk' ? rng.float(-0.14, 0.14) : 0);
     tank.rotation.z = Math.atan2(n.x, n.y) * 0.8 + (spot.v === 'sunk' ? rng.float(-0.18, 0.18) : 0);
-    flattenStatic(tank);
+    flattenStatic(tank, { tint: 0.07 });
     group.add(tank);
 
     colliders.addBox(spot.x, spot.z, 1.75, 3.5, spot.yaw, {

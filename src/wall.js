@@ -1,5 +1,12 @@
 import * as THREE from 'three';
-import { mat, buildLoft, mergeParts, flattenStatic } from './materials.js';
+import {
+  mat,
+  buildLoft,
+  mergeParts,
+  flattenStatic,
+  tintFaces,
+  tintedMaterial,
+} from './materials.js';
 import { WALL, BUNKERS, WALL_SENTRIES, COLORS, OBJECTIVE } from './config.js';
 import { sandbagGeometry } from './obstacles.js';
 import { Rng } from './util.js';
@@ -121,6 +128,7 @@ export function buildWall(scene, terrain, colliders) {
 
   const conc = mat(COLORS.concrete, { roughness: 0.97 });
   const concDark = mat(COLORS.concreteDark, { roughness: 0.98 });
+  const concTinted = tintedMaterial({ roughness: 0.97 });
   const steel = mat(COLORS.steel, { roughness: 0.68, metalness: 0.5 });
   const rust = mat(0x6d4a33, { roughness: 0.95, metalness: 0.2 });
 
@@ -164,7 +172,10 @@ export function buildWall(scene, terrain, colliders) {
     staticParts.push(bt);
   }
 
-  const wallMesh = new THREE.Mesh(mergeParts(staticParts), conc);
+  const wallMesh = new THREE.Mesh(
+    tintFaces(mergeParts(staticParts), COLORS.concrete, 0.07, 11),
+    concTinted
+  );
   wallMesh.position.y = WALL_BASE_Y;
   wallMesh.castShadow = true;
   wallMesh.receiveShadow = true;
@@ -180,7 +191,10 @@ export function buildWall(scene, terrain, colliders) {
       lineParts.push(line);
     }
   }
-  const lines = new THREE.Mesh(mergeParts(lineParts), concDark);
+  const lines = new THREE.Mesh(
+    tintFaces(mergeParts(lineParts), COLORS.concreteDark, 0.08, 31),
+    concTinted
+  );
   lines.position.y = WALL_BASE_Y;
   group.add(lines);
 
@@ -201,7 +215,10 @@ export function buildWall(scene, terrain, colliders) {
     slit.translate(cx, th - 3.2, frontZ + 1.4);
     towerParts.push(slit);
   }
-  const towers = new THREE.Mesh(mergeParts(towerParts), conc);
+  const towers = new THREE.Mesh(
+    tintFaces(mergeParts(towerParts), COLORS.concrete, 0.06, 23),
+    concTinted
+  );
   towers.position.y = WALL_BASE_Y;
   towers.castShadow = true;
   towers.receiveShadow = true;
@@ -228,7 +245,10 @@ export function buildWall(scene, terrain, colliders) {
   const back = new THREE.BoxGeometry(WALL.gateHalfWidth * 2 + 3.2, lintelY, 1.6);
   back.translate(WALL.gateX, lintelY / 2, WALL.z - passageDepth / 2);
   gateParts.push(back);
-  const gateMesh = new THREE.Mesh(mergeParts(gateParts), concDark);
+  const gateMesh = new THREE.Mesh(
+    tintFaces(mergeParts(gateParts), COLORS.concreteDark, 0.06, 43),
+    concTinted
+  );
   gateMesh.position.y = WALL_BASE_Y;
   gateMesh.castShadow = true;
   group.add(gateMesh);
@@ -339,7 +359,7 @@ export function buildWall(scene, terrain, colliders) {
     bunker.position.set(b.x, h - 0.35, b.z);
     // The model's local +Z is its embrasure, so this faces it out to sea.
     bunker.rotation.y = b.yaw;
-    flattenStatic(bunker);
+    flattenStatic(bunker, { tint: 0.06 });
     group.add(bunker);
 
     const size = bunker.userData.size;

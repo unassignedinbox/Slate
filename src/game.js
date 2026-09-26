@@ -5,6 +5,7 @@ import { createSky } from './sky.js';
 import { Fx } from './fx.js';
 import { Colliders } from './physics.js';
 import { Car } from './car.js';
+import { ChaseCamera, CAM_MODES } from './camera.js';
 import { buildWall } from './wall.js';
 import { buildTanks } from './tanks.js';
 import { buildObstacles } from './obstacles.js';
@@ -14,7 +15,16 @@ import { Input } from './input.js';
 import { Audio } from './audio.js';
 import { Hud } from './hud.js';
 import { CAR, DIFFICULTY, OBJECTIVE, ROADS, SPAWN, TIDE, WALL } from './config.js';
-import { clamp, lerp, damp, smoothstep, resamplePolyline, formatTime } from './util.js';
+import {
+  clamp,
+  lerp,
+  damp,
+  dampAngle,
+  angleDelta,
+  smoothstep,
+  resamplePolyline,
+  formatTime,
+} from './util.js';
 
 const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
 
@@ -36,6 +46,8 @@ export class Game {
     this._tmp2 = new THREE.Vector3();
     this._camTarget = new THREE.Vector3();
     this._camPos = new THREE.Vector3();
+    this._camLook = new THREE.Vector3();
+    this.camRoll = 0;
     this._listener = { pos: new THREE.Vector3(), right: new THREE.Vector3(1, 0, 0) };
   }
 
@@ -102,6 +114,7 @@ export class Game {
 
     this.car = new Car(this.terrain, this.ocean);
     scene.add(this.car.object);
+    this.chaseCam = new ChaseCamera(this.camera, this.terrain, this.ocean);
     this._carSmokeTimer = 0;
     this.fx.addEmitter((dt) => this._carFx(dt));
 
@@ -197,6 +210,7 @@ export class Game {
     this.recoverHold = 0;
     this.cinematic.active = false;
     this.input.enabled = true;
+    if (this.chaseCam) this.chaseCam.snap(this.car);
     this.hud.hint('Fresh attempt — low tide, full minefield', 4);
   }
 
@@ -245,7 +259,7 @@ export class Game {
     switch (action) {
       case 'camera':
         this.cameraMode = (this.cameraMode + 1) % 3;
-        this.hud.hint(['Chase camera', 'Bonnet camera', 'Wide camera'][this.cameraMode], 1.6);
+        this.hud.hint(CAM_MODES[this.cameraMode], 1.6);
         break;
       case 'pause':
         if (this.state === 'running') {
@@ -342,10 +356,8 @@ export class Game {
   /* ---------------------------------------------------------------- */
 
   updateCamera(dt) {
-    const car = this.car;
-    const cam = this.camera;
-
     if (this.cinematic.active) {
+      const cam = this.camera;
       this.cinematic.t += dt;
       const t = this.cinematic.t;
       const z = lerp(250, -180, clamp((t % 46) / 46, 0, 1));
@@ -360,58 +372,12 @@ export class Game {
       cam.lookAt(this._camTarget);
       cam.fov = 52;
       cam.updateProjectionMatrix();
+      this.chaseCam.initialised = false; // re-seat the rig when play resumes
       return;
     }
 
-    const fwd = car.forward;
-    const pos = car.object.position;
-    const speedT = clamp(Math.abs(car.speed) / CAR.maxSpeed, 0, 1);
-
-    if (this.cameraMode === 1) {
-      // Bonnet camera: sits on the scuttle, clear of the tinted windscreen.
-      const p = car.object.localToWorld(this._tmp.set(0, 1.17, 1.52));
-      cam.position.copy(p);
-      const look = car.object.localToWorld(this._tmp2.set(0, 0.7, 16));
-      cam.lookAt(look);
-      cam.fov = damp(cam.fov, 68, 3, dt);
-      cam.updateProjectionMatrix();
-    } else {
-      const dist = this.cameraMode === 2 ? 17 : lerp(8.4, 11.6, speedT);
-      const height = this.cameraMode === 2 ? 8.4 : lerp(3.5, 4.5, speedT);
-      // Pull the camera slightly to the outside of a slide.
-      const lateral = clamp(car.vel.dot(car.right) * 0.16, -2.2, 2.2);
-      this._camPos.set(
-        pos.x - fwd.x * dist + car.right.x * lateral,
-        pos.y + height,
-        pos.z - fwd.z * dist + car.right.z * lateral
-      );
-      const groundY = this.terrain.heightAt(this._camPos.x, this._camPos.z) + 1.9;
-      const waterY = this.ocean.level + 1.1;
-      this._camPos.y = Math.max(this._camPos.y, groundY, waterY);
-      const follow = this.state === 'running' ? (this.cameraMode === 2 ? 3.2 : 5.4) : 2.2;
-      cam.position.x = damp(cam.position.x, this._camPos.x, follow, dt);
-      cam.position.y = damp(cam.position.y, this._camPos.y, follow * 0.9, dt);
-      cam.position.z = damp(cam.position.z, this._camPos.z, follow, dt);
-
-      this._camTarget.set(pos.x + fwd.x * 8, pos.y + 1.9, pos.z + fwd.z * 8);
-      if (this.state === 'lost' || this.state === 'won') {
-        this._camTarget.set(pos.x, pos.y + 1.4, pos.z);
-      }
-      cam.lookAt(this._camTarget);
-      const targetFov = 56 + speedT * 12;
-      cam.fov = damp(cam.fov, targetFov, 3, dt);
-      cam.updateProjectionMatrix();
-    }
-
-    // Shake
-    const shake = this.fx.shake;
-    if (shake > 0.001) {
-      const s = shake * 0.55;
-      cam.position.x += (Math.random() - 0.5) * s;
-      cam.position.y += (Math.random() - 0.5) * s;
-      cam.position.z += (Math.random() - 0.5) * s;
-      cam.rotateZ((Math.random() - 0.5) * shake * 0.035);
-    }
+    this.chaseCam.setMode(this.cameraMode);
+    this.chaseCam.update(dt, this.car, { state: this.state, shake: this.fx.shake });
   }
 
   /* ---------------------------------------------------------------- */
@@ -596,6 +562,7 @@ export class Game {
     car.airborne = false;
     car.damage(5, 'recover');
     car.stuckTimer = 0;
+    if (this.chaseCam) this.chaseCam.snap(car);
     this.fx.dust({ x: car.pos.x, y: car.pos.y + 0.4, z: car.pos.z }, null, 8, 0xc9b78d);
     this.hud.hint('Recovered onto the track (−5% integrity)', 2.4);
   }
