@@ -112,6 +112,15 @@ const VIEWS = {
     const p = car.object.position;
     return { pos: [p.x + 5, p.y + 4.4, p.z + 12], look: [p.x - 2, p.y + 1.6, p.z - 22], fov: 62 };
   },
+  sentry: () => {
+    // Eye-level on a pillbox embrasure and the wall-top nest above it.
+    placeCar(-52, -214);
+    return { pos: [-44, 10.5, -222], look: [-52, 8.6, -239], fov: 30 };
+  },
+  nest: () => {
+    placeCar(30, -220);
+    return { pos: [34, 26, -232], look: [30, 29.5, -258], fov: 34 };
+  },
   headland: () => {
     placeCar(140, -40);
     return { pos: [40, 48, 60], look: [250, 10, -170], fov: 58 };

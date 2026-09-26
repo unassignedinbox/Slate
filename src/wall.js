@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { mat, buildLoft, mergeParts } from './materials.js';
+import { mat, buildLoft, mergeParts, flattenStatic } from './materials.js';
 import { WALL, BUNKERS, WALL_SENTRIES, COLORS, OBJECTIVE } from './config.js';
 import { sandbagGeometry } from './obstacles.js';
 import { Rng } from './util.js';
@@ -60,16 +60,31 @@ function createBunker(kind, rng) {
   roof.receiveShadow = true;
   g.add(roof);
 
-  // Embrasure: dark recess + concrete brow.
-  const slotH = big ? 1.0 : 0.62;
-  const slotW = big ? 2.6 : 2.2;
-  const slot = new THREE.Mesh(new THREE.BoxGeometry(slotW * 2, slotH, 0.5), dark);
-  slot.position.set(0, h * 0.68, d * 0.96);
+  // Embrasure: a real opening in the middle of the face, with a concrete brow
+  // and sill standing proud of it so the slot reads as a hole, not a decal.
+  const slotY = h * 0.68;
+  const slotH = big ? 0.92 : 0.6;
+  const slotW = big ? 1.2 : 0.8; // half width
+  const faceZ = d - 0.06;
+  const slot = new THREE.Mesh(new THREE.BoxGeometry(slotW * 2, slotH, 0.3), dark);
+  slot.position.set(0, slotY, faceZ - 0.16);
   g.add(slot);
-  const brow = new THREE.Mesh(new THREE.BoxGeometry(slotW * 2.3, 0.42, 0.7), concDark);
-  brow.position.set(0, h * 0.68 + slotH * 0.72, d * 1.02);
+  // Splayed cheeks either side of the opening.
+  for (const side of [-1, 1]) {
+    const cheek = new THREE.Mesh(new THREE.BoxGeometry(0.55, slotH + 0.1, 0.34), concDark);
+    cheek.position.set(side * (slotW + 0.26), slotY, faceZ - 0.08);
+    cheek.rotation.y = side * 0.22;
+    cheek.castShadow = true;
+    g.add(cheek);
+  }
+  const brow = new THREE.Mesh(new THREE.BoxGeometry(slotW * 2 + 1.5, 0.4, 0.62), concDark);
+  brow.position.set(0, slotY + slotH * 0.5 + 0.2, faceZ + 0.1);
   brow.castShadow = true;
   g.add(brow);
+  const sill = new THREE.Mesh(new THREE.BoxGeometry(slotW * 2 + 1.2, 0.3, 0.55), concDark);
+  sill.position.set(0, slotY - slotH * 0.5 - 0.15, faceZ + 0.06);
+  sill.castShadow = true;
+  g.add(sill);
 
   // Rear entrance + blast wall.
   const door = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.9, 0.3), dark);
@@ -92,7 +107,8 @@ function createBunker(kind, rng) {
   aerial.rotation.z = 0.08;
   g.add(aerial);
 
-  g.userData.mount = new THREE.Vector3(0, h * 0.68, d * 0.9);
+  // The gun sits in the opening so its barrel clears the concrete.
+  g.userData.mount = new THREE.Vector3(0, slotY, faceZ - 0.12);
   g.userData.size = { w, h, d };
   return g;
 }
@@ -197,10 +213,64 @@ export function buildWall(scene, terrain, colliders) {
   const lintel = new THREE.BoxGeometry(WALL.gateHalfWidth * 2 + 2, topY - lintelY + 1.4, WALL.thickness + 4);
   lintel.translate(WALL.gateX, lintelY + (topY - lintelY + 1.4) / 2, WALL.z);
   gateParts.push(lintel);
+  // Passage walls and a sealed far end, so the breach reads as a tunnel into
+  // the works rather than a hole with bright beach showing through it.
+  const passageDepth = WALL.thickness + 6;
+  for (const side of [-1, 1]) {
+    const cheek = new THREE.BoxGeometry(1.6, lintelY, passageDepth);
+    cheek.translate(
+      WALL.gateX + side * (WALL.gateHalfWidth + 0.8),
+      lintelY / 2,
+      WALL.z - 1
+    );
+    gateParts.push(cheek);
+  }
+  const back = new THREE.BoxGeometry(WALL.gateHalfWidth * 2 + 3.2, lintelY, 1.6);
+  back.translate(WALL.gateX, lintelY / 2, WALL.z - passageDepth / 2);
+  gateParts.push(back);
   const gateMesh = new THREE.Mesh(mergeParts(gateParts), concDark);
   gateMesh.position.y = WALL_BASE_Y;
   gateMesh.castShadow = true;
   group.add(gateMesh);
+
+  // Unlit interior: a darker inner face and a floor slab you can see into.
+  const shadowMat = mat(0x2b2e31, { roughness: 1 });
+  const innerFloor = new THREE.Mesh(
+    new THREE.BoxGeometry(WALL.gateHalfWidth * 2, 0.5, passageDepth - 2),
+    shadowMat
+  );
+  innerFloor.position.set(
+    WALL.gateX,
+    WALL_BASE_Y + 0.25,
+    WALL.z - 1
+  );
+  group.add(innerFloor);
+  const innerBack = new THREE.Mesh(
+    new THREE.BoxGeometry(WALL.gateHalfWidth * 2, lintelY * 0.9, 0.4),
+    shadowMat
+  );
+  innerBack.position.set(
+    WALL.gateX,
+    WALL_BASE_Y + lintelY * 0.45,
+    WALL.z - passageDepth / 2 + 1
+  );
+  group.add(innerBack);
+  // Rubble heaped against the far end — the sappers have not cleared it yet.
+  const rubbleRng = new Rng(4477);
+  for (let i = 0; i < 16; i++) {
+    const s = rubbleRng.float(0.5, 1.5);
+    const chunk = new THREE.Mesh(
+      new THREE.BoxGeometry(s, s * 0.7, s * 0.85),
+      i % 3 === 0 ? concDark : shadowMat
+    );
+    chunk.position.set(
+      WALL.gateX + rubbleRng.float(-WALL.gateHalfWidth + 1, WALL.gateHalfWidth - 1),
+      WALL_BASE_Y + 0.3 + rubbleRng.float(0, 1.1),
+      WALL.z - passageDepth / 2 + rubbleRng.float(1.4, 4.5)
+    );
+    chunk.rotation.set(rubbleRng.float(-0.3, 0.3), rubbleRng.float(0, 3.14), rubbleRng.float(-0.3, 0.3));
+    group.add(chunk);
+  }
 
   const doorGroup = new THREE.Group();
   const door = new THREE.Mesh(
@@ -267,7 +337,9 @@ export function buildWall(scene, terrain, colliders) {
     const bunker = createBunker(b.kind, rng);
     const h = terrain.heightAt(b.x, b.z);
     bunker.position.set(b.x, h - 0.35, b.z);
-    bunker.rotation.y = b.yaw + Math.PI; // face out to sea (+Z)
+    // The model's local +Z is its embrasure, so this faces it out to sea.
+    bunker.rotation.y = b.yaw;
+    flattenStatic(bunker);
     group.add(bunker);
 
     const size = bunker.userData.size;
@@ -280,7 +352,7 @@ export function buildWall(scene, terrain, colliders) {
     colliders.addOccluder(b.x, h + size.h * 0.6, b.z, size.w * 1.1);
 
     // Sandbag apron around the front corners.
-    const yaw = b.yaw + Math.PI;
+    const yaw = b.yaw;
     for (let i = 0; i < 26; i++) {
       const side = i < 13 ? -1 : 1;
       const k = i % 13;
@@ -323,7 +395,7 @@ export function buildWall(scene, terrain, colliders) {
     group.add(nest);
     mounts.push({
       position: new THREE.Vector3(px, py + 0.9, pz),
-      yaw: Math.PI,
+      yaw: 0, // looking out over the beach
       kind: s.kind,
       host: null,
     });

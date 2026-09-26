@@ -163,3 +163,51 @@ export function mergeParts(parts) {
   merged.computeVertexNormals();
   return merged;
 }
+
+/**
+ * Collapse a group of static meshes into one mesh per material, baking each
+ * child's transform. Purely a draw-call optimisation — only use it on things
+ * that never move or animate after construction.
+ */
+export function flattenStatic(root) {
+  root.updateMatrixWorld(true);
+  const inv = root.matrixWorld.clone().invert();
+  const buckets = new Map();
+  const drop = [];
+
+  root.traverse((o) => {
+    if (!o.isMesh || o.isInstancedMesh || o.userData.keepSeparate) return;
+    let b = buckets.get(o.material);
+    if (!b) {
+      b = { material: o.material, parts: [], cast: false, receive: false };
+      buckets.set(o.material, b);
+    }
+    const g = o.geometry.clone();
+    g.applyMatrix4(inv.clone().multiply(o.matrixWorld));
+    b.parts.push(g);
+    b.cast = b.cast || o.castShadow;
+    b.receive = b.receive || o.receiveShadow;
+    drop.push(o);
+  });
+
+  const attrKey = (g) => Object.keys(g.attributes).sort().join(',');
+
+  for (const o of drop) if (o.parent) o.parent.remove(o);
+  for (const b of buckets.values()) {
+    if (!b.parts.length) continue;
+    // Keep uv/normal data when every part agrees on it — textured pieces such
+    // as the mine warning boards would otherwise lose their uvs.
+    let geo = null;
+    const flat = b.parts.map((g) => (g.index ? g.toNonIndexed() : g));
+    if (flat.every((g) => attrKey(g) === attrKey(flat[0]))) {
+      geo = mergeGeometries(flat, false);
+    }
+    const mesh = new THREE.Mesh(geo || mergeParts(b.parts), b.material);
+    mesh.castShadow = b.cast;
+    mesh.receiveShadow = b.receive;
+    mesh.matrixAutoUpdate = false;
+    mesh.updateMatrix();
+    root.add(mesh);
+  }
+  return root;
+}

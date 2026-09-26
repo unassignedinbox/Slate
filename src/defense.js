@@ -1,27 +1,102 @@
 import * as THREE from 'three';
-import { mat } from './materials.js';
+import { mat, mergeParts } from './materials.js';
 import { DIFFICULTY, COLORS } from './config.js';
 import { clamp, damp, Rng } from './util.js';
 
 const rng = new Rng(8081);
 
-function createMG() {
+/* ------------------------------------------------------------------ */
+/* Crew                                                                */
+/* ------------------------------------------------------------------ */
+
+let crewGeo = null;
+
+/**
+ * Low-poly crewman, built once and shared. Modelled from the thighs up,
+ * because that is all that ever clears a parapet or an embrasure.
+ */
+function crewGeometry() {
+  if (crewGeo) return crewGeo;
+
+  const uniform = [];
+  const gear = [];
+  const skin = [];
+  const push = (list, geo, x, y, z, rx = 0, ry = 0, rz = 0) => {
+    const e = new THREE.Euler(rx, ry, rz);
+    const q = new THREE.Quaternion().setFromEuler(e);
+    const m = new THREE.Matrix4().compose(
+      new THREE.Vector3(x, y, z),
+      q,
+      new THREE.Vector3(1, 1, 1)
+    );
+    geo.applyMatrix4(m);
+    list.push(geo);
+  };
+
+  // Torso, hunched slightly forward over the gun.
+  push(uniform, new THREE.BoxGeometry(0.46, 0.5, 0.28), 0, -0.02, -0.12, -0.16);
+  push(uniform, new THREE.BoxGeometry(0.56, 0.17, 0.3), 0, 0.22, -0.16, -0.16);
+  // Hips / thighs, mostly hidden behind sandbags.
+  push(uniform, new THREE.BoxGeometry(0.42, 0.3, 0.3), 0, -0.36, -0.14);
+  // Arms reaching to the grips.
+  push(uniform, new THREE.BoxGeometry(0.14, 0.14, 0.52), -0.27, 0.02, 0.08, 0.34);
+  push(uniform, new THREE.BoxGeometry(0.14, 0.14, 0.52), 0.27, 0.02, 0.08, 0.34);
+  // Neck + head.
+  push(skin, new THREE.BoxGeometry(0.13, 0.1, 0.13), 0, 0.33, -0.15);
+  push(skin, new THREE.BoxGeometry(0.19, 0.2, 0.21), 0, 0.45, -0.13);
+  // Stahlhelm: shallow dome plus a flare.
+  push(
+    gear,
+    new THREE.SphereGeometry(0.155, 8, 4, 0, Math.PI * 2, 0, Math.PI * 0.55),
+    0,
+    0.5,
+    -0.13
+  );
+  push(gear, new THREE.CylinderGeometry(0.185, 0.2, 0.05, 8), 0, 0.5, -0.13);
+  // Ammo pouches.
+  push(gear, new THREE.BoxGeometry(0.4, 0.12, 0.1), 0, -0.14, 0.02, -0.16);
+
+  crewGeo = {
+    uniform: mergeParts(uniform),
+    gear: mergeParts(gear),
+    skin: mergeParts(skin),
+  };
+  return crewGeo;
+}
+
+function createCrewman() {
+  const geo = crewGeometry();
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(geo.uniform, mat(0x545a46, { roughness: 0.95 }));
+  const helmet = new THREE.Mesh(geo.gear, mat(0x3b423b, { roughness: 0.8, metalness: 0.25 }));
+  const head = new THREE.Mesh(geo.skin, mat(0xa9866a, { roughness: 1 }));
+  body.castShadow = true;
+  helmet.castShadow = true;
+  g.add(body, helmet, head);
+  return g;
+}
+
+function createMG({ shield: withShield = true } = {}) {
   const g = new THREE.Group();
   const steel = mat(0x4b5155, { roughness: 0.6, metalness: 0.55 });
   const dark = mat(0x26292b, { roughness: 0.8, metalness: 0.3 });
 
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.34, 0.42, 9), steel);
-  base.position.y = -0.3;
-  g.add(base);
+  if (withShield) {
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.34, 0.42, 9), steel);
+    base.position.y = -0.3;
+    g.add(base);
+  }
 
   const yawGroup = new THREE.Group();
   g.add(yawGroup);
 
-  const shield = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.78, 0.09), steel);
-  shield.position.set(0, 0.08, 0.34);
-  shield.rotation.x = -0.12;
-  shield.castShadow = true;
-  yawGroup.add(shield);
+  if (withShield) {
+    const shield = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.78, 0.09), steel);
+    shield.position.set(0, 0.08, 0.34);
+    shield.rotation.x = -0.12;
+    shield.castShadow = true;
+    yawGroup.add(shield);
+  }
 
   const pitchGroup = new THREE.Group();
   yawGroup.add(pitchGroup);
@@ -41,7 +116,11 @@ function createMG() {
   ammo.position.set(0.3, -0.12, 0.05);
   pitchGroup.add(ammo);
 
-  g.userData = { yawGroup, pitchGroup, muzzleZ: 1.9 };
+  const gunner = createCrewman();
+  gunner.position.set(0, -0.12, -0.5);
+  yawGroup.add(gunner);
+
+  g.userData = { yawGroup, pitchGroup, muzzleZ: 1.9, crew: [gunner] };
   return g;
 }
 
@@ -74,7 +153,16 @@ function createATGun() {
   brake.position.z = 4.6;
   pitchGroup.add(brake);
 
-  g.userData = { yawGroup, pitchGroup, muzzleZ: 4.9 };
+  const layer = createCrewman();
+  layer.position.set(-0.62, -0.2, -0.55);
+  layer.scale.setScalar(1.04);
+  yawGroup.add(layer);
+  const loader = createCrewman();
+  loader.position.set(0.72, -0.26, -0.95);
+  loader.rotation.y = -0.5;
+  yawGroup.add(loader);
+
+  g.userData = { yawGroup, pitchGroup, muzzleZ: 4.9, crew: [layer, loader] };
   return g;
 }
 
@@ -83,7 +171,10 @@ class Sentry {
     this.kind = mount.kind;
     this.position = mount.position.clone();
     this.baseYaw = mount.yaw;
-    this.object = this.kind === 'at' ? createATGun() : createMG();
+    // A gun in a casemate has the concrete for protection; only the open
+    // wall-top nests carry a shield and a pintle base.
+    this.object =
+      this.kind === 'at' ? createATGun() : createMG({ shield: !mount.host });
     this.object.position.copy(this.position);
     this.object.rotation.y = mount.yaw;
     scene.add(this.object);
@@ -99,6 +190,9 @@ class Sentry {
     this.lockT = 0;
     this.alive = true;
     this.scanPhase = rng.float(0, Math.PI * 2);
+    this.errX = 0;
+    this.errY = 0;
+    this.errZ = 0;
     this.reload = this.kind === 'at' ? rng.float(2, 6) : 0;
     this._aim = new THREE.Vector3();
     this._muzzle = new THREE.Vector3();
@@ -140,11 +234,13 @@ class Sentry {
     // Aim point with a little lead so fast cars still get chased.
     const speed = this.kind === 'at' ? DIFFICULTY.atShellSpeed : DIFFICULTY.bulletSpeed;
     const tof = dist / speed;
-    const lead = this.kind === 'at' ? 1.0 : 0.85;
+    const lead = this.kind === 'at' ? 0.95 : 0.7;
+    // Gunners are good, not clairvoyant: a per-burst aim error keeps steady
+    // targets from being an automatic kill and rewards changing speed.
     this._aim.set(
-      car.pos.x + car.vel.x * tof * lead,
-      car.pos.y + 0.75,
-      car.pos.z + car.vel.z * tof * lead
+      car.pos.x + car.vel.x * tof * lead + this.errX * dist,
+      car.pos.y + 0.75 + this.errY * dist,
+      car.pos.z + car.vel.z * tof * lead + this.errZ * dist
     );
 
     let targetYaw;
@@ -187,6 +283,9 @@ class Sentry {
       this.targeting = this.reload < 1.2;
       if (this.reload <= 0 && aimed && this.lockT > 1.0) {
         this.reload = DIFFICULTY.atReload * (0.8 + Math.random() * 0.5);
+        const e = DIFFICULTY.atAimError;
+        this.errX = (Math.random() - 0.5) * e;
+        this.errZ = (Math.random() - 0.5) * e;
         const m = this.muzzleWorld(this._muzzle);
         const dir = this._aim.clone().sub(m).normalize();
         ctx.spawnShell(m, dir, this);
@@ -209,6 +308,10 @@ class Sentry {
     if (this.state === 'scan') {
       if (this.lockT >= DIFFICULTY.sentryLockTime && aimed && ctx.requestFire && ctx.requestFire()) {
         this.state = 'burst';
+        const e = DIFFICULTY.sentryAimError;
+        this.errX = (Math.random() - 0.5) * e;
+        this.errY = (Math.random() - 0.5) * e * 0.35;
+        this.errZ = (Math.random() - 0.5) * e;
         this.burstLeft = DIFFICULTY.sentryBurst + Math.floor(Math.random() * 4);
         this.shotTimer = 0;
       }

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { mat, buildLoft, mergeParts } from './materials.js';
+import { flattenStatic, mat, buildLoft, mergeParts } from './materials.js';
 import { COLORS, TRENCHES, WALL, ROADS } from './config.js';
 import { Rng, clamp, lerp, resamplePolyline } from './util.js';
 
@@ -455,10 +455,12 @@ export function buildObstacles(scene, terrain, colliders, ocean) {
     board.rotation.y = yaw;
     signGroup.add(board);
   }
+  flattenStatic(signGroup);
   group.add(signGroup);
 
   /* ---- Telegraph poles along the causeway ---- */
   const poleMat = mat(COLORS.woodDark, { roughness: 1 });
+  const poleGroup = new THREE.Group();
   for (let i = 0; i < 16; i++) {
     const z = 250 - i * 30;
     const x = 22 + Math.sin(i * 0.7) * 4;
@@ -469,12 +471,15 @@ export function buildObstacles(scene, terrain, colliders, ocean) {
     pole.position.set(x, h + 3.4, z);
     pole.rotation.z = rng.float(-0.06, 0.06);
     pole.castShadow = true;
-    group.add(pole);
+    poleGroup.add(pole);
     const arm = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.14, 0.14), poleMat);
     arm.position.set(x, h + 6.4, z);
-    group.add(arm);
+    poleGroup.add(arm);
     colliders.addCircle(x, z, 0.5, { severity: 1.4, damage: 1.6, kind: 'solid', height: 7 });
   }
+
+  flattenStatic(poleGroup);
+  group.add(poleGroup);
 
   /* ---- Beached landing craft in the surf ---- */
   const craftGroup = new THREE.Group();
@@ -499,6 +504,7 @@ export function buildObstacles(scene, terrain, colliders, ocean) {
     });
     colliders.addOccluder(c.x, h + 1.6, c.z, 4.2);
   }
+  flattenStatic(craftGroup);
   group.add(craftGroup);
 
   /* ---- Supply clutter ---- */
