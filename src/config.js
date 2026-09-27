@@ -51,8 +51,8 @@ export const WEAPONS = {
   bulletDamage: 3.4,
   bombDamage: 62,
   bombRadius: 22,
-  mineDamage: 34,
-  tankMineDamage: 72,
+  mineDamage: 28,
+  tankMineDamage: 65,
 };
 
 export const COLORS = {

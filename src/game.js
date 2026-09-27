@@ -447,6 +447,7 @@ export class Game {
         mines: this.stats.mines,
         hits: this.stats.hits,
         bombs: this.planes.nearMisses || 0,
+        repairs: this.stats.repairs || 0,
       });
       this.effects.explosion(new THREE.Vector3(car.pos.x, car.pos.y + 0.8, car.pos.z), car.deathCause === 'drowned' ? 0.6 : 2.6);
       this.audio.explosion(car.pos, 1.4);
@@ -459,6 +460,7 @@ export class Game {
         mines: this.stats.mines,
         hits: this.stats.hits,
         bombs: this.planes.nearMisses || 0,
+        repairs: this.stats.repairs || 0,
       });
     }
     this.hud.startBtn.addEventListener('click', () => this.restart());

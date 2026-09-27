@@ -49,15 +49,18 @@ export class HUD {
           <h2>D-DAY &mdash; THE RUN TO THE WALL</h2>
           <p>
             You are ashore in a requisitioned saloon with the tide coming in behind you.
-            Three kilometres of defended beachhead lie between you and the gate in the
-            Atlantic Wall &mdash; minefields, wire, dragon&rsquo;s teeth, dug-in armour,
-            and machine-gun bunkers with interlocking arcs of fire.
+            Four and a half kilometres of defended beachhead lie between you and the gate
+            in the Atlantic Wall &mdash; minefields, wire, dragon&rsquo;s teeth, dug-in
+            armour, machine-gun bunkers with interlocking arcs of fire, and aircraft
+            working the road.
           </p>
           <ul>
             <li><b>W / &uarr;</b> throttle &nbsp; <b>S / &darr;</b> brake &amp; reverse &nbsp; <b>A D / &larr;&rarr;</b> steer</li>
             <li><b>C</b> camera &nbsp; <b>M</b> mute &nbsp; <b>P</b> pause &nbsp; <b>R</b> restart</li>
             <li>Mounds, trenches and wrecks break line of sight &mdash; the gunners cannot hit what they cannot see.</li>
             <li>Teller mines are the big steel plates with the cross on top. They will end you.</li>
+            <li>Engineer dumps under a red-cross pennant patch the hull. Drive into one.</li>
+            <li>Aircraft mark you with a siren before they release. Break off the road.</li>
             <li>The sea is rising. Standing still is a decision.</li>
           </ul>
           <button id="startBtn">START THE RUN</button>
@@ -114,7 +117,8 @@ export class HUD {
            <li><span>GROUND COVERED</span><b>${stats.distance} m</b></li>
            <li><span>MINES TRIPPED</span><b>${stats.mines}</b></li>
            <li><span>ROUNDS TAKEN</span><b>${stats.hits}</b></li>
-           <li><span>BOMBS SURVIVED</span><b>${stats.bombs}</b></li>
+           <li><span>NEAR MISSES FROM THE AIR</span><b>${stats.bombs}</b></li>
+           <li><span>REPAIR DUMPS USED</span><b>${stats.repairs}</b></li>
          </ul>
          <button id="startBtn">RUN IT AGAIN</button>`
       : `<h1 class="lose">${stats.causeTitle}</h1>
