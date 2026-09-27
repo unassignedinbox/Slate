@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Theraphosid // Cave Encounter</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="scene"></canvas>
+
+    <div id="boot">
+      <div class="boot-inner">
+        <div class="boot-title">THERAPHOSID</div>
+        <div class="boot-sub">initializing cave biome&hellip;</div>
+        <div class="boot-bar"><div class="boot-bar-fill" id="boot-fill"></div></div>
+      </div>
+    </div>
+
+    <div id="hud" class="hidden">
+      <div class="panel panel-top-left">
+        <div class="title">Brachypelma-class Theraphosid</div>
+        <div class="subtitle" id="state-label">state: idle</div>
+      </div>
+
+      <div class="panel panel-bottom-left" id="controls-panel">
+        <div class="row"><kbd>W A S D</kbd><span>walk / steer</span></div>
+        <div class="row"><kbd>SHIFT</kbd><span>skitter (fast)</span></div>
+        <div class="row"><kbd>SPACE</kbd><span>threat display</span></div>
+        <div class="row"><kbd>F</kbd><span>strike attack</span></div>
+        <div class="row"><kbd>C</kbd><span>cycle camera</span></div>
+        <div class="row"><kbd>drag / wheel</kbd><span>orbit / zoom (free cam)</span></div>
+      </div>
+
+      <div class="panel panel-bottom-right">
+        <button id="btn-threat" class="btn">Threat Display</button>
+        <button id="btn-attack" class="btn btn-danger">Strike Attack</button>
+        <button id="btn-path" class="btn">Auto Wall-Walk Tour</button>
+        <button id="btn-cam" class="btn">Camera: Follow</button>
+        <button id="btn-legs" class="btn btn-ghost">Toggle Debug IK</button>
+      </div>
+
+      <div class="panel panel-top-right" id="fps-panel">
+        <div id="fps">FPS --</div>
+        <div id="tris">Tris --</div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
