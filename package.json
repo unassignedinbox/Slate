@@ -1,0 +1,27 @@
+{
+  "name": "slate",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/unassignedinbox/Slate.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/unassignedinbox/Slate/issues"
+  },
+  "homepage": "https://github.com/unassignedinbox/Slate#readme",
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.63.0",
+    "vite": "^6.4.3"
+  }
+}
