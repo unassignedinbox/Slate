@@ -206,6 +206,12 @@ export const MECHANICS = {
   loadedWingbeatGain: 0.26, // wingbeat rises as it gets heavy
   loadedClimbPenalty: 0.55,
   takeoffImpulse: 1.5,
+  // Mosquitoes take off almost entirely on the wings and push with the
+  // legs as little as possible, so the host never feels them go. The
+  // wings spool up with all six feet still planted, and only then do the
+  // legs extend and release.
+  takeoffSpool: 0.85,      // s of wing spin-up before the first foot lifts
+  takeoffLegPush: 0.10,    // x bodyLength the legs extend - deliberately small
 };
 
 // Which keys force a geometry rebuild

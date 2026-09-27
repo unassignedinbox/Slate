@@ -128,6 +128,24 @@ The one liberty taken: a fuel tank is steel, not skin, so the fascicle
 carries a **rotary boring head**. Everything around it is the real
 mechanism.
 
+### Take-off (`agent.js: doTakeoff`)
+
+The beat everyone gets wrong. A mosquito leaving a host does **not** jump.
+It generates almost all of its take-off force aerodynamically and pushes
+with its legs as little as it can, specifically so the host never feels
+it go — and it does that while carrying up to its own body weight in
+fluid.
+
+So the order matters, and it is enforced here: the wings spool up to
+speed **first**, with all six feet still planted. Only once they are
+carrying the animal do the legs extend — gently — and release, fore pair
+first, the reverse of the touchdown order. The test asserts the wing gate
+is above 0.8 before the first foot leaves and that peak acceleration
+through the legs stays under 2 m/s². It currently measures 0.09.
+
+A laden one leaves badly: higher wingbeat, capped departure speed, and a
+measurably worse climb (0.94 m/s against 2.18 empty).
+
 ### Feeding
 
 Cibarial and pharyngeal pumps at ~3-4 Hz, visible as a peristaltic wave
@@ -164,13 +182,15 @@ things that actually matter, currently 39 of them:
   rest of the meal, at exactly the 45 deg *Anopheles* attitude
 - all six feet are on the real drum — not on thin air — and the raised
   abdomen is still over the barrel
+- the wings are up to speed before the first foot leaves on take-off, the
+  push through the legs is gentle, and a laden animal climbs worse
 - no frame teleports, no knee inverts, and the fuel balances
 
 One of those assertions walks the source and **fails if any declared
 parameter is never read** — a slider that does nothing is worse than no
 slider, and nine of them had quietly rotted before it was added.
 
-It has caught thirteen real bugs so far, including a left-handed rest
+It has caught fourteen real bugs so far, including a left-handed rest
 basis that silently produced the wrong feeding attitude, and a
 `LatheGeometry` axis mismatch that exploded every chain in the rig.
 

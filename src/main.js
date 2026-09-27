@@ -243,6 +243,8 @@ mFeed.add(M, 'detachThreshold', 0.1, 1, 0.01);
 mFeed.add(M, 'loadedWingbeatGain', 0, 1, 0.01);
 mFeed.add(M, 'loadedClimbPenalty', 0, 1, 0.01);
 mFeed.add(M, 'takeoffImpulse', 0.1, 6, 0.05);
+mFeed.add(M, 'takeoffSpool', 0.05, 3, 0.05);
+mFeed.add(M, 'takeoffLegPush', 0.0, 0.5, 0.005);
 
 gui.folders.forEach((f) => f.close());
 fMech.open(); mWing.open();

@@ -500,24 +500,73 @@ export class MosquitoAgent {
     if (this.stateTime > 1.3) this.setState(STATE.TAKEOFF);
   }
 
+  /**
+   * Take-off.
+   *
+   * This is the one people always get wrong. A mosquito leaving a host
+   * does NOT jump. It generates almost all of its take-off force
+   * aerodynamically and pushes with its legs as little as it can get away
+   * with, specifically so the host does not feel it leave - and it does
+   * that while carrying up to its own body weight in fluid.
+   *
+   * So the order matters: the wings spool up to speed FIRST, with all six
+   * feet still planted. Only once they are carrying the animal do the legs
+   * extend - gently - and release, fore pair first. A laden one leaves
+   * slowly and climbs badly.
+   */
   doTakeoff(dt) {
-    const m = this.m;
-    this.b.fold = damp(this.b.fold, 0, 9, dt);
-    this.b.fly = damp(this.b.fly, 1, 9, dt);
-    this.b.plant = damp(this.b.plant, 0, 5, dt);
-
-    // Loaded, it leaves badly: shallow climb, heavy, slow.
+    const m = this.m, S = this.S, L = S.bodyLength;
     const loadFrac = clamp(this.load / m.crawCapacity, 0, 1);
-    const climb = m.takeoffImpulse * (1 - m.loadedClimbPenalty * loadFrac);
-    if (this.stateTime > 0.22) {
+    const u = this.stateTime;
+
+    this.b.fold = damp(this.b.fold, 0, 9, dt);
+    // wing gate ramps over the spool-up window rather than snapping on
+    this.b.fly = Math.max(this.b.fly, smoothstep(0, m.takeoffSpool, u));
+    this.b.reach = damp(this.b.reach, 0, 5, dt);
+
+    // --- ground phase: legs extend, body rises, feet stay put ----------
+    const releaseStart = m.takeoffSpool * 0.92;
+    const stagger = m.touchdownStagger;
+    // fore pair leaves first - the reverse of the touchdown order
+    const order = [...m.touchdownOrder].reverse();
+
+    let planted = 0;
+    if (this.legPlan) {
+      for (let i = 0; i < order.length; i++) {
+        const pl = this.legPlan[order[i]];
+        if (!pl) continue;
+        if (pl.touched && u > releaseStart + i * stagger) {
+          pl.touched = false;
+          this.emit({ type: 'liftoff', leg: order[i] });
+        }
+        if (pl.touched) planted++;
+      }
+    }
+    const onGround = planted > 0;
+    this.b.plant = damp(this.b.plant, planted / 6, 9, dt);
+
+    if (onGround) {
+      // The legs straighten and lift the body along the surface normal.
+      // This is the only mechanical push, and it is deliberately small.
+      const push = smoothstep(releaseStart * 0.35, releaseStart * 1.25, u);
+      this.restAnchor.copy(this.drillAnchor)
+        .addScaledVector(this.site.n, push * m.takeoffLegPush * L);
+      this.settleToRest(dt, 9);
+      // bleed in a little upward velocity so the release is continuous
+      this.vel.addScaledVector(this.site.n,
+        m.takeoffImpulse * 0.35 * push * (1 - m.loadedClimbPenalty * loadFrac) * dt);
+    } else {
+      // --- airborne: climb, degraded by what it is carrying ------------
+      const climb = m.takeoffImpulse * (1 - m.loadedClimbPenalty * loadFrac);
       this.vel.addScaledVector(this.site.n, climb * dt * 3.0);
-      this.vel.addScaledVector(_v.set(Math.sin(this.heading), 0, Math.cos(this.heading)), -0.9 * dt);
-      // a laden mosquito is slow; cap the departure at cruise speed
+      this.vel.addScaledVector(
+        _v.set(Math.sin(this.heading), 0, Math.cos(this.heading)), -0.9 * dt);
       const vmax = m.cruiseSpeed * (1 - 0.5 * loadFrac);
       if (this.vel.length() > vmax) this.vel.setLength(vmax);
       this.pos.addScaledVector(this.vel, dt);
     }
-    if (this.stateTime > 2.2) {
+
+    if (!onGround && u > releaseStart + order.length * stagger + 1.4) {
       this.load = 0; this.displayLoad = 0; this.breach = 0; this.b.droop = 0;
       this.legPlan = null;
       this.setState(STATE.CRUISE);

@@ -486,6 +486,62 @@ console.log('\n== it actually fits on the tank ==');
   ok(onDrum(lab, 0.08), 'and the mouthparts are on the drum wall');
 }
 
+console.log('\n== take-off ==');
+{
+  const run = (fillFraction) => {
+    const tank = new FakeTank();
+    const agent = new MosquitoAgent(rig, params.shape, params.mech, tank);
+    const dt = 1 / 240;
+    let gateAtFirstLift = null, peakGroundAccel = 0, firstLiftT = null;
+    let clearT = null, climbSpeed = 0;
+    const prevVel = new THREE.Vector3();
+    for (let i = 0; i < 240 * 120; i++) {
+      prevVel.copy(agent.vel);
+      agent.update(dt);
+      for (const e of agent.events) {
+        if (e.type === 'liftoff' && gateAtFirstLift === null) {
+          gateAtFirstLift = agent.b.fly;
+          firstLiftT = agent.stateTime;
+        }
+      }
+      agent.events.length = 0;
+      if (agent.state === STATE.FEED) agent.load = params.mech.crawCapacity * fillFraction;
+      if (agent.state !== STATE.TAKEOFF) continue;
+      const planted = agent.legPlan ? agent.legPlan.filter((p) => p.touched).length : 0;
+      if (planted > 0) {
+        peakGroundAccel = Math.max(peakGroundAccel,
+          agent.vel.distanceTo(prevVel) / dt);
+      } else {
+        if (clearT === null) clearT = agent.stateTime;
+        if (agent.stateTime - clearT > 0.5 && !climbSpeed) {
+          climbSpeed = agent.vel.dot(agent.site.n);
+        }
+      }
+      if (clearT !== null && agent.stateTime - clearT > 0.8) break;
+    }
+    return { gateAtFirstLift, peakGroundAccel, firstLiftT, climbSpeed };
+  };
+
+  const light = run(0.02);
+  ok(light.gateAtFirstLift !== null, 'the take-off sequence runs');
+  ok(light.gateAtFirstLift > 0.8,
+    'WINGS ARE UP TO SPEED before the first foot leaves the panel',
+    `wing gate ${light.gateAtFirstLift.toFixed(2)} at first lift-off`);
+  ok(light.firstLiftT >= params.mech.takeoffSpool * 0.9,
+    'it spools up rather than snapping off the surface',
+    `first foot released at ${light.firstLiftT.toFixed(2)} s`);
+  ok(light.peakGroundAccel < 2.0,
+    'STEALTH: the mechanical push while still planted stays gentle',
+    `peak ${light.peakGroundAccel.toFixed(2)} m/s^2 through the legs`);
+
+  const heavy = run(0.98);
+  ok(heavy.climbSpeed > 0, 'a laden mosquito still gets airborne',
+    `${heavy.climbSpeed.toFixed(2)} m/s`);
+  ok(heavy.climbSpeed < light.climbSpeed * 0.85,
+    'and climbs measurably worse than an empty one',
+    `laden ${heavy.climbSpeed.toFixed(2)} vs empty ${light.climbSpeed.toFixed(2)} m/s`);
+}
+
 console.log('\n== abdomen load ==');
 {
   const tank = new FakeTank();

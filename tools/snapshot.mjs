@@ -157,4 +157,9 @@ rig.orient.quaternion.identity();
 rig.body.position.set(0, 0, 0);
 shoot('07_stroke_blur', [rig.root]);
 
+// 8 - mid take-off: wings up to speed, feet still planted, legs extending
+if (!runUntil((a) => a.state === STATE.TAKEOFF && a.b.fly > 0.85 &&
+  a.legPlan && a.legPlan.some((p) => p.touched))) throw new Error('never caught the take-off spool');
+shoot('08_takeoff_spool', [rig.root, vehicle.group]);
+
 console.log('done');

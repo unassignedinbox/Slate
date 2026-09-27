@@ -57,8 +57,12 @@ fi
 # ---------------------------------------------------------------------
 echo "==> computing the unresolved symbol set"
 SOFILES=$(ls "$BPYDIR"/*.so "$BPYDIR"/lib/*.so* 2>/dev/null || true)
-nm -D --undefined-only $SOFILES 2>/dev/null | awk '{print $NF}' | sort -u > /tmp/_undef.txt
-nm -D --defined-only $SOFILES 2>/dev/null | awk '{print $NF}' | sort -u > /tmp/_def.txt
+# nm prints versioned symbols as name@VER / name@@VER. Strip the version
+# before generating C - 'void foo@V_0.5.0(void){}' is not a thing.
+nm -D --undefined-only $SOFILES 2>/dev/null | awk '{print $NF}' \
+  | sed 's/@.*//' | sort -u > /tmp/_undef.txt
+nm -D --defined-only $SOFILES 2>/dev/null | awk '{print $NF}' \
+  | sed 's/@.*//' | sort -u > /tmp/_def.txt
 comm -23 /tmp/_undef.txt /tmp/_def.txt | grep -Ev '^(_?Py|_ITM_|__gmon|_Jv_)' > /tmp/_need.txt || true
 echo "    $(wc -l < /tmp/_need.txt) unresolved symbols"
 
