@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MOTOR BALL GP — Iron City Circuit</title>
+  <style>
+    :root {
+      --cyan: #35e0ff;
+      --amber: #ffb52e;
+      --hazard: #ffd320;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #04070c; }
+    body {
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      color: #dceef5;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    canvas.game { position: fixed; inset: 0; display: block; }
+
+    /* ---------- HUD ---------- */
+    #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; opacity: 0; transition: opacity .4s; }
+    #hud.on { opacity: 1; }
+
+    .panel {
+      position: absolute;
+      background: linear-gradient(160deg, rgba(8,18,26,.82), rgba(8,14,22,.62));
+      border: 1px solid rgba(53,224,255,.25);
+      border-radius: 10px;
+      backdrop-filter: blur(4px);
+      box-shadow: 0 0 24px rgba(0,0,0,.45), inset 0 0 18px rgba(53,224,255,.05);
+    }
+
+    #brand {
+      top: 14px; left: 16px; padding: 8px 16px 10px;
+      border-left: 4px solid var(--hazard);
+    }
+    #brand .t1 {
+      font-size: 20px; font-weight: 800; letter-spacing: 3px;
+      background: linear-gradient(90deg, #fff, var(--cyan));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    #brand .t2 { font-size: 10px; letter-spacing: 4px; color: #7fb7c7; margin-top: 1px; }
+
+    #timing { top: 14px; right: 16px; padding: 10px 16px; text-align: right; min-width: 210px; }
+    #timing .row { display: flex; justify-content: space-between; gap: 18px; font-size: 13px; line-height: 1.75; }
+    #timing .k { color: #7fb7c7; letter-spacing: 2px; font-size: 10px; text-transform: uppercase; align-self: center; }
+    #timing .v { font-variant-numeric: tabular-nums; font-weight: 700; color: #eaf8ff; }
+    #timing .v.big { font-size: 18px; color: var(--cyan); }
+    #timing .v.best { color: var(--amber); }
+
+    #speedbox { right: 16px; bottom: 16px; padding: 10px 18px 12px; text-align: right; }
+    #speed { font-size: 52px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums;
+      text-shadow: 0 0 18px rgba(53,224,255,.35); }
+    #speed small { font-size: 15px; font-weight: 600; color: #7fb7c7; letter-spacing: 2px; }
+    #gear { font-size: 13px; color: var(--amber); font-weight: 700; letter-spacing: 2px; margin-top: 2px; }
+
+    #nitrowrap { left: 50%; transform: translateX(-50%); bottom: 18px; width: 300px; padding: 8px 12px 10px; }
+    #nitrowrap .lab { font-size: 9px; letter-spacing: 3px; color: #7fb7c7; text-transform: uppercase; margin-bottom: 5px; display: flex; justify-content: space-between; }
+    #nitrobar { height: 10px; border-radius: 6px; background: #0a1a24; border: 1px solid rgba(53,224,255,.3); overflow: hidden; }
+    #nitrofill { height: 100%; width: 100%; border-radius: 6px;
+      background: linear-gradient(90deg, #0d7ea0, var(--cyan)); box-shadow: 0 0 12px rgba(53,224,255,.7); transition: width .08s linear; }
+    #nitrofill.boosting { background: linear-gradient(90deg, #ff7b2e, var(--amber)); box-shadow: 0 0 14px rgba(255,181,46,.8); }
+
+    #mapwrap { left: 16px; bottom: 16px; padding: 8px; }
+    #minimap { display: block; width: 190px; height: 150px; }
+
+    #msg {
+      position: absolute; left: 50%; top: 26%; transform: translate(-50%,-50%);
+      font-size: 44px; font-weight: 800; letter-spacing: 6px; color: #fff;
+      text-shadow: 0 0 26px rgba(53,224,255,.9), 0 2px 0 #000;
+      opacity: 0; transition: opacity .15s; white-space: nowrap; text-align: center;
+    }
+    #msg .sub { font-size: 15px; letter-spacing: 4px; color: var(--cyan); display: block; margin-top: 6px; }
+
+    #lapflash {
+      position: absolute; left: 50%; top: 12%; transform: translateX(-50%);
+      font-size: 15px; letter-spacing: 3px; padding: 8px 18px; border-radius: 8px;
+      opacity: 0; transition: opacity .3s; font-variant-numeric: tabular-nums; font-weight: 700;
+    }
+    #lapflash.show { opacity: 1; }
+    #lapflash.good { color: #7dffb0; border: 1px solid rgba(125,255,176,.4); background: rgba(10,40,26,.7); }
+    #lapflash.bad  { color: #ff9c9c; border: 1px solid rgba(255,156,156,.4); background: rgba(46,12,12,.7); }
+
+    #keys {
+      position: absolute; left: 50%; transform: translateX(-50%); top: 14px;
+      padding: 6px 14px; font-size: 10.5px; letter-spacing: 1.5px; color: #9cc4d1;
+      display: flex; gap: 16px; white-space: nowrap;
+    }
+    #keys b { color: #eaf8ff; background: rgba(53,224,255,.12); border: 1px solid rgba(53,224,255,.35);
+      border-radius: 4px; padding: 1px 6px; margin-right: 4px; font-weight: 700; }
+
+    /* ---------- START OVERLAY ---------- */
+    #start {
+      position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; text-align: center;
+      background:
+        linear-gradient(180deg, rgba(3,6,10,.35) 0%, rgba(3,6,10,.78) 70%, #04070c 100%),
+        url('/title.jpg') center/cover no-repeat;
+      transition: opacity .6s;
+    }
+    #start.hidden { opacity: 0; pointer-events: none; }
+    #start .kick { font-size: 12px; letter-spacing: 8px; color: var(--hazard); font-weight: 700; margin-bottom: 10px; }
+    #start h1 {
+      font-size: clamp(44px, 9vw, 96px); font-weight: 900; letter-spacing: 6px; line-height: .95;
+      background: linear-gradient(180deg, #fff 20%, var(--cyan) 75%, #0b5e79);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      filter: drop-shadow(0 4px 22px rgba(0,0,0,.8));
+    }
+    #start h1 span { display: block; font-size: .42em; letter-spacing: 14px;
+      background: linear-gradient(180deg, #ffe9c4, var(--amber)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    #start .lore { max-width: 560px; margin: 18px 0 26px; font-size: 14px; line-height: 1.65; color: #b8d4de; text-shadow: 0 2px 8px #000; }
+    #playbtn {
+      pointer-events: auto; cursor: pointer; font: inherit; font-weight: 800; font-size: 18px; letter-spacing: 5px;
+      color: #04131a; padding: 15px 54px; border: 0; border-radius: 6px;
+      background: linear-gradient(180deg, #9df1ff, var(--cyan) 60%, #1899ba);
+      box-shadow: 0 0 34px rgba(53,224,255,.45), 0 6px 0 #0a4c5e;
+      transition: transform .12s, box-shadow .12s; position: relative; top: 0;
+    }
+    #playbtn:hover { transform: translateY(-2px); box-shadow: 0 0 44px rgba(53,224,255,.65), 0 8px 0 #0a4c5e; }
+    #playbtn:active { transform: translateY(3px); box-shadow: 0 0 20px rgba(53,224,255,.4), 0 2px 0 #0a4c5e; }
+    #start .controls { margin-top: 30px; display: grid; grid-template-columns: auto auto; gap: 7px 18px;
+      font-size: 12.5px; color: #9cc4d1; text-align: left; text-shadow: 0 2px 6px #000; }
+    #start .controls b { color: #fff; background: rgba(53,224,255,.14); border: 1px solid rgba(53,224,255,.4);
+      border-radius: 4px; padding: 1px 8px; text-align: center; letter-spacing: 1px; }
+    #loading { margin-top: 26px; font-size: 11px; letter-spacing: 3px; color: #57707a; }
+  </style>
+</head>
+<body>
+  <!-- ============ HUD ============ -->
+  <div id="hud">
+    <div class="panel" id="brand">
+      <div class="t1">MOTOR BALL GP</div>
+      <div class="t2">IRON CITY CIRCUIT · TEST SESSION</div>
+    </div>
+
+    <div class="panel" id="timing">
+      <div class="row"><span class="k">Lap</span><span class="v big" id="lap">1</span></div>
+      <div class="row"><span class="k">Time</span><span class="v" id="cur">0:00.000</span></div>
+      <div class="row"><span class="k">Last</span><span class="v" id="last">--:--.---</span></div>
+      <div class="row"><span class="k">Best</span><span class="v best" id="best">--:--.---</span></div>
+    </div>
+
+    <div class="panel" id="speedbox">
+      <div id="speed">0<small> KM/H</small></div>
+      <div id="gear">N</div>
+    </div>
+
+    <div class="panel" id="nitrowrap">
+      <div class="lab"><span>N2O Boost  [SHIFT]</span><span id="nitropc">100%</span></div>
+      <div id="nitrobar"><div id="nitrofill"></div></div>
+    </div>
+
+    <div class="panel" id="mapwrap"><canvas id="minimap" width="380" height="300"></canvas></div>
+
+    <div id="msg"></div>
+    <div id="lapflash"></div>
+
+    <div class="panel" id="keys">
+      <span><b>W S</b>throttle / brake</span>
+      <span><b>A D</b>steer</span>
+      <span><b>SPACE</b>handbrake</span>
+      <span><b>SHIFT</b>nitro</span>
+      <span><b>R</b>reset car</span>
+      <span><b>C</b>paint</span>
+      <span><b>M</b>sound</span>
+    </div>
+  </div>
+
+  <!-- ============ START SCREEN ============ -->
+  <div id="start">
+    <div class="kick">IRON CITY · 2563</div>
+    <h1>MOTOR BALL GP<span>IRON CITY CIRCUIT</span></h1>
+    <p class="lore">
+      The Motorball arena, rebuilt for wheels. A banked superspeedway carved inside the Factory's
+      shadow — hazard-striped walls, killer bankings, and the Zalem spire watching from above.
+      Shake down the #99 street sedan and find the limits of the bowl.
+    </p>
+    <button id="playbtn">START ENGINE</button>
+    <div class="controls">
+      <b>W / S</b><span>Throttle · Brake / Reverse</span>
+      <b>A / D</b><span>Steering</span>
+      <b>SPACE</b><span>Handbrake (drift)</span>
+      <b>SHIFT</b><span>Nitro boost</span>
+      <b>R</b><span>Reset to track</span>
+      <b>C</b><span>Change paint</span>
+    </div>
+    <div id="loading">LOADING CIRCUIT…</div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
