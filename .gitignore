@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.venv/
+*.blend1
+image-search/
