@@ -141,8 +141,9 @@ wingbeat, worse climb, capped departure speed.
 ## Verifying it
 
 ```bash
-node tools/simcheck.mjs     # headless: asserts the motion is sane
-node tools/snapshot.mjs out # bakes real poses to OBJ for rendering
+node tools/simcheck.mjs      # headless: asserts the motion is sane
+node tools/snapshot.mjs out  # bakes real poses to OBJ for rendering
+bash tools/setup_blender.sh  # rebuild headless Blender, if you want stills
 ```
 
 `simcheck` runs the whole behaviour cycle with no GPU and asserts the
@@ -165,9 +166,23 @@ things that actually matter, currently 39 of them:
   abdomen is still over the barrel
 - no frame teleports, no knee inverts, and the fuel balances
 
-It has caught eleven real bugs so far, including a left-handed rest
+One of those assertions walks the source and **fails if any declared
+parameter is never read** — a slider that does nothing is worse than no
+slider, and nine of them had quietly rotted before it was added.
+
+It has caught thirteen real bugs so far, including a left-handed rest
 basis that silently produced the wrong feeding attitude, and a
 `LatheGeometry` axis mismatch that exploded every chain in the rig.
+
+### Rendering stills
+
+`tools/snapshot.mjs` bakes poses out of the *live* rig to OBJ;
+`tools/render_snapshots.py` renders them in headless Blender. Getting
+`bpy` to import on a slim container takes some work (it is linked against
+eight X11/GL libraries it never actually calls), so
+`tools/setup_blender.sh` reconstructs the whole environment including the
+synthesised stub libraries. Render with Cycles on CPU — Workbench needs a
+real GL context the stubs cannot provide.
 
 ---
 

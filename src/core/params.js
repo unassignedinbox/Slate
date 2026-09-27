@@ -32,7 +32,8 @@ export const SHAPE = {
   proboscisLength: 0.52, // x bodyLength
   proboscisBaseRadius: 0.019,
   proboscisTipRadius: 0.0042,
-  labiumWallThickness: 0.35, // fraction of proboscis radius
+  labiumWallThickness: 0.32, // fraction of the bore radius
+  labiumSegments: 7,         // chain links, so the sheath can buckle
   labellaLength: 0.045,
   fascicleRadius: 0.4, // fraction of labium bore
   // Maxillary palps: in FEMALE Anopheles these are as long as the
@@ -176,8 +177,7 @@ export const MECHANICS = {
   probeDuration: 1.8,
   // The labium does NOT enter the target. It buckles backwards into a
   // bow and the labella stay in contact while the fascicle slides out.
-  labiumBowDeg: 118.0,
-  labiumBowSegments: 7,
+  labiumBowDeg: 118.0,   // how far the sheath buckles back
   fascicleExtend: 0.78, // fraction of proboscis length driven in
   // Maxillae act as alternating microsaws; mandibles + labrum advance
   // between strokes. Measured actuation is ~15 Hz.

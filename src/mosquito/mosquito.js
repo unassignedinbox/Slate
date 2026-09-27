@@ -48,9 +48,14 @@ export function buildMosquito(S) {
     };
     const g = G.bodySegment(tl, prof, 1.0, (tw / th), 22, 26);
     g.rotateY(Math.PI); g.translate(0, 0, tl * 0.5); // centre, nose +Z
+    // The pharyngeal pump lives here. Give it its own node so it can
+    // pulse without dragging the legs and wings around with it.
+    const pharynx = new THREE.Group();
+    thorax.add(pharynx);
+    rig.pharyngealPump = pharynx;
     const m = new THREE.Mesh(g, M.shell);
     m.castShadow = m.receiveShadow = true;
-    thorax.add(m);
+    pharynx.add(m);
 
     // Ventral graphite cradle - where the legs bolt on
     const gv = G.bodySegment(tl * 0.94, (t) => prof(t) * 0.52, 0.5, (tw / th) * 1.02, 18, 20);
@@ -98,11 +103,18 @@ export function buildMosquito(S) {
   {
     const g = G.bodySegment(hl, (t) => (hw * 0.5) * Math.sin(Math.PI * Math.pow(t, 0.75)) * 1.02, 0.92, 1.0, 20, 18);
     g.rotateY(Math.PI); g.translate(0, 0, hl * 0.5);
-    head.add(new THREE.Mesh(g, M.shellDark));
+    // Cibarial pump chamber - the first of the two pumps, and the one you
+    // can actually see working on a feeding mosquito.
+    const cibarium = new THREE.Group();
+    head.add(cibarium);
+    rig.cibarialPump = cibarium;
+    cibarium.add(new THREE.Mesh(g, M.shellDark));
 
     // Compound eyes - huge, wrap most of the head
     for (const side of [-1, 1]) {
-      const e = new THREE.Mesh(G.compoundEye(S.eyeRadius * L, 3), M.eye);
+      // facet count across the eye -> icosahedron subdivision
+      const det = Math.max(1, Math.min(5, Math.round(Math.log2(S.eyeFacetDensity / 3.2))));
+      const e = new THREE.Mesh(G.compoundEye(S.eyeRadius * L, det), M.eye);
       e.position.set(side * S.eyeSeparation * L, hl * 0.06, hl * 0.06);
       e.rotation.y = side * 0.36; e.rotation.z = side * -0.12;
       head.add(e);
@@ -183,8 +195,8 @@ export function buildMosquito(S) {
   const pRad = (t) => pr0 + (pr1 - pr0) * Math.pow(t, 0.72);
 
   {
-    // --- labium: a chain so it can bow backwards ---
-    const n = 7;
+    // --- labium: a chain of open gutter segments so it can bow backwards
+    const n = Math.max(3, Math.round(S.labiumSegments));
     const segLen = pl / n;
     let cur = pRoot;
     for (let i = 0; i < n; i++) {
@@ -193,10 +205,12 @@ export function buildMosquito(S) {
       cur.add(node); cur = node;
       rig.labiumJoints.push(node);
       const t0 = i / n, t1 = (i + 1) / n;
-      // gutter cross-section: squashed tube, open on top
-      const g = G.taperedTube(segLen * 1.02, (t) => pRad(t0 + (t1 - t0) * t) * 1.0, { radial: 12, steps: 3 });
+      const g = G.gutterSegment(segLen * 1.02,
+        (t) => pRad(t0 + (t1 - t0) * t), S.labiumWallThickness,
+        { radial: 16, steps: 4 });
       const mesh = new THREE.Mesh(g, i % 2 ? M.shellDark : M.shell);
-      mesh.scale.y = 0.80;
+      mesh.material.side = THREE.DoubleSide;
+      mesh.scale.y = 0.86;
       node.add(mesh);
       node.add(new THREE.Mesh(G.collar(pRad(t0) * 1.22, segLen * 0.09, 0.4, 10), M.joint));
     }
@@ -314,11 +328,17 @@ export function buildMosquito(S) {
       band.scale.y = 0.88;
       holder.add(band);
 
-      // structural rib
-      if (i < n - 1) {
+      // Structural ribs, distributed evenly along the whole abdomen
+      // rather than one per tergum, so the count is independent of the
+      // segment count.
+      const ribs = Math.max(0, Math.round(S.ribCount));
+      for (let rIdx = 0; rIdx < ribs; rIdx++) {
+        const rt = (rIdx + 0.5) / ribs;
+        if (rt < t0 || rt >= t1) continue;
+        const local = (rt - t0) / (t1 - t0);
         const rib = new THREE.Mesh(
-          new THREE.TorusGeometry(radAt(t1) * 0.99, ar * 0.045, 6, 22), M.frame);
-        rib.position.z = segLen * 0.96; rib.scale.y = 0.88;
+          new THREE.TorusGeometry(radAt(rt) * 0.99, ar * 0.045, 6, 22), M.frame);
+        rib.position.z = segLen * local; rib.scale.y = 0.88;
         holder.add(rib);
       }
       // translucent window so the fuel load is readable
@@ -359,7 +379,7 @@ export function buildMosquito(S) {
     uni.uSpanLen.value = wl;
     rig.wingUniforms.push(uni);
 
-    const wg = G.wingGeometry(wl, wc, S.wingCamber);
+    const wg = G.wingGeometry(wl, wc, S.wingCamber, S.wingTwistDeg);
     const wm = new THREE.Mesh(wg, wingMat);
     wm.renderOrder = 2;
     alpha.add(wm);
@@ -470,10 +490,22 @@ export function buildMosquito(S) {
         return n;
       };
 
-      const coxa = mk(rootN, lens.coxa, rad * 1.5, rad * 1.25, M.joint, 0);
-      const troch = mk(coxa, lens.troch, rad * 1.25, rad * 1.1, M.joint, lens.coxa);
-      const femur = mk(troch, lens.femur, rad * 1.1, rad * 0.8, M.shellDark, lens.troch);
-      const tibia = mk(femur, lens.tibia, rad * 0.8, rad * 0.55, M.frame, lens.femur);
+      // One taper curve runs the whole limb, coxa to claw: r(u) shrinks
+      // from the base to the tip by legTaper.
+      const tp = Math.max(0.05, Math.min(1, S.legTaper));
+      const rAt = (u) => rad * 1.5 * (1 - (1 - tp) * Math.pow(u, 0.85));
+      const total = lens.coxa + lens.troch + lens.femur + lens.tibia + lens.tarsus;
+      let acc = 0;
+      const seg = (len) => { const a = acc / total; acc += len; return [rAt(a), rAt(acc / total)]; };
+
+      let [r0, r1] = seg(lens.coxa);
+      const coxa = mk(rootN, lens.coxa, r0, r1, M.joint, 0);
+      [r0, r1] = seg(lens.troch);
+      const troch = mk(coxa, lens.troch, r0, r1, M.joint, lens.coxa);
+      [r0, r1] = seg(lens.femur);
+      const femur = mk(troch, lens.femur, r0, r1, M.shellDark, lens.troch);
+      [r0, r1] = seg(lens.tibia);
+      const tibia = mk(femur, lens.tibia, r0, r1, M.frame, lens.femur);
 
       // 5 tarsomeres, progressively shorter, then the pretarsus + claws
       const tars = [];
@@ -481,10 +513,10 @@ export function buildMosquito(S) {
       const weights = [0.38, 0.22, 0.16, 0.13, 0.11];
       for (let i = 0; i < S.legTarsomeres; i++) {
         const w = weights[i % weights.length];
-        const seg = mk(cur, lens.tarsus * w, rad * (0.55 - 0.07 * i), rad * (0.48 - 0.07 * i),
-          i % 2 ? M.shell : M.frame, off);
-        tars.push(seg);
-        cur = seg; off = lens.tarsus * w;
+        const [tr0, tr1] = seg(lens.tarsus * w);
+        const sgm = mk(cur, lens.tarsus * w, tr0, tr1, i % 2 ? M.shell : M.frame, off);
+        tars.push(sgm);
+        cur = sgm; off = lens.tarsus * w;
       }
       const pretarsus = new THREE.Group();
       pretarsus.position.z = off;

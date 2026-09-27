@@ -11,6 +11,9 @@ import { buildMosquito } from '../src/mosquito/mosquito.js';
 import { MosquitoAgent, STATE } from '../src/mosquito/agent.js';
 import { wingAngles } from '../src/mosquito/kinematics.js';
 import { Vehicle } from '../src/scene/vehicle.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const MECH_HZ = params.mech.wingbeatHz;
 
@@ -30,6 +33,38 @@ class FakeTank {
   }
   pickSite() {
     return { point: new THREE.Vector3(-1.0, 1.9, 0), normal: new THREE.Vector3(-0.3, 1, 0).normalize() };
+  }
+}
+
+console.log('\n== every parameter is live ==');
+{
+  // A slider that does nothing is worse than no slider. This walks the
+  // source and fails if any declared parameter is never read.
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const paramsPath = path.join(root, 'src/core/params.js');
+  const src = fs.readFileSync(paramsPath, 'utf8');
+  const block = (name) => {
+    const i = src.indexOf(name);
+    return src.slice(i, src.indexOf('\n};', i));
+  };
+  const keysOf = (b) => [...b.matchAll(/^ {2}(\w+):/gm)].map((m) => m[1]);
+
+  const walk = (dir, out = []) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const f = path.join(dir, e.name);
+      if (e.isDirectory()) walk(f, out);
+      else if (f.endsWith('.js') && f !== paramsPath) out.push(f);
+    }
+    return out;
+  };
+  const code = walk(path.join(root, 'src')).map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+
+  for (const [label, name] of [['SHAPE', 'export const SHAPE = {'],
+  ['MECHANICS', 'export const MECHANICS = {']]) {
+    const ks = keysOf(block(name));
+    const dead = ks.filter((k) => !new RegExp('\\.' + k + '\\b').test(code));
+    ok(dead.length === 0, `${label}: no dead parameters`,
+      dead.length ? 'unused: ' + dead.join(', ') : `${ks.length} all read`);
   }
 }
 
@@ -155,6 +190,65 @@ console.log('\n== behaviour cycle ==');
 
   ok(tank.fuel < startFuel, 'fuel actually left the vehicle tank',
     `${startFuel} -> ${tank.fuel.toFixed(1)} L`);
+}
+
+console.log('\n== landing gear ==');
+{
+  const tank = new FakeTank();
+  const agent = new MosquitoAgent(rig, params.shape, params.mech, tank);
+  const dt = 1 / 120;
+  const hind = () => rig.legs.filter((l) => l.pair === 2);
+  let cruiseYaw = null, landYaw = null, cruisePitch = null, landPitch = null;
+  for (let i = 0; i < 120 * 60; i++) {
+    agent.update(dt); agent.events.length = 0;
+    if (agent.state === STATE.CRUISE && agent.t > 1.5 && cruiseYaw === null) {
+      cruiseYaw = Math.abs(hind()[0].root.rotation.y) * 180 / Math.PI;
+      cruisePitch = hind()[0].root.rotation.x * 180 / Math.PI;
+    }
+    if (agent.state === STATE.LAND && agent.stateTime > 0.12 && landYaw === null) {
+      landYaw = Math.abs(hind()[0].root.rotation.y) * 180 / Math.PI;
+      landPitch = hind()[0].root.rotation.x * 180 / Math.PI;
+      break;
+    }
+  }
+  ok(cruiseYaw !== null && landYaw !== null, 'sampled both cruise and landing');
+  ok(cruiseYaw > 150, 'hind legs TRAIL backwards in cruise',
+    `${cruiseYaw.toFixed(0)} deg from forward`);
+  ok(landYaw < cruiseYaw - 15, 'and swing FORWARD to reach for the surface',
+    `${landYaw.toFixed(0)} deg, ${(cruiseYaw - landYaw).toFixed(0)} deg of swing`);
+  ok(landPitch > cruisePitch + 10, 'and drop toward it',
+    `pitch ${cruisePitch.toFixed(0)} -> ${landPitch.toFixed(0)} deg`);
+}
+
+console.log('\n== the two pumps ==');
+{
+  const tank = new FakeTank();
+  const agent = new MosquitoAgent(rig, params.shape, params.mech, tank);
+  const dt = 1 / 240;
+  const cib = [], pha = [];
+  for (let i = 0; i < 240 * 60; i++) {
+    agent.update(dt); agent.events.length = 0;
+    if (agent.state === STATE.FEED && agent.stateTime > 1.0) {
+      cib.push(rig.cibarialPump.scale.y);
+      pha.push(rig.pharyngealPump.scale.y);
+      if (cib.length > 600) break;
+    }
+  }
+  ok(cib.length > 400, 'both pump chambers exist and are being driven');
+  const amp = (a) => Math.max(...a) - Math.min(...a);
+  ok(amp(cib) > 1e-3 && amp(pha) > 1e-3, 'both pumps actually move',
+    `cibarial ${(amp(cib) * 100).toFixed(1)}%, pharyngeal ${(amp(pha) * 100).toFixed(1)}%`);
+  // alternating, not synchronous: normalised cross-correlation must be < 0
+  const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+  const mc = mean(cib), mp = mean(pha);
+  let num = 0, dc = 0, dp = 0;
+  for (let i = 0; i < cib.length; i++) {
+    num += (cib[i] - mc) * (pha[i] - mp);
+    dc += (cib[i] - mc) ** 2; dp += (pha[i] - mp) ** 2;
+  }
+  const r = num / Math.sqrt(dc * dp);
+  ok(r < -0.2, 'cibarial and pharyngeal pumps run ALTERNATELY, not together',
+    `correlation ${r.toFixed(2)}`);
 }
 
 console.log('\n== tripod gait ==');

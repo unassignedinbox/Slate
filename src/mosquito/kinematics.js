@@ -285,24 +285,44 @@ export function solveLeg(leg, targetWorld, thorax, surfaceNormal, opts = {}) {
  * authority without them - and they are the single most recognisable
  * thing about a mosquito in flight.
  */
-export function applyLegsFlight(rig, m, t, blend = 1) {
+export function applyLegsFlight(rig, m, t, blend = 1, reach = 0) {
   const tuck = m.legTuckDeg * D;
   const trail = m.hindLegTrailDeg * D;
+  // `reach` is the landing gear coming down. Mosquitoes hold the hind
+  // legs BACKWARD in cruise and swing them FORWARD and down toward a
+  // surface as they commit to landing - it is the clearest single tell
+  // that a touchdown is about to happen, and its absence is why most
+  // insect landings in games look like the animal is being dropped.
+  const rch = clamp(reach, 0, 1);
   for (const leg of rig.legs) {
     const s = leg.side;
     let yaw, pitch, roll, femur, tibia, tarsus;
+    const reachPitch = m.landingReachDeg * D;
     if (leg.pair === 2) {
-      // hind: swept back and very nearly straight, trailing past the abdomen
-      yaw = s * (168 * D); pitch = -0.10 - trail * 0.16; roll = 0;
-      femur = -0.16; tibia = 0.30; tarsus = 0.22;
+      // hind: swept back and near straight in cruise, swung forward and
+      // down to feel for the surface on approach
+      yaw = lerp(s * (168 * D), s * (118 * D), rch);
+      pitch = lerp(-0.10 - trail * 0.16, reachPitch, rch);
+      roll = 0;
+      femur = lerp(-0.16, -0.30, rch);
+      tibia = lerp(0.30, 0.62, rch);
+      tarsus = lerp(0.22, 0.10, rch);
     } else if (leg.pair === 1) {
       // mid: femur swings back and up, tibia folds forward under the thorax
-      yaw = s * (78 * D); pitch = 0.62; roll = s * 0.30;
-      femur = -tuck * 1.35; tibia = tuck * 2.25; tarsus = -tuck * 0.55;
+      yaw = lerp(s * (78 * D), s * (92 * D), rch);
+      pitch = lerp(0.62, reachPitch * 0.85, rch);
+      roll = s * 0.30;
+      femur = lerp(-tuck * 1.35, -0.45, rch);
+      tibia = lerp(tuck * 2.25, 0.85, rch);
+      tarsus = lerp(-tuck * 0.55, 0.05, rch);
     } else {
-      // fore: folded tightest, carried forward and in under the head
-      yaw = s * (44 * D); pitch = 0.70; roll = s * 0.38;
-      femur = -tuck * 1.45; tibia = tuck * 2.40; tarsus = -tuck * 0.70;
+      // fore: folded tightest in cruise, extended last on approach
+      yaw = lerp(s * (44 * D), s * (58 * D), rch);
+      pitch = lerp(0.70, reachPitch * 0.7, rch);
+      roll = s * 0.38;
+      femur = lerp(-tuck * 1.45, -0.55, rch);
+      tibia = lerp(tuck * 2.40, 1.05, rch);
+      tarsus = lerp(-tuck * 0.70, 0.02, rch);
     }
     // passive flutter - limbs are never dead still in the air
     const fl = Math.sin(t * 6.1 + leg.pair * 1.7 + (s > 0 ? 0 : 0.9)) * 0.05;
@@ -412,6 +432,27 @@ export function applyProboscis(rig, m, S, state) {
  *  Distension while feeding plus the cibarial / pharyngeal pump, which
  *  run alternately at ~3-4 Hz and are clearly visible as peristalsis.
  * ====================================================================== */
+
+/**
+ * The two pumps.
+ *
+ * A mosquito has a cibarial pump in the head and a pharyngeal pump in the
+ * thorax, and they run ALTERNATELY rather than together - that offset is
+ * what makes a feeding mosquito look like it is working rather than
+ * vibrating. Both chambers get their own node so they can pulse without
+ * dragging the legs, wings or mouthparts with them.
+ */
+export function applyPumps(rig, m, pumpPhase, pumping) {
+  const a = Math.sin(TAU * pumpPhase);
+  const b = Math.sin(TAU * (pumpPhase + m.pumpPhaseOffset));
+  const k = pumping * m.pumpStroke;
+  if (rig.cibarialPump) {
+    rig.cibarialPump.scale.set(1 + k * 0.55 * a, 1 + k * 0.7 * a, 1 - k * 0.2 * a);
+  }
+  if (rig.pharyngealPump) {
+    rig.pharyngealPump.scale.set(1 + k * 0.22 * b, 1 + k * 0.30 * b, 1 - k * 0.1 * b);
+  }
+}
 
 export function applyAbdomen(rig, m, S, { load, pumpPhase, pumping, droop }) {
   const segs = rig.abdomenSegs;

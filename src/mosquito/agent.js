@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {
   applyWings, applyWingsFolded, applyLegsFlight, applyProboscis,
-  applyAbdomen, solveLeg, clamp, lerp, damp, smoothstep,
+  applyAbdomen, applyPumps, solveLeg, clamp, lerp, damp, smoothstep,
 } from './kinematics.js';
 
 const D = Math.PI / 180;
@@ -45,7 +45,9 @@ export class MosquitoAgent {
     this.drillSpin = 0;
 
     // continuous 0..1 blends the pose layers read from
-    this.b = { fly: 1, fold: 0, bow: 0, extend: 0, drill: 0, pump: 0, droop: 0, plant: 0 };
+    this.b = { fly: 1, fold: 0, bow: 0, extend: 0, drill: 0, pump: 0, droop: 0, plant: 0, reach: 0 };
+    // the abdomen fills behind the intake, it does not track it exactly
+    this.displayLoad = 0;
 
     this.load = 0;              // litres in the craw
     this.breach = 0;            // 0..1 how far through the tank wall
@@ -155,6 +157,7 @@ export class MosquitoAgent {
     this.steerTo(_v, this.m.cruiseSpeed, dt, 1.2);
     this.b.fly = damp(this.b.fly, 1, 8, dt);
     this.b.fold = damp(this.b.fold, 0, 8, dt);
+    this.b.reach = damp(this.b.reach, 0, 4, dt);
 
     if (this.stateTime > 3.0) { this.chooseSite(); this.setState(STATE.APPROACH); }
   }
@@ -168,6 +171,7 @@ export class MosquitoAgent {
   }
 
   doApproach(dt) {
+    this.b.reach = damp(this.b.reach, 0.12, 2, dt);
     const target = this.standoff(1.9).clone();
     const dist = this.steerTo(target, this.m.approachSpeed * 2.4, dt, 0.9);
     // face the site
@@ -177,6 +181,8 @@ export class MosquitoAgent {
   }
 
   doHover(dt) {
+    // landing gear starts coming down while it is still station-keeping
+    this.b.reach = damp(this.b.reach, 0.55, 2.5, dt);
     const target = this.standoff(1.25).clone();
     this.steerTo(target, this.m.approachSpeed, dt, 0.5);
     const toSite = _v.subVectors(this.site.point, this.pos);
@@ -318,6 +324,7 @@ export class MosquitoAgent {
     // force on a real mosquito is tiny, so the approach has to be gentle.
     this.steerTo(this.restRoot, this.m.approachSpeed * 0.6, dt, 0.5);
     this.rig.orient.quaternion.slerp(this.restQuat, 1 - Math.exp(-3.2 * dt));
+    this.b.reach = damp(this.b.reach, 1, 6, dt);
     this.b.plant = damp(this.b.plant, 0.5, 3, dt);
 
     // Touchdown is staggered: hind pair, then mid, then fore.
@@ -511,7 +518,7 @@ export class MosquitoAgent {
       this.pos.addScaledVector(this.vel, dt);
     }
     if (this.stateTime > 2.2) {
-      this.load = 0; this.breach = 0; this.b.droop = 0;
+      this.load = 0; this.displayLoad = 0; this.breach = 0; this.b.droop = 0;
       this.legPlan = null;
       this.setState(STATE.CRUISE);
     }
@@ -553,7 +560,7 @@ export class MosquitoAgent {
 
     // ---- legs ---------------------------------------------------------
     const plant = this.b.plant;
-    if (plant < 0.999) applyLegsFlight(rig, m, this.t, 1 - plant);
+    if (plant < 0.999) applyLegsFlight(rig, m, this.t, 1 - plant, this.b.reach);
     if (plant > 0.001 && this.legPlan) {
       rig.root.updateMatrixWorld(true);
       for (const pl of this.legPlan) {
@@ -595,9 +602,13 @@ export class MosquitoAgent {
       rig.fluidColumn.material.opacity = clamp(this.b.pump, 0, 1) * 0.85;
     }
 
-    // ---- abdomen -------------------------------------------------------
+    // ---- pumps and abdomen ---------------------------------------------
+    applyPumps(rig, m, this.pumpPhase, this.b.pump);
+    // the gut fills behind the intake
+    this.displayLoad = damp(this.displayLoad, this.load,
+      1 / Math.max(0.05, m.distensionLag), dt);
     applyAbdomen(rig, m, S, {
-      load: clamp(this.load / m.crawCapacity, 0, 1),
+      load: clamp(this.displayLoad / m.crawCapacity, 0, 1),
       pumpPhase: this.pumpPhase,
       pumping: this.b.pump,
       droop: this.b.droop,

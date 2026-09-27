@@ -38,6 +38,36 @@ export function bodySegment(length, rFn, squashY = 1, squashX = 1, radial = 18, 
   return g;
 }
 
+/**
+ * Open gutter segment - the labium's real cross-section.
+ *
+ * It is not a tube. It is a C-channel with a dorsal slot that the fascicle
+ * sits in, which is why the stylets can slide out of it while it bows
+ * away. Built as a partial lathe whose profile runs up the outside and
+ * back down the inside, so it has genuine wall thickness.
+ */
+export function gutterSegment(length, rFn, wall, { radial = 16, steps = 6, gapDeg = 78 } = {}) {
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    pts.push(new THREE.Vector2(Math.max(0.0002, rFn(t)), t * length));
+  }
+  for (let i = steps; i >= 0; i--) {
+    const t = i / steps;
+    pts.push(new THREE.Vector2(Math.max(0.0001, rFn(t) * (1 - wall)), t * length));
+  }
+  const gap = gapDeg * Math.PI / 180;
+  const phiLength = Math.PI * 2 - gap;
+  // A lathe point at angle phi ends up radially at (sin p, -cos p, 0) once
+  // the geometry is rotated into the +Z convention, so the slot has to be
+  // centred on phi = PI for it to open dorsally.
+  const phiStart = Math.PI + gap / 2;
+  const g = new THREE.LatheGeometry(pts, radial, phiStart, phiLength);
+  g.rotateX(Math.PI / 2);
+  g.computeVertexNormals();
+  return g;
+}
+
 /** Sharp bevelled ring - reads as a machined collar between segments. */
 export function collar(r, width, bevel = 0.35, radial = 18) {
   const b = width * bevel;
@@ -79,7 +109,7 @@ export function compoundEye(radius, detail = 3, squash = new THREE.Vector3(1, 0.
  * Returns geometry with an extra `aSpan` attribute (0 at root, 1 at tip)
  * used by the shader to apply live twist + aeroelastic flexure.
  */
-export function wingGeometry(length, chord, camber, spanSteps = 34, chordSteps = 7) {
+export function wingGeometry(length, chord, camber, twistDeg = 0, spanSteps = 34, chordSteps = 7) {
   const pos = [], nrm = [], uv = [], span = [], idx = [];
 
   // Planform half-width as a function of span
@@ -97,14 +127,21 @@ export function wingGeometry(length, chord, camber, spanSteps = 34, chordSteps =
   // The leading edge is not straight - it sweeps back slightly
   const sweep = (t) => 0.12 * chord * Math.pow(t, 1.7);
 
+  // Built-in washout: real wings are not flat plates, they carry a static
+  // twist from root to tip on top of whatever the stroke adds.
+  const washout = twistDeg * Math.PI / 180;
   for (let i = 0; i <= spanSteps; i++) {
     const t = i / spanSteps;
     const hw = halfWidth(t);
     const cx = sweep(t);
+    const a = -washout * t * t;
+    const ca = Math.cos(a), sa = Math.sin(a);
     for (let j = 0; j <= chordSteps; j++) {
       const c = j / chordSteps;
-      const x = cx + (c - 0.42) * 2 * hw;
-      const y = camberY(c) * (0.35 + 0.65 * Math.sin(Math.PI * Math.min(1, t * 1.4)));
+      const x0 = cx + (c - 0.42) * 2 * hw;
+      const y0 = camberY(c) * (0.35 + 0.65 * Math.sin(Math.PI * Math.min(1, t * 1.4)));
+      const x = x0 * ca - y0 * sa;
+      const y = x0 * sa + y0 * ca;
       const z = t * length;
       pos.push(x, y, z);
       nrm.push(0, 1, 0);

@@ -120,6 +120,7 @@ const gHead = fShape.addFolder('Head');
 [['headLength', 0.06, 0.3], ['headWidth', 0.06, 0.34], ['eyeRadius', 0.02, 0.14],
 ['eyeSeparation', 0.02, 0.16]].forEach(([k, a, b]) =>
   gHead.add(S, k, a, b, 0.001).onFinishChange(queueRebuild));
+gHead.add(S, 'eyeFacetDensity', 6, 60, 1).onFinishChange(queueRebuild);
 
 const gMouth = fShape.addFolder('Proboscis & palps');
 [['proboscisLength', 0.15, 1.0], ['proboscisBaseRadius', 0.005, 0.05],
@@ -127,6 +128,8 @@ const gMouth = fShape.addFolder('Proboscis & palps');
 ['labellaLength', 0.01, 0.12], ['palpLength', 0.0, 0.8], ['palpRadius', 0.003, 0.03]]
   .forEach(([k, a, b]) => gMouth.add(S, k, a, b, 0.001).onFinishChange(queueRebuild));
 gMouth.add(S, 'palpSegments', 2, 8, 1).onFinishChange(queueRebuild);
+gMouth.add(S, 'labiumSegments', 3, 14, 1).onFinishChange(queueRebuild);
+gMouth.add(S, 'labiumWallThickness', 0.08, 0.8, 0.01).onFinishChange(queueRebuild);
 gMouth.add(S, 'drillFluteCount', 2, 6, 1).onFinishChange(queueRebuild);
 gMouth.add(S, 'drillFlutePitch', 0.02, 0.3, 0.005).onFinishChange(queueRebuild);
 
@@ -164,6 +167,7 @@ const gLeg = fShape.addFolder('Legs');
 ['clawLength', 0.0, 0.08]]
   .forEach(([k, a, b]) => gLeg.add(S, k, a, b, 0.001).onFinishChange(queueRebuild));
 gLeg.add(S, 'legTarsomeres', 1, 7, 1).onFinishChange(queueRebuild);
+gLeg.add(S, 'legTaper', 0.1, 1.0, 0.01).onFinishChange(queueRebuild);
 
 /* -------- mechanics: live, no rebuild -------- */
 const fMech = gui.addFolder('Mechanics');
@@ -228,6 +232,8 @@ mProbe.add(M, 'sparkRate', 0, 400, 5);
 const mFeed = fMech.addFolder('Feeding');
 mFeed.add(M, 'pumpHz', 0.2, 12, 0.1);
 mFeed.add(M, 'pumpStroke', 0, 0.5, 0.005);
+mFeed.add(M, 'pumpPhaseOffset', 0, 1, 0.01);
+mFeed.add(M, 'distensionLag', 0.05, 4, 0.05);
 mFeed.add(M, 'drainRate', 0.1, 30, 0.1);
 mFeed.add(M, 'tankCapacity', 5, 200, 1).onChange((v) => {
   vehicle.capacity = v; vehicle.fuel = Math.min(vehicle.fuel, v);
