@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#101923" />
+    <title>Vector // Anopheles</title>
+  </head>
+  <body>
+    <main id="app">
+      <canvas id="scene"></canvas>
+      <div class="vignette"></div>
+      <div class="reticle" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <div class="readout" aria-label="simulation controls">
+        <div class="readout-top"><span class="mark"></span><span class="readout-dot"></span></div>
+        <label>scale <output id="scale-value">1.00</output><input id="scale" type="range" min="0.65" max="1.55" value="1" step="0.01"></label>
+        <label>wing rate <output id="wing-value">0.82</output><input id="wing" type="range" min="0.35" max="1.4" value="0.82" step="0.01"></label>
+        <label>approach <output id="approach-value">0.68</output><input id="approach" type="range" min="0.25" max="1" value="0.68" step="0.01"></label>
+        <label>drill force <output id="drill-value">0.72</output><input id="drill" type="range" min="0.25" max="1" value="0.72" step="0.01"></label>
+        <label>feed rate <output id="feed-value">0.65</output><input id="feed" type="range" min="0.2" max="1" value="0.65" step="0.01"></label>
+      </div>
+      <div class="fuel-meter" aria-label="fuel remaining"><span id="fuel-fill"></span></div>
+      <button class="reset" id="reset" aria-label="reset simulation"></button>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

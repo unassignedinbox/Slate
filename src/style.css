@@ -1,0 +1,34 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap');
+
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+body { background: #10161c; font-family: 'DM Mono', ui-monospace, monospace; }
+canvas { position: fixed; inset: 0; display: block; width: 100%; height: 100%; cursor: grab; }
+canvas:active { cursor: grabbing; }
+.vignette { pointer-events: none; position: fixed; inset: 0; background: radial-gradient(circle at 50% 42%, transparent 36%, rgba(5, 11, 15, .42) 118%), linear-gradient(90deg, rgba(5, 11, 14, .24), transparent 17%, transparent 83%, rgba(5, 11, 14, .24)); }
+.reticle { pointer-events: none; position: fixed; left: 50%; top: 50%; width: 26px; height: 26px; transform: translate(-50%, -50%); opacity: .76; }
+.reticle i { position: absolute; display: block; background: #dce8e8; box-shadow: 0 0 8px #b9ffff; }
+.reticle i:nth-child(1), .reticle i:nth-child(2) { height: 1px; width: 7px; top: 12px; }
+.reticle i:nth-child(1) { left: 0; } .reticle i:nth-child(2) { right: 0; }
+.reticle i:nth-child(3), .reticle i:nth-child(4) { width: 1px; height: 7px; left: 12px; }
+.reticle i:nth-child(3) { top: 0; } .reticle i:nth-child(4) { bottom: 0; }
+.readout { position: fixed; left: clamp(16px, 2.6vw, 42px); bottom: clamp(16px, 3vw, 42px); width: 190px; padding: 13px 14px 12px; background: linear-gradient(135deg, rgba(9, 19, 25, .83), rgba(12, 28, 35, .59)); border: 1px solid rgba(137, 203, 206, .35); border-left: 2px solid #b5f5ee; box-shadow: 0 12px 30px rgba(0, 0, 0, .25), inset 0 0 25px rgba(72, 165, 169, .05); backdrop-filter: blur(10px); user-select: none; }
+.readout::after { content: ''; position: absolute; top: -1px; right: -1px; width: 20px; height: 20px; border-top: 2px solid #b5f5ee; border-right: 2px solid #b5f5ee; }
+.readout-top { display: flex; justify-content: space-between; height: 10px; margin-bottom: 8px; }
+.mark { width: 31px; height: 2px; display: block; background: #c9fbef; box-shadow: 7px 4px 0 -0.5px #67a2a2, 14px 8px 0 -0.5px #67a2a2; }
+.readout-dot { width: 5px; height: 5px; border-radius: 50%; background: #68eab7; box-shadow: 0 0 10px 3px rgba(92, 239, 189, .6); animation: breathe 1.8s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: .25; transform: scale(.7); } }
+label { display: grid; grid-template-columns: 1fr 38px; align-items: center; gap: 3px 5px; padding: 5px 0 3px; color: #8eabae; font-size: 9px; letter-spacing: .075em; text-transform: uppercase; }
+output { text-align: right; color: #d2ecea; font-size: 9px; letter-spacing: 0; }
+input { grid-column: 1 / -1; appearance: none; height: 8px; margin: 0; padding: 0; background: linear-gradient(90deg, rgba(165,255,244,.58), rgba(165,255,244,.12)); clip-path: polygon(0 35%, 100% 35%, 100% 65%, 0 65%); cursor: ew-resize; }
+input::-webkit-slider-thumb { appearance: none; width: 7px; height: 7px; border: 1px solid #e1ffff; background: #81ded6; box-shadow: 0 0 8px #b5fff5; transform: rotate(45deg); }
+input::-moz-range-thumb { width: 6px; height: 6px; border: 1px solid #e1ffff; border-radius: 0; background: #81ded6; transform: rotate(45deg); }
+.fuel-meter { position: fixed; right: clamp(17px, 2.6vw, 42px); bottom: clamp(18px, 3vw, 42px); width: min(19vw, 240px); height: 5px; border: 1px solid rgba(219, 254, 247, .65); background: rgba(13, 27, 29, .55); box-shadow: 0 0 14px rgba(48, 199, 179, .15); transform: skewX(-25deg); }
+.fuel-meter::before, .fuel-meter::after { content: ''; position: absolute; right: 0; width: 1px; height: 12px; background: #d5fbf4; } .fuel-meter::before { top: -5px; } .fuel-meter::after { bottom: -5px; }
+.fuel-meter span { display: block; width: 100%; height: 100%; background: linear-gradient(90deg, #44c5aa, #e9d36d); box-shadow: 0 0 11px rgba(96, 246, 203, .8); transition: width .16s linear, background .5s; }
+.reset { position: fixed; right: clamp(17px, 2.6vw, 42px); top: clamp(18px, 3vw, 38px); width: 30px; height: 30px; border: 1px solid rgba(201, 240, 237, .65); border-radius: 50%; background: transparent; cursor: pointer; opacity: .7; }
+.reset::before { content: ''; position: absolute; width: 13px; height: 13px; left: 7px; top: 7px; border: 1px solid #e1f6f2; border-right-color: transparent; border-radius: 50%; }
+.reset::after { content: ''; position: absolute; border: 4px solid transparent; border-left-color: #e1f6f2; left: 4px; top: 6px; transform: rotate(26deg); }
+.reset:hover { opacity: 1; background: rgba(192, 255, 250, .1); }
+@media (max-width: 600px) { .readout { transform: scale(.87); transform-origin: bottom left; } .fuel-meter { width: 106px; } }
