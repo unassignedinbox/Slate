@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Tyrannosaurus rex — osteological rig</title>
+<style>
+  :root { --ink:#e8e3d8; --dim:#9aa3b2; --accent:#e0a55c; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:#0c0e12; color:var(--ink);
+    font:13px/1.45 ui-sans-serif,-apple-system,"Segoe UI",Inter,Roboto,sans-serif; overflow:hidden; }
+  #view { position:fixed; inset:0; display:block; }
+  .panel { position:fixed; backdrop-filter:blur(14px) saturate(120%);
+    background:rgba(18,21,27,.62); border:1px solid rgba(255,255,255,.08);
+    border-radius:14px; box-shadow:0 12px 40px rgba(0,0,0,.45); }
+  #controls { left:18px; top:18px; padding:14px; width:232px; }
+  h1 { margin:0 0 2px; font-size:14px; letter-spacing:.14em; text-transform:uppercase; font-weight:600; }
+  .sub { color:var(--dim); font-size:11px; margin-bottom:12px; letter-spacing:.03em; }
+  .row { display:flex; gap:6px; margin-bottom:8px; }
+  button { flex:1; padding:8px 6px; border-radius:9px; cursor:pointer;
+    background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.10);
+    color:var(--ink); font:inherit; font-size:12px; transition:.16s; }
+  button:hover { background:rgba(255,255,255,.11); transform:translateY(-1px); }
+  button.on { background:rgba(224,165,92,.20); border-color:rgba(224,165,92,.55); color:#ffd9a8; }
+  .lab { font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim); margin:12px 0 6px; }
+  .keys { color:var(--dim); font-size:10.5px; margin-top:12px; line-height:1.7; }
+  kbd { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12);
+    border-radius:4px; padding:0 4px; font:inherit; font-size:10px; }
+  #hud { right:18px; bottom:18px; padding:9px 14px; font-variant-numeric:tabular-nums;
+    color:var(--dim); font-size:11.5px; letter-spacing:.04em; }
+  #spec { left:18px; bottom:18px; padding:11px 14px; width:232px; color:var(--dim); font-size:10.5px; line-height:1.65; }
+  #spec b { color:var(--ink); font-weight:600; }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div id="controls" class="panel">
+  <h1>Tyrannosaurus&nbsp;rex</h1>
+  <div class="sub">FMNH PR2081 “Sue” proportions · 12.2 m</div>
+
+  <div class="lab">Locomotion</div>
+  <div class="row">
+    <button data-gait="idle" class="on">Idle</button>
+    <button data-gait="walk">Walk</button>
+    <button data-gait="run">Fast walk</button>
+  </div>
+
+  <div class="lab">Behaviour</div>
+  <div class="row">
+    <button id="roar">Roar</button>
+    <button id="sniff">Sniff</button>
+  </div>
+
+  <div class="lab">View</div>
+  <div class="row"><button id="follow" class="on">Follow camera</button></div>
+
+  <div class="keys">
+    <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> gait · <kbd>R</kbd> roar · <kbd>S</kbd> sniff<br>
+    <kbd>F</kbd> follow · drag to orbit · scroll to zoom
+  </div>
+</div>
+
+<div id="spec" class="panel">
+  <b>Rig</b> 10 cervical · 13 dorsal · 5 sacral · 40 caudal vertebrae,
+  each an independent joint. Hindlimb solved by 3-segment IK against a
+  world-anchored foot path — planted feet do not slide.
+  Tail and neck run on a delay-line spring chain (travelling wave, overshoot, settle).
+</div>
+
+<div id="hud" class="panel">—</div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
