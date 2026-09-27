@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#111715" />
+  <title>Osteomotion — T. rex skeleton lab</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="Osteomotion home">
+        <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+        <span>
+          <strong>OSTEOMOTION</strong>
+          <small>digital osteology lab</small>
+        </span>
+      </a>
+      <nav class="primary-nav" aria-label="Primary navigation">
+        <a href="#motion" class="active">Motion lab</a>
+        <a href="#anatomy">Anatomy</a>
+        <a href="#evidence">Evidence</a>
+      </nav>
+      <div class="topbar-meta"><span class="status-dot"></span> 2D skeletal study <span class="slash">/</span> v1.0</div>
+    </header>
+
+    <main id="top">
+      <section class="intro" aria-labelledby="page-title">
+        <div class="eyebrow"><span>SPECIMEN 01</span><i></i><span>TYRANNOSAURUS REX</span></div>
+        <h1 id="page-title">Read the bones.<br /><em>Follow the motion.</em></h1>
+        <p class="intro-copy">A research-led 2D osteological reconstruction of an adult <i>Tyrannosaurus rex</i>. Built around a horizontal vertebral column, a compliant 47-element tail, and the narrow, bird-like hindlimb posture supported by modern trackway evidence.</p>
+        <div class="intro-notes" aria-label="Model notes">
+          <span><b>FORM</b> articulated bone only</span>
+          <span><b>BASE</b> Trix / RGM 792.000</span>
+          <span><b>VIEW</b> left lateral</span>
+        </div>
+      </section>
+
+      <section class="workbench" id="motion" aria-label="T. rex motion laboratory">
+        <div class="stage-card">
+          <div class="stage-head">
+            <div>
+              <div class="section-kicker">OSTEO-MOTION / 01</div>
+              <h2>Articulation study</h2>
+            </div>
+            <div class="stage-head-right">
+              <span class="live-label"><span class="live-pulse"></span> LIVE MODEL</span>
+              <button class="icon-button" id="labelsToggle" type="button" aria-pressed="true" title="Toggle anatomy labels">Aa</button>
+              <button class="icon-button" id="mechanicsToggle" type="button" aria-pressed="true" title="Toggle motion mechanics overlay">⌁</button>
+            </div>
+          </div>
+
+          <div class="viewport-wrap">
+            <div class="viewport-toolbar">
+              <span class="view-label">LATERAL PROJECTION <b>← caudal / cranial →</b></span>
+              <div class="zoom-controls" aria-label="Zoom controls">
+                <button type="button" id="zoomOut" aria-label="Zoom out">−</button>
+                <span id="zoomValue">100%</span>
+                <button type="button" id="zoomIn" aria-label="Zoom in">+</button>
+                <button type="button" id="zoomReset" aria-label="Reset zoom">↺</button>
+              </div>
+            </div>
+            <div class="viewport" id="viewport">
+              <svg id="skeletonCanvas" viewBox="0 0 1200 850" role="img" aria-labelledby="svgTitle svgDesc" preserveAspectRatio="xMidYMid meet">
+                <title id="svgTitle">Animated lateral skeleton of Tyrannosaurus rex</title>
+                <desc id="svgDesc">A bone-only, left lateral 2D articulation study with individual tail vertebrae, ribs, skull, pelvis, arms and hindlimbs.</desc>
+                <defs>
+                  <linearGradient id="boneFill" x1="0" x2="1" y1="0" y2="1">
+                    <stop offset="0" stop-color="#f2dfad" />
+                    <stop offset="0.48" stop-color="#d5bb7e" />
+                    <stop offset="1" stop-color="#9b7a45" />
+                  </linearGradient>
+                  <linearGradient id="boneLight" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0" stop-color="#fff1be" />
+                    <stop offset="1" stop-color="#c29a5b" />
+                  </linearGradient>
+                  <linearGradient id="farBone" x1="0" x2="1" y1="0" y2="1">
+                    <stop offset="0" stop-color="#a89064" />
+                    <stop offset="1" stop-color="#635844" />
+                  </linearGradient>
+                  <radialGradient id="jointFill" cx="40%" cy="30%">
+                    <stop offset="0" stop-color="#f8e9bd" />
+                    <stop offset="0.7" stop-color="#c9a665" />
+                    <stop offset="1" stop-color="#80643d" />
+                  </radialGradient>
+                  <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="5" result="blur" />
+                    <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                  </filter>
+                  <filter id="subtleShadow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity=".35" />
+                  </filter>
+                  <pattern id="gridPattern" width="48" height="48" patternUnits="userSpaceOnUse">
+                    <path d="M 48 0 L 0 0 0 48" fill="none" stroke="#a1b7a6" stroke-opacity=".045" stroke-width="1" />
+                  </pattern>
+                </defs>
+                <rect width="1200" height="850" fill="#17211d" />
+                <rect width="1200" height="850" fill="url(#gridPattern)" />
+                <g id="stageRulers" aria-hidden="true"></g>
+                <g id="skeleton" filter="url(#subtleShadow)">
+                  <g id="farLimbs"></g>
+                  <g id="tail"></g>
+                  <g id="ribs"></g>
+                  <g id="spine"></g>
+                  <g id="pelvis"></g>
+                  <g id="nearLimbs"></g>
+                  <g id="skull"></g>
+                </g>
+                <g id="mechanics" aria-hidden="true"></g>
+                <g id="annotations" aria-hidden="true"></g>
+                <g id="groundLine" aria-hidden="true"></g>
+              </svg>
+              <div class="scale-readout"><span class="scale-bar"></span><span>2 m reference</span></div>
+              <div class="model-tag"><span class="tag-dot"></span><span id="modelTagText">WALK / 0.66 Hz</span></div>
+            </div>
+          </div>
+
+          <div class="transport" aria-label="Playback controls">
+            <button class="play-button" id="playToggle" type="button" aria-label="Pause animation"><span class="play-icon">Ⅱ</span><span id="playText">Pause</span></button>
+            <div class="scrub-wrap">
+              <div class="scrub-top"><span id="cycleLabel">CYCLE 01 / WALK</span><span id="timeLabel">00.00 s</span></div>
+              <input id="timeline" type="range" min="0" max="1000" value="0" step="1" aria-label="Animation timeline" />
+              <div class="scrub-ticks"><span>CONTACT</span><span>MID-STANCE</span><span>SWING</span><span>CONTACT</span></div>
+            </div>
+            <div class="speed-control" role="group" aria-label="Playback speed">
+              <span>SPEED</span>
+              <button type="button" data-speed="0.5">.5×</button>
+              <button type="button" data-speed="1" class="selected">1×</button>
+              <button type="button" data-speed="2">2×</button>
+            </div>
+          </div>
+
+          <div class="mode-tabs" role="tablist" aria-label="Movement cycle">
+            <button class="mode-tab active" data-mode="walk" role="tab" aria-selected="true"><span class="mode-index">01</span><span><b>Walk</b><small>resonant gait</small></span><span class="tab-arrow">↗</span></button>
+            <button class="mode-tab" data-mode="run" role="tab" aria-selected="false"><span class="mode-index">02</span><span><b>Run</b><small>fast walk / no turn</small></span><span class="tab-arrow">↗</span></button>
+            <button class="mode-tab" data-mode="idle" role="tab" aria-selected="false"><span class="mode-index">03</span><span><b>Idle</b><small>weight shift</small></span><span class="tab-arrow">↗</span></button>
+            <button class="mode-tab" data-mode="roar" role="tab" aria-selected="false"><span class="mode-index">04</span><span><b>Roar</b><small>neck + jaw</small></span><span class="tab-arrow">↗</span></button>
+            <button class="mode-tab" data-mode="sniff" role="tab" aria-selected="false"><span class="mode-index">05</span><span><b>Sniff</b><small>head search</small></span><span class="tab-arrow">↗</span></button>
+          </div>
+        </div>
+
+        <aside class="inspector" aria-label="Model inspector">
+          <div class="inspector-section specimen-section">
+            <div class="section-kicker">SPECIMEN RECORD</div>
+            <div class="specimen-title"><span class="specimen-number">01</span><div><h3>RGM 792.000</h3><p>“Trix” / adult female</p></div></div>
+            <div class="confidence"><span>osteological confidence</span><b>HIGH</b><i><em></em></i></div>
+          </div>
+
+          <div class="inspector-section active-cycle">
+            <div class="section-kicker">ACTIVE CYCLE</div>
+            <h3 id="cycleTitle">Resonant walk</h3>
+            <p id="cycleDescription">A measured, alternating bipedal gait. The tail is not a rigid counterweight: its interspinous ligaments are represented as a delayed vertical wave.</p>
+            <div class="cycle-facts"><span><b id="cycleHz">0.66</b><small>Hz cadence</small></span><span><b id="cycleSpeed">4.6</b><small>km/h model</small></span><span><b id="cyclePhase">180°</b><small>leg phase</small></span></div>
+          </div>
+
+          <div class="inspector-section anatomy-key" id="anatomy">
+            <div class="section-kicker">BONE MAP</div>
+            <div class="key-row"><span class="key-swatch spine-swatch"></span><span><b>Axial column</b><small>10 cervical · 13 dorsal · 5 sacral</small></span></div>
+            <div class="key-row"><span class="key-swatch tail-swatch"></span><span><b>Caudal series</b><small>47 modeled vertebrae / tapering</small></span></div>
+            <div class="key-row"><span class="key-swatch limb-swatch"></span><span><b>Hindlimb</b><small>femur · tibia/fibula · arctometatarsus</small></span></div>
+            <div class="key-row"><span class="key-swatch gastralia-swatch"></span><span><b>Gastralia</b><small>segmented belly ribs</small></span></div>
+          </div>
+
+          <div class="inspector-section mechanics-note">
+            <div class="note-mark">↗</div>
+            <div><b>Read the mechanics</b><p>Large caudofemoral muscles would anchor along the tail base; the animation keeps that lever arm visible instead of hiding it in flesh.</p></div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="metrics-strip" aria-label="Model measurements">
+        <div class="metric"><span class="metric-label">TOTAL LENGTH</span><strong>12.0 <small>m</small></strong><span class="metric-note">Trix-informed adult scale</span></div>
+        <div class="metric"><span class="metric-label">TAIL SERIES</span><strong>47 <small>caudals</small></strong><span class="metric-note">Sue mount reference count</span></div>
+        <div class="metric"><span class="metric-label">TAIL RESONANCE</span><strong>0.66 <small>s⁻¹</small></strong><span class="metric-note">baseline natural frequency</span></div>
+        <div class="metric"><span class="metric-label">ARMS</span><strong>2 <small>digits</small></strong><span class="metric-note">functional claws / each hand</span></div>
+      </section>
+
+      <section class="evidence-section" id="evidence" aria-labelledby="evidence-title">
+        <div class="evidence-heading"><div class="section-kicker">METHOD / SOURCES</div><h2 id="evidence-title">Built from evidence,<br /><em>not a movie pose.</em></h2><p>The viewer separates what the fossil tells us from what the animation has to infer. Bone counts and proportions follow published osteology; motion uses a conservative, explicitly labeled biomechanical model.</p></div>
+        <div class="source-list">
+          <a class="source-card" href="https://royalsocietypublishing.org/doi/10.1098/rsos.201441" target="_blank" rel="noreferrer"><span class="source-no">01</span><div><b>Van Bijlert, van Soest &amp; Schulp · 2021</b><span>Natural-frequency method for the tail of <i>T. rex</i>; 0.66 s⁻¹ baseline and 1.28 m/s preferred walking speed.</span></div><span class="external">↗</span></a>
+          <a class="source-card" href="https://www.fieldmuseum.org/page/3d-model-tyrannosaurus-rex" target="_blank" rel="noreferrer"><span class="source-no">02</span><div><b>Field Museum · SUE 3D model</b><span>Specimen-based skeletal reference for the largest and most complete <i>T. rex</i> skeleton.</span></div><span class="external">↗</span></a>
+          <a class="source-card" href="https://www.amnh.org/exhibitions/permanent/saurischian-dinosaurs/tyrannosaurus-rex" target="_blank" rel="noreferrer"><span class="source-no">03</span><div><b>American Museum of Natural History</b><span>Horizontal stalking posture and corrected museum mount context; no upright “kangaroo” stance.</span></div><span class="external">↗</span></a>
+          <a class="source-card" href="https://doi.org/10.1002/jmor.10018" target="_blank" rel="noreferrer"><span class="source-no">04</span><div><b>Carrano &amp; Hutchinson · 2002</b><span>Pelvic and hindlimb musculature reference used to keep the femur, knee, ankle and foot mechanically plausible.</span></div><span class="external">↗</span></a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer"><span>OSTEOMOTION / <i>T. rex</i> articulation study</span><span>All motion is an informed reconstruction, not a claim of direct fossil observation.</span></footer>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
