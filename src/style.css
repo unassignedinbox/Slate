@@ -1,0 +1,439 @@
+:root {
+  --amber: #ffb01e;
+  --cyan: #2fe6ff;
+  --pink: #ff3fa8;
+  --ink: rgba(6, 10, 18, 0.72);
+  --edge: rgba(47, 230, 255, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #05070c;
+  font-family: "Rajdhani", "DIN Alternate", "Segoe UI", system-ui, sans-serif;
+  color: #e9f4ff;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+#scene {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ------------------------------------------------------------ loading */
+#loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  background: radial-gradient(circle at 50% 40%, #1a2233, #05070c 70%);
+  z-index: 50;
+  transition: opacity 0.6s ease;
+}
+#loading.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+.lodTitle {
+  font-size: 68px;
+  font-weight: 900;
+  letter-spacing: 16px;
+  color: var(--amber);
+  text-shadow: 0 0 30px rgba(255, 176, 30, 0.5);
+}
+.lodSub {
+  margin-top: 10px;
+  letter-spacing: 6px;
+  color: #7fa7c4;
+  font-size: 13px;
+}
+
+/* ---------------------------------------------------------------- HUD */
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+body.hide-hud #hud > *:not(#bigMsg) {
+  opacity: 0;
+}
+
+.panel {
+  position: absolute;
+  background: var(--ink);
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  padding: 10px 12px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 0 22px rgba(0, 0, 0, 0.45), inset 0 0 26px rgba(47, 230, 255, 0.05);
+  transition: opacity 0.3s;
+}
+.panel::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3px;
+  height: 100%;
+  background: linear-gradient(180deg, var(--cyan), transparent);
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  font-size: 13px;
+  letter-spacing: 2px;
+  line-height: 1.75;
+  color: #8fb3cc;
+}
+.row b {
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  font-size: 14px;
+}
+.row.head b {
+  color: var(--amber);
+  font-size: 19px;
+}
+.row.best b {
+  color: var(--pink);
+}
+.row.dim {
+  opacity: 0.6;
+  font-size: 11px;
+}
+
+#timing {
+  left: 18px;
+  top: 18px;
+  min-width: 210px;
+}
+.sector {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.16);
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: var(--amber);
+}
+
+#status {
+  right: 18px;
+  top: 18px;
+  min-width: 190px;
+}
+
+#mapPanel {
+  left: 18px;
+  bottom: 18px;
+  padding: 8px 8px 6px;
+}
+#minimap {
+  display: block;
+  border-radius: 2px;
+}
+.maplabel {
+  margin-top: 4px;
+  font-size: 10px;
+  letter-spacing: 2.5px;
+  color: #7fa7c4;
+  text-align: center;
+}
+
+/* -------------------------------------------------------------- speedo */
+#speedo {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  width: 260px;
+  text-align: right;
+  transition: opacity 0.3s;
+}
+.dial {
+  position: absolute;
+  right: 6px;
+  bottom: 54px;
+  width: 168px;
+  height: 168px;
+  pointer-events: none;
+}
+.dialFace {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(47, 230, 255, 0.22);
+  background: conic-gradient(
+      from 210deg,
+      rgba(47, 230, 255, 0.18) 0deg,
+      rgba(47, 230, 255, 0.12) 160deg,
+      rgba(255, 176, 30, 0.22) 200deg,
+      rgba(255, 63, 168, 0.35) 240deg,
+      transparent 240deg
+    ),
+    radial-gradient(circle, rgba(5, 10, 18, 0.7) 55%, transparent 62%);
+  mask: radial-gradient(circle, transparent 54%, #000 56%);
+  -webkit-mask: radial-gradient(circle, transparent 54%, #000 56%);
+}
+#needle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 74px;
+  margin-left: -1.5px;
+  margin-top: -74px;
+  transform-origin: 50% 100%;
+  background: linear-gradient(180deg, var(--pink), rgba(255, 63, 168, 0.1));
+  box-shadow: 0 0 12px rgba(255, 63, 168, 0.8);
+  transform: rotate(-120deg);
+  transition: transform 0.08s linear;
+}
+.readout {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 8px;
+}
+#speed {
+  font-size: 74px;
+  font-weight: 900;
+  line-height: 0.85;
+  letter-spacing: -2px;
+  font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  color: #fff;
+  text-shadow: 0 0 26px rgba(47, 230, 255, 0.55);
+}
+.unit {
+  font-size: 13px;
+  letter-spacing: 4px;
+  color: var(--cyan);
+}
+.gearBox {
+  margin-top: 4px;
+  font-size: 12px;
+  letter-spacing: 3px;
+  color: #8fb3cc;
+}
+.gearBox b {
+  color: var(--amber);
+  font-size: 22px;
+  margin-left: 8px;
+}
+.boost {
+  margin-top: 6px;
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: #8fb3cc;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.boostBar {
+  width: 150px;
+  height: 9px;
+  border: 1px solid var(--edge);
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.boostBar i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #17607a, var(--cyan));
+  transition: width 0.1s linear;
+}
+.boostBar i.burning {
+  background: linear-gradient(90deg, var(--amber), var(--pink));
+  box-shadow: 0 0 14px var(--pink);
+}
+
+/* ------------------------------------------------------------ messages */
+#bigMsg {
+  position: absolute;
+  top: 16%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 64px;
+  font-weight: 900;
+  letter-spacing: 12px;
+  color: #fff;
+  text-shadow: 0 0 40px rgba(47, 230, 255, 0.6), 0 6px 26px rgba(0, 0, 0, 0.8);
+  opacity: 0;
+  transform: scale(0.94);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+#bigMsg.show {
+  opacity: 1;
+  transform: scale(1);
+}
+#subMsg {
+  position: absolute;
+  top: calc(16% + 74px);
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 15px;
+  letter-spacing: 8px;
+  color: var(--amber);
+}
+
+/* ---------------------------------------------------------------- help */
+#helpToggle {
+  position: absolute;
+  right: 18px;
+  top: 118px;
+  pointer-events: auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--edge);
+  background: var(--ink);
+  color: var(--cyan);
+  font-size: 15px;
+  cursor: pointer;
+}
+#help {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%) translateY(140%);
+  width: min(620px, 74vw);
+  background: var(--ink);
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  padding: 14px 20px 16px;
+  backdrop-filter: blur(6px);
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+  pointer-events: auto;
+}
+#help.open {
+  transform: translateX(-50%) translateY(0);
+}
+#help h3 {
+  margin: 0 0 2px;
+  font-size: 16px;
+  letter-spacing: 5px;
+  color: var(--amber);
+}
+#help .tag {
+  margin: 0 0 8px;
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: #8fb3cc;
+}
+#help .tag.small {
+  margin: 8px 0 0;
+  font-size: 11px;
+  opacity: 0.8;
+}
+#help ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  columns: 2;
+  font-size: 12.5px;
+  letter-spacing: 1.4px;
+  color: #cfe3f2;
+  line-height: 2;
+}
+kbd {
+  display: inline-block;
+  min-width: 20px;
+  padding: 1px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.07);
+  font-family: inherit;
+  font-size: 11px;
+  text-align: center;
+}
+
+/* --------------------------------------------------------------- touch */
+#touch {
+  display: none;
+}
+@media (pointer: coarse) {
+  #touch {
+    display: block;
+  }
+  #touch button {
+    position: absolute;
+    pointer-events: auto;
+    width: 74px;
+    height: 74px;
+    border-radius: 50%;
+    border: 1px solid var(--edge);
+    background: rgba(6, 10, 18, 0.5);
+    color: #cfe3f2;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+  #touch button[data-touch="left"] {
+    left: 16px;
+    bottom: 26px;
+  }
+  #touch button[data-touch="right"] {
+    left: 104px;
+    bottom: 26px;
+  }
+  #touch button[data-touch="gas"] {
+    right: 16px;
+    bottom: 26px;
+    background: rgba(47, 230, 255, 0.16);
+  }
+  #touch button[data-touch="brake"] {
+    right: 104px;
+    bottom: 26px;
+  }
+  #touch button[data-touch="boost"] {
+    right: 16px;
+    bottom: 112px;
+    background: rgba(255, 63, 168, 0.18);
+  }
+  #mapPanel {
+    display: none;
+  }
+  #speedo {
+    bottom: 120px;
+  }
+}
+
+@media (max-width: 720px) {
+  #bigMsg {
+    font-size: 38px;
+    letter-spacing: 6px;
+  }
+  #help ul {
+    columns: 1;
+  }
+  #speedo {
+    width: 180px;
+  }
+  #speed {
+    font-size: 50px;
+  }
+  .dial {
+    display: none;
+  }
+}

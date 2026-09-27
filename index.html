@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>MOTORBALL — Iron City Grand Prix</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+
+    <div id="loading">
+      <div class="lodTitle">MOTORBALL</div>
+      <div class="lodSub">BUILDING IRON CITY CIRCUIT…</div>
+    </div>
+
+    <!-- ------------------------------------------------------- HUD -->
+    <div id="hud">
+      <!-- top left: timing tower -->
+      <div class="panel" id="timing">
+        <div class="row head"><span>LAP</span><b id="lap">0/5</b></div>
+        <div class="row"><span>TIME</span><b id="curTime">--:--.---</b></div>
+        <div class="row"><span>LAST</span><b id="lastTime">--:--.---</b></div>
+        <div class="row best"><span>BEST</span><b id="bestTime">--:--.---</b></div>
+        <div class="sector" id="sector">GRID</div>
+      </div>
+
+      <!-- top right: status -->
+      <div class="panel" id="status">
+        <div class="row"><span>CAM</span><b id="camMode">CHASE</b></div>
+        <div class="row"><span>CAR</span><b id="liveryName">BATTLE ANGEL 99</b></div>
+        <div class="row dim"><span>PERF</span><b id="fps">60 FPS</b></div>
+      </div>
+
+      <!-- bottom left: minimap -->
+      <div class="panel" id="mapPanel">
+        <canvas id="minimap" width="240" height="190"></canvas>
+        <div class="maplabel">IRON CITY CIRCUIT · 1.65 KM</div>
+      </div>
+
+      <!-- bottom right: speed -->
+      <div id="speedo">
+        <div class="dial">
+          <div id="needle"></div>
+          <div class="dialFace"></div>
+        </div>
+        <div class="readout">
+          <div id="speed">000</div>
+          <div class="unit">KM/H</div>
+        </div>
+        <div class="gearBox"><span>GEAR</span><b id="gear">1</b></div>
+        <div class="boost">
+          <span>BOOST</span>
+          <div class="boostBar"><i id="boostFill"></i></div>
+        </div>
+      </div>
+
+      <div id="bigMsg" class="show">MOTORBALL CIRCUIT</div>
+      <div id="subMsg"></div>
+
+      <!-- touch controls -->
+      <div id="touch">
+        <button data-touch="left">◀</button>
+        <button data-touch="right">▶</button>
+        <button data-touch="brake">BRK</button>
+        <button data-touch="boost">N2O</button>
+        <button data-touch="gas">GAS</button>
+      </div>
+
+      <button id="helpToggle">?</button>
+      <div id="help" class="open">
+        <h3>MOTORBALL — IRON CITY GRAND PRIX</h3>
+        <p class="tag">Alita's motorball track, redesigned for race cars.</p>
+        <ul>
+          <li><kbd>W</kbd>/<kbd>↑</kbd> throttle &nbsp; <kbd>S</kbd>/<kbd>↓</kbd> brake &amp; reverse</li>
+          <li><kbd>A</kbd><kbd>D</kbd>/<kbd>←</kbd><kbd>→</kbd> steer</li>
+          <li><kbd>Shift</kbd> nitrous &nbsp; <kbd>Space</kbd> handbrake / drift</li>
+          <li><kbd>C</kbd> camera &nbsp; <kbd>R</kbd> restart &nbsp; <kbd>L</kbd> livery</li>
+          <li><kbd>M</kbd> engine audio &nbsp; <kbd>B</kbd> bloom &nbsp; <kbd>H</kbd> hide HUD</li>
+          <li><kbd>`</kbd> toggle this panel</li>
+        </ul>
+        <p class="tag small">Ride the banking through The Bowl, hit the tunnel at The Undercross, and fly the crossover Bridge. Gamepad supported.</p>
+      </div>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
