@@ -40,7 +40,7 @@ const C = {
   policeBlue: new THREE.MeshStandardMaterial({ color: 0x104e71, metalness: 0.75, roughness: 0.19 }),
   policePale: new THREE.MeshStandardMaterial({ color: 0x7acbd1, metalness: 0.7, roughness: 0.2, emissive: 0x08212a, emissiveIntensity: 0.7 }),
   black: new THREE.MeshStandardMaterial({ color: 0x04080a, metalness: 0.65, roughness: 0.18 }),
-  eye: new THREE.MeshPhysicalMaterial({ color: 0x031d22, metalness: 0.15, roughness: 0.05, clearcoat: 1, emissive: 0x0db8c5, emissiveIntensity: 1.8 }),
+  eye: new THREE.MeshPhysicalMaterial({ color: 0x020606, metalness: 0.18, roughness: 0.08, clearcoat: 1, emissive: 0x06454b, emissiveIntensity: 0.45 }),
   amber: new THREE.MeshPhysicalMaterial({ color: 0xffb738, transparent: true, opacity: 0.66, roughness: 0.13, metalness: 0.12, emissive: 0x673000, emissiveIntensity: 0.7, depthWrite: false }),
   red: new THREE.MeshStandardMaterial({ color: 0xff3d38, emissive: 0xff0800, emissiveIntensity: 2.8, roughness: 0.22 }),
   cyan: new THREE.MeshStandardMaterial({ color: 0x51f7ed, emissive: 0x13d7cc, emissiveIntensity: 2.4, roughness: 0.2 }),
@@ -149,28 +149,33 @@ const UP = new THREE.Vector3(0, 1, 0);
 
 function makeWing(side) {
   const hinge = new THREE.Group();
-  hinge.position.set(side * .16, .14, -.02);
+  // Mosquito wings emerge above the thorax and trail behind it; they are deliberately narrow, not insect-sized fans.
+  hinge.position.set(side * .18, .18, .06);
   const wing = new THREE.Group();
   hinge.add(wing);
   const shape = new THREE.Shape();
-  shape.moveTo(0, -.06);
-  shape.quadraticCurveTo(side * .58, -.39, side * 1.48, -.14);
-  shape.quadraticCurveTo(side * 1.58, .1, side * .92, .38);
-  shape.quadraticCurveTo(side * .22, .42, 0, .06);
-  const wingMat = new THREE.MeshPhysicalMaterial({ color: 0xb7eff4, transparent: true, opacity: .39, roughness: .1, metalness: .18, side: THREE.DoubleSide, depthWrite: false });
+  shape.moveTo(0, -.025);
+  shape.quadraticCurveTo(side * .34, -.16, side * .98, -.15);
+  shape.quadraticCurveTo(side * 1.58, -.10, side * 1.77, .03);
+  shape.quadraticCurveTo(side * 1.17, .17, side * .48, .18);
+  shape.quadraticCurveTo(side * .12, .13, 0, .025);
+  const wingMat = new THREE.MeshPhysicalMaterial({ color: 0x8dc6c7, transparent: true, opacity: .31, roughness: .17, metalness: .12, side: THREE.DoubleSide, depthWrite: false });
   const membrane = mesh(new THREE.ShapeGeometry(shape), wingMat, false, false);
   membrane.rotation.x = Math.PI / 2;
   wing.add(membrane);
-  const veins = [];
-  const veinMat = new THREE.LineBasicMaterial({ color: 0x5a9aa0, transparent: true, opacity: .78 });
-  const lines = [
-    [[0, 0, 0], [side * 1.38, 0, -.08]],
-    [[side * .25, 0, -.01], [side * .76, 0, .3]],
-    [[side * .48, 0, -.035], [side * 1.13, 0, .15]],
-    [[side * .85, 0, -.08], [side * 1.42, 0, -.05]],
+  const veinMat = new THREE.LineBasicMaterial({ color: 0x31575a, transparent: true, opacity: .92 });
+  const veins = [
+    [[0, 0, 0], [side * 1.67, 0, .025]],
+    [[side * .2, 0, 0], [side * .65, 0, .16]],
+    [[side * .45, 0, 0], [side * 1.1, 0, .13]],
+    [[side * .8, 0, .005], [side * 1.42, 0, .075]],
+    [[side * .3, 0, -.03], [side * .84, 0, -.13]],
   ];
-  lines.forEach((points) => { const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points.map(p => new THREE.Vector3(...p))), veinMat); wing.add(line); veins.push(line); });
-  const hub = mesh(new THREE.SphereGeometry(.115, 10, 8), C.edge); wing.add(hub);
+  veins.forEach((points) => {
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points.map((p) => new THREE.Vector3(...p))), veinMat);
+    wing.add(line);
+  });
+  const hub = mesh(new THREE.SphereGeometry(.075, 10, 8), C.edge); wing.add(hub);
   return { hinge, wing, membrane, side };
 }
 
@@ -179,76 +184,107 @@ function createMosquito() {
   const anatomy = new THREE.Group();
   root.add(anatomy);
   world.add(root);
-  const thorax = mesh(new THREE.SphereGeometry(.48, 22, 16), C.steel); thorax.scale.set(1.05, .85, 1.2); anatomy.add(thorax);
-  const thoraxShell = mesh(new THREE.SphereGeometry(.493, 22, 10, 0, Math.PI * 2, 0, Math.PI * .66), C.policeBlue); thoraxShell.scale.set(1.055, .86, 1.205); thoraxShell.rotation.x = -.35; anatomy.add(thoraxShell);
-  const backSpine = mesh(new THREE.BoxGeometry(.16, .04, .82), C.policePale); backSpine.position.set(0, .42, .13); backSpine.rotation.x = -.12; anatomy.add(backSpine);
-  const abdomen = new THREE.Group(); abdomen.position.z = .83; anatomy.add(abdomen);
-  const abdomenShell = mesh(new THREE.CylinderGeometry(.17, .37, 1.7, 20), C.steel); abdomenShell.rotation.x = Math.PI / 2; abdomen.add(abdomenShell);
-  const reservoir = mesh(new THREE.CylinderGeometry(.115, .285, 1.54, 16), C.amber, false); reservoir.rotation.x = Math.PI / 2; reservoir.position.z = .02; abdomen.add(reservoir);
+
+  // Restrained police hardware follows real mosquito anatomy rather than replacing it with a cartoon robot shell.
+  const cuticle = new THREE.MeshStandardMaterial({ color: 0x151f22, metalness: .78, roughness: .34 });
+  const stripe = new THREE.MeshStandardMaterial({ color: 0x91a9a1, metalness: .72, roughness: .25 });
+  const thorax = mesh(new THREE.SphereGeometry(.42, 24, 16), cuticle); thorax.scale.set(.83, .72, 1.06); anatomy.add(thorax);
+  const dorsalPlate = mesh(new THREE.SphereGeometry(.425, 20, 10, 0, Math.PI * 2, 0, Math.PI * .42), C.policeBlue);
+  dorsalPlate.scale.set(.835, .725, 1.065); dorsalPlate.rotation.x = -.15; dorsalPlate.position.y = .055; anatomy.add(dorsalPlate);
+  const dorsalSeam = mesh(new THREE.BoxGeometry(.04, .025, .71), C.policePale); dorsalSeam.position.set(0, .34, .08); anatomy.add(dorsalSeam);
+
+  const abdomen = new THREE.Group(); abdomen.position.set(0, .005, .72); anatomy.add(abdomen);
+  const reservoir = mesh(new THREE.CylinderGeometry(.105, .285, 1.62, 16), C.amber, false);
+  reservoir.rotation.x = Math.PI / 2; reservoir.position.z = .09; abdomen.add(reservoir);
   const bands = [];
-  for (let i = 0; i < 5; i++) {
-    const ring = mesh(new THREE.TorusGeometry(.32 - i * .028, .024, 6, 18), i % 2 ? C.policePale : C.black);
-    ring.rotation.x = Math.PI / 2; ring.position.z = -.5 + i * .29; abdomen.add(ring); bands.push(ring);
+  for (let i = 0; i < 7; i++) {
+    const r = .295 - i * .023;
+    const segment = mesh(new THREE.SphereGeometry(.5, 18, 12), i % 2 ? cuticle : C.steelDark);
+    segment.scale.set(r * 1.02, r * .76, .185);
+    segment.position.z = -.55 + i * .255;
+    abdomen.add(segment);
+    const band = mesh(new THREE.TorusGeometry(r * .9, .012, 6, 18), stripe);
+    band.rotation.x = Math.PI / 2; band.position.z = segment.position.z - .105; abdomen.add(band); bands.push(band);
   }
-  const tail = mesh(new THREE.ConeGeometry(.17, .32, 14), C.steel); tail.rotation.x = Math.PI / 2; tail.position.z = 1.01; abdomen.add(tail);
-  const head = new THREE.Group(); head.position.z = -.57; anatomy.add(head);
-  const headShell = mesh(new THREE.SphereGeometry(.36, 18, 14), C.steel); headShell.scale.set(1.05, .9, .92); head.add(headShell);
+  const tail = mesh(new THREE.ConeGeometry(.115, .31, 12), cuticle); tail.rotation.x = Math.PI / 2; tail.position.z = 1.15; abdomen.add(tail);
+
+  const head = new THREE.Group(); head.position.set(0, .005, -.48); anatomy.add(head);
+  const headShell = mesh(new THREE.SphereGeometry(.255, 18, 14), cuticle); headShell.scale.set(1.04, .84, .9); head.add(headShell);
   const eyes = [];
   for (const side of [-1, 1]) {
-    const eye = mesh(new THREE.SphereGeometry(.25, 16, 12), C.eye); eye.scale.set(.72, 1.1, .78); eye.position.set(side * .225, .03, -.18); head.add(eye); eyes.push(eye);
-    const eyeRing = mesh(new THREE.TorusGeometry(.2, .022, 6, 16), C.edge); eyeRing.position.set(side * .245, .03, -.19); eyeRing.rotation.y = Math.PI / 2; head.add(eyeRing);
+    const eye = mesh(new THREE.SphereGeometry(.155, 16, 12), C.eye); eye.scale.set(.72, .95, .74); eye.position.set(side * .16, .015, -.125); head.add(eye); eyes.push(eye);
+    const socket = mesh(new THREE.TorusGeometry(.127, .009, 5, 14), C.steel); socket.position.copy(eye.position); socket.rotation.y = Math.PI / 2; head.add(socket);
   }
-  const snout = mesh(new THREE.CylinderGeometry(.105, .135, .28, 12), C.black); snout.rotation.x = -Math.PI / 2; snout.position.z = -.31; head.add(snout);
-  const proboscis = new THREE.Group(); proboscis.position.z = -.39; head.add(proboscis);
-  const needle = mesh(new THREE.CylinderGeometry(.035, .055, 1.08, 10), C.edge); needle.rotation.x = -Math.PI / 2; needle.position.z = -.53; proboscis.add(needle);
-  const needleTip = mesh(new THREE.ConeGeometry(.038, .2, 10), C.black); needleTip.rotation.x = -Math.PI / 2; needleTip.position.z = -1.16; proboscis.add(needleTip);
-  const fuelTubeMat = new THREE.MeshPhysicalMaterial({ color: 0xffbc43, transparent: true, opacity: .05, emissive: 0x753b00, emissiveIntensity: .55, roughness: .1, depthWrite: false });
-  const fuelTube = mesh(new THREE.CylinderGeometry(.014, .014, .94, 8), fuelTubeMat, false); fuelTube.rotation.x = -Math.PI / 2; fuelTube.position.z = -.53; proboscis.add(fuelTube);
+  const snout = mesh(new THREE.CylinderGeometry(.055, .075, .16, 10), C.black); snout.rotation.x = -Math.PI / 2; snout.position.z = -.205; head.add(snout);
+  const proboscis = new THREE.Group(); proboscis.position.z = -.27; head.add(proboscis);
+  const needle = mesh(new THREE.CylinderGeometry(.019, .032, 1.17, 9), C.edge); needle.rotation.x = -Math.PI / 2; needle.position.z = -.58; proboscis.add(needle);
+  const needleTip = mesh(new THREE.ConeGeometry(.022, .16, 9), C.black); needleTip.rotation.x = -Math.PI / 2; needleTip.position.z = -1.245; proboscis.add(needleTip);
+  const fuelTubeMat = new THREE.MeshPhysicalMaterial({ color: 0xffbc43, transparent: true, opacity: .04, emissive: 0x753b00, emissiveIntensity: .55, roughness: .1, depthWrite: false });
+  const fuelTube = mesh(new THREE.CylinderGeometry(.009, .009, 1.04, 7), fuelTubeMat, false); fuelTube.rotation.x = -Math.PI / 2; fuelTube.position.z = -.55; proboscis.add(fuelTube);
+  // Female Anopheles palps run beside the proboscis; this is a key silhouette cue absent from the previous model.
+  for (const side of [-1, 1]) {
+    const palp = cylinderBetween(proboscis, new THREE.Vector3(side * .062, .018, -.08), new THREE.Vector3(side * .085, .028, -1.15), .011, C.steel, 6);
+    const palpTip = mesh(new THREE.SphereGeometry(.021, 7, 6), C.edge); palpTip.position.set(side * .085, .028, -1.15); proboscis.add(palpTip);
+  }
   const antennae = [];
   for (const side of [-1, 1]) {
-    const ant = new THREE.Group(); ant.position.set(side * .15, .13, -.22); head.add(ant);
-    const arm = cylinderBetween(ant, new THREE.Vector3(), new THREE.Vector3(side * .25, .18, -.48), .014, C.edge, 6);
-    const tip = mesh(new THREE.SphereGeometry(.032, 8, 6), C.cyan); tip.position.set(side * .25, .18, -.48); ant.add(tip);
-    antennae.push({ ant, arm });
+    const ant = new THREE.Group(); ant.position.set(side * .095, .1, -.17); head.add(ant);
+    cylinderBetween(ant, new THREE.Vector3(), new THREE.Vector3(side * .31, .17, -.47), .008, C.edge, 5);
+    const tip = mesh(new THREE.SphereGeometry(.015, 7, 5), C.policePale); tip.position.set(side * .31, .17, -.47); ant.add(tip);
+    antennae.push({ ant });
   }
-  const wings = [makeWing(-1), makeWing(1)]; wings.forEach(w => anatomy.add(w.hinge));
+
+  const wings = [makeWing(-1), makeWing(1)]; wings.forEach((wing) => anatomy.add(wing.hinge));
   const lights = [];
-  for (const [x, material] of [[-.21, C.red], [.21, C.cyan]]) { const lamp = mesh(new THREE.SphereGeometry(.052, 9, 8), material); lamp.position.set(x, .43, -.02); anatomy.add(lamp); lights.push(lamp); }
+  for (const [x, material] of [[-.115, C.red], [.115, C.cyan]]) {
+    const lamp = mesh(new THREE.SphereGeometry(.026, 9, 8), material); lamp.position.set(x, .335, -.01); anatomy.add(lamp); lights.push(lamp);
+  }
+
   const legs = [];
   const legSpecs = [
-    { side: -1, z: -.36, offset: -.12 }, { side: -1, z: .02, offset: 0 }, { side: -1, z: .37, offset: .12 },
-    { side: 1, z: -.36, offset: -.12 }, { side: 1, z: .02, offset: 0 }, { side: 1, z: .37, offset: .12 },
+    { side: -1, z: -.28, offset: -.08 }, { side: -1, z: .04, offset: 0 }, { side: -1, z: .31, offset: .1 },
+    { side: 1, z: -.28, offset: -.08 }, { side: 1, z: .04, offset: 0 }, { side: 1, z: .31, offset: .1 },
   ];
   legSpecs.forEach((spec, index) => {
-    const legRoot = new THREE.Vector3(spec.side * .31, -.1, spec.z);
+    const legRoot = new THREE.Vector3(spec.side * .245, -.12, spec.z);
     const group = new THREE.Group(); anatomy.add(group);
-    const upper = cylinderBetween(group, legRoot, legRoot.clone().add(new THREE.Vector3(spec.side * .45, -.25, spec.z * .2)), .036, C.steel, 7);
-    const lower = cylinderBetween(group, legRoot, legRoot.clone().add(new THREE.Vector3(spec.side * .68, -.62, spec.z * .25)), .026, C.edge, 7);
-    const knee = mesh(new THREE.SphereGeometry(.07, 8, 7), C.steel); group.add(knee);
-    const foot = cylinderBetween(group, legRoot, legRoot.clone().add(new THREE.Vector3(spec.side * .78, -.7, spec.z * .3)), .015, C.black, 6);
-    const claw = mesh(new THREE.ConeGeometry(.035, .13, 6), C.black); group.add(claw);
-    legs.push({ spec, root: legRoot, upper, lower, knee, foot, claw, phase: index * .83 });
+    const coxa = cylinderBetween(group, legRoot, legRoot.clone().add(new THREE.Vector3(spec.side * .21, -.04, 0)), .021, C.steel, 6);
+    const femur = cylinderBetween(group, legRoot, legRoot.clone().add(new THREE.Vector3(spec.side * .55, -.29, spec.z * .12)), .019, cuticle, 6);
+    const tibia = cylinderBetween(group, legRoot, legRoot.clone().add(new THREE.Vector3(spec.side * .82, -.59, spec.z * .2)), .012, C.edge, 6);
+    const tarsus = cylinderBetween(group, legRoot, legRoot.clone().add(new THREE.Vector3(spec.side * .96, -.64, spec.z * .26)), .007, C.black, 5);
+    const hip = mesh(new THREE.SphereGeometry(.036, 7, 6), C.steel); group.add(hip);
+    const knee = mesh(new THREE.SphereGeometry(.043, 7, 6), cuticle); group.add(knee);
+    const ankle = mesh(new THREE.SphereGeometry(.026, 7, 6), C.edge); group.add(ankle);
+    const claw = mesh(new THREE.SphereGeometry(.019, 7, 5), C.black); group.add(claw);
+    legs.push({ spec, root: legRoot, coxa, femur, tibia, tarsus, hip, knee, ankle, claw, phase: index * .83 });
   });
   const packets = [];
-  for (let i = 0; i < 14; i++) { const p = mesh(new THREE.SphereGeometry(.029 + (i % 3) * .006, 8, 7), C.amber, false); p.visible = false; anatomy.add(p); packets.push({ mesh: p, offset: i / 14 }); }
+  for (let i = 0; i < 16; i++) {
+    const packet = mesh(new THREE.SphereGeometry(.017 + (i % 3) * .004, 8, 7), C.amber, false);
+    packet.visible = false; anatomy.add(packet); packets.push({ mesh: packet, offset: i / 16 });
+  }
   return { root, anatomy, abdomen, reservoir, bands, head, proboscis, fuelTubeMat, wings, legs, packets, lights, antennae, eyes };
 }
 const mosquito = createMosquito();
-mosquito.root.position.set(-9, 6.1, -6);
+mosquito.root.position.set(5.9, 4.25, -3.1);
 mosquito.root.scale.setScalar(1);
 
 function updateLeg(leg, foot, lift = 0) {
   const root = leg.root;
-  const delta = new THREE.Vector3().subVectors(foot, root);
   const side = leg.spec.side;
   const outward = new THREE.Vector3(side, 0, 0);
-  const knee = root.clone().addScaledVector(delta, .43).addScaledVector(outward, .26).add(new THREE.Vector3(0, -.21 - lift, leg.spec.offset));
-  placeBetween(leg.upper, root, knee);
-  placeBetween(leg.lower, knee, foot);
+  const coxaEnd = root.clone().addScaledVector(outward, .19).add(new THREE.Vector3(0, -.025, -.015));
+  const route = new THREE.Vector3().subVectors(foot, coxaEnd);
+  const knee = coxaEnd.clone().addScaledVector(route, .38).addScaledVector(outward, .22).add(new THREE.Vector3(0, -.12 - lift, leg.spec.offset));
+  const ankle = coxaEnd.clone().addScaledVector(route, .74).addScaledVector(outward, .08).add(new THREE.Vector3(0, -.05 - lift * .35, leg.spec.offset * .35));
+  placeBetween(leg.coxa, root, coxaEnd);
+  placeBetween(leg.femur, coxaEnd, knee);
+  placeBetween(leg.tibia, knee, ankle);
+  placeBetween(leg.tarsus, ankle, foot);
+  leg.hip.position.copy(coxaEnd);
   leg.knee.position.copy(knee);
-  placeBetween(leg.foot, foot, foot.clone().add(new THREE.Vector3(side * .13, -.018, .07)));
-  leg.claw.position.copy(foot).add(new THREE.Vector3(side * .09, -.01, .04));
-  leg.claw.rotation.set(Math.PI / 2, 0, side * .4);
+  leg.ankle.position.copy(ankle);
+  leg.claw.position.copy(foot);
 }
 
 const params = { scale: 1, wing: .82, approach: .68, drill: .72, feed: .65 };
@@ -278,7 +314,7 @@ const tempV2 = new THREE.Vector3();
 function switchState(next) { state = next; stateClock = 0; }
 function resetSimulation() {
   fuel = 1; state = 'PATROL'; stateClock = 0; drilling = 0; perch = 0; feedPhase = 0; flowClock = 0; flightVelocity.set(0, 0, 0);
-  mosquito.root.position.set(-9, 6.1, -6);
+  mosquito.root.position.set(5.9, 4.25, -3.1);
   mosquito.root.quaternion.identity();
   hole.visible = false; holeHalo.visible = false;
 }
@@ -288,11 +324,11 @@ function updateSimulation(dt, elapsed) {
   stateClock += dt;
   const normal = tankNormal;
   // The tank normal points out of its skin. The body stays outside it; the head is aimed back into the skin.
-  landingBody.copy(contactPoint).addScaledVector(normal, 1.47);
+  landingBody.copy(contactPoint).addScaledVector(normal, 2.06);
   hoverPoint.copy(contactPoint).add(new THREE.Vector3(4.1, 2.3, -2.25));
 
   if (state === 'PATROL') {
-    desired.set(-7 + Math.cos(elapsed * .52) * 2.8, 5.2 + Math.sin(elapsed * 1.1) * .9, -3 + Math.sin(elapsed * .52) * 3.4);
+    desired.set(4.8 + Math.cos(elapsed * .52) * 1.4, 4.35 + Math.sin(elapsed * 1.1) * .48, -1.65 + Math.sin(elapsed * .52) * 1.55);
     if (stateClock > 4.7) switchState('INTERCEPT');
   } else if (state === 'INTERCEPT') {
     desired.copy(hoverPoint);
@@ -360,13 +396,14 @@ function updateSimulation(dt, elapsed) {
   mosquito.fuelTubeMat.opacity = .04 + smoothstep(0, 1, feedPhase) * .85;
   mosquito.reservoir.material.opacity = .26 + smoothstep(0, 9, feedPhase) * .51;
   mosquito.reservoir.material.emissiveIntensity = .35 + smoothstep(0, 8, feedPhase) * 1.1;
-  mosquito.abdomen.scale.y = 1 + smoothstep(0, 10, feedPhase) * .11;
-  mosquito.lights.forEach((lamp, i) => { lamp.material.emissiveIntensity = 1.5 + Math.max(0, Math.sin(elapsed * 8 + i * Math.PI)) * 3; });
+  const abdomenFill = 1 + smoothstep(0, 10, feedPhase) * .09;
+  mosquito.abdomen.scale.set(abdomenFill, abdomenFill, 1);
+  mosquito.lights.forEach((lamp, i) => { lamp.material.emissiveIntensity = .45 + Math.max(0, Math.sin(elapsed * 8 + i * Math.PI)) * .8; });
   mosquito.antennae.forEach((a, i) => { a.ant.rotation.y = Math.sin(elapsed * 3.8 + i * 2) * (.1 + (1 - perch) * .15); });
 
   const localFeet = [
-    [-.82, .10, -1.22], [-.91, -.06, -.89], [-.78, -.23, -.55],
-    [.82, .10, -1.22], [.91, -.06, -.89], [.78, -.23, -.55],
+    [-.72, .24, -2.02], [-.93, -.03, -2.02], [-.68, -.32, -2.02],
+    [.72, .24, -2.02], [.93, -.03, -2.02], [.68, -.32, -2.02],
   ];
   mosquito.legs.forEach((leg, i) => {
     let foot;
@@ -388,7 +425,7 @@ function updateSimulation(dt, elapsed) {
     packet.mesh.visible = feeding;
     if (feeding) {
       const progress = (elapsed * (1.1 + params.feed * 1.8) + packet.offset) % 1;
-      packet.mesh.position.set((i % 2 ? .022 : -.022), .0, -1.42 + progress * 2.23);
+      packet.mesh.position.set((i % 2 ? .016 : -.016), .0, -2.0 + progress * 2.72);
       const pulse = .8 + .45 * Math.sin(progress * Math.PI);
       packet.mesh.scale.setScalar(pulse);
     }
@@ -401,7 +438,7 @@ function updateSimulation(dt, elapsed) {
 }
 
 // Lightweight orbit camera; keeps the vehicle readable but lets the model be inspected from every side.
-const orbit = { radius: 13.2, theta: -.82, phi: 1.12, target: new THREE.Vector3(0, 1.8, 0), dragging: false, x: 0, y: 0 };
+const orbit = { radius: 9.4, theta: .76, phi: 1.08, target: new THREE.Vector3(.55, 1.55, .25), dragging: false, x: 0, y: 0 };
 function updateCamera() {
   const sinPhi = Math.sin(orbit.phi);
   camera.position.set(
