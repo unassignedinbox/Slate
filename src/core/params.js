@@ -163,7 +163,12 @@ export const MECHANICS = {
   touchdownStagger: 0.085, // s between pairs
   tarsalCompliance: 0.42, // how much the tarsus flattens on contact
   gripSettleTime: 0.35,
-  stanceSpread: 1.0, // lateral spread of planted feet
+  stanceSpread: 1.0,
+  // It lands short of the spot it wants and walks in on an alternating
+  // tripod. That is what a mosquito does, and it is what sells the weight.
+  walkStride: 0.46,     // x bodyLength, how far short it touches down
+  walkDuration: 2.1,    // s for the two tripod steps
+  stepLift: 0.055,      // x bodyLength, foot clearance during swing // lateral spread of planted feet
 
   // ---- probing / drilling ----------------------------------------------
   probeSweepDeg: 16.0, // labella hunting for a seam before committing
@@ -182,7 +187,7 @@ export const MECHANICS = {
   // Robotic addition: the fascicle carries a rotary boring head, because
   // a fuel tank is steel, not skin.
   drillRPM: 2400.0,
-  drillPlungeRate: 0.09, // m/s
+  drillPlungeRate: 0.022, // m/s through the tank wall
   drillWobbleDeg: 1.1,
   sparkRate: 90.0,
 

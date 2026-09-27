@@ -26,7 +26,7 @@ def make_mat(key):
         m.blend_method='BLEND'; m.show_transparent_back=False
     return m
 
-VIEWS = {"lateral":(1.0,0.03,0.03), "persp":(0.80,0.80,0.42), "top":(0.02,0.06,1.0)}
+VIEWS = {"lateral":(1.0,0.05,0.10), "persp":(1.0,0.62,0.52)}
 
 for f in sorted(glob.glob(os.path.join(indir,"*.obj"))):
     base = os.path.splitext(os.path.basename(f))[0]
@@ -52,7 +52,7 @@ for f in sorted(glob.glob(os.path.join(indir,"*.obj"))):
         o.data.materials.clear(); o.data.materials.append(make_mat(key))
         for p in o.data.polygons: p.use_smooth=True
 
-    focus=[o for o in meshes if o.name.split('.')[0]!='vehicle'] or meshes
+    focus=[o for o in meshes if o.name.split(".")[0]!="vehicle"] or meshes
     mn=mathutils.Vector((1e9,)*3); mx=mathutils.Vector((-1e9,)*3)
     dg=bpy.context.evaluated_depsgraph_get()
     for o in focus:
@@ -60,7 +60,7 @@ for f in sorted(glob.glob(os.path.join(indir,"*.obj"))):
         for vt in o.data.vertices:
             v=mw @ vt.co
             for i in range(3): mn[i]=min(mn[i],v[i]); mx[i]=max(mx[i],v[i])
-    ctr=(mn+mx)/2; size=max(mx-mn)*1.15
+    ctr=(mn+mx)/2; size=max(mx-mn)*1.55   # leave the surroundings in shot
     print("FOCUS", base, [o.name for o in focus], "ctr", [round(x,2) for x in ctr], "size", round(size,2))
 
     cd=bpy.data.cameras.new("C"); cd.type='ORTHO'; cd.ortho_scale=size

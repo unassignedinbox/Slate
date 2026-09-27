@@ -3,8 +3,8 @@
 A procedurally built, fully articulated **female *Anopheles* mosquito**
 styled as a police drone, and a simulation of the complete mechanic:
 
-**cruise → approach → hover → land → settle → probe → drill → feed →
-withdraw → take off.**
+**cruise → approach → hover → land → settle → walk → probe → drill →
+feed → withdraw → take off.**
 
 Nothing in it is a baked animation clip. Every frame is solved: the wing
 stroke comes from measured insect-flight kinematics, the feet are IK'd
@@ -69,6 +69,17 @@ banks into the turn and lets the lift vector do the work. Acceleration is
 capped, so it cannot snap direction. Body yaw carries the 1-6 deg wander
 real mosquitoes never stop doing.
 
+### Stroke blur (`kinematics.js: applyWings`)
+
+A wingbeat is always faster than the display. Even at the scaled-down
+default of 26 Hz there are only 2.3 frames per beat at 60 fps, so a
+single crisp wing aliases into a slow wobble — the most "fake" thing a
+bug can do. Each wing carries eleven ghosts that sample the beat that
+just elapsed and composite into the blurred fan a real mosquito shows.
+The blur is driven by `wingbeatHz * dt`, exactly like a camera shutter:
+it fades in when the beat outruns the frame rate and fades out again
+when you slow time down far enough to follow the wing.
+
 ### Landing (`agent.js: planLanding`)
 
 Before the descent starts, the final resting transform and all six foot
@@ -79,6 +90,16 @@ positions are solved:
 - hind legs reach first, then mid, then fore (`touchdownOrder`)
 - foot targets are **snapped onto the real cylinder** of the drum, then
   relaxed against each limb's reach envelope until both constraints hold
+- it deliberately touches down **short** of the bore site, because the
+  next thing it does is walk in
+
+### Walking (`agent.js: doWalk`)
+
+Alternating tripod: fore and hind of one side plus the mid leg of the
+other, so three feet are always down and the animal is statically stable
+through the whole cycle. Swing feet arc clear of the panel instead of
+dragging. The body glides from the touchdown anchor to the bore anchor
+while the gait runs underneath it.
 
 ### Leg IK (`kinematics.js: solveLeg`)
 
@@ -124,12 +145,29 @@ node tools/simcheck.mjs     # headless: asserts the motion is sane
 node tools/snapshot.mjs out # bakes real poses to OBJ for rendering
 ```
 
-`simcheck` runs the whole behaviour cycle with no GPU and checks the
-things that actually matter — that the stroke amplitude is inside the
-measured mosquito range, that the rotation leads the reversal, that the
-labium never enters the target, that all six feet reach their planted
-world positions and lie on the surface rather than through it, that no
-frame teleports, and that the fuel balances.
+`simcheck` runs the whole behaviour cycle with no GPU and asserts the
+things that actually matter, currently 39 of them:
+
+- stroke amplitude is inside the measured mosquito range, the feathering
+  is trapezoidal rather than sinusoidal, and the rotation **leads** the
+  reversal
+- the blur engages when the beat outruns the frame rate and disengages
+  when it does not
+- the gait never has fewer than three feet down, all six legs step, and
+  every foot lands exactly on the drilling stance
+- the labium never enters the target, the fascicle travels relative to
+  it, and the maxillae alternate
+- boring the wall is legible rather than a blink, and the labium is fully
+  buckled before breakthrough
+- the mouthparts settle onto the bore hole and stay within 5 mm for the
+  rest of the meal, at exactly the 45 deg *Anopheles* attitude
+- all six feet are on the real drum — not on thin air — and the raised
+  abdomen is still over the barrel
+- no frame teleports, no knee inverts, and the fuel balances
+
+It has caught eleven real bugs so far, including a left-handed rest
+basis that silently produced the wrong feeding attitude, and a
+`LatheGeometry` axis mismatch that exploded every chain in the rig.
 
 ---
 

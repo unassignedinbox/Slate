@@ -13,6 +13,7 @@ export const STATE = {
   HOVER: 'hover',
   LAND: 'land',
   SETTLE: 'settle',
+  WALK: 'walk',
   PROBE: 'probe',
   DRILL: 'drill',
   FEED: 'feed',
@@ -68,7 +69,9 @@ export class MosquitoAgent {
     const s = this.tank.pickSite();
     // surface frame: n = outward normal, f = a tangent the body will face
     const n = s.normal.clone().normalize();
-    let f = new THREE.Vector3(0, 1, 0);
+    // Prefer the surface's own natural heading if it has one (on a drum
+    // that is the axis); otherwise pick any stable tangent.
+    let f = s.tangent ? s.tangent.clone() : new THREE.Vector3(0, 1, 0);
     if (Math.abs(f.dot(n)) > 0.9) f.set(1, 0, 0);
     const r = new THREE.Vector3().crossVectors(f, n).normalize();
     f.crossVectors(n, r).normalize();
@@ -95,6 +98,7 @@ export class MosquitoAgent {
       case STATE.HOVER: this.doHover(dt); break;
       case STATE.LAND: this.doLand(dt); break;
       case STATE.SETTLE: this.doSettle(dt); break;
+      case STATE.WALK: this.doWalk(dt); break;
       case STATE.PROBE: this.doProbe(dt); break;
       case STATE.DRILL: this.doDrill(dt); break;
       case STATE.FEED: this.doFeed(dt); break;
@@ -198,56 +202,79 @@ export class MosquitoAgent {
     // Build the rest basis: body forward points down-and-into the surface.
     const fwd = _v.copy(f).multiplyScalar(Math.cos(restPitch))
       .addScaledVector(n, -Math.sin(restPitch)).normalize().clone();
+    // Right-handed basis: X x Y must equal Z, or setFromRotationMatrix
+    // silently returns a rotation that is not the one you drew.
     const side = new THREE.Vector3().crossVectors(n, fwd).normalize();
     const up = new THREE.Vector3().crossVectors(fwd, side).normalize();
 
-    _m4.makeBasis(side.negate(), up, fwd);
+    _m4.makeBasis(side, up, fwd);
     const restQuat = new THREE.Quaternion().setFromRotationMatrix(_m4);
     this.restQuat = restQuat;
-    // stand the labella lobes proud of the panel by their own radius,
-    // so they press on the surface instead of sinking into it
-    this.restAnchor = point.clone().addScaledVector(n, S.labellaLength * 0.75 * L);
+    // Stand the labella lobes proud of the panel by their own radius so
+    // they press on the surface instead of sinking into it.
+    const lift = S.labellaLength * 0.75 * L;
 
-    // Where does the root have to sit for the labella to touch the anchor?
+    // It does not land on the spot it drills. It touches down short and
+    // walks in, which is what a mosquito actually does and what gives the
+    // gait somewhere to happen.
+    this.drillAnchor = point.clone().addScaledVector(n, lift);
+    this.landAnchor = this.drillAnchor.clone()
+      .addScaledVector(f, -this.m.walkStride * L);
+    if (this.tank.projectToSurface) {
+      const sn = this.tank.projectToSurface(this.landAnchor);
+      this.landAnchor.copy(sn.point).addScaledVector(sn.normal, lift);
+    }
+    this.restAnchor = this.landAnchor.clone();
+
+    // Where does the root have to sit for the labella to touch an anchor?
     // Solve it exactly by posing the rig at the rest orientation.
     //
-    // Two answers matter: with the proboscis sheathed (the pose it lands
-    // in) and with the labium fully buckled (the pose it feeds in). The
-    // body physically shifts between them, so the feet get planned at a
-    // point between the two and the limbs carry the slack.
+    // Two answers matter: proboscis sheathed (the pose it lands in) and
+    // labium fully buckled (the pose it feeds in). The body physically
+    // shifts between them, so the stance gets planned between the two and
+    // the limbs carry the slack.
     const rig0 = this.rig;
     applyProboscis(rig0, this.m, S, { bow: 0, extend: 0, sawPhase: 0, drillSpin: 0, drilling: 0 });
-    const rootLand = this.rootForLabellaAt(this.restAnchor, restQuat);
+    const rootLand = this.rootForLabellaAt(this.landAnchor, restQuat);
+    const rootDry = this.rootForLabellaAt(this.drillAnchor, restQuat);
     applyProboscis(rig0, this.m, S, { bow: 1, extend: 1, sawPhase: 0, drillSpin: 0, drilling: 0 });
-    const rootFed = this.rootForLabellaAt(this.restAnchor, restQuat);
+    const rootFed = this.rootForLabellaAt(this.drillAnchor, restQuat);
     this.restRoot = rootLand;
-    const planRoot = rootLand.clone().lerp(rootFed, 0.55);
 
-    // ---- foot plant ring -------------------------------------------
-    // Two constraints fight each other here: the feet want to sit in the
-    // natural splayed stance, and they have to actually be ON the tank AND
-    // inside the reach of the limb that owns them. Pose the rig at the
-    // rest transform, then relax each target between the surface and the
-    // reachable sphere until both hold.
-    const rig = this.rig;
+    this.legPlan = this.footTargets(this.landAnchor, rootLand, restQuat, n);
+    this.legStance = this.footTargets(
+      this.drillAnchor, rootDry.clone().lerp(rootFed, 0.55), restQuat, n);
+  }
+
+  /**
+   * Six foot targets for a given body transform.
+   *
+   * Two constraints fight each other: the feet want the natural splayed
+   * stance, and they have to be ON the tank AND inside the reach of the
+   * limb that owns them. Pose the rig, then relax each target between the
+   * surface and the reachable shell until both hold.
+   */
+  footTargets(anchor, rootPos, quat, fallbackNormal) {
+    const rig = this.rig, S = this.S, L = S.bodyLength;
+    const { f, r } = this.site;
     const sp = rig.root.position.clone(), sq = rig.orient.quaternion.clone();
-    rig.root.position.copy(planRoot);
-    rig.orient.quaternion.copy(restQuat);
+    rig.root.position.copy(rootPos);
+    rig.orient.quaternion.copy(quat);
     rig.root.updateMatrixWorld(true);
 
     const snapTo = (p) => (this.tank.projectToSurface
       ? this.tank.projectToSurface(p)
-      : { point: p.clone(), normal: n.clone() });
+      : { point: p.clone(), normal: fallbackNormal.clone() });
 
     const spread = this.m.stanceSpread;
-    const plan = [];
-    for (const leg of this.rig.legs) {
+    const out = [];
+    for (const leg of rig.legs) {
       const pairFwd = [0.62, 0.12, -0.52][leg.pair];
       const pairOut = [0.62, 0.84, 0.92][leg.pair] * spread;
       const hip = leg.root.getWorldPosition(new THREE.Vector3());
       const reach = leg.lens.coxa + leg.lens.troch + leg.lens.femur + leg.lens.tibia;
 
-      let p = point.clone()
+      const p = anchor.clone()
         .addScaledVector(f, pairFwd * L * 0.95)
         .addScaledVector(r, leg.side * pairOut * L * 0.72);
 
@@ -261,13 +288,13 @@ export class MosquitoAgent {
         if (Math.abs(want - len) > 1e-4) p.copy(hip).addScaledVector(d, want / len);
         snap = snapTo(p);
       }
-      plan.push({ leg, point: snap.point, normal: snap.normal, touched: false });
+      out.push({ leg, point: snap.point, normal: snap.normal, touched: false });
     }
 
     rig.root.position.copy(sp);
     rig.orient.quaternion.copy(sq);
     rig.root.updateMatrixWorld(true);
-    this.legPlan = plan;
+    return out;
   }
 
   /** Root world position that puts the labella on `anchor` at orientation `q`. */
@@ -316,7 +343,14 @@ export class MosquitoAgent {
     this.b.plant = damp(this.b.plant, 1, 6, dt);
     this.vel.multiplyScalar(Math.exp(-9 * dt));
     this.settleToRest(dt, 7);
-    if (this.stateTime > this.m.gripSettleTime + 0.25) this.setState(STATE.PROBE);
+    if (this.stateTime > this.m.gripSettleTime + 0.25) {
+      // freeze where each foot actually is; the gait swings from there
+      for (const pl of this.legPlan) {
+        pl.from = pl.point.clone();
+        pl.fromN = pl.normal.clone();
+      }
+      this.setState(STATE.WALK);
+    }
   }
 
   /**
@@ -340,6 +374,49 @@ export class MosquitoAgent {
     if (step.length() > maxStep) step.setLength(maxStep);
     this.pos.add(step);
     this.vel.multiplyScalar(Math.exp(-12 * dt));
+  }
+
+  /**
+   * Alternating tripod gait.
+   *
+   * Three feet are always down - fore and hind of one side plus the mid
+   * leg of the other - so the animal is statically stable through the
+   * whole cycle. Swing feet arc clear of the panel instead of dragging.
+   */
+  doWalk(dt) {
+    const m = this.m, S = this.S, L = S.bodyLength;
+    const u = clamp(this.stateTime / m.walkDuration, 0, 1);
+    this.b.plant = 1;
+    this.b.fold = damp(this.b.fold, 1, 6, dt);
+
+    // the body glides from where it touched down to where it will drill
+    this.restAnchor.lerpVectors(this.landAnchor, this.drillAnchor, smoothstep(0, 1, u));
+    this.settleToRest(dt, 9);
+
+    for (let i = 0; i < this.legPlan.length; i++) {
+      const pl = this.legPlan[i], dest = this.legStance[i];
+      if (!pl.from) continue;
+      const tri = ((pl.leg.pair % 2) + (pl.leg.side > 0 ? 0 : 1)) % 2;
+      const w0 = tri === 0 ? 0.04 : 0.52;
+      const w1 = tri === 0 ? 0.46 : 0.94;
+      const sw = clamp((u - w0) / (w1 - w0), 0, 1);
+      const e = smoothstep(0, 1, sw);
+
+      pl.point.lerpVectors(pl.from, dest.point, e);
+      pl.normal.copy(pl.fromN).lerp(dest.normal, e).normalize();
+      const arc = Math.sin(Math.PI * sw) * m.stepLift * L;
+      if (arc > 1e-5) pl.point.addScaledVector(pl.normal, arc);
+      // a swinging leg carries no load
+      pl.leg.contact = damp(pl.leg.contact, (sw > 0.001 && sw < 0.999) ? 0.2 : 1, 12, dt);
+    }
+
+    if (u >= 1) {
+      for (let i = 0; i < this.legPlan.length; i++) {
+        this.legPlan[i].point.copy(this.legStance[i].point);
+        this.legPlan[i].normal.copy(this.legStance[i].normal);
+      }
+      this.setState(STATE.PROBE);
+    }
   }
 
   doProbe(dt) {
@@ -471,7 +548,7 @@ export class MosquitoAgent {
     rig.body.position.z = Math.cos(TAU * this.wingPhase * 2) * m.heaveAmplitude * L * 0.4 * flying;
 
     // ---- wings --------------------------------------------------------
-    if (flying > 0.02) applyWings(rig, m, this.wingPhase, flying);
+    if (flying > 0.02) applyWings(rig, m, this.wingPhase, flying, dt);
     if (this.b.fold > 0.02) applyWingsFolded(rig, m, this.b.fold * (1 - flying * 0.6));
 
     // ---- legs ---------------------------------------------------------
@@ -481,8 +558,9 @@ export class MosquitoAgent {
       rig.root.updateMatrixWorld(true);
       for (const pl of this.legPlan) {
         if (!pl.touched) continue;
-        // the tarsus eases onto the panel as weight comes on
-        pl.leg.contact = damp(pl.leg.contact, 1, 8, dt);
+        // the tarsus eases onto the panel as weight comes on.
+        // During the gait doWalk() owns this value, so do not stomp it.
+        if (this.state !== STATE.WALK) pl.leg.contact = damp(pl.leg.contact, 1, 8, dt);
         const flatten = pl.leg.contact;
         // per-foot normal: on a curved drum every foot sits on a
         // different tangent plane, so the site normal will not do

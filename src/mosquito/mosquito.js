@@ -386,7 +386,38 @@ export function buildMosquito(S) {
     const hinge = new THREE.Mesh(new THREE.SphereGeometry(wc * 0.26, 12, 8), M.joint);
     plane.add(hinge);
 
-    rig.wings.push({ side, mount, plane, phiBase, phi, theta, alpha, mesh: wm, uni });
+    // ---- stroke-blur ghosts ------------------------------------------
+    // A wingbeat is always faster than the display. At 26 Hz on a 60 Hz
+    // screen there are 2.3 frames per beat, so a single crisp wing
+    // aliases into a slow wobble - the single most "fake" thing a bug can
+    // do. These ghosts sample the wing back across the beat that just
+    // happened and composite into the blurred fan a real mosquito shows.
+    const ghosts = [];
+    const GHOSTS = 11;
+    const ghostMat = M.membrane.clone();
+    ghostMat.transmission = 0;
+    ghostMat.transparent = true;
+    ghostMat.opacity = 0;
+    ghostMat.depthWrite = false;
+    ghostMat.iridescence = 0.35;
+    const gUni = {};
+    makeWingDeformable(ghostMat, gUni);
+    gUni.uSpanLen.value = wl;
+    for (let i = 0; i < GHOSTS; i++) {
+      const gp = new THREE.Group(); gp.rotation.y = side * Math.PI / 2; plane.add(gp);
+      const gphi = new THREE.Group(); gp.add(gphi);
+      const gth = new THREE.Group(); gphi.add(gth);
+      const gal = new THREE.Group(); gth.add(gal);
+      const gm = new THREE.Mesh(wg, ghostMat);   // shares geometry
+      gm.castShadow = false; gm.receiveShadow = false; gm.renderOrder = 1;
+      gal.add(gm);
+      ghosts.push({ phi: gphi, theta: gth, alpha: gal, mesh: gm });
+    }
+
+    rig.wings.push({
+      side, mount, plane, phiBase, phi, theta, alpha, mesh: wm, uni,
+      ghosts, ghostMat, ghostUni: gUni,
+    });
 
     // Haltere: modified hindwing, beats antiphase. Missing = instantly wrong.
     const hm2 = new THREE.Group();

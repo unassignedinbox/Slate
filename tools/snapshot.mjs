@@ -126,22 +126,35 @@ runUntil((a) => Math.abs((a.wingPhase % 1) - 0.0) < 0.01);
 shoot('02_cruise_stroke_top', [rig.root]);
 
 // 3 - on final approach with the hind legs reaching
-runUntil((a) => a.state === STATE.LAND && a.stateTime > 0.15);
+if (!runUntil((a) => a.state === STATE.LAND && a.stateTime > 0.15)) throw new Error('never reached the landing reach');
 shoot('03_landing_reach', [rig.root, vehicle.group]);
 
+// 3b - mid-gait, one tripod in swing
+if (!runUntil((a) => a.state === STATE.WALK && a.stateTime > 0.30 && a.stateTime < 0.34)) throw new Error('never reached mid-gait');
+shoot('03b_walk_midstep', [rig.root, vehicle.group]);
+
 // 4 - settled at the Anopheles 45 degree rest angle, probing
-runUntil((a) => a.state === STATE.PROBE && a.stateTime > 0.9);
+if (!runUntil((a) => a.state === STATE.PROBE && a.stateTime > 0.9)) throw new Error('never reached the probing pose');
 shoot('04_probing', [rig.root, vehicle.group]);
 
 // 5 - labium buckled, fascicle driven in, boring
-runUntil((a) => a.state === STATE.DRILL && a.b.bow > 0.9 && a.b.extend > 0.6);
+if (!runUntil((a) => a.state === STATE.DRILL && a.b.extend > 0.55)) throw new Error('never reached the drilling pose');
 shoot('05_drilling', [rig.root, vehicle.group]);
 
 // 5b - head only: the mouthparts are the whole point, so frame them
 shoot('05b_mouthparts', [rig.head]);
 
 // 6 - engorged
-runUntil((a) => a.state === STATE.FEED && a.load > params.mech.crawCapacity * 0.9);
+if (!runUntil((a) => a.state === STATE.FEED && a.load > params.mech.crawCapacity * 0.9)) throw new Error('never reached the engorged pose');
 shoot('06_engorged', [rig.root, vehicle.group]);
+
+// 7 - the stroke-blur fan at a real mosquito wingbeat
+params.mech.wingbeatHz = 600;
+runUntil((a) => a.state === STATE.TAKEOFF || a.state === STATE.CRUISE, 40);
+for (let i = 0; i < 400; i++) { agent.update(1 / 60); agent.events.length = 0; }
+rig.root.position.set(0, 0, 0);
+rig.orient.quaternion.identity();
+rig.body.position.set(0, 0, 0);
+shoot('07_stroke_blur', [rig.root]);
 
 console.log('done');

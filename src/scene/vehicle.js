@@ -26,8 +26,8 @@ export class Vehicle {
     const glass = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.6, 2.3), glassMat);
     glass.position.set(0, 2.25, 0.5); this.group.add(glass);
 
-    const bed = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.5, 2.8), darkMat);
-    bed.position.set(0, 1.85, -1.75); this.group.add(bed);
+    const bed = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.5, 3.3), darkMat);
+    bed.position.set(0, 1.85, -1.85); this.group.add(bed);
 
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
       const w = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.72, 0.52, 22), rubber);
@@ -41,13 +41,13 @@ export class Vehicle {
 
     // ---- the fuel tank: a cylinder slung on the left flank -------------
     this.tankRadius = 0.72;
-    this.tankLength = 2.3;
+    this.tankLength = 2.9;
     this.wallThickness = 0.035;
     this.capacity = 60;
     this.fuel = 60;
 
     this.tankGroup = new THREE.Group();
-    this.tankGroup.position.set(-0.55, 2.82, -1.75);
+    this.tankGroup.position.set(-0.55, 2.82, -1.85);
     this.tankGroup.rotation.x = Math.PI / 2;   // drum lies fore-aft on the bed
     this.group.add(this.tankGroup);
 
@@ -98,14 +98,22 @@ export class Vehicle {
     // Local frame: +Y is the drum axis, the wall is the XZ circle. The
     // group is rotated 90deg about X, so a local normal (cos a, 0, sin a)
     // comes out as world (cos a, -sin a, 0): a = -90deg is straight up.
-    const ang = -Math.PI * 0.5 + (Math.random() - 0.5) * 1.3;
-    const along = (Math.random() - 0.5) * this.tankLength * 0.5;
+    const ang = -Math.PI * 0.5 + (Math.random() - 0.5) * 1.1;
+    // Bias the site toward one end of the drum. The animal lands BEHIND
+    // the site and its raised abdomen trails further back again, so all of
+    // that has to fit on the barrel or it ends up perched over thin air.
+    const half = this.tankLength * 0.5;
+    const along = -half * (0.12 + Math.random() * 0.48);
     const local = new THREE.Vector3(Math.cos(ang) * this.tankRadius, along, Math.sin(ang) * this.tankRadius);
     const localN = new THREE.Vector3(Math.cos(ang), 0, Math.sin(ang));
     this.tankGroup.updateMatrixWorld(true);
     return {
       point: local.applyMatrix4(this.tankGroup.matrixWorld),
       normal: localN.transformDirection(this.tankGroup.matrixWorld).normalize(),
+      // A cylinder has an obvious direction to walk in: along the axis.
+      // Walking round the circumference runs out of drum immediately.
+      tangent: new THREE.Vector3(0, -1, 0)
+        .transformDirection(this.tankGroup.matrixWorld).normalize(),
     };
   }
 

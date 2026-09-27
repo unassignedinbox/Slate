@@ -10,6 +10,9 @@ import { params } from '../src/core/params.js';
 import { buildMosquito } from '../src/mosquito/mosquito.js';
 import { MosquitoAgent, STATE } from '../src/mosquito/agent.js';
 import { wingAngles } from '../src/mosquito/kinematics.js';
+import { Vehicle } from '../src/scene/vehicle.js';
+
+const MECH_HZ = params.mech.wingbeatHz;
 
 const D = 180 / Math.PI;
 let fails = 0;
@@ -154,16 +157,87 @@ console.log('\n== behaviour cycle ==');
     `${startFuel} -> ${tank.fuel.toFixed(1)} L`);
 }
 
+console.log('\n== tripod gait ==');
+{
+  const tank = new FakeTank();
+  const agent = new MosquitoAgent(rig, params.shape, params.mech, tank);
+  const dt = 1 / 120;
+  let minGrounded = 99, maxArc = 0, frames = 0, everSwung = new Set();
+  for (let i = 0; i < 120 * 60; i++) {
+    agent.update(dt); agent.events.length = 0;
+    if (agent.state !== STATE.WALK) { if (frames) break; else continue; }
+    frames++;
+    let grounded = 0;
+    for (const pl of agent.legPlan) {
+      if (pl.leg.contact > 0.6) grounded++;
+      if (!pl.from) continue;
+      // perpendicular distance from the straight chord = the swing arc
+      const ab = new THREE.Vector3().subVectors(pl.point, pl.from);
+      const cd = new THREE.Vector3().subVectors(agent.legStance[agent.legPlan.indexOf(pl)].point, pl.from);
+      const len = cd.length();
+      if (len > 1e-6) {
+        const t = Math.max(0, Math.min(1, ab.dot(cd) / (len * len)));
+        const arc = ab.distanceTo(cd.multiplyScalar(t));
+        if (arc > 1e-4) everSwung.add(pl.leg.pair + ':' + pl.leg.side);
+        maxArc = Math.max(maxArc, arc);
+      }
+    }
+    minGrounded = Math.min(minGrounded, grounded);
+  }
+  ok(frames > 100, 'the walk phase actually runs', `${frames} frames`);
+  ok(minGrounded >= 3, 'STATICALLY STABLE: never fewer than 3 feet down',
+    `min ${minGrounded} of 6`);
+  ok(everSwung.size === 6, 'all six legs take a step', `${everSwung.size}/6`);
+  ok(maxArc > params.mech.stepLift * params.shape.bodyLength * 0.7,
+    'swing feet arc clear of the panel instead of dragging',
+    `peak ${(maxArc * 1000).toFixed(1)} mm`);
+  // and it must end exactly on the drilling stance
+  let worst = 0;
+  for (let i = 0; i < agent.legPlan.length; i++) {
+    worst = Math.max(worst, agent.legPlan[i].point.distanceTo(agent.legStance[i].point));
+  }
+  ok(worst < 1e-6, 'the gait lands every foot exactly on the drilling stance',
+    `worst ${(worst * 1e6).toFixed(2)} um`);
+}
+
+console.log('\n== wing stroke blur ==');
+{
+  const tank = new FakeTank();
+  const agent = new MosquitoAgent(rig, params.shape, params.mech, tank);
+  const w = rig.wings[0];
+  ok(w.ghosts && w.ghosts.length >= 7, 'wings carry stroke-blur ghosts',
+    `${w.ghosts ? w.ghosts.length : 0}`);
+
+  // fast beat relative to the frame -> blur on, crisp wing faded back
+  params.mech.wingbeatHz = 600;
+  for (let i = 0; i < 20; i++) agent.update(1 / 60);
+  const fastGhost = w.ghostMat.opacity, fastCrisp = w.mesh.material.opacity;
+  // slow beat -> no blur, crisp wing full
+  params.mech.wingbeatHz = 2;
+  for (let i = 0; i < 20; i++) agent.update(1 / 60);
+  const slowGhost = w.ghostMat.opacity, slowCrisp = w.mesh.material.opacity;
+  params.mech.wingbeatHz = MECH_HZ;
+
+  ok(fastGhost > 0.05, 'blur engages when the beat outruns the frame rate',
+    `ghost alpha ${fastGhost.toFixed(3)} at 600 Hz`);
+  ok(slowGhost < 0.01, 'blur disengages when the wing is followable',
+    `ghost alpha ${slowGhost.toFixed(3)} at 2 Hz`);
+  ok(fastCrisp < slowCrisp, 'the crisp wing fades back as the blur comes up',
+    `${fastCrisp.toFixed(2)} vs ${slowCrisp.toFixed(2)}`);
+}
+
 console.log('\n== proboscis mechanism ==');
 {
   const tank = new FakeTank();
   const agent = new MosquitoAgent(rig, params.shape, params.mech, tank);
   const dt = 1 / 120;
   let bowMax = 0, extMax = 0, worstDepth = 1e9, sampled = 0;
+  let drillFrames = 0, bowAtBreach = 0;
   let sawL = [], sawR = [];
   for (let i = 0; i < 120 * 60; i++) {
     agent.update(dt);
     agent.events.length = 0;
+    if (agent.state === STATE.DRILL) { drillFrames++; bowAtBreach = agent.b.bow; }
     if (agent.state === STATE.DRILL || agent.state === STATE.FEED) {
       bowMax = Math.max(bowMax, agent.b.bow);
       extMax = Math.max(extMax, agent.b.extend);
@@ -177,6 +251,11 @@ console.log('\n== proboscis mechanism ==');
     if (agent.state === STATE.WITHDRAW) break;
   }
   ok(sampled > 100, 'reached and held the drilling phase', `${sampled} frames`);
+  ok(drillFrames * dt > 1.0, 'boring through the wall is legible, not a blink',
+    `${(drillFrames * dt).toFixed(2)} s of actual drilling`);
+  ok(bowAtBreach > 0.9,
+    'the labium is fully buckled before the wall is breached',
+    `bow ${bowAtBreach.toFixed(2)} at breakthrough`);
   ok(bowMax > 0.9, 'labium buckles into a full bow', `${(bowMax * 100).toFixed(0)}%`);
   ok(extMax > 0.9, 'fascicle drives fully in', `${(extMax * 100).toFixed(0)}%`);
   ok(worstDepth > -0.02 * params.shape.bodyLength,
@@ -188,6 +267,48 @@ console.log('\n== proboscis mechanism ==');
   const lead = sawL.map((v, i) => v - sawR[i]);
   ok(Math.max(...lead) > 1e-5 && Math.min(...lead) < -1e-5,
     'maxillae alternate as microsaws (left leads, then right)');
+}
+
+console.log('\n== feeding pose ==');
+{
+  const tank = new FakeTank();
+  const agent = new MosquitoAgent(rig, params.shape, params.mech, tank);
+  const dt = 1 / 120;
+  let peakLab = 0, steadyLab = 0, pitchErr = 0, samples = 0, settleFrame = -1;
+  for (let i = 0; i < 120 * 60; i++) {
+    agent.update(dt); agent.events.length = 0;
+    if (agent.state !== STATE.FEED) { if (samples) break; else continue; }
+    samples++;
+    rig.root.updateMatrixWorld(true);
+    // full 3D error, not just height above the panel
+    const lab = rig.labella.getWorldPosition(new THREE.Vector3());
+    const e = lab.distanceTo(agent.drillAnchor);
+    peakLab = Math.max(peakLab, e);
+    // the body legitimately repositions while the labium finishes
+    // buckling; what matters is where it ends up and how fast
+    if (e < 0.004 * params.shape.bodyLength && settleFrame < 0) settleFrame = samples;
+    if (settleFrame > 0) steadyLab = Math.max(steadyLab, e);
+    // body long axis vs the panel: Anopheles feeds at ~45 deg, abdomen up
+    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(rig.orient.quaternion);
+    const deg = Math.asin(Math.max(-1, Math.min(1, -fwd.dot(agent.site.n)))) * 180 / Math.PI;
+    pitchErr = Math.max(pitchErr, Math.abs(deg - params.mech.bodyPitchRestDeg));
+  }
+  ok(samples > 100, 'held the feeding phase', `${samples} frames`);
+  ok(settleFrame > 0 && settleFrame * dt < 1.6,
+    'mouthparts settle onto the bore hole quickly once the labium is fully bowed',
+    `${(settleFrame * dt).toFixed(2)} s (peak ${(peakLab * 1000).toFixed(0)} mm during the pierce)`);
+  ok(steadyLab < 0.005 * params.shape.bodyLength,
+    'and then stay locked on it for the rest of the meal',
+    `worst ${(steadyLab * 1000).toFixed(2)} mm over ~8 s`);
+  ok(pitchErr < 4, 'body holds the Anopheles feeding attitude',
+    `within ${pitchErr.toFixed(1)} deg of ${params.mech.bodyPitchRestDeg}`);
+
+  // the animal must not be standing on stilts: knees have to stay bent
+  let straightest = 0;
+  for (const leg of rig.legs) straightest = Math.max(straightest, Math.abs(leg.tibia.rotation.x));
+  const deg = straightest * 180 / Math.PI;
+  ok(deg > 25 && deg < 165, 'no locked or hyperextended knees in the stance',
+    `most extreme knee ${deg.toFixed(0)} deg`);
 }
 
 console.log('\n== leg IK ==');
@@ -230,6 +351,45 @@ console.log('\n== leg IK ==');
     if (!Number.isFinite(leg.femur.rotation.x + leg.root.rotation.x)) bad++;
   }
   ok(bad === 0, 'no inverted or non-finite joints');
+}
+
+console.log('\n== it actually fits on the tank ==');
+{
+  // the real Vehicle this time, not the flat stand-in
+  const scene = new THREE.Group();
+  const veh = new Vehicle(scene);
+  const agent = new MosquitoAgent(rig, params.shape, params.mech, veh);
+  const dt = 1 / 120;
+  let reached = false;
+  for (let i = 0; i < 120 * 90; i++) {
+    agent.update(dt); agent.events.length = 0;
+    if (agent.state === STATE.FEED && agent.stateTime > 1.5) { reached = true; break; }
+  }
+  ok(reached, 'reaches the feeding phase on the real vehicle');
+  rig.root.updateMatrixWorld(true); scene.updateMatrixWorld(true);
+
+  const inv = new THREE.Matrix4().copy(veh.tankGroup.matrixWorld).invert();
+  const half = veh.tankLength * 0.5;
+  const onDrum = (wp, slack = 0.06) => {
+    const l = wp.clone().applyMatrix4(inv);       // drum axis is local Y
+    return Math.abs(l.y) <= half + slack &&
+      Math.abs(Math.hypot(l.x, l.z) - veh.tankRadius) <= slack;
+  };
+  let footsOn = 0;
+  for (const pl of agent.legPlan) {
+    if (onDrum(pl.leg.tarsomeres[0].getWorldPosition(new THREE.Vector3()), 0.10)) footsOn++;
+  }
+  ok(footsOn === 6, 'all six feet are planted on the drum, not on thin air',
+    `${footsOn}/6`);
+
+  // the raised abdomen must still be over the barrel, not past the end
+  const tip = rig.abdomenTip.getWorldPosition(new THREE.Vector3())
+    .applyMatrix4(inv);
+  ok(Math.abs(tip.y) <= half, 'the raised abdomen stays over the drum',
+    `${Math.abs(tip.y).toFixed(2)} m from centre, half-length ${half.toFixed(2)} m`);
+
+  const lab = rig.labella.getWorldPosition(new THREE.Vector3());
+  ok(onDrum(lab, 0.08), 'and the mouthparts are on the drum wall');
 }
 
 console.log('\n== abdomen load ==');

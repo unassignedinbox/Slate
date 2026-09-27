@@ -207,6 +207,9 @@ mLegs.add(M, 'touchdownStagger', 0, 0.4, 0.005);
 mLegs.add(M, 'tarsalCompliance', 0, 1, 0.01);
 mLegs.add(M, 'gripSettleTime', 0.05, 2, 0.01);
 mLegs.add(M, 'stanceSpread', 0.4, 1.8, 0.01);
+mLegs.add(M, 'walkStride', 0.0, 1.4, 0.01);
+mLegs.add(M, 'walkDuration', 0.3, 6, 0.05);
+mLegs.add(M, 'stepLift', 0.0, 0.2, 0.002);
 
 const mProbe = fMech.addFolder('Probe / pierce / drill');
 mProbe.add(M, 'probeSweepDeg', 0, 45, 0.5);

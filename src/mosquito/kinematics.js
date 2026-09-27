@@ -72,8 +72,14 @@ export function wingAngles(tau, m) {
   return { phi, phiDot, theta, alpha, alphaDot, aoa, t };
 }
 
-/** Write the stroke onto the rig for one frame. */
-export function applyWings(rig, m, phase, gate = 1) {
+/**
+ * Write the stroke onto the rig for one frame.
+ *
+ * `dt` is the real frame time. It is used to decide how much of the beat
+ * happened between this frame and the last, and therefore how hard to
+ * blur - the same decision a camera shutter makes.
+ */
+export function applyWings(rig, m, phase, gate = 1, dt = 1 / 60) {
   for (const w of rig.wings) {
     // The two wings are mirror images: same phase, mirrored axes.
     const k = wingAngles(phase, m);
@@ -92,6 +98,37 @@ export function applyWings(rig, m, phase, gate = 1) {
     w.uni.uTwistLag.value = 0.9;
     // aeroelastic bend, opposing the direction of travel
     w.uni.uFlex.value = -k.phiDot * m.wingFlexure * 0.22 * gate;
+
+    // ---- stroke blur -------------------------------------------------
+    if (w.ghosts && w.ghosts.length) {
+      // fraction of a full beat covered by this frame
+      const span = clamp(m.wingbeatHz * dt, 0, 1);
+      const n = w.ghosts.length;
+      // below ~1/6 of a beat per frame the eye can follow the wing, so
+      // fade the ghosts out and let the crisp wing carry it
+      const strength = smoothstep(0.16, 0.55, span) * gate;
+      const op = strength * 0.30;
+      w.ghostMat.opacity = op;
+      const on = op > 0.004;
+      for (const g of w.ghosts) g.mesh.visible = on;
+      w.mesh.material.opacity = lerp(0.55, 0.16, strength);
+
+      if (on) {
+        for (let i = 0; i < n; i++) {
+          // sample backwards across the beat that just elapsed
+          const f = (i + 1) / (n + 1);
+          const gk = wingAngles(phase - span * f, m);
+          const g = w.ghosts[i];
+          g.phi.rotation.y = s * gk.phi;
+          g.theta.rotation.x = gk.theta;
+          g.alpha.rotation.z = s * (gk.aoa + gk.alpha);
+        }
+        const gl = clamp(k.alphaDot * 0.10, -1.2, 1.2);
+        w.ghostUni.uTwist.value = -s * gl * (m.spanwiseTwistLagDeg * D);
+        w.ghostUni.uTwistLag.value = 0.9;
+        w.ghostUni.uFlex.value = -k.phiDot * m.wingFlexure * 0.22;
+      }
+    }
   }
 
   // Halteres: same frequency, antiphase, they are the gyros.
@@ -107,6 +144,12 @@ export function applyWings(rig, m, phase, gate = 1) {
 export function applyWingsFolded(rig, m, blend) {
   for (const w of rig.wings) {
     const s = w.side;
+    if (w.ghostMat) {
+      w.ghostMat.opacity = lerp(w.ghostMat.opacity, 0, blend);
+      const on = w.ghostMat.opacity > 0.004;
+      for (const g of w.ghosts) g.mesh.visible = on;
+      w.mesh.material.opacity = lerp(w.mesh.material.opacity, 0.55, blend);
+    }
     w.plane.rotation.x = lerp(w.plane.rotation.x, -18 * D, blend);
     w.phi.rotation.y = lerp(w.phi.rotation.y, s * -72 * D, blend);
     w.theta.rotation.x = lerp(w.theta.rotation.x, -4 * D, blend);
