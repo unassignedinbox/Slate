@@ -1,10 +1,17 @@
 {
   "name": "slate",
   "version": "1.0.0",
+  "type": "module",
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "check": "node scripts/gen-check.mjs",
+    "sim": "node scripts/sim.mjs",
+    "profile": "node scripts/profile.mjs",
+    "shots": "node scripts/render.mjs"
   },
   "repository": {
     "type": "git",
