@@ -1,0 +1,10 @@
+{
+  "name": "slate-eagle",
+  "version": "1.0.0",
+  "description": "Realistic procedural 3D bald eagle model with flight, glide, walk, idle, screech and head-turn animations (Three.js).",
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 8000 --bind 0.0.0.0"
+  },
+  "license": "MIT"
+}
