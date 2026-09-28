@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Bald Eagle — anatomical 3D model & animation</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden;
+    font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #c { position: fixed; inset: 0; display: block; }
+  #panel {
+    position: fixed; top: 14px; left: 14px; width: 310px; max-height: calc(100vh - 28px);
+    overflow: auto; padding: 14px 16px; border-radius: 12px;
+    background: rgba(14,17,22,.74); backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,.10); color: #e8ecf2;
+    box-shadow: 0 10px 40px rgba(0,0,0,.35);
+  }
+  h1 { margin: 0 0 2px; font-size: 15px; letter-spacing: .2px; }
+  .sub { margin: 0 0 12px; font-size: 11px; color: #9fb0c4; font-style: italic; }
+  #states { display: grid; gap: 6px; margin-bottom: 12px; }
+  button {
+    font: inherit; text-align: left; padding: 7px 10px; border-radius: 8px; cursor: pointer;
+    background: rgba(255,255,255,.06); color: #dfe6ef;
+    border: 1px solid rgba(255,255,255,.10); transition: .15s;
+  }
+  button:hover { background: rgba(255,255,255,.12); }
+  button.on { background: #c8922a; border-color: #eab54a; color: #1a1408; font-weight: 600; }
+  #info { font-size: 11.5px; color: #adbccd; min-height: 74px; margin-bottom: 10px; }
+  label { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-size: 12px; color: #c9d5e2; }
+  input[type=range] { width: 100%; }
+  .row { display: flex; justify-content: space-between; font-size: 11px; color: #9fb0c4; }
+  hr { border: 0; border-top: 1px solid rgba(255,255,255,.10); margin: 11px 0; }
+  .meta { font-size: 10.5px; color: #8a9bad; }
+  .meta b { color: #c3cfdc; font-weight: 600; }
+  .hint { position: fixed; bottom: 12px; right: 14px; font-size: 11px; color: rgba(255,255,255,.55); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="panel">
+  <h1>Bald Eagle — 3D anatomy & motion</h1>
+  <p class="sub">Haliaeetus leucocephalus · skeleton-driven rig</p>
+  <div id="states"></div>
+  <div id="info"></div>
+  <hr />
+  <div class="row"><span>Playback speed</span><span id="speedv">1.00×</span></div>
+  <input id="speed" type="range" min="0.05" max="2" step="0.01" value="1" />
+  <label><input id="plum" type="checkbox" checked /> Plumage &amp; body</label>
+  <label><input id="skel" type="checkbox" /> Skeleton (bones)</label>
+  <label><input id="rot" type="checkbox" /> Orbit camera automatically</label>
+  <hr />
+  <div class="meta">
+    <b>Osteometrics (RBCM / Trail 2017 means, mm):</b><br />
+    humerus 205 · ulna 234 · radius 221 · carpometacarpus 95 · coracoid 80 ·
+    scapula 112 · sternum 132 (keel 48) · femur 113 · tibiotarsus 151 ·
+    tarsometatarsus 88 · 14 cervicals · 7 rib pairs with uncinate processes ·
+    toe formula 2-3-4-5.<br /><br />
+    <b>Plumage:</b> 10 primaries (outer 6 emarginated), 17 secondaries,
+    4 tertials, 4 alula feathers, greater/median/lesser/marginal &amp; underwing
+    coverts, 12 rectrices.
+  </div>
+</div>
+<div class="hint">drag to orbit · scroll to zoom · keys 1–6 switch animation</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.161.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.161.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
