@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bald Eagle — Procedural Animated Model</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; font-family: 'Segoe UI', system-ui, sans-serif; }
+    #app { position: fixed; inset: 0; }
+    #panel {
+      position: fixed; top: 16px; left: 16px; z-index: 10;
+      background: rgba(12, 16, 22, 0.72); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.10); border-radius: 14px;
+      padding: 16px 18px; color: #e8edf4; width: 250px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+    }
+    #panel h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.4px; margin-bottom: 2px; }
+    #panel .sub { font-size: 11px; color: #9fb0c3; margin-bottom: 12px; }
+    #stateLabel {
+      display: inline-block; font-size: 11px; font-weight: 600;
+      color: #ffd97a; background: rgba(255,217,122,0.12);
+      border: 1px solid rgba(255,217,122,0.25);
+      padding: 2px 10px; border-radius: 20px; margin-bottom: 12px;
+    }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+    button {
+      appearance: none; border: 1px solid rgba(255,255,255,0.13);
+      background: rgba(255,255,255,0.06); color: #dfe7f0;
+      border-radius: 9px; padding: 8px 6px; font-size: 12.5px; font-weight: 500;
+      cursor: pointer; transition: all .15s;
+    }
+    button:hover { background: rgba(255,255,255,0.14); }
+    button.active { background: #c98a2b; border-color: #e8ae52; color: #14100a; font-weight: 700; }
+    button.wide { grid-column: span 2; }
+    .row { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 11.5px; color: #9fb0c3; }
+    input[type=range] { flex: 1; accent-color: #c98a2b; }
+    #export { width: 100%; margin-top: 12px; background: rgba(80,140,220,0.15); border-color: rgba(120,170,240,0.35); }
+    #export:hover { background: rgba(80,140,220,0.3); }
+    .hint { margin-top: 10px; font-size: 10.5px; color: #7c8aa0; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="panel">
+    <h1>🦅 Bald Eagle</h1>
+    <div class="sub">Fully procedural · ~420 individual feathers · rigged &amp; animated</div>
+    <span id="stateLabel">Idle</span>
+    <div class="grid">
+      <button data-state="idle" class="active">Idle</button>
+      <button data-state="walk">Walk</button>
+      <button data-state="takeoff" class="wide">▲ Take Off</button>
+      <button data-state="flight">Flight</button>
+      <button data-state="glide">Glide</button>
+      <button data-state="landing" class="wide">▼ Land</button>
+      <button id="screech" class="wide">Screech</button>
+    </div>
+    <div class="row">
+      <span>Speed</span>
+      <input id="speed" type="range" min="0.2" max="2" step="0.1" value="1" />
+      <span id="speedVal">1.0×</span>
+    </div>
+    <button id="export">Export .GLB</button>
+    <div class="hint">Drag to orbit · scroll to zoom.<br/>GLB export bakes all 6 animation clips (Idle, Walk, Flight, Glide, TakeOff, Landing) for game engines.</div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
