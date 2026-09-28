@@ -923,7 +923,7 @@ def main():
         g.add_animation(c.name, c.emit())
 
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                       "..", "build", "scorpion.glb")
+                       "..", "model", "scorpion.glb")
     out = os.path.normpath(out)
     size = g.save_glb(out)
 

@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from render import load_glb, render, write_png
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-GLB = os.path.normpath(os.path.join(HERE, "..", "build", "scorpion.glb"))
+GLB = os.path.normpath(os.path.join(HERE, "..", "model", "scorpion.glb"))
 DOCS = os.path.normpath(os.path.join(HERE, "..", "docs"))
 
 VIEWS = {

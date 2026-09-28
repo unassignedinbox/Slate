@@ -2,7 +2,7 @@
 
 A fully procedural, anatomically-structured scorpion (*Pandinus imperator*,
 the emperor scorpion) generated from source, exported as a rigged, animated
-**glTF 2.0 binary** (`build/scorpion.glb`), plus a WebGL viewer.
+**glTF 2.0 binary** (`model/scorpion.glb`), plus a WebGL viewer.
 
 ![hero](docs/hero.png)
 
@@ -11,7 +11,7 @@ placeholder geometry. The build has **no third-party dependencies**: it runs
 on a stock Python 3 interpreter.
 
 ```bash
-python3 src/scorpion.py     # -> build/scorpion.glb
+python3 src/scorpion.py     # -> model/scorpion.glb
 python3 src/sheets.py       # -> docs/*.png contact sheets
 python3 -m http.server 8080 # then open /viewer/index.html
 ```
@@ -128,7 +128,7 @@ src/render.py     GLB reader + software rasteriser (headless verification)
 src/sheets.py     documentation contact sheets
 viewer/           WebGL viewer
 reference/        photographic and anatomical references used
-build/            generated scorpion.glb
+model/            generated scorpion.glb
 docs/             generated renders
 ```
 

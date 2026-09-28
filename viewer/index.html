@@ -138,7 +138,7 @@ let travel = true, spin = true, wire = false, speed = 1.0;
 // 2 tetrapod steps per cycle x stride / cycle duration
 const CLIP_SPEED = { Walk: 2*0.020/1.05, Run: 2*0.028/0.62 };  // m/s
 
-new GLTFLoader().load('../build/scorpion.glb', (gltf) => {
+new GLTFLoader().load('../model/scorpion.glb', (gltf) => {
   root = gltf.scene;
   root.traverse(o => {
     if (o.isMesh) {

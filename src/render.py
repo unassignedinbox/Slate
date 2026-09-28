@@ -2,7 +2,7 @@
 """Standalone GLB reader + software rasteriser used to visually verify the
 model and its animation poses (no GPU / browser needed).
 
-  python3 render.py ../build/scorpion.glb out.png --anim Walk --time 0.3
+  python3 render.py ../model/scorpion.glb out.png --anim Walk --time 0.3
 """
 import json
 import math
