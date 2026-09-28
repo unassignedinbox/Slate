@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Bald Eagle — procedural 3D model &amp; animation (WebGL2)</title>
+<style>
+    :root
+    {
+        --ink: #eef2f7;
+        --dim: #9aa6b6;
+        --panel: rgba(14, 18, 24, 0.82);
+        --edge: rgba(255, 255, 255, 0.10);
+        --accent: #f0a63c;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: #0b0e13; overflow: hidden; }
+    body
+    {
+        font: 13px/1.45 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+    }
+    #viewport { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+    #viewport:active { cursor: grabbing; }
+
+    .panel
+    {
+        position: fixed;
+        background: var(--panel);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border: 1px solid var(--edge);
+        border-radius: 14px;
+        padding: 14px 16px;
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+    }
+
+    #controls { top: 16px; left: 16px; width: 268px; max-height: calc(100vh - 32px); overflow-y: auto; }
+    #status { bottom: 16px; left: 16px; right: 16px; max-width: 640px; padding: 10px 14px; }
+
+    h1 { font-size: 15px; margin: 0 0 2px; letter-spacing: 0.01em; }
+    h2 { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--dim); margin: 16px 0 8px; font-weight: 600; }
+    .sub { color: var(--dim); font-size: 11.5px; margin-bottom: 4px; }
+
+    .clips { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    button
+    {
+        font: inherit; font-size: 12px; color: var(--ink);
+        background: rgba(255, 255, 255, 0.055);
+        border: 1px solid var(--edge); border-radius: 9px;
+        padding: 8px 6px; cursor: pointer; transition: background 0.14s, border-color 0.14s, transform 0.08s;
+    }
+    button:hover { background: rgba(255, 255, 255, 0.11); }
+    button:active { transform: translateY(1px); }
+    button.active { background: rgba(240, 166, 60, 0.20); border-color: rgba(240, 166, 60, 0.65); color: #ffd79a; }
+    .frames { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+
+    label.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 3.5px 0; color: var(--dim); }
+    label.row span.k { color: var(--ink); }
+    input[type="range"] { width: 130px; accent-color: var(--accent); }
+    input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; }
+    select { font: inherit; font-size: 12px; background: rgba(255,255,255,0.06); color: var(--ink); border: 1px solid var(--edge); border-radius: 7px; padding: 4px 6px; }
+
+    #clipName { font-size: 14px; font-weight: 600; color: #ffd79a; }
+    #clipDetail { color: var(--dim); font-size: 11.5px; }
+    #readout { color: var(--dim); font-size: 11px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+    #buildInfo { color: var(--dim); font-size: 10.5px; margin-top: 8px; }
+
+    details { margin-top: 12px; }
+    summary { cursor: pointer; color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; }
+    details p { color: var(--dim); font-size: 11px; margin: 8px 0 0; }
+    details b { color: var(--ink); font-weight: 600; }
+    kbd { background: rgba(255,255,255,0.09); border: 1px solid var(--edge); border-radius: 4px; padding: 0 4px; font-size: 10.5px; }
+    a { color: #8fc0ff; }
+
+    @media (max-width: 720px)
+    {
+        #controls { width: calc(100vw - 32px); max-height: 46vh; }
+        #status { bottom: 8px; }
+    }
+</style>
+</head>
+<body>
+<canvas id="viewport"></canvas>
+
+<div class="panel" id="controls">
+    <h1>Bald eagle · <i>Haliaeetus leucocephalus</i></h1>
+    <div class="sub">Procedural 3D model, skeleton and animation — WebGL2, no assets.</div>
+
+    <h2>Animation</h2>
+    <div class="clips">
+        <button data-clip="flap">Wing flap</button>
+        <button data-clip="glide">Glide</button>
+        <button data-clip="walk">Walk</button>
+        <button data-clip="idle">Idle</button>
+        <button data-clip="screech">Screech</button>
+        <button data-clip="headTurn">Head turn</button>
+    </div>
+
+    <h2>Playback</h2>
+    <label class="row"><span class="k">Speed</span><span><input type="range" id="speed" min="0.05" max="1.6" step="0.05" value="1" /> <span id="speedValue">1.00×</span></span></label>
+    <label class="row"><span class="k">Secondary motion</span><input type="checkbox" id="toggleDynamics" /></label>
+
+    <h2>View</h2>
+    <div class="frames">
+        <button id="frameHead">Head</button>
+        <button id="frameBody">Body</button>
+        <button id="frameWing">Wing</button>
+    </div>
+    <label class="row"><span class="k">Auto-orbit</span><input type="checkbox" id="autoOrbit" checked /></label>
+    <label class="row"><span class="k">Ground</span><input type="checkbox" id="toggleGround" /></label>
+    <label class="row"><span class="k">Skeleton overlay</span><input type="checkbox" id="toggleSkeleton" /></label>
+    <label class="row"><span class="k">Wireframe</span><input type="checkbox" id="toggleWireframe" /></label>
+    <label class="row"><span class="k">Debug</span>
+        <select id="debugView">
+            <option value="0">Shaded</option>
+            <option value="1">Normals</option>
+            <option value="2">Shadow</option>
+            <option value="3">Albedo</option>
+        </select>
+    </label>
+
+    <details>
+        <summary>Reference</summary>
+        <p><b>Skeleton</b> — bald eagle long-bone means (Royal BC Museum avian osteology): humerus 207 mm, ulna 238 mm,
+        radius 227 mm, carpometacarpus 112 mm, tarsometatarsus 96 mm. Wingspan 1.8–2.3 m, body 0.70–1.02 m,
+        tail 0.23–0.37 m, mass 3.0–6.3 kg.</p>
+        <p><b>Plumage</b> — Accipitridae counts: 10 primaries, 17 secondaries (4 tertials), 3 alula quills,
+        12 rectrices, plus primary / greater / median / lesser / marginal / underwing covert rows and scapulars.
+        Every one of them is a separate 3-D solid with its own joint.</p>
+        <p><b>Wingbeat</b> — XROMM skeletal kinematics of flapping flight (Baier, Gatesy &amp; Dial, PLOS ONE 2013):
+        elbow peak extension ≈ 45 % of downstroke and peak flexion ≈ 45 % of upstroke (range ≈ 91°); the wrist holds
+        extension into early upstroke then flexes fast, adducting ≈ 70°; elbow and wrist reverse ≈ 4 % and 2 % of the
+        cycle before the wingtip. Cruise beat here: 2.4 Hz, 54 % downstroke.</p>
+        <p><b>Secondary motion</b> is simulated, not keyframed: every feather, neck joint and the tail base carries an
+        angular spring driven by its own bone's measured tip velocity.</p>
+    </details>
+
+    <details>
+        <summary>Controls</summary>
+        <p>Drag to orbit · wheel or pinch to zoom · <kbd>1</kbd>–<kbd>6</kbd> clips · <kbd>Space</kbd> pause ·
+        <kbd>O</kbd> auto-orbit.</p>
+    </details>
+
+    <div id="buildInfo"></div>
+</div>
+
+<div class="panel" id="status">
+    <div id="clipName">Wing flap</div>
+    <div id="clipDetail"></div>
+    <div id="readout"></div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
