@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Golden Eagle // Aquila chrysaetos</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <section class="stage-wrap" aria-label="Interactive 3D golden eagle">
+      <div id="stage"></div>
+      <div class="hud hud-top">
+        <div>
+          <p class="eyebrow">FIELD STUDY / 3D ANIMATION</p>
+          <h1>Golden Eagle</h1>
+          <p class="species"><i>Aquila chrysaetos</i> · adult plumage</p>
+        </div>
+        <div class="hud-badge"><span class="status-dot"></span><span id="poseLabel">IDLE</span></div>
+      </div>
+      <div class="hud hud-bottom">
+        <span id="readout">Direct mesh animation · no armature</span>
+        <span>Drag to orbit · scroll to zoom</span>
+      </div>
+      <div class="loading" id="loading">Building feather groups…</div>
+    </section>
+
+    <aside class="control-panel">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">ANIMATION LIBRARY</p>
+          <h2>Observed motion</h2>
+        </div>
+        <div class="frame-mark">AE<br><span>01</span></div>
+      </div>
+
+      <div class="mode-grid" role="group" aria-label="Animation selection">
+        <button class="mode-btn active" data-mode="idle"><span class="mode-index">01</span><span><b>Idle</b><small>breath · balance</small></span></button>
+        <button class="mode-btn" data-mode="flap"><span class="mode-index">02</span><span><b>Wing flap</b><small>powered flight</small></span></button>
+        <button class="mode-btn" data-mode="glide"><span class="mode-index">03</span><span><b>Glide</b><small>dihedral · tail steer</small></span></button>
+        <button class="mode-btn" data-mode="walk"><span class="mode-index">04</span><span><b>Walk</b><small>ground locomotion</small></span></button>
+        <button class="mode-btn" data-mode="head"><span class="mode-index">05</span><span><b>Head turn</b><small>neck counter-motion</small></span></button>
+        <button class="mode-btn" data-mode="screech"><span class="mode-index">06</span><span><b>Screech</b><small>display · gape</small></span></button>
+      </div>
+
+      <div class="transport">
+        <button id="playToggle" class="play-btn" aria-label="Pause animation">Ⅱ</button>
+        <label class="speed-control">SPEED <input id="speed" type="range" min="0.2" max="1.8" step="0.05" value="0.85" /><output id="speedValue">0.85×</output></label>
+      </div>
+
+      <div class="details">
+        <div class="detail-row"><span>species</span><b>Golden eagle</b></div>
+        <div class="detail-row"><span>flight profile</span><b>flap → glide</b></div>
+        <div class="detail-row"><span>wings</span><b>primaries + secondaries</b></div>
+        <div class="detail-row"><span>rig</span><b>direct mesh transforms</b></div>
+      </div>
+
+      <div class="reference-note">
+        <div class="note-line"><span class="note-dot"></span><span>REFERENCE NOTES</span></div>
+        <p>Long broad wings, shallow dihedral, fingered outer primaries, feathered tarsi, golden nape, and a fanned steering tail are modeled as visible 3D forms.</p>
+        <a href="SOURCES.md">View field references ↗</a>
+      </div>
+    </aside>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.161.0/build/three.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
