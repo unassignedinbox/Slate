@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Scorpion // Anatomy + Motion</title>
+<style>
+  :root{--ink:#f5f0e7;--muted:#a69d90;--line:#3e352e;--panel:rgba(21,15,11,.88);--accent:#db8440;--accent2:#ffbd66}
+  *{box-sizing:border-box} html,body{margin:0;height:100%;background:#110c09;color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;overflow:hidden}
+  #app{height:100%;position:relative} canvas{display:block}
+  .hud{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;padding:22px 24px 18px}
+  header{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}.kicker{font:600 11px/1.2 ui-monospace,SFMono-Regular,monospace;letter-spacing:.19em;text-transform:uppercase;color:var(--accent2)}
+  h1{font:500 clamp(26px,4vw,48px)/.98 Georgia,serif;letter-spacing:-.03em;margin:8px 0 0;max-width:600px} .sub{font-size:12px;color:var(--muted);margin-top:10px;max-width:500px;line-height:1.5}
+  .badge{border:1px solid var(--line);background:rgba(17,12,9,.55);padding:10px 12px;font:11px ui-monospace,monospace;color:#d7c9b7;white-space:nowrap}.badge b{color:var(--accent2);font-weight:600}
+  .bottom{display:flex;justify-content:space-between;align-items:flex-end;gap:20px}.panel{pointer-events:auto;background:var(--panel);border:1px solid var(--line);backdrop-filter:blur(14px);box-shadow:0 16px 50px #0008;border-radius:10px}.controls{padding:12px;display:flex;gap:8px;align-items:center}.controls button{border:1px solid #53453a;background:#231811;color:#e9ddcd;border-radius:6px;padding:9px 13px;font:600 11px ui-monospace,monospace;letter-spacing:.08em;cursor:pointer}.controls button:hover,.controls button.active{border-color:var(--accent);color:#fff0df;background:#3a2014}.controls .play{width:40px;color:var(--accent2);font-size:14px;padding:8px}.readout{min-width:175px;padding:2px 4px 2px 8px;color:var(--muted);font:11px/1.4 ui-monospace,monospace}.readout b{display:block;color:#f1dfca;font-size:12px}
+  .facts{width:min(340px,42vw);padding:15px 16px}.facts h2{font:500 16px Georgia,serif;margin:0 0 12px}.facts dl{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;margin:0}.facts dt{color:var(--muted);font:10px ui-monospace,monospace;text-transform:uppercase;letter-spacing:.08em}.facts dd{margin:2px 0 0;color:#ead9c8;font-size:12px}.facts .source{border-top:1px solid var(--line);margin-top:13px;padding-top:10px;color:#988b7c;font-size:10px;line-height:1.4}.source a{color:var(--accent2);text-decoration:none}
+  #loading{position:absolute;inset:0;display:grid;place-items:center;background:#110c09;z-index:4;color:var(--accent2);font:12px ui-monospace,monospace;letter-spacing:.1em}.error{color:#ff9c80;max-width:500px;padding:24px;line-height:1.6}.hint{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:#bfaa96;background:#1c130eaa;border:1px solid #4d3b30;border-radius:20px;padding:7px 12px;font:10px ui-monospace,monospace;opacity:0;transition:opacity 1s}.hint.show{opacity:1}
+  @media(max-width:700px){.hud{padding:14px}.badge{display:none}.sub{max-width:330px}.bottom{align-items:stretch;flex-direction:column-reverse}.facts{width:100%;}.controls{justify-content:space-between}.readout{min-width:auto}.facts{padding:11px}}
+</style>
+</head>
+<body>
+<div id="app"><div id="loading">LOADING ANATOMICAL ASSET…</div><div class="hint" id="hint">DRAG TO ORBIT · SCROLL TO ZOOM</div></div>
+<div class="hud">
+  <header><div><div class="kicker">Slate / field study 01</div><h1>Scorpion<br><em>motion study</em></h1><div class="sub">Procedural high-detail adult scorpion model with articulated pedipalps, chelicerae, four walking-leg pairs, five metasomal segments, telson, and aculeus.</div></div><div class="badge"><b>GLTF 2.0</b><br>rigged · 193 meshes · 2 clips</div></header>
+  <div class="bottom"><section class="panel controls"><button class="play" id="play" title="Play / pause">Ⅱ</button><button class="active" data-clip="Walk_Alternate_Tetrapod">WALK</button><button data-clip="Attack_Chelae_And_Aculeus">ATTACK</button><div class="readout"><b id="clipName">WALK / ALTERNATE TETRAPOD</b><span id="time">loop 1.00 s · 1×</span></div></section>
+  <section class="panel facts"><h2>Read the anatomy</h2><dl><div><dt>Prosoma</dt><dd>carapace + eyes</dd></div><div><dt>Pedipalps</dt><dd>chelae / pincers</dd></div><div><dt>Mesosoma</dt><dd>7 dorsal tergites</dd></div><div><dt>Metasoma</dt><dd>5 tail segments</dd></div><div><dt>Locomotion</dt><dd>alternate tetrapod</dd></div><div><dt>Terminal</dt><dd>telson + aculeus</dd></div></dl><div class="source">Anatomy and gait are based on the sources in <a href="../references.md" target="_blank">references.md</a>. Model units use +X forward, +Y left, +Z up.</div></section></div>
+</div>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+import {GLTFLoader} from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+
+const app=document.getElementById('app'), loading=document.getElementById('loading');
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0x110c09); scene.fog=new THREE.Fog(0x110c09,14,32);
+const camera=new THREE.PerspectiveCamera(36,innerWidth/innerHeight,.05,100); camera.position.set(9,-11,6.3);
+const renderer=new THREE.WebGLRenderer({antialias:true}); renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.setSize(innerWidth,innerHeight); renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap; renderer.outputColorSpace=THREE.SRGBColorSpace; renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.15; app.appendChild(renderer.domElement);
+const controls=new OrbitControls(camera,renderer.domElement); controls.target.set(-.25,0,1.35); controls.enableDamping=true; controls.dampingFactor=.07; controls.minDistance=4.5; controls.maxDistance=19; controls.maxPolarAngle=Math.PI*.49;
+const hemi=new THREE.HemisphereLight(0xffdfbd,0x170b05,2.1); scene.add(hemi);
+const key=new THREE.DirectionalLight(0xffc788,5.5); key.position.set(6,-7,11); key.castShadow=true; key.shadow.mapSize.set(2048,2048); key.shadow.camera.left=-9;key.shadow.camera.right=9;key.shadow.camera.top=8;key.shadow.camera.bottom=-7; scene.add(key);
+const fill=new THREE.PointLight(0x8c2f13,24,15,2); fill.position.set(-5,4,4); scene.add(fill);
+const rim=new THREE.PointLight(0x3b72a4,18,16,2); rim.position.set(-5,-6,6); scene.add(rim);
+const floor=new THREE.Mesh(new THREE.CircleGeometry(16,96),new THREE.MeshStandardMaterial({color:0x160e0a,roughness:.96,metalness:0})); floor.rotation.x=-Math.PI/2; floor.position.y=0; floor.receiveShadow=true; scene.add(floor);
+const grid=new THREE.GridHelper(20,40,0x5e3521,0x281912); grid.position.y=.012; grid.material.transparent=true; grid.material.opacity=.22; scene.add(grid);
+let mixer, actions={}, active, playing=true, clock=new THREE.Clock(), clips=[];
+const loader=new GLTFLoader(); loader.load('./scorpion.glb',g=>{
+  const model=g.scene; model.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true; if(o.material){o.material.envMapIntensity=0.7;}}}); scene.add(model);
+  mixer=new THREE.AnimationMixer(model); clips=g.animations; clips.forEach(c=>actions[c.name]=mixer.clipAction(c));
+  setClip('Walk_Alternate_Tetrapod'); loading.remove(); setTimeout(()=>document.getElementById('hint').classList.add('show'),400); setTimeout(()=>document.getElementById('hint').classList.remove('show'),3300);
+},xhr=>{if(xhr.total) loading.textContent=`LOADING ANATOMICAL ASSET… ${Math.round(xhr.loaded/xhr.total*100)}%`},e=>{loading.innerHTML='<div class="error"><b>Asset could not be loaded.</b><br>Run the included local server from the repository root so the GLB is served over HTTP.</div>';console.error(e)});
+function setClip(name){if(!mixer)return; Object.values(actions).forEach(a=>a.stop()); active=actions[name]; active.reset().play(); active.setLoop(THREE.LoopRepeat,Infinity); document.querySelectorAll('[data-clip]').forEach(b=>b.classList.toggle('active',b.dataset.clip===name)); document.getElementById('clipName').textContent=name.replaceAll('_',' ').toUpperCase(); document.getElementById('time').textContent=`loop ${(clips.find(c=>c.name===name)?.duration||0).toFixed(2)} s · 1×`; playing=true; document.getElementById('play').textContent='Ⅱ'}
+document.querySelectorAll('[data-clip]').forEach(b=>b.addEventListener('click',()=>setClip(b.dataset.clip)));
+document.getElementById('play').addEventListener('click',()=>{if(!active)return;playing=!playing;playing?active.play():active.paused=true;document.getElementById('play').textContent=playing?'Ⅱ':'▶'});
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+function render(){requestAnimationFrame(render);const dt=Math.min(clock.getDelta(),.05);if(mixer&&playing)mixer.update(dt);controls.update();renderer.render(scene,camera)} render();
+</script>
+</body>
+</html>
