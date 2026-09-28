@@ -33,6 +33,15 @@ photo reference for head/beak/talon proportions).
 Primary feathers fan/collapse continuously between folded and spread via
 per-feather quaternion interpolation; the tail fans procedurally.
 
+## Plumage variants
+The **Plumage** selector retints the whole bird procedurally:
+- **Bald Eagle** — white head/tail, dark brown body, yellow beak
+- **Golden Eagle** — golden nape hackles, dark tail, grey beak, yellow cere
+- **Gyrfalcon (dark morph)** — slate plumage, pale nape streaks, dark eyes
+
+The GLB export bakes whichever plumage is currently selected.
+A synthesized raptor screech (WebAudio) plays on **Screech** and at launch.
+
 ## Files
 - `bald_eagle_animated.glb` — baked export (hierarchy + all 6 keyframed clips,
   30 fps) ready for Unity / Unreal / Godot / Blender.

@@ -24,6 +24,7 @@ export function buildEagle() {
   const matEye = new THREE.MeshStandardMaterial({ color: 0xe8c53a, roughness: 0.15 });
   const matPupil = new THREE.MeshStandardMaterial({ color: 0x0a0806, roughness: 0.1 });
   const matFoot = new THREE.MeshStandardMaterial({ color: 0xeeb838, roughness: 0.6, map: scaleTexture() });
+  const matMembrane = new THREE.MeshStandardMaterial({ color: 0x33251a, roughness: 0.95, side: THREE.DoubleSide });
 
   function bone(name, parent, x, y, z) {
     const b = new THREE.Object3D();
@@ -264,9 +265,7 @@ export function buildEagle() {
       [[0, 0, 0], [s * 0.16, 0, -0.012], [s * wingLens.hand, -0.002, -0.030]],
       [0.012, 0.009, 0.004], 8), matBody, wrist);
     // propatagium (leading-edge skin): two pieces so it follows the fold
-    const memMat = new THREE.MeshStandardMaterial({
-      color: 0x33251a, roughness: 0.95, side: THREE.DoubleSide,
-    });
+    const memMat = matMembrane;
     {
       const shape = new THREE.BufferGeometry();
       const pts = new Float32Array([
@@ -285,12 +284,12 @@ export function buildEagle() {
     {
       const shape = new THREE.BufferGeometry();
       const pts = new Float32Array([
-        0, 0.006, 0.005,
-        s * wingLens.fore * 0.96, 0.002, -0.040,
-        s * wingLens.fore * 0.5, -0.002, -0.038,
-        0, -0.006, 0.005,
-        s * wingLens.fore * 0.96, -0.004, -0.040,
-        s * wingLens.fore * 0.5, -0.010, -0.038,
+        0, 0.005, 0.003,
+        s * wingLens.fore * 0.85, 0.002, -0.030,
+        s * wingLens.fore * 0.45, -0.002, -0.028,
+        0, -0.005, 0.003,
+        s * wingLens.fore * 0.85, -0.004, -0.030,
+        s * wingLens.fore * 0.45, -0.008, -0.028,
       ]);
       shape.setAttribute('position', new THREE.BufferAttribute(pts, 3));
       shape.setIndex([0, 1, 2, 3, 5, 4]);
@@ -552,5 +551,13 @@ export function buildEagle() {
   }
 
   root.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
-  return { root, bones, feathers, parts };
+  const materials = {
+    primary: F.primary, secondary: F.secondary,
+    covertDark: F.covertDark, covertMid: F.covertMid,
+    bodyDark: F.bodyDark, bodyMid: F.bodyMid, bodyLight: F.bodyLight,
+    white: F.white, whiteBright: F.whiteBright,
+    torso: matBody, skin: matWhiteSkin, beak: matBeak, cere: matBeakDk,
+    foot: matFoot, eye: matEye, membrane: matMembrane,
+  };
+  return { root, bones, feathers, parts, materials };
 }

@@ -85,6 +85,83 @@ const anim = new Animator(eagle);
 
 anim.onGroundScroll = (v) => { gtex.offset.y += v * clock._dt * 0.030; };
 
+// ---------------- plumage variants ----------------
+const PLUMAGES = {
+  bald: {
+    label: 'Bald Eagle',
+    primary: '#241a10', secondary: '#332516', covertDark: '#3d2c1a', covertMid: '#4a3722',
+    bodyDark: '#382817', bodyMid: '#4d3921', bodyLight: '#5d4729',
+    white: '#e9e4d8', whiteBright: '#f4f0e6',
+    torso: '#3a2a18', skin: '#e7e2d5', beak: '#f0b429', cere: '#d89b1f',
+    foot: '#eeb838', eye: '#e8c53a', membrane: '#33251a',
+  },
+  golden: {
+    label: 'Golden Eagle',
+    primary: '#1f1710', secondary: '#2b2014', covertDark: '#3f2f1c', covertMid: '#5a432a',
+    bodyDark: '#3b2c1a', bodyMid: '#523e27', bodyLight: '#6d5335',
+    white: '#a8813f', whiteBright: '#3a2c1d',
+    torso: '#3a2b19', skin: '#57402a', beak: '#767c85', cere: '#d9b23a',
+    foot: '#e5b53e', eye: '#a06f2c', membrane: '#33251a',
+  },
+  falcon: {
+    label: 'Gyrfalcon (dark)',
+    primary: '#22252b', secondary: '#2c3037', covertDark: '#363b43', covertMid: '#454c55',
+    bodyDark: '#3f454e', bodyMid: '#4a515a', bodyLight: '#5d656f',
+    white: '#b9bcc0', whiteBright: '#6a727c',
+    torso: '#343a41', skin: '#3b4148', beak: '#8a92a0', cere: '#e3c04a',
+    foot: '#eec545', eye: '#2f2319', membrane: '#2a2d33',
+  },
+};
+function setPlumage(key) {
+  const p = PLUMAGES[key];
+  if (!p) return;
+  for (const [k, mat] of Object.entries(eagle.materials)) {
+    if (p[k]) mat.color.set(p[k]);
+  }
+  document.querySelector('#panel h1').textContent = '\u{1F985} ' + p.label;
+}
+
+// ---------------- screech audio (synthesized) ----------------
+let audioCtx = null;
+function screechSound() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = audioCtx, t0 = ctx.currentTime;
+    const dur = 1.05;
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(0, t0);
+    master.gain.linearRampToValueAtTime(0.22, t0 + 0.04);
+    master.gain.setValueAtTime(0.22, t0 + 0.35);
+    master.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    master.connect(ctx.destination);
+    // tonal core: descending "keeee-arr"
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(2950, t0);
+    osc.frequency.setValueAtTime(2950, t0 + 0.14);
+    osc.frequency.exponentialRampToValueAtTime(1250, t0 + 0.9);
+    const vib = ctx.createOscillator(); vib.frequency.value = 27;
+    const vibG = ctx.createGain(); vibG.gain.value = 70;
+    vib.connect(vibG); vibG.connect(osc.frequency);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4200;
+    const og = ctx.createGain(); og.gain.value = 0.55;
+    osc.connect(lp); lp.connect(og); og.connect(master);
+    // raspy noise through a tracking bandpass
+    const nBuf = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
+    const d = nBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const noise = ctx.createBufferSource(); noise.buffer = nBuf;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 7;
+    bp.frequency.setValueAtTime(3300, t0);
+    bp.frequency.exponentialRampToValueAtTime(1500, t0 + 0.9);
+    const ng = ctx.createGain(); ng.gain.value = 0.8;
+    noise.connect(bp); bp.connect(ng); ng.connect(master);
+    osc.start(t0); osc.stop(t0 + dur);
+    vib.start(t0); vib.stop(t0 + dur);
+    noise.start(t0);
+  } catch (e) { /* audio unavailable */ }
+}
+
 // ---------------- UI ----------------
 const stateLabel = document.getElementById('stateLabel');
 anim.listeners.push(s => {
@@ -98,7 +175,12 @@ anim.listeners.push(s => {
 document.querySelectorAll('#panel button[data-state]').forEach(b => {
   b.addEventListener('click', () => anim.request(b.dataset.state));
 });
-document.getElementById('screech').addEventListener('click', () => anim.doScreech());
+document.getElementById('screech').addEventListener('click', () => { anim.doScreech(); screechSound(); });
+document.getElementById('plumage').addEventListener('change', e => setPlumage(e.target.value));
+document.getElementById('orbit').addEventListener('change', e => { controls.autoRotate = e.target.checked; });
+controls.autoRotateSpeed = 1.1;
+// cry on launch
+anim.listeners.push(s => { if (s === 'takeoff') setTimeout(screechSound, 450); });
 document.getElementById('speed').addEventListener('input', e => {
   anim.speed = parseFloat(e.target.value);
   document.getElementById('speedVal').textContent = anim.speed.toFixed(1) + '×';
