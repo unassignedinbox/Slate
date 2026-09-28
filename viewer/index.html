@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scorpion — procedural model &amp; animation rig</title>
+<style>
+  :root { --fg:#e9e4dc; --dim:#9a938a; --acc:#d8a05a; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:#0b0c0d; color:var(--fg);
+              font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
+  #app { position:fixed; inset:0; }
+  canvas { display:block; }
+  #ui { position:fixed; top:14px; left:14px; width:230px; padding:14px 15px;
+        background:rgba(14,15,16,.82); border:1px solid #2a2b2d;
+        border-radius:9px; backdrop-filter:blur(8px); }
+  h1 { margin:0 0 2px; font-size:13px; letter-spacing:.12em;
+       text-transform:uppercase; }
+  .sub { color:var(--dim); font-size:11px; margin-bottom:12px; }
+  .lbl { color:var(--dim); font-size:10px; letter-spacing:.14em;
+         text-transform:uppercase; margin:12px 0 5px; }
+  button { width:100%; margin:0 0 5px; padding:7px 9px; text-align:left;
+           background:#191a1c; color:var(--fg); border:1px solid #2e2f31;
+           border-radius:6px; cursor:pointer; font:inherit; font-size:12px; }
+  button:hover { background:#232426; border-color:#45464a; }
+  button.on { background:var(--acc); color:#17120a; border-color:var(--acc);
+              font-weight:700; }
+  .row { display:flex; gap:5px; }
+  .row button { margin-bottom:0; text-align:center; }
+  input[type=range] { width:100%; accent-color:var(--acc); }
+  #stats { position:fixed; bottom:12px; left:14px; color:var(--dim);
+           font-size:11px; }
+  #hint { position:fixed; bottom:12px; right:14px; color:var(--dim);
+          font-size:11px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="ui">
+  <h1>Scorpion</h1>
+  <div class="sub">procedural rig · glTF 2.0</div>
+  <div class="lbl">Animation</div>
+  <div id="clips"></div>
+  <div class="lbl">Speed <span id="spdv">1.00×</span></div>
+  <input id="spd" type="range" min="0" max="2" step="0.01" value="1">
+  <div class="lbl">View</div>
+  <div class="row">
+    <button data-v="persp">3/4</button>
+    <button data-v="side">Side</button>
+    <button data-v="top">Top</button>
+    <button data-v="front">Front</button>
+  </div>
+  <div class="lbl">Options</div>
+  <button id="spin" class="on">Turntable: on</button>
+  <button id="wire">Wireframe: off</button>
+  <button id="loco" class="on">Forward travel: on</button>
+</div>
+<div id="stats">loading…</div>
+<div id="hint">drag = orbit · wheel = zoom</div>
+
+<script type="importmap">
+{ "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader }    from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const app = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+app.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0c0d);
+scene.fog = new THREE.Fog(0x0b0c0d, 0.6, 2.0);
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+const camera = new THREE.PerspectiveCamera(32, innerWidth/innerHeight,
+                                           0.005, 20);
+camera.position.set(0.26, 0.16, 0.30);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(-0.02, 0.025, 0);
+controls.enableDamping = true;
+controls.minDistance = 0.06;
+controls.maxDistance = 1.2;
+
+// ---- lighting: warm key + cool rim + soft fill
+const key = new THREE.DirectionalLight(0xfff0dc, 3.1);
+key.position.set(0.22, 0.34, 0.18);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+const d = 0.16;
+Object.assign(key.shadow.camera, { left:-d, right:d, top:d, bottom:-d,
+                                   near:0.01, far:1.4 });
+key.shadow.bias = -0.0009;
+scene.add(key);
+const rim = new THREE.DirectionalLight(0x89a6d8, 1.5);
+rim.position.set(-0.26, 0.12, -0.24); scene.add(rim);
+scene.add(new THREE.HemisphereLight(0x4b5566, 0x120f0c, 0.7));
+
+// ---- ground: sand-ish, receives shadow
+const gtex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 512;
+  const x = c.getContext('2d');
+  x.fillStyle = '#241f1a'; x.fillRect(0,0,512,512);
+  for (let i=0;i<60000;i++){
+    const v = 22 + Math.random()*48;
+    x.fillStyle = `rgba(${v+26},${v+14},${v},${0.10+Math.random()*0.3})`;
+    x.fillRect(Math.random()*512, Math.random()*512, 1.6, 1.6);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(14,14);
+  return t;
+})();
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(4, 4),
+  new THREE.MeshStandardMaterial({ map:gtex, roughness:0.98, metalness:0.0 }));
+ground.rotation.x = -Math.PI/2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// ---- model
+let mixer = null, actions = {}, current = null, root = null;
+let travel = true, spin = true, wire = false, speed = 1.0;
+// ground speed derived from the baked stride so the feet do not slip:
+// 2 tetrapod steps per cycle x stride / cycle duration
+const CLIP_SPEED = { Walk: 2*0.020/1.05, Run: 2*0.028/0.62 };  // m/s
+
+new GLTFLoader().load('../build/scorpion.glb', (gltf) => {
+  root = gltf.scene;
+  root.traverse(o => {
+    if (o.isMesh) {
+      o.castShadow = o.receiveShadow = true;
+      o.material.envMapIntensity = 1.25;
+      o.material.flatShading = false;
+    }
+  });
+  scene.add(root);
+
+  mixer = new THREE.AnimationMixer(root);
+  const box = document.getElementById('clips');
+  gltf.animations.forEach((clip, i) => {
+    const a = mixer.clipAction(clip);
+    if (clip.name === 'Attack' || clip.name === 'Sting') {
+      a.setLoop(THREE.LoopRepeat);
+    }
+    actions[clip.name] = a;
+    const b = document.createElement('button');
+    b.textContent = `${clip.name}  ·  ${clip.duration.toFixed(2)}s`;
+    b.onclick = () => play(clip.name);
+    b.dataset.clip = clip.name;
+    box.appendChild(b);
+  });
+  play('Idle');
+
+  let tris = 0;
+  root.traverse(o => { if (o.isMesh) tris += o.geometry.index.count/3; });
+  document.getElementById('stats').textContent =
+    `${Math.round(tris).toLocaleString()} triangles · ` +
+    `${gltf.animations.length} clips · 190 mm body length`;
+}, undefined, e => {
+  document.getElementById('stats').textContent = 'failed to load GLB: ' + e;
+});
+
+function play(name){
+  const next = actions[name]; if (!next) return;
+  next.reset().setEffectiveTimeScale(1).setEffectiveWeight(1).play();
+  if (current && current !== next) current.crossFadeTo(next, 0.28, false);
+  current = next;
+  document.querySelectorAll('#clips button').forEach(b =>
+    b.classList.toggle('on', b.dataset.clip === name));
+  document.getElementById('clipName') && 0;
+  travelName = name;
+  if (root) root.position.set(0,0,0);
+}
+let travelName = 'Idle';
+
+// ---- UI
+document.getElementById('spd').oninput = e => {
+  speed = +e.target.value;
+  document.getElementById('spdv').textContent = speed.toFixed(2)+'×';
+};
+document.getElementById('spin').onclick = e => {
+  spin = !spin; e.target.classList.toggle('on', spin);
+  e.target.textContent = 'Turntable: ' + (spin?'on':'off');
+};
+document.getElementById('loco').onclick = e => {
+  travel = !travel; e.target.classList.toggle('on', travel);
+  e.target.textContent = 'Forward travel: ' + (travel?'on':'off');
+  if (root) root.position.set(0,0,0);
+};
+document.getElementById('wire').onclick = e => {
+  wire = !wire; e.target.classList.toggle('on', wire);
+  e.target.textContent = 'Wireframe: ' + (wire?'on':'off');
+  root && root.traverse(o => { if (o.isMesh) o.material.wireframe = wire; });
+};
+const VIEWS = {
+  persp:[[0.26,0.16,0.30],[-0.02,0.025,0]],
+  side: [[0.0,0.045,0.40],[-0.02,0.03,0]],
+  top:  [[-0.02,0.42,0.001],[-0.02,0,0]],
+  front:[[0.38,0.07,0.0],[0.0,0.025,0]],
+};
+document.querySelectorAll('[data-v]').forEach(b => b.onclick = () => {
+  const [p,t] = VIEWS[b.dataset.v];
+  camera.position.set(...p); controls.target.set(...t);
+  spin = false;
+  const s = document.getElementById('spin');
+  s.classList.remove('on'); s.textContent = 'Turntable: off';
+});
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+const clock = new THREE.Clock();
+function tick(){
+  requestAnimationFrame(tick);
+  const dt = clock.getDelta() * speed;
+  if (mixer) mixer.update(dt);
+  if (root && travel && CLIP_SPEED[travelName]) {
+    root.position.x += CLIP_SPEED[travelName] * dt;
+    if (root.position.x > 0.55) root.position.x = -0.55;
+  } else if (root && !travel) root.position.x = 0;
+  if (spin) {
+    const a = 0.12 * dt;
+    const c = Math.cos(a), s = Math.sin(a);
+    const p = camera.position.clone().sub(controls.target);
+    camera.position.set(p.x*c + p.z*s, p.y, -p.x*s + p.z*c)
+          .add(controls.target);
+  }
+  controls.update();
+  renderer.render(scene, camera);
+}
+tick();
+</script>
+</body>
+</html>
