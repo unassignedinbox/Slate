@@ -5,10 +5,11 @@
  * Units: metres. Femur 1.32 m, tibia 1.15 m, skull 1.40 m, total ~12.2 m.
  */
 import * as THREE from 'three';
-import { sweep, blob, plate, mirrorZ, merge, weather, roughen, longBone, lerp, clamp, smooth } from './boneKit.js';
+import { sweep, blob, plate, mirrorZ, mirrorX, merge, weather, roughen, longBone, lerp, clamp, smooth } from './boneKit.js';
 
+const SKULL_SCALE = 1.09;       // Sue's skull is ~1.53 m along the tooth row
 export const DIM = {
-  skull: 1.40,
+  skull: 1.40 * 1.09,
   cervical: [10, 1.12],
   dorsal: [13, 1.86],
   sacral: [5, 0.66],
@@ -26,12 +27,14 @@ export const DIM = {
  * ==================================================================== */
 function skullGeometry() {
   const parts = [];
-  const S = 1.0;
+  const S = SKULL_SCALE;
   // helper: bar defined by lateral [x,y] points, a z(t) offset track, and section sizes
   const bar = (pts2, zTrack, w, d, o = {}) => {
     const n = pts2.length - 1;
     const pts = pts2.map((p, i) => [p[0] * S, p[1] * S, (typeof zTrack === 'function' ? zTrack(i / n) : zTrack)]);
-    return sweep(pts, w, d, { radial: o.radial || 12, steps: o.steps || 30, section: o.section || 2 });
+    const k = 0.84;   // struts are slabs, not sausages — keep them lean
+    return sweep(pts, w.map(v => v * k), d.map(v => v * k * 1.12),
+      { radial: o.radial || 12, steps: o.steps || 30, section: o.section || 2.4 });
   };
 
   // --- premaxilla (short, deep, U-shaped in plan) ---
@@ -74,8 +77,8 @@ function skullGeometry() {
   parts.push(bar([[0.72, 0.49], [0.88, 0.53], [1.02, 0.55], [1.16, 0.52], [1.28, 0.46]],
     t => lerp(0.07, 0.10, Math.sin(t * Math.PI)), [0.075, 0.10, 0.115, 0.10, 0.07],
     [0.05, 0.055, 0.06, 0.055, 0.05], { section: 3 }));
-  parts.push(blob([1.12, 0.55, 0.0], 0.09, [1.6, 0.55, 0.35]));  // sagittal crest
-  parts.push(blob([1.30, 0.30, 0.0], 0.17, [0.8, 1.25, 1.10]));  // braincase / occiput
+  parts.push(blob([1.14, 0.54, 0.0], 0.085, [1.7, 0.5, 0.30]));  // sagittal crest
+  parts.push(blob([1.29, 0.29, 0.0], 0.125, [0.95, 1.25, 1.05]));  // braincase / occiput
   parts.push(blob([1.36, 0.16, 0.0], 0.055, [0.8, 0.9, 0.9]));   // occipital condyle
   // paroccipital processes
   parts.push(bar([[1.30, 0.34], [1.34, 0.30], [1.33, 0.24]], t => lerp(0.05, 0.27, t), [0.05, 0.05, 0.045], [0.06, 0.055, 0.05]));
@@ -92,16 +95,16 @@ function skullGeometry() {
   };
   for (let i = 0; i < 4; i++) {
     const t = i / 3, x = lerp(0.055, 0.135, t);
-    parts.push(tooth(x, 0.00 + 0.012 * (1 - t), lerp(0.035, 0.085, t), 0.11, 0.021, 0.35 - t * 0.2));
+    parts.push(tooth(x, 0.00 + 0.012 * (1 - t), lerp(0.035, 0.085, t), 0.085, 0.019, 0.35 - t * 0.2));
   }
   for (let i = 0; i < 12; i++) {
     const t = i / 11, x = lerp(0.19, 0.70, t);
-    const len = 0.30 * (1 - Math.pow(Math.abs(t - 0.32) * 1.6, 1.7)) + 0.09;
+    const len = 0.20 * (1 - Math.pow(Math.abs(t - 0.32) * 1.6, 1.7)) + 0.07;
     parts.push(tooth(x, -0.005, lerp(0.095, 0.175, smooth(t)), len, 0.030 + 0.012 * (1 - Math.abs(t - 0.3)), 0.10 - t * 0.28));
   }
 
   const left = merge(parts);
-  return merge([left, mirrorZ(left)]);
+  return mirrorX(merge([left, mirrorZ(left)]));
 }
 
 function mandibleGeometry() {
@@ -119,7 +122,7 @@ function mandibleGeometry() {
   // dentary teeth (13)
   for (let i = 0; i < 13; i++) {
     const t = i / 12, x = lerp(0.06, 0.63, t);
-    const len = 0.23 * (1 - Math.pow(Math.abs(t - 0.28) * 1.5, 1.8)) + 0.07;
+    const len = 0.16 * (1 - Math.pow(Math.abs(t - 0.28) * 1.5, 1.8)) + 0.055;
     const g = new THREE.ConeGeometry(0.023 + 0.010 * (1 - Math.abs(t - 0.28)), len, 10, 1);
     g.translate(0, len / 2, 0);
     g.rotateZ(-(0.18 - t * 0.3));
@@ -127,7 +130,9 @@ function mandibleGeometry() {
     parts.push(g);
   }
   const half = merge(parts);
-  return merge([half, mirrorZ(half)]);
+  const g = mirrorX(merge([half, mirrorZ(half)]));
+  g.scale(SKULL_SCALE, SKULL_SCALE, SKULL_SCALE);
+  return g;
 }
 
 /* =======================================================================
@@ -206,8 +211,8 @@ function iliumGeometry() {
   // a pointed preacetabular process, a squared postacetabular blade, and two
   // peduncles bracketing the acetabulum.
   const outline = [
-    [-0.78, 0.06], [-0.74, 0.26], [-0.50, 0.36], [-0.14, 0.41], [0.24, 0.41],
-    [0.50, 0.36], [0.63, 0.24], [0.66, 0.02], [0.58, -0.12], [0.44, -0.20],
+    [-0.78, 0.04], [-0.74, 0.22], [-0.50, 0.31], [-0.14, 0.35], [0.24, 0.35],
+    [0.50, 0.30], [0.63, 0.20], [0.66, 0.02], [0.58, -0.12], [0.44, -0.20],
     [0.30, -0.34], [0.16, -0.38], [0.06, -0.24], [-0.06, -0.30], [-0.26, -0.26],
     [-0.52, -0.16], [-0.72, -0.08],
   ];
@@ -218,7 +223,7 @@ function iliumGeometry() {
   const brev = sweep([[0.10, -0.10, 0.0], [0.34, -0.06, 0.0], [0.58, -0.02, 0.0]],
     [0.030, 0.028, 0.024], [0.050, 0.045, 0.038], { radial: 8, steps: 12 });
   const merged = merge([g, rim, acet, brev]);
-  merged.translate(0, -0.02, 0.255);
+  merged.translate(0, -0.10, 0.255);
   return merge([merged, mirrorZ(merged)]);
 }
 
@@ -454,7 +459,8 @@ export function buildRex() {
     const vg = vertebra({ len: l, cRad, cDepth: cRad * 0.85, spine: spineH, spineLean: lerp(-0.05, 0.06, t), spineW: 0.032, tp: lerp(0.22, 0.17, t), tpDrop: lerp(0.0, 0.03, t) });
     const parts = [vg];
     // ribs: full-length in the middle of the ribcage, short at both ends
-    const ribLen = 2.20 * Math.sin(Math.pow(clamp((t + 0.06), 0, 1), 0.55) * Math.PI * 0.86) * lerp(0.75, 1.0, smooth(clamp(t * 1.4, 0, 1)));
+    const RIBLEN = [0.95, 1.30, 1.60, 1.80, 1.92, 1.97, 1.97, 1.92, 1.86, 1.80, 1.70, 1.52, 1.28];
+    const ribLen = RIBLEN[i];
     if (ribLen > 0.25) {
       const rb = dorsalRib(ribLen, 0.30 + 0.42 * Math.sin(t * Math.PI), 0.032);
       rb.translate(l * 0.45, cRad * 0.78, 0.13 + cRad * 0.4);
@@ -508,8 +514,10 @@ export function buildRex() {
     const l = (cerLen / nCer) * lerp(1.15, 0.72, t);
     const node = new THREE.Group();
     node.position.set(i === 0 ? 0.06 : cprev, 0, 0);
-    // S-curve: rise steeply out of the shoulders, then level and dip to the head
-    node.rotation.z = i === 0 ? 0.24 : lerp(0.135, -0.30, smooth(t));
+    // S-curve specified as *cumulative* world angles, so the head ends up level
+    // and carried above the shoulders instead of pitching into the chest.
+    const NECK = [0.62, 0.78, 0.76, 0.62, 0.42, 0.20, 0.00, -0.14, -0.22, -0.26];
+    node.rotation.z = i === 0 ? NECK[0] : NECK[i] - NECK[i - 1];
     cnode.add(node);
     cprev = l;
     const cRad = lerp(0.115, 0.075, t);
@@ -532,20 +540,20 @@ export function buildRex() {
   // skull
   const skullNode = new THREE.Group();
   skullNode.position.set(cprev + 0.02, 0.02, 0);
-  skullNode.rotation.z = -0.26;
+  skullNode.rotation.z = -0.02;
   cnode.add(skullNode);
   const skullPivot = new THREE.Group();            // occipital condyle at the origin
   skullNode.add(skullPivot);
   const skullMesh = M(skullGeometry(), 200);
-  skullMesh.position.set(-1.36, -0.16, 0);         // bring occipital condyle to pivot
+  skullMesh.position.set(1.36 * SKULL_SCALE, -0.16 * SKULL_SCALE, 0);          // bring the occipital condyle onto the pivot
   skullPivot.add(skullMesh);
   rig.joints.skull = skullPivot;
 
   const jaw = new THREE.Group();
-  jaw.position.set(-1.36 + 1.145, -0.16 - 0.02, 0);  // jaw joint at the quadrate
+  jaw.position.set((1.36 - 1.145) * SKULL_SCALE, (-0.16 - 0.02) * SKULL_SCALE, 0);   // jaw joint at the quadrate
   skullPivot.add(jaw);
   const jawMesh = M(mandibleGeometry(), 210);
-  jawMesh.position.set(-1.145, 0.02, 0);
+  jawMesh.position.set(1.145 * SKULL_SCALE, 0.02 * SKULL_SCALE, 0);
   jaw.add(jawMesh);
   rig.joints.jaw = jaw;
 
@@ -563,7 +571,7 @@ export function buildRex() {
     const l = (cauLen / nCau) * lerp(1.45, 0.42, Math.pow(t, 0.8));
     const node = new THREE.Group();
     node.position.set(i === 0 ? 0.02 : tprev, 0, 0);
-    node.rotation.z = i === 0 ? 0.02 : lerp(0.002, 0.006, t);  // slight droop then straight
+    node.rotation.z = i === 0 ? 0.02 : lerp(-0.0065, -0.0015, t);  // slight droop then straight
     tnode.add(node);
     tprev = l;
     const cRad = lerp(0.135, 0.016, Math.pow(t, 0.75));

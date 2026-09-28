@@ -145,6 +145,7 @@ renderer.setSize(innerWidth, innerHeight);
 
 /* ---------------- loop ---------------- */
 const clock = new THREE.Clock();
+let prevX = 0, prevZ = 0;
 let lastPlant = { L: true, R: true };
 const tmp = new THREE.Vector3();
 
@@ -172,9 +173,13 @@ function tick() {
   grid.position.x = Math.round(p.x);
   grid.position.z = Math.round(p.z);
   if (followCam) {
-    controls.target.lerp(tmp.set(p.x, 2.4, p.z), 1 - Math.exp(-dt * 3));
-    camera.position.x += (p.x - (controls.target.x - camera.position.x) * 0 - camera.position.x) * 0;
+    // translate camera and pivot by exactly the animal's travel, so orbiting
+    // still feels hand-held while the rex never walks out of frame
+    camera.position.x += p.x - prevX; camera.position.z += p.z - prevZ;
+    controls.target.x += p.x - prevX; controls.target.z += p.z - prevZ;
+    controls.target.y += (2.45 - controls.target.y) * (1 - Math.exp(-dt * 2));
   }
+  prevX = p.x; prevZ = p.z;
   controls.update();
 
   ui.hud.textContent = `${anim.gait.toUpperCase()}  ·  ${anim.params.speed.toFixed(2)} m/s  ·  stride ${anim.params.stride.toFixed(2)} m  ·  ${(anim.params.freq).toFixed(2)} Hz  ·  travelled ${anim.distance.toFixed(1)} m`;
@@ -183,16 +188,5 @@ function tick() {
   requestAnimationFrame(tick);
 }
 tick();
-
-// keep the camera trailing the animal rather than being left behind
-let prevX = 0, prevZ = 0;
-setInterval(() => {
-  const p = rig.root.position;
-  if (followCam) {
-    camera.position.x += p.x - prevX;
-    camera.position.z += p.z - prevZ;
-  }
-  prevX = p.x; prevZ = p.z;
-}, 16);
 
 window.__rex = { rig, anim, scene, camera, renderer, THREE };

@@ -111,6 +111,29 @@ export function plate(outline2d, thickness, opts = {}) {
   return g;
 }
 
+/* Mirror across the transverse plane (x) — used to face the skull forwards. */
+export function mirrorX(geo) {
+  const g = geo.clone();
+  g.scale(-1, 1, 1);
+  const idx = g.getIndex();
+  if (idx) { const a = idx.array; for (let i = 0; i < a.length; i += 3) { const t = a[i]; a[i] = a[i + 2]; a[i + 2] = t; } }
+  else {
+    const pos = g.getAttribute('position');
+    for (let i = 0; i < pos.count; i += 3) {
+      for (const at of Object.values(g.attributes)) {
+        const it = at.itemSize;
+        for (let k = 0; k < it; k++) {
+          const a0 = at.array[i * it + k];
+          at.array[i * it + k] = at.array[(i + 2) * it + k];
+          at.array[(i + 2) * it + k] = a0;
+        }
+      }
+    }
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
 /* Mirror a geometry across the sagittal plane (z). */
 export function mirrorZ(geo) {
   const g = geo.clone();
@@ -180,6 +203,11 @@ function vnoise(x, y, z) {
 }
 export function roughen(geo, amp = 0.0045, freq = 11) {
   const pos = geo.getAttribute('position'), nrm = geo.getAttribute('normal');
+  // scale the relief to the size of the element: a caudal tip must not look
+  // like it was chewed, while a femur can carry real rugosity
+  geo.computeBoundingSphere();
+  const r = geo.boundingSphere ? geo.boundingSphere.radius : 1;
+  amp *= clamp(r / 0.7, 0.18, 1.6);
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
     const n = vnoise(x * freq, y * freq, z * freq) * 0.65

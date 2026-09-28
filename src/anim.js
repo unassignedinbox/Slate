@@ -40,10 +40,18 @@ class DelayLine {
   }
 }
 
+/* Non-slip constraint: during stance the planted foot is fixed in the world, so
+ * the body must advance exactly one stride per stance phase:
+ *      speed = stride * freq / duty
+ * Every entry below satisfies it. Duty stays above 0.5 in both gaits — an adult
+ * T. rex never had an aerial phase, it just took faster, longer steps.  */
+const gait = (speed, freq, duty, extra) =>
+  ({ speed, freq, duty, stride: speed * duty / freq, ...extra });
+
 export const GAITS = {
-  idle: { speed: 0.0, freq: 0.0, stride: 0.0, duty: 1.0, lift: 0.0, bob: 0.010, pitch: 0.0 },
-  walk: { speed: 1.55, freq: 0.62, stride: 2.50, duty: 0.62, lift: 0.42, bob: 0.055, pitch: 0.020 },
-  run:  { speed: 6.20, freq: 1.32, stride: 4.70, duty: 0.52, lift: 0.72, bob: 0.105, pitch: 0.055 },
+  idle: { speed: 0, freq: 0, stride: 0, duty: 1, lift: 0, bob: 0.010, pitch: 0.0 },
+  walk: gait(1.60, 0.45, 0.62, { lift: 0.40, bob: 0.055, pitch: 0.018 }),   // stride 2.20 m
+  run:  gait(4.60, 0.95, 0.54, { lift: 0.62, bob: 0.105, pitch: 0.050 }),   // stride 2.61 m
 };
 
 export class RexAnimator {
@@ -174,8 +182,8 @@ export class RexAnimator {
     const caud = rig.joints.caudals;
     for (let i = 0; i < caud.length; i++) {
       const t = i / (caud.length - 1);
-      const lag = 0.030 + t * 0.34;                       // wave travels tip-ward
-      const gain = (0.40 + 1.55 * Math.pow(t, 0.55)) * (1 - 0.35 * t);
+      const lag = 0.035 + t * 0.62;                       // wave travels tip-ward
+      const gain = (0.05 + 0.20 * Math.pow(t, 0.7)) * (1 - 0.30 * t);   // summed over 40 joints this is a gentle S, not a whip
       const yTarget = -this.tailYawLine.sample(lag) * gain;
       const droop = 0.0042 * Math.pow(t, 1.4) * (1 - 0.55 * smooth(clamp(p.speed / 5, 0, 1)));
       const zTarget = this.tailPitchLine.sample(lag * 0.8) * gain * 1.25
@@ -248,7 +256,7 @@ export class RexAnimator {
       fx = lerp(stride * 0.5, -stride * 0.5, u);
       fy = 0;
       // heel-down → flat → toe-off roll
-      toeRoll = u < 0.12 ? lerp(-0.22, 0, u / 0.12) : u > 0.72 ? lerp(0, 0.85, (u - 0.72) / 0.28) : 0;
+      toeRoll = u < 0.12 ? lerp(-0.10, 0, u / 0.12) : u > 0.72 ? lerp(0, 0.62, (u - 0.72) / 0.28) : 0;
       fy = u > 0.80 ? (u - 0.80) / 0.20 * 0.10 : 0;    // ankle lifts as it rolls onto the toes
       mtAngle = lerp(0.34, -0.42, u);
     } else {
@@ -257,13 +265,13 @@ export class RexAnimator {
       const e = smooth(smooth(u));
       fx = lerp(-stride * 0.5, stride * 0.5, e);
       fy = Math.sin(Math.PI * u) * p.lift * (0.75 + 0.25 * Math.sin(Math.PI * u));
-      toeRoll = lerp(0.85, -0.22, smooth(clamp(u * 1.25, 0, 1)));
+      toeRoll = lerp(0.62, -0.10, smooth(clamp(u * 1.25, 0, 1)));
       mtAngle = lerp(-0.42, 0.34, smooth(u));
     }
 
     // Target in ROOT space (ground = y 0), then transported into pelvis space.
     const lateral = DIM.hipHalfWidth * sgn + Math.sin(this.phase * TAU) * 0.02 * sgn;
-    const target = this._v.set(fx + 0.18, fy + 0.30, lateral);   // foot node sits above the sole
+    const target = this._v.set(fx + 0.18, fy + 0.40, lateral);   // foot node sits above the sole
     this.rig.root.localToWorld(target);
     this.rig.joints.pelvis.worldToLocal(target);
 
@@ -286,7 +294,7 @@ export class RexAnimator {
     const kneeZ = -(Math.PI - angB);
     const ankleZ = -mtAngle - (hipZ + kneeZ);
 
-    const sm = 1 - Math.exp(-dt * 28);
+    const sm = 1 - Math.exp(-dt * 55);
     leg.hip.rotation.z += (hipZ - leg.hip.rotation.z) * sm;
     leg.knee.rotation.z += (kneeZ - leg.knee.rotation.z) * sm;
     leg.ankle.rotation.z += (ankleZ - leg.ankle.rotation.z) * sm;
@@ -320,9 +328,9 @@ export class RexAnimator {
     const open = (lunge - release) ;
     const tremor = Math.sin(u * 140) * 0.018 * (u > 0.34 && u < 0.72 ? 1 : 0)
       + Math.sin(u * 61) * 0.030 * (u > 0.30 && u < 0.75 ? 1 : 0);
-    a.jaw = clamp(open, 0, 1) * 0.62 + tremor * clamp(open, 0, 1);
-    a.headPitch = -inhale * 0.16 + lunge * 0.42 - release * 0.30 + tremor * 0.4;
-    a.neckRaise = -inhale * 0.045 + lunge * 0.075 - release * 0.055;
+    a.jaw = clamp(open, 0, 1) * 1.08 + tremor * clamp(open, 0, 1);   // ~62° gape
+    a.headPitch = -inhale * 0.18 + lunge * 0.55 - release * 0.38 + tremor * 0.4;
+    a.neckRaise = -inhale * 0.060 + lunge * 0.105 - release * 0.075;
     a.neckCurl = inhale * 0.030 - lunge * 0.045 + release * 0.020;
     a.bodyPitch = -inhale * 0.035 + lunge * 0.055 - release * 0.030;
     a.bodyPush = inhale * 0.9 - lunge * 1.4 + release * 0.5;
@@ -339,9 +347,9 @@ export class RexAnimator {
     const up = smooth(clamp((u - 0.78) / 0.22, 0, 1));
     const active = clamp((u - 0.2) / 0.58, 0, 1) * (1 - up);
     const lower = down - up;
-    a.headPitch = lower * -0.58 + Math.sin(u * 46) * 0.020 * active;
-    a.neckCurl = lower * -0.085;
-    a.neckRaise = lower * -0.030;
+    a.headPitch = lower * -0.95 + Math.sin(u * 46) * 0.020 * active;
+    a.neckCurl = lower * -0.235;
+    a.neckRaise = lower * -0.070;
     a.headYaw = Math.sin(u * 3.4) * 0.32 * active + Math.sin(u * 21) * 0.02 * active;
     a.headRoll = Math.sin(u * 3.4 + 1.0) * 0.10 * active;
     // rapid low-amplitude jaw flutter = nostril pumping
