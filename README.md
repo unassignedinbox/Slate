@@ -14,7 +14,9 @@ Open `http://localhost:8000/` locally. In Arena preview, use the live preview fo
 
 - `public/scorpion.glb` — self-contained glTF 2.0 model with PBR materials, named anatomy nodes, and embedded animation data.
 - `public/index.html` — orbitable studio viewer with WALK and ATTACK controls.
+- `public/scorpion_standalone.html` — server-independent viewer with the GLB embedded; useful when a live preview process expires.
 - `tools/generate_scorpion.py` — deterministic generator. Re-run it after changing geometry or animation parameters.
+- `tools/serve_preview.cjs` — small Node static server with glTF MIME and CORS headers.
 - `references.md` — anatomy, gait, and visual reference sources plus the modeling audit.
 
 ## Clips
