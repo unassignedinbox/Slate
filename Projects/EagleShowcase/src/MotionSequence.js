@@ -420,11 +420,11 @@ const FlapCycle = {
                 (t) => ({ twist: 0, spread: down ? 2 : 10, bend: down ? 0 : 6 }));
 
             // Legs tucked up under the tail, toes balled.
-            pose.SetSide("hip", side, -38, 0, 4);
-            pose.SetSide("knee", side, 131, 0, 0);
-            pose.SetSide("ankle", side, -65, 0, 0);
-            pose.SetSide("foot", side, 30, 0, 0);
-            ApplyToes(pose, side, 44);
+            pose.SetSide("hip", side, -26, 0, 20);
+            pose.SetSide("knee", side, 140, 0, 0);
+            pose.SetSide("ankle", side, -53, 0, 0);
+            pose.SetSide("foot", side, 58, 0, 0);
+            ApplyToes(pose, side, 74, -6);
         }
 
         // Body: the trunk rises on the second half of the downstroke (lift peak) and sinks through the upstroke; it
@@ -494,11 +494,11 @@ const GlideCycle = {
                 (t2) => ({ twist: -2, spread: 2, bend: -lerp(3, 8, t2) + 0.8 * own }),
                 () => ({ twist: 0, spread: 4, bend: 2 }));
 
-            pose.SetSide("hip", side, -36, 0, 3);
-            pose.SetSide("knee", side, 129, 0, 0);
-            pose.SetSide("ankle", side, -63, 0, 0);
-            pose.SetSide("foot", side, 28, 0, 0);
-            ApplyToes(pose, side, 40);
+            pose.SetSide("hip", side, -25, 0, 19);
+            pose.SetSide("knee", side, 138, 0, 0);
+            pose.SetSide("ankle", side, -52, 0, 0);
+            pose.SetSide("foot", side, 56, 0, 0);
+            ApplyToes(pose, side, 72, -6);
         }
 
         // Slow scan of the ground below: the head yaws and pitches independently of the body.

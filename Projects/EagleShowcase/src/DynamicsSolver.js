@@ -74,6 +74,19 @@ export class DynamicsSolver
             }
             for (let i = 0; i < 3; ++i)
                 Add(`alulaQuill${T}${i}`, 0.08, [new SpringAxis(2, 1, 22.0, 15.0, 0.40, 0.25)], 400 + i);
+
+            // Covert rows: short, stiff and fast. Their contribution is small per feather but collectively it is what
+            //    makes the wing surface shimmer and ripple instead of looking like painted-on plating.
+            const covertRows = [["greaterCovert", 17, 0.11, 13.0], ["medianCovert", 16, 0.075, 16.0],
+                                ["lesserCovert", 14, 0.052, 19.0], ["marginalCovert", 16, 0.045, 21.0],
+                                ["primaryCovert", 10, 0.095, 14.0], ["underCovert", 15, 0.094, 14.5],
+                                ["underPrimaryCovert", 9, 0.075, 16.5], ["scapular", 9, 0.120, 9.5]];
+            for (const [row, count, tip, f] of covertRows)
+                for (let i = 0; i < count; ++i)
+                    Add(`${row}${T}${i}`, tip, [
+                        new SpringAxis(2, 1, 26.0, f, 0.42, 0.22),
+                        new SpringAxis(0, 2, 9.0, f * 1.2, 0.46, 0.14),
+                    ], 1200 + i * 5 + (T === "L" ? 0 : 53) + row.length * 17);
         }
         for (let i = 0; i < 12; ++i)
             Add(`rectrix${i}`, 0.29, [
@@ -91,6 +104,10 @@ export class DynamicsSolver
             new SpringAxis(0, 1, 3.0, 5.0, 0.55, 0.10),
             new SpringAxis(1, 0, -3.0, 5.2, 0.55, 0.10),
         ], 700);
+        for (let i = 0; i < 12; ++i)
+            for (const T of ["U", "D"])
+                Add(`tailCovert${T}${i}`, 0.08, [new SpringAxis(2, 1, 24.0, 12.0, 0.42, 0.18)], 900 + i * 3 + (T === "U" ? 0 : 1));
+
         Add("tailBase", 0.26, [
             new SpringAxis(0, 1, 7.0, 4.2, 0.45, 0.20),
             new SpringAxis(1, 0, -4.0, 4.6, 0.45, 0.14),
