@@ -13,7 +13,8 @@
     "validate:graph": "tsx scripts/validate-graph.ts",
     "validate:ui": "tsx scripts/validate-ui.tsx",
     "validate:build": "tsx scripts/validate-build.ts",
-    "check": "npm run typecheck && npm run validate:shaders && npm run validate:graph && npm run validate:build && npm run validate:ui"
+    "check": "npm run typecheck && npm run validate:shaders && npm run validate:graph && npm run validate:build && npm run validate:ui",
+    "preview:gen": "tsx scripts/preview-generator.ts"
   },
   "dependencies": {
     "react": "^18.3.1",

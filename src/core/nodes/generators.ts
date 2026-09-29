@@ -43,6 +43,23 @@ float post(float v){
 }
 `;
 
+/**
+ * Highest fractal octave that still lands above the sampling limit.
+ *
+ * `cycles` is how many times the octave-0 feature repeats across the domain.
+ * Anything finer than MIN_PX_PER_CYCLE texels is not detail, it is aliasing —
+ * and once erosion runs over it, it is aliasing that looks like erosion
+ * failed. Clamping here is the other half of the resolution contract: nodes
+ * refuse to run below `minRes` so they cannot smear, and generators refuse to
+ * synthesise above Nyquist so they cannot fizz.
+ */
+export const MIN_PX_PER_CYCLE = 3;
+export function nyquistOctaves(res: number, cycles: number, lacunarity: number, want: number): number {
+  const limit = res / MIN_PX_PER_CYCLE;
+  const maxOct = Math.floor(Math.log2(Math.max(1, limit / Math.max(1e-3, cycles))) / Math.log2(lacunarity)) + 1;
+  return Math.max(1, Math.min(want, maxOct));
+}
+
 const GEN_UNIFORMS = /* glsl */ `
 uniform float uScale, uSeed, uRotation;
 uniform vec2  uOffset;
@@ -405,7 +422,10 @@ void main(){
         uPlateau: ctx.p.plateau,
         uOffsetP: ctx.p.sharpness,
       },
-      ints: { uOctaves: ctx.p.octaves, uBasis: 0, uMode: 4 },
+      ints: {
+        uOctaves: nyquistOctaves(ctx.res, ctx.p.scale ?? 4, 2.07, ctx.p.octaves),
+        uBasis: 0, uMode: 4,
+      },
       target: out,
     });
     return { out: ctx.p.autoLevel ? autoLevel(ctx, out) : out };
@@ -428,8 +448,8 @@ export const MountainRange = defineNode({
   keywords: ['alps', 'peak', 'range', 'uplift'],
   params: [
     { id: 'ranges', label: 'Ranges', kind: 'float', default: 2.2, min: 0.5, max: 10, step: 0.05 },
-    { id: 'ridgeWidth', label: 'Ridge Width', kind: 'float', default: 0.34, min: 0.05, max: 1, step: 0.005 },
-    { id: 'flank', label: 'Flank Falloff', kind: 'float', default: 1.5, min: 0.3, max: 4, step: 0.01 },
+    { id: 'ridgeWidth', label: 'Ridge Sharpness', kind: 'float', default: 0.42, min: 0, max: 1, step: 0.005, info: 'Low gives broad shoulders, high gives knife-edge crests.' },
+    { id: 'flank', label: 'Flank Falloff', kind: 'float', default: 1.5, min: 0.3, max: 4, step: 0.01, info: 'How sharply the massif drops away to the lowlands.' },
     { id: 'detail', label: 'Detail', kind: 'float', default: 0.42, min: 0, max: 1, step: 0.005 },
     { id: 'octaves', label: 'Detail Octaves', kind: 'int', default: 9, min: 1, max: 16, step: 1 },
     { id: 'warpAmt', label: 'Warp', kind: 'float', default: 0.5, min: 0, max: 3, step: 0.01 },
@@ -439,34 +459,56 @@ export const MountainRange = defineNode({
   evaluate(ctx) {
     const out = ctx.alloc('R32F');
     const mask = ctx.input('mask');
+    const span = (ctx.p.scale ?? 2) * (ctx.p.ranges ?? 1.7);
     ctx.gpu.pass({
       name: 'gen.mountain',
       frag: shader(HEADER, NOISE, FRACTAL, GEN_UNIFORMS, FRACTAL_UNIFORMS, POST, /* glsl */ `
 uniform float uRanges, uRidgeWidth, uFlank, uDetail, uPeaks;
+uniform int uOctR2, uOctDet;
 uniform sampler2D uMask; uniform float uHasMask;
 layout(location = 0) out vec4 o;
 void main(){
   vec2 p = genCoord();
 
-  // Ridge skeleton: worley edges warped by low-frequency noise gives sinuous,
-  // branching crest lines rather than blobby lumps.
+  // Meander the ranges so crests do not run in straight lines.
   vec2 w = vec2(
-    fractal2(p * 0.4 + 11.0, 0, 0, 4, 2.0, 0.5, 1.0, 1.0, 0.0, uSeed),
-    fractal2(p * 0.4 - 7.0,  0, 0, 4, 2.0, 0.5, 1.0, 1.0, 0.0, uSeed + 3.0));
+    fractal2(p * 0.35 + 11.0, 0, 0, 4, 2.0, 0.5, 1.0, 1.0, 0.0, uSeed),
+    fractal2(p * 0.35 - 7.0,  0, 0, 4, 2.0, 0.5, 1.0, 1.0, 0.0, uSeed + 3.0));
   vec2 q = p * uRanges + w * uWarp;
 
-  vec3 c = worley2(q + uSeed * 13.0);
-  float edge = c.y - c.x;                       // 0 on the crest, grows outward
-  float crest = 1.0 - smoothstep(0.0, uRidgeWidth, edge);
-  crest = pow(crest, uFlank);
+  // 1. Massif envelope — which ground is mountainous at all. Without it the
+  //    ridges float on a dead-flat plain and the histogram goes bimodal:
+  //    most of the map sits in the darkest satmap stop and reads as black.
+  float mass = fractal2(q * 0.58, 0, uBasis, 4, 2.1, 0.5, 1.0, 1.0, 0.0, uSeed + 41.0);
+  mass = smoothstep(-0.50, 0.30, mass);
+  mass = pow(mass, 0.45 + uFlank * 0.35);
 
-  // per-cell peak height variation so not every summit is the same altitude
-  float peakVar = mix(1.0, 0.45 + hash11(c.z * 91.7) * 0.9, uPeaks);
-  float base = crest * peakVar;
+  // 2. Primary ridgelines. Musgrave's ridged multifractal keeps crests sharp
+  //    because each octave is weighted by the one above it, rather than being
+  //    averaged flat the way a plain ridged fBm is.
+  float r1 = saturate(fractal2(q * 1.2, 4, uBasis, uOctaves, uLac, uGain, uH, uOffsetP, 0.0, uSeed + 21.0) * 1.35);
+  r1 = pow(r1, mix(1.5, 0.55, saturate(uRidgeWidth)));
 
-  // fractal detail modulated by the ridge so valleys stay calmer than peaks
-  float det = fractal2(p * 2.0, 4, 0, uOctaves, uLac, uGain, uH, 0.92, 0.25, uSeed + 21.0);
-  base += det * uDetail * (0.25 + 0.75 * base);
+  // 3. Secondary spurs hanging off the main crests.
+  float r2 = saturate(fractal2(q * 3.1, 2, uBasis, uOctR2, 2.0, 0.5, 0.9, uOffsetP, 0.0, uSeed + 57.0) * 0.5 + 0.5);
+  float ridge = r1 * (0.72 + 0.28 * r2);
+
+  // 4. Summit variation. Keying this to a Voronoi cell id (as this node once
+  //    did) steps at every cell boundary and stamps hard straight seams across
+  //    the terrain; a low-frequency field varies the same way continuously.
+  float pv = saturate(fractal2(q * 0.42 + vec2(53.0, -29.0), 0, uBasis, 3, 2.0, 0.5, 1.0, 1.0, 0.0, uSeed + 91.0) * 0.5 + 0.5);
+  float peakVar = mix(1.0, 0.52 + pv * 0.88, uPeaks);
+
+  float base = mass * peakVar * (0.15 + 0.85 * ridge);
+
+  // 5. Subordinate detail, damped in the valleys.
+  float det = saturate(fractal2(p * 5.0, 2, uBasis, uOctDet, 2.0, 0.5, 0.9, 0.92, 0.2, uSeed + 77.0) * 0.5 + 0.5);
+  base += det * uDetail * 0.13 * (0.12 + 0.88 * base);
+
+  // Lift the midtones so the field actually occupies 0-1. Without this the
+  // bulk of the surface sits under 0.3, every satmap samples its darkest
+  // stops, and the whole terrain reads as one flat colour.
+  base = pow(saturate(base), 0.78);
 
   if (uHasMask > 0.5) base *= texture(uMask, vUV).r;
 
@@ -474,7 +516,7 @@ void main(){
 }`),
       uniforms: {
         ...genUniforms(ctx),
-        uLac: 2.05, uGain: 0.5, uH: 0.9, uOffsetP: 0.92,
+        uLac: 2.03, uGain: 0.5, uH: 0.9, uOffsetP: 0.92,
         uWarp: ctx.p.warpAmt,
         uRanges: ctx.p.ranges,
         uRidgeWidth: ctx.p.ridgeWidth,
@@ -484,7 +526,13 @@ void main(){
         uMask: t2(mask),
         uHasMask: mask ? 1 : 0,
       },
-      ints: { uOctaves: ctx.p.octaves, uBasis: 0, uMode: 4 },
+      ints: {
+        // clamp every band to what this resolution can actually carry
+        uOctaves: nyquistOctaves(ctx.res, span * 1.2, 2.03, ctx.p.octaves),
+        uOctR2: nyquistOctaves(ctx.res, span * 3.1, 2.0, 5),
+        uOctDet: nyquistOctaves(ctx.res, (ctx.p.scale ?? 2) * 5.0, 2.0, 5),
+        uBasis: 0, uMode: 4,
+      },
       target: out,
     });
     return { out: ctx.p.autoLevel ? autoLevel(ctx, out) : out };

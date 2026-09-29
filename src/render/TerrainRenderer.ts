@@ -21,8 +21,8 @@ export interface ShadingSettings {
 export const DEFAULT_SHADING: ShadingSettings = {
   sunAzimuth: 132,
   sunElevation: 34,
-  sunIntensity: 2.6,
-  ambient: 0.55,
+  sunIntensity: 2.4,
+  ambient: 0.72,
   shadows: true,
   ao: true,
   fog: 0.45,

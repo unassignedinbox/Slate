@@ -13,14 +13,14 @@ function node(type: string, x: number, y: number, params: Record<string, any> = 
  * with satmaps -> carve caves -> output. Every stage is a node you can unplug.
  */
 export function makeDefaultGraph(): GraphDoc {
-  const mountain = node('mountain', 40, 40, { ranges: 2.1, ridgeWidth: 0.36, detail: 0.45, scale: 2.0 });
-  const terrace = node('terrace', 380, 40, { count: 22, hardness: 0.45, tilt: 0.06, irregular: 0.35, amount: 0.35 });
+  const mountain = node('mountain', 40, 40, { ranges: 1.7, ridgeWidth: 0.45, flank: 1.35, detail: 0.42, peaks: 0.5, scale: 2.0 });
+  const terrace = node('terrace', 380, 40, { count: 26, hardness: 0.4, tilt: 0.06, irregular: 0.4, amount: 0.18 });
   const hydraulic = node('hydraulic', 720, 40, { iterations: 130, rainfall: 0.4, capacity: 1.25, dissolve: 0.6, deposition: 0.7 });
   const thermal = node('thermal', 1060, 40, { iterations: 55, angle: 46, rate: 0.55 });
   const rivers = node('rivers', 1400, 40, { passes: 2, accumIters: 150, incision: 0.5, depth: 26, width: 4, threshold: 0.44 });
 
   const slope = node('slope', 1400, 470, { maxAngle: 52, smooth: 1.5 });
-  const satRock = node('satmap', 1740, 300, { preset: 'alpine', inHigh: 0.95, variation: 0.07 });
+  const satRock = node('satmap', 1740, 300, { preset: 'verdant', inHigh: 0.92, variation: 0.07 });
   const satWet = node('satmap', 1740, 620, { preset: 'slate', gamma: 0.7, saturation: 0.75, brightness: 0.8 });
   const satCliff = node('satmap', 1740, 940, { preset: 'rocky', brightness: 0.85 });
 

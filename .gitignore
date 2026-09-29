@@ -3,3 +3,8 @@ dist
 .DS_Store
 *.local
 .vite
+
+# scripts/preview-generator.ts output
+preview-height.png
+preview-shaded.png
+diag-noise.png
