@@ -1,0 +1,34 @@
+{
+  "name": "slate",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "SDF terrain generator with node-based editing, GPU erosion and satmap texturing",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "validate:shaders": "tsx scripts/validate-shaders.ts",
+    "validate:graph": "tsx scripts/validate-graph.ts",
+    "validate:ui": "tsx scripts/validate-ui.tsx",
+    "validate:build": "tsx scripts/validate-build.ts",
+    "check": "npm run typecheck && npm run validate:shaders && npm run validate:graph && npm run validate:build && npm run validate:ui"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@shaderfrog/glsl-parser": "^7.0.1",
+    "@types/jsdom": "^21.1.7",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "jsdom": "^25.0.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}
