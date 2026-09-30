@@ -1,0 +1,32 @@
+{
+  "proof": "The SolidArc editor shell — outliner, blank viewport, inspector — rasterised from the real SolidArcEditorHost tick through the real patched ImGui.",
+  "execution": "CPU render by the tool's own translation units and the vendored ImGui — not a native OpenGL capture and not a mock.",
+  "renderer": "EditorDockingVerification's own CPU rasteriser (barycentric fill, 1600×900, stored-deflate PNG sheets). The windowed GLFW host is shipped separately through CMake.",
+  "source": {
+    "imgui": "3bae66c735670619baf51391eba7f3d90a25d125 (1.93.0-docking, sha256-verified, seated by Tools/Build/Bootstrap.py)",
+    "glfw": "7b6aead9fb88b3623e3b3725ebb42670cbe4c579 (sha256-verified)",
+    "patches": "Tools/Build/Patches/PatchA–E, applied verbatim from the Frontier engine's own trapezoidal patch set and proved by ApplyImGuiPatches.py --verify"
+  },
+  "scene": "The sample document from the tool's ConsoleHost: box Body01, sphere sheet CanopySheet, sketch line SketchAxis, construction line AxisRef, Body01 selected. One sheet per phase: the shell, the narrowing menu, the narrowed outliner, the empty document, the tab-strip crop.",
+  "commands": [
+    "bash Tools/Build/CheckSolidArcEditor.sh",
+    "Tools/Build/.EditorDockingVerification Engine/AuthoringTools/SolidArc/VisualProof/SolidArcEditor"
+  ],
+  "results": {
+    "sheets": [
+      "SolidArcEditorProof_Docked.png",
+      "SolidArcEditorProof_Narrowing.png",
+      "SolidArcEditorProof_BodiesNarrowed.png",
+      "SolidArcEditorProof_EmptyDocument.png",
+      "SolidArcEditorProof_TabStrip.png"
+    ],
+    "checks": 27,
+    "failures": 0,
+    "highlights": [
+      "three docked windows at outliner [0..239], viewport centre, inspector [1364..1600]",
+      "clicking the Body01 row picks it through QueryPickedFigureIdentity",
+      "no command carries a foreign texture — the viewport is blank by construction",
+      "the hovered tab's leading edge is inset by the 14 px trapezoidal slant, measured in pixels (y=3 onset 17 px vs y=17 onset 5 px, shift 12 ± 6 against slant 14)"
+    ]
+  }
+}

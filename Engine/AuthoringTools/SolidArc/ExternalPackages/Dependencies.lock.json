@@ -1,0 +1,26 @@
+{
+  "format": 1,
+  "origin": "SolidArc seats the same pinned third-party packages the Frontier engine seats: the docking ImGui with Frontier's five tab patches, and GLFW. Revisions and digests are carried over verbatim from the engine lock so the tool and the engine can never drift apart.",
+  "packages": [
+    {
+      "name": "glfw",
+      "repository": "glfw/glfw",
+      "revision": "7b6aead9fb88b3623e3b3725ebb42670cbe4c579",
+      "url": "https://codeload.github.com/glfw/glfw/tar.gz/7b6aead9fb88b3623e3b3725ebb42670cbe4c579",
+      "sha256": "169d49096e339caabbc12e1762273c5cb9130a535a282ba46cf5c14ab6e55694",
+      "proof": false,
+      "origin": "carried from the Frontier engine lock; the windowed SolidArc host opens its window through it",
+      "witness": "include/GLFW/glfw3.h"
+    },
+    {
+      "name": "imgui",
+      "repository": "ocornut/imgui",
+      "revision": "3bae66c735670619baf51391eba7f3d90a25d125",
+      "url": "https://codeload.github.com/ocornut/imgui/tar.gz/3bae66c735670619baf51391eba7f3d90a25d125",
+      "sha256": "0b99c7baed551f76058bc6fe83d806dc55c912280e9d2d268879a1c9751cef20",
+      "proof": true,
+      "origin": "carried from the Frontier engine lock; the docking branch with Frontier's five tab patches applied by Tools/Build/ApplyImGuiPatches.py",
+      "witness": "imgui.cpp"
+    }
+  ]
+}
