@@ -9,7 +9,10 @@ import { MeshData } from './geom/convex';
 import { Renderer, DrawItem } from './render/renderer';
 import { GpuMesh, makeMesh, freeMesh } from './render/gl';
 import { Batch, BatchInput } from './render/batch';
-import { SCENES, SceneDef, Scene, PaneScene, StructureScene, SolidScene, makeScene, RenderPiece } from './app/scenes';
+import {
+  SCENES, SceneDef, Scene, PaneScene, StructureScene, SolidScene, CarScene, makeScene, RenderPiece,
+} from './app/scenes';
+import { VatGpu } from './render/vat';
 
 function fatal(err: unknown): void {
   const box = document.createElement('pre');
@@ -35,7 +38,7 @@ class MeshCache {
   get(md: MeshData): GpuMesh {
     let e = this.map.get(md);
     if (!e) {
-      e = { gpu: makeMesh(gl, md.pos, md.nrm, md.attr), used: this.frame };
+      e = { gpu: makeMesh(gl, md.pos, md.nrm, md.attr, md.vid, md.idx), used: this.frame };
       this.map.set(md, e);
     }
     e.used = this.frame;
@@ -83,6 +86,7 @@ function camPos(): V3 {
 let sceneDef: SceneDef = SCENES[0];
 let scene: Scene = makeScene(sceneDef);
 let maskTex: WebGLTexture | null = null;
+let vat: VatGpu | null = null;
 
 let energy = 26;
 let crackScale = 0;
@@ -119,6 +123,22 @@ function setScene(def: SceneDef): void {
   cache.clear();
   if (maskTex) { gl.deleteTexture(maskTex); maskTex = null; }
   scene = makeScene(def);
+  renderer.vat = null; vat = null;
+  const deformRow = document.getElementById('deformRow')!;
+  deformRow.toggleAttribute('hidden', !(scene instanceof CarScene));
+  if (scene instanceof CarScene) {
+    // The plastic solve is an asset-build step, so it runs off-thread and the
+    // sites stream in while you play. No browser worker -> blocking fallback.
+    try {
+      const w = new Worker(new URL('./app/bakeWorker.ts', import.meta.url), { type: 'module' });
+      scene.rig.attachWorker(w);
+    } catch (e) {
+      console.warn('bake worker unavailable, falling back to main thread', e);
+    }
+    vat = new VatGpu(gl, scene.rig);
+    renderer.vat = vat;
+    syncDeformButton();
+  }
   cam.target = scene.cameraTarget;
   cam.dist = scene.cameraDist;
   cam.yaw = def.kind === 'pane' ? 0.12 : 0.6;
@@ -265,6 +285,21 @@ energyEl.oninput = crackEl.oninput = physEl.oninput = syncUI;
 syncUI();
 
 document.getElementById('reset')!.onclick = () => setScene(sceneDef);
+const deformBtn = document.getElementById('deformMode') as HTMLButtonElement;
+function syncDeformButton(): void {
+  if (!(scene instanceof CarScene)) return;
+  deformBtn.textContent = scene.mode === 1
+    ? 'Deformer: per-vertex VAT' : 'Deformer: lattice cage (FFD)';
+  deformBtn.classList.toggle('on', scene.mode === 2);
+}
+deformBtn.onclick = () => {
+  if (!(scene instanceof CarScene)) return;
+  scene.mode = scene.mode === 1 ? 2 : 1;
+  syncDeformButton();
+  toast(scene.mode === 1
+    ? 'Per-vertex VAT: exact, bound to this mesh'
+    : 'Lattice cage: trilinear FFD, drives any bound mesh');
+};
 const autoBtn = document.getElementById('auto')!;
 autoBtn.onclick = () => { cam.autoOrbit = !cam.autoOrbit; autoBtn.classList.toggle('on', cam.autoOrbit); };
 
@@ -329,6 +364,15 @@ function frame(now: number): void {
 
   scene.update(dtWall, crackScale, physScale);
 
+  if (scene instanceof CarScene && vat) {
+    vat.sync();
+    const d = scene.rig.activeDents();
+    renderer.dents = d;
+    renderer.dentCount = d.length / 3;
+  } else {
+    renderer.dentCount = 0;
+  }
+
   renderer.resize();
   renderer.setCamera(camPos(), cam.target, cam.fov);
 
@@ -391,6 +435,12 @@ function frame(now: number): void {
     const base: Record<string, string> = {};
     if (scene instanceof PaneScene) Object.assign(base, scene.stats());
     else if (scene instanceof StructureScene) Object.assign(base, scene.stats());
+    else if (scene instanceof CarScene) {
+      Object.assign(base, scene.stats(), {
+        'VAT memory': `${vat ? vat.megabytes().toFixed(1) : '0'} MB`,
+        'baking': scene.rig.pending ? `${scene.rig.pending} queued (worker)` : 'idle',
+      });
+    }
     else if (scene instanceof SolidScene) {
       Object.assign(base, scene.lastStats, {
         'rigid bodies': String(scene.world.bodies.length),

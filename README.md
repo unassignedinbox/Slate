@@ -24,6 +24,7 @@ npm run dev      # http://localhost:5173
 | Boulder · granite | solid crack surfaces | Hertzian cone under the contact, meridional splitting, fragment size graded by distance from the impact |
 | Beam · spruce | solid crack surfaces | Fracture energy across the fibres is ~10× along them, so it splits into long splinters |
 | Panel · ABS plastic | solid crack surfaces | Gc ≈ 5000 J/m². Very few, very large pieces with stress-whitened torn edges |
+| Car · panel deformation | baked elasto-plastic shell + VAT | Steel yields, it does not fracture: each site has an offline plastic solve replayed from a vertex-animation texture. Dents accumulate and never reset, paint crazes and flakes along the creases, and the headlight glass shatters live |
 | Brick wall / concrete column | bonded structural graph | Load propagates down the mortar joints, overloaded joints snap, unsupported islands collapse and break up on landing |
 
 ## Controls
@@ -36,12 +37,16 @@ npm run dev      # http://localhost:5173
 * **Debris time scale** — slow-mo for the rigid-body aftermath
 * **Energy** — log scale, 1 J to 50 kJ, annotated with real-world equivalents
   (thrown stone, hammer, rifle round, car at 20 km/h)
+* **Deformer** (car only) — A/B the exact per-vertex VAT against the lattice
+  cage that drives every part bound to it
 
 The solver readout on the left is live: crack paths, active tips, total crack
 length, new surface area, the surface energy that bought it, and the terminal
 crack speed (0.6 c_R) for the current material.
 
 ## Architecture
+
+![metal deformation](docs/metal-deformation.png)
 
 ```
 src/
@@ -60,6 +65,14 @@ src/
                       extrusion; releases a piece only once it is fully cut free
   frac/solid.ts       3D crack surfaces chosen by a Griffith energy cascade,
                       Hertzian cone contact damage, orientation-dependent Gc
+  frac/dent.ts        elasto-plastic shell solve (PBD + plastic creep) with
+                      sphere and barrier contacts, baked to a sparse VAT, plus
+                      the free-form deformation cage fit
+  geom/carbody.ts     the test vehicle: ONE welded quad-gridded shell, plus
+                      cage-bound lamps, wheels and surface-conformed glass
+  app/carrig.ts       damage cursors per site, bake streaming, lamp breakage
+  app/bakeWorker.ts   runs the plastic solve off the main thread
+  render/vat.ts       vertex-animation textures + the GLSL that plays them
   render/renderer.ts  forward renderer: shadow-mapped sun, analytic sky IBL,
                       procedural materials, separate sorted glass pass
   render/batch.ts     CPU-transformed debris batching (500 shards, 1 draw call)
@@ -75,10 +88,15 @@ The solvers are pure TypeScript and run headless:
 npx esbuild test/smoke.ts    --bundle --platform=node --format=esm --outfile=/tmp/s.mjs && node /tmp/s.mjs
 npx esbuild test/preview.ts  --bundle --platform=node --format=esm --outfile=/tmp/p.mjs && node /tmp/p.mjs   # -> /tmp/cracks.png
 npx esbuild test/preview3d.ts --bundle --platform=node --format=esm --outfile=/tmp/q.mjs && node /tmp/q.mjs  # -> /tmp/solid.png
+npx esbuild test/preview_car.ts --bundle --platform=node --format=cjs --outfile=/tmp/c.cjs && node /tmp/c.cjs  # -> /tmp/car.png
+npx esbuild test/shaders.ts --bundle --platform=node --format=esm --outfile=/tmp/h.mjs && node /tmp/h.mjs      # compiles every GLSL program
 ```
 
 `smoke` prints material constants, fragment counts versus impact energy,
-volume-conservation error and solver timings. The two `preview` scripts
+volume-conservation error and solver timings. `preview_car` reports patch
+sizes, bake times, VAT footprint and the cage-vs-exact error. `shaders`
+compiles every GLSL program with glslang, because a shader that fails to
+compile takes the whole app down and there is no GPU in CI. The two `preview` scripts
 rasterise the crack networks and the 3D fragments straight to PNG — the images
 in this README were produced by them.
 

@@ -38,12 +38,27 @@ export class Program {
   v2(name: string, x: number, y: number): void { this.gl.uniform2f(this.u(name), x, y); }
   v3(name: string, x: number, y: number, z: number): void { this.gl.uniform3f(this.u(name), x, y, z); }
   v4(name: string, x: number, y: number, z: number, w: number): void { this.gl.uniform4f(this.u(name), x, y, z, w); }
+  v3v(name: string, v: Float32Array<ArrayBufferLike>): void { this.gl.uniform3fv(this.u(name), v); }
+  v4v(name: string, v: Float32Array<ArrayBufferLike>): void { this.gl.uniform4fv(this.u(name), v); }
 }
 
-export interface GpuMesh { vao: WebGLVertexArrayObject; count: number; buffers: WebGLBuffer[]; }
+export interface GpuMesh {
+  vao: WebGLVertexArrayObject;
+  count: number;
+  buffers: WebGLBuffer[];
+  /** set for indexed meshes (the deformable car body) */
+  indexed?: boolean;
+}
 
-/** Build a VAO from interleaved-by-stream arrays (pos3, nrm3, attr3). */
-export function makeMesh(gl: GL, pos: Float32Array, nrm: Float32Array, attr: Float32Array): GpuMesh {
+/**
+ * Build a VAO from stream arrays (pos3, nrm3, attr3, optional vid1) with an
+ * optional index buffer. `vid` is the welded vertex id the deformation shader
+ * uses to look this vertex up in the vertex-animation texture.
+ */
+export function makeMesh(
+  gl: GL, pos: Float32Array, nrm: Float32Array, attr: Float32Array,
+  vid?: Float32Array, idx?: Uint32Array,
+): GpuMesh {
   const vao = gl.createVertexArray()!;
   gl.bindVertexArray(vao);
   const buffers: WebGLBuffer[] = [];
@@ -58,8 +73,17 @@ export function makeMesh(gl: GL, pos: Float32Array, nrm: Float32Array, attr: Flo
   bind(pos, 0, 3);
   bind(nrm, 1, 3);
   bind(attr, 2, 3);
+  if (vid) bind(vid, 3, 1);
+  let indexed = false;
+  if (idx) {
+    const ib = gl.createBuffer()!;
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+    buffers.push(ib);
+    indexed = true;
+  }
   gl.bindVertexArray(null);
-  return { vao, count: pos.length / 3, buffers };
+  return { vao, count: idx ? idx.length : pos.length / 3, buffers, indexed };
 }
 
 export function freeMesh(gl: GL, m: GpuMesh): void {

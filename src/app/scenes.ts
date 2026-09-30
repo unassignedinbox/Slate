@@ -17,8 +17,10 @@ import { Body, Piece, Structure, World } from '../sim/world';
 import { fractureSolid, Impact } from '../frac/solid';
 import { CrackNetwork } from '../frac/crack2d';
 import { RegionExtractor, ShellFragment } from '../frac/regions';
+import { CarRig, LampState } from './carrig';
+import { shellToMesh, slabMesh, wheelMesh, conformPane } from '../geom/carbody';
 
-export type SceneKind = 'pane' | 'solid' | 'structure';
+export type SceneKind = 'pane' | 'solid' | 'structure' | 'vehicle';
 
 export interface SceneDef {
   id: string;
@@ -62,6 +64,11 @@ export const SCENES: SceneDef[] = [
     blurb: 'Gc ~5000 J/m^2. The energy budget buys very little new surface: a few large pieces, blunt tears, stress-whitened edges.',
   },
   {
+    id: 'car', label: 'Car · panel deformation', kind: 'vehicle', material: 'abs-plastic',
+    energy: 3000,
+    blurb: 'Sheet steel does not fracture, it yields. Each impact site has an offline elasto-plastic shell solve baked into a vertex-animation texture; the impact energy just decides how far along that baked damage sequence to play. Headlight glass is solved live.',
+  },
+  {
     id: 'wall', label: 'Building · brick wall', kind: 'structure', material: 'brick',
     energy: 9000,
     blurb: 'Blocks bonded by mortar joints. Gravity load is pushed down the bond graph; overloaded joints snap, unsupported islands go dynamic. Progressive collapse.',
@@ -84,6 +91,8 @@ export interface RenderPiece {
   grain: V3; alpha: number;
   glass: boolean;
   mask?: boolean;
+  /** 0 rigid, 1 per-vertex VAT, 2 lattice cage */
+  deform?: number;
 }
 
 export const styleFor = (m: Material): number =>
@@ -780,11 +789,199 @@ function boxNormal(p: V3, c: V3, h: V3): V3 {
   return v3(0, 0, Math.sign(d.z));
 }
 
+
+// ============================================================ VEHICLE (metal)
+
+/**
+ * Car panel damage.
+ *
+ * Steel panels do not fracture, they yield: the realistic thing is a plastic
+ * shell solve, which is far too slow to run per frame. So it is baked per
+ * impact site (see frac/dent.ts) and replayed from a vertex-animation texture,
+ * with the impact energy choosing how far along the baked damage sequence to
+ * go. The lamp lenses are the opposite case - brittle, cheap, tiny - so those
+ * are fractured live by the same Griffith solver the other scenes use.
+ */
+export class CarScene extends Scene {
+  rig = new CarRig();
+  carY = 0.95;
+  bodyMesh!: MeshData;
+  wheels: { mesh: MeshData; model: M4 }[] = [];
+  windows: MeshData[] = [];
+  lampMeshes: MeshData[] = [];
+  shards: Body[] = [];
+  /** 1 = per-vertex VAT, 2 = lattice cage */
+  mode = 1;
+  lastSite = '-';
+  hits = 0;
+
+  build(): void {
+    this.bodyMesh = shellToMesh(this.rig.shell);
+    for (const l of this.rig.lamps) this.lampMeshes.push(slabMesh(l.centre, l.half, 0.014));
+
+    const wm = wheelMesh(0.33, 0.20);
+    for (const sx of [1, -1]) for (const sz of [1, -1]) {
+      this.wheels.push({
+        mesh: wm,
+        model: m4Compose(v3(sx * 1.26, this.carY - 0.33, sz * 0.9), quat()),
+      });
+    }
+
+    // greenhouse glass: snapped onto the body surface and bound to the same
+    // deformation cage, so it rides the panel it is glued into
+    const g = (c: V3, u: V3, vv: V3) =>
+      this.windows.push(conformPane(this.rig.shell, this.rig.nrm0, c, u, vv, 7));
+    g(v3(0.60, 0.46, 0), v3(0.16, 0.20, 0), v3(0, 0, 0.50));          // windscreen
+    g(v3(-0.95, 0.47, 0), v3(-0.17, 0.17, 0), v3(0, 0, 0.46));        // backlight
+    for (const sz of [1, -1]) {
+      g(v3(-0.16, 0.50, sz * 0.72), v3(0.44, 0, 0), v3(0, 0.125, 0)); // side glass
+    }
+  }
+
+  get cameraTarget(): V3 { return v3(0, this.carY * 0.85, 0); }
+  get cameraDist(): number { return 7.2; }
+
+  private toLocal(p: V3): V3 { return v3(p.x, p.y - this.carY, p.z); }
+  private toWorld(p: V3): V3 { return v3(p.x, p.y + this.carY, p.z); }
+
+  pick(ro: V3, rd: V3): HitInfo | null {
+    // ray vs the (undeformed) body triangles - a few thousand tris per click
+    const o = this.toLocal(ro);
+    const { pos, tris } = this.rig.shell;
+    let bt = 1e9; let bn = v3(0, 1, 0);
+    for (let t = 0; t < tris.length; t += 3) {
+      const a = tris[t] * 3, b = tris[t + 1] * 3, c = tris[t + 2] * 3;
+      const ax = pos[a], ay = pos[a + 1], az = pos[a + 2];
+      const e1 = v3(pos[b] - ax, pos[b + 1] - ay, pos[b + 2] - az);
+      const e2 = v3(pos[c] - ax, pos[c + 1] - ay, pos[c + 2] - az);
+      const pv = cross(rd, e2);
+      const det = dot(e1, pv);
+      if (Math.abs(det) < 1e-9) continue;
+      const inv = 1 / det;
+      const tv = v3(o.x - ax, o.y - ay, o.z - az);
+      const u = dot(tv, pv) * inv;
+      if (u < 0 || u > 1) continue;
+      const qv = cross(tv, e1);
+      const vv = dot(rd, qv) * inv;
+      if (vv < 0 || u + vv > 1) continue;
+      const tt = dot(e2, qv) * inv;
+      if (tt > 0.01 && tt < bt) { bt = tt; bn = norm(cross(e1, e2)); }
+    }
+    if (bt > 1e8) return null;
+    return { point: add(ro, mul(rd, bt)), normal: bn };
+  }
+
+  hit(p: V3, dir: V3, energy: number): void {
+    const lp = this.toLocal(p);
+    const res = this.rig.impact(lp, dir, energy);
+    this.lastSite = this.rig.sites[res.site].site.label;
+    this.hits++;
+    for (const l of res.lamps) this.shatterLamp(l, dir, energy);
+  }
+
+  /** Lamp lenses are brittle: solve them live, like every other glass part. */
+  private shatterLamp(l: LampState, dir: V3, energy: number): void {
+    const mat = MATERIALS['annealed-glass'];
+    const box = boxConvex(l.half.x, l.half.y, l.half.z);
+    const frags = fractureSolid(box, mat, {
+      point: v3(l.half.x * 0.5, 0, 0), dir: norm(dir),
+      energy: clamp(energy * 0.06, 20, 400),
+      impulse: Math.sqrt(2 * Math.max(energy, 1) * 0.02),
+      radius: 0.03,
+    }, { maxFragments: 26, seed: 17 });
+    const base = this.toWorld(l.centre);
+    for (const f of frags) {
+      const vel = add(mul(norm(dir), 0.8 + this.rand() * 1.6), v3(
+        (this.rand() - 0.5) * 1.4, 0.4 + this.rand() * 1.2, (this.rand() - 0.5) * 1.4));
+      const omega = v3((this.rand() - 0.5) * 14, (this.rand() - 0.5) * 14, (this.rand() - 0.5) * 14);
+      const b = bodyFromConvex(f.convex, mat, vel, omega, (this.rand() * 1e5) | 0, 1);
+      b.pos = add(base, b.pos);
+      this.world.add(b);
+      this.shards.push(b);
+      this.fragmentCount++;
+    }
+  }
+
+  update(dtWall: number, _crackScale: number, physScale: number): void {
+    this.rig.update(Math.min(dtWall, 0.033));
+    let t = dtWall * physScale;
+    const h = 1 / 240;
+    let guard = 0;
+    while (t > 0 && guard++ < 24) { const s = Math.min(h, t); this.world.step(s); t -= s; }
+  }
+
+  collect(out: RenderPiece[]): void {
+    const model = m4Compose(v3(0, this.carY, 0), quat());
+    const paint: [number, number, number] = [0.085, 0.16, 0.30];
+    out.push({
+      mesh: this.bodyMesh, model, style: 6, color: paint, spec: 1, rough: 0.08,
+      seed: 4, strain: 0, grain: v3(0, 1, 0), alpha: 1, glass: false, deform: this.mode,
+    });
+    for (const w of this.wheels) {
+      out.push({
+        mesh: w.mesh, model: w.model, style: 3, color: [0.055, 0.055, 0.06],
+        spec: 0.25, rough: 0.85, seed: 9, strain: 0, grain: v3(0, 1, 0), alpha: 1, glass: false,
+      });
+    }
+    // lamps and glass ride the deformation CAGE: one bake, every bound part
+    for (let i = 0; i < this.rig.lamps.length; i++) {
+      if (this.rig.lamps[i].broken) continue;
+      const tail = i >= 2;
+      out.push({
+        mesh: this.lampMeshes[i], model, style: 4,
+        color: tail ? [0.55, 0.06, 0.06] : [0.86, 0.88, 0.92],
+        spec: 1, rough: 0.05, seed: 3 + i, strain: 0, grain: v3(0, 1, 0),
+        alpha: 1, glass: true, deform: 2,
+      });
+    }
+    for (const w of this.windows) {
+      out.push({
+        mesh: w, model, style: 4, color: [0.035, 0.05, 0.06], spec: 1, rough: 0.04,
+        seed: 2, strain: 0, grain: v3(0, 1, 0), alpha: 1, glass: true, deform: 2,
+      });
+    }
+    for (const b of this.world.bodies) {
+      for (const pc of b.pieces) {
+        out.push({
+          mesh: pc.mesh, model: m4Compose(add(b.pos, pc.offset), b.quat), style: styleFor(pc.mat),
+          color: pc.mat.color, spec: pc.mat.specular, rough: pc.mat.roughness,
+          seed: pc.seed, strain: pc.strain, grain: v3(...pc.mat.grain), alpha: 1,
+          glass: pc.mat.style === 'glass', batch: pc.mat.style === 'glass',
+        });
+      }
+    }
+  }
+
+  dispose(): void {
+    this.rig.dispose();
+    this.world.clear();
+  }
+
+  stats(): Record<string, string> {
+    const r = this.rig;
+    const baked = r.sites.filter((s) => s.bake).length;
+    let patch = 0;
+    for (const s of r.sites) if (s.bake) patch += s.bake.count;
+    return {
+      'deformer': this.mode === 1 ? 'per-vertex VAT' : 'lattice cage (FFD)',
+      'body mesh': `${r.shell.n} verts · ${r.shell.tris.length / 3} tris · 1 draw`,
+      'sites baked': `${baked} / ${r.sites.length}` + (r.bakeMs ? ` · ${(r.bakeMs / Math.max(baked, 1)).toFixed(0)} ms each` : ''),
+      'VAT slots': patch ? `${patch} verts × ${r.frames} frames` : '-',
+      'active dents': `${r.activeCount()} blended`,
+      'last impact': this.lastSite,
+      'panel damage': `${(r.damage() * 100).toFixed(0)} %`,
+      'lamp shards': String(this.shards.length),
+      'runtime solve': 'none (playback only)',
+    };
+  }
+}
+
 export function makeScene(def: SceneDef): Scene {
   const mat = MATERIALS[def.material];
   const s: Scene = def.kind === 'pane' ? new PaneScene(def, mat)
     : def.kind === 'solid' ? new SolidScene(def, mat)
-      : new StructureScene(def, mat);
+      : def.kind === 'vehicle' ? new CarScene(def, mat)
+        : new StructureScene(def, mat);
   s.build();
   return s;
 }

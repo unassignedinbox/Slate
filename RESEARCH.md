@@ -192,6 +192,146 @@ granite gives 8 pieces at 120 J, 54 at 1.5 kJ, 150+ at 12 kJ.
 ABS panel (too tough to break at that energy). Bright faces are fresh fracture
 surface. Volume is conserved to floating-point exactly.*
 
+---
+
+## 4b. Metal: plastic deformation, baked and replayed (the car case)
+
+Fracture is the wrong model for a car panel. Sheet steel does not create new
+surface, it *yields*: the crystal lattice slips, the shape changes permanently,
+and nothing separates. Modelling that with a crack solver produces nonsense.
+It needs its own pipeline.
+
+### What sheet steel actually does
+
+| Quantity | Mild steel body panel | Consequence |
+|---|---|---|
+| Yield strain `sigma_y/E` | 250 MPa / 200 GPa = **0.00125** | It takes almost no strain to leave a permanent mark. |
+| Elastic springback | recovers ~`sigma_y/E` of strain on release | A dent is always shallower after the impactor leaves than while it is in contact. |
+| Membrane vs bending stiffness | bending is ~2 orders softer for 0.8 mm sheet | The panel **folds** rather than stretching: dents have creases and sharp rims, not smooth bowls. |
+| Work hardening | flow stress rises with accumulated strain | Successive hits in the same place do progressively less. |
+| Paint | clearcoat crazes at a few % strain, basecoat flakes | Bare metal and primer show along the crease, which is most of the visual read. |
+
+Front and rear impacts are not "denting" at all: the crush zone **shortens**,
+converting kinetic energy into folded metal. So the demo models two contact
+types — a sphere (pole, bollard, another car's corner) and a barrier (flat
+obstacle / another car's bumper bar), which prescribes a longitudinal
+compaction field and lets the shell relaxation buckle the excess sheet.
+
+### Why bake it
+
+The solver is position-based dynamics with plastic constraint creep
+(Müller et al. 2007) — the standard stable formulation for large plastic
+deformation:
+
+```
+stretch  |xi - xj| = L0            stiff   (membrane)
+bend     |xa - xb| = B0            soft    (fold instead of stretch)
+plastic  if |eps| > epsY:  L0 += sign(eps)(|eps| - epsY) L0 k
+```
+
+One dent is ~36 000 constraint projections per iteration, 24 iterations per
+crush step, 14 crush steps, plus a release pass at each step so the panel
+springs back onto its new plastic rest shape. That is 0.5-1.7 s per site in
+this demo — three orders of magnitude outside a frame budget, and it always
+produces the *same* answer for the same site. Textbook precompute.
+
+### The bake: a damage axis, not a time axis
+
+For each site the bake presses the impactor in by `1/F` of full depth, relaxes,
+lets plastic strain accumulate, then **removes the impactor and relaxes again**
+so the panel springs back. That released state is frame 1. Press deeper, repeat
+— frame 2, 3 ... F. The sequence is monotone, so the "time" axis of the
+animation is really **accumulated damage**:
+
+* impact energy decides how far along the sequence to play (9 kJ ≈ 1.4 t at
+  13 km/h = full depth),
+* repeat hits keep advancing the same cursor and it never resets,
+* a critically damped spring drives the visible cursor to the target, so the
+  panel booms in and settles instead of snapping.
+
+Per vertex, per frame, the bake stores displacement (xyz) and accumulated
+plastic strain (w, which drives the paint damage), plus the recomputed normal.
+
+### Playback: vertex animation texture, sparsely packed
+
+At runtime the vertex shader does the whole thing (`render/vat.ts`):
+
+```
+pos += SUM_k  amp_k * texelFetch(uVatPos, base[site_k] + frame*P + slot)
+```
+
+with the frame cursor interpolated between two baked frames, up to 6 dents
+blended at once. There is no runtime solve at all — the cost is a handful of
+texture fetches per vertex, the body stays **one draw call**, and it is trivial
+to LOD (stop blending distant dents) or to instance across a hundred cars.
+
+The one non-obvious trick: a dent only moves a few percent of the body, so
+storing a full-body VAT per site is 90 % zeros. Each bake is pruned to the
+vertices that actually moved (> 0.3 mm) and a per-site **slot table** maps mesh
+vertex → patch slot, with 0 meaning "this vertex is not in this dent". For this
+body that is the difference between 60 MB and **5.7 MB** for all 12 sites.
+
+### The lattice cage
+
+The per-vertex VAT is exact but married to one mesh. Production rigs usually
+bake into a **deformation lattice** (free-form cage) instead, and this demo
+does both so they can be A/B'd live:
+
+| | per-vertex VAT | lattice cage (22×9×9 FFD) |
+|---|---|---|
+| Accuracy | exact | mean 0.09 mm, max ~28 mm error (creases round off) |
+| Bound to | this exact mesh | anything inside the cage |
+| Drives lights / glass / badges / LODs | no, each needs its own bake | yes, automatically |
+| Cost | 1 fetch per dent | 8 fetches per dent (trilinear) |
+
+In the demo the body uses the per-vertex path by default, while the headlamp
+lenses and the window glass are **always** cage-driven — one bake, and every
+part glued to that panel moves with it. That is the argument for the cage in a
+real pipeline: you bake the panel once and every trim variant, LOD and decal
+mesh inherits the damage for free.
+
+### Glass on the car
+
+The lamp lenses are the opposite case: brittle, small, and cheap to solve. They
+are fractured **live** by the same Griffith solver the rest of the project
+uses, triggered either by a direct hit or by the panel behind them passing
+~22 % damage (a headlight does not survive its mounting deforming). So a corner
+tap dents the wing and pops the lamp in the same event, with real shards.
+
+![metal deformation](docs/metal-deformation.png)
+
+*Left: the assembled test vehicle (one welded 12 042-vertex shell, plus
+cage-bound lamps and glass). Middle-left: front barrier crush, two sites at
+full depth. Middle-right / right: the same door dent driven by the per-vertex
+VAT and by the lattice cage.*
+
+### Shipping this on real cars
+
+* Bake at cook time, not at load: 8-16 sites per vehicle, ~6 s of solve, ~6 MB
+  of texture. Ship it next to the mesh. (The demo bakes in a Web Worker at run
+  time only so you can watch it happen.)
+* Netcode is a float per site. Nothing else needs to be replicated, and every
+  client reproduces identical geometry.
+* Drive the physics proxy from the same cursor: shrink the crush box, move the
+  wheel collider, jam the door.
+* Author the sites from the crash structure (rails, bumper beam, A-pillar), and
+  paint a stiffness mask so the solve knows where the reinforcement is.
+* The damage cursor is also the perfect driver for everything else: audio layer
+  selection, panel-gap decals, steam/fluid VFX, and the "car is totalled"
+  gameplay flag.
+
+### Limitations
+
+* Dents are per-site, not per-arbitrary-direction; a real rig would bake 2-3
+  directions per site and blend. Blending more than ~6 sites at once starts to
+  double-count where patches overlap.
+* No tearing or separation: panels never rip and doors never fall off. Both
+  want a tear criterion on the plastic strain the bake already stores.
+* The cage rounds creases (see the table above) — use the per-vertex path for
+  hero vehicles, the cage for traffic.
+* No work-hardening feedback between different sites, and no global chassis
+  bending.
+
 ### C. Structural solver — bonded graph with load propagation (`sim/world.ts`)
 
 For buildings. Blocks are nodes; mortar joints are bonds with a strength
@@ -280,4 +420,7 @@ What I would change moving from this demo to a production AAA pipeline:
 * SWGMAT — *Glass Fractures* (radial/concentric/Hertzian cone/hackle) — https://www.asteetrace.org/static/images/pdf/02%20Glass%20Fractures.pdf
 * Bradt — *The Fractography and Crack Patterns of Broken Glass* — https://www.researchgate.net/publication/226276004
 * Frühmann et al. — *Fracture characteristics of wood in mode I, RL vs TL* — https://www.researchgate.net/publication/248470254
+* Müller, Heidelberger, Hennix, Ratcliff — *Position Based Dynamics* (plastic constraint creep) — https://matthias-research.github.io/pages/publications/posBasedDyn.pdf
+* Epic Games — *Vertex Animation Tool / VAT workflow* (position + normal textures driving a vertex shader) — https://dev.epicgames.com/documentation/en-us/unreal-engine/vertex-animation-tool-in-unreal-engine
+* Sederberg & Parry — *Free-Form Deformation of Solid Geometric Models* (the lattice cage) — https://dl.acm.org/doi/10.1145/15922.15903
 * Stanzl-Tschegg et al. — *Fracture Properties of Wood and Wood Composites* — https://www.researchgate.net/publication/229812650

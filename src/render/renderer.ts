@@ -13,6 +13,7 @@
 
 import { M4, V3, m4, m4LookAt, m4Perspective, m4Ortho, m4mul, v3, norm, mul, add, sub } from '../core/math';
 import { GL, GpuMesh, Program } from './gl';
+import { DEFORM_GLSL, VatGpu } from './vat';
 
 export interface DrawItem {
   mesh: GpuMesh;
@@ -28,6 +29,8 @@ export interface DrawItem {
   mask?: WebGLTexture | null;
   maskSize?: [number, number];
   emissive?: number;
+  /** 0 = rigid, 1 = per-vertex VAT, 2 = lattice cage (see render/vat.ts) */
+  deform?: number;
 }
 
 const COMMON = /* glsl */`
@@ -58,25 +61,32 @@ vec3 aces(vec3 x){
 }
 `;
 
-const VS = /* glsl */`#version 300 es
+export const VS = /* glsl */`#version 300 es
+precision highp float;
+precision highp sampler2D;
 layout(location=0) in vec3 aPos;
 layout(location=1) in vec3 aNrm;
 layout(location=2) in vec3 aAttr;
+layout(location=3) in float aVid;
 uniform mat4 uModel, uViewProj, uLightVP;
-out vec3 vWorld; out vec3 vNrm; out vec3 vAttr; out vec4 vLight; out vec3 vLocal;
+${DEFORM_GLSL}
+out vec3 vWorld; out vec3 vNrm; out vec3 vAttr; out vec4 vLight; out vec3 vLocal; out float vDmg;
 void main(){
-  vec4 w = uModel * vec4(aPos,1.0);
+  vec3 p = aPos; vec3 nn = aNrm; float dmg;
+  applyDeform(p, nn, aVid, dmg);
+  vDmg = dmg;
+  vec4 w = uModel * vec4(p,1.0);
   vWorld = w.xyz;
-  vLocal = aPos;
-  vNrm = mat3(uModel) * aNrm;
+  vLocal = p;
+  vNrm = mat3(uModel) * nn;
   vAttr = aAttr;
   vLight = uLightVP * w;
   gl_Position = uViewProj * w;
 }`;
 
-const FS = /* glsl */`#version 300 es
+export const FS = /* glsl */`#version 300 es
 ${COMMON}
-in vec3 vWorld; in vec3 vNrm; in vec3 vAttr; in vec4 vLight; in vec3 vLocal;
+in vec3 vWorld; in vec3 vNrm; in vec3 vAttr; in vec4 vLight; in vec3 vLocal; in float vDmg;
 uniform vec3 uCam, uSun, uColor, uGrain;
 uniform float uSpec, uRough, uSeed, uStrain, uAlpha, uEmissive;
 uniform int uStyle;
@@ -147,6 +157,27 @@ void main(){
     float cr = fbm(vLocal*160.0+uSeedV);
     albedo = mix(uColor, vec3(0.93,0.93,0.95), clamp(white*(0.55+0.6*cr),0.0,1.0));
     rough = mix(0.28, 0.85, fresh);
+  } else if(uStyle==6){
+    // ---- automotive paint: metallic basecoat under a clearcoat, and the
+    // way that paint dies when the steel under it yields.
+    float flake = vnoise(vLocal*820.0);
+    float sparkle = pow(flake, 9.0)*0.8;
+    albedo = uColor*(0.80+0.34*flake) + sparkle;
+    rough = 0.075;
+    spec = 1.0;
+    float dmg = clamp(vDmg, 0.0, 1.0);
+    // Paint has almost no ductility compared with the steel under it: past a
+    // few percent plastic strain the clearcoat crazes, then the basecoat
+    // flakes off and you see primer and bare metal along the crease.
+    float scuff = fbm(vLocal*62.0+uSeedV);
+    float craze = smoothstep(0.10, 0.40, dmg);
+    float bare  = smoothstep(0.42, 0.95, dmg*(0.55+0.85*scuff));
+    albedo = mix(albedo, albedo*0.82, craze);
+    albedo = mix(albedo, vec3(0.43,0.44,0.46), bare);
+    rough = mix(rough, 0.16, craze);
+    rough = mix(rough, 0.45, bare);
+    spec = mix(spec, 0.55, bare);
+    albedo *= 1.0 - 0.22*smoothstep(0.05, 0.55, dmg);
   } else {
     float n = fbm(vLocal*40.0+uSeedV);
     albedo = uColor*(0.9+0.2*n);
@@ -186,9 +217,9 @@ void main(){
   frag = vec4(aces(col), uAlpha);
 }`;
 
-const FS_GLASS = /* glsl */`#version 300 es
+export const FS_GLASS = /* glsl */`#version 300 es
 ${COMMON}
-in vec3 vWorld; in vec3 vNrm; in vec3 vAttr; in vec4 vLight; in vec3 vLocal;
+in vec3 vWorld; in vec3 vNrm; in vec3 vAttr; in vec4 vLight; in vec3 vLocal; in float vDmg;
 uniform vec3 uCam, uSun, uColor;
 uniform float uSpec, uRough, uSeed, uAlpha, uEmissive;
 uniform sampler2D uShadow;
@@ -242,11 +273,20 @@ void main(){
   frag = vec4(aces(col*1.0), clamp(alpha*uAlpha,0.0,1.0));
 }`;
 
-const VS_SHADOW = /* glsl */`#version 300 es
+export const VS_SHADOW = /* glsl */`#version 300 es
+precision highp float;
+precision highp sampler2D;
 layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNrm;
+layout(location=3) in float aVid;
 uniform mat4 uModel, uLightVP;
-void main(){ gl_Position = uLightVP * uModel * vec4(aPos,1.0); }`;
-const FS_SHADOW = /* glsl */`#version 300 es
+${DEFORM_GLSL}
+void main(){
+  vec3 p = aPos; vec3 nn = aNrm; float dmg;
+  applyDeform(p, nn, aVid, dmg);
+  gl_Position = uLightVP * uModel * vec4(p,1.0);
+}`;
+export const FS_SHADOW = /* glsl */`#version 300 es
 precision highp float; out vec4 f; void main(){ f=vec4(1.0); }`;
 
 const VS_SKY = /* glsl */`#version 300 es
@@ -307,6 +347,10 @@ export class Renderer {
   viewProj = m4(); lightVP = m4(); invViewProj = m4();
   sun: V3 = norm(v3(0.55, 0.78, 0.32));
   camPos: V3 = v3(0, 2, 6);
+  /** baked-deformation textures, set by the scene that owns them */
+  vat: VatGpu | null = null;
+  dents: Float32Array<ArrayBufferLike> = new Float32Array(0);
+  dentCount = 0;
 
   constructor(public canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2', {
@@ -404,9 +448,11 @@ export class Renderer {
     this.progShadow.use();
     this.progShadow.m4('uLightVP', this.lightVP);
     for (const it of opaque) {
+      this.bindDeform(this.progShadow, it.deform ?? 0);
       this.progShadow.m4('uModel', it.model);
       gl.bindVertexArray(it.mesh.vao);
-      gl.drawArrays(gl.TRIANGLES, 0, it.mesh.count);
+      if (it.mesh.indexed) gl.drawElements(gl.TRIANGLES, it.mesh.count, gl.UNSIGNED_INT, 0);
+      else gl.drawArrays(gl.TRIANGLES, 0, it.mesh.count);
     }
     gl.colorMask(true, true, true, true);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -496,8 +542,33 @@ export class Renderer {
     gl.disable(gl.BLEND);
   }
 
+  /** Bind the vertex-animation textures + the active dent list. */
+  private bindDeform(p: Program, mode: number): void {
+    const gl = this.gl;
+    const vat = this.vat;
+    if (!vat || mode === 0 || this.dentCount === 0) { p.i('uDefMode', 0); p.i('uDefCount', 0); return; }
+    p.i('uDefMode', mode);
+    p.i('uDefCount', this.dentCount);
+    p.i('uDefFrames', vat.rig.frames);
+    p.i('uTexW', 2048);
+    p.i('uVerts', vat.rig.shell.n);
+    p.i('uCageNodes', vat.rig.cage.nodes);
+    p.v3v('uDent', this.dents);
+    p.v4v('uSiteInfo', vat.siteInfo);
+    const c = vat.rig.cage;
+    p.v3('uCageMin', c.min.x, c.min.y, c.min.z);
+    p.v3('uCageSize', c.size.x, c.size.y, c.size.z);
+    p.v3('uCageDim', c.nx, c.ny, c.nz);
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, vat.posTex); p.i('uVatPos', 2);
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, vat.nrmTex); p.i('uVatNrm', 3);
+    gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, vat.slotTex); p.i('uVatSlot', 4);
+    gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, vat.cageTex); p.i('uCageTex', 5);
+    gl.activeTexture(gl.TEXTURE0);
+  }
+
   private drawWith(p: Program, it: DrawItem): void {
     const gl = this.gl;
+    this.bindDeform(p, it.deform ?? 0);
     p.m4('uModel', it.model);
     p.v3('uColor', it.color[0], it.color[1], it.color[2]);
     p.f('uSpec', it.spec);
@@ -509,7 +580,8 @@ export class Renderer {
     p.i('uStyle', it.style);
     p.v3('uGrain', it.grain.x, it.grain.y, it.grain.z);
     gl.bindVertexArray(it.mesh.vao);
-    gl.drawArrays(gl.TRIANGLES, 0, it.mesh.count);
+    if (it.mesh.indexed) gl.drawElements(gl.TRIANGLES, it.mesh.count, gl.UNSIGNED_INT, 0);
+    else gl.drawArrays(gl.TRIANGLES, 0, it.mesh.count);
   }
 }
 

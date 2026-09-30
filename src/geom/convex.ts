@@ -253,6 +253,10 @@ export interface MeshData {
   /** per-vertex: x = fresh(0/1), y = roughness jitter, z = local coord for grain */
   attr: Float32Array;
   count: number;
+  /** welded vertex id, for meshes driven by a vertex-animation texture */
+  vid?: Float32Array;
+  /** present for indexed meshes */
+  idx?: Uint32Array;
 }
 
 /**
