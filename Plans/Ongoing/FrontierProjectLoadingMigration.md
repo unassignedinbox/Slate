@@ -7,8 +7,9 @@ from a `.frontier` specification and, when required, a project DLL. `Project-Zer
 Frontier, never the executable or source donor for another project.
 
 This document records the selected delivery shape and its implementation status. The source and build-route migration
-now exists in this checkout; CPU mirrors and code-image ABI checks have run. A full Windows/Vulkan execution remains
-unverified because this environment has no Windows/Vulkan toolchain, device, or display runtime.
+now exists in this checkout; the code-image ABI checks and direct Project-Drive physics telemetry have run. A full
+Windows/Vulkan execution remains unverified because this environment has no Windows/Vulkan toolchain, device, or
+display runtime.
 
 ## Selected delivery shape
 
@@ -38,10 +39,10 @@ The current source confirms that the following are common rendering facilities a
 The visibility raster is therefore already a common prerequisite of the ReSTIR route; it is not project-specific.
 
 Surfel GI is a required shared GPU and CPU facility. `Engine/DisplayPresentation/SurfelReference.{h,cpp}` is the
-Vulkan-free, deterministic shared field oracle (persistent placement, hash-grid gather, and Jacobi running mean);
-its scene-measurement callback keeps scene-specific CPU tracing outside the engine. `SurfelReference.cpp`,
-`SurfelGI.cpp`, and the render-mode CPU mirror remain fixtures built on the same contract. The GPU side is authored in
-`SurfelIrradianceUpdate.slang`, `SurfelCommit.slang`, `SurfelGIResolve.slang`, and `SurfelGIStage`.
+Vulkan-free, deterministic shared field reference (persistent placement, hash-grid gather, and Jacobi running mean);
+its measurement callback keeps scene-specific CPU tracing outside the engine. The GPU side is authored in
+`SurfelIrradianceUpdate.slang`, `SurfelCommit.slang`, `SurfelGIResolve.slang`, and `SurfelGIStage`. CPU reference
+outputs are labeled as such and are never used as a substitute for a native host render or editor capture.
 
 The migration must keep the GPU compute route in `Engine/`, wire it through the one Frontier host, and retain the
 shared CPU implementation as the deterministic reference. It is not optional and it must not remain
@@ -141,9 +142,10 @@ established with a number, a structure-size check, and a generated interface has
   project target. Project-Tractrix's creator now emits a standalone specification and image instead of copying a project.
 - 🟢 `Tools/Build/ProjectOwnershipChecks.py` rejects restored project window entries, cross-project source includes,
   copied `GameExecution.cpp`, Project-Zero batch reuse, and invalid project specifications.
-- 🟡 Available Linux C++ CPU references and proof renderers have run successfully; durable outputs and provenance are
-  under `Exhibits/Gallery/`. CMake, PowerShell/MSVC, Slang/Vulkan tools, a Vulkan device, and a display runtime are
-  absent, so no native Frontier/Vulkan UI/shader execution has been claimed.
+- 🟡 The available Linux `DriveTelemetry` physics executable has run successfully; its direct raw output and
+  provenance are under `Exhibits/Gallery/Drive/`. Retired CPU proof renderers are deliberately absent. CMake,
+  PowerShell/MSVC, Slang/Vulkan tools, a Vulkan device, and a display runtime are absent, so no native
+  Frontier/Vulkan UI/shader execution has been claimed.
 
 ## Migration sequence
 
@@ -184,9 +186,10 @@ Replace the current `PROJECT_ZERO_SOURCES` reuse in `ProjectDrive.cmake` and the
 `ToolchainSequence.ps1`. The drive DLL must compile only Drive source plus its declared physics source; it links to
 the Frontier interchange import surface rather than compiling Project-Zero or engine renderer translation units.
 
-Project-Drive keeps its headless `DriveTelemetry` and `SurfelReference` executables. The latter is the
-deterministic CPU reference for the shared GPU surfel route; neither executable is an alternate windowed
-application.
+Project-Drive keeps only its headless `DriveTelemetry` executable for direct vehicle-solver telemetry. The
+engine-owned `Engine/DisplayPresentation/SurfelReference` remains the deterministic CPU reference for the shared GPU
+surfel route; it is not a Project-Drive executable. Neither CPU path is an alternate windowed application or a
+substitute renderer.
 
 ### 5. Retire Project-Tractrix duplication
 
@@ -231,7 +234,7 @@ The migration is complete only when all of the following hold:
 - an edit to Project-Drive recompiles and reloads only `ProjectDrive.dll`;
 - a binary inspection and build log show shared engine translation units linked only into `Frontier.exe`;
 - Project-Drive contains no Project-Zero source inclusion, copied host source, or windowed entry point;
-- the CPU surfel reference and Drive exhibit provenance remain successful;
+- labeled CPU-reference checks and direct DriveTelemetry provenance remain successful;
 - a Vulkan-device run records the surfel update, commit, and resolve dispatches and presents their image;
 - the GPU image remains within the agreed CPU-reference tolerance for the shared fixture;
 - the Project-Zero rendering verification remains successful;

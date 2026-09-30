@@ -113,7 +113,9 @@ int main(int argc, char** argv)
     FILE* csv = std::fopen(csvPath.c_str(), "w");
     if (!csv) { std::fprintf(stderr, "[DriveTelemetry] cannot write %s\n", csvPath.c_str()); return 1; }
 
-    std::fprintf(csv, "t,x,y,z,speed_mps,fwd_mps,rpm,gear,boost_bar,throttle,brake,steer,airborne");
+    std::fprintf(csv, "t,x,y,z,speed_mps,fwd_mps,rpm,gear,boost_bar,throttle,brake,steer,airborne"
+                      ",aero_drag_N,aero_downforce_N,aero_front_downforce_N,aero_rear_downforce_N"
+                      ",aero_wing_downforce_N,aero_underbody_downforce_N,aero_rideheight_m");
     for (int w = 0; w < 4; ++w)
         std::fprintf(csv, ",w%d_load_N,w%d_slip,w%d_slipang,w%d_steer,w%d_omega,w%d_contact,w%d_braketemp_K,w%d_abs",
                      w,w,w,w,w,w,w,w);
@@ -152,10 +154,13 @@ int main(int argc, char** argv)
         if (s % stride == 0)
         {
             const DriverInput in = InputAt(t);
-            std::fprintf(csv, "%.4f,%.4f,%.4f,%.4f,%.3f,%.3f,%.1f,%d,%.3f,%.3f,%.3f,%.3f,%d",
+            std::fprintf(csv, "%.4f,%.4f,%.4f,%.4f,%.3f,%.3f,%.1f,%d,%.3f,%.3f,%.3f,%.3f,%d"
+                              ",%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.5f",
                          t, ch.Position.x, ch.Position.y, ch.Position.z,
                          tl.SpeedMetresPerSecond, tl.ForwardSpeed, tl.EngineRPM, tl.GearIndex, tl.BoostBar,
-                         in.Throttle, in.Brake, in.Steer, airborne?1:0);
+                         in.Throttle, in.Brake, in.Steer, airborne?1:0,
+                         tl.Aero.TotalDrag_N, tl.Aero.TotalDownforce_N, tl.Aero.FrontDownforce_N, tl.Aero.RearDownforce_N,
+                         tl.Aero.WingDownforce_N, tl.Aero.UnderbodyDownforce_N, tl.Aero.UnderbodyRideHeight_m);
             for (int w=0; w<4; ++w)
             {
                 const auto& wt = tl.Wheels[w];

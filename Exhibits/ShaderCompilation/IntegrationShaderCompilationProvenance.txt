@@ -1,10 +1,7 @@
-Shader lowering proof — glslang Glslang Version: 11:16.0.0
-Date: Mon Sep 28 19:38:18 UTC 2026   Repo: SultanAladin/Frontier- @ 2fbe5c5 + RaytraceToggle patch
-Command: glslang -V --target-env vulkan1.2 -S comp -DFRONTIER_SHADER_TOOLCHAIN=1 -IEngine -IEngine/Shaders
------------------------------------------------------------------------------------------
-  PASS  SurfelIrradianceUpdate.slang -> 41172 bytes SPIR-V
-  PASS  SurfelGIResolve.slang        -> 43260 bytes SPIR-V
-  PASS  ReSTIRViewport.slang         -> 521212 bytes SPIR-V
-  PASS  AtrousDenoise.slang          -> 22912 bytes SPIR-V
-  PASS  SurfaceResolve.slang         -> 30408 bytes SPIR-V
-  PASS  VisibilityRaster.frag.slang  -> 8640 bytes SPIR-V
+Shader compilation provenance
+
+Status: historical shader-lowering log; not re-run in this sandbox.
+Reason: neither glslang nor glslc is installed in the available environment.
+
+This text is not render, editor, or runtime evidence. Native Vulkan compilation and execution must be rerun through
+the shared Frontier build route on an environment that provides the required shader compiler and device.

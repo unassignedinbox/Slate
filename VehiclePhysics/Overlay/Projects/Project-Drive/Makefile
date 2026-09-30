@@ -1,14 +1,12 @@
 # ============================================================================================================================================
-#  Projects/Project-Drive/Makefile — headless CPU references (sandbox stand-in), mirroring Project-Zero's Makefile discipline.
+#  Projects/Project-Drive/Makefile — standalone VehicleSolver telemetry only.
 # ============================================================================================================================================
-#  The product renderer is the Vulkan + Slang + ImGui stack (built by CMake `linux-app` / the Windows ToolchainSequence, once
-#  GameExecution is wired — see README). These two targets are the GPU-free references, buildable with plain g++:
+#  Frontier.exe owns every renderer. This makefile intentionally has no scene renderer, editor imitation, or image capture
+#  target. It only runs the real Project-Drive vehicle simulation and writes telemetry for analysis or native replay.
 #
-#     make telemetry   -> bin/DriveTelemetry    physics -> Diagnostics/{telemetry.csv,timing.log,run.log}
-#     make surfel      -> bin/SurfelReference    surfel-GI render -> Diagnostics/{drive_gi.ppm,surfel_timing.log}
-#     make run         -> build both and run them into Diagnostics/
+#      make telemetry   -> bin/DriveTelemetry -> Diagnostics/{telemetry.csv,timing.log,run.log}
 #
-#  Explicit file lists only — never glob Source/ (Project-Zero's rot-guard rule).
+#  Explicit file lists only — never glob Source/.
 
 CXX       := g++
 CXXFLAGS  := -std=c++20 -O2 -Wall -Wextra
@@ -25,24 +23,17 @@ VEHICLE_SRCS := \
 	$(VEHICLE)/TyreSlipDynamics.cpp \
 	$(VEHICLE)/Drivetrain.cpp
 
-.PHONY: all telemetry surfel run clean
-all: telemetry surfel
-
+.PHONY: telemetry run clean
 telemetry: $(BIN)/DriveTelemetry
-surfel:    $(BIN)/SurfelReference
 
 $(BIN)/DriveTelemetry: Source/DriveTelemetry.cpp Source/DriveCourse.h $(VEHICLE_SRCS) | $(BIN)
 	$(CXX) $(CXXFLAGS) -I$(VEHICLE) -ISource Source/DriveTelemetry.cpp $(VEHICLE_SRCS) -o $@
 
-$(BIN)/SurfelReference: Source/SurfelReference.cpp Source/DriveCourse.h Source/ControlVehicleMesh.inl | $(BIN)
-	$(CXX) $(CXXFLAGS) -pthread -ISource Source/SurfelReference.cpp -o $@
-
 $(BIN) $(DIAG):
 	@mkdir -p $@
 
-run: all | $(DIAG)
-	./$(BIN)/DriveTelemetry  $(DIAG)
-	./$(BIN)/SurfelReference --w 800 --h 450 --frames 24 --rays 8 --out $(DIAG)
+run: telemetry | $(DIAG)
+	./$(BIN)/DriveTelemetry $(DIAG)
 
 clean:
 	rm -rf $(BIN)

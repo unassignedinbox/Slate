@@ -2,11 +2,10 @@
 //                                               SURFELIRRADIANCEUPDATE.SLANG
 //============================================================================================================================================
 // 📦 GTX global-illumination path, pass 1 of 2 — the persistent world-space surfel field's temporal irradiance update.
-//    Dispatched ONE thread per live surfel when the "Raytracing" quick tile is OFF and "Global Illumination" is ON
-//    (see the mode matrix in RaytraceToggle/PortingGuide.md). It does NOT run in the raytraced ReSTIR path, and it does
-//    NOT run in the plain visibility-raster mode (GI off) — the host skips the whole surfel graph there.
+//    Dispatched ONE thread per live surfel when the Global Illumination mode is ON. It does not run in the ReSTIR
+//    path or in the plain visibility-raster mode (GI off) — the host skips the whole surfel graph there.
 //
-//    Technique (mirrors the proven CPU reference SurfelGI/SurfelGI.cpp, itself after Jure Triglav's surfel GI):
+//    Technique follows the shared CPU reference in `Engine/DisplayPresentation/SurfelReference.cpp`:
 //      • surfels are persistent in world space and never move — the single biggest anti-flicker decision;
 //      • each frame a surfel casts RayCount cosine-weighted hemisphere rays, traverses the shared CWBVH for
 //        visibility, gathers sun direct at the hit (shadow-ray tested) plus the neighbouring surfels' PREVIOUS
@@ -48,7 +47,7 @@ layout(std430, binding = 2) readonly buffer SurfelGridNextExtent { int  SurfelGr
 // Shared CWBVH blobs (identical bindings to the ReSTIR kernel's 8/9) — TraversalCWBVH.slang traces these.
 layout(std430, binding = 8) readonly buffer TraversalNodeExtent { vec4 CwbvhNodes[]; };
 layout(std430, binding = 9) readonly buffer TraversalLeafExtent { vec4 CwbvhTris[];  };
-uint TlasInstanceCount = 0u;   // single-blob world here (GTX Cornell/showcase); the two-level path plugs in as in ReSTIRViewport.
+uint TlasInstanceCount = 0u;   // single-blob world here; the two-level path plugs in as in ReSTIRViewport.
 #include "TraversalCWBVH.slang"
 
 //------------------------------------------------------------------------------------------------------------------------

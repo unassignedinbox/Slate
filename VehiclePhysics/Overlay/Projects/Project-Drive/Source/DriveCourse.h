@@ -2,10 +2,11 @@
 // 📦 Projects/Project-Drive/Source/DriveCourse.h — the shared driving course (terrain + props), header-only
 //============================================================================================================================================
 //
-//    ONE definition of the course, read by both hosts exactly like ShowroomStructure is in Project-Zero:
-//      • the RENDER side (SurfelReference / the Vulkan app) emits triangles from EmitCourseTriangles();
-//      • the PHYSICS side (DriveTelemetry / the live drive) samples CourseHeight()/CourseNormal() as the tyre ground query.
-//    Because both come from these functions, the wheels rest exactly on the surface the renderer draws.
+//    ONE definition of the course used by Project-Drive systems:
+//      • Frontier project integration emits scene triangles from EmitCourseTriangles() through the shared host;
+//      • DriveTelemetry samples CourseHeight()/CourseNormal() as the tyre ground query.
+//    Integration must preserve these shared functions so wheels rest on the terrain the host renders. DriveTelemetry
+//    is physics-only and must not be represented as a Frontier viewport or editor capture.
 //
 //    Layout matches TractrixDriveScene / the authored `--scene drive` level (metres, +X fwd / +Y left / +Z up):
 //      flat CHECKER pad · a RAMP 9 m ahead (6 m run, 1.35 m crest) · three rounded SPEED BUMPS behind · an 8-cone slalom.
@@ -39,8 +40,8 @@ struct CourseConstants
 };
 
 // Material ids the emitter tags each triangle with.  The first six belong to the static course; the remainder
-// are the ControlVehicle palette.  Keep this order in step with DriveSceneAuthor::AuthorMaterials and the CPU
-// reference renderers.  `ControlVehicle.blend` names its original material families MAGlass, MAMetalicCoat,
+// are the ControlVehicle palette. Keep this order in step with DriveSceneAuthor::AuthorMaterials and the
+// Frontier project integration.  `ControlVehicle.blend` names its original material families MAGlass, MAMetalicCoat,
 // MAPlastic and MARubber; the flattened body export has no polygon-slot stream, so its source-space classifier
 // restores those four material families without turning the whole shell into a single paint slab.
 enum CourseMaterial : uint32_t

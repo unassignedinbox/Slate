@@ -1,2 +1,4 @@
+# Rebuildable local Project-Drive telemetry; the retained evidence copy belongs in Exhibits/Gallery/Drive/.
 bin/
-Diagnostics/*.ppm
+Diagnostics/*.csv
+Diagnostics/*.log

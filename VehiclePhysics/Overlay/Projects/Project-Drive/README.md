@@ -17,8 +17,8 @@ exceptions, allocator ownership, Vulkan references, and ImGui records do not cro
 ## Project content
 
 `Source/DriveCourse.h` describes the proving ground shared by the vehicle and its content authoring. The project vehicle
-sources keep course and ControlVehicle semantics project-owned. `Source/SurfelReference.cpp` remains a project fixture
-using the engine-owned CPU `SurfelReferenceField`; it is not a project renderer or a second Surfel-GI implementation.
+sources keep course and ControlVehicle semantics project-owned. Project-Drive has no project-local renderer: visibility
+raster, Surfel GI, ReSTIR, sky, editor panels and capture all remain Frontier-owned.
 
 ## Build and opening
 

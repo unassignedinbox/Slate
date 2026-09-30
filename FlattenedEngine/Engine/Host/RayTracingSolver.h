@@ -1,5 +1,5 @@
 //============================================================================================================================================
-// 📦 Project-Zero/Source/RayTracingSolver.h — Triangle Geometry Ray Intersection and Analytical Scene Solver
+// 📦 Host/RayTracingSolver.h — Triangle geometry ray intersection and analytical scene solver
 //============================================================================================================================================
 
 #pragma once
@@ -36,10 +36,7 @@ public:
     RayTracingSolver() noexcept;
     ~RayTracingSolver() noexcept = default;
 
-    void                    ConstructCornellBoxScene() noexcept;
-
-    // An OPEN scene: ground and horizon with nothing overhead. Where the Cornell box is a closed room,
-    //    this is the framing complement — most of the default view misses geometry.
+    // An open scene: ground and horizon with nothing overhead.
     void                    ConstructOutdoorScene() noexcept;
 
     // Showcase: 100 analytical objects over soil with per-object spans. Additive to the pattern's scenes;

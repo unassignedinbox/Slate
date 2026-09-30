@@ -1,12 +1,10 @@
-Thread E / E-2 — shader compile proof
-Compiler: Glslang Version: 11:16.0.0 ESSL Version: OpenGL ES GLSL 3.20 glslang Khronos. 16.0.0 GLSL Version: 4.60 glslang Khronos. 16.0.0 SPIR-V Version 0x00010600, Revision 1 GLSL.std.450 Version 100, Revision 1 Khronos Tool ID 8 SPIR-V Generator Version 11 GL_KHR_vulkan_glsl version 100 ARB_GL_gl_spirv version 100 
-Command:  glslang --target-env vulkan1.2 -S comp -IEngine -I. <shader> -o <spv>
-Date:     2026-09-28T20:05:17Z
----------------------------------------------------------------
-PASS  SurfelIrradianceUpdate.slang       ->    41172 B SPIR-V
-PASS  SurfelCommit.slang                 ->     1700 B SPIR-V
-PASS  SurfelGIResolve.slang              ->    43260 B SPIR-V
-PASS  SurfaceResolve.slang               ->    31204 B SPIR-V
----------------------------------------------------------------
-Note: SurfaceResolve.slang shown post-patch (adds binding 14 MaterialImage aux target).
-      ReSTIRViewport / AtrousDenoise / VisibilityRaster unchanged from the Thread E proof.
+Shader compilation provenance
+
+Status: historical shader-lowering log; not re-run in this sandbox.
+Historical tool: glslang 16.0.0, target Vulkan 1.2 (2026-09-28T20:05:17Z).
+Historical results: SurfelIrradianceUpdate.slang, SurfelCommit.slang, SurfelGIResolve.slang, and SurfaceResolve.slang
+lowered successfully.
+
+This file is not render, editor, or runtime evidence. The current environment lacks glslang/glslc, so the shared
+Frontier build must recompile these shaders and record its command, source revision, and SPIR-V hashes when a native
+Vulkan toolchain and device are available.

@@ -1,24 +1,25 @@
 # Frontier proof gallery
 
-`Exhibits/Gallery/` is the single durable destination for rendered images, telemetry extracts, proof logs, and their provenance. Rebuildable proof sources live under `Exhibits/Workbench/`; throwaway executables and raw rendering intermediates belong in `_AgentScratch/` or feature-local diagnostics and are not authoritative evidence.
+`Exhibits/Gallery/` is the single durable destination for captured images, direct telemetry extracts, proof logs, and their
+provenance. Rebuildable proof sources live under `Exhibits/Workbench/`; disposable executables and intermediates belong
+in `_AgentScratch/` or feature-local diagnostics and are not authoritative evidence.
 
 ## Naming and execution truthfulness
 
-- `*_CPU_Reference.*` is the current canonical name for a CPU-rendered reference. It is **not** represented as a native Vulkan, Slang, or ImGui capture. Older retained galleries may use the synonymous legacy `*_CPU_Mirror.*` suffix.
-- Each gallery contains `Provenance.json`, which identifies the scene, command, measured results, execution boundary, and SHA-256 values for durable sibling artifacts.
-- `*_FrameDifference_x20_CPU_Mirror.png` visualises twenty-times-amplified temporal change for inspection.
-- Native GPU/UI captures should use a clearly separate `*_Native_*` name and state the capture environment in provenance.
+- `*_CPU_Reference.*` is the canonical name for a CPU reference. It is not represented as a native Vulkan, Slang, or
+  ImGui capture.
+- A native image or GIF must use a clearly separate `*_Native_*` name and identify the Frontier executable, project
+  specification, scene, and render mode in sibling provenance.
+- A CPU chart may visualize direct telemetry, but it must not be presented as a Frontier renderer/editor capture.
+- Every gallery carries `Provenance.json` with the command, source/output SHA-256 readings, and execution boundary.
 
 ## Gallery map
 
 ```text
 Gallery/
-├── CodeImages/                 Dynamic code-image ABI lifecycle result and provenance
-├── Drive/                      Canonical Project-Drive materials, Surfel/ReSTIR, XPBD, motion and editor-state CPU references
-├── ProjectZero/                Fresh Project-Zero showcase and M10 material-library CPU mirrors
-├── ReflectionReservoir/        Baseline, ReSTIR, and high-sample reflection reference
-├── RenderModes/CurrentUi/      Cornell plain-raster / Surfel-GI / ray-traced comparison
-└── SurfelGi/Cornell/           Cornell Surfel-GI convergence, coverage, and diagnostic views
+├── CodeImages/     Dynamic code-image ABI lifecycle result and provenance
+└── Drive/          Direct Project-Drive physics telemetry only; host captures are required for visual evidence
 ```
 
-The files in this hierarchy are intentionally portable PNG, text/CSV, Markdown, and JSON artifacts.
+No Project-Zero image is retained until it is captured from the shared host's default 20 × 20 material scene.
+Retired analytical scenes, custom CPU renderers, synthetic UI sheets, and their derived images are intentionally absent.
