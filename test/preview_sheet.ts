@@ -6,7 +6,7 @@ import { DentField } from '../src/app/dentfield';
 import { shellNormals } from '../src/geom/carbody';
 import { Canvas, View, drawShell, v3 } from './raster';
 
-const atlas = bakeDentAtlas(48, 12);
+const atlas = bakeDentAtlas();
 console.log(`dent library: ${atlas.types.length} types, ${atlas.frames} frames, ${atlas.res}^2, ` +
   `${((atlas.pos.length + atlas.nrm.length) * 4 / 1048576).toFixed(2)} MB, ${atlas.ms.toFixed(0)} ms bake`);
 

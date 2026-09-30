@@ -24,8 +24,8 @@ npm run dev      # http://localhost:5173
 | Boulder · granite | solid crack surfaces | Hertzian cone under the contact, meridional splitting, fragment size graded by distance from the impact |
 | Beam · spruce | solid crack surfaces | Fracture energy across the fibres is ~10× along them, so it splits into long splinters |
 | Panel · ABS plastic | solid crack surfaces | Gc ≈ 5000 J/m². Very few, very large pieces with stress-whitened torn edges |
-| Panel · sheet steel | baked flat-sheet dent atlas | 1.2 mm steel skin. One elasto-plastic dent solved offline on a flat sheet, stored as a displacement-map sequence and stamped at any point, any angle, any scale — hit it as often as you like |
-| Car · panel deformation | baked elasto-plastic shell + VAT | Steel yields, it does not fracture. Structural crush (nose, tail) replays a per-site offline plastic solve from a vertex-animation texture; every other hit stamps the portable flat-sheet dent at the exact contact point. Damage accumulates and never resets, paint crazes along the creases, and the headlight glass shatters live |
+| Panel · sheet steel | baked flat-sheet dent atlas | 1.2 mm steel skin. Three elasto-plastic bakes on a flat sheet — a dish, a crumpled crater and a long buckle — stamped at any point, any angle, any scale. A light hit dishes; a heavy one folds, because the structure around it gave way and fed the panel extra metal |
+| Car · panel deformation | baked elasto-plastic shell + VAT | Steel yields, it does not fracture. The four structural crush zones replay a per-site offline plastic solve from a vertex-animation texture; every other hit stamps a portable flat-sheet dent at the exact contact point. Damage accumulates and never resets, paint crazes along the creases, and the headlight glass shatters live |
 | Brick wall / concrete column | bonded structural graph | Load propagates down the mortar joints, overloaded joints snap, unsupported islands collapse and break up on landing |
 
 ## Controls
@@ -49,6 +49,8 @@ crack speed (0.6 c_R) for the current material.
 
 ![metal deformation](docs/metal-deformation.png)
 
+![dent library](docs/dent-library.png)
+
 ![stamped dents](docs/dent-stamping.png)
 
 ```
@@ -69,7 +71,7 @@ src/
   frac/solid.ts       3D crack surfaces chosen by a Griffith energy cascade,
                       Hertzian cone contact damage, orientation-dependent Gc
   frac/dentmap.ts     the portable bake: canonical dents solved on a flat steel
-                      sheet in tangent space -> 2.5 MB displacement-map atlas
+                      sheet in tangent space -> 1.1 MB displacement-map atlas
   app/dentfield.ts    live dent instances (type, frame, tangent frame, scale),
                       merge-on-repeat-hit, spring settle, shader packing
   frac/dent.ts        elasto-plastic shell solve (PBD + plastic creep) with

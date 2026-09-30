@@ -269,7 +269,8 @@ The one non-obvious trick: a dent only moves a few percent of the body, so
 storing a full-body VAT per site is 90 % zeros. Each bake is pruned to the
 vertices that actually moved (> 0.3 mm) and a per-site **slot table** maps mesh
 vertex → patch slot, with 0 meaning "this vertex is not in this dent". For this
-body that is the difference between 60 MB and **5.7 MB** for all 12 sites.
+body that is the difference between 34 MB and **7.7 MB** for the four
+structural sites.
 
 ### The lattice cage
 
@@ -293,71 +294,129 @@ mesh inherits the damage for free.
 ### Portable dents: bake one steel sheet, stamp it anywhere
 
 The per-site bake above answers "what does *this car* do when hit *there*".
-It is exact, but it is also 12 fixed answers, and a new vehicle means a new
-cook. The generalisation is to notice **what a dent actually depends on**.
+It is exact, but each answer is tied to one spot on one body, and a new
+vehicle means a new cook. The generalisation is to notice **what a dent
+actually depends on**.
 
-Away from a structural member, a panel dent is a *local* event. The steel is a
-thin shell under membrane tension with a plastic hinge ring; the physics is
-translation- and rotation-invariant along the surface, and over the ~30 cm
-footprint of the dent the panel's own curvature is a second-order correction.
-That is exactly the argument behind stamped/decal deformation in shipping
-racing games, and behind "detail maps" for damage in general: the interesting
-information is in the *shape of the dent*, not in where it happened.
+Away from a structural member, a panel dent is a *local* event: a thin shell
+under membrane tension with a plastic hinge ring, translation- and
+rotation-invariant along the surface, with the panel's own curvature only a
+second-order correction over the ~30 cm footprint. So the bake becomes a
+**material asset instead of an asset-specific one**: solve the same
+elasto-plastic shell (`frac/dent.ts`) on a **flat clamped square of 1.2 mm
+cold-rolled steel**, in the dent's own tangent frame, for a few canonical
+impact conditions, and store it as a displacement-map sequence indexed by
+(u, v, damage) — `frac/dentmap.ts`.
 
-So the bake becomes a **material asset instead of an asset-specific asset**:
-solve the same elasto-plastic shell (`frac/dent.ts`) on a **flat clamped square
-of 1.2 mm cold-rolled steel**, in the dent's own tangent frame, for a few
-canonical impactor shapes, and store the result as a displacement-map sequence
-indexed by (u, v, damage) — `frac/dentmap.ts`:
+### Why a dent dishes and a crash crumples
 
-| impactor | half-width | full depth | rim lip | peak plastic strain |
+The first version of this bake produced smooth bowls, and the reason turned
+out to be the interesting part of the whole problem.
+
+A thin shell has two stiffnesses: membrane goes as `E*t`, bending as
+`E*t³/12`. For 1.2 mm steel over a 30 cm patch bending is roughly five orders
+of magnitude cheaper than stretching, so a loaded sheet will do almost
+anything rather than change its metric. It stays nearly **isometric** and
+sheds the excess by folding, and because folding is cheap only along lines,
+the energy collects into narrow ridges and conical points — Witten's
+stretching ridges and developable cones (*Rev. Mod. Phys.* **79**, 643) —
+whose width is only ~`sqrt(t·L)`, with flat, essentially undeformed facets
+between them. That is the faceted look of a crashed bonnet.
+
+But none of that happens if the sheet has nowhere to put extra material.
+Pressing a ball into a plate clamped all round is a *stretching* problem: to
+go deeper the metal must get longer, there is no excess to fold, and the
+correct answer really is a smooth dish. **That is what a hailstone, a knee or
+a runaway trolley does to a door, and it is what the bake was modelling.**
+
+A crash is the opposite. The structure carrying the panel is collapsing, so
+the panel's own edges move *towards each other* and the sheet suddenly has
+more material than space. It cannot take that in compression — a plate buckles
+at a stress of order `E(t/L)²`, essentially zero — so it buckles, and buckling
+in a plastic material means folding. Hence three changes to the solver:
+
+1. **In-plane draw-in** (`DentSite.drawIn`) — a displacement boundary
+   condition that feeds surrounding sheet into the damaged zone as the
+   impactor goes in. Applied as a real constraint, not through the soft
+   elastic tie, because with a soft tie the panel quietly stretches its way
+   out of trouble and you get the dish back.
+2. **Plastic hinges that soften** — once a line has yielded in bending it is
+   the cheapest place to keep bending, so curvature runs away there and the
+   fold sharpens into a crease instead of spreading. Softening is delayed
+   until a real plastic rotation has accumulated; soften immediately and the
+   first grid-scale wrinkle wins.
+3. **An imperfection field** — a perfectly flat, perfectly uniform plate is a
+   degenerate buckling problem where every mode is equally good, so the solver
+   returns the average of all of them, which is a bowl. Real sheet has rolling
+   waviness; here it is a spatially correlated ~0.85 mm noise, which is what
+   makes fold lines run in long coherent arcs instead of dissolving into fuzz.
+
+The membrane was also allowed to yield 40 %, which let it dish its way out of
+every problem; it is now 5.5 %, while a *bending* pair may shorten 55 % (a
+~125° fold). Those two numbers are the difference between a dent and a
+crumple.
+
+One more thing matters, and it is a discretisation choice rather than a
+physical one: **the grid spacing is the facet size**. Crumpled sheet is
+piecewise linear, so a coarse grid represents it *exactly* and the shader's
+bilinear fetch reconstructs it exactly. Refining the bake does not sharpen the
+creases — it just lets the solver find shorter-wavelength buckling modes until
+the panel looks like corduroy. 2 cm cells give 4–6 cm facets, which is what
+the photographs show.
+
+| bake | contact | depth | in-plane draw-in | result |
 |---|---|---|---|---|
-| sharp — pole, another car's corner | 34 cm | 45.6 mm | +5.1 mm | 0.69 |
-| blunt — fist, knee, ball, trolley | 40 cm | 48.3 mm | +8.0 mm | 0.60 |
-| edge — bumper bar, kerb, barrier | 44 cm | 51.2 mm | +5.9 mm | 0.69 |
+| dish | 19 cm blunt | 49 mm | none | smooth bowl, raised rim — trolley, knee, hail |
+| crush | 13 cm | 59 mm | 34 % of depth | crater ringed with radial folds — pole, another car's corner |
+| fold | 3:1 bar | 45 mm | 75 % of depth | a long buckle with sharp fold lines — beam contact, bonnet |
 
-3 types × 12 damage frames × 48² texels × two RGBA32F maps (displacement +
-plastic strain, and the perturbed normal) = **2.53 MB, baked in ~1.5 s**. That
+3 types × 12 damage frames × 32² texels × two RGBA32F maps (displacement +
+plastic strain, and the perturbed normal) = **1.13 MB, baked in ~1.2 s**. That
 is the whole library, for every car in the game, forever.
 
+![dent library](docs/dent-library.png)
+
+*The three bakes at full damage, lit from a raking angle. Same solver, same
+steel; the only difference is how much material the collapsing structure
+around them feeds in.*
+
 At runtime a hit becomes an *instance*, not a solve (`app/dentfield.ts`): pick
-the type from the impact energy, build a tangent frame at the contact point,
-roll it randomly about the surface normal, scale it by log(energy), and push
-it onto a list of at most 8 live dents. A second hit within half a patch of an
-existing one **merges** into it and drives it deeper rather than stacking, the
-way real sheet metal behaves. The vertex shader then, for each vertex in
-range, projects into each instance's tangent frame, bilinearly samples the
-atlas between two damage frames, and adds `du·t + dv·b + dn·n`
-(`render/vat.ts::applyDents`). Vertices whose offset along the normal exceeds
-half a patch are rejected, so a dent in the door cannot reach through and move
-the far side of the car.
+the bake from the impact energy — which is really a question about whether
+anything behind the panel gave way — build a tangent frame at the contact
+point, roll it randomly about the surface normal, scale it by log(energy), and
+push it onto a list of at most 8 live dents. A second hit within half a patch
+of an existing one **merges** into it and drives it deeper rather than
+stacking, the way real sheet metal behaves. The vertex shader then projects
+each vertex into each instance's tangent frame, bilinearly samples between two
+damage frames, and adds `du·t + dv·b + dn·n` (`render/vat.ts::applyDents`).
+Vertices whose offset along the normal exceeds half a patch are rejected, so a
+dent in the door cannot reach through and move the far side of the car.
 
 ```
  per-site VAT (structural)          stamped sheet dents (panel)
  --------------------------          ---------------------------
- 5.7 MB, this body only              2.53 MB, every body ever
- 12 discrete places                  any point, any angle, any scale
+ 7.7 MB, this body only              1.13 MB, every body ever
+ 4 crush zones                       any point, any angle, any scale
  knows about rails and beams         knows about steel
- nose folds, wheelbase shortens      panel dishes, rim lips up, paint crazes
+ nose folds, wheelbase shortens      panel buckles, creases, paint crazes
 ```
 
 Both live in the same shader and the same frame, because they answer different
-questions. **Crush is structural** — how a nose folds depends on the rails, the
-bumper beam and the engine block behind it, and no amount of sheet-metal
-knowledge will tell you that, so the front and rear zones keep their per-site
-bakes. **Everything else is panel** — a door, a wing, a roof, a sill — and gets
-stamped. In the demo the car routes hits automatically: |x| > 1.42 m with more
-than 1.2 kJ goes to the crush bake, everything else stamps a dent at the exact
-contact point.
+questions. **Crush is structural** — how a nose folds depends on the rails,
+the bumper beam and the engine block behind it — so the front and rear zones
+keep their per-site bakes, and the demo now carries only those four. **The
+other eight sites were deleted**: doors, roof, wings and boot lid are ordinary
+panel and are stamped instead. The car routes hits automatically: |x| > 1.42 m
+with more than 1.2 kJ goes to the crush bake, everything else stamps.
 
-The `Panel · sheet steel` scene is the bake on its own: a bare 1.55 × 1.05 m
-skin you can hit as many times as you like, anywhere, with the dent library
-and the stamp count in the readout.
+The `Panel · sheet steel` scene is the library on its own: a bare
+1.55 × 1.05 m skin you can hit as many times as you like, anywhere.
 
 ![stamped dents](docs/dent-stamping.png)
 
-*Flat sheet, front and raking (the same 2.5 MB library at three energies), then
-the same stamps applied to the curved car body with no per-site bake at all.*
+*Flat sheet, front and raking — a dish, two crush craters and a long fold from
+one 1.13 MB library — then the same stamps on the curved car body, with no
+per-site bake involved at all.*
 
 ### Glass on the car
 
@@ -369,7 +428,7 @@ tap dents the wing and pops the lamp in the same event, with real shards.
 
 ![metal deformation](docs/metal-deformation.png)
 
-*Left: the assembled test vehicle (one welded 12 042-vertex shell, plus
+*Left: the assembled test vehicle (one welded 20 370-vertex shell, plus
 cage-bound lamps and glass). Middle-left: front barrier crush, two sites at
 full depth. Middle-right / right: the same door dent driven by the per-vertex
 VAT and by the lattice cage.*

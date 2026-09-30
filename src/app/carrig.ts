@@ -81,26 +81,23 @@ export class CarRig {
       });
     };
 
-    // A production rig would place these from the crash-structure layout.
+    // ONLY the structural crush zones get a per-site bake. Everything else on
+    // the body - doors, roof, wings, boot lid - is ordinary panel, and panel
+    // damage is stamped from the portable flat-sheet library instead (see
+    // frac/dentmap.ts). A nose fold depends on the rails, the bumper beam and
+    // the engine behind it, so it genuinely has to be solved in place; a dent
+    // in a door does not.
     S('front corner, left', v3(1.98, -0.18, -0.72), 0.26, 0.32, undefined, 'barrier', 0.95, 0.70);
     S('front bumper, centre', v3(2.07, -0.16, 0.0), 0.30, 0.32, undefined, 'barrier', 1.30, 0.80);
     S('front corner, right', v3(1.98, -0.18, 0.72), 0.26, 0.32, undefined, 'barrier', 0.95, 0.70);
-    S('bonnet, left', v3(1.28, 0.30, -0.42), 0.26, 0.13, v3(0, -1, 0));
-    S('bonnet, right', v3(1.28, 0.30, 0.42), 0.26, 0.13, v3(0, -1, 0));
-    S('roof', v3(0.05, 0.72, 0.0), 0.30, 0.12, v3(0, -1, 0));
-    S('door, left', v3(0.25, -0.05, -0.92), 0.30, 0.15, v3(0, 0, 1));
-    S('door, right', v3(0.25, -0.05, 0.92), 0.30, 0.15, v3(0, 0, -1));
-    S('rear quarter, left', v3(-1.45, -0.08, -0.88), 0.26, 0.15, v3(0, 0, 1));
-    S('rear quarter, right', v3(-1.45, -0.08, 0.88), 0.26, 0.15, v3(0, 0, -1));
-    S('boot lid', v3(-1.75, 0.26, 0.0), 0.26, 0.12, v3(0, -1, 0));
     S('rear bumper', v3(-2.05, -0.22, 0.0), 0.30, 0.26, undefined, 'barrier', 1.25, 0.60);
 
     const lamp = (label: string, c: V3, h: V3, site: number) =>
       this.lamps.push({ label, centre: c, half: h, broken: false, site });
     lamp('headlight, left', v3(1.93, -0.02, -0.58), v3(0.055, 0.085, 0.19), 0);
     lamp('headlight, right', v3(1.93, -0.02, 0.58), v3(0.055, 0.085, 0.19), 2);
-    lamp('tail light, left', v3(-2.00, 0.10, -0.60), v3(0.045, 0.07, 0.17), 11);
-    lamp('tail light, right', v3(-2.00, 0.10, 0.60), v3(0.045, 0.07, 0.17), 11);
+    lamp('tail light, left', v3(-2.00, 0.10, -0.60), v3(0.045, 0.07, 0.17), 3);
+    lamp('tail light, right', v3(-2.00, 0.10, 0.60), v3(0.045, 0.07, 0.17), 3);
   }
 
   /** Snap a rough site position onto the actual shell surface. */

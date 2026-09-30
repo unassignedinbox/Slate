@@ -98,7 +98,7 @@ let vat: VatGpu | null = null;
  */
 let dentAtlas: DentAtlasGpu | null = null;
 function ensureDentAtlas(): DentAtlasGpu {
-  if (!dentAtlas) dentAtlas = new DentAtlasGpu(gl, bakeDentAtlas(48, 12));
+  if (!dentAtlas) dentAtlas = new DentAtlasGpu(gl, bakeDentAtlas(32, 12));
   return dentAtlas;
 }
 

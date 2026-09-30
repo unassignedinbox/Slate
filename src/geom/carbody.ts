@@ -31,7 +31,7 @@ export const CAR = {
   W: 1.82,     // width   (z)
   H: 1.44,     // height  (y)
   /** target quad edge length [m]; dents need ~5 cm to resolve a crease */
-  cell: 0.052,
+  cell: 0.040,
 };
 
 /** Roofline as a fraction of full height, front (u=1) to rear (u=-1). */

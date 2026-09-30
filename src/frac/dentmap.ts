@@ -38,6 +38,10 @@ export interface DentType {
   shape?: 'sphere' | 'barrier';
   /** barrier only: half-width of the contact bar */
   span?: number;
+  /** barrier only: how elongated the bar is (1 = round punch, 3 = a beam) */
+  elong?: number;
+  /** in-plane draw-in as a fraction of depth - see DentSite.drawIn */
+  drawIn?: number;
 }
 
 export interface DentAtlas {
@@ -78,9 +82,17 @@ function sheetTopo(half: number, res: number): { topo: ShellTopo; n: number } {
       if (j + 1 < res) edge.push(a, a + res);
       // diagonals keep the quad grid from shearing into nothing
       if (i + 1 < res && j + 1 < res) edge.push(a, a + res + 1);
-      // bending pairs: two steps along each axis
+      // Bending pairs at SEVERAL scales. A single two-step stencil only
+      // resists curvature over two cells, so the cheapest buckling mode is a
+      // wrinkle every couple of cells and the sheet turns into corduroy. Real
+      // plate bending resists curvature at every wavelength, and it is the
+      // long-wavelength part that decides how big the facets are, so the
+      // stencil has to span several cells too.
       if (i + 2 < res) bend.push(a, a + 2);
       if (j + 2 < res) bend.push(a, a + 2 * res);
+      // diagonal hinges, so a fold is not forced to run along a grid axis
+      if (i + 2 < res && j + 2 < res) bend.push(a, a + 2 * res + 2);
+      if (i >= 2 && j + 2 < res) bend.push(a, a + 2 * res - 2);
     }
   }
   const dist = (p: number, q: number) => Math.hypot(
@@ -101,16 +113,34 @@ function sheetTopo(half: number, res: number): { topo: ShellTopo; n: number } {
 
 /** The shipped dent library. Impactor size is what really changes the shape. */
 export const DENT_TYPES: DentType[] = [
-  { label: 'sharp (pole, corner)', radius: 0.085, depth: 0.105, half: 0.34 },
-  { label: 'blunt (fist, ball, knee)', radius: 0.19, depth: 0.085, half: 0.40 },
-  { label: 'edge (bumper bar, kerb)', radius: 0.10, depth: 0.10, half: 0.44, shape: 'barrier', span: 0.12 },
+  // A low-energy hit does not collapse anything around it, so no material is
+  // fed in and the panel really does just dish. This one is SUPPOSED to be
+  // smooth - it is a trolley, a knee, a hailstone.
+  { label: 'dish (trolley, knee, hail)', radius: 0.19, depth: 0.055, half: 0.40, drawIn: 0 },
+  // A pole or another car's corner: the structure behind it gives, the panel
+  // is fed inward, and it crumples into facets around the contact.
+  { label: 'crush (pole, car corner)', radius: 0.13, depth: 0.075, half: 0.36, drawIn: 0.34 },
+  // A beam-shaped contact drawn in hard: a long buckle with sharp fold lines
+  // running off it, which is the bonnet in every front-end crash photo.
+  {
+    label: 'fold (beam, bonnet buckle)', radius: 0.10, depth: 0.062, half: 0.44,
+    shape: 'barrier', span: 0.085, elong: 3.2, drawIn: 0.75,
+  },
 ];
 
 /**
  * Run the plastic solve for each dent type on a flat sheet and pack the
- * results into displacement maps. ~50-150 ms per type at res 48.
+ * results into displacement maps.
+ *
+ * The resolution is deliberately coarse (~2 cm cells). Crumpled sheet is made
+ * of nearly FLAT facets joined by narrow ridges, so it is piecewise linear,
+ * and a piecewise-linear surface is represented EXACTLY on a coarse grid and
+ * reconstructed exactly by the bilinear fetch in the shader. Going finer does
+ * not buy sharper creases, it just lets the solver find shorter-wavelength
+ * buckling modes, and the panel turns to corduroy. The grid spacing is a
+ * physical choice here: it is the facet size.
  */
-export function bakeDentAtlas(res = 48, frames = 12, types = DENT_TYPES): DentAtlas {
+export function bakeDentAtlas(res = 32, frames = 12, types = DENT_TYPES): DentAtlas {
   const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const pos = new Float32Array(types.length * frames * res * res * 4);
   const nrm = new Float32Array(types.length * frames * res * res * 4);
@@ -125,6 +155,8 @@ export function bakeDentAtlas(res = 48, frames = 12, types = DENT_TYPES): DentAt
       depth: ty.depth,
       shape: ty.shape ?? 'sphere',
       span: ty.span,
+      elong: ty.elong,
+      drawIn: ty.drawIn,
       zone: ty.span ? ty.span * 1.4 : undefined,
     };
     const b = bakeDent(topo, site, {

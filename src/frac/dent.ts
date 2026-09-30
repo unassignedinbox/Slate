@@ -35,10 +35,29 @@
  *   bend constraint     |xa - xb| = B0        (across an edge, soft)
  *   plastic flow        if |eps| > epsY:  L0 += sign(eps)(|eps| - epsY) L0 k
  *
- * Steel yields at eps_y = sigma_y/E = 250 MPa / 200 GPa = 0.00125, and sheet
- * metal is ~100x softer in bending than in membrane stretch, which is exactly
- * why a dent forms sharp creases and a flat panel "oil-cans" instead of
- * stretching uniformly. Both of those come out of the two stiffnesses.
+ * Why crushed metal CRUMPLES instead of dishing
+ * ---------------------------------------------
+ * This is the whole game, and it is a statement about the two stiffnesses of a
+ * thin shell. Membrane stiffness goes as E*t, bending as E*t^3/12, so for
+ * 1.2 mm steel over a 30 cm patch bending is ~5 orders of magnitude cheaper
+ * than stretching. A confined sheet therefore refuses to change its metric: it
+ * stays nearly ISOMETRIC and gets rid of the excess by folding. The energy
+ * collects into narrow ridges and conical points (Witten's stretching ridges
+ * and developable cones, Rev. Mod. Phys. 79, 643) whose width is only
+ * ~sqrt(t*L) ~ 2 cm, with flat, essentially undeformed facets in between.
+ *
+ * Three things have to be true in the solver or you get a smooth bowl:
+ *
+ *   1. the membrane may yield only a few per cent  (steel necks at ~20 %, but
+ *      a panel dent is nearly all rotation and almost no stretch)
+ *   2. a plastic HINGE must SOFTEN: once a line of the sheet has yielded in
+ *      bending it is the cheapest place to keep bending, so curvature runs
+ *      away there and the fold becomes a crease instead of spreading out
+ *   3. the flat sheet needs an IMPERFECTION field, because a perfectly
+ *      symmetric plate has no reason to pick one buckling mode over another.
+ *      Real panels have rolling texture, swage lines and spot welds; here it
+ *      is a correlated ~0.3 mm noise, which is what makes fold lines run in
+ *      long coherent arcs rather than dissolving into per-vertex fuzz.
  */
 
 import { V3, v3, clamp, norm, sub, add, mul, dot } from '../core/math';
@@ -65,6 +84,27 @@ export interface DentSite {
   span?: number;
   /** how far back the crush zone reaches [m] (barrier only) */
   zone?: number;
+  /**
+   * IN-PLANE draw-in, as a fraction of the crush depth: how much surrounding
+   * sheet is fed into the damaged area while the impactor goes in.
+   *
+   * This is the difference between a dent and a crumple, and it took a
+   * rewrite to see it. Pressing a ball into a plate that is clamped all round
+   * is a *stretching* problem - the metal has to get longer to go deeper - and
+   * the correct answer really is a smooth dish. That is what a hailstone or a
+   * trolley does to a door, and it is what this bake produced.
+   *
+   * A crash is the opposite: the structure carrying the panel is collapsing,
+   * so the panel's own edges move TOWARDS each other and the sheet suddenly
+   * has more material than space. A near-inextensible sheet cannot absorb
+   * that by compressing (it would buckle at a stress ~E(t/L)^2, essentially
+   * zero), so it buckles - and because bending is 5 orders of magnitude
+   * cheaper than stretching, it buckles into flat facets joined by narrow
+   * plastic ridges. That is the crumpled bonnet.
+   */
+  drawIn?: number;
+  /** elongate a barrier footprint along local +X (1 = round, 3 = a bar) */
+  elong?: number;
 }
 
 export interface ShellTopo {
@@ -115,8 +155,26 @@ export interface DentOptions {
   /** bending yield (a hinge forms far sooner than the metal stretches) */
   yieldBend?: number;
   creep?: number;
-  /** how far the panel is allowed to plastically stretch before it would tear */
+  /**
+   * How far the MEMBRANE may plastically stretch. Small on purpose: sheet
+   * steel necks at ~20 % and a panel dent is nearly pure rotation. Letting
+   * this go large is exactly what turns a crumple into a smooth dish.
+   */
   maxPlastic?: number;
+  /**
+   * How far a BENDING pair may plastically shorten, i.e. how tight a fold the
+   * hinge can take. 0.55 of the two-step chord is a ~125 degree fold.
+   */
+  bendMaxPlastic?: number;
+  bendCreep?: number;
+  /**
+   * Plastic-hinge SOFTENING. A hinge that has already yielded gets weaker and
+   * yields sooner, so bending localises into a crease line instead of
+   * spreading over the panel. 0 = no localisation (smooth dish).
+   */
+  soften?: number;
+  /** out-of-plane imperfection amplitude [m] that seeds the buckling modes */
+  imperfection?: number;
   /** stiffness of the chassis rails / sills the panel hangs off */
   chassis?: number;
 }
@@ -151,7 +209,11 @@ export function bakeDent(topo: ShellTopo, site: DentSite, o: DentOptions = {}): 
   const epsY = o.yieldStretch ?? 0.0015;
   const bendY = o.yieldBend ?? 0.02;
   const creep = o.creep ?? 0.45;
-  const maxPl = o.maxPlastic ?? 0.4;
+  const maxPl = o.maxPlastic ?? 0.055;
+  const bendMaxPl = o.bendMaxPlastic ?? 0.55;
+  const bendCreep = o.bendCreep ?? 0.85;
+  const soften = o.soften ?? 44;
+  const imperf = o.imperfection ?? 8.5e-4;
   const chassis = o.chassis ?? 0.14;
 
   const n = topo.n;
@@ -160,12 +222,34 @@ export function bakeDent(topo: ShellTopo, site: DentSite, o: DentOptions = {}): 
   const w = new Float32Array(n);                // inverse mass (0 = welded to the chassis)
   const plastic = new Float32Array(n);          // accumulated |plastic strain|
   // Panels are not uniform: swage lines, spot welds, bracing and rolling
-  // texture all vary the local yield. Without this the dent is a perfect
-  // sphere imprint; with it, creases pick a side and wander like real ones.
-  const jitter = (i: number) => {
-    const h = Math.sin(i * 12.9898 + 78.233) * 43758.5453;
-    return 1 + (h - Math.floor(h) - 0.5) * 0.22;
+  // texture all vary the local yield. This has to be CORRELATED in space -
+  // white per-vertex noise just makes the surface sandy, whereas a field with
+  // a ~6 cm wavelength gives fold lines something coherent to follow, which is
+  // why real creases run in long arcs.
+  const hash3 = (i: number, j: number, k: number) => {
+    let h = i * 374761393 + j * 668265263 + k * 2147483647;
+    h = (h ^ (h >>> 13)) * 1274126177;
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967295 - 0.5;
   };
+  const vnoise = (px: number, py: number, pz: number, L: number) => {
+    const fx = px / L, fy = py / L, fz = pz / L;
+    const ix = Math.floor(fx), iy = Math.floor(fy), iz = Math.floor(fz);
+    const tx = fx - ix, ty = fy - iy, tz = fz - iz;
+    const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty), sz = tz * tz * (3 - 2 * tz);
+    let acc = 0;
+    for (let a = 0; a < 8; a++) {
+      const bx = a & 1, by = (a >> 1) & 1, bz = (a >> 2) & 1;
+      const wgt = (bx ? sx : 1 - sx) * (by ? sy : 1 - sy) * (bz ? sz : 1 - sz);
+      acc += wgt * hash3(ix + bx, iy + by, iz + bz);
+    }
+    return acc * 2;
+  };
+  const weak = new Float32Array(n);             // 1 +- local yield variation
+  for (let i = 0; i < n; i++) {
+    const px = x0[i * 3], py = x0[i * 3 + 1], pz = x0[i * 3 + 2];
+    weak[i] = 1 + (vnoise(px, py, pz, 0.115) * 0.95 + vnoise(px, py, pz, 0.042) * 0.30) * 0.22;
+  }
+  const jitter = (i: number) => weak[i];
 
   // ---- active region. Beyond ~3 impactor radii the body shell is stiff
   // enough (and tied to the rails) that nothing moves, so we solve locally.
@@ -185,7 +269,8 @@ export function bakeDent(topo: ShellTopo, site: DentSite, o: DentOptions = {}): 
       // the solve only needs to cover the crush zone the barrier drives,
       // not a sphere around the contact point
       const oa = dx * dirN.x + dy * dirN.y + dz * dirN.z;
-      const lat = Math.hypot(dx - oa * dirN.x, dy - oa * dirN.y, dz - oa * dirN.z);
+      const el = site.elong ?? 1;
+      const lat = Math.hypot((dx - oa * dirN.x) / el, dy - oa * dirN.y, dz - oa * dirN.z);
       m = smooth(spanA * 1.45, spanA * 0.95, lat) * smooth(zoneA * 1.75, zoneA * 0.95, Math.max(oa, 0));
     } else {
       const d = Math.hypot(dx, dy, dz);
@@ -199,6 +284,29 @@ export function bakeDent(topo: ShellTopo, site: DentSite, o: DentOptions = {}): 
     w[i] = m;
     if (m > 0.02) active++;
   }
+
+  // ---- in-plane draw-in field. The surrounding panel feeds material into
+  // the damaged zone: peak inward motion at mid radius, returning to zero at
+  // the patch rim so the stamped dent still meets the undamaged body exactly.
+  const drawIn = site.drawIn ?? 0;
+  const pull = new Float32Array(drawIn > 0 ? n * 3 : 0);
+  const pullG = new Float32Array(drawIn > 0 ? n : 0);
+  if (drawIn > 0) {
+    for (let i = 0; i < n; i++) {
+      if (w[i] <= 0) continue;
+      const dx = x0[i * 3] - site.p.x, dy = x0[i * 3 + 1] - site.p.y, dz = x0[i * 3 + 2] - site.p.z;
+      const oa = dx * dirN.x + dy * dirN.y + dz * dirN.z;
+      let rx = dx - oa * dirN.x, ry = dy - oa * dirN.y, rz = dz - oa * dirN.z;
+      const r = Math.hypot(rx, ry, rz);
+      if (r < 1e-6) continue;
+      const t = clamp(r / reach, 0, 1);
+      const g = smooth(0, 0.46, t) * (1 - smooth(0.60, 0.98, t));
+      const a = -g / r;                       // unit inward * profile
+      pull[i * 3] = rx * a; pull[i * 3 + 1] = ry * a; pull[i * 3 + 2] = rz * a;
+      pullG[i] = g;
+    }
+  }
+  let pullAmt = 0;
 
   // constraint subsets that touch the active patch
   const eSel: number[] = [], bSel: number[] = [];
@@ -214,11 +322,22 @@ export function bakeDent(topo: ShellTopo, site: DentSite, o: DentOptions = {}): 
   const bRest = new Float32Array(topo.bendRest);
   const eRest0 = topo.edgeRest, bRest0 = topo.bendRest;
 
-  const ks = 0.92;         // membrane: steel barely stretches
-  const kb = 0.24;         // bending: soft, so creases form instead of bulges
-  const ka = 0.035;        // weak pull back to the undeformed shape (elasticity)
+  const ks = 0.985;        // membrane: steel is all but inextensible
+  // Bending stiffness sets the BUCKLE WAVELENGTH. Push it too low and the
+  // cheapest mode is a fold every single cell, which is numerical hash, not
+  // crumple; a real panel picks ~5-15 cm facets because it is curved and
+  // ribbed, so the effective bending length is far larger than sqrt(t*L) for
+  // bare 1.2 mm sheet. This is tuned to fold over ~6 cells.
+  const kb = 0.45;
+  const ka = 0.012;        // weak pull back to the undeformed shape (elasticity)
 
-  const project = (sel: number[], list: Uint32Array, rest: Float32Array, k: number) => {
+  // accumulated plastic hinge rotation per bend pair, which drives softening
+  const hinge = new Float32Array(topo.bendRest.length);
+
+  const project = (
+    sel: number[], list: Uint32Array, rest: Float32Array, k: number,
+    soft?: Float32Array,
+  ) => {
     for (let s = 0; s < sel.length; s++) {
       const c = sel[s];
       const i = list[c * 2], j = list[c * 2 + 1];
@@ -230,7 +349,16 @@ export function bakeDent(topo: ShellTopo, site: DentSite, o: DentOptions = {}): 
       let dx = bx - ax, dy = by - ay, dz = bz - az;
       const L = Math.hypot(dx, dy, dz);
       if (L < 1e-9) continue;
-      const diff = (L - rest[c]) / L * k;
+      // a yielded hinge is a weak hinge: that is what localises the fold
+      // Softening only after a real plastic rotation: if a hinge goes weak the
+      // instant it yields, the very first (grid-scale) wrinkle wins and the
+      // elastic bending never gets to choose the facet size.
+      const kk = soft ? k / (1 + Math.min(Math.max(soft[c] - 0.06, 0) * soften, 9)) : k;
+      let diff = (L - rest[c]) / L * kk;
+      // A fold is metal lying against metal, not metal through metal. Without
+      // a floor on edge length the solver happily collapses a cell to nothing
+      // and you get spikes instead of a crease.
+      if (!soft && L < rest[c] * 0.62) diff = (L - rest[c] * 0.62) / L;
       dx *= diff; dy *= diff; dz *= diff;
       const fi = wi / sw, fj = wj / sw;
       x[i * 3] += dx * fi; x[i * 3 + 1] += dy * fi; x[i * 3 + 2] += dz * fi;
@@ -238,7 +366,10 @@ export function bakeDent(topo: ShellTopo, site: DentSite, o: DentOptions = {}): 
     }
   };
 
-  const flow = (sel: number[], list: Uint32Array, rest: Float32Array, rest0: Float32Array, yl: number) => {
+  const flow = (
+    sel: number[], list: Uint32Array, rest: Float32Array, rest0: Float32Array,
+    yl: number, cr: number, lim0: number, soft?: Float32Array,
+  ) => {
     for (let s = 0; s < sel.length; s++) {
       const c = sel[s];
       const i = list[c * 2], j = list[c * 2 + 1];
@@ -248,14 +379,17 @@ export function bakeDent(topo: ShellTopo, site: DentSite, o: DentOptions = {}): 
       const r = rest[c];
       const eps = (L - r) / r;
       const ae = Math.abs(eps);
-      const ylv = yl * (jitter(i) + jitter(j)) * 0.5;
+      // yielded hinges also yield SOONER next time (kinematic softening)
+      const relax = soft ? 1 / (1 + Math.min(Math.max(soft[c] - 0.06, 0) * soften, 9)) : 1;
+      const ylv = yl * (jitter(i) + jitter(j)) * 0.5 * relax;
       if (ae <= ylv) continue;
-      const dl = Math.sign(eps) * (ae - ylv) * r * creep;
+      const dl = Math.sign(eps) * (ae - ylv) * r * cr;
       let nr = r + dl;
-      const lim = rest0[c] * maxPl;
+      const lim = rest0[c] * lim0;
       nr = clamp(nr, rest0[c] - lim, rest0[c] + lim);
       const moved = Math.abs(nr - r) / rest0[c];
       rest[c] = nr;
+      if (soft) soft[c] += moved;
       plastic[i] += moved * 0.5; plastic[j] += moved * 0.5;
     }
   };
@@ -264,10 +398,20 @@ export function bakeDent(topo: ShellTopo, site: DentSite, o: DentOptions = {}): 
     for (let i = 0; i < n; i++) {
       if (w[i] <= 0) {
         x[i * 3] = x0[i * 3]; x[i * 3 + 1] = x0[i * 3 + 1]; x[i * 3 + 2] = x0[i * 3 + 2];
+      } else if (pullAmt > 0) {
+        // the surface the panel is elastically tied to is itself being drawn
+        // inward, which is what supplies the excess material
+        const t = ka * (1 - w[i]) + (1 - w[i]) * (1 - w[i]) * 0.30;
+        for (let c = 0; c < 3; c++) {
+          const tgt = x0[i * 3 + c] + pull[i * 3 + c] * pullAmt;
+          x[i * 3 + c] += (tgt - x[i * 3 + c]) * t;
+        }
       } else {
-        // residual elastic tie to the original surface, scaled by how welded
-        // the vertex is: patch centre floats free, patch rim is nearly rigid
-        const t = ka + (1 - w[i]) * (1 - w[i]) * 0.45;
+        // Residual elastic tie to the original surface. It has to be nearly
+        // zero in the middle of the patch: a uniform pull-back is a smoothing
+        // operator, and it will happily iron a crease flat again. Only the rim
+        // (where the panel is actually welded to something) is held.
+        const t = ka * (1 - w[i]) + (1 - w[i]) * (1 - w[i]) * 0.45;
         x[i * 3] += (x0[i * 3] - x[i * 3]) * t;
         x[i * 3 + 1] += (x0[i * 3 + 1] - x[i * 3 + 1]) * t;
         x[i * 3 + 2] += (x0[i * 3 + 2] - x[i * 3 + 2]) * t;
@@ -280,16 +424,33 @@ export function bakeDent(topo: ShellTopo, site: DentSite, o: DentOptions = {}): 
   const verts = new Uint32Array(patch);
   const P = verts.length;
 
+  // ---- imperfection. A perfectly flat, perfectly uniform plate is a
+  // degenerate buckling problem: every mode is equally good, so the solver
+  // picks the average of all of them, which is a smooth bowl. Real sheet has
+  // rolling waviness of a few tenths of a millimetre. Seed it.
+  if (imperf > 0) {
+    const nrm0 = shellNormals(x0, topo.tris);
+    for (let i = 0; i < n; i++) {
+      if (w[i] <= 0) continue;
+      const a = vnoise(x0[i * 3] + 11.3, x0[i * 3 + 1] - 4.7, x0[i * 3 + 2] + 2.1, 0.105) * imperf * w[i];
+      x[i * 3] += nrm0[i * 3] * a;
+      x[i * 3 + 1] += nrm0[i * 3 + 1] * a;
+      x[i * 3 + 2] += nrm0[i * 3 + 2] * a;
+    }
+  }
+
   const outPos = new Float32Array(F * P * 4);
   const outNrm = new Float32Array(F * P * 4);
   const nrmScratch = new Float32Array(n * 3);
   const dir = norm(site.d);
   const R = site.radius;
   const barrier = site.shape === 'barrier';
+  const elong = site.elong ?? 1;
 
   for (let f = 0; f < F; f++) {
     // progressive crush: slightly super-linear, as the panel work-hardens
     const depth = site.depth * Math.pow((f + 1) / F, 1.12);
+    pullAmt = depth * drawIn;
     // impactor centre: sphere just touching the surface, pushed in by `depth`
     const C = add(site.p, add(mul(dir, depth), mul(dir, -R)));
 
@@ -312,7 +473,14 @@ export function bakeDent(topo: ShellTopo, site: DentSite, o: DentOptions = {}): 
           const ox = x0[i * 3] - site.p.x, oy = x0[i * 3 + 1] - site.p.y, oz = x0[i * 3 + 2] - site.p.z;
           const oa = ox * dir.x + oy * dir.y + oz * dir.z;             // >0 = behind the face
           if (oa < -0.02) continue;
-          const l = Math.hypot(ox - oa * dir.x, oy - oa * dir.y, oz - oa * dir.z);
+          let lx = ox - oa * dir.x, ly = oy - oa * dir.y, lz = oz - oa * dir.z;
+          if (elong > 1) {
+            // squash the footprint along local +X so the contact is a BAR
+            // (bumper beam, kerb, guard rail) instead of a round punch
+            const alx = lx / elong;
+            lx = alx;
+          }
+          const l = Math.hypot(lx, ly, lz);
           if (l > span) continue;
           const u6 = Math.pow(l / span, 6);
           const lat = Math.max(0, 1 - u6);   // flat inside the footprint, sharp at its rim
@@ -340,19 +508,36 @@ export function bakeDent(topo: ShellTopo, site: DentSite, o: DentOptions = {}): 
           }
         }
       }
+      // The collapsing structure around the dent is a DISPLACEMENT boundary
+      // condition, not a suggestion: it drags the surrounding sheet in at
+      // whatever force it takes, and the sheet has to find somewhere to put
+      // the extra material. Applying it through the soft elastic tie instead
+      // let the panel quietly stretch its way out of trouble, which is
+      // exactly how you end up with a smooth dish again.
+      if (drawIn > 0) {
+        for (let i = 0; i < n; i++) {
+          const g = pullG[i];
+          if (g <= 0) continue;
+          const kd = 0.45 * g;
+          for (let cc = 0; cc < 3; cc++) {
+            const tgt = x0[i * 3 + cc] + pull[i * 3 + cc] * pullAmt;
+            x[i * 3 + cc] += (tgt - x[i * 3 + cc]) * kd;
+          }
+        }
+      }
       project(eSel, topo.edge, eRest, ks);
-      project(bSel, topo.bend, bRest, kb);
+      project(bSel, topo.bend, bRest, kb, hinge);
       anchor();
       if (it % 4 === 3) {
-        flow(eSel, topo.edge, eRest, eRest0, epsY);
-        flow(bSel, topo.bend, bRest, bRest0, bendY);
+        flow(eSel, topo.edge, eRest, eRest0, epsY, creep, maxPl);
+        flow(bSel, topo.bend, bRest, bRest0, bendY, bendCreep, bendMaxPl, hinge);
       }
     }
 
     // ---- release: impactor gone, elastic springback onto the plastic shape
     for (let it = 0; it < relIters; it++) {
       project(eSel, topo.edge, eRest, ks);
-      project(bSel, topo.bend, bRest, kb);
+      project(bSel, topo.bend, bRest, kb, hinge);
       anchor();
     }
 

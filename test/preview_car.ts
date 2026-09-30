@@ -62,12 +62,12 @@ console.log(`front crush: ${rig.bakedCount} sites baked in ${rig.bakeMs.toFixed(
   `eval ${Date.now() - t0} ms`);
 drawShell(c, view(1, [4.6, 1.3, 2.2], 1.15), def, rig.shell.tris, paint);
 
-// 2 ------------------------------------------------------- door dent, 60% in
+// 2 ------------------------------------------ front corner crush, 60 % in
 rig.reset();
-const door = rig.ensureBaked(7);
+const door = rig.ensureBaked(0);
 door.level = door.target = (rig.frames - 1) * 0.6;
 def = rig.deformed();
-drawShell(c, view(2, [1.0, 0.9, 3.1], 1.15), def, rig.shell.tris, paint);
+drawShell(c, view(2, [3.4, 1.1, -2.6], 1.15), def, rig.shell.tris, paint);
 
 // 3 -------------------------------------- same dent, but through the CAGE
 const cageFrames = door.cage!;

@@ -69,7 +69,7 @@ export const SCENES: SceneDef[] = [
   {
     id: 'sheet', label: 'Panel · sheet steel', kind: 'sheet', material: 'concrete',
     energy: 1800,
-    blurb: 'A 1.2 mm steel skin. One elasto-plastic dent is solved offline on a flat sheet and stored as a displacement-map sequence, then stamped at any point, any angle, any scale. Hit it anywhere, as often as you like: 2.5 MB of bake, no per-asset work.',
+    blurb: 'A 1.2 mm steel skin. Three elasto-plastic bakes on a flat sheet - a dish, a crumpled crater and a long buckle - stamped at any point, any angle, any scale. A light hit dishes, because the sheet has to stretch to go anywhere. A heavy one crumples into facets, because the structure around it collapsed and fed the panel more metal than it has room for.',
   },
   {
     id: 'car', label: 'Car · panel deformation', kind: 'vehicle', material: 'abs-plastic',
@@ -1028,7 +1028,7 @@ export class SheetScene extends Scene {
   lastHit = '-';
 
   build(): void {
-    this.shell = buildBoxShell(this.W, this.H, this.T, 0.019);
+    this.shell = buildBoxShell(this.W, this.H, this.T, 0.014);
     this.sheetMesh = shellToMesh(this.shell);
     this.nrm0 = shellNormals(this.shell.pos, this.shell.tris);
 

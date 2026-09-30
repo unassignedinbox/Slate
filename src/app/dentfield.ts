@@ -40,11 +40,19 @@ export class DentField {
 
   get frames(): number { return this.atlas.frames; }
 
-  /** Choose the baked impactor that best matches the blow. */
+  /**
+   * Choose the baked impactor that best matches the blow.
+   *
+   * The energy threshold is really a threshold on whether anything BEHIND the
+   * panel gave way. Below it the panel is still supported all round, so the
+   * sheet has to stretch to go anywhere and the result is a smooth dish. Above
+   * it the surrounding structure collapses, sheet gets fed into the damaged
+   * area, and it crumples into facets.
+   */
   private pickType(energy: number): number {
-    if (energy < 1300) return 1;            // blunt: a kick, a ball, a trolley
-    if (energy < 7000) return 0;           // sharp: a pole, another car's corner
-    return 2;                              // edge: bumper bar, kerb strike
+    if (energy < 1400) return 0;           // dish: trolley, knee, hail
+    if (energy < 8000) return 1;           // crush: pole, another car's corner
+    return 2;                              // fold: beam contact, bonnet buckle
   }
 
   /**
