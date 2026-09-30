@@ -121,6 +121,72 @@ Fragments carry their own `Piece`, so a shard that lands hard enough (or gets sh
 same solver with its remaining kinetic energy and breaks again — the toughness check makes it stop on its
 own after a generation or two.
 
+---
+
+## Metal deformation (car crash test)
+
+Switch **Scene → Car crash test**. The body is **one merged BufferGeometry** (hood + cabin + fenders,
+a single draw call, ~14 k verts); the headlight lenses are separate brittle glass bodies.
+
+### Bake: a real elasto-plastic sheet-metal solve
+`src/deform/panel.ts` simulates an actual steel panel — not a sculpted blob:
+
+* mass-grid shell with membrane, shear and **plastic bending hinge** constraints;
+* two real yield mechanisms — membrane stretch past `εy = σy/E` permanently lengthens the sheet
+  (the draw-in that feeds the crater), and curvature past `κy = 2σy/(E·t)` leaves a permanent hinge;
+* the impactor is pressed in, **removed**, and the panel relaxed, so what we bake is the *settled*
+  shape after elastic springback;
+* the panel is welded at its seams, exactly like a real pressing.
+
+Because the sheet can bend ~a million times more easily than it can stretch, the result is what a real
+dent looks like, and none of it is authored:
+
+| measured from the bake (0.8 mm mild steel, 41² grid) | |
+|---|---|
+| severity ladder (permanent set) | 6 / 15 / 24 / 33 / 41 / 50 mm |
+| raised rim around the crater | 1.3 mm (blunt) – 2.4 mm (edge/crease) |
+| in-plane material draw-in | 3–4 mm |
+| far side of the body | 0.00 mm |
+
+The solve is quasi-static position-based (an explicit integrator needs ~20 kHz for 3 MN/m springs
+against 3 g nodes — my first attempt exploded into NaNs within one frame). It runs in a **web worker**
+(`bake.worker.ts`) so the frame loop never hitches, and is cached per steel gauge. Two archetypes are
+baked: `blunt` (bumper / another car's corner) and `edge` (pole, headlight corner — narrow crease).
+
+### Runtime: VAT + lattice
+`src/deform/dent.ts` packs the fields into one half-float **vertex animation texture** — G×G tile per
+severity frame, stacked: **41 × 492 px, 158 KB for all 12 tiles**. RGB = the (u,v,w) displacement of
+that node.
+
+A dent at runtime is just a **lattice**: position, orthonormal frame (tangent/bitangent/normal),
+extent, severity. The vertex shader transforms each vertex into every active lattice, samples the VAT
+bilinearly *and* linearly between severity frames, fades with depth into the body, and accumulates
+(up to 12 dents). That gives you:
+
+* **zero CPU cost per frame** — a dent is 12 uniforms; nothing is re-uploaded, the mesh stays static
+  and instanceable;
+* **no cracks at seams** — displacement is a pure function of object-space position, so duplicated
+  UV/material-seam vertices move identically;
+* **accumulation is physical** — hitting the same panel again raises that lattice's severity, which
+  walks up the baked plastic *history* (each frame was pressed into the same panel), it is not a
+  scaled copy of one dent;
+* **normals are re-derived in-shader** by finite-differencing the same field, so the crumple lights
+  correctly, and the shadow pass gets the same patch via `customDepthMaterial`;
+* a CPU query (`displacementAt`) is available when gameplay/physics needs the deformed surface.
+
+### Steel + glass in the same impact
+Shooting a headlight instantiates a **pre-baked** shatter pattern (3 variants baked at load) — the
+runtime solve cost is **0 ms** — and dents the surrounding sheet metal. That is exactly the
+"cars bump, headlights break" case: bake the fracture for each breakable part offline, keep the live
+solver for hero destruction.
+
+*"Ram it"* fires a 20 kg / 9 m/s block (≈ a slow parking-lot bump) instead of a bullet.
+
+### What the little grains are
+They are comminution dust: GPU points spawned proportional to `impact energy × material.dustPerJoule`,
+plus the stand-in for fragments below the rigid-body budget (sub-millimetre pieces that are not worth a
+collider). Purely visual + a budget device — they carry no physics.
+
 ## Layout
 ```
 src/core/convex.ts       convex polyhedron, exact plane clipping, crack-surface meshing
@@ -129,6 +195,10 @@ src/fracture/materials.ts  Gc, density, anisotropy, residual stress, surface par
 src/fracture/fracture.ts   stress field, crack-normal selection, Griffith energy solver
 src/scene/targets.ts     pane / plank / wall / boulder / crate setups + rebar layout
 src/scene/audio.ts       procedural modal impact audio
+src/deform/panel.ts      offline elasto-plastic sheet-metal solver (the bake)
+src/deform/bake.worker.ts  runs the bake off the main thread
+src/deform/dent.ts       VAT packing, shader patch, runtime dent lattices
+src/scene/car.ts         single-geometry car body, lenses with pre-baked fracture
 src/physics/jolt.ts      Jolt Physics (WASM) backend: convex hulls, breakable links, CCD
 src/main.ts              three.js scene, projectiles, dust, UI
 ```

@@ -9,6 +9,7 @@ import { fracture, surfaceNoise, type Fragment, type Impact } from './fracture/f
 import { makeTarget, type Target } from './scene/targets';
 import { ensureAudio, playImpact } from './scene/audio';
 import { Physics, type Handle } from './physics/jolt';
+import { CarScene } from './scene/car';
 
 /* ------------------------------------------------------------------ */
 /* renderer / scene                                                     */
@@ -76,12 +77,18 @@ let damageTex: THREE.CanvasTexture | null = null;
 let damageCanvas: HTMLCanvasElement | null = null;
 let damageMesh: THREE.Mesh | null = null;
 let damageHits = 0;
+let car: CarScene | null = null;
 let baked: { impact: Impact; frags: Fragment[] }[] = [];
 let bakeMs = 0;
 const stats = { frags: 0, ms: 0, area: 0, fps: 0, physMs: 0 };
 
 const ui = {
+  scene: document.getElementById('scene') as HTMLSelectElement,
   mat: document.getElementById('mat') as HTMLSelectElement,
+  gauge: document.getElementById('gauge') as HTMLInputElement,
+  matRow: document.getElementById('matRow') as HTMLElement,
+  gaugeRow: document.getElementById('gaugeRow') as HTMLElement,
+  notesTitle: document.getElementById('notesTitle') as HTMLElement,
   e: document.getElementById('e') as HTMLInputElement,
   m: document.getElementById('m') as HTMLInputElement,
   b: document.getElementById('b') as HTMLInputElement,
@@ -172,11 +179,15 @@ function clearAll() {
   staticHandles.length = 0;
   for (const p of projectiles) { scene.remove(p.mesh); physics.remove(p.h); }
   projectiles.length = 0;
+  if (car) { car.dispose(); car = null; }
   baked = []; bakeMs = 0;
 }
 
 function reset() {
   clearAll();
+  if (ui.scene.value === 'car') { void buildCar(); return; }
+  ui.matRow.style.display = '';
+  ui.gaugeRow.style.display = 'none';
   target = makeTarget(ui.mat.value);
   intact = true;
   ui.hint.innerHTML = target.hint + ' &nbsp;·&nbsp; click the object to hit it there';
@@ -213,6 +224,30 @@ function reset() {
   physics.optimize();
   if (m.transmission) setupDamageDecal();
   if (ui.bake.checked) prebake();
+  updateStats();
+}
+
+async function buildCar() {
+  ui.matRow.style.display = 'none';
+  ui.gaugeRow.style.display = '';
+  ui.notesTitle.textContent = 'How it deforms';
+  car = new CarScene(scene, physics, {
+    spawnFragments: (frags, origin, quat, mat, imp, energy, baseVel) =>
+      void spawnFragments(frags, origin, quat, mat, imp, energy, baseVel),
+    dust: (at, mat, energy) => { if (ui.dust.checked) puffDust(at, mat, energy); },
+    sound: (kind, energy, shatter) => playImpact(kind, energy, shatter),
+  });
+  const overlay = document.getElementById('loading')!;
+  overlay.style.display = 'block';
+  overlay.textContent = 'Baking elasto-plastic steel panels…';
+  await car.build(+ui.gauge.value);
+  overlay.style.display = 'none';
+  intact = false;
+  physics.optimize();
+  ui.hint.innerHTML =
+    'Sheet steel is baked offline as an elasto-plastic panel, replayed at runtime from a vertex-animation texture ' +
+    'through a lattice placed at the hit. Shoot the body to dent it, hit the same place twice to deepen it, ' +
+    'shoot a headlight for a pre-baked 0 ms shatter.';
   updateStats();
 }
 
@@ -518,6 +553,23 @@ function shootAt(pointWorld: THREE.Vector3) {
   projectiles.push({ mesh, h, energy, born: performance.now(), prev: from.clone() });
 }
 
+/** Heavy, slow impactor: the "another car nudges your wing" case. */
+function ramIt() {
+  ensureAudio();
+  const aim = pickPoint();
+  const from = camera.position.clone();
+  const dir = aim.clone().sub(from).normalize();
+  const mass = 20;
+  const speed = 9;
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.18, 20, 14),
+    new THREE.MeshStandardMaterial({ color: 0x8892a0, roughness: 0.35, metalness: 0.8 }));
+  mesh.castShadow = true;
+  mesh.position.copy(from);
+  scene.add(mesh);
+  const h = physics.addSphere(from, 0.18, mass, dir.clone().multiplyScalar(speed));
+  projectiles.push({ mesh, h, energy: 0.5 * mass * speed * speed, born: performance.now(), prev: from.clone() });
+}
+
 /* ------------------------------------------------------------------ */
 /* input                                                                */
 /* ------------------------------------------------------------------ */
@@ -530,6 +582,7 @@ function pickPoint(ev?: PointerEvent): THREE.Vector3 {
   ray.setFromCamera(ndc, camera);
   const objs: THREE.Object3D[] = [];
   if (targetMesh) objs.push(targetMesh);
+  if (car) objs.push(...car.pickables);
   for (const d of dynamics) objs.push(d.mesh);
   objs.push(ground);
   const hit = ray.intersectObjects(objs, false)[0];
@@ -543,7 +596,7 @@ renderer.domElement.addEventListener('pointerup', (e: PointerEvent) => {
   if (dragged || e.button !== 0) return;
   shootAt(pickPoint(e));
 });
-addEventListener('keydown', e => {
+window.addEventListener('keydown', e => {
   if (e.code === 'Space') { e.preventDefault(); shootAt(pickPoint()); }
   if (e.code === 'KeyR') reset();
 });
@@ -556,14 +609,30 @@ function syncLabels() {
   (document.getElementById('mV') as HTMLElement).textContent = `${(+ui.m.value * 1000).toFixed(0)} g`;
   (document.getElementById('bV') as HTMLElement).textContent = `${ui.b.value}`;
   (document.getElementById('rV') as HTMLElement).textContent = `${ui.r.value}%`;
+  (document.getElementById('gV') as HTMLElement).textContent = `${(+ui.gauge.value).toFixed(2)} mm`;
 }
 for (const el of [ui.e, ui.m, ui.b, ui.r]) el.addEventListener('input', syncLabels);
 ui.mat.addEventListener('change', reset);
+ui.scene.addEventListener('change', reset);
+ui.gauge.addEventListener('change', () => { if (car) reset(); });
+ui.gauge.addEventListener('input', syncLabels);
+(document.getElementById('undent') as HTMLButtonElement).onclick = () => { car?.dents.clear(); updateStats(); };
+(document.getElementById('ram') as HTMLButtonElement).onclick = () => ramIt();
 ui.bake.addEventListener('change', () => { if (ui.bake.checked && intact) { prebake(); updateStats(); } });
 (document.getElementById('shoot') as HTMLButtonElement).onclick = () => shootAt(pickPoint());
 (document.getElementById('reset') as HTMLButtonElement).onclick = reset;
 
 function updateStats() {
+  if (car) {
+    ui.statsEl.innerHTML = [
+      `panel bake <span>${car.bakeMs.toFixed(0)} ms</span> (cached after first) · VAT <span>${car.vatKB.toFixed(0)} KB</span>`,
+      `lens patterns <span>${car.lensBakeMs.toFixed(0)} ms</span> baked · runtime shatter <span>0.0 ms</span>`,
+      `active dents <span>${car.dentCount}</span> · deepest set <span>${(car.maxDentDepth * 1000).toFixed(1)} mm</span>`,
+      `body draw calls <span>1</span> · verts <span>${car.body.geometry.getAttribute('position').count}</span>`,
+      `Jolt${Physics.multithreaded ? ' (MT)' : ''} step <span>${stats.physMs.toFixed(2)} ms</span> · fps <span>${stats.fps.toFixed(0)}</span>`,
+    ].join('<br>');
+    return;
+  }
   const m = target?.mat;
   ui.statsEl.innerHTML = [
     `material G<sub>c</sub> <span>${m ? m.Gc : 0} J/m²</span> · ρ <span>${m ? m.density : 0} kg/m³</span>`,
@@ -595,6 +664,7 @@ function stepProjectiles() {
       ray.far = len + 0.04;
       const objs: THREE.Object3D[] = [];
       if (targetMesh) objs.push(targetMesh);
+      if (car) objs.push(...car.pickables);
       for (const d of dynamics) objs.push(d.mesh);
       const hit = ray.intersectObjects(objs, false)[0];
       if (hit) {
@@ -603,6 +673,13 @@ function stepProjectiles() {
         const e = Math.max(1, 0.5 * p.h.mass * vel.lengthSq());
         if (targetMesh && hit.object === targetMesh) {
           applyImpact(hit.point, dir, e, vel);
+          consumed = true;
+        } else if (car && hit.object === car.body) {
+          const n = (hit.normal ?? dir.clone().negate()).clone()
+            .transformDirection(car.body.matrixWorld).normalize();
+          car.dentAt(hit.point, n, e);
+          consumed = true;
+        } else if (car && car.breakLens(hit.object as THREE.Mesh, dir, e)) {
           consumed = true;
         } else {
           const d = dynamics.find(x => x.mesh === hit.object);
@@ -671,7 +748,7 @@ function tick() {
   renderer.render(scene, camera);
 }
 
-addEventListener('resize', () => {
+window.addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);

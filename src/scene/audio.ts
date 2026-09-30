@@ -3,7 +3,8 @@ let ctx: AudioContext | null = null;
 export function ensureAudio() { if (!ctx) ctx = new AudioContext(); if (ctx.state === 'suspended') ctx.resume(); }
 
 const MODES: Record<string, number[]> = {
-  glass: [2400, 3300, 4700, 6100], stone: [180, 260, 420], wood: [220, 340, 520, 900], plastic: [380, 640],
+  glass: [2400, 3300, 4700, 6100], stone: [180, 260, 420], wood: [220, 340, 520, 900],
+  plastic: [380, 640], metal: [430, 690, 1150, 1730],
 };
 
 export function playImpact(kind: string, energy: number, shatter: boolean) {
@@ -26,7 +27,7 @@ export function playImpact(kind: string, energy: number, shatter: boolean) {
   n.buffer = buf;
   const bp = ctx.createBiquadFilter();
   bp.type = kind === 'glass' ? 'highpass' : kind === 'stone' ? 'bandpass' : 'lowpass';
-  bp.frequency.value = kind === 'glass' ? 2200 : kind === 'stone' ? 700 : 900;
+  bp.frequency.value = kind === 'glass' ? 2200 : kind === 'stone' ? 700 : kind === 'metal' ? 1500 : 900;
   n.connect(bp); bp.connect(gain);
 
   gain.gain.linearRampToValueAtTime(amp, t + 0.005);

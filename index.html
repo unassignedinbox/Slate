@@ -44,7 +44,13 @@
   <h1>Slate · Fracture</h1>
   <div class="sub">Stress-field crack propagation with a Griffith energy budget</div>
 
-  <div class="row"><label>Material</label><select id="mat"></select></div>
+  <div class="row"><label>Scene</label><select id="scene">
+    <option value="lab">Fracture lab</option>
+    <option value="car">Car crash test (dents + lenses)</option>
+  </select></div>
+  <div class="row" id="matRow"><label>Material</label><select id="mat"></select></div>
+  <div class="row" id="gaugeRow" style="display:none"><label>Steel gauge <b id="gV"></b></label>
+    <input id="gauge" type="range" min="0.6" max="1.6" step="0.05" value="0.8"></div>
   <div class="row"><label>Impact energy <b id="eV"></b></label><input id="e" type="range" min="5" max="1200" step="5" value="260"></div>
   <div class="row"><label>Projectile mass <b id="mV"></b></label><input id="m" type="range" min="0.01" max="6" step="0.01" value="0.05"></div>
   <div class="row"><label>Fragment budget <b id="bV"></b></label><input id="b" type="range" min="16" max="600" step="2" value="180"></div>
@@ -58,18 +64,22 @@
 
   <hr>
   <div class="btns"><button id="shoot">Shoot (Space)</button><button id="reset">Reset (R)</button></div>
+  <div class="btns" style="margin-top:6px"><button id="ram">Ram it (20 kg)</button><button id="undent">Pop dents out</button></div>
   <hr>
   <div id="stats"></div>
 </div>
 
 <div id="notes">
-  <b>How it breaks</b><br>
+  <b id="notesTitle">How it breaks</b><br>
   1 · Hertzian cone crack nucleates under the contact.<br>
   2 · Cracks open normal to max principal tension → radial stars near the hit, concentric rings further out.<br>
   3 · Each m² of new crack costs 2·G<sub>c</sub> joules, so cracks <b>arrest</b> on their own: dust at the impact, intact slabs at the edge.<br>
   4 · Anisotropy = character: grain (wood), bedding (rock), residual stress (tempered glass dices itself), high G<sub>c</sub> (plastic tears).
 </div>
 
+<div id="loading" style="display:none;position:fixed;inset:0;display:none;z-index:20;
+  background:rgba(8,10,13,.82);color:#dfe6ee;font:14px/1.5 ui-sans-serif,sans-serif;
+  align-items:center;justify-content:center;text-align:center;padding-top:45vh"></div>
 <div id="crosshair"></div>
 <div id="hint">Click anywhere on the object to hit it there · drag to orbit · scroll to zoom</div>
 <script type="module" src="/src/main.ts"></script>
