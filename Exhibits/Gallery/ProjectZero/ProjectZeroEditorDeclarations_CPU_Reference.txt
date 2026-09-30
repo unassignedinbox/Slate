@@ -1,0 +1,9 @@
+Project-Zero editor declarations (C ABI CPU reference)
+====================================================
+Source: FlattenedEngine/Projects/Project-Zero/Source/ProjectZeroInterchange.cpp
+Native ImGui capture: false
+
+Panels: ProjectZeroOutliner, MaterialShowcase, MaterialInspector, RenderModeInspector, CelestialEnvironment
+Scene subjects: MaterialShowcase root, 20 rows, 400 row/column material subjects, InterfacePanel, SunSky
+Render preferences: 0 visibility raster, 1 Surfel GI, 2 ReSTIR DI
+Opening scene: Content/Scenes/Showcase.gltf

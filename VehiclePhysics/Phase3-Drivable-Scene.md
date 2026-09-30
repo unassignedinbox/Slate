@@ -5,9 +5,9 @@
 Phase 3 assembles everything from Phases 0–2 into one **drivable vehicle on a Jolt heightfield**, per the locked decisions:
 terrain = Jolt heightfield, tyres = XPBD soft body, everything else rigid in Jolt, stepped on the dedicated physics thread.
 
-> The user's placeholder car for this phase is a **box chassis + four wheels** (`CarModelling/Cars/BoxCar.scr`), with the
-> box deliberately **not touching** the wheels — matching the controller, where the hubs mount below the chassis and the
-> box floats clear of the tyres. Real bodywork will be authored later by the user; the physics does not depend on it.
+> The old box proxy has been retired. Project-Drive now uses the ControlVehicle asset and authored socket positions for
+> wheel centres, suspension mounts and aero points; `DriveSceneAuthor` exports the visible body, glass, trim and XPBD
+> tyre wheels into the opening Drive scene.
 
 ## What ships
 

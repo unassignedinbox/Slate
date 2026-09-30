@@ -11,11 +11,14 @@
     "Accepts the current revision/fingerprint and exact C-layout interchange.",
     "Refuses a revision-1 request before callbacks run.",
     "Calls construct, cycle advance, and retirement callbacks.",
-    "Receives five Project-Drive C-layout panel declarations, including ControlVehicle, XPBD tyres and Surfel GI / ReSTIR.",
-    "Receives nine stable C-layout vehicle/course scene-subject declarations and one ControlVehicle diagnostic."
+    "Receives five Project-Zero C-layout panel declarations and the exact 20 x 20 material-showcase subject set.",
+    "Receives seven Project-Drive C-layout panel declarations, including ControlVehicle, XPBD tyres, telemetry, material showcase and Surfel GI / ReSTIR.",
+    "Receives the exact Project-Drive vehicle/course subject set, including body paint/glass/trim, four XPBD tyres, wheel hubs, brakes, course props and 20 x 20 material-showcase subjects.",
+    "Receives visibility-raster, Surfel-GI and ReSTIR rendering preferences from both projects, plus one camera request per project.",
+    "Receives Project-Zero and Project-Drive diagnostics naming the material showcase and ControlVehicle declarations."
   ],
   "sha256": {
-    "AbiContract_CPU_Check.txt": "1c5e801681bde9993e2a031aee255d2615b916c78960dec32fe5ef57c2b3969c",
-    "Exhibits/Workbench/CodeImages/CodeImageAbiCheck.cpp": "80badcad49539c65bc379775a80333c86e7a9bc79b69338b69dc9dafde686ffe"
+    "AbiContract_CPU_Check.txt": "fc444dcf53e2c3ff1912fdda9bd066a8b6ab900ffdc4332627d2ca6ae4a03e84",
+    "Exhibits/Workbench/CodeImages/CodeImageAbiCheck.cpp": "66b44fcfaf165c0c2bb7d382678074936e517be395b97506ae612ae7449d2ca4"
   }
 }

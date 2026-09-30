@@ -7,18 +7,24 @@ Project-Drive is opened by `Frontier.exe`, never by a project-owned windowed exe
 
 | Capability | Owner |
 |---|---|
-| Window, Vulkan device, renderer, editor, global camera, input, celestial environment | `Frontier.exe` |
-| GPU Surfel GI and deterministic CPU Surfel reference field | shared `Engine/` facilities |
-| Drive course, vehicle simulation, driver interpretation, chase-camera requests, vehicle panels | `ProjectDrive.dll` |
+| Window, Vulkan device, visibility raster, Surfel GI, ReSTIR, editor, global camera, input, sun and sky | `Frontier.exe` |
+| Drive course, ControlVehicle, XPBD tyres, driver interpretation, chase-camera requests, vehicle panels | `ProjectDrive.dll` |
+| 20 x 20 Drive material showcase in the opening scene | `DriveSceneAuthor` |
 
 The code image reaches host facilities through the versioned `CodeInterchange` C ABI. C++ standard-library records,
 exceptions, allocator ownership, Vulkan references, and ImGui records do not cross it.
 
 ## Project content
 
-`Source/DriveCourse.h` describes the proving ground shared by the vehicle and its content authoring. The project vehicle
-sources keep course and ControlVehicle semantics project-owned. Project-Drive has no project-local renderer: visibility
-raster, Surfel GI, ReSTIR, sky, editor panels and capture all remain Frontier-owned.
+`Source/DriveCourse.h` describes the proving ground shared by the vehicle and its content authoring. `DriveSceneAuthor`
+exports `Content/Scenes/DriveCourse.gltf`: ControlVehicle, four XPBD tyre wheels, course props, and a 20 x 20 material
+showcase so visibility raster, Surfel GI and ReSTIR all render the same project opening scene family.
+
+## Editor declarations
+
+`ProjectDriveInterchange.cpp` declares host-owned panels for the outliner, ControlVehicle inspector, XPBD tyres, vehicle
+dynamics, render modes, Drive material showcase, and telemetry graphs. It also declares outliner subjects for body
+paint/glass/trim, four tyres, hubs, brakes, course props, sun/sky, and every 20 x 20 material-showcase cell.
 
 ## Build and opening
 

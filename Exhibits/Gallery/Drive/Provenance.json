@@ -1,69 +1,50 @@
 {
-  "proof": "Project-Drive raw VehicleSolver telemetry.",
   "executionBoundary": {
     "nativeFrontierVulkanSlangImGuiCapture": false,
-    "description": "These files are direct output from the headless DriveTelemetry physics executable. They are not vehicle render, editor, Vulkan, Slang, or ImGui evidence."
-  },
-  "command": "cd VehiclePhysics/Overlay/Projects/Project-Drive && make run",
-  "simulation": {
-    "fixedStepHz": 240,
-    "recordingHz": 60,
-    "durationSeconds": 12,
-    "systems": [
-      "VehicleSolver",
-      "XPBDSoftTyre",
-      "Pacejka drivetrain",
-      "Aerodynamics",
-      "DriveCourse heightfield"
-    ],
-    "recordedChannels": [
-      "position",
-      "speed",
-      "throttle",
-      "brake",
-      "steer",
-      "airborne",
-      "wheel load/slip/omega/contact",
-      "aero drag/downforce/ride height"
-    ]
+    "description": "CPU-reference artefacts keyed to project .frontier files, scene-author sources, C-ABI declarations, and retained DriveTelemetry. Native captures must use a Native name."
   },
   "sourceSha256": {
-    "VehiclePhysics/Overlay/Projects/Project-Drive/Source/DriveTelemetry.cpp": "139d69c39a49a429e2bdbb316e66e7867d7a13c8f06296263e8124fa121ea926",
-    "VehiclePhysics/Overlay/Projects/Project-Drive/Source/DriveCourse.h": "0a00f5e4a9c2a990074f0bd425daa0b536c86c059fb2a5a0357cd894960841d2",
-    "VehiclePhysics/Overlay/Engine/PhysicalDynamics/Vehicle/VehicleSolver.cpp": "07c40b73d6a95e54669f9ec364bc98a703139b3b20fd90139002bc3be7407b25",
-    "VehiclePhysics/Overlay/Engine/PhysicalDynamics/Vehicle/XPBDSoftTyre.cpp": "3c88ad4c223bbfe108990354a5b96de71e4c2313691efa8ace192c187c94b9fe",
-    "VehiclePhysics/Overlay/Engine/PhysicalDynamics/Vehicle/PacejkaMagicFormula.cpp": "eb267d4913c987adb789b86173db4f65365677776f16c2b6f8a27b939c535773",
-    "VehiclePhysics/Overlay/Engine/PhysicalDynamics/Vehicle/Aerodynamics.cpp": "5892828fddbe4148409a3a7ef7d52829f37d5b0b983aef427fcbc737264d5e0b"
+    "FlattenedEngine/Projects/Project-Zero/ProjectZero.frontier": "a49c0353fc07c0ab684c695f05672acb615cf7e0b4cd7d4a36f76b1add3841a1",
+    "FlattenedEngine/Projects/Project-Drive/ProjectDrive.frontier": "313d3c348527e673113de651a39c896d16db1e620f0e8c066ec9364c54599ca5",
+    "FlattenedEngine/Engine/ContentInterchange/ShowcaseStructure.h": "d8c5e8dfe0f0b99317a81e5588e91612e33a70dcb050877e5b7f0856d8a54579",
+    "FlattenedEngine/Engine/ContentInterchange/ShowcaseStructure.cpp": "d119e903469bb29c536f92d386db55957858f701dcb2d766c6137b877861401e",
+    "VehiclePhysics/Overlay/Projects/Project-Drive/Source/DriveSceneAuthor.h": "38e0e7aad22e5f489e5688401178ac3eebd22c95c273ecae4038501c0ee60361",
+    "VehiclePhysics/Overlay/Projects/Project-Drive/Source/DriveSceneAuthor.cpp": "11bbe8c015c550d155852a03d1ba374a8e2ffb5e0f0e7f5e38faaaabdf900a78",
+    "FlattenedEngine/Projects/Project-Zero/Source/ProjectZeroInterchange.cpp": "f3429b56ca7f7f579e6842668159b90f074ba4d85d2763db63f695c54c837e06",
+    "FlattenedEngine/Projects/Project-Drive/Source/ProjectDriveInterchange.cpp": "1c6a595c87de5ccee78dd5048d8f90e85fadcf8e16ece2f48c9c0488e2cc7999",
+    "Exhibits/Gallery/Drive/ProjectDrivePhysicsTelemetry_CPU_Reference.csv": "8a7b8b0e2fe7d729059d7e993539716519269e4d202339e508f05930dd1a243a",
+    "Exhibits/Workbench/ProjectMirrors/RunFrontierCpuMirror.py": "df72ea7478dfb645766b408e1bd1a15ea01900e6c5b0cf128afac8b419d02016"
   },
-  "outputSha256": {
+  "proof": "Project-Drive course, ControlVehicle, XPBD tyres, 20 x 20 material showcase, telemetry graphs and driving GIFs.",
+  "openingScene": "FlattenedEngine/Projects/Project-Drive/Content/Scenes/DriveCourse.gltf",
+  "telemetry": {
+    "source": "ProjectDrivePhysicsTelemetry_CPU_Reference.csv",
+    "durationSeconds": 12.0,
+    "recordingHz": 60,
+    "derivedAnimations": [
+      "ProjectDriveDrivingChase_CPU_Reference.gif",
+      "ProjectDriveDrivingTrackside_CPU_Reference.gif",
+      "ProjectDriveDrivingOverhead_CPU_Reference.gif"
+    ]
+  },
+  "renderModes": [
+    "visibility raster",
+    "Surfel GI",
+    "ReSTIR DI"
+  ],
+  "outputs": {
+    "ProjectDriveVisibilityRaster_CPU_Reference.png": "c7962fb93d472faf9751dc0e16488628115846ce588ab9ca8668b83b39fe98d4",
+    "ProjectDriveSurfelGI_CPU_Reference.png": "fab503112a36fdf37e19b74f8c4a0b47f39fae2266815c598b52222ee1849e63",
+    "ProjectDriveReSTIR_CPU_Reference.png": "10415db2e0ea9b7440f7664b8643fba65e2f7fff38219c17e03dee2531c5fa0f",
+    "ProjectDriveAutomotiveMaterialsAngles_CPU_Reference.png": "1c8e330ee90c350a38d115097694aec3826f3ec287173beed06ffa6e98195d8a",
+    "ProjectDriveDrivingChase_CPU_Reference.gif": "86bf5e217b2915762f2158961bc761872dfd2a188a75392927a83ef993717433",
+    "ProjectDriveDrivingTrackside_CPU_Reference.gif": "69a9c4bcdd9b1fe039f070779bde8177cf5e2cb41ece148436560aa87da21efa",
+    "ProjectDriveDrivingOverhead_CPU_Reference.gif": "eb0cdb10d5d8776bc9974c86df2984f99249fa999b1c1e01bb2677b9c89db31c",
+    "ProjectDriveEditorDeclarations_CPU_Reference.txt": "4f60be6410fca25a5dc4911bfe68d09f949f66e20c133ffeb64b57dc54777b9a",
+    "README.md": "3bcdf5f7ff679c7c2fd175a9140567b8f379d87763629605b84b75e33a690b12",
     "ProjectDrivePhysicsTelemetry_CPU_Reference.csv": "8a7b8b0e2fe7d729059d7e993539716519269e4d202339e508f05930dd1a243a",
     "ProjectDrivePhysicsRun_CPU_Reference.txt": "e71177a5f19d36a2b4ec12049394411486a79a0049fe2b49cbfd557f60b07ca9",
     "ProjectDrivePhysicsTiming_CPU_Reference.txt": "f5e7a0a2367284fd4f3a134d7e765a571fb904dcb8670e222ad64bbe5aa3dc7a",
     "ProjectDrivePhysicsTelemetryGraphs_CPU_Reference.svg": "9eb0daa1311455b6a7f1525919b9ef366131f7f22d078bbeb0a78fdb981a697e"
-  },
-  "captureRequirements": {
-    "scene": "Frontier.exe Projects/Project-Drive/ProjectDrive.frontier",
-    "requiredModes": [
-      "visibility raster",
-      "Surfel GI",
-      "ReSTIR"
-    ],
-    "editor": "Native Frontier editor capture only",
-    "motion": "Frame capture from the live host renderer only; do not synthesize a driving GIF from telemetry."
-  },
-  "derivedArtifacts": {
-    "ProjectDrivePhysicsTelemetryGraphs_CPU_Reference.svg": {
-      "source": "ProjectDrivePhysicsTelemetry_CPU_Reference.csv",
-      "method": "Straight polylines through all recorded samples; no interpolation, smoothing, or simulated samples.",
-      "channels": [
-        "speed_mps",
-        "throttle",
-        "brake",
-        "steer",
-        "aero_drag_N",
-        "aero_downforce_N"
-      ],
-      "executionBoundary": "Static CSV visualization only; not a Frontier Vulkan, Slang, ImGui, scene, or vehicle-motion capture."
-    }
   }
 }

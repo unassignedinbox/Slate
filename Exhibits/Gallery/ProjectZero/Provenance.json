@@ -1,0 +1,33 @@
+{
+  "executionBoundary": {
+    "nativeFrontierVulkanSlangImGuiCapture": false,
+    "description": "CPU-reference artefacts keyed to project .frontier files, scene-author sources, C-ABI declarations, and retained DriveTelemetry. Native captures must use a Native name."
+  },
+  "sourceSha256": {
+    "FlattenedEngine/Projects/Project-Zero/ProjectZero.frontier": "a49c0353fc07c0ab684c695f05672acb615cf7e0b4cd7d4a36f76b1add3841a1",
+    "FlattenedEngine/Projects/Project-Drive/ProjectDrive.frontier": "313d3c348527e673113de651a39c896d16db1e620f0e8c066ec9364c54599ca5",
+    "FlattenedEngine/Engine/ContentInterchange/ShowcaseStructure.h": "d8c5e8dfe0f0b99317a81e5588e91612e33a70dcb050877e5b7f0856d8a54579",
+    "FlattenedEngine/Engine/ContentInterchange/ShowcaseStructure.cpp": "d119e903469bb29c536f92d386db55957858f701dcb2d766c6137b877861401e",
+    "VehiclePhysics/Overlay/Projects/Project-Drive/Source/DriveSceneAuthor.h": "38e0e7aad22e5f489e5688401178ac3eebd22c95c273ecae4038501c0ee60361",
+    "VehiclePhysics/Overlay/Projects/Project-Drive/Source/DriveSceneAuthor.cpp": "11bbe8c015c550d155852a03d1ba374a8e2ffb5e0f0e7f5e38faaaabdf900a78",
+    "FlattenedEngine/Projects/Project-Zero/Source/ProjectZeroInterchange.cpp": "f3429b56ca7f7f579e6842668159b90f074ba4d85d2763db63f695c54c837e06",
+    "FlattenedEngine/Projects/Project-Drive/Source/ProjectDriveInterchange.cpp": "1c6a595c87de5ccee78dd5048d8f90e85fadcf8e16ece2f48c9c0488e2cc7999",
+    "Exhibits/Gallery/Drive/ProjectDrivePhysicsTelemetry_CPU_Reference.csv": "8a7b8b0e2fe7d729059d7e993539716519269e4d202339e508f05930dd1a243a",
+    "Exhibits/Workbench/ProjectMirrors/RunFrontierCpuMirror.py": "df72ea7478dfb645766b408e1bd1a15ea01900e6c5b0cf128afac8b419d02016"
+  },
+  "proof": "Project-Zero default 20 x 20 material showcase CPU-reference render modes and editor declarations.",
+  "openingScene": "FlattenedEngine/Projects/Project-Zero/Content/Scenes/Showcase.gltf",
+  "renderModes": [
+    "visibility raster",
+    "Surfel GI",
+    "ReSTIR DI"
+  ],
+  "outputs": {
+    "ProjectZeroMaterialShowcaseVisibility_CPU_Reference.png": "d2d28fa23c66173ca24dea48dd1ad808e97803e82f5e6fce3ae5db4171f7b287",
+    "ProjectZeroMaterialShowcaseSurfelGI_CPU_Reference.png": "9bc7f0ffac60b1f1b21b5cd6f34b52e5f99a1bfad8b677a66e002fa0ea6be567",
+    "ProjectZeroMaterialShowcaseReSTIR_CPU_Reference.png": "5df4c5c52a7668f7468f949ad5bf4297de1038f9e865ebf0f00bed8d8f3603cf",
+    "ProjectZeroMaterialAngles_CPU_Reference.png": "a09978bf859e2ff6f4dfc348ae38bcbad117bd96aea4362e7aedca9448221ee6",
+    "ProjectZeroEditorDeclarations_CPU_Reference.txt": "95d0cb9aa6c6d5c3e60b91968a1ece67cc93f6847c7140b487077c096b09f5d7",
+    "README.md": "614e4cfda09410a4b4245d273dced4493f772d5988b178ddd9ca003f13880eb0"
+  }
+}

@@ -1,0 +1,9 @@
+Project-Drive editor declarations (C ABI CPU reference)
+====================================================
+Source: FlattenedEngine/Projects/Project-Drive/Source/ProjectDriveInterchange.cpp
+Native ImGui capture: false
+
+Panels: DriveOutliner, ControlVehicle, XPBDTyres, VehicleDynamics, DriveRenderModes, DriveMaterialShowcase, DriveTelemetry
+Scene subjects: ControlVehicle body paint/glass/trim, four XPBD tyres, wheel hubs, brakes, course props, SunSky, and 20 x 20 material showcase
+Render preferences: 0 visibility raster, 1 Surfel GI, 2 ReSTIR DI
+Opening scene: Content/Scenes/DriveCourse.gltf

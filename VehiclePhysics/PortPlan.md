@@ -121,9 +121,10 @@ a thin driving layer turns throttle/brake/steer into in-plane forces bounded by 
 | Scene assembly (solver + track + controller + thread) | `Projects/Project-Tractrix/Source/TractrixVehicleScene.h` | ✅ in-tree |
 | Headless drive test (mock chassis + mock heightfield) | `Vehicle/VehicleSceneValidation.cpp` | ✅ **19/19 pass** |
 
-Placeholder car = **box + four wheels** (`CarModelling/Cars/BoxCar.scr`), box not touching the wheels (the user will
-author real bodywork). Validated invariants: settles carrying exactly `1.000·mg` on 4 wheels with no sink-through;
-accelerates; brakes to a dead stop without reversing; steers/yaws while upright; rests stably on a 6 % slope.
+The old box proxy is retired. Project-Drive now uses the ControlVehicle asset, authored wheel sockets, procedural XPBD
+wheels and `DriveSceneAuthor` for visible body/material export. Validated invariants: settles carrying exactly
+`1.000·mg` on 4 wheels with no sink-through; accelerates; brakes to a dead stop without reversing; steers/yaws while
+upright; rests stably on a 6 % slope.
 
 ## Phase 5 — Re-port driving layer from GRIT `source-only`  ✅ **COMPLETE** (see `Phase5-SourceOnly-Report.md`)
 Keeps the Phase-2 XPBD soft tyre + Jolt heightfield + physics thread; re-derives the driving layer from the

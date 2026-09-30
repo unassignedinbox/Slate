@@ -11,7 +11,8 @@
 //        span 2  "Wheel FR"      — rubber + hub + brake -> instance 2 (dynamic; wheel 1)
 //        span 3  "Wheel RL"      — rubber + hub + brake -> instance 3 (dynamic; wheel 2)
 //        span 4  "Wheel RR"      — rubber + hub + brake -> instance 4 (dynamic; wheel 3)
-//        span 5  "Course"        — 6 materials -> static instances
+//        span 5  "Drive material showcase" — 20 × 20 material proof scene -> static instances
+//        span 6  "Course"        — 6 materials -> static instances
 //    SceneCodec preserves these material partitions inside their spans; VehicleInstanceSequence still addresses the
 //    body and four wheel spans by the same stable instance ordinal, not by a per-material instance count.
 //
@@ -36,7 +37,8 @@ namespace Frontier {
 namespace Drive {
 
 // Bump whenever Construct() changes what the level contains, so an older DriveCourse.gltf is regenerated.
-inline constexpr uint32_t kDriveSceneRevision = 2u;
+inline constexpr uint32_t kDriveSceneRevision = 3u;
+inline constexpr uint32_t kDriveMaterialShowcaseSide = 20u;
 
 // True when the file at Path was written by this revision (cheap header scan). Missing/older ⇒ false ⇒ re-export.
 [[nodiscard]] bool DriveSceneMatchesRevision(const std::string& Path) noexcept;
@@ -71,6 +73,8 @@ private:
 
     void AppendVehicleBody(float ComHeight, uint32_t Material) noexcept;
     void AppendWheel(const Vector3& LocalHub, float Radius, float HalfWidth, uint32_t Segments, uint32_t Material) noexcept;
+    void AppendMaterialSphere(const Vector3& Centre, float Radius, uint32_t Material, uint32_t Rings, uint32_t Segments) noexcept;
+    void AppendMaterialShowcase() noexcept;
     void AppendCourse() noexcept;
 
     void AuthorMaterials() noexcept;

@@ -18,8 +18,9 @@ in `_AgentScratch/` or feature-local diagnostics and are not authoritative evide
 ```text
 Gallery/
 ├── CodeImages/     Dynamic code-image ABI lifecycle result and provenance
-└── Drive/          Direct Project-Drive physics telemetry only; host captures are required for visual evidence
+├── Drive/          Project-Drive scene, vehicle-motion and direct telemetry CPU-reference evidence
+└── ProjectZero/    Project-Zero default 20 x 20 material-showcase CPU-reference evidence
 ```
 
-No Project-Zero image is retained until it is captured from the shared host's default 20 × 20 material scene.
-Retired analytical scenes, custom CPU renderers, synthetic UI sheets, and their derived images are intentionally absent.
+The Project-Zero and Project-Drive CPU-reference images are keyed to the project `.frontier` files and scene-author
+sources. They are not native captures; native renderer/editor captures must be added with `*_Native_*` names.

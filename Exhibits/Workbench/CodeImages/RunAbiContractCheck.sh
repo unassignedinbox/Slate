@@ -42,8 +42,11 @@ provenance = {
         "Accepts the current revision/fingerprint and exact C-layout interchange.",
         "Refuses a revision-1 request before callbacks run.",
         "Calls construct, cycle advance, and retirement callbacks.",
-        "Receives five Project-Drive C-layout panel declarations, including ControlVehicle, XPBD tyres and Surfel GI / ReSTIR.",
-        "Receives nine stable C-layout vehicle/course scene-subject declarations and one ControlVehicle diagnostic.",
+        "Receives five Project-Zero C-layout panel declarations and the exact 20 x 20 material-showcase subject set.",
+        "Receives seven Project-Drive C-layout panel declarations, including ControlVehicle, XPBD tyres, telemetry, material showcase and Surfel GI / ReSTIR.",
+        "Receives the exact Project-Drive vehicle/course subject set, including body paint/glass/trim, four XPBD tyres, wheel hubs, brakes, course props and 20 x 20 material-showcase subjects.",
+        "Receives visibility-raster, Surfel-GI and ReSTIR rendering preferences from both projects, plus one camera request per project.",
+        "Receives Project-Zero and Project-Drive diagnostics naming the material showcase and ControlVehicle declarations.",
     ],
     "sha256": {
         "AbiContract_CPU_Check.txt": hashlib.sha256(log.read_bytes()).hexdigest(),
