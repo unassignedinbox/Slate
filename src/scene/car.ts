@@ -106,6 +106,8 @@ export class CarScene {
   bakeMs = 0;
   vatKB = 0;
   lensBakeMs = 0;
+  /** false until the (async, worker-side) panel bake has returned */
+  ready = false;
 
   constructor(
     private scene: Scene,
@@ -212,15 +214,18 @@ export class CarScene {
     // on the CPU when something needs the deformed surface
     const chassis = boxPiece(4.3, 1.5, 1.86);
     this.handle = this.physics.addStaticConvex(chassis, new Vector3(), this.position.clone().add(new Vector3(0, 0.36, 0)), 0.9);
+    this.ready = true;
   }
 
   /** World-space raycast targets. */
   get pickables(): Object3D[] {
+    if (!this.ready) return [];
     return [this.body, ...this.lenses.filter(l => !l.broken).map(l => l.mesh)];
   }
 
   /** Steel panel hit -> plastic dent from the baked VAT. */
   dentAt(pointWorld: Vector3, normalWorld: Vector3, energy: number) {
+    if (!this.ready) return null;
     const inv = this.body.matrixWorld.clone().invert();
     const p = pointWorld.clone().applyMatrix4(inv);
     const n = normalWorld.clone().transformDirection(inv).normalize();
@@ -233,6 +238,7 @@ export class CarScene {
 
   /** Lens hit -> instantiate a pre-baked shatter (0 ms solve). */
   breakLens(mesh: Mesh, dirWorld: Vector3, energy: number) {
+    if (!this.ready) return false;
     const lens = this.lenses.find(l => l.mesh === mesh);
     if (!lens || lens.broken) return false;
     lens.broken = true;
@@ -251,10 +257,11 @@ export class CarScene {
     return true;
   }
 
-  get dentCount() { return this.dents.dents.length; }
+  get dentCount() { return this.dents ? this.dents.dents.length : 0; }
 
   get maxDentDepth() {
     let d = 0;
+    if (!this.dents) return 0;
     for (const dent of this.dents.dents) {
       const f = this.fields[dent.archetype];
       d = Math.max(d, f.depths[Math.min(f.depths.length - 1, Math.round(dent.severity))]);
@@ -263,6 +270,7 @@ export class CarScene {
   }
 
   dispose() {
+    this.ready = false;
     this.scene.remove(this.group);
     this.group.traverse(o => {
       const m = o as Mesh;

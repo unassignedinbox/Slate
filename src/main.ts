@@ -637,13 +637,17 @@ ui.mat.addEventListener('change', reset);
 ui.scene.addEventListener('change', reset);
 ui.gauge.addEventListener('change', () => { if (car) reset(); });
 ui.gauge.addEventListener('input', syncLabels);
-(document.getElementById('undent') as HTMLButtonElement).onclick = () => { car?.dents.clear(); updateStats(); };
+(document.getElementById('undent') as HTMLButtonElement).onclick = () => { if (car?.ready) { car.dents.clear(); updateStats(); } };
 (document.getElementById('ram') as HTMLButtonElement).onclick = () => ramIt();
 ui.bake.addEventListener('change', () => { if (ui.bake.checked && intact) { prebake(); updateStats(); } });
 (document.getElementById('shoot') as HTMLButtonElement).onclick = () => shootAt(pickPoint());
 (document.getElementById('reset') as HTMLButtonElement).onclick = reset;
 
 function updateStats() {
+  if (car && !car.ready) {
+    ui.statsEl.innerHTML = 'baking steel panels…';
+    return;
+  }
   if (car) {
     ui.statsEl.innerHTML = [
       `panel bake <span>${car.bakeMs.toFixed(0)} ms</span> (cached after first) · VAT <span>${car.vatKB.toFixed(0)} KB</span>`,
