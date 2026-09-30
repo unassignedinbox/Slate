@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fracture Lab — real-time material-aware destruction</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; overflow: hidden; background: #0b0e13; }
+      #app { width: 100%; height: 100%; }
+      .hud {
+        position: fixed; z-index: 10; color: #cfd6e0;
+        font-family: 'Segoe UI', system-ui, sans-serif; font-size: 13px;
+        user-select: none; pointer-events: none;
+      }
+      #panel {
+        top: 14px; left: 14px; max-width: 330px;
+        background: rgba(12, 16, 24, 0.82); border: 1px solid rgba(120, 150, 190, 0.25);
+        border-radius: 10px; padding: 14px 16px; backdrop-filter: blur(6px);
+        pointer-events: auto;
+      }
+      #panel h1 { font-size: 15px; letter-spacing: 0.06em; color: #fff; margin-bottom: 2px; }
+      #panel .sub { font-size: 11px; color: #7f8ea3; margin-bottom: 10px; }
+      #panel ul { list-style: none; margin-bottom: 10px; }
+      #panel li { padding: 2px 0; font-size: 12px; color: #aeb9c8; }
+      #panel li b { color: #e8edf4; font-weight: 600; }
+      #panel .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; }
+      .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      .controls button {
+        background: #1d2634; color: #dfe7f2; border: 1px solid #35455c;
+        border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer;
+      }
+      .controls button:hover { background: #28344a; }
+      .controls button.active { background: #2f5eaa; border-color: #4a7ed0; }
+      .powerRow { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; }
+      .powerRow input { width: 130px; accent-color: #4a7ed0; }
+      #stats {
+        bottom: 12px; left: 14px; font-size: 11px; color: #6d7a8c;
+      }
+      #hint {
+        bottom: 12px; left: 50%; transform: translateX(-50%);
+        font-size: 12px; color: #93a2b6; background: rgba(12,16,24,0.7);
+        padding: 6px 14px; border-radius: 20px; border: 1px solid rgba(120,150,190,0.2);
+      }
+      #crosshair {
+        top: 50%; left: 50%; transform: translate(-50%, -50%);
+        width: 14px; height: 14px; opacity: 0.0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div class="hud" id="panel">
+      <h1>FRACTURE LAB</h1>
+      <div class="sub">material-aware real-time destruction &mdash; no uniform Voronoi</div>
+      <ul>
+        <li><span class="dot" style="background:#9fe8dc"></span><b>Glass</b> &mdash; impact-aligned radial + spider-web rings, hangs in frame, shatters on 2nd hit</li>
+        <li><span class="dot" style="background:#c98d4a"></span><b>Wood</b> &mdash; anisotropic grain splinters, jagged snap band</li>
+        <li><span class="dot" style="background:#b6b0a4"></span><b>Concrete wall</b> &mdash; baked chunks + support graph, structural cascade collapse</li>
+        <li><span class="dot" style="background:#3b82f6"></span><b>Plastic</b> &mdash; ductile petaling tear + stress whitening (doesn't shatter)</li>
+        <li><span class="dot" style="background:#8d887e"></span><b>Rock</b> &mdash; distance-graded comminution, rough crack faces, re-shootable chunks</li>
+      </ul>
+      <div class="controls">
+        <button id="btnReset">Reset (R)</button>
+        <button id="btnSlow">Slow-mo (S)</button>
+      </div>
+      <div class="powerRow">
+        <span>Shot power</span>
+        <input id="power" type="range" min="8" max="34" step="1" value="20" />
+        <span id="powerVal">20 m/s</span>
+      </div>
+    </div>
+    <div class="hud" id="stats"></div>
+    <div class="hud" id="hint">CLICK to shoot a steel ball &nbsp;&bull;&nbsp; DRAG to orbit &nbsp;&bull;&nbsp; scroll to zoom</div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
