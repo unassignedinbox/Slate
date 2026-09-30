@@ -90,6 +90,28 @@ patterns at load time; the hit then costs **0 ms** — it only instantiates. The
 bake a handful of patterns per asset (varying impact site + energy tier), pick the nearest at runtime, and
 run the live solver only for hero/scripted destruction or on a worker thread.
 
+### 6b. Physics: Jolt
+Rigid bodies run on **Jolt Physics** (the WASM build of `jrouwe/JoltPhysics` — the engine behind
+Horizon Forbidden West and Godot 4), wrapped in `src/physics/jolt.ts`:
+
+* every fragment the solver emits is already convex, so it becomes a `ConvexHullShape` directly —
+  no convex decomposition, no hull fitting, ~0.15 ms per shard to build;
+* the projectile uses `EMotionQuality_LinearCast` (real CCD), so a 220 m/s bullet cannot tunnel
+  through a 14 mm pane;
+* `mEnhancedInternalEdgeRemoval` keeps thin shards from catching on each other's seams;
+* **rebar / hinge links are real breakable constraints**: a `DistanceConstraint` per bar whose
+  accumulated Lagrange multiplier is read every frame and cut when it exceeds the bar's yield load
+  (9 kN concrete, 1.6 kN plastic, 0.9 kN wood) — so a slab hangs, sags, then drops;
+* body IDs are copied into JS-owned `BodyID`s and every embind object we allocate is destroyed
+  (no WASM leaks across resets);
+* if the page is cross-origin isolated (COOP/COEP are set in `vite.config.ts`) it loads the
+  **multithreaded** Jolt build automatically and uses `hardwareConcurrency - 1` worker threads;
+  otherwise it falls back to the single-thread build silently. The HUD shows which one is live.
+
+Measured in this sandbox (single-threaded WASM, Node): 180 convex glass shards + 29 breakable links,
+**2.0 ms average per 1/60 s step**, all bodies asleep once the pile settles, zero escaped/NaN bodies,
+clean teardown.
+
 Other runtime measures in the demo: shared materials per shatter, convex colliders straight from the
 solver, aggressive sleeping, a rigid-body cap with the smallest sleeping fragments retired to debris,
 GPU point comminution dust, and cheap fake-refraction shards instead of hundreds of transmissive meshes.
@@ -107,11 +129,14 @@ src/fracture/materials.ts  Gc, density, anisotropy, residual stress, surface par
 src/fracture/fracture.ts   stress field, crack-normal selection, Griffith energy solver
 src/scene/targets.ts     pane / plank / wall / boulder / crate setups + rebar layout
 src/scene/audio.ts       procedural modal impact audio
-src/main.ts              three.js scene, cannon-es physics, projectiles, dust, UI
+src/physics/jolt.ts      Jolt Physics (WASM) backend: convex hulls, breakable links, CCD
+src/main.ts              three.js scene, projectiles, dust, UI
 ```
 
 ## Porting to a real engine
 Nothing here is web-specific: the solver is pure arithmetic on planes and polygons (~400 lines) and maps
-directly to C++/DOTS. In UE/Unity you would keep `fracture()` as a build-time tool for baked patterns and
-as a runtime call for hero moments, feed the convex cells to Chaos/PhysX as convex colliders, and move the
-crack-surface displacement into a material/nanite-displacement pass.
+directly to C++/DOTS. The physics side is already native Jolt, so a C++ port is a straight
+1:1 translation of `src/physics/jolt.ts` against the real Jolt API — same `ConvexHullShapeSettings`,
+same `DistanceConstraint` yield test, same `LinearCast` bullets. Keep `fracture()` as a build-time tool
+for baked patterns plus a runtime call for hero moments, and move the crack-surface displacement into a
+material/displacement pass.

@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "cannon-es": "^0.20.0",
+    "jolt-physics": "^1.1.0",
     "three": "^0.186.1"
   },
   "devDependencies": {

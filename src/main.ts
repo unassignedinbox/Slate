@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import * as CANNON from 'cannon-es';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
@@ -9,6 +8,7 @@ import { MATERIALS, type MaterialDef } from './fracture/materials';
 import { fracture, surfaceNoise, type Fragment, type Impact } from './fracture/fracture';
 import { makeTarget, type Target } from './scene/targets';
 import { ensureAudio, playImpact } from './scene/audio';
+import { Physics, type Handle } from './physics/jolt';
 
 /* ------------------------------------------------------------------ */
 /* renderer / scene                                                     */
@@ -53,37 +53,32 @@ scene.add(ground);
 scene.add(new THREE.GridHelper(24, 48, 0x243040, 0x1a222c));
 
 /* ------------------------------------------------------------------ */
-/* physics                                                              */
+/* physics — Jolt (WASM)                                                */
 /* ------------------------------------------------------------------ */
-const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
-world.broadphase = new CANNON.SAPBroadphase(world);
-(world.solver as CANNON.GSSolver).iterations = 8;
-world.allowSleep = true;
-const defaultMat = new CANNON.Material('d');
-world.defaultContactMaterial.friction = 0.6;
-world.defaultContactMaterial.restitution = 0.1;
-const groundBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane(), material: defaultMat });
-groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-world.addBody(groundBody);
+const physics = await Physics.create(8192);
+physics.addStaticPlane(0);
 
 /* ------------------------------------------------------------------ */
 /* state                                                                */
 /* ------------------------------------------------------------------ */
-interface Body3 { mesh: THREE.Object3D; body: CANNON.Body; mat: MaterialDef; vol: number; fractured: boolean; born: number }
+interface Body3 {
+  mesh: THREE.Mesh; h: Handle; mat: MaterialDef; vol: number;
+  fractured: boolean; born: number; piece: Piece;
+}
 let target: Target;
 let targetMesh: THREE.Mesh | null = null;
-let targetBody: CANNON.Body | null = null;
+let targetHandle: Handle | null = null;
 let intact = true;
 const dynamics: Body3[] = [];
 const props: THREE.Object3D[] = [];
-const constraints: CANNON.Constraint[] = [];
+const staticHandles: Handle[] = [];
 let damageTex: THREE.CanvasTexture | null = null;
 let damageCanvas: HTMLCanvasElement | null = null;
 let damageMesh: THREE.Mesh | null = null;
 let damageHits = 0;
 let baked: { impact: Impact; frags: Fragment[] }[] = [];
 let bakeMs = 0;
-const stats = { frags: 0, bodies: 0, ms: 0, area: 0, fps: 0 };
+const stats = { frags: 0, ms: 0, area: 0, fps: 0, physMs: 0 };
 
 const ui = {
   mat: document.getElementById('mat') as HTMLSelectElement,
@@ -106,11 +101,12 @@ for (const k of Object.keys(MATERIALS)) {
 /* ------------------------------------------------------------------ */
 /* materials                                                            */
 /* ------------------------------------------------------------------ */
+const matPool: THREE.Material[] = [];
+
 function makeSurfaceMats(m: MaterialDef, shard = false): THREE.Material[] {
   if (m.transmission && shard) {
-    // hundreds of transmissive meshes would each need a transmission pass;
-    // shards use a cheap refractive-looking blend instead (visually identical
-    // at shard scale, ~40x cheaper)
+    // hundreds of transmissive meshes would each need their own transmission
+    // pass; shards use a cheap refractive-looking blend instead
     const base = {
       color: m.color, roughness: 0.08, metalness: 0, transparent: true, opacity: 0.34,
       side: THREE.DoubleSide, envMapIntensity: 3.2, depthWrite: false as const,
@@ -147,29 +143,6 @@ function surfOpts(m: MaterialDef): SurfaceOpts {
   };
 }
 
-/* ------------------------------------------------------------------ */
-/* build / reset                                                        */
-/* ------------------------------------------------------------------ */
-function clearAll() {
-  for (const c of constraints) world.removeConstraint(c);
-  constraints.length = 0;
-  for (const d of dynamics) { scene.remove(d.mesh); world.removeBody(d.body); disposeObj(d.mesh, true); }
-  dynamics.length = 0;
-  for (const p of props) { scene.remove(p); disposeObj(p); }
-  props.length = 0;
-  for (const m of matPool) m.dispose();
-  matPool.length = 0;
-  if (targetMesh) { scene.remove(targetMesh); disposeObj(targetMesh); targetMesh = null; }
-  if (targetBody) { world.removeBody(targetBody); targetBody = null; }
-  if (damageMesh) { scene.remove(damageMesh); disposeObj(damageMesh); damageMesh = null; }
-  damageTex = null; damageCanvas = null; damageHits = 0;
-  for (const s of staticBodies) world.removeBody(s);
-  staticBodies.length = 0;
-  baked = []; bakeMs = 0;
-}
-const staticBodies: CANNON.Body[] = [];
-
-const matPool: THREE.Material[] = [];
 function disposeObj(o: THREE.Object3D, geometryOnly = false) {
   o.traverse(c => {
     const m = c as THREE.Mesh;
@@ -181,11 +154,25 @@ function disposeObj(o: THREE.Object3D, geometryOnly = false) {
   });
 }
 
-function cannonConvex(p: Piece, center: THREE.Vector3) {
-  return new CANNON.ConvexPolyhedron({
-    vertices: p.verts.map(v => new CANNON.Vec3(v.x - center.x, v.y - center.y, v.z - center.z)),
-    faces: p.faces.map(f => f.idx.slice()),
-  });
+/* ------------------------------------------------------------------ */
+/* build / reset                                                        */
+/* ------------------------------------------------------------------ */
+function clearAll() {
+  for (const d of dynamics) { scene.remove(d.mesh); disposeObj(d.mesh, true); physics.remove(d.h); }
+  dynamics.length = 0;
+  for (const p of props) { scene.remove(p); disposeObj(p); }
+  props.length = 0;
+  for (const m of matPool) m.dispose();
+  matPool.length = 0;
+  if (targetMesh) { scene.remove(targetMesh); disposeObj(targetMesh); targetMesh = null; }
+  if (targetHandle) { physics.remove(targetHandle); targetHandle = null; }
+  if (damageMesh) { scene.remove(damageMesh); disposeObj(damageMesh); damageMesh = null; }
+  damageTex = null; damageCanvas = null; damageHits = 0;
+  for (const s of staticHandles) physics.remove(s);
+  staticHandles.length = 0;
+  for (const p of projectiles) { scene.remove(p.mesh); physics.remove(p.h); }
+  projectiles.length = 0;
+  baked = []; bakeMs = 0;
 }
 
 function reset() {
@@ -203,29 +190,27 @@ function reset() {
   scene.add(targetMesh);
 
   const vol = target.piece.volume();
-  targetBody = new CANNON.Body({
-    mass: target.static ? 0 : vol * m.density,
-    shape: cannonConvex(target.piece, new THREE.Vector3()),
-    material: defaultMat,
-    position: new CANNON.Vec3(target.position.x, target.position.y, target.position.z),
-  });
-  world.addBody(targetBody);
+  const zero = new THREE.Vector3();
+  if (target.static) {
+    targetHandle = physics.addStaticConvex(target.piece, zero, target.position, m.friction);
+  } else {
+    targetHandle = physics.addFragment(
+      target.piece, zero, target.position, new THREE.Quaternion(), vol * m.density,
+      m.friction, m.restitution, zero, zero);
+  }
 
-  // supports
   for (const s of target.supports) {
     const g = new THREE.Mesh(new THREE.BoxGeometry(...s.size),
       new THREE.MeshStandardMaterial({ color: 0x2b3038, roughness: 0.7, metalness: 0.3 }));
     g.position.set(target.position.x + s.pos[0], target.position.y + s.pos[1], target.position.z + s.pos[2]);
     g.castShadow = g.receiveShadow = true;
     scene.add(g); props.push(g);
-    const b = new CANNON.Body({
-      mass: 0, material: defaultMat,
-      shape: new CANNON.Box(new CANNON.Vec3(s.size[0] / 2, s.size[1] / 2, s.size[2] / 2)),
-      position: new CANNON.Vec3(g.position.x, g.position.y, g.position.z),
-    });
-    world.addBody(b); staticBodies.push(b);
+    const h = physics.addStaticBox(g.position.clone(),
+      new THREE.Vector3(s.size[0] / 2, s.size[1] / 2, s.size[2] / 2), 0.8);
+    staticHandles.push(h);
   }
 
+  physics.optimize();
   if (m.transmission) setupDamageDecal();
   if (ui.bake.checked) prebake();
   updateStats();
@@ -263,12 +248,12 @@ function paintDamage(local: THREE.Vector3, energy: number) {
   const arms = 7 + ((r() * 7) | 0);
   for (let i = 0; i < arms; i++) {
     let a = (i / arms) * Math.PI * 2 + r() * 0.5;
-    let x = px, y = py, len = reach * (0.45 + r() * 0.9);
+    let x = px, y = py; const len = reach * (0.45 + r() * 0.9);
     c.beginPath(); c.moveTo(x, y);
     let travelled = 0;
     while (travelled < len) {
       const step = 8 + r() * 16;
-      a += (r() - 0.5) * 0.35;            // crack wander
+      a += (r() - 0.5) * 0.35;
       x += Math.cos(a) * step; y += Math.sin(a) * step;
       travelled += step;
       c.lineWidth = Math.max(0.4, 2.4 * (1 - travelled / len));
@@ -276,7 +261,6 @@ function paintDamage(local: THREE.Vector3, energy: number) {
     }
     c.stroke();
   }
-  // concentric ring (Wallner) cracks
   const rings = 2 + ((r() * 3) | 0);
   for (let k = 1; k <= rings; k++) {
     const rr = reach * (0.22 + 0.8 * (k / rings));
@@ -289,7 +273,6 @@ function paintDamage(local: THREE.Vector3, energy: number) {
     }
     c.stroke();
   }
-  // crushed contact zone
   const grd = c.createRadialGradient(px, py, 0, px, py, reach * 0.16);
   grd.addColorStop(0, 'rgba(255,255,255,.95)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
   c.fillStyle = grd; c.beginPath(); c.arc(px, py, reach * 0.16, 0, 7); c.fill();
@@ -330,6 +313,7 @@ function spawnFragments(
   const mats = makeSurfaceMats(m, true);
   frags.sort((a, b) => b.volume - a.volume);
   const totalMass = frags.reduce((s, f) => s + f.volume * m.density, 0) + 1e-9;
+  const spawned: Body3[] = [];
 
   frags.forEach((f, i) => {
     const c = f.centroid;
@@ -339,79 +323,68 @@ function spawnFragments(
 
     if (i >= MAX_BODIES || f.volume < m.minFragment * 0.9) { spawnDebris(worldPos, m, 1); return; }
 
-    const geo = buildGeometry(local, so, c);
-    const mesh = new THREE.Mesh(geo, mats); // one shared material pair for the whole shatter
-    mesh.castShadow = mesh.receiveShadow = true;
-    mesh.position.copy(worldPos); mesh.quaternion.copy(quat);
-    scene.add(mesh);
-
-    const body = new CANNON.Body({
-      mass: Math.max(0.004, mass), material: defaultMat,
-      shape: cannonConvex(f.piece, c),
-      position: new CANNON.Vec3(worldPos.x, worldPos.y, worldPos.z),
-      quaternion: new CANNON.Quaternion(quat.x, quat.y, quat.z, quat.w),
-      linearDamping: 0.02, angularDamping: 0.06,
-      allowSleep: true, sleepSpeedLimit: 0.12, sleepTimeLimit: 0.4,
-    });
-    body.material = defaultMat;
-
-    // ejection: remaining kinetic energy shared by mass, biased to the
+    // ejection: the remaining kinetic energy shared by mass, biased toward the
     // fragments that were born at the impact site
     const radial = c.clone().sub(imp.point);
     if (radial.lengthSq() < 1e-8) radial.copy(imp.dir);
     radial.normalize().applyQuaternion(quat);
     const along = imp.dir.clone().applyQuaternion(quat);
-    const share = (0.10 + 0.9 * f.proximity ** 2);
-    const v = Math.min(18, Math.sqrt(2 * (energy * 0.22) * share / (totalMass + mass)) * (0.6 + Math.random() * 0.7));
+    const share = 0.10 + 0.9 * f.proximity ** 2;
+    const speed = Math.min(18, Math.sqrt(2 * (energy * 0.22) * share / (totalMass + mass)) * (0.6 + Math.random() * 0.7));
     const dirv = radial.multiplyScalar(0.75).addScaledVector(along, 0.9).normalize();
-    body.velocity.set(
-      baseVel.x + dirv.x * v, baseVel.y + dirv.y * v + 0.25 * Math.random(), baseVel.z + dirv.z * v);
-    body.angularVelocity.set((Math.random() - 0.5) * 14 * share, (Math.random() - 0.5) * 14 * share, (Math.random() - 0.5) * 14 * share);
-    world.addBody(body);
+    const vel = new THREE.Vector3(
+      baseVel.x + dirv.x * speed, baseVel.y + dirv.y * speed + 0.25 * Math.random(), baseVel.z + dirv.z * speed);
+    const spin = new THREE.Vector3(
+      (Math.random() - 0.5) * 14 * share, (Math.random() - 0.5) * 14 * share, (Math.random() - 0.5) * 14 * share);
 
-    const rec: Body3 = { mesh, body, mat: m, vol: f.volume, fractured: false, born: performance.now() };
-    (rec as any).piece = local;
-    dynamics.push(rec);
+    const h = physics.addFragment(local, new THREE.Vector3(), worldPos, quat, mass,
+      m.friction, m.restitution, vel, spin, speed > 9);
+    if (!h) { spawnDebris(worldPos, m, 1); return; }
+
+    const geo = buildGeometry(local, so, c);
+    const mesh = new THREE.Mesh(geo, mats);
+    mesh.castShadow = mesh.receiveShadow = true;
+    mesh.position.copy(worldPos); mesh.quaternion.copy(quat);
+    scene.add(mesh);
+
+    const rec: Body3 = { mesh, h, mat: m, vol: f.volume, fractured: false, born: performance.now(), piece: local };
+    dynamics.push(rec); spawned.push(rec);
 
     if (ui.dust.checked && f.proximity > 0.55 && Math.random() < 0.5) spawnDebris(worldPos, m, 1);
   });
   stats.frags = frags.length;
-  stats.bodies = dynamics.length;
+  return spawned;
 }
 
-/** Rebar / hinge constraints: nearby fragments crossed by the same bar stay tied. */
-function linkRebar(m: MaterialDef, origin: THREE.Vector3) {
+/** Rebar / hinge links: Jolt constraints that snap once the bar yields. */
+function linkRebar(m: MaterialDef, spawned: Body3[]) {
   if (!ui.rebar.checked || (m.id !== 'concrete' && m.id !== 'plastic' && m.id !== 'wood')) return;
   const maxDist = m.id === 'concrete' ? 0.38 : 0.3;
-  const list = dynamics.slice(0, 120);
+  const yieldForce = m.id === 'concrete' ? 9000 : m.id === 'wood' ? 900 : 1600;
+  const tie = m.id === 'concrete' ? 0.5 : m.id === 'wood' ? 0.22 : 0.3;
+  const list = spawned.slice(0, 120);
   let made = 0;
   for (let i = 0; i < list.length && made < 90; i++) {
     for (let j = i + 1; j < list.length && made < 90; j++) {
       const a = list[i], b = list[j];
       const d = a.mesh.position.distanceTo(b.mesh.position);
-      if (d > maxDist) continue;
-      const tie = m.id === 'concrete' ? 0.5 : m.id === 'wood' ? 0.22 : 0.3;
-      if (Math.random() > tie) continue;
-      const pivotA = new CANNON.Vec3(
-        (b.mesh.position.x - a.mesh.position.x) / 2, (b.mesh.position.y - a.mesh.position.y) / 2,
-        (b.mesh.position.z - a.mesh.position.z) / 2);
-      const c = new CANNON.PointToPointConstraint(a.body, pivotA, b.body, pivotA.scale(-1));
-      c.collideConnected = true;
-      (c as any).maxForce = m.id === 'concrete' ? 1400 : 220; // bar yields, then snaps
-      world.addConstraint(c); constraints.push(c); made++;
+      if (d > maxDist || Math.random() > tie) continue;
+      const mid = a.mesh.position.clone().add(b.mesh.position).multiplyScalar(0.5);
+      physics.addLink(a.h, b.h, mid, yieldForce);
+      made++;
     }
   }
 }
 
 function applyImpact(worldPoint: THREE.Vector3, dirWorld: THREE.Vector3, energy: number, projVel: THREE.Vector3) {
-  if (!targetMesh || !targetBody || !intact) return;
+  if (!targetMesh || !targetHandle || !intact) return;
   const m = target.mat;
   const quat = targetMesh.quaternion.clone();
   const inv = quat.clone().invert();
   const local = worldPoint.clone().sub(targetMesh.position).applyQuaternion(inv);
   const localDir = dirWorld.clone().applyQuaternion(inv).normalize();
 
-  // ---- sub-critical hit on annealed glass: crack but hold -----------
+  // sub-critical hit on annealed glass: craze but hold
   if (m.transmission && m.storedEnergy === 0 && energy < 55 && damageHits < 3) {
     paintDamage(local, energy);
     playImpact('glass', energy, false);
@@ -422,7 +395,6 @@ function applyImpact(worldPoint: THREE.Vector3, dirWorld: THREE.Vector3, energy:
   let frags: Fragment[]; let ms: number; let area: number;
 
   if (ui.bake.checked && baked.length) {
-    // pick the nearest baked pattern -> zero solve cost at hit time
     let best = baked[0], bd = Infinity;
     for (const b of baked) { const d = b.impact.point.distanceTo(local); if (d < bd) { bd = d; best = b; } }
     frags = best.frags.map(f => ({ ...f, piece: f.piece.clone(), centroid: f.centroid.clone() }));
@@ -435,48 +407,46 @@ function applyImpact(worldPoint: THREE.Vector3, dirWorld: THREE.Vector3, energy:
 
   const origin = targetMesh.position.clone();
   scene.remove(targetMesh); disposeObj(targetMesh);
-  world.removeBody(targetBody);
+  physics.remove(targetHandle);
   if (damageMesh) { scene.remove(damageMesh); disposeObj(damageMesh); damageMesh = null; }
-  targetMesh = null; targetBody = null; intact = false;
+  targetMesh = null; targetHandle = null; intact = false;
 
   const carry = target.static ? new THREE.Vector3() : projVel.clone().multiplyScalar(0.02);
-  spawnFragments(frags, origin, quat, m, imp, energy, carry);
-  linkRebar(m, origin);
+  const spawned = spawnFragments(frags, origin, quat, m, imp, energy, carry);
+  linkRebar(m, spawned ?? []);
   if (ui.dust.checked) puffDust(worldPoint, m, energy);
   playImpact(m.sound ?? 'stone', energy, true);
   updateStats();
 }
 
 /* --- secondary fracture: a fragment that lands hard breaks again ---- */
-function trySecondary(d: Body3, impulse: number, contact: THREE.Vector3, normal: THREE.Vector3) {
+function trySecondary(d: Body3, energy: number, contact: THREE.Vector3, normal: THREE.Vector3) {
   if (!ui.secondary.checked || d.fractured) return;
   if (dynamics.length > MAX_BODIES) return;
   const m = d.mat;
-  const speed = d.body.velocity.length();
-  const energy = 0.5 * d.body.mass * speed * speed;
-  const need = m.Gc * 0.02 + 6;
-  if (energy < need || d.vol < m.minFragment * 30 || impulse < 1.2) return;
+  if (energy < m.Gc * 0.02 + 6 || d.vol < m.minFragment * 30) return;
 
-  const mesh = d.mesh as THREE.Mesh;
+  const mesh = d.mesh;
   const quat = mesh.quaternion.clone();
   const inv = quat.clone().invert();
-  const piece = (d as any).piece as Piece;
-  if (!piece) return;
   const local = contact.clone().sub(mesh.position).applyQuaternion(inv);
-  const imp: Impact = { point: local, dir: normal.clone().applyQuaternion(inv).normalize(), energy: energy * 0.6, radius: 0.01 };
-  const r = fracture(piece, m, imp, 14, (Math.random() * 1e6) | 0);
+  const imp: Impact = {
+    point: local, dir: normal.clone().applyQuaternion(inv).normalize(), energy: energy * 0.6, radius: 0.01,
+  };
+  const r = fracture(d.piece, m, imp, 14, (Math.random() * 1e6) | 0);
   if (r.fragments.length < 2) { d.fractured = true; return; }
 
-  const vel = new THREE.Vector3(d.body.velocity.x, d.body.velocity.y, d.body.velocity.z).multiplyScalar(0.4);
+  const vel = physics.getVelocity(d.h, new THREE.Vector3()).multiplyScalar(0.4);
+  const pos = mesh.position.clone();
   removeDynamic(d);
-  spawnFragments(r.fragments, mesh.position.clone(), quat, m, imp, energy * 0.5, vel);
+  spawnFragments(r.fragments, pos, quat, m, imp, energy * 0.5, vel);
   playImpact(m.sound ?? 'stone', energy, false);
 }
 
 function removeDynamic(d: Body3) {
   const i = dynamics.indexOf(d);
   if (i >= 0) dynamics.splice(i, 1);
-  scene.remove(d.mesh); disposeObj(d.mesh, true); world.removeBody(d.body);
+  scene.remove(d.mesh); disposeObj(d.mesh, true); physics.remove(d.h);
 }
 
 /* ------------------------------------------------------------------ */
@@ -498,7 +468,8 @@ function puffDust(at: THREE.Vector3, m: MaterialDef, energy: number) {
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   const mat = new THREE.PointsMaterial({
     color: m.transmission ? 0xdff3ff : m.interiorColor, size: m.transmission ? 0.012 : 0.02,
-    transparent: true, opacity: 0.8, depthWrite: false, blending: m.transmission ? THREE.AdditiveBlending : THREE.NormalBlending,
+    transparent: true, opacity: 0.8, depthWrite: false,
+    blending: m.transmission ? THREE.AdditiveBlending : THREE.NormalBlending,
   });
   const p = new THREE.Points(g, mat);
   scene.add(p);
@@ -527,7 +498,7 @@ function stepPuffs(dt: number) {
 /* ------------------------------------------------------------------ */
 /* projectile                                                           */
 /* ------------------------------------------------------------------ */
-interface Proj { mesh: THREE.Mesh; body: CANNON.Body; energy: number; born: number; prev: THREE.Vector3 }
+interface Proj { mesh: THREE.Mesh; h: Handle; energy: number; born: number; prev: THREE.Vector3 }
 const projectiles: Proj[] = [];
 const projGeo = new THREE.SphereGeometry(0.035, 16, 12);
 const projMat = new THREE.MeshStandardMaterial({ color: 0xffb648, roughness: 0.3, metalness: 0.9, emissive: 0x341a00 });
@@ -543,13 +514,8 @@ function shootAt(pointWorld: THREE.Vector3) {
   mesh.castShadow = true;
   mesh.position.copy(from);
   scene.add(mesh);
-  const body = new CANNON.Body({
-    mass, shape: new CANNON.Sphere(0.035), material: defaultMat,
-    position: new CANNON.Vec3(from.x, from.y, from.z),
-    velocity: new CANNON.Vec3(dir.x * speed, dir.y * speed, dir.z * speed),
-  });
-  world.addBody(body);
-  projectiles.push({ mesh, body, energy, born: performance.now(), prev: from.clone() });
+  const h = physics.addSphere(from, 0.035, mass, dir.multiplyScalar(speed));
+  projectiles.push({ mesh, h, energy, born: performance.now(), prev: from.clone() });
 }
 
 /* ------------------------------------------------------------------ */
@@ -583,31 +549,10 @@ addEventListener('keydown', e => {
 });
 
 /* ------------------------------------------------------------------ */
-/* collisions                                                          */
-/* ------------------------------------------------------------------ */
-world.addEventListener('postStep', () => {
-  // fragment lands hard -> secondary comminution
-  for (const eq of world.contacts) {
-    const a = dynamics.find(x => x.body === eq.bi), b = dynamics.find(x => x.body === eq.bj);
-    for (const d of [a, b]) {
-      if (!d || d.fractured) continue;
-      if (performance.now() - d.born < 90) continue;
-      const v = d.body.velocity.length();
-      if (v > 7) {
-        const n = new THREE.Vector3(eq.ni.x, eq.ni.y, eq.ni.z);
-        const cp = new THREE.Vector3(d.body.position.x, d.body.position.y, d.body.position.z);
-        trySecondary(d, v * d.body.mass, cp, n.negate());
-      }
-    }
-  }
-});
-
-/* ------------------------------------------------------------------ */
 /* ui wiring                                                           */
 /* ------------------------------------------------------------------ */
-const fmt = (v: number, u: string) => `${v}${u}`;
 function syncLabels() {
-  (document.getElementById('eV') as HTMLElement).textContent = fmt(+ui.e.value, ' J');
+  (document.getElementById('eV') as HTMLElement).textContent = `${ui.e.value} J`;
   (document.getElementById('mV') as HTMLElement).textContent = `${(+ui.m.value * 1000).toFixed(0)} g`;
   (document.getElementById('bV') as HTMLElement).textContent = `${ui.b.value}`;
   (document.getElementById('rV') as HTMLElement).textContent = `${ui.r.value}%`;
@@ -622,43 +567,30 @@ function updateStats() {
   const m = target?.mat;
   ui.statsEl.innerHTML = [
     `material G<sub>c</sub> <span>${m ? m.Gc : 0} J/m²</span> · ρ <span>${m ? m.density : 0} kg/m³</span>`,
-    `fragments <span>${stats.frags}</span> · rigid bodies <span>${dynamics.length}</span>`,
-    `solve <span>${stats.ms.toFixed(1)} ms</span>${ui.bake.checked ? ` (baked ${bakeMs.toFixed(0)} ms)` : ''}`,
-    `new crack area <span>${(stats.area * 1e4).toFixed(0)} cm²</span>`,
-    `constraints <span>${constraints.length}</span> · fps <span>${stats.fps.toFixed(0)}</span>`,
+    `fragments <span>${stats.frags}</span> · Jolt bodies <span>${physics.numBodies}</span> (awake <span>${physics.numActive}</span>)`,
+    `fracture solve <span>${stats.ms.toFixed(1)} ms</span>${ui.bake.checked ? ` (baked ${bakeMs.toFixed(0)} ms)` : ''}`,
+    `Jolt${Physics.multithreaded ? ' (MT)' : ''} step <span>${stats.physMs.toFixed(2)} ms</span> · new crack area <span>${(stats.area * 1e4).toFixed(0)} cm²</span>`,
+    `rebar links <span>${physics.links.length}</span> · fps <span>${stats.fps.toFixed(0)}</span>`,
   ].join('<br>');
 }
 
 /* ------------------------------------------------------------------ */
 /* loop                                                                */
 /* ------------------------------------------------------------------ */
+const _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _v = new THREE.Vector3();
 let last = performance.now(), acc = 0, fpsT = 0, fpsN = 0;
-function tick() {
-  requestAnimationFrame(tick);
-  const now = performance.now();
-  let dt = Math.min(0.05, (now - last) / 1000);
-  last = now;
-  fpsT += dt; fpsN++;
-  if (fpsT > 0.5) { stats.fps = fpsN / fpsT; fpsT = 0; fpsN = 0; updateStats(); }
 
-  const scale = ui.slowmo.checked ? 0.22 : 1;
-  acc += dt * scale;
-  const h = 1 / 90;
-  let steps = 0;
-  while (acc >= h && steps++ < 4) { world.step(h); acc -= h; }
-
-  for (const d of dynamics) {
-    d.mesh.position.set(d.body.position.x, d.body.position.y, d.body.position.z);
-    d.mesh.quaternion.set(d.body.quaternion.x, d.body.quaternion.y, d.body.quaternion.z, d.body.quaternion.w);
-  }
-  // swept ray test: bullets move metres per step, so never rely on contacts
+function stepProjectiles() {
   for (let i = projectiles.length - 1; i >= 0; i--) {
     const p = projectiles[i];
-    const cur = new THREE.Vector3(p.body.position.x, p.body.position.y, p.body.position.z);
+    physics.getTransform(p.h, _p, _q);
+    const cur = _p.clone();
     const seg = cur.clone().sub(p.prev);
     const len = seg.length();
     let consumed = false;
     if (len > 1e-5) {
+      // Jolt runs LinearCast CCD on the bullet, but we still need the exact
+      // surface point for the stress field, so we sweep a ray over the step.
       ray.set(p.prev, seg.clone().normalize());
       ray.far = len + 0.04;
       const objs: THREE.Object3D[] = [];
@@ -666,17 +598,16 @@ function tick() {
       for (const d of dynamics) objs.push(d.mesh);
       const hit = ray.intersectObjects(objs, false)[0];
       if (hit) {
-        const vel = new THREE.Vector3(p.body.velocity.x, p.body.velocity.y, p.body.velocity.z);
+        const vel = physics.getVelocity(p.h, new THREE.Vector3());
         const dir = vel.clone().normalize();
-        const e = Math.max(1, 0.5 * p.body.mass * vel.lengthSq());
+        const e = Math.max(1, 0.5 * p.h.mass * vel.lengthSq());
         if (targetMesh && hit.object === targetMesh) {
           applyImpact(hit.point, dir, e, vel);
           consumed = true;
         } else {
           const d = dynamics.find(x => x.mesh === hit.object);
           if (d) {
-            d.body.applyImpulse(new CANNON.Vec3(dir.x, dir.y, dir.z).scale(p.body.mass * vel.length()),
-              new CANNON.Vec3(hit.point.x - d.body.position.x, hit.point.y - d.body.position.y, hit.point.z - d.body.position.z));
+            physics.applyImpulse(d.h, dir.clone().multiplyScalar(p.h.mass * vel.length()), hit.point);
             trySecondary(d, e, hit.point, dir);
             consumed = true;
           }
@@ -687,15 +618,53 @@ function tick() {
     p.prev.copy(cur);
     p.mesh.position.copy(cur);
     if (consumed || performance.now() - p.born > 9000 || cur.y < -3) {
-      scene.remove(p.mesh); world.removeBody(p.body); projectiles.splice(i, 1);
+      scene.remove(p.mesh); physics.remove(p.h); projectiles.splice(i, 1);
     }
   }
+}
+
+function tick() {
+  requestAnimationFrame(tick);
+  const now = performance.now();
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  fpsT += dt; fpsN++;
+  if (fpsT > 0.5) { stats.fps = fpsN / fpsT; fpsT = 0; fpsN = 0; updateStats(); }
+
+  const scale = ui.slowmo.checked ? 0.22 : 1;
+  acc += dt * scale;
+  const h = 1 / 60;
+  let steps = 0;
+  const t0 = performance.now();
+  while (acc >= h && steps++ < 3) {
+    physics.step(h, 1);
+    physics.updateLinks(h);
+    acc -= h;
+  }
+  stats.physMs = stats.physMs * 0.9 + (performance.now() - t0) * 0.1;
+
+  for (const d of dynamics) {
+    physics.getTransform(d.h, _p, _q);
+    d.mesh.position.copy(_p);
+    d.mesh.quaternion.copy(_q);
+    // hard landing -> secondary comminution (engine-agnostic: sharp Δv)
+    if (!d.fractured && performance.now() - d.born > 90) {
+      const speed = physics.getVelocity(d.h, _v).length();
+      const drop = d.h.lastSpeed - speed;
+      d.h.lastSpeed = speed;
+      if (drop > 6) {
+        const e = 0.5 * d.h.mass * drop * drop;
+        trySecondary(d, e, d.mesh.position.clone(), new THREE.Vector3(0, 1, 0));
+      }
+    }
+  }
+
+  stepProjectiles();
   stepPuffs(dt * scale);
 
-  // retire far-away / sleeping debris to keep the sim cheap
   if (dynamics.length > MAX_BODIES) {
     dynamics.slice().sort((a, b) => a.vol - b.vol).slice(0, dynamics.length - MAX_BODIES)
-      .forEach(d => { if (d.body.sleepState === CANNON.Body.SLEEPING) removeDynamic(d); });
+      .forEach(d => { if (physics.isSleeping(d.h)) removeDynamic(d); });
   }
 
   controls.update();
