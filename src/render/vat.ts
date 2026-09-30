@@ -18,6 +18,8 @@
 
 import { GL } from './gl';
 import { CarRig, MAX_ACTIVE } from '../app/carrig';
+import { MAX_DENTS } from '../app/dentfield';
+import { DentAtlas } from '../frac/dentmap';
 
 export const TEXW = 2048;
 export const MAX_SITES = 16;
@@ -30,6 +32,14 @@ uniform int uDefCount, uDefFrames, uTexW, uVerts, uCageNodes;
 uniform vec3 uDent[${MAX_ACTIVE}];       // x = site, y = frame cursor, z = amplitude
 uniform vec4 uSiteInfo[${MAX_SITES}];    // x = vat base texel, y = patch size, z = cage base
 uniform vec3 uCageMin, uCageSize, uCageDim;
+
+// ---- portable sheet-metal dents (frac/dentmap.ts): one bake, stamped anywhere
+uniform sampler2D uDentPos, uDentNrm;
+uniform int uDentCount, uDentRes, uDentFrames;
+uniform vec4 uDentA[${MAX_DENTS}];   // xyz = contact point, w = 1 / patch half size
+uniform vec4 uDentB[${MAX_DENTS}];   // xyz = tangent,  w = damage cursor (frames)
+uniform vec4 uDentC[${MAX_DENTS}];   // xyz = bitangent, w = dent type
+uniform vec4 uDentD[${MAX_DENTS}];   // xyz = surface normal, w = scale
 
 vec4 vatFetch(sampler2D t, int idx){
   return texelFetch(t, ivec2(idx % uTexW, idx / uTexW), 0);
@@ -53,9 +63,65 @@ vec3 cageSample(vec3 p, int base, out float dmg){
   return acc;
 }
 
+vec4 dentTexel(sampler2D t, int type, int frame, ivec2 c){
+  int rr = uDentRes;
+  c = clamp(c, ivec2(0), ivec2(rr - 1));
+  return vatFetch(t, ((type * uDentFrames + frame) * rr + c.y) * rr + c.x);
+}
+
+vec4 dentBilinear(sampler2D t, int type, int frame, vec2 uv){
+  vec2 f = uv * float(uDentRes - 1);
+  ivec2 i0 = ivec2(floor(f));
+  vec2 w = f - floor(f);
+  vec4 a = dentTexel(t, type, frame, i0);
+  vec4 b = dentTexel(t, type, frame, i0 + ivec2(1,0));
+  vec4 c = dentTexel(t, type, frame, i0 + ivec2(0,1));
+  vec4 d = dentTexel(t, type, frame, i0 + ivec2(1,1));
+  return mix(mix(a,b,w.x), mix(c,d,w.x), w.y);
+}
+
+/**
+ * Stamp the baked flat-sheet dents. Each vertex is projected into the dent's
+ * tangent frame; outside the footprint it costs one dot product and a branch.
+ */
+void applyDents(inout vec3 pos, inout vec3 nrm, inout float dmg){
+  if(uDentCount == 0) return;
+  vec3 p0 = pos, dp = vec3(0.0), dn = vec3(0.0);
+  for(int k=0;k<${MAX_DENTS};k++){
+    if(k >= uDentCount) break;
+    vec4 A = uDentA[k], B = uDentB[k], C = uDentC[k], D = uDentD[k];
+    vec3 r = p0 - A.xyz;
+    float u = dot(r, B.xyz) * A.w;
+    float v = dot(r, C.xyz) * A.w;
+    if(abs(u) > 1.0 || abs(v) > 1.0) continue;
+    // a dent must not reach through the panel and move the far side of the car
+    float h = dot(r, D.xyz);
+    if(abs(h) > 0.55 / A.w) continue;
+    int type = int(C.w);
+    float fr = B.w;
+    int f0 = int(floor(fr));
+    int f1 = min(f0 + 1, uDentFrames - 1);
+    float tt = fr - float(f0);
+    vec2 uv = vec2(u, v) * 0.5 + 0.5;
+    vec4 d0 = dentBilinear(uDentPos, type, f0, uv);
+    vec4 d1 = dentBilinear(uDentPos, type, f1, uv);
+    vec4 d = mix(d0, d1, tt);
+    // the bake is self-similar, so scaling the footprint scales the dent
+    dp += (B.xyz * d.x + C.xyz * d.y + D.xyz * d.z) * D.w;
+    dmg = max(dmg, d.w);
+    vec4 nl = dentBilinear(uDentNrm, type, f1, uv);
+    vec3 nw = normalize(B.xyz * nl.x + C.xyz * nl.y + D.xyz * nl.z);
+    dn += (nw - D.xyz) * clamp(length(vec2(nl.x, nl.y)) * 3.0, 0.0, 1.0);
+  }
+  pos = p0 + dp;
+  nrm = normalize(nrm + dn);
+}
+
 void applyDeform(inout vec3 pos, inout vec3 nrm, float vid, out float dmg){
   dmg = 0.0;
-  if(uDefMode == 0 || uDefCount == 0) return;
+  if(uDefMode == 0){ return; }
+  applyDents(pos, nrm, dmg);
+  if(uDefMode >= 3 || uDefCount == 0) return;   // 3 = stamped dents only
   vec3 p0 = pos, dp = vec3(0.0), dn = vec3(0.0);
   for(int k=0;k<${MAX_ACTIVE};k++){
     if(k >= uDefCount) break;
@@ -93,6 +159,45 @@ void applyDeform(inout vec3 pos, inout vec3 nrm, float vid, out float dmg){
   nrm = normalize(nrm + dn);
 }
 `;
+
+/**
+ * The portable dent library on the GPU: two RGBA32F textures holding
+ * (displacement, strain) and (normal) for every type x frame x texel.
+ * ~2.5 MB total, and it is the ONLY thing needed to dent any mesh anywhere.
+ */
+export class DentAtlasGpu {
+  posTex: WebGLTexture;
+  nrmTex: WebGLTexture;
+  A = new Float32Array(MAX_DENTS * 4);
+  B = new Float32Array(MAX_DENTS * 4);
+  C = new Float32Array(MAX_DENTS * 4);
+  D = new Float32Array(MAX_DENTS * 4);
+  count = 0;
+
+  constructor(public gl: GL, public atlas: DentAtlas) {
+    const texels = atlas.types.length * atlas.frames * atlas.res * atlas.res;
+    const rows = Math.ceil(texels / TEXW);
+    const padded = rows * TEXW * 4;
+    const mk = (src: Float32Array) => {
+      const data = new Float32Array(padded);
+      data.set(src.subarray(0, Math.min(src.length, padded)));
+      const t = gl.createTexture()!;
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, TEXW, rows, 0, gl.RGBA, gl.FLOAT, data);
+      return t;
+    };
+    this.posTex = mk(atlas.pos);
+    this.nrmTex = mk(atlas.nrm);
+  }
+
+  megabytes(): number {
+    return (this.atlas.pos.length + this.atlas.nrm.length) * 4 / (1024 * 1024);
+  }
+}
 
 interface SiteSlot { base: number; count: number; cageBase: number; }
 

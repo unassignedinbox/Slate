@@ -13,7 +13,7 @@
 
 import { M4, V3, m4, m4LookAt, m4Perspective, m4Ortho, m4mul, v3, norm, mul, add, sub } from '../core/math';
 import { GL, GpuMesh, Program } from './gl';
-import { DEFORM_GLSL, VatGpu } from './vat';
+import { DEFORM_GLSL, VatGpu, DentAtlasGpu } from './vat';
 
 export interface DrawItem {
   mesh: GpuMesh;
@@ -349,6 +349,8 @@ export class Renderer {
   camPos: V3 = v3(0, 2, 6);
   /** baked-deformation textures, set by the scene that owns them */
   vat: VatGpu | null = null;
+  /** portable dent library (frac/dentmap.ts), shared by every deformable mesh */
+  dentAtlas: DentAtlasGpu | null = null;
   dents: Float32Array<ArrayBufferLike> = new Float32Array(0);
   dentCount = 0;
 
@@ -546,8 +548,21 @@ export class Renderer {
   private bindDeform(p: Program, mode: number): void {
     const gl = this.gl;
     const vat = this.vat;
-    if (!vat || mode === 0 || this.dentCount === 0) { p.i('uDefMode', 0); p.i('uDefCount', 0); return; }
+    const atlas = this.dentAtlas;
+    const nDent = atlas ? atlas.count : 0;
+    if (mode === 0 || (!vat && !atlas)) { p.i('uDefMode', 0); p.i('uDefCount', 0); p.i('uDentCount', 0); return; }
     p.i('uDefMode', mode);
+    p.i('uDentCount', nDent);
+    if (atlas && nDent > 0) {
+      p.i('uDentRes', atlas.atlas.res);
+      p.i('uDentFrames', atlas.atlas.frames);
+      p.v4v('uDentA', atlas.A); p.v4v('uDentB', atlas.B);
+      p.v4v('uDentC', atlas.C); p.v4v('uDentD', atlas.D);
+      gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, atlas.posTex); p.i('uDentPos', 6);
+      gl.activeTexture(gl.TEXTURE7); gl.bindTexture(gl.TEXTURE_2D, atlas.nrmTex); p.i('uDentNrm', 7);
+      gl.activeTexture(gl.TEXTURE0);
+    }
+    if (!vat || this.dentCount === 0) { p.i('uDefCount', 0); p.i('uTexW', 2048); return; }
     p.i('uDefCount', this.dentCount);
     p.i('uDefFrames', vat.rig.frames);
     p.i('uTexW', 2048);

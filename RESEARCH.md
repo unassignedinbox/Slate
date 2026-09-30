@@ -290,6 +290,75 @@ part glued to that panel moves with it. That is the argument for the cage in a
 real pipeline: you bake the panel once and every trim variant, LOD and decal
 mesh inherits the damage for free.
 
+### Portable dents: bake one steel sheet, stamp it anywhere
+
+The per-site bake above answers "what does *this car* do when hit *there*".
+It is exact, but it is also 12 fixed answers, and a new vehicle means a new
+cook. The generalisation is to notice **what a dent actually depends on**.
+
+Away from a structural member, a panel dent is a *local* event. The steel is a
+thin shell under membrane tension with a plastic hinge ring; the physics is
+translation- and rotation-invariant along the surface, and over the ~30 cm
+footprint of the dent the panel's own curvature is a second-order correction.
+That is exactly the argument behind stamped/decal deformation in shipping
+racing games, and behind "detail maps" for damage in general: the interesting
+information is in the *shape of the dent*, not in where it happened.
+
+So the bake becomes a **material asset instead of an asset-specific asset**:
+solve the same elasto-plastic shell (`frac/dent.ts`) on a **flat clamped square
+of 1.2 mm cold-rolled steel**, in the dent's own tangent frame, for a few
+canonical impactor shapes, and store the result as a displacement-map sequence
+indexed by (u, v, damage) — `frac/dentmap.ts`:
+
+| impactor | half-width | full depth | rim lip | peak plastic strain |
+|---|---|---|---|---|
+| sharp — pole, another car's corner | 34 cm | 45.6 mm | +5.1 mm | 0.69 |
+| blunt — fist, knee, ball, trolley | 40 cm | 48.3 mm | +8.0 mm | 0.60 |
+| edge — bumper bar, kerb, barrier | 44 cm | 51.2 mm | +5.9 mm | 0.69 |
+
+3 types × 12 damage frames × 48² texels × two RGBA32F maps (displacement +
+plastic strain, and the perturbed normal) = **2.53 MB, baked in ~1.5 s**. That
+is the whole library, for every car in the game, forever.
+
+At runtime a hit becomes an *instance*, not a solve (`app/dentfield.ts`): pick
+the type from the impact energy, build a tangent frame at the contact point,
+roll it randomly about the surface normal, scale it by log(energy), and push
+it onto a list of at most 8 live dents. A second hit within half a patch of an
+existing one **merges** into it and drives it deeper rather than stacking, the
+way real sheet metal behaves. The vertex shader then, for each vertex in
+range, projects into each instance's tangent frame, bilinearly samples the
+atlas between two damage frames, and adds `du·t + dv·b + dn·n`
+(`render/vat.ts::applyDents`). Vertices whose offset along the normal exceeds
+half a patch are rejected, so a dent in the door cannot reach through and move
+the far side of the car.
+
+```
+ per-site VAT (structural)          stamped sheet dents (panel)
+ --------------------------          ---------------------------
+ 5.7 MB, this body only              2.53 MB, every body ever
+ 12 discrete places                  any point, any angle, any scale
+ knows about rails and beams         knows about steel
+ nose folds, wheelbase shortens      panel dishes, rim lips up, paint crazes
+```
+
+Both live in the same shader and the same frame, because they answer different
+questions. **Crush is structural** — how a nose folds depends on the rails, the
+bumper beam and the engine block behind it, and no amount of sheet-metal
+knowledge will tell you that, so the front and rear zones keep their per-site
+bakes. **Everything else is panel** — a door, a wing, a roof, a sill — and gets
+stamped. In the demo the car routes hits automatically: |x| > 1.42 m with more
+than 1.2 kJ goes to the crush bake, everything else stamps a dent at the exact
+contact point.
+
+The `Panel · sheet steel` scene is the bake on its own: a bare 1.55 × 1.05 m
+skin you can hit as many times as you like, anywhere, with the dent library
+and the stamp count in the readout.
+
+![stamped dents](docs/dent-stamping.png)
+
+*Flat sheet, front and raking (the same 2.5 MB library at three energies), then
+the same stamps applied to the curved car body with no per-site bake at all.*
+
 ### Glass on the car
 
 The lamp lenses are the opposite case: brittle, small, and cheap to solve. They

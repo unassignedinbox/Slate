@@ -18,9 +18,12 @@ import { fractureSolid, Impact } from '../frac/solid';
 import { CrackNetwork } from '../frac/crack2d';
 import { RegionExtractor, ShellFragment } from '../frac/regions';
 import { CarRig, LampState } from './carrig';
-import { shellToMesh, slabMesh, wheelMesh, conformPane } from '../geom/carbody';
+import {
+  shellToMesh, slabMesh, wheelMesh, conformPane, buildBoxShell, shellNormals, IndexedShell,
+} from '../geom/carbody';
+import { DentField, MAX_DENTS } from './dentfield';
 
-export type SceneKind = 'pane' | 'solid' | 'structure' | 'vehicle';
+export type SceneKind = 'pane' | 'solid' | 'structure' | 'vehicle' | 'sheet';
 
 export interface SceneDef {
   id: string;
@@ -62,6 +65,11 @@ export const SCENES: SceneDef[] = [
     id: 'plastic', label: 'Panel · ABS plastic', kind: 'solid', material: 'abs-plastic',
     energy: 2600,
     blurb: 'Gc ~5000 J/m^2. The energy budget buys very little new surface: a few large pieces, blunt tears, stress-whitened edges.',
+  },
+  {
+    id: 'sheet', label: 'Panel · sheet steel', kind: 'sheet', material: 'concrete',
+    energy: 1800,
+    blurb: 'A 1.2 mm steel skin. One elasto-plastic dent is solved offline on a flat sheet and stored as a displacement-map sequence, then stamped at any point, any angle, any scale. Hit it anywhere, as often as you like: 2.5 MB of bake, no per-asset work.',
   },
   {
     id: 'car', label: 'Car · panel deformation', kind: 'vehicle', material: 'abs-plastic',
@@ -804,6 +812,8 @@ function boxNormal(p: V3, c: V3, h: V3): V3 {
  */
 export class CarScene extends Scene {
   rig = new CarRig();
+  /** stamped flat-sheet dents (the atlas is shared, injected by main.ts) */
+  dents!: DentField;
   carY = 0.95;
   bodyMesh!: MeshData;
   wheels: { mesh: MeshData; model: M4 }[] = [];
@@ -873,10 +883,28 @@ export class CarScene extends Scene {
 
   hit(p: V3, dir: V3, energy: number): void {
     const lp = this.toLocal(p);
-    const res = this.rig.impact(lp, dir, energy);
-    this.lastSite = this.rig.sites[res.site].site.label;
     this.hits++;
-    for (const l of res.lamps) this.shatterLamp(l, dir, energy);
+    // Two kinds of damage, two kinds of bake:
+    //   structural crush (front/rear) is site specific - the rails and the
+    //     bumper beam decide how the nose folds, so it uses the per-site bake
+    //   panel damage is translation invariant - stamp the portable flat-sheet
+    //     dent at the exact contact point instead
+    const crushZone = Math.abs(lp.x) > 1.42 && energy > 1200;
+    if (crushZone) {
+      const res = this.rig.impact(lp, dir, energy);
+      this.lastSite = `${this.rig.sites[res.site].site.label} (crush bake)`;
+      for (const l of res.lamps) this.shatterLamp(l, dir, energy);
+    } else {
+      const n = this.rig.normalAt(lp);
+      this.dents.add(lp, n, dir, energy);
+      this.lastSite = `stamped dent @ ${lp.x.toFixed(2)}, ${lp.y.toFixed(2)}, ${lp.z.toFixed(2)}`;
+      for (const l of this.rig.lamps) {
+        if (!l.broken && len(sub(lp, l.centre)) < 0.42 && energy > 120) {
+          l.broken = true;
+          this.shatterLamp(l, dir, energy);
+        }
+      }
+    }
   }
 
   /** Lamp lenses are brittle: solve them live, like every other glass part. */
@@ -904,6 +932,7 @@ export class CarScene extends Scene {
 
   update(dtWall: number, _crackScale: number, physScale: number): void {
     this.rig.update(Math.min(dtWall, 0.033));
+    this.dents.update(Math.min(dtWall, 0.033));
     let t = dtWall * physScale;
     const h = 1 / 240;
     let guard = 0;
@@ -968,10 +997,119 @@ export class CarScene extends Scene {
       'sites baked': `${baked} / ${r.sites.length}` + (r.bakeMs ? ` · ${(r.bakeMs / Math.max(baked, 1)).toFixed(0)} ms each` : ''),
       'VAT slots': patch ? `${patch} verts × ${r.frames} frames` : '-',
       'active dents': `${r.activeCount()} blended`,
+      'stamped dents': `${this.dents.items.length} / ${MAX_DENTS} · ${this.dents.describe()}`,
       'last impact': this.lastSite,
       'panel damage': `${(r.damage() * 100).toFixed(0)} %`,
       'lamp shards': String(this.shards.length),
       'runtime solve': 'none (playback only)',
+    };
+  }
+}
+
+
+// ============================================================== SHEET (metal)
+
+/**
+ * A bare steel panel: nothing but sheet metal, so you can see exactly what the
+ * portable dent bake does. Every hit stamps the SAME baked dent - solved once
+ * offline on a flat clamped sheet - at the contact point, with a random roll
+ * about the normal and a scale from the impact energy. Hits close together
+ * deepen the existing dent instead of stacking.
+ */
+export class SheetScene extends Scene {
+  W = 1.55; H = 1.05; T = 0.0012;      // 1.2 mm cold-rolled steel
+  originY = 1.2;
+  shell!: IndexedShell;
+  sheetMesh!: MeshData;
+  nrm0!: Float32Array;
+  frame: { mesh: MeshData; model: M4 }[] = [];
+  dents!: DentField;
+  hits = 0;
+  lastHit = '-';
+
+  build(): void {
+    this.shell = buildBoxShell(this.W, this.H, this.T, 0.019);
+    this.sheetMesh = shellToMesh(this.shell);
+    this.nrm0 = shellNormals(this.shell.pos, this.shell.tris);
+
+    const bar = (w: number, h: number, d: number, x: number, y: number) => {
+      const c = boxConvex(w / 2, h / 2, d / 2);
+      this.frame.push({
+        mesh: buildMesh(c, 0.3, v3(0, 1, 0), 3),
+        model: m4Compose(v3(x, this.originY + y, 0), quat()),
+      });
+    };
+    const fw = 0.05, fd = 0.06;
+    bar(this.W + fw * 2, fw, fd, 0, this.H / 2 + fw / 2);
+    bar(this.W + fw * 2, fw, fd, 0, -this.H / 2 - fw / 2);
+    bar(fw, this.H, fd, -this.W / 2 - fw / 2, 0);
+    bar(fw, this.H, fd, this.W / 2 + fw / 2, 0);
+    const postH = this.originY - this.H / 2 - fw;
+    const post = boxConvex(0.035, postH / 2, 0.035);
+    for (const sx of [-1, 1]) {
+      this.frame.push({
+        mesh: buildMesh(post, 0.3, v3(0, 1, 0), 5),
+        model: m4Compose(v3(sx * (this.W / 2), postH / 2, 0), quat()),
+      });
+    }
+  }
+
+  get cameraTarget(): V3 { return v3(0, this.originY * 0.95, 0); }
+  get cameraDist(): number { return 3.1; }
+
+  pick(ro: V3, rd: V3): HitInfo | null {
+    if (Math.abs(rd.z) < 1e-6) return null;
+    const t = (this.T / 2 - ro.z) / rd.z;
+    if (t <= 0) return null;
+    const p = add(ro, mul(rd, t));
+    const m = 0.02;
+    if (Math.abs(p.x) > this.W / 2 - m || Math.abs(p.y - this.originY) > this.H / 2 - m) return null;
+    return { point: p, normal: v3(0, 0, Math.sign(-rd.z)) };
+  }
+
+  hit(p: V3, dir: V3, energy: number): void {
+    const lp = v3(p.x, p.y - this.originY, this.T / 2);
+    const n = v3(0, 0, Math.sign(-dir.z) || 1);
+    const d = this.dents.add(lp, n, dir, energy);
+    this.hits++;
+    const ty = this.dents.atlas.types[d.type];
+    this.lastHit = `${ty.label} · ${(ty.half * d.scale * 200).toFixed(0)} cm across`;
+  }
+
+  update(dtWall: number, _crackScale: number, physScale: number): void {
+    this.dents.update(Math.min(dtWall, 0.033));
+    let t = dtWall * physScale;
+    let guard = 0;
+    while (t > 0 && guard++ < 24) { const s = Math.min(1 / 240, t); this.world.step(s); t -= s; }
+  }
+
+  collect(out: RenderPiece[]): void {
+    const model = m4Compose(v3(0, this.originY, 0), quat());
+    out.push({
+      mesh: this.sheetMesh, model, style: 6, color: [0.30, 0.33, 0.36],
+      spec: 1, rough: 0.14, seed: 6, strain: 0, grain: v3(0, 1, 0),
+      alpha: 1, glass: false, deform: 3,
+    });
+    for (const f of this.frame) {
+      out.push({
+        mesh: f.mesh, model: f.model, style: 2, color: [0.19, 0.2, 0.22],
+        spec: 0.5, rough: 0.55, seed: 2, strain: 0, grain: v3(0, 1, 0), alpha: 1, glass: false,
+      });
+    }
+  }
+
+  stats(): Record<string, string> {
+    const a = this.dents.atlas;
+    return {
+      'panel': `${this.shell.n} verts · 1.2 mm steel · 1 draw`,
+      'dent library': `${a.types.length} types × ${a.frames} frames × ${a.res}² · ` +
+        `${((a.pos.length + a.nrm.length) * 4 / 1048576).toFixed(1)} MB`,
+      'bake time': `${a.ms.toFixed(0)} ms (once, offline)`,
+      'stamped dents': `${this.dents.items.length} / ${MAX_DENTS}`,
+      'mix': this.dents.describe(),
+      'deepest': `${(this.dents.worst() * 100).toFixed(0)} % of full depth`,
+      'last hit': this.lastHit,
+      'runtime solve': 'none (texture lookup in the vertex shader)',
     };
   }
 }
@@ -981,6 +1119,7 @@ export function makeScene(def: SceneDef): Scene {
   const s: Scene = def.kind === 'pane' ? new PaneScene(def, mat)
     : def.kind === 'solid' ? new SolidScene(def, mat)
       : def.kind === 'vehicle' ? new CarScene(def, mat)
+        : def.kind === 'sheet' ? new SheetScene(def, mat)
         : new StructureScene(def, mat);
   s.build();
   return s;

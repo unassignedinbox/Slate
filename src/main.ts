@@ -10,9 +10,12 @@ import { Renderer, DrawItem } from './render/renderer';
 import { GpuMesh, makeMesh, freeMesh } from './render/gl';
 import { Batch, BatchInput } from './render/batch';
 import {
-  SCENES, SceneDef, Scene, PaneScene, StructureScene, SolidScene, CarScene, makeScene, RenderPiece,
+  SCENES, SceneDef, Scene, PaneScene, StructureScene, SolidScene, CarScene, SheetScene,
+  makeScene, RenderPiece,
 } from './app/scenes';
-import { VatGpu } from './render/vat';
+import { VatGpu, DentAtlasGpu } from './render/vat';
+import { bakeDentAtlas } from './frac/dentmap';
+import { DentField } from './app/dentfield';
 
 function fatal(err: unknown): void {
   const box = document.createElement('pre');
@@ -88,6 +91,17 @@ let scene: Scene = makeScene(sceneDef);
 let maskTex: WebGLTexture | null = null;
 let vat: VatGpu | null = null;
 
+/**
+ * The portable sheet-metal dent library. Solved once on a flat steel sheet
+ * (~1.5 s) and then stamped anywhere, on any mesh, for the rest of the
+ * session. In a shipped game this is an asset, not a startup cost.
+ */
+let dentAtlas: DentAtlasGpu | null = null;
+function ensureDentAtlas(): DentAtlasGpu {
+  if (!dentAtlas) dentAtlas = new DentAtlasGpu(gl, bakeDentAtlas(48, 12));
+  return dentAtlas;
+}
+
 let energy = 26;
 let crackScale = 0;
 let physScale = 1;
@@ -126,6 +140,13 @@ function setScene(def: SceneDef): void {
   renderer.vat = null; vat = null;
   const deformRow = document.getElementById('deformRow')!;
   deformRow.toggleAttribute('hidden', !(scene instanceof CarScene));
+  if (scene instanceof CarScene || scene instanceof SheetScene) {
+    const atlas = ensureDentAtlas();
+    renderer.dentAtlas = atlas;
+    scene.dents = new DentField(atlas.atlas);
+  } else {
+    renderer.dentAtlas = null;
+  }
   if (scene instanceof CarScene) {
     // The plastic solve is an asset-build step, so it runs off-thread and the
     // sites stream in while you play. No browser worker -> blocking fallback.
@@ -372,6 +393,11 @@ function frame(now: number): void {
   } else {
     renderer.dentCount = 0;
   }
+  if (renderer.dentAtlas) {
+    const f = (scene as CarScene | SheetScene).dents;
+    const a = renderer.dentAtlas;
+    a.count = f ? f.pack(a.A, a.B, a.C, a.D) : 0;
+  }
 
   renderer.resize();
   renderer.setCamera(camPos(), cam.target, cam.fov);
@@ -440,6 +466,9 @@ function frame(now: number): void {
         'VAT memory': `${vat ? vat.megabytes().toFixed(1) : '0'} MB`,
         'baking': scene.rig.pending ? `${scene.rig.pending} queued (worker)` : 'idle',
       });
+    }
+    else if (scene instanceof SheetScene) {
+      Object.assign(base, scene.stats());
     }
     else if (scene instanceof SolidScene) {
       Object.assign(base, scene.lastStats, {

@@ -116,6 +116,50 @@ export function buildCarShell(cell = CAR.cell): IndexedShell {
   return { pos, tris: new Uint32Array(tris), n: pos.length / 3, min: mn, max: mx };
 }
 
+/**
+ * Plain welded box grid - the flat steel sheet used to show the portable dent
+ * bake on something that is nothing but panel.
+ */
+export function buildBoxShell(sx: number, sy: number, sz: number, cell: number): IndexedShell {
+  const Nx = Math.max(1, Math.round(sx / cell));
+  const Ny = Math.max(1, Math.round(sy / cell));
+  const Nz = Math.max(1, Math.round(sz / cell));
+  const index = new Map<number, number>();
+  const pts: number[] = [];
+  const tris: number[] = [];
+  const id = (i: number, j: number, k: number): number => {
+    const key = (i * (Ny + 1) + j) * (Nz + 1) + k;
+    let v = index.get(key);
+    if (v === undefined) {
+      v = pts.length / 3;
+      index.set(key, v);
+      pts.push((i / Nx - 0.5) * sx, (j / Ny - 0.5) * sy, (k / Nz - 0.5) * sz);
+    }
+    return v;
+  };
+  const quad = (a: number, b: number, c: number, d: number) => tris.push(a, b, c, a, c, d);
+  for (let j = 0; j < Ny; j++) for (let k = 0; k < Nz; k++) {
+    quad(id(Nx, j, k), id(Nx, j + 1, k), id(Nx, j + 1, k + 1), id(Nx, j, k + 1));
+    quad(id(0, j, k), id(0, j, k + 1), id(0, j + 1, k + 1), id(0, j + 1, k));
+  }
+  for (let i = 0; i < Nx; i++) for (let k = 0; k < Nz; k++) {
+    quad(id(i, Ny, k), id(i, Ny, k + 1), id(i + 1, Ny, k + 1), id(i + 1, Ny, k));
+    quad(id(i, 0, k), id(i + 1, 0, k), id(i + 1, 0, k + 1), id(i, 0, k + 1));
+  }
+  for (let i = 0; i < Nx; i++) for (let j = 0; j < Ny; j++) {
+    quad(id(i, j, Nz), id(i + 1, j, Nz), id(i + 1, j + 1, Nz), id(i, j + 1, Nz));
+    quad(id(i, j, 0), id(i, j + 1, 0), id(i + 1, j + 1, 0), id(i + 1, j, 0));
+  }
+  const pos = new Float32Array(pts);
+  const mn = v3(1e9, 1e9, 1e9), mx = v3(-1e9, -1e9, -1e9);
+  for (let i = 0; i < pos.length; i += 3) {
+    mn.x = Math.min(mn.x, pos[i]); mx.x = Math.max(mx.x, pos[i]);
+    mn.y = Math.min(mn.y, pos[i + 1]); mx.y = Math.max(mx.y, pos[i + 1]);
+    mn.z = Math.min(mn.z, pos[i + 2]); mx.z = Math.max(mx.z, pos[i + 2]);
+  }
+  return { pos, tris: new Uint32Array(tris), n: pos.length / 3, min: mn, max: mx };
+}
+
 /** Area-weighted smooth normals for an indexed shell. */
 export function shellNormals(pos: Float32Array, tris: Uint32Array, out?: Float32Array): Float32Array {
   const nrm = out ?? new Float32Array(pos.length);

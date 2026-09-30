@@ -164,7 +164,7 @@ export function bakeDent(topo: ShellTopo, site: DentSite, o: DentOptions = {}): 
   // sphere imprint; with it, creases pick a side and wander like real ones.
   const jitter = (i: number) => {
     const h = Math.sin(i * 12.9898 + 78.233) * 43758.5453;
-    return 1 + (h - Math.floor(h) - 0.5) * 0.34;
+    return 1 + (h - Math.floor(h) - 0.5) * 0.22;
   };
 
   // ---- active region. Beyond ~3 impactor radii the body shell is stiff
@@ -363,7 +363,7 @@ export function bakeDent(topo: ShellTopo, site: DentSite, o: DentOptions = {}): 
       outPos[base + s * 4] = x[i * 3] - x0[i * 3];
       outPos[base + s * 4 + 1] = x[i * 3 + 1] - x0[i * 3 + 1];
       outPos[base + s * 4 + 2] = x[i * 3 + 2] - x0[i * 3 + 2];
-      outPos[base + s * 4 + 3] = Math.min(plastic[i] * 3.2, 1);
+      outPos[base + s * 4 + 3] = Math.min(plastic[i] * 0.3, 1);
       outNrm[base + s * 4] = nrmScratch[i * 3];
       outNrm[base + s * 4 + 1] = nrmScratch[i * 3 + 1];
       outNrm[base + s * 4 + 2] = nrmScratch[i * 3 + 2];

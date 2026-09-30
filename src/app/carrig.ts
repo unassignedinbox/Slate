@@ -116,6 +116,17 @@ export class CarRig {
     return { p: q, d: dir ? norm(dir) : mul(n, -1) };
   }
 
+  /** Outward surface normal nearest a point (for stamping portable dents). */
+  normalAt(p: V3): V3 {
+    const { pos } = this.shell;
+    let best = 0, bd = 1e9;
+    for (let i = 0; i < this.shell.n; i++) {
+      const d = (pos[i * 3] - p.x) ** 2 + (pos[i * 3 + 1] - p.y) ** 2 + (pos[i * 3 + 2] - p.z) ** 2;
+      if (d < bd) { bd = d; best = i; }
+    }
+    return v3(this.nrm0[best * 3], this.nrm0[best * 3 + 1], this.nrm0[best * 3 + 2]);
+  }
+
   /** Run (and cache) the offline solve for one site. */
   ensureBaked(i: number): SiteState {
     const s = this.sites[i];
