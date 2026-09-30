@@ -3,11 +3,20 @@ _AgentScratch/
 
 # Build output
 build/
+build-solidarc*/
 Build/Output/
 *.obj
 *.o
 *.pdb
 *.exe
+
+# SolidArc editor: vendored dependency trees (seated by Tools/Build/Bootstrap.py from Dependencies.lock.json),
+# the fetched archives, the bootstrap cache, and the windowed host's saved layout.
+Engine/AuthoringTools/SolidArc/ExternalPackages/imgui/
+Engine/AuthoringTools/SolidArc/ExternalPackages/glfw/
+Engine/AuthoringTools/SolidArc/ExternalPackages/dependency-archives/
+Engine/AuthoringTools/SolidArc/.cache/
+solidarc-editor.ini
 
 # Editor/OS noise
 .DS_Store
