@@ -1,1 +1,87 @@
-# Slate
+# Realtime fracture — glass, wood, rock, plastic, buildings
+
+A live, interactive fracture sandbox in **TypeScript + WebGL2**, with no
+dependencies beyond Vite. Shoot things and watch them break.
+
+The point of the project: fragments are produced by **stress-driven crack
+propagation under a Griffith energy budget** — not by Voronoi / cell fracture.
+Read [`RESEARCH.md`](RESEARCH.md) for the survey, the physics and the reasoning.
+
+![crack patterns](docs/crack-patterns.png)
+
+```bash
+npm install
+npm run dev      # http://localhost:5173
+```
+
+## What's in it
+
+| Target | Solver | What you should see |
+|---|---|---|
+| Window · annealed glass | shell crack network | Radial star from the impact, concentric arcs that terminate on the radials, wedge shards that fall only once fully surrounded — the rest hangs in the frame |
+| Window · tempered glass | shell crack network | The stored tempering energy sweeps a branching front across the whole pane and dices it into 500+ pieces |
+| Panel · acrylic (PMMA) | shell crack network | 50× the fracture energy of glass: a few wandering cracks, tough, arrests early |
+| Boulder · granite | solid crack surfaces | Hertzian cone under the contact, meridional splitting, fragment size graded by distance from the impact |
+| Beam · spruce | solid crack surfaces | Fracture energy across the fibres is ~10× along them, so it splits into long splinters |
+| Panel · ABS plastic | solid crack surfaces | Gc ≈ 5000 J/m². Very few, very large pieces with stress-whitened torn edges |
+| Brick wall / concrete column | bonded structural graph | Load propagates down the mortar joints, overloaded joints snap, unsupported islands collapse and break up on landing |
+
+## Controls
+
+* **Left click** the object — fire (energy from the slider)
+* **Drag** — orbit · **wheel** — zoom · **space** — fire at centre
+* **← / →** — cycle targets · **R** — reset
+* **Fracture time scale** — a pane shatters in ~0.5 ms in reality; the default
+  1:1000 bullet-time lets you watch the crack tips run and the shards release
+* **Debris time scale** — slow-mo for the rigid-body aftermath
+* **Energy** — log scale, 1 J to 50 kJ, annotated with real-world equivalents
+  (thrown stone, hammer, rifle round, car at 20 km/h)
+
+The solver readout on the left is live: crack paths, active tips, total crack
+length, new surface area, the surface energy that bought it, and the terminal
+crack speed (0.6 c_R) for the current material.
+
+## Architecture
+
+```
+src/
+  core/math.ts        vectors, quats, matrices, value noise, Weibull sampling
+  geom/convex.ts      convex polyhedron kernel: plane clipping, mass properties,
+                      mesh build with fresh-fracture-surface displacement
+  sim/materials.ts    real SI material constants (E, nu, rho, Gc, sigma_t, m,
+                      anisotropy, residual energy) + derived wave speeds
+  sim/world.ts        rigid bodies, contacts, and the bonded Structure graph
+                      (load propagation, joint failure, union-find islanding)
+  frac/crack2d.ts     dynamic crack-tip network on a shell: Griffith arrest,
+                      Mott speed law, micro-branching above 0.4 c_R, crack
+                      shielding -> T-junctions, concentric ring nucleation,
+                      tempered-glass dicing front
+  frac/regions.ts     grid flood fill -> boundary walk -> RDP -> ear clip ->
+                      extrusion; releases a piece only once it is fully cut free
+  frac/solid.ts       3D crack surfaces chosen by a Griffith energy cascade,
+                      Hertzian cone contact damage, orientation-dependent Gc
+  render/renderer.ts  forward renderer: shadow-mapped sun, analytic sky IBL,
+                      procedural materials, separate sorted glass pass
+  render/batch.ts     CPU-transformed debris batching (500 shards, 1 draw call)
+  app/scenes.ts       the seven demo targets
+  main.ts             camera, input, HUD
+```
+
+## Verifying it without a GPU
+
+The solvers are pure TypeScript and run headless:
+
+```bash
+npx esbuild test/smoke.ts    --bundle --platform=node --format=esm --outfile=/tmp/s.mjs && node /tmp/s.mjs
+npx esbuild test/preview.ts  --bundle --platform=node --format=esm --outfile=/tmp/p.mjs && node /tmp/p.mjs   # -> /tmp/cracks.png
+npx esbuild test/preview3d.ts --bundle --platform=node --format=esm --outfile=/tmp/q.mjs && node /tmp/q.mjs  # -> /tmp/solid.png
+```
+
+`smoke` prints material constants, fragment counts versus impact energy,
+volume-conservation error and solver timings. The two `preview` scripts
+rasterise the crack networks and the 3D fragments straight to PNG — the images
+in this README were produced by them.
+
+## License
+
+MIT
