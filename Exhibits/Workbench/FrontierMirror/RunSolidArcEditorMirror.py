@@ -34,8 +34,14 @@ GALLERY = ROOT / "Exhibits/Gallery/SolidArcEditor"
 # The SolidArc tree inside the engine checkout.
 ARC = "Editor/AuthoringTools/Modelling/SolidArc"
 
+# The Slate-authored mirror driver. It replaces the engine's own SolidArcEditorProof.cpp: it loads the same engine
+#    typeface archives and EngineContent/Icons the windowed build loads, builds a multi-category CAD scene, renders
+#    the viewport at full panel resolution and drives the outliner/inspector interactions. Slate authors no
+#    renderer — every widget, glyph, icon and viewport pixel is still the engine's own.
+DRIVER = str(ROOT / "Exhibits/Workbench/FrontierMirror/SolidArcEditorMirror.cpp")
+
 SOURCES = [
-    "Exhibits/Workbench/Editor/SolidArcEditorProof.cpp",
+    DRIVER,
     # the SolidArc modelling kernel the console builds the scene with
     f"{ARC}/Kernel/CurveSpecification.cpp", f"{ARC}/Kernel/SurfaceSpecification.cpp",
     f"{ARC}/Kernel/TopologySpecification.cpp", f"{ARC}/Kernel/SkinSolver.cpp",
@@ -89,10 +95,11 @@ INCLUDES = [
     ARC, f"{ARC}/Presentation",
 ]
 
-# The proof writes these two sheets into the engine checkout's canonical editor gallery. Each maps to the
-#    outliner/inspector state the CAD editor is meant to show: the CAD filter menu over an empty inspector, and
-#    a body picked with the full CAD inspector seated.
+# The driver writes these sheets into the engine checkout's canonical editor gallery. Each maps to a state the CAD
+#    editor is meant to show: the whole assembly with the full outliner tree and an empty inspector; the CAD filter
+#    menu open over the outliner; and a body picked with the full CAD inspector seated.
 SHEETS = {
+    "EditorProof_SolidArc_Overview.png": "SolidArcEditor_Overview_CPU_Reference.png",
     "EditorProof_SolidArc_Menu.png": "SolidArcEditor_Outliner_CPU_Reference.png",
     "EditorProof_SolidArc.png": "SolidArcEditor_Inspector_CPU_Reference.png",
 }
