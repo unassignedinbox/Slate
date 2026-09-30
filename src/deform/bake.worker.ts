@@ -4,11 +4,9 @@
 // and the result is a shipped asset — here we do it at load to show the cost.
 import { bakePanel, PANEL_PRESETS } from './panel';
 
-self.onmessage = (e: MessageEvent<{ gauge: number }>) => {
+self.onmessage = (e: MessageEvent<{ gauge: number; preset: 'blunt' | 'edge' }>) => {
   const g = e.data.gauge / 1000;
-  const fields = [bakePanel(PANEL_PRESETS.blunt(g)), bakePanel(PANEL_PRESETS.edge(g))];
-  const payload = fields.map(f => ({
-    grid: f.grid, size: f.size, frames: f.frames, depths: f.depths, ms: f.ms, data: f.data,
-  }));
-  (self as unknown as Worker).postMessage(payload, payload.map(p => p.data.buffer));
+  const f = bakePanel(PANEL_PRESETS[e.data.preset](g));
+  const payload = { grid: f.grid, size: f.size, frames: f.frames, depths: f.depths, ms: f.ms, data: f.data };
+  (self as unknown as Worker).postMessage(payload, [payload.data.buffer]);
 };

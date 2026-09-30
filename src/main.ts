@@ -1,3 +1,14 @@
+/* Anything that throws must be visible on screen, not only in devtools. */
+function fatal(msg: string) {
+  const el = document.getElementById('loading');
+  if (!el) return;
+  el.style.display = 'block';
+  el.innerHTML = `<div style="max-width:620px;margin:0 auto;color:#ff9c8a;text-align:left">
+    <b>Runtime error</b><br><pre style="white-space:pre-wrap;font-size:12px">${msg}</pre></div>`;
+}
+window.addEventListener('error', e => fatal(`${e.message}\n${e.filename}:${e.lineno}`));
+window.addEventListener('unhandledrejection', e => fatal(String((e as PromiseRejectionEvent).reason)));
+
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -56,9 +67,6 @@ scene.add(new THREE.GridHelper(24, 48, 0x243040, 0x1a222c));
 /* ------------------------------------------------------------------ */
 /* physics — Jolt (WASM)                                                */
 /* ------------------------------------------------------------------ */
-const physics = await Physics.create(8192);
-physics.addStaticPlane(0);
-
 /* ------------------------------------------------------------------ */
 /* state                                                                */
 /* ------------------------------------------------------------------ */
@@ -188,6 +196,10 @@ function reset() {
   if (ui.scene.value === 'car') { void buildCar(); return; }
   ui.matRow.style.display = '';
   ui.gaugeRow.style.display = 'none';
+  ui.notesTitle.textContent = 'How it breaks';
+  camera.position.set(2.6, 1.8, 3.6);
+  controls.target.set(0, 1.0, 0);
+  controls.update();
   target = makeTarget(ui.mat.value);
   intact = true;
   ui.hint.innerHTML = target.hint + ' &nbsp;·&nbsp; click the object to hit it there';
@@ -239,10 +251,19 @@ async function buildCar() {
   });
   const overlay = document.getElementById('loading')!;
   overlay.style.display = 'block';
-  overlay.textContent = 'Baking elasto-plastic steel panels…';
-  await car.build(+ui.gauge.value);
+  overlay.textContent = 'Baking elasto-plastic steel panels… (one-off, cached per gauge)';
+  try {
+    await car.build(+ui.gauge.value);
+  } catch (err) {
+    fatal('Car build failed: ' + err);
+    return;
+  }
   overlay.style.display = 'none';
   intact = false;
+  // a 4.3 m car needs a wider frame than a 1.7 m pane
+  camera.position.set(5.4, 2.5, 5.6);
+  controls.target.set(0, 0.75, 0);
+  controls.update();
   physics.optimize();
   ui.hint.innerHTML =
     'Sheet steel is baked offline as an elasto-plastic panel, replayed at runtime from a vertex-animation texture ' +
@@ -745,8 +766,13 @@ function tick() {
   }
 
   controls.update();
-  renderer.render(scene, camera);
+  try {
+    renderer.render(scene, camera);
+  } catch (err) {
+    if (!renderFailed) { renderFailed = true; fatal('Render error: ' + err); }
+  }
 }
+let renderFailed = false;
 
 window.addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
@@ -755,5 +781,13 @@ window.addEventListener('resize', () => {
 });
 
 syncLabels();
+
+const boot = document.getElementById('loading')!;
+boot.style.display = 'block';
+boot.textContent = 'Starting Jolt Physics…';
+const physics = await Physics.create(8192).catch(err => { fatal('Jolt failed to start: ' + err); throw err; });
+physics.addStaticPlane(0);
+boot.style.display = 'none';
+
 reset();
 tick();

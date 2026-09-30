@@ -183,7 +183,7 @@ export function bakePanel(o: PanelOpts): DentField {
 
   const data = new Float32Array(o.frames * N * 3);
   const depths: number[] = [];
-  const pressSteps = 80, relaxSteps = 110;
+  const pressSteps = 55, relaxSteps = 70;
 
   for (let f = 0; f < o.frames; f++) {
     // each severity level presses deeper into the SAME panel: the ladder is a
@@ -214,12 +214,12 @@ export function bakePanel(o: PanelOpts): DentField {
 export const PANEL_PRESETS = {
   /** a bumper / another car's corner: broad, round */
   blunt: (gauge: number): PanelOpts => ({
-    grid: 41, size: 0.85, thickness: gauge, yieldStrength: 190e6, E: 200e9,
+    grid: 35, size: 0.85, thickness: gauge, yieldStrength: 190e6, E: 200e9,
     frames: 6, maxDepth: 0.05, impactor: [0.17, 0.15],
   }),
   /** a headlight corner / pole: narrow, sharp crease */
   edge: (gauge: number): PanelOpts => ({
-    grid: 41, size: 0.85, thickness: gauge, yieldStrength: 190e6, E: 200e9,
+    grid: 35, size: 0.85, thickness: gauge, yieldStrength: 190e6, E: 200e9,
     frames: 6, maxDepth: 0.058, impactor: [0.055, 0.22],
   }),
 } as const;

@@ -53,27 +53,44 @@ export function bakeFields(gaugeMm: number) {
   return { ...rec, cached: false };
 }
 
-/** Same bake, off the main thread (falls back to the sync path). */
-export function bakeFieldsAsync(gaugeMm: number): Promise<{ fields: DentField[]; ms: number; cached: boolean }> {
+/** Same bake, off the main thread — one worker per archetype, in parallel. */
+export function bakeFieldsAsync(
+  gaugeMm: number, onProgress?: (done: number, total: number) => void,
+): Promise<{ fields: DentField[]; ms: number; cached: boolean }> {
   const key = Math.round(gaugeMm * 100);
   const hit = fieldCache.get(key);
   if (hit) return Promise.resolve({ ...hit, cached: true });
-  return new Promise(resolve => {
+
+  const presets: ('blunt' | 'edge')[] = ['blunt', 'edge'];
+  const t0 = performance.now();
+  let done = 0;
+
+  const one = (preset: 'blunt' | 'edge') => new Promise<DentField>(resolve => {
     let worker: Worker;
     try {
       worker = new Worker(new URL('../deform/bake.worker.ts', import.meta.url), { type: 'module' });
     } catch {
-      resolve(bakeFields(gaugeMm)); return;
+      resolve(bakePanel(PANEL_PRESETS[preset](gaugeMm / 1000)));   // no workers: bake inline
+      return;
     }
-    const t0 = performance.now();
-    worker.onmessage = (e: MessageEvent<DentField[]>) => {
-      const rec = { fields: e.data, ms: performance.now() - t0 };
-      fieldCache.set(key, rec);
+    const fallback = () => {
       worker.terminate();
-      resolve({ ...rec, cached: false });
+      resolve(bakePanel(PANEL_PRESETS[preset](gaugeMm / 1000)));
     };
-    worker.onerror = () => { worker.terminate(); resolve(bakeFields(gaugeMm)); };
-    worker.postMessage({ gauge: gaugeMm });
+    worker.onmessage = (e: MessageEvent<DentField>) => {
+      worker.terminate();
+      onProgress?.(++done, presets.length);
+      resolve(e.data);
+    };
+    worker.onerror = fallback;
+    worker.onmessageerror = fallback;
+    worker.postMessage({ gauge: gaugeMm, preset });
+  });
+
+  return Promise.all(presets.map(one)).then(fields => {
+    const rec = { fields, ms: performance.now() - t0 };
+    fieldCache.set(key, rec);
+    return { ...rec, cached: false };
   });
 }
 
@@ -97,8 +114,8 @@ export class CarScene {
     private position = new Vector3(0, 0.62, 0),
   ) {}
 
-  async build(gaugeMm: number) {
-    const { fields, ms, cached } = await bakeFieldsAsync(gaugeMm);
+  async build(gaugeMm: number, onProgress?: (done: number, total: number) => void) {
+    const { fields, ms, cached } = await bakeFieldsAsync(gaugeMm, onProgress);
     this.fields = fields;
     this.bakeMs = cached ? 0 : ms;
     this.dents = new DentSystem(fields);

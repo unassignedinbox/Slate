@@ -24,7 +24,7 @@
  */
 import {
   DataTexture, HalfFloatType, LinearFilter, Matrix3, Matrix4, Mesh, RGBAFormat,
-  ClampToEdgeWrapping, Vector3, type Material, type IUniform,
+  ClampToEdgeWrapping, Vector2, Vector3, Vector4, type Material, type IUniform,
 } from 'three';
 import type { DentField } from './panel';
 
@@ -165,8 +165,10 @@ export class DentSystem {
       uDentPos: { value: Array.from({ length: MAX_DENTS }, () => new Vector3()) },
       uDentRot: { value: Array.from({ length: MAX_DENTS }, () => new Matrix3()) },
       uDentRotT: { value: Array.from({ length: MAX_DENTS }, () => new Matrix3()) },
-      uDentSize: { value: Array.from({ length: MAX_DENTS }, () => ({ x: 1, y: 1, z: 1, w: 1 })) },
-      uDentSev: { value: Array.from({ length: MAX_DENTS }, () => ({ x: 0, y: 0 })) },
+      // NOTE: three's uniform array packer calls .toArray() on every element,
+      // so these MUST be real Vector4/Vector2 objects, not plain {x,y,z,w}.
+      uDentSize: { value: Array.from({ length: MAX_DENTS }, () => new Vector4(1, 1, 1, 1)) },
+      uDentSev: { value: Array.from({ length: MAX_DENTS }, () => new Vector2(0, 0)) },
     };
   }
 
@@ -228,10 +230,8 @@ export class DentSystem {
       (u.uDentPos.value as Vector3[])[i].copy(d.pos);
       (u.uDentRot.value as Matrix3[])[i].copy(d.rot);
       (u.uDentRotT.value as Matrix3[])[i].copy(d.rotT);
-      const s = (u.uDentSize.value as { x: number; y: number; z: number; w: number }[])[i];
-      s.x = d.size.x; s.y = d.size.y; s.z = d.size.z; s.w = d.amp;
-      const v = (u.uDentSev.value as { x: number; y: number }[])[i];
-      v.x = d.severity; v.y = d.archetype;
+      (u.uDentSize.value as Vector4[])[i].set(d.size.x, d.size.y, d.size.z, d.amp);
+      (u.uDentSev.value as Vector2[])[i].set(d.severity, d.archetype);
     }
   }
 
