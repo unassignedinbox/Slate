@@ -109,9 +109,13 @@ void applyDents(inout vec3 pos, inout vec3 nrm, inout float dmg){
     // the bake is self-similar, so scaling the footprint scales the dent
     dp += (B.xyz * d.x + C.xyz * d.y + D.xyz * d.z) * D.w;
     dmg = max(dmg, d.w);
-    vec4 nl = dentBilinear(uDentNrm, type, f1, uv);
+    // the baked normal is exact and relaxes to (0,0,1) at the patch edge, so
+    // it needs no fade - it just gets rotated into the instance's frame
+    vec4 n0 = dentBilinear(uDentNrm, type, f0, uv);
+    vec4 n1 = dentBilinear(uDentNrm, type, f1, uv);
+    vec4 nl = mix(n0, n1, tt);
     vec3 nw = normalize(B.xyz * nl.x + C.xyz * nl.y + D.xyz * nl.z);
-    dn += (nw - D.xyz) * clamp(length(vec2(nl.x, nl.y)) * 3.0, 0.0, 1.0);
+    dn += nw - D.xyz;
   }
   pos = p0 + dp;
   nrm = normalize(nrm + dn);

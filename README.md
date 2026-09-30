@@ -81,7 +81,8 @@ src/
                       cage-bound lamps, wheels and surface-conformed glass
   app/carrig.ts       damage cursors per site, bake streaming, lamp breakage
   app/bakeWorker.ts   runs the plastic solve off the main thread
-  render/vat.ts       vertex-animation textures + the GLSL that plays them
+  render/vat.ts       vertex-animation textures, the portable dent atlas, and
+                      the GLSL that plays both
   render/renderer.ts  forward renderer: shadow-mapped sun, analytic sky IBL,
                       procedural materials, separate sorted glass pass
   render/batch.ts     CPU-transformed debris batching (500 shards, 1 draw call)
@@ -99,6 +100,9 @@ npx esbuild test/preview.ts  --bundle --platform=node --format=esm --outfile=/tm
 npx esbuild test/preview3d.ts --bundle --platform=node --format=esm --outfile=/tmp/q.mjs && node /tmp/q.mjs  # -> /tmp/solid.png
 npx esbuild test/preview_car.ts --bundle --platform=node --format=cjs --outfile=/tmp/c.cjs && node /tmp/c.cjs  # -> /tmp/car.png
 npx esbuild test/preview_sheet.ts --bundle --platform=node --format=cjs --outfile=/tmp/d.cjs && node /tmp/d.cjs # -> /tmp/sheet.png
+npx esbuild test/preview_app.ts  --bundle --platform=node --format=cjs --outfile=/tmp/a.cjs && node /tmp/a.cjs   # -> /tmp/app.png
+npx esbuild test/frames.ts   --bundle --platform=node --format=cjs --outfile=/tmp/f.cjs && node /tmp/f.cjs      # every scene, every frame path
+npx esbuild test/gpupath.ts  --bundle --platform=node --format=cjs --outfile=/tmp/g.cjs && node /tmp/g.cjs      # the GLSL, emulated against the real texture
 npx esbuild test/shaders.ts --bundle --platform=node --format=esm --outfile=/tmp/h.mjs && node /tmp/h.mjs      # compiles every GLSL program
 ```
 
@@ -106,7 +110,18 @@ npx esbuild test/shaders.ts --bundle --platform=node --format=esm --outfile=/tmp
 volume-conservation error and solver timings. `preview_car` reports patch
 sizes, bake times, VAT footprint and the cage-vs-exact error. `preview_sheet`
 bakes the portable dent atlas and evaluates the shader's stamping maths on the
-CPU, on a flat sheet and on the car body. `shaders`
+CPU, on a flat sheet and on the car body.
+
+Three of these exist because of a bug that none of the others could see.
+`frames` drives the real per-frame path of every scene (build, pick, hit,
+update, collect) and validates every render piece. `gpupath` builds the padded
+RGBA32F texture exactly as `DentAtlasGpu` uploads it and runs a line-for-line
+transliteration of the GLSL against it, so an indexing mistake fails a test
+rather than showing a blank panel. And `preview_app` renders with the
+**shader's own normals** instead of normals recomputed from the displaced
+triangles — the difference is the difference between a dent you can see and
+one you cannot, and every earlier preview in this repo was flattering the
+result by using the latter. `shaders`
 compiles every GLSL program with glslang, because a shader that fails to
 compile takes the whole app down and there is no GPU in CI. The two `preview` scripts
 rasterise the crack networks and the 3D fragments straight to PNG — the images

@@ -177,21 +177,25 @@ export function bakeDentAtlas(res = 32, frames = 12, types = DENT_TYPES): DentAt
         pos[dst + 2] = b.pos[src + 2];
         pos[dst + 3] = b.pos[src + 3];
       }
-      // normals: recompute from the displaced grid (central differences),
-      // which is exact for a regular grid and avoids storing the mesh
-      const h = (2 * ty.half) / (res - 1);
-      for (let j = 0; j < res; j++) {
-        for (let i = 0; i < res; i++) {
-          const at = (ii: number, jj: number) => {
-            const c = clamp(ii, 0, res - 1) + clamp(jj, 0, res - 1) * res;
-            return pos[(base + f * res * res + c) * 4 + 2];
-          };
-          const dzdx = (at(i + 1, j) - at(i - 1, j)) / (2 * h);
-          const dzdy = (at(i, j + 1) - at(i, j - 1)) / (2 * h);
-          const l = Math.hypot(dzdx, dzdy, 1);
-          const dst = (base + f * res * res + j * res + i) * 4;
-          nrm[dst] = -dzdx / l; nrm[dst + 1] = -dzdy / l; nrm[dst + 2] = 1 / l;
-        }
+      // Normals come from the DEFORMED MESH, not from finite differences of
+      // the depth channel. That shortcut assumes the dent is a heightfield
+      // z = f(u, v), which was true before the sheet was allowed to draw
+      // inward and is badly false afterwards: a crumple moves metal sideways
+      // as much as down, and a fold is vertical, where a heightfield gradient
+      // is undefined. Using it left the geometry folding while the lighting
+      // stayed flat - creases you cannot see are creases you did not make.
+      for (let k = 0; k < b.count; k++) {
+        const v = b.verts[k];
+        const src = (f * b.count + k) * 4;
+        const dst = (base + f * res * res + v) * 4;
+        nrm[dst] = b.nrm[src];
+        nrm[dst + 1] = b.nrm[src + 1];
+        nrm[dst + 2] = b.nrm[src + 2];
+      }
+      // texels outside the solved patch are undamaged sheet
+      for (let k = 0; k < res * res; k++) {
+        const dst = (base + f * res * res + k) * 4;
+        if (nrm[dst] === 0 && nrm[dst + 1] === 0 && nrm[dst + 2] === 0) nrm[dst + 2] = 1;
       }
     }
     void n;

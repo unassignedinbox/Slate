@@ -414,9 +414,28 @@ The `Panel · sheet steel` scene is the library on its own: a bare
 
 ![stamped dents](docs/dent-stamping.png)
 
-*Flat sheet, front and raking — a dish, two crush craters and a long fold from
-one 1.13 MB library — then the same stamps on the curved car body, with no
-per-site bake involved at all.*
+*Rendered with the vertex shader's OWN normals, not normals recomputed from
+the displaced triangles: the flat sheet with a dish, a crater and a long fold,
+then the same stamps on the car body with no per-site bake involved.*
+
+### The normals were the bug
+
+Worth recording, because it is a trap this exact technique sets. The atlas
+stores a perturbed normal per texel, and it was being produced by central
+differences of the depth channel — which silently assumes the dent is a
+heightfield `z = f(u, v)`. That was true while the bake was a smooth dish. The
+moment the sheet was allowed to draw inward it stopped being true: a crumple
+moves metal sideways as much as down, and at a fold the surface is vertical,
+where a heightfield gradient does not exist at all.
+
+The geometry folded correctly and the lighting stayed glassy and flat. Every
+headless preview missed it, because they all recomputed flat normals from the
+displaced triangles — which is emphatically *not* what the renderer does. The
+fix is to take the true area-weighted normals off the deformed bake mesh,
+which `bakeDent` already computes and which was being thrown away, and to drop
+a fade factor in the shader that was attenuating the perturbation on exactly
+the gentle slopes that carry a dent's shape. Creases you cannot see are
+creases you did not make.
 
 ### Glass on the car
 

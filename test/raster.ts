@@ -116,3 +116,64 @@ export function drawShell(
 }
 
 export { v3, norm, sub, add, mul, cross, dot };
+
+/**
+ * Smooth-shaded triangle with per-vertex normals and a light model close to
+ * the app's: a hard sun, a sky/ground hemisphere term, and a Blinn specular.
+ * This exists so a headless preview shows what the SHADER's normals produce,
+ * not what recomputed flat normals would have produced - those two can differ
+ * completely, and only the first is what ends up on screen.
+ */
+export function triSmooth(
+  c: Canvas, view: View, p: [V3, V3, V3], nn: [V3, V3, V3],
+  col: [number, number, number], spec = 0.5, rough = 0.4,
+): void {
+  const q = [project(view, p[0]), project(view, p[1]), project(view, p[2])];
+  if (q.some((v) => v.z <= 0.05)) return;
+  const minX = Math.max(view.vx, Math.floor(Math.min(q[0].x, q[1].x, q[2].x)));
+  const maxX = Math.min(view.vx + view.vw - 1, Math.ceil(Math.max(q[0].x, q[1].x, q[2].x)));
+  const minY = Math.max(view.vy, Math.floor(Math.min(q[0].y, q[1].y, q[2].y)));
+  const maxY = Math.min(view.vy + view.vh - 1, Math.ceil(Math.max(q[0].y, q[1].y, q[2].y)));
+  const area = (q[1].x - q[0].x) * (q[2].y - q[0].y) - (q[2].x - q[0].x) * (q[1].y - q[0].y);
+  if (Math.abs(area) < 1e-9) return;
+  const sun = norm(v3(0.55, 0.78, 0.32));
+  const shin = 2 / Math.max(rough * rough * rough * rough, 1e-4);
+  for (let y = minY; y <= maxY; y++) {
+    for (let x = minX; x <= maxX; x++) {
+      const w0 = ((q[1].x - x) * (q[2].y - y) - (q[2].x - x) * (q[1].y - y)) / area;
+      const w1 = ((q[2].x - x) * (q[0].y - y) - (q[0].x - x) * (q[2].y - y)) / area;
+      const w2 = 1 - w0 - w1;
+      if (w0 < 0 || w1 < 0 || w2 < 0) continue;
+      const z = w0 * q[0].z + w1 * q[1].z + w2 * q[2].z;
+      const o = y * c.w + x;
+      if (z >= c.z[o]) continue;
+      c.z[o] = z;
+      let N = v3(
+        w0 * nn[0].x + w1 * nn[1].x + w2 * nn[2].x,
+        w0 * nn[0].y + w1 * nn[1].y + w2 * nn[2].y,
+        w0 * nn[0].z + w1 * nn[1].z + w2 * nn[2].z,
+      );
+      N = norm(N);
+      const P = v3(
+        w0 * p[0].x + w1 * p[1].x + w2 * p[2].x,
+        w0 * p[0].y + w1 * p[1].y + w2 * p[2].y,
+        w0 * p[0].z + w1 * p[1].z + w2 * p[2].z,
+      );
+      const V = norm(sub(view.eye, P));
+      if (dot(N, V) < 0) N = mul(N, -1);
+      const ndl = Math.max(dot(N, sun), 0);
+      const H = norm(add(sun, V));
+      const s = Math.pow(Math.max(dot(N, H), 0), shin) * spec;
+      const sky = 0.5 + 0.5 * N.y;                       // hemisphere ambient
+      const amb = 0.10 + 0.26 * sky;
+      const fres = 0.04 + 0.5 * Math.pow(1 - Math.max(dot(N, V), 0), 5) * spec;
+      const out: [number, number, number] = [0, 0, 0];
+      for (let k = 0; k < 3; k++) {
+        const base = col[k] / 255;
+        const lit = base * (amb + ndl * 0.95) + s * 1.5 + fres * 0.55;
+        out[k] = Math.round(255 * Math.min(1, Math.pow(Math.max(lit, 0), 1 / 2.2) * 0.95));
+      }
+      c.img[o * 4] = out[0]; c.img[o * 4 + 1] = out[1]; c.img[o * 4 + 2] = out[2];
+    }
+  }
+}
