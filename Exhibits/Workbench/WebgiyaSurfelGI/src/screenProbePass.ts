@@ -197,11 +197,6 @@ const screenSpaceHitStruct = wgsl(/* wgsl */ `
     albedo: vec3f,
     steps: u32,
   };
-
-  struct ScreenProbeTraceResult {
-    radiance: vec3f,
-    stats: vec4f,
-  };
 `);
 
 const hiZTraceHelpers = wgslFn(
@@ -546,7 +541,7 @@ const traceScreenProbe = wgslFn(
       envLod: f32,
       diffuseTexture: texture_2d_array<f32>,
       diffuseSampler: sampler
-    ) -> ScreenProbeTraceResult {
+    ) -> mat4x4f {
       let sampleCount = clamp(sampleCountIn, 1u, ${MAX_RAYS_PER_PROBE}u);
       let basis = screen_probe_basis(receiverNormal);
       let receiverEpsilon = 0.002;
@@ -661,15 +656,16 @@ const traceScreenProbe = wgslFn(
       }
 
       let inverseCount = 1.0 / max(1.0, f32(sampleCount));
-      var result: ScreenProbeTraceResult;
-      result.radiance = accumulated * inverseCount;
-      result.stats = vec4f(
+      // Return a built-in matrix payload: TSL can index matrix columns without
+      // attempting to introspect a custom WGSL structure at runtime.
+      let radiance = vec4f(accumulated * inverseCount, 1.0);
+      let stats = vec4f(
         hiZResolved * inverseCount,
         bvhFallback * inverseCount,
         environmentMiss * inverseCount,
         hiZStepFraction * inverseCount
       );
-      return result;
+      return mat4x4f(radiance, stats, vec4f(0.0), vec4f(0.0));
     }
   `,
   [
@@ -965,7 +961,7 @@ export function createScreenProbePass(
             envLod: f32,
             diffuseTexture: texture_2d_array<f32>,
             diffuseSampler: sampler
-          ) -> ScreenProbeTraceResult {
+          ) -> mat4x4f {
             return trace_screen_probe(
               receiverPosition,
               receiverNormal,
@@ -1070,9 +1066,9 @@ export function createScreenProbePass(
             diffuseTexture: texture(bvh.diffuseArrayTex),
             diffuseSampler: sampler(bvh.diffuseArrayTex),
           });
-          radianceOut.assign(vec4(traced.get('radiance'), 1.0));
+          radianceOut.assign(traced.element(int(0)));
           geometryOut.assign(vec4(normal, depth));
-          statsOut.assign(traced.get('stats'));
+          statsOut.assign(traced.element(int(1)));
         });
 
         textureStore(probeRadianceTexture!, ivec2(x, y), radianceOut);
