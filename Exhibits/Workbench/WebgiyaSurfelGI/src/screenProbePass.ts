@@ -269,7 +269,7 @@ const hiZTraceHelpers = wgslFn(
       levelCount: u32,
       evenAtlas: texture_2d<f32>,
       oddAtlas: texture_2d<f32>,
-      sceneDepth: texture_2d<f32>,
+      sceneDepth: texture_depth_2d,
       sceneNormal: texture_2d<f32>,
       sceneAlbedo: texture_2d<f32>
     ) -> ScreenSpaceHit {
@@ -336,7 +336,7 @@ const hiZTraceHelpers = wgslFn(
             vec2i(0),
             fullSize - vec2i(1)
           );
-          let surfaceDepth = textureLoad(sceneDepth, fullCoord, 0).r;
+          let surfaceDepth = textureLoad(sceneDepth, fullCoord, 0);
           if (surfaceDepth <= 0.0 || surfaceDepth >= 0.999999) {
             distanceAlongRay += 0.035;
             level = min(2u, maxTraceLevel);
@@ -536,7 +536,7 @@ const traceScreenProbe = wgslFn(
       hiZLevelCount: u32,
       hiZEven: texture_2d<f32>,
       hiZOdd: texture_2d<f32>,
-      sceneDepth: texture_2d<f32>,
+      sceneDepth: texture_depth_2d,
       sceneNormal: texture_2d<f32>,
       sceneAlbedo: texture_2d<f32>,
       lightDirection: vec3f,
@@ -963,7 +963,7 @@ export function createScreenProbePass(
             hiZLevelCount: u32,
             hiZEven: texture_2d<f32>,
             hiZOdd: texture_2d<f32>,
-            sceneDepth: texture_2d<f32>,
+            sceneDepth: texture_depth_2d,
             sceneNormal: texture_2d<f32>,
             sceneAlbedo: texture_2d<f32>,
             lightDirection: vec3f,
