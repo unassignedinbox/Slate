@@ -65,7 +65,7 @@ struct MockChassis
     [[nodiscard]] ChassisState State() const noexcept { return {Position, Orientation, LinearVelocity, AngularVelocity}; }
 };
 
-XPBDSoftTyre::GroundQuery Flat() { return [](const Vec3&, float& gz, Vec3& n){ gz = 0; n = {0,0,1}; return true; }; }
+XPBDSoftTyre::GroundQuery Flat() { return [](const Vec3& p, Vec3& surfacePoint, Vec3& normal){ surfacePoint = {p.x, p.y, 0.0f}; normal = {0,0,1}; return true; }; }
 VehicleGeometry Geo() { return VehicleGeometry{}; }
 
 struct Rig

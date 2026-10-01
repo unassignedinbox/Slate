@@ -251,8 +251,19 @@ private:
     //    can never fall out of step.
     [[nodiscard]] float DerivedDamping(float compliance, float ratio) const noexcept;
 
-    float SpokeBeta = 0.0f, ContactBeta = 0.0f, TreadBeta = 0.0f;
-    float SpokeTangentialBeta = 0.0f, SpokeLateralBeta = 0.0f;   // the non-edge constraints' derived β
+    // The authored compliances describe the reference 9 × 128 carcass, not one arbitrary mesh spring. Build converts
+    // them to per-constraint values so a procedurally chosen tessellation does not change the tyre's constitutive law.
+    float EffectiveSpokeCompliance           = 0.0f;
+    float EffectiveSpokeTangentialCompliance = 0.0f;
+    float EffectiveSpokeLateralCompliance    = 0.0f;
+    float EffectiveContactCompliance         = 0.0f;
+    float EffectiveTreadCompliance           = 0.0f;
+
+    float SpokeBeta           = 0.0f;
+    float ContactBeta         = 0.0f;
+    float TreadBeta           = 0.0f;
+    float SpokeTangentialBeta = 0.0f;
+    float SpokeLateralBeta    = 0.0f;
 
     SoftTyreParameters        Parameters;
     std::vector<SoftTyreNode>  NodeRecords;

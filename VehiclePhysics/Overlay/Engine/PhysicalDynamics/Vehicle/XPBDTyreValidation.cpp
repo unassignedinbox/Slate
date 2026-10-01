@@ -37,8 +37,10 @@ static void Check(const char* name, bool ok, const std::string& detail = "")
     else    { ++g_fail; std::printf("  [FAIL] %s   %s\n", name, detail.c_str()); }
 }
 
+// Flat track at z = 0, expressed as the SURFACE query the solver now takes: the nearest surface point under
+//    the probe plus its outward normal. A heightfield is exactly this with Height(x, y) substituted for 0.
 static XPBDSoftTyre::GroundQuery g_flat =
-    [](const Vec3& p, float& gz, Vec3& n) { (void)p; gz = 0.0f; n = {0, 0, 1}; return true; };
+    [](const Vec3& p, Vec3& surfacePoint, Vec3& normal) { surfacePoint = {p.x, p.y, 0.0f}; normal = {0, 0, 1}; return true; };
 
 struct Measured { double Fx = 0, Fy = 0, Fz = 0, Mz = 0; };
 
@@ -125,6 +127,27 @@ int main()
     vt.Build(P, {0, 0, P.Radius - 0.012f}, Quat{}); const double fzHi = SettleFz(vt, P.Radius - 0.012f);
     Check("Load positive and increases with penetration", fzLo > 0 && fzHi > fzLo,
           "Fz(4mm)=" + std::to_string(fzLo) + " Fz(12mm)=" + std::to_string(fzHi));
+
+    // A generated tyre may choose its tessellation independently of its physical specification. Point constraints are
+    // parallel springs, so their per-constraint compliance must scale with node count; edge strips additionally scale
+    // with their circumferential and lateral spacing. This gate catches either normalization being removed.
+    SoftTyreParameters coarseParameters = P;
+    coarseParameters.RingCount          = 5u;
+    coarseParameters.SegmentCount       = 64u;
+    XPBDSoftTyre coarseTyre;
+    coarseTyre.Build(coarseParameters, {0, 0, P.Radius - 0.008f}, Quat{});
+    const double coarseLoad = SettleFz(coarseTyre, P.Radius - 0.008f);
+
+    SoftTyreParameters denseParameters = P;
+    denseParameters.RingCount          = 13u;
+    denseParameters.SegmentCount       = 128u;
+    XPBDSoftTyre denseTyre;
+    denseTyre.Build(denseParameters, {0, 0, P.Radius - 0.008f}, Quat{});
+    const double denseLoad = SettleFz(denseTyre, P.Radius - 0.008f);
+    const double resolutionLoadRatio = coarseLoad / denseLoad;
+    Check("Vertical load is invariant across procedural tessellation (within 3%)",
+          resolutionLoadRatio > 0.97 && resolutionLoadRatio < 1.03,
+          "5x64=" + std::to_string(coarseLoad) + " 13x128=" + std::to_string(denseLoad));
 
     // Operating point ≈ 5 kN (near Pacejka Fz0), and the free-rolling spin rate.
     const float hubZ = P.Radius - 0.008f;

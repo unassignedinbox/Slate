@@ -51,11 +51,22 @@ void XPBDSoftTyre::Build(const SoftTyreParameters& params, const Vec3& hubPos, c
         }
     }
 
-    SpokeBeta   = DerivedDamping(Parameters.SpokeCompliance, Parameters.SpokeDampingRatio);
-    SpokeTangentialBeta = DerivedDamping(Parameters.SpokeTangentialCompliance, Parameters.SpokeShearDampingRatio);
-    SpokeLateralBeta    = DerivedDamping(Parameters.SpokeLateralCompliance, Parameters.SpokeShearDampingRatio);
-    ContactBeta = DerivedDamping(Parameters.ContactCompliance, Parameters.ContactDampingRatio);
-    TreadBeta   = DerivedDamping(Parameters.TreadTangentialCompliance, Parameters.TreadDampingRatio);
+    // A node constraint is one spring in a parallel field. Doubling the particle count must therefore double each
+    // spring's compliance, otherwise the assembled carcass becomes twice as stiff. The public values retain their
+    // calibrated meaning at the reference 9 × 128 discretisation while procedural meshes receive equivalent values.
+    constexpr float ReferenceNodeCount = 9.0f * 128.0f;
+    const float NodeScale = static_cast<float>(N) / ReferenceNodeCount;
+    EffectiveSpokeCompliance           = Parameters.SpokeCompliance           * NodeScale;
+    EffectiveSpokeTangentialCompliance = Parameters.SpokeTangentialCompliance * NodeScale;
+    EffectiveSpokeLateralCompliance    = Parameters.SpokeLateralCompliance    * NodeScale;
+    EffectiveContactCompliance         = Parameters.ContactCompliance         * NodeScale;
+    EffectiveTreadCompliance           = Parameters.TreadTangentialCompliance * NodeScale;
+
+    SpokeBeta           = DerivedDamping(EffectiveSpokeCompliance, Parameters.SpokeDampingRatio);
+    SpokeTangentialBeta = DerivedDamping(EffectiveSpokeTangentialCompliance, Parameters.SpokeShearDampingRatio);
+    SpokeLateralBeta    = DerivedDamping(EffectiveSpokeLateralCompliance, Parameters.SpokeShearDampingRatio);
+    ContactBeta         = DerivedDamping(EffectiveContactCompliance, Parameters.ContactDampingRatio);
+    TreadBeta           = DerivedDamping(EffectiveTreadCompliance, Parameters.TreadDampingRatio);
 
     BuildEdges();
     ContactReaction = TyreReaction{};
@@ -77,6 +88,18 @@ void XPBDSoftTyre::BuildEdges() noexcept
 
     auto restLen = [&](uint32_t a, uint32_t b) { return (NodeRecords[a].TreadLocal - NodeRecords[b].TreadLocal).Length(); };
 
+    // Discrete edge springs approximate strips of one continuous carcass. Hoop compliance is proportional to
+    // circumferential edge length and inversely proportional to strip width (R/S); lateral and bias edges have the
+    // reciprocal topology (S/R). Both factors are one at the calibrated 9 × 128 reference mesh.
+    const float HoopScale = (static_cast<float>(R) / 9.0f) * (128.0f / static_cast<float>(S));
+    const float CrossScale = (static_cast<float>(S) / 128.0f) * (9.0f / static_cast<float>(R));
+    const float HoopCompliance = Parameters.HoopCompliance * HoopScale;
+    const float LateralCompliance = Parameters.LateralCompliance * CrossScale;
+    const float ShearCompliance = Parameters.ShearCompliance * CrossScale;
+    const float HoopDamping = DerivedDamping(HoopCompliance, Parameters.HoopDampingRatio);
+    const float LateralDamping = DerivedDamping(LateralCompliance, Parameters.LateralDampingRatio);
+    const float ShearDamping = DerivedDamping(ShearCompliance, Parameters.ShearDampingRatio);
+
     for (uint32_t r = 0u; r < R; ++r)
         for (uint32_t s = 0u; s < S; ++s)
         {
@@ -86,19 +109,19 @@ void XPBDSoftTyre::BuildEdges() noexcept
             // Hoop (circumferential, same ring) — always present.
             {
                 const uint32_t j = Index(r, sn);
-                ConstraintEdges.push_back({i, j, restLen(i, j), Parameters.HoopCompliance, DerivedDamping(Parameters.HoopCompliance, Parameters.HoopDampingRatio), EdgeFamily::Hoop});
+                ConstraintEdges.push_back({i, j, restLen(i, j), HoopCompliance, HoopDamping, EdgeFamily::Hoop});
             }
             if (r + 1u < R)
             {
                 // Lateral (same segment, next ring).
                 const uint32_t j = Index(r + 1u, s);
-                ConstraintEdges.push_back({i, j, restLen(i, j), Parameters.LateralCompliance, DerivedDamping(Parameters.LateralCompliance, Parameters.LateralDampingRatio), EdgeFamily::Lateral});
+                ConstraintEdges.push_back({i, j, restLen(i, j), LateralCompliance, LateralDamping, EdgeFamily::Lateral});
                 // Shear diagonal (next segment, next ring).
                 const uint32_t k = Index(r + 1u, sn);
-                ConstraintEdges.push_back({i, k, restLen(i, k), Parameters.ShearCompliance, DerivedDamping(Parameters.ShearCompliance, Parameters.ShearDampingRatio), EdgeFamily::Diagonal});
+                ConstraintEdges.push_back({i, k, restLen(i, k), ShearCompliance, ShearDamping, EdgeFamily::Diagonal});
                 // Anti-diagonal (this ring's next seg ↔ next ring's this seg) for symmetric shear.
                 const uint32_t a = Index(r, sn), b = Index(r + 1u, s);
-                ConstraintEdges.push_back({a, b, restLen(a, b), Parameters.ShearCompliance, DerivedDamping(Parameters.ShearCompliance, Parameters.ShearDampingRatio), EdgeFamily::Diagonal});
+                ConstraintEdges.push_back({a, b, restLen(a, b), ShearCompliance, ShearDamping, EdgeFamily::Diagonal});
             }
         }
 }
@@ -125,8 +148,8 @@ void XPBDSoftTyre::Step(float dt, uint32_t substeps, const Vec3& hubPos, const Q
     float patchN = 0.0f;
     float contactAccum = 0.0f;
 
-    const float alphaContact = Parameters.ContactCompliance * invH2;
-    const float gammaContact = Parameters.ContactCompliance * ContactBeta / h;
+    const float alphaContact = EffectiveContactCompliance * invH2;
+    const float gammaContact = EffectiveContactCompliance * ContactBeta / h;
 
     for (uint32_t sub = 0u; sub < substeps; ++sub)
     {
@@ -161,12 +184,12 @@ void XPBDSoftTyre::Step(float dt, uint32_t substeps, const Vec3& hubPos, const Q
         // ── project: spokes (node ↔ rim/bead anchor) ─────────────────────────────────────────────────────────────
         // XPBD eq. 18 throughout: Δλ = (−C − α̃λ)/(Σw|∇C|² + α̃), Δx = w ∇C Δλ, λ += Δλ.  |∇C| = 1 for a
         // distance constraint, so the denominator is Σw + α̃.
-        const float alphaSpoke = Parameters.SpokeCompliance * invH2;
-        const float gammaSpoke = Parameters.SpokeCompliance * SpokeBeta / h;   // γ = α·β/Δt
-        const float alphaSpokeTangential = Parameters.SpokeTangentialCompliance * invH2;
-        const float alphaSpokeLateral    = Parameters.SpokeLateralCompliance * invH2;
-        const float gammaSpokeTangential = Parameters.SpokeTangentialCompliance * SpokeTangentialBeta / h;
-        const float gammaSpokeLateral    = Parameters.SpokeLateralCompliance * SpokeLateralBeta / h;
+        const float alphaSpoke = EffectiveSpokeCompliance * invH2;
+        const float gammaSpoke = EffectiveSpokeCompliance * SpokeBeta / h;   // γ = α·β/Δt
+        const float alphaSpokeTangential = EffectiveSpokeTangentialCompliance * invH2;
+        const float alphaSpokeLateral    = EffectiveSpokeLateralCompliance * invH2;
+        const float gammaSpokeTangential = EffectiveSpokeTangentialCompliance * SpokeTangentialBeta / h;
+        const float gammaSpokeLateral    = EffectiveSpokeLateralCompliance * SpokeLateralBeta / h;
         const float spokeRest = Parameters.Radius - Parameters.RimRadius;
         for (SoftTyreNode& node : NodeRecords)
         {
@@ -244,8 +267,8 @@ void XPBDSoftTyre::Step(float dt, uint32_t substeps, const Vec3& hubPos, const Q
             // enters the solve.  The previous code carried the tread as raw α in the stick/slide test but as
             // α/h² in the position correction two lines later, so the cone threshold and the correction it
             // guarded were computed against different stiffnesses and disagreed by a factor of Δτ².
-            const float alphaTread = Parameters.TreadTangentialCompliance * invH2;
-            const float gammaTread = Parameters.TreadTangentialCompliance * TreadBeta / h;
+            const float alphaTread = EffectiveTreadCompliance * invH2;
+            const float gammaTread = EffectiveTreadCompliance * TreadBeta / h;
             for (SoftTyreNode& node : NodeRecords)
             {
                 if (node.InverseMass <= 0.0f) continue;

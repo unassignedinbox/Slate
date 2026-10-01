@@ -114,13 +114,23 @@ static VehicleSolverConfiguration MakeConfig(DrivingScheme model)
     c.ActiveScheme = model;
     c.ChassisMass = 1200.0f;
     c.Tyre = SoftTyreParameters{};                 // Phase-2 calibrated defaults (R=0.34, etc.)
-    const float zoff = -0.55f;                      // hub sits below the CoM (box floats above the wheels)
+    const float zoff  = -0.55f;                     // [m] hub rest height below the CoM (box floats above the wheels)
+    const float strut =  0.5522f;                   // [m] authored mount-to-hub span (SuspensionMount_FL − AxleMount_FL)
     c.Wheels = {
-        WheelMount{ Vec3{ 1.30f,  0.78f, zoff}, /*steer*/true,  /*drive*/false, /*brake*/true },
-        WheelMount{ Vec3{ 1.30f, -0.78f, zoff}, true,  false, true },
-        WheelMount{ Vec3{-1.30f,  0.78f, zoff}, false, true,  true },
-        WheelMount{ Vec3{-1.30f, -0.78f, zoff}, false, true,  true },
+        WheelMount{ Vec3{ 1.30f,  0.78f, zoff}, Vec3{ 1.30f,  0.78f, zoff + strut}, /*steer*/true,  /*drive*/false, /*brake*/true },
+        WheelMount{ Vec3{ 1.30f, -0.78f, zoff}, Vec3{ 1.30f, -0.78f, zoff + strut}, true,  false, true },
+        WheelMount{ Vec3{-1.30f,  0.78f, zoff}, Vec3{-1.30f,  0.78f, zoff + strut}, false, true,  true },
+        WheelMount{ Vec3{-1.30f, -0.78f, zoff}, Vec3{-1.30f, -0.78f, zoff + strut}, false, true,  true },
     };
+
+    // 🔴 Rate and resolve the struts. A default-constructed SuspensionSpecification carries FreeLength = 0, which
+    //    welds every hub to its own strut top and silently removes the suspension this harness claims to exercise.
+    const float cornerSprung = 0.25f * (c.ChassisMass - 4.0f * c.UnsprungMass);   // [kg] per corner, springs only
+    const float cornerLoad   = 0.25f * c.ChassisMass * 9.81f;                     // [N]  per corner, body included
+    c.FrontStrut.Calibrate(cornerSprung);
+    c.RearStrut .Calibrate(cornerSprung);
+    c.FrontStrut.ResolveFromSockets(zoff + strut, zoff, cornerLoad);
+    c.RearStrut .ResolveFromSockets(zoff + strut, zoff, cornerLoad);
     return c;
 }
 
@@ -161,7 +171,12 @@ struct Rig
 };
 
 // Flat ground at z = 0.
-static bool FlatGround(const Vec3& p, float& gz, Vec3& n) { (void)p; gz = 0.0f; n = {0, 0, 1}; return true; }
+static bool FlatGround(const Vec3& p, Vec3& surfacePoint, Vec3& normal)
+{
+    surfacePoint = {p.x, p.y, 0.0f};
+    normal       = {0, 0, 1};
+    return true;
+}
 
 // Runs the full 5-scenario invariant suite for one driving model and returns {passed, failed} for that model.
 static void RunSuite(DrivingScheme model, const char* label)
@@ -243,11 +258,11 @@ static void RunSuite(DrivingScheme model, const char* label)
     // 5) REST on a sloped heightfield (handbrake), no sink / no explosion
     //--------------------------------------------------------------------------------------------------------------
     std::printf("[5] rest on a 6%% slope heightfield (handbrake, 3 s)\n");
-    auto Slope = [](const Vec3& p, float& gz, Vec3& n) -> bool
+    auto Slope = [](const Vec3& p, Vec3& surfacePoint, Vec3& normal) -> bool
     {
         const float grade = 0.06f;                    // z rises 6% with +x
-        gz = grade * p.x;
-        n = Vec3{-grade, 0.0f, 1.0f}.Normalized();
+        surfacePoint = {p.x, p.y, grade * p.x};
+        normal       = Vec3{-grade, 0.0f, 1.0f}.Normalized();
         return true;
     };
     Rig rig5; rig5.Build(cfg, Slope);
