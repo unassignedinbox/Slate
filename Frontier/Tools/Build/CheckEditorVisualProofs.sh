@@ -88,7 +88,7 @@ if [ ! -f "$TomlRoot/toml++/toml.hpp" ]; then
     exit 1
 fi
 
-mkdir -p Exhibits/Gallery/Editor
+mkdir -p Exhibits/Gallery/Editor ../VisualProof/SolidArcEditor
 
 GameSources=(
     Exhibits/Workbench/Editor/EditorProof.cpp
@@ -231,8 +231,8 @@ fi
 sed 's/^/    /' /tmp/SolidArcEditorProof.run | head -20
 
 GameProof="Exhibits/Gallery/Editor/EditorProof_Inspector.png"
-SolidArcProof="Exhibits/Gallery/Editor/EditorProof_SolidArc.png"
-SolidArcMenuProof="Exhibits/Gallery/Editor/EditorProof_SolidArc_Menu.png"
+SolidArcProof="../VisualProof/SolidArcEditor/SolidArcEditor.png"
+SolidArcMenuProof="../VisualProof/SolidArcEditor/SolidArcEditorFilterMenu.png"
 if [ ! -s "$GameProof" ]; then
     echo "[EditorVisualProof] RED — missing canonical game editor proof: $GameProof"
     echo "    Run Exhibits/Workbench/Editor/CheckEditorProof.sh when full editor proof dependencies are available."

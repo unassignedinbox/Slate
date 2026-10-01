@@ -256,7 +256,7 @@ int main()
     for (int I = 0; I < 3; ++I)
         Rest();
     Rasterise();
-    const char* MenuSheet = "Exhibits/Gallery/Editor/EditorProof_SolidArc_Menu.png";
+    const char* MenuSheet = "../VisualProof/SolidArcEditor/SolidArcEditorFilterMenu.png";
     if (const int Write = WriteSheet(MenuSheet, 7); Write != 0)
         return Write;
 
@@ -268,7 +268,7 @@ int main()
         Rest();
     Rasterise();
 
-    const char* Sheet = "Exhibits/Gallery/Editor/EditorProof_SolidArc.png";
+    const char* Sheet = "../VisualProof/SolidArcEditor/SolidArcEditor.png";
     if (const int Write = WriteSheet(Sheet, 8); Write != 0)
         return Write;
 
