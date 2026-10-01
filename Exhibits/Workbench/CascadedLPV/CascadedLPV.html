@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#07100f">
+    <title>Slate — Dynamic Open-World GI Lab</title>
+    <link rel="stylesheet" href="CascadedLPV.css">
+</head>
+<body>
+    <main>
+        <header class="Hero">
+            <div>
+                <p class="Eyebrow">SLATE · DYNAMIC LIGHT TRANSPORT</p>
+                <h1>Three moving light volumes.<br><span>No rays. No bake. No SDF.</span></h1>
+                <p class="Introduction">
+                    A live WebGPU prototype for changing game worlds. The sun rasterizes transient surface lights,
+                    three camera-relative LPV cascades spread that energy through a compact blocker field, and
+                    half-resolution screen-space GI restores nearby contact detail.
+                </p>
+            </div>
+            <div class="Status" aria-live="polite">
+                <span class="StatusLamp"></span>
+                <span id="StatusText">Preparing WebGPU</span>
+            </div>
+        </header>
+
+        <section class="ViewportSection" aria-label="Dynamic cascaded light propagation volume demonstration">
+            <div class="CanvasWrap">
+                <canvas id="PresentationCanvas"></canvas>
+                <div class="CanvasBadge">DRAG TO ORBIT · WHEEL TO DOLLY</div>
+                <div class="PanelLabels" id="PanelLabels" aria-hidden="true">
+                    <span>01 · DIRECT ONLY</span>
+                    <span>02 · CASCADED LPV</span>
+                    <span>03 · SCREEN DETAIL</span>
+                    <span>04 · COMBINED</span>
+                </div>
+                <div class="CanvasError" id="CanvasError" hidden>
+                    <strong>WebGPU is unavailable.</strong>
+                    <span>Open this page in a current Chrome, Edge, or Firefox Nightly build over localhost or HTTPS.</span>
+                </div>
+            </div>
+
+            <div class="ControlRail">
+                <label class="SelectControl">
+                    <span><b>View</b><small>Compare each stage or inspect one result</small></span>
+                    <select id="DisplayMode">
+                        <option value="0" selected>2×2 comparison</option>
+                        <option value="1">Combined</option>
+                        <option value="2">Direct only</option>
+                        <option value="3">LPV indirect</option>
+                        <option value="4">Screen detail</option>
+                        <option value="5">Cascade coverage</option>
+                        <option value="6">Blocker field</option>
+                    </select>
+                </label>
+                <label class="SwitchControl">
+                    <input id="AnimateWorld" type="checkbox" checked>
+                    <span class="SwitchTrack"><span></span></span>
+                    <span><b>Dynamic world</b><small>Moving meshes continuously replace samples</small></span>
+                </label>
+                <label class="SwitchControl">
+                    <input id="AnimateSun" type="checkbox" checked>
+                    <span class="SwitchTrack"><span></span></span>
+                    <span><b>Moving sun</b><small>RSM flux and shadows update every frame</small></span>
+                </label>
+                <label class="SwitchControl">
+                    <input id="BlockerField" type="checkbox" checked>
+                    <span class="SwitchTrack"><span></span></span>
+                    <span><b>Blocker field</b><small>Directional attenuation for coarse leak control</small></span>
+                </label>
+                <label class="SwitchControl">
+                    <input id="ScreenDetail" type="checkbox" checked>
+                    <span class="SwitchTrack"><span></span></span>
+                    <span><b>Screen GI + GTAO</b><small>Half-resolution contact lighting and occlusion</small></span>
+                </label>
+                <label class="SwitchControl">
+                    <input id="ShowSurfels" type="checkbox">
+                    <span class="SwitchTrack"><span></span></span>
+                    <span><b>Show RSM surfels</b><small>Current-frame light-view samples</small></span>
+                </label>
+                <label class="RangeControl">
+                    <span><b>Propagation</b><output id="PropagationOutput">4 steps</output></span>
+                    <input id="PropagationSteps" type="range" min="1" max="6" value="4" step="1">
+                </label>
+                <label class="RangeControl">
+                    <span><b>GI gain</b><output id="GainOutput">1.00×</output></span>
+                    <input id="IndirectGain" type="range" min="0" max="2" value="1" step="0.05">
+                </label>
+                <label class="RangeControl">
+                    <span><b>Screen radius</b><output id="RadiusOutput">2.8 m</output></span>
+                    <input id="ScreenRadius" type="range" min="10" max="50" value="28" step="2">
+                </label>
+                <div class="ButtonGroup">
+                    <button id="PauseButton" class="Secondary" type="button">Pause simulation</button>
+                    <button id="ResetButton" type="button">Reset camera &amp; history</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="Metrics" aria-label="Live pipeline metrics">
+            <article><span>Backend</span><strong>WebGPU</strong></article>
+            <article><span>Transient samples</span><strong id="SurfelMetric">16,384</strong></article>
+            <article><span>LPV cells</span><strong>3 × 32³</strong></article>
+            <article><span>CPU encode</span><strong id="TimingMetric">—</strong></article>
+        </section>
+
+        <section class="Pipeline" aria-label="Pipeline explanation">
+            <article>
+                <span class="ArticleNumber">01</span>
+                <h2>Rasterize samples</h2>
+                <p>A 256² reflective shadow map captures current positions, normals, materials, and sun-facing flux. Every second texel becomes a transient surfel; current G-buffer samples add visible movers and blockers, so stale geometry is replaced immediately.</p>
+            </article>
+            <article>
+                <span class="ArticleNumber">02</span>
+                <h2>Propagate off screen</h2>
+                <p>Three snapped 32³ lattices cover 24, 64, and 160 metres around the camera. Directional RGB light is injected and propagated while camera and light-view surfaces form a small blocker field.</p>
+            </article>
+            <article>
+                <span class="ArticleNumber">03</span>
+                <h2>Restore local detail</h2>
+                <p>The volume result is intentionally broad. A half-resolution, temporally validated screen pass adds short-range colour transfer and GTAO without pretending that screen-visible information is global.</p>
+            </article>
+        </section>
+
+        <footer>
+            <span>Fully runtime generated · animated geometry and lighting · fixed world-independent memory</span>
+            <span>Diffuse GI prototype · SSR/reflection probes remain a separate production concern</span>
+        </footer>
+    </main>
+    <script type="module" src="CascadedLPV.js?revision=1"></script>
+</body>
+</html>
