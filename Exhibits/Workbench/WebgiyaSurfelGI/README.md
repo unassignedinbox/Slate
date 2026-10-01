@@ -1,4 +1,4 @@
-# Webgiya Temporal Hi-Z Screen-Probe + Multi-bounce Surfel GI
+# Webgiya ReSTIR Hi-Z Screen-Probe + Multi-bounce Surfel GI
 
 Open `index.html` over HTTP. It redirects to the checked-in production build in `site/`.
 
@@ -15,8 +15,9 @@ The adaptation is isolated to:
 - `motionGBuffer.ts` — a derived four-target G-buffer adding NDC motion and stable identity/version data without modifying the pinned upstream G-buffer.
 - `motionHistoryPass.ts` — full-resolution ping-pong surface history, reprojection, conservative validation, and disocclusion diagnostics.
 - `hiZDepthPyramid.ts` — conservative min/max depth hierarchy packed into non-aliasing even/odd storage atlases.
-- `screenProbePass.ts` — an optional 8×8-tile screen-probe tracer with Hi-Z-first traversal, BVH fallback, diagnostics, and bilateral reconstruction.
-- `mainVisibility.ts` — a derived host that retains the upstream frame sequence and composes temporal surface validation, screen probes, and a Three.js GTAO visibility raster.
+- `screenProbePass.ts` — an optional 8×8-tile screen-probe tracer with Hi-Z-first traversal, BVH fallback, frame-jittered sampling for reuse, diagnostics, and the unchanged Phase 2 reconstruction path.
+- `screenProbeReusePass.ts` — probe-resolution weighted reservoirs, conservative temporal/spatial resampling, bounded weight correction, and reused-probe reconstruction.
+- `mainVisibility.ts` — a derived host that retains the upstream frame sequence and composes temporal surface validation, ReSTIR screen probes, and a Three.js GTAO visibility raster.
 - `Source.html` and build files — packaging and explanatory UI.
 
 ## Lighting and visibility layers
@@ -61,7 +62,17 @@ At full raster resolution, `motionHistoryPass.ts` keeps two ping-pong `RGBA16F` 
 - world-normal disagreement; and
 - every resize, which reallocates and invalidates both history buffers.
 
-The validation result is one `RGBA8` texture containing a binary conservative disocclusion mask, graded confidence, and reprojected coordinates. The compact two-history-plus-one-validation layout is practical for the 4 GB target and avoids adding more storage buffers. Phase 3 only builds and validates temporal surface infrastructure: it does **not** temporally reuse lighting, add ReSTIR reservoirs, update the static triangle BVH, seed surfels from ray hits, or add DDGI.
+The validation result is one `RGBA8` texture containing a binary conservative disocclusion mask, graded confidence, and reprojected coordinates. The compact two-history-plus-one-validation layout is practical for the 4 GB target and avoids adding more storage buffers. Phase 3 supplies the rejection gate consumed by Phase 4.
+
+## Phase 4 temporal and spatial ReSTIR reuse
+
+When **Reservoir reuse** is enabled, each frame jitters the probe-direction sequence while preserving the deterministic Phase 1/2 sequence when reuse is disabled. A complete current probe estimate becomes one weighted candidate. Its luminance is the scalar target weight; the reservoir stores the selected uncorrected RGB candidate and selected weight in one `RGBA16F` texel, plus weight sum, represented candidate count `M`, age, and source in a second `RGBA16F` texel.
+
+Temporal resampling follows the full-precision motion vector to the preceding probe and consumes Phase 3's binary disocclusion and confidence result. Invalid history, changed IDs/transforms, newly exposed surfaces, and off-screen reprojection therefore never enter the reservoir. The retained temporal population is capped before the current candidate is merged.
+
+Spatial resampling considers four cardinal probe neighbors. A neighbor is eligible only when its stable ID/generation matches and its current-frame position and normal pass conservative thresholds. The remaining `M` budget is divided across all remaining directions so one reservoir cannot starve the other neighbors. Weighted selection keeps the chosen candidate, accumulated weight, and represented population; a bounded `W / (M × selectedWeight)` correction produces the reused estimate before the existing bilateral full-resolution reconstruction.
+
+All reservoirs remain at one texel per 8×8 probe tile. Two history pairs, two temporary reservoir textures, and compact diagnostics add only a small probe-resolution footprint; there are no full-resolution lighting reservoirs. Disabling **Reservoir reuse** skips all three reuse computes, restores the deterministic Phase 2 reconstruction, and preserves the all-BVH and surfel-only baselines. This phase does not add dynamic BLAS/TLAS, ray-hit surfel seeding, or DDGI.
 
 ## Controls
 
@@ -78,9 +89,20 @@ The inspector adds **Screen probes**:
 
 - **Screen-probe GI** — enable the extension or return to the exact surfel-only baseline.
 - **Hi-Z first** — enable hierarchical depth traversal; disabling it sends every secondary direction to the BVH.
-- **Output** — show final lighting, reconstructed GI, bilateral confidence, trace sources, or normalized Hi-Z step count. In **Trace source**, green is Hi-Z, red is BVH fallback, and blue is an environment miss.
+- **Output** — show final lighting, reconstructed GI, bilateral confidence, trace sources, normalized Hi-Z steps, reservoir age/candidate count, reuse acceptance, or selected reuse source. In **Trace source**, green is Hi-Z, red is BVH fallback, and blue is an environment miss. In **Reuse source**, blue is current, green is temporal, and red is spatial; **Reuse acceptance** uses red for temporal and green for the accepted spatial fraction.
 - **Probe confidence blend** — cap how strongly a valid probe replaces the surfel fallback.
 - **Directions per probe** — quality/performance control from one to eight secondary directions; each hit can also issue a directional-light visibility ray.
+
+The **Screen-probe ReSTIR reuse** folder exposes:
+
+- **Reservoir reuse** — enable Phase 4 or return to the deterministic Phase 2 reconstruction.
+- **Temporal reuse** and **Spatial reuse** — isolate either resampling stage.
+- **Spatial neighbors** — cardinal neighbors considered, from zero to four.
+- **Temporal candidates** — maximum preceding population retained before adding the current candidate.
+- **Reservoir M cap** — maximum represented population after spatial merging.
+- **Weight correction cap** — bounds rare low-weight selections to control fireflies.
+
+Changing any reuse setting resets its history rather than mixing incompatible reservoir distributions.
 
 The **Visibility raster / AO** controls are:
 
@@ -118,10 +140,12 @@ Each frame retains Webgiya's original surfel sequence while the host runs the ne
 10. Gather nearby surfels per pixel with spatial, normal, variance, and radial-visibility weighting.
 11. Build the conservative min/max Hi-Z depth atlases.
 12. Trace camera-visible probes through Hi-Z, conservatively falling back to the same triangle BVH.
-13. Query fresh surfel radiance at secondary hits and reconstruct sparse probes at full resolution.
-14. Blend against the surfel fallback and composite direct shadows, indirect light, ambient visibility, and the final image.
+13. Query fresh surfel radiance at secondary hits and form the current weighted probe candidates.
+14. Reproject and resample temporal reservoirs through Phase 3's conservative validation gate.
+15. Resample same-surface spatial reservoirs and apply bounded normalization.
+16. Reconstruct reused sparse probes at full resolution, blend against the surfel fallback, and composite direct shadows, indirect light, ambient visibility, and the final image.
 
-Desktop settings retain upstream's `262144`-surfel pool, 32³ hash-grid cascades, 4×4 radial-depth tiles, 32 target samples, and four base integration samples. Screen probes use one probe per 8×8 tile and four secondary directions by default; GTAO runs at half resolution for GTX-class performance.
+Desktop settings retain upstream's `262144`-surfel pool, 32³ hash-grid cascades, 4×4 radial-depth tiles, 32 target samples, and four base integration samples. Screen probes use one probe per 8×8 tile and four secondary directions by default; reservoirs default to 16 temporal and 32 total represented candidates, while GTAO runs at half resolution for GTX-class performance.
 
 ## ShaderBall scene
 

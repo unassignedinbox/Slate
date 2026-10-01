@@ -43,6 +43,8 @@ const MAX_HIZ_STEPS = 64;
 export type ScreenProbeSettings = {
   samples: number;
   useHiZ: boolean;
+  reconstruct?: boolean;
+  sampleSequenceFrame?: number;
   envIntensity: number;
   envLod: number;
   directStrength: number;
@@ -153,8 +155,16 @@ const probeSampling = wgsl(/* wgsl */ `
     return value;
   }
 
-  fn screen_probe_random_2(probeIndex: u32, sampleIndex: u32) -> vec2f {
-    let a = screen_probe_hash_u32(probeIndex * 0x9e3779b9u + sampleIndex * 0x85ebca6bu);
+  fn screen_probe_random_2(
+    probeIndex: u32,
+    sampleIndex: u32,
+    sequenceFrame: u32
+  ) -> vec2f {
+    let a = screen_probe_hash_u32(
+      probeIndex * 0x9e3779b9u +
+      sampleIndex * 0x85ebca6bu +
+      sequenceFrame * 0xc2b2ae35u
+    );
     let b = screen_probe_hash_u32(a + 0xc2b2ae35u);
     return vec2f(
       f32(a & 0x00ffffffu) / 16777216.0,
@@ -174,9 +184,10 @@ const probeSampling = wgsl(/* wgsl */ `
     probeIndex: u32,
     sampleIndex: u32,
     sampleCount: u32,
+    sequenceFrame: u32,
     basis: mat3x3f
   ) -> vec3f {
-    let random = screen_probe_random_2(probeIndex, sampleIndex);
+    let random = screen_probe_random_2(probeIndex, sampleIndex, sequenceFrame);
     let stratified = (f32(sampleIndex) + random.x) / max(1.0, f32(sampleCount));
     let radius = sqrt(clamp(stratified, 0.0, 1.0));
     let angle = 2.0 * PI * random.y;
@@ -516,6 +527,7 @@ const traceScreenProbe = wgslFn(
       receiverNormal: vec3f,
       probeIndex: u32,
       sampleCountIn: u32,
+      sampleSequenceFrame: u32,
       useHiZ: u32,
       viewProjection: mat4x4f,
       inverseProjection: mat4x4f,
@@ -556,6 +568,7 @@ const traceScreenProbe = wgslFn(
           probeIndex,
           sampleIndex,
           sampleCount,
+          sampleSequenceFrame,
           basis
         );
         let rayOrigin = receiverPosition + receiverNormal * receiverEpsilon;
@@ -772,6 +785,7 @@ export function createScreenProbePass(
   const U_LIGHT_DIRECTION = uniform(new THREE.Vector3(0, 1, 0));
   const U_LIGHT_COLOR = uniform(new THREE.Color(1, 1, 1));
   const U_SAMPLE_COUNT = uniform(4);
+  const U_SAMPLE_SEQUENCE_FRAME = uniform(0);
   const U_USE_HIZ = uniform(1);
   const U_HIZ_LEVEL_COUNT = uniform(1);
   const U_ENV_INTENSITY = uniform(1.0);
@@ -897,6 +911,10 @@ export function createScreenProbePass(
       1,
       MAX_RAYS_PER_PROBE,
     );
+    U_SAMPLE_SEQUENCE_FRAME.value = Math.max(
+      0,
+      Math.floor(settings.sampleSequenceFrame ?? 0),
+    );
     U_USE_HIZ.value = settings.useHiZ ? 1 : 0;
     U_HIZ_LEVEL_COUNT.value = hiZPyramid.getLevelCount();
     U_ENV_INTENSITY.value = Math.max(0, settings.envIntensity);
@@ -936,6 +954,7 @@ export function createScreenProbePass(
             receiverNormal: vec3f,
             probeIndex: u32,
             sampleCountIn: u32,
+            sampleSequenceFrame: u32,
             useHiZ: u32,
             viewProjection: mat4x4f,
             inverseProjection: mat4x4f,
@@ -967,6 +986,7 @@ export function createScreenProbePass(
               receiverNormal,
               probeIndex,
               sampleCountIn,
+              sampleSequenceFrame,
               useHiZ,
               viewProjection,
               inverseProjection,
@@ -1040,6 +1060,7 @@ export function createScreenProbePass(
             receiverNormal: normal,
             probeIndex: probeIndex.toUint(),
             sampleCountIn: U_SAMPLE_COUNT.toUint(),
+            sampleSequenceFrame: U_SAMPLE_SEQUENCE_FRAME.toUint(),
             useHiZ: U_USE_HIZ.toUint(),
             viewProjection: U_VIEW_PROJECTION,
             inverseProjection: U_PROJECTION_INVERSE,
@@ -1119,7 +1140,9 @@ export function createScreenProbePass(
     }
 
     renderer.compute(traceNode);
-    renderer.compute(reconstructNode);
+    if (settings.reconstruct !== false) {
+      renderer.compute(reconstructNode);
+    }
   }
 
   return {

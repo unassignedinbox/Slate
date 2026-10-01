@@ -31,6 +31,7 @@ import { createSceneBVH, type SceneBVHBundle } from './sceneBvh.ts';
 import { createSurfelIntegratePass } from './surfelIntegratePass.ts';
 import { createSurfelGIResolvePass } from './surfelGIResolvePass.ts';
 import { createScreenProbePass } from './screenProbePass.ts';
+import { createScreenProbeReusePass } from './screenProbeReusePass.ts';
 import * as THREE from 'three/webgpu';
 import {
   float,
@@ -204,6 +205,7 @@ const screenDebug = createSurfelScreenDebug(uniformGrid, surfelPool);
 const integratorDispatchArgs = createIntegratorDispatchArgs();
 let surfelIntegrate: ReturnType<typeof createSurfelIntegratePass> | null = null;
 let screenProbePass: ReturnType<typeof createScreenProbePass> | null = null;
+const screenProbeReusePass = createScreenProbeReusePass();
 
 screenDebug.setDebugMode(screenDebug.debugParams.mode);
 screenDebug.configureGUI(gui);
@@ -350,6 +352,10 @@ const SCREEN_PROBE_OUTPUTS = {
   'Probe confidence': 'confidence',
   'Trace source': 'trace-source',
   'Hi-Z steps': 'hiz-steps',
+  'Reservoir age': 'reservoir-age',
+  'Reservoir candidates': 'reservoir-candidates',
+  'Reuse acceptance': 'reuse-acceptance',
+  'Reuse source': 'reuse-source',
 } as const;
 type ScreenProbeOutput =
   (typeof SCREEN_PROBE_OUTPUTS)[keyof typeof SCREEN_PROBE_OUTPUTS];
@@ -366,17 +372,22 @@ const screenProbeParams: {
   blendStrength: 0.8,
   samples: 4,
 };
+let screenProbeSampleSequenceFrame = 0;
+const resetProbeReuse = () => {
+  screenProbeReusePass.reset();
+  screenProbeSampleSequenceFrame = 0;
+  mustRebuildCompositeMaterial = true;
+};
 const screenProbeFolder = gui.addFolder('Screen probes');
 screenProbeFolder
   .add(screenProbeParams, 'enabled')
   .name('Screen-probe GI')
-  .onChange(() => {
-    mustRebuildCompositeMaterial = true;
-  })
+  .onChange(resetProbeReuse)
   .listen?.();
 screenProbeFolder
   .add(screenProbeParams, 'useHiZ')
   .name('Hi-Z first')
+  .onChange(resetProbeReuse)
   .listen?.();
 screenProbeFolder
   .add(screenProbeParams, 'output', SCREEN_PROBE_OUTPUTS)
@@ -395,6 +406,53 @@ screenProbeFolder
 screenProbeFolder
   .add(screenProbeParams, 'samples', 1, 8, 1)
   .name('Directions per probe')
+  .onChange(resetProbeReuse)
+  .listen?.();
+
+const probeReuseParams = {
+  enabled: true,
+  temporal: true,
+  spatial: true,
+  spatialNeighbors: 4,
+  maxHistory: 16,
+  maxReservoirM: 32,
+  correctionClamp: 4.0,
+};
+const probeReuseFolder = gui.addFolder('Screen-probe ReSTIR reuse');
+probeReuseFolder
+  .add(probeReuseParams, 'enabled')
+  .name('Reservoir reuse')
+  .onChange(resetProbeReuse)
+  .listen?.();
+probeReuseFolder
+  .add(probeReuseParams, 'temporal')
+  .name('Temporal reuse')
+  .onChange(resetProbeReuse)
+  .listen?.();
+probeReuseFolder
+  .add(probeReuseParams, 'spatial')
+  .name('Spatial reuse')
+  .onChange(resetProbeReuse)
+  .listen?.();
+probeReuseFolder
+  .add(probeReuseParams, 'spatialNeighbors', 0, 4, 1)
+  .name('Spatial neighbors')
+  .onChange(resetProbeReuse)
+  .listen?.();
+probeReuseFolder
+  .add(probeReuseParams, 'maxHistory', 2, 32, 1)
+  .name('Temporal candidates')
+  .onChange(resetProbeReuse)
+  .listen?.();
+probeReuseFolder
+  .add(probeReuseParams, 'maxReservoirM', 4, 64, 1)
+  .name('Reservoir M cap')
+  .onChange(resetProbeReuse)
+  .listen?.();
+probeReuseFolder
+  .add(probeReuseParams, 'correctionClamp', 1, 8, 0.25)
+  .name('Weight correction cap')
+  .onChange(resetProbeReuse)
   .listen?.();
 
 const envIntensityController = integratorFolder
@@ -565,6 +623,8 @@ async function loadScene(sceneDef: SceneDefinition) {
   sceneBVH = null;
   screenProbePass = null;
   motionHistory.reset();
+  screenProbeReusePass.reset();
+  screenProbeSampleSequenceFrame = 0;
   dirLight = recreateDirectionalLight(scene, dirLight, dirLightDefaults);
   clearSceneContent(scene);
   setLight(dirLight);
@@ -780,6 +840,8 @@ window.addEventListener('resize', () => {
   // lazily reallocates its ping-pong textures at the new physical resolution.
   gbuffer.resize(renderer);
   motionHistory.reset();
+  screenProbeReusePass.reset();
+  screenProbeSampleSequenceFrame = 0;
 
   postProcessing.needsUpdate = true;
 
@@ -881,11 +943,34 @@ renderer.setAnimationLoop(() => {
     screenProbePass.run(renderer, camera, gbuffer, sceneBVH, dirLight, {
       samples: screenProbeParams.samples,
       useHiZ: screenProbeParams.useHiZ,
+      reconstruct: !probeReuseParams.enabled,
+      sampleSequenceFrame: probeReuseParams.enabled
+        ? screenProbeSampleSequenceFrame
+        : 0,
       envIntensity: giTransportParams.envIntensity,
       envLod: giTransportParams.envLod,
       directStrength: giTransportParams.giFromDirect,
       multiBounceStrength: effectiveMultiBounceStrength(),
     });
+
+    if (probeReuseParams.enabled) {
+      const currentProbeRadiance = screenProbePass.getProbeRadianceTexture();
+      const currentProbeGeometry = screenProbePass.getProbeGeometryTexture();
+      const temporalValidation = motionHistory.getValidationTexture();
+      if (currentProbeRadiance && currentProbeGeometry && temporalValidation) {
+        screenProbeReusePass.run(
+          renderer,
+          camera,
+          gbuffer,
+          currentProbeRadiance,
+          currentProbeGeometry,
+          temporalValidation,
+          probeReuseParams,
+        );
+        screenProbeSampleSequenceFrame =
+          (screenProbeSampleSequenceFrame + 1) >>> 0;
+      }
+    }
   }
 
   // Surfel health debug
@@ -897,11 +982,16 @@ renderer.setAnimationLoop(() => {
   // 5. Composite Final Image (Fullscreen Pass)
   const giTex = surfelResolve.getOutputTexture();
   const screenProbeTex = screenProbeParams.enabled
-    ? screenProbePass?.getOutputTexture()
+    ? probeReuseParams.enabled
+      ? screenProbeReusePass.getOutputTexture()
+      : screenProbePass?.getOutputTexture()
     : null;
   const screenProbeStatsTex = screenProbeParams.enabled
     ? screenProbePass?.getTraceStatsTexture()
     : null;
+  const probeReservoirMetadataTex =
+    screenProbeReusePass.getReservoirMetadataTexture();
+  const probeReuseDebugTex = screenProbeReusePass.getDebugTexture();
   const temporalValidationTex = motionHistory.getValidationTexture();
   let directLight;
   if (giTex) {
@@ -963,6 +1053,32 @@ renderer.setAnimationLoop(() => {
         1.0,
       );
       const hiZStepsDebug = vec4(traceStats.w, traceStats.w, traceStats.w, 1.0);
+      const reservoirMetadata: THREE.Node = probeReservoirMetadataTex
+        ? texture(probeReservoirMetadataTex, screenUV)
+        : vec4(0.0);
+      const reuseDiagnostics: THREE.Node = probeReuseDebugTex
+        ? texture(probeReuseDebugTex, screenUV)
+        : vec4(0.0);
+      const reservoirAge = reservoirMetadata.z.div(
+        Math.max(1, probeReuseParams.maxHistory),
+      );
+      const reservoirCandidates = reservoirMetadata.y.div(
+        Math.max(1, probeReuseParams.maxReservoirM),
+      );
+      const reuseAcceptanceDebug = vec4(
+        reuseDiagnostics.r,
+        reuseDiagnostics.g,
+        0.0,
+        1.0,
+      );
+      const reuseSource = reuseDiagnostics.b;
+      // Source legend: blue = current trace, green = temporal, red = spatial.
+      const reuseSourceDebug = vec4(
+        reuseSource.mul(2.0).sub(1.0).max(0.0),
+        float(1.0).sub(reuseSource.mul(2.0).sub(1.0).abs()),
+        float(1.0).sub(reuseSource.mul(2.0)).max(0.0),
+        1.0,
+      );
       const validationSample: THREE.Node = temporalValidationTex
         ? texture(temporalValidationTex, screenUV)
         : vec4(1.0, 0.0, 0.0, 0.0);
@@ -1052,6 +1168,44 @@ renderer.setAnimationLoop(() => {
         screenProbeParams.output === SCREEN_PROBE_OUTPUTS['Hi-Z steps']
       ) {
         postProcessing.outputNode = fxaa(hiZStepsDebug);
+        postProcessing.needsUpdate = true;
+      } else if (
+        screenProbeParams.enabled &&
+        probeReuseParams.enabled &&
+        screenProbeParams.output === SCREEN_PROBE_OUTPUTS['Reservoir age']
+      ) {
+        postProcessing.outputNode = fxaa(
+          vec4(reservoirAge, reservoirAge, reservoirAge, 1.0),
+        );
+        postProcessing.needsUpdate = true;
+      } else if (
+        screenProbeParams.enabled &&
+        probeReuseParams.enabled &&
+        screenProbeParams.output ===
+          SCREEN_PROBE_OUTPUTS['Reservoir candidates']
+      ) {
+        postProcessing.outputNode = fxaa(
+          vec4(
+            reservoirCandidates,
+            reservoirCandidates,
+            reservoirCandidates,
+            1.0,
+          ),
+        );
+        postProcessing.needsUpdate = true;
+      } else if (
+        screenProbeParams.enabled &&
+        probeReuseParams.enabled &&
+        screenProbeParams.output === SCREEN_PROBE_OUTPUTS['Reuse acceptance']
+      ) {
+        postProcessing.outputNode = fxaa(reuseAcceptanceDebug);
+        postProcessing.needsUpdate = true;
+      } else if (
+        screenProbeParams.enabled &&
+        probeReuseParams.enabled &&
+        screenProbeParams.output === SCREEN_PROBE_OUTPUTS['Reuse source']
+      ) {
+        postProcessing.outputNode = fxaa(reuseSourceDebug);
         postProcessing.needsUpdate = true;
       } else {
         switch (giParams.mode) {
