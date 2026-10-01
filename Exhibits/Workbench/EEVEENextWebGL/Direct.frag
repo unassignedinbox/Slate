@@ -142,7 +142,9 @@ float DirectionalShadow(vec3 P, vec3 N) {
     if (!uShadowsEnabled) return 1.0;
     float viewDepth = max(dot(P - uCameraPosition, uCameraForward), 0.0);
     int cascade = ShadowCascade(viewDepth);
-    vec4 clip = uShadowMatrix[cascade] * vec4(P + N * 0.012 + uSunDirection * 0.008, 1.0);
+    // The depth pass stores light-facing surfaces, so only a small normal lift is
+    // needed. A light-direction position offset would visibly detach the shadow.
+    vec4 clip = uShadowMatrix[cascade] * vec4(P + N * 0.004, 1.0);
     vec3 ndc = clip.xyz / max(clip.w, 1e-5);
     vec2 localUv = ndc.xy * 0.5 + 0.5;
     float reference = ndc.z * 0.5 + 0.5;
@@ -169,7 +171,7 @@ float PointPCF(vec3 P, vec3 N) {
     float distanceToLight = length(delta);
     vec3 direction = delta / max(distanceToLight, 1e-4);
     float reference = distanceToLight / uPointRange;
-    float bias = (0.018 + 0.035 * (1.0 - max(dot(N, -direction), 0.0))) / uPointRange;
+    float bias = (0.012 + 0.024 * (1.0 - max(dot(N, -direction), 0.0))) / uPointRange;
     vec3 axis = abs(direction.z) < 0.8 ? vec3(0, 0, 1) : vec3(0, 1, 0);
     vec3 tangent = normalize(cross(axis, direction));
     vec3 bitangent = cross(direction, tangent);
@@ -190,8 +192,8 @@ float TracePointRay(vec3 P, vec3 N, vec3 lightToReceiver, vec2 diskPoint) {
     float hemisphere = sqrt(max(1.0 - dot(diskPoint, diskPoint), 0.0));
     vec3 lightSample = uPointPosition + uPointRadius *
         (tangent * diskPoint.x + bitangent * diskPoint.y + lightToReceiver * hemisphere);
-    vec3 receiver = P + N * 0.018;
-    float depthBias = (0.018 + 0.03 * (1.0 - max(dot(N, -lightToReceiver), 0.0))) / uPointRange;
+    vec3 receiver = P + N * 0.006;
+    float depthBias = (0.012 + 0.024 * (1.0 - max(dot(N, -lightToReceiver), 0.0))) / uPointRange;
 
     for (int stepIndex = 0; stepIndex < MAX_SHADOW_STEPS; ++stepIndex) {
         if (stepIndex >= uShadowStepCount) break;

@@ -38,7 +38,7 @@
             <label class="SwitchControl"><input id="Reflections" type="checkbox" checked><span class="Track"><span></span></span><span><b>Sphere-probe reflections</b><small>Stable cubemap reflection; screen-space reflections disabled</small></span></label>
             <label class="SwitchControl"><input id="Shadows" type="checkbox" checked><span class="Track"><span></span></span><span><b>Virtual-shadow analogue</b><small>Stable sun clip atlas and local cube shadow</small></span></label>
             <label class="SwitchControl"><input id="SoftShadows" type="checkbox" checked><span class="Track"><span></span></span><span><b>Shadow-map ray tracing</b><small>Sample light shapes and traverse depth; off = PCF</small></span></label>
-            <label class="SwitchControl"><input id="Emissive" type="checkbox" checked><span class="Track"><span></span></span><span><b>Emissive mesh</b><small>Contributes while visible to screen-space rays</small></span></label>
+            <label class="SwitchControl"><input id="Emissive" type="checkbox" checked><span class="Track"><span></span></span><span><b>Emissive movers</b><small>Moving cyan bar plus three glowing ShaderBalls</small></span></label>
             <label class="SwitchControl"><input id="ProbeDebug" type="checkbox"><span class="Track"><span></span></span><span><b>Probe debug</b><small>Green valid samples; red rejected/flood-filled samples</small></span></label>
             <label class="RangeControl"><span><b>Shadow rays</b><output id="ShadowRayOutput">2 rays</output></span><input id="ShadowRays" type="range" min="1" max="4" value="2" step="1"></label>
             <label class="RangeControl"><span><b>Shadow trace steps</b><output id="ShadowStepOutput">8 steps</output></span><input id="ShadowSteps" type="range" min="4" max="16" value="8" step="4"></label>
@@ -65,6 +65,6 @@
     <section class="Disclosure"><h2>Scope and fidelity</h2><p>This is an architectural WebGL2 reconstruction, not Blender source compiled for the browser. WebGL2 cannot expose EEVEE’s compute-driven sparse virtual-page allocator, so the exhibit preserves its important behaviour with a fixed clip-atlas analogue. Its soft-shadow path follows EEVEE’s light-shape sampling and light-to-receiver depth traversal, but uses fixed-resident single-layer maps rather than Blender’s sparse VSM pages and compute passes. It does preserve the baked/dynamic boundary: volume probes are static, direct lights and shadows are live, screen traces see only camera-visible information, and probe fallback fills misses.</p></section>
     <footer><span>Exact Slate ShaderBall geometry · offline C++ probe baker · no hidden path tracer</span><span>Blender and EEVEE are trademarks of their respective owners; this is an independent technical study</span></footer>
 </main>
-<script type="module" src="EEVEENext.js?revision=4"></script>
+<script type="module" src="EEVEENext.js?revision=5"></script>
 </body>
 </html>

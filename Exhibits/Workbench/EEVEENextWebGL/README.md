@@ -5,7 +5,7 @@ Open `EEVEENext.html` over HTTP. This exhibit is an independent architectural re
 ## Included instead of implied
 
 - **Deferred material G-buffer:** world position, normal/roughness, albedo/metalness, and depth feed a GGX direct-light pass.
-- **Direct shadows:** a 4096² depth atlas contains three stable 2048² directional clip/cascade tiles, while a moving local light owns a six-face 512² radial-depth shadow. The soft path stochastically samples the sun disk or local-light sphere and traverses from that light sample toward the receiver against the single-layer depth representation. One to four rays, four to sixteen traversal steps, receiver jitter, world-locked sampling, and automatic slope bias are explicit. A 3×3 directional/eight-tap cube PCF path remains available as a hard/soft comparison and fallback.
+- **Direct shadows:** a 4096² depth atlas contains three stable 2048² directional clip/cascade tiles, while a moving local light owns a six-face 512² radial-depth shadow. Light-facing surfaces are stored so thick casters keep contact with their shadows instead of inheriting a back-face offset. The soft path stochastically samples the sun disk or local-light sphere and traverses from that light sample toward the receiver against the single-layer depth representation. One to four rays, four to sixteen traversal steps, receiver jitter, world-locked sampling, and automatic slope bias are explicit. A 3×3 directional/eight-tap cube PCF path remains available as a hard/soft comparison and fallback.
 - **Baked volume light probes:** `EeveeProbeCache.bin` contains a 12×10×6 static cache produced by `EEVEEReference.cpp`. Every probe stores RGB L1 directional irradiance, six directional visibility reaches, validity, and sky visibility.
 - **Probe leak control:** probes inside geometry are rejected and flood-filled at lower confidence. Runtime interpolation manually weighs all eight neighbours and rejects a probe when its directional reach cannot see the receiver.
 - **Screen tracing:** half-resolution cosine rays march camera-visible geometry. Rays that leave the screen or miss fall back to the volume cache.
@@ -13,7 +13,7 @@ Open `EEVEENext.html` over HTTP. This exhibit is an independent architectural re
 - **Fast GI approximation:** a screen-space horizon-style visibility term modulates distant probe/ray lighting.
 - **Specular indirect:** glossy lighting uses a separately captured, mip-filtered sphere probe with an explicit recapture control. Screen-space reflections are intentionally disabled; diffuse screen-traced GI remains available.
 - **Faithful baked/dynamic boundary:** moving objects receive cached diffuse light but do not alter it. Moving the sun updates direct shadows immediately and marks the indirect cache stale. Visible moving emission can contribute through screen traces but does not become an off-screen baked source.
-- **Exact Slate ShaderBall:** the same `Exhibits/Assets/ShaderBall/ShaderBall.mesh` is used for animated objects.
+- **Exact Slate ShaderBall:** the same `Exhibits/Assets/ShaderBall/ShaderBall.mesh` is used for animated objects, including three additional coloured emissive movers that remain outside the static probe bake.
 
 ## Why the shadow system is an analogue
 
