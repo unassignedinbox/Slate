@@ -338,4 +338,11 @@ if(FRONTIER_BUILD_EXPERIMENTAL_SURFEL_GI)
         Experimental/SurfelGI/Tests/SurfelGIHostTests.cpp
     )
     target_link_libraries(FrontierSurfelGIContract PRIVATE FrontierSurfelGIExperimental)
+
+    # Dependency-free CPU scene preview: mirrors ShaderBallStructure's authored grid for reproducible captures when a
+    # Vulkan SDK/GPU is unavailable. It is intentionally labelled a preview, not a GPU SurfelGI capture.
+    add_executable(FrontierShaderBallPreview
+        Experimental/SurfelGI/Tools/RenderShaderBallPreview.cpp
+    )
+    target_compile_features(FrontierShaderBallPreview PRIVATE cxx_std_20)
 endif()
