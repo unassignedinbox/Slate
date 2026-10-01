@@ -830,7 +830,11 @@ function rebuild(full = true) {
   const tex = c => { const t = new THREE.CanvasTexture(c); t.flipY = false; t.wrapS = THREE.RepeatWrapping; t.anisotropy = 8; t.colorSpace = THREE.NoColorSpace; return t; };
   const colTex = tex(maps.color); colTex.colorSpace = THREE.SRGBColorSpace;
   const usePoly = T.meshMode === 'poly' && !!window.ClipperLib;
-  treadMat = new THREE.MeshStandardMaterial({ map: colTex, normalMap: tex(maps.normal), normalScale: new THREE.Vector2(usePoly ? 0.35 : 0.7, usePoly ? 0.35 : 0.7), roughnessMap: tex(maps.rough), roughness: 1, metalness: 0.0 });
+  // Polygon tread already carries the real groove walls and corner normals. Applying a
+  // tangent-space height-map normal to those discontinuous faces can flip highlights at
+  // sharp block corners, so reserve that normal map for the height-map fallback only.
+  const treadNormal = usePoly ? null : tex(maps.normal);
+  treadMat = new THREE.MeshStandardMaterial({ map: colTex, normalMap: treadNormal, normalScale: new THREE.Vector2(treadNormal ? 0.7 : 0, treadNormal ? 0.7 : 0), roughnessMap: tex(maps.rough), roughness: 1, metalness: 0.0 });
   const sw = buildSidewall(true); const sideTex = tex(sw.color); sideTex.colorSpace = THREE.SRGBColorSpace;
   const sideMat = new THREE.MeshStandardMaterial({ map: sideTex, normalMap: tex(sw.normal), normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.8, metalness: 0 });
   tyreMesh = new THREE.Group(); let triCount = 0;
