@@ -14,7 +14,7 @@
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);overflow:hidden}
-  #app{display:grid;grid-template-columns:320px 1fr 340px;grid-template-rows:60px 1fr 200px;height:100vh;gap:10px;padding:10px;background:radial-gradient(1200px 600px at 60% -10%,#1a1c20 0%,var(--bg) 60%)}
+  #app{display:grid;grid-template-columns:320px 1fr 340px;grid-template-rows:60px 1fr;height:100vh;gap:10px;padding:10px;background:radial-gradient(1200px 600px at 60% -10%,#1a1c20 0%,var(--bg) 60%)}
   header{grid-column:1/4;display:flex;align-items:center;gap:8px;padding:0 6px}
   .logo{width:34px;height:34px;border-radius:50%;background:conic-gradient(from 210deg,var(--txt) 0 12%,transparent 12% 25%,var(--txt) 25% 37%,transparent 37% 50%,var(--txt) 50% 62%,transparent 62% 75%,var(--txt) 75% 87%,transparent 87%);-webkit-mask:radial-gradient(circle,transparent 30%,#000 32%);mask:radial-gradient(circle,transparent 30%,#000 32%);margin-right:10px;opacity:.9}
   .tabs{display:flex;gap:4px}
@@ -93,10 +93,10 @@
   .layer .nm small{color:var(--mut);font-weight:300;margin-left:4px}
   .layer .ic{width:3px;height:14px;border-radius:2px;flex:0 0 3px}
   .layer button{padding:0 6px;line-height:20px;background:transparent;color:var(--mut)} .layer button:hover{color:#fff;background:var(--card3)}
-  #bottom{grid-column:1/4;display:flex;flex-direction:column;padding:14px 18px 12px}
-  #bottomHead{display:flex;align-items:center;gap:12px;color:var(--mut);margin-bottom:8px}
-  #bottomHead h2{margin:0}
-  #treadView{flex:1 1 0;min-height:0;width:100%;height:100%;display:block;border-radius:14px;background:#111}
+  #treadView{width:100%;height:150px;display:block;border-radius:14px;background:#111}
+  #treadStrip{width:100%;height:26px;display:block;border-radius:8px;background:#111;margin-top:6px}
+  #profile{cursor:crosshair;touch-action:none}
+  .mode.sm span{padding:4px 9px;font-size:11px}
   .hint{color:var(--mut);font-size:12px;line-height:1.5;margin:4px 0}
   code{background:var(--card2);padding:1px 6px;border-radius:6px;font-size:11px;font-family:ui-monospace,Menlo,monospace}
   #toast{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);background:#fff;color:#111;padding:8px 16px;border-radius:999px;opacity:0;transition:opacity .3s;pointer-events:none;font-weight:400}
@@ -125,8 +125,15 @@
         <div id="tyreParams"></div>
       </div>
       <div class="card" style="--bar:var(--yellow);margin-top:10px">
-        <h2>Cross-section</h2>
-        <canvas id="profile" width="280" height="190" style="width:100%;height:190px;background:#111;border-radius:14px"></canvas>
+        <h2>Cross-section <span class="r">drag the handles</span></h2>
+        <canvas id="profile" width="280" height="210" style="width:100%;height:210px;background:#111;border-radius:14px"></canvas>
+        <div id="profileParams"></div>
+      </div>
+      <div class="card" style="--bar:var(--red);margin-top:10px">
+        <h2>Tread materials <div class="mode sm" id="treadMode"><span class="on" data-m="color">Colour</span><span data-m="height">Depth</span><span data-m="normal">Normal</span><span data-m="rough">Rough</span></div></h2>
+        <canvas id="treadView"></canvas>
+        <canvas id="treadStrip"></canvas>
+        <div class="hint" id="treadDims" style="margin-top:6px"></div>
       </div>
     </div>
     <div class="panel" data-panel="look">
@@ -170,12 +177,6 @@
     </div>
   </aside>
 
-  <div id="bottom" class="card" style="--bar:var(--green)">
-    <div id="bottomHead"><h2>Unwrapped tread</h2><span id="treadDims"></span>
-      <div class="mode" id="treadMode"><span class="on" data-m="color">Colour</span><span data-m="height">Depth</span><span data-m="normal">Normal</span><span data-m="rough">Roughness</span></div>
-    </div>
-    <canvas id="treadView"></canvas>
-  </div>
 </div>
 
 <script src="https://unpkg.com/clipper-lib@6.4.2/clipper.js"></script>
@@ -829,33 +830,72 @@ function updateHud(d) {
   document.getElementById('sizePills').innerHTML = `<span class="pill n">sidewall ${d.H.toFixed(0)} mm</span><span class="pill n">tread ${(d.treadHalf * 2).toFixed(0)} mm</span><span class="pill ${remaining < 1.6 ? 'r' : 'g'}">${T.wear ? '-' + worn.toFixed(1) + ' mm worn' : 'new'}</span>`;
   document.getElementById('presetCount').textContent = PRESETS.length + ' designs';
   document.getElementById('wearVal').textContent = T.wear === 0 ? 'New' : T.wear >= 1 ? 'Bald' : Math.round(T.wear * 100) + '%';
-  document.getElementById('treadDims').textContent = `— circumference ${(d.circ / 1000).toFixed(2)} m × across ${(d.acrossHalf * 2).toFixed(0)} mm (incl. shoulders) · ${patternMap.k.toFixed(2)} px/mm`;
 }
 
+const profView = { X: null, Y: null, sc: 1, handles: [] };
+function profileHandles(d) {
+  const sr = d.sr, s45 = Math.sin(Math.PI / 4), c45 = Math.cos(Math.PI / 4);
+  const list = [
+    { id: 'tread', x: d.treadHalf, r: d.Rout - T.crown, label: 'tread edge / crown', color: '#38c46d' },
+    { id: 'shoulder', x: d.treadHalf + sr * s45, r: d.Rout - T.crown - sr + sr * c45, label: 'shoulder radius', color: '#d6c93a' },
+    { id: 'bulge', x: d.halfW * (0.6 + 0.4 * T.bulge), r: d.Rrim + d.H * 0.52, label: 'sidewall bulge', color: '#f0a04b' },
+    { id: 'bead', x: d.bw, r: d.Rrim + 2, label: 'rim width', color: '#9aa4ff' },
+    { id: 'depth', x: 0, r: d.Rout - T.treadDepth, label: 'tread depth', color: '#e5423f' },
+  ];
+  return list.flatMap(h => h.x === 0 ? [h] : [h, Object.assign({}, h, { x: -h.x, mirror: true })]);
+}
 function drawProfile(d, prof) {
   const c = document.getElementById('profile'), ctx = c.getContext('2d'); const W = c.width, H = c.height; ctx.clearRect(0, 0, W, H);
   const worn = T.wear * T.treadDepth;
-  const sc = Math.min((W - 40) / (T.width * 1.15), (H - 30) / (d.Rout - d.Rrim + 40)); const ox = W / 2, oy = H - 12;
-  const X = x => ox + x * sc, Y = r => oy - (r - d.Rrim + 20) * sc;
+  const sc = Math.min((W - 44) / (T.width * 1.15), (H - 40) / (d.Rout - d.Rrim + 40)); const ox = W / 2, oy = H - 16;
+  const X = x => ox + x * sc, Y = r => oy - (r - d.Rrim + 20) * sc; Object.assign(profView, { X, Y, sc, ox, oy, d });
   ctx.strokeStyle = '#2b2f38'; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(X(-d.bw - 10), Y(d.Rrim)); ctx.lineTo(X(d.bw + 10), Y(d.Rrim)); ctx.stroke(); ctx.setLineDash([]);
   ctx.fillStyle = '#9aa0ab'; ctx.fillRect(X(-d.bw), Y(d.Rrim) - 3, (2 * d.bw) * sc, 6);
-  ctx.beginPath(); prof.forEach((p, i) => { const rr = p.r - (p.zone === 'tread' ? (T.treadDepth * 0.35 + worn) * p.w : 0); i ? ctx.lineTo(X(p.x), Y(rr)) : ctx.moveTo(X(p.x), Y(rr)); }); ctx.closePath();
+  ctx.beginPath(); prof.forEach((p, i) => { const rr = p.r - (p.zone === 'tread' ? worn * p.w : 0); i ? ctx.lineTo(X(p.x), Y(rr)) : ctx.moveTo(X(p.x), Y(rr)); }); ctx.closePath();
   ctx.fillStyle = '#1e2024'; ctx.fill(); ctx.strokeStyle = '#e6e7ea'; ctx.lineWidth = 1.2; ctx.stroke();
-  ctx.strokeStyle = '#d6c93a'; ctx.lineWidth = 1; ctx.beginPath(); prof.filter(p => p.zone === 'tread').forEach((p, i) => { const rr = p.r - (T.treadDepth + worn) * p.w; i ? ctx.lineTo(X(p.x), Y(rr)) : ctx.moveTo(X(p.x), Y(rr)); }); ctx.stroke();
+  ctx.strokeStyle = '#d6c93a'; ctx.lineWidth = 1; ctx.setLineDash([2, 3]); ctx.beginPath(); prof.filter(p => p.zone === 'tread').forEach((p, i) => { const rr = p.r - (T.treadDepth + worn) * p.w; i ? ctx.lineTo(X(p.x), Y(rr)) : ctx.moveTo(X(p.x), Y(rr)); }); ctx.stroke(); ctx.setLineDash([]);
+  // handles
+  profView.handles = profileHandles(d);
+  for (const h of profView.handles) {
+    const hx = X(h.x), hy = Y(h.r); const active = profView.drag && profView.drag.id === h.id;
+    ctx.beginPath(); ctx.arc(hx, hy, active ? 7 : 5, 0, Math.PI * 2); ctx.fillStyle = '#111'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = h.color; ctx.stroke();
+    if (!h.mirror) { ctx.fillStyle = h.color; ctx.font = '300 10px Outfit, system-ui'; ctx.textAlign = h.id === 'depth' ? 'center' : 'left'; ctx.fillText(h.label, hx + (h.id === 'depth' ? 0 : 9), hy + (h.id === 'depth' ? 14 : -8)); }
+  }
   ctx.fillStyle = '#8a8d94'; ctx.font = '300 11px Outfit, system-ui'; ctx.textAlign = 'center';
-  ctx.fillText(`${T.width} mm`, ox, Y(d.Rout) - 8); ctx.fillText(`rim ${T.rim}"`, ox, oy - 4);
-  ctx.textAlign = 'left'; ctx.fillText(`${d.H.toFixed(0)}`, X(d.halfW) + 6, (Y(d.Rout) + Y(d.Rrim)) / 2);
-  ctx.fillStyle = '#d6c93a'; ctx.fillText(`tread ${T.treadDepth}mm`, 6, 12); ctx.fillStyle = '#8b91a0'; ctx.fillText(`crown ${T.crown}mm · shoulder R${d.sr.toFixed(0)}`, 6, 24);
+  ctx.fillText(`${T.width} mm`, ox, Y(d.Rout) - 10); ctx.fillText(`rim ${T.rim}" · ${(d.bw * 2).toFixed(0)} mm`, ox, oy - 4);
+  ctx.textAlign = 'left'; ctx.fillText(`${d.H.toFixed(0)} mm`, X(d.halfW) + 10, (Y(d.Rout) + Y(d.Rrim)) / 2);
+  ctx.textAlign = 'right'; ctx.fillStyle = '#5c5f66'; ctx.fillText(`crown ${T.crown.toFixed(1)} · R${d.sr.toFixed(0)} · depth ${T.treadDepth}`, W - 8, 14);
 }
-
+(function initProfileEditor() {
+  const c = document.getElementById('profile'); const clamp = THREE.MathUtils.clamp;
+  const toCanvas = e => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height]; };
+  const pick = (px, py) => { let best = null, bd = 12; for (const h of profView.handles) { const dd = Math.hypot(profView.X(h.x) - px, profView.Y(h.r) - py); if (dd < bd) { bd = dd; best = h; } } return best; };
+  c.addEventListener('pointermove', e => { if (!profView.drag) { c.style.cursor = pick(...toCanvas(e)) ? 'grab' : 'crosshair'; return; }
+    const [px, py] = toCanvas(e); const d = profView.d; const sgn = profView.drag.mirror ? -1 : 1;
+    const xmm = sgn * (px - profView.ox) / profView.sc, rmm = d.Rrim - 20 + (profView.oy - py) / profView.sc;
+    switch (profView.drag.id) {
+      case 'tread': T.treadFrac = clamp(xmm / d.halfW, 0.7, 0.98); T.crown = clamp(d.Rout - rmm, 0, 8); break;
+      case 'shoulder': T.shoulder = clamp((xmm - d.treadHalf) / Math.sin(Math.PI / 4), 4, 40); break;
+      case 'bulge': T.bulge = clamp((xmm / d.halfW - 0.6) / 0.4, 0.4, 1.6); break;
+      case 'bead': T.rimWidthFrac = clamp(xmm / d.halfW, 0.6, 0.92); break;
+      case 'depth': T.treadDepth = clamp(Math.round((d.Rout - rmm) * 2) / 2, 2, 20); break;
+    }
+    const nd = dims(); drawProfile(nd, buildProfile(nd)); schedule(); });
+  c.addEventListener('pointerdown', e => { const h = pick(...toCanvas(e)); if (!h) return; profView.drag = h; c.setPointerCapture(e.pointerId); c.style.cursor = 'grabbing'; });
+  const end = () => { if (!profView.drag) return; profView.drag = null; c.style.cursor = 'crosshair'; buildTyreUI(); const nd = dims(); drawProfile(nd, buildProfile(nd)); };
+  c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+})();
 function drawTreadView() {
-  const c = document.getElementById('treadView'); const r = c.getBoundingClientRect(); c.width = Math.round(r.width * devicePixelRatio); c.height = Math.round(r.height * devicePixelRatio);
-  const ctx = c.getContext('2d'); const src = maps[UI.treadMode]; const s = Math.min(c.width / src.width, c.height / src.height);
-  ctx.fillStyle = '#111'; ctx.fillRect(0, 0, c.width, c.height); ctx.imageSmoothingQuality = 'high';
-  const w = src.width * s, h = src.height * s; ctx.filter = UI.treadMode === 'color' ? 'brightness(2.6) contrast(1.05)' : 'none'; ctx.drawImage(src, (c.width - w) / 2, (c.height - h) / 2, w, h);
-  ctx.filter = 'none'; ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.strokeRect((c.width - w) / 2 + 0.5, (c.height - h) / 2 + 0.5, w - 1, h - 1);
+  const src = maps[UI.treadMode]; const bright = UI.treadMode === 'color' ? 'brightness(2.6) contrast(1.05)' : 'none';
+  const c = document.getElementById('treadView'); const r = c.getBoundingClientRect(); if (!r.width) return; c.width = Math.round(r.width * devicePixelRatio); c.height = Math.round(r.height * devicePixelRatio);
+  const ctx = c.getContext('2d'); ctx.imageSmoothingQuality = 'high'; ctx.filter = bright;
+  const cropW = Math.min(src.width, Math.round(src.height * c.width / c.height));     // a window of the circumference at true aspect
+  ctx.drawImage(src, 0, 0, cropW, src.height, 0, 0, c.width, c.height); ctx.filter = 'none';
+  const st = document.getElementById('treadStrip'); const rs = st.getBoundingClientRect(); st.width = Math.round(rs.width * devicePixelRatio); st.height = Math.round(rs.height * devicePixelRatio);
+  const sx = st.getContext('2d'); sx.filter = bright; sx.drawImage(src, 0, 0, st.width, st.height); sx.filter = 'none';
+  sx.strokeStyle = '#fff'; sx.lineWidth = 2; sx.strokeRect(1, 1, st.width * cropW / src.width - 2, st.height - 2);
+  const d = dims(); document.getElementById('treadDims').textContent = `Showing ${(cropW / patternMap.k).toFixed(0)} mm of ${(d.circ).toFixed(0)} mm circumference · map ${patternMap.W}×${patternMap.H} @ ${patternMap.k.toFixed(2)} px/mm`;
 }
-
 function resize() { const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); if (maps) drawTreadView(); }
 new ResizeObserver(resize).observe(view); resize();
 let last = performance.now();
@@ -887,15 +927,15 @@ function buildTyreUI() {
   const h = t => { const e = document.createElement('div'); e.className = 'sec'; e.textContent = t; p.appendChild(e); };
   h('Size');
   slider(p, 'Section width (mm)', T, 'width', 135, 405, 5); slider(p, 'Aspect ratio (%)', T, 'aspect', 20, 85, 5); slider(p, 'Rim diameter (in)', T, 'rim', 12, 24, 1);
-  h('Profile');
-  slider(p, 'Tread depth (mm)', T, 'treadDepth', 2, 20, 0.5); slider(p, 'Tread width fraction', T, 'treadFrac', 0.7, 0.98, 0.01, v => v.toFixed(2));
-  slider(p, 'Crown drop (mm)', T, 'crown', 0, 8, 0.1, v => v.toFixed(1)); slider(p, 'Shoulder radius (mm)', T, 'shoulder', 4, 40, 1);
-  slider(p, 'Sidewall bulge', T, 'bulge', 0.4, 1.6, 0.01, v => v.toFixed(2)); slider(p, 'Rim width fraction', T, 'rimWidthFrac', 0.6, 0.92, 0.01, v => v.toFixed(2));
   h('Wear');
   slider(p, 'Wear bias (edge↔centre)', T, 'wearBias', -1, 1, 0.01, v => v.toFixed(2));
   h('Tread mesh');
   select(p, 'Mesh mode', T, 'meshMode', ['poly', 'heightmap']); slider(p, 'Polygon detail (mm)', T, 'polyDetail', 3, 16, 0.5, v => v.toFixed(1));
   slider(p, 'Segments around', T, 'radial', 180, 1440, 20); slider(p, 'Segments across (heightmap)', T, 'across', 32, 192, 8);
+  const pp = document.getElementById('profileParams'); pp.innerHTML = '';
+  slider(pp, 'Tread depth (mm)', T, 'treadDepth', 2, 20, 0.5); slider(pp, 'Tread width fraction', T, 'treadFrac', 0.7, 0.98, 0.01, v => v.toFixed(2));
+  slider(pp, 'Crown drop (mm)', T, 'crown', 0, 8, 0.1, v => v.toFixed(1)); slider(pp, 'Shoulder radius (mm)', T, 'shoulder', 4, 40, 1);
+  slider(pp, 'Sidewall bulge', T, 'bulge', 0.4, 1.6, 0.01, v => v.toFixed(2)); slider(pp, 'Rim width fraction', T, 'rimWidthFrac', 0.6, 0.92, 0.01, v => v.toFixed(2));
   const l = document.getElementById('lookParams'); l.innerHTML = '';
   color(l, 'Rubber colour', T, 'rubber'); select(l, 'Lettering colour', T, 'letter', ['white', 'yellow', 'red', 'blue', 'black']); check(l, 'Sidewall lettering', T, 'lettering');
   const b = document.createElement('div'); b.className = 'row'; b.innerHTML = '<label>Brand</label><input type="text" value="' + T.brand + '">'; b.querySelector('input').oninput = e => { T.brand = e.target.value; schedule(); }; l.appendChild(b);
