@@ -489,10 +489,10 @@ async function BringRenderer()
     ] = await Promise.all([
         LoadBinary(GeometryAddress),
         LoadBinary(HierarchyAddress),
-        LoadText("SurfelIntegrate.wgsl?revision=3"),
-        LoadText("SurfelRaster.wgsl?revision=3"),
-        LoadText("SurfelPresent.wgsl?revision=3"),
-        LoadText("SurfelOverlay.wgsl?revision=3"),
+        LoadText("SurfelIntegrate.wgsl?revision=4"),
+        LoadText("SurfelRaster.wgsl?revision=4"),
+        LoadText("SurfelPresent.wgsl?revision=4"),
+        LoadText("SurfelOverlay.wgsl?revision=4"),
     ]);
 
     const Geometry = DecodeGeometry(GeometryBinary);

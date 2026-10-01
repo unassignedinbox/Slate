@@ -133,7 +133,7 @@ fn SunVisibility(Position: vec3f, Normal: vec3f) -> f32
         return 1.0;
     }
     let Bias = 0.0015 + 0.003 * (1.0 - max(dot(Normal, Presentation.SunDirectionIntensity.xyz), 0.0));
-    return textureSampleCompare(ShadowImage, ShadowComparison, TexturePosition, LightNdc.z - Bias);
+    return textureSampleCompareLevel(ShadowImage, ShadowComparison, TexturePosition, LightNdc.z - Bias);
 }
 
 fn Fresnel(SpecularZero: vec3f, Cosine: f32) -> vec3f
