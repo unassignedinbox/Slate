@@ -21,7 +21,8 @@ Expected result:
 
 ```text
 Files .../src/content.ts and .../src/content.ts differ
+Only in .../src: mainVisibility.ts
 Only in .../src: shaderBallScene.ts
 ```
 
-No surfel algorithm source differs. `content.ts` changes only the scene-preset import/list; `shaderBallScene.ts` supplies the requested ShaderBalls and light-lab geometry.
+No pinned surfel algorithm source differs. `content.ts` changes the scene-preset list, `shaderBallScene.ts` supplies the ShaderBalls/light lab, and `mainVisibility.ts` is a derived host adding the final GTAO visibility raster while the original `main.ts` remains unchanged.

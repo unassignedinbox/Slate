@@ -65,10 +65,8 @@ function addBox(
     makeNodeStandard(colour, roughness, metalness),
   );
   mesh.position.set(...position);
-  // This exhibit deliberately has no raster shadow maps. Visibility for the
-  // surfel transport remains the original Webgiya BVH ray query.
-  mesh.castShadow = false;
-  mesh.receiveShadow = false;
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
   scene.add(mesh);
   return mesh;
 }
@@ -147,11 +145,27 @@ export async function populateShaderBallSurfelScene(
     );
     mesh.position.set(...ball.position);
     mesh.scale.setScalar(ball.scale);
-    mesh.castShadow = false;
-    mesh.receiveShadow = false;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     scene.add(mesh);
   }
 
   dirLight.color.setRGB(1.0, 0.91, 0.78);
-  dirLight.castShadow = false;
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.set(4096, 4096);
+  dirLight.shadow.camera.near = 0.1;
+  dirLight.shadow.camera.far = 80;
+  dirLight.shadow.camera.left = -12;
+  dirLight.shadow.camera.right = 12;
+  dirLight.shadow.camera.top = 10;
+  dirLight.shadow.camera.bottom = -10;
+  dirLight.shadow.bias = -0.00008;
+  dirLight.shadow.normalBias = 0.018;
+  dirLight.shadow.radius = 2;
+  dirLight.shadow.camera.updateProjectionMatrix();
+
+  // Low-frequency ambient fill matches the role of the environment while the
+  // camera-space visibility raster supplies local occlusion.
+  const ambient = new THREE.HemisphereLight(0xc7dcff, 0x2a2119, 0.2);
+  scene.add(ambient);
 }
