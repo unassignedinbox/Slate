@@ -190,12 +190,8 @@ fn ShadowProjection(Cascade: u32) -> mat4x4f
     return Frame.ShadowProjection2;
 }
 
-fn SunVisibility(Position: vec3f, Normal: vec3f) -> f32
+fn CascadeVisibility(Position: vec3f, Normal: vec3f, Cascade: u32) -> f32
 {
-    let ViewDepth = max(dot(Position - Frame.CameraPosition.xyz, Frame.CameraForwardTan.xyz), 0.0);
-    var Cascade = 0u;
-    if (ViewDepth > Frame.ShadowSplits.x) { Cascade = 1u; }
-    if (ViewDepth > Frame.ShadowSplits.y) { Cascade = 2u; }
     let ReceiverPosition = Position + Normal * 0.006 + Frame.SunDirectionIntensity.xyz * 0.008;
     let Clip = ShadowProjection(Cascade) * vec4f(ReceiverPosition, 1.0);
     let Ndc = Clip.xyz / max(Clip.w, 0.0001);
@@ -229,6 +225,48 @@ fn SunVisibility(Position: vec3f, Normal: vec3f) -> f32
     }
     let Filtered = Visibility / max(Weight, 1.0);
     return smoothstep(0.08, 0.92, Filtered);
+}
+
+fn SunVisibility(Position: vec3f, Normal: vec3f) -> f32
+{
+    let ViewDepth = max(dot(Position - Frame.CameraPosition.xyz, Frame.CameraForwardTan.xyz), 0.0);
+    let NearBlendWidth = 1.25;
+    let FarBlendWidth = 3.0;
+    if (ViewDepth < Frame.ShadowSplits.x - NearBlendWidth)
+    {
+        return CascadeVisibility(Position, Normal, 0u);
+    }
+    if (ViewDepth < Frame.ShadowSplits.x + NearBlendWidth)
+    {
+        let Blend = smoothstep(
+            Frame.ShadowSplits.x - NearBlendWidth,
+            Frame.ShadowSplits.x + NearBlendWidth,
+            ViewDepth
+        );
+        return mix(
+            CascadeVisibility(Position, Normal, 0u),
+            CascadeVisibility(Position, Normal, 1u),
+            Blend
+        );
+    }
+    if (ViewDepth < Frame.ShadowSplits.y - FarBlendWidth)
+    {
+        return CascadeVisibility(Position, Normal, 1u);
+    }
+    if (ViewDepth < Frame.ShadowSplits.y + FarBlendWidth)
+    {
+        let Blend = smoothstep(
+            Frame.ShadowSplits.y - FarBlendWidth,
+            Frame.ShadowSplits.y + FarBlendWidth,
+            ViewDepth
+        );
+        return mix(
+            CascadeVisibility(Position, Normal, 1u),
+            CascadeVisibility(Position, Normal, 2u),
+            Blend
+        );
+    }
+    return CascadeVisibility(Position, Normal, 2u);
 }
 
 fn Fresnel(SpecularZero: vec3f, Cosine: f32) -> vec3f

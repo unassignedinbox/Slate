@@ -68,6 +68,7 @@ struct BlockerCell
     Axis1: vec4f,
 };
 struct BlockerExtent { Cells: array<BlockerCell>, };
+struct MomentExtent { Entries: array<vec2f>, };
 
 @group(0) @binding(0) var<uniform> Frame: FrameUniforms;
 @group(0) @binding(1) var<storage, read> Surfels: SurfelExtent;
@@ -80,6 +81,9 @@ struct BlockerExtent { Cells: array<BlockerCell>, };
 @group(0) @binding(8) var<storage, read_write> Reservoirs: ReservoirExtent;
 @group(0) @binding(9) var<storage, read> HistoryVolume: VolumeExtent;
 @group(0) @binding(10) var<storage, read_write> DilatedBlockers: BlockerExtent;
+@group(0) @binding(11) var<storage, read> SourceHistoryVolume: VolumeExtent;
+@group(0) @binding(12) var<storage, read> PreviousSourceMoments: MomentExtent;
+@group(0) @binding(13) var<storage, read_write> CurrentSourceMoments: MomentExtent;
 
 const VolumeResolution: u32 = 40u;
 const CellsPerCascade: u32 = 64000u;
@@ -172,6 +176,13 @@ fn InjectBlocker(Position: vec3f, Normal: vec3f)
             AddFixed(Base + 12u + Axis, Directional[Axis]);
         }
     }
+}
+
+@compute @workgroup_size(64)
+fn ClearReservoirs(@builtin(global_invocation_id) Global: vec3u)
+{
+    if (Global.x >= CellsPerCascade * 3u) { return; }
+    atomicStore(&Reservoirs.Entries[Global.x], 0u);
 }
 
 @compute @workgroup_size(64)
@@ -286,11 +297,44 @@ fn IsDynamic(Position: vec3f, CellRadius: f32) -> bool
         || InsideBox(Position, Frame.MotionMin7, Frame.MotionMax7, CellRadius);
 }
 
+fn EmptyVolumeCell() -> VolumeCell
+{
+    return VolumeCell(vec4f(0.0), vec4f(0.0), vec4f(0.0));
+}
+
 fn HistoryAt(Position: vec3f, Cascade: u32) -> VolumeCell
 {
     let Located = LocateCell(Position, PreviousCascadeOrigin(Cascade));
-    if (Located.w == 0) { return VolumeCell(vec4f(0.0), vec4f(0.0), vec4f(0.0)); }
+    if (Located.w == 0) { return EmptyVolumeCell(); }
     return HistoryVolume.Cells[CellNumber(Located.xyz, Cascade)];
+}
+
+fn SourceHistoryAt(Position: vec3f, Cascade: u32) -> VolumeCell
+{
+    let Located = LocateCell(Position, PreviousCascadeOrigin(Cascade));
+    if (Located.w == 0) { return EmptyVolumeCell(); }
+    return SourceHistoryVolume.Cells[CellNumber(Located.xyz, Cascade)];
+}
+
+fn SourceMomentsAt(Position: vec3f, Cascade: u32) -> vec2f
+{
+    let Located = LocateCell(Position, PreviousCascadeOrigin(Cascade));
+    if (Located.w == 0) { return vec2f(0.0); }
+    return PreviousSourceMoments.Entries[CellNumber(Located.xyz, Cascade)];
+}
+
+fn CellEnergy(Cell: VolumeCell) -> f32
+{
+    return dot(vec3f(Cell.Red.x, Cell.Green.x, Cell.Blue.x), vec3f(0.2126, 0.7152, 0.0722));
+}
+
+fn BlendCell(Previous: VolumeCell, Current: VolumeCell, Weight: f32) -> VolumeCell
+{
+    return VolumeCell(
+        mix(Previous.Red, Current.Red, Weight),
+        mix(Previous.Green, Current.Green, Weight),
+        mix(Previous.Blue, Current.Blue, Weight)
+    );
 }
 
 @compute @workgroup_size(64)
@@ -308,7 +352,6 @@ fn NormalizeMain(@builtin(global_invocation_id) Global: vec3u)
         ExchangeFixed(Base + 16u), ExchangeFixed(Base + 17u)
     );
     let RadianceWeight = ExchangeFixed(Base + 18u);
-    atomicExchange(&Reservoirs.Entries[Cell], 0u);
     if (RadianceWeight > 1.0)
     {
         // Average genuinely overlapping winners, but do not divide away sub-unit
@@ -317,21 +360,47 @@ fn NormalizeMain(@builtin(global_invocation_id) Global: vec3u)
         Green = Green / RadianceWeight;
         Blue = Blue / RadianceWeight;
     }
-    let Injection = VolumeCell(Red, Green, Blue);
-    InjectionVolume.Cells[Cell] = Injection;
-
+    let CurrentInjection = VolumeCell(Red, Green, Blue);
     let Cascade = Cell / CellsPerCascade;
     let Coordinate = LocalCoordinate(Cell);
     let OriginCell = CascadeOrigin(Cascade);
     let WorldPosition = OriginCell.xyz + (vec3f(Coordinate) + vec3f(0.5)) * OriginCell.w;
+    let DynamicCell = IsDynamic(WorldPosition, OriginCell.w * 0.5);
+    let StabilityEnabled = Frame.ScreenSettings.z > 0.5;
+    let HistoryValid = Frame.CameraPosition.w > 1.5 && StabilityEnabled && !DynamicCell;
+
+    // The first surfel exhibit used a long mean plus short moments. Apply the same
+    // adaptive publication rule to the world-space LPV source field before propagation.
+    let PreviousSource = SourceHistoryAt(WorldPosition, Cascade);
+    let PreviousMoments = SourceMomentsAt(WorldPosition, Cascade);
+    let CurrentEnergy = CellEnergy(CurrentInjection);
+    let PreviousEnergy = CellEnergy(PreviousSource);
+    let MeasurementPresent = RadianceWeight > 0.0001;
+    let MomentWeight = select(0.04, 0.14, MeasurementPresent);
+    let Innovation = CurrentEnergy - PreviousMoments.x;
+    var ShortMean = mix(PreviousMoments.x, CurrentEnergy, MomentWeight);
+    let VarianceWeight = select(0.06, 0.12, MeasurementPresent);
+    var Variance = mix(PreviousMoments.y, Innovation * Innovation, VarianceWeight);
+    if (!StabilityEnabled || Frame.CameraPosition.w <= 1.5 || DynamicCell)
+    {
+        ShortMean = CurrentEnergy;
+        Variance = 0.0;
+    }
+    CurrentSourceMoments.Entries[Cell] = vec2f(ShortMean, Variance);
+
+    let Disagreement = abs(ShortMean - PreviousEnergy);
+    let NoiseFloor = 2.0 * sqrt(max(Variance, 0.0)) + 0.006;
+    let ChangeConfidence = smoothstep(1.0, 3.0, Disagreement / NoiseFloor);
+    var PublicationWeight = mix(0.035, 0.28, ChangeConfidence);
+    if (!MeasurementPresent) { PublicationWeight = 0.025; }
+    if (!HistoryValid || PreviousEnergy < 0.00001) { PublicationWeight = 1.0; }
+    let StableInjection = BlendCell(PreviousSource, CurrentInjection, PublicationWeight);
+    InjectionVolume.Cells[Cell] = StableInjection;
+
     let History = HistoryAt(WorldPosition, Cascade);
-    let HistoryEnergy = History.Red.x + History.Green.x + History.Blue.x;
-    let HistoryWeight = select(0.0, 0.82, Frame.CameraPosition.w > 1.5 && HistoryEnergy > 0.0001 && !IsDynamic(WorldPosition, OriginCell.w * 0.5));
-    InitialPropagation.Cells[Cell] = VolumeCell(
-        mix(Injection.Red, History.Red, HistoryWeight),
-        mix(Injection.Green, History.Green, HistoryWeight),
-        mix(Injection.Blue, History.Blue, HistoryWeight)
-    );
+    let HistoryEnergy = CellEnergy(History);
+    let HistoryWeight = select(0.0, 0.82, HistoryValid && HistoryEnergy > 0.0001);
+    InitialPropagation.Cells[Cell] = BlendCell(StableInjection, History, HistoryWeight);
 
     let Opacity = vec3f(1.0) - exp(-vec3f(DirectionalSum[0], DirectionalSum[1], DirectionalSum[2]) * 0.16);
     let OpacityTwo = vec3f(1.0) - exp(-vec3f(DirectionalSum[3], DirectionalSum[4], DirectionalSum[5]) * 0.16);

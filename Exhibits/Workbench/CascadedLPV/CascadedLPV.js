@@ -22,6 +22,7 @@ const AnimateWorld = document.getElementById("AnimateWorld");
 const AnimateSun = document.getElementById("AnimateSun");
 const BlockerField = document.getElementById("BlockerField");
 const ScreenDetail = document.getElementById("ScreenDetail");
+const TemporalStability = document.getElementById("TemporalStability");
 const ShowSurfels = document.getElementById("ShowSurfels");
 const PropagationSteps = document.getElementById("PropagationSteps");
 const PropagationOutput = document.getElementById("PropagationOutput");
@@ -338,14 +339,14 @@ async function BringRenderer()
     StatusText.textContent = "Loading scene and transport shaders";
     const [GeometryBinary, RasterSource, ShadowSource, ExtractSource, InjectSource, PropagateSource, ScreenSource, PresentSource, OverlaySource] = await Promise.all([
         LoadBinary(GeometryAddress),
-        LoadText("LPVRaster.wgsl?revision=5"),
-        LoadText("CSMShadow.wgsl?revision=5"),
-        LoadText("LPVExtract.wgsl?revision=5"),
-        LoadText("LPVInject.wgsl?revision=5"),
-        LoadText("LPVPropagate.wgsl?revision=5"),
-        LoadText("LPVSSGI.wgsl?revision=5"),
-        LoadText("LPVPresent.wgsl?revision=5"),
-        LoadText("LPVOverlay.wgsl?revision=5"),
+        LoadText("LPVRaster.wgsl?revision=6"),
+        LoadText("CSMShadow.wgsl?revision=6"),
+        LoadText("LPVExtract.wgsl?revision=6"),
+        LoadText("LPVInject.wgsl?revision=6"),
+        LoadText("LPVPropagate.wgsl?revision=6"),
+        LoadText("LPVSSGI.wgsl?revision=6"),
+        LoadText("LPVPresent.wgsl?revision=6"),
+        LoadText("LPVOverlay.wgsl?revision=6"),
     ]);
     const Geometry = DecodeGeometry(GeometryBinary);
     const Cube = ConstructCube();
@@ -436,6 +437,11 @@ async function BringRenderer()
         label: "Extract stable blue-noise RSM candidates",
         layout: "auto",
         compute: { module: ExtractShader, entryPoint: "ExtractMain" },
+    });
+    const ClearReservoirProgram = Device.createComputePipeline({
+        label: "Clear stable LPV reservoirs",
+        layout: "auto",
+        compute: { module: InjectShader, entryPoint: "ClearReservoirs" },
     });
     const ClaimSurfelProgram = Device.createComputePipeline({
         label: "Claim one stable surfel reservoir per LPV cell",
@@ -541,8 +547,32 @@ async function BringRenderer()
         GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     );
     const VolumeBytes = VolumeCellCount * 48;
+    const MomentBytes = VolumeCellCount * 8;
     const BlockerVolumeBytes = VolumeCellCount * 32;
-    const InjectionVolume = CreateBuffer(Device, "LPV source radiance", VolumeBytes, GPUBufferUsage.STORAGE);
+    const InjectionVolume = CreateBuffer(
+        Device,
+        "Temporally filtered LPV source radiance",
+        VolumeBytes,
+        GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    );
+    const SourceHistoryVolume = CreateBuffer(
+        Device,
+        "Previous stable LPV source field",
+        VolumeBytes,
+        GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    );
+    const PreviousSourceMoments = CreateBuffer(
+        Device,
+        "Previous LPV source moments",
+        MomentBytes,
+        GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    );
+    const CurrentSourceMoments = CreateBuffer(
+        Device,
+        "Current LPV source moments",
+        MomentBytes,
+        GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    );
     const RawBlockerVolume = CreateBuffer(Device, "Raw six-face blockers", BlockerVolumeBytes, GPUBufferUsage.STORAGE);
     const BlockerVolume = CreateBuffer(Device, "Dilated six-face blockers", BlockerVolumeBytes, GPUBufferUsage.STORAGE);
     const HistoryVolume = CreateBuffer(
@@ -621,6 +651,10 @@ async function BringRenderer()
             { binding: 4, resource: { buffer: SurfelBuffer } },
         ],
     });
+    const ClearReservoirGroup = Device.createBindGroup({
+        layout: ClearReservoirProgram.getBindGroupLayout(0),
+        entries: [{ binding: 8, resource: { buffer: ReservoirBuffer } }],
+    });
     const ClaimSurfelGroup = Device.createBindGroup({
         layout: ClaimSurfelProgram.getBindGroupLayout(0),
         entries: [
@@ -647,8 +681,10 @@ async function BringRenderer()
             { binding: 5, resource: { buffer: InjectionVolume } },
             { binding: 6, resource: { buffer: RawBlockerVolume } },
             { binding: 7, resource: { buffer: PropagationVolumes[0] } },
-            { binding: 8, resource: { buffer: ReservoirBuffer } },
             { binding: 9, resource: { buffer: HistoryVolume } },
+            { binding: 11, resource: { buffer: SourceHistoryVolume } },
+            { binding: 12, resource: { buffer: PreviousSourceMoments } },
+            { binding: 13, resource: { buffer: CurrentSourceMoments } },
         ],
     });
     const DilateBlockerGroup = Device.createBindGroup({
@@ -951,7 +987,12 @@ async function BringRenderer()
             ScreenDetail.checked ? 1.0 : 0.0,
             Number(ShadowFilter.value),
         ], 88);
-        Content.set([0.84, Number(ScreenRadius.value) * 0.1, 1.0, 1.0], 92);
+        Content.set([
+            0.91,
+            Number(ScreenRadius.value) * 0.1,
+            TemporalStability.checked ? 1.0 : 0.0,
+            1.0,
+        ], 92);
         Content.set([VolumeResolution, SurfelCount, Number(PropagationSteps.value), 0.90], 96);
         Content.set(PreviousOrigins[0], 100);
         Content.set(PreviousOrigins[1], 104);
@@ -1046,6 +1087,12 @@ async function BringRenderer()
         ExtractPass.dispatchWorkgroups(Math.ceil(SurfelCount / 64));
         ExtractPass.end();
 
+        const ReservoirClearPass = Commands.beginComputePass({ label: "Clear per-cell surfel reservoirs" });
+        ReservoirClearPass.setPipeline(ClearReservoirProgram);
+        ReservoirClearPass.setBindGroup(0, ClearReservoirGroup);
+        ReservoirClearPass.dispatchWorkgroups(Math.ceil(VolumeCellCount / 64));
+        ReservoirClearPass.end();
+
         const SurfelClaimPass = Commands.beginComputePass({ label: "Select stable per-cell surfel reservoirs" });
         SurfelClaimPass.setPipeline(ClaimSurfelProgram);
         SurfelClaimPass.setBindGroup(0, ClaimSurfelGroup);
@@ -1125,6 +1172,8 @@ async function BringRenderer()
             OverlayRendering.end();
         }
 
+        Commands.copyBufferToBuffer(InjectionVolume, 0, SourceHistoryVolume, 0, VolumeBytes);
+        Commands.copyBufferToBuffer(CurrentSourceMoments, 0, PreviousSourceMoments, 0, MomentBytes);
         Commands.copyBufferToBuffer(PropagationVolumes[PublishedVolume], 0, HistoryVolume, 0, VolumeBytes);
         Device.queue.submit([Commands.finish()]);
         HistoryNumber = CurrentHistory;

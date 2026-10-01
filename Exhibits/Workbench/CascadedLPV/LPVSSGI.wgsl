@@ -37,6 +37,30 @@ struct FrameUniforms
 @group(0) @binding(7) var CurrentScreenGI: texture_storage_2d<rgba16float, write>;
 @group(0) @binding(8) var CurrentPosition: texture_storage_2d<rgba16float, write>;
 
+fn Hash(Value: u32) -> u32
+{
+    var State = Value;
+    State = State ^ (State >> 16u);
+    State = State * 0x7feb352du;
+    State = State ^ (State >> 15u);
+    State = State * 0x846ca68bu;
+    return State ^ (State >> 16u);
+}
+
+fn StableBlueAngle(Position: vec3f, Normal: vec3f) -> f32
+{
+    let Cell = vec3i(floor(Position * 8.0));
+    var Identity = Hash(bitcast<u32>(Cell.x) ^ 0x68bc21ebu);
+    let YTerm = bitcast<u32>(Cell.y) * 0x02e5be93u;
+    Identity = Hash(Identity ^ YTerm);
+    let ZTerm = bitcast<u32>(Cell.z) * 0x967a889bu;
+    Identity = Hash(Identity ^ ZTerm);
+    let NormalCell = vec3i(floor((Normal * 0.5 + 0.5) * 7.0));
+    let NormalTerm = u32(NormalCell.x + NormalCell.y * 9 + NormalCell.z * 81);
+    Identity = Hash(Identity ^ NormalTerm);
+    return f32(Identity >> 8u) * (6.28318530718 / 16777216.0);
+}
+
 fn ShadowProjection(Cascade: u32) -> mat4x4f
 {
     if (Cascade == 0u) { return Frame.ShadowProjection0; }
@@ -81,7 +105,9 @@ fn ScreenMain(@builtin(global_invocation_id) Global: vec3u)
     let Position = PositionHit.xyz;
     let Normal = normalize(textureLoad(NormalImage, FullPixel, 0).xyz);
     let Radius = Frame.ScreenSettings.y;
-    let FrameRotation = fract(Frame.CameraPosition.w * 0.61803398875) * 6.28318530718;
+    // Keep the sampling pattern fixed in world space. The former frame-wide golden-angle
+    // rotation made every receiver change all 32 taps every frame and visibly sparkled.
+    let FrameRotation = StableBlueAngle(Position, Normal);
     let PixelScale = max(f32(FullExtent.y) / 720.0, 0.65);
     var Indirect = vec3f(0.0);
     var Occlusion = 0.0;
@@ -146,11 +172,26 @@ fn ScreenMain(@builtin(global_invocation_id) Global: vec3u)
                 vec2f(HalfExtent) - vec2f(1.0)
             ));
             let HistoryPosition = textureLoad(PreviousPosition, PreviousPixel, 0);
-            if (HistoryPosition.w > 0.5 && distance(HistoryPosition.xyz, Position) < 0.18)
+            if (
+                Frame.ScreenSettings.z > 0.5
+                && Frame.CameraPosition.w > 1.5
+                && HistoryPosition.w > 0.5
+                && distance(HistoryPosition.xyz, Position) < 0.18
+            )
             {
                 let History = textureLoad(PreviousScreenGI, PreviousPixel, 0);
-                let HistoryWeight = clamp(Frame.ScreenSettings.x, 0.0, 0.94);
-                Current = mix(Current, History, HistoryWeight);
+                let Luminance = vec3f(0.2126, 0.7152, 0.0722);
+                let ColourDifference = abs(dot(Current.xyz - History.xyz, Luminance));
+                let OcclusionDifference = abs(Current.w - History.w);
+                let ChangeConfidence = smoothstep(0.025, 0.32, ColourDifference + OcclusionDifference * 0.18);
+                let StableWeight = clamp(Frame.ScreenSettings.x, 0.0, 0.95);
+                let HistoryWeight = mix(StableWeight, 0.48, ChangeConfidence);
+                let ColourBand = vec3f(0.075) + Current.xyz * 0.62;
+                let ClampedHistory = vec4f(
+                    clamp(History.xyz, max(Current.xyz - ColourBand, vec3f(0.0)), Current.xyz + ColourBand),
+                    clamp(History.w, Current.w - 0.16, Current.w + 0.16)
+                );
+                Current = mix(Current, ClampedHistory, HistoryWeight);
             }
         }
     }

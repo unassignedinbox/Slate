@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#07100f">
     <title>Slate — Dynamic Open-World GI Lab</title>
-    <link rel="stylesheet" href="CascadedLPV.css?revision=5">
+    <link rel="stylesheet" href="CascadedLPV.css?revision=6">
 </head>
 <body>
     <main>
@@ -76,6 +76,11 @@
                     <span><b>Screen GI + GTAO</b><small>Half-resolution contact lighting and occlusion</small></span>
                 </label>
                 <label class="SwitchControl">
+                    <input id="TemporalStability" type="checkbox" checked>
+                    <span class="SwitchTrack"><span></span></span>
+                    <span><b>Temporal stability</b><small>Adaptive history, soft reconstruction, fixed blue noise</small></span>
+                </label>
+                <label class="SwitchControl">
                     <input id="ShowSurfels" type="checkbox">
                     <span class="SwitchTrack"><span></span></span>
                     <span><b>Sparse RSM debug</b><small>Overlays 1 in 16 GI candidates</small></span>
@@ -122,12 +127,12 @@
             <article>
                 <span class="ArticleNumber">01</span>
                 <h2>Rasterize samples</h2>
-                <p>A GI-only 384² reflective shadow map generates world-anchored blue-noise candidates. Deterministic per-cell reservoirs and edge detection prevent light-space oversampling and reduce sample churn.</p>
+                <p>A GI-only 384² reflective shadow map ranks all four samples in each tile with fixed world-space blue noise. Stable IDs, deterministic reservoirs, and edge detection reduce sample churn.</p>
             </article>
             <article>
                 <span class="ArticleNumber">02</span>
                 <h2>Propagate off screen</h2>
-                <p>Three persistent 40³ lattices cover 24, 64, and 160 metres. Eight-cell radiance splats, reprojected history, motion invalidation, and dilated six-face blockers reduce popping and leakage.</p>
+                <p>Three persistent 40³ lattices cover 24, 64, and 160 metres. Adaptive source moments, reprojected history, soft trilinear reconstruction, motion invalidation, and six-face blockers suppress flicker and leakage.</p>
             </article>
             <article>
                 <span class="ArticleNumber">03</span>
@@ -141,6 +146,6 @@
             <span>Diffuse GI prototype · SSR/reflection probes remain a separate production concern</span>
         </footer>
     </main>
-    <script type="module" src="CascadedLPV.js?revision=5"></script>
+    <script type="module" src="CascadedLPV.js?revision=6"></script>
 </body>
 </html>

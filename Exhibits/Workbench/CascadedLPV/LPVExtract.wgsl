@@ -63,16 +63,16 @@ fn WorldIdentity(Position: vec3f, Normal: vec3f) -> u32
     return (Identity & 0x00ffffffu) | 1u;
 }
 
-fn BlueNoiseChoice(Position: vec3f, Normal: vec3f) -> u32
+fn BlueNoiseRank(Position: vec3f, Normal: vec3f) -> f32
 {
     let Quantized = floor(Position * 4.0);
     let Axis = abs(Normal);
     var Plane = Quantized.xy;
     if (Axis.x > Axis.y && Axis.x > Axis.z) { Plane = Quantized.yz; }
     else if (Axis.y > Axis.z) { Plane = Quantized.xz; }
-    // World-space interleaved-gradient rank: stable under light/camera motion and blue-noise-like locally.
-    let Rank = fract(52.9829189 * fract(dot(Plane, vec2f(0.06711056, 0.00583715))));
-    return min(u32(floor(Rank * 4.0)), 3u);
+    // The same fixed, world-space low-discrepancy idea used by the first surfel demo.
+    // Ranking actual surface candidates is more stable than choosing an RSM pixel offset.
+    return fract(52.9829189 * fract(dot(Plane, vec2f(0.06711056, 0.00583715))));
 }
 
 fn InBounds(Pixel: vec2i, Extent: vec2u) -> bool
@@ -90,25 +90,33 @@ fn ExtractMain(@builtin(global_invocation_id) Global: vec3u)
     let RsmExtent = textureDimensions(RsmPosition);
     let SampleWidth = RsmExtent.x / 2u;
     let Tile = vec2u(RecordNumber % SampleWidth, RecordNumber / SampleWidth);
-    let TileCentre = vec2i(Tile * 2u + vec2u(1u));
-    let CentrePosition = textureLoad(RsmPosition, TileCentre, 0);
-    if (CentrePosition.w < 0.5)
+    var SamplePosition = vec2i(Tile * 2u);
+    var BestRank = -1.0;
+    var FoundCandidate = false;
+    for (var CandidateNumber = 0u; CandidateNumber < 4u; CandidateNumber = CandidateNumber + 1u)
+    {
+        let Offset = vec2u(CandidateNumber & 1u, (CandidateNumber >> 1u) & 1u);
+        let CandidatePixel = vec2i(Tile * 2u + Offset);
+        let CandidatePosition = textureLoad(RsmPosition, CandidatePixel, 0);
+        if (CandidatePosition.w < 0.5) { continue; }
+        let CandidateNormal = normalize(textureLoad(RsmNormal, CandidatePixel, 0).xyz);
+        let Identity = WorldIdentity(CandidatePosition.xyz, CandidateNormal);
+        let TieBreak = f32(Hash(Identity) & 0xffffu) * (1.0 / 65536.0) * 0.0001;
+        let Rank = BlueNoiseRank(CandidatePosition.xyz, CandidateNormal) + TieBreak;
+        if (!FoundCandidate || Rank > BestRank)
+        {
+            FoundCandidate = true;
+            BestRank = Rank;
+            SamplePosition = CandidatePixel;
+        }
+    }
+    if (!FoundCandidate)
     {
         Surfels.Records[RecordNumber] = SurfelRecord(vec4f(0.0), vec4f(0.0), vec4f(0.0), vec4f(0.0));
         return;
     }
 
-    let CentreNormal = normalize(textureLoad(RsmNormal, TileCentre, 0).xyz);
-    let BlueChoice = BlueNoiseChoice(CentrePosition.xyz, CentreNormal);
-    let BlueOffset = vec2u(BlueChoice & 1u, (BlueChoice >> 1u) & 1u);
-    let SamplePosition = vec2i(Tile * 2u + BlueOffset);
     let PositionHit = textureLoad(RsmPosition, SamplePosition, 0);
-    if (PositionHit.w < 0.5)
-    {
-        Surfels.Records[RecordNumber] = SurfelRecord(vec4f(0.0), vec4f(0.0), vec4f(0.0), vec4f(0.0));
-        return;
-    }
-
     let NormalFlux = textureLoad(RsmNormal, SamplePosition, 0);
     let Normal = normalize(NormalFlux.xyz);
     let StableIdentity = WorldIdentity(PositionHit.xyz, Normal);
