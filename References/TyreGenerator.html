@@ -90,6 +90,15 @@
   .layer .nm small{color:var(--mut);font-weight:300;margin-left:4px}
   .layer .ic{width:3px;height:14px;border-radius:2px;flex:0 0 3px}
   .layer button{padding:0 6px;line-height:20px;background:transparent;color:var(--mut)} .layer button:hover{color:#fff;background:var(--card3)}
+  #decalLayers{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+  .decal{display:flex;align-items:center;gap:7px;background:var(--card2);border:1px solid transparent;border-radius:12px;padding:7px 8px 7px 12px;cursor:pointer}
+  .decal.sel{border-color:#fff}.decal.off{opacity:.48}
+  .decal .swatch{width:4px;height:18px;border-radius:3px;flex:0 0 4px}.decal .copy{min-width:0;flex:1;line-height:1.15}
+  .decal .name{display:block;font-weight:400;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.decal .preview{display:block;color:var(--mut);font-size:10.5px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;margin-top:2px}
+  .decal button{padding:0 5px;line-height:20px;background:transparent;color:var(--mut)}.decal button:hover{background:var(--card3);color:#fff}
+  #decalProps{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
+  .decal-title{font-size:12px;color:var(--txt);font-weight:400;margin:1px 0 8px}
+  .decal-note{color:var(--dim);font-size:11px;line-height:1.45;margin:8px 0 1px}
   #treadView{width:100%;height:150px;display:block;border-radius:14px;background:#111}
   #treadStrip{width:100%;height:26px;display:block;border-radius:8px;background:#111;margin-top:6px}
   #profile{cursor:crosshair;touch-action:none}
@@ -142,6 +151,13 @@
     </div>
     <div class="panel" data-panel="look">
       <div class="card" style="--bar:var(--yellow)"><h2>Compound &amp; look</h2><div id="lookParams"></div></div>
+      <div class="card" style="--bar:var(--red);margin-top:10px">
+        <h2>Sidewall decals <span class="r" id="decalCount"></span></h2>
+        <div class="hint">Build the sidewall lettering as editable text layers. Select a layer to change its copy, typeface, size, colour and placement.</div>
+        <div class="btns"><button id="addDecalBtn" class="primary">Add text decal</button></div>
+        <div id="decalLayers"></div>
+        <div id="decalProps" class="hint">Select a decal layer to edit it.</div>
+      </div>
     </div>
     <div class="panel" data-panel="export">
       <div class="card" style="--bar:var(--red)"><h2>Export</h2>
@@ -205,8 +221,29 @@ const T = {                       // tyre carcass parameters (mm / inch / fracti
   rubber: '#151515', letter: 'white', lettering: true, brand: 'SLATE', spokes: 5, rimColor: '#c9ccd2', rimStyle: 'spoke',
   factoryStripes: true, stripeRed: '#d63842', stripeBlue: '#3184c7', stripePattern: 'zigzag', stripeWidth: 1.4, stripeGap: 4.2, stripeWave: 1.1, stripeOffset: 0, stripePitch: 12
 };
-const P = { name: 'GZero', type: 'Slick', layers: [] };   // tread pattern
-const UI = { sel: -1, threads: false, spin: false, treadMode: 'color' };
+const DECAL_FONTS = [
+  { id: 'outfit', label: 'Outfit', css: 'Outfit, system-ui, sans-serif' },
+  { id: 'impact', label: 'Impact / heavy', css: 'Impact, "Arial Black", sans-serif' },
+  { id: 'sans', label: 'Clean sans', css: 'Arial, Helvetica, sans-serif' },
+  { id: 'serif', label: 'Classic serif', css: 'Georgia, serif' },
+  { id: 'mono', label: 'Technical mono', css: 'ui-monospace, Menlo, Consolas, monospace' },
+  { id: 'script', label: 'Script', css: 'cursive' }
+];
+const CUSTOM_DECAL_FONTS = new Map();
+let decalSequence = 0;
+const newDecal = (o = {}) => Object.assign({
+  id: `decal-${++decalSequence}`, name: 'Text decal', text: 'YOUR TEXT', font: 'outfit', fontLabel: 'Outfit',
+  size: 42, color: '#e8e8e8', x: 50, y: 50, align: 'center', weight: 700, italic: false,
+  opacity: 1, embossed: false, repeat: true, enabled: true
+}, o);
+const defaultDecals = () => [
+  newDecal({ name: 'Brand mark', text: '{brand}', font: 'impact', fontLabel: 'Impact / heavy', size: 68, color: '#e8e8e8', x: 2, y: 50, align: 'left', weight: 900, embossed: true }),
+  newDecal({ name: 'Model name', text: '{name}', font: 'outfit', fontLabel: 'Outfit', size: 54, color: '#e8e8e8', x: 14, y: 50, align: 'left', weight: 800, italic: true, embossed: true }),
+  newDecal({ name: 'Specification', text: '{size}  ·  {type}  ·  {depth}mm', font: 'mono', fontLabel: 'Technical mono', size: 25, color: '#bfbfbf', x: 28, y: 50, align: 'left', weight: 600 }),
+  newDecal({ name: 'Compliance', text: 'DOT SL8T {serial}  ·  TUBELESS RADIAL  ·  MAX 51 PSI', font: 'mono', fontLabel: 'Technical mono', size: 16, color: '#a7a7a7', x: 2, y: 72, align: 'left', weight: 600, opacity: .65, embossed: true })
+];
+const P = { name: 'GZero', type: 'Slick', layers: [], decals: defaultDecals() };   // tread pattern + sidewall decal layers
+const UI = { sel: -1, decalSel: -1, threads: false, spin: false, treadMode: 'color' };
 
 const TYPES = ['Slick', 'Semi-slick', 'Drift', 'Street', 'Grip / UHP', 'Wet', 'Winter', 'Rally', 'Off-road', 'Drag'];
 
@@ -475,8 +512,38 @@ function buildTreadMaps(pm, treadDepth, rubberHex, wear) {
   return { color: mk(col), rough: mk(rou), normal: mk(nor), height: hc };
 }
 
-// Sidewall canvas: lettering ("thread" of text + rim protector rib + sidewall micro texture)
-function buildSidewall(outer) {
+// Sidewall canvas: editable lettering / decal layers + mould detail.
+function decalFontFamily(decal) {
+  const custom = CUSTOM_DECAL_FONTS.get(decal.font);
+  if (custom) return custom.css;
+  return DECAL_FONTS.find(font => font.id === decal.font)?.css || 'Outfit, system-ui, sans-serif';
+}
+function decalFontLabel(decal) {
+  return CUSTOM_DECAL_FONTS.get(decal.font)?.label || DECAL_FONTS.find(font => font.id === decal.font)?.label || decal.fontLabel || 'Outfit';
+}
+function decalCopy(decal) {
+  const token = {
+    brand: T.brand, name: P.name, size: sizeString(), type: P.type.toUpperCase(), depth: Math.round(T.treadDepth),
+    serial: Math.abs(hashStr(P.name)) % 9000
+  };
+  return String(decal.text || '').replace(/\{(brand|name|size|type|depth|serial)\}/gi, (_, key) => token[key.toLowerCase()]);
+}
+function paintDecal(ctx, hx, decal, W, H) {
+  if (!decal.enabled) return;
+  const text = decalCopy(decal); if (!text.trim()) return;
+  const x = Math.max(-10, Math.min(110, +decal.x || 0)) / 100 * W, y = Math.max(0, Math.min(100, +decal.y || 0)) / 100 * H;
+  const font = `${decal.italic ? 'italic ' : ''}${decal.weight || 700} ${Math.max(8, +decal.size || 42)}px ${decalFontFamily(decal)}`;
+  const positions = decal.repeat ? [x, x + W / 2] : [x];
+  for (const px of positions) {
+    ctx.save(); ctx.globalAlpha = Math.max(0, Math.min(1, +decal.opacity ?? 1)); ctx.fillStyle = decal.color || '#e8e8e8';
+    ctx.font = font; ctx.textBaseline = 'middle'; ctx.textAlign = decal.align || 'center'; ctx.fillText(text, px, y); ctx.restore();
+    if (decal.embossed) {
+      hx.save(); hx.globalAlpha = Math.max(0.1, Math.min(1, +decal.opacity ?? 1)) * 0.62; hx.fillStyle = '#d0d0d0';
+      hx.font = font; hx.textBaseline = 'middle'; hx.textAlign = decal.align || 'center'; hx.fillText(text, px, y); hx.restore();
+    }
+  }
+}
+function buildSidewall() {
   const W = 4096, H = 256; const c = document.createElement('canvas'); c.width = W; c.height = H; const ctx = c.getContext('2d');
   const hc = document.createElement('canvas'); hc.width = W; hc.height = H; const hx = hc.getContext('2d'); hx.fillStyle = '#808080'; hx.fillRect(0, 0, W, H);
   drawSidewallThreads(hx, W, H);
@@ -486,29 +553,9 @@ function buildSidewall(outer) {
   // bead / rim protector rib and shoulder rib  (s: 0 = bead at bottom, 1 = shoulder at top)
   ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, H * 0.14, W, 4); ctx.fillRect(0, H * 0.86, W, 3);
   ctx.fillStyle = 'rgba(255,255,255,.06)'; ctx.fillRect(0, H * 0.18, W, 2); ctx.fillRect(0, H * 0.83, W, 3);
-  if (T.lettering) {
-    const colors = { white: '#e8e8e8', yellow: '#f5c518', red: '#e53935', blue: '#42a5f5', black: '#2a2a2a' }; const lc = colors[T.letter] || '#e8e8e8';
-    const size = sizeString(); const dir = P.layers.some(l => l.type === 'chevron') ? '   ◄ ROTATION' : '';
-    const asym = P.layers.some(l => l.type === 'lateral' && ((l.from > -0.9 && l.to > 0.9) || (l.from < -0.9 && l.to < 0.9))) ? (outer ? '   OUTSIDE' : '   INSIDE') : '';
-    ctx.save(); ctx.translate(0, H * 0.5); if (!outer) { ctx.scale(-1, 1); ctx.translate(-W, 0); }
-    ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
-    for (const x0 of [0, W / 2]) {
-      ctx.fillStyle = lc; ctx.font = '900 96px Impact, "Arial Black", system-ui, sans-serif'; ctx.fillText(T.brand.toUpperCase(), x0 + 60, 0);
-      emboss(hx, ctx.font, T.brand.toUpperCase(), x0 + 60, H * 0.5, outer, W);
-      const bw = ctx.measureText(T.brand.toUpperCase()).width;
-      ctx.font = 'italic 800 78px system-ui, sans-serif'; ctx.fillText(P.name.toUpperCase(), x0 + 60 + bw + 60, 0);
-      emboss(hx, ctx.font, P.name.toUpperCase(), x0 + 60 + bw + 60, H * 0.5, outer, W);
-      const nw = ctx.measureText(P.name.toUpperCase()).width;
-      ctx.fillStyle = T.letter === 'black' ? '#333' : '#bfbfbf'; ctx.font = '600 44px ui-monospace, Menlo, Consolas, monospace';
-      ctx.fillText(size + '   ' + P.type.toUpperCase() + '  ' + Math.round(T.treadDepth) + 'mm' + dir + asym, x0 + 60 + bw + 60 + nw + 90, 0);
-      // embossed DOT block
-      ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.font = '600 26px ui-monospace, monospace'; ctx.fillText('DOT SL8T ' + Math.abs(hashStr(P.name)) % 9000 + '  TUBELESS RADIAL  MAX 51 PSI', x0 + 60, H * 0.28);
-    }
-    ctx.restore();
-  }
+  if (T.lettering) (P.decals || []).forEach(decal => paintDecal(ctx, hx, decal, W, H));
   return { color: c, normal: heightToNormal(hc, 2.2) };
 }
-function emboss(hx, font, text, x, y, outer, W) { hx.save(); if (!outer) { hx.scale(-1, 1); hx.translate(-W, 0); } hx.font = font; hx.textBaseline = 'middle'; hx.fillStyle = '#b0b0b0'; hx.fillText(text, x, y); hx.restore(); }
 // the 'threads': radial body-cord ridges, woven chafer fabric at the bead, mould parting line, vent spews
 function drawSidewallThreads(hx, W, H) {
   const rand = mulberry(hashStr(P.name + T.width));
@@ -974,6 +1021,84 @@ function color(parent, label, obj, key, after = schedule) {
   const row = document.createElement('div'); row.className = 'row'; row.innerHTML = `<label>${label}</label><input type="color" value="${obj[key]}">`;
   row.querySelector('input').oninput = e => { obj[key] = e.target.value; after(); }; parent.appendChild(row); return row;
 }
+function textInput(parent, label, obj, key, after = schedule, onBlur) {
+  const row = document.createElement('div'); row.className = 'row';
+  const lab = document.createElement('label'); lab.textContent = label; row.appendChild(lab);
+  const input = document.createElement('input'); input.type = 'text'; input.value = obj[key] ?? ''; input.autocomplete = 'off'; row.appendChild(input);
+  input.oninput = () => { obj[key] = input.value; after(); };
+  if (onBlur) input.onchange = onBlur;
+  parent.appendChild(row); return input;
+}
+function decalSelect(parent, label, obj, key, options, after = schedule) {
+  const row = document.createElement('div'); row.className = 'row';
+  const lab = document.createElement('label'); lab.textContent = label; const sel = document.createElement('select');
+  for (const option of options) { const el = document.createElement('option'); el.value = option.value; el.textContent = option.label; el.selected = String(option.value) === String(obj[key]); sel.appendChild(el); }
+  sel.onchange = () => { obj[key] = sel.value; const option = options.find(o => o.value === sel.value); if (key === 'font' && option) obj.fontLabel = option.label; after(); };
+  row.append(lab, sel); parent.appendChild(row); return sel;
+}
+function decalLayers() {
+  if (!Array.isArray(P.decals)) P.decals = defaultDecals();
+  return P.decals;
+}
+function updateDecalLayerLabel() { buildDecalUI(); }
+async function loadDecalFont(file, decal) {
+  if (!file) return;
+  try {
+    const fontId = `custom-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+    const family = `Slate decal ${fontId}`;
+    const face = new FontFace(family, await file.arrayBuffer()); await face.load(); document.fonts.add(face);
+    CUSTOM_DECAL_FONTS.set(fontId, { label: file.name, css: `"${family}", sans-serif` });
+    decal.font = fontId; decal.fontLabel = file.name; buildDecalUI(); schedule(); toast(`Loaded ${file.name}`);
+  } catch (error) { console.warn('Custom decal font failed to load', error); toast('That font file could not be loaded'); }
+}
+function buildDecalUI() {
+  const decals = decalLayers();
+  if (UI.decalSel >= decals.length) UI.decalSel = decals.length - 1;
+  document.getElementById('decalCount').textContent = `${decals.length} layer${decals.length === 1 ? '' : 's'}`;
+  const list = document.getElementById('decalLayers'); list.innerHTML = '';
+  decals.forEach((decal, i) => {
+    const layer = document.createElement('div'); layer.className = `decal${i === UI.decalSel ? ' sel' : ''}${decal.enabled ? '' : ' off'}`;
+    const swatch = document.createElement('span'); swatch.className = 'swatch'; swatch.style.background = decal.color || '#e8e8e8';
+    const copy = document.createElement('span'); copy.className = 'copy';
+    const name = document.createElement('span'); name.className = 'name'; name.textContent = decal.name || 'Text decal';
+    const preview = document.createElement('span'); preview.className = 'preview'; preview.textContent = decalCopy(decal) || 'Empty decal'; copy.append(name, preview);
+    const action = (glyph, title, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = glyph; b.title = title; b.onclick = e => { e.stopPropagation(); fn(); }; layer.appendChild(b); };
+    layer.append(swatch, copy);
+    action(decal.enabled ? '◉' : '○', decal.enabled ? 'Hide decal' : 'Show decal', () => { decal.enabled = !decal.enabled; buildDecalUI(); schedule(); });
+    action('⧉', 'Duplicate decal', () => { const duplicate = Object.assign({}, decal, { name: `${decal.name || 'Text decal'} copy` }); delete duplicate.id; decals.splice(i + 1, 0, newDecal(duplicate)); UI.decalSel = i + 1; buildDecalUI(); schedule(); });
+    action('↑', 'Move earlier', () => { if (i) { [decals[i - 1], decals[i]] = [decals[i], decals[i - 1]]; UI.decalSel = i - 1; buildDecalUI(); schedule(); } });
+    action('↓', 'Move later', () => { if (i < decals.length - 1) { [decals[i + 1], decals[i]] = [decals[i], decals[i + 1]]; UI.decalSel = i + 1; buildDecalUI(); schedule(); } });
+    action('✕', 'Delete decal', () => { decals.splice(i, 1); UI.decalSel = -1; buildDecalUI(); schedule(); });
+    layer.onclick = () => { UI.decalSel = i; buildDecalUI(); };
+    list.appendChild(layer);
+  });
+  const props = document.getElementById('decalProps'); props.innerHTML = '';
+  const decal = decals[UI.decalSel];
+  if (!decal) { props.className = 'hint'; props.textContent = 'Select a decal layer to edit it. Add a text decal to create your own sidewall mark.'; return; }
+  props.className = '';
+  const title = document.createElement('div'); title.className = 'decal-title'; title.textContent = decal.name || 'Text decal'; props.appendChild(title);
+  textInput(props, 'Layer name', decal, 'name', schedule, updateDecalLayerLabel);
+  textInput(props, 'Decal text', decal, 'text', schedule, updateDecalLayerLabel);
+  const fontOptions = [
+    ...DECAL_FONTS.map(font => ({ value: font.id, label: font.label })),
+    ...[...CUSTOM_DECAL_FONTS.entries()].map(([value, font]) => ({ value, label: `Custom · ${font.label}` }))
+  ];
+  if (!fontOptions.some(font => font.value === decal.font)) fontOptions.push({ value: decal.font, label: `Reload custom font · ${decal.fontLabel || 'unknown'}` });
+  decalSelect(props, 'Typeface', decal, 'font', fontOptions, () => { buildDecalUI(); schedule(); });
+  const fontRow = document.createElement('div'); fontRow.className = 'row';
+  const fontLab = document.createElement('label'); fontLab.textContent = 'Load own font'; const fontFile = document.createElement('input'); fontFile.type = 'file'; fontFile.accept = '.ttf,.otf,.woff,.woff2,font/*'; fontFile.title = 'Load a TTF, OTF, WOFF or WOFF2 font';
+  fontFile.onchange = () => loadDecalFont(fontFile.files[0], decal); fontRow.append(fontLab, fontFile); props.appendChild(fontRow);
+  slider(props, 'Text size', decal, 'size', 10, 130, 1, v => `${Math.round(v)} px`);
+  color(props, 'Text colour', decal, 'color');
+  slider(props, 'Around sidewall', decal, 'x', -10, 110, 1, v => `${Math.round(v)}%`);
+  slider(props, 'Sidewall height', decal, 'y', 8, 92, 1, v => `${Math.round(v)}%`);
+  decalSelect(props, 'Alignment', decal, 'align', [{ value: 'left', label: 'Left' }, { value: 'center', label: 'Centre' }, { value: 'right', label: 'Right' }]);
+  decalSelect(props, 'Weight', decal, 'weight', [300, 400, 500, 600, 700, 800, 900].map(weight => ({ value: String(weight), label: String(weight) })), () => { decal.weight = +decal.weight; schedule(); });
+  slider(props, 'Opacity', decal, 'opacity', 0.1, 1, 0.05, v => `${Math.round(v * 100)}%`);
+  check(props, 'Italic', decal, 'italic'); check(props, 'Moulded / embossed', decal, 'embossed'); check(props, 'Repeat half-turn', decal, 'repeat');
+  const note = document.createElement('div'); note.className = 'decal-note'; note.innerHTML = 'Tokens: <code>{brand}</code> <code>{name}</code> <code>{size}</code> <code>{type}</code> <code>{depth}</code>. Custom font files stay in this browser session; JSON keeps the text settings but you will need to load the font again after importing on another device.'; props.appendChild(note);
+}
+
 function buildTyreUI() {
   const p = document.getElementById('tyreParams'); p.innerHTML = '';
   const h = t => { const e = document.createElement('div'); e.className = 'sec'; e.textContent = t; p.appendChild(e); };
@@ -989,7 +1114,7 @@ function buildTyreUI() {
   slider(pp, 'Crown drop (mm)', T, 'crown', 0, 8, 0.1, v => v.toFixed(1)); slider(pp, 'Shoulder radius (mm)', T, 'shoulder', 4, 40, 1);
   slider(pp, 'Sidewall bulge', T, 'bulge', 0.4, 1.6, 0.01, v => v.toFixed(2)); slider(pp, 'Rim width fraction', T, 'rimWidthFrac', 0.6, 0.92, 0.01, v => v.toFixed(2));
   const l = document.getElementById('lookParams'); l.innerHTML = '';
-  color(l, 'Rubber colour', T, 'rubber'); select(l, 'Lettering colour', T, 'letter', ['white', 'yellow', 'red', 'blue', 'black']); check(l, 'Sidewall lettering', T, 'lettering');
+  color(l, 'Rubber colour', T, 'rubber'); check(l, 'Show sidewall decals', T, 'lettering');
   const b = document.createElement('div'); b.className = 'row'; b.innerHTML = '<label>Brand</label><input type="text" value="' + T.brand + '">'; b.querySelector('input').oninput = e => { T.brand = e.target.value; schedule(); }; l.appendChild(b);
   select(l, 'Rim style', T, 'rimStyle', ['spoke', 'dish']); slider(l, 'Spokes', T, 'spokes', 3, 12, 1); color(l, 'Rim colour', T, 'rimColor');
   const markingHead = document.createElement('div'); markingHead.className = 'sec'; markingHead.textContent = 'Factory tread paint'; l.appendChild(markingHead);
@@ -1018,7 +1143,7 @@ function applyPreset(i) {
   const pr = PRESETS[i]; Object.assign(T, pr.tyre); P.name = pr.name; P.type = pr.type; P.layers = pr.layers.map(l => Object.assign({}, l)); UI.sel = -1; T.wear = 0; document.getElementById('wearSlider').value = 0;
   refreshAll();
 }
-function refreshAll() { buildTyreUI(); buildPresetUI(); buildLayerUI(); document.getElementById('pName').value = P.name; document.getElementById('pType').value = P.type; rebuild(); }
+function refreshAll() { buildTyreUI(); buildDecalUI(); buildPresetUI(); buildLayerUI(); document.getElementById('pName').value = P.name; document.getElementById('pType').value = P.type; rebuild(); }
 
 function buildLayerUI() {
   const box = document.getElementById('layers'); box.innerHTML = '';
@@ -1058,6 +1183,7 @@ document.getElementById('pType').onchange = e => { P.type = e.target.value; sche
 document.getElementById('pName').oninput = e => { P.name = e.target.value; schedule(); };
 document.getElementById('addLayer').innerHTML = Object.keys(LAYER_DEFS).map(k => `<option value="${k}">${LAYER_DEFS[k].label}</option>`).join('');
 document.getElementById('addLayerBtn').onclick = () => { P.layers.push(L(document.getElementById('addLayer').value)); UI.sel = P.layers.length - 1; buildLayerUI(); schedule(); };
+document.getElementById('addDecalBtn').onclick = () => { const decals = decalLayers(); decals.push(newDecal({ name: 'New text decal', text: 'YOUR TEXT', x: 50, y: 50, repeat: false })); UI.decalSel = decals.length - 1; buildDecalUI(); schedule(); };
 document.getElementById('randomBtn').onclick = () => { randomTyre(); refreshAll(); };
 document.getElementById('randomName').onclick = () => { P.name = randomName(); document.getElementById('pName').value = P.name; schedule(); };
 document.getElementById('wearSlider').oninput = e => { T.wear = +e.target.value; schedule(); };
@@ -1080,7 +1206,7 @@ document.getElementById('exportGlb').onclick = () => {
   const ex = new GLTFExporter(); const g = tyreGroup.clone(); g.remove(...g.children.filter(c => c.isLineSegments)); g.position.set(0, 0, 0); g.scale.setScalar(0.001);
   ex.parse(g, r => { dl(P.name.replace(/\s+/g, '_') + '.glb', URL.createObjectURL(new Blob([r], { type: 'model/gltf-binary' }))); toast('GLB exported (metres)'); }, e => toast('Export failed: ' + e), { binary: true });
 };
-document.getElementById('importJson').onchange = e => { const f = e.target.files[0]; if (!f) return; f.text().then(txt => { const j = JSON.parse(txt); if (j.tyre) Object.assign(T, j.tyre); if (j.pattern) { P.name = j.pattern.name; P.type = j.pattern.type; P.layers = j.pattern.layers; } UI.sel = -1; refreshAll(); toast('Imported ' + P.name); }); };
+document.getElementById('importJson').onchange = e => { const f = e.target.files[0]; if (!f) return; f.text().then(txt => { const j = JSON.parse(txt); if (j.tyre) Object.assign(T, j.tyre); if (j.pattern) { P.name = j.pattern.name; P.type = j.pattern.type; P.layers = j.pattern.layers; P.decals = Array.isArray(j.pattern.decals) ? j.pattern.decals.map(decal => newDecal(decal)) : defaultDecals(); } UI.sel = -1; UI.decalSel = -1; refreshAll(); toast('Imported ' + P.name); }); };
 window.addEventListener('keydown', e => { if (e.key === 'r' && !e.target.matches('input,select')) { randomTyre(); refreshAll(); } });
 
 applyPreset(0);
