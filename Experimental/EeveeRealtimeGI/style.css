@@ -1,0 +1,25 @@
+:root { color-scheme: dark; --ink:#eaf2f9; --muted:#9aaec1; --panel:rgba(9,15,24,.76); --line:rgba(166,207,238,.18); --a:#5eead4; --b:#8b8cff; }
+* { box-sizing:border-box; }
+html,body,#app { width:100%; height:100%; margin:0; overflow:hidden; background:#0b111a; }
+body { font-family:Manrope,system-ui,sans-serif; }
+#viewport { width:100%; height:100%; display:block; cursor:grab; touch-action:none; }
+#viewport:active { cursor:grabbing; }
+.panel { position:fixed; top:18px; left:18px; width:min(342px,calc(100vw - 36px)); padding:19px 19px 16px; border:1px solid var(--line); border-radius:15px; background:linear-gradient(145deg,rgba(16,27,42,.88),var(--panel)); box-shadow:0 14px 45px rgba(0,0,0,.28); backdrop-filter:blur(16px); }
+.eyebrow { color:var(--a); font:500 10px/1.1 "DM Mono",monospace; letter-spacing:.15em; }
+h1 { font-size:23px; letter-spacing:-.055em; margin:7px 0 2px; }
+.lede { margin:0 0 15px; color:var(--muted); font-size:11px; line-height:1.55; }
+.metric-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; margin-bottom:13px; }
+.metric-grid div { padding:8px 8px 7px; border-radius:8px; background:rgba(126,173,210,.08); }
+.metric-grid span { display:block; color:var(--muted); font-size:9px; line-height:1.2; }
+.metric-grid strong { display:block; margin-top:3px; font:500 11px "DM Mono",monospace; color:var(--ink); white-space:nowrap; }
+label { display:grid; grid-template-columns:1fr auto; gap:3px 9px; align-items:center; margin:10px 0; color:#cfdeea; font-size:11px; }
+label output { color:var(--a); font:500 11px "DM Mono",monospace; }
+label input[type=range] { grid-column:1/-1; width:100%; height:4px; accent-color:var(--a); }
+.toggle { display:flex; gap:9px; margin:9px 0; font-size:12px; }
+.toggle input { accent-color:var(--a); }
+.legend { display:flex; align-items:center; gap:7px; margin-top:13px; padding-top:12px; border-top:1px solid var(--line); color:var(--muted); font:10px "DM Mono",monospace; }
+.legend i { width:8px; height:8px; border-radius:50%; display:inline-block; }
+.legend .direct { background:#fff0bf; box-shadow:0 0 9px #ffe5a5; }.legend .indirect { background:#6ee7df; box-shadow:0 0 9px #5eead4; }
+.hint { margin:10px 0 0; color:#71859a; font-size:10px; }
+.unsupported { position:fixed; inset:0; display:grid; place-items:center; padding:20px; background:#0b111a; color:#eaf2f9; font:500 16px/1.5 Manrope,sans-serif; text-align:center; }
+@media (max-width:600px) { .panel { transform:scale(.88); transform-origin:top left; } }
