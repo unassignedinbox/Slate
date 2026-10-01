@@ -4,11 +4,12 @@ const GeometryAddress = "../../Assets/ShaderBall/ShaderBall.mesh";
 const GeometryMagic = 0x314d4253;
 const RsmResolution = 384;
 const RsmWorldSpan = 48.0;
+const ShadowResolution = 1024;
 const SurfelCount = (RsmResolution / 2) * (RsmResolution / 2);
 const VolumeResolution = 40;
 const CellsPerCascade = VolumeResolution ** 3;
 const VolumeCellCount = CellsPerCascade * 3;
-const FrameUniformBytes = 400;
+const FrameUniformBytes = 912;
 
 const PresentationCanvas = document.getElementById("PresentationCanvas");
 const StatusPanel = document.querySelector(".Status");
@@ -29,6 +30,7 @@ const ScreenRadius = document.getElementById("ScreenRadius");
 const RadiusOutput = document.getElementById("RadiusOutput");
 const RenderScale = document.getElementById("RenderScale");
 const ScaleOutput = document.getElementById("ScaleOutput");
+const ShadowFilter = document.getElementById("ShadowFilter");
 const PauseButton = document.getElementById("PauseButton");
 const ResetButton = document.getElementById("ResetButton");
 const TimingMetric = document.getElementById("TimingMetric");
@@ -280,6 +282,42 @@ function ConstructSceneInstances(Time)
     };
 }
 
+function ConstructMotionBounds(Time, PreviousTime)
+{
+    const Positions = (Value) => [
+        [[0.0, 5.1, 1.2 + Math.sin(Value * 1.15) * 1.05], [2.15, 0.48, 1.45]],
+        [[-4.1 + Math.sin(Value * 0.77) * 2.2, -2.2, 0.75], [1.0, 1.0, 1.0]],
+        [[4.5, -1.4 + Math.cos(Value * 0.61) * 2.7, 0.60], [0.85, 0.85, 0.85]],
+        [[Math.sin(Value * 0.48) * 7.5, 12.7, 0.9], [1.45, 0.85, 1.15]],
+        [[-4.0 + Math.sin(Value * 0.72) * 2.0, -0.6, 1.05], [1.25, 1.25, 1.25]],
+        [[3.8, 0.2 + Math.cos(Value * 0.66) * 2.0, 1.05], [1.25, 1.25, 1.25]],
+        [[-1.8, 7.1, 1.05 + (Math.sin(Value * 1.1) * 0.5 + 0.5) * 0.75], [1.25, 1.25, 1.25]],
+        [[2.2 + Math.sin(Value * 0.41) * 1.3, -7.7, 1.10], [1.35, 1.35, 1.35]],
+    ];
+    const Current = Positions(Time);
+    const Previous = Positions(PreviousTime);
+    return Current.map((Entry, Index) =>
+    {
+        const Position = Entry[0];
+        const Half = Entry[1];
+        const OldPosition = Previous[Index][0];
+        return {
+            Minimum: [
+                Math.min(Position[0], OldPosition[0]) - Half[0],
+                Math.min(Position[1], OldPosition[1]) - Half[1],
+                Math.min(Position[2], OldPosition[2]) - Half[2],
+                1.0,
+            ],
+            Maximum: [
+                Math.max(Position[0], OldPosition[0]) + Half[0],
+                Math.max(Position[1], OldPosition[1]) + Half[1],
+                Math.max(Position[2], OldPosition[2]) + Half[2],
+                1.0,
+            ],
+        };
+    });
+}
+
 async function BringRenderer()
 {
     if (!navigator.gpu) throw new Error("This browser does not expose navigator.gpu");
@@ -297,20 +335,22 @@ async function BringRenderer()
     CanvasContext.configure({ device: Device, format: CanvasFormat, alphaMode: "opaque" });
 
     StatusText.textContent = "Loading scene and transport shaders";
-    const [GeometryBinary, RasterSource, ExtractSource, InjectSource, PropagateSource, ScreenSource, PresentSource, OverlaySource] = await Promise.all([
+    const [GeometryBinary, RasterSource, ShadowSource, ExtractSource, InjectSource, PropagateSource, ScreenSource, PresentSource, OverlaySource] = await Promise.all([
         LoadBinary(GeometryAddress),
-        LoadText("LPVRaster.wgsl?revision=1"),
-        LoadText("LPVExtract.wgsl?revision=1"),
-        LoadText("LPVInject.wgsl?revision=1"),
-        LoadText("LPVPropagate.wgsl?revision=1"),
-        LoadText("LPVSSGI.wgsl?revision=1"),
-        LoadText("LPVPresent.wgsl?revision=1"),
-        LoadText("LPVOverlay.wgsl?revision=1"),
+        LoadText("LPVRaster.wgsl?revision=4"),
+        LoadText("CSMShadow.wgsl?revision=4"),
+        LoadText("LPVExtract.wgsl?revision=4"),
+        LoadText("LPVInject.wgsl?revision=4"),
+        LoadText("LPVPropagate.wgsl?revision=4"),
+        LoadText("LPVSSGI.wgsl?revision=4"),
+        LoadText("LPVPresent.wgsl?revision=4"),
+        LoadText("LPVOverlay.wgsl?revision=4"),
     ]);
     const Geometry = DecodeGeometry(GeometryBinary);
     const Cube = ConstructCube();
 
     const RasterShader = Device.createShaderModule({ label: "LPV scene raster", code: RasterSource });
+    const ShadowShader = Device.createShaderModule({ label: "Stabilized cascade shadows", code: ShadowSource });
     const ExtractShader = Device.createShaderModule({ label: "RSM surfel extraction", code: ExtractSource });
     const InjectShader = Device.createShaderModule({ label: "LPV scatter injection", code: InjectSource });
     const PropagateShader = Device.createShaderModule({ label: "LPV propagation", code: PropagateSource });
@@ -319,6 +359,7 @@ async function BringRenderer()
     const OverlayShader = Device.createShaderModule({ label: "Transient surfel overlay", code: OverlaySource });
     await Promise.all([
         ValidateShader(RasterShader, "LPVRaster.wgsl"),
+        ValidateShader(ShadowShader, "CSMShadow.wgsl"),
         ValidateShader(ExtractShader, "LPVExtract.wgsl"),
         ValidateShader(InjectShader, "LPVInject.wgsl"),
         ValidateShader(PropagateShader, "LPVPropagate.wgsl"),
@@ -377,15 +418,33 @@ async function BringRenderer()
             depthBiasSlopeScale: 1.35,
         },
     });
+    const ShadowProgram = Device.createRenderPipeline({
+        label: "Three stabilized cascade shadows",
+        layout: "auto",
+        vertex: { module: ShadowShader, entryPoint: "ShadowVertex", buffers: VertexLayout },
+        primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
+        depthStencil: {
+            format: "depth32float",
+            depthWriteEnabled: true,
+            depthCompare: "less",
+            depthBias: 2,
+            depthBiasSlopeScale: 1.5,
+        },
+    });
     const ExtractProgram = Device.createComputePipeline({
-        label: "Extract transient RSM surfels",
+        label: "Extract stable blue-noise RSM candidates",
         layout: "auto",
         compute: { module: ExtractShader, entryPoint: "ExtractMain" },
     });
-    const InjectSurfelProgram = Device.createComputePipeline({
-        label: "Inject transient surfels",
+    const ClaimSurfelProgram = Device.createComputePipeline({
+        label: "Claim one stable surfel reservoir per LPV cell",
         layout: "auto",
-        compute: { module: InjectShader, entryPoint: "InjectSurfels" },
+        compute: { module: InjectShader, entryPoint: "ClaimSurfels" },
+    });
+    const InjectSurfelProgram = Device.createComputePipeline({
+        label: "Trilinear selected-surface injection",
+        layout: "auto",
+        compute: { module: InjectShader, entryPoint: "InjectSelectedSurfels" },
     });
     const InjectCameraProgram = Device.createComputePipeline({
         label: "Inject camera blockers",
@@ -393,9 +452,14 @@ async function BringRenderer()
         compute: { module: InjectShader, entryPoint: "InjectCameraBlockers" },
     });
     const NormalizeProgram = Device.createComputePipeline({
-        label: "Normalize LPV injection",
+        label: "Normalize and reproject persistent LPV history",
         layout: "auto",
         compute: { module: InjectShader, entryPoint: "NormalizeMain" },
+    });
+    const DilateBlockerProgram = Device.createComputePipeline({
+        label: "Dilate near-cascade directional blockers",
+        layout: "auto",
+        compute: { module: InjectShader, entryPoint: "DilateBlockersMain" },
     });
     const PropagateProgram = Device.createComputePipeline({
         label: "Propagate cascaded radiance",
@@ -439,6 +503,12 @@ async function BringRenderer()
         FrameUniformBytes,
         GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     );
+    const ShadowUniforms = [0, 1, 2].map((Index) => CreateBuffer(
+        Device,
+        `Shadow cascade ${Index} uniforms`,
+        64,
+        GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    ));
     const VertexUsage = GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST;
     // Static mesh data is uploaded with queue.writeBuffer, which requires COPY_DST.
     const IndexUsage = GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST;
@@ -460,18 +530,31 @@ async function BringRenderer()
     const AtomicBuffer = CreateBuffer(
         Device,
         "LPV fixed-point injection",
-        VolumeCellCount * 17 * 4,
+        VolumeCellCount * 19 * 4,
+        GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    );
+    const ReservoirBuffer = CreateBuffer(
+        Device,
+        "Stable per-cell surfel reservoirs",
+        VolumeCellCount * 4,
         GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     );
     const VolumeBytes = VolumeCellCount * 48;
-    const VectorVolumeBytes = VolumeCellCount * 16;
+    const BlockerVolumeBytes = VolumeCellCount * 32;
     const InjectionVolume = CreateBuffer(Device, "LPV source radiance", VolumeBytes, GPUBufferUsage.STORAGE);
-    const BlockerVolume = CreateBuffer(Device, "LPV directional blockers", VectorVolumeBytes, GPUBufferUsage.STORAGE);
+    const RawBlockerVolume = CreateBuffer(Device, "Raw six-face blockers", BlockerVolumeBytes, GPUBufferUsage.STORAGE);
+    const BlockerVolume = CreateBuffer(Device, "Dilated six-face blockers", BlockerVolumeBytes, GPUBufferUsage.STORAGE);
+    const HistoryVolume = CreateBuffer(
+        Device,
+        "Persistent reprojected LPV history",
+        VolumeBytes,
+        GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    );
     const PropagationVolumes = [0, 1].map((Index) => CreateBuffer(
         Device,
         `LPV propagation ${Index}`,
         VolumeBytes,
-        GPUBufferUsage.STORAGE,
+        GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
     ));
 
     const RsmUsage = GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING;
@@ -494,11 +577,23 @@ async function BringRenderer()
         usage: RsmUsage,
     });
     const RsmDepth = Device.createTexture({
-        label: "RSM sun depth",
+        label: "GI-only RSM depth",
         size: [RsmResolution, RsmResolution],
         format: "depth32float",
-        usage: RsmUsage,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT,
     });
+    const CsmDepth = Device.createTexture({
+        label: "Three stabilized direct-shadow cascades",
+        size: [ShadowResolution, ShadowResolution, 3],
+        format: "depth32float",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    const CsmArrayView = CsmDepth.createView({ dimension: "2d-array", baseArrayLayer: 0, arrayLayerCount: 3 });
+    const CsmLayerViews = [0, 1, 2].map((Layer) => CsmDepth.createView({
+        dimension: "2d",
+        baseArrayLayer: Layer,
+        arrayLayerCount: 1,
+    }));
     const ShadowComparison = Device.createSampler({ compare: "less-equal", minFilter: "linear", magFilter: "linear" });
     const LinearSampler = Device.createSampler({ minFilter: "linear", magFilter: "linear" });
 
@@ -510,6 +605,11 @@ async function BringRenderer()
         layout: RsmProgram.getBindGroupLayout(0),
         entries: [{ binding: 0, resource: { buffer: FrameUniform } }],
     });
+    const ShadowGroups = ShadowUniforms.map((Uniform, Cascade) => Device.createBindGroup({
+        label: `Shadow cascade ${Cascade} group`,
+        layout: ShadowProgram.getBindGroupLayout(0),
+        entries: [{ binding: 0, resource: { buffer: Uniform } }],
+    }));
     const ExtractGroup = Device.createBindGroup({
         layout: ExtractProgram.getBindGroupLayout(0),
         entries: [
@@ -520,21 +620,41 @@ async function BringRenderer()
             { binding: 4, resource: { buffer: SurfelBuffer } },
         ],
     });
+    const ClaimSurfelGroup = Device.createBindGroup({
+        layout: ClaimSurfelProgram.getBindGroupLayout(0),
+        entries: [
+            { binding: 0, resource: { buffer: FrameUniform } },
+            { binding: 1, resource: { buffer: SurfelBuffer } },
+            { binding: 2, resource: { buffer: AtomicBuffer } },
+            { binding: 8, resource: { buffer: ReservoirBuffer } },
+        ],
+    });
     const InjectSurfelGroup = Device.createBindGroup({
         layout: InjectSurfelProgram.getBindGroupLayout(0),
         entries: [
             { binding: 0, resource: { buffer: FrameUniform } },
             { binding: 1, resource: { buffer: SurfelBuffer } },
             { binding: 2, resource: { buffer: AtomicBuffer } },
+            { binding: 8, resource: { buffer: ReservoirBuffer } },
         ],
     });
     const NormalizeGroup = Device.createBindGroup({
         layout: NormalizeProgram.getBindGroupLayout(0),
         entries: [
+            { binding: 0, resource: { buffer: FrameUniform } },
             { binding: 2, resource: { buffer: AtomicBuffer } },
             { binding: 5, resource: { buffer: InjectionVolume } },
-            { binding: 6, resource: { buffer: BlockerVolume } },
+            { binding: 6, resource: { buffer: RawBlockerVolume } },
             { binding: 7, resource: { buffer: PropagationVolumes[0] } },
+            { binding: 8, resource: { buffer: ReservoirBuffer } },
+            { binding: 9, resource: { buffer: HistoryVolume } },
+        ],
+    });
+    const DilateBlockerGroup = Device.createBindGroup({
+        layout: DilateBlockerProgram.getBindGroupLayout(0),
+        entries: [
+            { binding: 6, resource: { buffer: RawBlockerVolume } },
+            { binding: 10, resource: { buffer: BlockerVolume } },
         ],
     });
     const PropagateGroups = [
@@ -646,8 +766,6 @@ async function BringRenderer()
                 { binding: 2, resource: { buffer: AtomicBuffer } },
                 { binding: 3, resource: PositionImage.createView() },
                 { binding: 4, resource: NormalImage.createView() },
-                { binding: 8, resource: AlbedoImage.createView() },
-                { binding: 9, resource: RsmDepth.createView() },
             ],
         });
         ScreenGroups = [0, 1].map((Previous) =>
@@ -660,7 +778,7 @@ async function BringRenderer()
                     { binding: 1, resource: PositionImage.createView() },
                     { binding: 2, resource: NormalImage.createView() },
                     { binding: 3, resource: AlbedoImage.createView() },
-                    { binding: 4, resource: RsmDepth.createView() },
+                    { binding: 4, resource: CsmArrayView },
                     { binding: 5, resource: ScreenGIImages[Previous].createView() },
                     { binding: 6, resource: HistoryPositionImages[Previous].createView() },
                     { binding: 7, resource: ScreenGIImages[Current].createView() },
@@ -675,7 +793,7 @@ async function BringRenderer()
                 { binding: 1, resource: PositionImage.createView() },
                 { binding: 2, resource: NormalImage.createView() },
                 { binding: 3, resource: AlbedoImage.createView() },
-                { binding: 4, resource: RsmDepth.createView() },
+                { binding: 4, resource: CsmArrayView },
                 { binding: 5, resource: ShadowComparison },
                 { binding: 6, resource: ScreenGIImages[ScreenNumber].createView() },
                 { binding: 7, resource: LinearSampler },
@@ -722,6 +840,8 @@ async function BringRenderer()
     let FrameNumber = 0;
     let SimulationPaused = false;
     let PreviousCameraProjection = null;
+    let PreviousCascadeOrigins = null;
+    let PreviousWorldTime = 0.0;
     let SmoothedEncodeMilliseconds = 0.0;
 
     function CalculateCamera()
@@ -752,6 +872,31 @@ async function BringRenderer()
         ];
     }
 
+    function StabilizedShadowProjection(Camera, SunDirection, NearDistance, FarDistance)
+    {
+        const Tangent = Math.tan(0.78 * 0.5);
+        const Aspect = PresentationWidth / PresentationHeight;
+        const HalfHeight = Tangent * FarDistance;
+        const HalfWidth = HalfHeight * Aspect;
+        const HalfDepth = (FarDistance - NearDistance) * 0.5;
+        let Radius = Math.sqrt(HalfWidth * HalfWidth + HalfHeight * HalfHeight + HalfDepth * HalfDepth);
+        Radius = Math.ceil(Radius * 16.0) / 16.0;
+        let Centre = Add(Camera.Eye, Scale(Camera.Forward, (NearDistance + FarDistance) * 0.5));
+        const LightRight = Normalise(Cross([0.0, 0.0, 1.0], SunDirection));
+        const LightUp = Normalise(Cross(SunDirection, LightRight));
+        const TexelSize = (Radius * 2.0) / ShadowResolution;
+        const LightX = Dot(Centre, LightRight);
+        const LightY = Dot(Centre, LightUp);
+        Centre = Add(Centre, Scale(LightRight, Math.floor(LightX / TexelSize) * TexelSize - LightX));
+        Centre = Add(Centre, Scale(LightUp, Math.floor(LightY / TexelSize) * TexelSize - LightY));
+        const LightEye = Add(Centre, Scale(SunDirection, Radius + 70.0));
+        const View = ViewMatrix(LightEye, Centre, [0.0, 0.0, 1.0]);
+        return MultiplyMatrix(
+            OrthographicProjection(-Radius, Radius, -Radius, Radius, 0.1, Radius * 2.0 + 140.0),
+            View,
+        );
+    }
+
     function WriteFrameUniforms(Camera)
     {
         const SunElevation = 0.64 + Math.sin(SunTime * 0.63) * 0.12;
@@ -772,9 +917,19 @@ async function BringRenderer()
 
         const LookAhead = Add(Camera.Eye, Scale(Camera.Forward, Math.min(OrbitDistance * 0.55, 10.0)));
         const CascadeCenter = [LookAhead[0], LookAhead[1], 4.0];
-        const Origin0 = SnappedCascadeOrigin(CascadeCenter, 0.60);
-        const Origin1 = SnappedCascadeOrigin(CascadeCenter, 1.60);
-        const Origin2 = SnappedCascadeOrigin(CascadeCenter, 4.00);
+        const Origins = [
+            SnappedCascadeOrigin(CascadeCenter, 0.60),
+            SnappedCascadeOrigin(CascadeCenter, 1.60),
+            SnappedCascadeOrigin(CascadeCenter, 4.00),
+        ];
+        const PreviousOrigins = PreviousCascadeOrigins || Origins;
+        const ShadowSplits = [10.0, 30.0, 90.0];
+        const ShadowMatrices = [
+            StabilizedShadowProjection(Camera, SunDirection, 0.08, ShadowSplits[0]),
+            StabilizedShadowProjection(Camera, SunDirection, ShadowSplits[0], ShadowSplits[1]),
+            StabilizedShadowProjection(Camera, SunDirection, ShadowSplits[1], ShadowSplits[2]),
+        ];
+        const MotionBounds = ConstructMotionBounds(WorldTime, PreviousWorldTime);
         const Content = new Float32Array(FrameUniformBytes / 4);
         Content.set(Camera.Projection, 0);
         Content.set(PreviousCameraProjection || Camera.Projection, 16);
@@ -785,20 +940,36 @@ async function BringRenderer()
         Content.set([...Camera.Up, Number(IndirectGain.value)], 60);
         Content.set([...SunDirection, 4.35], 64);
         Content.set([...SunColour, WorldTime], 68);
-        Content.set(Origin0, 72);
-        Content.set(Origin1, 76);
-        Content.set(Origin2, 80);
+        Content.set(Origins[0], 72);
+        Content.set(Origins[1], 76);
+        Content.set(Origins[2], 80);
         Content.set([PresentationWidth, PresentationHeight, RsmResolution, RsmWorldSpan], 84);
         Content.set([
             Number(DisplayMode.value),
             BlockerField.checked ? 1.0 : 0.0,
             ScreenDetail.checked ? 1.0 : 0.0,
-            SimulationPaused ? 1.0 : 0.0,
+            Number(ShadowFilter.value),
         ], 88);
         Content.set([0.84, Number(ScreenRadius.value) * 0.1, 1.0, 1.0], 92);
         Content.set([VolumeResolution, SurfelCount, Number(PropagationSteps.value), 1.06], 96);
+        Content.set(PreviousOrigins[0], 100);
+        Content.set(PreviousOrigins[1], 104);
+        Content.set(PreviousOrigins[2], 108);
+        Content.set(ShadowMatrices[0], 112);
+        Content.set(ShadowMatrices[1], 128);
+        Content.set(ShadowMatrices[2], 144);
+        Content.set([...ShadowSplits, ShadowResolution], 160);
+        for (let BoundNumber = 0; BoundNumber < MotionBounds.length; ++BoundNumber)
+        {
+            Content.set(MotionBounds[BoundNumber].Minimum, 164 + BoundNumber * 8);
+            Content.set(MotionBounds[BoundNumber].Maximum, 168 + BoundNumber * 8);
+        }
         Device.queue.writeBuffer(FrameUniform, 0, Content);
-        return LightProjection;
+        for (let Cascade = 0; Cascade < 3; ++Cascade)
+        {
+            Device.queue.writeBuffer(ShadowUniforms[Cascade], 0, ShadowMatrices[Cascade]);
+        }
+        return { Origins };
     }
 
     function Render(Timestamp)
@@ -814,9 +985,25 @@ async function BringRenderer()
         FrameNumber += 1;
         UpdateScene(WorldTime);
         const Camera = CalculateCamera();
-        WriteFrameUniforms(Camera);
+        const FrameInfo = WriteFrameUniforms(Camera);
         const EncodeStart = performance.now();
         const Commands = Device.createCommandEncoder({ label: "Dynamic open-world GI frame" });
+
+        for (let Cascade = 0; Cascade < 3; ++Cascade)
+        {
+            const ShadowRendering = Commands.beginRenderPass({
+                label: `Rasterize stabilized shadow cascade ${Cascade}`,
+                colorAttachments: [],
+                depthStencilAttachment: {
+                    view: CsmLayerViews[Cascade],
+                    depthClearValue: 1.0,
+                    depthLoadOp: "clear",
+                    depthStoreOp: "store",
+                },
+            });
+            EncodeScene(ShadowRendering, ShadowProgram, ShadowGroups[Cascade]);
+            ShadowRendering.end();
+        }
 
         const RsmRendering = Commands.beginRenderPass({
             label: "Rasterize reflective shadow map",
@@ -858,7 +1045,13 @@ async function BringRenderer()
         ExtractPass.dispatchWorkgroups(Math.ceil(SurfelCount / 64));
         ExtractPass.end();
 
-        const SurfelInjectionPass = Commands.beginComputePass({ label: "Scatter surfel radiance and blockers" });
+        const SurfelClaimPass = Commands.beginComputePass({ label: "Select stable per-cell surfel reservoirs" });
+        SurfelClaimPass.setPipeline(ClaimSurfelProgram);
+        SurfelClaimPass.setBindGroup(0, ClaimSurfelGroup);
+        SurfelClaimPass.dispatchWorkgroups(Math.ceil(SurfelCount / 64));
+        SurfelClaimPass.end();
+
+        const SurfelInjectionPass = Commands.beginComputePass({ label: "Trilinear selected-surface radiance injection" });
         SurfelInjectionPass.setPipeline(InjectSurfelProgram);
         SurfelInjectionPass.setBindGroup(0, InjectSurfelGroup);
         SurfelInjectionPass.dispatchWorkgroups(Math.ceil(SurfelCount / 64));
@@ -875,6 +1068,12 @@ async function BringRenderer()
         NormalizePass.setBindGroup(0, NormalizeGroup);
         NormalizePass.dispatchWorkgroups(Math.ceil(VolumeCellCount / 64));
         NormalizePass.end();
+
+        const DilationPass = Commands.beginComputePass({ label: "Dilate near-cascade directional blockers" });
+        DilationPass.setPipeline(DilateBlockerProgram);
+        DilationPass.setBindGroup(0, DilateBlockerGroup);
+        DilationPass.dispatchWorkgroups(Math.ceil(VolumeCellCount / 64));
+        DilationPass.end();
 
         const StepCount = Number(PropagationSteps.value);
         for (let Step = 0; Step < StepCount; ++Step)
@@ -925,9 +1124,12 @@ async function BringRenderer()
             OverlayRendering.end();
         }
 
+        Commands.copyBufferToBuffer(PropagationVolumes[PublishedVolume], 0, HistoryVolume, 0, VolumeBytes);
         Device.queue.submit([Commands.finish()]);
         HistoryNumber = CurrentHistory;
         PreviousCameraProjection = new Float32Array(Camera.Projection);
+        PreviousCascadeOrigins = FrameInfo.Origins.map((Origin) => [...Origin]);
+        PreviousWorldTime = WorldTime;
         const EncodeMilliseconds = performance.now() - EncodeStart;
         SmoothedEncodeMilliseconds = SmoothedEncodeMilliseconds === 0.0
             ? EncodeMilliseconds
@@ -970,6 +1172,8 @@ async function BringRenderer()
     RenderScale.addEventListener("change", () =>
     {
         PreviousCameraProjection = null;
+        PreviousCascadeOrigins = null;
+        FrameNumber = 0;
         PresentationWidth = 0;
     });
     PauseButton.addEventListener("click", () =>
@@ -983,6 +1187,8 @@ async function BringRenderer()
         OrbitPitch = 0.40;
         OrbitDistance = 20.0;
         PreviousCameraProjection = null;
+        PreviousCascadeOrigins = null;
+        FrameNumber = 0;
         PresentationWidth = 0;
     });
 
@@ -1022,7 +1228,7 @@ async function BringRenderer()
 
     UpdateViewLabels();
     StatusPanel.classList.add("Ready");
-    StatusText.textContent = "WebGPU · three dynamic cascades live";
+    StatusText.textContent = "WebGPU · stabilized CSM + persistent LPV live";
     requestAnimationFrame(Render);
 }
 

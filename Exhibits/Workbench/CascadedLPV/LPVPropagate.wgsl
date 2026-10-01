@@ -1,4 +1,4 @@
-// Jacobi-style directional light propagation through three independent camera-relative cascades.
+// Directional propagation through persistent cascades with six-face conservative blockers.
 
 struct FrameUniforms
 {
@@ -20,26 +20,14 @@ struct FrameUniforms
     Counts: vec4f,
 };
 
-struct VolumeCell
-{
-    Red: vec4f,
-    Green: vec4f,
-    Blue: vec4f,
-};
-
-struct VolumeExtent
-{
-    Cells: array<VolumeCell>,
-};
-
-struct VectorExtent
-{
-    Cells: array<vec4f>,
-};
+struct VolumeCell { Red: vec4f, Green: vec4f, Blue: vec4f, };
+struct VolumeExtent { Cells: array<VolumeCell>, };
+struct BlockerCell { Axis0: vec4f, Axis1: vec4f, };
+struct BlockerExtent { Cells: array<BlockerCell>, };
 
 @group(0) @binding(0) var<uniform> Frame: FrameUniforms;
 @group(0) @binding(1) var<storage, read> InjectionVolume: VolumeExtent;
-@group(0) @binding(2) var<storage, read> BlockerVolume: VectorExtent;
+@group(0) @binding(2) var<storage, read> BlockerVolume: BlockerExtent;
 @group(0) @binding(3) var<storage, read> SourceVolume: VolumeExtent;
 @group(0) @binding(4) var<storage, read_write> DestinationVolume: VolumeExtent;
 
@@ -52,14 +40,12 @@ fn LocalCoordinate(Cell: u32) -> vec3i
     let Z = Local / (VolumeResolution * VolumeResolution);
     let Remainder = Local - Z * VolumeResolution * VolumeResolution;
     let Y = Remainder / VolumeResolution;
-    let X = Remainder - Y * VolumeResolution;
-    return vec3i(i32(X), i32(Y), i32(Z));
+    return vec3i(i32(Remainder - Y * VolumeResolution), i32(Y), i32(Z));
 }
 
 fn LocalIndex(Coordinate: vec3i, Cascade: u32) -> u32
 {
-    return Cascade * CellsPerCascade
-        + u32(Coordinate.x)
+    return Cascade * CellsPerCascade + u32(Coordinate.x)
         + u32(Coordinate.y) * VolumeResolution
         + u32(Coordinate.z) * VolumeResolution * VolumeResolution;
 }
@@ -67,6 +53,20 @@ fn LocalIndex(Coordinate: vec3i, Cascade: u32) -> u32
 fn Evaluate(Coefficients: vec4f, Direction: vec3f) -> f32
 {
     return max(Coefficients.x + dot(Coefficients.yzw, Direction), 0.0);
+}
+
+fn DirectionalOpacity(Blocker: BlockerCell, Direction: vec3f) -> f32
+{
+    return clamp(
+        Blocker.Axis0.x * max(Direction.x, 0.0)
+        + Blocker.Axis0.y * max(-Direction.x, 0.0)
+        + Blocker.Axis0.z * max(Direction.y, 0.0)
+        + Blocker.Axis0.w * max(-Direction.y, 0.0)
+        + Blocker.Axis1.x * max(Direction.z, 0.0)
+        + Blocker.Axis1.y * max(-Direction.z, 0.0),
+        0.0,
+        1.0
+    );
 }
 
 fn ClampCell(Cell: VolumeCell) -> VolumeCell
@@ -83,44 +83,36 @@ fn PropagateMain(@builtin(global_invocation_id) Global: vec3u)
 {
     let CellNumber = Global.x;
     if (CellNumber >= CellsPerCascade * 3u) { return; }
-
     let Cascade = CellNumber / CellsPerCascade;
     let Coordinate = LocalCoordinate(CellNumber);
     let DestinationBlocker = BlockerVolume.Cells[CellNumber];
     let Offsets = array<vec3i, 6>(
-        vec3i(-1, 0, 0), vec3i(1, 0, 0),
-        vec3i(0, -1, 0), vec3i(0, 1, 0),
-        vec3i(0, 0, -1), vec3i(0, 0, 1)
+        vec3i(-1, 0, 0), vec3i(1, 0, 0), vec3i(0, -1, 0),
+        vec3i(0, 1, 0), vec3i(0, 0, -1), vec3i(0, 0, 1)
     );
 
-    var Result = InjectionVolume.Cells[CellNumber];
+    let SourceCell = SourceVolume.Cells[CellNumber];
+    let InjectionCell = InjectionVolume.Cells[CellNumber];
+    var Result = VolumeCell(
+        SourceCell.Red * 0.78 + InjectionCell.Red * 0.22,
+        SourceCell.Green * 0.78 + InjectionCell.Green * 0.22,
+        SourceCell.Blue * 0.78 + InjectionCell.Blue * 0.22
+    );
     for (var DirectionNumber = 0u; DirectionNumber < 6u; DirectionNumber = DirectionNumber + 1u)
     {
         let SourceCoordinate = Coordinate + Offsets[DirectionNumber];
-        if (any(SourceCoordinate < vec3i(0)) || any(SourceCoordinate >= vec3i(i32(VolumeResolution))))
-        {
-            continue;
-        }
+        if (any(SourceCoordinate < vec3i(0)) || any(SourceCoordinate >= vec3i(i32(VolumeResolution)))) { continue; }
         let SourceNumber = LocalIndex(SourceCoordinate, Cascade);
         let Source = SourceVolume.Cells[SourceNumber];
         let TravelDirection = normalize(vec3f(-Offsets[DirectionNumber]));
         var Visibility = 1.0;
         if (Frame.Settings.y > 0.5)
         {
-            let SourceBlocker = BlockerVolume.Cells[SourceNumber];
-            let DestinationCrossing = smoothstep(
-                0.12,
-                0.92,
-                abs(dot(TravelDirection, DestinationBlocker.xyz))
-            ) * DestinationBlocker.w;
-            let SourceBackface = smoothstep(
-                0.05,
-                0.82,
-                -dot(TravelDirection, SourceBlocker.xyz)
-            ) * SourceBlocker.w;
-            Visibility = 1.0 - clamp(max(DestinationCrossing * 0.58, SourceBackface * 0.78), 0.0, 0.90);
+            let FacingDirection = -TravelDirection;
+            let DestinationOpacity = DirectionalOpacity(DestinationBlocker, FacingDirection);
+            let SourceOpacity = DirectionalOpacity(BlockerVolume.Cells[SourceNumber], FacingDirection);
+            Visibility = 1.0 - clamp(max(DestinationOpacity * 0.82, SourceOpacity * 0.90), 0.0, 0.96);
         }
-
         let Incoming = vec3f(
             Evaluate(Source.Red, TravelDirection),
             Evaluate(Source.Green, TravelDirection),
@@ -130,6 +122,5 @@ fn PropagateMain(@builtin(global_invocation_id) Global: vec3u)
         Result.Green = Result.Green + vec4f(Incoming.g * 0.45, Incoming.g * TravelDirection * 0.55);
         Result.Blue = Result.Blue + vec4f(Incoming.b * 0.45, Incoming.b * TravelDirection * 0.55);
     }
-
     DestinationVolume.Cells[CellNumber] = ClampCell(Result);
 }

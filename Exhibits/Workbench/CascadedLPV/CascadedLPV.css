@@ -260,7 +260,7 @@ button:hover { transform: translateY(-1px); filter: brightness(1.08); }
 button.Secondary { color: var(--Text); border-color: var(--Line); background: #06100f; }
 .Metrics {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     margin: 22px 0 86px;
     border-top: 1px solid var(--Line);
     border-bottom: 1px solid var(--Line);
@@ -303,7 +303,7 @@ footer {
     .ControlRail { grid-template-columns: 1fr 1fr; }
     .ButtonGroup { grid-column: span 2; }
     .Metrics { grid-template-columns: 1fr 1fr; }
-    .Metrics article:nth-child(2) { border-right: 0; }
+    .Metrics article:nth-child(even) { border-right: 0; }
     .Pipeline { grid-template-columns: 1fr; }
     .Pipeline article { min-height: 240px; }
     footer { display: block; }

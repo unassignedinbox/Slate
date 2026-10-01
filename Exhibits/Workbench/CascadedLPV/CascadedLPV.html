@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#07100f">
     <title>Slate — Dynamic Open-World GI Lab</title>
-    <link rel="stylesheet" href="CascadedLPV.css">
+    <link rel="stylesheet" href="CascadedLPV.css?revision=4">
 </head>
 <body>
     <main>
@@ -14,9 +14,9 @@
                 <p class="Eyebrow">SLATE · DYNAMIC LIGHT TRANSPORT</p>
                 <h1>Three moving light volumes.<br><span>No rays. No bake. No SDF.</span></h1>
                 <p class="Introduction">
-                    A live WebGPU prototype for changing game worlds. The sun rasterizes transient surface lights,
-                    three camera-relative LPV cascades spread that energy through a compact blocker field, and
-                    half-resolution screen-space GI restores nearby contact detail.
+                    A live WebGPU prototype for changing game worlds. Dedicated stabilized shadow cascades handle
+                    direct visibility; persistent camera-relative LPVs spread GI-only RSM energy through a six-face
+                    blocker field, while half-resolution screen-space GI restores nearby contact detail.
                 </p>
             </div>
             <div class="Status" aria-live="polite">
@@ -95,6 +95,13 @@
                     <span><b>Render scale</b><output id="ScaleOutput">150%</output></span>
                     <input id="RenderScale" type="range" min="100" max="175" value="150" step="25">
                 </label>
+                <label class="SelectControl">
+                    <span><b>Shadow filter</b><small>Stabilized 3-cascade PCF</small></span>
+                    <select id="ShadowFilter">
+                        <option value="1" selected>3×3 PCF</option>
+                        <option value="2">5×5 PCF</option>
+                    </select>
+                </label>
                 <div class="ButtonGroup">
                     <button id="PauseButton" class="Secondary" type="button">Pause simulation</button>
                     <button id="ResetButton" type="button">Reset camera &amp; history</button>
@@ -106,6 +113,7 @@
             <article><span>Backend</span><strong>WebGPU</strong></article>
             <article><span>Transient samples</span><strong id="SurfelMetric">36,864</strong></article>
             <article><span>LPV cells</span><strong>3 × 40³</strong></article>
+            <article><span>Direct shadows</span><strong>3 × 1024²</strong></article>
             <article><span>CPU encode</span><strong id="TimingMetric">—</strong></article>
         </section>
 
@@ -113,17 +121,17 @@
             <article>
                 <span class="ArticleNumber">01</span>
                 <h2>Rasterize samples</h2>
-                <p>A 384² reflective shadow map captures current positions, normals, materials, and sun-facing flux. Every second texel becomes a transient surfel; current G-buffer samples add visible movers and blockers, so stale geometry is replaced immediately.</p>
+                <p>A GI-only 384² reflective shadow map generates world-anchored blue-noise candidates. Deterministic per-cell reservoirs and edge detection prevent light-space oversampling and reduce sample churn.</p>
             </article>
             <article>
                 <span class="ArticleNumber">02</span>
                 <h2>Propagate off screen</h2>
-                <p>Three snapped 40³ lattices cover 24, 64, and 160 metres around the camera. Directional RGB light is injected and propagated while camera and light-view surfaces form a small blocker field.</p>
+                <p>Three persistent 40³ lattices cover 24, 64, and 160 metres. Eight-cell radiance splats, reprojected history, motion invalidation, and dilated six-face blockers reduce popping and leakage.</p>
             </article>
             <article>
                 <span class="ArticleNumber">03</span>
                 <h2>Restore local detail</h2>
-                <p>The volume result is intentionally broad. A half-resolution, temporally validated screen pass adds short-range colour transfer and GTAO without pretending that screen-visible information is global.</p>
+                <p>Three stabilized 1024² shadow cascades with switchable 3×3/5×5 PCF handle direct visibility independently. Half-resolution screen GI and GTAO restore short-range contact detail.</p>
             </article>
         </section>
 
@@ -132,6 +140,6 @@
             <span>Diffuse GI prototype · SSR/reflection probes remain a separate production concern</span>
         </footer>
     </main>
-    <script type="module" src="CascadedLPV.js?revision=3"></script>
+    <script type="module" src="CascadedLPV.js?revision=4"></script>
 </body>
 </html>

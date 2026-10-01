@@ -18,6 +18,13 @@ struct FrameUniforms
     Settings: vec4f,
     ScreenSettings: vec4f,
     Counts: vec4f,
+    PreviousCascadeOrigin0: vec4f,
+    PreviousCascadeOrigin1: vec4f,
+    PreviousCascadeOrigin2: vec4f,
+    ShadowProjection0: mat4x4f,
+    ShadowProjection1: mat4x4f,
+    ShadowProjection2: mat4x4f,
+    ShadowSplits: vec4f,
 };
 
 struct VolumeCell
@@ -32,9 +39,15 @@ struct VolumeExtent
     Cells: array<VolumeCell>,
 };
 
-struct VectorExtent
+struct BlockerCell
 {
-    Cells: array<vec4f>,
+    Axis0: vec4f,
+    Axis1: vec4f,
+};
+
+struct BlockerExtent
+{
+    Cells: array<BlockerCell>,
 };
 
 struct FullscreenVarying
@@ -47,12 +60,12 @@ struct FullscreenVarying
 @group(0) @binding(1) var PositionImage: texture_2d<f32>;
 @group(0) @binding(2) var NormalImage: texture_2d<f32>;
 @group(0) @binding(3) var AlbedoImage: texture_2d<f32>;
-@group(0) @binding(4) var RsmDepth: texture_depth_2d;
+@group(0) @binding(4) var CsmDepth: texture_depth_2d_array;
 @group(0) @binding(5) var ShadowComparison: sampler_comparison;
 @group(0) @binding(6) var ScreenGI: texture_2d<f32>;
 @group(0) @binding(7) var LinearSampler: sampler;
 @group(0) @binding(8) var<storage, read> RadianceVolume: VolumeExtent;
-@group(0) @binding(9) var<storage, read> BlockerVolume: VectorExtent;
+@group(0) @binding(9) var<storage, read> BlockerVolume: BlockerExtent;
 
 const VolumeResolution: u32 = 40u;
 const CellsPerCascade: u32 = 64000u;
@@ -153,7 +166,13 @@ fn SampleBlocker(Position: vec3f, Cascade: u32) -> vec4f
     let OriginCell = CascadeOrigin(Cascade);
     let Coordinate = vec3i(floor((Position - OriginCell.xyz) / OriginCell.w));
     if (any(Coordinate < vec3i(0)) || any(Coordinate >= vec3i(40))) { return vec4f(0.0); }
-    return BlockerVolume.Cells[CellNumber(Coordinate, Cascade)];
+    let Blocker = BlockerVolume.Cells[CellNumber(Coordinate, Cascade)];
+    let Axes = vec3f(
+        max(Blocker.Axis0.x, Blocker.Axis0.y),
+        max(Blocker.Axis0.z, Blocker.Axis0.w),
+        max(Blocker.Axis1.x, Blocker.Axis1.y)
+    );
+    return vec4f(Axes, max(Axes.x, max(Axes.y, Axes.z)));
 }
 
 fn SkyRadiance(Direction: vec3f) -> vec3f
@@ -164,17 +183,48 @@ fn SkyRadiance(Direction: vec3f) -> vec3f
     return mix(HorizonColour, ZenithColour, Zenith);
 }
 
+fn ShadowProjection(Cascade: u32) -> mat4x4f
+{
+    if (Cascade == 0u) { return Frame.ShadowProjection0; }
+    if (Cascade == 1u) { return Frame.ShadowProjection1; }
+    return Frame.ShadowProjection2;
+}
+
 fn SunVisibility(Position: vec3f, Normal: vec3f) -> f32
 {
-    let Clip = Frame.LightProjection * vec4f(Position + Normal * 0.012, 1.0);
+    let ViewDepth = max(dot(Position - Frame.CameraPosition.xyz, Frame.CameraForwardTan.xyz), 0.0);
+    var Cascade = 0u;
+    if (ViewDepth > Frame.ShadowSplits.x) { Cascade = 1u; }
+    if (ViewDepth > Frame.ShadowSplits.y) { Cascade = 2u; }
+    let Clip = ShadowProjection(Cascade) * vec4f(Position + Normal * 0.012, 1.0);
     let Ndc = Clip.xyz / max(Clip.w, 0.0001);
     let Uv = vec2f(Ndc.x * 0.5 + 0.5, 0.5 - Ndc.y * 0.5);
     if (any(Uv <= vec2f(0.0)) || any(Uv >= vec2f(1.0)) || Ndc.z <= 0.0 || Ndc.z >= 1.0)
     {
         return 1.0;
     }
-    let Bias = 0.0017 + 0.0032 * (1.0 - max(dot(Normal, Frame.SunDirectionIntensity.xyz), 0.0));
-    return textureSampleCompareLevel(RsmDepth, ShadowComparison, Uv, Ndc.z - Bias);
+    let Extent = textureDimensions(CsmDepth);
+    let Texel = 1.0 / vec2f(Extent);
+    let Bias = 0.00065 + 0.0018 * (1.0 - max(dot(Normal, Frame.SunDirectionIntensity.xyz), 0.0));
+    let FilterRadius = i32(clamp(Frame.Settings.w, 1.0, 2.0));
+    var Visibility = 0.0;
+    var Weight = 0.0;
+    for (var Y = -2; Y <= 2; Y = Y + 1)
+    {
+        for (var X = -2; X <= 2; X = X + 1)
+        {
+            if (abs(X) > FilterRadius || abs(Y) > FilterRadius) { continue; }
+            Visibility = Visibility + textureSampleCompareLevel(
+                CsmDepth,
+                ShadowComparison,
+                Uv + vec2f(f32(X), f32(Y)) * Texel,
+                i32(Cascade),
+                Ndc.z - Bias
+            );
+            Weight = Weight + 1.0;
+        }
+    }
+    return Visibility / max(Weight, 1.0);
 }
 
 fn Fresnel(SpecularZero: vec3f, Cosine: f32) -> vec3f

@@ -18,32 +18,47 @@ struct FrameUniforms
     Settings: vec4f,
     ScreenSettings: vec4f,
     Counts: vec4f,
+    PreviousCascadeOrigin0: vec4f,
+    PreviousCascadeOrigin1: vec4f,
+    PreviousCascadeOrigin2: vec4f,
+    ShadowProjection0: mat4x4f,
+    ShadowProjection1: mat4x4f,
+    ShadowProjection2: mat4x4f,
+    ShadowSplits: vec4f,
 };
 
 @group(0) @binding(0) var<uniform> Frame: FrameUniforms;
 @group(0) @binding(1) var PositionImage: texture_2d<f32>;
 @group(0) @binding(2) var NormalImage: texture_2d<f32>;
 @group(0) @binding(3) var AlbedoImage: texture_2d<f32>;
-@group(0) @binding(4) var RsmDepth: texture_depth_2d;
+@group(0) @binding(4) var CsmDepth: texture_depth_2d_array;
 @group(0) @binding(5) var PreviousScreenGI: texture_2d<f32>;
 @group(0) @binding(6) var PreviousPosition: texture_2d<f32>;
 @group(0) @binding(7) var CurrentScreenGI: texture_storage_2d<rgba16float, write>;
 @group(0) @binding(8) var CurrentPosition: texture_storage_2d<rgba16float, write>;
 
+fn ShadowProjection(Cascade: u32) -> mat4x4f
+{
+    if (Cascade == 0u) { return Frame.ShadowProjection0; }
+    if (Cascade == 1u) { return Frame.ShadowProjection1; }
+    return Frame.ShadowProjection2;
+}
+
 fn SunVisibility(Position: vec3f, Normal: vec3f) -> f32
 {
-    let Clip = Frame.LightProjection * vec4f(Position + Normal * 0.015, 1.0);
+    let ViewDepth = max(dot(Position - Frame.CameraPosition.xyz, Frame.CameraForwardTan.xyz), 0.0);
+    var Cascade = 0u;
+    if (ViewDepth > Frame.ShadowSplits.x) { Cascade = 1u; }
+    if (ViewDepth > Frame.ShadowSplits.y) { Cascade = 2u; }
+    let Clip = ShadowProjection(Cascade) * vec4f(Position + Normal * 0.015, 1.0);
     if (Clip.w <= 0.0) { return 1.0; }
     let Ndc = Clip.xyz / Clip.w;
     let Uv = vec2f(Ndc.x * 0.5 + 0.5, 0.5 - Ndc.y * 0.5);
-    if (any(Uv <= vec2f(0.0)) || any(Uv >= vec2f(1.0)) || Ndc.z <= 0.0 || Ndc.z >= 1.0)
-    {
-        return 1.0;
-    }
-    let Extent = textureDimensions(RsmDepth);
+    if (any(Uv <= vec2f(0.0)) || any(Uv >= vec2f(1.0)) || Ndc.z <= 0.0 || Ndc.z >= 1.0) { return 1.0; }
+    let Extent = textureDimensions(CsmDepth);
     let Pixel = vec2i(clamp(Uv * vec2f(Extent), vec2f(0.0), vec2f(Extent) - vec2f(1.0)));
-    let StoredDepth = textureLoad(RsmDepth, Pixel, 0);
-    let Bias = 0.0018 + 0.0035 * (1.0 - max(dot(Normal, Frame.SunDirectionIntensity.xyz), 0.0));
+    let StoredDepth = textureLoad(CsmDepth, Pixel, i32(Cascade), 0);
+    let Bias = 0.0009 + 0.0020 * (1.0 - max(dot(Normal, Frame.SunDirectionIntensity.xyz), 0.0));
     return select(0.0, 1.0, Ndc.z - Bias <= StoredDepth);
 }
 
