@@ -317,3 +317,25 @@ target_include_directories(Project-F20 PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Projects/Project-F20/Source
 )
 target_link_libraries(Project-F20 PRIVATE pthread)
+
+#============================================================================================================================================
+# Experimental — software-CWBVH SurfelGI reference contract
+# Kept opt-in: this first-pass port intentionally lives outside the Project-Zero production frame graph until it has been
+# profiled and integrated.  The host contract test has no Vulkan or renderer dependency; shaders and wiring are under
+# Experimental/SurfelGI/ (see VulkanIntegration.md).
+#============================================================================================================================================
+option(FRONTIER_BUILD_EXPERIMENTAL_SURFEL_GI "Build the experimental non-RTX SurfelGI contract test" OFF)
+if(FRONTIER_BUILD_EXPERIMENTAL_SURFEL_GI)
+    add_library(FrontierSurfelGIExperimental STATIC
+        Experimental/SurfelGI/SurfelGI.cpp
+    )
+    target_include_directories(FrontierSurfelGIExperimental PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/Experimental/SurfelGI
+    )
+    target_compile_features(FrontierSurfelGIExperimental PUBLIC cxx_std_20)
+
+    add_executable(FrontierSurfelGIContract
+        Experimental/SurfelGI/Tests/SurfelGIHostTests.cpp
+    )
+    target_link_libraries(FrontierSurfelGIContract PRIVATE FrontierSurfelGIExperimental)
+endif()
