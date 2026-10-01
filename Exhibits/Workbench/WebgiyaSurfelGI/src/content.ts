@@ -10,7 +10,6 @@ import { CSMShadowNode } from 'three/examples/jsm/csm/CSMShadowNode.js';
 import type { LightSettings } from './lighting.ts';
 import type { OcclusionSettings } from './surfelRadialDepth.ts';
 import { populateShaderBallSurfelScene } from './shaderBallScene.ts';
-import { populateDynamicShaderBallScene } from './dynamicShaderBallScene.ts';
 
 export type SceneContent = {
   ground: THREE.Mesh;
@@ -837,45 +836,8 @@ export type SceneDefinition = {
 
 export const SCENE_PRESETS: SceneDefinition[] = [
   {
-    id: 'shaderball-rigid-dynamics',
-    label: 'ShaderBall Rigid Dynamics · GTX',
-    hdr: `${baseUrl}exr/pizzo_pernice_puresky_2k.hdr`,
-    settings: {
-      light: {
-        intensity: 7.0,
-        animate: true,
-        speed: 0.22,
-      },
-      camera: {
-        position: new THREE.Vector3(10.5, 6.2, 12.5),
-        target: new THREE.Vector3(0, 1.55, -0.6),
-      },
-      gi: {
-        mode: 'combined',
-        indirectIntensity: 1.45,
-      },
-      integrator: {
-        baseSampleCount: 2,
-      },
-      transport: {
-        envIntensity: 0.35,
-        envLod: 4.0,
-        giFromDirect: 1.65,
-        giFromIndirect: 1.0,
-        albedoBoost: 1.08,
-      },
-      occlusion: {
-        shadowStrength: 0.8,
-        bleedReduction: 0.2,
-        grazingBiasScale: 0.25,
-        varianceBleedScale: 0.35,
-      },
-    },
-    populate: populateDynamicShaderBallScene,
-  },
-  {
     id: 'shaderball-light-lab',
-    label: 'ShaderBall Light Lab · Exact Static',
+    label: 'ShaderBall Light Lab',
     hdr: `${baseUrl}exr/pizzo_pernice_puresky_2k.hdr`,
     settings: {
       light: {
