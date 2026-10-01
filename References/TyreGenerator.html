@@ -202,7 +202,8 @@ const T = {                       // tyre carcass parameters (mm / inch / fracti
   width: 245, aspect: 40, rim: 18, treadDepth: 8, wear: 0, wearBias: 0,
   treadFrac: 0.88, crown: 2.0, shoulder: 18, bulge: 1.0, rimWidthFrac: 0.78,
   radial: 720, across: 96, meshMode: 'poly', polyDetail: 6,
-  rubber: '#151515', letter: 'white', lettering: true, brand: 'SLATE', spokes: 5, rimColor: '#c9ccd2', rimStyle: 'spoke'
+  rubber: '#151515', letter: 'white', lettering: true, brand: 'SLATE', spokes: 5, rimColor: '#c9ccd2', rimStyle: 'spoke',
+  factoryStripes: true, stripeRed: '#d63842', stripeBlue: '#3184c7', stripeWidth: 1.4, stripeGap: 4.2, stripeWave: 1.1
 };
 const P = { name: 'GZero', type: 'Slick', layers: [] };   // tread pattern
 const UI = { sel: -1, threads: false, spin: false, treadMode: 'color' };
@@ -415,8 +416,14 @@ function vnoise(x, y) {
 function buildTreadMaps(pm, treadDepth, rubberHex, wear) {
   const { W, H, depth, k } = pm;
   const base = new THREE.Color(rubberHex), worn = new THREE.Color('#4a4846'), grooveC = new THREE.Color('#0a0a0a');
+  const stripeRed = new THREE.Color(T.stripeRed), stripeBlue = new THREE.Color(T.stripeBlue);
   const col = new ImageData(W, H), rou = new ImageData(W, H), nor = new ImageData(W, H);
   const mmPerPx = 1 / k; const tmp = new THREE.Color();
+  const stripeWidth = Math.max(0.5, T.stripeWidth) * k * 0.5;
+  const stripeGap = Math.max(1.5, T.stripeGap) * k * 0.5;
+  const stripeWave = Math.max(0, T.stripeWave) * k;
+  const stripePeriod = Math.max(16, 42 * k);
+  const stripeCover = distance => Math.max(0, Math.min(1, (stripeWidth + 0.7 - distance) / 0.7));
   for (let y = 0; y < H; y++) {
     const wl = pm.wearRow(y);
     for (let x = 0; x < W; x++) {
@@ -426,8 +433,20 @@ function buildTreadMaps(pm, treadDepth, rubberHex, wear) {
       tmp.copy(base).lerp(worn, wl * 0.75 * (0.7 + 0.6 * grain));
       tmp.lerp(grooveC, Math.min(1, dv * 1.2));
       tmp.offsetHSL(0, 0, (grain - 0.5) * 0.06);
+      // Fresh tyres often have coloured factory identification stripes. Paint only the
+      // raised tread blocks, then fade the markings with wear rather than colouring grooves.
+      let paint = 0;
+      if (T.factoryStripes && dv < 0.025 && wl < 0.98) {
+        const phase = (x / stripePeriod) - Math.floor(x / stripePeriod);
+        const zig = (1 - 4 * Math.abs(phase - 0.5)) * stripeWave;
+        const redPaint = stripeCover(Math.abs(y - (H * 0.5 - stripeGap + zig)));
+        const bluePaint = stripeCover(Math.abs(y - (H * 0.5 + stripeGap - zig)));
+        const fade = 1 - wl * 0.92;
+        if (redPaint >= bluePaint && redPaint > 0) { paint = redPaint * fade; tmp.lerp(stripeRed, paint * 0.92); }
+        else if (bluePaint > 0) { paint = bluePaint * fade; tmp.lerp(stripeBlue, paint * 0.92); }
+      }
       col.data[o] = tmp.r * 255; col.data[o + 1] = tmp.g * 255; col.data[o + 2] = tmp.b * 255; col.data[o + 3] = 255;
-      const r = dv > 0.02 ? 0.92 : 0.9 - wl * 0.42 + (grain - 0.5) * 0.15; const rq = Math.max(0, Math.min(1, r)) * 255;
+      const r = paint > 0 ? 0.72 : (dv > 0.02 ? 0.92 : 0.9 - wl * 0.42 + (grain - 0.5) * 0.15); const rq = Math.max(0, Math.min(1, r)) * 255;
       rou.data[o] = rq; rou.data[o + 1] = rq; rou.data[o + 2] = rq; rou.data[o + 3] = 255;
       const xl = depth[y * W + (x + W - 1) % W], xr = depth[y * W + (x + 1) % W];
       const yu = depth[Math.max(0, y - 1) * W + x], yd = depth[Math.min(H - 1, y + 1) * W + x];
@@ -946,6 +965,12 @@ function buildTyreUI() {
   color(l, 'Rubber colour', T, 'rubber'); select(l, 'Lettering colour', T, 'letter', ['white', 'yellow', 'red', 'blue', 'black']); check(l, 'Sidewall lettering', T, 'lettering');
   const b = document.createElement('div'); b.className = 'row'; b.innerHTML = '<label>Brand</label><input type="text" value="' + T.brand + '">'; b.querySelector('input').oninput = e => { T.brand = e.target.value; schedule(); }; l.appendChild(b);
   select(l, 'Rim style', T, 'rimStyle', ['spoke', 'dish']); slider(l, 'Spokes', T, 'spokes', 3, 12, 1); color(l, 'Rim colour', T, 'rimColor');
+  const markingHead = document.createElement('div'); markingHead.className = 'sec'; markingHead.textContent = 'Factory tread paint'; l.appendChild(markingHead);
+  check(l, 'Coloured tread stripes', T, 'factoryStripes');
+  color(l, 'Red stripe', T, 'stripeRed'); color(l, 'Blue stripe', T, 'stripeBlue');
+  slider(l, 'Stripe width (mm)', T, 'stripeWidth', 0.5, 4, 0.1, v => v.toFixed(1));
+  slider(l, 'Stripe gap (mm)', T, 'stripeGap', 1.5, 10, 0.1, v => v.toFixed(1));
+  slider(l, 'Stripe weave (mm)', T, 'stripeWave', 0, 4, 0.1, v => v.toFixed(1));
 }
 function buildPresetUI() {
   const box = document.getElementById('presets'); box.innerHTML = '';
