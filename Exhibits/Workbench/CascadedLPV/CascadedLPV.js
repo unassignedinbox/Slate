@@ -284,6 +284,12 @@ async function BringRenderer()
     const Adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
     if (!Adapter) throw new Error("No WebGPU adapter is available");
     const Device = await Adapter.requestDevice();
+    Device.addEventListener("uncapturederror", (Event) =>
+    {
+        console.error("WebGPU validation error", Event.error);
+        StatusPanel.classList.add("Failed");
+        StatusText.textContent = `WebGPU validation: ${Event.error?.message || "unknown error"}`;
+    });
     const CanvasContext = PresentationCanvas.getContext("webgpu");
     const CanvasFormat = navigator.gpu.getPreferredCanvasFormat();
     CanvasContext.configure({ device: Device, format: CanvasFormat, alphaMode: "opaque" });
@@ -432,7 +438,8 @@ async function BringRenderer()
         GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     );
     const VertexUsage = GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST;
-    const IndexUsage = GPUBufferUsage.INDEX;
+    // Static mesh data is uploaded with queue.writeBuffer, which requires COPY_DST.
+    const IndexUsage = GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST;
     const BallVertexBuffer = CreateBuffer(Device, "ShaderBall vertices", Geometry.Vertices, VertexUsage);
     const BallIndexBuffer = CreateBuffer(Device, "ShaderBall indices", Geometry.Indices, IndexUsage);
     const CubeVertexBuffer = CreateBuffer(Device, "World box vertices", Cube.Vertices, VertexUsage);
