@@ -259,6 +259,29 @@ int main(int ArgumentCount, char** ArgumentValues)
     constexpr int Tile=44, Grid=20, Gap=12, Panel=Tile*Grid, Width=Panel*3+Gap*2, Height=Panel;
     const std::vector<TileSample> Samples=RasterizeTile(Vertices,Triangles,Tile);
     std::vector<unsigned char> Pixels(static_cast<size_t>(Width*Height*3),12u);
+    std::array<std::vector<unsigned char>,3> ModePixels;
+    const Vec3 Background[3]={{0.025f,0.030f,0.040f},{0.035f,0.060f,0.055f},{0.018f,0.025f,0.060f}};
+    for(int Mode=0;Mode<3;++Mode)
+    {
+        ModePixels[Mode].resize(static_cast<size_t>(Panel*Panel*3));
+        for(int Y=0;Y<Panel;++Y) for(int X=0;X<Panel;++X)
+        {
+            const float Horizon=static_cast<float>(Y)/static_cast<float>(Panel-1);
+            const Vec3 Backdrop=Background[Mode]*(0.65f+0.55f*Horizon);
+            const size_t Offset=static_cast<size_t>((Y*Panel+X)*3);
+            ModePixels[Mode][Offset+0]=static_cast<unsigned char>(std::clamp(Backdrop.X,0.0f,1.0f)*255.0f);
+            ModePixels[Mode][Offset+1]=static_cast<unsigned char>(std::clamp(Backdrop.Y,0.0f,1.0f)*255.0f);
+            ModePixels[Mode][Offset+2]=static_cast<unsigned char>(std::clamp(Backdrop.Z,0.0f,1.0f)*255.0f);
+        }
+    }
+    for(int Mode=0;Mode<3;++Mode) for(int Y=0;Y<Panel;++Y) for(int X=0;X<Panel;++X)
+    {
+        const size_t Source=static_cast<size_t>((Y*Panel+X)*3);
+        const size_t Target=static_cast<size_t>((Y*Width+Mode*(Panel+Gap)+X)*3);
+        Pixels[Target+0]=ModePixels[Mode][Source+0];
+        Pixels[Target+1]=ModePixels[Mode][Source+1];
+        Pixels[Target+2]=ModePixels[Mode][Source+2];
+    }
     const Vec3 View=Normalize({0.18f,0.12f,-1.0f}), Light=Normalize({-0.35f,0.72f,-0.60f});
     uint64_t EvaluationHash[3]={1469598103934665603ull,1469598103934665603ull,1469598103934665603ull};
     for(int Mode=0;Mode<3;++Mode) for(int Row=0;Row<Grid;++Row) for(int Column=0;Column<Grid;++Column)
@@ -279,14 +302,26 @@ int main(int ArgumentCount, char** ArgumentValues)
             Pixels[Offset+0]=static_cast<unsigned char>(Colour.X*255.0f+0.5f);
             Pixels[Offset+1]=static_cast<unsigned char>(Colour.Y*255.0f+0.5f);
             Pixels[Offset+2]=static_cast<unsigned char>(Colour.Z*255.0f+0.5f);
+            const size_t ModeOffset=static_cast<size_t>(((Row*Tile+LocalY)*Panel+Column*Tile+LocalX)*3);
+            ModePixels[Mode][ModeOffset+0]=Pixels[Offset+0];
+            ModePixels[Mode][ModeOffset+1]=Pixels[Offset+1];
+            ModePixels[Mode][ModeOffset+2]=Pixels[Offset+2];
         }
     }
     const bool SameEvaluation=EvaluationHash[0]==EvaluationHash[1]&&EvaluationHash[1]==EvaluationHash[2];
     const bool Written=PngWriteCodec::EncodeRgbFile(OutputPath,Width,Height,3,Pixels.data(),Width*3);
+    const char* ModePaths[3]={
+        "RaytraceToggle/MaterialGrid/ShaderBall20x20_VisibilityRaster_CPU.png",
+        "RaytraceToggle/MaterialGrid/ShaderBall20x20_SurfelGI_CPU.png",
+        "RaytraceToggle/MaterialGrid/ShaderBall20x20_ReSTIR_CPU.png"};
+    bool ModesWritten=true;
+    for(int Mode=0;Mode<3;++Mode)
+        ModesWritten=ModesWritten&&PngWriteCodec::EncodeRgbFile(ModePaths[Mode],Panel,Panel,3,ModePixels[Mode].data(),Panel*3);
     std::printf("ShaderBall grid: %zu vertices, %zu triangles, 400 materials x 3 paths\n",Vertices.size(),Triangles.size());
     std::printf("Material evaluation hashes: %016llx %016llx %016llx (%s)\n",
         static_cast<unsigned long long>(EvaluationHash[0]),static_cast<unsigned long long>(EvaluationHash[1]),
         static_cast<unsigned long long>(EvaluationHash[2]),SameEvaluation?"identical":"MISMATCH");
-    std::printf("Visual proof: %s\n",OutputPath);
-    return Written&&SameEvaluation?0:1;
+    std::printf("Combined proof: %s\n",OutputPath);
+    for(int Mode=0;Mode<3;++Mode) std::printf("Mode proof: %s\n",ModePaths[Mode]);
+    return Written&&ModesWritten&&SameEvaluation?0:1;
 }

@@ -8,6 +8,12 @@ Unlicense is retained beside it. Left to right, the three panels are:
 2. Surfel GI — ray tracing off, GI on, sky reflection enabled.
 3. ReSTIR — ray tracing on, GI on, traced reflection/refraction enabled.
 
+The modes are also rendered as separate CPU-reference images so each can be inspected at full size:
+
+- `ShaderBall20x20_VisibilityRaster_CPU.png`
+- `ShaderBall20x20_SurfelGI_CPU.png`
+- `ShaderBall20x20_ReSTIR_CPU.png`
+
 All panels call one `EvaluateMaterial` routine. Only `TransportShade` changes between panels. The executable hashes every
 resolved material response before transport and fails unless all three hashes are identical. The committed proof reports
 `efddf784ca0caa8a` for all three paths.
