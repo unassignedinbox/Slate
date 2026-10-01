@@ -1,5 +1,5 @@
-// Webgiya host with a camera-space visibility raster and GTAO.
-// The pinned upstream main.ts remains byte-identical for verification.
+// Webgiya host with screen-probe GI and a camera-space GTAO visibility raster.
+// The pinned upstream main.ts and surfel algorithms remain byte-identical.
 import './style.css';
 import { initRenderer } from './renderer.ts';
 import { createScene } from './scene.ts';
@@ -29,6 +29,7 @@ import { MAX_SURFELS } from './constants.ts';
 import { createSceneBVH, type SceneBVHBundle } from './sceneBvh.ts';
 import { createSurfelIntegratePass } from './surfelIntegratePass.ts';
 import { createSurfelGIResolvePass } from './surfelGIResolvePass.ts';
+import { createScreenProbePass } from './screenProbePass.ts';
 import * as THREE from 'three/webgpu';
 import {
   float,
@@ -200,6 +201,7 @@ const screenDebug = createSurfelScreenDebug(uniformGrid, surfelPool);
 // Create BVH & Pass
 const integratorDispatchArgs = createIntegratorDispatchArgs();
 let surfelIntegrate: ReturnType<typeof createSurfelIntegratePass> | null = null;
+let screenProbePass: ReturnType<typeof createScreenProbePass> | null = null;
 
 screenDebug.setDebugMode(screenDebug.debugParams.mode);
 screenDebug.configureGUI(gui);
@@ -315,6 +317,52 @@ const giTransportParams = { ...defaultGiTransportParams };
 const multiBounceParams = { enabled: true };
 const effectiveMultiBounceStrength = () =>
   multiBounceParams.enabled ? giTransportParams.giFromIndirect : 0;
+
+const SCREEN_PROBE_OUTPUTS = {
+  Lighting: 'lighting',
+  'Screen probe GI': 'radiance',
+  'Probe confidence': 'confidence',
+} as const;
+type ScreenProbeOutput =
+  (typeof SCREEN_PROBE_OUTPUTS)[keyof typeof SCREEN_PROBE_OUTPUTS];
+const screenProbeParams: {
+  enabled: boolean;
+  output: ScreenProbeOutput;
+  blendStrength: number;
+  samples: number;
+} = {
+  enabled: true,
+  output: SCREEN_PROBE_OUTPUTS.Lighting,
+  blendStrength: 0.8,
+  samples: 4,
+};
+const screenProbeFolder = gui.addFolder('Screen probes');
+screenProbeFolder
+  .add(screenProbeParams, 'enabled')
+  .name('Screen-probe GI')
+  .onChange(() => {
+    mustRebuildCompositeMaterial = true;
+  })
+  .listen?.();
+screenProbeFolder
+  .add(screenProbeParams, 'output', SCREEN_PROBE_OUTPUTS)
+  .name('Output')
+  .onChange(() => {
+    mustRebuildCompositeMaterial = true;
+  })
+  .listen?.();
+screenProbeFolder
+  .add(screenProbeParams, 'blendStrength', 0, 1, 0.01)
+  .name('Probe confidence blend')
+  .onChange(() => {
+    mustRebuildCompositeMaterial = true;
+  })
+  .listen?.();
+screenProbeFolder
+  .add(screenProbeParams, 'samples', 1, 8, 1)
+  .name('Directions per probe')
+  .listen?.();
+
 const envIntensityController = integratorFolder
   .add(giTransportParams, 'envIntensity', 0, 5, 0.05)
   .name('Env GI Intensity')
@@ -481,6 +529,7 @@ async function loadScene(sceneDef: SceneDefinition) {
   setLoading(`Loading ${sceneDef.label}`);
 
   sceneBVH = null;
+  screenProbePass = null;
   dirLight = recreateDirectionalLight(scene, dirLight, dirLightDefaults);
   clearSceneContent(scene);
   setLight(dirLight);
@@ -529,6 +578,8 @@ async function loadScene(sceneDef: SceneDefinition) {
   try {
     setLoading('Building BVH');
     sceneBVH = createSceneBVH(renderer, scene);
+    screenProbePass = createScreenProbePass(uniformGrid, surfelPool, envTex);
+    mustRebuildCompositeMaterial = true;
   } catch (error) {
     if (loadToken === sceneLoadToken) {
       showError(error);
@@ -778,8 +829,20 @@ renderer.setAnimationLoop(() => {
     integratorDispatchArgs.getIndirectAttr(),
   );
 
-  // 3. Resolve GI (Compute Indirect Light Texture)
+  // 3. Resolve the persistent world-space surfel cache.
   surfelResolve.run(renderer, camera, gbuffer);
+
+  // 4. Trace one 8x8 screen probe over each visible tile. Secondary hits
+  // consume the freshly integrated surfel field for multi-bounce radiance.
+  if (screenProbeParams.enabled && screenProbePass) {
+    screenProbePass.run(renderer, camera, gbuffer, sceneBVH, dirLight, {
+      samples: screenProbeParams.samples,
+      envIntensity: giTransportParams.envIntensity,
+      envLod: giTransportParams.envLod,
+      directStrength: giTransportParams.giFromDirect,
+      multiBounceStrength: effectiveMultiBounceStrength(),
+    });
+  }
 
   // Surfel health debug
   // debugSurfelSystem(renderer, surfelPool, uniformGrid, surfelFindMissing);
@@ -789,6 +852,9 @@ renderer.setAnimationLoop(() => {
 
   // 5. Composite Final Image (Fullscreen Pass)
   const giTex = surfelResolve.getOutputTexture();
+  const screenProbeTex = screenProbeParams.enabled
+    ? screenProbePass?.getOutputTexture()
+    : null;
   let directLight;
   if (giTex) {
     if (mustRebuildCompositeMaterial) {
@@ -808,14 +874,54 @@ renderer.setAnimationLoop(() => {
             .add(1.0 - visibilityParams.strength * 0.25)
         : float(1.0);
       const visibleDirect = directLight.mul(directVisibility);
-      const indirectLight = texture(giTex, screenUV)
-        .mul(albedo)
-        .mul(giParams.indirectIntensity)
-        .mul(ambientVisibility);
+
+      // The original full-resolution surfel resolve remains the fallback. Screen
+      // probes replace it only where bilateral reconstruction reports confidence,
+      // preventing the two estimators from being added twice.
+      const surfelRadiance = texture(giTex, screenUV).rgb;
+      let probeRadiance: THREE.Node = surfelRadiance;
+      let probeConfidence: THREE.Node = float(0.0);
+      let indirectRadiance: THREE.Node = surfelRadiance;
+      if (screenProbeTex) {
+        const probeSample = texture(screenProbeTex, screenUV);
+        probeRadiance = probeSample.rgb;
+        probeConfidence = probeSample.a.mul(screenProbeParams.blendStrength);
+        indirectRadiance = surfelRadiance
+          .mul(float(1.0).sub(probeConfidence))
+          .add(probeRadiance.mul(probeConfidence));
+      }
+      const indirectLight = vec4(
+        indirectRadiance
+          .mul(albedo.rgb)
+          .mul(giParams.indirectIntensity)
+          .mul(ambientVisibility),
+        1.0,
+      );
+      const probeDebugLight = vec4(
+        probeRadiance
+          .mul(albedo.rgb)
+          .mul(giParams.indirectIntensity)
+          .mul(ambientVisibility),
+        1.0,
+      );
 
       if (visibilityParams.output === VISIBILITY_OUTPUTS['Visibility raster']) {
         postProcessing.outputNode = fxaa(
           vec4(aoVisibility, aoVisibility, aoVisibility, 1.0),
+        );
+        postProcessing.needsUpdate = true;
+      } else if (
+        screenProbeParams.enabled &&
+        screenProbeParams.output === SCREEN_PROBE_OUTPUTS['Screen probe GI']
+      ) {
+        postProcessing.outputNode = fxaa(probeDebugLight);
+        postProcessing.needsUpdate = true;
+      } else if (
+        screenProbeParams.enabled &&
+        screenProbeParams.output === SCREEN_PROBE_OUTPUTS['Probe confidence']
+      ) {
+        postProcessing.outputNode = fxaa(
+          vec4(probeConfidence, probeConfidence, probeConfidence, 1.0),
         );
         postProcessing.needsUpdate = true;
       } else {

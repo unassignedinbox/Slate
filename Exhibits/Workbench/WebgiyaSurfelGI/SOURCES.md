@@ -22,7 +22,8 @@ Expected result:
 ```text
 Files .../src/content.ts and .../src/content.ts differ
 Only in .../src: mainVisibility.ts
+Only in .../src: screenProbePass.ts
 Only in .../src: shaderBallScene.ts
 ```
 
-No pinned surfel algorithm source differs. `content.ts` changes the scene-preset list, `shaderBallScene.ts` supplies the ShaderBalls/light lab, and `mainVisibility.ts` is a derived host adding the final GTAO visibility raster while the original `main.ts` remains unchanged.
+No pinned surfel algorithm source differs. `content.ts` changes the scene-preset list, `shaderBallScene.ts` supplies the ShaderBalls/light lab, `screenProbePass.ts` adds the optional camera-visible probe estimator, and `mainVisibility.ts` is a derived host composing screen probes and GTAO while the original `main.ts` remains unchanged.

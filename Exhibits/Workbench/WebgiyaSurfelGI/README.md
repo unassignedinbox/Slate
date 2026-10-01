@@ -1,8 +1,8 @@
-# Webgiya Multi-bounce Surfel GI · 1K Shadows + Visibility Raster
+# Webgiya Screen-Probe + Multi-bounce Surfel GI
 
 Open `index.html` over HTTP. It redirects to the checked-in production build in `site/`.
 
-This exhibit preserves Jure Triglav's MIT-licensed [Webgiya](https://github.com/jure/webgiya) at commit `0cd7f96859adc34e181f34a5d804e53fa94799cb`, uses the shared Slate ShaderBalls, restores the upstream direct-shadow presentation, and adds a separately controlled camera-space ambient-visibility raster.
+This exhibit preserves Jure Triglav's MIT-licensed [Webgiya](https://github.com/jure/webgiya) at commit `0cd7f96859adc34e181f34a5d804e53fa94799cb`, uses the shared Slate ShaderBalls, retains its persistent multi-bounce surfels, and adds an optional camera-visible screen-probe estimator alongside 1K direct shadows and a GTAO visibility raster.
 
 ## Exact implementation boundary
 
@@ -12,7 +12,8 @@ The adaptation is isolated to:
 
 - `content.ts` — selects the ShaderBall light lab.
 - `shaderBallScene.ts` — exact `SBM1` decoder, scene geometry, original-style directional shadows, and low-frequency hemisphere ambient light.
-- `mainVisibility.ts` — a derived host that retains the upstream frame sequence and adds a Three.js GTAO visibility raster during final composition.
+- `screenProbePass.ts` — an optional 8×8-tile screen-probe tracer and bilateral reconstruction pass.
+- `mainVisibility.ts` — a derived host that retains the upstream frame sequence and composes screen probes plus a Three.js GTAO visibility raster.
 - `Source.html` and build files — packaging and explanatory UI.
 
 ## Lighting and visibility layers
@@ -29,9 +30,24 @@ Upstream Webgiya does not contain a separate conventional SSAO/GTAO pass; its na
 
 Multi-bounce transport is enabled by default. Webgiya's existing surfel feedback path gathers the previous temporal irradiance field at each secondary BVH hit, multiplies it by the hit albedo, and writes the result into the next double-buffered irradiance field. Repeating this recurrence over frames progressively carries second and later diffuse bounces without adding another ray-tracing pass. The pinned integrator algorithm remains unchanged; the derived host now gives this path an explicit enable switch and strength control.
 
+## Phase 1 screen probes
+
+Screen probes do not replace the surfels. One representative receiver is selected per 8×8 G-buffer tile and traces four deterministic cosine-weighted directions by default through the existing static triangle BVH. A secondary hit performs a directional-light visibility query and gathers the freshly integrated world-space surfel field, including its MSM4 radial visibility, for later-bounce radiance. A miss samples the HDR environment.
+
+A full-resolution bilateral reconstruction rejects probes across depth and normal discontinuities. Its confidence blends between probe radiance and the original full-resolution surfel resolve instead of adding both estimators, avoiding duplicate indirect energy. Disabling **Screen-probe GI** stops both probe compute passes and restores the previous surfel-only composite.
+
+This is deliberately Phase 1: it does not yet include Hi-Z traversal, temporal reservoirs, motion vectors, DDGI clipmaps, or dynamic BLAS/TLAS geometry.
+
 ## Controls
 
-The inspector retains all upstream controls and adds **Visibility raster / AO**:
+The inspector adds **Screen probes**:
+
+- **Screen-probe GI** — enable the extension or return to the exact surfel-only baseline.
+- **Output** — show final lighting, reconstructed screen-probe GI, or bilateral confidence.
+- **Probe confidence blend** — cap how strongly a valid probe replaces the surfel fallback.
+- **Directions per probe** — quality/performance control from one to eight secondary directions; each hit can also issue a directional-light visibility ray.
+
+The **Visibility raster / AO** controls are:
 
 - **Ambient Occlusion** — enable or bypass the GTAO contribution.
 - **Output** — show normal lighting or the grayscale visibility raster directly.
@@ -64,9 +80,11 @@ Each frame still runs Webgiya's original sequence:
 7. Trace per-surfel rays through the CPU-built/GPU-uploaded scene BVH.
 8. Update sample-guiding lobes, temporal irradiance moments, and each surfel's MSM4 radial-depth tile.
 9. Gather nearby surfels per pixel with spatial, normal, variance, and radial-visibility weighting.
-10. Composite direct shadows, indirect light, ambient visibility, and the final image.
+10. Trace camera-visible screen probes through the same BVH and query fresh surfel radiance at secondary hits.
+11. Reconstruct the sparse probes at full resolution with depth/normal-aware confidence.
+12. Blend against the surfel fallback and composite direct shadows, indirect light, ambient visibility, and the final image.
 
-Desktop settings retain upstream's `262144`-surfel pool, 32³ hash-grid cascades, 4×4 radial-depth tiles, 32 target samples, and four base integration samples. GTAO runs at half resolution for GTX-class performance.
+Desktop settings retain upstream's `262144`-surfel pool, 32³ hash-grid cascades, 4×4 radial-depth tiles, 32 target samples, and four base integration samples. Screen probes use one probe per 8×8 tile and four secondary directions by default; GTAO runs at half resolution for GTX-class performance.
 
 ## ShaderBall scene
 
