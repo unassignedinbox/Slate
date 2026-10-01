@@ -27,6 +27,7 @@
 #include "FlyThroughSolver.h"
 #include "RayTracingSolver.h"
 #include "../../../Engine/ContentInterchange/ShaderBallStructure.h"
+#include "../../../Engine/ContentInterchange/WheelRimStructure.h"
 
 #include <algorithm>
 #include <chrono>
@@ -40,13 +41,16 @@
 int main(int argc, char** argv)
 {
     std::string ScenePath  = "Projects/Project-Zero/Content/Scenes/CornellBox.gltf";
+    std::string RimPreset  = "forged";                                                 // --rim <preset> picks the wheel
     float       SceneScale = 1.0f;
     for (int I = 1; I + 1 < argc; ++I)
     {
         if (std::strcmp(argv[I], "--scene") == 0) ScenePath  = argv[++I];
         if (std::strcmp(argv[I], "--scale") == 0) SceneScale = static_cast<float>(std::atof(argv[++I]));
+        if (std::strcmp(argv[I], "--rim")   == 0) RimPreset  = argv[++I];
     }
     if (ScenePath == "shaderball") ScenePath = "Projects/Project-Zero/Content/Scenes/ShaderBall.gltf";   // R4b material test level
+    if (ScenePath == "rim")        ScenePath = "Projects/Project-Zero/Content/Scenes/WheelRim.gltf";     // procedural wheel-rim level
 
     //──────────────────────────────────────────────────────────────────────────
     // Telemetry sink
@@ -82,6 +86,26 @@ int main(int argc, char** argv)
                 std::cerr << "[Scene] Exported the Cornell box to " << ScenePath << "\n";
             else
                 std::cerr << "[Scene] Cornell export failed: " << Error << "\n";
+        }
+        const bool IsWheelRim = ScenePath.find("WheelRim.gltf") != std::string::npos;
+        if (IsWheelRim)   // always re-synthesised: the parameters, not the file, are the asset
+        {
+            std::filesystem::create_directories(std::filesystem::path(ScenePath).parent_path(), FsError);
+            std::string Error;
+            Frontier::WheelRimSceneConfiguration RimConfiguration;
+            RimConfiguration.Parameters = Frontier::WheelRimParameters::FromPreset(
+                RimPreset == "split"   ? Frontier::RimPresetCategory::SplitTenSpoke    :
+                RimPreset == "weave"   ? Frontier::RimPresetCategory::TwentySpokeWeave :
+                RimPreset == "turbine" ? Frontier::RimPresetCategory::TurbineAero      :
+                RimPreset == "dish"    ? Frontier::RimPresetCategory::DeepDishConcave  :
+                RimPreset == "truck"   ? Frontier::RimPresetCategory::HeavyDutySixSpoke:
+                                         Frontier::RimPresetCategory::ForgedFiveSpoke);
+            Frontier::WheelRimStructure Rim; Rim.Construct(RimConfiguration);
+            const Frontier::RimSurfaceAudit& Audit = Rim.QueryBodyAudit();
+            std::cerr << "[Scene] Rim body: " << Audit.TriangleCount << " triangles, " << Audit.ShellCount << " shell(s), "
+                      << (Audit.Watertight() ? "watertight" : "NOT watertight") << ", " << Audit.SignedVolume << " m3\n";
+            if (Rim.Export(ScenePath, &Error)) std::cerr << "[Scene] Exported the " << RimPreset << " wheel rim to " << ScenePath << "\n";
+            else                               std::cerr << "[Scene] Wheel-rim export failed: " << Error << "\n";
         }
         const bool IsShaderBall = ScenePath.find("ShaderBall.gltf") != std::string::npos;
         if (IsShaderBall && !std::filesystem::exists(ScenePath, FsError))
@@ -171,6 +195,14 @@ int main(int argc, char** argv)
         // Shader ball: 5 m back from the front row, 2.6 m up, pitched down ~22° so all four rows fit at 55° FoV.
         Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -6.2f, 2.6f });
         Camera.AssignOrientationEuler(-22.0f * 3.14159265f / 180.0f, 0.0f, 0.0f);
+    }
+    else if (Level.QueryName() == "WheelRim")
+    {
+        // Wheel rim: 1.35 m in front of the face at hub height, pitched down ~6° — the whole 21" wheel fits at 55° FoV.
+        Camera.AssignSpatialLocation(Frontier::Vector3{ 0.0f, -1.35f, 0.30f });
+        Camera.AssignOrientationEuler(-6.0f * 3.14159265f / 180.0f, 0.0f, 0.0f);
+        CameraConfig.BaseFlightSpeed = 0.8f;
+        Camera.AssignConfiguration(CameraConfig);
     }
     else if (Level.QueryName() != "CornellBox")
     {
