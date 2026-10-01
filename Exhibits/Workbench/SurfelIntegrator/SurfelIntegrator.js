@@ -30,8 +30,15 @@ const CanvasError = document.getElementById("CanvasError");
 const SurfelVisibility = document.getElementById("SurfelVisibility");
 const IndirectVisibility = document.getElementById("IndirectVisibility");
 const RayCountControl = document.getElementById("RayCount");
+const PlacementMethod = document.getElementById("PlacementMethod");
+const ReconstructionMethod = document.getElementById("ReconstructionMethod");
+const ProgressiveRays = document.getElementById("ProgressiveRays");
+const LeakGuard = document.getElementById("LeakGuard");
+const AdaptiveTemporal = document.getElementById("AdaptiveTemporal");
 const IndirectGain = document.getElementById("IndirectGain");
 const GainOutput = document.getElementById("GainOutput");
+const OriginalPreset = document.getElementById("OriginalPreset");
+const ResearchPreset = document.getElementById("ResearchPreset");
 const ConvergenceToggle = document.getElementById("ConvergenceToggle");
 const ConvergenceRestart = document.getElementById("ConvergenceRestart");
 const SurfelMetric = document.getElementById("SurfelMetric");
@@ -268,7 +275,7 @@ function LocateTriangle(CumulativeArea, Target)
     return Lower;
 }
 
-function ConstructField(Geometry)
+function ConstructField(Geometry, UseBlueNoise)
 {
     const TriangleCount = Geometry.IndexCount / 3;
     const CumulativeArea = new Float64Array(TriangleCount);
@@ -297,6 +304,89 @@ function ConstructField(Geometry)
         CumulativeArea[TriangleNumber] = TotalArea;
     }
 
+    const SampleSurface = (SampleNumber, SampleCount, PlacementNumber = 0, LegacySequence = false) =>
+    {
+        const AreaPosition = ((SampleNumber + 0.5) / SampleCount) * TotalArea;
+        const TriangleNumber = LocateTriangle(CumulativeArea, AreaPosition);
+        const AlphaNumber = Geometry.Indices[TriangleNumber * 3] * 8;
+        const BetaNumber = Geometry.Indices[TriangleNumber * 3 + 1] * 8;
+        const GammaNumber = Geometry.Indices[TriangleNumber * 3 + 2] * 8;
+        const First = LegacySequence
+            ? (SampleNumber * 0.6180339887498948 + PlacementNumber * 0.127) % 1.0
+            : ((SampleNumber + 0.5) * 0.6180339887498948) % 1.0;
+        const Second = LegacySequence
+            ? RadicalInverse(SampleNumber + 1 + PlacementNumber * BallRecordCount)
+            : RadicalInverse(SampleNumber + 1);
+        const Root = Math.sqrt(First);
+        const Weights = [1.0 - Root, Root * (1.0 - Second), Root * Second];
+        const Position = [0.0, 0.0, 0.0];
+        const Normal = [0.0, 0.0, 0.0];
+        for (let Axis = 0; Axis < 3; ++Axis)
+        {
+            Position[Axis] =
+                Geometry.Vertices[AlphaNumber + Axis] * Weights[0]
+                + Geometry.Vertices[BetaNumber + Axis] * Weights[1]
+                + Geometry.Vertices[GammaNumber + Axis] * Weights[2];
+            Normal[Axis] =
+                Geometry.Vertices[AlphaNumber + 4 + Axis] * Weights[0]
+                + Geometry.Vertices[BetaNumber + 4 + Axis] * Weights[1]
+                + Geometry.Vertices[GammaNumber + 4 + Axis] * Weights[2];
+        }
+        return { Position, Normal: Normalise(Normal), Radius: 0.205 };
+    };
+
+    const CandidateCount = UseBlueNoise ? BallRecordCount * 8 : BallRecordCount;
+    const Candidates = Array.from(
+        { length: CandidateCount },
+        (_, CandidateNumber) => SampleSurface(CandidateNumber, CandidateCount),
+    );
+    let BallSamples = Candidates;
+    if (UseBlueNoise)
+    {
+        BallSamples = [];
+        const Used = new Uint8Array(CandidateCount);
+        const ClosestDistance = new Float64Array(CandidateCount);
+        ClosestDistance.fill(Number.POSITIVE_INFINITY);
+        let NextCandidate = Math.floor(CandidateCount * 0.38196601125);
+        for (let RecordNumber = 0; RecordNumber < BallRecordCount; ++RecordNumber)
+        {
+            const Selection = Candidates[NextCandidate];
+            BallSamples.push(Selection);
+            Used[NextCandidate] = 1;
+            let BestDistance = -1.0;
+            let BestCandidate = 0;
+            for (let CandidateNumber = 0; CandidateNumber < CandidateCount; ++CandidateNumber)
+            {
+                if (Used[CandidateNumber] !== 0) continue;
+                const Candidate = Candidates[CandidateNumber];
+                const Delta = Subtract(Candidate.Position, Selection.Position);
+                const NormalSeparation = 1.0 - Math.max(0.0, Dot(Candidate.Normal, Selection.Normal));
+                const Metric = Dot(Delta, Delta) + 0.035 * NormalSeparation * NormalSeparation;
+                ClosestDistance[CandidateNumber] = Math.min(ClosestDistance[CandidateNumber], Metric);
+                if (ClosestDistance[CandidateNumber] > BestDistance)
+                {
+                    BestDistance = ClosestDistance[CandidateNumber];
+                    BestCandidate = CandidateNumber;
+                }
+            }
+            NextCandidate = BestCandidate;
+        }
+
+        for (let SampleNumber = 0; SampleNumber < BallSamples.length; ++SampleNumber)
+        {
+            let NearestDistance = Number.POSITIVE_INFINITY;
+            for (let OtherNumber = 0; OtherNumber < BallSamples.length; ++OtherNumber)
+            {
+                if (SampleNumber === OtherNumber) continue;
+                const NormalAgreement = Dot(BallSamples[SampleNumber].Normal, BallSamples[OtherNumber].Normal);
+                if (NormalAgreement < 0.4) continue;
+                const Delta = Subtract(BallSamples[SampleNumber].Position, BallSamples[OtherNumber].Position);
+                NearestDistance = Math.min(NearestDistance, Math.hypot(...Delta));
+            }
+            BallSamples[SampleNumber].Radius = Clamp(NearestDistance * 1.7, 0.17, 0.29);
+        }
+    }
+
     const Records = [];
     const Append = (Position, Radius, Normal, Area, Albedo, Identity) =>
     {
@@ -305,6 +395,7 @@ function ConstructField(Geometry)
             Normal[0], Normal[1], Normal[2], Area,
             Albedo[0], Albedo[1], Albedo[2], Identity,
             0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0,
         );
     };
 
@@ -312,33 +403,22 @@ function ConstructField(Geometry)
     {
         const Translation = PlacementPositions[PlacementNumber];
         const Albedo = PlacementColours[PlacementNumber];
-        for (let RecordNumber = 0; RecordNumber < BallRecordCount; ++RecordNumber)
+        const PlacementSamples = UseBlueNoise
+            ? BallSamples
+            : Array.from(
+                { length: BallRecordCount },
+                (_, SampleNumber) => SampleSurface(SampleNumber, BallRecordCount, PlacementNumber, true),
+            );
+        for (const Sample of PlacementSamples)
         {
-            const AreaPosition = ((RecordNumber + 0.5) / BallRecordCount) * TotalArea;
-            const TriangleNumber = LocateTriangle(CumulativeArea, AreaPosition);
-            const AlphaNumber = Geometry.Indices[TriangleNumber * 3] * 8;
-            const BetaNumber = Geometry.Indices[TriangleNumber * 3 + 1] * 8;
-            const GammaNumber = Geometry.Indices[TriangleNumber * 3 + 2] * 8;
-            const First = (RecordNumber * 0.6180339887498948 + PlacementNumber * 0.127) % 1.0;
-            const Second = RadicalInverse(RecordNumber + 1 + PlacementNumber * BallRecordCount);
-            const Root = Math.sqrt(First);
-            const AlphaWeight = 1.0 - Root;
-            const BetaWeight = Root * (1.0 - Second);
-            const GammaWeight = Root * Second;
-            const Position = [0.0, 0.0, 0.0];
-            const Normal = [0.0, 0.0, 0.0];
-            for (let Axis = 0; Axis < 3; ++Axis)
-            {
-                Position[Axis] = Translation[Axis]
-                    + Geometry.Vertices[AlphaNumber + Axis] * AlphaWeight
-                    + Geometry.Vertices[BetaNumber + Axis] * BetaWeight
-                    + Geometry.Vertices[GammaNumber + Axis] * GammaWeight;
-                Normal[Axis] =
-                    Geometry.Vertices[AlphaNumber + 4 + Axis] * AlphaWeight
-                    + Geometry.Vertices[BetaNumber + 4 + Axis] * BetaWeight
-                    + Geometry.Vertices[GammaNumber + 4 + Axis] * GammaWeight;
-            }
-            Append(Position, 0.205, Normalise(Normal), TotalArea / BallRecordCount, Albedo, PlacementNumber);
+            Append(
+                Add(Sample.Position, Translation),
+                Sample.Radius,
+                Sample.Normal,
+                TotalArea / BallRecordCount,
+                Albedo,
+                PlacementNumber,
+            );
         }
     }
 
@@ -353,8 +433,9 @@ function ConstructField(Geometry)
         for (let Column = 0; Column < GroundColumns; ++Column)
         {
             const Sequence = Row * GroundColumns + Column + 1;
-            const JitterX = (RadicalInverse(Sequence) - 0.5) * GroundSpacingX * 0.34;
-            const JitterY = (((Sequence * 0.754877666) % 1.0) - 0.5) * GroundSpacingY * 0.34;
+            const JitterScale = UseBlueNoise ? 0.52 : 0.34;
+            const JitterX = (RadicalInverse(Sequence) - 0.5) * GroundSpacingX * JitterScale;
+            const JitterY = (((Sequence * 0.754877666) % 1.0) - 0.5) * GroundSpacingY * JitterScale;
             const Position = [
                 -GroundWidth * 0.5 + (Column + 0.5) * GroundSpacingX + JitterX,
                 -GroundDepth * 0.5 + (Row + 0.5) * GroundSpacingY + JitterY,
@@ -362,7 +443,7 @@ function ConstructField(Geometry)
             ];
             Append(
                 Position,
-                0.555,
+                UseBlueNoise ? 0.50 : 0.555,
                 [0.0, 0.0, 1.0],
                 GroundSpacingX * GroundSpacingY,
                 [0.48, 0.50, 0.52],
@@ -372,11 +453,11 @@ function ConstructField(Geometry)
     }
 
     const Field = new Float32Array(Records);
-    const RecordCount = Field.length / 16;
+    const RecordCount = Field.length / 20;
     const Links = new Int32Array(HashCount + RecordCount);
     for (let RecordNumber = 0; RecordNumber < RecordCount; ++RecordNumber)
     {
-        const Address = RecordNumber * 16;
+        const Address = RecordNumber * 20;
         const CellX = Math.floor(Field[Address] / FieldCellSize);
         const CellY = Math.floor(Field[Address + 1] / FieldCellSize);
         const CellZ = Math.floor(Field[Address + 2] / FieldCellSize);
@@ -489,10 +570,10 @@ async function BringRenderer()
     ] = await Promise.all([
         LoadBinary(GeometryAddress),
         LoadBinary(HierarchyAddress),
-        LoadText("SurfelIntegrate.wgsl?revision=4"),
-        LoadText("SurfelRaster.wgsl?revision=4"),
-        LoadText("SurfelPresent.wgsl?revision=4"),
-        LoadText("SurfelOverlay.wgsl?revision=4"),
+        LoadText("SurfelIntegrate.wgsl?revision=5"),
+        LoadText("SurfelRaster.wgsl?revision=5"),
+        LoadText("SurfelPresent.wgsl?revision=5"),
+        LoadText("SurfelOverlay.wgsl?revision=5"),
     ]);
 
     const Geometry = DecodeGeometry(GeometryBinary);
@@ -501,7 +582,11 @@ async function BringRenderer()
     {
         throw new Error("ShaderBall geometry and hierarchy describe different triangle counts");
     }
-    const FieldContent = ConstructField(Geometry);
+    const FieldVariants = {
+        Stratified: ConstructField(Geometry, false),
+        BlueNoise: ConstructField(Geometry, true),
+    };
+    let FieldContent = FieldVariants[PlacementMethod.value];
     SurfelMetric.textContent = FieldContent.RecordCount.toLocaleString();
 
     const IntegrationShader = Device.createShaderModule({ label: "Surfel integration", code: IntegrationSource });
@@ -778,7 +863,12 @@ async function BringRenderer()
             Geometry.IndexCount,
             Hierarchy.NodeCount,
         ], 16);
-        Content.set([FieldCellSize, 4.0, 0.0, 0.0], 20);
+        Content.set([
+            FieldCellSize,
+            ProgressiveRays.checked ? 1.0 : 0.0,
+            AdaptiveTemporal.checked ? 1.0 : 0.0,
+            LeakGuard.checked ? 1.0 : 0.0,
+        ], 20);
         for (let PlacementNumber = 0; PlacementNumber < 4; ++PlacementNumber)
         {
             Content.set([...PlacementPositions[PlacementNumber], 0.0], 24 + PlacementNumber * 4);
@@ -796,8 +886,8 @@ async function BringRenderer()
         Content.set([...Camera.Up, Number(IndirectGain.value)], 28);
         Content.set([...SunDirection, 1.0], 32);
         Content.set([5.5, 5.15, 4.7, IndirectVisibility.checked ? 1.0 : 0.0], 36);
-        Content.set([0.22, 0.29, 0.41, 0.0], 40);
-        Content.set([0.055, 0.10, 0.22, 0.0], 44);
+        Content.set([0.22, 0.29, 0.41, Number(ReconstructionMethod.value)], 40);
+        Content.set([0.055, 0.10, 0.22, LeakGuard.checked ? 1.0 : 0.0], 44);
         Content.set([FieldContent.RecordCount, HashCount, FieldCellSize, 1.08], 48);
         Device.queue.writeBuffer(PresentationUniformExtent, 0, Content);
     }
@@ -965,6 +1055,7 @@ async function BringRenderer()
 
     function RestartConvergence()
     {
+        Device.queue.writeBuffer(LinkExtent, 0, FieldContent.Links);
         Device.queue.writeBuffer(FieldExtents[0], 0, FieldContent.Field);
         Device.queue.writeBuffer(FieldExtents[1], 0, FieldContent.Field);
         PublishedNumber = 0;
@@ -972,6 +1063,20 @@ async function BringRenderer()
         AccumulationMetric.textContent = "0";
     }
 
+    function ApplyPreset(UseResearchModes)
+    {
+        RayCountControl.value = "1";
+        PlacementMethod.value = UseResearchModes ? "BlueNoise" : "Stratified";
+        ReconstructionMethod.value = UseResearchModes ? "2" : "0";
+        ProgressiveRays.checked = UseResearchModes;
+        LeakGuard.checked = UseResearchModes;
+        AdaptiveTemporal.checked = UseResearchModes;
+        FieldContent = FieldVariants[PlacementMethod.value];
+        RestartConvergence();
+    }
+
+    OriginalPreset.addEventListener("click", () => ApplyPreset(false));
+    ResearchPreset.addEventListener("click", () => ApplyPreset(true));
     ConvergenceToggle.addEventListener("click", () =>
     {
         ConvergenceEnabled = !ConvergenceEnabled;
@@ -979,6 +1084,15 @@ async function BringRenderer()
     });
     ConvergenceRestart.addEventListener("click", RestartConvergence);
     RayCountControl.addEventListener("change", RestartConvergence);
+    PlacementMethod.addEventListener("change", () =>
+    {
+        FieldContent = FieldVariants[PlacementMethod.value];
+        SurfelMetric.textContent = FieldContent.RecordCount.toLocaleString();
+        RestartConvergence();
+    });
+    ProgressiveRays.addEventListener("change", RestartConvergence);
+    LeakGuard.addEventListener("change", RestartConvergence);
+    AdaptiveTemporal.addEventListener("change", RestartConvergence);
     IndirectGain.addEventListener("input", () =>
     {
         GainOutput.textContent = `${Number(IndirectGain.value).toFixed(2)}×`;

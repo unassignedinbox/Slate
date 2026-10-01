@@ -191,7 +191,7 @@ canvas:active {
 
 .ControlRail {
     display: grid;
-    grid-template-columns: 1.15fr 1.15fr 1fr 1.2fr auto;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     min-height: 102px;
     border-top: 1px solid var(--Line);
 }
@@ -278,7 +278,7 @@ canvas:active {
 }
 
 select {
-    max-width: 88px;
+    max-width: 176px;
     padding: 7px 8px;
     color: var(--Text);
     border: 1px solid var(--Line);
@@ -314,8 +314,11 @@ input[type="range"] {
 
 .ButtonGroup {
     display: flex;
+    grid-column: span 3;
     align-items: center;
+    justify-content: flex-end;
     gap: 8px;
+    flex-wrap: wrap;
 }
 
 button {
@@ -427,7 +430,7 @@ footer {
     }
 
     .ButtonGroup {
-        grid-column: span 2;
+        grid-column: auto;
         justify-content: flex-end;
         border-bottom: 0;
     }

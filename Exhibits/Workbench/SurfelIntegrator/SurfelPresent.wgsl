@@ -9,6 +9,7 @@ struct SurfelRecord
     NormalArea: vec4f,
     AlbedoIdentity: vec4f,
     IrradianceAge: vec4f,
+    ShortMeanVariance: vec4f,
 };
 
 struct PresentationUniforms
@@ -75,8 +76,26 @@ fn GatherIrradiance(Position: vec3f, Normal: vec3f) -> vec3f
     let CellSize = Presentation.Counts.z;
     let Cell = vec3i(floor(Position / CellSize));
     let HashCount = i32(Presentation.Counts.y);
+    let ReconstructionMode = u32(Presentation.SkyHorizon.w + 0.5);
+    let UseLeakGuard = Presentation.SkyZenith.w > 0.5;
+    let Reference = select(vec3f(1.0, 0.0, 0.0), vec3f(0.0, 0.0, 1.0), abs(Normal.z) < 0.9);
+    let Tangent = normalize(cross(Reference, Normal));
+    let Bitangent = cross(Normal, Tangent);
+
     var Irradiance = vec3f(0.0);
     var WeightSum = 0.0;
+    var XMoment = 0.0;
+    var YMoment = 0.0;
+    var XXMoment = 0.0;
+    var XYMoment = 0.0;
+    var YYMoment = 0.0;
+    var IrradianceX = vec3f(0.0);
+    var IrradianceY = vec3f(0.0);
+    var MinimumIrradiance = vec3f(1.0e20);
+    var MaximumIrradiance = vec3f(0.0);
+    var RadiusMoment = 0.0;
+    var NearestDistance = 1.0e20;
+    var NearestIrradiance = vec3f(0.0);
 
     for (var OffsetZ = -1; OffsetZ <= 1; OffsetZ = OffsetZ + 1)
     {
@@ -94,13 +113,71 @@ fn GatherIrradiance(Position: vec3f, Normal: vec3f) -> vec3f
                     let Distance = length(Delta);
                     let Radius = Record.PositionRadius.w;
                     let NormalWeight = dot(Normal, Record.NormalArea.xyz);
-                    let PlanarDistance = abs(dot(Delta, Record.NormalArea.xyz));
-                    if (Distance < Radius && NormalWeight > 0.15 && PlanarDistance < Radius * 0.38)
+                    let SourcePlaneDistance = abs(dot(Delta, Record.NormalArea.xyz));
+                    let ReceiverPlaneDistance = abs(dot(Delta, Normal));
+                    if (
+                        NormalWeight > 0.25
+                        && SourcePlaneDistance < Radius * 0.45
+                        && ReceiverPlaneDistance < Radius * 0.45
+                        && Distance < NearestDistance
+                    )
                     {
-                        let LinearWeight = 1.0 - Distance / Radius;
-                        let Weight = NormalWeight * LinearWeight * LinearWeight;
-                        Irradiance = Irradiance + Record.IrradianceAge.xyz * Weight;
+                        NearestDistance = Distance;
+                        NearestIrradiance = Record.IrradianceAge.xyz;
+                    }
+
+                    var Weight = 0.0;
+                    if (ReconstructionMode == 0u)
+                    {
+                        let ReceiverValid = !UseLeakGuard || ReceiverPlaneDistance < Radius * 0.30;
+                        if (
+                            Distance < Radius
+                            && NormalWeight > 0.15
+                            && SourcePlaneDistance < Radius * 0.38
+                            && ReceiverValid
+                        )
+                        {
+                            let LinearWeight = 1.0 - Distance / Radius;
+                            Weight = NormalWeight * LinearWeight * LinearWeight;
+                        }
+                    }
+                    else
+                    {
+                        let ReceiverValid = !UseLeakGuard || ReceiverPlaneDistance < Radius * 0.24;
+                        if (
+                            Distance < Radius
+                            && NormalWeight > 0.35
+                            && SourcePlaneDistance < Radius * 0.30
+                            && ReceiverValid
+                        )
+                        {
+                            let NormalisedDistance = Distance / Radius;
+                            let Remainder = max(1.0 - NormalisedDistance, 0.0);
+                            let CompactWeight = Remainder * Remainder * Remainder * Remainder
+                                * (1.0 + 4.0 * NormalisedDistance);
+                            let SquaredNormalWeight = NormalWeight * NormalWeight;
+                            Weight = CompactWeight * SquaredNormalWeight * SquaredNormalWeight;
+                        }
+                    }
+
+                    if (Weight > 0.0)
+                    {
+                        let SampleOffset = Record.PositionRadius.xyz - Position;
+                        let X = dot(SampleOffset, Tangent);
+                        let Y = dot(SampleOffset, Bitangent);
+                        let SampleIrradiance = Record.IrradianceAge.xyz;
+                        Irradiance = Irradiance + SampleIrradiance * Weight;
                         WeightSum = WeightSum + Weight;
+                        XMoment = XMoment + X * Weight;
+                        YMoment = YMoment + Y * Weight;
+                        XXMoment = XXMoment + X * X * Weight;
+                        XYMoment = XYMoment + X * Y * Weight;
+                        YYMoment = YYMoment + Y * Y * Weight;
+                        IrradianceX = IrradianceX + SampleIrradiance * (X * Weight);
+                        IrradianceY = IrradianceY + SampleIrradiance * (Y * Weight);
+                        MinimumIrradiance = min(MinimumIrradiance, SampleIrradiance);
+                        MaximumIrradiance = max(MaximumIrradiance, SampleIrradiance);
+                        RadiusMoment = RadiusMoment + Radius * Weight;
                     }
                     RecordNumber = CellLinks.Entries[HashCount + RecordNumber] - 1;
                     Guard = Guard + 1;
@@ -109,11 +186,38 @@ fn GatherIrradiance(Position: vec3f, Normal: vec3f) -> vec3f
         }
     }
 
-    if (WeightSum > 0.00001)
+    if (WeightSum <= 0.00001)
     {
-        return Irradiance / WeightSum;
+        return select(vec3f(0.0), NearestIrradiance, NearestDistance < CellSize * 0.9);
     }
-    return vec3f(0.0);
+    let NormalisedAverage = Irradiance / WeightSum;
+    if (ReconstructionMode != 2u)
+    {
+        return NormalisedAverage;
+    }
+
+    let AverageRadius = RadiusMoment / WeightSum;
+    let Regularisation = WeightSum * AverageRadius * AverageRadius * 0.0125 + 1.0e-7;
+    let A = WeightSum;
+    let B = XMoment;
+    let C = YMoment;
+    let D = XXMoment + Regularisation;
+    let E = XYMoment;
+    let F = YYMoment + Regularisation;
+    let CofactorZero = D * F - E * E;
+    let CofactorOne = C * E - B * F;
+    let CofactorTwo = B * E - C * D;
+    let Determinant = A * CofactorZero + B * CofactorOne + C * CofactorTwo;
+    if (abs(Determinant) <= 1.0e-9)
+    {
+        return NormalisedAverage;
+    }
+    let Reconstructed = (
+        Irradiance * CofactorZero
+        + IrradianceX * CofactorOne
+        + IrradianceY * CofactorTwo
+    ) / Determinant;
+    return clamp(Reconstructed, MinimumIrradiance, MaximumIrradiance);
 }
 
 fn SunVisibility(Position: vec3f, Normal: vec3f) -> f32

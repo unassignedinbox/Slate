@@ -9,6 +9,7 @@ struct SurfelRecord
     NormalArea: vec4f,
     AlbedoIdentity: vec4f,
     IrradianceAge: vec4f,
+    ShortMeanVariance: vec4f,
 };
 
 struct OverlayUniforms

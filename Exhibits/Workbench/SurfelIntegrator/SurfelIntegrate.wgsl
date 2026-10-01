@@ -9,6 +9,7 @@ struct SurfelRecord
     NormalArea: vec4f,
     AlbedoIdentity: vec4f,
     IrradianceAge: vec4f,
+    ShortMeanVariance: vec4f,
 };
 
 struct GeometryVertex
@@ -316,7 +317,15 @@ fn GatherIrradiance(Position: vec3f, Normal: vec3f) -> vec3f
                     let Radius = Record.PositionRadius.w;
                     let NormalWeight = dot(Normal, Record.NormalArea.xyz);
                     let PlanarDistance = abs(dot(Delta, Record.NormalArea.xyz));
-                    if (Distance < Radius && NormalWeight > 0.15 && PlanarDistance < Radius * 0.38)
+                    let ReceiverPlanarDistance = abs(dot(Delta, Normal));
+                    let LeakValid = Integration.FieldTuning.w < 0.5
+                        || ReceiverPlanarDistance < Radius * 0.30;
+                    if (
+                        Distance < Radius
+                        && NormalWeight > 0.15
+                        && PlanarDistance < Radius * 0.38
+                        && LeakValid
+                    )
                     {
                         let LinearWeight = 1.0 - Distance / Radius;
                         let Weight = NormalWeight * LinearWeight * LinearWeight;
@@ -332,10 +341,25 @@ fn GatherIrradiance(Position: vec3f, Normal: vec3f) -> vec3f
     return select(vec3f(0.0), Irradiance / WeightSum, WeightSum > 0.00001);
 }
 
-fn CosineDirection(Normal: vec3f, Seed: ptr<function, u32>) -> vec3f
+fn CosineDirection(
+    Normal: vec3f,
+    Seed: ptr<function, u32>,
+    RecordNumber: u32,
+    SequenceNumber: u32,
+) -> vec3f
 {
-    let First = RandomUnit(Seed);
-    let Second = RandomUnit(Seed);
+    var First = RandomUnit(Seed);
+    var Second = RandomUnit(Seed);
+    if (Integration.FieldTuning.y > 0.5)
+    {
+        let FirstScramble = HashUnsigned(RecordNumber ^ 0x68bc21ebu);
+        let SecondScramble = HashUnsigned(RecordNumber ^ 0x02e5be93u);
+        let FirstOffset = f32(FirstScramble >> 8u) * (1.0 / 16777216.0);
+        let SecondOffset = f32(SecondScramble >> 8u) * (1.0 / 16777216.0);
+        let Sequence = f32(SequenceNumber);
+        First = fract(FirstOffset + Sequence * 0.7548776662466927);
+        Second = fract(SecondOffset + Sequence * 0.5698402909980532);
+    }
     let Radius = sqrt(First);
     let Angle = 2.0 * Pi * Second;
     let Reference = select(vec3f(1.0, 0.0, 0.0), vec3f(0.0, 0.0, 1.0), abs(Normal.z) < 0.9);
@@ -371,7 +395,9 @@ fn IntegrateMain(@builtin(global_invocation_id) Invocation: vec3u)
         {
             break;
         }
-        let Direction = CosineDirection(Normal, &Seed);
+        let StepNumber = max(u32(Integration.SunDirectionStep.w), 1u) - 1u;
+        let SequenceNumber = StepNumber * RayCount + RayNumber;
+        let Direction = CosineDirection(Normal, &Seed, RecordNumber, SequenceNumber);
         let Origin = Record.PositionRadius.xyz + Normal * 0.004;
         let SurfaceHit = TraceScene(Origin, Direction, 1000.0);
         if (SurfaceHit.Valid == 0u)
@@ -412,10 +438,26 @@ fn IntegrateMain(@builtin(global_invocation_id) Invocation: vec3u)
 
     Measurement = Measurement * (Pi / f32(RayCount));
     let Age = max(1.0, Integration.SunDirectionStep.w);
-    let IntegrationWeight = 1.0 / min(Age, Integration.SkyHorizonAgeCap.w);
-    let Published = mix(Record.IrradianceAge.xyz, Measurement, IntegrationWeight);
+    let BaseWeight = 1.0 / min(Age, Integration.SkyHorizonAgeCap.w);
+    var Published = mix(Record.IrradianceAge.xyz, Measurement, BaseWeight);
+    var ShortMean = Measurement;
+    var Variance = 0.0;
+    if (Integration.FieldTuning.z > 0.5 && Record.IrradianceAge.w > 0.5)
+    {
+        let ShortWeight = 0.14;
+        ShortMean = mix(Record.ShortMeanVariance.xyz, Measurement, ShortWeight);
+        let Luminance = vec3f(0.2126, 0.7152, 0.0722);
+        let Innovation = dot(Measurement - Record.ShortMeanVariance.xyz, Luminance);
+        Variance = mix(Record.ShortMeanVariance.w, Innovation * Innovation, 0.12);
+        let Disagreement = abs(dot(ShortMean - Record.IrradianceAge.xyz, Luminance));
+        let NoiseFloor = 2.0 * sqrt(max(Variance, 0.0)) + 0.015;
+        let ChangeConfidence = smoothstep(1.0, 3.0, Disagreement / NoiseFloor);
+        let AdaptiveWeight = mix(0.02, 0.20, ChangeConfidence);
+        Published = mix(Record.IrradianceAge.xyz, Measurement, max(BaseWeight, AdaptiveWeight));
+    }
     DestinationField.Records[RecordNumber].PositionRadius = Record.PositionRadius;
     DestinationField.Records[RecordNumber].NormalArea = Record.NormalArea;
     DestinationField.Records[RecordNumber].AlbedoIdentity = Record.AlbedoIdentity;
     DestinationField.Records[RecordNumber].IrradianceAge = vec4f(Published, Age);
+    DestinationField.Records[RecordNumber].ShortMeanVariance = vec4f(ShortMean, Variance);
 }
