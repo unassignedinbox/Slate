@@ -54,7 +54,8 @@ fn OverlayVertex(
         vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(-1.0, 1.0),
         vec2f(-1.0, 1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0)
     );
-    let Record = Surfels.Records[InstanceNumber];
+    // A sparse diagnostic preview is readable; drawing all 36,864 records obscures the scene.
+    let Record = Surfels.Records[InstanceNumber * 16u];
     let Normal = normalize(Record.NormalValid.xyz + vec3f(0.0, 0.0, 0.0001));
     let Reference = select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(Normal.z) > 0.88);
     let Tangent = normalize(cross(Reference, Normal));

@@ -196,7 +196,8 @@ fn SunVisibility(Position: vec3f, Normal: vec3f) -> f32
     var Cascade = 0u;
     if (ViewDepth > Frame.ShadowSplits.x) { Cascade = 1u; }
     if (ViewDepth > Frame.ShadowSplits.y) { Cascade = 2u; }
-    let Clip = ShadowProjection(Cascade) * vec4f(Position + Normal * 0.012, 1.0);
+    let ReceiverPosition = Position + Normal * 0.006 + Frame.SunDirectionIntensity.xyz * 0.008;
+    let Clip = ShadowProjection(Cascade) * vec4f(ReceiverPosition, 1.0);
     let Ndc = Clip.xyz / max(Clip.w, 0.0001);
     let Uv = vec2f(Ndc.x * 0.5 + 0.5, 0.5 - Ndc.y * 0.5);
     if (any(Uv <= vec2f(0.0)) || any(Uv >= vec2f(1.0)) || Ndc.z <= 0.0 || Ndc.z >= 1.0)
@@ -205,7 +206,9 @@ fn SunVisibility(Position: vec3f, Normal: vec3f) -> f32
     }
     let Extent = textureDimensions(CsmDepth);
     let Texel = 1.0 / vec2f(Extent);
-    let Bias = 0.00065 + 0.0018 * (1.0 - max(dot(Normal, Frame.SunDirectionIntensity.xyz), 0.0));
+    // CSM depth spans are much larger than the former RSM span; a millidepth bias
+    // erases contact shadows. Keep this below roughly one near-cascade texel in depth.
+    let Bias = 0.00010 + 0.00038 * (1.0 - max(dot(Normal, Frame.SunDirectionIntensity.xyz), 0.0));
     let FilterRadius = i32(clamp(Frame.Settings.w, 1.0, 2.0));
     var Visibility = 0.0;
     var Weight = 0.0;
@@ -224,7 +227,8 @@ fn SunVisibility(Position: vec3f, Normal: vec3f) -> f32
             Weight = Weight + 1.0;
         }
     }
-    return Visibility / max(Weight, 1.0);
+    let Filtered = Visibility / max(Weight, 1.0);
+    return smoothstep(0.08, 0.92, Filtered);
 }
 
 fn Fresnel(SpecularZero: vec3f, Cosine: f32) -> vec3f
@@ -302,9 +306,10 @@ fn PresentFragment(Input: FullscreenVarying) -> @location(0) vec4f
         let AmbientVisibility = select(1.0, ScreenSample.w, Frame.Settings.z > 0.5);
         let Ambient = DiffuseColour * SkyRadiance(Normal) * (0.22 * AmbientVisibility);
         let LPVSample = SampleLPV(Position, Normal);
-        let LPVIndirect = DiffuseColour * InversePi * LPVSample.xyz * Frame.CameraUpGain.w;
+        let LPVIndirect = DiffuseColour * InversePi * LPVSample.xyz
+            * Frame.CameraUpGain.w * 0.62;
         let ScreenIndirect = DiffuseColour * InversePi * ScreenSample.xyz
-            * Frame.CameraUpGain.w * select(0.0, 1.0, Frame.Settings.z > 0.5);
+            * Frame.CameraUpGain.w * 0.72 * select(0.0, 1.0, Frame.Settings.z > 0.5);
 
         let ReflectionDirection = reflect(-View, Normal);
         let ReflectedSky = mix(SkyRadiance(ReflectionDirection), SkyRadiance(Normal), Roughness * Roughness * 0.72);
@@ -323,6 +328,12 @@ fn PresentFragment(Input: FullscreenVarying) -> @location(0) vec4f
         else if (Mode == 4u)
         {
             LinearColour = ScreenIndirect * 1.55 + vec3f((1.0 - AmbientVisibility) * 0.10);
+        }
+        else if (Mode == 7u)
+        {
+            // White is sun-visible and black is shadowed; this bypasses GI so CSM
+            // coverage and PCF can be inspected without indirect-light fill.
+            LinearColour = vec3f(0.015 + Visibility * 0.82);
         }
         else if (Mode == 5u)
         {

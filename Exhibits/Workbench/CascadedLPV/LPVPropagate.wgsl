@@ -72,9 +72,9 @@ fn DirectionalOpacity(Blocker: BlockerCell, Direction: vec3f) -> f32
 fn ClampCell(Cell: VolumeCell) -> VolumeCell
 {
     return VolumeCell(
-        vec4f(clamp(Cell.Red.x, 0.0, 20.0), clamp(Cell.Red.yzw, vec3f(-20.0), vec3f(20.0))),
-        vec4f(clamp(Cell.Green.x, 0.0, 20.0), clamp(Cell.Green.yzw, vec3f(-20.0), vec3f(20.0))),
-        vec4f(clamp(Cell.Blue.x, 0.0, 20.0), clamp(Cell.Blue.yzw, vec3f(-20.0), vec3f(20.0)))
+        vec4f(clamp(Cell.Red.x, 0.0, 8.0), clamp(Cell.Red.yzw, vec3f(-8.0), vec3f(8.0))),
+        vec4f(clamp(Cell.Green.x, 0.0, 8.0), clamp(Cell.Green.yzw, vec3f(-8.0), vec3f(8.0))),
+        vec4f(clamp(Cell.Blue.x, 0.0, 8.0), clamp(Cell.Blue.yzw, vec3f(-8.0), vec3f(8.0)))
     );
 }
 
@@ -93,10 +93,12 @@ fn PropagateMain(@builtin(global_invocation_id) Global: vec3u)
 
     let SourceCell = SourceVolume.Cells[CellNumber];
     let InjectionCell = InjectionVolume.Cells[CellNumber];
+    // Keep the Jacobi operator deliberately dissipative. The previous 0.78 self-retention
+    // combined with six neighbours had gain above one and recursively amplified LPV history.
     var Result = VolumeCell(
-        SourceCell.Red * 0.78 + InjectionCell.Red * 0.22,
-        SourceCell.Green * 0.78 + InjectionCell.Green * 0.22,
-        SourceCell.Blue * 0.78 + InjectionCell.Blue * 0.22
+        SourceCell.Red * 0.48 + InjectionCell.Red * 0.52,
+        SourceCell.Green * 0.48 + InjectionCell.Green * 0.52,
+        SourceCell.Blue * 0.48 + InjectionCell.Blue * 0.52
     );
     for (var DirectionNumber = 0u; DirectionNumber < 6u; DirectionNumber = DirectionNumber + 1u)
     {
@@ -117,7 +119,7 @@ fn PropagateMain(@builtin(global_invocation_id) Global: vec3u)
             Evaluate(Source.Red, TravelDirection),
             Evaluate(Source.Green, TravelDirection),
             Evaluate(Source.Blue, TravelDirection)
-        ) * (0.115 * Visibility);
+        ) * (0.082 * Visibility);
         Result.Red = Result.Red + vec4f(Incoming.r * 0.45, Incoming.r * TravelDirection * 0.55);
         Result.Green = Result.Green + vec4f(Incoming.g * 0.45, Incoming.g * TravelDirection * 0.55);
         Result.Blue = Result.Blue + vec4f(Incoming.b * 0.45, Incoming.b * TravelDirection * 0.55);

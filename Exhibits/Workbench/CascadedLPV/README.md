@@ -21,13 +21,14 @@ The RSM is used only to discover indirect-light sources. It is not reused for di
 - **Shadow filter:** switches the dedicated cascaded shadow maps between 9-tap 3×3 and 25-tap 5×5 PCF. The 3×3 option is the GTX-class default; 5×5 softens edges at extra fragment cost.
 - **Blocker field:** disables directional propagation attenuation for a leak comparison.
 - **Screen GI + GTAO:** removes the near-field refinement while leaving world-space LPV active.
-- **Show RSM surfels:** overlays current GI candidates in the single combined view.
+- **Sparse RSM debug:** overlays one in sixteen current GI candidates. The reduced diagnostic density keeps the shaded scene readable.
+- **Shadow visibility:** displays the CSM/PCF result without ambient or indirect-light fill; white is sun-visible and black is shadowed.
 - **Propagation:** changes how far light diffuses through each cascade.
 - **Dynamic world / moving sun:** independently freeze geometry or illumination changes.
 - **Render scale:** scales presentation from 100% to 175%, capped at 1920×1080.
 
 ## Performance and limitations
 
-The fixed world-space storage remains bounded for open-world use. Three direct-shadow depth layers add about 12 MiB, while source radiance, persistent history, propagation ping-pong volumes, deterministic reservoirs, atomics, and raw/dilated directional blockers remain compact enough for a GTX-class target. The default uses 3×3 PCF and four propagation steps.
+The fixed world-space storage remains bounded for open-world use. Three direct-shadow depth layers add about 12 MiB, while source radiance, persistent history, propagation ping-pong volumes, deterministic reservoirs, atomics, and raw/dilated directional blockers remain compact enough for a GTX-class target. The default uses 3×3 PCF and four propagation steps. The propagation operator is dissipative, so reprojected history converges instead of recursively increasing scene exposure.
 
 This demonstrates a low-memory raster architecture rather than claiming Lumen-equivalent visibility. LPV cells are still coarse, RSM source discovery remains light-view dependent, and screen-space refinement cannot recover hidden surfaces. Thin-wall leaks are reduced by six-direction blockers and near-cascade dilation, but broad indirect shadows and missing off-screen local emissives remain expected limitations under the no-ray/no-SDF/no-bake constraints.

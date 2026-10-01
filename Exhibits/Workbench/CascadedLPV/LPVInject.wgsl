@@ -309,8 +309,10 @@ fn NormalizeMain(@builtin(global_invocation_id) Global: vec3u)
     );
     let RadianceWeight = ExchangeFixed(Base + 18u);
     atomicExchange(&Reservoirs.Entries[Cell], 0u);
-    if (RadianceWeight > 0.0001)
+    if (RadianceWeight > 1.0)
     {
+        // Average genuinely overlapping winners, but do not divide away sub-unit
+        // trilinear weights: doing so turned every corner tap into a full source.
         Red = Red / RadianceWeight;
         Green = Green / RadianceWeight;
         Blue = Blue / RadianceWeight;

@@ -50,7 +50,8 @@ fn SunVisibility(Position: vec3f, Normal: vec3f) -> f32
     var Cascade = 0u;
     if (ViewDepth > Frame.ShadowSplits.x) { Cascade = 1u; }
     if (ViewDepth > Frame.ShadowSplits.y) { Cascade = 2u; }
-    let Clip = ShadowProjection(Cascade) * vec4f(Position + Normal * 0.015, 1.0);
+    let ReceiverPosition = Position + Normal * 0.006 + Frame.SunDirectionIntensity.xyz * 0.008;
+    let Clip = ShadowProjection(Cascade) * vec4f(ReceiverPosition, 1.0);
     if (Clip.w <= 0.0) { return 1.0; }
     let Ndc = Clip.xyz / Clip.w;
     let Uv = vec2f(Ndc.x * 0.5 + 0.5, 0.5 - Ndc.y * 0.5);
@@ -58,7 +59,7 @@ fn SunVisibility(Position: vec3f, Normal: vec3f) -> f32
     let Extent = textureDimensions(CsmDepth);
     let Pixel = vec2i(clamp(Uv * vec2f(Extent), vec2f(0.0), vec2f(Extent) - vec2f(1.0)));
     let StoredDepth = textureLoad(CsmDepth, Pixel, i32(Cascade), 0);
-    let Bias = 0.0009 + 0.0020 * (1.0 - max(dot(Normal, Frame.SunDirectionIntensity.xyz), 0.0));
+    let Bias = 0.00012 + 0.00042 * (1.0 - max(dot(Normal, Frame.SunDirectionIntensity.xyz), 0.0));
     return select(0.0, 1.0, Ndc.z - Bias <= StoredDepth);
 }
 

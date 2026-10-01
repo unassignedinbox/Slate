@@ -6,6 +6,7 @@ const RsmResolution = 384;
 const RsmWorldSpan = 48.0;
 const ShadowResolution = 1024;
 const SurfelCount = (RsmResolution / 2) * (RsmResolution / 2);
+const OverlayStride = 16;
 const VolumeResolution = 40;
 const CellsPerCascade = VolumeResolution ** 3;
 const VolumeCellCount = CellsPerCascade * 3;
@@ -337,14 +338,14 @@ async function BringRenderer()
     StatusText.textContent = "Loading scene and transport shaders";
     const [GeometryBinary, RasterSource, ShadowSource, ExtractSource, InjectSource, PropagateSource, ScreenSource, PresentSource, OverlaySource] = await Promise.all([
         LoadBinary(GeometryAddress),
-        LoadText("LPVRaster.wgsl?revision=4"),
-        LoadText("CSMShadow.wgsl?revision=4"),
-        LoadText("LPVExtract.wgsl?revision=4"),
-        LoadText("LPVInject.wgsl?revision=4"),
-        LoadText("LPVPropagate.wgsl?revision=4"),
-        LoadText("LPVSSGI.wgsl?revision=4"),
-        LoadText("LPVPresent.wgsl?revision=4"),
-        LoadText("LPVOverlay.wgsl?revision=4"),
+        LoadText("LPVRaster.wgsl?revision=5"),
+        LoadText("CSMShadow.wgsl?revision=5"),
+        LoadText("LPVExtract.wgsl?revision=5"),
+        LoadText("LPVInject.wgsl?revision=5"),
+        LoadText("LPVPropagate.wgsl?revision=5"),
+        LoadText("LPVSSGI.wgsl?revision=5"),
+        LoadText("LPVPresent.wgsl?revision=5"),
+        LoadText("LPVOverlay.wgsl?revision=5"),
     ]);
     const Geometry = DecodeGeometry(GeometryBinary);
     const Cube = ConstructCube();
@@ -938,7 +939,7 @@ async function BringRenderer()
         Content.set([...Camera.Forward, Math.tan(0.78 * 0.5)], 52);
         Content.set([...Camera.Right, PresentationWidth / PresentationHeight], 56);
         Content.set([...Camera.Up, Number(IndirectGain.value)], 60);
-        Content.set([...SunDirection, 4.35], 64);
+        Content.set([...SunDirection, 3.60], 64);
         Content.set([...SunColour, WorldTime], 68);
         Content.set(Origins[0], 72);
         Content.set(Origins[1], 76);
@@ -951,7 +952,7 @@ async function BringRenderer()
             Number(ShadowFilter.value),
         ], 88);
         Content.set([0.84, Number(ScreenRadius.value) * 0.1, 1.0, 1.0], 92);
-        Content.set([VolumeResolution, SurfelCount, Number(PropagationSteps.value), 1.06], 96);
+        Content.set([VolumeResolution, SurfelCount, Number(PropagationSteps.value), 0.90], 96);
         Content.set(PreviousOrigins[0], 100);
         Content.set(PreviousOrigins[1], 104);
         Content.set(PreviousOrigins[2], 108);
@@ -1111,7 +1112,7 @@ async function BringRenderer()
         PresentationRendering.draw(3);
         PresentationRendering.end();
 
-        if (ShowSurfels.checked && Number(DisplayMode.value) !== 0)
+        if (ShowSurfels.checked && Number(DisplayMode.value) === 1)
         {
             const OverlayRendering = Commands.beginRenderPass({
                 label: "Expose current RSM surfels",
@@ -1120,7 +1121,7 @@ async function BringRenderer()
             });
             OverlayRendering.setPipeline(OverlayProgram);
             OverlayRendering.setBindGroup(0, OverlayGroup);
-            OverlayRendering.draw(6, SurfelCount);
+            OverlayRendering.draw(6, Math.ceil(SurfelCount / OverlayStride));
             OverlayRendering.end();
         }
 
