@@ -100,6 +100,30 @@ void OrbitBasis(float Yaw, float Pitch, float F[3], float R[3], float U[3]) noex
     U[0] = Ry * F[2]; U[1] = -Rx * F[2]; U[2] = Rx * F[1] - Ry * F[0];
 }
 
+bool PointInsidePolygon(const ImVec2& P, const ImVec2* Poly, int Count) noexcept
+{
+    bool Inside = false;
+    for (int I = 0, J = Count - 1; I < Count; J = I++)
+    {
+        const bool Crosses = ((Poly[I].y > P.y) != (Poly[J].y > P.y))
+            && (P.x < (Poly[J].x - Poly[I].x) * (P.y - Poly[I].y) / (Poly[J].y - Poly[I].y + 1e-6f) + Poly[I].x);
+        if (Crosses)
+            Inside = !Inside;
+    }
+    return Inside;
+}
+
+void ApplySnap(ViewportOrbit& Orbit, uint32_t View) noexcept
+{
+    if (View == 0u || View > 6u)
+        return;
+    Orbit.Yaw = kSnaps[View].Yaw;
+    Orbit.Pitch = kSnaps[View].Pitch;
+    Orbit.Ortho = true;
+    Orbit.ViewPoint = View;
+    ++Orbit.Revision;
+}
+
 //------------------------------------------------------------------------------------------------------------------------
 //                                                    TRANSPORT GLYPHS
 //------------------------------------------------------------------------------------------------------------------------
@@ -472,6 +496,13 @@ void ViewportPanel::AssignTabOpen(bool* Open) noexcept
 void ViewportPanel::AssignWindowTitle(const char* Title) noexcept
 {
     WindowTitle_ = (Title != nullptr && Title[0] != '\0') ? Title : "Viewport";
+}
+
+void ViewportPanel::AssignAxisGuide(bool Visible, float LengthPixels, float ThicknessPixels) noexcept
+{
+    SolidArcAxisGuideVisible_ = Visible;
+    SolidArcAxisGuideLength_ = std::clamp(LengthPixels, 18.0f, 120.0f);
+    SolidArcAxisGuideThickness_ = std::clamp(ThicknessPixels, 0.5f, 6.0f);
 }
 
 void ViewportPanel::AssignView(const unsigned char* Rgba, uint32_t Width, uint32_t Height) noexcept
@@ -1403,6 +1434,108 @@ void ViewportPanel::RecordView() noexcept
     //    dollies over the view. Front pads read bright, back pads dim, and the hot pad rings.
     float Gf[3], Gr[3], Gu[3];
     OrbitBasis(Orbit_.Yaw, Orbit_.Pitch, Gf, Gr, Gu);
+
+    bool NavHover = false;
+    if (Chrome_ == ViewportPanelChrome::SolidArcCad)
+    {
+        struct NavFace
+        {
+            const char* Label;
+            uint32_t View;
+            float N[3];
+            float C[3];
+            ImVec2 P[4];
+            float Depth;
+            ImU32 Tint;
+            bool Visible;
+        };
+        NavFace Faces[6] =
+        {
+            { "RIGHT",  3u, {  1.0f,  0.0f,  0.0f }, {  1.0f,  0.0f,  0.0f }, {}, 0.0f, IM_COL32(239, 83, 80, 172), false },
+            { "LEFT",   4u, { -1.0f,  0.0f,  0.0f }, { -1.0f,  0.0f,  0.0f }, {}, 0.0f, IM_COL32(239, 83, 80, 112), false },
+            { "BACK",   2u, {  0.0f,  1.0f,  0.0f }, {  0.0f,  1.0f,  0.0f }, {}, 0.0f, IM_COL32(105, 208, 109, 112), false },
+            { "FRONT",  1u, {  0.0f, -1.0f,  0.0f }, {  0.0f, -1.0f,  0.0f }, {}, 0.0f, IM_COL32(105, 208, 109, 172), false },
+            { "TOP",    5u, {  0.0f,  0.0f,  1.0f }, {  0.0f,  0.0f,  1.0f }, {}, 0.0f, IM_COL32(91, 140, 255, 172), false },
+            { "BOTTOM", 6u, {  0.0f,  0.0f, -1.0f }, {  0.0f,  0.0f, -1.0f }, {}, 0.0f, IM_COL32(91, 140, 255, 112), false },
+        };
+        const float Verts[8][3] =
+        {
+            { -1.0f, -1.0f, -1.0f }, {  1.0f, -1.0f, -1.0f }, {  1.0f,  1.0f, -1.0f }, { -1.0f,  1.0f, -1.0f },
+            { -1.0f, -1.0f,  1.0f }, {  1.0f, -1.0f,  1.0f }, {  1.0f,  1.0f,  1.0f }, { -1.0f,  1.0f,  1.0f },
+        };
+        const uint8_t Indices[6][4] =
+        {
+            { 1u, 2u, 6u, 5u }, { 0u, 4u, 7u, 3u }, { 2u, 3u, 7u, 6u },
+            { 0u, 1u, 5u, 4u }, { 4u, 5u, 6u, 7u }, { 0u, 3u, 2u, 1u },
+        };
+        const ImVec2 CubeC(Min.x + 70.0f, Min.y + 70.0f);
+        const float CubeScale = 26.0f;
+        for (uint32_t F = 0u; F < 6u; ++F)
+        {
+            NavFace& Face = Faces[F];
+            Face.Depth = Face.C[0] * Gf[0] + Face.C[1] * Gf[1] + Face.C[2] * Gf[2];
+            const float Facing = Face.N[0] * Gf[0] + Face.N[1] * Gf[1] + Face.N[2] * Gf[2];
+            Face.Visible = Facing < 0.08f;
+            for (uint32_t C = 0u; C < 4u; ++C)
+            {
+                const float* V = Verts[Indices[F][C]];
+                const float X = V[0] * Gr[0] + V[1] * Gr[1] + V[2] * Gr[2];
+                const float Y = V[0] * Gu[0] + V[1] * Gu[1] + V[2] * Gu[2];
+                Face.P[C] = ImVec2(CubeC.x + X * CubeScale, CubeC.y - Y * CubeScale);
+            }
+        }
+        uint32_t Order[6] = { 0u, 1u, 2u, 3u, 4u, 5u };
+        for (uint32_t A = 0u; A < 6u; ++A)
+            for (uint32_t B = A + 1u; B < 6u; ++B)
+                if (Faces[Order[A]].Depth > Faces[Order[B]].Depth)
+                    std::swap(Order[A], Order[B]);
+
+        ImGui::SetCursorScreenPos(ImVec2(CubeC.x - 48.0f, CubeC.y - 48.0f));
+        ImGui::InvisibleButton("##solidarc_navcube", ImVec2(96.0f, 96.0f));
+        NavHover = ImGui::IsItemHovered();
+        SolidArcNavHotFace_ = 0u;
+        const ImVec2 Mouse = ImGui::GetIO().MousePos;
+        if (NavHover)
+        {
+            for (uint32_t Slot = 0u; Slot < 6u; ++Slot)
+            {
+                NavFace& Face = Faces[Order[Slot]];
+                if (Face.Visible && PointInsidePolygon(Mouse, Face.P, 4))
+                    SolidArcNavHotFace_ = Face.View;
+            }
+            if (SolidArcNavHotFace_ != 0u && ImGui::IsMouseClicked(0))
+            {
+                ApplySnap(Orbit_, SolidArcNavHotFace_);
+                if (SolidArcNavHotFace_ == 5u)      SolidArcView_ = 0u;
+                else if (SolidArcNavHotFace_ == 1u) SolidArcView_ = 1u;
+                else if (SolidArcNavHotFace_ == 3u) SolidArcView_ = 2u;
+                else                                SolidArcView_ = 3u;
+            }
+        }
+        Draw->AddRectFilled(ImVec2(CubeC.x - 52.0f, CubeC.y - 52.0f), ImVec2(CubeC.x + 52.0f, CubeC.y + 52.0f),
+                            IM_COL32(0, 0, 0, NavHover ? 112 : 76), 14.0f);
+        Draw->AddRect(ImVec2(CubeC.x - 52.0f, CubeC.y - 52.0f), ImVec2(CubeC.x + 52.0f, CubeC.y + 52.0f),
+                      NavHover ? IM_COL32(255, 255, 255, 40) : kStroke, 14.0f);
+        ImGui::PushFont(Small);
+        for (uint32_t Slot = 0u; Slot < 6u; ++Slot)
+        {
+            NavFace& Face = Faces[Order[Slot]];
+            if (!Face.Visible)
+                continue;
+            const bool Hot = Face.View == SolidArcNavHotFace_;
+            Draw->AddConvexPolyFilled(Face.P, 4, Hot ? ControlPanel::FadeTint(Face.Tint, 1.25f) : Face.Tint);
+            Draw->AddPolyline(Face.P, 4, Hot ? IM_COL32(255, 255, 255, 150) : IM_COL32(255, 255, 255, 45),
+                              ImDrawFlags_Closed, Hot ? 1.4f : 1.0f);
+            ImVec2 Centre(0.0f, 0.0f);
+            for (const ImVec2& P : Face.P) { Centre.x += P.x; Centre.y += P.y; }
+            Centre.x *= 0.25f; Centre.y *= 0.25f;
+            const ImVec2 T = Small->CalcTextSizeA(8.0f, FLT_MAX, 0.0f, Face.Label);
+            Draw->AddText(Small, 8.0f, ImVec2(Centre.x - T.x * 0.5f, Centre.y - T.y * 0.5f),
+                          Hot ? kText : IM_COL32(240, 240, 240, 205), Face.Label);
+        }
+        ImGui::PopFont();
+    }
+
     const ImVec2 OrbC(Max.x - 52.0f, Max.y - 52.0f);
     constexpr float kArm = 20.0f;
     struct PadDot { float X; float Y; bool Front; };
@@ -1419,19 +1552,24 @@ void ViewportPanel::RecordView() noexcept
         Pads[i].Y     = OrbC.y - Dy * kArm;
         Pads[i].Front = Toward > 0.0f;
     }
-    ImGui::SetCursorScreenPos(ImVec2(OrbC.x - 48.0f, OrbC.y - 48.0f));
-    ImGui::InvisibleButton("##orb", ImVec2(96.0f, 96.0f));
-    const bool OrbHover = ImGui::IsItemHovered();
+    const bool ShowOrb = (Chrome_ != ViewportPanelChrome::SolidArcCad) || SolidArcAxisGuideVisible_;
+    bool OrbHover = false;
     OrbHot_ = 0u;
-    if (OrbHover || OrbHeld_)
+    if (ShowOrb)
     {
-        const ImVec2 Mouse = ImGui::GetIO().MousePos;
-        float Best = 14.0f * 14.0f;
-        for (uint32_t i = 0u; i < 6u; ++i)
+        ImGui::SetCursorScreenPos(ImVec2(OrbC.x - 48.0f, OrbC.y - 48.0f));
+        ImGui::InvisibleButton("##orb", ImVec2(96.0f, 96.0f));
+        OrbHover = ImGui::IsItemHovered();
+        if (OrbHover || OrbHeld_)
         {
-            const float Hx = Mouse.x - Pads[i].X, Hy = Mouse.y - Pads[i].Y;
-            const float D2 = Hx * Hx + Hy * Hy;
-            if (D2 < Best) { Best = D2; OrbHot_ = i + 1u; }
+            const ImVec2 Mouse = ImGui::GetIO().MousePos;
+            float Best = 14.0f * 14.0f;
+            for (uint32_t i = 0u; i < 6u; ++i)
+            {
+                const float Hx = Mouse.x - Pads[i].X, Hy = Mouse.y - Pads[i].Y;
+                const float D2 = Hx * Hx + Hy * Hy;
+                if (D2 < Best) { Best = D2; OrbHot_ = i + 1u; }
+            }
         }
     }
     if (OrbHover && ImGui::IsMouseClicked(0))
@@ -1477,34 +1615,64 @@ void ViewportPanel::RecordView() noexcept
     constexpr ImU32 kAxisTint[3] = { IM_COL32(239, 83, 80, 255),
                                      IM_COL32(105, 208, 109, 255),
                                      IM_COL32(91, 140, 255, 255) };
-    for (uint32_t a = 0u; a < 3u; ++a)
-        Draw->AddLine(ImVec2(Pads[2u * a].X, Pads[2u * a].Y),
-            ImVec2(Pads[2u * a + 1u].X, Pads[2u * a + 1u].Y),
-            ControlPanel::FadeTint(kAxisTint[a], 0.55f), 2.0f);
-    for (uint32_t i = 0u; i < 6u; ++i)
+    if (ShowOrb)
     {
-        const ImU32 Tint = ControlPanel::FadeTint(kAxisTint[i / 2u], Pads[i].Front ? 1.0f : 0.35f);
-        Draw->AddCircleFilled(ImVec2(Pads[i].X, Pads[i].Y), 7.0f, Tint);
-        if (OrbHot_ == i + 1u)
-            Draw->AddCircle(ImVec2(Pads[i].X, Pads[i].Y), 10.0f, IM_COL32(255, 255, 255, 200), 0, 1.6f);
+        const char* kAxisNames[3] = { "X", "Y", "Z" };
+        ImGui::PushFont(Small);
+        if (Chrome_ == ViewportPanelChrome::SolidArcCad)
+        {
+            Draw->AddRectFilled(ImVec2(OrbC.x - 42.0f, OrbC.y - 42.0f), ImVec2(OrbC.x + 42.0f, OrbC.y + 42.0f),
+                                IM_COL32(0, 0, 0, OrbHover ? 90 : 52), 12.0f);
+            Draw->AddRect(ImVec2(OrbC.x - 42.0f, OrbC.y - 42.0f), ImVec2(OrbC.x + 42.0f, OrbC.y + 42.0f),
+                          OrbHover ? IM_COL32(255, 255, 255, 35) : kStroke, 12.0f);
+            for (uint32_t a = 0u; a < 3u; ++a)
+            {
+                const float PosDx = (Pads[2u * a].X - OrbC.x) / kArm;
+                const float PosDy = (Pads[2u * a].Y - OrbC.y) / kArm;
+                const ImVec2 Positive(OrbC.x + PosDx * SolidArcAxisGuideLength_,
+                                      OrbC.y + PosDy * SolidArcAxisGuideLength_);
+                const ImVec2 Negative(OrbC.x - PosDx * SolidArcAxisGuideLength_ * 0.45f,
+                                      OrbC.y - PosDy * SolidArcAxisGuideLength_ * 0.45f);
+                Draw->AddLine(Negative, Positive, ControlPanel::FadeTint(kAxisTint[a], 0.35f),
+                              std::max(0.5f, SolidArcAxisGuideThickness_ * 0.75f));
+                const bool Hot = (OrbHot_ == 2u * a + 1u) || (OrbHot_ == 2u * a + 2u);
+                Draw->AddLine(OrbC, Positive, Hot ? kAxisTint[a] : ControlPanel::FadeTint(kAxisTint[a], 0.88f),
+                              Hot ? SolidArcAxisGuideThickness_ + 0.75f : SolidArcAxisGuideThickness_);
+                const ImVec2 T = Small->CalcTextSizeA(Small->LegacySize, FLT_MAX, 0.0f, kAxisNames[a]);
+                Draw->AddText(Small, Small->LegacySize, ImVec2(Positive.x + 5.0f, Positive.y - T.y * 0.5f),
+                              Hot ? kText : kAxisTint[a], kAxisNames[a]);
+            }
+        }
+        else
+        {
+            for (uint32_t a = 0u; a < 3u; ++a)
+                Draw->AddLine(ImVec2(Pads[2u * a].X, Pads[2u * a].Y),
+                    ImVec2(Pads[2u * a + 1u].X, Pads[2u * a + 1u].Y),
+                    ControlPanel::FadeTint(kAxisTint[a], 0.55f), 2.0f);
+            for (uint32_t i = 0u; i < 6u; ++i)
+            {
+                const ImU32 Tint = ControlPanel::FadeTint(kAxisTint[i / 2u], Pads[i].Front ? 1.0f : 0.35f);
+                Draw->AddCircleFilled(ImVec2(Pads[i].X, Pads[i].Y), 7.0f, Tint);
+                if (OrbHot_ == i + 1u)
+                    Draw->AddCircle(ImVec2(Pads[i].X, Pads[i].Y), 10.0f, IM_COL32(255, 255, 255, 200), 0, 1.6f);
+            }
+            for (uint32_t a = 0u; a < 3u; ++a)
+            {
+                const ImU32 Tint = ControlPanel::FadeTint(kAxisTint[a], Pads[2u * a].Front ? 1.0f : 0.4f);
+                Draw->AddText(ImVec2(Pads[2u * a].X + 9.0f, Pads[2u * a].Y - 7.0f), Tint, kAxisNames[a]);
+            }
+        }
+        ImGui::PopFont();
     }
-    const char* kAxisNames[3] = { "X", "Y", "Z" };
-    ImGui::PushFont(Small);
-    for (uint32_t a = 0u; a < 3u; ++a)
-    {
-        const ImU32 Tint = ControlPanel::FadeTint(kAxisTint[a], Pads[2u * a].Front ? 1.0f : 0.4f);
-        Draw->AddText(ImVec2(Pads[2u * a].X + 9.0f, Pads[2u * a].Y - 7.0f), Tint, kAxisNames[a]);
-    }
-    ImGui::PopFont();
 
-    const bool BillboardHover=MarkersOn_?Billboards.Draw(Draw,Min,Max,!OrbHover&&!OrbHeld_&&!CanvasDragging_):(Billboards.ClearFrame(),false);
+    const bool BillboardHover=MarkersOn_?Billboards.Draw(Draw,Min,Max,!OrbHover&&!OrbHeld_&&!CanvasDragging_&&!NavHover):(Billboards.ClearFrame(),false);
 
     // CAD canvas interaction (SolidArc): clicking and dragging across the CAD viewport canvas
     //    orbits the camera, middle-drag or Shift+left-drag pans the target, and scroll wheel dollies.
     //    For standard game viewports, RMB look and WASD flight are handled by the FlyThrough camera.
     if (Chrome_ == ViewportPanelChrome::SolidArcCad)
     {
-        const bool CanvasHover = ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(Min, Max) && !OrbHover && !OrbHeld_ && !BillboardHover;
+        const bool CanvasHover = ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(Min, Max) && !OrbHover && !OrbHeld_ && !NavHover && !BillboardHover;
         if (CanvasHover && (ImGui::IsMouseClicked(0) || ImGui::IsMouseClicked(1) || ImGui::IsMouseClicked(2)))
         {
             CanvasDragging_ = true;
@@ -1561,7 +1729,7 @@ void ViewportPanel::RecordView() noexcept
         const ImVec2 Mouse   = ImGui::GetIO().MousePos;
         const float  Across  = Max.x - Min.x;
         const float  Down    = Max.y - Min.y;
-        const bool   OverView = ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(Min, Max) && !OrbHover && !OrbHeld_ && !BillboardHover;
+        const bool   OverView = ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(Min, Max) && !OrbHover && !OrbHeld_ && !NavHover && !BillboardHover;
         if (OverView && Across > 1.0f && Down > 1.0f)
         {
             AimLive_ = true;

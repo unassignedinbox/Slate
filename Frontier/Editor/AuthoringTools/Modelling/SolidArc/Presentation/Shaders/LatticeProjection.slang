@@ -52,24 +52,22 @@ LatticeSample LatticeShade(ViewRecord View, float3 Origin, float3 Direction, flo
     float Grazing   = max(abs(Direction.z), 0.05);
     float Extent = (PixelAngle > 0.0 ? T * PixelAngle : PixelWorld) / Grazing;
 
-    // LOD: choose the power-of-ten minor cell such that a cell spans at least ~14 pixels; blend between levels.
+    // LOD: choose one snapped power-of-ten minor cell. The old cross-fade between CellA/CellB softened the
+    // distant grid into a grey blur in both the Vulkan shader and the CPU mirror; a CAD viewport needs crisp
+    // individual strokes instead, so only opacity fades with distance while spacing stays discrete.
     float MinorCell   = View.LatticeStyle.x;
     float TargetCell  = Extent * 14.0;
-    float LevelExact  = max(0.0, log(TargetCell / MinorCell) / log(10.0));
-    float Level       = floor(LevelExact);
-    float LevelMix  = LevelExact - Level;
-    float CellA       = MinorCell * pow(10.0, Level);
-    float CellB       = CellA * 10.0;
+    float Level       = floor(max(0.0, log(TargetCell / MinorCell) / log(10.0)));
+    float Cell        = MinorCell * pow(10.0, Level);
 
     float HalfWidth   = View.LatticeStyle.w;
-    float MinorA      = LatticeLineCoverage(Hit.xy, CellA, Extent, HalfWidth) * (1.0 - LevelMix);
-    float MinorB      = LatticeLineCoverage(Hit.xy, CellB, Extent, HalfWidth);
-    float MajorB      = LatticeLineCoverage(Hit.xy, CellB * View.LatticeStyle.y, Extent, HalfWidth + 0.25);
+    float Minor       = LatticeLineCoverage(Hit.xy, Cell, Extent, HalfWidth);
+    float Major       = LatticeLineCoverage(Hit.xy, Cell * View.LatticeStyle.y, Extent, HalfWidth + 0.25);
 
     float3 MinorTint  = float3(0.36, 0.38, 0.43);
     float3 MajorTint  = float3(0.50, 0.53, 0.60);
-    float  Coverage   = max(MinorA * 0.55, max(MinorB * 0.75, MajorB));
-    float3 Tint       = lerp(MinorTint, MajorTint, saturate(MajorB));
+    float  Coverage   = max(Minor * 0.68, Major);
+    float3 Tint       = lerp(MinorTint, MajorTint, saturate(Major));
 
     // World axes on top: X red, Y green. Drawn only where the other coordinate is near zero.
     float AxisX = AxisCoverage(Hit.y, Extent, HalfWidth + 0.5);
@@ -81,8 +79,8 @@ LatticeSample LatticeShade(ViewRecord View, float3 Origin, float3 Direction, flo
     // Radial fade around the eye's ground foot, plus a horizon fade from the grazing angle.
     float FadeRadius  = View.LatticeStyle.z;
     float Radial      = length(Hit.xy - Origin.xy);
-    float Fade        = 1.0 - smoothstep(FadeRadius * 0.35, FadeRadius, Radial);
-    float Horizon     = smoothstep(0.0, 0.18, abs(Direction.z));
+    float Fade        = 1.0 - smoothstep(FadeRadius * 0.70, FadeRadius, Radial);
+    float Horizon     = smoothstep(0.0, 0.10, abs(Direction.z));
     Coverage         *= Fade * Horizon;
 
     float4 Clip   = mul(View.ViewClip, float4(Hit, 1.0));

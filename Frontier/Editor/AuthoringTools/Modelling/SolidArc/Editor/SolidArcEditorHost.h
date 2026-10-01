@@ -61,6 +61,11 @@ private:
     bool ShadeOpen_ = false;
     bool OpenEcho_  = false;
     bool ShadeSeated_ = false;
+    bool OrbitSeated_ = false;
+    uint32_t LastOrbitRevision_ = 0u;
+    bool SolidArcAxisGuideVisible_ = true;
+    float SolidArcAxisGuideLength_ = 48.0f;
+    float SolidArcAxisGuideThickness_ = 1.25f;
     bool OutlinerTabOpen_ = true;
     bool ViewportTabOpen_ = true;
     bool InspectorTabOpen_ = true;

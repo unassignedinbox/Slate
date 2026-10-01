@@ -10,6 +10,7 @@
 #include <imgui_internal.h>
 
 #include <algorithm>
+#include <cstring>
 
 namespace Frontier {
 
@@ -228,6 +229,37 @@ void SolidArcEditorHost::ConstructLayout() noexcept
 
 void SolidArcEditorHost::Record(ConsoleHost& Host) noexcept
 {
+    auto ApplyViewportOrbitToCamera = [&]() noexcept
+    {
+        const ViewportOrbit& Orbit = Viewport_.QueryViewportOrbit();
+        CameraProjection& Camera = Host.Camera();
+        Camera.Yaw = -static_cast<double>(Orbit.Yaw);
+        Camera.Pitch = -static_cast<double>(Orbit.Pitch);
+        Camera.Distance = static_cast<double>(Orbit.Distance);
+        Camera.Pivot = Vec3{ static_cast<double>(Orbit.Target[0]),
+                             static_cast<double>(Orbit.Target[1]),
+                             static_cast<double>(Orbit.Target[2]) };
+        Camera.Orthographic = Orbit.Ortho;
+    };
+
+    if (!OrbitSeated_)
+    {
+        const CameraProjection& Camera = Host.Camera();
+        ViewportOrbit Seated{};
+        Seated.Yaw = static_cast<float>(-Camera.Yaw);
+        Seated.Pitch = static_cast<float>(-Camera.Pitch);
+        Seated.Distance = static_cast<float>(Camera.Distance);
+        Seated.Target[0] = static_cast<float>(Camera.Pivot.X);
+        Seated.Target[1] = static_cast<float>(Camera.Pivot.Y);
+        Seated.Target[2] = static_cast<float>(Camera.Pivot.Z);
+        Seated.Ortho = Camera.Orthographic;
+        Seated.ViewPoint = 0u;
+        Viewport_.SeatViewportOrbit(Seated);
+        LastOrbitRevision_ = Seated.Revision;
+        OrbitSeated_ = true;
+    }
+    ApplyViewportOrbitToCamera();
+
     Host.Render();
     ViewImage_ = Host.Raster().Readback();
     RowCount_ = BuildSolidArcOutliner(Host, Rows_.data(), Bindings_.data(), kMaxEditorInstances, &Readout_);
@@ -235,6 +267,7 @@ void SolidArcEditorHost::Record(ConsoleHost& Host) noexcept
         Viewport_.AssignView(ViewImage_.Pixels.data(), ViewImage_.Width, ViewImage_.Height);
     else
         Viewport_.AssignView(nullptr, 0u, 0u);
+    Viewport_.AssignAxisGuide(SolidArcAxisGuideVisible_, SolidArcAxisGuideLength_, SolidArcAxisGuideThickness_);
 
     ImGuiViewport* Main = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(ImVec2(Main->Pos.x, Main->Pos.y));
@@ -268,11 +301,78 @@ void SolidArcEditorHost::Record(ConsoleHost& Host) noexcept
         (void)BuildSolidArcInspectorSheet(Host, Bindings_[Picked], &PickedSheet_);
     else
         (void)BuildSolidArcInspectorSheet(Host, SolidArcOutlinerBinding{}, &PickedSheet_);
+
+    auto SeatAxisGuideProperties = [&]() noexcept
+    {
+        EditorPropertyGroup* Display = nullptr;
+        for (uint32_t G = 0u; G < PickedSheet_.GroupCount; ++G)
+        {
+            if (std::strcmp(PickedSheet_.Groups[G].Title, "Display") == 0)
+            {
+                Display = &PickedSheet_.Groups[G];
+                break;
+            }
+        }
+        if (Display == nullptr && PickedSheet_.GroupCount < kMaxEditorSheetGroups)
+        {
+            Display = &PickedSheet_.Groups[PickedSheet_.GroupCount++];
+            *Display = EditorPropertyGroup{};
+            std::snprintf(Display->Title, sizeof(Display->Title), "Display");
+        }
+        if (Display == nullptr)
+            return;
+        auto Add = [&](const char* Label, EditorPropertyCategory Category) noexcept -> EditorProperty*
+        {
+            if (Display->PropertyCount >= kMaxEditorGroupProps)
+                return nullptr;
+            EditorProperty& Property = Display->Properties[Display->PropertyCount++];
+            Property = EditorProperty{};
+            std::snprintf(Property.Label, sizeof(Property.Label), "%s", Label);
+            Property.Category = Category;
+            return &Property;
+        };
+        if (EditorProperty* Show = Add("Axis guide", EditorPropertyCategory::Switch))
+            Show->On = SolidArcAxisGuideVisible_;
+        if (EditorProperty* Length = Add("Axis length", EditorPropertyCategory::Slider))
+        {
+            Length->Minimum = 18.0f; Length->Maximum = 120.0f; Length->Figure = SolidArcAxisGuideLength_;
+            Length->Decimals = 0u; std::snprintf(Length->Unit, sizeof(Length->Unit), "px");
+        }
+        if (EditorProperty* Thick = Add("Axis thickness", EditorPropertyCategory::Slider))
+        {
+            Thick->Minimum = 0.5f; Thick->Maximum = 6.0f; Thick->Figure = SolidArcAxisGuideThickness_;
+            Thick->Decimals = 2u; std::snprintf(Thick->Unit, sizeof(Thick->Unit), "px");
+        }
+    };
+    SeatAxisGuideProperties();
     Inspector_.Record(PickedRow, Picked, &PickedSheet_);
+
+    for (uint32_t G = 0u; G < PickedSheet_.GroupCount; ++G)
+    {
+        const EditorPropertyGroup& Group = PickedSheet_.Groups[G];
+        for (uint32_t P = 0u; P < Group.PropertyCount; ++P)
+        {
+            const EditorProperty& Property = Group.Properties[P];
+            if (std::strcmp(Property.Label, "Axis guide") == 0 && Property.Category == EditorPropertyCategory::Switch)
+                SolidArcAxisGuideVisible_ = Property.On;
+            else if (std::strcmp(Property.Label, "Axis length") == 0 && Property.Category == EditorPropertyCategory::Slider)
+                SolidArcAxisGuideLength_ = std::clamp(Property.Figure, 18.0f, 120.0f);
+            else if (std::strcmp(Property.Label, "Axis thickness") == 0 && Property.Category == EditorPropertyCategory::Slider)
+                SolidArcAxisGuideThickness_ = std::clamp(Property.Figure, 0.5f, 6.0f);
+        }
+    }
+    Viewport_.AssignAxisGuide(SolidArcAxisGuideVisible_, SolidArcAxisGuideLength_, SolidArcAxisGuideThickness_);
 
     ApplySolidArcOutlinerVisibility(Host, Rows_.data(), Bindings_.data(), RowCount_);
     if (Picked < RowCount_)
         ApplySolidArcInspectorSheet(Host, Bindings_[Picked], PickedSheet_);
+
+    const ViewportOrbit& OrbitAfterUi = Viewport_.QueryViewportOrbit();
+    if (OrbitAfterUi.Revision != LastOrbitRevision_)
+    {
+        ApplyViewportOrbitToCamera();
+        LastOrbitRevision_ = OrbitAfterUi.Revision;
+    }
 
 #ifdef FRONTIER_DEVELOPMENT
     // Record the shared Notch/Control Centre above the dock columns, exactly as the main Frontier editor does.

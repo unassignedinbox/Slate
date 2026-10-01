@@ -249,6 +249,7 @@ GameProof="Exhibits/Gallery/Editor/EditorProof_Inspector.png"
 SolidArcProof="Exhibits/Gallery/Editor/EditorProof_SolidArc.png"
 SolidArcMenuProof="Exhibits/Gallery/Editor/EditorProof_SolidArc_Menu.png"
 SolidArcNotchProof="Exhibits/Gallery/Editor/EditorProof_SolidArc_Notch.png"
+SolidArcNavProof="Exhibits/Gallery/Editor/EditorProof_SolidArc_NavCube.png"
 if [ "${SOLIDARC_ONLY:-0}" != "1" ] && [ ! -s "$GameProof" ]; then
     echo "[EditorVisualProof] RED — missing canonical game editor proof: $GameProof"
     echo "    Run Exhibits/Workbench/Editor/CheckEditorProof.sh when full editor proof dependencies are available."
@@ -266,6 +267,10 @@ if [ ! -s "$SolidArcNotchProof" ]; then
     echo "[EditorVisualProof] RED — missing SolidArc Control Centre notch proof: $SolidArcNotchProof"
     exit 1
 fi
+if [ ! -s "$SolidArcNavProof" ]; then
+    echo "[EditorVisualProof] RED — missing SolidArc navigation cube proof: $SolidArcNavProof"
+    exit 1
+fi
 if [ -n "$(find Exhibits/Gallery/EditorPanels -type f 2>/dev/null | head -1)" ]; then
     echo "[EditorVisualProof] RED — simplified EditorPanels mockups are still present"
     exit 1
@@ -275,4 +280,5 @@ if [ "${SOLIDARC_ONLY:-0}" != "1" ]; then echo "[EditorVisualProof] game proof: 
 echo "[EditorVisualProof] SolidArc proof: $SolidArcProof"
 echo "[EditorVisualProof] SolidArc menu:  $SolidArcMenuProof"
 echo "[EditorVisualProof] SolidArc notch: $SolidArcNotchProof"
+echo "[EditorVisualProof] SolidArc nav:   $SolidArcNavProof"
 echo "[EditorVisualProof] GREEN — real ImGui editor proofs, no SVG/mockup boards"

@@ -184,6 +184,29 @@ if grep -q 'ImGuiCol_TabUnfocused' "$SolidHost" \
 else
     FailOne "SolidArc tab colour token set is incomplete"
 fi
+if grep -q 'solidarc_navcube' Engine/Editor/ViewportPanel.cpp \
+   && grep -q 'PointInsidePolygon' Engine/Editor/ViewportPanel.cpp \
+   && grep -q 'ApplySnap(Orbit_, SolidArcNavHotFace_)' Engine/Editor/ViewportPanel.cpp \
+   && grep -q 'AddConvexPolyFilled' Engine/Editor/ViewportPanel.cpp; then
+    Pass "SolidArc navigation cube has selectable faces that snap the viewport"
+else
+    FailOne "SolidArc navigation cube face snapping is missing"
+fi
+if grep -q 'AssignAxisGuide' Engine/Editor/ViewportPanel.h \
+   && grep -q 'Axis guide' "$SolidHost" \
+   && grep -q 'Axis length' "$SolidHost" \
+   && grep -q 'Axis thickness' "$SolidHost" \
+   && grep -q 'SolidArcAxisGuideVisible_' Engine/Editor/ViewportPanel.cpp; then
+    Pass "SolidArc axis guide exposes show, length and thickness properties and draws thin XYZ lines"
+else
+    FailOne "SolidArc axis guide properties are missing"
+fi
+if grep -q 'snapped power-of-ten minor cell' Editor/AuthoringTools/Modelling/SolidArc/Presentation/Shaders/LatticeProjection.slang \
+   && ! grep -q 'LevelMix' Editor/AuthoringTools/Modelling/SolidArc/Presentation/Shaders/LatticeProjection.slang; then
+    Pass "SolidArc lattice no longer cross-fades grid levels into a blurry far field"
+else
+    FailOne "SolidArc lattice still uses the old blurry cross-fade"
+fi
 
 ImguiRoot="${IMGUI_INCLUDE_DIR:-}"
 if [ -z "$ImguiRoot" ] && [ -f ExternalPackages/imgui/imgui.h ]; then ImguiRoot="ExternalPackages/imgui"; fi

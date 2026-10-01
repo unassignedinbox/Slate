@@ -54,6 +54,8 @@ public:
     void AssignWindowTitle(const char* Title) noexcept;
     // Switches the top chrome between the Project-Zero/game controls and SolidArc's CAD controls.
     void AssignChrome(ViewportPanelChrome Chrome) noexcept { Chrome_ = Chrome; }
+    // SolidArc viewport axis guide properties: a thin XYZ orientation overlay, independent of transform gizmos.
+    void AssignAxisGuide(bool Visible, float LengthPixels, float ThicknessPixels) noexcept;
 
     // Seats the scene view: RGBA32 top-down rows the view draws under its orb. The headless harness seats a CPU
     //    trace here; the engine build seats its ReSTIR target through AssignViewTexture instead.
@@ -156,6 +158,10 @@ private:
     uint32_t SolidArcShade_      = 3u;   // Wire, Flat, Plastic, Matcap
     uint32_t SolidArcGizmo_      = 0u;   // Move, Rotate, Scale
     uint32_t SolidArcView_       = 3u;   // Top, Front, Right, Iso, Ortho
+    bool     SolidArcAxisGuideVisible_ = true;
+    float    SolidArcAxisGuideLength_ = 48.0f;
+    float    SolidArcAxisGuideThickness_ = 1.25f;
+    uint32_t SolidArcNavHotFace_ = 0u;   // 0 none, otherwise kSnapNames view id for the top-left navigation cube
     bool     DockLeft_  = true;
     bool     DockRight_ = true;
 

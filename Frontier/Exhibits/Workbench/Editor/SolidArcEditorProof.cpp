@@ -185,7 +185,7 @@ int main()
     int GlyphSheetWidth = 0, GlyphSheetHeight = 0;
     IO.Fonts->GetTexDataAsRGBA32(&GlyphSheet, &GlyphSheetWidth, &GlyphSheetHeight);
 
-    Frontier::ConsoleHost Host("/tmp/solidarc-editor-proof", 520, 340);
+    Frontier::ConsoleHost Host("/tmp/solidarc-editor-proof", 1040, 680);
     if (!Run(Host, "box (-1.2,-0.5,0) (1.2,0.5,0.8) --name=Body01")) return 2;
     if (!Run(Host, "sphere (0.0,0.0,1.15) 0.35 --sheet --name=CanopySheet")) return 3;
     if (!Run(Host, "line (-1.4,-0.7,0) (1.4,-0.7,0) --name=SketchAxis")) return 4;
@@ -270,6 +270,14 @@ int main()
         return 9;
     }
 
+    Click(322.0f, 121.0f); // SolidArc navigation cube: top face, proves face pick snaps the viewport.
+    for (int I = 0; I < 12; ++I)
+        Rest();
+    Rasterise();
+    const char* NavSheet = "Exhibits/Gallery/Editor/EditorProof_SolidArc_NavCube.png";
+    if (const int Write = WriteSheet(NavSheet, 12); Write != 0)
+        return Write;
+
     Click(Editor.QueryNotchX(), Editor.QueryNotchY());
     for (int I = 0; I < 48; ++I)
         Rest();
@@ -278,8 +286,8 @@ int main()
     if (const int Write = WriteSheet(NotchSheet, 11); Write != 0)
         return Write;
 
-    std::fprintf(stderr, "[SolidArcEditorProof] wrote %s, %s and %s with %d bright pixels in the filtered sheet\n",
-                 MenuSheet, Sheet, NotchSheet, Bright);
+    std::fprintf(stderr, "[SolidArcEditorProof] wrote %s, %s, %s and %s with %d bright pixels in the filtered sheet\n",
+                 MenuSheet, Sheet, NavSheet, NotchSheet, Bright);
     ImGui::DestroyContext();
     return 0;
 }
