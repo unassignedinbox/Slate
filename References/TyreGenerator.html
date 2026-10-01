@@ -218,7 +218,7 @@ const T = {                       // tyre carcass parameters (mm / inch / fracti
   width: 245, aspect: 40, rim: 18, treadDepth: 8, wear: 0, wearBias: 0,
   treadFrac: 0.88, crown: 2.0, shoulder: 18, bulge: 1.0, rimWidthFrac: 0.78,
   radial: 720, across: 96, meshMode: 'poly', polyDetail: 6,
-  rubber: '#151515', letter: 'white', lettering: true, brand: 'SLATE', spokes: 5, rimColor: '#c9ccd2', rimStyle: 'spoke',
+  rubber: '#151515', letter: 'white', lettering: true, brand: 'SLATE', rimColor: '#ffffff', rimMaterial: 'Steel', rimLip: 8, rimWell: 10,
   factoryStripes: true, stripeRed: '#d63842', stripeBlue: '#3184c7', stripePattern: 'zigzag', stripeWidth: 1.4, stripeGap: 4.2, stripeWave: 1.1, stripeOffset: 0, stripePitch: 12
 };
 const DECAL_FONTS = [
@@ -246,6 +246,13 @@ const P = { name: 'GZero', type: 'Slick', layers: [], decals: defaultDecals() };
 const UI = { sel: -1, decalSel: -1, threads: false, spin: false, treadMode: 'color' };
 
 const TYPES = ['Slick', 'Semi-slick', 'Drift', 'Street', 'Grip / UHP', 'Wet', 'Winter', 'Rally', 'Off-road', 'Drag'];
+const RIM_MATERIALS = {
+  'Steel': { color: '#9ea5ad', metalness: 0.88, roughness: 0.3 },
+  'Maraging steel': { color: '#66717b', metalness: 0.91, roughness: 0.2 },
+  'Cast steel': { color: '#51555a', metalness: 0.72, roughness: 0.47 },
+  'Aluminium': { color: '#cfd5d9', metalness: 0.9, roughness: 0.23 },
+  'Brass': { color: '#b88943', metalness: 0.82, roughness: 0.28 }
+};
 
 const LAYER_DEFS = {
   circ:    { label: 'Circumferential groove', color: '#38c46d', pos: 0, width: 8, depth: 1, zig: 0, zigCount: 60 },
@@ -811,25 +818,34 @@ function buildTyreGeometry(d, pm) {
   return { geometry: g, profile: prof };
 }
 
-function buildRim(d) {
-  const grp = new THREE.Group(); const mat = new THREE.MeshStandardMaterial({ color: T.rimColor, metalness: 0.9, roughness: 0.28 });
-  const dark = new THREE.MeshStandardMaterial({ color: '#2a2b2e', metalness: 0.6, roughness: 0.5 });
-  const Rf = d.Rrim + 2, bw = d.bw;
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(d.Rrim - 2, d.Rrim - 2, bw * 2 - 8, 96, 1, true), dark); barrel.rotation.z = Math.PI / 2; grp.add(barrel);
-  for (const s of [-1, 1]) { const f = new THREE.Mesh(new THREE.TorusGeometry(d.Rrim - 1.5, 3.5, 12, 96), mat); f.rotation.y = Math.PI / 2; f.position.x = s * (bw - 2); grp.add(f); }
-  if (T.rimStyle === 'spoke') {
-    const hub = new THREE.Mesh(new THREE.CylinderGeometry(d.Rrim * 0.3, d.Rrim * 0.3, 40, 48), mat); hub.rotation.z = Math.PI / 2; hub.position.x = bw * 0.55; grp.add(hub);
-    const n = T.spokes; for (let i = 0; i < n; i++) {
-      const sp = new THREE.Mesh(new THREE.BoxGeometry(22, d.Rrim - 8, 34), mat); const a = i / n * Math.PI * 2;
-      sp.position.set(bw * 0.55, Math.cos(a) * d.Rrim * 0.55, Math.sin(a) * d.Rrim * 0.55); sp.rotation.x = -a; grp.add(sp);
-    }
-    for (let i = 0; i < 5; i++) { const b = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 8, 6), dark); const a = i / 5 * Math.PI * 2; b.rotation.z = Math.PI / 2; b.position.set(bw * 0.55 + 22, Math.cos(a) * d.Rrim * 0.14, Math.sin(a) * d.Rrim * 0.14); grp.add(b); }
-    const disc = new THREE.Mesh(new THREE.CylinderGeometry(d.Rrim * 0.8, d.Rrim * 0.8, 24, 64), new THREE.MeshStandardMaterial({ color: '#5a5550', metalness: 0.7, roughness: 0.6 })); disc.rotation.z = Math.PI / 2; disc.position.x = bw * 0.1; grp.add(disc);
-  } else {
-    const dish = new THREE.Mesh(new THREE.CylinderGeometry(d.Rrim - 3, d.Rrim * 0.35, 6, 96), mat); dish.rotation.z = Math.PI / 2; dish.position.x = bw * 0.6; grp.add(dish);
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(d.Rrim * 0.35, d.Rrim * 0.35, 30, 48), dark); cap.rotation.z = Math.PI / 2; cap.position.x = bw * 0.6; grp.add(cap);
+// Blank wheel rim: a single revolved, closed metal profile with a bead seat, drop well and rolled flanges.
+// It is deliberately open through the centre: no spokes, disc, hub or image geometry is added here.
+function buildBlankRimGeometry(d) {
+  const half = d.bw + 3, seat = d.Rrim + 2, lip = seat + Math.max(4, T.rimLip), well = seat - Math.max(3, T.rimWell), wall = 3.5;
+  // Clockwise cross-section: tyre-facing exterior from left to right, then the inside wall back to the start.
+  const profile = [
+    [-half, lip - 1], [-half - 1, lip + 1], [-half + 2, lip + 1], [-half + 3.5, seat + 3], [-half + 7, seat],
+    [-half + 15, seat - 1], [-half + 21, well], [half - 21, well], [half - 15, seat - 1], [half - 7, seat],
+    [half - 3.5, seat + 3], [half - 2, lip + 1], [half + 1, lip + 1], [half, lip - 1],
+    [half - 3, lip - wall], [half - 5, seat - wall], [half - 13, seat - wall - 1], [half - 20, well - wall],
+    [-half + 20, well - wall], [-half + 13, seat - wall - 1], [-half + 5, seat - wall], [-half + 3, lip - wall]
+  ];
+  const N = profile.length, M = Math.max(112, Math.min(256, Math.round(T.radial / 3))), pos = [], uv = [], idx = [];
+  for (let i = 0; i < N; i++) for (let j = 0; j <= M; j++) {
+    const [x, r] = profile[i], u = j / M, th = u * TAU; pos.push(x, r * Math.cos(th), r * Math.sin(th)); uv.push(u, i / N);
   }
-  return grp;
+  for (let i = 0; i < N; i++) {
+    const ni = (i + 1) % N;
+    for (let j = 0; j < M; j++) { const a = i * (M + 1) + j, b = a + 1, c = ni * (M + 1) + j, e = c + 1; idx.push(a, b, c, b, e, c); }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); g.computeBoundingSphere(); return g;
+}
+function buildRim(d) {
+  const spec = RIM_MATERIALS[T.rimMaterial] || RIM_MATERIALS.Steel;
+  const colour = new THREE.Color(spec.color).multiply(new THREE.Color(T.rimColor));
+  const mat = new THREE.MeshStandardMaterial({ color: colour, metalness: spec.metalness, roughness: spec.roughness, envMapIntensity: 1.1 });
+  const rim = new THREE.Mesh(buildBlankRimGeometry(d), mat); rim.name = `Blank ${T.rimMaterial} rim`;
+  const grp = new THREE.Group(); grp.name = 'Blank rim profile'; grp.add(rim); return grp;
 }
 
 // carcass "threads": radial body cords + steel belt cords under the tread
@@ -1113,10 +1129,14 @@ function buildTyreUI() {
   slider(pp, 'Tread depth (mm)', T, 'treadDepth', 2, 20, 0.5); slider(pp, 'Tread width fraction', T, 'treadFrac', 0.7, 0.98, 0.01, v => v.toFixed(2));
   slider(pp, 'Crown drop (mm)', T, 'crown', 0, 8, 0.1, v => v.toFixed(1)); slider(pp, 'Shoulder radius (mm)', T, 'shoulder', 4, 40, 1);
   slider(pp, 'Sidewall bulge', T, 'bulge', 0.4, 1.6, 0.01, v => v.toFixed(2)); slider(pp, 'Rim width fraction', T, 'rimWidthFrac', 0.6, 0.92, 0.01, v => v.toFixed(2));
+  const rimProfile = document.createElement('div'); rimProfile.className = 'sec'; rimProfile.textContent = 'Blank rim profile'; pp.appendChild(rimProfile);
+  slider(pp, 'Flange height (mm)', T, 'rimLip', 4, 14, 0.5, v => v.toFixed(1)); slider(pp, 'Drop well (mm)', T, 'rimWell', 3, 18, 0.5, v => v.toFixed(1));
   const l = document.getElementById('lookParams'); l.innerHTML = '';
   color(l, 'Rubber colour', T, 'rubber'); check(l, 'Show sidewall decals', T, 'lettering');
   const b = document.createElement('div'); b.className = 'row'; b.innerHTML = '<label>Brand</label><input type="text" value="' + T.brand + '">'; b.querySelector('input').oninput = e => { T.brand = e.target.value; schedule(); }; l.appendChild(b);
-  select(l, 'Rim style', T, 'rimStyle', ['spoke', 'dish']); slider(l, 'Spokes', T, 'spokes', 3, 12, 1); color(l, 'Rim colour', T, 'rimColor');
+  const rimHead = document.createElement('div'); rimHead.className = 'sec'; rimHead.textContent = 'Blank rim'; l.appendChild(rimHead);
+  select(l, 'Rim material', T, 'rimMaterial', Object.keys(RIM_MATERIALS)); color(l, 'Rim tint', T, 'rimColor');
+  const rimNote = document.createElement('div'); rimNote.className = 'hint'; rimNote.textContent = 'Open, spoke-free bead-seat profile. Flange height and drop well are shaped in Cross-section.'; l.appendChild(rimNote);
   const markingHead = document.createElement('div'); markingHead.className = 'sec'; markingHead.textContent = 'Factory tread paint'; l.appendChild(markingHead);
   check(l, 'Coloured tread stripes', T, 'factoryStripes');
   const patternRow = document.createElement('div'); patternRow.className = 'row'; patternRow.innerHTML = '<label>Stripe pattern</label><select><option value="zigzag">Solid zig-zag</option><option value="dotted">Dotted zig-zag</option><option value="dashed">Dashed zig-zag</option><option value="stitch">Stitch marks</option></select>';
