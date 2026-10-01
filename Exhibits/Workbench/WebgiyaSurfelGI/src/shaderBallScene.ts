@@ -152,7 +152,8 @@ export async function populateShaderBallSurfelScene(
 
   dirLight.color.setRGB(1.0, 0.91, 0.78);
   dirLight.castShadow = true;
-  dirLight.shadow.mapSize.set(4096, 4096);
+  // A 1K map keeps the animated direct shadow practical on the 4 GB target.
+  dirLight.shadow.mapSize.set(1024, 1024);
   dirLight.shadow.camera.near = 0.1;
   dirLight.shadow.camera.far = 80;
   dirLight.shadow.camera.left = -12;

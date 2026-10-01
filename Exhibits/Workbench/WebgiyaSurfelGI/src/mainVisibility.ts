@@ -312,6 +312,9 @@ const defaultGiTransportParams = {
   albedoBoost: 1.0,
 };
 const giTransportParams = { ...defaultGiTransportParams };
+const multiBounceParams = { enabled: true };
+const effectiveMultiBounceStrength = () =>
+  multiBounceParams.enabled ? giTransportParams.giFromIndirect : 0;
 const envIntensityController = integratorFolder
   .add(giTransportParams, 'envIntensity', 0, 5, 0.05)
   .name('Env GI Intensity')
@@ -332,23 +335,33 @@ const envLodController = integratorFolder
     );
   });
 envLodController.listen?.();
-const giFromDirectController = integratorFolder
-  .add(giTransportParams, 'giFromDirect', 0, 4, 0.05)
-  .name('GI 1-bounce')
+const multiBounceController = integratorFolder
+  .add(multiBounceParams, 'enabled')
+  .name('Multi-bounce GI')
   .onChange(() => {
     surfelIntegrate?.setGiScales(
       giTransportParams.giFromDirect,
-      giTransportParams.giFromIndirect,
+      effectiveMultiBounceStrength(),
+    );
+  });
+multiBounceController.listen?.();
+const giFromDirectController = integratorFolder
+  .add(giTransportParams, 'giFromDirect', 0, 4, 0.05)
+  .name('First-bounce Strength')
+  .onChange(() => {
+    surfelIntegrate?.setGiScales(
+      giTransportParams.giFromDirect,
+      effectiveMultiBounceStrength(),
     );
   });
 giFromDirectController.listen?.();
 const giFromIndirectController = integratorFolder
   .add(giTransportParams, 'giFromIndirect', 0, 4, 0.05)
-  .name('GI From Indirect')
+  .name('Multi-bounce Strength')
   .onChange(() => {
     surfelIntegrate?.setGiScales(
       giTransportParams.giFromDirect,
-      giTransportParams.giFromIndirect,
+      effectiveMultiBounceStrength(),
     );
   });
 giFromIndirectController.listen?.();
@@ -417,7 +430,7 @@ function applyTransportSettings(
   );
   surfelIntegrate?.setGiScales(
     giTransportParams.giFromDirect,
-    giTransportParams.giFromIndirect,
+    effectiveMultiBounceStrength(),
   );
   surfelIntegrate?.setAlbedoBoost(giTransportParams.albedoBoost);
 }
@@ -442,6 +455,7 @@ function resetParamsToDefaults() {
   giTransportParams.giFromDirect = defaultGiTransportParams.giFromDirect;
   giTransportParams.giFromIndirect = defaultGiTransportParams.giFromIndirect;
   giTransportParams.albedoBoost = defaultGiTransportParams.albedoBoost;
+  multiBounceParams.enabled = true;
 
   applyOcclusionSettings(DEFAULT_OCCLUSION_SETTINGS);
   Object.assign(lightCfg, defaultLightSettings);
@@ -453,7 +467,7 @@ function resetParamsToDefaults() {
   );
   surfelIntegrate?.setGiScales(
     giTransportParams.giFromDirect,
-    giTransportParams.giFromIndirect,
+    effectiveMultiBounceStrength(),
   );
   surfelIntegrate?.setAlbedoBoost(giTransportParams.albedoBoost);
 }
@@ -498,7 +512,7 @@ async function loadScene(sceneDef: SceneDefinition) {
   );
   surfelIntegrate.setGiScales(
     giTransportParams.giFromDirect,
-    giTransportParams.giFromIndirect,
+    effectiveMultiBounceStrength(),
   );
   surfelIntegrate.setAlbedoBoost(giTransportParams.albedoBoost);
 

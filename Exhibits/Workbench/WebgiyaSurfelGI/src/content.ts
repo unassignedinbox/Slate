@@ -837,7 +837,7 @@ export type SceneDefinition = {
 export const SCENE_PRESETS: SceneDefinition[] = [
   {
     id: 'shaderball-light-lab',
-    label: 'ShaderBall GI · Shadows + Visibility Raster',
+    label: 'ShaderBall Multi-bounce GI · Shadows + Visibility Raster',
     hdr: `${baseUrl}exr/pizzo_pernice_puresky_2k.hdr`,
     settings: {
       light: {

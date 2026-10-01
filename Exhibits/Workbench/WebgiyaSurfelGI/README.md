@@ -1,4 +1,4 @@
-# Webgiya Surfel GI · Shadows + Visibility Raster
+# Webgiya Multi-bounce Surfel GI · 1K Shadows + Visibility Raster
 
 Open `index.html` over HTTP. It redirects to the checked-in production build in `site/`.
 
@@ -19,11 +19,15 @@ The adaptation is isolated to:
 
 The final image now combines three different, inspectable visibility systems:
 
-1. **Original direct shadows** — Three.js' 4096² PCF-soft directional shadow map, including the animated directional source and full ShaderBall geometry.
+1. **Direct shadows** — Three.js' 1024² PCF-soft directional shadow map, including the animated directional source and full ShaderBall geometry.
 2. **Webgiya surfel visibility** — triangle-BVH rays for secondary hits and light visibility, plus MSM4 radial-depth occlusion for surfel-to-surfel and surfel-to-pixel leak rejection.
 3. **Visibility raster / AO** — a half-resolution, twelve-sample Ground Truth Ambient Occlusion raster generated from camera depth and view-space normals. It is strongest on indirect/ambient illumination and intentionally only quarter-strength on direct light to avoid double-darkening sunlight.
 
 Upstream Webgiya does not contain a separate conventional SSAO/GTAO pass; its native occlusion is the radial surfel system. The added GTAO layer supplies the small-scale contact visibility that can fall below the surfel radius.
+
+## Multi-bounce GI
+
+Multi-bounce transport is enabled by default. Webgiya's existing surfel feedback path gathers the previous temporal irradiance field at each secondary BVH hit, multiplies it by the hit albedo, and writes the result into the next double-buffered irradiance field. Repeating this recurrence over frames progressively carries second and later diffuse bounces without adding another ray-tracing pass. The pinned integrator algorithm remains unchanged; the derived host now gives this path an explicit enable switch and strength control.
 
 ## Controls
 
@@ -34,6 +38,12 @@ The inspector retains all upstream controls and adds **Visibility raster / AO**:
 - **AO Strength** — contribution to indirect/ambient lighting.
 - **AO Radius** — camera-space contact radius.
 - **AO Samples** — quality/performance control from 4 to 24 samples.
+
+The **Integrator** folder also exposes:
+
+- **Multi-bounce GI** — enables recurrent indirect-to-indirect surfel transport; enabled by default.
+- **First-bounce Strength** — scales direct illumination injected at secondary hits.
+- **Multi-bounce Strength** — scales previous-frame surfel irradiance fed into later diffuse bounces; zero disables feedback.
 
 Existing useful views remain available:
 
