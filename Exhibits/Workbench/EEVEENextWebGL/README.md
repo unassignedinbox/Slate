@@ -5,7 +5,7 @@ Open `EEVEENext.html` over HTTP. This exhibit is an independent architectural re
 ## Included instead of implied
 
 - **Deferred material G-buffer:** world position, normal/roughness, albedo/metalness, and depth feed a GGX direct-light pass.
-- **Direct shadows:** a 4096² depth atlas contains three stable 2048² directional clip/cascade tiles. A moving local light owns a six-face 512² radial-depth shadow. Receiver-slope bias, 3×3/5×5 PCF, and eight-tap cube filtering are explicit.
+- **Direct shadows:** a 4096² depth atlas contains three stable 2048² directional clip/cascade tiles, while a moving local light owns a six-face 512² radial-depth shadow. The soft path stochastically samples the sun disk or local-light sphere and traverses from that light sample toward the receiver against the single-layer depth representation. One to four rays, four to sixteen traversal steps, receiver jitter, world-locked sampling, and automatic slope bias are explicit. A 3×3 directional/eight-tap cube PCF path remains available as a hard/soft comparison and fallback.
 - **Baked volume light probes:** `EeveeProbeCache.bin` contains a 12×10×6 static cache produced by `EEVEEReference.cpp`. Every probe stores RGB L1 directional irradiance, six directional visibility reaches, validity, and sky visibility.
 - **Probe leak control:** probes inside geometry are rejected and flood-filled at lower confidence. Runtime interpolation manually weighs all eight neighbours and rejects a probe when its directional reach cannot see the receiver.
 - **Screen tracing:** half-resolution cosine rays march camera-visible geometry. Rays that leave the screen or miss fall back to the volume cache.
@@ -17,11 +17,13 @@ Open `EEVEENext.html` over HTTP. This exhibit is an independent architectural re
 
 ## Why the shadow system is an analogue
 
-EEVEE Next uses compute-driven sparse Virtual Shadow Maps: depth-visible receivers tag needed tiles, physical pages are allocated/cached, local lights use cube-face LOD, and sun lights use clipmaps or cascades. WebGL2 exposes neither compute shaders nor the storage-buffer atomics needed for Blender's page allocator. This exhibit preserves the observable architecture—stable directional levels, a bounded atlas, local cube projection, automatic receiver bias, and filtered shadow lookup—but keeps all atlas tiles resident. Calling this exact Blender VSM would be misleading.
+EEVEE Next uses compute-driven sparse Virtual Shadow Maps: depth-visible receivers tag needed tiles, physical pages are allocated/cached, local lights use cube-face LOD, and sun lights use clipmaps or cascades. Its soft-shadow stage chooses stochastic points on each light shape and traces from the light toward the receiver through linear-distance shadow data, using single-layer/last-occluder heuristics.
+
+WebGL2 exposes neither compute shaders nor the storage-buffer atomics needed for Blender's page allocator. This exhibit therefore keeps every atlas tile resident. It does preserve the key soft-shadow operation: sampled light-shape endpoints, light-to-receiver depth traversal, receiver jitter, low ray counts, and automatically scaled bias. Directional orthographic depth is linear; the local cube explicitly stores normalized radial distance. The conservative single-layer traversal is deliberately described as an analogue, not Blender's sparse VSM implementation.
 
 ## C++ reference and cache bake
 
-The C++ program is deliberately independent of WebGL. It mirrors the browser's cache format, L1 irradiance convention, invalid-probe flood fill, six-direction leak test, and shadow-level selection.
+The C++ program is deliberately independent of WebGL. It mirrors the browser's cache format, L1 irradiance convention, invalid-probe flood fill, six-direction leak test, shadow-level selection, and conservative single-layer light-to-receiver shadow-map traversal.
 
 ```bash
 ./RunReference.sh
@@ -38,13 +40,15 @@ The checked-in cache is deterministic: 720 probes × 256 bake rays and is approx
 - **Temporal / Spatial reuse:** compare raw low-ray-count instability against the denoised path.
 - **Fast GI occlusion:** adds local screen-space visibility to otherwise distant probe lighting.
 - **Sphere-probe reflections:** enables or disables the stable cubemap-only glossy contribution; there is no screen-space reflection path.
-- **Shadow filtering:** changes the directional kernel from 3×3 to 5×5 while retaining local cube filtering.
+- **Shadow-map ray tracing:** switches both lights between stochastic light-shape/depth traversal and the PCF comparison path.
+- **Shadow rays / steps:** exposes the intended low-count quality/performance trade-off. Two rays × eight steps is the GTX-class default; four × sixteen is the inspection preset.
+- **Sun angular radius / Local-light radius:** independently changes each emitter's physical shadow softness rather than just widening a blur kernel.
 - **Move sun:** intentionally demonstrates stale baked bounce versus live direct shadows.
 - **Emissive-only screen proof:** zeros analytic lights; visible emissive bounce can remain, while off-screen contribution disappears as expected for EEVEE screen tracing without a rebake.
 
 ## Fidelity limits
 
-The browser path uses one or two diffuse rays per half-resolution pixel rather than reproducing every EEVEE BSDF closure and tile-classification pass. It does not implement Blender's transmission, subsurface, volumetric froxels, transparent shadow modes, light clustering for thousands of lights, or sparse virtual-page allocation. Those omissions are stated rather than silently relabelled. The core GI, probe fallback, cache validity, reflections, denoising, and both directional/local shadow paths are implemented and exposed for inspection.
+The browser path uses one or two diffuse rays per half-resolution pixel rather than reproducing every EEVEE BSDF closure and tile-classification pass. Shadow samples are world-locked for stable low-count output; unlike Blender's full viewport pipeline, this exhibit does not add a dedicated temporal shadow denoiser. It also does not implement Blender's transmission, subsurface, volumetric froxels, transparent shadow modes, light clustering for thousands of lights, or sparse virtual-page allocation. Those omissions are stated rather than silently relabelled. The core GI, probe fallback, cache validity, reflections, denoising, and both directional/local shadow paths are implemented and exposed for inspection.
 
 ## References
 

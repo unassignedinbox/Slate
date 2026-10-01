@@ -1,6 +1,7 @@
 // EEVEE Next WebGL exhibit CPU reference and offline volume-light-probe baker.
 // This intentionally mirrors the browser's probe interpolation, leak rejection,
-// directional shadow clip selection, and cache invalidation rules without OpenGL.
+// directional shadow clip selection, light-to-receiver shadow-map traversal,
+// and cache invalidation rules without OpenGL.
 
 #include <algorithm>
 #include <array>
@@ -272,13 +273,41 @@ int SelectDirectionalShadowClip(float viewDepth) {
   return viewDepth < 38.0f ? 0 : (viewDepth < 76.0f ? 1 : 2);
 }
 
+// CPU form of the browser's conservative single-layer shadow traversal. The
+// light-shape offset is the ray's UV displacement at depth zero; it converges
+// on the receiver while depth advances linearly from light to surface.
+struct Vec2 { float x = 0, y = 0; };
+
+bool TraceShadowMapRay(const std::vector<float> &linearDepth, int width, int height,
+                       Vec2 receiverUv, float receiverDepth, Vec2 lightShapeOffset,
+                       int stepCount, float bias) {
+  if (width <= 0 || height <= 0 || int(linearDepth.size()) != width * height) return false;
+  stepCount = std::clamp(stepCount, 1, 16);
+  const float endDepth = receiverDepth - bias;
+  for (int step = 0; step < stepCount; ++step) {
+    const float t = (float(step) + 0.5f) / float(stepCount);
+    const Vec2 uv{receiverUv.x + lightShapeOffset.x * (1.0f - t),
+                  receiverUv.y + lightShapeOffset.y * (1.0f - t)};
+    if (uv.x <= 0.0f || uv.y <= 0.0f || uv.x >= 1.0f || uv.y >= 1.0f) continue;
+    const int x = std::clamp(int(uv.x * float(width)), 0, width - 1);
+    const int y = std::clamp(int(uv.y * float(height)), 0, height - 1);
+    const float rayDepth = endDepth * t;
+    if (linearDepth[x + y * width] < rayDepth - bias) return true;
+  }
+  return false;
+}
+
 bool SelfTest() {
   Probe open{}; open.validity=1.0f; open.visibility.fill(1.0f);
   Probe blocked=open; blocked.visibility[0]=0.05f;
   const bool visibility = VisibilityWeight(open,{4,0,0}) > 0.99f && VisibilityWeight(blocked,{4,0,0}) < 0.05f;
   const bool clips = SelectDirectionalShadowClip(12)==0 && SelectDirectionalShadowClip(50)==1 && SelectDirectionalShadowClip(100)==2;
+  std::vector<float> shadowDepth(8 * 8, 1.0f);
+  const bool openRay = !TraceShadowMapRay(shadowDepth, 8, 8, {0.56f,0.56f}, 0.8f, {0,0}, 8, 0.002f);
+  shadowDepth[4 + 4 * 8] = 0.32f;
+  const bool blockedRay = TraceShadowMapRay(shadowDepth, 8, 8, {0.56f,0.56f}, 0.8f, {0,0}, 8, 0.002f);
   const bool scene = TraceScene({0,0,2},{0,0,-1}).valid;
-  return visibility && clips && scene;
+  return visibility && clips && openRay && blockedRay && scene;
 }
 
 } // namespace eevee_reference
@@ -292,6 +321,6 @@ int main(int argc, char **argv) {
   }
   if (!SelfTest()) { std::cerr << "EEVEE_REFERENCE_FAILED\n"; return 1; }
   std::cout << "EEVEE_REFERENCE_OK\n";
-  std::cout << "probe_grid=" << GridX << 'x' << GridY << 'x' << GridZ << " shadow_clips=3 leak_rejection=directional\n";
+  std::cout << "probe_grid=" << GridX << 'x' << GridY << 'x' << GridZ << " shadow_clips=3 shadow_trace=light_to_receiver leak_rejection=directional\n";
   return 0;
 }
