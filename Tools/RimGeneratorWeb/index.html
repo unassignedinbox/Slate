@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a0d12">
+  <title>Slate / One-Piece Y Rim Generator</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="control-rail">
+      <div class="brand-lockup">
+        <div class="brand-mark"><span></span><span></span><span></span></div>
+        <div>
+          <div class="eyebrow">SLATE / PROCEDURAL ASSET LAB</div>
+          <div class="brand-name">RIM FORGE <sup>01</sup></div>
+        </div>
+      </div>
+
+      <div class="rail-intro">
+        <div class="eyebrow accent">ASSET BUILDER</div>
+        <h1>One-piece<br><em>Y-spoke.</em></h1>
+        <p>Author a production-ready rim blank, continuous Y topology and serviceable lug hardware in one view.</p>
+        <div class="contract-chips">
+          <span class="chip chip-accent">NO TYRE</span>
+          <span class="chip">GAME READY</span>
+        </div>
+      </div>
+
+      <section class="control-section">
+        <div class="section-heading"><span>01</span><b>Design language</b><i></i></div>
+        <label class="field-label" for="rim-style">Rim type</label>
+        <select id="rim-style" class="select-control">
+          <option value="Y_SINGLE">Single Y / balanced</option>
+          <option value="Y_COMPACT">Compact Y / open</option>
+          <option value="Y_AGGRESSIVE">Aggressive Y / deep</option>
+        </select>
+        <label class="field-label" for="finish">Surface finish</label>
+        <select id="finish" class="select-control">
+          <option value="BRUSHED_SILVER">Brushed silver</option>
+          <option value="GUNMETAL">Gunmetal</option>
+          <option value="SATIN_BLACK">Satin black</option>
+          <option value="FORGED_BRONZE">Forged bronze</option>
+          <option value="CERAMIC_WHITE">Ceramic white</option>
+        </select>
+      </section>
+
+      <section class="control-section">
+        <div class="section-heading"><span>02</span><b>Proportions</b><i></i></div>
+        <div class="field-grid">
+          <div class="range-field"><div class="field-top"><label for="diameter">Diameter</label><output id="diameter-out">18.0 in</output></div><input id="diameter" type="range" min="12" max="30" step="0.5" value="18"></div>
+          <div class="range-field"><div class="field-top"><label for="width">Width</label><output id="width-out">9.5 in</output></div><input id="width" type="range" min="5" max="16" step="0.25" value="9.5"></div>
+          <div class="range-field"><div class="field-top"><label for="dish">Face dish</label><output id="dish-out">30 mm</output></div><input id="dish" type="range" min="-40" max="100" step="1" value="30"></div>
+          <div class="range-field"><div class="field-top"><label for="bevel">Highlight bevel</label><output id="bevel-out">1.8 mm</output></div><input id="bevel" type="range" min="0" max="6" step="0.1" value="1.8"></div>
+        </div>
+      </section>
+
+      <section class="control-section">
+        <div class="section-heading"><span>03</span><b>Y topology</b><i></i></div>
+        <div class="field-grid">
+          <div class="range-field"><div class="field-top"><label for="spokes">Continuous Y spokes</label><output id="spokes-out">5</output></div><input id="spokes" type="range" min="3" max="12" step="1" value="5"></div>
+          <div class="range-field"><div class="field-top"><label for="spoke-width">Spoke width</label><output id="spoke-width-out">30 mm</output></div><input id="spoke-width" type="range" min="12" max="70" step="1" value="30"></div>
+          <div class="range-field"><div class="field-top"><label for="spoke-depth">Spoke depth</label><output id="spoke-depth-out">40 mm</output></div><input id="spoke-depth" type="range" min="12" max="90" step="1" value="40"></div>
+        </div>
+        <div class="toggle-row"><div><b>Machined spoke contrast</b><small>Use a brighter CNC edge finish on the Y faces.</small></div><label class="switch"><input id="contrast" type="checkbox"><span></span></label></div>
+      </section>
+
+      <section class="control-section">
+        <div class="section-heading"><span>04</span><b>Lug pattern</b><i></i></div>
+        <div class="field-grid">
+          <div class="range-field"><div class="field-top"><label for="lugs">Lug count</label><output id="lugs-out">5</output></div><input id="lugs" type="range" min="3" max="8" step="1" value="5"></div>
+          <div class="range-field"><div class="field-top"><label for="lug-circle">Bolt circle</label><output id="lug-circle-out">66 mm</output></div><input id="lug-circle" type="range" min="42" max="120" step="1" value="66"></div>
+          <div class="range-field"><div class="field-top"><label for="nut-radius">Nut radius</label><output id="nut-radius-out">18 mm</output></div><input id="nut-radius" type="range" min="8" max="28" step="1" value="18"></div>
+        </div>
+      </section>
+
+      <div class="rail-actions">
+        <button id="reset" class="button button-quiet">Reset build</button>
+        <button id="download" class="button button-primary"><span>Download spec</span><span class="button-arrow">↗</span></button>
+      </div>
+      <div class="rail-foot"><span class="live-dot"></span> LIVE PROCEDURAL PREVIEW <span class="version">v1.0</span></div>
+    </aside>
+
+    <main class="viewport-shell">
+      <header class="topbar">
+        <div class="crumbs"><span>PROJECT ZERO</span><b>/</b><span>CONTENT TOOLS</span><b>/</b><strong>RIM FORGE</strong></div>
+        <div class="top-actions"><span class="status-pill"><i></i> Scene synced</span><button class="icon-button" id="help" aria-label="Open help">?</button></div>
+      </header>
+
+      <section class="hero-stage">
+        <div class="stage-copy"><div class="eyebrow">PROCEDURAL WHEEL AUTHORING</div><h2>Shape the <span>blank.</span><br>Own the silhouette.</h2></div>
+        <div class="stage-tools"><button id="reset-camera" class="tool-button">↺ <span>Reset view</span></button><button id="wireframe" class="tool-button">▧ <span>Wireframe</span></button></div>
+        <canvas id="viewport" aria-label="Interactive 3D rim preview"></canvas>
+        <div class="axis-gizmo"><span class="axis-x">X</span><span class="axis-y">Y</span><span class="axis-z">Z</span><div></div></div>
+        <div class="orbit-hint"><span class="mouse-icon"></span><span>Drag to orbit</span><b>•</b><span>Scroll to zoom</span></div>
+        <div class="stage-stats"><div><span>POLY COUNT</span><b id="poly-stat">—</b></div><div><span>MAIN MESH</span><b>1</b></div><div><span>TYRE</span><b class="stat-off">OFF</b></div></div>
+      </section>
+
+      <section class="lower-dock">
+        <div class="dock-card profile-card">
+          <div class="dock-heading"><div><div class="eyebrow accent">EDITABLE PROFILE</div><h3>Blank cross-section</h3></div><button id="profile-reset" class="small-button">Reset curve</button></div>
+          <div class="profile-wrap"><canvas id="profile-canvas" width="360" height="150" aria-label="Editable rim blank cross section"></canvas><div class="profile-axis"><span>AXIAL WIDTH →</span><span>RADIAL ↑</span></div></div>
+          <p>Drag the control points to reshape the lip, bead seat and barrel. The Y assembly will rebuild around this curve.</p>
+        </div>
+        <div class="dock-card readout-card">
+          <div class="dock-heading"><div><div class="eyebrow accent">BUILD READOUT</div><h3>Assembly contract</h3></div><span class="ready-badge">READY</span></div>
+          <div class="readout-list"><div><span>PRIMARY OBJECT</span><b>Rim_OnePiece_Y_Assembly</b></div><div><span>SPOKE RULE</span><b>Continuous Y / no V + bar</b></div><div><span>HARDWARE</span><b id="hardware-readout">5 × hex nut + bolt</b></div><div><span>MATERIAL STACK</span><b>Finish / machined / titanium</b></div></div>
+          <div class="dock-footer"><span>EXPORT TARGET</span><b>GLB / PBR</b><span class="footer-line"></span><span class="units">METERS</span></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="help-modal" class="modal-backdrop" hidden>
+    <div class="modal"><button id="close-help" class="modal-close">×</button><div class="eyebrow accent">RIM FORGE / FIELD NOTES</div><h2>Designed for the asset handoff.</h2><p>The preview is a procedural, no-tyre rim authoring tool. Every spoke silhouette is generated as one closed Y prism, while nuts, bolts and the center cap remain separate serviceable hardware parts.</p><div class="modal-grid"><div><b>Orbit</b><span>Drag on the hero stage</span></div><div><b>Zoom</b><span>Mouse wheel or trackpad</span></div><div><b>Profile</b><span>Drag points in the cross-section card</span></div><div><b>Spec</b><span>Downloads a build JSON for your pipeline</span></div></div><button id="close-help-2" class="button button-primary">Back to authoring</button></div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
