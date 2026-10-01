@@ -102,6 +102,7 @@
   #treadView{width:100%;height:150px;display:block;border-radius:14px;background:#111}
   #treadStrip{width:100%;height:26px;display:block;border-radius:8px;background:#111;margin-top:6px}
   #profile{cursor:crosshair;touch-action:none}
+  #rimProfile{display:block;width:100%;height:190px;background:#111;border-radius:14px}
   .mode.sm span{padding:4px 9px;font-size:11px}
   .hint{color:var(--mut);font-size:12px;line-height:1.5;margin:4px 0}
   code{background:var(--card2);padding:1px 6px;border-radius:6px;font-size:11px;font-family:ui-monospace,Menlo,monospace}
@@ -117,7 +118,7 @@
   <header>
     <div class="logo"></div>
     <div class="tabs" id="tabs">
-      <div class="tab on" data-tab="size">Tyre</div><div class="tab" data-tab="look">Look</div><div class="tab" data-tab="export">Export</div>
+      <div class="tab on" data-tab="size">Tyre</div><div class="tab" data-tab="rim">Rim</div><div class="tab" data-tab="look">Look</div><div class="tab" data-tab="export">Export</div>
     </div>
   </header>
 
@@ -157,6 +158,13 @@
         <div class="btns"><button id="addDecalBtn" class="primary">Add text decal</button></div>
         <div id="decalLayers"></div>
         <div id="decalProps" class="hint">Select a decal layer to edit it.</div>
+      </div>
+    </div>
+    <div class="panel" data-panel="rim">
+      <div class="card" style="--bar:var(--orange)"><h2>Rim generator</h2><div id="rimParams"></div></div>
+      <div class="card" style="--bar:var(--yellow);margin-top:10px"><h2>Rim cross-section <span class="r">procedural profile</span></h2>
+        <canvas id="rimProfile" width="280" height="190"></canvas>
+        <div class="hint" id="rimProfileInfo">The profile follows the tyre bead and is generated from the flange and drop-well controls.</div>
       </div>
     </div>
     <div class="panel" data-panel="export">
@@ -218,8 +226,15 @@ const T = {                       // tyre carcass parameters (mm / inch / fracti
   width: 245, aspect: 40, rim: 18, treadDepth: 8, wear: 0, wearBias: 0,
   treadFrac: 0.88, crown: 2.0, shoulder: 18, bulge: 1.0, rimWidthFrac: 0.78,
   radial: 720, across: 96, meshMode: 'poly', polyDetail: 6,
-  rubber: '#151515', letter: 'white', lettering: true, brand: 'SLATE', rimColor: '#ffffff', rimMaterial: 'Steel', rimLip: 8, rimWell: 10,
+  rubber: '#151515', letter: 'white', lettering: true, brand: 'SLATE',
   factoryStripes: true, stripeRed: '#d63842', stripeBlue: '#3184c7', stripePattern: 'zigzag', stripeWidth: 1.4, stripeGap: 4.2, stripeWave: 1.1, stripeOffset: 0, stripePitch: 12
+};
+// Rim generation is intentionally separate from the tyre controls. Diameter and bead width remain
+// shared with the tyre so the procedural rim continues to fit every tyre preset.
+const R = {
+  material: 'Steel', tint: '#ffffff', lip: 8, well: 10,
+  layout: 'Blank barrel', pieceCount: 5, spokeWidth: 18, spokeDepth: 8, hubRatio: 0.28,
+  valve: true, valveAngle: 215
 };
 const DECAL_FONTS = [
   { id: 'outfit', label: 'Outfit', css: 'Outfit, system-ui, sans-serif' },
@@ -818,19 +833,22 @@ function buildTyreGeometry(d, pm) {
   return { geometry: g, profile: prof };
 }
 
-// Blank wheel rim: a single revolved, closed metal profile with a bead seat, drop well and rolled flanges.
-// It is deliberately open through the centre: no spokes, disc, hub or image geometry is added here.
-function buildBlankRimGeometry(d) {
-  const half = d.bw + 3, seat = d.Rrim + 2, lip = seat + Math.max(4, T.rimLip), well = seat - Math.max(3, T.rimWell), wall = 3.5;
-  // Clockwise cross-section: tyre-facing exterior from left to right, then the inside wall back to the start.
-  const profile = [
+// Procedural rim generator. The barrel is formed by revolving this closed profile; all centre
+// designs are generated from beams, never imported meshes or images.
+function rimProfilePoints(d) {
+  const half = d.bw + 3, seat = d.Rrim + 2, lip = seat + Math.max(4, R.lip), well = seat - Math.max(3, R.well), wall = 3.5;
+  return [
     [-half, lip - 1], [-half - 1, lip + 1], [-half + 2, lip + 1], [-half + 3.5, seat + 3], [-half + 7, seat],
     [-half + 15, seat - 1], [-half + 21, well], [half - 21, well], [half - 15, seat - 1], [half - 7, seat],
     [half - 3.5, seat + 3], [half - 2, lip + 1], [half + 1, lip + 1], [half, lip - 1],
-    [half - 3, lip - wall], [half - 5, seat - wall], [half - 13, seat - wall - 1], [half - 20, well - wall],
-    [-half + 20, well - wall], [-half + 13, seat - wall - 1], [-half + 5, seat - wall], [-half + 3, lip - wall]
+    [half, lip - 1 - wall], [half - 1, lip + 1 - wall], [half - 2, lip + 1 - wall], [half - 3.5, seat + 3 - wall],
+    [half - 5, seat - wall], [half - 13, seat - wall - 1], [half - 20, well - wall], [-half + 20, well - wall],
+    [-half + 13, seat - wall - 1], [-half + 5, seat - wall], [-half + 3.5, seat + 3 - wall],
+    [-half + 2, lip + 1 - wall], [-half - 1, lip + 1 - wall], [-half, lip - 1 - wall]
   ];
-  const N = profile.length, M = Math.max(112, Math.min(256, Math.round(T.radial / 3))), pos = [], uv = [], idx = [];
+}
+function buildBlankRimGeometry(d) {
+  const profile = rimProfilePoints(d), N = profile.length, M = Math.max(112, Math.min(256, Math.round(T.radial / 3))), pos = [], uv = [], idx = [];
   for (let i = 0; i < N; i++) for (let j = 0; j <= M; j++) {
     const [x, r] = profile[i], u = j / M, th = u * TAU; pos.push(x, r * Math.cos(th), r * Math.sin(th)); uv.push(u, i / N);
   }
@@ -840,12 +858,51 @@ function buildBlankRimGeometry(d) {
   }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); g.computeBoundingSphere(); return g;
 }
+function rimMaterial() {
+  const spec = RIM_MATERIALS[R.material] || RIM_MATERIALS.Steel;
+  const colour = new THREE.Color(spec.color).multiply(new THREE.Color(R.tint));
+  return new THREE.MeshStandardMaterial({ color: colour, metalness: spec.metalness, roughness: spec.roughness, envMapIntensity: 1.1 });
+}
+function addRimBeam(group, from, to, faceX, material) {
+  const dy = to[0] - from[0], dz = to[1] - from[1], length = Math.hypot(dy, dz); if (length < 0.1) return;
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(R.spokeDepth, length, R.spokeWidth), material);
+  beam.position.set(faceX, (from[0] + to[0]) / 2, (from[1] + to[1]) / 2); beam.rotation.x = Math.atan2(dz, dy); group.add(beam);
+}
+function rimPoint(radius, angle) { return [Math.cos(angle) * radius, Math.sin(angle) * radius]; }
+function buildRimCentre(d, material) {
+  if (R.layout === 'Blank barrel') return null;
+  const group = new THREE.Group(), faceX = d.bw, hubR = Math.max(32, d.Rrim * R.hubRatio), outerR = d.Rrim - 10, count = Math.max(3, Math.round(R.pieceCount));
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(hubR, hubR, R.spokeDepth, 48), material); hub.rotation.z = Math.PI / 2; hub.position.x = faceX; group.add(hub);
+  for (let i = 0; i < count; i++) {
+    const a = i / count * TAU - Math.PI / 2;
+    if (R.layout === 'Straight spokes') addRimBeam(group, rimPoint(hubR * 0.7, a), rimPoint(outerR, a), faceX, material);
+    else if (R.layout === 'Split spokes') {
+      const spread = Math.min(0.25, Math.PI / count * 0.45);
+      for (const side of [-1, 1]) addRimBeam(group, rimPoint(hubR * 0.78, a), rimPoint(outerR, a + side * spread), faceX, material);
+    } else { // Y spokes: one trunk and two procedural branches per piece.
+      const midR = hubR + (outerR - hubR) * 0.5, spread = Math.min(0.28, Math.PI / count * 0.52), joint = rimPoint(midR, a);
+      addRimBeam(group, rimPoint(hubR * 0.72, a), joint, faceX, material);
+      addRimBeam(group, joint, rimPoint(outerR, a - spread), faceX, material); addRimBeam(group, joint, rimPoint(outerR, a + spread), faceX, material);
+    }
+  }
+  group.name = `${count}-piece ${R.layout}`; return group;
+}
+function buildValveStem(d, capMaterial) {
+  if (!R.valve) return null;
+  const a = R.valveAngle * Math.PI / 180, seat = d.Rrim + 2, well = seat - Math.max(3, R.well), stem = new THREE.Group();
+  stem.position.set(d.bw + 1, Math.cos(a) * (well + 1), Math.sin(a) * (well + 1)); stem.rotation.x = a;
+  const rubber = new THREE.MeshStandardMaterial({ color: '#151619', roughness: 0.6, metalness: 0.05 });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 3.4, 15, 12), rubber); body.position.y = 7.5; stem.add(body);
+  const collar = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, 3, 12), capMaterial); collar.position.y = 1.5; stem.add(collar);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 5, 12), capMaterial); cap.position.y = 17; stem.add(cap);
+  stem.name = 'Tyre inflation valve'; return stem;
+}
 function buildRim(d) {
-  const spec = RIM_MATERIALS[T.rimMaterial] || RIM_MATERIALS.Steel;
-  const colour = new THREE.Color(spec.color).multiply(new THREE.Color(T.rimColor));
-  const mat = new THREE.MeshStandardMaterial({ color: colour, metalness: spec.metalness, roughness: spec.roughness, envMapIntensity: 1.1 });
-  const rim = new THREE.Mesh(buildBlankRimGeometry(d), mat); rim.name = `Blank ${T.rimMaterial} rim`;
-  const grp = new THREE.Group(); grp.name = 'Blank rim profile'; grp.add(rim); return grp;
+  const material = rimMaterial(), barrel = new THREE.Mesh(buildBlankRimGeometry(d), material); barrel.name = `Blank ${R.material} rim barrel`;
+  const group = new THREE.Group(); group.name = 'Procedural rim'; group.add(barrel);
+  const centre = buildRimCentre(d, material); if (centre) group.add(centre);
+  const valve = buildValveStem(d, material); if (valve) group.add(valve);
+  return group;
 }
 
 // carcass "threads": radial body cords + steel belt cords under the tread
@@ -924,7 +981,7 @@ function rebuild(full = true) {
   const groundR = d.Rout - T.wear * T.treadDepth; tyreGroup.position.y = groundR; tyreGroup.rotation.z = 0;
   if (!controls.userData?.init) { controls.userData = { init: true }; controls.target.set(0, groundR, 0); camera.position.set(d.Rout * 2.6, groundR + d.Rout * 0.6, d.Rout * 2.7); }
   fitZoom(d);
-  updateHud(d); drawProfile(d, profileCache); drawTreadView();
+  updateHud(d); drawProfile(d, profileCache); drawRimProfile(d); drawTreadView();
 }
 
 function updateHud(d) {
@@ -954,7 +1011,6 @@ function profileHandles(d) {
     { id: 'tread', x: d.treadHalf, r: d.Rout - T.crown, label: 'tread edge / crown', color: '#38c46d' },
     { id: 'shoulder', x: d.treadHalf + sr * s45, r: d.Rout - T.crown - sr + sr * c45, label: 'shoulder radius', color: '#d6c93a' },
     { id: 'bulge', x: d.halfW * (0.6 + 0.4 * T.bulge), r: d.Rrim + d.H * 0.52, label: 'sidewall bulge', color: '#f0a04b' },
-    { id: 'bead', x: d.bw, r: d.Rrim + 2, label: 'rim width', color: '#9aa4ff' },
     { id: 'depth', x: 0, r: d.Rout - T.treadDepth, label: 'tread depth', color: '#e5423f' },
   ];
   return list.flatMap(h => h.x === 0 ? [h] : [h, Object.assign({}, h, { x: -h.x, mirror: true })]);
@@ -992,7 +1048,6 @@ function drawProfile(d, prof) {
       case 'tread': T.treadFrac = clamp(xmm / d.halfW, 0.7, 0.98); T.crown = clamp(d.Rout - rmm, 0, 8); break;
       case 'shoulder': T.shoulder = clamp((xmm - d.treadHalf) / Math.sin(Math.PI / 4), 4, 40); break;
       case 'bulge': T.bulge = clamp((xmm / d.halfW - 0.6) / 0.4, 0.4, 1.6); break;
-      case 'bead': T.rimWidthFrac = clamp(xmm / d.halfW, 0.6, 0.92); break;
       case 'depth': T.treadDepth = clamp(Math.round((d.Rout - rmm) * 2) / 2, 2, 20); break;
     }
     const nd = dims(); drawProfile(nd, buildProfile(nd)); schedule(); });
@@ -1115,11 +1170,41 @@ function buildDecalUI() {
   const note = document.createElement('div'); note.className = 'decal-note'; note.innerHTML = 'Tokens: <code>{brand}</code> <code>{name}</code> <code>{size}</code> <code>{type}</code> <code>{depth}</code>. Custom font files stay in this browser session; JSON keeps the text settings but you will need to load the font again after importing on another device.'; props.appendChild(note);
 }
 
+function drawRimProfile(d) {
+  const c = document.getElementById('rimProfile'), ctx = c.getContext('2d'), W = c.width, H = c.height, profile = rimProfilePoints(d);
+  ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#101114'; ctx.fillRect(0, 0, W, H);
+  const minX = Math.min(...profile.map(p => p[0])), maxX = Math.max(...profile.map(p => p[0])), minR = Math.min(...profile.map(p => p[1])), maxR = Math.max(...profile.map(p => p[1]));
+  const scale = Math.min((W - 30) / (maxX - minX), (H - 48) / (maxR - minR)); const X = x => W / 2 + x * scale, Y = r => H - 24 - (r - minR) * scale;
+  ctx.beginPath(); profile.forEach((p, i) => i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1]))); ctx.closePath();
+  const spec = RIM_MATERIALS[R.material] || RIM_MATERIALS.Steel; ctx.fillStyle = spec.color; ctx.globalAlpha = .86; ctx.fill(); ctx.globalAlpha = 1; ctx.strokeStyle = '#f2f3f4'; ctx.lineWidth = 1.5; ctx.stroke();
+  const seat = d.Rrim + 2, well = seat - R.well; ctx.setLineDash([3, 3]); ctx.strokeStyle = '#38c46d'; ctx.beginPath(); ctx.moveTo(X(minX - 4), Y(seat)); ctx.lineTo(X(maxX + 4), Y(seat)); ctx.stroke(); ctx.strokeStyle = '#e5423f'; ctx.beginPath(); ctx.moveTo(X(minX - 4), Y(well)); ctx.lineTo(X(maxX + 4), Y(well)); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#d6c93a'; ctx.font = '11px Outfit, system-ui'; ctx.fillText('flange', 10, 16); ctx.fillStyle = '#38c46d'; ctx.fillText('bead seat', 10, 30); ctx.fillStyle = '#e5423f'; ctx.fillText('drop well', 10, 44);
+  document.getElementById('rimProfileInfo').textContent = `${T.rim} in rim · ${(d.bw * 2).toFixed(0)} mm bead width · ${R.lip.toFixed(1)} mm flange · ${R.well.toFixed(1)} mm drop well`;
+}
+function buildRimUI() {
+  const p = document.getElementById('rimParams'); p.innerHTML = '';
+  const h = title => { const e = document.createElement('div'); e.className = 'sec'; e.textContent = title; p.appendChild(e); };
+  h('Tyre fit');
+  slider(p, 'Rim diameter (in)', T, 'rim', 12, 24, 1); slider(p, 'Bead width fraction', T, 'rimWidthFrac', 0.6, 0.92, 0.01, v => v.toFixed(2));
+  const fitNote = document.createElement('div'); fitNote.className = 'hint'; fitNote.textContent = 'These shared dimensions keep the rim seated correctly inside the selected tyre.'; p.appendChild(fitNote);
+  h('Barrel profile');
+  slider(p, 'Flange height (mm)', R, 'lip', 4, 14, 0.5, v => v.toFixed(1)); slider(p, 'Drop well (mm)', R, 'well', 3, 18, 0.5, v => v.toFixed(1));
+  h('Material');
+  select(p, 'Rim material', R, 'material', Object.keys(RIM_MATERIALS)); color(p, 'Rim tint', R, 'tint');
+  h('Centre construction');
+  select(p, 'Centre design', R, 'layout', ['Blank barrel', 'Straight spokes', 'Split spokes', 'Y spokes']);
+  slider(p, 'Piece count', R, 'pieceCount', 3, 18, 1, v => `${Math.round(v)}`); slider(p, 'Piece width (mm)', R, 'spokeWidth', 8, 34, 1, v => v.toFixed(0));
+  slider(p, 'Piece depth (mm)', R, 'spokeDepth', 4, 16, 1, v => v.toFixed(0)); slider(p, 'Hub size', R, 'hubRatio', 0.16, 0.46, 0.01, v => v.toFixed(2));
+  const constructionNote = document.createElement('div'); constructionNote.className = 'hint'; constructionNote.textContent = 'Pieces are procedural beams. Blank barrel keeps the centre fully open; split and Y designs branch from each hub piece.'; p.appendChild(constructionNote);
+  h('Air valve');
+  check(p, 'Inflation valve', R, 'valve'); slider(p, 'Valve angle (°)', R, 'valveAngle', 0, 359, 1, v => `${Math.round(v)}°`);
+}
+
 function buildTyreUI() {
   const p = document.getElementById('tyreParams'); p.innerHTML = '';
   const h = t => { const e = document.createElement('div'); e.className = 'sec'; e.textContent = t; p.appendChild(e); };
   h('Size');
-  slider(p, 'Section width (mm)', T, 'width', 135, 405, 5); slider(p, 'Aspect ratio (%)', T, 'aspect', 20, 85, 5); slider(p, 'Rim diameter (in)', T, 'rim', 12, 24, 1);
+  slider(p, 'Section width (mm)', T, 'width', 135, 405, 5); slider(p, 'Aspect ratio (%)', T, 'aspect', 20, 85, 5);
   h('Wear');
   slider(p, 'Wear bias (edge↔centre)', T, 'wearBias', -1, 1, 0.01, v => v.toFixed(2));
   h('Tread mesh');
@@ -1128,15 +1213,10 @@ function buildTyreUI() {
   const pp = document.getElementById('profileParams'); pp.innerHTML = '';
   slider(pp, 'Tread depth (mm)', T, 'treadDepth', 2, 20, 0.5); slider(pp, 'Tread width fraction', T, 'treadFrac', 0.7, 0.98, 0.01, v => v.toFixed(2));
   slider(pp, 'Crown drop (mm)', T, 'crown', 0, 8, 0.1, v => v.toFixed(1)); slider(pp, 'Shoulder radius (mm)', T, 'shoulder', 4, 40, 1);
-  slider(pp, 'Sidewall bulge', T, 'bulge', 0.4, 1.6, 0.01, v => v.toFixed(2)); slider(pp, 'Rim width fraction', T, 'rimWidthFrac', 0.6, 0.92, 0.01, v => v.toFixed(2));
-  const rimProfile = document.createElement('div'); rimProfile.className = 'sec'; rimProfile.textContent = 'Blank rim profile'; pp.appendChild(rimProfile);
-  slider(pp, 'Flange height (mm)', T, 'rimLip', 4, 14, 0.5, v => v.toFixed(1)); slider(pp, 'Drop well (mm)', T, 'rimWell', 3, 18, 0.5, v => v.toFixed(1));
+  slider(pp, 'Sidewall bulge', T, 'bulge', 0.4, 1.6, 0.01, v => v.toFixed(2));
   const l = document.getElementById('lookParams'); l.innerHTML = '';
   color(l, 'Rubber colour', T, 'rubber'); check(l, 'Show sidewall decals', T, 'lettering');
   const b = document.createElement('div'); b.className = 'row'; b.innerHTML = '<label>Brand</label><input type="text" value="' + T.brand + '">'; b.querySelector('input').oninput = e => { T.brand = e.target.value; schedule(); }; l.appendChild(b);
-  const rimHead = document.createElement('div'); rimHead.className = 'sec'; rimHead.textContent = 'Blank rim'; l.appendChild(rimHead);
-  select(l, 'Rim material', T, 'rimMaterial', Object.keys(RIM_MATERIALS)); color(l, 'Rim tint', T, 'rimColor');
-  const rimNote = document.createElement('div'); rimNote.className = 'hint'; rimNote.textContent = 'Open, spoke-free bead-seat profile. Flange height and drop well are shaped in Cross-section.'; l.appendChild(rimNote);
   const markingHead = document.createElement('div'); markingHead.className = 'sec'; markingHead.textContent = 'Factory tread paint'; l.appendChild(markingHead);
   check(l, 'Coloured tread stripes', T, 'factoryStripes');
   const patternRow = document.createElement('div'); patternRow.className = 'row'; patternRow.innerHTML = '<label>Stripe pattern</label><select><option value="zigzag">Solid zig-zag</option><option value="dotted">Dotted zig-zag</option><option value="dashed">Dashed zig-zag</option><option value="stitch">Stitch marks</option></select>';
@@ -1163,7 +1243,7 @@ function applyPreset(i) {
   const pr = PRESETS[i]; Object.assign(T, pr.tyre); P.name = pr.name; P.type = pr.type; P.layers = pr.layers.map(l => Object.assign({}, l)); UI.sel = -1; T.wear = 0; document.getElementById('wearSlider').value = 0;
   refreshAll();
 }
-function refreshAll() { buildTyreUI(); buildDecalUI(); buildPresetUI(); buildLayerUI(); document.getElementById('pName').value = P.name; document.getElementById('pType').value = P.type; rebuild(); }
+function refreshAll() { buildTyreUI(); buildRimUI(); buildDecalUI(); buildPresetUI(); buildLayerUI(); document.getElementById('pName').value = P.name; document.getElementById('pType').value = P.type; rebuild(); }
 
 function buildLayerUI() {
   const box = document.getElementById('layers'); box.innerHTML = '';
@@ -1219,14 +1299,14 @@ document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => {
 // exports
 const dl = (name, url) => { const a = document.createElement('a'); a.href = url; a.download = name; a.click(); };
 const toast = m => { const t = document.getElementById('toast'); t.textContent = m; t.style.opacity = 1; setTimeout(() => t.style.opacity = 0, 1800); };
-document.getElementById('exportJson').onclick = () => { dl(P.name.replace(/\s+/g, '_') + '.tyre.json', URL.createObjectURL(new Blob([JSON.stringify({ tyre: T, pattern: P }, null, 2)], { type: 'application/json' }))); toast('Pattern JSON exported'); };
+document.getElementById('exportJson').onclick = () => { dl(P.name.replace(/\s+/g, '_') + '.tyre.json', URL.createObjectURL(new Blob([JSON.stringify({ tyre: T, rim: R, pattern: P }, null, 2)], { type: 'application/json' }))); toast('Pattern JSON exported'); };
 document.getElementById('exportHeight').onclick = () => { dl(P.name.replace(/\s+/g, '_') + '_height.png', maps.height.toDataURL()); toast('Height map exported'); };
 document.getElementById('exportNormal').onclick = () => { dl(P.name.replace(/\s+/g, '_') + '_normal.png', maps.normal.toDataURL()); toast('Normal map exported'); };
 document.getElementById('exportGlb').onclick = () => {
   const ex = new GLTFExporter(); const g = tyreGroup.clone(); g.remove(...g.children.filter(c => c.isLineSegments)); g.position.set(0, 0, 0); g.scale.setScalar(0.001);
   ex.parse(g, r => { dl(P.name.replace(/\s+/g, '_') + '.glb', URL.createObjectURL(new Blob([r], { type: 'model/gltf-binary' }))); toast('GLB exported (metres)'); }, e => toast('Export failed: ' + e), { binary: true });
 };
-document.getElementById('importJson').onchange = e => { const f = e.target.files[0]; if (!f) return; f.text().then(txt => { const j = JSON.parse(txt); if (j.tyre) Object.assign(T, j.tyre); if (j.pattern) { P.name = j.pattern.name; P.type = j.pattern.type; P.layers = j.pattern.layers; P.decals = Array.isArray(j.pattern.decals) ? j.pattern.decals.map(decal => newDecal(decal)) : defaultDecals(); } UI.sel = -1; UI.decalSel = -1; refreshAll(); toast('Imported ' + P.name); }); };
+document.getElementById('importJson').onchange = e => { const f = e.target.files[0]; if (!f) return; f.text().then(txt => { const j = JSON.parse(txt); if (j.tyre) Object.assign(T, j.tyre); if (j.rim) Object.assign(R, j.rim); else if (j.tyre) { if (j.tyre.rimMaterial) R.material = j.tyre.rimMaterial; if (j.tyre.rimColor) R.tint = j.tyre.rimColor; if (j.tyre.rimLip) R.lip = j.tyre.rimLip; if (j.tyre.rimWell) R.well = j.tyre.rimWell; } if (j.pattern) { P.name = j.pattern.name; P.type = j.pattern.type; P.layers = j.pattern.layers; P.decals = Array.isArray(j.pattern.decals) ? j.pattern.decals.map(decal => newDecal(decal)) : defaultDecals(); } UI.sel = -1; UI.decalSel = -1; refreshAll(); toast('Imported ' + P.name); }); };
 window.addEventListener('keydown', e => { if (e.key === 'r' && !e.target.matches('input,select')) { randomTyre(); refreshAll(); } });
 
 applyPreset(0);
