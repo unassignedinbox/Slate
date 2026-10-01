@@ -11,6 +11,9 @@
 #include "../../../../../Engine/Editor/InspectorPanel.h"
 #include "../../../../../Engine/Editor/OutlinerPanel.h"
 #include "../../../../../Engine/Editor/ViewportPanel.h"
+#include "../../../../../Engine/DisplayPresentation/ControlCentreHost.h"
+#include "../../../../../Engine/DisplayPresentation/PixelSpace.h"
+#include "../../../../../Engine/DeviceExchange/InputExchange.h"
 
 #include <cstdint>
 
@@ -20,13 +23,28 @@ class SolidArcEditorHost
 {
 public:
     SolidArcEditorHost() noexcept;
+    ~SolidArcEditorHost() noexcept;
 
     void ApplyTheme() noexcept;
+
+    // Same pull-down Control Centre notch as the main Frontier editor. Runtime callers tick this before
+    // ImGui::NewFrame(); the headless proof uses the same seam so the CPU mirror and live UI stay aligned.
+    bool SeatShade(uint32_t Width, uint32_t Height) noexcept;
+    void TickShade(float CursorX, float CursorY, bool Down, float Wheel, float DeltaSeconds) noexcept;
+    [[nodiscard]] bool ShadeCoversPointer() const noexcept;
+    void AssignProjectName(const char* Name) noexcept;
+
     void Record(ConsoleHost& Host) noexcept;
 
     [[nodiscard]] uint32_t QueryPickedFigureIdentity() const noexcept;
     [[nodiscard]] float    QueryViewWidth() const noexcept { return Viewport_.QueryViewWidth(); }
     [[nodiscard]] float    QueryViewHeight() const noexcept { return Viewport_.QueryViewHeight(); }
+    [[nodiscard]] bool     QueryShadeOpen() const noexcept;
+    [[nodiscard]] uint32_t QueryShadePage() const noexcept;
+    [[nodiscard]] float    QueryNotchX() const noexcept;
+    [[nodiscard]] float    QueryNotchY() const noexcept;
+    [[nodiscard]] float    QueryGripX() const noexcept;
+    [[nodiscard]] float    QueryGripY() const noexcept;
 
 private:
     void ConstructLayout() noexcept;
@@ -36,6 +54,13 @@ private:
     ViewportPanel Viewport_;
     InspectorPanel Inspector_;
 
+    ControlCentreHost Shade_;
+    InputExchange     ShadeInput_;
+    PixelSpace        ShadeSurface_;
+
+    bool ShadeOpen_ = false;
+    bool OpenEcho_  = false;
+    bool ShadeSeated_ = false;
     bool OutlinerTabOpen_ = true;
     bool ViewportTabOpen_ = true;
     bool InspectorTabOpen_ = true;

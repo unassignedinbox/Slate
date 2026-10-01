@@ -165,6 +165,25 @@ if grep -q 'AssignChrome(ViewportPanelChrome::SolidArcCad)' "$SolidHost" \
 else
     FailOne "SolidArc viewport toolbar controls are missing"
 fi
+if grep -q 'Viewport_.AssignShadeOpen(&ShadeOpen_)' "$SolidHost" \
+   && grep -q 'SeatShade' "$SolidHost" \
+   && grep -q 'TickShade' "$SolidHost" \
+   && grep -q 'ConstructControlLayout' "$SolidHost" \
+   && grep -q 'SurfaceLayer::Above' "$SolidHost" \
+   && grep -q 'Editor.SeatShade' Exhibits/Workbench/Editor/SolidArcEditorProof.cpp \
+   && grep -q 'EditorProof_SolidArc_Notch.png' Exhibits/Workbench/Editor/SolidArcEditorProof.cpp; then
+    Pass "SolidArc seats the same Control Centre notch in the live host and the CPU mirror proof"
+else
+    FailOne "SolidArc Control Centre notch is not wired through both host and proof"
+fi
+if grep -q 'ImGuiCol_TabUnfocused' "$SolidHost" \
+   && grep -q 'ImGuiCol_TabDimmedSelected' "$SolidHost" \
+   && grep -q 'ImGuiCol_TabSelectedOverline' "$SolidHost" \
+   && grep -q 'ImGuiCol_ButtonActive' "$SolidHost"; then
+    Pass "SolidArc tab colours include the Frontier grey/black focused, dimmed and pressed states instead of ImGui blue defaults"
+else
+    FailOne "SolidArc tab colour token set is incomplete"
+fi
 
 ImguiRoot="${IMGUI_INCLUDE_DIR:-}"
 if [ -z "$ImguiRoot" ] && [ -f ExternalPackages/imgui/imgui.h ]; then ImguiRoot="ExternalPackages/imgui"; fi
@@ -175,7 +194,8 @@ if [ -n "$ImguiRoot" ]; then
     else
         Compiler="${CXX:-g++}"
         if "$Compiler" -std=c++20 -Wall -Wextra -Wpedantic -Wno-unused-function -DFRONTIER_DEVELOPMENT \
-            -I"$ImguiRoot" -I. -IEditor/AuthoringTools/Modelling/SolidArc -IEngine/Editor \
+            -I"$ImguiRoot" -I. -IEngine -IEngine/Editor -IEngine/DisplayPresentation -IExternalPackages/tomlpp/include \
+            -IEditor/AuthoringTools/Modelling/SolidArc \
             -fsyntax-only \
             Editor/AuthoringTools/Modelling/SolidArc/Editor/SolidArcEditorHost.cpp \
             Engine/Editor/ControlPanel.cpp Engine/Editor/OutlinerPanel.cpp Engine/Editor/ViewportPanel.cpp Engine/Editor/InspectorPanel.cpp \

@@ -18,6 +18,8 @@ SolidArcEditorHost::SolidArcEditorHost() noexcept
     Outliner_.AssignControls(&Controls_);
     Viewport_.AssignControls(&Controls_);
     Inspector_.AssignControls(&Controls_);
+    Viewport_.AssignShadeOpen(&ShadeOpen_);
+    Shade_.AssignProjectName("SolidArc");
     Outliner_.AssignTabOpen(&OutlinerTabOpen_);
     Viewport_.AssignTabOpen(&ViewportTabOpen_);
     Inspector_.AssignTabOpen(&InspectorTabOpen_);
@@ -43,12 +45,85 @@ SolidArcEditorHost::SolidArcEditorHost() noexcept
     Inspector_.AssignReadout(&Readout_);
 }
 
+
+SolidArcEditorHost::~SolidArcEditorHost() noexcept
+{
+    Shade_.Terminate();
+}
+
+bool SolidArcEditorHost::SeatShade(uint32_t Width, uint32_t Height) noexcept
+{
+#ifdef FRONTIER_DEVELOPMENT
+    ShadeSeated_ = Shade_.Initialize(Width, Height);
+    // Match Project-Zero's editor pull: narrow enough to avoid the viewport tab controls, but still the same
+    // Notch/Control Centre host and geometry.
+    Shade_.AssignNotchWidth(200.0f);
+    Shade_.AssignProjectName("SolidArc");
+    return ShadeSeated_;
+#else
+    (void)Width; (void)Height;
+    return false;
+#endif
+}
+
+void SolidArcEditorHost::TickShade(float CursorX, float CursorY, bool Down, float Wheel, float DeltaSeconds) noexcept
+{
+#ifdef FRONTIER_DEVELOPMENT
+    if (!ShadeSeated_)
+        return;
+
+    const float Scale = std::clamp(Shade_.QueryAppearance().QueryApplied().InterfaceScale / 100.0f, 0.5f, 2.0f);
+    const ImVec2 Display = ImGui::GetIO().DisplaySize;
+    Shade_.Resize(static_cast<uint32_t>(Display.x / Scale + 0.5f),
+                  static_cast<uint32_t>(Display.y / Scale + 0.5f));
+    ShadeInput_.AssignCursorPosition(CursorX * Scale, CursorY * Scale);
+    ShadeInput_.AssignMouseButton(MouseButtonCategory::ButtonLeft, Down);
+    ShadeInput_.ResetMouseScroll();
+    if (Wheel != 0.0f)
+        ShadeInput_.AssignMouseScroll(Wheel);
+    Shade_.AdvanceInteraction(ShadeInput_, CursorX, CursorY);
+    Shade_.AdvanceLocomotion(DeltaSeconds);
+
+    // The SolidArc viewport gear shares the same open bit as Project-Zero. A click on the gear asks for a pose;
+    // the shade owns the animated travel and then echoes the settled/opening state back to the gear.
+    if (!Shade_.IsDragging() && ShadeOpen_ != OpenEcho_)
+    {
+        if (ShadeOpen_)
+            Shade_.OpenNotch();
+        else
+            Shade_.CloseNotch();
+        OpenEcho_ = ShadeOpen_;
+    }
+    ShadeOpen_ = Shade_.IsOpen();
+    OpenEcho_  = ShadeOpen_;
+#else
+    (void)CursorX; (void)CursorY; (void)Down; (void)Wheel; (void)DeltaSeconds;
+#endif
+}
+
+bool SolidArcEditorHost::ShadeCoversPointer() const noexcept
+{
+#ifdef FRONTIER_DEVELOPMENT
+    return ShadeSeated_ && Shade_.CoversPointer();
+#else
+    return false;
+#endif
+}
+
+void SolidArcEditorHost::AssignProjectName(const char* Name) noexcept
+{
+    Shade_.AssignProjectName(Name != nullptr ? Name : "SolidArc");
+}
+
 void SolidArcEditorHost::ApplyTheme() noexcept
 {
     PrepareSunInspectorFonts();
     IconPresentation::Attach();
     ImGuiStyle& Style = ImGui::GetStyle();
 #ifdef FRONTIER_DEVELOPMENT
+    // Same trapezoid sheet as Project-Zero / Frontier. SolidArc previously set only a subset of the
+    // tab colours, leaving the focused/dimmed variants and strip tints on ImGui's blue defaults in the live
+    // host and in the CPU mirror. Keep the geometry and the complete colour token set together.
     Style.TabSlant                  = 14.0f;
     Style.TabOverlap                = 24.0f;
     Style.TabHeight                 = 24.0f;
@@ -61,29 +136,67 @@ void SolidArcEditorHost::ApplyTheme() noexcept
     Style.TabBarBorderSize          = 0.0f;
     Style.TabButtonRounding         = 1.0f;
 #endif
-    Style.WindowPadding    = ImVec2(14.0f, 12.0f);
-    Style.WindowRounding   = 8.0f;
-    Style.ChildRounding    = 12.0f;
-    Style.FrameRounding    = 16.0f;
-    Style.WindowBorderSize = 1.0f;
-    Style.FrameBorderSize  = 1.0f;
-    Style.ScrollbarSize    = 8.0f;
+    Style.WindowPadding      = ImVec2(14.0f, 12.0f);
+    Style.FramePadding       = ImVec2(13.0f, 9.0f);
+    Style.ItemSpacing        = ImVec2(10.0f, 8.0f);
+    Style.ItemInnerSpacing   = ImVec2(6.0f, 4.0f);
+    Style.WindowRounding     = 8.0f;
+    Style.ChildRounding      = 12.0f;
+    Style.FrameRounding      = 16.0f;
+    Style.PopupRounding      = 18.0f;
+    Style.ScrollbarRounding  = 9.0f;
+    Style.GrabRounding       = 12.0f;
+    Style.WindowBorderSize   = 1.0f;
+    Style.ChildBorderSize    = 0.0f;
+    Style.FrameBorderSize    = 1.0f;
+    Style.PopupBorderSize    = 1.0f;
+    Style.ScrollbarSize      = 8.0f;
 
     ImVec4* Colours = Style.Colors;
-    Colours[ImGuiCol_WindowBg]       = ImVec4(0.071f, 0.071f, 0.071f, 1.0f);
-    Colours[ImGuiCol_ChildBg]        = ImVec4(0.000f, 0.000f, 0.000f, 0.0f);
-    Colours[ImGuiCol_Border]         = ImVec4(1.000f, 1.000f, 1.000f, 0.05f);
-    Colours[ImGuiCol_FrameBg]        = ImVec4(0.000f, 0.000f, 0.000f, 1.0f);
-    Colours[ImGuiCol_TitleBg]        = ImVec4(0.039f, 0.039f, 0.039f, 1.0f);
-    Colours[ImGuiCol_TitleBgActive]  = ImVec4(0.039f, 0.039f, 0.039f, 1.0f);
-    Colours[ImGuiCol_TitleBgCollapsed] = ImVec4(0.039f, 0.039f, 0.039f, 1.0f);
-    Colours[ImGuiCol_Button]         = ImVec4(0.133f, 0.133f, 0.133f, 1.0f);
-    Colours[ImGuiCol_ButtonHovered]  = ImVec4(0.180f, 0.180f, 0.180f, 1.0f);
-    Colours[ImGuiCol_Header]         = ImVec4(0.165f, 0.165f, 0.165f, 1.0f);
-    Colours[ImGuiCol_Tab]            = ImVec4(0.149f, 0.149f, 0.173f, 1.0f);
-    Colours[ImGuiCol_TabHovered]     = ImVec4(0.196f, 0.196f, 0.227f, 1.0f);
-    Colours[ImGuiCol_TabActive]      = ImVec4(0.071f, 0.071f, 0.071f, 1.0f);
-    Colours[ImGuiCol_DockingPreview] = ImVec4(1.000f, 1.000f, 1.000f, 0.12f);
+    Colours[ImGuiCol_Text]                  = ImVec4(0.941f, 0.941f, 0.941f, 1.0f);
+    Colours[ImGuiCol_TextDisabled]          = ImVec4(0.361f, 0.361f, 0.361f, 1.0f);
+    Colours[ImGuiCol_WindowBg]              = ImVec4(0.071f, 0.071f, 0.071f, 1.0f);
+    Colours[ImGuiCol_ChildBg]               = ImVec4(0.000f, 0.000f, 0.000f, 0.0f);
+    Colours[ImGuiCol_PopupBg]               = ImVec4(0.102f, 0.102f, 0.102f, 1.0f);
+    Colours[ImGuiCol_Border]                = ImVec4(1.000f, 1.000f, 1.000f, 0.05f);
+    Colours[ImGuiCol_BorderShadow]          = ImVec4(0.000f, 0.000f, 0.000f, 0.0f);
+    Colours[ImGuiCol_FrameBg]               = ImVec4(0.000f, 0.000f, 0.000f, 1.0f);
+    Colours[ImGuiCol_FrameBgHovered]        = ImVec4(0.031f, 0.031f, 0.031f, 1.0f);
+    Colours[ImGuiCol_FrameBgActive]         = ImVec4(0.071f, 0.071f, 0.071f, 1.0f);
+    Colours[ImGuiCol_MenuBarBg]             = ImVec4(0.071f, 0.071f, 0.071f, 1.0f);
+    Colours[ImGuiCol_TitleBg]               = ImVec4(0.039f, 0.039f, 0.039f, 1.0f);
+    Colours[ImGuiCol_TitleBgActive]         = ImVec4(0.039f, 0.039f, 0.039f, 1.0f);
+    Colours[ImGuiCol_TitleBgCollapsed]      = ImVec4(0.039f, 0.039f, 0.039f, 1.0f);
+    Colours[ImGuiCol_ScrollbarBg]           = ImVec4(0.000f, 0.000f, 0.000f, 0.0f);
+    Colours[ImGuiCol_ScrollbarGrab]         = ImVec4(0.141f, 0.141f, 0.141f, 1.0f);
+    Colours[ImGuiCol_ScrollbarGrabHovered]  = ImVec4(0.180f, 0.180f, 0.180f, 1.0f);
+    Colours[ImGuiCol_ScrollbarGrabActive]   = ImVec4(0.200f, 0.200f, 0.200f, 1.0f);
+    Colours[ImGuiCol_CheckMark]             = ImVec4(1.000f, 1.000f, 1.000f, 1.0f);
+    Colours[ImGuiCol_SliderGrab]            = ImVec4(0.878f, 0.878f, 0.878f, 1.0f);
+    Colours[ImGuiCol_SliderGrabActive]      = ImVec4(1.000f, 1.000f, 1.000f, 1.0f);
+    Colours[ImGuiCol_Button]                = ImVec4(0.133f, 0.133f, 0.133f, 1.0f);
+    Colours[ImGuiCol_ButtonHovered]         = ImVec4(0.180f, 0.180f, 0.180f, 1.0f);
+    Colours[ImGuiCol_ButtonActive]          = ImVec4(0.220f, 0.220f, 0.220f, 1.0f);
+    Colours[ImGuiCol_Header]                = ImVec4(0.165f, 0.165f, 0.165f, 1.0f);
+    Colours[ImGuiCol_HeaderHovered]         = ImVec4(0.110f, 0.110f, 0.110f, 1.0f);
+    Colours[ImGuiCol_HeaderActive]          = ImVec4(0.165f, 0.165f, 0.165f, 1.0f);
+    Colours[ImGuiCol_Separator]             = ImVec4(0.180f, 0.180f, 0.180f, 1.0f);
+    Colours[ImGuiCol_SeparatorHovered]      = ImVec4(0.298f, 0.302f, 1.000f, 1.0f);
+    Colours[ImGuiCol_SeparatorActive]       = ImVec4(0.424f, 0.467f, 1.000f, 1.0f);
+    Colours[ImGuiCol_ResizeGrip]            = ImVec4(0.180f, 0.180f, 0.180f, 1.0f);
+    Colours[ImGuiCol_ResizeGripHovered]     = ImVec4(0.298f, 0.302f, 1.000f, 1.0f);
+    Colours[ImGuiCol_ResizeGripActive]      = ImVec4(0.424f, 0.467f, 1.000f, 1.0f);
+    Colours[ImGuiCol_Tab]                   = ImVec4(0.149f, 0.149f, 0.173f, 1.0f);
+    Colours[ImGuiCol_TabHovered]            = ImVec4(0.196f, 0.196f, 0.227f, 1.0f);
+    Colours[ImGuiCol_TabActive]             = ImVec4(0.071f, 0.071f, 0.071f, 1.0f);
+    Colours[ImGuiCol_TabUnfocused]          = ImVec4(0.149f, 0.149f, 0.173f, 1.0f);
+    Colours[ImGuiCol_TabUnfocusedActive]    = ImVec4(0.071f, 0.071f, 0.071f, 1.0f);
+    Colours[ImGuiCol_TabDimmed]             = ImVec4(0.118f, 0.118f, 0.141f, 1.0f);
+    Colours[ImGuiCol_TabDimmedSelected]     = ImVec4(0.071f, 0.071f, 0.071f, 1.0f);
+    Colours[ImGuiCol_TabSelectedOverline]   = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+    Colours[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+    Colours[ImGuiCol_DockingPreview]        = ImVec4(1.000f, 1.000f, 1.000f, 0.12f);
+    Colours[ImGuiCol_TextSelectedBg]        = ImVec4(0.424f, 0.467f, 1.000f, 0.35f);
 }
 
 void SolidArcEditorHost::ConstructLayout() noexcept
@@ -152,14 +265,25 @@ void SolidArcEditorHost::Record(ConsoleHost& Host) noexcept
     const uint32_t Picked = Outliner_.QueryPicked();
     EditorInstance* PickedRow = (Picked < RowCount_) ? &Rows_[Picked] : nullptr;
     if (PickedRow != nullptr)
-        BuildSolidArcInspectorSheet(Host, Bindings_[Picked], &PickedSheet_);
+        (void)BuildSolidArcInspectorSheet(Host, Bindings_[Picked], &PickedSheet_);
     else
-        BuildSolidArcInspectorSheet(Host, SolidArcOutlinerBinding{}, &PickedSheet_);
+        (void)BuildSolidArcInspectorSheet(Host, SolidArcOutlinerBinding{}, &PickedSheet_);
     Inspector_.Record(PickedRow, Picked, &PickedSheet_);
 
     ApplySolidArcOutlinerVisibility(Host, Rows_.data(), Bindings_.data(), RowCount_);
     if (Picked < RowCount_)
         ApplySolidArcInspectorSheet(Host, Bindings_[Picked], PickedSheet_);
+
+#ifdef FRONTIER_DEVELOPMENT
+    // Record the shared Notch/Control Centre above the dock columns, exactly as the main Frontier editor does.
+    if (ShadeSeated_)
+    {
+        const float UiScale = std::clamp(Shade_.QueryAppearance().QueryApplied().InterfaceScale / 100.0f,
+                                         0.5f, 2.0f);
+        if (ShadeSurface_.Begin(SurfaceLayer::Above, Main->Size.x, Main->Size.y, UiScale))
+            Shade_.ConstructControlLayout(ShadeSurface_);
+    }
+#endif
 }
 
 uint32_t SolidArcEditorHost::QueryPickedFigureIdentity() const noexcept
@@ -168,6 +292,40 @@ uint32_t SolidArcEditorHost::QueryPickedFigureIdentity() const noexcept
     if (Picked >= RowCount_ || Bindings_[Picked].RowRole != SolidArcOutlinerBinding::Role::Figure)
         return 0u;
     return Bindings_[Picked].FigureIdentity;
+}
+
+bool SolidArcEditorHost::QueryShadeOpen() const noexcept
+{
+    return ShadeSeated_ && Shade_.IsOpen();
+}
+
+uint32_t SolidArcEditorHost::QueryShadePage() const noexcept
+{
+    return static_cast<uint32_t>(Shade_.QueryActivePage());
+}
+
+float SolidArcEditorHost::QueryNotchX() const noexcept
+{
+    const PlaneExtent Grip = Shade_.QueryHandleExtent();
+    return (Grip.MinimumX + Grip.MaximumX) * 0.5f;
+}
+
+float SolidArcEditorHost::QueryNotchY() const noexcept
+{
+    const PlaneExtent Grip = Shade_.QueryHandleExtent();
+    return (Grip.MinimumY + Grip.MaximumY) * 0.5f;
+}
+
+float SolidArcEditorHost::QueryGripX() const noexcept
+{
+    const PlaneExtent Grip = Shade_.QueryGripExtent();
+    return (Grip.MinimumX + Grip.MaximumX) * 0.5f;
+}
+
+float SolidArcEditorHost::QueryGripY() const noexcept
+{
+    const PlaneExtent Grip = Shade_.QueryGripExtent();
+    return (Grip.MinimumY + Grip.MaximumY) * 0.5f;
 }
 
 } // namespace Frontier

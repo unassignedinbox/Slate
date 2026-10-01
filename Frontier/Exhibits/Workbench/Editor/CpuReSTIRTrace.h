@@ -9,12 +9,17 @@
 //    Kept in Scratchpad: this is proof tooling, never part of the engine or the shipping game.
 #pragma once
 
-#include "../../Projects/Project-Zero/Source/RayTracingSolver.h"
-#include "../../Projects/Project-Zero/Source/FlyThroughSolver.h"
+#include "../../../Projects/Project-Zero/Source/RayTracingSolver.h"
+#include "../../../Engine/Host/FlyThroughSolver.h"
 #include <cmath>
 #include <cstdint>
 #include <thread>
 #include <vector>
+
+namespace Frontier::ProjectZero {
+using FlyThroughConfiguration = Frontier::HostRuntime::FlyThroughConfiguration;
+using FlyThroughSolver = Frontier::HostRuntime::FlyThroughSolver;
+}
 
 namespace CpuReSTIR {
 

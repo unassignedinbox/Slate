@@ -172,6 +172,11 @@ int main()
 
     Frontier::SolidArcEditorHost Editor;
     Editor.ApplyTheme();
+    if (!Editor.SeatShade(kWidth, kHeight))
+    {
+        std::fprintf(stderr, "[SolidArcEditorProof] [FAIL] could not seat SolidArc control notch\n");
+        return 10;
+    }
 
     if (IO.Fonts->Fonts.empty())
         IO.Fonts->AddFontDefault();
@@ -197,8 +202,10 @@ int main()
     auto Tick = [&](float MouseX, float MouseY, bool Down)
     {
         IO.DeltaTime = 1.0f / 60.0f;
-        IO.AddMousePosEvent(MouseX, MouseY);
-        IO.AddMouseButtonEvent(0, Down);
+        Editor.TickShade(MouseX, MouseY, Down, 0.0f, IO.DeltaTime);
+        const bool ShadeOwnsPointer = Editor.ShadeCoversPointer();
+        IO.AddMousePosEvent(ShadeOwnsPointer ? -1.0f : MouseX, ShadeOwnsPointer ? -1.0f : MouseY);
+        IO.AddMouseButtonEvent(0, ShadeOwnsPointer ? false : Down);
         ImGui::NewFrame();
         Editor.Record(Host);
         ImGui::Render();
@@ -241,10 +248,10 @@ int main()
     if (const int Write = WriteSheet(MenuSheet, 7); Write != 0)
         return Write;
 
-    Click(160.0f, 281.0f); // Bodies entry; selected filters appear as chips below the search/filter row.
+    Click(160.0f, 303.0f); // Bodies entry; selected filters appear as chips below the search/filter row.
     for (int I = 0; I < 4; ++I)
         Rest();
-    Click(78.0f, 294.0f); // Body01 row after the Bodies filter; seats the CAD inspector like the game proof.
+    Click(78.0f, 316.0f); // Body01 row after the Bodies filter; seats the CAD inspector like the game proof.
     for (int I = 0; I < 8; ++I)
         Rest();
     Rasterise();
@@ -262,7 +269,17 @@ int main()
         std::fprintf(stderr, "[SolidArcEditorProof] [FAIL] proof image is nearly empty\n");
         return 9;
     }
-    std::fprintf(stderr, "[SolidArcEditorProof] wrote %s and %s with %d bright pixels in the filtered sheet\n", MenuSheet, Sheet, Bright);
+
+    Click(Editor.QueryNotchX(), Editor.QueryNotchY());
+    for (int I = 0; I < 48; ++I)
+        Rest();
+    Rasterise();
+    const char* NotchSheet = "Exhibits/Gallery/Editor/EditorProof_SolidArc_Notch.png";
+    if (const int Write = WriteSheet(NotchSheet, 11); Write != 0)
+        return Write;
+
+    std::fprintf(stderr, "[SolidArcEditorProof] wrote %s, %s and %s with %d bright pixels in the filtered sheet\n",
+                 MenuSheet, Sheet, NotchSheet, Bright);
     ImGui::DestroyContext();
     return 0;
 }

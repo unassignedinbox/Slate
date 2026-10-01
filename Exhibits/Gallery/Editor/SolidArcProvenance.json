@@ -1,0 +1,25 @@
+{
+  "proof": "SolidArc editor chrome proof, rasterised from the real SolidArcEditorHost through patched ImGui draw lists.",
+  "date": "2026-10-01",
+  "execution": "CPU mirror/headless proof; no SVG/browser mockup. The same SolidArcEditorHost owns the live host chrome and the CPU proof path.",
+  "validation": [
+    "./Tools/Build/CheckEditorDockingSolidArc.sh",
+    "SOLIDARC_ONLY=1 ./Tools/Build/CheckEditorVisualProofs.sh"
+  ],
+  "results": {
+    "sheets": [
+      "EditorProof_SolidArc_CPU_Reference.png",
+      "EditorProof_SolidArc_Menu_CPU_Reference.png",
+      "EditorProof_SolidArc_Notch_CPU_Reference.png"
+    ],
+    "notes": [
+      "Tab geometry and complete grey/black Frontier tab token set are seated in SolidArcEditorHost::ApplyTheme.",
+      "Control Centre notch is seated/ticked/rendered by SolidArcEditorHost and exercised by SolidArcEditorProof."
+    ]
+  },
+  "sha256": {
+    "EditorProof_SolidArc_CPU_Reference.png": "0db373a75587f5c9d078c744ca3e2edd96efe774e368444684462fded225a7ad",
+    "EditorProof_SolidArc_Menu_CPU_Reference.png": "e9c85a5d61901b75c23883f050ab15140957c1cdd07a8470fbffcf986c65e988",
+    "EditorProof_SolidArc_Notch_CPU_Reference.png": "9949fea4a4b406ee87b2d6bc96efd890e255b2ddfd9980cda05d428e0b39ae82"
+  }
+}
