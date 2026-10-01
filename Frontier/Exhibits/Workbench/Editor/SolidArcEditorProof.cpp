@@ -246,6 +246,12 @@ int main()
         std::fprintf(stderr, "[SolidArcEditorProof] [FAIL] shared control notch did not initialize\n");
         return 7;
     }
+    if (!Editor.QueryAxisGuideShown() || Editor.QueryAxisGuideLength() != 34.0f ||
+        Editor.QueryAxisGuideThickness() != 1.0f)
+    {
+        std::fprintf(stderr, "[SolidArcEditorProof] [FAIL] SolidArc XYZ axis-guide properties are not seated\n");
+        return 7;
+    }
     Click(178.0f, 175.0f); // Filter dropdown in the SolidArc outliner search row.
     for (int I = 0; I < 3; ++I)
         Rest();

@@ -55,6 +55,18 @@ public:
     // Switches the top chrome between the Project-Zero/game controls and SolidArc's CAD controls.
     void AssignChrome(ViewportPanelChrome Chrome) noexcept { Chrome_ = Chrome; }
 
+    // SolidArc viewport orientation-axis properties. These control the passive
+    // XYZ guide in the lower-right corner, not the selected object's transform gizmo.
+    void AssignAxisGuide(bool Shown, float Length, float Thickness) noexcept
+    {
+        AxisGuideShown_ = Shown;
+        AxisGuideLength_ = Length < 12.0f ? 12.0f : (Length > 96.0f ? 96.0f : Length);
+        AxisGuideThickness_ = Thickness < 0.5f ? 0.5f : (Thickness > 4.0f ? 4.0f : Thickness);
+    }
+    [[nodiscard]] bool QueryAxisGuideShown() const noexcept { return AxisGuideShown_; }
+    [[nodiscard]] float QueryAxisGuideLength() const noexcept { return AxisGuideLength_; }
+    [[nodiscard]] float QueryAxisGuideThickness() const noexcept { return AxisGuideThickness_; }
+
     // Seats the scene view: RGBA32 top-down rows the view draws under its orb. The headless harness seats a CPU
     //    trace here; the engine build seats its ReSTIR target through AssignViewTexture instead.
     ViewportBillboards Billboards;
@@ -150,6 +162,9 @@ private:
     bool     Realtime_  = true;   // the viewport boots live, like the reference
 
     bool     MarkersOn_ = true;
+    bool     AxisGuideShown_ = true;
+    float    AxisGuideLength_ = 34.0f;
+    float    AxisGuideThickness_ = 1.0f;
     ViewportOrbit Orbit_;   // the views menu, the gizmo and the wheel pose through this
     ViewportOrbit Home_    = {};   // the seated home; the projection rows restore it
     uint32_t SolidArcSelectMask_ = 1u;   // Body, Face, Edge, Vertex bits: HTML top-panel parity

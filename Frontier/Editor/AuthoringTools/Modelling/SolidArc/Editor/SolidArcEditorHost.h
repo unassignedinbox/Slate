@@ -32,6 +32,13 @@ public:
     [[nodiscard]] float    QueryViewHeight() const noexcept { return Viewport_.QueryViewHeight(); }
     [[nodiscard]] bool     QueryControlNotchSeated() const noexcept { return ShadeSeated_; }
     [[nodiscard]] const ViewportOrbit& QueryViewportOrbit() const noexcept { return Viewport_.QueryViewportOrbit(); }
+    void AssignAxisGuide(bool Shown, float Length, float Thickness) noexcept
+    {
+        Viewport_.AssignAxisGuide(Shown, Length, Thickness);
+    }
+    [[nodiscard]] bool QueryAxisGuideShown() const noexcept { return Viewport_.QueryAxisGuideShown(); }
+    [[nodiscard]] float QueryAxisGuideLength() const noexcept { return Viewport_.QueryAxisGuideLength(); }
+    [[nodiscard]] float QueryAxisGuideThickness() const noexcept { return Viewport_.QueryAxisGuideThickness(); }
 
 private:
     void ConstructLayout() noexcept;

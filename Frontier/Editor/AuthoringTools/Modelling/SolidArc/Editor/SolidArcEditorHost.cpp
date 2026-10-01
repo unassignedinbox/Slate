@@ -41,6 +41,7 @@ SolidArcEditorHost::SolidArcEditorHost() noexcept
     };
     Outliner_.AssignFilterCatalog(SolidArcFilters, static_cast<uint32_t>(sizeof(SolidArcFilters) / sizeof(SolidArcFilters[0])));
     Viewport_.AssignChrome(ViewportPanelChrome::SolidArcCad);
+    Viewport_.AssignAxisGuide(true, 34.0f, 1.0f);
     Outliner_.AssignReadout(&Readout_);
     Viewport_.AssignReadout(&Readout_);
     Inspector_.AssignReadout(&Readout_);

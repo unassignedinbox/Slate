@@ -1450,7 +1450,8 @@ void ViewportPanel::RecordView() noexcept
     float Gf[3], Gr[3], Gu[3];
     OrbitBasis(Orbit_.Yaw, Orbit_.Pitch, Gf, Gr, Gu);
     const ImVec2 OrbC(Max.x - 52.0f, Max.y - 52.0f);
-    constexpr float kArm = 20.0f;
+    const bool AxisGuide = Chrome_ != ViewportPanelChrome::SolidArcCad || AxisGuideShown_;
+    const float kArm = Chrome_ == ViewportPanelChrome::SolidArcCad ? AxisGuideLength_ : 20.0f;
     struct PadDot { float X; float Y; bool Front; };
     PadDot Pads[6];
     constexpr float kAxes[6][3] = { { 1.0f, 0.0f, 0.0f }, { -1.0f, 0.0f, 0.0f },
@@ -1465,9 +1466,10 @@ void ViewportPanel::RecordView() noexcept
         Pads[i].Y     = OrbC.y - Dy * kArm;
         Pads[i].Front = Toward > 0.0f;
     }
-    ImGui::SetCursorScreenPos(ImVec2(OrbC.x - 48.0f, OrbC.y - 48.0f));
-    ImGui::InvisibleButton("##orb", ImVec2(96.0f, 96.0f));
-    const bool OrbHover = ImGui::IsItemHovered();
+    const float OrbHitHalf = std::max(48.0f, kArm + 14.0f);
+    ImGui::SetCursorScreenPos(ImVec2(OrbC.x - OrbHitHalf, OrbC.y - OrbHitHalf));
+    ImGui::InvisibleButton("##orb", ImVec2(OrbHitHalf * 2.0f, OrbHitHalf * 2.0f));
+    const bool OrbHover = AxisGuide && ImGui::IsItemHovered();
     OrbHot_ = 0u;
     if (OrbHover || OrbHeld_)
     {
@@ -1523,25 +1525,35 @@ void ViewportPanel::RecordView() noexcept
     constexpr ImU32 kAxisTint[3] = { IM_COL32(239, 83, 80, 255),
                                      IM_COL32(105, 208, 109, 255),
                                      IM_COL32(91, 140, 255, 255) };
-    for (uint32_t a = 0u; a < 3u; ++a)
-        Draw->AddLine(ImVec2(Pads[2u * a].X, Pads[2u * a].Y),
-            ImVec2(Pads[2u * a + 1u].X, Pads[2u * a + 1u].Y),
-            ControlPanel::FadeTint(kAxisTint[a], 0.55f), 2.0f);
-    for (uint32_t i = 0u; i < 6u; ++i)
+    if (AxisGuide)
     {
-        const ImU32 Tint = ControlPanel::FadeTint(kAxisTint[i / 2u], Pads[i].Front ? 1.0f : 0.35f);
-        Draw->AddCircleFilled(ImVec2(Pads[i].X, Pads[i].Y), 7.0f, Tint);
-        if (OrbHot_ == i + 1u)
-            Draw->AddCircle(ImVec2(Pads[i].X, Pads[i].Y), 10.0f, IM_COL32(255, 255, 255, 200), 0, 1.6f);
+        for (uint32_t a = 0u; a < 3u; ++a)
+            Draw->AddLine(ImVec2(Pads[2u * a].X, Pads[2u * a].Y),
+                ImVec2(Pads[2u * a + 1u].X, Pads[2u * a + 1u].Y),
+                ControlPanel::FadeTint(kAxisTint[a], 0.75f),
+                Chrome_ == ViewportPanelChrome::SolidArcCad ? AxisGuideThickness_ : 2.0f);
+
+        // Project-Zero retains its six compass pads. SolidArc intentionally uses
+        // plain, thin XYZ lines: no circles and no transform-gizmo appearance.
+        if (Chrome_ != ViewportPanelChrome::SolidArcCad)
+        {
+            for (uint32_t i = 0u; i < 6u; ++i)
+            {
+                const ImU32 Tint = ControlPanel::FadeTint(kAxisTint[i / 2u], Pads[i].Front ? 1.0f : 0.35f);
+                Draw->AddCircleFilled(ImVec2(Pads[i].X, Pads[i].Y), 7.0f, Tint);
+                if (OrbHot_ == i + 1u)
+                    Draw->AddCircle(ImVec2(Pads[i].X, Pads[i].Y), 10.0f, IM_COL32(255, 255, 255, 200), 0, 1.6f);
+            }
+        }
+        const char* kAxisNames[3] = { "X", "Y", "Z" };
+        ImGui::PushFont(Small);
+        for (uint32_t a = 0u; a < 3u; ++a)
+        {
+            const ImU32 Tint = ControlPanel::FadeTint(kAxisTint[a], Pads[2u * a].Front ? 1.0f : 0.55f);
+            Draw->AddText(ImVec2(Pads[2u * a].X + 5.0f, Pads[2u * a].Y - 7.0f), Tint, kAxisNames[a]);
+        }
+        ImGui::PopFont();
     }
-    const char* kAxisNames[3] = { "X", "Y", "Z" };
-    ImGui::PushFont(Small);
-    for (uint32_t a = 0u; a < 3u; ++a)
-    {
-        const ImU32 Tint = ControlPanel::FadeTint(kAxisTint[a], Pads[2u * a].Front ? 1.0f : 0.4f);
-        Draw->AddText(ImVec2(Pads[2u * a].X + 9.0f, Pads[2u * a].Y - 7.0f), Tint, kAxisNames[a]);
-    }
-    ImGui::PopFont();
 
     const bool BillboardHover=MarkersOn_?Billboards.Draw(Draw,Min,Max,!NavCubeHover&&!OrbHover&&!OrbHeld_&&!CanvasDragging_):(Billboards.ClearFrame(),false);
 
