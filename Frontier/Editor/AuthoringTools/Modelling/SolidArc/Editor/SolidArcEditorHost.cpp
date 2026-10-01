@@ -80,10 +80,19 @@ void SolidArcEditorHost::ApplyTheme() noexcept
     Colours[ImGuiCol_Button]         = ImVec4(0.133f, 0.133f, 0.133f, 1.0f);
     Colours[ImGuiCol_ButtonHovered]  = ImVec4(0.180f, 0.180f, 0.180f, 1.0f);
     Colours[ImGuiCol_Header]         = ImVec4(0.165f, 0.165f, 0.165f, 1.0f);
-    Colours[ImGuiCol_Tab]            = ImVec4(0.149f, 0.149f, 0.173f, 1.0f);
-    Colours[ImGuiCol_TabHovered]     = ImVec4(0.196f, 0.196f, 0.227f, 1.0f);
-    Colours[ImGuiCol_TabActive]      = ImVec4(0.071f, 0.071f, 0.071f, 1.0f);
-    Colours[ImGuiCol_DockingPreview] = ImVec4(1.000f, 1.000f, 1.000f, 0.12f);
+    // Keep every docking-tab state aligned with EditorHost. Setting only the
+    // three legacy colours leaves newer ImGui docking states on the default
+    // blue, which is why SolidArc previously changed colour on focus/press.
+    Colours[ImGuiCol_Tab]                         = ImVec4(0.149f, 0.149f, 0.173f, 1.0f); // #26262c
+    Colours[ImGuiCol_TabHovered]                  = ImVec4(0.196f, 0.196f, 0.227f, 1.0f); // #32323a
+    Colours[ImGuiCol_TabActive]                   = ImVec4(0.071f, 0.071f, 0.071f, 1.0f); // #121212
+    Colours[ImGuiCol_TabUnfocused]                = ImVec4(0.149f, 0.149f, 0.173f, 1.0f);
+    Colours[ImGuiCol_TabUnfocusedActive]          = ImVec4(0.071f, 0.071f, 0.071f, 1.0f);
+    Colours[ImGuiCol_TabDimmed]                   = ImVec4(0.118f, 0.118f, 0.141f, 1.0f); // #1e1e24
+    Colours[ImGuiCol_TabDimmedSelected]           = ImVec4(0.071f, 0.071f, 0.071f, 1.0f);
+    Colours[ImGuiCol_TabSelectedOverline]         = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+    Colours[ImGuiCol_TabDimmedSelectedOverline]   = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+    Colours[ImGuiCol_DockingPreview]              = ImVec4(1.000f, 1.000f, 1.000f, 0.12f);
 }
 
 void SolidArcEditorHost::ConstructLayout() noexcept
@@ -111,6 +120,32 @@ void SolidArcEditorHost::ConstructLayout() noexcept
     CentreColumn_ = Centre;
     RightColumn_ = Right;
     ImGui::DockBuilderFinish(DockId);
+}
+
+void SolidArcEditorHost::RecordControlNotch() noexcept
+{
+    // The closed ControlCentreHost contour: 400 px wide, with each lower
+    // corner inset by 8%. Keeping this in the SolidArc host makes the real
+    // application and dependency-free CPU mirror render identical chrome.
+    ImGuiViewport* Main = ImGui::GetMainViewport();
+    const float Width = std::min(400.0f, Main->Size.x);
+    constexpr float Height = 35.0f;
+    const float Left = Main->Pos.x + (Main->Size.x - Width) * 0.5f;
+    const float Top = Main->Pos.y;
+    const float Inset = Width * 0.08f;
+    ImDrawList* Draw = ImGui::GetForegroundDrawList(Main);
+    const ImVec2 Contour[4] =
+    {
+        { Left, Top }, { Left + Width, Top },
+        { Left + Width - Inset, Top + Height }, { Left + Inset, Top + Height }
+    };
+    Draw->AddConvexPolyFilled(Contour, 4, IM_COL32(10, 10, 11, 255));
+    const char* Caption = "SolidArc";
+    const ImVec2 TextSize = ImGui::CalcTextSize(Caption);
+    Draw->AddText({ Left + (Width - TextSize.x) * 0.5f, Top + (Height - TextSize.y) * 0.5f - 2.0f },
+                  IM_COL32(255, 255, 255, 128), Caption);
+    ControlNotchX_ = Left + Width * 0.5f;
+    ControlNotchY_ = Top + Height * 0.5f;
 }
 
 void SolidArcEditorHost::Record(ConsoleHost& Host) noexcept
@@ -141,6 +176,9 @@ void SolidArcEditorHost::Record(ConsoleHost& Host) noexcept
         const ImGuiDockNodeFlags DockFlags =
             static_cast<ImGuiDockNodeFlags>(ImGuiDockNodeFlags_NoWindowMenuButton);
         ConstructLayout();
+        // Match Frontier's patched tab strip, including the round per-column
+        // add control rather than ImGui's stock scroll/drop-down affordance.
+        ImGui::DockNodeSetAddButton(LeftColumn_, true);
         ImGui::DockSpace(ImGui::GetID("SolidArcEditorDockSpace"), ImVec2(0.0f, 0.0f), DockFlags);
     }
     ImGui::End();
@@ -156,6 +194,9 @@ void SolidArcEditorHost::Record(ConsoleHost& Host) noexcept
     else
         BuildSolidArcInspectorSheet(Host, SolidArcOutlinerBinding{}, &PickedSheet_);
     Inspector_.Record(PickedRow, Picked, &PickedSheet_);
+    // Overlay last, just like Frontier's ControlCentreHost, so the pull is not
+    // clipped by or hidden behind a dock tab.
+    RecordControlNotch();
 
     ApplySolidArcOutlinerVisibility(Host, Rows_.data(), Bindings_.data(), RowCount_);
     if (Picked < RowCount_)

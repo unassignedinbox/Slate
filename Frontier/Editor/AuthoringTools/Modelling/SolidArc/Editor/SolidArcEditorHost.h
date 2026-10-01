@@ -27,9 +27,14 @@ public:
     [[nodiscard]] uint32_t QueryPickedFigureIdentity() const noexcept;
     [[nodiscard]] float    QueryViewWidth() const noexcept { return Viewport_.QueryViewWidth(); }
     [[nodiscard]] float    QueryViewHeight() const noexcept { return Viewport_.QueryViewHeight(); }
+    // Centre of the shared Frontier top control notch. The CPU proof and the
+    // interactive host both consume the same draw path and geometry.
+    [[nodiscard]] float QueryControlNotchX() const noexcept { return ControlNotchX_; }
+    [[nodiscard]] float QueryControlNotchY() const noexcept { return ControlNotchY_; }
 
 private:
     void ConstructLayout() noexcept;
+    void RecordControlNotch() noexcept;
 
     ControlPanel Controls_;
     OutlinerPanel Outliner_;
@@ -43,6 +48,8 @@ private:
     ImGuiID CentreColumn_ = 0u;
     ImGuiID RightColumn_  = 0u;
     bool LayoutSeated_    = false;
+    float ControlNotchX_  = -1.0f;
+    float ControlNotchY_  = -1.0f;
 
     std::vector<EditorInstance> Rows_{kMaxEditorInstances};
     std::vector<SolidArcOutlinerBinding> Bindings_{kMaxEditorInstances};
