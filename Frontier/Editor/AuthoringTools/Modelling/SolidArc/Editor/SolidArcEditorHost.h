@@ -31,6 +31,7 @@ public:
     [[nodiscard]] float    QueryViewWidth() const noexcept { return Viewport_.QueryViewWidth(); }
     [[nodiscard]] float    QueryViewHeight() const noexcept { return Viewport_.QueryViewHeight(); }
     [[nodiscard]] bool     QueryControlNotchSeated() const noexcept { return ShadeSeated_; }
+    [[nodiscard]] const ViewportOrbit& QueryViewportOrbit() const noexcept { return Viewport_.QueryViewportOrbit(); }
 
 private:
     void ConstructLayout() noexcept;
@@ -60,6 +61,7 @@ private:
     std::vector<EditorInstance> Rows_{kMaxEditorInstances};
     std::vector<SolidArcOutlinerBinding> Bindings_{kMaxEditorInstances};
     uint32_t RowCount_ = 0u;
+    uint32_t AppliedOrbitRevision_ = 0u;
     EditorReadout Readout_ = {};
     EditorSheet PickedSheet_ = {};
     RasterImage ViewImage_ = {};

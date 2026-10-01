@@ -1398,6 +1398,52 @@ void ViewportPanel::RecordView() noexcept
         ImGui::PopFont();
     }
 
+    // SolidArc's view cube is anchored to the viewport itself (not the window), so docking and DPI
+    // changes cannot drift it into the toolbar.  One hit target covers the three visible faces; the
+    // release sector selects the corresponding exact orthographic view.
+    bool NavCubeHover = false;
+    if (Chrome_ == ViewportPanelChrome::SolidArcCad)
+    {
+        const ImVec2 C(Min.x + 72.0f, Min.y + 53.0f);
+        const ImVec2 Top[4]   = { {C.x, C.y - 28.0f}, {C.x + 34.0f, C.y - 12.0f}, {C.x, C.y + 4.0f}, {C.x - 34.0f, C.y - 12.0f} };
+        const ImVec2 Front[4] = { {C.x - 34.0f, C.y - 12.0f}, {C.x, C.y + 4.0f}, {C.x, C.y + 42.0f}, {C.x - 34.0f, C.y + 25.0f} };
+        const ImVec2 Right[4] = { {C.x, C.y + 4.0f}, {C.x + 34.0f, C.y - 12.0f}, {C.x + 34.0f, C.y + 25.0f}, {C.x, C.y + 42.0f} };
+        ImGui::SetCursorScreenPos(ImVec2(C.x - 38.0f, C.y - 32.0f));
+        ImGui::InvisibleButton("##solidarc-navigation-cube", ImVec2(76.0f, 80.0f));
+        NavCubeHover = ImGui::IsItemHovered();
+        uint32_t HotFace = 0u;
+        if (NavCubeHover)
+        {
+            const ImVec2 M = ImGui::GetIO().MousePos;
+            HotFace = M.y < C.y + 1.0f ? 5u : (M.x < C.x ? 1u : 3u); // top, front, right
+            if (ImGui::IsMouseReleased(0))
+            {
+                Orbit_.Yaw = kSnaps[HotFace].Yaw;
+                Orbit_.Pitch = kSnaps[HotFace].Pitch;
+                Orbit_.ViewPoint = HotFace;
+                Orbit_.Ortho = true;
+                ++Orbit_.Revision;
+            }
+        }
+        const ImU32 FaceTop = HotFace == 5u ? IM_COL32(232, 232, 236, 255) : IM_COL32(196, 196, 202, 245);
+        const ImU32 FaceFront = HotFace == 1u ? IM_COL32(220, 220, 226, 255) : IM_COL32(174, 174, 182, 245);
+        const ImU32 FaceRight = HotFace == 3u ? IM_COL32(210, 210, 218, 255) : IM_COL32(154, 154, 164, 245);
+        Draw->AddConvexPolyFilled(Top, 4, FaceTop);
+        Draw->AddConvexPolyFilled(Front, 4, FaceFront);
+        Draw->AddConvexPolyFilled(Right, 4, FaceRight);
+        Draw->AddPolyline(Top, 4, IM_COL32(78, 78, 88, 255), ImDrawFlags_Closed, 1.2f);
+        Draw->AddPolyline(Front, 4, IM_COL32(78, 78, 88, 255), ImDrawFlags_Closed, 1.2f);
+        Draw->AddPolyline(Right, 4, IM_COL32(78, 78, 88, 255), ImDrawFlags_Closed, 1.2f);
+        ImGui::PushFont(Small);
+        const ImU32 CubeInk = IM_COL32(55, 55, 65, 255);
+        Draw->AddText(Small, 9.0f, ImVec2(C.x - 9.0f, C.y - 17.0f), CubeInk, "TOP");
+        Draw->AddText(Small, 8.0f, ImVec2(C.x - 31.0f, C.y + 12.0f), CubeInk, "FRONT");
+        Draw->AddText(Small, 8.0f, ImVec2(C.x + 5.0f, C.y + 12.0f), CubeInk, "RIGHT");
+        Draw->AddRectFilled(ImVec2(C.x - 31.0f, C.y + 50.0f), ImVec2(C.x + 31.0f, C.y + 72.0f), IM_COL32(215, 215, 222, 245), 3.0f);
+        Draw->AddText(ImVec2(C.x - 18.0f, C.y + 53.0f), CubeInk, "WCS  v");
+        ImGui::PopFont();
+    }
+
     // The orbit gizmo, Blender's compass: the three axes through the orbit's basis, pads on all six
     //    ends, letters on the positive three. A pad tap snaps its view, a drag orbits, and the wheel
     //    dollies over the view. Front pads read bright, back pads dim, and the hot pad rings.
@@ -1497,14 +1543,14 @@ void ViewportPanel::RecordView() noexcept
     }
     ImGui::PopFont();
 
-    const bool BillboardHover=MarkersOn_?Billboards.Draw(Draw,Min,Max,!OrbHover&&!OrbHeld_&&!CanvasDragging_):(Billboards.ClearFrame(),false);
+    const bool BillboardHover=MarkersOn_?Billboards.Draw(Draw,Min,Max,!NavCubeHover&&!OrbHover&&!OrbHeld_&&!CanvasDragging_):(Billboards.ClearFrame(),false);
 
     // CAD canvas interaction (SolidArc): clicking and dragging across the CAD viewport canvas
     //    orbits the camera, middle-drag or Shift+left-drag pans the target, and scroll wheel dollies.
     //    For standard game viewports, RMB look and WASD flight are handled by the FlyThrough camera.
     if (Chrome_ == ViewportPanelChrome::SolidArcCad)
     {
-        const bool CanvasHover = ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(Min, Max) && !OrbHover && !OrbHeld_ && !BillboardHover;
+        const bool CanvasHover = ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(Min, Max) && !NavCubeHover && !OrbHover && !OrbHeld_ && !BillboardHover;
         if (CanvasHover && (ImGui::IsMouseClicked(0) || ImGui::IsMouseClicked(1) || ImGui::IsMouseClicked(2)))
         {
             CanvasDragging_ = true;
@@ -1561,7 +1607,7 @@ void ViewportPanel::RecordView() noexcept
         const ImVec2 Mouse   = ImGui::GetIO().MousePos;
         const float  Across  = Max.x - Min.x;
         const float  Down    = Max.y - Min.y;
-        const bool   OverView = ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(Min, Max) && !OrbHover && !OrbHeld_ && !BillboardHover;
+        const bool   OverView = ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(Min, Max) && !NavCubeHover && !OrbHover && !OrbHeld_ && !BillboardHover;
         if (OverView && Across > 1.0f && Down > 1.0f)
         {
             AimLive_ = true;

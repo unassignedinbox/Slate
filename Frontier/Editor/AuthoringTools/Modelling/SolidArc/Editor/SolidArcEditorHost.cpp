@@ -10,6 +10,7 @@
 #include <imgui_internal.h>
 
 #include <algorithm>
+#include <cstdio>
 
 namespace Frontier {
 
@@ -162,6 +163,28 @@ void SolidArcEditorHost::Record(ConsoleHost& Host) noexcept
         ShadeOpen_ = Shade_.IsOpen();
     }
 #endif
+    // Apply viewport navigation on the following frame.  This makes the cube,
+    // compass and Views menu drive SolidArc's real camera rather than merely
+    // changing an editor-side ornament.
+    const ViewportOrbit& Orbit = Viewport_.QueryViewportOrbit();
+    if (Orbit.Revision != AppliedOrbitRevision_)
+    {
+        static const char* Snaps[] = { nullptr, "view front", "view back", "view right",
+                                       "view left", "view top", "view bottom" };
+        if (Orbit.ViewPoint < 7u && Snaps[Orbit.ViewPoint] != nullptr)
+            Host.Execute(Snaps[Orbit.ViewPoint]);
+        else
+        {
+            char Command[96];
+            std::snprintf(Command, sizeof(Command), "view orbit %.4f %.4f",
+                          static_cast<double>(Orbit.Yaw * 57.2957795f),
+                          static_cast<double>(Orbit.Pitch * 57.2957795f));
+            Host.Execute(Command);
+        }
+        if (Orbit.Ortho)
+            Host.Execute("view ortho");
+        AppliedOrbitRevision_ = Orbit.Revision;
+    }
     Host.Render();
     ViewImage_ = Host.Raster().Readback();
     RowCount_ = BuildSolidArcOutliner(Host, Rows_.data(), Bindings_.data(), kMaxEditorInstances, &Readout_);

@@ -25,8 +25,8 @@ static_assert(sizeof(ImDrawIdx) == 2u, "the proof rasteriser walks 16-bit ImGui 
 
 namespace {
 
-constexpr int kWidth  = 1280;
-constexpr int kHeight = 720;
+constexpr int kWidth  = 1600;
+constexpr int kHeight = 900;
 constexpr unsigned char kGround[3] = { 5u, 5u, 5u };
 
 struct Rgba
@@ -188,7 +188,7 @@ int main()
     int GlyphSheetWidth = 0, GlyphSheetHeight = 0;
     IO.Fonts->GetTexDataAsRGBA32(&GlyphSheet, &GlyphSheetWidth, &GlyphSheetHeight);
 
-    Frontier::ConsoleHost Host("/tmp/solidarc-editor-proof", 520, 340);
+    Frontier::ConsoleHost Host("/tmp/solidarc-editor-proof", 800, 500);
     if (!Run(Host, "box (-1.2,-0.5,0) (1.2,0.5,0.8) --name=Body01")) return 2;
     if (!Run(Host, "sphere (0.0,0.0,1.15) 0.35 --sheet --name=CanopySheet")) return 3;
     if (!Run(Host, "line (-1.4,-0.7,0) (1.4,-0.7,0) --name=SketchAxis")) return 4;
@@ -265,6 +265,17 @@ int main()
     const char* Sheet = "Exhibits/Gallery/Editor/EditorProof_SolidArc.png";
     if (const int Write = WriteSheet(Sheet, 8); Write != 0)
         return Write;
+
+    // The cube is functional, not decoration: the top face seats the exact
+    // canonical top/orthographic orbit and the following frame applies it to
+    // SolidArc's real ConsoleHost camera.
+    Click(322.0f, 100.0f);
+    Rest();
+    if (Editor.QueryViewportOrbit().ViewPoint != 5u || !Editor.QueryViewportOrbit().Ortho)
+    {
+        std::fprintf(stderr, "[SolidArcEditorProof] [FAIL] navigation cube top face did not select Top Ortho\n");
+        return 9;
+    }
 
     int Bright = 0;
     for (size_t I = 0; I < Pixels.size(); I += 3u)
