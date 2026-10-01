@@ -4,6 +4,7 @@
 `Engine/ContentInterchange/WheelRimStructure.{h,cpp}`     — engine seam: TriangleIndex soup, OpenPBR materials, glTF export
 `Scratchpad/WheelRimGeneratorTest.cpp`                    — bring-up harness: synthesise every preset, audit, dump OBJ
 `Scratchpad/RimPreviewRaster.py`                          — software preview rasteriser for those OBJs (diagnostics only)
+`Tools/WheelRimSketcher/`                                — browser twin: live three.js viewer, material + colour panel, OBJ/glTF export
 
 Rim and spokes only — no tyre is ever generated. Lug nuts and the centre cap are separate closed shells.
 
@@ -113,6 +114,11 @@ Projects/Project-Zero/bin/ProjectZero --scene rim --rim forged|split|weave|turbi
 g++ -std=c++20 -O2 Scratchpad/WheelRimGeneratorTest.cpp Engine/ContentInterchange/WheelRimSpecification.cpp -o /tmp/rimtest
 /tmp/rimtest /tmp/rims            # add any second argument for a fast low-resolution pass
 python3 Scratchpad/RimPreviewRaster.py /tmp/rims/ForgedFiveSpoke.obj out.png --view=three-quarter
+```
+
+```bash
+# browser tool (same generator, live materials and colour)
+python3 -m http.server 8080 --bind 0.0.0.0 --directory Tools/WheelRimSketcher
 ```
 
 Cost at the defaults (512 × 110 lattice): ~0.3 M triangles and ~0.6 s single-threaded per wheel. Drop
