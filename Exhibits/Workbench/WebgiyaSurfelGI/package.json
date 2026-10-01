@@ -1,0 +1,30 @@
+{
+  "name": "slate-webgiya-surfel-gi",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build && node ./FinalizeBuild.mjs",
+    "preview": "vite preview --host 0.0.0.0",
+    "lint": "eslint .",
+    "format": "prettier -w .",
+    "format:check": "prettier -c ."
+  },
+  "devDependencies": {
+    "@types/three": "^0.182.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^9.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "~5.8.3",
+    "vite": "^7.1.0"
+  },
+  "dependencies": {
+    "lil-gui": "^0.20.0",
+    "three": "^0.182.0",
+    "three-mesh-bvh": "^0.9.2",
+    "vite-plugin-mkcert": "^1.17.9"
+  }
+}
