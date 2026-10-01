@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="theme-color" content="#10100d">
     <title>Slate — EEVEE Next WebGL Study</title>
-    <link rel="stylesheet" href="EEVEENext.css?revision=1">
+    <link rel="stylesheet" href="EEVEENext.css?revision=2">
 </head>
 <body>
 <main>
@@ -61,6 +61,6 @@
     <section class="Disclosure"><h2>Scope and fidelity</h2><p>This is an architectural WebGL2 reconstruction, not Blender source compiled for the browser. WebGL2 cannot expose EEVEE’s compute-driven sparse virtual-page allocator, so the exhibit preserves its important behaviour with a fixed clip-atlas analogue. It does preserve the baked/dynamic boundary: volume probes are static, direct lights and shadows are live, screen traces see only camera-visible information, and probe fallback fills misses.</p></section>
     <footer><span>Exact Slate ShaderBall geometry · offline C++ probe baker · no hidden path tracer</span><span>Blender and EEVEE are trademarks of their respective owners; this is an independent technical study</span></footer>
 </main>
-<script type="module" src="EEVEENext.js?revision=1"></script>
+<script type="module" src="EEVEENext.js?revision=2"></script>
 </body>
 </html>
