@@ -314,7 +314,7 @@ input[type="range"] {
 
 .ButtonGroup {
     display: flex;
-    grid-column: span 3;
+    grid-column: 1 / -1;
     align-items: center;
     justify-content: flex-end;
     gap: 8px;

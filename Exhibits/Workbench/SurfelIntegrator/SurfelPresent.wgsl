@@ -111,7 +111,7 @@ fn GatherIrradiance(Position: vec3f, Normal: vec3f) -> vec3f
                     let Record = PublishedField.Records[RecordNumber];
                     let Delta = Position - Record.PositionRadius.xyz;
                     let Distance = length(Delta);
-                    let Radius = Record.PositionRadius.w;
+                    let Radius = Record.PositionRadius.w * Presentation.CameraPosition.w;
                     let NormalWeight = dot(Normal, Record.NormalArea.xyz);
                     let SourcePlaneDistance = abs(dot(Delta, Record.NormalArea.xyz));
                     let ReceiverPlaneDistance = abs(dot(Delta, Normal));

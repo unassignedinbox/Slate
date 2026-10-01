@@ -64,9 +64,9 @@
                 <label class="SelectControl">
                     <span><b>Reconstruction</b><small>Compare soft averaging with sharper interpolation</small></span>
                     <select id="ReconstructionMethod">
-                        <option value="0">Original soft</option>
+                        <option value="0" selected>Original soft · recommended</option>
                         <option value="1">Compact bilateral</option>
-                        <option value="2" selected>Gradient MLS</option>
+                        <option value="2">Gradient MLS</option>
                     </select>
                 </label>
                 <label class="SwitchControl">
@@ -80,9 +80,17 @@
                     <span><b>Leak guard</b><small>Two-sided tangent-plane rejection</small></span>
                 </label>
                 <label class="SwitchControl">
-                    <input id="AdaptiveTemporal" type="checkbox" checked>
+                    <input id="AdaptiveTemporal" type="checkbox">
                     <span class="SwitchTrack"><span></span></span>
-                    <span><b>Adaptive temporal</b><small>Short mean and variance guide the history weight</small></span>
+                    <span><b>Adaptive temporal</b><small>More responsive, but less stable at one ray</small></span>
+                </label>
+                <label class="RangeControl">
+                    <span><b>Surfel density</b><output id="DensityOutput">100% · 1,328</output></span>
+                    <input id="SurfelDensity" type="range" min="50" max="200" value="100" step="25">
+                </label>
+                <label class="RangeControl">
+                    <span><b>Support size</b><output id="SizeOutput">1.00×</output></span>
+                    <input id="SurfelSize" type="range" min="50" max="200" value="100" step="5">
                 </label>
                 <label class="RangeControl">
                     <span><b>GI gain</b><output id="GainOutput">1.00×</output></span>
@@ -90,7 +98,7 @@
                 </label>
                 <div class="ButtonGroup">
                     <button id="OriginalPreset" class="Secondary" type="button">Original preset</button>
-                    <button id="ResearchPreset" type="button">Research preset</button>
+                    <button id="ResearchPreset" type="button">Recommended preset</button>
                     <button id="ConvergenceToggle" class="Secondary" type="button">Pause convergence</button>
                     <button id="ConvergenceRestart" class="Secondary" type="button">Restart</button>
                 </div>
@@ -136,9 +144,9 @@
 
         <footer>
             <span>Full ShaderBall topology · 67,832 triangles · four shared placements</span>
-            <span>Progressive cosine rays · software BVH · compact MLS gather · variance-aware temporal integration</span>
+            <span>Progressive cosine rays · software BVH · switchable soft/MLS gather · stable temporal integration</span>
         </footer>
     </main>
-    <script type="module" src="SurfelIntegrator.js?revision=5"></script>
+    <script type="module" src="SurfelIntegrator.js?revision=6"></script>
 </body>
 </html>

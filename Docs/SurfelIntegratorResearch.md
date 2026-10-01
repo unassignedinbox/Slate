@@ -1,6 +1,6 @@
 # Surfel Integrator research modes
 
-The browser exhibit in `Exhibits/Workbench/SurfelIntegrator/` keeps the original 1,328-record count and exposes both the original estimator and a set of research-backed alternatives. The adaptive temporal experiment adds one `vec4` of statistics to each allocated record, but both presets use the same storage and dispatch sizes. The **Original preset** and **Research preset** buttons switch the entire comparison in one click; each individual method can also be changed independently.
+The browser exhibit in `Exhibits/Workbench/SurfelIntegrator/` exposes both the original estimator and a set of research-backed alternatives. At 100% density it uses the original 1,328-record count; the density control can vary this from approximately half to twice that count. The adaptive temporal experiment adds one `vec4` of statistics to each allocated record, but every mode uses the same preallocated maximum storage. The **Original preset** and **Recommended preset** buttons switch the algorithmic comparison in one click; density and support size stay fixed so the comparison remains fair.
 
 ## Why the original image is soft and uneven
 
@@ -15,7 +15,13 @@ This diagnosis is consistent with surface-splatting reconstruction, irradiance-c
 - **Area stratified** is the original mode. One candidate per output record is selected through the triangle-area CDF.
 - **Blue-noise best candidate** creates eight area-proportional candidates per output record, then selects a fixed-size maximin subset. Position and normal separation are both part of the selection metric. Its support radius is adapted from local nearest-neighbour spacing.
 
-The two modes contain exactly the same number of records and use identically sized GPU buffers, making the comparison budget-neutral. The explicitly covered ground remains a 19 by 16 jittered lattice in both modes.
+The two modes contain exactly the same number of records at a given density and use identically sized GPU buffers, making the comparison budget-neutral. At 100%, the explicitly covered ground is a 19 by 16 jittered lattice in both modes.
+
+### Density and support size
+
+**Surfel density** changes the actual number of records. Ball and ground counts scale together from about 50% to 200%. Base support radii and the spatial-hash cell size scale inversely with the square root of density, so increasing density adds spatial detail instead of merely adding more overlapping blur.
+
+**Support size** multiplies each record's reconstruction radius without changing the count. The spatial hash is rebuilt at the matching scale, avoiding missing-neighbour artifacts. Smaller support preserves detail but can reveal holes and noise; larger support hides holes and flicker but blurs irradiance gradients and increases the chance of cross-surface leakage.
 
 ### Ray sequence
 
@@ -30,7 +36,7 @@ This is a lightweight WebGPU adaptation of the well-distributed-prefix principle
 - **Compact bilateral** uses a compact Wendland kernel with stronger normal agreement and tangent-plane checks. It reduces the long blur tail while retaining a nearest compatible fallback for small coverage gaps.
 - **Gradient MLS** uses the same compact neighbourhood and fits a first-order irradiance model in the receiver's tangent plane. The value at the query point is obtained from a regularized 3 by 3 moving-least-squares system and clamped to the neighbourhood range to prevent ringing.
 
-The MLS mode is the practical analogue of first-order irradiance-cache reconstruction: locally linear irradiance variation can survive interpolation instead of being collapsed to a constant average.
+The MLS mode is the practical analogue of first-order irradiance-cache reconstruction: locally linear irradiance variation can survive interpolation instead of being collapsed to a constant average. In this particular one-ray, low-density field, the original soft mode is the recommended default: its bias suppresses residual record variance and coverage error better than the higher-order fit. MLS becomes more compelling after density and per-record sample quality are high enough that interpolation error dominates sampling error.
 
 ### Leak rejection
 
@@ -38,7 +44,9 @@ The MLS mode is the practical analogue of first-order irradiance-cache reconstru
 
 ### Temporal integration
 
-The original path uses the capped running mean. **Adaptive temporal** additionally stores a short-term colour mean and luminance variance per record. Disagreement between the short and long means raises the update weight only when that disagreement is large relative to measured noise. This follows the dual-timescale, variance-aware idea behind the multi-scale mean estimator without presenting this compact implementation as the complete published MSME algorithm.
+The stable path uses a running mean whose history now grows to 96 updates instead of stopping at 32, reducing the permanent one-ray update weight from about 3.1% to about 1%. **Adaptive temporal** additionally stores a short-term colour mean and luminance variance per record. Disagreement between the short and long means raises the update weight only when that disagreement is large relative to measured noise. This follows the dual-timescale, variance-aware idea behind the multi-scale mean estimator without presenting this compact implementation as the complete published MSME algorithm.
+
+Progressive directions improve the distribution of the accumulated samples; they do not make each individual one-ray measurement temporally continuous. For this static exhibit, the recommended preset therefore keeps progressive rays but disables adaptive temporal integration. Pausing after convergence removes update flicker entirely.
 
 ## Primary references
 
@@ -49,6 +57,10 @@ The original path uses the capped running mean. **Adaptive temporal** additional
 - Majercik et al., [Dynamic Diffuse Global Illumination with Ray-Traced Irradiance Fields](https://www.jcgt.org/published/0008/02/01/paper-lowres.pdf): visibility-weighted interpolation and depth moments for leak suppression.
 - Wang et al., [SurfelPlus](http://wangruipeng.com/SurfelPlus/): adaptive radius and allocation, shared local radiance, variance-aware integration, and coverage evaluation.
 - Triglav, [Surfel-based global illumination on the web](https://juretriglav.si/surfel-based-global-illumination-on-the-web/): a current WebGPU implementation using dynamic coverage, spatial hashes, temporal estimation, and radial depth moments.
+
+## Recommended configuration for this exhibit
+
+At one ray per update, use **blue-noise placement**, **original soft reconstruction**, **progressive rays**, **leak guard on**, and **adaptive temporal off**. A useful quality-oriented starting point is 150% density with support near 0.9 to 1.1. Increase support only if holes or uneven patches remain; increase density when performance allows and sharper spatial detail is the goal.
 
 ## Remaining high-value work
 

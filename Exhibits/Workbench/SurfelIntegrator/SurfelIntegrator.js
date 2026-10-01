@@ -35,6 +35,10 @@ const ReconstructionMethod = document.getElementById("ReconstructionMethod");
 const ProgressiveRays = document.getElementById("ProgressiveRays");
 const LeakGuard = document.getElementById("LeakGuard");
 const AdaptiveTemporal = document.getElementById("AdaptiveTemporal");
+const SurfelDensity = document.getElementById("SurfelDensity");
+const DensityOutput = document.getElementById("DensityOutput");
+const SurfelSize = document.getElementById("SurfelSize");
+const SizeOutput = document.getElementById("SizeOutput");
 const IndirectGain = document.getElementById("IndirectGain");
 const GainOutput = document.getElementById("GainOutput");
 const OriginalPreset = document.getElementById("OriginalPreset");
@@ -53,6 +57,20 @@ function Align(NumberValue, Alignment)
 function Clamp(NumberValue, Minimum, Maximum)
 {
     return Math.min(Maximum, Math.max(Minimum, NumberValue));
+}
+
+function FieldLayout(DensityScale)
+{
+    const RootScale = Math.sqrt(DensityScale);
+    const BallRecords = Math.max(64, Math.round(BallRecordCount * DensityScale));
+    const GroundColumns = Math.max(8, Math.round(19 * RootScale));
+    const GroundRows = Math.max(7, Math.round(16 * RootScale));
+    return {
+        BallRecords,
+        GroundColumns,
+        GroundRows,
+        RecordCount: BallRecords * PlacementPositions.length + GroundColumns * GroundRows,
+    };
 }
 
 function Add(Alpha, Beta)
@@ -275,8 +293,26 @@ function LocateTriangle(CumulativeArea, Target)
     return Lower;
 }
 
-function ConstructField(Geometry, UseBlueNoise)
+function ConstructFieldLinks(Field, RecordCount, CellSize)
 {
+    const Links = new Int32Array(HashCount + RecordCount);
+    for (let RecordNumber = 0; RecordNumber < RecordCount; ++RecordNumber)
+    {
+        const Address = RecordNumber * 20;
+        const CellX = Math.floor(Field[Address] / CellSize);
+        const CellY = Math.floor(Field[Address + 1] / CellSize);
+        const CellZ = Math.floor(Field[Address + 2] / CellSize);
+        const CellNumber = HashCell(CellX, CellY, CellZ);
+        Links[HashCount + RecordNumber] = Links[CellNumber];
+        Links[CellNumber] = RecordNumber + 1;
+    }
+    return Links;
+}
+
+function ConstructField(Geometry, UseBlueNoise, DensityScale = 1.0)
+{
+    const Layout = FieldLayout(DensityScale);
+    const DensityRadiusScale = 1.0 / Math.sqrt(DensityScale);
     const TriangleCount = Geometry.IndexCount / 3;
     const CumulativeArea = new Float64Array(TriangleCount);
     let TotalArea = 0.0;
@@ -315,7 +351,7 @@ function ConstructField(Geometry, UseBlueNoise)
             ? (SampleNumber * 0.6180339887498948 + PlacementNumber * 0.127) % 1.0
             : ((SampleNumber + 0.5) * 0.6180339887498948) % 1.0;
         const Second = LegacySequence
-            ? RadicalInverse(SampleNumber + 1 + PlacementNumber * BallRecordCount)
+            ? RadicalInverse(SampleNumber + 1 + PlacementNumber * Layout.BallRecords)
             : RadicalInverse(SampleNumber + 1);
         const Root = Math.sqrt(First);
         const Weights = [1.0 - Root, Root * (1.0 - Second), Root * Second];
@@ -332,10 +368,10 @@ function ConstructField(Geometry, UseBlueNoise)
                 + Geometry.Vertices[BetaNumber + 4 + Axis] * Weights[1]
                 + Geometry.Vertices[GammaNumber + 4 + Axis] * Weights[2];
         }
-        return { Position, Normal: Normalise(Normal), Radius: 0.205 };
+        return { Position, Normal: Normalise(Normal), Radius: 0.205 * DensityRadiusScale };
     };
 
-    const CandidateCount = UseBlueNoise ? BallRecordCount * 8 : BallRecordCount;
+    const CandidateCount = UseBlueNoise ? Layout.BallRecords * 8 : Layout.BallRecords;
     const Candidates = Array.from(
         { length: CandidateCount },
         (_, CandidateNumber) => SampleSurface(CandidateNumber, CandidateCount),
@@ -348,7 +384,7 @@ function ConstructField(Geometry, UseBlueNoise)
         const ClosestDistance = new Float64Array(CandidateCount);
         ClosestDistance.fill(Number.POSITIVE_INFINITY);
         let NextCandidate = Math.floor(CandidateCount * 0.38196601125);
-        for (let RecordNumber = 0; RecordNumber < BallRecordCount; ++RecordNumber)
+        for (let RecordNumber = 0; RecordNumber < Layout.BallRecords; ++RecordNumber)
         {
             const Selection = Candidates[NextCandidate];
             BallSamples.push(Selection);
@@ -383,7 +419,11 @@ function ConstructField(Geometry, UseBlueNoise)
                 const Delta = Subtract(BallSamples[SampleNumber].Position, BallSamples[OtherNumber].Position);
                 NearestDistance = Math.min(NearestDistance, Math.hypot(...Delta));
             }
-            BallSamples[SampleNumber].Radius = Clamp(NearestDistance * 1.7, 0.17, 0.29);
+            BallSamples[SampleNumber].Radius = Clamp(
+                NearestDistance * 1.7,
+                0.17 * DensityRadiusScale,
+                0.29 * DensityRadiusScale,
+            );
         }
     }
 
@@ -406,8 +446,8 @@ function ConstructField(Geometry, UseBlueNoise)
         const PlacementSamples = UseBlueNoise
             ? BallSamples
             : Array.from(
-                { length: BallRecordCount },
-                (_, SampleNumber) => SampleSurface(SampleNumber, BallRecordCount, PlacementNumber, true),
+                { length: Layout.BallRecords },
+                (_, SampleNumber) => SampleSurface(SampleNumber, Layout.BallRecords, PlacementNumber, true),
             );
         for (const Sample of PlacementSamples)
         {
@@ -415,15 +455,15 @@ function ConstructField(Geometry, UseBlueNoise)
                 Add(Sample.Position, Translation),
                 Sample.Radius,
                 Sample.Normal,
-                TotalArea / BallRecordCount,
+                TotalArea / Layout.BallRecords,
                 Albedo,
                 PlacementNumber,
             );
         }
     }
 
-    const GroundColumns = 19;
-    const GroundRows = 16;
+    const GroundColumns = Layout.GroundColumns;
+    const GroundRows = Layout.GroundRows;
     const GroundWidth = 7.42;
     const GroundDepth = 6.32;
     const GroundSpacingX = GroundWidth / GroundColumns;
@@ -443,7 +483,7 @@ function ConstructField(Geometry, UseBlueNoise)
             ];
             Append(
                 Position,
-                UseBlueNoise ? 0.50 : 0.555,
+                (UseBlueNoise ? 0.50 : 0.555) * DensityRadiusScale,
                 [0.0, 0.0, 1.0],
                 GroundSpacingX * GroundSpacingY,
                 [0.48, 0.50, 0.52],
@@ -454,25 +494,15 @@ function ConstructField(Geometry, UseBlueNoise)
 
     const Field = new Float32Array(Records);
     const RecordCount = Field.length / 20;
-    const Links = new Int32Array(HashCount + RecordCount);
-    for (let RecordNumber = 0; RecordNumber < RecordCount; ++RecordNumber)
-    {
-        const Address = RecordNumber * 20;
-        const CellX = Math.floor(Field[Address] / FieldCellSize);
-        const CellY = Math.floor(Field[Address + 1] / FieldCellSize);
-        const CellZ = Math.floor(Field[Address + 2] / FieldCellSize);
-        const CellNumber = HashCell(CellX, CellY, CellZ);
-        Links[HashCount + RecordNumber] = Links[CellNumber];
-        Links[CellNumber] = RecordNumber + 1;
-    }
+    const Links = ConstructFieldLinks(Field, RecordCount, FieldCellSize * DensityRadiusScale);
     return { Field, Links, RecordCount, TotalArea };
 }
 
-function ConstructExtent(Device, Label, Content, Usage)
+function ConstructExtent(Device, Label, Content, Usage, MinimumByteCount = 0)
 {
     const Extent = Device.createBuffer({
         label: Label,
-        size: Align(Content.byteLength, 4),
+        size: Align(Math.max(Content.byteLength, MinimumByteCount), 4),
         usage: Usage,
         mappedAtCreation: true,
     });
@@ -570,10 +600,10 @@ async function BringRenderer()
     ] = await Promise.all([
         LoadBinary(GeometryAddress),
         LoadBinary(HierarchyAddress),
-        LoadText("SurfelIntegrate.wgsl?revision=5"),
-        LoadText("SurfelRaster.wgsl?revision=5"),
-        LoadText("SurfelPresent.wgsl?revision=5"),
-        LoadText("SurfelOverlay.wgsl?revision=5"),
+        LoadText("SurfelIntegrate.wgsl?revision=6"),
+        LoadText("SurfelRaster.wgsl?revision=6"),
+        LoadText("SurfelPresent.wgsl?revision=6"),
+        LoadText("SurfelOverlay.wgsl?revision=6"),
     ]);
 
     const Geometry = DecodeGeometry(GeometryBinary);
@@ -582,11 +612,21 @@ async function BringRenderer()
     {
         throw new Error("ShaderBall geometry and hierarchy describe different triangle counts");
     }
-    const FieldVariants = {
-        Stratified: ConstructField(Geometry, false),
-        BlueNoise: ConstructField(Geometry, true),
+    const FieldCache = new Map();
+    const FieldKey = (Placement, DensityScale) => `${Placement}:${DensityScale.toFixed(2)}`;
+    const AcquireField = (Placement, DensityScale) =>
+    {
+        const Key = FieldKey(Placement, DensityScale);
+        if (!FieldCache.has(Key))
+        {
+            FieldCache.set(Key, ConstructField(Geometry, Placement === "BlueNoise", DensityScale));
+        }
+        return FieldCache.get(Key);
     };
-    let FieldContent = FieldVariants[PlacementMethod.value];
+    const InitialDensityScale = Number(SurfelDensity.value) * 0.01;
+    let ActiveDensityScale = InitialDensityScale;
+    let ActiveSupportScale = Number(SurfelSize.value) * 0.01;
+    let FieldContent = AcquireField(PlacementMethod.value, ActiveDensityScale);
     SurfelMetric.textContent = FieldContent.RecordCount.toLocaleString();
 
     const IntegrationShader = Device.createShaderModule({ label: "Surfel integration", code: IntegrationSource });
@@ -624,17 +664,20 @@ async function BringRenderer()
     const GroundVertexExtent = ConstructExtent(Device, "Ground vertices", Ground.Vertices, GPUBufferUsage.VERTEX);
     const GroundIndexExtent = ConstructExtent(Device, "Ground indices", Ground.Indices, GPUBufferUsage.INDEX);
     const GroundInstanceExtent = ConstructExtent(Device, "Ground placement", Ground.Instance, GPUBufferUsage.VERTEX);
+    const MaximumRecordCount = FieldLayout(Number(SurfelDensity.max) * 0.01).RecordCount;
     const LinkExtent = ConstructExtent(
         Device,
         "Surfel cell links",
         FieldContent.Links,
         GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        (HashCount + MaximumRecordCount) * Int32Array.BYTES_PER_ELEMENT,
     );
     const FieldExtents = [0, 1].map((NumberValue) => ConstructExtent(
         Device,
         `Surfel field ${NumberValue}`,
         FieldContent.Field,
         GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        MaximumRecordCount * 20 * Float32Array.BYTES_PER_ELEMENT,
     ));
 
     const IntegrationUniformExtent = ConstructUniformExtent(Device, "Integration settings", 160);
@@ -855,7 +898,7 @@ async function BringRenderer()
         const Content = new Float32Array(40);
         Content.set([...SunDirection, IntegrationStep], 0);
         Content.set([5.5, 5.15, 4.7, Number(RayCountControl.value)], 4);
-        Content.set([0.22, 0.29, 0.41, 32.0], 8);
+        Content.set([0.22, 0.29, 0.41, 96.0], 8);
         Content.set([0.055, 0.10, 0.22, 8.0], 12);
         Content.set([
             FieldContent.RecordCount,
@@ -863,15 +906,17 @@ async function BringRenderer()
             Geometry.IndexCount,
             Hierarchy.NodeCount,
         ], 16);
+        const ActiveCellSize = FieldCellSize * ActiveSupportScale / Math.sqrt(ActiveDensityScale);
         Content.set([
-            FieldCellSize,
+            ActiveCellSize,
             ProgressiveRays.checked ? 1.0 : 0.0,
             AdaptiveTemporal.checked ? 1.0 : 0.0,
             LeakGuard.checked ? 1.0 : 0.0,
         ], 20);
         for (let PlacementNumber = 0; PlacementNumber < 4; ++PlacementNumber)
         {
-            Content.set([...PlacementPositions[PlacementNumber], 0.0], 24 + PlacementNumber * 4);
+            const SupportScale = PlacementNumber === 0 ? ActiveSupportScale : 0.0;
+            Content.set([...PlacementPositions[PlacementNumber], SupportScale], 24 + PlacementNumber * 4);
         }
         Device.queue.writeBuffer(IntegrationUniformExtent, 0, Content);
     }
@@ -880,7 +925,7 @@ async function BringRenderer()
     {
         const Content = new Float32Array(52);
         Content.set(LightProjection, 0);
-        Content.set([...Camera.Eye, 0.0], 16);
+        Content.set([...Camera.Eye, ActiveSupportScale], 16);
         Content.set([...Camera.Forward, Math.tan(0.82 * 0.5)], 20);
         Content.set([...Camera.Right, PresentationWidth / PresentationHeight], 24);
         Content.set([...Camera.Up, Number(IndirectGain.value)], 28);
@@ -888,7 +933,8 @@ async function BringRenderer()
         Content.set([5.5, 5.15, 4.7, IndirectVisibility.checked ? 1.0 : 0.0], 36);
         Content.set([0.22, 0.29, 0.41, Number(ReconstructionMethod.value)], 40);
         Content.set([0.055, 0.10, 0.22, LeakGuard.checked ? 1.0 : 0.0], 44);
-        Content.set([FieldContent.RecordCount, HashCount, FieldCellSize, 1.08], 48);
+        const ActiveCellSize = FieldCellSize * ActiveSupportScale / Math.sqrt(ActiveDensityScale);
+        Content.set([FieldContent.RecordCount, HashCount, ActiveCellSize, 1.08], 48);
         Device.queue.writeBuffer(PresentationUniformExtent, 0, Content);
     }
 
@@ -896,7 +942,7 @@ async function BringRenderer()
     {
         const Content = new Float32Array(20);
         Content.set(CameraProjection, 0);
-        Content.set([0.34, 1.15, FieldContent.RecordCount, 0.0], 16);
+        Content.set([0.34 * ActiveSupportScale, 1.15, FieldContent.RecordCount, 0.0], 16);
         Device.queue.writeBuffer(OverlayUniformExtent, 0, Content);
     }
 
@@ -1055,7 +1101,9 @@ async function BringRenderer()
 
     function RestartConvergence()
     {
-        Device.queue.writeBuffer(LinkExtent, 0, FieldContent.Links);
+        const ActiveCellSize = FieldCellSize * ActiveSupportScale / Math.sqrt(ActiveDensityScale);
+        const ActiveLinks = ConstructFieldLinks(FieldContent.Field, FieldContent.RecordCount, ActiveCellSize);
+        Device.queue.writeBuffer(LinkExtent, 0, ActiveLinks);
         Device.queue.writeBuffer(FieldExtents[0], 0, FieldContent.Field);
         Device.queue.writeBuffer(FieldExtents[1], 0, FieldContent.Field);
         PublishedNumber = 0;
@@ -1063,16 +1111,34 @@ async function BringRenderer()
         AccumulationMetric.textContent = "0";
     }
 
-    function ApplyPreset(UseResearchModes)
+    let FieldRequest = 0;
+    function SelectField()
+    {
+        const Request = ++FieldRequest;
+        const RequestedPlacement = PlacementMethod.value;
+        const RequestedDensity = Number(SurfelDensity.value) * 0.01;
+        StatusText.textContent = "Redistributing world-space surfels";
+        requestAnimationFrame(() =>
+        {
+            if (Request !== FieldRequest) return;
+            FieldContent = AcquireField(RequestedPlacement, RequestedDensity);
+            ActiveDensityScale = RequestedDensity;
+            SurfelMetric.textContent = FieldContent.RecordCount.toLocaleString();
+            DensityOutput.textContent = `${Math.round(RequestedDensity * 100)}% · ${FieldContent.RecordCount.toLocaleString()}`;
+            RestartConvergence();
+            StatusText.textContent = "WebGPU · world-space field live";
+        });
+    }
+
+    function ApplyPreset(UseRecommendedModes)
     {
         RayCountControl.value = "1";
-        PlacementMethod.value = UseResearchModes ? "BlueNoise" : "Stratified";
-        ReconstructionMethod.value = UseResearchModes ? "2" : "0";
-        ProgressiveRays.checked = UseResearchModes;
-        LeakGuard.checked = UseResearchModes;
-        AdaptiveTemporal.checked = UseResearchModes;
-        FieldContent = FieldVariants[PlacementMethod.value];
-        RestartConvergence();
+        PlacementMethod.value = UseRecommendedModes ? "BlueNoise" : "Stratified";
+        ReconstructionMethod.value = "0";
+        ProgressiveRays.checked = UseRecommendedModes;
+        LeakGuard.checked = UseRecommendedModes;
+        AdaptiveTemporal.checked = false;
+        SelectField();
     }
 
     OriginalPreset.addEventListener("click", () => ApplyPreset(false));
@@ -1084,15 +1150,26 @@ async function BringRenderer()
     });
     ConvergenceRestart.addEventListener("click", RestartConvergence);
     RayCountControl.addEventListener("change", RestartConvergence);
-    PlacementMethod.addEventListener("change", () =>
-    {
-        FieldContent = FieldVariants[PlacementMethod.value];
-        SurfelMetric.textContent = FieldContent.RecordCount.toLocaleString();
-        RestartConvergence();
-    });
+    PlacementMethod.addEventListener("change", SelectField);
     ProgressiveRays.addEventListener("change", RestartConvergence);
     LeakGuard.addEventListener("change", RestartConvergence);
     AdaptiveTemporal.addEventListener("change", RestartConvergence);
+    SurfelDensity.addEventListener("input", () =>
+    {
+        const DensityScale = Number(SurfelDensity.value) * 0.01;
+        const RecordCount = FieldLayout(DensityScale).RecordCount;
+        DensityOutput.textContent = `${SurfelDensity.value}% · ${RecordCount.toLocaleString()}`;
+    });
+    SurfelDensity.addEventListener("change", SelectField);
+    SurfelSize.addEventListener("input", () =>
+    {
+        SizeOutput.textContent = `${(Number(SurfelSize.value) * 0.01).toFixed(2)}×`;
+    });
+    SurfelSize.addEventListener("change", () =>
+    {
+        ActiveSupportScale = Number(SurfelSize.value) * 0.01;
+        RestartConvergence();
+    });
     IndirectGain.addEventListener("input", () =>
     {
         GainOutput.textContent = `${Number(IndirectGain.value).toFixed(2)}×`;
