@@ -11,7 +11,7 @@ Open `EEVEENext.html` over HTTP. This exhibit is an independent architectural re
 - **Screen tracing:** half-resolution cosine rays march camera-visible geometry. Rays that leave the screen or miss fall back to the volume cache.
 - **Denoising:** normal/depth spatial reuse, world-position temporal reprojection, disocclusion rejection, and neighbourhood clamping are separate, switchable stages.
 - **Fast GI approximation:** a screen-space horizon-style visibility term modulates distant probe/ray lighting.
-- **Specular indirect:** low-roughness reflection rays search the screen and fall back to a mip-filtered sphere probe. The sphere probe is captured separately and has an explicit recapture control.
+- **Specular indirect:** glossy lighting uses a separately captured, mip-filtered sphere probe with an explicit recapture control. Screen-space reflections are intentionally disabled; diffuse screen-traced GI remains available.
 - **Faithful baked/dynamic boundary:** moving objects receive cached diffuse light but do not alter it. Moving the sun updates direct shadows immediately and marks the indirect cache stale. Visible moving emission can contribute through screen traces but does not become an off-screen baked source.
 - **Exact Slate ShaderBall:** the same `Exhibits/Assets/ShaderBall/ShaderBall.mesh` is used for animated objects.
 
@@ -37,7 +37,7 @@ The checked-in cache is deterministic: 720 probes × 256 bake rays and is approx
 - **Probe leak rejection:** demonstrates why ordinary trilinear probe interpolation leaks through walls.
 - **Temporal / Spatial reuse:** compare raw low-ray-count instability against the denoised path.
 - **Fast GI occlusion:** adds local screen-space visibility to otherwise distant probe lighting.
-- **Sphere reflections:** compares screen hits with the sphere-probe fallback.
+- **Sphere-probe reflections:** enables or disables the stable cubemap-only glossy contribution; there is no screen-space reflection path.
 - **Shadow filtering:** changes the directional kernel from 3×3 to 5×5 while retaining local cube filtering.
 - **Move sun:** intentionally demonstrates stale baked bounce versus live direct shadows.
 - **Emissive-only screen proof:** zeros analytic lights; visible emissive bounce can remain, while off-screen contribution disappears as expected for EEVEE screen tracing without a rebake.
