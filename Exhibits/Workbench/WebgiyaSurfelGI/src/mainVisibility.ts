@@ -322,16 +322,20 @@ const SCREEN_PROBE_OUTPUTS = {
   Lighting: 'lighting',
   'Screen probe GI': 'radiance',
   'Probe confidence': 'confidence',
+  'Trace source': 'trace-source',
+  'Hi-Z steps': 'hiz-steps',
 } as const;
 type ScreenProbeOutput =
   (typeof SCREEN_PROBE_OUTPUTS)[keyof typeof SCREEN_PROBE_OUTPUTS];
 const screenProbeParams: {
   enabled: boolean;
+  useHiZ: boolean;
   output: ScreenProbeOutput;
   blendStrength: number;
   samples: number;
 } = {
   enabled: true,
+  useHiZ: true,
   output: SCREEN_PROBE_OUTPUTS.Lighting,
   blendStrength: 0.8,
   samples: 4,
@@ -343,6 +347,10 @@ screenProbeFolder
   .onChange(() => {
     mustRebuildCompositeMaterial = true;
   })
+  .listen?.();
+screenProbeFolder
+  .add(screenProbeParams, 'useHiZ')
+  .name('Hi-Z first')
   .listen?.();
 screenProbeFolder
   .add(screenProbeParams, 'output', SCREEN_PROBE_OUTPUTS)
@@ -837,6 +845,7 @@ renderer.setAnimationLoop(() => {
   if (screenProbeParams.enabled && screenProbePass) {
     screenProbePass.run(renderer, camera, gbuffer, sceneBVH, dirLight, {
       samples: screenProbeParams.samples,
+      useHiZ: screenProbeParams.useHiZ,
       envIntensity: giTransportParams.envIntensity,
       envLod: giTransportParams.envLod,
       directStrength: giTransportParams.giFromDirect,
@@ -854,6 +863,9 @@ renderer.setAnimationLoop(() => {
   const giTex = surfelResolve.getOutputTexture();
   const screenProbeTex = screenProbeParams.enabled
     ? screenProbePass?.getOutputTexture()
+    : null;
+  const screenProbeStatsTex = screenProbeParams.enabled
+    ? screenProbePass?.getTraceStatsTexture()
     : null;
   let directLight;
   if (giTex) {
@@ -904,6 +916,17 @@ renderer.setAnimationLoop(() => {
           .mul(ambientVisibility),
         1.0,
       );
+      const traceStats: THREE.Node = screenProbeStatsTex
+        ? texture(screenProbeStatsTex, screenUV)
+        : vec4(0.0);
+      // Trace-source legend: green = Hi-Z, red = BVH fallback, blue = env miss.
+      const traceSourceDebug = vec4(
+        traceStats.y,
+        traceStats.x,
+        traceStats.z,
+        1.0,
+      );
+      const hiZStepsDebug = vec4(traceStats.w, traceStats.w, traceStats.w, 1.0);
 
       if (visibilityParams.output === VISIBILITY_OUTPUTS['Visibility raster']) {
         postProcessing.outputNode = fxaa(
@@ -923,6 +946,18 @@ renderer.setAnimationLoop(() => {
         postProcessing.outputNode = fxaa(
           vec4(probeConfidence, probeConfidence, probeConfidence, 1.0),
         );
+        postProcessing.needsUpdate = true;
+      } else if (
+        screenProbeParams.enabled &&
+        screenProbeParams.output === SCREEN_PROBE_OUTPUTS['Trace source']
+      ) {
+        postProcessing.outputNode = fxaa(traceSourceDebug);
+        postProcessing.needsUpdate = true;
+      } else if (
+        screenProbeParams.enabled &&
+        screenProbeParams.output === SCREEN_PROBE_OUTPUTS['Hi-Z steps']
+      ) {
+        postProcessing.outputNode = fxaa(hiZStepsDebug);
         postProcessing.needsUpdate = true;
       } else {
         switch (giParams.mode) {

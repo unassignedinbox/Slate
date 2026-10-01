@@ -33,13 +33,16 @@ import {
   surfelRadialDepthOcclusion,
   U_OCCLUSION_PARAMS,
 } from './surfelRadialDepth';
+import { createHiZDepthPyramid } from './hiZDepthPyramid';
 
 const TILE_SIZE = 8;
 const MAX_RAYS_PER_PROBE = 8;
 const MAX_SURFELS_PER_PROBE_HIT = 24;
+const MAX_HIZ_STEPS = 64;
 
 export type ScreenProbeSettings = {
   samples: number;
+  useHiZ: boolean;
   envIntensity: number;
   envLod: number;
   directStrength: number;
@@ -56,6 +59,7 @@ export type ScreenProbePass = {
     settings: ScreenProbeSettings,
   ) => void;
   getOutputTexture: () => THREE.Texture | null;
+  getTraceStatsTexture: () => THREE.Texture | null;
   getProbeRadianceTexture: () => THREE.Texture | null;
   getProbeGeometryTexture: () => THREE.Texture | null;
 };
@@ -185,6 +189,209 @@ const probeSampling = wgsl(/* wgsl */ `
   }
 `);
 
+const screenSpaceHitStruct = wgsl(/* wgsl */ `
+  struct ScreenSpaceHit {
+    status: u32,
+    position: vec3f,
+    normal: vec3f,
+    albedo: vec3f,
+    steps: u32,
+  };
+
+  struct ScreenProbeTraceResult {
+    radiance: vec3f,
+    stats: vec4f,
+  };
+`);
+
+const hiZTraceHelpers = wgslFn(
+  /* wgsl */ `
+    fn screen_probe_hiz_level_size(fullSize: vec2i, level: u32) -> vec2i {
+      var size = fullSize;
+      for (var i = 0u; i < level; i = i + 1u) {
+        size = max(vec2i(1), (size + vec2i(1)) / 2);
+      }
+      return size;
+    }
+
+    fn screen_probe_hiz_offset_y(fullSize: vec2i, level: u32) -> i32 {
+      let parity = level & 1u;
+      var offset = 0;
+      var current = parity;
+      loop {
+        if (current >= level) { break; }
+        offset += screen_probe_hiz_level_size(fullSize, current).y;
+        current += 2u;
+      }
+      return offset;
+    }
+
+    fn screen_probe_hiz_bounds(
+      level: u32,
+      coord: vec2i,
+      fullSize: vec2i,
+      evenAtlas: texture_2d<f32>,
+      oddAtlas: texture_2d<f32>
+    ) -> vec2f {
+      let offsetCoord = coord + vec2i(0, screen_probe_hiz_offset_y(fullSize, level));
+      if ((level & 1u) == 0u) {
+        return textureLoad(evenAtlas, offsetCoord, 0).xy;
+      }
+      return textureLoad(oddAtlas, offsetCoord, 0).xy;
+    }
+
+    fn screen_probe_reconstruct_world(
+      uv: vec2f,
+      depth: f32,
+      inverseProjection: mat4x4f,
+      cameraWorld: mat4x4f
+    ) -> vec3f {
+      let screen = vec2f(uv.x, 1.0 - uv.y) * 2.0 - 1.0;
+      let clip = vec4f(screen, depth, 1.0);
+      let viewH = inverseProjection * clip;
+      let view = viewH.xyz / viewH.w;
+      return (cameraWorld * vec4f(view, 1.0)).xyz;
+    }
+
+    fn screen_probe_trace_hiz(
+      origin: vec3f,
+      direction: vec3f,
+      viewProjection: mat4x4f,
+      inverseProjection: mat4x4f,
+      cameraWorld: mat4x4f,
+      fullSize: vec2i,
+      levelCount: u32,
+      evenAtlas: texture_2d<f32>,
+      oddAtlas: texture_2d<f32>,
+      sceneDepth: texture_2d<f32>,
+      sceneNormal: texture_2d<f32>,
+      sceneAlbedo: texture_2d<f32>
+    ) -> ScreenSpaceHit {
+      var result: ScreenSpaceHit;
+      result.status = 2u;
+      result.position = vec3f(0.0);
+      result.normal = vec3f(0.0, 1.0, 0.0);
+      result.albedo = vec3f(0.0);
+      result.steps = 0u;
+
+      if (levelCount == 0u) { return result; }
+      let maxTraceLevel = min(levelCount - 1u, 5u);
+      var level = min(2u, maxTraceLevel);
+      var distanceAlongRay = 0.012;
+
+      for (var step = 0u; step < ${MAX_HIZ_STEPS}u; step = step + 1u) {
+        result.steps = step + 1u;
+        let samplePosition = origin + direction * distanceAlongRay;
+        let clip = viewProjection * vec4f(samplePosition, 1.0);
+        if (clip.w <= 1e-5) {
+          result.status = 2u;
+          return result;
+        }
+
+        let ndc = clip.xyz / clip.w;
+        if (ndc.z >= 1.0 || distanceAlongRay >= 80.0) {
+          result.status = 0u;
+          return result;
+        }
+        if (ndc.z <= 0.0) {
+          distanceAlongRay += 0.025;
+          continue;
+        }
+
+        let uv = vec2f(ndc.x * 0.5 + 0.5, 1.0 - (ndc.y * 0.5 + 0.5));
+        if (any(uv < vec2f(0.0)) || any(uv >= vec2f(1.0))) {
+          result.status = 2u;
+          return result;
+        }
+
+        let levelSize = screen_probe_hiz_level_size(fullSize, level);
+        let levelCoord = clamp(
+          vec2i(floor(uv * vec2f(levelSize))),
+          vec2i(0),
+          levelSize - vec2i(1)
+        );
+        let bounds = screen_probe_hiz_bounds(
+          level,
+          levelCoord,
+          fullSize,
+          evenAtlas,
+          oddAtlas
+        );
+        let depthTolerance = 0.00035 * exp2(f32(level));
+
+        if (bounds.x < 0.999999 && ndc.z >= bounds.x - depthTolerance) {
+          if (level > 0u) {
+            level -= 1u;
+            continue;
+          }
+
+          let fullCoord = clamp(
+            vec2i(floor(uv * vec2f(fullSize))),
+            vec2i(0),
+            fullSize - vec2i(1)
+          );
+          let surfaceDepth = textureLoad(sceneDepth, fullCoord, 0).r;
+          if (surfaceDepth <= 0.0 || surfaceDepth >= 0.999999) {
+            distanceAlongRay += 0.035;
+            level = min(2u, maxTraceLevel);
+            continue;
+          }
+
+          let surfacePosition = screen_probe_reconstruct_world(
+            uv,
+            surfaceDepth,
+            inverseProjection,
+            cameraWorld
+          );
+          let delta = surfacePosition - origin;
+          let projectedDistance = dot(delta, direction);
+          if (projectedDistance <= 0.012) {
+            distanceAlongRay += 0.035;
+            level = min(2u, maxTraceLevel);
+            continue;
+          }
+
+          let perpendicular = length(delta - direction * projectedDistance);
+          let worldTolerance = max(0.025, projectedDistance * 0.006);
+          let surfaceNormal = normalize(
+            textureLoad(sceneNormal, fullCoord, 0).xyz * 2.0 - 1.0
+          );
+          let facing = dot(surfaceNormal, -direction);
+          if (perpendicular <= worldTolerance && facing > 0.02) {
+            result.status = 1u;
+            result.position = surfacePosition;
+            result.normal = surfaceNormal;
+            result.albedo = clamp(
+              textureLoad(sceneAlbedo, fullCoord, 0).rgb,
+              vec3f(0.0),
+              vec3f(1.0)
+            );
+            return result;
+          }
+
+          result.status = 2u;
+          return result;
+        }
+
+        let levelScale = exp2(f32(level));
+        let stepLength = clamp(
+          max(0.0125, distanceAlongRay * 0.01) * levelScale,
+          0.025,
+          0.5
+        );
+        distanceAlongRay += stepLength;
+        level = min(level + 1u, maxTraceLevel);
+      }
+
+      result.status = 2u;
+      return result;
+    }
+  `,
+  [screenSpaceHitStruct] as unknown as NonNullable<
+    Parameters<typeof wgslFn>[1]
+  >,
+);
+
 const lookupSurfelRadiance = wgslFn(
   /* wgsl */ `
     fn screen_probe_lookup_surfel_radiance(
@@ -261,6 +468,52 @@ const lookupSurfelRadiance = wgslFn(
   ] as unknown as NonNullable<Parameters<typeof wgslFn>[1]>,
 );
 
+const evaluateScreenProbeHit = wgslFn(
+  /* wgsl */ `
+    fn screen_probe_evaluate_hit(
+      hitPosition: vec3f,
+      hitNormal: vec3f,
+      hitAlbedo: vec3f,
+      lightDirection: vec3f,
+      lightColor: vec3f,
+      cameraPosition: vec3f,
+      gridOrigin: vec3f,
+      momentsOffset: u32,
+      occlusionParams: vec4f,
+      directStrength: f32,
+      multiBounceStrength: f32
+    ) -> vec3f {
+      let epsilon = 0.002;
+      var radiance = vec3f(0.0);
+      var shadowRay: Ray;
+      shadowRay.origin = hitPosition + hitNormal * epsilon;
+      shadowRay.direction = lightDirection;
+      let shadowHit = bvhIntersectFirstHit(shadowRay);
+      if (!shadowHit.didHit) {
+        let nDotL = max(0.0, dot(hitNormal, lightDirection));
+        radiance += lightColor * hitAlbedo * nDotL *
+          (1.0 / PI) * directStrength;
+      }
+
+      let cachedRadiance = screen_probe_lookup_surfel_radiance(
+        hitPosition,
+        hitNormal,
+        cameraPosition,
+        gridOrigin,
+        momentsOffset,
+        occlusionParams
+      );
+      radiance += cachedRadiance * hitAlbedo * multiBounceStrength;
+      return radiance;
+    }
+  `,
+  [
+    consts,
+    bvhIntersectFirstHit,
+    lookupSurfelRadiance,
+  ] as unknown as NonNullable<Parameters<typeof wgslFn>[1]>,
+);
+
 const traceScreenProbe = wgslFn(
   /* wgsl */ `
     fn trace_screen_probe(
@@ -268,6 +521,17 @@ const traceScreenProbe = wgslFn(
       receiverNormal: vec3f,
       probeIndex: u32,
       sampleCountIn: u32,
+      useHiZ: u32,
+      viewProjection: mat4x4f,
+      inverseProjection: mat4x4f,
+      cameraWorld: mat4x4f,
+      fullSize: vec2i,
+      hiZLevelCount: u32,
+      hiZEven: texture_2d<f32>,
+      hiZOdd: texture_2d<f32>,
+      sceneDepth: texture_2d<f32>,
+      sceneNormal: texture_2d<f32>,
+      sceneAlbedo: texture_2d<f32>,
       lightDirection: vec3f,
       lightColor: vec3f,
       cameraPosition: vec3f,
@@ -282,11 +546,15 @@ const traceScreenProbe = wgslFn(
       envLod: f32,
       diffuseTexture: texture_2d_array<f32>,
       diffuseSampler: sampler
-    ) -> vec3f {
+    ) -> ScreenProbeTraceResult {
       let sampleCount = clamp(sampleCountIn, 1u, ${MAX_RAYS_PER_PROBE}u);
       let basis = screen_probe_basis(receiverNormal);
       let receiverEpsilon = 0.002;
       var accumulated = vec3f(0.0);
+      var hiZResolved = 0.0;
+      var bvhFallback = 0.0;
+      var environmentMiss = 0.0;
+      var hiZStepFraction = 0.0;
 
       for (var sampleIndex = 0u; sampleIndex < sampleCount; sampleIndex = sampleIndex + 1u) {
         let rayDirection = screen_probe_cosine_direction(
@@ -295,71 +563,125 @@ const traceScreenProbe = wgslFn(
           sampleCount,
           basis
         );
-        var ray: Ray;
-        ray.origin = receiverPosition + receiverNormal * receiverEpsilon;
-        ray.direction = rayDirection;
-        let hit = bvhIntersectFirstHit(ray);
+        let rayOrigin = receiverPosition + receiverNormal * receiverEpsilon;
         var incoming = vec3f(0.0);
+        var resolved = false;
 
-        if (hit.didHit) {
-          let hitPosition = ray.origin + ray.direction * hit.dist;
-          let hitNormal = normalize(hit.normal);
-          let uvAndMaterial = getVertexAttribute(hit.barycoord, hit.indices.xyz);
-          let hitUv = uvAndMaterial.xy;
-          let materialIndex = i32(round(uvAndMaterial.z));
-          let hitAlbedo = clamp(
-            screen_probe_sample_diffuse(
-              diffuseTexture,
-              diffuseSampler,
-              hitUv,
-              materialIndex
-            ),
-            vec3f(0.0),
-            vec3f(1.0)
-          );
-
-          var shadowRay: Ray;
-          shadowRay.origin = hitPosition + hitNormal * receiverEpsilon;
-          shadowRay.direction = lightDirection;
-          let shadowHit = bvhIntersectFirstHit(shadowRay);
-          if (!shadowHit.didHit) {
-            let nDotL = max(0.0, dot(hitNormal, lightDirection));
-            incoming += lightColor * hitAlbedo * nDotL *
-              (1.0 / PI) * directStrength;
-          }
-
-          let cachedRadiance = screen_probe_lookup_surfel_radiance(
-            hitPosition,
-            hitNormal,
-            cameraPosition,
-            gridOrigin,
-            momentsOffset,
-            occlusionParams
-          );
-          incoming += cachedRadiance * hitAlbedo * multiBounceStrength;
-        } else {
-          incoming = screen_probe_sample_environment(
+        if (useHiZ != 0u) {
+          let screenHit = screen_probe_trace_hiz(
+            rayOrigin,
             rayDirection,
-            envTexture,
-            envSampler,
-            envLod
-          ) * envIntensity;
+            viewProjection,
+            inverseProjection,
+            cameraWorld,
+            fullSize,
+            hiZLevelCount,
+            hiZEven,
+            hiZOdd,
+            sceneDepth,
+            sceneNormal,
+            sceneAlbedo
+          );
+          hiZStepFraction += f32(screenHit.steps) / f32(${MAX_HIZ_STEPS});
+
+          if (screenHit.status == 1u) {
+            incoming = screen_probe_evaluate_hit(
+              screenHit.position,
+              screenHit.normal,
+              screenHit.albedo,
+              lightDirection,
+              lightColor,
+              cameraPosition,
+              gridOrigin,
+              momentsOffset,
+              occlusionParams,
+              directStrength,
+              multiBounceStrength
+            );
+            hiZResolved += 1.0;
+            resolved = true;
+          } else if (screenHit.status == 0u) {
+            incoming = screen_probe_sample_environment(
+              rayDirection,
+              envTexture,
+              envSampler,
+              envLod
+            ) * envIntensity;
+            environmentMiss += 1.0;
+            resolved = true;
+          }
+        }
+
+        if (!resolved) {
+          bvhFallback += 1.0;
+          var ray: Ray;
+          ray.origin = rayOrigin;
+          ray.direction = rayDirection;
+          let hit = bvhIntersectFirstHit(ray);
+
+          if (hit.didHit) {
+            let hitPosition = ray.origin + ray.direction * hit.dist;
+            let hitNormal = normalize(hit.normal);
+            let uvAndMaterial = getVertexAttribute(hit.barycoord, hit.indices.xyz);
+            let hitAlbedo = clamp(
+              screen_probe_sample_diffuse(
+                diffuseTexture,
+                diffuseSampler,
+                uvAndMaterial.xy,
+                i32(round(uvAndMaterial.z))
+              ),
+              vec3f(0.0),
+              vec3f(1.0)
+            );
+            incoming = screen_probe_evaluate_hit(
+              hitPosition,
+              hitNormal,
+              hitAlbedo,
+              lightDirection,
+              lightColor,
+              cameraPosition,
+              gridOrigin,
+              momentsOffset,
+              occlusionParams,
+              directStrength,
+              multiBounceStrength
+            );
+          } else {
+            incoming = screen_probe_sample_environment(
+              rayDirection,
+              envTexture,
+              envSampler,
+              envLod
+            ) * envIntensity;
+            environmentMiss += 1.0;
+          }
         }
 
         accumulated += incoming;
       }
 
-      return accumulated / max(1.0, f32(sampleCount));
+      let inverseCount = 1.0 / max(1.0, f32(sampleCount));
+      var result: ScreenProbeTraceResult;
+      result.radiance = accumulated * inverseCount;
+      result.stats = vec4f(
+        hiZResolved * inverseCount,
+        bvhFallback * inverseCount,
+        environmentMiss * inverseCount,
+        hiZStepFraction * inverseCount
+      );
+      return result;
     }
   `,
   [
     consts,
+    screenSpaceHitStruct,
+    hiZTraceHelpers,
     bvhIntersectFirstHit,
     getVertexAttribute,
     probeSampling,
     sampleDiffuseArray,
     sampleEnvironment,
-    lookupSurfelRadiance,
+    evaluateScreenProbeHit,
   ] as unknown as NonNullable<Parameters<typeof wgslFn>[1]>,
 );
 
@@ -433,8 +755,10 @@ export function createScreenProbePass(
   pool: SurfelPool,
   environment: THREE.Texture,
 ): ScreenProbePass {
+  const hiZPyramid = createHiZDepthPyramid();
   let probeRadianceTexture: THREE.StorageTexture | null = null;
   let probeGeometryTexture: THREE.StorageTexture | null = null;
+  let probeStatsTexture: THREE.StorageTexture | null = null;
   let outputTexture: THREE.StorageTexture | null = null;
   let traceNode: THREE.ComputeNode | null = null;
   let reconstructNode: THREE.ComputeNode | null = null;
@@ -445,12 +769,15 @@ export function createScreenProbePass(
 
   const U_PROJECTION_INVERSE = uniform(new THREE.Matrix4());
   const U_CAMERA_WORLD = uniform(new THREE.Matrix4());
+  const U_VIEW_PROJECTION = uniform(new THREE.Matrix4());
   const U_CAMERA_POSITION = uniform(new THREE.Vector3());
   const U_GRID_ORIGIN = uniform(new THREE.Vector3());
   const U_MOMENTS_OFFSET = uniform(0);
   const U_LIGHT_DIRECTION = uniform(new THREE.Vector3(0, 1, 0));
   const U_LIGHT_COLOR = uniform(new THREE.Color(1, 1, 1));
   const U_SAMPLE_COUNT = uniform(4);
+  const U_USE_HIZ = uniform(1);
+  const U_HIZ_LEVEL_COUNT = uniform(1);
   const U_ENV_INTENSITY = uniform(1.0);
   const U_ENV_LOD = uniform(4.0);
   const U_DIRECT_STRENGTH = uniform(1.0);
@@ -486,6 +813,7 @@ export function createScreenProbePass(
     probeHeight = nextProbeHeight;
     probeRadianceTexture?.dispose();
     probeGeometryTexture?.dispose();
+    probeStatsTexture?.dispose();
     outputTexture?.dispose();
     probeRadianceTexture = makeStorageTexture(
       probeWidth,
@@ -496,6 +824,11 @@ export function createScreenProbePass(
       probeWidth,
       probeHeight,
       'Screen Probe Geometry',
+    );
+    probeStatsTexture = makeStorageTexture(
+      probeWidth,
+      probeHeight,
+      'Screen Probe Trace Stats',
     );
     outputTexture = makeStorageTexture(width, height, 'Screen Probe Resolve');
     traceNode = null;
@@ -513,11 +846,17 @@ export function createScreenProbePass(
     const width = gbuffer.target.width;
     const height = gbuffer.target.height;
     ensureTextures(width, height);
-    if (!probeRadianceTexture || !probeGeometryTexture || !outputTexture)
+    if (
+      !probeRadianceTexture ||
+      !probeGeometryTexture ||
+      !probeStatsTexture ||
+      !outputTexture
+    )
       return;
 
     const depthTexture = gbuffer.target.depthTexture;
     const normalTexture = gbuffer.target.textures[0];
+    const albedoTexture = gbuffer.target.textures[1];
     const surfelAttribute = pool.getSurfelAttr();
     const momentsAttribute = pool.getMomentsAttr();
     const offsetsAndListAttribute = grid.getOffsetsAndListAttr();
@@ -533,8 +872,23 @@ export function createScreenProbePass(
       return;
     }
 
+    if (
+      settings.useHiZ ||
+      !hiZPyramid.getEvenTexture() ||
+      !hiZPyramid.getOddTexture()
+    ) {
+      hiZPyramid.run(renderer, depthTexture, width, height);
+    }
+    const hiZEvenTexture = hiZPyramid.getEvenTexture();
+    const hiZOddTexture = hiZPyramid.getOddTexture();
+    if (!hiZEvenTexture || !hiZOddTexture) return;
+
     U_PROJECTION_INVERSE.value.copy(camera.projectionMatrixInverse);
     U_CAMERA_WORLD.value.copy(camera.matrixWorld);
+    U_VIEW_PROJECTION.value.multiplyMatrices(
+      camera.projectionMatrix,
+      camera.matrixWorldInverse,
+    );
     U_CAMERA_POSITION.value.copy(camera.position);
     snap_to_surfel_grid_origin(U_GRID_ORIGIN.value, camera.position);
     U_MOMENTS_OFFSET.value = pool.getOffsets().writeOffset;
@@ -547,6 +901,8 @@ export function createScreenProbePass(
       1,
       MAX_RAYS_PER_PROBE,
     );
+    U_USE_HIZ.value = settings.useHiZ ? 1 : 0;
+    U_HIZ_LEVEL_COUNT.value = hiZPyramid.getLevelCount();
     U_ENV_INTENSITY.value = Math.max(0, settings.envIntensity);
     U_ENV_LOD.value = Math.max(0, settings.envLod);
     U_DIRECT_STRENGTH.value = Math.max(0, settings.directStrength);
@@ -584,6 +940,17 @@ export function createScreenProbePass(
             receiverNormal: vec3f,
             probeIndex: u32,
             sampleCountIn: u32,
+            useHiZ: u32,
+            viewProjection: mat4x4f,
+            inverseProjection: mat4x4f,
+            cameraWorld: mat4x4f,
+            fullSize: vec2i,
+            hiZLevelCount: u32,
+            hiZEven: texture_2d<f32>,
+            hiZOdd: texture_2d<f32>,
+            sceneDepth: texture_2d<f32>,
+            sceneNormal: texture_2d<f32>,
+            sceneAlbedo: texture_2d<f32>,
             lightDirection: vec3f,
             lightColor: vec3f,
             cameraPosition: vec3f,
@@ -598,12 +965,23 @@ export function createScreenProbePass(
             envLod: f32,
             diffuseTexture: texture_2d_array<f32>,
             diffuseSampler: sampler
-          ) -> vec3f {
+          ) -> ScreenProbeTraceResult {
             return trace_screen_probe(
               receiverPosition,
               receiverNormal,
               probeIndex,
               sampleCountIn,
+              useHiZ,
+              viewProjection,
+              inverseProjection,
+              cameraWorld,
+              fullSize,
+              hiZLevelCount,
+              hiZEven,
+              hiZOdd,
+              sceneDepth,
+              sceneNormal,
+              sceneAlbedo,
               lightDirection,
               lightColor,
               cameraPosition,
@@ -652,6 +1030,7 @@ export function createScreenProbePass(
         const valid = depth.lessThan(0.999999).and(depth.greaterThan(0.0));
         const radianceOut = vec4(0).toVar();
         const geometryOut = vec4(0).toVar();
+        const statsOut = vec4(0).toVar();
 
         If(valid, () => {
           const normal = texture(normalTexture, uv)
@@ -660,11 +1039,22 @@ export function createScreenProbePass(
             .normalize();
           const viewPosition = getViewPosition(uv, depth, U_PROJECTION_INVERSE);
           const worldPosition = U_CAMERA_WORLD.mul(vec4(viewPosition, 1.0)).xyz;
-          const radiance = traceScreenProbeBound({
+          const traced = traceScreenProbeBound({
             receiverPosition: worldPosition,
             receiverNormal: normal,
             probeIndex: probeIndex.toUint(),
             sampleCountIn: U_SAMPLE_COUNT.toUint(),
+            useHiZ: U_USE_HIZ.toUint(),
+            viewProjection: U_VIEW_PROJECTION,
+            inverseProjection: U_PROJECTION_INVERSE,
+            cameraWorld: U_CAMERA_WORLD,
+            fullSize: ivec2(width, height),
+            hiZLevelCount: U_HIZ_LEVEL_COUNT.toUint(),
+            hiZEven: texture(hiZEvenTexture),
+            hiZOdd: texture(hiZOddTexture),
+            sceneDepth: texture(depthTexture),
+            sceneNormal: texture(normalTexture),
+            sceneAlbedo: texture(albedoTexture),
             lightDirection: U_LIGHT_DIRECTION,
             lightColor: U_LIGHT_COLOR,
             cameraPosition: U_CAMERA_POSITION,
@@ -680,12 +1070,14 @@ export function createScreenProbePass(
             diffuseTexture: texture(bvh.diffuseArrayTex),
             diffuseSampler: sampler(bvh.diffuseArrayTex),
           });
-          radianceOut.assign(vec4(radiance, 1.0));
+          radianceOut.assign(vec4(traced.get('radiance'), 1.0));
           geometryOut.assign(vec4(normal, depth));
+          statsOut.assign(traced.get('stats'));
         });
 
         textureStore(probeRadianceTexture!, ivec2(x, y), radianceOut);
         textureStore(probeGeometryTexture!, ivec2(x, y), geometryOut);
+        textureStore(probeStatsTexture!, ivec2(x, y), statsOut);
       })()
         .compute(probeWidth * probeHeight)
         .setName('Screen Probe Trace');
@@ -737,6 +1129,7 @@ export function createScreenProbePass(
   return {
     run,
     getOutputTexture: () => outputTexture,
+    getTraceStatsTexture: () => probeStatsTexture,
     getProbeRadianceTexture: () => probeRadianceTexture,
     getProbeGeometryTexture: () => probeGeometryTexture,
   };
