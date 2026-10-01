@@ -2,15 +2,17 @@
 
 const GeometryAddress = "../../Assets/ShaderBall/ShaderBall.mesh";
 const GeometryMagic = 0x314d4253;
-const RsmResolution = 384;
+const RsmResolution = 512;
 const RsmWorldSpan = 48.0;
-const ShadowResolution = 1024;
+const ShadowResolutions = [2048, 1024, 1024];
 const SurfelCount = (RsmResolution / 2) * (RsmResolution / 2);
 const OverlayStride = 16;
-const VolumeResolution = 40;
+const VolumeResolution = 48;
+const NearBlockerResolution = 80;
 const CellsPerCascade = VolumeResolution ** 3;
 const VolumeCellCount = CellsPerCascade * 3;
-const FrameUniformBytes = 912;
+const FrameUniformBytes = 960;
+const MaximumPersistentEmitterSurfels = 768;
 
 const PresentationCanvas = document.getElementById("PresentationCanvas");
 const StatusPanel = document.querySelector(".Status");
@@ -25,6 +27,11 @@ const GtaoEnabled = document.getElementById("GtaoEnabled");
 const EmissiveLight = document.getElementById("EmissiveLight");
 const TemporalStability = document.getElementById("TemporalStability");
 const ShowSurfels = document.getElementById("ShowSurfels");
+const AdaptiveQuality = document.getElementById("AdaptiveQuality");
+const EmitterSurfelCount = document.getElementById("EmitterSurfelCount");
+const EmitterSurfelOutput = document.getElementById("EmitterSurfelOutput");
+const EmitterSurfelScale = document.getElementById("EmitterSurfelScale");
+const EmitterScaleOutput = document.getElementById("EmitterScaleOutput");
 const PropagationSteps = document.getElementById("PropagationSteps");
 const PropagationOutput = document.getElementById("PropagationOutput");
 const IndirectGain = document.getElementById("IndirectGain");
@@ -38,6 +45,7 @@ const PauseButton = document.getElementById("PauseButton");
 const ResetButton = document.getElementById("ResetButton");
 const TimingMetric = document.getElementById("TimingMetric");
 const SurfelMetric = document.getElementById("SurfelMetric");
+const QualityMetric = document.getElementById("QualityMetric");
 
 SurfelMetric.textContent = SurfelCount.toLocaleString();
 
@@ -217,6 +225,68 @@ function ConstructCube()
     return { Vertices: new Float32Array(VertexValues), Indices: new Uint32Array(IndexValues) };
 }
 
+function ConstructPersistentEmitterSurfels(Cube, Count)
+{
+    // Deterministic best-candidate sampling keeps a fixed, blue-noise-like pattern on
+    // the emitter's actual local-space cube triangles. It is never regenerated per frame.
+    let State = 0x6d2b79f5;
+    const Random = () =>
+    {
+        State ^= State << 13;
+        State ^= State >>> 17;
+        State ^= State << 5;
+        return (State >>> 0) / 4294967296;
+    };
+    const SampleTriangle = () =>
+    {
+        const Triangle = Math.min(Cube.Indices.length / 3 - 1, Math.floor(Random() * Cube.Indices.length / 3));
+        const A = Cube.Indices[Triangle * 3] * 8;
+        const B = Cube.Indices[Triangle * 3 + 1] * 8;
+        const C = Cube.Indices[Triangle * 3 + 2] * 8;
+        const RootU = Math.sqrt(Random());
+        const WeightA = 1.0 - RootU;
+        const WeightB = RootU * (1.0 - Random());
+        const WeightC = 1.0 - WeightA - WeightB;
+        return {
+            Position: [0, 1, 2].map((Axis) =>
+                Cube.Vertices[A + Axis] * WeightA
+                + Cube.Vertices[B + Axis] * WeightB
+                + Cube.Vertices[C + Axis] * WeightC),
+            Normal: [Cube.Vertices[A + 4], Cube.Vertices[A + 5], Cube.Vertices[A + 6]],
+            Triangle,
+        };
+    };
+    const Samples = [];
+    for (let Number = 0; Number < Count; ++Number)
+    {
+        let Winner = null;
+        let WinnerDistance = -1.0;
+        for (let CandidateNumber = 0; CandidateNumber < 12; ++CandidateNumber)
+        {
+            const Candidate = SampleTriangle();
+            let Nearest = Number === 0 ? 1.0 : Infinity;
+            for (const Existing of Samples)
+            {
+                const Delta = Subtract(Candidate.Position, Existing.Position);
+                Nearest = Math.min(Nearest, Dot(Delta, Delta));
+            }
+            if (Nearest > WinnerDistance)
+            {
+                WinnerDistance = Nearest;
+                Winner = Candidate;
+            }
+        }
+        Samples.push(Winner);
+    }
+    const Values = new Float32Array(Count * 8);
+    for (let Number = 0; Number < Count; ++Number)
+    {
+        const Sample = Samples[Number];
+        Values.set([...Sample.Position, Sample.Triangle, ...Sample.Normal, 1.0], Number * 8);
+    }
+    return Values;
+}
+
 function CreateBuffer(Device, Label, ContentOrSize, Usage)
 {
     const Size = typeof ContentOrSize === "number"
@@ -252,6 +322,11 @@ function PushInstance(Target, Position, Colour, Metalness, ScaleValue, Roughness
     );
 }
 
+function EmissivePosition(Time)
+{
+    return [Math.sin(Time * 0.37) * 1.1, -6.5, 1.35];
+}
+
 function ConstructSceneInstances(Time)
 {
     const Cubes = [];
@@ -271,7 +346,7 @@ function ConstructSceneInstances(Time)
     // sourced independently of the sun. Emissive-only view removes every solar source.
     PushInstance(
         Cubes,
-        [0.0, -6.5, 1.35],
+        EmissivePosition(Time),
         [0.025, 0.68, 1.0],
         0.0,
         [3.7, 0.20, 0.30],
@@ -307,6 +382,7 @@ function ConstructMotionBounds(Time, PreviousTime)
         [[3.8, 0.2 + Math.cos(Value * 0.66) * 2.0, 1.05], [1.25, 1.25, 1.25]],
         [[-1.8, 7.1, 1.05 + (Math.sin(Value * 1.1) * 0.5 + 0.5) * 0.75], [1.25, 1.25, 1.25]],
         [[2.2 + Math.sin(Value * 0.41) * 1.3, -7.7, 1.10], [1.35, 1.35, 1.35]],
+        [EmissivePosition(Value), [2.05, 0.42, 0.38]],
     ];
     const Current = Positions(Time);
     const Previous = Positions(PreviousTime);
@@ -337,7 +413,15 @@ async function BringRenderer()
     if (!navigator.gpu) throw new Error("This browser does not expose navigator.gpu");
     const Adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
     if (!Adapter) throw new Error("No WebGPU adapter is available");
-    const Device = await Adapter.requestDevice();
+    const TimestampSupported = Adapter.features.has("timestamp-query");
+    const Device = await Adapter.requestDevice({
+        requiredFeatures: TimestampSupported ? ["timestamp-query"] : [],
+    });
+    if (!TimestampSupported)
+    {
+        AdaptiveQuality.checked = false;
+        AdaptiveQuality.disabled = true;
+    }
     Device.addEventListener("uncapturederror", (Event) =>
     {
         console.error("WebGPU validation error", Event.error);
@@ -349,24 +433,29 @@ async function BringRenderer()
     CanvasContext.configure({ device: Device, format: CanvasFormat, alphaMode: "opaque" });
 
     StatusText.textContent = "Loading scene and transport shaders";
-    const [GeometryBinary, RasterSource, ShadowSource, ExtractSource, InjectSource, PropagateSource, ScreenSource, PresentSource, OverlaySource] = await Promise.all([
+    const [GeometryBinary, RasterSource, ShadowSource, ExtractSource, InjectSource, BlockerSource, NearSource, PropagateSource, ScreenSource, PresentSource, OverlaySource] = await Promise.all([
         LoadBinary(GeometryAddress),
-        LoadText("LPVRaster.wgsl?revision=7"),
-        LoadText("CSMShadow.wgsl?revision=7"),
-        LoadText("LPVExtract.wgsl?revision=7"),
-        LoadText("LPVInject.wgsl?revision=7"),
-        LoadText("LPVPropagate.wgsl?revision=7"),
-        LoadText("LPVGTAO.wgsl?revision=7"),
-        LoadText("LPVPresent.wgsl?revision=7"),
-        LoadText("LPVOverlay.wgsl?revision=7"),
+        LoadText("LPVRaster.wgsl?revision=8"),
+        LoadText("CSMShadow.wgsl?revision=8"),
+        LoadText("LPVExtract.wgsl?revision=8"),
+        LoadText("LPVInject.wgsl?revision=8"),
+        LoadText("LPVBlocker.wgsl?revision=8"),
+        LoadText("LPVNear.wgsl?revision=8"),
+        LoadText("LPVPropagate.wgsl?revision=8"),
+        LoadText("LPVGTAO.wgsl?revision=8"),
+        LoadText("LPVPresent.wgsl?revision=8"),
+        LoadText("LPVOverlay.wgsl?revision=8"),
     ]);
     const Geometry = DecodeGeometry(GeometryBinary);
     const Cube = ConstructCube();
+    const PersistentEmitterSurfels = ConstructPersistentEmitterSurfels(Cube, MaximumPersistentEmitterSurfels);
 
     const RasterShader = Device.createShaderModule({ label: "LPV scene raster", code: RasterSource });
     const ShadowShader = Device.createShaderModule({ label: "Stabilized cascade shadows", code: ShadowSource });
     const ExtractShader = Device.createShaderModule({ label: "RSM surfel extraction", code: ExtractSource });
     const InjectShader = Device.createShaderModule({ label: "LPV scatter injection", code: InjectSource });
+    const BlockerShader = Device.createShaderModule({ label: "Packed high-resolution blockers", code: BlockerSource });
+    const NearShader = Device.createShaderModule({ label: "Six-face near radiance", code: NearSource });
     const PropagateShader = Device.createShaderModule({ label: "LPV propagation", code: PropagateSource });
     const ScreenShader = Device.createShaderModule({ label: "GTAO resolve", code: ScreenSource });
     const PresentShader = Device.createShaderModule({ label: "LPV presentation", code: PresentSource });
@@ -376,6 +465,8 @@ async function BringRenderer()
         ValidateShader(ShadowShader, "CSMShadow.wgsl"),
         ValidateShader(ExtractShader, "LPVExtract.wgsl"),
         ValidateShader(InjectShader, "LPVInject.wgsl"),
+        ValidateShader(BlockerShader, "LPVBlocker.wgsl"),
+        ValidateShader(NearShader, "LPVNear.wgsl"),
         ValidateShader(PropagateShader, "LPVPropagate.wgsl"),
         ValidateShader(ScreenShader, "LPVGTAO.wgsl"),
         ValidateShader(PresentShader, "LPVPresent.wgsl"),
@@ -470,15 +561,45 @@ async function BringRenderer()
         layout: "auto",
         compute: { module: InjectShader, entryPoint: "InjectCameraBlockers" },
     });
+    const InjectPersistentEmitterProgram = Device.createComputePipeline({
+        label: "Inject persistent local-space emissive surfels",
+        layout: "auto",
+        compute: { module: NearShader, entryPoint: "InjectPersistentEmitters" },
+    });
+    const InjectNearProgram = Device.createComputePipeline({
+        label: "Inject dual-reservoir near surfels",
+        layout: "auto",
+        compute: { module: NearShader, entryPoint: "InjectNearSurfels" },
+    });
+    const NormalizeNearProgram = Device.createComputePipeline({
+        label: "Normalize persistent six-face near source",
+        layout: "auto",
+        compute: { module: NearShader, entryPoint: "NormalizeNear" },
+    });
+    const PropagateNearProgram = Device.createComputePipeline({
+        label: "Propagate six-face near radiance",
+        layout: "auto",
+        compute: { module: NearShader, entryPoint: "PropagateNear" },
+    });
     const NormalizeProgram = Device.createComputePipeline({
         label: "Normalize and reproject persistent LPV history",
         layout: "auto",
         compute: { module: InjectShader, entryPoint: "NormalizeMain" },
     });
-    const DilateBlockerProgram = Device.createComputePipeline({
-        label: "Dilate near-cascade directional blockers",
+    const NormalizeNearBlockerProgram = Device.createComputePipeline({
+        label: "Normalize packed 80-cubed near blockers",
         layout: "auto",
-        compute: { module: InjectShader, entryPoint: "DilateBlockersMain" },
+        compute: { module: BlockerShader, entryPoint: "NormalizeNear" },
+    });
+    const NormalizeFarBlockerProgram = Device.createComputePipeline({
+        label: "Normalize packed middle and far blockers",
+        layout: "auto",
+        compute: { module: BlockerShader, entryPoint: "NormalizeFar" },
+    });
+    const DilateBlockerProgram = Device.createComputePipeline({
+        label: "Dilate packed near blockers",
+        layout: "auto",
+        compute: { module: BlockerShader, entryPoint: "DilateNear" },
     });
     const PropagateProgram = Device.createComputePipeline({
         label: "Propagate cascaded radiance",
@@ -522,6 +643,18 @@ async function BringRenderer()
         FrameUniformBytes,
         GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     );
+    const TimestampQueries = TimestampSupported
+        ? Device.createQuerySet({ label: "Whole-frame GPU timestamps", type: "timestamp", count: 2 })
+        : null;
+    const TimestampResolve = TimestampSupported
+        ? CreateBuffer(Device, "Resolved GPU timestamps", 16, GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC)
+        : null;
+    const TimestampReadbacks = TimestampSupported
+        ? [0, 1, 2, 3].map((Index) => ({
+            Buffer: CreateBuffer(Device, `GPU timestamp readback ${Index}`, 16, GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ),
+            Busy: false,
+        }))
+        : [];
     const ShadowUniforms = [0, 1, 2].map((Index) => CreateBuffer(
         Device,
         `Shadow cascade ${Index} uniforms`,
@@ -546,21 +679,44 @@ async function BringRenderer()
         SurfelCount * 64,
         GPUBufferUsage.STORAGE,
     );
+    const PersistentEmitterBuffer = CreateBuffer(
+        Device,
+        "Fixed local-space blue-noise emitter surfels",
+        PersistentEmitterSurfels,
+        GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    );
     const AtomicBuffer = CreateBuffer(
         Device,
         "LPV fixed-point injection",
-        VolumeCellCount * 19 * 4,
+        VolumeCellCount * 13 * 4,
         GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     );
     const ReservoirBuffer = CreateBuffer(
         Device,
         "Stable per-cell surfel reservoirs",
-        VolumeCellCount * 4,
+        (VolumeCellCount + CellsPerCascade) * 4,
         GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     );
     const VolumeBytes = VolumeCellCount * 48;
     const MomentBytes = VolumeCellCount * 8;
-    const BlockerVolumeBytes = VolumeCellCount * 32;
+    const NearBlockerCellCount = NearBlockerResolution ** 3;
+    const FarBlockerCellCount = CellsPerCascade * 2;
+    const NearBlockerAtomic = CreateBuffer(Device, "80-cubed near blocker atomics", NearBlockerCellCount * 6 * 4, GPUBufferUsage.STORAGE);
+    const FarBlockerAtomic = CreateBuffer(Device, "Middle/far blocker atomics", FarBlockerCellCount * 6 * 4, GPUBufferUsage.STORAGE);
+    const NearBlockerPacked = CreateBuffer(Device, "Packed 80-cubed near blockers", NearBlockerCellCount * 8, GPUBufferUsage.STORAGE);
+    const NearBlockerDilated = CreateBuffer(Device, "Dilated packed 80-cubed near blockers", NearBlockerCellCount * 8, GPUBufferUsage.STORAGE);
+    const FarBlockerPacked = CreateBuffer(Device, "Packed middle/far blockers", FarBlockerCellCount * 8, GPUBufferUsage.STORAGE);
+    const NearCellBytes = CellsPerCascade * 6 * 16;
+    const NearRadianceAtomic = CreateBuffer(Device, "Near six-face fixed-point injection", CellsPerCascade * 19 * 4, GPUBufferUsage.STORAGE);
+    const NearSourceVolume = CreateBuffer(Device, "Near six-face filtered source", NearCellBytes, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC);
+    const NearSourceHistory = CreateBuffer(Device, "Previous near six-face source", NearCellBytes, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST);
+    const NearHistoryVolume = CreateBuffer(Device, "Persistent near six-face history", NearCellBytes, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST);
+    const NearPropagationVolumes = [0, 1].map((Index) => CreateBuffer(
+        Device,
+        `Near six-face propagation ${Index}`,
+        NearCellBytes,
+        GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    ));
     const InjectionVolume = CreateBuffer(
         Device,
         "Temporally filtered LPV source radiance",
@@ -585,8 +741,6 @@ async function BringRenderer()
         MomentBytes,
         GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
     );
-    const RawBlockerVolume = CreateBuffer(Device, "Raw six-face blockers", BlockerVolumeBytes, GPUBufferUsage.STORAGE);
-    const BlockerVolume = CreateBuffer(Device, "Dilated six-face blockers", BlockerVolumeBytes, GPUBufferUsage.STORAGE);
     const HistoryVolume = CreateBuffer(
         Device,
         "Persistent reprojected LPV history",
@@ -625,18 +779,13 @@ async function BringRenderer()
         format: "depth32float",
         usage: GPUTextureUsage.RENDER_ATTACHMENT,
     });
-    const CsmDepth = Device.createTexture({
-        label: "Three stabilized direct-shadow cascades",
-        size: [ShadowResolution, ShadowResolution, 3],
+    const CsmDepths = ShadowResolutions.map((Resolution, Cascade) => Device.createTexture({
+        label: `Stabilized direct-shadow cascade ${Cascade}`,
+        size: [Resolution, Resolution],
         format: "depth32float",
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-    });
-    const CsmArrayView = CsmDepth.createView({ dimension: "2d-array", baseArrayLayer: 0, arrayLayerCount: 3 });
-    const CsmLayerViews = [0, 1, 2].map((Layer) => CsmDepth.createView({
-        dimension: "2d",
-        baseArrayLayer: Layer,
-        arrayLayerCount: 1,
     }));
+    const CsmViews = CsmDepths.map((Texture) => Texture.createView());
     const ShadowComparison = Device.createSampler({ compare: "less-equal", minFilter: "linear", magFilter: "linear" });
     const LinearSampler = Device.createSampler({ minFilter: "linear", magFilter: "linear" });
 
@@ -672,8 +821,9 @@ async function BringRenderer()
         entries: [
             { binding: 0, resource: { buffer: FrameUniform } },
             { binding: 1, resource: { buffer: SurfelBuffer } },
-            { binding: 2, resource: { buffer: AtomicBuffer } },
             { binding: 8, resource: { buffer: ReservoirBuffer } },
+            { binding: 14, resource: { buffer: NearBlockerAtomic } },
+            { binding: 15, resource: { buffer: FarBlockerAtomic } },
         ],
     });
     const InjectSurfelGroup = Device.createBindGroup({
@@ -685,13 +835,63 @@ async function BringRenderer()
             { binding: 8, resource: { buffer: ReservoirBuffer } },
         ],
     });
+    const InjectPersistentEmitterGroup = Device.createBindGroup({
+        layout: InjectPersistentEmitterProgram.getBindGroupLayout(0),
+        entries: [
+            { binding: 0, resource: { buffer: FrameUniform } },
+            { binding: 3, resource: { buffer: NearRadianceAtomic } },
+            { binding: 10, resource: { buffer: PersistentEmitterBuffer } },
+            { binding: 11, resource: { buffer: AtomicBuffer } },
+        ],
+    });
+    const InjectNearGroup = Device.createBindGroup({
+        layout: InjectNearProgram.getBindGroupLayout(0),
+        entries: [
+            { binding: 0, resource: { buffer: FrameUniform } },
+            { binding: 1, resource: { buffer: SurfelBuffer } },
+            { binding: 2, resource: { buffer: ReservoirBuffer } },
+            { binding: 3, resource: { buffer: NearRadianceAtomic } },
+        ],
+    });
+    const NormalizeNearGroup = Device.createBindGroup({
+        layout: NormalizeNearProgram.getBindGroupLayout(0),
+        entries: [
+            { binding: 0, resource: { buffer: FrameUniform } },
+            { binding: 3, resource: { buffer: NearRadianceAtomic } },
+            { binding: 4, resource: { buffer: NearSourceHistory } },
+            { binding: 5, resource: { buffer: NearSourceVolume } },
+            { binding: 6, resource: { buffer: NearHistoryVolume } },
+            { binding: 8, resource: { buffer: NearPropagationVolumes[0] } },
+        ],
+    });
+    const PropagateNearGroups = [
+        Device.createBindGroup({
+            layout: PropagateNearProgram.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: { buffer: FrameUniform } },
+                { binding: 5, resource: { buffer: NearSourceVolume } },
+                { binding: 7, resource: { buffer: NearPropagationVolumes[0] } },
+                { binding: 8, resource: { buffer: NearPropagationVolumes[1] } },
+                { binding: 9, resource: { buffer: NearBlockerDilated } },
+            ],
+        }),
+        Device.createBindGroup({
+            layout: PropagateNearProgram.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: { buffer: FrameUniform } },
+                { binding: 5, resource: { buffer: NearSourceVolume } },
+                { binding: 7, resource: { buffer: NearPropagationVolumes[1] } },
+                { binding: 8, resource: { buffer: NearPropagationVolumes[0] } },
+                { binding: 9, resource: { buffer: NearBlockerDilated } },
+            ],
+        }),
+    ];
     const NormalizeGroup = Device.createBindGroup({
         layout: NormalizeProgram.getBindGroupLayout(0),
         entries: [
             { binding: 0, resource: { buffer: FrameUniform } },
             { binding: 2, resource: { buffer: AtomicBuffer } },
             { binding: 5, resource: { buffer: InjectionVolume } },
-            { binding: 6, resource: { buffer: RawBlockerVolume } },
             { binding: 7, resource: { buffer: PropagationVolumes[0] } },
             { binding: 9, resource: { buffer: HistoryVolume } },
             { binding: 11, resource: { buffer: SourceHistoryVolume } },
@@ -699,11 +899,27 @@ async function BringRenderer()
             { binding: 13, resource: { buffer: CurrentSourceMoments } },
         ],
     });
+    const NormalizeNearBlockerGroup = Device.createBindGroup({
+        layout: NormalizeNearBlockerProgram.getBindGroupLayout(0),
+        entries: [
+            { binding: 0, resource: { buffer: NearBlockerAtomic } },
+            { binding: 1, resource: { buffer: FarBlockerAtomic } },
+            { binding: 2, resource: { buffer: NearBlockerPacked } },
+        ],
+    });
+    const NormalizeFarBlockerGroup = Device.createBindGroup({
+        layout: NormalizeFarBlockerProgram.getBindGroupLayout(0),
+        entries: [
+            { binding: 0, resource: { buffer: NearBlockerAtomic } },
+            { binding: 1, resource: { buffer: FarBlockerAtomic } },
+            { binding: 4, resource: { buffer: FarBlockerPacked } },
+        ],
+    });
     const DilateBlockerGroup = Device.createBindGroup({
         layout: DilateBlockerProgram.getBindGroupLayout(0),
         entries: [
-            { binding: 6, resource: { buffer: RawBlockerVolume } },
-            { binding: 10, resource: { buffer: BlockerVolume } },
+            { binding: 2, resource: { buffer: NearBlockerPacked } },
+            { binding: 3, resource: { buffer: NearBlockerDilated } },
         ],
     });
     const PropagateGroups = [
@@ -712,7 +928,7 @@ async function BringRenderer()
             entries: [
                 { binding: 0, resource: { buffer: FrameUniform } },
                 { binding: 1, resource: { buffer: InjectionVolume } },
-                { binding: 2, resource: { buffer: BlockerVolume } },
+                { binding: 2, resource: { buffer: FarBlockerPacked } },
                 { binding: 3, resource: { buffer: PropagationVolumes[0] } },
                 { binding: 4, resource: { buffer: PropagationVolumes[1] } },
             ],
@@ -722,7 +938,7 @@ async function BringRenderer()
             entries: [
                 { binding: 0, resource: { buffer: FrameUniform } },
                 { binding: 1, resource: { buffer: InjectionVolume } },
-                { binding: 2, resource: { buffer: BlockerVolume } },
+                { binding: 2, resource: { buffer: FarBlockerPacked } },
                 { binding: 3, resource: { buffer: PropagationVolumes[1] } },
                 { binding: 4, resource: { buffer: PropagationVolumes[0] } },
             ],
@@ -735,6 +951,70 @@ async function BringRenderer()
             { binding: 1, resource: { buffer: SurfelBuffer } },
         ],
     });
+
+    let AdaptivePresentationScale = Number(RenderScale.value);
+    let ActiveSurfelCandidates = SurfelCount;
+    let ActivePropagationSteps = Number(PropagationSteps.value);
+    let ActiveShadowRadius = Number(ShadowFilter.value);
+    let SmoothedGpuMilliseconds = 0.0;
+    let AdaptiveSampleCounter = 0;
+
+    function UpdateQualityMetrics()
+    {
+        const ScalePercent = AdaptiveQuality.checked ? AdaptivePresentationScale : Number(RenderScale.value);
+        const Candidates = AdaptiveQuality.checked ? ActiveSurfelCandidates : SurfelCount;
+        const Steps = AdaptiveQuality.checked ? ActivePropagationSteps : Number(PropagationSteps.value);
+        const ShadowRadius = AdaptiveQuality.checked ? ActiveShadowRadius : Number(ShadowFilter.value);
+        SurfelMetric.textContent = Candidates.toLocaleString();
+        QualityMetric.textContent = `${Math.round(ScalePercent)}% · ${Math.round(Candidates / 1024)}k · ${Steps} · ${ShadowRadius * 2 + 1}×${ShadowRadius * 2 + 1}`;
+    }
+
+    function ApplyGpuTiming(Milliseconds)
+    {
+        if (!Number.isFinite(Milliseconds) || Milliseconds <= 0.0 || Milliseconds > 1000.0) return;
+        SmoothedGpuMilliseconds = SmoothedGpuMilliseconds === 0.0
+            ? Milliseconds
+            : SmoothedGpuMilliseconds * 0.88 + Milliseconds * 0.12;
+        TimingMetric.textContent = `${SmoothedGpuMilliseconds.toFixed(2)} ms GPU`;
+        if (!AdaptiveQuality.checked || ++AdaptiveSampleCounter % 24 !== 0) return;
+
+        const MaximumScale = Number(RenderScale.value);
+        const MaximumSteps = Number(PropagationSteps.value);
+        const MaximumShadow = Number(ShadowFilter.value);
+        let ResizeRequired = false;
+        if (SmoothedGpuMilliseconds > 18.0)
+        {
+            // Deliberate degradation order: presentation, RSM candidates,
+            // propagation iterations, and only then the direct-shadow kernel.
+            if (AdaptivePresentationScale > 75)
+            {
+                AdaptivePresentationScale = Math.max(75, AdaptivePresentationScale - 5);
+                ResizeRequired = true;
+            }
+            else if (ActiveSurfelCandidates > 16384) ActiveSurfelCandidates = Math.max(16384, ActiveSurfelCandidates - 8192);
+            else if (ActivePropagationSteps > 2) ActivePropagationSteps -= 1;
+            else if (ActiveShadowRadius > 1) ActiveShadowRadius -= 1;
+        }
+        else if (SmoothedGpuMilliseconds < 13.0)
+        {
+            // Restore in reverse order to avoid reallocating or oscillating LPV grids.
+            if (ActiveShadowRadius < MaximumShadow) ActiveShadowRadius += 1;
+            else if (ActivePropagationSteps < MaximumSteps) ActivePropagationSteps += 1;
+            else if (ActiveSurfelCandidates < SurfelCount) ActiveSurfelCandidates = Math.min(SurfelCount, ActiveSurfelCandidates + 8192);
+            else if (AdaptivePresentationScale < MaximumScale)
+            {
+                AdaptivePresentationScale = Math.min(MaximumScale, AdaptivePresentationScale + 5);
+                ResizeRequired = true;
+            }
+        }
+        AdaptivePresentationScale = Math.min(AdaptivePresentationScale, MaximumScale);
+        ActivePropagationSteps = Math.min(ActivePropagationSteps, MaximumSteps);
+        ActiveShadowRadius = Math.min(ActiveShadowRadius, MaximumShadow);
+        if (ResizeRequired) PresentationWidth = 0;
+        UpdateQualityMetrics();
+    }
+
+    UpdateQualityMetrics();
 
     let PositionImage = null;
     let NormalImage = null;
@@ -772,7 +1052,7 @@ async function BringRenderer()
 
     function ResizePresentation()
     {
-        const RequestedScale = Number(RenderScale.value) * 0.01;
+        const RequestedScale = (AdaptiveQuality.checked ? AdaptivePresentationScale : Number(RenderScale.value)) * 0.01;
         const PixelRatio = Math.min((window.devicePixelRatio || 1.0) * RequestedScale, 2.0);
         const Width = Math.max(1, Math.min(1920, Math.round(PresentationCanvas.clientWidth * PixelRatio)));
         const Height = Math.max(1, Math.min(1080, Math.round(PresentationCanvas.clientHeight * PixelRatio)));
@@ -812,9 +1092,10 @@ async function BringRenderer()
             layout: InjectCameraProgram.getBindGroupLayout(0),
             entries: [
                 { binding: 0, resource: { buffer: FrameUniform } },
-                { binding: 2, resource: { buffer: AtomicBuffer } },
                 { binding: 3, resource: PositionImage.createView() },
                 { binding: 4, resource: NormalImage.createView() },
+                { binding: 14, resource: { buffer: NearBlockerAtomic } },
+                { binding: 15, resource: { buffer: FarBlockerAtomic } },
             ],
         });
         ScreenGroups = [0, 1].map((Previous) =>
@@ -840,12 +1121,16 @@ async function BringRenderer()
                 { binding: 1, resource: PositionImage.createView() },
                 { binding: 2, resource: NormalImage.createView() },
                 { binding: 3, resource: AlbedoImage.createView() },
-                { binding: 4, resource: CsmArrayView },
+                { binding: 4, resource: CsmViews[0] },
                 { binding: 5, resource: ShadowComparison },
                 { binding: 6, resource: GtaoImages[ScreenNumber].createView() },
                 { binding: 7, resource: LinearSampler },
                 { binding: 8, resource: { buffer: PropagationVolumes[VolumeNumber] } },
-                { binding: 9, resource: { buffer: BlockerVolume } },
+                { binding: 9, resource: { buffer: NearBlockerDilated } },
+                { binding: 10, resource: CsmViews[1] },
+                { binding: 11, resource: CsmViews[2] },
+                { binding: 12, resource: { buffer: NearPropagationVolumes[VolumeNumber] } },
+                { binding: 13, resource: { buffer: FarBlockerPacked } },
             ],
         })));
         HistoryNumber = 0;
@@ -919,7 +1204,7 @@ async function BringRenderer()
         ];
     }
 
-    function StabilizedShadowProjection(Camera, SunDirection, NearDistance, FarDistance)
+    function StabilizedShadowProjection(Camera, SunDirection, NearDistance, FarDistance, Resolution)
     {
         const Tangent = Math.tan(0.78 * 0.5);
         const Aspect = PresentationWidth / PresentationHeight;
@@ -931,7 +1216,7 @@ async function BringRenderer()
         let Centre = Add(Camera.Eye, Scale(Camera.Forward, (NearDistance + FarDistance) * 0.5));
         const LightRight = Normalise(Cross([0.0, 0.0, 1.0], SunDirection));
         const LightUp = Normalise(Cross(SunDirection, LightRight));
-        const TexelSize = (Radius * 2.0) / ShadowResolution;
+        const TexelSize = (Radius * 2.0) / Resolution;
         const LightX = Dot(Centre, LightRight);
         const LightY = Dot(Centre, LightUp);
         Centre = Add(Centre, Scale(LightRight, Math.floor(LightX / TexelSize) * TexelSize - LightX));
@@ -970,16 +1255,16 @@ async function BringRenderer()
         const LookAhead = Add(Camera.Eye, Scale(Camera.Forward, Math.min(OrbitDistance * 0.55, 10.0)));
         const CascadeCenter = [LookAhead[0], LookAhead[1], 4.0];
         const Origins = [
-            SnappedCascadeOrigin(CascadeCenter, 0.60),
-            SnappedCascadeOrigin(CascadeCenter, 1.60),
-            SnappedCascadeOrigin(CascadeCenter, 4.00),
+            SnappedCascadeOrigin(CascadeCenter, 0.50),
+            SnappedCascadeOrigin(CascadeCenter, 4.0 / 3.0),
+            SnappedCascadeOrigin(CascadeCenter, 10.0 / 3.0),
         ];
         const PreviousOrigins = PreviousCascadeOrigins || Origins;
         const ShadowSplits = [10.0, 30.0, 90.0];
         const ShadowMatrices = [
-            StabilizedShadowProjection(Camera, SunDirection, 0.08, ShadowSplits[0]),
-            StabilizedShadowProjection(Camera, SunDirection, ShadowSplits[0], ShadowSplits[1]),
-            StabilizedShadowProjection(Camera, SunDirection, ShadowSplits[1], ShadowSplits[2]),
+            StabilizedShadowProjection(Camera, SunDirection, 0.08, ShadowSplits[0], ShadowResolutions[0]),
+            StabilizedShadowProjection(Camera, SunDirection, ShadowSplits[0], ShadowSplits[1], ShadowResolutions[1]),
+            StabilizedShadowProjection(Camera, SunDirection, ShadowSplits[1], ShadowSplits[2], ShadowResolutions[2]),
         ];
         const MotionBounds = ConstructMotionBounds(WorldTime, PreviousWorldTime);
         const Content = new Float32Array(FrameUniformBytes / 4);
@@ -1000,7 +1285,7 @@ async function BringRenderer()
             Number(DisplayMode.value),
             BlockerField.checked ? 1.0 : 0.0,
             GtaoEnabled.checked ? 1.0 : 0.0,
-            Number(ShadowFilter.value),
+            AdaptiveQuality.checked ? ActiveShadowRadius : Number(ShadowFilter.value),
         ], 88);
         Content.set([
             0.91,
@@ -1008,19 +1293,27 @@ async function BringRenderer()
             TemporalStability.checked ? 1.0 : 0.0,
             1.0,
         ], 92);
-        Content.set([VolumeResolution, SurfelCount, Number(PropagationSteps.value), 0.90], 96);
+        const CandidateCount = AdaptiveQuality.checked ? ActiveSurfelCandidates : SurfelCount;
+        const PropagationCount = AdaptiveQuality.checked ? ActivePropagationSteps : Number(PropagationSteps.value);
+        Content.set([VolumeResolution, CandidateCount, PropagationCount, 0.90], 96);
         Content.set(PreviousOrigins[0], 100);
         Content.set(PreviousOrigins[1], 104);
         Content.set(PreviousOrigins[2], 108);
         Content.set(ShadowMatrices[0], 112);
         Content.set(ShadowMatrices[1], 128);
         Content.set(ShadowMatrices[2], 144);
-        Content.set([...ShadowSplits, ShadowResolution], 160);
+        Content.set([...ShadowSplits, ShadowResolutions[0]], 160);
         for (let BoundNumber = 0; BoundNumber < MotionBounds.length; ++BoundNumber)
         {
             Content.set(MotionBounds[BoundNumber].Minimum, 164 + BoundNumber * 8);
             Content.set(MotionBounds[BoundNumber].Maximum, 168 + BoundNumber * 8);
         }
+        Content.set([
+            Number(EmitterSurfelCount.value),
+            Number(EmitterSurfelScale.value) * 0.01,
+            EmissiveLight.checked ? 1.0 : 0.0,
+            0.0,
+        ], 236);
         Device.queue.writeBuffer(FrameUniform, 0, Content);
         for (let Cascade = 0; Cascade < 3; ++Cascade)
         {
@@ -1045,6 +1338,14 @@ async function BringRenderer()
         const FrameInfo = WriteFrameUniforms(Camera);
         const EncodeStart = performance.now();
         const Commands = Device.createCommandEncoder({ label: "Dynamic open-world GI frame" });
+        if (TimestampSupported)
+        {
+            const TimingBegin = Commands.beginComputePass({
+                label: "Begin whole-frame GPU timer",
+                timestampWrites: { querySet: TimestampQueries, beginningOfPassWriteIndex: 0 },
+            });
+            TimingBegin.end();
+        }
 
         for (let Cascade = 0; Cascade < 3; ++Cascade)
         {
@@ -1052,7 +1353,7 @@ async function BringRenderer()
                 label: `Rasterize stabilized shadow cascade ${Cascade}`,
                 colorAttachments: [],
                 depthStencilAttachment: {
-                    view: CsmLayerViews[Cascade],
+                    view: CsmViews[Cascade],
                     depthClearValue: 1.0,
                     depthLoadOp: "clear",
                     depthStoreOp: "store",
@@ -1105,7 +1406,7 @@ async function BringRenderer()
         const ReservoirClearPass = Commands.beginComputePass({ label: "Clear per-cell surfel reservoirs" });
         ReservoirClearPass.setPipeline(ClearReservoirProgram);
         ReservoirClearPass.setBindGroup(0, ClearReservoirGroup);
-        ReservoirClearPass.dispatchWorkgroups(Math.ceil(VolumeCellCount / 64));
+        ReservoirClearPass.dispatchWorkgroups(Math.ceil((VolumeCellCount + CellsPerCascade) / 64));
         ReservoirClearPass.end();
 
         const SurfelClaimPass = Commands.beginComputePass({ label: "Select stable per-cell surfel reservoirs" });
@@ -1120,6 +1421,15 @@ async function BringRenderer()
         SurfelInjectionPass.dispatchWorkgroups(Math.ceil(SurfelCount / 64));
         SurfelInjectionPass.end();
 
+        const NearInjectionPass = Commands.beginComputePass({ label: "Inject dual-reservoir near surfels" });
+        NearInjectionPass.setPipeline(InjectNearProgram);
+        NearInjectionPass.setBindGroup(0, InjectNearGroup);
+        NearInjectionPass.dispatchWorkgroups(Math.ceil(SurfelCount / 64));
+        NearInjectionPass.setPipeline(InjectPersistentEmitterProgram);
+        NearInjectionPass.setBindGroup(0, InjectPersistentEmitterGroup);
+        NearInjectionPass.dispatchWorkgroups(Math.ceil(MaximumPersistentEmitterSurfels / 64));
+        NearInjectionPass.end();
+
         const CameraInjectionPass = Commands.beginComputePass({ label: "Scatter camera-visible blockers" });
         CameraInjectionPass.setPipeline(InjectCameraProgram);
         CameraInjectionPass.setBindGroup(0, InjectCameraGroup);
@@ -1129,22 +1439,37 @@ async function BringRenderer()
         const NormalizePass = Commands.beginComputePass({ label: "Normalize LPV injection" });
         NormalizePass.setPipeline(NormalizeProgram);
         NormalizePass.setBindGroup(0, NormalizeGroup);
-        NormalizePass.dispatchWorkgroups(Math.ceil(VolumeCellCount / 64));
+        NormalizePass.dispatchWorkgroups(Math.ceil((CellsPerCascade * 2) / 64));
         NormalizePass.end();
 
-        const DilationPass = Commands.beginComputePass({ label: "Dilate near-cascade directional blockers" });
-        DilationPass.setPipeline(DilateBlockerProgram);
-        DilationPass.setBindGroup(0, DilateBlockerGroup);
-        DilationPass.dispatchWorkgroups(Math.ceil(VolumeCellCount / 64));
-        DilationPass.end();
+        const NearNormalizePass = Commands.beginComputePass({ label: "Normalize persistent six-face near radiance" });
+        NearNormalizePass.setPipeline(NormalizeNearProgram);
+        NearNormalizePass.setBindGroup(0, NormalizeNearGroup);
+        NearNormalizePass.dispatchWorkgroups(Math.ceil(CellsPerCascade / 64));
+        NearNormalizePass.end();
 
-        const StepCount = Number(PropagationSteps.value);
+        const BlockerPass = Commands.beginComputePass({ label: "Normalize and dilate packed blocker fields" });
+        BlockerPass.setPipeline(NormalizeNearBlockerProgram);
+        BlockerPass.setBindGroup(0, NormalizeNearBlockerGroup);
+        BlockerPass.dispatchWorkgroups(Math.ceil(NearBlockerCellCount / 64));
+        BlockerPass.setPipeline(NormalizeFarBlockerProgram);
+        BlockerPass.setBindGroup(0, NormalizeFarBlockerGroup);
+        BlockerPass.dispatchWorkgroups(Math.ceil(FarBlockerCellCount / 64));
+        BlockerPass.setPipeline(DilateBlockerProgram);
+        BlockerPass.setBindGroup(0, DilateBlockerGroup);
+        BlockerPass.dispatchWorkgroups(Math.ceil(NearBlockerCellCount / 64));
+        BlockerPass.end();
+
+        const StepCount = AdaptiveQuality.checked ? ActivePropagationSteps : Number(PropagationSteps.value);
         for (let Step = 0; Step < StepCount; ++Step)
         {
             const PropagationPass = Commands.beginComputePass({ label: `LPV propagation step ${Step + 1}` });
             PropagationPass.setPipeline(PropagateProgram);
             PropagationPass.setBindGroup(0, PropagateGroups[Step % 2]);
-            PropagationPass.dispatchWorkgroups(Math.ceil(VolumeCellCount / 64));
+            PropagationPass.dispatchWorkgroups(Math.ceil((CellsPerCascade * 2) / 64));
+            PropagationPass.setPipeline(PropagateNearProgram);
+            PropagationPass.setBindGroup(0, PropagateNearGroups[Step % 2]);
+            PropagationPass.dispatchWorkgroups(Math.ceil(CellsPerCascade / 64));
             PropagationPass.end();
         }
         const PublishedVolume = StepCount % 2;
@@ -1183,14 +1508,48 @@ async function BringRenderer()
             });
             OverlayRendering.setPipeline(OverlayProgram);
             OverlayRendering.setBindGroup(0, OverlayGroup);
-            OverlayRendering.draw(6, Math.ceil(SurfelCount / OverlayStride));
+            const OverlayCandidateCount = AdaptiveQuality.checked ? ActiveSurfelCandidates : SurfelCount;
+            OverlayRendering.draw(6, Math.ceil(OverlayCandidateCount / OverlayStride));
             OverlayRendering.end();
         }
 
         Commands.copyBufferToBuffer(InjectionVolume, 0, SourceHistoryVolume, 0, VolumeBytes);
         Commands.copyBufferToBuffer(CurrentSourceMoments, 0, PreviousSourceMoments, 0, MomentBytes);
         Commands.copyBufferToBuffer(PropagationVolumes[PublishedVolume], 0, HistoryVolume, 0, VolumeBytes);
+        Commands.copyBufferToBuffer(NearSourceVolume, 0, NearSourceHistory, 0, NearCellBytes);
+        Commands.copyBufferToBuffer(NearPropagationVolumes[PublishedVolume], 0, NearHistoryVolume, 0, NearCellBytes);
+
+        let TimestampReadback = null;
+        if (TimestampSupported)
+        {
+            const TimingEnd = Commands.beginComputePass({
+                label: "End whole-frame GPU timer",
+                timestampWrites: { querySet: TimestampQueries, beginningOfPassWriteIndex: 1 },
+            });
+            TimingEnd.end();
+            TimestampReadback = TimestampReadbacks.find((Entry) => !Entry.Busy) || null;
+            if (TimestampReadback)
+            {
+                TimestampReadback.Busy = true;
+                Commands.resolveQuerySet(TimestampQueries, 0, 2, TimestampResolve, 0);
+                Commands.copyBufferToBuffer(TimestampResolve, 0, TimestampReadback.Buffer, 0, 16);
+            }
+        }
         Device.queue.submit([Commands.finish()]);
+        if (TimestampReadback)
+        {
+            TimestampReadback.Buffer.mapAsync(GPUMapMode.READ).then(() =>
+            {
+                const Values = new BigUint64Array(TimestampReadback.Buffer.getMappedRange());
+                const Nanoseconds = Values[1] >= Values[0] ? Values[1] - Values[0] : 0n;
+                TimestampReadback.Buffer.unmap();
+                TimestampReadback.Busy = false;
+                ApplyGpuTiming(Number(Nanoseconds) / 1.0e6);
+            }).catch(() =>
+            {
+                TimestampReadback.Busy = false;
+            });
+        }
         HistoryNumber = CurrentHistory;
         PreviousCameraProjection = new Float32Array(Camera.Projection);
         PreviousCascadeOrigins = FrameInfo.Origins.map((Origin) => [...Origin]);
@@ -1199,7 +1558,7 @@ async function BringRenderer()
         SmoothedEncodeMilliseconds = SmoothedEncodeMilliseconds === 0.0
             ? EncodeMilliseconds
             : SmoothedEncodeMilliseconds * 0.90 + EncodeMilliseconds * 0.10;
-        TimingMetric.textContent = `${SmoothedEncodeMilliseconds.toFixed(2)} ms`;
+        if (!TimestampSupported) TimingMetric.textContent = `${SmoothedEncodeMilliseconds.toFixed(2)} ms CPU fallback`;
         requestAnimationFrame(Render);
     }
 
@@ -1234,6 +1593,18 @@ async function BringRenderer()
     {
         const Count = Number(PropagationSteps.value);
         PropagationOutput.textContent = `${Count} ${Count === 1 ? "step" : "steps"}`;
+        ActivePropagationSteps = Count;
+        UpdateQualityMetrics();
+    });
+    EmitterSurfelCount.addEventListener("input", () =>
+    {
+        EmitterSurfelOutput.textContent = Number(EmitterSurfelCount.value).toLocaleString();
+        InvalidateLightingHistory();
+    });
+    EmitterSurfelScale.addEventListener("input", () =>
+    {
+        EmitterScaleOutput.textContent = `${(Number(EmitterSurfelScale.value) * 0.01).toFixed(2)}×`;
+        InvalidateLightingHistory();
     });
     IndirectGain.addEventListener("input", () =>
     {
@@ -1246,6 +1617,8 @@ async function BringRenderer()
     RenderScale.addEventListener("input", () =>
     {
         ScaleOutput.textContent = `${RenderScale.value}%`;
+        AdaptivePresentationScale = Math.min(AdaptivePresentationScale, Number(RenderScale.value));
+        UpdateQualityMetrics();
     });
     RenderScale.addEventListener("change", () =>
     {
@@ -1253,6 +1626,25 @@ async function BringRenderer()
         PreviousCascadeOrigins = null;
         FrameNumber = 0;
         PresentationWidth = 0;
+    });
+    ShadowFilter.addEventListener("change", () =>
+    {
+        ActiveShadowRadius = Number(ShadowFilter.value);
+        UpdateQualityMetrics();
+    });
+    AdaptiveQuality.addEventListener("change", () =>
+    {
+        if (AdaptiveQuality.checked)
+        {
+            AdaptivePresentationScale = Number(RenderScale.value);
+            ActiveSurfelCandidates = SurfelCount;
+            ActivePropagationSteps = Number(PropagationSteps.value);
+            ActiveShadowRadius = Number(ShadowFilter.value);
+            AdaptiveSampleCounter = 0;
+        }
+        PresentationWidth = 0;
+        InvalidateLightingHistory();
+        UpdateQualityMetrics();
     });
     PauseButton.addEventListener("click", () =>
     {

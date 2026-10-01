@@ -41,6 +41,8 @@ struct FrameUniforms
     MotionMax6: vec4f,
     MotionMin7: vec4f,
     MotionMax7: vec4f,
+    MotionMin8: vec4f,
+    MotionMax8: vec4f,
 };
 
 struct SurfelRecord
@@ -62,12 +64,6 @@ struct VolumeCell
 };
 struct VolumeExtent { Cells: array<VolumeCell>, };
 
-struct BlockerCell
-{
-    Axis0: vec4f,
-    Axis1: vec4f,
-};
-struct BlockerExtent { Cells: array<BlockerCell>, };
 struct MomentExtent { Entries: array<vec2f>, };
 
 @group(0) @binding(0) var<uniform> Frame: FrameUniforms;
@@ -76,18 +72,19 @@ struct MomentExtent { Entries: array<vec2f>, };
 @group(0) @binding(3) var PositionImage: texture_2d<f32>;
 @group(0) @binding(4) var NormalImage: texture_2d<f32>;
 @group(0) @binding(5) var<storage, read_write> InjectionVolume: VolumeExtent;
-@group(0) @binding(6) var<storage, read_write> RawBlockers: BlockerExtent;
 @group(0) @binding(7) var<storage, read_write> InitialPropagation: VolumeExtent;
 @group(0) @binding(8) var<storage, read_write> Reservoirs: ReservoirExtent;
 @group(0) @binding(9) var<storage, read> HistoryVolume: VolumeExtent;
-@group(0) @binding(10) var<storage, read_write> DilatedBlockers: BlockerExtent;
 @group(0) @binding(11) var<storage, read> SourceHistoryVolume: VolumeExtent;
 @group(0) @binding(12) var<storage, read> PreviousSourceMoments: MomentExtent;
 @group(0) @binding(13) var<storage, read_write> CurrentSourceMoments: MomentExtent;
+@group(0) @binding(14) var<storage, read_write> NearBlockerAccumulation: AtomicExtent;
+@group(0) @binding(15) var<storage, read_write> FarBlockerAccumulation: AtomicExtent;
 
-const VolumeResolution: u32 = 40u;
-const CellsPerCascade: u32 = 64000u;
-const AtomicStride: u32 = 19u;
+const VolumeResolution: u32 = 48u;
+const NearBlockerResolution: u32 = 80u;
+const CellsPerCascade: u32 = 110592u;
+const AtomicStride: u32 = 13u;
 const FixedScale: f32 = 1024.0;
 
 fn Hash(Value: u32) -> u32
@@ -159,6 +156,18 @@ fn ReservoirKey(Identity: u32, Cascade: u32, RecordNumber: u32, Confidence: f32)
     return Priority | StableTieBreak;
 }
 
+fn AddNearBlocker(Address: u32, Value: f32)
+{
+    let Encoded = i32(round(clamp(Value, 0.0, 32.0) * FixedScale));
+    atomicAdd(&NearBlockerAccumulation.Entries[Address], Encoded);
+}
+
+fn AddFarBlocker(Address: u32, Value: f32)
+{
+    let Encoded = i32(round(clamp(Value, 0.0, 32.0) * FixedScale));
+    atomicAdd(&FarBlockerAccumulation.Entries[Address], Encoded);
+}
+
 fn InjectBlocker(Position: vec3f, Normal: vec3f)
 {
     let Directional = array<f32, 6>(
@@ -166,14 +175,32 @@ fn InjectBlocker(Position: vec3f, Normal: vec3f)
         max(Normal.y, 0.0), max(-Normal.y, 0.0),
         max(Normal.z, 0.0), max(-Normal.z, 0.0)
     );
-    for (var Cascade = 0u; Cascade < 3u; Cascade = Cascade + 1u)
+
+    let NearOrigin = Frame.CascadeOrigin0;
+    let NearCellSize = NearOrigin.w * f32(VolumeResolution) / f32(NearBlockerResolution);
+    let NearCoordinate = vec3i(floor((Position - NearOrigin.xyz) / NearCellSize));
+    if (all(NearCoordinate >= vec3i(0)) && all(NearCoordinate < vec3i(i32(NearBlockerResolution))))
+    {
+        let NearCell = u32(NearCoordinate.x)
+            + u32(NearCoordinate.y) * NearBlockerResolution
+            + u32(NearCoordinate.z) * NearBlockerResolution * NearBlockerResolution;
+        for (var Axis = 0u; Axis < 6u; Axis = Axis + 1u)
+        {
+            AddNearBlocker(NearCell * 6u + Axis, Directional[Axis]);
+        }
+    }
+
+    for (var Cascade = 1u; Cascade < 3u; Cascade = Cascade + 1u)
     {
         let Located = LocateCell(Position, CascadeOrigin(Cascade));
         if (Located.w == 0) { continue; }
-        let Base = CellNumber(Located.xyz, Cascade) * AtomicStride;
+        let LocalCell = u32(Located.x)
+            + u32(Located.y) * VolumeResolution
+            + u32(Located.z) * VolumeResolution * VolumeResolution;
+        let FarCell = (Cascade - 1u) * CellsPerCascade + LocalCell;
         for (var Axis = 0u; Axis < 6u; Axis = Axis + 1u)
         {
-            AddFixed(Base + 12u + Axis, Directional[Axis]);
+            AddFarBlocker(FarCell * 6u + Axis, Directional[Axis]);
         }
     }
 }
@@ -181,7 +208,7 @@ fn InjectBlocker(Position: vec3f, Normal: vec3f)
 @compute @workgroup_size(64)
 fn ClearReservoirs(@builtin(global_invocation_id) Global: vec3u)
 {
-    if (Global.x >= CellsPerCascade * 3u) { return; }
+    if (Global.x >= CellsPerCascade * 4u) { return; }
     atomicStore(&Reservoirs.Entries[Global.x], 0u);
 }
 
@@ -201,7 +228,13 @@ fn ClaimSurfels(@builtin(global_invocation_id) Global: vec3u)
         let Located = LocateCell(Position, CascadeOrigin(Cascade));
         if (Located.w == 0) { continue; }
         let Cell = CellNumber(Located.xyz, Cascade);
-        atomicMax(&Reservoirs.Entries[Cell], ReservoirKey(Identity, Cascade, RecordNumber, Record.NormalValid.w));
+        let Key = ReservoirKey(Identity, Cascade, RecordNumber, Record.NormalValid.w);
+        let PreviousPrimary = atomicMax(&Reservoirs.Entries[Cell], Key);
+        if (Cascade == 0u && PreviousPrimary != 0u && PreviousPrimary != Key)
+        {
+            let SecondaryAddress = CellsPerCascade * 3u + Cell;
+            atomicMax(&Reservoirs.Entries[SecondaryAddress], min(PreviousPrimary, Key));
+        }
     }
 }
 
@@ -220,7 +253,7 @@ fn SplatRadiance(Cell: u32, Weight: f32, Red: vec4f, Green: vec4f, Blue: vec4f)
     AddFixed(Base + 9u, Blue.y * Weight);
     AddFixed(Base + 10u, Blue.z * Weight);
     AddFixed(Base + 11u, Blue.w * Weight);
-    AddFixed(Base + 18u, Weight);
+    AddFixed(Base + 12u, Weight);
 }
 
 @compute @workgroup_size(64)
@@ -238,7 +271,8 @@ fn InjectSelectedSurfels(@builtin(global_invocation_id) Global: vec3u)
     let Green = vec4f(Radiance.g * 0.45, Radiance.g * Normal * 0.55);
     let Blue = vec4f(Radiance.b * 0.45, Radiance.b * Normal * 0.55);
 
-    for (var Cascade = 0u; Cascade < 3u; Cascade = Cascade + 1u)
+    // The near cascade is injected into a dedicated six-face radiance field.
+    for (var Cascade = 1u; Cascade < 3u; Cascade = Cascade + 1u)
     {
         let OriginCell = CascadeOrigin(Cascade);
         let Located = LocateCell(Position, OriginCell);
@@ -294,7 +328,8 @@ fn IsDynamic(Position: vec3f, CellRadius: f32) -> bool
         || InsideBox(Position, Frame.MotionMin4, Frame.MotionMax4, CellRadius)
         || InsideBox(Position, Frame.MotionMin5, Frame.MotionMax5, CellRadius)
         || InsideBox(Position, Frame.MotionMin6, Frame.MotionMax6, CellRadius)
-        || InsideBox(Position, Frame.MotionMin7, Frame.MotionMax7, CellRadius);
+        || InsideBox(Position, Frame.MotionMin7, Frame.MotionMax7, CellRadius)
+        || InsideBox(Position, Frame.MotionMin8, Frame.MotionMax8, CellRadius);
 }
 
 fn EmptyVolumeCell() -> VolumeCell
@@ -340,18 +375,13 @@ fn BlendCell(Previous: VolumeCell, Current: VolumeCell, Weight: f32) -> VolumeCe
 @compute @workgroup_size(64)
 fn NormalizeMain(@builtin(global_invocation_id) Global: vec3u)
 {
-    let Cell = Global.x;
+    let Cell = Global.x + CellsPerCascade;
     if (Cell >= CellsPerCascade * 3u) { return; }
     let Base = Cell * AtomicStride;
     var Red = vec4f(ExchangeFixed(Base + 0u), ExchangeFixed(Base + 1u), ExchangeFixed(Base + 2u), ExchangeFixed(Base + 3u));
     var Green = vec4f(ExchangeFixed(Base + 4u), ExchangeFixed(Base + 5u), ExchangeFixed(Base + 6u), ExchangeFixed(Base + 7u));
     var Blue = vec4f(ExchangeFixed(Base + 8u), ExchangeFixed(Base + 9u), ExchangeFixed(Base + 10u), ExchangeFixed(Base + 11u));
-    let DirectionalSum = array<f32, 6>(
-        ExchangeFixed(Base + 12u), ExchangeFixed(Base + 13u),
-        ExchangeFixed(Base + 14u), ExchangeFixed(Base + 15u),
-        ExchangeFixed(Base + 16u), ExchangeFixed(Base + 17u)
-    );
-    let RadianceWeight = ExchangeFixed(Base + 18u);
+    let RadianceWeight = ExchangeFixed(Base + 12u);
     if (RadianceWeight > 1.0)
     {
         // Average genuinely overlapping winners, but do not divide away sub-unit
@@ -401,42 +431,4 @@ fn NormalizeMain(@builtin(global_invocation_id) Global: vec3u)
     let HistoryEnergy = CellEnergy(History);
     let HistoryWeight = select(0.0, 0.82, HistoryValid && HistoryEnergy > 0.0001);
     InitialPropagation.Cells[Cell] = BlendCell(StableInjection, History, HistoryWeight);
-
-    let Opacity = vec3f(1.0) - exp(-vec3f(DirectionalSum[0], DirectionalSum[1], DirectionalSum[2]) * 0.16);
-    let OpacityTwo = vec3f(1.0) - exp(-vec3f(DirectionalSum[3], DirectionalSum[4], DirectionalSum[5]) * 0.16);
-    RawBlockers.Cells[Cell] = BlockerCell(
-        vec4f(Opacity.x, Opacity.y, Opacity.z, OpacityTwo.x),
-        vec4f(OpacityTwo.y, OpacityTwo.z, 0.0, 0.0)
-    );
-}
-
-fn MaxBlocker(Alpha: BlockerCell, Beta: BlockerCell) -> BlockerCell
-{
-    return BlockerCell(max(Alpha.Axis0, Beta.Axis0), max(Alpha.Axis1, Beta.Axis1));
-}
-
-@compute @workgroup_size(64)
-fn DilateBlockersMain(@builtin(global_invocation_id) Global: vec3u)
-{
-    let Cell = Global.x;
-    if (Cell >= CellsPerCascade * 3u) { return; }
-    let Cascade = Cell / CellsPerCascade;
-    var Result = RawBlockers.Cells[Cell];
-    if (Cascade == 0u)
-    {
-        let Coordinate = LocalCoordinate(Cell);
-        for (var Z = -1; Z <= 1; Z = Z + 1)
-        {
-            for (var Y = -1; Y <= 1; Y = Y + 1)
-            {
-                for (var X = -1; X <= 1; X = X + 1)
-                {
-                    let Neighbour = Coordinate + vec3i(X, Y, Z);
-                    if (any(Neighbour < vec3i(0)) || any(Neighbour >= vec3i(i32(VolumeResolution)))) { continue; }
-                    Result = MaxBlocker(Result, RawBlockers.Cells[CellNumber(Neighbour, Cascade)]);
-                }
-            }
-        }
-    }
-    DilatedBlockers.Cells[Cell] = Result;
 }

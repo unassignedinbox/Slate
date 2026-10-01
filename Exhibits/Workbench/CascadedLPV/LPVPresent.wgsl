@@ -39,16 +39,10 @@ struct VolumeExtent
     Cells: array<VolumeCell>,
 };
 
-struct BlockerCell
-{
-    Axis0: vec4f,
-    Axis1: vec4f,
-};
-
-struct BlockerExtent
-{
-    Cells: array<BlockerCell>,
-};
+struct NearCell { Faces: array<vec4f, 6>, }
+struct NearExtent { Cells: array<NearCell>, }
+struct PackedBlocker { Low: u32, High: u32, }
+struct BlockerExtent { Cells: array<PackedBlocker>, }
 
 struct FullscreenVarying
 {
@@ -60,15 +54,19 @@ struct FullscreenVarying
 @group(0) @binding(1) var PositionImage: texture_2d<f32>;
 @group(0) @binding(2) var NormalImage: texture_2d<f32>;
 @group(0) @binding(3) var AlbedoImage: texture_2d<f32>;
-@group(0) @binding(4) var CsmDepth: texture_depth_2d_array;
+@group(0) @binding(4) var CsmNear: texture_depth_2d;
+@group(0) @binding(10) var CsmMiddle: texture_depth_2d;
+@group(0) @binding(11) var CsmFar: texture_depth_2d;
 @group(0) @binding(5) var ShadowComparison: sampler_comparison;
 @group(0) @binding(6) var GtaoTexture: texture_2d<f32>;
 @group(0) @binding(7) var LinearSampler: sampler;
 @group(0) @binding(8) var<storage, read> RadianceVolume: VolumeExtent;
-@group(0) @binding(9) var<storage, read> BlockerVolume: BlockerExtent;
+@group(0) @binding(9) var<storage, read> NearBlockerVolume: BlockerExtent;
+@group(0) @binding(12) var<storage, read> NearRadianceVolume: NearExtent;
+@group(0) @binding(13) var<storage, read> FarBlockerVolume: BlockerExtent;
 
-const VolumeResolution: u32 = 40u;
-const CellsPerCascade: u32 = 64000u;
+const VolumeResolution: u32 = 48u;
+const CellsPerCascade: u32 = 110592u;
 const InversePi: f32 = 0.31830988618;
 
 fn CascadeOrigin(Cascade: u32) -> vec4f
@@ -90,12 +88,62 @@ fn CascadeEdge(Position: vec3f, Cascade: u32) -> f32
 {
     let OriginCell = CascadeOrigin(Cascade);
     let Grid = (Position - OriginCell.xyz) / OriginCell.w;
-    return min(min(min(Grid.x, Grid.y), Grid.z), min(min(39.0 - Grid.x, 39.0 - Grid.y), 39.0 - Grid.z));
+    return min(min(min(Grid.x, Grid.y), Grid.z), min(min(47.0 - Grid.x, 47.0 - Grid.y), 47.0 - Grid.z));
 }
 
 fn Evaluate(Coefficients: vec4f, Direction: vec3f) -> f32
 {
     return max(Coefficients.x + dot(Coefficients.yzw, Direction), 0.0);
+}
+
+fn FaceDirection(Face: u32) -> vec3f
+{
+    let Directions = array<vec3f, 6>(
+        vec3f(1.0, 0.0, 0.0), vec3f(-1.0, 0.0, 0.0),
+        vec3f(0.0, 1.0, 0.0), vec3f(0.0, -1.0, 0.0),
+        vec3f(0.0, 0.0, 1.0), vec3f(0.0, 0.0, -1.0)
+    );
+    return Directions[Face];
+}
+
+fn EvaluateNear(Cell: NearCell, Direction: vec3f) -> vec3f
+{
+    var Value = vec3f(0.0);
+    var Weight = 0.0;
+    for (var Face = 0u; Face < 6u; Face = Face + 1u)
+    {
+        let FaceWeight = max(dot(FaceDirection(Face), Direction), 0.0);
+        Value = Value + Cell.Faces[Face].rgb * FaceWeight;
+        Weight = Weight + FaceWeight;
+    }
+    return Value / max(Weight, 0.0001);
+}
+
+fn SampleNearCascade(Position: vec3f, Normal: vec3f) -> vec3f
+{
+    let OriginCell = Frame.CascadeOrigin0;
+    let SamplePosition = Position + Normal * min(OriginCell.w * 0.48, 0.36);
+    let Grid = (SamplePosition - OriginCell.xyz) / OriginCell.w - vec3f(0.5);
+    let Base = vec3i(floor(Grid));
+    let Fraction = fract(Grid);
+    if (any(Base < vec3i(0)) || any(Base >= vec3i(47))) { return vec3f(0.0); }
+    var Value = vec3f(0.0);
+    for (var Z = 0; Z <= 1; Z = Z + 1)
+    {
+        for (var Y = 0; Y <= 1; Y = Y + 1)
+        {
+            for (var X = 0; X <= 1; X = X + 1)
+            {
+                let Offset = vec3i(X, Y, Z);
+                let WeightX = select(1.0 - Fraction.x, Fraction.x, X == 1);
+                let WeightY = select(1.0 - Fraction.y, Fraction.y, Y == 1);
+                let WeightZ = select(1.0 - Fraction.z, Fraction.z, Z == 1);
+                Value = Value + EvaluateNear(NearRadianceVolume.Cells[CellNumber(Base + Offset, 0u)], -Normal)
+                    * (WeightX * WeightY * WeightZ);
+            }
+        }
+    }
+    return Value;
 }
 
 fn SampleCascade(Position: vec3f, Normal: vec3f, Cascade: u32) -> vec3f
@@ -105,7 +153,7 @@ fn SampleCascade(Position: vec3f, Normal: vec3f, Cascade: u32) -> vec3f
     let Grid = (SamplePosition - OriginCell.xyz) / OriginCell.w - vec3f(0.5);
     let Base = vec3i(floor(Grid));
     let Fraction = fract(Grid);
-    if (any(Base < vec3i(0)) || any(Base >= vec3i(39))) { return vec3f(0.0); }
+    if (any(Base < vec3i(0)) || any(Base >= vec3i(47))) { return vec3f(0.0); }
 
     var Red = vec4f(0.0);
     var Green = vec4f(0.0);
@@ -141,7 +189,7 @@ fn SampleLPV(Position: vec3f, Normal: vec3f) -> vec4f
     let NearEdge = CascadeEdge(Position, 0u);
     if (NearEdge > 0.0)
     {
-        let NearValue = SampleCascade(Position, Normal, 0u);
+        let NearValue = SampleNearCascade(Position, Normal);
         let MiddleValue = SampleCascade(Position, Normal, 1u);
         let NearWeight = smoothstep(0.45, 2.5, NearEdge);
         return vec4f(mix(MiddleValue, NearValue, NearWeight), 0.0);
@@ -161,17 +209,42 @@ fn SampleLPV(Position: vec3f, Normal: vec3f) -> vec4f
     return vec4f(0.0, 0.0, 0.0, 3.0);
 }
 
+fn BlockerChannels(Blocker: PackedBlocker) -> array<f32, 6>
+{
+    return array<f32, 6>(
+        f32(Blocker.Low & 255u) * (1.0 / 255.0),
+        f32((Blocker.Low >> 8u) & 255u) * (1.0 / 255.0),
+        f32((Blocker.Low >> 16u) & 255u) * (1.0 / 255.0),
+        f32((Blocker.Low >> 24u) & 255u) * (1.0 / 255.0),
+        f32(Blocker.High & 255u) * (1.0 / 255.0),
+        f32((Blocker.High >> 8u) & 255u) * (1.0 / 255.0)
+    );
+}
+
 fn SampleBlocker(Position: vec3f, Cascade: u32) -> vec4f
 {
     let OriginCell = CascadeOrigin(Cascade);
-    let Coordinate = vec3i(floor((Position - OriginCell.xyz) / OriginCell.w));
-    if (any(Coordinate < vec3i(0)) || any(Coordinate >= vec3i(40))) { return vec4f(0.0); }
-    let Blocker = BlockerVolume.Cells[CellNumber(Coordinate, Cascade)];
-    let Axes = vec3f(
-        max(Blocker.Axis0.x, Blocker.Axis0.y),
-        max(Blocker.Axis0.z, Blocker.Axis0.w),
-        max(Blocker.Axis1.x, Blocker.Axis1.y)
-    );
+    var Blocker: PackedBlocker;
+    if (Cascade == 0u)
+    {
+        let NearResolution = 80u;
+        let NearCellSize = OriginCell.w * f32(VolumeResolution) / f32(NearResolution);
+        let Coordinate = vec3i(floor((Position - OriginCell.xyz) / NearCellSize));
+        if (any(Coordinate < vec3i(0)) || any(Coordinate >= vec3i(80))) { return vec4f(0.0); }
+        let Index = u32(Coordinate.x) + u32(Coordinate.y) * NearResolution
+            + u32(Coordinate.z) * NearResolution * NearResolution;
+        Blocker = NearBlockerVolume.Cells[Index];
+    }
+    else
+    {
+        let Coordinate = vec3i(floor((Position - OriginCell.xyz) / OriginCell.w));
+        if (any(Coordinate < vec3i(0)) || any(Coordinate >= vec3i(48))) { return vec4f(0.0); }
+        let Local = u32(Coordinate.x) + u32(Coordinate.y) * VolumeResolution
+            + u32(Coordinate.z) * VolumeResolution * VolumeResolution;
+        Blocker = FarBlockerVolume.Cells[(Cascade - 1u) * CellsPerCascade + Local];
+    }
+    let Channels = BlockerChannels(Blocker);
+    let Axes = vec3f(max(Channels[0], Channels[1]), max(Channels[2], Channels[3]), max(Channels[4], Channels[5]));
     return vec4f(Axes, max(Axes.x, max(Axes.y, Axes.z)));
 }
 
@@ -200,7 +273,9 @@ fn CascadeVisibility(Position: vec3f, Normal: vec3f, Cascade: u32) -> f32
     {
         return 1.0;
     }
-    let Extent = textureDimensions(CsmDepth);
+    var Extent = textureDimensions(CsmNear);
+    if (Cascade == 1u) { Extent = textureDimensions(CsmMiddle); }
+    if (Cascade == 2u) { Extent = textureDimensions(CsmFar); }
     let Texel = 1.0 / vec2f(Extent);
     // CSM depth spans are much larger than the former RSM span; a millidepth bias
     // erases contact shadows. Keep this below roughly one near-cascade texel in depth.
@@ -213,13 +288,21 @@ fn CascadeVisibility(Position: vec3f, Normal: vec3f, Cascade: u32) -> f32
         for (var X = -2; X <= 2; X = X + 1)
         {
             if (abs(X) > FilterRadius || abs(Y) > FilterRadius) { continue; }
-            Visibility = Visibility + textureSampleCompareLevel(
-                CsmDepth,
-                ShadowComparison,
-                Uv + vec2f(f32(X), f32(Y)) * Texel,
-                i32(Cascade),
-                Ndc.z - Bias
-            );
+            let SampleUv = Uv + vec2f(f32(X), f32(Y)) * Texel;
+            var Tap = 0.0;
+            if (Cascade == 0u)
+            {
+                Tap = textureSampleCompareLevel(CsmNear, ShadowComparison, SampleUv, Ndc.z - Bias);
+            }
+            else if (Cascade == 1u)
+            {
+                Tap = textureSampleCompareLevel(CsmMiddle, ShadowComparison, SampleUv, Ndc.z - Bias);
+            }
+            else
+            {
+                Tap = textureSampleCompareLevel(CsmFar, ShadowComparison, SampleUv, Ndc.z - Bias);
+            }
+            Visibility = Visibility + Tap;
             Weight = Weight + 1.0;
         }
     }
@@ -377,8 +460,8 @@ fn PresentFragment(Input: FullscreenVarying) -> @location(0) vec4f
         }
         else if (Mode == 8u)
         {
-            // In this mode LPVExtract injects zero solar radiance. Only the visible
-            // emitter and the coloured LPV spill it produces can remain.
+            // LPVExtract injects zero solar radiance here. Only self-emission and
+            // the persistent local-space emitter surfels can remain.
             LinearColour = Emissive + LPVIndirect * 1.35;
         }
         else if (Mode == 5u)

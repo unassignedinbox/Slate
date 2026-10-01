@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#07100f">
     <title>Slate — Dynamic Open-World GI Lab</title>
-    <link rel="stylesheet" href="CascadedLPV.css?revision=7">
+    <link rel="stylesheet" href="CascadedLPV.css?revision=8">
 </head>
 <body>
     <main>
@@ -15,8 +15,8 @@
                 <h1>Three moving light volumes.<br><span>No rays. No bake. No SDF.</span></h1>
                 <p class="Introduction">
                     A live WebGPU prototype for changing game worlds. Dedicated stabilized shadow cascades handle
-                    direct visibility; persistent camera-relative LPVs spread sun and emissive RSM radiance through
-                    a six-face blocker field, while half-resolution GTAO contributes ambient visibility only.
+                    direct visibility; persistent camera-relative LPVs spread RSM sunlight and local-space emissive
+                    surfels through packed directional blockers, while half-resolution GTAO adds ambient visibility only.
                 </p>
             </div>
             <div class="Status" aria-live="polite">
@@ -91,6 +91,19 @@
                     <span class="SwitchTrack"><span></span></span>
                     <span><b>Sparse RSM debug</b><small>Overlays 1 in 16 GI candidates</small></span>
                 </label>
+                <label class="SwitchControl">
+                    <input id="AdaptiveQuality" type="checkbox" checked>
+                    <span class="SwitchTrack"><span></span></span>
+                    <span><b>Adaptive GPU budget</b><small>Timestamp-driven scale, candidates, propagation, then PCF</small></span>
+                </label>
+                <label class="RangeControl">
+                    <span><b>Emitter surfels</b><output id="EmitterSurfelOutput">512</output></span>
+                    <input id="EmitterSurfelCount" type="range" min="128" max="768" value="512" step="128">
+                </label>
+                <label class="RangeControl">
+                    <span><b>Emitter footprint</b><output id="EmitterScaleOutput">1.00×</output></span>
+                    <input id="EmitterSurfelScale" type="range" min="50" max="200" value="100" step="25">
+                </label>
                 <label class="RangeControl">
                     <span><b>Propagation</b><output id="PropagationOutput">4 steps</output></span>
                     <input id="PropagationSteps" type="range" min="1" max="6" value="4" step="1">
@@ -104,8 +117,8 @@
                     <input id="ScreenRadius" type="range" min="4" max="30" value="14" step="2">
                 </label>
                 <label class="RangeControl">
-                    <span><b>Render scale</b><output id="ScaleOutput">150%</output></span>
-                    <input id="RenderScale" type="range" min="100" max="175" value="150" step="25">
+                    <span><b>Maximum render scale</b><output id="ScaleOutput">100%</output></span>
+                    <input id="RenderScale" type="range" min="75" max="150" value="100" step="5">
                 </label>
                 <label class="SelectControl">
                     <span><b>Shadow filter</b><small>Stabilized 3-cascade PCF</small></span>
@@ -123,27 +136,29 @@
 
         <section class="Metrics" aria-label="Live pipeline metrics">
             <article><span>Backend</span><strong>WebGPU</strong></article>
-            <article><span>Transient samples</span><strong id="SurfelMetric">36,864</strong></article>
-            <article><span>LPV cells</span><strong>3 × 40³</strong></article>
-            <article><span>Direct shadows</span><strong>3 × 1024²</strong></article>
-            <article><span>CPU encode</span><strong id="TimingMetric">—</strong></article>
+            <article><span>Active RSM samples</span><strong id="SurfelMetric">65,536</strong></article>
+            <article><span>Radiance</span><strong>3 × 48³</strong></article>
+            <article><span>Near blockers</span><strong>80³ packed</strong></article>
+            <article><span>Direct shadows</span><strong>2048² · 1024² · 1024²</strong></article>
+            <article><span>GPU transport</span><strong id="TimingMetric">—</strong></article>
+            <article><span>Adaptive quality</span><strong id="QualityMetric">100% · 65k · 4 · 3×3</strong></article>
         </section>
 
         <section class="Pipeline" aria-label="Pipeline explanation">
             <article>
                 <span class="ArticleNumber">01</span>
                 <h2>Rasterize samples</h2>
-                <p>A GI-only 384² reflective shadow map captures both reflected sun and explicit emissive radiance. Emissive-only view zeros every solar source so the cyan LPV spill is directly testable.</p>
+                <p>A 512² GI-only reflective shadow map yields up to 65,536 blue-noise 2×2 candidates. Fixed local-space mesh surfels separately follow the moving cyan emitter even when it leaves the RSM or camera.</p>
             </article>
             <article>
                 <span class="ArticleNumber">02</span>
                 <h2>Propagate off screen</h2>
-                <p>Three persistent 40³ lattices cover 24, 64, and 160 metres. Adaptive source moments, reprojected history, soft trilinear reconstruction, motion invalidation, and six-face blockers suppress flicker and leakage.</p>
+                <p>Three persistent 48³ lattices cover 24, 64, and 160 metres. The near field retains two source reservoirs and six-face RGB; an independent packed 80³ blocker lattice samples three points across every near propagation link.</p>
             </article>
             <article>
                 <span class="ArticleNumber">03</span>
                 <h2>Restore local detail</h2>
-                <p>Three stabilized 1024² shadow cascades handle direct visibility. Half-resolution GTAO adds contact occlusion only; the inaccurate screen-space colour-transfer approximation has been removed.</p>
+                <p>Stabilized 2048²/1024²/1024² shadow cascades use 3×3 or 5×5 PCF. GPU timestamps adapt presentation scale, spatial RSM candidates, propagation, then PCF without ever resizing an LPV.</p>
             </article>
         </section>
 
@@ -152,6 +167,6 @@
             <span>Diffuse GI prototype · SSR/reflection probes remain a separate production concern</span>
         </footer>
     </main>
-    <script type="module" src="CascadedLPV.js?revision=7"></script>
+    <script type="module" src="CascadedLPV.js?revision=8"></script>
 </body>
 </html>

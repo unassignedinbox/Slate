@@ -2,52 +2,56 @@
 
 Open `CascadedLPV.html` through an HTTP server in a WebGPU-capable browser.
 
-## Implemented pipeline
+## Revision 8 pipeline
 
-1. Rasterize the animated scene into a supersampled primary G-buffer, a GI-only 384² reflective shadow map, and three stabilized 1024² direct-shadow cascades.
-2. Capture reflected sunlight and explicit emissive radiance in the RSM. Rank all four samples in each 2×2 tile with a deterministic world-space blue-noise rule, stable IDs, and depth/normal discontinuity confidence.
-3. Resolve one deterministic candidate reservoir per LPV cell and trilinearly splat each selected source into the eight neighbouring cells.
-4. Add camera-visible geometry to a separate six-direction blocker volume. Conservatively dilate only the near-cascade blockers by one cell; radiance sources are never dilated.
-5. Reproject both the previous source field and propagated volume through the prior snapped cascade origins. A short mean/variance estimate adaptively publishes stable source radiance, while swept moving-object bounds immediately invalidate stale history.
-6. Run one to six Jacobi propagation steps in three persistent 40³ grids covering 24 m, 64 m, and 160 m, then resolve with soft trilinear reconstruction.
-7. Compute half-resolution GTAO with fixed world-space blue-noise directions, adaptive temporal smoothing, history clamping, and world-position rejection. No colour is transferred by this screen-space pass.
-8. Resolve direct light through selectable 3×3 or 5×5 PCF, then combine persistent LPV indirect light, self-emission, GTAO-modulated sky response, and diagnostic views.
+1. Rasterize the animated scene into a primary G-buffer, a GI-only 512² reflective shadow map, and independent 2048²/1024²/1024² stabilized direct-shadow textures.
+2. Extract at most 65,536 candidates by ranking all four samples in every RSM 2×2 tile with deterministic world-space blue noise, stable IDs, and depth/normal-discontinuity confidence. Reduced adaptive prefixes are permuted across the complete RSM instead of cropping it.
+3. Resolve two competing deterministic source reservoirs in each near LPV cell and one reservoir in each middle/far cell. Sources are trilinearly splatted without dilating radiance.
+4. Generate a fixed best-candidate blue-noise pattern on the cyan emitter's mesh triangles in object-local space. Transform and inject those records into all applicable LPV cascades every frame, independently of the directional RSM and camera.
+5. Store near radiance as six RGB faces in a persistent 48³ field. Middle/far 48³ fields retain compact first-order directional coefficients. Reproject source and propagated history through prior snapped origins, while swept moving-object bounds immediately invalidate stale cells.
+6. Scatter geometry into a separate 80³ near blocker lattice and two 48³ middle/far lattices. Six directional opacity channels occupy two packed `u32` words per cell. Only near blockers receive one-cell 3×3×3 dilation, and each near propagation link tests three high-resolution blocker samples.
+7. Run adaptive Jacobi propagation in the three persistent world-space grids covering 24 m, 64 m, and 160 m, then resolve with the original soft trilinear reconstruction.
+8. Compute half-resolution GTAO with fixed world-space blue-noise directions, temporal clamping, and world-position rejection. It contributes ambient visibility only and transfers no screen-space colour.
+9. Resolve direct light with 3×3 PCF by default or optional 5×5 PCF. Where `timestamp-query` is available, a four-buffer asynchronous readback ring adjusts presentation scale, spatial RSM candidate count, propagation count, and finally PCF radius. LPV and blocker dimensions never change at runtime.
 
-The RSM is used only to discover indirect-light sources. It is not reused for direct shadowing. The scene uses the repository's exact 67,832-triangle ShaderBall mesh for four animated objects, plus procedural dynamic game-world geometry. No BVH, ray query, path tracing, signed-distance field, lightmap, or precomputed transport is used.
+The RSM discovers reflected-sun sources; it is never reused for direct visibility. The scene retains the repository's exact 67,832-triangle ShaderBall mesh. There is no BVH, ray query, path tracing, signed-distance field, lightmap, baked lighting, or precomputed transfer.
 
-## Emissive-light proof
+## Persistent emissive proof
 
-A cyan emissive bar is positioned between two neutral pillars. Select **Emissive-only proof** to set solar RSM injection to exactly zero and clear temporal history. In that view:
+A moving cyan mesh is positioned between two neutral pillars. Its 768-record maximum sample set is generated once on the actual local-space cube triangles and remains fixed. Every frame the GPU transforms the active records by the emitter's current object transform and injects them directly into the near six-face and compact middle/far fields.
 
-- the cyan bar remains visible through self-emission;
-- coloured illumination on nearby non-emissive surfaces can only come from the world-space LPV;
-- switching **Emissive light** off resets history and removes both the source and its propagated spill.
+Select **Emissive-only proof** to make directional-RSM solar injection exactly zero and clear history. In that view:
 
-This proves that emissive radiance enters the same persistent, blocked LPV transport path as reflected sunlight. It does not claim arbitrary off-screen emissive discovery: an emitter must still be captured by the directional RSM or another raster source view.
+- the cyan mesh remains visible through self-emission;
+- coloured illumination on non-emissive receivers comes only from persistent world-space LPV transport;
+- the source continues to update while moving or outside the camera/RSM capture;
+- switching **Emissive light** off resets history and removes both source and spill.
 
 ## Controls
 
-- **2×2 comparison:** direct/self-emission, LPV-only indirect, GTAO visibility, and the combined result.
-- **Emissive light:** enables the cyan emissive source and invalidates old lighting history when changed.
-- **Emissive-only proof:** removes every solar source from LPV injection so emissive transport can be evaluated in isolation.
-- **GTAO:** enables ambient visibility only; it never adds screen-derived radiance.
-- **Shadow filter:** switches the dedicated cascaded shadow maps between 9-tap 3×3 and 25-tap 5×5 PCF. The 3×3 option is the GTX-class default.
+- **2×2 comparison:** direct/self-emission, LPV-only indirect, GTAO visibility, and combined output.
+- **Emissive light / Emissive-only proof:** enable the persistent cyan source or isolate it from every solar contribution.
+- **Emitter surfels:** changes the actual number of transformed local-space records, from 128 to 768. More records improve triangle coverage and motion continuity but add atomic injection work.
+- **Emitter footprint:** changes the persistent surfels' trilinear kernel from 0.50× to 2.00×. Larger values fill neighbouring cells more smoothly but can soften detail and increase apparent spill.
+- **Adaptive GPU budget:** targets a roughly 16.7 ms class budget using GPU timestamps. Over budget, it reduces presentation scale first, then active spatial RSM candidates, propagation iterations, and only then 5×5 PCF to 3×3. It restores quality in reverse order with hysteresis.
+- **Maximum render scale:** caps the adaptive scale (75–150%); it is the fixed scale when adaptation is disabled.
+- **Shadow filter:** selects the quality ceiling. 3×3 is the GTX-class default; 5×5 is optional.
 - **Blocker field:** disables directional propagation attenuation for a leak comparison.
-- **Temporal stability:** compares adaptive LPV/GTAO history against the unsmoothed current frame.
-- **Sparse RSM debug:** overlays one in sixteen current GI candidates in Combined view.
-- **Shadow visibility:** displays CSM/PCF without ambient or indirect-light fill; white is sun-visible and black is shadowed.
-- **Propagation:** changes how far light diffuses through each cascade.
-- **Dynamic world / moving sun:** independently freeze geometry or illumination changes.
-- **Render scale:** scales presentation from 100% to 175%, capped at 1920×1080.
+- **Temporal stability:** compares persistent adaptive history against rapidly updating current measurements.
+- **GTAO:** controls ambient occlusion only; it never adds screen-derived radiance.
+- **Sparse RSM debug:** overlays one in sixteen active GI candidates in Combined view.
+- **Cascade coverage / blocker field / shadow visibility:** expose the principal world-space structures directly.
+- **Propagation:** sets the maximum number of diffusion iterations.
+- **Dynamic world / moving sun:** independently freeze geometry or directional illumination.
 
-## Why screen-space GI was removed
+## Why screen-space GI remains removed
 
-The former colour-transfer pass was not an accurate GI solution. It inferred bounce light from nearby visible pixels without reliable thickness, hidden-surface information, or receiver-to-source visibility. It could create plausible contact colour in selected views, but it could also transfer light across gaps, lose illumination at screen edges, and change when the camera moved. Temporal filtering hid noise but could not correct those visibility errors.
+The former colour-transfer pass inferred bounce light from nearby visible pixels without reliable thickness, hidden-surface information, or receiver-to-source visibility. It could transfer light across gaps, lose illumination at screen edges, and change with the camera. Temporal filtering hid noise but could not correct those errors.
 
-More elaborate screen-space ray marching would reduce some local errors, but it would retain the same off-screen and disocclusion failures while increasing GTX-class cost. The exhibit therefore keeps GTAO and delegates all diffuse colour transport to the world-space RSM/LPV system.
+The exhibit therefore keeps GTAO and delegates all diffuse colour transport to persistent world-space LPVs. This is intentionally not presented as path tracing or as a replacement for Lumen's ray/SDF visibility.
 
 ## Performance and limitations
 
-The fixed world-space storage remains bounded for open-world use. Three direct-shadow depth layers add about 12 MiB; adaptive source history and its short moments add about 12 MiB. Radiance, propagation ping-pong volumes, deterministic reservoirs, atomics, and directional blockers remain bounded for the GTX-class target. The default uses 3×3 PCF and four propagation steps.
+All expensive world-space allocations are fixed. Raising the three radiance grids to 48³ and adding near six-face radiance costs more than revision 7, but remains bounded on a 4 GB GTX 1650 Super-class target. Packed blockers avoid six floating-point channels per 80³ cell; inactive RSM candidates and persistent mesh records skip work without reallocating buffers. Separate direct-shadow textures consume about 24 MiB at 32-bit depth.
 
-This demonstrates a low-memory raster architecture rather than claiming Lumen-equivalent visibility. LPV cells are still coarse and RSM source discovery remains light-view dependent. Thin-wall leaks are reduced by six-direction blockers and near-cascade dilation, but broad indirect shadows and emissive sources outside every raster source view remain expected limitations under the no-ray/no-SDF/no-bake constraints.
+This remains a raster LPV prototype, not Lumen-equivalent visibility. Coarse voxels smear transport, blockers approximate rather than trace receiver-to-source visibility, and only emissive meshes supplied to the persistent local-space sampler are independent of source-view discovery. Broad indirect shadows, glossy reflections, arbitrary unsampled emitters, and very thin geometry remain expected limitations under the no-ray/no-SDF/no-bake constraints.

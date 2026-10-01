@@ -1,4 +1,4 @@
-// Directional propagation through persistent cascades with six-face conservative blockers.
+// Compact first-order propagation for the middle/far cascades through packed six-face blockers.
 
 struct FrameUniforms
 {
@@ -22,8 +22,8 @@ struct FrameUniforms
 
 struct VolumeCell { Red: vec4f, Green: vec4f, Blue: vec4f, };
 struct VolumeExtent { Cells: array<VolumeCell>, };
-struct BlockerCell { Axis0: vec4f, Axis1: vec4f, };
-struct BlockerExtent { Cells: array<BlockerCell>, };
+struct PackedBlocker { Low: u32, High: u32, };
+struct BlockerExtent { Cells: array<PackedBlocker>, };
 
 @group(0) @binding(0) var<uniform> Frame: FrameUniforms;
 @group(0) @binding(1) var<storage, read> InjectionVolume: VolumeExtent;
@@ -31,8 +31,8 @@ struct BlockerExtent { Cells: array<BlockerCell>, };
 @group(0) @binding(3) var<storage, read> SourceVolume: VolumeExtent;
 @group(0) @binding(4) var<storage, read_write> DestinationVolume: VolumeExtent;
 
-const VolumeResolution: u32 = 40u;
-const CellsPerCascade: u32 = 64000u;
+const VolumeResolution: u32 = 48u;
+const CellsPerCascade: u32 = 110592u;
 
 fn LocalCoordinate(Cell: u32) -> vec3i
 {
@@ -55,15 +55,24 @@ fn Evaluate(Coefficients: vec4f, Direction: vec3f) -> f32
     return max(Coefficients.x + dot(Coefficients.yzw, Direction), 0.0);
 }
 
-fn DirectionalOpacity(Blocker: BlockerCell, Direction: vec3f) -> f32
+fn UnpackChannel(Blocker: PackedBlocker, Face: u32) -> f32
+{
+    if (Face < 4u)
+    {
+        return f32((Blocker.Low >> (Face * 8u)) & 255u) * (1.0 / 255.0);
+    }
+    return f32((Blocker.High >> ((Face - 4u) * 8u)) & 255u) * (1.0 / 255.0);
+}
+
+fn DirectionalOpacity(Blocker: PackedBlocker, Direction: vec3f) -> f32
 {
     return clamp(
-        Blocker.Axis0.x * max(Direction.x, 0.0)
-        + Blocker.Axis0.y * max(-Direction.x, 0.0)
-        + Blocker.Axis0.z * max(Direction.y, 0.0)
-        + Blocker.Axis0.w * max(-Direction.y, 0.0)
-        + Blocker.Axis1.x * max(Direction.z, 0.0)
-        + Blocker.Axis1.y * max(-Direction.z, 0.0),
+        UnpackChannel(Blocker, 0u) * max(Direction.x, 0.0)
+        + UnpackChannel(Blocker, 1u) * max(-Direction.x, 0.0)
+        + UnpackChannel(Blocker, 2u) * max(Direction.y, 0.0)
+        + UnpackChannel(Blocker, 3u) * max(-Direction.y, 0.0)
+        + UnpackChannel(Blocker, 4u) * max(Direction.z, 0.0)
+        + UnpackChannel(Blocker, 5u) * max(-Direction.z, 0.0),
         0.0,
         1.0
     );
@@ -81,11 +90,12 @@ fn ClampCell(Cell: VolumeCell) -> VolumeCell
 @compute @workgroup_size(64)
 fn PropagateMain(@builtin(global_invocation_id) Global: vec3u)
 {
-    let CellNumber = Global.x;
+    let CellNumber = Global.x + CellsPerCascade;
     if (CellNumber >= CellsPerCascade * 3u) { return; }
     let Cascade = CellNumber / CellsPerCascade;
     let Coordinate = LocalCoordinate(CellNumber);
-    let DestinationBlocker = BlockerVolume.Cells[CellNumber];
+    let PackedNumber = (Cascade - 1u) * CellsPerCascade + (CellNumber % CellsPerCascade);
+    let DestinationBlocker = BlockerVolume.Cells[PackedNumber];
     let Offsets = array<vec3i, 6>(
         vec3i(-1, 0, 0), vec3i(1, 0, 0), vec3i(0, -1, 0),
         vec3i(0, 1, 0), vec3i(0, 0, -1), vec3i(0, 0, 1)
@@ -93,8 +103,6 @@ fn PropagateMain(@builtin(global_invocation_id) Global: vec3u)
 
     let SourceCell = SourceVolume.Cells[CellNumber];
     let InjectionCell = InjectionVolume.Cells[CellNumber];
-    // Keep the Jacobi operator deliberately dissipative. The previous 0.78 self-retention
-    // combined with six neighbours had gain above one and recursively amplified LPV history.
     var Result = VolumeCell(
         SourceCell.Red * 0.48 + InjectionCell.Red * 0.52,
         SourceCell.Green * 0.48 + InjectionCell.Green * 0.52,
@@ -112,7 +120,8 @@ fn PropagateMain(@builtin(global_invocation_id) Global: vec3u)
         {
             let FacingDirection = -TravelDirection;
             let DestinationOpacity = DirectionalOpacity(DestinationBlocker, FacingDirection);
-            let SourceOpacity = DirectionalOpacity(BlockerVolume.Cells[SourceNumber], FacingDirection);
+            let SourcePackedNumber = (Cascade - 1u) * CellsPerCascade + (SourceNumber % CellsPerCascade);
+            let SourceOpacity = DirectionalOpacity(BlockerVolume.Cells[SourcePackedNumber], FacingDirection);
             Visibility = 1.0 - clamp(max(DestinationOpacity * 0.82, SourceOpacity * 0.90), 0.0, 0.96);
         }
         let Incoming = vec3f(

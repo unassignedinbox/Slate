@@ -260,7 +260,7 @@ button:hover { transform: translateY(-1px); filter: brightness(1.08); }
 button.Secondary { color: var(--Text); border-color: var(--Line); background: #06100f; }
 .Metrics {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     margin: 22px 0 86px;
     border-top: 1px solid var(--Line);
     border-bottom: 1px solid var(--Line);

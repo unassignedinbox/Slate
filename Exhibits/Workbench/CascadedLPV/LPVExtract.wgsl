@@ -89,7 +89,10 @@ fn ExtractMain(@builtin(global_invocation_id) Global: vec3u)
 
     let RsmExtent = textureDimensions(RsmPosition);
     let SampleWidth = RsmExtent.x / 2u;
-    let Tile = vec2u(RecordNumber % SampleWidth, RecordNumber / SampleWidth);
+    // An odd multiplicative permutation over the 256x256 tile domain keeps every
+    // active prefix spatially distributed when adaptive quality lowers RecordCount.
+    let TileNumber = (RecordNumber * 40503u) & 65535u;
+    let Tile = vec2u(TileNumber % SampleWidth, TileNumber / SampleWidth);
     var SamplePosition = vec2i(Tile * 2u);
     var BestRank = -1.0;
     var FoundCandidate = false;
@@ -145,13 +148,11 @@ fn ExtractMain(@builtin(global_invocation_id) Global: vec3u)
     let AlbedoMetalness = textureLoad(RsmAlbedo, SamplePosition, 0);
     let Flux = max(NormalFlux.w, 0.0);
     let DiffuseAlbedo = AlbedoMetalness.xyz * (1.0 - AlbedoMetalness.w * 0.88);
-    let EmissiveStrength = max(PositionHit.w - 1.0, 0.0);
-    let EmissiveRadiance = AlbedoMetalness.xyz * EmissiveStrength;
-    // Mode 8 is a falsifiable emissive-only proof: no solar RSM radiance enters the LPV.
+    // Emissive meshes have their own fixed local-space surfels and never depend on
+    // this directional RSM. Mode 8 therefore provides a strict persistent-emitter proof.
     let IncludeSolarGI = select(1.0, 0.0, u32(Frame.Settings.x + 0.5) == 8u);
-    let SolarRadiance = DiffuseAlbedo * Frame.SunColourTime.xyz
+    let Radiance = DiffuseAlbedo * Frame.SunColourTime.xyz
         * (Flux * Frame.SunDirectionIntensity.w * 0.78 * IncludeSolarGI);
-    let Radiance = SolarRadiance + EmissiveRadiance;
     let BaseRadius = Frame.ScreenRsm.w / max(f32(SampleWidth), 1.0) * 0.82;
     let EdgeConfidence = select(1.0, 0.58, EdgeScore > 0.5);
     let Radius = BaseRadius * mix(1.0, 0.55, clamp(EdgeScore * 0.25, 0.0, 1.0));
