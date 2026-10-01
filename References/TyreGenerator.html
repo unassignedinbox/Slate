@@ -694,7 +694,9 @@ function buildPolyTread(d, pmGeo) {
 }
 // sidewall-only lathe (used together with the polygon tread)
 function buildSidewallGeometry(d, prof) {
-  const side = prof.filter(p => p.zone === 'side' || p.edge); const M = Math.max(90, Math.round(T.radial / 2));
+  // Match the polygon tread's shoulder-ring tessellation. If the rings use different
+  // segment counts, their chord edges disagree and form a visible saw-tooth seam.
+  const side = prof.filter(p => p.zone === 'side' || p.edge); const M = Math.max(90, Math.ceil(d.circ / Math.max(3, T.polyDetail)));
   const left = side.filter(p => p.x < 0), right = side.filter(p => p.x > 0);
   const pos = [], uv = [], idx = []; let base = 0;
   for (const run of [left, right]) { const N = run.length;
