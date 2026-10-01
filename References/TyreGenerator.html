@@ -653,9 +653,22 @@ function buildPolyTread(d, pmGeo) {
     for (const sp of steiner) holes.push([new THREE.Vector2(sp[0], sp[1])]);
     let faces; try { faces = THREE.ShapeUtils.triangulateShape(contour, holes); } catch (e) { continue; }
     const all = contour.concat(...holes); const hz = pc.depth;
+    const pushTop = q => { const P3 = place(q.x, q.y, hz); push(P3, [P3[3], P3[4], P3[5]], q.x / circ, (q.y + A) / (2 * A), tangentAt(q.x / circ)); };
+    // Earcut can leave a very wide triangle across a block between its groove boundaries.
+    // That triangle is planar while the tyre crown/shoulder is curved, creating the dark
+    // corner wedges seen in the viewport. Subdivide every top triangle in 2D before it is
+    // projected onto the tyre profile, so the curved surface is tessellated consistently.
     for (const f of faces) { const a = all[f[0]], b = all[f[1]], c = all[f[2]]; const area = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y); if (Math.abs(area) < 1e-6) continue;
-      const ord = area > 0 ? [a, b, c] : [a, c, b];
-      for (const q of ord) { const P3 = place(q.x, q.y, hz); push(P3, [P3[3], P3[4], P3[5]], q.x / circ, (q.y + A) / (2 * A), tangentAt(q.x / circ)); } tris++; }
+      const ord = area > 0 ? [a, b, c] : [a, c, b]; const [q0, q1, q2] = ord;
+      const edgeLength = (u, v) => { const a3 = place(u.x, u.y, hz), b3 = place(v.x, v.y, hz); return Math.hypot(b3[0] - a3[0], b3[1] - a3[1], b3[2] - a3[2]); };
+      const longestEdge = Math.max(edgeLength(q0, q1), edgeLength(q1, q2), edgeLength(q2, q0));
+      const steps = Math.min(8, Math.max(1, Math.ceil(longestEdge / Math.max(12, T.polyDetail * 4))));
+      const point = (i, j) => new THREE.Vector2(q0.x + (q1.x - q0.x) * i / steps + (q2.x - q0.x) * j / steps, q0.y + (q1.y - q0.y) * i / steps + (q2.y - q0.y) * j / steps);
+      for (let i = 0; i < steps; i++) for (let j = 0; j < steps - i; j++) {
+        const p0 = point(i, j), p1 = point(i + 1, j), p2 = point(i, j + 1); pushTop(p0); pushTop(p1); pushTop(p2); tris++;
+        if (i + j < steps - 1) { const p3 = point(i + 1, j + 1); pushTop(p1); pushTop(p3); pushTop(p2); tris++; }
+      }
+    }
     // walls: generated from the lower side of every boundary edge
     for (const r of rings) for (let i = 0; i < r.length; i++) {
       const a = r[i], b = r[(i + 1) % r.length]; const dx = b[0] - a[0], dy = b[1] - a[1]; const l = Math.hypot(dx, dy); if (l < 1e-6) continue;
