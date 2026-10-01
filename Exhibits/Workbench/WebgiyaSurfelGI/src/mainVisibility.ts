@@ -12,7 +12,8 @@ import {
   type SceneDefinition,
   type SceneSettings,
 } from './content.ts';
-import { createGBuffer } from './gbuffer.ts';
+import { createMotionGBuffer } from './motionGBuffer.ts';
+import { createMotionHistoryPass } from './motionHistoryPass.ts';
 import { createSurfelPool } from './surfelPool.ts';
 import { createSurfelPreparePass } from './surfelPreparePass.ts';
 import { createSurfelAgePass } from './surfelAgePass.ts';
@@ -33,6 +34,7 @@ import { createScreenProbePass } from './screenProbePass.ts';
 import * as THREE from 'three/webgpu';
 import {
   float,
+  fract,
   mrt,
   normalView,
   output,
@@ -40,7 +42,6 @@ import {
   screenUV,
   texture,
   vec4,
-  velocity,
 } from 'three/tsl';
 import {
   createLightControls,
@@ -48,7 +49,6 @@ import {
   setLightAnglesFromEnvMapSunUVLocation,
 } from './lighting.ts';
 import { fxaa } from 'three/examples/jsm/tsl/display/FXAANode.js';
-import { traa } from 'three/examples/jsm/tsl/display/TRAANode.js';
 import { ao } from 'three/examples/jsm/tsl/display/GTAONode.js';
 import { createIntegratorDispatchArgs } from './integratorDispatchArgs.ts';
 import {
@@ -57,6 +57,7 @@ import {
   DEFAULT_OCCLUSION_SETTINGS,
 } from './surfelRadialDepth.ts';
 import { EXRLoader, HDRLoader } from 'three/examples/jsm/Addons.js';
+import { updateTemporalSurfaceVersions } from './shaderBallScene.ts';
 
 const loadingOverlay =
   document.querySelector<HTMLDivElement>('#loading-overlay');
@@ -186,7 +187,8 @@ let envTex: THREE.DataTexture | null = null;
 // Viewport camera can show debug
 camera.layers.enable(1);
 
-const gbuffer = createGBuffer(renderer);
+const gbuffer = createMotionGBuffer(renderer);
+const motionHistory = createMotionHistoryPass();
 
 const surfelPool = createSurfelPool();
 surfelPool.ensureCapacity(MAX_SURFELS);
@@ -295,6 +297,30 @@ visibilityFolder
     if (visibilityPass) visibilityPass.samples.value = visibilityParams.samples;
   })
   .listen?.();
+
+const TEMPORAL_OUTPUTS = {
+  Lighting: 'lighting',
+  'Motion vectors': 'motion-vectors',
+  'Surface IDs': 'surface-ids',
+  'Reprojected coordinates': 'reprojected-coordinates',
+  Disocclusion: 'disocclusion',
+  'History confidence': 'history-confidence',
+} as const;
+type TemporalOutput = (typeof TEMPORAL_OUTPUTS)[keyof typeof TEMPORAL_OUTPUTS];
+const temporalParams: { output: TemporalOutput } = {
+  output: TEMPORAL_OUTPUTS.Lighting,
+};
+const temporalFolder = gui.addFolder('Motion / history validation');
+temporalFolder
+  .add(temporalParams, 'output', TEMPORAL_OUTPUTS)
+  .name('Output')
+  .onChange(() => {
+    mustRebuildCompositeMaterial = true;
+  })
+  .listen?.();
+temporalFolder
+  .add({ reset: () => motionHistory.reset() }, 'reset')
+  .name('Reset history');
 
 const defaultIntegratorParams = { baseSampleCount: 4 };
 const integratorParams = { ...defaultIntegratorParams };
@@ -538,6 +564,7 @@ async function loadScene(sceneDef: SceneDefinition) {
 
   sceneBVH = null;
   screenProbePass = null;
+  motionHistory.reset();
   dirLight = recreateDirectionalLight(scene, dirLight, dirLightDefaults);
   clearSceneContent(scene);
   setLight(dirLight);
@@ -749,8 +776,10 @@ window.addEventListener('resize', () => {
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   renderer.setSize(w, h);
-  // Resize offscreen gbuffer
+  // Resize offscreen gbuffer and invalidate temporal history. The history pass
+  // lazily reallocates its ping-pong textures at the new physical resolution.
   gbuffer.resize(renderer);
+  motionHistory.reset();
 
   postProcessing.needsUpdate = true;
 
@@ -772,6 +801,8 @@ renderer.setAnimationLoop(() => {
   controls.update();
   updateAnimation();
   camera.updateMatrixWorld();
+  scene.updateMatrixWorld(true);
+  updateTemporalSurfaceVersions(scene);
 
   if (!sceneBVH || !surfelIntegrate) {
     // postProcessing.render();       // show direct scene while loading
@@ -789,6 +820,10 @@ renderer.setAnimationLoop(() => {
   renderer.setRenderTarget(prevTarget);
   renderer.setMRT(null);
   camera.layers.enable(1);
+
+  // Reproject the current surface raster into the preceding frame and reject
+  // off-screen, mismatched, newly exposed, or transformed surface history.
+  motionHistory.run(renderer, camera, gbuffer);
 
   // GPU surfel prepare + generation into a fixed-capacity pool (capacity set once at init)
   // Age and recycle a fraction of the pool; this replenishes the free list gradually
@@ -867,6 +902,7 @@ renderer.setAnimationLoop(() => {
   const screenProbeStatsTex = screenProbeParams.enabled
     ? screenProbePass?.getTraceStatsTexture()
     : null;
+  const temporalValidationTex = motionHistory.getValidationTexture();
   let directLight;
   if (giTex) {
     if (mustRebuildCompositeMaterial) {
@@ -927,8 +963,66 @@ renderer.setAnimationLoop(() => {
         1.0,
       );
       const hiZStepsDebug = vec4(traceStats.w, traceStats.w, traceStats.w, 1.0);
+      const validationSample: THREE.Node = temporalValidationTex
+        ? texture(temporalValidationTex, screenUV)
+        : vec4(1.0, 0.0, 0.0, 0.0);
+      const motionSample = texture(gbuffer.target.textures[2], screenUV).xy;
+      // Signed NDC velocity is magnified 8x: neutral grey is stationary,
+      // red/green deviations indicate horizontal/vertical motion.
+      const motionDebug = vec4(
+        motionSample.x.mul(4.0).add(0.5),
+        motionSample.y.mul(4.0).add(0.5),
+        0.5,
+        1.0,
+      );
+      const surfaceId = texture(gbuffer.target.textures[3], screenUV).r;
+      const surfaceIdDebug = vec4(
+        fract(surfaceId.mul(0.1031)),
+        fract(surfaceId.mul(0.11369)),
+        fract(surfaceId.mul(0.13787)),
+        1.0,
+      );
+      const reprojectedCoordinateDebug = vec4(
+        validationSample.z,
+        validationSample.w,
+        0.0,
+        1.0,
+      );
+      const disocclusionDebug = vec4(
+        validationSample.r,
+        validationSample.r,
+        validationSample.r,
+        1.0,
+      );
+      const historyConfidenceDebug = vec4(
+        validationSample.g,
+        validationSample.g,
+        validationSample.g,
+        1.0,
+      );
 
-      if (visibilityParams.output === VISIBILITY_OUTPUTS['Visibility raster']) {
+      if (temporalParams.output === TEMPORAL_OUTPUTS['Motion vectors']) {
+        postProcessing.outputNode = fxaa(motionDebug);
+        postProcessing.needsUpdate = true;
+      } else if (temporalParams.output === TEMPORAL_OUTPUTS['Surface IDs']) {
+        postProcessing.outputNode = fxaa(surfaceIdDebug);
+        postProcessing.needsUpdate = true;
+      } else if (
+        temporalParams.output === TEMPORAL_OUTPUTS['Reprojected coordinates']
+      ) {
+        postProcessing.outputNode = fxaa(reprojectedCoordinateDebug);
+        postProcessing.needsUpdate = true;
+      } else if (temporalParams.output === TEMPORAL_OUTPUTS.Disocclusion) {
+        postProcessing.outputNode = fxaa(disocclusionDebug);
+        postProcessing.needsUpdate = true;
+      } else if (
+        temporalParams.output === TEMPORAL_OUTPUTS['History confidence']
+      ) {
+        postProcessing.outputNode = fxaa(historyConfidenceDebug);
+        postProcessing.needsUpdate = true;
+      } else if (
+        visibilityParams.output === VISIBILITY_OUTPUTS['Visibility raster']
+      ) {
         postProcessing.outputNode = fxaa(
           vec4(aoVisibility, aoVisibility, aoVisibility, 1.0),
         );

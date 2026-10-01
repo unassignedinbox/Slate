@@ -1,4 +1,4 @@
-# Webgiya Hi-Z Screen-Probe + Multi-bounce Surfel GI
+# Webgiya Temporal Hi-Z Screen-Probe + Multi-bounce Surfel GI
 
 Open `index.html` over HTTP. It redirects to the checked-in production build in `site/`.
 
@@ -11,10 +11,12 @@ This exhibit preserves Jure Triglav's MIT-licensed [Webgiya](https://github.com/
 The adaptation is isolated to:
 
 - `content.ts` — selects the ShaderBall light lab.
-- `shaderBallScene.ts` — exact `SBM1` decoder, scene geometry, original-style directional shadows, and low-frequency hemisphere ambient light.
+- `shaderBallScene.ts` — exact `SBM1` decoder, scene geometry, stable surface IDs and transform generations, original-style directional shadows, and low-frequency hemisphere ambient light.
+- `motionGBuffer.ts` — a derived four-target G-buffer adding NDC motion and stable identity/version data without modifying the pinned upstream G-buffer.
+- `motionHistoryPass.ts` — full-resolution ping-pong surface history, reprojection, conservative validation, and disocclusion diagnostics.
 - `hiZDepthPyramid.ts` — conservative min/max depth hierarchy packed into non-aliasing even/odd storage atlases.
 - `screenProbePass.ts` — an optional 8×8-tile screen-probe tracer with Hi-Z-first traversal, BVH fallback, diagnostics, and bilateral reconstruction.
-- `mainVisibility.ts` — a derived host that retains the upstream frame sequence and composes screen probes plus a Three.js GTAO visibility raster.
+- `mainVisibility.ts` — a derived host that retains the upstream frame sequence and composes temporal surface validation, screen probes, and a Three.js GTAO visibility raster.
 - `Source.html` and build files — packaging and explanatory UI.
 
 ## Lighting and visibility layers
@@ -43,9 +45,34 @@ Every frame builds conservative minimum/maximum depth levels from the primary G-
 
 Each probe direction now tries hierarchical screen traversal first. A depth candidate is accepted only after full-resolution world-position, ray-distance, surface-normal, and facing validation. Rays leaving the viewport, ambiguous candidates, and step-budget exhaustion fall back to the exact triangle BVH. A ray that reaches the camera far range without crossing visible depth uses the environment. The existing BVH still handles directional-light visibility after either kind of secondary hit.
 
-Disable **Hi-Z first** to compare against the Phase 1 all-BVH path. This phase does not add temporal reservoirs, motion vectors, DDGI clipmaps, or dynamic BLAS/TLAS geometry.
+Disable **Hi-Z first** to compare against the Phase 1 all-BVH path.
+
+## Phase 3 motion and conservative history validation
+
+The derived G-buffer adds signed NDC motion vectors and a stable float surface ID. A separate transform generation increments whenever a rigid object's world matrix changes, so object identity stays stable while stale history from a changed transform is still rejected. This leaves the original `gbuffer.ts` and every surfel algorithm byte-identical.
+
+At full raster resolution, `motionHistoryPass.ts` keeps two ping-pong `RGBA16F` surface-history textures. Each texel compactly stores an octahedral world normal, linear view depth, and an exact combined ID/generation key. The current pixel's velocity maps it to the preceding frame, where validation rejects:
+
+- first-frame or manually reset history;
+- reprojection outside the viewport;
+- background, newly exposed, or otherwise missing surfaces;
+- stable-ID or transform-generation mismatch;
+- reconstructed world-position/depth disagreement;
+- world-normal disagreement; and
+- every resize, which reallocates and invalidates both history buffers.
+
+The validation result is one `RGBA8` texture containing a binary conservative disocclusion mask, graded confidence, and reprojected coordinates. The compact two-history-plus-one-validation layout is practical for the 4 GB target and avoids adding more storage buffers. Phase 3 only builds and validates temporal surface infrastructure: it does **not** temporally reuse lighting, add ReSTIR reservoirs, update the static triangle BVH, seed surfels from ray hits, or add DDGI.
 
 ## Controls
+
+The **Motion / history validation** folder adds:
+
+- **Output → Motion vectors** — signed NDC motion, magnified 8×; neutral grey is stationary and red/green show horizontal/vertical motion.
+- **Output → Surface IDs** — a deterministic false-colour stable-ID view.
+- **Output → Reprojected coordinates** — previous-frame U/V in red/green.
+- **Output → Disocclusion** — white rejects history and black accepts it.
+- **Output → History confidence** — graded geometry-validation confidence before the stricter binary decision.
+- **Reset history** — explicitly invalidates the next frame, useful for verifying first-frame behavior.
 
 The inspector adds **Screen probes**:
 
@@ -77,21 +104,22 @@ Existing useful views remain available:
 
 ## Upstream pipeline preserved
 
-Each frame still runs Webgiya's original sequence:
+Each frame retains Webgiya's original surfel sequence while the host runs the new surface-history infrastructure around it:
 
-1. Raster G-buffer.
-2. Prepare the fixed-capacity surfel pool.
-3. Find screen-space regions missing surfels.
-4. Allocate and seed surfels.
-5. Age, recycle, and compact the pool.
-6. Build the eight-cascade spatial hash grid.
-7. Trace per-surfel rays through the CPU-built/GPU-uploaded scene BVH.
-8. Update sample-guiding lobes, temporal irradiance moments, and each surfel's MSM4 radial-depth tile.
-9. Gather nearby surfels per pixel with spatial, normal, variance, and radial-visibility weighting.
-10. Build the conservative min/max Hi-Z depth atlases.
-11. Trace camera-visible probes through Hi-Z, conservatively falling back to the same triangle BVH.
-12. Query fresh surfel radiance at secondary hits and reconstruct sparse probes at full resolution.
-13. Blend against the surfel fallback and composite direct shadows, indirect light, ambient visibility, and the final image.
+1. Raster the derived G-buffer: normal, albedo, NDC motion, stable ID/generation, and depth.
+2. Reproject into the preceding packed surface history, emit validation/disocclusion, and write the current ping-pong history.
+3. Prepare the fixed-capacity surfel pool.
+4. Find screen-space regions missing surfels.
+5. Allocate and seed surfels.
+6. Age, recycle, and compact the pool.
+7. Build the eight-cascade spatial hash grid.
+8. Trace per-surfel rays through the CPU-built/GPU-uploaded scene BVH.
+9. Update sample-guiding lobes, temporal irradiance moments, and each surfel's MSM4 radial-depth tile.
+10. Gather nearby surfels per pixel with spatial, normal, variance, and radial-visibility weighting.
+11. Build the conservative min/max Hi-Z depth atlases.
+12. Trace camera-visible probes through Hi-Z, conservatively falling back to the same triangle BVH.
+13. Query fresh surfel radiance at secondary hits and reconstruct sparse probes at full resolution.
+14. Blend against the surfel fallback and composite direct shadows, indirect light, ambient visibility, and the final image.
 
 Desktop settings retain upstream's `262144`-surfel pool, 32³ hash-grid cascades, 4×4 radial-depth tiles, 32 target samples, and four base integration samples. Screen probes use one probe per 8×8 tile and four secondary directions by default; GTAO runs at half resolution for GTX-class performance.
 

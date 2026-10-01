@@ -3,6 +3,62 @@ import { makeNodeStandard } from './materials.ts';
 
 const baseUrl = import.meta.env.BASE_URL;
 
+let nextStableSurfaceId = 1;
+
+type SurfaceMaterial = THREE.MeshStandardNodeMaterial & {
+  surfaceId: number;
+  surfaceVersion: number;
+};
+
+const previousSurfaceTransforms = new WeakMap<THREE.Mesh, THREE.Matrix4>();
+
+function makeSurfaceMaterial(
+  colour: number,
+  roughness: number,
+  metalness: number,
+): SurfaceMaterial {
+  const material = makeNodeStandard(
+    colour,
+    roughness,
+    metalness,
+  ) as SurfaceMaterial;
+  // Float IDs are exact at this scene's scale and remain stable as objects move.
+  material.surfaceId = nextStableSurfaceId++;
+  material.surfaceVersion = 0;
+  return material;
+}
+
+/**
+ * Bumps the temporal generation of a rigid surface whenever its world transform
+ * changes. The stable ID remains untouched; the generation is only used to
+ * reject stale history from the preceding frame.
+ */
+export function updateTemporalSurfaceVersions(scene: THREE.Scene): void {
+  scene.traverse((object) => {
+    if (!(object instanceof THREE.Mesh)) return;
+    const previous = previousSurfaceTransforms.get(object);
+    if (!previous) {
+      previousSurfaceTransforms.set(object, object.matrixWorld.clone());
+      return;
+    }
+    if (previous.equals(object.matrixWorld)) return;
+
+    const materials = Array.isArray(object.material)
+      ? object.material
+      : [object.material];
+    for (const candidate of materials) {
+      const material = candidate as Partial<SurfaceMaterial>;
+      if (
+        typeof material.surfaceId === 'number' &&
+        typeof material.surfaceVersion === 'number'
+      ) {
+        material.surfaceVersion = (material.surfaceVersion + 1) % 32;
+      }
+    }
+    previous.copy(object.matrixWorld);
+  });
+}
+
 async function loadShaderBallGeometry(): Promise<THREE.BufferGeometry> {
   const response = await fetch(`${baseUrl}models/ShaderBall.mesh`);
   if (!response.ok) {
@@ -62,7 +118,7 @@ function addBox(
 ): THREE.Mesh {
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(...size),
-    makeNodeStandard(colour, roughness, metalness),
+    makeSurfaceMaterial(colour, roughness, metalness),
   );
   mesh.position.set(...position);
   mesh.castShadow = true;
@@ -75,6 +131,8 @@ export async function populateShaderBallSurfelScene(
   scene: THREE.Scene,
   dirLight: THREE.DirectionalLight,
 ): Promise<void> {
+  nextStableSurfaceId = 1;
+
   // An open, high-contrast light lab gives Webgiya's unmodified surfel gather
   // nearby coloured surfaces, thin occluders, and deep corners to resolve.
   addBox(scene, [18, 0.2, 14], [0, -0.1, 0], 0x777b73, 0.96);
@@ -141,7 +199,7 @@ export async function populateShaderBallSurfelScene(
     );
     const mesh = new THREE.Mesh(
       geometry,
-      makeNodeStandard(ball.colour, ball.roughness, ball.metalness),
+      makeSurfaceMaterial(ball.colour, ball.roughness, ball.metalness),
     );
     mesh.position.set(...ball.position);
     mesh.scale.setScalar(ball.scale);
