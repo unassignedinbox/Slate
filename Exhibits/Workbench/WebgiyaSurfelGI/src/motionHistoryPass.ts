@@ -152,7 +152,7 @@ const validateHistory = wgslFn(
 
     let depthConfidence = 1.0 - smoothstep(worldTolerance, worldTolerance * 2.0, worldError);
     let normalConfidence = smoothstep(0.82, 0.96, normalAgreement);
-    let confidence = min(depthConfidence, normalConfidence) * select(0.0, 1.0, keyMatches);
+    var confidence = min(depthConfidence, normalConfidence) * select(0.0, 1.0, keyMatches);
     confidence *= select(0.0, 1.0, inBounds && currentSurfaceValid && previousSurfaceValid);
     confidence *= clamp(historyValid, 0.0, 1.0);
 

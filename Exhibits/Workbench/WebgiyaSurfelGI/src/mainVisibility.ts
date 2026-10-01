@@ -104,6 +104,34 @@ function isWebGpuError(message: string) {
 function describeError(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === 'string') return error;
+  if (error && typeof error === 'object') {
+    const detail = error as {
+      message?: unknown;
+      error?: unknown;
+      reason?: unknown;
+      type?: unknown;
+      target?: {
+        currentSrc?: unknown;
+        src?: unknown;
+        href?: unknown;
+      };
+      constructor?: { name?: string };
+    };
+    if (typeof detail.message === 'string' && detail.message)
+      return detail.message;
+    if (detail.error && detail.error !== error)
+      return describeError(detail.error);
+    if (detail.reason && detail.reason !== error)
+      return describeError(detail.reason);
+
+    const resource =
+      detail.target?.currentSrc ?? detail.target?.src ?? detail.target?.href;
+    const kind = detail.constructor?.name ?? 'Event';
+    const type = typeof detail.type === 'string' ? detail.type : 'unknown';
+    if (typeof resource === 'string' && resource)
+      return `${kind} (${type}) while loading ${resource}`;
+    if (kind !== 'Object' || type !== 'unknown') return `${kind} (${type})`;
+  }
   try {
     return JSON.stringify(error);
   } catch {
@@ -139,6 +167,28 @@ const { renderer } = await initRenderer().catch((error) => {
   showError(error);
   throw error;
 });
+
+// WebGPU validation and shader-compilation failures are GPU events rather than
+// ordinary JavaScript Errors in Chromium. Surface their actual message instead
+// of the otherwise opaque `{ "isTrusted": true }` event payload.
+const gpuDevice = (
+  renderer.backend as unknown as {
+    device?: {
+      addEventListener?: (
+        type: string,
+        listener: (event: { error?: unknown }) => void,
+      ) => void;
+      lost?: Promise<unknown>;
+    };
+  }
+).device;
+gpuDevice?.addEventListener?.('uncapturederror', (event) => {
+  showError(event.error ?? event);
+});
+gpuDevice?.lost?.then((info) => {
+  showError(info);
+});
+
 const gui = createUI(renderer);
 const sceneBundle = createScene(renderer);
 const { scene, camera, controls } = sceneBundle;
