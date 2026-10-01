@@ -50,6 +50,10 @@ layout(std430, binding = 8) readonly buffer TraversalNodeExtent { vec4 CwbvhNode
 layout(std430, binding = 9) readonly buffer TraversalLeafExtent { vec4 CwbvhTris[];  };
 uint TlasInstanceCount = 0u;   // single-blob world here (the showcase grid); the two-level path plugs in as in ReSTIRViewport.
 #include "TraversalCWBVH.slang"
+#define FRONTIER_SURFEL_TRIANGLE_BINDING 3
+#define FRONTIER_SURFEL_MATERIAL_BINDING 4
+#define FRONTIER_SURFEL_SLAB_BINDING 5
+#include "SurfelMaterialEvaluation.slang"
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                    PUSH CONSTANTS
@@ -153,23 +157,33 @@ void main()
             meas += PC.SkyAmbient.xyz;
             continue;
         }
-        vec3 hp = O + wi * h.t;
-        // PORT: decode the hit's geometric normal + albedo from h (triangle → material slab), exactly as the ReSTIR
-        //       kernel does. Here we shade the bounce with the sun term against the incoming direction's opposite as a
-        //       stand-in normal and gather the surfel field — structurally identical, materially approximate.
-        vec3 hitN = -wi;
-        // sun direct at the hit (shadow-ray tested)
-        vec3 Lo = vec3(0.0);
+        vec3 HitPosition = O + wi * h.t;
+        SurfelTriangle Triangle = MaterialTriangles[h.primitive];
+        vec3 HitNormal = normalize(cross(Triangle.V1.xyz - Triangle.V0.xyz, Triangle.V2.xyz - Triangle.V0.xyz));
+        if (dot(HitNormal, wi) > 0.0) HitNormal = -HitNormal;
+        uint MaterialIndex = floatBitsToUint(Triangle.V0.w);
+        ShadingRecord HitMaterial = ResolveSurfelMaterial(MaterialIndex);
+        vec3 Outgoing = -wi;
+
+        // The ray-hit material is evaluated through the same OpenPBR ResolveLayers/EvaluateBsdf pair as ReSTIR.
+        // Transport differs here—one sun visibility ray plus the persistent irradiance field—but the BSDF does not.
+        vec3 Lo = HitMaterial.Emission;
         vec3 L = normalize(PC.SunDirectionRadiance.xyz);
-        float ndl = max(dot(hitN, L), 0.0);
-        if (ndl > 0.0)
+        float Cosine = max(dot(HitNormal, L), 0.0);
+        if (Cosine > 0.0)
         {
-            vec3 sO = hp + hitN * 1e-3; vec3 srD = 1.0 / L;
-            bool shadowed = TraverseOccluded(sO, L, srD, 1e30);   // single-blob world (TlasInstanceCount==0); two-level: TraverseInstancesOccluded
-            if (!shadowed) Lo += PC.SunColour.xyz * (PC.SunDirectionRadiance.w * ndl * kInvPi);
+            vec3 ShadowOrigin = HitPosition + HitNormal * 1e-3;
+            vec3 ShadowReciprocal = 1.0 / L;
+            bool Shadowed = TraverseOccluded(ShadowOrigin, L, ShadowReciprocal, 1e30);
+            if (!Shadowed)
+                Lo += EvaluateSurfelMaterial(HitMaterial, HitNormal, Outgoing, L)
+                    * PC.SunColour.xyz * (PC.SunDirectionRadiance.w * Cosine);
         }
-        // multi-bounce: neighbouring surfels' previous irradiance at the hit
-        Lo += kInvPi * GatherField(hp, hitN);
+
+        // The field stores irradiance rather than direction samples. Evaluate its material response along the normal;
+        // diffuse, fuzz, coat, metal and thin-film energy therefore still pass through OpenPBR instead of an albedo fold.
+        vec3 FieldIrradiance = GatherField(HitPosition, HitNormal);
+        Lo += EvaluateSurfelMaterial(HitMaterial, HitNormal, Outgoing, HitNormal) * FieldIrradiance;
         // firefly clamp on the sample
         Lo = min(Lo, vec3(firefly));
         meas += Lo;

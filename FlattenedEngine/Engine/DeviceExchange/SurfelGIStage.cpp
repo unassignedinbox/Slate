@@ -64,6 +64,8 @@ namespace
     { return { b, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1u, VK_SHADER_STAGE_COMPUTE_BIT, nullptr }; }
     VkDescriptorSetLayoutBinding StorageImage(uint32_t b) noexcept
     { return { b, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1u, VK_SHADER_STAGE_COMPUTE_BIT, nullptr }; }
+    VkDescriptorSetLayoutBinding CombinedSampler(uint32_t b) noexcept
+    { return { b, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1u, VK_SHADER_STAGE_COMPUTE_BIT, nullptr }; }
     // Matches CellHash() in SurfelIrradianceUpdate.slang / SurfelGIResolve.slang exactly.
     inline uint32_t CellHash(int cx, int cy, int cz, uint32_t hashSize) noexcept
     {
@@ -81,6 +83,8 @@ bool SurfelGIStage::Bring(const SurfelStageInit& Init) noexcept
 {
     I = Init;
     if (I.Device == VK_NULL_HANDLE || I.CwbvhNodeBuffer == VK_NULL_HANDLE || I.CwbvhLeafBuffer == VK_NULL_HANDLE ||
+        I.TriangleBuffer == VK_NULL_HANDLE || I.MaterialBuffer == VK_NULL_HANDLE || I.MaterialSlabBuffer == VK_NULL_HANDLE ||
+        I.EnergyLutView == VK_NULL_HANDLE || I.SheenLutView == VK_NULL_HANDLE || I.MaterialLutSampler == VK_NULL_HANDLE ||
         I.OutputImageView == VK_NULL_HANDLE || I.SurfaceImageView == VK_NULL_HANDLE || I.NormalImageView == VK_NULL_HANDLE ||
         I.AlbedoImageView == VK_NULL_HANDLE || I.MaterialAuxView == VK_NULL_HANDLE || I.GridCellSize <= 0.0f)
     {
@@ -143,9 +147,10 @@ bool SurfelGIStage::CreatePipelines() noexcept
         return R == VK_SUCCESS;
     };
 
-    std::array<VkDescriptorPoolSize, 2> PoolSizes{{
-        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 11u }, // update 5 + commit 1 + resolve 5
-        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,   5u },
+    std::array<VkDescriptorPoolSize, 3> PoolSizes{{
+        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,         17u }, // update 8 + commit 1 + resolve 8
+        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,           5u },
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,   4u }, // energy + sheen, update and resolve
     }};
     VkDescriptorPoolCreateInfo PoolInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
     PoolInfo.maxSets       = 3u;
@@ -154,11 +159,15 @@ bool SurfelGIStage::CreatePipelines() noexcept
     if (vkCreateDescriptorPool(I.Device, &PoolInfo, nullptr, &DescriptorPool) != VK_SUCCESS) return false;
 
     // push blocks: update/resolve = 6×vec4/uvec4 = 96 B; commit = one uvec4 = 16 B (see the shaders).
-    if (!BuildLayout({ StorageBuffer(0), StorageBuffer(1), StorageBuffer(2), StorageBuffer(8), StorageBuffer(9) },
+    if (!BuildLayout({ StorageBuffer(0), StorageBuffer(1), StorageBuffer(2),
+                       StorageBuffer(3), StorageBuffer(4), StorageBuffer(5),
+                       StorageBuffer(8), StorageBuffer(9), CombinedSampler(13), CombinedSampler(14) },
                      96u, UpdateLayout, UpdatePipeLayout)) return false;
     if (!BuildLayout({ StorageBuffer(0) }, 16u, CommitLayout, CommitPipeLayout)) return false;
     if (!BuildLayout({ StorageImage(0), StorageImage(1), StorageImage(2), StorageImage(3), StorageImage(4),
-                       StorageBuffer(8), StorageBuffer(9), StorageBuffer(10), StorageBuffer(11), StorageBuffer(12) },
+                       StorageBuffer(6), StorageBuffer(7), StorageBuffer(8), StorageBuffer(9),
+                       StorageBuffer(10), StorageBuffer(11), StorageBuffer(12),
+                       CombinedSampler(13), CombinedSampler(14), StorageBuffer(15) },
                      96u, ResolveLayout, ResolvePipeLayout)) return false;
 
     return BuildPipeline("SurfelIrradianceUpdate.spv", UpdatePipeLayout,  UpdatePipeline)
@@ -180,23 +189,33 @@ bool SurfelGIStage::WriteDescriptors() noexcept
     auto Buf = [](VkBuffer b){ return VkDescriptorBufferInfo{ b, 0u, VK_WHOLE_SIZE }; };
     auto Img = [](VkImageView v){ return VkDescriptorImageInfo{ VK_NULL_HANDLE, v, VK_IMAGE_LAYOUT_GENERAL }; };
     const VkDescriptorBufferInfo Surfel = Buf(SurfelBuffer), Head = Buf(HeadBuffer), Next = Buf(NextBuffer);
-    const VkDescriptorBufferInfo Nodes  = Buf(I.CwbvhNodeBuffer), Tris = Buf(I.CwbvhLeafBuffer);
+    const VkDescriptorBufferInfo Nodes = Buf(I.CwbvhNodeBuffer), Tris = Buf(I.CwbvhLeafBuffer);
+    const VkDescriptorBufferInfo Triangles = Buf(I.TriangleBuffer), Materials = Buf(I.MaterialBuffer);
+    const VkDescriptorBufferInfo Slabs = Buf(I.MaterialSlabBuffer);
     const VkDescriptorImageInfo  Out = Img(I.OutputImageView), Surf = Img(I.SurfaceImageView), Norm = Img(I.NormalImageView);
     const VkDescriptorImageInfo  Alb = Img(I.AlbedoImageView), Aux = Img(I.MaterialAuxView);
+    const VkDescriptorImageInfo  Energy{ I.MaterialLutSampler, I.EnergyLutView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+    const VkDescriptorImageInfo  Sheen { I.MaterialLutSampler, I.SheenLutView,  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
 
     std::vector<VkWriteDescriptorSet> W;
     auto WB = [&](VkDescriptorSet s, uint32_t b, const VkDescriptorBufferInfo* i)
     { W.push_back({ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, s, b, 0u, 1u, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, nullptr, i, nullptr }); };
     auto WI = [&](VkDescriptorSet s, uint32_t b, const VkDescriptorImageInfo* i)
     { W.push_back({ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, s, b, 0u, 1u, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, i, nullptr, nullptr }); };
+    auto WS = [&](VkDescriptorSet s, uint32_t b, const VkDescriptorImageInfo* i)
+    { W.push_back({ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, s, b, 0u, 1u, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, i, nullptr, nullptr }); };
     // Update: b0 Surfels, b1 Head, b2 Next, b8 Nodes, b9 Tris
-    WB(UpdateSet, 0, &Surfel); WB(UpdateSet, 1, &Head); WB(UpdateSet, 2, &Next); WB(UpdateSet, 8, &Nodes); WB(UpdateSet, 9, &Tris);
+    WB(UpdateSet, 0, &Surfel); WB(UpdateSet, 1, &Head); WB(UpdateSet, 2, &Next);
+    WB(UpdateSet, 3, &Triangles); WB(UpdateSet, 4, &Materials); WB(UpdateSet, 5, &Slabs);
+    WB(UpdateSet, 8, &Nodes); WB(UpdateSet, 9, &Tris); WS(UpdateSet, 13, &Energy); WS(UpdateSet, 14, &Sheen);
     // Commit: b0 Surfels
     WB(CommitSet, 0, &Surfel);
     // Resolve: images 0-4, nodes/tris 8/9, surfels 10, head 11, next 12.
     WI(ResolveSet, 0, &Out); WI(ResolveSet, 1, &Surf); WI(ResolveSet, 2, &Norm); WI(ResolveSet, 3, &Alb); WI(ResolveSet, 4, &Aux);
+    WB(ResolveSet, 6, &Triangles); WB(ResolveSet, 7, &Materials);
     WB(ResolveSet, 8, &Nodes); WB(ResolveSet, 9, &Tris);
     WB(ResolveSet, 10, &Surfel); WB(ResolveSet, 11, &Head); WB(ResolveSet, 12, &Next);
+    WS(ResolveSet, 13, &Energy); WS(ResolveSet, 14, &Sheen); WB(ResolveSet, 15, &Slabs);
 
     vkUpdateDescriptorSets(I.Device, static_cast<uint32_t>(W.size()), W.data(), 0u, nullptr);
     return true;

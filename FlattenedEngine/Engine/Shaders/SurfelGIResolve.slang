@@ -16,10 +16,9 @@
 //    The Reflections mode is independent (Off/Sky/Raytraced); the host clamps it so Raytraced reflections only appear
 //    when the raytracing budget is actually available (see PortingGuide.md mode matrix + the fall-back guard).
 //
-// ⚠️ PORT SEAMS (`// PORT:`): albedo/metalness/roughness are read from G-buffer images here; SurfaceResolve.slang already
-//    parks primary albedo (the denoiser reads it) — extend it to also emit a metal/rough aux target, OR decode the
-//    material slab from SurfaceImage.w (visibility id) exactly as ReSTIRViewport.slang does. This file LOWERS today.
-//    NOTE: GLSL source lowered by the build scripts (glslang/glslc -fshader-stage=compute --target-env=vulkan1.2).
+// MaterialAux.z carries the numeric primary material index. The complete MaterialRecord and MaterialSlabRecord are read
+//    from the same buffers as ReSTIR and resolved by SurfelMaterialEvaluation.slang; MaterialAux.xy remain diagnostics.
+//    NOTE: GLSL source lowers through the engine shader build as a Vulkan 1.2 compute stage.
 
 #version 460
 #extension GL_GOOGLE_include_directive : require
@@ -33,7 +32,7 @@ layout(rgba8,   binding = 0) uniform writeonly image2D OutputImage;   // tone-ma
 layout(rgba32f, binding = 1) uniform readonly  image2D SurfaceImage;  // xyz = world position, w = visibility id bits
 layout(rgba16f, binding = 2) uniform readonly  image2D NormalImage;   // xyz = geometric normal
 layout(rgba8,   binding = 3) uniform readonly  image2D AlbedoImage;   // xyz = base colour (PORT: SurfaceResolve primary albedo)
-layout(rgba16f, binding = 4) uniform readonly  image2D MaterialAux;   // x = metalness, y = roughness (SurfaceResolve aux)
+layout(rgba16f, binding = 4) uniform readonly  image2D MaterialAux;   // xy diagnostics, z = numeric material index
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                    SURFEL FIELD (read-only here)
@@ -55,6 +54,10 @@ layout(std430, binding = 8) readonly buffer TraversalNodeExtent { vec4 CwbvhNode
 layout(std430, binding = 9) readonly buffer TraversalLeafExtent { vec4 CwbvhTris[];  };
 uint TlasInstanceCount = 0u;
 #include "TraversalCWBVH.slang"
+#define FRONTIER_SURFEL_TRIANGLE_BINDING 6
+#define FRONTIER_SURFEL_MATERIAL_BINDING 7
+#define FRONTIER_SURFEL_SLAB_BINDING 15
+#include "SurfelMaterialEvaluation.slang"
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                    PUSH CONSTANTS
@@ -122,14 +125,25 @@ vec3 Reflection(vec3 P, vec3 N, vec3 V, vec3 f0, float roughness, uint mode)
     if (mode == kReflectSky)
     {
         // reflect the sky dome only — no scene rays. Roughness widens toward the ambient (cheap gloss).
-        return PC.SkyAmbient.xyz;
+        vec3 skyR = PC.SkyAmbient.xyz * mix(1.35, 1.0, roughness);
+        return skyR;
     }
     // kReflectRaytraced — one reflection ray against the CWBVH; miss → sky, hit → sun direct + surfel indirect at the hit.
     vec3 rD = 1.0 / R;
     TraversalHit h = TraverseClosest(P + N*1e-3, R, rD, 1e30);
-    if (h.t >= 1e29) return PC.SkyAmbient.xyz;
-    vec3 hp = P + R * h.t; vec3 hN = -R;   // PORT: decode hit normal/albedo like the kernel; stand-in here.
-    return SunDirect(hp, hN) * kInvPi + kInvPi * GatherField(hp, hN);
+    if (h.t >= 1e29) return PC.SkyAmbient.xyz * 1.35;
+    vec3 HitPosition = P + R * h.t;
+    SurfelTriangle Triangle = MaterialTriangles[h.primitive];
+    vec3 HitNormal = normalize(cross(Triangle.V1.xyz - Triangle.V0.xyz, Triangle.V2.xyz - Triangle.V0.xyz));
+    if (dot(HitNormal, R) > 0.0) HitNormal = -HitNormal;
+    ShadingRecord HitMaterial = ResolveSurfelMaterial(floatBitsToUint(Triangle.V0.w));
+    vec3 SunDirection = normalize(PC.SunDirectionRadiance.xyz);
+    vec3 HitColour = HitMaterial.Emission;
+    HitColour += EvaluateSurfelMaterial(HitMaterial, HitNormal, -R, SunDirection)
+               * SunDirect(HitPosition, HitNormal);
+    HitColour += EvaluateSurfelMaterial(HitMaterial, HitNormal, -R, HitNormal)
+               * GatherField(HitPosition, HitNormal);
+    return HitColour;
 }
 
 void main()
@@ -141,40 +155,42 @@ void main()
     vec4 surf = imageLoad(SurfaceImage, pixel);
     vec3 P = surf.xyz;
     // A miss (no geometry) shows the sky directly.
-    vec3 N = normalize(imageLoad(NormalImage, pixel).xyz);
-    if (dot(N, N) < 1e-6)
+    vec3 RawNormal = imageLoad(NormalImage, pixel).xyz;
+    if (dot(RawNormal, RawNormal) < 1e-6)
     {
         vec3 V = normalize(P - PC.CameraEye.xyz);
         vec3 sky = PC.SkyAmbient.xyz;
-        imageStore(OutputImage, pixel, vec4(pow(sky / (sky + vec3(1.0)), vec3(1.0 / 2.2)), 1.0));
+        imageStore(OutputImage, pixel, vec4(pow(sky/(sky+vec3(1.0)), vec3(1.0/2.2)), 1.0));
         return;
     }
+    vec3 N = normalize(RawNormal);
 
-    vec3 albedo   = imageLoad(AlbedoImage, pixel).xyz;
-    vec2 mr       = imageLoad(MaterialAux, pixel).xy;
-    float metal   = mr.x;
-    float rough   = mr.y;
-    vec3 V        = normalize(PC.CameraEye.xyz - P);
-    vec3 f0       = mix(vec3(0.04), albedo, metal);
-    vec3 diffuse  = albedo * (1.0 - metal);
+    vec4 MaterialParameters = imageLoad(MaterialAux, pixel);
+    uint MaterialIndex = uint(round(MaterialParameters.z));
+    ShadingRecord Material = ResolveSurfelMaterial(MaterialIndex);
+    vec3 V = normalize(PC.CameraEye.xyz - P);
+    vec3 L = normalize(PC.SunDirectionRadiance.xyz);
 
     uint flags = PC.Counts.z;
     uint reflMode = PC.Counts.w;
 
-    // --- direct (always, sharp) ---
-    vec3 col = diffuse * kInvPi * SunDirect(P, N);
+    // Direct, indirect and environment transport all pass through the same OpenPBR evaluator as ReSTIR. The transport
+    // sources differ by mode; the material record and ResolveLayers/EvaluateBsdf implementation are shared.
+    vec3 col = Material.Emission;
+    vec3 DirectRadiance = SunDirect(P, N);
+    col += EvaluateSurfelMaterial(Material, N, V, L) * DirectRadiance;
 
-    // --- indirect diffuse ---
-    if ((flags & kFeatureGlobalIllumination) != 0u)
-        col += diffuse * kInvPi * GatherField(P, N);          // surfel GI
-    else
-        col += diffuse * PC.SkyAmbient.xyz;                    // plain raster: sky ambient fill (never black)
+    vec3 IndirectRadiance = ((flags & kFeatureGlobalIllumination) != 0u)
+                          ? GatherField(P, N)
+                          : PC.SkyAmbient.xyz;
+    col += EvaluateSurfelMaterial(Material, N, V, N) * IndirectRadiance;
 
-    // --- reflections (Off / Sky / Raytraced) ---
     if (reflMode != kReflectOff)
     {
-        vec3 F = Fresnel(f0, max(dot(N, V), 0.0));
-        col += F * Reflection(P, N, V, f0, rough, reflMode);
+        vec3 ReflectedDirection = reflect(-V, N);
+        vec3 ReflectedRadiance = Reflection(P, N, V, vec3(0.0), Material.SpecularRoughness, reflMode);
+        col += EvaluateSurfelMaterial(Material, N, V, ReflectedDirection)
+             * ReflectedRadiance * max(dot(N, ReflectedDirection), 0.0);
     }
 
     // exposure + Reinhard + gamma

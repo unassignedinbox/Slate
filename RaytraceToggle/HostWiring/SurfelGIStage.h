@@ -13,10 +13,10 @@
 //    guide: BringSurfelStage() in the bring-up list, RecordFrame() before the ReSTIR dispatch, and Destroy() in teardown.
 //
 // The binding contract MUST match the shaders in ../Shaders:
-//    Update  : b0 Surfels(rw)  b1 GridHead(ro)  b2 GridNext(ro)  b8 CwbvhNodes  b9 CwbvhTris   push SurfelUpdateConstants
-//    Commit  : b0 Surfels(rw)                                                                   push {uvec4 Counts}
-//    Resolve : b0 Output(w) b1 Surface(ro) b2 Normal(ro) b3 Albedo(ro) b4 MaterialAux(ro)
-//              b5 SkyCube  b8 CwbvhNodes b9 CwbvhTris  b10 Surfels(ro) b11 GridHead(ro) b12 GridNext(ro)  push ResolveConstants
+//    Update  : b0 Surfels b1 GridHead b2 GridNext · b3 Triangles b4 Materials b5 Slabs · b8/9 CWBVH · b13/14 LUTs
+//    Commit  : b0 Surfels
+//    Resolve : b0 Output b1 Surface b2 Normal b3 Albedo b4 MaterialAux · b6 Triangles b7 Materials · b8/9 CWBVH
+//              b10 Surfels b11 GridHead b12 GridNext · b13/14 LUTs · b15 Slabs
 //------------------------------------------------------------------------------------------------------------------------
 
 #pragma once
@@ -56,6 +56,14 @@ namespace Frontier
         // Shared acceleration structure blobs — the SAME buffers the ReSTIR kernel binds at 8/9.
         VkBuffer                         CwbvhNodeBuffer   = VK_NULL_HANDLE;
         VkBuffer                         CwbvhLeafBuffer   = VK_NULL_HANDLE;
+
+        // Shared scene/material records — exactly the buffers and LUTs bound to ReSTIRViewport.
+        VkBuffer                         TriangleBuffer     = VK_NULL_HANDLE;
+        VkBuffer                         MaterialBuffer     = VK_NULL_HANDLE;
+        VkBuffer                         MaterialSlabBuffer = VK_NULL_HANDLE;
+        VkImageView                      EnergyLutView      = VK_NULL_HANDLE;
+        VkImageView                      SheenLutView       = VK_NULL_HANDLE;
+        VkSampler                        MaterialLutSampler = VK_NULL_HANDLE;
 
         // G-buffer + present views (GENERAL layout storage images produced by VisibilityRaster/SurfaceResolve).
         VkImageView                      OutputImageView   = VK_NULL_HANDLE;   // rgba8   (present target)

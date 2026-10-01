@@ -3047,9 +3047,15 @@ bool SwapchainExchange::BringSurfelGIStage() noexcept
     SurfelStageInit Init{};
     Init.Device           = Vulkan->Device;
     Init.MemoryProperties = Vulkan->MemoryProperties;
-    Init.CwbvhNodeBuffer  = Vulkan->TraversalNodeBuffer;
-    Init.CwbvhLeafBuffer  = Vulkan->TraversalLeafBuffer;
-    Init.OutputImageView  = Vulkan->StorageImageView;
+    Init.CwbvhNodeBuffer   = Vulkan->TraversalNodeBuffer;
+    Init.CwbvhLeafBuffer   = Vulkan->TraversalLeafBuffer;
+    Init.TriangleBuffer    = Vulkan->TriangleBuffer;
+    Init.MaterialBuffer    = Vulkan->MaterialBuffer;
+    Init.MaterialSlabBuffer = Vulkan->SlabBuffer;
+    Init.EnergyLutView     = Vulkan->ShadingTables[0].View;
+    Init.SheenLutView      = Vulkan->ShadingTables[1].View;
+    Init.MaterialLutSampler = Vulkan->TableSampler;
+    Init.OutputImageView   = Vulkan->StorageImageView;
     Init.SurfaceImageView = static_cast<VkImageView>(Visibility.QuerySurfaceView());
     Init.NormalImageView  = static_cast<VkImageView>(Visibility.QueryNormalView());
     Init.AlbedoImageView  = static_cast<VkImageView>(Visibility.QueryAlbedoView());

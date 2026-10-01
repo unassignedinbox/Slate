@@ -164,7 +164,8 @@ void main()
         bool  AuxHit   = Visibility != kVisibilityInvalid;
         float AuxMetal = AuxHit ? Materials[Material].Emissive.w : 0.0;
         float AuxRough = AuxHit ? Materials[Material].Albedo.w   : 1.0;
-        imageStore(MaterialImage, ivec2(Pixel), vec4(AuxMetal, AuxRough, 0.0, 0.0));
+        float AuxMaterial = AuxHit ? float(Material) : 0.0;
+        imageStore(MaterialImage, ivec2(Pixel), vec4(AuxMetal, AuxRough, AuxMaterial, 0.0));
         vec3 Albedo = AuxHit ? Materials[Material].Albedo.xyz : vec3(0.0);
         imageStore(AlbedoImage, ivec2(Pixel), vec4(Albedo, 1.0));
     }

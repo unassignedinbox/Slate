@@ -1,6 +1,37 @@
-# Showcase material grid — all families, all three modes
+# ShaderBall material grid — all families, all three modes
 
-`ShowcaseGrid_Modes.png` is the engine's **15×15 = 225-sphere material showcase**
+`ShaderBall20x20_ThreePaths.png` is the current **20×20 = 400-material** parity proof. Every cell uses the public-domain
+[derkreature ShaderBall](ShaderBallAsset/ORIGIN.md), reduced only for deterministic CPU raster verification. The original
+Unlicense is retained beside it. Left to right, the three panels are:
+
+1. Visibility raster — ray tracing off, GI off, reflections off.
+2. Surfel GI — ray tracing off, GI on, sky reflection enabled.
+3. ReSTIR — ray tracing on, GI on, traced reflection/refraction enabled.
+
+All panels call one `EvaluateMaterial` routine. Only `TransportShade` changes between panels. The executable hashes every
+resolved material response before transport and fails unless all three hashes are identical. The committed proof reports
+`efddf784ca0caa8a` for all three paths.
+
+The 20 rows cover IOR/F0, angular Fresnel response (including F20/F90), polished conductor colour, rough conductor,
+procedural wood, glitter, automotive metallic flake/coat, polymer, procedural paper fibre, woven fabric/sheen,
+subsurface wax/skin, clear glass, absorbing glass, thin film, clear coat, brushed anisotropic metal, rubber, ceramic,
+emission, and layered showpieces. Columns sweep hue or the row's principal physical parameter.
+
+Reproduce from the repository root:
+
+```bash
+g++ -std=c++20 -O2 Exhibits/Workbench/Materials/ShaderBallGridProof.cpp -o ShaderBallGridProof
+./ShaderBallGridProof
+```
+
+The GPU correction follows the same rule. `SurfelMaterialEvaluation.slang` reads the engine's real
+`MaterialRecord`/`MaterialSlabRecord` tables and invokes the same `ResolveLayers` and `EvaluateBsdf` implementation as
+ReSTIR. Both the Surfel irradiance update and final resolve use it; the old albedo/metalness/roughness approximation is no
+longer the material path. `MaterialAux.z` now carries only the primary material index needed to address those shared tables.
+
+## Legacy 15×15 sphere proof
+
+`ShowcaseGrid_Modes.png` is the earlier engine **15×15 = 225-sphere material showcase**
 (`ContentInterchange/ShowcaseStructure.cpp`, the r4 generator — the same grid the flake / denoiser /
 material work rendered) run through **all three render-mode paths** by the CPU mirror
 (`../CpuMirror/ModeMatrix.cpp --scene grid`). It proves every OpenPBR family shades correctly regardless of
