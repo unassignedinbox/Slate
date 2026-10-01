@@ -63,9 +63,10 @@ fn SkyRadiance(Direction: vec3f) -> vec3f
 fn CellHash(Cell: vec3i) -> u32
 {
     let Shifted = vec3u(Cell + vec3i(2048));
-    let Mixed = (Shifted.x * 73856093u)
-              ^ (Shifted.y * 19349663u)
-              ^ (Shifted.z * 83492791u);
+    let HashedX = Shifted.x * 73856093u;
+    let HashedY = Shifted.y * 19349663u;
+    let HashedZ = Shifted.z * 83492791u;
+    let Mixed = HashedX ^ HashedY ^ HashedZ;
     return Mixed % max(u32(Presentation.Counts.y), 1u);
 }
 

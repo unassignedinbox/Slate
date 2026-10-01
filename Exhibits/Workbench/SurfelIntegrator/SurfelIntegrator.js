@@ -183,7 +183,7 @@ async function LoadBinary(Address)
 
 async function LoadText(Address)
 {
-    const Response = await fetch(Address);
+    const Response = await fetch(Address, { cache: "no-store" });
     if (!Response.ok)
     {
         throw new Error(`Unable to load ${Address}: HTTP ${Response.status}`);
@@ -417,7 +417,12 @@ async function ValidateShader(Shader, Label)
     const Failures = Information.messages.filter((Message) => Message.type === "error");
     if (Failures.length > 0)
     {
-        throw new Error(`${Label}:\n${Failures.map((Message) => Message.message).join("\n")}`);
+        const Diagnostic = Failures.map((Message) =>
+        {
+            const Location = Message.lineNum ? `${Message.lineNum}:${Message.linePos || 1} ` : "";
+            return `${Location}${Message.message}`;
+        }).join("\n");
+        throw new Error(`${Label}:\n${Diagnostic}`);
     }
 }
 
@@ -484,10 +489,10 @@ async function BringRenderer()
     ] = await Promise.all([
         LoadBinary(GeometryAddress),
         LoadBinary(HierarchyAddress),
-        LoadText("SurfelIntegrate.wgsl"),
-        LoadText("SurfelRaster.wgsl"),
-        LoadText("SurfelPresent.wgsl"),
-        LoadText("SurfelOverlay.wgsl"),
+        LoadText("SurfelIntegrate.wgsl?revision=3"),
+        LoadText("SurfelRaster.wgsl?revision=3"),
+        LoadText("SurfelPresent.wgsl?revision=3"),
+        LoadText("SurfelOverlay.wgsl?revision=3"),
     ]);
 
     const Geometry = DecodeGeometry(GeometryBinary);
@@ -1024,6 +1029,7 @@ BringRenderer().catch((Failure) =>
     StatusPanel.classList.add("Failed");
     StatusText.textContent = "WebGPU could not start";
     CanvasError.hidden = false;
+    CanvasError.querySelector("strong").textContent = "WebGPU startup failed.";
     const Detail = CanvasError.querySelector("span");
     Detail.textContent = Failure instanceof Error ? Failure.message : String(Failure);
 });

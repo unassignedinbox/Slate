@@ -284,9 +284,10 @@ fn TraceScene(Origin: vec3f, Direction: vec3f, MaximumDistance: f32) -> RayHit
 fn CellHash(Cell: vec3i) -> u32
 {
     let Shifted = vec3u(Cell + vec3i(2048));
-    let Mixed = (Shifted.x * 73856093u)
-              ^ (Shifted.y * 19349663u)
-              ^ (Shifted.z * 83492791u);
+    let HashedX = Shifted.x * 73856093u;
+    let HashedY = Shifted.y * 19349663u;
+    let HashedZ = Shifted.z * 83492791u;
+    let Mixed = HashedX ^ HashedY ^ HashedZ;
     return Mixed % max(u32(Integration.Counts.y), 1u);
 }
 
@@ -358,10 +359,9 @@ fn IntegrateMain(@builtin(global_invocation_id) Invocation: vec3u)
 
     let Record = SourceField.Records[RecordNumber];
     let Normal = normalize(Record.NormalArea.xyz);
-    var Seed = HashUnsigned(
-        RecordNumber * 2246822519u
-        ^ u32(Integration.SunDirectionStep.w) * 3266489917u
-    );
+    let RecordSeed = RecordNumber * 2246822519u;
+    let StepSeed = u32(Integration.SunDirectionStep.w) * 3266489917u;
+    var Seed = HashUnsigned(RecordSeed ^ StepSeed);
     let RayCount = max(1u, u32(Integration.SunColourRays.w));
     var Measurement = vec3f(0.0);
 
