@@ -2,10 +2,10 @@
 
 const GeometryAddress = "../../Assets/ShaderBall/ShaderBall.mesh";
 const GeometryMagic = 0x314d4253;
-const RsmResolution = 256;
+const RsmResolution = 384;
 const RsmWorldSpan = 48.0;
 const SurfelCount = (RsmResolution / 2) * (RsmResolution / 2);
-const VolumeResolution = 32;
+const VolumeResolution = 40;
 const CellsPerCascade = VolumeResolution ** 3;
 const VolumeCellCount = CellsPerCascade * 3;
 const FrameUniformBytes = 400;
@@ -27,6 +27,8 @@ const IndirectGain = document.getElementById("IndirectGain");
 const GainOutput = document.getElementById("GainOutput");
 const ScreenRadius = document.getElementById("ScreenRadius");
 const RadiusOutput = document.getElementById("RadiusOutput");
+const RenderScale = document.getElementById("RenderScale");
+const ScaleOutput = document.getElementById("ScaleOutput");
 const PauseButton = document.getElementById("PauseButton");
 const ResetButton = document.getElementById("ResetButton");
 const TimingMetric = document.getElementById("TimingMetric");
@@ -601,9 +603,10 @@ async function BringRenderer()
 
     function ResizePresentation()
     {
-        const PixelRatio = Math.min(window.devicePixelRatio || 1.0, 1.25);
-        const Width = Math.max(1, Math.min(1600, Math.round(PresentationCanvas.clientWidth * PixelRatio)));
-        const Height = Math.max(1, Math.min(900, Math.round(PresentationCanvas.clientHeight * PixelRatio)));
+        const RequestedScale = Number(RenderScale.value) * 0.01;
+        const PixelRatio = Math.min((window.devicePixelRatio || 1.0) * RequestedScale, 2.0);
+        const Width = Math.max(1, Math.min(1920, Math.round(PresentationCanvas.clientWidth * PixelRatio)));
+        const Height = Math.max(1, Math.min(1080, Math.round(PresentationCanvas.clientHeight * PixelRatio)));
         if (Width === PresentationWidth && Height === PresentationHeight) return;
         PresentationWidth = Width;
         PresentationHeight = Height;
@@ -769,9 +772,9 @@ async function BringRenderer()
 
         const LookAhead = Add(Camera.Eye, Scale(Camera.Forward, Math.min(OrbitDistance * 0.55, 10.0)));
         const CascadeCenter = [LookAhead[0], LookAhead[1], 4.0];
-        const Origin0 = SnappedCascadeOrigin(CascadeCenter, 0.75);
-        const Origin1 = SnappedCascadeOrigin(CascadeCenter, 2.0);
-        const Origin2 = SnappedCascadeOrigin(CascadeCenter, 5.0);
+        const Origin0 = SnappedCascadeOrigin(CascadeCenter, 0.60);
+        const Origin1 = SnappedCascadeOrigin(CascadeCenter, 1.60);
+        const Origin2 = SnappedCascadeOrigin(CascadeCenter, 4.00);
         const Content = new Float32Array(FrameUniformBytes / 4);
         Content.set(Camera.Projection, 0);
         Content.set(PreviousCameraProjection || Camera.Projection, 16);
@@ -959,6 +962,15 @@ async function BringRenderer()
     ScreenRadius.addEventListener("input", () =>
     {
         RadiusOutput.textContent = `${(Number(ScreenRadius.value) * 0.1).toFixed(1)} m`;
+    });
+    RenderScale.addEventListener("input", () =>
+    {
+        ScaleOutput.textContent = `${RenderScale.value}%`;
+    });
+    RenderScale.addEventListener("change", () =>
+    {
+        PreviousCameraProjection = null;
+        PresentationWidth = 0;
     });
     PauseButton.addEventListener("click", () =>
     {

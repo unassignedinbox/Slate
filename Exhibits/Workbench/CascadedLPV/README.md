@@ -4,9 +4,9 @@ Open `CascadedLPV.html` through an HTTP server in a WebGPU-capable browser.
 
 ## Implemented pipeline
 
-1. Rasterize the animated scene into a primary G-buffer and a 256² reflective shadow map.
-2. Compact every second RSM texel into 16,384 transient surface-light candidates.
-3. Scatter RSM and downsampled G-buffer samples into three snapped, camera-relative 32³ grids.
+1. Rasterize the animated scene into a supersampled primary G-buffer and a 384² reflective shadow map.
+2. Compact every second RSM texel into 36,864 transient surface-light candidates.
+3. Scatter RSM and downsampled G-buffer samples into three snapped, camera-relative 40³ grids.
 4. Normalize fixed-point atomic injection into directional RGB radiance and a directional blocker field.
 5. Run one to six Jacobi propagation steps independently in the 24 m, 64 m, and 160 m cascades.
 6. Compute half-resolution short-range screen-space colour transfer and GTAO with world-position history rejection.

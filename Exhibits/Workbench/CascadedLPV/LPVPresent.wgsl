@@ -54,8 +54,8 @@ struct FullscreenVarying
 @group(0) @binding(8) var<storage, read> RadianceVolume: VolumeExtent;
 @group(0) @binding(9) var<storage, read> BlockerVolume: VectorExtent;
 
-const VolumeResolution: u32 = 32u;
-const CellsPerCascade: u32 = 32768u;
+const VolumeResolution: u32 = 40u;
+const CellsPerCascade: u32 = 64000u;
 const InversePi: f32 = 0.31830988618;
 
 fn CascadeOrigin(Cascade: u32) -> vec4f
@@ -77,7 +77,7 @@ fn CascadeEdge(Position: vec3f, Cascade: u32) -> f32
 {
     let OriginCell = CascadeOrigin(Cascade);
     let Grid = (Position - OriginCell.xyz) / OriginCell.w;
-    return min(min(min(Grid.x, Grid.y), Grid.z), min(min(31.0 - Grid.x, 31.0 - Grid.y), 31.0 - Grid.z));
+    return min(min(min(Grid.x, Grid.y), Grid.z), min(min(39.0 - Grid.x, 39.0 - Grid.y), 39.0 - Grid.z));
 }
 
 fn Evaluate(Coefficients: vec4f, Direction: vec3f) -> f32
@@ -92,7 +92,7 @@ fn SampleCascade(Position: vec3f, Normal: vec3f, Cascade: u32) -> vec3f
     let Grid = (SamplePosition - OriginCell.xyz) / OriginCell.w - vec3f(0.5);
     let Base = vec3i(floor(Grid));
     let Fraction = fract(Grid);
-    if (any(Base < vec3i(0)) || any(Base >= vec3i(31))) { return vec3f(0.0); }
+    if (any(Base < vec3i(0)) || any(Base >= vec3i(39))) { return vec3f(0.0); }
 
     var Red = vec4f(0.0);
     var Green = vec4f(0.0);
@@ -152,7 +152,7 @@ fn SampleBlocker(Position: vec3f, Cascade: u32) -> vec4f
 {
     let OriginCell = CascadeOrigin(Cascade);
     let Coordinate = vec3i(floor((Position - OriginCell.xyz) / OriginCell.w));
-    if (any(Coordinate < vec3i(0)) || any(Coordinate >= vec3i(32))) { return vec4f(0.0); }
+    if (any(Coordinate < vec3i(0)) || any(Coordinate >= vec3i(40))) { return vec4f(0.0); }
     return BlockerVolume.Cells[CellNumber(Coordinate, Cascade)];
 }
 

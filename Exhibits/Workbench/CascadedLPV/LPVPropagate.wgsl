@@ -43,8 +43,8 @@ struct VectorExtent
 @group(0) @binding(3) var<storage, read> SourceVolume: VolumeExtent;
 @group(0) @binding(4) var<storage, read_write> DestinationVolume: VolumeExtent;
 
-const VolumeResolution: u32 = 32u;
-const CellsPerCascade: u32 = 32768u;
+const VolumeResolution: u32 = 40u;
+const CellsPerCascade: u32 = 64000u;
 
 fn LocalCoordinate(Cell: u32) -> vec3i
 {

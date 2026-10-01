@@ -66,8 +66,8 @@ struct VectorExtent
 @group(0) @binding(8) var AlbedoImage: texture_2d<f32>;
 @group(0) @binding(9) var RsmDepth: texture_depth_2d;
 
-const VolumeResolution: u32 = 32u;
-const CellsPerCascade: u32 = 32768u;
+const VolumeResolution: u32 = 40u;
+const CellsPerCascade: u32 = 64000u;
 const AtomicStride: u32 = 17u;
 const FixedScale: f32 = 1024.0;
 

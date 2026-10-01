@@ -91,6 +91,10 @@
                     <span><b>Screen radius</b><output id="RadiusOutput">2.8 m</output></span>
                     <input id="ScreenRadius" type="range" min="10" max="50" value="28" step="2">
                 </label>
+                <label class="RangeControl">
+                    <span><b>Render scale</b><output id="ScaleOutput">150%</output></span>
+                    <input id="RenderScale" type="range" min="100" max="175" value="150" step="25">
+                </label>
                 <div class="ButtonGroup">
                     <button id="PauseButton" class="Secondary" type="button">Pause simulation</button>
                     <button id="ResetButton" type="button">Reset camera &amp; history</button>
@@ -100,8 +104,8 @@
 
         <section class="Metrics" aria-label="Live pipeline metrics">
             <article><span>Backend</span><strong>WebGPU</strong></article>
-            <article><span>Transient samples</span><strong id="SurfelMetric">16,384</strong></article>
-            <article><span>LPV cells</span><strong>3 × 32³</strong></article>
+            <article><span>Transient samples</span><strong id="SurfelMetric">36,864</strong></article>
+            <article><span>LPV cells</span><strong>3 × 40³</strong></article>
             <article><span>CPU encode</span><strong id="TimingMetric">—</strong></article>
         </section>
 
@@ -109,12 +113,12 @@
             <article>
                 <span class="ArticleNumber">01</span>
                 <h2>Rasterize samples</h2>
-                <p>A 256² reflective shadow map captures current positions, normals, materials, and sun-facing flux. Every second texel becomes a transient surfel; current G-buffer samples add visible movers and blockers, so stale geometry is replaced immediately.</p>
+                <p>A 384² reflective shadow map captures current positions, normals, materials, and sun-facing flux. Every second texel becomes a transient surfel; current G-buffer samples add visible movers and blockers, so stale geometry is replaced immediately.</p>
             </article>
             <article>
                 <span class="ArticleNumber">02</span>
                 <h2>Propagate off screen</h2>
-                <p>Three snapped 32³ lattices cover 24, 64, and 160 metres around the camera. Directional RGB light is injected and propagated while camera and light-view surfaces form a small blocker field.</p>
+                <p>Three snapped 40³ lattices cover 24, 64, and 160 metres around the camera. Directional RGB light is injected and propagated while camera and light-view surfaces form a small blocker field.</p>
             </article>
             <article>
                 <span class="ArticleNumber">03</span>
@@ -128,6 +132,6 @@
             <span>Diffuse GI prototype · SSR/reflection probes remain a separate production concern</span>
         </footer>
     </main>
-    <script type="module" src="CascadedLPV.js?revision=2"></script>
+    <script type="module" src="CascadedLPV.js?revision=3"></script>
 </body>
 </html>
