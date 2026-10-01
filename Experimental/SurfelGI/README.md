@@ -28,7 +28,8 @@ This is intentionally under `Experimental/`: it is a complete pass set plus a ho
 | Vulkan sequence / descriptors / barriers | `VulkanIntegration.md` | exact host integration recipe |
 | Upstream pass-by-pass correspondence | `Parity.md` | preserved stages and explicit backend substitutions |
 | Standalone contract tests | `Tests/SurfelGIHostTests.cpp` | no Vulkan SDK or GPU required |
-| ShaderBall preview captures | `Renders/` + `Tools/RenderShaderBallPreview.cpp` | reproducible CPU scene preview while GPU wiring is pending |
+| ShaderBall direct-light preview | `Renders/` + `Tools/RenderShaderBallPreview.cpp` | reproducible CPU scene preview while GPU wiring is pending |
+| ShaderBall SurfelGI CPU mirror | `Renders/SurfelMirror/` + `Tools/RenderShaderBallSurfelMirror.cpp` | five-frame execution-mirror convergence sequence plus raw indirect output |
 
 ## Build the host contract test
 

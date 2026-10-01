@@ -345,4 +345,11 @@ if(FRONTIER_BUILD_EXPERIMENTAL_SURFEL_GI)
         Experimental/SurfelGI/Tools/RenderShaderBallPreview.cpp
     )
     target_compile_features(FrontierShaderBallPreview PRIVATE cxx_std_20)
+
+    # CPU execution mirror of the portable GLSL surfel passes. Its captures are a deterministic verification aid while
+    # the Vulkan frame-graph integration remains isolated under Experimental/.
+    add_executable(FrontierShaderBallSurfelMirror
+        Experimental/SurfelGI/Tools/RenderShaderBallSurfelMirror.cpp
+    )
+    target_compile_features(FrontierShaderBallSurfelMirror PRIVATE cxx_std_20)
 endif()
