@@ -772,6 +772,9 @@ const scene = new THREE.Scene(); scene.background = new THREE.Color('#0b0c0e');
 const pmrem = new THREE.PMREMGenerator(renderer); scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 const camera = new THREE.PerspectiveCamera(38, 1, 1, 20000); camera.position.set(700, 380, 720);
 const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.target.set(0, 0, 0);
+controls.zoomSpeed = 0.8; controls.maxPolarAngle = Math.PI / 2 - 0.03; controls.zoomToCursor = false;
+function fitZoom(d) { const R = d.Rout; controls.minDistance = R * 0.75; controls.maxDistance = R * 7; camera.near = R * 0.02; camera.far = R * 60; camera.updateProjectionMatrix();
+  const dist = camera.position.distanceTo(controls.target); if (dist > controls.maxDistance || dist < controls.minDistance) { const dir = camera.position.clone().sub(controls.target).normalize(); camera.position.copy(controls.target).addScaledVector(dir, THREE.MathUtils.clamp(dist, controls.minDistance, controls.maxDistance)); } }
 const key = new THREE.DirectionalLight('#fff4e0', 2.2); key.position.set(600, 900, 500); key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.camera.left = key.shadow.camera.bottom = -600; key.shadow.camera.right = key.shadow.camera.top = 600; key.shadow.camera.far = 3000; key.shadow.bias = -0.0002; key.shadow.normalBias = 2.5; scene.add(key);
 scene.add(new THREE.DirectionalLight('#9fc5ff', 0.6).translateX(-800).translateY(200).translateZ(-400));
 scene.add(new THREE.HemisphereLight('#3a4050', '#0b0b0d', 0.6));
@@ -806,6 +809,8 @@ function rebuild(full = true) {
   rimGroup = buildRim(d); rimGroup.traverse(o => { o.castShadow = true; }); tyreGroup.add(rimGroup);
   threadLines = buildThreads(profileCache, d); threadLines.visible = UI.threads; tyreGroup.add(threadLines);
   const groundR = d.Rout - T.wear * T.treadDepth; tyreGroup.position.y = groundR; tyreGroup.rotation.z = 0;
+  if (!controls.userData?.init) { controls.userData = { init: true }; controls.target.set(0, groundR, 0); camera.position.set(d.Rout * 2.6, groundR + d.Rout * 0.6, d.Rout * 2.7); }
+  fitZoom(d);
   updateHud(d); drawProfile(d, profileCache); drawTreadView();
 }
 
@@ -967,7 +972,7 @@ document.getElementById('threadsBtn').onclick = e => { UI.threads = !UI.threads;
 document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => {
   const d = dims(); const R = d.Rout; const v = b.dataset.view;
   const pos = { iso: [R * 2.6, R * 1.4, R * 2.7], side: [R * 4.2, R * 0.9, 0.01], front: [0.01, R * 0.9, R * 4.2], tread: [R * 0.9, R * 2.9, R * 0.7] }[v];
-  camera.position.set(...pos); controls.target.set(0, v === 'tread' ? R * 1.6 : R * 0.9, 0); tyreGroup.rotation.x = 0;
+  controls.target.set(0, v === 'tread' ? R * 1.6 : R * 0.95, 0); camera.position.set(pos[0], pos[1] + (v === 'tread' ? R * 0.7 : 0), pos[2]); fitZoom(d); tyreGroup.rotation.x = 0;
 });
 // exports
 const dl = (name, url) => { const a = document.createElement('a'); a.href = url; a.download = name; a.click(); };
