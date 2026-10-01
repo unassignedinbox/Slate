@@ -201,7 +201,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 const T = {                       // tyre carcass parameters (mm / inch / fractions)
   width: 245, aspect: 40, rim: 18, treadDepth: 8, wear: 0, wearBias: 0,
   treadFrac: 0.88, crown: 2.0, shoulder: 18, bulge: 1.0, rimWidthFrac: 0.78,
-  radial: 720, across: 96, meshMode: 'heightmap', polyDetail: 6,
+  radial: 720, across: 96, meshMode: 'poly', polyDetail: 6,
   rubber: '#151515', letter: 'white', lettering: true, brand: 'SLATE', spokes: 5, rimColor: '#c9ccd2', rimStyle: 'spoke',
   factoryStripes: true, stripeRed: '#d63842', stripeBlue: '#3184c7', stripePattern: 'zigzag', stripeWidth: 1.4, stripeGap: 4.2, stripeWave: 1.1, stripeOffset: 0, stripePitch: 12
 };
@@ -707,6 +707,23 @@ function buildSidewallGeometry(d, prof) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); return g;
 }
 
+// Polygon shoulder seal: a small overlapping quad strip hides any numerical crack where the boolean-cut tread meets the sidewall.
+function buildShoulderSeal(d) {
+  const M = Math.max(180, T.radial), cover = Math.min(8, Math.max(4, T.polyDetail));
+  const pos = [], nrm = [], uv = [], idx = []; let base = 0;
+  const ringPoint = (y, offset, th) => { const p = treadProfileAt(y, d); const x = p.x + p.nx * offset, r = p.r + p.nr * offset; return [x, r * Math.cos(th), r * Math.sin(th), p.nx, p.nr * Math.cos(th), p.nr * Math.sin(th)]; };
+  for (const sign of [-1, 1]) {
+    for (let row = 0; row < 2; row++) for (let j = 0; j <= M; j++) {
+      const th = j / M * TAU, y = sign * (d.acrossHalf - (row ? cover : 0));
+      // The outside ring sits just above the join; the inner ring lies under the tread blocks.
+      const q = ringPoint(y, row ? -0.45 : 0.35, th); pos.push(q[0], q[1], q[2]); nrm.push(q[3], q[4], q[5]); uv.push(j / M, row);
+    }
+    for (let j = 0; j < M; j++) { const a = base + j, b = a + 1, c = a + M + 1, e = c + 1; idx.push(a, b, c, b, e, c); }
+    base += (M + 1) * 2;
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeBoundingSphere(); return g;
+}
+
 // =====================================================================================================================
 //  3D TYRE MESH (procedural profile revolved, displaced by tread depth map along profile normals)
 // =====================================================================================================================
@@ -839,20 +856,18 @@ let tyreMesh, rimGroup, threadLines, maps, patternMap, profileCache, treadMat, s
 function disposeGroup() { tyreGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); }); tyreGroup.clear(); }
 
 function rebuild(full = true) {
-  // The continuous heightfield is a single watertight mesh; it avoids the shoulder gaps
-  // inherent in joining separately-triangulated polygon tread and sidewall surfaces.
-  if (T.meshMode !== 'heightmap') T.meshMode = 'heightmap';
   const d = dims();
   patternMap = renderPattern(P, d, 384, T.wear, T.wearBias, T.treadDepth);
   maps = buildTreadMaps(patternMap, T.treadDepth, T.rubber, T.wear);
   disposeGroup();
   const tex = c => { const t = new THREE.CanvasTexture(c); t.flipY = false; t.wrapS = THREE.RepeatWrapping; t.anisotropy = 8; t.colorSpace = THREE.NoColorSpace; return t; };
   const colTex = tex(maps.color); colTex.colorSpace = THREE.SRGBColorSpace;
-  const usePoly = false;
-  // The watertight heightfield has a continuous UV/tangent frame, so it can safely use
-  // the generated tread normal map without the corner discontinuities of polygon pieces.
-  const treadNormal = tex(maps.normal);
-  treadMat = new THREE.MeshStandardMaterial({ map: colTex, normalMap: treadNormal, normalScale: new THREE.Vector2(0.7, 0.7), roughnessMap: tex(maps.rough), roughness: 1, metalness: 0.0 });
+  const usePoly = !!window.ClipperLib;
+  // Polygon tread already carries the real groove walls and corner normals. Applying a
+  // tangent-space height-map normal to those discontinuous faces can flip highlights at
+  // sharp block corners, so reserve that normal map for the height-map fallback only.
+  const treadNormal = usePoly ? null : tex(maps.normal);
+  treadMat = new THREE.MeshStandardMaterial({ map: colTex, normalMap: treadNormal, normalScale: new THREE.Vector2(treadNormal ? 0.7 : 0, treadNormal ? 0.7 : 0), roughnessMap: tex(maps.rough), roughness: 1, metalness: 0.0 });
   const sw = buildSidewall(true); const sideTex = tex(sw.color); sideTex.colorSpace = THREE.SRGBColorSpace;
   const sideMat = new THREE.MeshStandardMaterial({ map: sideTex, normalMap: tex(sw.normal), normalScale: new THREE.Vector2(0.45, 0.45), roughness: 0.8, metalness: 0 });
   tyreMesh = new THREE.Group(); let triCount = 0;
@@ -862,6 +877,10 @@ function rebuild(full = true) {
     if (treadGeo) { const prof = buildProfile(d); profileCache = prof; tyreMesh.add(new THREE.Mesh(treadGeo, treadMat)); tyreMesh.add(new THREE.Mesh(buildSidewallGeometry(d, prof), sideMat)); triCount = treadGeo.userData.tris; }
     else { const { geometry, profile } = buildTyreGeometry(d, patternMap); profileCache = profile; tyreMesh.add(new THREE.Mesh(geometry, [treadMat, sideMat])); triCount = geometry.index.count / 3; }
   } else { const { geometry, profile } = buildTyreGeometry(d, patternMap); profileCache = profile; tyreMesh.add(new THREE.Mesh(geometry, [treadMat, sideMat])); triCount = geometry.index.count / 3; }
+  if (usePoly) {
+    const shoulderMat = new THREE.MeshStandardMaterial({ color: T.rubber, roughness: 0.88, metalness: 0, side: THREE.DoubleSide });
+    tyreMesh.add(new THREE.Mesh(buildShoulderSeal(d), shoulderMat));
+  }
   tyreMesh.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (UI.threads) [].concat(o.material).forEach(m => { m.transparent = true; m.opacity = 0.35; }); } });
   tyreMesh.userData.tris = triCount; tyreGroup.add(tyreMesh);
   rimGroup = buildRim(d); rimGroup.traverse(o => { o.castShadow = true; }); tyreGroup.add(rimGroup);
@@ -880,7 +899,7 @@ function updateHud(d) {
   const tile = (l, v, u, dot) => `<div class="tile"><div class="l"><i style="background:${dot || 'var(--green)'}"></i>${l}</div><div class="v">${v}<small>${u}</small></div></div>`;
   document.getElementById('tiles').innerHTML =
     tile('Overall Ø', od.toFixed(0), 'mm', 'var(--yellow)') + tile('Tread left', remaining.toFixed(1), '/ ' + T.treadDepth + ' mm', col) +
-    tile('Circumference', (circ / 1000).toFixed(2), 'm', 'var(--yellow)') + tile('Tread mesh', (tyreMesh?.userData.tris / 1000 || 0).toFixed(1), 'k tris · ' + (T.meshMode === 'poly' ? 'polygons' : 'heightmap'), 'var(--green)');
+    tile('Circumference', (circ / 1000).toFixed(2), 'm', 'var(--yellow)') + tile('Tread mesh', (tyreMesh?.userData.tris / 1000 || 0).toFixed(1), 'k tris · polygons', 'var(--green)');
   const bigNum = v => { const [a, b] = String(v).split('.'); return a + (b ? '<span class="frac">.' + b + '</span>' : ''); };
   document.getElementById('bigSize').innerHTML = `${T.width}<span class="frac">/${T.aspect}</span><small>R${T.rim}</small>`;
   document.getElementById('sizeR').textContent = `${(d.Rrim * 2).toFixed(0)} mm rim`;
@@ -990,8 +1009,8 @@ function buildTyreUI() {
   h('Wear');
   slider(p, 'Wear bias (edge↔centre)', T, 'wearBias', -1, 1, 0.01, v => v.toFixed(2));
   h('Tread mesh');
-  const meshRow = document.createElement('div'); meshRow.className = 'row'; meshRow.innerHTML = '<label>Mesh mode</label><span class="val" style="flex:1;text-align:left">Watertight heightfield</span>'; p.appendChild(meshRow);
-  slider(p, 'Segments around', T, 'radial', 180, 1440, 20); slider(p, 'Segments across', T, 'across', 32, 192, 8);
+  const meshRow = document.createElement('div'); meshRow.className = 'row'; meshRow.innerHTML = '<label>Mesh mode</label><span class="val" style="flex:1;text-align:left">Polygon topology</span>'; p.appendChild(meshRow);
+  slider(p, 'Polygon detail (mm)', T, 'polyDetail', 3, 16, 0.5, v => v.toFixed(1)); slider(p, 'Segments around', T, 'radial', 180, 1440, 20);
   const pp = document.getElementById('profileParams'); pp.innerHTML = '';
   slider(pp, 'Tread depth (mm)', T, 'treadDepth', 2, 20, 0.5); slider(pp, 'Tread width fraction', T, 'treadFrac', 0.7, 0.98, 0.01, v => v.toFixed(2));
   slider(pp, 'Crown drop (mm)', T, 'crown', 0, 8, 0.1, v => v.toFixed(1)); slider(pp, 'Shoulder radius (mm)', T, 'shoulder', 4, 40, 1);
