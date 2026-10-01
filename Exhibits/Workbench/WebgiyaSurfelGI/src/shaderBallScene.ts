@@ -65,8 +65,10 @@ function addBox(
     makeNodeStandard(colour, roughness, metalness),
   );
   mesh.position.set(...position);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
+  // This exhibit deliberately has no raster shadow maps. Visibility for the
+  // surfel transport remains the original Webgiya BVH ray query.
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
   scene.add(mesh);
   return mesh;
 }
@@ -145,22 +147,11 @@ export async function populateShaderBallSurfelScene(
     );
     mesh.position.set(...ball.position);
     mesh.scale.setScalar(ball.scale);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
     scene.add(mesh);
   }
 
   dirLight.color.setRGB(1.0, 0.91, 0.78);
-  dirLight.castShadow = true;
-  dirLight.shadow.mapSize.set(4096, 4096);
-  dirLight.shadow.camera.near = 0.1;
-  dirLight.shadow.camera.far = 80;
-  dirLight.shadow.camera.left = -12;
-  dirLight.shadow.camera.right = 12;
-  dirLight.shadow.camera.top = 10;
-  dirLight.shadow.camera.bottom = -10;
-  dirLight.shadow.bias = -0.00008;
-  dirLight.shadow.normalBias = 0.018;
-  dirLight.shadow.radius = 2;
-  dirLight.shadow.camera.updateProjectionMatrix();
+  dirLight.castShadow = false;
 }

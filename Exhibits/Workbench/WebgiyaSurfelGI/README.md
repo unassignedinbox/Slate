@@ -1,4 +1,4 @@
-# Webgiya Surfel GI · ShaderBall Light Lab
+# Webgiya Surfel GI · ShaderBalls · No Shadow Maps
 
 Open `index.html` over HTTP. It redirects to the checked-in production build in `site/`.
 
@@ -34,8 +34,9 @@ Desktop settings retain upstream's `262144`-surfel pool, 32³ hash-grid cascades
 
 - Four copies of `Exhibits/Assets/ShaderBall/ShaderBall.mesh` use the exact shared indexed geometry. The public and built copies have the same SHA-256: `67ab71ee998bb17dc1949c038c2eaeccd4cea8b06a2209dd812839c455e75f4f`.
 - The ShaderBalls and surrounding colour lab are static so the exact upstream BVH remains valid.
-- Webgiya's original animated directional-light path is enabled by default. The orbiting light is passed into the unchanged surfel integrator each frame, so direct bounce and multi-bounce irradiance respond live.
-- The original inspector exposes direct/indirect/combined output, surfels, irradiance, variance, cascades, hash-grid cells, radial occlusion, sample count, transport strength, and light animation controls.
+- Raster shadow maps are deliberately disabled for every mesh and for the directional light. There is no hidden shadow-map pass in this scene.
+- Webgiya's original animated directional-light path is enabled by default. The orbiting light is passed into the unchanged surfel integrator each frame; secondary-hit sun visibility is evaluated with the triangle BVH, so direct-bounce and multi-bounce irradiance remain ray traced.
+- The original inspector exposes direct/indirect/combined output, surfels, irradiance, variance, cascades, hash-grid cells, radial occlusion, sample count, transport strength, and light animation controls. Select **GI → Output → Indirect** to inspect only the surfel result.
 
 ## Requirements and running
 
