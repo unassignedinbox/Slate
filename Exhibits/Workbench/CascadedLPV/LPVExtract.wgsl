@@ -145,8 +145,13 @@ fn ExtractMain(@builtin(global_invocation_id) Global: vec3u)
     let AlbedoMetalness = textureLoad(RsmAlbedo, SamplePosition, 0);
     let Flux = max(NormalFlux.w, 0.0);
     let DiffuseAlbedo = AlbedoMetalness.xyz * (1.0 - AlbedoMetalness.w * 0.88);
-    let Radiance = DiffuseAlbedo * Frame.SunColourTime.xyz
-        * (Flux * Frame.SunDirectionIntensity.w * 0.78);
+    let EmissiveStrength = max(PositionHit.w - 1.0, 0.0);
+    let EmissiveRadiance = AlbedoMetalness.xyz * EmissiveStrength;
+    // Mode 8 is a falsifiable emissive-only proof: no solar RSM radiance enters the LPV.
+    let IncludeSolarGI = select(1.0, 0.0, u32(Frame.Settings.x + 0.5) == 8u);
+    let SolarRadiance = DiffuseAlbedo * Frame.SunColourTime.xyz
+        * (Flux * Frame.SunDirectionIntensity.w * 0.78 * IncludeSolarGI);
+    let Radiance = SolarRadiance + EmissiveRadiance;
     let BaseRadius = Frame.ScreenRsm.w / max(f32(SampleWidth), 1.0) * 0.82;
     let EdgeConfidence = select(1.0, 0.58, EdgeScore > 0.5);
     let Radius = BaseRadius * mix(1.0, 0.55, clamp(EdgeScore * 0.25, 0.0, 1.0));

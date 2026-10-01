@@ -36,6 +36,7 @@ struct RasterVarying
     @location(1) WorldNormal: vec3f,
     @location(2) AlbedoMetalness: vec4f,
     @location(3) Roughness: f32,
+    @location(4) EmissiveStrength: f32,
 };
 
 struct RasterTargets
@@ -62,6 +63,7 @@ fn WorldVertex(Input: RasterInput) -> RasterVarying
     Result.WorldNormal = normalize(Input.Normal / SafeScale);
     Result.AlbedoMetalness = Input.AlbedoMetalness;
     Result.Roughness = Input.ScaleRoughness.w;
+    Result.EmissiveStrength = max(Input.TranslationFlags.w, 0.0);
     return Result;
 }
 
@@ -77,7 +79,7 @@ fn CameraVertex(Input: RasterInput) -> RasterVarying
 fn CameraFragment(Input: RasterVarying) -> RasterTargets
 {
     var Result: RasterTargets;
-    Result.PositionHit = vec4f(Input.WorldPosition, 1.0);
+    Result.PositionHit = vec4f(Input.WorldPosition, 1.0 + Input.EmissiveStrength);
     Result.NormalRoughness = vec4f(normalize(Input.WorldNormal), Input.Roughness);
     Result.AlbedoMetalness = Input.AlbedoMetalness;
     return Result;
@@ -97,7 +99,7 @@ fn RsmFragment(Input: RasterVarying) -> RsmTargets
     var Result: RsmTargets;
     let Normal = normalize(Input.WorldNormal);
     let Flux = max(dot(Normal, Frame.SunDirectionIntensity.xyz), 0.0);
-    Result.PositionHit = vec4f(Input.WorldPosition, 1.0);
+    Result.PositionHit = vec4f(Input.WorldPosition, 1.0 + Input.EmissiveStrength);
     Result.NormalFlux = vec4f(Normal, Flux);
     Result.AlbedoMetalness = Input.AlbedoMetalness;
     return Result;

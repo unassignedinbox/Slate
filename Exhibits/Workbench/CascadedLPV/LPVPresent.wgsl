@@ -62,7 +62,7 @@ struct FullscreenVarying
 @group(0) @binding(3) var AlbedoImage: texture_2d<f32>;
 @group(0) @binding(4) var CsmDepth: texture_depth_2d_array;
 @group(0) @binding(5) var ShadowComparison: sampler_comparison;
-@group(0) @binding(6) var ScreenGI: texture_2d<f32>;
+@group(0) @binding(6) var GtaoTexture: texture_2d<f32>;
 @group(0) @binding(7) var LinearSampler: sampler;
 @group(0) @binding(8) var<storage, read> RadianceVolume: VolumeExtent;
 @group(0) @binding(9) var<storage, read> BlockerVolume: BlockerExtent;
@@ -324,7 +324,7 @@ fn PresentFragment(Input: FullscreenVarying) -> @location(0) vec4f
         - Frame.CameraUpGain.xyz * (ScreenPosition.y * Frame.CameraForwardTan.w)
     );
 
-    var LinearColour = SkyRadiance(ViewDirection);
+    var LinearColour = select(SkyRadiance(ViewDirection), vec3f(0.002), Mode == 8u);
     if (PositionHit.w > 0.5)
     {
         let NormalRoughness = textureLoad(NormalImage, Pixel, 0);
@@ -334,20 +334,20 @@ fn PresentFragment(Input: FullscreenVarying) -> @location(0) vec4f
         let Roughness = NormalRoughness.w;
         let Albedo = AlbedoMetalness.xyz;
         let Metalness = AlbedoMetalness.w;
+        let EmissiveStrength = max(PositionHit.w - 1.0, 0.0);
+        let Emissive = Albedo * EmissiveStrength;
         let DiffuseColour = Albedo * (1.0 - Metalness);
         let View = normalize(Frame.CameraPosition.xyz - Position);
         let SunFacing = max(dot(Normal, Frame.SunDirectionIntensity.xyz), 0.0);
         let Visibility = SunVisibility(Position, Normal);
         let DirectDiffuse = DiffuseColour * InversePi * Frame.SunColourTime.xyz
             * (SunFacing * Visibility * Frame.SunDirectionIntensity.w);
-        let ScreenSample = textureSampleLevel(ScreenGI, LinearSampler, LocalUv, 0.0);
-        let AmbientVisibility = select(1.0, ScreenSample.w, Frame.Settings.z > 0.5);
+        let GtaoSample = textureSampleLevel(GtaoTexture, LinearSampler, LocalUv, 0.0);
+        let AmbientVisibility = select(1.0, GtaoSample.w, Frame.Settings.z > 0.5);
         let Ambient = DiffuseColour * SkyRadiance(Normal) * (0.22 * AmbientVisibility);
         let LPVSample = SampleLPV(Position, Normal);
         let LPVIndirect = DiffuseColour * InversePi * LPVSample.xyz
             * Frame.CameraUpGain.w * 0.62;
-        let ScreenIndirect = DiffuseColour * InversePi * ScreenSample.xyz
-            * Frame.CameraUpGain.w * 0.72 * select(0.0, 1.0, Frame.Settings.z > 0.5);
 
         let ReflectionDirection = reflect(-View, Normal);
         let ReflectedSky = mix(SkyRadiance(ReflectionDirection), SkyRadiance(Normal), Roughness * Roughness * 0.72);
@@ -357,7 +357,7 @@ fn PresentFragment(Input: FullscreenVarying) -> @location(0) vec4f
 
         if (Mode == 2u)
         {
-            LinearColour = DirectDiffuse + Ambient + Specular;
+            LinearColour = DirectDiffuse + Ambient + Specular + Emissive;
         }
         else if (Mode == 3u)
         {
@@ -365,13 +365,21 @@ fn PresentFragment(Input: FullscreenVarying) -> @location(0) vec4f
         }
         else if (Mode == 4u)
         {
-            LinearColour = ScreenIndirect * 1.55 + vec3f((1.0 - AmbientVisibility) * 0.10);
+            // GTAO is retained only as an ambient-visibility term: white is open,
+            // dark is occluded. No screen-space colour is interpreted as GI.
+            LinearColour = vec3f(0.01 + AmbientVisibility * 0.72);
         }
         else if (Mode == 7u)
         {
             // White is sun-visible and black is shadowed; this bypasses GI so CSM
             // coverage and PCF can be inspected without indirect-light fill.
             LinearColour = vec3f(0.015 + Visibility * 0.82);
+        }
+        else if (Mode == 8u)
+        {
+            // In this mode LPVExtract injects zero solar radiance. Only the visible
+            // emitter and the coloured LPV spill it produces can remain.
+            LinearColour = Emissive + LPVIndirect * 1.35;
         }
         else if (Mode == 5u)
         {
@@ -381,7 +389,7 @@ fn PresentFragment(Input: FullscreenVarying) -> @location(0) vec4f
                 vec3f(1.0, 0.55, 0.18),
                 vec3f(0.24)
             );
-            LinearColour = (DirectDiffuse + Ambient + LPVIndirect + ScreenIndirect + Specular) * 0.62
+            LinearColour = (DirectDiffuse + Ambient + LPVIndirect + Specular + Emissive) * 0.62
                 + Tints[u32(LPVSample.w + 0.5)] * 0.18;
         }
         else if (Mode == 6u)
@@ -392,7 +400,7 @@ fn PresentFragment(Input: FullscreenVarying) -> @location(0) vec4f
         }
         else
         {
-            LinearColour = DirectDiffuse + Ambient + LPVIndirect + ScreenIndirect + Specular;
+            LinearColour = DirectDiffuse + Ambient + LPVIndirect + Specular + Emissive;
         }
     }
 

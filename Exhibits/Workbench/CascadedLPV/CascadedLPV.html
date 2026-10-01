@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#07100f">
     <title>Slate — Dynamic Open-World GI Lab</title>
-    <link rel="stylesheet" href="CascadedLPV.css?revision=6">
+    <link rel="stylesheet" href="CascadedLPV.css?revision=7">
 </head>
 <body>
     <main>
@@ -15,8 +15,8 @@
                 <h1>Three moving light volumes.<br><span>No rays. No bake. No SDF.</span></h1>
                 <p class="Introduction">
                     A live WebGPU prototype for changing game worlds. Dedicated stabilized shadow cascades handle
-                    direct visibility; persistent camera-relative LPVs spread GI-only RSM energy through a six-face
-                    blocker field, while half-resolution screen-space GI restores nearby contact detail.
+                    direct visibility; persistent camera-relative LPVs spread sun and emissive RSM radiance through
+                    a six-face blocker field, while half-resolution GTAO contributes ambient visibility only.
                 </p>
             </div>
             <div class="Status" aria-live="polite">
@@ -32,7 +32,7 @@
                 <div class="PanelLabels" id="PanelLabels" aria-hidden="true">
                     <span>01 · DIRECT ONLY</span>
                     <span>02 · CASCADED LPV</span>
-                    <span>03 · SCREEN DETAIL</span>
+                    <span>03 · GTAO</span>
                     <span>04 · COMBINED</span>
                 </div>
                 <div class="CanvasError" id="CanvasError" hidden>
@@ -49,10 +49,11 @@
                         <option value="1">Combined</option>
                         <option value="2">Direct only</option>
                         <option value="3">LPV indirect</option>
-                        <option value="4">Screen detail</option>
+                        <option value="4">GTAO visibility</option>
                         <option value="5">Cascade coverage</option>
                         <option value="6">Blocker field</option>
                         <option value="7">Shadow visibility</option>
+                        <option value="8">Emissive-only proof</option>
                     </select>
                 </label>
                 <label class="SwitchControl">
@@ -71,9 +72,14 @@
                     <span><b>Blocker field</b><small>Directional attenuation for coarse leak control</small></span>
                 </label>
                 <label class="SwitchControl">
-                    <input id="ScreenDetail" type="checkbox" checked>
+                    <input id="GtaoEnabled" type="checkbox" checked>
                     <span class="SwitchTrack"><span></span></span>
-                    <span><b>Screen GI + GTAO</b><small>Half-resolution contact lighting and occlusion</small></span>
+                    <span><b>GTAO</b><small>Screen-space ambient occlusion only; no fake colour transfer</small></span>
+                </label>
+                <label class="SwitchControl">
+                    <input id="EmissiveLight" type="checkbox" checked>
+                    <span class="SwitchTrack"><span></span></span>
+                    <span><b>Emissive light</b><small>Cyan bar injects radiance into the world LPV</small></span>
                 </label>
                 <label class="SwitchControl">
                     <input id="TemporalStability" type="checkbox" checked>
@@ -94,8 +100,8 @@
                     <input id="IndirectGain" type="range" min="0" max="2" value="1" step="0.05">
                 </label>
                 <label class="RangeControl">
-                    <span><b>Screen radius</b><output id="RadiusOutput">2.8 m</output></span>
-                    <input id="ScreenRadius" type="range" min="10" max="50" value="28" step="2">
+                    <span><b>GTAO radius</b><output id="RadiusOutput">1.4 m</output></span>
+                    <input id="ScreenRadius" type="range" min="4" max="30" value="14" step="2">
                 </label>
                 <label class="RangeControl">
                     <span><b>Render scale</b><output id="ScaleOutput">150%</output></span>
@@ -127,7 +133,7 @@
             <article>
                 <span class="ArticleNumber">01</span>
                 <h2>Rasterize samples</h2>
-                <p>A GI-only 384² reflective shadow map ranks all four samples in each tile with fixed world-space blue noise. Stable IDs, deterministic reservoirs, and edge detection reduce sample churn.</p>
+                <p>A GI-only 384² reflective shadow map captures both reflected sun and explicit emissive radiance. Emissive-only view zeros every solar source so the cyan LPV spill is directly testable.</p>
             </article>
             <article>
                 <span class="ArticleNumber">02</span>
@@ -137,7 +143,7 @@
             <article>
                 <span class="ArticleNumber">03</span>
                 <h2>Restore local detail</h2>
-                <p>Three stabilized 1024² shadow cascades with switchable 3×3/5×5 PCF handle direct visibility independently. Half-resolution screen GI and GTAO restore short-range contact detail.</p>
+                <p>Three stabilized 1024² shadow cascades handle direct visibility. Half-resolution GTAO adds contact occlusion only; the inaccurate screen-space colour-transfer approximation has been removed.</p>
             </article>
         </section>
 
@@ -146,6 +152,6 @@
             <span>Diffuse GI prototype · SSR/reflection probes remain a separate production concern</span>
         </footer>
     </main>
-    <script type="module" src="CascadedLPV.js?revision=6"></script>
+    <script type="module" src="CascadedLPV.js?revision=7"></script>
 </body>
 </html>

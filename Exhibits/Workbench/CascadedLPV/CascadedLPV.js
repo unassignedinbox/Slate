@@ -1,4 +1,4 @@
-// WebGPU host for a fully dynamic RSM -> transient surfel -> cascaded LPV -> screen GI demonstration.
+// WebGPU host for a fully dynamic RSM -> transient surfel -> cascaded LPV -> GTAO demonstration.
 
 const GeometryAddress = "../../Assets/ShaderBall/ShaderBall.mesh";
 const GeometryMagic = 0x314d4253;
@@ -21,7 +21,8 @@ const DisplayMode = document.getElementById("DisplayMode");
 const AnimateWorld = document.getElementById("AnimateWorld");
 const AnimateSun = document.getElementById("AnimateSun");
 const BlockerField = document.getElementById("BlockerField");
-const ScreenDetail = document.getElementById("ScreenDetail");
+const GtaoEnabled = document.getElementById("GtaoEnabled");
+const EmissiveLight = document.getElementById("EmissiveLight");
 const TemporalStability = document.getElementById("TemporalStability");
 const ShowSurfels = document.getElementById("ShowSurfels");
 const PropagationSteps = document.getElementById("PropagationSteps");
@@ -242,10 +243,10 @@ async function ValidateShader(Shader, Label)
     }
 }
 
-function PushInstance(Target, Position, Colour, Metalness, ScaleValue, Roughness)
+function PushInstance(Target, Position, Colour, Metalness, ScaleValue, Roughness, EmissiveStrength = 0.0)
 {
     Target.push(
-        Position[0], Position[1], Position[2], 0.0,
+        Position[0], Position[1], Position[2], EmissiveStrength,
         Colour[0], Colour[1], Colour[2], Metalness,
         ScaleValue[0], ScaleValue[1], ScaleValue[2], Roughness,
     );
@@ -266,6 +267,17 @@ function ConstructSceneInstances(Time)
     PushInstance(Cubes, [3.9, 10.2, 1.25], [0.08, 0.46, 0.31], 0.0, [2.5, 2.5, 2.5], 0.55);
     PushInstance(Cubes, [-2.7, -6.5, 1.0], [0.43, 0.45, 0.46], 0.05, [0.7, 0.7, 2.0], 0.38);
     PushInstance(Cubes, [2.7, -6.5, 1.0], [0.43, 0.45, 0.46], 0.05, [0.7, 0.7, 2.0], 0.38);
+    // A visible cyan emitter between neutral receivers proves that LPV radiance is
+    // sourced independently of the sun. Emissive-only view removes every solar source.
+    PushInstance(
+        Cubes,
+        [0.0, -6.5, 1.35],
+        [0.025, 0.68, 1.0],
+        0.0,
+        [3.7, 0.20, 0.30],
+        0.22,
+        EmissiveLight.checked ? 5.5 : 0.0,
+    );
     PushInstance(Cubes, [0.0, 5.1, 1.2 + Math.sin(Time * 1.15) * 1.05], [0.62, 0.09, 0.07], 0.0, [3.8, 0.42, 2.4], 0.48);
     PushInstance(Cubes, [-4.1 + Math.sin(Time * 0.77) * 2.2, -2.2, 0.75], [0.08, 0.58, 0.42], 0.0, [1.5, 1.5, 1.5], 0.44);
     PushInstance(Cubes, [4.5, -1.4 + Math.cos(Time * 0.61) * 2.7, 0.60], [0.85, 0.48, 0.06], 0.0, [1.2, 1.2, 1.2], 0.36);
@@ -339,14 +351,14 @@ async function BringRenderer()
     StatusText.textContent = "Loading scene and transport shaders";
     const [GeometryBinary, RasterSource, ShadowSource, ExtractSource, InjectSource, PropagateSource, ScreenSource, PresentSource, OverlaySource] = await Promise.all([
         LoadBinary(GeometryAddress),
-        LoadText("LPVRaster.wgsl?revision=6"),
-        LoadText("CSMShadow.wgsl?revision=6"),
-        LoadText("LPVExtract.wgsl?revision=6"),
-        LoadText("LPVInject.wgsl?revision=6"),
-        LoadText("LPVPropagate.wgsl?revision=6"),
-        LoadText("LPVSSGI.wgsl?revision=6"),
-        LoadText("LPVPresent.wgsl?revision=6"),
-        LoadText("LPVOverlay.wgsl?revision=6"),
+        LoadText("LPVRaster.wgsl?revision=7"),
+        LoadText("CSMShadow.wgsl?revision=7"),
+        LoadText("LPVExtract.wgsl?revision=7"),
+        LoadText("LPVInject.wgsl?revision=7"),
+        LoadText("LPVPropagate.wgsl?revision=7"),
+        LoadText("LPVGTAO.wgsl?revision=7"),
+        LoadText("LPVPresent.wgsl?revision=7"),
+        LoadText("LPVOverlay.wgsl?revision=7"),
     ]);
     const Geometry = DecodeGeometry(GeometryBinary);
     const Cube = ConstructCube();
@@ -356,7 +368,7 @@ async function BringRenderer()
     const ExtractShader = Device.createShaderModule({ label: "RSM surfel extraction", code: ExtractSource });
     const InjectShader = Device.createShaderModule({ label: "LPV scatter injection", code: InjectSource });
     const PropagateShader = Device.createShaderModule({ label: "LPV propagation", code: PropagateSource });
-    const ScreenShader = Device.createShaderModule({ label: "Screen GI and GTAO", code: ScreenSource });
+    const ScreenShader = Device.createShaderModule({ label: "GTAO resolve", code: ScreenSource });
     const PresentShader = Device.createShaderModule({ label: "LPV presentation", code: PresentSource });
     const OverlayShader = Device.createShaderModule({ label: "Transient surfel overlay", code: OverlaySource });
     await Promise.all([
@@ -365,7 +377,7 @@ async function BringRenderer()
         ValidateShader(ExtractShader, "LPVExtract.wgsl"),
         ValidateShader(InjectShader, "LPVInject.wgsl"),
         ValidateShader(PropagateShader, "LPVPropagate.wgsl"),
-        ValidateShader(ScreenShader, "LPVSSGI.wgsl"),
+        ValidateShader(ScreenShader, "LPVGTAO.wgsl"),
         ValidateShader(PresentShader, "LPVPresent.wgsl"),
         ValidateShader(OverlayShader, "LPVOverlay.wgsl"),
     ]);
@@ -474,7 +486,7 @@ async function BringRenderer()
         compute: { module: PropagateShader, entryPoint: "PropagateMain" },
     });
     const ScreenProgram = Device.createComputePipeline({
-        label: "Short-range screen GI and GTAO",
+        label: "Half-resolution GTAO",
         layout: "auto",
         compute: { module: ScreenShader, entryPoint: "ScreenMain" },
     });
@@ -728,7 +740,7 @@ async function BringRenderer()
     let NormalImage = null;
     let AlbedoImage = null;
     let DepthImage = null;
-    let ScreenGIImages = [null, null];
+    let GtaoImages = [null, null];
     let HistoryPositionImages = [null, null];
     let InjectCameraGroup = null;
     let ScreenGroups = [null, null];
@@ -744,7 +756,7 @@ async function BringRenderer()
             NormalImage,
             AlbedoImage,
             DepthImage,
-            ...ScreenGIImages,
+            ...GtaoImages,
             ...HistoryPositionImages,
         ])
         {
@@ -754,7 +766,7 @@ async function BringRenderer()
         NormalImage = null;
         AlbedoImage = null;
         DepthImage = null;
-        ScreenGIImages = [null, null];
+        GtaoImages = [null, null];
         HistoryPositionImages = [null, null];
     }
 
@@ -784,14 +796,14 @@ async function BringRenderer()
         const HalfWidth = Math.max(1, Math.ceil(Width / 2));
         const HalfHeight = Math.max(1, Math.ceil(Height / 2));
         const HistoryUsage = GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING;
-        ScreenGIImages = [0, 1].map((Index) => Device.createTexture({
-            label: `Screen GI history ${Index}`,
+        GtaoImages = [0, 1].map((Index) => Device.createTexture({
+            label: `GTAO history ${Index}`,
             size: [HalfWidth, HalfHeight],
             format: "rgba16float",
             usage: HistoryUsage,
         }));
         HistoryPositionImages = [0, 1].map((Index) => Device.createTexture({
-            label: `Screen position history ${Index}`,
+            label: `GTAO position history ${Index}`,
             size: [HalfWidth, HalfHeight],
             format: "rgba16float",
             usage: HistoryUsage,
@@ -814,11 +826,9 @@ async function BringRenderer()
                     { binding: 0, resource: { buffer: FrameUniform } },
                     { binding: 1, resource: PositionImage.createView() },
                     { binding: 2, resource: NormalImage.createView() },
-                    { binding: 3, resource: AlbedoImage.createView() },
-                    { binding: 4, resource: CsmArrayView },
-                    { binding: 5, resource: ScreenGIImages[Previous].createView() },
+                    { binding: 5, resource: GtaoImages[Previous].createView() },
                     { binding: 6, resource: HistoryPositionImages[Previous].createView() },
-                    { binding: 7, resource: ScreenGIImages[Current].createView() },
+                    { binding: 7, resource: GtaoImages[Current].createView() },
                     { binding: 8, resource: HistoryPositionImages[Current].createView() },
                 ],
             });
@@ -832,7 +842,7 @@ async function BringRenderer()
                 { binding: 3, resource: AlbedoImage.createView() },
                 { binding: 4, resource: CsmArrayView },
                 { binding: 5, resource: ShadowComparison },
-                { binding: 6, resource: ScreenGIImages[ScreenNumber].createView() },
+                { binding: 6, resource: GtaoImages[ScreenNumber].createView() },
                 { binding: 7, resource: LinearSampler },
                 { binding: 8, resource: { buffer: PropagationVolumes[VolumeNumber] } },
                 { binding: 9, resource: { buffer: BlockerVolume } },
@@ -945,7 +955,12 @@ async function BringRenderer()
         const Warmth = Clamp((0.72 - SunElevation) * 1.8, 0.0, 0.45);
         const SunColour = [1.0, 0.92 - Warmth * 0.25, 0.76 - Warmth * 0.38];
         const LightTarget = [0.0, 0.8, 2.0];
-        const LightEye = Add(LightTarget, Scale(SunDirection, 60.0));
+        // Emissive-only proof uses a fixed raster source view so moving the sun cannot
+        // masquerade as changing emissive transport.
+        const RsmDirection = Number(DisplayMode.value) === 8
+            ? Normalise([0.50, -0.40, 0.76])
+            : SunDirection;
+        const LightEye = Add(LightTarget, Scale(RsmDirection, 60.0));
         const LightView = ViewMatrix(LightEye, LightTarget, [0.0, 0.0, 1.0]);
         const LightProjection = MultiplyMatrix(
             OrthographicProjection(-RsmWorldSpan * 0.5, RsmWorldSpan * 0.5, -RsmWorldSpan * 0.5, RsmWorldSpan * 0.5, 0.1, 120.0),
@@ -984,7 +999,7 @@ async function BringRenderer()
         Content.set([
             Number(DisplayMode.value),
             BlockerField.checked ? 1.0 : 0.0,
-            ScreenDetail.checked ? 1.0 : 0.0,
+            GtaoEnabled.checked ? 1.0 : 0.0,
             Number(ShadowFilter.value),
         ], 88);
         Content.set([
@@ -1135,7 +1150,7 @@ async function BringRenderer()
         const PublishedVolume = StepCount % 2;
 
         const CurrentHistory = 1 - HistoryNumber;
-        const ScreenPass = Commands.beginComputePass({ label: "Resolve half-resolution screen GI and GTAO" });
+        const ScreenPass = Commands.beginComputePass({ label: "Resolve half-resolution GTAO" });
         ScreenPass.setPipeline(ScreenProgram);
         ScreenPass.setBindGroup(0, ScreenGroups[HistoryNumber]);
         ScreenPass.dispatchWorkgroups(
@@ -1193,7 +1208,20 @@ async function BringRenderer()
         PanelLabels.hidden = Number(DisplayMode.value) !== 0;
     }
 
-    DisplayMode.addEventListener("change", UpdateViewLabels);
+    function InvalidateLightingHistory()
+    {
+        FrameNumber = 0;
+        PreviousCameraProjection = null;
+        PreviousCascadeOrigins = null;
+    }
+
+    DisplayMode.addEventListener("change", () =>
+    {
+        UpdateViewLabels();
+        InvalidateLightingHistory();
+    });
+    EmissiveLight.addEventListener("change", InvalidateLightingHistory);
+    TemporalStability.addEventListener("change", InvalidateLightingHistory);
     ShowSurfels.addEventListener("change", () =>
     {
         if (ShowSurfels.checked && Number(DisplayMode.value) === 0)
