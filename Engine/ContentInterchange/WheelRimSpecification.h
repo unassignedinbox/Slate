@@ -52,6 +52,10 @@ enum class SpokeContourCategory : uint32_t
     Turbine  = 3,   // broad one-sided bar, narrow slot windows, strong lean
     Weave    = 4,   // two counter-swept families crossing at mid radius: mesh / lattice face
     Dished   = 5,   // narrow root fanning into a wide tip that merges along the outer band
+    Blade    = 6,   // aero disc: bars so wide the windows become slots (GT3 / endurance covers)
+    Fan      = 7,   // many thin near-parallel bars of almost constant width (luxury multi-spoke)
+    Lattice  = 8,   // radial bars crossed by one concentric ring
+    Honeycomb= 9,   // concentric ring with the bars staggered either side of it — hexagonal cells
 };
 
 // Lug seat geometry — matches the countersink milled into the face and the mating surface of the nut.
@@ -73,17 +77,46 @@ enum class RimFinishCategory : uint32_t
     MatteBlack      = 7,
     GoldAnodised    = 8,
     SteelHardware   = 9,
+    GunmetalPaint   = 10,
+    CandyRed        = 11,
+    RaceWhite       = 12,
 };
 
 // Whole-wheel starting points. Each one only writes parameters; every field stays individually overridable.
 enum class RimPresetCategory : uint32_t
 {
+    //  ── originals ───────────────────────────────────────────────────────────────────────────────────────────────
     ForgedFiveSpoke   = 0,   // 20×9.5 ET35, five tapered bars, machined face + gloss pockets
     SplitTenSpoke     = 1,   // 19×8.5 ET42, five split roots ⇒ ten tips, satin graphite
     TwentySpokeWeave  = 2,   // 21×10 ET30, counter-swept mesh, polished
     TurbineAero       = 3,   // 18×8 ET45, broad leaning blades, gloss paint
     DeepDishConcave   = 4,   // 20×11 ET15, deep concave dish, polished lip + black face
     HeavyDutySixSpoke = 5,   // 17×8 ET0 truck wheel, six broad bars, matte black, six lugs
+    //  ── offroad ─────────────────────────────────────────────────────────────────────────────────────────────────
+    OffroadBeadlock   = 6,   // 17×9 ET−12, six wide bars, 24 lip bolts, matte black
+    OffroadRockEight  = 7,   // 17×8.5 ET0, eight bars, bronze, lip bolts
+    OffroadOverland   = 8,   // 18×9 ET10, fine mesh, matte black, lip bolts
+    OffroadSteelLook  = 9,   // 16×8 ET−6, stamped-steel blade disc, white
+    OffroadDuallyRing = 10,  // 17×9 ET5, lattice with a concentric ring, gunmetal
+    //  ── GT3 / endurance ─────────────────────────────────────────────────────────────────────────────────────────
+    Gt3CentreLockAero = 11,  // 18×12 ET20, aero blade disc, centre-lock nut, gold
+    Gt3EnduranceTen   = 12,  // 18×11 ET26, ten thin bars, centre-lock, satin graphite
+    Gt3TurbineCover   = 13,  // 18×10.5 ET22, turbine cover, centre-lock, matte
+    Gt3SplitBlade     = 14,  // 19×12 ET18, split blades, centre-lock, white
+    //  ── GT / sport ──────────────────────────────────────────────────────────────────────────────────────────────
+    GtTwinFiveSplit   = 15,  // 19×9.5 ET38, twin-five split, machined face
+    GtDirectional     = 16,  // 20×10 ET30, directional turbine, gunmetal
+    GtMeshNineteen    = 17,  // 19×9 ET35, classic mesh, gloss black
+    GtHoneycomb       = 18,  // 20×10 ET32, honeycomb lattice, bronze
+    //  ── luxury ──────────────────────────────────────────────────────────────────────────────────────────────────
+    LuxuryFanTwenty   = 19,  // 22×9 ET40, twenty thin fan spokes, polished
+    LuxuryFineMesh    = 20,  // 21×9 ET38, fine mesh, chrome
+    LuxuryDishCruiser = 21,  // 22×9.5 ET25, dished face, polished lip + gloss face
+    LuxuryConcaveTen  = 22,  // 20×8.5 ET42, ten concave bars, machined
+    //  ── show ────────────────────────────────────────────────────────────────────────────────────────────────────
+    ShowDeepChrome    = 23,  // 20×12 ET−20, deep dish, chrome, lip bolts
+    ShowCandyWeave    = 24,  // 22×10 ET28, candy red mesh
+    ShowGoldPinwheel  = 25,  // 21×10.5 ET25, heavy-sweep pinwheel, gold
 };
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -149,6 +182,8 @@ struct WheelRimParameters
     float SpokeTwistDegrees         = 0.0f;    // [deg] axial twist of the crown across the span (directional look)
     float SpokeSplitDegrees         = 7.0f;    // [deg] half-angle the Split family opens to at the tip
     float SpokePhaseDegrees         = 0.0f;    // [deg] rotation of the whole spoke set
+    float RingRadiusFraction        = 0.58f;   // [-]   Lattice / Honeycomb: concentric ring position, hub ⇒ band
+    float RingWidthMillimetre       = 22.0f;   // [mm]  Lattice / Honeycomb: width of that ring
 
     // ── Hub, bore, lugs, valve ───────────────────────────────────────────────────────────────────────────────────
     float CentreBoreMillimetre      = 72.6f;   // [mm]  bore diameter
@@ -171,6 +206,12 @@ struct WheelRimParameters
     float LugNutHeightMillimetre    = 24.0f;   // [mm]
     float LugNutChamferMillimetre   = 2.2f;    // [mm]  top chamfer
     float LugNutProudMillimetre     = 1.5f;    // [mm]  how far the seat sits proud of the countersink bottom
+    bool  GenerateLipBolts          = false;   // [-]   decorative bolt heads around the outer band (beadlock look)
+    uint32_t LipBoltCount           = 24u;     // [cnt]
+    float LipBoltDiameterMillimetre = 9.0f;    // [mm]  across-flats of one lip bolt
+    float LipBoltProudMillimetre    = 2.6f;    // [mm]  how far it stands off the face
+    bool  CentreLock                = false;   // [-]   one central nut instead of lug nuts (GT3 / endurance)
+    float CentreLockFlatsMillimetre = 52.0f;   // [mm]  across-flats of that nut
     bool  GenerateCentreCap         = true;
     float CentreCapRadiusFraction   = 0.56f;   // [-]   cap radius ÷ hub disc radius
     float CentreCapDomeMillimetre   = 6.0f;    // [mm]  dome height above the hub front

@@ -60,16 +60,27 @@ Parameters are automotive on the way in: inch diameter and width, millimetre off
 | Size | `DiameterInch` · `WidthInch` · `OffsetMillimetre` (ET) · `FlangeHeightMillimetre` · `FlangeThicknessMillimetre` · `BarrelWallMillimetre` · `WellDepthMillimetre` · `WellOffsetFraction` · `WellWidthFraction` · `BeadSeatTaperDegrees` |
 | Cross-section | `SectionKnots` (override the derived J-section with your own `(r, z, fillet, finish)` polyline) · `SectionSamples` · `SectionSmoothing` |
 | Face plate | `HubRadiusFraction` · `OuterBandFraction` · `PadThicknessMillimetre` · `SpokeThicknessMillimetre` · `LipThicknessMillimetre` · `DishMillimetre` · `ConcavityPower` · `CrownMillimetre` · `BackReliefMillimetre` · `FilletMillimetre` · `BevelMillimetre` · `BevelBands` |
-| Spokes | `SpokeContour` (Straight · Split · Twisted · Turbine · Weave · Dished) · `SpokeCount` · `SpokeRootWidthMillimetre` · `SpokeTipWidthMillimetre` · `SpokeTaperPower` · `SpokeSweepDegrees` · `SpokeTwistDegrees` · `SpokeSplitDegrees` · `SpokePhaseDegrees` |
-| Hub / hardware | `CentreBoreMillimetre` · `BoreChamferMillimetre` · `LugCount` · `LugCircleMillimetre` (PCD) · `LugHoleMillimetre` · `LugSeat` (Conical · Ball · Flat) · `LugSeatAngleDegrees` · `LugSeatDepthMillimetre` · `LugPhaseDegrees` · `ValveHole` · `ValveHoleMillimetre` · `ValveRadiusFraction` · `GenerateLugNuts` · `LugNut` (Hex · Spline · Capped) · `LugNutFlatsMillimetre` · `LugNutHeightMillimetre` · `LugNutChamferMillimetre` · `LugNutProudMillimetre` · `GenerateCentreCap` · `CentreCapRadiusFraction` · `CentreCapDomeMillimetre` |
+| Spokes | `SpokeContour` (Straight · Split · Twisted · Turbine · Weave · Dished · Blade · Fan · Lattice · Honeycomb) · `RingRadiusFraction` · `RingWidthMillimetre` (concentric ring used by Lattice / Honeycomb) · `SpokeCount` · `SpokeRootWidthMillimetre` · `SpokeTipWidthMillimetre` · `SpokeTaperPower` · `SpokeSweepDegrees` · `SpokeTwistDegrees` · `SpokeSplitDegrees` · `SpokePhaseDegrees` |
+| Hub / hardware | `CentreBoreMillimetre` · `BoreChamferMillimetre` · `LugCount` · `LugCircleMillimetre` (PCD) · `LugHoleMillimetre` · `LugSeat` (Conical · Ball · Flat) · `LugSeatAngleDegrees` · `LugSeatDepthMillimetre` · `LugPhaseDegrees` · `ValveHole` · `ValveHoleMillimetre` · `ValveRadiusFraction` · `GenerateLugNuts` · `LugNut` (Hex · Spline · Capped) · `LugNutFlatsMillimetre` · `LugNutHeightMillimetre` · `LugNutChamferMillimetre` · `LugNutProudMillimetre` · `GenerateCentreCap` · `CentreCapRadiusFraction` · `CentreCapDomeMillimetre` · `GenerateLipBolts` · `LipBoltCount` · `LipBoltDiameterMillimetre` · `LipBoltProudMillimetre` (beadlock-style heads around the outer band) · `CentreLock` · `CentreLockFlatsMillimetre` (single central GT3 nut; suppresses the lugs and the cap) |
 | Finishes | `FaceFinish` · `PocketFinish` · `LipFinish` · `HardwareFinish` · `CapFinish` · `FacePaint[3]` · `PocketPaint[3]` |
 | Tessellation | `AngularSegments` · `RadialSegments` · `HardwareSegments` · `CreaseDegrees` |
 
 `Normalise()` pins every field into a buildable range (and reports what it changed); it also opens the bolt circle if
 the lug holes would collide with the bore and caps the spoke tip width at the sector pitch.
 
-**Presets** (`WheelRimParameters::FromPreset`): `ForgedFiveSpoke`, `SplitTenSpoke`, `TwentySpokeWeave`, `TurbineAero`,
-`DeepDishConcave`, `HeavyDutySixSpoke`. A preset only writes fields — override anything afterwards.
+**Presets** (`WheelRimParameters::FromPreset`) — 26, each also reachable from the browser tool and from `--rim`:
+
+| Group | Presets (`--rim` name) |
+|---|---|
+| Classic | `ForgedFiveSpoke` (forged) · `SplitTenSpoke` (split) · `TwentySpokeWeave` (weave) · `TurbineAero` (turbine) · `DeepDishConcave` (dish) · `HeavyDutySixSpoke` (truck) |
+| Offroad | `OffroadBeadlock` (beadlock, 24 lip bolts) · `OffroadRockEight` (rock) · `OffroadOverland` (overland) · `OffroadSteelLook` (steel) · `OffroadDuallyRing` (dually, 8-lug lattice) |
+| GT3 / endurance | `Gt3CentreLockAero` (gt3aero) · `Gt3EnduranceTen` (gt3ten) · `Gt3TurbineCover` (gt3cover) · `Gt3SplitBlade` (gt3blade) — all centre-lock |
+| GT / sport | `GtTwinFiveSplit` (gtsplit) · `GtDirectional` (gtdir) · `GtMeshNineteen` (gtmesh) · `GtHoneycomb` (honeycomb) |
+| Luxury | `LuxuryFanTwenty` (fan) · `LuxuryFineMesh` (finemesh) · `LuxuryDishCruiser` (cruiser) · `LuxuryConcaveTen` (concave) |
+| Show | `ShowDeepChrome` (chrome, 30 lip bolts) · `ShowCandyWeave` (candy) · `ShowGoldPinwheel` (pinwheel) |
+
+A preset only writes fields — override anything afterwards. Finishes: 13 recipes, now including `GunmetalPaint`,
+`CandyRed` and `RaceWhite`.
 
 ### The blank-rim cross-section curve
 
@@ -108,7 +119,7 @@ trim-sheet / tri-planar detail; a dedicated unwrap is still the right move for u
 
 ```bash
 # level: synthesises, audits and exports Content/Scenes/WheelRim.gltf, then loads it like any other level
-Projects/Project-Zero/bin/ProjectZero --scene rim --rim forged|split|weave|turbine|dish|truck
+Projects/Project-Zero/bin/ProjectZero --scene rim --rim forged   # 26 names, see the preset table above
 
 # harness (no Vulkan needed): every preset, topology audit, OBJ dump
 g++ -std=c++20 -O2 Scratchpad/WheelRimGeneratorTest.cpp Engine/ContentInterchange/WheelRimSpecification.cpp -o /tmp/rimtest

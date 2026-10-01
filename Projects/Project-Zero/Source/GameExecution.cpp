@@ -33,6 +33,7 @@
 #include <chrono>
 #include <thread>
 #include <string>
+#include <unordered_map>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -41,7 +42,7 @@
 int main(int argc, char** argv)
 {
     std::string ScenePath  = "Projects/Project-Zero/Content/Scenes/CornellBox.gltf";
-    std::string RimPreset  = "forged";                                                 // --rim <preset> picks the wheel
+    std::string RimPreset  = "forged";                                                 // --rim <preset> picks the wheel (26 names, see below)
     float       SceneScale = 1.0f;
     for (int I = 1; I + 1 < argc; ++I)
     {
@@ -93,13 +94,39 @@ int main(int argc, char** argv)
             std::filesystem::create_directories(std::filesystem::path(ScenePath).parent_path(), FsError);
             std::string Error;
             Frontier::WheelRimSceneConfiguration RimConfiguration;
+            static const std::unordered_map<std::string, Frontier::RimPresetCategory> RimPresetNames = {
+                { "forged",    Frontier::RimPresetCategory::ForgedFiveSpoke    },
+                { "split",     Frontier::RimPresetCategory::SplitTenSpoke      },
+                { "weave",     Frontier::RimPresetCategory::TwentySpokeWeave   },
+                { "turbine",   Frontier::RimPresetCategory::TurbineAero        },
+                { "dish",      Frontier::RimPresetCategory::DeepDishConcave    },
+                { "truck",     Frontier::RimPresetCategory::HeavyDutySixSpoke  },
+                { "beadlock",  Frontier::RimPresetCategory::OffroadBeadlock    },
+                { "rock",      Frontier::RimPresetCategory::OffroadRockEight   },
+                { "overland",  Frontier::RimPresetCategory::OffroadOverland    },
+                { "steel",     Frontier::RimPresetCategory::OffroadSteelLook   },
+                { "dually",    Frontier::RimPresetCategory::OffroadDuallyRing  },
+                { "gt3aero",   Frontier::RimPresetCategory::Gt3CentreLockAero  },
+                { "gt3ten",    Frontier::RimPresetCategory::Gt3EnduranceTen    },
+                { "gt3cover",  Frontier::RimPresetCategory::Gt3TurbineCover    },
+                { "gt3blade",  Frontier::RimPresetCategory::Gt3SplitBlade      },
+                { "gtsplit",   Frontier::RimPresetCategory::GtTwinFiveSplit    },
+                { "gtdir",     Frontier::RimPresetCategory::GtDirectional      },
+                { "gtmesh",    Frontier::RimPresetCategory::GtMeshNineteen     },
+                { "honeycomb", Frontier::RimPresetCategory::GtHoneycomb        },
+                { "fan",       Frontier::RimPresetCategory::LuxuryFanTwenty    },
+                { "finemesh",  Frontier::RimPresetCategory::LuxuryFineMesh     },
+                { "cruiser",   Frontier::RimPresetCategory::LuxuryDishCruiser  },
+                { "concave",   Frontier::RimPresetCategory::LuxuryConcaveTen   },
+                { "chrome",    Frontier::RimPresetCategory::ShowDeepChrome     },
+                { "candy",     Frontier::RimPresetCategory::ShowCandyWeave     },
+                { "pinwheel",  Frontier::RimPresetCategory::ShowGoldPinwheel   },
+            };
+            const auto RimLookup = RimPresetNames.find(RimPreset);
+            if (RimLookup == RimPresetNames.end())
+                std::cerr << "[Scene] Unknown --rim preset '" << RimPreset << "', using 'forged'.\n";
             RimConfiguration.Parameters = Frontier::WheelRimParameters::FromPreset(
-                RimPreset == "split"   ? Frontier::RimPresetCategory::SplitTenSpoke    :
-                RimPreset == "weave"   ? Frontier::RimPresetCategory::TwentySpokeWeave :
-                RimPreset == "turbine" ? Frontier::RimPresetCategory::TurbineAero      :
-                RimPreset == "dish"    ? Frontier::RimPresetCategory::DeepDishConcave  :
-                RimPreset == "truck"   ? Frontier::RimPresetCategory::HeavyDutySixSpoke:
-                                         Frontier::RimPresetCategory::ForgedFiveSpoke);
+                RimLookup == RimPresetNames.end() ? Frontier::RimPresetCategory::ForgedFiveSpoke : RimLookup->second);
             Frontier::WheelRimStructure Rim; Rim.Construct(RimConfiguration);
             const Frontier::RimSurfaceAudit& Audit = Rim.QueryBodyAudit();
             std::cerr << "[Scene] Rim body: " << Audit.TriangleCount << " triangles, " << Audit.ShellCount << " shell(s), "

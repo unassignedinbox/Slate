@@ -13,7 +13,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import GUI from 'lil-gui';
 import {
     defaultParameters, normalise, synthesise, audit, toBuffers, toWavefront, resolveSection,
-    Finishes, Presets, PaintSchemes, RimSlot, RimSlotName, SpokeContour, LugSeat, LugNut,
+    Finishes, Presets, PresetSchemes, PaintSchemes, RimSlot, RimSlotName, SpokeContour, LugSeat, LugNut,
 } from './RimSpecification.js';
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -227,6 +227,13 @@ gui.add(options, 'preset', Object.keys(Presets)).name('preset').onChange((name) 
     Object.assign(parameters, defaultParameters());
     Presets[name](parameters);
     normalise(parameters);
+    const schemeName = PresetSchemes[name];
+    if (schemeName && PaintSchemes[schemeName]) {
+        options.scheme = schemeName;
+        const scheme = PaintSchemes[schemeName];
+        for (let slot = 0; slot < RimSlot.Count; ++slot) applyFinish(slot, scheme[slot]);
+        syncMaterials();
+    }
     gui.controllersRecursive().forEach((c) => c.updateDisplay());
     rebuild(true);
 });
@@ -261,6 +268,8 @@ spokeFolder.add(parameters, 'SpokeSweepDegrees', -45, 45, 0.5).name('sweep [°]'
 spokeFolder.add(parameters, 'SpokeTwistDegrees', -30, 30, 0.5).name('twist [°]').onChange(touch);
 spokeFolder.add(parameters, 'SpokeSplitDegrees', 0, 20, 0.5).name('split angle [°]').onChange(touch);
 spokeFolder.add(parameters, 'SpokePhaseDegrees', 0, 72, 1).name('phase [°]').onChange(touch);
+spokeFolder.add(parameters, 'RingRadiusFraction', 0.15, 0.92, 0.01).name('ring radius (lattice/honeycomb)').onChange(touch);
+spokeFolder.add(parameters, 'RingWidthMillimetre', 3, 60, 0.5).name('ring width [mm]').onChange(touch);
 
 const faceFolder = gui.addFolder('Face plate');
 faceFolder.add(parameters, 'HubRadiusFraction', 0.14, 0.6, 0.005).name('hub radius').onChange(touch);
@@ -288,6 +297,12 @@ hubFolder.add(parameters, 'GenerateLugNuts').name('lug nuts').onChange(touch);
 hubFolder.add(parameters, 'LugNut', Object.values(LugNut)).name('nut style').onChange(touch);
 hubFolder.add(parameters, 'LugNutFlatsMillimetre', 12, 34, 0.5).name('nut across flats [mm]').onChange(touch);
 hubFolder.add(parameters, 'LugNutHeightMillimetre', 10, 46, 0.5).name('nut height [mm]').onChange(touch);
+hubFolder.add(parameters, 'CentreLock').name('centre lock (GT3)').onChange(touch);
+hubFolder.add(parameters, 'CentreLockFlatsMillimetre', 20, 110, 1).name('centre-lock flats [mm]').onChange(touch);
+hubFolder.add(parameters, 'GenerateLipBolts').name('beadlock lip bolts').onChange(touch);
+hubFolder.add(parameters, 'LipBoltCount', 0, 48, 1).name('lip bolt count').onChange(touch);
+hubFolder.add(parameters, 'LipBoltDiameterMillimetre', 3, 20, 0.5).name('lip bolt Ø [mm]').onChange(touch);
+hubFolder.add(parameters, 'LipBoltProudMillimetre', 0.5, 10, 0.1).name('lip bolt proud [mm]').onChange(touch);
 hubFolder.add(parameters, 'GenerateCentreCap').name('centre cap').onChange(touch);
 hubFolder.add(parameters, 'CentreCapRadiusFraction', 0.2, 1.0, 0.01).name('cap radius').onChange(touch);
 hubFolder.add(parameters, 'CentreCapDomeMillimetre', 0, 20, 0.5).name('cap dome [mm]').onChange(touch);

@@ -139,10 +139,12 @@ struct SpokeRecipe
     float    TaperPower  = 1.0f;
     float    SplitHalf   = 0.0f;    // [rad] half opening of a split tip, 0 = single bar
     float    Lean        = 0.0f;    // [-] asymmetric centreline shift (turbine blades)
-    float    CountScale  = 1.0f;
+    float    RingRadius  = 0.0f;    // [m] concentric ring (Lattice / Honeycomb); 0 = none
+    float    RingHalf    = 0.0f;    // [m] half width of that ring
+    bool     Staggered   = false;   // [-] Honeycomb: bars sit inside the ring, then outside it with half a pitch offset
 };
 
-[[nodiscard]] SpokeRecipe ResolveSpokeRecipe(const WheelRimParameters& P) noexcept
+[[nodiscard]] SpokeRecipe ResolveSpokeRecipe(const WheelRimParameters& P, const RimDimensions& D) noexcept
 {
     SpokeRecipe R;
     R.RootHalf   = 0.5f * P.SpokeRootWidthMillimetre * kMilli;
@@ -182,6 +184,36 @@ struct SpokeRecipe
             R.TipHalf   *= 2.10f;
             R.TaperPower = 2.40f;
             break;
+        case SpokeContourCategory::Blade:
+            // Aero disc: the bars are nearly a sector wide, so what is left reads as a slot rather than a window.
+            R.Sweep[0]   = Sweep;
+            R.RootHalf  *= 1.25f;
+            R.TipHalf    = std::max(R.TipHalf * 2.0f, 0.60f * kPi * D.BandRadius / static_cast<float>(std::max(2u, P.SpokeCount)));
+            R.TaperPower = 0.55f;
+            break;
+        case SpokeContourCategory::Fan:
+            // Luxury multi-spoke: many thin bars of almost constant width with a gentle lean.
+            R.Sweep[0]   = std::abs(Sweep) > Radians(4.0f) ? Sweep : Radians(8.0f);
+            R.RootHalf  *= 0.58f;
+            R.TipHalf    = R.RootHalf * 0.80f;
+            R.TaperPower = 1.0f;
+            break;
+        case SpokeContourCategory::Lattice:
+            R.Sweep[0]   = Sweep;
+            R.RootHalf  *= 0.72f;
+            R.TipHalf   *= 0.80f;
+            R.RingRadius = Mix(D.HubRadius, D.BandRadius, Clamp(P.RingRadiusFraction, 0.15f, 0.92f));
+            R.RingHalf   = 0.5f * std::max(3.0f, P.RingWidthMillimetre) * kMilli;
+            break;
+        case SpokeContourCategory::Honeycomb:
+            R.Sweep[0]   = Sweep;
+            R.RootHalf  *= 0.52f;
+            R.TipHalf   *= 0.58f;
+            R.TaperPower = 1.0f;
+            R.RingRadius = Mix(D.HubRadius, D.BandRadius, Clamp(P.RingRadiusFraction, 0.15f, 0.92f));
+            R.RingHalf   = 0.5f * std::max(3.0f, P.RingWidthMillimetre) * kMilli;
+            R.Staggered  = true;
+            break;
     }
     return R;
 }
@@ -211,28 +243,43 @@ struct FaceContour
 
         float Phi = D.HubRadius + 0.5f * Fillet - Radius;                  // hub disc
         Phi = ContourUnion(Phi, Radius - (D.BandRadius - 0.5f * Fillet), Fillet);   // outer band
+        if (S.RingRadius > 0.0f)                                           // concentric ring (Lattice / Honeycomb)
+            Phi = ContourUnion(Phi, S.RingHalf - std::abs(Radius - S.RingRadius), Fillet);
 
         const float Taper   = std::pow(T, S.TaperPower);
         const float Half    = Mix(S.RootHalf, S.TipHalf, Taper);
         const float Arc     = std::max(Radius, 1.0e-3f);
 
+        // Honeycomb staggers the bars: inside the ring at the authored phase, outside it at half a pitch — the two
+        //    rows plus the ring make hexagonal cells, all still one smooth-union contour.
+        const uint32_t Rows = S.Staggered ? 2u : 1u;
+        const float Feather = 0.6f * Fillet;
+
         for (uint32_t Family = 0u; Family < S.Families; ++Family)
+        for (uint32_t Row = 0u; Row < Rows; ++Row)
         {
+            float RowGate = 1.0f;
+            if (S.Staggered)
+                RowGate = Row == 0u ? 1.0f - SmoothStep(S.RingRadius - Feather, S.RingRadius + Feather, Radius)
+                                    : SmoothStep(S.RingRadius - Feather, S.RingRadius + Feather, Radius);
+            if (RowGate <= 0.001f) continue;
+            const float RowHalf = Half * RowGate;
             const float Lean  = S.Sweep[Family] * (T * T * (3.0f - 2.0f * T));
             for (uint32_t Bar = 0u; Bar < SpokeCount; ++Bar)
             {
-                const float Root = Phase + kTau * (static_cast<float>(Bar) + 0.5f * static_cast<float>(Family) * (S.Families > 1u ? 1.0f : 0.0f)) / static_cast<float>(SpokeCount);
+                const float Stagger = S.Staggered && Row == 1u ? kPi / static_cast<float>(SpokeCount) : 0.0f;
+                const float Root = Stagger + Phase + kTau * (static_cast<float>(Bar) + 0.5f * static_cast<float>(Family) * (S.Families > 1u ? 1.0f : 0.0f)) / static_cast<float>(SpokeCount);
                 const float Axis = Root + Lean + S.Lean * Half / Arc;
                 if (S.SplitHalf > 0.0f)
                 {
                     const float Open = S.SplitHalf * T * T;
-                    const float Left  = Half - std::abs(AngleDelta(Angle, Axis - Open)) * Arc;
-                    const float Right = Half - std::abs(AngleDelta(Angle, Axis + Open)) * Arc;
+                    const float Left  = RowHalf - std::abs(AngleDelta(Angle, Axis - Open)) * Arc;
+                    const float Right = RowHalf - std::abs(AngleDelta(Angle, Axis + Open)) * Arc;
                     Phi = ContourUnion(Phi, ContourUnion(Left, Right, Fillet * 1.4f), Fillet);
                 }
                 else
                 {
-                    Phi = ContourUnion(Phi, Half - std::abs(AngleDelta(Angle, Axis)) * Arc, Fillet);
+                    Phi = ContourUnion(Phi, RowHalf - std::abs(AngleDelta(Angle, Axis)) * Arc, Fillet);
                 }
             }
         }
@@ -261,7 +308,7 @@ struct FaceContour
 {
     FaceContour C;
     C.D          = D;
-    C.S          = ResolveSpokeRecipe(P);
+    C.S          = ResolveSpokeRecipe(P, D);
     C.Fillet     = std::max(0.5f * kMilli, P.FilletMillimetre * kMilli);
     C.SpokeCount = std::max(2u, P.SpokeCount);
     C.Phase      = Radians(P.SpokePhaseDegrees);
@@ -507,6 +554,228 @@ WheelRimParameters WheelRimParameters::FromPreset(RimPresetCategory Preset) noex
             P.WellOffsetFraction = 0.68f;
             break;
 
+        //  ── offroad ─────────────────────────────────────────────────────────────────────────────────────────────
+        case RimPresetCategory::OffroadBeadlock:
+            P.DiameterInch = 17.0f; P.WidthInch = 9.0f; P.OffsetMillimetre = -12.0f;
+            P.SpokeContour = SpokeContourCategory::Straight; P.SpokeCount = 6u;
+            P.SpokeRootWidthMillimetre = 86.0f; P.SpokeTipWidthMillimetre = 62.0f; P.SpokeTaperPower = 1.0f;
+            P.LugCount = 6u; P.LugCircleMillimetre = 139.7f; P.LugHoleMillimetre = 16.0f; P.CentreBoreMillimetre = 106.1f;
+            P.PadThicknessMillimetre = 24.0f; P.SpokeThicknessMillimetre = 19.0f; P.BarrelWallMillimetre = 8.5f;
+            P.DishMillimetre = 6.0f; P.ConcavityPower = 1.1f; P.FilletMillimetre = 14.0f; P.OuterBandFraction = 0.11f;
+            P.GenerateLipBolts = true; P.LipBoltCount = 24u; P.LipBoltDiameterMillimetre = 10.0f;
+            P.FaceFinish = RimFinishCategory::MatteBlack; P.LipFinish = RimFinishCategory::MatteBlack;
+            P.PocketFinish = RimFinishCategory::MatteBlack; P.CapFinish = RimFinishCategory::SatinGraphite;
+            P.LugNutFlatsMillimetre = 22.0f; P.LugNutHeightMillimetre = 28.0f;
+            break;
+
+        case RimPresetCategory::OffroadRockEight:
+            P.DiameterInch = 17.0f; P.WidthInch = 8.5f; P.OffsetMillimetre = 0.0f;
+            P.SpokeContour = SpokeContourCategory::Straight; P.SpokeCount = 8u;
+            P.SpokeRootWidthMillimetre = 64.0f; P.SpokeTipWidthMillimetre = 44.0f; P.SpokeTaperPower = 1.2f;
+            P.LugCount = 6u; P.LugCircleMillimetre = 139.7f; P.CentreBoreMillimetre = 106.1f;
+            P.PadThicknessMillimetre = 22.0f; P.SpokeThicknessMillimetre = 17.0f; P.BarrelWallMillimetre = 8.0f;
+            P.DishMillimetre = 14.0f; P.ConcavityPower = 1.3f; P.FilletMillimetre = 12.0f;
+            P.GenerateLipBolts = true; P.LipBoltCount = 20u;
+            P.FaceFinish = RimFinishCategory::BronzeAnodised; P.LipFinish = RimFinishCategory::BronzeAnodised;
+            P.PocketFinish = RimFinishCategory::MatteBlack;
+            break;
+
+        case RimPresetCategory::OffroadOverland:
+            P.DiameterInch = 18.0f; P.WidthInch = 9.0f; P.OffsetMillimetre = 10.0f;
+            P.SpokeContour = SpokeContourCategory::Weave; P.SpokeCount = 8u;
+            P.SpokeRootWidthMillimetre = 52.0f; P.SpokeTipWidthMillimetre = 38.0f; P.SpokeSweepDegrees = 20.0f;
+            P.LugCount = 6u; P.LugCircleMillimetre = 139.7f; P.CentreBoreMillimetre = 106.1f;
+            P.SpokeThicknessMillimetre = 15.0f; P.DishMillimetre = 12.0f; P.FilletMillimetre = 10.0f;
+            P.GenerateLipBolts = true; P.LipBoltCount = 18u; P.LipBoltDiameterMillimetre = 8.0f;
+            P.FaceFinish = RimFinishCategory::MatteBlack; P.LipFinish = RimFinishCategory::SatinGraphite;
+            P.PocketFinish = RimFinishCategory::MatteBlack;
+            break;
+
+        case RimPresetCategory::OffroadSteelLook:
+            P.DiameterInch = 16.0f; P.WidthInch = 8.0f; P.OffsetMillimetre = -6.0f;
+            P.SpokeContour = SpokeContourCategory::Blade; P.SpokeCount = 5u;
+            P.SpokeRootWidthMillimetre = 52.0f; P.SpokeTipWidthMillimetre = 54.0f;
+            P.LugCount = 5u; P.LugCircleMillimetre = 127.0f; P.CentreBoreMillimetre = 78.1f;
+            P.PadThicknessMillimetre = 16.0f; P.SpokeThicknessMillimetre = 9.0f; P.LipThicknessMillimetre = 7.0f;
+            P.DishMillimetre = 20.0f; P.ConcavityPower = 1.6f; P.CrownMillimetre = 0.0f; P.BackReliefMillimetre = 0.0f;
+            P.HubRadiusFraction = 0.36f; P.FilletMillimetre = 16.0f; P.BevelMillimetre = 1.2f;
+            P.GenerateCentreCap = true; P.CentreCapRadiusFraction = 0.72f; P.CentreCapDomeMillimetre = 9.0f;
+            P.FaceFinish = RimFinishCategory::RaceWhite; P.LipFinish = RimFinishCategory::RaceWhite;
+            P.PocketFinish = RimFinishCategory::MatteBlack; P.CapFinish = RimFinishCategory::PolishedAlloy;
+            break;
+
+        case RimPresetCategory::OffroadDuallyRing:
+            P.DiameterInch = 17.0f; P.WidthInch = 9.0f; P.OffsetMillimetre = 5.0f;
+            P.SpokeContour = SpokeContourCategory::Lattice; P.SpokeCount = 8u;
+            P.SpokeRootWidthMillimetre = 56.0f; P.SpokeTipWidthMillimetre = 40.0f;
+            P.RingRadiusFraction = 0.54f; P.RingWidthMillimetre = 26.0f;
+            P.LugCount = 8u; P.LugCircleMillimetre = 165.1f; P.CentreBoreMillimetre = 116.7f;
+            P.PadThicknessMillimetre = 24.0f; P.SpokeThicknessMillimetre = 16.0f; P.BarrelWallMillimetre = 8.0f;
+            P.DishMillimetre = 10.0f; P.FilletMillimetre = 11.0f;
+            P.FaceFinish = RimFinishCategory::GunmetalPaint; P.LipFinish = RimFinishCategory::GunmetalPaint;
+            P.PocketFinish = RimFinishCategory::MatteBlack;
+            break;
+
+        //  ── GT3 / endurance ─────────────────────────────────────────────────────────────────────────────────────
+        case RimPresetCategory::Gt3CentreLockAero:
+            P.DiameterInch = 18.0f; P.WidthInch = 12.0f; P.OffsetMillimetre = 20.0f;
+            P.SpokeContour = SpokeContourCategory::Blade; P.SpokeCount = 7u;
+            P.SpokeRootWidthMillimetre = 50.0f; P.SpokeTipWidthMillimetre = 56.0f; P.SpokeSweepDegrees = 12.0f;
+            P.LugCount = 0u; P.CentreLock = true; P.CentreLockFlatsMillimetre = 56.0f; P.GenerateCentreCap = false;
+            P.CentreBoreMillimetre = 68.0f; P.HubRadiusFraction = 0.30f;
+            P.DishMillimetre = 16.0f; P.ConcavityPower = 1.4f; P.SpokeThicknessMillimetre = 10.0f;
+            P.FilletMillimetre = 8.0f; P.BevelMillimetre = 2.0f; P.WellOffsetFraction = 0.66f;
+            P.FaceFinish = RimFinishCategory::GoldAnodised; P.LipFinish = RimFinishCategory::GoldAnodised;
+            P.PocketFinish = RimFinishCategory::MatteBlack; P.HardwareFinish = RimFinishCategory::SteelHardware;
+            break;
+
+        case RimPresetCategory::Gt3EnduranceTen:
+            P.DiameterInch = 18.0f; P.WidthInch = 11.0f; P.OffsetMillimetre = 26.0f;
+            P.SpokeContour = SpokeContourCategory::Fan; P.SpokeCount = 10u;
+            P.SpokeRootWidthMillimetre = 58.0f; P.SpokeTipWidthMillimetre = 44.0f; P.SpokeSweepDegrees = 6.0f;
+            P.LugCount = 0u; P.CentreLock = true; P.CentreLockFlatsMillimetre = 52.0f; P.GenerateCentreCap = false;
+            P.CentreBoreMillimetre = 68.0f; P.DishMillimetre = 20.0f; P.SpokeThicknessMillimetre = 11.0f;
+            P.FilletMillimetre = 9.0f; P.WellOffsetFraction = 0.66f;
+            P.FaceFinish = RimFinishCategory::SatinGraphite; P.LipFinish = RimFinishCategory::SatinGraphite;
+            P.PocketFinish = RimFinishCategory::MatteBlack;
+            break;
+
+        case RimPresetCategory::Gt3TurbineCover:
+            P.DiameterInch = 18.0f; P.WidthInch = 10.5f; P.OffsetMillimetre = 22.0f;
+            P.SpokeContour = SpokeContourCategory::Turbine; P.SpokeCount = 11u;
+            P.SpokeRootWidthMillimetre = 58.0f; P.SpokeTipWidthMillimetre = 66.0f; P.SpokeSweepDegrees = 34.0f;
+            P.LugCount = 0u; P.CentreLock = true; P.GenerateCentreCap = false; P.CentreBoreMillimetre = 68.0f;
+            P.DishMillimetre = 10.0f; P.ConcavityPower = 1.15f; P.CrownMillimetre = 3.0f;
+            P.SpokeThicknessMillimetre = 9.0f; P.FilletMillimetre = 12.0f; P.WellOffsetFraction = 0.66f;
+            P.FaceFinish = RimFinishCategory::MatteBlack; P.LipFinish = RimFinishCategory::SatinGraphite;
+            P.PocketFinish = RimFinishCategory::MatteBlack;
+            break;
+
+        case RimPresetCategory::Gt3SplitBlade:
+            P.DiameterInch = 19.0f; P.WidthInch = 12.0f; P.OffsetMillimetre = 18.0f;
+            P.SpokeContour = SpokeContourCategory::Split; P.SpokeCount = 6u;
+            P.SpokeRootWidthMillimetre = 82.0f; P.SpokeTipWidthMillimetre = 62.0f; P.SpokeSplitDegrees = 11.0f;
+            P.LugCount = 0u; P.CentreLock = true; P.CentreLockFlatsMillimetre = 58.0f; P.GenerateCentreCap = false;
+            P.CentreBoreMillimetre = 68.0f; P.DishMillimetre = 22.0f; P.ConcavityPower = 1.7f;
+            P.SpokeThicknessMillimetre = 12.0f; P.FilletMillimetre = 10.0f; P.WellOffsetFraction = 0.66f;
+            P.FaceFinish = RimFinishCategory::RaceWhite; P.LipFinish = RimFinishCategory::RaceWhite;
+            P.PocketFinish = RimFinishCategory::MatteBlack;
+            break;
+
+        //  ── GT / sport ──────────────────────────────────────────────────────────────────────────────────────────
+        case RimPresetCategory::GtTwinFiveSplit:
+            P.DiameterInch = 19.0f; P.WidthInch = 9.5f; P.OffsetMillimetre = 38.0f;
+            P.SpokeContour = SpokeContourCategory::Split; P.SpokeCount = 5u;
+            P.SpokeRootWidthMillimetre = 76.0f; P.SpokeTipWidthMillimetre = 52.0f; P.SpokeSplitDegrees = 12.0f;
+            P.SpokeSweepDegrees = 6.0f; P.DishMillimetre = 24.0f; P.ConcavityPower = 1.9f;
+            P.FilletMillimetre = 10.0f; P.CrownMillimetre = 3.2f;
+            P.FaceFinish = RimFinishCategory::MachinedFace; P.LipFinish = RimFinishCategory::MachinedFace;
+            P.PocketFinish = RimFinishCategory::GunmetalPaint;
+            break;
+
+        case RimPresetCategory::GtDirectional:
+            P.DiameterInch = 20.0f; P.WidthInch = 10.0f; P.OffsetMillimetre = 30.0f;
+            P.SpokeContour = SpokeContourCategory::Twisted; P.SpokeCount = 9u;
+            P.SpokeRootWidthMillimetre = 58.0f; P.SpokeTipWidthMillimetre = 40.0f;
+            P.SpokeSweepDegrees = 26.0f; P.SpokeTwistDegrees = 14.0f;
+            P.DishMillimetre = 28.0f; P.ConcavityPower = 2.0f; P.CrownMillimetre = 3.6f; P.FilletMillimetre = 9.0f;
+            P.FaceFinish = RimFinishCategory::GunmetalPaint; P.LipFinish = RimFinishCategory::MachinedFace;
+            P.PocketFinish = RimFinishCategory::MatteBlack;
+            break;
+
+        case RimPresetCategory::GtMeshNineteen:
+            P.DiameterInch = 19.0f; P.WidthInch = 9.0f; P.OffsetMillimetre = 35.0f;
+            P.SpokeContour = SpokeContourCategory::Weave; P.SpokeCount = 9u;
+            P.SpokeRootWidthMillimetre = 44.0f; P.SpokeTipWidthMillimetre = 32.0f; P.SpokeSweepDegrees = 23.0f;
+            P.HubRadiusFraction = 0.27f; P.DishMillimetre = 18.0f; P.SpokeThicknessMillimetre = 11.0f;
+            P.FilletMillimetre = 7.0f;
+            P.FaceFinish = RimFinishCategory::GlossPaint; P.LipFinish = RimFinishCategory::GlossPaint;
+            P.PocketFinish = RimFinishCategory::MatteBlack;
+            break;
+
+        case RimPresetCategory::GtHoneycomb:
+            P.DiameterInch = 20.0f; P.WidthInch = 10.0f; P.OffsetMillimetre = 32.0f;
+            P.SpokeContour = SpokeContourCategory::Honeycomb; P.SpokeCount = 9u;
+            P.SpokeRootWidthMillimetre = 46.0f; P.SpokeTipWidthMillimetre = 42.0f;
+            P.RingRadiusFraction = 0.52f; P.RingWidthMillimetre = 18.0f;
+            P.HubRadiusFraction = 0.26f; P.DishMillimetre = 22.0f; P.SpokeThicknessMillimetre = 11.0f;
+            P.FilletMillimetre = 8.0f; P.BevelMillimetre = 2.2f;
+            P.FaceFinish = RimFinishCategory::BronzeAnodised; P.LipFinish = RimFinishCategory::BronzeAnodised;
+            P.PocketFinish = RimFinishCategory::MatteBlack;
+            break;
+
+        //  ── luxury ──────────────────────────────────────────────────────────────────────────────────────────────
+        case RimPresetCategory::LuxuryFanTwenty:
+            P.DiameterInch = 22.0f; P.WidthInch = 9.0f; P.OffsetMillimetre = 40.0f;
+            P.SpokeContour = SpokeContourCategory::Fan; P.SpokeCount = 20u;
+            P.SpokeRootWidthMillimetre = 42.0f; P.SpokeTipWidthMillimetre = 30.0f; P.SpokeSweepDegrees = 9.0f;
+            P.HubRadiusFraction = 0.24f; P.DishMillimetre = 16.0f; P.SpokeThicknessMillimetre = 9.0f;
+            P.FilletMillimetre = 6.0f; P.BevelMillimetre = 1.8f; P.AngularSegments = 640u;
+            P.FaceFinish = RimFinishCategory::PolishedAlloy; P.LipFinish = RimFinishCategory::PolishedAlloy;
+            P.PocketFinish = RimFinishCategory::SatinGraphite;
+            break;
+
+        case RimPresetCategory::LuxuryFineMesh:
+            P.DiameterInch = 21.0f; P.WidthInch = 9.0f; P.OffsetMillimetre = 38.0f;
+            P.SpokeContour = SpokeContourCategory::Weave; P.SpokeCount = 14u;
+            P.SpokeRootWidthMillimetre = 32.0f; P.SpokeTipWidthMillimetre = 24.0f; P.SpokeSweepDegrees = 26.0f;
+            P.HubRadiusFraction = 0.23f; P.DishMillimetre = 14.0f; P.SpokeThicknessMillimetre = 9.0f;
+            P.FilletMillimetre = 5.5f; P.AngularSegments = 704u;
+            P.FaceFinish = RimFinishCategory::Chrome; P.LipFinish = RimFinishCategory::Chrome;
+            P.PocketFinish = RimFinishCategory::SatinGraphite; P.CapFinish = RimFinishCategory::Chrome;
+            break;
+
+        case RimPresetCategory::LuxuryDishCruiser:
+            P.DiameterInch = 22.0f; P.WidthInch = 9.5f; P.OffsetMillimetre = 25.0f;
+            P.SpokeContour = SpokeContourCategory::Dished; P.SpokeCount = 10u;
+            P.SpokeRootWidthMillimetre = 40.0f; P.SpokeTipWidthMillimetre = 58.0f;
+            P.DishMillimetre = 38.0f; P.ConcavityPower = 2.2f; P.OuterBandFraction = 0.05f;
+            P.SpokeThicknessMillimetre = 11.0f; P.FilletMillimetre = 8.0f;
+            P.FaceFinish = RimFinishCategory::GlossPaint; P.LipFinish = RimFinishCategory::PolishedAlloy;
+            P.PocketFinish = RimFinishCategory::MatteBlack; P.CapFinish = RimFinishCategory::GoldAnodised;
+            break;
+
+        case RimPresetCategory::LuxuryConcaveTen:
+            P.DiameterInch = 20.0f; P.WidthInch = 8.5f; P.OffsetMillimetre = 42.0f;
+            P.SpokeContour = SpokeContourCategory::Straight; P.SpokeCount = 10u;
+            P.SpokeRootWidthMillimetre = 50.0f; P.SpokeTipWidthMillimetre = 30.0f; P.SpokeTaperPower = 1.7f;
+            P.DishMillimetre = 30.0f; P.ConcavityPower = 2.3f; P.CrownMillimetre = 3.0f; P.FilletMillimetre = 8.0f;
+            P.FaceFinish = RimFinishCategory::MachinedFace; P.LipFinish = RimFinishCategory::MachinedFace;
+            P.PocketFinish = RimFinishCategory::GunmetalPaint;
+            break;
+
+        //  ── show ────────────────────────────────────────────────────────────────────────────────────────────────
+        case RimPresetCategory::ShowDeepChrome:
+            P.DiameterInch = 20.0f; P.WidthInch = 12.0f; P.OffsetMillimetre = -20.0f;
+            P.SpokeContour = SpokeContourCategory::Dished; P.SpokeCount = 6u;
+            P.SpokeRootWidthMillimetre = 52.0f; P.SpokeTipWidthMillimetre = 76.0f;
+            P.DishMillimetre = 58.0f; P.ConcavityPower = 2.6f; P.OuterBandFraction = 0.035f;
+            P.WellOffsetFraction = 0.72f; P.FilletMillimetre = 9.0f;
+            P.GenerateLipBolts = true; P.LipBoltCount = 30u; P.LipBoltDiameterMillimetre = 8.0f;
+            P.FaceFinish = RimFinishCategory::Chrome; P.LipFinish = RimFinishCategory::Chrome;
+            P.PocketFinish = RimFinishCategory::MatteBlack; P.HardwareFinish = RimFinishCategory::GoldAnodised;
+            break;
+
+        case RimPresetCategory::ShowCandyWeave:
+            P.DiameterInch = 22.0f; P.WidthInch = 10.0f; P.OffsetMillimetre = 28.0f;
+            P.SpokeContour = SpokeContourCategory::Weave; P.SpokeCount = 11u;
+            P.SpokeRootWidthMillimetre = 40.0f; P.SpokeTipWidthMillimetre = 30.0f; P.SpokeSweepDegrees = 28.0f;
+            P.HubRadiusFraction = 0.24f; P.DishMillimetre = 24.0f; P.FilletMillimetre = 6.5f;
+            P.AngularSegments = 640u;
+            P.FaceFinish = RimFinishCategory::CandyRed; P.LipFinish = RimFinishCategory::Chrome;
+            P.PocketFinish = RimFinishCategory::GunmetalPaint; P.CapFinish = RimFinishCategory::CandyRed;
+            break;
+
+        case RimPresetCategory::ShowGoldPinwheel:
+            P.DiameterInch = 21.0f; P.WidthInch = 10.5f; P.OffsetMillimetre = 25.0f;
+            P.SpokeContour = SpokeContourCategory::Turbine; P.SpokeCount = 13u;
+            P.SpokeRootWidthMillimetre = 48.0f; P.SpokeTipWidthMillimetre = 52.0f; P.SpokeSweepDegrees = 40.0f;
+            P.SpokeTwistDegrees = 10.0f; P.DishMillimetre = 20.0f; P.CrownMillimetre = 3.4f; P.FilletMillimetre = 7.0f;
+            P.AngularSegments = 640u;
+            P.FaceFinish = RimFinishCategory::GoldAnodised; P.LipFinish = RimFinishCategory::PolishedAlloy;
+            P.PocketFinish = RimFinishCategory::MatteBlack; P.CapFinish = RimFinishCategory::GoldAnodised;
+            break;
+
         case RimPresetCategory::HeavyDutySixSpoke:
             P.DiameterInch = 17.0f; P.WidthInch = 8.0f; P.OffsetMillimetre = 0.0f;
             P.SpokeContour = SpokeContourCategory::Straight; P.SpokeCount = 6u;
@@ -566,6 +835,13 @@ std::string WheelRimParameters::Normalise() noexcept
     HardwareSegments  = std::max(8u,  std::min(256u,  HardwareSegments));
     BevelBands        = std::max(1u,  std::min(16u,   BevelBands));
     SectionSamples    = std::max(24u, std::min(2048u, SectionSamples));
+    LipBoltCount      = std::min(96u, LipBoltCount);
+    Pin(RingRadiusFraction, 0.15f, 0.92f, "RingRadiusFraction");
+    Pin(RingWidthMillimetre, 3.0f, 80.0f, "RingWidthMillimetre");
+    Pin(LipBoltDiameterMillimetre, 3.0f, 26.0f, "LipBoltDiameterMillimetre");
+    Pin(LipBoltProudMillimetre, 0.5f, 14.0f, "LipBoltProudMillimetre");
+    Pin(CentreLockFlatsMillimetre, 20.0f, 110.0f, "CentreLockFlatsMillimetre");
+    if (CentreLock) LugCount = 0u;
 
     // The bolt circle must leave material between the bore and the lug holes.
     const float Clearance = 0.5f * CentreBoreMillimetre + 0.5f * LugHoleMillimetre + 6.0f;
@@ -640,6 +916,24 @@ RimFinishRecipe QueryFinishRecipe(RimFinishCategory Finish) noexcept
             R.BaseColor[0] = 0.760f; R.BaseColor[1] = 0.560f; R.BaseColor[2] = 0.180f;
             R.SpecularColor[0] = 1.0f; R.SpecularColor[1] = 0.94f; R.SpecularColor[2] = 0.74f;
             R.Metalness = 1.0f; R.SpecularRoughness = 0.18f; R.CoatWeight = 0.5f;
+            break;
+        case RimFinishCategory::GunmetalPaint:
+            R.Name = "rim_gunmetal_paint";
+            R.BaseColor[0] = 0.105f; R.BaseColor[1] = 0.118f; R.BaseColor[2] = 0.132f;
+            R.Metalness = 0.20f; R.SpecularRoughness = 0.35f; R.CoatWeight = 1.0f; R.CoatRoughness = 0.06f;
+            R.HazinessWeight = 0.18f;
+            break;
+        case RimFinishCategory::CandyRed:
+            R.Name = "rim_candy_red";
+            R.BaseColor[0] = 0.330f; R.BaseColor[1] = 0.020f; R.BaseColor[2] = 0.028f;
+            R.SpecularColor[0] = 1.0f; R.SpecularColor[1] = 0.70f; R.SpecularColor[2] = 0.70f;
+            R.Metalness = 0.35f; R.SpecularRoughness = 0.18f; R.CoatWeight = 1.0f; R.CoatRoughness = 0.03f;
+            break;
+        case RimFinishCategory::RaceWhite:
+            R.Name = "rim_race_white";
+            R.BaseColor[0] = 0.780f; R.BaseColor[1] = 0.782f; R.BaseColor[2] = 0.775f;
+            R.Metalness = 0.0f; R.SpecularRoughness = 0.30f; R.CoatWeight = 0.8f; R.CoatRoughness = 0.08f;
+            R.DiffuseRoughness = 0.3f;
             break;
         case RimFinishCategory::SteelHardware:
             R.Name = "rim_hardware_steel";
@@ -1144,7 +1438,54 @@ RimSurface WheelRimSpecification::Synthesise(const WheelRimParameters& Parameter
         }
     }
 
-    if (P.GenerateCentreCap)
+    if (P.GenerateLipBolts && P.LipBoltCount > 0u)
+    {
+        // Beadlock-style bolt heads marching around the outer band — the offroad / show-wheel tell.
+        const float Across = 0.5f * std::max(3.0f, P.LipBoltDiameterMillimetre) * kMilli;
+        const float Proud  = std::max(0.8f * kMilli, P.LipBoltProudMillimetre * kMilli);
+        const float Circle = Mix(D.BandRadius, D.InnerRadius, 0.55f);
+        for (uint32_t Bolt = 0u; Bolt < P.LipBoltCount; ++Bolt)
+        {
+            const float A  = kTau * static_cast<float>(Bolt) / static_cast<float>(P.LipBoltCount);
+            const float Cx = Circle * std::cos(A), Cy = Circle * std::sin(A);
+            const float Seat = Height.Front(Circle, A, 1.0f) - 0.3f * kMilli;
+            const std::vector<float> Profile = {
+                Across * 1.25f, Seat,
+                Across * 1.25f, Seat + 0.35f * Proud,
+                Across,         Seat + 0.55f * Proud,
+                Across,         Seat + Proud - 0.35f * Across,
+                Across * 0.70f, Seat + Proud };
+            const uint32_t First = Surface.QueryTriangleCount();
+            AddRevolution(Profile, 6u, Cx, Cy, A, RimSurfaceSlot::Hardware, true);
+            RimPartSpan Part; Part.Name = "LipBolt." + std::to_string(Bolt);
+            Part.FirstTriangle = First; Part.TriangleCount = Surface.QueryTriangleCount() - First;
+            Surface.Parts.push_back(Part);
+            EnforceOutwardOrientation(Surface, Part.FirstTriangle, Part.TriangleCount);
+        }
+    }
+
+    if (P.CentreLock)
+    {
+        // Single central nut (GT3 / endurance): sits on the hub pad, swallowing the bore.
+        const float Across  = 0.5f * std::max(20.0f, P.CentreLockFlatsMillimetre) * kMilli;
+        const float Chamfer = 0.12f * Across;
+        const float Seat    = Height.Front(0.0f, 0.0f, 1.0f) - 1.0f * kMilli;
+        const float Tall    = 1.15f * Across;
+        const std::vector<float> Profile = {
+            D.BoreRadius * 0.55f, Seat,
+            Across * 1.06f,       Seat + 0.22f * Across,
+            Across,               Seat + 0.34f * Across,
+            Across,               Seat + Tall - Chamfer,
+            Across - Chamfer,     Seat + Tall };
+        const uint32_t First = Surface.QueryTriangleCount();
+        AddRevolution(Profile, 6u, 0.0f, 0.0f, 0.0f, RimSurfaceSlot::Hardware, true);
+        RimPartSpan Part; Part.Name = "CentreLockNut";
+        Part.FirstTriangle = First; Part.TriangleCount = Surface.QueryTriangleCount() - First;
+        Surface.Parts.push_back(Part);
+        EnforceOutwardOrientation(Surface, Part.FirstTriangle, Part.TriangleCount);
+    }
+
+    if (P.GenerateCentreCap && !P.CentreLock)
     {
         const float Radius = Clamp(P.CentreCapRadiusFraction, 0.1f, 1.0f) * D.HubRadius;
         const float Dome   = P.CentreCapDomeMillimetre * kMilli;

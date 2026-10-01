@@ -45,7 +45,8 @@ function angleDelta(a, b) {
 //                                                     ENUMERATIONS
 //------------------------------------------------------------------------------------------------------------------------
 
-export const SpokeContour = { Straight: 'Straight', Split: 'Split', Twisted: 'Twisted', Turbine: 'Turbine', Weave: 'Weave', Dished: 'Dished' };
+export const SpokeContour = { Straight: 'Straight', Split: 'Split', Twisted: 'Twisted', Turbine: 'Turbine', Weave: 'Weave', Dished: 'Dished',
+    Blade: 'Blade', Fan: 'Fan', Lattice: 'Lattice', Honeycomb: 'Honeycomb' };
 export const LugSeat = { Conical: 'Conical', Ball: 'Ball', Flat: 'Flat' };
 export const LugNut = { Hex: 'Hex', Spline: 'Spline', Capped: 'Capped' };
 
@@ -65,6 +66,7 @@ export const Finishes = {
     GoldAnodised:   { name: 'Gold anodised',    color: '#c69a36', metalness: 1.0,  roughness: 0.18, anisotropy: 0.0,  clearcoat: 0.5,  clearcoatRoughness: 0.08 },
     GunmetalPaint:  { name: 'Gunmetal paint',   color: '#3a3f45', metalness: 0.2,  roughness: 0.35, anisotropy: 0.0,  clearcoat: 1.0,  clearcoatRoughness: 0.06 },
     CandyRed:       { name: 'Candy red',        color: '#7c0a12', metalness: 0.35, roughness: 0.18, anisotropy: 0.0,  clearcoat: 1.0,  clearcoatRoughness: 0.03 },
+    RaceWhite:      { name: 'Race white',       color: '#c7c8c5', metalness: 0.0,  roughness: 0.30, anisotropy: 0.0,  clearcoat: 0.8,  clearcoatRoughness: 0.08 },
     SteelHardware:  { name: 'Steel hardware',   color: '#8f9296', metalness: 1.0,  roughness: 0.30, anisotropy: 0.0,  clearcoat: 0.0,  clearcoatRoughness: 0.1 },
 };
 
@@ -89,6 +91,7 @@ export function defaultParameters() {
         SpokeContour: SpokeContour.Straight, SpokeCount: 5,
         SpokeRootWidthMillimetre: 62, SpokeTipWidthMillimetre: 34, SpokeTaperPower: 1.4,
         SpokeSweepDegrees: 0, SpokeTwistDegrees: 0, SpokeSplitDegrees: 7, SpokePhaseDegrees: 0,
+        RingRadiusFraction: 0.58, RingWidthMillimetre: 22,
         // hub / lugs / valve
         CentreBoreMillimetre: 72.6, LugCount: 5, LugCircleMillimetre: 114.3, LugHoleMillimetre: 14.2,
         LugSeat: LugSeat.Conical, LugSeatAngleDegrees: 60, LugSeatDepthMillimetre: 6, LugPhaseDegrees: 0,
@@ -96,6 +99,8 @@ export function defaultParameters() {
         // hardware
         GenerateLugNuts: true, LugNut: LugNut.Hex, LugNutFlatsMillimetre: 19, LugNutHeightMillimetre: 24,
         LugNutChamferMillimetre: 2.2, LugNutProudMillimetre: 1.5,
+        GenerateLipBolts: false, LipBoltCount: 24, LipBoltDiameterMillimetre: 9, LipBoltProudMillimetre: 2.6,
+        CentreLock: false, CentreLockFlatsMillimetre: 52,
         GenerateCentreCap: true, CentreCapRadiusFraction: 0.56, CentreCapDomeMillimetre: 6,
         // tessellation
         AngularSegments: 384, RadialSegments: 84, HardwareSegments: 40, CreaseDegrees: 38,
@@ -127,6 +132,161 @@ export const Presets = {
         LugCount: 6, LugCircleMillimetre: 139.7, LugHoleMillimetre: 16, CentreBoreMillimetre: 106.1,
         PadThicknessMillimetre: 22, SpokeThicknessMillimetre: 17, DishMillimetre: 10, ConcavityPower: 1.2,
         BarrelWallMillimetre: 7, LugNutFlatsMillimetre: 22, LugNutHeightMillimetre: 28 }),
+
+    //  ── offroad ─────────────────────────────────────────────────────────────────────────────────────────────────
+    'Offroad beadlock 17×9': (p) => Object.assign(p, {
+        DiameterInch: 17, WidthInch: 9, OffsetMillimetre: -12, SpokeContour: SpokeContour.Straight, SpokeCount: 6,
+        SpokeRootWidthMillimetre: 86, SpokeTipWidthMillimetre: 62, SpokeTaperPower: 1.0,
+        LugCount: 6, LugCircleMillimetre: 139.7, LugHoleMillimetre: 16, CentreBoreMillimetre: 106.1,
+        PadThicknessMillimetre: 24, SpokeThicknessMillimetre: 19, BarrelWallMillimetre: 8.5,
+        DishMillimetre: 6, ConcavityPower: 1.1, FilletMillimetre: 14, OuterBandFraction: 0.11,
+        GenerateLipBolts: true, LipBoltCount: 24, LipBoltDiameterMillimetre: 10,
+        LugNutFlatsMillimetre: 22, LugNutHeightMillimetre: 28 }),
+    'Offroad rock 8-spoke 17×8.5': (p) => Object.assign(p, {
+        DiameterInch: 17, WidthInch: 8.5, OffsetMillimetre: 0, SpokeContour: SpokeContour.Straight, SpokeCount: 8,
+        SpokeRootWidthMillimetre: 64, SpokeTipWidthMillimetre: 44, SpokeTaperPower: 1.2,
+        LugCount: 6, LugCircleMillimetre: 139.7, CentreBoreMillimetre: 106.1,
+        PadThicknessMillimetre: 22, SpokeThicknessMillimetre: 17, BarrelWallMillimetre: 8,
+        DishMillimetre: 14, ConcavityPower: 1.3, FilletMillimetre: 12,
+        GenerateLipBolts: true, LipBoltCount: 20 }),
+    'Overland mesh 18×9': (p) => Object.assign(p, {
+        DiameterInch: 18, WidthInch: 9, OffsetMillimetre: 10, SpokeContour: SpokeContour.Weave, SpokeCount: 8,
+        SpokeRootWidthMillimetre: 52, SpokeTipWidthMillimetre: 38, SpokeSweepDegrees: 20,
+        LugCount: 6, LugCircleMillimetre: 139.7, CentreBoreMillimetre: 106.1,
+        SpokeThicknessMillimetre: 15, DishMillimetre: 12, FilletMillimetre: 10,
+        GenerateLipBolts: true, LipBoltCount: 18, LipBoltDiameterMillimetre: 8 }),
+    'Steel-look rally 16×8': (p) => Object.assign(p, {
+        DiameterInch: 16, WidthInch: 8, OffsetMillimetre: -6, SpokeContour: SpokeContour.Blade, SpokeCount: 5,
+        SpokeRootWidthMillimetre: 52, SpokeTipWidthMillimetre: 54,
+        LugCount: 5, LugCircleMillimetre: 127, CentreBoreMillimetre: 78.1,
+        PadThicknessMillimetre: 16, SpokeThicknessMillimetre: 9, LipThicknessMillimetre: 7,
+        DishMillimetre: 20, ConcavityPower: 1.6, CrownMillimetre: 0, BackReliefMillimetre: 0,
+        HubRadiusFraction: 0.36, FilletMillimetre: 16, BevelMillimetre: 1.2,
+        GenerateCentreCap: true, CentreCapRadiusFraction: 0.72, CentreCapDomeMillimetre: 9 }),
+    'Dually lattice ring 17×9': (p) => Object.assign(p, {
+        DiameterInch: 17, WidthInch: 9, OffsetMillimetre: 5, SpokeContour: SpokeContour.Lattice, SpokeCount: 8,
+        SpokeRootWidthMillimetre: 56, SpokeTipWidthMillimetre: 40,
+        RingRadiusFraction: 0.54, RingWidthMillimetre: 26,
+        LugCount: 8, LugCircleMillimetre: 165.1, CentreBoreMillimetre: 116.7,
+        PadThicknessMillimetre: 24, SpokeThicknessMillimetre: 16, BarrelWallMillimetre: 8,
+        DishMillimetre: 10, FilletMillimetre: 11 }),
+
+    //  ── GT3 / endurance ─────────────────────────────────────────────────────────────────────────────────────────
+    'GT3 centre-lock aero 18×12': (p) => Object.assign(p, {
+        DiameterInch: 18, WidthInch: 12, OffsetMillimetre: 20, SpokeContour: SpokeContour.Blade, SpokeCount: 7,
+        SpokeRootWidthMillimetre: 50, SpokeTipWidthMillimetre: 56, SpokeSweepDegrees: 12,
+        LugCount: 0, CentreLock: true, CentreLockFlatsMillimetre: 56, GenerateCentreCap: false,
+        CentreBoreMillimetre: 68, HubRadiusFraction: 0.30,
+        DishMillimetre: 16, ConcavityPower: 1.4, SpokeThicknessMillimetre: 10,
+        FilletMillimetre: 8, BevelMillimetre: 2, WellOffsetFraction: 0.66 }),
+    'GT3 endurance 10-spoke 18×11': (p) => Object.assign(p, {
+        DiameterInch: 18, WidthInch: 11, OffsetMillimetre: 26, SpokeContour: SpokeContour.Fan, SpokeCount: 10,
+        SpokeRootWidthMillimetre: 58, SpokeTipWidthMillimetre: 44, SpokeSweepDegrees: 6,
+        LugCount: 0, CentreLock: true, CentreLockFlatsMillimetre: 52, GenerateCentreCap: false,
+        CentreBoreMillimetre: 68, DishMillimetre: 20, SpokeThicknessMillimetre: 11,
+        FilletMillimetre: 9, WellOffsetFraction: 0.66 }),
+    'GT3 turbine cover 18×10.5': (p) => Object.assign(p, {
+        DiameterInch: 18, WidthInch: 10.5, OffsetMillimetre: 22, SpokeContour: SpokeContour.Turbine, SpokeCount: 11,
+        SpokeRootWidthMillimetre: 58, SpokeTipWidthMillimetre: 66, SpokeSweepDegrees: 34,
+        LugCount: 0, CentreLock: true, GenerateCentreCap: false, CentreBoreMillimetre: 68,
+        DishMillimetre: 10, ConcavityPower: 1.15, CrownMillimetre: 3,
+        SpokeThicknessMillimetre: 9, FilletMillimetre: 12, WellOffsetFraction: 0.66 }),
+    'GT3 split blade 19×12': (p) => Object.assign(p, {
+        DiameterInch: 19, WidthInch: 12, OffsetMillimetre: 18, SpokeContour: SpokeContour.Split, SpokeCount: 6,
+        SpokeRootWidthMillimetre: 82, SpokeTipWidthMillimetre: 62, SpokeSplitDegrees: 11,
+        LugCount: 0, CentreLock: true, CentreLockFlatsMillimetre: 58, GenerateCentreCap: false,
+        CentreBoreMillimetre: 68, DishMillimetre: 22, ConcavityPower: 1.7,
+        SpokeThicknessMillimetre: 12, FilletMillimetre: 10, WellOffsetFraction: 0.66 }),
+
+    //  ── GT / sport ──────────────────────────────────────────────────────────────────────────────────────────────
+    'GT twin 5-split 19×9.5': (p) => Object.assign(p, {
+        DiameterInch: 19, WidthInch: 9.5, OffsetMillimetre: 38, SpokeContour: SpokeContour.Split, SpokeCount: 5,
+        SpokeRootWidthMillimetre: 76, SpokeTipWidthMillimetre: 52, SpokeSplitDegrees: 12,
+        SpokeSweepDegrees: 6, DishMillimetre: 24, ConcavityPower: 1.9,
+        FilletMillimetre: 10, CrownMillimetre: 3.2 }),
+    'GT directional 20×10': (p) => Object.assign(p, {
+        DiameterInch: 20, WidthInch: 10, OffsetMillimetre: 30, SpokeContour: SpokeContour.Twisted, SpokeCount: 9,
+        SpokeRootWidthMillimetre: 58, SpokeTipWidthMillimetre: 40,
+        SpokeSweepDegrees: 26, SpokeTwistDegrees: 14,
+        DishMillimetre: 28, ConcavityPower: 2.0, CrownMillimetre: 3.6, FilletMillimetre: 9 }),
+    'GT mesh 19×9': (p) => Object.assign(p, {
+        DiameterInch: 19, WidthInch: 9, OffsetMillimetre: 35, SpokeContour: SpokeContour.Weave, SpokeCount: 9,
+        SpokeRootWidthMillimetre: 44, SpokeTipWidthMillimetre: 32, SpokeSweepDegrees: 23,
+        HubRadiusFraction: 0.27, DishMillimetre: 18, SpokeThicknessMillimetre: 11, FilletMillimetre: 7 }),
+    'GT honeycomb 20×10': (p) => Object.assign(p, {
+        DiameterInch: 20, WidthInch: 10, OffsetMillimetre: 32, SpokeContour: SpokeContour.Honeycomb, SpokeCount: 9,
+        SpokeRootWidthMillimetre: 46, SpokeTipWidthMillimetre: 42,
+        RingRadiusFraction: 0.52, RingWidthMillimetre: 18,
+        HubRadiusFraction: 0.26, DishMillimetre: 22, SpokeThicknessMillimetre: 11,
+        FilletMillimetre: 8, BevelMillimetre: 2.2 }),
+
+    //  ── luxury ──────────────────────────────────────────────────────────────────────────────────────────────────
+    'Luxury fan 20-spoke 22×9': (p) => Object.assign(p, {
+        DiameterInch: 22, WidthInch: 9, OffsetMillimetre: 40, SpokeContour: SpokeContour.Fan, SpokeCount: 20,
+        SpokeRootWidthMillimetre: 42, SpokeTipWidthMillimetre: 30, SpokeSweepDegrees: 9,
+        HubRadiusFraction: 0.24, DishMillimetre: 16, SpokeThicknessMillimetre: 9,
+        FilletMillimetre: 6, BevelMillimetre: 1.8, AngularSegments: 640 }),
+    'Luxury fine mesh 21×9': (p) => Object.assign(p, {
+        DiameterInch: 21, WidthInch: 9, OffsetMillimetre: 38, SpokeContour: SpokeContour.Weave, SpokeCount: 14,
+        SpokeRootWidthMillimetre: 32, SpokeTipWidthMillimetre: 24, SpokeSweepDegrees: 26,
+        HubRadiusFraction: 0.23, DishMillimetre: 14, SpokeThicknessMillimetre: 9,
+        FilletMillimetre: 5.5, AngularSegments: 704 }),
+    'Luxury dish cruiser 22×9.5': (p) => Object.assign(p, {
+        DiameterInch: 22, WidthInch: 9.5, OffsetMillimetre: 25, SpokeContour: SpokeContour.Dished, SpokeCount: 10,
+        SpokeRootWidthMillimetre: 40, SpokeTipWidthMillimetre: 58,
+        DishMillimetre: 38, ConcavityPower: 2.2, OuterBandFraction: 0.05,
+        SpokeThicknessMillimetre: 11, FilletMillimetre: 8 }),
+    'Luxury concave 10-spoke 20×8.5': (p) => Object.assign(p, {
+        DiameterInch: 20, WidthInch: 8.5, OffsetMillimetre: 42, SpokeContour: SpokeContour.Straight, SpokeCount: 10,
+        SpokeRootWidthMillimetre: 50, SpokeTipWidthMillimetre: 30, SpokeTaperPower: 1.7,
+        DishMillimetre: 30, ConcavityPower: 2.3, CrownMillimetre: 3, FilletMillimetre: 8 }),
+
+    //  ── show ────────────────────────────────────────────────────────────────────────────────────────────────────
+    'Show deep chrome 20×12': (p) => Object.assign(p, {
+        DiameterInch: 20, WidthInch: 12, OffsetMillimetre: -20, SpokeContour: SpokeContour.Dished, SpokeCount: 6,
+        SpokeRootWidthMillimetre: 52, SpokeTipWidthMillimetre: 76,
+        DishMillimetre: 58, ConcavityPower: 2.6, OuterBandFraction: 0.035,
+        WellOffsetFraction: 0.72, FilletMillimetre: 9,
+        GenerateLipBolts: true, LipBoltCount: 30, LipBoltDiameterMillimetre: 8 }),
+    'Show candy weave 22×10': (p) => Object.assign(p, {
+        DiameterInch: 22, WidthInch: 10, OffsetMillimetre: 28, SpokeContour: SpokeContour.Weave, SpokeCount: 11,
+        SpokeRootWidthMillimetre: 40, SpokeTipWidthMillimetre: 30, SpokeSweepDegrees: 28,
+        HubRadiusFraction: 0.24, DishMillimetre: 24, FilletMillimetre: 6.5, AngularSegments: 640 }),
+    'Show gold pinwheel 21×10.5': (p) => Object.assign(p, {
+        DiameterInch: 21, WidthInch: 10.5, OffsetMillimetre: 25, SpokeContour: SpokeContour.Turbine, SpokeCount: 13,
+        SpokeRootWidthMillimetre: 48, SpokeTipWidthMillimetre: 52, SpokeSweepDegrees: 40,
+        SpokeTwistDegrees: 10, DishMillimetre: 20, CrownMillimetre: 3.4, FilletMillimetre: 7,
+        AngularSegments: 640 }),
+};
+
+// The paint scheme each preset ships with in the C++ module; the viewer applies it when the preset changes.
+export const PresetSchemes = {
+    'Forged 5-spoke 20×9.5': 'Machined face + gloss pockets',
+    'Split 10-spoke 19×8.5': 'Machined face + gloss pockets',
+    'Mesh weave 21×10': 'Satin graphite monotone',
+    'Turbine aero 18×8': 'Gloss black + polished lip',
+    'Deep dish concave 20×11': 'Gloss black + polished lip',
+    'Heavy duty 6-spoke 17×8': 'Matte black utility',
+    'Offroad beadlock 17×9': 'Matte black utility',
+    'Offroad rock 8-spoke 17×8.5': 'Bronze anodised',
+    'Overland mesh 18×9': 'Matte black utility',
+    'Steel-look rally 16×8': 'Race white',
+    'Dually lattice ring 17×9': 'Gunmetal',
+    'GT3 centre-lock aero 18×12': 'Gold race',
+    'GT3 endurance 10-spoke 18×11': 'Satin graphite monotone',
+    'GT3 turbine cover 18×10.5': 'Matte black utility',
+    'GT3 split blade 19×12': 'Race white',
+    'GT twin 5-split 19×9.5': 'Machined face + gloss pockets',
+    'GT directional 20×10': 'Gunmetal',
+    'GT mesh 19×9': 'Gloss black + polished lip',
+    'GT honeycomb 20×10': 'Bronze anodised',
+    'Luxury fan 20-spoke 22×9': 'Full polish',
+    'Luxury fine mesh 21×9': 'Full polish',
+    'Luxury dish cruiser 22×9.5': 'Gloss black + polished lip',
+    'Luxury concave 10-spoke 20×8.5': 'Machined face + gloss pockets',
+    'Show deep chrome 20×12': 'Full polish',
+    'Show candy weave 22×10': 'Candy red + chrome',
+    'Show gold pinwheel 21×10.5': 'Gold race',
 };
 
 export const PaintSchemes = {
@@ -136,6 +296,9 @@ export const PaintSchemes = {
     'Full polish':                   { 0: 'PolishedAlloy', 1: 'BrushedAlloy', 2: 'PolishedAlloy', 3: 'BrushedAlloy', 4: 'Chrome', 5: 'PolishedAlloy' },
     'Bronze anodised':               { 0: 'BronzeAnodised', 1: 'MatteBlack', 2: 'BronzeAnodised', 3: 'MatteBlack', 4: 'SteelHardware', 5: 'BronzeAnodised' },
     'Gold race':                     { 0: 'GoldAnodised', 1: 'MatteBlack', 2: 'GoldAnodised', 3: 'MatteBlack', 4: 'SteelHardware', 5: 'MatteBlack' },
+    'Matte black utility':           { 0: 'MatteBlack', 1: 'MatteBlack', 2: 'MatteBlack', 3: 'MatteBlack', 4: 'SteelHardware', 5: 'SatinGraphite' },
+    'Race white':                    { 0: 'RaceWhite', 1: 'MatteBlack', 2: 'RaceWhite', 3: 'MatteBlack', 4: 'SteelHardware', 5: 'PolishedAlloy' },
+    'Gunmetal':                      { 0: 'GunmetalPaint', 1: 'MatteBlack', 2: 'GunmetalPaint', 3: 'MatteBlack', 4: 'SteelHardware', 5: 'GunmetalPaint' },
     'Candy red + chrome':            { 0: 'CandyRed', 1: 'GunmetalPaint', 2: 'Chrome', 3: 'MatteBlack', 4: 'Chrome', 5: 'CandyRed' },
 };
 
@@ -152,6 +315,11 @@ export function normalise(p) {
     pin('CentreBoreMillimetre', 20, 300); pin('LugCircleMillimetre', 50, 400); pin('LugHoleMillimetre', 6, 40);
     pin('LugSeatDepthMillimetre', 0, 20); pin('LugNutFlatsMillimetre', 8, 50); pin('LugNutHeightMillimetre', 6, 70);
     pin('CentreCapRadiusFraction', 0.1, 1); pin('CreaseDegrees', 5, 150);
+    pin('RingRadiusFraction', 0.15, 0.92); pin('RingWidthMillimetre', 3, 80);
+    pin('LipBoltDiameterMillimetre', 3, 26); pin('LipBoltProudMillimetre', 0.5, 14);
+    pin('CentreLockFlatsMillimetre', 20, 110);
+    p.LipBoltCount = Math.round(clamp(p.LipBoltCount, 0, 96));
+    if (p.CentreLock) p.LugCount = 0;
     p.SpokeCount = Math.round(clamp(p.SpokeCount, 2, 60));
     p.LugCount = Math.round(clamp(p.LugCount, 0, 12));
     p.AngularSegments = Math.round(clamp(p.AngularSegments, 64, 2048));
@@ -204,9 +372,9 @@ function resolveDimensions(p) {
     return d;
 }
 
-function resolveSpokeRecipe(p) {
+function resolveSpokeRecipe(p, d) {
     const r = {
-        families: 1, sweep: [0, 0],
+        families: 1, sweep: [0, 0], ringRadius: 0, ringHalf: 0, staggered: false,
         rootHalf: 0.5 * p.SpokeRootWidthMillimetre * MILLI,
         tipHalf: 0.5 * p.SpokeTipWidthMillimetre * MILLI,
         taperPower: Math.max(0.2, p.SpokeTaperPower), splitHalf: 0, lean: 0,
@@ -225,6 +393,24 @@ function resolveSpokeRecipe(p) {
             r.rootHalf *= 0.46; r.tipHalf *= 0.52; break;
         case SpokeContour.Dished:
             r.sweep[0] = sweep; r.rootHalf *= 0.62; r.tipHalf *= 2.1; r.taperPower = 2.4; break;
+        case SpokeContour.Blade:
+            // Aero disc: the bars are nearly a sector wide, so what is left reads as a slot rather than a window.
+            r.sweep[0] = sweep; r.rootHalf *= 1.25;
+            r.tipHalf = Math.max(r.tipHalf * 2.0, (0.60 * PI * d.BandRadius) / Math.max(2, p.SpokeCount));
+            r.taperPower = 0.55; break;
+        case SpokeContour.Fan:
+            // Luxury multi-spoke: many thin bars of almost constant width with a gentle lean.
+            r.sweep[0] = Math.abs(sweep) > radians(4) ? sweep : radians(8);
+            r.rootHalf *= 0.58; r.tipHalf = r.rootHalf * 0.80; r.taperPower = 1; break;
+        case SpokeContour.Lattice:
+            r.sweep[0] = sweep; r.rootHalf *= 0.72; r.tipHalf *= 0.80;
+            r.ringRadius = mix(d.HubRadius, d.BandRadius, clamp(p.RingRadiusFraction, 0.15, 0.92));
+            r.ringHalf = 0.5 * Math.max(3, p.RingWidthMillimetre) * MILLI; break;
+        case SpokeContour.Honeycomb:
+            r.sweep[0] = sweep; r.rootHalf *= 0.52; r.tipHalf *= 0.58; r.taperPower = 1;
+            r.ringRadius = mix(d.HubRadius, d.BandRadius, clamp(p.RingRadiusFraction, 0.15, 0.92));
+            r.ringHalf = 0.5 * Math.max(3, p.RingWidthMillimetre) * MILLI;
+            r.staggered = true; break;
         default:
             r.sweep[0] = sweep; break;
     }
@@ -236,7 +422,7 @@ function resolveSpokeRecipe(p) {
 //------------------------------------------------------------------------------------------------------------------------
 
 function makeFaceContour(p, d) {
-    const s = resolveSpokeRecipe(p);
+    const s = resolveSpokeRecipe(p, d);
     const fillet = Math.max(0.5 * MILLI, p.FilletMillimetre * MILLI);
     const spokeCount = Math.max(2, p.SpokeCount);
     const phase = radians(p.SpokePhaseDegrees);
@@ -249,24 +435,36 @@ function makeFaceContour(p, d) {
         const t = saturate((radius - d.HubRadius) / span);
         let phi = d.HubRadius + 0.5 * fillet - radius;
         phi = contourUnion(phi, radius - (d.BandRadius - 0.5 * fillet), fillet);
+        if (s.ringRadius > 0) phi = contourUnion(phi, s.ringHalf - Math.abs(radius - s.ringRadius), fillet);
 
         const taper = Math.pow(t, s.taperPower);
         const half = mix(s.rootHalf, s.tipHalf, taper);
         const arc = Math.max(radius, 1e-3);
         const ease = t * t * (3 - 2 * t);
 
-        for (let family = 0; family < s.families; ++family) {
+        // Honeycomb staggers the bars: inside the ring at the authored phase, outside it at half a pitch — the two
+        //    rows plus the ring make hexagonal cells, all still one smooth-union contour.
+        const rows = s.staggered ? 2 : 1;
+        const feather = 0.6 * fillet;
+        for (let family = 0; family < s.families; ++family)
+        for (let row = 0; row < rows; ++row) {
+            let rowGate = 1;
+            if (s.staggered) rowGate = row === 0 ? 1 - smoothStep(s.ringRadius - feather, s.ringRadius + feather, radius)
+                                                 : smoothStep(s.ringRadius - feather, s.ringRadius + feather, radius);
+            if (rowGate <= 0.001) continue;
+            const rowHalf = half * rowGate;
             const lean = s.sweep[family] * ease;
             for (let bar = 0; bar < spokeCount; ++bar) {
-                const root = phase + (TAU * (bar + 0.5 * family * (s.families > 1 ? 1 : 0))) / spokeCount;
+                const stagger = s.staggered && row === 1 ? PI / spokeCount : 0;
+                const root = stagger + phase + (TAU * (bar + 0.5 * family * (s.families > 1 ? 1 : 0))) / spokeCount;
                 const axis = root + lean + (s.lean * half) / arc;
                 if (s.splitHalf > 0) {
                     const open = s.splitHalf * t * t;
-                    const left = half - Math.abs(angleDelta(angle, axis - open)) * arc;
-                    const right = half - Math.abs(angleDelta(angle, axis + open)) * arc;
+                    const left = rowHalf - Math.abs(angleDelta(angle, axis - open)) * arc;
+                    const right = rowHalf - Math.abs(angleDelta(angle, axis + open)) * arc;
                     phi = contourUnion(phi, contourUnion(left, right, fillet * 1.4), fillet);
                 } else {
-                    phi = contourUnion(phi, half - Math.abs(angleDelta(angle, axis)) * arc, fillet);
+                    phi = contourUnion(phi, rowHalf - Math.abs(angleDelta(angle, axis)) * arc, fillet);
                 }
             }
         }
@@ -738,7 +936,47 @@ export function synthesise(parameters) {
         }
     }
 
-    if (p.GenerateCentreCap) {
+    if (p.GenerateLipBolts && p.LipBoltCount > 0) {
+        // Beadlock-style bolt heads marching around the outer band — the offroad / show-wheel tell.
+        const across = 0.5 * Math.max(3, p.LipBoltDiameterMillimetre) * MILLI;
+        const proud = Math.max(0.8 * MILLI, p.LipBoltProudMillimetre * MILLI);
+        const circle = mix(d.BandRadius, d.InnerRadius, 0.55);
+        for (let bolt = 0; bolt < p.LipBoltCount; ++bolt) {
+            const a = (TAU * bolt) / p.LipBoltCount;
+            const cx = circle * Math.cos(a), cy = circle * Math.sin(a);
+            const seat = height.front(circle, a, 1) - 0.3 * MILLI;
+            const profile = [
+                across * 1.25, seat,
+                across * 1.25, seat + 0.35 * proud,
+                across, seat + 0.55 * proud,
+                across, seat + proud - 0.35 * across,
+                across * 0.70, seat + proud];
+            const first = slots.length;
+            addRevolution(profile, 6, cx, cy, a, RimSlot.Hardware, true);
+            parts.push({ name: `LipBolt.${bolt}`, firstTriangle: first, triangleCount: slots.length - first });
+            enforceOutwardOrientation(surface, first, slots.length - first);
+        }
+    }
+
+    if (p.CentreLock) {
+        // Single central nut (GT3 / endurance): sits on the hub pad, swallowing the bore.
+        const across = 0.5 * Math.max(20, p.CentreLockFlatsMillimetre) * MILLI;
+        const chamfer = 0.12 * across;
+        const seat = height.front(0, 0, 1) - 1 * MILLI;
+        const tall = 1.15 * across;
+        const profile = [
+            d.BoreRadius * 0.55, seat,
+            across * 1.06, seat + 0.22 * across,
+            across, seat + 0.34 * across,
+            across, seat + tall - chamfer,
+            across - chamfer, seat + tall];
+        const first = slots.length;
+        addRevolution(profile, 6, 0, 0, 0, RimSlot.Hardware, true);
+        parts.push({ name: 'CentreLockNut', firstTriangle: first, triangleCount: slots.length - first });
+        enforceOutwardOrientation(surface, first, slots.length - first);
+    }
+
+    if (p.GenerateCentreCap && !p.CentreLock) {
         const radius = clamp(p.CentreCapRadiusFraction, 0.1, 1) * d.HubRadius;
         const dome = p.CentreCapDomeMillimetre * MILLI;
         const base = height.front(0, 0, 1) - 2 * MILLI;

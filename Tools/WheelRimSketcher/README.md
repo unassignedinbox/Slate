@@ -30,14 +30,17 @@ volumes to six decimals).
 
 ## Panel
 
-* **preset** — the six wheels; **paint scheme** — seven two-tone combinations.
+* **preset** — the 26 wheels (classic, offroad, GT3, GT, luxury, show); picking one also applies the paint scheme
+  it ships with in the C++ module. **paint scheme** — ten combinations, overridable per slot.
 * **Size & barrel** — diameter, width, ET, flange, barrel wall, drop well, bead taper, section smoothing, and
   *show section curve* which draws the resolved blank-rim cross-section in the half-plane that generates it.
-* **Spokes** — family (Straight · Split · Twisted · Turbine · Weave · Dished), count, root/tip width, taper, sweep,
-  twist, split angle, phase.
+* **Spokes** — family (Straight · Split · Twisted · Turbine · Weave · Dished · Blade · Fan · Lattice · Honeycomb),
+  count, root/tip width, taper, sweep, twist, split angle, phase, and the concentric-ring radius / width that the
+  Lattice and Honeycomb families weave their bars through.
 * **Face plate** — hub radius, outer band, dish, concavity, thicknesses, crown, back relief, junction fillet (the
   smooth-minimum radius where a spoke grows out of the hub), edge bevel and bevel bands.
-* **Hub, lugs & hardware** — bore, PCD, lug count/hole/seat/depth/phase, nut style and size, centre cap, valve hole.
+* **Hub, lugs & hardware** — bore, PCD, lug count/hole/seat/depth/phase, nut style and size, centre cap, valve hole,
+  beadlock lip bolts (count / diameter / proud height) and the GT3 centre-lock nut.
 * **Materials & colour** — per surface slot (face · pockets & walls · lip & flange · barrel interior · lug nuts ·
   centre cap): a finish recipe (gloss paint, satin graphite, polished / brushed / machined alloy, chrome, bronze or
   gold anodised, matte black, gunmetal, candy red, steel) plus live **colour**, metalness, roughness, clear coat,

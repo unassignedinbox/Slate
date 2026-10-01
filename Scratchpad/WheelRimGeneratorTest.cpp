@@ -16,7 +16,27 @@ int main(int argc, char** argv)
         { RimPresetCategory::TwentySpokeWeave,  "TwentySpokeWeave"  },
         { RimPresetCategory::TurbineAero,       "TurbineAero"       },
         { RimPresetCategory::DeepDishConcave,   "DeepDishConcave"   },
-        { RimPresetCategory::HeavyDutySixSpoke, "HeavyDutySixSpoke" } };
+        { RimPresetCategory::HeavyDutySixSpoke, "HeavyDutySixSpoke" },
+        { RimPresetCategory::OffroadBeadlock,   "OffroadBeadlock"   },
+        { RimPresetCategory::OffroadRockEight,  "OffroadRockEight"  },
+        { RimPresetCategory::OffroadOverland,   "OffroadOverland"   },
+        { RimPresetCategory::OffroadSteelLook,  "OffroadSteelLook"  },
+        { RimPresetCategory::OffroadDuallyRing, "OffroadDuallyRing" },
+        { RimPresetCategory::Gt3CentreLockAero, "Gt3CentreLockAero" },
+        { RimPresetCategory::Gt3EnduranceTen,   "Gt3EnduranceTen"   },
+        { RimPresetCategory::Gt3TurbineCover,   "Gt3TurbineCover"   },
+        { RimPresetCategory::Gt3SplitBlade,     "Gt3SplitBlade"     },
+        { RimPresetCategory::GtTwinFiveSplit,   "GtTwinFiveSplit"   },
+        { RimPresetCategory::GtDirectional,     "GtDirectional"     },
+        { RimPresetCategory::GtMeshNineteen,    "GtMeshNineteen"    },
+        { RimPresetCategory::GtHoneycomb,       "GtHoneycomb"       },
+        { RimPresetCategory::LuxuryFanTwenty,   "LuxuryFanTwenty"   },
+        { RimPresetCategory::LuxuryFineMesh,    "LuxuryFineMesh"    },
+        { RimPresetCategory::LuxuryDishCruiser, "LuxuryDishCruiser" },
+        { RimPresetCategory::LuxuryConcaveTen,  "LuxuryConcaveTen"  },
+        { RimPresetCategory::ShowDeepChrome,    "ShowDeepChrome"    },
+        { RimPresetCategory::ShowCandyWeave,    "ShowCandyWeave"    },
+        { RimPresetCategory::ShowGoldPinwheel,  "ShowGoldPinwheel"  } };
 
     int Failures = 0;
     for (const auto& Entry : Presets)
