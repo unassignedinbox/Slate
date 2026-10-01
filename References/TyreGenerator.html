@@ -641,38 +641,31 @@ function buildPolyTread(d, pmGeo) {
   };
   for (const pc of pieces) for (const ex0 of exPolygons(pc.paths)) for (const poly of splitWide(ex0)) {
     const rings = [poly.outer, ...poly.holes].map(r => subdivideRing(r, LX, LY, d.treadHalf, LYS)); if (rings[0].length < 3) continue;
-    // Steiner grid inside the polygon for curvature-following interiors
-    const xs = rings[0].map(p => p[0]), ys = rings[0].map(p => p[1]); const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
-    const steiner = [];
-    if (x1 - x0 > LX * 1.5 || y1 - y0 > LY * 1.5) for (const gy of ROWS) { if (gy <= y0 || gy >= y1) continue; for (let gx = Math.ceil(x0 / LX) * LX; gx < x1; gx += LX) {
-      if (!pointInRing(gx, gy, rings[0])) continue; let inHole = false; for (let h = 1; h < rings.length; h++) if (pointInRing(gx, gy, rings[h])) { inHole = true; break; } if (inHole) continue;
-      // keep clear of edges (avoid slivers)
-      const tol = Math.abs(gy) > d.treadHalf ? LYS * 0.35 : LY * 0.35; let near = false; for (const r of rings) { for (let i = 0; i < r.length && !near; i++) if (Math.abs(r[i][0] - gx) < LX * 0.35 && Math.abs(r[i][1] - gy) < tol) near = true; if (near) break; } if (near) continue;
-      steiner.push([gx, gy]);
-    } }
     const contour = rings[0].map(p => new THREE.Vector2(p[0], p[1])); const holes = rings.slice(1).map(r => r.map(p => new THREE.Vector2(p[0], p[1])));
-    for (const sp of steiner) holes.push([new THREE.Vector2(sp[0], sp[1])]);
     let faces; try { faces = THREE.ShapeUtils.triangulateShape(contour, holes); } catch (e) { continue; }
     const all = contour.concat(...holes); const hz = pc.depth;
+    const edgeLength = (u, v) => { const a3 = place(u.x, u.y, hz), b3 = place(v.x, v.y, hz); return Math.hypot(b3[0] - a3[0], b3[1] - a3[1], b3[2] - a3[2]); };
+    let longestTopEdge = 0;
+    for (const f of faces) { const a = all[f[0]], b = all[f[1]], c = all[f[2]]; longestTopEdge = Math.max(longestTopEdge, edgeLength(a, b), edgeLength(b, c), edgeLength(c, a)); }
+    // A single level per boolean polygon keeps every shared top edge conforming. This
+    // avoids the T-junctions created when adjacent Earcut triangles refined independently.
+    const topSteps = Math.min(4, Math.max(1, Math.ceil(longestTopEdge / Math.max(28, T.polyDetail * 5))));
     const pushTop = q => { const P3 = place(q.x, q.y, hz); push(P3, [P3[3], P3[4], P3[5]], q.x / circ, (q.y + A) / (2 * A), tangentAt(q.x / circ)); };
-    // Earcut can leave a very wide triangle across a block between its groove boundaries.
-    // That triangle is planar while the tyre crown/shoulder is curved, creating the dark
-    // corner wedges seen in the viewport. Subdivide every top triangle in 2D before it is
-    // projected onto the tyre profile, so the curved surface is tessellated consistently.
     for (const f of faces) { const a = all[f[0]], b = all[f[1]], c = all[f[2]]; const area = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y); if (Math.abs(area) < 1e-6) continue;
       const ord = area > 0 ? [a, b, c] : [a, c, b]; const [q0, q1, q2] = ord;
-      const edgeLength = (u, v) => { const a3 = place(u.x, u.y, hz), b3 = place(v.x, v.y, hz); return Math.hypot(b3[0] - a3[0], b3[1] - a3[1], b3[2] - a3[2]); };
-      const longestEdge = Math.max(edgeLength(q0, q1), edgeLength(q1, q2), edgeLength(q2, q0));
-      const steps = Math.min(8, Math.max(1, Math.ceil(longestEdge / Math.max(12, T.polyDetail * 4))));
-      const point = (i, j) => new THREE.Vector2(q0.x + (q1.x - q0.x) * i / steps + (q2.x - q0.x) * j / steps, q0.y + (q1.y - q0.y) * i / steps + (q2.y - q0.y) * j / steps);
-      for (let i = 0; i < steps; i++) for (let j = 0; j < steps - i; j++) {
+      const point = (i, j) => new THREE.Vector2(q0.x + (q1.x - q0.x) * i / topSteps + (q2.x - q0.x) * j / topSteps, q0.y + (q1.y - q0.y) * i / topSteps + (q2.y - q0.y) * j / topSteps);
+      for (let i = 0; i < topSteps; i++) for (let j = 0; j < topSteps - i; j++) {
         const p0 = point(i, j), p1 = point(i + 1, j), p2 = point(i, j + 1); pushTop(p0); pushTop(p1); pushTop(p2); tris++;
-        if (i + j < steps - 1) { const p3 = point(i + 1, j + 1); pushTop(p1); pushTop(p3); pushTop(p2); tris++; }
+        if (i + j < topSteps - 1) { const p3 = point(i + 1, j + 1); pushTop(p1); pushTop(p3); pushTop(p2); tris++; }
       }
     }
     // walls: generated from the lower side of every boundary edge
     for (const r of rings) for (let i = 0; i < r.length; i++) {
-      const a = r[i], b = r[(i + 1) % r.length]; const dx = b[0] - a[0], dy = b[1] - a[1]; const l = Math.hypot(dx, dy); if (l < 1e-6) continue;
+      const edgeA = r[i], edgeB = r[(i + 1) % r.length];
+      for (let segment = 0; segment < topSteps; segment++) {
+        const a = [edgeA[0] + (edgeB[0] - edgeA[0]) * segment / topSteps, edgeA[1] + (edgeB[1] - edgeA[1]) * segment / topSteps];
+        const b = [edgeA[0] + (edgeB[0] - edgeA[0]) * (segment + 1) / topSteps, edgeA[1] + (edgeB[1] - edgeA[1]) * (segment + 1) / topSteps];
+        const dx = b[0] - a[0], dy = b[1] - a[1]; const l = Math.hypot(dx, dy); if (l < 1e-6) continue;
       const ox = dy / l, oy = -dx / l; const mx = (a[0] + b[0]) / 2 + ox * 0.9, my = (a[1] + b[1]) / 2 + oy * 0.9;
       const smp = sampleDepth(pmGeo, mx / circ, (my + A) / (2 * A)); const hOut = smp > 0.02 ? snapLevel(smp + wl(my)) : 0;
       const hIn = pc.depth; if (hOut >= hIn - 0.005) continue;
@@ -687,7 +680,8 @@ function buildPolyTread(d, pmGeo) {
       const uvA1 = [uvA0[0] + inU * 0.6, uvA0[1] + inV * 0.6], uvB1 = [uvB0[0] + inU * 0.6, uvB0[1] + inV * 0.6];
       const et = [b0[0] - a0[0], b0[1] - a0[1], b0[2] - a0[2]]; const el = Math.hypot(...et) || 1; const wt = [et[0] / el, et[1] / el, et[2] / el];
       const quad = flip ? [[a0, uvA0], [a1, uvA1], [b0, uvB0], [b0, uvB0], [a1, uvA1], [b1, uvB1]] : [[a0, uvA0], [b0, uvB0], [a1, uvA1], [a1, uvA1], [b0, uvB0], [b1, uvB1]];
-      for (const [q, t] of quad) push(q, n, t[0], t[1], wt); tris += 2;
+        for (const [q, t] of quad) push(q, n, t[0], t[1], wt); tris += 2;
+      }
     }
   }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute('tangent', new THREE.Float32BufferAttribute(tan, 4)); g.computeBoundingSphere();
