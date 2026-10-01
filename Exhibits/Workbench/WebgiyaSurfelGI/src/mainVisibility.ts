@@ -27,6 +27,7 @@ import {
 } from './debug/surfelScreenDebug.ts';
 import { MAX_SURFELS } from './constants.ts';
 
+import { createDynamicSceneBVH } from './sceneBvhDynamic.ts';
 import { createSceneBVH, type SceneBVHBundle } from './sceneBvh.ts';
 import { createSurfelIntegratePass } from './surfelIntegratePass.ts';
 import { createSurfelGIResolvePass } from './surfelGIResolvePass.ts';
@@ -58,7 +59,10 @@ import {
   DEFAULT_OCCLUSION_SETTINGS,
 } from './surfelRadialDepth.ts';
 import { EXRLoader, HDRLoader } from 'three/examples/jsm/Addons.js';
-import { updateTemporalSurfaceVersions } from './shaderBallScene.ts';
+import {
+  updateDynamicRigidObjects,
+  updateTemporalSurfaceVersions,
+} from './shaderBallScene.ts';
 
 const loadingOverlay =
   document.querySelector<HTMLDivElement>('#loading-overlay');
@@ -374,6 +378,39 @@ temporalFolder
   .add({ reset: () => motionHistory.reset() }, 'reset')
   .name('Reset history');
 
+const dynamicRigidParams = {
+  acceleration: true,
+  enabled: true,
+  amplitude: 0.34,
+  speed: 0.82,
+};
+const dynamicRigidFolder = gui.addFolder('Dynamic rigid geometry');
+dynamicRigidFolder
+  .add(dynamicRigidParams, 'acceleration')
+  .name('Dynamic BLAS / TLAS')
+  .onChange(() => {
+    motionHistory.reset();
+    screenProbeReusePass.reset();
+    void loadSceneById(currentSceneId ?? '');
+  })
+  .listen?.();
+dynamicRigidFolder
+  .add(dynamicRigidParams, 'enabled')
+  .name('Animate rigid BLAS')
+  .onChange(() => {
+    motionHistory.reset();
+    screenProbeReusePass.reset();
+  })
+  .listen?.();
+dynamicRigidFolder
+  .add(dynamicRigidParams, 'amplitude', 0, 0.75, 0.01)
+  .name('Motion amplitude')
+  .listen?.();
+dynamicRigidFolder
+  .add(dynamicRigidParams, 'speed', 0, 2, 0.01)
+  .name('Motion speed')
+  .listen?.();
+
 const defaultIntegratorParams = { baseSampleCount: 4 };
 const integratorParams = { ...defaultIntegratorParams };
 const integratorFolder = gui.addFolder('Integrator');
@@ -662,7 +699,7 @@ function resetParamsToDefaults() {
   surfelIntegrate?.setAlbedoBoost(giTransportParams.albedoBoost);
 }
 
-let sceneBVH: SceneBVHBundle | null = null;
+let sceneBVH: (SceneBVHBundle & { update?: () => boolean }) | null = null;
 let sceneLoadToken = 0;
 
 async function loadScene(sceneDef: SceneDefinition) {
@@ -722,7 +759,9 @@ async function loadScene(sceneDef: SceneDefinition) {
 
   try {
     setLoading('Building BVH');
-    sceneBVH = createSceneBVH(renderer, scene);
+    sceneBVH = dynamicRigidParams.acceleration
+      ? createDynamicSceneBVH(renderer, scene)
+      : createSceneBVH(renderer, scene);
     screenProbePass = createScreenProbePass(uniformGrid, surfelPool, envTex);
     mustRebuildCompositeMaterial = true;
   } catch (error) {
@@ -900,6 +939,7 @@ window.addEventListener('resize', () => {
 
 const prevCameraPos = new THREE.Vector3();
 prevCameraPos.copy(camera.position);
+const dynamicRigidClock = new THREE.Clock();
 
 renderer.setAnimationLoop(() => {
   if (renderer.info.frame < 100) {
@@ -912,6 +952,11 @@ renderer.setAnimationLoop(() => {
 
   controls.update();
   updateAnimation();
+  updateDynamicRigidObjects(
+    scene,
+    dynamicRigidClock.getElapsedTime(),
+    dynamicRigidParams,
+  );
   camera.updateMatrixWorld();
   scene.updateMatrixWorld(true);
   updateTemporalSurfaceVersions(scene);
@@ -921,6 +966,9 @@ renderer.setAnimationLoop(() => {
     prevCameraPos.copy(camera.position);
     return;
   }
+  // Refit only transformed rigid BLAS bounds/vertices, then propagate their
+  // root bounds through the compact TLAS before any GPU ray work this frame.
+  sceneBVH.update?.();
   scene.background = null;
   // Offscreen gbuffer for spawning
   const prevTarget = renderer.getRenderTarget();

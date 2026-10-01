@@ -59,6 +59,44 @@ export function updateTemporalSurfaceVersions(scene: THREE.Scene): void {
   });
 }
 
+export type DynamicRigidSettings = {
+  acceleration?: boolean;
+  enabled: boolean;
+  amplitude: number;
+  speed: number;
+};
+
+/** Updates only object transforms; canonical ShaderBall vertices stay local. */
+export function updateDynamicRigidObjects(
+  scene: THREE.Scene,
+  elapsedSeconds: number,
+  settings: DynamicRigidSettings,
+): void {
+  scene.traverse((object) => {
+    if (
+      !(object instanceof THREE.Mesh) ||
+      object.userData.dynamicRigid !== true
+    )
+      return;
+    const base = object.userData.dynamicBasePosition as
+      | THREE.Vector3
+      | undefined;
+    if (!base) return;
+    const baseRotationY = Number(object.userData.dynamicBaseRotationY ?? 0);
+    const phase = Number(object.userData.dynamicPhase ?? 0);
+    const time = elapsedSeconds * Math.max(0, settings.speed) + phase;
+    const amplitude =
+      settings.enabled && settings.acceleration !== false
+        ? Math.max(0, settings.amplitude)
+        : 0;
+    object.position.copy(base);
+    object.position.y += Math.sin(time) * amplitude;
+    object.position.x += Math.sin(time * 0.53) * amplitude * 0.35;
+    object.rotation.y =
+      baseRotationY + Math.sin(time * 0.71) * amplitude * 0.35;
+  });
+}
+
 async function loadShaderBallGeometry(): Promise<THREE.BufferGeometry> {
   const response = await fetch(`${baseUrl}models/ShaderBall.mesh`);
   if (!response.ok) {
@@ -189,7 +227,7 @@ export async function populateShaderBallSurfelScene(
     },
   ];
 
-  for (const ball of balls) {
+  for (const [ballIndex, ball] of balls.entries()) {
     addBox(
       scene,
       [2.0, ball.pedestalHeight, 2.0],
@@ -205,6 +243,15 @@ export async function populateShaderBallSurfelScene(
     mesh.scale.setScalar(ball.scale);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
+    if (ballIndex === balls.length - 1) {
+      // Phase 5 keeps one copy of the shared canonical ShaderBall as a rigid
+      // BLAS instance. Its local geometry never changes; only the world/TLAS
+      // data is refitted by the derived host.
+      mesh.userData.dynamicRigid = true;
+      mesh.userData.dynamicBasePosition = mesh.position.clone();
+      mesh.userData.dynamicBaseRotationY = mesh.rotation.y;
+      mesh.userData.dynamicPhase = 0.65;
+    }
     scene.add(mesh);
   }
 

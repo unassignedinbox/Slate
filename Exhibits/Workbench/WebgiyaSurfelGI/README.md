@@ -1,4 +1,4 @@
-# Webgiya ReSTIR Hi-Z Screen-Probe + Multi-bounce Surfel GI
+# Webgiya Dynamic ReSTIR Hi-Z + Multi-bounce Surfel GI
 
 Open `index.html` over HTTP. It redirects to the checked-in production build in `site/`.
 
@@ -14,6 +14,7 @@ The adaptation is isolated to:
 - `shaderBallScene.ts` — exact `SBM1` decoder, scene geometry, stable surface IDs and transform generations, original-style directional shadows, and low-frequency hemisphere ambient light.
 - `motionGBuffer.ts` — a derived four-target G-buffer adding NDC motion and stable identity/version data without modifying the pinned upstream G-buffer.
 - `motionHistoryPass.ts` — full-resolution ping-pong surface history, reprojection, conservative validation, and disocclusion diagnostics.
+- `sceneBvhDynamic.ts` — a derived static-BLAS/dynamic-BLAS builder with a compact flattened TLAS and transform-only per-frame refits; the pinned `sceneBvh.ts` remains unchanged.
 - `hiZDepthPyramid.ts` — conservative min/max depth hierarchy packed into non-aliasing even/odd storage atlases.
 - `screenProbePass.ts` — an optional 8×8-tile screen-probe tracer with Hi-Z-first traversal, BVH fallback, frame-jittered sampling for reuse, diagnostics, and the unchanged Phase 2 reconstruction path.
 - `screenProbeReusePass.ts` — probe-resolution weighted reservoirs, conservative temporal/spatial resampling, bounded weight correction, and reused-probe reconstruction.
@@ -72,7 +73,15 @@ Temporal resampling follows the full-precision motion vector to the preceding pr
 
 Spatial resampling considers four cardinal probe neighbors. A neighbor is eligible only when its stable ID/generation matches and its current-frame position and normal pass conservative thresholds. The remaining `M` budget is divided across all remaining directions so one reservoir cannot starve the other neighbors. Weighted selection keeps the chosen candidate, accumulated weight, and represented population; a bounded `W / (M × selectedWeight)` correction produces the reused estimate before the existing bilateral full-resolution reconstruction.
 
-All reservoirs remain at one texel per 8×8 probe tile. Two history pairs, two temporary reservoir textures, and compact diagnostics add only a small probe-resolution footprint; there are no full-resolution lighting reservoirs. Disabling **Reservoir reuse** skips all three reuse computes, restores the deterministic Phase 2 reconstruction, and preserves the all-BVH and surfel-only baselines. This phase does not add dynamic BLAS/TLAS, ray-hit surfel seeding, or DDGI.
+All reservoirs remain at one texel per 8×8 probe tile. Two history pairs, two temporary reservoir textures, and compact diagnostics add only a small probe-resolution footprint; there are no full-resolution lighting reservoirs. Disabling **Reservoir reuse** skips all three reuse computes, restores the deterministic Phase 2 reconstruction, and preserves the all-BVH and surfel-only baselines. Phase 4 itself does not add dynamic geometry, ray-hit surfel seeding, or DDGI.
+
+## Phase 5 dynamic rigid BLAS/TLAS
+
+The green ShaderBall is now a true rigid dynamic object using the same shared canonical indexed geometry. `sceneBvhDynamic.ts` excludes it from the static world BLAS, builds its local BLAS once, and places both roots under a compact TLAS. The TLAS and all BLAS subtrees are flattened into the exact node/index/attribute layout already consumed by Webgiya, so the pinned surfel integrator, shadow queries, radial-depth learning, and screen-probe BVH fallback require no shader-algorithm changes.
+
+Rigid animation updates only the moving object's world-space vertex/normal stream and transforms its existing local BLAS bounds. The BLAS topology and triangle ordering are never rebuilt. Root bounds are then propagated through the TLAS and the changed node/vertex storage ranges are uploaded before ray work. Static geometry and its large BLAS remain untouched, while raster shadows, motion vectors, transform generations, conservative history rejection, surfel rays, and probe rays all observe the same current transform.
+
+Only one 67,832-triangle ShaderBall moves by default, keeping CPU refit and upload costs bounded for the GTX 1650 Super target. Turning animation off restores its base transform but keeps the same acceleration structure. Phase 5 deliberately does not add static-grid instancing, skinned rigs, ray-hit surfel seeding, or DDGI.
 
 ## Controls
 
@@ -104,6 +113,13 @@ The **Screen-probe ReSTIR reuse** folder exposes:
 
 Changing any reuse setting resets its history rather than mixing incompatible reservoir distributions.
 
+The **Dynamic rigid geometry** folder exposes:
+
+- **Dynamic BLAS / TLAS** — enable Phase 5; disabling it reloads the exact pinned merged-static `sceneBvh.ts` path and holds every ShaderBall at its base transform.
+- **Animate rigid BLAS** — animate the green shared-geometry ShaderBall or return it to its base transform.
+- **Motion amplitude** — controls its vertical excursion and smaller lateral/rotational motion.
+- **Motion speed** — controls transform animation speed without rebuilding BLAS topology.
+
 The **Visibility raster / AO** controls are:
 
 - **Ambient Occlusion** — enable or bypass the GTAO contribution.
@@ -128,29 +144,30 @@ Existing useful views remain available:
 
 Each frame retains Webgiya's original surfel sequence while the host runs the new surface-history infrastructure around it:
 
-1. Raster the derived G-buffer: normal, albedo, NDC motion, stable ID/generation, and depth.
-2. Reproject into the preceding packed surface history, emit validation/disocclusion, and write the current ping-pong history.
-3. Prepare the fixed-capacity surfel pool.
-4. Find screen-space regions missing surfels.
-5. Allocate and seed surfels.
-6. Age, recycle, and compact the pool.
-7. Build the eight-cascade spatial hash grid.
-8. Trace per-surfel rays through the CPU-built/GPU-uploaded scene BVH.
-9. Update sample-guiding lobes, temporal irradiance moments, and each surfel's MSM4 radial-depth tile.
-10. Gather nearby surfels per pixel with spatial, normal, variance, and radial-visibility weighting.
-11. Build the conservative min/max Hi-Z depth atlases.
-12. Trace camera-visible probes through Hi-Z, conservatively falling back to the same triangle BVH.
-13. Query fresh surfel radiance at secondary hits and form the current weighted probe candidates.
-14. Reproject and resample temporal reservoirs through Phase 3's conservative validation gate.
-15. Resample same-surface spatial reservoirs and apply bounded normalization.
-16. Reconstruct reused sparse probes at full resolution, blend against the surfel fallback, and composite direct shadows, indirect light, ambient visibility, and the final image.
+1. Update rigid transforms, refit only their BLAS copies, and propagate TLAS bounds.
+2. Raster the derived G-buffer: normal, albedo, NDC motion, stable ID/generation, and depth.
+3. Reproject into the preceding packed surface history, emit validation/disocclusion, and write the current ping-pong history.
+4. Prepare the fixed-capacity surfel pool.
+5. Find screen-space regions missing surfels.
+6. Allocate and seed surfels.
+7. Age, recycle, and compact the pool.
+8. Build the eight-cascade spatial hash grid.
+9. Trace per-surfel rays through the flattened static-BLAS/dynamic-BLAS TLAS.
+10. Update sample-guiding lobes, temporal irradiance moments, and each surfel's MSM4 radial-depth tile.
+11. Gather nearby surfels per pixel with spatial, normal, variance, and radial-visibility weighting.
+12. Build the conservative min/max Hi-Z depth atlases.
+13. Trace camera-visible probes through Hi-Z, conservatively falling back to the same triangle BVH.
+14. Query fresh surfel radiance at secondary hits and form the current weighted probe candidates.
+15. Reproject and resample temporal reservoirs through Phase 3's conservative validation gate.
+16. Resample same-surface spatial reservoirs and apply bounded normalization.
+17. Reconstruct reused sparse probes at full resolution, blend against the surfel fallback, and composite direct shadows, indirect light, ambient visibility, and the final image.
 
 Desktop settings retain upstream's `262144`-surfel pool, 32³ hash-grid cascades, 4×4 radial-depth tiles, 32 target samples, and four base integration samples. Screen probes use one probe per 8×8 tile and four secondary directions by default; reservoirs default to 16 temporal and 32 total represented candidates, while GTAO runs at half resolution for GTX-class performance.
 
 ## ShaderBall scene
 
 - Four copies of `Exhibits/Assets/ShaderBall/ShaderBall.mesh` use the exact shared indexed geometry.
-- The ShaderBalls and colour laboratory remain static so the exact upstream triangle BVH remains valid.
+- Three ShaderBalls and the colour laboratory remain in the static BLAS; the green ShaderBall uses one canonical local BLAS beneath the TLAS and animates rigidly.
 - The original animated directional-light path is enabled by default.
 - A restrained hemisphere light supplies ambient fill; GTAO and surfel radial visibility prevent it from flattening contacts.
 
