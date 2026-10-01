@@ -254,7 +254,7 @@ int main()
     if (const int Write = WriteSheet(MenuSheet, 7); Write != 0)
         return Write;
 
-    Click(160.0f, 281.0f); // Bodies entry; selected filters appear as chips below the search/filter row.
+    Click(160.0f, 301.0f); // Bodies entry; selected filters appear as chips below the search/filter row.
     for (int I = 0; I < 4; ++I)
         Rest();
     Click(78.0f, 294.0f); // Body01 row after the Bodies filter; seats the CAD inspector like the game proof.

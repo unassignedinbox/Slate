@@ -19,6 +19,7 @@ SolidArcEditorHost::SolidArcEditorHost() noexcept
     Viewport_.AssignControls(&Controls_);
     Inspector_.AssignControls(&Controls_);
     Viewport_.AssignShadeOpen(&ShadeOpen_);
+    Shade_.AssignProjectName("SolidArc");
     Outliner_.AssignTabOpen(&OutlinerTabOpen_);
     Viewport_.AssignTabOpen(&ViewportTabOpen_);
     Inspector_.AssignTabOpen(&InspectorTabOpen_);
