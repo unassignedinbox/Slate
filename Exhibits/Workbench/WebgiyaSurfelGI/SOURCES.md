@@ -17,11 +17,6 @@ With the pinned Webgiya repository checked out at `/tmp/webgiya`, this command i
 diff -qr /tmp/webgiya/src Exhibits/Workbench/WebgiyaSurfelGI/src
 ```
 
-Expected result:
+Expected differences are limited to `content.ts` plus the Slate-authored `shaderBallScene.ts`, `dynamicShaderBallScene.ts`, `dynamicRigidState.ts`, `dynamicRigidInvalidatePass.ts`, `mainDynamic.ts`, and `surfelIntegrateDynamicPass.ts` extension files.
 
-```text
-Files .../src/content.ts and .../src/content.ts differ
-Only in .../src: shaderBallScene.ts
-```
-
-No surfel algorithm source differs. `content.ts` changes only the scene-preset import/list; `shaderBallScene.ts` supplies the requested ShaderBalls and light-lab geometry.
+The pinned original `main.ts` and `surfelIntegratePass.ts` remain present and unchanged. Run `VerifyUpstream.sh` to validate all 117 copied upstream files independently of the extension.
