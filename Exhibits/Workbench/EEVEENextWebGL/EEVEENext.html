@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="theme-color" content="#10100d">
+    <title>Slate — EEVEE Next WebGL Study</title>
+    <link rel="stylesheet" href="EEVEENext.css?revision=1">
+</head>
+<body>
+<main>
+    <header class="Hero">
+        <div>
+            <p class="Eyebrow">SLATE · EEVEE NEXT ARCHITECTURAL STUDY</p>
+            <h1>Screen rays when visible.<br><span>Probe light when they miss.</span></h1>
+            <p class="Introduction">A WebGL2 and C++ reconstruction of Blender 4.2+ EEVEE’s major lighting paths: deferred PBR, per-BSDF-style screen tracing, baked volume and sphere probes, temporal/spatial denoising, fast GI occlusion, directional clip shadows, and local-light cube shadows.</p>
+        </div>
+        <div class="Status" id="Status"><span class="Lamp"></span><span id="StatusText">Preparing WebGL2</span></div>
+    </header>
+
+    <section class="ViewportSection">
+        <div class="CanvasWrap">
+            <canvas id="Canvas"></canvas>
+            <div class="CanvasBadge">DRAG TO ORBIT · WHEEL TO DOLLY</div>
+            <div class="PanelLabels" id="PanelLabels"><span>01 · DIRECT + SHADOWS</span><span>02 · VOLUME PROBES</span><span>03 · SCREEN GI</span><span>04 · COMBINED</span></div>
+            <div class="ErrorPanel" id="ErrorPanel" hidden><strong>WebGL2 could not start.</strong><span></span></div>
+        </div>
+        <div class="ControlRail">
+            <label class="SelectControl"><span><b>View</b><small>Inspect every EEVEE lighting stage</small></span><select id="ViewMode"><option value="0" selected>2×2 comparison</option><option value="1">Combined</option><option value="2">Direct + shadows</option><option value="3">Volume probe fallback</option><option value="4">Screen-traced indirect</option><option value="5">Sphere-probe reflections</option><option value="6">Shadow visibility</option><option value="7">Probe validity</option><option value="8">Emissive-only screen proof</option></select></label>
+            <label class="SwitchControl"><input id="AnimateWorld" type="checkbox" checked><span class="Track"><span></span></span><span><b>Dynamic objects</b><small>Receive baked light; do not alter the cache</small></span></label>
+            <label class="SwitchControl"><input id="AnimateSun" type="checkbox"><span class="Track"><span></span></span><span><b>Move sun</b><small>Direct shadows update; baked bounce becomes stale</small></span></label>
+            <label class="SwitchControl"><input id="ScreenTrace" type="checkbox" checked><span class="Track"><span></span></span><span><b>Screen tracing</b><small>Depth-buffer rays, probe fallback on misses</small></span></label>
+            <label class="SwitchControl"><input id="VolumeProbes" type="checkbox" checked><span class="Track"><span></span></span><span><b>Volume light probes</b><small>Baked L1 directional irradiance cache</small></span></label>
+            <label class="SwitchControl"><input id="LeakRejection" type="checkbox" checked><span class="Track"><span></span></span><span><b>Probe leak rejection</b><small>Directional visibility, invalid rejection, flood fill</small></span></label>
+            <label class="SwitchControl"><input id="Temporal" type="checkbox" checked><span class="Track"><span></span></span><span><b>Temporal accumulation</b><small>World-position reprojection and neighbourhood clamp</small></span></label>
+            <label class="SwitchControl"><input id="SpatialReuse" type="checkbox" checked><span class="Track"><span></span></span><span><b>Spatial reuse</b><small>Normal/depth-aware neighbouring ray reuse</small></span></label>
+            <label class="SwitchControl"><input id="FastGI" type="checkbox" checked><span class="Track"><span></span></span><span><b>Fast GI occlusion</b><small>Screen-space horizon-style ambient visibility</small></span></label>
+            <label class="SwitchControl"><input id="Reflections" type="checkbox" checked><span class="Track"><span></span></span><span><b>Sphere reflections</b><small>Screen hit with prefiltered sphere-probe fallback</small></span></label>
+            <label class="SwitchControl"><input id="Shadows" type="checkbox" checked><span class="Track"><span></span></span><span><b>Virtual-shadow analogue</b><small>Stable sun clip atlas and local cube shadow</small></span></label>
+            <label class="SwitchControl"><input id="SoftShadows" type="checkbox" checked><span class="Track"><span></span></span><span><b>Shadow filtering</b><small>5×5 directional and eight-tap local filtering</small></span></label>
+            <label class="SwitchControl"><input id="Emissive" type="checkbox" checked><span class="Track"><span></span></span><span><b>Emissive mesh</b><small>Contributes while visible to screen-space rays</small></span></label>
+            <label class="SwitchControl"><input id="ProbeDebug" type="checkbox"><span class="Track"><span></span></span><span><b>Probe debug</b><small>Green valid samples; red rejected/flood-filled samples</small></span></label>
+            <label class="RangeControl"><span><b>GI rays</b><output id="RayOutput">1 ray</output></span><input id="RayCount" type="range" min="1" max="2" value="1" step="1"></label>
+            <label class="RangeControl"><span><b>Trace steps</b><output id="StepOutput">24 steps</output></span><input id="TraceSteps" type="range" min="8" max="40" value="24" step="4"></label>
+            <label class="RangeControl"><span><b>Screen thickness</b><output id="ThicknessOutput">0.35 m</output></span><input id="Thickness" type="range" min="8" max="80" value="35" step="3"></label>
+            <label class="RangeControl"><span><b>Render scale</b><output id="ScaleOutput">100%</output></span><input id="RenderScale" type="range" min="50" max="125" value="100" step="25"></label>
+            <label class="RangeControl"><span><b>Exposure</b><output id="ExposureOutput">1.00×</output></span><input id="Exposure" type="range" min="50" max="180" value="100" step="5"></label>
+            <div class="ButtonGroup"><button id="PauseButton" class="Secondary" type="button">Pause simulation</button><button id="RecaptureButton" class="Secondary" type="button">Recapture sphere probe</button><button id="ResetButton" type="button">Reset camera</button></div>
+        </div>
+    </section>
+
+    <section class="Metrics"><article><span>Backend</span><strong>WebGL2 deferred</strong></article><article><span>Volume cache</span><strong id="CacheMetric">—</strong></article><article><span>Cache state</span><strong id="CacheState">Baked cache valid</strong></article><article><span>Sun shadows</span><strong>3 × 2048² atlas</strong></article><article><span>Local shadow</span><strong>6 × 512²</strong></article><article><span>Frame time</span><strong id="GpuMetric">—</strong></article></section>
+
+    <section class="Pipeline">
+        <article><span>01</span><h2>Deferred light and shadows</h2><p>A three-target material G-buffer feeds GGX direct lighting. The sun uses three stabilized atlas tiles with receiver-slope bias and selectable PCF; a moving local light has a six-face radial-depth shadow.</p></article>
+        <article><span>02</span><h2>Faithful probe cache</h2><p>The C++ baker captures static-scene irradiance into 720 L1 directional probes. Invalid samples are rejected and flood-filled, while six directional reach values suppress interpolation through walls. Moving objects receive—but never rewrite—the bake.</p></article>
+        <article><span>03</span><h2>Screen trace and denoise</h2><p>Half-resolution cosine rays march the camera depth representation. Misses fall back to volume probes. Spatial reuse, world-position temporal reprojection, neighbourhood clamping, and bilateral weights stabilize one or two rays per pixel.</p></article>
+        <article><span>04</span><h2>Specular probe fallback</h2><p>Low-roughness reflections first search the screen and then use a mip-filtered sphere probe. The probe can be recaptured explicitly; it is intentionally separate from diffuse volume probes, matching EEVEE’s split indirect-light architecture.</p></article>
+    </section>
+
+    <section class="Disclosure"><h2>Scope and fidelity</h2><p>This is an architectural WebGL2 reconstruction, not Blender source compiled for the browser. WebGL2 cannot expose EEVEE’s compute-driven sparse virtual-page allocator, so the exhibit preserves its important behaviour with a fixed clip-atlas analogue. It does preserve the baked/dynamic boundary: volume probes are static, direct lights and shadows are live, screen traces see only camera-visible information, and probe fallback fills misses.</p></section>
+    <footer><span>Exact Slate ShaderBall geometry · offline C++ probe baker · no hidden path tracer</span><span>Blender and EEVEE are trademarks of their respective owners; this is an independent technical study</span></footer>
+</main>
+<script type="module" src="EEVEENext.js?revision=1"></script>
+</body>
+</html>
