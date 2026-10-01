@@ -869,30 +869,64 @@ int main(int argc, char** argv)
         W.Field.AssignSettings(Settings);
 
         // Seed from the geometry itself rather than from a G-buffer: off-screen surfaces are exactly the ones
-        //    that bounce light into shot, and a camera-only seeding would omit them.
+        //    that bounce light into shot, and a camera-only seeding would omit them. Triangle-area stratification
+        //    is essential here: choosing triangle numbers uniformly gives the two-triangle ground almost no
+        //    candidates while the 67 832-triangle ball receives nearly the whole budget.
         std::vector<Frontier::SurfelReferenceSample> Samples;
         Rng Random{ 0xC0FFEEu };
-        const auto SeedFrom = [&](const MeshAccelerator& Mesh, const V3& Offset, uint32_t Count, uint32_t Material)
+        const auto AppendAreaSamples = [&](
+            const MeshAccelerator& Geometry,
+            const V3&              Offset,
+            uint32_t               SampleCount,
+            uint32_t               MaterialNumber)
         {
-            if (Mesh.Primitives.empty()) return;
-            for (uint32_t K = 0u; K < Count; ++K)
+            if (Geometry.Primitives.empty() || SampleCount == 0u) return;
+            std::vector<float> CumulativeArea;
+            CumulativeArea.reserve(Geometry.Primitives.size());
+            float TotalArea = 0.0f;
+            for (const Triangle& Primitive : Geometry.Primitives)
             {
-                const Triangle& T = Mesh.Primitives[static_cast<size_t>(Random.Next() * (Mesh.Primitives.size() - 1u))];
-                float A = Random.Next(), B = Random.Next();
-                if (A + B > 1.0f) { A = 1.0f - A; B = 1.0f - B; }
-                const V3 P = T.A + (T.B - T.A) * A + (T.C - T.A) * B + Offset;
-                const V3 N = Normalise(T.Na + T.Nb + T.Nc);
-                Frontier::SurfelReferenceSample S;
-                S.Position[0] = P.x; S.Position[1] = P.y; S.Position[2] = P.z;
-                S.Normal[0] = N.x;   S.Normal[1] = N.y;   S.Normal[2] = N.z;
-                const ShadingRecord& M = W.Materials[Material < W.Materials.size() ? Material : 0u];
-                S.Albedo[0] = M.BaseColor.x; S.Albedo[1] = M.BaseColor.y; S.Albedo[2] = M.BaseColor.z;
-                Samples.push_back(S);
+                const V3 AreaVector = Cross(Primitive.B - Primitive.A, Primitive.C - Primitive.A);
+                TotalArea += 0.5f * std::sqrt(Dot(AreaVector, AreaVector));
+                CumulativeArea.push_back(TotalArea);
+            }
+            if (TotalArea <= 1.0e-8f) return;
+
+            for (uint32_t SampleNumber = 0u; SampleNumber < SampleCount; ++SampleNumber)
+            {
+                const float AreaPosition = TotalArea * (static_cast<float>(SampleNumber) + Random.Next())
+                                         / static_cast<float>(SampleCount);
+                const auto Found = std::lower_bound(CumulativeArea.begin(), CumulativeArea.end(), AreaPosition);
+                const size_t TriangleIndex = static_cast<size_t>(std::distance(CumulativeArea.begin(), Found));
+                const Triangle& Primitive = Geometry.Primitives[
+                    std::min(TriangleIndex, Geometry.Primitives.size() - 1u)];
+                float BetaWeight = Random.Next();
+                float GammaWeight = Random.Next();
+                if (BetaWeight + GammaWeight > 1.0f)
+                {
+                    BetaWeight = 1.0f - BetaWeight;
+                    GammaWeight = 1.0f - GammaWeight;
+                }
+                const float AlphaWeight = 1.0f - BetaWeight - GammaWeight;
+                const V3 Position = Primitive.A * AlphaWeight + Primitive.B * BetaWeight
+                                  + Primitive.C * GammaWeight + Offset;
+                const V3 Normal = Normalise(Primitive.Na * AlphaWeight + Primitive.Nb * BetaWeight
+                                          + Primitive.Nc * GammaWeight);
+                Frontier::SurfelReferenceSample Sample;
+                Sample.Position[0] = Position.x; Sample.Position[1] = Position.y; Sample.Position[2] = Position.z;
+                Sample.Normal[0] = Normal.x;     Sample.Normal[1] = Normal.y;     Sample.Normal[2] = Normal.z;
+                const ShadingRecord& Material = W.Materials[
+                    MaterialNumber < W.Materials.size() ? MaterialNumber : 0u];
+                Sample.Albedo[0] = Material.BaseColor.x;
+                Sample.Albedo[1] = Material.BaseColor.y;
+                Sample.Albedo[2] = Material.BaseColor.z;
+                Samples.push_back(Sample);
             }
         };
-        SeedFrom(Static, V3{ 0.0f, 0.0f, 0.0f }, 24000u, 0u);
-        for (const auto& P : W.Accelerator.Placements)
-            if (P.OverrideMaterial) SeedFrom(W.Accelerator.Meshes[P.Mesh], P.Offset, 60u, P.Material);
+        AppendAreaSamples(Static, V3{ 0.0f, 0.0f, 0.0f }, 24000u, 0u);
+        for (const auto& Placement : W.Accelerator.Placements)
+            if (Placement.OverrideMaterial)
+                AppendAreaSamples(W.Accelerator.Meshes[Placement.Mesh], Placement.Offset, 96u, Placement.Material);
         W.Field.Seed(Samples);
         std::printf("[showcase] surfel field: %u surfels from %zu candidates\n",
                     W.Field.QuerySurfelCount(), Samples.size());

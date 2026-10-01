@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#090d12">
+    <title>Slate — Persistent Surfel GI</title>
+    <link rel="stylesheet" href="SurfelIntegrator.css">
+</head>
+<body>
+    <main>
+        <header class="Hero">
+            <div>
+                <p class="Eyebrow">SLATE · TRANSPORT LAB</p>
+                <h1>Persistent surfel GI,<br><span>distributed by surface area.</span></h1>
+                <p class="Introduction">
+                    Four full-resolution ShaderBalls, one explicitly covered receiver, and one world-space field.
+                    The field traces the same geometry in WebGPU and converges through a Jacobi running mean.
+                </p>
+            </div>
+            <div class="Status" aria-live="polite">
+                <span class="StatusLamp" id="StatusLamp"></span>
+                <span id="StatusText">Preparing WebGPU</span>
+            </div>
+        </header>
+
+        <section class="ViewportSection" aria-label="Interactive surfel global illumination demonstration">
+            <div class="CanvasWrap">
+                <canvas id="PresentationCanvas"></canvas>
+                <div class="CanvasBadge">DRAG TO ORBIT · WHEEL TO DOLLY</div>
+                <div class="CanvasError" id="CanvasError" hidden>
+                    <strong>WebGPU is unavailable.</strong>
+                    <span>Open this page in a current Chrome, Edge, or Firefox Nightly build over localhost or HTTPS.</span>
+                </div>
+            </div>
+
+            <div class="ControlRail">
+                <label class="SwitchControl">
+                    <input id="SurfelVisibility" type="checkbox">
+                    <span class="SwitchTrack"><span></span></span>
+                    <span><b>Show surfels</b><small>World-space discs, depth tested</small></span>
+                </label>
+                <label class="SwitchControl">
+                    <input id="IndirectVisibility" type="checkbox" checked>
+                    <span class="SwitchTrack"><span></span></span>
+                    <span><b>Indirect light</b><small>Gathered from the persistent field</small></span>
+                </label>
+                <label class="SelectControl">
+                    <span><b>Rays per surfel</b><small>One is the realtime default</small></span>
+                    <select id="RayCount">
+                        <option value="1" selected>1 ray</option>
+                        <option value="2">2 rays</option>
+                        <option value="4">4 rays</option>
+                    </select>
+                </label>
+                <label class="RangeControl">
+                    <span><b>GI gain</b><output id="GainOutput">1.00×</output></span>
+                    <input id="IndirectGain" type="range" min="0" max="2" value="1" step="0.05">
+                </label>
+                <div class="ButtonGroup">
+                    <button id="ConvergenceToggle" type="button">Pause convergence</button>
+                    <button id="ConvergenceRestart" class="Secondary" type="button">Restart</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="Metrics" aria-label="Live transport metrics">
+            <article><span>Backend</span><strong id="BackendMetric">WebGPU</strong></article>
+            <article><span>Surface records</span><strong id="SurfelMetric">—</strong></article>
+            <article><span>Accumulation</span><strong id="AccumulationMetric">0</strong></article>
+            <article><span>Command encoding</span><strong id="TimingMetric">—</strong></article>
+        </section>
+
+        <section class="Explanation">
+            <article>
+                <span class="ArticleNumber">01</span>
+                <h2>Not octahedral mapping</h2>
+                <p>
+                    Octahedral mapping packs a direction onto a square. This demonstration does not unwrap each
+                    object. Every disc is a persistent position, normal, radius, material response, and irradiance
+                    record in world space.
+                </p>
+            </article>
+            <article>
+                <span class="ArticleNumber">02</span>
+                <h2>Why the floor is covered</h2>
+                <p>
+                    Triangle-uniform sampling starves a two-triangle plane while oversampling a finely tessellated
+                    ball. Here, ball candidates are proportional to triangle area and the floor owns a jittered
+                    lattice, so every receiving surface has predictable coverage.
+                </p>
+            </article>
+            <article>
+                <span class="ArticleNumber">03</span>
+                <h2>Hybrid, not screen-only</h2>
+                <p>
+                    Screen-space injection is useful for moving detail, but it loses off-camera emitters and changes
+                    with the camera. Keep a world-space static field, then add screen-visible records for dynamic
+                    geometry. Bake placement if desired; continue integrating light at runtime.
+                </p>
+            </article>
+        </section>
+
+        <footer>
+            <span>Full ShaderBall topology · 67,832 triangles · four shared placements</span>
+            <span>Cosine rays · software BVH · spatial-hash gather · temporal Jacobi integration</span>
+        </footer>
+    </main>
+    <script type="module" src="SurfelIntegrator.js"></script>
+</body>
+</html>
