@@ -33,6 +33,7 @@ import { createSurfelIntegratePass } from './surfelIntegratePass.ts';
 import { createSurfelGIResolvePass } from './surfelGIResolvePass.ts';
 import { createScreenProbePass } from './screenProbePass.ts';
 import { createScreenProbeReusePass } from './screenProbeReusePass.ts';
+import { createRayHitSurfelSeedPass } from './rayHitSurfelSeedPass.ts';
 import * as THREE from 'three/webgpu';
 import {
   float,
@@ -260,6 +261,10 @@ const integratorDispatchArgs = createIntegratorDispatchArgs();
 let surfelIntegrate: ReturnType<typeof createSurfelIntegratePass> | null = null;
 let screenProbePass: ReturnType<typeof createScreenProbePass> | null = null;
 const screenProbeReusePass = createScreenProbeReusePass();
+const rayHitSurfelSeedPass = createRayHitSurfelSeedPass(
+  uniformGrid,
+  surfelPool,
+);
 
 screenDebug.setDebugMode(screenDebug.debugParams.mode);
 screenDebug.configureGUI(gui);
@@ -443,6 +448,7 @@ const SCREEN_PROBE_OUTPUTS = {
   'Reservoir candidates': 'reservoir-candidates',
   'Reuse acceptance': 'reuse-acceptance',
   'Reuse source': 'reuse-source',
+  'Ray-hit seeds': 'ray-hit-seeds',
 } as const;
 type ScreenProbeOutput =
   (typeof SCREEN_PROBE_OUTPUTS)[keyof typeof SCREEN_PROBE_OUTPUTS];
@@ -494,6 +500,30 @@ screenProbeFolder
   .add(screenProbeParams, 'samples', 1, 8, 1)
   .name('Directions per probe')
   .onChange(resetProbeReuse)
+  .listen?.();
+
+const rayHitSeedParams = {
+  enabled: true,
+  budget: 32,
+  candidatesPerBudget: 8,
+  coverageScale: 1.0,
+};
+const rayHitSeedFolder = gui.addFolder('Ray-hit surfel seeding');
+rayHitSeedFolder
+  .add(rayHitSeedParams, 'enabled')
+  .name('Ray-hit seeding')
+  .listen?.();
+rayHitSeedFolder
+  .add(rayHitSeedParams, 'budget', 0, 128, 1)
+  .name('Max new surfels / frame')
+  .listen?.();
+rayHitSeedFolder
+  .add(rayHitSeedParams, 'candidatesPerBudget', 1, 16, 1)
+  .name('Candidate overscan')
+  .listen?.();
+rayHitSeedFolder
+  .add(rayHitSeedParams, 'coverageScale', 0.5, 2.0, 0.05)
+  .name('Coverage rejection')
   .listen?.();
 
 const probeReuseParams = {
@@ -1069,6 +1099,23 @@ renderer.setAnimationLoop(() => {
           (screenProbeSampleSequenceFrame + 1) >>> 0;
       }
     }
+
+    // Phase 6 is an additive, late-frame path. Disabling it leaves the exact
+    // completed Phase 5 allocation/integration sequence above untouched.
+    if (rayHitSeedParams.enabled) {
+      const seedTexture = screenProbePass.getProbeSeedTexture();
+      const probeSize = screenProbePass.getProbeSize();
+      if (seedTexture) {
+        rayHitSurfelSeedPass.run(
+          renderer,
+          camera,
+          seedTexture,
+          probeSize.width,
+          probeSize.height,
+          rayHitSeedParams,
+        );
+      }
+    }
   }
 
   // Surfel health debug
@@ -1090,6 +1137,7 @@ renderer.setAnimationLoop(() => {
   const probeReservoirMetadataTex =
     screenProbeReusePass.getReservoirMetadataTexture();
   const probeReuseDebugTex = screenProbeReusePass.getDebugTexture();
+  const rayHitSeedDebugTex = rayHitSurfelSeedPass.getDebugTexture();
   const temporalValidationTex = motionHistory.getValidationTexture();
   let directLight;
   if (giTex) {
@@ -1156,6 +1204,9 @@ renderer.setAnimationLoop(() => {
         : vec4(0.0);
       const reuseDiagnostics: THREE.Node = probeReuseDebugTex
         ? texture(probeReuseDebugTex, screenUV)
+        : vec4(0.0);
+      const rayHitSeedDiagnostics: THREE.Node = rayHitSeedDebugTex
+        ? texture(rayHitSeedDebugTex, screenUV)
         : vec4(0.0);
       const reservoirAge = reservoirMetadata.z.div(
         Math.max(1, probeReuseParams.maxHistory),
@@ -1304,6 +1355,14 @@ renderer.setAnimationLoop(() => {
         screenProbeParams.output === SCREEN_PROBE_OUTPUTS['Reuse source']
       ) {
         postProcessing.outputNode = fxaa(reuseSourceDebug);
+        postProcessing.needsUpdate = true;
+      } else if (
+        screenProbeParams.enabled &&
+        screenProbeParams.output === SCREEN_PROBE_OUTPUTS['Ray-hit seeds']
+      ) {
+        // Dark red = validated candidate, green = existing-cache rejection,
+        // cyan = accepted and allocated under the global frame budget.
+        postProcessing.outputNode = fxaa(rayHitSeedDiagnostics);
         postProcessing.needsUpdate = true;
       } else {
         switch (giParams.mode) {

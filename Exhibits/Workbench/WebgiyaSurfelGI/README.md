@@ -1,4 +1,4 @@
-# Webgiya Dynamic ReSTIR Hi-Z + Multi-bounce Surfel GI
+# Webgiya Ray-seeded Dynamic ReSTIR Hi-Z + Multi-bounce Surfel GI
 
 Open `index.html` over HTTP. It redirects to the checked-in production build in `site/`.
 
@@ -16,9 +16,10 @@ The adaptation is isolated to:
 - `motionHistoryPass.ts` — full-resolution ping-pong surface history, reprojection, conservative validation, and disocclusion diagnostics.
 - `sceneBvhDynamic.ts` — a derived static-BLAS/dynamic-BLAS builder with a compact flattened TLAS and transform-only per-frame refits; the pinned `sceneBvh.ts` remains unchanged.
 - `hiZDepthPyramid.ts` — conservative min/max depth hierarchy packed into non-aliasing even/odd storage atlases.
-- `screenProbePass.ts` — an optional 8×8-tile screen-probe tracer with Hi-Z-first traversal, BVH fallback, frame-jittered sampling for reuse, diagnostics, and the unchanged Phase 2 reconstruction path.
+- `screenProbePass.ts` — an optional 8×8-tile screen-probe tracer with Hi-Z-first traversal, BVH fallback, frame-jittered sampling for reuse, diagnostics, the unchanged Phase 2 reconstruction path, and one compact secondary-hit candidate output per probe.
 - `screenProbeReusePass.ts` — probe-resolution weighted reservoirs, conservative temporal/spatial resampling, bounded weight correction, and reused-probe reconstruction.
-- `mainVisibility.ts` — a derived host that retains the upstream frame sequence and composes temporal surface validation, ReSTIR screen probes, and a Three.js GTAO visibility raster.
+- `rayHitSurfelSeedPass.ts` — a derived, budgeted allocator that rejects covered secondary hits through the existing surfel hash grid and conservatively initializes accepted cache entries.
+- `mainVisibility.ts` — a derived host that retains the upstream frame sequence and composes temporal surface validation, ReSTIR screen probes, ray-hit surfel seeding, and a Three.js GTAO visibility raster.
 - `Source.html` and build files — packaging and explanatory UI.
 
 ## Lighting and visibility layers
@@ -83,6 +84,16 @@ Rigid animation updates only the moving object's world-space vertex/normal strea
 
 Only one 67,832-triangle ShaderBall moves by default, keeping CPU refit and upload costs bounded for the GTX 1650 Super target. Turning animation off restores its base transform but keeps the same acceleration structure. Phase 5 deliberately does not add static-grid instancing, skinned rigs, ray-hit surfel seeding, or DDGI.
 
+## Phase 6 ray-hit surfel seeding
+
+Each screen probe now retains its first validated secondary geometry hit independently of the radiance and trace-statistics outputs. One probe-resolution `RGBA32F` texture stores world position in XYZ and a custom 22-bit octahedral normal plus an explicit validity bit in W. At 1080p this adds roughly 0.5 MiB, rather than another pair of full-resolution geometry textures.
+
+A derived late-frame pass examines a deterministic rotating subset of those hits. Before allocation it queries the existing cascaded surfel hash grid and rejects a candidate when a nearby, similarly oriented surfel already covers the surface. A strict global atomic budget, 32 accepted surfels per frame by default, remains authoritative after spatial thinning. Consequently the extension discovers indirectly visible surfaces gradually without letting probe count determine pool consumption.
+
+Accepted hits use Webgiya's existing pool stack and packed surfel representation. Position, normal, birth frame, guiding lobes, and the radial-depth tile receive conservative cold-start values. Both temporal moment regions are initialized because these surfels are created after the current frame's integration and the moments buffers swap before the following frame. They enter the normal hash-grid, integration, radial-depth, guiding, aging, and recycling path on the next frame; no parallel cache or replacement spawning algorithm is introduced.
+
+Disabling **Ray-hit seeding** skips the allocator and restores the completed Phase 5 frame sequence and cache population behavior. The original screen-space missing-surfel finder and allocator are unchanged and always remain the primary creation path. Phase 6 does not add DDGI, static-grid instancing, or skinned-rig support.
+
 ## Controls
 
 The **Motion / history validation** folder adds:
@@ -98,7 +109,7 @@ The inspector adds **Screen probes**:
 
 - **Screen-probe GI** — enable the extension or return to the exact surfel-only baseline.
 - **Hi-Z first** — enable hierarchical depth traversal; disabling it sends every secondary direction to the BVH.
-- **Output** — show final lighting, reconstructed GI, bilateral confidence, trace sources, normalized Hi-Z steps, reservoir age/candidate count, reuse acceptance, or selected reuse source. In **Trace source**, green is Hi-Z, red is BVH fallback, and blue is an environment miss. In **Reuse source**, blue is current, green is temporal, and red is spatial; **Reuse acceptance** uses red for temporal and green for the accepted spatial fraction.
+- **Output** — show final lighting, reconstructed GI, bilateral confidence, trace sources, normalized Hi-Z steps, reservoir age/candidate count, reuse acceptance, selected reuse source, or ray-hit seed diagnostics. In **Trace source**, green is Hi-Z, red is BVH fallback, and blue is an environment miss. In **Reuse source**, blue is current, green is temporal, and red is spatial; **Reuse acceptance** uses red for temporal and green for the accepted spatial fraction. In **Ray-hit seeds**, dark red is a validated candidate, green is rejected existing coverage, and cyan is a newly allocated surfel.
 - **Probe confidence blend** — cap how strongly a valid probe replaces the surfel fallback.
 - **Directions per probe** — quality/performance control from one to eight secondary directions; each hit can also issue a directional-light visibility ray.
 
@@ -112,6 +123,13 @@ The **Screen-probe ReSTIR reuse** folder exposes:
 - **Weight correction cap** — bounds rare low-weight selections to control fireflies.
 
 Changing any reuse setting resets its history rather than mixing incompatible reservoir distributions.
+
+The **Ray-hit surfel seeding** folder exposes:
+
+- **Ray-hit seeding** — enable Phase 6 independently; disabling it preserves the completed Phase 5 cache path.
+- **Max new surfels / frame** — the strict global allocation ceiling, from zero to 128 in the UI.
+- **Candidate overscan** — number of deterministically thinned hits examined per available budget slot before hash-grid rejection.
+- **Coverage rejection** — scales the existing-cache proximity radius; higher values seed more conservatively.
 
 The **Dynamic rigid geometry** folder exposes:
 
@@ -160,9 +178,10 @@ Each frame retains Webgiya's original surfel sequence while the host runs the ne
 14. Query fresh surfel radiance at secondary hits and form the current weighted probe candidates.
 15. Reproject and resample temporal reservoirs through Phase 3's conservative validation gate.
 16. Resample same-surface spatial reservoirs and apply bounded normalization.
-17. Reconstruct reused sparse probes at full resolution, blend against the surfel fallback, and composite direct shadows, indirect light, ambient visibility, and the final image.
+17. Reject already covered secondary-hit candidates through the current hash grid, then allocate at most the Phase 6 frame budget with both temporal moment regions initialized.
+18. Reconstruct reused sparse probes at full resolution, blend against the surfel fallback, and composite direct shadows, indirect light, ambient visibility, and the final image.
 
-Desktop settings retain upstream's `262144`-surfel pool, 32³ hash-grid cascades, 4×4 radial-depth tiles, 32 target samples, and four base integration samples. Screen probes use one probe per 8×8 tile and four secondary directions by default; reservoirs default to 16 temporal and 32 total represented candidates, while GTAO runs at half resolution for GTX-class performance.
+Desktop settings retain upstream's `262144`-surfel pool, 32³ hash-grid cascades, 4×4 radial-depth tiles, 32 target samples, and four base integration samples. Screen probes use one probe per 8×8 tile and four secondary directions by default; reservoirs default to 16 temporal and 32 total represented candidates, ray-hit seeding defaults to at most 32 new surfels per frame, and GTAO runs at half resolution for GTX-class performance.
 
 ## ShaderBall scene
 

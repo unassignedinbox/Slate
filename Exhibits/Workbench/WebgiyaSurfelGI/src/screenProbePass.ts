@@ -64,6 +64,8 @@ export type ScreenProbePass = {
   getTraceStatsTexture: () => THREE.Texture | null;
   getProbeRadianceTexture: () => THREE.Texture | null;
   getProbeGeometryTexture: () => THREE.Texture | null;
+  getProbeSeedTexture: () => THREE.Texture | null;
+  getProbeSize: () => { width: number; height: number };
 };
 
 const gridHelpers = wgsl(
@@ -170,6 +172,22 @@ const probeSampling = wgsl(/* wgsl */ `
       f32(a & 0x00ffffffu) / 16777216.0,
       f32(b & 0x00ffffffu) / 16777216.0
     );
+  }
+
+  fn screen_probe_pack_seed_normal(normalIn: vec3f) -> f32 {
+    let n = normalize(normalIn);
+    var oct = n.xy / max(abs(n.x) + abs(n.y) + abs(n.z), 1e-6);
+    if (n.z < 0.0) {
+      oct = (vec2f(1.0) - abs(oct.yx)) *
+        select(vec2f(-1.0), vec2f(1.0), oct >= vec2f(0.0));
+    }
+    let encoded = clamp(oct * 0.5 + 0.5, vec2f(0.0), vec2f(1.0));
+    let quantized = vec2u(round(encoded * 2047.0));
+    // Keep a fixed finite exponent. The sign bit is explicit validity and the
+    // 22 low mantissa bits hold two 11-bit oct coordinates, so no payload can
+    // become a NaN that a texture store is allowed to canonicalize.
+    let packed = 0xbf800000u | quantized.x | (quantized.y << 11u);
+    return bitcast<f32>(packed);
   }
 
   fn screen_probe_basis(normalIn: vec3f) -> mat3x3f {
@@ -562,6 +580,8 @@ const traceScreenProbe = wgslFn(
       var bvhFallback = 0.0;
       var environmentMiss = 0.0;
       var hiZStepFraction = 0.0;
+      var seedCandidate = vec4f(0.0);
+      var hasSeedCandidate = false;
 
       for (var sampleIndex = 0u; sampleIndex < sampleCount; sampleIndex = sampleIndex + 1u) {
         let rayDirection = screen_probe_cosine_direction(
@@ -606,6 +626,13 @@ const traceScreenProbe = wgslFn(
               directStrength,
               multiBounceStrength
             );
+            if (!hasSeedCandidate) {
+              seedCandidate = vec4f(
+                screenHit.position,
+                screen_probe_pack_seed_normal(screenHit.normal)
+              );
+              hasSeedCandidate = true;
+            }
             hiZResolved += 1.0;
             resolved = true;
           } else if (screenHit.status == 0u) {
@@ -630,6 +657,13 @@ const traceScreenProbe = wgslFn(
           if (hit.didHit) {
             let hitPosition = ray.origin + ray.direction * hit.dist;
             let hitNormal = normalize(hit.normal);
+            if (!hasSeedCandidate) {
+              seedCandidate = vec4f(
+                hitPosition,
+                screen_probe_pack_seed_normal(hitNormal)
+              );
+              hasSeedCandidate = true;
+            }
             let uvAndMaterial = getVertexAttribute(hit.barycoord, hit.indices.xyz);
             let hitAlbedo = clamp(
               screen_probe_sample_diffuse(
@@ -678,7 +712,7 @@ const traceScreenProbe = wgslFn(
         environmentMiss * inverseCount,
         hiZStepFraction * inverseCount
       );
-      return mat4x4f(radiance, stats, vec4f(0.0), vec4f(0.0));
+      return mat4x4f(radiance, stats, seedCandidate, vec4f(0.0));
     }
   `,
   [
@@ -768,6 +802,7 @@ export function createScreenProbePass(
   let probeRadianceTexture: THREE.StorageTexture | null = null;
   let probeGeometryTexture: THREE.StorageTexture | null = null;
   let probeStatsTexture: THREE.StorageTexture | null = null;
+  let probeSeedTexture: THREE.StorageTexture | null = null;
   let outputTexture: THREE.StorageTexture | null = null;
   let traceNode: THREE.ComputeNode | null = null;
   let reconstructNode: THREE.ComputeNode | null = null;
@@ -793,9 +828,14 @@ export function createScreenProbePass(
   const U_DIRECT_STRENGTH = uniform(1.0);
   const U_MULTI_BOUNCE_STRENGTH = uniform(1.0);
 
-  function makeStorageTexture(width: number, height: number, name: string) {
+  function makeStorageTexture(
+    width: number,
+    height: number,
+    name: string,
+    type: THREE.TextureDataType = THREE.HalfFloatType,
+  ) {
     const result = new THREE.StorageTexture(width, height);
-    result.type = THREE.HalfFloatType;
+    result.type = type;
     result.format = THREE.RGBAFormat;
     result.minFilter = THREE.NearestFilter;
     result.magFilter = THREE.NearestFilter;
@@ -824,6 +864,7 @@ export function createScreenProbePass(
     probeRadianceTexture?.dispose();
     probeGeometryTexture?.dispose();
     probeStatsTexture?.dispose();
+    probeSeedTexture?.dispose();
     outputTexture?.dispose();
     probeRadianceTexture = makeStorageTexture(
       probeWidth,
@@ -839,6 +880,12 @@ export function createScreenProbePass(
       probeWidth,
       probeHeight,
       'Screen Probe Trace Stats',
+    );
+    probeSeedTexture = makeStorageTexture(
+      probeWidth,
+      probeHeight,
+      'Screen Probe Ray-hit Seeds',
+      THREE.FloatType,
     );
     outputTexture = makeStorageTexture(width, height, 'Screen Probe Resolve');
     traceNode = null;
@@ -860,6 +907,7 @@ export function createScreenProbePass(
       !probeRadianceTexture ||
       !probeGeometryTexture ||
       !probeStatsTexture ||
+      !probeSeedTexture ||
       !outputTexture
     )
       return;
@@ -1047,6 +1095,7 @@ export function createScreenProbePass(
         const radianceOut = vec4(0).toVar();
         const geometryOut = vec4(0).toVar();
         const statsOut = vec4(0).toVar();
+        const seedOut = vec4(0).toVar();
 
         If(valid, () => {
           const normal = texture(normalTexture, uv)
@@ -1090,11 +1139,13 @@ export function createScreenProbePass(
           radianceOut.assign(traced.element(int(0)));
           geometryOut.assign(vec4(normal, depth));
           statsOut.assign(traced.element(int(1)));
+          seedOut.assign(traced.element(int(2)));
         });
 
         textureStore(probeRadianceTexture!, ivec2(x, y), radianceOut);
         textureStore(probeGeometryTexture!, ivec2(x, y), geometryOut);
         textureStore(probeStatsTexture!, ivec2(x, y), statsOut);
+        textureStore(probeSeedTexture!, ivec2(x, y), seedOut);
       })()
         .compute(probeWidth * probeHeight)
         .setName('Screen Probe Trace');
@@ -1151,5 +1202,7 @@ export function createScreenProbePass(
     getTraceStatsTexture: () => probeStatsTexture,
     getProbeRadianceTexture: () => probeRadianceTexture,
     getProbeGeometryTexture: () => probeGeometryTexture,
+    getProbeSeedTexture: () => probeSeedTexture,
+    getProbeSize: () => ({ width: probeWidth, height: probeHeight }),
   };
 }
