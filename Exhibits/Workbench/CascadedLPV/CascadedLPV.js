@@ -1252,15 +1252,20 @@ async function BringRenderer()
             LightView,
         );
 
-        const LookAhead = Add(Camera.Eye, Scale(Camera.Forward, Math.min(OrbitDistance * 0.55, 10.0)));
-        const CascadeCenter = [LookAhead[0], LookAhead[1], 4.0];
+        // Anchor transport around the orbit/player focus rather than a fixed distance
+        // in front of the camera. With the old look-ahead anchor, dollying out moved
+        // the visible scene from the 0.5 m near lattice into 1.33/3.33 m cells, making
+        // the same light suddenly appear as large leaking blocks.
+        const CascadeCenter = [Camera.Target[0], Camera.Target[1], 4.0];
         const Origins = [
             SnappedCascadeOrigin(CascadeCenter, 0.50),
             SnappedCascadeOrigin(CascadeCenter, 4.0 / 3.0),
             SnappedCascadeOrigin(CascadeCenter, 10.0 / 3.0),
         ];
         const PreviousOrigins = PreviousCascadeOrigins || Origins;
-        const ShadowSplits = [10.0, 30.0, 90.0];
+        // Keep the focused scene in the 2048² direct-shadow cascade throughout the
+        // full 8–34 m dolly range. Otherwise zooming alone selects a coarser CSM.
+        const ShadowSplits = [38.0, 76.0, 120.0];
         const ShadowMatrices = [
             StabilizedShadowProjection(Camera, SunDirection, 0.08, ShadowSplits[0], ShadowResolutions[0]),
             StabilizedShadowProjection(Camera, SunDirection, ShadowSplits[0], ShadowSplits[1], ShadowResolutions[1]),
