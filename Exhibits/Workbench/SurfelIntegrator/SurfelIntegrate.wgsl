@@ -284,7 +284,9 @@ fn TraceScene(Origin: vec3f, Direction: vec3f, MaximumDistance: f32) -> RayHit
 fn CellHash(Cell: vec3i) -> u32
 {
     let Shifted = vec3u(Cell + vec3i(2048));
-    let Mixed = Shifted.x * 73856093u ^ Shifted.y * 19349663u ^ Shifted.z * 83492791u;
+    let Mixed = (Shifted.x * 73856093u)
+              ^ (Shifted.y * 19349663u)
+              ^ (Shifted.z * 83492791u);
     return Mixed % max(u32(Integration.Counts.y), 1u);
 }
 
