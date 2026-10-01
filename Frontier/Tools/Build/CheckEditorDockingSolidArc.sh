@@ -150,6 +150,21 @@ if grep -q 'BuildSolidArcInspectorSheet' "$Adapter" \
 else
     FailOne "SolidArc CAD inspector sheet is missing"
 fi
+if grep -q 'ImGuiCol_TabSelected' "$SolidHost" \
+   && grep -q 'ImGuiCol_TabDimmedSelected' "$SolidHost" \
+   && grep -q 'Applied.TabSlant' "$SolidHost" \
+   && grep -q 'Applied.TabOverlap' "$SolidHost"; then
+    Pass "SolidArc seats the same dark selected-tab tints and interlocking trapezoid geometry as Frontier"
+else
+    FailOne "SolidArc tab theme can fall back to the vendor blue or stock rectangular geometry"
+fi
+if grep -q 'ControlCentreHost' Editor/AuthoringTools/Modelling/SolidArc/Editor/SolidArcEditorHost.h \
+   && grep -q 'AssignProjectName("SolidArc")' "$SolidHost" \
+   && grep -q 'ConstructControlLayout' "$SolidHost"; then
+    Pass "SolidArc runs the shared Frontier control-centre notch above its dock columns"
+else
+    FailOne "SolidArc is missing the shared Frontier control-centre notch"
+fi
 if grep -q 'AssignChrome(ViewportPanelChrome::SolidArcCad)' "$SolidHost" \
    && grep -q 'RecordSolidArcBar' Engine/Editor/ViewportPanel.cpp \
    && grep -q 'Construct' Engine/Editor/ViewportPanel.cpp \

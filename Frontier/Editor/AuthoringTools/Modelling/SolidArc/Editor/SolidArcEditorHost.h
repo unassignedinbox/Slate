@@ -11,6 +11,9 @@
 #include "../../../../../Engine/Editor/InspectorPanel.h"
 #include "../../../../../Engine/Editor/OutlinerPanel.h"
 #include "../../../../../Engine/Editor/ViewportPanel.h"
+#include "../../../../../Engine/DisplayPresentation/ControlCentreHost.h"
+#include "../../../../../Engine/DisplayPresentation/PixelSpace.h"
+#include "../../../../../Engine/DeviceExchange/InputExchange.h"
 
 #include <cstdint>
 
@@ -20,6 +23,10 @@ class SolidArcEditorHost
 {
 public:
     SolidArcEditorHost() noexcept;
+    ~SolidArcEditorHost() noexcept;
+
+    SolidArcEditorHost(const SolidArcEditorHost&)            = delete;
+    SolidArcEditorHost& operator=(const SolidArcEditorHost&) = delete;
 
     void ApplyTheme() noexcept;
     void Record(ConsoleHost& Host) noexcept;
@@ -30,12 +37,19 @@ public:
 
 private:
     void ConstructLayout() noexcept;
+    void AdvanceControlCentre() noexcept;
+    void RecordControlCentre() noexcept;
 
     ControlPanel Controls_;
     OutlinerPanel Outliner_;
     ViewportPanel Viewport_;
     InspectorPanel Inspector_;
 
+    ControlCentreHost ControlCentre_;
+    InputExchange     ControlInput_;
+    PixelSpace        ControlSurface_;
+
+    bool ControlCentreSeated_ = false;
     bool OutlinerTabOpen_ = true;
     bool ViewportTabOpen_ = true;
     bool InspectorTabOpen_ = true;

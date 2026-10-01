@@ -43,47 +43,140 @@ SolidArcEditorHost::SolidArcEditorHost() noexcept
     Inspector_.AssignReadout(&Readout_);
 }
 
+SolidArcEditorHost::~SolidArcEditorHost() noexcept
+{
+    ControlCentre_.Terminate();
+}
+
+void SolidArcEditorHost::AdvanceControlCentre() noexcept
+{
+#ifdef FRONTIER_DEVELOPMENT
+    ImGuiIO& Input = ImGui::GetIO();
+    const ImVec2 Display = Input.DisplaySize;
+    if (!ControlCentreSeated_ && Display.x > 0.0f && Display.y > 0.0f)
+    {
+        ControlCentreSeated_ = ControlCentre_.Initialize(
+            static_cast<uint32_t>(Display.x + 0.5f),
+            static_cast<uint32_t>(Display.y + 0.5f));
+        if (ControlCentreSeated_)
+        {
+            ControlCentre_.AssignNotchWidth(200.0f);
+            ControlCentre_.AssignProjectName("SolidArc");
+        }
+    }
+    if (!ControlCentreSeated_)
+        return;
+
+    const float Scale = std::clamp(
+        ControlCentre_.QueryAppearance().QueryApplied().InterfaceScale / 100.0f,
+        0.5f,
+        2.0f);
+    ControlCentre_.Resize(
+        static_cast<uint32_t>(Display.x / Scale + 0.5f),
+        static_cast<uint32_t>(Display.y / Scale + 0.5f));
+    ControlInput_.AssignCursorPosition(Input.MousePos.x * Scale, Input.MousePos.y * Scale);
+    ControlInput_.AssignMouseButton(MouseButtonCategory::ButtonLeft, Input.MouseDown[0]);
+    ControlInput_.ResetMouseScroll();
+    if (Input.MouseWheel != 0.0f)
+        ControlInput_.AssignMouseScroll(Input.MouseWheel);
+    ControlCentre_.AdvanceInteraction(ControlInput_, Input.MousePos.x, Input.MousePos.y);
+    ControlCentre_.AdvanceLocomotion(Input.DeltaTime);
+#endif
+}
+
+void SolidArcEditorHost::RecordControlCentre() noexcept
+{
+#ifdef FRONTIER_DEVELOPMENT
+    if (!ControlCentreSeated_)
+        return;
+
+    ImGuiViewport* Main = ImGui::GetMainViewport();
+    const float Scale = std::clamp(
+        ControlCentre_.QueryAppearance().QueryApplied().InterfaceScale / 100.0f,
+        0.5f,
+        2.0f);
+    if (ControlSurface_.Begin(SurfaceLayer::Above, Main->Size.x, Main->Size.y, Scale))
+        ControlCentre_.ConstructControlLayout(ControlSurface_);
+#endif
+}
+
 void SolidArcEditorHost::ApplyTheme() noexcept
 {
     PrepareSunInspectorFonts();
     IconPresentation::Attach();
-    ImGuiStyle& Style = ImGui::GetStyle();
+    ImGuiStyle& Applied = ImGui::GetStyle();
 #ifdef FRONTIER_DEVELOPMENT
-    Style.TabSlant                  = 14.0f;
-    Style.TabOverlap                = 24.0f;
-    Style.TabHeight                 = 24.0f;
-    Style.TabStripPadTop            = 4.0f;
-    Style.TabMinWidthBase           = 110.0f;
-    Style.TabMinWidthShrink         = 110.0f;
-    Style.DockingNodeHasCloseButton = false;
-    Style.TabRounding               = 0.0f;
-    Style.TabBorderSize             = 0.0f;
-    Style.TabBarBorderSize          = 0.0f;
-    Style.TabButtonRounding         = 1.0f;
+    Applied.TabSlant                  = 14.0f;
+    Applied.TabOverlap                = 24.0f;
+    Applied.TabHeight                 = 24.0f;
+    Applied.TabStripPadTop            = 4.0f;
+    Applied.TabMinWidthBase           = 110.0f;
+    Applied.TabMinWidthShrink         = 110.0f;
+    Applied.DockingNodeHasCloseButton = false;
+    Applied.TabRounding               = 0.0f;
+    Applied.TabBorderSize             = 0.0f;
+    Applied.TabBarBorderSize          = 0.0f;
+    Applied.TabButtonRounding         = 1.0f;
 #endif
-    Style.WindowPadding    = ImVec2(14.0f, 12.0f);
-    Style.WindowRounding   = 8.0f;
-    Style.ChildRounding    = 12.0f;
-    Style.FrameRounding    = 16.0f;
-    Style.WindowBorderSize = 1.0f;
-    Style.FrameBorderSize  = 1.0f;
-    Style.ScrollbarSize    = 8.0f;
+    Applied.WindowPadding     = ImVec2(14.0f, 12.0f);
+    Applied.FramePadding      = ImVec2(13.0f, 9.0f);
+    Applied.ItemSpacing       = ImVec2(10.0f, 8.0f);
+    Applied.ItemInnerSpacing  = ImVec2(6.0f, 4.0f);
+    Applied.ScrollbarSize     = 8.0f;
+    Applied.WindowRounding    = 8.0f;
+    Applied.ChildRounding     = 12.0f;
+    Applied.FrameRounding     = 16.0f;
+    Applied.PopupRounding     = 18.0f;
+    Applied.ScrollbarRounding = 9.0f;
+    Applied.GrabRounding      = 12.0f;
+    Applied.WindowBorderSize  = 1.0f;
+    Applied.ChildBorderSize   = 0.0f;
+    Applied.FrameBorderSize   = 1.0f;
+    Applied.PopupBorderSize   = 1.0f;
 
-    ImVec4* Colours = Style.Colors;
-    Colours[ImGuiCol_WindowBg]       = ImVec4(0.071f, 0.071f, 0.071f, 1.0f);
-    Colours[ImGuiCol_ChildBg]        = ImVec4(0.000f, 0.000f, 0.000f, 0.0f);
-    Colours[ImGuiCol_Border]         = ImVec4(1.000f, 1.000f, 1.000f, 0.05f);
-    Colours[ImGuiCol_FrameBg]        = ImVec4(0.000f, 0.000f, 0.000f, 1.0f);
-    Colours[ImGuiCol_TitleBg]        = ImVec4(0.039f, 0.039f, 0.039f, 1.0f);
-    Colours[ImGuiCol_TitleBgActive]  = ImVec4(0.039f, 0.039f, 0.039f, 1.0f);
-    Colours[ImGuiCol_TitleBgCollapsed] = ImVec4(0.039f, 0.039f, 0.039f, 1.0f);
-    Colours[ImGuiCol_Button]         = ImVec4(0.133f, 0.133f, 0.133f, 1.0f);
-    Colours[ImGuiCol_ButtonHovered]  = ImVec4(0.180f, 0.180f, 0.180f, 1.0f);
-    Colours[ImGuiCol_Header]         = ImVec4(0.165f, 0.165f, 0.165f, 1.0f);
-    Colours[ImGuiCol_Tab]            = ImVec4(0.149f, 0.149f, 0.173f, 1.0f);
-    Colours[ImGuiCol_TabHovered]     = ImVec4(0.196f, 0.196f, 0.227f, 1.0f);
-    Colours[ImGuiCol_TabActive]      = ImVec4(0.071f, 0.071f, 0.071f, 1.0f);
-    Colours[ImGuiCol_DockingPreview] = ImVec4(1.000f, 1.000f, 1.000f, 0.12f);
+    ImVec4* Tints = Applied.Colors;
+    Tints[ImGuiCol_Text]                       = ImVec4(0.941f, 0.941f, 0.941f, 1.0f);
+    Tints[ImGuiCol_TextDisabled]               = ImVec4(0.361f, 0.361f, 0.361f, 1.0f);
+    Tints[ImGuiCol_WindowBg]                   = ImVec4(0.071f, 0.071f, 0.071f, 1.0f);
+    Tints[ImGuiCol_ChildBg]                    = ImVec4(0.000f, 0.000f, 0.000f, 0.0f);
+    Tints[ImGuiCol_PopupBg]                    = ImVec4(0.102f, 0.102f, 0.102f, 1.0f);
+    Tints[ImGuiCol_Border]                     = ImVec4(1.000f, 1.000f, 1.000f, 0.05f);
+    Tints[ImGuiCol_BorderShadow]               = ImVec4(0.000f, 0.000f, 0.000f, 0.0f);
+    Tints[ImGuiCol_FrameBg]                    = ImVec4(0.000f, 0.000f, 0.000f, 1.0f);
+    Tints[ImGuiCol_FrameBgHovered]             = ImVec4(0.031f, 0.031f, 0.031f, 1.0f);
+    Tints[ImGuiCol_FrameBgActive]              = ImVec4(0.071f, 0.071f, 0.071f, 1.0f);
+    Tints[ImGuiCol_MenuBarBg]                  = ImVec4(0.071f, 0.071f, 0.071f, 1.0f);
+    Tints[ImGuiCol_TitleBg]                    = ImVec4(0.039f, 0.039f, 0.039f, 1.0f);
+    Tints[ImGuiCol_TitleBgActive]              = ImVec4(0.039f, 0.039f, 0.039f, 1.0f);
+    Tints[ImGuiCol_TitleBgCollapsed]           = ImVec4(0.039f, 0.039f, 0.039f, 1.0f);
+    Tints[ImGuiCol_ScrollbarBg]                = ImVec4(0.000f, 0.000f, 0.000f, 0.0f);
+    Tints[ImGuiCol_ScrollbarGrab]              = ImVec4(0.141f, 0.141f, 0.141f, 1.0f);
+    Tints[ImGuiCol_ScrollbarGrabHovered]       = ImVec4(0.180f, 0.180f, 0.180f, 1.0f);
+    Tints[ImGuiCol_ScrollbarGrabActive]        = ImVec4(0.200f, 0.200f, 0.200f, 1.0f);
+    Tints[ImGuiCol_CheckMark]                  = ImVec4(1.000f, 1.000f, 1.000f, 1.0f);
+    Tints[ImGuiCol_SliderGrab]                 = ImVec4(0.878f, 0.878f, 0.878f, 1.0f);
+    Tints[ImGuiCol_SliderGrabActive]           = ImVec4(1.000f, 1.000f, 1.000f, 1.0f);
+    Tints[ImGuiCol_Button]                     = ImVec4(0.133f, 0.133f, 0.133f, 1.0f);
+    Tints[ImGuiCol_ButtonHovered]              = ImVec4(0.180f, 0.180f, 0.180f, 1.0f);
+    Tints[ImGuiCol_ButtonActive]               = ImVec4(0.220f, 0.220f, 0.220f, 1.0f);
+    Tints[ImGuiCol_Header]                     = ImVec4(0.165f, 0.165f, 0.165f, 1.0f);
+    Tints[ImGuiCol_HeaderHovered]              = ImVec4(0.110f, 0.110f, 0.110f, 1.0f);
+    Tints[ImGuiCol_HeaderActive]               = ImVec4(0.165f, 0.165f, 0.165f, 1.0f);
+    Tints[ImGuiCol_Separator]                  = ImVec4(0.180f, 0.180f, 0.180f, 1.0f);
+    Tints[ImGuiCol_SeparatorHovered]           = ImVec4(0.298f, 0.302f, 1.000f, 1.0f);
+    Tints[ImGuiCol_SeparatorActive]            = ImVec4(0.424f, 0.467f, 1.000f, 1.0f);
+    Tints[ImGuiCol_ResizeGrip]                 = ImVec4(0.180f, 0.180f, 0.180f, 1.0f);
+    Tints[ImGuiCol_ResizeGripHovered]          = ImVec4(0.298f, 0.302f, 1.000f, 1.0f);
+    Tints[ImGuiCol_ResizeGripActive]           = ImVec4(0.424f, 0.467f, 1.000f, 1.0f);
+    Tints[ImGuiCol_Tab]                        = ImVec4(0.149f, 0.149f, 0.173f, 1.0f);
+    Tints[ImGuiCol_TabHovered]                 = ImVec4(0.196f, 0.196f, 0.227f, 1.0f);
+    Tints[ImGuiCol_TabSelected]                = ImVec4(0.071f, 0.071f, 0.071f, 1.0f);
+    Tints[ImGuiCol_TabDimmed]                  = ImVec4(0.118f, 0.118f, 0.141f, 1.0f);
+    Tints[ImGuiCol_TabDimmedSelected]          = ImVec4(0.071f, 0.071f, 0.071f, 1.0f);
+    Tints[ImGuiCol_TabSelectedOverline]        = ImVec4(0.000f, 0.000f, 0.000f, 0.0f);
+    Tints[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0.000f, 0.000f, 0.000f, 0.0f);
+    Tints[ImGuiCol_DockingPreview]             = ImVec4(1.000f, 1.000f, 1.000f, 0.12f);
+    Tints[ImGuiCol_TextSelectedBg]             = ImVec4(0.424f, 0.467f, 1.000f, 0.35f);
 }
 
 void SolidArcEditorHost::ConstructLayout() noexcept
@@ -115,6 +208,7 @@ void SolidArcEditorHost::ConstructLayout() noexcept
 
 void SolidArcEditorHost::Record(ConsoleHost& Host) noexcept
 {
+    AdvanceControlCentre();
     Host.Render();
     ViewImage_ = Host.Raster().Readback();
     RowCount_ = BuildSolidArcOutliner(Host, Rows_.data(), Bindings_.data(), kMaxEditorInstances, &Readout_);
@@ -160,6 +254,8 @@ void SolidArcEditorHost::Record(ConsoleHost& Host) noexcept
     ApplySolidArcOutlinerVisibility(Host, Rows_.data(), Bindings_.data(), RowCount_);
     if (Picked < RowCount_)
         ApplySolidArcInspectorSheet(Host, Bindings_[Picked], PickedSheet_);
+
+    RecordControlCentre();
 }
 
 uint32_t SolidArcEditorHost::QueryPickedFigureIdentity() const noexcept
