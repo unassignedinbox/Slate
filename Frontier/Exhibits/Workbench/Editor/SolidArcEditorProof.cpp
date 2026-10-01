@@ -172,6 +172,14 @@ int main()
 
     Frontier::SolidArcEditorHost Editor;
     Editor.ApplyTheme();
+    const ImGuiStyle& SolidArcStyle = ImGui::GetStyle();
+    const ImVec4 ActiveTab = SolidArcStyle.Colors[ImGuiCol_TabDimmedSelected];
+    if (SolidArcStyle.TabSlant != 14.0f || SolidArcStyle.TabOverlap != 24.0f ||
+        ActiveTab.x > 0.09f || ActiveTab.y > 0.09f || ActiveTab.z > 0.09f)
+    {
+        std::fprintf(stderr, "[SolidArcEditorProof] [FAIL] Frontier trapezoid/tab colour sheet is not seated\n");
+        return 2;
+    }
 
     if (IO.Fonts->Fonts.empty())
         IO.Fonts->AddFontDefault();
@@ -233,6 +241,11 @@ int main()
 
     for (int I = 0; I < 12; ++I)
         Rest();
+    if (!Editor.QueryControlNotchSeated())
+    {
+        std::fprintf(stderr, "[SolidArcEditorProof] [FAIL] shared control notch did not initialize\n");
+        return 7;
+    }
     Click(178.0f, 175.0f); // Filter dropdown in the SolidArc outliner search row.
     for (int I = 0; I < 3; ++I)
         Rest();

@@ -18,6 +18,7 @@ SolidArcEditorHost::SolidArcEditorHost() noexcept
     Outliner_.AssignControls(&Controls_);
     Viewport_.AssignControls(&Controls_);
     Inspector_.AssignControls(&Controls_);
+    Viewport_.AssignShadeOpen(&ShadeOpen_);
     Outliner_.AssignTabOpen(&OutlinerTabOpen_);
     Viewport_.AssignTabOpen(&ViewportTabOpen_);
     Inspector_.AssignTabOpen(&InspectorTabOpen_);
@@ -61,13 +62,24 @@ void SolidArcEditorHost::ApplyTheme() noexcept
     Style.TabBarBorderSize          = 0.0f;
     Style.TabButtonRounding         = 1.0f;
 #endif
-    Style.WindowPadding    = ImVec2(14.0f, 12.0f);
-    Style.WindowRounding   = 8.0f;
-    Style.ChildRounding    = 12.0f;
-    Style.FrameRounding    = 16.0f;
-    Style.WindowBorderSize = 1.0f;
-    Style.FrameBorderSize  = 1.0f;
-    Style.ScrollbarSize    = 8.0f;
+    // Keep this sheet identical to EditorHost::ApplyTheme.  In particular,
+    // FramePadding/spacing affect the patched trapezoid's measured contour;
+    // omitting them made the SolidArc tabs look like a different widget.
+    Style.WindowPadding      = ImVec2(14.0f, 12.0f);
+    Style.FramePadding       = ImVec2(13.0f, 9.0f);
+    Style.ItemSpacing        = ImVec2(10.0f, 8.0f);
+    Style.ItemInnerSpacing   = ImVec2(6.0f, 4.0f);
+    Style.WindowRounding     = 8.0f;
+    Style.ChildRounding      = 12.0f;
+    Style.FrameRounding      = 16.0f;
+    Style.PopupRounding      = 18.0f;
+    Style.ScrollbarRounding  = 9.0f;
+    Style.GrabRounding       = 12.0f;
+    Style.WindowBorderSize   = 1.0f;
+    Style.ChildBorderSize    = 0.0f;
+    Style.FrameBorderSize    = 1.0f;
+    Style.PopupBorderSize    = 1.0f;
+    Style.ScrollbarSize      = 8.0f;
 
     ImVec4* Colours = Style.Colors;
     Colours[ImGuiCol_WindowBg]       = ImVec4(0.071f, 0.071f, 0.071f, 1.0f);
@@ -83,6 +95,14 @@ void SolidArcEditorHost::ApplyTheme() noexcept
     Colours[ImGuiCol_Tab]            = ImVec4(0.149f, 0.149f, 0.173f, 1.0f);
     Colours[ImGuiCol_TabHovered]     = ImVec4(0.196f, 0.196f, 0.227f, 1.0f);
     Colours[ImGuiCol_TabActive]      = ImVec4(0.071f, 0.071f, 0.071f, 1.0f);
+    // Current docking ImGui paints selected/dimmed tabs through these slots.
+    // Leaving them at the default style was the source of SolidArc's blue tab.
+    Colours[ImGuiCol_TabUnfocused]             = ImVec4(0.149f, 0.149f, 0.173f, 1.0f);
+    Colours[ImGuiCol_TabUnfocusedActive]       = ImVec4(0.071f, 0.071f, 0.071f, 1.0f);
+    Colours[ImGuiCol_TabDimmed]                 = ImVec4(0.118f, 0.118f, 0.141f, 1.0f);
+    Colours[ImGuiCol_TabDimmedSelected]         = ImVec4(0.071f, 0.071f, 0.071f, 1.0f);
+    Colours[ImGuiCol_TabSelectedOverline]       = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+    Colours[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
     Colours[ImGuiCol_DockingPreview] = ImVec4(1.000f, 1.000f, 1.000f, 0.12f);
 }
 
@@ -115,6 +135,32 @@ void SolidArcEditorHost::ConstructLayout() noexcept
 
 void SolidArcEditorHost::Record(ConsoleHost& Host) noexcept
 {
+#ifdef FRONTIER_DEVELOPMENT
+    ImGuiIO& IO = ImGui::GetIO();
+    if (!ShadeSeated_)
+    {
+        ShadeSeated_ = Shade_.Initialize(static_cast<uint32_t>(IO.DisplaySize.x + 0.5f),
+                                         static_cast<uint32_t>(IO.DisplaySize.y + 0.5f));
+        Shade_.AssignNotchWidth(200.0f);
+    }
+    if (ShadeSeated_)
+    {
+        Shade_.Resize(static_cast<uint32_t>(IO.DisplaySize.x + 0.5f),
+                      static_cast<uint32_t>(IO.DisplaySize.y + 0.5f));
+        ShadeInput_.AssignCursorPosition(IO.MousePos.x, IO.MousePos.y);
+        ShadeInput_.AssignMouseButton(MouseButtonCategory::ButtonLeft, IO.MouseDown[0]);
+        ShadeInput_.ResetMouseScroll();
+        if (IO.MouseWheel != 0.0f)
+            ShadeInput_.AssignMouseScroll(IO.MouseWheel);
+        Shade_.AdvanceInteraction(ShadeInput_, IO.MousePos.x, IO.MousePos.y);
+        Shade_.AdvanceLocomotion(IO.DeltaTime);
+        if (!Shade_.IsDragging() && ShadeOpen_ != Shade_.IsOpen())
+        {
+            if (ShadeOpen_) Shade_.OpenNotch(); else Shade_.CloseNotch();
+        }
+        ShadeOpen_ = Shade_.IsOpen();
+    }
+#endif
     Host.Render();
     ViewImage_ = Host.Raster().Readback();
     RowCount_ = BuildSolidArcOutliner(Host, Rows_.data(), Bindings_.data(), kMaxEditorInstances, &Readout_);
@@ -160,6 +206,13 @@ void SolidArcEditorHost::Record(ConsoleHost& Host) noexcept
     ApplySolidArcOutlinerVisibility(Host, Rows_.data(), Bindings_.data(), RowCount_);
     if (Picked < RowCount_)
         ApplySolidArcInspectorSheet(Host, Bindings_[Picked], PickedSheet_);
+
+#ifdef FRONTIER_DEVELOPMENT
+    // Foreground recording is deliberately last, matching EditorHost: the
+    // control notch must sit above every dock tab in both GPU and CPU paths.
+    if (ShadeSeated_ && ShadeSurface_.Begin(SurfaceLayer::Above, Main->Size.x, Main->Size.y, 1.0f))
+        Shade_.ConstructControlLayout(ShadeSurface_);
+#endif
 }
 
 uint32_t SolidArcEditorHost::QueryPickedFigureIdentity() const noexcept

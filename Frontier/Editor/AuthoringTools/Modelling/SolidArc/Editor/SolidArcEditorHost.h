@@ -11,6 +11,9 @@
 #include "../../../../../Engine/Editor/InspectorPanel.h"
 #include "../../../../../Engine/Editor/OutlinerPanel.h"
 #include "../../../../../Engine/Editor/ViewportPanel.h"
+#include "../../../../../Engine/DisplayPresentation/ControlCentreHost.h"
+#include "../../../../../Engine/DeviceExchange/InputExchange.h"
+#include "../../../../../Engine/DisplayPresentation/PixelSpace.h"
 
 #include <cstdint>
 
@@ -27,6 +30,7 @@ public:
     [[nodiscard]] uint32_t QueryPickedFigureIdentity() const noexcept;
     [[nodiscard]] float    QueryViewWidth() const noexcept { return Viewport_.QueryViewWidth(); }
     [[nodiscard]] float    QueryViewHeight() const noexcept { return Viewport_.QueryViewHeight(); }
+    [[nodiscard]] bool     QueryControlNotchSeated() const noexcept { return ShadeSeated_; }
 
 private:
     void ConstructLayout() noexcept;
@@ -35,6 +39,15 @@ private:
     OutlinerPanel Outliner_;
     ViewportPanel Viewport_;
     InspectorPanel Inspector_;
+
+    // The same Top Notch control centre used by Frontier/Project-Zero.  It is
+    // recorded last so both the native host and the CPU proof exercise the
+    // identical overlay implementation rather than a SolidArc facsimile.
+    ControlCentreHost Shade_;
+    InputExchange ShadeInput_;
+    PixelSpace ShadeSurface_;
+    bool ShadeSeated_ = false;
+    bool ShadeOpen_ = false;
 
     bool OutlinerTabOpen_ = true;
     bool ViewportTabOpen_ = true;

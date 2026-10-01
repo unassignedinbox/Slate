@@ -158,6 +158,8 @@ Sources=(
     "$Root/Kernel/ConstraintGraph.cpp"
     "$Root/Kernel/MirrorSolver.cpp"
     "$Root/Kernel/BlendSolver.cpp"
+    "$Root/Kernel/FaceEditSolver.cpp"
+    "$Root/Kernel/TweakSolver.cpp"
     "$Root/Presentation/SoftwareRaster.cpp"
     "$Root/Presentation/ScenePresentation.cpp"
     "$Root/Interaction/CameraProjection.cpp"
@@ -179,9 +181,33 @@ Sources=(
     Engine/Editor/OutlinerPanel.cpp
     Engine/Editor/ViewportPanel.cpp
     Engine/Editor/InspectorPanel.cpp
+    Engine/Editor/AtmosphereSkyInspectorPanel.cpp
+    Engine/Editor/CameraInspectorPanel.cpp
+    Engine/Editor/CloudsInspectorPanel.cpp
+    Engine/Editor/FogInspectorPanel.cpp
+    Engine/Editor/LensFlareInspectorPanel.cpp
+    Engine/Editor/MoonInspectorPanel.cpp
+    Engine/Editor/StarsInspectorPanel.cpp
+    Engine/Editor/SunInspectorPanel.cpp
+    Engine/Editor/WeatherInspectorPanel.cpp
+    Exhibits/Workbench/Editor/SolidArcProofIconCounterpart.cpp
     Engine/DisplayPresentation/GlyphSpace.cpp
     Engine/DisplayPresentation/VectorCodec.cpp
     Engine/DisplayPresentation/PixelSpace.cpp
+    Engine/DisplayPresentation/ControlCentreHost.cpp
+    Engine/DisplayPresentation/MotionIntegrator.cpp
+    Engine/DisplayPresentation/ThemeStructure.cpp
+    Engine/DisplayPresentation/ControlKit.cpp
+    Engine/DisplayPresentation/AppearanceInspector.cpp
+    Engine/DisplayPresentation/ConfigurationInspector.cpp
+    Engine/DisplayPresentation/MaterialInspector.cpp
+    Engine/DisplayPresentation/DialogueHost.cpp
+    Engine/DisplayPresentation/FidelityClassifier.cpp
+    Engine/DisplayPresentation/TypefaceRegistry.cpp
+    Engine/DisplayPresentation/FontCodec.cpp
+    Engine/ContentInterchange/AssetResolution.cpp
+    Engine/ContentInterchange/MaterialIndex.cpp
+    Engine/DeviceExchange/InputExchange.cpp
     "$ImguiRoot/imgui.cpp"
     "$ImguiRoot/imgui_draw.cpp"
     "$ImguiRoot/imgui_tables.cpp"
@@ -189,7 +215,7 @@ Sources=(
 )
 
 if ! "$Compiler" -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wno-unused-function -DFRONTIER_DEVELOPMENT \
-    -I"$ImguiRoot" -I. -IEngine/Editor -IEngine/DisplayPresentation -IExhibits/Workbench/Editor \
+    -I"$ImguiRoot" -I. -IEngine -IEngine/Editor -IEngine/DisplayPresentation -IExhibits/Workbench/Editor -I"$TomlRoot" \
     -I"$Root" -I"$Root/Presentation" \
     "${Sources[@]}" -o "$Work/SolidArcEditorProof" >/tmp/SolidArcEditorProof.build 2>&1; then
     echo "[EditorVisualProof] RED — SolidArc editor proof did not compile"
