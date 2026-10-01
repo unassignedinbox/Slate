@@ -689,33 +689,16 @@ function buildPolyTread(d, pmGeo) {
 }
 // sidewall-only lathe (used together with the polygon tread)
 function buildSidewallGeometry(d, prof) {
-  // Match the polygon tread's shoulder-ring tessellation. If the rings use different
-  // segment counts, their chord edges disagree and form a visible saw-tooth seam.
+  // Match the polygon tread's shoulder-ring tessellation. The outer row is inset
+  // beneath the polygon edge to avoid a second, overlapping shoulder surface.
   const side = prof.filter(p => p.zone === 'side' || p.edge); const M = Math.max(90, Math.ceil(d.circ / Math.max(3, T.polyDetail)));
   const left = side.filter(p => p.x < 0), right = side.filter(p => p.x > 0);
   const pos = [], uv = [], idx = []; let base = 0;
   for (const run of [left, right]) { const N = run.length;
-    for (let i = 0; i < N; i++) { const p = run[i]; for (let j = 0; j <= M; j++) { const u = j / M, th = u * TAU; pos.push(p.x, p.r * Math.cos(th), p.r * Math.sin(th)); uv.push(p.x < 0 ? 1 - u : u, Math.max(-0.05, p.s ?? 1)); } }
+    for (let i = 0; i < N; i++) { const p = run[i], inset = p.edge ? 0.55 : 0; for (let j = 0; j <= M; j++) { const u = j / M, th = u * TAU, x = p.x - p.nx * inset, r = p.r - p.nr * inset; pos.push(x, r * Math.cos(th), r * Math.sin(th)); uv.push(p.x < 0 ? 1 - u : u, Math.max(-0.05, p.s ?? 1)); } }
     for (let i = 0; i < N - 1; i++) for (let j = 0; j < M; j++) { const a = base + i * (M + 1) + j, b = a + 1, c = a + M + 1, e = c + 1; idx.push(a, b, c, b, e, c); }
     base += N * (M + 1); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); return g;
-}
-
-// Polygon shoulder seal: a small overlapping quad strip hides any numerical crack where the boolean-cut tread meets the sidewall.
-function buildShoulderSeal(d) {
-  const M = Math.max(180, T.radial), cover = Math.min(8, Math.max(4, T.polyDetail));
-  const pos = [], nrm = [], uv = [], idx = []; let base = 0;
-  const ringPoint = (y, offset, th) => { const p = treadProfileAt(y, d); const x = p.x + p.nx * offset, r = p.r + p.nr * offset; return [x, r * Math.cos(th), r * Math.sin(th), p.nx, p.nr * Math.cos(th), p.nr * Math.sin(th)]; };
-  for (const sign of [-1, 1]) {
-    for (let row = 0; row < 2; row++) for (let j = 0; j <= M; j++) {
-      const th = j / M * TAU, y = sign * (d.acrossHalf - (row ? cover : 0));
-      // The outside ring sits just above the join; the inner ring lies under the tread blocks.
-      const q = ringPoint(y, row ? -0.45 : 0.35, th); pos.push(q[0], q[1], q[2]); nrm.push(q[3], q[4], q[5]); uv.push(j / M, row);
-    }
-    for (let j = 0; j < M; j++) { const a = base + j, b = a + 1, c = a + M + 1, e = c + 1; idx.push(a, b, c, b, e, c); }
-    base += (M + 1) * 2;
-  }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeBoundingSphere(); return g;
 }
 
 // =====================================================================================================================
@@ -863,7 +846,7 @@ function rebuild(full = true) {
   const treadNormal = usePoly ? null : tex(maps.normal);
   treadMat = new THREE.MeshStandardMaterial({ map: colTex, normalMap: treadNormal, normalScale: new THREE.Vector2(treadNormal ? 0.7 : 0, treadNormal ? 0.7 : 0), roughnessMap: tex(maps.rough), roughness: 1, metalness: 0.0 });
   const sw = buildSidewall(true); const sideTex = tex(sw.color); sideTex.colorSpace = THREE.SRGBColorSpace;
-  const sideMat = new THREE.MeshStandardMaterial({ map: sideTex, normalMap: tex(sw.normal), normalScale: new THREE.Vector2(0.45, 0.45), roughness: 0.8, metalness: 0 });
+  const sideMat = new THREE.MeshStandardMaterial({ map: sideTex, normalMap: tex(sw.normal), normalScale: new THREE.Vector2(0.45, 0.45), roughness: 0.8, metalness: 0, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
   tyreMesh = new THREE.Group(); let triCount = 0;
   if (usePoly) {
     const pmGeo = renderPattern(P, d, 384, T.wear, T.wearBias, T.treadDepth, true);
@@ -871,10 +854,6 @@ function rebuild(full = true) {
     if (treadGeo) { const prof = buildProfile(d); profileCache = prof; tyreMesh.add(new THREE.Mesh(treadGeo, treadMat)); tyreMesh.add(new THREE.Mesh(buildSidewallGeometry(d, prof), sideMat)); triCount = treadGeo.userData.tris; }
     else { const { geometry, profile } = buildTyreGeometry(d, patternMap); profileCache = profile; tyreMesh.add(new THREE.Mesh(geometry, [treadMat, sideMat])); triCount = geometry.index.count / 3; }
   } else { const { geometry, profile } = buildTyreGeometry(d, patternMap); profileCache = profile; tyreMesh.add(new THREE.Mesh(geometry, [treadMat, sideMat])); triCount = geometry.index.count / 3; }
-  if (usePoly) {
-    const shoulderMat = new THREE.MeshStandardMaterial({ color: T.rubber, roughness: 0.88, metalness: 0, side: THREE.DoubleSide });
-    tyreMesh.add(new THREE.Mesh(buildShoulderSeal(d), shoulderMat));
-  }
   tyreMesh.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (UI.threads) [].concat(o.material).forEach(m => { m.transparent = true; m.opacity = 0.35; }); } });
   tyreMesh.userData.tris = triCount; tyreGroup.add(tyreMesh);
   rimGroup = buildRim(d); rimGroup.traverse(o => { o.castShadow = true; }); tyreGroup.add(rimGroup);
