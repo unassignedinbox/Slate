@@ -203,7 +203,7 @@ const T = {                       // tyre carcass parameters (mm / inch / fracti
   treadFrac: 0.88, crown: 2.0, shoulder: 18, bulge: 1.0, rimWidthFrac: 0.78,
   radial: 720, across: 96, meshMode: 'poly', polyDetail: 6,
   rubber: '#151515', letter: 'white', lettering: true, brand: 'SLATE', spokes: 5, rimColor: '#c9ccd2', rimStyle: 'spoke',
-  factoryStripes: true, stripeRed: '#d63842', stripeBlue: '#3184c7', stripeWidth: 1.4, stripeGap: 4.2, stripeWave: 1.1
+  factoryStripes: true, stripeRed: '#d63842', stripeBlue: '#3184c7', stripePattern: 'zigzag', stripeWidth: 1.4, stripeGap: 4.2, stripeWave: 1.1, stripeOffset: 0, stripePitch: 12
 };
 const P = { name: 'GZero', type: 'Slick', layers: [] };   // tread pattern
 const UI = { sel: -1, threads: false, spin: false, treadMode: 'color' };
@@ -422,8 +422,21 @@ function buildTreadMaps(pm, treadDepth, rubberHex, wear) {
   const stripeWidth = Math.max(0.5, T.stripeWidth) * k * 0.5;
   const stripeGap = Math.max(1.5, T.stripeGap) * k * 0.5;
   const stripeWave = Math.max(0, T.stripeWave) * k;
+  const stripeOffset = T.stripeOffset * k;
+  const stripePitch = Math.max(4, T.stripePitch) * k;
   const stripePeriod = Math.max(16, 42 * k);
   const stripeCover = distance => Math.max(0, Math.min(1, (stripeWidth + 0.7 - distance) / 0.7));
+  const stripePaintAt = (x, y, centre, phaseOffset = 0) => {
+    const px = x + phaseOffset, cell = Math.floor(px / stripePitch), local = (px / stripePitch - cell - 0.5) * stripePitch;
+    if (T.stripePattern === 'dotted') return stripeCover(Math.hypot(local, y - centre));
+    if (T.stripePattern === 'dashed') return Math.abs(local) < stripePitch * 0.31 ? stripeCover(Math.abs(y - centre)) : 0;
+    if (T.stripePattern === 'stitch') {
+      if (Math.abs(local) >= stripePitch * 0.35) return 0;
+      const slope = cell % 2 ? 0.65 : -0.65;
+      return stripeCover(Math.abs((y - centre) - local * slope) / Math.sqrt(1 + slope * slope));
+    }
+    return stripeCover(Math.abs(y - centre));
+  };
   for (let y = 0; y < H; y++) {
     const wl = pm.wearRow(y);
     for (let x = 0; x < W; x++) {
@@ -439,8 +452,8 @@ function buildTreadMaps(pm, treadDepth, rubberHex, wear) {
       if (T.factoryStripes && dv < 0.025 && wl < 0.98) {
         const phase = (x / stripePeriod) - Math.floor(x / stripePeriod);
         const zig = (1 - 4 * Math.abs(phase - 0.5)) * stripeWave;
-        const redPaint = stripeCover(Math.abs(y - (H * 0.5 - stripeGap + zig)));
-        const bluePaint = stripeCover(Math.abs(y - (H * 0.5 + stripeGap - zig)));
+        const redPaint = stripePaintAt(x, y, H * 0.5 + stripeOffset - stripeGap + zig);
+        const bluePaint = stripePaintAt(x, y, H * 0.5 + stripeOffset + stripeGap - zig, stripePitch * 0.5);
         const fade = 1 - wl * 0.92;
         if (redPaint >= bluePaint && redPaint > 0) { paint = redPaint * fade; tmp.lerp(stripeRed, paint * 0.92); }
         else if (bluePaint > 0) { paint = bluePaint * fade; tmp.lerp(stripeBlue, paint * 0.92); }
@@ -967,10 +980,14 @@ function buildTyreUI() {
   select(l, 'Rim style', T, 'rimStyle', ['spoke', 'dish']); slider(l, 'Spokes', T, 'spokes', 3, 12, 1); color(l, 'Rim colour', T, 'rimColor');
   const markingHead = document.createElement('div'); markingHead.className = 'sec'; markingHead.textContent = 'Factory tread paint'; l.appendChild(markingHead);
   check(l, 'Coloured tread stripes', T, 'factoryStripes');
+  const patternRow = document.createElement('div'); patternRow.className = 'row'; patternRow.innerHTML = '<label>Stripe pattern</label><select><option value="zigzag">Solid zig-zag</option><option value="dotted">Dotted zig-zag</option><option value="dashed">Dashed zig-zag</option><option value="stitch">Stitch marks</option></select>';
+  const patternSelect = patternRow.querySelector('select'); patternSelect.value = T.stripePattern; patternSelect.onchange = e => { T.stripePattern = e.target.value; schedule(); }; l.appendChild(patternRow);
   color(l, 'Red stripe', T, 'stripeRed'); color(l, 'Blue stripe', T, 'stripeBlue');
+  slider(l, 'Lateral position (mm)', T, 'stripeOffset', -70, 70, 0.5, v => (v > 0 ? '+' : '') + v.toFixed(1));
   slider(l, 'Stripe width (mm)', T, 'stripeWidth', 0.5, 4, 0.1, v => v.toFixed(1));
   slider(l, 'Stripe gap (mm)', T, 'stripeGap', 1.5, 10, 0.1, v => v.toFixed(1));
   slider(l, 'Stripe weave (mm)', T, 'stripeWave', 0, 4, 0.1, v => v.toFixed(1));
+  slider(l, 'Pattern pitch (mm)', T, 'stripePitch', 4, 24, 0.5, v => v.toFixed(1));
 }
 function buildPresetUI() {
   const box = document.getElementById('presets'); box.innerHTML = '';
