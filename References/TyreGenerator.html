@@ -201,7 +201,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 const T = {                       // tyre carcass parameters (mm / inch / fractions)
   width: 245, aspect: 40, rim: 18, treadDepth: 8, wear: 0, wearBias: 0,
   treadFrac: 0.88, crown: 2.0, shoulder: 18, bulge: 1.0, rimWidthFrac: 0.78,
-  radial: 720, across: 96, meshMode: 'poly', polyDetail: 6,
+  radial: 720, across: 96, meshMode: 'heightmap', polyDetail: 6,
   rubber: '#151515', letter: 'white', lettering: true, brand: 'SLATE', spokes: 5, rimColor: '#c9ccd2', rimStyle: 'spoke',
   factoryStripes: true, stripeRed: '#d63842', stripeBlue: '#3184c7', stripePattern: 'zigzag', stripeWidth: 1.4, stripeGap: 4.2, stripeWave: 1.1, stripeOffset: 0, stripePitch: 12
 };
@@ -839,18 +839,20 @@ let tyreMesh, rimGroup, threadLines, maps, patternMap, profileCache, treadMat, s
 function disposeGroup() { tyreGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); }); tyreGroup.clear(); }
 
 function rebuild(full = true) {
+  // The continuous heightfield is a single watertight mesh; it avoids the shoulder gaps
+  // inherent in joining separately-triangulated polygon tread and sidewall surfaces.
+  if (T.meshMode !== 'heightmap') T.meshMode = 'heightmap';
   const d = dims();
   patternMap = renderPattern(P, d, 384, T.wear, T.wearBias, T.treadDepth);
   maps = buildTreadMaps(patternMap, T.treadDepth, T.rubber, T.wear);
   disposeGroup();
   const tex = c => { const t = new THREE.CanvasTexture(c); t.flipY = false; t.wrapS = THREE.RepeatWrapping; t.anisotropy = 8; t.colorSpace = THREE.NoColorSpace; return t; };
   const colTex = tex(maps.color); colTex.colorSpace = THREE.SRGBColorSpace;
-  const usePoly = T.meshMode === 'poly' && !!window.ClipperLib;
-  // Polygon tread already carries the real groove walls and corner normals. Applying a
-  // tangent-space height-map normal to those discontinuous faces can flip highlights at
-  // sharp block corners, so reserve that normal map for the height-map fallback only.
-  const treadNormal = usePoly ? null : tex(maps.normal);
-  treadMat = new THREE.MeshStandardMaterial({ map: colTex, normalMap: treadNormal, normalScale: new THREE.Vector2(treadNormal ? 0.7 : 0, treadNormal ? 0.7 : 0), roughnessMap: tex(maps.rough), roughness: 1, metalness: 0.0 });
+  const usePoly = false;
+  // The watertight heightfield has a continuous UV/tangent frame, so it can safely use
+  // the generated tread normal map without the corner discontinuities of polygon pieces.
+  const treadNormal = tex(maps.normal);
+  treadMat = new THREE.MeshStandardMaterial({ map: colTex, normalMap: treadNormal, normalScale: new THREE.Vector2(0.7, 0.7), roughnessMap: tex(maps.rough), roughness: 1, metalness: 0.0 });
   const sw = buildSidewall(true); const sideTex = tex(sw.color); sideTex.colorSpace = THREE.SRGBColorSpace;
   const sideMat = new THREE.MeshStandardMaterial({ map: sideTex, normalMap: tex(sw.normal), normalScale: new THREE.Vector2(0.45, 0.45), roughness: 0.8, metalness: 0 });
   tyreMesh = new THREE.Group(); let triCount = 0;
@@ -988,8 +990,8 @@ function buildTyreUI() {
   h('Wear');
   slider(p, 'Wear bias (edge↔centre)', T, 'wearBias', -1, 1, 0.01, v => v.toFixed(2));
   h('Tread mesh');
-  select(p, 'Mesh mode', T, 'meshMode', ['poly', 'heightmap']); slider(p, 'Polygon detail (mm)', T, 'polyDetail', 3, 16, 0.5, v => v.toFixed(1));
-  slider(p, 'Segments around', T, 'radial', 180, 1440, 20); slider(p, 'Segments across (heightmap)', T, 'across', 32, 192, 8);
+  const meshRow = document.createElement('div'); meshRow.className = 'row'; meshRow.innerHTML = '<label>Mesh mode</label><span class="val" style="flex:1;text-align:left">Watertight heightfield</span>'; p.appendChild(meshRow);
+  slider(p, 'Segments around', T, 'radial', 180, 1440, 20); slider(p, 'Segments across', T, 'across', 32, 192, 8);
   const pp = document.getElementById('profileParams'); pp.innerHTML = '';
   slider(pp, 'Tread depth (mm)', T, 'treadDepth', 2, 20, 0.5); slider(pp, 'Tread width fraction', T, 'treadFrac', 0.7, 0.98, 0.01, v => v.toFixed(2));
   slider(pp, 'Crown drop (mm)', T, 'crown', 0, 8, 0.1, v => v.toFixed(1)); slider(pp, 'Shoulder radius (mm)', T, 'shoulder', 4, 40, 1);
