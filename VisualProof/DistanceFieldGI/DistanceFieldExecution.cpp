@@ -48,6 +48,7 @@ public:
     std::vector<Allocation> Buffers;
     std::vector<ImageAllocation> Images;
     VkSampler Sampler{};
+    bool TextureIndexing=false, TextureUpdateAfterBind=false;
     ExecutionHost()
     {
         VkApplicationInfo Application{VK_STRUCTURE_TYPE_APPLICATION_INFO};
@@ -86,8 +87,19 @@ public:
         float Priority=1.0f;
         VkDeviceQueueCreateInfo QueueInformation{VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};
         QueueInformation.queueFamilyIndex=Family; QueueInformation.queueCount=1u; QueueInformation.pQueuePriorities=&Priority;
+        VkPhysicalDeviceVulkan12Features Supported{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+        VkPhysicalDeviceFeatures2 Available{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2}; Available.pNext=&Supported;
+        vkGetPhysicalDeviceFeatures2(Physical,&Available);
+        TextureIndexing=Supported.runtimeDescriptorArray && Supported.shaderSampledImageArrayNonUniformIndexing &&
+                        Supported.descriptorBindingVariableDescriptorCount && Supported.descriptorBindingPartiallyBound;
+        TextureUpdateAfterBind=TextureIndexing && Supported.descriptorBindingSampledImageUpdateAfterBind;
+        VkPhysicalDeviceVulkan12Features Enabled{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+        Enabled.runtimeDescriptorArray=Enabled.shaderSampledImageArrayNonUniformIndexing=TextureIndexing;
+        Enabled.descriptorBindingVariableDescriptorCount=Enabled.descriptorBindingPartiallyBound=TextureIndexing;
+        Enabled.descriptorBindingSampledImageUpdateAfterBind=TextureUpdateAfterBind;
         VkPhysicalDeviceFeatures Features{}; Features.shaderStorageImageExtendedFormats=VK_TRUE;
         VkDeviceCreateInfo DeviceInformation{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
+        DeviceInformation.pNext=&Enabled;
         DeviceInformation.queueCreateInfoCount=1u; DeviceInformation.pQueueCreateInfos=&QueueInformation; DeviceInformation.pEnabledFeatures=&Features;
         Accept(vkCreateDevice(Physical,&DeviceInformation,nullptr,&Device));
         vkGetDeviceQueue(Device,Family,0u,&Queue);
@@ -348,6 +360,35 @@ int main(int Count,char** Arguments)
             auto Recreated=Execute(4u,"recreated"); Require(Recreated[0]>1000.0,"Scene recreation produced no lighting");
             Frame.FeatureFlags=0u; Frame.ReflectionMode=2u;
             auto Reflection=Execute(1u,"mesh-reflection"); Require(Reflection[0]>500.0,"Exact mesh reflection missed emissive geometry");
+            ImageAllocation Pigment{};
+            if(Host.TextureIndexing)
+            {
+                Stage.Destroy();
+                const float Green[4]={0,1,0,1}; Pigment=Host.AllocateImage(1,1,VK_FORMAT_R32G32B32A32_SFLOAT,Green,sizeof(Green),true);
+                MaterialSlabRecord Pigmented{};
+                Pigmented.BaseWeight=1.0f; Pigmented.BaseColorR=Pigmented.BaseColorG=Pigmented.BaseColorB=1.0f;
+                Pigmented.SpecularRoughness=0.5f; Pigmented.SpecularIor=1.5f; Pigmented.GeometryOpacity=1.0f;
+                Pigmented.NormalScale=Pigmented.OcclusionStrength=Pigmented.MixWeight=1.0f;
+                for(auto& Slot:Pigmented.TextureSlots) Slot=UINT32_MAX;
+                Pigmented.TextureSlots[0]=0xFFFF0000u;
+                Materials[0].SlabCount=1u;
+                Host.Replace(MaterialBuffer,Materials.data(),Materials.size()*sizeof(MaterialRecord));
+                Host.Replace(Slabs,&Pigmented,sizeof(Pigmented));
+                Frame.FeatureFlags=1u; Frame.ReflectionMode=0u;
+                Require(Stage.Bring(Initialization),"Constant-material scene recreation failed");
+                auto Constant=Execute(4u,"constant-material");
+                Stage.Destroy();
+                Initialization.TextureCapacity=4u; Initialization.TextureCount=1u;
+                Initialization.TextureSampler=Host.Sampler; Initialization.TextureViews=&Pigment.View;
+                Initialization.TextureUpdateAfterBind=Host.TextureUpdateAfterBind;
+                Require(Stage.Bring(Initialization),"Bindless production resolve creation failed");
+                auto Textured=Execute(4u,"textured-material");
+                Require(Constant[0]>1000.0 && Textured[0]<Constant[0]*0.1,"Texture descriptor indexing did not modulate the resolved material");
+                std::cout<<"PASS descriptor-indexed production resolve and actual texture sampling\n";
+            }
+            else std::cout<<"SKIP descriptor-indexed variant: physical device lacks the required descriptor features\n";
+            Frame.FeatureFlags=0u;
+
             // 📝 Thin glass must transmit the first opaque hit, not misclassify it as a glass exit.
             MaterialSlabRecord Glass{};
             Glass.BaseColorR=Glass.BaseColorG=Glass.BaseColorB=1.0f;

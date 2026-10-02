@@ -25,7 +25,7 @@ Sources = [Root / "VisualProof/DistanceFieldGI/DistanceFieldExecution.cpp",
 subprocess.run([os.environ.get("CXX", "g++"), "-std=c++20", "-O2", "-g", "-Wall", "-Wextra", "-Wno-missing-field-initializers",
                 "-I" + str(Engine), *map(str, Sources), "-lvulkan", "-o", str(Output / "DistanceFieldExecution")], check=True)
 Completed = subprocess.run([str(Output / "DistanceFieldExecution"), str(Shaders), str(Images)],
-                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=240)
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=600)
 (Output / "Execution.log").write_text(Completed.stdout, encoding="utf-8")
 print(Completed.stdout)
 if Completed.returncode:

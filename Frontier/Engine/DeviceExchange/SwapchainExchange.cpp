@@ -3097,7 +3097,7 @@ bool SwapchainExchange::BringDistanceFieldGIStage() noexcept
     for (const VulkanRecord::ResidentTexture& T : Vulkan->Textures) SurfelTextureViews.push_back(T.View);
     Init.TextureViews     = SurfelTextureViews.data();
     Init.TextureCount     = static_cast<uint32_t>(SurfelTextureViews.size());
-    Init.TextureCapacity  = Vulkan->DescriptorIndexing ? kTextureSlotCapacity : 0u;
+    Init.TextureCapacity  = Vulkan->DescriptorIndexing ? Init.TextureCount : 0u;
     if (!Init.TriangleBuffer || !Init.MaterialBuffer || !Init.InstanceBuffer
      || !Init.SlabBuffer     || !Init.VertexBuffer   || !Init.IndexBuffer
      || !Init.EnergyLutView  || !Init.SheenLutView) return true;

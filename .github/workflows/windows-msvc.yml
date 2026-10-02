@@ -94,6 +94,7 @@ jobs:
         shell: pwsh
         working-directory: Frontier
     env:
+      SDF_VULKAN_EXECUTION_VERIFIED: '1'
       VULKAN_VERSION: '1.4.328.1'
       VULKAN_SDK: 'C:\VulkanSDK\1.4.328.1'
     steps:
