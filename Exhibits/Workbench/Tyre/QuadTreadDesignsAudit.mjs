@@ -68,11 +68,11 @@ const core = html.split('// == GEOMETRY CORE BEGIN ==')[1].split('// == GEOMETRY
                  .replace(/^[^\n]*\n/, '');   // strip the rest of the BEGIN marker line itself
 eval(core + `
 ;globalThis.__G = {
-  DESIGNS, T, D, sxDet, placements, resolveShape, splitSipes, derive, buildTread,
+  DESIGNS, T, D, AX, sxDet, placements, resolveShape, splitSipes, derive, buildTread,
   setDesign(k) { preset = k; Object.assign(T, DESIGNS[k].set); },
 };`);
 
-const { DESIGNS, T, D, sxDet, placements, resolveShape, splitSipes, derive, buildTread, setDesign } = globalThis.__G;
+const { DESIGNS, T, D, AX, sxDet, placements, resolveShape, splitSipes, derive, buildTread, setDesign } = globalThis.__G;
 
 // ------------------------------------------------ mesh audit ----------------------------------------------------------
 function auditMesh(B) {
@@ -167,6 +167,26 @@ function lintTraced(key) {
       if (d > 2 && d < 178) { crossed = true; break; }
     }
     if (crossed) warn.push(`block "${b.name}": sipes cross — keep one sipe family per block parallel`);
+  }
+  // sculpted tops: the apex dip must stay below the shallowest wall level it would otherwise
+  // break — under the least sipe floor minus a margin, else below a sensible share of the groove
+  for (const b of dsg.blocks) {
+    if (!b.apex) continue;
+    const dip = AX.bind(b.apex, b.shape);
+    const pts = resolveShape(b.shape, D.halfW, D.P);
+    const cap = (b.sipes && b.sipes.length)
+      ? Math.min(...b.sipes.map(s => Math.min(T.depth - 0.6, Math.max(0.8, (s.depthF ?? 0.62) * T.depth)))) - 0.7
+      : T.depth * 0.45;
+    let maxd = -1e9, mind = 1e9;
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i], q = pts[(i + 1) % pts.length];
+      for (const t of [0, .25, .5, .75]) {
+        const d = dip((p[0] + (q[0] - p[0]) * t) * D.halfW, (p[1] + (q[1] - p[1]) * t) * D.P);
+        if (d > maxd) maxd = d; if (d < mind) mind = d;
+      }
+    }
+    if (mind < -0.05) warn.push(`block "${b.name}": apex rises above the running surface (${mind.toFixed(2)} mm < 0)`);
+    if (maxd > cap + 1e-6) warn.push(`block "${b.name}": apex dip ${maxd.toFixed(1)} mm exceeds the ${cap.toFixed(1)} mm cap — keep sculpting shallower than the shallowest sipe floor −0.7 mm`);
   }
   // authored outlines must be simple
   const authored = dsg.blocks.map(b => ({ name: b.name, parts: splitSipes(resolveShape(b.shape, D.halfW, D.P), b.sipes) }));

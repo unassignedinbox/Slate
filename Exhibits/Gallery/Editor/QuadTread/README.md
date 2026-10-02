@@ -67,3 +67,11 @@ then re-renders the PNGs into this folder with a small software z-buffer
    polygon vertex produces slivers and dangling fan edges — shift the whole
    family with `off` until it cuts through the thick part of the lug
    (swept numerically: ±8 mm fan on the helix vane is watertight).
+4. **Sculpted lug tops (`apex`) must clear the shallowest sipe floor.** Blocks
+   may carry an authored apex function (per-vertex mm dip below the running
+   surface — `AX.ramp` / `AX.wedge`; claw shoulders run a 2.8 mm shed ramp,
+   armor shoulders 2.2 mm, helix vanes a 1.8 mm directional wedge). The dip is
+   lint-capped at `min(sipe floor) − 0.7 mm` / `0.45 × depth` so wall level
+   grids stay uniform and every column remains conforming. Sipe floors always
+   stay planar; chord midpoints stay 3-D lerps, so sculpted and flat pieces
+   share coordinates exactly.

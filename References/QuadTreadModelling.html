@@ -399,11 +399,12 @@ const DESIGNS = {
   },
   helixTrace: {
     label: 'Helix S — point mirror', tag: 'traced · 180° rotational copy',
-    desc: 'Point-symmetric directional: one S-curved vane authored on the right; the second vane is the same outline rotated 180° about the pitch centre — a point mirror, not an axis mirror, so the pair reads as a spinning helix instead of a V.',
+    desc: 'Point-symmetric directional: one S-curved vane authored on the right; the second vane is the same outline rotated 180° about the pitch centre — a point mirror, not an axis mirror, so the pair reads as a spinning helix instead of a V. Vane tops carry a 1.8 mm directional wedge sculpted per vertex (still all quads).',
     set: { width: 225, aspect: 50, rim: 17, depth: 9.5, crown: 2.6, shoulderLen: 13, shoulderDrop: 4,
            pitches: 44, chevron: 0, gapScale: 1, stagger: 1, sipeW: 1.4, sipeDepthF: 0.6 },
     blocks: [
-      { name: 'vane', sipes: [{ ang: 40, off: -8, depthF: 0.6 }, { ang: 40, off: 8, depthF: 0.6 }],
+      { name: 'vane', apex: { ramp: [58, 1.8] },              // directional wedge along the vane sweep
+        sipes: [{ ang: 40, off: -8, depthF: 0.6 }, { ang: 40, off: 8, depthF: 0.6 }],
         shape: SH.poly([[.03, .14], [.24, .18], [.32, .36], [.18, .50], [.36, .58], [.42, .78], [.34, .90], [.12, .84], [.06, .66], [.18, .52], [.03, .42]]) },
       { name: 'shoulder', sipes: [{ ang: 6, depthF: 0.55 }],
         shape: SH.box(.72, .18, 1.0, .52, 3.5) },
@@ -463,14 +464,15 @@ const DESIGNS = {
   },
   armorTrace: {
     label: 'Armor Z — polygon trace', tag: 'reference · point-mirrored half',
-    desc: 'The marked-up mud-terrain reference traced literally as four polygonal lugs: red shoulder, cream wing, orange hook and green centre Z. The opposite half is the same outlines rotated 180° about (0, ¾) — a point mirror that also lands the copy half a pitch along.',
+    desc: 'The marked-up mud-terrain reference traced literally as four polygonal lugs: red shoulder, cream wing, orange hook and green centre Z. The opposite half is the same outlines rotated 180° about (0, ¾) — a point mirror that also lands the copy half a pitch along. Shoulder lugs get a 2.2 mm outward shed ramp sculpted per vertex.',
     set: { width: 285, aspect: 70, rim: 17, depth: 15, crown: 2, shoulderLen: 18, shoulderDrop: 6,
            pitches: 26, chevron: 0, gapScale: 1, stagger: 1, sipeW: 1.5, sipeDepthF: .55 },
     blocks: [
       { name: 'centre Z', shape: SH.poly([[.02, .10], [.27, .02], [.34, .18], [.24, .34], [.345, .415], [.26, .585], [.08, .62], [.14, .45], [.01, .34]]) },
       { name: 'inner hook', shape: SH.poly([[.30, .605], [.55, .60], [.62, .74], [.49, .81], [.62, .925], [.575, 1.045], [.35, 1.09], [.42, .93], [.305, .79]]) },
       { name: 'outer wing', shape: SH.poly([[.575, .075], [.78, .08], [.91, .24], [.78, .31], [.885, .45], [.775, .615], [.61, .57], [.69, .42], [.585, .32]]) },
-      { name: 'shoulder', shape: SH.poly([[.825, .575], [1, .58], [1, 1.075], [.815, 1.115], [.74, .985], [.79, .84], [.715, .67]]) },
+      { name: 'shoulder', apex: { ramp: [90, 2.2] },          // outward shed ramp on the shoulder lugs
+        shape: SH.poly([[.825, .575], [1, .58], [1, 1.075], [.815, 1.115], [.74, .985], [.79, .84], [.715, .67]]) },
     ],
     sym: {
       even: [
@@ -501,13 +503,14 @@ const DESIGNS = {
   },
   clawTrace: {
     label: 'Claw V — polygon trace', tag: 'reference · long directional hooks',
-    desc: 'Long claw-shaped lugs traced from the directional M/T reference. The three source pieces form one half; the 180° point mirror builds the opposite half half a pitch along.',
+    desc: 'Long claw-shaped lugs traced from the directional M/T reference. The three source pieces form one half; the 180° point mirror builds the opposite half half a pitch along. Shoulder claws shed outward: a 2.8 mm ramp sculpted per vertex into the lug top.',
     set: { width: 295, aspect: 70, rim: 17, depth: 16, crown: 2, shoulderLen: 20, shoulderDrop: 7,
            pitches: 24, chevron: 0, gapScale: 1, stagger: 1, sipeW: 1.6, sipeDepthF: .55 },
     blocks: [
       { name: 'centre claw', shape: SH.poly([[.01, .08], [.28, .02], [.42, .18], [.29, .31], [.42, .42], [.335, .565], [.15, .55], [.23, .39], [.03, .28]]) },
       { name: 'mid claw', shape: SH.poly([[.34, .585], [.66, .63], [.80, .78], [.64, .87], [.775, .965], [.685, 1.085], [.475, 1.05], [.54, .92], [.375, .74]]) },
-      { name: 'shoulder claw', shape: SH.poly([[.725, .10], [1, .14], [1, .55], [.85, .69], [.72, .56], [.80, .40], [.645, .305]]) },
+      { name: 'shoulder claw', apex: { ramp: [90, 2.8] },     // outward mud-shed ramp sculpted into the top
+        shape: SH.poly([[.725, .10], [1, .14], [1, .55], [.85, .69], [.72, .56], [.80, .40], [.645, .305]]) },
     ],
     sym: {
       even: [
@@ -932,6 +935,41 @@ function makeBuilder() {
 
 const PENETRATION = 0.35;   // mm: traced outline walls + bottom faces reach past the groove floor
 
+// Apex helpers: authored closed-form dip functions (mm below the running surface) for sculpted lug tops.
+// A design sets `apex` on a block; full-depth pieces evaluate it per vertex (sipe floors stay planar).
+// Rule of use (enforced by the audit lint): the dip must stay shallower than the block's shallowest
+// sipe floor minus a margin, so walls keep a uniform level grid and every column stays conforming.
+const AX = {
+  ramp(deg, dip, box) {          // planar shed ramp rising toward direction deg (0° = along +v)
+    const th = deg * π / 180, dx = Math.sin(th), dy = Math.cos(th);
+    return (mx, my) => {
+      const c = box.c, hu = box.hxu * Math.abs(dx), hv = box.hyu * Math.abs(dy), t0 = Math.max(1e-6, hu + hv);
+      const s = ((mx - c[0]) * dx + (my - c[1]) * dy) / t0 * .5 + .5;
+      return dip * Math.min(1, Math.max(0, s));
+    };
+  },
+  wedge(deg, dip, box) {         // two-sided ridge: 0 on the centreline, dip toward both flanks
+    const th = deg * π / 180, dx = Math.sin(th), dy = Math.cos(th);
+    return (mx, my) => {
+      const c = box.c, hu = box.hxu * Math.abs(dy), hv = box.hyu * Math.abs(dx), t0 = Math.max(1e-6, hu + hv);
+      return dip * Math.min(1, Math.abs((mx - c[0]) * -dy + (my - c[1]) * dx) / t0);
+    };
+  },
+  boxOf(sh) {                    // resolved authored bbox of a block shape (unit uv)
+    const p = resolveShape(sh, D.halfW, D.P);
+    const xs = p.map(q => q[0] * D.halfW), ys = p.map(q => q[1] * D.P);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    return { c: [(x0 + x1) / 2, (y0 + y1) / 2], hxu: (x1 - x0) / 2, hyu: (y1 - y0) / 2 };
+  },
+  bind(spec, sh) {               // block.apex = AX.bind({ ramp: [deg, dip] }, shape) → fn(mx,my)→mm
+    if (!spec) return null;
+    if (typeof spec === 'function') return spec;
+    const b = AX.boxOf(sh), fns = [];
+    for (const [k, args] of Object.entries(spec)) fns.push(AX[k](...args, b));
+    return fns.length === 1 ? fns[0] : ((mx, my) => fns.reduce((a, f) => a + f(mx, my), 0));
+  },
+};
+
 function emitFloorBand(B, tiles, flat) {
   const { cols } = buildColumns();
   const rows = buildRows();
@@ -952,49 +990,61 @@ function emitFloorBand(B, tiles, flat) {
   }
 }
 
-function emitTracedPiece(B, poly, topDepth, flat, col, depthLevels) {
+function emitTracedPiece(B, poly, topDepth, flat, col, depthLevels, apexF) {
   const n = poly.length;
   const botDepth = T.depth + PENETRATION;
+  // Per-vertex top depths: sculpted (apex) pieces vary across the top; the dip is evaluated in
+  // AUTHORED space (vertex `.s`), so mirrored placements sculpt the mirror image consistently.
+  // ALL chord midpoints are 3-D lerps of the ring ends — exactly like the constant-depth path —
+  // so fans and walls stay coincident edge-on-edge.
+  const src = poly.map(v => v.s || v.p);
+  const topOf = s => topDepth + (apexF ? apexF(s[0] * D.halfW, s[1] * D.P) : 0);
+  const dTop = src.map(topOf);
   const mm = poly.map(v => ({ x: v.p[0] * D.halfW, y: v.p[1] * D.P }));
-  const top = mm.map(q => pos(q.x, q.y, topDepth, flat, V()));
-  const bot = mm.map(q => pos(q.x, q.y, botDepth, flat, V()));
-  const ct = top.reduce((acc, q) => acc.add(q), new THREE.Vector3()).multiplyScalar(1 / n);
-  const cb = bot.reduce((acc, q) => acc.add(q), new THREE.Vector3()).multiplyScalar(1 / n);
   const lerp3 = (a, b, t = .5) => a.clone().lerp(b, t);
+  const top = dTop.map((d, i) => pos(mm[i].x, mm[i].y, d, flat, V()));
+  const bot = mm.map(q => pos(q.x, q.y, botDepth, flat, V()));
+  const cS = src.reduce((a, s) => [a[0] + s[0] / n, a[1] + s[1] / n], [0, 0]);
+  const cq = { x: mm.reduce((a, q) => a + q.x / n, 0), y: mm.reduce((a, q) => a + q.y / n, 0) };
+  const ct = pos(cq.x, cq.y, topOf(cS), flat, V());
+  const cb = bot.reduce((acc, q) => acc.add(q), new THREE.Vector3()).multiplyScalar(1 / n);
   for (let i = 0; i < n; i++) {
     const pr = (i - 1 + n) % n, nx = (i + 1) % n;
-    const up = surfNormal(mm[i].x, mm[i].y, flat, V());
-    B.quad('tile', [top[i], lerp3(top[i], top[nx]), ct, lerp3(top[pr], top[i])], [up, up, up, up], up, col);
+    const qN = lerp3(top[i], top[nx]), qP = lerp3(top[pr], top[i]);
+    let up;
+    if (apexF) {          // face normal from the sculpted quad's own geometry (up-checked)
+      up = new THREE.Vector3().subVectors(qN, qP).cross(new THREE.Vector3().subVectors(top[i], ct));
+      up.normalize();
+      if (up.dot(surfNormal(mm[i].x, mm[i].y, flat, V())) < 0) up.negate();
+    } else up = surfNormal(mm[i].x, mm[i].y, flat, V());
+    B.quad('tile', [top[i], qN, ct, qP], [up, up, up, up], up, col);
     const dn = up.clone().negate();
-    B.quad('tile', [bot[i], lerp3(bot[pr], bot[i]), cb, lerp3(bot[i], bot[nx])], [dn, dn, dn, dn], dn, col);
+    B.quad('tile', [bot[i], lerp3(bot[i], bot[pr]), cb, lerp3(bot[i], bot[nx])], [dn, dn, dn, dn], dn, col);
   }
   // Walls. Every edge is emitted per depth segment (split at every sipe depth of the block, the same
   // levels the sipe walls and strip walls terminate at), and each segment is split at the 3-D CHORD
-  // midpoints of its end rings — exactly the midpoints the top/bottom fans use. So wall edge loops are
-  // conforming against the fans horizontally and against each other vertically, at sipe crossings too.
+  // midpoints of its end rings — exactly the midpoints the fans use. Sculpted tops only tilt the first
+  // row: the first ring follows the per-vertex dip, every ring below stays a shared absolute level, so
+  // adjacent walls keep identical edge stacks as long as the dip clears the shallowest level (linted).
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n, tag = poly[i].tag;
     let dT;
     if (tag.t === 'side') continue;                            // sipe strip flank: meets the sipe wall's foot
     else if (tag.t === 'sipe') dT = tag.depth;
     else dT = botDepth;
-    if (dT < topDepth + 1e-6) continue;   // wall below its own floor: hidden inside the solid, skip it
+    const lo = Math.max(dTop[i], dTop[j]);
+    if (dT < lo + 1e-6) continue;   // wall below its own floor: hidden inside the solid, skip it
     const midU = (poly[i].p[0] + poly[j].p[0]) / 2, midV = (poly[i].p[1] + poly[j].p[1]) / 2;
     const mx = midU * D.halfW, my = midV * D.P;
     let ex = new THREE.Vector3(top[j].z - top[i].z, 0, top[i].x - top[j].x);
     if (!flat) ex = surfNormal(mx, my, false, V()).cross(tangent(mx, my, false, V()));
-    const segs = [];
-    let p0 = topDepth;
-    for (const c of depthLevels) if (c > p0 + 1e-6 && c < dT - 1e-6) { segs.push([p0, c]); p0 = c; }
-    segs.push([p0, dT]);
-    let a1 = top[i], a2 = top[j], am = lerp3(a1, a2);
-    for (const [dA, dB] of segs) {
-      const b1 = dB === botDepth ? bot[i] : pos(mm[i].x, mm[i].y, dB, flat, V());
-      const b2 = dB === botDepth ? bot[j] : pos(mm[j].x, mm[j].y, dB, flat, V());
-      const bm = lerp3(b1, b2);
-      B.quad('tile', [a1, am, bm, b1], [ex, ex, ex, ex], ex, col);
-      B.quad('tile', [am, a2, b2, bm], [ex, ex, ex, ex], ex, col);
-      a1 = b1; a2 = b2; am = bm;
+    const lvls = depthLevels.filter(c => c > lo + 1e-6 && c < dT - 1e-6);
+    const ringI = [top[i], ...lvls.map(L => pos(mm[i].x, mm[i].y, L, flat, V())), dT === botDepth ? bot[i] : pos(mm[i].x, mm[i].y, dT, flat, V())];
+    const ringJ = [top[j], ...lvls.map(L => pos(mm[j].x, mm[j].y, L, flat, V())), dT === botDepth ? bot[j] : pos(mm[j].x, mm[j].y, dT, flat, V())];
+    const ringM = ringI.map((p, k) => lerp3(p, ringJ[k]));
+    for (let r = 0; r < ringI.length - 1; r++) {
+      B.quad('tile', [ringI[r], ringM[r], ringM[r + 1], ringI[r + 1]], [ex, ex, ex, ex], ex, col);
+      B.quad('tile', [ringM[r], ringJ[r], ringJ[r + 1], ringM[r + 1]], [ex, ex, ex, ex], ex, col);
     }
   }
 }
@@ -1017,7 +1067,7 @@ function buildTracedTread(opts = {}) {
     const parts = splitSipes(resolveShape(b.shape, D.halfW, D.P), b.sipes);
     const levels = [...new Set(parts.flatMap(pt => pt.poly.map(v => v.tag.t === 'sipe' ? v.tag.depth : NaN)).filter(Number.isFinite))]
                    .sort((a, b) => a - b);
-    return { name: b.name, parts, levels };
+    return { name: b.name, parts, levels, dipF: AX.bind(b.apex, b.shape) };
   });
   for (let t = 0; t < tiles; t++) {
     const places = placements(dsg, t);
@@ -1027,9 +1077,10 @@ function buildTracedTread(opts = {}) {
         for (const part of blk.parts) {
           const poly = part.poly.map(v => {
             const q = sxAp(pl.M, v.p);
-            return { p: [q[0], q[1] + t], tag: v.tag };
+            return { p: [q[0], q[1] + t], s: v.p, tag: v.tag };
           });
-          emitTracedPiece(B, poly, part.topDepth, flat, col, blk.levels);
+          const dip = part.topDepth === 0 ? blk.dipF : null;   // sculpt running surface only; sipe floors stay planar
+          emitTracedPiece(B, poly, part.topDepth, flat, col, blk.levels, dip);
         }
       }
     }
