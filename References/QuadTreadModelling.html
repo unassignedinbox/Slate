@@ -1,0 +1,1053 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quad Tread Modelling — mirror · trace · align · array</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0c0d0f;--card:#17181b;--card2:#1e2024;--card3:#25272c;--line:rgba(255,255,255,.06);
+    --txt:#e6e7ea;--mut:#8a8d94;--dim:#5c5f66;--green:#38c46d;--blue:#4f9cf0;--orange:#f0a04b;
+    font-family:"Outfit",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:13px;font-weight:300;letter-spacing:.01em;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);overflow:hidden}
+  #app{display:grid;grid-template-columns:330px 1fr;grid-template-rows:56px 1fr;height:100vh;gap:10px;padding:10px;
+       background:radial-gradient(1200px 600px at 60% -10%,#1a1c20 0%,var(--bg) 60%)}
+  header{grid-column:1/3;display:flex;align-items:center;gap:12px;padding:0 6px}
+  header h1{font-size:16px;font-weight:400;margin:0}
+  header .badge{background:var(--card2);border:1px solid var(--line);color:var(--green);border-radius:999px;padding:5px 14px;font-size:11.5px}
+  header .badge.warn{color:var(--orange)}
+  header .stats{margin-left:auto;display:flex;gap:16px;color:var(--mut);font-size:12px}
+  header .stats b{color:var(--txt);font-weight:500}
+  aside{display:flex;flex-direction:column;gap:10px;overflow-y:auto;min-height:0;scrollbar-width:thin;scrollbar-color:#2a2c31 transparent}
+  .card{background:var(--card);border-radius:18px;padding:16px 16px 12px;flex:0 0 auto}
+  .card h2{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:400;margin:0 0 10px}
+  .card h2::before{content:"";width:3px;height:15px;border-radius:2px;background:var(--bar,var(--green))}
+  .card h2 .r{margin-left:auto;color:var(--mut);font-size:11.5px;font-weight:300}
+  .steps{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .step{background:var(--card2);border:1px solid transparent;border-radius:12px;padding:10px 12px;cursor:pointer;transition:.15s}
+  .step:hover{border-color:var(--line);background:var(--card3)}
+  .step.on{border-color:var(--green);background:var(--card3)}
+  .step .n{color:var(--dim);font-size:10.5px}
+  .step.on .n{color:var(--green)}
+  .step .t{font-weight:400;font-size:13px;margin-top:2px}
+  #stageDesc{color:var(--mut);font-size:11.8px;line-height:1.5;margin-top:10px;min-height:52px}
+  .row{display:flex;align-items:center;gap:10px;margin:7px 0}
+  .row label{flex:0 0 118px;color:var(--mut);font-size:12px}
+  .row .val{flex:0 0 46px;text-align:right;color:var(--txt);font-size:12px;font-variant-numeric:tabular-nums}
+  .row input[type=range]{flex:1;min-width:0;-webkit-appearance:none;appearance:none;height:18px;background:transparent;cursor:pointer}
+  .row input[type=range]::-webkit-slider-runnable-track{height:2px;background:#33363c;border-radius:2px}
+  .row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:#fff;margin-top:-5px;box-shadow:0 0 0 3px var(--card)}
+  .row input[type=range]::-moz-range-track{height:2px;background:#33363c;border-radius:2px}
+  .row input[type=range]::-moz-range-thumb{width:12px;height:12px;border:0;border-radius:50%;background:#fff}
+  .row input[type=checkbox]{appearance:none;width:34px;height:20px;border-radius:999px;background:#2d3036;position:relative;cursor:pointer;transition:.2s;flex:0 0 34px}
+  .row input[type=checkbox]::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#9a9da4;transition:.2s}
+  .row input[type=checkbox]:checked{background:var(--green)}
+  .row input[type=checkbox]:checked::after{left:17px;background:#fff}
+  .presets{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
+  .presets button{background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:12px;padding:9px 10px;font:inherit;font-size:12px;cursor:pointer;transition:.15s;text-align:left}
+  .presets button small{display:block;color:var(--dim);font-size:10px;margin-top:2px}
+  .presets button:hover{background:var(--card3)}
+  .presets button.on{border-color:var(--green)}
+  .presets button.on small{color:var(--green)}
+  #presetDesc{color:var(--mut);font-size:11.5px;line-height:1.5;min-height:34px}
+  .btns{display:flex;gap:6px;margin-top:6px}
+  .btns button{background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:999px;padding:7px 14px;font:inherit;font-size:12px;cursor:pointer;transition:.15s}
+  .btns button:hover{background:var(--card3)}
+  .btns button.primary{background:#fff;color:#111;border-color:#fff}
+  #view{position:relative;border-radius:18px;overflow:hidden;background:#111;min-height:0}
+  #view canvas{display:block}
+  #hint{position:absolute;left:14px;bottom:12px;color:var(--dim);font-size:11px;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Quad Tread Modelling — Mirrored Motifs</h1>
+    <span class="badge">100% quads</span>
+    <span class="badge">mirror + translate motifs</span>
+    <span class="badge warn">no heightmap · no displacement</span>
+    <div class="stats">
+      <span>quads <b id="stQuads">0</b></span>
+      <span>bridge quads <b id="stBridge">0</b></span>
+      <span>tiles <b id="stTiles">0</b></span>
+      <span>pitch <b id="stPitch">0</b> mm</span>
+    </div>
+  </header>
+
+  <aside>
+    <div class="card" style="--bar:var(--green)">
+      <h2>Pipeline <span class="r">the four steps</span></h2>
+      <div class="steps">
+        <div class="step" data-stage="1"><div class="n">STEP 1</div><div class="t">Trace</div></div>
+        <div class="step" data-stage="2"><div class="n">STEP 2</div><div class="t">Align</div></div>
+        <div class="step" data-stage="3"><div class="n">STEP 3</div><div class="t">Array</div></div>
+        <div class="step" data-stage="4"><div class="n">STEP 4</div><div class="t">Bridge</div></div>
+      </div>
+      <div id="stageDesc"></div>
+    </div>
+
+    <div class="card" style="--bar:var(--blue)">
+      <h2>Tread designs <span class="r">real archetypes</span></h2>
+      <div class="presets" id="presetButtons"></div>
+      <div id="presetDesc"></div>
+    </div>
+
+    <div class="card" style="--bar:var(--orange)">
+      <h2>Tyre <span class="r">carcass fit</span></h2>
+      <div id="tyreRows"></div>
+    </div>
+
+    <div class="card" style="--bar:var(--green)">
+      <h2>Pattern <span class="r">applies to the design</span></h2>
+      <div id="patternRows"></div>
+    </div>
+
+    <div class="card" style="--bar:var(--blue)">
+      <h2>Display</h2>
+      <div id="displayRows"></div>
+      <div class="btns">
+        <button id="exportObj" class="primary">Export OBJ (quad faces)</button>
+        <button id="exportGlb">GLB</button>
+      </div>
+    </div>
+  </aside>
+
+  <div id="view"><div id="hint">drag to orbit · wheel to zoom</div></div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+
+// ====================================================================================================================
+//  QUAD TREAD MODELLING — real tread archetypes + mirrored reference motifs
+//
+//  The tread is MODELLED, never displaced: no height map, no texture probe, no per-vertex raster lookup.
+//
+//  A tread design is a list of LANES from the centre of the tyre outward. A lane is either a circumferential
+//  groove (always floor) or a rib of rubber. A rib lane is continuous (a ring) or blocked (cut into tread
+//  blocks by a per-lane gap), carries its own sipes, its own chevron slope multiplier, and its own PHASE —
+//  a circumferential offset that staggers its blocks against the neighbouring lanes, which is how off-road
+//  lugs alternate. Every lane boundary and every block/sipe/gap edge becomes a grid line of ONE shared
+//  conforming quad grid, so every wall is traced exactly by quad edges and lanes can never disagree about
+//  a shared vertex: the classification shifts per lane, the grid does not.
+//
+//  STEP 1  TRACE   one pitch of the design, flat: block tops, explicit wall quads down every outline,
+//                  groove floors, sipe floors. All faces quads.
+//  STEP 2  ALIGN   the same tile mapped onto the wheel: lateral mm follow the crown bulge + shoulder
+//                  roundover, circumferential mm become wheel angle. Same topology, new positions.
+//  STEP 3  ARRAY   the tile instanced pitch-count times; pitch = circumference / count, exact.
+//  STEP 4  BRIDGE  the gaps of every blocked lane are closed by bridging the identical boundary loops of
+//                  neighbouring tiles with quads (tinted blue). Watertight tread band, tread only.
+// ====================================================================================================================
+
+const π = Math.PI;
+
+// ------------------------------------------------- state -----------------------------------------------------------
+const T = {
+  width: 205, aspect: 55, rim: 16, treadFrac: 0.88,     // carcass
+  depth: 8, crown: 2.5, shoulderLen: 12, shoulderDrop: 3,
+  pitches: 70, chevron: 14, gapScale: 1.0, stagger: 1.0, // pattern knobs, applied onto the active design
+  sipeW: 1.6, sipeDepthF: 0.6,
+  skirt: true, wire: true, tint: true, spin: false,
+};
+let preset = 'road';
+let stage = 4;
+
+const STAGE_TEXT = {
+  1: 'Step 1 — Trace. One pitch of the design, flat. Lane patterns use the shared quad grid; reference patterns use one authored right-half rail motif, mirrored, pitch-flipped and translated into the opposite half. Top faces, wall quads and floors only — no height sampling.',
+  2: 'Step 2 — Align. The same quad tile bent onto the wheel. Across the width it follows the crown bulge and shoulder roundover; along its length, the wheel circumference. Same topology, new positions.',
+  3: 'Step 3 — Array. The completed tile repeats around the wheel at exact pitch spacing (circumference ÷ pitch count). Mirrored motif designs are circular-arrayed after the mirror/translate operation; blocked lane designs leave their identical boundary loops ready to bridge.',
+  4: 'Step 4 — Bridge / close. Blocked lane gaps bridge matching loops with quads; traced motif lugs are closed as solid quad shells and then wrapped around the circumference. Tread only — no sidewall, no carcass.',
+};
+
+// ------------------------------------------------- tread designs ---------------------------------------------------
+//  Lanes run from the tyre centreline outward; the first lane straddles the centre, the last absorbs the
+//  remaining width out to the shoulder. kind:'groove' is a circumferential groove. A rib lane:
+//    blocked   cut into blocks by a gap of gapFrac × pitch (bridged in step 4)
+//    sipes     thin cuts across the lane (work on continuous ribs too)
+//    phase     0..1 circumferential offset — staggers this lane's blocks against its neighbours
+//    chevMul   multiplies the global chevron slope inside this lane (0 = straight)
+const DESIGNS = {
+  road: {
+    label: 'Road / Touring', tag: 'asphalt · symmetric ribs',
+    desc: 'Symmetric asphalt pattern: continuous siped centre rib, four circumferential grooves, blocked intermediate and shoulder ribs with light chevron. The daily-commuter layout.',
+    set: { width: 205, aspect: 55, rim: 16, depth: 8, crown: 2.5, shoulderLen: 12, shoulderDrop: 3,
+           pitches: 70, chevron: 14, gapScale: 1, stagger: 1, sipeW: 1.6, sipeDepthF: 0.6 },
+    lanes: [
+      { kind: 'rib',    w: 16, sipes: 2, chevMul: 0 },
+      { kind: 'groove', w: 8 },
+      { kind: 'rib',    w: 24, blocked: true, gapFrac: 0.16, sipes: 2, chevMul: 1, phase: 0 },
+      { kind: 'groove', w: 9 },
+      { kind: 'rib',    w: 60, blocked: true, gapFrac: 0.20, sipes: 2, chevMul: 0.6, phase: 0.5 },
+    ],
+  },
+  ht: {
+    label: 'Highway Rib', tag: 'van / truck · straight ribs',
+    desc: 'Classic highway rib: straight continuous ribs with zero chevron and narrow circumferential grooves — low noise, even wear, straight-line stability for vans and light trucks. Light single sipes only.',
+    set: { width: 235, aspect: 65, rim: 16, depth: 10, crown: 2, shoulderLen: 13, shoulderDrop: 3,
+           pitches: 84, chevron: 0, gapScale: 1, stagger: 1, sipeW: 1.4, sipeDepthF: 0.55 },
+    lanes: [
+      { kind: 'rib',    w: 14, sipes: 1, chevMul: 0 },
+      { kind: 'groove', w: 7 },
+      { kind: 'rib',    w: 20, sipes: 1, chevMul: 0 },
+      { kind: 'groove', w: 7 },
+      { kind: 'rib',    w: 24, sipes: 1, chevMul: 0 },
+      { kind: 'groove', w: 7 },
+      { kind: 'rib',    w: 60, sipes: 1, chevMul: 0 },
+    ],
+  },
+  winter: {
+    label: 'Winter / Nordic', tag: 'snow · dense siping',
+    desc: 'Studless winter: a dense field of small staggered blocks, every one cut by deep multi-sipes — the thousands of biting edges do the work on snow and ice. Narrow section, high pitch count.',
+    set: { width: 195, aspect: 65, rim: 15, depth: 9.5, crown: 2.5, shoulderLen: 11, shoulderDrop: 4,
+           pitches: 72, chevron: 10, gapScale: 1, stagger: 1, sipeW: 1.2, sipeDepthF: 0.85 },
+    lanes: [
+      { kind: 'rib',    w: 14, blocked: true, gapFrac: 0.18, sipes: 3, chevMul: 0,   phase: 0.5 },
+      { kind: 'groove', w: 6 },
+      { kind: 'rib',    w: 22, blocked: true, gapFrac: 0.20, sipes: 3, chevMul: 1,   phase: 0 },
+      { kind: 'groove', w: 6 },
+      { kind: 'rib',    w: 60, blocked: true, gapFrac: 0.22, sipes: 3, chevMul: 0.7, phase: 0.5 },
+    ],
+  },
+  at: {
+    label: 'All-Terrain', tag: '50/50 · interlocking blocks',
+    desc: 'All-terrain compromise: chunkier, more open blocks than a road tyre but still siped and tightly interlocked for tarmac manners. Staggered rows, moderate chevron, deeper tread.',
+    set: { width: 265, aspect: 60, rim: 18, depth: 12.5, crown: 2, shoulderLen: 15, shoulderDrop: 5,
+           pitches: 40, chevron: 16, gapScale: 1, stagger: 1, sipeW: 1.6, sipeDepthF: 0.65 },
+    lanes: [
+      { kind: 'rib',    w: 20, blocked: true, gapFrac: 0.25, sipes: 2, chevMul: 0.5, phase: 0 },
+      { kind: 'groove', w: 8 },
+      { kind: 'rib',    w: 26, blocked: true, gapFrac: 0.28, sipes: 2, chevMul: 1,   phase: 0.5 },
+      { kind: 'groove', w: 8 },
+      { kind: 'rib',    w: 60, blocked: true, gapFrac: 0.30, sipes: 1, chevMul: 0.7, phase: 0.15 },
+    ],
+  },
+  wet: {
+    label: 'Wet / Rain', tag: 'directional V',
+    desc: 'Directional rain pattern: a sharp V channels water outward from the narrow centre rib through wide circumferential grooves. Staggered arms, siped blocks, deep tread.',
+    set: { width: 225, aspect: 45, rim: 17, depth: 8.5, crown: 3, shoulderLen: 14, shoulderDrop: 4,
+           pitches: 58, chevron: 50, gapScale: 1, stagger: 1, sipeW: 1.6, sipeDepthF: 0.65 },
+    lanes: [
+      { kind: 'rib',    w: 12, chevMul: 0 },
+      { kind: 'groove', w: 11 },
+      { kind: 'rib',    w: 26, blocked: true, gapFrac: 0.30, sipes: 2, chevMul: 1, phase: 0 },
+      { kind: 'groove', w: 10 },
+      { kind: 'rib',    w: 60, blocked: true, gapFrac: 0.32, sipes: 2, chevMul: 1, phase: 0.35 },
+    ],
+  },
+  aqua: {
+    label: 'Aqua / Full Wet', tag: 'racing wet · centre channel',
+    desc: 'Full-wet racing pattern: a wide open centre channel dumps the bulk of the water, steep V arms sweep the rest to the shoulders. Deep tread, tall crown, everything staggered.',
+    set: { width: 245, aspect: 40, rim: 18, depth: 10, crown: 3.5, shoulderLen: 14, shoulderDrop: 4,
+           pitches: 52, chevron: 55, gapScale: 1, stagger: 1, sipeW: 1.8, sipeDepthF: 0.7 },
+    lanes: [
+      { kind: 'groove', w: 18 },
+      { kind: 'rib',    w: 22, blocked: true, gapFrac: 0.28, sipes: 1, chevMul: 1,   phase: 0 },
+      { kind: 'groove', w: 9 },
+      { kind: 'rib',    w: 24, blocked: true, gapFrac: 0.30, sipes: 1, chevMul: 1,   phase: 0.4 },
+      { kind: 'groove', w: 9 },
+      { kind: 'rib',    w: 60, blocked: true, gapFrac: 0.30, sipes: 1, chevMul: 0.9, phase: 0.7 },
+    ],
+  },
+  gt3: {
+    label: 'GT3 Slick', tag: 'racing · smooth',
+    desc: 'Racing slick: an unbroken band of rubber for maximum dry contact patch, flat crown, shallow depth. The two thin circumferential scribes are wear indicators, not tread.',
+    set: { width: 305, aspect: 30, rim: 18, depth: 3.5, crown: 1, shoulderLen: 16, shoulderDrop: 3,
+           pitches: 24, chevron: 0, gapScale: 1, stagger: 1, sipeW: 1.6, sipeDepthF: 0.6 },
+    lanes: [
+      { kind: 'rib',    w: 60, chevMul: 0 },
+      { kind: 'groove', w: 3 },
+      { kind: 'rib',    w: 99, chevMul: 0 },
+    ],
+  },
+  drag: {
+    label: 'Drag Slick', tag: 'straight-line · wrinkle wall',
+    desc: 'Drag slick: a huge, nearly square contact patch of soft smooth rubber, almost no crown, minimal depth. The two hairline scribes are wear gauges — everything else is grip.',
+    set: { width: 325, aspect: 50, rim: 15, depth: 4, crown: 0.8, shoulderLen: 18, shoulderDrop: 2,
+           pitches: 20, chevron: 0, gapScale: 1, stagger: 1, sipeW: 1.6, sipeDepthF: 0.6 },
+    lanes: [
+      { kind: 'rib',    w: 90,  chevMul: 0 },
+      { kind: 'groove', w: 2.5 },
+      { kind: 'rib',    w: 60,  chevMul: 0 },
+      { kind: 'groove', w: 2.5 },
+      { kind: 'rib',    w: 60,  chevMul: 0 },
+    ],
+  },
+  semi: {
+    label: 'Semi-slick', tag: 'track / tarmac',
+    desc: 'Road-legal track pattern: mostly rubber, a wide continuous outer shoulder for cornering, sparse angled slots on the inner half to stay legal in the wet. Large pitches, shallow gaps.',
+    set: { width: 265, aspect: 35, rim: 19, depth: 6, crown: 1.5, shoulderLen: 14, shoulderDrop: 3,
+           pitches: 40, chevron: 35, gapScale: 1, stagger: 1, sipeW: 1.6, sipeDepthF: 0.6 },
+    lanes: [
+      { kind: 'rib',    w: 30, chevMul: 0 },
+      { kind: 'groove', w: 9 },
+      { kind: 'rib',    w: 34, blocked: true, gapFrac: 0.10, sipes: 0, chevMul: 1, phase: 0 },
+      { kind: 'groove', w: 8 },
+      { kind: 'rib',    w: 70, chevMul: 0 },
+    ],
+  },
+  armorTrace: {
+    label: 'Armor Z — mirrored motifs', tag: 'reference · mirror + half-pitch flip',
+    desc: 'Reference-style armour tread: only the right-half source lugs are authored. The builder mirrors them across the tyre centreline, flips them through the pitch axis, translates by half a pitch, then circular-arrays the finished motif. Every hook is a rail-traced quad strip, not a box.',
+    set: { width:285, aspect:70, rim:17, depth:15, crown:2, shoulderLen:18, shoulderDrop:6, pitches:26, chevron:0, gapScale:1, stagger:1, sipeW:1.5, sipeDepthF:.55 },
+    lanes:[{kind:'rib',w:999,chevMul:0}], traced:true,
+    motifs:[
+      {name:'centre Z spine', phase:.02, cols:2, left:[[.02,.10],[.12,.18],[.07,.33],[.20,.48],[.14,.68],[.05,.84]], right:[[.18,.06],[.32,.15],[.24,.32],[.39,.47],[.31,.73],[.13,.90]]},
+      {name:'inner broken hook', phase:.48, cols:2, left:[[.22,.04],[.38,.10],[.33,.25],[.50,.39],[.44,.58],[.28,.72]], right:[[.40,.02],[.60,.13],[.53,.28],[.70,.43],[.61,.66],[.38,.82]]},
+      {name:'outer wing', phase:.04, cols:3, left:[[.55,.02],[.69,.10],[.63,.26],[.79,.39],[.72,.58],[.58,.73]], right:[[.77,.06],[.96,.17],[.87,.32],[1.00,.50],[.92,.72],[.71,.86]]},
+      {name:'offset shoulder cap', phase:.52, cols:2, left:[[.76,.00],[.90,.05],[.83,.21],[.95,.39],[.87,.58],[.76,.72],[.72,.82]], right:[[.94,.02],[1.00,.05],[1.00,.22],[1.00,.42],[1.00,.64],[.93,.79],[.82,.88]]},
+    ]
+  },
+  latticeTrace: {
+    label: 'Lattice X — mirrored motifs', tag: 'reference · crossed quad strips',
+    desc: 'Dense all-terrain reference rebuilt as crossing rail strips: centre diamonds, X-bars, notched wings and shoulder teeth. The left half is generated by mirror + pitch flip; no hand-authored opposite side and no rectangular stamp.',
+    set: { width:275, aspect:55, rim:20, depth:13.5, crown:2.2, shoulderLen:17, shoulderDrop:5, pitches:30, chevron:0, gapScale:1, stagger:1, sipeW:1.4, sipeDepthF:.55 },
+    lanes:[{kind:'rib',w:999,chevMul:0}], traced:true,
+    motifs:[
+      {name:'centre diamond A', phase:.00, cols:2, mirrorShift:.5, left:[[.02,.08],[.14,.18],[.10,.35],[.23,.50],[.16,.68],[.03,.80]], right:[[.19,.04],[.33,.17],[.28,.34],[.42,.51],[.31,.73],[.13,.88]]},
+      {name:'centre diamond B', phase:.50, cols:2, mirrorShift:.5, left:[[.05,.02],[.22,.12],[.17,.29],[.32,.45],[.25,.63],[.08,.76]], right:[[.28,.00],[.49,.14],[.42,.31],[.58,.48],[.48,.69],[.22,.84]]},
+      {name:'cross bar long', phase:.12, cols:2, mirrorShift:.5, left:[[.36,.04],[.50,.16],[.45,.31],[.63,.47],[.55,.64],[.36,.75]], right:[[.54,.01],[.78,.15],[.70,.33],[.89,.51],[.79,.72],[.52,.87]]},
+      {name:'notched outer wing', phase:.62, cols:3, mirrorShift:.5, left:[[.58,.02],[.74,.10],[.68,.25],[.84,.38],[.77,.55],[.61,.69]], right:[[.78,.04],[.98,.16],[.90,.31],[1.00,.45],[.96,.66],[.73,.82]]},
+      {name:'square shoulder tooth', phase:.18, cols:2, mirrorShift:.5, left:[[.80,.00],[.94,.07],[.88,.22],[.99,.37],[.91,.54],[.77,.68]], right:[[.97,.03],[1.00,.06],[1.00,.22],[1.00,.42],[1.00,.61],[.90,.76]]},
+    ]
+  },
+  clawTrace: {
+    label: 'Claw V — mirrored motifs', tag: 'reference · long directional claws',
+    desc: 'Long claw-shaped M/T lugs authored once as right-side rails. The opposite side is not copied by hand: it is mirrored, flipped in pitch, translated, and then circular-arrayed so the V alternates around the tyre.',
+    set: { width:295, aspect:70, rim:17, depth:16, crown:2, shoulderLen:20, shoulderDrop:7, pitches:24, chevron:0, gapScale:1, stagger:1, sipeW:1.6, sipeDepthF:.55 },
+    lanes:[{kind:'rib',w:999,chevMul:0}], traced:true,
+    motifs:[
+      {name:'inner talon', phase:.00, cols:2, mirrorShift:.5, left:[[.02,.10],[.18,.08],[.13,.24],[.31,.38],[.24,.56],[.09,.70]], right:[[.20,.04],[.43,.14],[.34,.30],[.56,.47],[.45,.68],[.20,.84]]},
+      {name:'main sweeping claw', phase:.35, cols:3, mirrorShift:.5, left:[[.28,.02],[.47,.11],[.39,.27],[.60,.40],[.52,.58],[.35,.73]], right:[[.50,.00],[.79,.15],[.69,.33],[.91,.50],[.78,.73],[.49,.90]]},
+      {name:'outer buttress hook', phase:.04, cols:3, mirrorShift:.5, left:[[.63,.05],[.79,.14],[.72,.31],[.88,.46],[.79,.64],[.65,.78]], right:[[.83,.10],[1.00,.20],[.99,.41],[1.00,.60],[.91,.80],[.76,.91]]},
+      {name:'staggered shoulder claw', phase:.54, cols:2, mirrorShift:.5, left:[[.75,.00],[.91,.09],[.84,.27],[.98,.44],[.88,.64],[.75,.79]], right:[[.95,.04],[1.00,.08],[1.00,.30],[1.00,.52],[.98,.74],[.86,.91]]},
+    ]
+  },
+  touringTrace: {
+    label: 'Touring — traced five-rib', tag: 'reference · chamfered mirrored ribs',
+    desc: 'A touring reference with narrow centre facets, chamfered intermediate lugs and broad shoulder caps. It is still generated from right-side quad motifs and mirror/translation transforms, but with shallower depth and tighter pitches for road use.',
+    set: { width:225, aspect:50, rim:17, depth:8, crown:2.5, shoulderLen:13, shoulderDrop:3, pitches:58, chevron:0, gapScale:1, stagger:1, sipeW:1.1, sipeDepthF:.6 },
+    lanes:[{kind:'rib',w:999,chevMul:0}], traced:true,
+    motifs:[
+      {name:'centre chamfer rib', phase:.02, cols:2, mirrorShift:.5, left:[[.02,.02],[.11,.04],[.09,.28],[.15,.48],[.11,.72],[.02,.78]], right:[[.13,.02],[.24,.06],[.21,.29],[.28,.50],[.23,.73],[.12,.82]]},
+      {name:'inner diagonal block', phase:.42, cols:2, mirrorShift:.5, left:[[.26,.04],[.38,.09],[.34,.25],[.44,.44],[.39,.65],[.27,.76]], right:[[.40,.06],[.56,.12],[.51,.30],[.61,.48],[.55,.70],[.39,.80]]},
+      {name:'intermediate saw block', phase:.04, cols:2, mirrorShift:.5, left:[[.55,.02],[.67,.04],[.64,.23],[.74,.42],[.69,.65],[.56,.76]], right:[[.69,.03],[.84,.07],[.80,.27],[.90,.47],[.85,.70],[.68,.82]]},
+      {name:'broad shoulder cap', phase:.50, cols:3, mirrorShift:.5, left:[[.78,.03],[.92,.05],[.87,.25],[.97,.46],[.90,.68],[.79,.78]], right:[[.96,.03],[1.00,.05],[1.00,.25],[1.00,.50],[1.00,.73],[.92,.84]]},
+      {name:'hairline centre siped islands', phase:.25, cols:1, mirrorShift:.5, left:[[.01,.16],[.07,.18],[.06,.38],[.08,.58],[.06,.78]], right:[[.06,.14],[.12,.18],[.11,.40],[.13,.60],[.11,.80]]},
+    ]
+  },
+  hydraTrace: {
+    label: 'Hydra Wet — mirrored V', tag: 'AAA · directional water channels',
+    desc: 'Next-gen directional wet pattern: paired mirrored V-arms, split shoulder exits and a centre arrow. The voids are actual space between traced quad strips; no height texture is being sampled.',
+    set: { width:255, aspect:35, rim:20, depth:9.5, crown:3.2, shoulderLen:15, shoulderDrop:4, pitches:46, chevron:0, gapScale:1, stagger:1, sipeW:1.3, sipeDepthF:.65 },
+    lanes:[{kind:'rib',w:999,chevMul:0}], traced:true,
+    motifs:[
+      {name:'centre arrow island', phase:.00, cols:2, mirrorShift:.5, left:[[.02,.08],[.16,.20],[.11,.38],[.21,.55],[.14,.73],[.04,.86]], right:[[.15,.04],[.31,.18],[.26,.38],[.36,.57],[.26,.79],[.10,.93]]},
+      {name:'primary swept V arm', phase:.18, cols:3, mirrorShift:.5, left:[[.26,.00],[.42,.11],[.37,.25],[.56,.42],[.49,.58],[.32,.70]], right:[[.41,.01],[.66,.17],[.59,.32],[.80,.51],[.69,.70],[.45,.86]]},
+      {name:'secondary water hook', phase:.64, cols:2, mirrorShift:.5, left:[[.35,.02],[.50,.10],[.46,.24],[.63,.39],[.56,.55],[.39,.66]], right:[[.52,.05],[.73,.18],[.66,.34],[.84,.50],[.74,.68],[.51,.80]]},
+      {name:'split shoulder exit', phase:.18, cols:2, mirrorShift:.5, left:[[.70,.08],[.86,.17],[.78,.34],[.96,.49],[.86,.69],[.73,.82]], right:[[.88,.12],[1.00,.20],[1.00,.40],[1.00,.62],[.96,.80],[.82,.92]]},
+      {name:'outer rain tooth', phase:.68, cols:2, mirrorShift:.5, left:[[.76,.00],[.91,.07],[.84,.22],[.98,.36],[.91,.52],[.78,.64]], right:[[.96,.02],[1.00,.07],[1.00,.24],[1.00,.43],[.98,.60],[.88,.74]]},
+    ]
+  },
+  apexTrace: {
+    label: 'Apex A/T — layered mirrors', tag: 'AAA · nested lugs',
+    desc: 'Layered all-terrain pattern inspired by modern premium tyres: nested hooks, centre keys, shoulder teeth and staggered half-pitch flips. One authored source module becomes the full tread through mirror and translate transforms.',
+    set: { width:285, aspect:60, rim:18, depth:14, crown:2.4, shoulderLen:18, shoulderDrop:6, pitches:32, chevron:0, gapScale:1, stagger:1, sipeW:1.5, sipeDepthF:.6 },
+    lanes:[{kind:'rib',w:999,chevMul:0}], traced:true,
+    motifs:[
+      {name:'centre key stone', phase:.03, cols:2, mirrorShift:.5, left:[[.02,.08],[.15,.06],[.13,.24],[.22,.37],[.17,.55],[.07,.70]], right:[[.17,.04],[.31,.09],[.30,.27],[.40,.42],[.31,.63],[.16,.80]]},
+      {name:'nested middle hook A', phase:.27, cols:2, mirrorShift:.5, left:[[.24,.00],[.39,.09],[.35,.24],[.51,.36],[.45,.54],[.30,.67]], right:[[.41,.01],[.61,.13],[.56,.29],[.72,.43],[.65,.63],[.44,.79]]},
+      {name:'nested middle hook B', phase:.76, cols:2, mirrorShift:.5, left:[[.25,.03],[.41,.14],[.34,.31],[.53,.47],[.46,.64],[.28,.78]], right:[[.43,.04],[.66,.19],[.58,.36],[.78,.54],[.69,.74],[.43,.90]]},
+      {name:'outer armour plate', phase:.05, cols:3, mirrorShift:.5, left:[[.57,.02],[.72,.09],[.67,.25],[.83,.40],[.77,.59],[.61,.73]], right:[[.76,.04],[.97,.15],[.91,.33],[1.00,.49],[.96,.70],[.74,.87]]},
+      {name:'shoulder saw tooth', phase:.55, cols:2, mirrorShift:.5, left:[[.78,.00],[.92,.08],[.86,.24],[.99,.39],[.91,.58],[.78,.72]], right:[[.97,.04],[1.00,.07],[1.00,.26],[1.00,.47],[1.00,.67],[.90,.84]]},
+      {name:'tiny centre interlock', phase:.53, cols:1, mirrorShift:.5, left:[[.04,.02],[.12,.12],[.09,.30],[.17,.44],[.13,.60],[.05,.72]], right:[[.12,.00],[.23,.13],[.18,.31],[.28,.47],[.20,.65],[.10,.78]]},
+    ]
+  },
+  offroad: {
+    label: 'Off-road M/T', tag: 'mud terrain · lugs',
+    desc: 'Mud-terrain: tall widely-spaced lugs with staggered rows so something is always biting, huge voids for mud clearance, deep tread, no sipes. No continuous rubber anywhere.',
+    set: { width: 285, aspect: 70, rim: 17, depth: 15, crown: 2, shoulderLen: 18, shoulderDrop: 6,
+           pitches: 34, chevron: 18, gapScale: 1, stagger: 1, sipeW: 1.6, sipeDepthF: 0.6 },
+    lanes: [
+      { kind: 'rib',    w: 34, blocked: true, gapFrac: 0.45, sipes: 0, chevMul: 0.4, phase: 0 },
+      { kind: 'groove', w: 9 },
+      { kind: 'rib',    w: 36, blocked: true, gapFrac: 0.45, sipes: 0, chevMul: 1, phase: 0.5 },
+      { kind: 'groove', w: 9 },
+      { kind: 'rib',    w: 60, blocked: true, gapFrac: 0.50, sipes: 0, chevMul: 0.7, phase: 0.1 },
+    ],
+  },
+  mud: {
+    label: 'Extreme Mud', tag: 'bogger · giant lugs',
+    desc: 'Competition mud bogger: enormous paddle-like lugs separated by cavernous voids and wide trenches — more hole than rubber. Tallest tread in the set; it digs, it does not roll quietly.',
+    set: { width: 315, aspect: 75, rim: 16, depth: 19, crown: 2, shoulderLen: 20, shoulderDrop: 8,
+           pitches: 24, chevron: 24, gapScale: 1, stagger: 1, sipeW: 1.6, sipeDepthF: 0.6 },
+    lanes: [
+      { kind: 'rib',    w: 40, blocked: true, gapFrac: 0.50, sipes: 0, chevMul: 0.3, phase: 0 },
+      { kind: 'groove', w: 14 },
+      { kind: 'rib',    w: 44, blocked: true, gapFrac: 0.52, sipes: 0, chevMul: 1,   phase: 0.5 },
+      { kind: 'groove', w: 14 },
+      { kind: 'rib',    w: 70, blocked: true, gapFrac: 0.55, sipes: 0, chevMul: 0.6, phase: 0.15 },
+    ],
+  },
+  sand: {
+    label: 'Sand Paddle', tag: 'dunes · full-width scoops',
+    desc: 'Dune paddle tyre: one full-width transverse scoop per pitch and nothing else — straight paddles that throw sand backwards like a water wheel. Zero chevron, zero stagger, maximum void.',
+    set: { width: 225, aspect: 75, rim: 16, depth: 18, crown: 1.5, shoulderLen: 12, shoulderDrop: 5,
+           pitches: 16, chevron: 0, gapScale: 1, stagger: 1, sipeW: 1.6, sipeDepthF: 0.6 },
+    lanes: [
+      { kind: 'rib',    w: 400, blocked: true, gapFrac: 0.55, sipes: 0, chevMul: 0, phase: 0 },
+    ],
+  },
+  rally: {
+    label: 'Rally Gravel', tag: 'loose surface · blocks',
+    desc: 'Gravel rally: medium blocks everywhere with single sipes, moderate chevron and offset rows — bite on loose surfaces without the self-destruction of full mud lugs on hardpack.',
+    set: { width: 215, aspect: 65, rim: 15, depth: 12, crown: 2.5, shoulderLen: 12, shoulderDrop: 4,
+           pitches: 44, chevron: 22, gapScale: 1, stagger: 1, sipeW: 1.8, sipeDepthF: 0.6 },
+    lanes: [
+      { kind: 'rib',    w: 18, blocked: true, gapFrac: 0.30, sipes: 1, chevMul: 0, phase: 0.25 },
+      { kind: 'groove', w: 8 },
+      { kind: 'rib',    w: 26, blocked: true, gapFrac: 0.35, sipes: 1, chevMul: 1, phase: 0 },
+      { kind: 'groove', w: 8 },
+      { kind: 'rib',    w: 60, blocked: true, gapFrac: 0.35, sipes: 1, chevMul: 0.8, phase: 0.5 },
+    ],
+  },
+};
+
+// ------------------------------------------------- derived ---------------------------------------------------------
+const D = {};              // derived dimensions + resolved lanes, refreshed before every build
+
+function derive() {
+  D.halfW  = T.width * T.treadFrac / 2;
+  D.R      = T.rim * 25.4 / 2 + T.width * T.aspect / 100;
+  D.circ   = 2 * π * D.R;
+  D.P      = D.circ / T.pitches;
+  D.shLen  = Math.min(T.shoulderLen, D.halfW * 0.45);
+  D.tanA   = Math.tan(T.chevron * π / 180);
+
+  // ---- resolve the active design's lanes onto this carcass --------------------------------------------------------
+  const defs = DESIGNS[preset].lanes;
+  const lanes = [];
+  let x = 0;
+  for (let i = 0; i < defs.length; i++) {
+    const d = defs[i];
+    const last = i === defs.length - 1;
+    let x1 = last ? D.halfW : Math.min(x + d.w * (i === 0 ? 0.5 : 1), D.halfW - (d.kind === 'groove' ? 8 : 4));
+    if (x1 - x < 0.75) { if (last && lanes.length) { lanes[lanes.length - 1].x1 = D.halfW; } continue; }
+    const blocked = !!d.blocked;
+    const gf = Math.min(0.6, Math.max(0, (d.gapFrac ?? 0) * T.gapScale));
+    lanes.push({
+      kind: d.kind, x0: x, x1, blocked,
+      gapLen: blocked ? Math.min(Math.max(gf * D.P, 2.5), D.P - 4) : 0,
+      sipes: Math.max(0, Math.round(d.sipes ?? 0)),
+      phase: ((d.phase ?? 0) * T.stagger) % 1,
+      chevMul: d.chevMul ?? 1,
+      sipeDepth: T.depth * Math.min(1, (d.sipeDepthF ?? T.sipeDepthF)),
+    });
+    x = x1;
+    if (x >= D.halfW - 0.5) break;
+  }
+  if (!lanes.length) lanes.push({ kind: 'rib', x0: 0, x1: D.halfW, blocked: false, gapLen: 0, sipes: 0, phase: 0, chevMul: 0, sipeDepth: T.depth });
+  lanes[lanes.length - 1].x1 = D.halfW;
+  D.lanes = lanes;
+
+  // ---- per-lane band program over one pitch (circumferential structure) -------------------------------------------
+  for (const L of lanes) {
+    if (L.kind === 'groove') { L.program = [{ t: 'BLOCK', len: D.P }]; continue; }
+    const body = D.P - L.gapLen;
+    const ns = L.blocked || L.sipes > 0 ? L.sipes : 0;
+    const sw = ns > 0 ? Math.min(T.sipeW, body / (ns + 1) * 0.5) : 0;
+    const sub = (body - ns * sw) / (ns + 1);
+    const bands = [];
+    for (let k = 0; k <= ns; k++) { bands.push({ t: 'BLOCK', len: sub }); if (k < ns) bands.push({ t: 'SIPE', len: sw }); }
+    if (L.gapLen > 0) bands.push({ t: 'GAP', len: L.gapLen });
+    L.program = bands;
+  }
+
+  // wall split levels: every sipe floor in use, so all wall edge loops conform (no T-junctions)
+  D.levels = [...new Set(lanes.filter(L => L.kind !== 'groove' && L.sipes > 0 && L.sipeDepth < T.depth - 1e-6)
+                              .map(L => Math.round(L.sipeDepth * 1e6) / 1e6))].sort((a, b) => a - b);
+}
+
+// crown bulge + shoulder roundover
+function rTop(x) {
+  const a = Math.abs(x);
+  let r = D.R - T.crown * (a / D.halfW) * (a / D.halfW);
+  if (D.shLen > 0.5) {
+    const t = (a - (D.halfW - D.shLen)) / D.shLen;
+    if (t > 0) r -= T.shoulderDrop * t * t;
+  }
+  return r;
+}
+// chevron: piecewise-linear shear accumulated lane by lane, so each lane sets its own slope and the
+// function stays continuous — slanted walls are traced exactly, and arrayed tiles stay in phase.
+function shear(x) {
+  const a = Math.abs(x);
+  let s = 0;
+  for (const L of D.lanes) {
+    if (a <= L.x0) break;
+    s += (Math.min(a, L.x1) - L.x0) * D.tanA * L.chevMul;
+    if (a <= L.x1) break;
+  }
+  return -s;
+}
+
+// ------------------------------------------------- the shared grid -------------------------------------------------
+// Columns sit on lane edges; rows are the UNION of every lane's (phase-shifted) band boundaries plus a
+// global density set. Classification happens per lane on this one grid — lanes can never disagree about
+// a shared vertex because every vertex is a grid point both lanes use.
+function buildColumns() {
+  const cols = [], lane = [];
+  const push = (a, b, li, n) => {
+    for (let k = 0; k < n; k++) { cols.push(a + (b - a) * k / n); lane.push(li); }
+  };
+  const half = [];   // [{a,b,li,n}] centre outward
+  for (let li = 0; li < D.lanes.length; li++) {
+    const L = D.lanes[li], w = L.x1 - L.x0, last = li === D.lanes.length - 1;
+    if (L.kind === 'groove') { half.push({ a: L.x0, b: L.x1, li, n: 2 }); continue; }
+    if (last && D.shLen > 0.5 && L.x1 - D.shLen > L.x0 + 1) {
+      half.push({ a: L.x0, b: L.x1 - D.shLen, li, n: Math.max(2, Math.round((w - D.shLen) / 5)) });
+      half.push({ a: L.x1 - D.shLen, b: L.x1, li, n: 4 });
+    } else {
+      half.push({ a: L.x0, b: L.x1, li, n: Math.max(2, Math.round(w / 5)) });
+    }
+  }
+  for (let s = half.length - 1; s >= 0; s--) push(-half[s].b, -half[s].a, half[s].li, half[s].n);
+  for (const seg of half) push(seg.a, seg.b, seg.li, seg.n);
+  cols.push(D.halfW);
+  return { cols, lane };
+}
+
+function buildRows() {
+  const st = [];
+  const put = y => st.push(((y % D.P) + D.P) % D.P);
+  for (const L of D.lanes) {
+    if (L.kind === 'groove') continue;
+    let acc = 0;
+    for (const b of L.program) { put(L.phase * D.P + acc); acc += b.len; }
+  }
+  const n = Math.max(6, Math.ceil(D.P / 4.5));      // density for roundness, classification-neutral
+  for (let k = 0; k < n; k++) put(D.P * k / n);
+  st.sort((a, b) => a - b);
+  // sweep-merge: enforce a minimum row separation so no sliver cell can collapse under the
+  // 0.01 mm OBJ vertex quantisation (a plain bucket dedupe lets stations straddle a bucket edge)
+  const rows = [0];
+  for (const y of st) if (y > rows[rows.length - 1] + 0.1 && y < D.P - 0.1) rows.push(y);
+  rows.push(D.P);
+  return rows;
+}
+
+function bandAt(L, y) {
+  if (L.kind === 'groove') return 'BLOCK';
+  let y2 = ((y - L.phase * D.P) % D.P + D.P) % D.P;
+  for (const b of L.program) { if (y2 < b.len) return b.t; y2 -= b.len; }
+  return L.program[L.program.length - 1].t;
+}
+function depthOf(L, band) {
+  if (L.kind === 'groove') return T.depth;
+  if (band === 'BLOCK') return 0;
+  if (band === 'SIPE') return L.sipeDepth;
+  return T.depth;   // GAP
+}
+function wallSegs(a, b) {
+  const out = [];
+  let p = a;
+  for (const c of D.levels) if (c > a + 1e-6 && c < b - 1e-6) { out.push([p, c]); p = c; }
+  out.push([p, b]);
+  return out;
+}
+
+// ------------------------------------------------- geometry --------------------------------------------------------
+function pos(x, y, depth, flat, out) {
+  const ys = y + shear(x);
+  if (flat) return out.set(x, -depth, ys - D.P / 2);
+  const th = ys / D.circ * 2 * π;
+  const r = rTop(x) - depth;
+  return out.set(x, r * Math.cos(th), r * Math.sin(th));
+}
+function surfNormal(x, y, flat, out) {
+  if (flat) return out.set(0, 1, 0);
+  const th = (y + shear(x)) / D.circ * 2 * π;
+  const e = 0.25, dr = (rTop(x + e) - rTop(x - e)) / (2 * e);
+  return out.set(-dr, Math.cos(th), Math.sin(th)).normalize();
+}
+function tangent(x, y, flat, out) {
+  if (flat) return out.set(0, 0, 1);
+  const th = (y + shear(x)) / D.circ * 2 * π;
+  return out.set(0, -Math.sin(th), Math.cos(th));
+}
+
+const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _n = new THREE.Vector3();
+const V = () => new THREE.Vector3();
+
+function makeBuilder() {
+  const sets = { tile: { pos: [], nrm: [], quads: 0 }, bridge: { pos: [], nrm: [], quads: 0 } };
+  const edges = [];
+  const edgeSeen = new Set();
+  const objV = [], objIndex = new Map(), objF = [];
+
+  const ek = v => `${Math.round(v.x * 100)},${Math.round(v.y * 100)},${Math.round(v.z * 100)}`;
+  // welding key per axis: when a coordinate sits within 1e-4 of a rounding tie (…x.5), float noise
+  // between emission paths can flip Math.round either way — so probe the neighbouring bucket too
+  const axisKeys = c => {
+    const s = c * 100, r = Math.round(s), f = s - r;
+    return 0.5 - Math.abs(f) < 1e-4 ? [r, r + Math.sign(f)] : [r];
+  };
+  function objVert(v) {
+    const kx = axisKeys(v.x), ky = axisKeys(v.y), kz = axisKeys(v.z);
+    for (const x of kx) for (const y of ky) for (const z of kz) {
+      const i = objIndex.get(`${x},${y},${z}`);
+      if (i !== undefined) return i + 1;
+    }
+    const i = objV.length;
+    objV.push([v.x, v.y, v.z]);
+    objIndex.set(`${kx[0]},${ky[0]},${kz[0]}`, i);
+    return i + 1;
+  }
+  function edge(p, q) {
+    const a = ek(p), b = ek(q);
+    const k = a < b ? a + '|' + b : b + '|' + a;
+    if (edgeSeen.has(k)) return;
+    edgeSeen.add(k);
+    edges.push(p.x, p.y, p.z, q.x, q.y, q.z);
+  }
+  function quad(setName, p, n, expected) {
+    _a.subVectors(p[1], p[0]); _b.subVectors(p[3], p[0]); _n.crossVectors(_a, _b);
+    if (_n.lengthSq() < 1e-9) return;
+    if (_n.dot(expected) < 0) { p = [p[0], p[3], p[2], p[1]]; n = [n[0], n[3], n[2], n[1]]; }
+    const s = sets[setName];
+    for (const tri of [[0, 1, 2], [0, 2, 3]])
+      for (const i of tri) { s.pos.push(p[i].x, p[i].y, p[i].z); s.nrm.push(n[i].x, n[i].y, n[i].z); }
+    s.quads++;
+    edge(p[0], p[1]); edge(p[1], p[2]); edge(p[2], p[3]); edge(p[3], p[0]);
+    objF.push([objVert(p[0]), objVert(p[1]), objVert(p[2]), objVert(p[3])]);
+  }
+  return { sets, edges, quad, objV, objF };
+}
+
+// Exact motif-trace path used by the photographic / AAA references.  The authored data is one
+// right-half tread module.  The build step mirrors it through the tyre centre plane, optionally flips it
+// through the pitch axis, translates it by a half-pitch (or a per-motif phase), and only then circular-arrays
+// the completed tile.  Complex lugs are rail-traced: each lug has two matching polylines, and every station
+// between those rails becomes an explicit quad.  No bitmap/height/texture/displacement path exists here.
+function buildTracedTread() {
+  derive();
+  const flat = stage === 1, tiles = stage <= 2 ? 1 : T.pitches, B = makeBuilder();
+  const design = DESIGNS[preset], bottomDepth = T.depth;
+
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const avg = vectors => vectors.reduce((a, q) => a.add(q), new THREE.Vector3()).multiplyScalar(1 / Math.max(1, vectors.length));
+  const expectedFrom = (pts, fallback) => {
+    const n = pts.reduce((a, q) => a.add(q), new THREE.Vector3());
+    return n.lengthSq() > 1e-10 ? n.normalize() : fallback.clone().normalize();
+  };
+
+  function mapPoint(point, side, motif, tile) {
+    let [u, v] = point;
+    if (side < 0 && motif.mirrorY !== false) v = 1 - v;                 // the visible pitch-axis flip
+    const phase = motif.phase ?? 0;
+    const shift = side < 0 ? (motif.mirrorShift ?? 0.5) : 0;             // the visible translate step
+    return { x: side * u * D.halfW, y: (tile + v + phase + shift) * D.P };
+  }
+
+  function emitQuad(set, p, normals, expected) {
+    B.quad(set, p, normals, expected.clone().normalize());
+  }
+
+  function emitWall(aTop, bTop, bBot, aBot, centre, set = 'tile') {
+    const mid = aTop.clone().add(bTop).multiplyScalar(0.5);
+    let exp = mid.clone().sub(centre);
+    if (exp.lengthSq() < 1e-10) exp = new THREE.Vector3(0, 1, 0);
+    exp.normalize();
+    emitQuad(set, [aTop, bTop, bBot, aBot], [exp, exp, exp, exp], exp);
+  }
+
+  function emitRailStrip(motif, side, tile) {
+    const left = motif.left, right = motif.right;
+    if (!left || !right || left.length < 2 || right.length < 2) return false;
+    if (left.length !== right.length) throw new Error(`Motif ${motif.name || 'unnamed'} has mismatched rail counts`);
+
+    const n = left.length, cols = Math.max(1, Math.round(motif.cols ?? 2));
+    const top = [], bot = [], nrm = [];
+    for (let j = 0; j < n; j++) {
+      top[j] = []; bot[j] = []; nrm[j] = [];
+      for (let c = 0; c <= cols; c++) {
+        const t = c / cols;
+        const q = mapPoint([lerp(left[j][0], right[j][0], t), lerp(left[j][1], right[j][1], t)], side, motif, tile);
+        top[j][c] = pos(q.x, q.y, 0, flat, V());
+        bot[j][c] = pos(q.x, q.y, bottomDepth, flat, V());
+        nrm[j][c] = surfNormal(q.x, q.y, flat, V());
+      }
+    }
+    const centre = avg(top.flat());
+
+    // top and underside grids — every emitted face is a quad, even for hooked / dog-legged strips
+    for (let j = 0; j < n - 1; j++) for (let c = 0; c < cols; c++) {
+      const ns = [nrm[j][c], nrm[j][c + 1], nrm[j + 1][c + 1], nrm[j + 1][c]];
+      emitQuad('tile', [top[j][c], top[j][c + 1], top[j + 1][c + 1], top[j + 1][c]], ns, expectedFrom(ns, new THREE.Vector3(0, 1, 0)));
+      const bs = ns.map(n => n.clone().negate());
+      emitQuad('tile', [bot[j][c], bot[j + 1][c], bot[j + 1][c + 1], bot[j][c + 1]], bs, expectedFrom(bs, new THREE.Vector3(0, -1, 0)));
+    }
+
+    // perimeter walls, split along every rail station / width station so the outline itself is quad topology
+    for (let j = 0; j < n - 1; j++) {
+      emitWall(top[j][0],    top[j + 1][0],    bot[j + 1][0],    bot[j][0],    centre);
+      emitWall(top[j][cols], top[j + 1][cols], bot[j + 1][cols], bot[j][cols], centre);
+    }
+    for (let c = 0; c < cols; c++) {
+      emitWall(top[0][c],     top[0][c + 1],     bot[0][c + 1],     bot[0][c],     centre);
+      emitWall(top[n - 1][c], top[n - 1][c + 1], bot[n - 1][c + 1], bot[n - 1][c], centre);
+    }
+    return true;
+  }
+
+  // Fallback for the older polygon traces.  It is still quad-only, and now it keeps pitch-crossing shapes
+  // continuous instead of modulo-wrapping individual vertices through the middle of a lug.
+  function emitPolygon(motif, side, tile) {
+    const poly = motif.poly;
+    if (!poly || poly.length < 4) return;
+    const pts = poly.map(p => mapPoint(p, side, motif, tile));
+    const top = pts.map(q => pos(q.x, q.y, 0, flat, V()));
+    const bot = pts.map(q => pos(q.x, q.y, bottomDepth, flat, V()));
+    const ct = avg(top), cb = avg(bot), up = surfNormal(pts[0].x, pts[0].y, flat, V()), dn = up.clone().negate();
+    const midTop = [], midBot = [];
+    for (let i = 0; i < pts.length; i++) {
+      const j = (i + 1) % pts.length;
+      midTop[i] = top[i].clone().lerp(top[j], 0.5);
+      midBot[i] = bot[i].clone().lerp(bot[j], 0.5);
+    }
+    for (let i = 0; i < pts.length; i++) {
+      const prev = (i - 1 + pts.length) % pts.length;
+      emitQuad('tile', [top[i], midTop[i], ct, midTop[prev]], [up, up, up, up], up);
+      emitQuad('tile', [bot[i], midBot[prev], cb, midBot[i]], [dn, dn, dn, dn], dn);
+      emitWall(top[i], midTop[i], midBot[i], bot[i], ct);
+      const j = (i + 1) % pts.length;
+      emitWall(midTop[i], top[j], bot[j], midBot[i], ct);
+    }
+  }
+
+  const pieces = design.motifs ?? design.blocks ?? [];
+  for (let tile = 0; tile < tiles; tile++) {
+    for (const motif of pieces) {
+      const sides = motif.sides ?? (motif.mirror === false ? [1] : [1, -1]);
+      for (const side of sides) {
+        if (!emitRailStrip(motif, side, tile)) emitPolygon(motif, side, tile);
+      }
+    }
+  }
+  return B;
+}
+
+function buildTread() {
+  if (DESIGNS[preset].traced) return buildTracedTread();
+  derive();
+  const { cols, lane: laneOf } = buildColumns();
+  const rows = buildRows();
+  const flat = stage === 1;
+  const tiles = stage <= 2 ? 1 : T.pitches;
+  const withBridge = stage === 4;
+  const B = makeBuilder();
+
+  const M = cols.length - 1, K = rows.length - 1;
+
+  // classification tables over the shared grid: band + depth per (lane, row interval)
+  const bandTab = D.lanes.map(L => {
+    const r = new Array(K);
+    for (let j = 0; j < K; j++) r[j] = bandAt(L, (rows[j] + rows[j + 1]) / 2);
+    return r;
+  });
+  const depthTab = D.lanes.map((L, li) => bandTab[li].map(b => depthOf(L, b)));
+
+  const wallQuad = (set, p, exp) => {
+    _a.subVectors(p[1], p[0]); _b.subVectors(p[3], p[0]);
+    const gn = new THREE.Vector3().crossVectors(_a, _b);
+    if (gn.lengthSq() < 1e-9) return;
+    if (gn.dot(exp) < 0) gn.negate();
+    gn.normalize();
+    B.quad(set, p, [gn, gn, gn, gn], gn);
+  };
+
+  for (let t = 0; t < tiles; t++) {
+    const yBase = t * D.P;
+
+    // ---- ① surface cells ------------------------------------------------------------------------------------------
+    for (let j = 0; j < K; j++) {
+      const y0 = yBase + rows[j], y1 = yBase + rows[j + 1];
+      for (let i = 0; i < M; i++) {
+        const li = laneOf[i];
+        const isBridge = bandTab[li][j] === 'GAP';
+        if (isBridge && !withBridge) continue;
+        const d = depthTab[li][j];
+        const x0 = cols[i], x1 = cols[i + 1];
+        const p = [pos(x0, y0, d, flat, V()), pos(x1, y0, d, flat, V()), pos(x1, y1, d, flat, V()), pos(x0, y1, d, flat, V())];
+        const n = [surfNormal(x0, y0, flat, V()), surfNormal(x1, y0, flat, V()), surfNormal(x1, y1, flat, V()), surfNormal(x0, y1, flat, V())];
+        const exp = n[0].clone().add(n[2]);
+        B.quad(isBridge ? 'bridge' : 'tile', p, n, exp);
+      }
+    }
+
+    // ---- ② vertical walls: wherever two lateral neighbours sit at different depths ---------------------------------
+    for (let i = 1; i < M; i++) {
+      const lL = laneOf[i - 1], lR = laneOf[i];
+      for (let j = 0; j < K; j++) {
+        const dL = depthTab[lL][j], dR = depthTab[lR][j];
+        if (Math.abs(dL - dR) < 1e-6) continue;
+        // the wall belongs to the shallower (block) side; it is bridge geometry only if that side is in gap
+        const blockIsLeft = dL < dR;
+        const blockBand = blockIsLeft ? bandTab[lL][j] : bandTab[lR][j];
+        if (blockBand === 'GAP' && !withBridge) continue;
+        const x = cols[i], y0 = yBase + rows[j], y1 = yBase + rows[j + 1];
+        const exp = new THREE.Vector3(blockIsLeft ? 1 : -1, 0, 0);
+        for (const [d0, d1] of wallSegs(Math.min(dL, dR), Math.max(dL, dR)))
+          wallQuad(blockBand === 'GAP' ? 'bridge' : 'tile',
+                   [pos(x, y0, d0, flat, V()), pos(x, y1, d0, flat, V()), pos(x, y1, d1, flat, V()), pos(x, y0, d1, flat, V())], exp);
+      }
+    }
+
+    // ---- ③ horizontal walls: each lane's own block leading/trailing edges and sipe walls ---------------------------
+    for (let j = 0; j < K; j++) {
+      for (let i = 0; i < M; i++) {
+        const li = laneOf[i];
+        const prev = bandTab[li][(j - 1 + K) % K];                 // periodic: before y=0 lies the previous tile
+        const cur = bandTab[li][j];
+        const dP = depthOf(D.lanes[li], prev), dC = depthTab[li][j];
+        if (Math.abs(dP - dC) < 1e-6) continue;
+        const y = yBase + rows[j], x0 = cols[i], x1 = cols[i + 1];
+        const sign = dP < dC ? 1 : -1;
+        const exp = tangent((x0 + x1) / 2, y, flat, V()).multiplyScalar(sign);
+        for (const [d0, d1] of wallSegs(Math.min(dP, dC), Math.max(dP, dC)))
+          wallQuad('tile',
+                   [pos(x0, y, d0, flat, V()), pos(x1, y, d0, flat, V()), pos(x1, y, d1, flat, V()), pos(x0, y, d1, flat, V())], exp);
+      }
+    }
+
+    // ---- ④ optional shoulder skirt --------------------------------------------------------------------------------
+    if (T.skirt) {
+      for (const side of [0, M]) {
+        const x = cols[side];
+        const li = laneOf[side === 0 ? 0 : M - 1];
+        const exp = new THREE.Vector3(side === 0 ? -1 : 1, 0, 0);
+        for (let j = 0; j < K; j++) {
+          const isBridge = bandTab[li][j] === 'GAP';
+          if (isBridge && !withBridge) continue;
+          const dS = depthTab[li][j];
+          if (dS >= T.depth - 1e-6) continue;
+          const y0 = yBase + rows[j], y1 = yBase + rows[j + 1];
+          for (const [d0, d1] of wallSegs(dS, T.depth))
+            wallQuad(isBridge ? 'bridge' : 'tile',
+                     [pos(x, y0, d0, flat, V()), pos(x, y1, d0, flat, V()), pos(x, y1, d1, flat, V()), pos(x, y0, d1, flat, V())], exp);
+        }
+      }
+    }
+  }
+  return B;
+}
+
+// ------------------------------------------------- three.js --------------------------------------------------------
+const view = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+view.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#111214');
+const camera = new THREE.PerspectiveCamera(42, 1, 1, 8000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+
+const key = new THREE.DirectionalLight(0xffffff, 1.6);  key.position.set(300, 500, 350);
+const rim = new THREE.DirectionalLight(0x8fb4ff, 0.5);  rim.position.set(-400, -200, -300);
+scene.add(key, rim, new THREE.HemisphereLight(0x3a3f47, 0x14161a, 0.8));
+
+const matTile = new THREE.MeshStandardMaterial({ color: '#1b1b1e', roughness: 0.88, metalness: 0.0,
+  polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+const matBridge = new THREE.MeshStandardMaterial({ color: '#1b1b1e', roughness: 0.88, metalness: 0.0,
+  polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+const matWire = new THREE.LineBasicMaterial({ color: '#45e07f', transparent: true, opacity: 0.4 });
+
+const group = new THREE.Group();
+scene.add(group);
+let meshTile = null, meshBridge = null, wire = null, lastBuild = null, lastView = '';
+
+function toMesh(set, material) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(set.pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(set.nrm, 3));
+  return new THREE.Mesh(g, material);
+}
+
+function rebuild() {
+  const B = buildTread();
+  lastBuild = B;
+  for (const m of [meshTile, meshBridge, wire]) if (m) { group.remove(m); m.geometry.dispose(); }
+  meshTile = toMesh(B.sets.tile, matTile);
+  meshBridge = toMesh(B.sets.bridge, matBridge);
+  const wg = new THREE.BufferGeometry();
+  wg.setAttribute('position', new THREE.Float32BufferAttribute(B.edges, 3));
+  wire = new THREE.LineSegments(wg, matWire);
+  group.add(meshTile, meshBridge, wire);
+
+  matBridge.color.set(T.tint ? '#2e4a68' : '#1b1b1e');
+  wire.visible = T.wire;
+
+  document.getElementById('stQuads').textContent = (B.sets.tile.quads + B.sets.bridge.quads).toLocaleString();
+  document.getElementById('stBridge').textContent = B.sets.bridge.quads.toLocaleString();
+  document.getElementById('stTiles').textContent = stage <= 2 ? 1 : T.pitches;
+  document.getElementById('stPitch').textContent = D.P.toFixed(1);
+
+  const viewKey = `${stage}|${preset}`;
+  if (viewKey !== lastView) { fitView(); lastView = viewKey; }
+}
+
+function fitView() {
+  const box = new THREE.Box3().setFromObject(group);
+  const c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
+  const d = Math.max(s.x, s.y, s.z);
+  controls.target.copy(c);
+  if (stage === 1) camera.position.set(c.x + d * 0.55, c.y + d * 1.15, c.z + d * 0.9);
+  else camera.position.set(c.x + d * 0.95, c.y + d * 0.55, c.z + d * 0.75);
+  camera.near = d / 100; camera.far = d * 20;
+  camera.updateProjectionMatrix();
+}
+
+function resize() {
+  const w = view.clientWidth, h = view.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(view);
+
+renderer.setAnimationLoop(() => {
+  controls.autoRotate = T.spin;
+  controls.autoRotateSpeed = 1.2;
+  controls.update();
+  renderer.render(scene, camera);
+});
+
+// ------------------------------------------------- export ----------------------------------------------------------
+function download(name, blob) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+document.getElementById('exportObj').onclick = () => {
+  if (!lastBuild) return;
+  let s = '# Quad Tread Modelling — every face below is a quad (f has 4 indices)\n';
+  s += `# design ${preset}  quads ${lastBuild.objF.length}  verts ${lastBuild.objV.length}\no tread\n`;
+  for (const v of lastBuild.objV) s += `v ${v[0].toFixed(4)} ${v[1].toFixed(4)} ${v[2].toFixed(4)}\n`;
+  for (const f of lastBuild.objF) s += `f ${f[0]} ${f[1]} ${f[2]} ${f[3]}\n`;
+  download(`tread-${preset}-quads.obj`, new Blob([s], { type: 'text/plain' }));
+};
+document.getElementById('exportGlb').onclick = () => {
+  new GLTFExporter().parse(group, r => download(`tread-${preset}.glb`, new Blob([r], { type: 'model/gltf-binary' })),
+    e => console.error(e), { binary: true });
+};
+
+// ------------------------------------------------- UI --------------------------------------------------------------
+const SLIDERS = {
+  tyreRows: [
+    ['width', 'Tyre width', 145, 355, 5, 'mm'],
+    ['aspect', 'Aspect ratio', 25, 80, 5, '%'],
+    ['rim', 'Rim', 13, 24, 1, '"'],
+    ['treadFrac', 'Tread coverage', 0.6, 1, 0.01, ''],
+    ['depth', 'Tread depth', 2, 18, 0.5, 'mm'],
+    ['crown', 'Crown bulge', 0, 8, 0.5, 'mm'],
+    ['shoulderLen', 'Shoulder length', 0, 30, 1, 'mm'],
+    ['shoulderDrop', 'Shoulder drop', 0, 12, 0.5, 'mm'],
+  ],
+  patternRows: [
+    ['pitches', 'Pitches (tiles)', 20, 110, 1, ''],
+    ['chevron', 'Chevron angle', 0, 65, 1, '°'],
+    ['gapScale', 'Gap scale', 0.4, 1.8, 0.05, '×'],
+    ['stagger', 'Stagger', 0, 1, 0.05, '×'],
+    ['sipeW', 'Sipe width', 1, 3, 0.1, 'mm'],
+    ['sipeDepthF', 'Sipe depth', 0.2, 1, 0.05, '×'],
+  ],
+};
+const TOGGLES = [
+  ['wire', 'Quad wireframe'],
+  ['tint', 'Tint bridge quads'],
+  ['skirt', 'Shoulder skirt'],
+  ['spin', 'Auto rotate'],
+];
+const inputs = {}, valEls = {};
+function makeRows(holderId, defs) {
+  const holder = document.getElementById(holderId);
+  for (const [k, label, min, max, step, unit] of defs) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `<label>${label}</label><input type="range" min="${min}" max="${max}" step="${step}" value="${T[k]}"><span class="val"></span>`;
+    const input = row.querySelector('input'), val = row.querySelector('.val');
+    valEls[k] = () => val.textContent = (step < 1 ? (+T[k]).toFixed(2).replace(/\.?0+$/, '') : T[k]) + unit;
+    valEls[k]();
+    input.oninput = () => { T[k] = +input.value; valEls[k](); rebuild(); };
+    inputs[k] = input;
+    holder.appendChild(row);
+  }
+}
+makeRows('tyreRows', SLIDERS.tyreRows);
+makeRows('patternRows', SLIDERS.patternRows);
+{
+  const holder = document.getElementById('displayRows');
+  for (const [k, label] of TOGGLES) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `<label>${label}</label><input type="checkbox" ${T[k] ? 'checked' : ''}>`;
+    row.querySelector('input').onchange = e => { T[k] = e.target.checked; rebuild(); };
+    holder.appendChild(row);
+  }
+}
+
+// preset buttons
+const presetHolder = document.getElementById('presetButtons');
+for (const key of Object.keys(DESIGNS)) {
+  const d = DESIGNS[key];
+  const btn = document.createElement('button');
+  btn.dataset.preset = key;
+  btn.innerHTML = `${d.label}<small>${d.tag}</small>`;
+  btn.onclick = () => applyPreset(key);
+  presetHolder.appendChild(btn);
+}
+function applyPreset(key) {
+  preset = key;
+  Object.assign(T, DESIGNS[key].set);
+  for (const k in inputs) if (k in T) { inputs[k].value = T[k]; valEls[k](); }
+  document.querySelectorAll('[data-preset]').forEach(b => b.classList.toggle('on', b.dataset.preset === key));
+  document.getElementById('presetDesc').textContent = DESIGNS[key].desc;
+  rebuild();
+}
+
+const stepEls = [...document.querySelectorAll('.step')];
+function setStage(s) {
+  stage = s;
+  stepEls.forEach(el => el.classList.toggle('on', +el.dataset.stage === s));
+  document.getElementById('stageDesc').textContent = STAGE_TEXT[s];
+  rebuild();
+}
+stepEls.forEach(el => el.onclick = () => setStage(+el.dataset.stage));
+
+// ------------------------------------------------- go --------------------------------------------------------------
+resize();
+stage = 4;
+stepEls.forEach(el => el.classList.toggle('on', +el.dataset.stage === 4));
+document.getElementById('stageDesc').textContent = STAGE_TEXT[4];
+applyPreset('road');
+fitView();
+</script>
+</body>
+</html>
