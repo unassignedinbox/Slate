@@ -39,9 +39,9 @@ foreach ($Source in $Sources)
 }
 
 $Includes = @(
-    "/I`"$Engine\Engine`"",
-    "/I`"$Engine`"",
-    "/I`"$Engine\Exhibits\Workbench\Editor\Counterparts`""
+    "/I$Engine\Engine",
+    "/I$Engine",
+    "/I$Engine\Exhibits\Workbench\Editor\Counterparts"
 )
 
 $Arguments = @('/nologo', '/utf-8', '/std:c++20', '/EHsc', '/O2', '/MD', '/openmp', '/W3', '/wd4244', '/wd4305', '/wd4324',

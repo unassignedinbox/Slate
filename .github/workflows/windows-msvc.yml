@@ -100,10 +100,10 @@ jobs:
             & ./Tools/Build/ToolchainSequence.ps1 -Configuration Release -SetupDependencies -Parallel 2 *>&1 | Tee-Object -FilePath ../_AgentScratch/logs/msvc-ci/CompilerOutput.log
             if ($LASTEXITCODE -ne 0) { throw 'Frontier build failed' }
             if (-not (Test-Path Build/Output/Windows/Release/Binary/Frontier.exe)) { throw 'Frontier.exe was not produced' }
-            & ../VisualProof/DistanceFieldGI/BuildDistanceFieldGIProof.ps1
+            & ../VisualProof/DistanceFieldGI/BuildDistanceFieldGIProof.ps1 *>&1 | Tee-Object -FilePath ../_AgentScratch/logs/msvc-ci/SdfProof.log
             if ($LASTEXITCODE -ne 0) { throw 'SDF CPU proof or GPU dispatch refusal checks failed' }
           } catch {
-            $CompilerLog = Get-Content ../_AgentScratch/logs/msvc-ci/CompilerOutput.log -ErrorAction SilentlyContinue
+            $CompilerLog = Get-Content ../_AgentScratch/logs/msvc-ci/CompilerOutput.log, ../_AgentScratch/logs/msvc-ci/SdfProof.log -ErrorAction SilentlyContinue
             $Failures = $CompilerLog | Select-String -Pattern '(fatal error|error [A-Z]+[0-9]+|error:|LNK[0-9]+|FAILED)'
             $Diagnostic = ($_ | Out-String) + ($Failures | Out-String -Width 4096)
             if (-not $Failures) { $Diagnostic += ($CompilerLog | Select-Object -Last 30 | Out-String -Width 4096) }
