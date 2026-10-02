@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""Compile SolidArc and run focused regressions in an x64 MSVC developer shell."""
+from __future__ import annotations
+
+import concurrent.futures
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parents[2]
+SOURCE = ROOT / "Editor/AuthoringTools/Modelling/SolidArc"
+OUTPUT = ROOT.parent / "_AgentScratch/build/msvc-solidarc"
+
+
+def main() -> int:
+    if sys.platform != "win32" or not shutil.which("cl.exe"):
+        raise RuntimeError("Use an x64 Visual Studio developer shell with cl.exe on PATH")
+    objects, logs, proofs = (OUTPUT / name for name in ("objects", "logs", "proofs"))
+    for folder in (objects, logs, proofs):
+        folder.mkdir(parents=True, exist_ok=True)
+    sources = sorted(path for folder in ("Kernel", "Presentation", "Interaction", "Document", "Console")
+                     for path in (SOURCE / folder).glob("*.cpp") if path.name != "SolidArcConsole.cpp")
+    flags = ["/nologo", "/c", "/std:c++20", "/EHsc", "/MD", "/O2", "/W4", "/WX", "/utf-8",
+             "/permissive-", "/DNOMINMAX", "/D_CRT_SECURE_NO_WARNINGS",
+             f'/DSOLIDARC_PROOF_FOLDER="{proofs.as_posix()}"', f"/I{SOURCE}", f"/I{SOURCE / 'Presentation'}"]
+
+    def run(command: list[str], name: str) -> None:
+        result = subprocess.run(command, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                text=True, encoding="utf-8", errors="replace")
+        (logs / f"{name}.log").write_text(subprocess.list2cmdline(command) + "\n" + result.stdout, encoding="utf-8")
+        if result.returncode:
+            print(result.stdout, flush=True)
+            raise RuntimeError(f"{name} failed with exit code {result.returncode}")
+
+    def compile_source(path: Path) -> Path:
+        obj = objects / (str(path.relative_to(SOURCE)).replace(os.sep, "_") + ".obj")
+        print(f"Compile {path.relative_to(SOURCE)}", flush=True)
+        run(["cl.exe", *flags, str(path), f"/Fo{obj}"], obj.stem)
+        return obj
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        compiled = list(executor.map(compile_source, sources))
+    archive = OUTPUT / "SolidArc.lib"
+    run(["lib.exe", "/nologo", f"/OUT:{archive}", *map(str, compiled)], "Archive")
+
+    def link_program(source: Path, name: str) -> Path:
+        obj = compile_source(source)
+        executable = OUTPUT / f"{name}.exe"
+        run(["link.exe", "/nologo", f"/OUT:{executable}", str(obj), str(archive)], name + "Link")
+        return executable
+
+    console = link_program(SOURCE / "Console/SolidArcConsole.cpp", "SolidArc")
+    for name in ("Kernel", "Blend", "MultiEdgeFillet", "Document"):
+        executable = link_program(SOURCE / f"Verification/{name}Verification.cpp", name + "Verification")
+        run([str(executable)], name + "Verification")
+        print(f"PASS {name}Verification", flush=True)
+    documents = sorted((ROOT / "Projects/Project-Drive/Content/Vehicles/Liger").glob("*.arc"))
+    if len(documents) != 6:
+        raise RuntimeError(f"Expected six Liger journals, found {len(documents)}")
+    for document in documents:
+        run([str(console), "--proofs", str(proofs), "-c", f'open "{document.as_posix()}"'], document.stem)
+        print(f"PASS replay {document.name}", flush=True)
+    print("MSVC SolidArc: console linked, focused regressions and all Liger journals passed")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except (RuntimeError, OSError) as error:
+        print(error, file=sys.stderr)
+        raise SystemExit(1)

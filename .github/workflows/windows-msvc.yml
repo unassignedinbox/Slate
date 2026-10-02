@@ -1,0 +1,120 @@
+name: Windows MSVC
+
+on:
+  push:
+    branches: [main, arena/01a0fd48-slate]
+    paths:
+      - '.github/workflows/windows-msvc.yml'
+      - 'Frontier/**'
+  pull_request:
+    paths:
+      - '.github/workflows/windows-msvc.yml'
+      - 'Frontier/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-msvc-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  solidarc:
+    name: SolidArc MSVC and document checks
+    runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: Frontier
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Compile and verify with real MSVC
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $VsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $VisualStudio = & $VsWhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $VisualStudio) { throw 'Visual Studio C++ workload not found' }
+          Import-Module "$VisualStudio\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
+          Enter-VsDevShell -VsInstallPath $VisualStudio -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'
+          python Tools/Build/CheckMsvcSolidArc.py
+          if ($LASTEXITCODE -ne 0) { throw 'SolidArc MSVC verification failed' }
+      - name: Retain compiler logs and rendered proofs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: solidarc-msvc-${{ github.sha }}
+          retention-days: 14
+          path: |
+            _AgentScratch/build/msvc-solidarc/logs/
+            _AgentScratch/build/msvc-solidarc/proofs/
+            _AgentScratch/build/msvc-solidarc/*.exe
+
+  frontier:
+    name: Frontier Windows application
+    runs-on: windows-2022
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: Frontier
+    env:
+      VULKAN_VERSION: '1.4.328.1'
+      VULKAN_SDK: 'C:\VulkanSDK\1.4.328.1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Install signed Vulkan SDK
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $Installer = Join-Path $env:RUNNER_TEMP 'VulkanSDK.exe'
+          $Url = "https://sdk.lunarg.com/sdk/download/$env:VULKAN_VERSION/windows/vulkansdk-windows-X64-$env:VULKAN_VERSION.exe"
+          Invoke-WebRequest -Uri $Url -OutFile $Installer
+          $Signature = Get-AuthenticodeSignature $Installer
+          if ($Signature.Status -ne 'Valid' -or $Signature.SignerCertificate.Subject -notmatch 'LunarG') {
+            throw "Unexpected SDK installer signature: $($Signature.Status) $($Signature.SignerCertificate.Subject)"
+          }
+          Get-FileHash $Installer -Algorithm SHA256
+          $Installation = Start-Process -FilePath $Installer -ArgumentList '--accept-licenses --default-answer --confirm-command install' -Wait -PassThru
+          if ($Installation.ExitCode -ne 0) { throw "Vulkan SDK installation failed: $($Installation.ExitCode)" }
+          if (-not (Test-Path "$env:VULKAN_SDK\Include\vulkan\vulkan.h")) { throw 'SDK headers not installed' }
+      - name: Build the Windows host and project code image
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $VsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $VisualStudio = & $VsWhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $VisualStudio) { throw 'Visual Studio C++ workload not found' }
+          Import-Module "$VisualStudio\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
+          Enter-VsDevShell -VsInstallPath $VisualStudio -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'
+          New-Item -ItemType Directory -Force ../_AgentScratch/logs/msvc-ci | Out-Null
+          Start-Transcript -Path ../_AgentScratch/logs/msvc-ci/FrontierBuild.log
+          try {
+            & ./Tools/Build/ToolchainSequence.ps1 -Configuration Release -SetupDependencies -Parallel 2
+            if ($LASTEXITCODE -ne 0) { throw 'Frontier build failed' }
+            if (-not (Test-Path Build/Output/Windows/Release/Binary/Frontier.exe)) { throw 'Frontier.exe was not produced' }
+          } finally {
+            Stop-Transcript
+          }
+      - name: Retain build diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: frontier-msvc-${{ github.sha }}
+          retention-days: 14
+          path: |
+            _AgentScratch/logs/msvc-ci/
+            Frontier/build/dependencies-Release/CMakeFiles/CMakeConfigureLog.yaml
+            Frontier/Build/Output/Windows/Release/Object/*.rsp
+      - name: Retain Windows binary
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: frontier-windows-release-${{ github.sha }}
+          retention-days: 14
+          path: Frontier/Build/Output/Windows/Release/Binary/
