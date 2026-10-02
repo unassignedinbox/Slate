@@ -21,8 +21,13 @@ namespace Frontier::SlangMirror
 #define xy xy()
 #define xyz xyz()
 #define zw zw()
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 4100) // Shared shader signatures retain unused uniform inputs.
+#elif defined(__GNUC__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#endif
 using uint = std::uint32_t;
 inline float log(float A) { return std::log(A); }
 #include "Shaders/ShadingRecords.slang"
@@ -74,7 +79,11 @@ float3 MatcapLookup(uint Layer, float3 N)
     return lerp(Top, Bottom, Ty);
 }
 
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#elif defined(__GNUC__)
 #pragma GCC diagnostic pop
+#endif
 #undef xy
 #undef xyz
 #undef zw

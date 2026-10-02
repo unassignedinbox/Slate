@@ -5855,8 +5855,8 @@ Deliver<BrepBody> BlendSolver::PushFace(const BrepBody& Body, int Face, double D
     {
         Vec3 Radial = P - Centroid;
         Radial = Radial - Normal * Radial.Dot(Normal);                                   // stay in the face's plane
-        double Reach = Radial.Length();
-        Vec3 Pulled = Reach > Inset ? P - Radial * (Inset / Reach) : P;
+        double RadialLength = Radial.Length();
+        Vec3 Pulled = RadialLength > Inset ? P - Radial * (Inset / RadialLength) : P;
         Shifted.push_back(Pulled + Base);
     }
     Shifted.push_back(Shifted.front());
@@ -7583,9 +7583,9 @@ Deliver<UnequalConeApexChamferSpecification> BlendSolver::ClassifyUnequalConeApe
         if (EdgeData.Coedges.size() != 2) return Deliver<UnequalConeApexChamferSpecification>::Reject(
             RefusalReason::NonManifold, "unequal bicone edge is not manifold");
         if (EdgeData.Closed() && EdgeData.Curve.Classification == CurveClassification::Circle &&
-            EdgeData.Curve.Degree == 2 && EdgeData.Curve.Rational()) RimEdges.push_back(&EdgeData - Body.Edges.data());
+            EdgeData.Curve.Degree == 2 && EdgeData.Curve.Rational()) RimEdges.push_back(static_cast<int>(&EdgeData - Body.Edges.data()));
         else if (!EdgeData.Closed() && EdgeData.Curve.Classification == CurveClassification::Line &&
-                 EdgeData.Curve.Degree == 1) LineEdges.push_back(&EdgeData - Body.Edges.data());
+                 EdgeData.Curve.Degree == 1) LineEdges.push_back(static_cast<int>(&EdgeData - Body.Edges.data()));
         else return Deliver<UnequalConeApexChamferSpecification>::Reject(RefusalReason::Unsupported,
                                                                             "native unequal bicone has unsupported edge geometry");
     }
@@ -7821,9 +7821,9 @@ Deliver<EqualRadiusBiconeApexChamferSpecification> BlendSolver::ClassifyEqualRad
         if (EdgeData.Coedges.size() != 2) return Deliver<EqualRadiusBiconeApexChamferSpecification>::Reject(
             RefusalReason::NonManifold, "equal bicone edge is not manifold");
         if (EdgeData.Closed() && EdgeData.Curve.Classification == CurveClassification::Circle &&
-            EdgeData.Curve.Degree == 2 && EdgeData.Curve.Rational()) RimEdges.push_back(&EdgeData - Body.Edges.data());
+            EdgeData.Curve.Degree == 2 && EdgeData.Curve.Rational()) RimEdges.push_back(static_cast<int>(&EdgeData - Body.Edges.data()));
         else if (!EdgeData.Closed() && EdgeData.Curve.Classification == CurveClassification::Line &&
-                 EdgeData.Curve.Degree == 1) LineEdges.push_back(&EdgeData - Body.Edges.data());
+                 EdgeData.Curve.Degree == 1) LineEdges.push_back(static_cast<int>(&EdgeData - Body.Edges.data()));
         else return Deliver<EqualRadiusBiconeApexChamferSpecification>::Reject(RefusalReason::Unsupported,
                                                                             "native equal bicone has unsupported edge geometry");
     }

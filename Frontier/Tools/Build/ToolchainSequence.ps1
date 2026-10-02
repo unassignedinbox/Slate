@@ -506,13 +506,14 @@ function Invoke-DependencyScript([string] $ScriptPath, [string[]] $Arguments)
 
     if (Test-Path $Host51)
     {
-        & $Host51 -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @Arguments
+        & $Host51 -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @Arguments | Out-Host
     }
     else
     {
-        & powershell -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @Arguments
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @Arguments | Out-Host
     }
 
+    # Keep child-process diagnostics on the host stream; only the numeric exit code is returned.
     return $LASTEXITCODE
 }
 
@@ -543,7 +544,7 @@ $JoltLib = Join-Path $PackageRoot "jolt\lib\$Configuration\Jolt.lib"
 if (-not (Test-Path $JoltLib))
 {
     Write-Building 'Jolt library absent - invoking BuildJolt.ps1'
-    $ExitCode = Invoke-DependencyScript (Join-Path $RepositoryRoot 'Tools\Build\BuildJolt.ps1') @('-Configuration', $Configuration, '-Isa', $Isa)
+    $ExitCode = Invoke-DependencyScript (Join-Path $RepositoryRoot 'Tools\Build\BuildJolt.ps1') @('-Configuration', $Configuration, '-Isa', $Isa, '-Parallel', $Parallel)
     if ($ExitCode -ne 0) { throw 'BuildJolt.ps1 failed' }
 }
 

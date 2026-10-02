@@ -35,8 +35,10 @@ def main() -> int:
             if os.environ.get("GITHUB_ACTIONS"):
                 diagnostics = [line for line in result.stdout.splitlines() if "error " in line or "warning " in line]
                 message = "\n".join(diagnostics or result.stdout.splitlines()[-20:])[:12000]
-                message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-                print(f"::error title={name}::{message}", flush=True)
+                for offset in range(0, len(message), 3000):
+                    part = message[offset:offset + 3000]
+                    part = part.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                    print(f"::error title={name}::{part}", flush=True)
             raise RuntimeError(f"{name} failed with exit code {result.returncode}")
 
     def compile_source(path: Path) -> Path:

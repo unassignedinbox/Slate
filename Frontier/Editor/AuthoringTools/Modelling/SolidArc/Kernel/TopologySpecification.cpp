@@ -767,7 +767,7 @@ BrepBody::FaceTriangles BrepBody::TessellateFace(int Face, double ChordTolerance
             for (int J = 0; J < T.RowCount; ++J) SamplesV.push_back(T.Parameters[static_cast<size_t>(J) * T.ColumnCount].Y);
         }
         std::vector<Vec2> P;
-        std::vector<PlanarEdge> Edges;
+        std::vector<PlanarEdge> PlanarSegments;
         // ring points
         std::vector<std::vector<int>> Rings;
         for (int L : F.Loops)
@@ -846,9 +846,9 @@ BrepBody::FaceTriangles BrepBody::TessellateFace(int Face, double ChordTolerance
                 std::vector<Cut>& Cs = RingCuts[RingEdgeFirst[R][0] + static_cast<int>(I)];
                 std::sort(Cs.begin(), Cs.end(), [](const Cut& X, const Cut& Y) { return X.Along < Y.Along; });
                 int Prev = Rings[R][I];
-                for (const Cut& C : Cs) { if (C.Point != Prev) Edges.push_back({ Prev, C.Point }); Prev = C.Point; }
+                for (const Cut& C : Cs) { if (C.Point != Prev) PlanarSegments.push_back({ Prev, C.Point }); Prev = C.Point; }
                 int Last = Rings[R][(I + 1) % Rings[R].size()];
-                if (Last != Prev) Edges.push_back({ Prev, Last });
+                if (Last != Prev) PlanarSegments.push_back({ Prev, Last });
             }
         // lattice segments: sub-segments whose midpoint lies inside the domain, both directions
         for (Segment& Sg : Segments)
@@ -870,17 +870,17 @@ BrepBody::FaceTriangles BrepBody::TessellateFace(int Face, double ChordTolerance
                 if (Na < 0) { Na = Sg.AlongU ? LatticeAt(Sg.K + (Ta > 0.5 ? 1 : 0), Sg.Line) : LatticeAt(Sg.Line, Sg.K + (Ta > 0.5 ? 1 : 0)); Chain[K].second = Na; }
                 if (Nb < 0) { Nb = Sg.AlongU ? LatticeAt(Sg.K + (Tb > 0.5 ? 1 : 0), Sg.Line) : LatticeAt(Sg.Line, Sg.K + (Tb > 0.5 ? 1 : 0)); Chain[K + 1].second = Nb; }
                 if (Na == Nb) continue;
-                Edges.push_back({ Na, Nb }); Edges.push_back({ Nb, Na });
+                PlanarSegments.push_back({ Na, Nb }); PlanarSegments.push_back({ Nb, Na });
             }
         }
         // cells → triangles
-        std::vector<std::vector<std::vector<int>>> Cells = PlanarCells(P, Edges);
+        std::vector<std::vector<std::vector<int>>> Cells = PlanarCells(P, PlanarSegments);
         for (const std::vector<std::vector<int>>& Cell : Cells)
         {
             std::vector<std::vector<uint32_t>> CellRings;
             for (const std::vector<int>& Ring : Cell)
             {
-                std::vector<uint32_t> Rg; for (int Ed : Ring) Rg.push_back(static_cast<uint32_t>(Edges[Ed].From));
+                std::vector<uint32_t> Rg; for (int Ed : Ring) Rg.push_back(static_cast<uint32_t>(PlanarSegments[Ed].From));
                 CellRings.push_back(std::move(Rg));
             }
             std::vector<uint32_t> Tri = TriangulatePolygon(P, CellRings);

@@ -47,7 +47,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'SolidArc MSVC verification failed' }
       - name: Retain compiler logs and rendered proofs
         if: always()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: solidarc-msvc-${{ github.sha }}
           retention-days: 14
@@ -105,7 +105,7 @@ jobs:
           }
       - name: Retain build diagnostics
         if: always()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: frontier-msvc-${{ github.sha }}
           retention-days: 14
@@ -115,7 +115,7 @@ jobs:
             Frontier/Build/Output/Windows/Release/Object/*.rsp
       - name: Retain Windows binary
         if: success()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: frontier-windows-release-${{ github.sha }}
           retention-days: 14
