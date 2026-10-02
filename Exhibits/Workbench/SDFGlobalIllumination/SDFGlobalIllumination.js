@@ -12,6 +12,14 @@ const TraceDistance = document.getElementById("TraceDistance");
 const DistanceOutput = document.getElementById("DistanceOutput");
 const SunStrength = document.getElementById("SunStrength");
 const SunOutput = document.getElementById("SunOutput");
+const PatternCell = document.getElementById("PatternCell");
+const PatternOutput = document.getElementById("PatternOutput");
+const HitPrecision = document.getElementById("HitPrecision");
+const HitOutput = document.getElementById("HitOutput");
+const FilterRadius = document.getElementById("FilterRadius");
+const FilterOutput = document.getElementById("FilterOutput");
+const TemporalResponse = document.getElementById("TemporalResponse");
+const TemporalOutput = document.getElementById("TemporalOutput");
 const AnimateSun = document.getElementById("AnimateSun");
 const ResetCamera = document.getElementById("ResetCamera");
 const RayMetric = document.getElementById("RayMetric");
@@ -119,17 +127,19 @@ function resetCamera()
     State.target = [0.0, 1.7, -0.25];
 }
 
-function pushVertex(vertices, position, normal, material)
+function pushVertex(vertices, position, normal, material, objectId, materialId)
 {
     vertices.push(
         position[0], position[1], position[2],
         normal[0], normal[1], normal[2],
         material.albedo[0], material.albedo[1], material.albedo[2],
         material.emissive,
+        objectId,
+        materialId,
     );
 }
 
-function appendBox(vertices, indices, primitive, material)
+function appendBox(vertices, indices, primitive, material, objectId, materialId)
 {
     const faces = [
         { normal: [1, 0, 0], corners: [[1,-1,-1],[1,1,-1],[1,-1,1],[1,1,1]] },
@@ -141,14 +151,14 @@ function appendBox(vertices, indices, primitive, material)
     ];
     for (const face of faces)
     {
-        const base = vertices.length / 10;
+        const base = vertices.length / 12;
         for (const corner of face.corners)
         {
             pushVertex(vertices, [
                 primitive.center[0] + corner[0] * primitive.half[0],
                 primitive.center[1] + corner[1] * primitive.half[1],
                 primitive.center[2] + corner[2] * primitive.half[2],
-            ], face.normal, material);
+            ], face.normal, material, objectId, materialId);
         }
         indices.push(base, base + 1, base + 2, base + 2, base + 1, base + 3);
     }
@@ -170,9 +180,9 @@ function decodeShaderBall(content)
     };
 }
 
-function appendShaderBall(vertices, indices, primitive, material, mesh)
+function appendShaderBall(vertices, indices, primitive, material, mesh, objectId, materialId)
 {
-    const base = vertices.length / 10;
+    const base = vertices.length / 12;
     const cosine = Math.cos(primitive.rotationY);
     const sine = Math.sin(primitive.rotationY);
     for (let index = 0; index < mesh.vertexCount; ++index)
@@ -194,7 +204,7 @@ function appendShaderBall(vertices, indices, primitive, material, mesh)
             cosine * nx + sine * nz,
             ny,
             -sine * nx + cosine * nz,
-        ], material);
+        ], material, objectId, materialId);
     }
     for (const index of mesh.indices) indices.push(base + index);
 }
@@ -204,11 +214,17 @@ function createSceneGeometry(shaderBallContent)
     const vertices = [];
     const indices = [];
     const shaderBall = decodeShaderBall(shaderBallContent);
-    for (const primitive of PRIMITIVES)
+    const materialNames = Object.keys(MATERIALS);
+    for (let primitiveIndex = 0; primitiveIndex < PRIMITIVES.length; ++primitiveIndex)
     {
+        const primitive = PRIMITIVES[primitiveIndex];
         const material = MATERIALS[primitive.material];
-        if (primitive.type === "shaderBall") appendShaderBall(vertices, indices, primitive, material, shaderBall);
-        else appendBox(vertices, indices, primitive, material);
+        const objectId = primitiveIndex + 1;
+        const materialId = materialNames.indexOf(primitive.material) + 1;
+        if (primitive.type === "shaderBall")
+            appendShaderBall(vertices, indices, primitive, material, shaderBall, objectId, materialId);
+        else
+            appendBox(vertices, indices, primitive, material, objectId, materialId);
     }
     return {
         vertices: new Float32Array(vertices),
@@ -319,7 +335,6 @@ function connectControls()
         GiOutput.value = Number(GiIntensity.value).toFixed(2);
         DistanceOutput.value = `${TraceDistance.value} m`;
         SunOutput.value = Number(SunStrength.value).toFixed(1);
-        ResolutionOutput.value = `${GiResolution.value}%`;
         PatternOutput.value = `${Number(PatternCell.value).toFixed(3).replace(/0+$/, "").replace(/\.$/, "")} m`;
         HitOutput.value = `${Number(HitPrecision.value).toFixed(2)} vx`;
         FilterOutput.value = `${FilterRadius.value} px`;
@@ -330,7 +345,6 @@ function connectControls()
         GiIntensity,
         TraceDistance,
         SunStrength,
-        GiResolution,
         PatternCell,
         HitPrecision,
         FilterRadius,
@@ -468,19 +482,25 @@ async function start()
             module: modules.gbuffer,
             entryPoint: "VertexMain",
             buffers: [{
-                arrayStride: 40,
+                arrayStride: 48,
                 attributes: [
                     { shaderLocation: 0, offset: 0, format: "float32x3" },
                     { shaderLocation: 1, offset: 12, format: "float32x3" },
                     { shaderLocation: 2, offset: 24, format: "float32x3" },
                     { shaderLocation: 3, offset: 36, format: "float32" },
+                    { shaderLocation: 4, offset: 40, format: "float32x2" },
                 ],
             }],
         },
         fragment: {
             module: modules.gbuffer,
             entryPoint: "FragmentMain",
-            targets: [{ format: "rgba16float" }, { format: "rgba16float" }, { format: "rgba8unorm" }],
+            targets: [
+                { format: "rgba16float" },
+                { format: "rgba16float" },
+                { format: "rgba8unorm" },
+                { format: "rgba16float" },
+            ],
         },
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: "depth24plus", depthWriteEnabled: true, depthCompare: "less" },
@@ -521,11 +541,13 @@ async function start()
     let worldPositionTexture;
     let worldNormalTexture;
     let albedoTexture;
+    let motionIdentityTexture;
     let depthTexture;
     let indirectTexture;
     let historyLighting = [];
     let historyPosition = [];
     let historyNormal = [];
+    let historyIdentity = [];
     let giBindGroup;
     let denoiseBindGroups = [];
     let presentBindGroups = [];
@@ -542,9 +564,10 @@ async function start()
         );
         const nextWidth = Math.max(2, Math.floor(Canvas.clientWidth * pixelRatio * resolutionCap));
         const nextHeight = Math.max(2, Math.floor(Canvas.clientHeight * pixelRatio * resolutionCap));
-        const giScale = Number(GiResolution.value) * 0.01;
-        const nextGiWidth = Math.max(2, Math.ceil(nextWidth * giScale));
-        const nextGiHeight = Math.max(2, Math.ceil(nextHeight * giScale));
+        // ReSTIR preparation deliberately keeps candidate generation and all
+        // reconstruction at full raster resolution. No checkerboard fallback.
+        const nextGiWidth = nextWidth;
+        const nextGiHeight = nextHeight;
         if (nextWidth === width && nextHeight === height
             && nextGiWidth === giWidth && nextGiHeight === giHeight) return;
         width = nextWidth;
@@ -557,21 +580,24 @@ async function start()
             worldPositionTexture,
             worldNormalTexture,
             albedoTexture,
+            motionIdentityTexture,
             depthTexture,
             indirectTexture,
             ...historyLighting,
             ...historyPosition,
             ...historyNormal,
+            ...historyIdentity,
         ]) texture?.destroy();
         const colourUsage = GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING;
         worldPositionTexture = device.createTexture({ label: "World position G-buffer", size: [width, height], format: "rgba16float", usage: colourUsage });
         worldNormalTexture = device.createTexture({ label: "World normal G-buffer", size: [width, height], format: "rgba16float", usage: colourUsage });
         albedoTexture = device.createTexture({ label: "Albedo G-buffer", size: [width, height], format: "rgba8unorm", usage: colourUsage });
+        motionIdentityTexture = device.createTexture({ label: "Motion and identity G-buffer", size: [width, height], format: "rgba16float", usage: colourUsage });
         depthTexture = device.createTexture({ label: "Scene depth", size: [width, height], format: "depth24plus", usage: GPUTextureUsage.RENDER_ATTACHMENT });
         const giSize = [giWidth, giHeight];
         const computeTextureUsage = GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING;
         indirectTexture = device.createTexture({
-            label: "Raw adjustable-resolution SDF indirect",
+            label: "Raw full-resolution SDF indirect",
             size: giSize,
             format: "rgba16float",
             usage: computeTextureUsage,
@@ -590,6 +616,12 @@ async function start()
         }));
         historyNormal = [0, 1].map((index) => device.createTexture({
             label: `SDF GI history normal ${index}`,
+            size: giSize,
+            format: "rgba16float",
+            usage: computeTextureUsage,
+        }));
+        historyIdentity = [0, 1].map((index) => device.createTexture({
+            label: `SDF GI history identity and moments ${index}`,
             size: giSize,
             format: "rgba16float",
             usage: computeTextureUsage,
@@ -618,12 +650,15 @@ async function start()
                     { binding: 1, resource: indirectTexture.createView() },
                     { binding: 2, resource: worldPositionTexture.createView() },
                     { binding: 3, resource: worldNormalTexture.createView() },
-                    { binding: 4, resource: historyLighting[readIndex].createView() },
-                    { binding: 5, resource: historyPosition[readIndex].createView() },
-                    { binding: 6, resource: historyNormal[readIndex].createView() },
-                    { binding: 7, resource: historyLighting[writeIndex].createView() },
-                    { binding: 8, resource: historyPosition[writeIndex].createView() },
-                    { binding: 9, resource: historyNormal[writeIndex].createView() },
+                    { binding: 4, resource: motionIdentityTexture.createView() },
+                    { binding: 5, resource: historyLighting[readIndex].createView() },
+                    { binding: 6, resource: historyPosition[readIndex].createView() },
+                    { binding: 7, resource: historyNormal[readIndex].createView() },
+                    { binding: 8, resource: historyIdentity[readIndex].createView() },
+                    { binding: 9, resource: historyLighting[writeIndex].createView() },
+                    { binding: 10, resource: historyPosition[writeIndex].createView() },
+                    { binding: 11, resource: historyNormal[writeIndex].createView() },
+                    { binding: 12, resource: historyIdentity[writeIndex].createView() },
                 ],
             });
         });
@@ -637,6 +672,9 @@ async function start()
                 { binding: 3, resource: albedoTexture.createView() },
                 { binding: 4, resource: historyLighting[historyTextureIndex].createView() },
                 { binding: 5, resource: linearSampler },
+                { binding: 6, resource: motionIdentityTexture.createView() },
+                { binding: 7, resource: historyIdentity[historyTextureIndex].createView() },
+                { binding: 8, resource: historyNormal[historyTextureIndex].createView() },
             ],
         }));
         historyIndex = 0;
@@ -661,7 +699,10 @@ async function start()
         const projection = perspectiveProjection(Math.PI / 3.05, width / height, 0.08, 70.0);
         const view = viewMatrix(eye, State.target, [0.0, 1.0, 0.0]);
         const currentViewProjection = multiplyMatrix(projection, view);
-        device.queue.writeBuffer(cameraBuffer, 0, currentViewProjection);
+        const cameraUniforms = new Float32Array(32);
+        cameraUniforms.set(currentViewProjection, 0);
+        cameraUniforms.set(previousViewProjection || currentViewProjection, 16);
+        device.queue.writeBuffer(cameraBuffer, 0, cameraUniforms);
 
         const sunAngle = AnimateSun.checked ? elapsed * 0.22 : 0.72;
         const lightDirection = normalise([Math.cos(sunAngle) * 0.56, 0.82, Math.sin(sunAngle) * 0.46]);
@@ -690,15 +731,12 @@ async function start()
         ], 12);
         device.queue.writeBuffer(giBuffer, 0, giUniforms);
 
-        const denoiseUniforms = new Float32Array(20);
-        denoiseUniforms.set(previousViewProjection || currentViewProjection, 0);
-        const historyResponse = Number(TemporalResponse.value);
-        denoiseUniforms.set([
+        const denoiseUniforms = new Float32Array([
             historyValid ? 1.0 : 0.0,
             voxelSize,
-            historyResponse,
+            Number(TemporalResponse.value),
             Number(FilterRadius.value),
-        ], 16);
+        ]);
         device.queue.writeBuffer(denoiseBuffer, 0, denoiseUniforms);
 
         const presentUniforms = new Float32Array(16);
@@ -715,6 +753,7 @@ async function start()
                 { view: worldPositionTexture.createView(), clearValue: [0, 0, 0, 0], loadOp: "clear", storeOp: "store" },
                 { view: worldNormalTexture.createView(), clearValue: [0, 0, 0, 0], loadOp: "clear", storeOp: "store" },
                 { view: albedoTexture.createView(), clearValue: [0, 0, 0, 0], loadOp: "clear", storeOp: "store" },
+                { view: motionIdentityTexture.createView(), clearValue: [0, 0, 0, 0], loadOp: "clear", storeOp: "store" },
             ],
             depthStencilAttachment: { view: depthTexture.createView(), depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "discard" },
         });

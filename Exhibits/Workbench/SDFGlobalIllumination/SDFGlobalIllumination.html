@@ -17,6 +17,7 @@
         <button class="NavMode" data-mode="1">Global GI</button>
         <button class="NavMode" data-mode="2">Direct</button>
         <button class="NavMode" data-mode="3">Trace cost</button>
+        <button class="NavMode" data-mode="4">Motion</button>
     </nav>
 
     <aside class="Controls">
@@ -31,7 +32,7 @@
         <div class="MetricGrid">
             <article><span>Global field</span><b>160×80×160</b><small>8 distance levels</small></article>
             <article><span>Mesh SDF</span><b>96³ JFA+</b><small>exact refinement</small></article>
-            <article><span>Tracing</span><b id="RayMetric">8 rays</b><small>world-locked</small></article>
+            <article><span>Tracing</span><b id="RayMetric">4 rays</b><small>full resolution</small></article>
             <article><span>Visibility</span><b>Global</b><small>no depth hits</small></article>
         </div>
 
@@ -44,11 +45,14 @@
                     <option value="1">SDF indirect only</option>
                     <option value="2">Direct · no shadows</option>
                     <option value="3">Sphere-trace cost</option>
+                    <option value="4">Motion vectors</option>
+                    <option value="5">Temporal variance</option>
+                    <option value="6">History length</option>
                 </select>
             </label>
             <label class="RangeControl">
-                <span>GI rays</span><output id="RayOutput">8</output>
-                <input id="RayCount" type="range" min="1" max="16" step="1" value="8">
+                <span>GI rays</span><output id="RayOutput">4</output>
+                <input id="RayCount" type="range" min="1" max="16" step="1" value="4">
             </label>
             <label class="RangeControl">
                 <span>GI intensity</span><output id="GiOutput">0.90</output>
@@ -66,10 +70,6 @@
 
         <section class="ControlSection">
             <div class="SectionHeading"><span>Quality</span><span class="SectionRule"></span></div>
-            <label class="RangeControl">
-                <span>GI resolution</span><output id="ResolutionOutput">75%</output>
-                <input id="GiResolution" type="range" min="50" max="100" step="5" value="75">
-            </label>
             <label class="RangeControl">
                 <span>Ray-pattern cell</span><output id="PatternOutput">0.05 m</output>
                 <input id="PatternCell" type="range" min="0.025" max="0.25" step="0.005" value="0.05">
@@ -94,9 +94,10 @@
                 <input id="AnimateSun" type="checkbox" checked>
                 <i></i>
             </label>
+            <div class="RuntimeLine"><span>GI resolution</span><b>Full resolution</b></div>
             <div class="RuntimeLine"><span>Trace origin</span><b>Raster receiver</b></div>
             <div class="RuntimeLine"><span>Geometry hits</span><b>Global SDF only</b></div>
-            <div class="RuntimeLine"><span>Reconstruction</span><b>World reprojection</b></div>
+            <div class="RuntimeLine"><span>History</span><b>Motion + identity</b></div>
             <div class="RuntimeLine Warning"><span>SDF shadows</span><b>Next phase</b></div>
         </section>
 

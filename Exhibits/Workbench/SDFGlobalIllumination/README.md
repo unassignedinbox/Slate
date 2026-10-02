@@ -25,10 +25,10 @@ The combination of sub-voxel seeds, JFA+, exact triangle refinement, trilinear c
 3. The artifact also stores a base-resolution RGBA8 material field containing linear albedo and an emissive mask.
 4. The browser uploads the baked data as a mipmapped `r16float` 3D texture and an `rgba8unorm` 3D material texture.
 5. A compute pass identifies the narrow SDF surface band, derives normals from the global field, and writes outgoing radiance into a `160×80×160 RGBA16F` global surface-radiance cache. With light animation disabled, this cache updates only when its source parameters change.
-6. A conventional raster G-buffer supplies only the current receiver position, normal, and albedo. The exact same ShaderBall mesh and transforms are used for rasterization and SDF composition.
-7. At an adjustable 50–100% resolution, one to sixteen cosine-distributed rays per receiver sphere-trace the global SDF. Directions are keyed to fine, adjustable world-space cells so camera motion cannot reshuffle a pixel-space pattern and the cache voxel grid is not exposed as large lighting blocks. Distance-adaptive mip selection accelerates empty-space traversal; candidate hits return to mip zero and use an adjustable base-voxel threshold before acceptance.
+6. A full-resolution raster G-buffer supplies receiver position, normal, albedo, camera motion, object ID, and material ID. The exact same ShaderBall mesh and transforms are used for rasterization and SDF composition. Current and previous view-projection matrices generate explicit current-to-previous UV motion.
+7. At full raster resolution, one to sixteen cosine-distributed rays per receiver sphere-trace the global SDF. There is no half-resolution or checkerboard fallback. Directions are keyed to fine, adjustable world-space cells. Distance-adaptive mip selection accelerates empty-space traversal; candidate hits return to mip zero and use an adjustable base-voxel threshold before acceptance.
 8. Accepted world-space hits sample the global surface-radiance cache. Rays leaving the baked world sample a low-intensity environment.
-9. An adjustable position/normal bilateral reconstruction removes raw low-ray-count variance. World-position reprojection accumulates up to 32 validated frames, rejects changed surfaces, and neighbourhood-clamps retained radiance. Temporal response is exposed directly so clean convergence can be balanced against animated-light latency.
+9. An adjustable position/normal/identity bilateral reconstruction removes raw variance. Motion-vector reprojection accumulates up to 32 validated frames and rejects object, material, position, normal, and disocclusion mismatches. First and second luminance moments drive variance-aware history clamping.
 10. The composite multiplies reconstructed incoming indirect radiance by receiver albedo and combines it with the raster direct term.
 
 A bounded incoming-radiance estimator suppresses isolated emissive fireflies before reconstruction. Temporal directions still originate from world-keyed sequences; the history stage stabilizes their estimator rather than inventing screen-space hits.
@@ -44,7 +44,20 @@ The architectural correspondence is deliberate but bounded:
 - hit lighting lives in a separate surface-radiance cache; and
 - coarse global-distance levels accelerate traversal before mip-zero validation.
 
-This is not presented as a reproduction of Unreal Engine Lumen. Lumen builds camera-centred global-distance-field clipmaps, maintains a card-based surface cache, combines several tracing representations, schedules partial updates, and applies extensive reconstruction. This exhibit uses a static bounded global field and a dense voxel radiance cache so every stage remains inspectable.
+This is not presented as a reproduction of Unreal Engine Lumen. Lumen builds camera-centred global-distance-field clipmaps, maintains a card-based surface cache, combines several tracing representations, schedules partial updates, and applies extensive reconstruction. This exhibit still uses a static bounded global field and a dense voxel radiance cache so every stage remains inspectable.
+
+## ReSTIR GI migration status
+
+The full-resolution temporal foundation is now in place before reservoir work begins:
+
+- all GI tracing, history, reconstruction, and presentation textures match raster resolution;
+- the G-buffer emits explicit camera motion plus stable object and material identities;
+- temporal history uses motion vectors rather than reconstructing motion inside the denoiser;
+- disocclusion rejection checks identity, position, and normal;
+- luminance moments expose variance and history diagnostics; and
+- the previous cosine tracer remains the measurable baseline.
+
+ReSTIR reservoirs are **not** claimed to be active yet. The next implementation milestone replaces the dense voxel-radiance cache with card/chart surface pages and hit-to-card lookup. Candidate generation, temporal reconnection, spatial reservoir reuse, and a multi-pass variance denoiser follow that cache change so reservoirs do not merely preserve coarse voxel lighting.
 
 ## Deliberately deferred: SDF shadows
 
@@ -54,12 +67,11 @@ The next phase can add SDF shadows as a separate query without changing or disgu
 
 ## Controls
 
-- **Lighting / Global GI / Direct / Trace cost** — dashboard views of combined lighting, SDF indirect, unshadowed direct, or normalized sphere-trace cost.
-- **GI rays** — one to sixteen world-locked cosine rays per receiver. More rays reduce estimator variance at a direct performance cost.
+- **Lighting / Global GI / Direct / Trace cost / Motion** — dashboard views of combined lighting, SDF indirect, unshadowed direct, normalized sphere-trace cost, or encoded camera motion. The Output menu additionally exposes temporal variance and history length.
+- **GI rays** — one to sixteen full-resolution, world-locked cosine rays per receiver. More rays reduce estimator variance at a direct performance cost.
 - **GI intensity** — scales only the SDF-derived indirect contribution.
 - **Trace distance** — maximum world-space sphere-trace reach.
 - **Sun strength** — updates raster direct light and the global surface-radiance cache.
-- **GI resolution** — runs tracing and reconstruction at 50–100% of the canvas dimensions. The new 75% default is sharper than the previous fixed half-resolution path.
 - **Ray-pattern cell** — size of the world-space sampling cell. Smaller values replace large stable blocks with finer variance for the temporal filter to resolve.
 - **SDF hit threshold** — hit acceptance radius in base GDF voxels. Lower values are more precise but require more marching work.
 - **Spatial filter** — zero to two pixels of position/normal-aware filtering.
