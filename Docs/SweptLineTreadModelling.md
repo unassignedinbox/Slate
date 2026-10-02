@@ -83,6 +83,22 @@ for (let p = 0; p < raw.length; p++) out.push(out[p] + raw[p] / total);
 Normalising against the total is what lets the sequence be irregular and still close exactly at 1.0. The last ring
 wraps to the first with `(i + 1) % ringCount`, so there is no seam to weld.
 
+**Where the rings go is decided by the lines, not by a sample count.** This is the difference between this method
+and a displacement map, and it is worth being precise about because the first version of this prototype got it
+wrong. Each lane contributes its node positions to one schedule shared by every lane — shared, because lane `j`
+and lane `j+1` can only be bridged if they agree on where their rings sit. A node that is half of a hard-edge
+pair contributes **two** positions, `StepEpsilon` either side of it. Runs between nodes are then subdivided, but
+only as much as curvature asks for:
+
+```js
+if (marks.get(key)) walls.push(key - StepEpsilon, key + StepEpsilon);
+else                walls.push(key);
+```
+
+The consequence is that the ring count per pitch is a property of the pattern. A five-rib pattern needs 17 rings
+per pitch; a block row needs 27; the asymmetric needs 28. A slider cannot set it, because the pattern already
+has.
+
 ### Step 4 — fit the tyre profile
 
 Each ring is placed on the carcass. Lateral stays lateral; the radius comes from the moulded surface, and the
@@ -116,7 +132,41 @@ A skirt on its own closes nothing — it only moves the open loop outwards. The 
 boundary loops by nature, and those loops are where it meets the sidewalls. Joining the two skirts with an inner
 face at `outerRadius − depth − beltThickness` is what earns the right to assert zero boundary edges.
 
-## 3. The constraint that makes it work
+## 3. Hard edges, and why they are the whole point
+
+A tread block has **walls**. If the element's height is interpolated up from the groove floor over the gap
+between two rings, what gets built is a ramp, and a surface made of ramps is a displaced heightfield no matter
+how it was authored. That is a real failure mode and this prototype shipped with it once.
+
+A hard edge is therefore **two nodes at the same `t`**, one carrying the height below it and one the height
+above:
+
+```js
+const edge = (t, y, w, below, above) => [node(t, y, w, below), node(t, y, w, above)];
+```
+
+The schedule splits the pair by `StepEpsilon = 0.0012` of a pitch, and the quad spanning those two rings **is**
+the wall. At a 46 mm pitch that is 0.11 mm of travel for 9 mm of rise:
+
+| Construction                          | Block wall angle | Nodes with a ring on them |
+|---------------------------------------|------------------|---------------------------|
+| Uniform grid, smoothstep up to height | 58.5°            | 1 of 4                    |
+| Node-placed rings, hard edge pairs    | **89.3°**        | **4 of 4**                |
+
+A moulded block wall is 85–90°. Sipes use the same mechanism — a sipe is a hard-edged slot that stops short of
+the floor, so it is two coincident pairs, down and back up, a few thousandths of a pitch apart.
+
+`sampleLane` has to tolerate the zero-length segment this creates:
+
+```js
+const span = b.t - a.t;
+if (span <= 1e-9) continue;   // a hard edge: nothing to interpolate across
+```
+
+Smoothstep still applies along the **runs**, so a vee's outboard walk stays tangent-continuous. It never softens
+a wall, because a wall has no run to soften.
+
+## 4. The constraint that makes it work
 
 > Every cross-section must carry a **constant point count**, whatever the line samples to.
 
@@ -149,7 +199,7 @@ Two consequences follow, and both are deliberate:
 - **Degenerate quads exist in the groove floors.** They are zero-area, not zero-point, so the connectivity stays
   manifold. They cost memory and nothing else, and they can be welded at export if the vertex count matters.
 
-## 4. The audit
+## 5. The audit
 
 Every edge in a closed manifold is shared by exactly two triangles. Count them:
 
@@ -160,22 +210,30 @@ const key = (a, b) => (a < b ? a + ':' + b : b + ':' + a);
 // uses  > 2 → non-manifold (a fin, or a weld that merged two surfaces)
 ```
 
-Both counts must be zero with capping on. Current state of the prototype:
+Current state, with capping on:
 
-| Pattern      | Lanes | Rings | Vertices | Quads  | Boundary | Non-manifold |
-|--------------|-------|-------|----------|--------|----------|--------------|
-| Five rib     | 5     | 736   | 32 384   | 32 384 | 0        | 0            |
-| Block row    | 5     | 736   | 32 384   | 32 384 | 0        | 0            |
-| Directional  | 5     | 736   | 32 384   | 32 384 | 0        | 0            |
-| Lugged       | 4     | 736   | 26 496   | 26 496 | 0        | 0            |
-| Asymmetric   | 5     | 736   | 32 384   | 32 384 | 0        | 0            |
-| Winter       | 5     | 736   | 32 384   | 32 384 | 0        | 0            |
+| Pattern      | Lanes | Rings/pitch | Rings | Vertices | Triangles | Boundary | Non-manifold |
+|--------------|-------|-------------|-------|----------|-----------|----------|--------------|
+| Five rib     | 5     | 17          | 782   | 34 408   | 68 816    | 0        | 0            |
+| Block row    | 5     | 27          | 1 242 | 54 648   | 109 296   | 0        | 0            |
+| Directional  | 5     | 17          | 782   | 34 408   | 68 816    | 0        | 0            |
+| Lugged       | 4     | 18          | 828   | 29 808   | 59 616    | 0        | 0            |
+| Asymmetric   | 5     | 28          | 1 288 | 56 672   | 113 344   | 0        | 0            |
+| Winter       | 5     | 24          | 1 104 | 48 576   | 97 152    | 0        | 0            |
 
-With capping off the boundary count is exactly `ringCount × 2` — the two lateral loops, and nothing else. That is
-the more useful gate of the two, because it says the open edges are *where they are supposed to be* rather than
-merely that there are none.
+**Do not read too much into those zeroes.** The topology here is a regular grid wrapped into a torus, and a
+regular grid wrapped into a torus is watertight whatever you do to its vertices. The audit will pass for a
+displaced heightfield just as readily as for this. It is a necessary check, not a sufficient one — it catches
+indexing mistakes in the bridge and nothing else.
 
-## 5. Vocabulary
+The gates that actually separate this from a displacement map are the two in section 3: **what fraction of the
+authored nodes have a vertex ring on them**, and **what angle the block walls stand at**. Report those next to
+the manifold audit, never the manifold audit alone.
+
+With capping off the boundary count is exactly `ringCount × 2` — the two lateral loops, and nothing else. That
+is more useful than zero, because it says the open edges are *where they are supposed to be*.
+
+## 6. Vocabulary
 
 Names used in the code, matching the trade rather than the renderer:
 
@@ -191,7 +249,7 @@ Names used in the code, matching the trade rather than the renderer:
 - **Void ratio** — groove and sipe area over total area. Sea-land ratio, informally.
 - **Pitch sequence** — the deliberately unequal pitch lengths of step 3.
 
-## 6. Porting to C++
+## 7. Porting to C++
 
 The prototype maps onto the existing types with no structural change:
 
@@ -202,6 +260,8 @@ The prototype maps onto the existing types with no structural change:
 | `sampleLane`       | `TreadLineSampler`                                                      |
 | `laneSection`      | `TreadLineSection`, returning a fixed `TreadRingPointCount` array        |
 | `pitchOffsets`     | already present as the pitch sequence in `TreadPatternSpecification`     |
+| `pitchSchedule`    | **new** `TreadRingSchedule` — the merged, node-placed ring positions     |
+| `edge(...)`        | a `TreadLineNode` pair sharing a `PitchPosition`                        |
 | `surfaceAt`        | `EvaluateTyreProfile` in `TyreProfileSpecification.h` — unchanged        |
 | `buildTread`       | replaces the body of `TreadMeshSolver`                                   |
 | `audit`            | the existing manifold gate in `Exhibits/Workbench/Tyre/TreadMeshProof`   |
@@ -212,17 +272,20 @@ clipped polygon soup is work nothing is good at.
 
 Order of work:
 
-1. `TreadLineNode` and the lane list in the specification types.
+1. `TreadLineNode` and the lane list in the specification types. A node carries `PitchPosition`,
+   `LateralCentre`, `HalfWidth` and `HeightFraction`; a hard edge is two nodes sharing a
+   `PitchPosition`.
 2. `TreadLineSection` with `TreadRingPointCount` as a compile-time constant, and a static assertion that every
    section returns exactly that many points.
 3. Rewrite `TreadMeshSolver::Solve` as the five steps.
-4. Extend `TreadMeshProof` to gate boundary and non-manifold at zero for all six pattern families, and at
-   `RingCount × 2` with capping off.
+4. Extend `TreadMeshProof` to gate three things, not one: boundary and non-manifold at zero, **every
+   authored node carrying a ring**, and **block walls at 85° or steeper**. The manifold gate alone would
+   pass a heightfield.
 5. Convert the existing presets from region lists to lane lists.
 
 Step 4 before step 5, so the preset conversion is landing against a gate that already works.
 
-## 7. Open questions
+## 8. Open questions
 
 - **Sipes are approximated.** A real sipe is a zero-width slit; here it is an `h` dip with finite width. Below
   about 0.4 mm the two walls would need to share vertices, which is a second constant point count problem. Worth

@@ -134,6 +134,60 @@ self-checks so a regression fails loudly.
 
 ---
 
+## Viewing HTML prototypes
+
+Do not ask the user to load a sandbox dev server — the sandbox is wiped often and without warning, so the
+server dies and the link rots. Commit the file, push the branch, then hand over a **raw.githack.com** link
+pinned to the commit:
+
+```
+https://raw.githack.com/unassignedinbox/Slate/<commit-sha>/<path-to-file>
+```
+
+For example:
+
+```
+https://raw.githack.com/unassignedinbox/Slate/adb69a3e50f8e72f9cd305a7ff5649d3b192cb21/Exhibits/Workbench/SDFGlobalIllumination/SDFGlobalIllumination.html
+```
+
+Rules that follow from this:
+
+- Pin the **commit SHA**, never a branch name. A branch link changes under the user's feet and will not match
+  what was described.
+- **Push before handing over the link.** githack serves from GitHub; an unpushed commit 404s.
+- Anything the page loads must be **committed and referenced relative to the repository**, because githack
+  serves the repository and nothing else. Fonts come from `Frontier/EngineContent/Fonts/`; a path that only
+  resolves on a local server is a broken page.
+- Re-issue a fresh link after every push. The old SHA keeps serving the old file, which is worse than a 404
+  because it looks like the fix did not work.
+
+## Verifying a prototype without a browser
+
+The sandbox has no browser, and the Google and Playwright binary CDNs are blocked, so a prototype cannot be
+screenshotted. Harness it in Node instead — but harness it against the **real library**:
+
+- `npm install three@<version>` and import the genuine `three`, `OrbitControls` and `RoomEnvironment`. Stub
+  **only** the WebGL context and the DOM, because the sandbox genuinely has neither.
+- Never hand-write a stub of a third-party class. A stub written to match the code under test cannot fail.
+  `controls.userData = {}` once hid a `TypeError` that left the whole page blank, because `OrbitControls`
+  extends `EventDispatcher` and has no `userData`.
+- Say plainly what was verified and what was not. "The geometry is correct and the module initialises" is not
+  "it looks right".
+
+## Do not pass a displacement off as topology
+
+A regular grid wrapped into a torus is watertight no matter what you do to it, so a zero boundary / zero
+non-manifold audit on one proves nothing at all. When the task is to build geometry *as a modeller would*,
+gate the thing that actually distinguishes the two:
+
+- Does the authored curve **place** the geometry, or is it merely sampled onto a fixed grid? Count how many of
+  the curve's nodes have a vertex ring on them.
+- Are the walls **walls**? Measure the angle. A moulded tread block wall is 85–90°; a displaced heightfield
+  produces 50–60° ramps.
+- Report both numbers next to the manifold audit, and never report the manifold audit on its own.
+
+---
+
 ## Design references
 
 - **Entity + Editor System** — [`Docs/EntityEditorSystem.md`](Docs/EntityEditorSystem.md)
