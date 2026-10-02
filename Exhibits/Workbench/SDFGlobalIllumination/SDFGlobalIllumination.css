@@ -126,6 +126,10 @@ html, body {
     font: 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+.Error[hidden] {
+    display: none;
+}
+
 .Error {
     position: fixed;
     inset: 0;
