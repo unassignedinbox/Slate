@@ -27,7 +27,7 @@ namespace
 int main()
 {
     VerificationPanel Panel("SolidArc · Phase 22 · Native .arc Document Verification — versioned command journal, atomic save/open, recovery");
-    const std::filesystem::path Directory = "/tmp/SolidArcDocumentVerification";
+    const std::filesystem::path Directory = std::filesystem::path(SOLIDARC_PROOF_FOLDER) / "DocumentVerification";
     const std::filesystem::path Stem = Directory / "mounting-bracket";
     const std::filesystem::path Document = Directory / "mounting-bracket.arc";
     const std::filesystem::path Backup = Directory / "mounting-bracket.arc.bak";
@@ -59,10 +59,11 @@ int main()
     const double BaseVolume = BaseBefore ? BaseBefore->Body.Validate().Volume : 0.0;
 
     Panel.Section("Save: extension normalization, version header and recovery backup");
-    Panel.Expect("save accepts a stem and appends .arc", Host.Execute("save " + Stem.string()));
+    Panel.Expect("save accepts a stem and appends .arc", Host.Execute("save \"" + Stem.generic_string() + "\""));
     Panel.Expect("native .arc was written", std::filesystem::exists(Document));
     std::ifstream First(Document);
     std::string Header; std::getline(First, Header);
+    First.close(); // Release the read handle before the Windows atomic replacement check.
     Panel.Expect("native document declares v1 header", Header == "# SolidArc native document v1");
     Panel.Expect("first save has no backup yet", !std::filesystem::exists(Backup));
 
@@ -76,7 +77,7 @@ int main()
     Panel.Section("Open: exact semantic replay and associativity");
     Panel.Expect("reset replaces the live scene before the test open", Host.Execute("reset"));
     Panel.Expect("reset removed all figures", Host.AllFigures().empty());
-    Panel.Expect("open .arc succeeds", Host.Execute("open " + Document.string()));
+    Panel.Expect("open .arc succeeds", Host.Execute("open \"" + Document.generic_string() + "\""));
     Panel.Expect("open restores original figure count", Host.AllFigures().size() == 5);
     Panel.Expect("open restores the exact saved geometric document fingerprint", UndoSequence::Fingerprint(Host.Document()) == BeforeOpen);
     // The second save contains the one-unit move made after the first save; this check confirms both model revisions
@@ -105,10 +106,10 @@ int main()
     }
     const uint64_t BeforeBadOpen = UndoSequence::Fingerprint(Host.Document());
     const size_t FiguresBeforeBadOpen = Host.AllFigures().size();
-    Panel.Expect("malformed native document is refused", !Host.Execute("open " + Invalid.string()));
+    Panel.Expect("malformed native document is refused", !Host.Execute("open \"" + Invalid.generic_string() + "\""));
     Panel.Expect("failed open preserves the current geometry", UndoSequence::Fingerprint(Host.Document()) == BeforeBadOpen);
     Panel.Expect("failed open preserves the current figure count", Host.AllFigures().size() == FiguresBeforeBadOpen);
-    Panel.Expect("wrong native extension is refused", !Host.Execute("open " + (Directory / "not-a-document.txt").string()));
+    Panel.Expect("wrong native extension is refused", !Host.Execute("open \"" + (Directory / "not-a-document.txt").generic_string() + "\""));
 
     return Panel.Conclude();
 }

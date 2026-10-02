@@ -31,6 +31,7 @@
 
 #version 460
 #extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_nonuniform_qualifier : require
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
@@ -113,8 +114,6 @@ layout(push_constant) uniform ResolveConstants
 const uint kFeatureGlobalIllumination = 1u;    // bit 0: surfel diffuse gather runs
 // Reflection mode (Counts.w): 0 = Off, 1 = Sky, 2 = Raytraced.
 const uint kReflectOff = 0u, kReflectSky = 1u, kReflectRaytraced = 2u;
-
-const float kPi = 3.14159265358979, kInvPi = 0.31830988618379;
 
 // Horizon → zenith gradient about the sky ambient, plus a broad solar aureole. Roughness widens the lobe, which
 //    is what a prefiltered cube would have done for a glossy reflection.

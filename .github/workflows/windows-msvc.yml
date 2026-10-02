@@ -97,9 +97,17 @@ jobs:
           New-Item -ItemType Directory -Force ../_AgentScratch/logs/msvc-ci | Out-Null
           Start-Transcript -Path ../_AgentScratch/logs/msvc-ci/FrontierBuild.log
           try {
-            & ./Tools/Build/ToolchainSequence.ps1 -Configuration Release -SetupDependencies -Parallel 2
+            & ./Tools/Build/ToolchainSequence.ps1 -Configuration Release -SetupDependencies -Parallel 2 *>&1 | Tee-Object -FilePath ../_AgentScratch/logs/msvc-ci/CompilerOutput.log
             if ($LASTEXITCODE -ne 0) { throw 'Frontier build failed' }
             if (-not (Test-Path Build/Output/Windows/Release/Binary/Frontier.exe)) { throw 'Frontier.exe was not produced' }
+          } catch {
+            $Diagnostic = ($_ | Out-String) + (Get-Content ../_AgentScratch/logs/msvc-ci/CompilerOutput.log -Tail 40 -ErrorAction SilentlyContinue | Out-String)
+            for ($Offset = 0; $Offset -lt $Diagnostic.Length; $Offset += 3000) {
+              $Part = $Diagnostic.Substring($Offset, [Math]::Min(3000, $Diagnostic.Length - $Offset))
+              $Part = $Part.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+              Write-Host "::error title=Frontier build::$Part"
+            }
+            throw
           } finally {
             Stop-Transcript
           }

@@ -35,6 +35,7 @@
 
 #version 460
 #extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_nonuniform_qualifier : require
 
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
@@ -93,9 +94,6 @@ layout(push_constant) uniform SurfelUpdateConstants
     uvec4 Counts;                 // x = surfel count, y = frame index, z = ray count, w = grid hash size
     vec4  Tuning;                 // x = firefly clamp, y = running-mean age cap, z/w unused
 } PC;
-
-const float kPi    = 3.14159265358979;
-const float kInvPi = 0.31830988618379;
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                    HELPERS

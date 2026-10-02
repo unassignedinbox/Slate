@@ -15,6 +15,8 @@ OUTPUT = ROOT.parent / "_AgentScratch/build/msvc-solidarc"
 
 
 def main() -> int:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     if sys.platform != "win32" or not shutil.which("cl.exe"):
         raise RuntimeError("Use an x64 Visual Studio developer shell with cl.exe on PATH")
     objects, logs, proofs = (OUTPUT / name for name in ("objects", "logs", "proofs"))
