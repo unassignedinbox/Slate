@@ -193,6 +193,47 @@ const DESIGNS = {
       { kind: 'rib',    w: 60, blocked: true, gapFrac: 0.20, sipes: 2, chevMul: 0.6, phase: 0.5 },
     ],
   },
+  ht: {
+    label: 'Highway Rib', tag: 'van / truck · straight ribs',
+    desc: 'Classic highway rib: straight continuous ribs with zero chevron and narrow circumferential grooves — low noise, even wear, straight-line stability for vans and light trucks. Light single sipes only.',
+    set: { width: 235, aspect: 65, rim: 16, depth: 10, crown: 2, shoulderLen: 13, shoulderDrop: 3,
+           pitches: 84, chevron: 0, gapScale: 1, stagger: 1, sipeW: 1.4, sipeDepthF: 0.55 },
+    lanes: [
+      { kind: 'rib',    w: 14, sipes: 1, chevMul: 0 },
+      { kind: 'groove', w: 7 },
+      { kind: 'rib',    w: 20, sipes: 1, chevMul: 0 },
+      { kind: 'groove', w: 7 },
+      { kind: 'rib',    w: 24, sipes: 1, chevMul: 0 },
+      { kind: 'groove', w: 7 },
+      { kind: 'rib',    w: 60, sipes: 1, chevMul: 0 },
+    ],
+  },
+  winter: {
+    label: 'Winter / Nordic', tag: 'snow · dense siping',
+    desc: 'Studless winter: a dense field of small staggered blocks, every one cut by deep multi-sipes — the thousands of biting edges do the work on snow and ice. Narrow section, high pitch count.',
+    set: { width: 195, aspect: 65, rim: 15, depth: 9.5, crown: 2.5, shoulderLen: 11, shoulderDrop: 4,
+           pitches: 72, chevron: 10, gapScale: 1, stagger: 1, sipeW: 1.2, sipeDepthF: 0.85 },
+    lanes: [
+      { kind: 'rib',    w: 14, blocked: true, gapFrac: 0.18, sipes: 3, chevMul: 0,   phase: 0.5 },
+      { kind: 'groove', w: 6 },
+      { kind: 'rib',    w: 22, blocked: true, gapFrac: 0.20, sipes: 3, chevMul: 1,   phase: 0 },
+      { kind: 'groove', w: 6 },
+      { kind: 'rib',    w: 60, blocked: true, gapFrac: 0.22, sipes: 3, chevMul: 0.7, phase: 0.5 },
+    ],
+  },
+  at: {
+    label: 'All-Terrain', tag: '50/50 · interlocking blocks',
+    desc: 'All-terrain compromise: chunkier, more open blocks than a road tyre but still siped and tightly interlocked for tarmac manners. Staggered rows, moderate chevron, deeper tread.',
+    set: { width: 265, aspect: 60, rim: 18, depth: 12.5, crown: 2, shoulderLen: 15, shoulderDrop: 5,
+           pitches: 40, chevron: 16, gapScale: 1, stagger: 1, sipeW: 1.6, sipeDepthF: 0.65 },
+    lanes: [
+      { kind: 'rib',    w: 20, blocked: true, gapFrac: 0.25, sipes: 2, chevMul: 0.5, phase: 0 },
+      { kind: 'groove', w: 8 },
+      { kind: 'rib',    w: 26, blocked: true, gapFrac: 0.28, sipes: 2, chevMul: 1,   phase: 0.5 },
+      { kind: 'groove', w: 8 },
+      { kind: 'rib',    w: 60, blocked: true, gapFrac: 0.30, sipes: 1, chevMul: 0.7, phase: 0.15 },
+    ],
+  },
   wet: {
     label: 'Wet / Rain', tag: 'directional V',
     desc: 'Directional rain pattern: a sharp V channels water outward from the narrow centre rib through wide circumferential grooves. Staggered arms, siped blocks, deep tread.',
@@ -206,6 +247,20 @@ const DESIGNS = {
       { kind: 'rib',    w: 60, blocked: true, gapFrac: 0.32, sipes: 2, chevMul: 1, phase: 0.35 },
     ],
   },
+  aqua: {
+    label: 'Aqua / Full Wet', tag: 'racing wet · centre channel',
+    desc: 'Full-wet racing pattern: a wide open centre channel dumps the bulk of the water, steep V arms sweep the rest to the shoulders. Deep tread, tall crown, everything staggered.',
+    set: { width: 245, aspect: 40, rim: 18, depth: 10, crown: 3.5, shoulderLen: 14, shoulderDrop: 4,
+           pitches: 52, chevron: 55, gapScale: 1, stagger: 1, sipeW: 1.8, sipeDepthF: 0.7 },
+    lanes: [
+      { kind: 'groove', w: 18 },
+      { kind: 'rib',    w: 22, blocked: true, gapFrac: 0.28, sipes: 1, chevMul: 1,   phase: 0 },
+      { kind: 'groove', w: 9 },
+      { kind: 'rib',    w: 24, blocked: true, gapFrac: 0.30, sipes: 1, chevMul: 1,   phase: 0.4 },
+      { kind: 'groove', w: 9 },
+      { kind: 'rib',    w: 60, blocked: true, gapFrac: 0.30, sipes: 1, chevMul: 0.9, phase: 0.7 },
+    ],
+  },
   gt3: {
     label: 'GT3 Slick', tag: 'racing · smooth',
     desc: 'Racing slick: an unbroken band of rubber for maximum dry contact patch, flat crown, shallow depth. The two thin circumferential scribes are wear indicators, not tread.',
@@ -215,6 +270,19 @@ const DESIGNS = {
       { kind: 'rib',    w: 60, chevMul: 0 },
       { kind: 'groove', w: 3 },
       { kind: 'rib',    w: 99, chevMul: 0 },
+    ],
+  },
+  drag: {
+    label: 'Drag Slick', tag: 'straight-line · wrinkle wall',
+    desc: 'Drag slick: a huge, nearly square contact patch of soft smooth rubber, almost no crown, minimal depth. The two hairline scribes are wear gauges — everything else is grip.',
+    set: { width: 325, aspect: 50, rim: 15, depth: 4, crown: 0.8, shoulderLen: 18, shoulderDrop: 2,
+           pitches: 20, chevron: 0, gapScale: 1, stagger: 1, sipeW: 1.6, sipeDepthF: 0.6 },
+    lanes: [
+      { kind: 'rib',    w: 90,  chevMul: 0 },
+      { kind: 'groove', w: 2.5 },
+      { kind: 'rib',    w: 60,  chevMul: 0 },
+      { kind: 'groove', w: 2.5 },
+      { kind: 'rib',    w: 60,  chevMul: 0 },
     ],
   },
   semi: {
@@ -241,6 +309,28 @@ const DESIGNS = {
       { kind: 'rib',    w: 36, blocked: true, gapFrac: 0.45, sipes: 0, chevMul: 1, phase: 0.5 },
       { kind: 'groove', w: 9 },
       { kind: 'rib',    w: 60, blocked: true, gapFrac: 0.50, sipes: 0, chevMul: 0.7, phase: 0.1 },
+    ],
+  },
+  mud: {
+    label: 'Extreme Mud', tag: 'bogger · giant lugs',
+    desc: 'Competition mud bogger: enormous paddle-like lugs separated by cavernous voids and wide trenches — more hole than rubber. Tallest tread in the set; it digs, it does not roll quietly.',
+    set: { width: 315, aspect: 75, rim: 16, depth: 19, crown: 2, shoulderLen: 20, shoulderDrop: 8,
+           pitches: 24, chevron: 24, gapScale: 1, stagger: 1, sipeW: 1.6, sipeDepthF: 0.6 },
+    lanes: [
+      { kind: 'rib',    w: 40, blocked: true, gapFrac: 0.50, sipes: 0, chevMul: 0.3, phase: 0 },
+      { kind: 'groove', w: 14 },
+      { kind: 'rib',    w: 44, blocked: true, gapFrac: 0.52, sipes: 0, chevMul: 1,   phase: 0.5 },
+      { kind: 'groove', w: 14 },
+      { kind: 'rib',    w: 70, blocked: true, gapFrac: 0.55, sipes: 0, chevMul: 0.6, phase: 0.15 },
+    ],
+  },
+  sand: {
+    label: 'Sand Paddle', tag: 'dunes · full-width scoops',
+    desc: 'Dune paddle tyre: one full-width transverse scoop per pitch and nothing else — straight paddles that throw sand backwards like a water wheel. Zero chevron, zero stagger, maximum void.',
+    set: { width: 225, aspect: 75, rim: 16, depth: 18, crown: 1.5, shoulderLen: 12, shoulderDrop: 5,
+           pitches: 16, chevron: 0, gapScale: 1, stagger: 1, sipeW: 1.6, sipeDepthF: 0.6 },
+    lanes: [
+      { kind: 'rib',    w: 400, blocked: true, gapFrac: 0.55, sipes: 0, chevMul: 0, phase: 0 },
     ],
   },
   rally: {
@@ -363,13 +453,8 @@ function buildColumns() {
 }
 
 function buildRows() {
-  const seen = new Map();
-  const put = y => {
-    y = ((y % D.P) + D.P) % D.P;
-    const k = Math.round(y / 0.05);                 // merge stations closer than 0.05 mm — no sliver cells
-    if (!seen.has(k)) seen.set(k, y);
-  };
-  put(0);
+  const st = [];
+  const put = y => st.push(((y % D.P) + D.P) % D.P);
   for (const L of D.lanes) {
     if (L.kind === 'groove') continue;
     let acc = 0;
@@ -377,8 +462,11 @@ function buildRows() {
   }
   const n = Math.max(6, Math.ceil(D.P / 4.5));      // density for roundness, classification-neutral
   for (let k = 0; k < n; k++) put(D.P * k / n);
-  const rows = [...seen.values()].sort((a, b) => a - b);
-  if (rows[0] > 1e-9) rows.unshift(0);
+  st.sort((a, b) => a - b);
+  // sweep-merge: enforce a minimum row separation so no sliver cell can collapse under the
+  // 0.01 mm OBJ vertex quantisation (a plain bucket dedupe lets stations straddle a bucket edge)
+  const rows = [0];
+  for (const y of st) if (y > rows[rows.length - 1] + 0.1 && y < D.P - 0.1) rows.push(y);
   rows.push(D.P);
   return rows;
 }
@@ -433,10 +521,21 @@ function makeBuilder() {
   const objV = [], objIndex = new Map(), objF = [];
 
   const ek = v => `${Math.round(v.x * 100)},${Math.round(v.y * 100)},${Math.round(v.z * 100)}`;
+  // welding key per axis: when a coordinate sits within 1e-4 of a rounding tie (…x.5), float noise
+  // between emission paths can flip Math.round either way — so probe the neighbouring bucket too
+  const axisKeys = c => {
+    const s = c * 100, r = Math.round(s), f = s - r;
+    return 0.5 - Math.abs(f) < 1e-4 ? [r, r + Math.sign(f)] : [r];
+  };
   function objVert(v) {
-    const k = ek(v);
-    let i = objIndex.get(k);
-    if (i === undefined) { i = objV.length; objV.push([v.x, v.y, v.z]); objIndex.set(k, i); }
+    const kx = axisKeys(v.x), ky = axisKeys(v.y), kz = axisKeys(v.z);
+    for (const x of kx) for (const y of ky) for (const z of kz) {
+      const i = objIndex.get(`${x},${y},${z}`);
+      if (i !== undefined) return i + 1;
+    }
+    const i = objV.length;
+    objV.push([v.x, v.y, v.z]);
+    objIndex.set(`${kx[0]},${ky[0]},${kz[0]}`, i);
     return i + 1;
   }
   function edge(p, q) {
