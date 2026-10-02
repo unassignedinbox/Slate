@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quad Tread Modelling — trace · align · array · bridge</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0c0d0f;--card:#17181b;--card2:#1e2024;--card3:#25272c;--line:rgba(255,255,255,.06);
+    --txt:#e6e7ea;--mut:#8a8d94;--dim:#5c5f66;--green:#38c46d;--blue:#4f9cf0;--orange:#f0a04b;
+    font-family:"Outfit",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:13px;font-weight:300;letter-spacing:.01em;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);overflow:hidden}
+  #app{display:grid;grid-template-columns:330px 1fr;grid-template-rows:56px 1fr;height:100vh;gap:10px;padding:10px;
+       background:radial-gradient(1200px 600px at 60% -10%,#1a1c20 0%,var(--bg) 60%)}
+  header{grid-column:1/3;display:flex;align-items:center;gap:12px;padding:0 6px}
+  header h1{font-size:16px;font-weight:400;margin:0}
+  header .badge{background:var(--card2);border:1px solid var(--line);color:var(--green);border-radius:999px;padding:5px 14px;font-size:11.5px}
+  header .badge.warn{color:var(--orange)}
+  header .stats{margin-left:auto;display:flex;gap:16px;color:var(--mut);font-size:12px}
+  header .stats b{color:var(--txt);font-weight:500}
+  aside{display:flex;flex-direction:column;gap:10px;overflow-y:auto;min-height:0;scrollbar-width:thin;scrollbar-color:#2a2c31 transparent}
+  .card{background:var(--card);border-radius:18px;padding:16px 16px 12px;flex:0 0 auto}
+  .card h2{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:400;margin:0 0 10px}
+  .card h2::before{content:"";width:3px;height:15px;border-radius:2px;background:var(--bar,var(--green))}
+  .card h2 .r{margin-left:auto;color:var(--mut);font-size:11.5px;font-weight:300}
+  .steps{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .step{background:var(--card2);border:1px solid transparent;border-radius:12px;padding:10px 12px;cursor:pointer;transition:.15s}
+  .step:hover{border-color:var(--line);background:var(--card3)}
+  .step.on{border-color:var(--green);background:var(--card3)}
+  .step .n{color:var(--dim);font-size:10.5px}
+  .step.on .n{color:var(--green)}
+  .step .t{font-weight:400;font-size:13px;margin-top:2px}
+  #stageDesc{color:var(--mut);font-size:11.8px;line-height:1.5;margin-top:10px;min-height:52px}
+  .row{display:flex;align-items:center;gap:10px;margin:7px 0}
+  .row label{flex:0 0 118px;color:var(--mut);font-size:12px}
+  .row .val{flex:0 0 46px;text-align:right;color:var(--txt);font-size:12px;font-variant-numeric:tabular-nums}
+  .row input[type=range]{flex:1;min-width:0;-webkit-appearance:none;appearance:none;height:18px;background:transparent;cursor:pointer}
+  .row input[type=range]::-webkit-slider-runnable-track{height:2px;background:#33363c;border-radius:2px}
+  .row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:#fff;margin-top:-5px;box-shadow:0 0 0 3px var(--card)}
+  .row input[type=range]::-moz-range-track{height:2px;background:#33363c;border-radius:2px}
+  .row input[type=range]::-moz-range-thumb{width:12px;height:12px;border:0;border-radius:50%;background:#fff}
+  .row input[type=checkbox]{appearance:none;width:34px;height:20px;border-radius:999px;background:#2d3036;position:relative;cursor:pointer;transition:.2s;flex:0 0 34px}
+  .row input[type=checkbox]::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#9a9da4;transition:.2s}
+  .row input[type=checkbox]:checked{background:var(--green)}
+  .row input[type=checkbox]:checked::after{left:17px;background:#fff}
+  .presets{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px}
+  .presets button,.btns button{background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:999px;padding:7px 14px;font:inherit;font-size:12px;cursor:pointer;transition:.15s}
+  .presets button:hover,.btns button:hover{background:var(--card3)}
+  .btns{display:flex;gap:6px;margin-top:6px}
+  .btns button.primary{background:#fff;color:#111;border-color:#fff}
+  #view{position:relative;border-radius:18px;overflow:hidden;background:#111;min-height:0}
+  #view canvas{display:block}
+  #hint{position:absolute;left:14px;bottom:12px;color:var(--dim);font-size:11px;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Quad Tread Modelling</h1>
+    <span class="badge">100% quads</span>
+    <span class="badge warn">no heightmap · no displacement</span>
+    <div class="stats">
+      <span>quads <b id="stQuads">0</b></span>
+      <span>bridge quads <b id="stBridge">0</b></span>
+      <span>tiles <b id="stTiles">0</b></span>
+      <span>pitch <b id="stPitch">0</b> mm</span>
+    </div>
+  </header>
+
+  <aside>
+    <div class="card" style="--bar:var(--green)">
+      <h2>Pipeline <span class="r">the four steps</span></h2>
+      <div class="steps">
+        <div class="step" data-stage="1"><div class="n">STEP 1</div><div class="t">Trace</div></div>
+        <div class="step" data-stage="2"><div class="n">STEP 2</div><div class="t">Align</div></div>
+        <div class="step" data-stage="3"><div class="n">STEP 3</div><div class="t">Array</div></div>
+        <div class="step" data-stage="4"><div class="n">STEP 4</div><div class="t">Bridge</div></div>
+      </div>
+      <div id="stageDesc"></div>
+    </div>
+
+    <div class="card" style="--bar:var(--blue)">
+      <h2>Presets</h2>
+      <div class="presets">
+        <button data-preset="street">Street</button>
+        <button data-preset="sport">Sport directional</button>
+        <button data-preset="winter">Winter siped</button>
+        <button data-preset="block">Block lug</button>
+      </div>
+    </div>
+
+    <div class="card" style="--bar:var(--orange)">
+      <h2>Tyre <span class="r">carcass fit</span></h2>
+      <div id="tyreRows"></div>
+    </div>
+
+    <div class="card" style="--bar:var(--green)">
+      <h2>Pattern tile <span class="r">one repetition</span></h2>
+      <div id="patternRows"></div>
+    </div>
+
+    <div class="card" style="--bar:var(--blue)">
+      <h2>Display</h2>
+      <div id="displayRows"></div>
+      <div class="btns">
+        <button id="exportObj" class="primary">Export OBJ (quad faces)</button>
+        <button id="exportGlb">GLB</button>
+      </div>
+    </div>
+  </aside>
+
+  <div id="view"><div id="hint">drag to orbit · wheel to zoom</div></div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+
+// ====================================================================================================================
+//  QUAD TREAD MODELLING
+//
+//  The tread is MODELLED, never displaced. There is no height map, no texture probe, no per-vertex raster lookup.
+//  One full tread pattern tile is described as vector bands (rib / circumferential grooves / chevron lugs / sipes).
+//  Its outlines are traced by a conforming quad grid: grid columns sit exactly on the lateral feature edges, grid
+//  rows sit exactly on the block / sipe / gap edges, and each column is sheared along the circumference by the
+//  chevron angle — so every slanted groove wall is traced exactly by quad edges, never stair-stepped.
+//
+//  STEP 1  TRACE   the tile is built flat: block top faces, explicit vertical wall quads down the block outlines,
+//                  groove floors, sipe floors. All faces are quads.
+//  STEP 2  ALIGN   the same tile is mapped onto the wheel: lateral mm follow the crown bulge + shoulder roundover
+//                  (radius varies across the width), circumferential mm become wheel angle.
+//  STEP 3  ARRAY   the tile is instanced N times around the wheel; the pitch is exactly circumference / N, so the
+//                  spacing between tread blocks is uniform and the pattern closes on itself.
+//  STEP 4  BRIDGE  every tile ends and begins with an identical boundary loop (same columns, same levels). The gap
+//                  between consecutive tiles is closed by bridging those loops with quads: lateral-groove floors
+//                  across the lugs, rib top continuation, and the rib/groove wall quads running through the gap.
+//                  The result is a watertight tread band — tread only, no sidewall, no carcass.
+// ====================================================================================================================
+
+// ------------------------------------------------- state -----------------------------------------------------------
+const T = {
+  width: 245, aspect: 40, rim: 18, treadFrac: 0.88,     // carcass
+  depth: 8, crown: 3.0, shoulderLen: 14, shoulderDrop: 4,
+  pitches: 64, gapFrac: 0.30, chevron: 38,              // tile layout
+  ribW: 30, grooveW: 9, centreW: 8,
+  sipes: 1, sipeW: 1.6, sipeDepthF: 0.6,
+  skirt: true,                                          // display
+  wire: true, tint: true, spin: false,
+};
+let stage = 4;
+
+const STAGE_TEXT = {
+  1: 'Step 1 — Trace. One full tread pattern tile, flat. The pattern outline (rib, grooves, chevron lugs, sipes) is traced by quads: top faces, vertical wall quads down every block edge, groove floors. No height sampling anywhere.',
+  2: 'Step 2 — Align. The same quad tile is bent onto the wheel. Across the width it follows the crown bulge and shoulder roundover; along its length it follows the wheel circumference. Same topology, new positions.',
+  3: 'Step 3 — Array. The tile repeats around the wheel at exact pitch spacing (circumference ÷ pitch count), leaving a uniform gap between consecutive tiles. The boundary loops facing each gap are identical.',
+  4: 'Step 4 — Bridge. Each gap is closed by bridging the matching boundary loops with quads (tinted blue): lateral-groove floors across the lugs, rib continuation, wall quads through the gap. Watertight tread band, tread only.',
+};
+
+const PRESETS = {
+  street: { depth: 8,  crown: 3,   shoulderLen: 14, shoulderDrop: 4, pitches: 64, gapFrac: 0.30, chevron: 38, ribW: 30, grooveW: 9,  centreW: 8,  sipes: 1, sipeW: 1.6, sipeDepthF: 0.6 },
+  sport:  { depth: 7,  crown: 2,   shoulderLen: 18, shoulderDrop: 5, pitches: 56, gapFrac: 0.24, chevron: 55, ribW: 44, grooveW: 11, centreW: 0,  sipes: 0, sipeW: 1.6, sipeDepthF: 0.6 },
+  winter: { depth: 10, crown: 3.5, shoulderLen: 12, shoulderDrop: 4, pitches: 72, gapFrac: 0.34, chevron: 30, ribW: 22, grooveW: 7,  centreW: 6,  sipes: 3, sipeW: 1.4, sipeDepthF: 0.7 },
+  block:  { depth: 11, crown: 2,   shoulderLen: 10, shoulderDrop: 3, pitches: 44, gapFrac: 0.40, chevron: 12, ribW: 0,  grooveW: 10, centreW: 10, sipes: 0, sipeW: 1.6, sipeDepthF: 0.6 },
+};
+
+// ------------------------------------------------- derived ---------------------------------------------------------
+const D = {};              // derived dimensions, refreshed before every build
+function derive() {
+  D.halfW   = T.width * T.treadFrac / 2;                       // half tread width, mm
+  D.R       = T.rim * 25.4 / 2 + T.width * T.aspect / 100;     // outer radius at the crown apex, mm
+  D.circ    = 2 * Math.PI * D.R;                               // reference circumference, mm
+  D.P       = D.circ / T.pitches;                              // one pitch, mm — exact fit by construction
+  D.gapLen  = Math.min(Math.max(T.gapFrac * D.P, 2), D.P - 4); // lateral groove between tiles
+  D.blockLen = D.P - D.gapLen;
+
+  // lateral layout, clamped so every region keeps a sensible width
+  D.cgHalf    = Math.min(T.centreW / 2, D.halfW * 0.2);                       // centre groove half width
+  const ribHalf = T.ribW / 2;
+  D.ribOut    = Math.min(D.cgHalf + ribHalf, D.halfW * 0.55);                 // rib outer edge
+  D.grooveOut = Math.min(D.ribOut + T.grooveW, D.halfW - 6);                  // circumferential groove outer edge
+  D.shLen     = Math.min(T.shoulderLen, (D.halfW - D.grooveOut) * 0.8);       // shoulder roundover length
+  D.shearK    = Math.tan(T.chevron * Math.PI / 180);                          // chevron shear slope (mm per mm)
+  D.sipeDepth = T.depth * T.sipeDepthF;
+}
+
+// crown bulge + shoulder roundover: tread-surface radius as a function of lateral position
+function rTop(x) {
+  const a = Math.abs(x);
+  let r = D.R - T.crown * (a / D.halfW) * (a / D.halfW);
+  if (D.shLen > 0.5) {
+    const t = (a - (D.halfW - D.shLen)) / D.shLen;
+    if (t > 0) r -= T.shoulderDrop * t * t;
+  }
+  return r;
+}
+// chevron: every column is shifted along the circumference proportionally to its distance from the rib edge.
+// The shift is per-column and identical for every tile, so arrayed tiles stay in phase and gaps stay constant.
+function shear(x) { return -D.shearK * Math.max(0, Math.abs(x) - D.ribOut); }
+
+// ------------------------------------------------- tile layout -----------------------------------------------------
+// Columns: lateral stations (mm) + the region of each interval. Grid columns SIT ON the feature edges.
+function buildColumns() {
+  const half = [];                                        // [{a,b,region,n}] from the centre outward
+  if (D.cgHalf > 0.5)             half.push({ a: 0,          b: D.cgHalf,    region: 'CG',     n: 2 });
+  if (D.ribOut - D.cgHalf > 0.5)  half.push({ a: D.cgHalf,   b: D.ribOut,    region: 'RIB',    n: 3 });
+  if (D.grooveOut - D.ribOut > 0.5) half.push({ a: D.ribOut, b: D.grooveOut, region: 'GROOVE', n: 2 });
+  const lugA = D.grooveOut, lugB = D.halfW;
+  const flat = Math.max(1, lugB - lugA - D.shLen);
+  half.push({ a: lugA, b: lugB - D.shLen, region: 'LUG', n: Math.max(3, Math.round(flat / 5)) });
+  if (D.shLen > 0.5) half.push({ a: lugB - D.shLen, b: lugB, region: 'LUG', n: 4 });
+
+  const cols = [], creg = [];
+  const push = (a, b, region, n) => {
+    for (let k = 0; k < n; k++) {
+      cols.push(a + (b - a) * k / n);
+      creg.push(region);
+    }
+  };
+  for (let s = half.length - 1; s >= 0; s--) push(-half[s].b, -half[s].a, half[s].region, half[s].n); // mirrored half
+  for (const seg of half) push(seg.a, seg.b, seg.region, seg.n);                                       // positive half
+  cols.push(D.halfW);
+  return { cols, creg };
+}
+
+// Rows: circumferential stations (mm) over one pitch + the band of each interval.
+// BLOCK bands are the rubber, SIPE bands are thin cuts inside the tile, the single GAP band is the space
+// between tiles that Step 4 bridges. Grid rows SIT ON the block / sipe / gap edges.
+function buildRows() {
+  const bands = [];
+  const ns = Math.max(0, Math.round(T.sipes));
+  const sw = Math.min(T.sipeW, D.blockLen / (ns + 1) * 0.5);
+  const sub = (D.blockLen - ns * sw) / (ns + 1);
+  for (let k = 0; k <= ns; k++) {
+    bands.push({ t: 'BLOCK', len: sub });
+    if (k < ns) bands.push({ t: 'SIPE', len: sw });
+  }
+  bands.push({ t: 'GAP', len: D.gapLen });
+
+  const rows = [], rband = [];
+  let y = 0;
+  for (const b of bands) {
+    const n = b.t === 'BLOCK' ? Math.max(2, Math.round(b.len / 5)) : b.t === 'GAP' ? 2 : 1;
+    for (let k = 0; k < n; k++) { rows.push(y + b.len * k / n); rband.push(b.t); }
+    y += b.len;
+  }
+  rows.push(D.P);
+  return { rows, rband };
+}
+
+// depth below the tread surface for a (lateral region, circumferential band) cell — this IS the pattern.
+function depthOf(region, band) {
+  if (region === 'RIB') return 0;                                    // rib: continuous ring of rubber
+  if (region === 'CG' || region === 'GROOVE') return T.depth;        // circumferential grooves: floor
+  if (band === 'BLOCK') return 0;                                    // lug block top
+  if (band === 'SIPE') return D.sipeDepth;                           // sipe floor
+  return T.depth;                                                    // GAP: lateral groove floor
+}
+
+// ------------------------------------------------- geometry --------------------------------------------------------
+// position of (lateral mm, circumferential mm, depth mm). flat = Step 1, otherwise wrapped on the wheel.
+function pos(x, y, depth, flat, out) {
+  const ys = y + shear(x);
+  if (flat) return out.set(x, -depth, ys - D.P / 2);
+  const th = ys / D.circ * 2 * Math.PI;
+  const r = rTop(x) - depth;
+  return out.set(x, r * Math.cos(th), r * Math.sin(th));
+}
+// smooth analytic normal of the tread surface of revolution (used for top / floor quads so the crown shades smoothly)
+function surfNormal(x, y, flat, out) {
+  if (flat) return out.set(0, 1, 0);
+  const th = (y + shear(x)) / D.circ * 2 * Math.PI;
+  const e = 0.25, dr = (rTop(x + e) - rTop(x - e)) / (2 * e);
+  return out.set(-dr, Math.cos(th), Math.sin(th)).normalize();
+}
+// circumferential tangent (for orienting horizontal wall quads)
+function tangent(x, y, flat, out) {
+  if (flat) return out.set(0, 0, 1);
+  const th = (y + shear(x)) / D.circ * 2 * Math.PI;
+  return out.set(0, -Math.sin(th), Math.cos(th));
+}
+
+const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _n = new THREE.Vector3();
+
+function makeBuilder() {
+  const sets = { tile: { pos: [], nrm: [], quads: 0 }, bridge: { pos: [], nrm: [], quads: 0 } };
+  const edges = [];                     // wireframe segments (quad edges only — the true topology)
+  const edgeSeen = new Set();
+  const objV = [], objIndex = new Map(), objF = [];   // OBJ export: welded verts + quad faces
+
+  const ek = v => `${Math.round(v.x * 100)},${Math.round(v.y * 100)},${Math.round(v.z * 100)}`;
+  function objVert(v) {
+    const k = ek(v);
+    let i = objIndex.get(k);
+    if (i === undefined) { i = objV.length; objV.push([v.x, v.y, v.z]); objIndex.set(k, i); }
+    return i + 1;
+  }
+  function edge(p, q) {
+    const a = ek(p), b = ek(q);
+    const k = a < b ? a + '|' + b : b + '|' + a;
+    if (edgeSeen.has(k)) return;
+    edgeSeen.add(k);
+    edges.push(p.x, p.y, p.z, q.x, q.y, q.z);
+  }
+
+  // one quad: 4 corner positions, 4 corner normals, an expected facing direction (flips winding if needed)
+  function quad(setName, p, n, expected) {
+    _a.subVectors(p[1], p[0]); _b.subVectors(p[3], p[0]); _n.crossVectors(_a, _b);
+    if (_n.lengthSq() < 1e-9) return;                     // degenerate (zero-width clamp) — skip
+    if (_n.dot(expected) < 0) { p = [p[0], p[3], p[2], p[1]]; n = [n[0], n[3], n[2], n[1]]; }
+    const s = sets[setName];
+    for (const tri of [[0, 1, 2], [0, 2, 3]])
+      for (const i of tri) { s.pos.push(p[i].x, p[i].y, p[i].z); s.nrm.push(n[i].x, n[i].y, n[i].z); }
+    s.quads++;
+    edge(p[0], p[1]); edge(p[1], p[2]); edge(p[2], p[3]); edge(p[3], p[0]);
+    objF.push([objVert(p[0]), objVert(p[1]), objVert(p[2]), objVert(p[3])]);
+  }
+  return { sets, edges, quad, objV, objF };
+}
+
+const V = () => new THREE.Vector3();
+
+// Walls are split at the sipe-depth level whenever it falls strictly inside their span, so every wall edge loop
+// lines up with the sipe floors / sipe walls — conforming quad topology with no T-junctions.
+function wallSegs(dT, dB) {
+  if (Math.round(T.sipes) > 0 && D.sipeDepth > dT + 1e-6 && D.sipeDepth < dB - 1e-6)
+    return [[dT, D.sipeDepth], [D.sipeDepth, dB]];
+  return [[dT, dB]];
+}
+
+function buildTread() {
+  derive();
+  const { cols, creg } = buildColumns();
+  const { rows, rband } = buildRows();
+  const flat = stage === 1;
+  const tiles = stage <= 2 ? 1 : T.pitches;
+  const withBridge = stage === 4;
+  const B = makeBuilder();
+
+  const M = cols.length - 1, K = rows.length - 1;
+
+  for (let t = 0; t < tiles; t++) {
+    const yBase = t * D.P;
+
+    // ---- surface cells: block tops, groove floors, sipe floors — the trace of the pattern -----------------------
+    for (let j = 0; j < K; j++) {
+      const band = rband[j];
+      const isBridgeBand = band === 'GAP';
+      if (isBridgeBand && !withBridge) continue;
+      const y0 = yBase + rows[j], y1 = yBase + rows[j + 1];
+      for (let i = 0; i < M; i++) {
+        const d = depthOf(creg[i], band);
+        const x0 = cols[i], x1 = cols[i + 1];
+        const p = [pos(x0, y0, d, flat, V()), pos(x1, y0, d, flat, V()), pos(x1, y1, d, flat, V()), pos(x0, y1, d, flat, V())];
+        const n = [surfNormal(x0, y0, flat, V()), surfNormal(x1, y0, flat, V()), surfNormal(x1, y1, flat, V()), surfNormal(x0, y1, flat, V())];
+        const exp = n[0].clone().add(n[2]);
+        B.quad(isBridgeBand ? 'bridge' : 'tile', p, n, exp);
+      }
+    }
+
+    // ---- vertical walls: where two lateral regions sit at different depths (rib walls, groove walls…) ----------
+    for (let i = 1; i < M; i++) {
+      for (let j = 0; j < K; j++) {
+        const band = rband[j];
+        const isBridgeBand = band === 'GAP';
+        if (isBridgeBand && !withBridge) continue;
+        const dL = depthOf(creg[i - 1], band), dR = depthOf(creg[i], band);
+        if (Math.abs(dL - dR) < 1e-6) continue;
+        const x = cols[i], y0 = yBase + rows[j], y1 = yBase + rows[j + 1];
+        const exp = new THREE.Vector3(dL < dR ? 1 : -1, 0, 0);     // wall faces from the block into the groove
+        for (const [d0, d1] of wallSegs(Math.min(dL, dR), Math.max(dL, dR))) {
+          const p = [pos(x, y0, d0, flat, V()), pos(x, y1, d0, flat, V()), pos(x, y1, d1, flat, V()), pos(x, y0, d1, flat, V())];
+          _a.subVectors(p[1], p[0]); _b.subVectors(p[3], p[0]);
+          const gn = new THREE.Vector3().crossVectors(_a, _b);
+          if (gn.dot(exp) < 0) gn.negate();
+          gn.normalize();
+          B.quad(isBridgeBand ? 'bridge' : 'tile', p, [gn, gn, gn, gn], gn);
+        }
+      }
+    }
+
+    // ---- horizontal walls: block leading / trailing edges and sipe walls — these trace the block outline -------
+    for (let j = 0; j <= K - 1; j++) {
+      const bPrev = j === 0 ? 'GAP' : rband[j - 1];      // the band before y=0 is the previous tile's gap
+      const bCur = rband[j];
+      for (let i = 0; i < M; i++) {
+        const dP = depthOf(creg[i], bPrev), dC = depthOf(creg[i], bCur);
+        if (Math.abs(dP - dC) < 1e-6) continue;
+        const y = yBase + rows[j], x0 = cols[i], x1 = cols[i + 1];
+        const sign = dP < dC ? 1 : -1;                   // faces from the block into the groove
+        const exp = tangent((x0 + x1) / 2, y, flat, V()).multiplyScalar(sign);
+        for (const [d0, d1] of wallSegs(Math.min(dP, dC), Math.max(dP, dC))) {
+          const p = [pos(x0, y, d0, flat, V()), pos(x1, y, d0, flat, V()), pos(x1, y, d1, flat, V()), pos(x0, y, d1, flat, V())];
+          _a.subVectors(p[1], p[0]); _b.subVectors(p[3], p[0]);
+          const gn = new THREE.Vector3().crossVectors(_a, _b);
+          if (gn.dot(exp) < 0) gn.negate();
+          gn.normalize();
+          B.quad('tile', p, [gn, gn, gn, gn], gn);       // always tile geometry: it outlines the blocks
+        }
+      }
+    }
+
+    // ---- optional shoulder skirt: a wall of quads hanging off the two outer edges, for a closed look -----------
+    if (T.skirt) {
+      for (const side of [0, M]) {
+        const x = cols[side];
+        const exp = new THREE.Vector3(side === 0 ? -1 : 1, 0, 0);
+        for (let j = 0; j < K; j++) {
+          const band = rband[j];
+          const isBridgeBand = band === 'GAP';
+          if (isBridgeBand && !withBridge) continue;
+          const dS = depthOf('LUG', band);
+          if (dS >= T.depth - 1e-6) continue;            // gap floor already at skirt depth
+          const y0 = yBase + rows[j], y1 = yBase + rows[j + 1];
+          for (const [d0, d1] of wallSegs(dS, T.depth)) {
+            const p = [pos(x, y0, d0, flat, V()), pos(x, y1, d0, flat, V()), pos(x, y1, d1, flat, V()), pos(x, y0, d1, flat, V())];
+            _a.subVectors(p[1], p[0]); _b.subVectors(p[3], p[0]);
+            const gn = new THREE.Vector3().crossVectors(_a, _b);
+            if (gn.dot(exp) < 0) gn.negate();
+            gn.normalize();
+            B.quad(isBridgeBand ? 'bridge' : 'tile', p, [gn, gn, gn, gn], gn);
+          }
+        }
+      }
+    }
+  }
+  return B;
+}
+
+// ------------------------------------------------- three.js --------------------------------------------------------
+const view = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+view.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#111214');
+const camera = new THREE.PerspectiveCamera(42, 1, 1, 8000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+
+const key = new THREE.DirectionalLight(0xffffff, 1.6);  key.position.set(300, 500, 350);
+const rim = new THREE.DirectionalLight(0x8fb4ff, 0.5);  rim.position.set(-400, -200, -300);
+scene.add(key, rim, new THREE.HemisphereLight(0x3a3f47, 0x14161a, 0.8));
+
+const matTile = new THREE.MeshStandardMaterial({ color: '#1b1b1e', roughness: 0.88, metalness: 0.0,
+  polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+const matBridge = new THREE.MeshStandardMaterial({ color: '#1b1b1e', roughness: 0.88, metalness: 0.0,
+  polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+const matWire = new THREE.LineBasicMaterial({ color: '#45e07f', transparent: true, opacity: 0.4 });
+
+const group = new THREE.Group();
+scene.add(group);
+let meshTile = null, meshBridge = null, wire = null, lastBuild = null, lastStage = 0;
+
+function toMesh(set, material) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(set.pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(set.nrm, 3));
+  return new THREE.Mesh(g, material);
+}
+
+function rebuild() {
+  const B = buildTread();
+  lastBuild = B;
+  for (const m of [meshTile, meshBridge, wire]) if (m) { group.remove(m); m.geometry.dispose(); }
+  meshTile = toMesh(B.sets.tile, matTile);
+  meshBridge = toMesh(B.sets.bridge, matBridge);
+  const wg = new THREE.BufferGeometry();
+  wg.setAttribute('position', new THREE.Float32BufferAttribute(B.edges, 3));
+  wire = new THREE.LineSegments(wg, matWire);
+  group.add(meshTile, meshBridge, wire);
+
+  matBridge.color.set(T.tint ? '#2e4a68' : '#1b1b1e');
+  wire.visible = T.wire;
+
+  document.getElementById('stQuads').textContent = (B.sets.tile.quads + B.sets.bridge.quads).toLocaleString();
+  document.getElementById('stBridge').textContent = B.sets.bridge.quads.toLocaleString();
+  document.getElementById('stTiles').textContent = stage <= 2 ? 1 : T.pitches;
+  document.getElementById('stPitch').textContent = D.P.toFixed(1);
+
+  if (stage !== lastStage) { fitView(); lastStage = stage; }
+}
+
+function fitView() {
+  const box = new THREE.Box3().setFromObject(group);
+  const c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
+  const d = Math.max(s.x, s.y, s.z);
+  controls.target.copy(c);
+  if (stage === 1) camera.position.set(c.x + d * 0.55, c.y + d * 1.15, c.z + d * 0.9);
+  else camera.position.set(c.x + d * 0.95, c.y + d * 0.55, c.z + d * 0.75);
+  camera.near = d / 100; camera.far = d * 20;
+  camera.updateProjectionMatrix();
+}
+
+function resize() {
+  const w = view.clientWidth, h = view.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(view);
+
+renderer.setAnimationLoop(() => {
+  controls.autoRotate = T.spin;
+  controls.autoRotateSpeed = 1.2;
+  controls.update();
+  renderer.render(scene, camera);
+});
+
+// ------------------------------------------------- export ----------------------------------------------------------
+function download(name, blob) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+document.getElementById('exportObj').onclick = () => {
+  if (!lastBuild) return;
+  let s = '# Quad Tread Modelling — every face below is a quad (f has 4 indices)\n';
+  s += `# quads ${lastBuild.objF.length}  verts ${lastBuild.objV.length}\no tread\n`;
+  for (const v of lastBuild.objV) s += `v ${v[0].toFixed(4)} ${v[1].toFixed(4)} ${v[2].toFixed(4)}\n`;
+  for (const f of lastBuild.objF) s += `f ${f[0]} ${f[1]} ${f[2]} ${f[3]}\n`;
+  download('tread-quads.obj', new Blob([s], { type: 'text/plain' }));
+};
+document.getElementById('exportGlb').onclick = () => {
+  new GLTFExporter().parse(group, r => download('tread.glb', new Blob([r], { type: 'model/gltf-binary' })),
+    e => console.error(e), { binary: true });
+};
+
+// ------------------------------------------------- UI --------------------------------------------------------------
+const SLIDERS = {
+  tyreRows: [
+    ['width', 'Tyre width', 145, 355, 5, 'mm'],
+    ['aspect', 'Aspect ratio', 25, 80, 5, '%'],
+    ['rim', 'Rim', 13, 24, 1, '"'],
+    ['treadFrac', 'Tread coverage', 0.6, 1, 0.01, ''],
+    ['depth', 'Tread depth', 3, 16, 0.5, 'mm'],
+    ['crown', 'Crown bulge', 0, 8, 0.5, 'mm'],
+    ['shoulderLen', 'Shoulder length', 0, 30, 1, 'mm'],
+    ['shoulderDrop', 'Shoulder drop', 0, 12, 0.5, 'mm'],
+  ],
+  patternRows: [
+    ['pitches', 'Pitches (tiles)', 24, 110, 1, ''],
+    ['gapFrac', 'Tile spacing', 0.1, 0.55, 0.01, ''],
+    ['chevron', 'Chevron angle', 0, 65, 1, '°'],
+    ['ribW', 'Centre rib width', 0, 70, 2, 'mm'],
+    ['grooveW', 'Circ. groove', 0, 18, 0.5, 'mm'],
+    ['centreW', 'Centre groove', 0, 16, 0.5, 'mm'],
+    ['sipes', 'Sipes per block', 0, 3, 1, ''],
+    ['sipeW', 'Sipe width', 1, 3, 0.1, 'mm'],
+    ['sipeDepthF', 'Sipe depth', 0.2, 1, 0.05, '×'],
+  ],
+};
+const TOGGLES = [
+  ['wire', 'Quad wireframe'],
+  ['tint', 'Tint bridge quads'],
+  ['skirt', 'Shoulder skirt'],
+  ['spin', 'Auto rotate'],
+];
+const valEls = {};
+function makeRows(holderId, defs) {
+  const holder = document.getElementById(holderId);
+  for (const [k, label, min, max, step, unit] of defs) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `<label>${label}</label><input type="range" min="${min}" max="${max}" step="${step}" value="${T[k]}"><span class="val"></span>`;
+    const input = row.querySelector('input'), val = row.querySelector('.val');
+    valEls[k] = () => val.textContent = (step < 1 ? (+T[k]).toFixed(2).replace(/\.?0+$/, '') : T[k]) + unit;
+    valEls[k]();
+    input.oninput = () => { T[k] = +input.value; valEls[k](); rebuild(); };
+    holder.appendChild(row);
+    inputs[k] = input;
+  }
+}
+const inputs = {};
+makeRows('tyreRows', SLIDERS.tyreRows);
+makeRows('patternRows', SLIDERS.patternRows);
+{
+  const holder = document.getElementById('displayRows');
+  for (const [k, label] of TOGGLES) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `<label>${label}</label><input type="checkbox" ${T[k] ? 'checked' : ''}>`;
+    row.querySelector('input').onchange = e => { T[k] = e.target.checked; rebuild(); };
+    holder.appendChild(row);
+  }
+}
+
+const stepEls = [...document.querySelectorAll('.step')];
+function setStage(s) {
+  stage = s;
+  stepEls.forEach(el => el.classList.toggle('on', +el.dataset.stage === s));
+  document.getElementById('stageDesc').textContent = STAGE_TEXT[s];
+  rebuild();
+}
+stepEls.forEach(el => el.onclick = () => setStage(+el.dataset.stage));
+
+document.querySelectorAll('[data-preset]').forEach(btn => btn.onclick = () => {
+  Object.assign(T, PRESETS[btn.dataset.preset]);
+  for (const k in inputs) { inputs[k].value = T[k]; valEls[k](); }
+  rebuild();
+});
+
+// ------------------------------------------------- go --------------------------------------------------------------
+resize();
+setStage(4);
+fitView();
+</script>
+</body>
+</html>
