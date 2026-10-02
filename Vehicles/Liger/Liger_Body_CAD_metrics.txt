@@ -1,0 +1,6 @@
+Liger topology-preserving CAD rebuild
+Symmetry plane in source: world Y=-47.858990 cm; output recentered to Y=0 m
+Body_Main_Shell: 4366 patches; withheld-sample RMS=0.054 mm; max=2.142 mm
+Body_Front_Cowl: 76 patches; withheld-sample RMS=0.362 mm; max=3.988 mm
+Body_Roof_Glass_Frame: 86 patches; withheld-sample RMS=0.014 mm; max=0.190 mm
+Total: 4528 patches
