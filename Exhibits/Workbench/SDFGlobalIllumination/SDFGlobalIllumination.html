@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#06090d">
+    <title>Slate — Baked Global Distance Field GI</title>
+    <link rel="stylesheet" href="SDFGlobalIllumination.css">
+</head>
+<body>
+    <canvas id="PresentationCanvas"></canvas>
+    <div id="CanvasError" class="Error" hidden></div>
+
+    <aside class="TitleCard">
+        <strong>BAKED GLOBAL DISTANCE FIELD GI</strong>
+        <span>Lumen-style software SDF tracing · GI phase only</span>
+        <span class="Deferred">SDF shadows intentionally deferred</span>
+    </aside>
+
+    <aside class="Controls">
+        <div class="ControlTitle">GLOBAL SDF</div>
+        <label>
+            Output
+            <select id="DisplayMode">
+                <option value="0">Combined</option>
+                <option value="1">SDF indirect only</option>
+                <option value="2">Direct (no shadows)</option>
+                <option value="3">Sphere-trace cost</option>
+            </select>
+        </label>
+        <label>
+            GI rays <output id="RayOutput">4</output>
+            <input id="RayCount" type="range" min="1" max="4" step="1" value="4">
+        </label>
+        <label>
+            GI intensity <output id="GiOutput">1.25</output>
+            <input id="GiIntensity" type="range" min="0" max="3" step="0.05" value="1.25">
+        </label>
+        <label>
+            Trace distance <output id="DistanceOutput">22 m</output>
+            <input id="TraceDistance" type="range" min="4" max="30" step="1" value="22">
+        </label>
+        <label>
+            Sun strength <output id="SunOutput">3.2</output>
+            <input id="SunStrength" type="range" min="0" max="6" step="0.1" value="3.2">
+        </label>
+        <label class="Check"><input id="AnimateSun" type="checkbox" checked> Animate radiance injection</label>
+        <button id="ResetCamera" type="button">Reset camera</button>
+        <div class="Architecture">
+            <b>96×48×96</b> baked signed-distance field<br>
+            <b>7</b> exact analytic mip levels<br>
+            <b>RGBA16F</b> global surface-radiance cache<br>
+            <b>½ res</b> world-space sphere tracing
+        </div>
+        <div id="StatusText" class="Status">Preparing WebGPU…</div>
+    </aside>
+
+    <script type="module" src="SDFGlobalIllumination.js"></script>
+</body>
+</html>
