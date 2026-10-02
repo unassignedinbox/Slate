@@ -1,34 +1,16 @@
 //============================================================================================================================================
-// 📦 Frontier/Engine/DeviceExchange/DistanceFieldGIStage.h — Host owner of the Distance Field GI compute stage (RenderPath == 1)
+//                                                        DISTANCEFIELDGISTAGE.H
 //============================================================================================================================================
-// Replaces the legacy Surfel GI stage. It owns:
-//    • Global Distance Field (GDF) 3D clipmap buffers and Surface Cache atlas allocations;
-//    • Primary visibility depth-buffer accelerated lighting evaluation;
-//    • Monotonic contact soft shadow evaluation (k * H / t);
-//    • Multi-bounce emissive bleed (Row 8 luminaires) and distance field ambient occlusion (AO);
-//    • Sharp specular reflection and transmissive glass refraction routing;
-//    • DistanceFieldGIResolve compute pipeline and descriptor management.
+// 📦 Owns scene-derived GPU distance clipmaps, Jacobi radiance caches and raster-fed material resolve.
 
 #pragma once
-
 #include <vulkan/vulkan.h>
-#include <cstdint>
+#include "../GeometricRaster/DistanceFieldStructure.h"
+#include <cstddef>
 #include <string>
-#include <vector>
 
 namespace Frontier
 {
-
-struct DistanceFieldSurfaceSample
-{
-    float Position[3];
-    float Normal[3];
-    float Albedo[3];
-    float Roughness;
-    float Metallic;
-    uint32_t InstanceIndex;
-};
-
 struct DistanceFieldStageInit
 {
     VkDevice Device = VK_NULL_HANDLE;
@@ -51,8 +33,11 @@ struct DistanceFieldStageInit
     const VkImageView* TextureViews = nullptr;
     uint32_t TextureCount = 0u;
     uint32_t TextureCapacity = 0u;
-    uint32_t VolumeResolution = 128u;
+    bool TextureUpdateAfterBind = false;
+    uint32_t VolumeResolution = 32u;
     float ClipmapCellSize = 0.15f;
+    const DistanceFieldStructure* Geometry = nullptr;
+    std::string SpirvDirectory = "Engine/Shaders";
 };
 
 struct DistanceFieldFrameParams
@@ -64,7 +49,7 @@ struct DistanceFieldFrameParams
     float SkyAmbient[3] = { 0.05f, 0.07f, 0.12f };
     float ShadowSoftness = 0.22f;
     float CameraEye[3] = { 0.0f, -5.0f, 2.0f };
-    float GiBoost = 1.5f;
+    float GiBoost = 1.0f;
     uint32_t FrameIndex = 0u;
     uint32_t FeatureFlags = 0u;
     uint32_t ReflectionMode = 1u; // 0 = Off, 1 = Sky, 2 = Raytraced (Mesh BVH, no SDF blocks)
@@ -72,53 +57,50 @@ struct DistanceFieldFrameParams
     uint32_t RenderHeight = 1080u;
 };
 
+struct alignas(16) DistanceFieldPush
+{
+    float Sun[4], SunColour[4], SkyExposure[4], Tuning[4], Eye[4];
+    uint32_t Counts[4];
+};
+static_assert(sizeof(DistanceFieldPush) == 96u);
+static_assert(offsetof(DistanceFieldPush, Counts) == 80u);
+
 class DistanceFieldGIStage
 {
 public:
-    // 📝 Upstream has no field upload or descriptor writes, and its host/shader layouts disagree.
-    // 📝 Keep the imported implementation non-dispatchable until those contracts are implemented and verified.
-    static constexpr bool TransportImplemented = false;
-
-    DistanceFieldGIStage() noexcept = default;
-    ~DistanceFieldGIStage() noexcept { Destroy(); }
-
+    DistanceFieldGIStage() = default;
+    ~DistanceFieldGIStage() { Destroy(); }
     DistanceFieldGIStage(const DistanceFieldGIStage&) = delete;
     DistanceFieldGIStage& operator=(const DistanceFieldGIStage&) = delete;
-    DistanceFieldGIStage(DistanceFieldGIStage&&) noexcept = delete;
-    DistanceFieldGIStage& operator=(DistanceFieldGIStage&&) noexcept = delete;
-
-    [[nodiscard]] bool Bring(const DistanceFieldStageInit& Init) noexcept;
+    DistanceFieldGIStage(DistanceFieldGIStage&&) = delete;
+    DistanceFieldGIStage& operator=(DistanceFieldGIStage&&) = delete;
+    bool Bring(const DistanceFieldStageInit& Initialization) noexcept;
     void Destroy() noexcept;
-
-    [[nodiscard]] bool IsReady() const noexcept { return TransportImplemented && Pipeline != VK_NULL_HANDLE; }
-
-    void SynchronizeField(const std::vector<DistanceFieldSurfaceSample>& Samples,
-                          const DistanceFieldFrameParams& FrameParams) noexcept;
-
-    [[nodiscard]] bool RecordFrame(VkCommandBuffer Command,
-                                  const DistanceFieldFrameParams& FrameParams) noexcept;
-
+    bool IsReady() const noexcept;
+    bool RecordFrame(VkCommandBuffer Command, const DistanceFieldFrameParams& Frame) noexcept;
+    const std::string& QueryRefusal() const { return Refusal; }
+    // 📝 Borrowed readback handles for execution verification; owned and retired by this stage.
+    VkBuffer QueryDistanceBuffer() const { return Buffers[0]; }
+    VkBuffer QueryRadianceBuffer() const { return Buffers[1u + (FrameNumber & 1u)]; }
+    uint32_t QueryVoxelCount() const { return VoxelCount; }
 private:
-    [[nodiscard]] bool CreateBuffers() noexcept;
-    [[nodiscard]] bool CreatePipelines() noexcept;
-    [[nodiscard]] bool WriteDescriptors() noexcept;
-
-    DistanceFieldStageInit InitializationData{};
-
-    VkBuffer DistanceFieldBuffer = VK_NULL_HANDLE;
-    VkDeviceMemory DistanceFieldMemory = VK_NULL_HANDLE;
-    VkBuffer SurfaceCacheBuffer = VK_NULL_HANDLE;
-    VkDeviceMemory SurfaceCacheMemory = VK_NULL_HANDLE;
-
-    VkDescriptorPool DescriptorPool = VK_NULL_HANDLE;
+    bool Allocate(uint32_t Slot, VkDeviceSize Bytes);
+    bool ConstructPipelines();
+    bool WriteDescriptors();
+    DistanceFieldStageInit Initialization{};
+    VkBuffer Buffers[6]{};
+    VkDeviceMemory Memory[6]{};
+    VkDeviceSize Sizes[6]{};
+    VkDescriptorPool Pool = VK_NULL_HANDLE;
     VkDescriptorSetLayout DescriptorLayout = VK_NULL_HANDLE;
-    VkDescriptorSet DescriptorSet = VK_NULL_HANDLE;
-
     VkPipelineLayout PipelineLayout = VK_NULL_HANDLE;
-    VkPipeline Pipeline = VK_NULL_HANDLE;
-
-    uint32_t ActiveSurfaces = 0u;
-    uint64_t AccumulatedFrames = 0u;
+    VkDescriptorSet Sets[2]{};
+    VkPipeline Pipelines[3]{};
+    uint32_t VoxelCount = 0u, FrameNumber = 0u;
+    uint64_t ResidentRevision = 0u;
+    float Origins[12]{};
+    float PreviousLighting[12]{};
+    bool Ready = false;
+    std::string Refusal;
 };
-
-} // namespace Frontier
+}

@@ -26,6 +26,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  sdf-execution:
+    name: SDF production Vulkan execution and validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Install software Vulkan and validation tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libvulkan-dev mesa-vulkan-drivers vulkan-validationlayers glslc spirv-tools
+      - name: Execute production SDF shaders with synchronization validation
+        run: python3 VisualProof/DistanceFieldGI/RunDistanceFieldExecution.py
+      - name: Retain Vulkan execution evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: sdf-vulkan-execution-${{ github.sha }}
+          retention-days: 14
+          path: |
+            _AgentScratch/build/sdf-execution/Execution.log
+            _AgentScratch/build/sdf-execution/Images/*.png
+            _AgentScratch/build/sdf-execution/Images/*.ppm
+            _AgentScratch/build/sdf-execution/Shaders/
+
   solidarc:
     name: SolidArc MSVC and document checks
     runs-on: windows-2022
@@ -61,6 +85,7 @@ jobs:
             _AgentScratch/build/msvc-solidarc/*.exe
 
   frontier:
+    needs: sdf-execution
     name: Frontier + Project-Zero + Project-Drive
     runs-on: windows-2022
     timeout-minutes: 45

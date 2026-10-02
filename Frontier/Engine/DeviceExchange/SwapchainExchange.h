@@ -257,8 +257,7 @@ public:
 
     // D3: per-frame instance transform refresh (no reallocation, no device stall). See
     //    VisibilityExchange::RefreshInstances. Returns false if the count no longer matches the resident scene.
-    [[nodiscard]] bool          RefreshInstances(const InstanceRecord* Rows, uint32_t Count) noexcept
-    { return Visibility.RefreshInstances(Rows, Count); }
+    [[nodiscard]] bool          RefreshInstances(const InstanceRecord* Rows, uint32_t Count) noexcept;
     /// 📦 Reports readiness of the SDF transport, not merely selection of render mode one.
     [[nodiscard]] bool QueryDistanceFieldGIReady() const noexcept { return DistanceFieldStage.IsReady(); }
     [[nodiscard]] bool QuerySurfelGIReady() const noexcept { return SurfelStage.IsReady(); }
@@ -460,6 +459,7 @@ private:
     RayTracingCapabilitySet Capabilities;        // [-]   probed in BringPhysicalDevice
     VisibilityExchange      Visibility;          // [-]   R2 resident scene + cull / raster / HiZ / resolve
     SurfelGIStage           SurfelStage;         // [-]   shared non-raytraced indirect-light compute route
+    DistanceFieldStructure DistanceGeometry;
     DistanceFieldGIStage    DistanceFieldStage;  // [-]   shared non-raytraced distance-field GI route (RenderPath == 1)
     std::vector<SurfaceSample> SurfelSamples;    // [-]   persistent seed candidates derived from shared geometry
     std::vector<VkImageView>   SurfelTextureViews;// [-]  bindless table lent to the surfel passes; outlives Bring()

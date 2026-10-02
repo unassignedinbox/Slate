@@ -77,11 +77,15 @@ vec3 FromLocal(SurfaceFrame F, vec3 w) { return F.Tangent * w.x + F.Bitangent * 
 
 vec4 SampleChannel(GpuMaterialSlab S, uint channel, vec2 uv, float lodBias, vec4 fallback)
 {
+    #ifdef FRONTIER_CONSTANT_MATERIALS
+    return fallback;
+    #else
     uint slot = SlabTexture(S, channel);
     if (slot == 0xFFFFu) return fallback;
     ivec2 size = textureSize(Textures[nonuniformEXT(slot)], 0);
     float lod = lodBias + 0.5 * log2(float(size.x * size.y));
     return textureLod(Textures[nonuniformEXT(slot)], uv, lod);
+    #endif
 }
 
 // M1: the selection gate — skips the texture op entirely when the channel is dead (explicit LOD keeps this legal
@@ -98,6 +102,12 @@ vec4 SampleChannelGated(GpuMaterialSlab S, uint channel, vec2 uv, float lodBias,
 ShadingRecord ResolveMaterial(GpuMaterial mat, GpuInstance instance, uint primitive, vec3 hitPos, vec3 viewDir, float coneWidth, out SurfaceFrame F)
 {
     GpuTriangle tri = Triangles[instance.FlatTriangleOffset + primitive];
+    #ifdef FRONTIER_SDF_MATERIALS
+    uint GeometryStart=instance.FirstIndex+primitive*3u;
+    tri.v0.xyz=(instance.World*vec4(Vertices[Indices[GeometryStart]+instance.VertexOffset].Position.xyz,1.0)).xyz;
+    tri.v1.xyz=(instance.World*vec4(Vertices[Indices[GeometryStart+1u]+instance.VertexOffset].Position.xyz,1.0)).xyz;
+    tri.v2.xyz=(instance.World*vec4(Vertices[Indices[GeometryStart+2u]+instance.VertexOffset].Position.xyz,1.0)).xyz;
+    #endif
     vec3 bc = Barycentric(hitPos, tri.v0.xyz, tri.v1.xyz, tri.v2.xyz);
     vec3 e1 = tri.v1.xyz - tri.v0.xyz, e2 = tri.v2.xyz - tri.v0.xyz;
     vec3 faceCross = cross(e1, e2);

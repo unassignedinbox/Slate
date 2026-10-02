@@ -94,8 +94,9 @@ def Main() -> None:
     Shaders = sorted((Binary / "Engine/Shaders").glob("*.spv"))
     if not Shaders:
         raise RuntimeError("No compiled Vulkan shaders found")
-    if not (Binary / "Engine/Shaders/DistanceFieldGIResolve.spv").is_file():
-        raise RuntimeError("Missing compiled DistanceFieldGIResolve shader")
+    for Name in ("DistanceFieldConstruct", "DistanceFieldRadiance", "DistanceFieldGIResolve", "DistanceFieldGIResolveFixed"):
+        if not (Binary / f"Engine/Shaders/{Name}.spv").is_file():
+            raise RuntimeError(f"Missing compiled {Name} shader")
     for Shader in Shaders:
         if Shader.read_bytes()[:4] != b"\x03\x02\x23\x07":
             raise RuntimeError(f"Invalid SPIR-V signature: {Shader}")
@@ -160,9 +161,10 @@ def Main() -> None:
                 "configuration": "Release", "architecture": "x64", "compiler": "MSVC",
                 "projects": PackagedProjects, "compiledShaderCount": len(Shaders),
                 "gpuRuntimeVerified": False,
-                "sdfGi": {"importedCommit": "7d5cb3c14677af8ffbc07989ea091700973abcc2",
-                          "shaderCompiled": True, "runtimeEnabled": False,
-                          "reason": "Upstream GPU field upload and host/shader resource contract are incomplete",
+                "sdfGi": {"importedCommit": "46476f3e5632256297de795ef1a6ab247f92f5f0",
+                          "shaderCompiled": True, "runtimeEnabled": True,
+                          "transport": "Three camera-snapped distance volumes, GPU Jacobi radiance cache, exact mesh secondary rays",
+                          "activation": "Only after all scene resources and shader pipelines are ready",
                           "fallback": "Existing Surfel GI, or existing compute fallback if Surfel is unavailable"},
                 "requirements": ["Windows x64", "Microsoft Visual C++ x64 runtime",
                                  "Compatible Vulkan GPU and its installed driver"],

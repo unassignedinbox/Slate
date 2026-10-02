@@ -1,292 +1,310 @@
 //============================================================================================================================================
-// 📦 Frontier/Engine/DeviceExchange/DistanceFieldGIStage.cpp — Implementation of Distance Field GI compute stage
+//                                                       DISTANCEFIELDGISTAGE.CPP
 //============================================================================================================================================
-#include "DistanceFieldGIStage.h"
+// 📦 Records geometry upload, distance construction, radiance propagation and resolve with explicit resource dependencies.
 
+#include "DistanceFieldGIStage.h"
 #include <algorithm>
 #include <array>
-#include <vector>
 #include <cmath>
 #include <cstring>
 #include <fstream>
-#include <iostream>
 
 namespace Frontier
 {
-namespace
-{
-
-bool AllocateBuffer(VkDevice Device, const VkPhysicalDeviceMemoryProperties& Mem, VkDeviceSize Bytes,
-                    VkBufferUsageFlags Usage, uint32_t MemoryFlags, VkBuffer& OutBuffer, VkDeviceMemory& OutMemory) noexcept
-{
-    VkBufferCreateInfo BufferInfo{ VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-    BufferInfo.size = Bytes; BufferInfo.usage = Usage; BufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    if (vkCreateBuffer(Device, &BufferInfo, nullptr, &OutBuffer) != VK_SUCCESS) return false;
-
-    VkMemoryRequirements Req{};
-    vkGetBufferMemoryRequirements(Device, OutBuffer, &Req);
-
-    uint32_t TypeIndex = UINT32_MAX;
-    for (uint32_t i = 0u; i < Mem.memoryTypeCount; ++i)
-    {
-        if ((Req.memoryTypeBits & (1u << i)) && (Mem.memoryTypes[i].propertyFlags & MemoryFlags) == MemoryFlags) { TypeIndex = i; break; }
-    }
-    if (TypeIndex == UINT32_MAX) return false;
-
-    VkMemoryAllocateInfo AllocInfo{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
-    AllocInfo.allocationSize = Req.size; AllocInfo.memoryTypeIndex = TypeIndex;
-    if (vkAllocateMemory(Device, &AllocInfo, nullptr, &OutMemory) != VK_SUCCESS) return false;
-    return vkBindBufferMemory(Device, OutBuffer, OutMemory, 0) == VK_SUCCESS;
-}
-
-std::vector<char> ReadBinaryFile(const std::string& Path) noexcept
-{
-    std::ifstream Stream(Path, std::ios::ate | std::ios::binary);
-    if (!Stream.is_open()) return {};
-    const size_t Bytes = static_cast<size_t>(Stream.tellg());
-    std::vector<char> Buffer(Bytes);
-    Stream.seekg(0);
-    Stream.read(Buffer.data(), Bytes);
-    return Buffer;
-}
-
-VkShaderModule MakeModule(VkDevice Device, const std::string& Path) noexcept
-{
-    const std::vector<char> Spirv = ReadBinaryFile(Path);
-    if (Spirv.empty() || (Spirv.size() % 4u) != 0u) return VK_NULL_HANDLE;
-    VkShaderModuleCreateInfo Info{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
-    Info.codeSize = Spirv.size();
-    Info.pCode = reinterpret_cast<const uint32_t*>(Spirv.data());
-    VkShaderModule Mod = VK_NULL_HANDLE;
-    return vkCreateShaderModule(Device, &Info, nullptr, &Mod) == VK_SUCCESS ? Mod : VK_NULL_HANDLE;
-}
-
-inline VkDescriptorSetLayoutBinding StorageImage(uint32_t Binding) noexcept
-{
-    VkDescriptorSetLayoutBinding B{};
-    B.binding = Binding;
-    B.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    B.descriptorCount = 1u;
-    B.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-    return B;
-}
-
-inline VkDescriptorSetLayoutBinding StorageBuffer(uint32_t Binding) noexcept
-{
-    VkDescriptorSetLayoutBinding B{};
-    B.binding = Binding;
-    B.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    B.descriptorCount = 1u;
-    B.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-    return B;
-}
-
-inline VkDescriptorSetLayoutBinding Sampled(uint32_t Binding, uint32_t Count) noexcept
-{
-    VkDescriptorSetLayoutBinding B{};
-    B.binding = Binding;
-    B.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    B.descriptorCount = Count;
-    B.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-    return B;
-}
-
-} // namespace
-
-bool DistanceFieldGIStage::Bring(const DistanceFieldStageInit& Init) noexcept
+bool DistanceFieldGIStage::Bring(const DistanceFieldStageInit& Input) noexcept
 {
     Destroy();
-    if (!TransportImplemented) return false;
-    InitializationData = Init;
-    if (!InitializationData.Device) return false;
-    if (!CreateBuffers()) return false;
-    if (!CreatePipelines()) return false;
-    if (!WriteDescriptors()) return false;
+    Refusal.clear();
+    if (!Input.Device || !Input.Geometry || Input.Geometry->QueryFacets().empty() || Input.Geometry->QueryBranches().empty() ||
+        !Input.OutputImageView || !Input.SurfaceImageView || !Input.NormalImageView ||
+        !Input.TriangleBuffer || !Input.MaterialBuffer || !Input.InstanceBuffer || !Input.SlabBuffer ||
+        !Input.VertexBuffer || !Input.IndexBuffer || !Input.TableSampler || !Input.EnergyLutView || !Input.SheenLutView ||
+        Input.VolumeResolution < 8u || Input.VolumeResolution > 64u ||
+        !std::isfinite(Input.ClipmapCellSize) || Input.ClipmapCellSize <= 0.0f ||
+        (Input.TextureCapacity && (!Input.TextureCount || !Input.TextureViews || !Input.TextureSampler || Input.TextureCount > Input.TextureCapacity)))
+    {
+        Refusal = "SDF initialization is missing scene resources or has invalid clipmap dimensions";
+        return false;
+    }
+    Initialization = Input;
+    try
+    {
+        VoxelCount = 3u * Input.VolumeResolution * Input.VolumeResolution * Input.VolumeResolution;
+        if (!Allocate(0u, VkDeviceSize(VoxelCount) * 64u) ||
+            !Allocate(1u, VkDeviceSize(VoxelCount) * 16u) || !Allocate(2u, VkDeviceSize(VoxelCount) * 16u) ||
+            !Allocate(3u, 64u) ||
+            !Allocate(4u, Input.Geometry->QueryBranches().size() * sizeof(DistanceFieldBranch)) ||
+            !Allocate(5u, Input.Geometry->QueryFacets().size() * sizeof(DistanceFieldFacet)) ||
+            !ConstructPipelines() || !WriteDescriptors())
+        {
+            Refusal = "SDF allocation, shader pipeline or descriptor creation failed";
+            Destroy();
+            return false;
+        }
+        Ready = true;
+        return true;
+    }
+    catch (...)
+    {
+        Refusal = "SDF host allocation failed";
+        Destroy();
+        return false;
+    }
+}
+
+bool DistanceFieldGIStage::Allocate(uint32_t Slot, VkDeviceSize Bytes)
+{
+    Sizes[Slot] = Bytes;
+    VkBufferCreateInfo Information{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+    Information.size = Bytes;
+    Information.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    if (vkCreateBuffer(Initialization.Device, &Information, nullptr, &Buffers[Slot]) != VK_SUCCESS) return false;
+    VkMemoryRequirements Requirements{};
+    vkGetBufferMemoryRequirements(Initialization.Device, Buffers[Slot], &Requirements);
+    uint32_t Type = UINT32_MAX;
+    for (uint32_t Index = 0u; Index < Initialization.MemoryProperties.memoryTypeCount; ++Index)
+        if ((Requirements.memoryTypeBits & (1u << Index)) &&
+            (Initialization.MemoryProperties.memoryTypes[Index].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))
+        { Type = Index; break; }
+    if (Type == UINT32_MAX) return false;
+    VkMemoryAllocateInfo Allocation{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+    Allocation.allocationSize = Requirements.size;
+    Allocation.memoryTypeIndex = Type;
+    if (vkAllocateMemory(Initialization.Device, &Allocation, nullptr, &Memory[Slot]) != VK_SUCCESS) return false;
+    return vkBindBufferMemory(Initialization.Device, Buffers[Slot], Memory[Slot], 0u) == VK_SUCCESS;
+}
+
+bool DistanceFieldGIStage::ConstructPipelines()
+{
+    std::vector<VkDescriptorSetLayoutBinding> Descriptors;
+    auto Append = [&](uint32_t Slot, VkDescriptorType Type, uint32_t Count = 1u)
+    { Descriptors.push_back({Slot, Type, Count, VK_SHADER_STAGE_COMPUTE_BIT, nullptr}); };
+    for (uint32_t Slot : {0u, 1u, 2u}) Append(Slot, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+    for (uint32_t Slot : {3u, 4u, 5u, 6u, 7u, 10u, 15u, 16u, 17u, 18u, 19u, 20u}) Append(Slot, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+    Append(13u, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    Append(14u, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    Append(31u, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, std::max(1u, Initialization.TextureCapacity));
+    std::vector<VkDescriptorBindingFlags> Flags(Descriptors.size(), 0u);
+    if (Initialization.TextureCapacity)
+        Flags.back() = VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT | VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
+    if (Initialization.TextureCapacity && Initialization.TextureUpdateAfterBind) Flags.back() |= VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+    VkDescriptorSetLayoutBindingFlagsCreateInfo DescriptorFlags{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO};
+    DescriptorFlags.bindingCount = static_cast<uint32_t>(Flags.size());
+    DescriptorFlags.pBindingFlags = Flags.data();
+    VkDescriptorSetLayoutCreateInfo Layout{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    Layout.pNext = Initialization.TextureCapacity ? &DescriptorFlags : nullptr;
+    Layout.flags = Initialization.TextureCapacity && Initialization.TextureUpdateAfterBind ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT : 0u;
+    Layout.bindingCount = static_cast<uint32_t>(Descriptors.size());
+    Layout.pBindings = Descriptors.data();
+    if (vkCreateDescriptorSetLayout(Initialization.Device, &Layout, nullptr, &DescriptorLayout) != VK_SUCCESS) return false;
+    VkPushConstantRange Push{VK_SHADER_STAGE_COMPUTE_BIT, 0u, sizeof(DistanceFieldPush)};
+    VkPipelineLayoutCreateInfo PipelineInformation{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    PipelineInformation.setLayoutCount = 1u;
+    PipelineInformation.pSetLayouts = &DescriptorLayout;
+    PipelineInformation.pushConstantRangeCount = 1u;
+    PipelineInformation.pPushConstantRanges = &Push;
+    if (vkCreatePipelineLayout(Initialization.Device, &PipelineInformation, nullptr, &PipelineLayout) != VK_SUCCESS) return false;
+    const char* Names[] = {"DistanceFieldConstruct.spv", "DistanceFieldRadiance.spv",
+        Initialization.TextureCapacity ? "DistanceFieldGIResolve.spv" : "DistanceFieldGIResolveFixed.spv"};
+    for (uint32_t Index = 0u; Index < 3u; ++Index)
+    {
+        std::ifstream Stream(Initialization.SpirvDirectory + "/" + Names[Index], std::ios::binary | std::ios::ate);
+        if (!Stream) return false;
+        const auto Length = Stream.tellg();
+        if (Length < 20 || Length % 4 != 0) return false;
+        std::vector<uint32_t> Words(static_cast<size_t>(Length) / 4u);
+        Stream.seekg(0);
+        if (!Stream.read(reinterpret_cast<char*>(Words.data()), Length) || Words[0] != 0x07230203u) return false;
+        VkShaderModuleCreateInfo ModuleInformation{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+        ModuleInformation.codeSize = static_cast<size_t>(Length);
+        ModuleInformation.pCode = Words.data();
+        VkShaderModule Module{};
+        if (vkCreateShaderModule(Initialization.Device, &ModuleInformation, nullptr, &Module) != VK_SUCCESS) return false;
+        VkComputePipelineCreateInfo Pipeline{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+        Pipeline.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+        Pipeline.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        Pipeline.stage.module = Module;
+        Pipeline.stage.pName = "main";
+        Pipeline.layout = PipelineLayout;
+        const auto Result = vkCreateComputePipelines(Initialization.Device, VK_NULL_HANDLE, 1u, &Pipeline, nullptr, &Pipelines[Index]);
+        vkDestroyShaderModule(Initialization.Device, Module, nullptr);
+        if (Result != VK_SUCCESS) return false;
+    }
+    return true;
+}
+
+bool DistanceFieldGIStage::WriteDescriptors()
+{
+    const uint32_t Capacity = std::max(1u, Initialization.TextureCapacity);
+    VkDescriptorPoolSize Sizes[] = {{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 24u}, {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 6u},
+                                    {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2u * (Capacity + 2u)}};
+    VkDescriptorPoolCreateInfo Information{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+    Information.maxSets = 2u;
+    Information.flags = Initialization.TextureCapacity && Initialization.TextureUpdateAfterBind ? VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT : 0u;
+    Information.poolSizeCount = 3u;
+    Information.pPoolSizes = Sizes;
+    if (vkCreateDescriptorPool(Initialization.Device, &Information, nullptr, &Pool) != VK_SUCCESS) return false;
+    std::vector<VkDescriptorImageInfo> Textures(Capacity);
+    for (uint32_t Index = 0u; Index < Capacity; ++Index)
+        Textures[Index] = Initialization.TextureCapacity
+            ? VkDescriptorImageInfo{Initialization.TextureSampler, Initialization.TextureViews[std::min(Index, Initialization.TextureCount - 1u)], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}
+            : VkDescriptorImageInfo{Initialization.TableSampler, Initialization.EnergyLutView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    for (uint32_t Cycle = 0u; Cycle < 2u; ++Cycle)
+    {
+        VkDescriptorSetVariableDescriptorCountAllocateInfo Variable{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO};
+        Variable.descriptorSetCount = 1u;
+        Variable.pDescriptorCounts = &Capacity;
+        VkDescriptorSetAllocateInfo Allocation{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+        Allocation.pNext = Initialization.TextureCapacity ? &Variable : nullptr;
+        Allocation.descriptorPool = Pool;
+        Allocation.descriptorSetCount = 1u;
+        Allocation.pSetLayouts = &DescriptorLayout;
+        if (vkAllocateDescriptorSets(Initialization.Device, &Allocation, &Sets[Cycle]) != VK_SUCCESS) return false;
+        VkBuffer Handles[] = {Buffers[0], Buffers[1u + Cycle], Buffers[3], Buffers[4], Buffers[5], Buffers[2u - Cycle],
+            Initialization.TriangleBuffer, Initialization.MaterialBuffer, Initialization.InstanceBuffer,
+            Initialization.SlabBuffer, Initialization.VertexBuffer, Initialization.IndexBuffer};
+        const uint32_t Slots[] = {3u,4u,5u,6u,7u,10u,15u,16u,17u,18u,19u,20u};
+        VkDescriptorBufferInfo BufferInformation[12]{};
+        VkDescriptorImageInfo Images[] = {{VK_NULL_HANDLE, Initialization.OutputImageView, VK_IMAGE_LAYOUT_GENERAL},
+            {VK_NULL_HANDLE, Initialization.SurfaceImageView, VK_IMAGE_LAYOUT_GENERAL},
+            {VK_NULL_HANDLE, Initialization.NormalImageView, VK_IMAGE_LAYOUT_GENERAL},
+            {Initialization.TableSampler, Initialization.EnergyLutView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+            {Initialization.TableSampler, Initialization.SheenLutView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}};
+        std::vector<VkWriteDescriptorSet> Writes;
+        for (uint32_t Index = 0u; Index < 12u; ++Index)
+        {
+            BufferInformation[Index] = {Handles[Index], 0u, VK_WHOLE_SIZE};
+            VkWriteDescriptorSet Write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            Write.dstSet = Sets[Cycle]; Write.dstBinding = Slots[Index]; Write.descriptorCount = 1u;
+            Write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; Write.pBufferInfo = &BufferInformation[Index];
+            Writes.push_back(Write);
+        }
+        for (uint32_t Index = 0u; Index < 5u; ++Index)
+        {
+            VkWriteDescriptorSet Write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+            Write.dstSet = Sets[Cycle]; Write.dstBinding = Index < 3u ? Index : Index + 10u; Write.descriptorCount = 1u;
+            Write.descriptorType = Index < 3u ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            Write.pImageInfo = &Images[Index]; Writes.push_back(Write);
+        }
+        VkWriteDescriptorSet Write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+        Write.dstSet = Sets[Cycle]; Write.dstBinding = 31u; Write.descriptorCount = Capacity;
+        Write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; Write.pImageInfo = Textures.data();
+        Writes.push_back(Write);
+        vkUpdateDescriptorSets(Initialization.Device, static_cast<uint32_t>(Writes.size()), Writes.data(), 0u, nullptr);
+    }
+    return true;
+}
+
+bool DistanceFieldGIStage::IsReady() const noexcept
+{
+    return Ready && Initialization.Geometry && !Initialization.Geometry->QueryFacets().empty() &&
+           !Initialization.Geometry->QueryBranches().empty() &&
+           Initialization.Geometry->QueryFacets().size()*sizeof(DistanceFieldFacet) <= Sizes[5] &&
+           Initialization.Geometry->QueryBranches().size()*sizeof(DistanceFieldBranch) <= Sizes[4];
+}
+
+bool DistanceFieldGIStage::RecordFrame(VkCommandBuffer Command, const DistanceFieldFrameParams& Frame) noexcept
+{
+    if (!IsReady() || !Command || !Frame.RenderWidth || !Frame.RenderHeight) return false;
+    for (float Value : Frame.CameraEye) if (!std::isfinite(Value)) return false;
+    struct GeometryConstants { float Origins[12]; uint32_t Counts[4]; } Constants{};
+    const uint32_t Resolution = Initialization.VolumeResolution;
+    for (uint32_t Level = 0u; Level < 3u; ++Level)
+    {
+        const float Cell = Initialization.ClipmapCellSize * float(1u << Level);
+        for (uint32_t Axis = 0u; Axis < 3u; ++Axis)
+            Constants.Origins[4u*Level+Axis] = (std::floor(Frame.CameraEye[Axis] / Cell) - float(Resolution/2u)) * Cell;
+        Constants.Origins[4u*Level+3u] = Cell;
+    }
+    const auto& Geometry = *Initialization.Geometry;
+    const bool GeometryChanged = ResidentRevision != Geometry.QueryRevision();
+    const bool Reconstruct = GeometryChanged || std::memcmp(Origins, Constants.Origins, sizeof(Origins)) != 0;
+    Constants.Counts[0] = Resolution;
+    Constants.Counts[1] = static_cast<uint32_t>(Geometry.QueryBranches().size());
+    Constants.Counts[2] = static_cast<uint32_t>(Geometry.QueryFacets().size());
+    DistanceFieldPush Push{};
+    std::memcpy(Push.Sun, Frame.SunDirection, 12u); Push.Sun[3] = Frame.SunRadiance;
+    std::memcpy(Push.SunColour, Frame.SunColour, 12u);
+    std::memcpy(Push.SkyExposure, Frame.SkyAmbient, 12u); Push.SkyExposure[3] = Frame.Exposure;
+    std::memcpy(Push.Eye, Frame.CameraEye, 12u);
+    Push.Tuning[0] = std::max(0.01f, Frame.ShadowSoftness);
+    Push.Tuning[1] = std::clamp(Frame.GiBoost, 0.0f, 2.0f);
+    const bool Reset = Reconstruct || std::memcmp(PreviousLighting, Push.Sun, sizeof(PreviousLighting)) != 0;
+    Push.Tuning[2] = Reset ? 1.0f : 0.0f;
+    Push.Counts[0] = VoxelCount; Push.Counts[1] = FrameNumber; Push.Counts[2] = Frame.FeatureFlags; Push.Counts[3] = Frame.ReflectionMode;
+    auto Barrier = [&](VkPipelineStageFlags Source, VkAccessFlags SourceAccess, VkPipelineStageFlags Destination, VkAccessFlags DestinationAccess)
+    {
+        VkMemoryBarrier MemoryBarrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+        MemoryBarrier.srcAccessMask = SourceAccess; MemoryBarrier.dstAccessMask = DestinationAccess;
+        vkCmdPipelineBarrier(Command, Source, Destination, 0u, 1u, &MemoryBarrier, 0u, nullptr, 0u, nullptr);
+    };
+    // 📝 All stages run on the host's existing compute queue. Include previous reads before overwriting shared volumes.
+    Barrier(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
+    auto Upload = [&](VkBuffer Buffer, const void* Data, VkDeviceSize Bytes)
+    {
+        for (VkDeviceSize Offset = 0u; Offset < Bytes; Offset += 65536u)
+            vkCmdUpdateBuffer(Command, Buffer, Offset, std::min<VkDeviceSize>(65536u, Bytes - Offset), static_cast<const char*>(Data) + Offset);
+    };
+    if (GeometryChanged)
+    {
+        Upload(Buffers[4], Geometry.QueryBranches().data(), Geometry.QueryBranches().size()*sizeof(DistanceFieldBranch));
+        Upload(Buffers[5], Geometry.QueryFacets().data(), Geometry.QueryFacets().size()*sizeof(DistanceFieldFacet));
+    }
+    Upload(Buffers[3], &Constants, sizeof(Constants));
+    if (Reset)
+        for (uint32_t Slot : {1u, 2u}) vkCmdFillBuffer(Command, Buffers[Slot], 0u, VK_WHOLE_SIZE, 0u);
+    Barrier(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+    vkCmdBindDescriptorSets(Command, VK_PIPELINE_BIND_POINT_COMPUTE, PipelineLayout, 0u, 1u, &Sets[FrameNumber & 1u], 0u, nullptr);
+    vkCmdPushConstants(Command, PipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0u, sizeof(Push), &Push);
+    if (Reconstruct)
+    {
+        vkCmdBindPipeline(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Pipelines[0]);
+        vkCmdDispatch(Command, (VoxelCount + 63u)/64u, 1u, 1u);
+        Barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+    }
+    vkCmdBindPipeline(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Pipelines[1]);
+    vkCmdDispatch(Command, (VoxelCount + 63u)/64u, 1u, 1u);
+    Barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+    vkCmdBindPipeline(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Pipelines[2]);
+    vkCmdDispatch(Command, (Frame.RenderWidth + 15u)/16u, (Frame.RenderHeight + 15u)/16u, 1u);
+    Barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT);
+    ResidentRevision = Geometry.QueryRevision();
+    std::memcpy(Origins, Constants.Origins, sizeof(Origins));
+    std::memcpy(PreviousLighting, Push.Sun, sizeof(PreviousLighting));
+    ++FrameNumber;
     return true;
 }
 
 void DistanceFieldGIStage::Destroy() noexcept
 {
-    if (InitializationData.Device != VK_NULL_HANDLE)
+    Ready = false;
+    if (Initialization.Device)
     {
-        if (Pipeline != VK_NULL_HANDLE)       vkDestroyPipeline(InitializationData.Device, Pipeline, nullptr);
-        if (PipelineLayout != VK_NULL_HANDLE) vkDestroyPipelineLayout(InitializationData.Device, PipelineLayout, nullptr);
-        if (DescriptorLayout != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(InitializationData.Device, DescriptorLayout, nullptr);
-        if (DescriptorPool != VK_NULL_HANDLE) vkDestroyDescriptorPool(InitializationData.Device, DescriptorPool, nullptr);
-
-        if (DistanceFieldBuffer != VK_NULL_HANDLE) vkDestroyBuffer(InitializationData.Device, DistanceFieldBuffer, nullptr);
-        if (DistanceFieldMemory != VK_NULL_HANDLE) vkFreeMemory(InitializationData.Device, DistanceFieldMemory, nullptr);
-
-        if (SurfaceCacheBuffer != VK_NULL_HANDLE)  vkDestroyBuffer(InitializationData.Device, SurfaceCacheBuffer, nullptr);
-        if (SurfaceCacheMemory != VK_NULL_HANDLE)  vkFreeMemory(InitializationData.Device, SurfaceCacheMemory, nullptr);
+        for (auto Pipeline : Pipelines) if (Pipeline) vkDestroyPipeline(Initialization.Device, Pipeline, nullptr);
+        if (Pool) vkDestroyDescriptorPool(Initialization.Device, Pool, nullptr);
+        if (PipelineLayout) vkDestroyPipelineLayout(Initialization.Device, PipelineLayout, nullptr);
+        if (DescriptorLayout) vkDestroyDescriptorSetLayout(Initialization.Device, DescriptorLayout, nullptr);
+        for (uint32_t Slot = 0u; Slot < 6u; ++Slot)
+        {
+            if (Buffers[Slot]) vkDestroyBuffer(Initialization.Device, Buffers[Slot], nullptr);
+            if (Memory[Slot]) vkFreeMemory(Initialization.Device, Memory[Slot], nullptr);
+        }
     }
-    Pipeline = VK_NULL_HANDLE;
-    PipelineLayout = VK_NULL_HANDLE;
-    DescriptorLayout = VK_NULL_HANDLE;
-    DescriptorPool = VK_NULL_HANDLE;
-    DistanceFieldBuffer = VK_NULL_HANDLE;
-    DistanceFieldMemory = VK_NULL_HANDLE;
-    SurfaceCacheBuffer = VK_NULL_HANDLE;
-    SurfaceCacheMemory = VK_NULL_HANDLE;
-    DescriptorSet = VK_NULL_HANDLE;
-    ActiveSurfaces = 0u;
-    AccumulatedFrames = 0u;
-    InitializationData = {};
+    std::fill(std::begin(Buffers), std::end(Buffers), VK_NULL_HANDLE);
+    std::fill(std::begin(Memory), std::end(Memory), VK_NULL_HANDLE);
+    std::fill(std::begin(Sizes), std::end(Sizes), 0u);
+    std::fill(std::begin(Pipelines), std::end(Pipelines), VK_NULL_HANDLE);
+    std::fill(std::begin(Sets), std::end(Sets), VK_NULL_HANDLE);
+    Pool = VK_NULL_HANDLE; PipelineLayout = VK_NULL_HANDLE; DescriptorLayout = VK_NULL_HANDLE;
+    VoxelCount = FrameNumber = 0u; ResidentRevision = 0u;
+    Initialization = {};
+    std::fill(std::begin(Origins), std::end(Origins), 0.0f);
+    std::fill(std::begin(PreviousLighting), std::end(PreviousLighting), 0.0f);
 }
-
-bool DistanceFieldGIStage::CreateBuffers() noexcept
-{
-    const VkDeviceSize VoxelBytes = VkDeviceSize(InitializationData.VolumeResolution) *
-                                    InitializationData.VolumeResolution *
-                                    InitializationData.VolumeResolution * sizeof(float);
-    const VkBufferUsageFlags Usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    return AllocateBuffer(InitializationData.Device, InitializationData.MemoryProperties, VoxelBytes,
-                          Usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, DistanceFieldBuffer, DistanceFieldMemory);
 }
-
-bool DistanceFieldGIStage::CreatePipelines() noexcept
-{
-    const uint32_t Slots = InitializationData.TextureCapacity;
-    std::vector<VkDescriptorSetLayoutBinding> Bindings = {
-        StorageImage(0),  // OutputImage
-        StorageImage(1),  // SurfaceImage
-        StorageImage(2),  // NormalImage
-        StorageBuffer(3), // GDF Buffer
-        StorageBuffer(4), // SurfaceCache Buffer
-        StorageBuffer(8), // CwbvhNodeBuffer
-        StorageBuffer(9), // CwbvhLeafBuffer
-        StorageBuffer(10),// TriangleBuffer
-        StorageBuffer(11),// MaterialBuffer
-        StorageBuffer(12),// InstanceBuffer
-        StorageBuffer(13),// SlabBuffer
-        StorageBuffer(14),// VertexBuffer
-        StorageBuffer(15) // IndexBuffer
-    };
-    if (Slots > 0u)
-    {
-        Bindings.push_back(Sampled(16, Slots));
-    }
-
-    VkDescriptorSetLayoutCreateInfo LayoutInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-    LayoutInfo.bindingCount = static_cast<uint32_t>(Bindings.size());
-    LayoutInfo.pBindings = Bindings.data();
-    LayoutInfo.flags = Slots > 0u ? VkDescriptorSetLayoutCreateFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT) : 0u;
-
-    if (vkCreateDescriptorSetLayout(InitializationData.Device, &LayoutInfo, nullptr, &DescriptorLayout) != VK_SUCCESS)
-        return false;
-
-    VkPushConstantRange Push{ VK_SHADER_STAGE_COMPUTE_BIT, 0u, 96u };
-    VkPipelineLayoutCreateInfo PipelineLayoutInfo{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
-    PipelineLayoutInfo.setLayoutCount = 1u;
-    PipelineLayoutInfo.pSetLayouts = &DescriptorLayout;
-    PipelineLayoutInfo.pushConstantRangeCount = 1u;
-    PipelineLayoutInfo.pPushConstantRanges = &Push;
-
-    if (vkCreatePipelineLayout(InitializationData.Device, &PipelineLayoutInfo, nullptr, &PipelineLayout) != VK_SUCCESS)
-        return false;
-
-    const std::string SpvPath = "Frontier/Engine/Shaders/DistanceFieldGIResolve.spv";
-    VkShaderModule Module = MakeModule(InitializationData.Device, SpvPath);
-    if (Module == VK_NULL_HANDLE)
-    {
-        const std::string AltPath = "Engine/Shaders/DistanceFieldGIResolve.spv";
-        Module = MakeModule(InitializationData.Device, AltPath);
-    }
-    if (Module != VK_NULL_HANDLE)
-    {
-        VkPipelineShaderStageCreateInfo Stage{ VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
-        Stage.stage = VK_SHADER_STAGE_COMPUTE_BIT; Stage.module = Module; Stage.pName = "main";
-        VkComputePipelineCreateInfo CI{ VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO };
-        CI.stage = Stage; CI.layout = PipelineLayout;
-        const VkResult R = vkCreateComputePipelines(InitializationData.Device, VK_NULL_HANDLE, 1u, &CI, nullptr, &Pipeline);
-        vkDestroyShaderModule(InitializationData.Device, Module, nullptr);
-        if (R != VK_SUCCESS) return false;
-    }
-    return true;
-}
-
-bool DistanceFieldGIStage::WriteDescriptors() noexcept
-{
-    const uint32_t Slots = InitializationData.TextureCapacity;
-    std::vector<VkDescriptorPoolSize> PoolSizes = {
-        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3u },
-        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 10u }
-    };
-    if (Slots > 0u) PoolSizes.push_back({ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, Slots });
-
-    VkDescriptorPoolCreateInfo PoolInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
-    PoolInfo.maxSets = 2u;
-    PoolInfo.poolSizeCount = static_cast<uint32_t>(PoolSizes.size());
-    PoolInfo.pPoolSizes = PoolSizes.data();
-    PoolInfo.flags = Slots > 0u ? VkDescriptorPoolCreateFlags(VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT) : 0u;
-
-    if (vkCreateDescriptorPool(InitializationData.Device, &PoolInfo, nullptr, &DescriptorPool) != VK_SUCCESS)
-        return false;
-
-    uint32_t TableSize = Slots;
-    VkDescriptorSetVariableDescriptorCountAllocateInfo VarCount{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO };
-    VarCount.descriptorSetCount = 1u; VarCount.pDescriptorCounts = &TableSize;
-
-    VkDescriptorSetAllocateInfo AllocInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
-    AllocInfo.descriptorPool = DescriptorPool;
-    AllocInfo.descriptorSetCount = 1u;
-    AllocInfo.pSetLayouts = &DescriptorLayout;
-    AllocInfo.pNext = Slots > 0u ? &VarCount : nullptr;
-
-    if (vkAllocateDescriptorSets(InitializationData.Device, &AllocInfo, &DescriptorSet) != VK_SUCCESS)
-        return false;
-
-    return true;
-}
-
-void DistanceFieldGIStage::SynchronizeField(const std::vector<DistanceFieldSurfaceSample>& Samples,
-                                           const DistanceFieldFrameParams& FrameParams) noexcept
-{
-    if (!IsReady()) return;
-    ActiveSurfaces = static_cast<uint32_t>(Samples.size());
-    AccumulatedFrames++;
-}
-
-bool DistanceFieldGIStage::RecordFrame(VkCommandBuffer Command,
-                                      const DistanceFieldFrameParams& FrameParams) noexcept
-{
-    if (!IsReady() || Command == VK_NULL_HANDLE) return false;
-
-    vkCmdBindPipeline(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Pipeline);
-
-    if (DescriptorSet != VK_NULL_HANDLE)
-    {
-        vkCmdBindDescriptorSets(Command, VK_PIPELINE_BIND_POINT_COMPUTE, PipelineLayout, 0u, 1u, &DescriptorSet, 0u, nullptr);
-    }
-
-    struct PushData {
-        float SunDir[3]; float SunRad;
-        float SunCol[3]; float Exposure;
-        float SkyAmb[3]; float Softness;
-        float CamEye[3]; float GiBoost;
-        uint32_t FrameIdx; uint32_t FeatFlags;
-        uint32_t ReflMode; uint32_t Width; uint32_t Height;
-    } Params{};
-    std::memcpy(Params.SunDir, FrameParams.SunDirection, sizeof(Params.SunDir));
-    Params.SunRad = FrameParams.SunRadiance;
-    std::memcpy(Params.SunCol, FrameParams.SunColour, sizeof(Params.SunCol));
-    Params.Exposure = FrameParams.Exposure;
-    std::memcpy(Params.SkyAmb, FrameParams.SkyAmbient, sizeof(Params.SkyAmb));
-    Params.Softness = FrameParams.ShadowSoftness;
-    std::memcpy(Params.CamEye, FrameParams.CameraEye, sizeof(Params.CamEye));
-    Params.GiBoost = FrameParams.GiBoost;
-    Params.FrameIdx = FrameParams.FrameIndex;
-    Params.FeatFlags = FrameParams.FeatureFlags;
-    Params.ReflMode = FrameParams.ReflectionMode;
-    Params.Width = FrameParams.RenderWidth;
-    Params.Height = FrameParams.RenderHeight;
-
-    vkCmdPushConstants(Command, PipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0u, sizeof(Params), &Params);
-
-    const uint32_t GroupX = (FrameParams.RenderWidth + 15u) / 16u;
-    const uint32_t GroupY = (FrameParams.RenderHeight + 15u) / 16u;
-    vkCmdDispatch(Command, GroupX, GroupY, 1u);
-    return true;
-}
-
-} // namespace Frontier

@@ -4,25 +4,34 @@
 **Target Branch**: `arena/01a0fd52-frontier`
 **Location**: `Plans/Ongoing/SwapSurfelGIWithDistanceFieldGI.md`
 
-## Slate integration audit — 2026-10-02
+## Slate implementation — 2026-10-02
 
-**Status: imported, not a completed GPU replacement.** The sections below describe the upstream intended
-architecture. The imported CPU renders are not captures from `Frontier.exe`.
+The imported `46476f3` still left field/cache memory unpopulated and did not match the resolve shader.
+Slate replaces that scaffold with an executing scene-dependent pipeline:
 
-The source at `7d5cb3c` allocates but never writes descriptor sets. The shader requires descriptor sets
-0, 2 and 3, whereas the host provides only set 0. The host pushes 84 bytes with a different field layout
-from the shader's 48 bytes. The surface cache is never allocated/populated and `SynchronizeField` only
-increments counters. No reservoir producer is present. The GPU shader does not contain the CPU proof's
-AO-neighborhood fix, mesh reflection or refraction implementation.
+- `DistanceFieldStructure` projects scene vertices through instance transforms and builds a stackless triangle BVH.
+  Instance refresh changes the geometry revision; unchanged rows preserve temporal history.
+- `DistanceFieldConstruct` generates three camera-snapped distance grids on the GPU from closest triangle points.
+  The distance is oriented by the closest facet normal; open/thin meshes are supported as two-sided distance surfaces.
+- A surface-radiance cache is associated with each voxel's closest surface point. This is **not** a UV card atlas.
+  Two separate GPU buffers implement Jacobi diffuse propagation, direct sun, sky and arbitrary emissive materials.
+- `DistanceFieldGIResolve` consumes raster visibility, the shared OpenPBR material decoder and the cache.
+  Reflections/refraction traverse the exact world triangle BVH, never voxel surfaces. No RT cores are required.
+- The shared push payload is exactly 96 bytes, with `static_assert` offsets on the host and matching GLSL fields.
+  All resources are initialized, descriptors written and transfer/compute dependencies recorded before use.
+- Missing shaders/resources refuse readiness. Scene/camera/lighting changes invalidate radiance history.
+  Shading-table arrival and swapchain reconstruction rebind the stage; retirement is idempotent.
+- The fixed-descriptor variant uses constant material coefficients when descriptor indexing is unavailable.
+  GPU cache bounce albedo/emission currently uses flattened material coefficients rather than per-texel textures.
+- Dynamic transforms rebuild the CPU world BVH and upload it in the command stream. This is correctness-first,
+  not a demonstrated real-time performance budget. Hi-Z SSGI and capsule proxies remain future optimizations.
+- The sky remains the existing non-RT analytic approximation, not the full raytraced atmosphere.
+  Refraction is bounded to four mesh intersections; this is not an unbounded nested-medium path tracer.
 
-Slate therefore guards stage creation and dispatch with `DistanceFieldGIStage::TransportImplemented = false`.
-Mode 1 uses the existing GI fallback and diagnostics report SDF unavailability rather than claiming activation.
-The source and shader are built, but enabling SDF requires implementing and validating those resource contracts,
-GPU field/cache/reservoir production, synchronization and shader transport first. The two stale
-`SurfelPathRecorded` references were also corrected and shader lowering was registered in both toolchains.
+`DistanceFieldExecution.cpp` runs the actual production SPIR-V with Vulkan synchronization validation and readback.
+CPU showcase images below remain CPU proofs; they are not GPU startup screenshots or hardware performance evidence.
 
-The suggested dynamic-mesh SSGI and capsule proxies are future work, not implemented by this merge;
-the quoted timing is not a measured result from this build.
+The following upstream sections describe design targets; the implementation and limits above take precedence.
 
 ---
 

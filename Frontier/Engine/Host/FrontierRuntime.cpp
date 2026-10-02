@@ -1046,7 +1046,7 @@ int Frontier::RunFrontierRuntime(
             RtActive = false;                                   // the guard: degrade to plain raster
         // Raytraced reflections need the raytracing budget; without it, degrade to sky reflections (never SSR).
         Frontier::ReflectionModeCategory EffReflMode = S.ReflectionMode;
-        if (!RtActive && EffReflMode == Frontier::ReflectionModeCategory::Raytraced)
+        if (!RtActive && !(GiActive && Surface.QueryDistanceFieldGIReady()) && EffReflMode == Frontier::ReflectionModeCategory::Raytraced)
             EffReflMode = Frontier::ReflectionModeCategory::Sky;
         const uint32_t RenderPath = RtActive ? 0u : (GiActive ? 1u : 2u);   // 0 raytraced ReSTIR / 1 Distance Field GI / 2 plain raster
         Integrator.AssignRenderPath(RenderPath);
@@ -1071,9 +1071,9 @@ int Frontier::RunFrontierRuntime(
         {
             Logger.RecordMessage(Frontier::DiagnosticSeverity::Information, "SdfGI",
                 Surface.QueryDistanceFieldGIReady()
-                    ? "Distance Field GI stage ready."
-                    : "Distance Field GI unavailable: upstream field upload and host/shader descriptor contract "
-                      "are incomplete. Using the existing GI fallback; no SDF compute dispatch is recorded.");
+                    ? "Distance Field GI ready: scene-derived three-level clipmaps, GPU Jacobi radiance propagation, "
+                      "SDF diffuse/shadows and mesh-BVH reflections/refraction."
+                    : "Distance Field GI resources unavailable; retaining the existing GI fallback.");
         }
 
         Integrator.AssignGlobalIllumination(GiActive);

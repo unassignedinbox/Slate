@@ -2684,6 +2684,8 @@ void SwapchainExchange::UploadShadingTables(const float* Energy, const float* Sh
     //    so without this rewrite bindings 13/14 stay unbound while the kernel samples them every pixel — silent
     //    garbage on forgiving drivers, a fault on strict ones. The rewrite is idempotent for every other binding.
     WriteDescriptorSet();
+    (void)BringDistanceFieldGIStage();
+    (void)BringSurfelGIStage();
 }
 
 void* SwapchainExchange::SwapReservoirParity() noexcept
@@ -3017,6 +3019,15 @@ void SwapchainExchange::UploadScene(const SceneStructure& Scene, const Traversal
     UploadMaterials(Scene.QueryMaterials());       // R4a: MaterialRecord + MaterialSlabRecord (bindings 2, 10)
     UploadTraversal(Traversal);                    // R3: CWBVH node + triangle blobs (bindings 8-9)
     BuildSurfelSamples(Scene);
+    try
+    {
+        if (!DistanceGeometry.Construct(Scene)) std::cerr << "[SdfGI] Scene contains no valid distance geometry.\n";
+    }
+    catch (...)
+    {
+        (void)DistanceGeometry.Construct(std::vector<DistanceFieldFacet>{});
+        std::cerr << "[SdfGI] Scene construction refused; retaining fallback.\n";
+    }
     // UploadTraversal may replace both CWBVH handles. Rebind the stage only after those handles and the
     // shared visibility targets exist, so no descriptor ever points at an old or null traversal buffer.
     if (!BringDistanceFieldGIStage())
@@ -3041,11 +3052,29 @@ bool SwapchainExchange::BringVisibility() noexcept
     return true;
 }
 
+bool SwapchainExchange::RefreshInstances(const InstanceRecord* Rows, uint32_t Count) noexcept
+{
+    if (!Visibility.RefreshInstances(Rows, Count)) return false;
+    try
+    {
+        if (DistanceGeometry.RefreshInstances(Rows, Count)) return true;
+    }
+    catch (...) {}
+    (void)DistanceGeometry.Construct(std::vector<DistanceFieldFacet>{});
+    return true; // [-] - Visibility succeeded; SDF refuses stale geometry and uses the existing fallback.
+}
+
 bool SwapchainExchange::BringDistanceFieldGIStage() noexcept
 {
     DistanceFieldStage.Destroy();
-    if (!Vulkan->TraversalNodeBuffer || !Vulkan->TraversalLeafBuffer || !Visibility.IsReady()) return true;
+    if (!Visibility.IsReady() || DistanceGeometry.QueryFacets().empty()) return true;
     DistanceFieldStageInit Init{};
+    VkPhysicalDeviceVulkan12Features Features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+    VkPhysicalDeviceFeatures2 Supported{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+    Supported.pNext = &Features;
+    vkGetPhysicalDeviceFeatures2(Vulkan->PhysicalDevice, &Supported);
+    Init.TextureUpdateAfterBind = Features.descriptorBindingSampledImageUpdateAfterBind != VK_FALSE;
+    Init.Geometry         = &DistanceGeometry;
     Init.Device           = Vulkan->Device;
     Init.MemoryProperties = Vulkan->MemoryProperties;
     Init.CwbvhNodeBuffer  = Vulkan->TraversalNodeBuffer;

@@ -382,6 +382,9 @@ $ShaderTable = @(
     @{ Source = 'ReSTIRViewport.slang';        Stage = 'compute';  Output = 'ReSTIRViewport.spv' }
     @{ Source = 'SurfelIrradianceUpdate.slang'; Stage = 'compute';  Output = 'SurfelIrradianceUpdate.spv' }
     @{ Source = 'SurfelCommit.slang';           Stage = 'compute';  Output = 'SurfelCommit.spv' }
+    @{ Source = 'DistanceFieldConstruct.slang'; Stage = 'compute'; Output = 'DistanceFieldConstruct.spv' }
+    @{ Source = 'DistanceFieldRadiance.slang'; Stage = 'compute'; Output = 'DistanceFieldRadiance.spv' }
+    @{ Source = 'DistanceFieldGIResolveFixed.slang'; Stage = 'compute'; Output = 'DistanceFieldGIResolveFixed.spv' }
     @{ Source = 'DistanceFieldGIResolve.slang'; Stage = 'compute'; Output = 'DistanceFieldGIResolve.spv' }
     @{ Source = 'SurfelGIResolve.slang';         Stage = 'compute';  Output = 'SurfelGIResolve.spv' }
     @{ Source = 'ClusterCull.slang';           Stage = 'compute';  Output = 'ClusterCull.spv' }
@@ -408,7 +411,7 @@ $ShaderTable = @(
     @{ Source = 'GizmoRaster.vert.slang';      Stage = 'vertex';   Output = 'GizmoRaster.vert.spv' }
     @{ Source = 'GizmoRaster.frag.slang';      Stage = 'fragment'; Output = 'GizmoRaster.frag.spv' }
 )
-$ShaderIncludeNames = @('DistanceFieldRecords.slang', 'GlobalDistanceField.slang', 'SurfaceCacheRecords.slang', 'PatchSelection.slang', 'PatchPolicy.shared.h', 'PresentationDither.slang', 'SceneRecords.slang', 'RayGeneration.slang', 'TraversalCWBVH.slang', 'InterfaceRecords.slang', 'InterfaceSignedDistance.slang', 'SkyRecords.slang', 'MoonRecords.slang', 'PostRecords.slang', 'CloudShadow.slang', 'WeatherMedia.slang', 'MaterialEvaluation.slang', 'ShadowRecords.slang', 'ShadowSample.slang', 'OutlineRecords.slang', 'GizmoRecords.slang')
+$ShaderIncludeNames = @('DistanceFieldTransport.slang', 'DistanceFieldGIResolveBody.slang', 'SceneMaterialResolve.slang', 'DistanceFieldRecords.slang', 'GlobalDistanceField.slang', 'SurfaceCacheRecords.slang', 'PatchSelection.slang', 'PatchPolicy.shared.h', 'PresentationDither.slang', 'SceneRecords.slang', 'RayGeneration.slang', 'TraversalCWBVH.slang', 'InterfaceRecords.slang', 'InterfaceSignedDistance.slang', 'SkyRecords.slang', 'MoonRecords.slang', 'PostRecords.slang', 'CloudShadow.slang', 'WeatherMedia.slang', 'MaterialEvaluation.slang', 'ShadowRecords.slang', 'ShadowSample.slang', 'OutlineRecords.slang', 'GizmoRecords.slang')
 
 function Invoke-ShaderLowering([string] $VulkanRoot)
 {
@@ -590,6 +593,7 @@ $EngineRelative = @(
     #    renamed/deleted entry; `Tools/Build/CheckBuildSourceList.sh` catches an absent one and holds the CMake
     #    agreement, so run it with any build-system change.
     'Engine\DeviceExchange\SwapchainExchange.cpp'
+    'Engine\GeometricRaster\DistanceFieldStructure.cpp'
     'Engine\DeviceExchange\DistanceFieldGIStage.cpp'
     'Engine\DeviceExchange\SurfelGIStage.cpp'
     'Engine\DeviceExchange\RayTracingCapabilitySet.cpp'

@@ -1,7 +1,7 @@
 //============================================================================================================================================
 //                                                     DISTANCEFIELDREADINESS.CPP
 //============================================================================================================================================
-// 📦 Verifies that the imported, unfinished GPU transport cannot report readiness or record commands.
+// 📦 Verifies that the SDF stage with missing resources cannot report readiness or record commands.
 
 #include "Engine/DeviceExchange/DistanceFieldGIStage.h"
 
@@ -12,15 +12,9 @@ static_assert(!std::is_move_constructible_v<Frontier::DistanceFieldGIStage>);
 static_assert(!std::is_move_assignable_v<Frontier::DistanceFieldGIStage>);
 
 /// 📦 Checks refusal and idempotent retirement without creating a Vulkan device or window.
-/// err   returns nonzero if incomplete transport becomes dispatchable
+/// err   returns nonzero if missing resources becomes dispatchable
 int main()
 {
-    if (Frontier::DistanceFieldGIStage::TransportImplemented)
-    {
-        std::fputs("Replace this refusal check with GPU contract/render verification before enabling SDF transport.\n", stderr);
-        return 1;
-    }
-
     Frontier::DistanceFieldGIStage ActiveStage;
     Frontier::DistanceFieldStageInit Initialization{};
     Frontier::DistanceFieldFrameParams Frame{};
@@ -29,13 +23,12 @@ int main()
     {
         if (ActiveStage.Bring(Initialization) || ActiveStage.IsReady() || ActiveStage.RecordFrame(Command, Frame))
         {
-            std::fputs("FAIL: incomplete SDF transport accepted initialization or command recording\n", stderr);
+            std::fputs("FAIL: SDF stage with missing resources accepted initialization or command recording\n", stderr);
             return 1;
         }
-        ActiveStage.SynchronizeField({}, Frame);
         ActiveStage.Destroy();
         ActiveStage.Destroy();
     }
-    std::puts("PASS: incomplete SDF transport refuses initialization and dispatch; repeated retirement is safe (no GPU used)");
+    std::puts("PASS: SDF stage with missing resources refuses initialization and dispatch; repeated retirement is safe (no GPU used)");
     return 0;
 }

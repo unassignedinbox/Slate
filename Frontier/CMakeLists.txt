@@ -94,7 +94,7 @@ find_program(GLSLC_EXECUTABLE glslc HINTS "$ENV{VULKAN_SDK}/bin" "/usr/bin" "/us
 find_program(SLANGC_EXECUTABLE slangc HINTS "$ENV{VULKAN_SDK}/bin" "/usr/bin" "/usr/local/bin")
 
 set(SHADER_ROOT "${CMAKE_SOURCE_DIR}/Engine/Shaders")
-set(SHADER_INCLUDES "${SHADER_ROOT}/DistanceFieldRecords.slang" "${SHADER_ROOT}/GlobalDistanceField.slang" "${SHADER_ROOT}/SurfaceCacheRecords.slang" "${SHADER_ROOT}/PatchSelection.slang" "${SHADER_ROOT}/PatchPolicy.shared.h" "${SHADER_ROOT}/PresentationDither.slang" "${SHADER_ROOT}/WeatherMedia.slang" "${SHADER_ROOT}/CloudShadow.slang" "${SHADER_ROOT}/SkyRecords.slang" "${SHADER_ROOT}/MoonRecords.slang" "${SHADER_ROOT}/PostRecords.slang" "${CMAKE_SOURCE_DIR}/Engine/DisplayPresentation/LensFlareKernel.h" "${SHADER_ROOT}/SceneRecords.slang" "${SHADER_ROOT}/RayGeneration.slang" "${SHADER_ROOT}/TraversalCWBVH.slang"
+set(SHADER_INCLUDES "${SHADER_ROOT}/DistanceFieldTransport.slang" "${SHADER_ROOT}/DistanceFieldGIResolveBody.slang" "${SHADER_ROOT}/SceneMaterialResolve.slang" "${SHADER_ROOT}/DistanceFieldRecords.slang" "${SHADER_ROOT}/GlobalDistanceField.slang" "${SHADER_ROOT}/SurfaceCacheRecords.slang" "${SHADER_ROOT}/PatchSelection.slang" "${SHADER_ROOT}/PatchPolicy.shared.h" "${SHADER_ROOT}/PresentationDither.slang" "${SHADER_ROOT}/WeatherMedia.slang" "${SHADER_ROOT}/CloudShadow.slang" "${SHADER_ROOT}/SkyRecords.slang" "${SHADER_ROOT}/MoonRecords.slang" "${SHADER_ROOT}/PostRecords.slang" "${CMAKE_SOURCE_DIR}/Engine/DisplayPresentation/LensFlareKernel.h" "${SHADER_ROOT}/SceneRecords.slang" "${SHADER_ROOT}/RayGeneration.slang" "${SHADER_ROOT}/TraversalCWBVH.slang"
                     "${SHADER_ROOT}/InterfaceRecords.slang" "${SHADER_ROOT}/InterfaceSignedDistance.slang"
                     "${SHADER_ROOT}/ShadowRecords.slang" "${SHADER_ROOT}/ShadowSample.slang"
                     "${SHADER_ROOT}/OutlineRecords.slang" "${SHADER_ROOT}/GizmoRecords.slang")
@@ -106,6 +106,9 @@ set(SHADER_TABLE
     "ReSTIRViewport.slang|compute|ReSTIRViewport.spv"
     "SurfelIrradianceUpdate.slang|compute|SurfelIrradianceUpdate.spv"
     "SurfelCommit.slang|compute|SurfelCommit.spv"
+    "DistanceFieldConstruct.slang|compute|DistanceFieldConstruct.spv"
+    "DistanceFieldRadiance.slang|compute|DistanceFieldRadiance.spv"
+    "DistanceFieldGIResolveFixed.slang|compute|DistanceFieldGIResolveFixed.spv"
     "DistanceFieldGIResolve.slang|compute|DistanceFieldGIResolve.spv"
     "SurfelGIResolve.slang|compute|SurfelGIResolve.spv"
     "ClusterCull.slang|compute|ClusterCull.spv"
@@ -294,6 +297,7 @@ set(FRONTIER_HOST_SOURCES
     Engine/Host/FlyThroughSolver.cpp
     Engine/Host/EditorFeedSequence.cpp
     Engine/DeviceExchange/SwapchainExchange.cpp
+    Engine/GeometricRaster/DistanceFieldStructure.cpp
     Engine/DeviceExchange/DistanceFieldGIStage.cpp
     Engine/DeviceExchange/SurfelGIStage.cpp
     Engine/DeviceExchange/RayTracingCapabilitySet.cpp
