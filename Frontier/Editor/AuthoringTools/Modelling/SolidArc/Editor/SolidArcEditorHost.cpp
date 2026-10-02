@@ -47,6 +47,10 @@ constexpr ViewportConstructTile kConstructTiles[] =
     { "Surface",     "Cone Sheet",    ConstructGlyph::Cone,            ""  },
     { "Surface",     "Torus Sheet",   ConstructGlyph::Torus,           ""  },
     { "Surface",     "Patch",         ConstructGlyph::Patch,           ""  },
+    { "Reference",   "XY Workplane",  ConstructGlyph::Plane,           ""  },
+    { "Reference",   "XZ Workplane",  ConstructGlyph::Plane,           ""  },
+    { "Reference",   "YZ Workplane",  ConstructGlyph::Plane,           ""  },
+    { "Sketch Draw", "Aircraft Rib",  ConstructGlyph::Spline,          ""  },
 };
 constexpr uint32_t kConstructTileCount = static_cast<uint32_t>(sizeof(kConstructTiles) / sizeof(kConstructTiles[0]));
 
@@ -54,7 +58,7 @@ constexpr uint32_t kConstructTileCount = static_cast<uint32_t>(sizeof(kConstruct
 //    person can see at once and move afterwards. An empty string means the tile does not exist.
 std::string ConstructCommand(uint32_t Index, double X, double Y) noexcept
 {
-    char Line[640];
+    char Line[1280];
     switch (Index)
     {
     case 0:  std::snprintf(Line, sizeof(Line), "plane (%.3f,%.3f,0) 1.4 1.4", X - 0.7, Y - 0.7); break;
@@ -91,6 +95,28 @@ std::string ConstructCommand(uint32_t Index, double X, double Y) noexcept
                                       X + (Column - 1) * 0.7, Y + (Row - 1) * 0.7, (Row == 1 && Column == 1) ? 0.5 : 0.0);
         break;
     }
+    case 22: std::snprintf(Line, sizeof(Line), "workplane xy"); break;
+    case 23: std::snprintf(Line, sizeof(Line), "workplane xz"); break;
+    case 24: std::snprintf(Line, sizeof(Line), "workplane yz"); break;
+    case 25:
+        // A real aircraft wing-rib sketch on the vertical XZ workplane: cambered closed skin, three lightening holes,
+        // a rounded rear spar slot and a construction chord. It remains editable as six ordinary sketch figures.
+        std::snprintf(Line, sizeof(Line),
+            "workplane xz; "
+            "line (%.3f,%.3f) (%.3f,%.3f) --construction --name=RibChord; "
+            "circle (%.3f,%.3f) 0.45 --name=LighteningA; "
+            "circle (%.3f,%.3f) 0.55 --name=LighteningB; "
+            "circle (%.3f,%.3f) 0.40 --name=LighteningC; "
+            "slot (%.3f,%.3f) (%.3f,%.3f) 0.18 --name=RearSpar; "
+            "spline (%.3f,%.3f) (%.3f,%.3f) (%.3f,%.3f) (%.3f,%.3f) (%.3f,%.3f) "
+            "(%.3f,%.3f) (%.3f,%.3f) (%.3f,%.3f) (%.3f,%.3f) (%.3f,%.3f) --closed --name=AircraftRib",
+            X - 4.5, Y, X + 4.5, Y,
+            X - 2.1, Y, X - 0.1, Y, X + 1.9, Y,
+            X + 2.8, Y - 0.15, X + 3.6, Y - 0.15,
+            X - 4.5, Y, X - 3.5, Y + 0.55, X - 1.5, Y + 0.85, X + 1.5, Y + 0.75,
+            X + 3.5, Y + 0.35, X + 4.5, Y, X + 3.5, Y - 0.18, X + 1.5, Y - 0.32,
+            X - 1.5, Y - 0.42, X - 3.5, Y - 0.30);
+        break;
     default: return std::string();
     }
     return std::string(Line);
@@ -285,10 +311,19 @@ bool SolidArcEditorHost::PlaceConstruct(ConsoleHost& Host, uint32_t Tile) noexce
     const size_t Before = Host.AllFigures().size();
     const bool   Done   = Host.Execute(Command);
     ++ConstructPlaced_;
-    if (Done && Host.AllFigures().size() > Before)
+    if (!Done) return false;
+    if (Host.AllFigures().size() > Before)
     {
         ConstructPlacedName_ = Host.AllFigures().back().Name;
         Host.Execute("select " + ConstructPlacedName_);
+        if (Tile == 25u)
+            Toasts_.Push("Aircraft rib sketch created", "XZ workplane · closed skin · 3 lightening holes · rear spar slot");
+        return true;
+    }
+    if (Tile >= 22u && Tile <= 24u)
+    {
+        ConstructPlacedName_ = Tile == 22u ? "XY Workplane" : (Tile == 23u ? "XZ Workplane" : "YZ Workplane");
+        Toasts_.Push("Active workplane changed", ConstructPlacedName_ + " · global coordinates remain right-handed Z-up");
         return true;
     }
     return false;

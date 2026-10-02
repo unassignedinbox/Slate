@@ -119,7 +119,7 @@ GameSources=(
     Engine/ContentInterchange/MaterialIndex.cpp
     Engine/DeviceExchange/InputExchange.cpp
     Projects/Project-Zero/Source/RayTracingSolver.cpp
-    Projects/Project-Zero/Source/FlyThroughSolver.cpp
+    Engine/Host/FlyThroughSolver.cpp
     Engine/GeometricRaster/CameraProjection.cpp
     Engine/DeviceExchange/OrientationClassifier.cpp
     "$ImguiRoot/imgui.cpp"
@@ -128,21 +128,25 @@ GameSources=(
     "$ImguiRoot/imgui_widgets.cpp"
 )
 
-if ! "$Compiler" -std=c++20 -O2 -Wall -Wextra -Wno-unused-function -DFRONTIER_DEVELOPMENT \
-    -I"$ImguiRoot" -I. -IEngine/Editor -IEngine/DisplayPresentation -I"$TomlRoot" \
-    -IExhibits/Workbench/Editor -IExhibits/Workbench/Editor/Counterparts -pthread \
-    "${GameSources[@]}" -o "$Work/EditorProof" >/tmp/EditorProof.visual.build 2>&1; then
-    echo "[EditorVisualProof] RED — game editor proof did not compile"
-    sed 's/^/    /' /tmp/EditorProof.visual.build | head -40
-    exit 1
-fi
+if [ "${SOLIDARC_ONLY:-0}" != "1" ]; then
+    if ! "$Compiler" -std=c++20 -O2 -Wall -Wextra -Wno-unused-function -DFRONTIER_DEVELOPMENT \
+        -I"$ImguiRoot" -I. -IEngine/Editor -IEngine/DisplayPresentation -I"$TomlRoot" \
+        -IExhibits/Workbench/Editor -IExhibits/Workbench/Editor/Counterparts -pthread \
+        "${GameSources[@]}" -o "$Work/EditorProof" >/tmp/EditorProof.visual.build 2>&1; then
+        echo "[EditorVisualProof] RED — game editor proof did not compile"
+        sed 's/^/    /' /tmp/EditorProof.visual.build | head -40
+        exit 1
+    fi
 
-if ! "$Work/EditorProof" >/tmp/EditorProof.visual.run 2>&1; then
-    echo "[EditorVisualProof] RED — game editor proof did not run"
-    sed 's/^/    /' /tmp/EditorProof.visual.run | head -80
-    exit 1
+    if ! "$Work/EditorProof" >/tmp/EditorProof.visual.run 2>&1; then
+        echo "[EditorVisualProof] RED — game editor proof did not run"
+        sed 's/^/    /' /tmp/EditorProof.visual.run | head -80
+        exit 1
+    fi
+    sed 's/^/    /' /tmp/EditorProof.visual.run | head -30
+else
+    echo "[EditorVisualProof] SOLIDARC_ONLY — skipping unrelated Project-Zero editor proof"
 fi
-sed 's/^/    /' /tmp/EditorProof.visual.run | head -30
 
 Root="Editor/AuthoringTools/Modelling/SolidArc"
 
@@ -159,6 +163,8 @@ Sources=(
     "$Root/Kernel/ConstraintGraph.cpp"
     "$Root/Kernel/MirrorSolver.cpp"
     "$Root/Kernel/BlendSolver.cpp"
+    "$Root/Kernel/TweakSolver.cpp"
+    "$Root/Kernel/FaceEditSolver.cpp"
     "$Root/Presentation/SoftwareRaster.cpp"
     "$Root/Presentation/ScenePresentation.cpp"
     "$Root/Interaction/CameraProjection.cpp"
@@ -181,9 +187,37 @@ Sources=(
     Engine/Editor/ViewportPanel.cpp
     Engine/Editor/InspectorPanel.cpp
     Engine/Editor/SolidArcInspectorPanel.cpp
+    Engine/Editor/TyreInspectorPanel.cpp
+    Engine/Editor/FogInspectorPanel.cpp
+    Engine/Editor/WeatherInspectorPanel.cpp
+    Engine/Editor/CloudsInspectorPanel.cpp
+    Engine/Editor/SunInspectorPanel.cpp
+    Engine/Editor/LensFlareInspectorPanel.cpp
+    Engine/Editor/AtmosphereSkyInspectorPanel.cpp
+    Engine/Editor/MoonInspectorPanel.cpp
+    Engine/Editor/StarsInspectorPanel.cpp
+    Engine/Editor/CameraInspectorPanel.cpp
     Engine/DisplayPresentation/GlyphSpace.cpp
     Engine/DisplayPresentation/VectorCodec.cpp
     Engine/DisplayPresentation/PixelSpace.cpp
+    Engine/DisplayPresentation/ControlCentreHost.cpp
+    Engine/DisplayPresentation/NotificationQueue.cpp
+    Engine/DisplayPresentation/MotionIntegrator.cpp
+    Engine/DisplayPresentation/ThemeStructure.cpp
+    Engine/DisplayPresentation/ControlKit.cpp
+    Engine/DisplayPresentation/AppearanceInspector.cpp
+    Engine/DisplayPresentation/ConfigurationInspector.cpp
+    Engine/DisplayPresentation/DialogueHost.cpp
+    Engine/DisplayPresentation/FidelityClassifier.cpp
+    Engine/DisplayPresentation/TypefaceRegistry.cpp
+    Engine/DisplayPresentation/FontCodec.cpp
+    Engine/DisplayPresentation/IconPresentation.cpp
+    Exhibits/Workbench/Editor/IconArtProofStub.cpp
+    Engine/DisplayPresentation/MaterialInspector.cpp
+    Engine/ContentInterchange/AssetResolution.cpp
+    Engine/ContentInterchange/MaterialIndex.cpp
+    Engine/DeviceExchange/InputExchange.cpp
+    Engine/GeometricRaster/StarCatalogueIndex.cpp
     "$ImguiRoot/imgui.cpp"
     "$ImguiRoot/imgui_draw.cpp"
     "$ImguiRoot/imgui_tables.cpp"
@@ -191,7 +225,7 @@ Sources=(
 )
 
 if ! "$Compiler" -std=c++20 -O2 -Wall -Wextra -Wpedantic -Wno-unused-function -DFRONTIER_DEVELOPMENT \
-    -I"$ImguiRoot" -I. -IEngine/Editor -IEngine/DisplayPresentation -IExhibits/Workbench/Editor \
+    -I"$ImguiRoot" -I"$TomlRoot" -I. -IEngine -IEngine/Editor -IEngine/DisplayPresentation -IExhibits/Workbench/Editor \
     -I"$Root" -I"$Root/Presentation" \
     "${Sources[@]}" -o "$Work/SolidArcEditorProof" >/tmp/SolidArcEditorProof.build 2>&1; then
     echo "[EditorVisualProof] RED — SolidArc editor proof did not compile"
@@ -204,12 +238,12 @@ if ! "$Work/SolidArcEditorProof" >/tmp/SolidArcEditorProof.run 2>&1; then
     sed 's/^/    /' /tmp/SolidArcEditorProof.run | head -40
     exit 1
 fi
-sed 's/^/    /' /tmp/SolidArcEditorProof.run | head -20
+head -20 /tmp/SolidArcEditorProof.run | sed 's/^/    /'
 
 GameProof="Exhibits/Gallery/Editor/EditorProof_Inspector.png"
 SolidArcProof="Exhibits/Gallery/Editor/EditorProof_SolidArc.png"
 SolidArcMenuProof="Exhibits/Gallery/Editor/EditorProof_SolidArc_Menu.png"
-if [ ! -s "$GameProof" ]; then
+if [ "${SOLIDARC_ONLY:-0}" != "1" ] && [ ! -s "$GameProof" ]; then
     echo "[EditorVisualProof] RED — missing canonical game editor proof: $GameProof"
     echo "    Run Exhibits/Workbench/Editor/CheckEditorProof.sh when full editor proof dependencies are available."
     exit 1

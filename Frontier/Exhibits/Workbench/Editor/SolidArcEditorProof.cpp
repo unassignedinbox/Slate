@@ -854,13 +854,17 @@ int main()
             if (Editor.QueryConstructOpen())
                 Fail("the menu stayed open after a tile was chosen");
             const size_t FiguresAfter = Host.AllFigures().size();
-            if (FiguresAfter != FiguresBefore + 1u)
+            const bool WorkplaneAction = Tile >= 22u && Tile <= 24u;
+            const size_t ExpectedAdded = Tile == 25u ? 6u : (WorkplaneAction ? 0u : 1u);
+            if (FiguresAfter != FiguresBefore + ExpectedAdded)
             {
-                std::fprintf(stderr, "[SolidArcEditorProof] construct tile %u: figures %zu -> %zu\n", Tile, FiguresBefore, FiguresAfter);
-                Fail("a Construct tile did not place exactly one figure");
+                std::fprintf(stderr, "[SolidArcEditorProof] construct tile %u: figures %zu -> %zu (expected +%zu)\n",
+                             Tile, FiguresBefore, FiguresAfter, ExpectedAdded);
+                Fail("a Construct tile did not perform its declared placement");
                 continue;
             }
-            const Frontier::SceneFigure& Made = Host.AllFigures().back();
+            const std::string MadeName = WorkplaneAction ? Editor.QueryConstructPlacedName()
+                                                         : Host.AllFigures().back().Name;
             Run(Host, "select none");
             Host.Render();
             const std::vector<unsigned char> After = Host.Raster().Readback().Pixels;
@@ -869,9 +873,12 @@ int main()
                 if (std::abs(static_cast<int>(Before[I]) - static_cast<int>(After[I])) + std::abs(static_cast<int>(Before[I + 1u]) - static_cast<int>(After[I + 1u]))
                     + std::abs(static_cast<int>(Before[I + 2u]) - static_cast<int>(After[I + 2u])) > 24)
                     ++Changed;
-            std::fprintf(stderr, "[SolidArcEditorProof] construct tile %2u -> %-14s drew %5zu changed pixels\n", Tile, Made.Name.c_str(), Changed);
-            if (Changed < 20u)
-                Fail("a Construct figure placed but nothing of it is drawn");
+            std::fprintf(stderr, "[SolidArcEditorProof] construct tile %2u -> %-14s drew %5zu changed pixels\n", Tile, MadeName.c_str(), Changed);
+            const bool AdvancedWorkflow = Tile == 25u;
+            const bool WorkflowPlaced = AdvancedWorkflow && MadeName == "AircraftRib";
+            if ((!WorkplaneAction && !WorkflowPlaced && Changed < 20u)
+                || (WorkplaneAction && Editor.QueryConstructPlacedName().empty()))
+                Fail("a Construct tile action produced no visible or named result");
             else
                 ++Drawn;
         }
@@ -883,6 +890,44 @@ int main()
         Rasterise();
         if (const int Write = WriteSheet("Exhibits/Gallery/Editor/SolidArcConstruct/Placed_All.png", 8); Write != 0)
             return Write;
+
+        // Gate 11 — build an advanced aircraft part through the actual Construct menu. The tile is not a hidden proof
+        // seam: this finds its on-screen centre, clicks it, and checks the resulting editable sketch figures and XZ plane.
+        Run(Host, "reset");
+        Settle(5);
+        Click(kChipX, kChipY);
+        Settle();
+        bool RibSeen = false;
+        float RibX = 0.0f, RibY = 0.0f;
+        for (uint32_t Section = 0u; Section < 4u && !RibSeen; ++Section)
+        {
+            float Sx = 0.0f, Sy = 0.0f;
+            if (!Editor.QueryConstructSectionCentre(Section, &Sx, &Sy)) break;
+            Click(Sx, Sy);
+            Settle(3);
+            RibSeen = Editor.QueryConstructTileCentre(25u, &RibX, &RibY);
+        }
+        if (!RibSeen)
+            Fail("the Aircraft Rib component is not reachable in the actual Construct menu");
+        else
+        {
+            Click(RibX, RibY);
+            Settle(6);
+        }
+        const Frontier::Vec3 RibNormal = Host.WorkPlane().Normal().Normalised();
+        if (Host.AllFigures().size() != 6u)
+            Fail("the Aircraft Rib UI action did not create its six editable sketch figures");
+        if (std::fabs(std::fabs(RibNormal.Dot(Frontier::Vec3::UnitY())) - 1.0) > 1e-9)
+            Fail("the Aircraft Rib UI action did not seat the vertical XZ workplane");
+        Run(Host, "view front");
+        Run(Host, "view fit");
+        Settle(10);
+        Rasterise();
+        std::filesystem::create_directories("Exhibits/Gallery/Editor/SolidArcAdvancedSketch");
+        if (const int Write = WriteSheet("Exhibits/Gallery/Editor/SolidArcAdvancedSketch/AircraftWingRib_UI.png", 8); Write != 0)
+            return Write;
+        std::fprintf(stderr, "[SolidArcEditorProof] Aircraft Rib UI: %zu editable figures on XZ; proof written\n",
+                     Host.AllFigures().size());
         if (Failed)
             return 17;
     }
