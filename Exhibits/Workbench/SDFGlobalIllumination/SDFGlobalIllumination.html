@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#06090d">
+    <meta name="theme-color" content="#08090a">
     <title>Slate — Baked Global Distance Field GI</title>
     <link rel="stylesheet" href="SDFGlobalIllumination.css">
 </head>
@@ -11,48 +11,80 @@
     <canvas id="PresentationCanvas"></canvas>
     <div id="CanvasError" class="Error" hidden></div>
 
-    <aside class="TitleCard">
-        <strong>BAKED GLOBAL DISTANCE FIELD GI</strong>
-        <span>Lumen-style software SDF tracing · GI phase only</span>
-        <span class="Deferred">SDF shadows intentionally deferred</span>
-    </aside>
+    <nav class="DashboardNav" aria-label="Render views">
+        <div class="BrandMark" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <button class="NavMode Active" data-mode="0">Lighting</button>
+        <button class="NavMode" data-mode="1">Global GI</button>
+        <button class="NavMode" data-mode="2">Direct</button>
+        <button class="NavMode" data-mode="3">Trace cost</button>
+    </nav>
 
     <aside class="Controls">
-        <div class="ControlTitle">GLOBAL SDF</div>
-        <label>
-            Output
-            <select id="DisplayMode">
-                <option value="0">Combined</option>
-                <option value="1">SDF indirect only</option>
-                <option value="2">Direct (no shadows)</option>
-                <option value="3">Sphere-trace cost</option>
-            </select>
-        </label>
-        <label>
-            GI rays <output id="RayOutput">4</output>
-            <input id="RayCount" type="range" min="1" max="4" step="1" value="4">
-        </label>
-        <label>
-            GI intensity <output id="GiOutput">1.25</output>
-            <input id="GiIntensity" type="range" min="0" max="3" step="0.05" value="1.25">
-        </label>
-        <label>
-            Trace distance <output id="DistanceOutput">22 m</output>
-            <input id="TraceDistance" type="range" min="4" max="30" step="1" value="22">
-        </label>
-        <label>
-            Sun strength <output id="SunOutput">3.2</output>
-            <input id="SunStrength" type="range" min="0" max="6" step="0.1" value="3.2">
-        </label>
-        <label class="Check"><input id="AnimateSun" type="checkbox" checked> Animate radiance injection</label>
-        <button id="ResetCamera" type="button">Reset camera</button>
-        <div class="Architecture">
-            <b>96×48×96</b> baked signed-distance field<br>
-            <b>7</b> exact analytic mip levels<br>
-            <b>RGBA16F</b> global surface-radiance cache<br>
-            <b>½ res</b> world-space sphere tracing
+        <header class="PanelHeader">
+            <div>
+                <span class="Eyebrow">SOFTWARE RAY TRACING</span>
+                <h1>Global SDF</h1>
+            </div>
+            <span class="LiveState"><i></i> Live</span>
+        </header>
+
+        <div class="MetricGrid">
+            <article><span>Field</span><b>96×48×96</b><small>7 distance levels</small></article>
+            <article><span>Tracing</span><b id="RayMetric">6 rays</b><small>world-locked</small></article>
+            <article><span>Cache</span><b>RGBA16F</b><small>surface radiance</small></article>
+            <article><span>Visibility</span><b>Global</b><small>no depth hits</small></article>
         </div>
-        <div id="StatusText" class="Status">Preparing WebGPU…</div>
+
+        <section class="ControlSection">
+            <div class="SectionHeading"><span>Transport</span><span class="SectionRule"></span></div>
+            <label>
+                <span>Output</span>
+                <select id="DisplayMode">
+                    <option value="0">Combined lighting</option>
+                    <option value="1">SDF indirect only</option>
+                    <option value="2">Direct · no shadows</option>
+                    <option value="3">Sphere-trace cost</option>
+                </select>
+            </label>
+            <label class="RangeControl">
+                <span>GI rays</span><output id="RayOutput">6</output>
+                <input id="RayCount" type="range" min="1" max="8" step="1" value="6">
+            </label>
+            <label class="RangeControl">
+                <span>GI intensity</span><output id="GiOutput">0.90</output>
+                <input id="GiIntensity" type="range" min="0" max="2.5" step="0.05" value="0.90">
+            </label>
+            <label class="RangeControl">
+                <span>Trace distance</span><output id="DistanceOutput">22 m</output>
+                <input id="TraceDistance" type="range" min="4" max="30" step="1" value="22">
+            </label>
+            <label class="RangeControl">
+                <span>Sun strength</span><output id="SunOutput">3.2</output>
+                <input id="SunStrength" type="range" min="0" max="6" step="0.1" value="3.2">
+            </label>
+        </section>
+
+        <section class="RuntimeCard">
+            <label class="SwitchRow">
+                <span><b>Animate injection</b><small>Rotate cached source radiance</small></span>
+                <input id="AnimateSun" type="checkbox">
+                <i></i>
+            </label>
+            <div class="RuntimeLine"><span>Trace origin</span><b>Raster receiver</b></div>
+            <div class="RuntimeLine"><span>Geometry hits</span><b>Global SDF only</b></div>
+            <div class="RuntimeLine Warning"><span>SDF shadows</span><b>Next phase</b></div>
+        </section>
+
+        <footer class="PanelFooter">
+            <button id="ResetCamera" type="button">Reset camera</button>
+            <div id="StatusText" class="Status">Preparing WebGPU…</div>
+        </footer>
+    </aside>
+
+    <aside class="TitleCard">
+        <span class="TitleIndex">01 / GLOBAL TRANSPORT</span>
+        <strong>BAKED DISTANCE FIELD GI</strong>
+        <span>World-space sphere tracing with a dynamic radiance cache.</span>
     </aside>
 
     <script type="module" src="SDFGlobalIllumination.js"></script>

@@ -31,8 +31,12 @@ fn sampleDistance(worldPosition : vec3f, level : f32) -> f32 {
     return textureSampleLevel(globalDistanceField, linearSampler, fieldUv(worldPosition), level).r;
 }
 
-fn hash12(value : vec2u) -> f32 {
-    var state = value.x * 1664525u + value.y * 1013904223u + 0x9e3779b9u;
+fn worldHash(value : vec3i, seed : u32) -> f32 {
+    let bits = bitcast<vec3u>(value);
+    var state = bits.x * 1664525u
+        + bits.y * 1013904223u
+        + bits.z * 747796405u
+        + seed;
     state ^= state >> 16u;
     state *= 2246822519u;
     state ^= state >> 13u;
@@ -113,22 +117,33 @@ fn ComputeMain(@builtin(global_invocation_id) id : vec3u) {
 
     let normal = normalize(normalSample.xyz);
     let basis = tangentBasis(normal);
-    let rayCount = clamp(u32(parameters.settings.z + 0.5), 1u, 4u);
-    let frame = u32(parameters.settings.w + 0.5);
+    let rayCount = clamp(u32(parameters.settings.z + 0.5), 1u, 8u);
+    // The sequence is keyed to a coarse world-space cell, not the current
+    // pixel. Orbiting the camera therefore cannot reshuffle GI directions over
+    // a stationary surface as a screen-space noise pattern would.
+    let worldKey = vec3i(floor(
+        (positionSample.xyz - parameters.boundsMinimum.xyz)
+        / (parameters.settings.y * 1.75)
+    ));
     let noise = vec2f(
-        hash12(id.xy + vec2u(frame * 17u, frame * 29u)),
-        hash12(id.yx + vec2u(frame * 43u + 11u, frame * 7u + 3u))
+        worldHash(worldKey, 0x9e3779b9u),
+        worldHash(worldKey, 0x7f4a7c15u)
     );
     var sum = vec3f(0.0);
     var stepSum = 0.0;
     let origin = positionSample.xyz + normal * parameters.settings.y * 1.9;
-    for (var ray = 0u; ray < 4u; ray += 1u) {
+    for (var ray = 0u; ray < 8u; ray += 1u) {
         if (ray >= rayCount) {
             break;
         }
         let direction = normalize(basis * cosineDirection(ray, rayCount, noise));
         let result = traceGlobalDistanceField(origin, direction);
-        sum += result.radiance;
+        // A tiny bright emitter can otherwise dominate a one-in-few sample and
+        // appear as a white firefly. This is a bounded radiance estimator, not
+        // a temporal screen-space clamp.
+        let peak = max(result.radiance.r, max(result.radiance.g, result.radiance.b));
+        let boundedRadiance = result.radiance * min(1.0, 2.0 / max(peak, 1e-4));
+        sum += boundedRadiance;
         stepSum += result.steps;
     }
 

@@ -14,6 +14,8 @@ const SunStrength = document.getElementById("SunStrength");
 const SunOutput = document.getElementById("SunOutput");
 const AnimateSun = document.getElementById("AnimateSun");
 const ResetCamera = document.getElementById("ResetCamera");
+const RayMetric = document.getElementById("RayMetric");
+const NavModes = [...document.querySelectorAll(".NavMode")];
 
 const State = {
     yaw: 0.28,
@@ -290,16 +292,32 @@ async function validateShader(module, label)
 
 function connectControls()
 {
+    const syncMode = () =>
+    {
+        for (const button of NavModes)
+            button.classList.toggle("Active", button.dataset.mode === DisplayMode.value);
+    };
     const update = () =>
     {
         RayOutput.value = RayCount.value;
+        RayMetric.textContent = `${RayCount.value} rays`;
         GiOutput.value = Number(GiIntensity.value).toFixed(2);
         DistanceOutput.value = `${TraceDistance.value} m`;
         SunOutput.value = Number(SunStrength.value).toFixed(1);
     };
     for (const control of [RayCount, GiIntensity, TraceDistance, SunStrength]) control.addEventListener("input", update);
+    for (const button of NavModes)
+    {
+        button.addEventListener("click", () =>
+        {
+            DisplayMode.value = button.dataset.mode;
+            syncMode();
+        });
+    }
+    DisplayMode.addEventListener("change", syncMode);
     ResetCamera.addEventListener("click", resetCamera);
     update();
+    syncMode();
 
     Canvas.addEventListener("pointerdown", (event) =>
     {

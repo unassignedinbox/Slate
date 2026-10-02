@@ -11,11 +11,13 @@ This is a new exhibit. It does not reuse the surfel, LPV, EEVEE probe, or screen
 3. The browser uploads those baked volumes as one mipmapped `r16float` 3D texture and one `rgba8unorm` 3D texture.
 4. A compute pass identifies the narrow SDF surface band, derives its normal from the global field, and writes direct/emissive outgoing radiance into a `96×48×96 RGBA16F` global surface-radiance cache.
 5. A conventional raster G-buffer supplies only the current receiver position, normal, and albedo. It is not searched for lighting hits.
-6. At half resolution, one to four cosine-distributed rays per receiver sphere-trace the global SDF. Distance-adaptive mip selection accelerates empty-space traversal; candidate hits return to mip zero before acceptance.
+6. At half resolution, one to eight cosine-distributed rays per receiver sphere-trace the global SDF. Their sequence is keyed to coarse world-space cells so camera motion cannot reshuffle a pixel-space noise pattern. Distance-adaptive mip selection accelerates empty-space traversal; candidate hits return to mip zero before acceptance.
 7. Accepted world-space hits sample the global surface-radiance cache. Rays leaving the baked world sample a low-intensity environment.
 8. The full-resolution composite multiplies that incoming indirect radiance by receiver albedo and combines it with the raster direct term.
 
-The tracing directions are deterministic by default. This avoids hiding noise behind a screen-space temporal filter while the core global-field behaviour is being evaluated.
+The tracing directions are deterministic and world-locked by default. A bounded incoming-radiance estimator suppresses isolated emissive fireflies without temporal history. This avoids hiding noise behind a screen-space temporal filter while the core global-field behaviour is being evaluated.
+
+The camera G-buffer supplies the visible receiver position, exactly as a deferred renderer must, but it is never searched for ray hits. Every secondary hit, miss, and occlusion decision comes from the baked global distance field; the surface-radiance cache supplies lighting only after a GDF hit has been validated.
 
 ## Relationship to Lumen
 
@@ -37,7 +39,7 @@ This boundary is explicit in the UI through **Direct (no shadows)**. The next ph
 ## Controls
 
 - **Output** — combined lighting, SDF indirect only, unshadowed direct only, or normalized sphere-trace cost.
-- **GI rays** — one to four half-resolution cosine rays per receiver.
+- **GI rays** — one to eight half-resolution, world-locked cosine rays per receiver.
 - **GI intensity** — scales only the SDF-derived indirect contribution.
 - **Trace distance** — maximum world-space sphere-trace reach.
 - **Sun strength** — updates raster direct light and the global surface-radiance cache.
