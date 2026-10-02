@@ -1,0 +1,27 @@
+[EditorDocking] Project-Zero editor layout
+  PASS  uses the new editor dockspace id, so stale two-column .ini data cannot keep the old layout
+  PASS  splits left and right, producing outliner / viewport / inspector columns
+  PASS  docks Outliner left, Viewport centre, Inspector right
+  PASS  Inspector is no longer stacked over the Outliner
+  PASS  viewport is an opaque docked window, not a fullscreen backing plate
+  PASS  development editor disables the fullscreen scene backdrop, so the render appears only inside the viewport panel
+  PASS  OutlinerPanel, ViewportPanel and InspectorPanel can be retitled for SolidArc without duplicating panel code
+  PASS  Project-Zero owns an explicit game filter catalogue
+
+[EditorDocking] SolidArc editor shell
+  PASS  SolidArc editor host and outliner adapter exist
+  PASS  SolidArc reuses the engine OutlinerPanel, ViewportPanel and InspectorPanel
+  PASS  SolidArc seats distinct outliner, viewport and inspector window titles
+  PASS  SolidArc docks outliner left, viewport centre and inspector right
+  PASS  SolidArc viewport is a docked window, not a fullscreen backing plate
+  PASS  SolidArc document rows use the shared EditorInstance outliner feed and write visibility back
+  PASS  SolidArc outliner exposes its own colour-coded CAD folders (Lines, Profiles, Bodies, Surfaces, Construction, Dimensions, Constraints) instead of game-engine categories
+  PASS  SolidArc draws no world-origin triad, and the transform gizmo culls back faces instead of painting winding faults
+  PASS  SolidArc inspector uses its own glass cards with Position/Rotation/Scale XYZ rows and sliders, and the outliner draws flat two-tone folders; the game editor keeps its own
+  PASS  SolidArc uses a CAD-specific filter catalogue instead of the game editor's Lights/Sky/Geometry/Camera vocabulary
+  PASS  SolidArc outliner seats the web category colour coding for lines, profiles, bodies, surfaces, construction and dimensions
+  PASS  SolidArc inspector sheet exposes CAD identity, geometry, bounds and parameter groups
+  PASS  SolidArc viewport top rail carries the Construct chip only, and the corner orbit compass is not drawn
+  PASS  SolidArc optional ImGui editor shell syntax-compiles against ExternalPackages/imgui
+
+[EditorDocking] GREEN — game editor and SolidArc use dedicated docked viewport windows, and SolidArc uses shared outliner/inspector panels with CAD chrome

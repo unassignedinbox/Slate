@@ -77,6 +77,13 @@ ConsoleHost::ConsoleHost(std::string ProofFolder, uint32_t Width, uint32_t Heigh
     RegisterInteraction();
 }
 
+void ConsoleHost::SeatSurface(uint32_t Width, uint32_t Height, uint32_t Samples) noexcept
+{
+    if (Width < 16u || Height < 16u) return;
+    Surface->AssignSamples(Samples);
+    if (Width != Surface->Width() || Height != Surface->Height()) Surface->Resize(Width, Height);
+}
+
 //------------------------------------------------------------------------------------------------------------------------
 //                                                  OUTPUT
 //------------------------------------------------------------------------------------------------------------------------
@@ -1160,6 +1167,45 @@ std::vector<SceneFigure*> ConsoleHost::ResolveMany(const CommandLine& C, size_t 
 //                                                  RENDER
 //------------------------------------------------------------------------------------------------------------------------
 
+uint64_t ConsoleHost::PictureSignature() const noexcept
+{
+    uint64_t Sum = 1469598103934665603ull;
+    auto Mix = [&](const void* Bytes, size_t Count)
+    {
+        const unsigned char* P = static_cast<const unsigned char*>(Bytes);
+        for (size_t I = 0; I < Count; ++I) { Sum ^= P[I]; Sum *= 1099511628211ull; }
+    };
+    auto Put = [&](auto Value) { Mix(&Value, sizeof Value); };
+    Put(Revision); Put(Surface->Width()); Put(Surface->Height()); Put(Surface->QuerySamples());
+    Put(HoverPick); Put(static_cast<int>(Mode)); Put(static_cast<int>(Shading)); Put(ShowControlCages); Put(ShowIsoCurves); Put(ShowDimensions); Put(GizmoShown);
+    // A tool preview and the gizmo's hovered grip follow the pointer, so the pointer belongs in the signature too.
+    Put(PointerX); Put(PointerY); Put(Tool.Active());
+    const ViewRecord Seen = View.ToViewRecord(Surface->Width(), Surface->Height(), 1.0);
+    Mix(Seen.ViewClip, sizeof Seen.ViewClip); Mix(Seen.EyePosition, sizeof Seen.EyePosition);
+    Mix(Backdrop, sizeof Backdrop);
+    for (const SceneFigure& Figure : Scene.Figures())
+    {
+        Put(Figure.Identity); Put(Figure.Hidden); Put(Figure.Selected); Put(Figure.Construction); Put(Figure.Matcap);
+        Mix(Figure.Tint, sizeof Figure.Tint);
+        Put(Figure.SelectedPoles.size()); Put(Figure.SelectedFaces.size()); Put(Figure.SelectedEdges.size());
+        const Box3 Reach = Figure.Bounds();
+        Put(Reach.Low.X); Put(Reach.Low.Y); Put(Reach.Low.Z); Put(Reach.High.X); Put(Reach.High.Y); Put(Reach.High.Z);
+    }
+    for (const SketchArea& Area : Scene.Areas()) { Put(Area.Identity); Put(Area.Selected); Put(Area.Filled); }
+    for (const DimensionEntry& Dimension : Dimensions) { Put(Dimension.Id); Put(Dimension.Hidden); Put(Dimension.Value); }
+    return Sum;
+}
+
+bool ConsoleHost::RenderIfChanged() noexcept
+{
+    const uint64_t Now = PictureSignature();
+    if (Now == DrawnSignature)
+        return false;
+    Render();
+    DrawnSignature = Now;
+    return true;
+}
+
 void ConsoleHost::Render() noexcept
 {
     Surface->BeginTarget(Backdrop);
@@ -1191,7 +1237,12 @@ void ConsoleHost::Render() noexcept
     for (const SceneFigure& Figure : Scene.Figures())
     {
         if (Figure.Hidden || Figure.Classification != FigureClassification::Curve) continue;
-        DrawRecord D = Figure.Selected ? ScenePresentation::Tinted(1.0f, 0.62f, 0.20f) : ScenePresentation::Tinted(0.92f, 0.94f, 0.97f);
+        // A sketch curve wears its outliner folder's colour: lines cyan, profiles green, construction violet.
+        const bool LineForm = Figure.Blueprint.Form == SceneFigure::ParametricForm::Line;
+        DrawRecord D = Figure.Selected     ? ScenePresentation::Tinted(1.0f, 0.62f, 0.20f)
+                     : Figure.Construction ? ScenePresentation::Tinted(0.71f, 0.55f, 1.0f)
+                     : LineForm            ? ScenePresentation::Tinted(0.31f, 0.85f, 0.88f)
+                                           : ScenePresentation::Tinted(0.20f, 0.78f, 0.35f);
         D.LineWidth = Figure.Selected ? 2.5f : 2.0f;
         D.Dashed = Figure.Construction;
         D.PickIdentity = SceneDocument::PickOf(Figure.Identity);
@@ -1217,7 +1268,6 @@ void ConsoleHost::Render() noexcept
         GizmoRig.AimAt(View);
         GizmoRig.Draw(*Surface, View, Surface->Width(), Surface->Height());
     }
-    ScenePresentation::DrawTriad(*Surface, View.OrthographicHalfHeight() * 0.12);
     Surface->EndTarget();
 }
 
@@ -4385,6 +4435,7 @@ void ConsoleHost::Register() noexcept
 
 bool ConsoleHost::Execute(std::string_view Line) noexcept
 {
+    ++Revision;
     // Hotkeys and `repeat` recurse into Execute. Persist the user-level instruction only: saving both that instruction
     // and its nested expansion would apply geometry twice when the document is reopened.
     const bool TopLevel = ExecuteDepth++ == 0;

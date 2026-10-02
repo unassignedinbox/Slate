@@ -1,0 +1,11 @@
+[BuildSourceList] CMake names 115 TUs for Project-Zero.exe, the PowerShell script 119
+  PASS  ① all 115 CMake-listed TUs exist on disk
+  PASS  ② all 119 PowerShell-listed TUs exist on disk
+  PASS  ③ every CMake-listed TU is in the PowerShell batch — the two build systems agree
+  PASS  ④ every engine/app TU without its own main() is in a build list or explicitly accounted for
+  PASS  ⑤ ShaderballPreview.cpp is built by both, with SHADERBALL_PREVIEW_LIB on both (so neither links a second main)
+  PASS  ⑥ the CPU reference names the same TUs in CMake, the Makefile and Construct.ps1
+  PASS  ⑥ …and Construct.ps1 agrees with CMake too
+  PASS  ⑦ Project-Dyno names the same TUs in CMake and its ToolchainSequence.ps1
+
+[BuildSourceList] GREEN — every hand-maintained source list names the same translation units

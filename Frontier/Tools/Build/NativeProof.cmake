@@ -12,6 +12,8 @@ add_executable(FrontierNativeProof
     Engine/Editor/OutlinerPanel.cpp
     Engine/Editor/ViewportPanel.cpp
     Engine/Editor/InspectorPanel.cpp
+    Engine/Editor/SolidArcInspectorPanel.cpp
+    Engine/Editor/TyreInspectorPanel.cpp
     Engine/Editor/ShadeTick.cpp
     Engine/DisplayPresentation/ControlCentreHost.cpp
     Engine/DisplayPresentation/PixelSpace.cpp

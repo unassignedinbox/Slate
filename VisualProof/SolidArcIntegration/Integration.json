@@ -1,0 +1,83 @@
+{
+  "date": "2026-10-02",
+  "source": {
+    "repository": "https://github.com/streamlinkinbox/Frontier",
+    "revision": "8dc202886599c5fa084fd0d60952b2a8b85f1598",
+    "patches": [
+      "SolidArcSelect/SolidArc_All_on_d91cd78.patch",
+      "SolidArcFilletFix/0001-SolidArc-fillet-cap-arc-direction.patch"
+    ],
+    "documents": "Vehicles/Liger/*.arc and Vehicles/Liger/SolidArc/*.arc"
+  },
+  "slateBase": "36cd3eb82efb93de4d9163e13bce1a6d4ad386ab",
+  "integration": [
+    "Applied the cumulative patch once; did not reapply its older component patches.",
+    "Preserved content-folder font loading while sharing editor style tokens.",
+    "Imported six journals and five render scripts under Project-Drive/Content/Vehicles/Liger; open paths are relative to Frontier/.",
+    "Linked SolidArc and tyre inspectors in the MSVC, CMake and headless source lists.",
+    "Checked the result of inspector-sheet construction; made label truncation explicit and enlarged count text storage for warning-clean optimized builds."
+  ],
+  "verification": {
+    "compiler": "g++ (Debian 12.2.0-14+deb12u1) 12.2.0",
+    "solidArcAndMergedEditorFlags": [
+      "-std=c++20",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Wpedantic",
+      "-Werror",
+      "-Wno-unused-function"
+    ],
+    "kernelSuites": 110,
+    "kernelChecks": 2732,
+    "kernelFailures": 0,
+    "solidArcNativeUiExit": 0,
+    "ligerDocumentsReplayed": 6,
+    "ligerRenderScriptExit": 0,
+    "sourceListChecksExit": 0,
+    "dockingChecksExit": 0
+  },
+  "limitations": {
+    "windowsMsvc": "Unavailable on this Linux worker. Source-list parity passed; a native Windows/Vulkan host build was not executed.",
+    "gameEditorUi": {
+      "baselineAndMergedFailuresIdentical": true,
+      "baselineFailureLines": [
+        "[EditorProof] [FAIL] the views menu never opened",
+        "[EditorProof] [FAIL] the views menu never posed snap 5",
+        "[EditorProof] [FAIL] the views menu never posed snap 1",
+        "[EditorProof] [FAIL] the views menu never posed snap 2",
+        "[EditorProof] [FAIL] the views menu never posed snap 3",
+        "[EditorProof] [FAIL] the views menu never posed snap 4",
+        "[EditorProof] [FAIL] the views menu never posed snap 6",
+        "[EditorProof] [FAIL] the views menu never posed snap 0",
+        "[EditorProof] [FAIL] the views menu never posed snap 0",
+        "[EditorProof] [FAIL] tab 2 never seated again",
+        "[EditorProof] [FAIL] tab 2 shut alongside tab 0",
+        "[EditorProof] [FAIL] tab 0 never seated again",
+        "[EditorProof] [FAIL] tab 1 never shut",
+        "[EditorProof] [FAIL] tab 0 shut alongside tab 1",
+        "[EditorProof] [FAIL] tab 2 shut alongside tab 1",
+        "[EditorProof] [FAIL] wrote Exhibits/Gallery/Editor/EditorProof_Tabs.png, but the sheet disagrees with its caption"
+      ],
+      "command": "python Exhibits/Workbench/FrontierMirror/RunSolidArcMirror.py --game-ui",
+      "note": "This optional suite returns nonzero; it is not counted as passing SolidArc verification."
+    },
+    "priorTyreUiCommit": "3a20621 was not present in the restored checkout or remote; this import is based on 36cd3eb."
+  },
+  "commands": [
+    "python Exhibits/Workbench/FrontierMirror/RunSolidArcMirror.py",
+    "bash Frontier/Tools/Build/CheckBuildSourceList.sh",
+    "bash Frontier/Tools/Build/CheckEditorDockingSolidArc.sh",
+    "CXX=<g++ -Werror wrapper> bash Frontier/Tools/Build/CheckSolidArc.sh"
+  ],
+  "sha256": {
+    "Verification.log": "3f2e1cbb6bb0af8ba027de9c158a32ac4753cc543bbc994c7a5da9a15d23f69b",
+    "EditorProof_SolidArc.png": "69f656e9698be276c0bb11da084fe5a7ed73adfbac4ef187badf7d0ef18964cf",
+    "Liger_RearQuarter.png": "684a5d1d53dded4990014ae959b8454dd30de7359b343c3201ccb1ffec92985e",
+    "KernelChecks.log": "9c8566aeb811bf7f5b6bdce1cd853e180dc21cffe527506cb8da1fb8b2f4af55",
+    "Build.log": "52c4a5e0ab0926c8eb873fca7d159061fac8a3804b76356c7d10cb30faf94c66",
+    "BuildSourceChecks.log": "b0bed41d288dccaa33fef6c999dc992443e19a851f9218452f27d543418070e2",
+    "DockingChecks.log": "89da54f4fe395b09e036887395872edcbee7fd17794000eba9b7c13d466974fc",
+    "GameEditorBaseline.log": "fb59c0833972deaac63f70ce224463b56a8eee7ffbf962effd3c1fb1032f23c6"
+  }
+}

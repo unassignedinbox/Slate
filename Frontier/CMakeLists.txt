@@ -211,6 +211,8 @@ set(FRONTIER_ENGINE_SOURCES
     Engine/Editor/OutlinerPanel.cpp
     Engine/Editor/ViewportPanel.cpp
     Engine/Editor/InspectorPanel.cpp
+    Engine/Editor/SolidArcInspectorPanel.cpp
+    Engine/Editor/TyreInspectorPanel.cpp
     Engine/Editor/SunInspectorPanel.cpp
     Engine/Editor/LensFlareInspectorPanel.cpp
     Engine/Editor/AtmosphereSkyInspectorPanel.cpp

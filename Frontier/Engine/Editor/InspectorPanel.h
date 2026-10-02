@@ -25,6 +25,9 @@ public:
     // Lets SolidArc seat this exact inspector beside Project-Zero without sharing the same ImGui title/id.
     void AssignWindowTitle(const char* Title) noexcept { WindowTitle_ = (Title != nullptr && Title[0] != '\0') ? Title : "Inspector"; }
 
+    // SolidArc seats its glass-card look on the empty state too; its sheets select it themselves by Appearance.
+    void AssignGlassCards(bool Glass) noexcept { GlassCards_ = Glass; }
+
     // The foot strip's live figures (realtime, triangle total); without a readout the strip prints its dashes.
     void AssignReadout(const EditorReadout* Readout) noexcept;
 
@@ -44,6 +47,7 @@ private:
     const EditorReadout* Readout_  = nullptr;
     const char*          WindowTitle_ = "Inspector";
 
+    bool     GlassCards_  = false;
     bool     CardShut_[8] = {};                        // false reads open; sheet cards, then the notes card
     uint32_t SheetFor_    = kNoEditorInstance;
     uint32_t NameFor_     = kNoEditorInstance;

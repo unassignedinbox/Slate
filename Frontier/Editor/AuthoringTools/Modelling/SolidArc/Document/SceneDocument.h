@@ -44,6 +44,7 @@ struct SceneFigure
     BrepBody     Body;                                                                  // valid when Classification == Body
     bool         Construction = false;                                                  // [-] drawn dashed, never rendered as solid
     bool         Hidden = false;                                                        // [-]
+    bool         Locked = false;                                                        // [-] the inspector's Locked cell: the Transform card refuses a locked figure
     bool         Selected = false;                                                      // [-]
     uint8_t      Matcap = 0;                                                            // [-] studio layer (Plasticity: one per whole)
     // Per-face material override (Frontier extension): face index → studio layer. Faces absent from the map fall back to

@@ -30,7 +30,7 @@ SOURCES = [
     "Exhibits/Workbench/Editor/EditorProof.cpp",
     # the editor itself
     "Engine/Editor/EditorHost.cpp", "Engine/Editor/ControlPanel.cpp", "Engine/Editor/OutlinerPanel.cpp",
-    "Engine/Editor/ViewportPanel.cpp", "Engine/Editor/InspectorPanel.cpp", "Engine/Editor/ShadeTick.cpp",
+    "Engine/Editor/ViewportPanel.cpp", "Engine/Editor/InspectorPanel.cpp", "Engine/Editor/SolidArcInspectorPanel.cpp", "Engine/Editor/TyreInspectorPanel.cpp", "Engine/Editor/ShadeTick.cpp",
     # the nine inspector pages InspectorPanel dispatches to (missing from the engine's own script)
     "Engine/Editor/SunInspectorPanel.cpp", "Engine/Editor/StarsInspectorPanel.cpp",
     "Engine/Editor/AtmosphereSkyInspectorPanel.cpp", "Engine/Editor/CameraInspectorPanel.cpp",

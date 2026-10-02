@@ -16,6 +16,7 @@
 #include "FogInspectorPanel.h"
 #include "WeatherInspectorPanel.h"
 #include "CameraInspectorPanel.h"
+#include "SolidArcInspectorPanel.h"
 #include <imgui_internal.h>   // ImGuiWindow: the SkipItems early-out
 
 #include <cctype>
@@ -123,9 +124,23 @@ void InspectorPanel::Record(EditorInstance* Picked, uint32_t PickedIndex, Editor
         }
     }
 
+    // Nothing picked, yet the sheet carries the document hero: the SolidArc inspector shows the document itself.
+    static EditorInstance DocumentRow;
+    if (Picked == nullptr && Sheet != nullptr && GlassCards_ && Sheet->Appearance == EditorSheetAppearance::SolidArc && Sheet->Hero.Active)
+    {
+        DocumentRow = EditorInstance{};
+        std::snprintf(DocumentRow.Label, sizeof(DocumentRow.Label), "SolidArc document");
+        DocumentRow.Symbol = EditorSymbol::None;
+        DocumentRow.Tint[0] = 1.0f; DocumentRow.Tint[1] = 0.706f; DocumentRow.Tint[2] = 0.329f;
+        Picked = &DocumentRow;
+    }
+
     if (Picked == nullptr || Sheet == nullptr)
     {
-        RecordEmpty();
+        if (GlassCards_)
+            RecordSolidArcEmpty(*Controls_);
+        else
+            RecordEmpty();
         const float Gap = Controls_->QueryFootTop() - ImGui::GetCursorScreenPos().y;
         if (Gap > 0.0f)
         {
@@ -136,6 +151,18 @@ void InspectorPanel::Record(EditorInstance* Picked, uint32_t PickedIndex, Editor
         return;
     }
 
+    if (Sheet->Appearance == EditorSheetAppearance::SolidArc)
+    {
+        // SolidArc's own glass-card sheet: header, tiles, transform rows. The folds persist in CardShut_.
+        ImGui::BeginChild("##solidarc-properties", ImVec2(0.0f, ImMax(0.0f, Controls_->QueryFootTop() - ImGui::GetCursorScreenPos().y)), false);
+        ImGui::PushID(static_cast<int>(PickedIndex));
+        RecordSolidArcInspector(*Controls_, *Picked, PickedIndex, *Sheet, CardShut_);
+        ImGui::PopID();
+        ImGui::EndChild();
+        RecordFooter(Picked);
+        if(!Embedded)ImGui::End();
+        return;
+    }
     if(Sheet->Appearance==EditorSheetAppearance::Tyre||Sheet->Appearance==EditorSheetAppearance::TyreTread
        ||Sheet->Appearance==EditorSheetAppearance::TyreLattice){
         ImGui::BeginChild("##tyre-properties",ImVec2(0,ImMax(0.f,Controls_->QueryFootTop()-ImGui::GetCursorScreenPos().y)),false);
@@ -323,7 +350,7 @@ void InspectorPanel::RecordIdent(EditorInstance* Picked, uint32_t PickedIndex) n
     }
     if (NameDone || NameEdited)
     {
-        std::snprintf(Picked->Label, sizeof(Picked->Label), "%s", NameText_);
+        std::snprintf(Picked->Label, sizeof(Picked->Label), "%.*s", int(sizeof(Picked->Label) - 1u), NameText_);
     }
 
     char CategoryUpper[24] = {};
@@ -586,7 +613,6 @@ void InspectorPanel::RecordStanding(EditorInstance* Picked, uint32_t PickedIndex
     float Y = Min.y + 72.0f;
 
     ImGui::PushFont(Small);
-    const ImVec2 TypeGlyph = Small->CalcTextSizeA(Small->LegacySize, FLT_MAX, 0.0f, "TYPE");
     Draw->AddText(ImVec2(BodyX, Y), kDim, "TYPE");
     ImGui::PopFont();
     ImGui::SetCursorScreenPos(ImVec2(ZoneX, Y));

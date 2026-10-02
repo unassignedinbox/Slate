@@ -1,0 +1,60 @@
+[EditorProof] typefaces: 0 families
+[EditorProof] traced the showcase: 480x300, 24 frames, 5994 triangles, 101 spans
+[EditorProof] faces seated: 4 of 4
+[EditorProof] outliner third: 174000 ink cells of 174000
+[EditorProof] viewport third: 330000 ink cells of 330000
+[EditorProof] inspector third: 173996 ink cells of 174000
+[EditorProof] tab edges: lower-left 15, upper-left 26, lower-right 120, upper-right 109
+[EditorProof] slant: left 11 px, right 11 px (sheet seats 14)
+[EditorProof] 315 glyph cells in the tab band
+[EditorProof] theme tints: 117 accent-bar cells, 11268 seated-row cells
+[EditorProof] shut console: 0 black cells in the command band
+[EditorProof] foot tops: outliner 673, viewport 673, inspector 675 (want 672, one line)
+[EditorProof] filter dropdown: 1650 ink cells
+[EditorProof] narrowed: 355 chip cells, 2211 ink cells, 731 camera-row ink cells
+[EditorProof] palette: 181823 stack cells, 17488 indigo cells
+[EditorProof] console bar: 17121 black cells
+[EditorProof] views menu: 0 black cells
+[EditorProof] [FAIL] the views menu never opened
+[EditorProof] view pick: snap 0 yaw 0.000 pitch 0.000 ortho 0 rev 0
+[EditorProof] [FAIL] the views menu never posed snap 5
+[EditorProof] view pick: snap 0 yaw 0.000 pitch 0.000 ortho 0 rev 0
+[EditorProof] [FAIL] the views menu never posed snap 1
+[EditorProof] view pick: snap 0 yaw 0.000 pitch 0.000 ortho 0 rev 0
+[EditorProof] [FAIL] the views menu never posed snap 2
+[EditorProof] view pick: snap 0 yaw 0.000 pitch 0.000 ortho 0 rev 0
+[EditorProof] [FAIL] the views menu never posed snap 3
+[EditorProof] view pick: snap 0 yaw 0.000 pitch 0.000 ortho 0 rev 0
+[EditorProof] [FAIL] the views menu never posed snap 4
+[EditorProof] view pick: snap 0 yaw 0.000 pitch 0.000 ortho 0 rev 0
+[EditorProof] [FAIL] the views menu never posed snap 6
+[EditorProof] view pick: snap 0 yaw 0.000 pitch 0.000 ortho 0 rev 0
+[EditorProof] [FAIL] the views menu never posed snap 0
+[EditorProof] view pick: snap 0 yaw 0.000 pitch 0.000 ortho 0 rev 0
+[EditorProof] [FAIL] the views menu never posed snap 0
+[EditorProof] gizmo tap: snap 3 yaw -1.571
+[EditorProof] gizmo drag: yaw -1.891 (was -1.571) snap 0 rev 9
+[EditorProof] wheel dolly: 3.960 (was 4.500)
+[EditorProof] inspector foot: top 675 (viewport 673), 231 bright cells
+[EditorProof] pull brand: 149 bright cells
+[EditorProof] pull slide: 640.0 -> 760.0
+[EditorProof] shade after pull tap: open
+[EditorProof] shade after grip tap: shut
+[EditorProof] shade after pull-down: open
+[EditorProof] shade after grip tap: shut
+[EditorProof] shade after tile pull-up: shut
+[EditorProof] add glyph hunts to 174 (seam 160.3)
+[EditorProof] add control: 19 bright cells
+[EditorProof] tab 2 after its mark: shut
+[EditorProof] add control seats at 160.3, 12.0
+[EditorProof] [FAIL] tab 2 never seated again
+[EditorProof] tab 0 after its mark: shut
+[EditorProof] [FAIL] tab 2 shut alongside tab 0
+[EditorProof] add control seats at 160.3, 12.0
+[EditorProof] [FAIL] tab 0 never seated again
+[EditorProof] tab 1 after its mark: open
+[EditorProof] [FAIL] tab 1 never shut
+[EditorProof] [FAIL] tab 0 shut alongside tab 1
+[EditorProof] [FAIL] tab 2 shut alongside tab 1
+[EditorProof] add control seats at 160.3, 12.0
+[EditorProof] [FAIL] wrote Exhibits/Gallery/Editor/EditorProof_Tabs.png, but the sheet disagrees with its caption

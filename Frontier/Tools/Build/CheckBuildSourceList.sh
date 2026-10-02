@@ -91,6 +91,14 @@ fi
 #    The allowlist exists so that "not linked into the exe" is a DECISION with a reason, never an omission. Anything
 #    here that gains a consumer must move into both lists.
 cat > "$Work/allow.txt" <<'ALLOW'
+Engine\Generators\Tyre\RimSpecification.cpp|authoring-only: linked by RunTyreGeneratorMirror.py, not yet hosted by Frontier.exe
+Engine\Generators\Tyre\TreadPatternRaster.cpp|authoring-only: linked by RunTyreGeneratorMirror.py, not yet hosted by Frontier.exe
+Engine\Generators\Tyre\TyreAppearanceSpecification.cpp|authoring-only: linked by RunTyreGeneratorMirror.py, not yet hosted by Frontier.exe
+Engine\Generators\Tyre\TyreGeneratorWindow.cpp|authoring-only: linked by RunTyreGeneratorMirror.py, not yet hosted by Frontier.exe
+Engine\Generators\Tyre\TyrePresetLibrary.cpp|authoring-only: linked by RunTyreGeneratorMirror.py, not yet hosted by Frontier.exe
+Engine\Generators\Tyre\TreadMeshSolver.cpp|geometry authoring: exercised by Exhibits/Workbench/Tyre/TreadMeshProof.cpp, not a runtime host consumer
+Engine\Generators\Tyre\TreadRegionSolver.cpp|geometry authoring: exercised by Exhibits/Workbench/Tyre/TreadMeshProof.cpp, not a runtime host consumer
+Engine\Generators\Tyre\TyreMeshStructure.cpp|geometry authoring: exercised by Exhibits/Workbench/Tyre/TreadMeshProof.cpp, not a runtime host consumer
 Engine\Editor\ConstructWorld.cpp|CPU authoring bridge linked by Projects/Project-Zero/Host/Makefile; not live GPU spawning
 Engine\GeometricRaster\VisibilityRaster.cpp|the CPU visibility mirror the shadow proofs read; no exe consumer yet
 Projects\Project-Zero\Source\RendererHost.cpp|linked into the separate Project-Zero-CpuReference target, not the showroom
