@@ -16,6 +16,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <sstream>
+#include <utility>
 
 namespace Frontier {
 
@@ -51,6 +53,7 @@ constexpr ViewportConstructTile kConstructTiles[] =
     { "Reference",   "XZ Workplane",  ConstructGlyph::Plane,           ""  },
     { "Reference",   "YZ Workplane",  ConstructGlyph::Plane,           ""  },
     { "Sketch Draw", "Aircraft Rib",  ConstructGlyph::Spline,          ""  },
+    { "Solid",       "Turbofan Engine", ConstructGlyph::Cylinder,       ""  },
 };
 constexpr uint32_t kConstructTileCount = static_cast<uint32_t>(sizeof(kConstructTiles) / sizeof(kConstructTiles[0]));
 
@@ -58,6 +61,48 @@ constexpr uint32_t kConstructTileCount = static_cast<uint32_t>(sizeof(kConstruct
 //    person can see at once and move afterwards. An empty string means the tile does not exist.
 std::string ConstructCommand(uint32_t Index, double X, double Y) noexcept
 {
+    if (Index == 26u)
+    {
+        // A high-detail, editable two-spool turbofan assembly. The fan blades are real extruded closed profiles rather
+        // than a texture; the nacelle/core are analytic sheets, while rings, hub, spinner, shaft, struts and pylon remain
+        // individually selectable solids. Its shaft follows +Y, preserving the application's global right-handed Z-up frame.
+        std::ostringstream Command;
+        Command.setf(std::ios::fixed);
+        Command.precision(3);
+        Command << "workplane xz; ";
+        constexpr int BladeCount = 14;
+        for (int Blade = 0; Blade < BladeCount; ++Blade)
+        {
+            const double Angle = 6.283185307179586 * static_cast<double>(Blade) / static_cast<double>(BladeCount);
+            const auto Point = [](double Radius, double A) { return std::pair<double, double>{ Radius * std::cos(A), Radius * std::sin(A) }; };
+            const auto RootLead = Point(0.92, Angle - 0.11);
+            const auto TipLead = Point(3.02, Angle + 0.18);
+            const auto TipTrail = Point(3.02, Angle + 0.36);
+            const auto RootTrail = Point(0.92, Angle + 0.13);
+            char Name[24];
+            std::snprintf(Name, sizeof(Name), "%02d", Blade + 1);
+            Command << "polyline (" << RootLead.first << ',' << RootLead.second << ") ("
+                    << TipLead.first << ',' << TipLead.second << ") (" << TipTrail.first << ',' << TipTrail.second
+                    << ") (" << RootTrail.first << ',' << RootTrail.second << ") --closed --name=FanBladeSketch" << Name << "; "
+                    << "extrude FanBladeSketch" << Name << " 0.38 --name=FanBlade" << Name << "; ";
+        }
+        Command << "cylinder (0,-0.10,0) 3.48 5.80 --axis=(0,1,0) --sheet --name=BypassDuct; "
+                << "cylinder (0,0.20,0) 1.28 4.70 --axis=(0,1,0) --sheet --name=CoreCase; "
+                << "cone (0,4.90,0) 1.30 0.82 1.80 --axis=(0,1,0) --sheet --name=ExhaustCone; "
+                << "torus (0,5.70,0) 0.92 0.16 --axis=(0,1,0) --name=ExhaustRing; "
+                << "torus (0,3.90,0) 2.95 0.20 --axis=(0,1,0) --name=RearCaseRing; "
+                << "torus (0,0.05,0) 2.05 0.12 --axis=(0,1,0) --name=FanDisk; "
+                << "cylinder (0,-0.28,0) 0.78 1.15 --axis=(0,1,0) --name=FanHub; "
+                << "cylinder (0,-0.05,0) 0.24 6.25 --axis=(0,1,0) --name=MainShaft; "
+                << "cone (0,-0.82,0) 0.10 0.80 0.82 --axis=(0,1,0) --name=Spinner; "
+                << "sphere (3.30,2.55,-0.35) 0.58 --name=AccessoryGearbox; "
+                << "box (-0.34,1.20,3.20) (0.34,4.35,4.55) --name=EnginePylon; "
+                << "box (-0.13,0.30,-3.25) (0.13,3.70,3.25) --name=VerticalFrame; "
+                << "box (-3.25,0.30,-0.13) (3.25,3.70,0.13) --name=HorizontalFrame; "
+                << "torus (0,-0.18,0) 3.52 0.48 --axis=(0,1,0) --name=TurbofanEngine";
+        return Command.str();
+    }
+
     char Line[1280];
     switch (Index)
     {
@@ -318,6 +363,8 @@ bool SolidArcEditorHost::PlaceConstruct(ConsoleHost& Host, uint32_t Tile) noexce
         Host.Execute("select " + ConstructPlacedName_);
         if (Tile == 25u)
             Toasts_.Push("Aircraft rib sketch created", "XZ workplane · closed skin · 3 lightening holes · rear spar slot");
+        else if (Tile == 26u)
+            Toasts_.Push("Turbofan engine assembly created", "14 swept fan blades · nacelle · core · shaft · spinner · exhaust · pylon");
         return true;
     }
     if (Tile >= 22u && Tile <= 24u)

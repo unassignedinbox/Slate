@@ -855,7 +855,7 @@ int main()
                 Fail("the menu stayed open after a tile was chosen");
             const size_t FiguresAfter = Host.AllFigures().size();
             const bool WorkplaneAction = Tile >= 22u && Tile <= 24u;
-            const size_t ExpectedAdded = Tile == 25u ? 6u : (WorkplaneAction ? 0u : 1u);
+            const size_t ExpectedAdded = Tile == 26u ? 42u : (Tile == 25u ? 6u : (WorkplaneAction ? 0u : 1u));
             if (FiguresAfter != FiguresBefore + ExpectedAdded)
             {
                 std::fprintf(stderr, "[SolidArcEditorProof] construct tile %u: figures %zu -> %zu (expected +%zu)\n",
@@ -874,8 +874,8 @@ int main()
                     + std::abs(static_cast<int>(Before[I + 2u]) - static_cast<int>(After[I + 2u])) > 24)
                     ++Changed;
             std::fprintf(stderr, "[SolidArcEditorProof] construct tile %2u -> %-14s drew %5zu changed pixels\n", Tile, MadeName.c_str(), Changed);
-            const bool AdvancedWorkflow = Tile == 25u;
-            const bool WorkflowPlaced = AdvancedWorkflow && MadeName == "AircraftRib";
+            const bool WorkflowPlaced = (Tile == 25u && MadeName == "AircraftRib")
+                                     || (Tile == 26u && MadeName == "TurbofanEngine");
             if ((!WorkplaneAction && !WorkflowPlaced && Changed < 20u)
                 || (WorkplaneAction && Editor.QueryConstructPlacedName().empty()))
                 Fail("a Construct tile action produced no visible or named result");
@@ -927,6 +927,66 @@ int main()
         if (const int Write = WriteSheet("Exhibits/Gallery/Editor/SolidArcAdvancedSketch/AircraftWingRib_UI.png", 8); Write != 0)
             return Write;
         std::fprintf(stderr, "[SolidArcEditorProof] Aircraft Rib UI: %zu editable figures on XZ; proof written\n",
+                     Host.AllFigures().size());
+
+        // Gate 12 — a substantially more complex aircraft engine, again reached solely through an on-screen Construct
+        // tile. Capture three high-resolution views so fan detail and longitudinal engine architecture are both reviewable.
+        Run(Host, "reset");
+        Settle(10);
+        Click(kChipX, kChipY);
+        Settle();
+        bool EngineSeen = false;
+        float EngineX = 0.0f, EngineY = 0.0f;
+        for (uint32_t Section = 0u; Section < 4u && !EngineSeen; ++Section)
+        {
+            float Sx = 0.0f, Sy = 0.0f;
+            if (!Editor.QueryConstructSectionCentre(Section, &Sx, &Sy)) break;
+            Click(Sx, Sy);
+            Settle(3);
+            EngineSeen = Editor.QueryConstructTileCentre(26u, &EngineX, &EngineY);
+        }
+        if (!EngineSeen)
+            Fail("the Turbofan Engine component is not reachable in the actual Construct menu");
+        else
+        {
+            Click(EngineX, EngineY);
+            Settle(10);
+        }
+        bool HasEngine = false, HasSpinner = false, HasPylon = false;
+        for (const Frontier::SceneFigure& Figure : Host.AllFigures())
+        {
+            HasEngine = HasEngine || Figure.Name == "TurbofanEngine";
+            HasSpinner = HasSpinner || Figure.Name == "Spinner";
+            HasPylon = HasPylon || Figure.Name == "EnginePylon";
+        }
+        if (Host.AllFigures().size() != 42u || !HasEngine || !HasSpinner || !HasPylon)
+            Fail("the Turbofan Engine UI action did not create its 42 editable assembly figures");
+
+        gWidth = 2048;
+        gHeight = 1152;
+        IO.DisplaySize = ImVec2(static_cast<float>(gWidth), static_cast<float>(gHeight));
+        Pixels.assign(static_cast<size_t>(gWidth) * static_cast<size_t>(gHeight) * 3u, 0u);
+        Editor.ReseatLayout();
+        Settle(10);
+        Run(Host, "select none");
+        Settle(4);
+        std::filesystem::create_directories("Exhibits/Gallery/Editor/SolidArcAircraftEngine");
+        auto CaptureEngine = [&](const char* View, const char* File) -> int
+        {
+            const std::string ViewCommand = std::string("view ") + View;
+            Run(Host, ViewCommand.c_str());
+            Run(Host, "view fit");
+            Settle(12);
+            Rasterise();
+            return WriteSheet(File, 8);
+        };
+        if (const int Write = CaptureEngine("front", "Exhibits/Gallery/Editor/SolidArcAircraftEngine/Turbofan_Front_2K.png"); Write != 0)
+            return Write;
+        if (const int Write = CaptureEngine("iso", "Exhibits/Gallery/Editor/SolidArcAircraftEngine/Turbofan_Isometric_2K.png"); Write != 0)
+            return Write;
+        if (const int Write = CaptureEngine("right", "Exhibits/Gallery/Editor/SolidArcAircraftEngine/Turbofan_Side_2K.png"); Write != 0)
+            return Write;
+        std::fprintf(stderr, "[SolidArcEditorProof] Turbofan Engine UI: %zu editable figures; front/isometric/side 2K proofs written\n",
                      Host.AllFigures().size());
         if (Failed)
             return 17;
