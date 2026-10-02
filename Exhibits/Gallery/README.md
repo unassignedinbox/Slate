@@ -16,6 +16,7 @@ Gallery/
 ├── CodeImages/                 Dynamic code-image ABI lifecycle result and provenance
 ├── Drive/                      Project-Drive driven by the real VehicleSolver: driving GIFs, material angles, run graphs
 ├── Editor/                     The engine's own EditorProof, run headless — eight editor phases
+├── Editor/QuadTread/           Quad-tread designs (References/QuadTreadModelling.html): flat + wheel proofs for every design, audited zero-defect
 ├── ProjectZero/                The 20 x 20 material grid through the visibility raster, ReSTIR DI and a reference path trace
 ├── ReflectionReservoir/        Baseline, ReSTIR, and high-sample reflection reference
 └── RenderModes/CurrentUi/      Material-grid plain-raster / Surfel-GI / ray-traced comparison
