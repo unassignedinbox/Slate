@@ -57,7 +57,7 @@ jobs:
             _AgentScratch/build/msvc-solidarc/*.exe
 
   frontier:
-    name: Frontier Windows application
+    name: Frontier + Project-Zero + Project-Drive
     runs-on: windows-2022
     timeout-minutes: 45
     defaults:
@@ -114,6 +114,10 @@ jobs:
           } finally {
             Stop-Transcript
           }
+      - name: Package and verify Project-Zero and Project-Drive
+        run: |
+          python Tools/Build/PackageWindowsProjects.py *>&1 | Tee-Object -FilePath ../_AgentScratch/logs/msvc-ci/ProjectPackage.log
+          if ($LASTEXITCODE -ne 0) { throw 'Windows project packaging or DLL verification failed' }
       - name: Retain build diagnostics
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -134,3 +138,11 @@ jobs:
             Frontier/Build/Output/Windows/Release/Binary/
             Frontier/Projects/Project-Zero/Build/*.dll
             Frontier/Projects/Project-Drive/Build/*.dll
+      - name: Retain Frontier with both projects
+        if: success()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: frontier-projects-windows-release-${{ github.sha }}
+          retention-days: 14
+          if-no-files-found: error
+          path: _AgentScratch/build/Frontier-Windows-Release/
