@@ -31,6 +31,7 @@
 #include <Jolt/Physics/Collision/ShapeCast.h>
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/CollisionCollector.h>
+#include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
 #include <Jolt/Physics/Collision/NarrowPhaseQuery.h>
 #include <Jolt/Physics/Body/BodyFilter.h>   // BodyFilter/IgnoreSingleBodyFilter live under Body/, not Collision/ (upstream Jolt layout)
 #include <Jolt/Physics/Body/Body.h>

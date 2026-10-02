@@ -130,4 +130,7 @@ jobs:
         with:
           name: frontier-windows-release-${{ github.sha }}
           retention-days: 14
-          path: Frontier/Build/Output/Windows/Release/Binary/
+          path: |
+            Frontier/Build/Output/Windows/Release/Binary/
+            Frontier/Projects/Project-Zero/Build/*.dll
+            Frontier/Projects/Project-Drive/Build/*.dll
