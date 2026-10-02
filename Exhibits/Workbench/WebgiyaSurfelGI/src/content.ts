@@ -837,7 +837,7 @@ export type SceneDefinition = {
 export const SCENE_PRESETS: SceneDefinition[] = [
   {
     id: 'shaderball-light-lab',
-    label: 'ShaderBall GI · Hi-Z Screen Probes + Surfel Cache',
+    label: 'ShaderBall GI · Dynamic Multi-bounce Surfel Cache',
     hdr: `${baseUrl}exr/pizzo_pernice_puresky_2k.hdr`,
     settings: {
       light: {

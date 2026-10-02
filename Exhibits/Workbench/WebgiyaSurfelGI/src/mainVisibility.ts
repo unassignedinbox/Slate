@@ -1,5 +1,5 @@
-// Webgiya host with screen-probe GI and a camera-space GTAO visibility raster.
-// The pinned upstream main.ts and surfel algorithms remain byte-identical.
+// Webgiya host with a camera-space visibility raster and GTAO.
+// The pinned upstream main.ts remains byte-identical for verification.
 import './style.css';
 import { initRenderer } from './renderer.ts';
 import { createScene } from './scene.ts';
@@ -12,8 +12,7 @@ import {
   type SceneDefinition,
   type SceneSettings,
 } from './content.ts';
-import { createMotionGBuffer } from './motionGBuffer.ts';
-import { createMotionHistoryPass } from './motionHistoryPass.ts';
+import { createGBuffer } from './gbuffer.ts';
 import { createSurfelPool } from './surfelPool.ts';
 import { createSurfelPreparePass } from './surfelPreparePass.ts';
 import { createSurfelAgePass } from './surfelAgePass.ts';
@@ -31,13 +30,9 @@ import { createDynamicSceneBVH } from './sceneBvhDynamic.ts';
 import { createSceneBVH, type SceneBVHBundle } from './sceneBvh.ts';
 import { createSurfelIntegratePass } from './surfelIntegratePass.ts';
 import { createSurfelGIResolvePass } from './surfelGIResolvePass.ts';
-import { createScreenProbePass } from './screenProbePass.ts';
-import { createScreenProbeReusePass } from './screenProbeReusePass.ts';
-import { createRayHitSurfelSeedPass } from './rayHitSurfelSeedPass.ts';
 import * as THREE from 'three/webgpu';
 import {
   float,
-  fract,
   mrt,
   normalView,
   output,
@@ -60,10 +55,7 @@ import {
   DEFAULT_OCCLUSION_SETTINGS,
 } from './surfelRadialDepth.ts';
 import { EXRLoader, HDRLoader } from 'three/examples/jsm/Addons.js';
-import {
-  updateDynamicRigidObjects,
-  updateTemporalSurfaceVersions,
-} from './shaderBallScene.ts';
+import { updateDynamicRigidObjects } from './shaderBallScene.ts';
 
 const loadingOverlay =
   document.querySelector<HTMLDivElement>('#loading-overlay');
@@ -109,34 +101,6 @@ function isWebGpuError(message: string) {
 function describeError(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === 'string') return error;
-  if (error && typeof error === 'object') {
-    const detail = error as {
-      message?: unknown;
-      error?: unknown;
-      reason?: unknown;
-      type?: unknown;
-      target?: {
-        currentSrc?: unknown;
-        src?: unknown;
-        href?: unknown;
-      };
-      constructor?: { name?: string };
-    };
-    if (typeof detail.message === 'string' && detail.message)
-      return detail.message;
-    if (detail.error && detail.error !== error)
-      return describeError(detail.error);
-    if (detail.reason && detail.reason !== error)
-      return describeError(detail.reason);
-
-    const resource =
-      detail.target?.currentSrc ?? detail.target?.src ?? detail.target?.href;
-    const kind = detail.constructor?.name ?? 'Event';
-    const type = typeof detail.type === 'string' ? detail.type : 'unknown';
-    if (typeof resource === 'string' && resource)
-      return `${kind} (${type}) while loading ${resource}`;
-    if (kind !== 'Object' || type !== 'unknown') return `${kind} (${type})`;
-  }
   try {
     return JSON.stringify(error);
   } catch {
@@ -172,28 +136,6 @@ const { renderer } = await initRenderer().catch((error) => {
   showError(error);
   throw error;
 });
-
-// WebGPU validation and shader-compilation failures are GPU events rather than
-// ordinary JavaScript Errors in Chromium. Surface their actual message instead
-// of the otherwise opaque `{ "isTrusted": true }` event payload.
-const gpuDevice = (
-  renderer.backend as unknown as {
-    device?: {
-      addEventListener?: (
-        type: string,
-        listener: (event: { error?: unknown }) => void,
-      ) => void;
-      lost?: Promise<unknown>;
-    };
-  }
-).device;
-gpuDevice?.addEventListener?.('uncapturederror', (event) => {
-  showError(event.error ?? event);
-});
-gpuDevice?.lost?.then((info) => {
-  showError(info);
-});
-
 const gui = createUI(renderer);
 const sceneBundle = createScene(renderer);
 const { scene, camera, controls } = sceneBundle;
@@ -243,8 +185,7 @@ let envTex: THREE.DataTexture | null = null;
 // Viewport camera can show debug
 camera.layers.enable(1);
 
-const gbuffer = createMotionGBuffer(renderer);
-const motionHistory = createMotionHistoryPass();
+const gbuffer = createGBuffer(renderer);
 
 const surfelPool = createSurfelPool();
 surfelPool.ensureCapacity(MAX_SURFELS);
@@ -259,12 +200,6 @@ const screenDebug = createSurfelScreenDebug(uniformGrid, surfelPool);
 // Create BVH & Pass
 const integratorDispatchArgs = createIntegratorDispatchArgs();
 let surfelIntegrate: ReturnType<typeof createSurfelIntegratePass> | null = null;
-let screenProbePass: ReturnType<typeof createScreenProbePass> | null = null;
-const screenProbeReusePass = createScreenProbeReusePass();
-const rayHitSurfelSeedPass = createRayHitSurfelSeedPass(
-  uniformGrid,
-  surfelPool,
-);
 
 screenDebug.setDebugMode(screenDebug.debugParams.mode);
 screenDebug.configureGUI(gui);
@@ -359,30 +294,6 @@ visibilityFolder
   })
   .listen?.();
 
-const TEMPORAL_OUTPUTS = {
-  Lighting: 'lighting',
-  'Motion vectors': 'motion-vectors',
-  'Surface IDs': 'surface-ids',
-  'Reprojected coordinates': 'reprojected-coordinates',
-  Disocclusion: 'disocclusion',
-  'History confidence': 'history-confidence',
-} as const;
-type TemporalOutput = (typeof TEMPORAL_OUTPUTS)[keyof typeof TEMPORAL_OUTPUTS];
-const temporalParams: { output: TemporalOutput } = {
-  output: TEMPORAL_OUTPUTS.Lighting,
-};
-const temporalFolder = gui.addFolder('Motion / history validation');
-temporalFolder
-  .add(temporalParams, 'output', TEMPORAL_OUTPUTS)
-  .name('Output')
-  .onChange(() => {
-    mustRebuildCompositeMaterial = true;
-  })
-  .listen?.();
-temporalFolder
-  .add({ reset: () => motionHistory.reset() }, 'reset')
-  .name('Reset history');
-
 const dynamicRigidParams = {
   acceleration: true,
   enabled: true,
@@ -394,18 +305,12 @@ dynamicRigidFolder
   .add(dynamicRigidParams, 'acceleration')
   .name('Dynamic BLAS / TLAS')
   .onChange(() => {
-    motionHistory.reset();
-    screenProbeReusePass.reset();
     void loadSceneById(currentSceneId ?? '');
   })
   .listen?.();
 dynamicRigidFolder
   .add(dynamicRigidParams, 'enabled')
   .name('Animate rigid BLAS')
-  .onChange(() => {
-    motionHistory.reset();
-    screenProbeReusePass.reset();
-  })
   .listen?.();
 dynamicRigidFolder
   .add(dynamicRigidParams, 'amplitude', 0, 0.75, 0.01)
@@ -437,141 +342,6 @@ const giTransportParams = { ...defaultGiTransportParams };
 const multiBounceParams = { enabled: true };
 const effectiveMultiBounceStrength = () =>
   multiBounceParams.enabled ? giTransportParams.giFromIndirect : 0;
-
-const SCREEN_PROBE_OUTPUTS = {
-  Lighting: 'lighting',
-  'Screen probe GI': 'radiance',
-  'Probe confidence': 'confidence',
-  'Trace source': 'trace-source',
-  'Hi-Z steps': 'hiz-steps',
-  'Reservoir age': 'reservoir-age',
-  'Reservoir candidates': 'reservoir-candidates',
-  'Reuse acceptance': 'reuse-acceptance',
-  'Reuse source': 'reuse-source',
-  'Ray-hit seeds': 'ray-hit-seeds',
-} as const;
-type ScreenProbeOutput =
-  (typeof SCREEN_PROBE_OUTPUTS)[keyof typeof SCREEN_PROBE_OUTPUTS];
-const screenProbeParams: {
-  enabled: boolean;
-  useHiZ: boolean;
-  output: ScreenProbeOutput;
-  blendStrength: number;
-  samples: number;
-} = {
-  enabled: true,
-  useHiZ: true,
-  output: SCREEN_PROBE_OUTPUTS.Lighting,
-  blendStrength: 0.8,
-  samples: 4,
-};
-let screenProbeSampleSequenceFrame = 0;
-const resetProbeReuse = () => {
-  screenProbeReusePass.reset();
-  screenProbeSampleSequenceFrame = 0;
-  mustRebuildCompositeMaterial = true;
-};
-const screenProbeFolder = gui.addFolder('Screen probes');
-screenProbeFolder
-  .add(screenProbeParams, 'enabled')
-  .name('Screen-probe GI')
-  .onChange(resetProbeReuse)
-  .listen?.();
-screenProbeFolder
-  .add(screenProbeParams, 'useHiZ')
-  .name('Hi-Z first')
-  .onChange(resetProbeReuse)
-  .listen?.();
-screenProbeFolder
-  .add(screenProbeParams, 'output', SCREEN_PROBE_OUTPUTS)
-  .name('Output')
-  .onChange(() => {
-    mustRebuildCompositeMaterial = true;
-  })
-  .listen?.();
-screenProbeFolder
-  .add(screenProbeParams, 'blendStrength', 0, 1, 0.01)
-  .name('Probe confidence blend')
-  .onChange(() => {
-    mustRebuildCompositeMaterial = true;
-  })
-  .listen?.();
-screenProbeFolder
-  .add(screenProbeParams, 'samples', 1, 8, 1)
-  .name('Directions per probe')
-  .onChange(resetProbeReuse)
-  .listen?.();
-
-const rayHitSeedParams = {
-  enabled: true,
-  budget: 32,
-  candidatesPerBudget: 8,
-  coverageScale: 1.0,
-};
-const rayHitSeedFolder = gui.addFolder('Ray-hit surfel seeding');
-rayHitSeedFolder
-  .add(rayHitSeedParams, 'enabled')
-  .name('Ray-hit seeding')
-  .listen?.();
-rayHitSeedFolder
-  .add(rayHitSeedParams, 'budget', 0, 128, 1)
-  .name('Max new surfels / frame')
-  .listen?.();
-rayHitSeedFolder
-  .add(rayHitSeedParams, 'candidatesPerBudget', 1, 16, 1)
-  .name('Candidate overscan')
-  .listen?.();
-rayHitSeedFolder
-  .add(rayHitSeedParams, 'coverageScale', 0.5, 2.0, 0.05)
-  .name('Coverage rejection')
-  .listen?.();
-
-const probeReuseParams = {
-  enabled: true,
-  temporal: true,
-  spatial: true,
-  spatialNeighbors: 4,
-  maxHistory: 16,
-  maxReservoirM: 32,
-  correctionClamp: 4.0,
-};
-const probeReuseFolder = gui.addFolder('Screen-probe ReSTIR reuse');
-probeReuseFolder
-  .add(probeReuseParams, 'enabled')
-  .name('Reservoir reuse')
-  .onChange(resetProbeReuse)
-  .listen?.();
-probeReuseFolder
-  .add(probeReuseParams, 'temporal')
-  .name('Temporal reuse')
-  .onChange(resetProbeReuse)
-  .listen?.();
-probeReuseFolder
-  .add(probeReuseParams, 'spatial')
-  .name('Spatial reuse')
-  .onChange(resetProbeReuse)
-  .listen?.();
-probeReuseFolder
-  .add(probeReuseParams, 'spatialNeighbors', 0, 4, 1)
-  .name('Spatial neighbors')
-  .onChange(resetProbeReuse)
-  .listen?.();
-probeReuseFolder
-  .add(probeReuseParams, 'maxHistory', 2, 32, 1)
-  .name('Temporal candidates')
-  .onChange(resetProbeReuse)
-  .listen?.();
-probeReuseFolder
-  .add(probeReuseParams, 'maxReservoirM', 4, 64, 1)
-  .name('Reservoir M cap')
-  .onChange(resetProbeReuse)
-  .listen?.();
-probeReuseFolder
-  .add(probeReuseParams, 'correctionClamp', 1, 8, 0.25)
-  .name('Weight correction cap')
-  .onChange(resetProbeReuse)
-  .listen?.();
-
 const envIntensityController = integratorFolder
   .add(giTransportParams, 'envIntensity', 0, 5, 0.05)
   .name('Env GI Intensity')
@@ -738,10 +508,6 @@ async function loadScene(sceneDef: SceneDefinition) {
   setLoading(`Loading ${sceneDef.label}`);
 
   sceneBVH = null;
-  screenProbePass = null;
-  motionHistory.reset();
-  screenProbeReusePass.reset();
-  screenProbeSampleSequenceFrame = 0;
   dirLight = recreateDirectionalLight(scene, dirLight, dirLightDefaults);
   clearSceneContent(scene);
   setLight(dirLight);
@@ -792,8 +558,6 @@ async function loadScene(sceneDef: SceneDefinition) {
     sceneBVH = dynamicRigidParams.acceleration
       ? createDynamicSceneBVH(renderer, scene)
       : createSceneBVH(renderer, scene);
-    screenProbePass = createScreenProbePass(uniformGrid, surfelPool, envTex);
-    mustRebuildCompositeMaterial = true;
   } catch (error) {
     if (loadToken === sceneLoadToken) {
       showError(error);
@@ -914,7 +678,6 @@ scenePass.setMRT(
   mrt({
     output: output,
     normal: normalView,
-    // velocity: velocity,
   }),
 );
 
@@ -935,18 +698,6 @@ const visibilityRaster = visibilityPass
   .getTextureNode()
   .toInspector('Visibility Raster');
 
-// const scenePassVelocity = scenePass
-//   .getTextureNode('velocity')
-//   .toInspector('Velocity');
-
-// const traaNode = traa(
-//   scenePassColor,
-//   scenePassDepth,
-//   scenePassVelocity,
-//   camera,
-// );
-// postProcessing.outputNode = traaNode;
-
 window.addEventListener('resize', () => {
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -955,12 +706,8 @@ window.addEventListener('resize', () => {
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   renderer.setSize(w, h);
-  // Resize offscreen gbuffer and invalidate temporal history. The history pass
-  // lazily reallocates its ping-pong textures at the new physical resolution.
+  // Resize offscreen gbuffer
   gbuffer.resize(renderer);
-  motionHistory.reset();
-  screenProbeReusePass.reset();
-  screenProbeSampleSequenceFrame = 0;
 
   postProcessing.needsUpdate = true;
 
@@ -989,15 +736,14 @@ renderer.setAnimationLoop(() => {
   );
   camera.updateMatrixWorld();
   scene.updateMatrixWorld(true);
-  updateTemporalSurfaceVersions(scene);
 
   if (!sceneBVH || !surfelIntegrate) {
     // postProcessing.render();       // show direct scene while loading
     prevCameraPos.copy(camera.position);
     return;
   }
-  // Refit only transformed rigid BLAS bounds/vertices, then propagate their
-  // root bounds through the compact TLAS before any GPU ray work this frame.
+  // Refit only transformed rigid BLAS bounds/vertices and propagate the compact
+  // TLAS before the surfel integrator performs any geometry queries this frame.
   sceneBVH.update?.();
   scene.background = null;
   // Offscreen gbuffer for spawning
@@ -1010,10 +756,6 @@ renderer.setAnimationLoop(() => {
   renderer.setRenderTarget(prevTarget);
   renderer.setMRT(null);
   camera.layers.enable(1);
-
-  // Reproject the current surface raster into the preceding frame and reject
-  // off-screen, mismatched, newly exposed, or transformed surface history.
-  motionHistory.run(renderer, camera, gbuffer);
 
   // GPU surfel prepare + generation into a fixed-capacity pool (capacity set once at init)
   // Age and recycle a fraction of the pool; this replenishes the free list gradually
@@ -1062,61 +804,8 @@ renderer.setAnimationLoop(() => {
     integratorDispatchArgs.getIndirectAttr(),
   );
 
-  // 3. Resolve the persistent world-space surfel cache.
+  // 3. Resolve GI (Compute Indirect Light Texture)
   surfelResolve.run(renderer, camera, gbuffer);
-
-  // 4. Trace one 8x8 screen probe over each visible tile. Secondary hits
-  // consume the freshly integrated surfel field for multi-bounce radiance.
-  if (screenProbeParams.enabled && screenProbePass) {
-    screenProbePass.run(renderer, camera, gbuffer, sceneBVH, dirLight, {
-      samples: screenProbeParams.samples,
-      useHiZ: screenProbeParams.useHiZ,
-      reconstruct: !probeReuseParams.enabled,
-      sampleSequenceFrame: probeReuseParams.enabled
-        ? screenProbeSampleSequenceFrame
-        : 0,
-      envIntensity: giTransportParams.envIntensity,
-      envLod: giTransportParams.envLod,
-      directStrength: giTransportParams.giFromDirect,
-      multiBounceStrength: effectiveMultiBounceStrength(),
-    });
-
-    if (probeReuseParams.enabled) {
-      const currentProbeRadiance = screenProbePass.getProbeRadianceTexture();
-      const currentProbeGeometry = screenProbePass.getProbeGeometryTexture();
-      const temporalValidation = motionHistory.getValidationTexture();
-      if (currentProbeRadiance && currentProbeGeometry && temporalValidation) {
-        screenProbeReusePass.run(
-          renderer,
-          camera,
-          gbuffer,
-          currentProbeRadiance,
-          currentProbeGeometry,
-          temporalValidation,
-          probeReuseParams,
-        );
-        screenProbeSampleSequenceFrame =
-          (screenProbeSampleSequenceFrame + 1) >>> 0;
-      }
-    }
-
-    // Phase 6 is an additive, late-frame path. Disabling it leaves the exact
-    // completed Phase 5 allocation/integration sequence above untouched.
-    if (rayHitSeedParams.enabled) {
-      const seedTexture = screenProbePass.getProbeSeedTexture();
-      const probeSize = screenProbePass.getProbeSize();
-      if (seedTexture) {
-        rayHitSurfelSeedPass.run(
-          renderer,
-          camera,
-          seedTexture,
-          probeSize.width,
-          probeSize.height,
-          rayHitSeedParams,
-        );
-      }
-    }
-  }
 
   // Surfel health debug
   // debugSurfelSystem(renderer, surfelPool, uniformGrid, surfelFindMissing);
@@ -1126,19 +815,6 @@ renderer.setAnimationLoop(() => {
 
   // 5. Composite Final Image (Fullscreen Pass)
   const giTex = surfelResolve.getOutputTexture();
-  const screenProbeTex = screenProbeParams.enabled
-    ? probeReuseParams.enabled
-      ? screenProbeReusePass.getOutputTexture()
-      : screenProbePass?.getOutputTexture()
-    : null;
-  const screenProbeStatsTex = screenProbeParams.enabled
-    ? screenProbePass?.getTraceStatsTexture()
-    : null;
-  const probeReservoirMetadataTex =
-    screenProbeReusePass.getReservoirMetadataTexture();
-  const probeReuseDebugTex = screenProbeReusePass.getDebugTexture();
-  const rayHitSeedDebugTex = rayHitSurfelSeedPass.getDebugTexture();
-  const temporalValidationTex = motionHistory.getValidationTexture();
   let directLight;
   if (giTex) {
     if (mustRebuildCompositeMaterial) {
@@ -1158,211 +834,15 @@ renderer.setAnimationLoop(() => {
             .add(1.0 - visibilityParams.strength * 0.25)
         : float(1.0);
       const visibleDirect = directLight.mul(directVisibility);
+      const indirectLight = texture(giTex, screenUV)
+        .mul(albedo)
+        .mul(giParams.indirectIntensity)
+        .mul(ambientVisibility);
 
-      // The original full-resolution surfel resolve remains the fallback. Screen
-      // probes replace it only where bilateral reconstruction reports confidence,
-      // preventing the two estimators from being added twice.
-      const surfelRadiance = texture(giTex, screenUV).rgb;
-      let probeRadiance: THREE.Node = surfelRadiance;
-      let probeConfidence: THREE.Node = float(0.0);
-      let indirectRadiance: THREE.Node = surfelRadiance;
-      if (screenProbeTex) {
-        const probeSample = texture(screenProbeTex, screenUV);
-        probeRadiance = probeSample.rgb;
-        probeConfidence = probeSample.a.mul(screenProbeParams.blendStrength);
-        indirectRadiance = surfelRadiance
-          .mul(float(1.0).sub(probeConfidence))
-          .add(probeRadiance.mul(probeConfidence));
-      }
-      const indirectLight = vec4(
-        indirectRadiance
-          .mul(albedo.rgb)
-          .mul(giParams.indirectIntensity)
-          .mul(ambientVisibility),
-        1.0,
-      );
-      const probeDebugLight = vec4(
-        probeRadiance
-          .mul(albedo.rgb)
-          .mul(giParams.indirectIntensity)
-          .mul(ambientVisibility),
-        1.0,
-      );
-      const traceStats: THREE.Node = screenProbeStatsTex
-        ? texture(screenProbeStatsTex, screenUV)
-        : vec4(0.0);
-      // Trace-source legend: green = Hi-Z, red = BVH fallback, blue = env miss.
-      const traceSourceDebug = vec4(
-        traceStats.y,
-        traceStats.x,
-        traceStats.z,
-        1.0,
-      );
-      const hiZStepsDebug = vec4(traceStats.w, traceStats.w, traceStats.w, 1.0);
-      const reservoirMetadata: THREE.Node = probeReservoirMetadataTex
-        ? texture(probeReservoirMetadataTex, screenUV)
-        : vec4(0.0);
-      const reuseDiagnostics: THREE.Node = probeReuseDebugTex
-        ? texture(probeReuseDebugTex, screenUV)
-        : vec4(0.0);
-      const rayHitSeedDiagnostics: THREE.Node = rayHitSeedDebugTex
-        ? texture(rayHitSeedDebugTex, screenUV)
-        : vec4(0.0);
-      const reservoirAge = reservoirMetadata.z.div(
-        Math.max(1, probeReuseParams.maxHistory),
-      );
-      const reservoirCandidates = reservoirMetadata.y.div(
-        Math.max(1, probeReuseParams.maxReservoirM),
-      );
-      const reuseAcceptanceDebug = vec4(
-        reuseDiagnostics.r,
-        reuseDiagnostics.g,
-        0.0,
-        1.0,
-      );
-      const reuseSource = reuseDiagnostics.b;
-      // Source legend: blue = current trace, green = temporal, red = spatial.
-      const reuseSourceDebug = vec4(
-        reuseSource.mul(2.0).sub(1.0).max(0.0),
-        float(1.0).sub(reuseSource.mul(2.0).sub(1.0).abs()),
-        float(1.0).sub(reuseSource.mul(2.0)).max(0.0),
-        1.0,
-      );
-      const validationSample: THREE.Node = temporalValidationTex
-        ? texture(temporalValidationTex, screenUV)
-        : vec4(1.0, 0.0, 0.0, 0.0);
-      const motionSample = texture(gbuffer.target.textures[2], screenUV).xy;
-      // Signed NDC velocity is magnified 8x: neutral grey is stationary,
-      // red/green deviations indicate horizontal/vertical motion.
-      const motionDebug = vec4(
-        motionSample.x.mul(4.0).add(0.5),
-        motionSample.y.mul(4.0).add(0.5),
-        0.5,
-        1.0,
-      );
-      const surfaceId = texture(gbuffer.target.textures[3], screenUV).r;
-      const surfaceIdDebug = vec4(
-        fract(surfaceId.mul(0.1031)),
-        fract(surfaceId.mul(0.11369)),
-        fract(surfaceId.mul(0.13787)),
-        1.0,
-      );
-      const reprojectedCoordinateDebug = vec4(
-        validationSample.z,
-        validationSample.w,
-        0.0,
-        1.0,
-      );
-      const disocclusionDebug = vec4(
-        validationSample.r,
-        validationSample.r,
-        validationSample.r,
-        1.0,
-      );
-      const historyConfidenceDebug = vec4(
-        validationSample.g,
-        validationSample.g,
-        validationSample.g,
-        1.0,
-      );
-
-      if (temporalParams.output === TEMPORAL_OUTPUTS['Motion vectors']) {
-        postProcessing.outputNode = fxaa(motionDebug);
-        postProcessing.needsUpdate = true;
-      } else if (temporalParams.output === TEMPORAL_OUTPUTS['Surface IDs']) {
-        postProcessing.outputNode = fxaa(surfaceIdDebug);
-        postProcessing.needsUpdate = true;
-      } else if (
-        temporalParams.output === TEMPORAL_OUTPUTS['Reprojected coordinates']
-      ) {
-        postProcessing.outputNode = fxaa(reprojectedCoordinateDebug);
-        postProcessing.needsUpdate = true;
-      } else if (temporalParams.output === TEMPORAL_OUTPUTS.Disocclusion) {
-        postProcessing.outputNode = fxaa(disocclusionDebug);
-        postProcessing.needsUpdate = true;
-      } else if (
-        temporalParams.output === TEMPORAL_OUTPUTS['History confidence']
-      ) {
-        postProcessing.outputNode = fxaa(historyConfidenceDebug);
-        postProcessing.needsUpdate = true;
-      } else if (
-        visibilityParams.output === VISIBILITY_OUTPUTS['Visibility raster']
-      ) {
+      if (visibilityParams.output === VISIBILITY_OUTPUTS['Visibility raster']) {
         postProcessing.outputNode = fxaa(
           vec4(aoVisibility, aoVisibility, aoVisibility, 1.0),
         );
-        postProcessing.needsUpdate = true;
-      } else if (
-        screenProbeParams.enabled &&
-        screenProbeParams.output === SCREEN_PROBE_OUTPUTS['Screen probe GI']
-      ) {
-        postProcessing.outputNode = fxaa(probeDebugLight);
-        postProcessing.needsUpdate = true;
-      } else if (
-        screenProbeParams.enabled &&
-        screenProbeParams.output === SCREEN_PROBE_OUTPUTS['Probe confidence']
-      ) {
-        postProcessing.outputNode = fxaa(
-          vec4(probeConfidence, probeConfidence, probeConfidence, 1.0),
-        );
-        postProcessing.needsUpdate = true;
-      } else if (
-        screenProbeParams.enabled &&
-        screenProbeParams.output === SCREEN_PROBE_OUTPUTS['Trace source']
-      ) {
-        postProcessing.outputNode = fxaa(traceSourceDebug);
-        postProcessing.needsUpdate = true;
-      } else if (
-        screenProbeParams.enabled &&
-        screenProbeParams.output === SCREEN_PROBE_OUTPUTS['Hi-Z steps']
-      ) {
-        postProcessing.outputNode = fxaa(hiZStepsDebug);
-        postProcessing.needsUpdate = true;
-      } else if (
-        screenProbeParams.enabled &&
-        probeReuseParams.enabled &&
-        screenProbeParams.output === SCREEN_PROBE_OUTPUTS['Reservoir age']
-      ) {
-        postProcessing.outputNode = fxaa(
-          vec4(reservoirAge, reservoirAge, reservoirAge, 1.0),
-        );
-        postProcessing.needsUpdate = true;
-      } else if (
-        screenProbeParams.enabled &&
-        probeReuseParams.enabled &&
-        screenProbeParams.output ===
-          SCREEN_PROBE_OUTPUTS['Reservoir candidates']
-      ) {
-        postProcessing.outputNode = fxaa(
-          vec4(
-            reservoirCandidates,
-            reservoirCandidates,
-            reservoirCandidates,
-            1.0,
-          ),
-        );
-        postProcessing.needsUpdate = true;
-      } else if (
-        screenProbeParams.enabled &&
-        probeReuseParams.enabled &&
-        screenProbeParams.output === SCREEN_PROBE_OUTPUTS['Reuse acceptance']
-      ) {
-        postProcessing.outputNode = fxaa(reuseAcceptanceDebug);
-        postProcessing.needsUpdate = true;
-      } else if (
-        screenProbeParams.enabled &&
-        probeReuseParams.enabled &&
-        screenProbeParams.output === SCREEN_PROBE_OUTPUTS['Reuse source']
-      ) {
-        postProcessing.outputNode = fxaa(reuseSourceDebug);
-        postProcessing.needsUpdate = true;
-      } else if (
-        screenProbeParams.enabled &&
-        screenProbeParams.output === SCREEN_PROBE_OUTPUTS['Ray-hit seeds']
-      ) {
-        // Dark red = validated candidate, green = existing-cache rejection,
-        // cyan = accepted and allocated under the global frame budget.
-        postProcessing.outputNode = fxaa(rayHitSeedDiagnostics);
         postProcessing.needsUpdate = true;
       } else {
         switch (giParams.mode) {

@@ -27,4 +27,4 @@ Only in .../src: screenProbePass.ts
 Only in .../src: shaderBallScene.ts
 ```
 
-No pinned surfel algorithm source differs. `content.ts` changes the scene-preset list, `shaderBallScene.ts` supplies the ShaderBalls/light lab, `hiZDepthPyramid.ts` and `screenProbePass.ts` add the optional hierarchical screen-probe estimator, and `mainVisibility.ts` is a derived host composing screen probes and GTAO while the original `main.ts` remains unchanged.
+No pinned surfel algorithm source differs. `content.ts` changes the scene-preset list, `shaderBallScene.ts` supplies the ShaderBalls/light lab and rigid animation, `sceneBvhDynamic.ts` adds the optional static-BLAS/dynamic-BLAS TLAS path, and `mainVisibility.ts` is a derived surfel-only host composing Webgiya GI with raster shadows and GTAO while the original `main.ts` remains unchanged.
