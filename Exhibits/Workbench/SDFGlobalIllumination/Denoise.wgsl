@@ -14,8 +14,14 @@ struct DenoiseUniforms {
 @group(0) @binding(8) var outputPosition : texture_storage_2d<rgba16float, write>;
 @group(0) @binding(9) var outputNormal : texture_storage_2d<rgba16float, write>;
 
-fn sourceCoordinate(coordinate : vec2i, sourceDimensions : vec2u) -> vec2i {
-    return min(coordinate * 2 + vec2i(1), vec2i(sourceDimensions) - vec2i(1));
+fn sourceCoordinate(
+    coordinate : vec2i,
+    reconstructionDimensions : vec2u,
+    sourceDimensions : vec2u
+) -> vec2i {
+    let position = (vec2f(coordinate) + vec2f(0.5))
+        * vec2f(sourceDimensions) / vec2f(reconstructionDimensions);
+    return min(vec2i(position), vec2i(sourceDimensions) - vec2i(1));
 }
 
 @compute @workgroup_size(8, 8)
@@ -27,7 +33,7 @@ fn ComputeMain(@builtin(global_invocation_id) id : vec3u) {
 
     let coordinate = vec2i(id.xy);
     let sourceDimensions = textureDimensions(currentPosition);
-    let source = sourceCoordinate(coordinate, sourceDimensions);
+    let source = sourceCoordinate(coordinate, dimensions, sourceDimensions);
     let positionSample = textureLoad(currentPosition, source, 0);
     let normalSample = textureLoad(currentNormal, source, 0);
     if (positionSample.w < 0.5 || normalSample.w < 0.5) {
@@ -40,7 +46,8 @@ fn ComputeMain(@builtin(global_invocation_id) id : vec3u) {
     let centerPosition = positionSample.xyz;
     let centerNormal = normalize(normalSample.xyz);
     let voxelSize = parameters.settings.y;
-    let spatialRadius = voxelSize * 5.0;
+    let filterRadius = i32(clamp(parameters.settings.w, 0.0, 2.0) + 0.5);
+    let spatialRadius = voxelSize * (3.0 + f32(filterRadius));
     var radianceSum = vec3f(0.0);
     var traceCostSum = 0.0;
     var weightSum = 0.0;
@@ -51,12 +58,15 @@ fn ComputeMain(@builtin(global_invocation_id) id : vec3u) {
     // global-SDF hits. Screen depth is never searched for secondary geometry.
     for (var oy = -2; oy <= 2; oy += 1) {
         for (var ox = -2; ox <= 2; ox += 1) {
+            if (abs(ox) > filterRadius || abs(oy) > filterRadius) {
+                continue;
+            }
             let sampleCoordinate = clamp(
                 coordinate + vec2i(ox, oy),
                 vec2i(0),
                 vec2i(dimensions) - vec2i(1)
             );
-            let sampleSource = sourceCoordinate(sampleCoordinate, sourceDimensions);
+            let sampleSource = sourceCoordinate(sampleCoordinate, dimensions, sourceDimensions);
             let samplePosition = textureLoad(currentPosition, sampleSource, 0);
             let sampleNormalRaw = textureLoad(currentNormal, sampleSource, 0);
             if (samplePosition.w < 0.5 || sampleNormalRaw.w < 0.5) {

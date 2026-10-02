@@ -319,8 +319,23 @@ function connectControls()
         GiOutput.value = Number(GiIntensity.value).toFixed(2);
         DistanceOutput.value = `${TraceDistance.value} m`;
         SunOutput.value = Number(SunStrength.value).toFixed(1);
+        ResolutionOutput.value = `${GiResolution.value}%`;
+        PatternOutput.value = `${Number(PatternCell.value).toFixed(3).replace(/0+$/, "").replace(/\.$/, "")} m`;
+        HitOutput.value = `${Number(HitPrecision.value).toFixed(2)} vx`;
+        FilterOutput.value = `${FilterRadius.value} px`;
+        TemporalOutput.value = Number(TemporalResponse.value).toFixed(2);
     };
-    for (const control of [RayCount, GiIntensity, TraceDistance, SunStrength]) control.addEventListener("input", update);
+    for (const control of [
+        RayCount,
+        GiIntensity,
+        TraceDistance,
+        SunStrength,
+        GiResolution,
+        PatternCell,
+        HitPrecision,
+        FilterRadius,
+        TemporalResponse,
+    ]) control.addEventListener("input", update);
     for (const button of NavModes)
     {
         button.addEventListener("click", () =>
@@ -501,6 +516,8 @@ async function start()
 
     let width = 0;
     let height = 0;
+    let giWidth = 0;
+    let giHeight = 0;
     let worldPositionTexture;
     let worldNormalTexture;
     let albedoTexture;
@@ -525,9 +542,15 @@ async function start()
         );
         const nextWidth = Math.max(2, Math.floor(Canvas.clientWidth * pixelRatio * resolutionCap));
         const nextHeight = Math.max(2, Math.floor(Canvas.clientHeight * pixelRatio * resolutionCap));
-        if (nextWidth === width && nextHeight === height) return;
+        const giScale = Number(GiResolution.value) * 0.01;
+        const nextGiWidth = Math.max(2, Math.ceil(nextWidth * giScale));
+        const nextGiHeight = Math.max(2, Math.ceil(nextHeight * giScale));
+        if (nextWidth === width && nextHeight === height
+            && nextGiWidth === giWidth && nextGiHeight === giHeight) return;
         width = nextWidth;
         height = nextHeight;
+        giWidth = nextGiWidth;
+        giHeight = nextGiHeight;
         Canvas.width = width;
         Canvas.height = height;
         for (const texture of [
@@ -545,12 +568,10 @@ async function start()
         worldNormalTexture = device.createTexture({ label: "World normal G-buffer", size: [width, height], format: "rgba16float", usage: colourUsage });
         albedoTexture = device.createTexture({ label: "Albedo G-buffer", size: [width, height], format: "rgba8unorm", usage: colourUsage });
         depthTexture = device.createTexture({ label: "Scene depth", size: [width, height], format: "depth24plus", usage: GPUTextureUsage.RENDER_ATTACHMENT });
-        const giWidth = Math.ceil(width / 2);
-        const giHeight = Math.ceil(height / 2);
         const giSize = [giWidth, giHeight];
         const computeTextureUsage = GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING;
         indirectTexture = device.createTexture({
-            label: "Raw half-resolution SDF indirect",
+            label: "Raw adjustable-resolution SDF indirect",
             size: giSize,
             format: "rgba16float",
             usage: computeTextureUsage,
@@ -661,13 +682,23 @@ async function start()
         giUniforms.set([...sdf.minimum, 0.0], 0);
         giUniforms.set([...sdf.maximum, 0.0], 4);
         giUniforms.set([Number(TraceDistance.value), voxelSize, Number(RayCount.value), samplingFrame % 1024], 8);
-        giUniforms.set([0.12, sdf.mipCount - 1, 0.0, 0.0], 12);
+        giUniforms.set([
+            0.12,
+            sdf.mipCount - 1,
+            Number(PatternCell.value),
+            Number(HitPrecision.value),
+        ], 12);
         device.queue.writeBuffer(giBuffer, 0, giUniforms);
 
         const denoiseUniforms = new Float32Array(20);
         denoiseUniforms.set(previousViewProjection || currentViewProjection, 0);
-        const historyResponse = AnimateSun.checked ? 0.18 : updateRadianceCache ? 0.24 : 0.06;
-        denoiseUniforms.set([historyValid ? 1.0 : 0.0, voxelSize, historyResponse, 0.0], 16);
+        const historyResponse = Number(TemporalResponse.value);
+        denoiseUniforms.set([
+            historyValid ? 1.0 : 0.0,
+            voxelSize,
+            historyResponse,
+            Number(FilterRadius.value),
+        ], 16);
         device.queue.writeBuffer(denoiseBuffer, 0, denoiseUniforms);
 
         const presentUniforms = new Float32Array(16);
@@ -710,14 +741,14 @@ async function start()
         const giPass = encoder.beginComputePass({ label: "Trace global SDF indirect" });
         giPass.setPipeline(giPipeline);
         giPass.setBindGroup(0, giBindGroup);
-        giPass.dispatchWorkgroups(Math.ceil(Math.ceil(width / 2) / 8), Math.ceil(Math.ceil(height / 2) / 8));
+        giPass.dispatchWorkgroups(Math.ceil(giWidth / 8), Math.ceil(giHeight / 8));
         giPass.end();
 
         const nextHistoryIndex = 1 - historyIndex;
         const denoisePass = encoder.beginComputePass({ label: "Reproject and reconstruct SDF GI" });
         denoisePass.setPipeline(denoisePipeline);
         denoisePass.setBindGroup(0, denoiseBindGroups[historyIndex]);
-        denoisePass.dispatchWorkgroups(Math.ceil(Math.ceil(width / 2) / 8), Math.ceil(Math.ceil(height / 2) / 8));
+        denoisePass.dispatchWorkgroups(Math.ceil(giWidth / 8), Math.ceil(giHeight / 8));
         denoisePass.end();
 
         const presentPass = encoder.beginRenderPass({
@@ -739,7 +770,7 @@ async function start()
         averageMilliseconds += (milliseconds - averageMilliseconds) * 0.08;
         if (++statusCounter % 20 === 0)
         {
-            StatusText.textContent = `${averageMilliseconds.toFixed(1)} ms frame · ${Math.ceil(width / 2)}×${Math.ceil(height / 2)} GI · ${geometry.indices.length / 3 | 0} raster triangles`;
+            StatusText.textContent = `${averageMilliseconds.toFixed(1)} ms frame · ${giWidth}×${giHeight} GI · ${geometry.indices.length / 3 | 0} raster triangles`;
         }
         requestAnimationFrame(render);
     }

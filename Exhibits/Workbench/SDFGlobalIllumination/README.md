@@ -26,9 +26,9 @@ The combination of sub-voxel seeds, JFA+, exact triangle refinement, trilinear c
 4. The browser uploads the baked data as a mipmapped `r16float` 3D texture and an `rgba8unorm` 3D material texture.
 5. A compute pass identifies the narrow SDF surface band, derives normals from the global field, and writes outgoing radiance into a `160×80×160 RGBA16F` global surface-radiance cache. With light animation disabled, this cache updates only when its source parameters change.
 6. A conventional raster G-buffer supplies only the current receiver position, normal, and albedo. The exact same ShaderBall mesh and transforms are used for rasterization and SDF composition.
-7. At half resolution, one to eight cosine-distributed rays per receiver sphere-trace the global SDF. Directions are keyed to coarse world-space cells so camera motion cannot reshuffle a pixel-space noise pattern. Distance-adaptive mip selection accelerates empty-space traversal; candidate hits return to mip zero before acceptance.
+7. At an adjustable 50–100% resolution, one to sixteen cosine-distributed rays per receiver sphere-trace the global SDF. Directions are keyed to fine, adjustable world-space cells so camera motion cannot reshuffle a pixel-space pattern and the cache voxel grid is not exposed as large lighting blocks. Distance-adaptive mip selection accelerates empty-space traversal; candidate hits return to mip zero and use an adjustable base-voxel threshold before acceptance.
 8. Accepted world-space hits sample the global surface-radiance cache. Rays leaving the baked world sample a low-intensity environment.
-9. A 5×5 position/normal bilateral reconstruction removes raw low-ray-count variance. World-position reprojection accumulates up to 32 validated frames, rejects changed surfaces, and neighbourhood-clamps retained radiance. Animated lighting keeps a deliberately responsive history floor.
+9. An adjustable position/normal bilateral reconstruction removes raw low-ray-count variance. World-position reprojection accumulates up to 32 validated frames, rejects changed surfaces, and neighbourhood-clamps retained radiance. Temporal response is exposed directly so clean convergence can be balanced against animated-light latency.
 10. The composite multiplies reconstructed incoming indirect radiance by receiver albedo and combines it with the raster direct term.
 
 A bounded incoming-radiance estimator suppresses isolated emissive fireflies before reconstruction. Temporal directions still originate from world-keyed sequences; the history stage stabilizes their estimator rather than inventing screen-space hits.
@@ -55,10 +55,15 @@ The next phase can add SDF shadows as a separate query without changing or disgu
 ## Controls
 
 - **Lighting / Global GI / Direct / Trace cost** — dashboard views of combined lighting, SDF indirect, unshadowed direct, or normalized sphere-trace cost.
-- **GI rays** — one to eight half-resolution, world-locked cosine rays per receiver.
+- **GI rays** — one to sixteen world-locked cosine rays per receiver. More rays reduce estimator variance at a direct performance cost.
 - **GI intensity** — scales only the SDF-derived indirect contribution.
 - **Trace distance** — maximum world-space sphere-trace reach.
 - **Sun strength** — updates raster direct light and the global surface-radiance cache.
+- **GI resolution** — runs tracing and reconstruction at 50–100% of the canvas dimensions. The new 75% default is sharper than the previous fixed half-resolution path.
+- **Ray-pattern cell** — size of the world-space sampling cell. Smaller values replace large stable blocks with finer variance for the temporal filter to resolve.
+- **SDF hit threshold** — hit acceptance radius in base GDF voxels. Lower values are more precise but require more marching work.
+- **Spatial filter** — zero to two pixels of position/normal-aware filtering.
+- **Temporal response** — current-frame weight. Lower values converge more smoothly; higher values follow animated lighting faster.
 - **Animate injection** — rotates unshadowed source radiance and is enabled by default as the real-time lighting proof. Disable it for a fully converged inspection image.
 - **Reset camera** — restores the default orbit. Drag to orbit and use the wheel to dolly.
 

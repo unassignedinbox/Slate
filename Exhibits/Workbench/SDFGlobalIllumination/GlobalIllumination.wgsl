@@ -90,11 +90,12 @@ fn traceGlobalDistanceField(origin : vec3f, direction : vec3f) -> TraceResult {
             distance = sampleDistance(position, 0.0);
         }
 
-        if (abs(distance) < voxelSize * 0.72) {
+        if (abs(distance) < voxelSize * parameters.environment.w) {
             let cacheRadiance = textureSampleLevel(surfaceRadiance, linearSampler, uv, 0.0);
             return TraceResult(cacheRadiance.rgb, f32(steps));
         }
-        distanceAlongRay += max(abs(distance) * 0.72, voxelSize * 0.32);
+        let minimumStep = voxelSize * max(0.10, parameters.environment.w * 0.36);
+        distanceAlongRay += max(abs(distance) * 0.72, minimumStep);
     }
     return TraceResult(environmentRadiance(direction), f32(steps));
 }
@@ -107,7 +108,9 @@ fn ComputeMain(@builtin(global_invocation_id) id : vec3u) {
     }
 
     let sourceDimensions = textureDimensions(worldPositionTexture);
-    let sourceCoordinate = min(id.xy * 2u + vec2u(1u), sourceDimensions - vec2u(1u));
+    let sourcePosition = (vec2f(id.xy) + vec2f(0.5))
+        * vec2f(sourceDimensions) / vec2f(outputDimensions);
+    let sourceCoordinate = min(vec2u(sourcePosition), sourceDimensions - vec2u(1u));
     let positionSample = textureLoad(worldPositionTexture, sourceCoordinate, 0);
     let normalSample = textureLoad(worldNormalTexture, sourceCoordinate, 0);
     if (positionSample.w < 0.5 || normalSample.w < 0.5) {
@@ -117,13 +120,12 @@ fn ComputeMain(@builtin(global_invocation_id) id : vec3u) {
 
     let normal = normalize(normalSample.xyz);
     let basis = tangentBasis(normal);
-    let rayCount = clamp(u32(parameters.settings.z + 0.5), 1u, 8u);
-    // The sequence is keyed to a coarse world-space cell, not the current
-    // pixel. Orbiting the camera therefore cannot reshuffle GI directions over
-    // a stationary surface as a screen-space noise pattern would.
+    let rayCount = clamp(u32(parameters.settings.z + 0.5), 1u, 16u);
+    // The sequence remains world-locked, but its cell size is independent of
+    // the GDF voxel size. A fine pattern avoids exposing the 3D cache grid.
     let worldKey = vec3i(floor(
         (positionSample.xyz - parameters.boundsMinimum.xyz)
-        / (parameters.settings.y * 1.75)
+        / max(parameters.environment.z, 0.005)
     ));
     let sequenceFrame = u32(parameters.settings.w + 0.5);
     let noise = vec2f(
@@ -133,7 +135,7 @@ fn ComputeMain(@builtin(global_invocation_id) id : vec3u) {
     var sum = vec3f(0.0);
     var stepSum = 0.0;
     let origin = positionSample.xyz + normal * parameters.settings.y * 1.9;
-    for (var ray = 0u; ray < 8u; ray += 1u) {
+    for (var ray = 0u; ray < 16u; ray += 1u) {
         if (ray >= rayCount) {
             break;
         }
