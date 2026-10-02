@@ -199,6 +199,7 @@ public:
 
 int main(int Count,char** Arguments)
 {
+    std::cout << std::unitbuf;
     using namespace Frontier;
     try
     {
@@ -259,8 +260,10 @@ int main(int Count,char** Arguments)
             Initialization.TableSampler=Host.Sampler; Initialization.EnergyLutView=Initialization.SheenLutView=Table.View;
             DistanceFieldGIStage Stage;
             auto Missing=Initialization; Missing.SpirvDirectory="/missing-sdf-shaders";
+            std::cout<<"Checking missing-shader refusal\n";
             Require(!Stage.Bring(Missing) && !Stage.IsReady(),"Missing shaders must refuse readiness");
-            Require(Stage.Bring(Initialization),Stage.QueryRefusal().c_str());
+            std::cout<<"Constructing production pipelines\n";
+            Require(Stage.Bring(Initialization),"SDF initialization refused");
             Require(Stage.IsReady(),"Populated stage must become ready");
             auto Pixels=Host.Allocate(Width*Height*4u);
             auto Fields=Host.Allocate(Stage.QueryVoxelCount()*64u);
@@ -294,6 +297,7 @@ int main(int Count,char** Arguments)
                 std::cout<<Name<<": red="<<Red<<" green="<<Green<<'\n';
                 return std::array<double,2>{Red,Green};
             };
+            std::cout<<"Dispatching production pipelines\n";
             auto Lit=Execute(8u,"emissive-gi");
             Require(Lit[0]>1000.0 && Lit[0]>Lit[1]*2.0,"Emissive scene must produce red indirect illumination");
             auto FieldBytes=Host.Read(Fields); const float* FieldValues=reinterpret_cast<const float*>(FieldBytes.data());

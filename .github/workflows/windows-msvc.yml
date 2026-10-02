@@ -35,7 +35,7 @@ jobs:
       - name: Install software Vulkan and validation tools
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y libvulkan-dev mesa-vulkan-drivers vulkan-validationlayers glslc spirv-tools
+          sudo apt-get install -y libvulkan-dev mesa-vulkan-drivers vulkan-validationlayers glslc spirv-tools gdb
       - name: Execute production SDF shaders with synchronization validation
         run: python3 VisualProof/DistanceFieldGI/RunDistanceFieldExecution.py
       - name: Retain Vulkan execution evidence
@@ -45,7 +45,7 @@ jobs:
           name: sdf-vulkan-execution-${{ github.sha }}
           retention-days: 14
           path: |
-            _AgentScratch/build/sdf-execution/Execution.log
+            _AgentScratch/build/sdf-execution/*.log
             _AgentScratch/build/sdf-execution/Images/*.png
             _AgentScratch/build/sdf-execution/Images/*.ppm
             _AgentScratch/build/sdf-execution/Shaders/

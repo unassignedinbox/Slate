@@ -22,13 +22,19 @@ for Name in ("DistanceFieldConstruct", "DistanceFieldRadiance", "DistanceFieldGI
 Sources = [Root / "VisualProof/DistanceFieldGI/DistanceFieldExecution.cpp",
            Engine / "Engine/DeviceExchange/DistanceFieldGIStage.cpp",
            Engine / "Engine/GeometricRaster/DistanceFieldStructure.cpp"]
-subprocess.run([os.environ.get("CXX", "g++"), "-std=c++20", "-O2", "-Wall", "-Wextra", "-Wno-missing-field-initializers",
+subprocess.run([os.environ.get("CXX", "g++"), "-std=c++20", "-O2", "-g", "-Wall", "-Wextra", "-Wno-missing-field-initializers",
                 "-I" + str(Engine), *map(str, Sources), "-lvulkan", "-o", str(Output / "DistanceFieldExecution")], check=True)
 Completed = subprocess.run([str(Output / "DistanceFieldExecution"), str(Shaders), str(Images)],
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=240)
 (Output / "Execution.log").write_text(Completed.stdout, encoding="utf-8")
 print(Completed.stdout)
 if Completed.returncode:
+    if Completed.returncode < 0:
+        Crash = subprocess.run(["gdb", "--batch", "-ex", "run", "-ex", "bt 20", "--args",
+                                str(Output / "DistanceFieldExecution"), str(Shaders), str(Images)],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=180)
+        (Output / "Crash.log").write_text(Crash.stdout, encoding="utf-8")
+        print(Crash.stdout)
     # Emit the actual driver/validation refusal in Actions annotations, even when artifact downloads are unavailable.
     for Line in Completed.stdout.splitlines():
         if "FAIL" in Line or "Validation Error" in Line or "VUID" in Line:
