@@ -47,10 +47,16 @@
   .row input[type=checkbox]::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#9a9da4;transition:.2s}
   .row input[type=checkbox]:checked{background:var(--green)}
   .row input[type=checkbox]:checked::after{left:17px;background:#fff}
-  .presets{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px}
-  .presets button,.btns button{background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:999px;padding:7px 14px;font:inherit;font-size:12px;cursor:pointer;transition:.15s}
-  .presets button:hover,.btns button:hover{background:var(--card3)}
+  .presets{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
+  .presets button{background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:12px;padding:9px 10px;font:inherit;font-size:12px;cursor:pointer;transition:.15s;text-align:left}
+  .presets button small{display:block;color:var(--dim);font-size:10px;margin-top:2px}
+  .presets button:hover{background:var(--card3)}
+  .presets button.on{border-color:var(--green)}
+  .presets button.on small{color:var(--green)}
+  #presetDesc{color:var(--mut);font-size:11.5px;line-height:1.5;min-height:34px}
   .btns{display:flex;gap:6px;margin-top:6px}
+  .btns button{background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:999px;padding:7px 14px;font:inherit;font-size:12px;cursor:pointer;transition:.15s}
+  .btns button:hover{background:var(--card3)}
   .btns button.primary{background:#fff;color:#111;border-color:#fff}
   #view{position:relative;border-radius:18px;overflow:hidden;background:#111;min-height:0}
   #view canvas{display:block}
@@ -84,13 +90,9 @@
     </div>
 
     <div class="card" style="--bar:var(--blue)">
-      <h2>Presets</h2>
-      <div class="presets">
-        <button data-preset="street">Street</button>
-        <button data-preset="sport">Sport directional</button>
-        <button data-preset="winter">Winter siped</button>
-        <button data-preset="block">Block lug</button>
-      </div>
+      <h2>Tread designs <span class="r">real archetypes</span></h2>
+      <div class="presets" id="presetButtons"></div>
+      <div id="presetDesc"></div>
     </div>
 
     <div class="card" style="--bar:var(--orange)">
@@ -99,7 +101,7 @@
     </div>
 
     <div class="card" style="--bar:var(--green)">
-      <h2>Pattern tile <span class="r">one repetition</span></h2>
+      <h2>Pattern <span class="r">applies to the design</span></h2>
       <div id="patternRows"></div>
     </div>
 
@@ -129,73 +131,189 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 
 // ====================================================================================================================
-//  QUAD TREAD MODELLING
+//  QUAD TREAD MODELLING — with real tread archetypes
 //
-//  The tread is MODELLED, never displaced. There is no height map, no texture probe, no per-vertex raster lookup.
-//  One full tread pattern tile is described as vector bands (rib / circumferential grooves / chevron lugs / sipes).
-//  Its outlines are traced by a conforming quad grid: grid columns sit exactly on the lateral feature edges, grid
-//  rows sit exactly on the block / sipe / gap edges, and each column is sheared along the circumference by the
-//  chevron angle — so every slanted groove wall is traced exactly by quad edges, never stair-stepped.
+//  The tread is MODELLED, never displaced: no height map, no texture probe, no per-vertex raster lookup.
 //
-//  STEP 1  TRACE   the tile is built flat: block top faces, explicit vertical wall quads down the block outlines,
-//                  groove floors, sipe floors. All faces are quads.
-//  STEP 2  ALIGN   the same tile is mapped onto the wheel: lateral mm follow the crown bulge + shoulder roundover
-//                  (radius varies across the width), circumferential mm become wheel angle.
-//  STEP 3  ARRAY   the tile is instanced N times around the wheel; the pitch is exactly circumference / N, so the
-//                  spacing between tread blocks is uniform and the pattern closes on itself.
-//  STEP 4  BRIDGE  every tile ends and begins with an identical boundary loop (same columns, same levels). The gap
-//                  between consecutive tiles is closed by bridging those loops with quads: lateral-groove floors
-//                  across the lugs, rib top continuation, and the rib/groove wall quads running through the gap.
-//                  The result is a watertight tread band — tread only, no sidewall, no carcass.
+//  A tread design is a list of LANES from the centre of the tyre outward. A lane is either a circumferential
+//  groove (always floor) or a rib of rubber. A rib lane is continuous (a ring) or blocked (cut into tread
+//  blocks by a per-lane gap), carries its own sipes, its own chevron slope multiplier, and its own PHASE —
+//  a circumferential offset that staggers its blocks against the neighbouring lanes, which is how off-road
+//  lugs alternate. Every lane boundary and every block/sipe/gap edge becomes a grid line of ONE shared
+//  conforming quad grid, so every wall is traced exactly by quad edges and lanes can never disagree about
+//  a shared vertex: the classification shifts per lane, the grid does not.
+//
+//  STEP 1  TRACE   one pitch of the design, flat: block tops, explicit wall quads down every outline,
+//                  groove floors, sipe floors. All faces quads.
+//  STEP 2  ALIGN   the same tile mapped onto the wheel: lateral mm follow the crown bulge + shoulder
+//                  roundover, circumferential mm become wheel angle. Same topology, new positions.
+//  STEP 3  ARRAY   the tile instanced pitch-count times; pitch = circumference / count, exact.
+//  STEP 4  BRIDGE  the gaps of every blocked lane are closed by bridging the identical boundary loops of
+//                  neighbouring tiles with quads (tinted blue). Watertight tread band, tread only.
 // ====================================================================================================================
+
+const π = Math.PI;
 
 // ------------------------------------------------- state -----------------------------------------------------------
 const T = {
-  width: 245, aspect: 40, rim: 18, treadFrac: 0.88,     // carcass
-  depth: 8, crown: 3.0, shoulderLen: 14, shoulderDrop: 4,
-  pitches: 64, gapFrac: 0.30, chevron: 38,              // tile layout
-  ribW: 30, grooveW: 9, centreW: 8,
-  sipes: 1, sipeW: 1.6, sipeDepthF: 0.6,
-  skirt: true,                                          // display
-  wire: true, tint: true, spin: false,
+  width: 205, aspect: 55, rim: 16, treadFrac: 0.88,     // carcass
+  depth: 8, crown: 2.5, shoulderLen: 12, shoulderDrop: 3,
+  pitches: 70, chevron: 14, gapScale: 1.0, stagger: 1.0, // pattern knobs, applied onto the active design
+  sipeW: 1.6, sipeDepthF: 0.6,
+  skirt: true, wire: true, tint: true, spin: false,
 };
+let preset = 'road';
 let stage = 4;
 
 const STAGE_TEXT = {
-  1: 'Step 1 — Trace. One full tread pattern tile, flat. The pattern outline (rib, grooves, chevron lugs, sipes) is traced by quads: top faces, vertical wall quads down every block edge, groove floors. No height sampling anywhere.',
-  2: 'Step 2 — Align. The same quad tile is bent onto the wheel. Across the width it follows the crown bulge and shoulder roundover; along its length it follows the wheel circumference. Same topology, new positions.',
-  3: 'Step 3 — Array. The tile repeats around the wheel at exact pitch spacing (circumference ÷ pitch count), leaving a uniform gap between consecutive tiles. The boundary loops facing each gap are identical.',
-  4: 'Step 4 — Bridge. Each gap is closed by bridging the matching boundary loops with quads (tinted blue): lateral-groove floors across the lugs, rib continuation, wall quads through the gap. Watertight tread band, tread only.',
+  1: 'Step 1 — Trace. One pitch of the design, flat. Every lane outline (ribs, grooves, blocks, sipes) is traced by quads: top faces, vertical wall quads down each edge, groove floors. No height sampling anywhere.',
+  2: 'Step 2 — Align. The same quad tile bent onto the wheel. Across the width it follows the crown bulge and shoulder roundover; along its length, the wheel circumference. Same topology, new positions.',
+  3: 'Step 3 — Array. The tile repeats around the wheel at exact pitch spacing (circumference ÷ pitch count). Blocked lanes leave their gaps open; the boundary loops facing every gap are identical.',
+  4: 'Step 4 — Bridge. Each gap in every blocked lane is closed by bridging the matching boundary loops with quads (tinted blue). Watertight tread band — tread only, no sidewall, no carcass.',
 };
 
-const PRESETS = {
-  street: { depth: 8,  crown: 3,   shoulderLen: 14, shoulderDrop: 4, pitches: 64, gapFrac: 0.30, chevron: 38, ribW: 30, grooveW: 9,  centreW: 8,  sipes: 1, sipeW: 1.6, sipeDepthF: 0.6 },
-  sport:  { depth: 7,  crown: 2,   shoulderLen: 18, shoulderDrop: 5, pitches: 56, gapFrac: 0.24, chevron: 55, ribW: 44, grooveW: 11, centreW: 0,  sipes: 0, sipeW: 1.6, sipeDepthF: 0.6 },
-  winter: { depth: 10, crown: 3.5, shoulderLen: 12, shoulderDrop: 4, pitches: 72, gapFrac: 0.34, chevron: 30, ribW: 22, grooveW: 7,  centreW: 6,  sipes: 3, sipeW: 1.4, sipeDepthF: 0.7 },
-  block:  { depth: 11, crown: 2,   shoulderLen: 10, shoulderDrop: 3, pitches: 44, gapFrac: 0.40, chevron: 12, ribW: 0,  grooveW: 10, centreW: 10, sipes: 0, sipeW: 1.6, sipeDepthF: 0.6 },
+// ------------------------------------------------- tread designs ---------------------------------------------------
+//  Lanes run from the tyre centreline outward; the first lane straddles the centre, the last absorbs the
+//  remaining width out to the shoulder. kind:'groove' is a circumferential groove. A rib lane:
+//    blocked   cut into blocks by a gap of gapFrac × pitch (bridged in step 4)
+//    sipes     thin cuts across the lane (work on continuous ribs too)
+//    phase     0..1 circumferential offset — staggers this lane's blocks against its neighbours
+//    chevMul   multiplies the global chevron slope inside this lane (0 = straight)
+const DESIGNS = {
+  road: {
+    label: 'Road / Touring', tag: 'asphalt · symmetric ribs',
+    desc: 'Symmetric asphalt pattern: continuous siped centre rib, four circumferential grooves, blocked intermediate and shoulder ribs with light chevron. The daily-commuter layout.',
+    set: { width: 205, aspect: 55, rim: 16, depth: 8, crown: 2.5, shoulderLen: 12, shoulderDrop: 3,
+           pitches: 70, chevron: 14, gapScale: 1, stagger: 1, sipeW: 1.6, sipeDepthF: 0.6 },
+    lanes: [
+      { kind: 'rib',    w: 16, sipes: 2, chevMul: 0 },
+      { kind: 'groove', w: 8 },
+      { kind: 'rib',    w: 24, blocked: true, gapFrac: 0.16, sipes: 2, chevMul: 1, phase: 0 },
+      { kind: 'groove', w: 9 },
+      { kind: 'rib',    w: 60, blocked: true, gapFrac: 0.20, sipes: 2, chevMul: 0.6, phase: 0.5 },
+    ],
+  },
+  wet: {
+    label: 'Wet / Rain', tag: 'directional V',
+    desc: 'Directional rain pattern: a sharp V channels water outward from the narrow centre rib through wide circumferential grooves. Staggered arms, siped blocks, deep tread.',
+    set: { width: 225, aspect: 45, rim: 17, depth: 8.5, crown: 3, shoulderLen: 14, shoulderDrop: 4,
+           pitches: 58, chevron: 50, gapScale: 1, stagger: 1, sipeW: 1.6, sipeDepthF: 0.65 },
+    lanes: [
+      { kind: 'rib',    w: 12, chevMul: 0 },
+      { kind: 'groove', w: 11 },
+      { kind: 'rib',    w: 26, blocked: true, gapFrac: 0.30, sipes: 2, chevMul: 1, phase: 0 },
+      { kind: 'groove', w: 10 },
+      { kind: 'rib',    w: 60, blocked: true, gapFrac: 0.32, sipes: 2, chevMul: 1, phase: 0.35 },
+    ],
+  },
+  gt3: {
+    label: 'GT3 Slick', tag: 'racing · smooth',
+    desc: 'Racing slick: an unbroken band of rubber for maximum dry contact patch, flat crown, shallow depth. The two thin circumferential scribes are wear indicators, not tread.',
+    set: { width: 305, aspect: 30, rim: 18, depth: 3.5, crown: 1, shoulderLen: 16, shoulderDrop: 3,
+           pitches: 24, chevron: 0, gapScale: 1, stagger: 1, sipeW: 1.6, sipeDepthF: 0.6 },
+    lanes: [
+      { kind: 'rib',    w: 60, chevMul: 0 },
+      { kind: 'groove', w: 3 },
+      { kind: 'rib',    w: 99, chevMul: 0 },
+    ],
+  },
+  semi: {
+    label: 'Semi-slick', tag: 'track / tarmac',
+    desc: 'Road-legal track pattern: mostly rubber, a wide continuous outer shoulder for cornering, sparse angled slots on the inner half to stay legal in the wet. Large pitches, shallow gaps.',
+    set: { width: 265, aspect: 35, rim: 19, depth: 6, crown: 1.5, shoulderLen: 14, shoulderDrop: 3,
+           pitches: 40, chevron: 35, gapScale: 1, stagger: 1, sipeW: 1.6, sipeDepthF: 0.6 },
+    lanes: [
+      { kind: 'rib',    w: 30, chevMul: 0 },
+      { kind: 'groove', w: 9 },
+      { kind: 'rib',    w: 34, blocked: true, gapFrac: 0.10, sipes: 0, chevMul: 1, phase: 0 },
+      { kind: 'groove', w: 8 },
+      { kind: 'rib',    w: 70, chevMul: 0 },
+    ],
+  },
+  offroad: {
+    label: 'Off-road M/T', tag: 'mud terrain · lugs',
+    desc: 'Mud-terrain: tall widely-spaced lugs with staggered rows so something is always biting, huge voids for mud clearance, deep tread, no sipes. No continuous rubber anywhere.',
+    set: { width: 285, aspect: 70, rim: 17, depth: 15, crown: 2, shoulderLen: 18, shoulderDrop: 6,
+           pitches: 34, chevron: 18, gapScale: 1, stagger: 1, sipeW: 1.6, sipeDepthF: 0.6 },
+    lanes: [
+      { kind: 'rib',    w: 34, blocked: true, gapFrac: 0.45, sipes: 0, chevMul: 0.4, phase: 0 },
+      { kind: 'groove', w: 9 },
+      { kind: 'rib',    w: 36, blocked: true, gapFrac: 0.45, sipes: 0, chevMul: 1, phase: 0.5 },
+      { kind: 'groove', w: 9 },
+      { kind: 'rib',    w: 60, blocked: true, gapFrac: 0.50, sipes: 0, chevMul: 0.7, phase: 0.1 },
+    ],
+  },
+  rally: {
+    label: 'Rally Gravel', tag: 'loose surface · blocks',
+    desc: 'Gravel rally: medium blocks everywhere with single sipes, moderate chevron and offset rows — bite on loose surfaces without the self-destruction of full mud lugs on hardpack.',
+    set: { width: 215, aspect: 65, rim: 15, depth: 12, crown: 2.5, shoulderLen: 12, shoulderDrop: 4,
+           pitches: 44, chevron: 22, gapScale: 1, stagger: 1, sipeW: 1.8, sipeDepthF: 0.6 },
+    lanes: [
+      { kind: 'rib',    w: 18, blocked: true, gapFrac: 0.30, sipes: 1, chevMul: 0, phase: 0.25 },
+      { kind: 'groove', w: 8 },
+      { kind: 'rib',    w: 26, blocked: true, gapFrac: 0.35, sipes: 1, chevMul: 1, phase: 0 },
+      { kind: 'groove', w: 8 },
+      { kind: 'rib',    w: 60, blocked: true, gapFrac: 0.35, sipes: 1, chevMul: 0.8, phase: 0.5 },
+    ],
+  },
 };
 
 // ------------------------------------------------- derived ---------------------------------------------------------
-const D = {};              // derived dimensions, refreshed before every build
-function derive() {
-  D.halfW   = T.width * T.treadFrac / 2;                       // half tread width, mm
-  D.R       = T.rim * 25.4 / 2 + T.width * T.aspect / 100;     // outer radius at the crown apex, mm
-  D.circ    = 2 * Math.PI * D.R;                               // reference circumference, mm
-  D.P       = D.circ / T.pitches;                              // one pitch, mm — exact fit by construction
-  D.gapLen  = Math.min(Math.max(T.gapFrac * D.P, 2), D.P - 4); // lateral groove between tiles
-  D.blockLen = D.P - D.gapLen;
+const D = {};              // derived dimensions + resolved lanes, refreshed before every build
 
-  // lateral layout, clamped so every region keeps a sensible width
-  D.cgHalf    = Math.min(T.centreW / 2, D.halfW * 0.2);                       // centre groove half width
-  const ribHalf = T.ribW / 2;
-  D.ribOut    = Math.min(D.cgHalf + ribHalf, D.halfW * 0.55);                 // rib outer edge
-  D.grooveOut = Math.min(D.ribOut + T.grooveW, D.halfW - 6);                  // circumferential groove outer edge
-  D.shLen     = Math.min(T.shoulderLen, (D.halfW - D.grooveOut) * 0.8);       // shoulder roundover length
-  D.shearK    = Math.tan(T.chevron * Math.PI / 180);                          // chevron shear slope (mm per mm)
-  D.sipeDepth = T.depth * T.sipeDepthF;
+function derive() {
+  D.halfW  = T.width * T.treadFrac / 2;
+  D.R      = T.rim * 25.4 / 2 + T.width * T.aspect / 100;
+  D.circ   = 2 * π * D.R;
+  D.P      = D.circ / T.pitches;
+  D.shLen  = Math.min(T.shoulderLen, D.halfW * 0.45);
+  D.tanA   = Math.tan(T.chevron * π / 180);
+
+  // ---- resolve the active design's lanes onto this carcass --------------------------------------------------------
+  const defs = DESIGNS[preset].lanes;
+  const lanes = [];
+  let x = 0;
+  for (let i = 0; i < defs.length; i++) {
+    const d = defs[i];
+    const last = i === defs.length - 1;
+    let x1 = last ? D.halfW : Math.min(x + d.w * (i === 0 ? 0.5 : 1), D.halfW - (d.kind === 'groove' ? 8 : 4));
+    if (x1 - x < 0.75) { if (last && lanes.length) { lanes[lanes.length - 1].x1 = D.halfW; } continue; }
+    const blocked = !!d.blocked;
+    const gf = Math.min(0.6, Math.max(0, (d.gapFrac ?? 0) * T.gapScale));
+    lanes.push({
+      kind: d.kind, x0: x, x1, blocked,
+      gapLen: blocked ? Math.min(Math.max(gf * D.P, 2.5), D.P - 4) : 0,
+      sipes: Math.max(0, Math.round(d.sipes ?? 0)),
+      phase: ((d.phase ?? 0) * T.stagger) % 1,
+      chevMul: d.chevMul ?? 1,
+      sipeDepth: T.depth * Math.min(1, (d.sipeDepthF ?? T.sipeDepthF)),
+    });
+    x = x1;
+    if (x >= D.halfW - 0.5) break;
+  }
+  if (!lanes.length) lanes.push({ kind: 'rib', x0: 0, x1: D.halfW, blocked: false, gapLen: 0, sipes: 0, phase: 0, chevMul: 0, sipeDepth: T.depth });
+  lanes[lanes.length - 1].x1 = D.halfW;
+  D.lanes = lanes;
+
+  // ---- per-lane band program over one pitch (circumferential structure) -------------------------------------------
+  for (const L of lanes) {
+    if (L.kind === 'groove') { L.program = [{ t: 'BLOCK', len: D.P }]; continue; }
+    const body = D.P - L.gapLen;
+    const ns = L.blocked || L.sipes > 0 ? L.sipes : 0;
+    const sw = ns > 0 ? Math.min(T.sipeW, body / (ns + 1) * 0.5) : 0;
+    const sub = (body - ns * sw) / (ns + 1);
+    const bands = [];
+    for (let k = 0; k <= ns; k++) { bands.push({ t: 'BLOCK', len: sub }); if (k < ns) bands.push({ t: 'SIPE', len: sw }); }
+    if (L.gapLen > 0) bands.push({ t: 'GAP', len: L.gapLen });
+    L.program = bands;
+  }
+
+  // wall split levels: every sipe floor in use, so all wall edge loops conform (no T-junctions)
+  D.levels = [...new Set(lanes.filter(L => L.kind !== 'groove' && L.sipes > 0 && L.sipeDepth < T.depth - 1e-6)
+                              .map(L => Math.round(L.sipeDepth * 1e6) / 1e6))].sort((a, b) => a - b);
 }
 
-// crown bulge + shoulder roundover: tread-surface radius as a function of lateral position
+// crown bulge + shoulder roundover
 function rTop(x) {
   const a = Math.abs(x);
   let r = D.R - T.crown * (a / D.halfW) * (a / D.halfW);
@@ -205,99 +323,114 @@ function rTop(x) {
   }
   return r;
 }
-// chevron: every column is shifted along the circumference proportionally to its distance from the rib edge.
-// The shift is per-column and identical for every tile, so arrayed tiles stay in phase and gaps stay constant.
-function shear(x) { return -D.shearK * Math.max(0, Math.abs(x) - D.ribOut); }
+// chevron: piecewise-linear shear accumulated lane by lane, so each lane sets its own slope and the
+// function stays continuous — slanted walls are traced exactly, and arrayed tiles stay in phase.
+function shear(x) {
+  const a = Math.abs(x);
+  let s = 0;
+  for (const L of D.lanes) {
+    if (a <= L.x0) break;
+    s += (Math.min(a, L.x1) - L.x0) * D.tanA * L.chevMul;
+    if (a <= L.x1) break;
+  }
+  return -s;
+}
 
-// ------------------------------------------------- tile layout -----------------------------------------------------
-// Columns: lateral stations (mm) + the region of each interval. Grid columns SIT ON the feature edges.
+// ------------------------------------------------- the shared grid -------------------------------------------------
+// Columns sit on lane edges; rows are the UNION of every lane's (phase-shifted) band boundaries plus a
+// global density set. Classification happens per lane on this one grid — lanes can never disagree about
+// a shared vertex because every vertex is a grid point both lanes use.
 function buildColumns() {
-  const half = [];                                        // [{a,b,region,n}] from the centre outward
-  if (D.cgHalf > 0.5)             half.push({ a: 0,          b: D.cgHalf,    region: 'CG',     n: 2 });
-  if (D.ribOut - D.cgHalf > 0.5)  half.push({ a: D.cgHalf,   b: D.ribOut,    region: 'RIB',    n: 3 });
-  if (D.grooveOut - D.ribOut > 0.5) half.push({ a: D.ribOut, b: D.grooveOut, region: 'GROOVE', n: 2 });
-  const lugA = D.grooveOut, lugB = D.halfW;
-  const flat = Math.max(1, lugB - lugA - D.shLen);
-  half.push({ a: lugA, b: lugB - D.shLen, region: 'LUG', n: Math.max(3, Math.round(flat / 5)) });
-  if (D.shLen > 0.5) half.push({ a: lugB - D.shLen, b: lugB, region: 'LUG', n: 4 });
-
-  const cols = [], creg = [];
-  const push = (a, b, region, n) => {
-    for (let k = 0; k < n; k++) {
-      cols.push(a + (b - a) * k / n);
-      creg.push(region);
-    }
+  const cols = [], lane = [];
+  const push = (a, b, li, n) => {
+    for (let k = 0; k < n; k++) { cols.push(a + (b - a) * k / n); lane.push(li); }
   };
-  for (let s = half.length - 1; s >= 0; s--) push(-half[s].b, -half[s].a, half[s].region, half[s].n); // mirrored half
-  for (const seg of half) push(seg.a, seg.b, seg.region, seg.n);                                       // positive half
+  const half = [];   // [{a,b,li,n}] centre outward
+  for (let li = 0; li < D.lanes.length; li++) {
+    const L = D.lanes[li], w = L.x1 - L.x0, last = li === D.lanes.length - 1;
+    if (L.kind === 'groove') { half.push({ a: L.x0, b: L.x1, li, n: 2 }); continue; }
+    if (last && D.shLen > 0.5 && L.x1 - D.shLen > L.x0 + 1) {
+      half.push({ a: L.x0, b: L.x1 - D.shLen, li, n: Math.max(2, Math.round((w - D.shLen) / 5)) });
+      half.push({ a: L.x1 - D.shLen, b: L.x1, li, n: 4 });
+    } else {
+      half.push({ a: L.x0, b: L.x1, li, n: Math.max(2, Math.round(w / 5)) });
+    }
+  }
+  for (let s = half.length - 1; s >= 0; s--) push(-half[s].b, -half[s].a, half[s].li, half[s].n);
+  for (const seg of half) push(seg.a, seg.b, seg.li, seg.n);
   cols.push(D.halfW);
-  return { cols, creg };
+  return { cols, lane };
 }
 
-// Rows: circumferential stations (mm) over one pitch + the band of each interval.
-// BLOCK bands are the rubber, SIPE bands are thin cuts inside the tile, the single GAP band is the space
-// between tiles that Step 4 bridges. Grid rows SIT ON the block / sipe / gap edges.
 function buildRows() {
-  const bands = [];
-  const ns = Math.max(0, Math.round(T.sipes));
-  const sw = Math.min(T.sipeW, D.blockLen / (ns + 1) * 0.5);
-  const sub = (D.blockLen - ns * sw) / (ns + 1);
-  for (let k = 0; k <= ns; k++) {
-    bands.push({ t: 'BLOCK', len: sub });
-    if (k < ns) bands.push({ t: 'SIPE', len: sw });
+  const seen = new Map();
+  const put = y => {
+    y = ((y % D.P) + D.P) % D.P;
+    const k = Math.round(y / 0.05);                 // merge stations closer than 0.05 mm — no sliver cells
+    if (!seen.has(k)) seen.set(k, y);
+  };
+  put(0);
+  for (const L of D.lanes) {
+    if (L.kind === 'groove') continue;
+    let acc = 0;
+    for (const b of L.program) { put(L.phase * D.P + acc); acc += b.len; }
   }
-  bands.push({ t: 'GAP', len: D.gapLen });
-
-  const rows = [], rband = [];
-  let y = 0;
-  for (const b of bands) {
-    const n = b.t === 'BLOCK' ? Math.max(2, Math.round(b.len / 5)) : b.t === 'GAP' ? 2 : 1;
-    for (let k = 0; k < n; k++) { rows.push(y + b.len * k / n); rband.push(b.t); }
-    y += b.len;
-  }
+  const n = Math.max(6, Math.ceil(D.P / 4.5));      // density for roundness, classification-neutral
+  for (let k = 0; k < n; k++) put(D.P * k / n);
+  const rows = [...seen.values()].sort((a, b) => a - b);
+  if (rows[0] > 1e-9) rows.unshift(0);
   rows.push(D.P);
-  return { rows, rband };
+  return rows;
 }
 
-// depth below the tread surface for a (lateral region, circumferential band) cell — this IS the pattern.
-function depthOf(region, band) {
-  if (region === 'RIB') return 0;                                    // rib: continuous ring of rubber
-  if (region === 'CG' || region === 'GROOVE') return T.depth;        // circumferential grooves: floor
-  if (band === 'BLOCK') return 0;                                    // lug block top
-  if (band === 'SIPE') return D.sipeDepth;                           // sipe floor
-  return T.depth;                                                    // GAP: lateral groove floor
+function bandAt(L, y) {
+  if (L.kind === 'groove') return 'BLOCK';
+  let y2 = ((y - L.phase * D.P) % D.P + D.P) % D.P;
+  for (const b of L.program) { if (y2 < b.len) return b.t; y2 -= b.len; }
+  return L.program[L.program.length - 1].t;
+}
+function depthOf(L, band) {
+  if (L.kind === 'groove') return T.depth;
+  if (band === 'BLOCK') return 0;
+  if (band === 'SIPE') return L.sipeDepth;
+  return T.depth;   // GAP
+}
+function wallSegs(a, b) {
+  const out = [];
+  let p = a;
+  for (const c of D.levels) if (c > a + 1e-6 && c < b - 1e-6) { out.push([p, c]); p = c; }
+  out.push([p, b]);
+  return out;
 }
 
 // ------------------------------------------------- geometry --------------------------------------------------------
-// position of (lateral mm, circumferential mm, depth mm). flat = Step 1, otherwise wrapped on the wheel.
 function pos(x, y, depth, flat, out) {
   const ys = y + shear(x);
   if (flat) return out.set(x, -depth, ys - D.P / 2);
-  const th = ys / D.circ * 2 * Math.PI;
+  const th = ys / D.circ * 2 * π;
   const r = rTop(x) - depth;
   return out.set(x, r * Math.cos(th), r * Math.sin(th));
 }
-// smooth analytic normal of the tread surface of revolution (used for top / floor quads so the crown shades smoothly)
 function surfNormal(x, y, flat, out) {
   if (flat) return out.set(0, 1, 0);
-  const th = (y + shear(x)) / D.circ * 2 * Math.PI;
+  const th = (y + shear(x)) / D.circ * 2 * π;
   const e = 0.25, dr = (rTop(x + e) - rTop(x - e)) / (2 * e);
   return out.set(-dr, Math.cos(th), Math.sin(th)).normalize();
 }
-// circumferential tangent (for orienting horizontal wall quads)
 function tangent(x, y, flat, out) {
   if (flat) return out.set(0, 0, 1);
-  const th = (y + shear(x)) / D.circ * 2 * Math.PI;
+  const th = (y + shear(x)) / D.circ * 2 * π;
   return out.set(0, -Math.sin(th), Math.cos(th));
 }
 
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _n = new THREE.Vector3();
+const V = () => new THREE.Vector3();
 
 function makeBuilder() {
   const sets = { tile: { pos: [], nrm: [], quads: 0 }, bridge: { pos: [], nrm: [], quads: 0 } };
-  const edges = [];                     // wireframe segments (quad edges only — the true topology)
+  const edges = [];
   const edgeSeen = new Set();
-  const objV = [], objIndex = new Map(), objF = [];   // OBJ export: welded verts + quad faces
+  const objV = [], objIndex = new Map(), objF = [];
 
   const ek = v => `${Math.round(v.x * 100)},${Math.round(v.y * 100)},${Math.round(v.z * 100)}`;
   function objVert(v) {
@@ -313,11 +446,9 @@ function makeBuilder() {
     edgeSeen.add(k);
     edges.push(p.x, p.y, p.z, q.x, q.y, q.z);
   }
-
-  // one quad: 4 corner positions, 4 corner normals, an expected facing direction (flips winding if needed)
   function quad(setName, p, n, expected) {
     _a.subVectors(p[1], p[0]); _b.subVectors(p[3], p[0]); _n.crossVectors(_a, _b);
-    if (_n.lengthSq() < 1e-9) return;                     // degenerate (zero-width clamp) — skip
+    if (_n.lengthSq() < 1e-9) return;
     if (_n.dot(expected) < 0) { p = [p[0], p[3], p[2], p[1]]; n = [n[0], n[3], n[2], n[1]]; }
     const s = sets[setName];
     for (const tri of [[0, 1, 2], [0, 2, 3]])
@@ -329,20 +460,10 @@ function makeBuilder() {
   return { sets, edges, quad, objV, objF };
 }
 
-const V = () => new THREE.Vector3();
-
-// Walls are split at the sipe-depth level whenever it falls strictly inside their span, so every wall edge loop
-// lines up with the sipe floors / sipe walls — conforming quad topology with no T-junctions.
-function wallSegs(dT, dB) {
-  if (Math.round(T.sipes) > 0 && D.sipeDepth > dT + 1e-6 && D.sipeDepth < dB - 1e-6)
-    return [[dT, D.sipeDepth], [D.sipeDepth, dB]];
-  return [[dT, dB]];
-}
-
 function buildTread() {
   derive();
-  const { cols, creg } = buildColumns();
-  const { rows, rband } = buildRows();
+  const { cols, lane: laneOf } = buildColumns();
+  const rows = buildRows();
   const flat = stage === 1;
   const tiles = stage <= 2 ? 1 : T.pitches;
   const withBridge = stage === 4;
@@ -350,87 +471,92 @@ function buildTread() {
 
   const M = cols.length - 1, K = rows.length - 1;
 
+  // classification tables over the shared grid: band + depth per (lane, row interval)
+  const bandTab = D.lanes.map(L => {
+    const r = new Array(K);
+    for (let j = 0; j < K; j++) r[j] = bandAt(L, (rows[j] + rows[j + 1]) / 2);
+    return r;
+  });
+  const depthTab = D.lanes.map((L, li) => bandTab[li].map(b => depthOf(L, b)));
+
+  const wallQuad = (set, p, exp) => {
+    _a.subVectors(p[1], p[0]); _b.subVectors(p[3], p[0]);
+    const gn = new THREE.Vector3().crossVectors(_a, _b);
+    if (gn.lengthSq() < 1e-9) return;
+    if (gn.dot(exp) < 0) gn.negate();
+    gn.normalize();
+    B.quad(set, p, [gn, gn, gn, gn], gn);
+  };
+
   for (let t = 0; t < tiles; t++) {
     const yBase = t * D.P;
 
-    // ---- surface cells: block tops, groove floors, sipe floors — the trace of the pattern -----------------------
+    // ---- ① surface cells ------------------------------------------------------------------------------------------
     for (let j = 0; j < K; j++) {
-      const band = rband[j];
-      const isBridgeBand = band === 'GAP';
-      if (isBridgeBand && !withBridge) continue;
       const y0 = yBase + rows[j], y1 = yBase + rows[j + 1];
       for (let i = 0; i < M; i++) {
-        const d = depthOf(creg[i], band);
+        const li = laneOf[i];
+        const isBridge = bandTab[li][j] === 'GAP';
+        if (isBridge && !withBridge) continue;
+        const d = depthTab[li][j];
         const x0 = cols[i], x1 = cols[i + 1];
         const p = [pos(x0, y0, d, flat, V()), pos(x1, y0, d, flat, V()), pos(x1, y1, d, flat, V()), pos(x0, y1, d, flat, V())];
         const n = [surfNormal(x0, y0, flat, V()), surfNormal(x1, y0, flat, V()), surfNormal(x1, y1, flat, V()), surfNormal(x0, y1, flat, V())];
         const exp = n[0].clone().add(n[2]);
-        B.quad(isBridgeBand ? 'bridge' : 'tile', p, n, exp);
+        B.quad(isBridge ? 'bridge' : 'tile', p, n, exp);
       }
     }
 
-    // ---- vertical walls: where two lateral regions sit at different depths (rib walls, groove walls…) ----------
+    // ---- ② vertical walls: wherever two lateral neighbours sit at different depths ---------------------------------
     for (let i = 1; i < M; i++) {
+      const lL = laneOf[i - 1], lR = laneOf[i];
       for (let j = 0; j < K; j++) {
-        const band = rband[j];
-        const isBridgeBand = band === 'GAP';
-        if (isBridgeBand && !withBridge) continue;
-        const dL = depthOf(creg[i - 1], band), dR = depthOf(creg[i], band);
+        const dL = depthTab[lL][j], dR = depthTab[lR][j];
         if (Math.abs(dL - dR) < 1e-6) continue;
+        // the wall belongs to the shallower (block) side; it is bridge geometry only if that side is in gap
+        const blockIsLeft = dL < dR;
+        const blockBand = blockIsLeft ? bandTab[lL][j] : bandTab[lR][j];
+        if (blockBand === 'GAP' && !withBridge) continue;
         const x = cols[i], y0 = yBase + rows[j], y1 = yBase + rows[j + 1];
-        const exp = new THREE.Vector3(dL < dR ? 1 : -1, 0, 0);     // wall faces from the block into the groove
-        for (const [d0, d1] of wallSegs(Math.min(dL, dR), Math.max(dL, dR))) {
-          const p = [pos(x, y0, d0, flat, V()), pos(x, y1, d0, flat, V()), pos(x, y1, d1, flat, V()), pos(x, y0, d1, flat, V())];
-          _a.subVectors(p[1], p[0]); _b.subVectors(p[3], p[0]);
-          const gn = new THREE.Vector3().crossVectors(_a, _b);
-          if (gn.dot(exp) < 0) gn.negate();
-          gn.normalize();
-          B.quad(isBridgeBand ? 'bridge' : 'tile', p, [gn, gn, gn, gn], gn);
-        }
+        const exp = new THREE.Vector3(blockIsLeft ? 1 : -1, 0, 0);
+        for (const [d0, d1] of wallSegs(Math.min(dL, dR), Math.max(dL, dR)))
+          wallQuad(blockBand === 'GAP' ? 'bridge' : 'tile',
+                   [pos(x, y0, d0, flat, V()), pos(x, y1, d0, flat, V()), pos(x, y1, d1, flat, V()), pos(x, y0, d1, flat, V())], exp);
       }
     }
 
-    // ---- horizontal walls: block leading / trailing edges and sipe walls — these trace the block outline -------
-    for (let j = 0; j <= K - 1; j++) {
-      const bPrev = j === 0 ? 'GAP' : rband[j - 1];      // the band before y=0 is the previous tile's gap
-      const bCur = rband[j];
+    // ---- ③ horizontal walls: each lane's own block leading/trailing edges and sipe walls ---------------------------
+    for (let j = 0; j < K; j++) {
       for (let i = 0; i < M; i++) {
-        const dP = depthOf(creg[i], bPrev), dC = depthOf(creg[i], bCur);
+        const li = laneOf[i];
+        const prev = bandTab[li][(j - 1 + K) % K];                 // periodic: before y=0 lies the previous tile
+        const cur = bandTab[li][j];
+        const dP = depthOf(D.lanes[li], prev), dC = depthTab[li][j];
         if (Math.abs(dP - dC) < 1e-6) continue;
         const y = yBase + rows[j], x0 = cols[i], x1 = cols[i + 1];
-        const sign = dP < dC ? 1 : -1;                   // faces from the block into the groove
+        const sign = dP < dC ? 1 : -1;
         const exp = tangent((x0 + x1) / 2, y, flat, V()).multiplyScalar(sign);
-        for (const [d0, d1] of wallSegs(Math.min(dP, dC), Math.max(dP, dC))) {
-          const p = [pos(x0, y, d0, flat, V()), pos(x1, y, d0, flat, V()), pos(x1, y, d1, flat, V()), pos(x0, y, d1, flat, V())];
-          _a.subVectors(p[1], p[0]); _b.subVectors(p[3], p[0]);
-          const gn = new THREE.Vector3().crossVectors(_a, _b);
-          if (gn.dot(exp) < 0) gn.negate();
-          gn.normalize();
-          B.quad('tile', p, [gn, gn, gn, gn], gn);       // always tile geometry: it outlines the blocks
-        }
+        for (const [d0, d1] of wallSegs(Math.min(dP, dC), Math.max(dP, dC)))
+          wallQuad('tile',
+                   [pos(x0, y, d0, flat, V()), pos(x1, y, d0, flat, V()), pos(x1, y, d1, flat, V()), pos(x0, y, d1, flat, V())], exp);
       }
     }
 
-    // ---- optional shoulder skirt: a wall of quads hanging off the two outer edges, for a closed look -----------
+    // ---- ④ optional shoulder skirt --------------------------------------------------------------------------------
     if (T.skirt) {
       for (const side of [0, M]) {
         const x = cols[side];
+        const li = laneOf[side === 0 ? 0 : M - 1];
         const exp = new THREE.Vector3(side === 0 ? -1 : 1, 0, 0);
         for (let j = 0; j < K; j++) {
-          const band = rband[j];
-          const isBridgeBand = band === 'GAP';
-          if (isBridgeBand && !withBridge) continue;
-          const dS = depthOf('LUG', band);
-          if (dS >= T.depth - 1e-6) continue;            // gap floor already at skirt depth
+          const isBridge = bandTab[li][j] === 'GAP';
+          if (isBridge && !withBridge) continue;
+          const dS = depthTab[li][j];
+          if (dS >= T.depth - 1e-6) continue;
           const y0 = yBase + rows[j], y1 = yBase + rows[j + 1];
-          for (const [d0, d1] of wallSegs(dS, T.depth)) {
-            const p = [pos(x, y0, d0, flat, V()), pos(x, y1, d0, flat, V()), pos(x, y1, d1, flat, V()), pos(x, y0, d1, flat, V())];
-            _a.subVectors(p[1], p[0]); _b.subVectors(p[3], p[0]);
-            const gn = new THREE.Vector3().crossVectors(_a, _b);
-            if (gn.dot(exp) < 0) gn.negate();
-            gn.normalize();
-            B.quad(isBridgeBand ? 'bridge' : 'tile', p, [gn, gn, gn, gn], gn);
-          }
+          for (const [d0, d1] of wallSegs(dS, T.depth))
+            wallQuad(isBridge ? 'bridge' : 'tile',
+                     [pos(x, y0, d0, flat, V()), pos(x, y1, d0, flat, V()), pos(x, y1, d1, flat, V()), pos(x, y0, d1, flat, V())], exp);
         }
       }
     }
@@ -462,7 +588,7 @@ const matWire = new THREE.LineBasicMaterial({ color: '#45e07f', transparent: tru
 
 const group = new THREE.Group();
 scene.add(group);
-let meshTile = null, meshBridge = null, wire = null, lastBuild = null, lastStage = 0;
+let meshTile = null, meshBridge = null, wire = null, lastBuild = null, lastView = '';
 
 function toMesh(set, material) {
   const g = new THREE.BufferGeometry();
@@ -490,7 +616,8 @@ function rebuild() {
   document.getElementById('stTiles').textContent = stage <= 2 ? 1 : T.pitches;
   document.getElementById('stPitch').textContent = D.P.toFixed(1);
 
-  if (stage !== lastStage) { fitView(); lastStage = stage; }
+  const viewKey = `${stage}|${preset}`;
+  if (viewKey !== lastView) { fitView(); lastView = viewKey; }
 }
 
 function fitView() {
@@ -530,13 +657,13 @@ function download(name, blob) {
 document.getElementById('exportObj').onclick = () => {
   if (!lastBuild) return;
   let s = '# Quad Tread Modelling — every face below is a quad (f has 4 indices)\n';
-  s += `# quads ${lastBuild.objF.length}  verts ${lastBuild.objV.length}\no tread\n`;
+  s += `# design ${preset}  quads ${lastBuild.objF.length}  verts ${lastBuild.objV.length}\no tread\n`;
   for (const v of lastBuild.objV) s += `v ${v[0].toFixed(4)} ${v[1].toFixed(4)} ${v[2].toFixed(4)}\n`;
   for (const f of lastBuild.objF) s += `f ${f[0]} ${f[1]} ${f[2]} ${f[3]}\n`;
-  download('tread-quads.obj', new Blob([s], { type: 'text/plain' }));
+  download(`tread-${preset}-quads.obj`, new Blob([s], { type: 'text/plain' }));
 };
 document.getElementById('exportGlb').onclick = () => {
-  new GLTFExporter().parse(group, r => download('tread.glb', new Blob([r], { type: 'model/gltf-binary' })),
+  new GLTFExporter().parse(group, r => download(`tread-${preset}.glb`, new Blob([r], { type: 'model/gltf-binary' })),
     e => console.error(e), { binary: true });
 };
 
@@ -547,19 +674,16 @@ const SLIDERS = {
     ['aspect', 'Aspect ratio', 25, 80, 5, '%'],
     ['rim', 'Rim', 13, 24, 1, '"'],
     ['treadFrac', 'Tread coverage', 0.6, 1, 0.01, ''],
-    ['depth', 'Tread depth', 3, 16, 0.5, 'mm'],
+    ['depth', 'Tread depth', 2, 18, 0.5, 'mm'],
     ['crown', 'Crown bulge', 0, 8, 0.5, 'mm'],
     ['shoulderLen', 'Shoulder length', 0, 30, 1, 'mm'],
     ['shoulderDrop', 'Shoulder drop', 0, 12, 0.5, 'mm'],
   ],
   patternRows: [
-    ['pitches', 'Pitches (tiles)', 24, 110, 1, ''],
-    ['gapFrac', 'Tile spacing', 0.1, 0.55, 0.01, ''],
+    ['pitches', 'Pitches (tiles)', 20, 110, 1, ''],
     ['chevron', 'Chevron angle', 0, 65, 1, '°'],
-    ['ribW', 'Centre rib width', 0, 70, 2, 'mm'],
-    ['grooveW', 'Circ. groove', 0, 18, 0.5, 'mm'],
-    ['centreW', 'Centre groove', 0, 16, 0.5, 'mm'],
-    ['sipes', 'Sipes per block', 0, 3, 1, ''],
+    ['gapScale', 'Gap scale', 0.4, 1.8, 0.05, '×'],
+    ['stagger', 'Stagger', 0, 1, 0.05, '×'],
     ['sipeW', 'Sipe width', 1, 3, 0.1, 'mm'],
     ['sipeDepthF', 'Sipe depth', 0.2, 1, 0.05, '×'],
   ],
@@ -570,7 +694,7 @@ const TOGGLES = [
   ['skirt', 'Shoulder skirt'],
   ['spin', 'Auto rotate'],
 ];
-const valEls = {};
+const inputs = {}, valEls = {};
 function makeRows(holderId, defs) {
   const holder = document.getElementById(holderId);
   for (const [k, label, min, max, step, unit] of defs) {
@@ -581,11 +705,10 @@ function makeRows(holderId, defs) {
     valEls[k] = () => val.textContent = (step < 1 ? (+T[k]).toFixed(2).replace(/\.?0+$/, '') : T[k]) + unit;
     valEls[k]();
     input.oninput = () => { T[k] = +input.value; valEls[k](); rebuild(); };
-    holder.appendChild(row);
     inputs[k] = input;
+    holder.appendChild(row);
   }
 }
-const inputs = {};
 makeRows('tyreRows', SLIDERS.tyreRows);
 makeRows('patternRows', SLIDERS.patternRows);
 {
@@ -599,6 +722,25 @@ makeRows('patternRows', SLIDERS.patternRows);
   }
 }
 
+// preset buttons
+const presetHolder = document.getElementById('presetButtons');
+for (const key of Object.keys(DESIGNS)) {
+  const d = DESIGNS[key];
+  const btn = document.createElement('button');
+  btn.dataset.preset = key;
+  btn.innerHTML = `${d.label}<small>${d.tag}</small>`;
+  btn.onclick = () => applyPreset(key);
+  presetHolder.appendChild(btn);
+}
+function applyPreset(key) {
+  preset = key;
+  Object.assign(T, DESIGNS[key].set);
+  for (const k in inputs) if (k in T) { inputs[k].value = T[k]; valEls[k](); }
+  document.querySelectorAll('[data-preset]').forEach(b => b.classList.toggle('on', b.dataset.preset === key));
+  document.getElementById('presetDesc').textContent = DESIGNS[key].desc;
+  rebuild();
+}
+
 const stepEls = [...document.querySelectorAll('.step')];
 function setStage(s) {
   stage = s;
@@ -608,15 +750,12 @@ function setStage(s) {
 }
 stepEls.forEach(el => el.onclick = () => setStage(+el.dataset.stage));
 
-document.querySelectorAll('[data-preset]').forEach(btn => btn.onclick = () => {
-  Object.assign(T, PRESETS[btn.dataset.preset]);
-  for (const k in inputs) { inputs[k].value = T[k]; valEls[k](); }
-  rebuild();
-});
-
 // ------------------------------------------------- go --------------------------------------------------------------
 resize();
-setStage(4);
+stage = 4;
+stepEls.forEach(el => el.classList.toggle('on', +el.dataset.stage === 4));
+document.getElementById('stageDesc').textContent = STAGE_TEXT[4];
+applyPreset('road');
 fitView();
 </script>
 </body>
