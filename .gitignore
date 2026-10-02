@@ -1,25 +1,27 @@
-# Build artifacts and binaries
-*.o
-*.obj
-*.exe
-*.a
-*.lib
-*.ppm
-bin/
+# Disposable agent output — never committed (see CLAUDE.md § Scratch folder).
+_AgentScratch/
+
+# Build output
 build/
-Projects/**/bin/
-Projects/**/build/
-Scratchpad/GenerateDialogueProofs
-Scratchpad/GenerateFontSectionProofs
-Scratchpad/GenerateThemeSectionProofs
-Scratchpad/GenerateCarouselProofs
-Scratchpad/GenerateControlPanelProof
-Scratchpad/VectorGlyphTest
+Build/Output/
+*.obj
+*.o
+*.pdb
+*.exe
+
+# Editor/OS noise
 .DS_Store
+Thumbs.db
 
-# Per-user Control Centre preferences (written by ConfigurationRegistry at runtime)
-Projects/*/Content/Slate.config.toml
+# Python bytecode caches
+__pycache__/
+*.pyc
 
-# Fetched test levels (Projects/Project-Zero/Build/FetchSponza.ps1) - never committed
-Projects/*/Content/Scenes/Sponza/
-Projects/*/Content/Scenes/ShaderBall.gltf
+# Engine dependencies: fetched by Frontier/Tools/Bootstrap.py, never committed
+# Dependencies are fetched by Frontier/Tools/Bootstrap.py, never committed — but the lock file and README
+#    ARE the manifest and must be tracked, exactly as the engine's own .gitignore does it.
+Frontier/ExternalPackages/*
+!Frontier/ExternalPackages/Dependencies.lock.json
+!Frontier/ExternalPackages/README.md
+Frontier/.cache/
+Frontier/build/
