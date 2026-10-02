@@ -87,5 +87,7 @@ finally
 }
 
 if ($Result -ne 0) { Write-Error 'DistanceFieldGIProof FAILED a check.' }
+& python (Join-Path $PSScriptRoot 'CheckProofImage.py') (Join-Path $ProofFolder 'DistanceFieldGISheet.png')
+if ($LASTEXITCODE -ne 0) { throw 'DistanceFieldGIProof produced an invalid PNG' }
 Write-Host 'DistanceFieldGIProof passed.'
 exit 0

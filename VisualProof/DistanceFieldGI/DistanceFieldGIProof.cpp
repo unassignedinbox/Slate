@@ -199,9 +199,9 @@ void WritePng(const std::string& Path, uint32_t Width, uint32_t Height, const st
     };
 
     uint8_t Ihdr[13] = {
-        static_cast<uint8_t>((Width >> 24) & 0xFF), static_cast<uint8_t>((Width >> 8) & 0xFF),
+        static_cast<uint8_t>((Width >> 24) & 0xFF), static_cast<uint8_t>((Width >> 16) & 0xFF),
         static_cast<uint8_t>((Width >> 8) & 0xFF),  static_cast<uint8_t>(Width & 0xFF),
-        static_cast<uint8_t>((Height >> 24) & 0xFF), static_cast<uint8_t>((Height >> 8) & 0xFF),
+        static_cast<uint8_t>((Height >> 24) & 0xFF), static_cast<uint8_t>((Height >> 16) & 0xFF),
         static_cast<uint8_t>((Height >> 8) & 0xFF),  static_cast<uint8_t>(Height & 0xFF),
         8, 2, 0, 0, 0
     };
@@ -420,7 +420,7 @@ int main()
     //--------------------------------------------------------------------------------------------------------------------
     // VISUAL PROOF RENDERING — 6-PANEL COMPARISON SHEET
     //--------------------------------------------------------------------------------------------------------------------
-    Log("Rendering 6-panel visual comparison sheet (1920x1080)...");
+    Log("Rendering 6-panel visual comparison sheet (1920x720)...");
 
     const uint32_t PanelW = 640u;
     const uint32_t PanelH = 360u;
