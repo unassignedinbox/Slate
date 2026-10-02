@@ -7,42 +7,22 @@ import {
     PRIMITIVES,
     SDF_BOUNDS,
     SDF_RESOLUTION,
-    sampleSceneDistance,
+    sampleAnalyticSceneDistance,
 } from "./SceneDefinition.mjs";
+import {
+    floatToHalf,
+    readShaderBallSdf,
+    sampleMeshSdf,
+} from "./ShaderBallSDFBake.mjs";
 
 const MAGIC = 0x31464453; // SDF1
-const VERSION = 1;
+const VERSION = 2;
 const HEADER_BYTES = 64;
 const directory = dirname(fileURLToPath(import.meta.url));
-
-function floatToHalf(value)
-{
-    const scalar = new Float32Array(1);
-    const bits = new Uint32Array(scalar.buffer);
-    scalar[0] = value;
-    const source = bits[0];
-    const sign = (source >>> 16) & 0x8000;
-    let exponent = ((source >>> 23) & 0xff) - 127 + 15;
-    let mantissa = source & 0x7fffff;
-    if (exponent <= 0)
-    {
-        if (exponent < -10) return sign;
-        mantissa = (mantissa | 0x800000) >>> (1 - exponent);
-        return sign | ((mantissa + 0x1000) >>> 13);
-    }
-    if (exponent >= 31) return sign | 0x7bff;
-    if (mantissa & 0x1000)
-    {
-        mantissa += 0x2000;
-        if (mantissa & 0x800000)
-        {
-            mantissa = 0;
-            exponent += 1;
-            if (exponent >= 31) return sign | 0x7bff;
-        }
-    }
-    return sign | (exponent << 10) | (mantissa >>> 13);
-}
+const meshField = await readShaderBallSdf(join(directory, "ShaderBallSDF.bin"));
+const shaderBalls = PRIMITIVES
+    .map((primitive, primitiveIndex) => ({ primitive, primitiveIndex }))
+    .filter(({ primitive }) => primitive.type === "shaderBall");
 
 function voxelPosition(x, y, z, dimensions)
 {
@@ -51,6 +31,32 @@ function voxelPosition(x, y, z, dimensions)
         SDF_BOUNDS.minimum[1] + (y + 0.5) / dimensions[1] * (SDF_BOUNDS.maximum[1] - SDF_BOUNDS.minimum[1]),
         SDF_BOUNDS.minimum[2] + (z + 0.5) / dimensions[2] * (SDF_BOUNDS.maximum[2] - SDF_BOUNDS.minimum[2]),
     ];
+}
+
+function shaderBallDistance(point, primitive)
+{
+    const dx = point[0] - primitive.position[0];
+    const dy = point[1] - primitive.position[1];
+    const dz = point[2] - primitive.position[2];
+    const cosine = Math.cos(primitive.rotationY);
+    const sine = Math.sin(primitive.rotationY);
+    const local = [
+        (cosine * dx - sine * dz) / primitive.scale,
+        dy / primitive.scale,
+        (sine * dx + cosine * dz) / primitive.scale,
+    ];
+    return sampleMeshSdf(meshField, local) * primitive.scale;
+}
+
+function sampleComposedScene(point)
+{
+    let result = sampleAnalyticSceneDistance(point);
+    for (const { primitive, primitiveIndex } of shaderBalls)
+    {
+        const distance = shaderBallDistance(point, primitive);
+        if (distance < result.distance) result = { distance, primitiveIndex };
+    }
+    return result;
 }
 
 function bakeDistanceLevel(dimensions)
@@ -64,7 +70,7 @@ function bakeDistanceLevel(dimensions)
         {
             for (let x = 0; x < dimensions[0]; ++x)
             {
-                const { distance } = sampleSceneDistance(voxelPosition(x, y, z, dimensions));
+                const { distance } = sampleComposedScene(voxelPosition(x, y, z, dimensions));
                 values[address++] = floatToHalf(Math.max(-32.0, Math.min(32.0, distance)));
             }
         }
@@ -84,7 +90,7 @@ function bakeMaterialVolume()
         {
             for (let x = 0; x < dimensions[0]; ++x)
             {
-                const { primitiveIndex } = sampleSceneDistance(voxelPosition(x, y, z, dimensions));
+                const { primitiveIndex } = sampleComposedScene(voxelPosition(x, y, z, dimensions));
                 const material = MATERIALS[PRIMITIVES[primitiveIndex].material];
                 values[address++] = Math.round(Math.max(0, Math.min(1, material.albedo[0])) * 255);
                 values[address++] = Math.round(Math.max(0, Math.min(1, material.albedo[1])) * 255);
@@ -100,13 +106,13 @@ const levels = [];
 let dimensions = [...SDF_RESOLUTION];
 while (true)
 {
-    process.stdout.write(`Baking ${dimensions.join("x")} distance level...\n`);
+    process.stdout.write(`Baking composed ${dimensions.join("x")} global distance level...\n`);
     levels.push({ dimensions: [...dimensions], bytes: bakeDistanceLevel(dimensions) });
     if (dimensions.every((value) => value === 1)) break;
     dimensions = dimensions.map((value) => Math.max(1, Math.floor(value / 2)));
 }
 
-process.stdout.write(`Baking ${SDF_RESOLUTION.join("x")} material volume...\n`);
+process.stdout.write(`Baking composed ${SDF_RESOLUTION.join("x")} material volume...\n`);
 const materialBytes = bakeMaterialVolume();
 let materialOffset = HEADER_BYTES;
 for (const level of levels) materialOffset += 16 + level.bytes.byteLength;
@@ -150,6 +156,9 @@ const metadata = {
     mipResolutions: levels.map((level) => level.dimensions),
     distanceEncoding: "IEEE-754 binary16 world-space signed distance",
     materialEncoding: "RGBA8: linear albedo RGB + emissive mask A",
+    composition: "analytic architecture union four transformed canonical ShaderBall mesh SDFs",
+    meshSdf: "ShaderBallSDF.bin",
+    shaderBallInstances: shaderBalls.length,
     primitives: PRIMITIVES.length,
     materials: MATERIALS.length,
     byteLength: totalBytes,

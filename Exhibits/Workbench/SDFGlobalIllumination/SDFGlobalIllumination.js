@@ -154,46 +154,60 @@ function appendBox(vertices, indices, primitive, material)
     }
 }
 
-function appendSphere(vertices, indices, primitive, material)
+function decodeShaderBall(content)
 {
-    const segments = 32;
-    const rings = 20;
-    const base = vertices.length / 10;
-    for (let ring = 0; ring <= rings; ++ring)
-    {
-        const theta = ring / rings * Math.PI;
-        const y = Math.cos(theta);
-        const radial = Math.sin(theta);
-        for (let segment = 0; segment <= segments; ++segment)
-        {
-            const phi = segment / segments * Math.PI * 2.0;
-            const normal = [Math.cos(phi) * radial, y, Math.sin(phi) * radial];
-            pushVertex(vertices, [
-                primitive.center[0] + normal[0] * primitive.radius,
-                primitive.center[1] + normal[1] * primitive.radius,
-                primitive.center[2] + normal[2] * primitive.radius,
-            ], normal, material);
-        }
-    }
-    for (let ring = 0; ring < rings; ++ring)
-    {
-        for (let segment = 0; segment < segments; ++segment)
-        {
-            const a = base + ring * (segments + 1) + segment;
-            const b = a + segments + 1;
-            indices.push(a, b, a + 1, a + 1, b, b + 1);
-        }
-    }
+    const view = new DataView(content);
+    if (view.byteLength < 16 || view.getUint32(0, true) !== 0x314d4253)
+        throw new Error("ShaderBall.mesh is not an SBM1 stream");
+    const vertexCount = view.getUint32(4, true);
+    const indexCount = view.getUint32(8, true);
+    if (view.byteLength !== 16 + vertexCount * 32 + indexCount * 4 || indexCount % 3 !== 0)
+        throw new Error("ShaderBall.mesh has an inconsistent byte count");
+    return {
+        vertexCount,
+        source: new Float32Array(content, 16, vertexCount * 8),
+        indices: new Uint32Array(content.slice(16 + vertexCount * 32)),
+    };
 }
 
-function createSceneGeometry()
+function appendShaderBall(vertices, indices, primitive, material, mesh)
+{
+    const base = vertices.length / 10;
+    const cosine = Math.cos(primitive.rotationY);
+    const sine = Math.sin(primitive.rotationY);
+    for (let index = 0; index < mesh.vertexCount; ++index)
+    {
+        const address = index * 8;
+        // Shared asset is Z-up. Convert to Y-up, then apply the same uniform
+        // instance transform used while composing its canonical mesh SDF.
+        const x = mesh.source[address];
+        const y = mesh.source[address + 2];
+        const z = -mesh.source[address + 1];
+        const nx = mesh.source[address + 3];
+        const ny = mesh.source[address + 5];
+        const nz = -mesh.source[address + 4];
+        pushVertex(vertices, [
+            primitive.position[0] + primitive.scale * (cosine * x + sine * z),
+            primitive.position[1] + primitive.scale * y,
+            primitive.position[2] + primitive.scale * (-sine * x + cosine * z),
+        ], [
+            cosine * nx + sine * nz,
+            ny,
+            -sine * nx + cosine * nz,
+        ], material);
+    }
+    for (const index of mesh.indices) indices.push(base + index);
+}
+
+function createSceneGeometry(shaderBallContent)
 {
     const vertices = [];
     const indices = [];
+    const shaderBall = decodeShaderBall(shaderBallContent);
     for (const primitive of PRIMITIVES)
     {
         const material = MATERIALS[primitive.material];
-        if (primitive.type === "sphere") appendSphere(vertices, indices, primitive, material);
+        if (primitive.type === "shaderBall") appendShaderBall(vertices, indices, primitive, material, shaderBall);
         else appendBox(vertices, indices, primitive, material);
     }
     return {
@@ -221,8 +235,9 @@ function decodeGlobalSdf(content)
     const view = new DataView(content);
     if (view.byteLength < 64 || view.getUint32(0, true) !== 0x31464453)
         throw new Error("GlobalSDF.bin is not an SDF1 stream");
-    if (view.getUint32(4, true) !== 1)
-        throw new Error("Unsupported global SDF version");
+    const version = view.getUint32(4, true);
+    if (version < 1 || version > 2)
+        throw new Error(`Unsupported global SDF version ${version}`);
     const dimensions = [view.getUint32(8, true), view.getUint32(12, true), view.getUint32(16, true)];
     const mipCount = view.getUint32(20, true);
     const minimum = [view.getFloat32(24, true), view.getFloat32(28, true), view.getFloat32(32, true)];
@@ -372,15 +387,16 @@ async function start()
     const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
     context.configure({ device, format: presentationFormat, alphaMode: "opaque" });
 
-    const [sdfContent, gbufferSource, cacheSource, giSource, presentSource] = await Promise.all([
+    const [sdfContent, shaderBallContent, gbufferSource, cacheSource, giSource, presentSource] = await Promise.all([
         loadBinary("GlobalSDF.bin"),
+        loadBinary("../../Assets/ShaderBall/ShaderBall.mesh"),
         loadText("GBuffer.wgsl"),
         loadText("RadianceCache.wgsl"),
         loadText("GlobalIllumination.wgsl"),
         loadText("Present.wgsl"),
     ]);
     const sdf = decodeGlobalSdf(sdfContent);
-    const geometry = createSceneGeometry();
+    const geometry = createSceneGeometry(shaderBallContent);
 
     const modules = {
         gbuffer: device.createShaderModule({ label: "SDF G-buffer", code: gbufferSource }),
@@ -549,6 +565,7 @@ async function start()
     let lastFrame = startTime;
     let averageMilliseconds = 16.7;
     let statusCounter = 0;
+    let previousCacheKey = "";
 
     function render(now)
     {
@@ -563,6 +580,9 @@ async function start()
         const lightDirection = normalise([Math.cos(sunAngle) * 0.56, 0.82, Math.sin(sunAngle) * 0.46]);
         const lightColour = [1.0, 0.91, 0.72, 1.0];
         const sunStrength = Number(SunStrength.value);
+        const cacheKey = `${lightDirection.map((value) => value.toFixed(5)).join(",")}:${sunStrength.toFixed(3)}`;
+        const updateRadianceCache = cacheKey !== previousCacheKey;
+        if (updateRadianceCache) previousCacheKey = cacheKey;
         const cacheUniforms = new Float32Array(20);
         cacheUniforms.set([...sdf.minimum, 0.0], 0);
         cacheUniforms.set([...sdf.maximum, 0.0], 4);
@@ -602,15 +622,18 @@ async function start()
         gbufferPass.drawIndexed(geometry.indices.length);
         gbufferPass.end();
 
-        const cachePass = encoder.beginComputePass({ label: "Inject global surface radiance" });
-        cachePass.setPipeline(cachePipeline);
-        cachePass.setBindGroup(0, cacheBindGroup);
-        cachePass.dispatchWorkgroups(
-            Math.ceil(sdf.dimensions[0] / 4),
-            Math.ceil(sdf.dimensions[1] / 4),
-            Math.ceil(sdf.dimensions[2] / 4),
-        );
-        cachePass.end();
+        if (updateRadianceCache)
+        {
+            const cachePass = encoder.beginComputePass({ label: "Inject global surface radiance" });
+            cachePass.setPipeline(cachePipeline);
+            cachePass.setBindGroup(0, cacheBindGroup);
+            cachePass.dispatchWorkgroups(
+                Math.ceil(sdf.dimensions[0] / 4),
+                Math.ceil(sdf.dimensions[1] / 4),
+                Math.ceil(sdf.dimensions[2] / 4),
+            );
+            cachePass.end();
+        }
 
         const giPass = encoder.beginComputePass({ label: "Trace global SDF indirect" });
         giPass.setPipeline(giPipeline);
