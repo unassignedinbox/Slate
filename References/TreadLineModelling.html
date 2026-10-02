@@ -522,6 +522,8 @@ const laneMat = new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0.02
                                                  side: THREE.DoubleSide });
 let group = new THREE.Group(); scene.add(group);
 let built = null;
+// ⚠️ OrbitControls extends EventDispatcher, not Object3D — it has no `userData` to hang a flag on.
+let cameraSeated = false;
 
 function rebuildAll() {
   group.clear();
@@ -553,8 +555,8 @@ function rebuildAll() {
   }
 
   group.position.y = 0;
-  if (!controls.userData.seated) {
-    controls.userData.seated = true;
+  if (!cameraSeated) {
+    cameraSeated = true;
     controls.target.set(0, 0, 0);
     camera.position.set(d.Rout * 1.5, d.Rout * 0.85, d.Rout * 1.7);
   }
