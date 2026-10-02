@@ -13,6 +13,7 @@
 #include "Kernel/TweakSolver.h"
 #include "Kernel/FaceEditSolver.h"
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <chrono>
 #include <cstdarg>
@@ -202,7 +203,7 @@ namespace
                 // Build the label with a non-ASCII degree mark by appending the UTF-8 bytes of U+00B0.
                 std::snprintf(Buf, sizeof Buf, "%.1f", D.Value * (180.0 / 3.14159265358979323846));
                 std::string S(Buf);
-                S.push_back(char(0xC2)); S.push_back(char(0xB0));                       // U+00B0 in UTF-8
+                S.append("\xC2\xB0");                       // U+00B0 in UTF-8
                 return S;
             }
         }
@@ -264,8 +265,9 @@ void ConsoleHost::AutoEmitDimensions(const SceneFigure& Figure) noexcept
         if (C.Classification == CurveClassification::Circle) AnalyticLength = 2.0 * 3.14159265358979323846 * C.RadiusMajor;
         else if (C.Classification == CurveClassification::Ellipse)
         {
-            double A = C.RadiusMajor, B = C.RadiusMinor, H = std::pow((A - B) / (A + B), 2);
-            AnalyticLength = 3.14159265358979323846 * (A + B) * (1.0 + 3.0 * H / (10.0 + std::sqrt(4.0 - 3.0 * H)));
+            double MajorRadius = C.RadiusMajor, MinorRadius = C.RadiusMinor;
+            double EccentricityRatio = std::pow((MajorRadius - MinorRadius) / (MajorRadius + MinorRadius), 2);
+            AnalyticLength = 3.14159265358979323846 * (MajorRadius + MinorRadius) * (1.0 + 3.0 * EccentricityRatio / (10.0 + std::sqrt(4.0 - 3.0 * EccentricityRatio)));
         }
         if (AnalyticLength < 1e-9) AnalyticLength = C.Length();
         // Live arc-length dim tied to source field B - A (length of A→B for a line) or to the curve's
@@ -3119,7 +3121,11 @@ void ConsoleHost::Register() noexcept
                 {
                     double A = TotalAngle * T * (ScalarCriteria::Pi / 180.0);
                     M = Mat4::Translation(Origin) * Mat4::Rotation(Axis, A) * Mat4::Translation(-Origin);
-                    if (ScaleEnd != 1.0) { double S = 1.0 + (ScaleEnd - 1.0) * T; M = Mat4::Translation(Origin) * Mat4::Scaling(Vec3{ S, S, S }) * Mat4::Translation(-Origin) * M; }
+                    if (ScaleEnd != 1.0)
+                    {
+                        double ScaleFactor = 1.0 + (ScaleEnd - 1.0) * T;
+                        M = Mat4::Translation(Origin) * Mat4::Scaling(Vec3{ ScaleFactor, ScaleFactor, ScaleFactor }) * Mat4::Translation(-Origin) * M;
+                    }
                 }
                 else
                 {
@@ -3812,9 +3818,9 @@ void ConsoleHost::Register() noexcept
         if (Sub == "pin")
         {
             if (!Need(C, 2, "constraint pin")) return false;
-            PointRef Ref; std::string Figure; int Slot, Sub, Comp;
-            if (!ParsePointRef(C.Arguments[1], Ref, Figure, Slot, Sub, Comp)) return Refuse("constraint pin: bad point ref '%s'", C.Arguments[1].c_str());
-            CGraph.AddAnchor(Ref, Figure, Slot, Sub, Comp);
+            PointRef Ref; std::string Figure; int Slot, SubIndex, Comp;
+            if (!ParsePointRef(C.Arguments[1], Ref, Figure, Slot, SubIndex, Comp)) return Refuse("constraint pin: bad point ref '%s'", C.Arguments[1].c_str());
+            CGraph.AddAnchor(Ref, Figure, Slot, SubIndex, Comp);
             CGraph.SetFixed(Ref, true);
             Row("constraint: pinned %s", C.Arguments[1].c_str());
             return true;
@@ -3951,8 +3957,8 @@ void ConsoleHost::Register() noexcept
             if (N < 3) return Refuse("angle: polyline '%s' has only %d vertices; need at least 3", C.Arguments[0].c_str(), N);
             if (K < 0) K = N / 2;
             if (K < 1 || K > N - 2) return Refuse("angle --at=K: K must be in [1, %d] (got %d)", N - 2, K);
-            Vec4 A = Crv.Poles[K - 1], B = Crv.Poles[K], C = Crv.Poles[K + 1];
-            P0 = A.Divide(); P1 = B.Divide(); P2 = C.Divide();
+            Vec4 PreviousPole = Crv.Poles[K - 1], CentrePole = Crv.Poles[K], NextPole = Crv.Poles[K + 1];
+            P0 = PreviousPole.Divide(); P1 = CentrePole.Divide(); P2 = NextPole.Divide();
         }
         else
         {

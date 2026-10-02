@@ -32,6 +32,11 @@ def main() -> int:
         (logs / f"{name}.log").write_text(subprocess.list2cmdline(command) + "\n" + result.stdout, encoding="utf-8")
         if result.returncode:
             print(result.stdout, flush=True)
+            if os.environ.get("GITHUB_ACTIONS"):
+                diagnostics = [line for line in result.stdout.splitlines() if "error " in line or "warning " in line]
+                message = "\n".join(diagnostics or result.stdout.splitlines()[-20:])[:12000]
+                message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                print(f"::error title={name}::{message}", flush=True)
             raise RuntimeError(f"{name} failed with exit code {result.returncode}")
 
     def compile_source(path: Path) -> Path:
@@ -41,7 +46,16 @@ def main() -> int:
         return obj
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        compiled = list(executor.map(compile_source, sources))
+        futures = [executor.submit(compile_source, source) for source in sources]
+        compiled = []
+        failures = []
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                compiled.append(future.result())
+            except RuntimeError as error:
+                failures.append(str(error))
+        if failures:
+            raise RuntimeError("\n".join(failures))
     archive = OUTPUT / "SolidArc.lib"
     run(["lib.exe", "/nologo", f"/OUT:{archive}", *map(str, compiled)], "Archive")
 

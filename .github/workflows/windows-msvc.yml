@@ -6,10 +6,12 @@ on:
     paths:
       - '.github/workflows/windows-msvc.yml'
       - 'Frontier/**'
+      - '.gitattributes'
   pull_request:
     paths:
       - '.github/workflows/windows-msvc.yml'
       - 'Frontier/**'
+      - '.gitattributes'
   workflow_dispatch:
 
 permissions:
@@ -29,8 +31,8 @@ jobs:
         shell: pwsh
         working-directory: Frontier
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
       - name: Compile and verify with real MSVC
@@ -45,7 +47,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'SolidArc MSVC verification failed' }
       - name: Retain compiler logs and rendered proofs
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: solidarc-msvc-${{ github.sha }}
           retention-days: 14
@@ -66,8 +68,8 @@ jobs:
       VULKAN_VERSION: '1.4.328.1'
       VULKAN_SDK: 'C:\VulkanSDK\1.4.328.1'
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
       - name: Install signed Vulkan SDK
@@ -103,7 +105,7 @@ jobs:
           }
       - name: Retain build diagnostics
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: frontier-msvc-${{ github.sha }}
           retention-days: 14
@@ -113,7 +115,7 @@ jobs:
             Frontier/Build/Output/Windows/Release/Object/*.rsp
       - name: Retain Windows binary
         if: success()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: frontier-windows-release-${{ github.sha }}
           retention-days: 14

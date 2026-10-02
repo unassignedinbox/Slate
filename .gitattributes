@@ -1,0 +1,2 @@
+# Dependency patches target LF sources extracted from upstream archives.
+*.patch text eol=lf
