@@ -56,9 +56,111 @@ as its gate.
   contracts a GPU paint evaluator must satisfy, including the `PaintedTiles` layer source kind.
 - `Plans/Ongoing/ProceduralTyreAndSurfacePainting.md` — the four-phase plan these feed into.
 
-## QuadTreadProof — the quad tread pipeline's gate
+## QuadTreadAudit — the gate for the traced-pattern tread
 
-The gate for `Engine/Generators/Tyre/QuadTreadSolver`, the 1:1 port of `References/QuadTreadModelling.html`.
+`QuadTreadAudit.mjs` is the headless proof for `References/QuadTreadModelling.html` after that page was
+rewritten to trace real pattern units instead of classifying a lane grid. It slices the geometry core out of
+the page itself — everything between the `BEGIN GEOMETRY CORE` and `END GEOMETRY CORE` markers — and runs it
+with no browser, no DOM and no three.js, so the thing audited is literally the thing shipped.
+
+```bash
+node Exhibits/Workbench/Tyre/QuadTreadAudit.mjs                # 9 designs × steps 2 and 5
+node Exhibits/Workbench/Tyre/QuadTreadAudit.mjs breaker 5      # one case
+node Exhibits/Workbench/Tyre/QuadTreadAudit.mjs --json         # writes QuadTreadAudit.result.json
+node Exhibits/Workbench/Tyre/QuadTreadViewerProof.mjs          # boots the page itself, drives the UI
+```
+
+No packages: the page carries its own ear clipper, so there is nothing to `npm i`.
+
+`QuadTreadViewerProof.mjs` is the second half of the gate. The audit proves the geometry; the proof runs the
+page's own module body against a stub DOM and a stub three.js and then *drives* it — all nine designs at all
+five steps, the audit button, the OBJ export (every face must have four in-range indices) and the GLB path.
+A page that throws for one design at one step cannot pass, and neither can one whose export quietly emits
+triangles.
+
+### What the page now does
+
+A design authors **one half of one pattern unit** as outlines — blocks with stepped, toothed, arced and
+hooked edges, continuous zigzag ribs, sipes — and declares how that half becomes a tile: mirrored across the
+centreline, point-mirrored about the tile centre, optionally slid half a pitch, optionally flipped on
+alternate pitches. Every outline is densified once and meshed into quads (ear clipping, then each triangle
+cut into three quads by its centroid and edge midpoints, which is conforming by construction). Walls, floors,
+chamfers and sipe wells are emitted against the *same* refined loops, so neighbouring surfaces cannot
+disagree about a vertex. Then: align to the crown, array at circumference ÷ pitch count, bridge the seams.
+
+⚠️ **The pitch line is sheared, the blocks are not.** A 40° chevron arm needs about 48 mm of travel across a
+225-section tread, but the pitch of a 56-pitch tyre is 35 mm — so a block authored on a slant *cannot* fit in
+its own tile, and the previous attempt at this quietly wrapped it, tore the floor region open and left five
+disconnected shells. A design instead declares `seam(u)`, and `Builder.vert` emits every vertex at
+`v + seam(u) · pitch`. The tile stays a rectangle to author in; the frame it sits on is the V. Tile *t*'s
+trailing seam equals tile *t+1*'s leading seam at every `u`, by construction rather than by tolerance.
+
+### Where it stands
+
+Every design, at the full bridged band (step 5):
+
+| design  | label            | symmetry                        |   quads | stray open edges |
+|---------|------------------|---------------------------------|--------:|-----------------:|
+| vortex  | Vortex V         | mirror                          | 269 696 |                0 |
+| nordic  | Nordic Ice       | mirror + ½ shift                | 381 504 |                0 |
+| apex    | Apex Asymmetric  | none — both halves authored     | 300 514 |                0 |
+| breaker | Breaker M/T      | point mirror + alternating flip | 180 300 |                0 |
+| trail   | Trail A/T        | mirror + ½ shift                | 332 976 |                0 |
+| cruise  | Cruise HT        | mirror                          | 276 192 |                0 |
+| circuit | Circuit R        | none — asymmetric               | 153 936 |                0 |
+| gravel  | Gravel Rally     | mirror + ½ shift + flip         | 181 896 |                0 |
+| paddle  | Sand Paddle      | mirror                          |  70 380 |                0 |
+
+Zero degenerate quads, zero non-manifold edges and zero inconsistently wound pairs in all eighteen cases
+(nine designs × steps 2 and 5). The only open edges at step 5 are on the two tread edges — 2 592 to 3 444 of
+them depending on pitch count — which is what a tread band modelled without a sidewall should have.
+
+⚠️ Boundary edges are classified by position, never assumed: an edge counts as a tread edge only when both
+endpoints sit within 1 µm of ±half-width. Steps 2 and 4 are the negative controls that prove the classifier
+can see a defect — one unbridged tile reports its two pitch seams (228–316 stray edges), and the arrayed but
+unbridged band reports exactly that count once per pitch: `vortex` at step 4 opens 14 560 = 56 × 260, and the
+same build at step 5 closes every one of them.
+
+💡 **Welding across the wrap.** At step 5 the circumferential coordinate is reduced modulo the circumference
+before welding, because the last bridge ends at `v = circumference` and the first tile starts at `v = 0`;
+those are one ring of vertices on the wheel and two different numbers on the page. Keys are 1 µm buckets with
+a probe into the neighbouring bucket whenever a coordinate lands on a bucket edge, so the last-bit difference
+between `Σ pitches` and `2πR` cannot split a vertex in two.
+
+The one number that is not zero is **quad warp** — how far the worst quad is from planar, 0.55 mm to 5.0 mm
+depending on design. It is not a topology defect: it is what happens when a large quad spans a curved,
+sheared surface, and it scales with the `Quad size` slider. The audit reports it so it cannot be forgotten.
+
+### Five defects this gate caught
+
+Each of these passed a visual check and failed the audit.
+
+1. **Shoulder rows on the left ran to the wrong edge.** `rimBlockPath` compared `|u| ≥ halfW` against a
+   *signed* half-width, so for a negative-side row the test was always true, the detour never closed, and the
+   lug outline doubled back along the rim. 138 torn edges per tile.
+2. **Draft outsets overran the pitch.** A block parked one margin from the seam, then grew by
+   `depth · tan(draft)` — and up to 1.7 × that at a sharp corner — so its floor outline crossed the seam and
+   the channel it was supposed to be a hole in. The margin is now derived from the draft, not guessed.
+3. **Offsetting a notched outline folded it onto itself.** A chamfer inset or a draft outset on a stepped
+   edge can self-intersect; `safeOffset` now backs the distance off until the result is a simple polygon of
+   the same orientation, because a valid outline matters more than a perfect chamfer.
+4. **Sipes cut through the block they were cut into.** A rib edge wanders, so a sipe that fits at mid-length
+   broke out at its ends; and five sipes in an 11 mm block overlapped each other. Both are now rejected by
+   measurement, not by hoping the design is sensible.
+5. **Two blocks per pitch quietly overlapped.** The phase that places the second block was clamped to keep it
+   inside the tile, which slid it back into the first one. The designs now place pairs that fit.
+
+### Relationship to the C++ port
+
+`Frontier/Engine/Generators/Tyre/QuadTreadSolver` and `QuadTreadProof.cpp` below port the **previous**
+version of this page — the lane-grid builder, where a conforming quad grid was classified per lane. That
+pipeline is sound and its gate still passes; it is simply no longer what the page does. Porting the traced
+pattern is a separate piece of work, and `QuadTreadAudit.mjs` is the contract it will have to meet.
+
+## QuadTreadProof — the lane-grid tread pipeline's gate
+
+The gate for `Engine/Generators/Tyre/QuadTreadSolver`, a 1:1 port of the **lane-grid** version of
+`References/QuadTreadModelling.html` (superseded on the page by the traced-pattern builder above).
 This builder takes the other road entirely: no raster, no boolean stage, no triangulator. One pattern tile is
 traced by a conforming quad grid — columns on the lateral feature edges, rows on the block/sipe/gap edges,
 every column sheared by the chevron angle so slanted walls are traced exactly — then aligned to the crown,

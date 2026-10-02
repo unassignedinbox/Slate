@@ -17,7 +17,9 @@ namespace Frontier {
 //------------------------------------------------------------------------------------------------------------------------
 
 /// 📦 One tread pattern tile as vector bands: rib, circumferential grooves, chevron lugs, sipes.
-/// note  💡 This is the 1:1 port of References/QuadTreadModelling.html. The tread is modelled, never
+/// note  💡 This is the 1:1 port of the lane-grid builder that References/QuadTreadModelling.html carried
+///       until that page was rewritten to trace pattern units; the page's current builder is a different
+///       algorithm and is gated by Exhibits/Workbench/Tyre/QuadTreadAudit.mjs. The tread is modelled, never
 ///       displaced — there is no height map, no raster probe, no boolean stage. The pattern is a set of
 ///       lateral regions crossed with circumferential bands, and the grid lines sit exactly on the feature
 ///       edges, so every groove wall is traced by quad edges rather than approximated by them.

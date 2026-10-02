@@ -1,7 +1,8 @@
 //============================================================================================================================================
 //                                                           QUADTREADSOLVER.CPP
 //============================================================================================================================================
-// 📦 The quad tread pipeline: trace one tile with a conforming quad grid, align, array, bridge. Port of References/QuadTreadModelling.html.
+// 📦 The quad tread pipeline: trace one tile with a conforming quad grid, align, array, bridge. Port of the lane-grid
+// builder References/QuadTreadModelling.html carried before it was rewritten to trace pattern units.
 
 #include "QuadTreadSolver.h"
 
