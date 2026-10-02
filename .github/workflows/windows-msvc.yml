@@ -101,7 +101,10 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Frontier build failed' }
             if (-not (Test-Path Build/Output/Windows/Release/Binary/Frontier.exe)) { throw 'Frontier.exe was not produced' }
           } catch {
-            $Diagnostic = ($_ | Out-String) + (Get-Content ../_AgentScratch/logs/msvc-ci/CompilerOutput.log -Tail 40 -ErrorAction SilentlyContinue | Out-String)
+            $CompilerLog = Get-Content ../_AgentScratch/logs/msvc-ci/CompilerOutput.log -ErrorAction SilentlyContinue
+            $Failures = $CompilerLog | Select-String -Pattern '(fatal error|error [A-Z]+[0-9]+|error:|LNK[0-9]+|FAILED)'
+            $Diagnostic = ($_ | Out-String) + ($Failures | Out-String -Width 4096)
+            if (-not $Failures) { $Diagnostic += ($CompilerLog | Select-Object -Last 30 | Out-String -Width 4096) }
             for ($Offset = 0; $Offset -lt $Diagnostic.Length; $Offset += 3000) {
               $Part = $Diagnostic.Substring($Offset, [Math]::Min(3000, $Diagnostic.Length - $Offset))
               $Part = $Part.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')

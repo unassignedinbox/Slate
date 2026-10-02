@@ -25,10 +25,11 @@ enum
     // Revision 2 adds the host reception callbacks and their C-layout payloads. Code
     // images built against revision 1 must be refused rather than called with this layout.
     FrontierCodeInterchangeNumber = 2u,
-    // FNV-1a-64 of the revision-2 canonical C-layout contract (records + callbacks).
-    FrontierCodeInterchangeFingerprint = UINT64_C(0xdd4363893c94c8f0),
     FrontierProjectInterchangeMaximumText = 1024u,
 };
+
+// FNV-1a-64 of the revision-2 C layout. An MSVC C enum would truncate this to 32 bits.
+static const uint64_t FrontierCodeInterchangeFingerprint = UINT64_C(0xdd4363893c94c8f0);
 
 typedef enum FrontierProjectRefusalNumber
 {

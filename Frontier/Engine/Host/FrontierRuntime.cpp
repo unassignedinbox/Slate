@@ -1449,7 +1449,7 @@ int Frontier::RunFrontierRuntime(
                 &ProjectInput,
                 ProjectRefusal))
         {
-            Logger.RecordMessage(Frontier::DiagnosticSeverity::Error, "Project", ProjectRefusal.c_str());
+            Logger.RecordMessage(Frontier::DiagnosticSeverity::Refusal, "Project", ProjectRefusal.c_str());
             break;
         }
 
