@@ -1,0 +1,6 @@
+Liger continuous CAD body skin
+sections=89
+points_per_section=49
+x_range_cm=-182.887..259.200
+span_spacing_cm~=5.024
+result=one degree-3 x degree-3 multi-span NURBS sheet
