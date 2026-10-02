@@ -6,6 +6,8 @@
 
 #define VK_NULL_HANDLE nullptr
 
+using VkDeviceSize = uint64_t;
+
 typedef struct VkPhysicalDevice_T*             VkPhysicalDevice;
 typedef struct VkDevice_T*                     VkDevice;
 typedef struct VkBuffer_T*                     VkBuffer;

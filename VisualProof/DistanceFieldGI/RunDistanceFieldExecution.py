@@ -19,6 +19,11 @@ for Name in ("DistanceFieldConstruct", "DistanceFieldRadiance", "DistanceFieldGI
                     "-I" + str(Engine / "Engine"), str(Engine / f"Engine/Shaders/{Name}.slang"),
                     "-o", str(Shaders / f"{Name}.spv")], check=True)
     subprocess.run(["spirv-val", "--target-env", "vulkan1.2", str(Shaders / f"{Name}.spv")], check=True)
+# Keep the SDK-free native editor declaration route working alongside the real Vulkan execution route.
+subprocess.run([os.environ.get("CXX", "g++"), "-std=c++20", "-fsyntax-only", "-DFRONTIER_DEVELOPMENT",
+                "-I" + str(Engine), "-I" + str(Engine / "Engine"),
+                "-I" + str(Engine / "Exhibits/Workbench/Editor/Counterparts"),
+                str(Engine / "Engine/Host/RayTracingSolver.cpp")], check=True)
 Sources = [Root / "VisualProof/DistanceFieldGI/DistanceFieldExecution.cpp",
            Engine / "Engine/DeviceExchange/DistanceFieldGIStage.cpp",
            Engine / "Engine/GeometricRaster/DistanceFieldStructure.cpp"]
