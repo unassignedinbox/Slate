@@ -56,6 +56,54 @@ as its gate.
   contracts a GPU paint evaluator must satisfy, including the `PaintedTiles` layer source kind.
 - `Plans/Ongoing/ProceduralTyreAndSurfacePainting.md` — the four-phase plan these feed into.
 
+## QuadTreadProof — the quad tread pipeline's gate
+
+The gate for `Engine/Generators/Tyre/QuadTreadSolver`, the 1:1 port of `References/QuadTreadModelling.html`.
+This builder takes the other road entirely: no raster, no boolean stage, no triangulator. One pattern tile is
+traced by a conforming quad grid — columns on the lateral feature edges, rows on the block/sipe/gap edges,
+every column sheared by the chevron angle so slanted walls are traced exactly — then aligned to the crown,
+arrayed at circumference ÷ pitch count, and the identical boundary loops of neighbouring tiles bridged with
+quads. No external packages at all:
+
+```
+g++ -std=c++20 -O2 -Wall -Wextra -I Frontier/Engine -o _AgentScratch/build/tyre/QuadTreadProof \
+    Exhibits/Workbench/Tyre/QuadTreadProof.cpp \
+    Frontier/Engine/Generators/Tyre/QuadTreadSolver.cpp \
+    Frontier/Engine/Generators/Tyre/TyreMeshStructure.cpp
+./_AgentScratch/build/tyre/QuadTreadProof
+```
+
+Seven cases — the page's four presets plus a featureless tile, an everything-at-once tile and a narrow
+145/80 R13 — all at the Bridge stage:
+
+| case   |   quads | expected |  rim | stray | non-manifold | degenerate | loose triangles |
+|--------|--------:|---------:|-----:|------:|-------------:|-----------:|----------------:|
+| street |  40 448 |   40 448 |  896 |     0 |            0 |          0 |               0 |
+| sport  |  23 520 |   23 520 |  896 |     0 |            0 |          0 |               0 |
+| winter |  88 992 |   88 992 | 1872 |     0 |            0 |          0 |               0 |
+| block  |  22 352 |   22 352 |  704 |     0 |            0 |          0 |               0 |
+| bare   |  24 064 |   24 064 |  768 |     0 |            0 |          0 |               0 |
+| dense  | 107 800 |  107 800 | 2860 |     0 |            0 |          0 |               0 |
+| narrow |  18 384 |   18 384 |  720 |     0 |            0 |          0 |               0 |
+
+💡 The **expected** column is measured by the reference page's own JavaScript audit, and the gate holds the
+C++ build to it exactly. The two implementations run the same subdivision arithmetic in the same IEEE
+doubles, so a drift of even one quad means the port stopped being a port.
+
+⚠️ Boundary edges are classified by position, never guessed: an edge counts as a rim edge only when both
+endpoints sit within 0.02 mm of ±half-width. The negative control withholds the Bridge stage — the street
+tile at Array opens exactly 7 168 stray edges, one ring of seams per gap, which is what proves the stray
+classifier can see the defect the positive cases claim is absent.
+
+Where the old pipeline needed `RepairJunctions`, this one needs nothing repaired: walls are split at the
+sipe depth as they are emitted (`WallSegments`), so every wall edge loop is conforming by construction.
+The remaining open rims are the two tread edges where the sidewall will attach — the band is tread only,
+by design.
+
+The Export page of the Tyre Generator window drives the same solver: **Tread OBJ (quads)** writes
+`TreadQuads.obj` with real four-index faces, reconstructed losslessly from `AddQuad`'s fixed (A,B,C)(A,C,D)
+split — valid because this gate holds `LooseTriangle` at zero.
+
 ## TreadMeshProof — the Phase 1 gate
 
 The C++ gate for the ported builder, against `Engine/Generators/Tyre`. Build and run:

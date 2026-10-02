@@ -75,6 +75,24 @@ void RasterizeList(const ImDrawList* List, const unsigned char* Sheet, int Sheet
             Offset += Cmd.ElemCount;
             continue;
         }
+
+        // ⚠️ Sample the texture THIS COMMAND references, not a pointer cached at startup. The vendored
+        //    ImGui owns atlas textures dynamically (ImGuiBackendFlags_RendererHasTextures): when a panel
+        //    adds a font mid-run the atlas is rebuilt into a NEW ImTextureData and NewFrame frees the old
+        //    one's pixels — so a pixel pointer taken once at startup is a use-after-free by the time the
+        //    later sheets rasterise. The command's TexRef always names the live texture.
+        const unsigned char* Texels    = Sheet;
+        int                  TexelsW   = SheetW;
+        int                  TexelsH   = SheetH;
+        int                  TexelsBpp = 4;
+        if (const ImTextureData* Live = Cmd.TexRef._TexData; Live != nullptr && Live->Pixels != nullptr)
+        {
+            Texels    = reinterpret_cast<const unsigned char*>(Live->Pixels);
+            TexelsW   = Live->Width;
+            TexelsH   = Live->Height;
+            TexelsBpp = Live->BytesPerPixel;
+        }
+
         const int ClipX0 = int(Cmd.ClipRect.x < 0.0f ? 0.0f : Cmd.ClipRect.x);
         const int ClipY0 = int(Cmd.ClipRect.y < 0.0f ? 0.0f : Cmd.ClipRect.y);
         const int ClipX1 = int(Cmd.ClipRect.z > float(Target.Width)  ? float(Target.Width)  : Cmd.ClipRect.z);
@@ -131,11 +149,11 @@ void RasterizeList(const ImDrawList* List, const unsigned char* Sheet, int Sheet
                     const float Bl= W0 * Chan(A.col, 16) + W1 * Chan(B.col, 16) + W2 * Chan(D.col, 16);
                     float Al      = W0 * Chan(A.col, 24) + W1 * Chan(B.col, 24) + W2 * Chan(D.col, 24);
 
-                    int Sx = int(U * float(SheetW)), Sy = int(V * float(SheetH));
-                    if (Sx < 0) Sx = 0;  if (Sx >= SheetW) Sx = SheetW - 1;
-                    if (Sy < 0) Sy = 0;  if (Sy >= SheetH) Sy = SheetH - 1;
-                    const unsigned char* Texel = Sheet + (size_t(Sy) * size_t(SheetW) + size_t(Sx)) * 4u;
-                    Al *= float(Texel[3]) / 255.0f;
+                    int Sx = int(U * float(TexelsW)), Sy = int(V * float(TexelsH));
+                    if (Sx < 0) Sx = 0;  if (Sx >= TexelsW) Sx = TexelsW - 1;
+                    if (Sy < 0) Sy = 0;  if (Sy >= TexelsH) Sy = TexelsH - 1;
+                    const unsigned char* Texel = Texels + (size_t(Sy) * size_t(TexelsW) + size_t(Sx)) * size_t(TexelsBpp);
+                    Al *= float(Texel[TexelsBpp == 4 ? 3 : 0]) / 255.0f;   // Alpha8 atlases carry alpha in their one channel
 
                     Blend(&Target.Pixels[(size_t(Y) * size_t(Target.Width) + size_t(X)) * 4u], R, G, Bl, Al);
                 }

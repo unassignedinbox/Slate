@@ -13,6 +13,7 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 
+#include "Generators/Tyre/QuadTreadSolver.h"
 #include "Generators/Tyre/TyreProfileSpecification.h"
 #include "Generators/Tyre/TyrePresetLibrary.h"
 #include "../../Editor/ControlPanel.h"
@@ -1331,6 +1332,47 @@ void RecordLookPage(TyreGeneratorState& State)
 //                                                      THE EXPORT PAGE
 //------------------------------------------------------------------------------------------------------------------------
 
+/// 📦 Writes the quad tread band as an OBJ whose faces are real four-index quads, which is the topology
+///    claim in a form any mesh tool can verify.
+/// out   std::string  [-]  the notice to show: the file written and its size, or why not
+/// note  💡 TyreMeshStructure stores a quad as two triangles sharing a diagonal, in AddQuad's fixed order
+///       (A,B,C)(A,C,D). QuadTreadProof holds LooseTriangle at zero for this builder, so walking the index
+///       buffer six at a time reconstructs every quad exactly; nothing is guessed from geometry.
+/// tag   proof, allocating
+static std::string WriteQuadTreadObj(const TyreGeneratorState& State)
+{
+    TyreMeshStructure            Mesh;
+    const QuadTreadSpecification Pattern;   // the reference page's Street tile until the pattern page drives this
+    const QuadTreadMetrics       Built = SolveQuadTread(State.Document.Carcass, Pattern,
+                                                        QuadTreadStage::Bridge, Mesh);
+    const uint32_t Quads = Built.TileQuad + Built.BridgeQuad;
+    if (Quads == 0u)
+        return "Tread OBJ: the carcass is not valid, nothing written";
+
+    const char* Path = "TreadQuads.obj";
+    std::FILE*  File = std::fopen(Path, "wb");
+    if (File == nullptr)
+        return "Tread OBJ: could not open TreadQuads.obj for writing";
+
+    std::fprintf(File, "# Quad tread band - every face below is a quad (f has 4 indices)\n");
+    std::fprintf(File, "# quads %u  positions %zu\no tread\n",
+                 Quads, Mesh.QueryPositions().size());
+    for (const TyrePositionRecord& Point : Mesh.QueryPositions())
+        std::fprintf(File, "v %.4f %.4f %.4f\n",
+                     double(Point.X), double(Point.Y), double(Point.Z));
+    const std::vector<uint32_t>& Indices = Mesh.QueryIndices();
+    for (size_t Corner = 0; Corner + 5 < Indices.size(); Corner += 6)
+        std::fprintf(File, "f %u %u %u %u\n",
+                     Indices[Corner] + 1u, Indices[Corner + 1u] + 1u,
+                     Indices[Corner + 2u] + 1u, Indices[Corner + 5u] + 1u);
+    std::fclose(File);
+
+    char Notice[96];
+    std::snprintf(Notice, sizeof(Notice), "TreadQuads.obj written - %u quads, bridge group %u",
+                  Quads, Built.BridgeQuad);
+    return Notice;
+}
+
 void RecordExportPage(TyreGeneratorState& State)
 {
     Card Panel;
@@ -1341,10 +1383,10 @@ void RecordExportPage(TyreGeneratorState& State)
     //    position the previous button left behind, and the row walks diagonally down the card.
     const float  W   = ImGui::GetContentRegionAvail().x;
     const ImVec2 Row = ImGui::GetCursorScreenPos();
-    const char*  Labels[4] = { "Pattern JSON", "Height PNG", "Normal PNG", "GLB (3D)" };
+    const char*  Labels[5] = { "Pattern JSON", "Height PNG", "Normal PNG", "Tread OBJ (quads)", "GLB (3D)" };
     float X = Row.x;
     float Y = Row.y;
-    for (int I = 0; I < 4; ++I)
+    for (int I = 0; I < 5; ++I)
     {
         const float Width = Measure(13.0f, Labels[I]).x + 28.0f;
         if (X > Row.x && X + Width > Row.x + W)
@@ -1353,9 +1395,11 @@ void RecordExportPage(TyreGeneratorState& State)
             Y += 36.0f;
         }
         ImGui::SetCursorScreenPos(ImVec2(X, Y));
-        if (Button(Labels[I], I == 3))
+        if (Button(Labels[I], I == 4))
         {
-            State.Notice = Labels[I];
+            // 📝 The quad tread export is real: it solves the band and writes the file right here. The
+            //    other buttons stay notices until their exporters are ported.
+            State.Notice     = I == 3 ? WriteQuadTreadObj(State) : Labels[I];
             State.NoticeFade = 1.0f;
         }
         X += Width + 6.0f;

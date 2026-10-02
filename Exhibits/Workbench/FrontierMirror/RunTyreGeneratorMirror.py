@@ -34,6 +34,9 @@ SOURCES = [
     "Engine/Generators/Tyre/TyrePresetLibrary.cpp",
     "Engine/Generators/Tyre/TyreAppearanceSpecification.cpp",
     "Engine/Generators/Tyre/RimSpecification.cpp",
+    # the quad tread pipeline behind the Export page's "Tread OBJ (quads)" button
+    "Engine/Generators/Tyre/QuadTreadSolver.cpp",
+    "Engine/Generators/Tyre/TyreMeshStructure.cpp",
     "Projects/Project-Drive/Source/TyreGeneratorSequence.cpp",
     # the editor itself
     "Engine/Editor/EditorHost.cpp", "Engine/Editor/ControlPanel.cpp", "Engine/Editor/OutlinerPanel.cpp",
