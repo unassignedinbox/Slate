@@ -94,6 +94,8 @@ def Main() -> None:
     Shaders = sorted((Binary / "Engine/Shaders").glob("*.spv"))
     if not Shaders:
         raise RuntimeError("No compiled Vulkan shaders found")
+    if not (Binary / "Engine/Shaders/DistanceFieldGIResolve.spv").is_file():
+        raise RuntimeError("Missing compiled DistanceFieldGIResolve shader")
     for Shader in Shaders:
         if Shader.read_bytes()[:4] != b"\x03\x02\x23\x07":
             raise RuntimeError(f"Invalid SPIR-V signature: {Shader}")
@@ -158,6 +160,10 @@ def Main() -> None:
                 "configuration": "Release", "architecture": "x64", "compiler": "MSVC",
                 "projects": PackagedProjects, "compiledShaderCount": len(Shaders),
                 "gpuRuntimeVerified": False,
+                "sdfGi": {"importedCommit": "7d5cb3c14677af8ffbc07989ea091700973abcc2",
+                          "shaderCompiled": True, "runtimeEnabled": False,
+                          "reason": "Upstream GPU field upload and host/shader resource contract are incomplete",
+                          "fallback": "Existing Surfel GI, or existing compute fallback if Surfel is unavailable"},
                 "requirements": ["Windows x64", "Microsoft Visual C++ x64 runtime",
                                  "Compatible Vulkan GPU and its installed driver"],
                 "sha256": {Location.relative_to(Destination).as_posix(): hashlib.sha256(Location.read_bytes()).hexdigest()

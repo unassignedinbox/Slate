@@ -114,6 +114,12 @@ Engine\PhysicalDynamics\Vehicle\TyreSlipDynamics.cpp|Project-Drive vehicle stack
 Engine\PhysicalDynamics\Vehicle\VehicleGeometry.cpp|Project-Drive vehicle stack: no image links it yet
 Engine\PhysicalDynamics\Vehicle\VehicleSolver.cpp|Project-Drive vehicle stack: no image links it yet
 Engine\PhysicalDynamics\Vehicle\XPBDSoftTyre.cpp|Project-Drive vehicle stack: no image links it yet
+Engine\DisplayPresentation\DistanceFieldIntegrator.cpp|CPU offline reference integrator for distance field GI
+Engine\GeometricRaster\DistanceFieldBakeSolver.cpp|CPU offline distance field baker
+Engine\GeometricRaster\DistanceFieldSpace.cpp|CPU local distance field volume representation
+Engine\GeometricRaster\GlobalDistanceFieldSpace.cpp|CPU global distance field clipmaps representation
+Engine\GeometricRaster\SurfaceCacheStructure.cpp|CPU surface cache atlas and lighting card representation
+
 ALLOW
 
 cut -d'|' -f1 < "$Work/allow.txt" | sort -u > "$Work/allow_paths.txt"

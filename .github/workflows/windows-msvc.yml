@@ -100,6 +100,8 @@ jobs:
             & ./Tools/Build/ToolchainSequence.ps1 -Configuration Release -SetupDependencies -Parallel 2 *>&1 | Tee-Object -FilePath ../_AgentScratch/logs/msvc-ci/CompilerOutput.log
             if ($LASTEXITCODE -ne 0) { throw 'Frontier build failed' }
             if (-not (Test-Path Build/Output/Windows/Release/Binary/Frontier.exe)) { throw 'Frontier.exe was not produced' }
+            & ../VisualProof/DistanceFieldGI/BuildDistanceFieldGIProof.ps1
+            if ($LASTEXITCODE -ne 0) { throw 'SDF CPU proof or GPU dispatch refusal checks failed' }
           } catch {
             $CompilerLog = Get-Content ../_AgentScratch/logs/msvc-ci/CompilerOutput.log -ErrorAction SilentlyContinue
             $Failures = $CompilerLog | Select-String -Pattern '(fatal error|error [A-Z]+[0-9]+|error:|LNK[0-9]+|FAILED)'
@@ -127,6 +129,7 @@ jobs:
           retention-days: 14
           path: |
             _AgentScratch/logs/msvc-ci/
+            _AgentScratch/build/distancefield/VisualProof/DistanceFieldGI/
             Frontier/build/dependencies-Release/CMakeFiles/CMakeConfigureLog.yaml
             Frontier/Build/Output/Windows/Release/Object/*.rsp
       - name: Retain Windows binary
