@@ -28,11 +28,12 @@ The combination of sub-voxel seeds, JFA+, exact triangle refinement, trilinear c
 6. A conventional raster G-buffer supplies only the current receiver position, normal, and albedo. The exact same ShaderBall mesh and transforms are used for rasterization and SDF composition.
 7. At half resolution, one to eight cosine-distributed rays per receiver sphere-trace the global SDF. Directions are keyed to coarse world-space cells so camera motion cannot reshuffle a pixel-space noise pattern. Distance-adaptive mip selection accelerates empty-space traversal; candidate hits return to mip zero before acceptance.
 8. Accepted world-space hits sample the global surface-radiance cache. Rays leaving the baked world sample a low-intensity environment.
-9. The composite multiplies incoming indirect radiance by receiver albedo and combines it with the raster direct term.
+9. A 5×5 position/normal bilateral reconstruction removes raw low-ray-count variance. World-position reprojection accumulates up to 32 validated frames, rejects changed surfaces, and neighbourhood-clamps retained radiance. Animated lighting keeps a deliberately responsive history floor.
+10. The composite multiplies reconstructed incoming indirect radiance by receiver albedo and combines it with the raster direct term.
 
-A bounded incoming-radiance estimator suppresses isolated emissive fireflies without temporal history. There is no screen-space temporal denoiser.
+A bounded incoming-radiance estimator suppresses isolated emissive fireflies before reconstruction. Temporal directions still originate from world-keyed sequences; the history stage stabilizes their estimator rather than inventing screen-space hits.
 
-The camera G-buffer supplies visible receivers, exactly as a deferred renderer must, but it is never searched for ray hits. Every secondary hit, miss, and occlusion decision comes from `GlobalSDF.bin`; the surface-radiance cache supplies lighting only after a GDF hit has been validated.
+The camera G-buffer supplies visible receivers and validates temporal reconstruction, exactly as a deferred renderer must, but it is never searched for ray hits. Every secondary hit, miss, and occlusion decision comes from `GlobalSDF.bin`; the surface-radiance cache supplies lighting only after a GDF hit has been validated.
 
 ## Relationship to Lumen
 
@@ -58,7 +59,7 @@ The next phase can add SDF shadows as a separate query without changing or disgu
 - **GI intensity** — scales only the SDF-derived indirect contribution.
 - **Trace distance** — maximum world-space sphere-trace reach.
 - **Sun strength** — updates raster direct light and the global surface-radiance cache.
-- **Animate injection** — rotates unshadowed source radiance; disabled by default for a stable inspection image.
+- **Animate injection** — rotates unshadowed source radiance and is enabled by default as the real-time lighting proof. Disable it for a fully converged inspection image.
 - **Reset camera** — restores the default orbit. Drag to orbit and use the wheel to dolly.
 
 ## Bake reproducibility
@@ -82,7 +83,7 @@ The matching metadata JSON files record source triangle count, method, bounds, r
 - One bounded global volume rather than camera-centred clipmaps.
 - Diffuse one-bounce transport plus environment misses; no glossy reflection path.
 - Dense radiance voxels instead of Lumen cards.
-- No temporal denoiser or screen-space hit fallback.
+- Temporal/bilateral reconstruction is camera-space, but there is no screen-space hit fallback or screen-derived radiance.
 - No source visibility or SDF shadows until the next phase.
 - Features substantially thinner than one global base voxel (`≈0.11 m`) can still disappear after global composition even though the canonical mesh SDF is much finer.
 

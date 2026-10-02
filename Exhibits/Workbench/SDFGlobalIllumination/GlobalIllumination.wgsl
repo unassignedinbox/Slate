@@ -125,9 +125,10 @@ fn ComputeMain(@builtin(global_invocation_id) id : vec3u) {
         (positionSample.xyz - parameters.boundsMinimum.xyz)
         / (parameters.settings.y * 1.75)
     ));
+    let sequenceFrame = u32(parameters.settings.w + 0.5);
     let noise = vec2f(
-        worldHash(worldKey, 0x9e3779b9u),
-        worldHash(worldKey, 0x7f4a7c15u)
+        worldHash(worldKey, 0x9e3779b9u + sequenceFrame * 747796405u),
+        worldHash(worldKey, 0x7f4a7c15u + sequenceFrame * 2891336453u)
     );
     var sum = vec3f(0.0);
     var stepSum = 0.0;

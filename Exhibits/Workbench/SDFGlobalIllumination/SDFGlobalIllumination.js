@@ -387,12 +387,13 @@ async function start()
     const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
     context.configure({ device, format: presentationFormat, alphaMode: "opaque" });
 
-    const [sdfContent, shaderBallContent, gbufferSource, cacheSource, giSource, presentSource] = await Promise.all([
+    const [sdfContent, shaderBallContent, gbufferSource, cacheSource, giSource, denoiseSource, presentSource] = await Promise.all([
         loadBinary("GlobalSDF.bin"),
         loadBinary("../../Assets/ShaderBall/ShaderBall.mesh"),
         loadText("GBuffer.wgsl"),
         loadText("RadianceCache.wgsl"),
         loadText("GlobalIllumination.wgsl"),
+        loadText("Denoise.wgsl"),
         loadText("Present.wgsl"),
     ]);
     const sdf = decodeGlobalSdf(sdfContent);
@@ -402,6 +403,7 @@ async function start()
         gbuffer: device.createShaderModule({ label: "SDF G-buffer", code: gbufferSource }),
         cache: device.createShaderModule({ label: "Global surface radiance cache", code: cacheSource }),
         gi: device.createShaderModule({ label: "Global SDF GI", code: giSource }),
+        denoise: device.createShaderModule({ label: "SDF GI reconstruction", code: denoiseSource }),
         present: device.createShaderModule({ label: "SDF GI presentation", code: presentSource }),
     };
     await Promise.all(Object.entries(modules).map(([label, module]) => validateShader(module, label)));
@@ -411,6 +413,7 @@ async function start()
     const cameraBuffer = createBuffer(device, "Camera uniforms", 256, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
     const cacheBuffer = createBuffer(device, "Radiance cache uniforms", 256, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
     const giBuffer = createBuffer(device, "GI uniforms", 256, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+    const denoiseBuffer = createBuffer(device, "GI reconstruction uniforms", 256, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
     const presentBuffer = createBuffer(device, "Present uniforms", 256, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
 
     const distanceTexture = device.createTexture({
@@ -469,6 +472,7 @@ async function start()
     });
     const cachePipeline = device.createComputePipeline({ label: "Surface radiance injection", layout: "auto", compute: { module: modules.cache, entryPoint: "ComputeMain" } });
     const giPipeline = device.createComputePipeline({ label: "Global distance-field GI", layout: "auto", compute: { module: modules.gi, entryPoint: "ComputeMain" } });
+    const denoisePipeline = device.createComputePipeline({ label: "SDF GI temporal/spatial reconstruction", layout: "auto", compute: { module: modules.denoise, entryPoint: "ComputeMain" } });
     const presentPipeline = device.createRenderPipeline({
         label: "SDF GI present",
         layout: "auto",
@@ -502,8 +506,14 @@ async function start()
     let albedoTexture;
     let depthTexture;
     let indirectTexture;
+    let historyLighting = [];
+    let historyPosition = [];
+    let historyNormal = [];
     let giBindGroup;
-    let presentBindGroup;
+    let denoiseBindGroups = [];
+    let presentBindGroups = [];
+    let historyIndex = 0;
+    let historyValid = false;
 
     function resize()
     {
@@ -520,18 +530,49 @@ async function start()
         height = nextHeight;
         Canvas.width = width;
         Canvas.height = height;
-        for (const texture of [worldPositionTexture, worldNormalTexture, albedoTexture, depthTexture, indirectTexture]) texture?.destroy();
+        for (const texture of [
+            worldPositionTexture,
+            worldNormalTexture,
+            albedoTexture,
+            depthTexture,
+            indirectTexture,
+            ...historyLighting,
+            ...historyPosition,
+            ...historyNormal,
+        ]) texture?.destroy();
         const colourUsage = GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING;
         worldPositionTexture = device.createTexture({ label: "World position G-buffer", size: [width, height], format: "rgba16float", usage: colourUsage });
         worldNormalTexture = device.createTexture({ label: "World normal G-buffer", size: [width, height], format: "rgba16float", usage: colourUsage });
         albedoTexture = device.createTexture({ label: "Albedo G-buffer", size: [width, height], format: "rgba8unorm", usage: colourUsage });
         depthTexture = device.createTexture({ label: "Scene depth", size: [width, height], format: "depth24plus", usage: GPUTextureUsage.RENDER_ATTACHMENT });
+        const giWidth = Math.ceil(width / 2);
+        const giHeight = Math.ceil(height / 2);
+        const giSize = [giWidth, giHeight];
+        const computeTextureUsage = GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING;
         indirectTexture = device.createTexture({
-            label: "Half-resolution SDF indirect",
-            size: [Math.ceil(width / 2), Math.ceil(height / 2)],
+            label: "Raw half-resolution SDF indirect",
+            size: giSize,
             format: "rgba16float",
-            usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+            usage: computeTextureUsage,
         });
+        historyLighting = [0, 1].map((index) => device.createTexture({
+            label: `SDF GI accumulated lighting ${index}`,
+            size: giSize,
+            format: "rgba16float",
+            usage: computeTextureUsage,
+        }));
+        historyPosition = [0, 1].map((index) => device.createTexture({
+            label: `SDF GI history position ${index}`,
+            size: giSize,
+            format: "rgba16float",
+            usage: computeTextureUsage,
+        }));
+        historyNormal = [0, 1].map((index) => device.createTexture({
+            label: `SDF GI history normal ${index}`,
+            size: giSize,
+            format: "rgba16float",
+            usage: computeTextureUsage,
+        }));
         giBindGroup = device.createBindGroup({
             label: "SDF GI bind group",
             layout: giPipeline.getBindGroupLayout(0),
@@ -545,18 +586,40 @@ async function start()
                 { binding: 6, resource: indirectTexture.createView() },
             ],
         });
-        presentBindGroup = device.createBindGroup({
-            label: "Presentation bind group",
+        denoiseBindGroups = [0, 1].map((readIndex) =>
+        {
+            const writeIndex = 1 - readIndex;
+            return device.createBindGroup({
+                label: `SDF GI reconstruction ${readIndex} to ${writeIndex}`,
+                layout: denoisePipeline.getBindGroupLayout(0),
+                entries: [
+                    { binding: 0, resource: { buffer: denoiseBuffer } },
+                    { binding: 1, resource: indirectTexture.createView() },
+                    { binding: 2, resource: worldPositionTexture.createView() },
+                    { binding: 3, resource: worldNormalTexture.createView() },
+                    { binding: 4, resource: historyLighting[readIndex].createView() },
+                    { binding: 5, resource: historyPosition[readIndex].createView() },
+                    { binding: 6, resource: historyNormal[readIndex].createView() },
+                    { binding: 7, resource: historyLighting[writeIndex].createView() },
+                    { binding: 8, resource: historyPosition[writeIndex].createView() },
+                    { binding: 9, resource: historyNormal[writeIndex].createView() },
+                ],
+            });
+        });
+        presentBindGroups = [0, 1].map((historyTextureIndex) => device.createBindGroup({
+            label: `Presentation bind group ${historyTextureIndex}`,
             layout: presentPipeline.getBindGroupLayout(0),
             entries: [
                 { binding: 0, resource: { buffer: presentBuffer } },
                 { binding: 1, resource: worldPositionTexture.createView() },
                 { binding: 2, resource: worldNormalTexture.createView() },
                 { binding: 3, resource: albedoTexture.createView() },
-                { binding: 4, resource: indirectTexture.createView() },
+                { binding: 4, resource: historyLighting[historyTextureIndex].createView() },
                 { binding: 5, resource: linearSampler },
             ],
-        });
+        }));
+        historyIndex = 0;
+        historyValid = false;
     }
 
     const extents = sdf.maximum.map((value, axis) => value - sdf.minimum[axis]);
@@ -566,6 +629,8 @@ async function start()
     let averageMilliseconds = 16.7;
     let statusCounter = 0;
     let previousCacheKey = "";
+    let previousViewProjection = null;
+    let samplingFrame = 0;
 
     function render(now)
     {
@@ -574,7 +639,8 @@ async function start()
         const eye = cameraEye();
         const projection = perspectiveProjection(Math.PI / 3.05, width / height, 0.08, 70.0);
         const view = viewMatrix(eye, State.target, [0.0, 1.0, 0.0]);
-        device.queue.writeBuffer(cameraBuffer, 0, multiplyMatrix(projection, view));
+        const currentViewProjection = multiplyMatrix(projection, view);
+        device.queue.writeBuffer(cameraBuffer, 0, currentViewProjection);
 
         const sunAngle = AnimateSun.checked ? elapsed * 0.22 : 0.72;
         const lightDirection = normalise([Math.cos(sunAngle) * 0.56, 0.82, Math.sin(sunAngle) * 0.46]);
@@ -594,9 +660,15 @@ async function start()
         const giUniforms = new Float32Array(16);
         giUniforms.set([...sdf.minimum, 0.0], 0);
         giUniforms.set([...sdf.maximum, 0.0], 4);
-        giUniforms.set([Number(TraceDistance.value), voxelSize, Number(RayCount.value), 0.0], 8);
+        giUniforms.set([Number(TraceDistance.value), voxelSize, Number(RayCount.value), samplingFrame % 1024], 8);
         giUniforms.set([0.12, sdf.mipCount - 1, 0.0, 0.0], 12);
         device.queue.writeBuffer(giBuffer, 0, giUniforms);
+
+        const denoiseUniforms = new Float32Array(20);
+        denoiseUniforms.set(previousViewProjection || currentViewProjection, 0);
+        const historyResponse = AnimateSun.checked ? 0.18 : updateRadianceCache ? 0.24 : 0.06;
+        denoiseUniforms.set([historyValid ? 1.0 : 0.0, voxelSize, historyResponse, 0.0], 16);
+        device.queue.writeBuffer(denoiseBuffer, 0, denoiseUniforms);
 
         const presentUniforms = new Float32Array(16);
         presentUniforms.set([...lightDirection, 0.0], 0);
@@ -641,15 +713,26 @@ async function start()
         giPass.dispatchWorkgroups(Math.ceil(Math.ceil(width / 2) / 8), Math.ceil(Math.ceil(height / 2) / 8));
         giPass.end();
 
+        const nextHistoryIndex = 1 - historyIndex;
+        const denoisePass = encoder.beginComputePass({ label: "Reproject and reconstruct SDF GI" });
+        denoisePass.setPipeline(denoisePipeline);
+        denoisePass.setBindGroup(0, denoiseBindGroups[historyIndex]);
+        denoisePass.dispatchWorkgroups(Math.ceil(Math.ceil(width / 2) / 8), Math.ceil(Math.ceil(height / 2) / 8));
+        denoisePass.end();
+
         const presentPass = encoder.beginRenderPass({
             label: "Present global SDF GI",
             colorAttachments: [{ view: context.getCurrentTexture().createView(), clearValue: [0.01, 0.015, 0.02, 1], loadOp: "clear", storeOp: "store" }],
         });
         presentPass.setPipeline(presentPipeline);
-        presentPass.setBindGroup(0, presentBindGroup);
+        presentPass.setBindGroup(0, presentBindGroups[nextHistoryIndex]);
         presentPass.draw(3);
         presentPass.end();
         device.queue.submit([encoder.finish()]);
+        historyIndex = nextHistoryIndex;
+        historyValid = true;
+        previousViewProjection = currentViewProjection.slice();
+        samplingFrame = (samplingFrame + 1) >>> 0;
 
         const milliseconds = now - lastFrame;
         lastFrame = now;
