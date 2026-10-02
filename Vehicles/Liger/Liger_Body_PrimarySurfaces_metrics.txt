@@ -1,0 +1,9 @@
+RearDeckCentre: Shell_Crease_076 -> Shell_Crease_076 mirrored; x=-150.9..0.7 cm; rails=7; rail/reference mean=0.73 cm max=2.24 cm
+RearDeckStep: Shell_Crease_076 -> Shell_Crease_074; x=-150.9..0.7 cm; rails=7; rail/reference mean=0.69 cm max=2.25 cm
+RearDeckLedge: Shell_Crease_074 -> Shell_Crease_035; x=-150.9..0.7 cm; rails=7; rail/reference mean=0.72 cm max=2.25 cm
+RearDeckOuter: Shell_Crease_035 -> Shell_Crease_061; x=-139.2..1.0 cm; rails=7; rail/reference mean=0.66 cm max=2.69 cm
+RearShoulder: Shell_Crease_061 -> Shell_Crease_028; x=-123.0..11.3 cm; rails=7; rail/reference mean=0.72 cm max=2.69 cm
+RearQuarterCrown: Shell_Crease_028 -> Shell_Crease_071; x=-122.0..12.9 cm; rails=7; rail/reference mean=0.74 cm max=2.81 cm
+CockpitCantRail: Shell_Crease_063 +Y half -> Shell_Crease_023; x=12.9..174.0 cm; rails=7; rail/reference mean=0.84 cm max=2.69 cm
+BonnetCentre: Shell_Crease_025 -> Shell_Crease_025 mirrored; x=174.0..250.3 cm; rails=7; rail/reference mean=0.58 cm max=2.24 cm
+BonnetShoulder: Shell_Crease_025 -> Shell_Crease_026; x=174.0..207.6 cm; rails=7; rail/reference mean=0.83 cm max=3.61 cm
