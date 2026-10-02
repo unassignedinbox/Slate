@@ -120,6 +120,30 @@ int main()
     bool FrontOkay = BlendSolver::Frame(Box, 0, FrontFrame, Why);
     bool BackOkay = BlendSolver::Frame(Box, 2, BackFrame, Why);
 
+    Panel.Section("Exact single-edge orthogonal-prism route");
+    Deliver<BrepBody> ExerciseBox = BrepBody::Box({ 0, 0, 0 }, { 5, 4, 6 });
+    EdgeCornerFrame ExerciseFrame; std::string ExerciseWhy;
+    const bool ExerciseFrameOkay = BlendSolver::Frame(ExerciseBox.Payload, 5, ExerciseFrame, ExerciseWhy);
+    int AppliedExercise = -1;
+    Deliver<BrepBody> ExerciseRoll = ExerciseFrameOkay
+        ? BlendSolver::FilletEdges(ExerciseBox.Payload, { 5 }, 2.0, &AppliedExercise)
+        : Deliver<BrepBody>::Reject(RefusalReason::Unsupported, ExerciseWhy.c_str());
+    int CurvedEndCaps = 0;
+    if (ExerciseRoll)
+        for (const BrepEdge& Edge : ExerciseRoll.Payload.Edges)
+        {
+            const double Middle = 0.5 * (Edge.Curve.DomainStart() + Edge.Curve.DomainEnd());
+            if (std::fabs(Edge.Curve.Curvature(Middle) - 0.5) < 1e-8) ++CurvedEndCaps;
+        }
+    const double ExerciseVolume = ExerciseFrameOkay
+        ? ExerciseBox.Payload.Validate().Volume - BlendSolver::FilletRemoval(ExerciseFrame, 2.0) : 0.0;
+    Panel.Expect("One box edge commits one closed Z-up rounded prism",
+                 ExerciseRoll && ExerciseRoll.Payload.Validate().Solid() && AppliedExercise == 1);
+    Panel.Expect("Both depth ends retain the R2 circular boundary instead of a diagonal chord", CurvedEndCaps == 2);
+    Panel.Within("The exact rounded prism follows the rolling-ball volume",
+                 ExerciseRoll ? std::fabs(ExerciseRoll.Payload.Validate().Volume - ExerciseVolume)
+                              : ScalarCriteria::Infinity, 0.01);
+
     Panel.Section("Independent seed-set composition");
     Panel.Expect("The source box is a one-hull V8/E12/F6 solid",
                  BoxResult && OriginalReport.Solid() && OriginalReport.Hulls == 1 &&

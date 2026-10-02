@@ -5416,6 +5416,76 @@ Deliver<BrepBody> BlendSolver::ChamferEdges(const BrepBody& Body, const std::vec
         "no common planar cutter produced a closed solid without self-intersection");
 }
 
+// A rectangular prism's single straight edge has an exact, simpler construction than the generic trimmed-face route:
+// round one corner of its rectangular cross-section, then extrude that closed NURBS profile along the selected edge.
+// This keeps +Z genuinely vertical in a front view—the two end-cap boundaries are circular arcs, not the straight
+// chords previously left by the conservative fallback.
+static std::optional<Deliver<BrepBody>> FilletOrthogonalPrismEdge(const BrepBody& Body, int Edge,
+                                                                  const EdgeCornerFrame& F, double Radius) noexcept
+{
+    const BodyReport Report = Body.Validate();
+    if (!Report.Solid() || Report.Genus != 0 || Body.Vertices.size() != 8 || Body.Edges.size() != 12 ||
+        Body.Faces.size() != 6 || Edge < 0 || Edge >= static_cast<int>(Body.Edges.size())) return std::nullopt;
+    for (const BrepEdge& Candidate : Body.Edges)
+        if (Candidate.Curve.Degree != 1 || Candidate.Curve.Curvature(
+            0.5 * (Candidate.Curve.DomainStart() + Candidate.Curve.DomainEnd())) > ScalarCriteria::CircularTolerance)
+            return std::nullopt;
+
+    double WidthA = 0.0, WidthB = 0.0;
+    const double PositionTolerance = ScalarCriteria::ScaledPositionTolerance * std::max(1.0, Body.Bounds().Diagonal());
+    for (const BrepVertex& Vertex : Body.Vertices)
+    {
+        const Vec3 Relative = Vertex.Point - F.Start;
+        const double A = Relative.Dot(F.InA), B = Relative.Dot(F.InB), Along = Relative.Dot(F.Tangent);
+        WidthA = std::max(WidthA, A); WidthB = std::max(WidthB, B);
+        if (A < -PositionTolerance || B < -PositionTolerance || Along < -PositionTolerance ||
+            Along > F.Length + PositionTolerance) return std::nullopt;
+    }
+    if (WidthA <= Tol || WidthB <= Tol) return std::nullopt;
+    // Every source vertex must occupy one corner of this local rectangular-prism coordinate frame.
+    for (const BrepVertex& Vertex : Body.Vertices)
+    {
+        const Vec3 Relative = Vertex.Point - F.Start;
+        const double Coordinates[3] = { Relative.Dot(F.InA), Relative.Dot(F.InB), Relative.Dot(F.Tangent) };
+        const double Extents[3] = { WidthA, WidthB, F.Length };
+        for (int Axis = 0; Axis < 3; ++Axis)
+            if (std::min(std::fabs(Coordinates[Axis]), std::fabs(Coordinates[Axis] - Extents[Axis])) > PositionTolerance)
+                return std::nullopt;
+    }
+
+    const double SetBack = BlendSolver::TangentSetBack(F, Radius);
+    if (SetBack >= std::min(WidthA, WidthB) - Tol)
+        return Deliver<BrepBody>::Reject(RefusalReason::DegenerateInput,
+            "fillet radius consumes an orthogonal-prism support");
+    auto Point = [&](double A, double B) noexcept { return F.Start + F.InA * A + F.InB * B; };
+    const Vec3 TangentA = Point(SetBack, 0.0), FarA = Point(WidthA, 0.0);
+    const Vec3 Opposite = Point(WidthA, WidthB);
+    const Vec3 FarB = Point(0.0, WidthB), TangentB = Point(0.0, SetBack);
+    const Vec3 Centre = F.Start - F.Bisector * (Radius / std::sin(F.Dihedral * 0.5));
+    const Vec3 ArcMiddle = Centre + F.Bisector * Radius;
+
+    Deliver<NurbsCurve> Profile = NurbsCurve::Line(TangentA, FarA);
+    const Deliver<NurbsCurve> Pieces[] =
+    {
+        NurbsCurve::Line(FarA, Opposite), NurbsCurve::Line(Opposite, FarB),
+        NurbsCurve::Line(FarB, TangentB), NurbsCurve::ArcThreePoints(TangentB, ArcMiddle, TangentA)
+    };
+    for (const Deliver<NurbsCurve>& Piece : Pieces)
+    {
+        if (!Profile || !Piece) return Deliver<BrepBody>::Reject(RefusalReason::DegenerateInput,
+            "orthogonal-prism fillet profile is degenerate");
+        Profile = NurbsCurve::Join(Profile.Payload, Piece.Payload);
+    }
+    if (!Profile) return Deliver<BrepBody>::Reject(Profile.Denial.Reason, Profile.Denial.Detail);
+    Deliver<BrepBody> Result = BrepBody::Extrude(Profile.Payload, F.Tangent, F.Length);
+    if (!Result) return Result;
+    const BodyReport Rounded = Result.Payload.Validate();
+    if (!Rounded.Solid() || Rounded.Genus != 0)
+        return Deliver<BrepBody>::Reject(RefusalReason::NonManifold,
+            "orthogonal-prism fillet did not produce one closed solid");
+    return Result;
+}
+
 Deliver<BrepBody> BlendSolver::FilletEdge(const BrepBody& Body, int Edge, double Radius) noexcept
 {
     if (std::optional<CylinderCap> Cap = NativeCylinderCap(Body, Edge)) return FilletCylinderCap(*Cap, Radius);
@@ -5597,6 +5667,20 @@ Deliver<BrepBody> BlendSolver::FilletEdges(const BrepBody& Body, const std::vect
                 return Deliver<BrepBody>::Reject(RefusalReason::Unsupported, "multi-edge fillet seeds overlap inconsistent tangent chains");
         }
         if (!Duplicate) Targets.push_back({ Effective, EdgeSignature(Body, Effective.front()) });
+    }
+
+    // A single edge on an orthogonal prism gets an exact rounded cross-section. Keep this at the transaction level:
+    // sequential multi-edge rolls rely on stable edge signatures and deliberately retain the general composition path.
+    if (Targets.size() == 1 && Targets.front().Chain.size() == 1)
+    {
+        EdgeCornerFrame Frame;
+        const int Selected = Targets.front().Chain.front();
+        if (!CornerFrameRefusal(Body, Selected, Frame))
+            if (std::optional<Deliver<BrepBody>> Prism = FilletOrthogonalPrismEdge(Body, Selected, Frame, Radius))
+            {
+                if (*Prism && AppliedChains) *AppliedChains = 1;
+                return std::move(*Prism);
+            }
     }
 
     // Four mutually parallel edges form a complete cross-section family. Rebuild them together as one exact rounded
