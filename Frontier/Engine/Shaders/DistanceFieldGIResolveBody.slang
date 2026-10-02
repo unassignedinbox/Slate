@@ -88,7 +88,8 @@ vec3 ShadeHit(vec3 hp, uint FacetSlot, vec3 wo)
     vec3 wiLoc = ToLocal(F, L);
     if (wiLoc.z > 0.0)
         Lo += EvaluateBsdf(m, layers, woLoc, wiLoc) * (PC.SunColour.xyz * PC.SunDirectionRadiance.w) * wiLoc.z * DistanceShadow(hp,F.Geometric);
-    Lo += AmbientResponse(m, layers, woLoc) * (kInvPi * GatherField(hp, F.Normal));
+    Lo += AmbientResponse(m, layers, woLoc) * ((PC.Counts.z & kFeatureGlobalIllumination) != 0u
+        ? kInvPi * GatherField(hp, F.Normal) : PC.SkyAmbient.xyz);
     return Lo;
 }
 

@@ -250,7 +250,7 @@ int main(int Count,char** Arguments)
             auto Output=Host.AllocateImage(Width,Height,VK_FORMAT_R8G8B8A8_UNORM,nullptr,Width*Height*4u);
             auto Position=Host.AllocateImage(Width,Height,VK_FORMAT_R32G32B32A32_SFLOAT,Surface.data(),Surface.size()*4u);
             auto Normals=Host.AllocateImage(Width,Height,VK_FORMAT_R16G16B16A16_SFLOAT,Normal.data(),Normal.size()*4u);
-            const float White[4]={1,1,1,1}; auto Table=Host.AllocateImage(1,1,VK_FORMAT_R32G32B32A32_SFLOAT,White,sizeof(White),true);
+            const float White[4]={0.6f,0.02f,0.7f,1.0f}; auto Table=Host.AllocateImage(1,1,VK_FORMAT_R32G32B32A32_SFLOAT,White,sizeof(White),true);
             auto VertexBuffer=Host.Allocate(Vertices.size()*sizeof(VertexRecord),Vertices.data());
             auto IndexBuffer=Host.Allocate(Indices.size()*4u,Indices.data());
             auto InstanceBuffer=Host.Allocate(Instances.size()*sizeof(InstanceRecord),Instances.data());
@@ -324,10 +324,24 @@ int main(int Count,char** Arguments)
             Require(Geometry.RefreshInstances(Instances.data(),2u) && Geometry.QueryRevision()!=Revision,"Moving instances must rebuild world geometry");
             auto Moved=Execute(4u,"emitter-moved");
             Require(Moved[0]<Lit[0]*0.2,"Moving the emitter left stale indirect lighting");
+            Require(Host.Read(Fields)!=FieldBytes,"Moved geometry did not alter the populated distance volumes");
             Instances[1].World[12]=0.0f; Require(Geometry.RefreshInstances(Instances.data(),2u),"Restore emitter failed");
             Materials[1].EmissiveR=0.0f; Require(Geometry.Construct(Vertices,Indices,Instances,Materials),"Dark scene update failed");
             auto Dark=Execute(3u,"emission-off");
             Require(Dark[0]<Lit[0]*0.1,"Emission change did not clear cache history");
+            Frame.FeatureFlags=0u; Frame.SunRadiance=1.0f;
+            Frame.SunDirection[0]=Frame.SunDirection[1]=0.0f; Frame.SunDirection[2]=1.0f;
+            auto Shadow=Execute(1u,"sun-occluded");
+            Instances[1].World[12]=6.0f; Require(Geometry.RefreshInstances(Instances.data(),2u),"Occluder motion failed");
+            auto Sun=Execute(1u,"sun-visible");
+            Require(Sun[0]>1000.0 && Shadow[0]<Sun[0]*0.2,"Scene-derived distance shadows did not follow occluder motion");
+            Frame.SunRadiance=0.0f; auto SunOff=Execute(1u,"sun-off");
+            Require(SunOff[0]<Sun[0]*0.1,"Lighting change retained direct illumination");
+            auto BeforeCamera=Host.Read(Fields); Frame.CameraEye[0]+=0.5f;
+            (void)Execute(1u,"camera-shifted");
+            Require(Host.Read(Fields)!=BeforeCamera,"Camera movement did not re-snap the clipmaps");
+            Frame.CameraEye[0]=0.0f; Instances[1].World[12]=0.0f;
+            Frame.FeatureFlags=1u;
             Materials[1].EmissiveR=4.0f; Require(Geometry.Construct(Vertices,Indices,Instances,Materials),"Emissive scene reload failed");
             Stage.Destroy(); Stage.Destroy(); Require(!Stage.IsReady(),"Retired stage still ready");
             Require(Stage.Bring(Initialization),"Stage recreation failed");
@@ -388,7 +402,7 @@ int main(int Count,char** Arguments)
             auto Resized=Execute(1u,"resized"); Require(Resized[0]>100.0,"Resized output lost transmission");
             Stage.Destroy();
             Require(ValidationErrors.load()==0u,"Vulkan validation reported errors");
-            std::cout<<"PASS production SDF pipelines: populated three-level fields, emissive GI, bounce cache, GI toggle, moving instances, history reset, recreation, mesh reflection, thin/solid refraction, Beer attenuation and resize\n";
+            std::cout<<"PASS production SDF pipelines: populated three-level fields, emissive GI, bounce cache, GI toggle, moving instances, history reset, solar shadows, camera re-snapping, recreation, mesh reflection, thin/solid refraction, Beer attenuation and resize\n";
         }
         Require(ValidationErrors.load()==0u,"Vulkan resource destruction reported validation errors");
         std::cout<<"PASS Vulkan validation including synchronization and resource destruction: zero errors\n";
