@@ -32,7 +32,6 @@ const uint kMaterialTextureNone = 0xFFFFFFFFu;
 #ifndef FRONTIER_CONSTANT_MATERIALS
 layout(binding = 31) uniform sampler2D Textures[];
 #endif
-//   // bindless table, as in ReSTIRViewport (last binding in the set)
 #include "SceneMaterialResolve.slang"
 
 // The visibility id packing SurfaceResolve.slang writes into SurfaceImage.w — identical to ReSTIRViewport's.
@@ -44,7 +43,7 @@ uint VisibilityPrimitive(uint Packed) { return Packed & 0x3FFFu; }
 //                                                    PUSH CONSTANTS
 //------------------------------------------------------------------------------------------------------------------------
 // Feature flags — MUST match Engine/Shaders/ReSTIRViewport.slang so a single ControlCentreSettings drives both paths.
-const uint kFeatureGlobalIllumination = 1u;    // bit 0: surfel diffuse gather runs
+const uint kFeatureGlobalIllumination = 1u;    // bit 0: distance-field diffuse gather runs
 // Reflection mode (Counts.w): 0 = Off, 1 = Sky, 2 = Raytraced.
 const uint kReflectOff = 0u, kReflectSky = 1u, kReflectRaytraced = 2u;
 
@@ -102,7 +101,7 @@ vec3 Reflection(vec3 P, vec3 N, vec3 V, float roughness, uint mode)
         // reflect the sky dome only — no scene rays. Roughness widens toward the ambient (cheap gloss).
         return SkyAlongApprox(R, roughness);
     }
-    // kReflectRaytraced — one reflection ray against the CWBVH; miss → sky, hit → the hit's own material.
+    // kReflectRaytraced — one reflection ray against the world triangle BVH; miss → sky, hit → the hit's own material.
     vec3 Origin=P+N*0.001;
     DistanceRayHit Hit=TraceDistanceMesh(Origin,R,1e20);
     if (Hit.Facet==0xFFFFFFFFu) return SkyAlongApprox(R,roughness);
@@ -110,13 +109,21 @@ vec3 Reflection(vec3 P, vec3 N, vec3 V, float roughness, uint mode)
 }
 
 
-vec3 Transmission(vec3 Position, vec3 Normal, vec3 View, ShadingRecord Material)
+vec3 Transmission(vec3 Position, vec3 Normal, vec3 View, ShadingRecord Material, bool ThinWalled)
 {
     float Ior=max(Material.SpecularIor,1.01);
     vec3 Direction=refract(-View,Normal,1.0/Ior);
     if (dot(Direction,Direction)<1e-8) return vec3(0.0);
     vec3 Origin=Position-Normal*0.002, Attenuation=vec3(1.0);
-    bool Inside=true;
+    bool Inside=!ThinWalled;
+    if (ThinWalled)
+    {
+        // 📝 Parallel foil entry/exit preserves the far-field direction. Solid media use geometric exit distance below.
+        Direction=-View;
+        if (Material.TransmissionDepth>0.0 && Material.TransmissionThickness>0.0)
+            Attenuation=exp(log(max(Material.TransmissionColor,vec3(1e-5)))*Material.TransmissionThickness/
+                            (Material.TransmissionDepth*max(abs(dot(View,Normal)),1e-4)));
+    }
     for (uint Bounce=0u; Bounce<4u; ++Bounce)
     {
         DistanceRayHit Hit=TraceDistanceMesh(Origin,Direction,1e20);
@@ -145,7 +152,7 @@ void main()
     vec3 P = surf.xyz;
     uint visibility = floatBitsToUint(surf.w);
     // A miss (no geometry) shows the sky directly.
-    if (visibility == kVisibilityInvalid)
+    if (visibility == kVisibilityInvalid || VisibilityInstance(visibility) >= uint(Instances.length()))
     {
         vec3 V = normalize(P - PC.CameraEye.xyz);
         vec3 sky = SkyAlongApprox(V, 0.0);
@@ -209,7 +216,7 @@ void main()
     {
         float FresnelWeight=pow((max(m.SpecularIor,1.01)-1.0)/(max(m.SpecularIor,1.01)+1.0),2.0);
         FresnelWeight+= (1.0-FresnelWeight)*pow(1.0-max(dot(N,V),0.0),5.0);
-        col+=m.TransmissionWeight*(1.0-FresnelWeight)*Transmission(P,N,V,m);
+        col+=m.TransmissionWeight*(1.0-FresnelWeight)*Transmission(P,N,V,m,F.ThinWalled);
     }
     // exposure + Reinhard + gamma
     col *= PC.SkyAmbient.w;

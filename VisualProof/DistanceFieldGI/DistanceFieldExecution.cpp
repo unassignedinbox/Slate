@@ -55,9 +55,10 @@ public:
         Application.apiVersion = VK_API_VERSION_1_2;
         const char* Layer = "VK_LAYER_KHRONOS_validation";
         const char* Extension = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
-        VkValidationFeatureEnableEXT Synchronization = VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT;
+        VkValidationFeatureEnableEXT Synchronization[] = {VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
+            VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT, VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT};
         VkValidationFeaturesEXT Validation{VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT};
-        Validation.enabledValidationFeatureCount=1u; Validation.pEnabledValidationFeatures=&Synchronization;
+        Validation.enabledValidationFeatureCount=3u; Validation.pEnabledValidationFeatures=Synchronization;
         VkInstanceCreateInfo Information{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
         Information.pNext=&Validation; Information.pApplicationInfo=&Application;
         Information.enabledLayerCount=1u; Information.ppEnabledLayerNames=&Layer;
@@ -170,6 +171,12 @@ public:
         Transition(Result,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,Sampled?VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:VK_IMAGE_LAYOUT_GENERAL); Submit();
         return Result;
     }
+    void Replace(Allocation Extent, const void* Content, size_t Bytes)
+    {
+        Require(Bytes<=Extent.Size,"Scene update exceeded allocation");
+        void* Mapped=nullptr; Accept(vkMapMemory(Device,Extent.Memory,0u,Bytes,0u,&Mapped));
+        std::memcpy(Mapped,Content,Bytes); vkUnmapMemory(Device,Extent.Memory);
+    }
     std::vector<uint8_t> Read(Allocation Extent)
     {
         void* Mapped=nullptr; Accept(vkMapMemory(Device,Extent.Memory,0u,Extent.Size,0u,&Mapped));
@@ -281,16 +288,16 @@ int main(int Count,char** Arguments)
                 }
                 Host.Begin();
                 Host.Transition(Output,VK_IMAGE_LAYOUT_GENERAL,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-                VkBufferImageCopy Copy{}; Copy.imageSubresource={VK_IMAGE_ASPECT_COLOR_BIT,0u,0u,1u}; Copy.imageExtent={Width,Height,1u};
+                VkBufferImageCopy Copy{}; Copy.imageSubresource={VK_IMAGE_ASPECT_COLOR_BIT,0u,0u,1u}; Copy.imageExtent={Output.Width,Output.Height,1u};
                 vkCmdCopyImageToBuffer(Host.Command,Output.Image,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,Pixels.Buffer,1u,&Copy);
                 Host.Transition(Output,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,VK_IMAGE_LAYOUT_GENERAL);
                 VkBufferCopy FieldCopy{0u,0u,Fields.Size}, CacheCopy{0u,0u,Cache.Size};
                 vkCmdCopyBuffer(Host.Command,Stage.QueryDistanceBuffer(),Fields.Buffer,1u,&FieldCopy);
                 vkCmdCopyBuffer(Host.Command,Stage.QueryRadianceBuffer(),Cache.Buffer,1u,&CacheCopy);
                 Host.Submit();
-                auto Bytes=Host.Read(Pixels);
+                auto Bytes=Host.Read(Pixels); Bytes.resize(Output.Width*Output.Height*4u);
                 std::ofstream Image(std::filesystem::path(Arguments[2])/(std::string(Name)+".ppm"),std::ios::binary);
-                Image<<"P6\n"<<Width<<' '<<Height<<"\n255\n";
+                Image<<"P6\n"<<Output.Width<<' '<<Output.Height<<"\n255\n";
                 double Red=0.0, Green=0.0;
                 for(size_t Index=0u;Index<Bytes.size();Index+=4u)
                 { Image.write(reinterpret_cast<const char*>(Bytes.data()+Index),3u); Red+=Bytes[Index]; Green+=Bytes[Index+1u]; }
@@ -327,9 +334,61 @@ int main(int Count,char** Arguments)
             auto Recreated=Execute(4u,"recreated"); Require(Recreated[0]>1000.0,"Scene recreation produced no lighting");
             Frame.FeatureFlags=0u; Frame.ReflectionMode=2u;
             auto Reflection=Execute(1u,"mesh-reflection"); Require(Reflection[0]>500.0,"Exact mesh reflection missed emissive geometry");
+            // 📝 Thin glass must transmit the first opaque hit, not misclassify it as a glass exit.
+            MaterialSlabRecord Glass{};
+            Glass.BaseColorR=Glass.BaseColorG=Glass.BaseColorB=1.0f;
+            Glass.SpecularWeight=1.0f; Glass.SpecularColorR=Glass.SpecularColorG=Glass.SpecularColorB=1.0f;
+            Glass.SpecularRoughness=0.05f; Glass.SpecularIor=1.5f;
+            Glass.TransmissionWeight=1.0f; Glass.TransmissionColorR=Glass.TransmissionColorG=Glass.TransmissionColorB=1.0f;
+            Glass.TransmissionDepth=0.2f; Glass.GeometryOpacity=1.0f; Glass.SlabFlags=1u;
+            Glass.NormalScale=Glass.OcclusionStrength=Glass.MixWeight=1.0f;
+            for(auto& Slot:Glass.TextureSlots) Slot=UINT32_MAX;
+            Materials[0].SlabCount=1u;
+            Host.Replace(MaterialBuffer,Materials.data(),Materials.size()*sizeof(MaterialRecord));
+            Host.Replace(Slabs,&Glass,sizeof(Glass));
+            Instances[1].World[14]=-2.0f;
+            Host.Replace(InstanceBuffer,Instances.data(),Instances.size()*sizeof(InstanceRecord));
+            Require(Geometry.RefreshInstances(Instances.data(),2u),"Transmission scene positioning failed");
+            Frame.ReflectionMode=0u;
+            auto Foil=Execute(1u,"thin-glass"); Require(Foil[0]>1000.0,"Thin-walled glass did not transmit the emissive scene");
+            Glass.TransmissionWeight=0.0f; Host.Replace(Slabs,&Glass,sizeof(Glass));
+            auto Opaque=Execute(1u,"opaque-control"); Require(Opaque[0]<Foil[0]*0.1,"Opaque control unexpectedly transmitted light");
+
+            // 📝 A solid slab exercises actual entry/exit refraction and Beer attenuation over geometric thickness.
+            Stage.Destroy();
+            Vertices.resize(9u); Indices={0,1,2,3,4,5,6,7,8};
+            const float GlassPositions[9][3]={{-2,-2,0},{2,-2,0},{0,2,0},
+                {-2,-2,-0.2f},{0,2,-0.2f},{2,-2,-0.2f},{-2,-2,-1},{2,-2,-1},{0,2,-1}};
+            for(uint32_t Index=0u;Index<9u;++Index)
+            {
+                Vertices[Index].SpatialLocation={GlassPositions[Index][0],GlassPositions[Index][1],GlassPositions[Index][2]};
+                Vertices[Index].NormalDirection={0,0,Index>=3u && Index<6u ? -1.0f : 1.0f};
+                Vertices[Index].TangentDirection={1,0,0,1};
+            }
+            Instances[0].TriangleCount=2u; Instances[1].FirstIndex=6u; Instances[1].FlatTriangleOffset=2u; Instances[1].World[14]=0.0f;
+            Host.Replace(InstanceBuffer,Instances.data(),Instances.size()*sizeof(InstanceRecord));
+            VertexBuffer=Host.Allocate(Vertices.size()*sizeof(VertexRecord),Vertices.data());
+            IndexBuffer=Host.Allocate(Indices.size()*4u,Indices.data()); Triangles=Host.Allocate(3u*64u);
+            Initialization.VertexBuffer=VertexBuffer.Buffer; Initialization.IndexBuffer=IndexBuffer.Buffer; Initialization.TriangleBuffer=Triangles.Buffer;
+            Require(Geometry.Construct(Vertices,Indices,Instances,Materials),"Solid glass geometry failed");
+            Glass.TransmissionWeight=1.0f; Glass.SlabFlags=0u; Host.Replace(Slabs,&Glass,sizeof(Glass));
+            Require(Stage.Bring(Initialization),"Solid glass scene recreation failed");
+            auto Clear=Execute(1u,"solid-clear-glass"); Require(Clear[0]>1000.0,"Solid dielectric did not transmit the background");
+            Glass.TransmissionColorR=0.1f; Host.Replace(Slabs,&Glass,sizeof(Glass));
+            auto Tinted=Execute(1u,"solid-tinted-glass");
+            Require(Tinted[0]>100.0 && Tinted[0]<Clear[0]*0.85,"Geometric Beer attenuation did not darken transmitted red light");
+
+            Stage.Destroy();
+            Output=Host.AllocateImage(16u,16u,VK_FORMAT_R8G8B8A8_UNORM,nullptr,16u*16u*4u);
+            Position=Host.AllocateImage(16u,16u,VK_FORMAT_R32G32B32A32_SFLOAT,Surface.data(),16u*16u*16u);
+            Normals=Host.AllocateImage(16u,16u,VK_FORMAT_R16G16B16A16_SFLOAT,Normal.data(),16u*16u*8u);
+            Initialization.OutputImageView=Output.View; Initialization.SurfaceImageView=Position.View; Initialization.NormalImageView=Normals.View;
+            Frame.RenderWidth=Frame.RenderHeight=16u;
+            Require(Stage.Bring(Initialization),"Resize descriptor recreation failed");
+            auto Resized=Execute(1u,"resized"); Require(Resized[0]>100.0,"Resized output lost transmission");
             Stage.Destroy();
             Require(ValidationErrors.load()==0u,"Vulkan validation reported errors");
-            std::cout<<"PASS production SDF pipelines: populated three-level fields, emissive GI, bounce cache, GI toggle, moving instances, history reset, recreation and mesh reflection\n";
+            std::cout<<"PASS production SDF pipelines: populated three-level fields, emissive GI, bounce cache, GI toggle, moving instances, history reset, recreation, mesh reflection, thin/solid refraction, Beer attenuation and resize\n";
         }
         Require(ValidationErrors.load()==0u,"Vulkan resource destruction reported validation errors");
         std::cout<<"PASS Vulkan validation including synchronization and resource destruction: zero errors\n";

@@ -94,7 +94,7 @@ bool DistanceFieldGIStage::ConstructPipelines()
     DescriptorFlags.pBindingFlags = Flags.data();
     VkDescriptorSetLayoutCreateInfo Layout{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
     Layout.pNext = Initialization.TextureCapacity ? &DescriptorFlags : nullptr;
-    Layout.flags = Initialization.TextureCapacity && Initialization.TextureUpdateAfterBind ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT : 0u;
+    Layout.flags = Initialization.TextureCapacity && Initialization.TextureUpdateAfterBind ? VkDescriptorSetLayoutCreateFlags(VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT) : 0u;
     Layout.bindingCount = static_cast<uint32_t>(Descriptors.size());
     Layout.pBindings = Descriptors.data();
     if (vkCreateDescriptorSetLayout(Initialization.Device, &Layout, nullptr, &DescriptorLayout) != VK_SUCCESS) return false;
@@ -141,7 +141,7 @@ bool DistanceFieldGIStage::WriteDescriptors()
                                     {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2u * (Capacity + 2u)}};
     VkDescriptorPoolCreateInfo Information{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
     Information.maxSets = 2u;
-    Information.flags = Initialization.TextureCapacity && Initialization.TextureUpdateAfterBind ? VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT : 0u;
+    Information.flags = Initialization.TextureCapacity && Initialization.TextureUpdateAfterBind ? VkDescriptorPoolCreateFlags(VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT) : 0u;
     Information.poolSizeCount = 3u;
     Information.pPoolSizes = Sizes;
     if (vkCreateDescriptorPool(Initialization.Device, &Information, nullptr, &Pool) != VK_SUCCESS) return false;

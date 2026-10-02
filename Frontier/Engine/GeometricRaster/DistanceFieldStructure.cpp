@@ -90,6 +90,8 @@ bool DistanceFieldStructure::Construct(std::vector<DistanceFieldFacet> Input)
         bool Finite = true;
         for (uint32_t Axis = 0u; Axis < 3u; ++Axis)
             Finite &= std::isfinite(Facet.Alpha[Axis]) && std::isfinite(Facet.Beta[Axis]) && std::isfinite(Facet.Gamma[Axis]);
+        for (uint32_t Axis = 0u; Axis < 3u; ++Axis)
+            Finite &= std::isfinite(Facet.Albedo[Axis]) && std::isfinite(Facet.Emission[Axis]);
         if (!Finite) return false;
         const float Alpha[3] = { Facet.Beta[0]-Facet.Alpha[0], Facet.Beta[1]-Facet.Alpha[1], Facet.Beta[2]-Facet.Alpha[2] };
         const float Beta[3] = { Facet.Gamma[0]-Facet.Alpha[0], Facet.Gamma[1]-Facet.Alpha[1], Facet.Gamma[2]-Facet.Alpha[2] };
@@ -97,6 +99,7 @@ bool DistanceFieldStructure::Construct(std::vector<DistanceFieldFacet> Input)
         Facet.Normal[1] = Alpha[2]*Beta[0]-Alpha[0]*Beta[2];
         Facet.Normal[2] = Alpha[0]*Beta[1]-Alpha[1]*Beta[0];
         const float Length = std::sqrt(Facet.Normal[0]*Facet.Normal[0]+Facet.Normal[1]*Facet.Normal[1]+Facet.Normal[2]*Facet.Normal[2]);
+        if (!std::isfinite(Length)) return false;
         if (Length < 1.0e-10f) continue;
         for (uint32_t Axis = 0u; Axis < 3u; ++Axis) Facet.Normal[Axis] /= Length;
         Facets.push_back(Facet);

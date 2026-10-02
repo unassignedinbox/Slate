@@ -122,7 +122,12 @@ ShadingRecord ResolveMaterial(GpuMaterial mat, GpuInstance instance, uint primit
     GpuVertex vc = Vertices[Indices[base + 2u] + instance.VertexOffset];
     mat3 world = mat3(instance.World);   // ⚠️ normals use the linear part directly (rigid / uniform scale); non-uniform scale is not corrected
     vec2 uv  = bc.x * va.Texcoord.xy + bc.y * vb.Texcoord.xy + bc.z * vc.Texcoord.xy;
+#ifdef FRONTIER_SDF_MATERIALS
+    mat3 NormalProjection = abs(determinant(world)) > 1e-12 ? transpose(inverse(world)) : world;
+    vec3 nI  = NormalProjection * (bc.x * va.Normal.xyz + bc.y * vb.Normal.xyz + bc.z * vc.Normal.xyz);
+#else
     vec3 nI  = world * (bc.x * va.Normal.xyz + bc.y * vb.Normal.xyz + bc.z * vc.Normal.xyz);
+#endif
     vec4 tI  = bc.x * va.Tangent + bc.y * vb.Tangent + bc.z * vc.Tangent;
     vec3 n   = dot(nI, nI) > 1e-12 ? normalize(nI) : ng;
     if (dot(n, ng) < 0.0) n = -n;                                   // interpolated normal follows the viewer-facing side
