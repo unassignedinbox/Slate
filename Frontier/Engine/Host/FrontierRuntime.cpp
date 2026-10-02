@@ -166,9 +166,15 @@ int Frontier::RunFrontierRuntime(
     float       SceneScale = 1.0f;
     bool        WaterSnapshot = false; // opt-in load-time Ripple mesh, not live GPU simulation
     bool        AnimateInstances = false;   // D3: --animate drives instance transforms from a scripted path
+    bool        VerifyOpeningScene = false; // [-] - Headless package check; stops after the real scene import.
     bool        SilentAudio      = false;   // --silent: open the null audio driver (no sound card, or CI)
     for (int I = 1; I < argc; ++I)
     {
+        if (std::strcmp(argv[I], "--verify-opening-scene") == 0)
+        {
+            VerifyOpeningScene = true;
+            continue;
+        }
         if (std::strcmp(argv[I], "--water-body-snapshot") == 0) { WaterSnapshot=true; continue; }
         if (std::strcmp(argv[I], "--animate") == 0) { AnimateInstances = true; continue; }
         if (std::strcmp(argv[I], "--silent")  == 0) { SilentAudio      = true; continue; }   // null audio driver
@@ -319,11 +325,23 @@ int Frontier::RunFrontierRuntime(
         {
             Logger.RecordMessage(Frontier::DiagnosticSeverity::Fatal, "Scene", ("Cannot import " + ScenePath + ": " + Error).c_str());
             Logger.TerminateSink();
-            std::cerr << "\n" << ProjectName << " could not import the scene. Press Enter to close this console.\n";
-            std::cin.get();
+            if (!VerifyOpeningScene)
+            {
+                std::cerr << "\n" << ProjectName << " could not import the scene. Press Enter to close this console.\n";
+                std::cin.get();
+            }
             return 1;
         }
         if (!Error.empty()) std::cerr << "[Scene] " << Error << "\n";
+        if (VerifyOpeningScene)
+        {
+            const bool Populated = Level.QueryTriangleCount() > 0u && !Level.QueryInstances().empty();
+            std::cout << (Populated ? "PASS" : "FAIL") << " opening scene import: " << ProjectName
+                      << " · " << Level.QueryTriangleCount() << " triangles, "
+                      << Level.QueryInstances().size() << " instances\n";
+            Logger.TerminateSink();
+            return Populated ? 0 : 1;
+        }
         if (WaterSnapshot) {
             try {
                 const auto Water=Frontier::HostRuntime::AppendPondSnapshot(Level);

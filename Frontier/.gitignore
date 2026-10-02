@@ -41,3 +41,7 @@ Exhibits/Gallery/*
 #    same creatures rather than additional content, and three of them exceed GitHub's 50 MB recommendation.
 #    They stay on disk, untracked.
 EngineContent/GeometryArchives/CreaturesVault/Refined/
+
+# Reconstructed by the project-owned headless content author.
+Projects/Project-Drive/Content/Scenes/DriveCourse.gltf
+Projects/Project-Drive/Build/DriveContentHost

@@ -375,6 +375,7 @@ endif()
 # Project code images contain project semantics only. They do not compile the window, device, renderer, editor, or host.
 add_library(ProjectZero SHARED Projects/Project-Zero/Source/ProjectZeroInterchange.cpp)
 add_library(ProjectDrive SHARED Projects/Project-Drive/Source/ProjectDriveInterchange.cpp)
+include(Projects/Project-Drive/Build/DriveContent.cmake)
 foreach(ProjectCodeImage IN ITEMS ProjectZero ProjectDrive)
     target_include_directories(${ProjectCodeImage} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Engine/ProjectInterchange)
     set_target_properties(${ProjectCodeImage} PROPERTIES PREFIX "" SUFFIX ".dll")

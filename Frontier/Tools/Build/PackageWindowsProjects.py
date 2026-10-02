@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage the MSVC Release host and both projects, verifying their DLL ABI before upload."""
+"""Stage the MSVC Release host and both projects, verifying DLL ABI and actual opening-scene import before upload."""
 from __future__ import annotations
 
 import ctypes
@@ -9,6 +9,8 @@ import os
 from pathlib import Path
 import shutil
 import struct
+import subprocess
+import tempfile
 import sys
 import tomllib
 
@@ -69,6 +71,20 @@ def VerifyInterchange(Location: Path, Specification: dict) -> None:
     print(f"PASS {Location.name}: x64 DLL loaded; revision and fingerprint accepted; incompatible requests refused")
 
 
+def VerifyScene(SpecificationPath: Path, SceneOverride: Path | None = None, ExpectedCode: int = 0) -> None:
+    Command = [str(Destination / "Frontier.exe"), str(SpecificationPath), "--verify-opening-scene"]
+    if SceneOverride is not None:
+        Command += ["--scene", str(SceneOverride)]
+    Completed = subprocess.run(Command, cwd=Destination, stdin=subprocess.DEVNULL,
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                               encoding="utf-8", errors="replace", timeout=180)
+    print(Completed.stdout)
+    if Completed.returncode != ExpectedCode:
+        raise RuntimeError(f"Scene verification returned {Completed.returncode}, expected {ExpectedCode}: {Command}")
+    if ExpectedCode == 0 and "PASS opening scene import:" not in Completed.stdout:
+        raise RuntimeError("Host did not confirm the opening-scene import")
+
+
 def Main() -> None:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     if sys.platform != "win32" or ctypes.sizeof(ctypes.c_void_p) != 8:
@@ -101,15 +117,42 @@ def Main() -> None:
         shutil.copy2(Source / Specification["CodeImage"], Library)
         VerifyImage(Library, True)
         VerifyInterchange(Library, Specification)
+
+        OpeningScene = Target / Specification["OpeningScene"]
+        Preparation = ""
+        if Name == "ProjectDrive":
+            Author = Target / "Build/DriveContentHost.exe"
+            shutil.copy2(Source / "Build/DriveContentHost.exe", Author)
+            VerifyImage(Author, False)
+            # Export only missing content; malformed existing content must fail, not be silently replaced.
+            subprocess.run([str(Author), "--ensure", str(OpeningScene)], check=True, timeout=180)
+            Preparation = (
+                f'if exist "%~dp0Projects\\{Folder}\\Content\\Scenes\\DriveCourse.gltf" goto LaunchFrontier\n'
+                f'"%~dp0Projects\\{Folder}\\Build\\DriveContentHost.exe" --ensure '
+                f'"%~dp0Projects\\{Folder}\\Content\\Scenes\\DriveCourse.gltf"\n'
+                'if errorlevel 1 goto Finished\n:LaunchFrontier\n')
+        VerifyScene(Target / SpecificationPath.name)
+        if not OpeningScene.is_file() or OpeningScene.stat().st_size == 0:
+            raise RuntimeError(f"Package has no opening scene: {OpeningScene}")
+        # Exercise the exact failure this gate missed previously, plus a present but corrupt glTF.
+        with tempfile.TemporaryDirectory(prefix="Scene verification ", dir=Destination.parent) as Scratch:
+            Missing = Path(Scratch) / "missing.gltf"
+            Corrupt = Path(Scratch) / "corrupt.gltf"
+            Corrupt.write_text("this is not glTF", encoding="ascii")
+            VerifyScene(Target / SpecificationPath.name, Missing, ExpectedCode=1)
+            VerifyScene(Target / SpecificationPath.name, Corrupt, ExpectedCode=1)
+        print(f"PASS {Name}: packaged scene imports; missing and corrupt scenes are refused without a GPU")
         Launcher = Destination / f"Start-{Name}.cmd"
         Launcher.write_text(
-            '@echo off\nsetlocal\ncd /d "%~dp0"\n'
+            '@echo off\nsetlocal\ncd /d "%~dp0"\n' + Preparation +
             f'"%~dp0Frontier.exe" "%~dp0Projects\\{Folder}\\{Name}.frontier" %*\n'
-            'set "FrontierExitCode=%ERRORLEVEL%"\nif not "%FrontierExitCode%"=="0" pause\n'
+            ':Finished\nset "FrontierExitCode=%ERRORLEVEL%"\nif not "%FrontierExitCode%"=="0" pause\n'
             'exit /b %FrontierExitCode%\n', encoding="ascii", newline="\r\n")
         PackagedProjects.append({"name": Name, "launcher": Launcher.name,
                                  "specification": SpecificationPath.relative_to(Root).as_posix(),
-                                 "dllAbiVerified": True})
+                                 "dllAbiVerified": True, "openingSceneImported": True,
+                                 "openingScene": OpeningScene.relative_to(Destination).as_posix(),
+                                 "missingAndCorruptSceneRefusalVerified": True})
 
     Manifest = {"sourceCommit": os.environ.get("GITHUB_SHA", "local"),
                 "configuration": "Release", "architecture": "x64", "compiler": "MSVC",
@@ -127,6 +170,6 @@ def Main() -> None:
 if __name__ == "__main__":
     try:
         Main()
-    except (OSError, RuntimeError, ValueError, AttributeError, struct.error) as Error:
+    except (OSError, RuntimeError, ValueError, AttributeError, struct.error, subprocess.SubprocessError) as Error:
         print(f"Package failed: {Error}", file=sys.stderr)
         raise SystemExit(1)

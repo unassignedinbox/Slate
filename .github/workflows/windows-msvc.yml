@@ -114,10 +114,11 @@ jobs:
           } finally {
             Stop-Transcript
           }
-      - name: Package and verify Project-Zero and Project-Drive
+      - name: Package and verify project DLLs and opening-scene imports
         run: |
+          $env:PATH = "$env:VULKAN_SDK\Bin;$env:PATH"
           python Tools/Build/PackageWindowsProjects.py *>&1 | Tee-Object -FilePath ../_AgentScratch/logs/msvc-ci/ProjectPackage.log
-          if ($LASTEXITCODE -ne 0) { throw 'Windows project packaging or DLL verification failed' }
+          if ($LASTEXITCODE -ne 0) { throw 'Windows project packaging, DLL or scene-import verification failed' }
       - name: Retain build diagnostics
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

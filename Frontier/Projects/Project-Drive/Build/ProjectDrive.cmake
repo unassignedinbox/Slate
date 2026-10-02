@@ -1,7 +1,7 @@
 #============================================================================================================================================
 #                                                    PROJECTDRIVE.CMAKE
 #============================================================================================================================================
-# 📦 Defines only ProjectDrive.dll; Frontier.exe owns the window, device, renderer, editor, input, camera, and sky.
+# 📦 Defines ProjectDrive.dll and its headless content author; Frontier.exe owns the window, device, renderer, editor, input, camera, and sky.
 
 set(PROJECT_DRIVE_CODE_IMAGE
     Projects/Project-Drive/Source/ProjectDriveInterchange.cpp
@@ -23,3 +23,5 @@ set_target_properties(ProjectDrive PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/Projects/Project-Drive/Build"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/Projects/Project-Drive/Build"
 )
+
+include(${CMAKE_CURRENT_LIST_DIR}/DriveContent.cmake)

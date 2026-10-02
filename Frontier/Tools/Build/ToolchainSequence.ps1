@@ -889,6 +889,10 @@ function Invoke-ProjectCodeImage
 Invoke-ProjectCodeImage 'Project-Zero' 'ProjectZero' 'Projects\\Project-Zero\\Source\\ProjectZeroInterchange.cpp'
 Invoke-ProjectCodeImage 'Project-Drive' 'ProjectDrive' 'Projects\\Project-Drive\\Source\\ProjectDriveInterchange.cpp'
 
+# Project-owned content must exist before the shared host attempts to decode its opening scene.
+& python (Join-Path $RepositoryRoot 'Tools\Build\BuildDriveContent.py')
+if ($LASTEXITCODE -ne 0) { throw 'Project-Drive content generation/import verification failed' }
+
 if ($Run)
 {
     Write-Building 'Launching Frontier (working directory = repository root)...'
