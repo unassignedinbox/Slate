@@ -6,11 +6,15 @@ on:
     paths:
       - '.github/workflows/windows-msvc.yml'
       - 'Frontier/**'
+      - 'VisualProof/DistanceFieldGI/**'
+      - 'Exhibits/Assets/ShaderBall/**'
       - '.gitattributes'
   pull_request:
     paths:
       - '.github/workflows/windows-msvc.yml'
       - 'Frontier/**'
+      - 'VisualProof/DistanceFieldGI/**'
+      - 'Exhibits/Assets/ShaderBall/**'
       - '.gitattributes'
   workflow_dispatch:
 
