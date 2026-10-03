@@ -32,7 +32,7 @@ const FLUIDS = {
   },
 };
 const SCENE_DEFAULT = { dam: 'water', splash: 'milk', ocean: 'water', pour: 'chocolate' };
-const QUALITY = { fast: 15000, low: 40000, medium: 100000, high: 200000 };
+const QUALITY = { tiny: 5000, fast: 15000, low: 40000, medium: 100000, high: 200000 };
 
 // ------------------------------------------------------------------ init
 if (!navigator.gpu) fail('WebGPU is not available in this browser.<br>Use Chrome/Edge 113+ (desktop) or open <a href="legacy.html">the WebGL/CPU version</a>.');
@@ -178,7 +178,7 @@ const TS = (t, s) => [s[0], 0, 0, 0, 0, s[1], 0, 0, 0, 0, s[2], 0, t[0], t[1], t
 const SUN = norm([0.42, 0.82, 0.38]);
 
 // ------------------------------------------------------------------ state
-const state = { scene: 'dam', fluid: 'water', quality: 'medium', paused: false, view: 'fluid', smooth: 3, ballSize: 2.2, ballDensity: 2.0, keep: false, slowmo: 1 };
+const state = { scene: 'dam', fluid: 'water', quality: 'tiny', paused: false, view: 'fluid', smooth: 3, ballSize: 2.2, ballDensity: 2.0, keep: false, slowmo: 1 };
 const cam = { yaw: -0.55, pitch: 0.42, dist: 60, target: [20, 6, 7], fov: 45 * Math.PI / 180 };
 let SC = null;           // current scene description
 let sim = null;          // GPU sim resources
