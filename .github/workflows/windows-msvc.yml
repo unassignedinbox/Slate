@@ -151,6 +151,32 @@ jobs:
           $env:PATH = "$env:VULKAN_SDK\Bin;$env:PATH"
           python Tools/Build/PackageWindowsProjects.py *>&1 | Tee-Object -FilePath ../_AgentScratch/logs/msvc-ci/ProjectPackage.log
           if ($LASTEXITCODE -ne 0) { throw 'Windows project packaging, DLL or scene-import verification failed' }
+      - name: Build and exercise runnable SolidArc application
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $VsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $VisualStudio = & $VsWhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          Import-Module "$VisualStudio\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
+          Enter-VsDevShell -VsInstallPath $VisualStudio -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'
+          python Tools/Build/BuildSolidArcApplication.py
+          if ($LASTEXITCODE -ne 0) { throw 'SolidArc application build/presentation verification failed' }
+      - name: Retain SolidArc application diagnostics
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: solidarc-application-evidence-${{ github.sha }}
+          retention-days: 14
+          path: |
+            _AgentScratch/build/solidarc-application/*.log
+            _AgentScratch/build/solidarc-application/Presentation/
+      - name: Retain runnable SolidArc
+        if: success()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: solidarc-application-windows-${{ github.sha }}
+          retention-days: 14
+          if-no-files-found: error
+          path: _AgentScratch/build/SolidArc-Windows-Release/
       - name: Retain build diagnostics
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

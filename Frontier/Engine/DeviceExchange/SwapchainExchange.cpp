@@ -2417,6 +2417,7 @@ void SwapchainExchange::UploadMaterials(const MaterialIndex& Materials) noexcept
     if (!Vulkan->Device) return;
 
     if (Vulkan->MaterialBuffer || Vulkan->SlabBuffer) vkDeviceWaitIdle(Vulkan->Device);
+    DistanceFieldStage.Destroy(); SurfelStage.Destroy();
     if (Vulkan->MaterialBuffer) vkDestroyBuffer(Vulkan->Device, Vulkan->MaterialBuffer, nullptr);
     if (Vulkan->MaterialMemory) vkFreeMemory   (Vulkan->Device, Vulkan->MaterialMemory, nullptr);
     if (Vulkan->SlabBuffer)     vkDestroyBuffer(Vulkan->Device, Vulkan->SlabBuffer, nullptr);
@@ -2443,6 +2444,8 @@ void SwapchainExchange::UploadMaterials(const MaterialIndex& Materials) noexcept
     Upload(Materials.QuerySlabRecords().data(), Materials.QuerySlabRecords().size() * sizeof(MaterialSlabRecord), Vulkan->SlabBuffer,     Vulkan->SlabMemory);
 
     WriteDescriptorSet();
+    ++SurfaceMaterialRevision;
+    if (!SceneUploadInProgress) RefreshMaterialBindings();
 }
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -2467,6 +2470,8 @@ void SwapchainExchange::UploadTextures(const TextureIndex& Textures) noexcept
 {
     if (!Vulkan->Device || !Vulkan->DescriptorIndexing) return;
     vkDeviceWaitIdle(Vulkan->Device);
+    DistanceFieldStage.Destroy(); SurfelStage.Destroy();
+    ++SurfaceMaterialRevision;
     DestroyTextures();
 
     if (!Vulkan->TextureSampler)
@@ -2482,7 +2487,7 @@ void SwapchainExchange::UploadTextures(const TextureIndex& Textures) noexcept
 
     const std::vector<TextureDescriptor>& Source = Textures.QueryTextures();
     const uint32_t Count = static_cast<uint32_t>(std::min<size_t>(Source.size(), kTextureSlotCapacity));
-    if (Count == 0u) { WriteDescriptorSet(); return; }
+    if (Count == 0u) { WriteDescriptorSet(); if (!SceneUploadInProgress) RefreshMaterialBindings(); return; }
     if (Source.size() > kTextureSlotCapacity)
         std::cerr << "[SwapchainExchange] " << Source.size() << " textures exceed the " << kTextureSlotCapacity << "-slot table - the rest are not resident.\n";
 
@@ -2585,6 +2590,7 @@ void SwapchainExchange::UploadTextures(const TextureIndex& Textures) noexcept
 
     std::cerr << "[SwapchainExchange] Textures: " << Count << " resident (" << (StagingBytes >> 20) << " MB) in the bindless table.\n";
     WriteDescriptorSet();
+    if (!SceneUploadInProgress) RefreshMaterialBindings();
 }
 
 void SwapchainExchange::UploadShadingTables(const float* Energy, const float* Sheen, uint32_t Resolution) noexcept
@@ -3013,6 +3019,7 @@ void SwapchainExchange::UploadStarTables(const void* CellBytes, uint32_t CellCou
 void SwapchainExchange::UploadScene(const SceneStructure& Scene, const TraversalIndex& Traversal, const TextureIndex* Textures) noexcept
 {
     if (!Vulkan->Device) return;
+    SceneUploadInProgress = true;
     Visibility.UploadScene(Scene);
     if (Textures) UploadTextures(*Textures);        // R4a: bindless table (binding 15) — before the descriptor writes below
     UploadTriangles(Scene.QueryFlatTriangles());   // kernel: material / normal lookup by CWBVH primitive index
@@ -3028,6 +3035,7 @@ void SwapchainExchange::UploadScene(const SceneStructure& Scene, const Traversal
         (void)DistanceGeometry.Construct(std::vector<DistanceFieldFacet>{});
         std::cerr << "[SdfGI] Scene construction refused; retaining fallback.\n";
     }
+    SceneUploadInProgress = false;
     // UploadTraversal may replace both CWBVH handles. Rebind the stage only after those handles and the
     // shared visibility targets exist, so no descriptor ever points at an old or null traversal buffer.
     if (!BringDistanceFieldGIStage())
@@ -3064,6 +3072,20 @@ bool SwapchainExchange::RefreshInstances(const InstanceRecord* Rows, uint32_t Co
     return true; // [-] - Visibility succeeded; SDF refuses stale geometry and uses the existing fallback.
 }
 
+void SwapchainExchange::RefreshMaterialBindings() noexcept
+{
+    // Uploads wait for the device before replacing borrowed buffers/views. Recreate both GI descriptor sets,
+    // including the fallback, so a live material or texture edit can never leave stale image handles behind.
+    (void)BringDistanceFieldGIStage();
+    (void)BringSurfelGIStage();
+    if (Vulkan->DescriptorIndexing && Visibility.IsReady())
+    {
+        std::vector<const void*> Views;
+        for (const VulkanRecord::ResidentTexture& Texture : Vulkan->Textures) Views.push_back(Texture.View);
+        Visibility.AssignRasterMaterials(Vulkan->SlabBuffer, Vulkan->TextureSampler, Views.data(), static_cast<uint32_t>(Views.size()));
+    }
+}
+
 bool SwapchainExchange::BringDistanceFieldGIStage() noexcept
 {
     DistanceFieldStage.Destroy();
@@ -3084,7 +3106,7 @@ bool SwapchainExchange::BringDistanceFieldGIStage() noexcept
     Init.SurfaceImageView = static_cast<VkImageView>(Visibility.QuerySurfaceView());
     Init.NormalImageView  = static_cast<VkImageView>(Visibility.QueryNormalView());
     Init.TriangleBuffer   = static_cast<VkBuffer>(Visibility.QueryFlatTriangleBuffer());
-    Init.MaterialBuffer   = static_cast<VkBuffer>(Visibility.QueryMaterialBuffer());
+    Init.MaterialBuffer   = Vulkan->MaterialBuffer;
     Init.InstanceBuffer   = static_cast<VkBuffer>(Visibility.QueryInstanceBuffer());
     Init.SlabBuffer       = Vulkan->SlabBuffer;
     Init.VertexBuffer     = static_cast<VkBuffer>(Visibility.QueryVertexBuffer());
@@ -3125,7 +3147,7 @@ bool SwapchainExchange::BringSurfelGIStage() noexcept
     //    This function already runs after UploadTriangles/UploadMaterials/UploadTraversal, so the handles are
     //    current; any later reupload calls it again and the descriptors are rewritten.
     Init.TriangleBuffer   = static_cast<VkBuffer>(Visibility.QueryFlatTriangleBuffer());
-    Init.MaterialBuffer   = static_cast<VkBuffer>(Visibility.QueryMaterialBuffer());
+    Init.MaterialBuffer   = Vulkan->MaterialBuffer;
     Init.InstanceBuffer   = static_cast<VkBuffer>(Visibility.QueryInstanceBuffer());
     Init.SlabBuffer       = Vulkan->SlabBuffer;
     Init.VertexBuffer     = static_cast<VkBuffer>(Visibility.QueryVertexBuffer());
@@ -3443,6 +3465,7 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
         DfParams.CameraEye[2]   = Dispatch.CameraOriginZ;
         DfParams.Exposure       = Dispatch.Exposure;
         DfParams.FrameIndex     = Dispatch.AccumulationIndex;
+        DfParams.MaterialRevision = SurfaceMaterialRevision;
         DfParams.FeatureFlags   = Dispatch.FeatureFlags;
         DfParams.ReflectionMode = (Dispatch.FeatureFlags & DispatchFeatureReflectionMask) >> DispatchFeatureReflectionShift;
         DfParams.RenderWidth    = RenderWidth;

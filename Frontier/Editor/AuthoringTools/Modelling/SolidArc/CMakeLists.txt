@@ -837,3 +837,13 @@ add_test(NAME Phase9b_FairPatch COMMAND SolidArc ${CMAKE_CURRENT_SOURCE_DIR}/Scr
 add_test(NAME Phase10_Suite COMMAND SolidArc ${CMAKE_CURRENT_SOURCE_DIR}/Scripts/Phase10_Suite.arc)
 add_test(NAME Phase10_ContactSheet COMMAND SolidArc ${CMAKE_CURRENT_SOURCE_DIR}/Scripts/Phase10_ContactSheet.arc)
 add_test(NAME Phase23_AdversarialProfiles COMMAND SolidArc ${CMAKE_CURRENT_SOURCE_DIR}/Scripts/Phase23_AdversarialProfiles.arc)
+
+# The windowed authoring application reuses the shared editor objects built by the primary MSVC route.
+# The existing SolidArc target remains the dependency-free console. Both are real applications, not verification entries.
+if(WIN32 AND MSVC)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    add_custom_target(SolidArcApplication
+        COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/../../../../Tools/Build/BuildSolidArcApplication.py"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../../../.."
+        VERBATIM)
+endif()

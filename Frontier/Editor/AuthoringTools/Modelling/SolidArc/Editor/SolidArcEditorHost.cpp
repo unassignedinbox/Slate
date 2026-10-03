@@ -261,6 +261,13 @@ void SolidArcEditorHost::ConstructLayout() noexcept
     const float RightShare = std::clamp((Main->Size.x >= 1500.0f ? 380.0f : 236.0f) / RestWidth, 0.16f, 0.34f);
     ImGui::DockBuilderSplitNode(CentreAndRight, ImGuiDir_Right, RightShare, &Right, &Centre);
     ImGui::DockBuilderDockWindow("SolidArc Outliner", Left);
+    if (DocumentCommands_)
+    {
+        ImGuiID Commands = 0u, View = 0u;
+        ImGui::DockBuilderSplitNode(Centre, ImGuiDir_Down, 0.23f, &Commands, &View);
+        ImGui::DockBuilderDockWindow("Document commands", Commands);
+        Centre = View;
+    }
     ImGui::DockBuilderDockWindow("SolidArc Viewport", Centre);
     ImGui::DockBuilderDockWindow("SolidArc Inspector", Right);
     LeftColumn_ = Left;

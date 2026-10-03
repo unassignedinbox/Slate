@@ -267,7 +267,7 @@ int main(int Count,char** Arguments)
             auto IndexBuffer=Host.Allocate(Indices.size()*4u,Indices.data());
             auto InstanceBuffer=Host.Allocate(Instances.size()*sizeof(InstanceRecord),Instances.data());
             auto MaterialBuffer=Host.Allocate(Materials.size()*sizeof(MaterialRecord),Materials.data());
-            auto Triangles=Host.Allocate(2u*64u); auto Slabs=Host.Allocate(sizeof(MaterialSlabRecord));
+            auto Triangles=Host.Allocate(2u*64u); auto Slabs=Host.Allocate(2u*sizeof(MaterialSlabRecord));
             DistanceFieldStageInit Initialization{};
             Initialization.PhysicalDevice=Host.Physical; Initialization.Device=Host.Device; Initialization.MemoryProperties=Host.Memory;
             Initialization.Geometry=&Geometry; Initialization.SpirvDirectory=Arguments[1];
@@ -405,6 +405,99 @@ int main(int Count,char** Arguments)
                 auto Textured=Execute(4u,"textured-material");
                 Require(Constant[0]>1000.0 && Textured[0]<Constant[0]*0.1,"Texture descriptor indexing did not modulate the resolved material");
                 std::cout<<"PASS descriptor-indexed production resolve and actual texture sampling\n";
+                Stage.Destroy();
+                for(auto& Vertex:Vertices)
+                { Vertex.TextureCoordinateU=(Vertex.SpatialLocation.x+2.0f)*0.25f; Vertex.TextureCoordinateV=(Vertex.SpatialLocation.y+2.0f)*0.25f; }
+                Host.Replace(VertexBuffer,Vertices.data(),Vertices.size()*sizeof(VertexRecord));
+                std::array<float,64> Albedo{}, Emission{};
+                for(uint32_t Pixel=0u;Pixel<16u;++Pixel)
+                {
+                    bool Left=Pixel%4u<2u;
+                    Albedo[Pixel*4u]=Left?0.9f:0.1f; Albedo[Pixel*4u+1u]=Left?0.1f:0.9f; Albedo[Pixel*4u+3u]=1.0f;
+                    Emission[Pixel*4u]=Left?1.0f:0.0f; Emission[Pixel*4u+1u]=Left?0.0f:1.0f; Emission[Pixel*4u+3u]=1.0f;
+                }
+                const float Bump[4]={0.6f,0.5f,1.0f,1.0f}, Packed[4]={0.35f,0.25f,0.0f,1.0f};
+                auto DiffuseTexture=Host.AllocateImage(4u,4u,VK_FORMAT_R32G32B32A32_SFLOAT,Albedo.data(),sizeof(Albedo),true);
+                auto EmissionTexture=Host.AllocateImage(4u,4u,VK_FORMAT_R32G32B32A32_SFLOAT,Emission.data(),sizeof(Emission),true);
+                auto NormalTexture=Host.AllocateImage(1u,1u,VK_FORMAT_R32G32B32A32_SFLOAT,Bump,sizeof(Bump),true);
+                auto PackedTexture=Host.AllocateImage(1u,1u,VK_FORMAT_R32G32B32A32_SFLOAT,Packed,sizeof(Packed),true);
+                VkImageView AuthoredViews[]={DiffuseTexture.View,EmissionTexture.View,NormalTexture.View,PackedTexture.View};
+                Initialization.TextureCount=4u; Initialization.TextureViews=AuthoredViews;
+                std::array<MaterialSlabRecord,2> Authored{Pigmented,Pigmented};
+                Authored[0].SpecularWeight=1.0f; Authored[0].SpecularRoughness=0.8f;
+                Authored[0].TextureSlots[1]=0xFFFF0003u; // roughness: packed image G
+                Authored[0].TextureSlots[2]=0xFFFF0002u; // tangent-space normal
+                Authored[0].TextureSlots[7]=0xFFFF0003u; // occlusion: packed image R
+                Authored[1].BaseWeight=0.0f;
+                Authored[1].EmissionLuminance=8.0f;
+                Authored[1].EmissionColorR=Authored[1].EmissionColorG=Authored[1].EmissionColorB=1.0f;
+                Authored[1].TextureSlots[3]=0xFFFF0001u; // emission: a genuinely varying authored image
+                Materials[1].SlabOffset=1u; Materials[1].SlabCount=1u;
+                Host.Replace(Slabs,Authored.data(),sizeof(Authored));
+                Host.Replace(MaterialBuffer,Materials.data(),Materials.size()*sizeof(MaterialRecord)); ++Frame.MaterialRevision;
+                Require(Stage.Bring(Initialization),"Textured surface-card scene creation failed");
+                auto Bounced=Execute(8u,"textured-card-bounce");
+                auto DiffuseBytes=Host.Read(DiffuseCards), EmissionBytes=Host.Read(EmissiveCards), NormalBytes=Host.Read(NormalCards), BounceBytes=Host.Read(Cache);
+                const float* DiffuseValues=reinterpret_cast<const float*>(DiffuseBytes.data());
+                const float* EmissionValues=reinterpret_cast<const float*>(EmissionBytes.data());
+                const float* NormalValues=reinterpret_cast<const float*>(NormalBytes.data());
+                const float* BounceValues=reinterpret_cast<const float*>(BounceBytes.data());
+                float DiffuseMinimum=1.0f, DiffuseMaximum=0.0f, EmitterMinimum=8.0f, EmitterMaximum=0.0f, BounceMinimum=100.0f, BounceMaximum=0.0f;
+                double GreenBounce=0.0;
+                for(uint32_t Row=0u;Row<Initialization.CardResolution;++Row)
+                    for(uint32_t Column=0u;Column<Initialization.CardResolution;++Column)
+                    {
+                        uint32_t Receiver=(Row*Stage.QueryCardWidth()+Column)*4u;
+                        uint32_t Emitter=Receiver+Initialization.CardResolution*4u;
+                        DiffuseMinimum=std::min(DiffuseMinimum,DiffuseValues[Receiver]); DiffuseMaximum=std::max(DiffuseMaximum,DiffuseValues[Receiver]);
+                        EmitterMinimum=std::min(EmitterMinimum,EmissionValues[Emitter]); EmitterMaximum=std::max(EmitterMaximum,EmissionValues[Emitter]);
+                        BounceMinimum=std::min(BounceMinimum,BounceValues[Receiver+1u]); BounceMaximum=std::max(BounceMaximum,BounceValues[Receiver+1u]);
+                        GreenBounce+=BounceValues[Receiver+1u];
+                        Require(std::abs(DiffuseValues[Receiver+3u]-0.2f)<0.01f,"Roughness texture was not captured");
+                        Require(NormalValues[Receiver]>0.1f && NormalValues[Receiver+2u]>0.9f,"Normal map was not captured");
+                        Require(std::abs(EmissionValues[Receiver+3u]-0.35f)<0.01f,"Occlusion texture was not captured");
+                    }
+                Require(DiffuseMaximum-DiffuseMinimum>0.5f && EmitterMaximum-EmitterMinimum>6.0f,"Cards flattened authored spatial texture variation");
+                Require(GreenBounce>0.05 && BounceMaximum-BounceMinimum>0.01f,"Receiver cards did not accumulate spatially varying textured emission");
+                Require(Bounced[1]>1000.0,"Textured emission never reached the final indirect-light resolve");
+                std::cout<<"PASS spatial atlas: diffuse range="<<DiffuseMinimum<<".."<<DiffuseMaximum<<" emission range="<<EmitterMinimum<<".."<<EmitterMaximum
+                         <<" green diffuse bounce="<<GreenBounce<<" range="<<BounceMinimum<<".."<<BounceMaximum<<'\n';
+                auto SaveCardImage=[&](const char* Name,const float* Values,float Scale)
+                {
+                    constexpr uint32_t Magnify=16u;
+                    std::ofstream Picture(std::filesystem::path(Arguments[2])/(std::string(Name)+".ppm"),std::ios::binary);
+                    Picture<<"P6\n"<<Stage.QueryCardWidth()*Magnify<<' '<<Stage.QueryCardHeight()*Magnify<<"\n255\n";
+                    for(uint32_t Row=0;Row<Stage.QueryCardHeight()*Magnify;++Row)
+                        for(uint32_t Column=0;Column<Stage.QueryCardWidth()*Magnify;++Column)
+                            for(uint32_t Channel=0;Channel<3u;++Channel)
+                            {
+                                float Value=Values[((Row/Magnify)*Stage.QueryCardWidth()+Column/Magnify)*4u+Channel]*Scale;
+                                unsigned char Byte=static_cast<unsigned char>(std::pow(std::clamp(Value,0.0f,1.0f),1.0f/2.2f)*255.0f);
+                                Picture.write(reinterpret_cast<const char*>(&Byte),1);
+                            }
+                };
+                SaveCardImage("captured-diffuse-atlas",DiffuseValues,1.0f);
+                SaveCardImage("captured-emission-atlas",EmissionValues,0.125f);
+                SaveCardImage("bounced-radiance-atlas",BounceValues,0.125f);
+                // Header coefficients and geometry remain unchanged. Only the live slab changes.
+                Authored[1].EmissionLuminance=0.0f;
+                Host.Replace(Slabs,Authored.data(),sizeof(Authored)); ++Frame.MaterialRevision;
+                auto Revised=Execute(1u,"textured-emission-revision");
+                Require(Revised[0]+Revised[1]<(Bounced[0]+Bounced[1])*0.05,"Material-only revision retained stale card lighting");
+                Authored[1].EmissionLuminance=8.0f; Authored[1].GeometryOpacity=0.0f;
+                Materials[1].Flags=2u; // alpha mask
+                Host.Replace(Slabs,Authored.data(),sizeof(Authored));
+                Host.Replace(MaterialBuffer,Materials.data(),Materials.size()*sizeof(MaterialRecord)); ++Frame.MaterialRevision;
+                Materials[1].AlphaCutoff=0.5f;
+                Host.Replace(MaterialBuffer,Materials.data(),Materials.size()*sizeof(MaterialRecord));
+                auto Cutout=Execute(4u,"textured-cutout-emitter");
+                Require(Cutout[0]+Cutout[1]<(Bounced[0]+Bounced[1])*0.05,"Cutout cards still participated in diffuse transport");
+                std::cout<<"PASS material-only recapture, history reset and secondary cutout visibility\n";
+                Stage.Destroy();
+                Initialization.TextureCount=1u; Initialization.TextureViews=&Pigment.View;
+                Materials[1].SlabOffset=Materials[1].SlabCount=Materials[1].Flags=0u;
+                Host.Replace(MaterialBuffer,Materials.data(),Materials.size()*sizeof(MaterialRecord)); ++Frame.MaterialRevision;
+                Require(Stage.Bring(Initialization),"Return from textured card fixture failed");
             }
             else std::cout<<"SKIP descriptor-indexed variant: physical device lacks the required descriptor features\n";
             Frame.FeatureFlags=0u;

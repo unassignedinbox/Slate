@@ -53,7 +53,9 @@ public:
     void CloseShade() noexcept { ShadeOpen_ = false; }
 
     void Record(ConsoleHost& Host) noexcept;
+    void ShowDocumentCommands() noexcept { DocumentCommands_ = true; LayoutSeated_ = false; }
 
+    [[nodiscard]] const RasterImage& QueryPresentedImage() const noexcept { return ViewImage_; }
     [[nodiscard]] uint32_t QueryPickedFigureIdentity() const noexcept;
 
     /// 📦 The proof's pick seam: seats the pick on the first row of the role (named Label when it is not null); false when none.
@@ -109,6 +111,7 @@ private:
     ImGuiID CentreColumn_ = 0u;
     ImGuiID RightColumn_  = 0u;
     bool LayoutSeated_    = false;
+    bool DocumentCommands_ = false;
 
     std::vector<EditorInstance> Rows_{kMaxEditorInstances};
     std::vector<SolidArcOutlinerBinding> Bindings_{kMaxEditorInstances};

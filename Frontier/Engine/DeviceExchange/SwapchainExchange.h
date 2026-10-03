@@ -459,6 +459,9 @@ private:
     RayTracingCapabilitySet Capabilities;        // [-]   probed in BringPhysicalDevice
     VisibilityExchange      Visibility;          // [-]   R2 resident scene + cull / raster / HiZ / resolve
     SurfelGIStage           SurfelStage;         // [-]   shared non-raytraced indirect-light compute route
+    uint64_t               SurfaceMaterialRevision = 0u;
+    bool                   SceneUploadInProgress = false;
+    void                   RefreshMaterialBindings() noexcept;
     DistanceFieldStructure DistanceGeometry;
     DistanceFieldGIStage    DistanceFieldStage;  // [-]   shared non-raytraced distance-field GI route (RenderPath == 1)
     std::vector<SurfaceSample> SurfelSamples;    // [-]   persistent seed candidates derived from shared geometry
