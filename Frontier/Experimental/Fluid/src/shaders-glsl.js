@@ -775,7 +775,7 @@ uniform float uSlicePos;
 uniform int uObstacleType;
 uniform vec3 uObstaclePos;
 uniform float uObstacleRadius;
-uniform int uShowBoundingBox;
+uniform int uTransparentExport;
 uniform int uShowVoxelGridLines;
 uniform int uShowActiveVoxelCells;
 uniform int uShowFloorGrid;
@@ -785,7 +785,8 @@ vec3 worldToUVW(vec3 p) {
 }
 
 vec2 intersectBox(vec3 ro, vec3 rd, vec3 bMin, vec3 bMax) {
-  vec3 invRd = 1.0 / rd;
+  vec3 safeDirection = mix(vec3(-1.0), vec3(1.0), greaterThanEqual(rd, vec3(0.0))) * max(abs(rd), vec3(1e-7));
+  vec3 invRd = 1.0 / safeDirection;
   vec3 t0 = (bMin - ro) * invRd;
   vec3 t1 = (bMax - ro) * invRd;
   vec3 tSmaller = min(t0, t1);
@@ -923,23 +924,10 @@ vec3 acesToneMap(vec3 x) {
   return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
 }
 
-float computeBoxWireframe(vec3 pWorld, float distToCam) {
-  vec3 uvw = worldToUVW(pWorld);
-  vec3 edgeDist = min(uvw, 1.0 - uvw);
-  float dMin = min(edgeDist.x, min(edgeDist.y, edgeDist.z));
-  float dMax = max(edgeDist.x, max(edgeDist.y, edgeDist.z));
-  float dMid = edgeDist.x + edgeDist.y + edgeDist.z - dMin - dMax;
-  float lineThickness = 0.0024 * clamp(distToCam * 0.38, 0.5, 2.5);
-  float edgeMask = smoothstep(lineThickness, lineThickness * 0.25, max(dMin, dMid));
-
-  if (uShowVoxelGridLines == 1) {
-    float res = float(uGridRes);
-    vec3 cellFrac = abs(fract(uvw * res) - 0.5);
-    float tick = smoothstep(0.08, 0.02, min(cellFrac.x, min(cellFrac.y, cellFrac.z)));
-    float faceBorder = smoothstep(lineThickness * 4.5, lineThickness * 0.5, max(dMin, dMid));
-    edgeMask = max(edgeMask, faceBorder * tick * 0.55);
-  }
-  return edgeMask;
+vec4 encodeFlipbookPixel(vec3 radiance, float transmittance) {
+  vec3 colour = pow(acesToneMap(max(radiance, vec3(0.0)) * uExposure), vec3(1.0 / 2.2));
+  float alpha = clamp(max(1.0 - transmittance, max(colour.r, max(colour.g, colour.b))), 0.0, 1.0);
+  return vec4(colour, alpha);
 }
 
 vec3 evaluateSparseVoxelOverlay(vec3 uvw, float smoke, float temp) {
@@ -1011,8 +999,8 @@ void main() {
     vec3 gp = rayOrigin + rayDir * tGround;
     float radialFade = 1.0 - smoothstep(2.2, 7.2, length(gp.xz));
 
-    vec2 gridMajor = abs(fract(gp.xz * 2.0 + 0.5) - 0.5) / fwidth(gp.xz * 2.0);
-    vec2 gridVoxel = abs(fract(gp.xz * float(uGridRes) * 0.15) - 0.5) / fwidth(gp.xz * float(uGridRes) * 0.15);
+    vec2 gridMajor = abs(fract(gp.xz * 2.0 + 0.5) - 0.5) / max(fwidth(gp.xz * 2.0), vec2(1e-6));
+    vec2 gridVoxel = abs(fract(gp.xz * float(uGridRes) * 0.15) - 0.5) / max(fwidth(gp.xz * float(uGridRes) * 0.15), vec2(1e-6));
     float majorLine = 1.0 - min(min(gridMajor.x, gridMajor.y), 1.0);
     float minorLine = (1.0 - min(min(gridVoxel.x, gridVoxel.y), 1.0)) * float(uShowVoxelGridLines);
 
@@ -1061,18 +1049,10 @@ void main() {
   float tExit  = min(boxHit.y, tGround);
 
   if (tExit <= tEnter) {
+    if (uTransparentExport == 1) { outColor = encodeFlipbookPixel(vec3(1.0, 0.85, 0.65) * shockGlow, 1.0); return; }
     vec3 finalBg = acesToneMap((bgSky + vec3(1.0, 0.85, 0.65) * shockGlow) * uExposure);
     outColor = vec4(pow(finalBg, vec3(1.0 / 2.2)), 1.0);
     return;
-  }
-
-  vec3 boxWireColor = vec3(0.0);
-  if (uShowBoundingBox == 1) {
-    vec3 pEnter = rayOrigin + rayDir * max(boxHit.x, 0.001);
-    vec3 pExit  = rayOrigin + rayDir * boxHit.y;
-    float wEnter = boxHit.x > 0.0 ? computeBoxWireframe(pEnter, boxHit.x) : 0.0;
-    float wExit  = (boxHit.y < tGround ? computeBoxWireframe(pExit, boxHit.y) : 0.0) * 0.35;
-    boxWireColor = vec3(1.0, 0.48, 0.14) * wEnter + vec3(0.32, 0.55, 0.85) * wExit;
   }
 
   // --- MODE 8: 2D Axis Cross-Section Slice Inspector ---
@@ -1100,7 +1080,6 @@ void main() {
       sliceCol = mix(sliceCol, vec3(0.25, 0.65, 1.0), voxelGrid * 0.45);
       accum = mix(bgSky, sliceCol, 0.92);
     }
-    accum += boxWireColor;
     accum = acesToneMap(accum * uExposure);
     outColor = vec4(pow(accum, vec3(1.0 / 2.2)), 1.0);
     return;
@@ -1131,7 +1110,7 @@ void main() {
       vec4 velAndSolid = fetchVoxel(uVelocityTex, mapPos);
       float irr = fetchVoxel(uPressureTex, mapPos).g;
 
-      if (velAndSolid.a > 0.5) {
+      if (velAndSolid.a > 0.5 && uTransparentExport == 0) {
         vec3 n = vec3(mask) * (-sign(rdGrid));
         if (length(n) < 0.1) n = -rayDir;
         float diff = max(0.18, dot(n, uSunDir));
@@ -1177,7 +1156,8 @@ void main() {
       mapPos += ivec3(vec3(mask)) * rayStep;
     }
 
-    vec3 finalCol = accumLight + bgSky * transmittance + boxWireColor;
+    if (uTransparentExport == 1) { outColor = encodeFlipbookPixel(accumLight, transmittance); return; }
+    vec3 finalCol = accumLight + bgSky * transmittance;
     finalCol = acesToneMap(finalCol * uExposure);
     outColor = vec4(pow(finalCol, vec3(1.0 / 2.2)), 1.0);
     return;
@@ -1208,7 +1188,7 @@ void main() {
     vec3 pWorld = rayOrigin + rayDir * t;
     vec3 uvw = worldToUVW(pWorld);
 
-    if (uObstacleType != 0) {
+    if (uObstacleType != 0 && uTransparentExport == 0) {
       float obsDist = sdObstacle(uvw);
       if (obsDist < 0.0) {
         vec2 eps = vec2(0.008, 0.0);
@@ -1321,7 +1301,7 @@ void main() {
         // Crepuscular Volumetric God-Ray Sun Shafts & Fire Shafts through smoke gaps (every 2nd step)
         if (uGodRaysIntensity > 0.01 && (i & 1) == 0) {
           float sunShaft = marchSunTransmittance(uvw, 0.0);
-          float radialMask = smoothstep(0.55, 0.05, length(uvw.xz - vec2(0.5))) * smoothstep(0.95, 0.15, uvw.y);
+          float radialMask = (1.0 - smoothstep(0.05, 0.55, length(uvw.xz - vec2(0.5)))) * (1.0 - smoothstep(0.15, 0.95, uvw.y));
           vec3 shaftLight = sunLightColor * sunShaft * (0.25 + 1.45 * phaseVal) * radialMask * 0.09;
           accumBloom += transmittance * shaftLight * effStep * 2.0 * (uGodRaysIntensity / max(uBloomIntensity, 0.25));
         }
@@ -1331,10 +1311,10 @@ void main() {
     t += baseStepSize;
   }
 
+  if (uTransparentExport == 1) { outColor = encodeFlipbookPixel(accumLight + accumBloom * uBloomIntensity + vec3(1.0, 0.85, 0.65) * shockGlow, transmittance); return; }
   vec3 finalColor = accumLight
                   + accumBloom * uBloomIntensity
                   + bgSky * transmittance
-                  + boxWireColor
                   + vec3(1.0, 0.85, 0.65) * shockGlow;
   finalColor = acesToneMap(finalColor * uExposure);
   outColor = vec4(pow(finalColor, vec3(1.0 / 2.2)), 1.0);

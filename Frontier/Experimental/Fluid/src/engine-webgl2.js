@@ -21,13 +21,15 @@ import {
 } from './shaders-glsl.js';
 
 export class WebGL2PyroEngine {
-  constructor(canvas, params) {
+  constructor(canvas, params, options = {}) {
     this.canvas = canvas;
     this.params = params;
+    this.transparentExport = !!options.transparent;
     this.backendName = 'WebGL2 (GLSL 300 es)';
 
     const gl = canvas.getContext('webgl2', {
-      alpha: false,
+      alpha: this.transparentExport,
+      premultipliedAlpha: true,
       depth: false,
       stencil: false,
       antialias: false,
@@ -41,6 +43,7 @@ export class WebGL2PyroEngine {
     this.gl = gl;
 
     this.extColorBufferFloat = gl.getExtension('EXT_color_buffer_float');
+    if (!this.extColorBufferFloat) throw new Error('Floating-point render targets are required for this gas solver.');
     this.extFloatLinear = gl.getExtension('OES_texture_float_linear');
 
     this.time = 0.0;
@@ -173,6 +176,7 @@ export class WebGL2PyroEngine {
       drawBuffers.push(attachment);
     }
     gl.drawBuffers(drawBuffers);
+    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('The GPU could not allocate the simulation grid. Try a smaller resolution.');
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     return fbo;
   }
@@ -637,7 +641,7 @@ export class WebGL2PyroEngine {
       gl.uniform1i(u.uObstacleType, p.obstacleType);
       gl.uniform3f(u.uObstaclePos, p.obstacleX, p.obstacleY, p.obstacleZ);
       gl.uniform1f(u.uObstacleRadius, p.obstacleRadius);
-      gl.uniform1i(u.uShowBoundingBox, p.showBoundingBox ? 1 : 0);
+      gl.uniform1i(u.uTransparentExport, this.transparentExport ? 1 : 0);
       gl.uniform1i(u.uShowVoxelGridLines, p.showVoxelGridLines ? 1 : 0);
       gl.uniform1i(u.uShowActiveVoxelCells, p.showActiveVoxelCells ? 1 : 0);
       gl.uniform1i(u.uShowFloorGrid, p.showFloorGrid ? 1 : 0);
@@ -674,7 +678,7 @@ export class WebGL2PyroEngine {
       this.bindTex(1, this.buffers.thermo0, u.uThermoTex);
 
       gl.enable(gl.BLEND);
-      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
       gl.bindVertexArray(this.emberVAO);
       gl.drawArrays(gl.POINTS, 0, Math.min(this.maxEmbers, p.emberCount));
       gl.disable(gl.BLEND);
@@ -713,6 +717,9 @@ export class WebGL2PyroEngine {
 
   destroy() {
     const gl = this.gl;
+    gl.deleteVertexArray(this.quadVAO);
+    gl.deleteVertexArray(this.emberVAO);
+    gl.deleteBuffer(this.emberVBO);
     if (this.buffers) {
       Object.values(this.buffers).forEach((t) => t && gl.deleteTexture(t));
     }

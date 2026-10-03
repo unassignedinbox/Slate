@@ -1,3 +1,6 @@
+import { DocumentSequence } from "./DocumentSequence.js";
+import { FlipbookSequence } from "./FlipbookSequence.js";
+import { ProjectBounds } from "./BoundsProjection.js";
 import { OrbitCamera } from "./camera.js";
 import { WebGL2PyroEngine } from "./engine-webgl2.js";
 import { WebGPUPyroEngine } from "./engine-webgpu.js";
@@ -115,6 +118,8 @@ class FluidPanel {
     this.SavedSun = this.Parameters.sunIntensity;
     this.VisibleKeys = [];
     FillIcons();
+    this.Documents = new DocumentSequence(this, Icon);
+    this.Flipbook = new FlipbookSequence(this);
     this.ConnectInterface();
     this.ConstructPresetCards();
     this.ConstructSceneRows();
@@ -125,6 +130,57 @@ class FluidPanel {
     );
     this.InitializeRenderer("webgl2");
     requestAnimationFrame((Time) => this.Frame(Time));
+  }
+
+  InitializeDocumentState() {
+    this.Parameters = { ...InitialParameters };
+    if (new URLSearchParams(location.search).get("quality") === "low")
+      Object.assign(this.Parameters, {
+        gridResolution: 24,
+        raymarchSteps: 40,
+        pressureIterations: 10,
+        renderScale: 0.5,
+        shadowSteps: 3,
+        emberCount: 100,
+      });
+    this.Camera = new OrbitCamera();
+    this.Camera.targetDistance = 4.1;
+    this.Camera.targetCenter = [0, 0.3, 0];
+    this.Names = {
+      domain: "Gas domain",
+      emitter: "Fire emitter",
+      collider: "Sphere collider",
+      sun: "Directional light",
+    };
+    this.Selection = "emitter";
+    this.Tab = "source";
+    this.Preset = "";
+    this.Dirty = false;
+    this.Bursts = [];
+    this.SavedCollider = 1;
+    this.SavedSun = this.Parameters.sunIntensity;
+  }
+
+  RenderBounds() {
+    const Overlay = Select("#domain-bounds");
+    const Visible = this.Parameters.showBoundingBox && !!this.Engine;
+    Overlay.toggleAttribute("hidden", !Visible);
+    if (!Visible) return;
+    const Rectangle = Select("#viewport").getBoundingClientRect();
+    Overlay.setAttribute(
+      "viewBox",
+      `0 0 ${Rectangle.width} ${Rectangle.height}`,
+    );
+    const Lines = ProjectBounds(
+      this.Camera,
+      this.Engine.getBoundsBox(),
+      Rectangle.width,
+      Rectangle.height,
+    );
+    Overlay.innerHTML = Lines.map(
+      (Line) =>
+        `<line x1="${Line[0].toFixed(2)}" y1="${Line[1].toFixed(2)}" x2="${Line[2].toFixed(2)}" y2="${Line[3].toFixed(2)}"/>`,
+    ).join("");
   }
 
   async InitializeRenderer(Backend) {
@@ -179,8 +235,14 @@ class FluidPanel {
         );
         const CurrentEngine = this.Engine;
         CurrentEngine.device.lost.then((Information) => {
-          if (this.Engine === CurrentEngine)
-            this.ShowGpuError(Information.message || "WebGPU device lost.");
+          const Message = Information.message || "WebGPU device lost.";
+          if (this.Engine === CurrentEngine) this.ShowGpuError(Message);
+          else {
+            const Document = this.Documents?.Slots.find(
+              (Slot) => Slot.State?.Engine === CurrentEngine,
+            );
+            if (Document) Document.State.Fault = Message;
+          }
         });
       }
     } catch (ErrorValue) {
@@ -218,6 +280,7 @@ class FluidPanel {
   MarkDirty() {
     this.Dirty = true;
     Select("#dirty-indicator").classList.remove("clean");
+    this.Documents?.RefreshLabels();
   }
   Notify(Message) {
     clearTimeout(this.ToastTimeout);
@@ -338,6 +401,7 @@ class FluidPanel {
             ? this.Parameters.sunIntensity > 0
             : true;
     Select("#dirty-indicator").classList.toggle("clean", !this.Dirty);
+    this.Documents?.RefreshLabels();
   }
 
   ConstructSceneRows() {
@@ -880,10 +944,19 @@ class FluidPanel {
 
   async OpenScene(File) {
     if (!File) return;
+    const DocumentIdentity = this.Documents.ActiveIdentity;
     try {
       if (File.size > 256 * 1024)
         throw new Error("Scene settings must be smaller than 256 KB.");
       const Scene = ValidateScene(JSON.parse(await File.text()));
+      if (
+        DocumentIdentity !== this.Documents.ActiveIdentity ||
+        this.Baking ||
+        this.Switching
+      )
+        throw new Error(
+          "The active document changed or is busy. Select the intended tab and open the scene again.",
+        );
       this.ApplySceneParameters(Scene.Parameters);
       this.Names = Scene.Names;
       Select("#document-name").value = Scene.Name;
@@ -1010,6 +1083,45 @@ class FluidPanel {
         this.ConstructInspector();
       }
     });
+    let Scrub = null;
+    Select("#inspector-body").addEventListener("pointerdown", (Event) => {
+      if (
+        !Event.target.matches(".value-pill input[type=number]") ||
+        Event.button !== 0
+      )
+        return;
+      Scrub = {
+        Element: Event.target,
+        Pointer: Event.pointerId,
+        X: Event.clientX,
+        Value: Number(Event.target.value),
+        Moved: false,
+      };
+      Event.target.setPointerCapture(Event.pointerId);
+    });
+    Select("#inspector-body").addEventListener("pointermove", (Event) => {
+      if (!Scrub || Scrub.Pointer !== Event.pointerId) return;
+      const Delta = Event.clientX - Scrub.X;
+      if (!Scrub.Moved && Math.abs(Delta) < 3) return;
+      Event.preventDefault();
+      Scrub.Moved = true;
+      Scrub.Element.classList.add("scrubbing");
+      const Control = ControlSpecification[Scrub.Element.dataset.param];
+      const Scale = Event.shiftKey ? 0.1 : Event.altKey ? 10 : 1;
+      const Value =
+        Math.round(
+          (Scrub.Value + Delta * Control.step * Scale) / Control.step,
+        ) * Control.step;
+      this.ApplyParameter(
+        Control.key,
+        Number(Math.max(Control.min, Math.min(Control.max, Value)).toFixed(6)),
+      );
+    });
+    for (const Name of ["pointerup", "pointercancel", "lostpointercapture"])
+      Select("#inspector-body").addEventListener(Name, () => {
+        if (Scrub) Scrub.Element.classList.remove("scrubbing");
+        Scrub = null;
+      });
     Select("#inspector-body").addEventListener("input", (Event) => {
       if (Event.target.type === "range")
         this.ApplyParameter(
@@ -1162,6 +1274,7 @@ class FluidPanel {
   }
 
   KeyPress(Event) {
+    if (Select("#flipbook-dialog").open) return;
     if (
       (Event.ctrlKey || Event.metaKey) &&
       Event.shiftKey &&
@@ -1291,8 +1404,18 @@ class FluidPanel {
       },
       { passive: false },
     );
+    const ConnectedCanvas = this.Canvas;
     this.Canvas.addEventListener("webglcontextlost", (Event) => {
       Event.preventDefault();
+      if (ConnectedCanvas !== this.Canvas) {
+        const Document = this.Documents?.Slots.find(
+          (Slot) => Slot.State?.Canvas === ConnectedCanvas,
+        );
+        if (Document)
+          Document.State.Fault =
+            "This document lost its GPU context. Retry to rebuild it from its settings.";
+        return;
+      }
       this.ShowGpuError(
         "WebGL context lost. Retry to rebuild the simulation; settings are preserved.",
       );
@@ -1303,7 +1426,12 @@ class FluidPanel {
     requestAnimationFrame((NextTime) => this.Frame(NextTime));
     const Delta = Math.max(0.001, (Time - this.LastTime) / 1000);
     this.LastTime = Time;
-    if (document.hidden || this.Switching || !Select("#gpu-error").hidden)
+    if (
+      document.hidden ||
+      this.Switching ||
+      this.Baking ||
+      !Select("#gpu-error").hidden
+    )
       return;
     this.Elapsed += Delta;
     this.Frames++;
@@ -1338,6 +1466,7 @@ class FluidPanel {
           this.SingleStep = false;
         }
         this.Engine.render(this.Camera);
+        this.RenderBounds();
       } catch (ErrorValue) {
         this.ShowGpuError(ErrorValue.message);
       } finally {

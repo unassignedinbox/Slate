@@ -196,3 +196,62 @@ Verify("WebGPU gas uniform arrays agree with retained shader layouts", () => {
   Assert.match(Engine, /new ArrayBuffer\(176\)/);
   Assert.match(Engine, /new ArrayBuffer\(208\)/);
 });
+
+Verify(
+  "Projected bounds have twelve finite edges, including axis-aligned and near-plane views",
+  async () => {
+    const { ProjectBounds } = await import("./BoundsProjection.js");
+    const Camera = new OrbitCamera();
+    const Bounds = { boxMin: [-1, -1, -1], boxMax: [1, 1, 1] };
+    for (const Angle of [0, Math.PI / 2, Math.PI]) {
+      Camera.targetTheta = Angle;
+      Camera.targetPhi = Math.PI / 2;
+      Camera.update(1);
+      const Lines = ProjectBounds(Camera, Bounds, 640, 480);
+      Assert.equal(Lines.length, 12);
+      Assert.ok(Lines.flat().every(Number.isFinite));
+    }
+    Camera.position = [0, 0, 0];
+    Assert.ok(
+      ProjectBounds(Camera, Bounds, 640, 480).flat().every(Number.isFinite),
+    );
+  },
+);
+Verify(
+  "Flipbook allocation limits, atlas layout and row order are explicit",
+  async () => {
+    const { SpecifyFlipbook, UnpackFrame } = await import(
+      "./FlipbookSequence.js"
+    );
+    const Layout = SpecifyFlipbook(64, 512, 24, 0.25);
+    Assert.equal(Layout.Width, 4096);
+    Assert.equal(Layout.Height, 4096);
+    for (const Arguments of [
+      [10000, 512, 24, 0],
+      [4, 10000, 24, 0],
+      [4, 64, 0, 0],
+      [4, 64, 24, NaN],
+    ])
+      Assert.throws(() => SpecifyFlipbook(...Arguments));
+    const Pixels = UnpackFrame(
+      new Uint8Array([
+        255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 0, 0, 0, 0,
+      ]),
+      2,
+      true,
+    );
+    Assert.deepEqual(
+      [...Pixels],
+      [0, 0, 255, 255, 0, 0, 0, 0, 255, 0, 0, 255, 0, 255, 0, 255],
+    );
+    Assert.deepEqual(
+      [...UnpackFrame(new Uint8Array([64, 32, 0, 128]), 1, true)],
+      [128, 64, 0, 128],
+    );
+  },
+);
+Verify("Bounds are no longer evaluated inside the volume shader", () => {
+  const Shader = ReadText(new URL("shaders-glsl.js", import.meta.url), "utf8");
+  Assert.doesNotMatch(Shader, /computeBoxWireframe|uShowBoundingBox/);
+  Assert.match(Shader, /max\(abs\(rd\), vec3\(1e-7\)\)/);
+});

@@ -15,18 +15,25 @@
   <body>
     <div id="app">
       <header class="app-header">
-        <a class="brand" href="./index.html" aria-label="Fluid editor home"
-          ><span data-icon="flame" class="brand-icon"></span
-          ><strong>FLUID</strong
-          ><span class="experimental">EXPERIMENTAL</span></a
-        >
+        <div class="document-dock">
+          <div
+            id="document-tabs"
+            class="document-tabs"
+            role="tablist"
+            aria-label="Fluid documents"
+          ></div>
+          <button
+            id="new-document"
+            class="icon-button"
+            title="New Fluid document"
+            aria-label="New Fluid document"
+            data-icon="plus"
+          ></button>
+        </div>
         <nav class="top-nav" aria-label="Workspace">
           <button class="nav-button active" id="workspace-button">
             Workspace</button
-          ><button class="nav-button" id="library-button">Presets</button
-          ><button class="nav-button" id="diagnostics-button">
-            Diagnostics
-          </button>
+          ><button class="nav-button" id="library-button">Presets</button>
         </nav>
         <div class="header-end">
           <span class="gas-tag"><i></i> Gas simulation</span
@@ -65,7 +72,7 @@
           hidden
         />
       </div>
-      <main class="workspace">
+      <main class="workspace" id="fluid-workspace">
         <aside class="left-panel">
           <div class="outliner-heading">
             <div>
@@ -195,6 +202,20 @@
               <option value="top">Top</option>
             </select>
             <div class="viewport-bar-end">
+              <button
+                id="flipbook-button"
+                class="button bake-toolbar"
+                title="Bake flipbook"
+                aria-label="Bake flipbook"
+              >
+                <span data-icon="grid"></span>Bake</button
+              ><button
+                id="diagnostics-button"
+                class="icon-button"
+                title="Diagnostics"
+                aria-label="Diagnostics"
+                data-icon="viewport"
+              ></button>
               <select id="render-channel" aria-label="Render channel"></select
               ><button
                 id="overlays-button"
@@ -224,6 +245,12 @@
               id="pyro-canvas"
               aria-label="Interactive live 3D smoke and fire viewport"
             ></canvas>
+            <svg
+              id="domain-bounds"
+              class="domain-bounds"
+              aria-label="Projected simulation bounds"
+              hidden
+            ></svg>
             <div class="viewport-caption">
               <span class="live-pill" id="live-pill"
                 ><i></i><span>INITIALIZING</span></span
@@ -485,9 +512,12 @@
         ><span>Search presets<kbd>/</kbd></span>
       </div>
       <div class="help-note">
-        Scene files save settings and camera position, not simulation fields.
-        The time ruler is live telemetry, not a cached timeline. Water
-        simulation is not included.
+        Scene files save settings and camera position, not simulation fields. Up
+        to four document tabs retain their GPU state in this session; inactive
+        documents do not advance. Double-click a tab to rename it. Drag a slider
+        or its numeric value to adjust it; Shift slows numeric dragging, Alt
+        speeds it up. The time ruler is live telemetry, not a cached timeline.
+        Water simulation is not included.
       </div>
       <a
         href="https://github.com/eosclient0001-rgb/Frontier/tree/33c5f2e13dc3d6912a8bb2d887a4e8061b401b6b"
@@ -495,6 +525,100 @@
         rel="noreferrer"
         >Based on the original Frontier pyro app ↗</a
       >
+    </dialog>
+    <dialog id="flipbook-dialog">
+      <div class="dialog-heading">
+        <span data-icon="grid"></span>
+        <h2>Bake flipbook</h2>
+        <button
+          id="close-flipbook"
+          class="icon-button"
+          aria-label="Close flipbook"
+          data-icon="close"
+        ></button>
+      </div>
+      <p id="bake-scene-name"></p>
+      <p class="bake-description">
+        Bake a fresh simulation from this scene’s settings, with the current
+        camera locked to square framing. The live scene is held, not cleared.
+        This is a sequence of rendered frames—not the voxel atlas minimap.
+      </p>
+      <fieldset id="bake-settings" class="bake-settings">
+        <label
+          >Frames<select id="bake-count">
+            <option>4</option>
+            <option selected>16</option>
+            <option>32</option>
+            <option>64</option>
+          </select></label
+        >
+        <label
+          >Tile resolution<select id="bake-size">
+            <option value="64">64 × 64</option>
+            <option value="128">128 × 128</option>
+            <option value="256" selected>256 × 256</option>
+            <option value="512">512 × 512</option>
+          </select></label
+        >
+        <label
+          >Frames per second<select id="bake-rate">
+            <option>12</option>
+            <option selected>24</option>
+            <option>30</option>
+            <option>60</option>
+          </select></label
+        >
+        <label
+          >Warm-up · seconds<input
+            id="bake-warmup"
+            type="number"
+            min="0"
+            max="3"
+            step="0.05"
+            value="0.25"
+        /></label>
+        <label class="bake-check"
+          ><input id="bake-transparent" type="checkbox" checked />Transparent
+          background</label
+        >
+        <label class="bake-check"
+          ><input id="bake-burst" type="checkbox" />Start with a burst</label
+        >
+      </fieldset>
+      <div class="bake-actions">
+        <button id="bake-start" class="button">Bake frames</button
+        ><button id="bake-cancel" class="button" hidden>Cancel bake</button>
+      </div>
+      <progress id="bake-progress" max="1" value="0"></progress>
+      <p id="bake-progress-label" role="status">
+        PNG spritesheet + JSON frame rectangles, UVs and timing. Transparent
+        output uses straight alpha with an opacity/emission matte; no HDR or
+        engine-specific asset is exported.
+      </p>
+      <section id="bake-result" hidden>
+        <h3 id="bake-result-label"></h3>
+        <canvas
+          id="bake-preview"
+          width="256"
+          height="256"
+          aria-label="Baked flipbook preview"
+        ></canvas>
+        <div class="bake-preview-controls">
+          <label><input id="bake-play" type="checkbox" checked />Play</label
+          ><input
+            id="bake-frame"
+            type="range"
+            min="0"
+            max="15"
+            value="0"
+            aria-label="Flipbook preview frame"
+          /><output id="bake-frame-label">1 / 16</output>
+        </div>
+        <div class="bake-actions">
+          <button id="bake-png" class="button">Download PNG</button
+          ><button id="bake-json" class="button">Download metadata</button>
+        </div>
+      </section>
     </dialog>
     <script type="module" src="./src/FluidPanel.js"></script>
   </body>

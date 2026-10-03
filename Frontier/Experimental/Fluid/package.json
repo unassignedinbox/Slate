@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test src/SceneMetrics.mjs",
-    "verify:browser": "node src/BrowserMetrics.mjs"
+    "verify:browser": "node src/BrowserMetrics.mjs",
+    "verify:interactions": "node src/InteractionMetrics.mjs"
   },
   "devDependencies": {
     "playwright": "^1.63.0",
