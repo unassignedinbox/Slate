@@ -1,6 +1,9 @@
 # Slate
 
-Real-time 3D particle fluid simulation and renderer for games and VFX. It runs in the browser on WebGL2 with no dependencies.
+Real-time 3D particle fluid simulation and renderer for games and VFX.
+
+- **`index.html` – WebGPU version (current).** The PBF solver runs in WebGPU compute shaders (`src/gpu/sim.wgsl.js`), with 40k / 100k / 200k particles. Rendering is also WebGPU (`src/gpu/render.wgsl.js`): fluid shadows and self-shadowing from a light-space depth/thickness map, caustics on the floor and objects, a whitewater/foam attribute per particle, in-scattering, and a narrow-range depth filter. It needs desktop Chrome or Edge 113+.
+- **`legacy.html` – the first CPU solver with a WebGL2 renderer**, described below.
 
 ```
 python3 -m http.server 8080   # then open http://localhost:8080

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Slate Fluid — GPU (WebGPU)</title>
+<title>Slate Fluid — real-time volumetric fluid</title>
 <style>
   html, body { margin: 0; height: 100%; background: #111; overflow: hidden; font: 13px/1.35 system-ui, -apple-system, Segoe UI, sans-serif; color: #e8eaed; }
   #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; }
@@ -20,13 +20,13 @@
   input[type=range] { width: 120px; }
   #stats { position: fixed; right: 12px; bottom: 10px; color: #c4c7cc; background: rgba(0,0,0,0.45); padding: 4px 8px; border-radius: 6px; font-variant-numeric: tabular-nums; }
   #help { color: #9aa0a6; font-size: 11.5px; margin-top: 10px; }
-  #err a{color:#8ab4f8} #err { position: fixed; top: 40%; width: 100%; text-align: center; color: #ff8a80; font-size: 16px; }
+  #err { position: fixed; top: 40%; width: 100%; text-align: center; color: #ff8a80; font-size: 16px; }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div id="panel">
-  <h1>Slate Fluid · WebGPU</h1><div style='font-size:11px;color:#9aa0a6'>PBF solver + screen-space renderer, 100% GPU · <a style='color:#8ab4f8' href='legacy.html'>legacy</a></div>
+  <h1>Slate Fluid · legacy CPU/WebGL</h1><div style='font-size:11px;color:#9aa0a6'><a style='color:#8ab4f8' href='index.html'>→ GPU (WebGPU) version</a></div>
   <h2>Scene</h2>
   <div class="row">
     <button data-scene="dam">Dam break</button>
@@ -49,14 +49,13 @@
   <div style="text-align:right;color:#9aa0a6;font-size:11px" id="ballDensityV"></div>
   <div class="row"><button id="drop">Drop ball</button><button id="reset">Reset (R)</button><button id="pause">Pause</button></div>
   <h2>Quality</h2>
-  <div class="row"><button data-q="low">40k</button><button data-q="medium">100k</button><button data-q="high">200k</button></div>
-  <label>Time scale <input type="range" id="slowmo" min="0.1" max="1" step="0.05" value="1" /><span id="slowmoV"></span></label>
+  <label>Substeps / frame <input type="range" id="substeps" min="1" max="4" step="1" value="1" /><span id="substepsV"></span></label>
   <label>Surface smoothing <input type="range" id="smooth" min="0" max="6" step="1" value="3" /><span id="smoothV"></span></label>
   <div class="row"><button data-view="fluid">Rendered</button><button data-view="particles">Particles (P)</button></div>
   <div id="help">Drag: orbit · Right-drag / Shift-drag: pan · Wheel: zoom<br/>Click: throw a ball where you aim · Space: pause</div>
 </div>
 <div id="stats"></div>
 <div id="err"></div>
-<script type="module" src="./src/gpu/app.js"></script>
+<script type="module" src="./src/main.js"></script>
 </body>
 </html>
