@@ -10,6 +10,7 @@ npm install
 npm run dev       # http://localhost:5173
 npm run build     # type-check + production bundle
 npm run validate:wgsl   # structural lint of every WGSL compute/render shader
+npm run test:smoke      # headless WCSPH regression test (pours all 4 materials, no GPU needed)
 ```
 
 ## What you get

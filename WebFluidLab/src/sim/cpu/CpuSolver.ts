@@ -316,7 +316,7 @@ export class CpuSolver {
       let vx = this.velX[i] + this.accelX[i] * dt;
       let vy = this.velY[i] + this.accelY[i] * dt;
       let vz = this.velZ[i] + this.accelZ[i] * dt;
-      const dampScale = 1 - mat.damping * 0.6 * dt;
+      const dampScale = Math.exp(-mat.damping * 9.0 * dt);
       vx *= dampScale;
       vy *= dampScale;
       vz *= dampScale;
@@ -342,6 +342,19 @@ export class CpuSolver {
       for (const c of this.colliders) {
         const hit = colliderSdf(c, pos[0], pos[1], pos[2], this.simTime);
         this.resolveContact(i, pos, vel, hit.dist, hit.nx, hit.ny, hit.nz, radius, mat.friction, mat.adhesion, dt);
+      }
+
+      // Bingham-plastic-style yield behaviour: thick materials (mud,
+      // chocolate) have a yield speed below which residual SPH jitter gets
+      // strongly braked instead of persisting forever.
+      const yieldSpeed = mat.damping * 0.9;
+      const restSpeed = Math.hypot(vel[0], vel[1], vel[2]);
+      if (yieldSpeed > 0.001 && restSpeed < yieldSpeed) {
+        const t = Math.min(1, Math.max(0, restSpeed / yieldSpeed));
+        const brake = 0.015 + (1 - 0.015) * t;
+        vel[0] *= brake;
+        vel[1] *= brake;
+        vel[2] *= brake;
       }
 
       const speed = Math.hypot(vel[0], vel[1], vel[2]);

@@ -42,7 +42,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let dt = params.p0.x;
 
   var vel = p.velocity.xyz + p.accel.xyz * dt;
-  vel = vel * (1.0 - mat.c.w * 0.6 * dt);
+  vel = vel * exp(-mat.c.w * 9.0 * dt);
   var pos = p.position.xyz + vel * dt;
 
   var contact = 0.0;
@@ -61,6 +61,17 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let c = colliders[ci];
     let hit = evalCollider(pos, c);
     resolveContact(&pos, &vel, hit.dist, hit.normal, radius, friction, adhesion, dt, &contact);
+  }
+
+  // Bingham-plastic-style yield behaviour: thick materials (mud, chocolate)
+  // have a yield speed below which residual SPH jitter gets strongly braked
+  // instead of persisting forever, so a poured pile actually comes to rest
+  // instead of gently simmering indefinitely.
+  let yieldSpeed = mat.c.w * 0.9;
+  let restSpeed = length(vel);
+  if (yieldSpeed > 0.001 && restSpeed < yieldSpeed) {
+    let t = clamp(restSpeed / yieldSpeed, 0.0, 1.0);
+    vel = vel * mix(0.015, 1.0, t);
   }
 
   let speed = length(vel);
