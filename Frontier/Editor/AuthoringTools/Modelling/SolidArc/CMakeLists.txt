@@ -893,3 +893,6 @@ add_test(NAME LigerGuideVerification COMMAND GuideVerification
 add_test(NAME LigerConsolidationVerification COMMAND GuideVerification --consolidated
     "${LIGER_RECONSTRUCTION}/Liger_Roof_Repair.arc"
     "${LIGER_RECONSTRUCTION}/Liger_Consolidated.arc")
+add_test(NAME LigerLayoutVerification COMMAND GuideVerification --layout
+    "${LIGER_RECONSTRUCTION}/Liger_Consolidated.arc"
+    "${LIGER_RECONSTRUCTION}/Liger_Layout.arc")

@@ -111,6 +111,8 @@ def main() -> int:
     print("PASS native named guides, surface proximity, mirrored pairs and unchanged repaired skin", flush=True)
     run([str(executable), "--consolidated", str(reconstruction / "Liger_Roof_Repair.arc"),
          str(reconstruction / "Liger_Consolidated.arc")], "LigerConsolidationVerification")
+    run([str(executable), "--layout", str(reconstruction / "Liger_Consolidated.arc"),
+         str(reconstruction / "Liger_Layout.arc")], "LigerLayoutVerification")
     print("MSVC SolidArc: console linked, focused regressions and all Liger journals passed")
     return 0
 

@@ -183,6 +183,54 @@ samples; it does not provide a continuous fit-error certificate. The native veri
 radii, sixteen crown-to-fade joins, mirrored curves and save/reopen persistence. The metric tool checks native guide
 samples against the selected source chains and confirms that this reference-authoring pass did not alter the body.
 
+### Extended connections and first guide-aligned topology
+
+Open **`Liger_Layout.arc`** for the extended drawing and first actual topology cuts. The consolidated
+review is preserved in `Liger_Consolidated.arc` as the before state.
+
+- **B41 / B42:** both crossbar ends continue across the outer roof strips to **B03**.
+- **C01:** each forward rail tip continues to **B03**, instead of stopping just short.
+- **B45:** the side diagonal continues upward to **B29**, following the cabin and shoulder surface.
+- **R02:** extends to the rear **C02** and front **B22** outer-arch contours.
+- **B17:** the lower nose return extends to **B22** on both sides.
+- **B52:** the nose diagonals continue downward to **B17**.
+
+The roof continuations use exact native surface isoparametric curves. Eight supporting faces (four
+mirrored pairs) are partitioned into sixteen faces and sewn into the actual body: 1074 → 1082 faces.
+These are real face boundaries, not guide overlays or hidden edges. The original surface shape is
+preserved by spline restriction, with no fitting or smoothing of the skin in this step.
+
+This is the **start** of topology integration, not a completed re-layout of the whole car. The side/nose
+extensions are independent surface-fitted curves; their body topology is still pending. The earlier
+curved middle of C01 is likewise not newly integrated by this roof-tip/crossbar operation. Both arch
+borders, the orange selections, and the rejected-guide exclusions are preserved. Old guide entities
+remain hidden rather than destroyed, and extended visible guides retain their short IDs.
+
+`Liger_Layout_Four_Views.png` shows front-quarter, rear-quarter, side and top. The detail board and
+`Liger_Layout_Topology_Before_After.png` show the local changes; the latter has guide overlays disabled
+so the actual new seams can be inspected. Use `show edges on` in SolidArc to see the patch layout.
+
+```powershell
+$Liger = "Frontier/Projects/Project-Drive/Content/Vehicles/Liger/Reconstruction"
+FeatureVerification.exe "$Liger/Liger_Consolidated.arc" _AgentScratch/build/layout-edges.json
+python Frontier/Projects/Project-Drive/Tools/Liger/ExtensionSequence.py `
+  "$Liger/Liger_Consolidated.arc" _AgentScratch/build/layout-edges.triangles.f64 `
+  ./GuideVerification.exe _AgentScratch/build/extension-work "$Liger/Liger_Layout.arc"
+python Frontier/Projects/Project-Drive/Tools/Liger/ExtensionVerification.py
+GuideVerification.exe --layout "$Liger/Liger_Consolidated.arc" `
+  "$Liger/Liger_Layout.arc" _AgentScratch/build/layout-renders
+python Frontier/Projects/Project-Drive/Tools/Liger/GuideProjection.py `
+  _AgentScratch/build/layout-renders $Liger --layout --font C:/Windows/Fonts/arial.ttf
+```
+
+Keep `Liger_Layout.layout.tsv` alongside the ARC when running native verification. It maps each new
+face to its original face and source parameter rectangle. The verifier checks complete, nonoverlapping
+coverage, native surface positions, real shared edges between the new face pairs, unchanged openings,
+old guide preservation, visible guide proximity, reflected pairs and save/reopen persistence.
+`Liger_Layout.guides.json` records the connections and scope. Python additionally checks a continuous
+coefficient error bound for the restricted skin and preservation of the original guide spans.
+`LigerLayoutVerification` is included in CTest and both native build gates.
+
 ### Consolidated guide drawing
 
 Open **`Liger_Consolidated.arc`** for the current simplified selection. The complete candidate review

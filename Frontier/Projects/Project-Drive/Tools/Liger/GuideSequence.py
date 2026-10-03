@@ -129,7 +129,7 @@ class SurfaceProjection:
     def __init__(self, Triangles):
         self.Triangles = Triangles
         self.Search = {}
-        for Axes in [(0, 1), (0, 2)]:
+        for Axes in [(0, 1), (0, 2), (1, 2)]:
             Projected = Triangles[:, :, Axes]
             Centres = Projected.mean(axis=1)
             self.Search[Axes] = (cKDTree(Centres), float(np.linalg.norm(Projected - Centres[:, None], axis=2).max()))

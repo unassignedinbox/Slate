@@ -1,0 +1,42 @@
+  repaired reference opens                                               true         true   PASS
+  candidate document opens                                               true         true   PASS
+  complete nonoverlapping source-face coverage                           true         true   PASS
+  native restricted-face position error [m]                         4.448e-15      1.0e-10   PASS
+  eight roof supports split into genuinely sewn face pairs               true         true   PASS
+LAYOUT_TOPOLOGY faces=1082 edges=9137 open=732 nonmanifold=0 misoriented=0 hulls=1
+  new roof faces, no new holes or orientation faults                     true         true   PASS
+  accepted guides and orange selections retained                         true         true   PASS
+  selected consolidated guides are native features                       true         true   PASS
+  bilateral candidate curves are paired                                  true         true   PASS
+  native reflected candidate position error [m]                     0.000e+00      1.0e-10   PASS
+  sampled guide distance to actual native skin [mm]                 3.751e-01      1.2e+00   PASS
+  rejected options and superseded join fragments hidden                  true         true   PASS
+  joined rails and all four arch borders are shown bilaterally             true         true   PASS
+  save candidates                                                        true         true   PASS
+  reopen candidates                                                      true         true   PASS
+  names, geometry, colour and visibility survive replay                  true         true   PASS
+  review display                                                         true         true   PASS
+  review camera                                                          true         true   PASS
+  native review image                                                    true         true   PASS
+  review camera                                                          true         true   PASS
+  native review image                                                    true         true   PASS
+  review camera                                                          true         true   PASS
+  native review image                                                    true         true   PASS
+  review camera                                                          true         true   PASS
+  native review image                                                    true         true   PASS
+  detail patch layout                                                    true         true   PASS
+  detail camera                                                          true         true   PASS
+  native review image                                                    true         true   PASS
+  detail camera                                                          true         true   PASS
+  native review image                                                    true         true   PASS
+  detail camera                                                          true         true   PASS
+  native review image                                                    true         true   PASS
+  topology proof display                                                 true         true   PASS
+  topology proof display                                                 true         true   PASS
+  matched topology camera                                                true         true   PASS
+  before topology                                                        true         true   PASS
+  after topology                                                         true         true   PASS
+  matched topology camera                                                true         true   PASS
+  before topology                                                        true         true   PASS
+  after topology                                                         true         true   PASS
+  40 checks, 0 failed → ALL PASS

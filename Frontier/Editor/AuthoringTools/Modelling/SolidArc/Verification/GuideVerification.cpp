@@ -107,6 +107,62 @@ bool SameSurface(const NurbsSurface& First, const NurbsSurface& Second)
     }
     return true;
 }
+void VerifyLayout(VerificationPanel& Panel, const BrepBody& Before, const BrepBody& After, const std::string& Path)
+{
+    std::ifstream Input(std::filesystem::path(Path).replace_extension(".layout.tsv"));
+    std::vector<std::array<double, 6>> Rows;
+    for (std::array<double, 6> Row; Input >> Row[0] >> Row[1] >> Row[2] >> Row[3] >> Row[4] >> Row[5];) Rows.push_back(Row);
+    bool Valid = Input.eof() && Rows.size() == After.Faces.size();
+    std::vector<bool> Seen(After.Faces.size());
+    std::vector<double> Area(Before.Faces.size());
+    std::vector<std::vector<int>> Children(Before.Faces.size());
+    double Maximum = 0;
+    size_t Unchanged = 0;
+    for (const auto& Row : Rows)
+    {
+        const int Old = static_cast<int>(Row[0]), New = static_cast<int>(Row[1]);
+        if (Old < 0 || New < 0 || Old >= static_cast<int>(Before.Faces.size()) || New >= static_cast<int>(After.Faces.size()) ||
+            Seen[New] || Row[0] != Old || Row[1] != New || Row[2] < 0 || Row[3] > 1 || Row[4] < 0 || Row[5] > 1 ||
+            Row[2] >= Row[3] || Row[4] >= Row[5]) { Valid = false; continue; }
+        Seen[New] = true;
+        Area[Old] += (Row[3] - Row[2]) * (Row[5] - Row[4]);
+        Children[Old].push_back(New);
+        const auto& A = Before.Faces[Old].Surface;
+        const auto& B = After.Faces[New].Surface;
+        if (Row[2] == 0 && Row[3] == 1 && Row[4] == 0 && Row[5] == 1)
+        {
+            Valid = Valid && SameSurface(A, B);
+            ++Unchanged;
+        }
+        for (int U = 0; U <= 16; ++U) for (int V = 0; V <= 16; ++V)
+            Maximum = std::max(Maximum, A.Sample(Row[2] + (Row[3] - Row[2]) * U / 16.0,
+                Row[4] + (Row[5] - Row[4]) * V / 16.0).Distance(B.Sample(U / 16.0, V / 16.0)));
+    }
+    for (double Value : Area) Valid = Valid && std::fabs(Value - 1) < 1e-12;
+    for (size_t A = 0; A < Rows.size(); ++A) for (size_t B = A + 1; B < Rows.size(); ++B)
+        if (Rows[A][0] == Rows[B][0])
+            Valid = Valid && std::max(0.0, std::min(Rows[A][3], Rows[B][3]) - std::max(Rows[A][2], Rows[B][2])) *
+                std::max(0.0, std::min(Rows[A][5], Rows[B][5]) - std::max(Rows[A][4], Rows[B][4])) < 1e-14;
+    Panel.Expect("complete nonoverlapping source-face coverage", Valid && Unchanged == 1066);
+    Panel.Within("native restricted-face position error [m]", Maximum, 1e-10);
+    size_t Cuts = 0;
+    bool Joined = true;
+    for (const auto& Pair : Children)
+    {
+        if (Pair.size() == 1) continue;
+        ++Cuts;
+        bool Shared = false;
+        if (Pair.size() != 2) { Joined = false; continue; }
+        for (const auto& Edge : After.Edges)
+        {
+            if (Edge.Coedges.size() != 2) continue;
+            const int A = After.Coedges[Edge.Coedges[0]].Face, B = After.Coedges[Edge.Coedges[1]].Face;
+            if ((A == Pair[0] && B == Pair[1]) || (B == Pair[0] && A == Pair[1])) Shared = true;
+        }
+        Joined = Joined && Shared;
+    }
+    Panel.Expect("eight roof supports split into genuinely sewn face pairs", Joined && Cuts == 8);
+}
 }
 
 int main(int Count, char** Arguments)
@@ -131,7 +187,8 @@ int main(int Count, char** Arguments)
         std::cout << "PROJECTED_NATIVE_SURFACE_SAMPLES " << Samples << '\n';
         return Input.eof() && Samples && Output.good() ? 0 : 2;
     }
-    const bool Consolidated = Count >= 4 && std::string(Arguments[1]) == "--consolidated";
+    const bool Layout = Count >= 4 && std::string(Arguments[1]) == "--layout";
+    const bool Consolidated = Layout || (Count >= 4 && std::string(Arguments[1]) == "--consolidated");
     if (Consolidated)
     {
         --Count;
@@ -140,7 +197,7 @@ int main(int Count, char** Arguments)
     if (Count != 3 && Count != 4) return 2;
     VerificationPanel Panel("SolidArc · on-surface curve candidates");
     const std::filesystem::path Destination = Count == 4 ? Arguments[3] :
-        (Consolidated ? SOLIDARC_PROOF_FOLDER "/ConsolidationVerification" : SOLIDARC_PROOF_FOLDER "/GuideVerification");
+        (Layout ? SOLIDARC_PROOF_FOLDER "/LayoutVerification" : Consolidated ? SOLIDARC_PROOF_FOLDER "/ConsolidationVerification" : SOLIDARC_PROOF_FOLDER "/GuideVerification");
     std::filesystem::create_directories(Destination);
     ConsoleHost Before(Destination.string(), 2000, 1250), After(Destination.string(), 2000, 1250);
     Panel.Expect("repaired reference opens", Before.Execute(std::string("open \"") + Arguments[1] + "\""));
@@ -151,9 +208,13 @@ int main(int Count, char** Arguments)
     bool Intact = Original->Body.Faces.size() == Current->Body.Faces.size();
     if (Intact) for (size_t Index = 0; Index < Original->Body.Faces.size(); ++Index)
         Intact = Intact && SameSurface(Original->Body.Faces[Index].Surface, Current->Body.Faces[Index].Surface);
-    Panel.Expect("all repaired body surface coefficients unchanged", Intact);
+    if (Layout) VerifyLayout(Panel, Original->Body, Current->Body, Arguments[2]);
+    else Panel.Expect("all repaired body surface coefficients unchanged", Intact);
     const auto Report = Current->Body.Validate();
-    Panel.Expect("skin topology unchanged", Report.Faces == 1074 && Report.Edges == 9107 && Report.OpenEdges == 732 &&
+    std::cout << "LAYOUT_TOPOLOGY faces=" << Report.Faces << " edges=" << Report.Edges << " open=" << Report.OpenEdges
+              << " nonmanifold=" << Report.NonManifoldEdges << " misoriented=" << Report.MisorientedEdges << " hulls=" << Report.Hulls << '\n';
+    Panel.Expect(Layout ? "new roof faces, no new holes or orientation faults" : "skin topology unchanged",
+        (Layout ? Report.Faces == 1082 && Report.OpenEdges <= 732 : Report.Faces == 1074 && Report.Edges == 9107 && Report.OpenEdges == 732) &&
         Report.NonManifoldEdges == 0 && Report.MisorientedEdges == 0 && Report.Hulls == 1);
     bool Existing = true;
     for (const auto& Figure : Before.AllFigures())
@@ -222,7 +283,7 @@ int main(int Count, char** Arguments)
         bool Separate = true;
         for (const auto* Name : Borders) for (const auto* Side : { "_Left", "_Right" })
         {
-            const auto* Figure = After.Document().Find(std::string(Name) + Side);
+            const auto* Figure = After.Document().Find(std::string(Layout && std::string(Name) == "Guide_C01_JoinedRoofRail" ? "Guide_C01_Extended" : Name) + Side);
             Separate = Separate && Figure && !Figure->Hidden;
         }
         Panel.Expect("joined rails and all four arch borders are shown bilaterally", Separate);
@@ -255,7 +316,7 @@ int main(int Count, char** Arguments)
                 Panel.Expect("detail camera", Before.Execute(Inspection[Index - 4]));
             }
             After.Camera() = Before.Camera();
-            Panel.Expect("native review image", After.Execute(std::string(Consolidated ? "render Liger_Consolidated_" : "render Liger_Guide_") + Views[Index] + " --size=2000x1250"));
+            Panel.Expect("native review image", After.Execute(std::string(Layout ? "render Liger_Layout_" : Consolidated ? "render Liger_Consolidated_" : "render Liger_Guide_") + Views[Index] + " --size=2000x1250"));
             for (const auto& Figure : After.AllFigures())
             {
                 if (Figure.Hidden || !Figure.Name.starts_with("Guide_")) continue;
@@ -267,6 +328,21 @@ int main(int Count, char** Arguments)
                     Pixels << Views[Index] << ',' << Figure.Name << ',' << Sample << ',' << X << ',' << Y << ',' << (After.Camera().ProjectionMatrix(1.6) * After.Camera().ViewMatrix()).TransformPoint(Point).Z << ',' << After.Raster().Depth(static_cast<uint32_t>(X), static_cast<uint32_t>(Y)) << '\n';
                 }
             }
+        }
+    }
+    if (Layout && Count == 4)
+    {
+        for (auto* Host : { &Before, &After })
+            Panel.Expect("topology proof display", Host->Execute("show cages off; show iso off; show edges on; show features off; show shading plastic"));
+        const char* Frames[] = {
+            "line (.055,.54,1.1) (.40,.73,1.1) --name=LayoutInspection; select LayoutInspection; view top; view fit selected; delete LayoutInspection",
+            "line (1.10,.19,1.07) (1.245,.35,1.07) --name=LayoutInspection; select LayoutInspection; view top; view fit selected; delete LayoutInspection" };
+        for (int Index = 0; Index < 2; ++Index)
+        {
+            Panel.Expect("matched topology camera", Before.Execute(Frames[Index]));
+            After.Camera() = Before.Camera();
+            Panel.Expect("before topology", Before.Execute("render Liger_Layout_Before_" + std::to_string(Index) + " --size=2000x1250"));
+            Panel.Expect("after topology", After.Execute("render Liger_Layout_After_" + std::to_string(Index) + " --size=2000x1250"));
         }
     }
     return Panel.Conclude();

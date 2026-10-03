@@ -86,6 +86,7 @@ done
 "$WORK/RoofRepairVerification" "$LIGER/Liger_Feature_Aligned.arc" "$LIGER/Liger_Roof_Repair.arc"
 "$WORK/GuideVerification" "$LIGER/Liger_Roof_Repair.arc" "$LIGER/Liger_Guide_Candidates.arc"
 "$WORK/GuideVerification" --consolidated "$LIGER/Liger_Roof_Repair.arc" "$LIGER/Liger_Consolidated.arc"
+"$WORK/GuideVerification" --layout "$LIGER/Liger_Consolidated.arc" "$LIGER/Liger_Layout.arc"
 
 # Keep the focused gate's normal scratch behaviour, but make the nine newly covered baseline
 # artifacts and the current bounded-slice proof durable. Their verifier names are unchanged;

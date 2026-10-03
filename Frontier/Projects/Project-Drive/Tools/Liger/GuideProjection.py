@@ -13,12 +13,13 @@ from PIL import Image, ImageDraw, ImageFont
 Colours = {"B": "#37b9ff", "G": "#57eb7a", "Y": "#ffe35c", "M": "#f577e7", "R": "#ff6b74", "O": "#ffc06b"}
 
 
-def Run(Source, Destination, FontPath, Consolidated=False):
-    Prefix = "Liger_Consolidated" if Consolidated else "Liger_Guide"
+def Run(Source, Destination, FontPath, Consolidated=False, Layout=False):
+    Consolidated = Consolidated or Layout
+    Prefix = "Liger_Layout" if Layout else "Liger_Consolidated" if Consolidated else "Liger_Guide"
     Palette = dict(Colours)
     if Consolidated:
         Palette.update(C=Colours["B"], G=Colours["B"])
-    MetadataName = "Liger_Consolidated.guides.json" if Consolidated else "Liger_Guide_Candidates.guides.json"
+    MetadataName = f"{Prefix}.guides.json" if Consolidated else "Liger_Guide_Candidates.guides.json"
     Metadata = json.loads((Destination / MetadataName).read_text())
     Rows = list(csv.DictReader((Source / "GuidePixels.csv").open()))
     Curves = {Curve["code"]: Curve for Curve in Metadata["curves"]}
@@ -45,6 +46,9 @@ def Run(Source, Destination, FontPath, Consolidated=False):
             "Rear_Arch_Detail": ["B20", "C02", "B19", "R01", "R02"],
             "Front_Arch_Detail": ["B22", "G23", "B35", "B19", "B16", "R01", "R02"],
         }
+    if Layout:
+        Requested["Front_Quarter"] += ["B17", "B52", "B41", "B42"]
+        Requested["Side"] += ["B45", "B17", "B52"]
     Images = {}
     Placements = []
     for View, Codes in Requested.items():
@@ -142,9 +146,13 @@ def Run(Source, Destination, FontPath, Consolidated=False):
     Draw = Heading(
         Overview,
         (
-            "LIGER / CONSOLIDATED GUIDES / FOUR-VIEW REVIEW"
-            if Consolidated
-            else "LIGER / NAMED CURVE CANDIDATES / FOUR-VIEW REVIEW"
+            "LIGER / EXTENDED GUIDES + FIRST TOPOLOGY CUTS"
+            if Layout
+            else (
+                "LIGER / CONSOLIDATED GUIDES / FOUR-VIEW REVIEW"
+                if Consolidated
+                else "LIGER / NAMED CURVE CANDIDATES / FOUR-VIEW REVIEW"
+            )
         ),
     )
     for Index, View in enumerate(["Front_Quarter", "Rear_Quarter", "Side", "Top"]):
@@ -155,9 +163,13 @@ def Run(Source, Destination, FontPath, Consolidated=False):
     Draw.text(
         (38, 2838),
         (
-            "53 native guides. Yellow and R03-R05 excluded; close parallel traces consolidated. Body patches unchanged."
-            if Consolidated
-            else "Guide-only phase: repaired skin unchanged. A close parallel is NOT proof it can be removed. Tell me the IDs to keep, join or discard."
+            "Roof: new sewn face edges. Side/nose: extended guides, topology pending. Source skin preserved; both arch borders retained."
+            if Layout
+            else (
+                "53 native guides. Yellow and R03-R05 excluded; close parallel traces consolidated. Body patches unchanged."
+                if Consolidated
+                else "Guide-only phase: repaired skin unchanged. A close parallel is NOT proof it can be removed. Tell me the IDs to keep, join or discard."
+            )
         ),
         font=Small,
         fill="#c7d3e1",
@@ -168,9 +180,13 @@ def Run(Source, Destination, FontPath, Consolidated=False):
     Draw = Heading(
         Details,
         (
-            "LIGER / JOINED ROOF RAIL AND DISTINCT ARCH BORDERS"
-            if Consolidated
-            else "LIGER / SURFACE EXTENSIONS AND PAIRED-CONTOUR OPTIONS"
+            "LIGER / EXTENDED ROOF AND SIDE CONNECTIONS"
+            if Layout
+            else (
+                "LIGER / JOINED ROOF RAIL AND DISTINCT ARCH BORDERS"
+                if Consolidated
+                else "LIGER / SURFACE EXTENSIONS AND PAIRED-CONTOUR OPTIONS"
+            )
         ),
     )
     for Index, View in enumerate(["Roof_Detail", "Top", "Rear_Arch_Detail", "Front_Arch_Detail"]):
@@ -181,9 +197,13 @@ def Run(Source, Destination, FontPath, Consolidated=False):
     Draw.text(
         (38, 2838),
         (
-            "C01 = B27 + M01 + B53. C02 = G92 + M03 + G50 + M04 + G91. Both arch borders retained. M02 excluded with Y01."
-            if Consolidated
-            else "Wheel-arch inner/outer borders remain separate. M01-M04 are proposed connections across existing skin, not repaired patches."
+            "B41 / B42 / C01 now reach B03 on native roof seams. B45, R02, B17 and B52 extended as surface-fitted guides."
+            if Layout
+            else (
+                "C01 = B27 + M01 + B53. C02 = G92 + M03 + G50 + M04 + G91. Both arch borders retained. M02 excluded with Y01."
+                if Consolidated
+                else "Wheel-arch inner/outer borders remain separate. M01-M04 are proposed connections across existing skin, not repaired patches."
+            )
         ),
         font=Small,
         fill="#c7d3e1",
@@ -195,7 +215,11 @@ def Run(Source, Destination, FontPath, Consolidated=False):
     Draw = ImageDraw.Draw(Key)
     Draw.text(
         (38, 24),
-        "LIGER / CONSOLIDATED CURVE KEY" if Consolidated else "LIGER / CURVE SELECTION KEY",
+        (
+            "LIGER / EXTENDED CURVE KEY"
+            if Layout
+            else "LIGER / CONSOLIDATED CURVE KEY" if Consolidated else "LIGER / CURVE SELECTION KEY"
+        ),
         font=Title,
         fill="#ecf1f6",
     )
@@ -274,6 +298,30 @@ def Run(Source, Destination, FontPath, Consolidated=False):
         fill="#c7d3e1",
     )
     Key.save(Destination / f"{Prefix}_Key.png")
+    if Layout:
+        Comparison = Image.new("RGB", (4000, 2875), "#101922")
+        Draw = ImageDraw.Draw(Comparison)
+        Draw.text((38, 24), "LIGER / ACTUAL ROOF TOPOLOGY / BEFORE AND AFTER", font=Title, fill="#ecf1f6")
+        Draw.text(
+            (38, 104),
+            "Guide overlays OFF. New lines here are real sewn face boundaries, not sketches or hidden-edge styling.",
+            font=Label,
+            fill="#c7d3e1",
+        )
+        for Row, Caption in enumerate(["CROSSBAR CONTINUATIONS B41 / B42", "FORWARD ROOF RAIL C01"]):
+            for Column, State in enumerate(["Before", "After"]):
+                Name = f"Liger_Layout_{State}_{Row}.png"
+                shutil.copyfile(Source / Name, Destination / Name)
+                X, Y = Column * 2000, 210 + Row * 1310
+                Draw.text((X + 38, Y + 5), State.upper() + " / " + Caption, font=Label, fill="#e4e9f0")
+                Comparison.paste(Image.open(Source / Name).convert("RGB"), (X, Y + 52))
+        Draw.text(
+            (38, 2838),
+            "8 existing support faces partitioned into 16 mirrored faces. 1074 -> 1082 total faces; no surface refit or invented thickness.",
+            font=Small,
+            fill="#c7d3e1",
+        )
+        Comparison.save(Destination / "Liger_Layout_Topology_Before_After.png")
     Report = {
         "renderer": "Native SolidArc GuideVerification; only labels, leaders and layout added after rendering",
         "documentSha256": Metadata["documentSha256"],
@@ -293,5 +341,6 @@ if __name__ == "__main__":
     Parser.add_argument("Destination", type=Path)
     Parser.add_argument("--font", type=Path, default=Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"))
     Parser.add_argument("--consolidated", action="store_true")
+    Parser.add_argument("--layout", action="store_true")
     Arguments = Parser.parse_args()
-    Run(Arguments.Renders, Arguments.Destination, Arguments.font, Arguments.consolidated)
+    Run(Arguments.Renders, Arguments.Destination, Arguments.font, Arguments.consolidated, Arguments.layout)

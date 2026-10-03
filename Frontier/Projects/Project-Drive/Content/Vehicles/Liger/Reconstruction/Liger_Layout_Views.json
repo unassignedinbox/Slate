@@ -1,0 +1,926 @@
+{
+  "renderer": "Native SolidArc GuideVerification; only labels, leaders and layout added after rendering",
+  "documentSha256": "423d2bb7a7cc234d02f26aa96783afa98a9dc91898b7e5d1b545001e4632dda0",
+  "labelPlacements": [
+    {
+      "view": "Front_Quarter",
+      "code": "B01",
+      "nativeCurve": "Guide_B01_OuterShoulder_Across",
+      "nativeSample": 32,
+      "leaderPixel": [
+        1323.08,
+        764.119
+      ],
+      "labelRectangle": [
+        1368.08,
+        804.119,
+        1448.08,
+        846.119
+      ]
+    },
+    {
+      "view": "Front_Quarter",
+      "code": "B02",
+      "nativeCurve": "Guide_B02_LowerCanopy_Across",
+      "nativeSample": 32,
+      "leaderPixel": [
+        1300.01,
+        751.47
+      ],
+      "labelRectangle": [
+        1345.01,
+        686.47,
+        1425.01,
+        728.47
+      ]
+    },
+    {
+      "view": "Front_Quarter",
+      "code": "B03",
+      "nativeCurve": "Guide_B03_UpperCanopy_Across",
+      "nativeSample": 32,
+      "leaderPixel": [
+        1152.78,
+        593.746
+      ],
+      "labelRectangle": [
+        1197.78,
+        633.746,
+        1277.78,
+        675.746
+      ]
+    },
+    {
+      "view": "Front_Quarter",
+      "code": "G04",
+      "nativeCurve": "Guide_G04_WindshieldFoot_Across",
+      "nativeSample": 35,
+      "leaderPixel": [
+        1224.46,
+        759.75
+      ],
+      "labelRectangle": [
+        1269.46,
+        799.75,
+        1349.46,
+        841.75
+      ]
+    },
+    {
+      "view": "Front_Quarter",
+      "code": "B22",
+      "nativeCurve": "Guide_B22_FrontOuterArch_Left",
+      "nativeSample": 32,
+      "leaderPixel": [
+        1510.82,
+        618.802
+      ],
+      "labelRectangle": [
+        1555.82,
+        658.802,
+        1635.82,
+        700.802
+      ]
+    },
+    {
+      "view": "Front_Quarter",
+      "code": "G23",
+      "nativeCurve": "Guide_G23_FrontInnerArch_Right",
+      "nativeSample": 32,
+      "leaderPixel": [
+        940.61,
+        817.741
+      ],
+      "labelRectangle": [
+        985.61,
+        857.741,
+        1065.6100000000001,
+        899.741
+      ]
+    },
+    {
+      "view": "Front_Quarter",
+      "code": "C01",
+      "nativeCurve": "Guide_C01_Extended_Left",
+      "nativeSample": 32,
+      "leaderPixel": [
+        993.958,
+        456.012
+      ],
+      "labelRectangle": [
+        1038.958,
+        496.012,
+        1118.958,
+        538.012
+      ]
+    },
+    {
+      "view": "Front_Quarter",
+      "code": "R01",
+      "nativeCurve": "Guide_R01_SideBeltOption_Right",
+      "nativeSample": 32,
+      "leaderPixel": [
+        720.198,
+        722.344
+      ],
+      "labelRectangle": [
+        765.198,
+        762.344,
+        845.198,
+        804.344
+      ]
+    },
+    {
+      "view": "Front_Quarter",
+      "code": "B17",
+      "nativeCurve": "Guide_B17_Extended_Across",
+      "nativeSample": 32,
+      "leaderPixel": [
+        1443.47,
+        967.651
+      ],
+      "labelRectangle": [
+        1488.47,
+        1007.651,
+        1568.47,
+        1049.6509999999998
+      ]
+    },
+    {
+      "view": "Front_Quarter",
+      "code": "B52",
+      "nativeCurve": "Guide_B52_Extended_Left",
+      "nativeSample": 32,
+      "leaderPixel": [
+        1519.12,
+        754.582
+      ],
+      "labelRectangle": [
+        1564.12,
+        794.582,
+        1644.12,
+        836.582
+      ]
+    },
+    {
+      "view": "Front_Quarter",
+      "code": "B41",
+      "nativeCurve": "Guide_B41_Extended_Across",
+      "nativeSample": 32,
+      "leaderPixel": [
+        964.009,
+        481.341
+      ],
+      "labelRectangle": [
+        1009.009,
+        416.341,
+        1089.009,
+        458.341
+      ]
+    },
+    {
+      "view": "Front_Quarter",
+      "code": "B42",
+      "nativeCurve": "Guide_B42_Extended_Across",
+      "nativeSample": 32,
+      "leaderPixel": [
+        987.042,
+        489.226
+      ],
+      "labelRectangle": [
+        1017.042,
+        599.226,
+        1097.042,
+        641.226
+      ]
+    },
+    {
+      "view": "Rear_Quarter",
+      "code": "B01",
+      "nativeCurve": "Guide_B01_OuterShoulder_Across",
+      "nativeSample": 32,
+      "leaderPixel": [
+        1212.31,
+        479.472
+      ],
+      "labelRectangle": [
+        1257.31,
+        519.472,
+        1337.31,
+        561.472
+      ]
+    },
+    {
+      "view": "Rear_Quarter",
+      "code": "B07",
+      "nativeCurve": "Guide_B07_RearDeckRim_Across",
+      "nativeSample": 32,
+      "leaderPixel": [
+        509.296,
+        784.642
+      ],
+      "labelRectangle": [
+        554.296,
+        824.642,
+        634.296,
+        866.642
+      ]
+    },
+    {
+      "view": "Rear_Quarter",
+      "code": "B08",
+      "nativeCurve": "Guide_B08_RearUpperReturn_Across",
+      "nativeSample": 32,
+      "leaderPixel": [
+        515.112,
+        836.591
+      ],
+      "labelRectangle": [
+        560.112,
+        876.591,
+        640.112,
+        918.591
+      ]
+    },
+    {
+      "view": "Rear_Quarter",
+      "code": "G12",
+      "nativeCurve": "Guide_G12_RearLowerInset_Across",
+      "nativeSample": 32,
+      "leaderPixel": [
+        531.426,
+        815.496
+      ],
+      "labelRectangle": [
+        576.426,
+        750.496,
+        656.426,
+        792.496
+      ]
+    },
+    {
+      "view": "Rear_Quarter",
+      "code": "B20",
+      "nativeCurve": "Guide_B20_RearInnerArch_Right",
+      "nativeSample": 32,
+      "leaderPixel": [
+        1044.62,
+        830.395
+      ],
+      "labelRectangle": [
+        1089.62,
+        870.395,
+        1169.62,
+        912.395
+      ]
+    },
+    {
+      "view": "Rear_Quarter",
+      "code": "C02",
+      "nativeCurve": "Guide_C02_JoinedRearOuterArch_Right",
+      "nativeSample": 32,
+      "leaderPixel": [
+        1060.64,
+        799.922
+      ],
+      "labelRectangle": [
+        1105.64,
+        734.922,
+        1185.64,
+        776.922
+      ]
+    },
+    {
+      "view": "Rear_Quarter",
+      "code": "C01",
+      "nativeCurve": "Guide_C01_Extended_Left",
+      "nativeSample": 32,
+      "leaderPixel": [
+        829.441,
+        530.828
+      ],
+      "labelRectangle": [
+        874.441,
+        570.828,
+        954.441,
+        612.828
+      ]
+    },
+    {
+      "view": "Side",
+      "code": "B20",
+      "nativeCurve": "Guide_B20_RearInnerArch_Right",
+      "nativeSample": 32,
+      "leaderPixel": [
+        484.467,
+        546.701
+      ],
+      "labelRectangle": [
+        529.467,
+        586.701,
+        609.467,
+        628.701
+      ]
+    },
+    {
+      "view": "Side",
+      "code": "C02",
+      "nativeCurve": "Guide_C02_JoinedRearOuterArch_Right",
+      "nativeSample": 32,
+      "leaderPixel": [
+        521.355,
+        534.57
+      ],
+      "labelRectangle": [
+        566.355,
+        469.57000000000005,
+        646.355,
+        511.57000000000005
+      ]
+    },
+    {
+      "view": "Side",
+      "code": "B22",
+      "nativeCurve": "Guide_B22_FrontOuterArch_Right",
+      "nativeSample": 32,
+      "leaderPixel": [
+        1479.65,
+        547.529
+      ],
+      "labelRectangle": [
+        1524.65,
+        587.529,
+        1604.65,
+        629.529
+      ]
+    },
+    {
+      "view": "Side",
+      "code": "G23",
+      "nativeCurve": "Guide_G23_FrontInnerArch_Right",
+      "nativeSample": 32,
+      "leaderPixel": [
+        1478.48,
+        553.701
+      ],
+      "labelRectangle": [
+        1523.48,
+        488.701,
+        1603.48,
+        530.701
+      ]
+    },
+    {
+      "view": "Side",
+      "code": "B19",
+      "nativeCurve": "Guide_B19_SideCrease_Right",
+      "nativeSample": 32,
+      "leaderPixel": [
+        983.38,
+        658.16
+      ],
+      "labelRectangle": [
+        1028.38,
+        698.16,
+        1108.38,
+        740.16
+      ]
+    },
+    {
+      "view": "Side",
+      "code": "B46",
+      "nativeCurve": "Guide_B46_UpperBeltRail_Right",
+      "nativeSample": 32,
+      "leaderPixel": [
+        798.136,
+        612.529
+      ],
+      "labelRectangle": [
+        843.136,
+        652.529,
+        923.136,
+        694.529
+      ]
+    },
+    {
+      "view": "Side",
+      "code": "R01",
+      "nativeCurve": "Guide_R01_SideBeltOption_Right",
+      "nativeSample": 32,
+      "leaderPixel": [
+        984.707,
+        659.546
+      ],
+      "labelRectangle": [
+        1029.7069999999999,
+        594.546,
+        1109.7069999999999,
+        636.546
+      ]
+    },
+    {
+      "view": "Side",
+      "code": "R02",
+      "nativeCurve": "Guide_R02_Extended_Right",
+      "nativeSample": 39,
+      "leaderPixel": [
+        1071.43,
+        631.298
+      ],
+      "labelRectangle": [
+        1116.43,
+        671.298,
+        1196.43,
+        713.298
+      ]
+    },
+    {
+      "view": "Side",
+      "code": "B45",
+      "nativeCurve": "Guide_B45_Extended_Right",
+      "nativeSample": 32,
+      "leaderPixel": [
+        1013.66,
+        653.758
+      ],
+      "labelRectangle": [
+        1043.6599999999999,
+        763.758,
+        1123.6599999999999,
+        805.758
+      ]
+    },
+    {
+      "view": "Side",
+      "code": "B17",
+      "nativeCurve": "Guide_B17_Extended_Across",
+      "nativeSample": 32,
+      "leaderPixel": [
+        1748.25,
+        725.075
+      ],
+      "labelRectangle": [
+        1793.25,
+        765.075,
+        1873.25,
+        807.075
+      ]
+    },
+    {
+      "view": "Side",
+      "code": "B52",
+      "nativeCurve": "Guide_B52_Extended_Right",
+      "nativeSample": 32,
+      "leaderPixel": [
+        1645.93,
+        601.854
+      ],
+      "labelRectangle": [
+        1690.93,
+        641.854,
+        1770.93,
+        683.854
+      ]
+    },
+    {
+      "view": "Top",
+      "code": "B01",
+      "nativeCurve": "Guide_B01_OuterShoulder_Across",
+      "nativeSample": 32,
+      "leaderPixel": [
+        1650.04,
+        624.995
+      ],
+      "labelRectangle": [
+        1695.04,
+        664.995,
+        1775.04,
+        706.995
+      ]
+    },
+    {
+      "view": "Top",
+      "code": "B02",
+      "nativeCurve": "Guide_B02_LowerCanopy_Across",
+      "nativeSample": 32,
+      "leaderPixel": [
+        1612.62,
+        624.995
+      ],
+      "labelRectangle": [
+        1657.62,
+        559.995,
+        1737.62,
+        601.995
+      ]
+    },
+    {
+      "view": "Top",
+      "code": "B03",
+      "nativeCurve": "Guide_B03_UpperCanopy_Across",
+      "nativeSample": 32,
+      "leaderPixel": [
+        1338.79,
+        624.984
+      ],
+      "labelRectangle": [
+        1383.79,
+        664.984,
+        1463.79,
+        706.984
+      ]
+    },
+    {
+      "view": "Top",
+      "code": "G04",
+      "nativeCurve": "Guide_G04_WindshieldFoot_Across",
+      "nativeSample": 34,
+      "leaderPixel": [
+        1585.73,
+        684.954
+      ],
+      "labelRectangle": [
+        1630.73,
+        724.954,
+        1710.73,
+        766.954
+      ]
+    },
+    {
+      "view": "Top",
+      "code": "C01",
+      "nativeCurve": "Guide_C01_Extended_Left",
+      "nativeSample": 32,
+      "leaderPixel": [
+        788.006,
+        488.097
+      ],
+      "labelRectangle": [
+        833.006,
+        528.097,
+        913.006,
+        570.097
+      ]
+    },
+    {
+      "view": "Top",
+      "code": "B29",
+      "nativeCurve": "Guide_B29_RoofRearCrossbar_Across",
+      "nativeSample": 32,
+      "leaderPixel": [
+        849.543,
+        624.981
+      ],
+      "labelRectangle": [
+        894.543,
+        664.981,
+        974.543,
+        706.981
+      ]
+    },
+    {
+      "view": "Top",
+      "code": "B33",
+      "nativeCurve": "Guide_B33_RoofFrontCrossbar_Across",
+      "nativeSample": 32,
+      "leaderPixel": [
+        1199.28,
+        624.981
+      ],
+      "labelRectangle": [
+        1244.28,
+        664.981,
+        1324.28,
+        706.981
+      ]
+    },
+    {
+      "view": "Top",
+      "code": "B41",
+      "nativeCurve": "Guide_B41_Extended_Across",
+      "nativeSample": 32,
+      "leaderPixel": [
+        908.208,
+        624.98
+      ],
+      "labelRectangle": [
+        953.208,
+        559.98,
+        1033.208,
+        601.98
+      ]
+    },
+    {
+      "view": "Top",
+      "code": "B42",
+      "nativeCurve": "Guide_B42_Extended_Across",
+      "nativeSample": 32,
+      "leaderPixel": [
+        967.593,
+        624.98
+      ],
+      "labelRectangle": [
+        1012.593,
+        664.98,
+        1092.5929999999998,
+        706.98
+      ]
+    },
+    {
+      "view": "Roof_Detail",
+      "code": "C01",
+      "nativeCurve": "Guide_C01_Extended_Left",
+      "nativeSample": 32,
+      "leaderPixel": [
+        511.125,
+        345.583
+      ],
+      "labelRectangle": [
+        556.125,
+        385.583,
+        636.125,
+        427.583
+      ]
+    },
+    {
+      "view": "Roof_Detail",
+      "code": "B29",
+      "nativeCurve": "Guide_B29_RoofRearCrossbar_Across",
+      "nativeSample": 32,
+      "leaderPixel": [
+        636.738,
+        625.001
+      ],
+      "labelRectangle": [
+        681.738,
+        665.001,
+        761.738,
+        707.001
+      ]
+    },
+    {
+      "view": "Roof_Detail",
+      "code": "B33",
+      "nativeCurve": "Guide_B33_RoofFrontCrossbar_Across",
+      "nativeSample": 32,
+      "leaderPixel": [
+        1350.64,
+        625.0
+      ],
+      "labelRectangle": [
+        1395.64,
+        665.0,
+        1475.64,
+        707.0
+      ]
+    },
+    {
+      "view": "Roof_Detail",
+      "code": "B41",
+      "nativeCurve": "Guide_B41_Extended_Across",
+      "nativeSample": 32,
+      "leaderPixel": [
+        756.49,
+        624.999
+      ],
+      "labelRectangle": [
+        801.49,
+        664.999,
+        881.49,
+        706.999
+      ]
+    },
+    {
+      "view": "Roof_Detail",
+      "code": "B42",
+      "nativeCurve": "Guide_B42_Extended_Across",
+      "nativeSample": 32,
+      "leaderPixel": [
+        877.712,
+        624.999
+      ],
+      "labelRectangle": [
+        922.712,
+        664.999,
+        1002.712,
+        706.999
+      ]
+    },
+    {
+      "view": "Rear_Arch_Detail",
+      "code": "B20",
+      "nativeCurve": "Guide_B20_RearInnerArch_Right",
+      "nativeSample": 32,
+      "leaderPixel": [
+        1001.58,
+        280.589
+      ],
+      "labelRectangle": [
+        1046.58,
+        320.589,
+        1126.58,
+        362.589
+      ]
+    },
+    {
+      "view": "Rear_Arch_Detail",
+      "code": "C02",
+      "nativeCurve": "Guide_C02_JoinedRearOuterArch_Right",
+      "nativeSample": 32,
+      "leaderPixel": [
+        1110.75,
+        244.689
+      ],
+      "labelRectangle": [
+        1155.75,
+        284.68899999999996,
+        1235.75,
+        326.68899999999996
+      ]
+    },
+    {
+      "view": "Rear_Arch_Detail",
+      "code": "B19",
+      "nativeCurve": "Guide_B19_SideCrease_Right",
+      "nativeSample": 51,
+      "leaderPixel": [
+        1857.2,
+        575.071
+      ],
+      "labelRectangle": [
+        1902.2,
+        615.071,
+        1982.2,
+        657.071
+      ]
+    },
+    {
+      "view": "Rear_Arch_Detail",
+      "code": "R01",
+      "nativeCurve": "Guide_R01_SideBeltOption_Right",
+      "nativeSample": 11,
+      "leaderPixel": [
+        1836.39,
+        614.549
+      ],
+      "labelRectangle": [
+        1881.39,
+        549.549,
+        1961.39,
+        591.549
+      ]
+    },
+    {
+      "view": "Rear_Arch_Detail",
+      "code": "R02",
+      "nativeCurve": "Guide_R02_Extended_Right",
+      "nativeSample": 11,
+      "leaderPixel": [
+        1833.65,
+        530.951
+      ],
+      "labelRectangle": [
+        1878.65,
+        465.951,
+        1958.65,
+        507.951
+      ]
+    },
+    {
+      "view": "Front_Arch_Detail",
+      "code": "B22",
+      "nativeCurve": "Guide_B22_FrontOuterArch_Right",
+      "nativeSample": 32,
+      "leaderPixel": [
+        972.901,
+        260.8
+      ],
+      "labelRectangle": [
+        1017.901,
+        300.8,
+        1097.9009999999998,
+        342.8
+      ]
+    },
+    {
+      "view": "Front_Arch_Detail",
+      "code": "G23",
+      "nativeCurve": "Guide_G23_FrontInnerArch_Right",
+      "nativeSample": 32,
+      "leaderPixel": [
+        969.317,
+        279.676
+      ],
+      "labelRectangle": [
+        1014.317,
+        214.676,
+        1094.317,
+        256.676
+      ]
+    },
+    {
+      "view": "Front_Arch_Detail",
+      "code": "B35",
+      "nativeCurve": "Guide_B35_FrontWingRail_Right",
+      "nativeSample": 32,
+      "leaderPixel": [
+        611.02,
+        274.328
+      ],
+      "labelRectangle": [
+        656.02,
+        314.328,
+        736.02,
+        356.328
+      ]
+    },
+    {
+      "view": "Front_Arch_Detail",
+      "code": "B19",
+      "nativeCurve": "Guide_B19_SideCrease_Right",
+      "nativeSample": 13,
+      "leaderPixel": [
+        84.2191,
+        689.748
+      ],
+      "labelRectangle": [
+        129.2191,
+        729.748,
+        209.2191,
+        771.748
+      ]
+    },
+    {
+      "view": "Front_Arch_Detail",
+      "code": "B16",
+      "nativeCurve": "Guide_B16_LowerSideSweep_Right",
+      "nativeSample": 18,
+      "leaderPixel": [
+        81.2583,
+        807.7
+      ],
+      "labelRectangle": [
+        126.2583,
+        847.7,
+        206.25830000000002,
+        889.7
+      ]
+    },
+    {
+      "view": "Front_Arch_Detail",
+      "code": "R01",
+      "nativeCurve": "Guide_R01_SideBeltOption_Right",
+      "nativeSample": 51,
+      "leaderPixel": [
+        63.2117,
+        603.4
+      ],
+      "labelRectangle": [
+        108.21170000000001,
+        643.4,
+        188.2117,
+        685.4
+      ]
+    },
+    {
+      "view": "Front_Arch_Detail",
+      "code": "R02",
+      "nativeCurve": "Guide_R02_Extended_Right",
+      "nativeSample": 50,
+      "leaderPixel": [
+        91.8236,
+        517.005
+      ],
+      "labelRectangle": [
+        136.8236,
+        557.005,
+        216.8236,
+        599.005
+      ]
+    }
+  ],
+  "images": {
+    "Liger_Layout_After_0.png": "22c0a8b1643e3236db12b6b758d198f21530569265b9ab0ee0a34c21bdc51fea",
+    "Liger_Layout_After_1.png": "2d833a91e3dd823f57e4c94c7ac698cd7cc030b47a429ec82d353ffe4fe087a8",
+    "Liger_Layout_Before_0.png": "4926490b660d738c9dfad27a9b8f679b49f9f74ad9e38eaccda2d3893f5a586c",
+    "Liger_Layout_Before_1.png": "8801e1d489647a25b5ac01ea7f485e76d9eafe2cab7fc9a4cf5a12d69150797d",
+    "Liger_Layout_Details.png": "b6a40a4909a42771aa42096d169113c5033470f596fe3bac05d07dbf1c20c684",
+    "Liger_Layout_Four_Views.png": "d14201b3d0e94de01ee093d48eb23675f5d46edab2476716730a5c2e95d7cf2f",
+    "Liger_Layout_Front_Arch_Detail.png": "dd087d581542feb728fd8abacf587d92265b38cbf45e8b425753b0de3c048a45",
+    "Liger_Layout_Front_Arch_Detail_Labelled.png": "7f5f0b1103f6ffd8a6ae59d697d2bb2b56343fb0ee239f732dd867bac1193180",
+    "Liger_Layout_Front_Quarter.png": "c70169b73b0246ab05c124db4b80b351f9497aa53307084ba8a6f6bfa5abc797",
+    "Liger_Layout_Front_Quarter_Labelled.png": "bab12c395b7c3b741bf0e2fbfd020893542515fc1ecbb3f8a18043fc1f11c27d",
+    "Liger_Layout_Key.png": "83c7c82667639d622215e55cfa24ccfc2c531d26f3997a96b433a43dc6f1ef69",
+    "Liger_Layout_Rear_Arch_Detail.png": "0de5daa4969758d06758be30f72bd6fd27112040aec3df2250d7ecace4bd8a6a",
+    "Liger_Layout_Rear_Arch_Detail_Labelled.png": "bbda1b82f610598afd7b5813b416dd97073eaef4c726b6ab162816ab4b39cebe",
+    "Liger_Layout_Rear_Quarter.png": "fa4d12f6d2d442e622666c890a3e966717ed34420ef05ae32cdd847d18b742a1",
+    "Liger_Layout_Rear_Quarter_Labelled.png": "ac4934238b622da78393f6bed190a8a6e2a21fb5b62f8c5750fae914d3790ecc",
+    "Liger_Layout_Roof_Detail.png": "03178097146bbbf3ee17f89075421d58c89105448edd03e7faa75dd189ca073b",
+    "Liger_Layout_Roof_Detail_Labelled.png": "f66d0c1d2d77abe3c14b182380e8bce8eb3b77665049be1fa7876ba52fd31aa0",
+    "Liger_Layout_Side.png": "30be5497ee986e4f4ad23bdd620a61353da343e69a8efabec004bbf4870d77e3",
+    "Liger_Layout_Side_Labelled.png": "145beb3efbc1f07ccf1ed0a04aa642e7fe0c7ffdf40680ff7511c363e64160fb",
+    "Liger_Layout_Top.png": "07bc9ac5fd6e8b77b19ce27e37656e5a5472f5be7e4bef309c7a3a1d4947b8b8",
+    "Liger_Layout_Top_Labelled.png": "454ee54b1421fb463d67b53b87895f58d1aa63e10413e57e19f6348f410a4198",
+    "Liger_Layout_Topology_Before_After.png": "81cd6fa55a0d26830a5236874b165f56ce2691d227251ccdb49dd14ba4f785e3"
+  }
+}
