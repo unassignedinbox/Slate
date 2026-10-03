@@ -81,9 +81,11 @@ vec4 SampleChannel(GpuMaterialSlab S, uint channel, vec2 uv, float lodBias, vec4
     return fallback;
     #else
     uint slot = SlabTexture(S, channel);
-    if (slot == 0xFFFFu) return fallback;
     #ifdef FRONTIER_SDF_MATERIALS
+    // 📝 A single guard covers both the unbound sentinel and slots outside the resident descriptor table.
     if (slot >= uint(PC.CameraEye.w)) return fallback;
+    #else
+    if (slot == 0xFFFFu) return fallback;
     #endif
     ivec2 size = textureSize(Textures[nonuniformEXT(slot)], 0);
     float lod = lodBias + 0.5 * log2(float(size.x * size.y));

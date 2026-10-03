@@ -29,8 +29,17 @@ Sources = [Root / "VisualProof/DistanceFieldGI/DistanceFieldExecution.cpp",
            Engine / "Engine/GeometricRaster/DistanceFieldStructure.cpp"]
 subprocess.run([os.environ.get("CXX", "g++"), "-std=c++20", "-O2", "-g", "-Wall", "-Wextra", "-Wno-missing-field-initializers",
                 "-I" + str(Engine), *map(str, Sources), "-lvulkan", "-o", str(Output / "DistanceFieldExecution")], check=True)
-Completed = subprocess.run([str(Output / "DistanceFieldExecution"), str(Shaders), str(Images)],
-                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=600)
+try:
+    Completed = subprocess.run([str(Output / "DistanceFieldExecution"), str(Shaders), str(Images)],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=600)
+except subprocess.TimeoutExpired as Failure:
+    Captured = Failure.stdout or b""
+    if isinstance(Captured, bytes):
+        Captured = Captured.decode("utf-8", errors="replace")
+    (Output / "Execution.log").write_text(Captured, encoding="utf-8")
+    print(Captured, flush=True)
+    print("::error::Production Vulkan execution exceeded 600 seconds; partial execution log retained", flush=True)
+    raise
 (Output / "Execution.log").write_text(Completed.stdout, encoding="utf-8")
 print(Completed.stdout)
 if Completed.returncode:

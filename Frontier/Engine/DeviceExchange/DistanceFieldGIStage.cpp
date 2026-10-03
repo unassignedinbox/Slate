@@ -328,7 +328,7 @@ bool DistanceFieldGIStage::RecordFrame(VkCommandBuffer Command, const DistanceFi
     std::memcpy(Push.SkyExposure, Frame.SkyAmbient, 12u);
     Push.SkyExposure[3] = Frame.Exposure;
     std::memcpy(Push.Eye, Frame.CameraEye, 12u);
-    Push.Eye[3]      = static_cast<float>(Initialization.TextureCount);
+    Push.Eye[3]      = static_cast<float>(std::min(Initialization.TextureCount, 0xFFFFu));
     Push.Tuning[0]   = std::max(0.01f, Frame.ShadowSoftness);
     Push.Tuning[1]   = std::clamp(Frame.GiBoost, 0.0f, 2.0f);
     const bool Reset = Capture || std::memcmp(PreviousLighting, Push.Sun, sizeof(PreviousLighting)) != 0;
