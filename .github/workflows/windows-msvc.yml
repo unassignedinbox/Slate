@@ -86,7 +86,8 @@ jobs:
 
   frontier:
     needs: sdf-execution
-    if: always()
+    # Retain failure diagnostics, but do not launch another build from a superseded run.
+    if: ${{ always() && !cancelled() }}
     name: Frontier + Project-Zero + Project-Drive
     runs-on: windows-2022
     timeout-minutes: 45
