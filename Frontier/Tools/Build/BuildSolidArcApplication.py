@@ -28,6 +28,8 @@ def Execute(Command, Name, Cwd=Root, Timeout=600):
     return Completed.stdout
 
 def Main():
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     if sys.platform != "win32" or not shutil.which("cl.exe"):
         raise RuntimeError("Use an x64 MSVC developer shell after ToolchainSequence.ps1 -Configuration Release")
     Work.mkdir(parents=True, exist_ok=True)
@@ -49,7 +51,7 @@ def Main():
                 Root / "ExternalPackages/stb", Root / "ExternalPackages/tomlpp/include",
                 Path(os.environ["VULKAN_SDK"]) / "Include"]
     Flags = ["/nologo", "/c", "/std:c++20", "/EHsc", "/MD", "/O2", "/W4", "/utf-8", "/DNOMINMAX",
-             "/D_CRT_SECURE_NO_WARNINGS", "/DFRONTIER_DEVELOPMENT", "/DTVG_STATIC",
+             "/DUNICODE", "/D_UNICODE", "/D_CRT_SECURE_NO_WARNINGS", "/DFRONTIER_DEVELOPMENT", "/DTVG_STATIC",
              '/DSOLIDARC_PROOF_FOLDER="Documents"', *["/I"+str(Path) for Path in Includes]]
     Sources = [Path for Folder in ("Kernel", "Presentation", "Interaction", "Document", "Console", "Editor")
                for Path in sorted((Source / Folder).glob("*.cpp")) if Path.name != "SolidArcConsole.cpp"]
@@ -63,8 +65,10 @@ def Main():
     Executable = Package / "SolidArc.exe"
     Libraries = [Work / "Shared.lib", Root / "ExternalPackages/thorvg/lib/Release/thorvg.lib",
                  "d3d11.lib", "dxgi.lib", "d3dcompiler.lib", "user32.lib", "gdi32.lib", "shell32.lib", "comdlg32.lib", "dwmapi.lib", "imm32.lib"]
-    Execute(["link.exe", "/nologo", "/SUBSYSTEM:WINDOWS", "/OPT:REF", "/OUT:"+str(Executable), *Compiled, *Libraries], "Link")
+    Execute(["link.exe", "/nologo", "/SUBSYSTEM:WINDOWS", "/MANIFEST:EMBED", "/MANIFESTINPUT:"+str(Source / "Editor/SolidArcApplication.manifest"), "/OPT:REF", "/OUT:"+str(Executable), *Compiled, *Libraries], "Link")
     shutil.copytree(Root / "EngineContent", Package / "EngineContent")
+    (Package / "Docs/SolidArc").mkdir(parents=True)
+    shutil.copy2(Root.parent / "Docs/SolidArc/README.md", Package / "Docs/SolidArc/README.md")
     shutil.copytree(Root / "Projects/Project-Drive/Content/Vehicles/Liger", Package / "Examples/Liger")
     # Ship the runtime beside the GUI so the portable package does not require a separate VC++ installer.
     Redist = Path(os.environ.get("VCToolsRedistDir", "")) / "x64"

@@ -82,6 +82,9 @@ vec4 SampleChannel(GpuMaterialSlab S, uint channel, vec2 uv, float lodBias, vec4
     #else
     uint slot = SlabTexture(S, channel);
     if (slot == 0xFFFFu) return fallback;
+    #ifdef FRONTIER_SDF_MATERIALS
+    if (slot >= uint(PC.CameraEye.w)) return fallback;
+    #endif
     ivec2 size = textureSize(Textures[nonuniformEXT(slot)], 0);
     float lod = lodBias + 0.5 * log2(float(size.x * size.y));
     return textureLod(Textures[nonuniformEXT(slot)], uv, lod);

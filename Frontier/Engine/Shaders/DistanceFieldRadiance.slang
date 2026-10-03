@@ -1,7 +1,7 @@
 //============================================================================================================================================
 //                                                     DISTANCEFIELDRADIANCE.SLANG
 //============================================================================================================================================
-// 📦 Jacobi surface-radiance propagation: separate previous/next buffers, direct light, sky and emissive multi-bounce transport.
+// 📦 Jacobi surface-radiance propagation: separate previous/next card images, direct light, sky and emissive multi-bounce transport.
 
 #version 460
 #extension GL_GOOGLE_include_directive : require

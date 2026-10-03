@@ -1,4 +1,8 @@
+//============================================================================================================================================
+//                                                       DISTANCEFIELDCAPTUREBODY.SLANG
+//============================================================================================================================================
 // 📦 Captures authored UV textures, normal maps, cutouts and emissive slabs into surface-card images.
+
 #extension GL_GOOGLE_include_directive : require
 #ifndef FRONTIER_CONSTANT_MATERIALS
 #extension GL_EXT_nonuniform_qualifier : require
@@ -21,7 +25,9 @@ void main()
     GpuInstance Placement=Instances[floatBitsToUint(Facets[Facet].Alpha.w)];
     GpuMaterial Material=Materials[Placement.MaterialIndex];
     SurfaceFrame Surface;
-    ShadingRecord Reflectance=ResolveMaterial(Material,Placement,floatBitsToUint(Facets[Facet].Beta.w),Position,Normal,0.0,Surface);
+    float Area=0.5*length(cross(Facets[Facet].Beta.xyz-Facets[Facet].Alpha.xyz,Facets[Facet].Gamma.xyz-Facets[Facet].Alpha.xyz));
+    float TexelWidth=sqrt(Area)/float(Resolution);
+    ShadingRecord Reflectance=ResolveMaterial(Material,Placement,floatBitsToUint(Facets[Facet].Beta.w),Position,Normal,TexelWidth,Surface);
     float Coverage=Surface.Opacity;
     // MaterialFlag::AlphaMask is bit 1; fully transparent texels never participate in secondary visibility.
     if ((Material.Slabs.z&2u)!=0u) Coverage=Coverage>=Material.AlphaCutoff ? 1.0 : 0.0;

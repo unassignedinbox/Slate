@@ -2445,7 +2445,7 @@ void SwapchainExchange::UploadMaterials(const MaterialIndex& Materials) noexcept
 
     WriteDescriptorSet();
     ++SurfaceMaterialRevision;
-    if (!SceneUploadInProgress) RefreshMaterialBindings();
+    if (!SceneUploadInProgress) RefreshMaterialDescriptors();
 }
 
 //------------------------------------------------------------------------------------------------------------------------
@@ -2487,7 +2487,7 @@ void SwapchainExchange::UploadTextures(const TextureIndex& Textures) noexcept
 
     const std::vector<TextureDescriptor>& Source = Textures.QueryTextures();
     const uint32_t Count = static_cast<uint32_t>(std::min<size_t>(Source.size(), kTextureSlotCapacity));
-    if (Count == 0u) { WriteDescriptorSet(); if (!SceneUploadInProgress) RefreshMaterialBindings(); return; }
+    if (Count == 0u) { WriteDescriptorSet(); if (!SceneUploadInProgress) RefreshMaterialDescriptors(); return; }
     if (Source.size() > kTextureSlotCapacity)
         std::cerr << "[SwapchainExchange] " << Source.size() << " textures exceed the " << kTextureSlotCapacity << "-slot table - the rest are not resident.\n";
 
@@ -2590,7 +2590,7 @@ void SwapchainExchange::UploadTextures(const TextureIndex& Textures) noexcept
 
     std::cerr << "[SwapchainExchange] Textures: " << Count << " resident (" << (StagingBytes >> 20) << " MB) in the bindless table.\n";
     WriteDescriptorSet();
-    if (!SceneUploadInProgress) RefreshMaterialBindings();
+    if (!SceneUploadInProgress) RefreshMaterialDescriptors();
 }
 
 void SwapchainExchange::UploadShadingTables(const float* Energy, const float* Sheen, uint32_t Resolution) noexcept
@@ -3072,7 +3072,7 @@ bool SwapchainExchange::RefreshInstances(const InstanceRecord* Rows, uint32_t Co
     return true; // [-] - Visibility succeeded; SDF refuses stale geometry and uses the existing fallback.
 }
 
-void SwapchainExchange::RefreshMaterialBindings() noexcept
+void SwapchainExchange::RefreshMaterialDescriptors() noexcept
 {
     // Uploads wait for the device before replacing borrowed buffers/views. Recreate both GI descriptor sets,
     // including the fallback, so a live material or texture edit can never leave stale image handles behind.

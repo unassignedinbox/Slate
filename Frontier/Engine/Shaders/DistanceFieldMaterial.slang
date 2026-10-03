@@ -1,4 +1,8 @@
+//============================================================================================================================================
+//                                                        DISTANCEFIELDMATERIAL.SLANG
+//============================================================================================================================================
 // 📦 Shared authored material decoding for both surface-card capture and final material resolve.
+
 #define FRONTIER_SDF_MATERIALS 1
 #include "SceneShadingRecords.slang"
 
