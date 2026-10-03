@@ -45,7 +45,7 @@ const device = await adapter.requestDevice({
   },
 });
 device.lost.then(i => fail('GPU device lost: ' + i.message));
-device.addEventListener('uncapturederror', e => { console.error(e.error.message); errEl.textContent = 'WebGPU error: ' + e.error.message; });
+device.addEventListener('uncapturederror', e => { console.error(e.error.message); recover(e.error.message); });
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('webgpu');
@@ -280,7 +280,7 @@ function createSim(sc) {
     layout: L.sim, entries: [paramsBuf, pos, vel, pred, tmp, cellCount, scan, worldBuf, nbr].map((b, i) => ({ binding: i, resource: { buffer: b } })),
   });
   sim = { pos, vel, pred, tmp, cellCount, scan, nbr, simBG, cells, blocks, offs, gx, gy, gz, buffers: [pos, vel, pred, tmp, cellCount, scan, nbr] };
-  speed.max = 0; speed.pending = false;
+  speed.max = 0;   // never touch speed.pending here: the staging buffer may still be mapped by the GPU
   // initial particles
   N = sc.initial.length / 3;
   const P4 = new Float32Array(N * 4);
@@ -422,6 +422,18 @@ function updateBallColors() {
 }
 
 // ------------------------------------------------------------------ load
+// Scene / quality switches are queued and applied at the start of the next frame, never mid-frame.
+let pendingLoad = null;
+function requestScene(name, fluid) { pendingLoad = { name, fluid }; }
+let lastRecover = 0;
+function recover(msg) {
+  console.warn('Recovering from GPU error:', msg);
+  const now = performance.now();
+  if (now - lastRecover < 1500) return;          // avoid restart loops
+  lastRecover = now;
+  errEl.textContent = '';
+  requestScene(state.scene, state.fluid);        // restart the simulation instead of staying broken
+}
 function loadScene(name, fluid) {
   state.scene = name;
   state.fluid = fluid || SCENE_DEFAULT[name];
@@ -577,6 +589,14 @@ function encodeRender(enc) {
 
 let last = performance.now(), fps = 60, t0 = performance.now();
 function frame(now) {
+  try { frameInner(now); } catch (err) { console.error(err); recover(String(err)); }
+  requestAnimationFrame(frame);
+}
+function frameInner(now) {
+  if (pendingLoad) {
+    const p = pendingLoad; pendingLoad = null;
+    try { loadScene(p.name, p.fluid); } catch (err) { console.error(err); }
+  }
   const dt = Math.min((now - last) / 1000, 0.1); last = now;
   fps = fps * 0.95 + 0.05 / Math.max(dt, 1e-3);
   resize();
@@ -591,7 +611,6 @@ function frame(now) {
   device.queue.submit([enc.finish()]);
   if (simmed) readSpeed();
   statsEl.textContent = `GPU · ${N.toLocaleString()} particles · ${curSub} substeps (max v ${speed.max.toFixed(0)}) · ${fps.toFixed(0)} fps · ${Wpx}×${Hpx}`;
-  requestAnimationFrame(frame);
 }
 
 // ------------------------------------------------------------------ input
@@ -640,11 +659,11 @@ function syncUI() {
   document.querySelectorAll('[data-q]').forEach(b => b.classList.toggle('on', b.dataset.q === state.quality));
   document.getElementById('pause').textContent = state.paused ? 'Resume' : 'Pause';
 }
-document.querySelectorAll('[data-scene]').forEach(b => b.onclick = () => loadScene(b.dataset.scene, state.keep ? state.fluid : undefined));
+document.querySelectorAll('[data-scene]').forEach(b => b.onclick = () => requestScene(b.dataset.scene, state.keep ? state.fluid : undefined));
 document.querySelectorAll('[data-mat]').forEach(b => b.onclick = () => { state.fluid = b.dataset.mat; syncUI(); });
 document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => { state.view = b.dataset.view; syncUI(); });
-document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { state.quality = b.dataset.q; loadScene(state.scene, state.fluid); });
-document.getElementById('reset').onclick = () => loadScene(state.scene, state.fluid);
+document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { state.quality = b.dataset.q; syncUI(); requestScene(state.scene, state.fluid); });
+document.getElementById('reset').onclick = () => requestScene(state.scene, state.fluid);
 document.getElementById('pause').onclick = () => { state.paused = !state.paused; syncUI(); };
 document.getElementById('drop').onclick = () => {
   const r = state.ballSize * SC.s;
@@ -664,7 +683,7 @@ bindRange('slowmo', 'slowmo', v => v.toFixed(2) + '×');
 document.getElementById('keepMat').onchange = e => { state.keep = e.target.checked; };
 window.addEventListener('keydown', e => {
   if (e.key === ' ') { state.paused = !state.paused; syncUI(); e.preventDefault(); }
-  if (e.key === 'r') loadScene(state.scene, state.fluid);
+  if (e.key === 'r') requestScene(state.scene, state.fluid);
   if (e.key === 'p') { state.view = state.view === 'fluid' ? 'particles' : 'fluid'; syncUI(); }
 });
 

@@ -6,7 +6,7 @@ Real-time 3D particle fluid simulation and renderer for games and VFX.
 - **`legacy.html` – the first CPU solver with a WebGL2 renderer**, described below.
 
 ```
-python3 -m http.server 8080   # then open http://localhost:8080
+python3 serve.py 8080         # no-cache static server, then open http://localhost:8080
 ```
 
 ## Simulation (`src/sim-worker.js`, runs in a Web Worker)
