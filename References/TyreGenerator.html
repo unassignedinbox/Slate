@@ -276,16 +276,15 @@ const LAYER_DEFS = {
   sipe:    { label: 'Sipes',                   color: '#9aa4ff', count: 140, angle: 0, width: 1.2, depth: 0.55, from: -1, to: 1, phase: 0.5, mirror: false, curve: 0, zig: 1.5 },
   dimple:  { label: 'Circular pattern',        color: '#4fc3f7', rows: 3, count: 60, radius: 3, depth: 0.5, from: -0.7, to: 0.7, stagger: true, ring: false },
   hex:     { label: 'Hexagon cells',           color: '#e5423f', size: 14, width: 3, depth: 0.8, from: -1, to: 1, rotate: 0 },
-  interlock:{ label: 'Interlocking lug channels', color: '#b779ff', count: 20, angle: 28, width: 8, depth: 1, from: 0.08, to: 1.25, phase: 0, mirror: true, notch: 9 },
-  blocks:  { label: 'Staggered block cuts',      color: '#ff7a59', rows: 2, count: 20, length: 18, width: 8, depth: 1, from: 0.72, to: 1.28, phase: 0, mirror: true, stagger: true },
+  terrain: { label: 'Terrain lug network',      color: '#c7772a', count: 18, width: 10, depth: 1, shoulder: 1.1, phase: 0 },
   noise:   { label: 'Micro texture',           color: '#8a8d94', amount: 0.06, scale: 3 }
 };
 const RANGES = {
   pos: [-1.3, 1.3, 0.01], width: [0.5, 30, 0.1], depth: [0.05, 1, 0.01], zig: [0, 12, 0.1], zigCount: [4, 240, 1],
   count: [2, 300, 1], angle: [-80, 80, 1], from: [-1.3, 1.3, 0.01], to: [-1.3, 1.3, 0.01], phase: [0, 1, 0.01], curve: [-1.5, 1.5, 0.01],
-  rows: [1, 14, 1], radius: [0.5, 15, 0.1], size: [4, 40, 0.5], length: [2, 60, 0.5], rotate: [0, 60, 1], notch: [0, 20, 0.5], amount: [0, 0.5, 0.01], scale: [1, 12, 0.5]
+  rows: [1, 14, 1], radius: [0.5, 15, 0.1], size: [4, 40, 0.5], rotate: [0, 60, 1], shoulder: [0.55, 1.28, 0.01], amount: [0, 0.5, 0.01], scale: [1, 12, 0.5]
 };
-const LABELS = { pos: 'Across position', width: 'Width (mm)', depth: 'Depth (×tread)', zig: 'Zig-zag (mm)', zigCount: 'Zig-zag count', count: 'Count around', angle: 'Angle (°)', from: 'From (across)', to: 'To (across)', phase: 'Phase', curve: 'Curvature', rows: 'Rows', radius: 'Radius (mm)', size: 'Cell size (mm)', length: 'Block length (mm)', rotate: 'Cell rotation (°)', notch: 'Interlock offset (mm)', amount: 'Amount', scale: 'Scale', mirror: 'Mirror (V)', stagger: 'Stagger rows', ring: 'Rings instead of dots' };
+const LABELS = { pos: 'Across position', width: 'Width (mm)', depth: 'Depth (×tread)', zig: 'Zig-zag (mm)', zigCount: 'Zig-zag count', count: 'Count around', angle: 'Angle (°)', from: 'From (across)', to: 'To (across)', phase: 'Phase', curve: 'Curvature', rows: 'Rows', radius: 'Radius (mm)', size: 'Cell size (mm)', rotate: 'Cell rotation (°)', shoulder: 'Shoulder reach', amount: 'Amount', scale: 'Scale', mirror: 'Mirror (V)', stagger: 'Stagger rows', ring: 'Rings instead of dots' };
 
 // =====================================================================================================================
 //  PRESETS — each one is a named tread design with its own default tyre size
@@ -334,30 +333,18 @@ const PRESETS = [
     layers: [L('dimple', { rows: 2, count: 3, radius: 3, depth: 0.8, from: -0.7, to: 0.7, stagger: true }), L('noise', { amount: 0.05, scale: 2 })] },
   { name: 'Talon Trail', type: 'Off-road', tyre: { width: 265, aspect: 65, rim: 17, treadDepth: 13, crown: 3, shoulder: 13, letter: 'white' },
     layers: [L('hex', { size: 22, width: 8, depth: 1, from: -1.3, to: 1.3 }), L('circ', { pos: 0, width: 9, zig: 4, zigCount: 30 })] },
-  { name: 'Atlas Blockline', type: 'Off-road', tyre: { width: 285, aspect: 70, rim: 17, treadDepth: 15, treadFrac: 0.91, crown: 3.4, shoulder: 12, letter: 'white' },
-    layers: [L('interlock', { count: 18, angle: 22, width: 10, from: 0.06, to: 1.24, notch: 10, mirror: true }),
-             L('circ', { pos: 0, width: 7, zig: 7, zigCount: 18 }), L('blocks', { rows: 2, count: 18, length: 14, width: 7, from: 0.8, to: 1.25, phase: 0.18, mirror: true, stagger: true }),
-             L('lateral', { count: 18, angle: 18, width: 10, from: 0.78, to: 1.3, phase: 0.12, zig: 3 }), L('lateral', { count: 18, angle: -18, width: 10, from: -1.3, to: -0.78, phase: 0.62, zig: 3 }),
-             L('sipe', { count: 36, angle: 8, width: 1.5, depth: 0.4, from: -1.2, to: 1.2, zig: 3 })] },
-  { name: 'Quarry Vector MT', type: 'Off-road', tyre: { width: 305, aspect: 65, rim: 18, treadDepth: 16, treadFrac: 0.9, crown: 3.8, shoulder: 11, letter: 'white' },
-    layers: [L('chevron', { count: 20, angle: 57, width: 15, from: 0.03, to: 1.3, curve: 0.18 }), L('interlock', { count: 20, angle: 57, width: 4, depth: 0.65, from: 0.12, to: 1.2, notch: 6, mirror: true, phase: 0.5 }),
-             L('circ', { pos: 0, width: 8, zig: 6, zigCount: 20 }), L('blocks', { rows: 2, count: 20, length: 18, width: 8, from: 0.88, to: 1.28, phase: 0.4, mirror: true, stagger: true }),
-             L('sipe', { count: 40, angle: 54, width: 1.4, depth: 0.35, from: 0.3, to: 1.25, mirror: true, zig: 2 })] },
-  { name: 'Sierra Tessellate', type: 'Rally', tyre: { width: 265, aspect: 70, rim: 16, treadDepth: 14, treadFrac: 0.9, crown: 3.5, shoulder: 12, letter: 'yellow' },
-    layers: [L('interlock', { count: 19, angle: 29, width: 11, from: 0.08, to: 1.27, notch: 12, mirror: false, phase: 0.03 }),
-             L('interlock', { count: 19, angle: -29, width: 11, from: -1.27, to: -0.08, notch: 12, mirror: false, phase: 0.53 }), L('circ', { pos: 0, width: 7, zig: 8, zigCount: 19 }),
-             L('lateral', { count: 19, angle: 0, width: 6, depth: 0.72, from: -0.2, to: 0.2, phase: 0.25, zig: 5 }), L('blocks', { rows: 1, count: 19, length: 13, width: 7, from: 0.78, to: 0.78, phase: 0.28, mirror: true, stagger: false })] },
-  { name: 'Channel Touring', type: 'Street', tyre: { width: 225, aspect: 55, rim: 17, treadDepth: 8, treadFrac: 0.9, crown: 2.1, shoulder: 16, letter: 'blue' },
-    layers: [L('circ', { pos: -0.68, width: 7 }), L('circ', { pos: -0.23, width: 6 }), L('circ', { pos: 0.23, width: 6 }), L('circ', { pos: 0.68, width: 7 }),
-             L('interlock', { count: 58, angle: 14, width: 3.4, depth: 0.82, from: 0.22, to: 0.95, notch: 3, mirror: true, phase: 0.2 }),
-             L('sipe', { count: 116, angle: 14, width: 1.1, depth: 0.5, from: -1.15, to: 1.15, zig: 1.4, phase: 0.5 })] },
-  { name: 'Tempest Arrow', type: 'Grip / UHP', tyre: { width: 275, aspect: 35, rim: 19, treadDepth: 8, treadFrac: 0.92, crown: 1.7, shoulder: 17, letter: 'red' },
-    layers: [L('chevron', { count: 32, angle: 50, width: 9, from: 0.04, to: 1.28, curve: 0.42 }), L('circ', { pos: 0, width: 8, zig: 3, zigCount: 32 }),
-             L('circ', { pos: 0.58, width: 5 }), L('circ', { pos: -0.58, width: 5 }), L('interlock', { count: 32, angle: 50, width: 2.5, depth: 0.6, from: 0.24, to: 1.16, notch: 4, mirror: true, phase: 0.5 }),
-             L('sipe', { count: 96, angle: 47, width: 1.1, depth: 0.46, from: 0.38, to: 1.2, mirror: true, zig: 1.8, phase: 0.15 })] },
-  { name: 'Glacier Lattice', type: 'Winter', tyre: { width: 235, aspect: 60, rim: 17, treadDepth: 11, treadFrac: 0.9, crown: 2.6, shoulder: 14, letter: 'white' },
-    layers: [L('interlock', { count: 44, angle: 31, width: 5.5, from: 0.04, to: 1.2, notch: 5, mirror: true }), L('circ', { pos: 0.45, width: 6, zig: 2.5, zigCount: 44 }), L('circ', { pos: -0.45, width: 6, zig: 2.5, zigCount: 44 }),
-             L('sipe', { count: 176, angle: 30, width: 1.05, depth: 0.58, from: 0.1, to: 1.25, mirror: true, zig: 1.8, phase: 0.5 })] },
+  { name: 'Ribline Touring 4', type: 'Street', tyre: { width: 225, aspect: 55, rim: 17, treadDepth: 8, treadFrac: 0.91, crown: 2.0, shoulder: 16, letter: 'blue' },
+    layers: [L('circ', { pos: -0.7, width: 6.5 }), L('circ', { pos: -0.25, width: 6 }), L('circ', { pos: 0.25, width: 6 }), L('circ', { pos: 0.7, width: 6.5 }),
+             L('lateral', { count: 72, angle: 13, width: 3.4, depth: 0.92, from: -1.02, to: -0.38, phase: 0.05, zig: 2 }), L('lateral', { count: 72, angle: -13, width: 3.4, depth: 0.92, from: 0.38, to: 1.02, phase: 0.55, zig: 2 }),
+             L('sipe', { count: 144, angle: 10, width: 1.05, depth: 0.5, from: -1.16, to: 1.16, phase: 0.25, zig: 1.1 })] },
+  { name: 'Trail Lock A/T', type: 'Off-road', tyre: { width: 285, aspect: 70, rim: 17, treadDepth: 15, treadFrac: 0.91, crown: 3.2, shoulder: 12, letter: 'white' },
+    layers: [L('terrain', { count: 17, width: 10, shoulder: 1.12, phase: 0.04 }), L('sipe', { count: 34, angle: 4, width: 1.5, depth: 0.38, from: -1.17, to: 1.17, phase: 0.5, zig: 3 })] },
+  { name: 'Rocklock M/T', type: 'Off-road', tyre: { width: 305, aspect: 65, rim: 18, treadDepth: 16, treadFrac: 0.9, crown: 3.8, shoulder: 11, letter: 'white' },
+    layers: [L('terrain', { count: 15, width: 13, shoulder: 1.22, phase: 0.28 }), L('circ', { pos: 0, width: 5, depth: 0.72, zig: 7, zigCount: 15 }),
+             L('sipe', { count: 30, angle: 7, width: 1.6, depth: 0.34, from: -1.18, to: 1.18, phase: 0.5, zig: 3.5 })] },
+  { name: 'Vector Trail V', type: 'Grip / UHP', tyre: { width: 275, aspect: 40, rim: 19, treadDepth: 10, treadFrac: 0.92, crown: 2.0, shoulder: 15, letter: 'red' },
+    layers: [L('chevron', { count: 19, angle: 52, width: 14, from: 0.03, to: 1.28, curve: 0.16 }), L('circ', { pos: 0, width: 7, zig: 5, zigCount: 19 }),
+             L('lateral', { count: 19, angle: 5, width: 7, depth: 0.84, from: 0.78, to: 1.28, phase: 0.18, zig: 2, mirror: true }), L('sipe', { count: 76, angle: 49, width: 1.2, depth: 0.46, from: 0.3, to: 1.2, phase: 0.48, mirror: true, zig: 1.5 })] },
 ];
 
 // =====================================================================================================================
@@ -382,11 +369,11 @@ function randomTyre() {
   const positions = grooves === 1 ? [0] : grooves === 2 ? [-0.3, 0.3] : grooves === 3 ? [-0.5, 0, 0.5] : [-0.6, -0.2, 0.2, 0.6];
   const zig = type === 'Off-road' || type === 'Rally' ? rnd(3, 7) : (type === 'Winter' ? rnd(0, 2) : 0);
   positions.forEach(p => layers.push(L('circ', { pos: p, width: rnd(5, 11), zig, zigCount: ri(22, 80) })));
-  const style = pick(['sym', 'dir', 'asym', 'interlock', 'hex', 'dot']);
+  const style = pick(['sym', 'dir', 'asym', 'terrain', 'hex', 'dot']);
   if (type === 'Slick' || type === 'Drag') { layers.push(L('dimple', { rows: 2, count: ri(3, 6), radius: 2.5, depth: 0.7, from: -0.6, to: 0.6, stagger: false })); layers.push(L('noise', { amount: 0.04, scale: 2 })); }
   else if (style === 'dir') layers.push(L('chevron', { count: ri(30, 50), angle: ri(35, 65), width: rnd(4, 9), from: rnd(0.05, 0.3), to: 1.3, curve: rnd(0, 0.6) }));
   else if (style === 'asym') { layers.push(L('lateral', { count: ri(40, 64), angle: ri(10, 30), width: rnd(3, 5), from: -1.3, to: rnd(-0.3, -0.1) })); layers.push(L('lateral', { count: ri(16, 26), angle: -ri(15, 40), width: rnd(4, 7), from: rnd(0.2, 0.5), to: 1.3, curve: 0.3 })); }
-  else if (style === 'interlock') layers.push(L('interlock', { count: ri(16, 48), angle: ri(18, 48), width: rnd(4, 11), depth: rnd(0.7, 1), from: rnd(0.04, 0.25), to: rnd(0.9, 1.3), notch: rnd(3, 12), mirror: true, phase: Math.random() < 0.5 ? 0 : 0.5 }));
+  else if (style === 'terrain') layers.push(L('terrain', { count: ri(14, 24), width: rnd(7, 13), depth: rnd(0.8, 1), shoulder: rnd(0.9, 1.25), phase: Math.random() * 0.5 }));
   else if (style === 'hex') layers.push(L('hex', { size: rnd(10, 24), width: rnd(3, 7), depth: rnd(0.7, 1), from: -1.3, to: 1.3 }));
   else if (style === 'dot') layers.push(L('dimple', { rows: ri(3, 8), count: ri(40, 100), radius: rnd(2, 5), depth: rnd(0.4, 0.9), from: -1.1, to: 1.1, stagger: true, ring: Math.random() < 0.3 }));
   else { const a = ri(-30, 30), c = ri(20, 64); layers.push(L('lateral', { count: c, angle: a, width: rnd(4, 10), from: 0.2, to: 1.3 })); layers.push(L('lateral', { count: c, angle: -a, width: rnd(4, 10), from: -1.3, to: -0.2, phase: 0.5 })); }
@@ -408,28 +395,24 @@ function dims(t = T) {
 // =====================================================================================================================
 //  TREAD PATTERN RENDERER  (mm space → depth map). White = full rubber, black = full tread depth cut.
 // =====================================================================================================================
-// A five-point stepped channel makes interlocking, block-like tread islands. It is shared by the
-// canvas renderer and the polygon boolean path generator so the visible tread and actual topology agree.
-function interlockLines(ly, th, circ) {
-  const count = Math.max(2, Math.round(ly.count)), from = ly.from * th, to = ly.to * th, notch = Math.max(0, ly.notch || 0);
-  const drift = Math.tan(ly.angle * Math.PI / 180) * Math.abs(to - from), lines = [];
-  for (let i = 0; i < count; i++) {
-    const x0 = (i + ly.phase) / count * circ;
-    for (const sign of ly.mirror ? [1, -1] : [1]) {
-      const y0 = sign * from, dy = sign * (to - from);
-      lines.push([[x0, y0], [x0 + drift * .22 + notch, y0 + dy * .22], [x0 + drift * .5 - notch, y0 + dy * .5], [x0 + drift * .78 + notch, y0 + dy * .78], [x0 + drift, y0 + dy]]);
+// Interlocking AT/MT groove network. Each repeat creates a stepped centre bridge and offset shoulder
+// release cuts, leaving large independent-looking lugs instead of a repeated herringbone strip.
+function terrainNetworkLines(ly, th, circ) {
+  const count = Math.max(4, Math.round(ly.count)), pitch = circ / count, shoulder = Math.min(1.28, Math.max(.55, ly.shoulder || 1.1)) * th;
+  const core = shoulder * .5, edge = Math.min(th * 1.28, shoulder + th * .18), lines = [];
+  for (let i = -1; i <= count; i++) {
+    const x = (i + (ly.phase || 0)) * pitch, flip = i & 1 ? 1 : -1;
+    // The two stepped central cuts outline alternating N/Z-shaped centre lugs.
+    lines.push([[x + pitch * .04, -core], [x + pitch * .27, -core], [x + pitch * .39, -core * .16], [x + pitch * .64, -core * .16], [x + pitch * .64, core * .43], [x + pitch * .9, core * .43]]);
+    lines.push([[x + pitch * .08, core], [x + pitch * .31, core], [x + pitch * .43, core * .16], [x + pitch * .58, core * .16], [x + pitch * .58, -core * .5], [x + pitch * .83, -core * .5]]);
+    // Staggered shoulder releases turn the outer field into large offset blocks.
+    for (const sign of [1, -1]) {
+      const lead = flip * sign > 0 ? .03 : .18;
+      lines.push([[x + pitch * lead, sign * core], [x + pitch * .18, sign * shoulder], [x + pitch * .51, sign * shoulder], [x + pitch * .72, sign * edge]]);
+      lines.push([[x + pitch * .74, sign * shoulder], [x + pitch * .92, sign * edge]]);
     }
   }
   return lines;
-}
-function blockCutRects(ly, th, circ) {
-  const rows = Math.max(1, Math.round(ly.rows)), count = Math.max(2, Math.round(ly.count)), out = [];
-  for (const sign of ly.mirror ? [1, -1] : [1]) for (let row = 0; row < rows; row++) {
-    const y = sign * ((rows === 1 ? (ly.from + ly.to) / 2 : ly.from + (ly.to - ly.from) * row / (rows - 1)) * th);
-    const shift = (ly.phase || 0) + (ly.stagger && row % 2 ? .5 : 0);
-    for (let i = -1; i <= count; i++) out.push([(i + shift) / count * circ - ly.length / 2, y - ly.width / 2, ly.length, ly.width]);
-  }
-  return out;
 }
 function renderPattern(pattern, d, H, wear = 0, wearBias = 0, treadDepth = 8, skipNoise = false) {
   const k = H / (2 * d.acrossHalf);                   // px per mm (uniform)
@@ -471,12 +454,10 @@ function renderPattern(pattern, d, H, wear = 0, wearBias = 0, treadDepth = 8, sk
           }
         }
         ctx.stroke();
-      } else if (ly.type === 'interlock') {
+      } else if (ly.type === 'terrain') {
         ctx.lineWidth = ly.width; ctx.beginPath();
-        for (const line of interlockLines(ly, th, circ)) line.forEach((point, i) => i ? ctx.lineTo(point[0], point[1]) : ctx.moveTo(point[0], point[1]));
+        for (const line of terrainNetworkLines(ly, th, circ)) line.forEach((point, i) => i ? ctx.lineTo(point[0], point[1]) : ctx.moveTo(point[0], point[1]));
         ctx.stroke();
-      } else if (ly.type === 'blocks') {
-        for (const [x, y, w, h] of blockCutRects(ly, th, circ)) ctx.fillRect(x, y, w, h);
       } else if (ly.type === 'dimple') {
         const rows = Math.max(1, Math.round(ly.rows)), n = Math.max(1, Math.round(ly.count));
         for (let r = 0; r < rows; r++) {
@@ -701,10 +682,8 @@ function patternPolygons(pattern, d, treadDepth) {
             let xx = x0 + ac * th * tan + (ly.curve || 0) * ac * ac * th * 0.5; if (ly.zig) xx += (j % 2 ? ly.zig : -ly.zig) * 0.5; pts.push([xx, yy]); }
           lines.push(pts); } }
       paths = strokePaths(lines, ly.width);
-    } else if (ly.type === 'interlock') {
-      paths = strokePaths(interlockLines(ly, th, circ), ly.width);
-    } else if (ly.type === 'blocks') {
-      paths = blockCutRects(ly, th, circ).map(([x, y, w, h]) => rectPath(x, y, x + w, y + h));
+    } else if (ly.type === 'terrain') {
+      paths = strokePaths(terrainNetworkLines(ly, th, circ), ly.width); wrap = false;
     } else if (ly.type === 'dimple') {
       const rows = Math.max(1, Math.round(ly.rows)), n = Math.max(1, Math.round(ly.count)); const rings = [];
       for (let r = 0; r < rows; r++) { const cc = rows === 1 ? (ly.from + ly.to) / 2 : ly.from + (ly.to - ly.from) * r / (rows - 1); const y = cc * th; const sh = ly.stagger && r % 2 ? 0.5 : 0;
@@ -1309,7 +1288,7 @@ function buildLayerUI() {
   const box = document.getElementById('layers'); box.innerHTML = '';
   P.layers.forEach((ly, i) => {
     const def = LAYER_DEFS[ly.type]; const el = document.createElement('div'); el.className = 'layer' + (i === UI.sel ? ' sel' : '');
-    const desc = ly.type === 'circ' ? `@${ly.pos} · ${ly.width}mm` : ly.type === 'hex' ? `${ly.size}mm cells` : ly.type === 'dimple' ? `${ly.rows}×${ly.count}` : ly.type === 'blocks' ? `${ly.rows} rows · ×${ly.count}` : ly.type === 'noise' ? `${ly.amount}` : `×${ly.count} · ${ly.angle}°`;
+    const desc = ly.type === 'circ' ? `@${ly.pos} · ${ly.width}mm` : ly.type === 'hex' ? `${ly.size}mm cells` : ly.type === 'dimple' ? `${ly.rows}×${ly.count}` : ly.type === 'terrain' ? `×${ly.count} · ${ly.width}mm lugs` : ly.type === 'noise' ? `${ly.amount}` : `×${ly.count} · ${ly.angle}°`;
     el.innerHTML = `<span class="ic" style="background:${def.color}"></span><span class="nm">${def.label} <small>${desc}</small></span><button title="duplicate">⧉</button><button title="up">↑</button><button title="down">↓</button><button title="delete">✕</button>`;
     const [dup, up, dn, del] = el.querySelectorAll('button');
     el.onclick = () => { UI.sel = i; buildLayerUI(); };
@@ -1335,7 +1314,7 @@ function buildLayerUI() {
     P.layers.splice(UI.sel + 1, 0, c); UI.sel++; buildLayerUI(); schedule();
   }; props.appendChild(mir);
 }
-function refreshLayerLabel() { const els = document.querySelectorAll('#layers .layer'); const ly = P.layers[UI.sel]; if (!ly || !els[UI.sel]) return; const desc = ly.type === 'circ' ? `@${ly.pos} · ${ly.width}mm` : ly.type === 'hex' ? `${ly.size}mm cells` : ly.type === 'dimple' ? `${ly.rows}×${ly.count}` : ly.type === 'blocks' ? `${ly.rows} rows · ×${ly.count}` : ly.type === 'noise' ? `${ly.amount}` : `×${ly.count} · ${ly.angle}°`; els[UI.sel].querySelector('small').textContent = desc; }
+function refreshLayerLabel() { const els = document.querySelectorAll('#layers .layer'); const ly = P.layers[UI.sel]; if (!ly || !els[UI.sel]) return; const desc = ly.type === 'circ' ? `@${ly.pos} · ${ly.width}mm` : ly.type === 'hex' ? `${ly.size}mm cells` : ly.type === 'dimple' ? `${ly.rows}×${ly.count}` : ly.type === 'terrain' ? `×${ly.count} · ${ly.width}mm lugs` : ly.type === 'noise' ? `${ly.amount}` : `×${ly.count} · ${ly.angle}°`; els[UI.sel].querySelector('small').textContent = desc; }
 
 // static controls
 document.getElementById('pType').innerHTML = TYPES.map(t => `<option>${t}</option>`).join('');
