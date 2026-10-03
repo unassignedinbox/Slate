@@ -878,3 +878,9 @@ add_test(NAME FeatureVerification COMMAND FeatureVerification)
 add_test(NAME LigerContourVerification COMMAND FeatureVerification
     "${LIGER_RECONSTRUCTION}/Liger_Feature_Aligned.arc"
     "${CMAKE_CURRENT_BINARY_DIR}/contour-edges.json" --roundtrip)
+
+add_executable(RoofRepairVerification Verification/RoofRepairVerification.cpp)
+target_link_libraries(RoofRepairVerification PRIVATE SolidArcConsoleKit)
+add_test(NAME LigerRoofRepairVerification COMMAND RoofRepairVerification
+    "${LIGER_RECONSTRUCTION}/Liger_Feature_Aligned.arc"
+    "${LIGER_RECONSTRUCTION}/Liger_Roof_Repair.arc")

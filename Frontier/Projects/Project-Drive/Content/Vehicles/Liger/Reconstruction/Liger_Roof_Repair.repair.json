@@ -1,0 +1,98 @@
+{
+  "sourceSha256": "8ce67d6fcf329e5fae8266c106f3de372e0d97859121773f712f2af06067fd23",
+  "acceptedGuidesSha256": "417b3010355b41d9f36f7d58b4172c8a15705d4572eb606b78df5c277ed8e6a7",
+  "documentSha256": "68ac15e17440d73d6371eeebbcf1e088973062b0eb291ccbbcd1beb0b43631ae",
+  "scope": "First mirrored roof fan only; other orange areas and arch skin integration remain pending.",
+  "positiveSourcePatches": [
+    80,
+    82,
+    158,
+    160,
+    162,
+    188,
+    222,
+    224,
+    310,
+    632,
+    682,
+    1038,
+    1040,
+    1116
+  ],
+  "exactPartialRestrictions": {
+    "102": {
+      "axis": 1,
+      "cut": 0.16666666666666666
+    },
+    "182": {
+      "axis": 0,
+      "cut": 0.125
+    },
+    "680": {
+      "axis": 0,
+      "cut": 0.4
+    }
+  },
+  "approvedOrangeFanEdges": [
+    1848,
+    1856,
+    1859,
+    2680,
+    3153,
+    3878
+  ],
+  "newSurfaceCount": 8,
+  "sewnFacesBefore": 1094,
+  "sewnFacesAfter": 1074,
+  "unchangedWholeBodySurfaces": 1060,
+  "independentJunctionSheetsUnchanged": 24,
+  "hiddenCompletedOrangeCopies": [
+    1847,
+    1848,
+    1849,
+    1850,
+    1851,
+    1853,
+    1854,
+    1855,
+    1856,
+    1859,
+    1860,
+    1861,
+    1863,
+    1865,
+    1866,
+    1867,
+    2659,
+    2670,
+    2678,
+    2679,
+    2680,
+    2681,
+    2682,
+    2683,
+    2842,
+    2843,
+    3153,
+    3154,
+    3878,
+    3879
+  ],
+  "removedOrangeCopies": 0,
+  "replacementParentPoles": [
+    22,
+    85
+  ],
+  "sampledPerimeterErrorMetres": 9.159339953157541e-16,
+  "sourceHeightChangeSampleCount": 10625,
+  "sampledHeightChangeMaximumMm": 0.37096072525844015,
+  "areaWeightedHeightChangeRmsMm": 0.049441616950627154,
+  "sampledRimNormalBeforeMaximumDegrees": 1.6020960708676983,
+  "sampledRimNormalBeforeRmsDegrees": 0.894008296679111,
+  "sampledRimNormalAfterMaximumDegrees": 1.601642006219596,
+  "sampledRimNormalAfterRmsDegrees": 0.14786933096241603,
+  "sampledInteriorKnotNormalJumpMaximumDegrees": 1.516753111139539,
+  "sampledCentralKnotNormalJumpMaximumDegrees": 0.13568322755961373,
+  "continuityCertificate": false,
+  "note": "Exact spatial perimeter; soft tangent targets. Locked source-rim corner mismatches remain. No watertight or Class-A claim."
+}

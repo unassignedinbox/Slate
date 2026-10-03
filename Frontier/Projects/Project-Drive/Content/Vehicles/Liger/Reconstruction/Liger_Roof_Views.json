@@ -1,0 +1,26 @@
+{
+  "renderer": "Native SolidArc RoofRepairVerification, 1600x1000; no generated or retouched CAD pixels",
+  "cameraMatching": "The original CameraProjection is copied directly to the repaired host for every view.",
+  "overlays": "Feature curves hidden in both image sets; native surface boundaries on.",
+  "sourceDocuments": {
+    "Liger_Feature_Aligned.arc": "417b3010355b41d9f36f7d58b4172c8a15705d4572eb606b78df5c277ed8e6a7",
+    "Liger_Roof_Repair.arc": "68ac15e17440d73d6371eeebbcf1e088973062b0eb291ccbbcd1beb0b43631ae"
+  },
+  "images": {
+    "Liger_Roof_Before_After.png": "d12a4fbfdfaaa40f64c73bb6cff69b4e8ccbdfff448104dd123bdb6ccf510fbf",
+    "Liger_Roof_Closeup_Comparison.png": "6b1aa8d4b0c75785f35f93fe8837e966f1c1f0d947a2ba12e8686e41da778cda",
+    "Liger_Roof_Glass_Frame.png": "de005cd684c874d25e9f6a1d1c3b04d72325e744577e019c055d74070c9a655c",
+    "Liger_Roof_New_Closeup.png": "e9b23a5c0bf3ba3cc5151975ebbaa244235450374a5919357ce5d96f57fab10c",
+    "Liger_Roof_New_Four_Views.png": "c9a61f1ec77ae08bc8f63a613ebfde3412b9f9f5326c9c24dbe604007e7e4d39",
+    "Liger_Roof_New_Front_Quarter.png": "047940ed7e885aa4628f5f3c807c19ce378f05d58ee187a1870755c72b435704",
+    "Liger_Roof_New_Rear_Quarter.png": "5d34f52ee15cdf8f6df023be87035a0f0c3550e58192aff6801607bac631081a",
+    "Liger_Roof_New_Side.png": "d36f254a7d350bb5b7234331e08747a7d691493aa8d396f307670762f9c84cc0",
+    "Liger_Roof_New_Top.png": "e4350b92c10d68af07bae7ad4548c6349159fd56ee0a5fb1b2ec313fdb80feb8",
+    "Liger_Roof_Original_Closeup.png": "f43e91bff4222e63ffb41dfd188bde28890cece497702bb62c3e1a86cdb7bcd6",
+    "Liger_Roof_Original_Four_Views.png": "fb8b6756f64c135270aadf71b659ec7353c0e24f896feef7757143456ef86d71",
+    "Liger_Roof_Original_Front_Quarter.png": "88469f2fa31d4fc175fe8a5d0c07d070c9304d022c0f26508877b62bc6dda87f",
+    "Liger_Roof_Original_Rear_Quarter.png": "a09ae638d3b73d9de62554ac4cff3a5d6172cf14de2622a3ad4f2304aae886f4",
+    "Liger_Roof_Original_Side.png": "6333ef21522fc9198be0cc0de2d834bcdb05c03f26e21c8a937c3db9d5da6a69",
+    "Liger_Roof_Original_Top.png": "ae69b6e3905faa701ac4b0471b94030f74f4f73ef2569181e68365d354a6da16"
+  }
+}

@@ -101,6 +101,10 @@ def main() -> int:
     run([str(OUTPUT / "FeatureVerification.exe"), str(reconstruction / "Liger_Feature_Aligned.arc"),
          str(OUTPUT / "contour-edges.json"), "--roundtrip"], "LigerContourVerification")
     print("PASS aligned Liger features, paired crowns, lower-fade continuity and mirror symmetry", flush=True)
+    executable = link_program(SOURCE / "Verification/RoofRepairVerification.cpp", "RoofRepairVerification")
+    run([str(executable), str(reconstruction / "Liger_Feature_Aligned.arc"),
+         str(reconstruction / "Liger_Roof_Repair.arc")], "LigerRoofRepairVerification")
+    print("PASS native roof repair, unchanged surrounding skin, mirror layout, topology and persistence", flush=True)
     print("MSVC SolidArc: console linked, focused regressions and all Liger journals passed")
     return 0
 

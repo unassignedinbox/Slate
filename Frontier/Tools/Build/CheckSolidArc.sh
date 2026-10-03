@@ -66,7 +66,7 @@ done
 echo "[SolidArc] kernel, console and interaction targets link"
 
 LIGER="$ROOT/Projects/Project-Drive/Content/Vehicles/Liger/Reconstruction"
-for TEST in Cowl Facet Body; do
+for TEST in Cowl Facet Body RoofRepair; do
     "$CXX_BIN" "${FLAGS[@]}" -c "$SRC/Verification/${TEST}Verification.cpp" -o "$WORK/obj/${TEST}Verification.o"
     "$CXX_BIN" "${OBJECTS[@]}" "$WORK/obj/${TEST}Verification.o" -o "$WORK/${TEST}Verification"
 done
@@ -83,6 +83,7 @@ for TEST in Feature Document FaceLoft Tweak DirectModeling ChamferLoop Transform
 done
 
 "$WORK/FeatureVerification" "$LIGER/Liger_Feature_Aligned.arc" "$WORK/contour-edges.json" --roundtrip
+"$WORK/RoofRepairVerification" "$LIGER/Liger_Feature_Aligned.arc" "$LIGER/Liger_Roof_Repair.arc"
 
 # Keep the focused gate's normal scratch behaviour, but make the nine newly covered baseline
 # artifacts and the current bounded-slice proof durable. Their verifier names are unchanged;

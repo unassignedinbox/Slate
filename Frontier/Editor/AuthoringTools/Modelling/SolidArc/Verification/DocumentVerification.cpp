@@ -180,6 +180,41 @@ int main()
     Panel.Expect("reopen knot-aware skin", Host.Execute("open \"" + ConformingPath + "\""));
     Panel.Expect("explicit knots and edge splits survive replay", UndoSequence::Fingerprint(Host.Document()) == ConformingFingerprint);
 
+    Panel.Section("Unequal boundary segmentation without changing surface knots");
+    Panel.Expect("clear before split-junction checks", Host.Execute("reset"));
+    Panel.Expect("long edge with no interior knot", Host.Execute("plane (0,0,0) 2 1 --name=Long"));
+    Panel.Expect("first unequal neighbour", Host.Execute("plane (0,1,0) 0.7 1 --name=Short_A"));
+    Panel.Expect("second unequal neighbour", Host.Execute("plane (0.7,1,0) 1.3 1 --name=Short_B"));
+    Panel.Expect("reconcile unequal edges", Host.Execute("sew Long Short_A Short_B --open --split-junctions --name=Reconciled"));
+    const auto* Reconciled = Figure(Host, "Reconciled");
+    const auto ReconciledReport = Reconciled ? Reconciled->Body.Validate() : BodyReport{};
+    Panel.Expect("no cracks or artificial faces", ReconciledReport.Faces == 3 && ReconciledReport.Edges == 10 &&
+        ReconciledReport.OpenEdges == 7 && ReconciledReport.Hulls == 1 && ReconciledReport.Oriented && ReconciledReport.Manifold);
+    const uint64_t ReconciledFingerprint = UndoSequence::Fingerprint(Host.Document());
+    const std::string ReconciledPath = (Directory / "reconciled.arc").generic_string();
+    Panel.Expect("save unequal-edge skin", Host.Execute("save \"" + ReconciledPath + "\""));
+    std::ifstream ReconciledFile(ReconciledPath);
+    const std::string ReconciledText((std::istreambuf_iterator<char>(ReconciledFile)), std::istreambuf_iterator<char>());
+    Panel.Expect("old builds must refuse boundary-split documents", ReconciledText.find("require boundary-splits") != std::string::npos);
+    Panel.Expect("reopen unequal-edge skin", Host.Execute("open \"" + ReconciledPath + "\""));
+    Panel.Expect("split-junction topology survives replay", ReconciledFingerprint == UndoSequence::Fingerprint(Host.Document()));
+    const auto Curved = NurbsSurface::Patch(3, 1, 4, 2,
+        { {0,0,0}, {0,1,0}, {0.6,0,0.2}, {0.6,1,0.2}, {1.4,0,0.2}, {1.4,1,0.2}, {2,0,0}, {2,1,0} });
+    Panel.Expect("curved boundary fixture", bool(Curved));
+    if (Curved)
+    {
+        const auto Neighbours = Curved.Payload.Transformed(Mat4::Translation({0,1,0})).SplitU(0.35);
+        const auto Joined = BrepBody::Sew({Curved.Payload, Neighbours.first, Neighbours.second}, ScalarCriteria::MergeTolerance, false, false, true);
+        const auto Report = Joined ? Joined.Payload.Validate() : BodyReport{};
+        Panel.Expect("curved unequal boundaries sew without planar assumptions", Report.Faces == 3 && Report.Edges == 10 && Report.OpenEdges == 7 && Report.Hulls == 1 && Report.Oriented);
+    }
+    const auto CylinderSurface = NurbsSurface::Cylinder({}, Vec3::UnitZ(), 1, 2);
+    const auto CylinderBefore = BrepBody::Sew({CylinderSurface.Payload}, ScalarCriteria::MergeTolerance, false);
+    const auto CylinderAfter = BrepBody::Sew({CylinderSurface.Payload}, ScalarCriteria::MergeTolerance, false, false, true);
+    Panel.Expect("closed circular edge domains are not discarded", CylinderBefore && CylinderAfter &&
+        CylinderBefore.Payload.Validate().Edges == CylinderAfter.Payload.Validate().Edges &&
+        CylinderBefore.Payload.Validate().OpenEdges == CylinderAfter.Payload.Validate().OpenEdges);
+
     Panel.Section("Numerical snapshot retention is bounded for dense imported skins");
     SceneDocument Snapshot = Host.Document();
     UndoSequence Bounded;

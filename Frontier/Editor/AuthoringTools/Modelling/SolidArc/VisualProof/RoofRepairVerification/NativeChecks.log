@@ -1,0 +1,34 @@
+  original opens                                                         true         true   PASS
+  repaired opens                                                         true         true   PASS
+REPAIR_TOPOLOGY faces=1074 edges=9107 vertices=8031 open=732 nonmanifold=0 misoriented=0 hulls=1
+  twenty fewer real faces, not hidden boundary edges                     true         true   PASS
+  no new open edges                                                      true         true   PASS
+  one connected, oriented, manifold skin                                 true         true   PASS
+  open source remains open                                               true         true   PASS
+  1060 unaffected body surfaces are coefficient-identical                true         true   PASS
+  replacement layout is mirrored                                         true         true   PASS
+  replacement has no sampled fold or collapsed fan                       true         true   PASS
+  split boundary loops close in vertex order                             true         true   PASS
+  all 1800 accepted feature and orange curves retained unchanged             true         true   PASS
+  all 24 independent source junction sheets preserved                    true         true   PASS
+  save repair                                                            true         true   PASS
+  reopen repair                                                          true         true   PASS
+  repair geometry and annotations survive replay                         true         true   PASS
+  annotation-ready display                                               true         true   PASS
+  annotation-ready display                                               true         true   PASS
+  original camera                                                        true         true   PASS
+  original render                                                        true         true   PASS
+  repaired render                                                        true         true   PASS
+  original camera                                                        true         true   PASS
+  original render                                                        true         true   PASS
+  repaired render                                                        true         true   PASS
+  original camera                                                        true         true   PASS
+  original render                                                        true         true   PASS
+  repaired render                                                        true         true   PASS
+  original camera                                                        true         true   PASS
+  original render                                                        true         true   PASS
+  repaired render                                                        true         true   PASS
+  close-up camera                                                        true         true   PASS
+  original close-up                                                      true         true   PASS
+  repaired close-up                                                      true         true   PASS
+  32 checks, 0 failed → ALL PASS

@@ -170,6 +170,17 @@ int main(int Count, char** Arguments)
                 (void)Side.WorldToPixel(Point, 1600, 1000, SideX, SideY);
                 Out << (Sample ? "," : "") << "[" << Point.X << "," << Point.Y << "," << Point.Z << "," << X << "," << Y << "," << SideX << "," << SideY << "]";
             }
+            Out << "],\"degree\":" << Edge.Curve.Degree << ",\"faces\":[";
+            for (size_t Slot = 0; Slot < Edge.Coedges.size(); ++Slot)
+                Out << (Slot ? "," : "") << Figure->Body.Coedges[Edge.Coedges[Slot]].Face;
+            Out << "],\"knots\":[";
+            for (size_t Slot = 0; Slot < Edge.Curve.Knots.size(); ++Slot) Out << (Slot ? "," : "") << Edge.Curve.Knots[Slot];
+            Out << "],\"poles\":[";
+            for (size_t Slot = 0; Slot < Edge.Curve.Poles.size(); ++Slot)
+            {
+                const Vec4& Pole = Edge.Curve.Poles[Slot];
+                Out << (Slot ? "," : "") << "[" << Pole.X << "," << Pole.Y << "," << Pole.Z << "," << Pole.W << "]";
+            }
             Out << "]}";
         }
         Out << "\n]\n";

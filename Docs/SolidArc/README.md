@@ -183,6 +183,54 @@ samples; it does not provide a continuous fit-error certificate. The native veri
 radii, sixteen crown-to-fade joins, mirrored curves and save/reopen persistence. The metric tool checks native guide
 samples against the selected source chains and confirms that this reference-authoring pass did not alter the body.
 
+### First orange-area surface repair (roof junction)
+
+Open `Liger_Roof_Repair.arc` for the first **actual skin repair**. The accepted
+`Liger_Feature_Aligned.arc` remains the unchanged reference. This is a bounded first pass,
+not completion of the orange areas or integration of the arch targets.
+
+- Replaces the fan around X≈0.10 m, Y≈±0.36 m, Z≈1.135 m, plus its supporting patch cluster.
+  Four regular tensor surfaces per side replace the fan layout. Three surrounding source patches
+  per side are exactly restricted; their retained portions are not refitted.
+- Sewn faces decrease from **1,094 to 1,074**. All 1,060 unaffected whole body surfaces and the
+  24 independent junction sheets retain their original coefficients.
+- The red rails, eight circular crowns, sixteen fades and all approved orange curves are retained.
+  Thirty obsolete orange copies inside the completed region are hidden, not deleted, to avoid
+  drawing the old fan on top of its replacement. The rest of the orange selections remain visible.
+- Sampled height change is **0.371 mm maximum / 0.049 mm area-weighted RMS**. The exact source
+  perimeter is retained to numerical precision. Sampled rim-normal RMS improves from 0.894° to
+  0.148°, but the locked source-rim corner mismatch remains about **1.602°**. Interior knot-normal
+  jumps reach 1.517° near that rim and 0.136° excluding the outer five percent of the parameter
+  domain. These are sampled diagnostics, **not G1/G2 or Class-A certificates**; rim blending still
+  needs refinement. Full values and scope are in `Liger_Roof_Repair.repair.json`.
+- Native topology: **732 open edges (unchanged), zero nonmanifold/misoriented edges, one hull**.
+  No caps, thickness, overlapping replacement ribbons or manufactured-solid claim.
+
+`Liger_Roof_Before_After.png` shows original/new front-quarter, rear-quarter, side and top.
+`Liger_Roof_Closeup_Comparison.png` makes the fan replacement visible. Separate
+`Liger_Roof_{Original,New}_Four_Views.png` boards and unlabelled individual PNGs are supplied
+for drawing corrections. Feature overlays are hidden equally in these renders; real CAD edges
+remain visible. The renderer copies the camera directly between documents, not a visual approximation.
+
+The kernel now supports opt-in `sew --split-junctions`: it reconciles coincident boundary segments
+with unequal endpoint layouts, without changing surface coefficients or introducing faces. Native
+journals require `boundary-splits`, so an older executable refuses instead of silently opening a
+cracked replacement. Ordinary `sew` behaviour is unchanged.
+
+Reproduce using NumPy/SciPy and Pillow (keep the large native exports in scratch):
+
+```powershell
+$Liger = "Frontier/Projects/Project-Drive/Content/Vehicles/Liger/Reconstruction"
+FeatureVerification.exe "$Liger/Liger_Feature_Aligned.arc" _AgentScratch/build/roof-source.json
+python Frontier/Projects/Project-Drive/Tools/Liger/RoofSequence.py _AgentScratch/build/roof-source.json
+python Frontier/Projects/Project-Drive/Tools/Liger/RoofVerification.py
+RoofRepairVerification.exe "$Liger/Liger_Feature_Aligned.arc" "$Liger/Liger_Roof_Repair.arc" _AgentScratch/build/roof-renders
+python Frontier/Projects/Project-Drive/Tools/Liger/RoofProjection.py _AgentScratch/build/roof-renders $Liger --font C:/Windows/Fonts/arial.ttf
+```
+
+Omit the render-directory argument to run the native topology, unchanged-source, mirror, guide,
+loop-order and save/reopen checks only. CTest, the Linux gate and the MSVC gate include this test.
+
 ### Reproduce the mirrored layout and four views
 
 This route uses the committed first skin and its `.queries` file; it does not need Blender. Install NumPy and SciPy.

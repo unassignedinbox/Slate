@@ -1019,11 +1019,89 @@ BrepBody BrepBody::Transformed(const Mat4& M) const noexcept
 //                                                  GENERIC BUILDERS
 //------------------------------------------------------------------------------------------------------------------------
 
-Deliver<BrepBody> BrepBody::Sew(const std::vector<NurbsSurface>& Surfaces, double Tolerance, bool Cap, bool KnotEdges) noexcept
+// Reconcile unequal boundary segmentation without inserting knots into neighbouring surfaces.
+// Only open-edge endpoints are candidates; a crossing in the interior of two edges is not a join.
+BrepBody BrepBody::ReconcileBoundarySplits(double Tolerance) const noexcept
+{
+    const BrepBody& Source = *this;
+    std::vector<int> Endpoints;
+    for (const BrepEdge& Edge : Source.Edges)
+        if (Edge.Coedges.size() == 1)
+        {
+            Endpoints.push_back(Edge.VertexStart);
+            Endpoints.push_back(Edge.VertexEnd);
+        }
+    std::sort(Endpoints.begin(), Endpoints.end());
+    Endpoints.erase(std::unique(Endpoints.begin(), Endpoints.end()), Endpoints.end());
+    std::vector<std::vector<NurbsCurve>> Pieces(Source.Edges.size());
+    for (size_t Index = 0; Index < Source.Edges.size(); ++Index)
+    {
+        const BrepEdge& Edge = Source.Edges[Index];
+        const NurbsCurve& Curve = Edge.Curve;
+        std::vector<double> Cuts{ Curve.DomainStart(), Curve.DomainEnd() };
+        if (Edge.Coedges.size() == 1)
+        {
+            Vec3 Low = Curve.StartPoint(), High = Low;
+            bool PositiveWeights = true;
+            for (const Vec4& Pole : Curve.Poles)
+            {
+                PositiveWeights = PositiveWeights && Pole.W > 0;
+                const Vec3 Point = Pole.Divide();
+                Low = Vec3(std::min(Low.X, Point.X), std::min(Low.Y, Point.Y), std::min(Low.Z, Point.Z));
+                High = Vec3(std::max(High.X, Point.X), std::max(High.Y, Point.Y), std::max(High.Z, Point.Z));
+            }
+            for (int Vertex : Endpoints)
+            {
+                const Vec3 Point = Source.Vertices[Vertex].Point;
+                if (Point.Distance(Curve.StartPoint()) <= Tolerance * 4 || Point.Distance(Curve.EndPoint()) <= Tolerance * 4) continue;
+                if (PositiveWeights && (Point.X < Low.X - Tolerance || Point.X > High.X + Tolerance ||
+                    Point.Y < Low.Y - Tolerance || Point.Y > High.Y + Tolerance ||
+                    Point.Z < Low.Z - Tolerance || Point.Z > High.Z + Tolerance)) continue;
+                double Distance = 0;
+                const double Parameter = Curve.ClosestParameter(Point, &Distance);
+                const double Margin = ScalarCriteria::ParametricEpsilon * std::max(1.0, Curve.DomainEnd() - Curve.DomainStart());
+                if (Distance <= Tolerance && Parameter > Curve.DomainStart() + Margin && Parameter < Curve.DomainEnd() - Margin)
+                    Cuts.push_back(Parameter);
+            }
+        }
+        std::sort(Cuts.begin(), Cuts.end());
+        Cuts.erase(std::unique(Cuts.begin(), Cuts.end(), [&](double First, double Second)
+            { return std::fabs(First - Second) <= ScalarCriteria::ParametricEpsilon * std::max(1.0, Curve.DomainEnd() - Curve.DomainStart()); }), Cuts.end());
+        if (Cuts.size() == 2) Pieces[Index].push_back(Curve);
+        else for (size_t Slot = 1; Slot < Cuts.size(); ++Slot) Pieces[Index].push_back(Curve.Trimmed(Cuts[Slot - 1], Cuts[Slot]));
+    }
+    BrepBody Result;
+    for (const BrepFace& Face : Source.Faces)
+    {
+        const int FaceIndex = Result.AddFace(Face.Surface);
+        for (int LoopIndex : Face.Loops)
+        {
+            const BrepLoop& Loop = Source.Loops[LoopIndex];
+            const int NewLoop = Result.AddLoop(FaceIndex, Loop.Outer);
+            for (int CoedgeIndex : Loop.Coedges)
+            {
+                const BrepCoedge& Coedge = Source.Coedges[CoedgeIndex];
+                const auto& Segments = Pieces[Coedge.Edge];
+                for (size_t Slot = 0; Slot < Segments.size(); ++Slot)
+                {
+                    const NurbsCurve& Curve = Segments[Coedge.Reversed ? Segments.size() - 1 - Slot : Slot];
+                    bool Reversed = false;
+                    int EdgeIndex = Result.FindCoincidentEdge(Curve, Tolerance, Reversed);
+                    if (EdgeIndex < 0) EdgeIndex = Result.AddEdge(Curve, Tolerance);
+                    Result.AddCoedge(EdgeIndex, Coedge.Reversed != Reversed, FaceIndex, NewLoop);
+                }
+            }
+        }
+    }
+    return Result;
+}
+
+Deliver<BrepBody> BrepBody::Sew(const std::vector<NurbsSurface>& Surfaces, double Tolerance, bool Cap, bool KnotEdges, bool SplitJunctions) noexcept
 {
     if (Surfaces.empty()) return Deliver<BrepBody>::Reject(RefusalReason::DegenerateInput, "no faces to sew");
     BrepBody B;
     for (const NurbsSurface& S : Surfaces) { int F = B.AddFace(S); B.AddNaturalBoundary(F, Tolerance, KnotEdges); }
+    if (SplitJunctions) B = B.ReconcileBoundarySplits(Tolerance);
     B.Orient();                                                                         // neighbours agree before caps are derived from them
     if (Cap) B.Capped(Tolerance);
     B.Orient();

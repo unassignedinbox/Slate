@@ -1900,6 +1900,9 @@ void ConsoleHost::RememberDocumentCommand(const CommandLine& Command) noexcept
          (Command.Verb == "sew" && Command.Switch("knot-edges"))) &&
         std::find(DocumentJournal.begin(), DocumentJournal.end(), "require knot-skin") == DocumentJournal.end())
         DocumentJournal.push_back("require knot-skin");
+    if (Command.Verb == "sew" && Command.Switch("split-junctions") &&
+        std::find(DocumentJournal.begin(), DocumentJournal.end(), "require boundary-splits") == DocumentJournal.end())
+        DocumentJournal.push_back("require boundary-splits");
     DocumentJournal.push_back(EncodeDocumentCommand(Command));
 }
 
@@ -2251,13 +2254,13 @@ void ConsoleHost::Register() noexcept
         }
         return Done > 0;
     });
-    Add("sew", "sew <surface...> [--open] [--knot-edges] — stitch and orient; --open preserves openings instead of capping", [=, this](const CommandLine& C)
+    Add("sew", "sew <surface...> [--open] [--knot-edges] [--split-junctions] — stitch and orient; --open preserves openings instead of capping", [=, this](const CommandLine& C)
     {
         std::vector<NurbsSurface> S; std::vector<uint32_t> Ids;
         for (SceneFigure* I : ResolveMany(C, 0)) { if (I->Classification == FigureClassification::Surface) { S.push_back(I->Surface); Ids.push_back(I->Identity); } else if (I->Classification == FigureClassification::Body) { for (const BrepFace& F : I->Body.Faces) S.push_back(F.Surface); Ids.push_back(I->Identity); } }
         if (S.empty()) return Refuse("sew: no surfaces");
         // Exterior skins retain their intentional openings; the historical default still caps them.
-        if (!AddBody(C, "Sewn", BrepBody::Sew(S, ScalarCriteria::MergeTolerance, !C.Switch("open"), C.Switch("knot-edges")))) return false;
+        if (!AddBody(C, "Sewn", BrepBody::Sew(S, ScalarCriteria::MergeTolerance, !C.Switch("open"), C.Switch("knot-edges"), C.Switch("split-junctions")))) return false;
         if (!C.Switch("keep")) for (uint32_t Id : Ids) Scene.Remove(Id);
         return true;
     });
@@ -4584,9 +4587,9 @@ void ConsoleHost::Register() noexcept
         return true;
     });
     Add("echo", "echo text", [=, this](const CommandLine& C) { std::printf("  "); for (const auto& A : C.Arguments) std::printf("%s ", A.c_str()); std::printf("\n"); return true; });
-    Add("require", "require open-sew|knot-skin|feature-curves — require supported document geometry", [this](const CommandLine& C)
+    Add("require", "require open-sew|knot-skin|feature-curves|boundary-splits — require supported document geometry", [this](const CommandLine& C)
     {
-        if (C.Count() != 1 || (C.Arguments[0] != "open-sew" && C.Arguments[0] != "knot-skin" && C.Arguments[0] != "feature-curves") || !C.Flags.empty())
+        if (C.Count() != 1 || (C.Arguments[0] != "open-sew" && C.Arguments[0] != "knot-skin" && C.Arguments[0] != "feature-curves" && C.Arguments[0] != "boundary-splits") || !C.Flags.empty())
             return Refuse("require: unsupported document capability");
         return true;
     });
