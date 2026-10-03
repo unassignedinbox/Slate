@@ -181,6 +181,7 @@ int WINAPI wWinMain(HINSTANCE Instance, HINSTANCE, PWSTR, int Show)
                 Require(Document.Execute("box (-1,-0.5,0) (1,0.5,0.8) --name=Body01"), "Initial document failed");
             std::string                      Notice = "Ready. Select geometry, use Construct, or enter a SolidArc command.";
             char                             Command[2048]{};
+            int                              FeatureChoice = 0;
             ComPtr<ID3D11Texture2D>          Preview;
             ComPtr<ID3D11ShaderResourceView> PreviewView;
             uint32_t                         PreviewWidth = 0u, PreviewHeight = 0u, Recordings = 0u;
@@ -217,7 +218,7 @@ int WINAPI wWinMain(HINSTANCE Instance, HINSTANCE, PWSTR, int Show)
                 Editor.TickShade(Contact.MousePos.x, Contact.MousePos.y, Contact.MouseDown[0], Contact.MouseWheel, Contact.DeltaTime);
                 ImGui::NewFrame();
                 Editor.Record(Document);
-                ImGui::SetNextWindowSize(ImVec2(640, 145), ImGuiCond_FirstUseEver);
+                ImGui::SetNextWindowSize(ImVec2(760, 235), ImGuiCond_FirstUseEver);
                 if (ImGui::Begin("Document commands"))
                 {
                     if (ImGui::Button("Open .arc"))
@@ -236,6 +237,34 @@ int WINAPI wWinMain(HINSTANCE Instance, HINSTANCE, PWSTR, int Show)
                     if (ImGui::Button("Undo")) (void)Document.Execute("undo");
                     ImGui::SameLine();
                     if (ImGui::Button("Redo")) (void)Document.Execute("redo");
+                    ImGui::Separator();
+                    ImGui::SetNextItemWidth(210.0f);
+                    ImGui::Combo("Feature purpose", &FeatureChoice, "Design (red)\0Circular guide (cyan)\0Repair (orange)\0Off\0");
+                    const char* Purposes[] = {"design", "circular", "repair", "off"};
+                    ImGui::SameLine();
+                    if (ImGui::Button("Apply to curves"))
+                        Notice = Document.Execute(std::string("feature ") + Purposes[FeatureChoice] + " selected") ?
+                            "Feature purpose recorded. This does not change body geometry." : "Select unlocked curves; circular requires an arc/circle.";
+                    ImGui::SameLine();
+                    if (ImGui::Button("Copy picked edges"))
+                    {
+                        std::string Owner;
+                        for (const auto& Figure : Document.AllFigures())
+                            if (!Figure.SelectedEdges.empty())
+                            {
+                                if (!Owner.empty()) { Owner.clear(); break; }
+                                Owner = Figure.Name;
+                            }
+                        if (Owner.empty() || FeatureChoice == 1 || FeatureChoice == 3)
+                            Notice = "Select edges on one body and choose Design or Repair.";
+                        else
+                            Notice = Document.Execute("feature-copy \"" + Owner + "\" " + Purposes[FeatureChoice]) ?
+                                "Independent feature curves copied; body unchanged." : "Feature edge copy refused.";
+                    }
+                    if (ImGui::Button("Show features")) (void)Document.Execute("show features on");
+                    ImGui::SameLine();
+                    if (ImGui::Button("Hide features")) (void)Document.Execute("show features off");
+                    ImGui::TextDisabled("Guides are editable copies, not live surface constraints. Colour is not a smoothness certificate.");
                     bool Execute = ImGui::InputText("Command", Command, sizeof(Command), ImGuiInputTextFlags_EnterReturnsTrue);
                     ImGui::SameLine();
                     Execute |= ImGui::Button("Execute");

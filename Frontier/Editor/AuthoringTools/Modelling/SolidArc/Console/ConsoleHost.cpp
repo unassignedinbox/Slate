@@ -1179,7 +1179,7 @@ uint64_t ConsoleHost::PictureSignature() const noexcept
     };
     auto Put = [&](auto Value) { Mix(&Value, sizeof Value); };
     Put(Revision); Put(Surface->Width()); Put(Surface->Height()); Put(Surface->QuerySamples());
-    Put(HoverPick); Put(static_cast<int>(Mode)); Put(static_cast<int>(Shading)); Put(ShowControlCages); Put(ShowIsoCurves); Put(ShowBoundaryEdges); Put(ShowDimensions); Put(GizmoShown);
+    Put(HoverPick); Put(static_cast<int>(Mode)); Put(static_cast<int>(Shading)); Put(ShowControlCages); Put(ShowIsoCurves); Put(ShowBoundaryEdges); Put(ShowFeatureCurves); Put(ShowDimensions); Put(GizmoShown);
     // A tool preview and the gizmo's hovered grip follow the pointer, so the pointer belongs in the signature too.
     Put(PointerX); Put(PointerY); Put(Tool.Active());
     const ViewRecord Seen = View.ToViewRecord(Surface->Width(), Surface->Height(), 1.0);
@@ -1187,7 +1187,7 @@ uint64_t ConsoleHost::PictureSignature() const noexcept
     Mix(Backdrop, sizeof Backdrop);
     for (const SceneFigure& Figure : Scene.Figures())
     {
-        Put(Figure.Identity); Put(Figure.Hidden); Put(Figure.Selected); Put(Figure.Construction); Put(Figure.Matcap);
+        Put(Figure.Identity); Put(Figure.Hidden); Put(Figure.Selected); Put(Figure.Construction); Put(Figure.Matcap); Put(static_cast<int>(Figure.Feature));
         Mix(Figure.Tint, sizeof Figure.Tint);
         Put(Figure.SelectedPoles.size()); Put(Figure.SelectedFaces.size()); Put(Figure.SelectedEdges.size());
         const Box3 Reach = Figure.Bounds();
@@ -1239,14 +1239,17 @@ void ConsoleHost::Render() noexcept
     for (const SceneFigure& Figure : Scene.Figures())
     {
         if (Figure.Hidden || Figure.Classification != FigureClassification::Curve) continue;
+        const bool Feature = Figure.Feature != FeaturePurpose::None;
+        if (Feature && !ShowFeatureCurves) continue;
         // A sketch curve wears its outliner folder's colour: lines cyan, profiles green, construction violet.
         const bool LineForm = Figure.Blueprint.Form == SceneFigure::ParametricForm::Line;
         DrawRecord D = Figure.Selected     ? ScenePresentation::Tinted(1.0f, 0.62f, 0.20f)
                      : Figure.Construction ? ScenePresentation::Tinted(0.71f, 0.55f, 1.0f)
                      : LineForm            ? ScenePresentation::Tinted(0.31f, 0.85f, 0.88f)
                                            : ScenePresentation::Tinted(0.20f, 0.78f, 0.35f);
-        D.LineWidth = Figure.Selected ? 2.5f : 2.0f;
-        D.Dashed = Figure.Construction;
+        if (Feature) D = ScenePresentation::Tinted(Figure.Tint[0], Figure.Tint[1], Figure.Tint[2]);
+        D.LineWidth = Feature ? 3.0f : (Figure.Selected ? 2.5f : 2.0f);
+        D.Dashed = Figure.Construction && !Feature;
         D.PickIdentity = SceneDocument::PickOf(Figure.Identity);
         D.Highlight = Figure.Selected ? 2.0f : (SceneDocument::IdentityOf(HoverPick) == Figure.Identity ? 1.0f : 0.0f);
         Surface->DrawSegments(ScenePresentation::CurveSegments(Figure.Curve), D);
@@ -1987,6 +1990,7 @@ bool ConsoleHost::OpenDocument(const std::string& RequestedPath) noexcept
     ShowControlCages = Candidate.ShowControlCages;
     ShowIsoCurves = Candidate.ShowIsoCurves;
     ShowBoundaryEdges = Candidate.ShowBoundaryEdges;
+    ShowFeatureCurves = Candidate.ShowFeatureCurves;
     ShowDimensions = Candidate.ShowDimensions;
     Shading = Candidate.Shading;
     for (Tile& T : SheetTiles) T = Tile();
@@ -4339,11 +4343,109 @@ void ConsoleHost::Register() noexcept
                 (Stem + ".mtl").c_str(), (Stem + ".materials.toml").c_str());
         return true;
     });
+    //------------------------------------------------------------------------------------------------------------------------
+    //                                                  FEATURE CURVE AUTHORING
+    //------------------------------------------------------------------------------------------------------------------------
+
+    auto PurposeOf = [](const std::string& Name, FeaturePurpose& Purpose)
+    {
+        if (Name == "design") Purpose = FeaturePurpose::Design;
+        else if (Name == "circular") Purpose = FeaturePurpose::CircularGuide;
+        else if (Name == "repair") Purpose = FeaturePurpose::Repair;
+        else if (Name == "off") Purpose = FeaturePurpose::None;
+        else return false;
+        return true;
+    };
+    auto ColourFeature = [](SceneFigure& Figure, FeaturePurpose Purpose)
+    {
+        Figure.Feature = Purpose;
+        const float Colours[4][3] = {{0.62f, 0.66f, 0.72f}, {1.0f, 0.16f, 0.22f},
+                                      {0.08f, 0.82f, 1.0f}, {1.0f, 0.52f, 0.08f}};
+        const auto Index = static_cast<unsigned>(Purpose);
+        for (int Axis = 0; Axis < 3; ++Axis) Figure.Tint[Axis] = Colours[Index][Axis];
+    };
+    Add("feature", "feature design|circular|repair|off <curve...|selected> — named editable guides; circular requires an analytic arc/circle; tint overrides colour", [=, this](const CommandLine& C)
+    {
+        FeaturePurpose Purpose{};
+        if (C.Count() < 2 || !C.Flags.empty() || !PurposeOf(C.Arguments[0], Purpose))
+            return Refuse("feature: purpose and curve names or selected required");
+        std::vector<SceneFigure*> Curves;
+        for (size_t Index = 1; Index < C.Count(); ++Index)
+        {
+            if (C.Arguments[Index] == "selected")
+            {
+                for (SceneFigure& Figure : Scene.Figures()) if (Figure.Selected) Curves.push_back(&Figure);
+            }
+            else
+            {
+                SceneFigure* Figure = Resolve(C.Arguments[Index]);
+                if (!Figure) return Refuse("feature: unknown curve '%s'", C.Arguments[Index].c_str());
+                Curves.push_back(Figure);
+            }
+        }
+        if (Curves.empty()) return Refuse("feature: no curves selected");
+        for (const SceneFigure* Figure : Curves)
+        {
+            if (Figure->Locked || Figure->Classification != FigureClassification::Curve)
+                return Refuse("feature: requires unlocked curves; use feature-copy for body edges");
+            if (Purpose == FeaturePurpose::CircularGuide && Figure->Curve.Classification != CurveClassification::Circle &&
+                Figure->Curve.Classification != CurveClassification::Arc)
+                return Refuse("feature: circular guide requires an analytic arc or circle, not a freeform approximation");
+        }
+        for (SceneFigure* Figure : Curves) ColourFeature(*Figure, Purpose);
+        Row("feature %s: %zu curve(s); annotation does not deform the body", C.Arguments[0].c_str(), Curves.size());
+        return true;
+    });
+    Add("feature-copy", "feature-copy <body> design|repair [--edges=i,j,...] [--name=N] — independent copies of explicit or selected body edges, not live constraints", [=, this](const CommandLine& C)
+    {
+        FeaturePurpose Purpose{};
+        if (C.Count() != 2 || !PurposeOf(C.Arguments[1], Purpose) ||
+            (Purpose != FeaturePurpose::Design && Purpose != FeaturePurpose::Repair))
+            return Refuse("feature-copy: body and design|repair required");
+        for (const auto& Option : C.Flags)
+            if (Option.first != "edges" && Option.first != "name") return Refuse("feature-copy: unsupported option");
+        SceneFigure* Figure = Resolve(C.Arguments[0]);
+        if (!Figure || Figure->Classification != FigureClassification::Body)
+            return Refuse("feature-copy: body required");
+        std::vector<int> Edges = Figure->SelectedEdges;
+        if (auto Text = C.SwitchText("edges"))
+        {
+            Edges.clear();
+            size_t Begin = 0;
+            while (Begin <= Text->size())
+            {
+                const size_t End = Text->find(',', Begin);
+                const auto Number = CommandCodec::ParseNumber(Text->substr(Begin, End == std::string::npos ? End : End - Begin));
+                if (!Number || !std::isfinite(*Number) || *Number < 0 || *Number >= double(Figure->Body.Edges.size()) || std::floor(*Number) != *Number)
+                    return Refuse("feature-copy: invalid edge index");
+                const int Edge = static_cast<int>(*Number);
+                if (std::find(Edges.begin(), Edges.end(), Edge) == Edges.end()) Edges.push_back(Edge);
+                if (End == std::string::npos) break;
+                Begin = End + 1;
+            }
+        }
+        if (Edges.empty()) return Refuse("feature-copy: select body edges or supply --edges");
+        std::vector<NurbsCurve> Curves;
+        for (int Edge : Edges)
+        {
+            if (Edge < 0 || size_t(Edge) >= Figure->Body.Edges.size()) return Refuse("feature-copy: stale edge selection");
+            Curves.push_back(Figure->Body.Edges[Edge].Curve);
+        }
+        const std::string Prefix = C.SwitchText("name").value_or(Figure->Name + "." + C.Arguments[1]);
+        for (size_t Index = 0; Index < Curves.size(); ++Index)
+        {
+            SceneFigure& Copy = Scene.AddCurve(Prefix + ".e" + std::to_string(Edges[Index]), std::move(Curves[Index]));
+            ColourFeature(Copy, Purpose);
+        }
+        Row("feature-copy: %zu independent editable curves; source body unchanged", Curves.size());
+        return true;
+    });
     Add("tint", "tint <figure...> r g b — body colour 0..1", [=, this](const CommandLine& C)
     {
         if (C.Count() < 4) return Refuse("tint: figure and r g b required");
         double R = C.Number(C.Count() - 3).value_or(-1), G = C.Number(C.Count() - 2).value_or(-1), B = C.Number(C.Count() - 1).value_or(-1);
-        if (R < 0 || G < 0 || B < 0) return Refuse("tint: r g b must be numbers 0..1");
+        if (!std::isfinite(R) || !std::isfinite(G) || !std::isfinite(B) || R < 0 || G < 0 || B < 0 || R > 1 || G > 1 || B > 1)
+            return Refuse("tint: r g b must be finite numbers 0..1");
         CommandLine Sub = C; Sub.Arguments.resize(C.Count() - 3);
         for (SceneFigure* I : ResolveMany(Sub, 0)) { I->Tint[0] = float(R); I->Tint[1] = float(G); I->Tint[2] = float(B); }
         return true;
@@ -4381,7 +4483,7 @@ void ConsoleHost::Register() noexcept
         return true;
     });
     RegisterSelection();
-    Add("show", "show cages on|off  ·  show iso on|off  ·  show edges on|off  ·  show shading flat|plastic|matcap", [=, this](const CommandLine& C)
+    Add("show", "show cages on|off  ·  show iso on|off  ·  show edges on|off  ·  show features on|off  ·  show shading flat|plastic|matcap", [=, this](const CommandLine& C)
     {
         if (!Need(C, 2, "show")) return false;
         bool On = C.Arguments[1] == "on";
@@ -4391,6 +4493,11 @@ void ConsoleHost::Register() noexcept
             if (C.Arguments[1] != "on" && C.Arguments[1] != "off") return Refuse("show edges: on|off");
             ShowBoundaryEdges = On;
         }
+        else if (C.Arguments[0] == "features")
+        {
+            if (C.Arguments[1] != "on" && C.Arguments[1] != "off") return Refuse("show features: on|off");
+            ShowFeatureCurves = On;
+        }
         else if (C.Arguments[0] == "shading")
         {
             const std::string& M = C.Arguments[1];
@@ -4398,7 +4505,7 @@ void ConsoleHost::Register() noexcept
             else return Refuse("show shading: flat|plastic|matcap");
             Row("shading %s", M.c_str());
         }
-        else return Refuse("show: cages|iso|edges|shading");
+        else return Refuse("show: cages|iso|edges|features|shading");
         return true;
     });
     Add("render", "render <name> [--size=WxH] — writes Proofs/<name>.png  ·  render sheet <0|1|2|3> captures a tile; render sheet finalize <name> writes the 2x2 contact sheet", [=, this](const CommandLine& C)
@@ -4477,9 +4584,9 @@ void ConsoleHost::Register() noexcept
         return true;
     });
     Add("echo", "echo text", [=, this](const CommandLine& C) { std::printf("  "); for (const auto& A : C.Arguments) std::printf("%s ", A.c_str()); std::printf("\n"); return true; });
-    Add("require", "require open-sew|knot-skin — require supported document geometry", [this](const CommandLine& C)
+    Add("require", "require open-sew|knot-skin|feature-curves — require supported document geometry", [this](const CommandLine& C)
     {
-        if (C.Count() != 1 || (C.Arguments[0] != "open-sew" && C.Arguments[0] != "knot-skin") || !C.Flags.empty())
+        if (C.Count() != 1 || (C.Arguments[0] != "open-sew" && C.Arguments[0] != "knot-skin" && C.Arguments[0] != "feature-curves") || !C.Flags.empty())
             return Refuse("require: unsupported document capability");
         return true;
     });

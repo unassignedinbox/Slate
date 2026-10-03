@@ -70,7 +70,7 @@ def main() -> int:
         return executable
 
     console = link_program(SOURCE / "Console/SolidArcConsole.cpp", "SolidArc")
-    for name in ("Kernel", "Blend", "MultiEdgeFillet", "Document"):
+    for name in ("Kernel", "Blend", "MultiEdgeFillet", "Document", "Feature"):
         executable = link_program(SOURCE / f"Verification/{name}Verification.cpp", name + "Verification")
         run([str(executable)], name + "Verification")
         print(f"PASS {name}Verification", flush=True)

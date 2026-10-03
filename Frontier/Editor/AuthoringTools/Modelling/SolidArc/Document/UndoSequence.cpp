@@ -21,7 +21,7 @@ uint64_t UndoSequence::Fingerprint(const SceneDocument& Scene) noexcept
     for (const SceneFigure& I : Scene.Figures())
     {
         Mix(H, I.Identity); Mix(H, uint64_t(I.Classification)); Mix(H, std::hash<std::string>{}(I.Name));
-        Mix(H, (I.Construction ? 1 : 0) | (I.Hidden ? 2 : 0) | (I.Selected ? 4 : 0)); Mix(H, I.Matcap);
+        Mix(H, (I.Construction ? 1 : 0) | (I.Hidden ? 2 : 0) | (I.Selected ? 4 : 0)); Mix(H, I.Matcap); Mix(H, uint64_t(I.Feature));
         Mix(H, Bits(I.Tint[0])); Mix(H, Bits(I.Tint[1])); Mix(H, Bits(I.Tint[2]));
         for (int P : I.SelectedPoles) Mix(H, uint64_t(P) + 7);
         for (int P : I.SelectedFaces) Mix(H, uint64_t(P) + 11);

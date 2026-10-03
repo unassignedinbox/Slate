@@ -243,6 +243,7 @@ private:
     int                                  ExecuteDepth = 0;
     bool                                 ShowControlCages = false;
     bool                                 ShowIsoCurves = true;
+    bool                                 ShowFeatureCurves = true;                     // [-] independent feature-curve visibility
     bool                                 ShowBoundaryEdges = true;                     // [-] B-rep edge overlay; geometry is unchanged
     bool                                 ShowDimensions = false;        // [Phase 13] dims hidden by default until the renderer is polished
     SurfaceShading                       Shading = SurfaceShading::Matcap;

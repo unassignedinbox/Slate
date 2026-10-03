@@ -16,6 +16,9 @@ namespace Frontier
 
 enum class FigureClassification : uint8_t { Curve, Surface, Body, Empty };
 
+// 📝 Authored guide semantics, not a smoothness certificate or an automatic surface constraint.
+enum class FeaturePurpose : uint8_t { None, Design, CircularGuide, Repair };
+
 // A closed area of the sketch: one cell of the planar arrangement of all coplanar (workplane) curves. Derived — rebuilt after
 //    every change to the curves — so it is never edited directly; only its Filled choice is user-owned and survives rebuilds by
 //    matching the cell's centroid + area signature.
@@ -39,6 +42,7 @@ struct SceneFigure
     uint32_t     Identity = 0;                                                          // [-] stable, 1-based, doubles as pick identity
     FigureClassification     Classification = FigureClassification::Curve;                                                // [-]
     std::string  Name;                                                                  // [-] user-facing, unique
+    FeaturePurpose Feature = FeaturePurpose::None;                                     // [-] persistent curve purpose
     NurbsCurve   Curve;                                                                 // valid when Classification == Curve
     NurbsSurface Surface;                                                               // valid when Classification == Surface
     BrepBody     Body;                                                                  // valid when Classification == Body

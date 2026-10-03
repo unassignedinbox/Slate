@@ -871,3 +871,7 @@ add_test(NAME BodyVerification COMMAND BodyVerification
     "${LIGER_RECONSTRUCTION}/Liger_Main_Body.queries"
     "${CMAKE_CURRENT_BINARY_DIR}/main-body.f64"
     "${LIGER_RECONSTRUCTION}/Liger_Reconstruction.arc")
+
+add_executable(FeatureVerification Verification/FeatureVerification.cpp)
+target_link_libraries(FeatureVerification PRIVATE SolidArcConsoleKit)
+add_test(NAME FeatureVerification COMMAND FeatureVerification)

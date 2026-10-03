@@ -116,7 +116,7 @@ void SceneDocument::RebuildAreas(const Workplane& Plane) noexcept
     Frontier::Plane Sheet = Plane.ToPlane();
     for (const SceneFigure& F : Entries)
     {
-        if (F.Classification != FigureClassification::Curve || F.Hidden || F.Construction) continue;
+        if (F.Classification != FigureClassification::Curve || F.Hidden || F.Construction || F.Feature != FeaturePurpose::None) continue;
         bool InPlane = true;
         for (const Vec4& P : F.Curve.Poles) if (std::fabs(Sheet.SignedDistance(P.Divide())) > ScalarCriteria::MergeTolerance) { InPlane = false; break; }
         if (!InPlane) continue;
