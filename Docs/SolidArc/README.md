@@ -37,3 +37,54 @@ and resizes the window. Its logs and captures are separate from the package unde
 
 The dependency-free `SolidArc` CMake target remains the console application. On Windows/MSVC, the separate
 `SolidArcApplication` target invokes the GUI helper after the main Frontier Release build has supplied shared UI objects.
+
+## Liger cowl checkpoint
+
+Open `Examples/Liger/Reconstruction/Liger_Front_Cowl.arc` with a build that supports `sew --open`.
+In the source checkout it is under `Frontier/Projects/Project-Drive/Content/Vehicles/Liger/Reconstruction`.
+Use `view fit` in Document commands if the component is outside the current view.
+The `.arc` retains cubic NURBS control poles and a sewn, open B-rep; it is not a triangle import.
+`sew --open` preserves intentional openings. Plain `sew` retains its existing planar-capping behaviour.
+**Do not open this document with the older executable:** older builds may ignore `--open` and add caps.
+
+This is only the front cowl, with 308 patches still requiring consolidation and continuity review.
+It is not the complete exterior or a manufacturing solid. The main body and roof/glass frame remain unfinished.
+The six older `.arc` files remain available as historical attempts, not accepted reconstructions.
+Adjacent `.metrics.json` and `.native.json` files contain the fitting and actual-kernel sampled comparisons.
+Dimensions follow the supplied extraction convention of centimetres converted to metres; the Blender scene's unit
+setting alone does not prove a physical scale.
+
+### Reproduce the cowl checks
+
+Use the original `Liger_named.blend` and `mesh/Body_Front_Cowl.npz` from
+`streamlinkinbox/Frontier`, commit `72c69b61e70427f7351f7fc3393cd25af56591db`, under `Vehicles/Liger`.
+Do not use the old fitted surfaces as the reference. With Python, `bpy==5.0.1`, NumPy and SciPy installed,
+run from the Slate repository root (replace the two `/reference` paths):
+
+```bash
+python Frontier/Projects/Project-Drive/Tools/Liger/SubdivisionProjection.py \
+  /reference/Liger_named.blend _AgentScratch/build/cowl-reference.npz
+python Frontier/Projects/Project-Drive/Tools/Liger/SurfaceSolver.py \
+  _AgentScratch/build/cowl-reference.npz _AgentScratch/build/Liger_Front_Cowl.arc
+```
+
+The extractor preserves the source mirror, sharp creases, corner smoothing and subdivision quality, then checks its
+samples against the original evaluated geometry. The solver fixes shared rims and holds out alternate sample rows
+and columns. It refuses inverted samples or a sampled positional error above 1 mm; this is not a continuous bound.
+Neither script modifies the original Blender file.
+
+The Windows MSVC check builds `CowlVerification.exe` and runs native topology, save/reopen and rendering checks.
+For the independent numerical comparison, run that executable with an additional output path:
+
+```powershell
+CowlVerification.exe _AgentScratch/build/Liger_Front_Cowl.arc _AgentScratch/build/cowl-native.f64
+python Frontier/Projects/Project-Drive/Tools/Liger/SurfaceMetrics.py `
+  _AgentScratch/build/cowl-reference.npz _AgentScratch/build/cowl-native.f64 `
+  _AgentScratch/build/Liger_Front_Cowl.arc /reference/mesh/Body_Front_Cowl.npz `
+  _AgentScratch/build/cowl-native.json
+```
+
+The temporary binary contains actual kernel samples as little-endian float64 XYZ coordinates, ordered by face,
+then U, then V, at 33 by 33 parameters per face. It is measurement output, not a CAD interchange format.
+The application build also launches the windowed editor with the cowl, captures its presentation and checks
+Construct, save/reopen and resize. Application captures are under `Presentation/Cowl` in the evidence artifact.

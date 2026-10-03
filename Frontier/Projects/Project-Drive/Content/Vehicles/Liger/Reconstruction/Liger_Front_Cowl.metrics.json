@@ -1,0 +1,40 @@
+{
+  "status": "reference-faithful starting skin; consolidation and continuity review still required",
+  "surfaceCount": 308,
+  "degree": [
+    3,
+    3
+  ],
+  "polesPerDirection": 11,
+  "heldOutSampleCount": 246400,
+  "heldOutMaximumMm": 0.7501677459618382,
+  "heldOutRmsMm": 0.005526888010725866,
+  "allSamplesMaximumMm": 0.7501677459618382,
+  "sharedRimMaximumGapMm": 4.577566798522238e-13,
+  "referenceBoundaryEdges": 80,
+  "referenceInteriorEdges": 576,
+  "reversedInteriorSamples": 0,
+  "claimsNotMade": [
+    "Final Class-A surface quality",
+    "G1/G2 continuity",
+    "Manufacturing solid",
+    "Complete vehicle conversion"
+  ],
+  "reference": {
+    "part": "Body_Front_Cowl",
+    "sourceSha256": "4e53db6436f8136823ce8f79a9a8318bde74b92debe160915b9efa54e86058b6",
+    "sourceCommit": "72c69b61e70427f7351f7fc3393cd25af56591db",
+    "metresPerSourceUnit": 0.01,
+    "sourceMirrorCentreY": -47.85898971557617,
+    "scaleBasis": "Supplied extraction scripts declare centimetres; Blender unit setting alone does not establish physical scale",
+    "originalLevel": 2,
+    "sourceAgreementMaximumMm": 0.0004962773067626434,
+    "boundarySmoothing": "PRESERVE_CORNERS",
+    "subdivisionQuality": 10,
+    "chartCount": 308,
+    "samplesPerDirection": 33,
+    "sourceModifier": "Catmull-Clark, binary edge creases, mirror preserved",
+    "sampling": "One non-limit refinement, then limit-projected refinement",
+    "blenderVersion": "5.0.1"
+  }
+}

@@ -80,6 +80,10 @@ def main() -> int:
     for document in documents:
         run([str(console), "--proofs", str(proofs), "-c", f'open "{document.as_posix()}"'], document.stem)
         print(f"PASS replay {document.name}", flush=True)
+    cowl = ROOT / "Projects/Project-Drive/Content/Vehicles/Liger/Reconstruction/Liger_Front_Cowl.arc"
+    executable = link_program(SOURCE / "Verification/CowlVerification.cpp", "CowlVerification")
+    run([str(executable), str(cowl)], "CowlVerification")
+    print("PASS native cowl topology, orientation, persistence and rendering", flush=True)
     print("MSVC SolidArc: console linked, focused regressions and all Liger journals passed")
     return 0
 

@@ -2237,12 +2237,13 @@ void ConsoleHost::Register() noexcept
         }
         return Done > 0;
     });
-    Add("sew", "sew <surface...> — stitch sheet surfaces into one body, cap planar openings, orient", [=, this](const CommandLine& C)
+    Add("sew", "sew <surface...> [--open] — stitch and orient; --open preserves openings instead of capping", [=, this](const CommandLine& C)
     {
         std::vector<NurbsSurface> S; std::vector<uint32_t> Ids;
         for (SceneFigure* I : ResolveMany(C, 0)) { if (I->Classification == FigureClassification::Surface) { S.push_back(I->Surface); Ids.push_back(I->Identity); } else if (I->Classification == FigureClassification::Body) { for (const BrepFace& F : I->Body.Faces) S.push_back(F.Surface); Ids.push_back(I->Identity); } }
         if (S.empty()) return Refuse("sew: no surfaces");
-        if (!AddBody(C, "Sewn", BrepBody::Sew(S))) return false;
+        // Exterior skins retain their intentional openings; the historical default still caps them.
+        if (!AddBody(C, "Sewn", BrepBody::Sew(S, ScalarCriteria::MergeTolerance, !C.Switch("open")))) return false;
         if (!C.Switch("keep")) for (uint32_t Id : Ids) Scene.Remove(Id);
         return true;
     });

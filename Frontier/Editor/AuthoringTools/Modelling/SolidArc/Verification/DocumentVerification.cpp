@@ -111,5 +111,25 @@ int main()
     Panel.Expect("failed open preserves the current figure count", Host.AllFigures().size() == FiguresBeforeBadOpen);
     Panel.Expect("wrong native extension is refused", !Host.Execute("open \"" + (Directory / "not-a-document.txt").generic_string() + "\""));
 
+    Panel.Section("Exterior sheet sewing preserves intentional openings across document replay");
+    Panel.Expect("clear previous model before sheet checks", Host.Execute("reset"));
+    Panel.Expect("first open sheet", Host.Execute("plane (0,0,0) 1 1 --name=Skin_A"));
+    Panel.Expect("second adjacent open sheet", Host.Execute("plane (1,0,0) 1 1 --name=Skin_B"));
+    Panel.Expect("open sewing succeeds", Host.Execute("sew Skin_A Skin_B --open --name=Exterior"));
+    const SceneFigure* Exterior = Figure(Host, "Exterior");
+    Panel.Expect("sewing replaces source sheets with one body", Host.AllFigures().size() == 1 && Exterior != nullptr);
+    const BodyReport SkinReport = Exterior ? Exterior->Body.Validate() : BodyReport{};
+    Panel.Expect("no caps or thickness added", SkinReport.Faces == 2 && SkinReport.OpenEdges == 6 && !SkinReport.Closed);
+    Panel.Expect("shared edge actually sewn", SkinReport.Edges == 7 && SkinReport.Hulls == 1);
+    Panel.Expect("open skin is manifold and consistently oriented", SkinReport.Manifold && SkinReport.Oriented);
+    const std::filesystem::path SkinDocument = Directory / "exterior.arc";
+    const uint64_t SkinFingerprint = UndoSequence::Fingerprint(Host.Document());
+    Panel.Expect("save open skin", Host.Execute("save \"" + SkinDocument.generic_string() + "\""));
+    Panel.Expect("clear open skin", Host.Execute("reset"));
+    Panel.Expect("reload open skin", Host.Execute("open \"" + SkinDocument.generic_string() + "\""));
+    Panel.Expect("open skin geometry survives replay", UndoSequence::Fingerprint(Host.Document()) == SkinFingerprint);
+    Exterior = Figure(Host, "Exterior");
+    Panel.Expect("replay still has six open edges", Exterior != nullptr && Exterior->Body.Validate().OpenEdges == 6);
+
     return Panel.Conclude();
 }

@@ -1,0 +1,36 @@
+{
+  "status": "Cowl checkpoint only; not a finished clean-surface vehicle reconstruction",
+  "measuredOn": "2026-10-03",
+  "documentSha256": "d5ec55b35dea41745a1a6c4c9db4ab379b5e155a7d3281bd351bc9bf006d8630",
+  "suppliedNpzSha256": "8e52b9a096ae268428375e382fb12e5d548c7a0dca12b7b68d3ccecd04b18d0d",
+  "nativeHeldOutMaximumMm": 0.7501677135403315,
+  "nativeHeldOutRmsMm": 0.005526887888706218,
+  "heldOutSampleCount": 246400,
+  "nativeSharedRimMaximumGapMm": 5.438959822042073e-13,
+  "nativeReversedInteriorSamples": 0,
+  "extractionToSuppliedNpzMaximumMm": 0.0004962773067626434,
+  "reference": {
+    "part": "Body_Front_Cowl",
+    "sourceSha256": "4e53db6436f8136823ce8f79a9a8318bde74b92debe160915b9efa54e86058b6",
+    "sourceCommit": "72c69b61e70427f7351f7fc3393cd25af56591db",
+    "metresPerSourceUnit": 0.01,
+    "sourceMirrorCentreY": -47.85898971557617,
+    "scaleBasis": "Supplied extraction scripts declare centimetres; Blender unit setting alone does not establish physical scale",
+    "originalLevel": 2,
+    "sourceAgreementMaximumMm": 0.0004962773067626434,
+    "boundarySmoothing": "PRESERVE_CORNERS",
+    "subdivisionQuality": 10,
+    "chartCount": 308,
+    "samplesPerDirection": 33,
+    "sourceModifier": "Catmull-Clark, binary edge creases, mirror preserved",
+    "sampling": "One non-limit refinement, then limit-projected refinement",
+    "blenderVersion": "5.0.1"
+  },
+  "limitations": [
+    "308 patches require consolidation",
+    "G1/G2 not certified",
+    "Sampled positional comparison is not a continuous Hausdorff bound",
+    "No main-body or roof/frame reconstruction is delivered by this document",
+    "Physical scale follows the supplied centimetre extraction convention"
+  ]
+}
