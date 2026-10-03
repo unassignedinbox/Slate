@@ -40,7 +40,7 @@ def main() -> int:
     authoring = sorted(str(path.relative_to(ENGINE))
                        for folder in ("Kernel", "Presentation", "Interaction", "Document", "Console", "Editor")
                        for path in (ENGINE / SOLIDARC / folder).glob("*.cpp")
-                       if path.name != "SolidArcConsole.cpp")
+                       if path.name not in ("SolidArcConsole.cpp", "SolidArcApplicationHost.cpp"))
     shared = [source for source in Shared.SOURCES if not source.endswith("/EditorProof.cpp")]
     editor_entry = "Exhibits/Workbench/Editor/SolidArcEditorProof.cpp"
     console_entry = f"{SOLIDARC}/Console/SolidArcConsole.cpp"
