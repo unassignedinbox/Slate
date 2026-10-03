@@ -875,3 +875,6 @@ add_test(NAME BodyVerification COMMAND BodyVerification
 add_executable(FeatureVerification Verification/FeatureVerification.cpp)
 target_link_libraries(FeatureVerification PRIVATE SolidArcConsoleKit)
 add_test(NAME FeatureVerification COMMAND FeatureVerification)
+add_test(NAME LigerContourVerification COMMAND FeatureVerification
+    "${LIGER_RECONSTRUCTION}/Liger_Feature_Aligned.arc"
+    "${CMAKE_CURRENT_BINARY_DIR}/contour-edges.json" --roundtrip)

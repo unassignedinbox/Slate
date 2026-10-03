@@ -82,6 +82,8 @@ for TEST in Feature Document FaceLoft Tweak DirectModeling ChamferLoop Transform
     "$WORK/${TEST}Verification"
 done
 
+"$WORK/FeatureVerification" "$LIGER/Liger_Feature_Aligned.arc" "$WORK/contour-edges.json" --roundtrip
+
 # Keep the focused gate's normal scratch behaviour, but make the nine newly covered baseline
 # artifacts and the current bounded-slice proof durable. Their verifier names are unchanged;
 # this is an explicit proof-coverage export rather than a blanket export of every temporary render.

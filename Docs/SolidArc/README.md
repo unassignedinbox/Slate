@@ -125,11 +125,18 @@ bounds and chart transformations independently of Blender.
 
 ### Colour-coded feature curves
 
-Open `Examples/Liger/Reconstruction/Liger_Feature_Review.arc` to inspect the main body with design and repair guides.
+Open `Examples/Liger/Reconstruction/Liger_Feature_Aligned.arc` for the body-feature and paired-arch targets.
 This document requires `feature-curves`; older applications refuse it rather than silently losing the annotations.
-The body is unchanged in this review document. Red curves are proposed design guides interpreted from the user's markup,
-orange curves mark existing geometry needing review, and cyan arcs are provisional upper wheel-opening circle references.
-The second arch contour, lower fade and local surface fairing are not completed by this document.
+Red cubic curves follow measured, tangent-continuous native body-edge chains, not the user's drawn coordinates.
+The shorter inner rail ends at its existing junction; it does not invent a detour across other patch edges.
+Orange selections are retained from the earlier review. Cyan marks inner arch targets; blue marks outer arch targets.
+Each arch target has an analytic circular crown and two quintic lower transitions. The transitions match the crown's
+position, tangent and curvature, then tend to zero curvature at their lower ends. These are side-elevation targets,
+placed just outboard for inspection, not contours already substituted into the body surfaces.
+
+The original body surfaces are unchanged. Curve-continuity checks are not body-surface G1/G2 certification.
+Local surface fairing and integration of the arch targets remain unfinished. `Liger_Feature_Review.arc` is the earlier,
+superseded guide interpretation retained for comparison; use the aligned document for subsequent work.
 
 In the windowed **Document commands** panel, choose **Feature purpose**, then **Apply to curves**. To trace existing
 geometry, select edges on one body, choose Design or Repair, and use **Copy picked edges**. These are independent editable
@@ -158,17 +165,23 @@ For the Liger reference processing, use the console verifier to export native ed
 ```powershell
 $Liger = "Frontier/Projects/Project-Drive/Content/Vehicles/Liger/Reconstruction"
 FeatureVerification.exe "$Liger/Liger_Main_Body_Simplified.arc" _AgentScratch/build/Edges.json
-python Frontier/Projects/Project-Drive/Tools/Liger/FeatureSequence.py `
+python Frontier/Projects/Project-Drive/Tools/Liger/ContourSequence.py `
   "$Liger/Liger_Main_Body_Simplified.arc" _AgentScratch/build/Edges.json `
-  _AgentScratch/build/Liger_Feature_Review.arc
-python Frontier/Projects/Project-Drive/Tools/Liger/FeatureVerification.py
+  "$Liger/Liger_Feature_Review.features.json" _AgentScratch/build/Liger_Feature_Aligned.arc
+FeatureVerification.exe _AgentScratch/build/Liger_Feature_Aligned.arc _AgentScratch/build/AlignedEdges.json --roundtrip
+python Frontier/Projects/Project-Drive/Tools/Liger/ContourVerification.py
+python Frontier/Projects/Project-Drive/Tools/Liger/ContourMetrics.py `
+  "$Liger/Liger_Main_Body_Simplified.arc" _AgentScratch/build/Edges.json _AgentScratch/build/AlignedEdges.json `
+  _AgentScratch/build/Liger_Feature_Aligned.arc _AgentScratch/build/Liger_Feature_Aligned.native.json
+SolidArc.exe --proofs _AgentScratch/build/AlignedViews `
+  _AgentScratch/build/Liger_Feature_Aligned.arc "$Liger/Liger_Aligned_Views.arc"
 ```
 
-The exporter also writes `Edges.triangles.f64`. Keep these temporary files out of Content. The generator requires NumPy
-and SciPy. Its recorded screen landmarks are a manual interpretation, not a precise measurement of the design intent.
-It projects the proposed rails onto a native chord-tolerance tessellation and creates cubic guide splines; these are not
-exact on-surface constraints. Circular guides fit only the opening crowns in side elevation and sit just outboard for
-comparison. Do not mistake them for rebuilt arch surfaces or final dimensions.
+The exporter also writes `.triangles.f64` and, with `--roundtrip`, `.guides.json` files. Keep these temporary files out of
+Content. The Python tools require NumPy and SciPy. The curve fitter uses uniform arclength samples and checks held-out
+samples; it does not provide a continuous fit-error certificate. The native verifier separately checks the eight circle
+radii, sixteen crown-to-fade joins, mirrored curves and save/reopen persistence. The metric tool checks native guide
+samples against the selected source chains and confirms that this reference-authoring pass did not alter the body.
 
 ### Reproduce the mirrored layout and four views
 

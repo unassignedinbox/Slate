@@ -1,0 +1,5 @@
+Document SHA256: 417b3010355b41d9f36f7d58b4172c8a15705d4572eb606b78df5c277ed8e6a7
+PASS feature-review roundtrip: geometry, purposes and colours retained
+PASS lower fade targets: curves=16 position_metres=2.48253e-16 unit_tangent_error=6.22563e-12 curvature_error_per_metre=2.31099e-10
+PASS circular guide radii: arcs=8 maximum_error_metres=6.10623e-16
+PASS mirrored design and circular guides: maximum_error_metres=1.04738e-15

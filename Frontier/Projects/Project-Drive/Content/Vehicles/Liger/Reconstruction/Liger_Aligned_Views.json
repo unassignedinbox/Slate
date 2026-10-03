@@ -1,0 +1,27 @@
+{
+  "document": "Liger_Feature_Aligned.arc",
+  "documentSha256": "417b3010355b41d9f36f7d58b4172c8a15705d4572eb606b78df5c277ed8e6a7",
+  "renderer": "Native SolidArc CPU rasterizer; individual renders unmodified; overview adds labels",
+  "images": [
+    {
+      "file": "Liger_Aligned_Front_Quarter.png",
+      "sha256": "60e41a4921fa9b4650a8108ffceefdbcfcfd395f238fa3b4b09c15ea20714975",
+      "view": "01 / FRONT THREE-QUARTER"
+    },
+    {
+      "file": "Liger_Aligned_Rear_Quarter.png",
+      "sha256": "ba6fc4e55c007975587139d6171ab33291d307f5cc6197fb36a5197528769b25",
+      "view": "02 / REAR THREE-QUARTER"
+    },
+    {
+      "file": "Liger_Aligned_Side.png",
+      "sha256": "79d93746283f694d89203c5a9fa30556f1510474b31a3802f4efe58f4502008f",
+      "view": "03 / SIDE \u2014 INNER + OUTER ARCH TARGETS"
+    },
+    {
+      "file": "Liger_Aligned_Top.png",
+      "sha256": "c8b1f78ef7eb0b78c225bf89cf491ba10d6a3f02c4fba0c87d953fb1e6517cf2",
+      "view": "04 / TOP \u2014 SOURCE-ALIGNED LONG FEATURES"
+    }
+  ]
+}

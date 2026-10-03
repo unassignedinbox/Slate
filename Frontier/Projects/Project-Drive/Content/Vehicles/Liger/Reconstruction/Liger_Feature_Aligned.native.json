@@ -1,0 +1,34 @@
+{
+  "documentSha256": "417b3010355b41d9f36f7d58b4172c8a15705d4572eb606b78df5c277ed8e6a7",
+  "bodySourceSha256": "8ce67d6fcf329e5fae8266c106f3de372e0d97859121773f712f2af06067fd23",
+  "nativeBodyEdgeSamplesExactlyUnchanged": 155550,
+  "nativeBodyTrianglesExactlyUnchanged": 278304,
+  "allSourceSurfaceCommandsUnchanged": true,
+  "nativeCurveFits": [
+    {
+      "name": "Design_Rail_1",
+      "maximumFitMm": 0.7321124220275591,
+      "rmsFitMm": 0.26043255917388686,
+      "samples": 4097
+    },
+    {
+      "name": "Design_Rail_2",
+      "maximumFitMm": 0.7178020234982931,
+      "rmsFitMm": 0.1478742836451882,
+      "samples": 4097
+    },
+    {
+      "name": "Design_Rail_3_Left",
+      "maximumFitMm": 0.36070314888529786,
+      "rmsFitMm": 0.06717101288381623,
+      "samples": 4097
+    },
+    {
+      "name": "Design_Rail_3_Right",
+      "maximumFitMm": 0.36070314888529786,
+      "rmsFitMm": 0.06717101288381623,
+      "samples": 4097
+    }
+  ],
+  "scope": "Aligned feature curves and paired arch/fade targets; no body-surface repair claimed"
+}

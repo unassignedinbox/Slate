@@ -98,6 +98,9 @@ def main() -> int:
          str(reconstruction / "Liger_Main_Body.queries"), str(OUTPUT / "main-body.f64"),
          str(reconstruction / "Liger_Reconstruction.arc")], "BodyVerification")
     print("PASS native main body, explicit junction sheets, persistence and combined reconstruction", flush=True)
+    run([str(OUTPUT / "FeatureVerification.exe"), str(reconstruction / "Liger_Feature_Aligned.arc"),
+         str(OUTPUT / "contour-edges.json"), "--roundtrip"], "LigerContourVerification")
+    print("PASS aligned Liger features, paired crowns, lower-fade continuity and mirror symmetry", flush=True)
     print("MSVC SolidArc: console linked, focused regressions and all Liger journals passed")
     return 0
 

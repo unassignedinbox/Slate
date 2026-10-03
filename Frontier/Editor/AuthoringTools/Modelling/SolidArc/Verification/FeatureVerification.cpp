@@ -30,13 +30,47 @@ int main(int Count, char** Arguments)
             if (!Host.Execute("save \"" + Saved + "\"") || !Host.Execute("open \"" + Saved + "\"") ||
                 Before != UndoSequence::Fingerprint(Host.Document())) return 2;
             std::cout << "PASS feature-review roundtrip: geometry, purposes and colours retained\n";
-            size_t Arcs = 0;
+            const bool PairedContours = Host.Document().Find("Rear_Inner_Crown_Left") != nullptr;
+            size_t Arcs = 0, Fades = 0;
+            double FadePositionError = 0, FadeTangentError = 0, FadeCurvatureError = 0;
             double RadiusError = 0;
             for (const auto& CurveFigure : Host.AllFigures())
             {
                 if (CurveFigure.Feature != FeaturePurpose::CircularGuide) continue;
                 ++Arcs;
                 const auto& Curve = CurveFigure.Curve;
+                if (PairedContours)
+                {
+                    for (int End = 0; End < 2; ++End)
+                    {
+                        const auto* FadeFigure = Host.Document().Find(CurveFigure.Name + (End == 0 ? "_TrailingFade" : "_LeadingFade"));
+                        if (!FadeFigure) return 2;
+                        const auto& Fade = FadeFigure->Curve;
+                        Vec3 CrownDerivatives[3], FadeDerivatives[3], LowerDerivatives[3];
+                        Curve.Derivatives(End == 0 ? Curve.DomainEnd() : Curve.DomainStart(), 2, CrownDerivatives);
+                        Fade.Derivatives(Fade.DomainStart(), 2, FadeDerivatives);
+                        Fade.Derivatives(Fade.DomainEnd(), 2, LowerDerivatives);
+                        auto CurvatureVector = [](const Vec3* Derivatives)
+                        {
+                            const double SpeedSquared = Derivatives[1].LengthSquared();
+                            return Derivatives[2] / SpeedSquared - Derivatives[1] * (Derivatives[1].Dot(Derivatives[2]) / (SpeedSquared * SpeedSquared));
+                        };
+                        const double PositionError = (CrownDerivatives[0] - FadeDerivatives[0]).Length();
+                        const double TangentError = (CrownDerivatives[1].Normalised() * (End == 0 ? 1.0 : -1.0) - FadeDerivatives[1].Normalised()).Length();
+                        const double CurvatureError = std::max((CurvatureVector(CrownDerivatives) - CurvatureVector(FadeDerivatives)).Length(), CurvatureVector(LowerDerivatives).Length());
+                        if (!std::isfinite(PositionError) || !std::isfinite(TangentError) || !std::isfinite(CurvatureError)) return 2;
+                        FadePositionError = std::max(FadePositionError, PositionError);
+                        FadeTangentError = std::max(FadeTangentError, TangentError);
+                        FadeCurvatureError = std::max(FadeCurvatureError, CurvatureError);
+                        for (int Sample = 0; Sample <= 1000; ++Sample)
+                        {
+                            Vec3 Derivatives[2];
+                            Fade.Derivatives(Fade.DomainStart() + (Fade.DomainEnd() - Fade.DomainStart()) * Sample / 1000.0, 1, Derivatives);
+                            if (!std::isfinite(Derivatives[1].Z) || Derivatives[1].Z >= 0) return 2;
+                        }
+                        ++Fades;
+                    }
+                }
                 for (int Sample = 0; Sample <= 1000; ++Sample)
                 {
                     const auto Point = Curve.Sample(Curve.DomainStart() + (Curve.DomainEnd() - Curve.DomainStart()) * Sample / 1000.0);
@@ -45,12 +79,33 @@ int main(int Count, char** Arguments)
                     RadiusError = std::max(RadiusError, Error);
                 }
             }
-            if (Arcs != 4 || RadiusError > 1e-11) return 2;
+            if (Arcs != (PairedContours ? 8u : 4u) || RadiusError > 1e-11) return 2;
+            if (PairedContours)
+            {
+                if (Fades != 16 || FadePositionError > 1e-10 || FadeTangentError > 1e-8 || FadeCurvatureError > 1e-6) return 2;
+                std::cout << "PASS lower fade targets: curves=" << Fades << " position_metres=" << FadePositionError
+                          << " unit_tangent_error=" << FadeTangentError << " curvature_error_per_metre=" << FadeCurvatureError << "\n";
+            }
             std::cout << "PASS circular guide radii: arcs=" << Arcs << " maximum_error_metres=" << RadiusError << "\n";
-            const char* LeftNames[] = {"Design_Rail_1", "Design_Rail_2", "Design_Rail_3_Left", "Rear_Opening_Circle_Left", "Front_Opening_Circle_Left"};
-            const char* RightNames[] = {"Design_Rail_1", "Design_Rail_2", "Design_Rail_3_Right", "Rear_Opening_Circle_Right", "Front_Opening_Circle_Right"};
+            std::vector<std::string> LeftNames = {"Design_Rail_1", "Design_Rail_2", "Design_Rail_3_Left"};
+            std::vector<std::string> RightNames = {"Design_Rail_1", "Design_Rail_2", "Design_Rail_3_Right"};
+            if (PairedContours)
+            {
+                for (const std::string Wheel : {"Rear", "Front"})
+                    for (const std::string Contour : {"Inner", "Outer"})
+                        for (const std::string Suffix : {"", "_TrailingFade", "_LeadingFade"})
+                        {
+                            LeftNames.push_back(Wheel + "_" + Contour + "_Crown_Left" + Suffix);
+                            RightNames.push_back(Wheel + "_" + Contour + "_Crown_Right" + Suffix);
+                        }
+            }
+            else
+            {
+                LeftNames.insert(LeftNames.end(), {"Rear_Opening_Circle_Left", "Front_Opening_Circle_Left"});
+                RightNames.insert(RightNames.end(), {"Rear_Opening_Circle_Right", "Front_Opening_Circle_Right"});
+            }
             double MirrorError = 0;
-            for (size_t Pair = 0; Pair < 5; ++Pair)
+            for (size_t Pair = 0; Pair < LeftNames.size(); ++Pair)
             {
                 const auto* Left = Host.Document().Find(LeftNames[Pair]);
                 const auto* Right = Host.Document().Find(RightNames[Pair]);
@@ -70,6 +125,30 @@ int main(int Count, char** Arguments)
             std::cout << "PASS mirrored design and circular guides: maximum_error_metres=" << MirrorError << "\n";
 
         }
+        if (Count == 4)
+        {
+            auto GuidePath = std::filesystem::path(Arguments[2]);
+            GuidePath.replace_extension(".guides.json");
+            std::ofstream Guides(GuidePath);
+            Guides << std::setprecision(17) << "[\n";
+            bool First = true;
+            for (const auto& CurveFigure : Host.AllFigures())
+            {
+                if (!CurveFigure.Name.starts_with("Design_Rail_")) continue;
+                Guides << (First ? "" : ",\n") << "{\"name\":\"" << CurveFigure.Name << "\",\"points\":[";
+                First = false;
+                const auto& Curve = CurveFigure.Curve;
+                for (int Sample = 0; Sample <= 4096; ++Sample)
+                {
+                    const Vec3 Point = Curve.Sample(Curve.DomainStart() + (Curve.DomainEnd() - Curve.DomainStart()) * Sample / 4096.0);
+                    Guides << (Sample ? "," : "") << "[" << Point.X << "," << Point.Y << "," << Point.Z << "]";
+                }
+                Guides << "]}";
+            }
+            Guides << "\n]\n";
+            if (!Guides.good()) return 2;
+        }
+        if (!Host.Document().Areas().empty()) return 2;
         const SceneFigure* Figure = Host.Document().Find("Liger_Main_Body");
         if (!Figure || Figure->Classification != FigureClassification::Body) return 2;
         Host.Execute("view top; view fit; view dolly 1.5");
