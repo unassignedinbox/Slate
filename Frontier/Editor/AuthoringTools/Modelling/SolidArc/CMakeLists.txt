@@ -887,6 +887,11 @@ add_test(NAME LigerPatchVerification COMMAND LigerPatchVerification
     "${LIGER_RECONSTRUCTION}/Liger_Patch_Repair.arc"
     "${SOLIDARC_PROOF_FOLDER}/LigerPatchRepair")
 set_tests_properties(LigerPatchVerification PROPERTIES TIMEOUT 1200 LABELS "Liger;Geometry")
+add_test(NAME LigerOrangeRepairVerification COMMAND LigerPatchVerification
+    "${LIGER_RECONSTRUCTION}/Liger_Patch_Repair.arc"
+    "${LIGER_RECONSTRUCTION}/Liger_Orange_Repair.arc"
+    "${SOLIDARC_PROOF_FOLDER}/LigerOrangeRepair" --orange)
+set_tests_properties(LigerOrangeRepairVerification PROPERTIES TIMEOUT 1200 LABELS "Liger;Geometry")
 
 add_executable(RoofRepairVerification Verification/RoofRepairVerification.cpp)
 target_link_libraries(RoofRepairVerification PRIVATE SolidArcConsoleKit)

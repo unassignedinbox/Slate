@@ -42,7 +42,7 @@ def VerifyChartOrientation(Patch, Axes):
     Poles = np.einsum(
         "ai,ijc,bj->abc",
         *[Refinements[0], Patch.Poles @ Axes, Refinements[1]],
-        optimize=True
+        optimize=True,
     )
     Along = np.arange(0, len(Poles) - 1, 3)[:, None] + np.arange(4)
     Across = np.arange(0, Poles.shape[1] - 1, 3)[:, None] + np.arange(4)
@@ -146,9 +146,23 @@ def MeasureSharedSeams(Patches):
     return Seams
 
 
-def Verify(EdgesPath):
-    Report = json.loads((Root / "Liger_Patch_Repair.json").read_text())
-    Selection = json.loads((Root / "Liger_Patch_Repair.selection.json").read_text())
+def TraceSourceCoordinates(History):
+    if "source" in History:
+        return {History["source"]: np.eye(3)}
+    Rotation = np.array([[0.0, -1.0, 1.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+    Result = {}
+    for Side, Offset in [("first", 0.0), ("second", 0.5)]:
+        Transform = np.array(
+            [[0.5, 0.0, Offset], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+        ) @ np.linalg.matrix_power(Rotation, History[Side + "Turn"])
+        for Name, Previous in TraceSourceCoordinates(History[Side]).items():
+            Result[Name] = Transform @ Previous
+    return Result
+
+
+def Verify(EdgesPath, Prefix="Liger_Patch_Repair"):
+    Report = json.loads((Root / f"{Prefix}.json").read_text())
+    Selection = json.loads((Root / f"{Prefix}.selection.json").read_text())
     assert (
         hashlib.sha256((Root / Report["source"]).read_bytes()).hexdigest()
         == Report["sourceSha256"]
@@ -178,13 +192,32 @@ def Verify(EdgesPath):
             Patch.Poles = Patch.Poles @ Axes
         Random = np.random.default_rng(72401 + Group["selection"]["component"])
         Samples = []
-        for Patch in Originals:
+        Mapped = []
+        Transforms = (
+            TraceSourceCoordinates(Group["selection"]["joinHistory"])
+            if "joinHistory" in Group["selection"]
+            else None
+        )
+        for Name, Patch in zip(Group["selection"]["names"], Originals):
             Coordinates = Random.uniform(0.00001, 0.99999, (193, 2))
             Samples.append(Evaluate(Patch, *Coordinates.T))
+            if Transforms is not None:
+                Projected = (
+                    np.c_[Coordinates, np.ones(len(Coordinates))] @ Transforms[Name].T
+                )[:, :2]
+                Normal = np.cross(
+                    Evaluate(Patch, np.array([0.5]), np.array([0.5]), 1, 0),
+                    Evaluate(Patch, np.array([0.5]), np.array([0.5]), 0, 1),
+                )[0]
+                if Normal[2] < 0:
+                    Projected[:, 0] = 1 - Projected[:, 0]
+                Mapped.append(Projected)
         Samples = np.concatenate(Samples)
         Errors = np.full(len(Samples), float("inf"))
         for Patch in Replacements:
-            Coordinates = Parameters(Patch, Samples[:, :2])
+            Coordinates = (
+                np.concatenate(Mapped) if Mapped else Parameters(Patch, Samples[:, :2])
+            )
             Positions = Evaluate(Patch, *Coordinates.T)
             Valid = np.linalg.norm(Positions[:, :2] - Samples[:, :2], axis=1) < 1e-8
             Errors[Valid] = np.minimum(
@@ -251,7 +284,7 @@ def Verify(EdgesPath):
         "groups": Results,
         "scope": "Independent held-out source-to-chart checks; exact spline samples. Numerical Bernstein checks use floating point, not interval arithmetic. Not a global Hausdorff or G1/G2 certificate.",
     }
-    (Root / "Liger_Patch_Repair.verification.json").write_text(
+    (Root / f"{Prefix}.verification.json").write_text(
         json.dumps(Output, indent=2) + "\n"
     )
     print(
@@ -262,4 +295,6 @@ def Verify(EdgesPath):
 if __name__ == "__main__":
     Parser = argparse.ArgumentParser(description=__doc__)
     Parser.add_argument("edges", type=Path)
-    Verify(Parser.parse_args().edges)
+    Parser.add_argument("--prefix", default="Liger_Patch_Repair")
+    Arguments = Parser.parse_args()
+    Verify(Arguments.edges, Arguments.prefix)

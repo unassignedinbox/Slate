@@ -1,0 +1,2247 @@
+{
+  "source": "Liger_Patch_Repair.arc",
+  "sourceSha256": "9c34922fdcfa7f1cf942e8c92b777b1e1363917c92383d0b74b9808fede10d0d",
+  "document": "Liger_Orange_Repair.arc",
+  "documentSha256": "ccdb15de9d432b7ff95eafa70b4d47758df632288a9620cfa88e094527fd5f1d",
+  "sourceFaceCount": 888,
+  "newFaceCount": 824,
+  "removedSurfaces": [
+    "Main_0198",
+    "Main_0199",
+    "Main_0202",
+    "Main_0203",
+    "Main_0208",
+    "Main_0209",
+    "Main_0288",
+    "Main_0289",
+    "Main_0350",
+    "Main_0351",
+    "Main_0352",
+    "Main_0353",
+    "Main_0372",
+    "Main_0373",
+    "Main_0422",
+    "Main_0423",
+    "Main_0424",
+    "Main_0425",
+    "Main_0448",
+    "Main_0449",
+    "Main_0460",
+    "Main_0461",
+    "Main_0496",
+    "Main_0497",
+    "Main_0500",
+    "Main_0501",
+    "Main_0546",
+    "Main_0547",
+    "Main_0548",
+    "Main_0549",
+    "Main_0550",
+    "Main_0551",
+    "Main_0558",
+    "Main_0559",
+    "Main_0560",
+    "Main_0561",
+    "Main_0760",
+    "Main_0761",
+    "Main_0762",
+    "Main_0763",
+    "Main_0764",
+    "Main_0765",
+    "Main_0828",
+    "Main_0829",
+    "Main_0834",
+    "Main_0835",
+    "Main_0860",
+    "Main_0861",
+    "Main_0868",
+    "Main_0869",
+    "Main_0880",
+    "Main_0881",
+    "Main_0884",
+    "Main_0885",
+    "Main_0886",
+    "Main_0887",
+    "Main_0896",
+    "Main_0897",
+    "Main_0898",
+    "Main_0899",
+    "Main_0914",
+    "Main_0915",
+    "Main_0918",
+    "Main_0919",
+    "Main_0920",
+    "Main_0921",
+    "Main_0996",
+    "Main_0997",
+    "Main_0998",
+    "Main_0999",
+    "Main_1024",
+    "Main_1025",
+    "Main_1026",
+    "Main_1027",
+    "Main_1028",
+    "Main_1029",
+    "Main_1048",
+    "Main_1049",
+    "Main_1050",
+    "Main_1051",
+    "Main_1070",
+    "Main_1071",
+    "Main_1074",
+    "Main_1075",
+    "Main_1078",
+    "Main_1079",
+    "Main_1094",
+    "Main_1095",
+    "Main_1096",
+    "Main_1097",
+    "Main_1098",
+    "Main_1099",
+    "Main_1102",
+    "Main_1103",
+    "Main_1104",
+    "Main_1105",
+    "Main_1106",
+    "Main_1107",
+    "Main_1112",
+    "Main_1113",
+    "Main_1114",
+    "Main_1115"
+  ],
+  "retainedSurfaceCount": 786,
+  "newSurfaces": [
+    "OrangeRepair_10_Left_0",
+    "OrangeRepair_10_Right_0",
+    "OrangeRepair_100_Left_0",
+    "OrangeRepair_100_Right_0",
+    "OrangeRepair_101_Left_0",
+    "OrangeRepair_101_Right_0",
+    "OrangeRepair_102_Left_0",
+    "OrangeRepair_102_Right_0",
+    "OrangeRepair_103_Left_0",
+    "OrangeRepair_103_Right_0",
+    "OrangeRepair_104_Left_0",
+    "OrangeRepair_104_Right_0",
+    "OrangeRepair_106_Left_0",
+    "OrangeRepair_106_Right_0",
+    "OrangeRepair_108_Left_0",
+    "OrangeRepair_108_Right_0",
+    "OrangeRepair_109_Left_0",
+    "OrangeRepair_109_Right_0",
+    "OrangeRepair_110_Left_0",
+    "OrangeRepair_110_Right_0",
+    "OrangeRepair_111_Left_0",
+    "OrangeRepair_111_Right_0",
+    "OrangeRepair_112_Left_0",
+    "OrangeRepair_112_Right_0",
+    "OrangeRepair_113_Left_0",
+    "OrangeRepair_113_Right_0",
+    "OrangeRepair_114_Left_0",
+    "OrangeRepair_114_Right_0",
+    "OrangeRepair_115_Left_0",
+    "OrangeRepair_115_Right_0",
+    "OrangeRepair_116_Left_0",
+    "OrangeRepair_116_Right_0",
+    "OrangeRepair_117_Left_0",
+    "OrangeRepair_117_Right_0",
+    "OrangeRepair_118_Left_0",
+    "OrangeRepair_118_Right_0",
+    "OrangeRepair_119_Left_0",
+    "OrangeRepair_119_Right_0"
+  ],
+  "groups": [
+    {
+      "label": "FrontCorner10",
+      "selection": {
+        "component": 10,
+        "faces": [
+          238,
+          240,
+          310,
+          312,
+          336,
+          388,
+          446,
+          448
+        ],
+        "names": [
+          "Main_0350",
+          "Main_0352",
+          "Main_0422",
+          "Main_0424",
+          "Main_0448",
+          "Main_0500",
+          "Main_0558",
+          "Main_0560"
+        ],
+        "rim": [
+          4352,
+          4353,
+          4354,
+          1414,
+          1415,
+          4619,
+          4364,
+          4365,
+          4366,
+          4367,
+          4368,
+          2967,
+          2968,
+          4392,
+          4393,
+          1090,
+          1092,
+          1091,
+          4193,
+          4194,
+          4195,
+          4196,
+          4197,
+          4198,
+          1773,
+          1774,
+          2931,
+          4351
+        ],
+        "orange": [
+          1090,
+          1091,
+          1092,
+          1414,
+          1415,
+          3517,
+          3518,
+          3519,
+          3523,
+          4355,
+          4356,
+          4357,
+          4358,
+          4359,
+          4360,
+          4361,
+          4387,
+          4394,
+          4395,
+          4396,
+          4637,
+          4843,
+          4931,
+          4932
+        ],
+        "bounds": [
+          [
+            1.523332824707,
+            0.675960006714,
+            0.819367904663
+          ],
+          [
+            1.926212081909,
+            0.902214804093,
+            0.907702897006
+          ]
+        ],
+        "projection": "principal",
+        "normalAxis": 2,
+        "barriers": {
+          "1415": "PerimeterSide0",
+          "1414": "PerimeterSide0",
+          "1092": "PerimeterSide0",
+          "1091": "PerimeterSide0",
+          "1090": "PerimeterSide0",
+          "2931": "PerimeterSide0",
+          "4198": "PerimeterSide1",
+          "4197": "PerimeterSide1",
+          "4196": "PerimeterSide1",
+          "4195": "PerimeterSide1",
+          "4194": "PerimeterSide1",
+          "4193": "PerimeterSide1",
+          "2968": "PerimeterSide2",
+          "2967": "PerimeterSide2",
+          "4619": "PerimeterSide2",
+          "4392": "PerimeterSide2",
+          "4393": "PerimeterSide2",
+          "4364": "PerimeterSide2",
+          "4365": "PerimeterSide2",
+          "4366": "PerimeterSide2",
+          "4367": "PerimeterSide2",
+          "4368": "PerimeterSide2",
+          "4351": "PerimeterSide3",
+          "4352": "PerimeterSide3",
+          "4353": "PerimeterSide3",
+          "4354": "PerimeterSide3",
+          "1774": "PerimeterSide3",
+          "1773": "PerimeterSide3"
+        },
+        "approvedOrangeCopies": [
+          1442,
+          1443,
+          1444,
+          1876,
+          1877,
+          4570,
+          4571,
+          4572,
+          4576,
+          5402,
+          5403,
+          5404,
+          5405,
+          5406,
+          5407,
+          5408,
+          5434,
+          5441,
+          5442,
+          5443,
+          5684,
+          5890,
+          5974,
+          5975
+        ],
+        "curvatureWeight": 5e-05,
+        "label": "FrontCorner10"
+      },
+      "mirroredSources": [
+        "Main_0351",
+        "Main_0353",
+        "Main_0423",
+        "Main_0425",
+        "Main_0449",
+        "Main_0501",
+        "Main_0559",
+        "Main_0561"
+      ],
+      "newSurfaces": [
+        "OrangeRepair_10_Left_0",
+        "OrangeRepair_10_Right_0"
+      ],
+      "measures": [
+        {
+          "sampleCount": 4232,
+          "maximumDisplacementMm": 0.11360040315622211,
+          "rmsDisplacementMm": 0.006286686086343617,
+          "rimNormalTargetMaximumDegrees": 0.5355564121729194,
+          "rimNormalTargetRmsDegrees": 0.04975379435220345
+        }
+      ],
+      "projectionAxes": [
+        [
+          0.9972030307781121,
+          0.0,
+          0.07474031982101377
+        ],
+        [
+          0.01698574609519506,
+          0.9738333045678467,
+          -0.22662784326745275
+        ],
+        [
+          -0.07278461263575557,
+          0.22726349226056428,
+          0.9711095227877212
+        ]
+      ]
+    },
+    {
+      "label": "FrontCorner100",
+      "selection": {
+        "component": 100,
+        "faces": [
+          118,
+          260
+        ],
+        "names": [
+          "Main_0198",
+          "Main_0372"
+        ],
+        "rim": [
+          3747,
+          3748,
+          3749,
+          3750,
+          3751,
+          3752,
+          3753,
+          3754,
+          2107,
+          2108,
+          2109,
+          2110,
+          2111,
+          2112,
+          2113,
+          2114,
+          2115,
+          2116,
+          2117,
+          2118,
+          2119,
+          2120,
+          2121,
+          2122,
+          2123,
+          2124,
+          2125,
+          2126,
+          2127,
+          2128,
+          2129,
+          2130
+        ],
+        "projection": "principal",
+        "normalAxis": 2,
+        "curvatureWeight": 5e-05,
+        "approvedOrangeCopies": [
+          2924,
+          2925,
+          2926,
+          2927,
+          2928,
+          2942,
+          2943,
+          2944,
+          2945,
+          2946,
+          2947,
+          2948,
+          2949,
+          2950,
+          2951,
+          4794,
+          4795,
+          4796,
+          4797,
+          4798,
+          4799,
+          4800,
+          4801
+        ],
+        "joinHistory": {
+          "first": {
+            "source": "Main_0198"
+          },
+          "second": {
+            "source": "Main_0372"
+          },
+          "firstTurn": 2,
+          "secondTurn": 3
+        },
+        "label": "FrontCorner100"
+      },
+      "mirroredSources": [
+        "Main_0199",
+        "Main_0373"
+      ],
+      "newSurfaces": [
+        "OrangeRepair_100_Left_0",
+        "OrangeRepair_100_Right_0"
+      ],
+      "measures": [
+        {
+          "sampleCount": 1035,
+          "maximumDisplacementMm": 0.462730028684355,
+          "rmsDisplacementMm": 0.08095162001920701,
+          "rimNormalTargetMaximumDegrees": 0.41283842275894467,
+          "rimNormalTargetRmsDegrees": 0.08591338333266203
+        }
+      ],
+      "projectionAxes": [
+        [
+          0.8522292008323928,
+          0.0,
+          0.5231686049913367
+        ],
+        [
+          -0.2979093323999161,
+          0.8220379274882742,
+          0.4852872092275039
+        ],
+        [
+          -0.43006443577400993,
+          -0.5694327403397024,
+          0.7005647259972482
+        ]
+      ]
+    },
+    {
+      "label": "FrontCorner101",
+      "selection": {
+        "component": 101,
+        "faces": [
+          122,
+          128
+        ],
+        "names": [
+          "Main_0202",
+          "Main_0208"
+        ],
+        "rim": [
+          2179,
+          2180,
+          2181,
+          2182,
+          2183,
+          2184,
+          2233,
+          2234,
+          2235,
+          2236,
+          2237,
+          2238,
+          2239,
+          2240,
+          2241,
+          2242,
+          1242,
+          1243,
+          1244,
+          1245,
+          1246,
+          1247,
+          1248,
+          1249
+        ],
+        "projection": "principal",
+        "normalAxis": 2,
+        "curvatureWeight": 5e-05,
+        "approvedOrangeCopies": [
+          1680,
+          1681,
+          1682,
+          1683,
+          1684,
+          1685,
+          2996,
+          2997,
+          2998,
+          2999,
+          3000,
+          3001,
+          3002,
+          3003,
+          3004,
+          3005,
+          3050,
+          3051,
+          3052,
+          3053
+        ],
+        "joinHistory": {
+          "first": {
+            "source": "Main_0202"
+          },
+          "second": {
+            "source": "Main_0208"
+          },
+          "firstTurn": 3,
+          "secondTurn": 0
+        },
+        "label": "FrontCorner101"
+      },
+      "mirroredSources": [
+        "Main_0203",
+        "Main_0209"
+      ],
+      "newSurfaces": [
+        "OrangeRepair_101_Left_0",
+        "OrangeRepair_101_Right_0"
+      ],
+      "measures": [
+        {
+          "sampleCount": 1058,
+          "maximumDisplacementMm": 0.00465477613298404,
+          "rmsDisplacementMm": 0.000706110442345206,
+          "rimNormalTargetMaximumDegrees": 0.01627693982990077,
+          "rimNormalTargetRmsDegrees": 0.0030968120740875616
+        }
+      ],
+      "projectionAxes": [
+        [
+          0.7493930163376551,
+          0.0,
+          0.6621254466219759
+        ],
+        [
+          -0.1296876132983141,
+          0.9806307447829166,
+          0.1467803302336173
+        ],
+        [
+          -0.6493005698606295,
+          -0.1958656232892919,
+          0.7348778317463109
+        ]
+      ]
+    },
+    {
+      "label": "FrontCorner102",
+      "selection": {
+        "component": 102,
+        "faces": [
+          192,
+          438
+        ],
+        "names": [
+          "Main_0288",
+          "Main_0550"
+        ],
+        "rim": [
+          2720,
+          1317,
+          2791,
+          2792,
+          2735,
+          2736,
+          2577,
+          2578,
+          4917,
+          4918
+        ],
+        "projection": "principal",
+        "normalAxis": 0,
+        "curvatureWeight": 5e-05,
+        "approvedOrangeCopies": [
+          1754,
+          3432,
+          3433,
+          3575,
+          3590,
+          3591,
+          3598,
+          3599,
+          3714,
+          3715,
+          3716,
+          3717
+        ],
+        "joinHistory": {
+          "first": {
+            "source": "Main_0288"
+          },
+          "second": {
+            "source": "Main_0550"
+          },
+          "firstTurn": 3,
+          "secondTurn": 3
+        },
+        "label": "FrontCorner102"
+      },
+      "mirroredSources": [
+        "Main_0289",
+        "Main_0551"
+      ],
+      "newSurfaces": [
+        "OrangeRepair_102_Left_0",
+        "OrangeRepair_102_Right_0"
+      ],
+      "measures": [
+        {
+          "sampleCount": 1058,
+          "maximumDisplacementMm": 0.020781721941975917,
+          "rmsDisplacementMm": 0.003431120229975909,
+          "rimNormalTargetMaximumDegrees": 0.024726689635033126,
+          "rimNormalTargetRmsDegrees": 0.00572813686656438
+        }
+      ],
+      "projectionAxes": [
+        [
+          0.7375653881655045,
+          2.7755575615628914e-17,
+          0.6752757201175447
+        ],
+        [
+          -0.6159784767098125,
+          0.4097717274267585,
+          0.6727983707114263
+        ],
+        [
+          -0.27670889832191453,
+          -0.912188100888019,
+          0.30223344319876655
+        ]
+      ]
+    },
+    {
+      "label": "FrontCorner103",
+      "selection": {
+        "component": 103,
+        "faces": [
+          348,
+          434
+        ],
+        "names": [
+          "Main_0460",
+          "Main_0546"
+        ],
+        "rim": [
+          4704,
+          2233,
+          4867,
+          4709,
+          2184,
+          4543,
+          4697,
+          2234
+        ],
+        "projection": "principal",
+        "normalAxis": 2,
+        "curvatureWeight": 5e-05,
+        "approvedOrangeCopies": [
+          3001,
+          3050,
+          3051,
+          5590,
+          5744,
+          5750,
+          5751,
+          5756,
+          5914
+        ],
+        "joinHistory": {
+          "first": {
+            "source": "Main_0460"
+          },
+          "second": {
+            "source": "Main_0546"
+          },
+          "firstTurn": 0,
+          "secondTurn": 0
+        },
+        "label": "FrontCorner103"
+      },
+      "mirroredSources": [
+        "Main_0461",
+        "Main_0547"
+      ],
+      "newSurfaces": [
+        "OrangeRepair_103_Left_0",
+        "OrangeRepair_103_Right_0"
+      ],
+      "measures": [
+        {
+          "sampleCount": 1058,
+          "maximumDisplacementMm": 0.0021728836963053055,
+          "rmsDisplacementMm": 0.00041103210457172756,
+          "rimNormalTargetMaximumDegrees": 0.016612568850607048,
+          "rimNormalTargetRmsDegrees": 0.005752475234881119
+        }
+      ],
+      "projectionAxes": [
+        [
+          0.8160956820582206,
+          0.0,
+          0.5779168086549549
+        ],
+        [
+          -0.05816636225666267,
+          0.9949220640150092,
+          0.08213866834774519
+        ],
+        [
+          -0.5749821840959548,
+          -0.10064833101504558,
+          0.8119516004271015
+        ]
+      ]
+    },
+    {
+      "label": "FrontCorner104",
+      "selection": {
+        "component": 104,
+        "faces": [
+          384,
+          436
+        ],
+        "names": [
+          "Main_0496",
+          "Main_0548"
+        ],
+        "rim": [
+          4771,
+          4772,
+          4837,
+          4903,
+          4429,
+          4430,
+          4754,
+          4914,
+          4762,
+          4767
+        ],
+        "projection": "principal",
+        "normalAxis": 2,
+        "curvatureWeight": 5e-05,
+        "approvedOrangeCopies": [
+          5476,
+          5477,
+          5801,
+          5809,
+          5814,
+          5818,
+          5819,
+          5882,
+          5883,
+          5884,
+          5950,
+          5961
+        ],
+        "joinHistory": {
+          "first": {
+            "source": "Main_0496"
+          },
+          "second": {
+            "source": "Main_0548"
+          },
+          "firstTurn": 3,
+          "secondTurn": 2
+        },
+        "label": "FrontCorner104"
+      },
+      "mirroredSources": [
+        "Main_0497",
+        "Main_0549"
+      ],
+      "newSurfaces": [
+        "OrangeRepair_104_Left_0",
+        "OrangeRepair_104_Right_0"
+      ],
+      "measures": [
+        {
+          "sampleCount": 1058,
+          "maximumDisplacementMm": 0.015166414564671271,
+          "rmsDisplacementMm": 0.0024307938779928448,
+          "rimNormalTargetMaximumDegrees": 0.029531076799378185,
+          "rimNormalTargetRmsDegrees": 0.008443189461345707
+        }
+      ],
+      "projectionAxes": [
+        [
+          0.8321550192591266,
+          6.938893903907228e-18,
+          0.5545430767053564
+        ],
+        [
+          -0.046866770549010006,
+          0.9964222740146551,
+          0.0703289248159642
+        ],
+        [
+          -0.5525590735298346,
+          -0.08451421092019436,
+          0.8291777966228879
+        ]
+      ]
+    },
+    {
+      "label": "RearDeckAndFender106",
+      "selection": {
+        "component": 106,
+        "faces": [
+          582,
+          584,
+          586,
+          778,
+          776
+        ],
+        "names": [
+          "Main_0760",
+          "Main_0762",
+          "Main_0764",
+          "Main_0998",
+          "Main_0996"
+        ],
+        "rim": [
+          2471,
+          2472,
+          6843,
+          6851,
+          3013,
+          3014,
+          3015,
+          3016,
+          3017,
+          3018,
+          7111,
+          7107,
+          3667,
+          3668,
+          3669,
+          3670,
+          3671,
+          3672,
+          3299,
+          3300
+        ],
+        "projection": "principal",
+        "normalAxis": 2,
+        "curvatureWeight": 5e-05,
+        "approvedOrangeCopies": [
+          8636,
+          8644,
+          8972,
+          8973,
+          8976,
+          4054,
+          4055,
+          4714,
+          4715,
+          4716,
+          4717,
+          7499,
+          7500,
+          7503,
+          7504,
+          7505,
+          7509
+        ],
+        "joinHistory": {
+          "first": {
+            "source": "Main_0760"
+          },
+          "second": {
+            "first": {
+              "first": {
+                "source": "Main_0762"
+              },
+              "second": {
+                "first": {
+                  "source": "Main_0764"
+                },
+                "second": {
+                  "source": "Main_0998"
+                },
+                "firstTurn": 2,
+                "secondTurn": 3
+              },
+              "firstTurn": 3,
+              "secondTurn": 3
+            },
+            "second": {
+              "source": "Main_0996"
+            },
+            "firstTurn": 1,
+            "secondTurn": 1
+          },
+          "firstTurn": 2,
+          "secondTurn": 0
+        },
+        "label": "RearDeckAndFender106"
+      },
+      "mirroredSources": [
+        "Main_0761",
+        "Main_0763",
+        "Main_0765",
+        "Main_0999",
+        "Main_0997"
+      ],
+      "newSurfaces": [
+        "OrangeRepair_106_Left_0",
+        "OrangeRepair_106_Right_0"
+      ],
+      "measures": [
+        {
+          "sampleCount": 2645,
+          "maximumDisplacementMm": 0.02713272526588817,
+          "rmsDisplacementMm": 0.0016561471260375838,
+          "rimNormalTargetMaximumDegrees": 0.022761336599235845,
+          "rimNormalTargetRmsDegrees": 0.004538466004338049
+        }
+      ],
+      "projectionAxes": [
+        [
+          0.9979556990954818,
+          0.0,
+          -0.06390948789380263
+        ],
+        [
+          0.035927066639776295,
+          0.8270315925491059,
+          0.5610062306323798
+        ],
+        [
+          0.052855165551809385,
+          -0.5621554455181322,
+          0.8253408911163926
+        ]
+      ]
+    },
+    {
+      "label": "RearDeckAndFender108",
+      "selection": {
+        "component": 108,
+        "faces": [
+          632,
+          720
+        ],
+        "names": [
+          "Main_0828",
+          "Main_0920"
+        ],
+        "rim": [
+          6017,
+          6018,
+          6019,
+          6020,
+          6021,
+          6022,
+          6027,
+          6028,
+          6666,
+          6677,
+          6678,
+          6825,
+          6835,
+          6836,
+          6837,
+          6838,
+          6127,
+          6128,
+          6129,
+          6130
+        ],
+        "projection": "principal",
+        "normalAxis": 1,
+        "curvatureWeight": 5e-05,
+        "approvedOrangeCopies": [
+          8459,
+          8470,
+          8471,
+          8618,
+          8628,
+          8629,
+          8630,
+          8631,
+          7810,
+          7811,
+          7812,
+          7813,
+          7814,
+          7815,
+          7816,
+          7817,
+          7818,
+          7819,
+          7820,
+          7821,
+          7920,
+          7921,
+          7922,
+          7923
+        ],
+        "joinHistory": {
+          "first": {
+            "source": "Main_0828"
+          },
+          "second": {
+            "source": "Main_0920"
+          },
+          "firstTurn": 3,
+          "secondTurn": 2
+        },
+        "label": "RearDeckAndFender108"
+      },
+      "mirroredSources": [
+        "Main_0829",
+        "Main_0921"
+      ],
+      "newSurfaces": [
+        "OrangeRepair_108_Left_0",
+        "OrangeRepair_108_Right_0"
+      ],
+      "measures": [
+        {
+          "sampleCount": 1058,
+          "maximumDisplacementMm": 0.07712170174478672,
+          "rmsDisplacementMm": 0.01788910475347641,
+          "rimNormalTargetMaximumDegrees": 0.5937087296448817,
+          "rimNormalTargetRmsDegrees": 0.09979643765488054
+        }
+      ],
+      "projectionAxes": [
+        [
+          0.9979630282745735,
+          0.0,
+          -0.06379493864753408
+        ],
+        [
+          0.06305782182400403,
+          0.15157650841621909,
+          0.9864320925452293
+        ],
+        [
+          0.00966981405482013,
+          -0.9884455281381709,
+          0.1512677513543364
+        ]
+      ]
+    },
+    {
+      "label": "RearDeckAndFender109",
+      "selection": {
+        "component": 109,
+        "faces": [
+          638,
+          840
+        ],
+        "names": [
+          "Main_0834",
+          "Main_1094"
+        ],
+        "rim": [
+          5921,
+          6053,
+          6054,
+          6056,
+          6062,
+          6063,
+          6393,
+          6045
+        ],
+        "projection": "principal",
+        "normalAxis": 1,
+        "curvatureWeight": 5e-05,
+        "approvedOrangeCopies": [
+          7714,
+          7838,
+          7846,
+          7847,
+          7849,
+          7854,
+          7855,
+          7856,
+          8186
+        ],
+        "joinHistory": {
+          "first": {
+            "source": "Main_0834"
+          },
+          "second": {
+            "source": "Main_1094"
+          },
+          "firstTurn": 0,
+          "secondTurn": 2
+        },
+        "label": "RearDeckAndFender109"
+      },
+      "mirroredSources": [
+        "Main_0835",
+        "Main_1095"
+      ],
+      "newSurfaces": [
+        "OrangeRepair_109_Left_0",
+        "OrangeRepair_109_Right_0"
+      ],
+      "measures": [
+        {
+          "sampleCount": 1058,
+          "maximumDisplacementMm": 0.0014322378183440065,
+          "rmsDisplacementMm": 0.0003882819191139591,
+          "rimNormalTargetMaximumDegrees": 0.16283167678444851,
+          "rimNormalTargetRmsDegrees": 0.02653377311372268
+        }
+      ],
+      "projectionAxes": [
+        [
+          0.9388462993932892,
+          2.7755575615628914e-17,
+          -0.34433650128257726
+        ],
+        [
+          0.27679713382038107,
+          0.5948232777192551,
+          0.7546976977519831
+        ],
+        [
+          0.20481936633128311,
+          -0.8038564973198398,
+          0.5584476330797095
+        ]
+      ]
+    },
+    {
+      "label": "RearDeckAndFender110",
+      "selection": {
+        "component": 110,
+        "faces": [
+          664,
+          832
+        ],
+        "names": [
+          "Main_0860",
+          "Main_1078"
+        ],
+        "rim": [
+          6593,
+          6594,
+          3242,
+          7184,
+          7185,
+          5876,
+          5877,
+          7189,
+          6716,
+          5887
+        ],
+        "projection": "principal",
+        "normalAxis": 0,
+        "curvatureWeight": 5e-05,
+        "approvedOrangeCopies": [
+          8386,
+          8387,
+          8388,
+          8389,
+          8509,
+          9069,
+          9070,
+          9074,
+          4295,
+          7669,
+          7670,
+          7680
+        ],
+        "joinHistory": {
+          "first": {
+            "source": "Main_0860"
+          },
+          "second": {
+            "source": "Main_1078"
+          },
+          "firstTurn": 0,
+          "secondTurn": 3
+        },
+        "label": "RearDeckAndFender110"
+      },
+      "mirroredSources": [
+        "Main_0861",
+        "Main_1079"
+      ],
+      "newSurfaces": [
+        "OrangeRepair_110_Left_0",
+        "OrangeRepair_110_Right_0"
+      ],
+      "measures": [
+        {
+          "sampleCount": 1058,
+          "maximumDisplacementMm": 0.04751779206157991,
+          "rmsDisplacementMm": 0.006105670510710161,
+          "rimNormalTargetMaximumDegrees": 0.01419582038448799,
+          "rimNormalTargetRmsDegrees": 0.002494267919799366
+        }
+      ],
+      "projectionAxes": [
+        [
+          0.720065797055029,
+          0.0,
+          0.6939057918129129
+        ],
+        [
+          0.60812921583214,
+          -0.48160963997729256,
+          -0.6310554742115224
+        ],
+        [
+          0.3341917185731751,
+          0.8763858480606261,
+          -0.3467906292796348
+        ]
+      ]
+    },
+    {
+      "label": "RearDeckAndFender111",
+      "selection": {
+        "component": 111,
+        "faces": [
+          668,
+          718
+        ],
+        "names": [
+          "Main_0868",
+          "Main_0918"
+        ],
+        "rim": [
+          2861,
+          2862,
+          6829,
+          6830,
+          6831,
+          5823,
+          5824,
+          5825,
+          5826,
+          5827,
+          5828,
+          5829,
+          5830,
+          6741,
+          6742,
+          6743,
+          6744,
+          6617,
+          6618,
+          6619,
+          6620,
+          6745,
+          6772,
+          6773
+        ],
+        "projection": "principal",
+        "normalAxis": 2,
+        "curvatureWeight": 5e-05,
+        "approvedOrangeCopies": [
+          8410,
+          8411,
+          8412,
+          8413,
+          8414,
+          8415,
+          8538,
+          3898,
+          3899,
+          7616,
+          7617
+        ],
+        "joinHistory": {
+          "first": {
+            "source": "Main_0868"
+          },
+          "second": {
+            "source": "Main_0918"
+          },
+          "firstTurn": 3,
+          "secondTurn": 2
+        },
+        "label": "RearDeckAndFender111"
+      },
+      "mirroredSources": [
+        "Main_0869",
+        "Main_0919"
+      ],
+      "newSurfaces": [
+        "OrangeRepair_111_Left_0",
+        "OrangeRepair_111_Right_0"
+      ],
+      "measures": [
+        {
+          "sampleCount": 1058,
+          "maximumDisplacementMm": 0.06120500821649166,
+          "rmsDisplacementMm": 0.0047027375138736305,
+          "rimNormalTargetMaximumDegrees": 0.11408485990188176,
+          "rimNormalTargetRmsDegrees": 0.020380499323331285
+        }
+      ],
+      "projectionAxes": [
+        [
+          0.9985210769895247,
+          -4.336808689942018e-19,
+          -0.05436597104512564
+        ],
+        [
+          0.0036877991267704954,
+          0.9976966991742321,
+          0.06773253719182962
+        ],
+        [
+          0.05424074985912372,
+          -0.067832856764565,
+          0.9962211825683482
+        ]
+      ]
+    },
+    {
+      "label": "RearDeckAndFender112",
+      "selection": {
+        "component": 112,
+        "faces": [
+          680,
+          696
+        ],
+        "names": [
+          "Main_0880",
+          "Main_0896"
+        ],
+        "rim": [
+          6430,
+          6659,
+          6543,
+          6257,
+          6258,
+          6552,
+          6653,
+          6654
+        ],
+        "projection": "principal",
+        "normalAxis": 1,
+        "curvatureWeight": 5e-05,
+        "approvedOrangeCopies": [
+          8336,
+          8345,
+          8446,
+          8447,
+          8448,
+          8452
+        ],
+        "joinHistory": {
+          "first": {
+            "source": "Main_0880"
+          },
+          "second": {
+            "source": "Main_0896"
+          },
+          "firstTurn": 2,
+          "secondTurn": 0
+        },
+        "label": "RearDeckAndFender112"
+      },
+      "mirroredSources": [
+        "Main_0881",
+        "Main_0897"
+      ],
+      "newSurfaces": [
+        "OrangeRepair_112_Left_0",
+        "OrangeRepair_112_Right_0"
+      ],
+      "measures": [
+        {
+          "sampleCount": 1058,
+          "maximumDisplacementMm": 0.053305134100067875,
+          "rmsDisplacementMm": 0.015025758995109311,
+          "rimNormalTargetMaximumDegrees": 0.11313726994959956,
+          "rimNormalTargetRmsDegrees": 0.02856177572165714
+        }
+      ],
+      "projectionAxes": [
+        [
+          0.886563367455796,
+          0.0,
+          -0.4626071718914864
+        ],
+        [
+          0.45495158760349147,
+          0.18117311547167259,
+          0.8718918253816524
+        ],
+        [
+          0.08381198257112016,
+          -0.9834512200563317,
+          0.16062144734502382
+        ]
+      ]
+    },
+    {
+      "label": "RearDeckAndFender113",
+      "selection": {
+        "component": 113,
+        "faces": [
+          684,
+          686,
+          698
+        ],
+        "names": [
+          "Main_0884",
+          "Main_0886",
+          "Main_0898"
+        ],
+        "rim": [
+          6663,
+          6666,
+          6673,
+          6674,
+          6675,
+          6676,
+          6677,
+          6678,
+          6685,
+          6694,
+          6723,
+          6724,
+          6725,
+          6726,
+          6727,
+          6728,
+          6729,
+          6730,
+          6119,
+          6120,
+          6121,
+          6122,
+          6123,
+          6124,
+          6125,
+          6126
+        ],
+        "projection": "principal",
+        "normalAxis": 2,
+        "curvatureWeight": 5e-05,
+        "approvedOrangeCopies": [
+          8454,
+          8455,
+          8456,
+          8457,
+          8458,
+          8459,
+          8466,
+          8467,
+          8468,
+          8469,
+          8470,
+          8471,
+          8517,
+          8518,
+          8519,
+          8520,
+          8521,
+          8522,
+          8523,
+          7913,
+          7914,
+          7915,
+          7916,
+          7917,
+          7918,
+          7919
+        ],
+        "joinHistory": {
+          "first": {
+            "first": {
+              "source": "Main_0884"
+            },
+            "second": {
+              "source": "Main_0886"
+            },
+            "firstTurn": 3,
+            "secondTurn": 0
+          },
+          "second": {
+            "source": "Main_0898"
+          },
+          "firstTurn": 2,
+          "secondTurn": 2
+        },
+        "label": "RearDeckAndFender113"
+      },
+      "mirroredSources": [
+        "Main_0885",
+        "Main_0887",
+        "Main_0899"
+      ],
+      "newSurfaces": [
+        "OrangeRepair_113_Left_0",
+        "OrangeRepair_113_Right_0"
+      ],
+      "measures": [
+        {
+          "sampleCount": 1587,
+          "maximumDisplacementMm": 0.18962532187627446,
+          "rmsDisplacementMm": 0.04981609821010613,
+          "rimNormalTargetMaximumDegrees": 0.24475995899186087,
+          "rimNormalTargetRmsDegrees": 0.03987392890433403
+        }
+      ],
+      "projectionAxes": [
+        [
+          0.9869485251047047,
+          0.0,
+          -0.16103604811857505
+        ],
+        [
+          0.10948401839476748,
+          0.7333301199471485,
+          0.6709993926185294
+        ],
+        [
+          0.11809258448260943,
+          -0.679872734545445,
+          0.7237590802966944
+        ]
+      ]
+    },
+    {
+      "label": "RearDeckAndFender114",
+      "selection": {
+        "component": 114,
+        "faces": [
+          714,
+          850
+        ],
+        "names": [
+          "Main_0914",
+          "Main_1104"
+        ],
+        "rim": [
+          6818,
+          6825,
+          7249,
+          6835,
+          6676,
+          7251
+        ],
+        "projection": "principal",
+        "normalAxis": 2,
+        "curvatureWeight": 5e-05,
+        "approvedOrangeCopies": [
+          8469,
+          8611,
+          8618,
+          8619,
+          8628,
+          9134,
+          9136
+        ],
+        "joinHistory": {
+          "first": {
+            "source": "Main_0914"
+          },
+          "second": {
+            "source": "Main_1104"
+          },
+          "firstTurn": 2,
+          "secondTurn": 3
+        },
+        "label": "RearDeckAndFender114"
+      },
+      "mirroredSources": [
+        "Main_0915",
+        "Main_1105"
+      ],
+      "newSurfaces": [
+        "OrangeRepair_114_Left_0",
+        "OrangeRepair_114_Right_0"
+      ],
+      "measures": [
+        {
+          "sampleCount": 1058,
+          "maximumDisplacementMm": 0.09373925101008318,
+          "rmsDisplacementMm": 0.023874280392050334,
+          "rimNormalTargetMaximumDegrees": 0.9743074519215341,
+          "rimNormalTargetRmsDegrees": 0.26121115197210115
+        }
+      ],
+      "projectionAxes": [
+        [
+          0.9997084773814042,
+          -3.469446951953614e-18,
+          0.024144569819205524
+        ],
+        [
+          -0.016709334187507502,
+          0.7218462060710883,
+          0.6918517564708397
+        ],
+        [
+          -0.01742866612121201,
+          -0.692053505721036,
+          0.7216357715748709
+        ]
+      ]
+    },
+    {
+      "label": "RearDeckAndFender115",
+      "selection": {
+        "component": 115,
+        "faces": [
+          794,
+          796,
+          808,
+          798,
+          806
+        ],
+        "names": [
+          "Main_1024",
+          "Main_1026",
+          "Main_1050",
+          "Main_1028",
+          "Main_1048"
+        ],
+        "rim": [
+          7073,
+          7074,
+          7075,
+          7076,
+          7077,
+          5801,
+          5802,
+          5803,
+          5804,
+          6607,
+          6608,
+          7141,
+          7142,
+          7143
+        ],
+        "projection": "principal",
+        "normalAxis": 2,
+        "curvatureWeight": 5e-05,
+        "approvedOrangeCopies": [
+          8400,
+          8401,
+          8926,
+          8927,
+          8928,
+          8929,
+          8930,
+          9002,
+          9003,
+          9006,
+          9007,
+          9010,
+          9011,
+          9026,
+          9027,
+          9028,
+          9029,
+          7594,
+          7595,
+          7596,
+          7597
+        ],
+        "joinHistory": {
+          "first": {
+            "first": {
+              "source": "Main_1024"
+            },
+            "second": {
+              "first": {
+                "first": {
+                  "source": "Main_1026"
+                },
+                "second": {
+                  "source": "Main_1050"
+                },
+                "firstTurn": 1,
+                "secondTurn": 0
+              },
+              "second": {
+                "source": "Main_1028"
+              },
+              "firstTurn": 3,
+              "secondTurn": 3
+            },
+            "firstTurn": 3,
+            "secondTurn": 1
+          },
+          "second": {
+            "source": "Main_1048"
+          },
+          "firstTurn": 0,
+          "secondTurn": 0
+        },
+        "label": "RearDeckAndFender115"
+      },
+      "mirroredSources": [
+        "Main_1025",
+        "Main_1027",
+        "Main_1051",
+        "Main_1029",
+        "Main_1049"
+      ],
+      "newSurfaces": [
+        "OrangeRepair_115_Left_0",
+        "OrangeRepair_115_Right_0"
+      ],
+      "measures": [
+        {
+          "sampleCount": 2645,
+          "maximumDisplacementMm": 0.017685900698616308,
+          "rmsDisplacementMm": 0.0026024297776134735,
+          "rimNormalTargetMaximumDegrees": 0.007860645422412953,
+          "rimNormalTargetRmsDegrees": 0.0017598854907018215
+        }
+      ],
+      "projectionAxes": [
+        [
+          0.9981423288754881,
+          0.0,
+          -0.06092529283488852
+        ],
+        [
+          -0.0015666490254326784,
+          0.9996693336597314,
+          -0.02566649471860103
+        ],
+        [
+          0.06090514689127701,
+          0.02571426336313883,
+          0.9978122768045317
+        ]
+      ]
+    },
+    {
+      "label": "RearDeckAndFender116",
+      "selection": {
+        "component": 116,
+        "faces": [
+          824,
+          848
+        ],
+        "names": [
+          "Main_1070",
+          "Main_1102"
+        ],
+        "rim": [
+          7168,
+          6027,
+          7249,
+          6836,
+          6837,
+          6838,
+          7166,
+          7167
+        ],
+        "projection": "principal",
+        "normalAxis": 1,
+        "curvatureWeight": 5e-05,
+        "approvedOrangeCopies": [
+          8629,
+          8630,
+          8631,
+          9050,
+          9051,
+          9052,
+          9053,
+          9134,
+          7820
+        ],
+        "joinHistory": {
+          "first": {
+            "source": "Main_1070"
+          },
+          "second": {
+            "source": "Main_1102"
+          },
+          "firstTurn": 0,
+          "secondTurn": 1
+        },
+        "label": "RearDeckAndFender116"
+      },
+      "mirroredSources": [
+        "Main_1071",
+        "Main_1103"
+      ],
+      "newSurfaces": [
+        "OrangeRepair_116_Left_0",
+        "OrangeRepair_116_Right_0"
+      ],
+      "measures": [
+        {
+          "sampleCount": 1058,
+          "maximumDisplacementMm": 0.020751998870860433,
+          "rmsDisplacementMm": 0.0051128706104982624,
+          "rimNormalTargetMaximumDegrees": 0.12489326865950952,
+          "rimNormalTargetRmsDegrees": 0.027263782565336
+        }
+      ],
+      "projectionAxes": [
+        [
+          0.999740160684393,
+          -8.673617379884035e-19,
+          -0.022794980033857725
+        ],
+        [
+          0.022424567913205438,
+          0.17954217695608876,
+          0.9834946595929103
+        ],
+        [
+          0.004092660338949393,
+          -0.9837502765915079,
+          0.17949552483970593
+        ]
+      ]
+    },
+    {
+      "label": "RearDeckAndFender117",
+      "selection": {
+        "component": 117,
+        "faces": [
+          828,
+          844
+        ],
+        "names": [
+          "Main_1074",
+          "Main_1098"
+        ],
+        "rim": [
+          7168,
+          7233,
+          7174,
+          6055,
+          7179,
+          6028,
+          7244,
+          6041,
+          6042,
+          6043
+        ],
+        "projection": "principal",
+        "normalAxis": 1,
+        "curvatureWeight": 5e-05,
+        "approvedOrangeCopies": [
+          9053,
+          9059,
+          9064,
+          9065,
+          9118,
+          9129,
+          7821,
+          7834,
+          7835,
+          7836,
+          7848
+        ],
+        "joinHistory": {
+          "first": {
+            "source": "Main_1074"
+          },
+          "second": {
+            "source": "Main_1098"
+          },
+          "firstTurn": 2,
+          "secondTurn": 2
+        },
+        "label": "RearDeckAndFender117"
+      },
+      "mirroredSources": [
+        "Main_1075",
+        "Main_1099"
+      ],
+      "newSurfaces": [
+        "OrangeRepair_117_Left_0",
+        "OrangeRepair_117_Right_0"
+      ],
+      "measures": [
+        {
+          "sampleCount": 1058,
+          "maximumDisplacementMm": 0.024389367064614476,
+          "rmsDisplacementMm": 0.007758434823307678,
+          "rimNormalTargetMaximumDegrees": 0.056638030535923777,
+          "rimNormalTargetRmsDegrees": 0.012009934260809544
+        }
+      ],
+      "projectionAxes": [
+        [
+          0.9915733573650582,
+          6.938893903907228e-18,
+          -0.12954642783105458
+        ],
+        [
+          0.10606057169156756,
+          0.5742114527946216,
+          0.8118080823765851
+        ],
+        [
+          0.07438704252922346,
+          -0.8187070339746023,
+          0.5693727780850305
+        ]
+      ]
+    },
+    {
+      "label": "RearDeckAndFender118",
+      "selection": {
+        "component": 118,
+        "faces": [
+          842,
+          852
+        ],
+        "names": [
+          "Main_1096",
+          "Main_1106"
+        ],
+        "rim": [
+          6816,
+          6817,
+          7234,
+          7243,
+          7244,
+          7251,
+          7253,
+          7229
+        ],
+        "projection": "principal",
+        "normalAxis": 1,
+        "curvatureWeight": 5e-05,
+        "approvedOrangeCopies": [
+          8609,
+          8610,
+          9119,
+          9126,
+          9127,
+          9129,
+          9136,
+          9138,
+          9114,
+          9128
+        ],
+        "joinHistory": {
+          "first": {
+            "source": "Main_1096"
+          },
+          "second": {
+            "source": "Main_1106"
+          },
+          "firstTurn": 1,
+          "secondTurn": 1
+        },
+        "label": "RearDeckAndFender118"
+      },
+      "mirroredSources": [
+        "Main_1097",
+        "Main_1107"
+      ],
+      "newSurfaces": [
+        "OrangeRepair_118_Left_0",
+        "OrangeRepair_118_Right_0"
+      ],
+      "measures": [
+        {
+          "sampleCount": 1058,
+          "maximumDisplacementMm": 0.05490179732370315,
+          "rmsDisplacementMm": 0.010409313663492598,
+          "rimNormalTargetMaximumDegrees": 0.06106066728873114,
+          "rimNormalTargetRmsDegrees": 0.012735201352874023
+        }
+      ],
+      "projectionAxes": [
+        [
+          0.9963960000018331,
+          0.0,
+          -0.0848234117466807
+        ],
+        [
+          0.06573110390881605,
+          0.6320630035060754,
+          0.7721242008756158
+        ],
+        [
+          0.05361374039623952,
+          -0.774917001748497,
+          0.6297850484425981
+        ]
+      ]
+    },
+    {
+      "label": "RearDeckAndFender119",
+      "selection": {
+        "component": 119,
+        "faces": [
+          858,
+          860
+        ],
+        "names": [
+          "Main_1112",
+          "Main_1114"
+        ],
+        "rim": [
+          7232,
+          7113,
+          7243,
+          7259,
+          7231,
+          7230
+        ],
+        "projection": "principal",
+        "normalAxis": 2,
+        "curvatureWeight": 5e-05,
+        "approvedOrangeCopies": [
+          8978,
+          9144,
+          9115,
+          9116,
+          9117,
+          9128,
+          9148
+        ],
+        "joinHistory": {
+          "first": {
+            "source": "Main_1112"
+          },
+          "second": {
+            "source": "Main_1114"
+          },
+          "firstTurn": 0,
+          "secondTurn": 1
+        },
+        "label": "RearDeckAndFender119"
+      },
+      "mirroredSources": [
+        "Main_1113",
+        "Main_1115"
+      ],
+      "newSurfaces": [
+        "OrangeRepair_119_Left_0",
+        "OrangeRepair_119_Right_0"
+      ],
+      "measures": [
+        {
+          "sampleCount": 1058,
+          "maximumDisplacementMm": 0.023618738133501793,
+          "rmsDisplacementMm": 0.0055101491648152316,
+          "rimNormalTargetMaximumDegrees": 0.02478290883827828,
+          "rimNormalTargetRmsDegrees": 0.005506575000580802
+        }
+      ],
+      "projectionAxes": [
+        [
+          0.9981325744575799,
+          3.469446951953614e-18,
+          -0.0610848901667507
+        ],
+        [
+          0.03183771603443488,
+          0.8534318547229276,
+          0.520231130539008
+        ],
+        [
+          0.05213179111055637,
+          -0.5212044410250011,
+          0.8518381342787028
+        ]
+      ]
+    }
+  ],
+  "hiddenCompletedInternalOrangeCopies": [
+    2948,
+    2949,
+    2950,
+    2951,
+    2962,
+    2963,
+    2964,
+    2965,
+    3002,
+    3003,
+    3004,
+    3005,
+    3010,
+    3011,
+    3012,
+    3013,
+    3716,
+    3717,
+    3720,
+    3721,
+    4570,
+    4571,
+    4572,
+    4573,
+    4574,
+    4575,
+    4576,
+    4577,
+    5402,
+    5403,
+    5404,
+    5405,
+    5406,
+    5407,
+    5408,
+    5427,
+    5428,
+    5429,
+    5430,
+    5431,
+    5432,
+    5433,
+    5434,
+    5441,
+    5442,
+    5443,
+    5448,
+    5449,
+    5450,
+    5451,
+    5684,
+    5685,
+    5750,
+    5753,
+    5882,
+    5883,
+    5886,
+    5887,
+    5890,
+    5891,
+    5974,
+    5975,
+    5976,
+    5977,
+    7499,
+    7500,
+    7501,
+    7502,
+    7503,
+    7504,
+    7505,
+    7506,
+    7507,
+    7508,
+    7509,
+    7510,
+    7816,
+    7817,
+    7818,
+    7819,
+    7828,
+    7829,
+    7830,
+    7831,
+    7854,
+    7859,
+    8388,
+    8389,
+    8392,
+    8393,
+    8414,
+    8415,
+    8418,
+    8419,
+    8448,
+    8451,
+    8454,
+    8455,
+    8457,
+    8458,
+    8460,
+    8461,
+    8463,
+    8464,
+    8619,
+    8621,
+    8973,
+    8974,
+    9002,
+    9003,
+    9004,
+    9005,
+    9006,
+    9007,
+    9008,
+    9009,
+    9010,
+    9011,
+    9012,
+    9013,
+    9029,
+    9030,
+    9050,
+    9057,
+    9065,
+    9066,
+    9126,
+    9127,
+    9130,
+    9131,
+    9148,
+    9149
+  ],
+  "remainingVisibleOrangeCopies": 1394,
+  "geometryChanged": true,
+  "wideWindowOffsetsApplied": false,
+  "boundaryPolicy": "Existing rim curves retained. Both front arch borders remain distinct. Roof offset regenerates at 25 mm on the new body.",
+  "scope": "Nineteen paired orange subsets at front corners, upper sides and rear deck/fenders. Eighteen groups preserve existing parameter charts while joining complete shared sides; one front-window corner is re-charted.",
+  "remaining": "Other orange regions, including bumper/fender junctions and the outer window surround, are not claimed repaired. Purple/red constant-width offsets remain pending.",
+  "measurementLimit": "Training samples and soft tangent targets are not global shape or G1/G2 continuity certificates. Independent held-out and native verification are separate.",
+  "validation": "Run PatchRepairVerification.py --prefix Liger_Orange_Repair and LigerPatchVerification with --orange for native sewing, replay, held-out geometry checks and close-up images."
+}

@@ -1,0 +1,505 @@
+{
+  "documentSha256": "ccdb15de9d432b7ff95eafa70b4d47758df632288a9620cfa88e094527fd5f1d",
+  "groups": [
+    {
+      "label": "FrontCorner10",
+      "heldOutSamples": 1544,
+      "maximumHeldOutDisplacementMm": 0.08304072431342124,
+      "rmsHeldOutDisplacementMm": 0.0086675135456615,
+      "sampledRimMaximumMetres": 6.62091712878333e-09,
+      "reflectionMaximumMetres": 7.108895957933346e-16,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 462,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 3.46933286617321e-07
+        }
+      ],
+      "sharedSeams": []
+    },
+    {
+      "label": "FrontCorner100",
+      "heldOutSamples": 386,
+      "maximumHeldOutDisplacementMm": 0.4642312743814436,
+      "rmsHeldOutDisplacementMm": 0.12096938872001636,
+      "sampledRimMaximumMetres": 1.0123779705712276e-09,
+      "reflectionMaximumMetres": 1.5263043145882805e-15,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 48,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 3.9457810194133075e-06
+        }
+      ],
+      "sharedSeams": []
+    },
+    {
+      "label": "FrontCorner101",
+      "heldOutSamples": 386,
+      "maximumHeldOutDisplacementMm": 0.004619710104680763,
+      "rmsHeldOutDisplacementMm": 0.0009062077445026265,
+      "sampledRimMaximumMetres": 2.648878170589393e-09,
+      "reflectionMaximumMetres": 1.3414875847488985e-15,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 32,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 4.239814173971278e-05
+        }
+      ],
+      "sharedSeams": []
+    },
+    {
+      "label": "FrontCorner102",
+      "heldOutSamples": 386,
+      "maximumHeldOutDisplacementMm": 0.013609475765008483,
+      "rmsHeldOutDisplacementMm": 0.002036304209256648,
+      "sampledRimMaximumMetres": 5.886885183537386e-10,
+      "reflectionMaximumMetres": 1.793620188084545e-15,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 30,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 1.8858060490841775e-05
+        }
+      ],
+      "sharedSeams": []
+    },
+    {
+      "label": "FrontCorner103",
+      "heldOutSamples": 386,
+      "maximumHeldOutDisplacementMm": 0.0020074228070932065,
+      "rmsHeldOutDisplacementMm": 0.0003299936398402085,
+      "sampledRimMaximumMetres": 2.149783822811255e-09,
+      "reflectionMaximumMetres": 1.355199909595506e-15,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 3,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 0.00017969992176384552
+        }
+      ],
+      "sharedSeams": []
+    },
+    {
+      "label": "FrontCorner104",
+      "heldOutSamples": 386,
+      "maximumHeldOutDisplacementMm": 0.015360786915774582,
+      "rmsHeldOutDisplacementMm": 0.0035604164741601415,
+      "sampledRimMaximumMetres": 5.870077266409857e-10,
+      "reflectionMaximumMetres": 1.3506446028928519e-15,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 12,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 5.602937498044849e-06
+        }
+      ],
+      "sharedSeams": []
+    },
+    {
+      "label": "RearDeckAndFender106",
+      "heldOutSamples": 965,
+      "maximumHeldOutDisplacementMm": 0.025703765498041875,
+      "rmsHeldOutDisplacementMm": 0.0024663191950268816,
+      "sampledRimMaximumMetres": 2.272631454340635e-09,
+      "reflectionMaximumMetres": 8.671119018262734e-16,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 70,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 4.502063476317908e-05
+        }
+      ],
+      "sharedSeams": []
+    },
+    {
+      "label": "RearDeckAndFender108",
+      "heldOutSamples": 386,
+      "maximumHeldOutDisplacementMm": 0.07816069338661968,
+      "rmsHeldOutDisplacementMm": 0.017067013782924155,
+      "sampledRimMaximumMetres": 3.6851776247966536e-10,
+      "reflectionMaximumMetres": 7.364386412590295e-16,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 84,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 4.633252866350491e-07
+        }
+      ],
+      "sharedSeams": []
+    },
+    {
+      "label": "RearDeckAndFender109",
+      "heldOutSamples": 386,
+      "maximumHeldOutDisplacementMm": 0.0013664566098636755,
+      "rmsHeldOutDisplacementMm": 0.0004766948336475284,
+      "sampledRimMaximumMetres": 7.017948645634207e-10,
+      "reflectionMaximumMetres": 7.108895957933346e-16,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 36,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 4.5321293115674303e-08
+        }
+      ],
+      "sharedSeams": []
+    },
+    {
+      "label": "RearDeckAndFender110",
+      "heldOutSamples": 386,
+      "maximumHeldOutDisplacementMm": 0.04764528516787436,
+      "rmsHeldOutDisplacementMm": 0.008592025522753555,
+      "sampledRimMaximumMetres": 2.721237922902772e-09,
+      "reflectionMaximumMetres": 7.021666937153402e-16,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 72,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 3.734595013825444e-06
+        }
+      ],
+      "sharedSeams": []
+    },
+    {
+      "label": "RearDeckAndFender111",
+      "heldOutSamples": 386,
+      "maximumHeldOutDisplacementMm": 0.05188179889303868,
+      "rmsHeldOutDisplacementMm": 0.006784362072930405,
+      "sampledRimMaximumMetres": 5.001892500790398e-09,
+      "reflectionMaximumMetres": 7.108895957933346e-16,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 50,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 0.00010708774529641317
+        }
+      ],
+      "sharedSeams": []
+    },
+    {
+      "label": "RearDeckAndFender112",
+      "heldOutSamples": 386,
+      "maximumHeldOutDisplacementMm": 0.05336043206094487,
+      "rmsHeldOutDisplacementMm": 0.015689005931442096,
+      "sampledRimMaximumMetres": 1.8578197099272446e-09,
+      "reflectionMaximumMetres": 7.771561172376096e-16,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 48,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 1.2168651890771897e-06
+        }
+      ],
+      "sharedSeams": []
+    },
+    {
+      "label": "RearDeckAndFender113",
+      "heldOutSamples": 579,
+      "maximumHeldOutDisplacementMm": 0.1827960462001954,
+      "rmsHeldOutDisplacementMm": 0.03983603015092526,
+      "sampledRimMaximumMetres": 1.3267524723694255e-08,
+      "reflectionMaximumMetres": 8.08254562088053e-16,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 184,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 2.0785487971389632e-07
+        }
+      ],
+      "sharedSeams": []
+    },
+    {
+      "label": "RearDeckAndFender114",
+      "heldOutSamples": 386,
+      "maximumHeldOutDisplacementMm": 0.09275397670727159,
+      "rmsHeldOutDisplacementMm": 0.030367532579743346,
+      "sampledRimMaximumMetres": 4.1194248912903496e-10,
+      "reflectionMaximumMetres": 7.108895957933346e-16,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 32,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 1.3667350041589716e-07
+        }
+      ],
+      "sharedSeams": []
+    },
+    {
+      "label": "RearDeckAndFender115",
+      "heldOutSamples": 965,
+      "maximumHeldOutDisplacementMm": 0.017744235359939964,
+      "rmsHeldOutDisplacementMm": 0.005507717011944388,
+      "sampledRimMaximumMetres": 2.9976383235705602e-09,
+      "reflectionMaximumMetres": 8.08254562088053e-16,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 136,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 1.250546499799654e-06
+        }
+      ],
+      "sharedSeams": []
+    },
+    {
+      "label": "RearDeckAndFender116",
+      "heldOutSamples": 386,
+      "maximumHeldOutDisplacementMm": 0.02107740815526782,
+      "rmsHeldOutDisplacementMm": 0.003672112733152061,
+      "sampledRimMaximumMetres": 2.35126091512708e-10,
+      "reflectionMaximumMetres": 7.364386412590295e-16,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 36,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 2.582208172567534e-11
+        }
+      ],
+      "sharedSeams": []
+    },
+    {
+      "label": "RearDeckAndFender117",
+      "heldOutSamples": 386,
+      "maximumHeldOutDisplacementMm": 0.024510424110557594,
+      "rmsHeldOutDisplacementMm": 0.006773447909948408,
+      "sampledRimMaximumMetres": 5.839181065629491e-10,
+      "reflectionMaximumMetres": 1.0175362097255202e-15,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 40,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 4.929577581859789e-07
+        }
+      ],
+      "sharedSeams": []
+    },
+    {
+      "label": "RearDeckAndFender118",
+      "heldOutSamples": 386,
+      "maximumHeldOutDisplacementMm": 0.05362095410132994,
+      "rmsHeldOutDisplacementMm": 0.00869140592353511,
+      "sampledRimMaximumMetres": 2.1425959418632683e-09,
+      "reflectionMaximumMetres": 8.08254562088053e-16,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 64,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 9.934914757920889e-07
+        }
+      ],
+      "sharedSeams": []
+    },
+    {
+      "label": "RearDeckAndFender119",
+      "heldOutSamples": 386,
+      "maximumHeldOutDisplacementMm": 0.02332110837177659,
+      "rmsHeldOutDisplacementMm": 0.006672426509988764,
+      "sampledRimMaximumMetres": 3.3406128398382327e-10,
+      "reflectionMaximumMetres": 7.108895957933346e-16,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 32,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 2.874427833046682e-07
+        }
+      ],
+      "sharedSeams": []
+    }
+  ],
+  "scope": "Independent held-out source-to-chart checks; exact spline samples. Numerical Bernstein checks use floating point, not interval arithmetic. Not a global Hausdorff or G1/G2 certificate.",
+  "retainedGuideContact": [
+    {
+      "label": "FrontCorner10",
+      "stationsOnOriginalSkin": 1270,
+      "maximumNewDistanceMetres": 4.695862805838358e-15
+    },
+    {
+      "label": "FrontCorner100",
+      "stationsOnOriginalSkin": 0,
+      "maximumNewDistanceMetres": 0.0
+    },
+    {
+      "label": "FrontCorner101",
+      "stationsOnOriginalSkin": 123,
+      "maximumNewDistanceMetres": 1.2161883888976235e-15
+    },
+    {
+      "label": "FrontCorner102",
+      "stationsOnOriginalSkin": 82,
+      "maximumNewDistanceMetres": 9.80915185026648e-16
+    },
+    {
+      "label": "FrontCorner103",
+      "stationsOnOriginalSkin": 0,
+      "maximumNewDistanceMetres": 0.0
+    },
+    {
+      "label": "FrontCorner104",
+      "stationsOnOriginalSkin": 0,
+      "maximumNewDistanceMetres": 0.0
+    },
+    {
+      "label": "RearDeckAndFender106",
+      "stationsOnOriginalSkin": 0,
+      "maximumNewDistanceMetres": 0.0
+    },
+    {
+      "label": "RearDeckAndFender108",
+      "stationsOnOriginalSkin": 3,
+      "maximumNewDistanceMetres": 0.0
+    },
+    {
+      "label": "RearDeckAndFender109",
+      "stationsOnOriginalSkin": 36,
+      "maximumNewDistanceMetres": 9.359022057391012e-16
+    },
+    {
+      "label": "RearDeckAndFender110",
+      "stationsOnOriginalSkin": 0,
+      "maximumNewDistanceMetres": 0.0
+    },
+    {
+      "label": "RearDeckAndFender111",
+      "stationsOnOriginalSkin": 708,
+      "maximumNewDistanceMetres": 9.155133597044475e-16
+    },
+    {
+      "label": "RearDeckAndFender112",
+      "stationsOnOriginalSkin": 55,
+      "maximumNewDistanceMetres": 6.521952122565445e-13
+    },
+    {
+      "label": "RearDeckAndFender113",
+      "stationsOnOriginalSkin": 68,
+      "maximumNewDistanceMetres": 7.033998881952434e-16
+    },
+    {
+      "label": "RearDeckAndFender114",
+      "stationsOnOriginalSkin": 0,
+      "maximumNewDistanceMetres": 0.0
+    },
+    {
+      "label": "RearDeckAndFender115",
+      "stationsOnOriginalSkin": 68,
+      "maximumNewDistanceMetres": 4.130565180115959e-13
+    },
+    {
+      "label": "RearDeckAndFender116",
+      "stationsOnOriginalSkin": 0,
+      "maximumNewDistanceMetres": 0.0
+    },
+    {
+      "label": "RearDeckAndFender117",
+      "stationsOnOriginalSkin": 1,
+      "maximumNewDistanceMetres": 0.0
+    },
+    {
+      "label": "RearDeckAndFender118",
+      "stationsOnOriginalSkin": 0,
+      "maximumNewDistanceMetres": 0.0
+    },
+    {
+      "label": "RearDeckAndFender119",
+      "stationsOnOriginalSkin": 0,
+      "maximumNewDistanceMetres": 0.0
+    }
+  ],
+  "sampledKnotNormalJumps": [
+    {
+      "label": "FrontCorner10",
+      "originalJoinedKnotMaximumDegrees": null,
+      "repairedKnotMaximumDegrees": 0.4756615599212982
+    },
+    {
+      "label": "FrontCorner100",
+      "originalJoinedKnotMaximumDegrees": 17.910709935507583,
+      "repairedKnotMaximumDegrees": 0.8903555668635734
+    },
+    {
+      "label": "FrontCorner101",
+      "originalJoinedKnotMaximumDegrees": 0.17609299347516724,
+      "repairedKnotMaximumDegrees": 0.11463137655767017
+    },
+    {
+      "label": "FrontCorner102",
+      "originalJoinedKnotMaximumDegrees": 0.3730417084308887,
+      "repairedKnotMaximumDegrees": 0.1628293699104011
+    },
+    {
+      "label": "FrontCorner103",
+      "originalJoinedKnotMaximumDegrees": 0.17583571751333976,
+      "repairedKnotMaximumDegrees": 0.11563387311151509
+    },
+    {
+      "label": "FrontCorner104",
+      "originalJoinedKnotMaximumDegrees": 0.668452534211637,
+      "repairedKnotMaximumDegrees": 0.15036455026346907
+    },
+    {
+      "label": "RearDeckAndFender106",
+      "originalJoinedKnotMaximumDegrees": 0.3607108740865739,
+      "repairedKnotMaximumDegrees": 0.2073235748542968
+    },
+    {
+      "label": "RearDeckAndFender108",
+      "originalJoinedKnotMaximumDegrees": 7.977119466342364,
+      "repairedKnotMaximumDegrees": 3.307523172813324
+    },
+    {
+      "label": "RearDeckAndFender109",
+      "originalJoinedKnotMaximumDegrees": 1.0777075510587741,
+      "repairedKnotMaximumDegrees": 0.4149179113122347
+    },
+    {
+      "label": "RearDeckAndFender110",
+      "originalJoinedKnotMaximumDegrees": 0.5342882692197567,
+      "repairedKnotMaximumDegrees": 0.32800886199477597
+    },
+    {
+      "label": "RearDeckAndFender111",
+      "originalJoinedKnotMaximumDegrees": 1.2721442838616577,
+      "repairedKnotMaximumDegrees": 0.5952637589789674
+    },
+    {
+      "label": "RearDeckAndFender112",
+      "originalJoinedKnotMaximumDegrees": 1.2175746046510956,
+      "repairedKnotMaximumDegrees": 0.304094537427436
+    },
+    {
+      "label": "RearDeckAndFender113",
+      "originalJoinedKnotMaximumDegrees": 3.629242604521624,
+      "repairedKnotMaximumDegrees": 2.5864804412660023
+    },
+    {
+      "label": "RearDeckAndFender114",
+      "originalJoinedKnotMaximumDegrees": 29.185667814551937,
+      "repairedKnotMaximumDegrees": 5.275488982076009
+    },
+    {
+      "label": "RearDeckAndFender115",
+      "originalJoinedKnotMaximumDegrees": 0.12509968386521017,
+      "repairedKnotMaximumDegrees": 0.05455843777249238
+    },
+    {
+      "label": "RearDeckAndFender116",
+      "originalJoinedKnotMaximumDegrees": 3.42012742770256,
+      "repairedKnotMaximumDegrees": 1.823800702532576
+    },
+    {
+      "label": "RearDeckAndFender117",
+      "originalJoinedKnotMaximumDegrees": 0.8205816211020659,
+      "repairedKnotMaximumDegrees": 0.6387876821664272
+    },
+    {
+      "label": "RearDeckAndFender118",
+      "originalJoinedKnotMaximumDegrees": 1.4436938256533132,
+      "repairedKnotMaximumDegrees": 0.6351931087528319
+    },
+    {
+      "label": "RearDeckAndFender119",
+      "originalJoinedKnotMaximumDegrees": 0.8351333409702032,
+      "repairedKnotMaximumDegrees": 0.24252754612180735
+    }
+  ],
+  "guideContactScope": "4097 stations per visible authored cubic guide, restricted to stations lying on modified source supports. Sampled contact check, not an interval certificate. Live roof-offset regeneration is verified natively."
+}

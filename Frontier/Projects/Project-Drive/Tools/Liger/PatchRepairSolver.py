@@ -129,7 +129,7 @@ def ConstructCoonsPatch(Sides):
     return Patch(ActivePatch, AlongKnots, AcrossKnots, np.zeros((2, 2), int), {})
 
 
-def Construct(Specification, Patches, Sewn, Edges, Barriers):
+def Construct(Specification, Patches, Sewn, Edges, Barriers, Seed=None):
     print("BEGIN", Specification["component"], len(Specification["names"]), flush=True)
     Pieces = [deepcopy(Patches[PatchName]) for PatchName in Specification["names"]]
     Axes = np.eye(3)
@@ -149,28 +149,38 @@ def Construct(Specification, Patches, Sewn, Edges, Barriers):
         print("AXES", Axes.tolist(), flush=True)
         for ActivePatch in Pieces:
             ActivePatch.Poles = ActivePatch.Poles @ Axes
-    Groups = TraversePerimeter(Specification, Axes, Edges, Barriers)
-    print(
-        "SIDES",
-        [
-            (KnotValues, len(AcrossParameters))
-            for KnotValues, AcrossParameters in Groups
-        ],
-        flush=True,
-    )
-    Sides = [JoinCurves(GradientValues)[0] for _, GradientValues in Groups]
-    if len(Groups) == 4:
-        for First, Opposite in [(0, 2), (1, 3)]:
-            FirstOperand = Groups[First][1]
-            SecondOperand = [
-                (SlotIndex, Reverse(ThirdOperand))
-                for SlotIndex, ThirdOperand in Groups[Opposite][1][::-1]
-            ]
-            _, FirstStops = JoinCurves(FirstOperand)
-            _, SecondStops = JoinCurves(SecondOperand)
-            FirstStops, SecondStops = AlignedStops(FirstStops, SecondStops, 0.02)
-            Sides[First] = JoinCurves(FirstOperand, FirstStops)[0]
-            Sides[Opposite] = Reverse(JoinCurves(SecondOperand, SecondStops)[0])
+    if Seed is not None:
+        Seed = deepcopy(Seed)
+        Seed.Poles = Seed.Poles @ Axes
+        AlongTangent = Evaluate(Seed, np.array([0.5]), np.array([0.5]), 1, 0)[0]
+        AcrossTangent = Evaluate(Seed, np.array([0.5]), np.array([0.5]), 0, 1)[0]
+        if np.cross(AlongTangent, AcrossTangent)[2] < 0:
+            Seed.Poles = Seed.Poles[::-1].copy()
+            Seed.KnotsU = 1 - Seed.KnotsU[::-1]
+        Sides = [None] * 4
+    else:
+        Groups = TraversePerimeter(Specification, Axes, Edges, Barriers)
+        print(
+            "SIDES",
+            [
+                (KnotValues, len(AcrossParameters))
+                for KnotValues, AcrossParameters in Groups
+            ],
+            flush=True,
+        )
+        Sides = [JoinCurves(GradientValues)[0] for _, GradientValues in Groups]
+        if len(Groups) == 4:
+            for First, Opposite in [(0, 2), (1, 3)]:
+                FirstOperand = Groups[First][1]
+                SecondOperand = [
+                    (SlotIndex, Reverse(ThirdOperand))
+                    for SlotIndex, ThirdOperand in Groups[Opposite][1][::-1]
+                ]
+                _, FirstStops = JoinCurves(FirstOperand)
+                _, SecondStops = JoinCurves(SecondOperand)
+                FirstStops, SecondStops = AlignedStops(FirstStops, SecondStops, 0.02)
+                Sides[First] = JoinCurves(FirstOperand, FirstStops)[0]
+                Sides[Opposite] = Reverse(JoinCurves(SecondOperand, SecondStops)[0])
     Samples = []
     Weights = []
     for ActivePatch in Pieces:
@@ -250,7 +260,9 @@ def Construct(Specification, Patches, Sewn, Edges, Barriers):
         return Derivatives
 
     Quads = []
-    if len(Sides) == 4:
+    if Seed is not None:
+        Quads = [Seed]
+    elif len(Sides) == 4:
         Quads = [ConstructCoonsPatch(Sides)]
     else:
         Corners = np.array([ThirdOperand(0) for ThirdOperand in Sides])
@@ -298,6 +310,12 @@ def Construct(Specification, Patches, Sewn, Edges, Barriers):
             )
     Measures = []
     for Index, ActivePatch in enumerate(Quads):
+        if ActivePatch.Poles.shape[0] * ActivePatch.Poles.shape[1] > Specification.get(
+            "maximumPoles", 12000
+        ):
+            raise ValueError(
+                "Patch pole budget exceeded; partition the selected area before fitting"
+            )
         print("QUAD", Index, ActivePatch.Poles.shape, flush=True)
 
         def ConstructRows(AlongParameters, AcrossParameters):
@@ -374,7 +392,10 @@ def Construct(Specification, Patches, Sewn, Edges, Barriers):
             GradientValues[:, 0] * 0.004,
             GradientValues[:, 1] * 0.004,
         ]
-        if Specification["component"] == 5:
+        CurvatureWeight = Specification.get(
+            "curvatureWeight", 0.0002 if Specification["component"] == 5 else 0
+        )
+        if CurvatureWeight:
             # Control physical curvature, not just point fit: narrow window charts
             # otherwise permit visible between-sample ripples in the unconstrained interior.
             Along = Evaluate(ActivePatch, AlongParameters, AcrossParameters, 1, 0)
@@ -435,8 +456,8 @@ def Construct(Specification, Patches, Sewn, Edges, Barriers):
                     * (2 / Span[0]) ** Orders[0]
                     * (2 / Span[1]) ** Orders[1]
                 )
-                Matrices.append(Matrix * 0.0002)
-                Targets.append(Target * 0.0002)
+                Matrices.append(Matrix * CurvatureWeight)
+                Targets.append(Target * CurvatureWeight)
         SecondOperand, _, _ = ConstructRows(*Coordinates2d[Inside].T)
         SampleWeights = Weights[Inside]
         Matrices.append(SecondOperand.multiply((SampleWeights * 5)[:, None]))

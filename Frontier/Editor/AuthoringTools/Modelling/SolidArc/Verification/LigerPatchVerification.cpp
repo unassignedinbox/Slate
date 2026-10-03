@@ -77,7 +77,8 @@ bool CompareSurfaceCoefficients(const NurbsSurface& First, const NurbsSurface& S
 
 int main(int Count, char** Arguments)
 {
-    if (Count != 4) return 2;
+    if (Count != 4 && Count != 5) return 2;
+    if (Count == 5 && std::string(Arguments[4]) != "--orange") return 2;
     const std::filesystem::path Destination = Arguments[3];
     std::filesystem::create_directories(Destination);
     VerificationPanel Panel("Liger guide-bounded patch repairs");
@@ -200,5 +201,20 @@ int main(int Count, char** Arguments)
     After.Camera() = Before.Camera();
     Panel.Expect("original roof detail", Before.Execute("render Liger_Patch_Before_Detail --size=2000x1400"));
     Panel.Expect("repaired roof detail", After.Execute("render Liger_Patch_After_Detail --size=2000x1400"));
+    if (Count == 5)
+    {
+        const char* DetailNames[] = {"Front_Orange", "Rear_Orange"};
+        const char* DetailCameras[] = {
+            "line (1.35,-1.22,.4) (2.62,0,1.02) --name=OrangeInspection; select OrangeInspection; view front; view orbit 55 27; view fit selected; delete OrangeInspection",
+            "line (-1.9,-1.22,.4) (-.6,0,1.05) --name=OrangeInspection; select OrangeInspection; view front; view orbit -55 27; view fit selected; delete OrangeInspection"
+        };
+        for (int Index = 0; Index < 2; ++Index)
+        {
+            Panel.Expect("orange detail camera", Before.Execute(DetailCameras[Index]));
+            After.Camera() = Before.Camera();
+            Panel.Expect("original orange detail", Before.Execute(std::string("render Liger_Patch_Before_") + DetailNames[Index] + " --size=2000x1400"));
+            Panel.Expect("repaired orange detail", After.Execute(std::string("render Liger_Patch_After_") + DetailNames[Index] + " --size=2000x1400"));
+        }
+    }
     return Panel.Conclude();
 }

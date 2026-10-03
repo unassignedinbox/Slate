@@ -120,6 +120,9 @@ def main() -> int:
     run([str(PatchExecutable), str(reconstruction / "Liger_Window_Review.arc"),
          str(reconstruction / "Liger_Patch_Repair.arc"), str(proofs / "LigerPatchRepair")],
         "LigerPatchRepairVerification")
+    run([str(PatchExecutable), str(reconstruction / "Liger_Patch_Repair.arc"),
+         str(reconstruction / "Liger_Orange_Repair.arc"), str(proofs / "LigerOrangeRepair"), "--orange"],
+        "LigerOrangeRepairVerification")
     print("MSVC SolidArc: console linked, focused regressions and all Liger journals passed")
     return 0
 
