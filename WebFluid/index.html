@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slate WebFluid — Realtime PBF Fluid Sim (WebGPU)</title>
+<style>
+  :root {
+    --panel-bg: rgba(16, 18, 24, 0.82);
+    --panel-border: rgba(255,255,255,0.09);
+    --accent: #58b2ff;
+    --text: #e8ecf2;
+    --text-dim: #93a0b4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0b0d12;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif; color: var(--text); }
+  #gfx { position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+    touch-action: none; cursor: grab; }
+  #gfx.dragging { cursor: grabbing; }
+
+  .panel {
+    position: absolute; top: 14px; left: 14px; width: 272px;
+    background: var(--panel-bg); border: 1px solid var(--panel-border);
+    border-radius: 12px; padding: 14px 14px 12px; backdrop-filter: blur(12px);
+    user-select: none; z-index: 10; max-height: calc(100vh - 28px); overflow-y: auto;
+  }
+  .panel::-webkit-scrollbar { width: 6px; }
+  .panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+  .panel h1 { font-size: 14px; font-weight: 600; letter-spacing: 0.4px; margin-bottom: 2px; }
+  .panel .sub { font-size: 11px; color: var(--text-dim); margin-bottom: 12px; }
+
+  .presets { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 14px; }
+  .preset {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; border-radius: 9px; border: 1px solid var(--panel-border);
+    background: rgba(255,255,255,0.04); cursor: pointer; font-size: 12.5px; color: var(--text);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .preset:hover { background: rgba(255,255,255,0.09); }
+  .preset.active { border-color: var(--accent); background: rgba(88,178,255,0.14); }
+  .preset .dot { width: 14px; height: 14px; border-radius: 50%; flex: none;
+    box-shadow: inset -2px -3px 4px rgba(0,0,0,0.35), inset 2px 2px 3px rgba(255,255,255,0.45); }
+
+  .row { display: flex; align-items: center; justify-content: space-between; margin: 8px 0; gap: 8px; }
+  .row label { font-size: 12px; color: var(--text-dim); flex: none; width: 86px; }
+  .row .val { font-size: 11px; color: var(--text); width: 44px; text-align: right; flex: none;
+    font-variant-numeric: tabular-nums; }
+  input[type=range] { flex: 1; -webkit-appearance: none; appearance: none; height: 4px;
+    background: rgba(255,255,255,0.15); border-radius: 2px; outline: none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 13px; height: 13px;
+    border-radius: 50%; background: var(--accent); cursor: pointer; border: none; }
+  input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%;
+    background: var(--accent); cursor: pointer; border: none; }
+
+  .toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 10px 0; }
+  .tbtn {
+    padding: 7px 8px; border-radius: 8px; border: 1px solid var(--panel-border);
+    background: rgba(255,255,255,0.04); cursor: pointer; font-size: 12px; color: var(--text);
+    text-align: center; transition: background 0.15s, border-color 0.15s;
+  }
+  .tbtn:hover { background: rgba(255,255,255,0.09); }
+  .tbtn.on { border-color: var(--accent); background: rgba(88,178,255,0.16); }
+  .tbtn.danger:hover { border-color: #ff7a6e; background: rgba(255,122,110,0.14); }
+
+  .sect { font-size: 10.5px; text-transform: uppercase; letter-spacing: 1.1px;
+    color: var(--text-dim); margin: 12px 0 4px; }
+  hr { border: none; border-top: 1px solid var(--panel-border); margin: 10px 0; }
+
+  .stats { font-size: 11px; color: var(--text-dim); line-height: 1.65;
+    font-variant-numeric: tabular-nums; }
+  .stats b { color: var(--text); font-weight: 600; }
+  .dyres-bar { height: 5px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; margin-top: 3px; }
+  .dyres-bar > div { height: 100%; background: linear-gradient(90deg, #ffb347, #58b2ff); width: 100%;
+    transition: width 0.25s; border-radius: 3px; }
+
+  .help {
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+    background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 9px;
+    padding: 7px 14px; font-size: 11.5px; color: var(--text-dim); white-space: nowrap;
+    backdrop-filter: blur(10px); z-index: 10; pointer-events: none;
+  }
+  .help b { color: var(--text); font-weight: 600; }
+
+  #fatal {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    background: #0b0d12; z-index: 100; text-align: center; padding: 24px;
+  }
+  #fatal .box { max-width: 560px; }
+  #fatal h2 { font-size: 20px; margin-bottom: 12px; }
+  #fatal p { font-size: 14px; color: var(--text-dim); line-height: 1.6; }
+  #fatal code { background: rgba(255,255,255,0.08); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+</style>
+</head>
+<body>
+<canvas id="gfx"></canvas>
+
+<div class="panel" id="panel">
+  <h1>WebFluid — PBF Liquid Sim</h1>
+  <div class="sub">WebGPU compute &middot; screen-space fluid &middot; dynamic res</div>
+
+  <div class="presets" id="presets">
+    <div class="preset" data-p="water"><span class="dot" style="background:#3f9fe8"></span>Water</div>
+    <div class="preset" data-p="milk"><span class="dot" style="background:#f3efe6"></span>Milk</div>
+    <div class="preset" data-p="chocolate"><span class="dot" style="background:#5a2d12"></span>Chocolate</div>
+    <div class="preset" data-p="mud"><span class="dot" style="background:#6b5a42"></span>Mud</div>
+  </div>
+
+  <div class="sect">Fluid properties</div>
+  <div class="row"><label>Viscosity</label><input type="range" id="sVisc" min="0" max="100" value="5"><span class="val" id="vVisc"></span></div>
+  <div class="row"><label>Cohesion</label><input type="range" id="sCoh" min="0" max="100" value="20"><span class="val" id="vCoh"></span></div>
+  <div class="row"><label>Stickiness</label><input type="range" id="sStick" min="0" max="100" value="0"><span class="val" id="vStick"></span></div>
+  <div class="row"><label>Particles</label><input type="range" id="sCount" min="6000" max="60000" step="2000" value="26000"><span class="val" id="vCount"></span></div>
+
+  <div class="sect">Scene</div>
+  <div class="toggles">
+    <div class="tbtn" id="bPour">Pour</div>
+    <div class="tbtn" id="bStir">Stir (orbit ball)</div>
+    <div class="tbtn on" id="bBlock">Obstacle block</div>
+    <div class="tbtn danger" id="bReset">Reset fluid</div>
+  </div>
+
+  <div class="sect">Dynamic resolution</div>
+  <div class="toggles" style="grid-template-columns: 1fr 1fr;">
+    <div class="tbtn on" id="bAuto">Auto (60 fps)</div>
+    <div class="tbtn" id="bAuto30">Auto (30 fps)</div>
+  </div>
+  <div class="row"><label>Manual scale</label><input type="range" id="sScale" min="40" max="100" value="80"><span class="val" id="vScale"></span></div>
+
+  <hr>
+  <div class="stats" id="stats">
+    <div><b id="stFps">—</b> fps &middot; <b id="stMs">—</b> ms &middot; <b id="stN">—</b> particles</div>
+    <div>render scale <b id="stScale">—</b></div>
+    <div class="dyres-bar"><div id="dyresFill"></div></div>
+  </div>
+</div>
+
+<div class="help"><b>Drag</b> orbit &middot; <b>Wheel</b> zoom &middot; <b>Drag the ball</b> to splash &amp; coat it &middot; <b>Shift+drag</b> pan</div>
+
+<div id="fatal"><div class="box">
+  <h2>WebGPU not available</h2>
+  <p id="fatalMsg">This demo needs WebGPU. Use a recent <b>Chrome / Edge</b> (119+) on desktop,
+  or Safari 18+ / Firefox 141+. On Linux Chrome you may need
+  <code>chrome://flags/#enable-unsafe-webgpu</code> or <code>--enable-features=Vulkan</code>.</p>
+</div></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
