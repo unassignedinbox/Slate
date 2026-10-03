@@ -53,7 +53,7 @@ jobs:
   solidarc:
     name: SolidArc MSVC and document checks
     runs-on: windows-2022
-    timeout-minutes: 30
+    timeout-minutes: 45
     defaults:
       run:
         shell: pwsh

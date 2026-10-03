@@ -1099,7 +1099,8 @@ bool ConsoleHost::AddDerived(const CommandLine& C, const char* Stem, FigureRecip
     Deliver<FigureRecipe::Product> P = Recipe.Produce(Scene, Plane);
     if (!P) return Refuse("%s refused: %s — %s", Stem, Refusal::Describe(P.Denial.Reason), P.Denial.Detail);
     Recipe.InputFingerprint = Recipe.FingerprintInputs(Scene, Plane);
-    SceneFigure& Figure = P.Payload.IsBody ? Scene.AddBody(C.SwitchText("name").value_or(Stem), std::move(P.Payload.Body))
+    SceneFigure& Figure = P.Payload.IsCurve ? Scene.AddCurve(C.SwitchText("name").value_or(Stem), std::move(P.Payload.Curve))
+                            : P.Payload.IsBody ? Scene.AddBody(C.SwitchText("name").value_or(Stem), std::move(P.Payload.Body))
                                            : Scene.AddSurface(C.SwitchText("name").value_or(Stem), std::move(P.Payload.Sheet));
     Figure.Recipe = std::move(Recipe);
     DescribeFigure(Figure);
@@ -1123,7 +1124,8 @@ bool ConsoleHost::AddDerived(const CommandLine& C, const char* Stem, FigureRecip
     Deliver<FigureRecipe::Product> P = Recipe.Produce(Scene, Plane);
     if (!P) return Refuse("%s refused: %s — %s", Stem, Refusal::Describe(P.Denial.Reason), P.Denial.Detail);
     Recipe.InputFingerprint = Recipe.FingerprintInputs(Scene, Plane);
-    SceneFigure& Figure = P.Payload.IsBody ? Scene.AddBody(C.SwitchText("name").value_or(Stem), std::move(P.Payload.Body))
+    SceneFigure& Figure = P.Payload.IsCurve ? Scene.AddCurve(C.SwitchText("name").value_or(Stem), std::move(P.Payload.Curve))
+                            : P.Payload.IsBody ? Scene.AddBody(C.SwitchText("name").value_or(Stem), std::move(P.Payload.Body))
                                            : Scene.AddSurface(C.SwitchText("name").value_or(Stem), std::move(P.Payload.Sheet));
     Figure.Recipe = std::move(Recipe);
     Figure.Blueprint = std::move(Source);                                            // Phase 16: live-edit the figure from the Blueprint
@@ -1238,7 +1240,8 @@ void ConsoleHost::Render() noexcept
     DrawAreas();
     for (const SceneFigure& Figure : Scene.Figures())
     {
-        if (Figure.Hidden || Figure.Classification != FigureClassification::Curve) continue;
+        if (Figure.Hidden || Figure.Classification != FigureClassification::Curve ||
+            (Figure.Recipe.Operation == RecipeOperation::SurfaceOffset && !Figure.Recipe.Complaint.empty())) continue;
         const bool Feature = Figure.Feature != FeaturePurpose::None;
         if (Feature && !ShowFeatureCurves) continue;
         // A sketch curve wears its outliner folder's colour: lines cyan, profiles green, construction violet.
@@ -1906,6 +1909,9 @@ void ConsoleHost::RememberDocumentCommand(const CommandLine& Command) noexcept
     if (Command.Verb == "cpcurve" && Command.SwitchText("knots") &&
         std::find(DocumentJournal.begin(), DocumentJournal.end(), "require curve-knots") == DocumentJournal.end())
         DocumentJournal.push_back("require curve-knots");
+    if (Command.Verb == "surface-offset" &&
+        std::find(DocumentJournal.begin(), DocumentJournal.end(), "require surface-offset") == DocumentJournal.end())
+        DocumentJournal.push_back("require surface-offset");
     DocumentJournal.push_back(EncodeDocumentCommand(Command));
 }
 
@@ -3368,6 +3374,58 @@ void ConsoleHost::Register() noexcept
         Row("empty: created '%s' at (%.3f, %.3f, %.3f)", Name.c_str(), P->X, P->Y, P->Z);
         return true;
     });
+    Add("surface-offset", "surface-offset <curve> <support> signed-distance [--tolerance=.00005] [--name=N] | surface-offset edit <offset> signed-distance — live normal-geodesic surface offset", [=, this](const CommandLine& C)
+    {
+        if (C.Count() != 3) return Refuse("surface-offset: three arguments required");
+        for (const auto& Flag : C.Flags)
+            if (Flag.first != "tolerance" && Flag.first != "name") return Refuse("surface-offset: unsupported option");
+        double Distance = 0;
+        if (!NumberArg(C, 2, Distance, "surface-offset") || !std::isfinite(Distance)) return Refuse("surface-offset: finite distance required");
+        FigureRecipe Recipe;
+        SceneFigure* Existing = nullptr;
+        if (C.Arguments[0] == "edit")
+        {
+            Existing = Resolve(C.Arguments[1]);
+            if (!Existing || Existing->Recipe.Operation != RecipeOperation::SurfaceOffset || C.SwitchText("name"))
+                return Refuse("surface-offset edit: expected an existing live offset; renaming is a separate operation");
+            Recipe = Existing->Recipe;
+        }
+        else
+        {
+            const auto* Curve = Resolve(C.Arguments[0]); const auto* Support = Resolve(C.Arguments[1]);
+            if (!Curve || !Support || Curve->Classification != FigureClassification::Curve ||
+                (Support->Classification != FigureClassification::Body && Support->Classification != FigureClassification::Surface))
+                return Refuse("surface-offset: requires a curve and a surface/body support");
+            Recipe.Operation = RecipeOperation::SurfaceOffset;
+            Recipe.Path.Figures = {Curve->Identity}; Recipe.Path.Support = Support->Identity;
+            Recipe.Radius = 0.00005;
+        }
+        Recipe.Length = Distance;
+        if (auto Text = C.SwitchText("tolerance"))
+        {
+            auto Value = CommandCodec::ParseNumber(*Text);
+            if (!Value || !std::isfinite(*Value)) return Refuse("surface-offset: invalid tolerance");
+            Recipe.Radius = *Value;
+        }
+        if (Existing)
+        {
+            auto Trial = Recipe.Produce(Scene, Plane);
+            if (!Trial) return Refuse("surface-offset edit: %s", Trial.Denial.Detail);
+            Recipe.InputFingerprint = Recipe.FingerprintInputs(Scene, Plane);
+            Recipe.Complaint.clear();
+            if (Recipe.OffsetFailureHidden) Existing->Hidden = false;
+            Recipe.OffsetFailureHidden = false;
+            Existing->Curve = std::move(Trial.Payload.Curve); Existing->Recipe = std::move(Recipe);
+            return true;
+        }
+        if (!AddDerived(C, "SurfaceOffset", std::move(Recipe))) return false;
+        auto& Figure = Scene.Figures().back();
+        Figure.Feature = FeaturePurpose::Design;
+        Figure.Locked = true;
+        Figure.Tint[0] = .68f; Figure.Tint[1] = .95f; Figure.Tint[2] = .1f;
+        return true;
+    });
+
     Add("recipe", "recipe [figure...] — how derived figures are built (sources, options, complaints)  ·  recipe bake <figure...> detaches them", [=, this](const CommandLine& C)
     {
         if (C.Count() >= 1 && C.Arguments[0] == "bake")
@@ -4621,9 +4679,9 @@ void ConsoleHost::Register() noexcept
         return true;
     });
     Add("echo", "echo text", [=, this](const CommandLine& C) { std::printf("  "); for (const auto& A : C.Arguments) std::printf("%s ", A.c_str()); std::printf("\n"); return true; });
-    Add("require", "require open-sew|knot-skin|feature-curves|boundary-splits|curve-knots — require supported document geometry", [this](const CommandLine& C)
+    Add("require", "require open-sew|knot-skin|feature-curves|boundary-splits|curve-knots|surface-offset — require supported document geometry", [this](const CommandLine& C)
     {
-        if (C.Count() != 1 || (C.Arguments[0] != "open-sew" && C.Arguments[0] != "knot-skin" && C.Arguments[0] != "feature-curves" && C.Arguments[0] != "boundary-splits" && C.Arguments[0] != "curve-knots") || !C.Flags.empty())
+        if (C.Count() != 1 || (C.Arguments[0] != "open-sew" && C.Arguments[0] != "knot-skin" && C.Arguments[0] != "feature-curves" && C.Arguments[0] != "boundary-splits" && C.Arguments[0] != "curve-knots" && C.Arguments[0] != "surface-offset") || !C.Flags.empty())
             return Refuse("require: unsupported document capability");
         return true;
     });

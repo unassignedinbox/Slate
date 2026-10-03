@@ -28,6 +28,7 @@ add_library(SolidArcKernel STATIC
     Kernel/SkinSolver.cpp
     Kernel/IntersectionSolver.cpp
     Kernel/FairPatchSolver.cpp
+    Kernel/SurfaceOffsetSolver.cpp
     Kernel/ProfileSolver.cpp
     Kernel/ConstraintSolver.cpp
     Kernel/ConstraintGraph.cpp
@@ -896,3 +897,10 @@ add_test(NAME LigerConsolidationVerification COMMAND GuideVerification --consoli
 add_test(NAME LigerLayoutVerification COMMAND GuideVerification --layout
     "${LIGER_RECONSTRUCTION}/Liger_Consolidated.arc"
     "${LIGER_RECONSTRUCTION}/Liger_Layout.arc")
+
+add_executable(SurfaceOffsetVerification Verification/SurfaceOffsetVerification.cpp Editor/SolidArcOutlinerAdapter.cpp)
+target_link_libraries(SurfaceOffsetVerification PRIVATE SolidArcConsoleKit)
+add_test(NAME SurfaceOffsetVerification COMMAND SurfaceOffsetVerification)
+add_test(NAME LigerSurfaceOffsetVerification COMMAND SurfaceOffsetVerification
+    "${LIGER_RECONSTRUCTION}/Liger_Surface_Offset.arc"
+    "${SOLIDARC_PROOF_FOLDER}/LigerSurfaceOffset")

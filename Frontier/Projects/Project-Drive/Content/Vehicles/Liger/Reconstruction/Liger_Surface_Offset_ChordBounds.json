@@ -1,0 +1,7 @@
+{
+  "stationCount": 347,
+  "minimumChordMetres": 0.02499762510610753,
+  "maximumChordMetres": 0.025000000043868608,
+  "method": "Stationary quintic roots on every polynomial parent span, with Bernstein control-hull pruning.",
+  "scope": "Numerical Euclidean lower bound on intrinsic distance at exported stations only; not a continuous or exact shortest-geodesic certificate."
+}

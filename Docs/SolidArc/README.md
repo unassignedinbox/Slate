@@ -468,3 +468,55 @@ The cowl temporary binary contains little-endian float64 XYZ positions, ordered 
 at 33 by 33 parameters per chart. It is measurement output, not CAD interchange content.
 The application build also opens the combined reconstruction in the windowed editor and checks presentation, Construct,
 save/reopen and resize. Captures are under `Presentation/Liger` in the application evidence artifact.
+
+## Live offsets along a surface
+
+Open `Examples/Liger/Reconstruction/Liger_Surface_Offset.arc` for the 25 mm inner roof guide.
+It retains the previous layout, body surfaces, arch borders, exclusions and orange selections.
+The new lime guide is `Guide_O01_RoofSurfaceOffset_Across`; its parent is `Guide_B03_UpperCanopy_Across`.
+This document adds a guide, not a trimmed roof face or completed orange topology repairs.
+
+Create and edit this native feature from **Document commands**:
+
+```text
+surface-offset Guide_B03_UpperCanopy_Across Liger_Main_Body -.025 --name=Guide_O01_RoofSurfaceOffset_Across
+surface-offset edit Guide_O01_RoofSurfaceOffset_Across -.030
+recipe Guide_O01_RoofSurfaceOffset_Across
+```
+
+Distances are metres. The sign chooses the side using the oriented support normal and parent tangent;
+negative is inward for this Liger parent/support pair. This is **not** a top-view offset projected onto the roof.
+Select the result in the native outliner to edit **Parameters → Signed width** in millimetres.
+The card also identifies its parent, support, numerical tolerance and regeneration status.
+
+Both the parent curve and support are live dependencies. Valid changes regenerate the offset;
+invalid changes hide the stale result and expose a complaint. Correcting the inputs restores it.
+Raw geometry is locked initially; edit the parent or width rather than hand-fitting the dependent curve.
+Width edits are transactional and support undo/redo. Saving/reopening preserves the live recipe.
+The `require surface-offset` capability marker prevents older loaders from silently accepting the feature.
+
+The Liger width was selected from 130 transverse measurements of the existing CAD strip:
+median 24.647 mm, rounded to a uniform 25 mm. Those measurements select a representative design width;
+they do not assert that the original varying strip was already a constant-distance offset.
+
+### Numerical scope
+
+- Smooth portions use refined normal-geodesic marching on the NURBS support.
+- Inward corners use branch intersections where possible; remaining supported corners use refined local
+  surface-distance estimates. The source curve is not smoothed or replaced.
+- Default tolerance is 0.00005 m; override it with `--tolerance=...` when creating or editing the feature.
+- Supports must be one edge-connected skin with valid, natural/untrimmed faces. The parent must lie on the support
+  within tolerance.
+  Boundary crossings, nonconvergent folds/corners, detected cusps and sampled nonlocal proximity are refused.
+  Some crease crossings are intentionally unsupported, including the folded-sheet refusal in the tests.
+- Refinement and held-out samples are numerical checks, **not** a certificate of global shortest distance,
+  absence of every self-intersection, or exact geometry between samples. This is a bounded local CAD operation.
+
+Run `SurfaceOffsetVerification` for analytic plane/cylinder/corner/circle checks, live edits, native inspector,
+undo/redo, failure recovery and persistence. The `LigerSurfaceOffsetVerification` CTest additionally replays the
+vehicle, checks bilateral agreement, exports four native views and compares the roof before/after.
+`Projects/Project-Drive/Tools/Liger/SurfaceOffsetSequence.py --proofs <native-proof-directory>` reproduces the
+strip measurements, native document and labelled review boards.
+Run `SurfaceOffsetVerification.py` in that same tools folder for independent provenance, width-selection and
+polynomial-parent chord-distance checks. Chord distances are lower bounds on intrinsic distance, not a
+replacement for the surface metric.

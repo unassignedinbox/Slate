@@ -1,0 +1,11 @@
+{
+  "marchRefinementMetres": 8.6438752278364878e-06,
+  "sampledInterpolationMetres": 2.2804600212148806e-05,
+  "sourceSupportDiscrepancyMetres": 6.8941371259427786e-12,
+  "normalPathLengthResidualMetres": 3.9999087132758238e-09,
+  "cornerRefinementMetres": 3.159911917544056e-08,
+  "cornerDistanceResidualMetres": 4.7169458122879593e-06,
+  "bilateralDiscrepancyMetres": 3.7204736603987382e-06,
+  "intervals": 346,
+  "cornerIntervals": 4
+}

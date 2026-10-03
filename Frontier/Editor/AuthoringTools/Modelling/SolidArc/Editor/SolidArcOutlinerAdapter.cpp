@@ -305,6 +305,11 @@ void SeatFigureRow(EditorInstance& Row, SolidArcOutlinerBinding& Binding, const 
             CopyText(Row.StandingNote, sizeof(Row.StandingNote), "B-rep check");
         }
     }
+    if (!Figure.Recipe.Complaint.empty())
+    {
+        Row.Standing = EditorStanding::Warn;
+        CopyText(Row.StandingNote, sizeof(Row.StandingNote), Figure.Recipe.Complaint.c_str());
+    }
     Binding.RowRole = SolidArcOutlinerBinding::Role::Figure;
     Binding.FigureIdentity = Figure.Identity;
 }
@@ -707,7 +712,7 @@ uint32_t BuildSolidArcOutliner(const ConsoleHost& Host,
                     std::snprintf(Measure, sizeof(Measure), "%.2f m", Dimension.Value);
                 else
                     std::snprintf(Measure, sizeof(Measure), "%s", Dimension.Label.c_str());
-                std::snprintf(Row.Meta, sizeof(Row.Meta), "%s \xc2\xb7 %s", Measure, Dimension.Slot >= 0 ? "driving" : "measured");
+                std::snprintf(Row.Meta, sizeof(Row.Meta), "%.11s \xc2\xb7 %.8s", Measure, Dimension.Slot >= 0 ? "driving" : "measured");
                 Binding.RowRole = SolidArcOutlinerBinding::Role::Dimension;
                 Binding.DimensionId = Dimension.Id;
                 ++At;
@@ -965,7 +970,26 @@ bool BuildSolidArcInspectorSheet(const ConsoleHost& Host,
 
     EditorPropertyGroup* Parameters = AddGroup(*Sheet, "Parameters", "Parametric blueprint");
     if (Parameters != nullptr)
-        AddBlueprintParameters(*Parameters, *Figure);
+    {
+        if (Figure->Recipe.Operation == RecipeOperation::SurfaceOffset)
+        {
+            CopyText(Parameters->Caption, sizeof(Parameters->Caption), "Live surface-distance offset");
+            AddReadout(*Parameters, "Metric", "along support skin");
+            AddSlider(*Parameters, "Signed width", static_cast<float>(Figure->Recipe.Length * 1000), -1000, 1000, 3u, "mm");
+            for (const auto& Input : Host.AllFigures())
+            {
+                if (!Figure->Recipe.Path.Figures.empty() && Input.Identity == Figure->Recipe.Path.Figures.front())
+                    AddReadout(*Parameters, "Parent curve", Input.Name.c_str());
+                if (Input.Identity == Figure->Recipe.Path.Support)
+                    AddReadout(*Parameters, "Support", Input.Name.c_str());
+            }
+            char Tolerance[32] = {};
+            std::snprintf(Tolerance, sizeof(Tolerance), "%.4g mm", Figure->Recipe.Radius * 1000);
+            AddReadout(*Parameters, "Tolerance", Tolerance);
+            AddReadout(*Parameters, "Status", Figure->Recipe.Complaint.empty() ? "live" : Figure->Recipe.Complaint.c_str());
+        }
+        else AddBlueprintParameters(*Parameters, *Figure);
+    }
 
     if (Anchored > 0u)
     {
@@ -1064,6 +1088,15 @@ void ApplySolidArcInspectorSheet(ConsoleHost& Host,
         for (uint32_t P = 0u; P < Group.PropertyCount; ++P)
         {
             const EditorProperty& Property = Group.Properties[P];
+            if (Figure->Recipe.Operation == RecipeOperation::SurfaceOffset && Property.Category == EditorPropertyCategory::Slider &&
+                std::strcmp(Property.Label, "Signed width") == 0 &&
+                Property.Figure != static_cast<float>(Figure->Recipe.Length * 1000))
+            {
+                char Line[128] = {};
+                std::snprintf(Line, sizeof(Line), "surface-offset edit \"#%u\" %.17g", Figure->Identity, double(Property.Figure) / 1000);
+                Host.Execute(Line);
+                return;
+            }
             if (Property.Category == EditorPropertyCategory::AxisVec3 && Property.Editable)
             {
                 ApplyTransformAxis(*Figure, Property);

@@ -24,6 +24,7 @@ def main() -> int:
         folder.mkdir(parents=True, exist_ok=True)
     sources = sorted(path for folder in ("Kernel", "Presentation", "Interaction", "Document", "Console")
                      for path in (SOURCE / folder).glob("*.cpp") if path.name != "SolidArcConsole.cpp")
+    sources.append(SOURCE / "Editor/SolidArcOutlinerAdapter.cpp")
     flags = ["/nologo", "/c", "/std:c++20", "/EHsc", "/MD", "/O2", "/W4", "/WX", "/utf-8",
              "/permissive-", "/DNOMINMAX", "/D_CRT_SECURE_NO_WARNINGS",
              f'/DSOLIDARC_PROOF_FOLDER="{proofs.as_posix()}"', f"/I{SOURCE}", f"/I{SOURCE / 'Presentation'}"]
@@ -70,7 +71,7 @@ def main() -> int:
         return executable
 
     console = link_program(SOURCE / "Console/SolidArcConsole.cpp", "SolidArc")
-    for name in ("Kernel", "Blend", "MultiEdgeFillet", "Document", "Feature"):
+    for name in ("Kernel", "Blend", "MultiEdgeFillet", "Document", "Feature", "SurfaceOffset"):
         executable = link_program(SOURCE / f"Verification/{name}Verification.cpp", name + "Verification")
         run([str(executable)], name + "Verification")
         print(f"PASS {name}Verification", flush=True)
@@ -113,6 +114,8 @@ def main() -> int:
          str(reconstruction / "Liger_Consolidated.arc")], "LigerConsolidationVerification")
     run([str(executable), "--layout", str(reconstruction / "Liger_Consolidated.arc"),
          str(reconstruction / "Liger_Layout.arc")], "LigerLayoutVerification")
+    run([str(OUTPUT / "SurfaceOffsetVerification.exe"), str(reconstruction / "Liger_Surface_Offset.arc"),
+         str(proofs / "LigerSurfaceOffset")], "LigerSurfaceOffsetVerification")
     print("MSVC SolidArc: console linked, focused regressions and all Liger journals passed")
     return 0
 
