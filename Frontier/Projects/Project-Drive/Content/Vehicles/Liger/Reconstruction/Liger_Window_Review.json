@@ -1,0 +1,126 @@
+{
+  "source": "Liger_Surface_Offset.arc",
+  "sourceSha256": "cb99a0bc70c3bfad7e7b94792ff72efa2ba3967200024f5278056cc64c5e28fb",
+  "document": "Liger_Window_Review.arc",
+  "documentSha256": "c45f780267540f00f2f1022bcc1a613146ffbe71347ef0827a09f4f3954c45a2",
+  "nativeEdgesSha256": "889086ed689686d5ca4418accafb69d18197db14a7661a8fef464631639e047b",
+  "bodyChanged": false,
+  "orangeRepairsChanged": false,
+  "roofOffsetChanged": false,
+  "windowGuides": [
+    {
+      "name": "Guide_W01_WindowPatchEdge_Left",
+      "nativeEdges": [
+        [
+          204,
+          0
+        ],
+        [
+          205,
+          0
+        ],
+        [
+          206,
+          0
+        ],
+        [
+          207,
+          0
+        ],
+        [
+          208,
+          0
+        ],
+        [
+          209,
+          0
+        ]
+      ],
+      "lengthMetres": 0.5136319913125059,
+      "roofGapMetres": 5.589695202070964e-09,
+      "greenGapMetres": 2.5419075938218215e-09,
+      "greenParameter": 0.29937712281879886,
+      "construction": {
+        "controlPoles": 19,
+        "sourceJoinMaximumMm": 0.0,
+        "construction": "Exact source cubic spans; endpoint welding bounded by sourceJoinMaximumMm, not a pixel fit"
+      },
+      "liveLinkedToBody": false,
+      "extent": "Exact patch edge from roof border to green foot. No invented continuation beyond green."
+    },
+    {
+      "name": "Guide_W01_WindowPatchEdge_Right",
+      "nativeEdges": [
+        [
+          281,
+          0
+        ],
+        [
+          280,
+          0
+        ],
+        [
+          279,
+          0
+        ],
+        [
+          278,
+          0
+        ],
+        [
+          277,
+          0
+        ],
+        [
+          276,
+          0
+        ]
+      ],
+      "lengthMetres": 0.5136319913125059,
+      "roofGapMetres": 5.589695044194858e-09,
+      "greenGapMetres": 1.0105898254518955e-08,
+      "greenParameter": 0.7006228747764217,
+      "construction": {
+        "controlPoles": 19,
+        "sourceJoinMaximumMm": 0.0,
+        "construction": "Exact source cubic spans; endpoint welding bounded by sourceJoinMaximumMm, not a pixel fit"
+      },
+      "liveLinkedToBody": false,
+      "extent": "Exact patch edge from roof border to green foot. No invented continuation beyond green."
+    }
+  ],
+  "bilateralDiscrepancyMetres": 0.0,
+  "spacing": [
+    {
+      "reference": "Guide_B02_LowerCanopy_Across",
+      "colour": "purple",
+      "existingChordMinimumMetres": 0.05585512262639837,
+      "existingChordMedianMetres": 0.060671070335463546,
+      "existingChordMaximumMetres": 0.07043137686425255,
+      "proposedSurfaceOffsetMetres": 0.06,
+      "applied": false,
+      "sourceDomain": [
+        0.3654874002835305,
+        0.634512598087794
+      ],
+      "displayedShape": "Exact existing curve, not a uniform offset"
+    },
+    {
+      "reference": "Guide_B01_OuterShoulder_Across",
+      "colour": "red",
+      "existingChordMinimumMetres": 0.12768853504282512,
+      "existingChordMedianMetres": 0.1437799865017872,
+      "existingChordMaximumMetres": 0.1590231627091424,
+      "proposedSurfaceOffsetMetres": 0.145,
+      "applied": false,
+      "sourceDomain": [
+        0.3665204158117786,
+        0.6334795855492585
+      ],
+      "displayedShape": "Exact existing curve, not a uniform offset"
+    }
+  ],
+  "measurement": "129 nearest-curve 3D chord gaps over the marked frontal span; not surface/geodesic distances.",
+  "offsetStatus": "Not applied: production solver refuses wider offsets at the creased window surround.",
+  "scope": "Review exact window guides and existing patches before modifying the surround. No topology cuts or surface fairing."
+}
