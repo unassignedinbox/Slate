@@ -1,0 +1,4 @@
+Document SHA256: 4de793ee9484822ede0c25c0cbcfe35d440fea52fe9b48750904078c4cbc6f9a
+PASS feature-review roundtrip: geometry, purposes and colours retained
+PASS circular guide radii: arcs=4 maximum_error_metres=6.66134e-16
+PASS mirrored design and circular guides: maximum_error_metres=5.78942e-15

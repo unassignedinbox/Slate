@@ -4440,7 +4440,7 @@ void ConsoleHost::Register() noexcept
         Row("feature-copy: %zu independent editable curves; source body unchanged", Curves.size());
         return true;
     });
-    Add("tint", "tint <figure...> r g b — body colour 0..1", [=, this](const CommandLine& C)
+    Add("tint", "tint <figure...> r g b — body or feature-curve colour 0..1", [=, this](const CommandLine& C)
     {
         if (C.Count() < 4) return Refuse("tint: figure and r g b required");
         double R = C.Number(C.Count() - 3).value_or(-1), G = C.Number(C.Count() - 2).value_or(-1), B = C.Number(C.Count() - 1).value_or(-1);

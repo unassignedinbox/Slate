@@ -1,0 +1,27 @@
+{
+  "document": "Liger_Feature_Review.arc",
+  "documentSha256": "4de793ee9484822ede0c25c0cbcfe35d440fea52fe9b48750904078c4cbc6f9a",
+  "renderer": "Native SolidArc CPU rasterizer; individual renders unchanged, overview adds labels",
+  "images": [
+    {
+      "file": "Liger_Feature_Front_Quarter.png",
+      "sha256": "822da9421ad152b44e3342992db856b989febab450934d66eefb4ecdb1804d75",
+      "view": "01 / FRONT THREE-QUARTER"
+    },
+    {
+      "file": "Liger_Feature_Rear_Quarter.png",
+      "sha256": "6a1d3a2d4ab279f51c1dbf286a209bd67cee844fc2df2f7de6220c9767ffbc0f",
+      "view": "02 / REAR THREE-QUARTER"
+    },
+    {
+      "file": "Liger_Feature_Side.png",
+      "sha256": "8bf2191b4652db6e426c6478daf9380ffde2ced05efd1a1740e30b3ca3d5af0d",
+      "view": "03 / SIDE \u2014 UPPER CIRCULAR REFERENCES"
+    },
+    {
+      "file": "Liger_Feature_Top.png",
+      "sha256": "9de0a99f0dacd89e824a74d2bcfe38986b615be7ab517272aaabc140726a2568",
+      "view": "04 / TOP \u2014 PROPOSED FEATURE PATHS"
+    }
+  ]
+}

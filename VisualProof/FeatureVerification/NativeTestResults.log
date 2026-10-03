@@ -1,0 +1,9 @@
+Test project /home/user/Slate/_AgentScratch/build/SolidArc
+    Start 160: DocumentVerification
+1/2 Test #160: DocumentVerification .............   Passed    1.10 sec
+    Start 175: FeatureVerification
+2/2 Test #175: FeatureVerification ..............   Passed    6.27 sec
+
+100% tests passed out of 2
+
+Total Test time (real) =   7.37 sec

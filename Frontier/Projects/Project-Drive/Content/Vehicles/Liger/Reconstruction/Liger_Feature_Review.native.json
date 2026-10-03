@@ -1,0 +1,13 @@
+{
+  "bodySourceSha256": "8ce67d6fcf329e5fae8266c106f3de372e0d97859121773f712f2af06067fd23",
+  "featureDocumentSha256": "4de793ee9484822ede0c25c0cbcfe35d440fea52fe9b48750904078c4cbc6f9a",
+  "bodyCommandsUnchanged": true,
+  "nativeBodyEdgeSamplesExactlyUnchanged": 155550,
+  "nativeBodyTrianglesExactlyUnchanged": 278304,
+  "nativeBodyTriangleSha256": "e116ef9350b8361ee930acabbcdb5d62f8720494c73bde8d2f2b0a73527b5861",
+  "roundtrip": "Native geometry, feature purposes and colours retained",
+  "circularGuideSampledRadiusErrorMetres": 6.66134e-16,
+  "scope": "Guide authoring only; no surface fairing or wheel-arch replacement claimed",
+  "guideSampledMirrorErrorMetres": 5.78942e-15,
+  "pinkOpeningBackfacesAlreadyPresentInSimplifiedBaseline": true
+}

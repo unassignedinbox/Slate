@@ -123,6 +123,53 @@ The subdivision extractor checks agreement with the original evaluated cowl; the
 agreement with the supplied positions and oriented triangle indices. `PatchVerification.py` exercises the reduction
 bounds and chart transformations independently of Blender.
 
+### Colour-coded feature curves
+
+Open `Examples/Liger/Reconstruction/Liger_Feature_Review.arc` to inspect the main body with design and repair guides.
+This document requires `feature-curves`; older applications refuse it rather than silently losing the annotations.
+The body is unchanged in this review document. Red curves are proposed design guides interpreted from the user's markup,
+orange curves mark existing geometry needing review, and cyan arcs are provisional upper wheel-opening circle references.
+The second arch contour, lower fade and local surface fairing are not completed by this document.
+
+In the windowed **Document commands** panel, choose **Feature purpose**, then **Apply to curves**. To trace existing
+geometry, select edges on one body, choose Design or Repair, and use **Copy picked edges**. These are independent editable
+curve copies, not live references that follow later body edits. Show/Hide features is independent of ordinary CAD edges.
+
+The same operations are available through native commands:
+
+```text
+feature design MyRail
+feature repair selected
+feature-copy Body01 design --edges=0,1,2 --name=Shoulder
+arc (0,0,0) 0.45 20 140 --name=OpeningCrown
+feature circular OpeningCrown
+tint MyRail 1 0.16 0.22
+show features on
+show edges off
+```
+
+Purposes and colours participate in undo/redo and native save/reopen. A circular purpose requires an analytic arc/circle
+at assignment; tagging a freeform approximation is refused. A colour is not a continuing geometry certificate after
+control-point edits. Feature curves do not create automatic sketch fills, but remain available as explicit geometry inputs.
+
+Run `FeatureVerification` for native authoring, refusal, persistence, circular-radius and rendered-colour checks.
+For the Liger reference processing, use the console verifier to export native edge samples and tessellation into scratch:
+
+```powershell
+$Liger = "Frontier/Projects/Project-Drive/Content/Vehicles/Liger/Reconstruction"
+FeatureVerification.exe "$Liger/Liger_Main_Body_Simplified.arc" _AgentScratch/build/Edges.json
+python Frontier/Projects/Project-Drive/Tools/Liger/FeatureSequence.py `
+  "$Liger/Liger_Main_Body_Simplified.arc" _AgentScratch/build/Edges.json `
+  _AgentScratch/build/Liger_Feature_Review.arc
+python Frontier/Projects/Project-Drive/Tools/Liger/FeatureVerification.py
+```
+
+The exporter also writes `Edges.triangles.f64`. Keep these temporary files out of Content. The generator requires NumPy
+and SciPy. Its recorded screen landmarks are a manual interpretation, not a precise measurement of the design intent.
+It projects the proposed rails onto a native chord-tolerance tessellation and creates cubic guide splines; these are not
+exact on-surface constraints. Circular guides fit only the opening crowns in side elevation and sit just outboard for
+comparison. Do not mistake them for rebuilt arch surfaces or final dimensions.
+
 ### Reproduce the mirrored layout and four views
 
 This route uses the committed first skin and its `.queries` file; it does not need Blender. Install NumPy and SciPy.

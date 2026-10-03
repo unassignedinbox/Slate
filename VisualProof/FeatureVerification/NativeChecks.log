@@ -1,0 +1,39 @@
+  capability declared                                                    true         true   PASS
+  source body                                                            true         true   PASS
+  independent design edge copies                                         true         true   PASS
+  purpose attached to copied curve                                       true         true   PASS
+  source topology unchanged                                              true         true   PASS
+  editable spline                                                        true         true   PASS
+  repair purpose                                                         true         true   PASS
+  undo feature assignment                                                true         true   PASS
+  undo restores ordinary curve                                           true         true   PASS
+  redo feature assignment                                                true         true   PASS
+  redo restores purpose and colour                                       true         true   PASS
+  unknown target refuses transactionally                                 true         true   PASS
+  unknown target leaves metadata intact                                  true         true   PASS
+  invalid edge list refuses transactionally                              true         true   PASS
+  invalid list creates no partial curves                                 true         true   PASS
+  freeform cannot masquerade as circular                                 true         true   PASS
+  invalid purpose does not mutate                                        true         true   PASS
+  exact rational arc                                                     true         true   PASS
+  circular purpose                                                       true         true   PASS
+  circular radius verified, not a polygon approximation                  true         true   PASS
+  closed guide construction                                              true         true   PASS
+  closed guide purpose                                                   true         true   PASS
+  feature guides do not create sketch fill areas                         true         true   PASS
+  custom feature colour                                                  true         true   PASS
+  invalid custom colour refused                                          true         true   PASS
+  ordinary boundaries independently hidden                               true         true   PASS
+  feature colours reach native pixels                                    true         true   PASS
+  feature visibility toggle                                              true         true   PASS
+  visibility removes feature strokes                                     true         true   PASS
+  feature display restores                                               true         true   PASS
+  invalid visibility refuses                                             true         true   PASS
+  hide before saving                                                     true         true   PASS
+  native save                                                            true         true   PASS
+  native reopen                                                          true         true   PASS
+  purpose, colours and geometry survive replay                           true         true   PASS
+  hidden feature display survives open                                   true         true   PASS
+  restore feature display for proof                                      true         true   PASS
+  native visual proof                                                    true         true   PASS
+  38 checks, 0 failed → ALL PASS
