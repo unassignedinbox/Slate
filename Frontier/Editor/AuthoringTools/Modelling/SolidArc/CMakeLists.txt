@@ -880,6 +880,14 @@ add_test(NAME LigerContourVerification COMMAND FeatureVerification
     "${LIGER_RECONSTRUCTION}/Liger_Feature_Aligned.arc"
     "${CMAKE_CURRENT_BINARY_DIR}/contour-edges.json" --roundtrip)
 
+add_executable(LigerPatchVerification Verification/LigerPatchVerification.cpp)
+target_link_libraries(LigerPatchVerification PRIVATE SolidArcConsoleKit)
+add_test(NAME LigerPatchVerification COMMAND LigerPatchVerification
+    "${LIGER_RECONSTRUCTION}/Liger_Window_Review.arc"
+    "${LIGER_RECONSTRUCTION}/Liger_Patch_Repair.arc"
+    "${SOLIDARC_PROOF_FOLDER}/LigerPatchRepair")
+set_tests_properties(LigerPatchVerification PROPERTIES TIMEOUT 1200 LABELS "Liger;Geometry")
+
 add_executable(RoofRepairVerification Verification/RoofRepairVerification.cpp)
 target_link_libraries(RoofRepairVerification PRIVATE SolidArcConsoleKit)
 add_test(NAME LigerRoofRepairVerification COMMAND RoofRepairVerification

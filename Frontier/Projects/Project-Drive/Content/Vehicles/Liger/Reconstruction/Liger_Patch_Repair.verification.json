@@ -1,0 +1,170 @@
+{
+  "documentSha256": "9c34922fdcfa7f1cf942e8c92b777b1e1363917c92383d0b74b9808fede10d0d",
+  "groups": [
+    {
+      "label": "FrontRoofJunction",
+      "heldOutSamples": 4053,
+      "maximumHeldOutDisplacementMm": 0.3945526953506029,
+      "rmsHeldOutDisplacementMm": 0.023008660636790027,
+      "sampledRimMaximumMetres": 3.844299256512558e-09,
+      "reflectionMaximumMetres": 8.95090418262362e-16,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 552,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 1.7963967803422782e-07
+        },
+        {
+          "bezierCells": 675,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 2.4273206089271964e-07
+        },
+        {
+          "bezierCells": 506,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 2.9926994349976807e-10
+        }
+      ],
+      "sharedSeams": [
+        {
+          "samples": 193,
+          "maximumGapMetres": 6.8950123633834074e-15,
+          "maximumNormalAngleDegrees": 0.1672223513754059
+        },
+        {
+          "samples": 193,
+          "maximumGapMetres": 8.624260763003373e-15,
+          "maximumNormalAngleDegrees": 0.0050189178759316245
+        },
+        {
+          "samples": 193,
+          "maximumGapMetres": 7.407775423123775e-15,
+          "maximumNormalAngleDegrees": 0.043190087793863755
+        }
+      ]
+    },
+    {
+      "label": "MiddleRoofSide",
+      "heldOutSamples": 4246,
+      "maximumHeldOutDisplacementMm": 0.06322546799397699,
+      "rmsHeldOutDisplacementMm": 0.0029047104141420154,
+      "sampledRimMaximumMetres": 1.1328924855691423e-08,
+      "reflectionMaximumMetres": 9.222205069512407e-16,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 696,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 1.8286875945855134e-05
+        }
+      ],
+      "sharedSeams": []
+    },
+    {
+      "label": "WindowSide",
+      "heldOutSamples": 1158,
+      "maximumHeldOutDisplacementMm": 1.3606701270267862,
+      "rmsHeldOutDisplacementMm": 0.06679010686140849,
+      "sampledRimMaximumMetres": 1.2774693448964098e-08,
+      "reflectionMaximumMetres": 8.95090418262362e-16,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 558,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 5.269758119564103e-07
+        },
+        {
+          "bezierCells": 570,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 1.3458297386885594e-06
+        },
+        {
+          "bezierCells": 621,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 9.032242834471805e-08
+        }
+      ],
+      "sharedSeams": [
+        {
+          "samples": 193,
+          "maximumGapMetres": 7.11409568747747e-15,
+          "maximumNormalAngleDegrees": 0.3380959758966148
+        },
+        {
+          "samples": 193,
+          "maximumGapMetres": 4.255211271505921e-15,
+          "maximumNormalAngleDegrees": 0.27703804911978497
+        },
+        {
+          "samples": 193,
+          "maximumGapMetres": 6.2222033166756914e-15,
+          "maximumNormalAngleDegrees": 0.05894009161712279
+        }
+      ]
+    },
+    {
+      "label": "RoofCrossbarStrip",
+      "heldOutSamples": 965,
+      "maximumHeldOutDisplacementMm": 0.043518991008850705,
+      "rmsHeldOutDisplacementMm": 0.0049586598379935285,
+      "sampledRimMaximumMetres": 9.591611432123989e-09,
+      "reflectionMaximumMetres": 8.886119947416683e-16,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 344,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 1.1969427312567846e-05
+        }
+      ],
+      "sharedSeams": []
+    },
+    {
+      "label": "FrontArchBand",
+      "heldOutSamples": 2895,
+      "maximumHeldOutDisplacementMm": 0.7098315182805237,
+      "rmsHeldOutDisplacementMm": 0.10355132892184678,
+      "sampledRimMaximumMetres": 2.8138852093662015e-08,
+      "reflectionMaximumMetres": 1.3517848686956847e-15,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 650,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 1.6941408163038512e-07
+        }
+      ],
+      "sharedSeams": []
+    },
+    {
+      "label": "RearRoofSide",
+      "heldOutSamples": 4246,
+      "maximumHeldOutDisplacementMm": 0.7777624385992832,
+      "rmsHeldOutDisplacementMm": 0.042012067913652786,
+      "sampledRimMaximumMetres": 3.184050373735238e-08,
+      "reflectionMaximumMetres": 7.021666937153402e-16,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 900,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 2.5180763971837672e-05
+        }
+      ],
+      "sharedSeams": []
+    },
+    {
+      "label": "RearRoofCentre",
+      "heldOutSamples": 3281,
+      "maximumHeldOutDisplacementMm": 0.2964252418841129,
+      "rmsHeldOutDisplacementMm": 0.022165743315984504,
+      "sampledRimMaximumMetres": 2.0306045994031248e-08,
+      "reflectionMaximumMetres": 8.688869536365456e-16,
+      "numericalChartOrientation": [
+        {
+          "bezierCells": 648,
+          "subdivisionDepth": 0,
+          "minimumJacobianCoefficient": 2.2424022746453156e-05
+        }
+      ],
+      "sharedSeams": []
+    }
+  ],
+  "scope": "Independent held-out source-to-chart checks; exact spline samples. Numerical Bernstein checks use floating point, not interval arithmetic. Not a global Hausdorff or G1/G2 certificate."
+}

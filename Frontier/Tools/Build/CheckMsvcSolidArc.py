@@ -116,6 +116,10 @@ def main() -> int:
          str(reconstruction / "Liger_Layout.arc")], "LigerLayoutVerification")
     run([str(OUTPUT / "SurfaceOffsetVerification.exe"), str(reconstruction / "Liger_Surface_Offset.arc"),
          str(proofs / "LigerSurfaceOffset")], "LigerSurfaceOffsetVerification")
+    PatchExecutable = link_program(SOURCE / "Verification/LigerPatchVerification.cpp", "LigerPatchVerification")
+    run([str(PatchExecutable), str(reconstruction / "Liger_Window_Review.arc"),
+         str(reconstruction / "Liger_Patch_Repair.arc"), str(proofs / "LigerPatchRepair")],
+        "LigerPatchRepairVerification")
     print("MSVC SolidArc: console linked, focused regressions and all Liger journals passed")
     return 0
 
