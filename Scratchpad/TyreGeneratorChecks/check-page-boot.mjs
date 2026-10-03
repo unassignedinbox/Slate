@@ -221,11 +221,108 @@ ok('the inspector is populated', $('edProps').querySelectorAll('select').length 
   `${$('edProps').querySelectorAll('select').length} selects, ${$('edProps').querySelectorAll('input').length} inputs`);
 ok('the pitch cell controls are populated', $('edCell').querySelectorAll('input').length === 6,
   `${$('edCell').querySelectorAll('input').length} sliders`);
-ok('all six tools are offered', $('edTools').querySelectorAll('button').length === 6,
+ok('all seven tools are offered', $('edTools').querySelectorAll('button').length === 7,
   $('edTools').querySelectorAll('button').map(b => b.dataset.tool).join(', '));
+
+// ------------------------------------------------------------------ the overlap
+section('One pitch at a time');
+// A design can put shapes on pitch A, on pitch B, or on both, and the tyre lays them on alternate pitches.
+// Drawing all three sets in one cell stacked them on top of each other and read as the design overlapping itself.
+const lugLayer = P.layers[lugIndex];
+const designShapes = sandbox.window.SlateTread.designShapes;
+const cellLugs = () => $('edSvg').querySelectorAll('.lug').length - $('edSvg').querySelectorAll('.ghost .lug').length;
+const edSetPitch = v => vm.runInContext(`edSetPitch(${v})`, sandbox);
+
+edSetPitch(0);
+ok('the cell holds exactly what the tyre puts on pitch A',
+  cellLugs() === designShapes(lugLayer.shapes, 0).length,
+  `${cellLugs()} drawn, ${designShapes(lugLayer.shapes, 0).length} instanced`);
+edSetPitch(1);
+ok('and exactly what it puts on pitch B',
+  cellLugs() === designShapes(lugLayer.shapes, 1).length,
+  `${cellLugs()} drawn, ${designShapes(lugLayer.shapes, 1).length} instanced`);
+
+lugLayer.shapes[0].phase = '1';
+edSetPitch(0);
+const onA = $('edSvg').querySelectorAll(`[data-id="${lugLayer.shapes[0].id}"]`).length
+  - $('edSvg').querySelectorAll(`.ghost [data-id="${lugLayer.shapes[0].id}"]`).length;
+ok('a pitch-B shape is not drawn over pitch A', onA === 0, `${onA} copies`);
+edSetPitch(1);
+const onB = $('edSvg').querySelectorAll(`[data-id="${lugLayer.shapes[0].id}"]`).length
+  - $('edSvg').querySelectorAll(`.ghost [data-id="${lugLayer.shapes[0].id}"]`).length;
+ok('and it is drawn on pitch B', onB === 1, `${onB} copies`);
+ok('the button says which pitch is on screen', $('edPitch').textContent.trim() === 'Pitch B',
+  $('edPitch').textContent.trim());
+ok('the list tags which pitch a shape belongs to', $('edList').querySelectorAll('.ph').length === 1,
+  $('edList').querySelectorAll('.ph').map(x => x.textContent).join(''));
+edSetPitch(0);
+ok('switching away drops a selection that is not on this pitch', UI.editSel !== 0 || !$('edSvg').querySelectorAll('.vtx').length);
+lugLayer.shapes[0].phase = 'both';
+edSetPitch(0);
+ok('a both-pitch shape comes back on A',
+  $('edSvg').querySelectorAll(`[data-id="${lugLayer.shapes[0].id}"]`).length > 0);
+ok('the neighbouring pitches are still ghosted', $('edSvg').querySelectorAll('.ghost').length === 2);
+
+// ------------------------------------------------------------------ curves
+section('Curved edges');
+const edBend = vm.runInContext('edBend', sandbox), edChaikin = vm.runInContext('edChaikin', sandbox);
+const edSubdivide = vm.runInContext('edSubdivide', sandbox), edSimplify = vm.runInContext('edSimplify', sandbox);
+const square = [[0, 0], [1, 0], [1, 1], [0, 1]];
+
+const bowed = edBend(square, 0, [0.5, -0.4]);
+ok('bending an edge inserts an arc', bowed.length === square.length + 7, `${square.length} → ${bowed.length} points`);
+ok('the arc passes through the cursor', (() => {
+  const mid = bowed[Math.floor((bowed.length - square.length) / 2) + 1];
+  return Math.abs(mid[0] - 0.5) < 0.08 && Math.abs(mid[1] + 0.4) < 0.08;
+})(), `midpoint ${bowed[4].map(v => v.toFixed(2)).join(', ')}`);
+ok('the original corners survive the bend',
+  bowed[0][0] === 0 && bowed[0][1] === 0 && bowed[bowed.length - 1][0] === 0 && bowed[bowed.length - 1][1] === 1);
+ok('bending the closing edge appends rather than corrupts the ring',
+  edBend(square, 3, [-0.4, 0.5]).length === square.length + 7);
+ok('the bow actually leaves the straight line', bowed.slice(1, 8).some(q => q[1] < -0.1));
+
+const smoothed = edChaikin(square, true);
+ok('smoothing cuts every corner', smoothed.length === 8, `${square.length} → ${smoothed.length} points`);
+ok('smoothing stays inside the original outline',
+  smoothed.every(q => q[0] >= -1e-9 && q[0] <= 1 + 1e-9 && q[1] >= -1e-9 && q[1] <= 1 + 1e-9));
+ok('smoothing an open sipe keeps both ends pinned', (() => {
+  const line = [[0, 0], [0.5, 0.4], [1, 0]], out = edChaikin(line, false);
+  return out[0][0] === 0 && out[0][1] === 0 && out[out.length - 1][0] === 1 && out[out.length - 1][1] === 0;
+})());
+ok('subdividing doubles the points', edSubdivide(square, true).length === 8);
+ok('subdividing keeps the shape identical',
+  edSubdivide(square, true).every(q => Math.abs(q[0] - 0.5) <= 0.5 + 1e-9 && Math.abs(q[1] - 0.5) <= 0.5 + 1e-9));
+ok('simplify drops a point sitting on a straight run',
+  edSimplify([[0, 0], [0.5, 0], [1, 0], [1, 1], [0, 1]], true, 0.004).length === 4);
+ok('simplify never takes a ring below three points',
+  edSimplify([[0, 0], [0.5, 0], [1, 0]], true, 1).length >= 3);
+ok('repeated smoothing is capped so a ring cannot grow without bound', (() => {
+  let r = square;
+  for (let i = 0; i < 12; i++) r = edChaikin(r, true);
+  return r.length <= 400;
+})());
+vm.runInContext('UI.editSel = 0; edDraw(); edSidebar();', sandbox);
+const inspector = $('edProps').querySelectorAll('button').map(b => b.textContent);
+ok('the inspector offers the curve operators',
+  ['Smooth', 'Subdivide', 'Simplify'].every(n => inspector.includes(n)), inspector.join(' | '));
+
+// ------------------------------------------------------------------ topology scope
+section('The cage follows the tread, not the background');
+ok('the scope defaults to the blocks themselves', UI.edTopoScope === 'tread');
+const scopePick = $('edTopoPanel').querySelectorAll('select')[0];
+ok('the panel offers the scope', !!scopePick && scopePick.querySelectorAll('option').length === 2,
+  scopePick ? scopePick.querySelectorAll('option').map(o => o.textContent).join(', ') : 'missing');
+$('edTopo').click();
+ok('the stats name the scope', /blocks/.test($('edStats').innerHTML) || /Clipper/.test($('edStats').innerHTML));
+scopePick.onchange({ target: { value: 'all' } });
+ok('switching to all is accepted', UI.edTopoScope === 'all');
+scopePick.onchange({ target: { value: 'tread' } });
+ok('and back to the tread', UI.edTopoScope === 'tread');
+$('edTopo').click();
 
 // ------------------------------------------------------------------ the squash, and the view controls
 section('The canvas keeps the cell in proportion');
+vm.runInContext('UI.editSel = 0; edSetPitch(0);', sandbox);
 const dims = vm.runInContext('dims', sandbox), blocksMetrics = vm.runInContext('blocksMetrics', sandbox);
 const d = dims(vm.runInContext('T', sandbox)), met = blocksMetrics(P.layers[lugIndex], d);
 const cellW = 2 * met.bandHalf, cellH = met.pitch;

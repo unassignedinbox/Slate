@@ -183,6 +183,7 @@
   #edList .it.on{background:var(--card3);box-shadow:inset 0 0 0 1px rgba(122,209,255,.45)}
   #edList .it .ic{width:8px;height:8px;border-radius:2px;flex:0 0 auto}
   #edList .it .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #edList .it .ph{flex:0 0 auto;font-size:9.5px;letter-spacing:.08em;color:var(--dim);border:1px solid var(--line);border-radius:5px;padding:1px 4px}
   #edList .it button{background:none;border:0;color:var(--dim);cursor:pointer;padding:0 2px;font-size:12px}
   #edList .it button:hover{color:var(--txt)}
   #edTools{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
@@ -268,6 +269,7 @@
 <div id="editor">
   <div class="pane">
     <h2>Tread editor <span class="r">
+      <button class="small" id="edPitch" title="A design can put different shapes on alternate pitches; this shows one at a time (P)">Pitch A</button>
       <button class="small" id="edTopo" title="Show the quad cage the mesher will emit (T)">Topology</button>
       <button class="small" id="edFit">Reset view</button>
       <button class="small" id="edClose">Close</button></span></h2>
@@ -277,6 +279,7 @@
       <button class="small" data-tool="hole">Draw hole</button>
       <button class="small" data-tool="sipe">Draw cut line</button>
       <button class="small" data-tool="erase">Erase point</button>
+      <button class="small" data-tool="curve">Bend edge</button>
       <button class="small" data-tool="loop">Edge loop</button>
     </div>
     <div id="edStage">
@@ -1352,7 +1355,7 @@ const defaultDecals = () => [
   newDecal({ name: 'Compliance', text: 'DOT SL8T {serial}  ·  TUBELESS RADIAL  ·  MAX 51 PSI', font: 'mono', fontLabel: 'Technical mono', size: 16, color: '#a7a7a7', x: 2, y: 72, align: 'left', weight: 600, opacity: .65, embossed: true })
 ];
 const P = { name: 'GZero', type: 'Slick', layers: [], decals: defaultDecals() };   // tread pattern + sidewall decal layers
-const UI = { sel: -1, decalSel: -1, threads: false, quads: false, spin: false, treadMode: 'color', editing: -1, editTool: 'select', editSel: -1, edTopo: false };
+const UI = { sel: -1, decalSel: -1, threads: false, quads: false, spin: false, treadMode: 'color', editing: -1, editTool: 'select', editSel: -1, edTopo: false, edTopoScope: 'tread', edPitch: 0 };
 
 const TYPES = ['Slick', 'Semi-slick', 'Drift', 'Street', 'Grip / UHP', 'Wet', 'Winter', 'Rally', 'Off-road', 'Drag'];
 const RIM_MATERIALS = {
@@ -2718,6 +2721,77 @@ function edScale() {
 }
 const edFmt = (ring, k) => ring.map(p => `${(p[0] * k.ax).toFixed(3)},${(p[1] * k.ay).toFixed(3)}`).join(' ');
 
+// ---- curves. Downstream everything is a polygon, so a curve is stored as the points it samples to; bending an
+// edge replaces that one straight segment with a quadratic arc through the cursor, and the smoothing operators
+// are plain corner cutting. Nothing below changes the shape schema.
+const CURVE_STEPS = 8, RING_CAP = 400;
+function edBend(snapshot, i, through, steps = CURVE_STEPS) {
+  const n = snapshot.length, a = snapshot[i], b = snapshot[(i + 1) % n];
+  const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+  const c = [2 * through[0] - mx, 2 * through[1] - my];        // so the arc passes through the cursor at t = 0.5
+  const arc = [];
+  for (let k = 1; k < steps; k++) {
+    const t = k / steps, u = 1 - t;
+    arc.push([u * u * a[0] + 2 * u * t * c[0] + t * t * b[0], u * u * a[1] + 2 * u * t * c[1] + t * t * b[1]]);
+  }
+  return [...snapshot.slice(0, i + 1), ...arc, ...snapshot.slice(i + 1)];
+}
+function edChaikin(ring, closed) {
+  const n = ring.length; if (n < 3 || n * 2 > RING_CAP) return ring;
+  const out = []; if (!closed) out.push(ring[0]);
+  for (let i = 0; i < (closed ? n : n - 1); i++) {
+    const a = ring[i], b = ring[(i + 1) % n];
+    out.push([a[0] + (b[0] - a[0]) * 0.25, a[1] + (b[1] - a[1]) * 0.25]);
+    out.push([a[0] + (b[0] - a[0]) * 0.75, a[1] + (b[1] - a[1]) * 0.75]);
+  }
+  if (!closed) out.push(ring[n - 1]);
+  return out;
+}
+function edSubdivide(ring, closed) {
+  const n = ring.length; if (n * 2 > RING_CAP) return ring;
+  const out = [];
+  for (let i = 0; i < (closed ? n : n - 1); i++) {
+    const a = ring[i], b = ring[(i + 1) % n];
+    out.push(a, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
+  }
+  if (!closed) out.push(ring[n - 1]);
+  return out;
+}
+function edSimplify(ring, closed, tol) {
+  const n = ring.length, floor = closed ? 3 : 2;
+  if (n <= floor) return ring;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    if (!closed && (i === 0 || i === n - 1)) { out.push(ring[i]); continue; }
+    const a = ring[(i - 1 + n) % n], b = ring[i], c = ring[(i + 1) % n];
+    const ax = c[0] - a[0], ay = c[1] - a[1], L = Math.hypot(ax, ay);
+    const dist = L < 1e-9 ? 0 : Math.abs((b[0] - a[0]) * ay - (b[1] - a[1]) * ax) / L;
+    if (dist > tol || out.length + (n - i - 1) < floor) out.push(b);
+  }
+  return out.length >= floor ? out : ring;
+}
+// Which edge of the selected shape is the cursor nearest? Measured in millimetres, because design units are
+// anisotropic and a design-space distance would favour the across direction eight to one.
+function edNearestEdge(shape, mm, k) {
+  let best = null;
+  const scan = (ring, tag, closed) => {
+    const n = ring.length;
+    for (let i = 0; i < (closed ? n : n - 1); i++) {
+      const a = ring[i], b = ring[(i + 1) % n];
+      const ax = a[0] * k.ax, ay = a[1] * k.ay, bx = b[0] * k.ax, by = b[1] * k.ay;
+      const ex = bx - ax, ey = by - ay, L2 = ex * ex + ey * ey;
+      if (L2 < 1e-9) continue;
+      const t = Math.max(0, Math.min(1, ((mm[0] - ax) * ex + (mm[1] - ay) * ey) / L2));
+      const dist = Math.hypot(mm[0] - (ax + ex * t), mm[1] - (ay + ey * t));
+      if (!best || dist < best.dist) best = { dist, ring, tag, i, closed };
+    }
+  };
+  scan(shape.points, 'o', true);
+  (shape.holes || []).forEach((h, i) => scan(h, 'h' + i, true));
+  (shape.sipes || []).forEach((l, i) => scan(l, 's' + i, false));
+  return best;
+}
+
 function edStageBox() { return document.getElementById('edStage').getBoundingClientRect(); }
 function edApplyView() { const v = ED.view; if (v) edSvg().setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`); }
 function edFitView() {
@@ -2744,7 +2818,9 @@ function openTreadEditor(index) {
   document.getElementById('editor').classList.add('on');
   document.getElementById('editorBtn').classList.add('on');
   ED.view = null; ED.topo = null; ED.topoKey = ''; ED.loopSel = null;
-  edFitView(); edDraw(); edSidebar();
+  const first = ly.shapes[UI.editSel];                                  // open on the pitch the first shape lives on
+  if (first && (first.phase === '0' || first.phase === '1')) UI.edPitch = Number(first.phase);
+  edFitView(); edSetPitch(UI.edPitch);
 }
 // The editor only ever edits a polygon lug layer, and most presets are built from the older raster layers. Rather
 // than let the button sit dead on those, give the pattern a lug layer to work on and open that.
@@ -2770,7 +2846,8 @@ function edTopology() {
   if (!window.ClipperLib) return { error: 'Topology needs the Clipper library, which did not load.' };
   const k = edScale(), d = k.d, m = k.m;
   const key = JSON.stringify([ly.shapes, ly.count, ly.reach, ly.gap, ly.depth, ly.topoAlong, ly.topoAcross,
-    ly.loopsLat, ly.loopsCirc, T.polyDetail, T.width, T.aspect, T.rim, T.treadFrac, T.shoulder, T.treadDepth, T.wear]);
+    ly.loopsLat, ly.loopsCirc, T.polyDetail, T.width, T.aspect, T.rim, T.treadFrac, T.shoulder, T.treadDepth, T.wear,
+    UI.edTopoScope]);
   if (ED.topo && ED.topoKey === key) return ED.topo;
   // Re-running the whole boolean pass on every pointer move would make dragging treacle; the cage the drag
   // started from is close enough to steer by, and the real one lands the moment the pointer comes up.
@@ -2783,6 +2860,10 @@ function edTopology() {
     const sx = xs.filter(v => v >= -0.01 && v <= span + 0.01);
     const faces = []; let quads = 0, tris = 0, worst = 1;
     for (const pc of treadRegions(P, d, T.treadDepth, T.wear).pieces) {
+      // depth 0 is the standing tread — the blocks themselves. Deeper pieces are the groove floor behind them,
+      // which is a single sprawling region and swamps the view when it is not what you are looking at.
+      const isTread = pc.depth === 0;
+      if (UI.edTopoScope === 'tread' && !isTread) continue;
       const cut = inter(pc.paths, win);
       if (!cut.length) continue;
       for (const ex of exPolygons(cut)) {
@@ -2793,7 +2874,7 @@ function edTopology() {
           const pts = f.map(i => patch.points[i]);
           const q = f.length === 4 ? ST.quadQuality(...pts) : 0;
           if (f.length === 4) { quads++; worst = Math.min(worst, q); } else tris++;
-          faces.push({ n: f.length, q, pts: pts.map(w => [w[1], w[0]]) });   // world is [along, across]; the canvas is [across, along]
+          faces.push({ n: f.length, q, floor: !isTread, pts: pts.map(w => [w[1], w[0]]) });   // world is [along, across]; the canvas is [across, along]
         }
       }
     }
@@ -2843,20 +2924,24 @@ function edDraw() {
       .map(l => `<path class="sipe" d="M${edFmt(l, k).replace(/ /g, 'L')}"/>`).join('');
     return `<path class="${cls}" data-id="${shape.sourceId || shape.id}" d="${d}"/>${lines}`;
   };
-  // Ghosted neighbours show how the design tiles, including the alternate pitch an A/B design produces.
+  // A design can hold shapes for pitch A, for pitch B, or for both, and the tyre lays them on alternate pitches.
+  // Drawing all three sets in one cell stacked them on top of each other, which read as the design overlapping
+  // itself. One pitch is shown at a time, exactly as the tyre tiles it, with the other parity ghosted either side.
+  const parity = UI.edPitch ? 1 : 0;
+  const here = sh => sh.phase === undefined || sh.phase === 'both' || Number(sh.phase) === parity;
   for (const dy of [-1, 1]) {
-    const inner = ST.designShapes(ly.shapes, 1).map(sh => body(sh, 'lug mirrored')).join('');
+    const inner = ST.designShapes(ly.shapes, 1 - parity).map(sh => body(sh, 'lug mirrored')).join('');
     parts.push(`<g class="ghost" transform="translate(0,${f3(dy * pitch)})">${inner}</g>`);
   }
   for (const shape of ly.shapes) {
-    if (shape.enabled === false) continue;
+    if (shape.enabled === false || !here(shape)) continue;
     for (const inst of ST.expandShape(shape)) {
       if (inst.instance === 'source') continue;
       parts.push(body(inst, `lug mirrored ${inst.role === 'cut' ? 'cut' : inst.role === 'ejector' ? 'ejector' : ''}`));
     }
   }
   ly.shapes.forEach((shape, i) => {
-    if (shape.enabled === false) return;
+    if (shape.enabled === false || !here(shape)) return;
     const cls = ['lug', shape.role === 'cut' ? 'cut' : shape.role === 'ejector' ? 'ejector' : '',
       i === UI.editSel ? 'sel' : '', bad.has(shape.id) ? 'bad' : ''].filter(Boolean).join(' ');
     parts.push(body(shape, cls));
@@ -2878,7 +2963,7 @@ function edDraw() {
   });
 
   const sel = ly.shapes[UI.editSel];
-  if (sel && sel.enabled !== false) {
+  if (sel && sel.enabled !== false && here(sel)) {
     const dot = (ring, t, extra) => ring.forEach((q, i) =>
       parts.push(`<circle class="vtx ${extra}" data-ring="${t}" data-i="${i}" cx="${f3(q[0] * k.ax)}" cy="${f3(q[1] * pitch)}" r="${hr}"/>`));
     dot(sel.points, 'o', '');
@@ -2904,6 +2989,7 @@ function edDraw() {
     hole: 'Click to cut a void into the selected lug. <b>Enter</b> closes it, <b>Esc</b> cancels.',
     sipe: 'Click to trace a sipe or cut line across the selected lug. <b>Enter</b> finishes it.',
     erase: 'Click a handle to remove that point. Outlines keep a minimum of three.',
+    curve: 'Drag an <b>edge</b> of the selected shape to bow it into an arc. <b>Smooth</b> in the inspector rounds every corner at once.',
     loop: 'Click to pin a <b>circumferential</b> edge loop, <b>Shift</b>-click for a <b>lateral</b> one. Drag a loop to move it, <b>Delete</b> removes the selected loop.'
   }[UI.editTool];
   edStats();
@@ -2920,7 +3006,7 @@ function edStats() {
     if (t && t.error) bits.push(`<span style="color:var(--orange)">${t.error}</span>`);
     else if (t) {
       const total = t.quads + t.tris;
-      bits.push(`<span>per repeat <b>${t.quads}</b> quads &#183; <b>${t.tris}</b> tris</span>`);
+      bits.push(`<span>${UI.edTopoScope === 'tread' ? 'blocks' : 'blocks + floor'} <b>${t.quads}</b> quads &#183; <b>${t.tris}</b> tris</span>`);
       bits.push(`<span>quads <b>${total ? Math.round(t.quads / total * 100) : 0}%</b></span>`);
       bits.push(`<span>worst <b>${t.worst.toFixed(2)}</b></span>`);
       bits.push(`<span>grid <b>${t.nx}</b> &#215; <b>${t.ny}</b> &#183; ${t.ms} ms</span>`);
@@ -2936,11 +3022,16 @@ function edSidebar() {
   ly.shapes.forEach((shape, i) => {
     const colour = shape.role === 'cut' ? 'var(--red)' : shape.role === 'ejector' ? 'var(--yellow)' : '#7ad1ff';
     const el = document.createElement('div'); el.className = 'it' + (i === UI.editSel ? ' on' : '');
+    const pitchTag = shape.phase === '0' ? '<span class="ph">A</span>' : shape.phase === '1' ? '<span class="ph">B</span>' : '';
     el.innerHTML = `<span class="ic" style="background:${colour};opacity:${shape.enabled === false ? .25 : 1}"></span>` +
-      `<span class="nm">${shape.name}</span><button title="visibility">${shape.enabled === false ? '○' : '●'}</button>` +
+      `<span class="nm">${shape.name}</span>${pitchTag}<button title="visibility">${shape.enabled === false ? '○' : '●'}</button>` +
       '<button title="duplicate">⧉</button><button title="delete">✕</button>';
     const [vis, dup, del] = el.querySelectorAll('button');
-    el.onclick = () => { UI.editSel = i; edDraw(); edSidebar(); };
+    el.onclick = () => {
+      UI.editSel = i;
+      if (shape.phase === '0' || shape.phase === '1') UI.edPitch = Number(shape.phase);
+      edSetPitch(UI.edPitch);                                           // redraws on the pitch this shape lives on
+    };
     vis.onclick = e => { e.stopPropagation(); shape.enabled = shape.enabled === false; edCommit(); };
     dup.onclick = e => {
       e.stopPropagation();
@@ -2960,7 +3051,10 @@ function edSidebar() {
     name.querySelector('input').oninput = e => { shape.name = e.target.value.slice(0, 60); };
     props.appendChild(name);
     select(props, 'Role', shape, 'role', ST.ROLES, edCommit);
-    select(props, 'Pitch', shape, 'phase', ['both', '0', '1'], edCommit);
+    select(props, 'Pitch', shape, 'phase', ['both', '0', '1'], () => {
+      if (shape.phase === '0' || shape.phase === '1') UI.edPitch = Number(shape.phase);
+      edCommit(); edSetPitch(UI.edPitch);
+    });
     check(props, 'Full-width rib', shape, 'continuous', edCommit);
     if (shape.role === 'cut') slider(props, 'Cut depth (×tread)', shape, 'cutDepth', 0.05, 1, 0.01, v => (+v).toFixed(2), edCommit);
     else slider(props, 'Crown height', shape, 'heightRatio', 0.05, 1, 0.01, v => (+v).toFixed(2), edCommit);
@@ -2971,6 +3065,22 @@ function edSidebar() {
       slider(props, 'Mirror axis Y', m, 'axisY', 0, 1, 0.005, v => (+v).toFixed(3), edCommit);
       slider(props, 'Mirror offset', m, 'stagger', -0.5, 0.5, 0.005, v => (+v).toFixed(3), edCommit);
     }
+    const curves = document.createElement('div'); curves.className = 'btns';
+    curves.innerHTML = '<button class="small" title="Round every corner (repeatable)">Smooth</button>' +
+      '<button class="small" title="Insert a point in the middle of every edge">Subdivide</button>' +
+      '<button class="small" title="Drop points that sit on a straight run">Simplify</button>';
+    const [smooth, divide, thin] = curves.querySelectorAll('button');
+    const onRings = fn => {
+      shape.points = fn(shape.points, true);
+      shape.holes = (shape.holes || []).map(h => fn(h, true));
+      shape.sipes = (shape.sipes || []).map(l => fn(l, false));
+      edCommit();
+    };
+    smooth.onclick = () => onRings(edChaikin);
+    divide.onclick = () => onRings(edSubdivide);
+    thin.onclick = () => onRings((r, closed) => edSimplify(r, closed, 0.004));
+    props.appendChild(curves);
+
     const nudge = document.createElement('div'); nudge.className = 'btns';
     nudge.innerHTML = '<button class="small">Centre across</button><button class="small">Flip across</button>';
     const [centre, flip] = nudge.querySelectorAll('button');
@@ -3005,11 +3115,12 @@ function edTopoPanel(ly) {
   host.innerHTML = '';
   const hint = document.createElement('div'); hint.className = 'hint';
   hint.innerHTML = UI.edTopo
-    ? 'Blue is a quad, orange a triangle, red a quad the mesher rates poor.'
+    ? 'Blue is a quad, orange a triangle, red a quad the mesher rates poor. <b>tread</b> cages the blocks themselves; <b>all</b> adds the groove floor behind them.'
     : 'Press <b>Topology</b> above (or <b>T</b>) to see the cage this design produces.';
   host.appendChild(hint);
 
   const redo = () => { ED.topoKey = ''; edDraw(); edSidebar(); schedule(); };
+  select(host, 'Cage shows', UI, 'edTopoScope', ['tread', 'all'], () => { ED.topoKey = ''; edDraw(); edSidebar(); });
   slider(host, 'Segments per pitch', ly, 'topoAlong', 0, 24, 1, v => (+v ? v : 'auto'), redo);
   slider(host, 'Segments across', ly, 'topoAcross', 0, 40, 1, v => (+v ? v : 'auto'), redo);
 
@@ -3103,6 +3214,14 @@ function edSetup() {
     }
     if (data.loop) { ED.loopSel = { kind: data.loop, i: +data.i }; edDraw(); edSidebar(); return; }
 
+    if (UI.editTool === 'curve') {
+      const shape = ly.shapes[UI.editSel];
+      if (!shape) { toast('Pick a shape first'); return; }
+      const near = edNearestEdge(shape, edPoint(ev), k);
+      if (!near || near.dist > ED.view.w * 0.04) return;                 // within about 4% of the view width
+      ED.drag = { mode: 'curve', ring: near.ring, i: near.i, snapshot: near.ring.map(q => q.slice()) };
+      svg.setPointerCapture(ev.pointerId); return;
+    }
     if (UI.editTool === 'pen' || UI.editTool === 'hole' || UI.editTool === 'sipe') {
       if (!ED.draft || ED.draft.kind !== UI.editTool) ED.draft = { kind: UI.editTool, pts: [] };
       ED.draft.pts.push(p); edDraw(); return;
@@ -3143,6 +3262,9 @@ function edSetup() {
       if (sel.kind === 'circ') ly.loopsCirc[sel.i] = +Math.max(-0.5, Math.min(0.5, p[0])).toFixed(4);
       else ly.loopsLat[sel.i] = +Math.max(0, Math.min(1, p[1])).toFixed(4);
       ED.topoKey = '';
+    } else if (ED.drag.mode === 'curve') {
+      const next = edBend(ED.drag.snapshot, ED.drag.i, raw);
+      ED.drag.ring.length = 0; ED.drag.ring.push(...next);
     } else if (ED.drag.mode === 'vertex') ED.drag.ring[ED.drag.i] = p;
     else {
       const dx = p[0] - ED.drag.last[0], dy = p[1] - ED.drag.last[1];
@@ -3165,6 +3287,7 @@ function edSetup() {
     document.querySelectorAll('#edTools button').forEach(x => x.classList.toggle('primary', x === b));
     edDraw();
   });
+  document.getElementById('edPitch').onclick = () => edSetPitch(UI.edPitch ? 0 : 1);
   document.getElementById('edClose').onclick = closeTreadEditor;
   document.getElementById('edFit').onclick = () => { edFitView(); edDraw(); };
   document.getElementById('edTopo').onclick = () => { edToggleTopology(); };
@@ -3190,6 +3313,7 @@ function edSetup() {
     if (ev.key === 'Enter') { edFinishDraft(); ev.preventDefault(); }
     else if (ev.key === 'Escape') { if (ED.draft) { ED.draft = null; edDraw(); } else closeTreadEditor(); }
     else if ((ev.key === 't' || ev.key === 'T') && !typing) edToggleTopology();
+    else if ((ev.key === 'p' || ev.key === 'P') && !typing) edSetPitch(UI.edPitch ? 0 : 1);
     else if ((ev.key === 'f' || ev.key === 'F') && !typing) { edFitView(); edDraw(); }
     else if ((ev.key === 'Delete' || ev.key === 'Backspace') && !typing) {
       const ly = edLayer(); if (!ly) return;
@@ -3206,6 +3330,15 @@ function edSetup() {
 function edToggleTopology() {
   UI.edTopo = !UI.edTopo;
   document.getElementById('edTopo').classList.toggle('primary', UI.edTopo);
+  edDraw(); edSidebar();
+}
+function edSetPitch(parity) {
+  UI.edPitch = parity ? 1 : 0;
+  const btn = document.getElementById('edPitch');
+  btn.textContent = UI.edPitch ? 'Pitch B' : 'Pitch A';
+  btn.classList.toggle('primary', !!UI.edPitch);
+  const ly = edLayer(), sel = ly && ly.shapes[UI.editSel];
+  if (sel && !(sel.phase === undefined || sel.phase === 'both' || Number(sel.phase) === UI.edPitch)) UI.editSel = -1;
   edDraw(); edSidebar();
 }
 
