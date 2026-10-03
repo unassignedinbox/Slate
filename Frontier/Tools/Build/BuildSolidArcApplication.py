@@ -82,12 +82,12 @@ def Main():
     if not (Smoke / "Execution.log").exists():
         raise RuntimeError("Application did not complete its native presentation checks")
     print((Smoke / "Execution.log").read_text())
-    Exterior = Package / "Examples/Liger/Reconstruction/Liger_Exterior_Partial.arc"
+    Exterior = Package / "Examples/Liger/Reconstruction/Liger_Reconstruction.arc"
     ExteriorSmoke = Smoke / "Liger"
     Execute([Executable, Exterior, "--smoke", ExteriorSmoke], "ExteriorApplication", Cwd=Package, Timeout=180)
     if not (ExteriorSmoke / "Execution.log").exists():
         raise RuntimeError("Application did not complete the native exterior presentation checks")
-    print("Liger partial exterior: " + (ExteriorSmoke / "Execution.log").read_text())
+    print("Liger body reconstruction: " + (ExteriorSmoke / "Execution.log").read_text())
     for Image in Smoke.rglob("*.ppm"):
         Magic, Extent, Maximum, Pixels = Image.read_bytes().split(b"\n", 3)
         Width, Height = map(int, Extent.split())

@@ -1,0 +1,178 @@
+{
+  "status": "Positional starting skin; surface-layout refinement and source-junction resolution remain",
+  "measuredOn": "2026-10-03",
+  "source": {
+    "sourceCommit": "72c69b61e70427f7351f7fc3393cd25af56591db",
+    "sourceSha256": "4e53db6436f8136823ce8f79a9a8318bde74b92debe160915b9efa54e86058b6",
+    "suppliedSha256": "67e65662e7374e6d1a48ddf949e4582c03ca834469d562b3e229a12090e5db66",
+    "part": "Body_Main_Shell",
+    "blenderVersion": "5.0.1",
+    "sourceAgreement": "Vertices match NPZ exactly; oriented quad boundaries retained where triangulation chooses another diagonal",
+    "alternateDiagonals": [
+      {
+        "polygon": 33635,
+        "triangleRows": [
+          67270,
+          67271
+        ],
+        "quadPlaneDepartureMm": 0.6095817487420074
+      },
+      {
+        "polygon": 68589,
+        "triangleRows": [
+          137178,
+          137179
+        ],
+        "quadPlaneDepartureMm": 0.005578868094626174
+      }
+    ],
+    "alignedSamplingMaximumMm": 0.0012361031910926132,
+    "metresPerSourceUnit": 0.01,
+    "sourceMirrorCentreY": -47.85898971557617,
+    "originalLevel": 2,
+    "samplingLevel": 5,
+    "quality": 10,
+    "boundarySmoothing": "PRESERVE_CORNERS",
+    "semiSharpMirroredEdges": 74,
+    "chartCount": 17474,
+    "samplesPerDirection": 17,
+    "parameterQuantizationMaximum": 3.920171081084334e-06,
+    "sampling": "Mirror evaluated first; a single original-control subdivision retains crease propagation",
+    "scaleBasis": "Supplied centimetre convention; physical scale is not independently established"
+  },
+  "documentSha256": "93bcfae4ba8716efe1c64aadbd8becc4feaa68bdf2f854d5ff966f7695077f03",
+  "sourceCharts": 17474,
+  "surfaceCount": 2017,
+  "sourcePoleCount": 296712,
+  "controlPoleCount": 230828,
+  "heldOutSamples": 3634592,
+  "heldOutMaximumMm": 0.7912716037991221,
+  "heldOutRmsMm": 0.004514897203978825,
+  "reversedInteriorSamples": 0,
+  "canonicalRimMaximumMm": 0.7912716037991221,
+  "maximumJoinedNormalAngleDegrees": 0.4992655923290526,
+  "junctionCharts": [
+    5473,
+    5474,
+    5665,
+    5666,
+    7576,
+    7579,
+    8328,
+    8331,
+    8440,
+    8443,
+    8468,
+    8471,
+    14210,
+    14213,
+    14402,
+    14405,
+    16313,
+    16314,
+    17065,
+    17066,
+    17177,
+    17178,
+    17205,
+    17206
+  ],
+  "sourceThreeFaceRims": [
+    {
+      "corners": [
+        1400,
+        7688
+      ],
+      "charts": [
+        5473,
+        8328,
+        8443
+      ]
+    },
+    {
+      "corners": [
+        1240,
+        7688
+      ],
+      "charts": [
+        5474,
+        8331,
+        8440
+      ]
+    },
+    {
+      "corners": [
+        1240,
+        7806
+      ],
+      "charts": [
+        5665,
+        7576,
+        8471
+      ]
+    },
+    {
+      "corners": [
+        1351,
+        7806
+      ],
+      "charts": [
+        5666,
+        7579,
+        8468
+      ]
+    },
+    {
+      "corners": [
+        3667,
+        12119
+      ],
+      "charts": [
+        14210,
+        17065,
+        17178
+      ]
+    },
+    {
+      "corners": [
+        3514,
+        12119
+      ],
+      "charts": [
+        14213,
+        17066,
+        17177
+      ]
+    },
+    {
+      "corners": [
+        3514,
+        12235
+      ],
+      "charts": [
+        14402,
+        16313,
+        17206
+      ]
+    },
+    {
+      "corners": [
+        3618,
+        12235
+      ],
+      "charts": [
+        14405,
+        16314,
+        17205
+      ]
+    }
+  ],
+  "junctionTreatment": "All incident charts are retained as independent editable sheets, not erased or silently welded",
+  "claimsNotMade": [
+    "Continuous Hausdorff bound",
+    "G1/G2 continuity",
+    "Manufacturing solid",
+    "Resolved source junctions"
+  ],
+  "validationUse": "Samples excluded from coefficient fitting, but used for adaptive pole-count selection and acceptance; not a blind test set"
+}

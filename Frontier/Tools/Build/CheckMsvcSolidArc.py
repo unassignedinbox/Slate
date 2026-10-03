@@ -93,6 +93,11 @@ def main() -> int:
          str(reconstruction / "Liger_Roof_Glass_Frame.triangles"), str(reconstruction / "Liger_Exterior_Partial.arc")],
         "FacetVerification")
     print("PASS consolidated cowl, source-faceted frame and partial assembly", flush=True)
+    executable = link_program(SOURCE / "Verification/BodyVerification.cpp", "BodyVerification")
+    run([str(executable), str(reconstruction / "Liger_Main_Body.arc"),
+         str(reconstruction / "Liger_Main_Body.queries"), str(OUTPUT / "main-body.f64"),
+         str(reconstruction / "Liger_Reconstruction.arc")], "BodyVerification")
+    print("PASS native main body, explicit junction sheets, persistence and combined reconstruction", flush=True)
     print("MSVC SolidArc: console linked, focused regressions and all Liger journals passed")
     return 0
 

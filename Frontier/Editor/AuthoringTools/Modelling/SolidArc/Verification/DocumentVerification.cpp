@@ -180,5 +180,30 @@ int main()
     Panel.Expect("reopen knot-aware skin", Host.Execute("open \"" + ConformingPath + "\""));
     Panel.Expect("explicit knots and edge splits survive replay", UndoSequence::Fingerprint(Host.Document()) == ConformingFingerprint);
 
+    Panel.Section("Numerical snapshot retention is bounded for dense imported skins");
+    SceneDocument Snapshot = Host.Document();
+    UndoSequence Bounded;
+    Bounded.CapGeometry(1);
+    Bounded.Record(Snapshot, "first tint");
+    Snapshot.Figures().front().Tint[0] = 0.13f;
+    Panel.Expect("first bounded snapshot settles", Bounded.Settle(Snapshot));
+    const uint64_t BeforeSecond = UndoSequence::Fingerprint(Snapshot);
+    Bounded.Record(Snapshot, "second tint");
+    Snapshot.Figures().front().Tint[0] = 0.24f;
+    Panel.Expect("second bounded snapshot settles", Bounded.Settle(Snapshot));
+    const uint64_t AfterSecond = UndoSequence::Fingerprint(Snapshot);
+    Panel.Expect("old snapshots evicted but latest retained", Bounded.UndoEntries().size() == 1);
+    Panel.Expect("geometry accounting includes B-rep payload", Bounded.RetainedGeometryBytes() == UndoSequence::GeometryBytes(Snapshot));
+    Panel.Expect("latest undo remains usable above a tiny budget", Bounded.Undo(Snapshot) == "second tint");
+    Panel.Expect("bounded undo restores exact document", UndoSequence::Fingerprint(Snapshot) == BeforeSecond);
+    Panel.Expect("redo remains available", Bounded.CanRedo());
+    Panel.Expect("bounded redo returns label", Bounded.Redo(Snapshot) == "second tint");
+    Panel.Expect("bounded redo restores exact document", UndoSequence::Fingerprint(Snapshot) == AfterSecond);
+    Bounded.Record(Snapshot, "unchanged");
+    Panel.Expect("unchanged snapshots do not enter the history", !Bounded.Settle(Snapshot));
+    Panel.Expect("unchanged operation retains latest undo", Bounded.UndoEntries().size() == 1);
+    Bounded.Clear();
+    Panel.Expect("clearing releases retained geometry accounting", Bounded.RetainedGeometryBytes() == 0 && !Bounded.CanUndo() && !Bounded.CanRedo());
+
     return Panel.Conclude();
 }

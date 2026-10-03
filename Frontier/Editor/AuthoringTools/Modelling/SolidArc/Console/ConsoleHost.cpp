@@ -1179,7 +1179,7 @@ uint64_t ConsoleHost::PictureSignature() const noexcept
     };
     auto Put = [&](auto Value) { Mix(&Value, sizeof Value); };
     Put(Revision); Put(Surface->Width()); Put(Surface->Height()); Put(Surface->QuerySamples());
-    Put(HoverPick); Put(static_cast<int>(Mode)); Put(static_cast<int>(Shading)); Put(ShowControlCages); Put(ShowIsoCurves); Put(ShowDimensions); Put(GizmoShown);
+    Put(HoverPick); Put(static_cast<int>(Mode)); Put(static_cast<int>(Shading)); Put(ShowControlCages); Put(ShowIsoCurves); Put(ShowBoundaryEdges); Put(ShowDimensions); Put(GizmoShown);
     // A tool preview and the gizmo's hovered grip follow the pointer, so the pointer belongs in the signature too.
     Put(PointerX); Put(PointerY); Put(Tool.Active());
     const ViewRecord Seen = View.ToViewRecord(Surface->Width(), Surface->Height(), 1.0);
@@ -1331,6 +1331,8 @@ void ConsoleHost::DrawBody(const SceneFigure& Figure) noexcept
     }
     for (size_t E = 0; E < B.Edges.size(); ++E)
     {
+        if (!ShowBoundaryEdges && !Figure.EdgeSelected(int(E)) &&
+            !(FigureHover && Mode == SelectMode::Edge && SceneDocument::EdgeOf(HoverPick) == int(E))) continue;
         std::vector<Vec3> P = B.EdgePolyline(int(E));
         SegmentStream Seg; for (size_t I = 0; I + 1 < P.size(); ++I) Seg.Append(P[I], P[I + 1]);
         const bool EdgeSel = Figure.EdgeSelected(int(E));
@@ -1984,6 +1986,7 @@ bool ConsoleHost::OpenDocument(const std::string& RequestedPath) noexcept
     GizmoShown = Candidate.GizmoShown;
     ShowControlCages = Candidate.ShowControlCages;
     ShowIsoCurves = Candidate.ShowIsoCurves;
+    ShowBoundaryEdges = Candidate.ShowBoundaryEdges;
     ShowDimensions = Candidate.ShowDimensions;
     Shading = Candidate.Shading;
     for (Tile& T : SheetTiles) T = Tile();
@@ -4378,11 +4381,16 @@ void ConsoleHost::Register() noexcept
         return true;
     });
     RegisterSelection();
-    Add("show", "show cages on|off  ·  show iso on|off  ·  show shading flat|plastic|matcap", [=, this](const CommandLine& C)
+    Add("show", "show cages on|off  ·  show iso on|off  ·  show edges on|off  ·  show shading flat|plastic|matcap", [=, this](const CommandLine& C)
     {
         if (!Need(C, 2, "show")) return false;
         bool On = C.Arguments[1] == "on";
         if (C.Arguments[0] == "cages") ShowControlCages = On; else if (C.Arguments[0] == "iso") ShowIsoCurves = On;
+        else if (C.Arguments[0] == "edges")
+        {
+            if (C.Arguments[1] != "on" && C.Arguments[1] != "off") return Refuse("show edges: on|off");
+            ShowBoundaryEdges = On;
+        }
         else if (C.Arguments[0] == "shading")
         {
             const std::string& M = C.Arguments[1];
@@ -4390,7 +4398,7 @@ void ConsoleHost::Register() noexcept
             else return Refuse("show shading: flat|plastic|matcap");
             Row("shading %s", M.c_str());
         }
-        else return Refuse("show: cages|iso|shading");
+        else return Refuse("show: cages|iso|edges|shading");
         return true;
     });
     Add("render", "render <name> [--size=WxH] — writes Proofs/<name>.png  ·  render sheet <0|1|2|3> captures a tile; render sheet finalize <name> writes the 2x2 contact sheet", [=, this](const CommandLine& C)

@@ -49,8 +49,57 @@ uint64_t UndoSequence::Fingerprint(const SceneDocument& Scene) noexcept
     return H;
 }
 
+size_t UndoSequence::GeometryBytes(const SceneDocument& Scene) noexcept
+{
+    size_t Bytes = sizeof(SceneDocument) + Scene.Figures().size() * sizeof(SceneFigure) + Scene.Areas().size() * sizeof(SketchArea);
+    auto CurveBytes = [](const NurbsCurve& Curve)
+    {
+        return Curve.Poles.size() * sizeof(Vec4) + Curve.Knots.size() * sizeof(double);
+    };
+    auto SurfaceBytes = [](const NurbsSurface& PatchSurface)
+    {
+        return PatchSurface.Poles.size() * sizeof(Vec4) +
+            (PatchSurface.KnotsU.size() + PatchSurface.KnotsV.size()) * sizeof(double);
+    };
+    for (const SceneFigure& Figure : Scene.Figures())
+    {
+        Bytes += CurveBytes(Figure.Curve) + SurfaceBytes(Figure.Surface);
+        Bytes += Figure.Blueprint.PolylinePoints.size() * sizeof(Vec3);
+        const BrepBody& Body = Figure.Body;
+        Bytes += Body.Vertices.size() * sizeof(BrepVertex) + Body.Edges.size() * sizeof(BrepEdge) +
+            Body.Coedges.size() * sizeof(BrepCoedge) + Body.Loops.size() * sizeof(BrepLoop) + Body.Faces.size() * sizeof(BrepFace);
+        for (const BrepEdge& Edge : Body.Edges) Bytes += CurveBytes(Edge.Curve) + Edge.Coedges.size() * sizeof(int);
+        for (const BrepFace& Face : Body.Faces) Bytes += SurfaceBytes(Face.Surface) + Face.Loops.size() * sizeof(int);
+        for (const BrepLoop& Loop : Body.Loops) Bytes += Loop.Coedges.size() * sizeof(int);
+        for (const BrepCoedge& Coedge : Body.Coedges) Bytes += Coedge.Trace.size() * sizeof(Vec2);
+    }
+    return Bytes;
+}
+
+size_t UndoSequence::RetainedGeometryBytes() const noexcept
+{
+    size_t Bytes = 0;
+    for (const Entry& Snapshot : UndoStack) Bytes += Snapshot.GeometryBytes;
+    for (const Entry& Snapshot : RedoStack) Bytes += Snapshot.GeometryBytes;
+    return Bytes;
+}
+
+void UndoSequence::TrimGeometry(bool PreserveUndo) noexcept
+{
+    size_t Bytes = RetainedGeometryBytes();
+    while (Bytes > GeometryLimit && UndoStack.size() + RedoStack.size() > 1)
+    {
+        auto& Preferred = PreserveUndo ? UndoStack : RedoStack;
+        auto& Other = PreserveUndo ? RedoStack : UndoStack;
+        auto& Discard = Other.empty() ? Preferred : Other;
+        Bytes -= Discard.front().GeometryBytes;
+        Discard.pop_front();
+    }
+}
+
 void UndoSequence::Record(const SceneDocument& Before, std::string Label) noexcept
 {
+    PendingEntry.GeometryBytes = GeometryBytes(Before);
     PendingEntry.Before = Before;
     PendingEntry.Label = std::move(Label);
     PendingFingerprint = Fingerprint(Before);
@@ -61,10 +110,11 @@ bool UndoSequence::Settle(const SceneDocument& After) noexcept
 {
     if (!Pending) return false;
     Pending = false;
-    if (Fingerprint(After) == PendingFingerprint) return false;
+    if (Fingerprint(After) == PendingFingerprint) { PendingEntry = {}; return false; }
     UndoStack.push_back(std::move(PendingEntry));
     RedoStack.clear();
     while (UndoStack.size() > Limit) UndoStack.pop_front();
+    TrimGeometry(true);
     return true;
 }
 
@@ -72,8 +122,9 @@ std::string UndoSequence::Undo(SceneDocument& Current) noexcept
 {
     if (UndoStack.empty()) return {};
     Entry E = std::move(UndoStack.back()); UndoStack.pop_back();
-    RedoStack.push_back({ E.Label, Current });
+    RedoStack.push_back({ E.Label, GeometryBytes(Current), Current });
     Current = std::move(E.Before);
+    TrimGeometry(false);
     return RedoStack.back().Label;
 }
 
@@ -81,8 +132,9 @@ std::string UndoSequence::Redo(SceneDocument& Current) noexcept
 {
     if (RedoStack.empty()) return {};
     Entry E = std::move(RedoStack.back()); RedoStack.pop_back();
-    UndoStack.push_back({ E.Label, Current });
+    UndoStack.push_back({ E.Label, GeometryBytes(Current), Current });
     Current = std::move(E.Before);
+    TrimGeometry(true);
     return UndoStack.back().Label;
 }
 

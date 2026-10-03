@@ -1,0 +1,45 @@
+"BodyVerification" start time: Oct 03 11:48 UTC
+  main body document opens                                               true         true   PASS
+  one main body and explicit source junction sheets                      true         true   PASS
+  all fitted surfaces retained                                           true         true   PASS
+  no fabricated closed solid                                             true         true   PASS
+  sewn main body has no three-face edges                                 true         true   PASS
+  sewn main body is consistently oriented                                true         true   PASS
+  every original chart sampled from native geometry                      true         true   PASS
+  main body saves                                                        true         true   PASS
+  main body reopens                                                      true         true   PASS
+  geometry survives save/reopen                                          true         true   PASS
+  all spline degrees, dimensions, weights and knots survive replay             true         true   PASS
+  show cages off                                                         true         true   PASS
+  show iso off                                                           true         true   PASS
+  show shading plastic                                                   true         true   PASS
+  view iso                                                               true         true   PASS
+  view fit                                                               true         true   PASS
+  · render /home/user/Slate/_AgentScratch/build/solidarc/Proofs/BodyVerification/Liger_Main_Body.png  1600x1000  911.7 ms  320172 tri  35862 seg  0 pts  1583931 frag
+  render Liger_Main_Body --size=1600x1000                                true         true   PASS
+  view front                                                             true         true   PASS
+  view fit                                                               true         true   PASS
+  · render /home/user/Slate/_AgentScratch/build/solidarc/Proofs/BodyVerification/Liger_Main_Body_Side.png  1600x1000  629.5 ms  319198 tri  35862 seg  0 pts  1772165 frag
+  render Liger_Main_Body_Side --size=1600x1000                           true         true   PASS
+  show edges off                                                         true         true   PASS
+  view orbit 35 18                                                       true         true   PASS
+  view persp                                                             true         true   PASS
+  view fit                                                               true         true   PASS
+  · render /home/user/Slate/_AgentScratch/build/solidarc/Proofs/BodyVerification/Liger_Main_Body_Shaded.png  1600x1000  804.4 ms  248448 tri  0 seg  0 pts  1128928 frag
+  render Liger_Main_Body_Shaded --size=1600x1000                         true         true   PASS
+  edge display does not alter geometry                                   true         true   PASS
+  combined reconstruction opens                                          true         true   PASS
+  all components and junction sheets retained                            true         true   PASS
+  three supplied components retain every sewn face                       true         true   PASS
+  show cages off                                                         true         true   PASS
+  show iso off                                                           true         true   PASS
+  show edges off                                                         true         true   PASS
+  show shading plastic                                                   true         true   PASS
+  view front                                                             true         true   PASS
+  view orbit 35 18                                                       true         true   PASS
+  view persp                                                             true         true   PASS
+  view fit                                                               true         true   PASS
+  · render /home/user/Slate/_AgentScratch/build/solidarc/Proofs/BodyVerification/Liger_Reconstruction.png  1600x1000  844.7 ms  334172 tri  0 seg  0 pts  1204832 frag
+  render Liger_Reconstruction --size=1600x1000                           true         true   PASS
+  38 checks, 0 failed → ALL PASS
+"BodyVerification" end time: Oct 03 11:49 UTC

@@ -1,0 +1,24 @@
+{
+  "parts": [
+    {
+      "file": "Liger_Main_Body.arc",
+      "sha256": "93bcfae4ba8716efe1c64aadbd8becc4feaa68bdf2f854d5ff966f7695077f03"
+    },
+    {
+      "file": "Liger_Front_Cowl_Consolidated.arc",
+      "sha256": "44f3deb13a76688520e54f53ec6014c8372bdd68bb470b403184a60135c06baa"
+    },
+    {
+      "file": "Liger_Roof_Glass_Frame.arc",
+      "sha256": "81cd811be74aa5fc9034519fc1b2bec139ad0fcbf8c42d4c82d4b2730e7b5b8c"
+    }
+  ],
+  "documentSha256": "060ab614c5d06eac2ea99701ba7266bb7369d4e6ecfd760d502ae70455efe142",
+  "placement": "Original shared source coordinates; no transformations or inferred thickness",
+  "terminology": "The user identifies the previous cowl/frame section as interior and windshield; source filenames retained for traceability",
+  "limitations": [
+    "Main-body junction sheets unresolved",
+    "Dense starting surface layout",
+    "No G1/G2 certification"
+  ]
+}

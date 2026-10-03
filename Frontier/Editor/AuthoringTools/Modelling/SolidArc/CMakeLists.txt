@@ -863,3 +863,11 @@ add_test(NAME FacetVerification COMMAND FacetVerification
     "${LIGER_RECONSTRUCTION}/Liger_Roof_Glass_Frame.arc"
     "${LIGER_RECONSTRUCTION}/Liger_Roof_Glass_Frame.triangles"
     "${LIGER_RECONSTRUCTION}/Liger_Exterior_Partial.arc")
+
+add_executable(BodyVerification Verification/BodyVerification.cpp)
+target_link_libraries(BodyVerification PRIVATE SolidArcConsoleKit)
+add_test(NAME BodyVerification COMMAND BodyVerification
+    "${LIGER_RECONSTRUCTION}/Liger_Main_Body.arc"
+    "${LIGER_RECONSTRUCTION}/Liger_Main_Body.queries"
+    "${CMAKE_CURRENT_BINARY_DIR}/main-body.f64"
+    "${LIGER_RECONSTRUCTION}/Liger_Reconstruction.arc")

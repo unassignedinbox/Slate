@@ -1,0 +1,59 @@
+{
+  "measuredOn": "2026-10-03",
+  "documentSha256": "93bcfae4ba8716efe1c64aadbd8becc4feaa68bdf2f854d5ff966f7695077f03",
+  "reference": {
+    "sourceCommit": "72c69b61e70427f7351f7fc3393cd25af56591db",
+    "sourceSha256": "4e53db6436f8136823ce8f79a9a8318bde74b92debe160915b9efa54e86058b6",
+    "suppliedSha256": "67e65662e7374e6d1a48ddf949e4582c03ca834469d562b3e229a12090e5db66",
+    "part": "Body_Main_Shell",
+    "blenderVersion": "5.0.1",
+    "sourceAgreement": "Vertices match NPZ exactly; oriented quad boundaries retained where triangulation chooses another diagonal",
+    "alternateDiagonals": [
+      {
+        "polygon": 33635,
+        "triangleRows": [
+          67270,
+          67271
+        ],
+        "quadPlaneDepartureMm": 0.6095817487420074
+      },
+      {
+        "polygon": 68589,
+        "triangleRows": [
+          137178,
+          137179
+        ],
+        "quadPlaneDepartureMm": 0.005578868094626174
+      }
+    ],
+    "alignedSamplingMaximumMm": 0.0012361031910926132,
+    "metresPerSourceUnit": 0.01,
+    "sourceMirrorCentreY": -47.85898971557617,
+    "originalLevel": 2,
+    "samplingLevel": 5,
+    "quality": 10,
+    "boundarySmoothing": "PRESERVE_CORNERS",
+    "semiSharpMirroredEdges": 74,
+    "chartCount": 17474,
+    "samplesPerDirection": 17,
+    "parameterQuantizationMaximum": 3.920171081084334e-06,
+    "sampling": "Mirror evaluated first; a single original-control subdivision retains crease propagation",
+    "scaleBasis": "Supplied centimetre convention; physical scale is not independently established"
+  },
+  "sampledCharts": 17474,
+  "samplesPerDirection": 17,
+  "heldOutSampleCount": 3634592,
+  "validationUse": "Samples excluded from coefficient fitting, but used for adaptive pole-count selection and acceptance; not a blind test set",
+  "heldOutMaximumMm": 0.7912716037853055,
+  "heldOutRmsMm": 0.004514897204035639,
+  "allSamplesMaximumMm": 0.7912716037853055,
+  "sharedRimMaximumMm": 1.1095118377696634e-09,
+  "reversedInteriorFiniteDifferenceSamples": 0,
+  "nativeChangeFromPreconsolidationMm": 8.481140473375879e-10,
+  "claimsNotMade": [
+    "Continuous Hausdorff bound",
+    "G1/G2 continuity",
+    "Resolved source junctions",
+    "Manufacturing solid"
+  ]
+}
