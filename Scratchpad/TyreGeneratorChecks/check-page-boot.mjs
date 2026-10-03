@@ -221,8 +221,121 @@ ok('the inspector is populated', $('edProps').querySelectorAll('select').length 
   `${$('edProps').querySelectorAll('select').length} selects, ${$('edProps').querySelectorAll('input').length} inputs`);
 ok('the pitch cell controls are populated', $('edCell').querySelectorAll('input').length === 6,
   `${$('edCell').querySelectorAll('input').length} sliders`);
-ok('all five tools are offered', $('edTools').querySelectorAll('button').length === 5,
+ok('all six tools are offered', $('edTools').querySelectorAll('button').length === 6,
   $('edTools').querySelectorAll('button').map(b => b.dataset.tool).join(', '));
+
+// ------------------------------------------------------------------ the squash, and the view controls
+section('The canvas keeps the cell in proportion');
+const dims = vm.runInContext('dims', sandbox), blocksMetrics = vm.runInContext('blocksMetrics', sandbox);
+const d = dims(vm.runInContext('T', sandbox)), met = blocksMetrics(P.layers[lugIndex], d);
+const cellW = 2 * met.bandHalf, cellH = met.pitch;
+ok('the pitch cell is far from square, which is why a unit square squashed it',
+  cellW / cellH > 3, `${cellW.toFixed(0)} mm across vs ${cellH.toFixed(0)} mm per pitch, ratio ${(cellW / cellH).toFixed(1)}:1`);
+
+const band = $('edSvg').querySelectorAll('.band')[0];
+ok('the band is drawn at its true width in millimetres',
+  Math.abs(parseFloat(band.getAttribute('width')) - cellW) < 0.01,
+  `${band.getAttribute('width')} vs ${cellW.toFixed(3)}`);
+ok('and spans the pitch at true height', Math.abs(parseFloat(band.getAttribute('height')) - cellH * 2.15) < 0.05,
+  `${band.getAttribute('height')} vs ${(cellH * 2.15).toFixed(3)}`);
+
+const vb = () => $('edSvg').getAttribute('viewBox').split(' ').map(Number);
+const fitted = vb();
+ok('the view box matches the stage aspect, so nothing is letterboxed or stretched',
+  Math.abs(fitted[2] / fitted[3] - 800 / 600) < 1e-6, `${(fitted[2] / fitted[3]).toFixed(4)}`);
+ok('the whole cell width is inside the view', fitted[2] >= cellW, `${fitted[2].toFixed(0)} mm wide view`);
+
+$('edZoomIn').click();
+const zoomed = vb();
+ok('zoom in narrows the view', zoomed[2] < fitted[2], `${fitted[2].toFixed(0)} → ${zoomed[2].toFixed(0)} mm`);
+ok('zoom keeps the centre fixed',
+  Math.abs((zoomed[0] + zoomed[2] / 2) - (fitted[0] + fitted[2] / 2)) < 1e-6 &&
+  Math.abs((zoomed[1] + zoomed[3] / 2) - (fitted[1] + fitted[3] / 2)) < 1e-6);
+ok('zoom keeps the aspect', Math.abs(zoomed[2] / zoomed[3] - fitted[2] / fitted[3]) < 1e-9);
+$('edZoomOut').click();
+ok('zoom out widens it again', Math.abs(vb()[2] - fitted[2]) < 1e-6);
+$('edZoomIn').click(); $('edZoomIn').click();
+ok('reset view restores the fit', ($('edFit').click(), Math.abs(vb()[2] - fitted[2]) < 1e-6));
+ok('handles are sized from the view, not fixed in design units',
+  parseFloat($('edSvg').querySelectorAll('.vtx')[0].getAttribute('r')) > 0.1,
+  `r = ${$('edSvg').querySelectorAll('.vtx')[0].getAttribute('r')} mm`);
+ok('the stats strip reports the real cell size',
+  /cell/.test($('edStats').innerHTML) && $('edStats').innerHTML.includes(String(Math.round(cellW))),
+  $('edStats').querySelectorAll('span').map(x => x.textContent).join(' | '));
+
+// ------------------------------------------------------------------ topology and retopology
+section('Topology view');
+ok('a topology button is offered', !!$('edTopo'));
+$('edTopo').click();
+ok('it turns on without throwing', UI.edTopo === true);
+ok('the button reads as active', $('edTopo').classList.contains('primary'));
+// Clipper is absent here, which is exactly the case the preview has to survive rather than crash on.
+ok('without Clipper it says so instead of failing', /Clipper/.test($('edStats').innerHTML),
+  $('edStats').querySelectorAll('span').map(x => x.textContent).join(' | '));
+ok('the design still draws underneath it', (($('edSvg').innerHTML.match(/class="lug/g) || []).length > 0));
+$('edTopo').click();
+ok('it turns off again', UI.edTopo === false && !$('edTopo').classList.contains('primary'));
+
+section('Retopology controls');
+const panel = $('edTopoPanel');
+ok('the panel offers the two density sliders', panel.querySelectorAll('input[type=range]').length === 2,
+  `${panel.querySelectorAll('input[type=range]').length} sliders`);
+ok('it offers pin and clear', panel.querySelectorAll('button').length >= 2,
+  panel.querySelectorAll('button').map(b => b.textContent).join(' | '));
+ok('it says there are no loops yet', /No edge loops/.test(panel.innerHTML));
+
+const lug = P.layers[lugIndex];
+ok('a fresh lug layer carries empty loop lists',
+  Array.isArray(lug.loopsCirc) && Array.isArray(lug.loopsLat) && !lug.loopsCirc.length && !lug.loopsLat.length);
+
+panel.querySelectorAll('button')[0].click();                       // pin grid to pitch
+ok('pinning sets both densities', lug.topoAlong > 0 && lug.topoAcross > 0,
+  `${lug.topoAlong} along × ${lug.topoAcross} across`);
+
+// The whole point of pinning: the ring divides into whole pitches, so every repeat is meshed identically.
+const treadGridLines = vm.runInContext('treadGridLines', sandbox);
+const plain = treadGridLines(d, 6);
+const pinned = treadGridLines(d, 6, P);
+ok('the pinned grid is exactly the pitch subdivided',
+  pinned.xs.length === met.count * lug.topoAlong + 1,
+  `${plain.xs.length} auto → ${pinned.xs.length} pinned (${met.count} × ${lug.topoAlong} + 1)`);
+ok('every pitch boundary is a grid line',
+  Array.from({ length: met.count }, (_, i) => i * met.pitch).every(x => pinned.xs.some(v => Math.abs(v - x) < 1e-3)));
+const steps = pinned.xs.slice(1).map((x, i) => x - pinned.xs[i]);
+ok('and the spacing is uniform, so no repeat is meshed differently',
+  Math.max(...steps) - Math.min(...steps) < 1e-4, `step ${steps[0].toFixed(4)} mm, spread ${(Math.max(...steps) - Math.min(...steps)).toExponential(1)}`);
+ok('the auto grid was not, which is the defect pinning fixes',
+  plain.xs.length % met.count !== 0, `${plain.xs.length} lines over ${met.count} pitches`);
+
+lug.loopsCirc.push(0.22, -0.22); lug.loopsLat.push(0.3);
+vm.runInContext('edDraw(); edSidebar();', sandbox);
+ok('pinned loops are drawn on the canvas', $('edSvg').querySelectorAll('.loopHit').length === 3,
+  `${$('edSvg').querySelectorAll('.loopHit').length} loops`);
+ok('each loop gets a drag handle', $('edSvg').querySelectorAll('.loopTag').length === 3);
+ok('the panel lists them', $('edTopoPanel').querySelectorAll('.lp').length === 3,
+  $('edTopoPanel').querySelectorAll('.lp').map(x => x.textContent.replace('✕', '')).join(', '));
+
+const tuned = treadGridLines(d, 6, P);
+ok('a lateral loop adds one line to every pitch',
+  tuned.xs.length === pinned.xs.length + met.count,
+  `${pinned.xs.length} → ${tuned.xs.length} circumferential lines`);
+ok('it lands at the same place inside each pitch',
+  Array.from({ length: met.count }, (_, i) => (i + 0.3) * met.pitch)
+    .every(x => tuned.xs.some(v => Math.abs(v - x) < 1e-3)));
+ok('a circumferential loop lands at its millimetre position',
+  [0.22, -0.22].every(u => tuned.ys.some(y => Math.abs(y - u * 2 * met.bandHalf) < 1e-3)),
+  `±${(0.22 * 2 * met.bandHalf).toFixed(2)} mm`);
+ok('the grid is sorted and free of duplicates',
+  tuned.xs.every((x, i) => i === 0 || x > tuned.xs[i - 1]) && tuned.ys.every((y, i) => i === 0 || y > tuned.ys[i - 1]));
+ok('the shoulder arc samples survive retopology',
+  [10, 30, 50, 70].every(ph => tuned.ys.some(y => Math.abs(y - (d.treadHalf + d.sr * Math.sin(ph * Math.PI / 180))) < 1e-3)));
+ok('with no lug layer the grid is byte-identical to before',
+  JSON.stringify(treadGridLines(d, 6, { layers: [] })) === JSON.stringify(plain));
+
+$('edTopoPanel').querySelectorAll('.lp')[0].querySelectorAll('button')[0].click();
+ok('a loop can be removed from the panel', lug.loopsCirc.length === 1, `${lug.loopsCirc.length} left`);
+$('edTopoPanel').querySelectorAll('button').find(b => /Clear loops/.test(b.textContent)).click();
+ok('clear removes the rest', !lug.loopsCirc.length && !lug.loopsLat.length);
 
 section('Editing through the panel');
 const before = P.layers[lugIndex].shapes.length;

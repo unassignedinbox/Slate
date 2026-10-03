@@ -17,7 +17,6 @@ export class FakeElement {
     this.style = new Proxy({}, { set: (t, k, v) => { t[k] = v; return true; } });
     this.dataset = {};
     this.attributes = {};
-    this.textContent = '';
     this.value = '';
     this.checked = false;
     this.files = [];
@@ -32,9 +31,13 @@ export class FakeElement {
     };
     for (const [k, v] of Object.entries(attrs)) this.setAttribute(k, v);
   }
+  // textContent and innerHTML are read back by the checks, so both have to see appendChild work as well as
+  // an innerHTML assignment; the parser only ever fills childNodes, so serialise from there.
+  get textContent() { return this.childNodes.map(c => c.textContent).join(''); }
+  set textContent(v) { this.childNodes = v === '' ? [] : [new FakeText(String(v))]; }
   get className() { return [...this._classes].join(' '); }
   set className(v) { this._classes = new Set(String(v).split(/\s+/).filter(Boolean)); }
-  get children() { return this.childNodes; }
+  get children() { return this.childNodes.filter(c => c.tagName); }
   get firstChild() { return this.childNodes[0] || null; }
   setAttribute(k, v) {
     this.attributes[k] = String(v);
@@ -51,11 +54,12 @@ export class FakeElement {
   prepend(...nodes) { for (const n of nodes.reverse()) { n.parentNode = this; this.childNodes.unshift(n); } }
   append(...nodes) { for (const n of nodes) this.appendChild(n); }
   insertBefore(child, ref) { const i = this.childNodes.indexOf(ref); this.childNodes.splice(i < 0 ? this.childNodes.length : i, 0, child); child.parentNode = this; return child; }
-  get innerHTML() { return this._html; }
+  get innerHTML() { return this.childNodes.map(serialise).join(''); }
   set innerHTML(html) {
     this._html = String(html);
     this.childNodes = parseFragment(this._html, this);
   }
+  get outerHTML() { return serialise(this); }
   addEventListener() { }
   removeEventListener() { }
   setPointerCapture() { }
@@ -84,9 +88,12 @@ export class FakeElement {
   getScreenCTM() { return { inverse: () => ({}) }; }
 }
 
+export class FakeText {
+  constructor(text) { this.textContent = String(text); this.childNodes = []; this.parentNode = null; }
+}
 function descendants(node) {
   const out = [];
-  const walk = n => { for (const c of n.childNodes) { out.push(c); walk(c); } };
+  const walk = n => { for (const c of n.childNodes) if (c.tagName) { out.push(c); walk(c); } };
   walk(node);
   return out;
 }
@@ -115,9 +122,11 @@ export function parseFragment(html, parent = null) {
   const tagRe = /<\/?([a-zA-Z][\w-]*)((?:\s+[\w:-]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+))?)*)\s*(\/?)>/g;
   let last = 0, m;
   const addText = text => {
-    if (!text.trim()) return;
+    if (!text) return;
+    const node = new FakeText(text);
     const host = stack[stack.length - 1];
-    if (host) host.textContent += text.replace(/<[^>]*>/g, '');
+    if (host) { node.parentNode = host; host.childNodes.push(node); }
+    else { node.parentNode = parent; roots.push(node); }
   };
   while ((m = tagRe.exec(html))) {
     addText(html.slice(last, m.index));
@@ -135,6 +144,16 @@ export function parseFragment(html, parent = null) {
   }
   addText(html.slice(last));
   return roots;
+}
+
+function serialise(el) {
+  if (!el.tagName) return el.textContent || '';
+  const attrs = { ...el.attributes };
+  if (el._classes.size) attrs.class = [...el._classes].join(' ');
+  const text = Object.entries(attrs).map(([k, v]) => ` ${k}="${v}"`).join('');
+  const tag = el.tagName.toLowerCase();
+  if (VOID.has(tag)) return `<${tag}${text}/>`;
+  return `<${tag}${text}>${el.childNodes.map(serialise).join('')}</${tag}>`;
 }
 
 function makeContext2D() {

@@ -134,23 +134,50 @@
   #editor h2{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:400;margin:0 0 10px}
   #editor h2::before{content:"";width:3px;height:16px;border-radius:2px;background:#7ad1ff}
   #editor h2 .r{margin-left:auto;display:flex;gap:6px}
-  #edStage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:var(--card2);border-radius:16px;overflow:hidden}
-  #edSvg{width:100%;height:100%;touch-action:none;cursor:crosshair}
+  #edStage{flex:1;min-height:0;position:relative;background:var(--card2);border-radius:16px;overflow:hidden}
+  /* The editor draws in millimetres, so one pitch cell keeps its real proportions instead of being forced square. */
+  #edSvg{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair;display:block}
+  #edSvg.pan{cursor:grab} #edSvg.panning{cursor:grabbing}
+  #edSvg [class]{vector-effect:non-scaling-stroke}
   #edSvg .ghost{opacity:.17}
-  #edSvg .band{fill:#101114;stroke:rgba(255,255,255,.1);stroke-width:.004}
-  #edSvg .grid{stroke:rgba(255,255,255,.055);stroke-width:.0025;vector-effect:non-scaling-stroke}
-  #edSvg .axis{stroke:rgba(122,209,255,.4);stroke-width:.004;stroke-dasharray:.02 .015}
-  #edSvg .lug{fill:#3f444c;stroke:#8e9099;stroke-width:.004;fill-rule:evenodd}
+  #edSvg .band{fill:#101114;stroke:rgba(255,255,255,.1);stroke-width:1}
+  #edSvg .grid{stroke:rgba(255,255,255,.05);stroke-width:1}
+  #edSvg .grid.major{stroke:rgba(255,255,255,.1)}
+  #edSvg .axis{stroke:rgba(122,209,255,.4);stroke-width:1;stroke-dasharray:7 5}
+  #edSvg .lug{fill:#3f444c;stroke:#8e9099;stroke-width:1.3;fill-rule:evenodd}
   #edSvg .lug.ejector{fill:#4a4233;stroke:#d6c93a}
-  #edSvg .lug.cut{fill:rgba(229,66,63,.16);stroke:#e5423f;stroke-dasharray:.016 .012}
-  #edSvg .lug.sel{fill:#4d5a68;stroke:#7ad1ff;stroke-width:.007}
-  #edSvg .lug.bad{stroke:#e5423f;stroke-width:.008}
+  #edSvg .lug.cut{fill:rgba(229,66,63,.16);stroke:#e5423f;stroke-dasharray:6 4}
+  #edSvg .lug.sel{fill:#4d5a68;stroke:#7ad1ff;stroke-width:2.2}
+  #edSvg .lug.bad{stroke:#e5423f;stroke-width:2.6}
   #edSvg .mirrored{opacity:.42;pointer-events:none}
-  #edSvg .sipe{fill:none;stroke:#9aa4ff;stroke-width:.006;stroke-linecap:round}
-  #edSvg .draft{fill:rgba(122,209,255,.12);stroke:#7ad1ff;stroke-width:.005;stroke-dasharray:.014 .01}
-  #edSvg .vtx{fill:#0c0d0f;stroke:#7ad1ff;stroke-width:.003;cursor:grab}
+  #edSvg .sipe{fill:none;stroke:#9aa4ff;stroke-width:2;stroke-linecap:round}
+  #edSvg .draft{fill:rgba(122,209,255,.12);stroke:#7ad1ff;stroke-width:1.8;stroke-dasharray:5 4}
+  #edSvg .vtx{fill:#0c0d0f;stroke:#7ad1ff;stroke-width:1.4;cursor:grab}
   #edSvg .vtx.hole{stroke:#f0a04b} #edSvg .vtx.sipe{stroke:#9aa4ff}
-  #edSvg text{fill:var(--dim);font-size:.026px;font-weight:400}
+  #edSvg text{fill:var(--dim);font-weight:400}
+  /* topology preview — the quad cage the mesher will actually emit */
+  #edSvg .topo{fill:none;stroke:rgba(122,209,255,.5);stroke-width:.8;pointer-events:none}
+  #edSvg .topo.tri{fill:rgba(240,160,75,.3);stroke:rgba(240,160,75,.85)}
+  #edSvg .topo.poor{fill:rgba(229,66,63,.26);stroke:rgba(229,66,63,.8)}
+  #edSvg .topoFill{fill:rgba(122,209,255,.05);stroke:none;pointer-events:none}
+  /* retopology edge loops */
+  #edSvg .loop{stroke:#38c46d;stroke-width:1.6;stroke-dasharray:9 5}
+  #edSvg .loop.on{stroke:#9cffc0;stroke-width:2.6;stroke-dasharray:none}
+  #edSvg .loopHit{stroke:transparent;stroke-width:11;fill:none;cursor:move}
+  #edSvg .loopTag{fill:#38c46d;stroke:#0c0d0f;stroke-width:1;cursor:move}
+  #edSvg .loopTag.on{fill:#aaffcc}
+  #edStats{position:absolute;left:12px;bottom:10px;display:flex;gap:7px;pointer-events:none;flex-wrap:wrap}
+  #edStats span{background:rgba(12,13,15,.72);border:1px solid var(--line);border-radius:8px;padding:3px 8px;font-size:11px;color:var(--mut)}
+  #edStats span b{color:var(--txt);font-weight:500}
+  #edZoom{position:absolute;right:12px;bottom:10px;display:flex;gap:5px}
+  #edZoom button{width:26px;height:26px;border-radius:8px;border:1px solid var(--line);background:rgba(12,13,15,.72);color:var(--txt);cursor:pointer;font-size:14px;line-height:1;padding:0}
+  #edZoom button:hover{border-color:var(--mut)}
+  #edTopoPanel .row{margin-top:5px}
+  #edLoops{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 2px}
+  #edLoops .lp{display:flex;align-items:center;gap:5px;background:var(--card2);border-radius:9px;padding:4px 7px;font-size:11.5px;cursor:pointer}
+  #edLoops .lp.on{box-shadow:inset 0 0 0 1px rgba(56,196,109,.6)}
+  #edLoops .lp button{background:none;border:0;color:var(--dim);cursor:pointer;padding:0;font-size:11px}
+  #edLoops .lp button:hover{color:var(--red)}
   #edList{display:flex;flex-direction:column;gap:4px;margin:4px 0 2px;max-height:230px;overflow-y:auto;scrollbar-width:thin}
   #edList .it{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:11px;background:var(--card2);cursor:pointer;font-size:12.5px}
   #edList .it.on{background:var(--card3);box-shadow:inset 0 0 0 1px rgba(122,209,255,.45)}
@@ -241,6 +268,7 @@
 <div id="editor">
   <div class="pane">
     <h2>Tread editor <span class="r">
+      <button class="small" id="edTopo" title="Show the quad cage the mesher will emit (T)">Topology</button>
       <button class="small" id="edFit">Reset view</button>
       <button class="small" id="edClose">Close</button></span></h2>
     <div id="edTools">
@@ -249,8 +277,13 @@
       <button class="small" data-tool="hole">Draw hole</button>
       <button class="small" data-tool="sipe">Draw cut line</button>
       <button class="small" data-tool="erase">Erase point</button>
+      <button class="small" data-tool="loop">Edge loop</button>
     </div>
-    <div id="edStage"><svg id="edSvg" preserveAspectRatio="xMidYMid meet"></svg></div>
+    <div id="edStage">
+      <svg id="edSvg" preserveAspectRatio="xMidYMid meet"></svg>
+      <div id="edStats"></div>
+      <div id="edZoom"><button id="edZoomOut" title="Zoom out">&minus;</button><button id="edZoomIn" title="Zoom in">+</button></div>
+    </div>
     <div id="edHint"></div>
     <div id="edWarn"></div>
   </div>
@@ -267,6 +300,8 @@
     <div id="edProps"></div>
     <div class="sec">Pitch cell</div>
     <div id="edCell"></div>
+    <div class="sec">Topology</div>
+    <div id="edTopoPanel"></div>
     <div class="btns" style="margin-top:10px">
       <button class="small" id="edLoad">Reload library design</button>
       <button class="small" id="edJson">Design JSON</button>
@@ -1317,7 +1352,7 @@ const defaultDecals = () => [
   newDecal({ name: 'Compliance', text: 'DOT SL8T {serial}  ·  TUBELESS RADIAL  ·  MAX 51 PSI', font: 'mono', fontLabel: 'Technical mono', size: 16, color: '#a7a7a7', x: 2, y: 72, align: 'left', weight: 600, opacity: .65, embossed: true })
 ];
 const P = { name: 'GZero', type: 'Slick', layers: [], decals: defaultDecals() };   // tread pattern + sidewall decal layers
-const UI = { sel: -1, decalSel: -1, threads: false, quads: false, spin: false, treadMode: 'color', editing: -1, editTool: 'select', editSel: -1 };
+const UI = { sel: -1, decalSel: -1, threads: false, quads: false, spin: false, treadMode: 'color', editing: -1, editTool: 'select', editSel: -1, edTopo: false };
 
 const TYPES = ['Slick', 'Semi-slick', 'Drift', 'Street', 'Grip / UHP', 'Wet', 'Winter', 'Rally', 'Off-road', 'Drag'];
 const RIM_MATERIALS = {
@@ -1360,10 +1395,12 @@ function blocksLayer(id, overrides = {}) {
   if (!design) throw new Error(`Unknown tread design: ${id}`);
   return Object.assign(L('blocks'), {
     design: id, count: design.count, reach: design.reach, sipeWidth: design.sipeWidth, sipeDepth: design.sipeDepth,
-    shapes: ST.designFromLibrary(id)
+    shapes: ST.designFromLibrary(id),
+    topoAlong: 0, topoAcross: 0, loopsCirc: [], loopsLat: []     // 0 = let the global polygon detail decide
   }, overrides);
 }
-const copyLayer = ly => Object.assign({}, ly, Array.isArray(ly.shapes) ? { shapes: ST.clone(ly.shapes) } : {});
+const copyLayer = ly => Object.assign({}, ly, Array.isArray(ly.shapes)
+  ? { shapes: ST.clone(ly.shapes), loopsCirc: (ly.loopsCirc || []).slice(), loopsLat: (ly.loopsLat || []).slice() } : {});
 
 const PRESETS = [
   { name: 'GZero', type: 'Slick', tyre: { width: 305, aspect: 30, rim: 19, treadDepth: 4, treadFrac: 0.93, crown: 1.2, shoulder: 26, letter: 'yellow' },
@@ -1909,27 +1946,82 @@ function treadProfileAt(y, d) {
 }
 // Grid lines for the quadrangulated tread: uniform around the circumference, finer across the shoulder arc
 // where the profile curves hardest. A boolean region that covers a whole cell becomes a single quad.
-function treadGridLines(d, detail) {
+// The quad grid. Left alone it is a uniform lattice sized by the global polygon detail, which is fine for the
+// raster patterns but gives every pitch a slightly different topology, because the ring divides unevenly. A
+// polygon lug layer can take the grid over: pin it to its own pitch so each repeat is meshed identically, set the
+// density in each direction, and pin explicit edge loops where the tread has to bend. That is the retopology the
+// tread editor drives — nothing here is automatic, it is all the design's own numbers.
+function treadGridLines(d, detail, pattern) {
+  const lugs = ((pattern && pattern.layers) || []).filter(ly => ly.type === 'blocks' && Array.isArray(ly.shapes));
   const LX = Math.max(2, detail), LY = LX * 2;
-  const nx = Math.max(16, Math.round(d.circ / LX));
-  const xs = Array.from({ length: nx + 1 }, (_, i) => i * d.circ / nx);
+  const tidy = a => a.slice().sort((x, y) => x - y).filter((v, i, q) => i === 0 || v - q[i - 1] > 1e-9);
+  // A loop dropped by hand can land a micron from a line that is already there, and a cell that thin collapses
+  // under the surface's 1e-3 mm weld into a degenerate face. Anything inside 20 µm of an existing line is already
+  // that line, so keep the structural one and drop the duplicate.
+  const LOOP_TOL = 0.02;
+  const merge = (base, extra) => {
+    const out = tidy(base);
+    for (const v of extra) if (!out.some(x => Math.abs(x - v) < LOOP_TOL)) out.push(v);
+    return tidy(out);
+  };
+
+  // ---- around the circumference ----
+  let xs;
+  const pinned = lugs.find(ly => ly.topoAlong > 0);
+  if (pinned) {
+    const m = blocksMetrics(pinned, d), n = Math.max(2, Math.round(pinned.topoAlong));
+    xs = [d.circ];
+    for (let i = 0; i < m.count; i++) for (let k = 0; k < n; k++) xs.push((i + k / n) * m.pitch);
+  } else {
+    const nx = Math.max(16, Math.round(d.circ / LX));
+    xs = Array.from({ length: nx + 1 }, (_, i) => i * d.circ / nx);
+  }
+  const latLines = [];
+  for (const ly of lugs) {
+    const m = blocksMetrics(ly, d);
+    for (const v of ly.loopsLat || []) for (let i = 0; i < m.count; i++) latLines.push(((i + v) % m.count) * m.pitch);
+  }
+  xs = merge(xs, latLines);
+
+  // ---- across the tread; the shoulder arc samples are structural and always stay ----
   const half = [0];
-  for (let y = LY; y <= d.treadHalf - LY * 0.5; y += LY) half.push(y);
+  const spread = lugs.find(ly => ly.topoAcross > 0);
+  if (spread) {
+    const m = blocksMetrics(spread, d), n = Math.max(2, Math.round(spread.topoAcross));
+    for (let k = 1; k <= n; k++) { const v = m.bandHalf * k / n; if (v < d.treadHalf - 0.01) half.push(v); }
+  } else {
+    for (let y = LY; y <= d.treadHalf - LY * 0.5; y += LY) half.push(y);
+  }
   half.push(d.treadHalf);
   for (let ph = 10; ph < 80; ph += 10) half.push(d.treadHalf + d.sr * Math.sin(ph * Math.PI / 180));
   half.push(d.acrossHalf);
-  const uniq = [...new Set(half.map(v => Math.round(v * 1e6) / 1e6))].sort((a, b) => a - b);
-  return { xs, ys: [...uniq.slice(1).map(v => -v).reverse(), ...uniq] };
+  const uniq = tidy(half);
+  const circLines = [];
+  for (const ly of lugs) {
+    const m = blocksMetrics(ly, d);
+    for (const u of ly.loopsCirc || []) { const v = u * 2 * m.bandHalf; if (Math.abs(v) < d.acrossHalf - LOOP_TOL) circLines.push(v); }
+  }
+  const ys = merge([...uniq.slice(1).map(v => -v).reverse(), ...uniq], circLines);
+  return { xs: xs.filter(v => v >= 0 && v <= d.circ), ys };
 }
 
 // Quad-dominant polygon tread. Each boolean floor level is quadrangulated over the shared grid, then the open
 // border of that level grows the groove walls, so tops and walls weld into one closed quad shell. Keeping the
 // topology in quads is what lets the tyre be deformed (sidewall squash, contact patch, sipe closure) without
 // the diagonal creasing a triangle soup produces.
+// Clipper trims the boundary cells; three.js' earcut only sees the rare clipped cell that still has a hole.
+// Both live out here so the tread editor's topology preview can run them rather than approximate them.
+const clipToCell = (rings, rect) => {
+  const out = inter(rings.map(r => toPath(r)), [rectPath(rect[0], rect[1], rect[2], rect[3])]);
+  return out.length ? exPolygons(out) : [];
+};
+const triangulate = (outer, holes) => THREE.ShapeUtils.triangulateShape(
+  outer.map(q => new THREE.Vector2(q[0], q[1])), holes.map(r => r.map(q => new THREE.Vector2(q[0], q[1]))));
+
 function buildPolyTread(d, pmGeo) {
   const { pieces, levels } = treadRegions(P, d, T.treadDepth, T.wear);
   const D = T.treadDepth, A = d.acrossHalf, circ = d.circ;
-  const { xs, ys } = treadGridLines(d, T.polyDetail);
+  const { xs, ys } = treadGridLines(d, T.polyDetail, P);
   const surface = new ST.QuadSurface(1e-3);
   const wl = y => pmGeo.wearRow((y + A) / (2 * A) * pmGeo.H);
   const place = (x, y, hFrac) => {
@@ -1939,14 +2031,6 @@ function buildPolyTread(d, pmGeo) {
   };
   const tangentAt = u => { const th = u * TAU; return [0, -Math.sin(th), Math.cos(th)]; };
   const snapLevel = h => levels.reduce((b, l) => Math.abs(l - h) < Math.abs(b - h) ? l : b, 0);
-  // Clipper trims the boundary cells; three.js' earcut only sees the rare clipped cell that still has a hole.
-  const clipToCell = (rings, rect) => {
-    const out = inter(rings.map(r => toPath(r)), [rectPath(rect[0], rect[1], rect[2], rect[3])]);
-    return out.length ? exPolygons(out) : [];
-  };
-  const triangulate = (outer, holes) => THREE.ShapeUtils.triangulateShape(
-    outer.map(q => new THREE.Vector2(q[0], q[1])), holes.map(r => r.map(q => new THREE.Vector2(q[0], q[1]))));
-
   for (const pc of pieces) {
     const pieceFaces = [];
     for (const ex of exPolygons(pc.paths)) {
@@ -2583,6 +2667,7 @@ function buildLayerUI() {
   }
   for (const k in ly) {
     if (k === 'type' || k === 'design' || k === 'shapes') continue;
+    if (k === 'topoAlong' || k === 'topoAcross' || k === 'loopsCirc' || k === 'loopsLat') continue;   // the tread editor owns these
     const range = (ly.type === 'blocks' && BLOCK_RANGES[k]) || RANGES[k];
     if (typeof ly[k] === 'boolean') check(props, LABELS[k] || k, ly, k, () => { buildLayerUI(); schedule(); });
     else if (range) slider(props, LABELS[k] || k, ly, k, ...range, v => (+v).toFixed(range[2] < 1 ? 2 : 0), () => { refreshLayerLabel(); schedule(); });
@@ -2617,11 +2702,39 @@ function refreshLayerLabel() { const els = document.querySelectorAll('#layers .l
 //  Editing never touches the casing: section width, aspect, rim size and the revolved profile stay exactly as they
 //  were, so a design can be redrawn on a finished tyre without changing its shape.
 // =====================================================================================================================
-const ED = { grid: 0.005, draft: null, drag: null };
+const ED = { grid: 2, draft: null, drag: null, view: null, topo: null, topoKey: '', loopSel: null };
 const edSvg = () => document.getElementById('edSvg');
 const edLayer = () => (UI.editing >= 0 ? P.layers[UI.editing] : null);
-const edSnap = v => (ED.free ? v : Math.round(v / ED.grid) * ED.grid);
-const edFmt = ring => ring.map(p => `${p[0].toFixed(4)},${p[1].toFixed(4)}`).join(' ');
+const edSnap = v => (ED.free ? v : Math.round(v / ED.grid) * ED.grid);     // millimetres, not design fractions
+
+// A design is stored as x = -0.5…0.5 across the band and y = 0…1 along one pitch, which are two very different
+// physical lengths: a touring tyre is about 210 mm across and 34 mm per pitch. Drawing that unit square as a
+// square is what made the editor look squashed, so the canvas works in millimetres and the cell keeps its real
+// proportions. Shapes stay in design units; only the view converts.
+function edScale() {
+  const ly = edLayer(), d = dims(T);
+  const m = ly && ly.type === 'blocks' ? blocksMetrics(ly, d) : { count: 32, pitch: d.circ / 32, bandHalf: d.treadHalf, scale: 1 };
+  return { ax: 2 * m.bandHalf, ay: m.pitch, d, m };
+}
+const edFmt = (ring, k) => ring.map(p => `${(p[0] * k.ax).toFixed(3)},${(p[1] * k.ay).toFixed(3)}`).join(' ');
+
+function edStageBox() { return document.getElementById('edStage').getBoundingClientRect(); }
+function edApplyView() { const v = ED.view; if (v) edSvg().setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`); }
+function edFitView() {
+  const k = edScale(), box = edStageBox();
+  const asp = box.height > 4 ? box.width / box.height : 2.4;
+  const want = k.ax * 1.1, tall = k.ay * 2.3;
+  let w = want, h = tall;
+  if (w / h > asp) h = w / asp; else w = h * asp;
+  ED.view = { x: -w / 2, y: 0.5 * k.ay - h / 2, w, h };
+  edApplyView();
+}
+function edZoomAt(factor, at) {
+  const v = ED.view; if (!v) return;
+  const w = Math.min(Math.max(v.w * factor, 6), 60000), f = w / v.w;
+  v.x = at[0] - (at[0] - v.x) * f; v.y = at[1] - (at[1] - v.y) * f; v.w *= f; v.h *= f;
+  edApplyView(); edDraw();
+}
 
 function openTreadEditor(index) {
   const ly = P.layers[index];
@@ -2630,8 +2743,8 @@ function openTreadEditor(index) {
   UI.editing = index; UI.editSel = ly.shapes.length ? 0 : -1; ED.draft = null; ED.drag = null;
   document.getElementById('editor').classList.add('on');
   document.getElementById('editorBtn').classList.add('on');
-  edSvg().setAttribute('viewBox', '-0.68 -0.46 1.36 1.92');
-  edDraw(); edSidebar();
+  ED.view = null; ED.topo = null; ED.topoKey = ''; ED.loopSel = null;
+  edFitView(); edDraw(); edSidebar();
 }
 // The editor only ever edits a polygon lug layer, and most presets are built from the older raster layers. Rather
 // than let the button sit dead on those, give the pattern a lug layer to work on and open that.
@@ -2648,33 +2761,92 @@ function openEditorAnywhere() {
 }
 function closeTreadEditor() { UI.editing = -1; ED.draft = null; document.getElementById('editor').classList.remove('on'); document.getElementById('editorBtn').classList.remove('on'); buildLayerUI(); }
 
+// ------------------------------------------------------------------------------------------------- topology
+// The preview is not an impression of the mesh — it runs the same boolean regions, the same grid lines and the
+// same quadrangulator the builder uses, over one full A/B repeat, then tiles the result. What is drawn is what
+// the exporter will emit, which is the only way a topology view is worth anything.
+function edTopology() {
+  const ly = edLayer(); if (!ly) return null;
+  if (!window.ClipperLib) return { error: 'Topology needs the Clipper library, which did not load.' };
+  const k = edScale(), d = k.d, m = k.m;
+  const key = JSON.stringify([ly.shapes, ly.count, ly.reach, ly.gap, ly.depth, ly.topoAlong, ly.topoAcross,
+    ly.loopsLat, ly.loopsCirc, T.polyDetail, T.width, T.aspect, T.rim, T.treadFrac, T.shoulder, T.treadDepth, T.wear]);
+  if (ED.topo && ED.topoKey === key) return ED.topo;
+  // Re-running the whole boolean pass on every pointer move would make dragging treacle; the cage the drag
+  // started from is close enough to steer by, and the real one lands the moment the pointer comes up.
+  if (ED.drag && ED.topo) return ED.topo;
+  const t0 = performance.now();
+  try {
+    const { xs, ys } = treadGridLines(d, T.polyDetail, P);
+    const span = 2 * m.pitch;                                    // one A/B repeat, which then tiles
+    const win = [rectPath(0, -d.acrossHalf, span, d.acrossHalf)];
+    const sx = xs.filter(v => v >= -0.01 && v <= span + 0.01);
+    const faces = []; let quads = 0, tris = 0, worst = 1;
+    for (const pc of treadRegions(P, d, T.treadDepth, T.wear).pieces) {
+      const cut = inter(pc.paths, win);
+      if (!cut.length) continue;
+      for (const ex of exPolygons(cut)) {
+        let patch = null;
+        try { patch = ST.quadrangulate([ex.outer, ...ex.holes], sx, ys, clipToCell, triangulate); } catch (e) { continue; }
+        if (!patch) continue;
+        for (const f of patch.faces) {
+          const pts = f.map(i => patch.points[i]);
+          const q = f.length === 4 ? ST.quadQuality(...pts) : 0;
+          if (f.length === 4) { quads++; worst = Math.min(worst, q); } else tris++;
+          faces.push({ n: f.length, q, pts: pts.map(w => [w[1], w[0]]) });   // world is [along, across]; the canvas is [across, along]
+        }
+      }
+    }
+    ED.topoKey = key;
+    return (ED.topo = { faces, quads, tris, worst, span, ms: Math.round(performance.now() - t0), nx: sx.length, ny: ys.length });
+  } catch (e) {
+    return { error: 'Topology failed: ' + e.message };
+  }
+}
+
 // ---------------------------------------------------------------------------------------------------- drawing
 function edDraw() {
   const ly = edLayer(); if (!ly) return;
-  const svg = edSvg(), bad = new Set(ST.invalidShapes(ly.shapes).map(s => s.id));
-  const parts = [
-    '<rect class="band" x="-0.5" y="-0.45" width="1" height="1.91"/>',
-    '<line class="axis" x1="0" y1="-0.45" x2="0" y2="1.46"/>',
-    '<line class="axis" x1="-0.68" y1="0" x2="0.68" y2="0"/>',
-    '<line class="axis" x1="-0.68" y1="1" x2="0.68" y2="1"/>',
-    '<text x="-0.665" y="-0.03">pitch A</text><text x="-0.665" y="0.97">next pitch</text>',
-    '<text x="-0.495" y="1.44">tread centre line is x = 0 · band edges at x = ±0.5</text>'
-  ];
-  for (let g = -5; g <= 5; g++) {
-    const v = g / 10; parts.push(`<line class="grid" x1="${v}" y1="-0.45" x2="${v}" y2="1.46"/>`);
+  if (!ED.view) edFitView();
+  const k = edScale(), svg = edSvg(), v = ED.view, box = edStageBox();
+  const px = v.w / Math.max(1, box.width || 1);                  // one screen pixel, in millimetres
+  const bad = new Set(ST.invalidShapes(ly.shapes).map(s => s.id));
+  const hx = k.ax / 2, pitch = k.ay, top = -0.55 * pitch, bot = 1.6 * pitch;
+  const fs = (12 * px).toFixed(3), hr = (4.6 * px).toFixed(3), f3 = n => n.toFixed(3);
+  const parts = [];
+  const line = (cls, x1, y1, x2, y2) => parts.push(`<line class="${cls}" x1="${f3(x1)}" y1="${f3(y1)}" x2="${f3(x2)}" y2="${f3(y2)}"/>`);
+
+  parts.push(`<rect class="band" x="${f3(-hx)}" y="${f3(top)}" width="${f3(k.ax)}" height="${f3(bot - top)}"/>`);
+  for (let g = -5; g <= 5; g++) line('grid' + (g === 0 ? ' major' : ''), g / 10 * k.ax, top, g / 10 * k.ax, bot);
+  for (let g = 0; g <= 10; g++) line('grid', -hx, g / 10 * pitch, hx, g / 10 * pitch);
+  line('axis', -hx * 1.04, 0, hx * 1.04, 0);
+  line('axis', -hx * 1.04, pitch, hx * 1.04, pitch);
+
+  // ---- the quad cage, under the outlines so both stay readable ----
+  if (UI.edTopo) {
+    const topo = edTopology();
+    if (topo && topo.faces) {
+      for (let rep = -1; rep <= 0; rep++) {
+        const dy = rep * topo.span;
+        for (const f of topo.faces) {
+          const cls = f.n !== 4 ? 'topo tri' : f.q < 0.25 ? 'topo poor' : 'topo';
+          const d = f.pts.map(q => `${f3(q[0])},${f3(q[1] + dy)}`).join('L');
+          parts.push(`<path class="${cls}" d="M${d}Z"/>`);
+        }
+      }
+    }
   }
-  for (let g = 0; g <= 10; g++) parts.push(`<line class="grid" x1="-0.5" y1="${g / 10}" x2="0.5" y2="${g / 10}"/>`);
 
   const body = (shape, cls) => {
-    const d = [shape.points, ...(shape.holes || [])].map(r => `M${edFmt(r).replace(/ /g, 'L')}Z`).join('');
+    const d = [shape.points, ...(shape.holes || [])].map(r => `M${edFmt(r, k).replace(/ /g, 'L')}Z`).join('');
     const lines = (shape.sipes || []).filter(l => l.length > 1)
-      .map(l => `<path class="sipe" d="M${edFmt(l).replace(/ /g, 'L')}"/>`).join('');
+      .map(l => `<path class="sipe" d="M${edFmt(l, k).replace(/ /g, 'L')}"/>`).join('');
     return `<path class="${cls}" data-id="${shape.sourceId || shape.id}" d="${d}"/>${lines}`;
   };
   // Ghosted neighbours show how the design tiles, including the alternate pitch an A/B design produces.
   for (const dy of [-1, 1]) {
-    const inner = ST.designShapes(ly.shapes, 1).map(s => body(s, 'lug mirrored')).join('');
-    parts.push(`<g class="ghost" transform="translate(0,${dy})">${inner}</g>`);
+    const inner = ST.designShapes(ly.shapes, 1).map(sh => body(sh, 'lug mirrored')).join('');
+    parts.push(`<g class="ghost" transform="translate(0,${f3(dy * pitch)})">${inner}</g>`);
   }
   for (const shape of ly.shapes) {
     if (shape.enabled === false) continue;
@@ -2689,30 +2861,72 @@ function edDraw() {
       i === UI.editSel ? 'sel' : '', bad.has(shape.id) ? 'bad' : ''].filter(Boolean).join(' ');
     parts.push(body(shape, cls));
   });
+
+  // ---- retopology loops, drawn over everything so they stay grabbable ----
+  const tag = 5.5 * px;
+  (ly.loopsCirc || []).forEach((u, i) => {
+    const x = u * k.ax, on = ED.loopSel && ED.loopSel.kind === 'circ' && ED.loopSel.i === i;
+    line('loop' + (on ? ' on' : ''), x, top, x, bot);
+    parts.push(`<line class="loopHit" data-loop="circ" data-i="${i}" x1="${f3(x)}" y1="${f3(top)}" x2="${f3(x)}" y2="${f3(bot)}"/>`);
+    parts.push(`<rect class="loopTag${on ? ' on' : ''}" data-loop="circ" data-i="${i}" x="${f3(x - tag)}" y="${f3(top - tag * 2)}" width="${f3(tag * 2)}" height="${f3(tag * 2)}" rx="${f3(tag * 0.4)}"/>`);
+  });
+  (ly.loopsLat || []).forEach((w, i) => {
+    const y = w * pitch, on = ED.loopSel && ED.loopSel.kind === 'lat' && ED.loopSel.i === i;
+    line('loop' + (on ? ' on' : ''), -hx, y, hx, y);
+    parts.push(`<line class="loopHit" data-loop="lat" data-i="${i}" x1="${f3(-hx)}" y1="${f3(y)}" x2="${f3(hx)}" y2="${f3(y)}"/>`);
+    parts.push(`<rect class="loopTag${on ? ' on' : ''}" data-loop="lat" data-i="${i}" x="${f3(-hx - tag * 2)}" y="${f3(y - tag)}" width="${f3(tag * 2)}" height="${f3(tag * 2)}" rx="${f3(tag * 0.4)}"/>`);
+  });
+
   const sel = ly.shapes[UI.editSel];
   if (sel && sel.enabled !== false) {
-    const dot = (ring, tag, extra) => ring.forEach((p, i) =>
-      parts.push(`<circle class="vtx ${extra}" data-ring="${tag}" data-i="${i}" cx="${p[0]}" cy="${p[1]}" r="0.011"/>`));
+    const dot = (ring, t, extra) => ring.forEach((q, i) =>
+      parts.push(`<circle class="vtx ${extra}" data-ring="${t}" data-i="${i}" cx="${f3(q[0] * k.ax)}" cy="${f3(q[1] * pitch)}" r="${hr}"/>`));
     dot(sel.points, 'o', '');
-    (sel.holes || []).forEach((h, k) => dot(h, 'h' + k, 'hole'));
-    (sel.sipes || []).forEach((l, k) => dot(l, 's' + k, 'sipe'));
+    (sel.holes || []).forEach((h, i) => dot(h, 'h' + i, 'hole'));
+    (sel.sipes || []).forEach((l, i) => dot(l, 's' + i, 'sipe'));
   }
   if (ED.draft && ED.draft.pts.length) {
-    const d = `M${edFmt(ED.draft.pts).replace(/ /g, 'L')}${ED.draft.kind === 'sipe' ? '' : 'Z'}`;
+    const d = `M${edFmt(ED.draft.pts, k).replace(/ /g, 'L')}${ED.draft.kind === 'sipe' ? '' : 'Z'}`;
     parts.push(`<path class="draft" d="${d}" style="${ED.draft.kind === 'sipe' ? 'fill:none' : ''}"/>`);
-    ED.draft.pts.forEach(p => parts.push(`<circle class="vtx" cx="${p[0]}" cy="${p[1]}" r="0.009"/>`));
+    ED.draft.pts.forEach(q => parts.push(`<circle class="vtx" cx="${f3(q[0] * k.ax)}" cy="${f3(q[1] * pitch)}" r="${hr}"/>`));
   }
+  parts.push(`<text x="${f3(-hx * 1.03)}" y="${f3(-0.04 * pitch)}" font-size="${fs}">pitch A</text>`);
+  parts.push(`<text x="${f3(-hx * 1.03)}" y="${f3(0.96 * pitch)}" font-size="${fs}">next pitch</text>`);
+  parts.push(`<text x="${f3(-hx * 0.99)}" y="${f3(1.5 * pitch)}" font-size="${fs}">centre line x = 0 · band edges x = &#177;0.5 · ${Math.round(k.ax)} &#215; ${Math.round(pitch)} mm cell</text>`);
   svg.innerHTML = parts.join('');
+
   const invalid = ST.invalidShapes(ly.shapes);
   document.getElementById('edWarn').textContent = invalid.length
     ? `${invalid.length} outline${invalid.length > 1 ? 's cross' : ' crosses'} itself — fix before the tyre rebuilds.` : '';
   document.getElementById('edHint').innerHTML = {
-    select: 'Drag a <b>handle</b> to move one point, drag inside a shape to slide it. <b>Alt</b> disables the 5 mm grid snap.',
+    select: 'Drag a <b>handle</b> to move one point, drag inside a shape to slide it. <b>Alt</b> disables the grid snap. Wheel zooms, middle-drag or <b>Space</b>-drag pans.',
     pen: 'Click to lay down the outline of a new lug. <b>Enter</b> closes it, <b>Esc</b> cancels.',
     hole: 'Click to cut a void into the selected lug. <b>Enter</b> closes it, <b>Esc</b> cancels.',
     sipe: 'Click to trace a sipe or cut line across the selected lug. <b>Enter</b> finishes it.',
-    erase: 'Click a handle to remove that point. Outlines keep a minimum of three.'
+    erase: 'Click a handle to remove that point. Outlines keep a minimum of three.',
+    loop: 'Click to pin a <b>circumferential</b> edge loop, <b>Shift</b>-click for a <b>lateral</b> one. Drag a loop to move it, <b>Delete</b> removes the selected loop.'
   }[UI.editTool];
+  edStats();
+}
+
+function edStats() {
+  const host = document.getElementById('edStats'); if (!host) return;
+  const k = edScale(), ly = edLayer();
+  const bits = [`<span>cell <b>${Math.round(k.ax)}</b> &#215; <b>${Math.round(k.ay)}</b> mm</span>`,
+    `<span>zoom <b>${(k.ax / ED.view.w * 100).toFixed(0)}%</b></span>`,
+    `<span>snap <b>${ED.grid}</b> mm</span>`];
+  if (UI.edTopo && ly) {
+    const t = edTopology();
+    if (t && t.error) bits.push(`<span style="color:var(--orange)">${t.error}</span>`);
+    else if (t) {
+      const total = t.quads + t.tris;
+      bits.push(`<span>per repeat <b>${t.quads}</b> quads &#183; <b>${t.tris}</b> tris</span>`);
+      bits.push(`<span>quads <b>${total ? Math.round(t.quads / total * 100) : 0}%</b></span>`);
+      bits.push(`<span>worst <b>${t.worst.toFixed(2)}</b></span>`);
+      bits.push(`<span>grid <b>${t.nx}</b> &#215; <b>${t.ny}</b> &#183; ${t.ms} ms</span>`);
+    }
+  }
+  host.innerHTML = bits.join('');
 }
 
 // ---------------------------------------------------------------------------------------------------- sidebar
@@ -2774,8 +2988,63 @@ function edSidebar() {
   const cell = document.getElementById('edCell'); cell.innerHTML = '';
   for (const k of ['count', 'reach', 'gap', 'depth', 'sipeWidth', 'sipeDepth']) {
     const range = BLOCK_RANGES[k] || RANGES[k];
-    slider(cell, LABELS[k] || k, ly, k, ...range, v => (+v).toFixed(range[2] < 1 ? 2 : 0), () => schedule());
+    slider(cell, LABELS[k] || k, ly, k, ...range, v => (+v).toFixed(range[2] < 1 ? 2 : 0), () => { ED.topoKey = ''; schedule(); edDraw(); });
   }
+  edTopoPanel(ly);
+}
+
+// The quad cage is the design's business, not the mesher's guess. Pinning the grid to the pitch is the one that
+// matters most: without it the ring divides unevenly and every repeat gets a slightly different topology.
+function edTopoPanel(ly) {
+  const host = document.getElementById('edTopoPanel'); if (!host) return;
+  // A design imported from JSON, or one saved before the editor grew these, arrives without them.
+  if (typeof ly.topoAlong !== 'number') ly.topoAlong = 0;
+  if (typeof ly.topoAcross !== 'number') ly.topoAcross = 0;
+  if (!Array.isArray(ly.loopsCirc)) ly.loopsCirc = [];
+  if (!Array.isArray(ly.loopsLat)) ly.loopsLat = [];
+  host.innerHTML = '';
+  const hint = document.createElement('div'); hint.className = 'hint';
+  hint.innerHTML = UI.edTopo
+    ? 'Blue is a quad, orange a triangle, red a quad the mesher rates poor.'
+    : 'Press <b>Topology</b> above (or <b>T</b>) to see the cage this design produces.';
+  host.appendChild(hint);
+
+  const redo = () => { ED.topoKey = ''; edDraw(); edSidebar(); schedule(); };
+  slider(host, 'Segments per pitch', ly, 'topoAlong', 0, 24, 1, v => (+v ? v : 'auto'), redo);
+  slider(host, 'Segments across', ly, 'topoAcross', 0, 40, 1, v => (+v ? v : 'auto'), redo);
+
+  const auto = document.createElement('div'); auto.className = 'btns';
+  auto.innerHTML = '<button class="small">Pin grid to pitch</button><button class="small">Clear loops</button>';
+  const [pin, clear] = auto.querySelectorAll('button');
+  pin.onclick = () => {
+    const k = edScale();
+    ly.topoAlong = Math.max(2, Math.min(24, Math.round(k.ay / Math.max(2, T.polyDetail))));
+    ly.topoAcross = Math.max(4, Math.min(40, Math.round(k.ax / Math.max(2, T.polyDetail * 2))));
+    toast(`Grid pinned to the pitch — ${ly.topoAlong} &#215; ${ly.topoAcross} per cell`); redo();
+  };
+  clear.onclick = () => { ly.loopsCirc = []; ly.loopsLat = []; ED.loopSel = null; redo(); };
+  host.appendChild(auto);
+
+  const loops = document.createElement('div'); loops.id = 'edLoops';
+  const chip = (kind, i, value) => {
+    const on = ED.loopSel && ED.loopSel.kind === kind && ED.loopSel.i === i;
+    const el = document.createElement('div'); el.className = 'lp' + (on ? ' on' : '');
+    el.innerHTML = `<span>${kind === 'circ' ? 'circ' : 'lat'} ${value.toFixed(3)}</span><button title="remove">&#10005;</button>`;
+    el.onclick = () => { ED.loopSel = { kind, i }; edDraw(); edSidebar(); };
+    el.querySelector('button').onclick = e => {
+      e.stopPropagation();
+      (kind === 'circ' ? ly.loopsCirc : ly.loopsLat).splice(i, 1);
+      ED.loopSel = null; redo();
+    };
+    loops.appendChild(el);
+  };
+  (ly.loopsCirc || []).forEach((u, i) => chip('circ', i, u));
+  (ly.loopsLat || []).forEach((v, i) => chip('lat', i, v));
+  if (!loops.children.length) {
+    const none = document.createElement('div'); none.className = 'hint';
+    none.innerHTML = 'No edge loops pinned. Pick <b>Edge loop</b> in the toolbar and click the canvas.';
+    host.appendChild(none);
+  } else host.appendChild(loops);
 }
 // Any structural edit redraws the canvas, the shape list and — if the design is sound — the tyre.
 function edCommit() { edDraw(); edSidebar(); if (!ST.invalidShapes(edLayer().shapes).length) schedule(); }
@@ -2803,17 +3072,44 @@ function edFinishDraft() {
 }
 function edSetup() {
   const svg = edSvg();
+
+  // ---- pan and zoom. The pointer always arrives in millimetres through the view box, so the design-unit
+  // conversion happens once, here, and every tool below works in design units as it always did.
+  const edPointD = ev => { const k = edScale(), q = edPoint(ev); return [q[0] / k.ax, q[1] / k.ay]; };
+  const edSnapD = (raw, k) => [edSnap(raw[0] * k.ax) / k.ax, edSnap(raw[1] * k.ay) / k.ay];
+  svg.addEventListener('wheel', ev => {
+    ev.preventDefault();
+    edZoomAt(Math.exp(ev.deltaY * 0.0015), edPoint(ev));
+  }, { passive: false });
+  svg.addEventListener('contextmenu', ev => ev.preventDefault());
+
   svg.addEventListener('pointerdown', ev => {
     const ly = edLayer(); if (!ly) return;
+    // middle button, right button or a held Space pans, whatever tool is live
+    if (ev.button === 1 || ev.button === 2 || ED.space) {
+      ED.drag = { mode: 'pan', last: edPoint(ev) };
+      svg.classList.add('panning'); svg.setPointerCapture(ev.pointerId); ev.preventDefault(); return;
+    }
+    if (ev.button !== 0) return;
     ED.free = ev.altKey;
-    const raw = edPoint(ev), p = [edSnap(raw[0]), edSnap(raw[1])];
-    const target = ev.target, tag = target.dataset ? target.dataset.ring : null;
+    const k = edScale(), raw = edPointD(ev), p = edSnapD(raw, k);
+    const target = ev.target, data = target.dataset || {};
+
+    if (UI.editTool === 'loop') {
+      if (data.loop) { ED.loopSel = { kind: data.loop, i: +data.i }; ED.drag = { mode: 'loop' }; svg.setPointerCapture(ev.pointerId); edDraw(); edSidebar(); return; }
+      if (ev.shiftKey) { (ly.loopsLat = ly.loopsLat || []).push(+p[1].toFixed(4)); ED.loopSel = { kind: 'lat', i: ly.loopsLat.length - 1 }; }
+      else { (ly.loopsCirc = ly.loopsCirc || []).push(+p[0].toFixed(4)); ED.loopSel = { kind: 'circ', i: ly.loopsCirc.length - 1 }; }
+      ED.topoKey = ''; edCommit(); return;
+    }
+    if (data.loop) { ED.loopSel = { kind: data.loop, i: +data.i }; edDraw(); edSidebar(); return; }
+
     if (UI.editTool === 'pen' || UI.editTool === 'hole' || UI.editTool === 'sipe') {
       if (!ED.draft || ED.draft.kind !== UI.editTool) ED.draft = { kind: UI.editTool, pts: [] };
       ED.draft.pts.push(p); edDraw(); return;
     }
+    const tag = data.ring;
     if (tag) {                                                         // a vertex handle of the selected shape
-      const shape = ly.shapes[UI.editSel], ring = edRing(shape, tag), i = +target.dataset.i;
+      const shape = ly.shapes[UI.editSel], ring = edRing(shape, tag), i = +data.i;
       if (UI.editTool === 'erase') {
         const floor = tag[0] === 's' ? 2 : 3;
         if (ring.length > floor) ring.splice(i, 1);
@@ -2823,20 +3119,31 @@ function edSetup() {
       }
       ED.drag = { mode: 'vertex', ring, i }; svg.setPointerCapture(ev.pointerId); return;
     }
-    const id = target.dataset ? target.dataset.id : null;
-    const hit = id ? ly.shapes.findIndex(s => s.id === id) : -1;
+    const id = data.id;
+    const hit = id ? ly.shapes.findIndex(sh => sh.id === id) : -1;
     if (hit >= 0) {
-      UI.editSel = hit; edSidebar();
+      UI.editSel = hit; ED.loopSel = null; edSidebar();
       if (UI.editTool === 'select') { ED.drag = { mode: 'shape', shape: ly.shapes[hit], last: p }; svg.setPointerCapture(ev.pointerId); }
       edDraw(); return;
     }
-    UI.editSel = -1; edDraw(); edSidebar();
+    UI.editSel = -1; ED.loopSel = null; edDraw(); edSidebar();
   });
+
   svg.addEventListener('pointermove', ev => {
     if (!ED.drag) return;
+    if (ED.drag.mode === 'pan') {
+      const now = edPoint(ev), v = ED.view;
+      v.x -= now[0] - ED.drag.last[0]; v.y -= now[1] - ED.drag.last[1];
+      edApplyView(); return;                                           // last stays put: it is fixed to the cursor
+    }
     ED.free = ev.altKey;
-    const raw = edPoint(ev), p = [edSnap(raw[0]), edSnap(raw[1])];
-    if (ED.drag.mode === 'vertex') ED.drag.ring[ED.drag.i] = p;
+    const ly = edLayer(), k = edScale(), raw = edPointD(ev), p = edSnapD(raw, k);
+    if (ED.drag.mode === 'loop') {
+      const sel = ED.loopSel; if (!sel || !ly) return;
+      if (sel.kind === 'circ') ly.loopsCirc[sel.i] = +Math.max(-0.5, Math.min(0.5, p[0])).toFixed(4);
+      else ly.loopsLat[sel.i] = +Math.max(0, Math.min(1, p[1])).toFixed(4);
+      ED.topoKey = '';
+    } else if (ED.drag.mode === 'vertex') ED.drag.ring[ED.drag.i] = p;
     else {
       const dx = p[0] - ED.drag.last[0], dy = p[1] - ED.drag.last[1];
       if (!dx && !dy) return;
@@ -2844,15 +3151,25 @@ function edSetup() {
     }
     edDraw();
   });
-  svg.addEventListener('pointerup', () => { if (ED.drag) { ED.drag = null; edCommit(); } });
+
+  svg.addEventListener('pointerup', ev => {
+    svg.classList.remove('panning');
+    if (!ED.drag) return;
+    const was = ED.drag.mode; ED.drag = null;
+    if (was !== 'pan') edCommit();
+  });
   svg.addEventListener('dblclick', () => { if (ED.draft) edFinishDraft(); });
+
   document.querySelectorAll('#edTools button').forEach(b => b.onclick = () => {
     UI.editTool = b.dataset.tool; ED.draft = null;
     document.querySelectorAll('#edTools button').forEach(x => x.classList.toggle('primary', x === b));
     edDraw();
   });
   document.getElementById('edClose').onclick = closeTreadEditor;
-  document.getElementById('edFit').onclick = () => edSvg().setAttribute('viewBox', '-0.68 -0.46 1.36 1.92');
+  document.getElementById('edFit').onclick = () => { edFitView(); edDraw(); };
+  document.getElementById('edTopo').onclick = () => { edToggleTopology(); };
+  document.getElementById('edZoomIn').onclick = () => edZoomAt(1 / 1.3, [ED.view.x + ED.view.w / 2, ED.view.y + ED.view.h / 2]);
+  document.getElementById('edZoomOut').onclick = () => edZoomAt(1.3, [ED.view.x + ED.view.w / 2, ED.view.y + ED.view.h / 2]);
   document.getElementById('edAddBtn').onclick = () => {
     const ly = edLayer(); if (!ly) return;
     ly.shapes.push(ST.normaliseShape(Object.assign(ST.newShape(document.getElementById('edAdd').value), { id: undefined }), ly.shapes.length));
@@ -2861,17 +3178,35 @@ function edSetup() {
   document.getElementById('edLoad').onclick = () => { const ly = edLayer(); if (!ly) return; ly.shapes = ST.designFromLibrary(ly.design); UI.editSel = 0; edCommit(); };
   document.getElementById('edJson').onclick = () => {
     const ly = edLayer(); if (!ly) return;
-    dl(`${ly.design}_design.json`, URL.createObjectURL(new Blob([JSON.stringify({ design: ly.design, shapes: ly.shapes }, null, 2)], { type: 'application/json' })));
+    const topo = { alongPerPitch: ly.topoAlong || 0, across: ly.topoAcross || 0, circLoops: ly.loopsCirc || [], latLoops: ly.loopsLat || [] };
+    dl(`${ly.design}_design.json`, URL.createObjectURL(new Blob([JSON.stringify({ design: ly.design, shapes: ly.shapes, topology: topo }, null, 2)], { type: 'application/json' })));
     toast('Tread design exported');
   };
+  window.addEventListener('keyup', ev => { if (ev.code === 'Space') ED.space = false; });
   window.addEventListener('keydown', ev => {
     if (UI.editing < 0) return;
+    const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(ev.target.tagName);
+    if (ev.code === 'Space' && !typing) { ED.space = true; ev.preventDefault(); return; }
     if (ev.key === 'Enter') { edFinishDraft(); ev.preventDefault(); }
     else if (ev.key === 'Escape') { if (ED.draft) { ED.draft = null; edDraw(); } else closeTreadEditor(); }
-    else if ((ev.key === 'Delete' || ev.key === 'Backspace') && !/^(INPUT|SELECT|TEXTAREA)$/.test(ev.target.tagName)) {
-      const ly = edLayer(); if (ly && ly.shapes[UI.editSel]) { ly.shapes.splice(UI.editSel, 1); UI.editSel = Math.min(UI.editSel, ly.shapes.length - 1); edCommit(); }
+    else if ((ev.key === 't' || ev.key === 'T') && !typing) edToggleTopology();
+    else if ((ev.key === 'f' || ev.key === 'F') && !typing) { edFitView(); edDraw(); }
+    else if ((ev.key === 'Delete' || ev.key === 'Backspace') && !typing) {
+      const ly = edLayer(); if (!ly) return;
+      if (ED.loopSel) {
+        const list = ED.loopSel.kind === 'circ' ? ly.loopsCirc : ly.loopsLat;
+        if (list) list.splice(ED.loopSel.i, 1);
+        ED.loopSel = null; ED.topoKey = ''; edCommit(); return;
+      }
+      if (ly.shapes[UI.editSel]) { ly.shapes.splice(UI.editSel, 1); UI.editSel = Math.min(UI.editSel, ly.shapes.length - 1); edCommit(); }
     }
   });
+}
+
+function edToggleTopology() {
+  UI.edTopo = !UI.edTopo;
+  document.getElementById('edTopo').classList.toggle('primary', UI.edTopo);
+  edDraw(); edSidebar();
 }
 
 // static controls
@@ -2935,7 +3270,7 @@ document.getElementById('exportObj').onclick = () => {
   dl(name + '_quads.obj', URL.createObjectURL(new Blob([out.join('\n') + '\n'], { type: 'text/plain' })));
   toast(`OBJ exported — ${q.quads} quads, ${q.tris} tris (${Math.round(q.quadRatio * 100)}% quad)`);
 };
-document.getElementById('importJson').onchange = e => { const f = e.target.files[0]; if (!f) return; f.text().then(txt => { const j = JSON.parse(txt); if (j.tyre) Object.assign(T, j.tyre); if (j.rim) Object.assign(R, j.rim); else if (j.tyre) { if (j.tyre.rimMaterial) R.material = j.tyre.rimMaterial; if (j.tyre.rimColor) R.tint = j.tyre.rimColor; if (j.tyre.rimLip) R.lip = j.tyre.rimLip; if (j.tyre.rimWell) R.well = j.tyre.rimWell; } if (j.pattern) { P.name = j.pattern.name; P.type = j.pattern.type; P.layers = (j.pattern.layers || []).map(l => l.type === 'blocks' ? Object.assign(L('blocks'), l, { shapes: (l.shapes || []).map(ST.normaliseShape) }) : l); P.decals = Array.isArray(j.pattern.decals) ? j.pattern.decals.map(decal => newDecal(decal)) : defaultDecals(); } UI.sel = -1; UI.decalSel = -1; refreshAll(); toast('Imported ' + P.name); }); };
+document.getElementById('importJson').onchange = e => { const f = e.target.files[0]; if (!f) return; f.text().then(txt => { const j = JSON.parse(txt); if (j.tyre) Object.assign(T, j.tyre); if (j.rim) Object.assign(R, j.rim); else if (j.tyre) { if (j.tyre.rimMaterial) R.material = j.tyre.rimMaterial; if (j.tyre.rimColor) R.tint = j.tyre.rimColor; if (j.tyre.rimLip) R.lip = j.tyre.rimLip; if (j.tyre.rimWell) R.well = j.tyre.rimWell; } if (j.pattern) { P.name = j.pattern.name; P.type = j.pattern.type; P.layers = (j.pattern.layers || []).map(l => l.type === 'blocks' ? Object.assign(L('blocks'), { topoAlong: 0, topoAcross: 0, loopsCirc: [], loopsLat: [] }, l, { shapes: (l.shapes || []).map(ST.normaliseShape) }) : l); P.decals = Array.isArray(j.pattern.decals) ? j.pattern.decals.map(decal => newDecal(decal)) : defaultDecals(); } UI.sel = -1; UI.decalSel = -1; refreshAll(); toast('Imported ' + P.name); }); };
 document.getElementById('editorBtn').onclick = openEditorAnywhere;
 window.addEventListener('keydown', e => {
   if (e.target.matches('input,select,textarea')) return;

@@ -155,9 +155,17 @@ ctx.buildProfile = () => ([
   { x: AHALF + 4, r: 220, nx: 1, nr: 0, zone: 'side', s: 0.4 },
   { x: AHALF + 6, r: 190, nx: 1, nr: -0.2, zone: 'side', s: 1 }
 ]);
+// The page hoisted these two out of buildPolyTread so the editor's topology preview can run the identical path;
+// they are rebuilt here on the same stubs the inline versions used.
+ctx.clipToCell = (rings, rect) => {
+  const out = ctx.inter(rings.map(r => toPath(r)), [rectPath(rect[0], rect[1], rect[2], rect[3])]);
+  return out.length ? ctx.exPolygons(out) : [];
+};
+ctx.triangulate = (outer, holes) => THREE.ShapeUtils.triangulateShape(
+  outer.map(q => new THREE.Vector2(q[0], q[1])), holes.map(r => r.map(q => new THREE.Vector2(q[0], q[1]))));
 vm.createContext(ctx);
 const TYRE_AT_START = JSON.stringify(ctx.T), DIMS_AT_START = JSON.stringify(d);
-for (const fn of ['treadProfileAt', 'treadGridLines', 'buildPolyTread', 'buildSidewallSurface', 'surfaceToGeometry'])
+for (const fn of ['treadProfileAt', 'blocksMetrics', 'treadGridLines', 'buildPolyTread', 'buildSidewallSurface', 'surfaceToGeometry'])
   vm.runInContext(lift(fn), ctx, { filename: fn + '.js' });
 
 // =====================================================================================================================
@@ -336,6 +344,65 @@ ok('every outline is still a simple polygon', inst.every(b => ST.validPolygon(b.
 const atPitch = i => inst.filter(b => b.outer.every(q => q[0] >= i * metrics.pitch - 1e-6 && q[0] <= (i + 1) * metrics.pitch + 1e-6))
   .map(b => b.outer.map(q => [q[0] - i * metrics.pitch, q[1]].map(v => v.toFixed(4)).join(',')).join(' ')).sort().join('|');
 ok('the design repeats every two pitches', atPitch(4) === atPitch(6) && atPitch(5) === atPitch(7), '');
+
+// =====================================================================================================================
+section('Retopology reaches the mesh');
+// A polygon lug layer can take the grid over. The point is not that the numbers change — it is that the shell
+// stays closed and quad dominant when they do, because a retopologised tread is still a tread.
+const autoStats = { faces: stats.faces, quads: stats.quadRatio };
+const retopoLayer = {
+  type: 'blocks', shapes: [{ id: 'x', points: [[-0.2, 0.2], [0.2, 0.2], [0.2, 0.8], [-0.2, 0.8]] }],
+  count: 30, reach: 1.1, gap: 1, topoAlong: 5, topoAcross: 14, loopsCirc: [0.31], loopsLat: [0.45]
+};
+ctx.P.layers = [retopoLayer];
+const reGrid = vm.runInContext('treadGridLines(' + JSON.stringify(d) + ', 6, P)', ctx);
+const mBand = THALF * 1.1, mPitch = CIRC / 30;
+ok('the circumferential grid is pinned to the pitch',
+  reGrid.xs.length === 30 * 5 + 1 + 30, `${grid.xs.length} auto → ${reGrid.xs.length} pinned + 1 lateral loop`);
+ok('every pitch boundary survived',
+  Array.from({ length: 30 }, (_, i) => i * mPitch).every(x => reGrid.xs.some(v => Math.abs(v - x) < 1e-3)));
+ok('the circumferential loop landed on its millimetre',
+  reGrid.ys.some(v => Math.abs(v - 0.31 * 2 * mBand) < 1e-3), `${(0.31 * 2 * mBand).toFixed(2)} mm`);
+ok('the shoulder arc rows are untouched by it',
+  [10, 30, 50, 70].every(ph => reGrid.ys.some(v => Math.abs(v - (THALF + SR * Math.sin(ph * Math.PI / 180))) < 1e-6)));
+ok('rows stay strictly increasing', reGrid.ys.every((v, i) => i === 0 || v > reGrid.ys[i - 1]), `${reGrid.ys.length} rows`);
+ok('no grid line is closer than the weld tolerance to its neighbour', (() => {
+  const tight = a => Math.min(...a.slice(1).map((v, i) => v - a[i]));
+  return tight(reGrid.xs) > 0.01 && tight(reGrid.ys) > 0.01;
+})(), `tightest ${Math.min(...reGrid.ys.slice(1).map((v, i) => v - reGrid.ys[i])).toFixed(4)} mm row`);
+// A loop dropped a micron from a line that already exists must be absorbed, not turned into a sliver cell.
+{
+  const onTop = { ...retopoLayer, loopsCirc: [THALF / (2 * THALF * 1.1) + 1e-6], loopsLat: [] };
+  const g = vm.runInContext('treadGridLines(' + JSON.stringify(d) + ', 6, ' + JSON.stringify({ layers: [onTop] }) + ')', ctx);
+  const tight = Math.min(...g.ys.slice(1).map((v, i) => v - g.ys[i]));
+  ok('a loop landing on an existing row is absorbed rather than split', tight > 0.01, `tightest ${tight.toFixed(4)} mm`);
+  ok('and the row it landed on is still exactly the tread edge', g.ys.some(v => Math.abs(v - THALF) < 1e-12));
+}
+
+const reSurface = vm.runInContext('buildPolyTread(' + JSON.stringify(d) + ', pmGeo)', ctx);
+const reStats = reSurface.stats();
+ok('the mesh really was rebuilt on the new grid', reStats.faces !== autoStats.faces,
+  `${autoStats.faces} → ${reStats.faces} faces`);
+ok('and it is still quad dominant', reStats.quadRatio > 0.95, `${(reStats.quadRatio * 100).toFixed(1)}% quads`);
+ok('no position is NaN', reSurface.positions.every(q => q.every(Number.isFinite)));
+ok('no face repeats a vertex', reSurface.faces.every(f => new Set(f.v).size === f.v.length));
+ok('the shell is still manifold', reSurface.nonManifoldEdges() === 0, `${reSurface.nonManifoldEdges()} non-manifold edges`);
+ok('the retopologised shell has no T-junction either', (() => {
+  const open = reSurface.boundaryEdges();
+  const seg = open.map(e => [reSurface.positions[e.a], reSurface.positions[e.b]]);
+  const SKIN = 0.05;
+  const liesOn = (p, a, b) => {
+    const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], ap = [p[0] - a[0], p[1] - a[1], p[2] - a[2]];
+    const L2 = ab[0] ** 2 + ab[1] ** 2 + ab[2] ** 2; if (L2 < 1e-12) return false;
+    const t = (ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2]) / L2; if (t < 1e-6 || t > 1 - 1e-6) return false;
+    return Math.hypot(ap[0] - ab[0] * t, ap[1] - ab[1] * t, ap[2] - ab[2] * t) < SKIN;
+  };
+  return !seg.some(([a, b]) => {
+    const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
+    return seg.some(([c, e]) => c !== a && liesOn(mid, c, e));
+  });
+})());
+ctx.P.layers = [];
 
 // =====================================================================================================================
 section('The casing is never touched');
