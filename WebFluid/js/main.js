@@ -122,22 +122,22 @@ const BLUR_RANGE = 0.30;
 
 const PRESETS = {
   water: {
-    visc: 0.05, coh: 0.20, stick: 0.00,
+    visc: 0.05, coh: 0.20, stick: 0.00, vort: 0.10,
     mat: { base: [0.07, 0.24, 0.33], opacityK: 0.25, absorb: [0.95, 0.28, 0.12],
            roughness: 0.04, specI: 1.15, refractK: 0.085, grain: 0, fresnelK: 0.9 },
   },
   milk: {
-    visc: 0.14, coh: 0.26, stick: 0.10,
+    visc: 0.14, coh: 0.26, stick: 0.10, vort: 0.05,
     mat: { base: [0.93, 0.90, 0.84], opacityK: 6.0, absorb: [0.05, 0.08, 0.16],
            roughness: 0.24, specI: 0.42, refractK: 0.02, grain: 0, fresnelK: 0.22 },
   },
   chocolate: {
-    visc: 0.60, coh: 0.62, stick: 0.85,
+    visc: 0.60, coh: 0.62, stick: 0.85, vort: 0.0,
     mat: { base: [0.200, 0.085, 0.034], opacityK: 9.0, absorb: [0.0, 0.0, 0.0],
            roughness: 0.10, specI: 0.85, refractK: 0.008, grain: 0, fresnelK: 0.32 },
   },
   mud: {
-    visc: 0.80, coh: 0.50, stick: 0.55,
+    visc: 0.80, coh: 0.50, stick: 0.55, vort: 0.0,
     mat: { base: [0.26, 0.205, 0.148], opacityK: 11.0, absorb: [0.0, 0.0, 0.0],
            roughness: 0.78, specI: 0.13, refractK: 0.004, grain: 1.0, fresnelK: 0.07 },
   },
@@ -152,6 +152,9 @@ const state = {
   pour: false, pourCarry: 0,
   stir: false, stirAngle: 0,
   block: true,
+  vort: 0.10, splashPending: 0, debugView: 0,
+  ballPhys: true, ballVel: [0, 0, 0],
+  ballSample: { count: 0, v: [0, 0, 0] }, ballReadPending: false,
   spherePos: [0.55, 0.42, 0.0], sphereVel: [0, 0, 0], sphereR: 0.22,
   cam: { yaw: 0.55, pitch: 0.33, dist: 4.4, target: [0, 0.6, 0] },
   drag: null, lastPointer: null,
@@ -249,7 +252,8 @@ async function main() {
   const velBuf    = B(MAX_PARTICLES * 16, SU, 'vel');
   const predA     = B(MAX_PARTICLES * 16, GPUBufferUsage.STORAGE, 'predA');
   const predB     = B(MAX_PARTICLES * 16, GPUBufferUsage.STORAGE, 'predB');
-  const lambdaBuf = B(MAX_PARTICLES * 4, GPUBufferUsage.STORAGE, 'lambda');
+  const ballBuf   = B(32, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC, 'ballAcc');
+  const ballRead  = B(32, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST, 'ballRead');
   const headBuf   = B(NUM_CELLS * 4, GPUBufferUsage.STORAGE, 'gridHead');
   const nextBuf   = B(MAX_PARTICLES * 4, GPUBufferUsage.STORAGE, 'gridNext');
   const velTmpBuf = B(MAX_PARTICLES * 16, GPUBufferUsage.STORAGE, 'velTmp');
@@ -257,7 +261,7 @@ async function main() {
   const UB = GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST;
   const simUBO  = B(192, UB, 'simParams');
   const camUBO  = B(320, UB, 'cam');
-  const matUBO  = B(64, UB, 'mat');
+  const matUBO  = B(80, UB, 'mat');
   const blurHU  = B(16, UB, 'blurH');
   const blurVU  = B(16, UB, 'blurV');
   const sphereU = B(96, UB, 'objSphere');
@@ -339,7 +343,7 @@ async function main() {
       { binding: 1, resource: { buffer: posBuf } },
       { binding: 2, resource: { buffer: velBuf } },
       { binding: 3, resource: { buffer: predA } },
-      { binding: 4, resource: { buffer: lambdaBuf } },
+      { binding: 4, resource: { buffer: ballBuf } },
       { binding: 5, resource: { buffer: headBuf } },
       { binding: 6, resource: { buffer: nextBuf } },
       { binding: 7, resource: { buffer: velTmpBuf } },
@@ -353,7 +357,7 @@ async function main() {
       { binding: 1, resource: { buffer: posBuf } },
       { binding: 2, resource: { buffer: velBuf } },
       { binding: 3, resource: { buffer: predB } },
-      { binding: 4, resource: { buffer: lambdaBuf } },
+      { binding: 4, resource: { buffer: ballBuf } },
       { binding: 5, resource: { buffer: headBuf } },
       { binding: 6, resource: { buffer: nextBuf } },
       { binding: 7, resource: { buffer: velTmpBuf } },
@@ -379,6 +383,8 @@ async function main() {
   const pDelta   = compPipe('applyDelta');
   const pFinal   = compPipe('finalizeVel');
   const pXsph    = compPipe('xsph');
+  const pCurl    = compPipe('computeCurl');
+  const pVort    = compPipe('applyVorticity');
 
   const SCENE_FMT = 'rgba16float';
   const depthStencil = (write, cmp = 'less') => ({
@@ -579,10 +585,10 @@ async function main() {
     simF[12] = state.coh * 0.012; simF[13] = 1 / W_DQ; simF[14] = state.visc; simF[15] = POLY6;
     simF[16] = SPIKY; simF[17] = PARTICLE_R; simF[18] = state.stick * 9.0; simF[19] = state.stick * 11.0;
     simF[20] = 0; simF[21] = GRAVITY; simF[22] = 0; simF[23] = H * 0.9; // adhesion range
-    simF.set(BOX.min, 24);
-    simF.set(BOX.max, 28);
+    simF.set(BOX.min, 24); simF[27] = state.vort;
+    simF.set(BOX.max, 28); simF[31] = state.splashPending;
     simF.set(state.spherePos, 32); simF[35] = state.sphereR;
-    simF.set(state.sphereVel, 36);
+    simF.set(state.sphereVel, 36); simF[39] = Math.random() * 1000;
     simF.set(OBS.min, 40);
     simF.set(OBS.max, 44); simF[47] = state.block ? 1 : 0;
     device.queue.writeBuffer(simUBO, 0, simArr);
@@ -613,13 +619,14 @@ async function main() {
     device.queue.writeBuffer(camUBO, 0, camArr);
   }
 
-  const matArr = new Float32Array(16);
+  const matArr = new Float32Array(20);
   function writeMatUBO() {
     const m = PRESETS[state.preset].mat;
     matArr.set(m.base, 0); matArr[3] = m.opacityK;
     matArr.set(m.absorb, 4); matArr[7] = m.roughness;
     matArr[8] = m.specI; matArr[9] = m.refractK; matArr[10] = m.grain; matArr[11] = m.fresnelK;
     matArr[12] = T.w; matArr[13] = T.h; matArr[14] = canvas.width; matArr[15] = canvas.height;
+    matArr[16] = state.debugView;
     device.queue.writeBuffer(matUBO, 0, matArr);
   }
 
@@ -664,7 +671,7 @@ async function main() {
   function applyPreset(name) {
     state.preset = name;
     const p = PRESETS[name];
-    state.visc = p.visc; state.coh = p.coh; state.stick = p.stick;
+    state.visc = p.visc; state.coh = p.coh; state.stick = p.stick; state.vort = p.vort;
     sliders.visc[0].value = p.visc * 100; sliders.visc[1].textContent = p.visc.toFixed(2);
     sliders.coh[0].value = p.coh * 100; sliders.coh[1].textContent = p.coh.toFixed(2);
     sliders.stick[0].value = p.stick * 100; sliders.stick[1].textContent = p.stick.toFixed(2);
@@ -681,7 +688,14 @@ async function main() {
   toggle('bPour', (on) => { state.pour = on; });
   toggle('bStir', (on) => { state.stir = on; });
   toggle('bBlock', (on) => { state.block = on; });
-  $('bReset').addEventListener('click', () => fillBlock(state.count));
+  toggle('bBallPhys', (on) => { state.ballPhys = on; state.ballVel = [0, 0, 0]; });
+  $('bReset').addEventListener('click', () => { fillBlock(state.count); state.ballVel = [0, 0, 0]; });
+  $('bSplash').addEventListener('click', () => {
+    state.splashPending = 1.4;
+    $('bSplash').classList.add('on');
+    setTimeout(() => $('bSplash').classList.remove('on'), 180);
+  });
+  $('selView').addEventListener('change', (e) => { state.debugView = +e.target.value; });
 
   function setAuto(fps) {
     const was60 = $('bAuto').classList.contains('on');
@@ -815,18 +829,74 @@ async function main() {
   // ------------------------------------------------------------ sphere anim
 
   let prevSpherePos = [...state.spherePos];
+  const BALL_DENSITY = 420;                              // kg/m^3 -> floats in water
+  const N_FULL = 900;                                    // contact samples when fully submerged
   function updateSphere(dt) {
+    const draggingBall = state.drag && state.drag.mode === 'sphere';
+
     if (state.stir) {
       state.stirAngle += dt * 1.5;
       const R = 0.72, a = state.stirAngle;
       state.spherePos = [Math.cos(a) * R, 0.38, Math.sin(a) * R * 0.65];
+    } else if (state.ballPhys && !draggingBall) {
+      // ---- dynamic rigid ball: gravity + buoyancy + fluid drag
+      const r = state.sphereR;
+      const vol = (4 / 3) * Math.PI * r * r * r;
+      const mass = BALL_DENSITY * vol;
+      const smp = state.ballSample;
+      const sub = clamp(smp.count / N_FULL, 0, 1.25);    // submersion fraction
+      let v = state.ballVel;
+      const F = [0, -9.8 * mass, 0];
+      F[1] += 1000 * vol * 9.8 * sub;                    // Archimedes (water rho)
+      const cD = 55 * sub;                               // fluid drag toward local flow
+      F[0] += (smp.v[0] - v[0]) * cD;
+      F[1] += (smp.v[1] - v[1]) * cD;
+      F[2] += (smp.v[2] - v[2]) * cD;
+      v = [v[0] + F[0] / mass * dt, v[1] + F[1] / mass * dt, v[2] + F[2] / mass * dt];
+      const sp = Math.hypot(v[0], v[1], v[2]);
+      if (sp > 6) v = v3scale(v, 6 / sp);
+      let p = v3add(state.spherePos, v3scale(v, dt));
+      // container collisions
+      const lo = [BOX.min[0] + r, r, BOX.min[2] + r];
+      const hi = [BOX.max[0] - r, 3.0, BOX.max[2] - r];
+      for (let a = 0; a < 3; a++) {
+        if (p[a] < lo[a]) { p[a] = lo[a]; if (v[a] < 0) v[a] *= -0.25; }
+        if (p[a] > hi[a]) { p[a] = hi[a]; if (v[a] > 0) v[a] *= -0.25; }
+      }
+      // obstacle block collision (sphere vs AABB)
+      if (state.block) {
+        const cp = [
+          clamp(p[0], OBS.min[0], OBS.max[0]),
+          clamp(p[1], OBS.min[1], OBS.max[1]),
+          clamp(p[2], OBS.min[2], OBS.max[2]),
+        ];
+        const d = v3sub(p, cp), l = v3len(d);
+        if (l < r) {
+          if (l > 1e-6) {
+            const n = v3scale(d, 1 / l);
+            p = v3add(cp, v3scale(n, r));
+            const vn = v3dot(v, n);
+            if (vn < 0) v = v3sub(v, v3scale(n, vn * 1.25));
+          } else {
+            p[1] = OBS.max[1] + r;
+          }
+        }
+      }
+      state.ballVel = v;
+      state.spherePos = p;
+      state.sphereVel = [...v];
+      prevSpherePos = [...p];
+      return;
     }
+
+    // kinematic (dragged / stirred / physics off): velocity from motion
     const inst = v3scale(v3sub(state.spherePos, prevSpherePos), 1 / Math.max(dt, 1e-4));
     state.sphereVel = [
       state.sphereVel[0] * 0.6 + inst[0] * 0.4,
       state.sphereVel[1] * 0.6 + inst[1] * 0.4,
       state.sphereVel[2] * 0.6 + inst[2] * 0.4,
     ];
+    state.ballVel = [...state.sphereVel];                // hand-off for release
     prevSpherePos = [...state.spherePos];
   }
 
@@ -851,6 +921,8 @@ async function main() {
     writeCamUBO(now / 1000);
     writeMatUBO();
     writeSphereUBO();
+    device.queue.writeBuffer(ballBuf, 0, new Int32Array(8)); // clear accumulators
+    state.splashPending = 0;
 
     const enc = device.createCommandEncoder();
 
@@ -872,8 +944,15 @@ async function main() {
       cp.setBindGroup(0, simBGs[cur]);
       cp.setPipeline(pFinal); cp.dispatchWorkgroups(nWG);
       cp.setPipeline(pXsph); cp.dispatchWorkgroups(nWG);
+      if (state.vort > 0.001) {
+        cp.setPipeline(pCurl); cp.dispatchWorkgroups(nWG);
+        cp.setPipeline(pVort); cp.dispatchWorkgroups(nWG);
+      }
     }
     cp.end();
+
+    // fluid -> ball force samples (async readback, ~1 frame latency)
+    if (!state.ballReadPending) enc.copyBufferToBuffer(ballBuf, 0, ballRead, 0, 32);
 
     // ---------------- scene pass (HDR, scaled res)
     {
@@ -927,22 +1006,24 @@ async function main() {
       rp.end();
     }
 
-    // ---------------- bilateral blur H then V
-    {
-      const rp = enc.beginRenderPass({
-        colorAttachments: [{ view: T.fluidBV, loadOp: 'clear', storeOp: 'store' }],
-      });
-      rp.setBindGroup(0, camBG); rp.setBindGroup(1, T.blurBG_H);
-      rp.setPipeline(blurPipe); rp.draw(3);
-      rp.end();
-    }
-    {
-      const rp = enc.beginRenderPass({
-        colorAttachments: [{ view: T.fluidAV, loadOp: 'clear', storeOp: 'store' }],
-      });
-      rp.setBindGroup(0, camBG); rp.setBindGroup(1, T.blurBG_V);
-      rp.setPipeline(blurPipe); rp.draw(3);
-      rp.end();
+    // ---------------- bilateral blur H then V (skipped in particles debug view)
+    if (state.debugView !== 1) {
+      {
+        const rp = enc.beginRenderPass({
+          colorAttachments: [{ view: T.fluidBV, loadOp: 'clear', storeOp: 'store' }],
+        });
+        rp.setBindGroup(0, camBG); rp.setBindGroup(1, T.blurBG_H);
+        rp.setPipeline(blurPipe); rp.draw(3);
+        rp.end();
+      }
+      {
+        const rp = enc.beginRenderPass({
+          colorAttachments: [{ view: T.fluidAV, loadOp: 'clear', storeOp: 'store' }],
+        });
+        rp.setBindGroup(0, camBG); rp.setBindGroup(1, T.blurBG_V);
+        rp.setPipeline(blurPipe); rp.draw(3);
+        rp.end();
+      }
     }
 
     // ---------------- composite + upscale to canvas
@@ -957,6 +1038,19 @@ async function main() {
     }
 
     device.queue.submit([enc.finish()]);
+
+    // ---------------- ball force readback
+    if (!state.ballReadPending) {
+      state.ballReadPending = true;
+      ballRead.mapAsync(GPUMapMode.READ).then(() => {
+        const a = new Int32Array(ballRead.getMappedRange());
+        const count = a[3] / SUBSTEPS;
+        const inv = a[3] > 0 ? 1 / (256 * a[3]) : 0;
+        state.ballSample = { count, v: [a[0] * inv, a[1] * inv, a[2] * inv] };
+        ballRead.unmap();
+        state.ballReadPending = false;
+      }).catch(() => { state.ballReadPending = false; });
+    }
 
     // ---------------- stats
     state.stats.frames++;

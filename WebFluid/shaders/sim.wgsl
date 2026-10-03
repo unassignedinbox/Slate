@@ -30,14 +30,14 @@ struct SimParams {
   adhesionRange  : f32,
 
   boxMin         : vec3f,
-  pad0           : f32,
+  vortEps        : f32,
   boxMax         : vec3f,
-  pad1           : f32,
+  splash         : f32,
 
   spherePos      : vec3f,
   sphereRadius   : f32,
   sphereVel      : vec3f,
-  pad2           : f32,
+  seed           : f32,
 
   obsMin         : vec3f,
   pad3           : f32,
@@ -48,8 +48,8 @@ struct SimParams {
 @group(0) @binding(0) var<uniform> P : SimParams;
 @group(0) @binding(1) var<storage, read_write> pos      : array<vec4f>;
 @group(0) @binding(2) var<storage, read_write> vel      : array<vec4f>;
-@group(0) @binding(3) var<storage, read_write> pred     : array<vec4f>; // current predicted
-@group(0) @binding(4) var<storage, read_write> lambdas  : array<f32>;
+@group(0) @binding(3) var<storage, read_write> pred     : array<vec4f>; // xyz predicted, w lambda
+@group(0) @binding(4) var<storage, read_write> ballAcc  : array<atomic<i32>>; // fluid->ball samples
 @group(0) @binding(5) var<storage, read_write> gridHead : array<atomic<i32>>;
 @group(0) @binding(6) var<storage, read_write> gridNext : array<i32>;
 @group(0) @binding(7) var<storage, read_write> velTmp   : array<vec4f>;
@@ -198,11 +198,20 @@ fn applyAdhesion(p: vec3f, vIn: vec3f) -> vec3f {
 
 // ============================================================ entry points
 
+fn hash1(n: f32) -> f32 { return fract(sin(n) * 43758.5453); }
+
 @compute @workgroup_size(256)
 fn predict(@builtin(global_invocation_id) gid: vec3u) {
   let i = gid.x;
   if (i >= P.numParticles) { return; }
   var v = vel[i].xyz + P.gravity * P.dt;
+  if (P.splash > 0.0) {
+    let fi = f32(i);
+    let h1 = hash1(fi * 12.9898 + P.seed);
+    let h2 = hash1(fi * 78.2330 + P.seed * 1.7);
+    let h3 = hash1(fi * 37.7190 + P.seed * 2.3);
+    v += vec3f((h1 - 0.5) * 1.7, 0.75 + h2 * 1.0, (h3 - 0.5) * 1.7) * P.splash;
+  }
   // CFL speed clamp
   let vmax = 0.45 * P.h / P.dt;
   let s = length(v);
@@ -264,7 +273,7 @@ fn computeLambda(@builtin(global_invocation_id) gid: vec3u) {
   }
   sumGrad2 += dot(gradI, gradI);
   let C = rho * P.invRho0 - 1.0;
-  lambdas[i] = -C / (sumGrad2 + P.epsLambda);
+  pred[i].w = -C / (sumGrad2 + P.epsLambda);
 }
 
 @compute @workgroup_size(256)
@@ -272,7 +281,7 @@ fn applyDelta(@builtin(global_invocation_id) gid: vec3u) {
   let i = gid.x;
   if (i >= P.numParticles) { return; }
   let pi = pred[i].xyz;
-  let li = lambdas[i];
+  let li = pred[i].w;
   let h2 = P.h * P.h;
   let cc = cellCoord(pi);
 
@@ -294,7 +303,7 @@ fn applyDelta(@builtin(global_invocation_id) gid: vec3u) {
               let w = P.poly6 * dd * dd * dd * P.wDqInv;
               let w2 = w * w;
               let scorr = -P.kCorr * w2 * w2;
-              dp += (li + lambdas[j] + scorr) * gradSpiky(d, sqrt(r2));
+              dp += (li + pred[j].w + scorr) * gradSpiky(d, sqrt(r2));
             }
           }
           j = gridNext[j];
@@ -316,6 +325,17 @@ fn finalizeVel(@builtin(global_invocation_id) gid: vec3u) {
   var v = (pNew - pos[i].xyz) / P.dt;
   v = applyAdhesion(pNew, v);
   velTmp[i] = vec4f(v, 0.0);
+
+  // sample fluid state around the dynamic ball (for two-way coupling on CPU)
+  {
+    let l = length(pNew - P.spherePos);
+    if (l - P.sphereRadius - P.particleRadius < P.adhesionRange) {
+      atomicAdd(&ballAcc[0], i32(v.x * 256.0));
+      atomicAdd(&ballAcc[1], i32(v.y * 256.0));
+      atomicAdd(&ballAcc[2], i32(v.z * 256.0));
+      atomicAdd(&ballAcc[3], 1);
+    }
+  }
 }
 
 @compute @workgroup_size(256)
@@ -350,4 +370,74 @@ fn xsph(@builtin(global_invocation_id) gid: vec3u) {
   let vNew = vi + P.viscosity * acc * P.invRho0;
   vel[i] = vec4f(vNew, 0.0);
   pos[i] = vec4f(pi, 1.0);
+}
+
+// Vorticity confinement (optional, re-energizes small swirls lost to the
+// solver). velTmp is reused as omega storage after xsph has consumed it.
+
+@compute @workgroup_size(256)
+fn computeCurl(@builtin(global_invocation_id) gid: vec3u) {
+  let i = gid.x;
+  if (i >= P.numParticles) { return; }
+  let pi = pred[i].xyz;
+  let vi = vel[i].xyz;
+  let h2 = P.h * P.h;
+  let cc = cellCoord(pi);
+
+  var omega = vec3f(0.0);
+  for (var dz = -1; dz <= 1; dz++) {
+    for (var dy = -1; dy <= 1; dy++) {
+      for (var dx = -1; dx <= 1; dx++) {
+        let nc = cc + vec3i(dx, dy, dz);
+        if (any(nc < vec3i(0)) || any(nc >= P.gridDims)) { continue; }
+        var j = atomicLoad(&gridHead[cellIndex(nc)]);
+        loop {
+          if (j < 0) { break; }
+          let d = pi - pred[j].xyz;
+          let r2 = dot(d, d);
+          if (r2 < h2 && r2 > 1e-12) {
+            omega += cross(vel[j].xyz - vi, gradSpiky(d, sqrt(r2)));
+          }
+          j = gridNext[j];
+        }
+      }
+    }
+  }
+  omega *= P.invRho0;
+  velTmp[i] = vec4f(omega, length(omega));
+}
+
+@compute @workgroup_size(256)
+fn applyVorticity(@builtin(global_invocation_id) gid: vec3u) {
+  let i = gid.x;
+  if (i >= P.numParticles) { return; }
+  let pi = pred[i].xyz;
+  let h2 = P.h * P.h;
+  let cc = cellCoord(pi);
+
+  var eta = vec3f(0.0);
+  for (var dz = -1; dz <= 1; dz++) {
+    for (var dy = -1; dy <= 1; dy++) {
+      for (var dx = -1; dx <= 1; dx++) {
+        let nc = cc + vec3i(dx, dy, dz);
+        if (any(nc < vec3i(0)) || any(nc >= P.gridDims)) { continue; }
+        var j = atomicLoad(&gridHead[cellIndex(nc)]);
+        loop {
+          if (j < 0) { break; }
+          let d = pi - pred[j].xyz;
+          let r2 = dot(d, d);
+          if (r2 < h2 && r2 > 1e-12) {
+            eta += velTmp[j].w * gradSpiky(d, sqrt(r2));
+          }
+          j = gridNext[j];
+        }
+      }
+    }
+  }
+  eta *= P.invRho0;
+  let el = length(eta);
+  if (el > 1e-6) {
+    let f = P.vortEps * cross(eta / el, velTmp[i].xyz);
+    vel[i] = vec4f(vel[i].xyz + f * P.dt, 0.0);
+  }
 }

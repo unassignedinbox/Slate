@@ -105,6 +105,10 @@ struct MatU {
   fresnelK   : f32,
   scaledRes  : vec2f,
   fullRes    : vec2f,
+  mode       : f32,   // 0 shaded, 1 particles, 2 normals, 3 thickness, 4 depth
+  pad0       : f32,
+  pad1       : f32,
+  pad2       : f32,
 };
 @group(1) @binding(0) var<uniform> matU : MatU;
 @group(1) @binding(1) var smpLin : sampler;
@@ -140,10 +144,15 @@ fn fsComposite(in: FullOut) -> @location(0) vec4f {
   let uv = in.pos.xy / matU.fullRes;
   let sceneCol = textureSampleLevel(sceneTex, smpLin, uv, 0.0).rgb;
 
+  let mode = i32(matU.mode);
   let ip = vec2i(uv * matU.scaledRes);
   let z = loadZ(ip);
   if (z > 1e8) {
+    if (mode >= 2) { return vec4f(0.08, 0.09, 0.11, 1.0); }
     return vec4f(tonemap(sceneCol), 1.0);
+  }
+  if (mode == 4) { // linear depth debug
+    return vec4f(vec3f(exp(-z * 0.3)), 1.0);
   }
 
   // --- reconstruct view-space position & normal from blurred depth
@@ -177,6 +186,13 @@ fn fsComposite(in: FullOut) -> @location(0) vec4f {
   let V = normalize(cam.eye - wp);
   let th = max(textureSampleLevel(thickTex, smpLin, uv, 0.0).r, 0.0);
 
+  if (mode == 2) { // world normal debug
+    return vec4f(n * 0.5 + 0.5, 1.0);
+  }
+  if (mode == 3) { // thickness debug
+    return vec4f(vec3f(1.0 - exp(-th * 0.9)) * vec3f(0.55, 0.8, 1.0), 1.0);
+  }
+
   // --- diffuse body (opaque fluids: milk, chocolate, mud)
   let ndl = max(dot(n, cam.sunDir), 0.0);
   let wrap = max((dot(n, cam.sunDir) + 0.4) / 1.4, 0.0); // wrapped diffuse ~ SSS
@@ -189,7 +205,8 @@ fn fsComposite(in: FullOut) -> @location(0) vec4f {
   let bg = textureSampleLevel(sceneTex, smpLin, refrUv, 0.0).rgb;
   let trans = bg * exp(-matU.absorb * th);
 
-  let alpha = 1.0 - exp(-matU.opacityK * th);
+  var alpha = 1.0 - exp(-matU.opacityK * th);
+  if (mode == 1) { alpha = 1.0; } // particles debug: opaque unblurred impostors
   var col = mix(trans, diffuse, alpha);
 
   // --- specular + fresnel reflection
@@ -202,7 +219,8 @@ fn fsComposite(in: FullOut) -> @location(0) vec4f {
   col += SUN_COLOR * spec * (1.0 + 2.0 * fres);
 
   // soften rim where the fluid gets vanishingly thin
-  let edge = clamp(th * 14.0, 0.0, 1.0);
+  var edge = clamp(th * 14.0, 0.0, 1.0);
+  if (mode == 1) { edge = 1.0; }
   col = mix(sceneCol, col, edge);
 
   return vec4f(tonemap(col), 1.0);

@@ -18,6 +18,15 @@ Unreal Engine's Niagara fluids, running entirely in the browser on WebGPU.
   (two-way push on fluid via constraint projection), a static obstacle block.
   Adhesion forces + sticky friction make viscous fluids cling to and coat
   surfaces, and drip under gravity.
+- **Two-way coupled rigid ball**: contact samples (count + mean flow velocity)
+  are accumulated on GPU with atomics and read back async; the CPU integrates
+  the ball with gravity, Archimedes buoyancy and fluid drag — it floats and
+  bobs in water, wades slowly through mud, and can be thrown by dragging.
+- **Vorticity confinement** (curl + eta passes) re-energizes swirls in the
+  thin fluids; disabled for chocolate/mud.
+- **Debug views**: raw particles (unblurred impostors), reconstructed normals,
+  thickness and linear depth — every stage of the screen-space pipeline is
+  inspectable. Plus a one-click **Splash!** impulse.
 - **Screen-space fluid rendering** (the standard GDC/NVIDIA technique):
   sphere impostor depth pass → depth-aware separable bilateral blur →
   normal reconstruction from blurred depth → additive thickness pass →

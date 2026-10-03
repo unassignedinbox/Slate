@@ -52,6 +52,12 @@
     border-radius: 50%; background: var(--accent); cursor: pointer; border: none; }
   input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%;
     background: var(--accent); cursor: pointer; border: none; }
+  select {
+    flex: 1; background: rgba(255,255,255,0.06); color: var(--text);
+    border: 1px solid var(--panel-border); border-radius: 7px; padding: 5px 8px;
+    font-size: 12px; outline: none; cursor: pointer;
+  }
+  select option { background: #15171e; }
 
   .toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 10px 0; }
   .tbtn {
@@ -116,8 +122,20 @@
   <div class="toggles">
     <div class="tbtn" id="bPour">Pour</div>
     <div class="tbtn" id="bStir">Stir (orbit ball)</div>
+    <div class="tbtn on" id="bBallPhys">Ball physics</div>
+    <div class="tbtn" id="bSplash">Splash!</div>
     <div class="tbtn on" id="bBlock">Obstacle block</div>
     <div class="tbtn danger" id="bReset">Reset fluid</div>
+  </div>
+
+  <div class="row"><label>View</label>
+    <select id="selView">
+      <option value="0" selected>Shaded fluid</option>
+      <option value="1">Particles</option>
+      <option value="2">Normals</option>
+      <option value="3">Thickness</option>
+      <option value="4">Depth</option>
+    </select>
   </div>
 
   <div class="sect">Dynamic resolution</div>
