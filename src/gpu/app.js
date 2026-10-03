@@ -32,7 +32,7 @@ const FLUIDS = {
   },
 };
 const SCENE_DEFAULT = { dam: 'water', splash: 'milk', ocean: 'water', pour: 'chocolate' };
-const QUALITY = { low: 40000, medium: 100000, high: 200000 };
+const QUALITY = { fast: 15000, low: 40000, medium: 100000, high: 200000 };
 
 // ------------------------------------------------------------------ init
 if (!navigator.gpu) fail('WebGPU is not available in this browser.<br>Use Chrome/Edge 113+ (desktop) or open <a href="legacy.html">the WebGL/CPU version</a>.');
