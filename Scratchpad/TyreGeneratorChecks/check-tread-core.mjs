@@ -66,7 +66,12 @@ section('Design model');
 // --------------------------------------------------------------------------------------------- ported library
 section('Ported reference tread library');
 {
-  ok('eight designs are published', T.TREAD_LIBRARY.length === 8, T.TREAD_LIBRARY.map(d => d.id).join(', '));
+  const ported = T.TREAD_LIBRARY.filter(d => d.origin !== 'slate'), drawn = T.TREAD_LIBRARY.filter(d => d.origin === 'slate');
+  ok('the eight reference designs are published', ported.length === 8, ported.map(d => d.id).join(', '));
+  ok('the library is not limited to the ported designs', drawn.length >= 4, drawn.map(d => d.id).join(', '));
+  ok('the library spans more than the off-road categories',
+    new Set(T.TREAD_LIBRARY.map(d => d.category)).size >= 6,
+    [...new Set(T.TREAD_LIBRARY.map(d => d.category))].join(', '));
   for (const entry of T.TREAD_LIBRARY) {
     const shapes = T.designFromLibrary(entry.id);
     const expanded = [...T.designShapes(shapes, 0), ...T.designShapes(shapes, 1)];
@@ -76,7 +81,7 @@ section('Ported reference tread library');
     const linked = shapes.filter(s => s.mirror.mode !== 'none').length;
     ok(`${entry.id}: outlines are simple polygons`, bad.length === 0, bad.map(s => s.name).join(', '));
     ok(`${entry.id}: shapes stay inside the tread band`, outside.length === 0, `${outside.length} outside`);
-    ok(`${entry.id}: has editable lugs and cut lines`, shapes.length >= 3 && sipes > 0,
+    ok(`${entry.id}: has editable lugs and cut lines`, shapes.length >= 2 && expanded.length >= 4 && sipes > 0,
       `${shapes.length} shapes (${linked} with linked mirrors), ${expanded.length} instances, ${sipes} cut lines`);
     ok(`${entry.id}: carries a Slate carcass preset`, entry.tyre && entry.tyre.width > 150 && entry.count >= 20 && entry.count % 2 === 0,
       `${entry.tyre.width}/${entry.tyre.aspect} R${entry.tyre.rim}, ${entry.count} repeats`);

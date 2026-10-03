@@ -670,6 +670,71 @@ function rockCleatShapes() {
 
 // `tyre` is the Slate carcass preset each design ships with. `reach` stretches the ±0.5 design band across the
 // tread and onto the shoulder arc (1.0 = tread edges, >1 wraps the shoulder).
+// ---------------------------------------------------------------------------------------------------------------
+//  ORIGINAL SLATE DESIGNS
+//  Drawn here rather than ported. They cover road categories the reference set never touches — snow, standing
+//  water, dry grip and track — and they exercise parts of the design model the ported designs do not: a chevron
+//  bar with four cut lines, a true directional V, a tread with no mirror symmetry at all, and slot cuts wide
+//  enough to read as grooves.
+// ---------------------------------------------------------------------------------------------------------------
+function winterShapes() {
+  // One chevron bar per pitch. The cut lines follow the bar, which is what keeps biting edges on both sides of
+  // the centre line as the tyre rolls into the contact patch.
+  const chevron = band([[-.30, .04], [0, .34], [.30, .04]], .46,
+    [.09, .20, .31, .42].map(o => [[-.28, .06 + o], [0, .34 + o], [.28, .06 + o]]),
+    { family: 'centre' });
+  const shoulder = lug([[-.5, .10], [-.345, .10], [-.325, .24], [-.325, .60], [-.345, .74], [-.5, .74]],
+    [.22, .34, .46, .58].map(y => [[-.5, y], [-.331, y]]),
+    { role: 'shoulder', family: 'shoulder' });
+  return [chevron, shoulder, mirrorLug(shoulder, .5)];
+}
+
+function wetShapes() {
+  // A solid centre rib carries the dry braking; everything outboard of it is a curved channel wall that throws
+  // water outwards, so both halves are a true mirror with no stagger.
+  const rib = lug([[-.075, 0], [.075, 0], [.075, 1], [-.075, 1]],
+    [[[-.075, .16], [.075, .30]], [[-.075, .66], [.075, .80]]],
+    { role: 'rib', family: 'rib', continuous: true });
+  const inner = band(quadCurve([-.325, .02], [-.265, .28], [-.115, .46], 6), .40, [
+    quadCurve([-.315, .14], [-.255, .40], [-.115, .58], 6),
+    quadCurve([-.315, .27], [-.255, .53], [-.115, .71], 6)
+  ], { family: 'inner' });
+  const shoulder = band(quadCurve([-.5, .08], [-.43, .30], [-.355, .44], 5), .42, [
+    [[-.49, .28], [-.40, .48]], [[-.455, .58], [-.365, .76]]
+  ], { role: 'shoulder', family: 'shoulder' });
+  return [rib, inner, mirrorLug(inner), shoulder, mirrorLug(shoulder)];
+}
+
+function uhpShapes() {
+  // Asymmetric on purpose: the outboard half is solid rubber for cornering load, the inboard half is cut up for
+  // water and warm-up. Nothing here pairs across the centre line, so the editor shows five independent shapes.
+  const outerShoulder = lug([[.5, .06], [.265, .06], [.245, .22], [.245, .70], [.265, .88], [.5, .88]],
+    [[[.315, .10], [.335, .84]]], { role: 'shoulder', family: 'outboard' });
+  const outerRib = lug([[.215, 0], [.095, 0], [.095, 1], [.215, 1]],
+    [[[.095, .12], [.215, .26]], [[.095, .62], [.215, .76]]],
+    { role: 'rib', family: 'outboard', continuous: true });
+  const centreRib = lug([[.055, 0], [-.055, 0], [-.055, 1], [.055, 1]],
+    [[[-.055, .40], [.055, .52]]], { role: 'rib', family: 'centre', continuous: true });
+  const innerBlock = lug([[-.095, .05], [-.235, .05], [-.255, .18], [-.255, .58], [-.235, .72], [-.095, .72]],
+    [[[-.248, .16], [-.10, .26]], [[-.248, .34], [-.10, .44]], [[-.248, .52], [-.10, .62]]],
+    { family: 'inboard' });
+  const innerShoulder = lug([[-.295, .18], [-.5, .18], [-.5, .86], [-.295, .86]],
+    [[[-.5, .34], [-.30, .40]], [[-.5, .62], [-.30, .68]]], { role: 'shoulder', family: 'inboard' });
+  return [outerShoulder, outerRib, centreRib, innerBlock, innerShoulder];
+}
+
+function trackShapes() {
+  // Almost slick. Two narrow circumferential grooves and a handful of wide angled slots — the slot width is set
+  // by the layer's cut width, so one slider takes this from a wet-weather semi-slick to a dry track tyre.
+  const centre = lug([[-.21, 0], [.21, 0], [.21, 1], [-.21, 1]],
+    [[[-.205, .20], [-.01, .33]], [[.01, .62], [.205, .75]]],
+    { role: 'rib', family: 'centre', continuous: true });
+  const shoulder = lug([[-.25, 0], [-.5, 0], [-.5, 1], [-.25, 1]],
+    [[[-.495, .16], [-.26, .30]], [[-.495, .66], [-.26, .80]]],
+    { role: 'shoulder', family: 'shoulder', continuous: true });
+  return [centre, shoulder, mirrorLug(shoulder)];
+}
+
 const TREAD_LIBRARY = [
   { id: 'highway', name: 'Highway HT', code: 'HT / 01', category: 'Street', terrain: 'ROAD',
     note: 'Asymmetric five-rib road pattern, four straight channels, fine diagonal cuts and swept shoulders.',
@@ -702,7 +767,24 @@ const TREAD_LIBRARY = [
   { id: 'rock-cleat', name: 'Rock cleat MT', code: 'MT / 08', category: 'Off-road', terrain: 'OPEN MUD-TERRAIN',
     note: 'Slanted shoulder bars and wider paired centre cleats with elbow cuts, open channels and low ejectors.',
     count: 30, sipeWidth: 1.1, sipeDepth: .45, reach: 1.22,
-    tyre: { width: 305, aspect: 70, rim: 18, treadDepth: 18, treadFrac: .9, crown: 3.6, shoulder: 11 } }
+    tyre: { width: 305, aspect: 70, rim: 18, treadDepth: 18, treadFrac: .9, crown: 3.6, shoulder: 11 } },
+  // ---- original Slate designs, drawn for categories the reference set never covers ----
+  { id: 'winter-vsipe', name: 'Winter V-sipe', code: 'SN / 09', category: 'Winter', terrain: 'SNOW / ICE',
+    note: 'Chevron centre bar carrying four cut lines per pitch, with staggered square shoulder blocks.',
+    count: 56, sipeWidth: .7, sipeDepth: .72, reach: 1.08, origin: 'slate',
+    tyre: { width: 215, aspect: 60, rim: 16, treadDepth: 9, treadFrac: .92, crown: 2.6, shoulder: 14 } },
+  { id: 'wet-channel', name: 'Wet aqua-channel', code: 'AQ / 10', category: 'Wet', terrain: 'STANDING WATER',
+    note: 'Solid centre rib between curved directional channels that open towards the shoulders.',
+    count: 48, sipeWidth: .8, sipeDepth: .5, reach: 1.06, origin: 'slate',
+    tyre: { width: 245, aspect: 45, rim: 18, treadDepth: 8, treadFrac: .92, crown: 2.4, shoulder: 15 } },
+  { id: 'uhp-asym', name: 'UHP asymmetric', code: 'UH / 11', category: 'Grip / UHP', terrain: 'DRY GRIP',
+    note: 'Solid outboard shoulder and ribs against siped inboard blocks — no mirror symmetry anywhere.',
+    count: 40, sipeWidth: .7, sipeDepth: .42, reach: 1.04, origin: 'slate',
+    tyre: { width: 255, aspect: 35, rim: 19, treadDepth: 7, treadFrac: .93, crown: 2.2, shoulder: 16 } },
+  { id: 'track-slot', name: 'Track slotted semi-slick', code: 'TR / 12', category: 'Semi-slick', terrain: 'TRACK',
+    note: 'Two circumferential grooves and wide angled slots cut into otherwise solid ribs.',
+    count: 30, sipeWidth: 2.2, sipeDepth: .55, reach: 1.02, origin: 'slate',
+    tyre: { width: 265, aspect: 35, rim: 18, treadDepth: 6, treadFrac: .93, crown: 2, shoulder: 15 } }
 ];
 
 function libraryShapes(id, parity = 0) {
@@ -714,6 +796,10 @@ function libraryShapes(id, parity = 0) {
   if (id === 'canyon-rt') return canyonShapes(parity);
   if (id === 'baja-interlock') return bajaShapes(parity);
   if (id === 'rock-cleat') return rockCleatShapes();
+  if (id === 'winter-vsipe') return winterShapes();
+  if (id === 'wet-channel') return wetShapes();
+  if (id === 'uhp-asym') return uhpShapes();
+  if (id === 'track-slot') return trackShapes();
   throw new Error(`Unknown tread design: ${id}`);
 }
 
@@ -724,13 +810,15 @@ function designFromLibrary(id) {
   if (!entry) throw new Error(`Unknown tread design: ${id}`);
   const shapes = [];
   for (const parity of [0, 1]) for (const b of libraryShapes(id, parity)) {
-    const match = shapes.find(s => s.phase === '0' && parity === 1 && signature(s) === signature(b));
-    if (match) { match.phase = 'both'; continue; }
-    shapes.push(Object.assign(clone(b), {
+    const shaped = Object.assign(clone(b), {
       id: `shape-${id}-${shapes.length + 1}`,
       name: `${b.family || b.role} ${shapes.length + 1}`,
       holes: [], cutDepth: .5, phase: String(parity), enabled: true, mirror: defaultMirror()
-    }));
+    });
+    // Compare like with like: a shape only belongs to one pitch if the other pitch does not repeat it.
+    const match = parity === 1 && shapes.find(s => s.phase === '0' && signature(s) === signature(shaped));
+    if (match) { match.phase = 'both'; continue; }
+    shapes.push(shaped);
   }
   for (let i = 0; i < shapes.length; i++) {
     const a = shapes[i];
@@ -1005,14 +1093,15 @@ function quadrangulate(rings, xs, ys, clip, triangulate) {
   const nx = i1 - i0 + 1, ny = j1 - j0 + 1;
   if (nx <= 0 || ny <= 0) return { points: [], faces: [] };
 
-  // Mark every cell any boundary edge can touch; the rest are cleanly inside or outside.
+  // Mark every cell a boundary edge passes through; the rest are cleanly inside or outside and need no clip.
+  // The span range of an edge's bounding box already covers every cell it can touch, so no slop is needed.
   const marked = new Uint8Array(nx * ny);
   for (const ring of rings) for (let i = 0; i < ring.length; i++) {
     const a = ring[i], b = ring[(i + 1) % ring.length];
     const ca0 = spanIndex(xs, Math.min(a[0], b[0])), ca1 = spanIndex(xs, Math.max(a[0], b[0]));
     const cb0 = spanIndex(ys, Math.min(a[1], b[1])), cb1 = spanIndex(ys, Math.max(a[1], b[1]));
-    for (let cx = Math.max(i0, ca0 - 1); cx <= Math.min(i1, ca1 + 1); cx++)
-      for (let cy = Math.max(j0, cb0 - 1); cy <= Math.min(j1, cb1 + 1); cy++) marked[(cy - j0) * nx + (cx - i0)] = 1;
+    for (let cx = Math.max(i0, ca0); cx <= Math.min(i1, ca1); cx++)
+      for (let cy = Math.max(j0, cb0); cy <= Math.min(j1, cb1); cy++) marked[(cy - j0) * nx + (cx - i0)] = 1;
   }
 
   const points = [];
@@ -1078,7 +1167,45 @@ function quadrangulate(rings, xs, ys, clip, triangulate) {
       }
     }
   }
-  return { points, faces };
+
+  // ---- conforming repair -------------------------------------------------------------------------------------
+  // A boolean border that stops on a grid line leaves a hanging vertex part-way along the neighbouring cell's
+  // edge. The shell is still closed, but the two sides no longer share an edge, which is what tears open under
+  // deformation. Any face edge carrying such a vertex is reopened and re-tessellated, quads first.
+  const K = v => Math.round(v * 1e4);
+  const alongX = new Map(), alongY = new Map();
+  for (let i = 0; i < points.length; i++) {
+    const kx = K(points[i][0]), ky = K(points[i][1]);
+    if (!alongX.has(kx)) alongX.set(kx, []);
+    if (!alongY.has(ky)) alongY.set(ky, []);
+    alongX.get(kx).push(i); alongY.get(ky).push(i);
+  }
+  const hanging = (ia, ib) => {
+    const a = points[ia], b = points[ib];
+    const axis = K(a[0]) === K(b[0]) ? 1 : K(a[1]) === K(b[1]) ? 0 : -1;
+    if (axis < 0) return [];                          // a sloped border edge is always shared by its two cells
+    const list = (axis === 1 ? alongX.get(K(a[0])) : alongY.get(K(a[1]))) || [];
+    if (list.length < 3) return [];
+    const lo = Math.min(a[axis], b[axis]), hi = Math.max(a[axis], b[axis]);
+    const mid = list.filter(k => k !== ia && k !== ib && points[k][axis] > lo + 1e-6 && points[k][axis] < hi - 1e-6);
+    mid.sort((p, q) => points[p][axis] - points[q][axis]);
+    return a[axis] < b[axis] ? mid : mid.reverse();
+  };
+  const conformed = [];
+  for (const f of faces) {
+    const ring = [];
+    for (let i = 0; i < f.length; i++) {
+      ring.push(f[i]);
+      ring.push(...hanging(f[i], f[(i + 1) % f.length]));
+    }
+    if (ring.length === f.length) { conformed.push(f); continue; }
+    const pts = ring.map(i => points[i]);
+    let tris = [];
+    try { tris = earClip(pts); } catch (e) { tris = []; }
+    if (!tris.length) { conformed.push(f); continue; }  // leave the face alone rather than lose it
+    for (const quad of trianglesToQuads(pts, tris)) conformed.push(quad.map(k => ring[k]));
+  }
+  return { points, faces: conformed };
 }
 
 // A Sutherland–Hodgman clip against an axis-aligned rectangle. Used by the offline checks and as a safety net
@@ -1302,7 +1429,7 @@ function randomTyre() {
   const size = { Slick: [305, 30, 19, 4], 'Semi-slick': [265, 35, 18, 5], Drift: [235, 40, 18, 6], Street: [205, 55, 16, 8], 'Grip / UHP': [255, 35, 19, 7], Wet: [245, 45, 18, 10], Winter: [215, 60, 16, 10], Rally: [235, 70, 15, 14], 'Off-road': [285, 70, 17, 15], Drag: [375, 50, 15, 4] }[type];
   Object.assign(T, { width: size[0] + ri(-2, 2) * 10, aspect: size[1] + ri(-1, 1) * 5, rim: size[2], treadDepth: size[3], letter: pick(['white', 'yellow', 'red', 'black', 'blue']), crown: rnd(1, 3), shoulder: rnd(12, 26) });
   // Rally and off-road tyres can come back as a polygon lug design instead, which is a different authoring model.
-  if ((type === 'Rally' || type === 'Off-road') && Math.random() < 0.5) {
+  if (ST.TREAD_LIBRARY.some(x => x.category === type) && Math.random() < 0.5) {
     const design = pick(ST.TREAD_LIBRARY.filter(x => x.category === type));
     if (design) {
       Object.assign(T, design.tyre, { letter: T.letter });
@@ -2094,6 +2221,7 @@ function rebuild(full = true) {
   const sw = buildSidewall(true); const sideTex = tex(sw.color); sideTex.colorSpace = THREE.SRGBColorSpace;
   const sideMat = new THREE.MeshStandardMaterial({ map: sideTex, normalMap: tex(sw.normal), normalScale: new THREE.Vector2(0.45, 0.45), roughness: 0.8, metalness: 0, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
   tyreMesh = new THREE.Group(); treadSurface = sidewallSurface = null;
+  const startedAt = performance.now();
   if (usePoly) {
     const pmGeo = renderPattern(P, d, 384, T.wear, T.wearBias, T.treadDepth, true);
     try { treadSurface = buildPolyTread(d, pmGeo); } catch (e) { console.warn('polygon tread failed, falling back', e); }
@@ -2118,6 +2246,7 @@ function rebuild(full = true) {
     quadRatio: (treadStats.quads + sideStats.quads) / Math.max(1, treadStats.faces + sideStats.faces),
     treadQuadRatio: treadStats.quadRatio, boundary: treadSurface.boundaryEdges().length
   };
+  tyreMesh.userData.quads.ms = Math.round(performance.now() - startedAt);
   tyreMesh.userData.tris = tyreMesh.userData.quads.triangles;
   tyreGroup.add(tyreMesh);
   // A wireframe drawn from quad edges only — triangulation diagonals are never shown, so the topology is visible.
@@ -2140,7 +2269,8 @@ function quadTile() {
   const tile = (l, v, u, dot) => `<div class="tile"><div class="l"><i style="background:${dot}"></i>${l}</div><div class="v">${v}<small>${u}</small></div></div>`;
   if (!q) return tile('Tread mesh', '0', 'faces', 'var(--green)');
   const pct = Math.round(q.quadRatio * 100);
-  return tile('Quad topology', pct + '%', `${(q.quads / 1000).toFixed(1)}k quads · ${q.tris} tris`, pct >= 80 ? 'var(--green)' : pct >= 60 ? 'var(--yellow)' : 'var(--red)');
+  return tile('Quad topology', pct + '%', `${(q.quads / 1000).toFixed(1)}k quads · ${q.tris} tris · ${q.ms} ms`,
+    pct >= 80 ? 'var(--green)' : pct >= 60 ? 'var(--yellow)' : 'var(--red)');
 }
 
 function updateHud(d) {
@@ -2368,7 +2498,7 @@ function buildTyreUI() {
   slider(p, 'Wear bias (edge↔centre)', T, 'wearBias', -1, 1, 0.01, v => v.toFixed(2));
   h('Tread mesh');
   const meshRow = document.createElement('div'); meshRow.className = 'row'; meshRow.innerHTML = '<label>Mesh mode</label><span class="val" style="flex:1;text-align:left">Polygon topology</span>'; p.appendChild(meshRow);
-  slider(p, 'Polygon detail (mm)', T, 'polyDetail', 3, 16, 0.5, v => v.toFixed(1)); slider(p, 'Segments around', T, 'radial', 180, 1440, 20);
+  slider(p, 'Polygon detail (mm)', T, 'polyDetail', 3, 16, 0.5, v => v.toFixed(1));   // drives the quad count and the rebuild time slider(p, 'Segments around', T, 'radial', 180, 1440, 20);
   const pp = document.getElementById('profileParams'); pp.innerHTML = '';
   slider(pp, 'Tread depth (mm)', T, 'treadDepth', 2, 20, 0.5); slider(pp, 'Tread width fraction', T, 'treadFrac', 0.7, 0.98, 0.01, v => v.toFixed(2));
   slider(pp, 'Crown drop (mm)', T, 'crown', 0, 8, 0.1, v => v.toFixed(1)); slider(pp, 'Shoulder radius (mm)', T, 'shoulder', 4, 40, 1);

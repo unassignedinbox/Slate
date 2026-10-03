@@ -156,6 +156,7 @@ ctx.buildProfile = () => ([
   { x: AHALF + 6, r: 190, nx: 1, nr: -0.2, zone: 'side', s: 1 }
 ]);
 vm.createContext(ctx);
+const TYRE_AT_START = JSON.stringify(ctx.T), DIMS_AT_START = JSON.stringify(d);
 for (const fn of ['treadProfileAt', 'treadGridLines', 'buildPolyTread', 'buildSidewallSurface', 'surfaceToGeometry'])
   vm.runInContext(lift(fn), ctx, { filename: fn + '.js' });
 
@@ -224,9 +225,9 @@ const seamKeys = new Set(seam.map(p => p[0].toFixed(4) + '|' + p[1].toFixed(4)))
 ok('the circumferential seam is welded, not duplicated', seamKeys.size === seam.length,
   `${seam.length} seam vertices, ${seamKeys.size} unique`);
 
-// A boolean border that crosses a grid line leaves a T-junction: the neighbouring cell spans the whole grid
-// edge while the clipped cell splits it. The shell stays geometrically closed — the split edge is covered by the
-// longer one — so the real requirement is that no open edge is an actual gap.
+// A boolean border that crosses a grid line leaves a hanging vertex on the neighbouring cell's edge; the
+// conforming repair in quadrangulate is supposed to remove every one of them. Anything still open must be a
+// shoulder rim, which the sidewall closes.
 const open = surface.boundaryEdges();
 const rimEdge = e => Math.abs(Math.abs(surface.positions[e.a][0]) - AHALF) < 1e-3 &&
   Math.abs(Math.abs(surface.positions[e.b][0]) - AHALF) < 1e-3;
@@ -254,6 +255,8 @@ const gaps = open.filter(e => !rimEdge(e) && !covered(e));
 ok('both shoulder rims are open, as the sidewall closes them', rims.length > 600, `${rims.length} rim edges`);
 ok('no open edge is an actual gap in the shell', gaps.length === 0,
   `${open.length - rims.length} T-junctions, ${gaps.length} gaps`);
+ok('the conforming repair left no T-junction at all', open.length === rims.length,
+  `${open.length - rims.length} remaining`);
 if (process.env.DUMP_GAPS) for (const e of gaps.slice(0, 30)) {
   const a = surface.positions[e.a], b = surface.positions[e.b];
   const ang = p => { const t = Math.atan2(p[2], p[1]); return ((t < 0 ? t + Math.PI * 2 : t) / (Math.PI * 2)) * CIRC; };
@@ -333,6 +336,33 @@ ok('every outline is still a simple polygon', inst.every(b => ST.validPolygon(b.
 const atPitch = i => inst.filter(b => b.outer.every(q => q[0] >= i * metrics.pitch - 1e-6 && q[0] <= (i + 1) * metrics.pitch + 1e-6))
   .map(b => b.outer.map(q => [q[0] - i * metrics.pitch, q[1]].map(v => v.toFixed(4)).join(',')).join(' ')).sort().join('|');
 ok('the design repeats every two pitches', atPitch(4) === atPitch(6) && atPitch(5) === atPitch(7), '');
+
+// =====================================================================================================================
+section('The casing is never touched');
+{
+  // The brief was an editor that does not change the tyre shape, so nothing in the editor or the lug pipeline may
+  // write a casing dimension. Section width, aspect, rim diameter, tread fraction, crown and shoulder radius are
+  // the inputs dims() turns into the revolved profile; a write to any of them would move the carcass.
+  const slice = (from, to) => moduleSrc.slice(moduleSrc.indexOf(from), moduleSrc.indexOf(to));
+  const editorSrc = slice('2D TREAD EDITOR', '// static controls');
+  const lugSrc = slice('POLYGON LUG DESIGNS', 'function renderPattern');
+  ok('the editor source was located', editorSrc.length > 4000, `${editorSrc.length} characters`);
+  ok('the lug pipeline source was located', lugSrc.length > 1000, `${lugSrc.length} characters`);
+  const casing = ['width', 'aspect', 'rim', 'treadFrac', 'crown', 'shoulder', 'rimWidthFrac'];
+  for (const [label, src] of [['editor', editorSrc], ['lug pipeline', lugSrc]]) {
+    const written = casing.filter(k => new RegExp(`\\bT\\.${k}\\s*(?:=[^=]|\\+=|-=|\\*=|/=)`).test(src));
+    ok(`the ${label} assigns no casing dimension`, written.length === 0, written.join(', ') || 'none');
+    ok(`the ${label} never bulk-assigns the tyre record`, !/Object\.assign\(\s*T\s*[,)]/.test(src));
+  }
+  ok('the editor writes only to the pattern and its own view record',
+    !/\bT\.[A-Za-z]+\s*(?:=[^=]|\+=|-=)/.test(editorSrc));
+
+  ctx.edited = Object.assign({}, ctx.layer, { count: 48, gap: 1.3, reach: 1.25, shapes: ST.designFromLibrary('mud') });
+  vm.runInContext('blocksMetrics(edited, ' + JSON.stringify(d) + ')', ctx);
+  vm.runInContext('blocksInstances(edited, ' + JSON.stringify(d) + ')', ctx);
+  ok('redesigning the tread leaves the tyre record untouched', JSON.stringify(ctx.T) === TYRE_AT_START);
+  ok('redesigning the tread leaves the derived dimensions untouched', JSON.stringify(d) === DIMS_AT_START);
+}
 
 console.log(`\n${passed}/${passed + failed} checks passed`);
 process.exit(failed ? 1 : 0);
