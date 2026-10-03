@@ -1,0 +1,52 @@
+{
+  "status": "Cowl checkpoint only; not a finished clean-surface vehicle reconstruction",
+  "measuredOn": "2026-10-03",
+  "documentSha256": "44f3deb13a76688520e54f53ec6014c8372bdd68bb470b403184a60135c06baa",
+  "suppliedNpzSha256": "8e52b9a096ae268428375e382fb12e5d548c7a0dca12b7b68d3ccecd04b18d0d",
+  "nativeHeldOutMaximumMm": 0.7501677135402902,
+  "nativeHeldOutRmsMm": 0.005526891928218325,
+  "heldOutSampleCount": 246400,
+  "nativeSharedRimMaximumGapMm": 0.0002912435318271978,
+  "nativeReversedInteriorSamples": 0,
+  "extractionToSuppliedNpzMaximumMm": 0.0004962773067626434,
+  "reference": {
+    "part": "Body_Front_Cowl",
+    "sourceSha256": "4e53db6436f8136823ce8f79a9a8318bde74b92debe160915b9efa54e86058b6",
+    "sourceCommit": "72c69b61e70427f7351f7fc3393cd25af56591db",
+    "metresPerSourceUnit": 0.01,
+    "sourceMirrorCentreY": -47.85898971557617,
+    "scaleBasis": "Supplied extraction scripts declare centimetres; Blender unit setting alone does not establish physical scale",
+    "originalLevel": 2,
+    "sourceAgreementMaximumMm": 0.0004962773067626434,
+    "boundarySmoothing": "PRESERVE_CORNERS",
+    "subdivisionQuality": 10,
+    "chartCount": 308,
+    "samplesPerDirection": 33,
+    "sourceModifier": "Catmull-Clark, binary edge creases, mirror preserved",
+    "sampling": "One non-limit refinement, then limit-projected refinement",
+    "blenderVersion": "5.0.1"
+  },
+  "limitations": [
+    "30 consolidated faces; further control-net and continuity review remains",
+    "G1/G2 not certified",
+    "Sampled positional comparison is not a continuous Hausdorff bound",
+    "No main-body or roof/frame reconstruction is delivered by this document",
+    "Physical scale follows the supplied centimetre extraction convention"
+  ],
+  "consolidation": {
+    "sourceDocumentSha256": "db5b6004f1375695d2bbaebc15c9ef99362251d3c903ac4a85f589b7d994336e",
+    "sourceFaceCount": 308,
+    "consolidatedFaceCount": 30,
+    "sourcePoleCount": 37268,
+    "consolidatedPoleCount": 14686,
+    "sampledChangeFromPriorMm": 0.00019943588969409536,
+    "continuousChangeBoundMm": 0.0001999925054202775,
+    "maximumJoinedNormalAngleBeforeReductionDegrees": 0.4718129907473862,
+    "limitations": [
+      "Not a G1/G2 certificate",
+      "Cowl only",
+      "Original Blender deviation remains a sampled comparison"
+    ],
+    "queries": "One row per original chart: face index and two affine rows mapping original UV to the consolidated face"
+  }
+}

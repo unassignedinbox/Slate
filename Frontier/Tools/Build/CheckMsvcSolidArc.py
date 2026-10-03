@@ -84,6 +84,15 @@ def main() -> int:
     executable = link_program(SOURCE / "Verification/CowlVerification.cpp", "CowlVerification")
     run([str(executable), str(cowl)], "CowlVerification")
     print("PASS native cowl topology, orientation, persistence and rendering", flush=True)
+    reconstruction = cowl.parent
+    run([str(executable), str(reconstruction / "Liger_Front_Cowl_Consolidated.arc"),
+         str(proofs / "cowl-consolidated.f64"), str(reconstruction / "Liger_Front_Cowl_Consolidated.queries")],
+        "ConsolidatedCowlVerification")
+    executable = link_program(SOURCE / "Verification/FacetVerification.cpp", "FacetVerification")
+    run([str(executable), str(reconstruction / "Liger_Roof_Glass_Frame.arc"),
+         str(reconstruction / "Liger_Roof_Glass_Frame.triangles"), str(reconstruction / "Liger_Exterior_Partial.arc")],
+        "FacetVerification")
+    print("PASS consolidated cowl, source-faceted frame and partial assembly", flush=True)
     print("MSVC SolidArc: console linked, focused regressions and all Liger journals passed")
     return 0
 

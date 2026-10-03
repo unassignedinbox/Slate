@@ -139,5 +139,46 @@ int main()
     Exterior = Figure(Host, "Exterior");
     Panel.Expect("replay still has six open edges", Exterior != nullptr && Exterior->Body.Validate().OpenEdges == 6);
 
+    Panel.Section("Knot-aware exterior sewing and explicit surface knots");
+    Panel.Expect("clear before knot checks", Host.Execute("reset"));
+    Panel.Expect("non-uniform patch", Host.Execute("patch 3 2 (0,0,0) (0,1,0) (0.5,0,0) (0.5,1,0) (2,0,0) (2,1,0) --degree=1 --knots-u=0,0,0.25,1,1 --name=Long"));
+    const SceneFigure* Long = Figure(Host, "Long");
+    Panel.Expect("explicit knots affect the parameterisation", Long != nullptr && Long->Surface.Sample(0.25, 0).Distance(Vec3(0.5, 0, 0)) < 1e-10);
+    Panel.Expect("first short side", Host.Execute("plane (0,1,0) 0.5 1 --name=Short_A"));
+    Panel.Expect("second short side", Host.Execute("plane (0.5,1,0) 1.5 1 --name=Short_B"));
+    const uint64_t BeforeKnots = UndoSequence::Fingerprint(Host.Document());
+    Panel.Expect("bad knot count refused", !Host.Execute("patch 2 2 (0,0) (0,1) (1,0) (1,1) --degree=1 --knots-u=0,0,1"));
+    Panel.Expect("non-finite knot refused", !Host.Execute("patch 2 2 (0,0) (0,1) (1,0) (1,1) --degree=1 --knots-u=0,0,nan,1"));
+    Panel.Expect("zero knot domain refused", !Host.Execute("patch 2 2 (0,0) (0,1) (1,0) (1,1) --degree=1 --knots-u=0,0,0,0"));
+    Panel.Expect("decreasing knots refused", !Host.Execute("patch 2 2 (0,0) (0,1) (1,0) (1,1) --degree=1 --knots-u=0,1,0,1"));
+    Panel.Expect("bad patches leave geometry unchanged", UndoSequence::Fingerprint(Host.Document()) == BeforeKnots);
+    Panel.Expect("long edge sews to short edges", Host.Execute("sew Long Short_A Short_B --open --knot-edges --name=Conforming"));
+    const SceneFigure* Conforming = Figure(Host, "Conforming");
+    const BodyReport ConformingReport = Conforming ? Conforming->Body.Validate() : BodyReport{};
+    Panel.Expect("no T-junction cracks or caps", ConformingReport.Faces == 3 && ConformingReport.Edges == 11 && ConformingReport.OpenEdges == 8);
+    Panel.Expect("conforming topology is connected and oriented", ConformingReport.Hulls == 1 && ConformingReport.Manifold && ConformingReport.Oriented);
+    bool ClosedLoops = Conforming != nullptr;
+    if (Conforming)
+    {
+        const BrepBody& Body = Conforming->Body;
+        for (const BrepLoop& Loop : Body.Loops)
+        {
+            for (size_t I = 0; I < Loop.Coedges.size(); ++I)
+            {
+                const BrepCoedge& A = Body.Coedges[Loop.Coedges[I]];
+                const BrepCoedge& B = Body.Coedges[Loop.Coedges[(I + 1) % Loop.Coedges.size()]];
+                const BrepEdge& Ea = Body.Edges[A.Edge];
+                const BrepEdge& Eb = Body.Edges[B.Edge];
+                ClosedLoops = ClosedLoops && (A.Reversed ? Ea.VertexStart : Ea.VertexEnd) == (B.Reversed ? Eb.VertexEnd : Eb.VertexStart);
+            }
+        }
+    }
+    Panel.Expect("reversed sides keep coedges in loop order", ClosedLoops);
+    const uint64_t ConformingFingerprint = UndoSequence::Fingerprint(Host.Document());
+    const std::string ConformingPath = (Directory / "conforming.arc").generic_string();
+    Panel.Expect("save knot-aware skin", Host.Execute("save \"" + ConformingPath + "\""));
+    Panel.Expect("reopen knot-aware skin", Host.Execute("open \"" + ConformingPath + "\""));
+    Panel.Expect("explicit knots and edge splits survive replay", UndoSequence::Fingerprint(Host.Document()) == ConformingFingerprint);
+
     return Panel.Conclude();
 }

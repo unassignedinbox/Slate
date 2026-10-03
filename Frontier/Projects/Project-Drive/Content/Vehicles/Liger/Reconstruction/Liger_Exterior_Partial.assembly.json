@@ -1,0 +1,13 @@
+{
+  "status": "Partial exterior only; main body remains unbuilt",
+  "parts": [
+    "Liger_Front_Cowl_Consolidated.arc",
+    "Liger_Roof_Glass_Frame.arc"
+  ],
+  "partSha256": [
+    "44f3deb13a76688520e54f53ec6014c8372bdd68bb470b403184a60135c06baa",
+    "81cd811be74aa5fc9034519fc1b2bec139ad0fcbf8c42d4c82d4b2730e7b5b8c"
+  ],
+  "documentSha256": "6ee84a8ef9a1b43538e3721b59cb642b74c16233fa3d16e8c354c644e8765f93",
+  "placement": "Original shared vehicle coordinates; no per-part repositioning or added joins"
+}

@@ -1,0 +1,16 @@
+{
+  "sourceDocumentSha256": "db5b6004f1375695d2bbaebc15c9ef99362251d3c903ac4a85f589b7d994336e",
+  "sourceFaceCount": 308,
+  "consolidatedFaceCount": 30,
+  "sourcePoleCount": 37268,
+  "consolidatedPoleCount": 14686,
+  "sampledChangeFromPriorMm": 0.00019943588969409536,
+  "continuousChangeBoundMm": 0.0001999925054202775,
+  "maximumJoinedNormalAngleBeforeReductionDegrees": 0.4718129907473862,
+  "limitations": [
+    "Not a G1/G2 certificate",
+    "Cowl only",
+    "Original Blender deviation remains a sampled comparison"
+  ],
+  "queries": "One row per original chart: face index and two affine rows mapping original UV to the consolidated face"
+}

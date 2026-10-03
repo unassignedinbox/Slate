@@ -394,7 +394,7 @@ int BrepBody::AddLoop(int Face, bool Outer) noexcept
     return static_cast<int>(Loops.size() - 1);
 }
 
-void BrepBody::AddNaturalBoundary(int Face, double Tolerance) noexcept
+void BrepBody::AddNaturalBoundary(int Face, double Tolerance, bool KnotEdges) noexcept
 {
     const NurbsSurface& S = Faces[Face].Surface;
     const double U0 = S.DomainStartU(), U1 = S.DomainEndU(), V0 = S.DomainStartV(), V1 = S.DomainEndV();
@@ -405,10 +405,32 @@ void BrepBody::AddNaturalBoundary(int Face, double Tolerance) noexcept
     for (Side& Sd : Sides)
     {
         if (Sd.Curve.Length() <= Tolerance * 4.0) continue;                             // degenerate side (pole / apex)
-        bool Rev = false;
-        int E = FindCoincidentEdge(Sd.Curve, Tolerance, Rev);
-        if (E < 0) { E = AddEdge(Sd.Curve, Tolerance); Rev = false; }
-        AddCoedge(E, Sd.Reversed != Rev, Face, Loop);
+        std::vector<double> Cuts{ Sd.Curve.DomainStart() };
+        // 📝 Concatenated patches retain degree-multiplicity knots at their original chart boundaries.
+        // Splitting only these knots preserves short-to-long edge incidence without changing the surface.
+        if (KnotEdges)
+        {
+            const auto& Knots = Sd.Curve.Knots;
+            for (size_t I = 0; I < Knots.size();)
+            {
+                size_t J = I + 1;
+                while (J < Knots.size() && Knots[J] == Knots[I]) ++J;
+                if (J - I >= static_cast<size_t>(Sd.Curve.Degree) &&
+                    Knots[I] > Sd.Curve.DomainStart() && Knots[I] < Sd.Curve.DomainEnd()) Cuts.push_back(Knots[I]);
+                I = J;
+            }
+        }
+        Cuts.push_back(Sd.Curve.DomainEnd());
+        const size_t Segments = Cuts.size() - 1;
+        for (size_t I = 0; I < Segments; ++I)
+        {
+            const size_t K = Sd.Reversed ? Segments - 1 - I : I;
+            NurbsCurve Curve = Segments == 1 ? Sd.Curve : Sd.Curve.Trimmed(Cuts[K], Cuts[K + 1]);
+            bool Rev = false;
+            int E = FindCoincidentEdge(Curve, Tolerance, Rev);
+            if (E < 0) { E = AddEdge(Curve, Tolerance); Rev = false; }
+            AddCoedge(E, Sd.Reversed != Rev, Face, Loop);
+        }
     }
 }
 
@@ -997,11 +1019,11 @@ BrepBody BrepBody::Transformed(const Mat4& M) const noexcept
 //                                                  GENERIC BUILDERS
 //------------------------------------------------------------------------------------------------------------------------
 
-Deliver<BrepBody> BrepBody::Sew(const std::vector<NurbsSurface>& Surfaces, double Tolerance, bool Cap) noexcept
+Deliver<BrepBody> BrepBody::Sew(const std::vector<NurbsSurface>& Surfaces, double Tolerance, bool Cap, bool KnotEdges) noexcept
 {
     if (Surfaces.empty()) return Deliver<BrepBody>::Reject(RefusalReason::DegenerateInput, "no faces to sew");
     BrepBody B;
-    for (const NurbsSurface& S : Surfaces) { int F = B.AddFace(S); B.AddNaturalBoundary(F, Tolerance); }
+    for (const NurbsSurface& S : Surfaces) { int F = B.AddFace(S); B.AddNaturalBoundary(F, Tolerance, KnotEdges); }
     B.Orient();                                                                         // neighbours agree before caps are derived from them
     if (Cap) B.Capped(Tolerance);
     B.Orient();

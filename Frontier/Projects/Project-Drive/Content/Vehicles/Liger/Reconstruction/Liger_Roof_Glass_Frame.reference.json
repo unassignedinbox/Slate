@@ -1,0 +1,48 @@
+{
+  "status": "Reference-faithful faceted frame, not a smoothed reconstruction",
+  "sourceCommit": "72c69b61e70427f7351f7fc3393cd25af56591db",
+  "sourceSha256": "4e53db6436f8136823ce8f79a9a8318bde74b92debe160915b9efa54e86058b6",
+  "suppliedNpzSha256": "58f9c6cbef50836950f4d919b3e6f9cf0c2a3c9daffcc2f026e7709a73f79354",
+  "sourceModifiers": {
+    "Mirror": {
+      "operation": "MIRROR",
+      "enabled": true
+    },
+    "Subdivision": {
+      "operation": "SUBSURF",
+      "enabled": false
+    },
+    "Mask": {
+      "operation": "MASK",
+      "enabled": false
+    },
+    "Solidify": {
+      "operation": "SOLIDIFY",
+      "enabled": false
+    }
+  },
+  "metresPerSourceUnit": 0.01,
+  "sourceMirrorCentreY": -47.85898971557617,
+  "scaleBasis": "Supplied centimetre extraction convention, not inferred from Blender unit settings",
+  "sourceAgreement": "Vertex coordinates and oriented triangle indices match the supplied NPZ exactly",
+  "surfaceCount": 170,
+  "controlPoleCount": 680,
+  "referencedVertices": 174,
+  "unusedSourceVertices": 0,
+  "referenceOpenEdges": 174,
+  "referenceNonManifoldEdges": 0,
+  "exactCoincidentVertexPairs": 27,
+  "weldedReferenceVertices": 147,
+  "weldedReferenceEdges": 316,
+  "weldedReferenceOpenEdges": 122,
+  "sewing": "Join exactly coincident reference edges only; no opening bridged",
+  "sourceMisorientedGeometricEdges": 26,
+  "orientation": "Native sewing repairs inconsistent source winding without moving any point",
+  "referenceAreaM2": 0.25725924039627546,
+  "limitations": [
+    "Faceting is retained intentionally",
+    "Main body not rebuilt",
+    "No invented thickness or glass infill"
+  ],
+  "documentSha256": "81cd811be74aa5fc9034519fc1b2bec139ad0fcbf8c42d4c82d4b2730e7b5b8c"
+}

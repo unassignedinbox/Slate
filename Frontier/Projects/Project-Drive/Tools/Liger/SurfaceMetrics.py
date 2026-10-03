@@ -9,7 +9,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 
-def Measure(Reference, Native, Document, Original, Destination, MeasuredOn):
+def Measure(Reference, Native, Document, Original, Destination, MeasuredOn, Consolidation=None):
     Content = np.load(Reference)
     Charts, Corners = Content['Charts'], Content['Corners']
     if Charts.shape != (308, 33, 33, 3):
@@ -55,6 +55,9 @@ def Measure(Reference, Native, Document, Original, Destination, MeasuredOn):
                                'Sampled positional comparison is not a continuous Hausdorff bound',
                                'No main-body or roof/frame reconstruction is delivered by this document',
                                'Physical scale follows the supplied centimetre extraction convention']}
+    if Consolidation:
+        Details['consolidation'] = json.loads(Consolidation.read_text())
+        Details['limitations'][0] = '30 consolidated faces; further control-net and continuity review remains'
     print(json.dumps(Details, indent=2))
     if SourceDeviation > 2e-6 or Reversed or max(Gaps)>1e-6 or Deviations[:, HeldOut].max()>1e-3:
         raise RuntimeError('Independent native reconstruction check failed')
@@ -67,5 +70,6 @@ if __name__ == '__main__':
     for Name in ['reference', 'native', 'document', 'original', 'destination']:
         Parser.add_argument(Name, type=Path)
     Parser.add_argument('--measured-on', type=date.fromisoformat, default=date.today())
+    Parser.add_argument('--consolidation', type=Path)
     Arguments = Parser.parse_args()
-    Measure(Arguments.reference, Arguments.native, Arguments.document, Arguments.original, Arguments.destination, Arguments.measured_on)
+    Measure(Arguments.reference, Arguments.native, Arguments.document, Arguments.original, Arguments.destination, Arguments.measured_on, Arguments.consolidation)

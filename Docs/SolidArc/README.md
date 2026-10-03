@@ -38,53 +38,76 @@ and resizes the window. Its logs and captures are separate from the package unde
 The dependency-free `SolidArc` CMake target remains the console application. On Windows/MSVC, the separate
 `SolidArcApplication` target invokes the GUI helper after the main Frontier Release build has supplied shared UI objects.
 
-## Liger cowl checkpoint
+## Liger partial exterior
 
-Open `Examples/Liger/Reconstruction/Liger_Front_Cowl.arc` with a build that supports `sew --open`.
-In the source checkout it is under `Frontier/Projects/Project-Drive/Content/Vehicles/Liger/Reconstruction`.
-Use `view fit` in Document commands if the component is outside the current view.
-The `.arc` retains cubic NURBS control poles and a sewn, open B-rep; it is not a triangle import.
-`sew --open` preserves intentional openings. Plain `sew` retains its existing planar-capping behaviour.
-The document declares `require open-sew`, so older executables refuse it rather than silently adding caps.
+Open `Examples/Liger/Reconstruction/Liger_Exterior_Partial.arc` in the current application build.
+Use `view fit` in Document commands if necessary. This document contains only the cowl and roof/glass frame,
+in their shared source coordinates. **The main body has not been rebuilt; this is not the complete vehicle.**
 
-This is only the front cowl, with 308 patches still requiring consolidation and continuity review.
-It is not the complete exterior or a manufacturing solid. The main body and roof/glass frame remain unfinished.
-The six older `.arc` files remain available as historical attempts, not accepted reconstructions.
-Adjacent `.metrics.json` and `.native.json` files contain the fitting and actual-kernel sampled comparisons.
-Dimensions follow the supplied extraction convention of centimetres converted to metres; the Blender scene's unit
-setting alone does not prove a physical scale.
+- `Liger_Front_Cowl_Consolidated.arc` contains the 30-face cubic NURBS cowl.
+- `Liger_Roof_Glass_Frame.arc` preserves the supplied frame as 170 planar triangular CAD faces. Its source
+  subdivision and solidification modifiers are disabled. This deliberately preserves faceting; it is not a smooth redesign.
+- `Liger_Front_Cowl.arc` is the retained 308-face baseline for comparison and regeneration.
+- The six older body files remain historical attempts, not accepted exterior reconstructions.
+- Adjacent JSON files record source hashes, reference settings and geometry measurements. `.queries` maps the original
+  cowl charts into the consolidated surfaces; `.triangles` retains the frame reference coordinates for verification.
 
-### Reproduce the cowl checks
+The cowl retains editable control poles. Its larger surfaces use explicit knot vectors; degree-multiplicity knots
+retain original chart divisions needed for conforming boundary sewing. `sew --open --knot-edges` preserves openings
+and splits those boundary curves without splitting the surface faces. This is not general partial-edge Boolean sewing.
+The document declares `require knot-skin`, so older applications refuse it instead of ignoring the new geometry options.
+Normal `sew` behaviour is unchanged, including its historical planar-capping default.
 
-Use the original `Liger_named.blend` and `mesh/Body_Front_Cowl.npz` from
-`streamlinkinbox/Frontier`, commit `72c69b61e70427f7351f7fc3393cd25af56591db`, under `Vehicles/Liger`.
-Do not use the old fitted surfaces as the reference. With Python, `bpy==5.0.1`, NumPy and SciPy installed,
-run from the Slate repository root (replace the two `/reference` paths):
+Control-pole reduction is checked using convex-hull bounds after Bernstein subdivision. The reported reduction bound
+is relative to the previous fitted cowl, not to Blender. The Blender comparison remains a sampled measurement, and
+G1/G2 continuity is not certified. Frame sewing joins exact coordinate duplicates and repairs inconsistent source winding;
+it does not move vertices or bridge openings. No glass infill, thickness or internal structure is generated.
+Dimensions follow the supplied centimetre-to-metre extraction convention; Blender's unit setting alone does not
+establish a physical scale.
+
+### Reproduce the surfaces
+
+Use `Liger_named.blend` and the two part NPZ files from `streamlinkinbox/Frontier`, commit
+`72c69b61e70427f7351f7fc3393cd25af56591db`, under `Vehicles/Liger`. Use Python with `bpy==5.0.1`, NumPy and SciPy.
+Run from the Slate repository root, replacing `/reference` with the downloaded source location:
 
 ```bash
 python Frontier/Projects/Project-Drive/Tools/Liger/SubdivisionProjection.py \
   /reference/Liger_named.blend _AgentScratch/build/cowl-reference.npz
 python Frontier/Projects/Project-Drive/Tools/Liger/SurfaceSolver.py \
   _AgentScratch/build/cowl-reference.npz _AgentScratch/build/Liger_Front_Cowl.arc
+python Frontier/Projects/Project-Drive/Tools/Liger/PatchSequence.py \
+  _AgentScratch/build/Liger_Front_Cowl.arc _AgentScratch/build/cowl-reference.npz \
+  _AgentScratch/build/Liger_Front_Cowl_Consolidated.arc
+python Frontier/Projects/Project-Drive/Tools/Liger/FacetProjection.py \
+  /reference/Liger_named.blend /reference/mesh/Body_Roof_Glass_Frame.npz \
+  _AgentScratch/build/Liger_Roof_Glass_Frame.arc \
+  --cowl=_AgentScratch/build/Liger_Front_Cowl_Consolidated.arc
 ```
 
-The extractor preserves the source mirror, sharp creases, corner smoothing and subdivision quality, then checks its
-samples against the original evaluated geometry. The solver fixes shared rims and holds out alternate sample rows
-and columns. It refuses inverted samples or a sampled positional error above 1 mm; this is not a continuous bound.
-Neither script modifies the original Blender file.
+The last command also writes `Liger_Exterior_Partial.arc`. Neither extractor modifies the original Blender file.
+The subdivision extractor checks agreement with the original evaluated cowl; the frame extractor requires exact
+agreement with the supplied positions and oriented triangle indices. `PatchVerification.py` exercises the reduction
+bounds and chart transformations independently of Blender.
 
-The Windows MSVC check builds `CowlVerification.exe` and runs native topology, save/reopen and rendering checks.
-For the independent numerical comparison, run that executable with an additional output path:
+### Verify native geometry
+
+The MSVC check, CMake/CTest targets and Linux focused gate include document, cowl and frame verification.
+`CowlVerification` accepts an optional binary output and chart-transform file for independent comparison:
 
 ```powershell
-CowlVerification.exe _AgentScratch/build/Liger_Front_Cowl.arc _AgentScratch/build/cowl-native.f64
+CowlVerification.exe _AgentScratch/build/Liger_Front_Cowl_Consolidated.arc `
+  _AgentScratch/build/cowl-native.f64 _AgentScratch/build/Liger_Front_Cowl_Consolidated.queries
 python Frontier/Projects/Project-Drive/Tools/Liger/SurfaceMetrics.py `
   _AgentScratch/build/cowl-reference.npz _AgentScratch/build/cowl-native.f64 `
-  _AgentScratch/build/Liger_Front_Cowl.arc /reference/mesh/Body_Front_Cowl.npz `
-  _AgentScratch/build/cowl-native.json
+  _AgentScratch/build/Liger_Front_Cowl_Consolidated.arc /reference/mesh/Body_Front_Cowl.npz `
+  _AgentScratch/build/cowl-native.json `
+  --consolidation=_AgentScratch/build/Liger_Front_Cowl_Consolidated.consolidation.json
+FacetVerification.exe _AgentScratch/build/Liger_Roof_Glass_Frame.arc `
+  _AgentScratch/build/Liger_Roof_Glass_Frame.triangles _AgentScratch/build/Liger_Exterior_Partial.arc
 ```
 
-The temporary binary contains actual kernel samples as little-endian float64 XYZ coordinates, ordered by face,
-then U, then V, at 33 by 33 parameters per face. It is measurement output, not a CAD interchange format.
-The application build also launches the windowed editor with the cowl, captures its presentation and checks
-Construct, save/reopen and resize. Application captures are under `Presentation/Cowl` in the evidence artifact.
+The temporary binary contains little-endian float64 XYZ positions, ordered by original chart, then U, then V,
+at 33 by 33 parameters per chart. It is measurement output, not CAD interchange content.
+The application build also opens the partial assembly in the windowed editor and checks presentation, Construct,
+save/reopen and resize. Captures are under `Presentation/Liger` in the application evidence artifact.

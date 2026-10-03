@@ -1891,6 +1891,10 @@ void ConsoleHost::RememberDocumentCommand(const CommandLine& Command) noexcept
     if (Command.Verb == "sew" && Command.Switch("open") &&
         std::find(DocumentJournal.begin(), DocumentJournal.end(), "require open-sew") == DocumentJournal.end())
         DocumentJournal.push_back("require open-sew");
+    if (((Command.Verb == "patch" && (Command.SwitchText("knots-u") || Command.SwitchText("knots-v"))) ||
+         (Command.Verb == "sew" && Command.Switch("knot-edges"))) &&
+        std::find(DocumentJournal.begin(), DocumentJournal.end(), "require knot-skin") == DocumentJournal.end())
+        DocumentJournal.push_back("require knot-skin");
     DocumentJournal.push_back(EncodeDocumentCommand(Command));
 }
 
@@ -2240,13 +2244,13 @@ void ConsoleHost::Register() noexcept
         }
         return Done > 0;
     });
-    Add("sew", "sew <surface...> [--open] — stitch and orient; --open preserves openings instead of capping", [=, this](const CommandLine& C)
+    Add("sew", "sew <surface...> [--open] [--knot-edges] — stitch and orient; --open preserves openings instead of capping", [=, this](const CommandLine& C)
     {
         std::vector<NurbsSurface> S; std::vector<uint32_t> Ids;
         for (SceneFigure* I : ResolveMany(C, 0)) { if (I->Classification == FigureClassification::Surface) { S.push_back(I->Surface); Ids.push_back(I->Identity); } else if (I->Classification == FigureClassification::Body) { for (const BrepFace& F : I->Body.Faces) S.push_back(F.Surface); Ids.push_back(I->Identity); } }
         if (S.empty()) return Refuse("sew: no surfaces");
         // Exterior skins retain their intentional openings; the historical default still caps them.
-        if (!AddBody(C, "Sewn", BrepBody::Sew(S, ScalarCriteria::MergeTolerance, !C.Switch("open")))) return false;
+        if (!AddBody(C, "Sewn", BrepBody::Sew(S, ScalarCriteria::MergeTolerance, !C.Switch("open"), C.Switch("knot-edges")))) return false;
         if (!C.Switch("keep")) for (uint32_t Id : Ids) Scene.Remove(Id);
         return true;
     });
@@ -2312,13 +2316,47 @@ void ConsoleHost::Register() noexcept
         if (auto A = C.SwitchText("v")) if (auto W = CommandCodec::ParsePoint(*A)) V = *W;
         return AddSurface(C, "Plane", NurbsSurface::Plane(O, U, V, LU, LV));
     });
-    Add("patch", "patch countU countV (p00) (p01) ... row-major [--degree=3]   B-spline patch", [=, this](const CommandLine& C)
+    Add("patch", "patch countU countV (p00) (p01) ... row-major [--degree=3] [--knots-u=k,...] [--knots-v=k,...]   B-spline patch", [=, this](const CommandLine& C)
     {
         double CU = 0, CV = 0; if (!Need(C, 2, "patch") || !NumberArg(C, 0, CU, "patch") || !NumberArg(C, 1, CV, "patch")) return false;
         std::vector<Vec3> Pts; Vec3 P;
         for (size_t I = 2; I < C.Count(); ++I) { if (!PointArg(C, I, P, "patch")) return false; Pts.push_back(P); }
         int Deg = static_cast<int>(C.SwitchNumber("degree").value_or(3));
-        return AddSurface(C, "Patch", NurbsSurface::Patch(std::min(Deg, int(CU) - 1), std::min(Deg, int(CV) - 1), int(CU), int(CV), Pts));
+        auto Result = NurbsSurface::Patch(std::min(Deg, int(CU) - 1), std::min(Deg, int(CV) - 1), int(CU), int(CV), Pts);
+        if (!Result) return AddSurface(C, "Patch", std::move(Result));
+        auto ReadKnots = [&](const char* Name, std::vector<double>& Knots, int Degree, int Count) -> bool
+        {
+            const auto Text = C.SwitchText(Name);
+            if (!Text) return true;
+            Knots.clear();
+            size_t Start = 0;
+            while (Start <= Text->size())
+            {
+                const size_t End = Text->find(',', Start);
+                const auto Number = CommandCodec::ParseNumber(Text->substr(Start, End == std::string::npos ? End : End - Start));
+                if (!Number || !std::isfinite(*Number)) return false;
+                Knots.push_back(*Number);
+                if (End == std::string::npos) break;
+                Start = End + 1;
+            }
+            if (Knots.size() != static_cast<size_t>(Count + Degree + 1) || !std::is_sorted(Knots.begin(), Knots.end())) return false;
+            if (!(Knots[Degree] < Knots[Count])) return false;
+            for (int I = 0; I <= Degree; ++I)
+                if (Knots[I] != Knots.front() || Knots[Knots.size() - 1 - I] != Knots.back()) return false;
+            for (size_t I = static_cast<size_t>(Degree + 1); I < static_cast<size_t>(Count);)
+            {
+                size_t J = I + 1;
+                while (J < static_cast<size_t>(Count) && Knots[J] == Knots[I]) ++J;
+                if (J - I > static_cast<size_t>(Degree) || Knots[I] <= Knots.front() || Knots[I] >= Knots.back()) return false;
+                I = J;
+            }
+            return true;
+        };
+        auto& Surface = Result.Payload;
+        if (!ReadKnots("knots-u", Surface.KnotsU, Surface.DegreeU, Surface.CountU) ||
+            !ReadKnots("knots-v", Surface.KnotsV, Surface.DegreeV, Surface.CountV))
+            return Refuse("patch: invalid clamped knot sequence");
+        return AddSurface(C, "Patch", std::move(Result));
     });
 
     //---------------------------------------------- derived surfaces ----------------------------------------------
@@ -4431,9 +4469,9 @@ void ConsoleHost::Register() noexcept
         return true;
     });
     Add("echo", "echo text", [=, this](const CommandLine& C) { std::printf("  "); for (const auto& A : C.Arguments) std::printf("%s ", A.c_str()); std::printf("\n"); return true; });
-    Add("require", "require open-sew — refuse on builds without explicit open-skin sewing", [this](const CommandLine& C)
+    Add("require", "require open-sew|knot-skin — require supported document geometry", [this](const CommandLine& C)
     {
-        if (C.Count() != 1 || C.Arguments[0] != "open-sew" || !C.Flags.empty())
+        if (C.Count() != 1 || (C.Arguments[0] != "open-sew" && C.Arguments[0] != "knot-skin") || !C.Flags.empty())
             return Refuse("require: unsupported document capability");
         return true;
     });

@@ -847,3 +847,19 @@ if(WIN32 AND MSVC)
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../../../.."
         VERBATIM)
 endif()
+
+# Exterior reconstruction checks use the same native documents as the MSVC route.
+set(LIGER_RECONSTRUCTION "${CMAKE_CURRENT_SOURCE_DIR}/../../../../Projects/Project-Drive/Content/Vehicles/Liger/Reconstruction")
+add_executable(CowlVerification Verification/CowlVerification.cpp)
+target_link_libraries(CowlVerification PRIVATE SolidArcConsoleKit)
+add_test(NAME CowlVerification COMMAND CowlVerification "${LIGER_RECONSTRUCTION}/Liger_Front_Cowl.arc")
+add_test(NAME ConsolidatedCowlVerification COMMAND CowlVerification
+    "${LIGER_RECONSTRUCTION}/Liger_Front_Cowl_Consolidated.arc"
+    "${CMAKE_CURRENT_BINARY_DIR}/cowl-consolidated.f64"
+    "${LIGER_RECONSTRUCTION}/Liger_Front_Cowl_Consolidated.queries")
+add_executable(FacetVerification Verification/FacetVerification.cpp)
+target_link_libraries(FacetVerification PRIVATE SolidArcConsoleKit)
+add_test(NAME FacetVerification COMMAND FacetVerification
+    "${LIGER_RECONSTRUCTION}/Liger_Roof_Glass_Frame.arc"
+    "${LIGER_RECONSTRUCTION}/Liger_Roof_Glass_Frame.triangles"
+    "${LIGER_RECONSTRUCTION}/Liger_Exterior_Partial.arc")
