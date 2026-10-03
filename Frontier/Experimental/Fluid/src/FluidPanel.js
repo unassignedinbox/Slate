@@ -102,6 +102,7 @@ class FluidPanel {
     this.Tab = "source";
     this.Preset = "";
     this.Filter = "all";
+    this.SceneFilter = "all";
     this.Dirty = false;
     this.LastTime = performance.now();
     this.Frames = 0;
@@ -266,11 +267,17 @@ class FluidPanel {
           ControlSpecification[Element.dataset.param]?.step,
         );
       else Element.value = Value;
-      if (Element.type === "range")
-        Element.style.setProperty(
-          "--range",
-          `${(100 * (Value - Number(Element.min))) / (Number(Element.max) - Number(Element.min))}%`,
+      if (Element.type === "range") {
+        const Fraction = Math.max(
+          0,
+          Math.min(
+            1,
+            (Value - Number(Element.min)) /
+              (Number(Element.max) - Number(Element.min)),
+          ),
         );
+        Element.style.setProperty("--fraction", Fraction);
+      }
     });
     Select("#render-channel").value = this.Parameters.renderChannel;
     Select("#diagnostic-channel").value = this.Parameters.renderChannel;
@@ -348,10 +355,51 @@ class FluidPanel {
       ["sun", "sun", "", this.Parameters.sunIntensity > 0],
     ];
     Select("#scene-count").textContent = Objects.length;
-    Select("#scene-tree").innerHTML = Objects.map(
-      ([Key, Glyph, Badge, Enabled]) =>
-        `<div class="scene-row ${this.Selection === Key ? "selected" : ""} ${!Enabled ? "muted" : ""}" data-object="${Key}" role="treeitem" aria-selected="${this.Selection === Key}" tabindex="0">${Icon(Glyph)}<span class="scene-label">${Escape(this.Names[Key])}</span>${Badge ? `<span class="row-badge">${Badge}</span>` : `<button class="icon-button row-toggle" data-toggle-object="${Key}" title="${Enabled ? "Disable" : "Enable"} ${Escape(this.Names[Key])}" aria-label="${Enabled ? "Disable" : "Enable"} ${Escape(this.Names[Key])}">${Icon(Enabled ? "eye" : "hidden")}</button>`}</div>`,
-    ).join("");
+    Select("#enabled-count").textContent = Objects.filter(
+      (ObjectSlot) => ObjectSlot[3],
+    ).length;
+    Select("#disabled-count").textContent = Objects.filter(
+      (ObjectSlot) => !ObjectSlot[3],
+    ).length;
+    const Categories = {
+      domain: "gas",
+      emitter: "gas",
+      collider: "geometry",
+      sun: "light",
+    };
+    const Search = Select("#scene-search").value.toLowerCase().trim();
+    const Matches = Objects.filter(
+      ([Key]) =>
+        (this.SceneFilter === "all" || Categories[Key] === this.SceneFilter) &&
+        this.Names[Key].toLowerCase().includes(Search),
+    );
+    Select("#scene-tree").hidden = Search
+      ? false
+      : Select("#collection-toggle").getAttribute("aria-expanded") === "false";
+    const RowMarkup =
+      Matches.map(
+        ([Key, Glyph, Badge, Enabled]) =>
+          `<div class="scene-row ${this.Selection === Key ? "selected" : ""} ${!Enabled ? "muted" : ""}" data-object="${Key}" data-category="${Categories[Key]}" role="treeitem" aria-selected="${this.Selection === Key}" aria-level="1" tabindex="0"><span class="row-chevron"></span><span class="row-icon">${Icon(Glyph)}</span><span class="scene-label">${Escape(this.Names[Key])}</span>${Badge ? `<span class="row-badge">${Badge}</span>` : `<button class="icon-button row-toggle" data-toggle-object="${Key}" title="${Enabled ? "Disable" : "Enable"} ${Escape(this.Names[Key])}" aria-label="${Enabled ? "Disable" : "Enable"} ${Escape(this.Names[Key])}">${Icon(Enabled ? "eye" : "hidden")}</button>`}</div>`,
+      ).join("") ||
+      '<div class="outliner-empty" role="status">No matching objects.</div>';
+    const RowSignature = JSON.stringify(
+      Matches.map((ObjectSlot) => [...ObjectSlot, this.Names[ObjectSlot[0]]]),
+    );
+    if (this.SceneRowSignature !== RowSignature) {
+      Select("#scene-tree").innerHTML = RowMarkup;
+      this.SceneRowSignature = RowSignature;
+    } else {
+      SelectAll("#scene-tree [data-object]").forEach((Row) => {
+        const Selected = Row.dataset.object === this.Selection;
+        Row.classList.toggle("selected", Selected);
+        Row.setAttribute("aria-selected", String(Selected));
+      });
+    }
+    SelectAll("[data-scene-filter]").forEach((Button) => {
+      const Selected = Button.dataset.sceneFilter === this.SceneFilter;
+      Button.classList.toggle("active", Selected);
+      Button.setAttribute("aria-pressed", String(Selected));
+    });
   }
 
   SelectObject(Key) {
@@ -408,8 +456,9 @@ class FluidPanel {
     this.Names.emitter =
       this.Parameters.emitterFuel === 0 ? "Smoke emitter" : "Fire emitter";
     this.Names.collider =
-      OBSTACLE_TYPES.find((Type) => Type.id === (this.Parameters.obstacleType || 1))
-        ?.label + " collider";
+      OBSTACLE_TYPES.find(
+        (Type) => Type.id === (this.Parameters.obstacleType || 1),
+      )?.label + " collider";
     Select("#document-name").value = PresetPresentation[Key][0];
     this.Selection = this.Parameters.emitterEnabled ? "emitter" : "domain";
     this.Tab = this.Parameters.emitterEnabled ? "source" : "simulation";
@@ -451,7 +500,23 @@ class FluidPanel {
       return `<div class="property-row toggle-row"><label class="property-label" for="property-${Key}">${Label}</label><label class="switch"><input id="property-${Key}" type="checkbox" data-param="${Key}" ${Value ? "checked" : ""}/><span></span></label></div>`;
     if (Control.type === "select")
       return `<div class="property-row select-row"><label class="property-label" for="property-${Key}">${Label}</label><select id="property-${Key}" data-param="${Key}">${Control.options.map((Option) => `<option value="${Option.id ?? Option.value}" ${(Option.id ?? Option.value) === Value ? "selected" : ""}>${Escape(Option.label)}</option>`).join("")}</select></div>`;
-    return `<div class="property-row"><label class="property-label" for="property-${Key}">${Label}</label><input id="property-${Key}" data-param="${Key}" type="number" value="${FormatNumber(Value, Control.step)}" min="${Control.min}" max="${Control.max}" step="${Control.step}"/><input type="range" aria-label="${Label} slider" data-param="${Key}" min="${Control.min}" max="${Control.max}" step="${Control.step}" value="${Value}"/></div>`;
+    const Unit =
+      {
+        boundsWidth: "m",
+        boundsHeight: "m",
+        emitterRadius: "m",
+        emitterHeight: "m",
+        obstacleRadius: "m",
+        sunElevation: "°",
+        sunAzimuth: "°",
+        timeScale: "×",
+        renderScale: "×",
+        dynamicBoundsMax: "×",
+        emitterRate: "×",
+        temperatureScale: "×",
+        emberLifetime: "×",
+      }[Key] || "—";
+    return `<div class="property-row slider-row"><label class="property-label" for="property-${Key}">${Label}</label><div class="slider-control"><div class="value-pill"><input id="property-${Key}" data-param="${Key}" type="number" value="${FormatNumber(Value, Control.step)}" min="${Control.min}" max="${Control.max}" step="${Control.step}"/><span class="unit-cell" aria-hidden="true">${Unit}</span></div><input type="range" aria-label="${Label} slider" data-param="${Key}" min="${Control.min}" max="${Control.max}" step="${Control.step}" value="${Value}"/></div></div>`;
   }
 
   ConstructInspector() {
@@ -861,9 +926,47 @@ class FluidPanel {
       const Row = Event.target.closest("[data-object]");
       if (Row) this.SelectObject(Row.dataset.object);
     });
+    Select("#scene-search").addEventListener("input", () =>
+      this.ConstructSceneRows(),
+    );
+    Select("#scene-filters").addEventListener("click", (Event) => {
+      const Filter = Event.target.closest("[data-scene-filter]");
+      if (Filter) {
+        this.SceneFilter = Filter.dataset.sceneFilter;
+        this.ConstructSceneRows();
+      }
+    });
+    Select("#compact-outliner").addEventListener("click", () => {
+      const Compact =
+        Select(".left-panel").classList.toggle("compact-outliner");
+      Select("#compact-outliner").setAttribute("aria-pressed", String(Compact));
+    });
+    Select("#collection-toggle").addEventListener("click", () => {
+      const Expanded =
+        Select("#collection-toggle").getAttribute("aria-expanded") === "true";
+      Select("#collection-toggle").setAttribute(
+        "aria-expanded",
+        String(!Expanded),
+      );
+      Select("#scene-tree").hidden = Expanded;
+    });
     Select("#scene-tree").addEventListener("keydown", (Event) => {
-      if (Event.key === "Enter" && Event.target.matches("[data-object]"))
-        this.SelectObject(Event.target.dataset.object);
+      if (!Event.target.matches("[data-object]")) return;
+      if (Event.key === "Enter") this.SelectObject(Event.target.dataset.object);
+      const Rows = SelectAll("#scene-tree [data-object]");
+      const Index = Rows.indexOf(Event.target);
+      if (Event.key === "ArrowDown" || Event.key === "ArrowUp") {
+        Event.preventDefault();
+        Rows[
+          Math.max(
+            0,
+            Math.min(
+              Rows.length - 1,
+              Index + (Event.key === "ArrowDown" ? 1 : -1),
+            ),
+          )
+        ].focus();
+      }
     });
     Select("#scene-tree").addEventListener("dblclick", (Event) => {
       if (Event.target.closest("[data-object]")) {
@@ -1059,6 +1162,15 @@ class FluidPanel {
   }
 
   KeyPress(Event) {
+    if (
+      (Event.ctrlKey || Event.metaKey) &&
+      Event.shiftKey &&
+      Event.key.toLowerCase() === "f"
+    ) {
+      Event.preventDefault();
+      Select("#scene-search").focus();
+      return;
+    }
     if ((Event.ctrlKey || Event.metaKey) && Event.key.toLowerCase() === "s") {
       Event.preventDefault();
       document.activeElement?.blur();

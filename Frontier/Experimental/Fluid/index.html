@@ -10,6 +10,7 @@
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2321252b'/%3E%3Cpath d='M18 5c1 8-7 8-3 14-4-1-4-5-4-5-8 12 11 19 14 7 1-6-3-12-7-16' fill='%23efa56f'/%3E%3C/svg%3E"
     />
     <link rel="stylesheet" href="./src/FluidPanel.css" />
+    <link rel="stylesheet" href="./src/ThemeSpecification.css" />
   </head>
   <body>
     <div id="app">
@@ -66,8 +67,72 @@
       </div>
       <main class="workspace">
         <aside class="left-panel">
-          <div class="panel-heading">
-            <span>SCENE</span><span id="scene-count" class="count">3</span
+          <div class="outliner-heading">
+            <div>
+              <h1>Outliner</h1>
+              <span class="outliner-subtitle"
+                >Scene · <span id="scene-count">3</span> nodes</span
+              >
+            </div>
+            <button
+              id="compact-outliner"
+              class="icon-button"
+              title="Compact outliner"
+              aria-label="Compact outliner"
+              aria-pressed="false"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 5v14M17 5v14" />
+              </svg>
+            </button>
+          </div>
+          <div class="scene-statistics">
+            <div class="scene-stat">
+              <span class="stat-symbol enabled-symbol">✓</span
+              ><span class="stat-label">Enabled</span
+              ><strong id="enabled-count">3</strong>
+            </div>
+            <div class="scene-stat">
+              <span
+                class="stat-symbol disabled-symbol"
+                data-icon="hidden"
+              ></span
+              ><span class="stat-label">Disabled</span
+              ><strong id="disabled-count">0</strong>
+            </div>
+          </div>
+          <label class="search scene-search"
+            ><span data-icon="search"></span
+            ><input
+              type="search"
+              id="scene-search"
+              placeholder="Search scene…"
+              aria-label="Search scene"
+            /><kbd>Ctrl ⇧ F</kbd></label
+          >
+          <div
+            class="scene-filters"
+            id="scene-filters"
+            aria-label="Outliner filters"
+          >
+            <button data-scene-filter="all" class="active" aria-pressed="true">
+              All</button
+            ><button data-scene-filter="gas" aria-pressed="false">Gas</button
+            ><button data-scene-filter="geometry" aria-pressed="false">
+              Geometry</button
+            ><button data-scene-filter="light" aria-pressed="false">
+              Lights
+            </button>
+          </div>
+          <div class="scene-toolbar">
+            <button
+              id="collection-toggle"
+              aria-expanded="true"
+              aria-controls="scene-tree"
+            >
+              <span class="collection-chevron">⌄</span
+              ><span data-icon="folder"></span
+              ><span>Scene collection</span></button
             ><button
               id="add-button"
               class="icon-button"
@@ -76,10 +141,6 @@
               aria-expanded="false"
               data-icon="plus"
             ></button>
-          </div>
-          <div class="scene-toolbar">
-            <span data-icon="layers"></span><span>Scene collection</span
-            ><span class="quiet">01</span>
           </div>
           <div
             id="scene-tree"
@@ -92,7 +153,7 @@
           </div>
           <div class="library" id="library">
             <div class="panel-heading">
-              <span>PRESET LIBRARY</span
+              <span>Preset library</span
               ><span class="count" id="preset-count"></span
               ><span data-icon="grid"></span>
             </div>
@@ -315,7 +376,7 @@
         </section>
         <aside class="inspector-panel">
           <div class="panel-heading">
-            <span>INSPECTOR</span
+            <span>Inspector</span
             ><button
               id="reset-properties"
               class="icon-button"

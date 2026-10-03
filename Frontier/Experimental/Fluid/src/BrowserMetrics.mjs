@@ -93,6 +93,99 @@ try {
   Assert.ok(Fields.energy > 0);
   Pass("Pause, exact single stepping, nonzero finite GPU voxel fields");
 
+  const Theme = await Page.evaluate(async () => {
+    await document.fonts.ready;
+    const Range = document.querySelector(
+      'input[type="range"][data-param="emitterRate"]',
+    );
+    return {
+      fonts: [...document.fonts]
+        .filter((Face) => Face.family === "DM Sans")
+        .map((Face) => Face.status),
+      family: getComputedStyle(document.body).fontFamily,
+      card: getComputedStyle(document.querySelector(".property-group"))
+        .borderRadius,
+      pill: document.querySelector(".value-pill").getBoundingClientRect().width,
+      unit: document.querySelector(".unit-cell").getBoundingClientRect().width,
+      track: Range.getBoundingClientRect().height,
+      row: document.querySelector(".scene-row").getBoundingClientRect().height,
+      background: getComputedStyle(document.querySelector(".property-group"))
+        .backgroundColor,
+    };
+  });
+  Assert.deepEqual(Theme.fonts, ["loaded", "loaded"]);
+  Assert.match(Theme.family, /DM Sans/);
+  Assert.equal(Theme.card, "22px");
+  Assert.equal(Theme.background, "rgb(26, 26, 26)");
+  Assert.equal(Theme.pill, 92);
+  Assert.equal(Theme.unit, 34);
+  Assert.equal(Theme.track, 26);
+  Assert.equal(Theme.row, 39);
+  Pass(
+    "Native DM Sans fonts, charcoal cards and Project Zero control geometry",
+  );
+
+  const Range = Page.locator('input[type="range"][data-param="emitterRate"]');
+  await Range.focus();
+  await Range.press("End");
+  Assert.equal((await Snapshot()).parameters.emitterRate, 2.5);
+  Assert.equal(
+    await Page.locator("#property-emitterRate").inputValue(),
+    "2.50",
+  );
+  await Range.press("Home");
+  Assert.equal((await Snapshot()).parameters.emitterRate, 0.1);
+  await Range.press("ArrowRight");
+  Assert.equal((await Snapshot()).parameters.emitterRate, 0.15);
+  const Track = await Range.boundingBox();
+  await Page.mouse.move(Track.x + 12, Track.y + 13);
+  await Page.mouse.down();
+  await Page.mouse.move(Track.x + Track.width - 12, Track.y + 13, { steps: 5 });
+  await Page.mouse.up();
+  Assert.equal((await Snapshot()).parameters.emitterRate, 2.5);
+  Assert.equal(
+    await Range.evaluate((Element) =>
+      Element.style.getPropertyValue("--fraction"),
+    ),
+    "1",
+  );
+  Pass(
+    "Split-pill typing, slider keyboard controls, dragging and live fill synchronization",
+  );
+
+  await Page.locator("#scene-search").fill("Fire");
+  Assert.equal(await Page.locator("[data-object]").count(), 1);
+  await Page.locator("#scene-search").fill("");
+  await Page.locator('[data-scene-filter="light"]').click();
+  Assert.equal(await Page.locator("[data-object]").count(), 1);
+  Assert.equal(await Page.locator('[data-object="sun"]').count(), 1);
+  await Page.locator('[data-scene-filter="all"]').click();
+  await Page.locator("#collection-toggle").click();
+  Assert.equal(await Page.locator("#scene-tree").isVisible(), false);
+  await Page.locator("#collection-toggle").click();
+  await Page.locator("#compact-outliner").click();
+  Assert.equal(
+    await Page.locator(".scene-row")
+      .first()
+      .evaluate((Element) => Element.getBoundingClientRect().height),
+    34,
+  );
+  await Page.locator("#compact-outliner").click();
+  await Page.locator('[data-toggle-object="emitter"]').click();
+  Assert.equal(await Page.locator("#disabled-count").textContent(), "1");
+  await Page.locator('[data-toggle-object="emitter"]').click();
+  Assert.equal(await Page.locator("#enabled-count").textContent(), "3");
+  await Page.locator('[data-object="emitter"]').dblclick();
+  Assert.equal(
+    await Page.locator("#object-name").evaluate(
+      (Element) => Element === document.activeElement,
+    ),
+    true,
+  );
+  Pass(
+    "Native-style outliner search, filters, folding, compact rows, status and double-click selection",
+  );
+
   await Page.locator("#property-emitterRate").fill("1.5");
   await Page.locator("#property-emitterRate").press("Tab");
   Assert.equal((await Snapshot()).parameters.emitterRate, 1.5);
