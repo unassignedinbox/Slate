@@ -1,0 +1,28 @@
+  repaired reference opens                                               true         true   PASS
+  candidate document opens                                               true         true   PASS
+  all repaired body surface coefficients unchanged                       true         true   PASS
+  skin topology unchanged                                                true         true   PASS
+  accepted guides and orange selections retained                         true         true   PASS
+  long, parallel and proposed guides are native curves                   true         true   PASS
+  bilateral candidate curves are paired                                  true         true   PASS
+  native reflected candidate position error [m]                     0.000e+00      1.0e-10   PASS
+  sampled guide distance to actual native skin [mm]                 5.720e-01      1.2e+00   PASS
+  save candidates                                                        true         true   PASS
+  reopen candidates                                                      true         true   PASS
+  names, geometry, colour and visibility survive replay                  true         true   PASS
+  review display                                                         true         true   PASS
+  review camera                                                          true         true   PASS
+  native review image                                                    true         true   PASS
+  review camera                                                          true         true   PASS
+  native review image                                                    true         true   PASS
+  review camera                                                          true         true   PASS
+  native review image                                                    true         true   PASS
+  review camera                                                          true         true   PASS
+  native review image                                                    true         true   PASS
+  detail camera                                                          true         true   PASS
+  native review image                                                    true         true   PASS
+  detail camera                                                          true         true   PASS
+  native review image                                                    true         true   PASS
+  detail camera                                                          true         true   PASS
+  native review image                                                    true         true   PASS
+  27 checks, 0 failed → ALL PASS

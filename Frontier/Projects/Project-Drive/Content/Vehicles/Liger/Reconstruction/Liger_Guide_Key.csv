@@ -1,0 +1,107 @@
+ID,Description,Role,LengthPerCurveMetres,ClosestParallelID,MedianSeparationMm,VisibleInitially,NativeNames
+B01,Outer Shoulder,existing long body chain,8.692469397222244,,,True,Guide_B01_OuterShoulder_Across
+B02,Lower Canopy,existing long body chain,7.759871901992206,,,True,Guide_B02_LowerCanopy_Across
+B03,Upper Canopy,existing long body chain,6.453290810809918,,,True,Guide_B03_UpperCanopy_Across
+G04,Windshield Foot,existing parallel candidate,4.810417629038845,B02,54.84280834856451,True,Guide_G04_WindshieldFoot_Across
+B05,Centreline,existing long body chain,3.443361404228754,,,True,Guide_B05_Centreline_Across
+B06,Rear Valance,existing long body chain,2.8951253373229773,,,True,Guide_B06_RearValance_Across
+B07,Rear Deck Rim,existing long body chain,2.72473207407504,,,True,Guide_B07_RearDeckRim_Across
+B08,Rear Upper Return,existing long body chain,2.616953860525487,,,True,Guide_B08_RearUpperReturn_Across
+G09,Rear Return Parallel,existing parallel candidate,2.5771988062900535,B08,9.536641268945008,True,Guide_G09_RearReturnParallel_Across
+G10,Rear Deck Parallel A,existing parallel candidate,2.5347515440434427,B07,12.386899030970282,True,Guide_G10_RearDeckParallelA_Across
+G11,Rear Deck Parallel B,existing parallel candidate,2.485419157311167,G10,12.561382860210355,True,Guide_G11_RearDeckParallelB_Across
+G12,Rear Lower Inset,existing parallel candidate,2.4602530587528406,G09,59.74041207085765,True,Guide_G12_RearLowerInset_Across
+G13,Rear Inset Parallel A,existing parallel candidate,2.3433766049410782,G12,5.369219691086521,True,Guide_G13_RearInsetParallelA_Across
+G14,Rear Deck Parallel C,existing parallel candidate,2.2636956566934505,G11,13.224262929421581,True,Guide_G14_RearDeckParallelC_Across
+G15,Rear Inset Parallel B,existing parallel candidate,2.240030104617749,G12,4.436474835553241,True,Guide_G15_RearInsetParallelB_Across
+B16,Lower Side Sweep,existing long body chain,2.12108128027267,,,True,Guide_B16_LowerSideSweep_Left;Guide_B16_LowerSideSweep_Right
+B17,Front Lower Return,existing long body chain,2.046145545821191,,,True,Guide_B17_FrontLowerReturn_Across
+B18,Nose Return,existing long body chain,2.0270308849996175,,,True,Guide_B18_NoseReturn_Across
+B19,Side Crease,existing long body chain,1.9964789043011217,,,True,Guide_B19_SideCrease_Left;Guide_B19_SideCrease_Right
+B20,Rear Inner Arch,existing long body chain,1.9926226367641697,,,True,Guide_B20_RearInnerArch_Left;Guide_B20_RearInnerArch_Right
+G21,Rear Deck Inner Rim,existing parallel candidate,1.9698840805642923,B07,2.875722281620073,True,Guide_G21_RearDeckInnerRim_Across
+B22,Front Outer Arch,existing long body chain,1.9590571130572247,,,True,Guide_B22_FrontOuterArch_Left;Guide_B22_FrontOuterArch_Right
+G23,Front Inner Arch,existing parallel candidate,1.8979301175344039,B22,19.467672027819205,True,Guide_G23_FrontInnerArch_Left;Guide_G23_FrontInnerArch_Right
+G24,Front Lip Parallel,existing parallel candidate,1.747027659086605,B22,1.8586126005957222,True,Guide_G24_FrontLipParallel_Left;Guide_G24_FrontLipParallel_Right
+B25,Rear Deck Crossbar Outer,existing long body chain,1.6719807537517117,,,True,Guide_B25_RearDeckCrossbarOuter_Across
+B26,Rear Deck Crossbar Inner,existing long body chain,1.5830067007988853,,,True,Guide_B26_RearDeckCrossbarInner_Across
+B27,Inner Roof Rail,existing long body chain,1.5386025021197784,,,True,Guide_B27_InnerRoofRail_Left;Guide_B27_InnerRoofRail_Right
+B28,Rear Deck Centre Return,existing long body chain,1.4118074512930234,,,True,Guide_B28_RearDeckCentreReturn_Across
+B29,Roof Rear Crossbar,existing long body chain,1.3889134057419095,,,True,Guide_B29_RoofRearCrossbar_Across
+B30,Bonnet Rear Crossbar,existing long body chain,1.3831175098851174,,,True,Guide_B30_BonnetRearCrossbar_Across
+G31,Inner Roof Parallel,existing parallel candidate,1.3825771714167536,B27,15.904933540035492,True,Guide_G31_InnerRoofParallel_Left;Guide_G31_InnerRoofParallel_Right
+B32,Rear Shoulder,existing long body chain,1.3023317230081206,,,True,Guide_B32_RearShoulder_Left;Guide_B32_RearShoulder_Right
+B33,Roof Front Crossbar,existing long body chain,1.2996833904651108,,,True,Guide_B33_RoofFrontCrossbar_Across
+G34,Rear Deck Centre Inset,existing parallel candidate,1.2766740140927606,B07,3.142262811510501,True,Guide_G34_RearDeckCentreInset_Across
+B35,Front Wing Rail,existing long body chain,1.2723991006436621,,,True,Guide_B35_FrontWingRail_Left;Guide_B35_FrontWingRail_Right
+B36,Upper Side Rail,existing long body chain,1.2471383904928286,,,True,Guide_B36_UpperSideRail_Left;Guide_B36_UpperSideRail_Right
+G37,Rear Shoulder Parallel A,existing parallel candidate,1.229652113556349,B32,7.820509094890423,True,Guide_G37_RearShoulderParallelA_Left;Guide_G37_RearShoulderParallelA_Right
+G38,Rear Shoulder Parallel B,existing parallel candidate,1.2160183685223889,B32,5.521347663590638,True,Guide_G38_RearShoulderParallelB_Left;Guide_G38_RearShoulderParallelB_Right
+B39,Side Upper Diagonal,existing long body chain,1.1613729775384387,,,True,Guide_B39_SideUpperDiagonal_Left;Guide_B39_SideUpperDiagonal_Right
+B40,Nose Inset Crossbar,existing long body chain,1.1551926150829281,,,True,Guide_B40_NoseInsetCrossbar_Across
+B41,Roof Repair Crossbar,existing long body chain,1.1436139145265665,,,True,Guide_B41_RoofRepairCrossbar_Across
+B42,Roof Forward Crossbar,existing long body chain,1.1429900358601084,,,True,Guide_B42_RoofForwardCrossbar_Across
+G43,Side Crease Parallel,existing parallel candidate,1.1418750108841107,B19,4.662689552250852,True,Guide_G43_SideCreaseParallel_Left;Guide_G43_SideCreaseParallel_Right
+G44,Nose Return Parallel,existing parallel candidate,1.076724899965377,B18,28.389897457734353,True,Guide_G44_NoseReturnParallel_Across
+B45,Upper Door Front Trace,existing long body chain,1.0455116913229312,,,True,Guide_B45_UpperDoorFrontTrace_Left;Guide_B45_UpperDoorFrontTrace_Right
+B46,Upper Belt Rail,existing long body chain,1.0409727731364091,,,True,Guide_B46_UpperBeltRail_Left;Guide_B46_UpperBeltRail_Right
+G47,Nose Lower Inset,existing parallel candidate,1.0307910097838224,B18,15.916046545089861,True,Guide_G47_NoseLowerInset_Across
+B48,Rear Lower Crossbar,existing long body chain,1.0293805205660387,,,True,Guide_B48_RearLowerCrossbar_Across
+G49,Side Lower Parallel,existing parallel candidate,0.9589109295435152,B19,3.652114943405721,True,Guide_G49_SideLowerParallel_Left;Guide_G49_SideLowerParallel_Right
+G50,Rear Outer Arch,existing parallel candidate,0.9357704669222752,B20,48.60696238261957,True,Guide_G50_RearOuterArch_Left;Guide_G50_RearOuterArch_Right
+G51,Waist Rail Parallel,existing parallel candidate,0.9281639240847419,B01,17.985115410234204,True,Guide_G51_WaistRailParallel_Left;Guide_G51_WaistRailParallel_Right
+B52,Bonnet Diagonal,existing long body chain,0.8897360110428723,,,True,Guide_B52_BonnetDiagonal_Left;Guide_B52_BonnetDiagonal_Right
+B53,Forward Roof Rail,existing long body chain,0.8780625120249859,,,True,Guide_B53_ForwardRoofRail_Left;Guide_B53_ForwardRoofRail_Right
+G54,Rear Corner Parallel,existing parallel candidate,0.8459866318905656,B08,8.42050462762676,True,Guide_G54_RearCornerParallel_Left;Guide_G54_RearCornerParallel_Right
+G55,Waist Outer Parallel,existing parallel candidate,0.8284902391020517,B01,21.659537793269784,True,Guide_G55_WaistOuterParallel_Left;Guide_G55_WaistOuterParallel_Right
+G56,Inner Roof Short Parallel,existing parallel candidate,0.8232845889161794,B27,8.643148217278796,True,Guide_G56_InnerRoofShortParallel_Left;Guide_G56_InnerRoofShortParallel_Right
+G57,Parallel G43,short existing parallel candidate,0.7201565815202036,G43,2.283757762945021,True,Guide_G57_Parallel_G43_Left;Guide_G57_Parallel_G43_Right
+G58,Parallel B03,short existing parallel candidate,0.5320479570567966,B03,20.821705158690573,True,Guide_G58_Parallel_B03_Left;Guide_G58_Parallel_B03_Right
+G59,Parallel B19,short existing parallel candidate,0.5038601935196299,B19,32.34401672513613,True,Guide_G59_Parallel_B19_Left;Guide_G59_Parallel_B19_Right
+G60,Parallel B03,short existing parallel candidate,0.20897626407583575,B03,25.432663201782173,False,Guide_G60_Parallel_B03_Left;Guide_G60_Parallel_B03_Right
+G61,Parallel B18,short existing parallel candidate,0.3399333441463625,B18,2.9667957974959824,False,Guide_G61_Parallel_B18_Left;Guide_G61_Parallel_B18_Right
+G62,Parallel B02,short existing parallel candidate,0.520275045552565,B02,21.434557972992028,True,Guide_G62_Parallel_B02_Left;Guide_G62_Parallel_B02_Right
+G63,Parallel B18,short existing parallel candidate,0.4761444439841946,B18,12.698201206990458,False,Guide_G63_Parallel_B18_Left;Guide_G63_Parallel_B18_Right
+G64,Parallel B02,short existing parallel candidate,0.3078784254850936,B02,34.2758137627085,False,Guide_G64_Parallel_B02_Left;Guide_G64_Parallel_B02_Right
+G65,Parallel B18,short existing parallel candidate,0.36696728425196606,B18,10.695891648851127,False,Guide_G65_Parallel_B18_Left;Guide_G65_Parallel_B18_Right
+G66,Parallel B18,short existing parallel candidate,0.2334463254246746,B18,2.3217705256776378,False,Guide_G66_Parallel_B18_Left;Guide_G66_Parallel_B18_Right
+G67,Parallel B03,short existing parallel candidate,0.20146323425621399,B03,27.240492947505665,False,Guide_G67_Parallel_B03_Left;Guide_G67_Parallel_B03_Right
+G68,Parallel B16,short existing parallel candidate,0.4297943964674849,B16,16.940062809237578,False,Guide_G68_Parallel_B16_Left;Guide_G68_Parallel_B16_Right
+G69,Parallel G43,short existing parallel candidate,0.2812936937838173,G43,36.093292017035864,False,Guide_G69_Parallel_G43_Left;Guide_G69_Parallel_G43_Right
+G70,Parallel G43,short existing parallel candidate,0.4088656372362539,G43,15.676120889652156,False,Guide_G70_Parallel_G43_Left;Guide_G70_Parallel_G43_Right
+G71,Parallel B06,short existing parallel candidate,0.24540595725348988,B06,11.997030138307787,False,Guide_G71_Parallel_B06_Left;Guide_G71_Parallel_B06_Right
+G72,Parallel G50,short existing parallel candidate,0.28631481851619756,G50,11.08213647939659,True,Guide_G72_Parallel_G50_Left;Guide_G72_Parallel_G50_Right
+G73,Parallel G49,short existing parallel candidate,0.5436787437260995,G49,4.502877740997006,True,Guide_G73_Parallel_G49_Left;Guide_G73_Parallel_G49_Right
+G74,Parallel B18,short existing parallel candidate,0.3218282543758002,B18,23.592796749164243,False,Guide_G74_Parallel_B18_Left;Guide_G74_Parallel_B18_Right
+G75,Parallel G50,short existing parallel candidate,0.5195030394645391,G50,10.833501369721894,True,Guide_G75_Parallel_G50_Left;Guide_G75_Parallel_G50_Right
+G76,Parallel B45,short existing parallel candidate,0.48751304639828075,B45,36.28826436855871,False,Guide_G76_Parallel_B45_Left;Guide_G76_Parallel_B45_Right
+G77,Parallel B32,short existing parallel candidate,0.2341419933198449,B32,8.76003828262002,False,Guide_G77_Parallel_B32_Left;Guide_G77_Parallel_B32_Right
+G78,Parallel B40,short existing parallel candidate,0.2061290625319492,B40,34.55563051279141,False,Guide_G78_Parallel_B40_Left;Guide_G78_Parallel_B40_Right
+G79,Parallel B02,short existing parallel candidate,0.20422919064946418,B02,5.712793621806674,True,Guide_G79_Parallel_B02_Left;Guide_G79_Parallel_B02_Right
+G80,Parallel B19,short existing parallel candidate,0.5340593384631016,B19,8.093138839162968,True,Guide_G80_Parallel_B19_Left;Guide_G80_Parallel_B19_Right
+G81,Parallel B03,short existing parallel candidate,0.357534632973748,B03,7.8801345069402835,True,Guide_G81_Parallel_B03_Left;Guide_G81_Parallel_B03_Right
+G82,Parallel B03,short existing parallel candidate,0.46062252923192926,B03,13.722324790857106,True,Guide_G82_Parallel_B03_Left;Guide_G82_Parallel_B03_Right
+G83,Parallel G31,short existing parallel candidate,0.21681911467645967,G31,30.607584794227677,False,Guide_G83_Parallel_G31_Left;Guide_G83_Parallel_G31_Right
+G84,Parallel B01,short existing parallel candidate,0.31511555876413355,B01,19.10797711033291,False,Guide_G84_Parallel_B01_Left;Guide_G84_Parallel_B01_Right
+G85,Parallel B02,short existing parallel candidate,0.18286695822063567,B02,6.191285869890067,False,Guide_G85_Parallel_B02_Left;Guide_G85_Parallel_B02_Right
+G86,Parallel G21,short existing parallel candidate,0.4258377415720581,G21,2.7356871457853056,False,Guide_G86_Parallel_G21_Left;Guide_G86_Parallel_G21_Right
+G87,Parallel B07,short existing parallel candidate,0.1963721782564754,B07,2.3442656104872186,False,Guide_G87_Parallel_B07_Left;Guide_G87_Parallel_B07_Right
+G88,Parallel B07,short existing parallel candidate,0.6222282983292412,B07,2.0884860617160563,True,Guide_G88_Parallel_B07_Left;Guide_G88_Parallel_B07_Right
+G89,Parallel G31,short existing parallel candidate,0.2470143248101704,G31,36.64120014949311,False,Guide_G89_Parallel_G31_Left;Guide_G89_Parallel_G31_Right
+G90,Parallel G50,short existing parallel candidate,0.23808647775769554,G50,26.945396249531818,False,Guide_G90_Parallel_G50_Left;Guide_G90_Parallel_G50_Right
+G91,Rear Outer Lower Trailing,existing arch continuation fragment,0.2456596743117448,,,True,Guide_G91_RearOuterLowerTrailing_Left;Guide_G91_RearOuterLowerTrailing_Right
+G92,Rear Outer Lower Leading,existing arch continuation fragment,0.3317292229952192,,,True,Guide_G92_RearOuterLowerLeading_Left;Guide_G92_RearOuterLowerLeading_Right
+Y01,Inner Roof Continuation,on-surface sketch extension,0.7838257554176107,,,True,Guide_Y01_InnerRoofContinuation_Left;Guide_Y01_InnerRoofContinuation_Right
+Y02,Parallel Roof Continuation,on-surface sketch extension,0.8051595783228879,,,True,Guide_Y02_ParallelRoofContinuation_Left;Guide_Y02_ParallelRoofContinuation_Right
+Y03,Belt Rail Continuation,on-surface sketch extension,0.920128654491571,,,True,Guide_Y03_BeltRailContinuation_Left;Guide_Y03_BeltRailContinuation_Right
+Y04,Upper Side Continuation,on-surface sketch extension,0.5551627044238525,,,True,Guide_Y04_UpperSideContinuation_Left;Guide_Y04_UpperSideContinuation_Right
+Y05,Bonnet Centre Continuation,on-surface sketch extension,0.6826085580545687,,,True,Guide_Y05_BonnetCentreContinuation_Across
+M01,Join Inner Roof To Forward Rail,on-surface join option,0.3243297860855837,,,True,Guide_M01_JoinInnerRoofToForwardRail_Left;Guide_M01_JoinInnerRoofToForwardRail_Right
+M02,Converge Parallel Roof Rails,on-surface join option,0.600094807677394,,,True,Guide_M02_ConvergeParallelRoofRails_Left;Guide_M02_ConvergeParallelRoofRails_Right
+M03,Join Rear Arch Leading,on-surface join option,0.2975138320362355,,,True,Guide_M03_JoinRearArchLeading_Left;Guide_M03_JoinRearArchLeading_Right
+M04,Join Rear Arch Trailing,on-surface join option,0.0946756037554872,,,True,Guide_M04_JoinRearArchTrailing_Left;Guide_M04_JoinRearArchTrailing_Right
+R01,Side Belt Option,on-surface design option,1.8842206153892773,,,True,Guide_R01_SideBeltOption_Left;Guide_R01_SideBeltOption_Right
+R02,Side Belt Option,on-surface design option,1.881171379033262,,,True,Guide_R02_SideBeltOption_Left;Guide_R02_SideBeltOption_Right
+R03,Upper Shoulder Option,on-surface design option,2.812254473769131,,,True,Guide_R03_UpperShoulderOption_Left;Guide_R03_UpperShoulderOption_Right
+R04,Canopy Rail Option,on-surface design option,5.77565650457679,,,True,Guide_R04_CanopyRailOption_Across
+R05,Windshield Diagonal Option,on-surface design option,0.5375195950740814,,,True,Guide_R05_WindshieldDiagonalOption_Left;Guide_R05_WindshieldDiagonalOption_Right

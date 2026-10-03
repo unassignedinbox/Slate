@@ -105,6 +105,10 @@ def main() -> int:
     run([str(executable), str(reconstruction / "Liger_Feature_Aligned.arc"),
          str(reconstruction / "Liger_Roof_Repair.arc")], "LigerRoofRepairVerification")
     print("PASS native roof repair, unchanged surrounding skin, mirror layout, topology and persistence", flush=True)
+    executable = link_program(SOURCE / "Verification/GuideVerification.cpp", "GuideVerification")
+    run([str(executable), str(reconstruction / "Liger_Roof_Repair.arc"),
+         str(reconstruction / "Liger_Guide_Candidates.arc")], "LigerGuideVerification")
+    print("PASS native named guides, surface proximity, mirrored pairs and unchanged repaired skin", flush=True)
     print("MSVC SolidArc: console linked, focused regressions and all Liger journals passed")
     return 0
 

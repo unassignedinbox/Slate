@@ -884,3 +884,9 @@ target_link_libraries(RoofRepairVerification PRIVATE SolidArcConsoleKit)
 add_test(NAME LigerRoofRepairVerification COMMAND RoofRepairVerification
     "${LIGER_RECONSTRUCTION}/Liger_Feature_Aligned.arc"
     "${LIGER_RECONSTRUCTION}/Liger_Roof_Repair.arc")
+
+add_executable(GuideVerification Verification/GuideVerification.cpp)
+target_link_libraries(GuideVerification PRIVATE SolidArcConsoleKit)
+add_test(NAME LigerGuideVerification COMMAND GuideVerification
+    "${LIGER_RECONSTRUCTION}/Liger_Roof_Repair.arc"
+    "${LIGER_RECONSTRUCTION}/Liger_Guide_Candidates.arc")

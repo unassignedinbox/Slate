@@ -215,6 +215,28 @@ int main()
         CylinderBefore.Payload.Validate().Edges == CylinderAfter.Payload.Validate().Edges &&
         CylinderBefore.Payload.Validate().OpenEdges == CylinderAfter.Payload.Validate().OpenEdges);
 
+    Panel.Section("Explicit knots for exact editable feature chains");
+    Panel.Expect("clear before curve knots", Host.Execute("reset"));
+    Panel.Expect("explicit curve parameterization", Host.Execute("cpcurve (0,0,0) (1,0,0) (2,1,0) --degree=1 --knots=0,0,0.2,1,1 --name=ExactGuide"));
+    const auto* ExactGuide = Figure(Host, "ExactGuide");
+    Panel.Expect("explicit curve knots are used", ExactGuide && ExactGuide->Curve.Sample(.2).Distance({1,0,0}) < 1e-12);
+    const auto CurveFingerprint = UndoSequence::Fingerprint(Host.Document());
+    Panel.Expect("wrong curve knot count refused", !Host.Execute("cpcurve (0,0) (1,0) --degree=1 --knots=0,1"));
+    Panel.Expect("decreasing curve knots refused", !Host.Execute("cpcurve (0,0) (1,0) --degree=1 --knots=0,1,0,1"));
+    Panel.Expect("nonfinite curve knots refused", !Host.Execute("cpcurve (0,0) (1,0) --degree=1 --knots=0,0,nan,1"));
+    Panel.Expect("ambiguous periodic custom knots refused", !Host.Execute("cpcurve (0,0) (1,0) (1,1) --degree=1 --periodic --knots=0,0,.5,1,1"));
+    Panel.Expect("empty explicit curve domain refused", !Host.Execute("cpcurve (0,0) (1,0) --degree=1 --knots=0,0,0,0"));
+    Panel.Expect("unclamped explicit curve refused", !Host.Execute("cpcurve (0,0) (1,0) --degree=1 --knots=-1,0,1,2"));
+    Panel.Expect("discontinuous internal curve knot refused", !Host.Execute("cpcurve (0,0) (1,0) (1,1) (2,1) --degree=1 --knots=0,0,.5,.5,1,1"));
+    Panel.Expect("invalid curves leave scene intact", CurveFingerprint == UndoSequence::Fingerprint(Host.Document()));
+    const auto CurvePath = (Directory / "curve-knots.arc").generic_string();
+    Panel.Expect("save explicit curve", Host.Execute("save \"" + CurvePath + "\""));
+    std::ifstream CurveFile(CurvePath);
+    const std::string CurveText((std::istreambuf_iterator<char>(CurveFile)), std::istreambuf_iterator<char>());
+    Panel.Expect("old builds must refuse explicit curve knots", CurveText.find("require curve-knots") != std::string::npos);
+    Panel.Expect("reopen explicit curve", Host.Execute("open \"" + CurvePath + "\""));
+    Panel.Expect("curve parameters survive persistence", CurveFingerprint == UndoSequence::Fingerprint(Host.Document()));
+
     Panel.Section("Numerical snapshot retention is bounded for dense imported skins");
     SceneDocument Snapshot = Host.Document();
     UndoSequence Bounded;

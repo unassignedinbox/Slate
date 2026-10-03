@@ -183,6 +183,78 @@ samples; it does not provide a continuous fit-error certificate. The native veri
 radii, sixteen crown-to-fade joins, mirrored curves and save/reopen persistence. The metric tool checks native guide
 samples against the selected source chains and confirms that this reference-authoring pass did not alter the body.
 
+### Named on-surface guide candidates
+
+Open **`Liger_Guide_Candidates.arc`** for the current curve-selection review, built on the accepted
+roof repair. This phase adds guides only: it does not merge patches, delete body edges or change skin coefficients.
+Your image marks identify geometric intent; they are not traced as literal pixel paths.
+
+| Colour  | IDs       | Meaning                                                                                  |
+|---------|-----------|------------------------------------------------------------------------------------------|
+| Blue    | B01…B53   | Long existing native edge chains; candidates, not automatically confirmed design creases. |
+| Green   | G04…G92   | Nearby parallel chains and rear-arch fragments; proximity does **not** authorize removal. |
+| Yellow  | Y01…Y05   | Proposed surface continuations of interrupted roof, belt, upper-side and bonnet rails.   |
+| Magenta | M01…M04   | Optional connections across existing patches, including the interrupted rear outer arch. |
+| Red     | R01…R05   | Surface-fitted interpretations of the additional side, shoulder, canopy and glass guides.|
+| Orange  | Repair.e… | Previously approved unresolved repair selections, with their prior visibility retained. |
+
+There are **81 long source chains** (at least 0.8 m), grouped into 56 bilateral/full-width families;
+34 further short parallel families (at least 0.18 m); two rear outer-arch lower fragments; and
+14 proposal families. The document contains **179 new named native feature curves**, including
+26 proposal curves after reflection. All long candidates are shown. Twenty-two additional short
+families are initially hidden to limit clutter; run `Liger_Guide_All_Candidates.arc` **after** the main
+document to reveal them. This small visibility script is not a standalone model document.
+
+The long and short existing traces retain the source cubic spans using explicit non-uniform curve knots.
+Only floating-point-scale endpoint welding is allowed. The new `cpcurve --knots=k,...` command authors
+these as single editable NURBS features, and saved documents require `curve-knots` so older builds refuse
+instead of silently substituting uniform knots. Invalid, discontinuous or non-clamped explicit knot
+sequences are refused. Periodic curves cannot combine with this option.
+
+Important selection groups:
+
+- Roof: **B27 / G31 / G56**, with **Y01 / Y02** continuations and **M01 / M02** joining alternatives.
+- Front arch: **B22 outer / G23 inner**, plus the nearby **G24** lip trace. Two borders can define a
+  useful intervening strip; do not infer redundancy just because they are parallel.
+- Rear arch: **B20 inner / G50 outer**, **G91 / G92** lower outer fragments, **M03 / M04** possible joins.
+- Side: **B19 / G43**, **B46 + Y03**, and alternative belts **R01 / R02**.
+- Planning options: **R03** shoulder, **R04** canopy rail, **R05** windshield diagonal.
+
+Each ID has `_Left`, `_Right`, or `_Across` names in SolidArc. `Liger_Guide_Key.png` and `.csv` list
+all names, lengths, sampled parallel separations and initial visibility. Use `hide <full-name>` /
+`unhide <full-name>` to compare choices without editing the skin. The earlier fitted rails and outboard
+circular arch targets are retained but hidden in this review to avoid confusing old targets with actual
+surface traces. The approved orange curves are neither replaced nor renumbered.
+
+`Liger_Guide_Four_Views.png` contains labelled front-quarter, rear-quarter, side and top native renders.
+`Liger_Guide_Details.png` includes roof and both arch close-ups. Individual native and labelled PNGs
+are also provided. Colour geometry is rendered by SolidArc; post-processing adds only labels and layout.
+
+Proposals are seeded on the existing tessellation, projected onto the native NURBS surfaces, then fitted
+as independent cubic features. They are **not live surface constraints or certified G1/G2 connections**.
+They are sampled within 0.572 mm of the native skin in this review (129 checks per new curve, including
+hidden candidates); bilateral candidate positions agree exactly at the sampled parameters. Topology,
+all repaired surface coefficients, the old guides, and orange visibility are independently checked.
+Detailed projection provenance and relationships are in `Liger_Guide_Candidates.guides.json`;
+per-curve native checks are in `Liger_Guide_Native.csv`. Fitting and distance checks are sampled, not
+continuous error certificates. No curve has yet been approved for removal or patch merging.
+
+To regenerate (NumPy, SciPy and Pillow; keep native exports in scratch):
+
+```powershell
+$Liger = "Frontier/Projects/Project-Drive/Content/Vehicles/Liger/Reconstruction"
+FeatureVerification.exe "$Liger/Liger_Roof_Repair.arc" _AgentScratch/build/guide-edges.json
+python Frontier/Projects/Project-Drive/Tools/Liger/GuideSequence.py "$Liger/Liger_Roof_Repair.arc" `
+  _AgentScratch/build/guide-edges.json ./GuideVerification.exe _AgentScratch/build/guide-work "$Liger/Liger_Guide_Candidates.arc"
+python Frontier/Projects/Project-Drive/Tools/Liger/GuideVerification.py
+GuideVerification.exe "$Liger/Liger_Roof_Repair.arc" "$Liger/Liger_Guide_Candidates.arc" _AgentScratch/build/guide-renders
+python Frontier/Projects/Project-Drive/Tools/Liger/GuideProjection.py _AgentScratch/build/guide-renders $Liger --font C:/Windows/Fonts/arial.ttf
+```
+
+Omit the render directory for geometry/persistence checks only. CTest and both native build gates include
+`LigerGuideVerification`. The optional native `--project source.arc queries.xyz projected.xyz` mode emits
+projected XYZ, face index, surface parameters and projection distance for each XYZ input row.
+
 ### First orange-area surface repair (roof junction)
 
 Open `Liger_Roof_Repair.arc` for the first **actual skin repair**. The accepted

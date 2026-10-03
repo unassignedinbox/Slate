@@ -1903,6 +1903,9 @@ void ConsoleHost::RememberDocumentCommand(const CommandLine& Command) noexcept
     if (Command.Verb == "sew" && Command.Switch("split-junctions") &&
         std::find(DocumentJournal.begin(), DocumentJournal.end(), "require boundary-splits") == DocumentJournal.end())
         DocumentJournal.push_back("require boundary-splits");
+    if (Command.Verb == "cpcurve" && Command.SwitchText("knots") &&
+        std::find(DocumentJournal.begin(), DocumentJournal.end(), "require curve-knots") == DocumentJournal.end())
+        DocumentJournal.push_back("require curve-knots");
     DocumentJournal.push_back(EncodeDocumentCommand(Command));
 }
 
@@ -2140,11 +2143,42 @@ void ConsoleHost::Register() noexcept
         if (Pts.size() >= 2) { S.A = Pts.front(); S.B = Pts.back(); }
         return AddCurve(C, "Spline", NurbsCurve::Interpolate(Pts, S.I0, S.Closed), S);
     });
-    Add("cpcurve", "cpcurve (p) (p) (p) ... [--degree=3] [--periodic]   control-point curve", [=, this](const CommandLine& C)
+    Add("cpcurve", "cpcurve (p) (p) (p) ... [--degree=3] [--periodic] [--knots=k,...]   control-point curve", [=, this](const CommandLine& C)
     {
         std::vector<Vec3> Pts; Vec3 P;
         for (size_t I = 0; I < C.Count(); ++I) { if (!Lift(C, I, P)) return Refuse("cpcurve: argument %zu is not a point", I + 1); Pts.push_back(P); }
-        return AddCurve(C, "ControlCurve", NurbsCurve::ControlPoints(static_cast<int>(C.SwitchNumber("degree").value_or(3)), Pts, C.Switch("periodic")));
+        auto Result = NurbsCurve::ControlPoints(static_cast<int>(C.SwitchNumber("degree").value_or(3)), Pts, C.Switch("periodic"));
+        if (const auto Text = C.SwitchText("knots"))
+        {
+            if (!Result || C.Switch("periodic")) return Refuse("cpcurve: explicit knots require a valid non-periodic curve");
+            std::vector<double> Knots;
+            size_t Start = 0;
+            while (Start <= Text->size())
+            {
+                const size_t End = Text->find(',', Start);
+                const auto Number = CommandCodec::ParseNumber(Text->substr(Start, End == std::string::npos ? End : End - Start));
+                if (!Number || !std::isfinite(*Number)) return Refuse("cpcurve: finite knot numbers required");
+                Knots.push_back(*Number);
+                if (End == std::string::npos) break;
+                Start = End + 1;
+            }
+            const size_t Degree = static_cast<size_t>(Result.Payload.Degree), Count = Result.Payload.Poles.size();
+            if (Knots.size() != Count + Degree + 1 || !std::is_sorted(Knots.begin(), Knots.end()) || !(Knots[Degree] < Knots[Count]))
+                return Refuse("cpcurve: invalid clamped knot sequence");
+            for (size_t Index = 0; Index <= Degree; ++Index)
+                if (Knots[Index] != Knots.front() || Knots[Knots.size() - 1 - Index] != Knots.back())
+                    return Refuse("cpcurve: endpoint knots must be clamped");
+            for (size_t Index = Degree + 1; Index < Count;)
+            {
+                size_t End = Index + 1;
+                while (End < Count && Knots[End] == Knots[Index]) ++End;
+                if (End - Index > Degree || Knots[Index] <= Knots.front() || Knots[Index] >= Knots.back())
+                    return Refuse("cpcurve: interior knots must preserve positional continuity");
+                Index = End;
+            }
+            Result = NurbsCurve::Build(Result.Payload.Degree, std::move(Result.Payload.Poles), std::move(Knots));
+        }
+        return AddCurve(C, "ControlCurve", std::move(Result));
     });
 
     //---------------------------------------------- primitive surfaces ----------------------------------------------
@@ -4587,9 +4621,9 @@ void ConsoleHost::Register() noexcept
         return true;
     });
     Add("echo", "echo text", [=, this](const CommandLine& C) { std::printf("  "); for (const auto& A : C.Arguments) std::printf("%s ", A.c_str()); std::printf("\n"); return true; });
-    Add("require", "require open-sew|knot-skin|feature-curves|boundary-splits — require supported document geometry", [this](const CommandLine& C)
+    Add("require", "require open-sew|knot-skin|feature-curves|boundary-splits|curve-knots — require supported document geometry", [this](const CommandLine& C)
     {
-        if (C.Count() != 1 || (C.Arguments[0] != "open-sew" && C.Arguments[0] != "knot-skin" && C.Arguments[0] != "feature-curves" && C.Arguments[0] != "boundary-splits") || !C.Flags.empty())
+        if (C.Count() != 1 || (C.Arguments[0] != "open-sew" && C.Arguments[0] != "knot-skin" && C.Arguments[0] != "feature-curves" && C.Arguments[0] != "boundary-splits" && C.Arguments[0] != "curve-knots") || !C.Flags.empty())
             return Refuse("require: unsupported document capability");
         return true;
     });
