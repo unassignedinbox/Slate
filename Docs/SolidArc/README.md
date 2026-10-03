@@ -183,6 +183,47 @@ samples; it does not provide a continuous fit-error certificate. The native veri
 radii, sixteen crown-to-fade joins, mirrored curves and save/reopen persistence. The metric tool checks native guide
 samples against the selected source chains and confirms that this reference-authoring pass did not alter the body.
 
+### Consolidated guide drawing
+
+Open **`Liger_Consolidated.arc`** for the current simplified selection. The complete candidate review
+remains in `Liger_Guide_Candidates.arc`. Both are standalone editable documents.
+
+- **C01** joins B27 + M01 + B53 into one roof rail on each side.
+- **C02** joins G92 + M03 + G50 + M04 + G91 into one rear outer-arch guide on each side.
+- Both front arch borders (**B22 / G23**) and both rear borders (**B20 / C02**) remain separate.
+- Yellow Y01–Y05 and red R03–R05 are hidden. M02 is also hidden because it connects rejected Y01.
+- Close parallel guides use an existing longer representative instead of an averaged replacement.
+  Examples: G24 → B22, G31/G56 → C01, G43/G49 → B19, G10/G11/G14 → B07.
+- Blue now means retained or joined guides; original IDs remain unchanged. R01/R02 remain red.
+  Orange repair selections are unchanged. There are 37 visible families / 53 native curves.
+
+This is a guide-network simplification, **not a body-patch merge**. Rejected and superseded candidates
+remain hidden and recoverable. The decision for every old ID is recorded in
+`Liger_Consolidated.guides.json`. Nearby parallel relations are sampled and bounded by a 40 mm
+median relation-path threshold with at least 80% overlap; both arch borders are explicitly protected.
+Wider distinct bands are retained. Previously hidden short candidates that do not qualify remain hidden.
+
+Joined spans preserve their original geometry and meet at coincident endpoints; no replacement line is
+fitted through their interiors. The joins are positional (C0), not a certified G1/G2 redesign.
+The repaired body is unchanged. Open `Liger_Consolidated_Four_Views.png` for the clean combined drawing;
+`Liger_Consolidated_Details.png` shows roof/arch details with patch edges. To inspect the patch layout
+in the document, run `show edges on`; restore the clean display with `show edges off`.
+`Liger_Consolidated_Key.png` lists the retained IDs, lengths and join membership.
+
+```powershell
+$Liger = "Frontier/Projects/Project-Drive/Content/Vehicles/Liger/Reconstruction"
+python Frontier/Projects/Project-Drive/Tools/Liger/ConsolidationSequence.py `
+  "$Liger/Liger_Guide_Candidates.arc" "$Liger/Liger_Consolidated.arc"
+python Frontier/Projects/Project-Drive/Tools/Liger/ConsolidationVerification.py
+GuideVerification.exe --consolidated "$Liger/Liger_Roof_Repair.arc" `
+  "$Liger/Liger_Consolidated.arc" _AgentScratch/build/consolidated-renders
+python Frontier/Projects/Project-Drive/Tools/Liger/GuideProjection.py `
+  _AgentScratch/build/consolidated-renders $Liger --consolidated --font C:/Windows/Fonts/arial.ttf
+```
+
+Omit the render directory for geometry/persistence checks only. CTest and both native build gates run
+`LigerConsolidationVerification`. Original-candidate verification remains a separate regression.
+
 ### Named on-surface guide candidates
 
 Open **`Liger_Guide_Candidates.arc`** for the current curve-selection review, built on the accepted

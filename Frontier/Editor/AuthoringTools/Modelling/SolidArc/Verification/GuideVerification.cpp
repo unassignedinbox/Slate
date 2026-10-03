@@ -131,9 +131,16 @@ int main(int Count, char** Arguments)
         std::cout << "PROJECTED_NATIVE_SURFACE_SAMPLES " << Samples << '\n';
         return Input.eof() && Samples && Output.good() ? 0 : 2;
     }
+    const bool Consolidated = Count >= 4 && std::string(Arguments[1]) == "--consolidated";
+    if (Consolidated)
+    {
+        --Count;
+        ++Arguments;
+    }
     if (Count != 3 && Count != 4) return 2;
     VerificationPanel Panel("SolidArc · on-surface curve candidates");
-    const std::filesystem::path Destination = Count == 4 ? Arguments[3] : SOLIDARC_PROOF_FOLDER "/GuideVerification";
+    const std::filesystem::path Destination = Count == 4 ? Arguments[3] :
+        (Consolidated ? SOLIDARC_PROOF_FOLDER "/ConsolidationVerification" : SOLIDARC_PROOF_FOLDER "/GuideVerification");
     std::filesystem::create_directories(Destination);
     ConsoleHost Before(Destination.string(), 2000, 1250), After(Destination.string(), 2000, 1250);
     Panel.Expect("repaired reference opens", Before.Execute(std::string("open \"") + Arguments[1] + "\""));
@@ -169,7 +176,7 @@ int main(int Count, char** Arguments)
     std::ofstream Measurements(Destination / "GuideNative.csv"); Measurements << std::setprecision(17) << "name,maximumSurfaceDistanceMm,samples\n";
     for (const auto& Figure : After.AllFigures())
     {
-        if (!Figure.Name.starts_with("Guide_")) continue;
+        if (!Figure.Name.starts_with("Guide_") || (Consolidated && Figure.Hidden)) continue;
         ++Guides;
         Tagged = Tagged && Figure.Classification == FigureClassification::Curve && Figure.Feature == FeaturePurpose::Design;
         if ((Figure.Name[6] == 'B' || Figure.Name[6] == 'G') && std::stoi(Figure.Name.substr(7, 2)) <= 56) ++LongCurves;
@@ -177,6 +184,7 @@ int main(int Count, char** Arguments)
         {
             const auto* Opposite = After.Document().Find(Figure.Name.substr(0, Figure.Name.size() - 5) + "_Right");
             if (!Opposite) return 2;
+            Tagged = Tagged && (!Consolidated || !Opposite->Hidden);
             ++MirrorPairs;
             for (int Sample = 0; Sample <= 128; ++Sample)
             {
@@ -196,10 +204,29 @@ int main(int Count, char** Arguments)
         Maximum = std::max(Maximum, Error);
         Measurements << Figure.Name << ',' << Error * 1000 << ",129\n";
     }
-    Panel.Expect("all long chains and proposed guides are native features", Tagged && Guides == 179 && LongCurves == 81 && Proposed == 26);
-    Panel.Expect("bilateral candidate curves are paired", MirrorPairs == 73);
+    Panel.Expect(Consolidated ? "selected consolidated guides are native features" : "all long chains and proposed guides are native features",
+        Tagged && (Consolidated ? Guides == 53 && Proposed == 4 : Guides == 179 && LongCurves == 81 && Proposed == 26));
+    Panel.Expect("bilateral candidate curves are paired", MirrorPairs == (Consolidated ? 16u : 73u));
     Panel.Within("native reflected candidate position error [m]", MirrorError, 1e-10);
     Panel.Within("sampled guide distance to actual native skin [mm]", Maximum * 1000, 1.2);
+    if (Consolidated)
+    {
+        bool Excluded = true;
+        for (const auto& Figure : After.AllFigures())
+            if (Figure.Name.starts_with("Guide_Y") || Figure.Name.starts_with("Guide_M") ||
+                Figure.Name.starts_with("Guide_R03_") || Figure.Name.starts_with("Guide_R04_") ||
+                Figure.Name.starts_with("Guide_R05_")) Excluded = Excluded && Figure.Hidden;
+        Panel.Expect("rejected options and superseded join fragments hidden", Excluded);
+        const char* Borders[] = { "Guide_B20_RearInnerArch", "Guide_B22_FrontOuterArch", "Guide_G23_FrontInnerArch",
+            "Guide_C01_JoinedRoofRail", "Guide_C02_JoinedRearOuterArch" };
+        bool Separate = true;
+        for (const auto* Name : Borders) for (const auto* Side : { "_Left", "_Right" })
+        {
+            const auto* Figure = After.Document().Find(std::string(Name) + Side);
+            Separate = Separate && Figure && !Figure->Hidden;
+        }
+        Panel.Expect("joined rails and all four arch borders are shown bilaterally", Separate);
+    }
     const auto Fingerprint = UndoSequence::Fingerprint(After.Document());
     const std::string Saved = (Destination / "GuideRoundtrip.arc").generic_string();
     Panel.Expect("save candidates", After.Execute("save \"" + Saved + "\""));
@@ -211,9 +238,12 @@ int main(int Count, char** Arguments)
         std::ofstream Pixels(Destination / "GuidePixels.csv"); Pixels << "view,name,sample,x,y,z,depth\n";
         const char* Views[] = { "Front_Quarter", "Rear_Quarter", "Side", "Top", "Roof_Detail", "Rear_Arch_Detail", "Front_Arch_Detail" };
         const char* Commands[] = { "view front; view orbit 55 23; view persp", "view front; view orbit -55 23; view persp", "view front", "view top" };
-        Panel.Expect("review display", After.Execute("show cages off; show iso off; show edges on; show features on; show shading plastic"));
+        Panel.Expect("review display", After.Execute(Consolidated ?
+            "show cages off; show iso off; show edges off; show features on; show shading plastic" :
+            "show cages off; show iso off; show edges on; show features on; show shading plastic"));
         for (int Index = 0; Index < 7; ++Index)
         {
+            if (Consolidated && Index == 4) Panel.Expect("detail patch layout", After.Execute("show edges on"));
             if (Index < 4)
                 Panel.Expect("review camera", Before.Execute(Commands[Index]) && Before.Execute("view fit; view dolly 1.5"));
             else
@@ -225,7 +255,7 @@ int main(int Count, char** Arguments)
                 Panel.Expect("detail camera", Before.Execute(Inspection[Index - 4]));
             }
             After.Camera() = Before.Camera();
-            Panel.Expect("native review image", After.Execute(std::string("render Liger_Guide_") + Views[Index] + " --size=2000x1250"));
+            Panel.Expect("native review image", After.Execute(std::string(Consolidated ? "render Liger_Consolidated_" : "render Liger_Guide_") + Views[Index] + " --size=2000x1250"));
             for (const auto& Figure : After.AllFigures())
             {
                 if (Figure.Hidden || !Figure.Name.starts_with("Guide_")) continue;

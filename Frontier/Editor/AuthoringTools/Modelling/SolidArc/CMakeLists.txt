@@ -890,3 +890,6 @@ target_link_libraries(GuideVerification PRIVATE SolidArcConsoleKit)
 add_test(NAME LigerGuideVerification COMMAND GuideVerification
     "${LIGER_RECONSTRUCTION}/Liger_Roof_Repair.arc"
     "${LIGER_RECONSTRUCTION}/Liger_Guide_Candidates.arc")
+add_test(NAME LigerConsolidationVerification COMMAND GuideVerification --consolidated
+    "${LIGER_RECONSTRUCTION}/Liger_Roof_Repair.arc"
+    "${LIGER_RECONSTRUCTION}/Liger_Consolidated.arc")

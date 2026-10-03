@@ -13,8 +13,13 @@ from PIL import Image, ImageDraw, ImageFont
 Colours = {"B": "#37b9ff", "G": "#57eb7a", "Y": "#ffe35c", "M": "#f577e7", "R": "#ff6b74", "O": "#ffc06b"}
 
 
-def Run(Source, Destination, FontPath):
-    Metadata = json.loads((Destination / "Liger_Guide_Candidates.guides.json").read_text())
+def Run(Source, Destination, FontPath, Consolidated=False):
+    Prefix = "Liger_Consolidated" if Consolidated else "Liger_Guide"
+    Palette = dict(Colours)
+    if Consolidated:
+        Palette.update(C=Colours["B"], G=Colours["B"])
+    MetadataName = "Liger_Consolidated.guides.json" if Consolidated else "Liger_Guide_Candidates.guides.json"
+    Metadata = json.loads((Destination / MetadataName).read_text())
     Rows = list(csv.DictReader((Source / "GuidePixels.csv").open()))
     Curves = {Curve["code"]: Curve for Curve in Metadata["curves"]}
     Title = ImageFont.truetype(str(FontPath), 52)
@@ -30,10 +35,20 @@ def Run(Source, Destination, FontPath):
         "Rear_Arch_Detail": ["B20", "G50", "G71", "G75", "G90", "G91", "G92", "M03", "M04"],
         "Front_Arch_Detail": ["B22", "G23", "G24", "B35", "B19", "B16"],
     }
+    if Consolidated:
+        Requested = {
+            "Front_Quarter": ["B01", "B02", "B03", "G04", "B22", "G23", "C01", "R01"],
+            "Rear_Quarter": ["B01", "B07", "B08", "G12", "B20", "C02", "C01"],
+            "Side": ["B20", "C02", "B22", "G23", "B19", "B46", "R01", "R02"],
+            "Top": ["B01", "B02", "B03", "G04", "C01", "B29", "B33", "B41", "B42"],
+            "Roof_Detail": ["C01", "B29", "B33", "B41", "B42"],
+            "Rear_Arch_Detail": ["B20", "C02", "B19", "R01", "R02"],
+            "Front_Arch_Detail": ["B22", "G23", "B35", "B19", "B16", "R01", "R02"],
+        }
     Images = {}
     Placements = []
     for View, Codes in Requested.items():
-        Path = Source / f"Liger_Guide_{View}.png"
+        Path = Source / f"{Prefix}_{View}.png"
         shutil.copyfile(Path, Destination / Path.name)
         Canvas = Image.open(Path).convert("RGB")
         Draw = ImageDraw.Draw(Canvas)
@@ -80,7 +95,7 @@ def Run(Source, Destination, FontPath):
             _, Row, Box = Best
             X, Y = float(Row["x"]), float(Row["y"])
             A, B, C, D = Box
-            Colour = Colours[Code[0]]
+            Colour = Palette[Code[0]]
             Draw.line([(X, Y), ((A + C) / 2, (B + D) / 2)], fill="#e4e9f0", width=2)
             Draw.ellipse((X - 4, Y - 4, X + 4, Y + 4), fill=Colour)
             Draw.rounded_rectangle(Box, radius=7, fill="#101922", outline=Colour, width=2)
@@ -96,7 +111,7 @@ def Run(Source, Destination, FontPath):
                     "labelRectangle": list(Box),
                 }
             )
-        Canvas.save(Destination / f"Liger_Guide_{View}_Labelled.png")
+        Canvas.save(Destination / f"{Prefix}_{View}_Labelled.png")
         Images[View] = Canvas
 
     def Heading(Canvas, Text):
@@ -110,15 +125,28 @@ def Run(Source, Destination, FontPath):
             ("R", "Red: design-guide options"),
             ("O", "Orange: unresolved repair selections"),
         ]
+        if Consolidated:
+            Legends = [
+                ("B", "Blue: retained / joined guides"),
+                ("R", "Red: retained R01 / R02"),
+                ("O", "Orange: remaining repair areas"),
+            ]
         for Index, (Code, Text) in enumerate(Legends):
             X = 40 + (Index % 3) * 1300
             Y = 100 + (Index // 3) * 49
-            Draw.line((X, Y + 16, X + 64, Y + 16), fill=Colours[Code], width=6)
+            Draw.line((X, Y + 16, X + 64, Y + 16), fill=Palette[Code], width=6)
             Draw.text((X + 82, Y), Text, font=Label, fill="#e4e9f0")
         return Draw
 
     Overview = Image.new("RGB", (4000, 2875), "#101922")
-    Draw = Heading(Overview, "LIGER / NAMED CURVE CANDIDATES / FOUR-VIEW REVIEW")
+    Draw = Heading(
+        Overview,
+        (
+            "LIGER / CONSOLIDATED GUIDES / FOUR-VIEW REVIEW"
+            if Consolidated
+            else "LIGER / NAMED CURVE CANDIDATES / FOUR-VIEW REVIEW"
+        ),
+    )
     for Index, View in enumerate(["Front_Quarter", "Rear_Quarter", "Side", "Top"]):
         X = (Index % 2) * 2000
         Y = 210 + (Index // 2) * 1310
@@ -126,14 +154,25 @@ def Run(Source, Destination, FontPath):
         Overview.paste(Images[View], (X, Y + 52))
     Draw.text(
         (38, 2838),
-        "Guide-only phase: repaired skin unchanged. A close parallel is NOT proof it can be removed. Tell me the IDs to keep, join or discard.",
+        (
+            "53 native guides. Yellow and R03-R05 excluded; close parallel traces consolidated. Body patches unchanged."
+            if Consolidated
+            else "Guide-only phase: repaired skin unchanged. A close parallel is NOT proof it can be removed. Tell me the IDs to keep, join or discard."
+        ),
         font=Small,
         fill="#c7d3e1",
     )
-    Overview.save(Destination / "Liger_Guide_Four_Views.png")
+    Overview.save(Destination / f"{Prefix}_Four_Views.png")
 
     Details = Image.new("RGB", (4000, 2875), "#101922")
-    Draw = Heading(Details, "LIGER / SURFACE EXTENSIONS AND PAIRED-CONTOUR OPTIONS")
+    Draw = Heading(
+        Details,
+        (
+            "LIGER / JOINED ROOF RAIL AND DISTINCT ARCH BORDERS"
+            if Consolidated
+            else "LIGER / SURFACE EXTENSIONS AND PAIRED-CONTOUR OPTIONS"
+        ),
+    )
     for Index, View in enumerate(["Roof_Detail", "Top", "Rear_Arch_Detail", "Front_Arch_Detail"]):
         X = (Index % 2) * 2000
         Y = 210 + (Index // 2) * 1310
@@ -141,15 +180,25 @@ def Run(Source, Destination, FontPath):
         Details.paste(Images[View], (X, Y + 52))
     Draw.text(
         (38, 2838),
-        "Wheel-arch inner/outer borders remain separate. M01-M04 are proposed connections across existing skin, not repaired patches.",
+        (
+            "C01 = B27 + M01 + B53. C02 = G92 + M03 + G50 + M04 + G91. Both arch borders retained. M02 excluded with Y01."
+            if Consolidated
+            else "Wheel-arch inner/outer borders remain separate. M01-M04 are proposed connections across existing skin, not repaired patches."
+        ),
         font=Small,
         fill="#c7d3e1",
     )
-    Details.save(Destination / "Liger_Guide_Details.png")
+    Details.save(Destination / f"{Prefix}_Details.png")
 
-    Key = Image.new("RGB", (2800, 3280), "#101922")
+    KeyHeight = 1480 if Consolidated else 3280
+    Key = Image.new("RGB", (2800, KeyHeight), "#101922")
     Draw = ImageDraw.Draw(Key)
-    Draw.text((38, 24), "LIGER / CURVE SELECTION KEY", font=Title, fill="#ecf1f6")
+    Draw.text(
+        (38, 24),
+        "LIGER / CONSOLIDATED CURVE KEY" if Consolidated else "LIGER / CURVE SELECTION KEY",
+        font=Title,
+        fill="#ecf1f6",
+    )
     Draw.text(
         (38, 100),
         "IDs match the native curve names. Left/Right share an ID; Across is a full-width or centre curve.",
@@ -158,13 +207,17 @@ def Run(Source, Destination, FontPath):
     )
     Draw.text(
         (38, 143),
-        "Dimmed rows: additional short candidates; reveal with Liger_Guide_All_Candidates.arc after loading the main document.",
+        (
+            "C01 and C02 are joined curves. Other IDs retain their previous meaning; all shown below are visible in this review."
+            if Consolidated
+            else "Dimmed rows: additional short candidates; reveal with Liger_Guide_All_Candidates.arc after loading the main document."
+        ),
         font=Tiny,
         fill="#c7d3e1",
     )
     Records = Metadata["curves"]
     Split = (len(Records) + 1) // 2
-    with (Destination / "Liger_Guide_Key.csv").open("w", newline="") as File:
+    with (Destination / f"{Prefix}_Key.csv").open("w", newline="") as File:
         Writer = csv.writer(File, lineterminator="\n")
         Writer.writerow(
             [
@@ -195,7 +248,7 @@ def Run(Source, Destination, FontPath):
                 Tail += " / " + " + ".join(Curve["connects"])
             if not Visible:
                 Tail += " / hidden"
-            Draw.text((X, Y), Code, font=Label, fill=Colours[Code[0]] if Visible else "#7e8a98")
+            Draw.text((X, Y), Code, font=Label, fill=Palette[Code[0]] if Visible else "#7e8a98")
             Draw.text((X + 93, Y), Description, font=Tiny, fill="#e4e9f0" if Visible else "#7e8a98")
             Draw.text((X + 720, Y + 2), Tail, font=Tiny, fill="#b7c7d8" if Visible else "#7e8a98")
             Writer.writerow(
@@ -211,23 +264,27 @@ def Run(Source, Destination, FontPath):
                 ]
             )
     Draw.text(
-        (38, 3210),
-        "Blue/green = existing traced geometry. Yellow/magenta/red = proposals. No candidate is approved for deletion or merging yet.",
+        (38, KeyHeight - 70),
+        (
+            "Parallel guides consolidated to existing representatives, not averaged. Rejected/superseded guides remain hidden in the document."
+            if Consolidated
+            else "Blue/green = existing traced geometry. Yellow/magenta/red = proposals. No candidate is approved for deletion or merging yet."
+        ),
         font=Tiny,
         fill="#c7d3e1",
     )
-    Key.save(Destination / "Liger_Guide_Key.png")
+    Key.save(Destination / f"{Prefix}_Key.png")
     Report = {
         "renderer": "Native SolidArc GuideVerification; only labels, leaders and layout added after rendering",
         "documentSha256": Metadata["documentSha256"],
         "labelPlacements": Placements,
         "images": {
             Path.name: hashlib.sha256(Path.read_bytes()).hexdigest()
-            for Path in sorted(Destination.glob("Liger_Guide_*.png"))
+            for Path in sorted(Destination.glob(f"{Prefix}_*.png"))
         },
     }
-    (Destination / "Liger_Guide_Views.json").write_text(json.dumps(Report, indent=2) + "\n")
-    shutil.copyfile(Source / "GuideNative.csv", Destination / "Liger_Guide_Native.csv")
+    (Destination / f"{Prefix}_Views.json").write_text(json.dumps(Report, indent=2) + "\n")
+    shutil.copyfile(Source / "GuideNative.csv", Destination / f"{Prefix}_Native.csv")
 
 
 if __name__ == "__main__":
@@ -235,5 +292,6 @@ if __name__ == "__main__":
     Parser.add_argument("Renders", type=Path)
     Parser.add_argument("Destination", type=Path)
     Parser.add_argument("--font", type=Path, default=Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"))
+    Parser.add_argument("--consolidated", action="store_true")
     Arguments = Parser.parse_args()
-    Run(Arguments.Renders, Arguments.Destination, Arguments.font)
+    Run(Arguments.Renders, Arguments.Destination, Arguments.font, Arguments.consolidated)

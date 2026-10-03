@@ -1,0 +1,38 @@
+ID,Description,Role,LengthPerCurveMetres,ClosestParallelID,MedianSeparationMm,VisibleInitially,NativeNames
+B01,Outer Shoulder,existing long body chain,8.692469397222244,,,True,Guide_B01_OuterShoulder_Across
+B02,Lower Canopy,existing long body chain,7.759871901992206,,,True,Guide_B02_LowerCanopy_Across
+B03,Upper Canopy,existing long body chain,6.453290810809918,,,True,Guide_B03_UpperCanopy_Across
+G04,Windshield Foot,existing parallel candidate,4.810417629038845,,,True,Guide_G04_WindshieldFoot_Across
+B05,Centreline,existing long body chain,3.443361404228754,,,True,Guide_B05_Centreline_Across
+B06,Rear Valance,existing long body chain,2.8951253373229773,,,True,Guide_B06_RearValance_Across
+B07,Rear Deck Rim,existing long body chain,2.72473207407504,,,True,Guide_B07_RearDeckRim_Across
+B08,Rear Upper Return,existing long body chain,2.616953860525487,,,True,Guide_B08_RearUpperReturn_Across
+G12,Rear Lower Inset,existing parallel candidate,2.4602530587528406,,,True,Guide_G12_RearLowerInset_Across
+B16,Lower Side Sweep,existing long body chain,2.12108128027267,,,True,Guide_B16_LowerSideSweep_Left;Guide_B16_LowerSideSweep_Right
+B17,Front Lower Return,existing long body chain,2.046145545821191,,,True,Guide_B17_FrontLowerReturn_Across
+B18,Nose Return,existing long body chain,2.0270308849996175,,,True,Guide_B18_NoseReturn_Across
+B19,Side Crease,existing long body chain,1.9964789043011217,,,True,Guide_B19_SideCrease_Left;Guide_B19_SideCrease_Right
+B20,Rear Inner Arch,existing long body chain,1.9926226367641697,,,True,Guide_B20_RearInnerArch_Left;Guide_B20_RearInnerArch_Right
+B22,Front Outer Arch,existing long body chain,1.9590571130572247,,,True,Guide_B22_FrontOuterArch_Left;Guide_B22_FrontOuterArch_Right
+G23,Front Inner Arch,existing parallel candidate,1.8979301175344039,,,True,Guide_G23_FrontInnerArch_Left;Guide_G23_FrontInnerArch_Right
+B25,Rear Deck Crossbar Outer,existing long body chain,1.6719807537517117,,,True,Guide_B25_RearDeckCrossbarOuter_Across
+B26,Rear Deck Crossbar Inner,existing long body chain,1.5830067007988853,,,True,Guide_B26_RearDeckCrossbarInner_Across
+B28,Rear Deck Centre Return,existing long body chain,1.4118074512930234,,,True,Guide_B28_RearDeckCentreReturn_Across
+B29,Roof Rear Crossbar,existing long body chain,1.3889134057419095,,,True,Guide_B29_RoofRearCrossbar_Across
+B30,Bonnet Rear Crossbar,existing long body chain,1.3831175098851174,,,True,Guide_B30_BonnetRearCrossbar_Across
+B32,Rear Shoulder,existing long body chain,1.3023317230081206,,,True,Guide_B32_RearShoulder_Left;Guide_B32_RearShoulder_Right
+B33,Roof Front Crossbar,existing long body chain,1.2996833904651108,,,True,Guide_B33_RoofFrontCrossbar_Across
+B35,Front Wing Rail,existing long body chain,1.2723991006436621,,,True,Guide_B35_FrontWingRail_Left;Guide_B35_FrontWingRail_Right
+B36,Upper Side Rail,existing long body chain,1.2471383904928286,,,True,Guide_B36_UpperSideRail_Left;Guide_B36_UpperSideRail_Right
+B39,Side Upper Diagonal,existing long body chain,1.1613729775384387,,,True,Guide_B39_SideUpperDiagonal_Left;Guide_B39_SideUpperDiagonal_Right
+B40,Nose Inset Crossbar,existing long body chain,1.1551926150829281,,,True,Guide_B40_NoseInsetCrossbar_Across
+B41,Roof Repair Crossbar,existing long body chain,1.1436139145265665,,,True,Guide_B41_RoofRepairCrossbar_Across
+B42,Roof Forward Crossbar,existing long body chain,1.1429900358601084,,,True,Guide_B42_RoofForwardCrossbar_Across
+B45,Upper Door Front Trace,existing long body chain,1.0455116913229312,,,True,Guide_B45_UpperDoorFrontTrace_Left;Guide_B45_UpperDoorFrontTrace_Right
+B46,Upper Belt Rail,existing long body chain,1.0409727731364091,,,True,Guide_B46_UpperBeltRail_Left;Guide_B46_UpperBeltRail_Right
+B48,Rear Lower Crossbar,existing long body chain,1.0293805205660387,,,True,Guide_B48_RearLowerCrossbar_Across
+B52,Bonnet Diagonal,existing long body chain,0.8897360110428723,,,True,Guide_B52_BonnetDiagonal_Left;Guide_B52_BonnetDiagonal_Right
+R01,Side Belt Option,on-surface design option,1.8842206153892773,,,True,Guide_R01_SideBeltOption_Left;Guide_R01_SideBeltOption_Right
+R02,Side Belt Option,on-surface design option,1.881171379033262,,,True,Guide_R02_SideBeltOption_Left;Guide_R02_SideBeltOption_Right
+C01,Joined Roof Rail,joined approved guide spans,2.7409932089016293,,,True,Guide_C01_JoinedRoofRail_Left;Guide_C01_JoinedRoofRail_Right
+C02,Joined Rear Outer Arch,joined approved guide spans,1.905342511854392,,,True,Guide_C02_JoinedRearOuterArch_Left;Guide_C02_JoinedRearOuterArch_Right
