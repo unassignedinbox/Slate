@@ -144,7 +144,7 @@
         <div id="profileParams"></div>
       </div>
       <div class="card" style="--bar:var(--red);margin-top:10px">
-        <h2>Tread materials <div class="mode sm" id="treadMode"><span class="on" data-m="color">Colour</span><span data-m="height">Depth</span><span data-m="normal">Normal</span><span data-m="rough">Rough</span></div></h2>
+        <h2>Tread mesh inspection <div class="mode sm" id="treadMode"><span class="on" data-m="color">Rubber / paint</span><span data-m="rough">Roughness</span></div></h2>
         <canvas id="treadView"></canvas>
         <canvas id="treadStrip"></canvas>
         <div class="hint" id="treadDims" style="margin-top:6px"></div>
@@ -169,8 +169,8 @@
     </div>
     <div class="panel" data-panel="export">
       <div class="card" style="--bar:var(--red)"><h2>Export</h2>
-        <div class="hint">Textures are exported at the current map resolution. GLB is in metres, Y-up, tyre axis along X.</div>
-        <div class="btns"><button id="exportJson">Pattern JSON</button><button id="exportHeight">Height PNG</button><button id="exportNormal">Normal PNG</button><button id="exportGlb" class="primary">GLB (3D)</button></div>
+        <div class="hint">Tread designs are boolean-built meshes. GLB is in metres, Y-up, tyre axis along X.</div>
+        <div class="btns"><button id="exportJson">Pattern JSON</button><button id="exportGlb" class="primary">GLB (3D)</button></div>
         <div class="row" style="margin-top:12px"><label>Import JSON</label><input type="file" id="importJson" accept=".json"></div>
       </div>
     </div>
@@ -225,7 +225,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 const T = {                       // tyre carcass parameters (mm / inch / fractions)
   width: 245, aspect: 40, rim: 18, treadDepth: 8, wear: 0, wearBias: 0,
   treadFrac: 0.88, crown: 2.0, shoulder: 18, bulge: 1.0, rimWidthFrac: 0.78,
-  radial: 720, across: 96, meshMode: 'poly', polyDetail: 6,
+  radial: 720, across: 96, polyDetail: 6,
   rubber: '#151515', letter: 'white', lettering: true, brand: 'SLATE',
   factoryStripes: true, stripeRed: '#d63842', stripeBlue: '#3184c7', stripePattern: 'zigzag', stripeWidth: 1.4, stripeGap: 4.2, stripeWave: 1.1, stripeOffset: 0, stripePitch: 12
 };
@@ -276,15 +276,17 @@ const LAYER_DEFS = {
   sipe:    { label: 'Sipes',                   color: '#9aa4ff', count: 140, angle: 0, width: 1.2, depth: 0.55, from: -1, to: 1, phase: 0.5, mirror: false, curve: 0, zig: 1.5 },
   dimple:  { label: 'Circular pattern',        color: '#4fc3f7', rows: 3, count: 60, radius: 3, depth: 0.5, from: -0.7, to: 0.7, stagger: true, ring: false },
   hex:     { label: 'Hexagon cells',           color: '#e5423f', size: 14, width: 3, depth: 0.8, from: -1, to: 1, rotate: 0 },
-  terrain: { label: 'Terrain lug network',      color: '#c7772a', count: 18, width: 10, depth: 1, shoulder: 1.1, phase: 0 },
+  atmesh:  { label: 'A/T stepped mesh lugs',     color: '#c7772a', count: 17, width: 10, depth: 1, shoulder: 1.14, bridge: 0.56, phase: 0 },
+  mudmesh: { label: 'M/T interlocking mesh lugs', color: '#e06c45', count: 14, width: 14, depth: 1, shoulder: 1.25, bridge: 0.66, phase: 0 },
+  arrowmesh:{ label: 'Directional V mesh lugs',   color: '#b779ff', count: 19, width: 13, depth: 1, shoulder: 1.24, bridge: 0.56, phase: 0 },
   noise:   { label: 'Micro texture',           color: '#8a8d94', amount: 0.06, scale: 3 }
 };
 const RANGES = {
   pos: [-1.3, 1.3, 0.01], width: [0.5, 30, 0.1], depth: [0.05, 1, 0.01], zig: [0, 12, 0.1], zigCount: [4, 240, 1],
   count: [2, 300, 1], angle: [-80, 80, 1], from: [-1.3, 1.3, 0.01], to: [-1.3, 1.3, 0.01], phase: [0, 1, 0.01], curve: [-1.5, 1.5, 0.01],
-  rows: [1, 14, 1], radius: [0.5, 15, 0.1], size: [4, 40, 0.5], rotate: [0, 60, 1], shoulder: [0.55, 1.28, 0.01], amount: [0, 0.5, 0.01], scale: [1, 12, 0.5]
+  rows: [1, 14, 1], radius: [0.5, 15, 0.1], size: [4, 40, 0.5], rotate: [0, 60, 1], shoulder: [0.65, 1.3, 0.01], bridge: [0.22, 0.86, 0.01], amount: [0, 0.5, 0.01], scale: [1, 12, 0.5]
 };
-const LABELS = { pos: 'Across position', width: 'Width (mm)', depth: 'Depth (×tread)', zig: 'Zig-zag (mm)', zigCount: 'Zig-zag count', count: 'Count around', angle: 'Angle (°)', from: 'From (across)', to: 'To (across)', phase: 'Phase', curve: 'Curvature', rows: 'Rows', radius: 'Radius (mm)', size: 'Cell size (mm)', rotate: 'Cell rotation (°)', shoulder: 'Shoulder reach', amount: 'Amount', scale: 'Scale', mirror: 'Mirror (V)', stagger: 'Stagger rows', ring: 'Rings instead of dots' };
+const LABELS = { pos: 'Across position', width: 'Width (mm)', depth: 'Depth (×tread)', zig: 'Zig-zag (mm)', zigCount: 'Zig-zag count', count: 'Count around', angle: 'Angle (°)', from: 'From (across)', to: 'To (across)', phase: 'Phase', curve: 'Curvature', rows: 'Rows', radius: 'Radius (mm)', size: 'Cell size (mm)', rotate: 'Cell rotation (°)', shoulder: 'Shoulder reach', bridge: 'Centre bridge', amount: 'Amount', scale: 'Scale', mirror: 'Mirror (V)', stagger: 'Stagger rows', ring: 'Rings instead of dots' };
 
 // =====================================================================================================================
 //  PRESETS — each one is a named tread design with its own default tyre size
@@ -333,18 +335,23 @@ const PRESETS = [
     layers: [L('dimple', { rows: 2, count: 3, radius: 3, depth: 0.8, from: -0.7, to: 0.7, stagger: true }), L('noise', { amount: 0.05, scale: 2 })] },
   { name: 'Talon Trail', type: 'Off-road', tyre: { width: 265, aspect: 65, rim: 17, treadDepth: 13, crown: 3, shoulder: 13, letter: 'white' },
     layers: [L('hex', { size: 22, width: 8, depth: 1, from: -1.3, to: 1.3 }), L('circ', { pos: 0, width: 9, zig: 4, zigCount: 30 })] },
-  { name: 'Ribline Touring 4', type: 'Street', tyre: { width: 225, aspect: 55, rim: 17, treadDepth: 8, treadFrac: 0.91, crown: 2.0, shoulder: 16, letter: 'blue' },
-    layers: [L('circ', { pos: -0.7, width: 6.5 }), L('circ', { pos: -0.25, width: 6 }), L('circ', { pos: 0.25, width: 6 }), L('circ', { pos: 0.7, width: 6.5 }),
-             L('lateral', { count: 72, angle: 13, width: 3.4, depth: 0.92, from: -1.02, to: -0.38, phase: 0.05, zig: 2 }), L('lateral', { count: 72, angle: -13, width: 3.4, depth: 0.92, from: 0.38, to: 1.02, phase: 0.55, zig: 2 }),
-             L('sipe', { count: 144, angle: 10, width: 1.05, depth: 0.5, from: -1.16, to: 1.16, phase: 0.25, zig: 1.1 })] },
+  // Reference 01 — five narrow ribs, short offset lateral reliefs and a smooth touring shoulder.
+  { name: 'Ribline Touring', type: 'Street', tyre: { width: 225, aspect: 55, rim: 17, treadDepth: 8, treadFrac: 0.91, crown: 2.0, shoulder: 16, letter: 'blue' },
+    layers: [L('circ', { pos: -0.76, width: 5.2 }), L('circ', { pos: -0.39, width: 4.8 }), L('circ', { pos: 0, width: 4.5 }), L('circ', { pos: 0.39, width: 4.8 }), L('circ', { pos: 0.76, width: 5.2 }),
+             L('lateral', { count: 74, angle: 17, width: 3.2, depth: 0.9, from: -1.05, to: -0.47, phase: 0.04, zig: 1.6 }), L('lateral', { count: 74, angle: -17, width: 3.2, depth: 0.9, from: 0.47, to: 1.05, phase: 0.54, zig: 1.6 }),
+             L('sipe', { count: 146, angle: 8, width: 1.0, depth: 0.42, from: -0.3, to: 0.3, phase: 0.26, zig: 0.8 })] },
+  // Reference 02 — staggered all-terrain blocks with an offset centre bridge and released shoulders.
   { name: 'Trail Lock A/T', type: 'Off-road', tyre: { width: 285, aspect: 70, rim: 17, treadDepth: 15, treadFrac: 0.91, crown: 3.2, shoulder: 12, letter: 'white' },
-    layers: [L('terrain', { count: 17, width: 10, shoulder: 1.12, phase: 0.04 }), L('sipe', { count: 34, angle: 4, width: 1.5, depth: 0.38, from: -1.17, to: 1.17, phase: 0.5, zig: 3 })] },
+    layers: [L('atmesh', { count: 17, width: 10.5, depth: 1, shoulder: 1.16, bridge: 0.55, phase: 0.03 }),
+             L('sipe', { count: 34, angle: 3, width: 1.35, depth: 0.35, from: -1.13, to: 1.13, phase: 0.5, zig: 2.5 })] },
+  // Reference 03 — sparse, deep interlocking mud blocks and an open shoulder void.
   { name: 'Rocklock M/T', type: 'Off-road', tyre: { width: 305, aspect: 65, rim: 18, treadDepth: 16, treadFrac: 0.9, crown: 3.8, shoulder: 11, letter: 'white' },
-    layers: [L('terrain', { count: 15, width: 13, shoulder: 1.22, phase: 0.28 }), L('circ', { pos: 0, width: 5, depth: 0.72, zig: 7, zigCount: 15 }),
-             L('sipe', { count: 30, angle: 7, width: 1.6, depth: 0.34, from: -1.18, to: 1.18, phase: 0.5, zig: 3.5 })] },
+    layers: [L('mudmesh', { count: 14, width: 14, depth: 1, shoulder: 1.27, bridge: 0.68, phase: 0.16 }),
+             L('sipe', { count: 28, angle: 4, width: 1.45, depth: 0.28, from: -0.95, to: 0.95, phase: 0.46, zig: 3.2 })] },
+  // Reference 04 — broad directional arrows with split outer evacuation channels.
   { name: 'Vector Trail V', type: 'Grip / UHP', tyre: { width: 275, aspect: 40, rim: 19, treadDepth: 10, treadFrac: 0.92, crown: 2.0, shoulder: 15, letter: 'red' },
-    layers: [L('chevron', { count: 19, angle: 52, width: 14, from: 0.03, to: 1.28, curve: 0.16 }), L('circ', { pos: 0, width: 7, zig: 5, zigCount: 19 }),
-             L('lateral', { count: 19, angle: 5, width: 7, depth: 0.84, from: 0.78, to: 1.28, phase: 0.18, zig: 2, mirror: true }), L('sipe', { count: 76, angle: 49, width: 1.2, depth: 0.46, from: 0.3, to: 1.2, phase: 0.48, mirror: true, zig: 1.5 })] },
+    layers: [L('arrowmesh', { count: 19, width: 13, depth: 1, shoulder: 1.25, bridge: 0.57, phase: 0.0 }),
+             L('sipe', { count: 76, angle: 49, width: 1.15, depth: 0.44, from: 0.34, to: 1.18, phase: 0.46, mirror: true, zig: 1.3 })] },
 ];
 
 // =====================================================================================================================
@@ -369,11 +376,13 @@ function randomTyre() {
   const positions = grooves === 1 ? [0] : grooves === 2 ? [-0.3, 0.3] : grooves === 3 ? [-0.5, 0, 0.5] : [-0.6, -0.2, 0.2, 0.6];
   const zig = type === 'Off-road' || type === 'Rally' ? rnd(3, 7) : (type === 'Winter' ? rnd(0, 2) : 0);
   positions.forEach(p => layers.push(L('circ', { pos: p, width: rnd(5, 11), zig, zigCount: ri(22, 80) })));
-  const style = pick(['sym', 'dir', 'asym', 'terrain', 'hex', 'dot']);
+  const style = pick(['sym', 'dir', 'asym', 'atmesh', 'mudmesh', 'arrowmesh', 'hex', 'dot']);
   if (type === 'Slick' || type === 'Drag') { layers.push(L('dimple', { rows: 2, count: ri(3, 6), radius: 2.5, depth: 0.7, from: -0.6, to: 0.6, stagger: false })); layers.push(L('noise', { amount: 0.04, scale: 2 })); }
   else if (style === 'dir') layers.push(L('chevron', { count: ri(30, 50), angle: ri(35, 65), width: rnd(4, 9), from: rnd(0.05, 0.3), to: 1.3, curve: rnd(0, 0.6) }));
   else if (style === 'asym') { layers.push(L('lateral', { count: ri(40, 64), angle: ri(10, 30), width: rnd(3, 5), from: -1.3, to: rnd(-0.3, -0.1) })); layers.push(L('lateral', { count: ri(16, 26), angle: -ri(15, 40), width: rnd(4, 7), from: rnd(0.2, 0.5), to: 1.3, curve: 0.3 })); }
-  else if (style === 'terrain') layers.push(L('terrain', { count: ri(14, 24), width: rnd(7, 13), depth: rnd(0.8, 1), shoulder: rnd(0.9, 1.25), phase: Math.random() * 0.5 }));
+  else if (style === 'atmesh') layers.push(L('atmesh', { count: ri(15, 22), width: rnd(8, 12), depth: rnd(0.75, 1), shoulder: rnd(1.02, 1.25), bridge: rnd(0.45, 0.66), phase: Math.random() * 0.5 }));
+  else if (style === 'mudmesh') layers.push(L('mudmesh', { count: ri(12, 17), width: rnd(11, 16), depth: 1, shoulder: rnd(1.15, 1.3), bridge: rnd(0.55, 0.78), phase: Math.random() * 0.5 }));
+  else if (style === 'arrowmesh') layers.push(L('arrowmesh', { count: ri(16, 24), width: rnd(9, 14), depth: rnd(0.8, 1), shoulder: rnd(1.06, 1.28), bridge: rnd(0.42, 0.7), phase: Math.random() * 0.5 }));
   else if (style === 'hex') layers.push(L('hex', { size: rnd(10, 24), width: rnd(3, 7), depth: rnd(0.7, 1), from: -1.3, to: 1.3 }));
   else if (style === 'dot') layers.push(L('dimple', { rows: ri(3, 8), count: ri(40, 100), radius: rnd(2, 5), depth: rnd(0.4, 0.9), from: -1.1, to: 1.1, stagger: true, ring: Math.random() < 0.3 }));
   else { const a = ri(-30, 30), c = ri(20, 64); layers.push(L('lateral', { count: c, angle: a, width: rnd(4, 10), from: 0.2, to: 1.3 })); layers.push(L('lateral', { count: c, angle: -a, width: rnd(4, 10), from: -1.3, to: -0.2, phase: 0.5 })); }
@@ -395,24 +404,62 @@ function dims(t = T) {
 // =====================================================================================================================
 //  TREAD PATTERN RENDERER  (mm space → depth map). White = full rubber, black = full tread depth cut.
 // =====================================================================================================================
-// Interlocking AT/MT groove network. Each repeat creates a stepped centre bridge and offset shoulder
-// release cuts, leaving large independent-looking lugs instead of a repeated herringbone strip.
-function terrainNetworkLines(ly, th, circ) {
-  const count = Math.max(4, Math.round(ly.count)), pitch = circ / count, shoulder = Math.min(1.28, Math.max(.55, ly.shoulder || 1.1)) * th;
-  const core = shoulder * .5, edge = Math.min(th * 1.28, shoulder + th * .18), lines = [];
+// Reference-specific groove centre-lines. These lines are never used as a displacement or height field:
+// they are offset to closed polygons below and boolean-cut into the solid tread mesh.
+function meshLugRange(ly, th) {
+  return {
+    count: Math.max(4, Math.round(ly.count)),
+    shoulder: Math.min(1.3, Math.max(0.65, ly.shoulder || 1.16)) * th,
+    bridge: Math.min(0.86, Math.max(0.22, ly.bridge || 0.56)) * th
+  };
+}
+function atMeshLines(ly, th, circ) {
+  const { count, shoulder, bridge } = meshLugRange(ly, th), pitch = circ / count, edge = Math.min(th * 1.3, shoulder + th * 0.18), lines = [];
   for (let i = -1; i <= count; i++) {
-    const x = (i + (ly.phase || 0)) * pitch, flip = i & 1 ? 1 : -1;
-    // The two stepped central cuts outline alternating N/Z-shaped centre lugs.
-    lines.push([[x + pitch * .04, -core], [x + pitch * .27, -core], [x + pitch * .39, -core * .16], [x + pitch * .64, -core * .16], [x + pitch * .64, core * .43], [x + pitch * .9, core * .43]]);
-    lines.push([[x + pitch * .08, core], [x + pitch * .31, core], [x + pitch * .43, core * .16], [x + pitch * .58, core * .16], [x + pitch * .58, -core * .5], [x + pitch * .83, -core * .5]]);
-    // Staggered shoulder releases turn the outer field into large offset blocks.
-    for (const sign of [1, -1]) {
-      const lead = flip * sign > 0 ? .03 : .18;
-      lines.push([[x + pitch * lead, sign * core], [x + pitch * .18, sign * shoulder], [x + pitch * .51, sign * shoulder], [x + pitch * .72, sign * edge]]);
-      lines.push([[x + pitch * .74, sign * shoulder], [x + pitch * .92, sign * edge]]);
+    const x = (i + (ly.phase || 0)) * pitch;
+    // Two offset, stepped centre channels leave the N-shaped centre blocks from reference 02.
+    lines.push([[x - .12 * pitch, -.18 * bridge], [x + .12 * pitch, -.18 * bridge], [x + .25 * pitch, -bridge], [x + .54 * pitch, -bridge], [x + .68 * pitch, -.42 * bridge], [x + .97 * pitch, -.42 * bridge]]);
+    lines.push([[x + .06 * pitch, .22 * bridge], [x + .30 * pitch, .22 * bridge], [x + .43 * pitch, bridge], [x + .73 * pitch, bridge], [x + .86 * pitch, .44 * bridge], [x + 1.14 * pitch, .44 * bridge]]);
+    // Each shoulder releases at a different circumferential point, producing independent outer lugs.
+    for (const sign of [-1, 1]) {
+      lines.push([[x + .15 * pitch, sign * bridge], [x + .31 * pitch, sign * shoulder], [x + .61 * pitch, sign * shoulder], [x + .84 * pitch, sign * edge]]);
+      lines.push([[x + .79 * pitch, sign * shoulder], [x + 1.02 * pitch, sign * edge]]);
     }
   }
   return lines;
+}
+function mudMeshLines(ly, th, circ) {
+  const { count, shoulder, bridge } = meshLugRange(ly, th), pitch = circ / count, edge = Math.min(th * 1.3, shoulder + th * 0.2), lines = [];
+  for (let i = -1; i <= count; i++) {
+    const x = (i + (ly.phase || 0)) * pitch;
+    // Broad zig channel: the remaining field is a small number of chunky, interlocking M/T blocks.
+    lines.push([[x - .10 * pitch, -bridge], [x + .19 * pitch, -bridge], [x + .39 * pitch, -.16 * bridge], [x + .68 * pitch, -.16 * bridge], [x + .88 * pitch, bridge], [x + 1.19 * pitch, bridge]]);
+    lines.push([[x + .12 * pitch, bridge], [x + .39 * pitch, bridge], [x + .56 * pitch, .18 * bridge], [x + .84 * pitch, .18 * bridge], [x + 1.04 * pitch, -bridge], [x + 1.31 * pitch, -bridge]]);
+    for (const sign of [-1, 1]) {
+      lines.push([[x + .04 * pitch, sign * bridge], [x + .18 * pitch, sign * (bridge + (shoulder - bridge) * .45)], [x + .45 * pitch, sign * shoulder], [x + .73 * pitch, sign * shoulder], [x + .94 * pitch, sign * edge]]);
+      lines.push([[x + .62 * pitch, sign * shoulder], [x + .84 * pitch, sign * edge]]);
+    }
+  }
+  return lines;
+}
+function arrowMeshLines(ly, th, circ) {
+  const { count, shoulder, bridge } = meshLugRange(ly, th), pitch = circ / count, edge = Math.min(th * 1.3, shoulder + th * 0.16), lines = [];
+  for (let i = -1; i <= count; i++) {
+    const x = (i + (ly.phase || 0)) * pitch;
+    // A matched pair starts at one apex so the mesh retains broad forward-pointing arrow lugs.
+    for (const sign of [-1, 1]) {
+      lines.push([[x + .03 * pitch, 0], [x + .27 * pitch, sign * (.52 * bridge)], [x + .47 * pitch, sign * shoulder], [x + .66 * pitch, sign * edge]]);
+      // Split evacuation branch and a small shoulder release mimic the reference's outer V openings.
+      lines.push([[x + .31 * pitch, sign * (.54 * bridge)], [x + .53 * pitch, sign * (.54 * bridge)], [x + .74 * pitch, sign * edge]]);
+      lines.push([[x + .70 * pitch, sign * (.84 * shoulder)], [x + .92 * pitch, sign * edge]]);
+    }
+  }
+  return lines;
+}
+function meshLugLines(ly, th, circ) {
+  if (ly.type === 'atmesh') return atMeshLines(ly, th, circ);
+  if (ly.type === 'mudmesh') return mudMeshLines(ly, th, circ);
+  return arrowMeshLines(ly, th, circ);
 }
 function renderPattern(pattern, d, H, wear = 0, wearBias = 0, treadDepth = 8, skipNoise = false) {
   const k = H / (2 * d.acrossHalf);                   // px per mm (uniform)
@@ -454,9 +501,9 @@ function renderPattern(pattern, d, H, wear = 0, wearBias = 0, treadDepth = 8, sk
           }
         }
         ctx.stroke();
-      } else if (ly.type === 'terrain') {
+      } else if (ly.type === 'atmesh' || ly.type === 'mudmesh' || ly.type === 'arrowmesh') {
         ctx.lineWidth = ly.width; ctx.beginPath();
-        for (const line of terrainNetworkLines(ly, th, circ)) line.forEach((point, i) => i ? ctx.lineTo(point[0], point[1]) : ctx.moveTo(point[0], point[1]));
+        for (const line of meshLugLines(ly, th, circ)) line.forEach((point, i) => i ? ctx.lineTo(point[0], point[1]) : ctx.moveTo(point[0], point[1]));
         ctx.stroke();
       } else if (ly.type === 'dimple') {
         const rows = Math.max(1, Math.round(ly.rows)), n = Math.max(1, Math.round(ly.count));
@@ -508,13 +555,13 @@ function vnoise(x, y) {
   return a + (b - a) * u + (c - a) * v + (a - b - c + dd) * u * v;
 }
 
-// Build colour / roughness / normal canvases from the depth field
+// Build albedo / roughness for the already-constructed polygon mesh. Neither canvas drives tread geometry.
 function buildTreadMaps(pm, treadDepth, rubberHex, wear) {
   const { W, H, depth, k } = pm;
   const base = new THREE.Color(rubberHex), worn = new THREE.Color('#4a4846'), grooveC = new THREE.Color('#0a0a0a');
   const stripeRed = new THREE.Color(T.stripeRed), stripeBlue = new THREE.Color(T.stripeBlue);
-  const col = new ImageData(W, H), rou = new ImageData(W, H), nor = new ImageData(W, H);
-  const mmPerPx = 1 / k; const tmp = new THREE.Color();
+  const col = new ImageData(W, H), rou = new ImageData(W, H);
+  const tmp = new THREE.Color();
   const stripeWidth = Math.max(0.5, T.stripeWidth) * k * 0.5;
   const stripeGap = Math.max(1.5, T.stripeGap) * k * 0.5;
   const stripeWave = Math.max(0, T.stripeWave) * k;
@@ -557,18 +604,10 @@ function buildTreadMaps(pm, treadDepth, rubberHex, wear) {
       col.data[o] = tmp.r * 255; col.data[o + 1] = tmp.g * 255; col.data[o + 2] = tmp.b * 255; col.data[o + 3] = 255;
       const r = paint > 0 ? 0.72 : (dv > 0.02 ? 0.92 : 0.9 - wl * 0.42 + (grain - 0.5) * 0.15); const rq = Math.max(0, Math.min(1, r)) * 255;
       rou.data[o] = rq; rou.data[o + 1] = rq; rou.data[o + 2] = rq; rou.data[o + 3] = 255;
-      const xl = depth[y * W + (x + W - 1) % W], xr = depth[y * W + (x + 1) % W];
-      const yu = depth[Math.max(0, y - 1) * W + x], yd = depth[Math.min(H - 1, y + 1) * W + x];
-      const dzdx = (xr - xl) * treadDepth / (2 * mmPerPx), dzdy = (yd - yu) * treadDepth / (2 * mmPerPx);
-      let nx = dzdx, ny = dzdy, nz = 1; const len = Math.hypot(nx, ny, nz); nx /= len; ny /= len; nz /= len;
-      nor.data[o] = (nx * 0.5 + 0.5) * 255; nor.data[o + 1] = (ny * 0.5 + 0.5) * 255; nor.data[o + 2] = (nz * 0.5 + 0.5) * 255; nor.data[o + 3] = 255;
     }
   }
   const mk = id => { const c = document.createElement('canvas'); c.width = W; c.height = H; c.getContext('2d').putImageData(id, 0, 0); return c; };
-  const hc = document.createElement('canvas'); hc.width = W; hc.height = H; const hid = new ImageData(W, H);
-  for (let i = 0; i < W * H; i++) { const q = (1 - depth[i]) * 255; hid.data[i * 4] = hid.data[i * 4 + 1] = hid.data[i * 4 + 2] = q; hid.data[i * 4 + 3] = 255; }
-  hc.getContext('2d').putImageData(hid, 0, 0);
-  return { color: mk(col), rough: mk(rou), normal: mk(nor), height: hc };
+  return { color: mk(col), rough: mk(rou) };
 }
 
 // Sidewall canvas: editable lettering / decal layers + mould detail.
@@ -682,8 +721,9 @@ function patternPolygons(pattern, d, treadDepth) {
             let xx = x0 + ac * th * tan + (ly.curve || 0) * ac * ac * th * 0.5; if (ly.zig) xx += (j % 2 ? ly.zig : -ly.zig) * 0.5; pts.push([xx, yy]); }
           lines.push(pts); } }
       paths = strokePaths(lines, ly.width);
-    } else if (ly.type === 'terrain') {
-      paths = strokePaths(terrainNetworkLines(ly, th, circ), ly.width); wrap = false;
+    } else if (ly.type === 'atmesh' || ly.type === 'mudmesh' || ly.type === 'arrowmesh') {
+      // Preserve the extra seam repeats built by meshLugLines rather than applying a second wrap.
+      paths = strokePaths(meshLugLines(ly, th, circ), ly.width); wrap = false;
     } else if (ly.type === 'dimple') {
       const rows = Math.max(1, Math.round(ly.rows)), n = Math.max(1, Math.round(ly.count)); const rings = [];
       for (let r = 0; r < rows; r++) { const cc = rows === 1 ? (ly.from + ly.to) / 2 : ly.from + (ly.to - ly.from) * r / (rows - 1); const y = cc * th; const sh = ly.stagger && r % 2 ? 0.5 : 0;
@@ -807,69 +847,6 @@ function buildSidewallGeometry(d, prof) {
     for (let i = 0; i < N - 1; i++) for (let j = 0; j < M; j++) { const a = base + i * (M + 1) + j, b = a + 1, c = a + M + 1, e = c + 1; idx.push(a, b, c, b, e, c); }
     base += N * (M + 1); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); return g;
-}
-
-// =====================================================================================================================
-//  3D TYRE MESH (procedural profile revolved, displaced by tread depth map along profile normals)
-// =====================================================================================================================
-function buildProfile(d) {
-  const { Rrim, H, Rout, halfW, treadHalf, sr, bw } = d; const crown = T.crown;
-  const right = [];
-  const treadN = Math.round(T.across / 2), shN = 12, sideN = 26;
-  for (let i = 0; i <= treadN; i++) { const x = i / treadN * treadHalf; right.push({ x, r: Rout - crown * (x / treadHalf) ** 2, zone: 'tread', w: 1 }); }
-  const cx = treadHalf, cr = Rout - crown - sr; let last;
-  for (let i = 1; i <= shN; i++) { const phi = i / shN * 80 * Math.PI / 180; last = { x: cx + sr * Math.sin(phi), r: cr + sr * Math.cos(phi), zone: 'tread', w: Math.max(0, (Math.cos(phi) - Math.cos(80 * Math.PI / 180)) / (1 - Math.cos(80 * Math.PI / 180))), edge: i === shN, s: 1 }; right.push(last); }
-  const P0 = last, P3 = { x: bw, r: Rrim + 2 }, bul = T.bulge;
-  const P1 = { x: P0.x + (halfW - P0.x) * 1.35 * bul + 4, r: P0.r - H * 0.22 }, P2 = { x: bw + (halfW - bw) * 0.55 * bul, r: Rrim + H * 0.2 };
-  for (let i = 1; i <= sideN; i++) {
-    const t = i / sideN, mt = 1 - t; const x = mt ** 3 * P0.x + 3 * mt * mt * t * P1.x + 3 * mt * t * t * P2.x + t ** 3 * P3.x, r = mt ** 3 * P0.r + 3 * mt * mt * t * P1.r + 3 * mt * t * t * P2.r + t ** 3 * P3.r;
-    right.push({ x, r, zone: 'side', w: 0, s: 1 - t });
-  }
-  right.push({ x: bw - 3, r: Rrim - 1, zone: 'side', w: 0, s: -0.05 });   // tuck under the rim flange
-  const left = right.slice(1).reverse().map(p => Object.assign({}, p, { x: -p.x }));
-  const pts = left.concat(right);
-  // 2D profile normals (pointing outward)
-  for (let i = 0; i < pts.length; i++) {
-    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)]; let tx = b.x - a.x, tr = b.r - a.r; const l = Math.hypot(tx, tr) || 1; tx /= l; tr /= l;
-    pts[i].nx = tr; pts[i].nr = -tx; if (pts[i].nr < 0 && pts[i].zone === 'tread') { pts[i].nx = -tr; pts[i].nr = tx; }
-  }
-  // sidewall normals should point away from the axis plane; fix orientation by sign of x
-  for (const p of pts) if (p.zone === 'side') { const s = Math.sign(p.x) || 1; if (Math.sign(p.nx) !== s && Math.abs(p.nx) > 0.3) { p.nx = -p.nx; p.nr = -p.nr; } else if (p.nr < -0.2 && Math.abs(p.nx) <= 0.3) { p.nx = -p.nx; p.nr = -p.nr; } }
-  return pts;
-}
-
-function sampleDepth(pm, u, v) {
-  const { W, H, depth } = pm; let fx = ((u % 1) + 1) % 1 * W, fy = Math.min(H - 1.001, Math.max(0, v * H));
-  const x0 = Math.floor(fx) % W, y0 = Math.floor(fy), x1 = (x0 + 1) % W, y1 = Math.min(H - 1, y0 + 1), tx = fx - Math.floor(fx), ty = fy - y0;
-  return (depth[y0 * W + x0] * (1 - tx) + depth[y0 * W + x1] * tx) * (1 - ty) + (depth[y1 * W + x0] * (1 - tx) + depth[y1 * W + x1] * tx) * ty;
-}
-
-function buildTyreGeometry(d, pm) {
-  const prof = buildProfile(d); const N = prof.length, M = T.radial;
-  const pos = new Float32Array(N * (M + 1) * 3), uv = new Float32Array(N * (M + 1) * 2);
-  const D = T.treadDepth; const A = d.acrossHalf;
-  for (let i = 0; i < N; i++) {
-    const p = prof[i]; const v = (p.x + A) / (2 * A);
-    for (let j = 0; j <= M; j++) {
-      const u = j / M, th = u * Math.PI * 2; let x = p.x, r = p.r;
-      if (p.w > 0) {
-        const h = sampleDepth(pm, u, v); const worn = pm.wearRow(v * pm.H) * D;
-        const off = (h * D + worn) * p.w; x -= p.nx * off; r -= p.nr * off;
-      }
-      const k = (i * (M + 1) + j); pos[k * 3] = x; pos[k * 3 + 1] = r * Math.cos(th); pos[k * 3 + 2] = r * Math.sin(th);
-      if (p.zone === 'tread') { uv[k * 2] = u; uv[k * 2 + 1] = v; } else { uv[k * 2] = p.x < 0 ? 1 - u : u; uv[k * 2 + 1] = p.s; }
-    }
-  }
-  const treadIdx = [], sideIdx = [];
-  for (let i = 0; i < N - 1; i++) {
-    const arr = (prof[i].zone === 'tread' && prof[i + 1].zone === 'tread') ? treadIdx : sideIdx;
-    for (let j = 0; j < M; j++) { const a = i * (M + 1) + j, b = a + 1, c = a + (M + 1), dd = c + 1; arr.push(a, b, c, b, dd, c); }
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-  g.setIndex(treadIdx.concat(sideIdx)); g.addGroup(0, treadIdx.length, 0); g.addGroup(treadIdx.length, sideIdx.length, 1);
-  g.computeVertexNormals(); g.computeBoundingSphere();
-  return { geometry: g, profile: prof };
 }
 
 // Procedural rim generator. The barrel is formed by revolving this closed profile; all centre
@@ -998,21 +975,20 @@ function rebuild(full = true) {
   disposeGroup();
   const tex = c => { const t = new THREE.CanvasTexture(c); t.flipY = false; t.wrapS = THREE.RepeatWrapping; t.anisotropy = 8; t.colorSpace = THREE.NoColorSpace; return t; };
   const colTex = tex(maps.color); colTex.colorSpace = THREE.SRGBColorSpace;
-  const usePoly = !!window.ClipperLib;
-  // Polygon tread already carries the real groove walls and corner normals. Applying a
-  // tangent-space height-map normal to those discontinuous faces can flip highlights at
-  // sharp block corners, so reserve that normal map for the height-map fallback only.
-  const treadNormal = usePoly ? null : tex(maps.normal);
-  treadMat = new THREE.MeshStandardMaterial({ map: colTex, normalMap: treadNormal, normalScale: new THREE.Vector2(treadNormal ? 0.7 : 0, treadNormal ? 0.7 : 0), roughnessMap: tex(maps.rough), roughness: 1, metalness: 0.0 });
+  if (!window.ClipperLib) throw new Error('The polygon boolean library is required for mesh treads.');
+  // The canvas is albedo/roughness only (rubber grain and optional factory paint). It never displaces
+  // the surface or supplies tread normals: every groove floor, lug top and vertical wall is geometry.
+  treadMat = new THREE.MeshStandardMaterial({ map: colTex, roughnessMap: tex(maps.rough), roughness: 1, metalness: 0.0 });
   const sw = buildSidewall(true); const sideTex = tex(sw.color); sideTex.colorSpace = THREE.SRGBColorSpace;
   const sideMat = new THREE.MeshStandardMaterial({ map: sideTex, normalMap: tex(sw.normal), normalScale: new THREE.Vector2(0.45, 0.45), roughness: 0.8, metalness: 0, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
   tyreMesh = new THREE.Group(); let triCount = 0;
-  if (usePoly) {
-    const pmGeo = renderPattern(P, d, 384, T.wear, T.wearBias, T.treadDepth, true);
-    let treadGeo; try { treadGeo = buildPolyTread(d, pmGeo); } catch (e) { console.warn('polygon tread failed, falling back', e); }
-    if (treadGeo) { const prof = buildProfile(d); profileCache = prof; tyreMesh.add(new THREE.Mesh(treadGeo, treadMat)); tyreMesh.add(new THREE.Mesh(buildSidewallGeometry(d, prof), sideMat)); triCount = treadGeo.userData.tris; }
-    else { const { geometry, profile } = buildTyreGeometry(d, patternMap); profileCache = profile; tyreMesh.add(new THREE.Mesh(geometry, [treadMat, sideMat])); triCount = geometry.index.count / 3; }
-  } else { const { geometry, profile } = buildTyreGeometry(d, patternMap); profileCache = profile; tyreMesh.add(new THREE.Mesh(geometry, [treadMat, sideMat])); triCount = geometry.index.count / 3; }
+  const pmGeo = renderPattern(P, d, 384, T.wear, T.wearBias, T.treadDepth, true);
+  const treadGeo = buildPolyTread(d, pmGeo);
+  if (!treadGeo) throw new Error('Polygon tread construction returned no mesh.');
+  const prof = buildProfile(d); profileCache = prof;
+  tyreMesh.add(new THREE.Mesh(treadGeo, treadMat));
+  tyreMesh.add(new THREE.Mesh(buildSidewallGeometry(d, prof), sideMat));
+  triCount = treadGeo.userData.tris;
   tyreMesh.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (UI.threads) [].concat(o.material).forEach(m => { m.transparent = true; m.opacity = 0.35; }); } });
   tyreMesh.userData.tris = triCount; tyreGroup.add(tyreMesh);
   rimGroup = buildRim(d); rimGroup.traverse(o => { o.castShadow = true; }); tyreGroup.add(rimGroup);
@@ -1288,7 +1264,7 @@ function buildLayerUI() {
   const box = document.getElementById('layers'); box.innerHTML = '';
   P.layers.forEach((ly, i) => {
     const def = LAYER_DEFS[ly.type]; const el = document.createElement('div'); el.className = 'layer' + (i === UI.sel ? ' sel' : '');
-    const desc = ly.type === 'circ' ? `@${ly.pos} · ${ly.width}mm` : ly.type === 'hex' ? `${ly.size}mm cells` : ly.type === 'dimple' ? `${ly.rows}×${ly.count}` : ly.type === 'terrain' ? `×${ly.count} · ${ly.width}mm lugs` : ly.type === 'noise' ? `${ly.amount}` : `×${ly.count} · ${ly.angle}°`;
+    const desc = ly.type === 'circ' ? `@${ly.pos} · ${ly.width}mm` : ly.type === 'hex' ? `${ly.size}mm cells` : ly.type === 'dimple' ? `${ly.rows}×${ly.count}` : (ly.type === 'atmesh' || ly.type === 'mudmesh' || ly.type === 'arrowmesh') ? `×${ly.count} · ${ly.width}mm mesh` : ly.type === 'noise' ? `${ly.amount}` : `×${ly.count} · ${ly.angle}°`;
     el.innerHTML = `<span class="ic" style="background:${def.color}"></span><span class="nm">${def.label} <small>${desc}</small></span><button title="duplicate">⧉</button><button title="up">↑</button><button title="down">↓</button><button title="delete">✕</button>`;
     const [dup, up, dn, del] = el.querySelectorAll('button');
     el.onclick = () => { UI.sel = i; buildLayerUI(); };
@@ -1314,7 +1290,7 @@ function buildLayerUI() {
     P.layers.splice(UI.sel + 1, 0, c); UI.sel++; buildLayerUI(); schedule();
   }; props.appendChild(mir);
 }
-function refreshLayerLabel() { const els = document.querySelectorAll('#layers .layer'); const ly = P.layers[UI.sel]; if (!ly || !els[UI.sel]) return; const desc = ly.type === 'circ' ? `@${ly.pos} · ${ly.width}mm` : ly.type === 'hex' ? `${ly.size}mm cells` : ly.type === 'dimple' ? `${ly.rows}×${ly.count}` : ly.type === 'terrain' ? `×${ly.count} · ${ly.width}mm lugs` : ly.type === 'noise' ? `${ly.amount}` : `×${ly.count} · ${ly.angle}°`; els[UI.sel].querySelector('small').textContent = desc; }
+function refreshLayerLabel() { const els = document.querySelectorAll('#layers .layer'); const ly = P.layers[UI.sel]; if (!ly || !els[UI.sel]) return; const desc = ly.type === 'circ' ? `@${ly.pos} · ${ly.width}mm` : ly.type === 'hex' ? `${ly.size}mm cells` : ly.type === 'dimple' ? `${ly.rows}×${ly.count}` : (ly.type === 'atmesh' || ly.type === 'mudmesh' || ly.type === 'arrowmesh') ? `×${ly.count} · ${ly.width}mm mesh` : ly.type === 'noise' ? `${ly.amount}` : `×${ly.count} · ${ly.angle}°`; els[UI.sel].querySelector('small').textContent = desc; }
 
 // static controls
 document.getElementById('pType').innerHTML = TYPES.map(t => `<option>${t}</option>`).join('');
@@ -1339,8 +1315,6 @@ document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => {
 const dl = (name, url) => { const a = document.createElement('a'); a.href = url; a.download = name; a.click(); };
 const toast = m => { const t = document.getElementById('toast'); t.textContent = m; t.style.opacity = 1; setTimeout(() => t.style.opacity = 0, 1800); };
 document.getElementById('exportJson').onclick = () => { dl(P.name.replace(/\s+/g, '_') + '.tyre.json', URL.createObjectURL(new Blob([JSON.stringify({ tyre: T, rim: R, pattern: P }, null, 2)], { type: 'application/json' }))); toast('Pattern JSON exported'); };
-document.getElementById('exportHeight').onclick = () => { dl(P.name.replace(/\s+/g, '_') + '_height.png', maps.height.toDataURL()); toast('Height map exported'); };
-document.getElementById('exportNormal').onclick = () => { dl(P.name.replace(/\s+/g, '_') + '_normal.png', maps.normal.toDataURL()); toast('Normal map exported'); };
 document.getElementById('exportGlb').onclick = () => {
   const ex = new GLTFExporter(); const g = tyreGroup.clone(); g.remove(...g.children.filter(c => c.isLineSegments)); g.position.set(0, 0, 0); g.scale.setScalar(0.001);
   ex.parse(g, r => { dl(P.name.replace(/\s+/g, '_') + '.glb', URL.createObjectURL(new Blob([r], { type: 'model/gltf-binary' }))); toast('GLB exported (metres)'); }, e => toast('Export failed: ' + e), { binary: true });
