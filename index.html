@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Slate Fluid — real-time volumetric fluid</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #111; overflow: hidden; font: 13px/1.35 system-ui, -apple-system, Segoe UI, sans-serif; color: #e8eaed; }
+  #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; }
+  #panel { position: fixed; top: 12px; left: 12px; width: 250px; background: rgba(18, 20, 24, 0.82); backdrop-filter: blur(8px);
+           border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px; user-select: none; }
+  h1 { font-size: 14px; margin: 0 0 8px; letter-spacing: 0.02em; }
+  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #9aa0a6; margin: 12px 0 6px; }
+  .row { display: flex; flex-wrap: wrap; gap: 5px; }
+  button { background: #2a2e35; color: #e8eaed; border: 1px solid #3a3f47; border-radius: 6px; padding: 5px 9px; cursor: pointer; font: inherit; }
+  button:hover { background: #343943; }
+  button.on { background: #3b6fd8; border-color: #5c8cf0; }
+  .sw { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+  label { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 4px 0; color: #c4c7cc; }
+  input[type=range] { width: 120px; }
+  #stats { position: fixed; right: 12px; bottom: 10px; color: #c4c7cc; background: rgba(0,0,0,0.45); padding: 4px 8px; border-radius: 6px; font-variant-numeric: tabular-nums; }
+  #help { color: #9aa0a6; font-size: 11.5px; margin-top: 10px; }
+  #err { position: fixed; top: 40%; width: 100%; text-align: center; color: #ff8a80; font-size: 16px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="panel">
+  <h1>Slate Fluid · PBF + screen-space rendering</h1>
+  <h2>Scene</h2>
+  <div class="row">
+    <button data-scene="dam">Dam break</button>
+    <button data-scene="splash">Splash</button>
+    <button data-scene="ocean">Ocean break</button>
+    <button data-scene="pour">Pour / coat</button>
+  </div>
+  <h2>Fluid</h2>
+  <div class="row">
+    <button data-mat="water"><span class="sw" style="background:#4aa3d8"></span>Water</button>
+    <button data-mat="milk"><span class="sw" style="background:#f3efe6"></span>Milk</button>
+    <button data-mat="chocolate"><span class="sw" style="background:#4a2412"></span>Chocolate</button>
+    <button data-mat="honey"><span class="sw" style="background:#e09a1a"></span>Honey</button>
+    <button data-mat="mud"><span class="sw" style="background:#5a4330"></span>Mud</button>
+  </div>
+  <label style="justify-content:flex-start"><input type="checkbox" id="keepMat" /> keep fluid when switching scene</label>
+  <h2>Objects</h2>
+  <label>Ball radius <input type="range" id="ballSize" min="1" max="4" step="0.1" value="2.2" /><span id="ballSizeV"></span></label>
+  <label>Ball density <input type="range" id="ballDensity" min="0.3" max="5" step="0.1" value="2" /></label>
+  <div style="text-align:right;color:#9aa0a6;font-size:11px" id="ballDensityV"></div>
+  <div class="row"><button id="drop">Drop ball</button><button id="reset">Reset (R)</button><button id="pause">Pause</button></div>
+  <h2>Quality</h2>
+  <label>Substeps / frame <input type="range" id="substeps" min="1" max="4" step="1" value="1" /><span id="substepsV"></span></label>
+  <label>Surface smoothing <input type="range" id="smooth" min="0" max="6" step="1" value="3" /><span id="smoothV"></span></label>
+  <div class="row"><button data-view="fluid">Rendered</button><button data-view="particles">Particles (P)</button></div>
+  <div id="help">Drag: orbit · Right-drag / Shift-drag: pan · Wheel: zoom<br/>Click: throw a ball where you aim · Space: pause</div>
+</div>
+<div id="stats"></div>
+<div id="err"></div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
