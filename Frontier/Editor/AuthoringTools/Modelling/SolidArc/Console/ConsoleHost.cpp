@@ -2352,9 +2352,9 @@ void ConsoleHost::Register() noexcept
             }
             return true;
         };
-        auto& Surface = Result.Payload;
-        if (!ReadKnots("knots-u", Surface.KnotsU, Surface.DegreeU, Surface.CountU) ||
-            !ReadKnots("knots-v", Surface.KnotsV, Surface.DegreeV, Surface.CountV))
+        auto& PatchSurface = Result.Payload;
+        if (!ReadKnots("knots-u", PatchSurface.KnotsU, PatchSurface.DegreeU, PatchSurface.CountU) ||
+            !ReadKnots("knots-v", PatchSurface.KnotsV, PatchSurface.DegreeV, PatchSurface.CountV))
             return Refuse("patch: invalid clamped knot sequence");
         return AddSurface(C, "Patch", std::move(Result));
     });
