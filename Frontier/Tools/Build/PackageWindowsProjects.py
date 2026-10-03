@@ -94,7 +94,7 @@ def Main() -> None:
     Shaders = sorted((Binary / "Engine/Shaders").glob("*.spv"))
     if not Shaders:
         raise RuntimeError("No compiled Vulkan shaders found")
-    for Name in ("DistanceFieldConstruct", "DistanceFieldRadiance", "DistanceFieldGIResolve", "DistanceFieldGIResolveFixed"):
+    for Name in ("DistanceFieldConstruct", "DistanceFieldCapture", "DistanceFieldCaptureFixed", "DistanceFieldRadiance", "DistanceFieldGIResolve", "DistanceFieldGIResolveFixed"):
         if not (Binary / f"Engine/Shaders/{Name}.spv").is_file():
             raise RuntimeError(f"Missing compiled {Name} shader")
     for Shader in Shaders:

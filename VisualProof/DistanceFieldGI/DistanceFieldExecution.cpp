@@ -269,9 +269,9 @@ int main(int Count,char** Arguments)
             auto MaterialBuffer=Host.Allocate(Materials.size()*sizeof(MaterialRecord),Materials.data());
             auto Triangles=Host.Allocate(2u*64u); auto Slabs=Host.Allocate(sizeof(MaterialSlabRecord));
             DistanceFieldStageInit Initialization{};
-            Initialization.Device=Host.Device; Initialization.MemoryProperties=Host.Memory;
+            Initialization.PhysicalDevice=Host.Physical; Initialization.Device=Host.Device; Initialization.MemoryProperties=Host.Memory;
             Initialization.Geometry=&Geometry; Initialization.SpirvDirectory=Arguments[1];
-            Initialization.VolumeResolution=8u; Initialization.ClipmapCellSize=0.125f;
+            Initialization.CardResolution=8u; Initialization.VolumeResolution=8u; Initialization.ClipmapCellSize=0.125f;
             Initialization.OutputImageView=Output.View; Initialization.SurfaceImageView=Position.View; Initialization.NormalImageView=Normals.View;
             Initialization.TriangleBuffer=Triangles.Buffer; Initialization.MaterialBuffer=MaterialBuffer.Buffer;
             Initialization.InstanceBuffer=InstanceBuffer.Buffer; Initialization.SlabBuffer=Slabs.Buffer;
@@ -286,7 +286,10 @@ int main(int Count,char** Arguments)
             Require(Stage.IsReady(),"Populated stage must become ready");
             auto Pixels=Host.Allocate(Width*Height*4u);
             auto Fields=Host.Allocate(Stage.QueryVoxelCount()*64u);
-            auto Cache=Host.Allocate(Stage.QueryVoxelCount()*16u);
+            auto Cache=Host.Allocate(1024u*16u);
+            auto DiffuseCards=Host.Allocate(1024u*16u);
+            auto EmissiveCards=Host.Allocate(1024u*16u);
+            auto NormalCards=Host.Allocate(1024u*16u);
             DistanceFieldFrameParams Frame{};
             Frame.CameraEye[0]=Frame.CameraEye[1]=0.0f; Frame.CameraEye[2]=0.5f;
             Frame.SunRadiance=0.0f; Frame.SkyAmbient[0]=Frame.SkyAmbient[1]=Frame.SkyAmbient[2]=0.0f;
@@ -303,9 +306,22 @@ int main(int Count,char** Arguments)
                 VkBufferImageCopy Copy{}; Copy.imageSubresource={VK_IMAGE_ASPECT_COLOR_BIT,0u,0u,1u}; Copy.imageExtent={Output.Width,Output.Height,1u};
                 vkCmdCopyImageToBuffer(Host.Command,Output.Image,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,Pixels.Buffer,1u,&Copy);
                 Host.Transition(Output,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,VK_IMAGE_LAYOUT_GENERAL);
-                VkBufferCopy FieldCopy{0u,0u,Fields.Size}, CacheCopy{0u,0u,Cache.Size};
+                VkBufferCopy FieldCopy{0u,0u,Fields.Size};
                 vkCmdCopyBuffer(Host.Command,Stage.QueryDistanceBuffer(),Fields.Buffer,1u,&FieldCopy);
-                vkCmdCopyBuffer(Host.Command,Stage.QueryRadianceBuffer(),Cache.Buffer,1u,&CacheCopy);
+                auto ReadCards=[&](VkImage Source, Allocation Destination)
+                {
+                    ImageAllocation Plane{}; Plane.Image=Source;
+                    Host.Transition(Plane,VK_IMAGE_LAYOUT_GENERAL,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+                    VkBufferImageCopy Transfer{}; Transfer.imageSubresource={VK_IMAGE_ASPECT_COLOR_BIT,0u,0u,1u};
+                    Transfer.imageExtent={Stage.QueryCardWidth(),Stage.QueryCardHeight(),1u};
+                    Require(VkDeviceSize(Transfer.imageExtent.width)*Transfer.imageExtent.height*16u<=Destination.Size,"Card readback allocation too small");
+                    vkCmdCopyImageToBuffer(Host.Command,Source,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,Destination.Buffer,1u,&Transfer);
+                    Host.Transition(Plane,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,VK_IMAGE_LAYOUT_GENERAL);
+                };
+                ReadCards(Stage.QueryRadianceImage(),Cache);
+                ReadCards(Stage.QueryDiffuseImage(),DiffuseCards);
+                ReadCards(Stage.QueryEmissionImage(),EmissiveCards);
+                ReadCards(Stage.QueryNormalImage(),NormalCards);
                 Host.Submit();
                 auto Bytes=Host.Read(Pixels); Bytes.resize(Output.Width*Output.Height*4u);
                 std::ofstream Image(std::filesystem::path(Arguments[2])/(std::string(Name)+".ppm"),std::ios::binary);
@@ -325,8 +341,12 @@ int main(int Count,char** Arguments)
             for(uint32_t Index=0u;Index<Stage.QueryVoxelCount();++Index)
             {
                 for(uint32_t Channel=0u;Channel<16u;++Channel) Require(std::isfinite(FieldValues[Index*16u+Channel]),"Non-finite distance voxel");
-                for(uint32_t Channel=0u;Channel<4u;++Channel) Require(std::isfinite(CacheValues[Index*4u+Channel]),"Non-finite radiance cache");
-                if(FieldValues[Index*16u+2u]<0.01f && CacheValues[Index*4u]>0.01f) ++GroundBounces;
+
+            }
+            for(uint32_t Index=0u;Index<Stage.QueryCardWidth()*Stage.QueryCardHeight();++Index)
+            {
+                for(uint32_t Channel=0u;Channel<4u;++Channel) Require(std::isfinite(CacheValues[Index*4u+Channel]),"Non-finite card radiance");
+                if(Index%Stage.QueryCardWidth()<Initialization.CardResolution && Index/Stage.QueryCardWidth()<Initialization.CardResolution && CacheValues[Index*4u]>0.01f) ++GroundBounces;
             }
             Require(GroundBounces>0u,"Receiving surface cache never accumulated bounced emission");
             Frame.FeatureFlags=0u; auto Disabled=Execute(1u,"gi-off");
@@ -338,7 +358,7 @@ int main(int Count,char** Arguments)
             Require(Moved[0]<Lit[0]*0.2,"Moving the emitter left stale indirect lighting");
             Require(Host.Read(Fields)!=FieldBytes,"Moved geometry did not alter the populated distance volumes");
             Instances[1].World[12]=0.0f; Require(Geometry.RefreshInstances(Instances.data(),2u),"Restore emitter failed");
-            Materials[1].EmissiveR=0.0f; Require(Geometry.Construct(Vertices,Indices,Instances,Materials),"Dark scene update failed");
+            Materials[1].EmissiveR=0.0f; Host.Replace(MaterialBuffer,Materials.data(),Materials.size()*sizeof(MaterialRecord)); ++Frame.MaterialRevision; Require(Geometry.Construct(Vertices,Indices,Instances,Materials),"Dark scene update failed");
             auto Dark=Execute(3u,"emission-off");
             Require(Dark[0]<Lit[0]*0.1,"Emission change did not clear cache history");
             Frame.FeatureFlags=0u; Frame.SunRadiance=1.0f;
@@ -354,7 +374,7 @@ int main(int Count,char** Arguments)
             Require(Host.Read(Fields)!=BeforeCamera,"Camera movement did not re-snap the clipmaps");
             Frame.CameraEye[0]=0.0f; Instances[1].World[12]=0.0f;
             Frame.FeatureFlags=1u;
-            Materials[1].EmissiveR=4.0f; Require(Geometry.Construct(Vertices,Indices,Instances,Materials),"Emissive scene reload failed");
+            Materials[1].EmissiveR=4.0f; Host.Replace(MaterialBuffer,Materials.data(),Materials.size()*sizeof(MaterialRecord)); ++Frame.MaterialRevision; Require(Geometry.Construct(Vertices,Indices,Instances,Materials),"Emissive scene reload failed");
             Stage.Destroy(); Stage.Destroy(); Require(!Stage.IsReady(),"Retired stage still ready");
             Require(Stage.Bring(Initialization),"Stage recreation failed");
             auto Recreated=Execute(4u,"recreated"); Require(Recreated[0]>1000.0,"Scene recreation produced no lighting");
@@ -372,8 +392,8 @@ int main(int Count,char** Arguments)
                 for(auto& Slot:Pigmented.TextureSlots) Slot=UINT32_MAX;
                 Pigmented.TextureSlots[0]=0xFFFF0000u;
                 Materials[0].SlabCount=1u;
-                Host.Replace(MaterialBuffer,Materials.data(),Materials.size()*sizeof(MaterialRecord));
-                Host.Replace(Slabs,&Pigmented,sizeof(Pigmented));
+                Host.Replace(MaterialBuffer,Materials.data(),Materials.size()*sizeof(MaterialRecord)); ++Frame.MaterialRevision;
+                Host.Replace(Slabs,&Pigmented,sizeof(Pigmented)); ++Frame.MaterialRevision;
                 Frame.FeatureFlags=1u; Frame.ReflectionMode=0u;
                 Require(Stage.Bring(Initialization),"Constant-material scene recreation failed");
                 auto Constant=Execute(4u,"constant-material");
@@ -399,14 +419,14 @@ int main(int Count,char** Arguments)
             Glass.NormalScale=Glass.OcclusionStrength=Glass.MixWeight=1.0f;
             for(auto& Slot:Glass.TextureSlots) Slot=UINT32_MAX;
             Materials[0].SlabCount=1u;
-            Host.Replace(MaterialBuffer,Materials.data(),Materials.size()*sizeof(MaterialRecord));
-            Host.Replace(Slabs,&Glass,sizeof(Glass));
+            Host.Replace(MaterialBuffer,Materials.data(),Materials.size()*sizeof(MaterialRecord)); ++Frame.MaterialRevision;
+            Host.Replace(Slabs,&Glass,sizeof(Glass)); ++Frame.MaterialRevision;
             Instances[1].World[14]=-2.0f;
             Host.Replace(InstanceBuffer,Instances.data(),Instances.size()*sizeof(InstanceRecord));
             Require(Geometry.RefreshInstances(Instances.data(),2u),"Transmission scene positioning failed");
             Frame.ReflectionMode=0u;
             auto Foil=Execute(1u,"thin-glass"); Require(Foil[0]>1000.0,"Thin-walled glass did not transmit the emissive scene");
-            Glass.TransmissionWeight=0.0f; Host.Replace(Slabs,&Glass,sizeof(Glass));
+            Glass.TransmissionWeight=0.0f; Host.Replace(Slabs,&Glass,sizeof(Glass)); ++Frame.MaterialRevision;
             auto Opaque=Execute(1u,"opaque-control"); Require(Opaque[0]<Foil[0]*0.1,"Opaque control unexpectedly transmitted light");
 
             // 📝 A solid slab exercises actual entry/exit refraction and Beer attenuation over geometric thickness.
@@ -426,10 +446,10 @@ int main(int Count,char** Arguments)
             IndexBuffer=Host.Allocate(Indices.size()*4u,Indices.data()); Triangles=Host.Allocate(3u*64u);
             Initialization.VertexBuffer=VertexBuffer.Buffer; Initialization.IndexBuffer=IndexBuffer.Buffer; Initialization.TriangleBuffer=Triangles.Buffer;
             Require(Geometry.Construct(Vertices,Indices,Instances,Materials),"Solid glass geometry failed");
-            Glass.TransmissionWeight=1.0f; Glass.SlabFlags=0u; Host.Replace(Slabs,&Glass,sizeof(Glass));
+            Glass.TransmissionWeight=1.0f; Glass.SlabFlags=0u; Host.Replace(Slabs,&Glass,sizeof(Glass)); ++Frame.MaterialRevision;
             Require(Stage.Bring(Initialization),"Solid glass scene recreation failed");
             auto Clear=Execute(1u,"solid-clear-glass"); Require(Clear[0]>1000.0,"Solid dielectric did not transmit the background");
-            Glass.TransmissionColorR=0.1f; Host.Replace(Slabs,&Glass,sizeof(Glass));
+            Glass.TransmissionColorR=0.1f; Host.Replace(Slabs,&Glass,sizeof(Glass)); ++Frame.MaterialRevision;
             auto Tinted=Execute(1u,"solid-tinted-glass");
             Require(Tinted[0]>100.0 && Tinted[0]<Clear[0]*0.85,"Geometric Beer attenuation did not darken transmitted red light");
 

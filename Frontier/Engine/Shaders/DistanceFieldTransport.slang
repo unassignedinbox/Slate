@@ -9,11 +9,14 @@ struct DistanceFacet { vec4 Alpha; vec4 Beta; vec4 Gamma; vec4 Normal; vec4 Albe
 struct DistanceBranch { vec4 Minimum; vec4 Maximum; uvec4 Range; };
 struct DistanceVoxel { vec4 PositionDistance; vec4 Normal; vec4 Albedo; vec4 Emission; };
 layout(std430, binding=3) buffer FieldExtent { DistanceVoxel Field[]; };
-layout(std430, binding=4) readonly buffer PreviousRadianceExtent { vec4 PreviousRadiance[]; };
+layout(rgba32f, binding=4) uniform readonly image2D PreviousRadiance;
 layout(std430, binding=5) readonly buffer DistanceConstants { vec4 ClipOrigins[3]; uvec4 GeometryCounts; };
 layout(std430, binding=6) readonly buffer DistanceBranches { DistanceBranch Branches[]; };
 layout(std430, binding=7) readonly buffer DistanceFacets { DistanceFacet Facets[]; };
-layout(std430, binding=10) buffer NextRadianceExtent { vec4 NextRadiance[]; };
+layout(rgba32f, binding=10) uniform image2D NextRadiance;
+layout(rgba32f, binding=8) uniform image2D SurfaceDiffuse;
+layout(rgba32f, binding=9) uniform image2D SurfaceNormal;
+layout(rgba32f, binding=11) uniform image2D SurfaceEmission;
 layout(push_constant) uniform DistancePush
 {
     vec4 SunDirectionRadiance;
@@ -62,13 +65,50 @@ float SampleSceneDistance(vec3 Position, out float Cell)
     }
     return abs(Distance);
 }
-vec3 SampleCachedRadiance(vec3 Position, bool Current)
+// 📝 Every facet owns a non-overlapping rectangular card. The square-to-triangle warp uses every texel;
+//    authored UVs are interpolated separately by ResolveMaterial, so mirrored/repeated UVs never alias cards.
+ivec2 CardOrigin(uint Facet)
 {
-    vec3 Coordinate;
-    int Level = SelectClip(Position, Coordinate);
-    if (Level < 0) return vec3(0.0);
-    uint Index = CellIndex(uvec3(clamp(round(Coordinate), vec3(0.0), vec3(GeometryCounts.x-1u))), uint(Level));
-    return Current ? NextRadiance[Index].xyz : PreviousRadiance[Index].xyz;
+    uint Columns=uint(imageSize(NextRadiance).x)/GeometryCounts.w;
+    return ivec2(Facet%Columns,Facet/Columns)*int(GeometryCounts.w);
+}
+vec3 CardPosition(uint Facet, vec2 Coordinate)
+{
+    float Root=sqrt(clamp(Coordinate.x,0.0,1.0));
+    vec3 Weights=vec3(1.0-Root,Root*(1.0-Coordinate.y),Root*Coordinate.y);
+    return Facets[Facet].Alpha.xyz*Weights.x+Facets[Facet].Beta.xyz*Weights.y+Facets[Facet].Gamma.xyz*Weights.z;
+}
+vec2 CardCoordinate(uint Facet, vec3 Position)
+{
+    vec3 EdgeAlpha=Facets[Facet].Beta.xyz-Facets[Facet].Alpha.xyz;
+    vec3 EdgeBeta=Facets[Facet].Gamma.xyz-Facets[Facet].Alpha.xyz;
+    vec3 Delta=Position-Facets[Facet].Alpha.xyz;
+    float Alpha=dot(EdgeAlpha,EdgeAlpha), Beta=dot(EdgeAlpha,EdgeBeta), Gamma=dot(EdgeBeta,EdgeBeta);
+    float Denominator=max(Alpha*Gamma-Beta*Beta,1e-20);
+    vec2 Weights=max(vec2(Gamma*dot(Delta,EdgeAlpha)-Beta*dot(Delta,EdgeBeta),
+                          Alpha*dot(Delta,EdgeBeta)-Beta*dot(Delta,EdgeAlpha))/Denominator,vec2(0.0));
+    float Sum=Weights.x+Weights.y;
+    return clamp(vec2(Sum*Sum,Weights.y/max(Sum,1e-10)),vec2(0.0),vec2(1.0));
+}
+vec3 SampleCachedRadiance(uint Facet, vec3 Position, bool Current)
+{
+    vec2 Coordinate=clamp(CardCoordinate(Facet,Position)*float(GeometryCounts.w)-0.5,vec2(0.0),vec2(GeometryCounts.w-1u));
+    ivec2 Lower=ivec2(floor(Coordinate)), Origin=CardOrigin(Facet);
+    vec2 Fraction=fract(Coordinate);
+    vec3 Radiance=vec3(0.0);
+    for (uint Corner=0u;Corner<4u;++Corner)
+    {
+        ivec2 Offset=ivec2(Corner&1u,(Corner>>1u)&1u);
+        ivec2 Pixel=Origin+min(Lower+Offset,ivec2(GeometryCounts.w-1u));
+        vec2 Weight=mix(vec2(1.0)-Fraction,Fraction,vec2(Offset));
+        Radiance+=(Current ? imageLoad(NextRadiance,Pixel).xyz : imageLoad(PreviousRadiance,Pixel).xyz)*Weight.x*Weight.y;
+    }
+    return Radiance;
+}
+float SurfaceCoverage(uint Facet, vec3 Position)
+{
+    ivec2 Pixel=CardOrigin(Facet)+ivec2(clamp(CardCoordinate(Facet,Position)*float(GeometryCounts.w),vec2(0.0),vec2(GeometryCounts.w-1u)));
+    return imageLoad(SurfaceNormal,Pixel).w;
 }
 float BoxDistanceSquared(vec3 Position, vec3 Minimum, vec3 Maximum)
 {
@@ -121,7 +161,7 @@ DistanceRayHit TraceDistanceMesh(vec3 Origin, vec3 Direction, float Maximum)
             vec3 Second=cross(Delta,EdgeAlpha);
             float Gamma=dot(Direction,Second)/Determinant, Travel=dot(EdgeBeta,Second)/Determinant;
             if (Beta>=0.0 && Gamma>=0.0 && Beta+Gamma<=1.0 && Travel>1e-4 && Travel<Hit.Travel)
-            { Hit.Travel=Travel; Hit.Facet=Slot; }
+            { if (SurfaceCoverage(Slot,Origin+Direction*Travel)>0.0) { Hit.Travel=Travel; Hit.Facet=Slot; } }
         }
         ++Branch;
     }
@@ -131,13 +171,17 @@ float DistanceShadow(vec3 Position, vec3 Normal)
 {
     vec3 Direction=normalize(PC.SunDirectionRadiance.xyz);
     float Cell; SampleSceneDistance(Position,Cell);
-    vec3 Origin=Position+Normal*max(Cell*1.5,0.002);
+    vec3 Origin=Position+Normal*0.002;
     float Visibility=1.0, Travel=Cell;
     for (uint Step=0u; Step<64u; ++Step)
     {
         float Distance=SampleSceneDistance(Origin+Direction*Travel,Cell);
-        if (Distance>1e19) break;
-        if (Distance<Cell*0.25) return 0.0;
+        if (Distance>1e19)
+        {
+            if (TraceDistanceMesh(Origin,Direction,1e20).Facet!=0xFFFFFFFFu) return 0.0;
+            break;
+        }
+        if (Distance<Cell*0.7 && TraceDistanceMesh(Origin,Direction,Travel+Cell*2.0).Facet!=0xFFFFFFFFu) return 0.0;
         Visibility=min(Visibility,Distance/(max(PC.Tuning.x,0.01)*max(Travel,0.001)));
         Travel+=max(Distance*0.75,Cell*0.25);
     }
@@ -153,7 +197,7 @@ vec3 HemisphereDirection(vec3 Normal, uint Sample, uint Frame)
 vec3 GatherDistanceRadiance(vec3 Position, vec3 Normal, bool Current)
 {
     float Cell; SampleSceneDistance(Position,Cell);
-    vec3 Origin=Position+Normal*max(Cell*1.5,0.002), Result=vec3(0.0);
+    vec3 Origin=Position+Normal*0.002, Result=vec3(0.0);
     for (uint Sample=0u; Sample<4u; ++Sample)
     {
         vec3 Direction=HemisphereDirection(Normal,Sample,Current ? 0u : PC.Counts.y);
@@ -163,14 +207,19 @@ vec3 GatherDistanceRadiance(vec3 Position, vec3 Normal, bool Current)
         {
             vec3 Point=Origin+Direction*Travel;
             float Distance=SampleSceneDistance(Point,Cell);
-            if (Distance>1e19) break;
+            if (Distance>1e19)
+            {
+                DistanceRayHit Hit=TraceDistanceMesh(Origin,Direction,1e20);
+                if (Hit.Facet!=0xFFFFFFFFu) Incoming=SampleCachedRadiance(Hit.Facet,Origin+Direction*Hit.Travel,Current);
+                break;
+            }
             if (Distance<Cell*0.7)
             {
                 // 📝 Exact triangle refinement avoids shading a voxel boundary as a surface.
                 DistanceRayHit Hit=TraceDistanceMesh(Origin,Direction,Travel+Cell*2.0);
                 if (Hit.Facet!=0xFFFFFFFFu)
                 {
-                    Incoming=SampleCachedRadiance(Origin+Direction*Hit.Travel,Current);
+                    Incoming=SampleCachedRadiance(Hit.Facet,Origin+Direction*Hit.Travel,Current);
                     break;
                 }
             }

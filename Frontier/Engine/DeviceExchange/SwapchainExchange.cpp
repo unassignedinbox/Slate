@@ -3074,6 +3074,7 @@ bool SwapchainExchange::BringDistanceFieldGIStage() noexcept
     Supported.pNext = &Features;
     vkGetPhysicalDeviceFeatures2(Vulkan->PhysicalDevice, &Supported);
     Init.TextureUpdateAfterBind = Features.descriptorBindingSampledImageUpdateAfterBind != VK_FALSE;
+    Init.PhysicalDevice   = Vulkan->PhysicalDevice;
     Init.Geometry         = &DistanceGeometry;
     Init.Device           = Vulkan->Device;
     Init.MemoryProperties = Vulkan->MemoryProperties;

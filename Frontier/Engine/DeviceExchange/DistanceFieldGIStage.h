@@ -13,6 +13,7 @@ namespace Frontier
 {
 struct DistanceFieldStageInit
 {
+    VkPhysicalDevice PhysicalDevice = VK_NULL_HANDLE;
     VkDevice Device = VK_NULL_HANDLE;
     VkPhysicalDeviceMemoryProperties MemoryProperties{};
     VkBuffer CwbvhNodeBuffer = VK_NULL_HANDLE;
@@ -34,6 +35,7 @@ struct DistanceFieldStageInit
     uint32_t TextureCount = 0u;
     uint32_t TextureCapacity = 0u;
     bool TextureUpdateAfterBind = false;
+    uint32_t CardResolution = 4u;
     uint32_t VolumeResolution = 32u;
     float ClipmapCellSize = 0.15f;
     const DistanceFieldStructure* Geometry = nullptr;
@@ -50,6 +52,7 @@ struct DistanceFieldFrameParams
     float ShadowSoftness = 0.22f;
     float CameraEye[3] = { 0.0f, -5.0f, 2.0f };
     float GiBoost = 1.0f;
+    uint64_t MaterialRevision = 0u;
     uint32_t FrameIndex = 0u;
     uint32_t FeatureFlags = 0u;
     uint32_t ReflectionMode = 1u; // 0 = Off, 1 = Sky, 2 = Raytraced (Mesh BVH, no SDF blocks)
@@ -81,10 +84,16 @@ public:
     const std::string& QueryRefusal() const { return Refusal; }
     // 📝 Borrowed readback handles for execution verification; owned and retired by this stage.
     VkBuffer QueryDistanceBuffer() const { return Buffers[0]; }
-    VkBuffer QueryRadianceBuffer() const { return Buffers[1u + (FrameNumber & 1u)]; }
+    VkImage QueryRadianceImage() const { return CardImages[FrameNumber & 1u]; }
+    VkImage QueryDiffuseImage() const { return CardImages[2]; }
+    VkImage QueryNormalImage() const { return CardImages[3]; }
+    VkImage QueryEmissionImage() const { return CardImages[4]; }
+    uint32_t QueryCardWidth() const { return CardWidth; }
+    uint32_t QueryCardHeight() const { return CardHeight; }
     uint32_t QueryVoxelCount() const { return VoxelCount; }
 private:
     bool Allocate(uint32_t Slot, VkDeviceSize Bytes);
+    bool ConstructCardImages();
     bool ConstructPipelines();
     bool WriteDescriptors();
     DistanceFieldStageInit Initialization{};
@@ -95,7 +104,13 @@ private:
     VkDescriptorSetLayout DescriptorLayout = VK_NULL_HANDLE;
     VkPipelineLayout PipelineLayout = VK_NULL_HANDLE;
     VkDescriptorSet Sets[2]{};
-    VkPipeline Pipelines[3]{};
+    VkPipeline Pipelines[4]{};
+    VkImage CardImages[5]{};
+    VkImageView CardViews[5]{};
+    VkDeviceMemory CardStorage[5]{};
+    uint32_t CardWidth = 0u, CardHeight = 0u;
+    bool CardImagesInitialized = false;
+    uint64_t ResidentMaterials = UINT64_MAX;
     uint32_t VoxelCount = 0u, FrameNumber = 0u;
     uint64_t ResidentRevision = 0u;
     float Origins[12]{};

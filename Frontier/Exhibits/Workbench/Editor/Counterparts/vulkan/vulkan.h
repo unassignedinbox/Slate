@@ -11,6 +11,7 @@ using VkDeviceSize = uint64_t;
 typedef struct VkPhysicalDevice_T*             VkPhysicalDevice;
 typedef struct VkDevice_T*                     VkDevice;
 typedef struct VkBuffer_T*                     VkBuffer;
+typedef struct VkImage_T*                      VkImage;
 typedef struct VkImageView_T*                  VkImageView;
 typedef struct VkSampler_T*                    VkSampler;
 typedef struct VkDescriptorPool_T*             VkDescriptorPool;

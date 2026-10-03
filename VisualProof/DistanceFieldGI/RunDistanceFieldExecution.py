@@ -14,7 +14,7 @@ Shaders = Output / "Shaders"
 Images = Output / "Images"
 Shaders.mkdir(parents=True, exist_ok=True)
 Images.mkdir(parents=True, exist_ok=True)
-for Name in ("DistanceFieldConstruct", "DistanceFieldRadiance", "DistanceFieldGIResolve", "DistanceFieldGIResolveFixed"):
+for Name in ("DistanceFieldConstruct", "DistanceFieldCapture", "DistanceFieldCaptureFixed", "DistanceFieldRadiance", "DistanceFieldGIResolve", "DistanceFieldGIResolveFixed"):
     subprocess.run(["glslc", "--target-env=vulkan1.2", "-fshader-stage=compute", "-I" + str(Engine / "Engine/Shaders"),
                     "-I" + str(Engine / "Engine"), str(Engine / f"Engine/Shaders/{Name}.slang"),
                     "-o", str(Shaders / f"{Name}.spv")], check=True)

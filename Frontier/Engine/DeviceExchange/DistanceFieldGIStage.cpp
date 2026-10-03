@@ -16,10 +16,11 @@ bool DistanceFieldGIStage::Bring(const DistanceFieldStageInit& Input) noexcept
 {
     Destroy();
     Refusal.clear();
-    if (!Input.Device || !Input.Geometry || Input.Geometry->QueryFacets().empty() || Input.Geometry->QueryBranches().empty() ||
+    if (!Input.PhysicalDevice || !Input.Device || !Input.Geometry || Input.Geometry->QueryFacets().empty() || Input.Geometry->QueryBranches().empty() ||
         !Input.OutputImageView || !Input.SurfaceImageView || !Input.NormalImageView ||
         !Input.TriangleBuffer || !Input.MaterialBuffer || !Input.InstanceBuffer || !Input.SlabBuffer ||
         !Input.VertexBuffer || !Input.IndexBuffer || !Input.TableSampler || !Input.EnergyLutView || !Input.SheenLutView ||
+        Input.CardResolution < 2u || Input.CardResolution > 32u ||
         Input.VolumeResolution < 8u || Input.VolumeResolution > 64u ||
         !std::isfinite(Input.ClipmapCellSize) || Input.ClipmapCellSize <= 0.0f ||
         (Input.TextureCapacity && (!Input.TextureCount || !Input.TextureViews || !Input.TextureSampler || Input.TextureCount > Input.TextureCapacity)))
@@ -31,12 +32,25 @@ bool DistanceFieldGIStage::Bring(const DistanceFieldStageInit& Input) noexcept
     try
     {
         VoxelCount = 3u * Input.VolumeResolution * Input.VolumeResolution * Input.VolumeResolution;
+        const uint32_t Cards = static_cast<uint32_t>(Input.Geometry->QueryFacets().size());
+        const uint32_t Columns = static_cast<uint32_t>(std::ceil(std::sqrt(double(Cards))));
+        CardWidth = Columns * Input.CardResolution;
+        CardHeight = ((Cards + Columns - 1u) / Columns) * Input.CardResolution;
+        VkPhysicalDeviceProperties Properties{};
+        vkGetPhysicalDeviceProperties(Input.PhysicalDevice, &Properties);
+        if (CardWidth > Properties.limits.maxImageDimension2D || CardHeight > Properties.limits.maxImageDimension2D ||
+            Properties.limits.maxPerStageDescriptorStorageImages < 8u ||
+            Input.Geometry->QueryFacets().size()*sizeof(DistanceFieldFacet) > Properties.limits.maxStorageBufferRange ||
+            Input.Geometry->QueryBranches().size()*sizeof(DistanceFieldBranch) > Properties.limits.maxStorageBufferRange)
+        {
+            Refusal = "Surface-card geometry exceeds device image or storage limits";
+            Destroy(); return false;
+        }
         if (!Allocate(0u, VkDeviceSize(VoxelCount) * 64u) ||
-            !Allocate(1u, VkDeviceSize(VoxelCount) * 16u) || !Allocate(2u, VkDeviceSize(VoxelCount) * 16u) ||
             !Allocate(3u, 64u) ||
             !Allocate(4u, Input.Geometry->QueryBranches().size() * sizeof(DistanceFieldBranch)) ||
             !Allocate(5u, Input.Geometry->QueryFacets().size() * sizeof(DistanceFieldFacet)) ||
-            !ConstructPipelines() || !WriteDescriptors())
+            !ConstructCardImages() || !ConstructPipelines() || !WriteDescriptors())
         {
             Refusal = "SDF allocation, shader pipeline or descriptor creation failed";
             Destroy();
@@ -75,13 +89,43 @@ bool DistanceFieldGIStage::Allocate(uint32_t Slot, VkDeviceSize Bytes)
     return vkBindBufferMemory(Initialization.Device, Buffers[Slot], Memory[Slot], 0u) == VK_SUCCESS;
 }
 
+bool DistanceFieldGIStage::ConstructCardImages()
+{
+    for (uint32_t Slot = 0u; Slot < 5u; ++Slot)
+    {
+        VkImageCreateInfo Information{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+        Information.imageType = VK_IMAGE_TYPE_2D; Information.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        Information.extent = {CardWidth, CardHeight, 1u}; Information.mipLevels = Information.arrayLayers = 1u;
+        Information.samples = VK_SAMPLE_COUNT_1_BIT; Information.tiling = VK_IMAGE_TILING_OPTIMAL;
+        Information.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        if (vkCreateImage(Initialization.Device, &Information, nullptr, &CardImages[Slot]) != VK_SUCCESS) return false;
+        VkMemoryRequirements Requirements{};
+        vkGetImageMemoryRequirements(Initialization.Device, CardImages[Slot], &Requirements);
+        uint32_t Selection = UINT32_MAX;
+        for (uint32_t Index = 0u; Index < Initialization.MemoryProperties.memoryTypeCount; ++Index)
+            if ((Requirements.memoryTypeBits & (1u << Index)) &&
+                (Initialization.MemoryProperties.memoryTypes[Index].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))
+            { Selection = Index; break; }
+        if (Selection == UINT32_MAX) return false;
+        VkMemoryAllocateInfo Extent{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+        Extent.allocationSize = Requirements.size; Extent.memoryTypeIndex = Selection;
+        if (vkAllocateMemory(Initialization.Device, &Extent, nullptr, &CardStorage[Slot]) != VK_SUCCESS ||
+            vkBindImageMemory(Initialization.Device, CardImages[Slot], CardStorage[Slot], 0u) != VK_SUCCESS) return false;
+        VkImageViewCreateInfo View{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+        View.image = CardImages[Slot]; View.viewType = VK_IMAGE_VIEW_TYPE_2D; View.format = Information.format;
+        View.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
+        if (vkCreateImageView(Initialization.Device, &View, nullptr, &CardViews[Slot]) != VK_SUCCESS) return false;
+    }
+    return true;
+}
+
 bool DistanceFieldGIStage::ConstructPipelines()
 {
     std::vector<VkDescriptorSetLayoutBinding> Descriptors;
     auto Append = [&](uint32_t Slot, VkDescriptorType Type, uint32_t Count = 1u)
     { Descriptors.push_back({Slot, Type, Count, VK_SHADER_STAGE_COMPUTE_BIT, nullptr}); };
-    for (uint32_t Slot : {0u, 1u, 2u}) Append(Slot, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-    for (uint32_t Slot : {3u, 4u, 5u, 6u, 7u, 10u, 15u, 16u, 17u, 18u, 19u, 20u}) Append(Slot, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+    for (uint32_t Slot : {0u, 1u, 2u, 4u, 8u, 9u, 10u, 11u}) Append(Slot, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+    for (uint32_t Slot : {3u, 5u, 6u, 7u, 15u, 16u, 17u, 18u, 19u, 20u}) Append(Slot, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
     Append(13u, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     Append(14u, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     Append(31u, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, std::max(1u, Initialization.TextureCapacity));
@@ -105,9 +149,10 @@ bool DistanceFieldGIStage::ConstructPipelines()
     PipelineInformation.pushConstantRangeCount = 1u;
     PipelineInformation.pPushConstantRanges = &Push;
     if (vkCreatePipelineLayout(Initialization.Device, &PipelineInformation, nullptr, &PipelineLayout) != VK_SUCCESS) return false;
-    const char* Names[] = {"DistanceFieldConstruct.spv", "DistanceFieldRadiance.spv",
+    const char* Names[] = {"DistanceFieldConstruct.spv",
+        Initialization.TextureCapacity ? "DistanceFieldCapture.spv" : "DistanceFieldCaptureFixed.spv", "DistanceFieldRadiance.spv",
         Initialization.TextureCapacity ? "DistanceFieldGIResolve.spv" : "DistanceFieldGIResolveFixed.spv"};
-    for (uint32_t Index = 0u; Index < 3u; ++Index)
+    for (uint32_t Index = 0u; Index < 4u; ++Index)
     {
         std::ifstream Stream(Initialization.SpirvDirectory + "/" + Names[Index], std::ios::binary | std::ios::ate);
         if (!Stream) return false;
@@ -137,7 +182,7 @@ bool DistanceFieldGIStage::ConstructPipelines()
 bool DistanceFieldGIStage::WriteDescriptors()
 {
     const uint32_t Capacity = std::max(1u, Initialization.TextureCapacity);
-    VkDescriptorPoolSize Sizes[] = {{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 24u}, {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 6u},
+    VkDescriptorPoolSize Sizes[] = {{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 20u}, {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 16u},
                                     {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2u * (Capacity + 2u)}};
     VkDescriptorPoolCreateInfo Information{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
     Information.maxSets = 2u;
@@ -161,18 +206,23 @@ bool DistanceFieldGIStage::WriteDescriptors()
         Allocation.descriptorSetCount = 1u;
         Allocation.pSetLayouts = &DescriptorLayout;
         if (vkAllocateDescriptorSets(Initialization.Device, &Allocation, &Sets[Cycle]) != VK_SUCCESS) return false;
-        VkBuffer Handles[] = {Buffers[0], Buffers[1u + Cycle], Buffers[3], Buffers[4], Buffers[5], Buffers[2u - Cycle],
+        VkBuffer Handles[] = {Buffers[0], Buffers[3], Buffers[4], Buffers[5],
             Initialization.TriangleBuffer, Initialization.MaterialBuffer, Initialization.InstanceBuffer,
             Initialization.SlabBuffer, Initialization.VertexBuffer, Initialization.IndexBuffer};
-        const uint32_t Slots[] = {3u,4u,5u,6u,7u,10u,15u,16u,17u,18u,19u,20u};
-        VkDescriptorBufferInfo BufferInformation[12]{};
+        const uint32_t Slots[] = {3u,5u,6u,7u,15u,16u,17u,18u,19u,20u};
+        VkDescriptorBufferInfo BufferInformation[10]{};
         VkDescriptorImageInfo Images[] = {{VK_NULL_HANDLE, Initialization.OutputImageView, VK_IMAGE_LAYOUT_GENERAL},
             {VK_NULL_HANDLE, Initialization.SurfaceImageView, VK_IMAGE_LAYOUT_GENERAL},
             {VK_NULL_HANDLE, Initialization.NormalImageView, VK_IMAGE_LAYOUT_GENERAL},
+            {VK_NULL_HANDLE, CardViews[Cycle], VK_IMAGE_LAYOUT_GENERAL},
+            {VK_NULL_HANDLE, CardViews[1u-Cycle], VK_IMAGE_LAYOUT_GENERAL},
+            {VK_NULL_HANDLE, CardViews[2], VK_IMAGE_LAYOUT_GENERAL},
+            {VK_NULL_HANDLE, CardViews[3], VK_IMAGE_LAYOUT_GENERAL},
+            {VK_NULL_HANDLE, CardViews[4], VK_IMAGE_LAYOUT_GENERAL},
             {Initialization.TableSampler, Initialization.EnergyLutView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
             {Initialization.TableSampler, Initialization.SheenLutView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}};
         std::vector<VkWriteDescriptorSet> Writes;
-        for (uint32_t Index = 0u; Index < 12u; ++Index)
+        for (uint32_t Index = 0u; Index < 10u; ++Index)
         {
             BufferInformation[Index] = {Handles[Index], 0u, VK_WHOLE_SIZE};
             VkWriteDescriptorSet Write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
@@ -180,11 +230,12 @@ bool DistanceFieldGIStage::WriteDescriptors()
             Write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; Write.pBufferInfo = &BufferInformation[Index];
             Writes.push_back(Write);
         }
-        for (uint32_t Index = 0u; Index < 5u; ++Index)
+        const uint32_t ImageSlots[] = {0u,1u,2u,4u,10u,8u,9u,11u,13u,14u};
+        for (uint32_t Index = 0u; Index < 10u; ++Index)
         {
             VkWriteDescriptorSet Write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-            Write.dstSet = Sets[Cycle]; Write.dstBinding = Index < 3u ? Index : Index + 10u; Write.descriptorCount = 1u;
-            Write.descriptorType = Index < 3u ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            Write.dstSet = Sets[Cycle]; Write.dstBinding = ImageSlots[Index]; Write.descriptorCount = 1u;
+            Write.descriptorType = Index < 8u ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
             Write.pImageInfo = &Images[Index]; Writes.push_back(Write);
         }
         VkWriteDescriptorSet Write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
@@ -223,6 +274,8 @@ bool DistanceFieldGIStage::RecordFrame(VkCommandBuffer Command, const DistanceFi
     Constants.Counts[0] = Resolution;
     Constants.Counts[1] = static_cast<uint32_t>(Geometry.QueryBranches().size());
     Constants.Counts[2] = static_cast<uint32_t>(Geometry.QueryFacets().size());
+    Constants.Counts[3] = Initialization.CardResolution;
+    const bool Capture = GeometryChanged || ResidentMaterials != Frame.MaterialRevision;
     DistanceFieldPush Push{};
     std::memcpy(Push.Sun, Frame.SunDirection, 12u); Push.Sun[3] = Frame.SunRadiance;
     std::memcpy(Push.SunColour, Frame.SunColour, 12u);
@@ -230,7 +283,7 @@ bool DistanceFieldGIStage::RecordFrame(VkCommandBuffer Command, const DistanceFi
     std::memcpy(Push.Eye, Frame.CameraEye, 12u);
     Push.Tuning[0] = std::max(0.01f, Frame.ShadowSoftness);
     Push.Tuning[1] = std::clamp(Frame.GiBoost, 0.0f, 2.0f);
-    const bool Reset = Reconstruct || std::memcmp(PreviousLighting, Push.Sun, sizeof(PreviousLighting)) != 0;
+    const bool Reset = Capture || std::memcmp(PreviousLighting, Push.Sun, sizeof(PreviousLighting)) != 0;
     Push.Tuning[2] = Reset ? 1.0f : 0.0f;
     Push.Counts[0] = VoxelCount; Push.Counts[1] = FrameNumber; Push.Counts[2] = Frame.FeatureFlags; Push.Counts[3] = Frame.ReflectionMode;
     auto Barrier = [&](VkPipelineStageFlags Source, VkAccessFlags SourceAccess, VkPipelineStageFlags Destination, VkAccessFlags DestinationAccess)
@@ -253,8 +306,25 @@ bool DistanceFieldGIStage::RecordFrame(VkCommandBuffer Command, const DistanceFi
         Upload(Buffers[5], Geometry.QueryFacets().data(), Geometry.QueryFacets().size()*sizeof(DistanceFieldFacet));
     }
     Upload(Buffers[3], &Constants, sizeof(Constants));
+    if (!CardImagesInitialized)
+    {
+        for (auto Image : CardImages)
+        {
+            VkImageMemoryBarrier Transition{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+            Transition.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED; Transition.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+            Transition.srcQueueFamilyIndex = Transition.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            Transition.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+            Transition.image = Image; Transition.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT,0u,1u,0u,1u};
+            vkCmdPipelineBarrier(Command, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                 0u,0u,nullptr,0u,nullptr,1u,&Transition);
+        }
+    }
     if (Reset)
-        for (uint32_t Slot : {1u, 2u}) vkCmdFillBuffer(Command, Buffers[Slot], 0u, VK_WHOLE_SIZE, 0u);
+    {
+        VkClearColorValue Clear{};
+        VkImageSubresourceRange Range{VK_IMAGE_ASPECT_COLOR_BIT,0u,1u,0u,1u};
+        for (uint32_t Slot : {0u,1u}) vkCmdClearColorImage(Command,CardImages[Slot],VK_IMAGE_LAYOUT_GENERAL,&Clear,1u,&Range);
+    }
     Barrier(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_WRITE_BIT,
             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
     vkCmdBindDescriptorSets(Command, VK_PIPELINE_BIND_POINT_COMPUTE, PipelineLayout, 0u, 1u, &Sets[FrameNumber & 1u], 0u, nullptr);
@@ -266,14 +336,22 @@ bool DistanceFieldGIStage::RecordFrame(VkCommandBuffer Command, const DistanceFi
         Barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
     }
-    vkCmdBindPipeline(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Pipelines[1]);
-    vkCmdDispatch(Command, (VoxelCount + 63u)/64u, 1u, 1u);
+    if (Capture)
+    {
+        vkCmdBindPipeline(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Pipelines[1]);
+        vkCmdDispatch(Command, (CardWidth+7u)/8u, (CardHeight+7u)/8u, 1u);
+        Barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+    }
+    vkCmdBindPipeline(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Pipelines[2]);
+    vkCmdDispatch(Command, (CardWidth+7u)/8u, (CardHeight+7u)/8u, 1u);
     Barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
-    vkCmdBindPipeline(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Pipelines[2]);
+    vkCmdBindPipeline(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Pipelines[3]);
     vkCmdDispatch(Command, (Frame.RenderWidth + 15u)/16u, (Frame.RenderHeight + 15u)/16u, 1u);
     Barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT);
+    CardImagesInitialized = true; ResidentMaterials = Frame.MaterialRevision;
     ResidentRevision = Geometry.QueryRevision();
     std::memcpy(Origins, Constants.Origins, sizeof(Origins));
     std::memcpy(PreviousLighting, Push.Sun, sizeof(PreviousLighting));
@@ -290,6 +368,12 @@ void DistanceFieldGIStage::Destroy() noexcept
         if (Pool) vkDestroyDescriptorPool(Initialization.Device, Pool, nullptr);
         if (PipelineLayout) vkDestroyPipelineLayout(Initialization.Device, PipelineLayout, nullptr);
         if (DescriptorLayout) vkDestroyDescriptorSetLayout(Initialization.Device, DescriptorLayout, nullptr);
+        for (uint32_t Slot = 0u; Slot < 5u; ++Slot)
+        {
+            if (CardViews[Slot]) vkDestroyImageView(Initialization.Device, CardViews[Slot], nullptr);
+            if (CardImages[Slot]) vkDestroyImage(Initialization.Device, CardImages[Slot], nullptr);
+            if (CardStorage[Slot]) vkFreeMemory(Initialization.Device, CardStorage[Slot], nullptr);
+        }
         for (uint32_t Slot = 0u; Slot < 6u; ++Slot)
         {
             if (Buffers[Slot]) vkDestroyBuffer(Initialization.Device, Buffers[Slot], nullptr);
@@ -302,6 +386,10 @@ void DistanceFieldGIStage::Destroy() noexcept
     std::fill(std::begin(Pipelines), std::end(Pipelines), VK_NULL_HANDLE);
     std::fill(std::begin(Sets), std::end(Sets), VK_NULL_HANDLE);
     Pool = VK_NULL_HANDLE; PipelineLayout = VK_NULL_HANDLE; DescriptorLayout = VK_NULL_HANDLE;
+    std::fill(std::begin(CardImages), std::end(CardImages), VK_NULL_HANDLE);
+    std::fill(std::begin(CardViews), std::end(CardViews), VK_NULL_HANDLE);
+    std::fill(std::begin(CardStorage), std::end(CardStorage), VK_NULL_HANDLE);
+    CardWidth = CardHeight = 0u; CardImagesInitialized = false; ResidentMaterials = UINT64_MAX;
     VoxelCount = FrameNumber = 0u; ResidentRevision = 0u;
     Initialization = {};
     std::fill(std::begin(Origins), std::end(Origins), 0.0f);
