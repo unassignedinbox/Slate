@@ -111,6 +111,42 @@
   .mode span{padding:5px 12px;border-radius:999px;color:var(--mut);cursor:pointer;font-size:12px}
   .mode span.on{background:var(--card3);color:#fff}
   .panel{display:none}.panel.on{display:block}
+  /* ---- 2D tread editor overlay ---- */
+  #editor{position:fixed;inset:0;z-index:60;background:rgba(8,9,11,.82);backdrop-filter:blur(7px);display:none;padding:22px}
+  #editor.on{display:grid;grid-template-columns:1fr 310px;gap:14px}
+  #editor .pane{background:var(--card);border-radius:22px;padding:16px 18px 14px;display:flex;flex-direction:column;min-height:0}
+  #editor .pane.side{overflow-y:auto;scrollbar-width:thin;scrollbar-color:#2a2c31 transparent}
+  #editor h2{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:400;margin:0 0 10px}
+  #editor h2::before{content:"";width:3px;height:16px;border-radius:2px;background:#7ad1ff}
+  #editor h2 .r{margin-left:auto;display:flex;gap:6px}
+  #edStage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:var(--card2);border-radius:16px;overflow:hidden}
+  #edSvg{width:100%;height:100%;touch-action:none;cursor:crosshair}
+  #edSvg .ghost{opacity:.17}
+  #edSvg .band{fill:#101114;stroke:rgba(255,255,255,.1);stroke-width:.004}
+  #edSvg .grid{stroke:rgba(255,255,255,.055);stroke-width:.0025;vector-effect:non-scaling-stroke}
+  #edSvg .axis{stroke:rgba(122,209,255,.4);stroke-width:.004;stroke-dasharray:.02 .015}
+  #edSvg .lug{fill:#3f444c;stroke:#8e9099;stroke-width:.004;fill-rule:evenodd}
+  #edSvg .lug.ejector{fill:#4a4233;stroke:#d6c93a}
+  #edSvg .lug.cut{fill:rgba(229,66,63,.16);stroke:#e5423f;stroke-dasharray:.016 .012}
+  #edSvg .lug.sel{fill:#4d5a68;stroke:#7ad1ff;stroke-width:.007}
+  #edSvg .lug.bad{stroke:#e5423f;stroke-width:.008}
+  #edSvg .mirrored{opacity:.42;pointer-events:none}
+  #edSvg .sipe{fill:none;stroke:#9aa4ff;stroke-width:.006;stroke-linecap:round}
+  #edSvg .draft{fill:rgba(122,209,255,.12);stroke:#7ad1ff;stroke-width:.005;stroke-dasharray:.014 .01}
+  #edSvg .vtx{fill:#0c0d0f;stroke:#7ad1ff;stroke-width:.003;cursor:grab}
+  #edSvg .vtx.hole{stroke:#f0a04b} #edSvg .vtx.sipe{stroke:#9aa4ff}
+  #edSvg text{fill:var(--dim);font-size:.026px;font-weight:400}
+  #edList{display:flex;flex-direction:column;gap:4px;margin:4px 0 2px;max-height:230px;overflow-y:auto;scrollbar-width:thin}
+  #edList .it{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:11px;background:var(--card2);cursor:pointer;font-size:12.5px}
+  #edList .it.on{background:var(--card3);box-shadow:inset 0 0 0 1px rgba(122,209,255,.45)}
+  #edList .it .ic{width:8px;height:8px;border-radius:2px;flex:0 0 auto}
+  #edList .it .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #edList .it button{background:none;border:0;color:var(--dim);cursor:pointer;padding:0 2px;font-size:12px}
+  #edList .it button:hover{color:var(--txt)}
+  #edTools{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+  #edHint{color:var(--dim);font-size:12px;line-height:1.5;margin-top:8px}
+  #edHint b{color:#7ad1ff;font-weight:400}
+  #edWarn{color:var(--red);font-size:12px;margin-top:6px;min-height:16px}
 </style>
 </head>
 <body>
@@ -170,7 +206,7 @@
     <div class="panel" data-panel="export">
       <div class="card" style="--bar:var(--red)"><h2>Export</h2>
         <div class="hint">Textures are exported at the current map resolution. GLB is in metres, Y-up, tyre axis along X.</div>
-        <div class="btns"><button id="exportJson">Pattern JSON</button><button id="exportHeight">Height PNG</button><button id="exportNormal">Normal PNG</button><button id="exportGlb" class="primary">GLB (3D)</button></div>
+        <div class="btns"><button id="exportJson">Pattern JSON</button><button id="exportHeight">Height PNG</button><button id="exportNormal">Normal PNG</button><button id="exportObj">OBJ (quads)</button><button id="exportGlb" class="primary">GLB (3D)</button></div>
         <div class="row" style="margin-top:12px"><label>Import JSON</label><input type="file" id="importJson" accept=".json"></div>
       </div>
     </div>
@@ -180,10 +216,47 @@
     <div class="float" id="badge"><div class="t" id="badgeType">Slick</div><div class="name" id="badgeName">GZero</div><div class="size" id="badgeSize">245/40 R18</div></div>
     <div class="float" id="tiles"></div>
     <div class="float" id="viewbtns">
-      <button class="small" data-view="iso">Iso</button><button class="small" data-view="side">Side</button><button class="small" data-view="tread">Tread</button><button class="small" data-view="front">Front</button><button class="small" id="spinBtn">Spin</button><button class="small" id="threadsBtn">X-ray cords</button>
+      <button class="small" data-view="iso">Iso</button><button class="small" data-view="side">Side</button><button class="small" data-view="tread">Tread</button><button class="small" data-view="front">Front</button><button class="small" id="spinBtn">Spin</button><button class="small" id="threadsBtn">X-ray cords</button><button class="small" id="quadsBtn">Quad cage</button>
     </div>
     <div id="toast"></div>
   </main>
+
+<!-- 2D tread editor: edits the lug outlines of a `blocks` layer. The tyre casing profile is untouched. -->
+<div id="editor">
+  <div class="pane">
+    <h2>Tread editor <span class="r">
+      <button class="small" id="edFit">Reset view</button>
+      <button class="small" id="edClose">Close</button></span></h2>
+    <div id="edTools">
+      <button class="small primary" data-tool="select">Select / drag</button>
+      <button class="small" data-tool="pen">Draw lug</button>
+      <button class="small" data-tool="hole">Draw hole</button>
+      <button class="small" data-tool="sipe">Draw cut line</button>
+      <button class="small" data-tool="erase">Erase point</button>
+    </div>
+    <div id="edStage"><svg id="edSvg" preserveAspectRatio="xMidYMid meet"></svg></div>
+    <div id="edHint"></div>
+    <div id="edWarn"></div>
+  </div>
+  <div class="pane side">
+    <h2>Shapes</h2>
+    <div class="btns">
+      <select id="edAdd" style="flex:1">
+        <option value="block">Block lug</option><option value="chevron">Chevron lug</option>
+        <option value="triangle">Triangle lug</option><option value="ejector">Ejector bar</option>
+        <option value="cut">Recessed cut</option>
+      </select><button class="small" id="edAddBtn">Add</button>
+    </div>
+    <div id="edList"></div>
+    <div id="edProps"></div>
+    <div class="sec">Pitch cell</div>
+    <div id="edCell"></div>
+    <div class="btns" style="margin-top:10px">
+      <button class="small" id="edLoad">Reload library design</button>
+      <button class="small" id="edJson">Design JSON</button>
+    </div>
+  </div>
+</div>
 
   <aside id="right">
     <div class="card" style="--bar:var(--green)">
@@ -206,6 +279,849 @@
 
 </div>
 
+<script id="tread-core">
+/* =====================================================================================================================
+   SLATE TREAD CORE — dependency-free logic shared by the generator UI and the offline checks.
+
+   Contains three things:
+     1. The polygon tread design model (shapes, linked mirrors, cut lines, validation).
+     2. The ported reference tread library — eight sophisticated polygon lug designs.
+     3. The quad-dominant surface builder (grid quadrangulation, tri→quad merge, welded topology, OBJ writer).
+
+   No three.js, no Clipper, no DOM. Boolean clipping and fallback triangulation are injected by the caller so the
+   same code can be exercised head-less from Node.
+   ===================================================================================================================== */
+(function (global) {
+'use strict';
+
+const TAU = Math.PI * 2;
+const clone = v => (typeof structuredClone === 'function' ? structuredClone(v) : JSON.parse(JSON.stringify(v)));
+let shapeSequence = 0;
+const uid = () => `shape-${++shapeSequence}-${Math.random().toString(36).slice(2, 7)}`;
+
+// =====================================================================================================================
+//  1. DESIGN MODEL — a tread design is a list of shapes in normalised coordinates.
+//     x : −0.5 … 0.5 across the tread band        y : 0 … 1 along one circumferential pitch
+//     Shapes are raised lugs by default; `role:'cut'` marks a recessed region instead.
+// =====================================================================================================================
+const MIRRORS = ['none', 'width', 'travel', 'point', 'both'];
+const ROLES = ['lug', 'shoulder', 'rib', 'ejector', 'cut'];
+const defaultMirror = () => ({ mode: 'none', axisX: 0, axisY: 0.5, stagger: 0 });
+
+const ringKey = ring => ring.map(p => p.map(v => v.toFixed(6)).join(',')).sort().join(';');
+const signature = s => JSON.stringify([ringKey(s.points), (s.holes || []).map(ringKey).sort(),
+  (s.sipes || []).map(ringKey).sort(), s.role, s.heightRatio, s.cutDepth ?? null, !!s.continuous]);
+const mean = (pts, k) => pts.reduce((a, p) => a + p[k], 0) / pts.length;
+
+function transformShape(shape, fn) {
+  return Object.assign({}, shape, {
+    points: shape.points.map(fn),
+    holes: (shape.holes || []).map(r => r.map(fn)),
+    sipes: (shape.sipes || []).map(r => r.map(fn))
+  });
+}
+
+// Mirroring always applies to the complete feature: outline, holes and every cut line.
+function expandShape(shape) {
+  const m = shape.mirror || defaultMirror();
+  const list = [['source', p => [p[0], p[1]]]];
+  if (m.mode === 'width' || m.mode === 'both') list.push(['width', ([x, y]) => [2 * m.axisX - x, y + m.stagger]]);
+  if (m.mode === 'travel' || m.mode === 'both') list.push(['travel', ([x, y]) => [x, 2 * m.axisY - y + m.stagger]]);
+  if (m.mode === 'point' || m.mode === 'both') list.push(['point', ([x, y]) => [2 * m.axisX - x, 2 * m.axisY - y + m.stagger]]);
+  const seen = new Set();
+  return list.map(([instance, fn]) => Object.assign(transformShape(shape, fn), { instance, sourceId: shape.id }))
+    .filter(s => { const k = signature(s); if (seen.has(k)) return false; seen.add(k); return true; });
+}
+
+// Shapes that belong to pitch A (parity 0), pitch B (parity 1) or every pitch.
+function designShapes(shapes, parity = 0) {
+  return (shapes || []).filter(s => s.enabled !== false && (s.phase === 'both' || Number(s.phase) === (parity % 2)))
+    .flatMap(expandShape);
+}
+
+const ringArea = ring => ring.reduce((sum, p, i) => { const q = ring[(i + 1) % ring.length]; return sum + p[0] * q[1] - p[1] * q[0]; }, 0) / 2;
+const cross = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+const between = (a, b, p) => Math.abs(cross(a, b, p)) < 1e-10 &&
+  p[0] >= Math.min(a[0], b[0]) - 1e-10 && p[0] <= Math.max(a[0], b[0]) + 1e-10 &&
+  p[1] >= Math.min(a[1], b[1]) - 1e-10 && p[1] <= Math.max(a[1], b[1]) + 1e-10;
+
+// A self-crossing or degenerate outline cannot be extruded, so the editor blocks the rebuild instead of
+// handing a broken contour to the boolean stage.
+function validPolygon(points) {
+  if (!Array.isArray(points) || points.length < 3) return false;
+  if (Math.abs(ringArea(points)) < 1e-9) return false;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i], b = points[(i + 1) % points.length];
+    if (Math.hypot(a[0] - b[0], a[1] - b[1]) < 1e-8) return false;
+    for (let j = i + 2; j < points.length; j++) {
+      if (i === 0 && j === points.length - 1) continue;
+      const c = points[j], d = points[(j + 1) % points.length];
+      if ((cross(a, b, c) * cross(a, b, d) < 0 && cross(c, d, a) * cross(c, d, b) < 0) ||
+        between(a, b, c) || between(a, b, d) || between(c, d, a) || between(c, d, b)) return false;
+    }
+  }
+  return true;
+}
+
+function invalidShapes(shapes) {
+  return (shapes || []).filter(s => s.enabled !== false &&
+    (!validPolygon(s.points) || (s.holes || []).some(h => !validPolygon(h))));
+}
+
+function newShape(kind = 'block') {
+  const points =
+    kind === 'chevron' ? [[-.22, .15], [-.07, .05], [.08, .35], [-.07, .65], [-.22, .55], [-.07, .35]] :
+    kind === 'triangle' ? [[-.22, .10], [-.03, .35], [-.22, .65]] :
+    kind === 'ejector' ? [[-.40, .20], [-.26, .20], [-.26, .30], [-.40, .30]] :
+    kind === 'cut' ? [[-.14, .20], [.14, .20], [.14, .44], [-.14, .44]] :
+    [[-.24, .10], [-.07, .10], [-.07, .70], [-.24, .70]];
+  const role = kind === 'ejector' ? 'ejector' : kind === 'cut' ? 'cut' : 'lug';
+  return {
+    id: uid(), name: kind === 'ejector' ? 'Ejector bar' : kind === 'cut' ? 'Recessed cut' : 'New ' + kind,
+    points, holes: [], sipes: [], role,
+    heightRatio: kind === 'ejector' ? .24 : 1, cutDepth: .5,
+    enabled: true, phase: 'both', mirror: defaultMirror()
+  };
+}
+
+function normaliseShape(raw, index = 0) {
+  const s = Object.assign({}, raw);
+  s.id = typeof s.id === 'string' && s.id ? s.id : uid();
+  s.name = typeof s.name === 'string' && s.name ? s.name.slice(0, 100) : `Shape ${index + 1}`;
+  s.points = (s.points || []).map(p => [+p[0], +p[1]]);
+  s.holes = (s.holes || []).map(r => r.map(p => [+p[0], +p[1]]));
+  s.sipes = (s.sipes || []).map(r => r.map(p => [+p[0], +p[1]]));
+  s.role = ROLES.includes(s.role) ? s.role : 'lug';
+  s.heightRatio = Number.isFinite(s.heightRatio) ? Math.min(1, Math.max(.05, s.heightRatio)) : 1;
+  s.cutDepth = Number.isFinite(s.cutDepth) ? Math.min(1, Math.max(.05, s.cutDepth)) : .5;
+  s.enabled = s.enabled !== false;
+  s.phase = ['both', '0', '1'].includes(String(s.phase)) ? String(s.phase) : 'both';
+  const m = s.mirror || {};
+  s.mirror = {
+    mode: MIRRORS.includes(m.mode) ? m.mode : 'none',
+    axisX: Number.isFinite(m.axisX) ? m.axisX : 0,
+    axisY: Number.isFinite(m.axisY) ? m.axisY : .5,
+    stagger: Number.isFinite(m.stagger) ? m.stagger : 0
+  };
+  if (s.continuous) s.continuous = true; else delete s.continuous;
+  return s;
+}
+
+// =====================================================================================================================
+//  2. REFERENCE TREAD LIBRARY
+//     Ported from the Frontier "Tread Lab" polygon studies (branch arena/01a0ffef-frontier, commit c36f130).
+//     These are original simplified vector interpretations of published tread photographs — not licensed CAD,
+//     exact replicas or manufacturer-endorsed engineering models.
+// =====================================================================================================================
+const lug = (points, sipes = [], options = {}) => Object.assign({ points, sipes, holes: [], role: 'lug', heightRatio: 1 }, options);
+const mapLug = (b, fn) => Object.assign({}, b, { points: b.points.map(fn), sipes: b.sipes.map(line => line.map(fn)) });
+const mirrorLug = (b, phase = 0) => { const r = mapLug(b, ([x, y]) => [-x, y + phase]); r.points.reverse(); return r; };
+const reflectLug = b => { const r = mapLug(b, ([x, y]) => [-x, y]); r.points.reverse(); return r; };
+const shiftLug = (b, phase) => mapLug(b, ([x, y]) => [x, y + phase]);
+// Reference pairs are point mirrors: both axial and travel coordinates reverse (a half-turn in the tread plane).
+const opposeLug = (b, sum = 1) => Object.assign(mapLug(b, ([x, y]) => [-x, sum - y]), { instance: 'opposed' });
+const lowBar = points => lug(points, [], { role: 'ejector', family: 'ejector', heightRatio: .20 });
+
+function quadCurve(a, c, b, steps = 5) {
+  return Array.from({ length: steps + 1 }, (_, i) => {
+    const t = i / steps, u = 1 - t;
+    return [u * u * a[0] + 2 * u * t * c[0] + t * t * b[0], u * u * a[1] + 2 * u * t * c[1] + t * t * b[1]];
+  });
+}
+function band(edge, thickness, sipes, options) {
+  return lug([...edge, ...edge.map(([x, y]) => [x, y + thickness]).reverse()], sipes, options);
+}
+// Shared periodic warp keeps channel boundaries aligned through the pitch seam.
+function windingChannel(b, amplitude) {
+  const warp = ([x, y]) => [x + amplitude * Math.sin(TAU * y), y];
+  const points = [];
+  b.points.forEach((a, i) => {
+    const q = b.points[(i + 1) % b.points.length], n = Math.max(1, Math.ceil(Math.abs(q[1] - a[1]) / .07));
+    for (let j = 0; j < n; j++) points.push(warp([a[0] + (q[0] - a[0]) * j / n, a[1] + (q[1] - a[1]) * j / n]));
+  });
+  return Object.assign({}, b, { points, sipes: b.sipes.map(line => line.map(warp)) });
+}
+
+function highwayShapes() {
+  // Reference 1 is asymmetric: the narrow second rib stays connected rather than breaking into isolated blocks.
+  const leftEdge = [...quadCurve([-.5, .56], [-.435, .58], [-.37, .46]), ...quadCurve([-.37, .46], [-.31, .24], [-.253, .035]).slice(1)];
+  const rightEdge = [...quadCurve([.263, .17], [.33, .11], [.39, .25]), ...quadCurve([.39, .25], [.46, .49], [.5, .48]).slice(1)];
+  return [
+    band(leftEdge, .86, [
+      [...quadCurve([-.501, 1.06], [-.43, 1.06], [-.369, .87]), [-.304, .64]],
+      [[-.473, .71], [-.420, .67], [-.378, .55]]
+    ], { role: 'shoulder', family: 'shoulder' }),
+    lug([[-.219, 0], [-.107, 0], [-.107, .20], [-.137, .38], [-.107, .28], [-.107, .75], [-.134, .88], [-.107, .81],
+      [-.107, 1], [-.219, 1], [-.219, .67], [-.185, .46], [-.219, .59]], [
+      [[-.22, .27], [-.19, .13]], [[-.109, .57], [-.149, .77]]
+    ], { role: 'rib', family: 'rib', continuous: true }),
+    band([[-.074, .45], [.01, .17], [.070, -.07]], .95, [[[-.075, .89], [-.019, .66], [.071, .40]]], { role: 'rib', family: 'rib' }),
+    band([[.105, .16], [.158, .02], [.225, -.26]], .90, [[[.104, .60], [.162, .43], [.224, .24]]], { role: 'rib', family: 'rib' }),
+    band(rightEdge, .85, [
+      [[.262, .64], [.323, .61], [.365, .44], [.400, .27], [.448, .23]],
+      [[.400, 1.01], [.443, .86], [.501, .86]]
+    ], { role: 'shoulder', family: 'shoulder' })
+  ];
+}
+
+function allTerrainShapes() {
+  const shoulder = lug([
+    [-.5, .04], [-.352, .04], [-.300, .13], [-.284, .29], [-.300, .51], [-.285, .70], [-.319, .92], [-.472, .88],
+    [-.5, .79], [-.5, .65], [-.481, .62], [-.481, .28], [-.5, .25]
+  ], [
+    [[-.5, .30], [-.401, .30], [-.347, .34], [-.304, .39]],
+    [[-.5, .65], [-.403, .65], [-.351, .69], [-.292, .75]]
+  ], { role: 'shoulder', family: 'shoulder' });
+  // Diagonal boundaries continue into the next pitch; the two centre lanes are offset so there is no gutter.
+  const left = lug([
+    [-.270, .03], [-.166, .26], [-.142, .36], [-.118, .31], [-.028, .61], [-.005, .74],
+    [-.005, 1.42], [-.069, 1.29], [-.071, 1.10], [-.112, 1.05], [-.111, 1.17], [-.178, .99], [-.270, .84]
+  ], [
+    [[-.250, .29], [-.199, .42], [-.179, .39], [-.087, .68], [-.028, .79]],
+    [[-.252, .64], [-.192, .75], [-.174, .71], [-.103, .93], [-.035, 1.07]]
+  ], { family: 'centre' });
+  const right = lug([
+    [.025, .08], [.101, .20], [.151, .34], [.168, .30], [.271, .54],
+    [.271, 1.31], [.190, 1.17], [.160, 1.23], [.100, 1.02], [.120, .96], [.063, .80], [.025, .81]
+  ], [
+    [[.033, .36], [.099, .44], [.125, .41], [.232, .69]],
+    [[.060, .64], [.124, .79], [.150, .75], [.249, 1.03]]
+  ], { family: 'centre' });
+  const weave = b => {
+    const warp = ([x, y]) => [x + .021 * (1 - Math.abs(x) / .28) * Math.sin(TAU * y), y];
+    const outline = [];
+    b.points.forEach((a, i) => {
+      const z = b.points[(i + 1) % b.points.length], n = Math.max(1, Math.ceil(Math.abs(z[1] - a[1]) / .10));
+      for (let j = 0; j < n; j++) outline.push(warp([a[0] + (z[0] - a[0]) * j / n, a[1] + (z[1] - a[1]) * j / n]));
+    });
+    return Object.assign({}, b, { points: outline, sipes: b.sipes.map(p => p.map(warp)) });
+  };
+  return [shoulder, mirrorLug(shoulder, .32), weave(left), weave(right)];
+}
+
+function ruggedShapes(parity) {
+  // Four annotated families. A right-hand partner is never redrawn independently: outline AND cut lines
+  // share one transform. Coordinates are a proportional study regularised to a periodic 316 × 80 grid.
+  const fromReference = (points, sipes, originY, family, options = {}) =>
+    mapLug(lug(points, sipes, Object.assign({ family, instance: 'source' }, options)),
+      ([x, y]) => [(x - 188) / 316, (y - originY) / 80]);
+
+  const shoulder = fromReference([
+    [30, 205], [73, 204], [93, 210], [97, 224], [95, 241], [89, 242], [87, 263], [65, 261], [32, 259], [30, 245]
+  ], [
+    [[41, 218], [54, 218], [64, 222], [69, 220], [83, 224]],
+    [[40, 237], [51, 238], [62, 242], [67, 240], [80, 244]]
+  ], 195, 'shoulder', { role: 'shoulder' });
+
+  const diagonal = fromReference([
+    [113, 241], [144, 234], [150, 261], [136, 271], [142, 274], [158, 265], [173, 282], [184, 301], [157, 310], [137, 288], [111, 274]
+  ], [
+    [[116, 252], [132, 252], [136, 258], [144, 256]],
+    [[137, 281], [152, 292], [158, 288], [173, 297]]
+  ], 243, 'diagonal');
+
+  const shoulders = [shoulder, opposeLug(shoulder)];
+  if (!(parity % 2)) return [...shoulders, diagonal, opposeLug(diagonal)];
+
+  const upright = fromReference([
+    [110, 288], [132, 302], [151, 324], [148, 344], [138, 377], [120, 386],
+    [117, 359], [102, 352], [101, 333], [124, 342], [126, 333], [108, 321], [104, 309]
+  ], [
+    [[113, 302], [126, 312], [128, 317], [140, 327]],
+    [[109, 346], [129, 355], [132, 365]]
+  ], 320, 'upright');
+
+  // A centrally symmetric double-notched S lug: half the perimeter point-mirrored onto itself.
+  const half = [[-14, -39], [20, -50], [34, -16], [25, 13], [16, -10], [8, -8]];
+  const sipe = [[23, -34], [8, -23], [1, -26], [-8, -18]];
+  const centre = mapLug(lug(
+    [...half, ...half.map(([x, y]) => [-x, -y])],
+    [sipe, sipe.map(([x, y]) => [-x, -y])],
+    { family: 'centre', instance: 'self-mirrored' }
+  ), ([x, y]) => [x / 316, .5 + y / 80]);
+  return [...shoulders, upright, centre, opposeLug(upright)];
+}
+
+const MUD_MIRROR_AXIS = .825;
+function mudShapes() {
+  const shoulder = lug([
+    ...quadCurve([-.5, .79], [-.455, .85], [-.35, .535]),
+    ...quadCurve([-.35, .535], [-.278, .245], [-.207, .06]).slice(1),
+    [-.170, .115], [-.140, .30], [-.160, .51], [-.210, .64],
+    ...quadCurve([-.210, .64], [-.285, .88], [-.390, 1.30]).slice(1),
+    ...quadCurve([-.390, 1.30], [-.470, 1.51], [-.5, 1.36]).slice(1)
+  ], [
+    [...quadCurve([-.480, 1.055], [-.431, 1.166], [-.350, .88]), [-.261, .532], [-.213, .435], [-.178, .506]]
+  ], { role: 'shoulder', family: 'shoulder', instance: 'source' });
+
+  // A broad pentagonal bar with two flat ends — no needle leading edge or spear point.
+  const centre = shiftLug(lug([
+    [-.200, .015], [-.083, .170], [.031, .960], [-.094, .850], [-.160, .410]
+  ], [
+    [[-.172, .18], [-.120, .32], [-.063, .61], [-.088, .663]]
+  ], { family: 'centre', instance: 'source' }), .65);
+
+  const ejector = lug([[-.476, 1.515], [-.385, 1.345], [-.381, 1.395], [-.472, 1.565]], [],
+    { role: 'ejector', family: 'outer-ejector', instance: 'source', heightRatio: .24 });
+  const innerEjector = lug([[-.365, 1.24], [-.285, .94], [-.280, .99], [-.360, 1.29]], [],
+    { role: 'ejector', family: 'inner-ejector', instance: 'source', heightRatio: .24 });
+  return [shoulder, opposeLug(shoulder, MUD_MIRROR_AXIS), centre, opposeLug(centre, MUD_MIRROR_AXIS),
+    ejector, opposeLug(ejector, MUD_MIRROR_AXIS), innerEjector, opposeLug(innerEjector, MUD_MIRROR_AXIS)];
+}
+
+function trailHybridShapes(parity) {
+  const shoulder = lug([
+    [-.5, .055], [-.356, .035], [-.299, .115], [-.282, .30], [-.300, .48], [-.282, .57],
+    [-.303, .84], [-.367, .90], [-.5, .82], [-.5, .62], [-.480, .60], [-.480, .29], [-.5, .26]
+  ], [
+    [[-.477, .31], [-.411, .32], [-.359, .36], [-.310, .35]],
+    [[-.478, .61], [-.408, .62], [-.344, .69], [-.307, .68]]
+  ], { role: 'shoulder', family: 'shoulder' });
+  const centre = parity % 2 ? lug([
+    [-.299, .09], [-.223, .015], [-.105, .16], [-.014, .36], [-.014, .53], [-.082, .58],
+    [-.161, .89], [-.243, .76], [-.215, .60], [-.291, .43]
+  ], [
+    [[-.270, .19], [-.207, .14], [-.135, .26], [-.072, .39]],
+    [[-.251, .45], [-.176, .52], [-.179, .67], [-.151, .72]]
+  ], { family: 'diagonal' }) : lug([
+    [-.298, .20], [-.127, .025], [.019, .21], [.019, .36], [-.061, .42], [-.043, .56],
+    [-.183, .925], [-.288, .73], [-.199, .51], [-.133, .45], [-.174, .31], [-.275, .39]
+  ], [
+    [[-.258, .21], [-.141, .10], [-.043, .25]],
+    [[-.262, .71], [-.197, .78], [-.109, .57]]
+  ], { family: 'notched-centre' });
+  const ejector = lowBar([[-.454, .949], [-.351, .971], [-.353, 1.014], [-.456, .992]]);
+  const narrowShoulder = mapLug(shoulder, ([x, y]) => [-.5 + (x + .5) * .77, y]);
+  return [narrowShoulder, opposeLug(narrowShoulder, 1.27), centre, opposeLug(centre), ejector, opposeLug(ejector, 1.27)];
+}
+
+function canyonShapes(parity) {
+  const shoulder = lug([
+    [-.5, .06], [-.348, .04], [-.300, .14], [-.307, .34], [-.338, .37], [-.337, .45],
+    [-.300, .47], [-.305, .82], [-.367, .91], [-.5, .86], [-.5, .67], [-.48, .62], [-.48, .28], [-.5, .24]
+  ], [
+    [[-.478, .30], [-.420, .29], [-.402, .33], [-.373, .30], [-.336, .33]],
+    [[-.477, .61], [-.410, .61], [-.385, .67], [-.328, .66]]
+  ], { role: 'shoulder', family: 'shoulder' });
+  const intermediate = lug([
+    [-.273, .08], [-.128, .12], [-.128, .27], [-.107, .32], [-.120, .67], [-.158, .85],
+    [-.267, .68], [-.239, .44], [-.273, .38]
+  ], [
+    [[-.249, .28], [-.196, .31], [-.180, .28], [-.137, .36]],
+    [[-.249, .56], [-.202, .60], [-.173, .56], [-.141, .62]]
+  ], { family: 'intermediate' });
+  let centre = lug([
+    [-.067, .06], [.036, -.025], [.088, .14], [.073, .44], [.049, .49], [.071, .55],
+    [.041, .92], [-.062, .91], [-.092, .62], [-.072, .42], [-.095, .30]
+  ], [
+    [[-.029, .20], [.011, .28], [.025, .25], [.064, .32]],
+    [[-.065, .48], [-.012, .58], [.007, .55], [.054, .68]]
+  ], { family: 'centre' });
+  if (parity % 2) centre = reflectLug(centre);
+  return [shoulder, opposeLug(shoulder, 1.30),
+    ...[intermediate, shiftLug(reflectLug(intermediate), .46), centre].map(b => windingChannel(b, .025))];
+}
+
+function bajaShapes(parity) {
+  const shoulder = lug([
+    [-.5, .035], [-.377, .035], [-.329, .14], [-.335, .32], [-.354, .34], [-.354, .43], [-.327, .46],
+    [-.335, .77], [-.372, .90], [-.5, .84], [-.5, .64], [-.482, .61], [-.482, .29], [-.5, .25]
+  ], [
+    [[-.484, .27], [-.442, .28], [-.430, .23], [-.414, .29], [-.357, .31]],
+    [[-.484, .50], [-.438, .51], [-.427, .46], [-.409, .53], [-.353, .55]],
+    [[-.480, .73], [-.440, .73], [-.427, .69], [-.399, .76], [-.367, .77]]
+  ], { role: 'shoulder', family: 'shoulder' });
+  const left = lug([
+    [-.302, .035], [-.194, -.02], [-.111, .13], [-.098, .33], [-.145, .41], [-.130, .53],
+    [-.102, .60], [-.111, .77], [-.230, .93], [-.302, .76], [-.263, .53], [-.302, .37]
+  ], [
+    [[-.284, .23], [-.239, .26], [-.221, .20], [-.185, .27], [-.125, .28]],
+    [[-.280, .64], [-.239, .67], [-.220, .62], [-.183, .70], [-.128, .69]]
+  ], { family: 'interlock' });
+  let centre = lug([
+    [-.030, .025], [.072, .18], [.070, .40], [.041, .44], [.044, .54], [.074, .58],
+    [.043, .91], [-.065, .80], [-.076, .56], [-.043, .52], [-.049, .41], [-.080, .36]
+  ], [
+    [[-.045, .23], [-.004, .29], [.013, .25], [.058, .32]],
+    [[-.058, .61], [-.013, .67], [.005, .62], [.050, .73]]
+  ], { family: 'centre' });
+  if (parity % 2) centre = reflectLug(centre);
+  return [shoulder, opposeLug(shoulder, 1.25),
+    ...[left, shiftLug(reflectLug(left), .39), shiftLug(centre, .18)].map(b => windingChannel(b, .009))];
+}
+
+function rockCleatShapes() {
+  const shoulder = lug([
+    [-.5, -.10], [-.335, .04], [-.267, .23], [-.267, .51], [-.295, .91], [-.360, .86],
+    [-.5, .64], [-.5, .47], [-.483, .45], [-.483, .10], [-.5, .08]
+  ], [
+    [[-.476, .235], [-.364, .44], [-.317, .50], [-.291, .34]]
+  ], { role: 'shoulder', family: 'shoulder' });
+  const centre = lug([
+    [-.234, .225], [-.087, .025], [-.018, .125], [-.018, .55], [-.089, .87], [-.217, .72], [-.239, .47]
+  ], [
+    [[-.190, .52], [-.137, .30], [-.050, .43]]
+  ], { family: 'cleat' });
+  const outer = lowBar([[-.465, .805], [-.385, .948], [-.389, .983], [-.469, .840]]);
+  const inner = lowBar([[-.362, .975], [-.294, 1.065], [-.298, 1.105], [-.366, 1.015]]);
+  return [shoulder, opposeLug(shoulder, 1.12), centre, opposeLug(centre, 1.07), outer, opposeLug(outer, 1.12),
+    shiftLug(inner, -.045), opposeLug(shiftLug(inner, -.045), 1.12)];
+}
+
+// `tyre` is the Slate carcass preset each design ships with. `reach` stretches the ±0.5 design band across the
+// tread and onto the shoulder arc (1.0 = tread edges, >1 wraps the shoulder).
+const TREAD_LIBRARY = [
+  { id: 'highway', name: 'Highway HT', code: 'HT / 01', category: 'Street', terrain: 'ROAD',
+    note: 'Asymmetric five-rib road pattern, four straight channels, fine diagonal cuts and swept shoulders.',
+    count: 56, sipeWidth: .75, sipeDepth: .62, reach: 1.02,
+    tyre: { width: 235, aspect: 55, rim: 17, treadDepth: 8, treadFrac: .92, crown: 2.2, shoulder: 15 } },
+  { id: 'all-terrain', name: 'All-terrain AT', code: 'AT / 02', category: 'Off-road', terrain: 'MIXED',
+    note: 'Dense stepped shoulder blocks and broad interlocking diagonal centre lugs.',
+    count: 40, sipeWidth: .9, sipeDepth: .55, reach: 1.1,
+    tyre: { width: 265, aspect: 70, rim: 17, treadDepth: 12, treadFrac: .91, crown: 3, shoulder: 13 } },
+  { id: 'rugged', name: 'Rugged RT', code: 'RT / 03', category: 'Off-road', terrain: 'OFF-ROAD',
+    note: 'Mirrored shoulder, diagonal and upright lug pairs around a symmetric double-notched centre block.',
+    count: 32, sipeWidth: 1, sipeDepth: .5, reach: 1.14,
+    tyre: { width: 285, aspect: 70, rim: 17, treadDepth: 16, treadFrac: .91, crown: 3.2, shoulder: 12 } },
+  { id: 'mud', name: 'Mud MT', code: 'MT / 04', category: 'Off-road', terrain: 'DEEP MUD',
+    note: 'Hooked shoulder paddles, broad flat-ended centre blocks and open staggered channels with low ejector bars.',
+    count: 32, sipeWidth: 1.1, sipeDepth: .45, reach: 1.2,
+    tyre: { width: 305, aspect: 70, rim: 18, treadDepth: 20, treadFrac: .9, crown: 3.8, shoulder: 11 } },
+  { id: 'trail-hybrid', name: 'Trail hybrid RT', code: 'RT / 05', category: 'Rally', terrain: 'RUGGED HYBRID',
+    note: 'Alternating S-notched and diagonal centre pairs, scalloped shoulders and low shoulder-groove bars.',
+    count: 36, sipeWidth: .95, sipeDepth: .52, reach: 1.14,
+    tyre: { width: 285, aspect: 70, rim: 17, treadDepth: 15, treadFrac: .91, crown: 3.2, shoulder: 12 } },
+  { id: 'canyon-rt', name: 'Canyon RT', code: 'RT / 06', category: 'Rally', terrain: 'RUGGED HYBRID',
+    note: 'Broader staggered centre blocks in winding channels, stepped shoulders and clipped medial notches.',
+    count: 36, sipeWidth: .95, sipeDepth: .52, reach: 1.14,
+    tyre: { width: 285, aspect: 70, rim: 17, treadDepth: 15, treadFrac: .91, crown: 3.2, shoulder: 12 } },
+  { id: 'baja-interlock', name: 'Baja interlock AT', code: 'AT / 07', category: 'Off-road', terrain: 'DENSE ALL-TERRAIN',
+    note: 'Angled interlocking centre blocks, winding channels, serrated shoulders and zig-zag cut lines.',
+    count: 44, sipeWidth: .75, sipeDepth: .6, reach: 1.1,
+    tyre: { width: 275, aspect: 70, rim: 17, treadDepth: 11, treadFrac: .91, crown: 3, shoulder: 13 } },
+  { id: 'rock-cleat', name: 'Rock cleat MT', code: 'MT / 08', category: 'Off-road', terrain: 'OPEN MUD-TERRAIN',
+    note: 'Slanted shoulder bars and wider paired centre cleats with elbow cuts, open channels and low ejectors.',
+    count: 30, sipeWidth: 1.1, sipeDepth: .45, reach: 1.22,
+    tyre: { width: 305, aspect: 70, rim: 18, treadDepth: 18, treadFrac: .9, crown: 3.6, shoulder: 11 } }
+];
+
+function libraryShapes(id, parity = 0) {
+  if (id === 'highway') return highwayShapes();
+  if (id === 'all-terrain') return allTerrainShapes();
+  if (id === 'rugged') return ruggedShapes(parity);
+  if (id === 'mud') return mudShapes();
+  if (id === 'trail-hybrid') return trailHybridShapes(parity);
+  if (id === 'canyon-rt') return canyonShapes(parity);
+  if (id === 'baja-interlock') return bajaShapes(parity);
+  if (id === 'rock-cleat') return rockCleatShapes();
+  throw new Error(`Unknown tread design: ${id}`);
+}
+
+// Convert a library design into editable shapes, recovering the exact mirror relationship of each pair so the
+// editor exposes one solid source plus linked copies instead of two independently drawn halves.
+function designFromLibrary(id) {
+  const entry = TREAD_LIBRARY.find(p => p.id === id);
+  if (!entry) throw new Error(`Unknown tread design: ${id}`);
+  const shapes = [];
+  for (const parity of [0, 1]) for (const b of libraryShapes(id, parity)) {
+    const match = shapes.find(s => s.phase === '0' && parity === 1 && signature(s) === signature(b));
+    if (match) { match.phase = 'both'; continue; }
+    shapes.push(Object.assign(clone(b), {
+      id: `shape-${id}-${shapes.length + 1}`,
+      name: `${b.family || b.role} ${shapes.length + 1}`,
+      holes: [], cutDepth: .5, phase: String(parity), enabled: true, mirror: defaultMirror()
+    }));
+  }
+  for (let i = 0; i < shapes.length; i++) {
+    const a = shapes[i];
+    for (let j = i + 1; j < shapes.length; j++) {
+      const b = shapes[j];
+      if (a.phase !== b.phase || a.points.length !== b.points.length) continue;
+      if (Math.abs((mean(a.points, 0) + mean(b.points, 0)) / 2) > .000001) continue;
+      const candidates = [
+        { mode: 'point', axisX: 0, axisY: (mean(a.points, 1) + mean(b.points, 1)) / 2, stagger: 0 },
+        { mode: 'width', axisX: 0, axisY: .5, stagger: mean(b.points, 1) - mean(a.points, 1) }
+      ];
+      const mirror = candidates.find(m => expandShape(Object.assign({}, a, { mirror: m }))
+        .some(s => s.instance !== 'source' && signature(s) === signature(b)));
+      if (mirror) { a.mirror = mirror; shapes.splice(j, 1); break; }
+    }
+  }
+  return shapes.map((s, i) => normaliseShape(s, i));
+}
+
+// =====================================================================================================================
+//  3. QUAD-DOMINANT SURFACE
+//     Faces are stored as four- or three-sided polygons over a welded vertex list, which is what a deformable
+//     tyre needs: quads everywhere they fit, triangles only where a boolean boundary leaves no room.
+// =====================================================================================================================
+class QuadSurface {
+  constructor(tolerance = 1e-3) {
+    this.positions = [];      // [x,y,z] welded
+    this.faces = [];          // { v:[i,...], n:[[x,y,z],...], uv:[[u,v],...], t:[x,y,z] }
+    this.tolerance = tolerance;
+    this.index = new Map();
+  }
+  vertex(p) {
+    const t = this.tolerance;
+    const key = `${Math.round(p[0] / t)}|${Math.round(p[1] / t)}|${Math.round(p[2] / t)}`;
+    let i = this.index.get(key);
+    if (i === undefined) { i = this.positions.length; this.positions.push([p[0], p[1], p[2]]); this.index.set(key, i); }
+    return i;
+  }
+  // corners: [{ p:[x,y,z], n:[x,y,z], uv:[u,v] }, ...] — three or four of them, already wound outward.
+  addFace(corners, tangent) {
+    const v = corners.map(c => this.vertex(c.p));
+    for (let i = 0; i < v.length; i++) if (v[i] === v[(i + 1) % v.length]) return null;    // collapsed edge
+    if (v.length === 4 && (v[0] === v[2] || v[1] === v[3])) return null;
+    const face = { v, n: corners.map(c => c.n), uv: corners.map(c => c.uv), t: tangent || [1, 0, 0] };
+    this.faces.push(face);
+    return face;
+  }
+  // Area-weighted vertex normals over the welded topology — the quad equivalent of computeVertexNormals.
+  computeSmoothNormals() {
+    const acc = this.positions.map(() => [0, 0, 0]);
+    for (const f of this.faces) {
+      const p = f.v.map(i => this.positions[i]);
+      const e1 = [p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]];
+      const e2 = [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]];
+      const n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+      for (const i of f.v) { acc[i][0] += n[0]; acc[i][1] += n[1]; acc[i][2] += n[2]; }
+    }
+    for (const a of acc) { const l = Math.hypot(a[0], a[1], a[2]) || 1; a[0] /= l; a[1] /= l; a[2] /= l; }
+    for (const f of this.faces) f.n = f.v.map(i => acc[i]);
+    return this;
+  }
+  get quadCount() { return this.faces.reduce((n, f) => n + (f.v.length === 4 ? 1 : 0), 0); }
+  get triCount() { return this.faces.reduce((n, f) => n + (f.v.length === 3 ? 1 : 0), 0); }
+  get triangleTotal() { return this.faces.reduce((n, f) => n + (f.v.length - 2), 0); }
+  stats() {
+    const quads = this.quadCount, tris = this.triCount;
+    return { vertices: this.positions.length, faces: this.faces.length, quads, tris,
+      triangles: this.triangleTotal, quadRatio: this.faces.length ? quads / this.faces.length : 0 };
+  }
+  // Edges used by exactly one face — the open border of the surface.
+  boundaryEdges() {
+    const seen = new Map();
+    for (const f of this.faces) for (let i = 0; i < f.v.length; i++) {
+      const a = f.v[i], b = f.v[(i + 1) % f.v.length], key = a < b ? `${a}_${b}` : `${b}_${a}`;
+      const rec = seen.get(key);
+      if (rec) rec.n++; else seen.set(key, { a, b, n: 1 });
+    }
+    return [...seen.values()].filter(e => e.n === 1);
+  }
+  nonManifoldEdges() {
+    const seen = new Map();
+    for (const f of this.faces) for (let i = 0; i < f.v.length; i++) {
+      const a = f.v[i], b = f.v[(i + 1) % f.v.length], key = a < b ? `${a}_${b}` : `${b}_${a}`;
+      seen.set(key, (seen.get(key) || 0) + 1);
+    }
+    return [...seen.values()].filter(n => n > 2).length;
+  }
+  // Expanded, indexed triangle arrays for the live viewport. Corner attributes are kept, so hard groove
+  // edges stay crisp while the welded quad topology below remains intact.
+  toRenderArrays() {
+    const position = [], normal = [], uv = [], tangent = [], index = [];
+    const map = new Map();
+    const corner = (f, i) => {
+      const p = this.positions[f.v[i]], n = f.n[i], t = f.uv[i];
+      const key = `${f.v[i]}|${Math.round(n[0] * 2048)},${Math.round(n[1] * 2048)},${Math.round(n[2] * 2048)}|${Math.round(t[0] * 65536)},${Math.round(t[1] * 65536)}`;
+      let k = map.get(key);
+      if (k === undefined) {
+        k = position.length / 3;
+        position.push(p[0], p[1], p[2]); normal.push(n[0], n[1], n[2]); uv.push(t[0], t[1]);
+        tangent.push(f.t[0], f.t[1], f.t[2], 1);
+        map.set(key, k);
+      }
+      return k;
+    };
+    for (const f of this.faces) {
+      const c = f.v.map((_, i) => corner(f, i));
+      index.push(c[0], c[1], c[2]);
+      if (c.length === 4) index.push(c[0], c[2], c[3]);
+    }
+    return { position, normal, uv, tangent, index };
+  }
+  // Quad edges only — a wireframe that proves the topology instead of showing triangulation diagonals.
+  wireframe() {
+    const out = [], seen = new Set();
+    for (const f of this.faces) for (let i = 0; i < f.v.length; i++) {
+      const a = f.v[i], b = f.v[(i + 1) % f.v.length], key = a < b ? `${a}_${b}` : `${b}_${a}`;
+      if (seen.has(key)) continue; seen.add(key);
+      const p = this.positions[a], q = this.positions[b];
+      out.push(p[0], p[1], p[2], q[0], q[1], q[2]);
+    }
+    return out;
+  }
+  // Wavefront OBJ keeps n-gons, so the exported tyre stays quad-dominant for a deformation rig.
+  toOBJ(name = 'tyre', scale = 1) {
+    const rows = [`# Slate tyre generator — quad-dominant tread`, `o ${name}`];
+    for (const p of this.positions) rows.push(`v ${(p[0] * scale).toFixed(6)} ${(p[1] * scale).toFixed(6)} ${(p[2] * scale).toFixed(6)}`);
+    const uvRows = [], nrmRows = [], faceRows = [];
+    let uvN = 0, nrmN = 0;
+    for (const f of this.faces) {
+      const parts = [];
+      for (let i = 0; i < f.v.length; i++) {
+        uvRows.push(`vt ${f.uv[i][0].toFixed(6)} ${f.uv[i][1].toFixed(6)}`);
+        nrmRows.push(`vn ${f.n[i][0].toFixed(6)} ${f.n[i][1].toFixed(6)} ${f.n[i][2].toFixed(6)}`);
+        parts.push(`${f.v[i] + 1}/${++uvN}/${++nrmN}`);
+      }
+      faceRows.push(`f ${parts.join(' ')}`);
+    }
+    return rows.concat(uvRows, nrmRows, faceRows).join('\n') + '\n';
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------- triangulation
+// Simple ear clipping used when a boundary cell is not already a quad. Small inputs only — the application
+// injects three.js' earcut for the rare clipped cell that still carries a hole.
+function earClip(points) {
+  const n = points.length;
+  if (n < 3) return [];
+  const indices = [...Array(n).keys()];
+  if (ringArea(points) < 0) indices.reverse();
+  const tris = [];
+  let guard = 0;
+  while (indices.length > 3 && guard++ < n * n + 16) {
+    let clipped = false;
+    for (let i = 0; i < indices.length; i++) {
+      const a = points[indices[(i + indices.length - 1) % indices.length]];
+      const b = points[indices[i]];
+      const c = points[indices[(i + 1) % indices.length]];
+      if (cross(a, b, c) <= 1e-12) continue;
+      let contains = false;
+      for (let j = 0; j < indices.length; j++) {
+        const k = indices[j];
+        if (k === indices[i] || k === indices[(i + indices.length - 1) % indices.length] || k === indices[(i + 1) % indices.length]) continue;
+        const p = points[k];
+        if (cross(a, b, p) >= 0 && cross(b, c, p) >= 0 && cross(c, a, p) >= 0) { contains = true; break; }
+      }
+      if (contains) continue;
+      tris.push([indices[(i + indices.length - 1) % indices.length], indices[i], indices[(i + 1) % indices.length]]);
+      indices.splice(i, 1); clipped = true; break;
+    }
+    if (!clipped) break;
+  }
+  if (indices.length === 3) tris.push([indices[0], indices[1], indices[2]]);
+  return tris;
+}
+
+// ------------------------------------------------------------------------------------------------- tri → quad merge
+const quadConvex = (p0, p1, p2, p3) => {
+  const s = [cross(p0, p1, p2), cross(p1, p2, p3), cross(p2, p3, p0), cross(p3, p0, p1)];
+  return s.every(v => v > 1e-12) || s.every(v => v < -1e-12);
+};
+function quadQuality(p0, p1, p2, p3) {
+  const q = [p0, p1, p2, p3];
+  let worst = 0;
+  for (let i = 0; i < 4; i++) {
+    const a = q[(i + 3) % 4], b = q[i], c = q[(i + 1) % 4];
+    const u = [a[0] - b[0], a[1] - b[1]], v = [c[0] - b[0], c[1] - b[1]];
+    const lu = Math.hypot(u[0], u[1]), lv = Math.hypot(v[0], v[1]);
+    if (lu < 1e-9 || lv < 1e-9) return -1;
+    const angle = Math.acos(Math.max(-1, Math.min(1, (u[0] * v[0] + u[1] * v[1]) / (lu * lv)))) * 180 / Math.PI;
+    worst = Math.max(worst, Math.abs(angle - 90));
+  }
+  return 1 - worst / 90;
+}
+// Greedy best-first pairing: the highest quality quad wins, so the leftover triangles sit where no sensible
+// quad existed in the first place.
+function trianglesToQuads(points, tris, minQuality = 0.12) {
+  const edges = new Map();
+  tris.forEach((t, fi) => {
+    for (let i = 0; i < 3; i++) {
+      const a = t[i], b = t[(i + 1) % 3], key = a < b ? `${a}_${b}` : `${b}_${a}`;
+      const rec = edges.get(key);
+      if (rec) rec.push(fi); else edges.set(key, [fi]);
+    }
+  });
+  const candidates = [];
+  for (const [key, faces] of edges) {
+    if (faces.length !== 2) continue;
+    const [fa, fb] = faces;
+    const [a, b] = key.split('_').map(Number);
+    const ta = tris[fa], tb = tris[fb];
+    const oppA = ta.find(v => v !== a && v !== b);
+    const oppB = tb.find(v => v !== a && v !== b);
+    if (oppA === undefined || oppB === undefined || oppA === oppB) continue;
+    // The merged outline walks round the shared edge: oppA → a → oppB → b closes both triangles exactly once.
+    const quad = [oppA, a, oppB, b];
+    const [p0, p1, p2, p3] = quad.map(v => points[v]);
+    if (!quadConvex(p0, p1, p2, p3)) continue;
+    const q = quadQuality(p0, p1, p2, p3);
+    if (q < minQuality) continue;
+    candidates.push({ fa, fb, quad, q });
+  }
+  candidates.sort((x, y) => y.q - x.q);
+  const used = new Uint8Array(tris.length);
+  const faces = [];
+  for (const c of candidates) {
+    if (used[c.fa] || used[c.fb]) continue;
+    used[c.fa] = used[c.fb] = 1;
+    faces.push(c.quad);
+  }
+  tris.forEach((t, i) => { if (!used[i]) faces.push(t); });
+  return faces;
+}
+
+// ------------------------------------------------------------------------------------------------ quadrangulation
+const pointInRing = (x, y, ring) => {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+};
+const ringsBBox = rings => {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const r of rings) for (const p of r) {
+    if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0];
+    if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1];
+  }
+  return [x0, y0, x1, y1];
+};
+const spanIndex = (lines, v) => {
+  let lo = 0, hi = lines.length - 2;
+  if (v <= lines[0]) return 0;
+  if (v >= lines[lines.length - 1]) return lines.length - 2;
+  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (lines[mid] <= v) lo = mid; else hi = mid - 1; }
+  return lo;
+};
+
+/* Quadrangulate one boolean polygon over an explicit grid.
+     rings       : [outer, ...holes] in millimetres, outer CCW
+     xs, ys      : sorted grid lines (ys may be non-uniform so the shoulder arc gets finer rows)
+     clip        : (rings, [x0,y0,x1,y1]) → [{ outer, holes }]      — Clipper in the app, Sutherland–Hodgman in checks
+     triangulate : (outer, holes) → [[i,j,k]] into outer.concat(...holes)  — optional, defaults to ear clipping
+   Returns { points:[[x,y]], faces:[[i,j,k(,l)]] }, quads wherever a grid cell fits entirely inside the polygon. */
+function quadrangulate(rings, xs, ys, clip, triangulate) {
+  const outer = rings[0];
+  const holes = rings.slice(1);
+  if (!outer || outer.length < 3) return { points: [], faces: [] };
+  const [bx0, by0, bx1, by1] = ringsBBox(rings);
+  const i0 = spanIndex(xs, bx0), i1 = spanIndex(xs, bx1);
+  const j0 = spanIndex(ys, by0), j1 = spanIndex(ys, by1);
+  const nx = i1 - i0 + 1, ny = j1 - j0 + 1;
+  if (nx <= 0 || ny <= 0) return { points: [], faces: [] };
+
+  // Mark every cell any boundary edge can touch; the rest are cleanly inside or outside.
+  const marked = new Uint8Array(nx * ny);
+  for (const ring of rings) for (let i = 0; i < ring.length; i++) {
+    const a = ring[i], b = ring[(i + 1) % ring.length];
+    const ca0 = spanIndex(xs, Math.min(a[0], b[0])), ca1 = spanIndex(xs, Math.max(a[0], b[0]));
+    const cb0 = spanIndex(ys, Math.min(a[1], b[1])), cb1 = spanIndex(ys, Math.max(a[1], b[1]));
+    for (let cx = Math.max(i0, ca0 - 1); cx <= Math.min(i1, ca1 + 1); cx++)
+      for (let cy = Math.max(j0, cb0 - 1); cy <= Math.min(j1, cb1 + 1); cy++) marked[(cy - j0) * nx + (cx - i0)] = 1;
+  }
+
+  const points = [];
+  const lookup = new Map();
+  const vertex = p => {
+    const key = `${Math.round(p[0] * 1e4)}|${Math.round(p[1] * 1e4)}`;
+    let i = lookup.get(key);
+    if (i === undefined) { i = points.length; points.push([p[0], p[1]]); lookup.set(key, i); }
+    return i;
+  };
+  const faces = [];
+  const rowWork = new Map();
+
+  for (let cy = j0; cy <= j1; cy++) for (let cx = i0; cx <= i1; cx++) {
+    if (marked[(cy - j0) * nx + (cx - i0)]) {
+      if (!rowWork.has(cy)) rowWork.set(cy, []);
+      rowWork.get(cy).push(cx);
+      continue;
+    }
+    const mx = (xs[cx] + xs[cx + 1]) / 2, my = (ys[cy] + ys[cy + 1]) / 2;
+    if (!pointInRing(mx, my, outer)) continue;
+    if (holes.some(h => pointInRing(mx, my, h))) continue;
+    faces.push([vertex([xs[cx], ys[cy]]), vertex([xs[cx + 1], ys[cy]]), vertex([xs[cx + 1], ys[cy + 1]]), vertex([xs[cx], ys[cy + 1]])]);
+  }
+
+  const localTriangulate = triangulate || ((o, h) => {
+    if (!h.length) return earClip(o);
+    return earClip(o);                                                   // degenerate fallback; holes are rare here
+  });
+
+  for (const [cy, columns] of rowWork) {
+    // One clip per grid row keeps the per-cell boolean inputs tiny even for a tread-wide groove network.
+    const strip = clip(rings, [xs[i0], ys[cy], xs[i1 + 1], ys[cy + 1]]);
+    if (!strip.length) continue;
+    const stripRings = strip.flatMap(ex => [ex.outer, ...(ex.holes || [])]);
+    for (const cx of columns) {
+      const cell = clip(stripRings, [xs[cx], ys[cy], xs[cx + 1], ys[cy + 1]]);
+      for (const piece of cell) {
+        const ring = piece.outer;
+        const pieceHoles = piece.holes || [];
+        if (!ring || ring.length < 3) continue;
+        if (Math.abs(ringArea(ring)) < 1e-7) continue;
+        if (!pieceHoles.length && ring.length === 4 && quadConvex(ring[0], ring[1], ring[2], ring[3])) {
+          const v = ring.map(vertex);
+          if (new Set(v).size === 4) { faces.push(ringArea(ring) > 0 ? v : v.slice().reverse()); continue; }
+        }
+        if (!pieceHoles.length && ring.length === 3) {
+          const v = ring.map(vertex);
+          if (new Set(v).size === 3) { faces.push(ringArea(ring) > 0 ? v : v.slice().reverse()); continue; }
+        }
+        const all = ring.concat(...pieceHoles);
+        let tris;
+        try { tris = localTriangulate(ring, pieceHoles); } catch (e) { tris = []; }
+        if (!tris.length) continue;
+        const localPoints = all;
+        const merged = trianglesToQuads(localPoints, tris);
+        for (const f of merged) {
+          const pts = f.map(i => localPoints[i]);
+          const v = pts.map(vertex);
+          if (new Set(v).size !== v.length) continue;
+          faces.push(ringArea(pts) > 0 ? v : v.slice().reverse());
+        }
+      }
+    }
+  }
+  return { points, faces };
+}
+
+// A Sutherland–Hodgman clip against an axis-aligned rectangle. Used by the offline checks and as a safety net
+// when the application cannot reach Clipper.
+function clipRectSimple(rings, rect) {
+  const [x0, y0, x1, y1] = rect;
+  const planes = [
+    p => p[0] >= x0, p => p[0] <= x1, p => p[1] >= y0, p => p[1] <= y1
+  ];
+  const intersect = [
+    (a, b) => [x0, a[1] + (b[1] - a[1]) * (x0 - a[0]) / (b[0] - a[0])],
+    (a, b) => [x1, a[1] + (b[1] - a[1]) * (x1 - a[0]) / (b[0] - a[0])],
+    (a, b) => [a[0] + (b[0] - a[0]) * (y0 - a[1]) / (b[1] - a[1]), y0],
+    (a, b) => [a[0] + (b[0] - a[0]) * (y1 - a[1]) / (b[1] - a[1]), y1]
+  ];
+  let poly = rings[0] ? rings[0].slice() : [];
+  for (let k = 0; k < 4 && poly.length; k++) {
+    const next = [];
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i], b = poly[(i + 1) % poly.length];
+      const inA = planes[k](a), inB = planes[k](b);
+      if (inA) next.push(a);
+      if (inA !== inB) next.push(intersect[k](a, b));
+    }
+    poly = next;
+  }
+  if (poly.length < 3) return [];
+  // Drop repeated vertices produced by clipping exactly through a corner.
+  const cleaned = poly.filter((p, i) => Math.hypot(p[0] - poly[(i + 1) % poly.length][0], p[1] - poly[(i + 1) % poly.length][1]) > 1e-9);
+  if (cleaned.length < 3) return [];
+  return [{ outer: ringArea(cleaned) > 0 ? cleaned : cleaned.reverse(), holes: [] }];
+}
+
+global.SlateTread = {
+  TAU, clone, uid,
+  MIRRORS, ROLES, defaultMirror, transformShape, expandShape, designShapes, signature,
+  validPolygon, invalidShapes, newShape, normaliseShape, ringArea, pointInRing,
+  TREAD_LIBRARY, libraryShapes, designFromLibrary,
+  QuadSurface, quadrangulate, trianglesToQuads, earClip, clipRectSimple, quadConvex, quadQuality, ringsBBox
+};
+
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
 <script src="https://unpkg.com/clipper-lib@6.4.2/clipper.js"></script>
 <script type="importmap">
 { "imports": {
@@ -258,7 +1174,7 @@ const defaultDecals = () => [
   newDecal({ name: 'Compliance', text: 'DOT SL8T {serial}  ·  TUBELESS RADIAL  ·  MAX 51 PSI', font: 'mono', fontLabel: 'Technical mono', size: 16, color: '#a7a7a7', x: 2, y: 72, align: 'left', weight: 600, opacity: .65, embossed: true })
 ];
 const P = { name: 'GZero', type: 'Slick', layers: [], decals: defaultDecals() };   // tread pattern + sidewall decal layers
-const UI = { sel: -1, decalSel: -1, threads: false, spin: false, treadMode: 'color' };
+const UI = { sel: -1, decalSel: -1, threads: false, quads: false, spin: false, treadMode: 'color', editing: -1, editTool: 'select', editSel: -1 };
 
 const TYPES = ['Slick', 'Semi-slick', 'Drift', 'Street', 'Grip / UHP', 'Wet', 'Winter', 'Rally', 'Off-road', 'Drag'];
 const RIM_MATERIALS = {
@@ -277,20 +1193,34 @@ const LAYER_DEFS = {
   dimple:  { label: 'Circular pattern',        color: '#4fc3f7', rows: 3, count: 60, radius: 3, depth: 0.5, from: -0.7, to: 0.7, stagger: true, ring: false },
   hex:     { label: 'Hexagon cells',           color: '#e5423f', size: 14, width: 3, depth: 0.8, from: -1, to: 1, rotate: 0 },
   terrain: { label: 'Terrain lug network',      color: '#c7772a', count: 18, width: 10, depth: 1, shoulder: 1.1, phase: 0 },
+  blocks:  { label: 'Polygon lug design',      color: '#7ad1ff', design: 'rugged', count: 32, reach: 1.14, gap: 1, depth: 1, sipeWidth: 1, sipeDepth: 0.5, shapes: [] },
   noise:   { label: 'Micro texture',           color: '#8a8d94', amount: 0.06, scale: 3 }
 };
 const RANGES = {
   pos: [-1.3, 1.3, 0.01], width: [0.5, 30, 0.1], depth: [0.05, 1, 0.01], zig: [0, 12, 0.1], zigCount: [4, 240, 1],
   count: [2, 300, 1], angle: [-80, 80, 1], from: [-1.3, 1.3, 0.01], to: [-1.3, 1.3, 0.01], phase: [0, 1, 0.01], curve: [-1.5, 1.5, 0.01],
-  rows: [1, 14, 1], radius: [0.5, 15, 0.1], size: [4, 40, 0.5], rotate: [0, 60, 1], shoulder: [0.55, 1.28, 0.01], amount: [0, 0.5, 0.01], scale: [1, 12, 0.5]
+  rows: [1, 14, 1], radius: [0.5, 15, 0.1], size: [4, 40, 0.5], rotate: [0, 60, 1], shoulder: [0.55, 1.28, 0.01], amount: [0, 0.5, 0.01], scale: [1, 12, 0.5],
+  reach: [0.8, 1.3, 0.01], gap: [0.65, 1.6, 0.01], sipeWidth: [0.3, 3, 0.05], sipeDepth: [0.1, 0.95, 0.01]
 };
-const LABELS = { pos: 'Across position', width: 'Width (mm)', depth: 'Depth (×tread)', zig: 'Zig-zag (mm)', zigCount: 'Zig-zag count', count: 'Count around', angle: 'Angle (°)', from: 'From (across)', to: 'To (across)', phase: 'Phase', curve: 'Curvature', rows: 'Rows', radius: 'Radius (mm)', size: 'Cell size (mm)', rotate: 'Cell rotation (°)', shoulder: 'Shoulder reach', amount: 'Amount', scale: 'Scale', mirror: 'Mirror (V)', stagger: 'Stagger rows', ring: 'Rings instead of dots' };
+const BLOCK_RANGES = { count: [16, 72, 2] };                 // the A/B pitch cell needs an even repeat count
+const LABELS = { pos: 'Across position', width: 'Width (mm)', depth: 'Depth (×tread)', zig: 'Zig-zag (mm)', zigCount: 'Zig-zag count', count: 'Count around', angle: 'Angle (°)', from: 'From (across)', to: 'To (across)', phase: 'Phase', curve: 'Curvature', rows: 'Rows', radius: 'Radius (mm)', size: 'Cell size (mm)', rotate: 'Cell rotation (°)', shoulder: 'Shoulder reach', amount: 'Amount', scale: 'Scale', mirror: 'Mirror (V)', stagger: 'Stagger rows', ring: 'Rings instead of dots', reach: 'Across reach', gap: 'Groove spacing', sipeWidth: 'Cut width (mm)', sipeDepth: 'Cut depth (×tread)' };
 
 // =====================================================================================================================
 //  PRESETS — each one is a named tread design with its own default tyre size
 // =====================================================================================================================
 const L = (type, o = {}) => Object.assign({ type }, strip(LAYER_DEFS[type]), o);
-function strip(d) { const r = {}; for (const k in d) if (k !== 'label' && k !== 'color') r[k] = d[k]; return r; }
+function strip(d) { const r = {}; for (const k in d) if (k !== 'label' && k !== 'color') r[k] = Array.isArray(d[k]) ? d[k].slice() : d[k]; return r; }
+const ST = window.SlateTread;
+// A polygon lug layer carries its own editable outlines, so loading a library design is a one-off copy.
+function blocksLayer(id, overrides = {}) {
+  const design = ST.TREAD_LIBRARY.find(x => x.id === id);
+  if (!design) throw new Error(`Unknown tread design: ${id}`);
+  return Object.assign(L('blocks'), {
+    design: id, count: design.count, reach: design.reach, sipeWidth: design.sipeWidth, sipeDepth: design.sipeDepth,
+    shapes: ST.designFromLibrary(id)
+  }, overrides);
+}
+const copyLayer = ly => Object.assign({}, ly, Array.isArray(ly.shapes) ? { shapes: ST.clone(ly.shapes) } : {});
 
 const PRESETS = [
   { name: 'GZero', type: 'Slick', tyre: { width: 305, aspect: 30, rim: 19, treadDepth: 4, treadFrac: 0.93, crown: 1.2, shoulder: 26, letter: 'yellow' },
@@ -342,6 +1272,12 @@ const PRESETS = [
   { name: 'Rocklock M/T', type: 'Off-road', tyre: { width: 305, aspect: 65, rim: 18, treadDepth: 16, treadFrac: 0.9, crown: 3.8, shoulder: 11, letter: 'white' },
     layers: [L('terrain', { count: 15, width: 13, shoulder: 1.22, phase: 0.28 }), L('circ', { pos: 0, width: 5, depth: 0.72, zig: 7, zigCount: 15 }),
              L('sipe', { count: 30, angle: 7, width: 1.6, depth: 0.34, from: -1.18, to: 1.18, phase: 0.5, zig: 3.5 })] },
+  // ---- ported polygon lug library: eight reference studies rebuilt as editable outlines ----
+  ...ST.TREAD_LIBRARY.map(design => ({
+    name: design.name, type: design.category, library: design.id,
+    tyre: Object.assign({ letter: 'white' }, design.tyre),
+    layers: [blocksLayer(design.id), L('noise', { amount: 0.035, scale: 2.5 })]
+  })),
   { name: 'Vector Trail V', type: 'Grip / UHP', tyre: { width: 275, aspect: 40, rim: 19, treadDepth: 10, treadFrac: 0.92, crown: 2.0, shoulder: 15, letter: 'red' },
     layers: [L('chevron', { count: 19, angle: 52, width: 14, from: 0.03, to: 1.28, curve: 0.16 }), L('circ', { pos: 0, width: 7, zig: 5, zigCount: 19 }),
              L('lateral', { count: 19, angle: 5, width: 7, depth: 0.84, from: 0.78, to: 1.28, phase: 0.18, zig: 2, mirror: true }), L('sipe', { count: 76, angle: 49, width: 1.2, depth: 0.46, from: 0.3, to: 1.2, phase: 0.48, mirror: true, zig: 1.5 })] },
@@ -365,6 +1301,17 @@ function randomTyre() {
   const type = pick(TYPES); const layers = [];
   const size = { Slick: [305, 30, 19, 4], 'Semi-slick': [265, 35, 18, 5], Drift: [235, 40, 18, 6], Street: [205, 55, 16, 8], 'Grip / UHP': [255, 35, 19, 7], Wet: [245, 45, 18, 10], Winter: [215, 60, 16, 10], Rally: [235, 70, 15, 14], 'Off-road': [285, 70, 17, 15], Drag: [375, 50, 15, 4] }[type];
   Object.assign(T, { width: size[0] + ri(-2, 2) * 10, aspect: size[1] + ri(-1, 1) * 5, rim: size[2], treadDepth: size[3], letter: pick(['white', 'yellow', 'red', 'black', 'blue']), crown: rnd(1, 3), shoulder: rnd(12, 26) });
+  // Rally and off-road tyres can come back as a polygon lug design instead, which is a different authoring model.
+  if ((type === 'Rally' || type === 'Off-road') && Math.random() < 0.5) {
+    const design = pick(ST.TREAD_LIBRARY.filter(x => x.category === type));
+    if (design) {
+      Object.assign(T, design.tyre, { letter: T.letter });
+      P.name = randomName(); P.type = type; UI.sel = -1;
+      P.layers = [blocksLayer(design.id, { count: Math.max(16, design.count + ri(-2, 2) * 2), gap: rnd(0.92, 1.12) }),
+        L('noise', { amount: 0.035, scale: 2.5 })];
+      return;
+    }
+  }
   const grooves = type === 'Slick' || type === 'Drag' ? 0 : type === 'Semi-slick' || type === 'Drift' ? ri(1, 2) : ri(2, 4);
   const positions = grooves === 1 ? [0] : grooves === 2 ? [-0.3, 0.3] : grooves === 3 ? [-0.5, 0, 0.5] : [-0.6, -0.2, 0.2, 0.6];
   const zig = type === 'Off-road' || type === 'Rally' ? rnd(3, 7) : (type === 'Winter' ? rnd(0, 2) : 0);
@@ -414,6 +1361,63 @@ function terrainNetworkLines(ly, th, circ) {
   }
   return lines;
 }
+// ---------------------------------------------------------------------------------------------------------------
+//  POLYGON LUG DESIGNS
+//  A `blocks` layer stores editable lug outlines in normalised design space. Lugs are raised rubber, so the
+//  groove network is their complement inside the lug band — the opposite sense of the parametric groove layers,
+//  which keeps both authoring styles alive side by side without touching the existing presets.
+// ---------------------------------------------------------------------------------------------------------------
+function blocksMetrics(ly, d) {
+  const count = Math.max(2, Math.round(ly.count || 32));
+  return { count, pitch: d.circ / count, bandHalf: d.treadHalf * (ly.reach ?? 1.1), scale: 1 - ((ly.gap ?? 1) - 1) * 0.14 };
+}
+// Every lug instance of the layer in tread millimetres.  x = around the circumference, y = across the tyre.
+function blocksInstances(ly, d, pad = 2) {
+  const { count, pitch, bandHalf, scale } = blocksMetrics(ly, d);
+  const shapes = Array.isArray(ly.shapes) ? ly.shapes : [];
+  if (!shapes.length) return [];
+  const out = [];
+  for (let i = -pad; i < count + pad; i++) {
+    for (const b of ST.designShapes(shapes, ((i % 2) + 2) % 2)) {
+      if (!b.points || b.points.length < 3) continue;
+      const cx = b.points.reduce((n, q) => n + q[0], 0) / b.points.length;
+      const cy = b.points.reduce((n, q) => n + q[1], 0) / b.points.length;
+      // Groove spacing shrinks each lug about its own centre, exactly as the reference designer does.
+      const to = ([x, y]) => [((b.continuous ? y : cy + (y - cy) * scale) + i) * pitch, (cx + (x - cx) * scale) * 2 * bandHalf];
+      out.push({
+        role: b.role, heightRatio: b.heightRatio ?? 1, cutDepth: b.cutDepth ?? 0.5, sourceId: b.sourceId,
+        outer: b.points.map(to), holes: (b.holes || []).map(r => r.map(to)), sipes: (b.sipes || []).map(r => r.map(to))
+      });
+    }
+  }
+  return out;
+}
+// Grey-scale depth raster for the colour / roughness maps and the groove-wall height probe.
+function blocksDepthCanvas(ly, d, W, H, kx, ky, g) {
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
+  x.setTransform(kx, 0, 0, ky, 0, H / 2); x.lineJoin = 'round'; x.lineCap = 'round';
+  const { bandHalf } = blocksMetrics(ly, d); const inst = blocksInstances(ly, d);
+  if (!inst.length) return c;                            // an empty design must not cut the whole band away
+  const trace = rings => { x.beginPath(); for (const r of rings) { r.forEach((q, i) => i ? x.lineTo(q[0], q[1]) : x.moveTo(q[0], q[1])); x.closePath(); } };
+  x.fillStyle = g(ly.depth); x.fillRect(-d.circ, -bandHalf, 3 * d.circ, 2 * bandHalf);
+  x.fillStyle = '#fff';
+  for (const b of inst) if (b.role !== 'cut') { trace([b.outer, ...b.holes]); x.fill('evenodd'); }
+  for (const b of inst) {
+    if (b.role === 'cut') { x.fillStyle = g(ly.depth * b.cutDepth); trace([b.outer]); x.fill(); }
+    else if (b.heightRatio < 0.999) { x.fillStyle = g(ly.depth * (1 - b.heightRatio)); trace([b.outer]); x.fill(); }
+  }
+  x.strokeStyle = g(ly.sipeDepth); x.lineWidth = Math.max(0.2, ly.sipeWidth);
+  for (const b of inst) {
+    if (b.role === 'cut' || !b.sipes.length) continue;
+    x.save(); trace([b.outer]); x.clip();
+    x.beginPath(); for (const line of b.sipes) line.forEach((q, i) => i ? x.lineTo(q[0], q[1]) : x.moveTo(q[0], q[1]));
+    x.stroke(); x.restore();
+  }
+  return c;
+}
+
 function renderPattern(pattern, d, H, wear = 0, wearBias = 0, treadDepth = 8, skipNoise = false) {
   const k = H / (2 * d.acrossHalf);                   // px per mm (uniform)
   const W = Math.max(64, Math.min(4096, Math.round(d.circ * k)));
@@ -458,6 +1462,12 @@ function renderPattern(pattern, d, H, wear = 0, wearBias = 0, treadDepth = 8, sk
         ctx.lineWidth = ly.width; ctx.beginPath();
         for (const line of terrainNetworkLines(ly, th, circ)) line.forEach((point, i) => i ? ctx.lineTo(point[0], point[1]) : ctx.moveTo(point[0], point[1]));
         ctx.stroke();
+      } else if (ly.type === 'blocks') {
+        // Raised lugs cannot be painted with a darken blend, so the layer is composited from its own raster.
+        if (off === 0) {
+          ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'darken';
+          ctx.drawImage(blocksDepthCanvas(ly, d, W, H, kx, ky, g), 0, 0); ctx.restore();
+        }
       } else if (ly.type === 'dimple') {
         const rows = Math.max(1, Math.round(ly.rows)), n = Math.max(1, Math.round(ly.count));
         for (let r = 0; r < rows; r++) {
@@ -663,12 +1673,41 @@ function exPolygons(paths) {                               // → [{outer:[[x,y]
   const L = CL(); const c = new L.Clipper(); c.AddPaths(paths, L.PolyType.ptSubject, true); const tree = new L.PolyTree(); c.Execute(L.ClipType.ctUnion, tree, L.PolyFillType.pftNonZero, L.PolyFillType.pftNonZero);
   return L.JS.PolyTreeToExPolygons(tree).map(ex => ({ outer: ex.outer.map(p => [p.X / CS, p.Y / CS]), holes: ex.holes.map(h => h.map(p => [p.X / CS, p.Y / CS])) }));
 }
+const round2 = v => Math.round(v * 100) / 100;
+// Boolean groove entries for one polygon lug layer: the band minus the lug union, plus every partial-depth
+// feature (low ejector tops, recessed cut regions and the cut lines carved into the lug crowns).
+function blocksEntries(ly, d) {
+  const { bandHalf } = blocksMetrics(ly, d); const inst = blocksInstances(ly, d);
+  if (!inst.length) return [];
+  const band = [rectPath(-d.circ, -bandHalf, 2 * d.circ, bandHalf)];
+  const outers = [], holes = [];
+  for (const b of inst) if (b.role !== 'cut') { outers.push(orient(toPath(b.outer))); for (const h of b.holes) holes.push(orient(toPath(h))); }
+  let lugArea = union(outers);
+  if (holes.length) lugArea = diff(lugArea, union(holes));
+  lugArea = inter(lugArea, band);
+  const entries = [{ paths: diff(band, lugArea), depth: round2(ly.depth) }];
+  const byDepth = new Map();
+  const add = (depth, paths) => {
+    const k = round2(depth); if (!(k > 0.004) || !paths.length) return;
+    const list = byDepth.get(k) || []; list.push(...paths); byDepth.set(k, list);
+  };
+  for (const b of inst) {
+    if (b.role === 'cut') add(ly.depth * b.cutDepth, inter([orient(toPath(b.outer))], band));
+    else if (b.heightRatio < 0.999) add(ly.depth * (1 - b.heightRatio), inter([orient(toPath(b.outer))], lugArea));
+  }
+  const lines = inst.filter(b => b.role !== 'cut').flatMap(b => b.sipes).filter(l => l.length > 1);
+  if (lines.length && ly.sipeWidth > 0.05) add(ly.sipeDepth, inter(strokePaths(lines, ly.sipeWidth), lugArea));
+  for (const [depth, paths] of byDepth) { const merged = union(paths); if (merged.length) entries.push({ paths: merged, depth }); }
+  return entries;
+}
 // Every groove layer as Clipper paths with its depth
 function patternPolygons(pattern, d, treadDepth) {
   const th = d.treadHalf, circ = d.circ, A = d.acrossHalf; const out = []; const bars = [];
   const shift = (paths, dx) => paths.map(p => p.map(q => ({ X: q.X + Math.round(dx * CS), Y: q.Y })));
   for (const ly of pattern.layers) {
-    if (ly.type === 'noise') continue; let paths = []; let wrap = true;
+    if (ly.type === 'noise') continue;
+    if (ly.type === 'blocks') { out.push(...blocksEntries(ly, d)); continue; }
+    let paths = []; let wrap = true;
     if (ly.type === 'circ') {
       const y = ly.pos * th;
       if (ly.zig > 0) { const n = Math.max(2, Math.round(ly.zigCount)) * 2; const pts = []; for (let i = -2; i <= n + 2; i++) pts.push([i / n * circ, y + (Math.abs(i) % 2 ? ly.zig : -ly.zig)]); paths = strokePaths([pts], ly.width); wrap = false; }
@@ -725,88 +1764,128 @@ function treadProfileAt(y, d) {
   const phi = Math.min(80 * Math.PI / 180, Math.asin(Math.min(1, (ay - d.treadHalf) / d.sr))); const c80 = Math.cos(80 * Math.PI / 180);
   return { x: sgn * (d.treadHalf + d.sr * Math.sin(phi)), r: d.Rout - T.crown - d.sr + d.sr * Math.cos(phi), nx: sgn * Math.sin(phi), nr: Math.cos(phi), w: Math.max(0, (Math.cos(phi) - c80) / (1 - c80)) };
 }
+// Grid lines for the quadrangulated tread: uniform around the circumference, finer across the shoulder arc
+// where the profile curves hardest. A boolean region that covers a whole cell becomes a single quad.
+function treadGridLines(d, detail) {
+  const LX = Math.max(2, detail), LY = LX * 2;
+  const nx = Math.max(16, Math.round(d.circ / LX));
+  const xs = Array.from({ length: nx + 1 }, (_, i) => i * d.circ / nx);
+  const half = [0];
+  for (let y = LY; y <= d.treadHalf - LY * 0.5; y += LY) half.push(y);
+  half.push(d.treadHalf);
+  for (let ph = 10; ph < 80; ph += 10) half.push(d.treadHalf + d.sr * Math.sin(ph * Math.PI / 180));
+  half.push(d.acrossHalf);
+  const uniq = [...new Set(half.map(v => Math.round(v * 1e6) / 1e6))].sort((a, b) => a - b);
+  return { xs, ys: [...uniq.slice(1).map(v => -v).reverse(), ...uniq] };
+}
+
+// Quad-dominant polygon tread. Each boolean floor level is quadrangulated over the shared grid, then the open
+// border of that level grows the groove walls, so tops and walls weld into one closed quad shell. Keeping the
+// topology in quads is what lets the tyre be deformed (sidewall squash, contact patch, sipe closure) without
+// the diagonal creasing a triangle soup produces.
 function buildPolyTread(d, pmGeo) {
   const { pieces, levels } = treadRegions(P, d, T.treadDepth, T.wear);
-  const D = T.treadDepth, A = d.acrossHalf, circ = d.circ, LX = T.polyDetail, LY = T.polyDetail * 2;
-  const pos = [], nrm = [], uv = [], tan = []; let tris = 0;
+  const D = T.treadDepth, A = d.acrossHalf, circ = d.circ;
+  const { xs, ys } = treadGridLines(d, T.polyDetail);
+  const surface = new ST.QuadSurface(1e-3);
   const wl = y => pmGeo.wearRow((y + A) / (2 * A) * pmGeo.H);
-  const place = (x, y, hFrac) => { const pr = treadProfileAt(y, d); const off = D * Math.max(hFrac, wl(y)) * pr.w; const ax = pr.x - pr.nx * off, r = pr.r - pr.nr * off; const th = x / circ * TAU; return [ax, r * Math.cos(th), r * Math.sin(th), pr.nx, pr.nr * Math.cos(th), pr.nr * Math.sin(th)]; };
-  const push = (p, n, u, v, t) => { pos.push(p[0], p[1], p[2]); nrm.push(n[0], n[1], n[2]); uv.push(u, v); tan.push(t[0], t[1], t[2], 1); };
-  const tangentAt = u => { const th = u * TAU; return [0, -Math.sin(th), Math.cos(th)]; };   // +u direction (circumferential)
-  const snapLevel = h => levels.reduce((b, l) => Math.abs(l - h) < Math.abs(b - h) ? l : b, 0);
-  const LYS = Math.max(1.5, d.sr * 0.17);                         // finer across-steps on the shoulder arc (~10°)
-  const rowsY = []; for (let y = 0; y <= d.treadHalf - LY * 0.5; y += LY) rowsY.push(y); for (let ph = 10; ph < 80; ph += 10) rowsY.push(d.treadHalf + d.sr * Math.sin(ph * Math.PI / 180)); const ROWS = [...rowsY.map(y => -y).reverse(), ...rowsY.slice(1)];
-  const SW = LX * 2;                                              // strip width for wide polygons (keeps earcut inputs small)
-  const bbox = ring => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const p of ring) { if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1]; } return [x0, y0, x1, y1]; };
-  const splitWide = ex => {
-    const [x0, y0, x1, y1] = bbox(ex.outer); if (x1 - x0 <= SW * 2.5) return [ex];
-    const outerP = toPath(ex.outer); const holes = ex.holes.map(h => ({ p: toPath(h), b: bbox(h) })); const out = [];
-    for (let xs = Math.floor(x0 / SW) * SW; xs < x1; xs += SW) {
-      const xe = xs + SW; const hp = holes.filter(h => h.b[2] >= xs && h.b[0] <= xe).map(h => h.p);
-      const part = inter([outerP, ...hp], [rectPath(xs, y0 - 1, xe, y1 + 1)]); if (part.length) out.push(...exPolygons(part));
-    }
-    return out;
+  const place = (x, y, hFrac) => {
+    const pr = treadProfileAt(y, d), off = D * Math.max(hFrac, wl(y)) * pr.w;
+    const ax = pr.x - pr.nx * off, r = pr.r - pr.nr * off, th = x / circ * TAU;
+    return { p: [ax, r * Math.cos(th), r * Math.sin(th)], n: [pr.nx, pr.nr * Math.cos(th), pr.nr * Math.sin(th)] };
   };
-  for (const pc of pieces) for (const ex0 of exPolygons(pc.paths)) for (const poly of splitWide(ex0)) {
-    const rings = [poly.outer, ...poly.holes].map(r => subdivideRing(r, LX, LY, d.treadHalf, LYS)); if (rings[0].length < 3) continue;
-    const contour = rings[0].map(p => new THREE.Vector2(p[0], p[1])); const holes = rings.slice(1).map(r => r.map(p => new THREE.Vector2(p[0], p[1])));
-    let faces; try { faces = THREE.ShapeUtils.triangulateShape(contour, holes); } catch (e) { continue; }
-    const all = contour.concat(...holes); const hz = pc.depth;
-    const edgeLength = (u, v) => { const a3 = place(u.x, u.y, hz), b3 = place(v.x, v.y, hz); return Math.hypot(b3[0] - a3[0], b3[1] - a3[1], b3[2] - a3[2]); };
-    let longestTopEdge = 0;
-    for (const f of faces) { const a = all[f[0]], b = all[f[1]], c = all[f[2]]; longestTopEdge = Math.max(longestTopEdge, edgeLength(a, b), edgeLength(b, c), edgeLength(c, a)); }
-    // A single level per boolean polygon keeps every shared top edge conforming. This
-    // avoids the T-junctions created when adjacent Earcut triangles refined independently.
-    const topSteps = Math.min(4, Math.max(1, Math.ceil(longestTopEdge / Math.max(28, T.polyDetail * 5))));
-    const pushTop = q => { const P3 = place(q.x, q.y, hz); push(P3, [P3[3], P3[4], P3[5]], q.x / circ, (q.y + A) / (2 * A), tangentAt(q.x / circ)); };
-    for (const f of faces) { const a = all[f[0]], b = all[f[1]], c = all[f[2]]; const area = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y); if (Math.abs(area) < 1e-6) continue;
-      const ord = area > 0 ? [a, b, c] : [a, c, b]; const [q0, q1, q2] = ord;
-      const point = (i, j) => new THREE.Vector2(q0.x + (q1.x - q0.x) * i / topSteps + (q2.x - q0.x) * j / topSteps, q0.y + (q1.y - q0.y) * i / topSteps + (q2.y - q0.y) * j / topSteps);
-      for (let i = 0; i < topSteps; i++) for (let j = 0; j < topSteps - i; j++) {
-        const p0 = point(i, j), p1 = point(i + 1, j), p2 = point(i, j + 1); pushTop(p0); pushTop(p1); pushTop(p2); tris++;
-        if (i + j < topSteps - 1) { const p3 = point(i + 1, j + 1); pushTop(p1); pushTop(p3); pushTop(p2); tris++; }
+  const tangentAt = u => { const th = u * TAU; return [0, -Math.sin(th), Math.cos(th)]; };
+  const snapLevel = h => levels.reduce((b, l) => Math.abs(l - h) < Math.abs(b - h) ? l : b, 0);
+  // Clipper trims the boundary cells; three.js' earcut only sees the rare clipped cell that still has a hole.
+  const clipToCell = (rings, rect) => {
+    const out = inter(rings.map(r => toPath(r)), [rectPath(rect[0], rect[1], rect[2], rect[3])]);
+    return out.length ? exPolygons(out) : [];
+  };
+  const triangulate = (outer, holes) => THREE.ShapeUtils.triangulateShape(
+    outer.map(q => new THREE.Vector2(q[0], q[1])), holes.map(r => r.map(q => new THREE.Vector2(q[0], q[1]))));
+
+  for (const pc of pieces) {
+    const pieceFaces = [];
+    for (const ex of exPolygons(pc.paths)) {
+      let patch = null;
+      try { patch = ST.quadrangulate([ex.outer, ...ex.holes], xs, ys, clipToCell, triangulate); }
+      catch (e) { console.warn('quadrangulation fell back for one region', e); }
+      if (!patch || !patch.faces.length) continue;
+      for (const f of patch.faces) {
+        const corners = f.map(i => {
+          const q = patch.points[i], s = place(q[0], q[1], pc.depth);
+          return { p: s.p, n: s.n, uv: [q[0] / circ, (q[1] + A) / (2 * A)] };
+        });
+        const face = surface.addFace(corners, tangentAt(patch.points[f[0]][0] / circ));
+        if (face) pieceFaces.push({ v: face.v, xy: f.map(i => patch.points[i]) });
       }
     }
-    // walls: generated from the lower side of every boundary edge
-    for (const r of rings) for (let i = 0; i < r.length; i++) {
-      const edgeA = r[i], edgeB = r[(i + 1) % r.length];
-      for (let segment = 0; segment < topSteps; segment++) {
-        const a = [edgeA[0] + (edgeB[0] - edgeA[0]) * segment / topSteps, edgeA[1] + (edgeB[1] - edgeA[1]) * segment / topSteps];
-        const b = [edgeA[0] + (edgeB[0] - edgeA[0]) * (segment + 1) / topSteps, edgeA[1] + (edgeB[1] - edgeA[1]) * (segment + 1) / topSteps];
-        const dx = b[0] - a[0], dy = b[1] - a[1]; const l = Math.hypot(dx, dy); if (l < 1e-6) continue;
-      const ox = dy / l, oy = -dx / l; const mx = (a[0] + b[0]) / 2 + ox * 0.9, my = (a[1] + b[1]) / 2 + oy * 0.9;
-      const smp = sampleDepth(pmGeo, mx / circ, (my + A) / (2 * A)); const hOut = smp > 0.02 ? snapLevel(smp + wl(my)) : 0;
-      const hIn = pc.depth; if (hOut >= hIn - 0.005) continue;
-      const u = mx / circ, v = (my + A) / (2 * A);
-      const a0 = place(a[0], a[1], hOut), b0 = place(b[0], b[1], hOut), a1 = place(a[0], a[1], hIn), b1 = place(b[0], b[1], hIn);
-      if (Math.hypot(a0[0] - a1[0], a0[1] - a1[1], a0[2] - a1[2]) < 0.02 && Math.hypot(b0[0] - b1[0], b0[1] - b1[1], b0[2] - b1[2]) < 0.02) continue;
-      const n = [0, 0, 0]; { const e1 = [b0[0] - a0[0], b0[1] - a0[1], b0[2] - a0[2]], e2 = [a1[0] - a0[0], a1[1] - a0[1], a1[2] - a0[2]]; n[0] = e1[1] * e2[2] - e1[2] * e2[1]; n[1] = e1[2] * e2[0] - e1[0] * e2[2]; n[2] = e1[0] * e2[1] - e1[1] * e2[0]; const ln = Math.hypot(...n) || 1; n[0] /= ln; n[1] /= ln; n[2] /= ln; }
-      // wall must face into the groove (toward −outward): flip if needed
-      const th = u * TAU; const want = [-oy, ox * Math.sin(th), -ox * Math.cos(th)]; /* −outward: x→circumferential tangent, y→axle */ const flip = n[0] * want[0] + n[1] * want[1] + n[2] * want[2] < 0; if (flip) { n[0] = -n[0]; n[1] = -n[1]; n[2] = -n[2]; }
-      // wall UVs sit just inside the groove floor (flat in the depth map) so the normal map does not tilt them
-      const inU = -ox * 1.2 / circ, inV = -oy * 1.2 / (2 * A); const uvA0 = [a[0] / circ + inU, (a[1] + A) / (2 * A) + inV], uvB0 = [b[0] / circ + inU, (b[1] + A) / (2 * A) + inV];
-      const uvA1 = [uvA0[0] + inU * 0.6, uvA0[1] + inV * 0.6], uvB1 = [uvB0[0] + inU * 0.6, uvB0[1] + inV * 0.6];
-      const et = [b0[0] - a0[0], b0[1] - a0[1], b0[2] - a0[2]]; const el = Math.hypot(...et) || 1; const wt = [et[0] / el, et[1] / el, et[2] / el];
-      const quad = flip ? [[a0, uvA0], [a1, uvA1], [b0, uvB0], [b0, uvB0], [a1, uvA1], [b1, uvB1]] : [[a0, uvA0], [b0, uvB0], [a1, uvA1], [a1, uvA1], [b0, uvB0], [b1, uvB1]];
-        for (const [q, t] of quad) push(q, n, t[0], t[1], wt); tris += 2;
+    // Edges used once are the open border of this floor level: that is exactly where a groove wall belongs.
+    const edges = new Map();
+    for (const f of pieceFaces) for (let i = 0; i < f.v.length; i++) {
+      const a = f.v[i], b = f.v[(i + 1) % f.v.length], key = a < b ? `${a}_${b}` : `${b}_${a}`;
+      const rec = edges.get(key);
+      if (rec) rec.n++; else edges.set(key, { n: 1, p0: f.xy[i], p1: f.xy[(i + 1) % f.v.length] });
+    }
+    for (const e of edges.values()) {
+      if (e.n !== 1) continue;
+      const a = e.p0, b = e.p1, dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy);
+      if (l < 1e-6) continue;
+      const ox = dy / l, oy = -dx / l;                              // faces are wound CCW, so this points outward
+      const mx = (a[0] + b[0]) / 2 + ox * 0.9, my = (a[1] + b[1]) / 2 + oy * 0.9;
+      const smp = sampleDepth(pmGeo, mx / circ, (my + A) / (2 * A));
+      const hOut = smp > 0.02 ? snapLevel(smp + wl(my)) : 0, hIn = pc.depth;
+      if (hOut >= hIn - 0.005) continue;
+      const steps = Math.max(1, Math.min(4, Math.round((hIn - hOut) * D / 3.5)));
+      const u = mx / circ, th = u * TAU;
+      const inU = -ox * 1.2 / circ, inV = -oy * 1.2 / (2 * A);
+      const uvA = [a[0] / circ + inU, (a[1] + A) / (2 * A) + inV], uvB = [b[0] / circ + inU, (b[1] + A) / (2 * A) + inV];
+      for (let s = 0; s < steps; s++) {
+        const h0 = hOut + (hIn - hOut) * s / steps, h1 = hOut + (hIn - hOut) * (s + 1) / steps;
+        const a0 = place(a[0], a[1], h0), b0 = place(b[0], b[1], h0);
+        const a1 = place(a[0], a[1], h1), b1 = place(b[0], b[1], h1);
+        if (Math.hypot(a0.p[0] - a1.p[0], a0.p[1] - a1.p[1], a0.p[2] - a1.p[2]) < 0.004 &&
+            Math.hypot(b0.p[0] - b1.p[0], b0.p[1] - b1.p[1], b0.p[2] - b1.p[2]) < 0.004) continue;
+        const e1 = [b0.p[0] - a0.p[0], b0.p[1] - a0.p[1], b0.p[2] - a0.p[2]];
+        const e2 = [a1.p[0] - a0.p[0], a1.p[1] - a0.p[1], a1.p[2] - a0.p[2]];
+        let n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+        const ln = Math.hypot(n[0], n[1], n[2]) || 1; n = [n[0] / ln, n[1] / ln, n[2] / ln];
+        // The wall must face into the groove, i.e. opposite the outward direction of the border edge.
+        const want = [-oy, ox * Math.sin(th), -ox * Math.cos(th)];
+        const flip = n[0] * want[0] + n[1] * want[1] + n[2] * want[2] < 0;
+        if (flip) n = [-n[0], -n[1], -n[2]];
+        // Wall UVs sit just inside the groove floor so a tangent-space normal map cannot tilt them.
+        const uvT = s / steps * 0.6, uvD = (s + 1) / steps * 0.6;
+        const corner = (q, uv, t) => ({ p: q.p, n, uv: [uv[0] + inU * t, uv[1] + inV * t] });
+        const quad = flip
+          ? [corner(a0, uvA, uvT), corner(a1, uvA, uvD), corner(b1, uvB, uvD), corner(b0, uvB, uvT)]
+          : [corner(a0, uvA, uvT), corner(b0, uvB, uvT), corner(b1, uvB, uvD), corner(a1, uvA, uvD)];
+        const el = Math.hypot(e1[0], e1[1], e1[2]) || 1;
+        const made = surface.addFace(quad, [e1[0] / el, e1[1] / el, e1[2] / el]);
+        if (made) made.wall = true;                                   // tagged so the checks can isolate groove walls
       }
     }
   }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute('tangent', new THREE.Float32BufferAttribute(tan, 4)); g.computeBoundingSphere();
-  g.userData.tris = tris; return g;
+  return surface;
 }
-// sidewall-only lathe (used together with the polygon tread)
-function buildSidewallGeometry(d, prof) {
-  // Match the polygon tread's shoulder-ring tessellation. The outer row is inset
-  // beneath the polygon edge to avoid a second, overlapping shoulder surface.
-  const side = prof.filter(p => p.zone === 'side' || p.edge); const M = Math.max(90, Math.ceil(d.circ / Math.max(3, T.polyDetail)));
-  const left = side.filter(p => p.x < 0), right = side.filter(p => p.x > 0);
-  const pos = [], uv = [], idx = []; let base = 0;
-  for (const run of [left, right]) { const N = run.length;
-    for (let i = 0; i < N; i++) { const p = run[i], inset = p.edge ? 0.55 : 0; for (let j = 0; j <= M; j++) { const u = j / M, th = u * TAU, x = p.x - p.nx * inset, r = p.r - p.nr * inset; pos.push(x, r * Math.cos(th), r * Math.sin(th)); uv.push(p.x < 0 ? 1 - u : u, Math.max(-0.05, p.s ?? 1)); } }
-    for (let i = 0; i < N - 1; i++) for (let j = 0; j < M; j++) { const a = base + i * (M + 1) + j, b = a + 1, c = a + M + 1, e = c + 1; idx.push(a, b, c, b, e, c); }
-    base += N * (M + 1); }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); return g;
+// Sidewall-only lathe, used together with the polygon tread. A revolved grid is quads by construction.
+function buildSidewallSurface(d, prof) {
+  // The outer row is inset beneath the polygon edge to avoid a second, overlapping shoulder surface.
+  const side = prof.filter(p => p.zone === 'side' || p.edge);
+  const M = Math.max(90, Math.ceil(d.circ / Math.max(3, T.polyDetail)));
+  const surface = new ST.QuadSurface(1e-3);
+  const corner = (p, j) => {
+    const inset = p.edge ? 0.55 : 0, u = j / M, th = u * TAU;
+    const x = p.x - p.nx * inset, r = p.r - p.nr * inset;
+    return { p: [x, r * Math.cos(th), r * Math.sin(th)], n: [0, 0, 1], uv: [p.x < 0 ? 1 - u : u, Math.max(-0.05, p.s ?? 1)] };
+  };
+  for (const run of [side.filter(p => p.x < 0), side.filter(p => p.x > 0)]) {
+    for (let i = 0; i < run.length - 1; i++) for (let j = 0; j < M; j++) {
+      surface.addFace([corner(run[i], j), corner(run[i], j + 1), corner(run[i + 1], j + 1), corner(run[i + 1], j)],
+        [0, -Math.sin(j / M * TAU), Math.cos(j / M * TAU)]);
+    }
+  }
+  return surface.computeSmoothNormals();
 }
 
 // =====================================================================================================================
@@ -844,32 +1923,37 @@ function sampleDepth(pm, u, v) {
   return (depth[y0 * W + x0] * (1 - tx) + depth[y0 * W + x1] * tx) * (1 - ty) + (depth[y1 * W + x0] * (1 - tx) + depth[y1 * W + x1] * tx) * ty;
 }
 
-function buildTyreGeometry(d, pm) {
-  const prof = buildProfile(d); const N = prof.length, M = T.radial;
-  const pos = new Float32Array(N * (M + 1) * 3), uv = new Float32Array(N * (M + 1) * 2);
-  const D = T.treadDepth; const A = d.acrossHalf;
-  for (let i = 0; i < N; i++) {
-    const p = prof[i]; const v = (p.x + A) / (2 * A);
-    for (let j = 0; j <= M; j++) {
-      const u = j / M, th = u * Math.PI * 2; let x = p.x, r = p.r;
-      if (p.w > 0) {
-        const h = sampleDepth(pm, u, v); const worn = pm.wearRow(v * pm.H) * D;
-        const off = (h * D + worn) * p.w; x -= p.nx * off; r -= p.nr * off;
-      }
-      const k = (i * (M + 1) + j); pos[k * 3] = x; pos[k * 3 + 1] = r * Math.cos(th); pos[k * 3 + 2] = r * Math.sin(th);
-      if (p.zone === 'tread') { uv[k * 2] = u; uv[k * 2 + 1] = v; } else { uv[k * 2] = p.x < 0 ? 1 - u : u; uv[k * 2 + 1] = p.s; }
-    }
-  }
-  const treadIdx = [], sideIdx = [];
+// Displacement fallback used when the Clipper boolean stage is unavailable. A revolved grid is already made of
+// quads, so it is emitted through the same welded quad surface as the polygon tread.
+function buildTyreSurfaces(d, pm) {
+  const prof = buildProfile(d), N = prof.length, M = T.radial, D = T.treadDepth, A = d.acrossHalf;
+  const tread = new ST.QuadSurface(1e-3), side = new ST.QuadSurface(1e-3);
+  const corner = (p, j) => {
+    const u = j / M, th = u * TAU, v = (p.x + A) / (2 * A); let x = p.x, r = p.r;
+    if (p.w > 0) { const off = (sampleDepth(pm, u, v) * D + pm.wearRow(v * pm.H) * D) * p.w; x -= p.nx * off; r -= p.nr * off; }
+    return { p: [x, r * Math.cos(th), r * Math.sin(th)], n: [0, 0, 1],
+      uv: p.zone === 'tread' ? [u, v] : [p.x < 0 ? 1 - u : u, p.s] };
+  };
   for (let i = 0; i < N - 1; i++) {
-    const arr = (prof[i].zone === 'tread' && prof[i + 1].zone === 'tread') ? treadIdx : sideIdx;
-    for (let j = 0; j < M; j++) { const a = i * (M + 1) + j, b = a + 1, c = a + (M + 1), dd = c + 1; arr.push(a, b, c, b, dd, c); }
+    const target = (prof[i].zone === 'tread' && prof[i + 1].zone === 'tread') ? tread : side;
+    for (let j = 0; j < M; j++) target.addFace(
+      [corner(prof[i], j), corner(prof[i], j + 1), corner(prof[i + 1], j + 1), corner(prof[i + 1], j)],
+      [0, -Math.sin(j / M * TAU), Math.cos(j / M * TAU)]);
   }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-  g.setIndex(treadIdx.concat(sideIdx)); g.addGroup(0, treadIdx.length, 0); g.addGroup(treadIdx.length, sideIdx.length, 1);
-  g.computeVertexNormals(); g.computeBoundingSphere();
-  return { geometry: g, profile: prof };
+  return { tread: tread.computeSmoothNormals(), side: side.computeSmoothNormals(), profile: prof };
+}
+
+// Welded quad faces → an indexed triangle geometry for the viewport. Corner attributes survive, so hard groove
+// edges stay crisp while `userData.quads` keeps the real topology counts for the readout and the OBJ writer.
+function surfaceToGeometry(surface) {
+  const a = surface.toRenderArrays(), g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(a.position, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(a.normal, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(a.uv, 2));
+  g.setAttribute('tangent', new THREE.Float32BufferAttribute(a.tangent, 4));
+  g.setIndex(a.index); g.computeBoundingSphere();
+  g.userData.quads = surface.stats();
+  return g;
 }
 
 // Procedural rim generator. The barrel is formed by revolving this closed profile; all centre
@@ -886,16 +1970,17 @@ function rimProfilePoints(d) {
     [-half + 2, lip + 1 - wall], [-half - 1, lip + 1 - wall], [-half, lip - 1 - wall]
   ];
 }
-function buildBlankRimGeometry(d) {
-  const profile = rimProfilePoints(d), N = profile.length, M = Math.max(112, Math.min(256, Math.round(T.radial / 3))), pos = [], uv = [], idx = [];
-  for (let i = 0; i < N; i++) for (let j = 0; j <= M; j++) {
-    const [x, r] = profile[i], u = j / M, th = u * TAU; pos.push(x, r * Math.cos(th), r * Math.sin(th)); uv.push(u, i / N);
-  }
-  for (let i = 0; i < N; i++) {
-    const ni = (i + 1) % N;
-    for (let j = 0; j < M; j++) { const a = i * (M + 1) + j, b = a + 1, c = ni * (M + 1) + j, e = c + 1; idx.push(a, b, c, b, e, c); }
-  }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); g.computeBoundingSphere(); return g;
+function buildRimBarrelSurface(d) {
+  const profile = rimProfilePoints(d), N = profile.length, M = Math.max(112, Math.min(256, Math.round(T.radial / 3)));
+  const surface = new ST.QuadSurface(1e-3);
+  const corner = (i, j) => {
+    const [x, r] = profile[i % N], u = j / M, th = u * TAU;
+    return { p: [x, r * Math.cos(th), r * Math.sin(th)], n: [0, 0, 1], uv: [u, (i % N) / N] };
+  };
+  for (let i = 0; i < N; i++) for (let j = 0; j < M; j++)
+    surface.addFace([corner(i, j), corner(i, j + 1), corner(i + 1, j + 1), corner(i + 1, j)],
+      [0, -Math.sin(j / M * TAU), Math.cos(j / M * TAU)]);
+  return surface.computeSmoothNormals();
 }
 function rimMaterial() {
   const spec = RIM_MATERIALS[R.material] || RIM_MATERIALS.Steel;
@@ -937,7 +2022,8 @@ function buildValveStem(d, capMaterial) {
   stem.name = 'Tyre inflation valve'; return stem;
 }
 function buildRim(d) {
-  const material = rimMaterial(), barrel = new THREE.Mesh(buildBlankRimGeometry(d), material); barrel.name = `Blank ${R.material} rim barrel`;
+  const material = rimMaterial(); rimBarrelSurface = buildRimBarrelSurface(d);
+  const barrel = new THREE.Mesh(surfaceToGeometry(rimBarrelSurface), material); barrel.name = `Blank ${R.material} rim barrel`;
   const group = new THREE.Group(); group.name = 'Procedural rim'; group.add(barrel);
   const centre = buildRimCentre(d, material); if (centre) group.add(centre);
   const valve = buildValveStem(d, material); if (valve) group.add(valve);
@@ -989,6 +2075,7 @@ const grid = new THREE.GridHelper(4000, 80, '#232529', '#1a1c1f'); grid.position
 const tyreGroup = new THREE.Group(); scene.add(tyreGroup);
 
 let tyreMesh, rimGroup, threadLines, maps, patternMap, profileCache, treadMat, sideMatL, sideMatR;
+let treadSurface, sidewallSurface, rimBarrelSurface, quadWireframe;
 function disposeGroup() { tyreGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); }); tyreGroup.clear(); }
 
 function rebuild(full = true) {
@@ -1006,21 +2093,54 @@ function rebuild(full = true) {
   treadMat = new THREE.MeshStandardMaterial({ map: colTex, normalMap: treadNormal, normalScale: new THREE.Vector2(treadNormal ? 0.7 : 0, treadNormal ? 0.7 : 0), roughnessMap: tex(maps.rough), roughness: 1, metalness: 0.0 });
   const sw = buildSidewall(true); const sideTex = tex(sw.color); sideTex.colorSpace = THREE.SRGBColorSpace;
   const sideMat = new THREE.MeshStandardMaterial({ map: sideTex, normalMap: tex(sw.normal), normalScale: new THREE.Vector2(0.45, 0.45), roughness: 0.8, metalness: 0, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-  tyreMesh = new THREE.Group(); let triCount = 0;
+  tyreMesh = new THREE.Group(); treadSurface = sidewallSurface = null;
   if (usePoly) {
     const pmGeo = renderPattern(P, d, 384, T.wear, T.wearBias, T.treadDepth, true);
-    let treadGeo; try { treadGeo = buildPolyTread(d, pmGeo); } catch (e) { console.warn('polygon tread failed, falling back', e); }
-    if (treadGeo) { const prof = buildProfile(d); profileCache = prof; tyreMesh.add(new THREE.Mesh(treadGeo, treadMat)); tyreMesh.add(new THREE.Mesh(buildSidewallGeometry(d, prof), sideMat)); triCount = treadGeo.userData.tris; }
-    else { const { geometry, profile } = buildTyreGeometry(d, patternMap); profileCache = profile; tyreMesh.add(new THREE.Mesh(geometry, [treadMat, sideMat])); triCount = geometry.index.count / 3; }
-  } else { const { geometry, profile } = buildTyreGeometry(d, patternMap); profileCache = profile; tyreMesh.add(new THREE.Mesh(geometry, [treadMat, sideMat])); triCount = geometry.index.count / 3; }
+    try { treadSurface = buildPolyTread(d, pmGeo); } catch (e) { console.warn('polygon tread failed, falling back', e); }
+    if (treadSurface && treadSurface.faces.length) {
+      const prof = buildProfile(d); profileCache = prof; sidewallSurface = buildSidewallSurface(d, prof);
+      tyreMesh.add(new THREE.Mesh(surfaceToGeometry(treadSurface), treadMat));
+      tyreMesh.add(new THREE.Mesh(surfaceToGeometry(sidewallSurface), sideMat));
+    } else treadSurface = null;
+  }
+  if (!treadSurface) {
+    const built = buildTyreSurfaces(d, patternMap); profileCache = built.profile;
+    treadSurface = built.tread; sidewallSurface = built.side;
+    tyreMesh.add(new THREE.Mesh(surfaceToGeometry(treadSurface), treadMat));
+    tyreMesh.add(new THREE.Mesh(surfaceToGeometry(sidewallSurface), sideMat));
+  }
   tyreMesh.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (UI.threads) [].concat(o.material).forEach(m => { m.transparent = true; m.opacity = 0.35; }); } });
-  tyreMesh.userData.tris = triCount; tyreGroup.add(tyreMesh);
+  const treadStats = treadSurface.stats(), sideStats = sidewallSurface.stats();
+  tyreMesh.userData.quads = {
+    vertices: treadStats.vertices + sideStats.vertices, faces: treadStats.faces + sideStats.faces,
+    quads: treadStats.quads + sideStats.quads, tris: treadStats.tris + sideStats.tris,
+    triangles: treadStats.triangles + sideStats.triangles,
+    quadRatio: (treadStats.quads + sideStats.quads) / Math.max(1, treadStats.faces + sideStats.faces),
+    treadQuadRatio: treadStats.quadRatio, boundary: treadSurface.boundaryEdges().length
+  };
+  tyreMesh.userData.tris = tyreMesh.userData.quads.triangles;
+  tyreGroup.add(tyreMesh);
+  // A wireframe drawn from quad edges only — triangulation diagonals are never shown, so the topology is visible.
+  quadWireframe = new THREE.LineSegments(
+    new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(
+      treadSurface.wireframe().concat(sidewallSurface.wireframe()), 3)),
+    new THREE.LineBasicMaterial({ color: '#7ad1ff', transparent: true, opacity: 0.5 }));
+  quadWireframe.visible = UI.quads; tyreGroup.add(quadWireframe);
   rimGroup = buildRim(d); rimGroup.traverse(o => { o.castShadow = true; }); tyreGroup.add(rimGroup);
   threadLines = buildThreads(profileCache, d); threadLines.visible = UI.threads; tyreGroup.add(threadLines);
   const groundR = d.Rout - T.wear * T.treadDepth; tyreGroup.position.y = groundR; tyreGroup.rotation.z = 0;
   if (!controls.userData?.init) { controls.userData = { init: true }; controls.target.set(0, groundR, 0); camera.position.set(d.Rout * 2.6, groundR + d.Rout * 0.6, d.Rout * 2.7); }
   fitZoom(d);
   updateHud(d); drawProfile(d, profileCache); drawRimProfile(d); drawTreadView();
+}
+
+// Topology readout: the deformation rig cares about quads, so the share of quad faces is shown first.
+function quadTile() {
+  const q = tyreMesh?.userData.quads;
+  const tile = (l, v, u, dot) => `<div class="tile"><div class="l"><i style="background:${dot}"></i>${l}</div><div class="v">${v}<small>${u}</small></div></div>`;
+  if (!q) return tile('Tread mesh', '0', 'faces', 'var(--green)');
+  const pct = Math.round(q.quadRatio * 100);
+  return tile('Quad topology', pct + '%', `${(q.quads / 1000).toFixed(1)}k quads · ${q.tris} tris`, pct >= 80 ? 'var(--green)' : pct >= 60 ? 'var(--yellow)' : 'var(--red)');
 }
 
 function updateHud(d) {
@@ -1031,7 +2151,7 @@ function updateHud(d) {
   const tile = (l, v, u, dot) => `<div class="tile"><div class="l"><i style="background:${dot || 'var(--green)'}"></i>${l}</div><div class="v">${v}<small>${u}</small></div></div>`;
   document.getElementById('tiles').innerHTML =
     tile('Overall Ø', od.toFixed(0), 'mm', 'var(--yellow)') + tile('Tread left', remaining.toFixed(1), '/ ' + T.treadDepth + ' mm', col) +
-    tile('Circumference', (circ / 1000).toFixed(2), 'm', 'var(--yellow)') + tile('Tread mesh', (tyreMesh?.userData.tris / 1000 || 0).toFixed(1), 'k tris · polygons', 'var(--green)');
+    tile('Circumference', (circ / 1000).toFixed(2), 'm', 'var(--yellow)') + quadTile();
   const bigNum = v => { const [a, b] = String(v).split('.'); return a + (b ? '<span class="frac">.' + b + '</span>' : ''); };
   document.getElementById('bigSize').innerHTML = `${T.width}<span class="frac">/${T.aspect}</span><small>R${T.rim}</small>`;
   document.getElementById('sizeR').textContent = `${(d.Rrim * 2).toFixed(0)} mm rim`;
@@ -1279,7 +2399,8 @@ function buildPresetUI() {
   });
 }
 function applyPreset(i) {
-  const pr = PRESETS[i]; Object.assign(T, pr.tyre); P.name = pr.name; P.type = pr.type; P.layers = pr.layers.map(l => Object.assign({}, l)); UI.sel = -1; T.wear = 0; document.getElementById('wearSlider').value = 0;
+  if (UI.editing >= 0) closeTreadEditor();
+  const pr = PRESETS[i]; Object.assign(T, pr.tyre); P.name = pr.name; P.type = pr.type; P.layers = pr.layers.map(copyLayer); UI.sel = -1; T.wear = 0; document.getElementById('wearSlider').value = 0;
   refreshAll();
 }
 function refreshAll() { buildTyreUI(); buildRimUI(); buildDecalUI(); buildPresetUI(); buildLayerUI(); document.getElementById('pName').value = P.name; document.getElementById('pType').value = P.type; rebuild(); }
@@ -1288,11 +2409,11 @@ function buildLayerUI() {
   const box = document.getElementById('layers'); box.innerHTML = '';
   P.layers.forEach((ly, i) => {
     const def = LAYER_DEFS[ly.type]; const el = document.createElement('div'); el.className = 'layer' + (i === UI.sel ? ' sel' : '');
-    const desc = ly.type === 'circ' ? `@${ly.pos} · ${ly.width}mm` : ly.type === 'hex' ? `${ly.size}mm cells` : ly.type === 'dimple' ? `${ly.rows}×${ly.count}` : ly.type === 'terrain' ? `×${ly.count} · ${ly.width}mm lugs` : ly.type === 'noise' ? `${ly.amount}` : `×${ly.count} · ${ly.angle}°`;
+    const desc = ly.type === 'circ' ? `@${ly.pos} · ${ly.width}mm` : ly.type === 'hex' ? `${ly.size}mm cells` : ly.type === 'dimple' ? `${ly.rows}×${ly.count}` : ly.type === 'terrain' ? `×${ly.count} · ${ly.width}mm lugs` : ly.type === 'blocks' ? `${ly.design} · ×${ly.count} · ${(ly.shapes || []).length} shapes` : ly.type === 'noise' ? `${ly.amount}` : `×${ly.count} · ${ly.angle}°`;
     el.innerHTML = `<span class="ic" style="background:${def.color}"></span><span class="nm">${def.label} <small>${desc}</small></span><button title="duplicate">⧉</button><button title="up">↑</button><button title="down">↓</button><button title="delete">✕</button>`;
     const [dup, up, dn, del] = el.querySelectorAll('button');
     el.onclick = () => { UI.sel = i; buildLayerUI(); };
-    dup.onclick = e => { e.stopPropagation(); P.layers.splice(i + 1, 0, Object.assign({}, ly)); UI.sel = i + 1; buildLayerUI(); schedule(); };
+    dup.onclick = e => { e.stopPropagation(); P.layers.splice(i + 1, 0, copyLayer(ly)); UI.sel = i + 1; buildLayerUI(); schedule(); };
     up.onclick = e => { e.stopPropagation(); if (i > 0) { [P.layers[i - 1], P.layers[i]] = [P.layers[i], P.layers[i - 1]]; UI.sel = i - 1; buildLayerUI(); schedule(); } };
     dn.onclick = e => { e.stopPropagation(); if (i < P.layers.length - 1) { [P.layers[i + 1], P.layers[i]] = [P.layers[i], P.layers[i + 1]]; UI.sel = i + 1; buildLayerUI(); schedule(); } };
     del.onclick = e => { e.stopPropagation(); P.layers.splice(i, 1); UI.sel = -1; buildLayerUI(); schedule(); };
@@ -1303,10 +2424,36 @@ function buildLayerUI() {
   if (!ly) { props.className = 'hint'; props.innerHTML = 'Select a layer to edit it. Layers are drawn in order; deeper cuts win.<br>Across-position <code>-1…1</code> = tread edges, <code>±1.3</code> reaches the shoulder.'; return; }
   props.className = '';
   const t = document.createElement('div'); t.className = 'hint'; t.innerHTML = `<b style="color:${LAYER_DEFS[ly.type].color}">${LAYER_DEFS[ly.type].label}</b>`; props.appendChild(t);
+  if (ly.type === 'blocks') {
+    const lib = document.createElement('div'); lib.className = 'row';
+    lib.innerHTML = `<label>Library design</label><select>${ST.TREAD_LIBRARY.map(x => `<option value="${x.id}" ${x.id === ly.design ? 'selected' : ''}>${x.name}</option>`).join('')}</select>`;
+    lib.querySelector('select').onchange = e => {
+      const next = blocksLayer(e.target.value, { depth: ly.depth, gap: ly.gap });
+      P.layers[UI.sel] = next; buildLayerUI(); schedule();
+    };
+    props.appendChild(lib);
+  }
   for (const k in ly) {
-    if (k === 'type') continue;
+    if (k === 'type' || k === 'design' || k === 'shapes') continue;
+    const range = (ly.type === 'blocks' && BLOCK_RANGES[k]) || RANGES[k];
     if (typeof ly[k] === 'boolean') check(props, LABELS[k] || k, ly, k, () => { buildLayerUI(); schedule(); });
-    else if (RANGES[k]) slider(props, LABELS[k] || k, ly, k, ...RANGES[k], v => (+v).toFixed(RANGES[k][2] < 1 ? 2 : 0), () => { refreshLayerLabel(); schedule(); });
+    else if (range) slider(props, LABELS[k] || k, ly, k, ...range, v => (+v).toFixed(range[2] < 1 ? 2 : 0), () => { refreshLayerLabel(); schedule(); });
+  }
+  if (ly.type === 'blocks') {
+    const row = document.createElement('div'); row.className = 'btns';
+    row.innerHTML = '<button class="small primary">Open in tread editor</button><button class="small">Mirror design</button>';
+    const [edit, mirrorDesign] = row.querySelectorAll('button');
+    edit.onclick = () => openTreadEditor(UI.sel);
+    mirrorDesign.onclick = () => {
+      const flip = pt => [-pt[0], pt[1]];
+      ly.shapes = ly.shapes.map(sh => Object.assign(ST.clone(sh), {
+        points: sh.points.map(flip).reverse(),
+        holes: (sh.holes || []).map(h => h.map(flip).reverse()),
+        sipes: (sh.sipes || []).map(l => l.map(flip))
+      }));
+      buildLayerUI(); schedule();
+    };
+    props.appendChild(row); return;
   }
   const mir = document.createElement('div'); mir.className = 'btns';
   mir.innerHTML = '<button class="small">Mirror layer across centre</button>'; mir.querySelector('button').onclick = () => {
@@ -1314,15 +2461,269 @@ function buildLayerUI() {
     P.layers.splice(UI.sel + 1, 0, c); UI.sel++; buildLayerUI(); schedule();
   }; props.appendChild(mir);
 }
-function refreshLayerLabel() { const els = document.querySelectorAll('#layers .layer'); const ly = P.layers[UI.sel]; if (!ly || !els[UI.sel]) return; const desc = ly.type === 'circ' ? `@${ly.pos} · ${ly.width}mm` : ly.type === 'hex' ? `${ly.size}mm cells` : ly.type === 'dimple' ? `${ly.rows}×${ly.count}` : ly.type === 'terrain' ? `×${ly.count} · ${ly.width}mm lugs` : ly.type === 'noise' ? `${ly.amount}` : `×${ly.count} · ${ly.angle}°`; els[UI.sel].querySelector('small').textContent = desc; }
+function refreshLayerLabel() { const els = document.querySelectorAll('#layers .layer'); const ly = P.layers[UI.sel]; if (!ly || !els[UI.sel]) return; const desc = ly.type === 'circ' ? `@${ly.pos} · ${ly.width}mm` : ly.type === 'hex' ? `${ly.size}mm cells` : ly.type === 'dimple' ? `${ly.rows}×${ly.count}` : ly.type === 'terrain' ? `×${ly.count} · ${ly.width}mm lugs` : ly.type === 'blocks' ? `${ly.design} · ×${ly.count} · ${(ly.shapes || []).length} shapes` : ly.type === 'noise' ? `${ly.amount}` : `×${ly.count} · ${ly.angle}°`; els[UI.sel].querySelector('small').textContent = desc; }
+
+// =====================================================================================================================
+//  2D TREAD EDITOR — direct editing of the polygon lug design of a `blocks` layer.
+//  Coordinates are the design space of the tread core: x = −0.5…0.5 across the band, y = 0…1 along one pitch.
+//  Editing never touches the casing: section width, aspect, rim size and the revolved profile stay exactly as they
+//  were, so a design can be redrawn on a finished tyre without changing its shape.
+// =====================================================================================================================
+const ED = { grid: 0.005, draft: null, drag: null };
+const edSvg = () => document.getElementById('edSvg');
+const edLayer = () => (UI.editing >= 0 ? P.layers[UI.editing] : null);
+const edSnap = v => (ED.free ? v : Math.round(v / ED.grid) * ED.grid);
+const edFmt = ring => ring.map(p => `${p[0].toFixed(4)},${p[1].toFixed(4)}`).join(' ');
+
+function openTreadEditor(index) {
+  const ly = P.layers[index];
+  if (!ly || ly.type !== 'blocks') return;
+  if (!Array.isArray(ly.shapes) || !ly.shapes.length) ly.shapes = ST.designFromLibrary(ly.design);
+  UI.editing = index; UI.editSel = ly.shapes.length ? 0 : -1; ED.draft = null; ED.drag = null;
+  document.getElementById('editor').classList.add('on');
+  edSvg().setAttribute('viewBox', '-0.68 -0.46 1.36 1.92');
+  edDraw(); edSidebar();
+}
+function closeTreadEditor() { UI.editing = -1; ED.draft = null; document.getElementById('editor').classList.remove('on'); buildLayerUI(); }
+
+// ---------------------------------------------------------------------------------------------------- drawing
+function edDraw() {
+  const ly = edLayer(); if (!ly) return;
+  const svg = edSvg(), bad = new Set(ST.invalidShapes(ly.shapes).map(s => s.id));
+  const parts = [
+    '<rect class="band" x="-0.5" y="-0.45" width="1" height="1.91"/>',
+    '<line class="axis" x1="0" y1="-0.45" x2="0" y2="1.46"/>',
+    '<line class="axis" x1="-0.68" y1="0" x2="0.68" y2="0"/>',
+    '<line class="axis" x1="-0.68" y1="1" x2="0.68" y2="1"/>',
+    '<text x="-0.665" y="-0.03">pitch A</text><text x="-0.665" y="0.97">next pitch</text>',
+    '<text x="-0.495" y="1.44">tread centre line is x = 0 · band edges at x = ±0.5</text>'
+  ];
+  for (let g = -5; g <= 5; g++) {
+    const v = g / 10; parts.push(`<line class="grid" x1="${v}" y1="-0.45" x2="${v}" y2="1.46"/>`);
+  }
+  for (let g = 0; g <= 10; g++) parts.push(`<line class="grid" x1="-0.5" y1="${g / 10}" x2="0.5" y2="${g / 10}"/>`);
+
+  const body = (shape, cls) => {
+    const d = [shape.points, ...(shape.holes || [])].map(r => `M${edFmt(r).replace(/ /g, 'L')}Z`).join('');
+    const lines = (shape.sipes || []).filter(l => l.length > 1)
+      .map(l => `<path class="sipe" d="M${edFmt(l).replace(/ /g, 'L')}"/>`).join('');
+    return `<path class="${cls}" data-id="${shape.sourceId || shape.id}" d="${d}"/>${lines}`;
+  };
+  // Ghosted neighbours show how the design tiles, including the alternate pitch an A/B design produces.
+  for (const dy of [-1, 1]) {
+    const inner = ST.designShapes(ly.shapes, 1).map(s => body(s, 'lug mirrored')).join('');
+    parts.push(`<g class="ghost" transform="translate(0,${dy})">${inner}</g>`);
+  }
+  for (const shape of ly.shapes) {
+    if (shape.enabled === false) continue;
+    for (const inst of ST.expandShape(shape)) {
+      if (inst.instance === 'source') continue;
+      parts.push(body(inst, `lug mirrored ${inst.role === 'cut' ? 'cut' : inst.role === 'ejector' ? 'ejector' : ''}`));
+    }
+  }
+  ly.shapes.forEach((shape, i) => {
+    if (shape.enabled === false) return;
+    const cls = ['lug', shape.role === 'cut' ? 'cut' : shape.role === 'ejector' ? 'ejector' : '',
+      i === UI.editSel ? 'sel' : '', bad.has(shape.id) ? 'bad' : ''].filter(Boolean).join(' ');
+    parts.push(body(shape, cls));
+  });
+  const sel = ly.shapes[UI.editSel];
+  if (sel && sel.enabled !== false) {
+    const dot = (ring, tag, extra) => ring.forEach((p, i) =>
+      parts.push(`<circle class="vtx ${extra}" data-ring="${tag}" data-i="${i}" cx="${p[0]}" cy="${p[1]}" r="0.011"/>`));
+    dot(sel.points, 'o', '');
+    (sel.holes || []).forEach((h, k) => dot(h, 'h' + k, 'hole'));
+    (sel.sipes || []).forEach((l, k) => dot(l, 's' + k, 'sipe'));
+  }
+  if (ED.draft && ED.draft.pts.length) {
+    const d = `M${edFmt(ED.draft.pts).replace(/ /g, 'L')}${ED.draft.kind === 'sipe' ? '' : 'Z'}`;
+    parts.push(`<path class="draft" d="${d}" style="${ED.draft.kind === 'sipe' ? 'fill:none' : ''}"/>`);
+    ED.draft.pts.forEach(p => parts.push(`<circle class="vtx" cx="${p[0]}" cy="${p[1]}" r="0.009"/>`));
+  }
+  svg.innerHTML = parts.join('');
+  const invalid = ST.invalidShapes(ly.shapes);
+  document.getElementById('edWarn').textContent = invalid.length
+    ? `${invalid.length} outline${invalid.length > 1 ? 's cross' : ' crosses'} itself — fix before the tyre rebuilds.` : '';
+  document.getElementById('edHint').innerHTML = {
+    select: 'Drag a <b>handle</b> to move one point, drag inside a shape to slide it. <b>Alt</b> disables the 5 mm grid snap.',
+    pen: 'Click to lay down the outline of a new lug. <b>Enter</b> closes it, <b>Esc</b> cancels.',
+    hole: 'Click to cut a void into the selected lug. <b>Enter</b> closes it, <b>Esc</b> cancels.',
+    sipe: 'Click to trace a sipe or cut line across the selected lug. <b>Enter</b> finishes it.',
+    erase: 'Click a handle to remove that point. Outlines keep a minimum of three.'
+  }[UI.editTool];
+}
+
+// ---------------------------------------------------------------------------------------------------- sidebar
+function edSidebar() {
+  const ly = edLayer(); if (!ly) return;
+  const list = document.getElementById('edList'); list.innerHTML = '';
+  ly.shapes.forEach((shape, i) => {
+    const colour = shape.role === 'cut' ? 'var(--red)' : shape.role === 'ejector' ? 'var(--yellow)' : '#7ad1ff';
+    const el = document.createElement('div'); el.className = 'it' + (i === UI.editSel ? ' on' : '');
+    el.innerHTML = `<span class="ic" style="background:${colour};opacity:${shape.enabled === false ? .25 : 1}"></span>` +
+      `<span class="nm">${shape.name}</span><button title="visibility">${shape.enabled === false ? '○' : '●'}</button>` +
+      '<button title="duplicate">⧉</button><button title="delete">✕</button>';
+    const [vis, dup, del] = el.querySelectorAll('button');
+    el.onclick = () => { UI.editSel = i; edDraw(); edSidebar(); };
+    vis.onclick = e => { e.stopPropagation(); shape.enabled = shape.enabled === false; edCommit(); };
+    dup.onclick = e => {
+      e.stopPropagation();
+      const copy = ST.normaliseShape(Object.assign(ST.clone(shape), { id: undefined, name: shape.name + ' copy' }), i);
+      copy.points = copy.points.map(([x, y]) => [x + 0.03, y + 0.03]);
+      ly.shapes.splice(i + 1, 0, copy); UI.editSel = i + 1; edCommit();
+    };
+    del.onclick = e => { e.stopPropagation(); ly.shapes.splice(i, 1); UI.editSel = Math.min(UI.editSel, ly.shapes.length - 1); edCommit(); };
+    list.appendChild(el);
+  });
+
+  const props = document.getElementById('edProps'); props.innerHTML = '';
+  const shape = ly.shapes[UI.editSel];
+  if (shape) {
+    const name = document.createElement('div'); name.className = 'row';
+    name.innerHTML = `<label>Name</label><input type="text" value="${shape.name.replace(/"/g, '&quot;')}">`;
+    name.querySelector('input').oninput = e => { shape.name = e.target.value.slice(0, 60); };
+    props.appendChild(name);
+    select(props, 'Role', shape, 'role', ST.ROLES, edCommit);
+    select(props, 'Pitch', shape, 'phase', ['both', '0', '1'], edCommit);
+    check(props, 'Full-width rib', shape, 'continuous', edCommit);
+    if (shape.role === 'cut') slider(props, 'Cut depth (×tread)', shape, 'cutDepth', 0.05, 1, 0.01, v => (+v).toFixed(2), edCommit);
+    else slider(props, 'Crown height', shape, 'heightRatio', 0.05, 1, 0.01, v => (+v).toFixed(2), edCommit);
+    const m = shape.mirror || (shape.mirror = ST.defaultMirror());
+    select(props, 'Mirror', m, 'mode', ST.MIRRORS, edCommit);
+    if (m.mode !== 'none') {
+      slider(props, 'Mirror axis X', m, 'axisX', -0.5, 0.5, 0.005, v => (+v).toFixed(3), edCommit);
+      slider(props, 'Mirror axis Y', m, 'axisY', 0, 1, 0.005, v => (+v).toFixed(3), edCommit);
+      slider(props, 'Mirror offset', m, 'stagger', -0.5, 0.5, 0.005, v => (+v).toFixed(3), edCommit);
+    }
+    const nudge = document.createElement('div'); nudge.className = 'btns';
+    nudge.innerHTML = '<button class="small">Centre across</button><button class="small">Flip across</button>';
+    const [centre, flip] = nudge.querySelectorAll('button');
+    const apply = fn => { Object.assign(shape, ST.transformShape(shape, fn)); edCommit(); };
+    centre.onclick = () => { const cx = shape.points.reduce((a, p) => a + p[0], 0) / shape.points.length; apply(([x, y]) => [x - cx, y]); };
+    flip.onclick = () => {
+      shape.points = shape.points.map(([x, y]) => [-x, y]).reverse();
+      shape.holes = (shape.holes || []).map(h => h.map(([x, y]) => [-x, y]).reverse());
+      shape.sipes = (shape.sipes || []).map(l => l.map(([x, y]) => [-x, y]));
+      edCommit();
+    };
+    props.appendChild(nudge);
+  } else { props.innerHTML = '<div class="hint">No shape selected — pick one from the list or draw a new lug.</div>'; }
+
+  const cell = document.getElementById('edCell'); cell.innerHTML = '';
+  for (const k of ['count', 'reach', 'gap', 'depth', 'sipeWidth', 'sipeDepth']) {
+    const range = BLOCK_RANGES[k] || RANGES[k];
+    slider(cell, LABELS[k] || k, ly, k, ...range, v => (+v).toFixed(range[2] < 1 ? 2 : 0), () => schedule());
+  }
+}
+// Any structural edit redraws the canvas, the shape list and — if the design is sound — the tyre.
+function edCommit() { edDraw(); edSidebar(); if (!ST.invalidShapes(edLayer().shapes).length) schedule(); }
+
+// ---------------------------------------------------------------------------------------------------- pointer
+function edPoint(ev) {
+  const svg = edSvg(), pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+  const q = pt.matrixTransform(svg.getScreenCTM().inverse());
+  return [q.x, q.y];
+}
+function edRing(shape, tag) {
+  if (tag === 'o') return shape.points;
+  return tag[0] === 'h' ? shape.holes[+tag.slice(1)] : shape.sipes[+tag.slice(1)];
+}
+function edFinishDraft() {
+  const ly = edLayer(), draft = ED.draft; ED.draft = null;
+  if (!ly || !draft) return;
+  const shape = ly.shapes[UI.editSel];
+  if (draft.kind === 'pen' && draft.pts.length >= 3) {
+    const made = ST.normaliseShape(Object.assign(ST.newShape('block'), { id: undefined, name: 'Drawn lug', points: draft.pts }), ly.shapes.length);
+    ly.shapes.push(made); UI.editSel = ly.shapes.length - 1;
+  } else if (draft.kind === 'hole' && shape && draft.pts.length >= 3) (shape.holes = shape.holes || []).push(draft.pts);
+  else if (draft.kind === 'sipe' && shape && draft.pts.length >= 2) (shape.sipes = shape.sipes || []).push(draft.pts);
+  edCommit();
+}
+function edSetup() {
+  const svg = edSvg();
+  svg.addEventListener('pointerdown', ev => {
+    const ly = edLayer(); if (!ly) return;
+    ED.free = ev.altKey;
+    const raw = edPoint(ev), p = [edSnap(raw[0]), edSnap(raw[1])];
+    const target = ev.target, tag = target.dataset ? target.dataset.ring : null;
+    if (UI.editTool === 'pen' || UI.editTool === 'hole' || UI.editTool === 'sipe') {
+      if (!ED.draft || ED.draft.kind !== UI.editTool) ED.draft = { kind: UI.editTool, pts: [] };
+      ED.draft.pts.push(p); edDraw(); return;
+    }
+    if (tag) {                                                         // a vertex handle of the selected shape
+      const shape = ly.shapes[UI.editSel], ring = edRing(shape, tag), i = +target.dataset.i;
+      if (UI.editTool === 'erase') {
+        const floor = tag[0] === 's' ? 2 : 3;
+        if (ring.length > floor) ring.splice(i, 1);
+        else if (tag[0] === 'h') shape.holes.splice(+tag.slice(1), 1);
+        else if (tag[0] === 's') shape.sipes.splice(+tag.slice(1), 1);
+        edCommit(); return;
+      }
+      ED.drag = { mode: 'vertex', ring, i }; svg.setPointerCapture(ev.pointerId); return;
+    }
+    const id = target.dataset ? target.dataset.id : null;
+    const hit = id ? ly.shapes.findIndex(s => s.id === id) : -1;
+    if (hit >= 0) {
+      UI.editSel = hit; edSidebar();
+      if (UI.editTool === 'select') { ED.drag = { mode: 'shape', shape: ly.shapes[hit], last: p }; svg.setPointerCapture(ev.pointerId); }
+      edDraw(); return;
+    }
+    UI.editSel = -1; edDraw(); edSidebar();
+  });
+  svg.addEventListener('pointermove', ev => {
+    if (!ED.drag) return;
+    ED.free = ev.altKey;
+    const raw = edPoint(ev), p = [edSnap(raw[0]), edSnap(raw[1])];
+    if (ED.drag.mode === 'vertex') ED.drag.ring[ED.drag.i] = p;
+    else {
+      const dx = p[0] - ED.drag.last[0], dy = p[1] - ED.drag.last[1];
+      if (!dx && !dy) return;
+      ED.drag.last = p; Object.assign(ED.drag.shape, ST.transformShape(ED.drag.shape, ([x, y]) => [x + dx, y + dy]));
+    }
+    edDraw();
+  });
+  svg.addEventListener('pointerup', () => { if (ED.drag) { ED.drag = null; edCommit(); } });
+  svg.addEventListener('dblclick', () => { if (ED.draft) edFinishDraft(); });
+  document.querySelectorAll('#edTools button').forEach(b => b.onclick = () => {
+    UI.editTool = b.dataset.tool; ED.draft = null;
+    document.querySelectorAll('#edTools button').forEach(x => x.classList.toggle('primary', x === b));
+    edDraw();
+  });
+  document.getElementById('edClose').onclick = closeTreadEditor;
+  document.getElementById('edFit').onclick = () => edSvg().setAttribute('viewBox', '-0.68 -0.46 1.36 1.92');
+  document.getElementById('edAddBtn').onclick = () => {
+    const ly = edLayer(); if (!ly) return;
+    ly.shapes.push(ST.normaliseShape(Object.assign(ST.newShape(document.getElementById('edAdd').value), { id: undefined }), ly.shapes.length));
+    UI.editSel = ly.shapes.length - 1; edCommit();
+  };
+  document.getElementById('edLoad').onclick = () => { const ly = edLayer(); if (!ly) return; ly.shapes = ST.designFromLibrary(ly.design); UI.editSel = 0; edCommit(); };
+  document.getElementById('edJson').onclick = () => {
+    const ly = edLayer(); if (!ly) return;
+    dl(`${ly.design}_design.json`, URL.createObjectURL(new Blob([JSON.stringify({ design: ly.design, shapes: ly.shapes }, null, 2)], { type: 'application/json' })));
+    toast('Tread design exported');
+  };
+  window.addEventListener('keydown', ev => {
+    if (UI.editing < 0) return;
+    if (ev.key === 'Enter') { edFinishDraft(); ev.preventDefault(); }
+    else if (ev.key === 'Escape') { if (ED.draft) { ED.draft = null; edDraw(); } else closeTreadEditor(); }
+    else if ((ev.key === 'Delete' || ev.key === 'Backspace') && !/^(INPUT|SELECT|TEXTAREA)$/.test(ev.target.tagName)) {
+      const ly = edLayer(); if (ly && ly.shapes[UI.editSel]) { ly.shapes.splice(UI.editSel, 1); UI.editSel = Math.min(UI.editSel, ly.shapes.length - 1); edCommit(); }
+    }
+  });
+}
 
 // static controls
 document.getElementById('pType').innerHTML = TYPES.map(t => `<option>${t}</option>`).join('');
 document.getElementById('pType').onchange = e => { P.type = e.target.value; schedule(); };
 document.getElementById('pName').oninput = e => { P.name = e.target.value; schedule(); };
 document.getElementById('addLayer').innerHTML = Object.keys(LAYER_DEFS).map(k => `<option value="${k}">${LAYER_DEFS[k].label}</option>`).join('');
-document.getElementById('addLayerBtn').onclick = () => { P.layers.push(L(document.getElementById('addLayer').value)); UI.sel = P.layers.length - 1; buildLayerUI(); schedule(); };
+document.getElementById('addLayerBtn').onclick = () => {
+  const kind = document.getElementById('addLayer').value;
+  P.layers.push(kind === 'blocks' ? blocksLayer('rugged') : L(kind));     // a lug layer is useless without a design
+  UI.sel = P.layers.length - 1; buildLayerUI(); schedule();
+};
 document.getElementById('addDecalBtn').onclick = () => { const decals = decalLayers(); decals.push(newDecal({ name: 'New text decal', text: 'YOUR TEXT', x: 50, y: 50, repeat: false })); UI.decalSel = decals.length - 1; buildDecalUI(); schedule(); };
+document.getElementById('quadsBtn').onclick = e => { UI.quads = !UI.quads; e.target.classList.toggle('primary', UI.quads); if (quadWireframe) quadWireframe.visible = UI.quads; };
 document.getElementById('randomBtn').onclick = () => { randomTyre(); refreshAll(); };
 document.getElementById('randomName').onclick = () => { P.name = randomName(); document.getElementById('pName').value = P.name; schedule(); };
 document.getElementById('wearSlider').oninput = e => { T.wear = +e.target.value; schedule(); };
@@ -1345,9 +2746,37 @@ document.getElementById('exportGlb').onclick = () => {
   const ex = new GLTFExporter(); const g = tyreGroup.clone(); g.remove(...g.children.filter(c => c.isLineSegments)); g.position.set(0, 0, 0); g.scale.setScalar(0.001);
   ex.parse(g, r => { dl(P.name.replace(/\s+/g, '_') + '.glb', URL.createObjectURL(new Blob([r], { type: 'model/gltf-binary' }))); toast('GLB exported (metres)'); }, e => toast('Export failed: ' + e), { binary: true });
 };
-document.getElementById('importJson').onchange = e => { const f = e.target.files[0]; if (!f) return; f.text().then(txt => { const j = JSON.parse(txt); if (j.tyre) Object.assign(T, j.tyre); if (j.rim) Object.assign(R, j.rim); else if (j.tyre) { if (j.tyre.rimMaterial) R.material = j.tyre.rimMaterial; if (j.tyre.rimColor) R.tint = j.tyre.rimColor; if (j.tyre.rimLip) R.lip = j.tyre.rimLip; if (j.tyre.rimWell) R.well = j.tyre.rimWell; } if (j.pattern) { P.name = j.pattern.name; P.type = j.pattern.type; P.layers = j.pattern.layers; P.decals = Array.isArray(j.pattern.decals) ? j.pattern.decals.map(decal => newDecal(decal)) : defaultDecals(); } UI.sel = -1; UI.decalSel = -1; refreshAll(); toast('Imported ' + P.name); }); };
+// OBJ keeps the real quad faces; GLB and the viewport necessarily triangulate them.
+document.getElementById('exportObj').onclick = () => {
+  if (!treadSurface) return toast('Nothing to export yet');
+  const name = P.name.replace(/\s+/g, '_');
+  const chunks = [treadSurface.toOBJ(name + '_tread', 0.001), sidewallSurface.toOBJ(name + '_sidewall', 0.001)];
+  if (rimBarrelSurface) chunks.push(rimBarrelSurface.toOBJ(name + '_rim_barrel', 0.001));
+  // Object blocks are concatenated, so every vertex index after the first needs its block offset.
+  let base = 0, uvBase = 0, nrmBase = 0, out = [];
+  for (const chunk of chunks) {
+    let v = 0, vt = 0, vn = 0;
+    for (const line of chunk.split('\n')) {
+      if (line.startsWith('v ')) { v++; out.push(line); }
+      else if (line.startsWith('vt ')) { vt++; out.push(line); }
+      else if (line.startsWith('vn ')) { vn++; out.push(line); }
+      else if (line.startsWith('f ')) {
+        out.push('f ' + line.slice(2).split(' ').map(ref => {
+          const [a, b, c] = ref.split('/');
+          return `${+a + base}/${+b + uvBase}/${+c + nrmBase}`;
+        }).join(' '));
+      } else if (line.trim()) out.push(line);
+    }
+    base += v; uvBase += vt; nrmBase += vn;
+  }
+  const q = tyreMesh.userData.quads;
+  dl(name + '_quads.obj', URL.createObjectURL(new Blob([out.join('\n') + '\n'], { type: 'text/plain' })));
+  toast(`OBJ exported — ${q.quads} quads, ${q.tris} tris (${Math.round(q.quadRatio * 100)}% quad)`);
+};
+document.getElementById('importJson').onchange = e => { const f = e.target.files[0]; if (!f) return; f.text().then(txt => { const j = JSON.parse(txt); if (j.tyre) Object.assign(T, j.tyre); if (j.rim) Object.assign(R, j.rim); else if (j.tyre) { if (j.tyre.rimMaterial) R.material = j.tyre.rimMaterial; if (j.tyre.rimColor) R.tint = j.tyre.rimColor; if (j.tyre.rimLip) R.lip = j.tyre.rimLip; if (j.tyre.rimWell) R.well = j.tyre.rimWell; } if (j.pattern) { P.name = j.pattern.name; P.type = j.pattern.type; P.layers = (j.pattern.layers || []).map(l => l.type === 'blocks' ? Object.assign(L('blocks'), l, { shapes: (l.shapes || []).map(ST.normaliseShape) }) : l); P.decals = Array.isArray(j.pattern.decals) ? j.pattern.decals.map(decal => newDecal(decal)) : defaultDecals(); } UI.sel = -1; UI.decalSel = -1; refreshAll(); toast('Imported ' + P.name); }); };
 window.addEventListener('keydown', e => { if (e.key === 'r' && !e.target.matches('input,select')) { randomTyre(); refreshAll(); } });
 
+edSetup();
 applyPreset(0);
 </script>
 </body>
