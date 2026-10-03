@@ -1,5 +1,5 @@
 // Slate Fluid — WebGPU edition. Simulation (PBF) and rendering both run on the GPU.
-import { SIM_WGSL, MAX_BALLS, MAX_OBS, CELL_CAP } from './sim.wgsl.js';
+import { SIM_WGSL, MAX_BALLS, MAX_OBS, MAX_NBR } from './sim.wgsl.js';
 import { PARTICLE_WGSL, SCENE_WGSL, SMOOTH_WGSL, BLUR_WGSL, COMPOSITE_WGSL } from './render.wgsl.js';
 
 const SPACING = 0.6, PR = 0.3, BASE_G = 98;
@@ -32,7 +32,7 @@ const FLUIDS = {
   },
 };
 const SCENE_DEFAULT = { dam: 'water', splash: 'milk', ocean: 'water', pour: 'chocolate' };
-const QUALITY = { tiny: 5000, fast: 15000, low: 40000, medium: 100000, high: 200000 };
+const QUALITY = { tiny: 5000, q10k: 10000, fast: 15000, low: 40000, medium: 100000, high: 200000 };
 
 // ------------------------------------------------------------------ init
 if (!navigator.gpu) fail('WebGPU is not available in this browser.<br>Use Chrome/Edge 113+ (desktop) or open <a href="legacy.html">the WebGL/CPU version</a>.');
@@ -73,19 +73,19 @@ function bgl(entries) {
 }
 const VF = S.VERTEX | S.FRAGMENT, F = S.FRAGMENT, V = S.VERTEX, C = S.COMPUTE;
 const L = {
-  sim: bgl([[C, 'u'], [C, 's'], [C, 's'], [C, 's'], [C, 's'], [C, 's'], [C, 's'], [C, 's']]),
+  sim: bgl([[C, 'u'], [C, 's'], [C, 's'], [C, 's'], [C, 's'], [C, 's'], [C, 's'], [C, 's'], [C, 's']]),
   part: bgl([[VF, 'u'], [V, 'r'], [V, 'r'], [F, 't']]),
   scene: bgl([[VF, 'u'], [VF, 'r'], [VF, 'r'], [F, 't'], [F, 't', 'float'], [F, 'p'], [F, 'u']]),
   smooth: bgl([[F, 'u'], [F, 't'], [F, 'u']]),
   blur: bgl([[F, 't'], [F, 'u']]),
-  comp: bgl([[F, 'u'], [F, 'u'], [F, 't', 'float'], [F, 't'], [F, 't'], [F, 't'], [F, 't'], [F, 't', 'float'], [F, 'p']]),
+  comp: bgl([[F, 'u'], [F, 'u'], [F, 't', 'float'], [F, 't'], [F, 't', 'float'], [F, 't'], [F, 't'], [F, 't', 'float'], [F, 'p']]),
 };
 const pl = (l) => device.createPipelineLayout({ bindGroupLayouts: [l] });
 
 // ------------------------------------------------------------------ pipelines
 const simMod = mod(SIM_WGSL);
 const simPipes = {};
-for (const ep of ['ballPredict', 'ballFinalize', 'clearGrid', 'predict', 'insert', 'lambda', 'delta', 'copyPred', 'velocity', 'viscosity', 'copyVel', 'finalize'])
+for (const ep of ['ballPredict', 'ballFinalize', 'clearGrid', 'countPred', 'countPos', 'scanBlocks', 'scanSums', 'addSums', 'scatterIdx', 'scatterData', 'copyBack', 'buildNbrs', 'predict', 'lambda', 'delta', 'copyPred', 'velocity', 'viscosity', 'copyVel', 'finalize'])
   simPipes[ep] = device.createComputePipeline({ layout: pl(L.sim), compute: { module: simMod, entryPoint: ep } });
 
 const partMod = mod(PARTICLE_WGSL), sceneMod = mod(SCENE_WGSL), smoothMod = mod(SMOOTH_WGSL), blurMod = mod(BLUR_WGSL), compMod = mod(COMPOSITE_WGSL);
@@ -178,7 +178,7 @@ const TS = (t, s) => [s[0], 0, 0, 0, 0, s[1], 0, 0, 0, 0, s[2], 0, t[0], t[1], t
 const SUN = norm([0.42, 0.82, 0.38]);
 
 // ------------------------------------------------------------------ state
-const state = { scene: 'dam', fluid: 'water', quality: 'tiny', paused: false, view: 'fluid', smooth: 3, ballSize: 2.2, ballDensity: 2.0, keep: false, slowmo: 1 };
+const state = { scene: 'dam', fluid: 'water', quality: 'q10k', fluidRes: 0.75, paused: false, view: 'fluid', smooth: 3, ballSize: 2.2, ballDensity: 2.0, keep: false, slowmo: 1 };
 const cam = { yaw: -0.55, pitch: 0.42, dist: 60, target: [20, 6, 7], fov: 45 * Math.PI / 180 };
 let SC = null;           // current scene description
 let sim = null;          // GPU sim resources
@@ -249,8 +249,8 @@ function buildScene(name, target) {
 const RHO0 = (() => { let s = 0; for (let i = -3; i <= 3; i++) for (let j = -3; j <= 3; j++) for (let k = -3; k <= 3; k++) { const r2 = (i * i + j * j + k * k) * SPACING * SPACING; if (r2 < 1) s += 1.5666814 * (1 - r2) ** 3; } return s; })();
 
 // ------------------------------------------------------------------ GPU sim resources
-const paramsBuf = buf(352, U.UNIFORM | U.COPY_DST);
-const paramsAB = new ArrayBuffer(352), pF = new Float32Array(paramsAB), pU = new Uint32Array(paramsAB);
+const paramsBuf = buf(368, U.UNIFORM | U.COPY_DST);
+const paramsAB = new ArrayBuffer(368), pF = new Float32Array(paramsAB), pU = new Uint32Array(paramsAB);
 const worldBuf = buf(400, U.STORAGE | U.COPY_DST);
 const camBuf = buf(384, U.UNIFORM | U.COPY_DST);
 const camF = new Float32Array(96);
@@ -271,11 +271,16 @@ function createSim(sc) {
   const cells = gx * gy * gz;
   const mk = (n) => buf(n, U.STORAGE | U.COPY_DST | U.VERTEX);
   const pos = mk(M * 16), vel = mk(M * 16), pred = mk(M * 16), tmp = mk(M * 16);
-  const gridCount = mk(cells * 4), gridIdx = mk(cells * CELL_CAP * 4);
+  const blocks = Math.ceil(cells / 256);
+  const offs = [cells + 1, cells + 1 + blocks, M * MAX_NBR, cells + 1];   // blockSums, sortedIdx, nbr counts, max-speed slot
+  const cellCount = buf((cells + 2) * 4, U.STORAGE | U.COPY_DST | U.COPY_SRC);
+  const scan = mk((cells + 1 + blocks + M) * 4);
+  const nbr = mk(M * (MAX_NBR + 1) * 4);
   const simBG = device.createBindGroup({
-    layout: L.sim, entries: [paramsBuf, pos, vel, pred, tmp, gridCount, gridIdx, worldBuf].map((b, i) => ({ binding: i, resource: { buffer: b } })),
+    layout: L.sim, entries: [paramsBuf, pos, vel, pred, tmp, cellCount, scan, worldBuf, nbr].map((b, i) => ({ binding: i, resource: { buffer: b } })),
   });
-  sim = { pos, vel, pred, tmp, gridCount, gridIdx, simBG, cells, gx, gy, gz, buffers: [pos, vel, pred, tmp, gridCount, gridIdx] };
+  sim = { pos, vel, pred, tmp, cellCount, scan, nbr, simBG, cells, blocks, offs, gx, gy, gz, buffers: [pos, vel, pred, tmp, cellCount, scan, nbr] };
+  speed.max = 0; speed.pending = false;
   // initial particles
   N = sc.initial.length / 3;
   const P4 = new Float32Array(N * 4);
@@ -301,7 +306,7 @@ const ballDensities = new Array(MAX_BALLS).fill(2);
 
 function writeParams() {
   const sc = SC, f = FLUIDS[state.fluid].sim;
-  const dt = (1 / 60) / sc.substeps * state.slowmo;
+  const dt = (1 / 60) / curSub * state.slowmo;
   pF.set([sc.W, sc.H, sc.D, PR], 0);
   pU.set([sim.gx, sim.gy, sim.gz, N], 4);
   pF.set([dt, sc.g, RHO0, 0.35], 8);
@@ -309,6 +314,7 @@ function writeParams() {
   pF.set([f.yld * sc.s, 0.004, sc.paddle ? sc.paddle.base : 0, sc.paddle ? sc.paddle.amp : 0], 16);
   pF.set([sc.paddle ? sc.paddle.period : 0, numBalls, sc.obstacles.length, f.foam], 20);
   for (let k = 0; k < MAX_OBS * 2; k++) pF.set([0, 0, 0, 0], 24 + k * 4);
+  pU.set(sim.offs, 88);
   sc.obstacles.slice(0, MAX_OBS).forEach((o, k) => {
     const a = 24 + k * 8;
     if (o.type === 'sphere') { pF.set([0, ...o.c], a); pF.set([o.r, 0, 0, 0], a + 4); }
@@ -343,16 +349,20 @@ let RT = null, Wpx = 0, Hpx = 0;
 function resize() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const w = Math.max(1, Math.floor(canvas.clientWidth * dpr)), h = Math.max(1, Math.floor(canvas.clientHeight * dpr));
-  if (RT && w === Wpx && h === Hpx) return;
+  if (RT && w === Wpx && h === Hpx && RT.res === state.fluidRes) return;
   Wpx = w; Hpx = h; canvas.width = w; canvas.height = h;
   if (RT) for (const t of RT.all) t.destroy();
   const tex = (format, usage = T.RENDER_ATTACHMENT | T.TEXTURE_BINDING) => device.createTexture({ size: [w, h], format, usage });
+  // fluid surface buffers at reduced resolution (resolution spent where it matters; composite upsamples)
+  const fw = Math.max(1, Math.round(w * state.fluidRes)), fh = Math.max(1, Math.round(h * state.fluidRes));
+  const ftex = (format, usage = T.RENDER_ATTACHMENT | T.TEXTURE_BINDING) => device.createTexture({ size: [fw, fh], format, usage });
   RT = {
     sceneColor: tex('rgba16float'), sceneLin: tex('r32float'), sceneZ: tex('depth24plus', T.RENDER_ATTACHMENT),
-    fDepthA: tex('r32float'), fDepthB: tex('r32float'), fluidZ: tex('depth24plus', T.RENDER_ATTACHMENT),
-    thickA: tex('rgba16float'), thickB: tex('rgba16float'),
+    fDepthA: ftex('r32float'), fDepthB: ftex('r32float'), fluidZ: ftex('depth24plus', T.RENDER_ATTACHMENT),
+    thickA: ftex('rgba16float'), thickB: ftex('rgba16float'),
   };
   RT.all = Object.values(RT);
+  RT.res = state.fluidRes;
   rebuildBindGroups();
 }
 
@@ -445,11 +455,11 @@ function writeCamera(time) {
   camF.set([SC.W, SC.H, SC.D, SC.paddle ? 1 : 0], 76);
   camF.set([...lo, LIGHT_RES], 80);
   camF.set([lview[0], lview[4], lview[8], R], 84);
-  camF.set([lview[1], lview[5], lview[9], 0], 88);
+  camF.set([lview[1], lview[5], lview[9], RT.res], 88);
   device.queue.writeBuffer(camBuf, 0, camF);
   const lk = FLUIDS[state.fluid].look;
   device.queue.writeBuffer(matBuf, 0, new Float32Array([...lk.base, ...lk.absorb, ...lk.scatter, ...lk.p0, ...lk.p1]));
-  const r = PR * 3.0, fall = PR * 2.2;
+  const r = PR * 3.0 * state.fluidRes, fall = PR * 2.2;
   device.queue.writeBuffer(dirBufs[0], 0, new Float32Array([1, 0, r, fall]));
   device.queue.writeBuffer(dirBufs[1], 0, new Float32Array([0, 1, r, fall]));
   device.queue.writeBuffer(dirBufs[2], 0, new Float32Array([1, 0, 1.5, 0]));
@@ -458,18 +468,34 @@ function writeCamera(time) {
 const RENDER_SCALE = 1.5;
 
 // ------------------------------------------------------------------ frame
+// adaptive temporal resolution: substeps follow the measured max speed (CFL), read back asynchronously
+const speed = { max: 0, pending: false, staging: device.createBuffer({ size: 4, usage: U.MAP_READ | U.COPY_DST }) };
+let curSub = 2;
+function chooseSubsteps() {
+  const dtFrame = (1 / 60) * state.slowmo;
+  const cfl = Math.ceil(speed.max * dtFrame / (0.5 * 1.0));      // move at most ~0.5 h per substep
+  curSub = Math.min(SC.substeps + 1, Math.max(1, cfl));
+}
 function encodeSim(enc) {
   const f = FLUIDS[state.fluid].sim;
+  device.queue.writeBuffer(sim.cellCount, sim.offs[3] * 4, new Uint32Array([0]));
   const pass = enc.beginComputePass();
   pass.setBindGroup(0, sim.simBG);
   const wg = Math.ceil(N / 128), wgCells = Math.ceil(sim.cells / 256);
   const run = (name, n) => { pass.setPipeline(simPipes[name]); pass.dispatchWorkgroups(n); };
-  for (let s = 0; s < SC.substeps; s++) {
+  const sortBy = (countPass, scatterPass) => {
+    run('clearGrid', wgCells); run(countPass, wg);
+    run('scanBlocks', sim.blocks); run('scanSums', 1); run('addSums', wgCells);
+    run('clearGrid', wgCells); run(scatterPass, wg);
+  };
+  // amortised: physically reorder particle storage by cell once per frame (memory coherence)
+  sortBy('countPos', 'scatterData'); run('copyBack', wg);
+  const iters = curSub === 1 ? f.iters + 1 : (curSub >= 4 ? 3 : f.iters);
+  for (let s = 0; s < curSub; s++) {
     run('ballPredict', 1);
-    run('clearGrid', wgCells);
     run('predict', wg);
-    run('insert', wg);
-    const iters = SC.substeps >= 4 ? 3 : f.iters;
+    sortBy('countPred', 'scatterIdx');
+    run('buildNbrs', wg);                       // one neighbour list, reused by every loop below
     for (let it = 0; it < iters; it++) { run('lambda', wg); run('delta', wg); run('copyPred', wg); }
     run('velocity', wg);
     for (let v = 0; v < f.passes; v++) { run('viscosity', wg); run('copyVel', wg); }
@@ -477,6 +503,16 @@ function encodeSim(enc) {
     run('ballFinalize', 1);
   }
   pass.end();
+  if (!speed.pending) enc.copyBufferToBuffer(sim.cellCount, sim.offs[3] * 4, speed.staging, 0, 4);
+}
+function readSpeed() {
+  if (speed.pending) return;
+  speed.pending = true;
+  const st = speed.staging;
+  st.mapAsync(GPUMapMode.READ).then(() => {
+    speed.max = new Float32Array(st.getMappedRange().slice(0))[0] || 0;
+    st.unmap(); speed.pending = false;
+  }).catch(() => { speed.pending = false; });
 }
 const view_ = (t) => t.createView();
 function drawGeo(pass, d) {
@@ -545,13 +581,16 @@ function frame(now) {
   fps = fps * 0.95 + 0.05 / Math.max(dt, 1e-3);
   resize();
   if (!state.paused) emit(1 / 60);
+  chooseSubsteps();
   writeParams();
   writeCamera((now - t0) / 1000);
   const enc = device.createCommandEncoder();
+  const simmed = !state.paused && N > 0 && !speed.pending;
   if (!state.paused && N > 0) encodeSim(enc);
   encodeRender(enc);
   device.queue.submit([enc.finish()]);
-  statsEl.textContent = `GPU · ${N.toLocaleString()} particles · ${SC.substeps} substeps · ${fps.toFixed(0)} fps · ${Wpx}×${Hpx}`;
+  if (simmed) readSpeed();
+  statsEl.textContent = `GPU · ${N.toLocaleString()} particles · ${curSub} substeps (max v ${speed.max.toFixed(0)}) · ${fps.toFixed(0)} fps · ${Wpx}×${Hpx}`;
   requestAnimationFrame(frame);
 }
 
@@ -620,6 +659,7 @@ const bindRange = (id, key, fmt = v => v) => {
 bindRange('ballSize', 'ballSize', v => v.toFixed(1));
 bindRange('ballDensity', 'ballDensity', v => v.toFixed(1) + (v < 1 ? ' (floats)' : ' (sinks)'));
 bindRange('smooth', 'smooth');
+bindRange('fluidRes', 'fluidRes', v => Math.round(v * 100) + '%');
 bindRange('slowmo', 'slowmo', v => v.toFixed(2) + '×');
 document.getElementById('keepMat').onchange = e => { state.keep = e.target.checked; };
 window.addEventListener('keydown', e => {

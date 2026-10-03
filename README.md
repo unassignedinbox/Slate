@@ -37,3 +37,14 @@ python3 -m http.server 8080   # then open http://localhost:8080
 - **Click** to throw a ball where you aim. Use the sliders to set its size and density, which decides whether it floats or sinks.
 - Scenes: dam break, splash, ocean break (wave paddle with a beach ramp and a pier post), pour/coat.
 - `P` switches to a particle view, `R` resets, `Space` pauses.
+
+## GPU performance techniques (WebGPU build)
+- **Neighbourhood search** (based on Fernández-Fernández et al., *Fast Octree Neighborhood Search for SPH*, SIGGRAPH Asia 2022). The octree in the paper is a CPU design, so these are the parts adapted for the GPU:
+  - Particles are sorted into grid cells with a counting sort: count, then a 3-pass prefix scan, then scatter. There's no per-cell limit anymore; the old fixed-size buckets could drop neighbours.
+  - Each particle gets **one neighbour list per substep**. Every solver loop reuses it: all density/λ iterations, all position-correction iterations and all viscosity passes. Before, each of those loops searched 27 grid cells again.
+  - The three cells next to each other along x are contiguous in the sorted array, so they're scanned as one range. That's 9 ranges per particle instead of 27 cells.
+  - **Amortised reordering:** particle data is physically re-sorted by cell once per frame, not every substep, so neighbours sit close together in memory.
+- **Adaptivity** (based on the sizing-function idea in Ando, Thürey & Wojtan, *Highly Adaptive Liquid Simulations on Tetrahedral Meshes*, SIGGRAPH 2013). The tetrahedral FLIP solver itself is a different method and isn't ported. Two ideas are borrowed:
+  - *Adaptive time steps:* the GPU tracks the fluid's maximum speed (read back asynchronously). Substeps per frame are set so particles move at most about 0.5 h per step, so calm fluid costs 1 step per frame.
+  - *Adaptive surface resolution:* fluid depth, thickness and smoothing passes run at a lower resolution ("Fluid resolution" slider, default 75%), and the final shading pass scales them back up.
+- The default quality is 10k particles. Presets go from 5k to 200k.

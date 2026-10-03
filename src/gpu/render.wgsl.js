@@ -10,7 +10,7 @@ struct Cam {
   dims: vec4f,    // W, H, D, paddle enabled
   lightO: vec4f,  // light origin, shadow map size
   lightR: vec4f,  // light right axis, ortho half extent
-  lightU: vec4f,  // light up axis
+  lightU: vec4f,  // light up axis, w = fluid render scale
 }
 struct Mat {
   base: vec4f,     // albedo rgb, opacity (scattering extinction)
@@ -69,6 +69,8 @@ fn ggx(n: vec3f, v: vec3f, l: vec3f, rough: f32) -> f32 {
   return D * G / (4.0 * nv) ;
 }
 // distance of p from the light plane, along -SUN_DIR (matches the light depth map)
+// scene-resolution pixel for a fluid-resolution fragment
+fn scenePx(fluidPx: vec2f, c: Cam) -> vec2i { return vec2i(fluidPx / c.lightU.w); }
 fn lightDist(p: vec3f, c: Cam) -> f32 { return dot(c.lightO.xyz - p, normalize(SUN_DIR)); }
 fn lightUV(p: vec3f, c: Cam) -> vec2f {
   let q = c.lightVP * vec4f(p, 1.0);
@@ -146,7 +148,7 @@ struct DepthOut { @location(0) d: f32, @builtin(frag_depth) fd: f32 }
   if (r2 > 1.0) { discard; }
   let r = cam.misc.x;
   let pe = i.eyeC + vec3f(i.uv, sqrt(1.0 - r2)) * r;
-  let sd = textureLoad(sceneLin, vec2i(i.clip.xy), 0).r;
+  let sd = textureLoad(sceneLin, min(scenePx(i.clip.xy, cam), vec2i(textureDimensions(sceneLin)) - vec2i(1)), 0).r;
   if (-pe.z > sd) { discard; }
   let cp = cam.proj * vec4f(pe, 1.0);
   var o: DepthOut;
@@ -160,7 +162,7 @@ struct DepthOut { @location(0) d: f32, @builtin(frag_depth) fd: f32 }
   if (r2 > 1.0) { discard; }
   let r = cam.misc.x;
   let z = sqrt(1.0 - r2);
-  let sd = textureLoad(sceneLin, vec2i(i.clip.xy), 0).r;
+  let sd = textureLoad(sceneLin, min(scenePx(i.clip.xy, cam), vec2i(textureDimensions(sceneLin)) - vec2i(1)), 0).r;
   if (-i.eyeC.z - z * r > sd) { discard; }
   let t = 2.0 * z * r * exp(-r2 * 1.6);
   // whitewater: explicit foam attribute + sparse spray particles
@@ -427,21 +429,23 @@ fn finish(c: vec3f) -> vec4f {
   let res = vec2f(textureDimensions(sceneColor));
   let uv = fc.xy / res;
   let bg = textureLoad(sceneColor, ic, 0).rgb;
-  let d = textureLoad(fluidDepth, ic, 0).r;
+  let fsz = vec2i(textureDimensions(fluidDepth));
+  let fic = min(vec2i(fc.xy * cam.lightU.w), fsz - vec2i(1));   // fluid buffers may be lower resolution
+  let d = textureLoad(fluidDepth, fic, 0).r;
   if (d > 1e5 || cam.misc.w < 0.5) { return finish(bg); }
 
   // ---- reconstruct the surface
-  let P = eyePos(ic);
-  var ddx = eyePos(ic + vec2i(1, 0)) - P;
-  let ddx2 = P - eyePos(ic - vec2i(1, 0));
+  let P = eyePos(fic);
+  var ddx = eyePos(fic + vec2i(1, 0)) - P;
+  let ddx2 = P - eyePos(fic - vec2i(1, 0));
   if (abs(ddx2.z) < abs(ddx.z)) { ddx = ddx2; }
-  var ddy = eyePos(ic - vec2i(0, 1)) - P;
-  let ddy2 = P - eyePos(ic + vec2i(0, 1));
+  var ddy = eyePos(fic - vec2i(0, 1)) - P;
+  let ddy2 = P - eyePos(fic + vec2i(0, 1));
   if (abs(ddy2.z) < abs(ddy.z)) { ddy = ddy2; }
   var nE = normalize(cross(ddx, ddy));
   if (nE.z < 0.0) { nE = -nE; }
 
-  let th = textureLoad(thick, ic, 0);
+  let th = textureSampleLevel(thick, samp, uv, 0.0);
   let T = th.r;
   let foamT = th.g;
   let R = mat3x3f(cam.invView[0].xyz, cam.invView[1].xyz, cam.invView[2].xyz);

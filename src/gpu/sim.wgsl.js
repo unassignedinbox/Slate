@@ -2,7 +2,7 @@
 // One bind group (8 bindings) shared by every entry point.
 export const MAX_BALLS = 8;
 export const MAX_OBS = 8;
-export const CELL_CAP = 24;
+export const MAX_NBR = 48;     // neighbour list capacity per particle
 
 export const SIM_COMMON = /* wgsl */`
 struct Params {
@@ -13,6 +13,7 @@ struct Params {
   mat1: vec4f,   // yield, kcorr, paddleBase, paddleAmp
   misc: vec4f,   // paddlePeriod (0 = none), numBalls, numObstacles, foam (0/1)
   obs: array<vec4f, ${MAX_OBS * 2}>,
+  offs: vec4u,   // scan buffer: blockSums offset, sortedIdx offset, nbr count offset, maxSpeed slot
 }
 struct Ball { p: vec4f, v: vec4f }   // p.w = radius, v.w = mass
 `;
@@ -36,14 +37,15 @@ export const SIM_WGSL = SIM_COMMON + WORLD_RW + /* wgsl */`
 @group(0) @binding(2) var<storage, read_write> vel: array<vec4f>;   // xyz, foam
 @group(0) @binding(3) var<storage, read_write> pred: array<vec4f>;  // predicted xyz, lambda
 @group(0) @binding(4) var<storage, read_write> tmp: array<vec4f>;
-@group(0) @binding(5) var<storage, read_write> gridCount: array<atomic<u32>>;
-@group(0) @binding(6) var<storage, read_write> gridIdx: array<u32>;
+@group(0) @binding(5) var<storage, read_write> cellCount: array<atomic<u32>>;  // per-cell count, reused as scatter cursor (+ max speed slot at the end)
+@group(0) @binding(6) var<storage, read_write> scan: array<u32>;               // [cellStart (cells+1) | blockSums | sortedIdx]
+@group(0) @binding(8) var<storage, read_write> nbr: array<u32>;                // [neighbour lists (N*MAX_NBR) | counts (N)]
 @group(0) @binding(7) var<storage, read_write> world: World;
 
 const POLY6: f32 = 1.5666814;      // 315 / (64 pi), h = 1
 const SPIKY: f32 = -14.323944;     // -45 / pi
 const W_DQ: f32 = 1.4762071;       // POLY6 * (1 - 0.2^2)^3
-const CAP: u32 = ${CELL_CAP}u;
+const MAXN: u32 = ${MAX_NBR}u;
 const IMP: f32 = 100000.0;
 
 fn cellOf(p: vec3f) -> vec3i {
@@ -171,10 +173,113 @@ fn ballFinalize() {
 }
 
 // ---------------------------------------------------------------- particles
+// ---------------------------------------------------------------- neighbourhood search
+// Counting sort of particles into h-sized cells (count -> 3-pass prefix scan -> scatter), then ONE neighbour list
+// per particle per substep that every solver loop reuses (Fernández-Fernández et al. 2022: amortise the
+// acceleration structure, keep the hot loops on a compact, coherent pair list). Particle storage itself is
+// physically re-ordered by cell once per frame (amortised z/cell sort for memory coherence).
+fn numCells() -> u32 { return P.grid.x * P.grid.y * P.grid.z; }
+
 @compute @workgroup_size(256)
 fn clearGrid(@builtin(global_invocation_id) id: vec3u) {
-  let n = P.grid.x * P.grid.y * P.grid.z;
-  if (id.x < n) { atomicStore(&gridCount[id.x], 0u); }
+  if (id.x < numCells()) { atomicStore(&cellCount[id.x], 0u); }
+}
+@compute @workgroup_size(128)
+fn countPred(@builtin(global_invocation_id) id: vec3u) {
+  if (id.x >= P.grid.w) { return; }
+  atomicAdd(&cellCount[cellId(cellOf(pred[id.x].xyz))], 1u);
+}
+@compute @workgroup_size(128)
+fn countPos(@builtin(global_invocation_id) id: vec3u) {
+  if (id.x >= P.grid.w) { return; }
+  atomicAdd(&cellCount[cellId(cellOf(pos[id.x].xyz))], 1u);
+}
+
+var<workgroup> sh: array<u32, 256>;
+@compute @workgroup_size(256)
+fn scanBlocks(@builtin(global_invocation_id) g: vec3u, @builtin(local_invocation_id) l: vec3u, @builtin(workgroup_id) w: vec3u) {
+  let n = numCells();
+  var v = 0u;
+  if (g.x < n) { v = atomicLoad(&cellCount[g.x]); }
+  sh[l.x] = v;
+  workgroupBarrier();
+  for (var off = 1u; off < 256u; off = off * 2u) {
+    var t = 0u;
+    if (l.x >= off) { t = sh[l.x - off]; }
+    workgroupBarrier();
+    sh[l.x] = sh[l.x] + t;
+    workgroupBarrier();
+  }
+  if (g.x < n) { scan[g.x] = sh[l.x] - v; }
+  if (l.x == 255u) { scan[P.offs.x + w.x] = sh[255]; }
+}
+@compute @workgroup_size(1)
+fn scanSums() {
+  let nb = (numCells() + 255u) / 256u;
+  var run = 0u;
+  for (var b = 0u; b < nb; b++) {
+    let v = scan[P.offs.x + b];
+    scan[P.offs.x + b] = run;
+    run += v;
+  }
+  scan[numCells()] = run;
+}
+@compute @workgroup_size(256)
+fn addSums(@builtin(global_invocation_id) g: vec3u) {
+  if (g.x < numCells()) { scan[g.x] += scan[P.offs.x + g.x / 256u]; }
+}
+@compute @workgroup_size(128)
+fn scatterIdx(@builtin(global_invocation_id) id: vec3u) {
+  let i = id.x;
+  if (i >= P.grid.w) { return; }
+  let c = cellId(cellOf(pred[i].xyz));
+  let slot = scan[c] + atomicAdd(&cellCount[c], 1u);
+  scan[P.offs.y + slot] = i;
+}
+// once per frame: physically reorder pos/vel by cell (tmp <- pos, pred <- vel), then copy back
+@compute @workgroup_size(128)
+fn scatterData(@builtin(global_invocation_id) id: vec3u) {
+  let i = id.x;
+  if (i >= P.grid.w) { return; }
+  let c = cellId(cellOf(pos[i].xyz));
+  let slot = scan[c] + atomicAdd(&cellCount[c], 1u);
+  tmp[slot] = pos[i];
+  pred[slot] = vel[i];
+}
+@compute @workgroup_size(128)
+fn copyBack(@builtin(global_invocation_id) id: vec3u) {
+  if (id.x >= P.grid.w) { return; }
+  pos[id.x] = tmp[id.x];
+  vel[id.x] = pred[id.x];
+}
+@compute @workgroup_size(128)
+fn buildNbrs(@builtin(global_invocation_id) id: vec3u) {
+  let i = id.x;
+  if (i >= P.grid.w) { return; }
+  let pi = pred[i].xyz;
+  let c0 = cellOf(pi);
+  let g = vec3i(P.grid.xyz);
+  var cnt = 0u;
+  let base = i * MAXN;
+  for (var dz = -1; dz <= 1; dz++) {
+    for (var dy = -1; dy <= 1; dy++) {
+      let cy = c0.y + dy;
+      let cz = c0.z + dz;
+      if (cy < 0 || cy >= g.y || cz < 0 || cz >= g.z) { continue; }
+      // the three x-adjacent cells are contiguous in the sorted index array: one range, no per-cell overhead
+      let x0 = max(c0.x - 1, 0);
+      let x1 = min(c0.x + 1, g.x - 1);
+      let s = scan[cellId(vec3i(x0, cy, cz))];
+      let e = scan[cellId(vec3i(x1, cy, cz)) + 1u];
+      for (var k = s; k < e; k++) {
+        let j = scan[P.offs.y + k];
+        if (j == i) { continue; }
+        let d = pi - pred[j].xyz;
+        if (dot(d, d) < 1.0 && cnt < MAXN) { nbr[base + cnt] = j; cnt++; }
+      }
+    }
+  }
+  nbr[P.offs.z + i] = cnt;
 }
 
 @compute @workgroup_size(128)
@@ -189,15 +294,6 @@ fn predict(@builtin(global_invocation_id) id: vec3u) {
 }
 
 @compute @workgroup_size(128)
-fn insert(@builtin(global_invocation_id) id: vec3u) {
-  let i = id.x;
-  if (i >= P.grid.w) { return; }
-  let c = cellId(cellOf(pred[i].xyz));
-  let k = atomicAdd(&gridCount[c], 1u);
-  if (k < CAP) { gridIdx[c * CAP + k] = i; }
-}
-
-@compute @workgroup_size(128)
 fn lambda(@builtin(global_invocation_id) id: vec3u) {
   let i = id.x;
   if (i >= P.grid.w) { return; }
@@ -206,32 +302,21 @@ fn lambda(@builtin(global_invocation_id) id: vec3u) {
   var rho = POLY6;
   var gs = vec3f(0.0);
   var sg2 = 0.0;
-  let c0 = cellOf(pi);
-  let g = vec3i(P.grid.xyz);
-  for (var dz = -1; dz <= 1; dz++) {
-    for (var dy = -1; dy <= 1; dy++) {
-      for (var dx = -1; dx <= 1; dx++) {
-        let c = c0 + vec3i(dx, dy, dz);
-        if (any(c < vec3i(0)) || any(c >= g)) { continue; }
-        let cid = cellId(c);
-        let cnt = min(atomicLoad(&gridCount[cid]), CAP);
-        for (var k = 0u; k < cnt; k++) {
-          let j = gridIdx[cid * CAP + k];
-          if (j == i) { continue; }
-          let d = pi - pred[j].xyz;
-          let r2 = dot(d, d);
-          if (r2 >= 1.0) { continue; }
-          let w = 1.0 - r2;
-          rho += POLY6 * w * w * w;
-          let r = sqrt(r2);
-          if (r > 1e-5) {
-            let hr = 1.0 - r;
-            let gr = d * (SPIKY * hr * hr / (r * rho0));
-            gs += gr;
-            sg2 += dot(gr, gr);
-          }
-        }
-      }
+  let nbase = i * MAXN;
+  let ncnt = nbr[P.offs.z + i];
+  for (var k = 0u; k < ncnt; k++) {
+    let j = nbr[nbase + k];
+    let d = pi - pred[j].xyz;
+    let r2 = dot(d, d);
+    if (r2 >= 1.0) { continue; }
+    let w = 1.0 - r2;
+    rho += POLY6 * w * w * w;
+    let r = sqrt(r2);
+    if (r > 1e-5) {
+      let hr = 1.0 - r;
+      let gr = d * (SPIKY * hr * hr / (r * rho0));
+      gs += gr;
+      sg2 += dot(gr, gr);
     }
   }
   let ratio = rho / rho0;
@@ -250,33 +335,22 @@ fn delta(@builtin(global_invocation_id) id: vec3u) {
   let rho0 = P.phys.z;
   let kc = P.mat1.y;
   var dp = vec3f(0.0);
-  let c0 = cellOf(pi);
-  let g = vec3i(P.grid.xyz);
-  for (var dz = -1; dz <= 1; dz++) {
-    for (var dy = -1; dy <= 1; dy++) {
-      for (var dx = -1; dx <= 1; dx++) {
-        let c = c0 + vec3i(dx, dy, dz);
-        if (any(c < vec3i(0)) || any(c >= g)) { continue; }
-        let cid = cellId(c);
-        let cnt = min(atomicLoad(&gridCount[cid]), CAP);
-        for (var k = 0u; k < cnt; k++) {
-          let j = gridIdx[cid * CAP + k];
-          if (j == i) { continue; }
-          let pj = pred[j];
-          let d = pi - pj.xyz;
-          let r2 = dot(d, d);
-          if (r2 >= 1.0) { continue; }
-          let r = sqrt(r2);
-          if (r < 1e-5) { continue; }
-          let w = 1.0 - r2;
-          let wr = POLY6 * w * w * w / W_DQ;
-          let wr2 = wr * wr;
-          let scorr = -kc * wr2 * wr2;
-          let hr = 1.0 - r;
-          dp += d * ((li + pj.w + scorr) * SPIKY * hr * hr / (r * rho0));
-        }
-      }
-    }
+  let nbase = i * MAXN;
+  let ncnt = nbr[P.offs.z + i];
+  for (var k = 0u; k < ncnt; k++) {
+    let j = nbr[nbase + k];
+    let pj = pred[j];
+    let d = pi - pj.xyz;
+    let r2 = dot(d, d);
+    if (r2 >= 1.0) { continue; }
+    let r = sqrt(r2);
+    if (r < 1e-5) { continue; }
+    let w = 1.0 - r2;
+    let wr = POLY6 * w * w * w / W_DQ;
+    let wr2 = wr * wr;
+    let scorr = -kc * wr2 * wr2;
+    let hr = 1.0 - r;
+    dp += d * ((li + pj.w + scorr) * SPIKY * hr * hr / (r * rho0));
   }
   var p = pi + dp;
   // obstacles
@@ -331,27 +405,16 @@ fn viscosity(@builtin(global_invocation_id) id: vec3u) {
   let vi = vel[i];
   var acc = vec3f(0.0);
   var ws = 0.0;
-  let c0 = cellOf(pi);
-  let g = vec3i(P.grid.xyz);
-  for (var dz = -1; dz <= 1; dz++) {
-    for (var dy = -1; dy <= 1; dy++) {
-      for (var dx = -1; dx <= 1; dx++) {
-        let c = c0 + vec3i(dx, dy, dz);
-        if (any(c < vec3i(0)) || any(c >= g)) { continue; }
-        let cid = cellId(c);
-        let cnt = min(atomicLoad(&gridCount[cid]), CAP);
-        for (var k = 0u; k < cnt; k++) {
-          let j = gridIdx[cid * CAP + k];
-          if (j == i) { continue; }
-          let d = pi - pred[j].xyz;
-          let r2 = dot(d, d);
-          if (r2 >= 1.0) { continue; }
-          let w = (1.0 - r2) * (1.0 - r2) * (1.0 - r2);
-          acc += (vel[j].xyz - vi.xyz) * w;
-          ws += w;
-        }
-      }
-    }
+  let nbase = i * MAXN;
+  let ncnt = nbr[P.offs.z + i];
+  for (var k = 0u; k < ncnt; k++) {
+    let j = nbr[nbase + k];
+    let d = pi - pred[j].xyz;
+    let r2 = dot(d, d);
+    if (r2 >= 1.0) { continue; }
+    let w = (1.0 - r2) * (1.0 - r2) * (1.0 - r2);
+    acc += (vel[j].xyz - vi.xyz) * w;
+    ws += w;
   }
   tmp[i] = vec4f(vi.xyz + acc * (P.mat0.x / max(ws, 0.6)), vi.w);
 }
@@ -423,5 +486,8 @@ fn finalize(@builtin(global_invocation_id) id: vec3u) {
   }
   vel[i] = vec4f(v, foam);
   pos[i] = vec4f(p, dens);
+  // temporal adaptivity: track the max speed (positive float bits are order preserving as u32)
+  atomicMax(&cellCount[P.offs.w], bitcast<u32>(length(v)));
 }
 `;
+
