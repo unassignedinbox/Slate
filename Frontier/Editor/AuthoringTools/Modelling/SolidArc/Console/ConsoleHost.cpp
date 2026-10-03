@@ -1888,6 +1888,9 @@ void ConsoleHost::RememberDocumentCommand(const CommandLine& Command) noexcept
     // A reset discards all preceding model history from the saved document as well. It is both correct and prevents
     // exploratory work before a new part from accumulating indefinitely in a later save.
     if (Command.Verb == "reset") DocumentJournal.clear();
+    if (Command.Verb == "sew" && Command.Switch("open") &&
+        std::find(DocumentJournal.begin(), DocumentJournal.end(), "require open-sew") == DocumentJournal.end())
+        DocumentJournal.push_back("require open-sew");
     DocumentJournal.push_back(EncodeDocumentCommand(Command));
 }
 
@@ -4428,6 +4431,12 @@ void ConsoleHost::Register() noexcept
         return true;
     });
     Add("echo", "echo text", [=, this](const CommandLine& C) { std::printf("  "); for (const auto& A : C.Arguments) std::printf("%s ", A.c_str()); std::printf("\n"); return true; });
+    Add("require", "require open-sew — refuse on builds without explicit open-skin sewing", [this](const CommandLine& C)
+    {
+        if (C.Count() != 1 || C.Arguments[0] != "open-sew" || !C.Flags.empty())
+            return Refuse("require: unsupported document capability");
+        return true;
+    });
     Add("help", "help [verb]", [=, this](const CommandLine& C)
     {
         if (C.Count() == 1) { auto It = Usage.find(C.Arguments[0]); if (It == Usage.end()) return Refuse("no command '%s'", C.Arguments[0].c_str()); Row("%s", It->second.c_str()); return true; }

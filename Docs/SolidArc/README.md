@@ -45,7 +45,7 @@ In the source checkout it is under `Frontier/Projects/Project-Drive/Content/Vehi
 Use `view fit` in Document commands if the component is outside the current view.
 The `.arc` retains cubic NURBS control poles and a sewn, open B-rep; it is not a triangle import.
 `sew --open` preserves intentional openings. Plain `sew` retains its existing planar-capping behaviour.
-**Do not open this document with the older executable:** older builds may ignore `--open` and add caps.
+The document declares `require open-sew`, so older executables refuse it rather than silently adding caps.
 
 This is only the front cowl, with 308 patches still requiring consolidation and continuity review.
 It is not the complete exterior or a manufacturing solid. The main body and roof/glass frame remain unfinished.

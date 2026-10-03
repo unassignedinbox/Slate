@@ -1,7 +1,7 @@
 {
   "status": "Cowl checkpoint only; not a finished clean-surface vehicle reconstruction",
   "measuredOn": "2026-10-03",
-  "documentSha256": "d5ec55b35dea41745a1a6c4c9db4ab379b5e155a7d3281bd351bc9bf006d8630",
+  "documentSha256": "db5b6004f1375695d2bbaebc15c9ef99362251d3c903ac4a85f589b7d994336e",
   "suppliedNpzSha256": "8e52b9a096ae268428375e382fb12e5d548c7a0dca12b7b68d3ccecd04b18d0d",
   "nativeHeldOutMaximumMm": 0.7501677135403315,
   "nativeHeldOutRmsMm": 0.005526887888706218,

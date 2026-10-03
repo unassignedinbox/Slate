@@ -98,7 +98,7 @@ def Fit(Reference, Destination, Count):
     Details['reference'] = json.loads(Reference.with_suffix('.json').read_text())
     Destination.with_suffix('.metrics.json').write_text(json.dumps(Details, indent=2)+'\n')
     Lines = ['# SolidArc native document v1', '# Liger front cowl: cubic NURBS starting skin, metres, common vehicle coordinates.',
-             '# Source reference and limitations are recorded in the adjacent metrics file.', 'reset']
+             '# Source reference and limitations are recorded in the adjacent metrics file.', 'reset', 'require open-sew']
     for Identity, Poles in enumerate(SurfacePoles):
         Coordinates = ' '.join('('+','.join(f'{Coordinate:.10f}' for Coordinate in Pole)+')' for Pole in Poles.reshape(-1, 3))
         Lines.append(f'patch {Count} {Count} {Coordinates} --degree=3 --name=Cowl_{Identity:03d}')

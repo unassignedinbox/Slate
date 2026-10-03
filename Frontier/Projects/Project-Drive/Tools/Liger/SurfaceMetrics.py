@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Compare actual SolidArc samples (CowlVerification) with independent Blender sampling and the supplied NPZ."""
 import argparse
+from datetime import date
 import hashlib
 import json
 from pathlib import Path
@@ -8,7 +9,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 
-def Measure(Reference, Native, Document, Original, Destination):
+def Measure(Reference, Native, Document, Original, Destination, MeasuredOn):
     Content = np.load(Reference)
     Charts, Corners = Content['Charts'], Content['Corners']
     if Charts.shape != (308, 33, 33, 3):
@@ -41,7 +42,7 @@ def Measure(Reference, Native, Document, Original, Destination):
     Valid = np.linalg.norm(SourceNormals, axis=-1) > 1e-16
     Reversed = int(np.count_nonzero(np.sum(SourceNormals*NativeNormals, axis=-1)[Valid] <= 0))
     Details = {'status': 'Cowl checkpoint only; not a finished clean-surface vehicle reconstruction',
-               'measuredOn': '2026-10-03', 'documentSha256': hashlib.sha256(Document.read_bytes()).hexdigest(),
+               'measuredOn': MeasuredOn.isoformat(), 'documentSha256': hashlib.sha256(Document.read_bytes()).hexdigest(),
                'suppliedNpzSha256': hashlib.sha256(Original.read_bytes()).hexdigest(),
                'nativeHeldOutMaximumMm': float(Deviations[:, HeldOut].max()*1000),
                'nativeHeldOutRmsMm': float(np.sqrt(np.mean(Deviations[:, HeldOut]**2))*1000),
@@ -65,5 +66,6 @@ if __name__ == '__main__':
     Parser = argparse.ArgumentParser()
     for Name in ['reference', 'native', 'document', 'original', 'destination']:
         Parser.add_argument(Name, type=Path)
+    Parser.add_argument('--measured-on', type=date.fromisoformat, default=date.today())
     Arguments = Parser.parse_args()
-    Measure(Arguments.reference, Arguments.native, Arguments.document, Arguments.original, Arguments.destination)
+    Measure(Arguments.reference, Arguments.native, Arguments.document, Arguments.original, Arguments.destination, Arguments.measured_on)

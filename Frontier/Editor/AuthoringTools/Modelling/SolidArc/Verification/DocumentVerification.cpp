@@ -11,6 +11,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 
 using namespace Frontier;
@@ -125,6 +126,13 @@ int main()
     const std::filesystem::path SkinDocument = Directory / "exterior.arc";
     const uint64_t SkinFingerprint = UndoSequence::Fingerprint(Host.Document());
     Panel.Expect("save open skin", Host.Execute("save \"" + SkinDocument.generic_string() + "\""));
+    std::ifstream SkinStream(SkinDocument);
+    const std::string SkinText((std::istreambuf_iterator<char>(SkinStream)), std::istreambuf_iterator<char>());
+    SkinStream.close();
+    Panel.Expect("saved open skins refuse rather than silently cap in older builds", SkinText.find("require open-sew") != std::string::npos);
+    Panel.Expect("supported capability succeeds", Host.Execute("require open-sew"));
+    Panel.Expect("unknown capability refuses", !Host.Execute("require unsupported-capability"));
+    Panel.Expect("capability checks do not alter geometry", UndoSequence::Fingerprint(Host.Document()) == SkinFingerprint);
     Panel.Expect("clear open skin", Host.Execute("reset"));
     Panel.Expect("reload open skin", Host.Execute("open \"" + SkinDocument.generic_string() + "\""));
     Panel.Expect("open skin geometry survives replay", UndoSequence::Fingerprint(Host.Document()) == SkinFingerprint);
