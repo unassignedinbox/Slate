@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0a0d12" />
+  <title>SLATE // FLUID LAB</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <canvas id="fluid-canvas" aria-label="WebGPU three dimensional fluid simulation"></canvas>
+
+    <header class="topbar glass">
+      <div class="brand-lockup">
+        <div class="brand-mark"><span></span><span></span><span></span></div>
+        <div>
+          <div class="eyebrow">SLATE / LAB 04</div>
+          <div class="brand-title">FLUID <strong>VOLUME</strong></div>
+        </div>
+      </div>
+      <div class="topbar-center">
+        <div class="scene-name">INTERACTION VOLUME <span class="live-dot"></span></div>
+        <div class="scene-subtitle">3D particle field / compute-resolved</div>
+      </div>
+      <div class="top-actions">
+        <div class="gpu-pill"><span class="pulse"></span><span id="gpu-label">WEBGPU</span><small id="backend-label">INITIALIZING</small></div>
+        <button id="reset-button" class="icon-button" title="Reset simulation" aria-label="Reset simulation">↻</button>
+      </div>
+    </header>
+
+    <aside class="left-rail glass">
+      <div class="rail-section">
+        <div class="section-label">SIMULATION</div>
+        <button id="play-button" class="primary-control"><span class="play-glyph">Ⅱ</span><span id="play-label">PAUSE</span><kbd>SPACE</kbd></button>
+        <div class="mini-stats">
+          <div><span>FPS</span><strong id="fps-value">--</strong></div>
+          <div><span>SUBSTEPS</span><strong id="substeps-value">3</strong></div>
+          <div><span>RES</span><strong id="resolution-value">--</strong></div>
+        </div>
+      </div>
+
+      <div class="rail-section compact-section">
+        <div class="section-label">FIELD</div>
+        <label class="slider-row"><span>Gravity</span><output id="gravity-output">-9.8 m/s²</output><input id="gravity-slider" type="range" min="0" max="16" step="0.1" value="9.8" /></label>
+        <label class="slider-row"><span>Time scale</span><output id="time-output">1.00×</output><input id="time-slider" type="range" min="0" max="2" step="0.05" value="1" /></label>
+        <label class="slider-row"><span>Particle size</span><output id="size-output">1.00×</output><input id="size-slider" type="range" min="0.7" max="1.45" step="0.01" value="1" /></label>
+      </div>
+
+      <div class="rail-section compact-section">
+        <div class="section-label">COLLISION SET</div>
+        <label class="toggle-row"><span>Moving paddle</span><input id="paddle-toggle" type="checkbox" checked /><i></i></label>
+        <label class="toggle-row"><span>Sticky surfaces</span><input id="sticky-toggle" type="checkbox" checked /><i></i></label>
+        <label class="toggle-row"><span>Floor grid</span><input id="grid-toggle" type="checkbox" checked /><i></i></label>
+      </div>
+
+      <div class="rail-footer"><span class="status-dot"></span><span id="status-label">ALLOCATING BUFFERS</span><span class="version">R1.0</span></div>
+    </aside>
+
+    <section class="material-dock glass">
+      <div class="dock-heading"><div><div class="section-label">MATERIAL PRESETS</div><div class="dock-title">Choose a fluid</div></div><span class="count-badge">04</span></div>
+      <div id="material-list" class="material-list">
+        <button class="material-card active" data-material="water"><span class="material-swatch water-swatch"></span><span class="material-copy"><strong>Water</strong><small>ρ 998 kg/m³ · low viscosity</small></span><span class="material-arrow">↗</span></button>
+        <button class="material-card" data-material="milk"><span class="material-swatch milk-swatch"></span><span class="material-copy"><strong>Milk</strong><small>ρ 1,030 kg/m³ · creamy flow</small></span><span class="material-arrow">↗</span></button>
+        <button class="material-card" data-material="chocolate"><span class="material-swatch chocolate-swatch"></span><span class="material-copy"><strong>Chocolate</strong><small>ρ 1,320 kg/m³ · shear thickening</small></span><span class="material-arrow">↗</span></button>
+        <button class="material-card" data-material="mud"><span class="material-swatch mud-swatch"></span><span class="material-copy"><strong>Mud</strong><small>ρ 1,650 kg/m³ · high adhesion</small></span><span class="material-arrow">↗</span></button>
+      </div>
+      <div class="material-readout"><span class="readout-line"></span><span id="material-description">Clear, fast-moving liquid with a crisp surface response.</span></div>
+    </section>
+
+    <div class="scene-hud">
+      <div class="hud-chip"><span class="hud-key">PARTICLES</span><strong id="particle-value">12,288</strong></div>
+      <div class="hud-chip"><span class="hud-key">SOLVER</span><strong>SPH / GRID HASH</strong></div>
+      <div class="hud-chip"><span class="hud-key">DYNAMIC RES</span><strong id="dynamic-res">100%</strong></div>
+    </div>
+
+    <div class="viewport-help"><span class="mouse-icon">⌖</span><span>DRAG TO ORBIT</span><i></i><span>SCROLL TO ZOOM</span><i></i><span>SPACE TO PAUSE</span></div>
+    <div id="loading-card" class="loading-card glass"><div class="loader-ring"></div><div><strong>Starting compute volume</strong><span id="loading-message">Requesting a WebGPU adapter…</span></div></div>
+    <div id="error-card" class="error-card glass hidden"><strong>WebGPU unavailable</strong><span>This experience needs a WebGPU-capable browser. The shader source is in <code>app.js</code>.</span></div>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
