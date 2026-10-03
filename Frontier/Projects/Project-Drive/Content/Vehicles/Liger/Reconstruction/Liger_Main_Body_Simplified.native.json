@@ -1,0 +1,27 @@
+{
+  "measuredOn": "2026-10-03",
+  "documentSha256": "8ce67d6fcf329e5fae8266c106f3de372e0d97859121773f712f2af06067fd23",
+  "nativeSamples": 5049986,
+  "sourceCharts": 17474,
+  "nativeChangeFromPriorMaximumMm": 0.0009163213856095797,
+  "nativeChangeFromPriorRmsMm": 5.4922560506482747e-05,
+  "sharedRimMaximumMm": 6.632e-06,
+  "reversedSampledInteriors": 0,
+  "exactSerializedMirrorPairs": 559,
+  "topology": {
+    "faces": 1094,
+    "vertices": 8054,
+    "edges": 9150,
+    "openEdges": 732,
+    "nonManifoldEdges": 0,
+    "misorientedEdges": 0,
+    "hulls": 1,
+    "areaM2": 14.562696569074,
+    "independentJunctionSheets": 24
+  },
+  "limitations": [
+    "Prior-source accuracy is inherited, not remeasured against Blender in this pass",
+    "Sampled normal and seam checks are not a G1/G2 certificate",
+    "Open surface body and 24 independent junction sheets, not a manufacturing solid"
+  ]
+}

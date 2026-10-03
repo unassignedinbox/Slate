@@ -1,0 +1,29 @@
+{
+  "document": "Liger_Main_Body_Simplified.arc",
+  "documentSha256": "8ce67d6fcf329e5fae8266c106f3de372e0d97859121773f712f2af06067fd23",
+  "script": "Liger_Main_Body_Simplified_Views.arc",
+  "scriptSha256": "70946f1c50006fcedc3bb5f86817394f99e2c3cbab1c788eef5c80df454fd361",
+  "renderer": "SolidArc native CPU rasterizer; four individual renders unchanged; overview adds labels only",
+  "views": [
+    {
+      "image": "Liger_Simplified_Front_Quarter.png",
+      "sha256": "d9b7ac5eda1827074cf30edece884a2de55aded9896fed14bb2fcc86abb842e1",
+      "view": "01 / FRONT THREE-QUARTER"
+    },
+    {
+      "image": "Liger_Simplified_Rear_Quarter.png",
+      "sha256": "dab2ad635912b4a46929ecdfca53359b9a22f2261b891054117478b9cf63eae3",
+      "view": "02 / REAR THREE-QUARTER"
+    },
+    {
+      "image": "Liger_Simplified_Side.png",
+      "sha256": "f47fc2acbb5e53d7cde90a3e16805cb36ca22cc486f53ac67f3d283150940d44",
+      "view": "03 / SIDE"
+    },
+    {
+      "image": "Liger_Simplified_Top.png",
+      "sha256": "6b4407e448d304bfb07238a55227f7a86b123020defc88ce9ccdcda30a08a466",
+      "view": "04 / TOP \u2014 MATCHING MIRRORED PATCHES"
+    }
+  ]
+}

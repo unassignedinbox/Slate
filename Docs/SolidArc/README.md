@@ -40,13 +40,19 @@ The dependency-free `SolidArc` CMake target remains the console application. On 
 
 ## Liger reconstruction
 
-Open `Examples/Liger/Reconstruction/Liger_Reconstruction.arc` after building the current sources.
+Open `Examples/Liger/Reconstruction/Liger_Reconstruction_Simplified.arc` after building the current sources.
+Use `Liger_Main_Body_Simplified.arc` to inspect the mirrored main exterior without the interior/windshield parts.
 Use `view fit` in Document commands if necessary. Use `show edges off` for shaded inspection or
 `show edges on` to inspect B-rep boundaries; this changes presentation only, not geometry.
 The document combines the main body with the previous **interior/windshield section**, as identified by the user.
 Original source filenames are retained for traceability; the earlier cowl file is not the exterior hood.
 
-- `Liger_Main_Body.arc` contains the editable cubic starting skin: 1,993 sewn faces plus 24 separate junction sheets.
+- `Liger_Main_Body_Simplified.arc` contains the first mirrored layout simplification. Its explicit spline spans remain
+  editable; reduced face count does not imply a minimal control-pole layout or Class-A continuity.
+- `Liger_Reconstruction_Simplified.arc` combines it with the unchanged interior/windshield parts.
+- `Liger_Main_Body_Simplified_Views.arc` is a render-command script, not a geometry document. Run it after loading the body.
+- `Liger_Simplified_Four_Views.png` shows front-quarter, rear-quarter, side and top views with CAD boundaries enabled.
+- `Liger_Main_Body.arc` contains the retained cubic starting skin: 1,993 sewn faces plus 24 separate junction sheets.
   Every sampled source chart is retained. The three-face source junctions are exposed as separate sheets rather
   than silently removed or welded. This is still a dense layout, not a finished Class-A surface reconstruction.
 - `Liger_Reconstruction.arc` combines that body and the two previous components without repositioning them.
@@ -116,6 +122,41 @@ Keep the large reference NPZ, intermediate `.fit.npz` and binary sample files in
 The subdivision extractor checks agreement with the original evaluated cowl; the frame extractor requires exact
 agreement with the supplied positions and oriented triangle indices. `PatchVerification.py` exercises the reduction
 bounds and chart transformations independently of Blender.
+
+### Reproduce the mirrored layout and four views
+
+This route uses the committed first skin and its `.queries` file; it does not need Blender. Install NumPy and SciPy.
+Run from the repository root. The render command below uses the **console/proof** `SolidArc.exe`, not the GUI executable:
+
+```powershell
+$Liger = "Frontier/Projects/Project-Drive/Content/Vehicles/Liger/Reconstruction"
+python Frontier/Projects/Project-Drive/Tools/Liger/MirrorSequence.py `
+  "$Liger/Liger_Main_Body.arc" _AgentScratch/build/Liger_Main_Body_Simplified.arc
+SolidArc.exe --proofs _AgentScratch/build/LigerViews `
+  _AgentScratch/build/Liger_Main_Body_Simplified.arc "$Liger/Liger_Main_Body_Simplified_Views.arc"
+python Frontier/Projects/Project-Drive/Tools/Liger/MirrorVerification.py
+```
+
+`MirrorSequence.py` restricts the prior splines back to source-chart rectangles, consolidates one half and reflects it.
+`--chart-limit` and `--pole-limit` bound each combined patch; the defaults are 128 charts and 4,096 control poles.
+The join check samples every polynomial span along each shared rim. The 24 source-junction sheets are kept separate.
+The `.simplification.json` records paired surface indices, hashes and the coefficient-bound reflection change relative
+to the previous CAD skin. This is not a new continuous bound against the Blender source.
+
+For an independent native audit, run `BodyVerification` on both the old and simplified documents, with their respective
+`.queries`, and retain the two `.f64` outputs. After checking the simplified document, retain its native `BodyMetrics.json`.
+Then run:
+
+```powershell
+python Frontier/Projects/Project-Drive/Tools/Liger/MirrorMetrics.py `
+  _AgentScratch/build/prior-native.f64 _AgentScratch/build/simplified-native.f64 `
+  "$Liger/Liger_Main_Body_Simplified.arc" _AgentScratch/build/BodyMetrics.json `
+  _AgentScratch/build/mirror-native.json
+```
+
+The audit checks every serialized mirror pair, native position changes, sampled rims and orientation, and sewn topology.
+Keep binary samples and raw execution logs in scratch. The four-view script writes four independent native PNGs and an
+unlabelled 2-by-2 overview; the published overview adds labels without changing the individual rendered images.
 
 ### Verify native geometry
 
