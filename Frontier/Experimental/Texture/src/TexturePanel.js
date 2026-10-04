@@ -22,6 +22,9 @@ import {
     FirstTile,
 } from "./SceneStructure.js";
 import { InstrumentPanel } from "./InstrumentPanel.js";
+import { MediaSummary } from "./MediaSolver.js";
+// 🔴 The slider lives in ControlSpecification so the instrument card can mount the same one. See the note there.
+import { SliderRow } from "./ControlSpecification.js";
 import { RevisionQueue } from "./RevisionQueue.js";
 import { DocumentSequence } from "./DocumentSequence.js";
 import { EmitTextureSet, EmitProject, ReadDocument, DocumentExtension, ExportSizes } from "./ExportSequence.js";
@@ -172,25 +175,6 @@ const FromHex = (Hex) =>
 //--------------------------------------------------------------------------------------------------------------------------
 // Inspector control builders — declarative rows bound by a dotted path into the project record.
 //--------------------------------------------------------------------------------------------------------------------------
-const SliderRow = ({ Label, Path, Value, Minimum, Maximum, Step, Unit, Hint }) =>
-{
-    const Fraction = (Clamp(Value, Minimum, Maximum) - Minimum) / Math.max(Maximum - Minimum, 1e-9);
-    return `
-    <div class="property-row slider-row">
-        <label class="property-label" for="control-${CSS.escape(Path)}">${Escape(Label)}</label>
-        <div class="slider-control">
-            <input id="control-${CSS.escape(Path)}" type="range" data-bind="${Path}" min="${Minimum}" max="${Maximum}"
-                   step="${Step}" value="${Value}" style="--fraction:${Fraction.toFixed(4)}" />
-            <span class="value-pill">
-                <input type="number" data-bind="${Path}" data-pill="1" min="${Minimum}" max="${Maximum}" step="${Step}"
-                       value="${Fixed(Value, Step)}" aria-label="${Escape(Label)} value" />
-                <span class="unit-cell">${Escape(Unit || "—")}</span>
-            </span>
-        </div>
-        ${Hint ? `<p class="property-hint">${Escape(Hint)}</p>` : ""}
-    </div>`;
-};
-
 const ToggleRow = ({ Label, Path, Value, Hint }) => `
     <div class="property-row toggle-row">
         <span class="property-label">${Escape(Label)}</span>
@@ -346,7 +330,9 @@ const Group = ({ Title, Badge, Body, Open = true }) => `
 //--------------------------------------------------------------------------------------------------------------------------
 // The panel.
 //--------------------------------------------------------------------------------------------------------------------------
-class TexturePanel
+// Exported so the painting path can be driven without a browser: the harness calls these methods against a stub that
+// records what the renderer would have been asked to do. The page itself still constructs it at DOMContentLoaded.
+export class TexturePanel
 {
     constructor()
     {
@@ -2533,9 +2519,9 @@ class TexturePanel
                 const Layer = this.PaintTargetLayer();
                 if (this.Projection.Brush.Target !== "mask" && this.StrokeTool === "brush") this.EnsureChannel(Layer, "base_color");
                 this.BeginStrokeRevision(Layer);
-                this.Projection.BeginPlane(Coordinate);
+                const Opening = this.Projection.BeginPlane(Coordinate, this.PointerReading(Event));
                 this.NotePaintedCoordinate(Coordinate);
-                this.StampPlane(Layer, Coordinate, Coordinate);
+                this.StampPlane(Layer, Opening);
             }
             return;
         }
@@ -2577,7 +2563,7 @@ class TexturePanel
         const Layer = this.PaintTargetLayer();
         if (this.Projection.Brush.Target !== "mask" && this.StrokeTool === "brush") this.EnsureChannel(Layer, "base_color");
         this.BeginStrokeRevision(Layer);
-        const Segment = this.Projection.Begin(Hit);
+        const Segment = this.Projection.Begin(Hit, this.PointerReading(Event));
         this.NotePaintedCoordinate(Hit.Coordinate);
         this.StampSurface(Layer, Segment);
     }
@@ -2619,11 +2605,11 @@ class TexturePanel
             }
             if (this.Projection.Active && (this.StrokeTool === "brush" || this.StrokeTool === "eraser"))
             {
-                const Segment = this.Projection.ExtendPlane(Coordinate, PlaneRadius);
+                const Segment = this.Projection.ExtendPlane(Coordinate, PlaneRadius, this.PointerReading(Event));
                 if (Segment)
                 {
                     this.NotePaintedCoordinate(Segment.EndPlane);
-                    this.StampPlane(this.ActiveLayer, Segment.StartPlane, Segment.EndPlane);
+                    this.StampPlane(this.ActiveLayer, Segment);
                 }
             }
             return;
@@ -2649,7 +2635,7 @@ class TexturePanel
         }
         if (!Hit || !this.Projection.Active) return;
         if (this.StrokeTool !== "brush" && this.StrokeTool !== "eraser") return;
-        const Segment = this.Projection.Extend(Hit);
+        const Segment = this.Projection.Extend(Hit, this.PointerReading(Event));
         if (Segment)
         {
             this.NotePaintedCoordinate(Hit.Coordinate);
@@ -2699,6 +2685,18 @@ class TexturePanel
         return Clamp(this.Projection.Brush.Radius / (Radius * 3.2), 0.002, 0.6);
     }
 
+    // What the pointer can say about the hand holding it. A stylus reports its own pressure and tilt; a mouse reports
+    // a flat 0.5 the moment a button goes down and means nothing by it, so only a pen is believed — StrokeProjection
+    // falls back to the speed of the hand for everything else.
+    PointerReading(Event)
+    {
+        return {
+            Pressure: Event?.pressure ?? 0,
+            Pen: Event?.pointerType === "pen",
+            Time: Event?.timeStamp ?? 0,
+        };
+    }
+
     StampSurface(Layer, Segment)
     {
         const Brush = this.Projection.Brush;
@@ -2711,11 +2709,17 @@ class TexturePanel
             End: Segment.End,
             Normal: Segment.Normal,
             Colour,
-            Radius: Brush.Radius,
+            // A chisel nib is as wide as the nib across its edge and as thin as its waist along it.
+            Radius: Brush.Radius * (Segment.Width ?? 1),
             Hardness: Brush.Hardness,
             Flow: Brush.Flow,
             FacingLimit: this.Projection.FacingLimit,
             Jitter: Brush.Jitter,
+            // 🔴 The eraser lifts with the plain medium whatever is in hand. Erasing is an undo of the surface, and an
+            //    undo that leaves bristle marks of its own is not one.
+            Media: Erase ? null : Brush.Media,
+            Press: Segment.Press,
+            Travel: Segment.Travel,
             Erase,
             Mode: "surface",
         };
@@ -2732,23 +2736,30 @@ class TexturePanel
         this.MarkDirty();
     }
 
-    StampPlane(Layer, Start, End)
+    StampPlane(Layer, Segment)
     {
         const Brush = this.Projection.Brush;
+        const Erase = this.Tool === "eraser";
         this.Integrator.Stamp(Layer, {
             Target: Brush.Target,
             Start: [0, 0, 0],
             End: [0, 0, 0],
             Normal: [0, 1, 0],
-            StartPlane: Start,
-            EndPlane: End,
+            StartPlane: Segment.StartPlane,
+            EndPlane: Segment.EndPlane,
             Colour: Brush.Target === "mask" ? this.MaskInk() : this.BrushColour,
             Radius: Brush.Radius,
-            PlaneRadius: this.PlaneRadius(),
+            PlaneRadius: this.PlaneRadius() * (Segment.Width ?? 1),
             Hardness: Brush.Hardness,
             Flow: Brush.Flow,
             Jitter: Brush.Jitter,
-            Erase: this.Tool === "eraser",
+            Media: Erase ? null : Brush.Media,
+            Press: Segment.Press,
+            Travel: Segment.Travel,
+            // The flattened view measures in UV. This is what a UV unit is worth in metres, so the paper comes out the
+            // same size here as it does on the surface instead of hundreds of times too fine to see.
+            Span: (this.SurfaceRecord?.Bounds.Radius || 1) * 3.2,
+            Erase,
             Mode: "plane",
         });
         this.Recomposite();
@@ -3358,6 +3369,7 @@ class TexturePanel
         if (Note)
             Note.textContent =
                 `flow ${Brush.Flow.toFixed(2)} · hard ${Brush.Hardness.toFixed(2)}` +
+                (Brush.Media && Brush.Media.Index ? ` · ${MediaSummary(Brush.Media)}` : "") +
                 (Brush.Symmetry === "none"
                     ? ""
                     : Brush.Symmetry === "radial"

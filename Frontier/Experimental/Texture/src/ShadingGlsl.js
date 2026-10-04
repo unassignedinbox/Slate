@@ -61,6 +61,23 @@ float Fractal(vec2 Coordinate, int Octaves)
     }
     return Sum / max(Total, 1e-4);
 }
+float Hash31(vec3 Seed)
+{
+    return fract(sin(dot(Seed, vec3(127.1, 311.7, 74.7))) * 43758.5453123);
+}
+// Paper has to be anchored to the SURFACE, not to the texture and not to the stroke: cross the same patch twice from
+// two directions and the same fibres must catch the pigment both times, or the grain reads as noise rather than tooth.
+float ValueNoise3(vec3 Coordinate)
+{
+    vec3 Cell = floor(Coordinate);
+    vec3 Local = fract(Coordinate);
+    vec3 Smooth = Local * Local * (3.0 - 2.0 * Local);
+    float A = mix(Hash31(Cell + vec3(0.0, 0.0, 0.0)), Hash31(Cell + vec3(1.0, 0.0, 0.0)), Smooth.x);
+    float B = mix(Hash31(Cell + vec3(0.0, 1.0, 0.0)), Hash31(Cell + vec3(1.0, 1.0, 0.0)), Smooth.x);
+    float C = mix(Hash31(Cell + vec3(0.0, 0.0, 1.0)), Hash31(Cell + vec3(1.0, 0.0, 1.0)), Smooth.x);
+    float D = mix(Hash31(Cell + vec3(0.0, 1.0, 1.0)), Hash31(Cell + vec3(1.0, 1.0, 1.0)), Smooth.x);
+    return mix(mix(A, B, Smooth.y), mix(C, D, Smooth.y), Smooth.z);
+}
 float Cellular(vec2 Coordinate)
 {
     vec2 Cell = floor(Coordinate);
@@ -615,6 +632,137 @@ void main()
 }`;
 
 //--------------------------------------------------------------------------------------------------------------------------
+// Media — the physical half of a stroke: bristle lanes, paper tooth, ink bleed, felt streaks, dust and wax skip.
+//
+// 🔴 This is the GLSL reading of MediaSolver.js. The two are written line for line and constant for constant so the
+//    card's ribbon preview and the paint on the surface are the same mark. Change one and change the other, or the
+//    preview starts lying — and a preview that lies is worse than no preview.
+//
+// Nothing here reads a texture. Every mark is computed from where it lands, so it never tiles, never softens at a
+// higher resolution, and a patch of surface keeps the same tooth whichever direction the stroke crossed it.
+//--------------------------------------------------------------------------------------------------------------------------
+const MediaChunk = /* glsl */ `
+uniform int uMedium;            // 0 plain · 1 bristle · 2 graphite · 3 ink · 4 felt · 5 dry pigment · 6 wax
+uniform vec4 uMediaA;           // grain, tooth frequency, scatter, bleed
+uniform vec4 uMediaB;           // bristles, splay, swell, wetness
+uniform vec4 uMediaC;           // darkness, tilt, melt, seed
+uniform vec4 uMediaD;           // dry-out, reach, fibre frequency, nib ratio
+
+// How far past the nominal rim this medium can still put pigment: dust, bleed and a laid-over lead all reach further
+// than the mark itself, and the stamping pass has to keep those texels alive long enough to ask.
+float MediaExtent()
+{
+    if (uMedium == 2) return 1.0 + 1.3 * uMediaC.y;
+    if (uMedium == 3) return 1.0 + 1.8 * uMediaA.w;
+    if (uMedium == 4) return 1.0 + 1.5 * uMediaA.w;
+    if (uMedium == 5) return 1.0 + 1.6 * uMediaA.z;
+    return 1.0;
+}
+
+// Returns (coverage, shade). Shade multiplies the colour in hand: below 1 is pigment piling into a valley or pooling at
+// a wet rim, above 1 is wax catching the light. It is what keeps a stroke from reading as flat colour.
+vec2 MediaDeposit(float Across, float Along, float Press, float Hardness, float Tooth, float Fibre, float Speck)
+{
+    float Rim = abs(Across);
+    float Load = 1.0 - uMediaD.x * clamp(Along / max(uMediaD.y, 1e-3), 0.0, 1.0);
+
+    if (uMedium == 1)
+    {
+        // Bristle. The head is a row of hairs, each laying its own ridge; the gaps between them are the drag marks a
+        // brush leaves. Water closes those gaps, which is why a wash reads flat and a dry brush reads like straw.
+        float Lanes = max(uMediaB.x * (1.0 + 0.45 * uMediaB.y * Press), 3.0);
+        float Lane = (Across * 0.5 + 0.5) * Lanes;
+        float Cell = floor(Lane);
+        float Within = Lane - Cell;
+        float Pick = Hash11(Cell * 1.73 + uMediaC.w * 7.0);
+        // 🔴 Hairs are not a comb: each sits off-centre in its lane and is its own thickness, or the mark reads as
+        //    corduroy — evenly ruled lines is the one thing a brush never leaves behind.
+        float Shift = Hash11(Cell * 3.11 + uMediaC.w * 13.0) * 0.5 - 0.25;
+        float Thin = mix(0.1, 0.44, Hash11(Cell * 5.37 + uMediaC.w * 3.0));
+        float Edge = clamp(Within - Shift, 0.0, 1.0);
+        float Ridge = smoothstep(0.0, Thin, Edge) * smoothstep(1.0, 1.0 - Thin, Edge);
+        float Comb = mix(mix(0.25, 1.0, Pick) * Ridge, 1.0, clamp(uMediaB.w * 0.9, 0.0, 0.9));
+        float Streak = mix(1.0, 0.45 + 0.55 * Fibre, (1.0 - uMediaB.w) * 0.75);
+        float Shape = 1.0 - smoothstep(mix(0.0, 0.96, Hardness * mix(0.75, 1.0, Press)), 1.0, Rim);
+        float Alpha = Shape * mix(Comb, 1.0, 0.12) * Streak * Load * mix(0.45, 1.0, Press);
+        float Shade = 1.0 - 0.18 * uMediaB.w * smoothstep(0.5, 1.0, Rim) + 0.04 * (1.0 - Press);
+        return vec2(clamp(Alpha, 0.0, 1.0), clamp(Shade, 0.7, 1.08));
+    }
+
+    if (uMedium == 2)
+    {
+        // Graphite. Lead cannot reach into a valley of the paper, so the tooth decides where the mark is; pressure and
+        // grade decide how far down the sides of those valleys it gets.
+        float Spread = 1.0 + 1.3 * uMediaC.y;
+        float Reach = 1.0 - smoothstep(mix(0.25, 0.9, Hardness) * Spread, Spread, Rim);
+        float Bite = clamp(Press * uMediaC.x * mix(1.0, 0.55, uMediaC.y), 0.0, 1.0);
+        float Cover = clamp(Bite * mix(0.55, 1.0, Reach), 0.0, 1.0);
+        float Gate = smoothstep(1.0 - Cover - 0.28, 1.0 - Cover + 0.24, Tooth + 0.16 * Fibre - 0.08);
+        float Alpha = Reach * mix(Cover, Gate, uMediaA.x);
+        float Shade = mix(1.02, 0.80, clamp(Cover * 0.6 + 0.4 * Tooth, 0.0, 1.0));
+        return vec2(clamp(Alpha, 0.0, 1.0), clamp(Shade, 0.7, 1.08));
+    }
+
+    if (uMedium == 3)
+    {
+        // Ink. A hard wet edge, and past it the fibres of the paper drinking what the nib left behind.
+        float Core = 1.0 - smoothstep(mix(0.6, 0.94, Hardness), 1.0, Rim);
+        float Halo = (1.0 - smoothstep(1.0, 1.0 + 1.8 * uMediaA.w, Rim)) * uMediaA.w * (0.18 + 0.5 * Fibre);
+        float Skip = mix(1.0, 0.55 + 0.45 * Fibre, uMediaA.x) * Load;
+        float Alpha = clamp(Core * Skip + Halo * (1.0 - Core), 0.0, 1.0) * mix(0.82, 1.0, Press);
+        float Shade = mix(1.0, 0.94, Halo);
+        return vec2(clamp(Alpha, 0.0, 1.0), clamp(Shade, 0.7, 1.08));
+    }
+
+    if (uMedium == 4)
+    {
+        // Felt. Flat colour laid by a bundle of fibres, with solvent pushing a darker rim out to the edge of the mark —
+        // the wet edge every marker drawing has and no flat-colour brush ever produces.
+        float Core = 1.0 - smoothstep(mix(0.55, 0.92, Hardness), 1.0, Rim);
+        float Streak = mix(1.0, 0.72 + 0.28 * Fibre, 0.55);
+        float Halo = (1.0 - smoothstep(1.0, 1.0 + 1.5 * uMediaA.w, Rim)) * uMediaA.w * 0.55;
+        float Alpha = clamp(Core * Streak * Load + Halo * (1.0 - Core), 0.0, 1.0);
+        float Rimness = smoothstep(0.45, 0.95, Rim) * Core;
+        float Shade = mix(1.0, 0.80, Rimness * mix(0.4, 1.0, uMediaA.w));
+        return vec2(clamp(Alpha, 0.0, 1.0), clamp(Shade, 0.7, 1.08));
+    }
+
+    if (uMedium == 5)
+    {
+        // Dry pigment. The tooth again, coarser, with nothing holding the pigment together — so it sheds: specks land
+        // outside the mark and the edge of a chalk line is never a line.
+        float Reach = 1.0 - smoothstep(mix(0.2, 0.85, Hardness), 1.0, Rim);
+        float Cover = clamp(Press * uMediaC.x * Reach, 0.0, 1.0);
+        float Gate = smoothstep(1.0 - Cover - 0.38, 1.0 - Cover + 0.30, Tooth);
+        float Dust = step(1.0 - 0.1 * uMediaA.z, Speck)
+                   * (1.0 - smoothstep(0.8, 1.0 + 1.6 * uMediaA.z, Rim))
+                   * (0.35 + 0.5 * Press);
+        float Alpha = max(Reach * mix(Cover, Gate, uMediaA.x) * Load, Dust);
+        float Shade = mix(1.05, 0.82, Cover);
+        return vec2(clamp(Alpha, 0.0, 1.0), clamp(Shade, 0.7, 1.08));
+    }
+
+    if (uMedium == 6)
+    {
+        // Wax. Stiff enough to bridge the valleys instead of filling them, until the heat of a hard stroke melts it in.
+        float Reach = 1.0 - smoothstep(mix(0.45, 0.92, Hardness), 1.0, Rim);
+        float Cover = clamp(Press * 1.05, 0.0, 1.0);
+        // 🔴 The threshold never reaches zero: wax bridges the valleys of the paper however hard it is pushed, and a
+        //    crayon line that fills in completely at full pressure is a felt pen with a different label.
+        float Ridge = 0.3 + 0.55 * (1.0 - Cover);
+        float Gate = smoothstep(Ridge - 0.16, Ridge + 0.14, Tooth);
+        float Filled = mix(Gate, 1.0, clamp(uMediaC.z * Press * 1.3, 0.0, 1.0));
+        float Alpha = Reach * mix(Cover, Filled, uMediaA.x) * Load;
+        float Shade = mix(1.0, 1.07, uMediaC.z * 0.6 * Alpha);
+        return vec2(clamp(Alpha, 0.0, 1.0), clamp(Shade, 0.7, 1.08));
+    }
+
+    // Plain: the soft round dab the pass drew before any of this existed, kept as medium zero so an untouched project
+    // paints exactly as it used to and an unset uniform cannot accidentally mean charcoal.
+    return vec2(clamp(1.0 - smoothstep(mix(0.0, 0.94, Hardness), 1.0, Rim), 0.0, 1.0), 1.0);
+}`;
+
+//--------------------------------------------------------------------------------------------------------------------------
 // ④ Brush stamping — distance to the stroke segment measured on the baked surface, not in UV.
 //--------------------------------------------------------------------------------------------------------------------------
 export const StampFragment = /* glsl */ `
@@ -642,6 +790,7 @@ uniform vec2 uStampSpan;
 uniform float uStampReach;
 uniform float uStampSoftness;
 uniform float uStampColourise;
+uniform vec4 uStrokePress;     // pressure at the segment's start and end, travel in metres at each
 out vec4 oCoverage;
 void main()
 {
@@ -669,15 +818,21 @@ void main()
         return;
     }
 
-    float Distance;
+    // The stroke's own frame: how far along the segment this texel sits, and how far to which side of it. The side is
+    // SIGNED because a bristle needs to know which hair it is under — an unsigned distance can only draw a tube.
+    float Side = 0.0;
+    float Travel = 0.0;
     float Facing = 1.0;
     float Radius = uRadius;
+    vec3 Anchor = vec3(vCoordinate, 0.0);
     if (uStampMode == 1)
     {
         vec2 Segment = uStrokeEndPlane - uStrokeStartPlane;
-        float SegmentLength = max(dot(Segment, Segment), 1e-9);
-        float Travel = clamp(dot(vCoordinate - uStrokeStartPlane, Segment) / SegmentLength, 0.0, 1.0);
-        Distance = length(vCoordinate - (uStrokeStartPlane + Segment * Travel));
+        float Span = length(Segment);
+        vec2 Ahead = Span > 1e-6 ? Segment / Span : vec2(1.0, 0.0);
+        Travel = Span > 1e-6 ? clamp(dot(vCoordinate - uStrokeStartPlane, Ahead) / Span, 0.0, 1.0) : 0.0;
+        vec2 Offset = vCoordinate - (uStrokeStartPlane + Segment * Travel);
+        Side = length(Offset) * (dot(Offset, vec2(-Ahead.y, Ahead.x)) < 0.0 ? -1.0 : 1.0);
         Radius = uPlaneRadius;
     }
     else
@@ -686,18 +841,49 @@ void main()
         vec3 Position = Sample.xyz;
         vec3 Normal = normalize(texture(uNormalSource, vCoordinate).xyz);
         vec3 Segment = uStrokeEnd - uStrokeStart;
-        float SegmentLength = max(dot(Segment, Segment), 1e-9);
-        float Travel = clamp(dot(Position - uStrokeStart, Segment) / SegmentLength, 0.0, 1.0);
-        vec3 Closest = uStrokeStart + Segment * Travel;
-        Distance = length(Position - Closest);
+        float Span = length(Segment);
+        vec3 Ahead = Span > 1e-6 ? Segment / Span : vec3(0.0);
+        // A stroke that has not moved yet, or one dragged straight into the surface, still has to pick a side: any
+        // tangent will do, so long as it is the same one for every texel of the dab.
+        vec3 Sideways = cross(Normal, Ahead);
+        if (dot(Sideways, Sideways) < 1e-10)
+            Sideways = cross(Normal, abs(Normal.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0));
+        Sideways = normalize(Sideways);
+        Travel = Span > 1e-6 ? clamp(dot(Position - uStrokeStart, Ahead) / Span, 0.0, 1.0) : 0.0;
+        vec3 Offset = Position - (uStrokeStart + Segment * Travel);
+        Side = length(Offset) * (dot(Offset, Sideways) < 0.0 ? -1.0 : 1.0);
         Facing = smoothstep(uFacingLimit, mix(uFacingLimit, 1.0, 0.45), dot(Normal, uStrokeNormal));
+        Anchor = Position;
     }
-    float Falloff = 1.0 - smoothstep(Radius * mix(0.0, 0.94, uHardness), Radius, Distance);
-    if (Falloff <= 0.0) discard;
+
+    // Pressure interpolates along the segment, so one drag thins and swells the way the hand did.
+    float Press = clamp(mix(uStrokePress.x, uStrokePress.y, Travel), 0.0, 1.0);
+    float Along = mix(uStrokePress.z, uStrokePress.w, Travel);
+    Radius *= 1.0 - uMediaB.z * (1.0 - Press);
+    Radius = max(Radius, 1e-6);
+
+    // 🔴 Reject before any noise is sampled. The pass covers the whole sheet for every segment; the handful of texels
+    //    the mark can reach are the only ones worth three octaves of value noise.
+    float Across = Side / Radius;
+    if (abs(Across) > MediaExtent()) discard;
+
+    float Tooth = 0.5;
+    float Fibre = 0.5;
+    float Speck = 0.0;
+    if (uMedium != 0)
+    {
+        vec3 Paper = Anchor * uMediaA.y;
+        Tooth = ValueNoise3(Paper) * 0.65 + ValueNoise3(Paper * 2.17 + vec3(11.3, -7.1, 3.9)) * 0.35;
+        Fibre = ValueNoise(vec2(Along * uMediaD.z, Across * 3.0 + uMediaC.w * 17.0));
+        Speck = Hash21(vCoordinate * 1024.0 + uMediaC.w);
+    }
+
+    vec2 Media = MediaDeposit(Across, Along, Press, uHardness, Tooth, Fibre, Speck);
+    if (Media.x <= 0.0) discard;
     float Jitter = mix(1.0, 0.65 + 0.35 * Hash21(vCoordinate * 512.0), uAlphaJitter);
-    float Alpha = clamp(Falloff * Facing * uFlow * Jitter, 0.0, 1.0);
+    float Alpha = clamp(Media.x * Facing * uFlow * Jitter, 0.0, 1.0);
     if (Alpha <= 0.0015) discard;
-    oCoverage = vec4(uStrokeColour * Alpha, Alpha);
+    oCoverage = vec4(clamp(uStrokeColour * Media.y, 0.0, 1.0) * Alpha, Alpha);
 }`;
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -1464,6 +1650,7 @@ void main()
 //--------------------------------------------------------------------------------------------------------------------------
 export const Chunks = {
     Noise: NoiseChunk,
+    Media: MediaChunk,
     Generator: GeneratorChunk,
     Finish: FinishChunk,
     Mask: MaskChunk,

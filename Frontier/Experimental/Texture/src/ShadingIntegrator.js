@@ -29,6 +29,7 @@ import { GeneratorIndex } from "./GeneratorSpecification.js";
 import { FinishFamilyIndex, FinishStyleIndex } from "./FinishSpecification.js";
 import { EnvironmentByIdentifier } from "./MaterialSpecification.js";
 import { TileRectangle } from "./SceneStructure.js";
+import { MediaUniforms, PlainMedia } from "./MediaSolver.js";
 
 const MaskKindIndex = (Kind) => ({ stroke: 1, generator: 2, colour: 3 })[Kind] ?? 0;
 
@@ -355,7 +356,7 @@ export class ShadingIntegrator
             Bake: Link(Device, BakeVertex, BakeFragment),
             Dilate: Link(Device, QuadVertex, DilateFragment),
             Curvature: Link(Device, QuadVertex, CurvatureFragment),
-            Stamp: Link(Device, QuadVertex, StampFragment, ["Noise"]),
+            Stamp: Link(Device, QuadVertex, StampFragment, ["Noise", "Media"]),
             Composite: Link(Device, QuadVertex, CompositeFragment, ["Noise", "Generator", "Finish", "Mask", "Blend"]),
             Mask: Link(Device, QuadVertex, MaskFragment, ["Noise", "Generator", "Mask"]),
             Shade: Link(Device, SurfaceVertex, SurfaceFragment, ["Environment"]),
@@ -793,6 +794,21 @@ export class ShadingIntegrator
         Device.uniform1f(Uniforms.get("uFlow"), Options.Flow);
         Device.uniform1f(Uniforms.get("uFacingLimit"), Options.FacingLimit ?? 0.1);
         Device.uniform1f(Uniforms.get("uAlphaJitter"), Options.Jitter || 0);
+
+        // The medium. `Media` is the profile MediaSolver built from the instrument in hand; with none in hand the
+        // plain profile goes up instead, which is the soft round dab this pass has always drawn.
+        const Media = MediaUniforms(Options.Media || PlainMedia, Options.Mode === "plane" ? Options.Span || 1 : 1);
+        Device.uniform1i(Uniforms.get("uMedium"), Options.Erase ? 0 : Media.Medium);
+        Device.uniform4fv(Uniforms.get("uMediaA"), Media.A);
+        Device.uniform4fv(Uniforms.get("uMediaB"), Media.B);
+        Device.uniform4fv(Uniforms.get("uMediaC"), Media.C);
+        Device.uniform4fv(Uniforms.get("uMediaD"), Media.D);
+        Device.uniform4fv(Uniforms.get("uStrokePress"), [
+            Options.Press?.[0] ?? 1,
+            Options.Press?.[1] ?? 1,
+            Options.Travel?.[0] ?? 0,
+            Options.Travel?.[1] ?? 0,
+        ]);
         const Burn = Options.Mode === "decal" ? Options.Decal : null;
         Device.uniform1i(Uniforms.get("uStampMode"), Options.Mode === "plane" ? 1 : Burn ? 2 : 0);
         this.BindImage(Program, "uStampDecal", (Burn && this.LayerImages.get(Burn.Layer)?.Decal) || this.BlankImage(), 2);

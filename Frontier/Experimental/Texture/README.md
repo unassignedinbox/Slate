@@ -10,7 +10,7 @@ cd Frontier/Experimental/Texture
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
-npm test           # 85 unit tests, no browser required
+npm test           # 92 unit tests, no browser required
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -183,18 +183,48 @@ two to sixteen — a cursor in every sector, the spokes drawn on the model, and 
 brushes, pencils, pens, markers, dry media, wax and oil — and the types within the family as tiles beside it, each one
 drawn as the instrument itself sitting in a dished well. Pick a tile and the card slides one pane left to that
 instrument's settings: size, opacity, flow, hardness and spacing, plus whatever belongs to the medium alone — a
-pencil's grade and grain, a marker's nib and bleed, a brush's head and wetness, a dry stick's tooth and scatter. Above
-them a ribbon of dabs is drawn with the same falloff the stamping pass uses, on paper rather than on panel, so the
-settings are judged against something a stroke would actually look like. <kbd>Tab</kbd> steps forward through the card —
-closed → tiles → settings → closed — and <kbd>Esc</kbd> steps back out of it.
+pencil's grade and grain, a marker's nib and bleed, a brush's head and wetness, a dry stick's tooth and scatter, a
+crayon's melt. The rows are the editor's own slider, the same `SliderRow` the inspector's property sheets are built
+from: a 26px track with its fill driven by `--fraction`, and a pill you can type into beside it. <kbd>Tab</kbd> steps
+forward through the card — closed → tiles → settings → closed — and <kbd>Esc</kbd> steps back out of it.
 
 Every instrument is one 300 × 60 drawing with its working tip at the right, and the tile is that same drawing under a
-cropped viewBox, so nothing is authored twice. Where a setting reaches the brush it drives it — size in centimetres,
-opacity and flow folded into the single deposit strength the stamping pass has, hardness, spacing, and the dry media's
-tooth onto the per-texel jitter — and where it does not, the foot of the card says how many settings are preview only
-rather than pretending. The whole set is kept on the instrument record either way, because it is exactly what a
-reconstruction would need. Aim at a mask and the colour swatches are replaced by a black-to-white value ramp: a mask
-holds coverage, not colour, so a hue picker there would offer a choice that cannot be expressed.
+cropped viewBox, so nothing is authored twice. Every setting reaches the paint — the foot of the card names the medium
+the settings resolved to and counts anything that does not, which is nothing today. The whole set is kept on the
+instrument record either way, because it is exactly what a reconstruction would need. Aim at a mask and the colour
+swatches are replaced by a black-to-white value ramp: a mask holds coverage, not colour, so a hue picker there would
+offer a choice that cannot be expressed.
+
+**What the media actually do.** The instrument is not a different-sized circle. Each family resolves to a medium with
+its own physics, computed per texel in the stamping pass — no brush-tip images, no grain textures, nothing that tiles
+or softens when the sheet gets bigger:
+
+| Medium | What the pass computes |
+| --- | --- |
+| Bristle | The head is a row of hairs, each sitting off-centre in its own lane at its own thickness; the gaps between them are the drag marks. Wetness closes the comb and pools pigment at the rim, dryness opens it and streaks along the stroke. The load runs out over a reach set by the head's size and how wet it is, so a long stroke goes dry at the end. |
+| Graphite | Lead cannot reach into a valley of the paper, so a surface-anchored tooth field decides where the mark is; pressure and the grade (2H → 6B) decide how far down the sides of those valleys it gets. Tilt spreads the same graphite wider and lighter. |
+| Ink | A hard wet edge, and past it a bleed halo creeping into the fibres. A fountain nib flexes with pressure, a ballpoint skips when it is dragged fast, a fineliner does neither. |
+| Felt | Flat colour laid by a bundle of fibres, streaked along the stroke, with solvent pushing a darker rim out to the edge of the mark — the wet edge every marker drawing has. |
+| Dry pigment | A coarser tooth with nothing binding it, so it sheds: specks land outside the mark and the edge of a chalk line is never a line. |
+| Wax | Stiff enough to bridge the valleys instead of filling them however hard it is pushed, until melt floods them in. |
+
+**Pressure.** A stylus is believed — `pointerType === "pen"` and its own reading. A mouse reports a flat 0.5 and means
+nothing by it, so the speed of the hand stands in: a flicked stroke is a light stroke. On top of either comes the entry
+ramp, because no instrument lands at full weight and a stroke that arrives at its full width is the clearest tell that
+nothing drew it. Pressure is interpolated along each segment, smoothed by one pole so it can never step, and it moves
+both the deposit and — by as much as the medium allows — the width. Only the entry tapers: the exit cannot be tapered
+live without knowing where the stroke is about to stop, and re-stamping a finished tail would mean paint changing
+underneath you. **Smoothing** is a lag rather than a resample, so the mark follows the pointer on a spring and an
+unsteady hand still draws a steady line. **A chisel nib** is as wide as the nib across its edge and as thin as its waist
+along it, computed per segment from the direction of travel against the angle the nib is held at — the whole of
+calligraphy in one number.
+
+Above the settings the card draws a ribbon, and the ribbon is not a drawing of a stroke: every pixel of it runs the same
+model the GPU runs, at the instrument's real size, on paper. Pale pigment — a white china marker, a chalk stick, a
+blender carrying nothing — is shown on a dark ground instead, because true-to-life invisibility is a preview of nothing.
+`MediaSolver.js` holds the model in JavaScript and `MediaChunk` in `ShadingGlsl.js` holds it in GLSL, written line for
+line against each other; the unit tests pin the constants the two have to agree on. The eraser always lifts with the
+plain medium whatever is in hand, because an undo of the surface that leaves bristle marks of its own is not one.
 
 **Objects and UDIM tiles.** A document holds a scene, not a single mesh. The outliner above the stack lists every
 object — select, rename (double-click), hide, isolate, add and remove — and each object owns a UDIM tile, numbered the
@@ -283,6 +313,8 @@ left button. Middle-drag and <kbd>Space</kbd>-drag pan; a click that never becom
 | `DecalSpecification.js` | Vector library, font archive, SVG/text rasterisation. |
 | `InstrumentSpecification.js` | The instrument library: six media families, their drawings, settings schema and brush mapping. |
 | `InstrumentPanel.js` | The summoned instrument card: family rail, tiles, settings carousel, ribbon preview. |
+| `MediaSolver.js` | What each medium does to a mark — bristle lanes, paper tooth, bleed, dust, wax skip — and the uniform packing the stamping pass reads. |
+| `ControlSpecification.js` | The editor's one slider row, mounted by both the inspector and the instrument card. |
 | `SurfaceStructure.js` | Built-in surfaces, Wavefront import, tangents, bounds, occlusion, spatial index. |
 | `SceneStructure.js` | Object records, UDIM tiles, and the assembly that folds a scene into one surface. |
 | `OrbitProjection.js` | Damped orbit camera, framing, panning, picking rays. |

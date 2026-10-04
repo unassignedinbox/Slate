@@ -13,6 +13,8 @@
 //    borrowing each other's colours.
 //============================================================================================================================================
 
+import { MediaFromInstrument, MediaSummary } from "./MediaSolver.js";
+
 //--------------------------------------------------------------------------------------------------------------------------
 // Drawing helpers.
 //--------------------------------------------------------------------------------------------------------------------------
@@ -502,66 +504,69 @@ const WaxArt = (Key, Config) =>
 //--------------------------------------------------------------------------------------------------------------------------
 // Settings schema.
 //
-// 🔴 `Wired` marks the controls that actually reach the stamping pass. The rest are recorded on the instrument, shown in
-//    the preview and carried into a stroke's record, but the pass has nowhere to put them yet — so the card LABELS them
-//    rather than pretending. `When` hides a row outright instead of grinding it out: a disabled control still reads as
-//    something you failed to reach.
+// 🔴 `Wired` marks the controls that reach the stamping pass. Every control carries it now: grain, tooth, wetness, nib,
+//    grade, bleed, melt, scatter, taper, tilt and smoothing are all read by MediaSolver and all land in the mark. The
+//    flag stays rather than being deleted because the card still reports it — and because the day a control is added
+//    ahead of the pass that can draw it, the card must go back to saying so instead of pretending.
+//    `When` hides a dependent row outright instead of greying it out: a disabled control reads as something you failed
+//    to reach.
 //--------------------------------------------------------------------------------------------------------------------------
 const StrokeControls = (Extra = []) => [
-    { Key: "Size", Label: "Size", Glyph: "Size", Kind: "Slider", Minimum: 0.4, Maximum: 60, Step: 0.1, Unit: " cm", Wired: true },
+    { Key: "Size", Label: "Size", Glyph: "Size", Kind: "Slider", Minimum: 0.4, Maximum: 60, Step: 0.1, Unit: "cm", Wired: true },
     { Key: "Opacity", Label: "Opacity", Glyph: "Opacity", Kind: "Slider", Minimum: 1, Maximum: 100, Step: 1, Unit: "%", Wired: true },
     { Key: "Flow", Label: "Flow", Glyph: "Flow", Kind: "Slider", Minimum: 1, Maximum: 100, Step: 1, Unit: "%", Wired: true },
     { Key: "Hardness", Label: "Hardness", Glyph: "Hardness", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%", Wired: true },
     { Key: "Spacing", Label: "Spacing", Glyph: "Spacing", Kind: "Slider", Minimum: 2, Maximum: 100, Step: 1, Unit: "%", Wired: true },
     ...Extra,
-    { Key: "Smoothing", Label: "Smoothing", Glyph: "Smooth", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%" },
+    { Key: "Smoothing", Label: "Smoothing", Glyph: "Smooth", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%", Wired: true },
 ];
 
 export const InstrumentSchema = {
     Pen: StrokeControls([
-        { Key: "Pressure", Label: "Pressure sensitive", Glyph: "Pressure", Kind: "Switch" },
+        { Key: "Bleed", Label: "Bleed", Glyph: "Bleed", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%", Wired: true },
+        { Key: "Pressure", Label: "Pressure sensitive", Glyph: "Pressure", Kind: "Switch", Wired: true },
         {
-            Key: "Taper", Label: "Taper", Glyph: "Taper", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%",
+            Key: "Taper", Label: "Taper", Glyph: "Taper", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%", Wired: true,
             When: (Settings) => Settings.Pressure === true,
         },
     ]),
 
     Pencil: StrokeControls([
-        { Key: "Grade", Label: "Grade", Glyph: "Grade", Kind: "Segmented", Options: ["2H", "HB", "2B", "6B"] },
+        { Key: "Grade", Label: "Grade", Glyph: "Grade", Kind: "Segmented", Options: ["2H", "HB", "2B", "6B"], Wired: true },
         { Key: "Grain", Label: "Grain", Glyph: "Grain", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%", Wired: true },
-        { Key: "Pressure", Label: "Pressure sensitive", Glyph: "Pressure", Kind: "Switch" },
+        { Key: "Pressure", Label: "Pressure sensitive", Glyph: "Pressure", Kind: "Switch", Wired: true },
         {
-            Key: "Tilt", Label: "Tilt shading", Glyph: "Tilt", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%",
+            Key: "Tilt", Label: "Tilt shading", Glyph: "Tilt", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%", Wired: true,
             When: (Settings) => Settings.Pressure === true,
         },
     ]),
 
     Dry: StrokeControls([
         { Key: "Grain", Label: "Tooth", Glyph: "Grain", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%", Wired: true },
-        { Key: "Scatter", Label: "Scatter", Glyph: "Scatter", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%" },
-        { Key: "Pressure", Label: "Pressure sensitive", Glyph: "Pressure", Kind: "Switch" },
+        { Key: "Scatter", Label: "Scatter", Glyph: "Scatter", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%", Wired: true },
+        { Key: "Pressure", Label: "Pressure sensitive", Glyph: "Pressure", Kind: "Switch", Wired: true },
     ]),
 
     Marker: StrokeControls([
-        { Key: "Nib", Label: "Nib", Glyph: "Mode", Kind: "Segmented", Options: ["Fine", "Chisel", "Broad"] },
-        { Key: "Bleed", Label: "Bleed", Glyph: "Bleed", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%" },
-        { Key: "Pressure", Label: "Pressure sensitive", Glyph: "Pressure", Kind: "Switch" },
+        { Key: "Nib", Label: "Nib", Glyph: "Mode", Kind: "Segmented", Options: ["Fine", "Chisel", "Broad"], Wired: true },
+        { Key: "Bleed", Label: "Bleed", Glyph: "Bleed", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%", Wired: true },
+        { Key: "Pressure", Label: "Pressure sensitive", Glyph: "Pressure", Kind: "Switch", Wired: true },
     ]),
 
     Brush: StrokeControls([
-        { Key: "Head", Label: "Head", Glyph: "Mode", Kind: "Segmented", Options: ["Round", "Filbert", "Flat", "Fan"] },
-        { Key: "Wetness", Label: "Wetness", Glyph: "Wetness", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%" },
-        { Key: "Pressure", Label: "Pressure sensitive", Glyph: "Pressure", Kind: "Switch" },
+        { Key: "Head", Label: "Head", Glyph: "Mode", Kind: "Segmented", Options: ["Round", "Filbert", "Flat", "Fan"], Wired: true },
+        { Key: "Wetness", Label: "Wetness", Glyph: "Wetness", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%", Wired: true },
+        { Key: "Pressure", Label: "Pressure sensitive", Glyph: "Pressure", Kind: "Switch", Wired: true },
         {
-            Key: "Taper", Label: "Taper", Glyph: "Taper", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%",
+            Key: "Taper", Label: "Taper", Glyph: "Taper", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%", Wired: true,
             When: (Settings) => Settings.Pressure === true,
         },
     ]),
 
     Wax: StrokeControls([
         { Key: "Grain", Label: "Tooth", Glyph: "Grain", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%", Wired: true },
-        { Key: "Melt", Label: "Melt", Glyph: "Wetness", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%" },
-        { Key: "Pressure", Label: "Pressure sensitive", Glyph: "Pressure", Kind: "Switch" },
+        { Key: "Melt", Label: "Melt", Glyph: "Wetness", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%", Wired: true },
+        { Key: "Pressure", Label: "Pressure sensitive", Glyph: "Pressure", Kind: "Switch", Wired: true },
     ]),
 };
 
@@ -689,7 +694,7 @@ export const InstrumentFamilies = [
                 Name: "Technical fineliner · 0.3 mm",
                 Tone: "#8a949c",
                 Art: { Barrel: "graphite", Metal: "chrome", Nib: "tube" },
-                Settings: { Size: 0.5, Opacity: 100, Flow: 100, Hardness: 94, Spacing: 4, Smoothing: 45, Pressure: false, Taper: 0 },
+                Settings: { Size: 0.5, Opacity: 100, Flow: 100, Hardness: 94, Spacing: 4, Smoothing: 45, Bleed: 6, Pressure: false, Taper: 0 },
                 Swatches: ["#15161a", "#1d3a8a", "#8d1e26", "#1f5c3a"],
             },
             {
@@ -698,7 +703,7 @@ export const InstrumentFamilies = [
                 Name: "Fountain pen · medium nib",
                 Tone: "#3a5f9c",
                 Art: { Barrel: "navy", Metal: "gold", Nib: "fountain", Section: "bar" },
-                Settings: { Size: 1.1, Opacity: 96, Flow: 88, Hardness: 78, Spacing: 5, Smoothing: 52, Pressure: true, Taper: 45 },
+                Settings: { Size: 1.1, Opacity: 96, Flow: 88, Hardness: 78, Spacing: 5, Smoothing: 52, Bleed: 30, Pressure: true, Taper: 45 },
                 Swatches: ["#16305e", "#15161a", "#5a0a1a", "#123a20"],
             },
             {
@@ -707,7 +712,7 @@ export const InstrumentFamilies = [
                 Name: "Ballpoint · 1.0 mm",
                 Tone: "#2b7f88",
                 Art: { Barrel: "teal", Metal: "silver", Nib: "ball" },
-                Settings: { Size: 0.8, Opacity: 84, Flow: 62, Hardness: 88, Spacing: 4, Smoothing: 35, Pressure: true, Taper: 20 },
+                Settings: { Size: 0.8, Opacity: 84, Flow: 62, Hardness: 88, Spacing: 4, Smoothing: 35, Bleed: 4, Pressure: true, Taper: 20 },
                 Swatches: ["#1d3a8a", "#15161a", "#8d1e26"],
             },
             {
@@ -716,7 +721,7 @@ export const InstrumentFamilies = [
                 Name: "Calligraphy pen · 2 mm italic",
                 Tone: "#f0cf7e",
                 Art: { Barrel: "walnut", Metal: "gold", Nib: "chisel" },
-                Settings: { Size: 2.4, Opacity: 100, Flow: 96, Hardness: 82, Spacing: 5, Smoothing: 48, Pressure: true, Taper: 70 },
+                Settings: { Size: 2.4, Opacity: 100, Flow: 96, Hardness: 82, Spacing: 5, Smoothing: 48, Bleed: 20, Pressure: true, Taper: 70 },
                 Swatches: ["#15161a", "#5a0a1a", "#16305e", "#4a2f18"],
             },
         ],
@@ -885,31 +890,27 @@ export const InstrumentArtwork = (Type, View = FullView) =>
 //--------------------------------------------------------------------------------------------------------------------------
 // Pushing an instrument onto the live brush.
 //
-// 🔴 Opacity and Flow both fold into the brush's single Flow, because the stamping pass has ONE deposit strength. They
-//    stay separate in the card because they mean different things to a painter, and separating them for real needs the
-//    per-stroke accumulation the pass does not have.
-// 🔴 Grain lands on Jitter only where the schema marks it wired. A pen has no grain control and must not inherit the
-//    chalk stick's jitter just because the two share a settings object shape.
+// 🔴 Opacity and Flow both fold into the brush's single Flow, because the stamping pass has ONE deposit strength per
+//    segment. They stay separate in the card because they mean different things to a painter, and telling them apart
+//    for real needs the per-stroke accumulation the pass does not have.
+// 🔴 Everything else that used to be dropped here — grade, nib, head, wetness, bleed, melt, scatter, tilt — now leaves
+//    on `Media`, the profile MediaSolver builds and the stamping pass unpacks into uniforms. Jitter stays for the
+//    plain brush in the pod; an instrument's grain is the paper's, and the paper is the medium's business.
 //--------------------------------------------------------------------------------------------------------------------------
 const Clamp = (Value, Low, High) => Math.min(High, Math.max(Low, Value));
 
-export const BrushFromInstrument = (Type, Settings) =>
-{
-    const Wired = new Set(
-        InstrumentSchema[Type.Schema].filter((Control) => Control.Wired).map((Control) => Control.Key),
-    );
-    return {
-        Radius: Clamp(Settings.Size / 100, 0.004, 0.6),
-        Hardness: Clamp(Settings.Hardness / 100, 0, 1),
-        Flow: Clamp((Settings.Opacity / 100) * (Settings.Flow / 100), 0.02, 1),
-        Spacing: Clamp(Settings.Spacing / 100, 0.05, 1),
-        Jitter: Wired.has("Grain") ? Clamp((Settings.Grain ?? 0) / 100, 0, 1) : 0,
-    };
-};
+export const BrushFromInstrument = (Type, Settings) => ({
+    Radius: Clamp(Settings.Size / 100, 0.004, 0.6),
+    Hardness: Clamp(Settings.Hardness / 100, 0, 1),
+    Flow: Clamp((Settings.Opacity / 100) * (Settings.Flow / 100), 0.02, 1),
+    Spacing: Clamp(Settings.Spacing / 100, 0.05, 1),
+    Jitter: 0,
+    Smoothing: Clamp((Settings.Smoothing ?? 0) / 100, 0, 1),
+    Media: MediaFromInstrument(Type, Settings),
+});
 
-// What a stroke record keeps of the instrument that laid it. BrushFromInstrument above is lossy by design, and the
-// settings it discards — grade, nib, head, wetness, bleed, taper, tilt, smoothing — are exactly what a reconstruction
-// would need, so they are captured here at the only point that still holds them.
+// What a stroke record keeps of the instrument that laid it: the settings as the painter left them, and the medium
+// those settings resolved to, so a stroke can be read back without rebuilding the instrument that made it.
 export const InstrumentRecord = (Type, Settings) => ({
     Key: Type.Key,
     Name: Type.Name,
@@ -917,6 +918,8 @@ export const InstrumentRecord = (Type, Settings) => ({
     Schema: Type.Schema,
     Tone: Type.Tone,
     Settings: { ...Settings },
+    Media: MediaFromInstrument(Type, Settings),
+    Summary: MediaSummary(MediaFromInstrument(Type, Settings)),
     Wired: VisibleControls(Type, Settings)
         .filter((Control) => Control.Wired)
         .map((Control) => Control.Key),

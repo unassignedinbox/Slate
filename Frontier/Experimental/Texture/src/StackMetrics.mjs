@@ -29,6 +29,17 @@ import {
     BrushFromInstrument,
     VisibleControls,
 } from "./InstrumentSpecification.js";
+import {
+    MediaFromInstrument,
+    MediaUniforms,
+    MediaWidth,
+    MediaExtent,
+    MediumOrdering,
+    PlainMedia,
+    Deposit,
+    ToothField,
+} from "./MediaSolver.js";
+import { SliderRow, Fraction, Fixed } from "./ControlSpecification.js";
 
 import {
     TileNumber,
@@ -978,13 +989,21 @@ test("an instrument folds down onto the brush without inventing settings", () =>
     // Opacity and flow fold into one deposit strength, because the stamping pass has only the one.
     assert.ok(Math.abs(Pushed.Flow - 0.92 * 0.8) < 1e-9);
     assert.equal(Pushed.Spacing, 0.1);
-    assert.equal(Pushed.Jitter, 0, "a brush has no grain control, so it inherits no jitter");
+    assert.equal(Pushed.Smoothing, 0.38, "smoothing is a brush property now, not a label");
+    // Grain used to land on the brush's flat alpha jitter. It belongs to the medium, which reads it as paper tooth.
+    assert.equal(Pushed.Jitter, 0, "no instrument reaches for the plain brush's jitter");
+    assert.equal(Pushed.Media.Index, 1, "a sable round is a bristle medium");
 
     const Chalk = InstrumentByKey["dry-chalk"];
-    assert.equal(BrushFromInstrument(Chalk, Chalk.Settings).Jitter, 0.78, "a dry stick's tooth does reach the jitter");
+    const Dust = BrushFromInstrument(Chalk, Chalk.Settings);
+    assert.equal(Dust.Media.Index, 5, "a chalk stick is dry pigment");
+    assert.ok(Math.abs(Dust.Media.Grain - 0.78) < 1e-9, "and its tooth reaches the medium");
+    assert.ok(Dust.Media.Scatter > 0, "as does its scatter");
 
     const Pen = InstrumentByKey["pen-fineliner"];
-    assert.equal(BrushFromInstrument(Pen, { ...Pen.Settings, Grain: 90 }).Jitter, 0, "a grain value on a pen is ignored");
+    const Ink = BrushFromInstrument(Pen, { ...Pen.Settings, Grain: 90 });
+    assert.equal(Ink.Media.Index, 3);
+    assert.ok(Ink.Media.Grain < 0.5, "a grain value on a pen is the nib's own skip, not the painter's");
 
     const Huge = BrushFromInstrument(Brush, { ...Brush.Settings, Size: 900, Opacity: 0, Flow: 0, Spacing: 0 });
     assert.equal(Huge.Radius, 0.6, "radius is clamped to what the brush accepts");
@@ -1003,7 +1022,10 @@ test("a dependent control is hidden rather than ground out", () =>
     assert.equal(Record.Key, "brush-round");
     assert.equal(Record.Settings.Head, "Round", "the record keeps what the brush cannot carry");
     assert.ok(Record.Wired.includes("Size") && Record.Wired.includes("Flow"));
-    assert.ok(!Record.Wired.includes("Smoothing"), "a preview-only control is not claimed as wired");
+    // Every control reaches the pass now, smoothing included, and the card's footnote reads off this same list.
+    assert.ok(Record.Wired.includes("Smoothing"), "nothing is claimed as preview only any more");
+    assert.equal(Record.Media.Index, 1, "the record carries the medium the settings resolved to");
+    assert.ok(/bristle/.test(Record.Summary), Record.Summary);
     Record.Settings.Size = 99;
     assert.notEqual(Brush.Settings.Size, 99, "the record holds a copy, so a later edit cannot rewrite its past");
 });
@@ -1046,4 +1068,166 @@ test("an export preset says which way its normals point", () =>
     assert.equal(Pixels[1], 20, "and the original is left alone");
 
     assert.deepEqual(ExportSizes.map((Entry) => Entry.Size), [0, 512, 1024, 2048, 4096]);
+});
+
+//--------------------------------------------------------------------------------------------------------------------------
+// The media model.
+//
+// These are the numbers ShadingGlsl's MediaChunk is written against. A change that breaks one of them is a change that
+// has to be made in the shader too, which is the entire reason they are asserted here rather than left to the eye.
+//--------------------------------------------------------------------------------------------------------------------------
+test("every instrument resolves to a medium the pass can hold", () =>
+{
+    const Expected = { brush: 1, pencil: 2, pen: 3, marker: 4, dry: 5, wax: 6 };
+    assert.equal(MediumOrdering[0].Identifier, "plain", "medium zero must be the plain dab an unset uniform means");
+    for (const Family of InstrumentFamilies)
+    {
+        for (const Type of Family.Types)
+        {
+            const Media = MediaFromInstrument(Type, Type.Settings);
+            assert.equal(Media.Index, Expected[Family.Key], `${Type.Key} resolved to ${Media.Medium}`);
+            for (const [Key, Value] of Object.entries(Media))
+                if (typeof Value === "number") assert.ok(Number.isFinite(Value), `${Type.Key}.${Key} is ${Value}`);
+            assert.ok(Media.Ratio > 0 && Media.Ratio <= 1, `${Type.Key} has a nonsense nib ratio`);
+            assert.ok(Media.Reach > 0, `${Type.Key} runs dry before it starts`);
+            assert.ok(Media.Grain >= 0 && Media.Grain <= 1);
+            const Packed = MediaUniforms(Media);
+            assert.deepEqual(
+                [Packed.A.length, Packed.B.length, Packed.C.length, Packed.D.length],
+                [4, 4, 4, 4],
+                `${Type.Key} does not pack into four vec4s`,
+            );
+            assert.ok(Packed.A.every(Number.isFinite) && Packed.D.every(Number.isFinite));
+        }
+    }
+});
+
+test("a medium lays its own kind of mark", () =>
+{
+    const Of = (Key, Patch = {}) =>
+    {
+        const Type = InstrumentByKey[Key];
+        return MediaFromInstrument(Type, { ...Type.Settings, ...Patch });
+    };
+    const Lay = (Media, Sample = {}) =>
+        Deposit(Media, { Across: 0.2, Along: 0.01, Press: 1, Hardness: 0.5, Tooth: 0.5, Fibre: 0.5, Speck: 0, ...Sample }).Alpha;
+
+    // Graphite is the paper's decision, not the pencil's.
+    const Pencil = Of("pencil-graphite");
+    assert.ok(Lay(Pencil, { Tooth: 0.95 }) > Lay(Pencil, { Tooth: 0.05 }), "tooth made no difference to graphite");
+    assert.ok(Lay(Pencil, { Press: 1 }) > Lay(Pencil, { Press: 0.25 }), "pressure made no difference to graphite");
+    assert.ok(MediaFromInstrument(InstrumentByKey["pencil-charcoal"], InstrumentByKey["pencil-charcoal"].Settings).Darkness >
+        Pencil.Darkness, "a 6B is no blacker than an HB");
+
+    // A dry stick sheds, and sheds further than the mark reaches.
+    const Chalk = Of("dry-chalk");
+    assert.ok(MediaExtent(Chalk) > 1);
+    assert.ok(Lay(Chalk, { Across: 1.15, Speck: 1 }) > 0, "no dust landed outside the stick");
+    assert.equal(Lay(Chalk, { Across: 1.15, Speck: 0 }), 0, "pigment landed outside the stick with no speck to carry it");
+
+    // Wax bridges the valleys however hard it is pushed, unless it is melted into them.
+    const Crayon = Of("wax-crayon");
+    assert.ok(Lay(Crayon, { Tooth: 0.1, Press: 1 }) < Lay(Crayon, { Tooth: 0.9, Press: 1 }) - 0.2, "wax ignored the valleys");
+    // Tooth at the top is the medium left entirely to the paper, and wax still bridges even at full pressure.
+    assert.ok(Lay(Of("wax-crayon", { Grain: 100 }), { Tooth: 0.1, Press: 1 }) < 0.3, "wax filled a valley it should skip");
+    assert.ok(Lay(Of("wax-crayon", { Melt: 100 }), { Tooth: 0.1, Press: 1 }) > Lay(Crayon, { Tooth: 0.1, Press: 1 }));
+
+    // A loaded brush carries further than a dry one and combs the paint less.
+    const Dry = Of("brush-round", { Wetness: 0 });
+    const Wet = Of("brush-round", { Wetness: 100 });
+    assert.ok(Wet.Reach > Dry.Reach);
+    const Comb = (Media) =>
+    {
+        let Low = 1;
+        let High = 0;
+        for (let Step = -60; Step <= 60; Step += 1)
+        {
+            const Alpha = Deposit(Media, { Across: Step / 200, Along: 0, Press: 1, Hardness: 0.4, Tooth: 0.5, Fibre: 0.5, Speck: 0 }).Alpha;
+            Low = Math.min(Low, Alpha);
+            High = Math.max(High, Alpha);
+        }
+        return High - Low;
+    };
+    assert.ok(Comb(Dry) > Comb(Wet) + 0.1, `a wet brush combed as hard as a dry one: ${Comb(Wet)} vs ${Comb(Dry)}`);
+    assert.ok(
+        Deposit(Dry, { Across: 0, Along: Dry.Reach, Press: 1, Hardness: 0.4, Tooth: 0.5, Fibre: 0.5, Speck: 0 }).Alpha <
+            Deposit(Dry, { Across: 0, Along: 0, Press: 1, Hardness: 0.4, Tooth: 0.5, Fibre: 0.5, Speck: 0 }).Alpha,
+        "the brush never ran dry",
+    );
+
+    // A marker pools at its rim; that wet edge is the whole look of the medium.
+    const Marker = Of("marker-chisel");
+    const Rim = Deposit(Marker, { Across: 0.8, Along: 0, Press: 1, Hardness: 0.72, Tooth: 0.5, Fibre: 0.5, Speck: 0 });
+    const Middle = Deposit(Marker, { Across: 0, Along: 0, Press: 1, Hardness: 0.72, Tooth: 0.5, Fibre: 0.5, Speck: 0 });
+    assert.ok(Rim.Shade < Middle.Shade, "the wet edge is no darker than the middle");
+
+    // And the plain medium is the soft round dab the pass drew before any of this.
+    assert.equal(Deposit(PlainMedia, { Across: 0, Hardness: 0.45 }).Alpha, 1);
+    assert.equal(Deposit(PlainMedia, { Across: 1, Hardness: 0.45 }).Alpha, 0);
+    assert.equal(Deposit(null, { Across: 0.3 }).Shade, 1, "the plain medium tints nothing");
+});
+
+test("a nib is as wide as the direction it is dragged in", () =>
+{
+    const Italic = MediaFromInstrument(InstrumentByKey["pen-italic"], InstrumentByKey["pen-italic"].Settings);
+    assert.ok(Italic.Ratio < 0.3, "a 2mm italic has no waist");
+    assert.ok(Math.abs(MediaWidth(Italic, Italic.Angle) - Italic.Ratio) < 1e-9, "dragged along its edge it is not thin");
+    assert.ok(Math.abs(MediaWidth(Italic, Italic.Angle + Math.PI / 2) - 1) < 1e-9, "dragged across it is not full width");
+    assert.ok(Math.abs(MediaWidth(Italic, Italic.Angle + Math.PI) - Italic.Ratio) < 1e-9, "and the other way along is the same");
+
+    const Round = MediaFromInstrument(InstrumentByKey["brush-round"], InstrumentByKey["brush-round"].Settings);
+    assert.equal(MediaWidth(Round, 0.4), 1, "a round head draws one width whichever way it moves");
+    assert.equal(MediaWidth(Round, Number.NaN), 1, "and a direction nobody could compute is not a zero-width stroke");
+});
+
+test("a frequency scales with the view and a reach scales against it", () =>
+{
+    const Media = MediaFromInstrument(InstrumentByKey["dry-chalk"], InstrumentByKey["dry-chalk"].Settings);
+    const Surface = MediaUniforms(Media, 1);
+    const Plane = MediaUniforms(Media, 3);
+    assert.ok(Math.abs(Plane.A[1] - Surface.A[1] * 3) < 1e-6, "the paper would be three times too fine in the plane view");
+    assert.ok(Math.abs(Plane.D[2] - Surface.D[2] * 3) < 1e-6);
+    assert.ok(Math.abs(Plane.D[1] - Surface.D[1] / 3) < 1e-6, "and the head would carry three times as far");
+    assert.ok(MediaUniforms(null).Medium === 0, "a missing profile is the plain one, not a crash");
+});
+
+test("the tooth is a field, not a shuffle", () =>
+{
+    // Paper does not move. The same point must answer the same way however many times it is asked, or a second stroke
+    // over the first would land in different valleys and the grain would read as noise.
+    assert.equal(ToothField(1.25, 3.5), ToothField(1.25, 3.5));
+    assert.notEqual(ToothField(1.25, 3.5), ToothField(1.26, 3.5));
+    let Low = 1;
+    let High = 0;
+    let Total = 0;
+    const Count = 4000;
+    for (let Step = 0; Step < Count; Step += 1)
+    {
+        const Value = ToothField(Step * 0.37, Step * 0.11);
+        Low = Math.min(Low, Value);
+        High = Math.max(High, Value);
+        Total += Value;
+    }
+    assert.ok(Low >= 0 && High <= 1, `tooth left its range: ${Low}..${High}`);
+    assert.ok(Math.abs(Total / Count - 0.5) < 0.06, `tooth is biased: ${Total / Count}`);
+});
+
+test("the editor has one slider, and both panels mount it", () =>
+{
+    const Row = SliderRow({ Label: "Size", Path: "Brush.Radius", Value: 0.5, Minimum: 0, Maximum: 1, Step: 0.01, Unit: "m" });
+    assert.ok(Row.includes("property-row slider-row"), "the theme's own row class");
+    assert.ok(Row.includes('type="range"') && Row.includes('data-pill="1"'), "both halves of the control");
+    assert.ok(Row.includes("--fraction:0.5000"), "the track paints its own fill");
+    assert.ok(Row.includes('data-bind="Brush.Radius"'), "the inspector's binding by default");
+
+    // The card asks for the same row under a different attribute, so the inspector's delegated listener cannot see it.
+    const Card = SliderRow({ Label: "Size", Path: "instrument-Size", Value: 9, Minimum: 0.4, Maximum: 60, Step: 0.1, Unit: "cm", Bind: "key", Glyph: "<svg></svg>" });
+    assert.ok(Card.includes('data-key="instrument-Size"') && !Card.includes("data-bind"), "the card bound into the inspector");
+    assert.ok(Card.includes("<svg></svg>"), "the card's glyph was dropped");
+    assert.ok(Card.includes(">cm<"), "the unit cell carries the unit");
+
+    assert.equal(Fraction(5, 0, 10), 0.5);
+    assert.equal(Fraction(-5, 0, 10), 0, "a value below the floor is not a negative fill");
+    assert.equal(Fixed(1.4, 1), "1", "a whole-number step shows no decimals");
+    assert.equal(Fixed(0.456, 0.01), "0.46");
 });

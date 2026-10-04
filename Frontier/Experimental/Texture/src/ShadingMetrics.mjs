@@ -24,6 +24,8 @@ import { OrbitProjection } from "./OrbitProjection.js";
 import { DefaultStack, DefaultProject, CreateLayer } from "./LayerSpecification.js";
 import { ExportSlots, SurfaceFragment, PlaneFragment, CompositeFragment, Chunks } from "./ShadingGlsl.js";
 import { DisplayIndex } from "./ChannelSpecification.js";
+import { MediaFromInstrument, PlainMedia } from "./MediaSolver.js";
+import { InstrumentByKey } from "./InstrumentSpecification.js";
 
 //--------------------------------------------------------------------------------------------------------------------------
 // A WebGL2 stand-in. Enumerations are handed out on demand, resources are tagged objects, and the uniform reflection is
@@ -251,6 +253,52 @@ test("painting a stroke layer stamps, and erasing uses a destructive blend", () 
     const Record = Integrator.LayerImages.get(Masked.Identifier);
     assert.ok(Record.Mask, "the mask image was not created");
     assert.equal(Record.Coverage, undefined, "a mask stroke allocated a coverage image");
+});
+
+test("the stamping pass is told which medium it is painting with", () =>
+{
+    const { Integrator, Device } = Prepare();
+    const Layer = CreateLayer("stroke");
+    Integrator.EnsureCoverage(Layer);
+    const Charcoal = InstrumentByKey["dry-charcoal"];
+    const Media = MediaFromInstrument(Charcoal, Charcoal.Settings);
+    const Options = {
+        Target: "coverage",
+        Start: [0, 0, 0.8],
+        End: [0.1, 0, 0.8],
+        Normal: [0, 0, 1],
+        Colour: [1, 1, 1],
+        Radius: 0.06,
+        Hardness: 0.2,
+        Flow: 0.8,
+        Media,
+        Press: [0.3, 0.9],
+        Travel: [0.2, 0.34],
+    };
+    Integrator.Stamp(Layer, Options);
+
+    const Sent = (Name) => Device.Calls.filter((Call) => Call.Arguments?.[0]?.Name === Name).at(-1)?.Arguments;
+    assert.equal(Sent("uMedium")[1], 5, "dry pigment did not reach the pass");
+    assert.deepEqual([...Sent("uMediaA")[1]].slice(0, 1), [Media.Grain], "the tooth strength is the first of the A pack");
+    assert.ok(Sent("uMediaA")[1][1] > 0, "a tooth frequency of zero is a flat mark");
+    assert.equal(Sent("uMediaB")[1].length, 4);
+    assert.equal(Sent("uMediaC")[1].length, 4);
+    assert.equal(Sent("uMediaD")[1].length, 4);
+    assert.deepEqual([...Sent("uStrokePress")[1]], [0.3, 0.9, 0.2, 0.34], "pressure and travel are one vec4");
+
+    // 🔴 The eraser lifts with the plain medium however exotic the instrument in hand is.
+    Integrator.Stamp(Layer, { ...Options, Erase: true });
+    assert.equal(Sent("uMedium")[1], 0, "erasing kept the charcoal");
+
+    // With no medium at all the pass is handed the plain profile rather than a hole.
+    Integrator.Stamp(Layer, { ...Options, Media: null });
+    assert.equal(Sent("uMedium")[1], PlainMedia.Index);
+    assert.deepEqual([...Sent("uStrokePress")[1]], [0.3, 0.9, 0.2, 0.34]);
+
+    // The flattened view measures in UV, so the paper's frequency is scaled by what a UV unit is worth.
+    Integrator.Stamp(Layer, { ...Options, Mode: "plane", StartPlane: [0.2, 0.2], EndPlane: [0.6, 0.3], PlaneRadius: 0.05, Span: 4 });
+    assert.ok(Math.abs(Sent("uMediaA")[1][1] - Media.Tooth * 4) < 1e-3, "the plane's paper is the surface's paper");
+    assert.ok(Math.abs(Sent("uMediaD")[1][1] - Media.Reach / 4) < 1e-6, "and a reach shrinks by the same number");
 });
 
 test("texture-space painting takes the plane path without touching the bake", () =>

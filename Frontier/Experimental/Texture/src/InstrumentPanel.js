@@ -11,6 +11,8 @@
 // it asks the host, through `Masking`, and swaps its colour swatches for a value ramp when the answer is yes.
 //============================================================================================================================================
 
+import { SliderRow, SyncSlider } from "./ControlSpecification.js";
+import { MediaFromInstrument, MediaSummary, Deposit, ToothField, ValueNoise, Hash21, MediaWidth, MediaExtent } from "./MediaSolver.js";
 import {
     InstrumentFamilies,
     InstrumentArtwork,
@@ -129,6 +131,12 @@ export class InstrumentPanel
     get Swatch()
     {
         return this.Chosen.get(this.Active.Key);
+    }
+
+    // The medium the instrument in hand resolves to: what the ribbon draws with and what the stamping pass is handed.
+    get Media()
+    {
+        return MediaFromInstrument(this.Active, this.Settings);
     }
 
     Drawing(Type, View)
@@ -275,16 +283,27 @@ export class InstrumentPanel
             ? `Masking · ${this.Settings.Size} cm`
             : `${FamilyOf(this.Active).Label} · ${this.Settings.Size} cm`;
 
+        this.RenderFootnote();
+    }
+
+    // What the card promises about the pane it is showing. Every control reaches the stamping pass today; the count is
+    // still computed rather than assumed, so the day one does not, the card says so instead of claiming otherwise.
+    RenderFootnote()
+    {
+        const Foot = this.Root.querySelector("[data-foot-note]");
+        if (!Foot) return;
         const Inert = VisibleControls(this.Active, this.Settings)
             .filter((Control) => !Control.Wired)
             .map((Control) => Control.Label);
-        this.Root.querySelector("[data-foot-note]").textContent = Inert.length
+        Foot.textContent = Inert.length
             ? `${Inert.length} setting${Inert.length === 1 ? "" : "s"} preview only`
-            : "Every setting reaches the brush";
+            : `Every setting reaches the paint · ${MediaSummary(this.Media)}`;
     }
 
     BuildControl(Control)
     {
+        if (Control.Kind === "Slider") return this.BuildSlider(Control);
+
         const Row = document.createElement("div");
         Row.className = `control-row ${Control.Wired ? "" : "inert"}`;
 
@@ -305,67 +324,65 @@ export class InstrumentPanel
             return Row;
         }
 
-        const Value = this.Settings[Control.Key];
-        const Shown = Control.Kind === "Slider" ? `${Value}${Control.Unit || ""}` : Value;
         Row.innerHTML = `
             <div class="control-head">${Glyph(Control.Glyph)}<span>${Escape(Control.Label)}</span>
-                <span class="control-value" data-readout>${Escape(Shown)}</span>
+                <span class="control-value" data-readout>${Escape(this.Settings[Control.Key])}</span>
             </div>`;
-
-        Row.append(Control.Kind === "Slider" ? this.BuildSlider(Control, Row) : this.BuildSegmented(Control));
+        Row.append(this.BuildSegmented(Control));
         return Row;
     }
 
-    BuildSlider(Control, Row)
+    //----------------------------------------------------------------------------------------------------------------------
+    // A slider row — the editor's slider, not one of the card's own. SliderRow is the same builder the inspector's
+    // property sheets use, so a size here reads, drags and types exactly like a roughness there.
+    //
+    // 🔴 Bound with `data-key`, never `data-bind`. The card is mounted on the body; a `data-bind` attribute out here
+    //    would be picked up by the panel's delegated inspector listener and resolved against the project record, which
+    //    has no notion of an instrument's settings.
+    //----------------------------------------------------------------------------------------------------------------------
+    BuildSlider(Control)
     {
-        const Track = document.createElement("div");
-        Track.className = "slider-track";
-        Track.innerHTML = `<div class="slider-rail"></div><div class="slider-fill"></div><div class="slider-knob"></div>`;
-        const Fill = Track.querySelector(".slider-fill");
-        const Knob = Track.querySelector(".slider-knob");
+        const Host = document.createElement("div");
+        Host.innerHTML = SliderRow({
+            Label: Control.Label,
+            Path: `instrument-${this.Active.Key}-${Control.Key}`,
+            Value: this.Settings[Control.Key],
+            Minimum: Control.Minimum,
+            Maximum: Control.Maximum,
+            Step: Control.Step,
+            Unit: Control.Unit,
+            Glyph: Glyph(Control.Glyph),
+            Bind: "key",
+            Muted: !Control.Wired,
+        });
+        const Row = Host.firstElementChild;
 
-        const Draw = () =>
+        const Apply = (Text, Live) =>
         {
-            const Fraction = (this.Settings[Control.Key] - Control.Minimum) / (Control.Maximum - Control.Minimum);
-            Fill.style.width = `${Fraction * 100}%`;
-            Knob.style.left = `${Fraction * 100}%`;
-        };
-
-        const Set = (Across) =>
-        {
-            const Box = Track.getBoundingClientRect();
-            const Fraction = Clamp((Across - Box.left) / (Box.width || 1), 0, 1);
-            const Raw = Control.Minimum + Fraction * (Control.Maximum - Control.Minimum);
-            const Snapped = Math.round(Raw / Control.Step) * Control.Step;
-            const Value = Number(Snapped.toFixed(Control.Step < 1 ? 1 : 0));
+            // 🔴 A pill being typed into is EMPTY for a keystroke or two, and `Number("")` is zero, not NaN. Testing
+            //    the string rather than the number is what stops a half-typed value snapping the setting to its floor.
+            if (Text === "" || Text === null || Text === undefined) return;
+            const Raw = Number(Text);
+            if (!Number.isFinite(Raw)) return;
+            const Value = Number(Clamp(Raw, Control.Minimum, Control.Maximum).toFixed(Control.Step < 1 ? 1 : 0));
             this.Settings[Control.Key] = Value;
-            Row.querySelector("[data-readout]").textContent = `${Value}${Control.Unit || ""}`;
-            Draw();
+            SyncSlider(Row, Value, Control.Step);
             this.Commit();
-            this.DrawRibbon(this.Root.querySelector(".ribbon-canvas"));
+            this.ScheduleRibbon();
             if (Control.Key === "Size")
                 this.Root.querySelector("[data-type-sub]").textContent =
                     `${this.Masking() ? "Masking" : FamilyOf(this.Active).Label} · ${Value} cm`;
+            // A typed value is committed on change rather than on every keystroke, so "4" on the way to "42" does not
+            // repaint the ribbon at a size nobody asked for.
+            if (!Live) this.RenderFootnote();
         };
 
-        // 🔴 Pointer capture, not a document listener. Without it a drag that leaves the 22px track stops tracking,
-        //    which on a control this thin is most drags.
-        Track.addEventListener("pointerdown", (Event) =>
+        for (const Field of Row.querySelectorAll("input"))
         {
-            Track.setPointerCapture?.(Event.pointerId);
-            Set(Event.clientX);
-        });
-        Track.addEventListener("pointermove", (Event) =>
-        {
-            if (Track.hasPointerCapture?.(Event.pointerId)) Set(Event.clientX);
-        });
-        Track.addEventListener("pointerup", (Event) =>
-        {
-            if (Track.hasPointerCapture?.(Event.pointerId)) Track.releasePointerCapture(Event.pointerId);
-        });
-
-        Draw();
-        return Track;
+            Field.addEventListener("input", (Event) => Apply(Event.target.value, true));
+            Field.addEventListener("change", (Event) => Apply(Event.target.value, false));
+        }
+        return Row;
     }
 
     BuildSegmented(Control)
@@ -491,58 +508,184 @@ export class InstrumentPanel
         for (const Entry of this.LevelDraws) Entry.Draw();
     }
 
+    // 🔴 One redraw per frame, not one per event. A drag on a slider fires input faster than a 46px brush can be
+    //    re-deposited pixel by pixel, and without the gate the card falls behind the hand that is dragging it.
+    ScheduleRibbon()
+    {
+        if (this.RibbonPending) return;
+        this.RibbonPending = true;
+        const Draw = () =>
+        {
+            this.RibbonPending = false;
+            this.DrawRibbon(this.Root.querySelector(".ribbon-canvas"));
+        };
+        if (typeof requestAnimationFrame === "function") requestAnimationFrame(Draw);
+        else Draw();
+    }
+
     //----------------------------------------------------------------------------------------------------------------------
-    // The ribbon: a run of dabs drawn with the same falloff the stamping pass uses, so the swatch is representative.
+    // The ribbon.
+    //
+    // 🔴 This is not a drawing of a stroke, it is a stroke: every pixel runs MediaSolver's `Deposit`, the same model
+    //    the stamping pass runs on the GPU, with the same tooth, the same bristle lanes and the same entry taper. A
+    //    preview drawn any other way is a promise the paint then breaks.
+    //
+    // 📝 Written as pixels rather than as canvas dabs because the model answers per point: there is no gradient stop
+    //    that can describe a bristle gap, and stacking translucent arcs to fake one gets the overlaps wrong anyway.
+    //    One write per pixel, because the preview path never crosses itself.
     //----------------------------------------------------------------------------------------------------------------------
     DrawRibbon(Canvas)
     {
         if (!Canvas) return;
         const Pen = Canvas.getContext("2d");
-        if (!Pen || typeof Pen.createRadialGradient !== "function") return;
+        if (!Pen || typeof Pen.createImageData !== "function") return;
         const Width = Canvas.width;
         const Height = Canvas.height;
-        Pen.clearRect(0, 0, Width, Height);
+        const Sheet = Pen.createImageData(Width, Height);
+        // jsdom hands back a proxy whose methods answer undefined; the returned object is the only honest test.
+        if (!Sheet || !Sheet.data) return;
 
         const Settings = this.Settings;
-        const Reach = Clamp(Settings.Size * 2.2, 3, 46);
-        const Strength = (Settings.Opacity / 100) * (Settings.Flow / 100);
-        const Tooth = (Settings.Grain || 0) / 100;
-        const Spread = (Settings.Scatter || 0) / 100;
-        const Core = Clamp(Settings.Hardness / 100, 0, 0.95);
+        const Media = this.Media;
+        const Hardness = Clamp((Settings.Hardness ?? 50) / 100, 0, 1);
+        const Strength = Clamp((Settings.Opacity / 100) * (Settings.Flow / 100), 0.02, 1);
+        const Reach = Clamp(Settings.Size * 2.4, 3.5, 46);
+        const Extent = MediaExtent(Media);
+        // The preview is drawn at the instrument's real size, so a metre of surface and a pixel of ribbon are related
+        // by one number — and the paper's tooth comes out the size it will actually be under the brush.
+        const Metres = Clamp(Settings.Size / 100, 0.004, 0.6) / Reach;
         const [Red, Green, Blue] = (this.Masking()
             ? [this.ReadLevel(), this.ReadLevel(), this.ReadLevel()]
             : Triple(this.Swatch)
-        ).map((Part) => Math.round(Part * 255));
+        ).map((Part) => Part * 255);
 
-        const Dab = (X, Y, Scale) =>
-        {
-            const Radius = Math.max(1, Reach * Scale);
-            const Wash = Pen.createRadialGradient(X, Y, 0, X, Y, Radius);
-            if (!Wash || typeof Wash.addColorStop !== "function") return;
-            Wash.addColorStop(0, `rgba(${Red},${Green},${Blue},${Strength})`);
-            Wash.addColorStop(Core, `rgba(${Red},${Green},${Blue},${Strength})`);
-            Wash.addColorStop(1, `rgba(${Red},${Green},${Blue},0)`);
-            Pen.fillStyle = Wash;
-            Pen.beginPath();
-            Pen.arc(X, Y, Radius, 0, Math.PI * 2);
-            Pen.fill();
-        };
+        // 🔴 A white china marker on cream paper is a true preview of nothing at all. When the pigment is as pale as
+        //    the sheet it would be laid on, the ribbon lays a dark ground instead — the same thing a shop does with a
+        //    white pencil on a black card, and the only way those instruments can be shown at all.
+        const Luminance = (0.2126 * Red + 0.7152 * Green + 0.0722 * Blue) / 255;
+        const Ground = Luminance > 0.72 ? [54, 54, 58] : null;
 
-        // 🔴 Deterministic wobble, never Math.random: a ribbon that reshuffles on every slider tick makes it impossible
-        //    to see what the slider actually changed.
-        const Wobble = (Step, Salt) => Math.sin(Step * 12.9898 + Salt * 78.233) * 0.5;
-
-        const Steps = 150;
+        // The path: one stroke across the strip, with a turn in it so a chisel nib shows both its widths.
+        const Steps = 24;
+        const Points = [];
+        const Walk = [0];
+        const Widths = [1];
         for (let Step = 0; Step <= Steps; Step += 1)
         {
-            const Along = Step / Steps;
-            const X = 24 + Along * (Width - 48);
-            const Y = Height * 0.55 + Math.sin(Along * Math.PI * 1.6) * Height * 0.2;
-            const Swell = Settings.Pressure ? Math.sin(Along * Math.PI) ** 0.6 : 1;
-            const Thin = 1 - ((Settings.Taper || 0) / 100) * (1 - Math.sin(Along * Math.PI));
-            if (Tooth > 0 && Wobble(Step, 3) + 0.5 < Tooth * 0.55) continue;
-            Dab(X + Spread * Wobble(Step, 7) * Reach * 1.2, Y + Spread * Wobble(Step, 11) * Reach * 1.2, Math.max(0.12, Swell * Thin));
+            const Share = Step / Steps;
+            const X = 18 + Share * (Width - 36);
+            const Y = Height * 0.54 + Math.sin(Share * Math.PI * 1.7) * Height * 0.23;
+            Points.push([X, Y]);
+            if (Step > 0)
+            {
+                Walk.push(Walk[Step - 1] + Math.sqrt((X - Points[Step - 1][0]) ** 2 + (Y - Points[Step - 1][1]) ** 2));
+                // The same width the stroke itself would get for this direction, so a chisel shows both of its faces.
+                Widths.push(MediaWidth(Media, Math.atan2(Y - Points[Step - 1][1], X - Points[Step - 1][0])));
+            }
         }
+        const Total = Walk[Walk.length - 1] || 1;
+
+        // The same entry ramp StrokeProjection applies, in the same units: no instrument lands at full weight.
+        const Pressure = (Along) =>
+        {
+            if (!Media.Pressure) return 1;
+            const Length = Math.max(Reach * (0.5 + 7 * Media.Taper), 1e-5);
+            const Entry = Clamp(Along / Length, 0, 1);
+            const Hand = 1 - 0.18 * Math.sin((Along / Total) * Math.PI * 2.3);
+            return Clamp(Hand * (1 - Media.Taper * (1 - Entry) * 0.88), 0.02, 1);
+        };
+
+        const Pixels = Sheet.data;
+        if (Ground)
+        {
+            for (let Index = 0; Index < Width * Height; Index += 1)
+            {
+                Pixels[Index * 4] = Ground[0];
+                Pixels[Index * 4 + 1] = Ground[1];
+                Pixels[Index * 4 + 2] = Ground[2];
+                Pixels[Index * 4 + 3] = 255;
+            }
+        }
+        const Limit = Reach * Extent + 2;
+
+        // 📝 A column index over the path. Without it every pixel of the strip would be measured against every segment
+        //    of the stroke — a sixth of a second per redraw, which on a slider drag is a frozen card. With it each
+        //    pixel only asks the two or three segments that could possibly be near it.
+        const Reachable = [];
+        for (let Column = 0; Column < Width; Column += 1) Reachable.push([]);
+        const Vertical = [];
+        for (let Step = 1; Step <= Steps; Step += 1)
+        {
+            const [AX, AY] = Points[Step - 1];
+            const [BX, BY] = Points[Step];
+            const Low = Math.max(0, Math.floor(Math.min(AX, BX) - Limit));
+            const High = Math.min(Width - 1, Math.ceil(Math.max(AX, BX) + Limit));
+            for (let Column = Low; Column <= High; Column += 1) Reachable[Column].push(Step);
+            Vertical.push([Math.min(AY, BY) - Limit, Math.max(AY, BY) + Limit]);
+        }
+
+        for (let Row = 0; Row < Height; Row += 1)
+        {
+            for (let Column = 0; Column < Width; Column += 1)
+            {
+                let Closest = Infinity;
+                let Side = 0;
+                let Along = 0;
+                let Nib = 1;
+                for (const Step of Reachable[Column])
+                {
+                    const Range = Vertical[Step - 1];
+                    if (Row < Range[0] || Row > Range[1]) continue;
+                    const [AX, AY] = Points[Step - 1];
+                    const [BX, BY] = Points[Step];
+                    const RunX = BX - AX;
+                    const RunY = BY - AY;
+                    const Span = RunX * RunX + RunY * RunY;
+                    const Travel = Span > 1e-9 ? Clamp(((Column - AX) * RunX + (Row - AY) * RunY) / Span, 0, 1) : 0;
+                    const OffX = Column - (AX + RunX * Travel);
+                    const OffY = Row - (AY + RunY * Travel);
+                    const Distance = Math.sqrt(OffX * OffX + OffY * OffY);
+                    if (Distance >= Closest) continue;
+                    Closest = Distance;
+                    Side = Distance * (OffX * RunY - OffY * RunX < 0 ? -1 : 1);
+                    Along = Walk[Step - 1] + Math.sqrt(Span) * Travel;
+                    Nib = Widths[Step];
+                }
+                if (Closest > Limit) continue;
+
+                const Press = Pressure(Along);
+                const Radius = Math.max(Reach * Nib * (1 - Media.Swell * (1 - Press)), 0.5);
+                const Across = Side / Radius;
+                if (Math.abs(Across) > Extent) continue;
+
+                const Paper = Media.Tooth * Metres;
+                const Mark = Deposit(Media, {
+                    Across,
+                    Along: Along * Metres,
+                    Press,
+                    Hardness,
+                    Tooth: ToothField(Column * Paper, Row * Paper),
+                    Fibre: ValueNoise(Along * Media.Fibre * Metres, Across * 3 + Media.Seed * 17),
+                    Speck: Hash21(Column * 1.37 + Media.Seed, Row * 2.13),
+                });
+                const Alpha = Clamp(Mark.Alpha * Strength, 0, 1);
+                if (Alpha <= 0.004) continue;
+
+                const Offset = (Row * Width + Column) * 4;
+                const Ink = [Clamp(Red * Mark.Shade, 0, 255), Clamp(Green * Mark.Shade, 0, 255), Clamp(Blue * Mark.Shade, 0, 255)];
+                if (Ground)
+                {
+                    for (let Part = 0; Part < 3; Part += 1) Pixels[Offset + Part] = Ground[Part] * (1 - Alpha) + Ink[Part] * Alpha;
+                    Pixels[Offset + 3] = 255;
+                    continue;
+                }
+                for (let Part = 0; Part < 3; Part += 1) Pixels[Offset + Part] = Ink[Part];
+                Pixels[Offset + 3] = Math.round(Alpha * 255);
+            }
+        }
+
+        Pen.clearRect(0, 0, Width, Height);
+        Pen.putImageData(Sheet, 0, 0);
     }
 
     //----------------------------------------------------------------------------------------------------------------------
