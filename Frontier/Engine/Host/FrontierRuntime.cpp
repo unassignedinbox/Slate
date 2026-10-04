@@ -645,12 +645,17 @@ int Frontier::RunFrontierRuntime(
     //──────────────────────────────────────────────────────────────────────────
     // Swapchain exchange — GLFW window + Vulkan surface + compute pipeline
     //──────────────────────────────────────────────────────────────────────────
+    bool BrowserManaged = false;
+    for (int Index = 1; Index + 1 < argc; ++Index)
+        if (std::strcmp(argv[Index], "--launcher-event") == 0) BrowserManaged = true;
+    const std::string SurfaceTitle = ProjectName + "  |  Frontier Engine";
     Frontier::SwapchainConfiguration SurfaceConfig
     {
         1280u,
         720u,
-        (ProjectName + "  |  Frontier Engine").c_str(),
-        false       // validation layers — false for zero-overhead startup and runtime
+        SurfaceTitle.c_str(),
+        false,      // validation layers — false for zero-overhead startup and runtime
+        BrowserManaged
     };
 
     // Frontier.config.toml is read before the device comes up: [render] ray_tracing_tier decides which traversal backend

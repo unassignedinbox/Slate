@@ -91,6 +91,7 @@ struct SwapchainConfiguration
     uint32_t    Height;                         // [px]  surface vertical resolution
     const char* Title;                          // [-]   window title string
     bool        ValidationEnabled;              // [-]   Vulkan validation layer activation
+    bool        HideUntilPresented = false;     // [-]   keep the browser visible instead of showing a blank loading window
 };
 
 //------------------------------------------------------------------------------------------------------------------------

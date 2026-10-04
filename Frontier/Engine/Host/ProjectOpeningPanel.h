@@ -39,6 +39,11 @@ inline void ApplyProjectOpeningTheme()
     Style.Colors[ImGuiCol_WindowBg] = ImVec4(.047f, .047f, .047f, 1);
     Style.Colors[ImGuiCol_ChildBg] = ImVec4(.071f, .071f, .071f, 1);
     Style.Colors[ImGuiCol_FrameBg] = ImVec4(.102f, .102f, .102f, 1);
+    Style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(.20f, .17f, .13f, 1);
+    Style.Colors[ImGuiCol_FrameBgActive] = ImVec4(.25f, .20f, .14f, 1);
+    Style.Colors[ImGuiCol_HeaderActive] = ImVec4(.36f, .29f, .19f, 1);
+    Style.Colors[ImGuiCol_NavCursor] = ImVec4(.898f, .702f, .412f, 1);
+    Style.Colors[ImGuiCol_PopupBg] = ImVec4(.071f, .071f, .071f, 1);
     Style.Colors[ImGuiCol_Button] = ImVec4(.15f, .15f, .15f, 1);
     Style.Colors[ImGuiCol_ButtonHovered] = ImVec4(.28f, .23f, .17f, 1);
     Style.Colors[ImGuiCol_ButtonActive] = ImVec4(.36f, .29f, .19f, 1);

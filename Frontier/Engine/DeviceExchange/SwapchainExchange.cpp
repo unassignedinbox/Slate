@@ -494,6 +494,7 @@ bool SwapchainExchange::Bring() noexcept
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE,  GLFW_TRUE);
+    glfwWindowHint(GLFW_VISIBLE, Configuration.HideUntilPresented ? GLFW_FALSE : GLFW_TRUE);
 
     GlfwWindow = glfwCreateWindow(
         static_cast<int>(Configuration.Width),
@@ -3386,7 +3387,11 @@ void SwapchainExchange::RecordAndPresent(const DispatchConfiguration& Dispatch) 
     PresentInfo.pImageIndices      = &ImageOrdinal;
 
     const VkResult PresentResult = vkQueuePresentKHR(Vulkan->GraphicsQueue, &PresentInfo);
-    if (PresentResult == VK_SUCCESS || PresentResult == VK_SUBOPTIMAL_KHR) PresentedFrame = true;
+    if (PresentResult == VK_SUCCESS || PresentResult == VK_SUBOPTIMAL_KHR)
+    {
+        if (!PresentedFrame && Configuration.HideUntilPresented) glfwShowWindow(GlfwWindow);
+        PresentedFrame = true;
+    }
     if (PresentResult == VK_ERROR_OUT_OF_DATE_KHR || PresentResult == VK_SUBOPTIMAL_KHR || ResizePending)
     {
         ResizePending = false;
