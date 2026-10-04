@@ -1,11 +1,15 @@
 {
   "Browser": {
-    "commit": "28284487c945c585dd5332dac71add985c02108d",
-    "run": "https://github.com/unassignedinbox/Slate/actions/runs/37184302718"
+    "commit": "919da65c0f451b6d45e219a2ed5853dcc2cff6e3",
+    "run": "https://github.com/unassignedinbox/Slate/actions/runs/37194740044",
+    "release": "https://github.com/unassignedinbox/Slate/releases/tag/frontier-browser-919da65",
+    "image": "Actual packaged Frontier.exe DX11 render-target readback",
+    "zipChecksum": "7c5d90b7da43b2d7e86a5c4f4e00440d461467de89b496e443d153b4d3d2956c  Frontier-Windows-x64-919da65.zip",
+    "physicalGpuGameplayVerified": false
   },
   "SDF": {
-    "commit": "28284487c945c585dd5332dac71add985c02108d",
-    "run": "https://github.com/unassignedinbox/Slate/actions/runs/37184302718",
+    "commit": "919da65c0f451b6d45e219a2ed5853dcc2cff6e3",
+    "run": "https://github.com/unassignedinbox/Slate/actions/runs/37194740044",
     "artifact_checks_passed": true,
     "display": "Nearest-neighbour enlargement of exact production Vulkan readback pixels; no reconstructed renderer or image generation. The top-left background sentinel is intentionally black.",
     "execution": [
