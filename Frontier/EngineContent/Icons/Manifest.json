@@ -964,5 +964,23 @@
     "file": "wind.svg",
     "reference": "Experimental/FrontierEditor/custom-icons/wind.svg",
     "sha256": "8b281a793b21674a43f73cd5d2b4d1346422b0b3138a21310eed608a240dbe86"
+  },
+  {
+    "symbol": "EditorVehicle",
+    "file": "editor-vehicle.svg",
+    "reference": "EngineContent/Icons/editor-vehicle.svg",
+    "sha256": "c05089075d513f2e70d63c248d4e892519aaf9e5facb8e3ceee81acc8b20493a"
+  },
+  {
+    "symbol": "EditorCloth",
+    "file": "editor-cloth.svg",
+    "reference": "EngineContent/Icons/editor-cloth.svg",
+    "sha256": "0ce4e72ff493d5be1f7afd133b1f3ee5e6cf17ccd4a03228ae2cd977f5471cb5"
+  },
+  {
+    "symbol": "EditorSuspension",
+    "file": "editor-suspension.svg",
+    "reference": "EngineContent/Icons/editor-suspension.svg",
+    "sha256": "2323cce89cdbcb8f3c1306d7386fa6327d98ada3a759ccc06fd55321c81845ae"
   }
 ]
