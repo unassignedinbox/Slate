@@ -520,3 +520,42 @@ strip measurements, native document and labelled review boards.
 Run `SurfaceOffsetVerification.py` in that same tools folder for independent provenance, width-selection and
 polynomial-parent chord-distance checks. Chord distances are lower bounds on intrinsic distance, not a
 replacement for the surface metric.
+
+## Experimental browser workspace
+
+Open `Frontier/Experimental/SolidArc/index.html` through an HTTP server. The browser workspace uses the Fluid editor’s
+charcoal styling and shared DM Sans fonts. Its geometry is the existing SolidArc C++ implementation compiled to
+WebAssembly, running in a dedicated browser worker. The viewport uses the same native software rasterizer; it is not
+a substitute triangle-only CAD implementation or a WebGL acceleration claim.
+
+- Start with **Mount study**, or open **Examples** for primitives, profiles and overlapping Boolean stock.
+- Use **Construct**, pick figures in the viewport or outliner, then use inspector operations and live dimensions.
+- Drag numeric values or type them; geometry is rebuilt on release. Shift-click extends selection. `1`–`4` choose
+  control-point, edge, face and whole-figure selection. Move is available from the inspector’s **Transform** tab.
+- Orbit with left-drag, pan with right-drag, zoom with the wheel and press `F` to fit. Motion uses a lower-resolution
+  native raster, followed by a full-resolution redraw on release.
+- **Commands** accepts the existing native command language, including `help`, `workplane xz` and detailed construction
+  options not exposed by the initial dialogs. Unsupported native geometry operations report their actual refusal.
+- **Save .arc** downloads native construction, and **Open document** replays it through the native atomic-open route.
+  Tabs hold independent native documents in memory; save before leaving the page. Limits are four documents and an
+  8 MB import. Camera and browser presentation preferences should be treated as session-only.
+- **Export OBJ** downloads tessellated solid geometry, without material sidecars. It is not STEP or NURBS export.
+- Large documents can be slow with the CPU rasterizer. **Help → Restart browser kernel** discards all unsaved browser
+  documents if a native operation stalls. This web build retains native geometric limitations; it is not a general
+  CAD robustness certification or full desktop interaction parity.
+
+From the repository root:
+
+```bash
+npm --prefix Frontier/Experimental/SolidArc ci
+npm --prefix Frontier/Experimental/SolidArc run dev
+npm --prefix Frontier/Experimental/SolidArc test
+npm --prefix Frontier/Experimental/SolidArc run verify:browser
+npm --prefix Frontier/Experimental/SolidArc run build
+```
+
+The checked-in `Runtime/GeometryModule.js` and `.wasm` make the source entry point usable on static hosting without
+npm or a geometry server. `Runtime/Provenance.json` identifies the native source revision and Emscripten version.
+To rebuild, activate Emscripten 4.0.15 and run `python Frontier/Experimental/SolidArc/Native/CompileSequence.py`.
+The **SolidArc WebAssembly** workflow compiles the same sources and publishes the runtime on the session branch.
+Node checks execute the real module; browser checks exercise its worker, raster, dialogs and file downloads.
