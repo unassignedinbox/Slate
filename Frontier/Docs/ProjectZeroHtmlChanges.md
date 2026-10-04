@@ -27,6 +27,8 @@
 | C013 | Precipitation icon instead of umbrella | HTML rain-cloud symbol implemented | Native artwork unchanged |
 | C014 | Animated composite WindEditor | Implemented; evaluator and browser checked | Native wind field evaluation deferred |
 | C015 | Cloud selection of a composite wind field | Implemented and browser-checked | Native cloud advection binding deferred |
+| C016 | Local fog volume shape instead of fixed box bounds | Implemented and browser-checked | Native shape masks/SDF integration deferred |
+| C017 | Permanent first Editor Camera | Implemented and browser-checked | Native camera ownership/removal guards deferred |
 
 ## 2026-10-04 — C001: Construct presentation
 
@@ -437,3 +439,92 @@ Committed **browser** evidence:
 **Status:** HTML review checkpoint. No C++ sources were changed and no native
 build was run. Native entity capability binding, composite wind evaluation and
 cloud advection integration remain deferred until the HTML review is finished.
+
+## 2026-10-04 — C016–C017: Local fog shape and permanent Editor Camera
+
+### Change-log continuity
+
+The previous turn's C012–C015 quick-tile, precipitation-symbol, composite-wind and
+cloud-binding changes were committed with this log in `728a579`. The older
+`ed7d5df` URL visible in the user's screenshot predates those changes. This
+section appends the new corrections; it does not replace or omit the prior log.
+
+### C016 — Local fog takes the selected volume shape
+
+Replaced the fixed `Local bounds` box graphic and editable half-size table with
+**Fog volume shape**:
+
+- Box / rectangular volume: width, depth and height.
+- Sphere: radius.
+- Ellipsoid and diamond / octahedron: width, depth and height.
+- Cylinder and cone: radius and height, aligned with Z up.
+- Regular polygon prism: radius, height and 3–16 sides.
+- Custom polygon extrusion: an editable, ordered XY footprint and Z height.
+
+The wireframe changes with the selected shape and dimensions. World-space Centre
+remains editable. **Min, Max and Size are calculated from the actual selected
+shape geometry**, including asymmetric custom footprints and polygon prisms;
+they are read-only results, not an independent fixed-box authoring control.
+The preview auto-fits the volume, while centre edits update the world-bound
+readouts. Legacy local-fog `Half Size` values seed box dimensions, preserving
+existing volumes on first load. New descriptors persist under
+`Values[localFogId].FogShape` and travel with scene export/import.
+
+Custom footprints support 3–32 vertices, including simple concave polygons.
+Crossing edges, duplicate adjacent points, zero-area footprints and invalid
+coordinates are rejected on Apply without replacing the last valid shape.
+Restored descriptors are bounded/sanitized. **Custom currently means polygon
+extrusion, not arbitrary imported mesh or SDF clipping.** Native general-mesh/SDF
+support remains a separate integration task.
+
+Local Fog's old density illustration is now explicitly labelled as a density
+study, not a ray march through the selected volume. This work does not falsely
+claim native shape-based fog rendering. Global/aerial fog and Local Cloud's
+existing bounds controls are unchanged.
+
+### C017 — The first camera belongs to the editor
+
+The original reserved `camera` entry is now **Editor Camera**, retaining its ID
+and optics drafts rather than allocating a second replacement entry. It is the
+first camera in the Cameras collection and carries an `EDITOR` badge and an
+inspector explanation distinguishing it from scene render cameras.
+
+- Editor Camera cannot be removed, hidden or renamed through context menus,
+  outliner visibility controls or F2.
+- Scene structure normalization guarantees exactly one reserved editor camera
+  after startup, reload, scene import, reset and structural edits. Imports with
+  no editor camera—including an empty scene—restore it. Spoofed or duplicated
+  reserved rows cannot turn it into a deletable scene entity.
+- Construct → Main Camera adds a normal scene camera. Duplicating Editor Camera
+  also creates a normal Main Camera with a fresh ID, never a second protected
+  editor camera. Ordinary scene cameras remain deletable and renameable.
+- Empty-scene import remains valid and retains supplied editor optics settings.
+
+This is an HTML editor ownership/identity policy. It does not implement or change
+native viewport navigation, camera switching or the native scene lifecycle.
+
+### Browser verification and proofs
+
+Standalone HTML rebuilt at **4.14 MiB**. All seven suites passed with
+`Errors: []`: `CheckBrowser`, `CheckConstruction`, `CheckQuickTools`,
+`CheckMaterials`, `CheckAssets`, `CheckWind`, and the new `CheckFogCamera`.
+
+The new suite checks all eight shape descriptors, finite geometry and derived
+bounds, legacy half-size conversion, sphere/cylinder extents, prism topology,
+custom polygon editing/rejection, centre offsets, scene round-trip, reload and
+1024/1280/1366/1920 layouts. Camera checks cover disabled removal/hide/rename,
+F2, duplicate and Construct semantics, empty/missing-camera imports, retained
+optics and reserved-camera restoration after corrupted/missing stored rows.
+Existing camera browser checks now target Editor Camera instead of the old
+Main Camera baseline label; Construct continues to target Main Camera.
+
+Committed browser screenshots:
+
+- [Sphere fog shape and derived bounds](../Experimental/ProjectZeroEditor/Screenshots/FogSphere.png)
+- [Triangular prism fog](../Experimental/ProjectZeroEditor/Screenshots/FogPrism.png)
+- [Custom polygon volume](../Experimental/ProjectZeroEditor/Screenshots/FogCustom.png)
+- [Protected Editor Camera](../Experimental/ProjectZeroEditor/Screenshots/EditorCamera.png)
+
+**Status:** HTML review checkpoint. No C++ sources changed and no native build
+was run. Native fog-shape masks and permanent editor-camera ownership/removal
+rules remain deferred until the HTML review is finished.

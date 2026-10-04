@@ -1,3 +1,5 @@
+import FogShapePanel from "./FogShapePanel.jsx";
+import { IsEditorCamera } from "./ScenePolicy.js";
 import { WindInspector, WindBinding } from "./WindPanel.jsx";
 import TransformPanel from "./TransformPanel.jsx";
 import MaterialPanel from "./MaterialPanel.jsx";
@@ -882,7 +884,13 @@ export function Inspector({
       <>
         {Header(
           "Scene / Cameras",
-          Subject.Id === "cine" ? "Cine Camera · lens study" : "Main Camera",
+          Subject.Id === "cine" ? "Cine Camera · lens study" : Subject.Name,
+        )}
+        {IsEditorCamera(Subject) && (
+          <div className="editor-camera-note">
+            Editor navigation camera · always present. Cannot be deleted or
+            hidden. Construct adds separate scene cameras.
+          </div>
         )}
         <Card Title="Lens + field of view" Height={440}>
           <Metric Value={Focal.toFixed(1)} Unit="mm" />
@@ -1568,7 +1576,7 @@ export function Inspector({
           />
           <p>
             {Local
-              ? "Sampled +Y path through the volume centre · static at time zero"
+              ? "Illustrative density study · does not ray-march the selected shape"
               : "Horizontal probe at world Z = 2 m · selected medium only"}
           </p>
           <HazeTransmission haze={V("Density") * (Aerial ? 25 : 100)} />
@@ -1582,54 +1590,19 @@ export function Inspector({
               ...(Local ? ["Anisotropy"] : []),
             )}
           </Card>
-          <Card
-            Title={
-              Local
-                ? "Local bounds"
-                : Aerial
-                  ? "Spectral transmission"
-                  : "Density with altitude"
-            }
-            Height={416}
-          >
-            {Local ? (
-              <>
-                <Bounds />
-                <TransformPanel
-                  Values={Values}
-                  Change={Change}
-                  Compact
-                  Space="WORLD SPACE"
-                  Rows={[
-                    [
-                      "Centre",
-                      "m",
-                      Sheet.find((Field) => Field.Label === "Centre").Default,
-                      -100000,
-                      100000,
-                      1,
-                    ],
-                    [
-                      "Half Size",
-                      "m",
-                      Sheet.find((Field) => Field.Label === "Half Size")
-                        .Default,
-                      0.001,
-                      100000,
-                      1,
-                    ],
-                  ]}
-                />
-              </>
-            ) : (
-              <>
-                <Curve
-                  Value={Aerial ? V("Density") : V("Falloff Height") / 500}
-                />
-                {!Aerial && F("Colour")}
-              </>
-            )}
-          </Card>
+          {Local ? (
+            <FogShapePanel Values={Values} Change={Change} />
+          ) : (
+            <Card
+              Title={Aerial ? "Spectral transmission" : "Density with altitude"}
+              Height={416}
+            >
+              <Curve
+                Value={Aerial ? V("Density") : V("Falloff Height") / 500}
+              />
+              {!Aerial && F("Colour")}
+            </Card>
+          )}
         </div>
         <Card Title="Wind binding">
           {Fields("Wind source", "Owned wind component")}

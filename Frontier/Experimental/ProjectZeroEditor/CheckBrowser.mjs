@@ -31,7 +31,7 @@ Page.on("console", (Message) => {
 });
 const PanelNames = [
   "Sun",
-  "Main Camera",
+  "Editor Camera",
   "Stars",
   "Moons",
   "Atmosphere",
@@ -117,7 +117,7 @@ try {
     });
   }
   // A real pointer drag, rather than synthetic value assignment.
-  await Select("Main Camera");
+  await Select("Editor Camera");
   const Range = Page.getByRole("slider", { name: "Focal Length", exact: true });
   await Range.scrollIntoViewIfNeeded();
   const Rect = await Range.boundingBox(),
@@ -134,7 +134,7 @@ try {
     exact: true,
   }).inputValue();
   await Select("Sun");
-  await Select("Main Camera");
+  await Select("Editor Camera");
   assert.equal(
     await Page.getByLabel("Focal Length value", { exact: true }).inputValue(),
     Focal,

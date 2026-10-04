@@ -1,3 +1,4 @@
+import { EnsureEditorCamera, IsEditorCamera } from "./ScenePolicy.js";
 import WindEditor from "./WindPanel.jsx";
 import AssetPanel from "./AssetPanel.jsx";
 import { RestoreAssets } from "./AssetDepot.js";
@@ -28,11 +29,11 @@ const InitialRows = [
   ["cameras", "Cameras", "group", "camera", null, "Camera collection"],
   [
     "camera",
-    "Main Camera",
+    "Editor Camera",
     "camera",
     "camera",
     "cameras",
-    "Live projection · aperture and focus are diagnostics only",
+    "Permanent editor navigation camera · not a scene render camera",
   ],
   [
     "cine",
@@ -181,10 +182,12 @@ function App() {
     [HiZ, ToggleHiZ] = useState(true),
     [Alias, ToggleAlias] = useState(true),
     [PatchError, SetPatchError] = useState(1);
-  const [Rows, AssignRows] = useState(Saved.Rows || InitialRows),
+  const [Rows, StoreRows] = useState(() =>
+      EnsureEditorCamera(Saved.Rows || InitialRows),
+    ),
     [Selected, Select] = useState(Saved.Selected || "sun"),
     [Values, AssignValues] = useState(Saved.Values || {}),
-    [Hidden, AssignHidden] = useState(Saved.Hidden || {}),
+    [Hidden, AssignHidden] = useState({ ...Saved.Hidden, camera: false }),
     [Collapsed, Collapse] = useState(Saved.Collapsed || {}),
     [Query, Search] = useState(""),
     [Filters, Filter] = useState([]),
@@ -215,6 +218,12 @@ function App() {
     }),
     [LeftWidth, ResizeLeft] = useState(316),
     [RightWidth, ResizeRight] = useState(340);
+  const AssignRows = (Update) =>
+    StoreRows((Previous) =>
+      EnsureEditorCamera(
+        typeof Update === "function" ? Update(Previous) : Update,
+      ),
+    );
   const [AssetRecords, StoreAssets] = useState(RestoreAssets(Saved.Assets)),
     [AssetsOpen, OpenAssets] = useState(false),
     [ViewportSettings, ShowViewportSettings] = useState(false);
@@ -387,8 +396,10 @@ function App() {
       .querySelector(".outliner-row.selected")
       ?.scrollIntoView({ block: "nearest" });
   }, [Selected]);
-  const ToggleHidden = (Id) =>
+  const ToggleHidden = (Id) => {
+    if (Id === "camera") return;
     AssignHidden((Previous) => ({ ...Previous, [Id]: !Previous[Id] }));
+  };
   const Toast = (Text) => {
     Notify(Text);
     setTimeout(() => Notify(""), 3200);
@@ -460,7 +471,7 @@ function App() {
         Event.preventDefault();
         SearchInput.current?.focus();
       }
-      if (Event.key === "F2") RenameRow(Selected);
+      if (Event.key === "F2" && Selected !== "camera") RenameRow(Selected);
       if (Event.key === "`") ShowConsole((Previous) => !Previous);
     };
     window.addEventListener("keydown", Key);
@@ -568,7 +579,6 @@ function App() {
       if (
         Loaded.Format !== "Frontier HTML UI study" ||
         !Array.isArray(Loaded.Rows) ||
-        !Loaded.Rows.length ||
         Loaded.Rows.length > 4096
       )
         throw Error();
@@ -584,10 +594,10 @@ function App() {
       AssignRows(Loaded.Rows);
       AssignValues(Loaded.Values || {});
       StoreAssets(RestoreAssets(Loaded.Assets));
-      AssignHidden(Loaded.Hidden || {});
+      AssignHidden({ ...Loaded.Hidden, camera: false });
       ChangeSettings({ ...DefaultSettings, ...Loaded.Settings });
       RenameProject(Loaded.Name || "Project-Zero");
-      Select(Loaded.Rows[0].Id);
+      Select(Loaded.Rows[0]?.Id || "camera");
       Toast("HTML UI state imported");
     } catch {
       Toast("Not a valid HTML UI study file");
@@ -599,6 +609,13 @@ function App() {
     Properties = Values[Template.Id] || {},
     Visible = true,
   ) => {
+    if (IsEditorCamera(Template))
+      Template = {
+        ...Template,
+        Name: "Main Camera",
+        Description:
+          "Scene camera · separate from the editor navigation camera",
+      };
     const Id = Template.Panel + "-" + crypto.randomUUID();
     const Names = new Set(Rows.map((Subject) => Subject.Name));
     const Stem =
@@ -866,7 +883,7 @@ function App() {
             }}
             onKeyDown={(Event) => {
               if (Event.key === "Enter") SelectRow(Row.Id);
-              if (Event.key === "F2") RenameRow(Row.Id);
+              if (Event.key === "F2" && !IsEditorCamera(Row)) RenameRow(Row.Id);
               if (Event.key === "ArrowRight")
                 Collapse((Previous) => ({ ...Previous, [Row.Id]: false }));
               if (Event.key === "ArrowLeft")
@@ -892,7 +909,7 @@ function App() {
               <Glyph Name="chevron" Size={12} />
             </button>
             <Icon Name={Row.Icon} Size={24} />
-            {Rename === Row.Id ? (
+            {Rename === Row.Id && !IsEditorCamera(Row) ? (
               <input
                 autoFocus
                 aria-label="Rename object"
@@ -918,15 +935,17 @@ function App() {
               <span className="row-name">{Row.Name}</span>
             )}
             <small>
-              {Row.Panel === "camera"
-                ? "55°"
-                : Row.Panel === "geometry"
-                  ? "24 tris"
-                  : Row.Panel === "sun"
-                    ? "5.2°"
-                    : Row.Panel === "wind"
-                      ? "4.2 m/s"
-                      : ""}
+              {IsEditorCamera(Row)
+                ? "EDITOR"
+                : Row.Panel === "camera"
+                  ? "55°"
+                  : Row.Panel === "geometry"
+                    ? "24 tris"
+                    : Row.Panel === "sun"
+                      ? "5.2°"
+                      : Row.Panel === "wind"
+                        ? "4.2 m/s"
+                        : ""}
             </small>
             {Row.Panel !== "group" && (
               <span className="row-status">
@@ -936,6 +955,10 @@ function App() {
             <button
               className="visibility"
               aria-label={"Toggle " + Row.Name + " visibility"}
+              disabled={IsEditorCamera(Row)}
+              title={
+                IsEditorCamera(Row) ? "Permanent editor camera" : undefined
+              }
               onClick={(Event) => {
                 Event.stopPropagation();
                 ToggleHidden(Row.Id);
@@ -1511,7 +1534,9 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
               <>
                 <label>{Subject.Name}</label>
                 <button
+                  disabled={IsEditorCamera(Subject)}
                   onClick={() => {
+                    if (IsEditorCamera(Subject)) return;
                     RenameRow(Selected);
                     ShowMenu(null);
                   }}
@@ -1519,6 +1544,7 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
                   Rename <small>F2</small>
                 </button>
                 <button
+                  disabled={IsEditorCamera(Subject)}
                   onClick={() => {
                     ToggleHidden(Selected);
                     ShowMenu(null);
@@ -1537,7 +1563,14 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
                 <button onClick={() => AddRow(Subject)}>Duplicate</button>
                 {Subject.Panel !== "group" && (
                   <button
+                    disabled={IsEditorCamera(Subject)}
+                    title={
+                      IsEditorCamera(Subject)
+                        ? "The editor camera cannot be deleted"
+                        : undefined
+                    }
                     onClick={() => {
+                      if (IsEditorCamera(Subject)) return;
                       AssignRows((Previous) => {
                         const Removed = new Set([Selected]);
                         let Changed = true;
@@ -1600,7 +1633,13 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
       )}
       {Construct && (
         <ConstructPanel
-          Catalogue={InitialRows.filter((Subject) => Subject.Panel !== "group")}
+          Catalogue={InitialRows.filter(
+            (Subject) => Subject.Panel !== "group",
+          ).map((Row) =>
+            IsEditorCamera(Row)
+              ? { ...Row, Name: "Main Camera", Description: "Scene camera" }
+              : Row,
+          )}
           Add={AddRow}
           Close={() => OpenConstruct(false)}
         />
