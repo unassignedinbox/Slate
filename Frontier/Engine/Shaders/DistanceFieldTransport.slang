@@ -25,6 +25,7 @@ layout(push_constant) uniform DistancePush
     vec4 Tuning;
     vec4 CameraEye;
     uvec4 Counts;
+    uvec4 RenderExtent;
 } PC;
 
 uint VolumeCount() { return GeometryCounts.x * GeometryCounts.x * GeometryCounts.x; }
@@ -212,10 +213,10 @@ float DistanceShadow(vec3 Position, vec3 Normal)
     }
     return clamp(Visibility,0.0,1.0);
 }
-vec3 HemisphereDirection(vec3 Normal, uint Sample, uint SampleCount)
+vec3 HemisphereDirection(vec3 Normal, uint Sample, uint SampleCount, vec2 Shift)
 {
-    float Height=(float(Sample)+0.5)/float(SampleCount);
-    float Angle=6.28318530718*fract(float(Sample)*0.61803398875);
+    float Height=fract((float(Sample)+0.5)/float(SampleCount)+Shift.x);
+    float Angle=6.28318530718*fract(float(Sample)*0.61803398875+Shift.y);
     vec3 Tangent=normalize(abs(Normal.z)<0.9 ? cross(Normal,vec3(0,0,1)) : cross(Normal,vec3(0,1,0)));
     return Tangent*(cos(Angle)*sqrt(1.0-Height))+cross(Normal,Tangent)*(sin(Angle)*sqrt(1.0-Height))+Normal*sqrt(Height);
 }
@@ -286,15 +287,34 @@ float RadianceDirectionDensity(uint Facet, vec3 Origin, vec3 Point, float Probab
     float Area=0.5*length(cross(Facets[Facet].Beta.xyz-Facets[Facet].Alpha.xyz,Facets[Facet].Gamma.xyz-Facets[Facet].Alpha.xyz));
     return Probability*dot(Delta,Delta)/max(Area*abs(dot(Facets[Facet].Normal.xyz,normalize(Delta))),1e-20);
 }
+#ifndef FRONTIER_SDF_REFERENCE_SAMPLES
+#define FRONTIER_SDF_REFERENCE_SAMPLES 0
+#endif
+uint ScrambleSample(uint Value)
+{
+    Value^=Value>>16u; Value*=0x7feb352du; Value^=Value>>15u;
+    Value*=0x846ca68bu; return Value^(Value>>16u);
+}
+vec4 GatherSampleShift(bool Current)
+{
+    if (!Current) return vec4(0.0);
+    uint Seed=ScrambleSample(gl_GlobalInvocationID.x)^ScrambleSample(gl_GlobalInvocationID.y+0x9e3779b9u);
+    return vec4(ScrambleSample(Seed),ScrambleSample(Seed+1u),ScrambleSample(Seed+2u),ScrambleSample(Seed+3u))/4294967296.0;
+}
 vec3 GatherDistanceRadiance(vec3 Position, vec3 Normal, bool Current)
 {
     float Cell; SampleSceneDistance(Position,Cell);
     vec3 Origin=Position+Normal*0.002, Result=vec3(0.0);
-    // Fixed quadrature removes the perpetual frame cycle; area/cosine MIS reduces spatial aliasing.
+    // Pixel-decorrelated quadrature removes repeated projected silhouettes. The gather is
+    // reconstructed as incident irradiance before material evaluation, not blurred after tonemapping.
     uint SampleCount=Current ? 32u : 16u;
+#if FRONTIER_SDF_REFERENCE_SAMPLES > 0
+    if (Current) SampleCount=uint(FRONTIER_SDF_REFERENCE_SAMPLES);
+#endif
+    vec4 Shift=GatherSampleShift(Current);
     for (uint Sample=0u; Sample<SampleCount; ++Sample)
     {
-        vec3 Direction=HemisphereDirection(Normal,Sample,SampleCount);
+        vec3 Direction=HemisphereDirection(Normal,Sample,SampleCount,Shift.xy);
         float Travel=Cell;
         vec3 Incoming=PC.SkyAmbient.xyz;
         bool Resolved=false;
@@ -343,9 +363,9 @@ vec3 GatherDistanceRadiance(vec3 Position, vec3 Normal, bool Current)
         }
         Result+=Incoming*(CosineDensity/max(CosineDensity+AreaDensity,1e-20))/float(SampleCount);
         float Probability;
-        uint Facet=SelectRadianceFacet(Origin,Normal,(float(Sample)+0.5)/float(SampleCount),0xFFFFFFFFu,Probability);
+        uint Facet=SelectRadianceFacet(Origin,Normal,fract((float(Sample)+0.5)/float(SampleCount)+Shift.z),0xFFFFFFFFu,Probability);
         if (Facet==0xFFFFFFFFu || Probability<=0.0) continue;
-        vec2 Coordinate=fract(vec2(0.5)+float(Sample)*vec2(0.754877666,0.569840296));
+        vec2 Coordinate=fract(vec2(0.5)+float(Sample)*vec2(0.754877666,0.569840296)+Shift.yw);
         vec3 Point=CardPosition(Facet,Coordinate), Delta=Point-Origin;
         float TravelToCard=length(Delta);
         if (TravelToCard<1e-4) continue;

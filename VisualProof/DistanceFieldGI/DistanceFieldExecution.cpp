@@ -65,6 +65,7 @@ int main(int Count,char** Arguments)
             Initialization.PhysicalDevice=Host.Physical; Initialization.Device=Host.Device; Initialization.MemoryProperties=Host.Memory;
             Initialization.Geometry=&Geometry; Initialization.SpirvDirectory=Arguments[1];
             Initialization.CardResolution=8u; Initialization.VolumeResolution=8u; Initialization.ClipmapCellSize=0.125f;
+            Initialization.ImageWidth=Output.Width; Initialization.ImageHeight=Output.Height;
             Initialization.OutputImageView=Output.View; Initialization.SurfaceImageView=Position.View; Initialization.NormalImageView=Normals.View;
             Initialization.TriangleBuffer=Triangles.Buffer; Initialization.MaterialBuffer=MaterialBuffer.Buffer;
             Initialization.InstanceBuffer=InstanceBuffer.Buffer; Initialization.SlabBuffer=Slabs.Buffer;
@@ -403,6 +404,7 @@ int main(int Count,char** Arguments)
             Output=Host.AllocateImage(16u,16u,VK_FORMAT_R8G8B8A8_UNORM,nullptr,16u*16u*4u);
             Position=Host.AllocateImage(16u,16u,VK_FORMAT_R32G32B32A32_SFLOAT,Surface.data(),16u*16u*16u);
             Normals=Host.AllocateImage(16u,16u,VK_FORMAT_R16G16B16A16_SFLOAT,Normal.data(),16u*16u*8u);
+            Initialization.ImageWidth=Output.Width; Initialization.ImageHeight=Output.Height;
             Initialization.OutputImageView=Output.View; Initialization.SurfaceImageView=Position.View; Initialization.NormalImageView=Normals.View;
             Frame.RenderWidth=Frame.RenderHeight=16u;
             Require(Stage.Bring(Initialization),"Resize descriptor recreation failed");

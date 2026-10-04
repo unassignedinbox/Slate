@@ -199,7 +199,8 @@ int main(int Count,char** Arguments)
         Initialization.PhysicalDevice=Host.Physical; Initialization.Device=Host.Device; Initialization.MemoryProperties=Host.Memory;
         Initialization.Geometry=&Geometry; Initialization.SpirvDirectory=Arguments[1];
         Initialization.CardResolution=4; Initialization.VolumeResolution=32; Initialization.ClipmapCellSize=.15f;
-        Initialization.OutputImageView=Output.View; Initialization.SurfaceImageView=Position.View; Initialization.NormalImageView=Normal.View;
+        Initialization.ImageWidth=Output.Width; Initialization.ImageHeight=Output.Height;
+            Initialization.OutputImageView=Output.View; Initialization.SurfaceImageView=Position.View; Initialization.NormalImageView=Normal.View;
         Initialization.TriangleBuffer=Triangles.Buffer; Initialization.MaterialBuffer=MaterialBuffer.Buffer;
         Initialization.InstanceBuffer=InstanceBuffer.Buffer; Initialization.SlabBuffer=SlabBuffer.Buffer;
         Initialization.VertexBuffer=VertexBuffer.Buffer; Initialization.IndexBuffer=IndexBuffer.Buffer;
@@ -231,6 +232,12 @@ int main(int Count,char** Arguments)
             return Pixels;
         };
         const auto Original=Execute("Scene-GI",32);
+        if (Case=="Oracle")
+        {
+            Stage.Destroy(); Require(ValidationErrors.load()==0,"Vulkan validation errors in dense reference");
+            std::cout<<"PASS dense production-shader quadrature reference; not a shipping performance result\n";
+            return 0;
+        }
         Frame.FeatureFlags=0; const auto Without=Execute("Scene-GI-off",1); Frame.FeatureFlags=1;
         std::cout<<"METRIC gi_on_off_rms "<<Difference(Original,Without)<<'\n';
         if (Case=="Reference")

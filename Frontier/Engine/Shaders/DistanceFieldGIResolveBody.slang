@@ -15,6 +15,8 @@ layout(rgba32f, binding=1) uniform readonly image2D SurfaceImage;
 layout(rgba16f, binding=2) uniform readonly image2D NormalImage;
 #include "DistanceFieldTransport.slang"
 #include "DistanceFieldMaterial.slang"
+layout(rgba16f, binding=21) uniform readonly image2D GatherIrradiance;
+layout(rgba16f, binding=22) uniform readonly image2D GatherNormal;
 
 // The visibility id packing SurfaceResolve.slang writes into SurfaceImage.w — identical to ReSTIRViewport's.
 const uint kVisibilityInvalid = 0xFFFFFFFFu;
@@ -47,6 +49,38 @@ vec3 SkyAlongApprox(vec3 Direction, float Roughness)
 vec3 GatherField(vec3 Position, vec3 Normal)
 {
     return 3.14159265359 * GatherDistanceRadiance(Position,Normal,true) * PC.Tuning.y;
+}
+
+// Reconstruct linear incident irradiance only. Material textures, direct shadows, emission,
+// specular and tone mapping remain outside this filter. Surface identity and plane/normal
+// agreement prevent borrowing light across silhouettes or through nearby walls.
+vec3 ReconstructIrradiance(ivec2 Pixel, vec3 Position, uint Visibility)
+{
+    vec4 Center=imageLoad(GatherIrradiance,Pixel);
+#if FRONTIER_SDF_REFERENCE_SAMPLES > 0
+    return Center.xyz;
+#endif
+    vec3 Normal=imageLoad(GatherNormal,Pixel).xyz;
+    ivec2 Extent=min(imageSize(SurfaceImage),ivec2(PC.RenderExtent.xy));
+    vec3 Sum=vec3(0.0); float Total=0.0;
+    for (int Row=-3;Row<=3;++Row) for (int Column=-3;Column<=3;++Column)
+    {
+        ivec2 Neighbor=Pixel+ivec2(Column,Row);
+        if (any(lessThan(Neighbor,ivec2(0))) || any(greaterThanEqual(Neighbor,Extent))) continue;
+        vec4 Surface=imageLoad(SurfaceImage,Neighbor);
+        uint Packed=floatBitsToUint(Surface.w);
+        if (Packed==0xFFFFFFFFu || VisibilityInstance(Packed)!=VisibilityInstance(Visibility)) continue;
+        vec4 Guide=imageLoad(GatherNormal,Neighbor);
+        float Alignment=dot(Normal,Guide.xyz);
+        if (Guide.w==0.0 || Alignment<0.9) continue;
+        vec3 Delta=Surface.xyz-Position;
+        float PlaneDistance=abs(dot(Delta,Normal));
+        float Tolerance=max(0.001,length(Delta)*0.1);
+        if (PlaneDistance>Tolerance) continue;
+        float Weight=exp(-float(Column*Column+Row*Row)/8.0)*pow(max(Alignment,0.0),32.0);
+        Sum+=imageLoad(GatherIrradiance,Neighbor).xyz*Weight; Total+=Weight;
+    }
+    return Total>0.0 ? Sum/Total : Center.xyz;
 }
 
 // Schlick Fresnel for the specular/reflection weight.
@@ -144,7 +178,7 @@ void main()
 {
     ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
     ivec2 size = imageSize(SurfaceImage);
-    if (pixel.x >= size.x || pixel.y >= size.y) return;
+    if (any(greaterThanEqual(pixel,min(size,ivec2(PC.RenderExtent.xy))))) return;
 
     vec4 surf = imageLoad(SurfaceImage, pixel);
     vec3 P = surf.xyz;
@@ -197,7 +231,7 @@ void main()
     // --- indirect diffuse: an irradiance through this material's hemispherical response ---
     vec3 response = AmbientResponse(m, layers, woLoc);
     if ((flags & kFeatureGlobalIllumination) != 0u)
-        col += response * (kInvPi * GatherField(P, N));        // distance-field diffuse transport
+        col += response * ReconstructIrradiance(pixel,P,visibility) * PC.Tuning.y;        // distance-field diffuse transport
     else
         col += response * PC.SkyAmbient.xyz;                   // plain raster: sky ambient fill (never black)
 

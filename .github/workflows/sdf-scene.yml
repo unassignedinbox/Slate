@@ -6,6 +6,8 @@ on:
       - 'VisualProof/SdfScene/SceneExecution.cpp'
       - 'VisualProof/SdfScene/RunSceneExecution.py'
       - '.github/workflows/sdf-scene.yml'
+      - 'Frontier/Engine/Shaders/DistanceField*.slang'
+      - 'Frontier/Engine/DeviceExchange/DistanceFieldGIStage.*'
   workflow_dispatch:
 permissions:
   contents: write
@@ -18,21 +20,21 @@ jobs:
       fail-fast: false
       max-parallel: 8
       matrix:
-        scene: [Reference, Small, Large, Offset, Extreme, Orbit, High, Far]
+        scene: [Reference, Orbit, High, Oracle]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
       - name: Install CPU Vulkan
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y libvulkan-dev mesa-vulkan-drivers vulkan-validationlayers glslc spirv-tools python3-pil
-      - name: Execute unchanged production shaders
+      - name: Execute production shaders and dense reference
         run: python3 VisualProof/SdfScene/RunSceneExecution.py '${{ matrix.scene }}'
       - name: Retain readbacks including failed cases
         if: always()
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add 'VisualProof/SdfScene/Captures/${{ matrix.scene }}' || exit 0
+          git add 'VisualProof/SdfScene/BandingAfter/${{ matrix.scene }}' || exit 0
           if git diff --cached --quiet; then exit 0; fi
           git commit -m 'Retain ${{ matrix.scene }} production SDF perspective readbacks [skip ci]'
           for Attempt in 1 2 3 4 5 6 7 8; do

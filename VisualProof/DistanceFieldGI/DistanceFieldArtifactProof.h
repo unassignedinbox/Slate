@@ -65,7 +65,8 @@ int RunDistanceArtifacts(const char* Shaders, const char* Destination)
     Initialization.PhysicalDevice=Host.Physical; Initialization.Device=Host.Device; Initialization.MemoryProperties=Host.Memory;
     Initialization.Geometry=&Geometry; Initialization.SpirvDirectory=Shaders;
     Initialization.CardResolution=8; Initialization.VolumeResolution=16; Initialization.ClipmapCellSize=.15f;
-    Initialization.OutputImageView=Output.View; Initialization.SurfaceImageView=Position.View; Initialization.NormalImageView=Normal.View;
+    Initialization.ImageWidth=Output.Width; Initialization.ImageHeight=Output.Height;
+            Initialization.OutputImageView=Output.View; Initialization.SurfaceImageView=Position.View; Initialization.NormalImageView=Normal.View;
     Initialization.TriangleBuffer=Triangles.Buffer; Initialization.MaterialBuffer=MaterialBuffer.Buffer;
     Initialization.InstanceBuffer=InstanceBuffer.Buffer; Initialization.SlabBuffer=SlabBuffer.Buffer;
     Initialization.VertexBuffer=VertexBuffer.Buffer; Initialization.IndexBuffer=IndexBuffer.Buffer;

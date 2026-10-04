@@ -3196,6 +3196,8 @@ bool SwapchainExchange::BringDistanceFieldGIStage() noexcept
     DistanceFieldStage.Destroy();
     if (!Visibility.IsReady() || DistanceGeometry.QueryFacets().empty()) return true;
     DistanceFieldStageInit Init{};
+    Init.ImageWidth = Configuration.Width;
+    Init.ImageHeight = Configuration.Height;
     VkPhysicalDeviceVulkan12Features Features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
     VkPhysicalDeviceFeatures2 Supported{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
     Supported.pNext = &Features;

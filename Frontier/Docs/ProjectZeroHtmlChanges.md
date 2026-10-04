@@ -1114,3 +1114,59 @@ Individual unaltered PNGs, logs and source/SPIR-V/image provenance are under `Ca
 `Assessment.json` and the repeatable assessor retain both passing and failing measurements.
 The user has not retested these changes on their own GPU; GPU performance and full application parity
 remain unverified. No editor layout, baking placement or production shader was altered in this phase.
+
+
+## C027 — Diffuse quadrature decorrelation and incident-light reconstruction (2026-10-04)
+
+Status at implementation submission: **not yet verified**. The prior C026 images remain untouched in
+`VisualProof/SdfScene/Captures`. Scale and large-world corrections are explicitly out of this phase's scope.
+
+The primary gather previously used identical cosine/area quadrature at every pixel, projecting coherent
+occluder/emitter contours. The new production pass gathers pixel-decorrelated incoming diffuse lighting
+into an RGBA16F image, with resolved shading normals in a second RGBA16F image. A 7×7 spatial reconstruction
+rejects different instances, incompatible normals and off-plane neighbours before the final material
+response. Direct lighting/shadows, textures, emission, specular and tone mapping are not filtered.
+Secondary reflection/transmission hits still use world-space transport, never screen-cache substitutes.
+Cache-card quadrature/history remains unchanged. The pixel sequence is static, not a cycling noise phase;
+continuous-camera stability is not established by static screenshots.
+
+Integration includes a compute-write→read barrier, two lifecycle-owned images (16 bytes/pixel combined),
+explicit allocation dimensions and bounded frame extents, a 112-byte push block, indexed/fixed material
+shaders and every shipping/proof shader build list. Historical baseline shader comparisons receive an
+ABI-only trailing extent member; their original resolve ignores the new images and retains its equations.
+
+Independent validation is requested for Reference/Orbit/High with identical scene/camera/material settings,
+plus a 512-sample-per-technique unfiltered **production-shader quadrature reference**. The latter is a
+numerical comparison, not a real-time renderer or ground truth for card-cache/transport accuracy. New raw
+readbacks belong under `BandingAfter`; no retouching or post-capture image denoising is permitted.
+Existing artifact, materials, transmission, texture, lifecycle and resize gates remain unchanged.
+
+Local Vulkan compilation/execution is unavailable: package repository connections failed and the sandbox
+has no Vulkan SDK/CPU ICD. Authorized GitHub Actions performs actual compilation and CPU Vulkan execution.
+Do not call this repair successful until those readbacks have been inspected and compared.
+
+### Dynamic deforming geometry: recommendation, not implemented
+
+The existing SDF path calls `TraceDistanceMesh`: it contains **software triangle ray tracing** and must not
+be presented as ray-free. Unreal software Lumen's SDF visibility is also not an arbitrary-deformation
+solution. A genuinely raster-only alternative is full-geometry radiance/depth probes: rasterize the actual
+current/skinned/deformed triangles into local cubemaps, integrate diffuse irradiance, preserve directional
+depth/visibility, and ping-pong irradiance for additional bounces. Moving geometry both receives and
+contributes, including off-camera contributors. No simplified mesh, triangle ray query or SDF marching is
+needed for this proposed path; direct visibility must use rasterized shadow maps too.
+
+Probe visibility/interpolation remains a finite-resolution approximation, not exact per-receiver triangle
+visibility. Six views per probe, dense mesh throughput, update latency and leakage around thin structures
+must be measured. Dirty bounds invalidate old/new affected probes and their bounce history. Most geometry
+being static helps scheduling, but does not make arbitrary deformations free. Stock DDGI is ray-traced;
+only its cache/visibility ideas transfer when capture is explicitly replaced by rasterization.
+
+Sources:
+- Epic, Lumen final-gather radiance-cache filtering and importance sampling:
+  https://www.unrealengine.com/en-US/tech-blog/unreal-engine-5-goes-all-in-on-dynamic-global-illumination-with-lumen
+- Epic, software/hardware visibility and limitations:
+  https://dev.epicgames.com/documentation/en-us/unreal-engine/lumen-technical-details-in-unreal-engine
+- Rasterized cubemap GI in dynamic diffuse environments (mechanism, not modern performance evidence):
+  https://www.cl.cam.ac.uk/~rkm38/pdfs/mantiuk02cmdsigi.pdf
+- DDGI directional irradiance/distance-moment visibility (original capture uses rays):
+  https://www.jcgt.org/published/0008/02/01/paper-lowres.pdf

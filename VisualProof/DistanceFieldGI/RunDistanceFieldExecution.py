@@ -23,7 +23,7 @@ if CpuDrivers:
 os.environ.setdefault("GALLIVM_PERF", "nopt")
 Shaders.mkdir(parents=True, exist_ok=True)
 Images.mkdir(parents=True, exist_ok=True)
-for Name in ("DistanceFieldConstruct", "DistanceFieldCapture", "DistanceFieldCaptureFixed", "DistanceFieldRadiance", "DistanceFieldGIResolve", "DistanceFieldGIResolveFixed"):
+for Name in ("DistanceFieldConstruct", "DistanceFieldCapture", "DistanceFieldCaptureFixed", "DistanceFieldRadiance", "DistanceFieldGather", "DistanceFieldGatherFixed", "DistanceFieldGIResolve", "DistanceFieldGIResolveFixed"):
     subprocess.run(["glslc", "--target-env=vulkan1.2", "-fshader-stage=compute", "-I" + str(Engine / "Engine/Shaders"),
                     "-I" + str(Engine / "Engine"), str(Engine / f"Engine/Shaders/{Name}.slang"),
                     "-o", str(Shaders / f"{Name}.spv")], check=True)
@@ -60,10 +60,14 @@ if PhaseSelection in ("All", "ArtifactBaseline"):
     shutil.copytree(Engine / "Engine/Shaders", BaselineSources, dirs_exist_ok=True)
     for Name in ("DistanceFieldTransport.slang", "DistanceFieldGIResolveBody.slang", "DistanceFieldRadiance.slang"):
         Content = subprocess.check_output(["git", "show", BaselineCommit + ":Frontier/Engine/Shaders/" + Name], cwd=Root)
+        # ABI-only extension: the historical resolve ignores the new gather images and extent.
+        # Preserve its lighting equations; the extra gather is unused by its final resolve.
+        if Name == "DistanceFieldTransport.slang":
+            Content = Content.replace(b"uvec4 Counts;", b"uvec4 Counts;\n    uvec4 RenderExtent;")
         (BaselineSources / Name).write_bytes(Content)
     BaselineShaders = Output / "BaselineShaders"
     BaselineShaders.mkdir(exist_ok=True)
-    for Name in ("DistanceFieldConstruct", "DistanceFieldCapture", "DistanceFieldCaptureFixed", "DistanceFieldRadiance", "DistanceFieldGIResolve", "DistanceFieldGIResolveFixed"):
+    for Name in ("DistanceFieldConstruct", "DistanceFieldCapture", "DistanceFieldCaptureFixed", "DistanceFieldRadiance", "DistanceFieldGather", "DistanceFieldGatherFixed", "DistanceFieldGIResolve", "DistanceFieldGIResolveFixed"):
         subprocess.run(["glslc", "--target-env=vulkan1.2", "-fshader-stage=compute", "-I"+str(BaselineSources),
                         "-I"+str(Engine / "Engine"), str(BaselineSources / (Name+".slang")),
                         "-o", str(BaselineShaders / (Name+".spv"))], check=True)

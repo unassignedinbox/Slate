@@ -35,6 +35,8 @@ struct DistanceFieldStageInit
     uint32_t                         TextureCount           = 0u;
     uint32_t                         TextureCapacity        = 0u;
     bool                             TextureUpdateAfterBind = false;
+    uint32_t                         ImageWidth             = 0u;
+    uint32_t                         ImageHeight            = 0u;
     uint32_t                         CardResolution         = 4u;
     uint32_t                         VolumeResolution       = 32u;
     float                            ClipmapCellSize        = 0.15f;
@@ -63,9 +65,9 @@ struct DistanceFieldFrameParams
 struct alignas(16) DistanceFieldPush
 {
     float    Sun[4], SunColour[4], SkyExposure[4], Tuning[4], Eye[4];
-    uint32_t Counts[4];
+    uint32_t Counts[4], RenderExtent[4];
 };
-static_assert(sizeof(DistanceFieldPush) == 96u);
+static_assert(sizeof(DistanceFieldPush) == 112u);
 static_assert(offsetof(DistanceFieldPush, Counts) == 80u);
 
 class DistanceFieldGIStage
@@ -135,10 +137,10 @@ class DistanceFieldGIStage
     VkDescriptorSetLayout  DescriptorLayout = VK_NULL_HANDLE;
     VkPipelineLayout       PipelineLayout   = VK_NULL_HANDLE;
     VkDescriptorSet        Sets[2]{};
-    VkPipeline             Pipelines[4]{};
-    VkImage                CardImages[5]{};
-    VkImageView            CardViews[5]{};
-    VkDeviceMemory         CardStorage[5]{};
+    VkPipeline             Pipelines[5]{};
+    VkImage                CardImages[7]{};
+    VkImageView            CardViews[7]{};
+    VkDeviceMemory         CardStorage[7]{};
     uint32_t               CardWidth = 0u, CardHeight = 0u;
     bool                   CardImagesInitialized = false;
     uint64_t               ResidentMaterials     = UINT64_MAX;
