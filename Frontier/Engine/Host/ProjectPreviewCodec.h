@@ -43,6 +43,10 @@ inline bool FindProjectPreview(const std::filesystem::path &Project, std::filesy
             Extension == ".tif" || Extension == ".tiff")
             Images.push_back(Walk->path());
     }
+    // 📝 Any user image at the top level overrides the bundled picture without a required filename.
+    const auto DefaultImage = Location / "Default/Project.png";
+    if (!Error && Images.empty() && std::filesystem::is_regular_file(DefaultImage, Error))
+        Images.push_back(DefaultImage);
     if (Error || Images.empty())
     {
         Refusal = "No readable supported image in Preview. Add PNG, JPEG, BMP, GIF or TIFF, then Scan.";

@@ -58,6 +58,9 @@ int main(int ArgumentCount, char **Arguments)
     std::string           Refusal;
     assert(!Frontier::FindProjectPreview(MissingProject, Found, Refusal) && !Refusal.empty());
     std::filesystem::create_directories(PreviewFolder);
+    std::filesystem::create_directories(PreviewFolder / "Default");
+    std::ofstream(PreviewFolder / "Default/Project.png") << "bundled fallback";
+    assert(Frontier::FindProjectPreview(MissingProject, Found, Refusal) && Found == PreviewFolder / "Default/Project.png");
     std::ofstream(PreviewFolder / "ignore.txt") << "not an image";
     std::ofstream(PreviewFolder / "zebra.PNG") << "discovery does not decode";
     std::ofstream(PreviewFolder / "alpha.jpg") << "alphabetically first supported file";
