@@ -55,13 +55,15 @@ a layer can own roughness and metalness without touching colour.
 **Layer stack.** Visibility, lock, opacity, ten blend modes (normal, multiply, screen, overlay, add, subtract, darken,
 lighten, difference, linear-burn), drag reorder, duplicate, delete, double-click rename, and a mask per layer. Each row is
 a card: the layer's colour plate, its kind, blend and channel count, the opacity read large, and a pair of chips —
-**Content** and **Mask** — naming where the next stroke will land. Four kinds of layer:
+**Content** and **Mask** — naming where the next stroke will land. Rows keep their full height however many there are:
+the stack scrolls inside the panel rather than squeezing, with the heading, filters and footer staying put. Five kinds
+of layer:
 
 - **fill** — a flat value per channel, the base of most materials.
 - **stroke** — painted coverage, written by the brush, eraser and flood tools.
 - **generator** — seven procedurals (fbm, cells, scratches, weave, wood, checker, gradient) and five surface signals
   (curvature, cavity, occlusion, inclination, altitude), each with scale, detail, contrast, balance, warp, angle and seed.
-- **decal** — an SVG or text decal projected onto the surface or planted on a plane.
+- **decal** — SVG or text artwork, either stamped into the texture or placed on the surface as a movable 3D decal.
 - **finish** — a procedural material: automotive paint, fabric, metal or plastic, evaluated per texel.
 
 **Procedural materials.** A material layer is a recipe rather than a colour. Four families, nineteen presets on the
@@ -117,20 +119,39 @@ travel with the descriptor at export.
 attributes and `javascript:`/`data:text/html` URLs are stripped) before it is rasterised at 1024². Text decals set in any
 of ten OFL families from `EngineContent/FontArchives`.
 
-**The tool follows the layer.** Select a paint layer and the brush is in hand; select a decal or text layer and the
-decal tool is, with the artwork previewed under the cursor — a click stamps it, and nothing new is added to the stack.
-A tool you reached for yourself is respected: an eraser or a flood stays put as you move between paint layers, and
-orbit is never taken away from you. Pressing <kbd>1</kbd>–<kbd>6</kbd> always wins.
+**Two kinds of decal.** The first row of the Placement group decides which one a layer is, and the add menu offers
+both outright:
 
-A decal layer holds **one piece of artwork and up to thirty-two marks** of it. A new layer opens with one mark waiting — nothing is
-composited until you click the model, and the preview shows exactly where it will land. After that the decal tool drops
-another mark wherever you click and slides it while you drag; each mark keeps its own frame, size, rotation, softness, emboss and
-**colour** — the artwork is treated as a stencil and painted in the mark's colour, so one channel carries the whole
-decal — and marks can be hidden, duplicated, reordered and dropped into named folders. They composite bottom to top
-inside the layer, exactly the way the stack does.
+- **Stamped into the texture** — every click burns the artwork into the layer's own image, oriented to the face it
+  landed on. From then on it is paint: the eraser takes it off, the brush works over it, undo lifts the last stamp, and
+  with the mask as the target the stamp lands in the mask instead. This is what a new decal layer does.
+- **Placed on the surface · 3D** — the artwork stays a projector that lives on the model. A click puts it down, a drag
+  slides it along the surface, it keeps following the face normals it is sitting on, and its frame, size, rotation and
+  angle limit can be edited forever after.
 
-**Previews, not guesses.** The cursor ring on the model is filled with the colour the stroke would lay down — white or
-black when the mask is the target, a dark wash for the eraser — and off the mesh it becomes a dashed outline that
+A placed decal layer holds **one piece of artwork and up to thirty-two marks** of it. The layer opens with one mark
+waiting — nothing is composited until you click the model, and the preview shows exactly where it will land. After that
+the decal tool drops another mark wherever you click and slides it while you drag; each mark keeps its own frame, size,
+rotation, softness, emboss and **colour** — the artwork is treated as a stencil and painted in the mark's colour, so one
+channel carries the whole decal — and marks can be hidden, duplicated, reordered and dropped into named folders. They
+composite bottom to top inside the layer, exactly the way the stack does, above anything stamped into it.
+
+**The tool follows the layer, and the rail only offers what fits.** Select a paint layer and the brush is in hand, with
+the brush, eraser and flood in the viewport rail; select a decal layer and the decal tool is in hand, with the brush and
+the flood taken away. The camera and the texel picker are always there, and <kbd>1</kbd>–<kbd>6</kbd> for a tool the
+layer cannot use is ignored rather than obeyed. Aim at the mask and the paint tools come back for any layer, because a
+mask is paintable whatever the layer underneath is. A tool you reached for yourself is respected: an eraser or a flood
+stays put as you move between paint layers, and orbit is never taken away from you.
+
+**Masks take the value of the colour in hand.** A mask holds coverage, not colour, so a stroke into one carries the
+brightness of the swatch: a pale colour reveals the layer, a dark one hides it, and the eraser clears what is there. The
+mask chip on the row — and <kbd>M</kbd>, and the viewport toggle — put you in mask paint mode straight away, adding a
+mask to the layer if it has none; the one it adds is the one your colour will show against, black for a light colour and
+white for a dark one, so the first stroke is always visible. Decals obey the same rule: with the mask as the target a
+stamp burns the artwork into the mask at the value of its tint.
+
+**Previews, not guesses.** The cursor ring on the model is filled with the colour the stroke would lay down — the value
+of that colour when the mask is the target, a dark wash for the eraser — and off the mesh it becomes a dashed outline that
 follows the pointer. With the decal tool in hand the artwork itself is drawn where it would land, hairline footprint and
 all, before the click that commits it. Symmetry draws too: the mirror button in the viewport bar (or <kbd>S</kbd>)
 cycles off → X → Y → Z, the seam where the plane cuts the model is drawn in green, and the mirrored cursor shows the
@@ -171,7 +192,7 @@ set. Each writes one PNG per channel named `<project-name>_<Channel>.png` next t
 
 | | | | |
 | --- | --- | --- | --- |
-| Orbit / brush / eraser | <kbd>1 2 3</kbd> | Content ⇄ mask | <kbd>M</kbd> |
+| Orbit / brush / eraser | <kbd>1 2 3</kbd> | Content ⇄ mask (adds one if needed) | <kbd>M</kbd> |
 | Flood / decal / pick | <kbd>4 5 6</kbd> | Mask view: off → overlay → mask | <kbd>⇧ M</kbd> |
 | Brush size | <kbd>[</kbd> <kbd>]</kbd> | Texture space | <kbd>X</kbd> |
 | Brush size, live | <kbd>Alt</kbd> + wheel | Frame the surface | <kbd>F</kbd> |

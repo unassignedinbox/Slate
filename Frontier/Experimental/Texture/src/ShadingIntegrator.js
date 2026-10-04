@@ -718,7 +718,19 @@ export class ShadingIntegrator
         Device.uniform1f(Uniforms.get("uFlow"), Options.Flow);
         Device.uniform1f(Uniforms.get("uFacingLimit"), Options.FacingLimit ?? 0.1);
         Device.uniform1f(Uniforms.get("uAlphaJitter"), Options.Jitter || 0);
-        Device.uniform1i(Uniforms.get("uStampMode"), Options.Mode === "plane" ? 1 : 0);
+        const Burn = Options.Mode === "decal" ? Options.Decal : null;
+        Device.uniform1i(Uniforms.get("uStampMode"), Options.Mode === "plane" ? 1 : Burn ? 2 : 0);
+        this.BindImage(Program, "uStampDecal", (Burn && this.LayerImages.get(Burn.Layer)?.Decal) || this.BlankImage(), 2);
+        Device.uniform3fv(Uniforms.get("uStampCentre"), Burn?.Position || [0, 0, 0]);
+        Device.uniform3fv(Uniforms.get("uStampAxis"), Burn?.Normal || [0, 1, 0]);
+        Device.uniform3fv(
+            Uniforms.get("uStampEdge"),
+            Burn ? RotateAround(Burn.Tangent, Burn.Normal, ((Burn.Rotation || 0) * Math.PI) / 180) : [1, 0, 0],
+        );
+        Device.uniform2fv(Uniforms.get("uStampSpan"), Burn?.Size || [0.2, 0.2]);
+        Device.uniform1f(Uniforms.get("uStampReach"), Burn?.Depth ?? 0.45);
+        Device.uniform1f(Uniforms.get("uStampSoftness"), Burn?.Softness ?? 0.06);
+        Device.uniform1f(Uniforms.get("uStampColourise"), Burn?.Colorise ? 1 : 0);
         Device.drawArrays(Device.TRIANGLES, 0, 3);
         Device.disable(Device.BLEND);
         Device.bindVertexArray(null);
@@ -798,10 +810,12 @@ export class ShadingIntegrator
                 Layer.Kind === "decal"
                     ? (Layer.Decal?.Marks || []).filter((Mark) => Mark.Visible !== false && Mark.Placed !== false)
                     : [];
+            // Burned-in decals live in the layer's coverage image and composite like paint, under its projectors.
+            if (Layer.Kind === "decal" && this.LayerImages.get(Layer.Identifier)?.Coverage) Passes.push({ Layer, Mark: null, Painted: true });
             if (Marks.length) for (const Mark of Marks) Passes.push({ Layer, Mark });
-            else Passes.push({ Layer, Mark: null });
+            else if (Layer.Kind !== "decal") Passes.push({ Layer, Mark: null });
         }
-        for (const { Layer, Mark } of Passes)
+        for (const { Layer, Mark, Painted } of Passes)
         {
             Device.bindFramebuffer(Device.FRAMEBUFFER, Destination);
             this.BindImage(Program, "uLower0", Source.Images[0], 0);
@@ -815,7 +829,7 @@ export class ShadingIntegrator
             this.BindImage(Program, "uCoverageMap", Record.Coverage || this.BlankImage(), 7);
             this.BindImage(Program, "uDecalMap", Record.Decal || this.BlankImage(), 8);
             this.BindImage(Program, "uMaskMap", Record.Mask || this.WhiteImage(), 9);
-            this.UploadLayerUniforms(Program, Layer, Material, Mark);
+            this.UploadLayerUniforms(Program, Layer, Material, Mark, Painted);
             Device.drawArrays(Device.TRIANGLES, 0, 3);
             const Swap = Source;
             Source = Destination;
@@ -830,11 +844,11 @@ export class ShadingIntegrator
         this.Statistics.CompositeMicroseconds = Math.round((performance.now() - Started) * 1000);
     }
 
-    UploadLayerUniforms(Program, Layer, Material, Mark = null)
+    UploadLayerUniforms(Program, Layer, Material, Mark = null, Painted = false)
     {
         const Device = this.Device;
         const Uniforms = Program.Uniforms;
-        const KindIndex = { fill: 0, stroke: 1, decal: 2, generator: 3, finish: 4 }[Layer.Kind] ?? 0;
+        const KindIndex = Painted ? 1 : ({ fill: 0, stroke: 1, decal: 2, generator: 3, finish: 4 }[Layer.Kind] ?? 0);
         Device.uniform1i(Uniforms.get("uKind"), KindIndex);
         Device.uniform1i(Uniforms.get("uBlend"), BlendIndex(Layer.Blend));
         Device.uniform1f(Uniforms.get("uOpacity"), Layer.Opacity);

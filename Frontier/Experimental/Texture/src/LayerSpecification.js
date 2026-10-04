@@ -75,6 +75,7 @@ export const MaskKinds = [
 // Decal defaults. Projection mode uses the surface bake; UV mode is a plain texture-space placement.
 //--------------------------------------------------------------------------------------------------------------------------
 export const DecalDefaults = () => ({
+    Placement: "stamp",             // stamp burns the artwork into the layer · project keeps it as a movable 3D decal
     Mode: "projection",
     SourceKind: "svg",
     Library: "hazard",
@@ -208,8 +209,9 @@ export const CreateLayer = (Kind = "fill", Overrides = {}) =>
         Finish: FinishDefaults(),
     };
     const Built = MergeLayer(Layer, Overrides);
-    // A decal layer is never empty: it opens with one placement of its artwork, ready to be moved.
-    if (Built.Kind === "decal" && !Built.Decal.Marks.length)
+    // A 3D decal layer opens with one placement waiting for the click that puts it on the model. A stamping layer
+    // has no placements at all: its artwork is burned into the texture as it is clicked.
+    if (Built.Kind === "decal" && Built.Decal.Placement === "project" && !Built.Decal.Marks.length)
     {
         Built.Decal.Marks = [CreateMark(Built.Decal, { Name: "Mark 1" })];
         Built.Decal.Selection = Built.Decal.Marks[0].Identifier;
@@ -369,6 +371,8 @@ const SanitiseDecal = (Decal, Candidate) =>
     if (!Candidate || typeof Candidate !== "object") return Decal;
     const Sanitised = {
         ...Decal,
+        // A record written before the two kinds existed described a projected decal, so that is what it stays.
+        Placement: Candidate.Placement === "stamp" ? "stamp" : "project",
         Mode: Candidate.Mode === "plane" ? "plane" : "projection",
         SourceKind: Candidate.SourceKind === "text" ? "text" : "svg",
         Library: typeof Candidate.Library === "string" ? Candidate.Library.slice(0, 48) : Decal.Library,
@@ -411,11 +415,13 @@ const SanitiseDecal = (Decal, Candidate) =>
     // A project written before marks existed carries exactly one placement: the record itself.
     const Marks = Array.isArray(Candidate.Marks) && Candidate.Marks.length
         ? Candidate.Marks.slice(0, MarkLimit).map((Mark) => SanitiseMark(Sanitised, Mark))
-        : [CreateMark(Sanitised, { Name: "Mark 1", Placed: true })];
+        : Sanitised.Placement === "stamp"
+          ? []
+          : [CreateMark(Sanitised, { Name: "Mark 1", Placed: true })];
     Sanitised.Marks = Marks;
     Sanitised.Selection = Marks.some((Mark) => Mark.Identifier === Candidate.Selection)
         ? Candidate.Selection
-        : Marks[Marks.length - 1].Identifier;
+        : Marks[Marks.length - 1]?.Identifier || "";
     return Sanitised;
 };
 
@@ -587,6 +593,7 @@ export const LayerSummary = (Layer) =>
               : Layer.Mask.Kind === "colour"
                 ? "colour mask"
                 : `${Layer.Mask.Generator.Kind} mask`;
-    const Marks = Layer.Kind === "decal" ? `${Layer.Decal.Marks?.length || 1} mark${(Layer.Decal.Marks?.length || 1) === 1 ? "" : "s"} · ` : "";
+    const Count = Layer.Decal?.Marks?.length || 0;
+    const Marks = Layer.Kind === "decal" ? (Layer.Decal.Placement === "stamp" ? "stamped · " : `${Count} mark${Count === 1 ? "" : "s"} · `) : "";
     return `${Marks}${Channels} channel${Channels === 1 ? "" : "s"} · ${Mask} · ${Math.round(Layer.Opacity * 100)}%`;
 };

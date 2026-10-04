@@ -620,7 +620,7 @@ test("a custom object consumes the imported surface", () =>
 //========================================================================================================================
 test("a decal layer opens with one mark and keeps its artwork shared", () =>
 {
-    const Layer = CreateLayer("decal");
+    const Layer = CreateLayer("decal", { Decal: { Placement: "project" } });
     assert.equal(Layer.Decal.Marks.length, 1);
     assert.equal(Layer.Decal.Selection, Layer.Decal.Marks[0].Identifier);
     assert.equal(Layer.Decal.Marks[0].Mode, "projection");
@@ -668,9 +668,33 @@ test("marks are sanitised one by one and a legacy decal becomes a single mark", 
 
 test("the layer summary counts marks", () =>
 {
-    const Layer = CreateLayer("decal");
+    const Layer = CreateLayer("decal", { Decal: { Placement: "project" } });
     Layer.Decal.Marks.push(CreateMark(Layer.Decal));
     assert.match(LayerSummary(Layer), /2 marks/);
+    assert.match(LayerSummary(CreateLayer("decal")), /stamped/, "a stamping layer has no marks to count");
+});
+
+test("a decal is stamped into the texture or placed on the surface, and the two are kept apart", () =>
+{
+    const Stamped = CreateLayer("decal");
+    assert.equal(Stamped.Decal.Placement, "stamp", "a new decal layer burns its artwork in");
+    assert.equal(Stamped.Decal.Marks.length, 0, "nothing is projected until the kind is changed");
+    assert.equal(Stamped.Decal.Selection, "");
+
+    const Placed = CreateLayer("decal", { Decal: { Placement: "project" } });
+    assert.equal(Placed.Decal.Marks.length, 1);
+    assert.equal(Placed.Decal.Marks[0].Placed, false, "the placement waits for the click that puts it on the model");
+
+    const Legacy = SanitiseLayer({ Kind: "decal", Decal: { Transform: { Size: 0.6 } } });
+    assert.equal(Legacy.Decal.Placement, "project", "a project written before the two kinds existed still projects");
+    assert.equal(Legacy.Decal.Marks.length, 1);
+
+    const Written = SanitiseLayer({ Kind: "decal", Decal: { Placement: "stamp" } });
+    assert.equal(Written.Decal.Placement, "stamp");
+    assert.equal(Written.Decal.Marks.length, 0, "a stamping layer is read back without inventing a placement");
+
+    const Nonsense = SanitiseLayer({ Kind: "decal", Decal: { Placement: "sideways" } });
+    assert.equal(Nonsense.Decal.Placement, "project");
 });
 
 //========================================================================================================================
@@ -805,7 +829,7 @@ test("a layer can be scoped to one object", () =>
 
 test("a fresh mark waits for its first click, and an old one does not", () =>
 {
-    const Layer = CreateLayer("decal");
+    const Layer = CreateLayer("decal", { Decal: { Placement: "project" } });
     assert.equal(Layer.Decal.Marks[0].Placed, false, "a new decal layer has nothing on the model yet");
 
     const Legacy = SanitiseLayer({ Kind: "decal", Decal: { Transform: { Size: 0.4 } } });

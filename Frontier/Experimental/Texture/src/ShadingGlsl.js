@@ -633,11 +633,42 @@ uniform float uHardness;
 uniform float uFlow;
 uniform float uFacingLimit;
 uniform float uAlphaJitter;
-uniform int uStampMode;        // 0 surface space · 1 texture space
+uniform int uStampMode;        // 0 surface space · 1 texture space · 2 decal burned into the texture
+uniform sampler2D uStampDecal;
+uniform vec3 uStampCentre;
+uniform vec3 uStampAxis;
+uniform vec3 uStampEdge;
+uniform vec2 uStampSpan;
+uniform float uStampReach;
+uniform float uStampSoftness;
+uniform float uStampColourise;
 out vec4 oCoverage;
 void main()
 {
     vec4 Sample = texture(uPositionSource, vCoordinate);
+
+    // A stamped decal is paint, not a projector: the artwork is burned into the layer the moment it is placed.
+    if (uStampMode == 2)
+    {
+        if (Sample.w < 0.5) discard;
+        vec3 Position = Sample.xyz;
+        vec3 Normal = normalize(texture(uNormalSource, vCoordinate).xyz);
+        vec3 Bitangent = normalize(cross(uStampAxis, uStampEdge));
+        vec3 Delta = Position - uStampCentre;
+        vec2 Local = vec2(dot(Delta, uStampEdge) / max(uStampSpan.x, 1e-4), dot(Delta, Bitangent) / max(uStampSpan.y, 1e-4)) + 0.5;
+        vec2 Within = step(vec2(0.0), Local) * step(Local, vec2(1.0));
+        float Depth = abs(dot(Delta, uStampAxis));
+        float Reach = 1.0 - smoothstep(uStampReach * 0.65, uStampReach, Depth);
+        float Face = smoothstep(uFacingLimit, mix(uFacingLimit, 1.0, 0.45), dot(Normal, uStampAxis));
+        vec4 Stencil = texture(uStampDecal, vec2(Local.x, 1.0 - Local.y));
+        float Edge = smoothstep(0.0, max(uStampSoftness, 0.001), Stencil.a);
+        float Burn = clamp(Stencil.a * Edge * Within.x * Within.y * Reach * Face * uFlow, 0.0, 1.0);
+        if (Burn <= 0.0015) discard;
+        vec3 Ink = mix(Stencil.rgb, uStrokeColour, uStampColourise);
+        oCoverage = vec4(Ink * Burn, Burn);
+        return;
+    }
+
     float Distance;
     float Facing = 1.0;
     float Radius = uRadius;

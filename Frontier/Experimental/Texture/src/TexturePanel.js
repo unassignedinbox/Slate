@@ -436,6 +436,7 @@ class TexturePanel
         this.RenderChannelStrip();
         this.SyncPaintTarget();
         this.SyncMaskView();
+        this.SyncToolRail();
         DressSelects(document);
         this.Advance();
         this.Timeline.Clear({
@@ -472,6 +473,7 @@ class TexturePanel
         if (this.Projection.Brush.Target === "mask" && Layer && Layer.Mask.Kind === "none")
             this.Projection.Configure({ Target: "coverage" });
         this.SyncToolToLayer();
+        this.SyncToolRail();
         this.RenderStack();
         this.RenderInspector();
         this.RenderChannelStrip();
@@ -1304,12 +1306,20 @@ class TexturePanel
         Ghost.style.borderColor = ToHex(this.PreviewInk().Ink) + "88";
     }
 
+    // A mask holds coverage, not colour, so a stroke into one carries the brightness of the colour in hand:
+    // a pale colour reveals the layer, a dark one hides it, exactly as the swatch suggests.
+    MaskInk(Colour = this.BrushColour)
+    {
+        const Value = Clamp(0.2126 * Colour[0] + 0.7152 * Colour[1] + 0.0722 * Colour[2], 0, 1);
+        return [Value, Value, Value];
+    }
+
     // What the next stroke would lay down, so the ring is a preview rather than an outline.
     PreviewInk()
     {
         const Brush = this.Projection.Brush;
         const Erasing = this.StrokeTool === "eraser";
-        if (Brush.Target === "mask") return { Ink: Erasing ? [0.04, 0.04, 0.05] : [0.95, 0.95, 0.98], Preview: 0.4 };
+        if (Brush.Target === "mask") return { Ink: Erasing ? [0.04, 0.04, 0.05] : this.MaskInk(), Preview: 0.4 };
         if (Erasing) return { Ink: [0.06, 0.06, 0.07], Preview: 0.32 };
         return { Ink: this.BrushColour, Preview: Clamp(Brush.Flow * 0.7, 0.12, 0.6) };
     }
@@ -1519,7 +1529,7 @@ class TexturePanel
                         </button>
                         <button class="row-chip mask-chip ${Carried ? "present" : "absent"} ${Selected && Masking ? "targeted" : ""}"
                                 data-chip="mask" data-chip-layer="${Layer.Identifier}"
-                                title="${Carried ? "Paint into the mask" : "Add a black mask"}">
+                                title="${Carried ? "Paint into the mask" : "Add a mask and paint into it"}">
                             ${Icon(Carried ? "mask" : "plus")}${Escape(MaskNote)}
                         </button>
                     </span>
@@ -1597,6 +1607,12 @@ class TexturePanel
                     Decal: { SourceKind: "text" },
                     Channels: { base_color: [0.95, 0.95, 0.96], specular_roughness: 0.28, height: 0.58 },
                 }),
+            projected: () =>
+                CreateLayer("decal", {
+                    Name: "Placed decal",
+                    Decal: { SourceKind: "svg", Library: "arrow", Placement: "project" },
+                    Channels: { base_color: [0.95, 0.3, 0.22], specular_roughness: 0.3, height: 0.58 },
+                }),
         };
         const Factory = Descriptor[Kind] || Descriptor.fill;
         const Layer = Factory();
@@ -1612,9 +1628,11 @@ class TexturePanel
         this.SyncToolToLayer(Layer.Kind === "decal");
         this.Chronicle(Layer.Kind === "decal" ? "decal" : "structure", `Added ${Layer.Name}`, `${LayerBadge(Layer)} layer`, Layer.Channels.base_color);
         this.Notify(
-            Layer.Kind === "decal"
-                ? `${Layer.Name} added — click the model to stamp it.`
-                : `${Layer.Name} added above ${Index >= 0 ? this.Layers[Index]?.Name || "the stack" : "the stack"}.`,
+            Layer.Kind !== "decal"
+                ? `${Layer.Name} added above ${Index >= 0 ? this.Layers[Index]?.Name || "the stack" : "the stack"}.`
+                : Layer.Decal.Placement === "stamp"
+                  ? `${Layer.Name} added — each click burns the artwork into it.`
+                  : `${Layer.Name} added — click the model to place it, then drag to move it.`,
         );
     }
 
@@ -1793,6 +1811,43 @@ class TexturePanel
         new ResizeObserver(() => this.Resize()).observe(Select("#viewport"));
     }
 
+    // Which tools make sense for the layer in hand. Orbit and the picker are about the viewport, so they are always
+    // offered; the rest follow the layer, and the mask takes paint from every kind of layer.
+    ToolsForLayer(Layer = this.ActiveLayer)
+    {
+        const Masking = this.Projection.Brush.Target === "mask";
+        if (!Layer) return ["orbit", "brush", "eraser", "fill", "decal", "picker"];
+        if (Layer.Kind === "decal" && !Masking) return ["orbit", "decal", "eraser", "picker"];
+        if (Masking) return ["orbit", "brush", "eraser", "fill", "decal", "picker"];
+        return ["orbit", "brush", "eraser", "fill", "picker"];
+    }
+
+    RefreshToolButtons()
+    {
+        const Allowed = this.ToolsForLayer();
+        const Layer = this.ActiveLayer;
+        SelectAll("[data-tool]").forEach((Button) =>
+        {
+            const Offered = Allowed.includes(Button.dataset.tool);
+            Button.hidden = !Offered;
+            Button.disabled = !Offered;
+        });
+        const Decal = Select('[data-tool="decal"]');
+        if (Decal)
+        {
+            const Stamping = Layer?.Kind !== "decal" || Layer.Decal.Placement === "stamp";
+            Decal.title = Stamping ? "Stamp the decal into the layer · 5" : "Place a 3D decal on the surface · 5";
+            Decal.setAttribute("aria-label", Decal.title.replace(" · 5", ""));
+        }
+        return Allowed;
+    }
+
+    SyncToolRail()
+    {
+        const Allowed = this.RefreshToolButtons();
+        if (!Allowed.includes(this.Tool)) this.SetTool(this.ActiveLayer?.Kind === "decal" ? "decal" : "brush");
+    }
+
     SetTool(Tool, Deliberate = false)
     {
         this.Tool = Tool;
@@ -1801,6 +1856,7 @@ class TexturePanel
         // A tool the hand reached for sticks to the layer it was chosen on; one the layer asked for does not.
         if (Deliberate) this.ChosenTool = Tool;
         this.SyncedLayer = this.ActiveLayer?.Identifier || "";
+        this.RefreshToolButtons();
         this.UpdateCaption();
     }
 
@@ -1848,15 +1904,30 @@ class TexturePanel
     SetPaintTarget(Target, Announce = true)
     {
         const Wanted = Target === "mask" ? "mask" : "coverage";
+        let Opened = "";
         if (Wanted === "mask")
         {
             const Layer = this.ActiveLayer;
             if (!Layer) return;
-            if (Layer.Mask.Kind === "none") this.AddMask("black", false);
+            // The mask a layer gets on the way in is the one the colour in hand will show against: a pale colour
+            // wants a black mask to reveal into, a dark colour wants a white mask to cut away.
+            if (Layer.Mask.Kind === "none")
+            {
+                Opened = this.MaskInk()[0] >= 0.5 ? "black" : "white";
+                this.AddMask(Opened, false);
+            }
         }
         this.Projection.Configure({ Target: Wanted });
         this.SyncPaintTarget();
-        if (Announce) this.Notify(Wanted === "mask" ? "Painting into the layer mask." : "Painting into the layer.");
+        this.SyncToolRail();
+        if (Announce)
+            this.Notify(
+                Wanted === "coverage"
+                    ? "Painting into the layer."
+                    : Opened
+                      ? `${Opened === "black" ? "Black" : "White"} mask added — painting into it.`
+                      : "Painting into the layer mask — light colours reveal, dark ones hide.",
+            );
     }
 
     SyncPaintTarget()
@@ -1866,7 +1937,7 @@ class TexturePanel
         Toggle.classList.toggle("active", Masking);
         Toggle.setAttribute("aria-pressed", String(Masking));
         const Note = Select("#paint-target-note");
-        Note.textContent = Masking ? "Painting into the mask" : "Painting into layer content";
+        Note.textContent = Masking ? "Painting into the mask · value of the colour" : "Painting into layer content";
         Note.classList.toggle("masking", Masking);
         SelectAll(".row-chip").forEach((Chip) =>
             Chip.classList.toggle(
@@ -2079,6 +2150,9 @@ class TexturePanel
             return Layer;
         }
         if (Layer.Kind === "stroke") return Layer;
+        // A decal layer holds burned pixels of its own, so the brush and the eraser work it directly rather than
+        // dropping a hand-painted layer on top of it.
+        if (Layer.Kind === "decal") return Layer;
         const Painted = CreateLayer("stroke", {
             Name: "Hand painted",
             Channels: { base_color: [...this.BrushColour], specular_roughness: Layer.Channels.specular_roughness },
@@ -2273,7 +2347,7 @@ class TexturePanel
         const Brush = this.Projection.Brush;
         const Erase = this.Tool === "eraser";
         const Target = Brush.Target;
-        const Colour = Target === "mask" ? [1, 1, 1] : this.BrushColour;
+        const Colour = Target === "mask" ? this.MaskInk() : this.BrushColour;
         const Options = {
             Target,
             Start: Segment.Start,
@@ -2311,7 +2385,7 @@ class TexturePanel
             Normal: [0, 1, 0],
             StartPlane: Start,
             EndPlane: End,
-            Colour: Brush.Target === "mask" ? [1, 1, 1] : this.BrushColour,
+            Colour: Brush.Target === "mask" ? this.MaskInk() : this.BrushColour,
             Radius: Brush.Radius,
             PlaneRadius: this.PlaneRadius(),
             Hardness: Brush.Hardness,
@@ -2329,7 +2403,7 @@ class TexturePanel
         const Layer = this.PaintTargetLayer();
         const Target = this.Projection.Brush.Target;
         this.BeginStrokeRevision(Layer);
-        this.Integrator.FloodLayer(Layer, Target, Target === "mask" ? [1, 1, 1] : this.BrushColour, 1);
+        this.Integrator.FloodLayer(Layer, Target, Target === "mask" ? this.MaskInk() : this.BrushColour, 1);
         this.CommitStrokeRevision();
         this.Recomposite();
         this.MarkDirty();
@@ -2361,7 +2435,7 @@ class TexturePanel
         };
     }
 
-    CommitStrokeRevision()
+    CommitStrokeRevision(Narrate = true)
     {
         if (!this.StrokeRecord) return;
         const Layer = this.Layers.find((Entry) => Entry.Identifier === this.StrokeRecord.Identifier);
@@ -2372,6 +2446,12 @@ class TexturePanel
             {
                 this.Revisions.Record(this.StrokeRecord);
                 const Points = this.Projection.Segments || 1;
+                if (!Narrate)
+                {
+                    this.StrokeRecord = null;
+                    this.UpdateStatusBar();
+                    return;
+                }
                 this.Chronicle(
                     "stroke",
                     `Added stroke (${Points} point${Points === 1 ? "" : "s"})`,
@@ -2408,6 +2488,12 @@ class TexturePanel
         }
         const Decal = Layer.Decal;
         const Frame = StrokeProjection.PlacementFrame(Hit);
+        // A stamping layer paints the artwork into the texture; so does any layer whose mask is the target.
+        if (Decal.Placement === "stamp" || this.Projection.Brush.Target === "mask")
+        {
+            this.BurnDecal(Layer, Frame);
+            return;
+        }
         const Waiting = Decal.Marks.find((Entry) => Entry.Placed === false);
         if (Waiting)
         {
@@ -2456,6 +2542,69 @@ class TexturePanel
         this.RenderStack();
         if (this.InspectorTab === "layer") this.RenderInspector();
         this.Notify(`${Mark.Name} placed — drag to move it.`);
+    }
+
+    // The stamped kind: the artwork is burned into the layer's own image, so it is paint from then on — erasable,
+    // paintable over, and carried by the same undo as a stroke. The mask takes it just as happily as the content.
+    BurnDecal(Layer, Frame)
+    {
+        const Decal = Layer.Decal;
+        const Template = this.ActiveMark || Decal;
+        const Transform = Template.Transform;
+        const Target = this.Projection.Brush.Target;
+        const Record = {
+            Layer: Layer.Identifier,
+            Position: Frame.Position,
+            Normal: Frame.Normal,
+            Tangent: Frame.Tangent,
+            Rotation: Transform.Rotation,
+            Size: [Transform.Size, Transform.Size / Math.max(Transform.Aspect, 0.05)],
+            Depth: Transform.Depth,
+            Softness: Template.Softness,
+            // A mask holds no colour, so the artwork is flattened to the value of the decal's own tint.
+            Colorise: Target === "mask" ? true : Template.Colorise,
+        };
+        const Options = {
+            Target,
+            Mode: "decal",
+            Decal: Record,
+            Colour: Target === "mask" ? this.MaskInk(Template.Tint) : Template.Tint,
+            Start: Frame.Position,
+            End: Frame.Position,
+            Normal: Frame.Normal,
+            Radius: Transform.Size,
+            Hardness: 1,
+            Flow: 1,
+            FacingLimit: Math.cos((Transform.AngleLimit * Math.PI) / 180),
+            Jitter: 0,
+            Erase: this.StrokeTool === "eraser",
+        };
+        // The image has to exist before it can be remembered, or the first stamp would have nothing to undo to.
+        if (Target === "mask") this.Integrator.EnsureMask(Layer);
+        else this.Integrator.EnsureCoverage(Layer);
+        this.BeginStrokeRevision(Layer);
+        this.Integrator.Stamp(Layer, Options);
+        const Axis = this.Projection.Brush.Symmetry;
+        if (Axis !== "none")
+        {
+            const Mirrored = {
+                ...Record,
+                Position: MirrorVector(Record.Position, Axis),
+                Normal: MirrorVector(Record.Normal, Axis),
+                Tangent: MirrorVector(Record.Tangent, Axis),
+            };
+            if (Mirrored.Position) this.Integrator.Stamp(Layer, { ...Options, Decal: Mirrored, Normal: Mirrored.Normal });
+        }
+        this.CommitStrokeRevision(false);
+        this.Recomposite();
+        this.MarkDirty();
+        this.Chronicle(
+            "decal",
+            `Stamped ${Layer.Name}`,
+            `${Layer.Decal.SourceKind === "text" ? "text" : "artwork"} · ${Target === "mask" ? "mask" : "content"}`,
+            Target === "mask" ? null : Template.Tint,
+        );
+        this.Notify(`${Layer.Name} stamped into the ${Target === "mask" ? "mask" : "layer"}.`);
     }
 
     // Dragging after the click slides the placement across the surface.
@@ -2779,7 +2928,8 @@ class TexturePanel
             Mask: Layer?.Mask,
             Generator: Layer?.Generator,
             Decal: Layer?.Decal,
-            Mark: this.ActiveMark,
+            // A stamping layer keeps no placements, so the artwork record itself is what the placement rows edit.
+            Mark: this.ActiveMark || (Layer?.Kind === "decal" ? Layer.Decal : null),
             Finish: Layer?.Finish,
             Project: this.Project,
             Object: this.ActiveObject,
@@ -2879,6 +3029,25 @@ class TexturePanel
             this.Integrator.Configure(Number(this.Project.Resolution));
             this.Recomposite();
             this.UpdateStatusBar();
+            return;
+        }
+        if (Path === "Decal.Placement")
+        {
+            const Layer = this.ActiveLayer;
+            if (Layer?.Kind === "decal" && Layer.Decal.Placement === "project" && !Layer.Decal.Marks.length)
+            {
+                const Mark = CreateMark(Layer.Decal, { Name: "Mark 1" });
+                Layer.Decal.Marks.push(Mark);
+                Layer.Decal.Selection = Mark.Identifier;
+            }
+            this.Recomposite();
+            this.RenderStack();
+            this.RenderInspector();
+            this.Notify(
+                Layer?.Decal.Placement === "stamp"
+                    ? "Clicks now stamp the artwork into the layer."
+                    : "Clicks now place a 3D decal you can drag around.",
+            );
             return;
         }
         if (Path.startsWith("Mark."))
@@ -3545,11 +3714,24 @@ class TexturePanel
         });
 
         const Mark = this.ActiveMark || Decal;
+        const Stamping = Decal.Placement === "stamp";
         const Placement = Group({
             Title: "Placement",
-            Badge: Mark.Mode === "plane" ? "UV" : "PROJECTED",
+            Badge: Stamping ? "STAMPED" : Mark.Mode === "plane" ? "UV" : "3D",
             Body: [
                 SelectRow({
+                    Label: "Decal kind",
+                    Path: "Decal.Placement",
+                    Value: Decal.Placement,
+                    Options: [
+                        { Value: "stamp", Label: "Stamped into the texture" },
+                        { Value: "project", Label: "Placed on the surface · 3D" },
+                    ],
+                    Hint: Stamping
+                        ? "Each click burns the artwork into this layer as paint — erasable, and it takes the mask when the mask is the target."
+                        : "The decal stays a projector on the model: click to drop one, drag to slide it along the surface.",
+                }),
+                Stamping ? "" : SelectRow({
                     Label: "Projection",
                     Path: "Mark.Mode",
                     Value: Mark.Mode,
@@ -3562,7 +3744,7 @@ class TexturePanel
                             ? "Choose the decal tool and click the model to drop another mark; drag to slide it."
                             : "UV placement ignores the model and lays the mark flat in texture space.",
                 }),
-                ...(Mark.Mode === "projection"
+                ...(Stamping || Mark.Mode === "projection"
                     ? [
                           SliderRow({ Label: "Size", Path: "Mark.Transform.Size", Value: Mark.Transform.Size, Minimum: 0.02, Maximum: 2.4, Step: 0.01, Unit: "m" }),
                           SliderRow({ Label: "Aspect", Path: "Mark.Transform.Aspect", Value: Mark.Transform.Aspect, Minimum: 0.2, Maximum: 5, Step: 0.01, Unit: "×" }),
@@ -3588,7 +3770,7 @@ class TexturePanel
                 }),
             ].join(""),
         });
-        return Source + this.MarkList(Layer) + Placement;
+        return Source + (Stamping ? "" : this.MarkList(Layer)) + Placement;
     }
 
     // Every placement of the layer's artwork, in composite order, grouped by folder. The bottom of the list is painted
@@ -4121,7 +4303,13 @@ class TexturePanel
             const Tools = ["orbit", "brush", "eraser", "fill", "decal", "picker"];
             if (/^[1-6]$/.test(Key))
             {
-                this.SetTool(Tools[Number(Key) - 1], true);
+                const Wanted = Tools[Number(Key) - 1];
+                if (!this.ToolsForLayer().includes(Wanted))
+                {
+                    this.Notify(`${Wanted} is not a tool for a ${LayerKindByIdentifier[this.ActiveLayer?.Kind]?.Label.toLowerCase() || "layer"}.`);
+                    return;
+                }
+                this.SetTool(Wanted, true);
                 return;
             }
             if (Key === "[") this.Projection.Configure({ Radius: Clamp(this.Projection.Brush.Radius * 0.84, 0.004, 1.2) });
@@ -4323,8 +4511,9 @@ class TexturePanel
         const Tool = ToolOrdering.find((Entry) => Entry.Identifier === this.Tool);
         const Target = this.Projection.Brush.Target === "mask" ? "mask" : "layer";
         Select("#viewport-object").textContent = Layer.Name;
-        const Stamping = this.StrokeTool === "decal" && Layer?.Kind === "decal";
-        const ToolLabel = Stamping && Layer.Decal.SourceKind === "text" ? "Text" : Tool?.Label;
+        const Placing = this.StrokeTool === "decal" && Layer?.Kind === "decal";
+        const Artwork = Layer?.Kind === "decal" && Layer.Decal.SourceKind === "text" ? "Text" : "Decal";
+        const ToolLabel = Placing ? `${Artwork} ${Layer.Decal.Placement === "stamp" ? "stamp" : "placement"}` : Tool?.Label;
         const Axis = this.Projection.Brush.Symmetry;
         const Mirror = Axis === "none" ? "" : ` · mirror ${Axis.toUpperCase()}`;
         Select("#viewport-subtitle").textContent =
