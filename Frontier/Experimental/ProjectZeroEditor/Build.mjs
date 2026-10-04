@@ -49,15 +49,6 @@ for (const Name of ["luna", "ember", "glacier", "sulfur", "shroud", "shard"]) {
   Canvas.getContext("2d").drawImage(Image, 0, 0, 512, 256);
   Assets.Moons.push(Canvas.toDataURL("image/jpeg", 0.9));
 }
-const Reference = await loadImage(
-  path.resolve(
-    Frontier,
-    "../Exhibits/Gallery/Editor/EditorProof_Tabs_CPU_Reference.png",
-  ),
-);
-const Canvas = createCanvas(595, 583);
-Canvas.getContext("2d").drawImage(Reference, 330, 90, 595, 583, 0, 0, 595, 583);
-Assets.Viewport = Canvas.toDataURL("image/png");
 const Fonts = ["Light", "Regular"]
   .map(
     (Weight, Index) =>

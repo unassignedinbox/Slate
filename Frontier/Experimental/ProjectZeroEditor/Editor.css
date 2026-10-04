@@ -1871,85 +1871,337 @@ img {
   place-items: center;
   padding: 30px;
 }
+/* Native Construct: category rail and a compact, multi-column entity matrix. */
+.construct-scrim {
+  padding: 12px;
+}
 .construct-dialog {
-  width: 740px;
-  max-width: 95vw;
-  max-height: 85vh;
+  width: min(860px, calc(100vw - 24px));
+  height: min(760px, calc(100dvh - 24px));
   display: flex;
   flex-direction: column;
-  background: #151515;
-  border: 1px solid #ffffff13;
-  border-radius: 24px;
-  box-shadow: 0 30px 100px #000b;
+  min-height: 0;
   overflow: hidden;
+  background: #171717;
+  border: 1px solid #373737;
+  border-radius: 12px;
+  box-shadow: 0 24px 80px #0009;
 }
-.construct-dialog > header {
+.construct-dialog .construct-titlebar {
   display: flex;
   align-items: center;
-  padding: 24px 28px;
   justify-content: space-between;
+  height: 30px;
+  padding: 0 10px 0 16px;
   flex: none;
+  background: #121212;
+  border-bottom: 1px solid #303030;
 }
-.construct-dialog header button {
-  width: 28px;
-  height: 28px;
+.construct-titlebar h2 {
+  font-size: 12px;
+}
+.construct-titlebar button {
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
   padding: 0;
+  border: 0;
+  background: transparent;
   border-radius: 50%;
 }
-.construct-search {
+.construct-path {
   display: flex;
   gap: 12px;
   align-items: center;
-  margin: 0 24px 18px;
-  padding: 12px 18px;
-  border: 1px solid #ffffff12;
-  border-radius: 24px;
-  background: #0a0a0a;
-  color: #888;
+  min-height: 48px;
+  margin: 0 20px;
+  border-bottom: 1px solid #373737;
+  color: #707070;
+  font-size: 11px;
+  flex: none;
 }
-.construct-search input {
-  background: transparent;
-  flex: 1;
-  border: 0;
-}
-.construct-search kbd {
-  font-size: 10px;
-  color: #555;
-}
-.construct-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  padding: 0 24px 24px;
-  overflow: auto;
-}
-.construct-grid button {
-  justify-content: flex-start;
-  min-height: 70px;
-  border-radius: 14px;
-  text-align: left;
-  padding: 12px;
-  gap: 13px;
+.construct-path strong {
+  color: #d8d8d8;
   font-size: 12px;
+  font-weight: 400;
+  margin-right: 10px;
+  letter-spacing: 0.5px;
 }
-.construct-grid small {
-  display: block;
-  font-size: 9px;
-  margin-top: 5px;
-  max-width: 170px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.construct-path .active {
+  color: #c5c5c5;
 }
-.construct-grid button > svg:last-child {
+.construct-path kbd {
   margin-left: auto;
   color: #777;
+  font:
+    10px "DM Sans",
+    sans-serif;
 }
-.construct-dialog footer {
-  padding: 14px 24px;
-  border-top: 1px solid #ffffff0b;
-  font-size: 10px;
+.construct-dialog .construct-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 20px 12px;
+  padding: 0 12px;
+  height: 38px;
+  flex: none;
+  background: #121212;
+  border: 1px solid #373737;
+  border-radius: 8px;
   color: #777;
+}
+.construct-search input {
+  border: 0;
+  background: transparent;
+  flex: 1;
+  height: 100%;
+  font-size: 12px;
+}
+.construct-search button {
+  width: 24px;
+  min-height: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.construct-catalogue {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 12px;
+  padding: 0 20px 18px;
+}
+.construct-categories {
+  width: 138px;
+  flex: none;
+  overflow: auto;
+}
+.construct-categories button {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 12px;
+  color: #aaa;
+  margin-bottom: 2px;
+}
+.construct-categories button.active {
+  background: #303030;
+  color: #eee;
+}
+.construct-categories button:hover {
+  background: #292929;
+}
+.construct-results {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+.construct-matrix {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+  gap: 8px;
+  align-content: start;
+}
+.construct-matrix .construct-entity {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 9px;
+  height: 116px;
+  min-width: 0;
+  padding: 8px 9px;
+  background: #202020;
+  border: 1px solid #3a3a3a;
+  border-radius: 7px;
+  text-align: left;
+}
+.construct-matrix .construct-entity:hover {
+  background: #2b2b2b;
+  border-color: #666;
+}
+.construct-entity > span {
+  display: block;
+  align-self: stretch;
+  font-size: 12px;
+  color: #d8d8d8;
+  line-height: 1.35;
+}
+.construct-caption,
+.construct-empty {
+  color: #888;
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 16px 0;
+}
+.construct-dialog > footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  min-height: 60px;
+  border-top: 1px solid #373737;
+}
+.construct-dialog > footer small {
+  flex: 1;
+  font-size: 10px;
+}
+.construct-dialog > footer button,
+.construct-selection > button {
+  border: 1px solid #373737;
+  background: #262626;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.construct-dialog > footer button:hover {
+  background: #343434;
+}
+.construct-dialog > footer .construct-add {
+  color: #eee;
+  border-color: #626262;
+  background: #333;
+}
+.construct-selection {
+  display: flex;
+  flex: none;
+  gap: 12px;
+  align-items: center;
+  margin: 14px 20px 0;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #373737;
+}
+.construct-selection > input {
+  flex: 1;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: #121212;
+  font-size: 13px;
+}
+.construct-properties {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+  container-type: inline-size;
+}
+.construct-properties .specialized-inspector {
+  padding-top: 12px;
+}
+@media (max-width: 600px) {
+  .construct-categories {
+    width: 108px;
+  }
+  .construct-path {
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 8px 0;
+  }
+  .construct-path strong {
+    width: 100%;
+  }
+  .construct-matrix {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  }
+}
+/* The viewport deliberately draws analytical symbols, not native scene geometry. */
+.checker-pane {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background: repeating-conic-gradient(#1d1d1d 0% 25%, #171717 0% 50%) 0 0/48px
+    48px;
+}
+.checker-content {
+  position: relative;
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+.checker-placements {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 14px;
+  padding: 28px 22px;
+}
+.preview-placement {
+  min-width: 0;
+  min-height: 126px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: #b4c0ce;
+  background: transparent;
+}
+.preview-placement:hover {
+  background: #0004;
+  border-color: #ffffff24;
+}
+.preview-placement.selected {
+  background: #ffb45408;
+  border-color: #ffb45488;
+  color: #ffb454;
+}
+.preview-placement svg {
+  width: 76px;
+  height: 72px;
+  fill: #17171775;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.preview-placement span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #bcbcbc;
+}
+.preview-placement.selected span {
+  color: #f0ce9e;
+}
+.checker-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-height: 160px;
+  color: #737373;
+  font-size: 12px;
+  pointer-events: none;
+}
+.checker-empty small {
+  font-size: 10px;
+  color: #5e5e5e;
+}
+.checker-caption {
+  flex: none;
+  padding: 9px 12px;
+  color: #626262;
+  font-size: 8px;
+  letter-spacing: 1px;
+  background: #1117;
+  pointer-events: none;
+}
+.scene-image.split-view > .checker-pane {
+  width: 50%;
 }
 .toast {
   position: fixed;

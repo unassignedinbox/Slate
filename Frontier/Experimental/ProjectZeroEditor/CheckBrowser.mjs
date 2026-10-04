@@ -10,7 +10,7 @@ const Require = createRequire(
 const { chromium } = Require("playwright");
 import fs from "node:fs";
 import assert from "node:assert/strict";
-const Proof = Folder + "/Screenshots";
+const Proof = process.env.FRONTIER_PROOF_FOLDER || Folder + "/Screenshots";
 fs.mkdirSync(Proof, { recursive: true });
 const Browser = await chromium.launch({
   executablePath: process.env.FRONTIER_BROWSER_EXECUTABLE || undefined,
@@ -187,7 +187,11 @@ try {
   await Page.getByRole("textbox", { name: "Search outliner" }).fill("");
   await Page.getByRole("button", { name: "Construct", exact: true }).click();
   await Page.getByRole("textbox", { name: "Search construct" }).fill("Rainbow");
-  await Page.locator(".construct-grid>button").click();
+  await Page.locator(".construct-matrix")
+    .getByRole("button", { name: "Rainbow", exact: true })
+    .click();
+  await Page.getByRole("button", { name: "Add to scene", exact: true }).click();
+  assert.equal(await Page.locator("[data-preview-id]").count(), 1);
   assert.equal(await Page.locator('[data-panel="rainbow"]').count(), 1);
   // Notch and all five native control-centre pages.
   await Page.getByRole("button", {

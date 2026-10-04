@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { Inspector, Icon, Glyph, Panels } from "./Inspectors.jsx";
 import Notch from "./Notch.jsx";
+import ConstructPanel from "./ConstructPanel.jsx";
+import CheckerViewport, { PreviewVisible } from "./CheckerViewport.jsx";
 import "./Editor.css";
 const InitialRows = [
   ["showcase", "Showcase", "group", "folder-scene", null, "Scene collection"],
@@ -190,7 +192,6 @@ function App() {
     [Name, RenameProject] = useState(Saved.Name || "Project-Zero"),
     [Rename, RenameRow] = useState(null),
     [Construct, OpenConstruct] = useState(false),
-    [ConstructQuery, SearchConstruct] = useState(""),
     [Projection, SetProjection] = useState("PERSP"),
     [RunMode, SetRunMode] = useState("EDIT"),
     [Message, Notify] = useState(""),
@@ -228,6 +229,11 @@ function App() {
       ...Previous,
       [Selected]: { ...Previous[Selected], [Key]: Value },
     }));
+  useEffect(() => {
+    document
+      .querySelector(".outliner-row.selected")
+      ?.scrollIntoView({ block: "nearest" });
+  }, [Selected]);
   const ToggleHidden = (Id) =>
     AssignHidden((Previous) => ({ ...Previous, [Id]: !Previous[Id] }));
   const Toast = (Text) => {
@@ -252,7 +258,13 @@ function App() {
   }, [Rows, Selected, Values, Hidden, Collapsed, Settings, Name]);
   useEffect(() => {
     const Key = (Event) => {
-      if (/INPUT|TEXTAREA|SELECT/.test(Event.target.tagName)) return;
+      if (
+        Event.target.closest?.(
+          'input, textarea, select, [contenteditable]:not([contenteditable="false"])',
+        )
+      )
+        return;
+      if (Construct || Shade) return;
       if (Event.key === "F3") {
         Event.preventDefault();
         SetDebug((Previous) => (Previous + (Event.shiftKey ? 15 : 1)) % 16);
@@ -275,7 +287,13 @@ function App() {
         OpenConstruct(false);
         RenameRow(null);
       }
-      if (Event.shiftKey && Event.code === "KeyA") {
+      if (
+        (Event.ctrlKey || Event.metaKey) &&
+        !Event.shiftKey &&
+        !Event.altKey &&
+        !Event.repeat &&
+        Event.code === "KeyA"
+      ) {
         Event.preventDefault();
         OpenConstruct(true);
       }
@@ -288,7 +306,7 @@ function App() {
     };
     window.addEventListener("keydown", Key);
     return () => window.removeEventListener("keydown", Key);
-  }, [Selected]);
+  }, [Selected, Construct, Shade]);
   useEffect(() => {
     const Move = (Event) => {
       if (!Divider.current) return;
@@ -415,28 +433,51 @@ function App() {
     }
     Event.target.value = "";
   };
-  const AddRow = (Template) => {
-    const Id = Template.Panel + "-" + Date.now();
+  const AddRow = (
+    Template,
+    Properties = Values[Template.Id] || {},
+    Visible = true,
+  ) => {
+    const Id = Template.Panel + "-" + crypto.randomUUID();
+    const Names = new Set(Rows.map((Subject) => Subject.Name));
+    const Stem =
+      Template.Name.replace(/[\x00-\x1f\x7f]/g, "").trim() || "Untitled";
+    let Name = Stem,
+      Suffix = 2;
+    while (Names.has(Name)) Name = Stem + " " + Suffix++;
     AssignRows((Previous) => [
       ...Previous,
       {
         ...Template,
         Id,
-        Name: Template.Name,
-        Parent:
-          Template.Panel === "camera"
-            ? "cameras"
-            : Template.Panel === "geometry"
-              ? "showcase"
-              : "world",
+        Name,
+        Preview: true,
+        Parent: Rows.some((Subject) => Subject.Id === Template.Parent)
+          ? Template.Parent
+          : null,
       },
     ]);
+    AssignValues((Previous) => ({ ...Previous, [Id]: { ...Properties } }));
+    // Show a new placement even when the destination collection was hidden.
+    AssignHidden((Previous) => {
+      const Next = { ...Previous, [Id]: !Visible };
+      let Owner = Rows.find((Subject) => Subject.Id === Template.Parent);
+      const Seen = new Set();
+      while (Owner && !Seen.has(Owner.Id)) {
+        Seen.add(Owner.Id);
+        Next[Owner.Id] = false;
+        Owner = Rows.find((Subject) => Subject.Id === Owner.Parent);
+      }
+      return Next;
+    });
     Select(Id);
     OpenConstruct(false);
+    ShowMenu(null);
+    Expand(false);
     Search("");
     Filter([]);
     Collapse({});
-    Toast("Added to the HTML scene outline · no native object created");
+    Toast("Added " + Name + " · analytical HTML preview");
   };
   const TabStrip = (Side) => (
     <div
@@ -774,7 +815,13 @@ function App() {
         <button
           title="Frame selected"
           onClick={() =>
-            Toast("Reference viewport · native camera is not connected")
+            document
+              .querySelector(`[data-preview-id="${Selected}"]`)
+              ?.scrollIntoView({
+                block: "center",
+                inline: "center",
+                behavior: "smooth",
+              })
           }
         >
           F
@@ -830,13 +877,15 @@ function App() {
         </button>
         <button
           className="live"
-          title="Reference image only. No engine connection."
+          title="Analytical HTML preview. No engine connection."
           onClick={() =>
-            Toast("Native CPU reference frame · no live renderer connected")
+            Toast(
+              "Checkerboard preview · constructed entities use analytical markers",
+            )
           }
         >
           <i />
-          REF <small>CPU</small>
+          PREVIEW
         </button>
         <button
           aria-label="Open control center"
@@ -849,14 +898,22 @@ function App() {
         className={
           "scene-image " + (Projection === "SPLIT" ? "split-view" : "")
         }
-        title="Authentic native CPU reference frame. This HTML copy does not run the renderer."
+        title="Checkerboard authoring preview. Symbols represent constructed entities, not engine rendering."
       >
-        <img
-          src={window.NativeAssets.Viewport}
-          alt="Project Zero native reference viewport"
+        <CheckerViewport
+          Rows={Rows}
+          Hidden={Hidden}
+          Selected={Selected}
+          Select={SelectRow}
         />
         {Projection === "SPLIT" && (
-          <img src={window.NativeAssets.Viewport} alt="Second reference view" />
+          <CheckerViewport
+            Rows={Rows}
+            Hidden={Hidden}
+            Selected={Selected}
+            Select={SelectRow}
+            View={2}
+          />
         )}
         {Debug > 0 && (
           <div className="diagnostic-overlay">
@@ -873,7 +930,7 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
           </div>
         )}
         {Settings.FPS && (
-          <div className="fps-overlay">FPS — · CPU reference</div>
+          <div className="fps-overlay">FPS — · HTML preview</div>
         )}
         {Console && (
           <div className="console">
@@ -894,11 +951,17 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
       </div>
       <footer
         className="viewport-footer"
-        title="Reference scene statistics; no live GPU telemetry"
+        title="Browser-local analytical symbols, not native geometry or renderer telemetry"
       >
-        FPS <b>—</b> · — ms | TRIS 5994 | INSTANCES {Rows.length} ·{" "}
-        {Rows.filter((Row) => !Hidden[Row.Id]).length} visible | CAMERA{" "}
-        <b>+0° +0° 4.5m</b>
+        HTML PREVIEW · CONSTRUCTED{" "}
+        <b>{Rows.filter((Subject) => Subject.Preview).length}</b> ·{" "}
+        {
+          Rows.filter(
+            (Subject) =>
+              Subject.Preview && PreviewVisible(Subject, Rows, Hidden),
+          ).length
+        }{" "}
+        visible · NO ENGINE CONNECTION
       </footer>
     </>
   );
@@ -920,7 +983,7 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
         </div>
         <footer className="inspector-footer">
           <span>{Subject.Description}</span>
-          <span>FPS — · TRIS 5994</span>
+          <span>HTML preview</span>
         </footer>
       </>
     ) : (
@@ -930,6 +993,7 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
     <>
       <main
         className={"workspace " + (Wide ? "inspector-workspace" : "")}
+        inert={Construct ? "" : undefined}
         style={{ "--left": LeftWidth + "px", "--right": RightWidth + "px" }}
       >
         {["Left", "Centre", "Right"].map((Side) => (
@@ -1005,7 +1069,7 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
                     OpenConstruct(true);
                   }}
                 >
-                  Construct… <small>Shift+A</small>
+                  Construct… <small>Ctrl+A</small>
                 </button>
                 <button
                   onClick={() => {
@@ -1147,59 +1211,11 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
         </>
       )}
       {Construct && (
-        <div
-          className="modal-scrim"
-          onClick={(Event) => {
-            if (Event.target === Event.currentTarget) OpenConstruct(false);
-          }}
-        >
-          <section
-            className="construct-dialog"
-            role="dialog"
-            aria-label="Construct"
-          >
-            <header>
-              <h2>Construct</h2>
-              <button
-                aria-label="Close construct"
-                onClick={() => OpenConstruct(false)}
-              >
-                <Glyph Name="close" />
-              </button>
-            </header>
-            <label className="construct-search">
-              <Glyph Name="search" />
-              <input
-                autoFocus
-                placeholder="Search scene objects…"
-                aria-label="Search construct"
-                value={ConstructQuery}
-                onChange={(Event) => SearchConstruct(Event.target.value)}
-              />
-              <kbd>Shift+A</kbd>
-            </label>
-            <div className="construct-grid">
-              {InitialRows.filter(
-                (Row) =>
-                  Row.Panel !== "group" &&
-                  Row.Id !== "sky" &&
-                  Row.Name.toLowerCase().includes(ConstructQuery.toLowerCase()),
-              ).map((Row) => (
-                <button key={Row.Id} onClick={() => AddRow(Row)}>
-                  <Icon Name={Row.Icon} Size={32} />
-                  <span>
-                    {Row.Name}
-                    <small>{Row.Description}</small>
-                  </span>
-                  <Glyph Name="plus" Size={15} />
-                </button>
-              ))}
-            </div>
-            <footer>
-              HTML scene authoring only · no native engine connection
-            </footer>
-          </section>
-        </div>
+        <ConstructPanel
+          Catalogue={InitialRows.filter((Subject) => Subject.Panel !== "group")}
+          Add={AddRow}
+          Close={() => OpenConstruct(false)}
+        />
       )}
       <input
         type="file"
