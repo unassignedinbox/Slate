@@ -55,10 +55,11 @@ export function getFabricLoadScale(arealDensity = 85) {
 }
 
 export const AVATAR_FINISHES = [
-  { id: 0, label: "Warm porcelain mannequin" },
+  { id: 0, label: "Ivory toile fitting form" },
   { id: 1, label: "Sculpted bronze atelier" },
   { id: 2, label: "Charcoal studio matte" },
   { id: 3, label: "Alabaster satin form" },
+  { id: 4, label: "Natural sand muslin form" },
 ];
 
 export const DEFAULT_PARAMS = {
@@ -180,15 +181,15 @@ export const CONTROL_GROUPS = [
     ],
   },
   {
-    title: "Human Avatar & Pose",
+    title: "Tailoring Form & Pose",
     controls: [
-      { key: "avatarVisible", label: "Show human mannequin", type: "toggle" },
+      { key: "avatarVisible", label: "Show tailoring mannequin", type: "toggle" },
       {
         key: "avatarBodyType",
         label: "Mannequin body form",
         type: "select",
         options: [
-          { id: 0, label: "Female couture form" },
+          { id: 0, label: "Female fitting form" },
           { id: 1, label: "Male tailoring form" },
         ],
       },
@@ -211,7 +212,7 @@ export const CONTROL_GROUPS = [
         options: AVATAR_FINISHES,
       },
       { key: "clothThickness", label: "Collision offset", type: "range", min: 0.004, max: 0.028, step: 0.001 },
-      { key: "bodyFriction", label: "Skin / cloth friction", type: "range", min: 0.0, max: 0.9, step: 0.02 },
+      { key: "bodyFriction", label: "Form / cloth friction", type: "range", min: 0.0, max: 0.9, step: 0.02 },
     ],
   },
   {

@@ -204,8 +204,8 @@ class ClothPanel {
       Select("#backend-select").value = Backend;
       Select("#viewport-subtitle").textContent =
         Backend === "webgpu"
-          ? "WebGPU WGSL Compute XPBD · 16-capsule human body collider"
-          : "WebGL2 XPBD solver · 16-capsule human body collider";
+          ? "WebGPU XPBD · 16-capsule tailoring-form collider"
+          : "WebGL2 XPBD · 16-capsule tailoring-form collider";
       this.ResizeViewport();
       Select("#status-ready").innerHTML =
         Backend === "webgpu" ? "<i></i>WebGPU ready" : "<i></i>GPU ready";
@@ -664,7 +664,7 @@ class ClothPanel {
         ],
         "PATTERN",
         true,
-        "Switch between Female & Male sculpted mannequins and adjust Garment mesh resolution (32–320).",
+        "Switch between the ivory fabric-covered Female and Male fitting forms and adjust garment mesh resolution (32–320).",
       );
       AddGroup(
         "Bodice & neckline",
@@ -695,7 +695,7 @@ class ClothPanel {
         "Zhang et al. 2025: Cerda-Mahadevan wrinkle wavelength λ(B/E), Vandeparre wrinklon transition L_w, orthotropic anisotropy, and in-plane compressive locking relief.",
       );
       AddGroup(
-        "Human avatar & pose",
+        "Tailoring form & pose",
         [
           "avatarVisible",
           "avatarBodyType",
@@ -707,7 +707,7 @@ class ClothPanel {
         ],
         "AVATAR",
         true,
-        "16 articulated anatomical capsules collide with every cloth vertex in the WebGPU compute pass.",
+        "Ivory fabric-covered female and male fitting forms with a blank head, subtle stitched pattern seams, articulated limbs, and 16 cloth-collision capsules.",
       );
       AddGroup(
         "WebGPU XPBD solver",
@@ -811,14 +811,14 @@ class ClothPanel {
       this.LoadPreset("ivory_embroidered_wrap_gown");
     } else if (Kind === "female-body") {
       this.ApplyParameter("avatarBodyType", 0);
-      this.Notify("Switched to sculpted Female couture mannequin.");
+      this.Notify("Switched to the Female ivory toile fitting form.");
     } else if (Kind === "male-body") {
       this.ApplyParameter("avatarBodyType", 1);
-      this.Notify("Switched to sculpted Male tailoring mannequin.");
+      this.Notify("Switched to the Male ivory toile fitting form.");
     } else if (Kind === "catwalk") {
       this.ApplyParameter("avatarPose", 1);
       this.SelectObject("avatar");
-      this.Notify("Human avatar switched to Runway Catwalk stride.");
+      this.Notify("Fitting mannequin switched to Runway Catwalk stride.");
     } else if (Kind === "twirl") {
       this.ApplyParameter("avatarPose", 2);
       this.TriggerBurst("twirl");
@@ -826,7 +826,7 @@ class ClothPanel {
     } else if (Kind === "studio") {
       this.ApplyParameter("avatarPose", 0);
       this.SelectObject("avatar");
-      this.Notify("Human avatar switched to Studio Contrapposto pose.");
+      this.Notify("Fitting mannequin switched to Studio Contrapposto pose.");
     }
   }
 
@@ -1013,8 +1013,8 @@ class ClothPanel {
       this.ApplyParameter("avatarBodyType", bodyType);
       this.Notify(
         bodyType === 1
-          ? "Switched to sculpted Male tailoring mannequin and re-fitted garment."
-          : "Switched to sculpted Female couture mannequin and re-fitted garment.",
+          ? "Switched to the Male fitting form and re-fitted garment."
+          : "Switched to the Female fitting form and re-fitted garment.",
       );
     });
 

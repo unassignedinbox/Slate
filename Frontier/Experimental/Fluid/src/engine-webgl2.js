@@ -585,6 +585,7 @@ export class WebGL2ClothEngine {
       gl.uniform4f(gl.getUniformLocation(this.avatarProg, "uLightDir"), lx, ly, lz, this.params.sunIntensity ?? 2.6);
       gl.uniform4f(gl.getUniformLocation(this.avatarProg, "uPrimaryCol"), pal.primary[0], pal.primary[1], pal.primary[2], this.params.ambientIntensity ?? 0.75);
       gl.uniform4f(gl.getUniformLocation(this.avatarProg, "uExtraParams"), this.params.renderChannel ?? 0, this.params.subsurfaceScatter ?? 0.65, this.params.showSeamLines ? 1 : 0, this.params.avatarFinish ?? 0);
+      gl.uniform4f(gl.getUniformLocation(this.avatarProg, "uStyleInfo"), 0, 0, 0, this.avatar.motionState.yaw ?? 0);
       gl.bindVertexArray(this.avatarVAO);
       gl.drawElements(gl.TRIANGLES, this.avatarIndexCount, gl.UNSIGNED_INT, 0);
     }

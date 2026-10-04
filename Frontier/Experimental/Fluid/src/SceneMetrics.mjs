@@ -6,6 +6,7 @@ import {
   DEBUG_CHANNELS,
   COLOR_PALETTES,
   FABRIC_PRESETS,
+  AVATAR_FINISHES,
   getFabricPresetParameters,
   getFabricLoadScale,
 } from "./presets.js";
@@ -36,6 +37,10 @@ Test("Couture dress presets validate and construct tailored parameters", () => {
   Assert.equal(DEBUG_CHANNELS.length, 7);
   Assert.equal(COLOR_PALETTES.length, 10);
   Assert.ok(FABRIC_PRESETS.length >= 10);
+  Assert.equal(DEFAULT_PARAMS.avatarFinish, 0);
+  Assert.equal(AVATAR_FINISHES.length, 5);
+  Assert.match(AVATAR_FINISHES[0].label, /toile|fitting form/i);
+  Assert.equal(ValidateParameter("avatarFinish", 4), 4);
   const silk = getFabricPresetParameters(0);
   const canvas = getFabricPresetParameters(3);
   const leather = getFabricPresetParameters(6);
@@ -78,12 +83,23 @@ Test("Zhang et al. 2025 (SIGGRAPH '25) PieSizingEstimator evaluates optimal reso
   Assert.ok(sWaist <= sMidSkirt);
 });
 
-Test("HumanAvatar constructs sculpted 3D Female and Male body meshes and 16 articulated SDF capsules", () => {
+Test("HumanAvatar builds faceless fabric fitting forms, a rolling stand, and 16 articulated SDF capsules", () => {
   const avatar = new HumanAvatar(0);
   Assert.equal(avatar.bodyType, 0);
   Assert.ok(avatar.vertexCount > 12000);
   Assert.ok(avatar.indexCount > 70000);
   Assert.equal(avatar.capsuleData.length, 16 * 12);
+  let hasRearStandPost = false;
+  for (let i = 0; i < avatar.basePositions.length; i += 3) {
+    const x = avatar.basePositions[i];
+    const y = avatar.basePositions[i + 1];
+    const z = avatar.basePositions[i + 2];
+    if (y > 0.50 && y < 0.78 && Math.abs(x) < 0.014 && Math.abs(z + 0.155) < 0.014) {
+      hasRearStandPost = true;
+      break;
+    }
+  }
+  Assert.ok(hasRearStandPost, "the mannequin's steel stand should reach the lower back");
 
   for (const bodyType of [0, 1]) {
     avatar.setBodyType(bodyType);
@@ -218,4 +234,8 @@ Test("WebGPU WGSL and WebGL2 GLSL cloth & avatar shaders contain all required en
   Assert.match(GLSL_CLOTH_FS, /pieSizingColor/);
   Assert.match(GLSL_AVATAR_VS, /#version 300 es/);
   Assert.match(GLSL_AVATAR_FS, /fragColor/);
+  Assert.match(GLSL_AVATAR_FS, /Ivory cotton toile/);
+  Assert.match(GLSL_AVATAR_FS, /seamStroke/);
+  Assert.match(WGSL_CLOTH_RENDER_SHADER, /seamStroke/);
+  Assert.match(WGSL_CLOTH_RENDER_SHADER, /styleInfo\.w/);
 });

@@ -436,7 +436,7 @@ fn fsFloor(in : FloorVSOut) -> @location(0) vec4<f32> {
 }
 
 // -----------------------------------------------------------------------------
-// 2. SCULPTED HUMAN AVATAR MANNEQUIN PASS
+// 2. FABRIC-COVERED TAILORING FORM AND WHEELED STAND PASS
 // -----------------------------------------------------------------------------
 struct AvatarVSOut {
   @builtin(position) pos : vec4<f32>,
@@ -456,42 +456,108 @@ fn vsAvatar(
   return out;
 }
 
+fn seamStroke(distanceToSeam: f32, halfWidth: f32) -> f32 {
+  let aa = max(fwidth(distanceToSeam) * 0.8, 0.00018);
+  return 1.0 - smoothstep(halfWidth, halfWidth + aa, distanceToSeam);
+}
+
 @fragment
 fn fsAvatar(in : AvatarVSOut) -> @location(0) vec4<f32> {
   let N = normalize(in.normal);
   let V = normalize(uRender.cameraPos.xyz - in.worldPos);
   let L = normalize(uRender.lightDir.xyz);
   let H = normalize(V + L);
+  let yaw = uRender.styleInfo.w;
+  let cy = cos(yaw);
+  let sy = sin(yaw);
+  let formPos = vec3<f32>(in.worldPos.x * cy - in.worldPos.z * sy, in.worldPos.y,
+                          in.worldPos.x * sy + in.worldPos.z * cy);
 
   let finish = i32(uRender.extraParams.w + 0.5);
-  var baseCol = vec3<f32>(0.76, 0.65, 0.58); // Warm porcelain mannequin
-  var rough = 0.36;
-  var metallic = 0.04;
+  let toileFinish = finish == 0 || finish == 4;
+  var baseCol = vec3<f32>(0.82, 0.79, 0.73); // Ivory cotton toile / fitting-form canvas
+  var rough = 0.84;
+  var metallic = 0.0;
   if (finish == 1) {
-    baseCol = vec3<f32>(0.56, 0.41, 0.28); // Sculpted bronze
+    baseCol = vec3<f32>(0.56, 0.41, 0.28);
     rough = 0.25;
     metallic = 0.65;
   } else if (finish == 2) {
-    baseCol = vec3<f32>(0.18, 0.19, 0.21); // Charcoal studio matte
-    rough = 0.52;
+    baseCol = vec3<f32>(0.18, 0.19, 0.21);
+    rough = 0.62;
   } else if (finish == 3) {
-    baseCol = vec3<f32>(0.86, 0.85, 0.83); // Alabaster satin
-    rough = 0.28;
+    baseCol = vec3<f32>(0.86, 0.85, 0.83);
+    rough = 0.46;
+  } else if (finish == 4) {
+    baseCol = vec3<f32>(0.69, 0.55, 0.43); // Natural sand muslin
+    rough = 0.88;
   }
 
-  // Plinth base darker finish
-  if (in.worldPos.y < 0.006) {
-    baseCol = vec3<f32>(0.12, 0.125, 0.135);
-    rough = 0.28;
+  // A fine, low-contrast linen grain fades out before it can alias at distance.
+  if (toileFinish) {
+    let warp = sin((formPos.y + formPos.z * 0.08) * 940.0);
+    let weft = sin((formPos.x + formPos.z * 0.05) * 940.0);
+    let grainFade = 1.0 - smoothstep(0.55, 1.45,
+      max(fwidth(formPos.x * 940.0), fwidth(formPos.y * 940.0)));
+    baseCol *= 1.0 + (warp + weft) * 0.006 * grainFade;
+
+    if (uRender.extraParams.z > 0.5) {
+      let front = smoothstep(0.025, 0.065, formPos.z);
+      let back = smoothstep(0.025, 0.065, -formPos.z);
+      let torso = smoothstep(0.77, 0.83, formPos.y) * (1.0 - smoothstep(1.37, 1.44, formPos.y));
+      let center = seamStroke(abs(formPos.x), 0.00105) * (front + back) * torso;
+      let princessX = 0.073 - 0.014 * smoothstep(1.02, 1.32, formPos.y);
+      let princess = seamStroke(abs(abs(formPos.x) - princessX), 0.0010)
+                   * front * smoothstep(0.93, 0.98, formPos.y)
+                   * (1.0 - smoothstep(1.33, 1.39, formPos.y));
+      let waist = seamStroke(abs(formPos.y - 1.035), 0.00125)
+                * (1.0 - smoothstep(0.17, 0.205, abs(formPos.x)));
+      let bust = seamStroke(abs(formPos.y - 1.174), 0.0010) * front
+               * (1.0 - smoothstep(0.115, 0.16, abs(formPos.x)));
+      let legCenter = 0.5 * (seamStroke(abs(formPos.x - 0.080), 0.00095)
+                           + seamStroke(abs(formPos.x + 0.080), 0.00095))
+                    * front * smoothstep(0.16, 0.23, formPos.y)
+                    * (1.0 - smoothstep(0.82, 0.89, formPos.y));
+      let seam = clamp(center + princess + waist + bust + legCenter, 0.0, 1.0);
+      let stitchDash = step(0.38, fract(formPos.y * 300.0));
+      let stitched = clamp(seam * (0.78 + 0.22 * stitchDash), 0.0, 1.0);
+      baseCol = mix(baseCol, baseCol * 0.70, stitched * 0.42);
+      baseCol = mix(baseCol, baseCol * 1.06, seam * (1.0 - stitchDash) * 0.08);
+    }
   }
 
-  let ndl = max(0.0, dot(N, L));
+  // Dark steel stand: rear post, four spokes, and caster wheels.
+  let poleMask = (1.0 - smoothstep(0.014, 0.021, abs(formPos.x)))
+               * (1.0 - smoothstep(0.013, 0.020, abs(formPos.z + 0.155)))
+               * smoothstep(0.018, 0.035, formPos.y)
+               * (1.0 - smoothstep(0.79, 0.83, formPos.y));
+  let spokeX = (1.0 - smoothstep(0.011, 0.020, abs(formPos.z + 0.155)))
+             * (1.0 - smoothstep(0.30, 0.34, abs(formPos.x)))
+             * (1.0 - smoothstep(0.00, 0.045, abs(formPos.y - 0.026)));
+  let spokeZ = (1.0 - smoothstep(0.011, 0.020, abs(formPos.x)))
+             * (1.0 - smoothstep(0.30, 0.34, abs(formPos.z + 0.155)))
+             * (1.0 - smoothstep(0.00, 0.045, abs(formPos.y - 0.026)));
+  let casterCenters = array<vec2<f32>, 4>(vec2<f32>(0.32, -0.155), vec2<f32>(-0.32, -0.155),
+                                         vec2<f32>(0.0, 0.17), vec2<f32>(0.0, -0.48));
+  var caster = 0.0;
+  for (var i = 0; i < 4; i = i + 1) {
+    let radial = length(formPos.xz - casterCenters[i]);
+    caster = max(caster, (1.0 - smoothstep(0.022, 0.031, radial))
+                        * (1.0 - smoothstep(0.020, 0.030, abs(formPos.y + 0.007))));
+  }
+  let stand = max(max(poleMask, max(spokeX, spokeZ)), caster);
+  if (stand > 0.02) {
+    baseCol = mix(baseCol, vec3<f32>(0.055, 0.063, 0.073), clamp(stand, 0.0, 1.0));
+    rough = mix(rough, 0.30, clamp(stand, 0.0, 1.0));
+    metallic = mix(metallic, 0.62, clamp(stand, 0.0, 1.0));
+  }
+
   let wrapDiff = max(0.0, (dot(N, L) + 0.35) / 1.35);
   let ndv = max(0.001, dot(N, V));
   let ndh = max(0.0, dot(N, H));
   let specPow = exp2(10.0 * (1.0 - rough));
   let spec = pow(ndh, specPow) * (0.12 + 0.65 * metallic);
-  let rim = pow(1.0 - ndv, 3.2) * 0.28;
+  let rim = pow(1.0 - ndv, 3.2) * 0.22;
 
   let sunI = uRender.lightDir.w * 0.48;
   let ambI = uRender.primaryColor.w * 0.42;

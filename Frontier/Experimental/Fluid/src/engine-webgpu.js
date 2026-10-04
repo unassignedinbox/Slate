@@ -606,7 +606,7 @@ export class WebGPUClothEngine {
     ru[44] = this.params.dressStyle ?? 0;
     ru[45] = this.params.arealDensity ?? 85;
     ru[46] = this.params.windResponse ?? 1.0;
-    ru[47] = 0.0;
+    ru[47] = this.avatar.motionState.yaw ?? 0.0;
 
     this.device.queue.writeBuffer(this.renderUniformBuffer, 0, ru);
 

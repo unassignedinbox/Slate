@@ -1,5 +1,5 @@
 /**
- * WebGL2 GLSL 300 es Shaders for the Cloth & Human Avatar Fallback Engine
+ * WebGL2 GLSL 300 es Shaders for Cloth & Fitting-Mannequin Fallback Rendering
  * Matches the WGSL textile-specific silk/cotton/denim/wool/leather shading and debug channels.
  */
 
@@ -68,33 +68,101 @@ uniform vec4 uCameraPos;   // xyz: pos, w: exposure
 uniform vec4 uLightDir;    // xyz: dir, w: sunIntensity
 uniform vec4 uPrimaryCol;  // rgb: primary, w: ambientIntensity
 uniform vec4 uExtraParams; // x: channel, y: sss, z: seams, w: avatarFinish
+uniform vec4 uStyleInfo;   // w: mannequin yaw, used to keep fitted seams on the rotating form
 out vec4 fragColor;
+
+float seamStroke(float distanceToSeam, float halfWidth) {
+  float aa = max(fwidth(distanceToSeam) * 0.8, 0.00018);
+  return 1.0 - smoothstep(halfWidth, halfWidth + aa, distanceToSeam);
+}
 
 void main() {
   vec3 N = normalize(vNormal);
   vec3 V = normalize(uCameraPos.xyz - vWorldPos);
   vec3 L = normalize(uLightDir.xyz);
   vec3 H = normalize(V + L);
+  float yaw = uStyleInfo.w;
+  float cy = cos(yaw), sy = sin(yaw);
+  vec3 formPos = vec3(vWorldPos.x * cy - vWorldPos.z * sy, vWorldPos.y,
+                      vWorldPos.x * sy + vWorldPos.z * cy);
 
   int finish = int(uExtraParams.w + 0.5);
-  vec3 baseCol = vec3(0.76, 0.65, 0.58);
-  float rough = 0.36;
-  float metallic = 0.04;
+  bool toileFinish = finish == 0 || finish == 4;
+  vec3 baseCol = vec3(0.82, 0.79, 0.73); // Ivory cotton toile / fitting-form canvas
+  float rough = 0.84;
+  float metallic = 0.0;
   if (finish == 1) {
     baseCol = vec3(0.56, 0.41, 0.28);
     rough = 0.25;
     metallic = 0.65;
   } else if (finish == 2) {
     baseCol = vec3(0.18, 0.19, 0.21);
-    rough = 0.52;
+    rough = 0.62;
   } else if (finish == 3) {
     baseCol = vec3(0.86, 0.85, 0.83);
-    rough = 0.28;
+    rough = 0.46;
+  } else if (finish == 4) {
+    baseCol = vec3(0.69, 0.55, 0.43); // Natural sand muslin
+    rough = 0.88;
   }
 
-  if (vWorldPos.y < 0.006) {
-    baseCol = vec3(0.12, 0.125, 0.135);
-    rough = 0.28;
+  // A fine, low-contrast linen grain: it fades out before it can alias at distance.
+  if (toileFinish) {
+    float warp = sin((formPos.y + formPos.z * 0.08) * 940.0);
+    float weft = sin((formPos.x + formPos.z * 0.05) * 940.0);
+    float grainFade = 1.0 - smoothstep(0.55, 1.45,
+      max(fwidth(formPos.x * 940.0), fwidth(formPos.y * 940.0)));
+    baseCol *= 1.0 + (warp + weft) * 0.006 * grainFade;
+
+    if (uExtraParams.z > 0.5) {
+      float front = smoothstep(0.025, 0.065, formPos.z);
+      float back = smoothstep(0.025, 0.065, -formPos.z);
+      float torso = smoothstep(0.77, 0.83, formPos.y) * (1.0 - smoothstep(1.37, 1.44, formPos.y));
+      float center = seamStroke(abs(formPos.x), 0.00105) * (front + back) * torso;
+      float princessX = 0.073 - 0.014 * smoothstep(1.02, 1.32, formPos.y);
+      float princess = seamStroke(abs(abs(formPos.x) - princessX), 0.0010)
+                     * front * smoothstep(0.93, 0.98, formPos.y)
+                     * (1.0 - smoothstep(1.33, 1.39, formPos.y));
+      float waist = seamStroke(abs(formPos.y - 1.035), 0.00125)
+                  * (1.0 - smoothstep(0.17, 0.205, abs(formPos.x)));
+      float bust = seamStroke(abs(formPos.y - 1.174), 0.0010) * front
+                 * (1.0 - smoothstep(0.115, 0.16, abs(formPos.x)));
+      float legCenter = 0.5 * (seamStroke(abs(formPos.x - 0.080), 0.00095)
+                             + seamStroke(abs(formPos.x + 0.080), 0.00095))
+                      * front * smoothstep(0.16, 0.23, formPos.y)
+                      * (1.0 - smoothstep(0.82, 0.89, formPos.y));
+      float seam = clamp(center + princess + waist + bust + legCenter, 0.0, 1.0);
+      float stitchDash = step(0.38, fract(formPos.y * 300.0));
+      float stitched = clamp(seam * (0.78 + 0.22 * stitchDash), 0.0, 1.0);
+      baseCol = mix(baseCol, baseCol * 0.70, stitched * 0.42);
+      baseCol = mix(baseCol, baseCol * 1.06, seam * (1.0 - stitchDash) * 0.08);
+    }
+  }
+
+  // Dark steel stand: a rear post, four spokes, and small caster wheels.
+  float poleMask = (1.0 - smoothstep(0.014, 0.021, abs(formPos.x)))
+                 * (1.0 - smoothstep(0.013, 0.020, abs(formPos.z + 0.155)))
+                 * smoothstep(0.018, 0.035, formPos.y)
+                 * (1.0 - smoothstep(0.79, 0.83, formPos.y));
+  float spokeX = (1.0 - smoothstep(0.011, 0.020, abs(formPos.z + 0.155)))
+               * (1.0 - smoothstep(0.30, 0.34, abs(formPos.x)))
+               * (1.0 - smoothstep(0.00, 0.045, abs(formPos.y - 0.026)));
+  float spokeZ = (1.0 - smoothstep(0.011, 0.020, abs(formPos.x)))
+               * (1.0 - smoothstep(0.30, 0.34, abs(formPos.z + 0.155)))
+               * (1.0 - smoothstep(0.00, 0.045, abs(formPos.y - 0.026)));
+  vec2 casterCenters[4] = vec2[4](vec2(0.32, -0.155), vec2(-0.32, -0.155),
+                                   vec2(0.0, 0.17), vec2(0.0, -0.48));
+  float caster = 0.0;
+  for (int i = 0; i < 4; i++) {
+    float radial = length(formPos.xz - casterCenters[i]);
+    caster = max(caster, (1.0 - smoothstep(0.022, 0.031, radial))
+                        * (1.0 - smoothstep(0.020, 0.030, abs(formPos.y + 0.007))));
+  }
+  float stand = max(max(poleMask, max(spokeX, spokeZ)), caster);
+  if (stand > 0.02) {
+    baseCol = mix(baseCol, vec3(0.055, 0.063, 0.073), clamp(stand, 0.0, 1.0));
+    rough = mix(rough, 0.30, clamp(stand, 0.0, 1.0));
+    metallic = mix(metallic, 0.62, clamp(stand, 0.0, 1.0));
   }
 
   float wrapDiff = max(0.0, (dot(N, L) + 0.35) / 1.35);
@@ -102,7 +170,7 @@ void main() {
   float ndh = max(0.0, dot(N, H));
   float specPow = exp2(10.0 * (1.0 - rough));
   float spec = pow(ndh, specPow) * (0.12 + 0.65 * metallic);
-  float rim = pow(1.0 - ndv, 3.2) * 0.28;
+  float rim = pow(1.0 - ndv, 3.2) * 0.22;
 
   float sunI = uLightDir.w * 0.48;
   float ambI = uPrimaryCol.w * 0.42;

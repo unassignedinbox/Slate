@@ -1,11 +1,9 @@
 /**
- * Sculpted 3D Female & Male Human Body / Couture Mannequin Avatar
- * - Supports both Female Couture Form (bodyType = 0) and Male Tailoring Form (bodyType = 1)
- * - Smooth C² monotone cubic Hermite anatomical splines for torso, bust/pectorals, waist, pelvis,
- *   sloping trapezius, sternocleidomastoid neck, and 3D sculpted head (jawline, chin, nose bridge, brow, cranium)
- * - Orthonormal Bishop-frame articulated arms with deltoid caps, elbows, oval wrists, and sculpted hands
- * - Anatomical legs with gluteal-thigh blend, patella knee contour, gastrocnemius calves, ankles, and feet
- * - 16-Capsule Analytical SDF Collision Primitives for WebGPU Compute Shaders + Custom Wavefront .OBJ Import
+ * Fabric-covered 3D Female & Male Tailoring Mannequin Avatars
+ * - Supports a fitted female dress form and broad-shouldered male tailoring form
+ * - Smooth faceless head, cloth-sheathed torso contours, soft bust shaping, and visible pattern seams
+ * - Articulated, simplified arms and legs sized for garment fitting and simulation
+ * - Rolling tailor's stand and 16-capsule SDF collisions + Custom Wavefront .OBJ Import
  */
 
 export const POSE_MODES = [
@@ -16,7 +14,7 @@ export const POSE_MODES = [
 ];
 
 export const BODY_TYPES = [
-  { id: 0, label: "Female couture form" },
+  { id: 0, label: "Female fitting form" },
   { id: 1, label: "Male tailoring form" },
 ];
 
@@ -58,7 +56,7 @@ function evalHermiteProfile(y, knots) {
 
 export class HumanAvatar {
   constructor(bodyType = 0) {
-    this.bodyType = bodyType; // 0 = Female couture form, 1 = Male tailoring form
+    this.bodyType = bodyType; // 0 = Female fitting form, 1 = Male tailoring form
     this.isCustomObj = false;
     this.capsuleCount = 16;
     // 16 capsules * 12 floats (vec4 pA_rA, vec4 pB_rB, vec4 vel_pad)
@@ -96,8 +94,8 @@ export class HumanAvatar {
   }
 
   /**
-   * Constructs a high-resolution, anatomically sculpted 3D Female or Male mannequin mesh
-   * (pelvis + torso + bust/pectorals + trapezius + neck + sculpted head + deltoid arms + hands + legs + feet + plinth).
+   * Constructs a high-resolution fabric-covered tailoring form with a smooth, featureless head,
+   * tailored torso contours, articulated limbs, and a wheeled display stand.
    */
   buildProceduralBody(bodyType = this.bodyType) {
     this.bodyType = bodyType ? 1 : 0;
@@ -105,7 +103,7 @@ export class HumanAvatar {
 
     const positions = [];
     const normals = [];
-    const boneIds = []; // 0=torso/head, 1=leftLeg, 2=rightLeg, 3=leftArm, 4=rightArm, 5=plinth
+    const boneIds = []; // 0=mannequin / mounted stand, 1=leftLeg, 2=rightLeg, 3=leftArm, 4=rightArm, 5=static accessory
     const boneWeights = [];
     const indices = [];
 
@@ -138,8 +136,54 @@ export class HumanAvatar {
       }
     };
 
+    const addRodBetween = (start, end, radius, boneId, segs = 14) => {
+      const direction = [end[0] - start[0], end[1] - start[1], end[2] - start[2]];
+      const length = Math.hypot(...direction) || 1;
+      const axis = direction.map((value) => value / length);
+      const reference = Math.abs(axis[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+      let u = [
+        axis[1] * reference[2] - axis[2] * reference[1],
+        axis[2] * reference[0] - axis[0] * reference[2],
+        axis[0] * reference[1] - axis[1] * reference[0],
+      ];
+      const uLength = Math.hypot(...u) || 1;
+      u = u.map((value) => value / uLength);
+      const v = [
+        u[1] * axis[2] - u[2] * axis[1],
+        u[2] * axis[0] - u[0] * axis[2],
+        u[0] * axis[1] - u[1] * axis[0],
+      ];
+      const rings = [0, 0.055, 0.945, 1].map((t, ring) => {
+        const center = start.map((value, i) => value + direction[i] * t);
+        const r = radius * (ring === 0 || ring === 3 ? 0.82 : 1);
+        const points = Array.from({ length: segs }, (_, s) => {
+          const angle = (s / segs) * Math.PI * 2;
+          const ca = Math.cos(angle) * r, sa = Math.sin(angle) * r;
+          return [
+            center[0] + u[0] * ca + v[0] * sa,
+            center[1] + u[1] * ca + v[1] * sa,
+            center[2] + u[2] * ca + v[2] * sa,
+          ];
+        });
+        return { points, weight: 0 };
+      });
+      addRingLoft(rings, boneId);
+    };
+
+    const addVerticalWheel = (cx, cz, radius = 0.026, segs = 18, boneId = 0) => {
+      const wheelRings = [-0.036, -0.028, 0.012, 0.022].map((y, i) => {
+        const r = radius * (i === 0 || i === 3 ? 0.74 : 1);
+        const points = Array.from({ length: segs }, (_, s) => {
+          const a = (s / segs) * Math.PI * 2;
+          return [cx + Math.cos(a) * r, y, cz + Math.sin(a) * r];
+        });
+        return { points, weight: 0 };
+      });
+      addRingLoft(wheelRings, boneId);
+    };
+
     // =========================================================================
-    // 1. TORSO + PELVIS + TRAPEZIUS + NECK + SCULPTED 3D HEAD LOFT
+    // 1. TORSO + PELVIS + TRAPEZIUS + NECK + FEATURELESS DRESS-FORM HEAD LOFT
     // =========================================================================
     // Keyframe knots: [y_meters, rx_halfWidth, rz_halfDepth, centerZ_offset]
     const femaleTorsoKnots = [
@@ -227,7 +271,7 @@ export class HumanAvatar {
             const rightBreast = Math.exp(-Math.pow((x - 0.072) / 0.055, 2));
             const sternumValley = 0.16 * Math.exp(-Math.pow(x / 0.038, 2));
             const frontMask = Math.pow(Math.max(0, sinA), 1.15);
-            const bustProj = 0.046 * bustVert * frontMask * (leftBreast + rightBreast + sternumValley);
+            const bustProj = 0.030 * bustVert * frontMask * (leftBreast + rightBreast + sternumValley);
             z += bustProj;
             x *= 1 + 0.05 * bustVert * (leftBreast + rightBreast);
           }
@@ -239,7 +283,7 @@ export class HumanAvatar {
             const leftPec = Math.exp(-Math.pow((x + 0.082) / 0.068, 4));
             const rightPec = Math.exp(-Math.pow((x - 0.082) / 0.068, 4));
             const frontMask = Math.pow(sinA, 1.25);
-            z += 0.024 * pecY * frontMask * (leftPec + rightPec);
+            z += 0.010 * pecY * frontMask * (leftPec + rightPec);
 
             // Male rectus abdominis (subtle 6-pack & linea alba between y = 0.96 and 1.16)
           }
@@ -247,7 +291,7 @@ export class HumanAvatar {
             const abEnv = Math.sin(((y - 0.95) / 0.22) * Math.PI);
             const abPair = Math.exp(-Math.pow((Math.abs(x) - 0.036) / 0.026, 2));
             const rows = 0.65 + 0.35 * Math.cos(((y - 0.98) / 0.055) * Math.PI * 2);
-            z += 0.006 * abEnv * abPair * rows * (sinA - 0.4);
+            z += 0.0015 * abEnv * abPair * rows * (sinA - 0.4);
           }
         }
 
@@ -256,14 +300,14 @@ export class HumanAvatar {
           const clavY = Math.exp(-Math.pow((y - 1.368) / 0.014, 2));
           const clavLateral = Math.exp(-Math.pow((Math.abs(x) - 0.075) / 0.055, 2));
           const jugularNotch = Math.exp(-Math.pow(x / 0.022, 2));
-          z += (0.006 * clavLateral - 0.005 * jugularNotch) * clavY * sinA;
+          z += (0.0025 * clavLateral - 0.0015 * jugularNotch) * clavY * sinA;
         }
 
         // 1C. Posterior Gluteal Lobe & Cleft Sculpting (y ∈ [0.79, 0.97], back z < 0)
         if (y > 0.79 && y < 0.98 && sinA < 0) {
           const gluteY = Math.exp(-Math.pow((y - 0.875) / 0.055, 2));
           const glutePeakX = isMale ? 0.062 : 0.068;
-          const gluteAmp = isMale ? 0.024 : 0.034;
+          const gluteAmp = isMale ? 0.006 : 0.008;
           const gluteLobes =
             Math.exp(-Math.pow((x + glutePeakX) / 0.055, 2)) +
             Math.exp(-Math.pow((x - glutePeakX) / 0.055, 2));
@@ -275,42 +319,10 @@ export class HumanAvatar {
         if (y > 0.95 && y < 1.36 && sinA < -0.5) {
           const spineGroove = Math.exp(-Math.pow(x / 0.022, 2));
           const spineEnv = Math.sin(((y - 0.95) / 0.41) * Math.PI);
-          z += 0.007 * spineGroove * spineEnv * (-sinA - 0.5);
+          z += 0.0015 * spineGroove * spineEnv * (-sinA - 0.5);
         }
 
-        // 1E. Sculpted 3D Head & Facial Features (y > 1.52m)
-        if (y > 1.52 && y < maxY - 0.005) {
-          const headH = maxY - 1.52;
-          const hu = (y - 1.52) / headH; // 0 = chin base, 1 = crown
-
-          // Anterior Chin & Jawline projection (hu ∈ [0.05, 0.32], front sinA > 0)
-          if (sinA > 0) {
-            const chinEnv = Math.exp(-Math.pow((hu - 0.14) / 0.09, 2));
-            const chinCenter = Math.exp(-Math.pow(cosA / (isMale ? 0.42 : 0.32), 2));
-            z += (isMale ? 0.014 : 0.011) * chinEnv * chinCenter * Math.pow(sinA, 1.5);
-
-            // Nose bridge & nasal tip (hu ∈ [0.32, 0.56], center front)
-            const noseEnv = Math.exp(-Math.pow((hu - 0.42) / 0.10, 2));
-            const noseRidge = Math.exp(-Math.pow(cosA / 0.15, 2));
-            z += 0.014 * noseEnv * noseRidge * Math.pow(sinA, 2.0);
-
-            // Orbital eye hollows (hu ≈ 0.50, cosA ≈ ±0.32)
-            const eyeEnv = Math.exp(-Math.pow((hu - 0.50) / 0.055, 2));
-            const eyeSockets =
-              Math.exp(-Math.pow((cosA + 0.32) / 0.16, 2)) +
-              Math.exp(-Math.pow((cosA - 0.32) / 0.16, 2));
-            z -= 0.006 * eyeEnv * eyeSockets * sinA;
-
-            // Supraorbital brow ridge (hu ≈ 0.57)
-            const browEnv = Math.exp(-Math.pow((hu - 0.57) / 0.045, 2));
-            z += (isMale ? 0.006 : 0.003) * browEnv * Math.pow(sinA, 1.4);
-          }
-
-          // Subtle sculpted ear silhouettes (hu ∈ [0.36, 0.56], lateral cosA ≈ ±1)
-          const earEnv = Math.exp(-Math.pow((hu - 0.46) / 0.08, 2));
-          const earSide = Math.exp(-Math.pow((sinA + 0.08) / 0.18, 2));
-          x += Math.sign(cosA) * 0.006 * earEnv * earSide * Math.pow(Math.abs(cosA), 2.0);
-        }
+        // 1E. Smooth featureless tailoring-form head: no sculpted face, ears, or expression.
 
         points.push([x, y, z]);
       }
@@ -434,10 +446,10 @@ export class HumanAvatar {
         [0.24, side * (shX + (elX - shX) * 0.48), 1.245, -0.016, isMale ? 0.048 : 0.039, isMale ? 0.049 : 0.040], // Biceps / triceps belly
         [0.44, side * elX,           1.120, -0.022, isMale ? 0.041 : 0.034, isMale ? 0.039 : 0.033], // Elbow joint
         [0.56, side * (elX + (wrX - elX) * 0.32), 1.045, -0.010, isMale ? 0.043 : 0.035, isMale ? 0.040 : 0.033], // Forearm brachioradialis swell
-        [0.80, side * wrX,           0.885,  0.016, isMale ? 0.030 : 0.025, isMale ? 0.022 : 0.018], // Oval wrist joint
-        [0.90, side * (wrX + (fnX - wrX) * 0.55), 0.825,  0.026, isMale ? 0.035 : 0.030, isMale ? 0.015 : 0.013], // Sculpted palm & thumb base
-        [0.97, side * fnX,           0.778,  0.032, isMale ? 0.024 : 0.020, isMale ? 0.010 : 0.008], // Tapered fingers
-        [1.00, side * (fnX + 0.003), 0.765,  0.034, 0.002, 0.002], // Fingertip cap
+        [0.80, side * wrX,           0.885,  0.016, isMale ? 0.030 : 0.025, isMale ? 0.022 : 0.018], // Smooth wrist cuff
+        [0.90, side * (wrX + (fnX - wrX) * 0.55), 0.825,  0.026, isMale ? 0.032 : 0.028, isMale ? 0.023 : 0.020], // Seamless palm
+        [0.97, side * fnX,           0.786,  0.032, isMale ? 0.023 : 0.020, isMale ? 0.016 : 0.014], // Soft mitten-shaped hand
+        [1.00, side * (fnX + 0.003), 0.778,  0.034, 0.006, 0.006], // Rounded hand cap
       ];
 
       const axK = armKnots.map((k) => [k[0], k[1]]);
@@ -485,16 +497,9 @@ export class HumanAvatar {
           const cosA = Math.cos(angle);
           const sinA = Math.sin(angle);
 
-          // Thumb silhouette bulge on anterior palm (t ∈ [0.82, 0.93], sinA > 0.5)
-          let thumbExtra = 0.0;
-          if (t > 0.81 && t < 0.94 && sinA > 0.4) {
-            const thumbT = Math.exp(-Math.pow((t - 0.87) / 0.035, 2));
-            const thumbAng = Math.exp(-Math.pow((sinA - 0.85) / 0.25, 2));
-            thumbExtra = 0.010 * thumbT * thumbAng;
-          }
-
+          // Smooth hand shell keeps the dress-form silhouette neutral and unexpressive.
           const uComp = cosA * rMaj;
-          const vComp = sinA * (rMin + thumbExtra);
+          const vComp = sinA * rMin;
 
           points.push([
             cx + bx * uComp + nx * vComp,
@@ -510,24 +515,19 @@ export class HumanAvatar {
     buildArm(1, 4);  // Right arm
 
     // =========================================================================
-    // 4. STUDIO RUNWAY PEDESTAL PLINTH (y from -0.038m to 0.005m)
+    // 4. TAILOR'S FORM STAND: rear post, four steel spokes, and caster wheels
     // =========================================================================
-    const plinthRings = [
-      { radius: 0.001, y: 0.005 },
-      { radius: 0.44, y: 0.005 },
-      { radius: 0.46, y: -0.005 },
-      { radius: 0.46, y: -0.038 },
-      { radius: 0.001, y: -0.038 },
-    ].map(({ radius, y }) => {
-      const pts = [];
-      const segs = 48;
-      for (let s = 0; s < segs; s++) {
-        const a = (s / segs) * Math.PI * 2;
-        pts.push([Math.cos(a) * radius, y, Math.sin(a) * radius]);
-      }
-      return { points: pts, weight: 0 };
-    });
-    addRingLoft(plinthRings, 5);
+    // The post follows the mannequin's gentle yaw; the cross base remains planted on the stage.
+    addRodBetween([0, 0.024, -0.155], [0, 0.805, -0.155], 0.011, 0);
+    const standCenter = [0, 0.026, -0.155];
+    const wheelPoints = [
+      [0.32, -0.155], [-0.32, -0.155], [0, 0.17], [0, -0.48],
+    ];
+    for (const [x, z] of wheelPoints) {
+      addRodBetween(standCenter, [x, 0.026, z], 0.014, 0, 12);
+      addVerticalWheel(x, z);
+    }
+    addVerticalWheel(standCenter[0], standCenter[2], 0.032);
 
     this.vertexCount = positions.length / 3;
     this.indexCount = indices.length;
