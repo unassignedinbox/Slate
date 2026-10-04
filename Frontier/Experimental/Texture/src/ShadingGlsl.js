@@ -89,6 +89,265 @@ float Levels(float Value, float Balance, float Contrast)
     return clamp((Value - Low) / max(1e-4, High - Low), 0.0, 1.0);
 }`;
 
+// Procedural finishes — automotive paint, fabric, metal and plastic evaluated per texel. Family and style indices mirror
+// FinishSpecification.FinishFamilies, and the eight shape/finish numbers are the controls the inspector shows by name.
+const FinishChunk = /* glsl */ `
+struct FinishSample
+{
+    vec3 Colour;
+    float Roughness;
+    float Metalness;
+    float Specular;
+    float Coat;
+    float CoatRoughness;
+    float Fuzz;
+    float Height;
+    float Occlusion;
+};
+
+// A sparse field of oriented flakes: each cell either carries one or it does not, and the ones that do catch the light.
+float FlakeField(vec2 Coordinate, float Scale, float Density, float Seed, out float Facet)
+{
+    vec2 Lattice = Coordinate * max(Scale, 0.001);
+    vec2 Cell = floor(Lattice);
+    float Draw = Hash21(Cell + Seed * 17.0);
+    Facet = Hash21(Cell.yx + Seed * 31.0);
+    float Present = step(1.0 - clamp(Density, 0.0, 1.0), Draw);
+    vec2 Local = fract(Lattice) - 0.5 - (Hash22(Cell + Seed) - 0.5) * 0.45;
+    float Disc = 1.0 - smoothstep(0.12, 0.42, length(Local));
+    return Present * Disc;
+}
+
+// Warp over weft. Style 0 plain, 1 twill, 2 satin, 3 knitted ribs.
+float WeaveField(vec2 Coordinate, int Style, float Scale, out float Warp, out float Ridge)
+{
+    vec2 Thread = Coordinate * max(Scale, 0.001);
+    vec2 Cell = floor(Thread);
+    vec2 Local = fract(Thread);
+    float Parity = mod(Cell.x + Cell.y, 2.0);
+    if (Style == 1) Parity = step(1.5, mod(Cell.x + Cell.y * 2.0, 4.0));
+    else if (Style == 2) Parity = step(3.5, mod(Cell.x + Cell.y * 3.0, 5.0));
+    else if (Style == 3) Parity = step(0.5, mod(Cell.y, 2.0));
+    Warp = Parity;
+    float Across = mix(Local.y, Local.x, Parity);
+    float Round = sin(Across * 3.14159265);
+    Ridge = Round;
+    float Along = mix(Local.x, Local.y, Parity);
+    float Edge = smoothstep(0.0, 0.14, Along) * smoothstep(1.0, 0.86, Along);
+    return clamp(Round * mix(0.75, 1.0, Edge), 0.0, 1.0);
+}
+
+FinishSample SampleFinish(
+    int Family, int Style, vec2 Coordinate, vec3 Position, vec3 Normal, vec4 Field,
+    vec3 ColourA, vec3 ColourB, vec4 Shape, vec4 Trim)
+{
+    float Scale = max(Shape.x, 0.001);
+    float Density = Shape.y;
+    float Strength = Shape.z;
+    float Gloss = clamp(Shape.w, 0.0, 1.0);
+    float Coat = clamp(Trim.x, 0.0, 1.0);
+    float Angle = radians(Trim.y);
+    float Variation = Trim.z;
+    float Seed = Trim.w;
+
+    vec2 Turned = Rotate(Coordinate - 0.5, Angle) + 0.5;
+    FinishSample Result;
+    Result.Colour = ColourA;
+    Result.Roughness = clamp(1.0 - Gloss, 0.02, 1.0);
+    Result.Metalness = 0.0;
+    Result.Specular = 1.0;
+    Result.Coat = Coat;
+    Result.CoatRoughness = clamp((1.0 - Gloss) * 0.35, 0.01, 1.0);
+    Result.Fuzz = 0.0;
+    Result.Height = 0.5;
+    Result.Occlusion = 1.0;
+
+    if (Family == 0)
+    {
+        // Automotive. A pigmented base, a flake layer, then clear coat over the top.
+        float Facet = 0.0;
+        float Flakes = FlakeField(Turned, Scale * 240.0, Density, Seed, Facet);
+        float Drift = Fractal(Turned * (2.0 + Scale * 3.0) + Seed, 4);
+        vec3 Body = mix(ColourA, ColourA * mix(0.72, 1.28, Drift), Variation);
+        if (Style == 1) Body = mix(Body, ColourB, 0.35 + 0.45 * Drift);            // candy pearl shifts between two pigments
+        float Sparkle = Flakes * Strength * mix(0.6, 1.0, Facet);
+        Result.Colour = mix(Body, ColourB, clamp(Sparkle, 0.0, 1.0));
+        Result.Metalness = clamp(Sparkle * 0.9, 0.0, 1.0);
+        Result.Roughness = clamp(mix(1.0 - Gloss, 0.18, Sparkle) + Drift * 0.04 * Variation, 0.02, 1.0);
+        Result.Height = 0.5 + (Flakes - 0.5) * 0.02 * Strength;
+        Result.Coat = Coat;
+        Result.CoatRoughness = clamp((1.0 - Gloss) * 0.22 + Fractal(Turned * 11.0, 2) * 0.05 * Variation, 0.008, 1.0);
+        if (Style == 2)
+        {
+            // Matte wrap: no flake, a fine grain, coat held flat.
+            float Grain = Fractal(Turned * 260.0 * Scale, 3);
+            Result.Colour = mix(ColourA, ColourB, Grain * 0.25 * Variation);
+            Result.Metalness = 0.0;
+            Result.Roughness = clamp(0.62 + Grain * 0.16 - Gloss * 0.2, 0.2, 1.0);
+            Result.Coat = Coat * 0.25;
+            Result.CoatRoughness = 0.55;
+            Result.Height = 0.5 + (Grain - 0.5) * 0.01;
+        }
+        else if (Style == 3)
+        {
+            // Primer: chalky, speckled, no coat worth the name.
+            float Speckle = Cellular(Turned * 180.0 * Scale);
+            Result.Colour = mix(ColourA, ColourB, (1.0 - Speckle) * 0.3);
+            Result.Metalness = 0.0;
+            Result.Roughness = clamp(0.78 + (1.0 - Speckle) * 0.18 - Gloss * 0.25, 0.3, 1.0);
+            Result.Coat = Coat * 0.1;
+            Result.Occlusion = mix(1.0, 0.88, 1.0 - Speckle);
+            Result.Height = 0.5 + (Speckle - 0.5) * 0.04 * Strength;
+        }
+    }
+    else if (Family == 1)
+    {
+        // Fabric. Threads cross, catch light along their length and shade in the gaps.
+        float Warp = 0.0;
+        float Ridge = 0.0;
+        float Weave = WeaveField(Turned, Style, Scale * 90.0, Warp, Ridge);
+        float Fibre = Fractal(Turned * 420.0 * Scale, 3);
+        vec3 Thread = mix(ColourA, ColourB, Warp);
+        Thread = mix(Thread, Thread * mix(0.78, 1.18, Fibre), Variation);
+        Result.Colour = Thread * mix(0.72, 1.0, Weave);
+        Result.Roughness = clamp(0.74 + (1.0 - Weave) * 0.18 - Gloss * 0.3 + Fibre * 0.06, 0.25, 1.0);
+        Result.Metalness = 0.0;
+        Result.Specular = 0.35 + Gloss * 0.4;
+        Result.Fuzz = clamp(Strength * mix(0.55, 1.0, Fibre), 0.0, 1.0);
+        Result.Height = 0.5 + (Weave - 0.5) * 0.35;
+        Result.Occlusion = mix(0.62, 1.0, Weave);
+        Result.Coat = Coat * 0.12;
+        if (Style == 4)
+        {
+            // Velvet: no visible weave, all nap.
+            float Nap = Fractal(Turned * 300.0 * Scale, 4);
+            Result.Colour = mix(ColourA, ColourB, Nap * mix(0.3, 0.9, Variation));
+            Result.Roughness = clamp(0.88 - Gloss * 0.2, 0.4, 1.0);
+            Result.Fuzz = clamp(0.65 + Strength * 0.35, 0.0, 1.0);
+            Result.Height = 0.5 + (Nap - 0.5) * 0.08;
+            Result.Occlusion = mix(0.8, 1.0, Nap);
+        }
+    }
+    else if (Family == 2)
+    {
+        // Metal. Always conductive; the style decides how the surface was worked.
+        Result.Metalness = 1.0;
+        Result.Specular = 1.0;
+        Result.Coat = Coat * 0.3;
+        if (Style == 0)
+        {
+            // Brushed: long grain along the chosen angle.
+            vec2 Stretched = vec2(Turned.x * Scale * 900.0, Turned.y * Scale * 14.0);
+            float Grain = Fractal(Stretched, 3);
+            float Fine = Fractal(Stretched * 3.1 + 11.0, 2);
+            Result.Colour = ColourA * mix(0.88, 1.12, Grain);
+            Result.Roughness = clamp(mix(0.42, 0.08, Gloss) + (Grain - 0.5) * 0.3 * Strength + Fine * 0.04, 0.02, 1.0);
+            Result.Height = 0.5 + (Grain - 0.5) * 0.05 * Strength;
+        }
+        else if (Style == 1)
+        {
+            // Hammered: overlapping dents.
+            float Dent = Cellular(Turned * Scale * 34.0);
+            float Soft = smoothstep(0.0, 0.7, Dent);
+            Result.Colour = ColourA * mix(0.82, 1.14, Soft);
+            Result.Roughness = clamp(mix(0.34, 0.1, Gloss) + (1.0 - Soft) * 0.22 * Strength, 0.02, 1.0);
+            Result.Height = 0.5 + (Soft - 0.5) * 0.5 * Strength;
+            Result.Occlusion = mix(0.72, 1.0, Soft);
+        }
+        else if (Style == 2)
+        {
+            // Cast and pitted.
+            float Pit = Fractal(Turned * Scale * 220.0, 5);
+            float Hole = step(1.0 - clamp(Density, 0.0, 1.0) * 0.4, Hash21(floor(Turned * Scale * 160.0) + Seed));
+            Result.Colour = ColourA * mix(0.7, 1.05, Pit) * mix(1.0, 0.55, Hole);
+            Result.Roughness = clamp(mix(0.62, 0.3, Gloss) + Pit * 0.25 * Strength + Hole * 0.2, 0.05, 1.0);
+            Result.Height = 0.5 + (Pit - 0.5) * 0.18 * Strength - Hole * 0.12;
+            Result.Occlusion = mix(0.75, 1.0, Pit) * mix(1.0, 0.6, Hole);
+        }
+        else
+        {
+            // Galvanised spangle: wide crystal facets, each with its own tilt.
+            float Facet = 0.0;
+            float Crystal = FlakeField(Turned, Scale * 26.0, clamp(Density + 0.45, 0.0, 1.0), Seed, Facet);
+            float Plate = Hash21(floor(Turned * Scale * 26.0) + Seed * 3.0);
+            Result.Colour = mix(ColourA, ColourB, Crystal * 0.8) * mix(0.86, 1.1, Plate);
+            Result.Roughness = clamp(mix(0.5, 0.16, Gloss) + (Plate - 0.5) * 0.3 * Strength, 0.03, 1.0);
+            Result.Height = 0.5 + (Crystal - 0.5) * 0.06 * Strength;
+        }
+    }
+    else
+    {
+        // Plastic. Dielectric, moulded, usually a little textured so it does not read as glass.
+        Result.Metalness = 0.0;
+        Result.Specular = 0.6 + Gloss * 0.4;
+        float Pebble = Cellular(Turned * Scale * 150.0);
+        float Grain = Fractal(Turned * Scale * 520.0, 3);
+        if (Style == 0)
+        {
+            Result.Colour = mix(ColourA, ColourB, Grain * 0.18 * Variation);
+            Result.Roughness = clamp(mix(0.42, 0.06, Gloss) + Grain * 0.05 * Strength, 0.02, 1.0);
+            Result.Coat = Coat;
+            Result.CoatRoughness = clamp((1.0 - Gloss) * 0.2, 0.01, 1.0);
+            Result.Height = 0.5 + (Grain - 0.5) * 0.01;
+        }
+        else if (Style == 1)
+        {
+            // Pebbled, the grained finish on a dashboard.
+            float Bump = smoothstep(0.05, 0.6, Pebble);
+            Result.Colour = mix(ColourA, ColourB, (1.0 - Bump) * 0.25 * Variation);
+            Result.Roughness = clamp(mix(0.68, 0.3, Gloss) + (1.0 - Bump) * 0.22 * Strength, 0.1, 1.0);
+            Result.Height = 0.5 + (Bump - 0.5) * 0.4 * Strength;
+            Result.Occlusion = mix(0.7, 1.0, Bump);
+            Result.Coat = Coat * 0.3;
+        }
+        else if (Style == 2)
+        {
+            // Soft touch: rubberised, almost no specular sheen.
+            Result.Colour = ColourA * mix(0.94, 1.04, Grain);
+            Result.Roughness = clamp(0.82 - Gloss * 0.22 + Grain * 0.08 * Strength, 0.3, 1.0);
+            Result.Fuzz = clamp(0.25 * Strength, 0.0, 1.0);
+            Result.Specular = 0.3;
+            Result.Coat = 0.0;
+            Result.Height = 0.5 + (Grain - 0.5) * 0.02;
+        }
+        else
+        {
+            // Polycarbonate: clear, hard, faintly scratched.
+            vec2 Stretched = vec2(Turned.x * Scale * 700.0, Turned.y * Scale * 18.0);
+            float Scratch = smoothstep(0.78, 1.0, Fractal(Stretched, 3));
+            Result.Colour = mix(ColourA, ColourB, Scratch * 0.5);
+            Result.Roughness = clamp(mix(0.16, 0.02, Gloss) + Scratch * 0.3 * Strength, 0.01, 1.0);
+            Result.Coat = max(Coat, 0.4);
+            Result.CoatRoughness = clamp((1.0 - Gloss) * 0.08 + Scratch * 0.2, 0.004, 1.0);
+            Result.Height = 0.5 + Scratch * 0.01;
+        }
+    }
+    Result.Colour = clamp(Result.Colour, 0.0, 1.0);
+    return Result;
+}`;
+
+// Masks — painted, generator-driven or keyed on a colour. Shared by the compositor and the mask preview pass.
+const MaskChunk = /* glsl */ `
+float ColourMask(vec3 Lower, vec3 Key, float Tolerance, float Softness)
+{
+    float Distance = length(Lower - Key);
+    float Inner = max(Tolerance, 0.001);
+    float Outer = Inner + max(Softness, 0.001);
+    return 1.0 - smoothstep(Inner, Outer, Distance);
+}
+
+float SampleMask(
+    int Kind, float Painted, vec2 Coordinate, vec3 Position, vec3 Normal, vec4 Field,
+    int FieldKind, vec4 A, vec4 B, vec3 Lower, vec3 Key, float Tolerance, float Softness, float Invert)
+{
+    float Mask = 1.0;
+    if (Kind == 1) Mask = Painted;
+    else if (Kind == 2)
+        Mask = SampleGenerator(FieldKind, Coordinate, Position, Normal, Field, A.x, int(A.y), A.z, A.w, B.x, B.y, B.z, B.w);
+    else if (Kind == 3) Mask = ColourMask(Lower, Key, Tolerance, Softness);
+    return mix(Mask, 1.0 - Mask, Invert);
+}`;
+
 // Generator kinds — index order mirrors GeneratorSpecification.GeneratorOrdering.
 const GeneratorChunk = /* glsl */ `
 uniform sampler2D uPositionMap;
@@ -424,7 +683,7 @@ uniform sampler2D uCoverageMap;
 uniform sampler2D uDecalMap;
 uniform sampler2D uMaskMap;
 
-uniform int uKind;              // 0 fill · 1 stroke · 2 decal · 3 generator
+uniform int uKind;              // 0 fill · 1 stroke · 2 decal · 3 generator · 4 finish
 uniform int uBlend;
 uniform float uOpacity;
 uniform float uEnabled[12];
@@ -436,11 +695,21 @@ uniform vec4 uGeneratorA;       // scale, detail, contrast, balance
 uniform vec4 uGeneratorB;       // warp, angle, seed, invert
 uniform int uGeneratorKind;
 
-uniform int uMaskKind;          // 0 none · 1 painted · 2 generator
+uniform int uMaskKind;          // 0 none · 1 painted · 2 generator · 3 colour
 uniform vec4 uMaskA;
 uniform vec4 uMaskB;
 uniform int uMaskField;
 uniform float uMaskInvert;
+uniform vec3 uMaskColour;
+uniform float uMaskTolerance;
+uniform float uMaskSoftness;
+
+uniform int uFinishFamily;
+uniform int uFinishStyle;
+uniform vec3 uFinishColourA;
+uniform vec3 uFinishColourB;
+uniform vec4 uFinishShape;      // scale, density, strength, gloss
+uniform vec4 uFinishTrim;       // coat, angle, variation, seed
 
 uniform int uDecalMode;         // 0 projection · 1 UV plane
 uniform vec3 uDecalPosition;
@@ -476,6 +745,16 @@ void main()
     float Coverage = 1.0;
     vec3 Colour = uBaseColour;
     float Emboss = 0.0;
+
+    // Channel values a layer writes. Constants for every kind except a finish, which produces them per texel.
+    float RoughnessValue = uScalar[0];
+    float MetalnessValue = uScalar[1];
+    float OcclusionValue = uScalar[2];
+    float SpecularValue = uScalar[4];
+    float CoatValue = uScalar[5];
+    float CoatRoughnessValue = uScalar[6];
+    float FuzzValue = uScalar[7];
+    float HeightValue = uScalar[3];
 
     if (uKind == 1)
     {
@@ -517,20 +796,26 @@ void main()
             uGeneratorA.x, int(uGeneratorA.y), uGeneratorA.z, uGeneratorA.w,
             uGeneratorB.x, uGeneratorB.y, uGeneratorB.z, uGeneratorB.w);
     }
+    else if (uKind == 4)
+    {
+        FinishSample Finish = SampleFinish(
+            uFinishFamily, uFinishStyle, vCoordinate, Position, Normal, Field,
+            uFinishColourA, uFinishColourB, uFinishShape, uFinishTrim);
+        Colour = Finish.Colour;
+        RoughnessValue = Finish.Roughness;
+        MetalnessValue = Finish.Metalness;
+        OcclusionValue = Finish.Occlusion * uScalar[2];
+        SpecularValue = Finish.Specular * uScalar[4];
+        CoatValue = Finish.Coat;
+        CoatRoughnessValue = Finish.CoatRoughness;
+        FuzzValue = Finish.Fuzz;
+        HeightValue = Finish.Height;
+    }
 
-    if (uMaskKind == 1)
-    {
-        float Painted = texture(uMaskMap, vCoordinate).a;
-        Coverage *= mix(Painted, 1.0 - Painted, uMaskInvert);
-    }
-    else if (uMaskKind == 2)
-    {
-        float Masked = SampleGenerator(
-            uMaskField, vCoordinate, Position, Normal, Field,
-            uMaskA.x, int(uMaskA.y), uMaskA.z, uMaskA.w,
-            uMaskB.x, uMaskB.y, uMaskB.z, uMaskB.w);
-        Coverage *= mix(Masked, 1.0 - Masked, uMaskInvert);
-    }
+    if (uMaskKind > 0)
+        Coverage *= SampleMask(
+            uMaskKind, texture(uMaskMap, vCoordinate).a, vCoordinate, Position, Normal, Field,
+            uMaskField, uMaskA, uMaskB, Lower0.rgb, uMaskColour, uMaskTolerance, uMaskSoftness, uMaskInvert);
 
     Coverage = clamp(Coverage * uOpacity, 0.0, 1.0) * Surface.w;
     if (Coverage <= 0.0)
@@ -542,18 +827,18 @@ void main()
         return;
     }
 
-    float Height = uScalar[3] + Emboss;
+    float Height = HeightValue + Emboss;
 
     vec3 BaseColour = mix(Lower0.rgb, BlendColour(uBlend, Lower0.rgb, Colour), Coverage * uEnabled[0]);
     float Opacity = mix(Lower0.a, BlendScalar(uBlend, Lower0.a, uScalar[9]), Coverage * uEnabled[1]);
-    float Roughness = mix(Lower1.r, BlendScalar(uBlend, Lower1.r, uScalar[0]), Coverage * uEnabled[2]);
-    float Metalness = mix(Lower1.g, BlendScalar(uBlend, Lower1.g, uScalar[1]), Coverage * uEnabled[3]);
-    float Occlusion = mix(Lower1.b, BlendScalar(uBlend, Lower1.b, uScalar[2]), Coverage * uEnabled[4]);
+    float Roughness = mix(Lower1.r, BlendScalar(uBlend, Lower1.r, RoughnessValue), Coverage * uEnabled[2]);
+    float Metalness = mix(Lower1.g, BlendScalar(uBlend, Lower1.g, MetalnessValue), Coverage * uEnabled[3]);
+    float Occlusion = mix(Lower1.b, BlendScalar(uBlend, Lower1.b, OcclusionValue), Coverage * uEnabled[4]);
     float Elevation = mix(Lower1.a, BlendScalar(uBlend, Lower1.a, Height), Coverage * uEnabled[5]);
-    float Specular = mix(Lower2.r, BlendScalar(uBlend, Lower2.r, uScalar[4]), Coverage * uEnabled[6]);
-    float Coat = mix(Lower2.g, BlendScalar(uBlend, Lower2.g, uScalar[5]), Coverage * uEnabled[7]);
-    float CoatRoughness = mix(Lower2.b, BlendScalar(uBlend, Lower2.b, uScalar[6]), Coverage * uEnabled[8]);
-    float Fuzz = mix(Lower2.a, BlendScalar(uBlend, Lower2.a, uScalar[7]), Coverage * uEnabled[9]);
+    float Specular = mix(Lower2.r, BlendScalar(uBlend, Lower2.r, SpecularValue), Coverage * uEnabled[6]);
+    float Coat = mix(Lower2.g, BlendScalar(uBlend, Lower2.g, CoatValue), Coverage * uEnabled[7]);
+    float CoatRoughness = mix(Lower2.b, BlendScalar(uBlend, Lower2.b, CoatRoughnessValue), Coverage * uEnabled[8]);
+    float Fuzz = mix(Lower2.a, BlendScalar(uBlend, Lower2.a, FuzzValue), Coverage * uEnabled[9]);
     vec3 Emission = mix(Lower3.rgb, BlendColour(uBlend, Lower3.rgb, uEmissionColour), Coverage * uEnabled[10]);
     float Transmission = mix(Lower3.a, BlendScalar(uBlend, Lower3.a, uScalar[8]), Coverage * uEnabled[11]);
 
@@ -561,6 +846,39 @@ void main()
     oChannel1 = clamp(vec4(Roughness, Metalness, Occlusion, Elevation), 0.0, 1.0);
     oChannel2 = clamp(vec4(Specular, Coat, CoatRoughness, Fuzz), 0.0, 1.0);
     oChannel3 = vec4(clamp(Emission, 0.0, 1.0), clamp(Transmission, 0.0, 1.0));
+}`;
+
+//--------------------------------------------------------------------------------------------------------------------------
+// ⑤b Mask preview — the selected layer's mask evaluated on its own so the viewport can show it or tint by it.
+//--------------------------------------------------------------------------------------------------------------------------
+export const MaskFragment = /* glsl */ `
+in vec2 vCoordinate;
+
+uniform sampler2D uMaskMap;
+uniform sampler2D uLower0;
+
+uniform int uMaskKind;
+uniform vec4 uMaskA;
+uniform vec4 uMaskB;
+uniform int uMaskField;
+uniform float uMaskInvert;
+uniform vec3 uMaskColour;
+uniform float uMaskTolerance;
+uniform float uMaskSoftness;
+
+out vec4 oMask;
+
+void main()
+{
+    vec4 Surface = texture(uPositionMap, vCoordinate);
+    vec3 Position = Surface.xyz;
+    vec3 Normal = normalize(texture(uNormalMap, vCoordinate).xyz + vec3(1e-6));
+    vec4 Field = texture(uFieldMap, vCoordinate);
+    float Mask = SampleMask(
+        uMaskKind, texture(uMaskMap, vCoordinate).a, vCoordinate, Position, Normal, Field,
+        uMaskField, uMaskA, uMaskB, texture(uLower0, vCoordinate).rgb,
+        uMaskColour, uMaskTolerance, uMaskSoftness, uMaskInvert);
+    oMask = vec4(vec3(Mask), Mask);
 }`;
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -606,6 +924,7 @@ uniform vec3 uViewPosition;
 uniform float uNormalGain;
 uniform float uDisplay;
 uniform float uCheckerScale;
+uniform vec3 uMaskTint;
 
 uniform float uDiffuseRoughness;
 uniform vec3 uSpecularColour;
@@ -727,8 +1046,8 @@ void main()
     vec3 Emission = Linearise(Channel3.rgb) * uEmissionLuminance;
     float Transmission = Channel3.a;
 
-    // Channel inspections short-circuit the whole slab evaluation.
-    if (uDisplay > 0.5)
+    // Channel inspections short-circuit the whole slab evaluation. The overlay is not an inspection — it shades first.
+    if (uDisplay > 0.5 && int(uDisplay + 0.5) != 15)
     {
         int Mode = int(uDisplay + 0.5);
         vec3 Inspection = vec3(0.0);
@@ -744,6 +1063,7 @@ void main()
         else if (Mode == 10) Inspection = vec3(Channel3.a);
         else if (Mode == 11) Inspection = vec3(Field.r, Field.g, 0.0);
         else if (Mode == 12) Inspection = vec3(Field.a);
+        else if (Mode == 13) Inspection = vec3(0.0);
         else if (Mode == 14)
         {
             // The selected layer's mask on its own: black is hidden, white is revealed, as the brush sees it.
@@ -847,7 +1167,14 @@ void main()
         Radiance = mix(Radiance, vec3(1.6, 1.6, 1.7) * (0.3 + Luminance(Radiance)), Ring * 0.75);
     }
 
-    oColour = vec4(ToneMap(Radiance), 1.0);
+    vec3 Shaded = ToneMap(Radiance);
+    if (int(uDisplay + 0.5) == 15)
+    {
+        // Mask overlay: the surface stays paintable and what the mask hides is washed with the overlay tint.
+        float Mask = texture(uMaskPreview, vCoordinate).a;
+        Shaded = mix(mix(Shaded * 0.45 + uMaskTint * 0.55, Shaded, 0.25), Shaded, Mask);
+    }
+    oColour = vec4(Shaded, 1.0);
 }`;
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -887,6 +1214,7 @@ uniform float uAspect;
 uniform float uDisplay;
 uniform float uNormalGain;
 uniform float uCheckerScale;
+uniform vec3 uMaskTint;
 uniform vec3 uCursor;          // texture-space x, y, radius
 uniform float uCursorVisible;
 out vec4 oColour;
@@ -931,6 +1259,11 @@ void main()
             Colour = mix(vec3(0.16), vec3(0.62), mod(CheckerCell.x + CheckerCell.y, 2.0));
         }
         else if (Mode == 14) Colour = mix(vec3(0.04, 0.05, 0.07), vec3(0.96), texture(uMaskPreview, Coordinate).a);
+        else if (Mode == 15)
+        {
+            float Mask = texture(uMaskPreview, Coordinate).a;
+            Colour = mix(mix(Channel0.rgb * 0.45 + uMaskTint * 0.55, Channel0.rgb, 0.25), Channel0.rgb, Mask);
+        }
         else Colour = Channel0.rgb;
         if (Field.a <= 0.0 && Mode == 0) Colour *= 0.35;
     }
@@ -995,6 +1328,8 @@ void main()
 export const Chunks = {
     Noise: NoiseChunk,
     Generator: GeneratorChunk,
+    Finish: FinishChunk,
+    Mask: MaskChunk,
     Blend: BlendChunk,
     Environment: EnvironmentChunk,
 };

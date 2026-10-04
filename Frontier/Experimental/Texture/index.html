@@ -84,6 +84,7 @@
                         </select>
                         <div class="viewport-bar-end">
                             <select id="channel-select" aria-label="Displayed channel"></select><select id="symmetry-select" aria-label="Symmetry"></select
+                            ><button id="browser-button" class="icon-button" title="Content browser · B" aria-label="Content browser" data-icon="grid"></button
                             ><button id="diagnostics-button" class="icon-button" title="Diagnostics" aria-label="Diagnostics" data-icon="viewport"></button
                             ><button id="focus-button" class="icon-button" title="Frame surface · F" aria-label="Frame surface" data-icon="focus"></button
                             ><button id="maximize-button" class="icon-button" title="Maximize viewport" aria-label="Maximize viewport" data-icon="maximize"></button>
@@ -103,6 +104,12 @@
                             ><button class="icon-button" data-tool="decal" title="Place the decal · 5" aria-label="Place the decal" data-icon="decal"></button
                             ><button class="icon-button" data-tool="picker" title="Pick a texel · 6" aria-label="Pick a texel" data-icon="picker"></button><span></span
                             ><button id="mask-toggle" class="icon-button" title="Paint the mask · M" aria-label="Paint the mask" aria-pressed="false" data-icon="mask"></button>
+                        </div>
+                        <div class="mask-view" id="mask-view" data-state="empty" role="group" aria-label="Mask view">
+                            <span class="mask-view-label" data-icon="mask"></span
+                            ><button data-mask-view="off" class="active" aria-pressed="true" title="Hide the mask">Off</button
+                            ><button data-mask-view="overlay" aria-pressed="false" title="Wash the mask over the surface · ⇧M">Overlay</button
+                            ><button data-mask-view="isolated" aria-pressed="false" title="Show the mask on its own · ⇧M">Mask</button>
                         </div>
                         <div class="viewport-right-hud">
                             <span class="live-metric"><b id="frames">—</b> FPS</span><span class="live-metric" id="brush-hud">BRUSH 9.0 cm</span>
@@ -130,6 +137,33 @@
                             </div>
                             <p class="gpu-detail" id="gpu-error-detail" hidden></p>
                         </div>
+                        <section class="browser" id="content-browser" data-state="closed" aria-label="Content browser">
+                            <button class="browser-tab" id="browser-tab" aria-expanded="false" aria-controls="browser-body">
+                                <span data-icon="grid"></span><span class="browser-tab-label">Content browser</span><i class="browser-grip"></i>
+                            </button>
+                            <div class="browser-body" id="browser-body">
+                                <aside class="browser-library" aria-label="Library">
+                                    <p class="browser-library-head">Library</p>
+                                    <div class="browser-categories" id="browser-categories"></div>
+                                </aside>
+                                <div class="browser-content">
+                                    <header class="browser-head">
+                                        <div class="browser-title">
+                                            <h2 id="browser-heading">Automotive</h2>
+                                            <small id="browser-count">—</small>
+                                        </div>
+                                        <input type="search" id="browser-search" placeholder="Search the shelf" aria-label="Search content" hidden />
+                                        <div class="browser-actions">
+                                            <button class="icon-button" id="browser-search-toggle" title="Search" aria-label="Search" data-icon="search"></button
+                                            ><button class="icon-button active" data-browser-view="grid" title="Grid" aria-label="Grid view" data-icon="grid"></button
+                                            ><button class="icon-button" data-browser-view="list" title="List" aria-label="List view" data-icon="list"></button
+                                            ><button class="icon-button" id="browser-close" title="Close the browser · B" aria-label="Close the browser" data-icon="close"></button>
+                                        </div>
+                                    </header>
+                                    <div class="browser-items" id="browser-items" data-view="grid"></div>
+                                </div>
+                            </div>
+                        </section>
                         <div id="toast" class="toast" role="status" hidden></div>
                         <div id="diagnostics" class="diagnostics" hidden>
                             <div class="panel-heading">
@@ -199,6 +233,9 @@
             <div class="menu-divider"></div>
             <button data-add="svg" role="menuitem"><span data-icon="vector"></span><span>SVG decal<small>A vector mark projected onto the surface</small></span></button
             ><button data-add="text" role="menuitem"><span data-icon="text"></span><span>Text decal<small>Typeset a label from the font archive</small></span></button>
+            <div class="menu-divider"></div>
+            <button data-add="finish" role="menuitem"><span data-icon="material"></span><span>Material<small>Car paint, fabric, metal or plastic</small></span></button
+            ><button data-add="browse" role="menuitem"><span data-icon="grid"></span><span>Content browser<small>The whole shelf, B</small></span></button>
             <p>New layers land directly above the selected one and write every channel they enable.</p>
         </div>
         <dialog id="help-dialog">
@@ -214,7 +251,8 @@
             <div class="shortcut-list">
                 <span>Orbit / brush / eraser<kbd>1 / 2 / 3</kbd></span><span>Flood / decal / pick<kbd>4 / 5 / 6</kbd></span
                 ><span>Brush size<kbd>[ / ]</kbd></span><span>Brush size, live<kbd>Alt + wheel</kbd></span
-                ><span>Content ⇄ mask<kbd>M</kbd></span><span>See the mask<kbd>⇧ M</kbd></span><span>Texture space<kbd>X</kbd></span><span>Frame surface<kbd>F</kbd></span
+                ><span>Content ⇄ mask<kbd>M</kbd></span><span>Mask view<kbd>⇧ M</kbd></span><span>Content browser<kbd>B</kbd></span
+                ><span>Texture space<kbd>X</kbd></span><span>Frame surface<kbd>F</kbd></span
                 ><span>Undo / redo<kbd>Ctrl Z / Ctrl ⇧ Z</kbd></span><span>Save project<kbd>Ctrl S</kbd></span><span>Export set<kbd>Ctrl E</kbd></span
                 ><span>Search layers<kbd>/</kbd></span>
             </div>

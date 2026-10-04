@@ -26,6 +26,20 @@ import {
 import { SurfaceDefaults, SurfaceControls, MaterialLibrary, MaterialByIdentifier, EnvironmentOrdering } from "./MaterialSpecification.js";
 import { GeneratorOrdering, GeneratorIndex, NormaliseGenerator, DefaultGenerator, GeneratorControls } from "./GeneratorSpecification.js";
 import {
+    FinishFamilies,
+    FinishShelf,
+    FinishByIdentifier,
+    FinishFamilyByIdentifier,
+    FinishDefaults,
+    CreateFinish,
+    SanitiseFinish,
+    FinishFamilyIndex,
+    FinishStyleIndex,
+    FinishControls,
+    FinishColours,
+    FinishLabel,
+} from "./FinishSpecification.js";
+import {
     CreateLayer,
     CloneLayer,
     ExpandMaterial,
@@ -34,6 +48,9 @@ import {
     SanitiseProject,
     LayerChannelCount,
     LayerBadge,
+    LayerSummary,
+    SanitiseLayer,
+    MaskKinds,
     ResetLayerCounter,
 } from "./LayerSpecification.js";
 import { RevisionQueue } from "./RevisionQueue.js";
@@ -314,4 +331,124 @@ test("rows are flipped into image orientation without reordering components", ()
     assert.deepEqual([...Flipped.slice(0, 8)], [9, 10, 11, 12, 13, 14, 15, 16]);
     assert.deepEqual([...Flipped.slice(8)], [1, 2, 3, 4, 5, 6, 7, 8]);
     assert.deepEqual([...FlipRows(Flipped, Width, Height)], [...Pixels]);
+});
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Procedural finishes. The shader reads families and styles by index, so the ordering here is a contract.
+//--------------------------------------------------------------------------------------------------------------------------
+test("every finish family declares the controls its shader branch reads", () =>
+{
+    assert.equal(FinishFamilies.length, 4, "the shader only branches on four families");
+    FinishFamilies.forEach((Family, Index) =>
+    {
+        assert.equal(Family.Index, Index, `${Family.Identifier} does not sit at its declared index`);
+        assert.equal(FinishFamilyIndex(Family.Identifier), Index);
+        assert.ok(Family.Styles.length >= 4, `${Family.Identifier} offers too few styles`);
+        Family.Styles.forEach((Style, Position) => assert.equal(Style.Index, Position, `${Style.Identifier} is out of order`));
+        assert.equal(FinishColours(Family.Identifier).length, 2, "every family mixes exactly two colours");
+        const Keys = FinishControls(Family.Identifier).map((Control) => Control.Key);
+        assert.deepEqual(Keys, ["Scale", "Density", "Strength", "Gloss", "Coat", "Angle", "Variation"], Family.Identifier);
+        for (const Control of FinishControls(Family.Identifier))
+            assert.ok(Control.Maximum > Control.Minimum, `${Family.Identifier}.${Control.Key} has an empty range`);
+    });
+    assert.equal(FinishStyleIndex("fabric", "velvet"), 4);
+    assert.equal(FinishStyleIndex("fabric", "nonsense"), 0, "an unknown style must fall back rather than throw");
+    assert.equal(FinishFamilyIndex("nonsense"), 0);
+});
+
+test("the shelf only offers finishes the families can actually evaluate", () =>
+{
+    assert.ok(FinishShelf.length >= 16, "the shelf is thinner than the four families it covers");
+    for (const Family of FinishFamilies)
+        assert.ok(
+            FinishShelf.some((Entry) => Entry.Family === Family.Identifier),
+            `${Family.Identifier} has nothing on the shelf`,
+        );
+    for (const Entry of FinishShelf)
+    {
+        const Family = FinishFamilyByIdentifier[Entry.Family];
+        assert.ok(Family, `${Entry.Identifier} names a family that does not exist`);
+        assert.ok(
+            Family.Styles.some((Style) => Style.Identifier === Entry.Style),
+            `${Entry.Identifier} names a style ${Entry.Style} its family does not have`,
+        );
+        assert.match(Entry.Swatch, /^#[0-9a-f]{6}$/i, `${Entry.Identifier} has no swatch`);
+        for (const Key of ["ColourA", "ColourB", "Scale", "Density", "Strength", "Gloss", "Coat", "Angle", "Variation"])
+            assert.ok(Key in Entry.Settings, `${Entry.Identifier} leaves ${Key} unset`);
+    }
+    assert.equal(FinishShelf.length, new Set(FinishShelf.map((Entry) => Entry.Identifier)).size, "two finishes share a name");
+});
+
+test("a finish record survives creation, sanitising and a hostile project file", () =>
+{
+    const Created = CreateFinish("raw-denim");
+    assert.equal(Created.Family, "fabric");
+    assert.equal(Created.Style, "twill");
+    assert.equal(Created.Scale, FinishByIdentifier["raw-denim"].Settings.Scale);
+    assert.equal(FinishLabel(Created), "Raw denim");
+    assert.deepEqual(CreateFinish("nothing-like-this"), { ...FinishDefaults() }, "an unknown shelf entry must fall back");
+
+    const Hostile = SanitiseFinish({
+        Shelf: "made-up",
+        Family: "porcelain",
+        Style: "gilded",
+        ColourA: "red",
+        ColourB: [2, -1, 0.5],
+        Scale: 900,
+        Density: -4,
+        Gloss: Number.NaN,
+        Angle: 1000,
+        Seed: 10_000,
+    });
+    assert.equal(Hostile.Shelf, "");
+    assert.equal(Hostile.Family, "automotive");
+    assert.equal(Hostile.Style, "metallic");
+    assert.deepEqual(Hostile.ColourA, [0.5, 0.5, 0.5]);
+    assert.deepEqual(Hostile.ColourB, [1, 0, 0.5]);
+    assert.equal(Hostile.Scale, 4);
+    assert.equal(Hostile.Density, 0);
+    assert.equal(Hostile.Gloss, 0);
+    assert.equal(Hostile.Angle, 180);
+    assert.equal(Hostile.Seed, 999);
+    assert.equal(FinishLabel(Hostile), "Automotive · Metallic flake");
+});
+
+test("a material layer carries its finish through the stack and a project round trip", () =>
+{
+    const Layer = CreateLayer("finish", { Finish: CreateFinish("brushed-brass") });
+    assert.equal(Layer.Kind, "finish");
+    assert.equal(LayerBadge(Layer), "METAL");
+    assert.ok(LayerChannelCount(Layer) >= 8, "a finish should write most of the channel set by default");
+    const Restored = SanitiseLayer(JSON.parse(JSON.stringify(Layer)));
+    assert.equal(Restored.Finish.Family, "metal");
+    assert.equal(Restored.Finish.Style, "brushed");
+    assert.equal(Restored.Finish.Angle, Layer.Finish.Angle);
+    // A project written before finishes existed must still load.
+    const Legacy = SanitiseLayer({ Kind: "fill", Name: "Old fill" });
+    assert.deepEqual(Legacy.Finish, SanitiseFinish(undefined));
+});
+
+test("a colour mask records a key, a tolerance and the wash it draws in the viewport", () =>
+{
+    const Fresh = CreateLayer("fill");
+    assert.equal(Fresh.Mask.Kind, "none");
+    assert.equal(Fresh.Mask.Tolerance, 0.25);
+    assert.equal(Fresh.Mask.Colour.length, 3);
+    assert.equal(Fresh.Mask.Tint.length, 3);
+    assert.ok(MaskKinds.some((Kind) => Kind.Identifier === "colour"), "the colour mask is not offered");
+
+    const Keyed = SanitiseLayer({
+        Kind: "fill",
+        Mask: { Kind: "colour", Colour: [1, 0.5, 0], Tolerance: 4, Softness: -1, Tint: [0, 1, 0], Invert: true },
+    });
+    assert.equal(Keyed.Mask.Kind, "colour");
+    assert.deepEqual(Keyed.Mask.Colour, [1, 0.5, 0]);
+    assert.equal(Keyed.Mask.Tolerance, 1, "tolerance is a unit range");
+    assert.equal(Keyed.Mask.Softness, 0);
+    assert.deepEqual(Keyed.Mask.Tint, [0, 1, 0]);
+    assert.equal(Keyed.Mask.Invert, true);
+    assert.match(LayerSummary(Keyed), /colour mask/);
+
+    const Nonsense = SanitiseLayer({ Kind: "fill", Mask: { Kind: "spectral" } });
+    assert.equal(Nonsense.Mask.Kind, "none", "an unknown mask kind must not reach the shader");
 });

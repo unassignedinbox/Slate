@@ -16,6 +16,7 @@ import {
     CurvatureFragment,
     StampFragment,
     CompositeFragment,
+    MaskFragment,
     SurfaceVertex,
     SurfaceFragment,
     BackgroundFragment,
@@ -25,7 +26,10 @@ import {
 } from "./ShadingGlsl.js";
 import { ChannelSpecification, BlendIndex } from "./ChannelSpecification.js";
 import { GeneratorIndex } from "./GeneratorSpecification.js";
+import { FinishFamilyIndex, FinishStyleIndex } from "./FinishSpecification.js";
 import { EnvironmentByIdentifier } from "./MaterialSpecification.js";
+
+const MaskKindIndex = (Kind) => ({ stroke: 1, generator: 2, colour: 3 })[Kind] ?? 0;
 
 const Header = "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\n";
 
@@ -351,7 +355,8 @@ export class ShadingIntegrator
             Dilate: Link(Device, QuadVertex, DilateFragment),
             Curvature: Link(Device, QuadVertex, CurvatureFragment),
             Stamp: Link(Device, QuadVertex, StampFragment, ["Noise"]),
-            Composite: Link(Device, QuadVertex, CompositeFragment, ["Noise", "Generator", "Blend"]),
+            Composite: Link(Device, QuadVertex, CompositeFragment, ["Noise", "Generator", "Finish", "Mask", "Blend"]),
+            Mask: Link(Device, QuadVertex, MaskFragment, ["Noise", "Generator", "Mask"]),
             Shade: Link(Device, SurfaceVertex, SurfaceFragment, ["Environment"]),
             Background: Link(Device, QuadVertex, BackgroundFragment, ["Environment"]),
             Plane: Link(Device, QuadVertex, PlaneFragment),
@@ -444,6 +449,7 @@ export class ShadingIntegrator
         this.ReleaseTarget(this.BakeTarget);
         this.ReleaseTarget(this.BakeScratch);
         this.ReleaseTarget(this.FieldTarget);
+        this.ReleaseTarget(this.MaskPreviewTarget);
         this.ChannelTargets = [0, 1].map(() =>
             this.CreateTarget([0, 1, 2, 3].map(() => this.CreateColourImage(Resolution))),
         );
@@ -457,6 +463,8 @@ export class ShadingIntegrator
             this.CreateImage(Resolution, Resolution, Device.RGBA16F, Device.RGBA, Device.FLOAT, false),
         ]);
         this.FieldTarget = this.CreateTarget([this.CreateColourImage(Resolution)]);
+        this.MaskPreviewTarget = this.CreateTarget([this.CreateColourImage(Resolution)]);
+        this.MaskPreviewLayer = "";
         if (Previous !== Resolution) this.RescaleLayerImages(Previous, Resolution);
         if (this.Surface) this.BakeSurface();
     }
@@ -812,7 +820,7 @@ export class ShadingIntegrator
     {
         const Device = this.Device;
         const Uniforms = Program.Uniforms;
-        const KindIndex = { fill: 0, stroke: 1, decal: 2, generator: 3 }[Layer.Kind] ?? 0;
+        const KindIndex = { fill: 0, stroke: 1, decal: 2, generator: 3, finish: 4 }[Layer.Kind] ?? 0;
         Device.uniform1i(Uniforms.get("uKind"), KindIndex);
         Device.uniform1i(Uniforms.get("uBlend"), BlendIndex(Layer.Blend));
         Device.uniform1f(Uniforms.get("uOpacity"), Layer.Opacity);
@@ -842,7 +850,7 @@ export class ShadingIntegrator
         Device.uniform4f(Uniforms.get("uGeneratorB"), Generator.Warp, Generator.Angle, Generator.Seed, Generator.Invert ? 1 : 0);
 
         const Mask = Layer.Mask;
-        const MaskKind = Mask.Kind === "stroke" ? 1 : Mask.Kind === "generator" ? 2 : 0;
+        const MaskKind = MaskKindIndex(Mask.Kind);
         Device.uniform1i(Uniforms.get("uMaskKind"), MaskKind);
         Device.uniform1i(Uniforms.get("uMaskField"), GeneratorIndex(Mask.Generator.Kind));
         Device.uniform4f(
@@ -854,6 +862,20 @@ export class ShadingIntegrator
         );
         Device.uniform4f(Uniforms.get("uMaskB"), Mask.Generator.Warp, Mask.Generator.Angle, Mask.Generator.Seed, Mask.Generator.Invert ? 1 : 0);
         Device.uniform1f(Uniforms.get("uMaskInvert"), Mask.Invert ? 1 : 0);
+        Device.uniform3fv(Uniforms.get("uMaskColour"), Mask.Colour || [0.82, 0.12, 0.14]);
+        Device.uniform1f(Uniforms.get("uMaskTolerance"), Mask.Tolerance ?? 0.25);
+        Device.uniform1f(Uniforms.get("uMaskSoftness"), Mask.Softness ?? 0.12);
+
+        const Finish = Layer.Finish;
+        if (Finish)
+        {
+            Device.uniform1i(Uniforms.get("uFinishFamily"), FinishFamilyIndex(Finish.Family));
+            Device.uniform1i(Uniforms.get("uFinishStyle"), FinishStyleIndex(Finish.Family, Finish.Style));
+            Device.uniform3fv(Uniforms.get("uFinishColourA"), Finish.ColourA);
+            Device.uniform3fv(Uniforms.get("uFinishColourB"), Finish.ColourB);
+            Device.uniform4f(Uniforms.get("uFinishShape"), Finish.Scale * Scale, Finish.Density, Finish.Strength, Finish.Gloss);
+            Device.uniform4f(Uniforms.get("uFinishTrim"), Finish.Coat, Finish.Angle, Finish.Variation, Finish.Seed);
+        }
 
         const Decal = Layer.Decal;
         const Transform = Decal.Transform;
@@ -872,9 +894,57 @@ export class ShadingIntegrator
         Device.uniform1f(Uniforms.get("uDecalEmboss"), Decal.Emboss);
     }
 
-    // The mask inspection draws whichever layer is selected; a layer without one reads as fully revealed.
+    // The mask inspection draws whichever layer is selected. Painted masks live in an image already; generator and colour
+    // masks do not exist anywhere until they are evaluated, so this pass resolves whichever kind the layer carries.
+    RefreshMaskPreview(Layer, Material)
+    {
+        if (!this.Ready || !this.MaskPreviewTarget) return;
+        if (!Layer || !Layer.Mask || Layer.Mask.Kind === "none")
+        {
+            this.MaskPreviewLayer = "";
+            return;
+        }
+        const Device = this.Device;
+        const Program = this.Programs.Mask;
+        const Size = this.Resolution;
+        Device.bindFramebuffer(Device.FRAMEBUFFER, this.MaskPreviewTarget);
+        Device.viewport(0, 0, Size, Size);
+        Device.disable(Device.BLEND);
+        Device.disable(Device.DEPTH_TEST);
+        Device.useProgram(Program.Program);
+        Device.bindVertexArray(this.QuadArray);
+        const Record = this.LayerImages.get(Layer.Identifier) || {};
+        this.BindImage(Program, "uMaskMap", Record.Mask || this.BlankImage(), 0);
+        this.BindImage(Program, "uLower0", this.ChannelImages[0], 1);
+        this.BindImage(Program, "uPositionMap", this.BakeTarget.Images[0], 2);
+        this.BindImage(Program, "uNormalMap", this.BakeTarget.Images[1], 3);
+        this.BindImage(Program, "uFieldMap", this.FieldTarget.Images[0], 4);
+        const Uniforms = Program.Uniforms;
+        const Mask = Layer.Mask;
+        const Scale = Material?.texture_scale ?? 1;
+        Device.uniform1i(Uniforms.get("uMaskKind"), MaskKindIndex(Mask.Kind));
+        Device.uniform1i(Uniforms.get("uMaskField"), GeneratorIndex(Mask.Generator.Kind));
+        Device.uniform4f(
+            Uniforms.get("uMaskA"),
+            Mask.Generator.Scale * Scale,
+            Mask.Generator.Detail,
+            Mask.Generator.Contrast,
+            Mask.Generator.Balance,
+        );
+        Device.uniform4f(Uniforms.get("uMaskB"), Mask.Generator.Warp, Mask.Generator.Angle, Mask.Generator.Seed, Mask.Generator.Invert ? 1 : 0);
+        Device.uniform1f(Uniforms.get("uMaskInvert"), Mask.Invert ? 1 : 0);
+        Device.uniform3fv(Uniforms.get("uMaskColour"), Mask.Colour || [0.82, 0.12, 0.14]);
+        Device.uniform1f(Uniforms.get("uMaskTolerance"), Mask.Tolerance ?? 0.25);
+        Device.uniform1f(Uniforms.get("uMaskSoftness"), Mask.Softness ?? 0.12);
+        Device.drawArrays(Device.TRIANGLES, 0, 3);
+        Device.bindVertexArray(null);
+        Device.bindFramebuffer(Device.FRAMEBUFFER, null);
+        this.MaskPreviewLayer = Layer.Identifier;
+    }
+
     MaskImage(Identifier)
     {
+        if (Identifier && this.MaskPreviewLayer === Identifier && this.MaskPreviewTarget) return this.MaskPreviewTarget.Images[0];
         const Record = Identifier ? this.LayerImages.get(Identifier) : null;
         return Record?.Mask || this.WhiteImage();
     }
@@ -1008,6 +1078,7 @@ export class ShadingIntegrator
         Device.uniform1f(Uniforms.get("uNormalGain"), this.NormalGain(Options.Material));
         Device.uniform1f(Uniforms.get("uDisplay"), Options.Display);
         Device.uniform1f(Uniforms.get("uCheckerScale"), Options.CheckerScale || 16);
+        Device.uniform3fv(Uniforms.get("uMaskTint"), Options.MaskTint || [0.95, 0.22, 0.3]);
         const Material = Options.Material;
         Device.uniform1f(Uniforms.get("uDiffuseRoughness"), Material.base_diffuse_roughness);
         Device.uniform3fv(Uniforms.get("uSpecularColour"), Material.specular_color);
@@ -1058,6 +1129,7 @@ export class ShadingIntegrator
         Device.uniform1f(Program.Uniforms.get("uDisplay"), Options.Display);
         Device.uniform1f(Program.Uniforms.get("uNormalGain"), this.NormalGain(Options.Material));
         Device.uniform1f(Program.Uniforms.get("uCheckerScale"), Options.CheckerScale || 16);
+        Device.uniform3fv(Program.Uniforms.get("uMaskTint"), Options.MaskTint || [0.95, 0.22, 0.3]);
         Device.uniform3fv(Program.Uniforms.get("uCursor"), Options.Cursor || [0, 0, 0]);
         Device.uniform1f(Program.Uniforms.get("uCursorVisible"), Options.Cursor ? 1 : 0);
         Device.drawArrays(Device.TRIANGLES, 0, 3);

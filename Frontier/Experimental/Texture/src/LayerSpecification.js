@@ -15,6 +15,7 @@ import {
     BlendOrdering,
 } from "./ChannelSpecification.js";
 import { DefaultGenerator, NormaliseGenerator } from "./GeneratorSpecification.js";
+import { FinishDefaults, SanitiseFinish, FinishBadge } from "./FinishSpecification.js";
 import { SurfaceDefaults, SurfaceControls } from "./MaterialSpecification.js";
 
 export const LayerKinds = [
@@ -50,6 +51,14 @@ export const LayerKinds = [
         Accent: "#8fd6a0",
         Hint: "A procedural or baked field — noise, cells, curvature, occlusion.",
     },
+    {
+        Identifier: "finish",
+        Label: "Material",
+        Badge: "MATL",
+        Glyph: "material",
+        Accent: "#c98cff",
+        Hint: "A procedural finish — car paint, fabric, metal or plastic — with its own material properties.",
+    },
 ];
 
 export const LayerKindByIdentifier = Object.fromEntries(LayerKinds.map((Kind) => [Kind.Identifier, Kind]));
@@ -58,6 +67,7 @@ export const MaskKinds = [
     { Identifier: "none", Label: "No mask" },
     { Identifier: "stroke", Label: "Painted mask" },
     { Identifier: "generator", Label: "Generator mask" },
+    { Identifier: "colour", Label: "Colour mask" },
 ];
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -99,6 +109,10 @@ export const MaskDefaults = () => ({
     Kind: "none",
     Invert: false,
     Generator: DefaultGenerator("fbm"),
+    Colour: [0.82, 0.12, 0.14],     // the key a colour mask selects from the stack beneath the layer
+    Tolerance: 0.25,
+    Softness: 0.12,
+    Tint: [0.95, 0.22, 0.3],        // overlay wash drawn over whatever the mask hides
 });
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -122,6 +136,17 @@ const DefaultEnabledChannels = {
     stroke: ["base_color", "specular_roughness"],
     decal: ["base_color", "specular_roughness", "height"],
     generator: ["base_color", "specular_roughness", "height"],
+    finish: [
+        "base_color",
+        "specular_roughness",
+        "base_metalness",
+        "ambient_occlusion",
+        "height",
+        "specular_weight",
+        "coat_weight",
+        "coat_roughness",
+        "fuzz_weight",
+    ],
 };
 
 export const CreateLayer = (Kind = "fill", Overrides = {}) =>
@@ -140,6 +165,7 @@ export const CreateLayer = (Kind = "fill", Overrides = {}) =>
         Mask: MaskDefaults(),
         Generator: DefaultGenerator(Descriptor === "generator" ? "fbm" : "fbm"),
         Decal: DecalDefaults(),
+        Finish: FinishDefaults(),
     };
     return MergeLayer(Layer, Overrides);
 };
@@ -151,6 +177,7 @@ export const MergeLayer = (Layer, Overrides = {}) =>
     Merged.Enabled = { ...Layer.Enabled, ...(Overrides.Enabled || {}) };
     Merged.Mask = { ...Layer.Mask, ...(Overrides.Mask || {}) };
     if (Overrides.Mask?.Generator) Merged.Mask.Generator = NormaliseGenerator(Overrides.Mask.Generator);
+    Merged.Finish = { ...Layer.Finish, ...(Overrides.Finish || {}) };
     Merged.Generator = NormaliseGenerator({ ...Layer.Generator, ...(Overrides.Generator || {}) });
     Merged.Decal = {
         ...Layer.Decal,
@@ -356,11 +383,17 @@ export const SanitiseLayer = (Candidate) =>
     }
     if (Candidate.Mask)
         Layer.Mask = {
+            ...MaskDefaults(),
             Kind: MaskKinds.some((Kind) => Kind.Identifier === Candidate.Mask.Kind) ? Candidate.Mask.Kind : "none",
             Invert: Boolean(Candidate.Mask.Invert),
             Generator: NormaliseGenerator(Candidate.Mask.Generator || {}),
+            Colour: SanitiseColour(Candidate.Mask.Colour, [0.82, 0.12, 0.14]),
+            Tolerance: Clamp(Candidate.Mask.Tolerance ?? 0.25, 0, 1),
+            Softness: Clamp(Candidate.Mask.Softness ?? 0.12, 0, 1),
+            Tint: SanitiseColour(Candidate.Mask.Tint, [0.95, 0.22, 0.3]),
         };
     Layer.Generator = NormaliseGenerator(Candidate.Generator || {});
+    Layer.Finish = SanitiseFinish(Candidate.Finish);
     if (Candidate.Decal) Layer.Decal = SanitiseDecal(Layer.Decal, Candidate.Decal);
     if (typeof Candidate.Coverage === "string") Layer.Coverage = Candidate.Coverage;
     if (typeof Candidate.MaskCoverage === "string") Layer.MaskCoverage = Candidate.MaskCoverage;
@@ -426,6 +459,7 @@ export const LayerBadge = (Layer) =>
 {
     if (Layer.Kind === "generator") return (Layer.Generator?.Kind || "fbm").slice(0, 5).toUpperCase();
     if (Layer.Kind === "decal") return Layer.Decal?.SourceKind === "text" ? "TEXT" : "SVG";
+    if (Layer.Kind === "finish") return FinishBadge(Layer.Finish);
     return LayerKindByIdentifier[Layer.Kind]?.Badge || "LAYER";
 };
 
@@ -435,6 +469,13 @@ export const LayerChannelCount = (Layer) =>
 export const LayerSummary = (Layer) =>
 {
     const Channels = LayerChannelCount(Layer);
-    const Mask = Layer.Mask.Kind === "none" ? "no mask" : Layer.Mask.Kind === "stroke" ? "painted mask" : `${Layer.Mask.Generator.Kind} mask`;
+    const Mask =
+        Layer.Mask.Kind === "none"
+            ? "no mask"
+            : Layer.Mask.Kind === "stroke"
+              ? "painted mask"
+              : Layer.Mask.Kind === "colour"
+                ? "colour mask"
+                : `${Layer.Mask.Generator.Kind} mask`;
     return `${Channels} channel${Channels === 1 ? "" : "s"} · ${Mask} · ${Math.round(Layer.Opacity * 100)}%`;
 };

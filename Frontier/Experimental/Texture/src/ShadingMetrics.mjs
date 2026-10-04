@@ -22,7 +22,7 @@ import {
 import { BuildSurface } from "./SurfaceStructure.js";
 import { OrbitProjection } from "./OrbitProjection.js";
 import { DefaultStack, DefaultProject, CreateLayer } from "./LayerSpecification.js";
-import { ExportSlots, SurfaceFragment, PlaneFragment } from "./ShadingGlsl.js";
+import { ExportSlots, SurfaceFragment, PlaneFragment, CompositeFragment, Chunks } from "./ShadingGlsl.js";
 import { DisplayIndex } from "./ChannelSpecification.js";
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -159,7 +159,10 @@ test("the integrator links every program and reflects its uniforms", () =>
 {
     const { Integrator } = Prepare();
     const Names = Object.keys(Integrator.Programs);
-    assert.deepEqual(Names.sort(), ["Background", "Bake", "Composite", "Curvature", "Dilate", "Plane", "Resolve", "Shade", "Stamp"].sort());
+    assert.deepEqual(
+        Names.sort(),
+        ["Background", "Bake", "Composite", "Curvature", "Dilate", "Mask", "Plane", "Resolve", "Shade", "Stamp"].sort(),
+    );
     for (const [Name, Program] of Object.entries(Integrator.Programs))
     {
         // The bake pass is driven entirely by attributes, so it is the one program without uniforms.
@@ -347,11 +350,49 @@ test("a layer with no mask of its own inspects as fully revealed", () =>
 test("the mask inspection is wired to the display mode the shaders switch on", () =>
 {
     assert.equal(DisplayIndex("mask"), 14, "the mask view moved away from the GLSL branch that draws it");
+    assert.equal(DisplayIndex("mask_overlay"), 15, "the mask overlay moved away from the GLSL branch that draws it");
     for (const Source of [SurfaceFragment, PlaneFragment])
     {
         assert.match(Source, /uniform sampler2D uMaskPreview;/, "a fragment stage cannot reach the mask image");
         assert.match(Source, /Mode == 14/, "a fragment stage has no branch for the mask view");
+        assert.match(Source, /uniform vec3 uMaskTint;/, "a fragment stage cannot tint the overlay");
     }
+    // The overlay shades first and washes afterwards, so it must escape the inspection short-circuit.
+    assert.match(SurfaceFragment, /uDisplay > 0\.5 && int\(uDisplay \+ 0\.5\) != 15/, "the overlay is being treated as an inspection");
+    assert.match(PlaneFragment, /Mode == 15/, "texture space has no overlay branch");
+});
+
+test("generator and colour masks resolve through a pass of their own", () =>
+{
+    const { Integrator, Device } = Prepare();
+    const Layer = CreateLayer("fill", { Mask: { Kind: "colour", Colour: [0.2, 0.4, 0.6], Tolerance: 0.3, Softness: 0.1 } });
+    assert.equal(Integrator.MaskImage(Layer.Identifier), Integrator.WhiteImage(), "an unresolved colour mask should read white");
+    const Before = Count(Device, "drawArrays");
+    Integrator.RefreshMaskPreview(Layer, DefaultProject().Material);
+    assert.equal(Count(Device, "drawArrays") - Before, 1, "the mask preview pass never drew");
+    assert.equal(Integrator.MaskPreviewLayer, Layer.Identifier);
+    assert.equal(
+        Integrator.MaskImage(Layer.Identifier),
+        Integrator.MaskPreviewTarget.Images[0],
+        "the resolved mask should be the one inspected",
+    );
+    // A layer carrying no mask leaves the preview alone rather than drawing an empty pass.
+    const Marker = Count(Device, "drawArrays");
+    Integrator.RefreshMaskPreview(CreateLayer("fill"), DefaultProject().Material);
+    assert.equal(Count(Device, "drawArrays"), Marker, "a layer with no mask still ran the preview pass");
+    assert.equal(Integrator.MaskPreviewLayer, "");
+});
+
+test("the compositor can write a finish without touching the flat channel values", () =>
+{
+    assert.match(CompositeFragment, /uniform int uFinishFamily;/, "the finish family never reaches the shader");
+    assert.match(CompositeFragment, /uKind == 4/, "there is no finish branch in the compositor");
+    assert.match(CompositeFragment, /FinishSample Finish = SampleFinish\(/, "the finish is never evaluated");
+    for (const Name of ["RoughnessValue", "MetalnessValue", "CoatValue", "FuzzValue", "HeightValue"])
+        assert.ok(CompositeFragment.includes(Name), `${Name} is not routed through the blend`);
+    assert.match(Chunks.Finish, /float FlakeField\(/, "the flake field went missing");
+    assert.match(Chunks.Finish, /float WeaveField\(/, "the weave field went missing");
+    assert.match(Chunks.Mask, /Kind == 3/, "the mask chunk has no colour branch");
 });
 
 test("the viewport and texture-space passes both draw", () =>

@@ -62,18 +62,53 @@ a card: the layer's colour plate, its kind, blend and channel count, the opacity
 - **generator** — seven procedurals (fbm, cells, scratches, weave, wood, checker, gradient) and five surface signals
   (curvature, cavity, occlusion, inclination, altitude), each with scale, detail, contrast, balance, warp, angle and seed.
 - **decal** — an SVG or text decal projected onto the surface or planted on a plane.
+- **finish** — a procedural material: automotive paint, fabric, metal or plastic, evaluated per texel.
 
-**Masks.** A mask is a greyscale image multiplied into the layer's coverage: black conceals, white reveals, the same way
-Substance Painter does it. A layer with no mask shows a dashed *Add mask* chip; clicking it attaches a black mask and aims
-the brush at it in one step, so the layer disappears and you paint it back. The Mask group in the inspector adds a black,
-white or generator mask, switches the brush between content and mask, inverts, fills white, clears to black or removes the
-mask altogether; `M` flips the target while painting and the stack footer always states which one is live. Masks are
-undoable with the rest of the stack, and a removed mask frees its image so the next one starts clean.
+**Procedural materials.** A material layer is a recipe rather than a colour. Four families, nineteen presets on the
+shelf, and one inspector that renames itself to suit the family:
+
+| Family | Styles | What the inspector asks about |
+| --- | --- | --- |
+| Automotive | metallic flake, candy pearl, matte wrap, primer | flake scale, flake density, flake brightness, clear coat, flake angle, pigment variation |
+| Fabric | plain, twill / denim, satin, knitted rib, velvet | thread count, thread spread, fuzz, sheen, weave angle, thread variation |
+| Metal | brushed, hammered, cast and pitted, galvanised spangle | grain scale, pitting, relief, polish, lacquer, brush angle |
+| Plastic | injection moulded, pebbled grain, soft touch, polycarbonate | grain scale, grain density, grain depth, gloss, clear coat |
+
+The recipe writes nine channels per texel — colour, roughness, metalness, occlusion, height, specular weight, coat
+weight, coat roughness and fuzz — so those rows in the Channels group read *written by the material recipe* rather than
+offering a flat slider that would be a lie. Occlusion and specular weight keep their sliders, because the material's own
+value is scaled by them. Everything else about the layer is unchanged: blend, opacity, a mask, reorder, and paint on top.
+
+**Masks.** A mask is multiplied into the layer's coverage: black conceals, white reveals, the same way Substance Painter
+does it. Four kinds — **painted** (a greyscale image the brush writes), **generator** (any of the twelve procedurals) and
+**colour** (keys on the colour already composited beneath the layer, with a tolerance, a softness and an eyedropper), or
+none at all. A layer with no mask shows a dashed *Add mask* chip; clicking it attaches a black mask and aims the brush at
+it in one step, so the layer disappears and you paint it back.
+
+The mask can be looked at three ways — from the toggle floating at the top of the viewport, from the same switch in the
+Mask group, or by cycling `⇧ M`:
+
+- **Off** — the shaded surface.
+- **Overlay** — the shaded surface with a tint washed over whatever the mask hides. The surface stays live, so you paint
+  the mask and watch the wash retreat.
+- **Mask** — the mask on its own in black and white.
+
+Generator and colour masks have no image behind them, so a pass of their own resolves whichever kind the layer carries
+into a preview target before the viewport samples it: what you see is what the compositor applied, inversion included.
+`M` flips the brush between content and mask while painting and the stack footer always states which one is live. Masks
+are undoable with the rest of the stack, and a removed mask frees its image so the next one starts clean.
+
+**Content browser.** A drawer across the foot of the viewport — drag its tab, press `B`, or use the grid button in the
+viewport bar; it settles closed, half or full. The library column on the left walks Materials (the four finish families
+plus the multi-layer surface presets), Decals (signage, marks, plates, grunge and the ten type families), Generators
+(procedural and baked) and Scene (surfaces and lighting). The shelf on the right searches, switches between tiles and
+rows, and one click puts the thing into the document: a material layer, a decal layer, a generator layer, a new mesh or
+a new environment.
 
 Painting on a layer that cannot hold coverage inserts a stroke layer above it rather than refusing the stroke. The stack
 is capped at 64 layers.
 
-**Material system.** Eighteen surface-level constants that are uniform over the model — specular
+**Surface constants.** Eighteen surface-level constants that are uniform over the model — specular
 IOR and colour, anisotropy, coat IOR and darkening, fuzz colour, thin-film weight/thickness/IOR, transmission colour and
 depth, emission luminance, normal intensity, height scale — live beside the painted channels in the **Material** tab and
 travel with the descriptor at export.
@@ -94,10 +129,10 @@ set. Each writes one PNG per channel named `<project-name>_<Channel>.png` next t
 | | | | |
 | --- | --- | --- | --- |
 | Orbit / brush / eraser | <kbd>1 2 3</kbd> | Content ⇄ mask | <kbd>M</kbd> |
-| Flood / decal / pick | <kbd>4 5 6</kbd> | See the mask on its own | <kbd>⇧ M</kbd> |
+| Flood / decal / pick | <kbd>4 5 6</kbd> | Mask view: off → overlay → mask | <kbd>⇧ M</kbd> |
 | Brush size | <kbd>[</kbd> <kbd>]</kbd> | Texture space | <kbd>X</kbd> |
 | Brush size, live | <kbd>Alt</kbd> + wheel | Frame the surface | <kbd>F</kbd> |
-| Search layers | <kbd>/</kbd> | | |
+| Search layers | <kbd>/</kbd> | Content browser | <kbd>B</kbd> |
 | Undo / redo | <kbd>Ctrl Z</kbd> / <kbd>Ctrl ⇧ Z</kbd> | Save / export | <kbd>Ctrl S</kbd> / <kbd>Ctrl E</kbd> |
 
 ---
@@ -106,10 +141,11 @@ set. Each writes one PNG per channel named `<project-name>_<Channel>.png` next t
 
 | File | Role |
 | --- | --- |
-| `TexturePanel.js` | The panel: stack, masks, inspector, tools, documents, shortcuts, dialogs. |
+| `TexturePanel.js` | The panel: stack, masks, inspector, content browser, tools, documents, shortcuts, dialogs. |
 | `ChannelSpecification.js` | The twelve channels, their packing, encodings, blend and export orderings. |
 | `MaterialSpecification.js` | Surface constants, material presets, the six-light environments. |
 | `GeneratorSpecification.js` | Procedural and surface-signal generators and their parameter ranges. |
+| `FinishSpecification.js` | Procedural material families, their styles, named controls and the preset shelf. |
 | `LayerSpecification.js` | Layer, mask and decal records; sanitisers; project defaults and validation. |
 | `DecalSpecification.js` | Vector library, font archive, SVG/text rasterisation. |
 | `SurfaceStructure.js` | Built-in surfaces, Wavefront import, tangents, bounds, occlusion, spatial index. |
