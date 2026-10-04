@@ -2,6 +2,7 @@
 """Retrieve executed CI pixels on an Actions runner (the local sandbox cannot reach Azure artifact storage)."""
 from pathlib import Path
 import json
+import hashlib
 import shutil
 import struct
 import subprocess
@@ -18,6 +19,23 @@ for Kind, Run, Prefix in (("Browser", BrowserRun, "project-opening"), ("SDF", Sd
     subprocess.run(["gh", "run", "download", Run, "-n", Prefix + "-" + Commit, "-D", str(Scratch / Kind)], check=True)
     Provenance[Kind] = {"commit": Commit, "run": "https://github.com/unassignedinbox/Slate/actions/runs/" + Run}
 Native = Scratch / "Browser/ProjectBrowserWindows.png"
+# Prefer the readback from the packaged Frontier.exe when that run published a release.
+ReleaseTag = "frontier-browser-" + Provenance["Browser"]["commit"][:7]
+Release = subprocess.run(["gh", "release", "view", ReleaseTag, "--json", "url"], capture_output=True, text=True)
+if Release.returncode == 0:
+    Packaged = Scratch / "PackagedBrowser"
+    subprocess.run(["gh", "release", "download", ReleaseTag, "--pattern", "ProjectBrowser.png",
+                    "--pattern", "BuildManifest.json", "--pattern", "*.sha256", "--dir", str(Packaged)], check=True)
+    Manifest = json.loads((Packaged / "BuildManifest.json").read_text())
+    assert Manifest["sourceCommit"] == Provenance["Browser"]["commit"]
+    assert Manifest["projectBrowserDx11Verified"] and Manifest["visualCppRuntimeBundled"]
+    Native = Packaged / "ProjectBrowser.png"
+    assert hashlib.sha256(Native.read_bytes()).hexdigest() == Manifest["sha256"]["Docs/ProjectBrowser.png"]
+    Provenance["Browser"]["release"] = json.loads(Release.stdout)["url"]
+    Provenance["Browser"]["image"] = "Actual packaged Frontier.exe DX11 render-target readback"
+    Provenance["Browser"]["zipChecksum"] = next(Packaged.glob("*.sha256")).read_text().strip()
+    Provenance["Browser"]["physicalGpuGameplayVerified"] = Manifest["gpuRuntimeVerified"]
+(Root / "VisualProof/ProjectOpening/Provenance.json").write_text(json.dumps(Provenance["Browser"], indent=2) + "\n")
 assert Native.is_file(), "A real DX11 readback, not the shared CPU UI proof, is required"
 shutil.copyfile(Native, Root / "VisualProof/ProjectOpening/ProjectBrowserWindows.png")
 Log = (Scratch / "SDF/Execution.log").read_text(encoding="utf-8", errors="replace")

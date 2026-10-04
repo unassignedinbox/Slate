@@ -48,13 +48,13 @@ jobs:
       - name: Download exact readbacks and retain on the session branch
         env:
           GH_TOKEN: ${{ github.token }}
-          BROWSER_RUN: ${{ inputs.export_browser_run || '37184302718' }}
-          SDF_RUN: ${{ inputs.export_sdf_run || '37184302718' }}
+          BROWSER_RUN: ${{ inputs.export_browser_run || '37194740044' }}
+          SDF_RUN: ${{ inputs.export_sdf_run || '37194740044' }}
         run: |
           python3 VisualProof/ProjectOpening/ExportExecutionProofs.py "$BROWSER_RUN" "$SDF_RUN"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add VisualProof/ProjectOpening/ProjectBrowserWindows.png VisualProof/DistanceFieldGI
+          git add VisualProof/ProjectOpening/ProjectBrowserWindows.png VisualProof/ProjectOpening/Provenance.json VisualProof/DistanceFieldGI
           if ! git diff --cached --quiet; then
             git commit -m 'Retain executed DX11 card and production SDF pixel proofs [skip ci]'
             git push origin HEAD:arena/01a0fd48-slate
