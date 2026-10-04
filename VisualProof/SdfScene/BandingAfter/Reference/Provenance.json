@@ -1,0 +1,43 @@
+{
+  "source": "259c46c67e28b33ad621070eb2d1be3d2482d4d8",
+  "run": "37233160992",
+  "case": "Reference",
+  "exitCode": 0,
+  "seconds": 845.121499092,
+  "method": "Production Vulkan SDF stages on CPU ICD. CPU triangle intersections supply primary visibility only; all lighting/material/transport runs in production SPIR-V.",
+  "settings": {
+    "size": [
+      384,
+      256
+    ],
+    "cardResolution": 4,
+    "volumeResolution": 32,
+    "clipCell": 0.15,
+    "warmupFrames": 32,
+    "shadowConeSlope": 0.06,
+    "sunRadiance": 1.8,
+    "skyAmbient": 0.005,
+    "reflections": 0,
+    "materials": "matte Lambert, no textures; unused specular tables are unit placeholders"
+  },
+  "primarySamplesPerTechnique": 32,
+  "reconstruction": "geometry-guided incident irradiance 7x7",
+  "shaders": {
+    "DistanceFieldGatherFixed.spv": "98aee7bbd27898532b757061497213c180db3b059e9cf06a1243ea9d32fcdb9c",
+    "DistanceFieldConstruct.spv": "4a35deef7dc6ea24f14512d91a5ece51f446bfc327b02a04308d6cbca49d7af6",
+    "DistanceFieldGIResolve.spv": "88329b6769214e90e02cdcd62a57c736069fb60c0ca02917152e7b67099a4cb5",
+    "DistanceFieldGather.spv": "84ddad656be6b26ffb9e89a2895cc4981e8bd2a294c0f4823e96b3f109543a78",
+    "DistanceFieldCapture.spv": "e961a784a7484ac90c9db92c41258bdac36d9c784b65ed8a96974a7a3b7582ba",
+    "DistanceFieldGIResolveFixed.spv": "441a7726897d2181a6ac9a00d77ba7e6f6606f518dd5046b26228ad0dfe100c4",
+    "DistanceFieldCaptureFixed.spv": "b17923cc09fe65a00a78f4a1fcaf6045ac1dc7cae2fa390e9363e61ab1c1b02d",
+    "DistanceFieldRadiance.spv": "3e3a3beb255aba6c33f76a29237a73f23233c5103ac72b6be06d648978734f3a"
+  },
+  "images": {
+    "Floor-probes.png": "6b1d045f613e00ee94f3e01951245ef988bed33d7358756094bde2a7f3c77845",
+    "Scene-GI.png": "04df43a2e4d749ddec7da33e10ceb9e534bf5150904d56a3c3a65a2d0e1868c3",
+    "Scene-GI-off.png": "56015fb1ecef74f7e790078bc3c5416aa319a0ebe177ac8e9fa90acec3a3d88c",
+    "Moved-first-frame.png": "d015488304d9f24f6258956199616b48238e61f6e48ed1999d22dfc338ba1c7b",
+    "Moved-settled.png": "bf5ff5e9888d4bf27e56eca0770fb52e53ac3220da8774f0a953e83b960fa510",
+    "Restored.png": "04df43a2e4d749ddec7da33e10ceb9e534bf5150904d56a3c3a65a2d0e1868c3"
+  }
+}
