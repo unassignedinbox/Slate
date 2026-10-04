@@ -1232,3 +1232,66 @@ At evidence checkpoint time the full Windows host/project packaging job and Soli
 running. This entry does not claim those entire jobs passed; consult the linked workflow for later status.
 The post-execution edits only add the trailing-member offset assertion, source-header/indentation cleanup,
 the independent readback assessor and documentation; transport/lighting equations remain those executed.
+
+## C028 — Interactive full-geometry raster-probe GI in HTML (2026-10-04)
+
+User accepted the native banding repair and requested an HTML demonstration of the proposed dynamic GI.
+Delivered `Frontier/Experimental/RadianceProjection/index.html` with `ProbeIntegrator.js`, using the existing
+vendored Three.js r160, OrbitControls and native DM Sans font. No CDN dependencies, native code changes,
+new low-polygon visibility mesh, ray queries, SDF marching or fabricated ambient GI are involved.
+
+### Implemented mechanism
+
+- Actual 3,006-triangle scene; the deforming ribbon has 841 vertices and 1,568 triangles. Its position buffer
+  is deformed and its normals recomputed. Primary rendering, probe captures and the sun shadow map consume
+  that same geometry. No alternate proxy representation is constructed.
+- A 4×3×4 world-space grid captures six 32×32 raster views per updated probe. HDR RGB stores outgoing
+  radiance and alpha stores radial distance; uncovered directions are black with a far distance of 20 m.
+- 128 cosine-weighted hemisphere samples integrate each directional irradiance texel on the GPU. A 16×16
+  octahedral tile per probe stores irradiance/π. A second atlas stores directional depth mean and mean square.
+- Eight-neighbour interpolation combines trilinear weights, surface orientation and moment-based visibility.
+  Double-buffered atlases avoid render-target feedback. Recursive captures sample the previous atlas, giving
+  approximate additional diffuse bounces. Direct sunlight is separately shadow-mapped, with receiver-plane
+  depth correction for PCF. Tonemapping happens only in presentation, never in the capture feedback.
+- Every update rerasterizes the actual scene. Static-capture reuse, adaptive probe placement and dirty-bounds
+  scheduling are **not** implemented in this first demonstration. Its purpose is to expose the working
+  mechanism and trade-offs, not promise shipping performance or full native parity.
+
+Controls: GI toggle, indirect-only/normals, motion pause, deformation amplitude, lateral displacement,
+ribbon visibility/colour, emitter and sun strength, recursive bounce, depth visibility, probe markers,
+1–12 probes/frame, freeze/resume updates and clear history. The lower view shows an actual selected probe's
+six radiance/depth faces or the live irradiance atlas. Camera orbit/zoom/pan and mobile reflow are supported.
+To see emission-driven bounce clearly, set **Direct sun to zero**. Freeze captures, move/deform the mesh,
+then resume them to inspect stale versus refreshed indirect lighting. Pausing motion makes GI comparisons easier.
+
+### Executed browser checks
+
+`VisualProof/RadianceProjection/VerifyBrowser.cjs` runs Playwright against the served page and reads the
+actual WebGL framebuffer. Retained screenshots and `Execution.json` are in its `Captures` subdirectory.
+The local Chromium run used software graphics; reported frame intervals are RAF intervals, **not GPU timings**.
+Normal Playwright Chromium works with the runner; the optional `PROBE_LAMBDA_CHROMIUM` route uses the
+sandbox's scratch-installed Chromium package. Browser dependencies are not committed.
+
+| Verification                                        | Result          |
+|-----------------------------------------------------|-----------------|
+| GI toggle, RGB RMS / maximum                         | 10.483 / 120    |
+| Sun off: mean emissive GI on otherwise black receivers | 29.500 / 255    |
+| Moved geometry: stale vs refreshed GI RMS / maximum   | 8.006 / 91      |
+| Sun/emission off and history cleared: GI difference   | RMS 0 / max 0   |
+| Actual ribbon vertex changes                        | Verified        |
+| Frozen probe cursor                                 | Unchanged       |
+| 390-pixel mobile layout                              | No overflow     |
+| Shader/browser errors; WebGL readback errors           | Zero            |
+
+The screenshot cases include final/direct-only, emitter-only/GI-off, moved-frozen/moved-updated,
+radial depth, irradiance atlas, no-light and mobile layout. Raw screenshots are not denoised or retouched.
+The source SHA-256 digests in the execution report identify the HTML and renderer used for these checks.
+
+Initial inspection exposed uninitialized cubemap camera orientations (six repeated views); explicitly
+initializing Three's cube coordinate system corrected them before validation. Direct-shadow PCF initially
+showed self-shadow striping; receiver-plane depth correction removed it before the retained checks.
+
+Limitations remain visible: coarse probe/angular resolution, possible thin-surface leakage, mixed-age
+captures during motion, interpolation bias and finite grid coverage. Freeze/low-budget controls intentionally
+expose latency. No glossy transport, arbitrary imported/skinned asset workflow, probe relocation or native
+integration is claimed. Existing C027 native SDF correction and all C026 scale failure evidence are untouched.
