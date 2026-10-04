@@ -4284,10 +4284,12 @@ void ConsoleHost::Register() noexcept
             }
             else
             {
+                const bool Derived = Figure->Recipe.Live() ||
+                    (Figure->Blueprint.Form >= SceneFigure::ParametricForm::Extrude && Figure->Blueprint.Form <= SceneFigure::ParametricForm::ChamferEdge);
                 TransformFigure(*Figure, Affine);
                 // A primitive blueprint cannot generally represent affine-scaled or rotated NURBS. Keep the actual
                 // authored geometry instead of allowing a later dimension edit to snap it back to its old recipe.
-                if (!Translation) Figure->Blueprint.Form = SceneFigure::ParametricForm::None;
+                if (!Translation || Derived) Figure->Blueprint.Form = SceneFigure::ParametricForm::None;
             }
             AutoEmitDimensions(*Figure);
         }
