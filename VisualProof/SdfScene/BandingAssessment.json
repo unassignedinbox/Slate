@@ -1,0 +1,89 @@
+{
+  "method": "Raw 8-bit display RGB versus 512+512 unfiltered production-shader quadrature; same cache, scene and exposure.",
+  "limitations": "Not independent transport ground truth. Matte scene only. No continuous-camera stability or GPU timing proof.",
+  "sampleCountsPerTechnique": {
+    "before": 32,
+    "after": 32,
+    "denseReference": 512
+  },
+  "gates": {
+    "giOffMaximumChange": 0,
+    "restorationMaximumChange": 0,
+    "rmsRatioUpperBound": 0.5
+  },
+  "views": {
+    "Reference": {
+      "source": "259c46c67e28b33ad621070eb2d1be3d2482d4d8",
+      "giOffChange": {
+        "rms": 0.0,
+        "maximum": 0.0
+      },
+      "giToggle": {
+        "rms": 16.089173095141238,
+        "maximum": 125.0
+      }
+    },
+    "Orbit": {
+      "source": "259c46c67e28b33ad621070eb2d1be3d2482d4d8",
+      "giOffChange": {
+        "rms": 0.0,
+        "maximum": 0.0
+      },
+      "giToggle": {
+        "rms": 11.661234435657661,
+        "maximum": 118.0
+      }
+    },
+    "High": {
+      "source": "259c46c67e28b33ad621070eb2d1be3d2482d4d8",
+      "giOffChange": {
+        "rms": 0.0,
+        "maximum": 0.0
+      },
+      "giToggle": {
+        "rms": 17.943769339245403,
+        "maximum": 135.0
+      }
+    }
+  },
+  "referenceComparison": {
+    "wholeImage": {
+      "pixels": 98304,
+      "before": {
+        "rms": 1.571068087978994,
+        "maximum": 45.0
+      },
+      "after": {
+        "rms": 0.6533682386973992,
+        "maximum": 47.0
+      }
+    },
+    "giAffectedPixels": {
+      "pixels": 31883,
+      "before": {
+        "rms": 2.7565548901601598,
+        "maximum": 45.0
+      },
+      "after": {
+        "rms": 1.1462811251074054,
+        "maximum": 47.0
+      }
+    },
+    "foregroundFloor": {
+      "pixels": 8423,
+      "before": {
+        "rms": 1.770556074115508,
+        "maximum": 11.0
+      },
+      "after": {
+        "rms": 0.5225153397407157,
+        "maximum": 3.0
+      }
+    }
+  },
+  "restoredImage": {
+    "rms": 0.0,
+    "maximum": 0.0
+  },
+  "improvementPass": true
+}

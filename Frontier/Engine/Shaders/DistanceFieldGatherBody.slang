@@ -1,5 +1,5 @@
 //============================================================================================================================================
-//                                                   DISTANCEFIELDGATHERBODY.SLANG
+//                                                       DISTANCEFIELDGATHERBODY.SLANG
 //============================================================================================================================================
 // 📦 Material-independent incoming diffuse lighting and geometry guides for spatial irradiance reconstruction.
 

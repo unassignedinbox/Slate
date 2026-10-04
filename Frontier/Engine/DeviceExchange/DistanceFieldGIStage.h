@@ -69,6 +69,7 @@ struct alignas(16) DistanceFieldPush
 };
 static_assert(sizeof(DistanceFieldPush) == 112u);
 static_assert(offsetof(DistanceFieldPush, Counts) == 80u);
+static_assert(offsetof(DistanceFieldPush, RenderExtent) == 96u);
 
 class DistanceFieldGIStage
 {

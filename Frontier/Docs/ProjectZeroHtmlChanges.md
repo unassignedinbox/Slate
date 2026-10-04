@@ -1118,12 +1118,12 @@ remain unverified. No editor layout, baking placement or production shader was a
 
 ## C027 — Diffuse quadrature decorrelation and incident-light reconstruction (2026-10-04)
 
-Status at implementation submission: **not yet verified**. The prior C026 images remain untouched in
+Status: **verified reduction of coherent banding in the retained scene views**. The prior C026 images remain untouched in
 `VisualProof/SdfScene/Captures`. Scale and large-world corrections are explicitly out of this phase's scope.
 
 The primary gather previously used identical cosine/area quadrature at every pixel, projecting coherent
 occluder/emitter contours. The new production pass gathers pixel-decorrelated incoming diffuse lighting
-into an RGBA16F image, with resolved shading normals in a second RGBA16F image. A 7×7 spatial reconstruction
+into an RGBA16F image (irradiance divided by π), with resolved shading normals in a second RGBA16F image. A 7×7 spatial reconstruction
 rejects different instances, incompatible normals and off-plane neighbours before the final material
 response. Direct lighting/shadows, textures, emission, specular and tone mapping are not filtered.
 Secondary reflection/transmission hits still use world-space transport, never screen-cache substitutes.
@@ -1143,7 +1143,7 @@ Existing artifact, materials, transmission, texture, lifecycle and resize gates 
 
 Local Vulkan compilation/execution is unavailable: package repository connections failed and the sandbox
 has no Vulkan SDK/CPU ICD. Authorized GitHub Actions performs actual compilation and CPU Vulkan execution.
-Do not call this repair successful until those readbacks have been inspected and compared.
+The actual readbacks and independent comparison results are recorded below; they have now been inspected.
 
 ### Dynamic deforming geometry: recommendation, not implemented
 
@@ -1170,3 +1170,65 @@ Sources:
   https://www.cl.cam.ac.uk/~rkm38/pdfs/mantiuk02cmdsigi.pdf
 - DDGI directional irradiance/distance-moment visibility (original capture uses rays):
   https://www.jcgt.org/published/0008/02/01/paper-lowres.pdf
+
+
+### C027 executed evidence and remaining limits
+
+Production implementation source: `259c46c67e28b33ad621070eb2d1be3d2482d4d8`.
+Scene run: https://github.com/unassignedinbox/Slate/actions/runs/37233160992
+Existing regression run: https://github.com/unassignedinbox/Slate/actions/runs/37233160945
+
+All four scene jobs succeeded: Reference (including same-stage movement/restoration), Orbit, High and the
+512+512 unfiltered quadrature comparison. Inspection of all three before/after views shows the repeated
+floor rings and angular wall banding removed at the captured resolution. The new outputs retain GI; the
+Reference GI-on/off RMS is 16.0892, rather than zero. No original scale/translation results were overwritten.
+
+`AssessBandingReadbacks.py --enforce` passes with unchanged-direct-lighting, exact restoration and less
+than half the previous RMS error in each comparison region. Display RGB units are 0–255:
+
+| Region / property             | Before     | After      |
+|-------------------------------|------------|------------|
+| Whole-image RMS vs 512+512     | 1.571068   | 0.653368   |
+| GI-affected-pixel RMS          | 2.756555   | 1.146281   |
+| Foreground-floor RMS          | 1.770556   | 0.522515   |
+| Foreground-floor maximum      | 11         | 3          |
+| Whole-image maximum           | 45         | 47         |
+| GI-off change, all three views | —          | RMS/max 0  |
+| Object restoration difference | —          | RMS/max 0  |
+
+The 8,423-pixel floor region is a fixed projected physical rectangle, X within ±4.8 m and
+Y between −3.8 and −1.05 m. It contains no foreground objects; the script does not compute lighting.
+All images are hashed against execution provenance. The dense reference shares the same production
+transport/card cache and therefore does **not** independently validate those approximations.
+The whole-image maximum did not improve: isolated edge/contact errors remain (maximum 47), including
+reconstruction bias near sharp indirect-visibility changes. Do not advertise the output as artifact-free.
+Static sampling does not establish continuous-camera temporal stability. GPU frame time is unmeasured.
+
+Existing ArtifactBaseline, ArtifactAfter and complete Regression jobs all pass. Regression includes
+actual descriptor-indexed material/texture sampling, textured card bounce, static convergence, instance
+movement and history reset, geometry/material changes, reflections, thin/solid transmission, Beer
+attenuation, resize, shipping-resolution card seams, and synchronization/resource destruction validation.
+Vulkan validation reports **zero errors**. No existing threshold was relaxed.
+
+Restricted analytical/artifact metrics also improve: matte symmetry RMS 4.23736 → 0.637561,
+single-bounce reference RMS 2.67571 → 0.543786, subdivision RMS 2.76445 → 0.58333.
+Camera-shadow RMS and zero-specular reflection delta remain zero. These narrower checks supplement,
+not replace, the independent scene images.
+
+Main deliverable: `VisualProof/SdfScene/BandingComparison.png` (inspected and opened in the side viewer).
+`BandingAssessment.json` retains every measured value, including the worse maximum. Raw captures and
+execution/SPIR-V provenance are under `BandingAfter/<case>`. No image denoising, resizing, retouching or
+exposure manipulation was performed after capture.
+
+For the proposed raster-probe dynamic path, static and dynamic visibility must be composed in the **same**
+probe captures, not added as two independent ambient terms. Reuse static geometry/depth captures where
+valid, restore them before drawing each new dynamic pose, and refresh lighting when dynamic shadows or
+bounce illumination change. This prevents stale moving-object depth and double-counted static lighting.
+The probes are a lighting representation, not substitute low-polygon meshes. The proposal remains
+unimplemented; supporting actual deformed vertex streams and budgeting probe updates is a separate task.
+
+Native Project Zero editor/stack checks, browser checks and Drive checks passed in the same workflow.
+At evidence checkpoint time the full Windows host/project packaging job and SolidArc checks are still
+running. This entry does not claim those entire jobs passed; consult the linked workflow for later status.
+The post-execution edits only add the trailing-member offset assertion, source-header/indentation cleanup,
+the independent readback assessor and documentation; transport/lighting equations remain those executed.

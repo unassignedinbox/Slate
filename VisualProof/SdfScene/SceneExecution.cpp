@@ -200,7 +200,7 @@ int main(int Count,char** Arguments)
         Initialization.Geometry=&Geometry; Initialization.SpirvDirectory=Arguments[1];
         Initialization.CardResolution=4; Initialization.VolumeResolution=32; Initialization.ClipmapCellSize=.15f;
         Initialization.ImageWidth=Output.Width; Initialization.ImageHeight=Output.Height;
-            Initialization.OutputImageView=Output.View; Initialization.SurfaceImageView=Position.View; Initialization.NormalImageView=Normal.View;
+        Initialization.OutputImageView=Output.View; Initialization.SurfaceImageView=Position.View; Initialization.NormalImageView=Normal.View;
         Initialization.TriangleBuffer=Triangles.Buffer; Initialization.MaterialBuffer=MaterialBuffer.Buffer;
         Initialization.InstanceBuffer=InstanceBuffer.Buffer; Initialization.SlabBuffer=SlabBuffer.Buffer;
         Initialization.VertexBuffer=VertexBuffer.Buffer; Initialization.IndexBuffer=IndexBuffer.Buffer;
