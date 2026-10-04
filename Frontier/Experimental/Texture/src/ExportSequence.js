@@ -159,12 +159,13 @@ export const EmitTextureSet = async (Integrator, Project, PresetIdentifier, Repo
     return { Count: Images.length, Preset: Preset.Label, Size: Written };
 };
 
-// A .pigment document is the whole session in one file: the project record, the camera pose and the branching timeline.
+// A .pigment document is the whole session in one file: the project record, the camera pose, the branching timeline —
+// and, since version 2, the paint itself. Sheets come last so the readable half of the file is still the first screenful.
 export const DocumentFormat = "pigment";
-export const DocumentVersion = 1;
+export const DocumentVersion = 2;
 export const DocumentExtension = ".pigment";
 
-export const ComposeDocument = (Project, Camera, Timeline = null) => ({
+export const ComposeDocument = (Project, Camera, Timeline = null, Sheets = null) => ({
     Format: DocumentFormat,
     Version: DocumentVersion,
     Generator: "Frontier Texture 0.1",
@@ -172,22 +173,25 @@ export const ComposeDocument = (Project, Camera, Timeline = null) => ({
     Project,
     Camera,
     Timeline,
+    Sheets: Sheets && Sheets.length ? Sheets : [],
 });
 
-export const EmitProject = (Project, Camera, Timeline = null) =>
+export const EmitProject = (Project, Camera, Timeline = null, Sheets = null) =>
 {
-    const Record = ComposeDocument(Project, Camera, Timeline);
+    const Record = ComposeDocument(Project, Camera, Timeline, Sheets);
     Download(new Blob([JSON.stringify(Record, null, 4)], { type: "application/json" }), `${Slug(Project.Name)}${DocumentExtension}`);
     return Record;
 };
 
-// Reading accepts both the .pigment document and the flat project record earlier builds wrote.
+// Reading accepts the .pigment document of either version, and the flat project record earlier builds wrote. A version 1
+// file simply has no sheets, which is indistinguishable from a version 2 document nobody painted in.
 export const ReadDocument = (Text) =>
 {
     const Parsed = JSON.parse(Text);
+    const Sheets = Array.isArray(Parsed?.Sheets) ? Parsed.Sheets : [];
     if (Parsed && Parsed.Format === DocumentFormat && Parsed.Project)
-        return { Project: Parsed.Project, Camera: Parsed.Camera || null, Timeline: Parsed.Timeline || null };
-    return { Project: Parsed, Camera: Parsed?.Camera || null, Timeline: null };
+        return { Project: Parsed.Project, Camera: Parsed.Camera || null, Timeline: Parsed.Timeline || null, Sheets };
+    return { Project: Parsed, Camera: Parsed?.Camera || null, Timeline: null, Sheets };
 };
 
 export const ExportSlotLabels = ExportSlots;

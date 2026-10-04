@@ -28,6 +28,7 @@ import { SliderRow } from "./ControlSpecification.js";
 import { RevisionQueue } from "./RevisionQueue.js";
 import { DocumentSequence } from "./DocumentSequence.js";
 import { EmitTextureSet, EmitProject, ReadDocument, DocumentExtension, ExportSizes } from "./ExportSequence.js";
+import { CollectSheets, ApplySheets, SheetTally, SheetAllowance } from "./SheetCodec.js";
 import { TimelineSequence, EventByKind, EventClock, PreviewLimit } from "./TimelineSequence.js";
 import {
     ChannelSpecification,
@@ -4729,12 +4730,37 @@ export class TexturePanel
         this.RenderTimeline();
     }
 
-    SaveDocument()
+    // A document carries its paint. Every layer image the device is holding is read back, encoded as a PNG and written
+    // into the file beside the record that describes it, so reopening a project returns the strokes and not merely the
+    // recipe that framed them. Blank sheets are passed over and the whole set is budgeted, because a .pigment file is
+    // still something a browser has to hold in one string.
+    async SaveDocument()
     {
-        EmitProject(this.Project, this.Camera.Serialise(), this.Timeline.Serialise());
-        this.Chronicle("export", "Document written", `${this.Project.Name}${DocumentExtension}`);
+        if (this.Saving) return;
+        this.Saving = true;
+        this.SetStatus("Reading the paint back", "busy");
+        let Written = { Sheets: [], Bytes: 0, Skipped: 0 };
+        try
+        {
+            Written = await CollectSheets(this.Integrator, this.Layers, { Report: (Text) => this.SetStatus(Text, "busy") });
+        }
+        catch (Refusal)
+        {
+            this.Notify(`The paint could not be read back: ${Refusal.message}. Writing the record alone.`);
+        }
+        const Tally = SheetTally(Written.Sheets);
+        const Detail = Tally.Count
+            ? `${Tally.Count} sheet${Tally.Count === 1 ? "" : "s"} · ${Tally.Megabytes.toFixed(1)} MB`
+            : "no painted sheets";
+        EmitProject(this.Project, this.Camera.Serialise(), this.Timeline.Serialise(), Written.Sheets);
+        this.Chronicle("export", "Document written", `${this.Project.Name}${DocumentExtension} · ${Detail}`);
         this.MarkClean();
-        this.Notify(`${this.Project.Name}${DocumentExtension} written.`);
+        this.SetStatus("Ready", "ready");
+        this.Saving = false;
+        this.Notify(
+            `${this.Project.Name}${DocumentExtension} written · ${Detail}` +
+                (Written.Skipped ? ` · ${Written.Skipped} left out, past the ${(SheetAllowance / 1024 / 1024) | 0} MB allowance` : ""),
+        );
     }
 
     MaterialInspector()
@@ -4993,14 +5019,28 @@ export class TexturePanel
             if (Document_.Camera) this.Camera.Restitute(Document_.Camera);
             this.RebuildSurface(true);
             this.InvalidateDecals();
+            // The paint the file carried goes back onto the layers it came off, at whatever resolution those layers now
+            // ask for. A version 1 document has none, and says so by being silent rather than by failing.
+            let Paint = { Restored: 0, Refused: 0 };
+            if (Document_.Sheets?.length)
+            {
+                this.SetStatus("Laying the paint back down", "busy");
+                Paint = await ApplySheets(this.Integrator, this.Layers, Document_.Sheets);
+                this.Recomposite();
+                this.SetStatus("Ready", "ready");
+            }
             if (!this.Timeline.Restitute(Document_.Timeline))
                 this.Timeline.Clear({ Kind: "document", Title: "Document opened", Detail: File.name });
             else this.Chronicle("document", "Document opened", File.name);
             this.RenderStack();
             this.RenderObjects();
             this.RenderInspector();
-                this.Notify(
-                `${File.name} opened · ${Record.Layers.length} layers · ${this.Timeline.Branches.length} branch${this.Timeline.Branches.length === 1 ? "" : "es"}.`,
+            const Unread = Paint.Refused ? `, ${Paint.Refused} unreadable` : "";
+            const Paintwork = Paint.Restored
+                ? ` · ${Paint.Restored} painted sheet${Paint.Restored === 1 ? "" : "s"}${Unread}`
+                : "";
+            this.Notify(
+                `${File.name} opened · ${Record.Layers.length} layers · ${this.Timeline.Branches.length} branch${this.Timeline.Branches.length === 1 ? "" : "es"}${Paintwork}.`,
             );
         }
         catch (Error)

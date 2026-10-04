@@ -10,7 +10,7 @@ cd Frontier/Experimental/Texture
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
-npm test           # 92 unit tests, no browser required
+npm test           # 97 unit tests, no browser required
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -262,9 +262,20 @@ long session costs nothing to remember. The head follows undo and redo, and even
 several versions of itself; the pills at the top switch between them, `+` forks on the spot, and up to eight branches
 live side by side.
 
-**The `.pigment` document.** Save (<kbd>Ctrl S</kbd>, the timeline's Save button, or the export dialog) writes one JSON
-document holding the project record, the camera pose and the whole branching timeline. Opening one restores all three,
-and the flat `.texture.json` files earlier builds wrote still open.
+**The `.pigment` document carries the paint.** Save (<kbd>Ctrl S</kbd>, the timeline's Save button, or the export
+dialog) writes one JSON document holding the project record, the camera pose, the whole branching timeline — and every
+painted sheet in the stack. Each layer's coverage and each painted mask is read back off the GPU, encoded as a PNG and
+written into the file beside the record that describes it, so opening a document returns the strokes and not merely the
+recipe that framed them. Blank sheets cost nothing, because a sheet nothing has been painted into is left out; a sparse
+1024² stroke layer is four megabytes on the GPU and about sixty kilobytes in the file. A sheet lands back on its layer
+at whatever resolution that layer now asks for, resampled if the two disagree, and one unreadable sheet is counted in
+the toast rather than taking the document down with it.
+
+The encoder is this editor's own, in `SheetCodec.js`: a complete PNG writer and reader over the platform's
+`CompressionStream`, with no canvas in the middle — a canvas round trip would premultiply what is already premultiplied
+and lose the faintest coverage a brush can lay down. The consequence is that the same code runs under node, so the
+round trip is asserted by the test suite rather than hoped for. Version 1 documents, and the flat `.texture.json` files
+earlier builds wrote, still open; they simply arrive with no paint.
 
 **Flatten and export, at the foot of the stack.** The two buttons under the layer stack are where a surface leaves the
 editor. **Flatten** composites the whole stack into one painted layer and opens the export dialogue on top of it; it is
@@ -325,6 +336,7 @@ left button. Middle-drag and <kbd>Space</kbd>-drag pan; a click that never becom
 | `TimelineSequence.js` | Typed timeline events, the head that steps with undo, and the branches a document forks into. |
 | `DocumentSequence.js` | Up to four resident documents and their tabs. |
 | `ExportSequence.js` | Slot resolve, PNG emission, OpenPBR descriptor. |
+| `SheetCodec.js` | Painted sheets ⇄ PNG text: the writer, the reader, the blank test and the resample a saved document needs. |
 | `*.mjs` | Node test files — surface maths, stack semantics, device behaviour and context recovery, against a recording WebGL2 stand-in. |
 
 `TexturePanel.css` holds the editor-specific rules; `ThemeSpecification.css` is the shared Frontier chrome and should stay
@@ -334,6 +346,8 @@ in step with the fluid app's copy of the same file.
 
 ## Limits
 
-Painted coverage is a GPU image: projects store the layer record, materials, decals and camera, not the pixels. Resolution
-changes resample painted layers rather than dropping them, but a project reopened in a new session starts from its
-generators and materials. Undo is byte-budgeted, so very long paint sessions retire their oldest image snapshots first.
+A saved document carries its painted sheets, but the file is a single JSON string the browser has to hold whole, so the
+set is budgeted at 96 MB of encoded paint; past that the remaining sheets are left out and the toast says how many.
+Undo is byte-budgeted too, and very long paint sessions retire their oldest image snapshots first. Reading a stack of
+large sheets back off the GPU is arithmetic, not magic: a 2048² sheet is about a third of a second to encode, and the
+status line names each one as it goes.

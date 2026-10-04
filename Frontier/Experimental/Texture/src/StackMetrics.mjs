@@ -22,6 +22,18 @@ import {
 } from "./TimelineSequence.js";
 import { ComposeDocument, ReadDocument, DocumentFormat, DocumentExtension, FlipGreen, ExportSizes } from "./ExportSequence.js";
 import {
+    EncodePng,
+    DecodePng,
+    EncodeSheet,
+    DecodeSheet,
+    BytesFromText,
+    BlankSheet,
+    ResampleSheet,
+    CollectSheets,
+    ApplySheets,
+    SheetTally,
+} from "./SheetCodec.js";
+import {
     InstrumentFamilies,
     InstrumentByKey,
     InstrumentArtwork,
@@ -886,6 +898,191 @@ test("a .pigment document carries the project, the camera and the timeline", () 
     assert.equal(Legacy.Project.Name, Project.Name);
     assert.equal(Legacy.Timeline, null);
     assert.equal(Legacy.Camera.Distance, 5);
+    assert.deepEqual(Legacy.Sheets, [], "a file with no sheets must read as no paint, never as undefined");
+});
+
+//--------------------------------------------------------------------------------------------------------------------------
+// The paint itself. A sheet leaves the GPU as premultiplied RGBA8 and has to come back byte for byte, because the
+// faintest coverage a brush can lay down is one in two hundred and fifty-five and a lossy round trip would erase it.
+//--------------------------------------------------------------------------------------------------------------------------
+const PaintedSheet = (Size, Seed = 7) =>
+{
+    const Pixels = new Uint8Array(Size * Size * 4);
+    let State = Seed;
+    for (let Row = 0; Row < Size; Row += 1)
+    {
+        for (let Column = 0; Column < Size; Column += 1)
+        {
+            State = (State * 1664525 + 1013904223) >>> 0;
+            const Fall = Math.hypot(Row - Size * 0.5, Column - Size * 0.45) / (Size * 0.42);
+            const Alpha = Math.max(0, Math.min(255, Math.round((1 - Fall) * 255 + ((State >>> 24) % 9) - 4)));
+            const At = (Row * Size + Column) * 4;
+            // Premultiplied, so every colour byte stays inside the alpha it was laid down with.
+            Pixels[At] = Math.round(Alpha * 0.82);
+            Pixels[At + 1] = Math.round(Alpha * 0.31);
+            Pixels[At + 2] = Math.round(Alpha * 0.17);
+            Pixels[At + 3] = Alpha;
+        }
+    }
+    return Pixels;
+};
+
+test("a painted sheet survives the PNG round trip byte for byte", async () =>
+{
+    const Size = 48;
+    const Pixels = PaintedSheet(Size);
+    const Bytes = await EncodePng(Pixels, Size, Size);
+    assert.deepEqual(
+        Array.from(Bytes.subarray(0, 8)),
+        [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+        "the file must open with the PNG signature",
+    );
+    assert.equal(String.fromCharCode(...Bytes.subarray(12, 16)), "IHDR");
+    assert.equal(String.fromCharCode(...Bytes.subarray(Bytes.length - 8, Bytes.length - 4)), "IEND");
+
+    const Read = await DecodePng(Bytes);
+    assert.equal(Read.Width, Size);
+    assert.equal(Read.Height, Size);
+    assert.deepEqual(Array.from(Read.Pixels), Array.from(Pixels), "the decoder must return exactly what was encoded");
+
+    // 🔴 Every filter the writer may choose has to be understood by the reader, so a sheet is built that forces each one
+    //    in turn: a flat row, a horizontal ramp, a vertical ramp and a diagonal.
+    const Mixed = new Uint8Array(Size * Size * 4);
+    for (let Row = 0; Row < Size; Row += 1)
+        for (let Column = 0; Column < Size; Column += 1)
+        {
+            const At = (Row * Size + Column) * 4;
+            Mixed[At] = Row % 4 === 1 ? Column * 5 : 0;
+            Mixed[At + 1] = Row % 4 === 2 ? Row * 5 : 0;
+            Mixed[At + 2] = Row % 4 === 3 ? (Row + Column) * 2 : 0;
+            Mixed[At + 3] = 255;
+        }
+    const Again = await DecodePng(await EncodePng(Mixed, Size, Size));
+    assert.deepEqual(Array.from(Again.Pixels), Array.from(Mixed), "a sheet exercising all four filters must round trip");
+});
+
+test("a sheet encodes to text the right way up and decodes back the way the device wants it", async () =>
+{
+    const Size = 16;
+    const Pixels = new Uint8Array(Size * Size * 4);
+    // One opaque texel on the bottom row as readPixels returns it, which is the top row of the written image.
+    Pixels[3] = 255;
+    const Text = await EncodeSheet({ Pixels, Resolution: Size });
+    assert.equal(typeof Text, "string");
+    assert.ok(/^[A-Za-z0-9+/=]+$/.test(Text), "a sheet must be plain base64 so JSON can hold it");
+
+    const Upright = await DecodePng(BytesFromText(Text));
+    assert.equal(Upright.Pixels[3], 0, "the written image must not still be upside down");
+    assert.equal(Upright.Pixels[(Size - 1) * Size * 4 + 3], 255, "the marked texel belongs on the written image's last row");
+
+    const Back = await DecodeSheet(Text);
+    assert.equal(Back.Resolution, Size);
+    assert.equal(Back.Pixels[3], 255, "decoding must hand the device back the orientation it read out");
+    assert.ok(Back.Pixels instanceof Uint8Array, "texSubImage2D is given a Uint8Array, not a clamped one");
+});
+
+test("blank sheets are passed over, painted ones are collected, and the allowance is honoured", async () =>
+{
+    const Painted = { Pixels: PaintedSheet(24), Resolution: 24 };
+    const Blank = { Pixels: new Uint8Array(24 * 24 * 4), Resolution: 24 };
+    assert.equal(BlankSheet(Blank.Pixels), true);
+    assert.equal(BlankSheet(Painted.Pixels), false);
+
+    const Layers = [
+        { Identifier: "layer-a", Name: "Base" },
+        { Identifier: "layer-b", Name: "Scratches" },
+        { Identifier: "layer-c", Name: "Untouched" },
+    ];
+    const Held = new Map([
+        ["layer-a:coverage", Painted],
+        ["layer-a:mask", Blank],
+        ["layer-b:coverage", Painted],
+        ["layer-b:mask", Painted],
+    ]);
+    const Device = {
+        SnapshotLayer: (Layer, Target) => Held.get(`${Layer.Identifier}:${Target}`) || null,
+        LayerResolution: () => 24,
+        RestoreLayer: (Layer, Target, Snapshot) => Restored.push({ Layer: Layer.Identifier, Target, Snapshot }),
+    };
+    const Restored = [];
+
+    const Said = [];
+    const Written = await CollectSheets(Device, Layers, { Report: (Text) => Said.push(Text) });
+    assert.equal(Written.Sheets.length, 3, "two coverages and one mask hold paint; the blank mask does not");
+    assert.deepEqual(
+        Written.Sheets.map((Sheet) => `${Sheet.Layer}:${Sheet.Target}`),
+        ["layer-a:coverage", "layer-b:coverage", "layer-b:mask"],
+    );
+    assert.equal(Written.Skipped, 0);
+    assert.ok(Written.Bytes > 0 && Written.Bytes === SheetTally(Written.Sheets).Bytes);
+    assert.equal(Said.length, 3, "the saver names every sheet it reads");
+
+    // A budget smaller than the second sheet keeps the first and says how many it left behind.
+    const Tight = await CollectSheets(Device, Layers, { Allowance: Written.Sheets[0].Image.length + 1 });
+    assert.equal(Tight.Sheets.length, 1);
+    assert.equal(Tight.Skipped, 2, "the sheets that would not fit are counted, not dropped in silence");
+
+    // And a device that is not running yields nothing rather than throwing.
+    assert.deepEqual(await CollectSheets(null, Layers), { Sheets: [], Bytes: 0, Skipped: 0 });
+
+    const Result = await ApplySheets(Device, Layers, Written.Sheets);
+    assert.deepEqual(Result, { Restored: 3, Refused: 0 });
+    assert.deepEqual(
+        Restored.map((Entry) => `${Entry.Layer}:${Entry.Target}`),
+        ["layer-a:coverage", "layer-b:coverage", "layer-b:mask"],
+    );
+    assert.deepEqual(
+        Array.from(Restored[0].Snapshot.Pixels),
+        Array.from(Painted.Pixels),
+        "what the device is handed back must be what it gave up",
+    );
+
+    // Nonsense in the file is refused per sheet, and a sheet naming a layer that is gone is simply not placed.
+    const Hostile = [
+        { Layer: "layer-a", Target: "coverage", Image: "not base64 at all" },
+        { Layer: "layer-z", Target: "coverage", Image: Written.Sheets[0].Image },
+        { Layer: "layer-a", Target: "decal", Image: Written.Sheets[0].Image },
+    ];
+    assert.deepEqual(await ApplySheets(Device, Layers, Hostile), { Restored: 0, Refused: 1 });
+});
+
+test("a sheet that lands on a layer of another resolution is resampled onto it", async () =>
+{
+    const Pixels = PaintedSheet(32);
+    const Half = ResampleSheet(Pixels, 32, 16);
+    assert.equal(Half.length, 16 * 16 * 4);
+    assert.ok(Half[(8 * 16 + 7) * 4 + 3] > 200, "the middle of the mark stays covered when it is halved");
+    assert.equal(ResampleSheet(Pixels, 32, 32), Pixels, "a sheet already the right size is passed straight through");
+
+    const Layers = [{ Identifier: "layer-a", Name: "Base" }];
+    const Landed = [];
+    const Device = {
+        SnapshotLayer: () => null,
+        LayerResolution: () => 64,
+        RestoreLayer: (Layer, Target, Snapshot) => Landed.push(Snapshot),
+    };
+    const Sheet = { Layer: "layer-a", Target: "coverage", Resolution: 32, Image: await EncodeSheet({ Pixels, Resolution: 32 }) };
+    await ApplySheets(Device, Layers, [Sheet]);
+    assert.equal(Landed[0].Resolution, 64, "the device is handed the size it asked for, not the size the file held");
+    assert.equal(Landed[0].Pixels.length, 64 * 64 * 4);
+});
+
+test("a .pigment document carries the paint beside the record", async () =>
+{
+    const Project = DefaultProject();
+    const Image = await EncodeSheet({ Pixels: PaintedSheet(8), Resolution: 8 });
+    const Sheets = [{ Layer: "layer-a", Target: "coverage", Resolution: 8, Image }];
+    const Written = ComposeDocument(Project, { Distance: 3 }, null, Sheets);
+    assert.equal(Written.Version, 2, "a document carrying paint is a version 2 document");
+    assert.equal(Written.Sheets.length, 1);
+
+    const Read = ReadDocument(JSON.stringify(Written));
+    assert.equal(Read.Sheets.length, 1);
+    assert.equal(Read.Sheets[0].Image, Sheets[0].Image, "JSON must hand the sheet back unchanged");
+    const Back = await DecodeSheet(Read.Sheets[0].Image);
+    assert.deepEqual(Array.from(Back.Pixels), Array.from(PaintedSheet(8)), "a document round trip must not touch a texel");
+
+    assert.deepEqual(ComposeDocument(Project, null).Sheets, [], "a document saved with no paint still names the field");
 });
 
 test("a layer can be scoped to one object", () =>
