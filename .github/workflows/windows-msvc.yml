@@ -84,6 +84,31 @@ jobs:
             _AgentScratch/build/msvc-solidarc/proofs/
             _AgentScratch/build/msvc-solidarc/*.exe
 
+  drive-playback:
+    name: Drive MSVC playback and outliner checks
+    runs-on: windows-2022
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: Frontier
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Exercise native project and scene callbacks
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $VsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $VisualStudio = & $VsWhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          Import-Module "$VisualStudio\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
+          Enter-VsDevShell -VsInstallPath $VisualStudio -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'
+          python Tools/Bootstrap.py --package vulkan-headers --package cgltf --package stb --package ufbx
+          if ($LASTEXITCODE -ne 0) { throw 'Drive check dependencies failed' }
+          python Tools/Tests/CheckDrivePlayback.py
+          if ($LASTEXITCODE -ne 0) { throw 'Drive playback or scene placement checks failed' }
+
   frontier:
     needs: sdf-execution
     # Retain failure diagnostics, but do not launch another build from a superseded run.

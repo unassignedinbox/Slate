@@ -61,6 +61,7 @@ assert Scene.read_bytes() == Older, "Existing scenes, even older generated copie
 Scene.write_bytes(Original)
 print("PASS opening filename matches authored revision; ensure preserves both current and existing older scenes")
 Roster = [Source for Source in Content if not Source.endswith("DriveContentHost.cpp")]
-Link("DrivePlacementChecks", [*Roster, "Engine/Host/EditorFeedSequence.cpp",
+Link("DrivePlacementChecks", [*Roster, "Engine/GeometricRaster/CameraProjection.cpp",
+                              "Engine/Host/EditorFeedSequence.cpp",
                               "Projects/Project-Drive/Source/DrivePlacementChecks.cpp"], [Scene])
 print("PASS project playback and imported scene/roster checks; no window or GPU was used.")
