@@ -1,0 +1,8 @@
+Vulkan execution device: llvmpipe (LLVM 20.1.2, 256 bits)
+CPU JIT flags: nopt
+SCENE case=Far scale=1 offset=0,0,0 facets=292 instances=10
+CAPTURE Scene-GI frames=32
+CAPTURE Scene-GI-off frames=1
+METRIC gi_on_off_rms 16.3399
+CAPTURE  frames=1
+PASS production CPU Vulkan scene execution; invariance assessed separately, not assumed
