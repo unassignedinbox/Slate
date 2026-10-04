@@ -198,6 +198,11 @@ int RunEditorConversion(const char* Destination)
         Celestial[0].BuildSheet(CelestialEntity::Atmosphere, Sheets[0]);
         Require(Halves.size() == 256u * 512u * 4u, "real texture bake stays heap backed");
         Require(Sheets[0].SkyImage.Pixels == Celestial[0].SkyPreviewHalves.data(), "inspector borrows actual bake pixels");
+        Require(Celestial[0].SaveSkyDome((Output / "Atmosphere.environment").string(), Halves), "real baked environment export");
+        std::vector<uint16_t> Reloaded;
+        Require(Celestial[0].LoadSkyDome((Output / "Atmosphere.environment").string(), Reloaded), "real baked environment reload");
+        Require(Reloaded == Halves, "baked environment export/reload preserves every HDR texel");
+        Celestial[0].BuildSheet(CelestialEntity::Atmosphere, Sheets[0]);
         Input.DisplaySize = {900, 3700};
         for (unsigned Repeat = 0; Repeat < 3; ++Repeat) Tick();
         Capture(Output, "AtmosphereBaked.png");

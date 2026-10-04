@@ -35,6 +35,8 @@ add_executable(FrontierNativeProof
     Engine/DisplayPresentation/GlyphSpace.cpp
     Engine/DisplayPresentation/FontCodec.cpp
     Engine/DisplayPresentation/MaterialInspector.cpp
+    Engine/ContentInterchange/SpaceCodec.cpp
+    Engine/ContentInterchange/SpaceExport.cpp
     Engine/ContentInterchange/AssetResolution.cpp
     Engine/ContentInterchange/MaterialIndex.cpp
     Engine/DeviceExchange/InputExchange.cpp
