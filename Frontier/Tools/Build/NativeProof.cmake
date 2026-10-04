@@ -10,7 +10,6 @@ add_executable(FrontierNativeProof
     "${CMAKE_SOURCE_DIR}/../VisualProof/ProjectZeroNative/EditorConversionProof.cpp"
     Engine/DisplayPresentation/DiagnosticInspector.cpp
     Engine/DisplayPresentation/ShadingTableCodec.cpp
-    Engine/DeviceExchange/VisibilityExchange.cpp
     Engine/Host/RayTracingSolver.cpp
     Engine/Editor/EditorHost.cpp
     Engine/Editor/ControlPanel.cpp

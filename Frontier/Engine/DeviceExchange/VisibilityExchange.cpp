@@ -58,12 +58,6 @@ static_assert(sizeof(FrameConstantRecord) == 336u, "FrameConstantRecord must mat
 
 struct HiZPushRecord { uint32_t SourceExtent[2]; uint32_t TargetExtent[2]; uint32_t CopyLevelZero; };
 
-const char* DebugViewName(DebugViewCategory View) noexcept
-{
-    static const char* Names[] = { "Off", "Depth", "Visibility ID", "Motion Vectors", "Cluster ID", "HiZ (level 3)", "Albedo", "Normal", "Roughness", "Metalness", "Shading Normal", "Reservoir M", "Reservoir W", "Reservoir Age", "Patch Tiles", "Tiles + Wireframe" };
-    const uint32_t I = static_cast<uint32_t>(View);
-    return I < static_cast<uint32_t>(DebugViewCategory::Count) ? Names[I] : Names[0];
-}
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                    VULKAN RECORD

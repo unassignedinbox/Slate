@@ -60,7 +60,19 @@ enum class DebugViewCategory : uint32_t
     Count        = 16
 };
 
-[[nodiscard]] const char* DebugViewName(DebugViewCategory View) noexcept;
+// 📝 Labels belong to the telemetry protocol, not Vulkan device construction. This
+// keeps headless diagnostics from linking the entire device translation unit.
+[[nodiscard]] inline const char* DebugViewName(DebugViewCategory View) noexcept
+{
+    static constexpr const char* Names[] = {
+        "Off", "Depth", "Visibility ID", "Motion Vectors", "Cluster ID", "HiZ (level 3)",
+        "Albedo", "Normal", "Roughness", "Metalness", "Shading Normal", "Reservoir M",
+        "Reservoir W", "Reservoir Age", "Patch Tiles", "Tiles + Wireframe"
+    };
+    static_assert(sizeof(Names) / sizeof(Names[0]) == static_cast<uint32_t>(DebugViewCategory::Count));
+    const auto Index = static_cast<uint32_t>(View);
+    return Index < static_cast<uint32_t>(DebugViewCategory::Count) ? Names[Index] : Names[0];
+}
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                  FRAME CONFIGURATION
