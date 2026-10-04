@@ -129,10 +129,11 @@ def Main() -> None:
             VerifyImage(Author, False)
             # Export only missing content; malformed existing content must fail, not be silently replaced.
             subprocess.run([str(Author), "--ensure", str(OpeningScene)], check=True, timeout=180)
+            SceneRelative = str(Path(Specification["OpeningScene"])).replace("/", "\\")
             Preparation = (
-                f'if exist "%~dp0Projects\\{Folder}\\Content\\Scenes\\DriveCourse.gltf" goto LaunchFrontier\n'
+                f'if exist "%~dp0Projects\\{Folder}\\{SceneRelative}" goto LaunchFrontier\n'
                 f'"%~dp0Projects\\{Folder}\\Build\\DriveContentHost.exe" --ensure '
-                f'"%~dp0Projects\\{Folder}\\Content\\Scenes\\DriveCourse.gltf"\n'
+                f'"%~dp0Projects\\{Folder}\\{SceneRelative}"\n'
                 'if errorlevel 1 goto Finished\n:LaunchFrontier\n')
         VerifyScene(Target / SpecificationPath.name)
         if not OpeningScene.is_file() or OpeningScene.stat().st_size == 0:

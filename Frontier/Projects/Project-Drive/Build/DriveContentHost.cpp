@@ -27,7 +27,7 @@ int main(int ArgumentCount, char** Arguments)
         {
             std::filesystem::create_directories(SceneLocation.parent_path());
             Frontier::Drive::DriveSceneAuthor Author;
-            // 📝 The shared host currently imports a static opening scene, not wheel-instance simulation transforms.
+            // 📝 Export the settled opening presentation; Play later supplies separate live placement deltas.
             Author.Construct(true);
             std::string Refusal;
             if (!Author.Export(SceneLocation.string(), &Refusal))

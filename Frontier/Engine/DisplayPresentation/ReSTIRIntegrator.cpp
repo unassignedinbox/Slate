@@ -130,7 +130,7 @@ DispatchConfiguration ReSTIRIntegrator::BuildDispatch(
                                    | ((ActiveConfiguration.ReflectionMode & 3u) << DispatchFeatureReflectionShift)
                                    // The denoiser detail-guide id, packed into bits [12..14] (see DispatchGuideShift).
                                    //    Standard (0) leaves these bits clear = the pre-guide à-trous, bit-for-bit.
-                                   | ((static_cast<uint32_t>(ActiveConfiguration.RenderPath == 0u && ActiveConfiguration.DenoiseGuide) << DispatchGuideShift) & DispatchGuideMask);
+                                   | ((static_cast<uint32_t>(ActiveConfiguration.DenoiseGuide) << DispatchGuideShift) & DispatchGuideMask);
 
     // The power-proportional sun coin (0 = the kernel's legacy fixed 0.5); see AssignSunPickProbability.
     Dispatch.SunPickProbability    = SunPickProbability;

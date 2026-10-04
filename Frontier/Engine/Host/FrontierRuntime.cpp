@@ -1055,7 +1055,7 @@ int Frontier::RunFrontierRuntime(
             const char* PathName = RenderPath == 0u ? "raytraced ReSTIR kernel"
                                  : RenderPath == 1u ? (Surface.QueryDistanceFieldGIReady() ? "Distance Field GI"
                                                       : Surface.QuerySurfelGIReady() ? "Surfel GI (SDF unavailable)"
-                                                      : "GI compute fallback (SDF/Surfel unavailable)")
+                                                      : "raster fallback (SDF/Surfel unavailable)")
                                  :                    "plain visibility raster (no GI)";
             const char* ReflName = EffReflMode == Frontier::ReflectionModeCategory::Off ? "off"
                                  : EffReflMode == Frontier::ReflectionModeCategory::Sky ? "sky" : "raytraced";
@@ -1112,23 +1112,21 @@ int Frontier::RunFrontierRuntime(
             ShadowTierFrameValid = true;
             Surface.AssignShadowFrame(Shadow);
 
-            // State the active shadow path in the log so a run report never has to guess. The renderer is
-            //    dual-mode by design: GI ON = every shadow is a ReSTIR shadow ray traced in the kernel (the
-            //    R10 map stage does not record at all); GI OFF = rasterised shadow maps with the tier's filter.
+            // Shadow routing follows the selected render path, not the GI checkbox alone.
             {
                 char ShadowLine[320];
-                if (S.GlobalIllumination)
+                if (RenderPath == 0u)
                     std::snprintf(ShadowLine, sizeof(ShadowLine),
-                                  "Shadow path: ReSTIR ray-traced (GI on - shadow maps idle; inline shadow rays are "
-                                  "counted inside GpuReSTIRMs, so GpuShadowMs=0 is expected). Opaque rays use the "
-                                  "bounded closest-hit path and spatial winners are revalidated at the current pixel. "
-                                  "Tier stage if GI is switched off: %s @ %u px, %u taps.",
-                                  Shadow.Filter == Frontier::ShadowFilterCategory::Hard ? "Hard"
-                                : Shadow.Filter == Frontier::ShadowFilterCategory::Pcf  ? "PCF" : "PCSS",
-                                  Shadow.MapSide, Shadow.FilterTaps);
+                                  "Shadow path: ReSTIR mesh rays (%s); shadow maps idle. Inline shadow rays are "
+                                  "included in GpuReSTIRMs; GpuShadowMs=0 is expected.",
+                                  Frontier::RayTracingCapabilitySet::TierName(Surface.QueryRayTracingTier()));
+                else if (RenderPath == 1u && Surface.QueryDistanceFieldGIReady())
+                    std::snprintf(ShadowLine, sizeof(ShadowLine),
+                                  "Shadow path: Distance Field GI direct-light visibility; mesh reflections %s.",
+                                  EffReflMode == Frontier::ReflectionModeCategory::Raytraced ? "on" : "off");
                 else
                     std::snprintf(ShadowLine, sizeof(ShadowLine),
-                                  "Shadow path: rasterised maps (GI off) - %s @ %u px, %u taps.",
+                                  "Shadow path: rasterised maps - %s @ %u px, %u taps.",
                                   Shadow.Filter == Frontier::ShadowFilterCategory::Hard ? "Hard"
                                 : Shadow.Filter == Frontier::ShadowFilterCategory::Pcf  ? "PCF" : "PCSS",
                                   Shadow.MapSide, Shadow.FilterTaps);

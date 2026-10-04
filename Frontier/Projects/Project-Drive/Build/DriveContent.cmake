@@ -20,9 +20,16 @@ target_compile_definitions(DriveContentHost PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN
 find_package(Threads REQUIRED)
 target_link_libraries(DriveContentHost PRIVATE Threads::Threads)
 set_target_properties(DriveContentHost PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${DriveContentRoot}/Projects/Project-Drive/Build")
+file(READ "${DriveContentRoot}/Projects/Project-Drive/ProjectDrive.frontier" DriveSpecification)
+string(REGEX MATCH "OpeningScene[ \t]*=[ \t]*\"([^\"]+)\"" DriveOpeningMatch "${DriveSpecification}")
+set(DriveOpeningScene "${DriveContentRoot}/Projects/Project-Drive/${CMAKE_MATCH_1}")
+if(NOT DriveOpeningMatch)
+    message(FATAL_ERROR "ProjectDrive.frontier does not name an OpeningScene")
+endif()
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${DriveContentRoot}/Projects/Project-Drive/ProjectDrive.frontier")
 # Always check content, including when the scene was deleted without a source change. Never overwrite user content.
 add_custom_target(DriveOpeningScene
-    COMMAND $<TARGET_FILE:DriveContentHost> --ensure "${DriveContentRoot}/Projects/Project-Drive/Content/Scenes/DriveCourse.gltf"
+    COMMAND $<TARGET_FILE:DriveContentHost> --ensure "${DriveOpeningScene}"
     DEPENDS DriveContentHost
     VERBATIM)
 if(TARGET ProjectDrive)

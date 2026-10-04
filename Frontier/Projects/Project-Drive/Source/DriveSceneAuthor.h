@@ -35,7 +35,8 @@
 namespace Frontier {
 namespace Drive {
 
-// Bump whenever Construct() changes what the level contains, so an older DriveCourse.gltf is regenerated.
+// Advance this stamp and the versioned OpeningScene filename together when Construct() changes the scene.
+// Existing scenes are never overwritten by a build, including authored copies of an earlier opening.
 inline constexpr uint32_t kDriveSceneRevision = 4u;   // 4: ground-referenced opening body and wheel placement
 
 // True when the file at Path was written by this revision (cheap header scan). Missing/older ⇒ false ⇒ re-export.

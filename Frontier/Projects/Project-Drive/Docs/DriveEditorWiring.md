@@ -47,3 +47,6 @@ wheel placements move all their raster instances together, independent of glTF p
 
 Run `python Tools/Tests/CheckDrivePlayback.py` from `Frontier/` for window-free callback, placement and roster checks.
 Both the host and project DLL must be rebuilt together when the interchange revision changes.
+
+The generated opening is now `DriveCourse.r4.gltf`. Build and package preparation read its filename from
+`ProjectDrive.frontier`; older `DriveCourse.gltf` files are left untouched rather than overwriting possible user edits.
