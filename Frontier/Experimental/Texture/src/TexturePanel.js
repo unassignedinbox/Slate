@@ -251,6 +251,7 @@ class TexturePanel
     {
         if (this.Commenced) return;
         this.Commenced = true;
+        this.AdoptSoftwareLimits();
         this.Documents = new DocumentSequence(this, Icon);
         this.BindHeader();
         this.BindStack();
@@ -2233,6 +2234,24 @@ class TexturePanel
     }
 
     //----------------------------------------------------------------------------------------------------------------------
+    // Running on a CPU rasteriser is a legitimate way to use this editor on a machine whose GPU the browser will not touch.
+    // It is perhaps thirty times slower, so meet it halfway: author at 512 rather than 1024 and draw one pixel per pixel.
+    //----------------------------------------------------------------------------------------------------------------------
+    AdoptSoftwareLimits()
+    {
+        if (!this.Integrator.Software) return;
+        this.Project.Resolution = Math.min(this.Project.Resolution, 512);
+        this.Integrator.Resolution = this.Project.Resolution;
+        setTimeout(
+            () =>
+                this.Notify(
+                    `Software renderer in use (${this.Integrator.Renderer || "CPU"}) — authoring at ${this.Project.Resolution}² to keep it responsive.`,
+                ),
+            600,
+        );
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
     // Asking WebGPU for an adapter settles the only question the WebGL error leaves open: whether the machine has no usable
     // GPU, or has one the browser is simply refusing to lend to WebGL. The answer arrives a tick later, so it is folded in
     // once it does.
@@ -2247,12 +2266,19 @@ class TexturePanel
             const Detail = Select("#gpu-error-detail");
             Detail.textContent = [...Lines, Probe.Modern ? `WebGPU adapter: ${Probe.Adapter}` : "WebGPU: no adapter"].join(" · ");
             Detail.hidden = false;
-            if (!Probe.Modern) return;
             const Advice = Select("#gpu-error-advice");
             const First = document.createElement("li");
-            First.textContent =
-                `The GPU itself is fine — WebGPU sees ${Probe.Adapter} on this machine. WebGL alone is being refused, so this ` +
-                "is browser configuration rather than hardware: chrome://flags/#ignore-gpu-blocklist and chrome://gpu are the places to look.";
+            if (Probe.Modern)
+                First.textContent =
+                    `The GPU itself is fine — WebGPU sees ${Probe.Adapter} on this machine. WebGL alone is being refused, so this ` +
+                    "is browser configuration rather than hardware: chrome://flags/#ignore-gpu-blocklist and chrome://gpu are the places to look.";
+            else
+                First.innerHTML =
+                    "Neither WebGL nor WebGPU can see a GPU here, so the browser has been cut off from it entirely — a blocklisted " +
+                    "or broken display driver. To run on the GPU, update the display driver and set " +
+                    "chrome://flags/#ignore-gpu-blocklist to Enabled. To run <em>now</em> on the processor instead, close every " +
+                    "window and start the browser with <code>--enable-unsafe-swiftshader</code> — this editor detects that and " +
+                    "authors at 512² so it stays usable.";
             Advice.prepend(First);
         });
     }
@@ -2369,7 +2395,8 @@ class TexturePanel
     Resize()
     {
         const Viewport = Select("#viewport");
-        const Ratio = Math.min(window.devicePixelRatio || 1, 2);
+        // A CPU rasteriser pays for every pixel in software, so stop asking it for retina ones.
+        const Ratio = this.Integrator.Software ? Math.min(window.devicePixelRatio || 1, 1) : Math.min(window.devicePixelRatio || 1, 2);
         const Bounds = Viewport.getBoundingClientRect();
         this.Integrator.Resize(Bounds.width, Bounds.height, Ratio);
         this.Camera.Aspect = Math.max(Bounds.width / Math.max(Bounds.height, 1), 0.1);

@@ -17,6 +17,7 @@ import {
     DeviceAttributeSets,
     ProbeAcceleration,
     DeviceReport,
+    SoftwareRenderer,
 } from "./ShadingIntegrator.js";
 import { BuildSurface } from "./SurfaceStructure.js";
 import { OrbitProjection } from "./OrbitProjection.js";
@@ -502,4 +503,27 @@ test("the renderer report carries everything worth pasting into a bug report", (
     assert.match(Text, /Attempts  : 5 attribute sets/);
     assert.match(Text, /Address   : https:\/\/example\.test\/index\.html/, "the report should say which copy was loaded");
     assert.match(Text, /Framed    : yes, inside an iframe/, "a framed page is worth knowing about");
+});
+
+test("a processor-backed renderer is recognised by every name browsers give it", () =>
+{
+    for (const Name of [
+        "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0)), SwANGLE driver)",
+        "llvmpipe (LLVM 15.0.6, 256 bits)",
+        "Microsoft Basic Render Driver",
+        "Apple Paravirtual device",
+    ])
+        assert.equal(SoftwareRenderer(Name), true, `${Name} should read as software`);
+    for (const Name of ["ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Direct3D11 vs_5_0 ps_5_0)", "Mali-G78", "", null])
+        assert.equal(SoftwareRenderer(Name), false, `${Name} should read as hardware`);
+});
+
+test("the integrator reports which kind of renderer it got", () =>
+{
+    const Canvas = CreateCanvas();
+    Canvas.Device.getParameter = (Name) => (Name === Canvas.Device.MAX_DRAW_BUFFERS ? 8 : "SwiftShader Device (Subzero)");
+    const Integrator = new ShadingIntegrator(Canvas);
+    assert.equal(Integrator.Ready, true, Integrator.Failure);
+    assert.equal(Integrator.Software, true);
+    assert.match(Integrator.Renderer, /SwiftShader/);
 });

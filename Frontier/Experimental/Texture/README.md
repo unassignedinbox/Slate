@@ -21,6 +21,10 @@ installed:
 https://raw.githack.com/unassignedinbox/Slate/<branch-or-commit>/Frontier/Experimental/Texture/index.html
 ```
 
+If the browser will only offer a CPU rasteriser — Chromium's SwiftShader, reached with `--enable-unsafe-swiftshader` —
+the editor recognises it, authors at 512² instead of 1024² and stops asking for retina pixels, which keeps it usable
+rather than merely alive.
+
 `RendererCheck.html` sits beside the editor: a dependency-free page that asks the browser for WebGL 2, WebGL 1, Canvas 2D
 and a WebGPU adapter and prints what came back. If it cannot get a context, nothing on the web can on that machine.
 

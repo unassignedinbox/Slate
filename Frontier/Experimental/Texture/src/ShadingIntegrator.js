@@ -265,6 +265,15 @@ export const DeviceReport = (Failure, Notes = [], Probe = null) =>
         ...(Notes.length ? ["Browser said:", ...Notes.map((Note) => `  ${Note}`)] : ["Browser said: nothing"]),
     ].join("\n");
 
+//--------------------------------------------------------------------------------------------------------------------------
+// The names browsers give their CPU rasterisers. SwANGLE is what Chromium reports when it is running SwiftShader behind
+// ANGLE, which is what --enable-unsafe-swiftshader turns on.
+//--------------------------------------------------------------------------------------------------------------------------
+export const SoftwareRenderer = (Renderer) =>
+    /swiftshader|swangle|llvmpipe|softpipe|software rasterizer|microsoft basic render|generic renderer|apple paravirtual/i.test(
+        String(Renderer || ""),
+    );
+
 export class ShadingIntegrator
 {
     constructor(Canvas)
@@ -294,6 +303,9 @@ export class ShadingIntegrator
         this.Renderer = String(
             (Reflection && Device.getParameter(Reflection.UNMASKED_RENDERER_WEBGL)) || Device.getParameter(Device.RENDERER) || "",
         );
+        // A CPU rasteriser answers every call the same way a GPU does, just far slower. Knowing which one we are talking to
+        // lets the panel ask for less work rather than crawl.
+        this.Software = SoftwareRenderer(this.Renderer);
         // Rendering into RGBA16F needs one of these two. The second is the mobile and software-backend spelling of the first.
         this.FloatRender = Device.getExtension("EXT_color_buffer_float") || Device.getExtension("EXT_color_buffer_half_float");
         this.FloatFilter = Device.getExtension("OES_texture_float_linear");
