@@ -117,8 +117,14 @@ travel with the descriptor at export.
 attributes and `javascript:`/`data:text/html` URLs are stripped) before it is rasterised at 1024². Text decals set in any
 of ten OFL families from `EngineContent/FontArchives`.
 
-A decal layer holds **one piece of artwork and up to thirty-two marks** of it. The decal tool drops another mark
-wherever you click and slides it while you drag; each mark keeps its own frame, size, rotation, softness, emboss and
+**The tool follows the layer.** Select a paint layer and the brush is in hand; select a decal or text layer and the
+decal tool is, with the artwork previewed under the cursor — a click stamps it, and nothing new is added to the stack.
+A tool you reached for yourself is respected: an eraser or a flood stays put as you move between paint layers, and
+orbit is never taken away from you. Pressing <kbd>1</kbd>–<kbd>6</kbd> always wins.
+
+A decal layer holds **one piece of artwork and up to thirty-two marks** of it. A new layer opens with one mark waiting — nothing is
+composited until you click the model, and the preview shows exactly where it will land. After that the decal tool drops
+another mark wherever you click and slides it while you drag; each mark keeps its own frame, size, rotation, softness, emboss and
 **colour** — the artwork is treated as a stencil and painted in the mark's colour, so one channel carries the whole
 decal — and marks can be hidden, duplicated, reordered and dropped into named folders. They composite bottom to top
 inside the layer, exactly the way the stack does.

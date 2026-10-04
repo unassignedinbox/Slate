@@ -793,7 +793,11 @@ export class ShadingIntegrator
         const Passes = [];
         for (const Layer of Visible)
         {
-            const Marks = Layer.Kind === "decal" ? (Layer.Decal?.Marks || []).filter((Mark) => Mark.Visible !== false) : [];
+            // A mark that has never been clicked onto the model is not composited; the preview shows where it would land.
+            const Marks =
+                Layer.Kind === "decal"
+                    ? (Layer.Decal?.Marks || []).filter((Mark) => Mark.Visible !== false && Mark.Placed !== false)
+                    : [];
             if (Marks.length) for (const Mark of Marks) Passes.push({ Layer, Mark });
             else Passes.push({ Layer, Mark: null });
         }

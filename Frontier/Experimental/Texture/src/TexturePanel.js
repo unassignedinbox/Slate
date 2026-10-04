@@ -383,6 +383,8 @@ class TexturePanel
         this.PickCandidate = null;
         this.Placement = null;
         this.MovingMark = "";
+        this.ChosenTool = "";
+        this.SyncedLayer = "";
         this.PlaneZoom = 0.82;
         this.PlanePan = [0, 0];
         this.Dirty = false;
@@ -469,6 +471,7 @@ class TexturePanel
         const Layer = this.ActiveLayer;
         if (this.Projection.Brush.Target === "mask" && Layer && Layer.Mask.Kind === "none")
             this.Projection.Configure({ Target: "coverage" });
+        this.SyncToolToLayer();
         this.RenderStack();
         this.RenderInspector();
         this.RenderChannelStrip();
@@ -1185,8 +1188,9 @@ class TexturePanel
             this.Project.Layers.splice(Index + 1, 0, Layer);
             this.Project.Selection = Layer.Identifier;
         });
+        this.SyncToolToLayer(Layer.Kind === "decal");
         this.Chronicle(Layer.Kind === "decal" ? "decal" : "structure", `Added ${Layer.Name}`, `${LayerBadge(Layer)} layer`, Layer.Channels.base_color);
-        this.Notify(`${Layer.Name} added.`);
+        this.Notify(Layer.Kind === "decal" ? `${Layer.Name} added — click the model to stamp it.` : `${Layer.Name} added.`);
     }
 
     //----------------------------------------------------------------------------------------------------------------------
@@ -1550,6 +1554,7 @@ class TexturePanel
 
     AfterStackChange()
     {
+        if (this.ActiveLayer && this.ActiveLayer.Identifier !== this.SyncedLayer) this.SyncToolToLayer();
         this.MarkDirty();
         this.Recomposite();
         this.RenderStack();
@@ -1604,8 +1609,13 @@ class TexturePanel
         });
         if (Layer.Kind === "decal") this.RefreshDecal(Layer);
         if (Layer.Kind === "stroke") this.Integrator.EnsureCoverage(Layer);
+        this.SyncToolToLayer(Layer.Kind === "decal");
         this.Chronicle(Layer.Kind === "decal" ? "decal" : "structure", `Added ${Layer.Name}`, `${LayerBadge(Layer)} layer`, Layer.Channels.base_color);
-        this.Notify(`${Layer.Name} added above ${Index >= 0 ? this.Layers[Index]?.Name || "the stack" : "the stack"}.`);
+        this.Notify(
+            Layer.Kind === "decal"
+                ? `${Layer.Name} added — click the model to stamp it.`
+                : `${Layer.Name} added above ${Index >= 0 ? this.Layers[Index]?.Name || "the stack" : "the stack"}.`,
+        );
     }
 
     // A finish is added as its own layer kind. What lands in the inspector afterwards is the material's own vocabulary —
@@ -1736,7 +1746,7 @@ class TexturePanel
     {
         this.BindSurfacePointers();
         SelectAll("[data-tool]").forEach((Button) =>
-            Button.addEventListener("click", () => this.SetTool(Button.dataset.tool)),
+            Button.addEventListener("click", () => this.SetTool(Button.dataset.tool, true)),
         );
         Select("#view-mode").addEventListener("change", (Event) => this.SetViewMode(Event.target.value));
         SelectAll("[data-mask-view]").forEach((Button) =>
@@ -1783,12 +1793,33 @@ class TexturePanel
         new ResizeObserver(() => this.Resize()).observe(Select("#viewport"));
     }
 
-    SetTool(Tool)
+    SetTool(Tool, Deliberate = false)
     {
         this.Tool = Tool;
         this.Projection.Tool = Tool;
         SelectAll("[data-tool]").forEach((Button) => Button.classList.toggle("active", Button.dataset.tool === Tool));
+        // A tool the hand reached for sticks to the layer it was chosen on; one the layer asked for does not.
+        if (Deliberate) this.ChosenTool = Tool;
+        this.SyncedLayer = this.ActiveLayer?.Identifier || "";
         this.UpdateCaption();
+    }
+
+    // The layer in hand decides the tool: a decal layer stamps, anything else paints. Orbit and the picker are
+    // deliberate choices about the viewport rather than the layer, so they are left alone, and so is an eraser or a
+    // flood that was chosen by hand on a paintable layer.
+    SyncToolToLayer(Force = false)
+    {
+        const Layer = this.ActiveLayer;
+        if (!Layer) return;
+        this.SyncedLayer = Layer.Identifier;
+        const Wanted = Layer.Kind === "decal" ? "decal" : "brush";
+        if (this.Tool === Wanted) return;
+        if (!Force)
+        {
+            if (this.Tool === "orbit" || this.Tool === "picker") return;
+            if (Wanted === "brush" && (this.Tool === "eraser" || this.Tool === "fill") && this.ChosenTool === this.Tool) return;
+        }
+        this.SetTool(Wanted);
     }
 
     DeviceCoordinates(Event)
@@ -2376,17 +2407,38 @@ class TexturePanel
             return;
         }
         const Decal = Layer.Decal;
+        const Frame = StrokeProjection.PlacementFrame(Hit);
+        const Waiting = Decal.Marks.find((Entry) => Entry.Placed === false);
+        if (Waiting)
+        {
+            this.CaptureStack(() =>
+            {
+                Waiting.Transform.Position = Frame.Position;
+                Waiting.Transform.Normal = Frame.Normal;
+                Waiting.Transform.Tangent = Frame.Tangent;
+                Waiting.Mode = "projection";
+                Waiting.Placed = true;
+                Decal.Selection = Waiting.Identifier;
+            });
+            this.MovingMark = Waiting.Identifier;
+            this.Chronicle("decal", `Placed ${Waiting.Name}`, `${Layer.Name} · ${Decal.Marks.length} mark${Decal.Marks.length === 1 ? "" : "s"}`, Waiting.Tint);
+            this.Recomposite();
+            this.RenderStack();
+            if (this.InspectorTab === "layer") this.RenderInspector();
+            this.Notify(`${Waiting.Name} placed — drag to move it.`);
+            return;
+        }
         if (Decal.Marks.length >= MarkLimit)
         {
             this.Notify(`A decal layer holds ${MarkLimit} marks. Remove one, or add another layer.`);
             return;
         }
-        const Frame = StrokeProjection.PlacementFrame(Hit);
         const Template = this.ActiveMark || Decal;
         const Mark = CreateMark(Decal, {
             Name: `Mark ${Decal.Marks.length + 1}`,
             Folder: this.ActiveMark?.Folder || "",
             Mode: "projection",
+            Placed: true,
             Tint: [...Template.Tint],
             Colorise: Template.Colorise !== false,
             Softness: Template.Softness,
@@ -2416,6 +2468,7 @@ class TexturePanel
         Mark.Transform.Normal = Frame.Normal;
         Mark.Transform.Tangent = Frame.Tangent;
         Mark.Mode = "projection";
+        Mark.Placed = true;
         this.Recomposite();
         this.MarkDirty();
     }
@@ -2447,9 +2500,12 @@ class TexturePanel
             {
                 if (Decal.Marks.length >= MarkLimit) return;
                 const Template = this.ActiveMark || Decal;
+                // Added from the inspector, a mark waits for the click that puts it somewhere rather than piling up
+                // invisibly on top of the one it was copied from.
                 const Fresh = CreateMark(Decal, {
                     Name: `Mark ${Decal.Marks.length + 1}`,
                     Folder: Template.Folder || "",
+                    Placed: false,
                     Transform: { ...Template.Transform, Position: [...Template.Transform.Position] },
                 });
                 Decal.Marks.push(Fresh);
@@ -3549,7 +3605,11 @@ class TexturePanel
                 <span class="mark-chip" style="--mark-colour:${ToHex(Mark.Tint)}">${Index + 1}</span>
                 <span class="mark-copy">
                     <span class="mark-name">${Escape(Mark.Name)}</span>
-                    <span class="mark-note">${Mark.Mode === "plane" ? "UV" : "projected"} · ${(Mark.Mode === "plane" ? Mark.Plane.Size : Mark.Transform.Size).toFixed(2)}${Mark.Mode === "plane" ? "uv" : "m"}</span>
+                    <span class="mark-note">${
+                        Mark.Placed === false
+                            ? "waiting for a click on the model"
+                            : `${Mark.Mode === "plane" ? "UV" : "projected"} · ${(Mark.Mode === "plane" ? Mark.Plane.Size : Mark.Transform.Size).toFixed(2)}${Mark.Mode === "plane" ? "uv" : "m"}`
+                    }</span>
                 </span>
                 <button class="icon-button" data-action="mark-lower" data-argument="${Mark.Identifier}" title="Send down" aria-label="Send down">${Icon("down")}</button
                 ><button class="icon-button" data-action="mark-raise" data-argument="${Mark.Identifier}" title="Bring up" aria-label="Bring up">${Icon("up")}</button
@@ -4061,7 +4121,7 @@ class TexturePanel
             const Tools = ["orbit", "brush", "eraser", "fill", "decal", "picker"];
             if (/^[1-6]$/.test(Key))
             {
-                this.SetTool(Tools[Number(Key) - 1]);
+                this.SetTool(Tools[Number(Key) - 1], true);
                 return;
             }
             if (Key === "[") this.Projection.Configure({ Radius: Clamp(this.Projection.Brush.Radius * 0.84, 0.004, 1.2) });
@@ -4263,12 +4323,14 @@ class TexturePanel
         const Tool = ToolOrdering.find((Entry) => Entry.Identifier === this.Tool);
         const Target = this.Projection.Brush.Target === "mask" ? "mask" : "layer";
         Select("#viewport-object").textContent = Layer.Name;
+        const Stamping = this.StrokeTool === "decal" && Layer?.Kind === "decal";
+        const ToolLabel = Stamping && Layer.Decal.SourceKind === "text" ? "Text" : Tool?.Label;
         const Axis = this.Projection.Brush.Symmetry;
         const Mirror = Axis === "none" ? "" : ` · mirror ${Axis.toUpperCase()}`;
         Select("#viewport-subtitle").textContent =
             this.ViewMode === "plane"
                 ? `Texture space · ${DisplayOrdering.find((Entry) => Entry.Identifier === this.Display)?.Label}`
-                : `${Tool?.Label} → ${Target} · ${LayerSummary(Layer)}${Mirror}`;
+                : `${ToolLabel} → ${Target} · ${LayerSummary(Layer)}${Mirror}`;
         Select("#live-pill").querySelector("span").textContent =
             this.ViewMode === "plane" ? "TEXTURE SPACE" : this.Display === "material" ? "OPENPBR" : this.Display.toUpperCase();
     }

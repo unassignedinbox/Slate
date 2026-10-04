@@ -802,3 +802,16 @@ test("a layer can be scoped to one object", () =>
     assert.equal(SanitiseLayer({ Kind: "fill", Object: 42 }).Object, "", "a nonsense scope is dropped");
     assert.ok(SanitiseLayer({ Kind: "fill", Object: "x".repeat(200) }).Object.length <= 64);
 });
+
+test("a fresh mark waits for its first click, and an old one does not", () =>
+{
+    const Layer = CreateLayer("decal");
+    assert.equal(Layer.Decal.Marks[0].Placed, false, "a new decal layer has nothing on the model yet");
+
+    const Legacy = SanitiseLayer({ Kind: "decal", Decal: { Transform: { Size: 0.4 } } });
+    assert.equal(Legacy.Decal.Marks[0].Placed, true, "a project written before marks existed is already placed");
+
+    const Read = SanitiseLayer({ Kind: "decal", Decal: { Marks: [{ Name: "A" }, { Name: "B", Placed: false }] } });
+    assert.equal(Read.Decal.Marks[0].Placed, true, "a saved mark defaults to placed");
+    assert.equal(Read.Decal.Marks[1].Placed, false);
+});

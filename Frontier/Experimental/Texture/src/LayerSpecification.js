@@ -132,6 +132,7 @@ export const CreateMark = (Decal, Overrides = {}) =>
         Name: "Mark",
         Folder: "",
         Visible: true,
+        Placed: false,              // a mark the surface has never been clicked for still waits for its first click
         Mode: Template.Mode,
         Tint: [...Template.Tint],
         Colorise: Template.Colorise !== false,
@@ -410,7 +411,7 @@ const SanitiseDecal = (Decal, Candidate) =>
     // A project written before marks existed carries exactly one placement: the record itself.
     const Marks = Array.isArray(Candidate.Marks) && Candidate.Marks.length
         ? Candidate.Marks.slice(0, MarkLimit).map((Mark) => SanitiseMark(Sanitised, Mark))
-        : [CreateMark(Sanitised, { Name: "Mark 1" })];
+        : [CreateMark(Sanitised, { Name: "Mark 1", Placed: true })];
     Sanitised.Marks = Marks;
     Sanitised.Selection = Marks.some((Mark) => Mark.Identifier === Candidate.Selection)
         ? Candidate.Selection
@@ -426,6 +427,7 @@ export const SanitiseMark = (Decal, Candidate) =>
     if (typeof Candidate.Name === "string") Mark.Name = Candidate.Name.slice(0, 48);
     if (typeof Candidate.Folder === "string") Mark.Folder = Candidate.Folder.slice(0, 48);
     Mark.Visible = Candidate.Visible !== false;
+    Mark.Placed = Candidate.Placed !== false;
     Mark.Mode = Candidate.Mode === "plane" ? "plane" : "projection";
     Mark.Tint = SanitiseColour(Candidate.Tint, Mark.Tint);
     Mark.Colorise = Candidate.Colorise !== false;
