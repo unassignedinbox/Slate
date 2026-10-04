@@ -625,6 +625,60 @@ int main(int Count,char** Arguments)
             Require(Stage.Bring(Initialization),"Resize descriptor recreation failed");
             auto Resized=Execute(1u,"resized"); Require(Resized[0]>100.0,"Resized output lost transmission");
             Stage.Destroy();
+            // Two adjacent coplanar primitives must not reveal their separate surface cards as a crack.
+            // Use the shipping stage defaults here, in addition to the deliberately small earlier fixtures.
+            Initialization.CardResolution = DistanceFieldStageInit{}.CardResolution;
+            Initialization.VolumeResolution = DistanceFieldStageInit{}.VolumeResolution;
+            const float JoinedPositions[6][3] = {{-2,-2,0},{2,-2,0},{2,2,0},{-2,-2,0},{2,2,0},{-2,2,0}};
+            for (uint32_t Index = 0u; Index < 6u; ++Index)
+            {
+                Vertices[Index].SpatialLocation = {JoinedPositions[Index][0], JoinedPositions[Index][1], JoinedPositions[Index][2]};
+                Vertices[Index].NormalDirection = {0,0,1};
+                Vertices[Index].TangentDirection = {1,0,0,1};
+            }
+            Instances[1].TriangleCount = 0u;
+            Materials[0] = MaterialRecord{};
+            Materials[0].AlbedoR = Materials[0].AlbedoG = Materials[0].AlbedoB = 0.7f;
+            Materials[0].Roughness = 0.5f;
+            Materials[0].BaseColourTexture = Materials[0].NormalTexture = UINT32_MAX;
+            Host.Replace(VertexBuffer, Vertices.data(), Vertices.size()*sizeof(VertexRecord));
+            Host.Replace(InstanceBuffer, Instances.data(), Instances.size()*sizeof(InstanceRecord));
+            Host.Replace(MaterialBuffer, Materials.data(), Materials.size()*sizeof(MaterialRecord));
+            Require(Geometry.Construct(Vertices, Indices, Instances, Materials), "Coplanar seam fixture construction failed");
+            for (uint32_t Row = 0u; Row < Output.Height; ++Row)
+                for (uint32_t Column = 0u; Column < Output.Width; ++Column)
+                {
+                    const uint32_t Pixel = Row*Output.Width + Column;
+                    Surface[Pixel*4u] = (float(Column)/float(Output.Width)-0.5f)*0.4f;
+                    Surface[Pixel*4u+1u] = (float(Row)/float(Output.Height)-0.5f)*0.4f;
+                    Surface[Pixel*4u+2u] = 0.0f;
+                    const uint32_t Primitive = Surface[Pixel*4u+1u] > Surface[Pixel*4u] ? 1u : 0u;
+                    std::memcpy(&Surface[Pixel*4u+3u], &Primitive, 4u);
+                }
+            std::memcpy(&Surface[3], &Invalid, 4u);
+            Position = Host.AllocateImage(Output.Width, Output.Height, VK_FORMAT_R32G32B32A32_SFLOAT,
+                Surface.data(), Output.Width*Output.Height*16u);
+            Initialization.SurfaceImageView = Position.View;
+            Frame.SkyAmbient[0] = Frame.SkyAmbient[1] = Frame.SkyAmbient[2] = 1.0f;
+            Frame.FeatureFlags = 1u; Frame.ReflectionMode = 0u; ++Frame.MaterialRevision;
+            Require(Stage.Bring(Initialization), "Shipping-resolution seam fixture failed");
+            Fields = Host.Allocate(Stage.QueryVoxelCount()*64u);
+            (void)Execute(8u, "coplanar-card-seam");
+            uint32_t MaximumEdgeDifference = 0u;
+            for (uint32_t Row = 1u; Row < Output.Height; ++Row)
+                for (uint32_t Column = 1u; Column < Output.Width; ++Column)
+                    for (uint32_t Channel = 0u; Channel < 3u; ++Channel)
+                    {
+                        const uint32_t Pixel = Row*Output.Width + Column;
+                        for (uint32_t Neighbor : {Pixel-1u, Pixel-Output.Width})
+                            MaximumEdgeDifference = std::max(MaximumEdgeDifference,
+                                uint32_t(std::abs(int(LastPixels[Pixel*4u+Channel])-int(LastPixels[Neighbor*4u+Channel]))));
+                    }
+            std::cout << "ARTIFACT coplanar cards: max neighbor delta=" << MaximumEdgeDifference
+                      << " card resolution=" << Initialization.CardResolution << " volume resolution=" << Initialization.VolumeResolution << '\n';
+            Require(MaximumEdgeDifference <= 3u, "Visible seam between coplanar primitive cards");
+            std::cout << "PASS coplanar card continuity at shipping card/volume resolutions\n";
+            Stage.Destroy();
             Require(ValidationErrors.load()==0u,"Vulkan validation reported errors");
             std::cout<<"PASS production SDF pipelines: populated three-level fields, emissive GI, bounce cache, GI toggle, moving instances, history reset, solar shadows, camera re-snapping, recreation, mesh reflection, thin/solid refraction, Beer attenuation and resize\n";
         }
