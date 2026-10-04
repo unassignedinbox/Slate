@@ -271,3 +271,242 @@ Verify(
     );
   }),
 );
+
+const Render = (Width = 800, Height = 600) =>
+  Invoke("RenderDocument", "number", ["number", "number"], [Width, Height]);
+const CloseEnough = (Actual, Expected, Tolerance = 1e-8) =>
+  Assert.ok(Math.abs(Actual - Expected) < Tolerance, `${Actual} ≠ ${Expected}`);
+Verify(
+  "All 22 native Construct catalogue entries create actual geometry",
+  async () => {
+    const { ConstructionCatalogue, PlaceConstruction } = await import(
+      "./ConstructionSpecification.js"
+    );
+    Assert.equal(ConstructionCatalogue.length, 22);
+    Assert.deepEqual(
+      [...new Set(ConstructionCatalogue.map((Entry) => Entry.section))],
+      ["Reference", "Sketch Draw", "Solid", "Surface"],
+    );
+    for (let Index = 0; Index < ConstructionCatalogue.length; ++Index) {
+      Fresh(() => {
+        Assert.ok(
+          Command(PlaceConstruction(Index, Index)),
+          ConstructionCatalogue[Index].label,
+        );
+        Assert.equal(Describe().figures.length, 1);
+        Assert.ok(
+          Describe().figures[0].poles > 0 || Describe().figures[0].faces > 0,
+        );
+      })();
+    }
+  },
+);
+Verify(
+  "Empty selections expose no nonfinite gizmo coordinates",
+  Fresh(() => {
+    Assert.ok(Command("gizmo on"));
+    Render();
+    Assert.deepEqual(Describe().gizmo.grips, []);
+    Assert.equal(
+      Invoke("BeginGizmoDocument", "number", ["number", "number"], [400, 300]),
+      0,
+    );
+  }),
+);
+Verify(
+  "Affine inspector translation, rotation and scale are native, undoable and persistent",
+  Fresh(() => {
+    Command("box (0,0,0) 2 3 4 --name=Block");
+    Command("select Block");
+    Assert.ok(Command("transform selected --move=(1,2,3)"));
+    Assert.deepEqual(Describe().figures[0].low, [1, 2, 3]);
+    Command("dim auto");
+    const Height = Describe().dimensions.find((Entry) => Entry.slot === 5);
+    Assert.ok(Command(`dim edit ${Height.id} 8`));
+    Assert.deepEqual(Describe().figures[0].low, [1, 2, 3]);
+    Command("undo");
+    Assert.ok(Command("transform selected --rotate=(0,0,90)"));
+    const Rotated = Describe().figures[0];
+    CloseEnough(Rotated.high[0] - Rotated.low[0], 3);
+    CloseEnough(Rotated.high[1] - Rotated.low[1], 2);
+    Assert.ok(Command("transform selected --scale=(2,1,1)"));
+    const Scaled = Describe().figures[0];
+    CloseEnough(Scaled.high[0] - Scaled.low[0], 6);
+    Command("undo");
+    CloseEnough(
+      Describe().figures[0].high[0] - Describe().figures[0].low[0],
+      3,
+    );
+    Command("redo");
+    Assert.ok(Command("save /transform.arc"));
+    const Saved = Describe().figures;
+    Assert.ok(Command("reset"));
+    Assert.ok(Command("open /transform.arc"));
+    Assert.deepEqual(Describe().figures, Saved);
+  }),
+);
+Verify(
+  "Transform refusal preserves geometry for invalid and singular matrices",
+  Fresh(() => {
+    Command("box (0,0,0) 2 3 4 --name=Block");
+    const Before = Describe().figures;
+    for (const Instruction of [
+      "transform Block --move=(nan,0,0)",
+      "transform Block --scale=(0,1,1)",
+      "transform Block 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1",
+      "transform missing --move=(1,0,0)",
+    ]) {
+      Assert.equal(Command(Instruction), false, Instruction);
+      Assert.deepEqual(Describe().figures, Before);
+    }
+  }),
+);
+Verify(
+  "Original analytic gizmo drags, snaps, cancels and journals a camera-independent affine edit",
+  Fresh(() => {
+    Command("box (0,0,0) 2 3 4 --name=Block");
+    Command("select Block");
+    Command("view front");
+    Command("view fit");
+    Invoke("SeatDocument", null, ["number", "number", "number"], [800, 600, 1]);
+    Render();
+    const Grip = Describe().gizmo.grips.find((Entry) => Entry.id === 1);
+    Assert.ok(Grip);
+    const Before = Describe().figures;
+    const History = Describe().history.length;
+    Assert.equal(
+      Invoke(
+        "BeginGizmoDocument",
+        "number",
+        ["number", "number"],
+        [Grip.u * 800, Grip.v * 600],
+      ),
+      1,
+    );
+    Invoke(
+      "DragGizmoDocument",
+      "number",
+      ["number", "number", "number"],
+      [Grip.u * 800 + 43, Grip.v * 600, 1],
+    );
+    Assert.notDeepEqual(Describe().figures, Before);
+    Invoke("FinishGizmoDocument", "number", ["number"], [1]);
+    Assert.deepEqual(Describe().figures, Before);
+    Assert.equal(Describe().history.length, History);
+    Render();
+    Assert.equal(
+      Invoke(
+        "BeginGizmoDocument",
+        "number",
+        ["number", "number"],
+        [Grip.u * 800, Grip.v * 600],
+      ),
+      1,
+    );
+    Invoke(
+      "DragGizmoDocument",
+      "number",
+      ["number", "number", "number"],
+      [Grip.u * 800 + 43, Grip.v * 600, 1],
+    );
+    Assert.equal(Invoke("FinishGizmoDocument", "number", ["number"], [0]), 1);
+    const After = Describe().figures;
+    const Movement = After[0].low[0] - Before[0].low[0];
+    CloseEnough(Movement / 0.25, Math.round(Movement / 0.25));
+    Assert.equal(Describe().history.length, History + 1);
+    Command("undo");
+    Assert.deepEqual(Describe().figures, Before);
+    Command("redo");
+    Assert.deepEqual(Describe().figures, After);
+    Invoke("OrbitDocument", null, ["number", "number"], [0.3, 0.1]);
+    Invoke("ZoomDocument", null, ["number"], [2]);
+    Command("save /gizmo.arc");
+    const Journal = Geometry.FS.readFile("/gizmo.arc", { encoding: "utf8" });
+    Assert.match(Journal, /transform selected/);
+    Assert.doesNotMatch(Journal, /^(click|pointer|release) /m);
+    Command("reset");
+    Assert.ok(Command("open /gizmo.arc"));
+    Assert.deepEqual(Describe().figures, After);
+  }),
+);
+Verify(
+  "Gizmo control-pole edits preserve the other poles and survive undo",
+  Fresh(() => {
+    Command("spline (0,0,0) (1,2,0) (2,-1,0) (3,0,0) --name=Guide");
+    Command("selectmode control");
+    Command("select poles Guide 0");
+    Command("view top");
+    Command("view fit");
+    Render();
+    const Before = Describe().figures;
+    const Grip = Describe().gizmo.grips.find((Entry) => Entry.id === 1);
+    Assert.equal(
+      Invoke(
+        "BeginGizmoDocument",
+        "number",
+        ["number", "number"],
+        [Grip.u * 800, Grip.v * 600],
+      ),
+      1,
+    );
+    Invoke(
+      "DragGizmoDocument",
+      "number",
+      ["number", "number", "number"],
+      [Grip.u * 800 - 40, Grip.v * 600, 0],
+    );
+    Assert.equal(Invoke("FinishGizmoDocument", "number", ["number"], [0]), 1);
+    Assert.ok(Describe().figures[0].low[0] < Before[0].low[0]);
+    Command("undo");
+    Assert.deepEqual(Describe().figures, Before);
+  }),
+);
+Verify(
+  "Zoom remains finite at extremes and inverse wheel steps restore camera distance",
+  Fresh(() => {
+    const Before = Describe().camera.distance;
+    Invoke("ZoomDocument", null, ["number"], [1]);
+    Assert.ok(Describe().camera.distance < Before);
+    Invoke("ZoomDocument", null, ["number"], [-1]);
+    CloseEnough(Describe().camera.distance, Before);
+    for (let Index = 0; Index < 30; ++Index)
+      Invoke("ZoomDocument", null, ["number"], [-40]);
+    Assert.equal(Describe().camera.distance, 1e8);
+    Invoke("ZoomDocument", null, ["number"], [NaN]);
+    Assert.equal(Describe().camera.distance, 1e8);
+  }),
+);
+Verify(
+  "Transformed derived solids retain their authored shape instead of snapping back to the recipe",
+  Fresh(() => {
+    Command("circle (0,0) 1 --name=Profile");
+    Command("extrude Profile 2");
+    Command("select Extrusion");
+    Assert.ok(Command("transform selected --move=(5,0,0)"));
+    Command("dim auto");
+    const Body = Describe().figures.find(
+      (Figure) => Figure.classification === 2,
+    );
+    CloseEnough(Body.low[0], 4);
+    CloseEnough(Body.high[0], 6);
+    Assert.equal(
+      Describe().dimensions.filter(
+        (Dimension) => Dimension.anchor === Body.id && Dimension.slot >= 0,
+      ).length,
+      0,
+    );
+    Assert.ok(Command("transform Profile --move=(0,3,0)"));
+    Assert.deepEqual(
+      Describe().figures.find((Figure) => Figure.id === Body.id),
+      Body,
+    );
+    Command("undo");
+    Command("undo");
+    Command("dim auto");
+    Assert.ok(
+      Describe().dimensions.some(
+        (Dimension) => Dimension.anchor === Body.id && Dimension.slot >= 0,
+      ),
+    );
+  }),
+);

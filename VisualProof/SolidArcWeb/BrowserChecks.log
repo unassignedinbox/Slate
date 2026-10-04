@@ -1,0 +1,17 @@
+
+> solidarc-web@0.1.0 verify:browser
+> node src/BrowserMetrics.mjs
+
+PASS 1: Actual WASM startup, native extrusion/subtraction example, RGBA presentation and shared DM Sans
+PASS 2: Outliner search, filters, compact/fold controls and actual native visibility
+PASS 3: Native Construct catalogue places a solid; live dimension typing, undo and redo change its geometry
+PASS 4: Numeric pill dragging, range controls and outliner double-click rename
+PASS 5: Coalesced orbit reaches the full mouse displacement; camera modes, projection, fit, edges, cages and dimensions
+PASS 6: Real viewport face picking, native edge selection and an applied solid chamfer
+PASS 7: Native .arc download and import preserve the edited topology; malformed input preserves the open scene
+PASS 8: Independent native document switching, filenames and close cleanup
+PASS 9: Actual OBJ export, topology diagnostics and visible native refusals without a browser failure
+PASS 10: Native filled-region viewport picking feeds the extrusion dialog and survives command journaling
+PASS 11: Maximize/help controls and desktop, tablet and phone layouts
+PASS 12: No JavaScript or browser console errors
+12 browser checks passed.

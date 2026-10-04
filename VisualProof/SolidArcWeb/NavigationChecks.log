@@ -1,0 +1,13 @@
+
+> solidarc-web@0.1.0 verify:interaction
+> node src/NavigationMetrics.mjs
+
+PASS 1: Wheel direction and magnitude are correct for mouse pixels, tiny trackpad deltas and line units
+PASS 2: Rapid interleaved orbit and wheel events retain every delta while the worker is busy
+PASS 3: Right/middle pan round-trips without jumps; a stationary right click does not change selection
+PASS 4: Original C++ gizmo moves and Ctrl-snaps, Escape restores preview, one undo restores geometry, and .arc replays it
+PASS 5: Native scale cylinders, rotation sectors and planar grips all change real geometry with undo
+PASS 6: Transform XYZ cells type and scrub, rotate/scale about the selection centre, uniformly scale and reset each row
+PASS 7: Native catalogue sections/counts, Tab/Escape, accelerator and surface/sketch placement work in the browser
+PASS 8: Construct popup fits desktop/mobile; no JavaScript or browser console errors
+8 camera, gizmo and layout checks passed.

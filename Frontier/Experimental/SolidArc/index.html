@@ -105,11 +105,14 @@
             <span data-icon="link"></span>Native B-rep · editable construction
           </div>
           <section class="construct-library">
-            <div class="section-heading">
-              <h3>Construct</h3>
-              <span class="subtle">Sketch to solid</span>
-            </div>
-            <div id="construct-tiles"></div>
+            <button id="construct-launcher" class="construct-launcher">
+              <span data-icon="construct"></span
+              ><span
+                >Construct geometry<small
+                  >22 native tools · Tab in viewport</small
+                ></span
+              ><span>↗</span>
+            </button>
           </section>
           <div class="panel-footer">
             <span data-icon="shield"></span>Geometry stays in your browser
@@ -117,7 +120,13 @@
         </aside>
         <section class="panel scene-panel">
           <div class="viewport-bar">
-            <span data-icon="viewport"></span><strong>Geometry view</strong
+            <button
+              id="construct-button"
+              class="construct-chip"
+              aria-haspopup="dialog"
+            >
+              <span data-icon="plus"></span>Construct</button
+            ><strong class="viewport-title">Geometry view</strong
             ><span class="bar-divider"></span
             ><select id="camera-view" aria-label="Camera view">
               <option value="orbit" disabled>Orbit</option>
@@ -125,7 +134,9 @@
               <option value="front">Front</option>
               <option value="right">Right</option>
               <option value="top">Top</option>
-              <option value="back">Back</option></select
+              <option value="back">Back</option>
+              <option value="left">Left</option>
+              <option value="bottom">Bottom</option></select
             ><span class="spacer"></span
             ><button
               id="projection-button"
@@ -201,14 +212,26 @@
                 data-icon="cage"
               ></button>
             </div>
+            <div class="gizmo-toolbar">
+              <label for="gizmo-mode">Gizmo</label
+              ><select id="gizmo-mode" aria-label="Gizmo mode">
+                <option value="combined">Combined</option>
+                <option value="translate">Move</option>
+                <option value="rotate">Rotate</option>
+                <option value="scale">Scale</option>
+                <option value="off">Off</option>
+              </select>
+            </div>
+            <div id="gizmo-readout" role="status"></div>
             <div class="orientation">
               <button data-view="top" title="Top">Z</button
               ><button data-view="right" title="Right">X</button
               ><button data-view="front" title="Front">Y</button>
             </div>
             <div class="viewport-instructions">
-              Drag to orbit <span>Right-drag to pan</span> Scroll to zoom
-              <span>Shift-click to add selection</span>
+              Drag to orbit <span>Right / middle-drag to pan</span> Scroll to
+              zoom
+              <span>Alt-drag bypasses gizmo · Ctrl snaps</span>
             </div>
             <div id="loading-overlay">
               <div class="spinner"></div>
@@ -287,6 +310,31 @@
       </footer>
     </div>
     <div id="toast" role="status" hidden></div>
+    <div
+      id="construct-menu"
+      popover
+      role="dialog"
+      aria-label="Construct geometry catalogue"
+    >
+      <header>
+        <i></i><strong>Construct</strong><kbd>Tab</kbd
+        ><button
+          id="construct-close"
+          class="icon-button"
+          aria-label="Close construct menu"
+          data-icon="close"
+        ></button>
+      </header>
+      <div class="construct-content">
+        <nav id="construct-sections" aria-label="Construction sections"></nav>
+        <div class="construct-catalogue">
+          <div id="construct-tiles"></div>
+          <footer>
+            Click a tile: place it at the next spot on the workplane
+          </footer>
+        </div>
+      </div>
+    </div>
     <dialog id="tool-dialog">
       <div class="dialog-heading">
         <span data-icon="construct"></span>
@@ -343,17 +391,21 @@
       </p>
       <div class="help-grid">
         <span>Orbit <kbd>Drag</kbd></span
-        ><span>Pan <kbd>Right-drag</kbd></span
+        ><span>Pan <kbd>Right / middle-drag</kbd></span
         ><span>Fit <kbd>F</kbd></span
         ><span>Select points / edges / faces / bodies <kbd>1–4</kbd></span
         ><span>Undo / redo <kbd>Ctrl Z / Ctrl Shift Z</kbd></span
         ><span>Save native document <kbd>Ctrl S</kbd></span>
       </div>
       <p>
-        Use Construct to create sketches and solids. Select geometry in the
-        viewport or outliner; Shift-click extends the selection. Live dimensions
-        rebuild native geometry. Numeric pills support typing and horizontal
-        dragging. Double-click an outliner row or document tab to rename it.
+        Use Construct (Tab while the viewport is focused) for the native
+        Reference, Sketch Draw, Solid and Surface catalogue. Drag the native
+        gizmo to move, rotate or scale; Ctrl snaps and Escape cancels. Alt-drag
+        always orbits. The Transform inspector has editable XYZ rows and reset
+        chips. Select geometry in the viewport or outliner; Shift-click extends
+        the selection. Live dimensions rebuild native geometry. Numeric pills
+        support typing and horizontal dragging. Double-click an outliner row or
+        document tab to rename it.
       </p>
       <div class="help-note">
         The native kernel still has bounded operation support: unsupported

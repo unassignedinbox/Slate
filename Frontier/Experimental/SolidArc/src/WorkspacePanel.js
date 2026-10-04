@@ -5,9 +5,24 @@ import {
   NativeName,
   ConstructCommand,
 } from "./CommandSpecification.js";
+import {
+  ConstructionCatalogue,
+  PlaceConstruction,
+} from "./ConstructionSpecification.js";
 const Select = (Selector) => document.querySelector(Selector);
 const All = (Selector) => [...document.querySelectorAll(Selector)];
 const Paths = {
+  rectangle: '<rect x="3" y="5" width="18" height="14" rx="1"/>',
+  centre:
+    '<rect x="3" y="5" width="18" height="14" rx="1"/><path d="M9 12h6m-3-3v6"/>',
+  polyline: '<path d="m3 18 6-13 7 13 5-12"/>',
+  slot: '<rect x="2" y="7" width="20" height="10" rx="5"/>',
+  arc: '<path d="M4 17a9 9 0 1 1 16 0"/>',
+  ellipse: '<ellipse cx="12" cy="12" rx="10" ry="6"/>',
+  polygon: '<path d="m7 3 10 0 5 9-5 9H7l-5-9Z"/>',
+  cone: '<ellipse cx="12" cy="19" rx="9" ry="3"/><path d="m3 19 7-16h4l7 16"/>',
+  controlcurve: '<path d="M3 18C7 0 17 24 21 6m-18 12 6-15 6 18 6-15"/>',
+
   body: '<path d="m12 2 9 5v10l-9 5-9-5V7Zm0 10L3 7m9 5 9-5m-9 5v10M7 4.5l10 5.5"/>',
   surface: '<path d="m3 8 12-5 6 13-12 5Z"/>',
   cylinder:
@@ -86,6 +101,9 @@ class WorkspacePanel {
     this.Busy = false;
     this.Ready = false;
     this.Log = [];
+    this.NavigationQueue = [];
+    this.InspectorTab = "geometry";
+    this.ConstructSection = "Reference";
     All("[data-icon]").forEach(
       (Element) => (Element.innerHTML = Icon(Element.dataset.icon)),
     );
@@ -138,7 +156,11 @@ class WorkspacePanel {
       this.Fail(Response.error);
       return;
     }
+    const GeometryChanged =
+      JSON.stringify(this.Description.figures) !==
+      JSON.stringify(Response.description.figures);
     this.Description = Response.description;
+    this.Interaction = Response.interaction || "";
     const Canvas = Select("#cad-canvas");
     Canvas.width = Response.width;
     Canvas.height = Response.height;
@@ -154,7 +176,23 @@ class WorkspacePanel {
     Select("#render-duration").textContent =
       `${Math.round(Response.duration)} ms · CPU raster`;
     Select("#kernel-status").innerHTML = "<i></i>Native kernel ready";
-    this.Refresh();
+    if (Response.dirty && this.Document) this.Document.dirty = true;
+    if (Pending.action === "pointerEnd" && !Response.success) {
+      Select("#console-panel").hidden = false;
+      this.Notify(
+        "Native gizmo transform refused; the original geometry was restored.",
+      );
+    }
+    if (
+      ["pointerStart", "pointerMove", "hover", "zoom", "orbit", "pan"].includes(
+        Pending.action,
+      )
+    )
+      this.RefreshNavigation();
+    else {
+      if (!this.TransformEditing && GeometryChanged) this.TransformDraft = null;
+      this.Refresh();
+    }
     if (this.RenameTarget) {
       if (this.Picked[0]?.id === this.RenameTarget) {
         Select("#figure-name")?.focus();
@@ -184,27 +222,73 @@ class WorkspacePanel {
         new Error("Wait for the current native operation to finish."),
       );
     const Rectangle = Select("#viewport").getBoundingClientRect();
+    // Camera motion previews are cheaper; gizmo drags keep full precision. The native gizmo's pixel size follows
+    // the raster scale, so its displayed size and analytic hit locations stay in CSS-pixel agreement.
+    const MovingCamera =
+      this.Interaction !== "gizmo" &&
+      (Action === "zoom" || Action === "pointerMove");
     const Scale =
       Math.min(1, 1000 / Rectangle.width, 900 / Rectangle.height) *
-      (["orbit", "pan", "zoom"].includes(Action) ? 0.6 : 1);
+      (MovingCamera ? 0.65 : 1);
     const Token = ++this.Token;
     this.Busy = true;
-    Select("#app").classList.add("busy");
+    Select("#app").classList.toggle(
+      "busy",
+      ![
+        "hover",
+        "pointerStart",
+        "pointerMove",
+        "pointerEnd",
+        "zoom",
+        "orbit",
+        "pan",
+      ].includes(Action),
+    );
     Select("#kernel-status").textContent = "Computing geometry…";
-    return new Promise((resolve, reject) => {
-      this.Pending.set(Token, { resolve, reject });
+    this.InFlightAction = Action;
+    return (this.CurrentRequest = new Promise((resolve, reject) => {
+      this.Pending.set(Token, { resolve, reject, action: Action });
       this.Worker.postMessage({
         token: Token,
         action: Action,
         identity: this.Active,
+        scale: Scale,
+        cssHeight: Rectangle.height,
         width: Math.max(64, Math.round(Rectangle.width * Scale)),
         height: Math.max(64, Math.round(Rectangle.height * Scale)),
         ...Payload,
       });
-    });
+    }));
+  }
+  async AwaitNavigation() {
+    if (this.ViewDrag) return false;
+    while (this.Ready && (this.Busy || this.Motion || this.ResolveDetail)) {
+      if (
+        this.Busy &&
+        ![
+          "pointerStart",
+          "pointerMove",
+          "pointerEnd",
+          "hover",
+          "zoom",
+          "pan",
+          "orbit",
+          "render",
+        ].includes(this.InFlightAction)
+      )
+        return false;
+      if (!this.Busy) this.FlushNavigation();
+      await this.CurrentRequest;
+    }
+    return this.Ready;
   }
   async Command(Text, Dirty = true) {
-    if (this.Busy || !this.Ready) return;
+    if (!this.Ready || this.ViewDrag) return;
+    if (
+      (this.Busy || this.Motion || this.ResolveDetail) &&
+      !(await this.AwaitNavigation())
+    )
+      return;
     const Commands = Array.isArray(Text) ? Text : [Text];
     this.AppendLog(Commands.map((Command) => `› ${Command}`));
     const Response = await this.Request("command", { commands: Commands });
@@ -226,7 +310,8 @@ class WorkspacePanel {
       (Figure) =>
         Figure.selected ||
         Figure.pickedFaces.length ||
-        Figure.pickedEdges.length,
+        Figure.pickedEdges.length ||
+        Figure.pickedPoles?.length,
     );
   }
   get SelectedRegions() {
@@ -246,7 +331,12 @@ class WorkspacePanel {
     return this.Picked;
   }
   async CreateDocument(Example = null) {
-    if (this.Busy || !this.Ready) return;
+    if (!this.Ready || this.ViewDrag) return;
+    if (
+      (this.Busy || this.Motion || this.ResolveDetail) &&
+      !(await this.AwaitNavigation())
+    )
+      return;
     if (this.Documents.length >= 4) {
       this.Notify(
         "Save and close a tab before opening another. Four live documents maximum.",
@@ -268,13 +358,13 @@ class WorkspacePanel {
     Select("#loading-overlay").hidden = true;
     if (Example)
       await this.Command(
-        ["gizmo off", "show shading matcap", ...Examples[Example].commands],
+        ["gizmo on", "show shading matcap", ...Examples[Example].commands],
         false,
       );
     else
       await this.Command(
         [
-          "gizmo off",
+          "gizmo on",
           "show shading matcap",
           "show cages off",
           "dim off",
@@ -285,14 +375,24 @@ class WorkspacePanel {
     this.Refresh();
   }
   async ActivateDocument(Identity) {
-    if (Identity === this.Active || this.Busy) return;
+    if (Identity === this.Active || !this.Ready || this.ViewDrag) return;
+    if (
+      (this.Busy || this.Motion || this.ResolveDetail) &&
+      !(await this.AwaitNavigation())
+    )
+      return;
     this.Active = Identity;
     this.Filter = "all";
     Select("#scene-search").value = "";
     await this.Request("render");
   }
   async CloseDocument(Identity) {
-    if (this.Busy || this.Documents.length === 1) return;
+    if (this.Documents.length === 1 || !this.Ready || this.ViewDrag) return;
+    if (
+      (this.Busy || this.Motion || this.ResolveDetail) &&
+      !(await this.AwaitNavigation())
+    )
+      return;
     const Document = this.Documents.find(
       (Document) => Document.id === Identity,
     );
@@ -370,6 +470,25 @@ class WorkspacePanel {
         Button.dataset.mode === Modes[this.Description.mode],
       ),
     );
+    this.RefreshNavigation();
+  }
+  RefreshNavigation() {
+    const Gizmo = this.Description.gizmo;
+    if (Gizmo) {
+      Select("#gizmo-mode").value = Gizmo.visible
+        ? ["combined", "translate", "rotate", "scale"][Gizmo.layout]
+        : "off";
+      Select("#gizmo-readout").textContent = Gizmo.dragging
+        ? `${Gizmo.readout} · Ctrl to snap · Esc to cancel`
+        : "";
+      Select("#cad-canvas").style.cursor = Gizmo.dragging
+        ? "grabbing"
+        : Gizmo.hover
+          ? "grab"
+          : this.ViewDrag
+            ? "grabbing"
+            : "default";
+    }
     const Camera = this.Description.camera;
     if (Camera) {
       const Views = {
@@ -377,6 +496,8 @@ class WorkspacePanel {
         front: [0, 0],
         back: [Math.PI, 0],
         right: [Math.PI / 2, 0],
+        left: [-Math.PI / 2, 0],
+        bottom: [0, -Math.PI / 2 + 0.0001],
         top: [0, Math.PI / 2 - 0.0001],
       };
       Select("#camera-view").value =
@@ -467,7 +588,8 @@ class WorkspacePanel {
     const Extent = Figure.high.map((Value, Index) => Value - Figure.low[Index]);
     Select("#inspector-body").innerHTML =
       `<section class="inspector-card selection-card"><div class="selection-heading"><span class="large-icon colour-${Figure.classification}">${Icon(FigureIcon(Figure))}</span><div><input id="figure-name" aria-label="Geometry name" value="${Escape(Figure.name)}" maxlength="64"/><small>${Classification(Figure).toUpperCase()}${this.Picked.length > 1 ? ` · +${this.Picked.length - 1} SELECTED` : ""}</small></div><button id="selected-visibility" class="icon-button" title="Toggle visibility" aria-label="Toggle selected visibility">${Icon(Figure.hidden ? "hidden" : "eye")}</button></div><div class="geometry-counts"><div><span>Faces</span><strong>${Figure.faces}</strong></div><div><span>Edges</span><strong>${Figure.edges}</strong></div><div><span>${Figure.classification === 0 ? "Poles" : "Vertices"}</span><strong>${Figure.classification === 0 ? Figure.poles : Figure.vertices}</strong></div></div></section>
-<div class="inspector-tabs"><span class="active">Geometry</span><button data-tool="move">Transform</button><button id="topology-button">Topology</button></div>
+<div class="inspector-tabs"><button data-inspector="geometry" class="${this.InspectorTab === "geometry" ? "active" : ""}">Geometry</button><button data-inspector="transform" class="${this.InspectorTab === "transform" ? "active" : ""}">Transform</button><button id="topology-button">Topology</button></div>
+${this.InspectorTab === "transform" ? this.TransformTable(Figure) : ""}<div ${this.InspectorTab === "transform" ? "hidden" : ""}>
 <section class="inspector-card"><div class="section-heading"><h3>Dimensions</h3><small>NATIVE · m</small></div><p>Construction dimensions rebuild the native geometry. Drag values or type; apply on release.</p>${
         Dimensions.length
           ? Dimensions.slice(0, 12)
@@ -477,7 +599,121 @@ class WorkspacePanel {
       }<label class="switch-row">Viewport dimensions<input id="dimensions-toggle" type="checkbox" class="switch" ${this.Document?.dimensions ? "checked" : ""}/></label></section>
 <section class="inspector-card"><div class="section-heading"><h3>Bounds</h3><small>WORLD · m</small></div><div class="bounds-values">${["X", "Y", "Z"].map((Axis, Index) => `<div><span class="axis-${Axis}">${Axis}</span><strong>${Decimal(Extent[Index])}</strong><small>m</small></div>`).join("")}</div></section>
 <section class="inspector-card"><div class="section-heading"><h3>Operations</h3><small>NATIVE SOLVERS</small></div><div class="operation-grid">${["extrude", "revolve", "loft", "fillet", "chamfer", "shell", "union", "subtract", "intersect"].map((Key) => this.ToolButton(Key)).join("")}</div><p class="picked-note">${Figure.pickedFaces.length} faces · ${Figure.pickedEdges.length} edges selected</p></section>
-<section class="inspector-card"><h3>Presentation</h3><select id="material-select" aria-label="Surface appearance"><option value="">Change finish…</option><option>steel</option> <option>chrome</option><option>copper</option><option>clay</option><option>plastic-blue</option><option>glass</option></select><div class="inspector-actions"><button id="export-obj" class="button">Export OBJ</button><button id="delete-selection" class="icon-button" title="Delete selected" aria-label="Delete selected">${Icon("trash")}</button></div><p>OBJ exports all native solid bodies as a tessellated geometry-only file. Save .arc to retain editable construction.</p></section>`;
+<section class="inspector-card"><h3>Presentation</h3><select id="material-select" aria-label="Surface appearance"><option value="">Change finish…</option><option>steel</option> <option>chrome</option><option>copper</option><option>clay</option><option>plastic-blue</option><option>glass</option></select><div class="inspector-actions"><button id="export-obj" class="button">Export OBJ</button><button id="delete-selection" class="icon-button" title="Delete selected" aria-label="Delete selected">${Icon("trash")}</button></div><p>OBJ exports all native solid bodies as a tessellated geometry-only file. Save .arc to retain editable construction.</p></section></div>`;
+  }
+  ToggleConstruct() {
+    const Menu = Select("#construct-menu");
+    if (Menu.matches(":popover-open")) {
+      Menu.hidePopover();
+      return;
+    }
+    const Anchor = Select("#construct-button").getBoundingClientRect();
+    Menu.style.left = `${Math.max(8, Math.min(Anchor.left, innerWidth - 528))}px`;
+    Menu.style.top = `${Math.max(8, Math.min(Anchor.bottom + 8, innerHeight - 338))}px`;
+    Menu.showPopover();
+    Menu.querySelector(`[data-section="${this.ConstructSection}"]`).focus();
+  }
+  RefreshConstruct() {
+    const Sections = [
+      ...new Set(ConstructionCatalogue.map((Entry) => Entry.section)),
+    ];
+    Select("#construct-sections").innerHTML = Sections.map(
+      (Section) =>
+        `<button data-section="${Section}" class="${Section === this.ConstructSection ? "active" : ""}" aria-pressed="${Section === this.ConstructSection}">${Section}<small>${ConstructionCatalogue.filter((Entry) => Entry.section === Section).length}</small></button>`,
+    ).join("");
+    Select("#construct-tiles").innerHTML = ConstructionCatalogue.map(
+      (Entry, Index) =>
+        Entry.section !== this.ConstructSection
+          ? ""
+          : `<button data-construct="${Index}" class="catalogue-tile" title="Place ${Entry.label}">${Icon(Entry.icon)}<span>${Entry.label}</span>${Entry.key ? `<kbd>${Entry.key}</kbd>` : ""}</button>`,
+    ).join("");
+  }
+  TransformTable(Figure) {
+    const Key = `${this.Active}:${this.Picked.map((Entry) => Entry.id).join(",")}`;
+    const Centre = [0, 1, 2].map(
+      (Axis) =>
+        (Math.min(...this.Picked.map((Entry) => Entry.low[Axis])) +
+          Math.max(...this.Picked.map((Entry) => Entry.high[Axis]))) /
+        2,
+    );
+    if (this.TransformDraft?.key !== Key)
+      this.TransformDraft = {
+        key: Key,
+        position: Centre,
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+        uniform: 1,
+      };
+    this.TransformDraft.position = Centre;
+    const Locked = this.Picked.some((Entry) => Entry.locked);
+    const Rows = [
+      ["position", "Position", "m", 0.01, -10000, 10000],
+      ["rotation", "Rotation", "deg", 0.4, -36000, 36000],
+      ["scale", "Scale", "×", 0.005, 0.001, 1000],
+    ];
+    return `<section class="inspector-card transform-card"><div class="section-heading"><h3>Transform</h3><small>WORLD SPACE</small></div><table class="transform-table"><thead><tr><th></th>${["X", "Y", "Z"].map((Axis) => `<th class="axis-${Axis}" scope="col">${Axis}</th>`).join("")}</tr></thead><tbody>${Rows.map(([Key, Label, Unit, Step, Minimum, Maximum]) => `<tr><th scope="row">${Label}<small>${Unit}</small></th>${[0, 1, 2].map((Axis) => `<td><input type="number" aria-label="${Label} ${["X", "Y", "Z"][Axis]}" data-transform="${Key}" data-axis="${Axis}" data-scrub="${Step}" step="any" min="${Minimum}" max="${Maximum}" value="${Decimal(this.TransformDraft[Key][Axis])}" ${Locked ? "disabled" : ""}/></td>`).join("")}</tr>`).join("")}</tbody></table><label class="uniform-heading" for="uniform-scale">Uniform scale</label><div class="slider-control"><div class="value-pill"><input id="uniform-number" data-uniform="true" type="number" aria-label="Uniform scale value" min="0.1" max="4" step="0.01" value="${Decimal(this.TransformDraft.uniform)}" ${Locked ? "disabled" : ""}/><span>×</span></div><input id="uniform-scale" aria-label="Uniform scale slider" type="range" min="0.1" max="4" step="0.01" style="--fill:${((this.TransformDraft.uniform - 0.1) / 3.9) * 100}%" value="${this.TransformDraft.uniform}" ${Locked ? "disabled" : ""}/></div><div class="transform-resets">${["position", "rotation", "scale"].map((Key, Index) => `<button data-transform-reset="${Key}" ${Locked ? "disabled" : ""}>${Icon("rotate")}${["pos", "rot", "scale"][Index]}</button>`).join("")}</div><p>${Locked ? "Selection is locked." : "Drag a value or type. Rotation and scale are amounts applied since selection; transforms act around the selection centre."}</p><p>Rotation/scale and transformed derived figures become authored NURBS geometry; their old construction dimensions are not retained. Undo restores them.</p></section>`;
+  }
+  async ApplyTransform(Row, Axis, Value) {
+    const Existing = this.TransformDraft;
+    if (
+      Existing &&
+      (Row === "uniform"
+        ? Existing.uniform === Value
+        : Axis === null
+          ? Existing[Row].every((NumberValue) => NumberValue === Value)
+          : Existing[Row][Axis] === Value)
+    )
+      return;
+    if (
+      !this.Ready ||
+      this.ViewDrag ||
+      ((this.Busy || this.Motion || this.ResolveDetail) &&
+        !(await this.AwaitNavigation()))
+    ) {
+      this.Notify("Finish the current gesture before editing a transform.");
+      return;
+    }
+    if (
+      !Number.isFinite(Value) ||
+      Math.abs(Value) > 36000 ||
+      (["scale", "uniform"].includes(Row) && Value < 0.001)
+    )
+      throw new Error("Enter a finite transform; scale must be positive.");
+    const Draft = this.TransformDraft;
+    if (!Draft || !this.Picked.length) return;
+    const Before = structuredClone(Draft);
+    let Vector = [0, 0, 0],
+      Flag = "move";
+    if (Row === "uniform") {
+      Vector = [
+        Value / Draft.uniform,
+        Value / Draft.uniform,
+        Value / Draft.uniform,
+      ];
+      Draft.uniform = Value;
+      Flag = "scale";
+    } else {
+      const Next = [...Draft[Row]];
+      if (Axis === null) Next.fill(Value);
+      else Next[Axis] = Value;
+      Vector = Next.map((NumberValue, Index) =>
+        Row === "scale"
+          ? NumberValue / Draft[Row][Index]
+          : NumberValue - Draft[Row][Index],
+      );
+      Draft[Row] = Next;
+      Flag = { position: "move", rotation: "rotate", scale: "scale" }[Row];
+    }
+    this.TransformEditing = true;
+    try {
+      const Response = await this.Command(
+        `transform selected --${Flag}=(${Vector.join(",")}) --pivot=(${Before.position.join(",")})`,
+      );
+      if (!Response?.success) this.TransformDraft = Before;
+    } finally {
+      this.TransformEditing = false;
+      this.RefreshInspector();
+    }
   }
   DimensionControl(Dimension) {
     const Editable = Dimension.slot >= 0;
@@ -489,21 +725,7 @@ class WorkspacePanel {
     return `<button data-tool="${Key}" class="operation-button">${Icon(Tools[Key].icon)}<span>${Tools[Key].title}</span></button>`;
   }
   ConstructLibrary() {
-    Select("#construct-tiles").innerHTML = [
-      "box",
-      "cylinder",
-      "sphere",
-      "torus",
-      "rect",
-      "circle",
-      "plane",
-      "spline",
-    ]
-      .map(
-        (Key) =>
-          `<button data-tool="${Key}" class="construct-tile">${Icon(Tools[Key].icon)}<span>${Tools[Key].title}<small>${Tools[Key].group}</small></span><span class="tile-arrow">↗</span></button>`,
-      )
-      .join("");
+    this.RefreshConstruct();
     Select("#example-cards").innerHTML = Object.entries(Examples)
       .map(
         ([Key, Example]) =>
@@ -511,8 +733,13 @@ class WorkspacePanel {
       )
       .join("");
   }
-  OpenTool(Key) {
-    if (this.Busy || !this.Ready) return;
+  async OpenTool(Key) {
+    if (!this.Ready || this.ViewDrag) return;
+    if (
+      (this.Busy || this.Motion || this.ResolveDetail) &&
+      !(await this.AwaitNavigation())
+    )
+      return;
     this.Tool = Key;
     const Definition = Tools[Key];
     Select("#tool-title").textContent = Definition.title;
@@ -565,7 +792,12 @@ class WorkspacePanel {
     this.ToastTimer = setTimeout(() => (Select("#toast").hidden = true), 4200);
   }
   async Save() {
-    if (this.Busy) return;
+    if (!this.Ready || this.ViewDrag) return;
+    if (
+      (this.Busy || this.Motion || this.ResolveDetail) &&
+      !(await this.AwaitNavigation())
+    )
+      return;
     const Response = await this.Request("save");
     if (Response.success) {
       Download(
@@ -614,7 +846,7 @@ class WorkspacePanel {
         this.Document.cages = false;
         await this.Command(
           [
-            "gizmo off",
+            "gizmo on",
             "show shading matcap",
             "show edges on",
             "show cages off",
@@ -746,7 +978,7 @@ class WorkspacePanel {
       "click",
       Safe(async (Event) => {
         const Button = Event.target.closest("[data-tool]");
-        if (Button) this.OpenTool(Button.dataset.tool);
+        if (Button) await this.OpenTool(Button.dataset.tool);
         if (Event.target.closest("[data-close-dialog]"))
           Event.target.closest("dialog").close();
         const Example = Event.target.closest("[data-example]");
@@ -787,7 +1019,47 @@ class WorkspacePanel {
         );
       }
     });
-    Select("#add-button").onclick = () => this.OpenTool("box");
+    Select("#add-button").onclick = () => this.ToggleConstruct();
+    Select("#construct-button").onclick = () => this.ToggleConstruct();
+    Select("#construct-launcher").onclick = () => this.ToggleConstruct();
+    Select("#construct-close").onclick = () =>
+      Select("#construct-menu").hidePopover();
+    Select("#construct-sections").onclick = (Event) => {
+      const Button = Event.target.closest("[data-section]");
+      if (Button) {
+        this.ConstructSection = Button.dataset.section;
+        this.RefreshConstruct();
+        Select(`[data-section="${this.ConstructSection}"]`).focus();
+      }
+    };
+    Select("#construct-tiles").onclick = Safe(async (Event) => {
+      const Button = Event.target.closest("[data-construct]");
+      if (!Button || !(await this.AwaitNavigation())) return;
+      Select("#construct-menu").hidePopover();
+      const Document = this.Document;
+      const Response = await this.Command(
+        PlaceConstruction(
+          Number(Button.dataset.construct),
+          Document.placed || 0,
+        ),
+      );
+      if (Response?.success) {
+        Document.placed = (Document.placed || 0) + 1;
+        await this.Command(
+          `select ${this.Description.figures.at(-1).id}`,
+          false,
+        );
+        await this.Command("view fit", false);
+      }
+    });
+    Select("#gizmo-mode").onchange = Safe((Event) =>
+      this.Command(
+        Event.target.value === "off"
+          ? "gizmo off"
+          : ["gizmo on", `gizmo ${Event.target.value}`],
+        false,
+      ),
+    );
     Select("#examples-button").onclick = () =>
       Select("#examples-dialog").showModal();
     Select("#workspace-button").onclick = () =>
@@ -865,8 +1137,25 @@ class WorkspacePanel {
           await this.Command(
             `${this.Picked[0].hidden ? "unhide" : "hide"} ${this.Picked[0].id}`,
           );
+        const InspectorTab = Event.target.closest("[data-inspector]");
+        if (InspectorTab) {
+          this.InspectorTab = InspectorTab.dataset.inspector;
+          this.RefreshInspector();
+        }
+        const Reset = Event.target.closest("[data-transform-reset]");
+        if (Reset)
+          await this.ApplyTransform(
+            Reset.dataset.transformReset,
+            null,
+            Reset.dataset.transformReset === "scale" ? 1 : 0,
+          );
         if (Event.target.closest("#topology-button")) await this.Inspect();
         if (Event.target.closest("#export-obj")) {
+          if (
+            (this.Busy || this.Motion || this.ResolveDetail) &&
+            !(await this.AwaitNavigation())
+          )
+            return;
           const Response = await this.Request("export");
           if (Response.success)
             Download(Response.file, `${this.Document.name}.obj`);
@@ -876,6 +1165,26 @@ class WorkspacePanel {
     Select("#inspector-body").addEventListener(
       "change",
       Safe((Event) => {
+        if (Event.target.dataset.transform && !Event.target.checkValidity()) {
+          this.Notify("Use a value within the transform field limits.");
+          this.RefreshInspector();
+          return;
+        }
+        if (Event.target.dataset.transform)
+          return this.ApplyTransform(
+            Event.target.dataset.transform,
+            Number(Event.target.dataset.axis),
+            Number(Event.target.value),
+          );
+        if (
+          Event.target.id === "uniform-scale" ||
+          Event.target.id === "uniform-number"
+        )
+          return this.ApplyTransform(
+            "uniform",
+            null,
+            Number(Event.target.value),
+          );
         if (Event.target.id === "figure-name")
           return this.Command(
             `rename ${this.Picked[0].id} ${NativeName(Event.target.value)}`,
@@ -906,6 +1215,13 @@ class WorkspacePanel {
       }),
     );
     Select("#inspector-body").addEventListener("input", (Event) => {
+      if (Event.target.id === "uniform-scale") {
+        Select("#uniform-number").value = Event.target.value;
+        Event.target.style.setProperty(
+          "--fill",
+          `${((Number(Event.target.value) - 0.1) / 3.9) * 100}%`,
+        );
+      }
       if (Event.target.dataset.dimensionRange) {
         Select(`#dimension-${Event.target.dataset.dimensionRange}`).value =
           Event.target.value;
@@ -919,7 +1235,9 @@ class WorkspacePanel {
     Select("#inspector-body").addEventListener("pointerdown", (Event) => {
       if (
         Event.button !== 0 ||
-        !Event.target.matches("[data-dimension]:not(:disabled)")
+        !Event.target.matches(
+          "[data-dimension]:not(:disabled), [data-transform]:not(:disabled), [data-uniform]:not(:disabled)",
+        )
       )
         return;
       Scrub = {
@@ -940,7 +1258,10 @@ class WorkspacePanel {
           Number(Scrub.input.min),
           Math.min(
             Number(Scrub.input.max),
-            Scrub.number + Distance * (Event.shiftKey ? 0.001 : 0.01),
+            Scrub.number +
+              Distance *
+                (Number(Scrub.input.dataset.scrub) || 0.01) *
+                (Event.shiftKey ? 0.1 : 1),
           ),
         ),
       );
@@ -959,6 +1280,24 @@ class WorkspacePanel {
       "keydown",
       Safe((Event) => {
         if (Select("dialog[open]")) return;
+        if (Event.key === "Tab" && Event.target.id === "cad-canvas") {
+          Event.preventDefault();
+          this.ToggleConstruct();
+          return;
+        }
+        if (Select("#construct-menu").matches(":popover-open")) {
+          const Index = ConstructionCatalogue.findIndex(
+            (Entry) =>
+              Entry.key && Entry.key.toLowerCase() === Event.key.toLowerCase(),
+          );
+          if (Index >= 0 && !Event.target.matches("input")) {
+            Event.preventDefault();
+            this.ConstructSection = ConstructionCatalogue[Index].section;
+            this.RefreshConstruct();
+            Select(`[data-construct="${Index}"]`).click();
+          }
+          return;
+        }
         if (
           (Event.ctrlKey || Event.metaKey) &&
           Event.key.toLowerCase() === "s"
@@ -1006,88 +1345,121 @@ class WorkspacePanel {
     Select("#console-panel").hidden = false;
     await this.Command(`topology ${this.Picked[0].id}`, false);
   }
+  get Motion() {
+    return this.NavigationQueue[0] || null;
+  }
   ConnectViewport(Safe) {
     const Canvas = Select("#cad-canvas");
-    let Drag = null;
     this.FlushNavigation = Safe(async () => {
       if (this.Busy || !this.Ready) return;
       if (this.Motion) {
-        const Motion = this.Motion;
-        this.Motion = null;
+        const Motion = this.NavigationQueue.shift();
         await this.Request(Motion.action, Motion);
-      } else if (this.ResolveDetail) {
+      } else if (this.ResolveDetail && !this.ViewDrag) {
         this.ResolveDetail = false;
         await this.Request("render");
       }
     });
+    const Queue = (Request) => {
+      const Previous = this.NavigationQueue.at(-1);
+      if (
+        Previous?.action === Request.action &&
+        ["pointerMove", "hover"].includes(Request.action)
+      )
+        Object.assign(Previous, Request);
+      else if (Previous?.action === "zoom" && Request.action === "zoom")
+        Previous.steps += Request.steps;
+      else this.NavigationQueue.push(Request);
+      this.FlushNavigation();
+    };
+    const Coordinates = (Event) => {
+      const Rectangle = Canvas.getBoundingClientRect();
+      return {
+        u: (Event.clientX - Rectangle.left) / Rectangle.width,
+        v: (Event.clientY - Rectangle.top) / Rectangle.height,
+        cx: Event.clientX,
+        cy: Event.clientY,
+        snap: Event.ctrlKey || Event.metaKey,
+      };
+    };
+    const Finish = (Cancel, Event) => {
+      if (
+        !this.ViewDrag ||
+        (Event?.pointerId !== undefined &&
+          Event.pointerId !== this.ViewDrag.identity)
+      )
+        return;
+      const Previous = this.ViewDrag;
+      this.ViewDrag = null;
+      Queue({
+        action: "pointerEnd",
+        ...(Event ? Coordinates(Event) : Previous.last),
+        cancel: Cancel,
+      });
+      if (Canvas.hasPointerCapture(Previous.identity))
+        Canvas.releasePointerCapture(Previous.identity);
+      this.ResolveDetail = true;
+    };
     Canvas.oncontextmenu = (Event) => Event.preventDefault();
     Canvas.onpointerdown = (Event) => {
-      if (this.Busy || this.Motion || !this.Ready) return;
+      if (!this.Ready || this.ViewDrag || Event.button > 2) return;
+      Event.preventDefault();
+      Canvas.focus({ preventScroll: true });
       Canvas.setPointerCapture(Event.pointerId);
-      Drag = {
-        x: Event.clientX,
-        y: Event.clientY,
-        originX: Event.clientX,
-        originY: Event.clientY,
-        moved: false,
-        pan: Event.button === 2 || Event.button === 1,
+      const Position = Coordinates(Event);
+      this.ViewDrag = { identity: Event.pointerId, last: Position };
+      Queue({
+        action: "pointerStart",
+        ...Position,
+        button: Event.button,
         extend: Event.shiftKey,
-      };
+        orbit: Event.altKey,
+        pan: Event.shiftKey && Event.altKey,
+      });
     };
     Canvas.onpointermove = (Event) => {
-      if (!Drag) return;
-      if (
-        Math.hypot(Event.clientX - Drag.originX, Event.clientY - Drag.originY) >
-        4
-      )
-        Drag.moved = true;
-      if (!Drag.moved) return;
-      const X = Event.clientX - Drag.x,
-        Y = Event.clientY - Drag.y;
-      Drag.x = Event.clientX;
-      Drag.y = Event.clientY;
-      this.Motion ||= {
-        action: Drag.pan ? "pan" : "orbit",
-        x: 0,
-        y: 0,
-        height: Canvas.clientHeight,
-      };
-      this.Motion.x += Drag.pan ? X : -X * 0.008;
-      this.Motion.y += Drag.pan ? -Y : Y * 0.008;
-      this.FlushNavigation();
+      if (!this.Ready) return;
+      if (this.ViewDrag) {
+        if (Event.pointerId !== this.ViewDrag.identity) return;
+        this.ViewDrag.last = Coordinates(Event);
+        Queue({ action: "pointerMove", ...this.ViewDrag.last });
+      } else Queue({ action: "hover", ...Coordinates(Event) });
     };
-    Canvas.onpointerup = Safe(async (Event) => {
-      const Previous = Drag;
-      Drag = null;
-      if (!Previous) return;
-      if (Previous.moved) {
-        this.ResolveDetail = true;
-        this.FlushNavigation();
-        return;
-      }
-      if (this.Busy) return;
-      const Rectangle = Canvas.getBoundingClientRect();
-      await this.Request("pick", {
-        x: ((Event.clientX - Rectangle.left) * Canvas.width) / Rectangle.width,
-        y: ((Event.clientY - Rectangle.top) * Canvas.height) / Rectangle.height,
-        extend: Previous.extend,
-      });
-    });
-    Canvas.onpointercancel = () => {
-      Drag = null;
-      this.ResolveDetail = true;
-      this.FlushNavigation();
+    Canvas.onpointerup = (Event) => Finish(false, Event);
+    Canvas.onpointercancel = (Event) => Finish(true, Event);
+    Canvas.onlostpointercapture = () => Finish(true);
+    Canvas.onpointerleave = () => {
+      if (!this.ViewDrag && this.Ready)
+        Queue({ action: "hover", u: -10, v: -10 });
     };
+    window.addEventListener("blur", () => Finish(true));
+    document.addEventListener(
+      "keydown",
+      (Event) => {
+        if (Event.key === "Escape" && this.ViewDrag) {
+          Event.preventDefault();
+          Event.stopImmediatePropagation();
+          Finish(true);
+        }
+      },
+      true,
+    );
     Canvas.addEventListener(
       "wheel",
       (Event) => {
         Event.preventDefault();
-        if (this.Motion?.action !== "zoom")
-          this.Motion = { action: "zoom", steps: 0 };
-        this.Motion.steps += Math.sign(Event.deltaY) * 0.5;
+        if (!this.Ready) return;
+        // Browser wheel units are pixels, lines or pages. Preserve magnitude, including tiny trackpad deltas.
+        const Pixels =
+          Event.deltaY *
+          (Event.deltaMode === 1
+            ? 16
+            : Event.deltaMode === 2
+              ? Canvas.clientHeight
+              : 1);
+        if (!Number.isFinite(Pixels) || Pixels === 0) return;
+        Queue({ action: "zoom", steps: -Pixels / 100 });
         this.ResolveDetail = true;
-        clearTimeout(this.WheelTimer);
-        this.WheelTimer = setTimeout(() => this.FlushNavigation(), 80);
       },
       { passive: false },
     );

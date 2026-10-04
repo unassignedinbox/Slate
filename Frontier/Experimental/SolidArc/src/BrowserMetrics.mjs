@@ -109,14 +109,10 @@ try {
     await Page.locator("#document-title").textContent(),
     "Browser trial",
   );
-  await Page.locator('#construct-tiles [data-tool="box"]').click();
-  await Page.locator('[name="name"]').fill("TestBlock");
-  await Page.locator('[name="height"]').fill("1.5");
-  await Page.locator("#apply-tool").click();
+  await Page.locator("#construct-button").click();
+  await Page.locator('[data-section="Solid"]').click();
+  await Page.locator('[data-construct="12"]').click();
   await Ready();
-  await Page.waitForFunction(
-    () => !document.querySelector("#tool-dialog").open,
-  );
   Assert.equal((await Snapshot()).figures[0].faces, 6);
   await Page.locator('[data-figure="1"]').click();
   await Ready();
@@ -129,12 +125,12 @@ try {
   Assert.equal((await Snapshot()).figures[0].high[2], 2.5);
   await Page.locator("#undo-button").click();
   await Ready();
-  Assert.equal((await Snapshot()).figures[0].high[2], 1.5);
+  Assert.equal((await Snapshot()).figures[0].high[2], 1);
   await Page.locator("#redo-button").click();
   await Ready();
   Assert.equal((await Snapshot()).figures[0].high[2], 2.5);
   Pass(
-    "Construct dialog builds a native solid; live dimension typing, undo and redo change its geometry",
+    "Native Construct catalogue places a solid; live dimension typing, undo and redo change its geometry",
   );
   let Current = (await Snapshot()).dimensions.find(
     (Dimension) => Dimension.slot === 5,
@@ -210,10 +206,12 @@ try {
   Pass(
     "Coalesced orbit reaches the full mouse displacement; camera modes, projection, fit, edges, cages and dimensions",
   );
+  await Page.locator("#gizmo-mode").selectOption("off");
+  await Ready();
   await Page.locator('[data-mode="face"]').click();
   await Ready();
   await Page.locator("#cad-canvas").click({
-    position: { x: Canvas.width * 0.5, y: Canvas.height * 0.5 },
+    position: { x: Canvas.width * 0.55, y: Canvas.height * 0.5 },
   });
   await Ready();
   Assert.ok((await Snapshot()).figures[0].pickedFaces.length > 0);
@@ -310,6 +308,7 @@ try {
     1,
   );
   await Page.locator('#inspector-body [data-tool="extrude"]').click();
+  await Page.locator("#tool-dialog").waitFor({ state: "visible" });
   Assert.match(
     await Page.locator("#command-preview").textContent(),
     /extrude a\d/,

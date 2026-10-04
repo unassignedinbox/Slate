@@ -1,0 +1,158 @@
+
+> solidarc-web@0.1.0 test
+> node --test src/GeometryMetrics.mjs
+
+TAP version 13
+# Subtest: Every supplied study executes against the actual C++ WebAssembly module
+ok 1 - Every supplied study executes against the actual C++ WebAssembly module
+  ---
+  duration_ms: 385.485053
+  type: 'test'
+  ...
+# Subtest: Native primitive topology and exact extents are exposed, not mock counts
+ok 2 - Native primitive topology and exact extents are exposed, not mock counts
+  ---
+  duration_ms: 10.300746
+  type: 'test'
+  ...
+# Subtest: A live dimension rebuilds geometry; native undo and redo restore it
+ok 3 - A live dimension rebuilds geometry; native undo and redo restore it
+  ---
+  duration_ms: 12.288587
+  type: 'test'
+  ...
+# Subtest: Native circle extrusion produces a solid with the requested height
+ok 4 - Native circle extrusion produces a solid with the requested height
+  ---
+  duration_ms: 18.783529
+  type: 'test'
+  ...
+# Subtest: Cylinder subtraction produces the native through-hole topology
+ok 5 - Cylinder subtraction produces the native through-hole topology
+  ---
+  duration_ms: 63.518232
+  type: 'test'
+  ...
+# Subtest: Unsupported shell is refused without replacing the sphere
+ok 6 - Unsupported shell is refused without replacing the sphere
+  ---
+  duration_ms: 72.512115
+  type: 'test'
+  ...
+# Subtest: Native save/reopen preserves edits and rejects malformed input atomically
+ok 7 - Native save/reopen preserves edits and rejects malformed input atomically
+  ---
+  duration_ms: 177.955165
+  type: 'test'
+  ...
+# Subtest: Independent native documents retain their own geometry
+ok 8 - Independent native documents retain their own geometry
+  ---
+  duration_ms: 53.753602
+  type: 'test'
+  ...
+# Subtest: Original software raster returns nonempty RGBA pixels and camera orbit changes them
+ok 9 - Original software raster returns nonempty RGBA pixels and camera orbit changes them
+  ---
+  duration_ms: 46.264561
+  type: 'test'
+  ...
+# Subtest: Native OBJ export contains tessellated geometry
+ok 10 - Native OBJ export contains tessellated geometry
+  ---
+  duration_ms: 13.578471
+  type: 'test'
+  ...
+# Subtest: All primitive UI defaults dispatch valid native commands
+ok 11 - All primitive UI defaults dispatch valid native commands
+  ---
+  duration_ms: 145.51368
+  type: 'test'
+  ...
+# Subtest: Command forms reject nonfinite values, invalid torus radii and missing selections
+ok 12 - Command forms reject nonfinite values, invalid torus radii and missing selections
+  ---
+  duration_ms: 0.698402
+  type: 'test'
+  ...
+# Subtest: Names cannot inject commands or HTML into generated forms
+ok 13 - Names cannot inject commands or HTML into generated forms
+  ---
+  duration_ms: 0.320225
+  type: 'test'
+  ...
+# Subtest: Native material finishes change the rendered pixels
+ok 14 - Native material finishes change the rendered pixels
+  ---
+  duration_ms: 66.574862
+  type: 'test'
+  ...
+# Subtest: Native box union, intersection and supported shell execute successfully
+ok 15 - Native box union, intersection and supported shell execute successfully
+  ---
+  duration_ms: 20.904194
+  type: 'test'
+  ...
+# Subtest: Native sketch-region extrusion retains inner holes and exposes control-point picks
+ok 16 - Native sketch-region extrusion retains inner holes and exposes control-point picks
+  ---
+  duration_ms: 51.197585
+  type: 'test'
+  ...
+# Subtest: All 22 native Construct catalogue entries create actual geometry
+ok 17 - All 22 native Construct catalogue entries create actual geometry
+  ---
+  duration_ms: 302.272456
+  type: 'test'
+  ...
+# Subtest: Empty selections expose no nonfinite gizmo coordinates
+ok 18 - Empty selections expose no nonfinite gizmo coordinates
+  ---
+  duration_ms: 87.617664
+  type: 'test'
+  ...
+# Subtest: Affine inspector translation, rotation and scale are native, undoable and persistent
+ok 19 - Affine inspector translation, rotation and scale are native, undoable and persistent
+  ---
+  duration_ms: 87.041182
+  type: 'test'
+  ...
+# Subtest: Transform refusal preserves geometry for invalid and singular matrices
+ok 20 - Transform refusal preserves geometry for invalid and singular matrices
+  ---
+  duration_ms: 10.53976
+  type: 'test'
+  ...
+# Subtest: Original analytic gizmo drags, snaps, cancels and journals a camera-independent affine edit
+ok 21 - Original analytic gizmo drags, snaps, cancels and journals a camera-independent affine edit
+  ---
+  duration_ms: 242.155449
+  type: 'test'
+  ...
+# Subtest: Gizmo control-pole edits preserve the other poles and survive undo
+ok 22 - Gizmo control-pole edits preserve the other poles and survive undo
+  ---
+  duration_ms: 87.945326
+  type: 'test'
+  ...
+# Subtest: Zoom remains finite at extremes and inverse wheel steps restore camera distance
+ok 23 - Zoom remains finite at extremes and inverse wheel steps restore camera distance
+  ---
+  duration_ms: 9.511316
+  type: 'test'
+  ...
+# Subtest: Transformed derived solids retain their authored shape instead of snapping back to the recipe
+ok 24 - Transformed derived solids retain their authored shape instead of snapping back to the recipe
+  ---
+  duration_ms: 37.256458
+  type: 'test'
+  ...
+1..24
+# tests 24
+# suites 0
+# pass 24
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2105.307096

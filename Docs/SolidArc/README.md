@@ -529,10 +529,25 @@ WebAssembly, running in a dedicated browser worker. The viewport uses the same n
 a substitute triangle-only CAD implementation or a WebGL acceleration claim.
 
 - Start with **Mount study**, or open **Examples** for primitives, profiles and overlapping Boolean stock.
-- Use **Construct**, pick figures in the viewport or outliner, then use inspector operations and live dimensions.
+- **Construct** matches the native catalogue: Reference, Sketch Draw, Solid and Surface, with all 22 entries.
+  Click the viewport chip, or press Tab while the viewport has focus. Tiles place the native default shape at the next
+  ring position on the workplane; use live dimensions to edit it. Escape/click-away closes the catalogue.
+- Pick figures in the viewport or outliner, then use inspector operations and live dimensions.
 - Drag numeric values or type them; geometry is rebuilt on release. Shift-click extends selection. `1`–`4` choose
-  control-point, edge, face and whole-figure selection. Move is available from the inspector’s **Transform** tab.
-- Orbit with left-drag, pan with right-drag, zoom with the wheel and press `F` to fit. Motion uses a lower-resolution
+  control-point, edge, face and whole-figure selection. **Transform** is the native-style XYZ table: Position, Rotation,
+  Scale, uniform scale and per-row reset chips. Position is the selection centre in world metres; rotation/scale are
+  incremental amounts since selection, not a stored object decomposition. Geometry edits/undo reset that draft.
+- The viewport uses the original C++ combined gizmo: translation cones, scale cylinders, planar grips and rotation
+  sectors. Choose Combined/Move/Rotate/Scale/Off at the top right. Ctrl snaps movement to 0.25 m, scale to 0.1x and
+  rotation to 5 degrees; Escape or pointer cancellation restores the pre-drag geometry. A completed drag is one
+  undoable world-space affine command, so native save/replay does not depend on screen coordinates.
+- Rotation/scaling and transformed derived results become authored NURBS/B-rep geometry. The old primitive/derived
+  recipe cannot generally represent that affine result, so its construction dimensions become read-only rather than
+  allowing an edit to snap the geometry back. Undo restores the original recipe. Translation retains supported
+  primitive dimensions. This is a geometry edit, not a nondestructive object-transform stack.
+- Orbit with left-drag on empty space (Alt-drag bypasses the gizmo), pan with right/middle-drag, scroll up to zoom in
+  and down to zoom out, and press `F` to fit. Wheel magnitude respects pixel/line/page units and trackpads. Mixed camera
+  events are queued without dropping deltas; camera motion uses a lower-resolution
   native raster, followed by a full-resolution redraw on release.
 - **Commands** accepts the existing native command language, including `help`, `workplane xz` and detailed construction
   options not exposed by the initial dialogs. Unsupported native geometry operations report their actual refusal.
@@ -551,6 +566,7 @@ npm --prefix Frontier/Experimental/SolidArc ci
 npm --prefix Frontier/Experimental/SolidArc run dev
 npm --prefix Frontier/Experimental/SolidArc test
 npm --prefix Frontier/Experimental/SolidArc run verify:browser
+npm --prefix Frontier/Experimental/SolidArc run verify:interaction
 npm --prefix Frontier/Experimental/SolidArc run build
 ```
 
@@ -559,3 +575,5 @@ npm or a geometry server. `Runtime/Provenance.json` identifies the native source
 To rebuild, activate Emscripten 4.0.15 and run `python Frontier/Experimental/SolidArc/Native/CompileSequence.py`.
 The **SolidArc WebAssembly** workflow compiles the same sources and publishes the runtime on the session branch.
 Node checks execute the real module; browser checks exercise its worker, raster, dialogs and file downloads.
+`verify:interaction` covers queued camera gestures, original native gizmo grips/cancellation/snapping, affine document
+replay, the Construct catalogue and the Transform table. Browser screenshots are in `VisualProof/SolidArcWeb/`.
