@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Frontier — Project-Zero</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ══ trapezoid tab sheet (EditorStyleSpecification.h: slant 14, height 24) ══ -->
+  <div id="tabstrip">
+    <div class="tabzone left">
+      <div class="tab"><span>Outliner</span><span class="x" title="Close tab">✕</span></div>
+      <div class="tab-add" id="tab-add" title="Add a panel"></div>
+    </div>
+    <div class="tabzone centre">
+      <div class="tab"><span>Viewport</span><span class="x" title="Close tab">✕</span></div>
+      <div class="tab dimmed project"><span>Project-Zero</span></div>
+    </div>
+    <div class="tabzone right">
+      <div class="tab"><span>Inspector</span><span class="x" title="Close tab">✕</span></div>
+    </div>
+  </div>
+
+  <!-- ══ OUTLINER ══ -->
+  <div class="column" id="outliner-col">
+    <div id="outliner">
+      <div class="outliner-head">
+        <div class="outliner-title-row">
+          <span class="outliner-title">Outliner</span>
+          <span class="outliner-sub" id="outliner-sub">Showcase &bull; 122 nodes</span>
+          <span class="compact-btn" id="compact-btn" title="Compact rows (Tab)"></span>
+        </div>
+      </div>
+      <div class="census">
+        <div class="census-tile">
+          <span class="census-ico ok" id="census-vis-ico"></span>
+          <span class="census-body">
+            <span class="census-label">Visible</span>
+            <span class="census-fig" id="census-visible">0</span>
+          </span>
+        </div>
+        <div class="census-tile">
+          <span class="census-ico hid" id="census-hid-ico"></span>
+          <span class="census-body">
+            <span class="census-label">Hidden</span>
+            <span class="census-fig" id="census-hidden">0</span>
+          </span>
+        </div>
+      </div>
+      <div class="search-row">
+        <label class="search-pill" id="search-pill">
+          <span id="search-ico"></span>
+          <input id="search" placeholder="Search  Ctrl+Shift+F" spellcheck="false">
+        </label>
+        <div class="filter-btn" id="filter-btn">
+          <span id="filter-ico"></span><span>Filter</span><span id="filter-caret">▾</span>
+          <div class="filter-pop" id="filter-pop"></div>
+        </div>
+      </div>
+      <div class="chips" id="chips"></div>
+      <div class="tree" id="tree"></div>
+      <div class="outliner-census-foot">
+        <div class="census-bar" id="census-bar"></div>
+        <div class="census-foot-row">
+          <b id="cf-shown">0/0</b><span>shown</span>
+          <span id="cf-hidden" style="margin-left:12px">0 hidden</span>
+          <span class="verdict clean" id="cf-verdict"></span>
+        </div>
+      </div>
+      <div class="outliner-foot" id="outliner-foot"></div>
+    </div>
+  </div>
+
+  <!-- ══ VIEWPORT ══ -->
+  <div class="column" id="viewport-col">
+    <div id="viewport">
+      <div class="rail" id="rail">
+        <div class="brand" title="Frontier">F</div>
+        <div class="dockpair">
+          <span class="dockseg on" id="dock-left" title="Outliner column"></span>
+          <span class="dockseg on" id="dock-right" title="Inspector column"></span>
+        </div>
+        <div class="rbtn" id="add-btn" title="Add an object  (Shift A)"><span id="add-ico"></span><span>Add</span></div>
+        <div class="menu" id="add-menu"></div>
+
+        <div class="rail-centre">
+          <div class="modepill" id="modepill">
+            <span class="modeseg sel" data-mode="edit">Edit</span>
+            <span class="modeseg" data-mode="simulate">Simulate</span>
+            <span class="modeseg" data-mode="play">Play</span>
+          </div>
+          <div class="transport" id="transport">
+            <span class="rule"></span>
+            <span class="tb" id="t-pause" title="Pause / resume  (Space)"></span>
+            <span class="tb" id="t-step" title="Step one frame"></span>
+            <span class="tb" id="t-stop" title="Stop and restore  (Esc)"></span>
+          </div>
+        </div>
+
+        <div class="rail-right">
+          <div class="rbtn" id="proj-btn" title="Projection"><span id="proj-label">Persp</span><span style="letter-spacing:0">▾</span><span id="fov-label">72°</span></div>
+          <div class="menu" id="proj-menu"></div>
+          <div class="rbtn iconic" id="markers-btn" title="Markers"><span id="markers-ico"></span></div>
+          <div class="status-pill"><span class="live-dot" id="live-dot"></span><span id="status-label">Live</span><b id="status-samples">0</b></div>
+          <div class="rbtn iconic" id="settings-btn" title="Viewport settings"><span id="settings-ico"></span></div>
+        </div>
+      </div>
+      <div class="hairline" id="hairline"><i id="hairline-fill"></i></div>
+
+      <div class="view-wrap" id="view-wrap">
+        <canvas id="view"></canvas>
+        <div class="fps-overlay" id="fps-overlay">FPS 60 &bull; 16.7 ms</div>
+        <div class="gizmo-readout" id="gizmo-readout"></div>
+        <div class="mode-hint" id="mode-hint">W move &middot; E rotate &middot; R scale</div>
+      </div>
+
+      <div class="cmdline">
+        <span class="flag" id="cmd-flag"></span>
+        <input id="cmd" placeholder="find" spellcheck="false" autocomplete="off">
+        <span class="khint">⌘K</span>
+        <span class="crun" id="cmd-run"></span>
+        <div class="palette" id="palette"></div>
+      </div>
+      <div class="vstatus" id="vstatus"></div>
+    </div>
+  </div>
+
+  <!-- ══ INSPECTOR ══ -->
+  <div class="column" id="inspector-col">
+    <div id="inspector">
+      <div class="insp-head" id="insp-head">
+        <span class="insp-art" id="insp-art"></span>
+        <span class="insp-ident">
+          <input class="insp-name" id="insp-name" spellcheck="false">
+          <span class="insp-cat" id="insp-cat">&mdash;</span>
+        </span>
+        <span class="insp-tools">
+          <span class="insp-tool" id="insp-lock" title="Lock"></span>
+          <span class="insp-tool" id="insp-eye" title="Visibility"></span>
+        </span>
+      </div>
+      <div class="insp-body" id="insp-body"></div>
+      <div class="insp-foot" id="insp-foot"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CONSTRUCT (Tab) — NativeConstructPanel.h ══ -->
+<div id="construct-veil">
+  <div id="construct">
+    <div class="construct-title"><span>Construct</span><span class="x" id="construct-close">✕</span></div>
+    <div class="construct-crumb">
+      <span class="live">CONSTRUCT&nbsp;&nbsp;/&nbsp;&nbsp;FRONTIER</span>
+      <span class="steps" id="construct-steps">01 Entities&nbsp;&nbsp;&gt;&nbsp;&nbsp;02 Properties</span>
+    </div>
+    <div class="construct-search" id="construct-search-wrap">
+      <input id="construct-search" placeholder="Search existing engine entities..." spellcheck="false">
+    </div>
+    <div class="construct-body">
+      <div class="construct-cats" id="construct-cats"></div>
+      <div class="construct-tiles" id="construct-tiles"></div>
+      <div class="construct-props" id="construct-props">
+        <div class="cp-head">
+          <span class="cp-back" id="cp-back">&lt; Entities</span>
+          <span id="cp-title" style="font-size:12px"></span>
+          <span class="cp-enable" id="cp-enable">Enable in world</span>
+        </div>
+        <div class="cp-body" id="cp-body"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CONTROL CENTER — ControlCentreHost.cpp quick tiles ══ -->
+<div id="shade">
+  <div class="shade-panel">
+    <div class="shade-head">
+      <span class="st">Control Center</span>
+      <span class="sico"><span id="shade-wifi"></span><span id="shade-gear"></span></span>
+    </div>
+    <div class="quick-grid" id="quick-grid"></div>
+    <div class="shade-slider">
+      <span class="cam" id="shade-cam"></span>
+      <input type="range" id="res-slider" min="25" max="100" value="100" step="5">
+      <span class="pct" id="res-pct">100%</span>
+    </div>
+  </div>
+  <div class="shade-grab" id="shade-grab"></div>
+</div>
+
+<div id="toasts"></div>
+
+<script src="icons.js"></script>
+<script src="scene.js"></script>
+<script src="viewport3d.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
