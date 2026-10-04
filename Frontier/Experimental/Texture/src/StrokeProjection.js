@@ -212,6 +212,8 @@ export class StrokeProjection
             Position: [...Hit.Position],
             Normal: [...Normal],
             Tangent: Tangent.map((Component) => Component / Scale),
+            // Where the click landed on the sheet, so the timeline can draw the placement in texture space.
+            Coordinate: Hit.Coordinate ? [...Hit.Coordinate] : null,
         };
     }
 }

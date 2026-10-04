@@ -189,6 +189,10 @@ const DefaultEnabledChannels = {
     ],
 };
 
+// A layer paints on a sheet of its own size when it wants one: 0 follows the document, the rest are the sizes a
+// texture set is normally shipped at. The stroke history is what makes this safe to change after the fact.
+export const LayerResolutions = [0, 256, 512, 1024, 2048, 4096];
+
 export const CreateLayer = (Kind = "fill", Overrides = {}) =>
 {
     const Descriptor = LayerKindByIdentifier[Kind] ? Kind : "fill";
@@ -201,6 +205,7 @@ export const CreateLayer = (Kind = "fill", Overrides = {}) =>
         Locked: false,
         Opacity: 1,
         Blend: "normal",
+        Resolution: 0,              // 0 follows the document; otherwise this layer keeps its own sheet size
         Channels: DefaultChannelValues(),
         Enabled: DefaultChannelMask(DefaultEnabledChannels[Descriptor]),
         Mask: MaskDefaults(),
@@ -472,6 +477,7 @@ export const SanitiseLayer = (Candidate) =>
     Layer.Locked = Boolean(Candidate.Locked);
     Layer.Opacity = Clamp(Candidate.Opacity ?? 1, 0, 1);
     Layer.Blend = BlendOrdering.some((Blend) => Blend.Identifier === Candidate.Blend) ? Candidate.Blend : "normal";
+    Layer.Resolution = LayerResolutions.includes(Candidate.Resolution) ? Candidate.Resolution : 0;
     for (const Identifier of ChannelIdentifiers)
     {
         const Specification = ChannelByIdentifier[Identifier];

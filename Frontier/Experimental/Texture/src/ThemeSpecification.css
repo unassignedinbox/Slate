@@ -3160,7 +3160,7 @@ dialog {
 .timeline-event {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   padding: 9px 10px;
@@ -3298,4 +3298,324 @@ dialog {
 .scope-toggle.active [data-icon],
 .scope-toggle.active svg {
   color: var(--green);
+}
+
+/*==========================================================================================================================================*/
+/* Channel chips. A layer wears only the channels it writes: a rail of pills, an × that hands one back, and a + that     */
+/* opens the shelf of the rest. The per-channel controls fold underneath, one disclosure each.                           */
+/*==========================================================================================================================================*/
+.channel-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px 0 12px;
+}
+.chip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  color: #7a7a7a;
+}
+.chip-head > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.chip-head svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+.chip-head b {
+  display: inline-grid;
+  place-items: center;
+  min-width: 21px;
+  height: 21px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #ffffff0d;
+  color: var(--text);
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.chip-clear {
+  border: 0;
+  background: none;
+  color: #7a7a7a;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0;
+  cursor: pointer;
+  padding: 0;
+}
+.chip-clear:hover {
+  color: var(--text);
+}
+.chip-clear:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.chip-rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+.channel-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  height: 36px;
+  padding: 0 11px 0 13px;
+  border-radius: 999px;
+  background: #171717;
+  border: 1px solid #ffffff0a;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.channel-pill:hover {
+  background: #1d1d1d;
+  border-color: #ffffff14;
+}
+.channel-pill.focused {
+  border-color: #ffffff24;
+  background: #212121;
+}
+.channel-pill i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--chip, #9a9a9a);
+}
+.channel-pill .pill-remove {
+  display: inline-grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  color: #6f6f6f;
+}
+.channel-pill .pill-remove:hover {
+  background: #ffffff12;
+  color: var(--text);
+}
+.channel-pill .pill-remove svg {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+.channel-pill.plus {
+  width: 36px;
+  padding: 0;
+  justify-content: center;
+  background: none;
+  border: 1px dashed #ffffff1f;
+  color: #8a8a8a;
+}
+.channel-pill.plus:hover,
+.channel-pill.plus.open {
+  color: var(--text);
+  border-color: #ffffff33;
+  border-style: solid;
+}
+.channel-pill.plus svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+}
+.channel-pill.ghost {
+  background: #0f0f0f;
+  border-style: dashed;
+  color: #a6a6a6;
+}
+.channel-shelf {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  padding: 12px;
+  border-radius: 18px;
+  background: #0d0d0d;
+  border: 1px solid #ffffff08;
+}
+.channel-shelf .property-hint {
+  margin: 0;
+}
+details.channel-control {
+  border-top: 1px solid #ffffff07;
+  padding: 0;
+}
+details.channel-control > summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 42px;
+  cursor: pointer;
+  font-size: 12px;
+  list-style: none;
+}
+details.channel-control > summary::-webkit-details-marker {
+  display: none;
+}
+details.channel-control > summary::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 1.4px solid #6f6f6f;
+  border-bottom: 1.4px solid #6f6f6f;
+  transform: rotate(-45deg);
+  transition: transform 0.14s ease;
+}
+details.channel-control[open] > summary::before {
+  transform: rotate(45deg);
+}
+details.channel-control > summary i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--chip, #9a9a9a);
+}
+details.channel-control > summary code {
+  display: none;
+}
+.channel-origin {
+  margin-left: auto;
+  font-size: 9px;
+  letter-spacing: 1.1px;
+  color: #5f5f5f;
+}
+.channel-body {
+  padding-bottom: 8px;
+}
+.channel-body .channel-note {
+  margin: 0 0 10px;
+  font-size: 11px;
+  color: #6f6f6f;
+  font-style: italic;
+}
+
+/*==========================================================================================================================================*/
+/* Layer thumbnails. The plate on each row is the sheet the layer paints on, read back small: the painted texture while  */
+/* content is the target, the mask while the mask is. Where there is nothing painted yet the kind's glyph still shows.   */
+/*==========================================================================================================================================*/
+.layer-swatch {
+  position: relative;
+  overflow: hidden;
+}
+.layer-swatch canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  image-rendering: auto;
+  background-image:
+    linear-gradient(
+      45deg,
+      #00000033 25%,
+      transparent 25%,
+      transparent 75%,
+      #00000033 75%
+    ),
+    linear-gradient(
+      45deg,
+      #00000033 25%,
+      transparent 25%,
+      transparent 75%,
+      #00000033 75%
+    );
+  background-size: 12px 12px;
+  background-position:
+    0 0,
+    6px 6px;
+}
+.layer-swatch.painted canvas {
+  opacity: 1;
+}
+.layer-swatch.painted svg {
+  display: none;
+}
+.layer-swatch.masked {
+  box-shadow:
+    inset 0 1px 0 #ffffff2e,
+    0 0 0 1.5px #ffffff38;
+}
+
+/*==========================================================================================================================================*/
+/* The timeline reads as a diary: a heading per day, entries newest first, and a thumbnail drawn from the numbers the    */
+/* event carries — where a stamp landed on the sheet, the path a stroke took, which tile was touched.                    */
+/*==========================================================================================================================================*/
+.timeline-day {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 14px;
+}
+.day-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 2px 6px;
+  background: linear-gradient(#121212 70%, #12121200);
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: #8a8a8a;
+}
+.day-head i {
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+.day-head b {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #ffffff0d;
+  color: #c8c8c8;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.event-preview {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: #0b0b0b;
+  border: 1px solid #ffffff0d;
+  overflow: hidden;
+}
+.event-preview svg {
+  width: 36px;
+  height: 36px;
+}
+.event-preview .preview-sheet {
+  fill: #141414;
+  stroke: #ffffff12;
+  stroke-width: 1;
+}
+.event-preview .preview-grid {
+  stroke: #ffffff14;
+  stroke-width: 0.6;
+}
+.timeline-event.undone .event-preview {
+  opacity: 0.4;
 }

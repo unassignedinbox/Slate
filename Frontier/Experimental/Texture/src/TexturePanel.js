@@ -22,7 +22,7 @@ import {
 import { RevisionQueue } from "./RevisionQueue.js";
 import { DocumentSequence } from "./DocumentSequence.js";
 import { EmitTextureSet, EmitProject, ReadDocument, DocumentExtension } from "./ExportSequence.js";
-import { TimelineSequence, EventByKind, EventClock, EventKinds } from "./TimelineSequence.js";
+import { TimelineSequence, EventByKind, EventClock, PreviewLimit } from "./TimelineSequence.js";
 import {
     ChannelSpecification,
     ChannelByIdentifier,
@@ -61,6 +61,7 @@ import {
     LayerBadge,
     LayerChannelCount,
     LayerSummary,
+    LayerResolutions,
     MaskKinds,
     CreateMark,
     MarkLimit,
@@ -385,6 +386,8 @@ class TexturePanel
         this.MovingMark = "";
         this.ChosenTool = "";
         this.SyncedLayer = "";
+        this.ChannelShelf = false;
+        this.ChannelFocus = "";
         this.PlaneZoom = 0.82;
         this.PlanePan = [0, 0];
         this.Dirty = false;
@@ -760,6 +763,52 @@ class TexturePanel
                 Row.blur();
             }
         });
+    }
+
+    // Every row shows the sheet it paints on rather than a flat swatch: the painted texture while the content is the
+    // target, the mask while the mask is. The read-back is 64² per layer, blitted down on the GPU, so a deep stack
+    // costs a few tens of kilobytes rather than a full-resolution copy each.
+    RefreshThumbnails()
+    {
+        if (this.ThumbnailTimer) return;
+        this.ThumbnailTimer = setTimeout(() =>
+        {
+            this.ThumbnailTimer = 0;
+            this.DrawThumbnails();
+        }, 90);
+    }
+
+    DrawThumbnails()
+    {
+        if (!this.Integrator.Ready) return;
+        const Masking = this.Projection.Brush.Target === "mask";
+        for (const Holder of SelectAll("[data-thumbnail]"))
+        {
+            const Layer = this.Layers.find((Entry) => Entry.Identifier === Holder.dataset.thumbnail);
+            const Canvas = Holder.querySelector("canvas");
+            if (!Layer || !Canvas) continue;
+            const Target = Masking && Layer.Mask.Kind === "stroke" ? "mask" : "coverage";
+            const Preview = this.Integrator.PreviewLayer(Layer, Target, 64);
+            const Context = Preview ? Canvas.getContext("2d") : null;
+            const Size = Preview?.Size || 0;
+            if (Preview && Canvas.width !== Size) Canvas.width = Canvas.height = Size;
+            const Image = Size ? Context?.createImageData(Size, Size) : null;
+            // A stand-in canvas with no raster behind it simply keeps the kind's glyph.
+            if (!Image?.data)
+            {
+                Holder.classList.remove("painted");
+                continue;
+            }
+            // Read-back arrives bottom row first; the canvas wants the top row first.
+            for (let Row = 0; Row < Size; Row += 1)
+            {
+                const From = (Size - 1 - Row) * Size * 4;
+                Image.data.set(Preview.Pixels.subarray(From, From + Size * 4), Row * Size * 4);
+            }
+            Context.putImageData(Image, 0, 0);
+            Holder.classList.add("painted");
+            Holder.classList.toggle("masked", Target === "mask");
+        }
     }
 
     // The UV view draws its tile grid as an overlay rather than in the shader, because the tiles want numbers on them.
@@ -1509,7 +1558,9 @@ class TexturePanel
                      data-layer="${Layer.Identifier}" data-object="${Layer.Kind}" draggable="true"
                      role="treeitem" aria-selected="${Selected}" tabindex="0">
                     <span class="layer-accent"></span>
-                    <span class="layer-swatch" style="--swatch:${Swatch}">${Icon(Kind.Glyph)}</span>
+                    <span class="layer-swatch" style="--swatch:${Swatch}" data-thumbnail="${Layer.Identifier}">
+                        <canvas width="64" height="64" aria-hidden="true"></canvas>${Icon(Kind.Glyph)}
+                    </span>
                     <span class="layer-copy">
                         <span class="layer-name">${Escape(Layer.Name)}</span>
                         <span class="layer-note">${Escape(LayerBadge(Layer).toLowerCase())} · ${Escape(Layer.Blend)} · ${
@@ -1538,6 +1589,7 @@ class TexturePanel
             : `<div class="outliner-empty">No layers match that filter.</div>`;
         Select("#stack-subtitle").textContent =
             `${this.Layers.length} layer${this.Layers.length === 1 ? "" : "s"} · ${Masked} masked · top first`;
+        this.RefreshThumbnails();
     }
 
     CaptureStack(Mutate)
@@ -1920,6 +1972,7 @@ class TexturePanel
         this.Projection.Configure({ Target: Wanted });
         this.SyncPaintTarget();
         this.SyncToolRail();
+        this.RefreshThumbnails();
         if (Announce)
             this.Notify(
                 Wanted === "coverage"
@@ -2136,6 +2189,17 @@ class TexturePanel
         );
     }
 
+    // Channels arrive as they are needed rather than all at once: a layer that has never been painted writes nothing,
+    // and the stroke that lands on it brings the channel it writes along.
+    EnsureChannel(Layer, Identifier)
+    {
+        if (!Layer || Layer.Enabled[Identifier]) return;
+        Layer.Enabled[Identifier] = true;
+        this.RenderStack();
+        if (this.InspectorTab === "layer") this.RenderInspector();
+        this.Notify(`${ChannelLabel(Identifier)} added to ${Layer.Name} by the first stroke.`);
+    }
+
     PaintTargetLayer()
     {
         const Layer = this.ActiveLayer;
@@ -2186,8 +2250,10 @@ class TexturePanel
             {
                 const Coordinate = this.PlaneCoordinates(Event);
                 const Layer = this.PaintTargetLayer();
+                if (this.Projection.Brush.Target !== "mask" && this.StrokeTool === "brush") this.EnsureChannel(Layer, "base_color");
                 this.BeginStrokeRevision(Layer);
                 this.Projection.BeginPlane(Coordinate);
+                this.NotePaintedCoordinate(Coordinate);
                 this.StampPlane(Layer, Coordinate, Coordinate);
             }
             return;
@@ -2228,8 +2294,10 @@ class TexturePanel
             return;
         }
         const Layer = this.PaintTargetLayer();
+        if (this.Projection.Brush.Target !== "mask" && this.StrokeTool === "brush") this.EnsureChannel(Layer, "base_color");
         this.BeginStrokeRevision(Layer);
         const Segment = this.Projection.Begin(Hit);
+        this.NotePaintedCoordinate(Hit.Coordinate);
         this.StampSurface(Layer, Segment);
     }
 
@@ -2271,7 +2339,11 @@ class TexturePanel
             if (this.Projection.Active && (this.StrokeTool === "brush" || this.StrokeTool === "eraser"))
             {
                 const Segment = this.Projection.ExtendPlane(Coordinate, PlaneRadius);
-                if (Segment) this.StampPlane(this.ActiveLayer, Segment.StartPlane, Segment.EndPlane);
+                if (Segment)
+                {
+                    this.NotePaintedCoordinate(Segment.EndPlane);
+                    this.StampPlane(this.ActiveLayer, Segment.StartPlane, Segment.EndPlane);
+                }
             }
             return;
         }
@@ -2297,7 +2369,11 @@ class TexturePanel
         if (!Hit || !this.Projection.Active) return;
         if (this.StrokeTool !== "brush" && this.StrokeTool !== "eraser") return;
         const Segment = this.Projection.Extend(Hit);
-        if (Segment) this.StampSurface(this.ActiveLayer, Segment);
+        if (Segment)
+        {
+            this.NotePaintedCoordinate(Hit.Coordinate);
+            this.StampSurface(this.ActiveLayer, Segment);
+        }
     }
 
     OnPointerUp(Event)
@@ -2402,6 +2478,7 @@ class TexturePanel
     {
         const Layer = this.PaintTargetLayer();
         const Target = this.Projection.Brush.Target;
+        if (Target !== "mask") this.EnsureChannel(Layer, "base_color");
         this.BeginStrokeRevision(Layer);
         this.Integrator.FloodLayer(Layer, Target, Target === "mask" ? this.MaskInk() : this.BrushColour, 1);
         this.CommitStrokeRevision();
@@ -2435,8 +2512,21 @@ class TexturePanel
         };
     }
 
+    // The pointer walks over texels as it paints; a sampled handful of those coordinates is all the timeline needs to
+    // redraw the stroke later, and it is numbers rather than pixels so a long session stays small.
+    NotePaintedCoordinate(Coordinate)
+    {
+        if (!Coordinate) return;
+        if (!this.StrokePath) this.StrokePath = [];
+        const Last = this.StrokePath[this.StrokePath.length - 1];
+        if (Last && Math.hypot(Last[0] - Coordinate[0], Last[1] - Coordinate[1]) < 0.012) return;
+        if (this.StrokePath.length >= PreviewLimit) this.StrokePath.shift();
+        this.StrokePath.push([Coordinate[0], Coordinate[1]]);
+    }
+
     CommitStrokeRevision(Narrate = true)
     {
+        this.RefreshThumbnails();
         if (!this.StrokeRecord) return;
         const Layer = this.Layers.find((Entry) => Entry.Identifier === this.StrokeRecord.Identifier);
         if (Layer)
@@ -2457,10 +2547,14 @@ class TexturePanel
                     `Added stroke (${Points} point${Points === 1 ? "" : "s"})`,
                     `${Layer.Name} · ${this.StrokeRecord.Target === "mask" ? "mask" : "content"}`,
                     this.Projection.Brush.Target === "mask" ? null : this.BrushColour,
+                    this.StrokePath?.length
+                        ? { Shape: "path", Points: this.StrokePath, Size: [this.Projection.Brush.Radius, this.Projection.Brush.Radius] }
+                        : { Shape: "flood" },
                 );
             }
         }
         this.StrokeRecord = null;
+        this.StrokePath = null;
         this.UpdateStatusBar();
     }
 
@@ -2507,7 +2601,19 @@ class TexturePanel
                 Decal.Selection = Waiting.Identifier;
             });
             this.MovingMark = Waiting.Identifier;
-            this.Chronicle("decal", `Placed ${Waiting.Name}`, `${Layer.Name} · ${Decal.Marks.length} mark${Decal.Marks.length === 1 ? "" : "s"}`, Waiting.Tint);
+            this.Chronicle(
+                "decal",
+                `Placed ${Waiting.Name}`,
+                `${Layer.Name} · ${Decal.Marks.length} mark${Decal.Marks.length === 1 ? "" : "s"}`,
+                Waiting.Tint,
+                Frame.Coordinate && {
+                    Shape: "stamp",
+                    Coordinate: Frame.Coordinate,
+                    Size: this.FootprintInTexture(Waiting.Transform),
+                    Rotation: Waiting.Transform.Rotation,
+                    Glyph: Decal.SourceKind === "text" ? "text" : "vector",
+                },
+            );
             this.Recomposite();
             this.RenderStack();
             if (this.InspectorTab === "layer") this.RenderInspector();
@@ -2551,11 +2657,33 @@ class TexturePanel
             Decal.Selection = Mark.Identifier;
         });
         this.MovingMark = Mark.Identifier;
-        this.Chronicle("decal", `Placed ${Mark.Name}`, `${Layer.Name} · ${Decal.Marks.length} marks`, Mark.Tint);
+        this.Chronicle(
+            "decal",
+            `Placed ${Mark.Name}`,
+            `${Layer.Name} · ${Decal.Marks.length} marks`,
+            Mark.Tint,
+            Frame.Coordinate && {
+                Shape: "stamp",
+                Coordinate: Frame.Coordinate,
+                Size: this.FootprintInTexture(Mark.Transform),
+                Rotation: Mark.Transform.Rotation,
+                Glyph: Decal.SourceKind === "text" ? "text" : "vector",
+            },
+        );
         this.Recomposite();
         this.RenderStack();
         if (this.InspectorTab === "layer") this.RenderInspector();
         this.Notify(`${Mark.Name} placed — drag to move it.`);
+    }
+
+    // Roughly how much of the sheet a placement covers. The exact figure depends on the unwrap, but a decal of a given
+    // world size against the model's radius is close enough for a thumbnail drawn forty pixels wide.
+    FootprintInTexture(Transform)
+    {
+        const Radius = Math.max(this.SurfaceRecord?.Bounds?.Radius || 1, 0.05);
+        const Span = this.SurfaceRecord?.Tiles?.Columns || 1;
+        const Width = Transform.Size / (Radius * 2.6 * Span);
+        return [Width, Width / Math.max(Transform.Aspect, 0.05)];
     }
 
     // The stamped kind: the artwork is burned into the layer's own image, so it is paint from then on — erasable,
@@ -2593,6 +2721,7 @@ class TexturePanel
             Jitter: 0,
             Erase: this.StrokeTool === "eraser",
         };
+        if (Target !== "mask") this.EnsureChannel(Layer, "base_color");
         // The image has to exist before it can be remembered, or the first stamp would have nothing to undo to.
         if (Target === "mask") this.Integrator.EnsureMask(Layer);
         else this.Integrator.EnsureCoverage(Layer);
@@ -2611,12 +2740,20 @@ class TexturePanel
         }
         this.CommitStrokeRevision(false);
         this.Recomposite();
+        this.RefreshThumbnails();
         this.MarkDirty();
         this.Chronicle(
             "decal",
             `Stamped ${Layer.Name}`,
             `${Layer.Decal.SourceKind === "text" ? "text" : "artwork"} · ${Target === "mask" ? "mask" : "content"}`,
             Target === "mask" ? null : Template.Tint,
+            Frame.Coordinate && {
+                Shape: "stamp",
+                Coordinate: Frame.Coordinate,
+                Size: this.FootprintInTexture(Transform),
+                Rotation: Transform.Rotation,
+                Glyph: Layer.Decal.SourceKind === "text" ? "text" : "vector",
+            },
         );
         this.Notify(`${Layer.Name} stamped into the ${Target === "mask" ? "mask" : "layer"}.`);
     }
@@ -3017,6 +3154,25 @@ class TexturePanel
             this.Chronicle("surface", `Tile ${this.ActiveObject?.Tile}`, this.ActiveObject?.Name || "");
         if (Path === "Project.Resolution" && Committed)
             this.Chronicle("surface", `Resolution ${this.Project.Resolution}²`, "every layer resampled");
+        // A layer's own sheet size is a structural change: the images it already holds are resampled into the new size
+        // rather than thrown away, so paint survives the move in both directions.
+        if (Path === "Layer.Resolution")
+        {
+            const Layer = this.ActiveLayer;
+            if (!Layer) return;
+            Layer.Resolution = Number(Layer.Resolution) || 0;
+            const Size = this.Integrator.LayerResolution(Layer);
+            this.Integrator.ResampleLayer(Layer);
+            this.Recomposite();
+            this.MarkDirty();
+            this.RenderStack();
+            if (Committed)
+            {
+                this.Chronicle("structure", `${Layer.Name} sheet ${Size}²`, Layer.Resolution ? "layer resolution" : "follows the document");
+                this.Notify(`${Layer.Name} now paints at ${Size}².`);
+            }
+            return;
+        }
         if (Path === "Project.Object")
         {
             this.SelectObject(this.Project.Object);
@@ -3238,6 +3394,32 @@ class TexturePanel
                     Layer.Enabled.base_color = true;
                 });
                 break;
+            case "channel-shelf":
+                this.ChannelShelf = !this.ChannelShelf;
+                this.RenderInspector();
+                return;
+            case "channel-focus":
+                this.ChannelFocus = this.ChannelFocus === Argument ? "" : Argument;
+                this.RenderInspector();
+                return;
+            case "channel-add":
+                if (!Layer.Enabled[Argument])
+                {
+                    this.CaptureStack(() => (Layer.Enabled[Argument] = true));
+                    this.ChannelFocus = Argument;
+                    this.ChannelShelf = false;
+                    this.Chronicle("structure", `${ChannelLabel(Argument)} added`, Layer.Name, Layer.Channels[Argument]);
+                    this.Notify(`${ChannelLabel(Argument)} is now written by ${Layer.Name}.`);
+                }
+                break;
+            case "channel-remove":
+                if (Layer.Enabled[Argument])
+                {
+                    this.CaptureStack(() => (Layer.Enabled[Argument] = false));
+                    if (this.ChannelFocus === Argument) this.ChannelFocus = "";
+                    this.Notify(`${ChannelLabel(Argument)} is back on the shelf.`);
+                }
+                break;
             case "pick-mark":
                 this.CaptureStack(() =>
                 {
@@ -3374,6 +3556,16 @@ class TexturePanel
                         Step: 0.01,
                         Unit: "—",
                     }),
+                    SelectRow({
+                        Label: "Sheet",
+                        Path: "Layer.Resolution",
+                        Value: String(Layer.Resolution || 0),
+                        Options: LayerResolutions.map((Size) => ({
+                            Value: String(Size),
+                            Label: Size ? `${Size} × ${Size}` : `Document · ${this.Project.Resolution} × ${this.Project.Resolution}`,
+                        })),
+                        Hint: "A detail layer can carry a bigger sheet than the document, or a backdrop a smaller one.",
+                    }),
                     ActionRow([
                         { Action: "raise-layer", Label: "Raise", Glyph: "up" },
                         { Action: "lower-layer", Label: "Lower", Glyph: "down" },
@@ -3413,18 +3605,14 @@ class TexturePanel
                 }),
             );
 
+        const Written = ChannelSpecification.filter((Channel) => Layer.Enabled[Channel.Identifier]);
         Sections.push(
             Group({
                 Title: "Channels",
-                Badge: `${LayerChannelCount(Layer)} / ${ChannelSpecification.length}`,
+                Badge: `${Written.length}`,
                 Body: [
-                    `<p class="property-hint">Only the enabled channels are written into the texture set. Toggle them on the
-                      channel strip beneath the viewport or here.</p>`,
-                    ActionRow([
-                        { Action: "all-channels", Label: "Enable all", Glyph: "check" },
-                        { Action: "no-channels", Label: "Base colour only", Glyph: "palette" },
-                    ]),
-                    ...ChannelSpecification.map((Channel) => this.ChannelControl(Layer, Channel)),
+                    this.ChannelChips(Layer),
+                    ...Written.map((Channel) => this.ChannelControl(Layer, Channel)),
                 ].join(""),
             }),
         );
@@ -3579,47 +3767,103 @@ class TexturePanel
         <p class="property-hint">M switches between them while painting.</p>`;
     }
 
+    // Where a channel's value comes from on this layer, which is the honest answer to why editing the flat colour of a
+    // decal does nothing: the artwork's tint writes that channel, not the swatch.
+    ChannelOrigin(Layer, Identifier)
+    {
+        if (Layer.Kind === "finish")
+        {
+            const Role = FinishChannelRole(Identifier);
+            if (Role === "driven") return { Tag: "MATERIAL", Note: "Written per texel by the material recipe." };
+            if (Role === "scaled") return { Tag: "SCALES", Note: "Scales the value the material produces." };
+        }
+        if (Layer.Kind === "decal" && Identifier === "base_color")
+            return { Tag: "DECAL TINT", Note: "The artwork is a stencil: its colour comes from the tint of each placement." };
+        if (Layer.Kind === "generator" && Identifier === "base_color")
+            return { Tag: "FIELD", Note: "The generator drives the coverage; this colour is what it paints with." };
+        if (Layer.Kind === "stroke" && Identifier === "base_color") return { Tag: "TEXTURE", Note: "Stored per texel wherever the brush has been." };
+        return { Tag: "CONSTANT", Note: "" };
+    }
+
+    // The chip rail from the channel panel: what the layer writes, an × that takes a channel off it, and a + that
+    // opens the shelf of everything it is not writing yet.
+    ChannelChips(Layer)
+    {
+        const Written = ChannelSpecification.filter((Channel) => Layer.Enabled[Channel.Identifier]);
+        const Spare = ChannelSpecification.filter((Channel) => !Layer.Enabled[Channel.Identifier]);
+        const Chip = (Channel) => `
+            <span class="channel-pill ${this.ChannelFocus === Channel.Identifier ? "focused" : ""}"
+                  data-action="channel-focus" data-argument="${Channel.Identifier}" title="${Escape(Channel.Hint)}">
+                <i style="--chip:${ChannelTint(Channel.Identifier)}"></i>${Escape(Channel.Label)}
+                <b class="pill-remove" data-action="channel-remove" data-argument="${Channel.Identifier}"
+                   role="button" tabindex="0" aria-label="Stop writing ${Escape(Channel.Label)}">${Icon("close")}</b>
+            </span>`;
+        const Shelf = this.ChannelShelf
+            ? `<div class="channel-shelf">
+                   ${
+                       Spare.length
+                           ? Spare.map(
+                                 (Channel) => `
+                           <button class="channel-pill ghost" data-action="channel-add" data-argument="${Channel.Identifier}"
+                                   title="${Escape(Channel.Hint)}">
+                               <i style="--chip:${ChannelTint(Channel.Identifier)}"></i>${Escape(Channel.Label)}
+                           </button>`,
+                             ).join("")
+                           : `<p class="property-hint">Every channel is already on this layer.</p>`
+                   }
+               </div>`
+            : "";
+        return `
+        <div class="channel-chips">
+            <div class="chip-head">
+                <span>${Icon("layers")}CHANNELS<b>${Written.length}</b></span>
+                <button class="chip-clear" data-action="no-channels" ${Written.length ? "" : "disabled"}>Clear all</button>
+            </div>
+            <div class="chip-rail">
+                ${Written.map(Chip).join("")}
+                <button class="channel-pill plus ${this.ChannelShelf ? "open" : ""}" data-action="channel-shelf"
+                        aria-expanded="${this.ChannelShelf ? "true" : "false"}" aria-label="Add a channel"
+                        title="Add a channel">${Icon("plus")}</button>
+            </div>
+            ${Shelf}
+            ${
+                Written.length
+                    ? ""
+                    : `<p class="property-hint">Nothing is written yet. The first stroke adds base colour on its own, or add a channel above.</p>`
+            }
+        </div>`;
+    }
+
     ChannelControl(Layer, Channel)
     {
-        const Enabled = Layer.Enabled[Channel.Identifier];
         const Value = Layer.Channels[Channel.Identifier];
-        // A finish writes most of these per texel, so the flat value behind them would be a lie. The ones it only scales
-        // keep their slider, and the ones it never touches behave as they do on any other layer.
-        const Driven = Layer.Kind === "finish" ? FinishChannelRole(Channel.Identifier) : "";
-        if (Enabled && Driven === "driven")
-            return `
-        <div class="channel-control enabled driven">
-            <label class="channel-head">
-                <input type="checkbox" data-bind="Enabled.${Channel.Identifier}" checked
-                       aria-label="Write ${Escape(Channel.Label)}" />
-                <span class="channel-name">${Escape(Channel.Label)}</span>
-                <code>${Escape(Channel.Identifier)}</code>
-            </label>
-            <p class="channel-note">Written by the material recipe.</p>
-        </div>`;
+        const Origin = this.ChannelOrigin(Layer, Channel.Identifier);
+        const Focused = this.ChannelFocus === Channel.Identifier;
         const Control =
-            Channel.Kind === "color"
-                ? ColourRow({ Label: Channel.Label, Path: `Channels.${Channel.Identifier}`, Value })
-                : SliderRow({
-                      Label: Channel.Label,
-                      Path: `Channels.${Channel.Identifier}`,
-                      Value,
-                      Minimum: 0,
-                      Maximum: 1,
-                      Step: 0.01,
-                      Unit: "—",
-                      Hint: Driven === "scaled" ? "Scales the value the material produces." : "",
-                  });
+            Origin.Tag === "MATERIAL"
+                ? `<p class="channel-note">${Escape(Origin.Note)}</p>`
+                : Channel.Kind === "color"
+                  ? ColourRow({ Label: Channel.Label, Path: `Channels.${Channel.Identifier}`, Value, Hint: Origin.Note })
+                  : SliderRow({
+                        Label: Channel.Label,
+                        Path: `Channels.${Channel.Identifier}`,
+                        Value,
+                        Minimum: 0,
+                        Maximum: 1,
+                        Step: 0.01,
+                        Unit: "—",
+                        Hint: Origin.Note,
+                    });
         return `
-        <div class="channel-control ${Enabled ? "enabled" : ""}">
-            <label class="channel-head">
-                <input type="checkbox" data-bind="Enabled.${Channel.Identifier}" ${Enabled ? "checked" : ""}
-                       aria-label="Write ${Escape(Channel.Label)}" />
+        <details class="channel-control enabled ${Focused ? "focused" : ""}" data-channel-control="${Channel.Identifier}" ${Focused ? "open" : ""}>
+            <summary>
+                <i style="--chip:${ChannelTint(Channel.Identifier)}"></i>
                 <span class="channel-name">${Escape(Channel.Label)}</span>
                 <code>${Escape(Channel.Identifier)}</code>
-            </label>
-            ${Enabled ? Control : ""}
-        </div>`;
+                <span class="channel-origin">${Origin.Tag}</span>
+            </summary>
+            <div class="channel-body">${Control}</div>
+        </details>`;
     }
 
     GeneratorBody(Prefix, Generator)
@@ -3849,9 +4093,10 @@ class TexturePanel
     // Timeline. The revision queue remembers pixels; this reads the session back as a story, on branches that can be
     // forked, named and revisited.
     //----------------------------------------------------------------------------------------------------------------------
-    Chronicle(Kind, Title, Detail = "", Colour = null)
+    Chronicle(Kind, Title, Detail = "", Colour = null, Preview = null)
     {
-        const Event = this.Timeline.Record({ Kind, Title, Detail, Colour });
+        const Span = this.SurfaceRecord?.Tiles?.Columns || 1;
+        const Event = this.Timeline.Record({ Kind, Title, Detail, Colour, Preview: Preview && { Span, ...Preview } });
         return Event;
     }
 
@@ -3876,27 +4121,7 @@ class TexturePanel
                 ${Escape(Branch.Name)}<b>${Branch.Events.length}</b>
             </button>`,
         ).join("");
-        const Rows = Events.map((Event, Index) =>
-        {
-            const Kind = EventByKind[Event.Kind];
-            const Spent = Index >= Timeline.Head;
-            return `
-            <li class="timeline-event ${Spent ? "undone" : ""} ${Index === Timeline.Head - 1 ? "head" : ""}"
-                data-action="timeline-visit" data-argument="${Event.Identifier}" style="--event-accent:${Kind.Accent}">
-                <span class="event-node"></span>
-                <span class="event-copy">
-                    <span class="event-title">
-                        ${Event.Colour ? `<i class="event-chip" style="--chip:${ToHex(Event.Colour)}"></i>` : ""}${Escape(Event.Title)}
-                    </span>
-                    <span class="event-note">${Escape(Event.Detail || Kind.Label)}</span>
-                </span>
-                <span class="event-meta">
-                    <span class="event-badge">${Kind.Badge}</span>
-                    <span class="event-hash">${Event.Hash}</span>
-                    <span class="event-clock">${EventClock(Event.Stamp)}</span>
-                </span>
-            </li>`;
-        }).reverse().join("");
+        const Rows = this.TimelineDays(Events);
         return `
             <div class="timeline">
                 <div class="timeline-head">
@@ -3913,12 +4138,131 @@ class TexturePanel
                     <span>${Timeline.Branch.Name}</span><b>${Timeline.Head}</b> of ${Events.length} events
                     ${Timeline.Branch.Parent ? `· forked from ${Escape(this.BranchName(Timeline.Branch.Parent))} at ${Timeline.Branch.Origin}` : ""}
                 </div>
-                ${Events.length ? `<ol class="timeline-rail">${Rows}</ol>` : `<p class="timeline-empty">Nothing has happened yet. Paint something.</p>`}
+                ${Events.length ? Rows : `<p class="timeline-empty">Nothing has happened yet. Paint something.</p>`}
                 <div class="timeline-foot">
                     <button class="button" data-action="document-save">${Icon("download")}Save ${DocumentExtension}</button>
                     <button class="button" data-action="document-open">${Icon("folder")}Open</button>
                 </div>
             </div>`;
+    }
+
+    // Events are read as a diary: a heading per day, the newest at the top, each entry carrying a thumbnail of what it
+    // did in texture space. The thumbnail is drawn from the numbers on the event, so it costs no memory at all.
+    TimelineDays(Events)
+    {
+        const Timeline = this.Timeline;
+        const Today = new Date().toDateString();
+        const Yesterday = new Date(Date.now() - 86400000).toDateString();
+        const Days = [];
+        Events.forEach((Event, Index) =>
+        {
+            const Day = new Date(Event.Stamp).toDateString();
+            const Last = Days[Days.length - 1];
+            if (Last && Last.Day === Day) Last.Entries.push({ Event, Index });
+            else Days.push({ Day, Entries: [{ Event, Index }] });
+        });
+        return Days.reverse()
+            .map((Group_) =>
+            {
+                const Moment = new Date(Group_.Entries[0].Event.Stamp);
+                const Label =
+                    Group_.Day === Today
+                        ? "Today"
+                        : Group_.Day === Yesterday
+                          ? "Yesterday"
+                          : Moment.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+                const Rows = Group_.Entries.slice()
+                    .reverse()
+                    .map(({ Event, Index }) =>
+                    {
+                        const Kind = EventByKind[Event.Kind];
+                        const Spent = Index >= Timeline.Head;
+                        return `
+                    <li class="timeline-event ${Spent ? "undone" : ""} ${Index === Timeline.Head - 1 ? "head" : ""}"
+                        data-action="timeline-visit" data-argument="${Event.Identifier}" style="--event-accent:${Kind.Accent}">
+                        <span class="event-node"></span>
+                        ${this.EventPreview(Event)}
+                        <span class="event-copy">
+                            <span class="event-title">
+                                ${Event.Colour ? `<i class="event-chip" style="--chip:${ToHex(Event.Colour)}"></i>` : ""}${Escape(Event.Title)}
+                            </span>
+                            <span class="event-note">${Escape(Event.Detail || Kind.Label)}</span>
+                        </span>
+                        <span class="event-meta">
+                            <span class="event-badge">${Kind.Badge}</span>
+                            <span class="event-hash">${Event.Hash}</span>
+                            <span class="event-clock">${EventClock(Event.Stamp)}</span>
+                        </span>
+                    </li>`;
+                    })
+                    .join("");
+                return `
+                <section class="timeline-day">
+                    <header class="day-head">
+                        <span>${Escape(Label)}</span>
+                        <i></i>
+                        <b>${Group_.Entries.length}</b>
+                    </header>
+                    <ol class="timeline-rail">${Rows}</ol>
+                </section>`;
+            })
+            .join("");
+    }
+
+    // The sheet, drawn at forty pixels: the tile grid, then whatever the event did on it.
+    EventPreview(Event)
+    {
+        const Preview = Event.Preview;
+        const Tint = Event.Colour ? ToHex(Event.Colour) : EventByKind[Event.Kind].Accent;
+        const Span = Preview?.Span || 1;
+        const Grid = Array.from({ length: Math.max(Span - 1, 0) }, (Ignored, Index) =>
+        {
+            const At = ((Index + 1) / Span) * 40;
+            return `<path d="M${At} 0V40M0 ${At}H40" class="preview-grid" />`;
+        }).join("");
+        const Mark = () =>
+        {
+            if (!Preview) return `<circle cx="20" cy="20" r="5.5" fill="${Tint}" opacity="0.9" />`;
+            if (Preview.Shape === "flood") return `<rect x="1" y="1" width="38" height="38" rx="5" fill="${Tint}" opacity="0.55" />`;
+            if (Preview.Shape === "tile" && Number.isFinite(Preview.Tile))
+            {
+                const Column = (Preview.Tile - 1001) % 10;
+                const Row = Math.floor((Preview.Tile - 1001) / 10);
+                const Size = 40 / Span;
+                return `<rect x="${Column * Size}" y="${40 - (Row + 1) * Size}" width="${Size}" height="${Size}" fill="${Tint}" opacity="0.5" />`;
+            }
+            if (Preview.Shape === "path" && Preview.Points?.length)
+            {
+                const Points = Preview.Points.map((Point) => `${(Point[0] * 40).toFixed(1)},${((1 - Point[1]) * 40).toFixed(1)}`).join(" ");
+                const Width = Math.max(1.4, Math.min((Preview.Size?.[0] || 0.08) * 26, 9));
+                return Preview.Points.length === 1
+                    ? `<circle cx="${(Preview.Points[0][0] * 40).toFixed(1)}" cy="${((1 - Preview.Points[0][1]) * 40).toFixed(1)}" r="${(Width / 2).toFixed(1)}" fill="${Tint}" />`
+                    : `<polyline points="${Points}" fill="none" stroke="${Tint}" stroke-width="${Width.toFixed(1)}" stroke-linecap="round" stroke-linejoin="round" opacity="0.95" />`;
+            }
+            if (Preview.Shape === "stamp" && Preview.Coordinate)
+            {
+                const X = Preview.Coordinate[0] * 40;
+                const Y = (1 - Preview.Coordinate[1]) * 40;
+                const Width = Math.max((Preview.Size?.[0] || 0.12) * 40, 5);
+                const Height = Math.max((Preview.Size?.[1] || 0.12) * 40, 5);
+                return `
+                <g transform="translate(${X.toFixed(1)} ${Y.toFixed(1)}) rotate(${-(Preview.Rotation || 0)})">
+                    <rect x="${(-Width / 2).toFixed(1)}" y="${(-Height / 2).toFixed(1)}" width="${Width.toFixed(1)}" height="${Height.toFixed(1)}"
+                          rx="1.5" fill="${Tint}" opacity="0.45" stroke="${Tint}" stroke-width="1.1" />
+                    <path d="M${(-Width / 2).toFixed(1)} 0H${(Width / 2).toFixed(1)}M0 ${(-Height / 2).toFixed(1)}V${(Height / 2).toFixed(1)}"
+                          stroke="${Tint}" stroke-width="0.7" opacity="0.8" />
+                </g>`;
+            }
+            return `<circle cx="20" cy="20" r="5.5" fill="${Tint}" opacity="0.9" />`;
+        };
+        return `
+        <span class="event-preview" title="${Escape(Preview?.Shape || "event")} in texture space">
+            <svg viewBox="0 0 40 40" aria-hidden="true">
+                <rect x="0.5" y="0.5" width="39" height="39" rx="4" class="preview-sheet" />
+                ${Grid}
+                ${Mark()}
+            </svg>
+        </span>`;
     }
 
     ActiveObjectName(Identifier)
@@ -4633,6 +4977,8 @@ class TexturePanel
         requestAnimationFrame(() => this.Advance());
     }
 }
+
+const ChannelLabel = (Identifier) => ChannelSpecification.find((Channel) => Channel.Identifier === Identifier)?.Label || Identifier;
 
 const ChannelTint = (Identifier) =>
     ({

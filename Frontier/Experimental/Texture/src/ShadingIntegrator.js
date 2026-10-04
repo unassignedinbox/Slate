@@ -471,27 +471,32 @@ export class ShadingIntegrator
     }
 
     // Painted coverage survives a resolution change by way of a filtered blit.
+    // The document changed size, so every layer that follows the document follows it here. A layer holding its own
+    // sheet size is left exactly as it is: that is the point of carrying one.
     RescaleLayerImages(Previous, Resolution)
     {
-        const Device = this.Device;
-        for (const Record of this.LayerImages.values())
-            for (const Slot of ["Coverage", "Mask"])
-            {
-                const Image = Record[Slot];
-                if (!Image) continue;
-                const Replacement = this.CreateColourImage(Resolution);
-                const Read = this.CreateTarget([Image]);
-                const Write = this.CreateTarget([Replacement]);
-                Device.bindFramebuffer(Device.READ_FRAMEBUFFER, Read);
-                Device.bindFramebuffer(Device.DRAW_FRAMEBUFFER, Write);
-                Device.blitFramebuffer(0, 0, Previous, Previous, 0, 0, Resolution, Resolution, Device.COLOR_BUFFER_BIT, Device.LINEAR);
-                Device.bindFramebuffer(Device.READ_FRAMEBUFFER, null);
-                Device.bindFramebuffer(Device.DRAW_FRAMEBUFFER, null);
-                Device.deleteFramebuffer(Read);
-                Device.deleteFramebuffer(Write);
-                Device.deleteTexture(Image);
-                Record[Slot] = Replacement;
-            }
+        for (const Record of this.LayerImages.values()) this.FitLayerImages(Record, Record.Own ? Record.Own : Resolution, Previous);
+    }
+
+    // One layer's images moved to a new size, keeping what is painted on them.
+    ResampleLayer(Layer)
+    {
+        const Record = this.LayerImages.get(Layer.Identifier);
+        if (!Record) return;
+        Record.Own = Layer.Resolution || 0;
+        this.FitLayerImages(Record, this.LayerResolution(Layer), this.Resolution);
+    }
+
+    FitLayerImages(Record, Size, Fallback)
+    {
+        for (const Slot of ["Coverage", "Mask"])
+        {
+            if (!Record[Slot]) continue;
+            if ((Record[`${Slot}Size`] || Fallback) === Size) continue;
+            if (!Record[`${Slot}Target`]) Record[`${Slot}Target`] = this.CreateTarget([Record[Slot]]);
+            Record[`${Slot}Size`] = Record[`${Slot}Size`] || Fallback;
+            this.ResizeLayerImage(Record, Slot, Size);
+        }
     }
 
     //----------------------------------------------------------------------------------------------------------------------
@@ -608,26 +613,95 @@ export class ShadingIntegrator
         return this.LayerImages.get(Layer.Identifier);
     }
 
+    // The sheet a layer paints on. Usually the document's, but a layer may carry its own so a decal sheet can be 4K
+    // while the base fill stays at 1K; the compositor samples by coordinate, so the sizes never have to agree.
+    LayerResolution(Layer)
+    {
+        return Layer?.Resolution ? Math.min(Layer.Resolution, this.MaximumResolution || 4096) : this.Resolution;
+    }
+
     EnsureCoverage(Layer)
     {
         const Record = this.LayerRecord(Layer);
+        const Size = this.LayerResolution(Layer);
+        Record.Own = Layer.Resolution || 0;
+        if (Record.Coverage && Record.CoverageSize !== Size) this.ResizeLayerImage(Record, "Coverage", Size);
         if (!Record.Coverage)
         {
-            Record.Coverage = this.CreateColourImage(this.Resolution);
+            Record.Coverage = this.CreateColourImage(Size);
             Record.CoverageTarget = this.CreateTarget([Record.Coverage]);
+            Record.CoverageSize = Size;
             this.ClearImage(Record.CoverageTarget, [0, 0, 0, 0]);
         }
         else if (!Record.CoverageTarget) Record.CoverageTarget = this.CreateTarget([Record.Coverage]);
         return Record;
     }
 
+    // Changing a layer's resolution resamples what is already painted rather than throwing it away.
+    ResizeLayerImage(Record, Slot, Size)
+    {
+        const Device = this.Device;
+        const Previous = Record[Slot];
+        const PreviousTarget = Record[`${Slot}Target`];
+        const PreviousSize = Record[`${Slot}Size`] || this.Resolution;
+        const Image = this.CreateColourImage(Size);
+        const Target = this.CreateTarget([Image]);
+        this.ClearImage(Target, [0, 0, 0, 0]);
+        if (PreviousTarget && typeof Device.blitFramebuffer === "function")
+        {
+            Device.bindFramebuffer(Device.READ_FRAMEBUFFER, PreviousTarget);
+            Device.bindFramebuffer(Device.DRAW_FRAMEBUFFER, Target);
+            Device.blitFramebuffer(0, 0, PreviousSize, PreviousSize, 0, 0, Size, Size, Device.COLOR_BUFFER_BIT, Device.LINEAR);
+            Device.bindFramebuffer(Device.READ_FRAMEBUFFER, null);
+            Device.bindFramebuffer(Device.DRAW_FRAMEBUFFER, null);
+        }
+        if (PreviousTarget) Device.deleteFramebuffer(PreviousTarget);
+        if (Previous) Device.deleteTexture(Previous);
+        Record[Slot] = Image;
+        Record[`${Slot}Target`] = Target;
+        Record[`${Slot}Size`] = Size;
+    }
+
+    // A thumbnail of what a layer actually holds. Blitted down on the GPU and read back at a size the stack can
+    // afford: sixty-four square is sixteen kilobytes a layer, so a deep stack still costs less than one snapshot.
+    PreviewLayer(Layer, Target, Size = 64)
+    {
+        const Device = this.Device;
+        if (!this.Ready || typeof Device.blitFramebuffer !== "function") return null;
+        const Record = this.LayerImages.get(Layer.Identifier);
+        const Surface = Target === "mask" ? Record?.MaskTarget : Record?.CoverageTarget;
+        if (!Surface) return null;
+        const Source = (Target === "mask" ? Record.MaskSize : Record.CoverageSize) || this.Resolution;
+        if (!this.PreviewTarget || this.PreviewSize !== Size)
+        {
+            if (this.PreviewTarget) Device.deleteFramebuffer(this.PreviewTarget);
+            if (this.PreviewImage) Device.deleteTexture(this.PreviewImage);
+            this.PreviewImage = this.CreateColourImage(Size);
+            this.PreviewTarget = this.CreateTarget([this.PreviewImage]);
+            this.PreviewSize = Size;
+            this.PreviewPixels = new Uint8Array(Size * Size * 4);
+        }
+        Device.bindFramebuffer(Device.READ_FRAMEBUFFER, Surface);
+        Device.bindFramebuffer(Device.DRAW_FRAMEBUFFER, this.PreviewTarget);
+        Device.blitFramebuffer(0, 0, Source, Source, 0, 0, Size, Size, Device.COLOR_BUFFER_BIT, Device.LINEAR);
+        Device.bindFramebuffer(Device.DRAW_FRAMEBUFFER, null);
+        Device.bindFramebuffer(Device.READ_FRAMEBUFFER, this.PreviewTarget);
+        Device.readPixels(0, 0, Size, Size, Device.RGBA, Device.UNSIGNED_BYTE, this.PreviewPixels);
+        Device.bindFramebuffer(Device.READ_FRAMEBUFFER, null);
+        return { Pixels: this.PreviewPixels, Size };
+    }
+
     EnsureMask(Layer)
     {
         const Record = this.LayerRecord(Layer);
+        const Size = this.LayerResolution(Layer);
+        Record.Own = Layer.Resolution || 0;
+        if (Record.Mask && Record.MaskSize !== Size) this.ResizeLayerImage(Record, "Mask", Size);
         if (!Record.Mask)
         {
-            Record.Mask = this.CreateColourImage(this.Resolution);
+            Record.Mask = this.CreateColourImage(Size);
             Record.MaskTarget = this.CreateTarget([Record.Mask]);
+            Record.MaskSize = Size;
             this.ClearImage(Record.MaskTarget, [0, 0, 0, 0]);
         }
         else if (!Record.MaskTarget) Record.MaskTarget = this.CreateTarget([Record.Mask]);
@@ -694,9 +768,10 @@ export class ShadingIntegrator
         const Device = this.Device;
         const Record = Options.Target === "mask" ? this.EnsureMask(Layer) : this.EnsureCoverage(Layer);
         const Target = Options.Target === "mask" ? Record.MaskTarget : Record.CoverageTarget;
+        const Size = (Options.Target === "mask" ? Record.MaskSize : Record.CoverageSize) || this.Resolution;
         const Program = this.Programs.Stamp;
         Device.bindFramebuffer(Device.FRAMEBUFFER, Target);
-        Device.viewport(0, 0, this.Resolution, this.Resolution);
+        Device.viewport(0, 0, Size, Size);
         Device.useProgram(Program.Program);
         Device.bindVertexArray(this.QuadArray);
         Device.enable(Device.BLEND);
@@ -751,22 +826,24 @@ export class ShadingIntegrator
         const Record = this.LayerImages.get(Layer.Identifier);
         const Surface = Target === "mask" ? Record?.MaskTarget : Record?.CoverageTarget;
         if (!Surface) return null;
-        const Pixels = new Uint8Array(this.Resolution * this.Resolution * 4);
+        const Size = (Target === "mask" ? Record.MaskSize : Record.CoverageSize) || this.Resolution;
+        const Pixels = new Uint8Array(Size * Size * 4);
         Device.bindFramebuffer(Device.FRAMEBUFFER, Surface);
-        Device.readPixels(0, 0, this.Resolution, this.Resolution, Device.RGBA, Device.UNSIGNED_BYTE, Pixels);
+        Device.readPixels(0, 0, Size, Size, Device.RGBA, Device.UNSIGNED_BYTE, Pixels);
         Device.bindFramebuffer(Device.FRAMEBUFFER, null);
-        return { Pixels, Resolution: this.Resolution };
+        return { Pixels, Resolution: Size };
     }
 
     RestoreLayer(Layer, Target, Snapshot)
     {
-        if (!Snapshot || Snapshot.Resolution !== this.Resolution) return;
         const Device = this.Device;
         const Record = Target === "mask" ? this.EnsureMask(Layer) : this.EnsureCoverage(Layer);
+        const Size = (Target === "mask" ? Record.MaskSize : Record.CoverageSize) || this.Resolution;
+        if (!Snapshot || Snapshot.Resolution !== Size) return;
         const Image = Target === "mask" ? Record.Mask : Record.Coverage;
         Device.bindTexture(Device.TEXTURE_2D, Image);
         Device.texSubImage2D(
-            Device.TEXTURE_2D, 0, 0, 0, this.Resolution, this.Resolution,
+            Device.TEXTURE_2D, 0, 0, 0, Size, Size,
             Device.RGBA, Device.UNSIGNED_BYTE, Snapshot.Pixels,
         );
         Device.bindTexture(Device.TEXTURE_2D, null);
