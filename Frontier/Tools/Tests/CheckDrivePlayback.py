@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+import tomllib
 
 Root = Path(__file__).resolve().parents[2]
 Scratch = Root.parent / "_AgentScratch/build/DrivePlayback"
@@ -46,7 +47,19 @@ Scene = Scratch / "DriveCourse.gltf"
 # The file is generated within this check's own scratch directory, never over the user's authored scene.
 if Scene.exists():
     Scene.unlink()
-Link("DriveContentHost", Content, ["--ensure", Scene])
+Author = Link("DriveContentHost", Content, ["--ensure", Scene])
+Original = Scene.read_bytes()
+Specification = tomllib.loads((Root / "Projects/Project-Drive/ProjectDrive.frontier").read_text(encoding="utf-8"))
+assert Path(Specification["Project"]["OpeningScene"]).stem == json.loads(Original)["scenes"][0]["name"]
+subprocess.run([str(Author), "--ensure", str(Scene)], cwd=Scratch, check=True)
+assert Scene.read_bytes() == Original
+Older = Original.replace(b'"DriveCourse.r4"', b'"DriveCourse.r3"')
+assert Older != Original
+Scene.write_bytes(Older)
+subprocess.run([str(Author), "--ensure", str(Scene)], cwd=Scratch, check=True)
+assert Scene.read_bytes() == Older, "Existing scenes, even older generated copies, must not be overwritten"
+Scene.write_bytes(Original)
+print("PASS opening filename matches authored revision; ensure preserves both current and existing older scenes")
 Roster = [Source for Source in Content if not Source.endswith("DriveContentHost.cpp")]
 Link("DrivePlacementChecks", [*Roster, "Engine/Host/EditorFeedSequence.cpp",
                               "Projects/Project-Drive/Source/DrivePlacementChecks.cpp"], [Scene])

@@ -11,7 +11,7 @@ import tomllib
 Root = Path(__file__).resolve().parents[2]
 Parser = argparse.ArgumentParser(description=__doc__)
 Specification = tomllib.loads((Root / "Projects/Project-Drive/ProjectDrive.frontier").read_text(encoding="utf-8"))
-Parser.add_argument("--scene", type=Path, default=Root / "Projects/Project-Drive" / Specification["OpeningScene"])
+Parser.add_argument("--scene", type=Path, default=Root / "Projects/Project-Drive" / Specification["Project"]["OpeningScene"])
 Parser.add_argument("--output-dir", type=Path, default=Root / "Projects/Project-Drive/Build")
 Arguments = Parser.parse_args()
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")

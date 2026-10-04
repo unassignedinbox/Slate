@@ -28,20 +28,6 @@ void VehicleSolver::Build(const VehicleSolverConfiguration& config, const Hooks&
     SteerAngle = 0.0f;
     CurrentTelemetry = {};
 
-    SoftTyres.clear();
-    SoftTyres.resize(ActiveConfiguration.Wheels.size());
-    for (size_t i = 0; i < ActiveConfiguration.Wheels.size(); ++i)
-    {
-        const WheelMount& w = ActiveConfiguration.Wheels[i];
-        const Vec3 hub = initial.Position + initial.Orientation.Rotate(w.LocalOffset);
-        SoftTyres[i].Build(ActiveConfiguration.Tyre, hub, initial.Orientation);
-        if (i < CurrentTelemetry.Wheels.size())
-        {
-            CurrentTelemetry.Wheels[i].HubPosition = hub;
-            CurrentTelemetry.Wheels[i].HubRotation = initial.Orientation;
-        }
-    }
-    CurrentTelemetry.WheelCount = static_cast<uint32_t>(SoftTyres.size());
 
     // ── Production driving layer (PacejkaDrivetrain) setup ───────────────────────────────────────────────────────────
     //   Wire the Phase-1 slip + drivetrain models. The slip integrator holds a const reference to PacejkaTyre, so PacejkaTyre
@@ -70,13 +56,27 @@ void VehicleSolver::Build(const VehicleSolverConfiguration& config, const Hooks&
     StrutRate.assign(ActiveConfiguration.Wheels.size(), 0.0f);
     for (size_t i = 0; i < StrutTravel.size(); ++i)
         StrutTravel[i] = StrutFor(i).StaticCompression;
-    // Start every strut at the sag its own spring settles to, so the car is standing at its authored ride height on
-    //    step zero instead of dropping into it and ringing.
-    StrutTravel.resize(ActiveConfiguration.Wheels.size());
-    StrutRate.assign(ActiveConfiguration.Wheels.size(), 0.0f);
-    for (size_t i = 0; i < StrutTravel.size(); ++i)
-        StrutTravel[i] = StrutFor(i).StaticCompression;
     SlipDeflections.assign(ActiveConfiguration.Wheels.size(), SlipState{});
+
+    SoftTyres.clear();
+    SoftTyres.resize(ActiveConfiguration.Wheels.size());
+    for (size_t i = 0; i < ActiveConfiguration.Wheels.size(); ++i)
+    {
+        Vec3 MountWorld, AxisUp;
+        const Vec3 hub = ResolveHub(i, initial, MountWorld, AxisUp);
+        SoftTyres[i].Build(ActiveConfiguration.Tyre, hub, initial.Orientation);
+        if (i < CurrentTelemetry.Wheels.size())
+        {
+            CurrentTelemetry.Wheels[i].HubPosition = hub;
+            CurrentTelemetry.Wheels[i].HubRotation = initial.Orientation;
+        }
+    }
+    CurrentTelemetry.WheelCount = static_cast<uint32_t>(SoftTyres.size());
+
+    CurrentTelemetry.Chassis = initial;
+    CurrentTelemetry.EngineRPM = ActiveConfiguration.Engine.IdleRPM;
+    CurrentTelemetry.GearIndex = GearIndex;
+    CurrentTelemetry.PacejkaActive = ActiveConfiguration.ActiveScheme == DrivingScheme::PacejkaDrivetrain;
 
     ConstructionComplete = !SoftTyres.empty() && static_cast<bool>(ChassisHooks.ReadChassis) &&
              static_cast<bool>(ChassisHooks.ApplyForceAtPoint) && static_cast<bool>(ChassisHooks.Ground);

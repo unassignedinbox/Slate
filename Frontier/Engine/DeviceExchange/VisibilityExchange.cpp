@@ -929,9 +929,6 @@ bool VisibilityExchange::RefreshInstances(const InstanceRecord* Rows, uint32_t C
     if (Count != InstanceCount)                  return false;
     if (Vulkan == nullptr || !Vulkan->Instances.Buffer) return false;
 
-    void* Destination = Vulkan->Instances.Mapped;
-    if (Destination == nullptr) return false;    // device-local fallback: no host mapping to write through
-
     const size_t Bytes = static_cast<size_t>(Count) * sizeof(InstanceRecord);
     if (Bytes > static_cast<size_t>(Vulkan->Instances.Bytes)) return false;
 
