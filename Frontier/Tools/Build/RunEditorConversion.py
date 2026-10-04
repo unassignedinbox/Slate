@@ -52,7 +52,7 @@ Report = {"exit": Result.returncode, "stackBytes": 262144 if os.name != "nt" els
 # Compiler-reported frames, not sizeof estimates; scope is these compiled proof TUs.
 Frames = []
 Critical = ("BuildLayout(", "RecordCollection(", "RecordSunInspector(", "RecordAtmosphereSkyInspector(",
-            "RecordLensFlareInspector(", "RecordWeatherInspector(", "ConstructInspectorLayout(", "RunEditorConversion(")
+            "RecordProbe(", "RecordCurve(", "RecordLensFlareInspector(", "RecordWeatherInspector(", "ConstructInspectorLayout(", "RunEditorConversion(")
 for Record in Program.parent.rglob("*.su"):
     for Line in Record.read_text().splitlines():
         Fields = Line.split("\t")

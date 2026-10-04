@@ -4,6 +4,7 @@
 // 📦 Executed native inspector, collection, diagnostics and bounded-stack verification; no browser renderer.
 
 #include "CelestialSequence.h"
+#include "EnvironmentProjection.h"
 #include "EditorFeedSequence.h"
 #include "EditorHost.h"
 #include "ControlPanel.h"
@@ -23,6 +24,21 @@ using namespace Frontier::HostRuntime;
 
 namespace {
 
+struct CurveItem
+{
+    ImGuiID Identity;
+    std::string Label;
+    ImRect Rectangle;
+    ImGuiWindow* Window;
+};
+std::vector<CurveItem> CurveItems;
+
+CurveItem LocateCurve(const char* Label)
+{
+    for (const auto& Item : CurveItems) if (Item.Label == Label) return Item;
+    throw std::runtime_error(std::string("Native curve not submitted: ") + Label);
+}
+
 void Require(bool Condition, const char* Description)
 {
     if (!Condition) throw std::runtime_error(Description);
@@ -40,6 +56,17 @@ void Capture(const std::filesystem::path& Output, const char* Name)
 }
 
 } // namespace
+
+#ifdef IMGUI_ENABLE_TEST_ENGINE
+void ImGuiTestEngineHook_ItemAdd(ImGuiContext*, ImGuiID, const ImRect&, const ImGuiLastItemData*) {}
+void ImGuiTestEngineHook_ItemInfo(ImGuiContext* Context, ImGuiID Identity, const char* Label, ImGuiItemStatusFlags)
+{
+    if (Label && std::strstr(Label, "-curve"))
+        CurveItems.push_back({Identity, Label, Context->LastItemData.Rect, Context->CurrentWindow});
+}
+void ImGuiTestEngineHook_Log(ImGuiContext*, const char*, ...) {}
+const char* ImGuiTestEngine_FindItemDebugLabel(ImGuiContext*, ImGuiID) { return "native proof"; }
+#endif
 
 int RunEditorConversion(const char* Destination)
 {
@@ -95,6 +122,7 @@ int RunEditorConversion(const char* Destination)
         }
         std::snprintf(Rows[0].Label, sizeof(Rows[0].Label), "Collection fixture / 800 records");
         ImGui::CreateContext();
+        ImGui::GetCurrentContext()->TestEngineHookItems = true;
         auto& Input = ImGui::GetIO();
         Input.IniFilename = nullptr;
         Input.DeltaTime = 1.0f / 60;
@@ -117,6 +145,7 @@ int RunEditorConversion(const char* Destination)
         Input.DisplaySize = {480, 1300};
         auto Tick = [&]()
         {
+            CurveItems.clear();
             ImGui::NewFrame();
             ImGui::SetNextWindowPos({0, 0});
             ImGui::SetNextWindowSize(Input.DisplaySize);
@@ -166,11 +195,153 @@ int RunEditorConversion(const char* Destination)
         };
         for (const auto& Requested : Captures)
         {
+            std::snprintf(Rows[0].Label,sizeof(Rows[0].Label),"%s",CelestialEntityName(Requested.Selection));
             Celestial[0].BuildSheet(Requested.Selection, Sheets[0]);
             Input.DisplaySize = {900, Requested.Height};
             for (unsigned Repeat = 0; Repeat < 3; ++Repeat) Tick();
             Capture(Output, Requested.Name);
         }
+        // 📝 Inspect actual submitted ImGui items rather than guessing panel coordinates.
+        auto Property = [&](const char* Label) -> EditorProperty&
+        {
+            for (auto& Group : Sheets[0].Groups)
+                for (unsigned Index = 0; Index < Group.PropertyCount; ++Index)
+                    if (!std::strcmp(Group.Properties[Index].Label,Label)) return Group.Properties[Index];
+            throw std::runtime_error(std::string("Property missing: ") + Label);
+        };
+        auto Press = [&](ImGuiKey Key)
+        {
+            Input.AddMousePosEvent(-100,-100);
+            Tick();
+            Input.AddKeyEvent(Key,true);
+            Tick();
+            Input.AddKeyEvent(Key,false);
+            Tick();
+        };
+        auto Probe = [&](const char* Label, float Fraction)
+        {
+            const auto Item = LocateCurve(Label);
+            const ImVec2 Centre = Item.Rectangle.GetCenter();
+            Input.AddMousePosEvent(Item.Rectangle.Min.x+Item.Rectangle.GetWidth()*Fraction,Centre.y);
+            Tick();
+            Input.AddMouseButtonEvent(0,true);
+            Tick();
+            Require(ImGui::GetCurrentContext()->ActiveId == Item.Identity,"actual native curve receives pointer input");
+            Input.AddMouseButtonEvent(0,false);
+            Tick();
+        };
+        using namespace EnvironmentProjection;
+        CelestialObservation Calendar;
+        for (int Year : {1900,2000,2024,2026,2100})
+        {
+            Calendar.Year = Year;
+            for (int DayNumber = 1; DayNumber <= CountYearDays(Year); ++DayNumber)
+            {
+                ResolveDate(Calendar,DayNumber);
+                if (ProjectDay(Calendar) != DayNumber) throw std::runtime_error("calendar day roundtrip");
+            }
+        }
+        Require(true,"calendar roundtrip for every day in five leap/common/century years");
+        Require(CountYearDays(1900)==365 && CountYearDays(2000)==366 && CountYearDays(2100)==365,"Gregorian leap-century boundaries");
+        Require(std::abs(SampleDensity(8000,8000)-std::exp(-1.0f))<1e-6f,"density at scale height is one over e");
+        Require(SampleScattering(440,1)>SampleScattering(680,1),"Rayleigh wavelength study favours blue");
+        Require(SampleHazeTransmission(0,6)==1 && SampleHazeTransmission(5,0)==1,"haze study clear endpoints");
+        Require(SampleHazeTransmission(5,3)<SampleHazeTransmission(5,1),"haze study follows authored strength");
+        Require(std::abs(SampleOzoneTransmission(600,4)-std::exp(-4.0f))<1e-6f && SampleOzoneTransmission(380,4)>0.99f,"ozone illustrative peak and wings");
+        Require(SampleSpectrum(440,10000)>SampleSpectrum(680,10000) && SampleSpectrum(440,2000)<SampleSpectrum(680,2000),"Planck study changes spectral balance with Kelvin");
+        std::snprintf(Rows[0].Label,sizeof(Rows[0].Label),"Sun");
+        Celestial[0].Observation.Year = 2024;
+        Celestial[0].Observation.UtcOffset = -5.5f;
+        Celestial[0].BuildSheet(CelestialEntity::Sun, Sheets[0]);
+        Input.DisplaySize = {900, 4000};
+        for (int Repeat=0;Repeat<3;++Repeat) Tick();
+        Require(Property("Year").Figure==2024 && Property("UTC offset").Figure==-5.5f,"solar studies receive actual native year and UTC offset");
+        const auto GainItem = LocateCurve("##sun-gain-curve");
+        const float PreviousIntensity = Property("Intensity").Figure;
+        Input.AddMousePosEvent(GainItem.Rectangle.Max.x-1,GainItem.Rectangle.GetCenter().y);
+        Tick();
+        Require(Property("Intensity").Figure==PreviousIntensity,"hover inspects without editing authored intensity");
+        Probe("##sun-gain-curve",0.25f);
+        Require(std::abs(Property("Intensity").Figure-15)<60/LocateCurve("##sun-gain-curve").Rectangle.GetWidth(),"gain plot writes the real native intensity property");
+        Press(ImGuiKey_End);
+        Require(Property("Intensity").Figure==60,"gain End clamps to native maximum");
+        Press(ImGuiKey_Home);
+        Require(Property("Intensity").Figure==0,"gain Home clamps to native minimum");
+        Press(ImGuiKey_RightArrow);
+        Require(std::abs(Property("Intensity").Figure-0.6f)<0.001f,"focused curve arrow key edits rather than navigating away");
+        Probe("##sun-day-curve",0.75f);
+        Require(std::abs(Property("Local Hours").Figure-18)<24/LocateCurve("##sun-day-curve").Rectangle.GetWidth(),"daylight graph writes local time");
+        Celestial[0].ApplySheet(CelestialEntity::Sun,Sheets[0]);
+        Celestial[0].Tick(0,Eye,0);
+        const float EveningElevation = Celestial[0].Frame().Sun.Elevation;
+        Probe("##sun-day-curve",0.5f);
+        Celestial[0].ApplySheet(CelestialEntity::Sun,Sheets[0]);
+        Celestial[0].Tick(0,Eye,0);
+        Require(std::abs(Celestial[0].Frame().Sun.Elevation-EveningElevation)>10,"graph time reaches the native celestial solver");
+        Probe("##sun-season-curve",0.5f);
+        Press(ImGuiKey_End);
+        Require(Property("Month").Figure==12 && Property("Day of Month").Figure==31,"season graph reaches December 31 in leap year");
+        Press(ImGuiKey_Home);
+        Require(Property("Month").Figure==1 && Property("Day of Month").Figure==1,"season Home selects January 1");
+        Probe("##sun-spectrum-curve",0.5f);
+        Require(Property("Temperature").Figure==Celestial[0].SunTemperatureKelvin,"spectrum probe does not overwrite colour temperature");
+        Property("Month").Figure = 2;
+        Property("Day of Month").Figure = 31;
+        Celestial[0].ApplySheet(CelestialEntity::Sun,Sheets[0]);
+        Require(Celestial[0].Observation.Day==29,"native date writeback clamps February in leap year");
+        Celestial[0].Tick(0,Eye,0);
+        Celestial[0].BuildSheet(CelestialEntity::Sun,Sheets[0]);
+        for (int Repeat=0;Repeat<3;++Repeat) Tick();
+        Capture(Output,"SunGraphs.png");
+        Input.DisplaySize = {480,5500};
+        for (int Repeat=0;Repeat<3;++Repeat) Tick();
+        for (const char* Label : {"##sun-gain-curve","##sun-day-curve","##sun-season-curve","##sun-spectrum-curve"})
+        {
+            const auto Item = LocateCurve(Label);
+            Require(Item.Rectangle.Min.x>=0 && Item.Rectangle.Max.x<=Input.DisplaySize.x && Item.Rectangle.GetWidth()>120,"sun graph fits narrow inspector");
+        }
+        Capture(Output,"SunGraphsNarrow.png");
+        Celestial[0].Prepare();
+        Celestial[0].Tick(0,Eye,0);
+        std::snprintf(Rows[0].Label,sizeof(Rows[0].Label),"Atmosphere");
+        Celestial[0].BuildSheet(CelestialEntity::Atmosphere, Sheets[0]);
+        Input.DisplaySize = {900,3700};
+        for (int Repeat=0;Repeat<3;++Repeat) Tick();
+        const float PreviousRayleigh = Property("Rayleigh").Figure;
+        Probe("##sky-scattering-curve",0.5f);
+        Probe("##sky-haze-curve",0.75f);
+        Probe("##sky-ozone-curve",0.25f);
+        Probe("##sky-density-curve",0.2f);
+        Require(Property("Rayleigh").Figure==PreviousRayleigh,"atmosphere diagnostic probes do not alter medium settings");
+        Press(ImGuiKey_End);
+        const auto DensityItem = LocateCurve("##sky-density-curve");
+        const int RowIndex = 0;
+        const ImGuiID RowSeed = ImHashData(&RowIndex,sizeof(RowIndex),DensityItem.Window->ID);
+        const ImGuiID AltitudeIdentity = ImHashStr("##sky-altitude",0,RowSeed);
+        const ImGuiID WavelengthIdentity = ImHashStr("##sky-wavelength",0,RowSeed);
+        Require(DensityItem.Window->StateStorage.GetFloat(AltitudeIdentity)==Property("Atmosphere").Figure,"density probe keyboard reaches altitude endpoint");
+        Require(std::abs(DensityItem.Window->StateStorage.GetFloat(WavelengthIdentity)-480)<400/LocateCurve("##sky-ozone-curve").Rectangle.GetWidth(),"scattering and ozone share the wavelength probe");
+        Property("Rayleigh").Figure = 2.5f;
+        Property("Mie").Figure = 3.0f;
+        Property("Ozone").Figure = 0.5f;
+        Property("Rayleigh Scale H").Figure = 12000;
+        Celestial[0].ApplySheet(CelestialEntity::Atmosphere,Sheets[0]);
+        Require(Celestial[0].Medium.RayleighStrength==2.5f && Celestial[0].Medium.MieStrength==3 && Celestial[0].Medium.OzoneStrength==0.5f && Celestial[0].Medium.RayleighScaleHeight==12000,"graph controls retain actual native medium writeback");
+        for (int Repeat=0;Repeat<3;++Repeat) Tick();
+        Capture(Output,"AtmosphereGraphs.png");
+        Input.DisplaySize = {480,4200};
+        for (int Repeat=0;Repeat<3;++Repeat) Tick();
+        for (const char* Label : {"##sky-scattering-curve","##sky-haze-curve","##sky-ozone-curve","##sky-density-curve"})
+        {
+            const auto Item = LocateCurve(Label);
+            Require(Item.Rectangle.Min.x>=0 && Item.Rectangle.Max.x<=Input.DisplaySize.x && Item.Rectangle.GetWidth()>120,"atmosphere graph fits narrow inspector");
+        }
+        Capture(Output,"AtmosphereGraphsNarrow.png");
+        Celestial[0].Prepare();
+        Celestial[0].Budget.AtmosphereSamples = 8;
+        Celestial[0].Budget.AtmosphereLightSamples = 4;
+        Celestial[0].Tick(0,Eye,0);
+        std::snprintf(Rows[0].Label,sizeof(Rows[0].Label),"Atmosphere");
         Celestial[0].BuildSheet(CelestialEntity::Atmosphere, Sheets[0]);
         Input.DisplaySize = {900, 3700};
         for (unsigned Repeat = 0; Repeat < 3; ++Repeat) Tick();
@@ -195,6 +366,7 @@ int RunEditorConversion(const char* Destination)
         Require(!Celestial[0].TakeSkyDomeBakeRequest(), "bake request consumed exactly once");
         std::vector<uint16_t> Halves;
         Celestial[0].BakeSkyDome(Halves);
+        std::snprintf(Rows[0].Label,sizeof(Rows[0].Label),"Atmosphere");
         Celestial[0].BuildSheet(CelestialEntity::Atmosphere, Sheets[0]);
         Require(Halves.size() == 256u * 512u * 4u, "real texture bake stays heap backed");
         Require(Sheets[0].SkyImage.Pixels == Celestial[0].SkyPreviewHalves.data(), "inspector borrows actual bake pixels");
@@ -202,6 +374,7 @@ int RunEditorConversion(const char* Destination)
         std::vector<uint16_t> Reloaded;
         Require(Celestial[0].LoadSkyDome((Output / "Atmosphere.environment").string(), Reloaded), "real baked environment reload");
         Require(Reloaded == Halves, "baked environment export/reload preserves every HDR texel");
+        std::snprintf(Rows[0].Label,sizeof(Rows[0].Label),"Atmosphere");
         Celestial[0].BuildSheet(CelestialEntity::Atmosphere, Sheets[0]);
         Input.DisplaySize = {900, 3700};
         for (unsigned Repeat = 0; Repeat < 3; ++Repeat) Tick();

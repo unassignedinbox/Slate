@@ -75,7 +75,7 @@ target_include_directories(FrontierNativeProof PRIVATE
     ExternalPackages/imgui ExternalPackages/tomlpp/include ExternalPackages/thorvg/inc
     ExternalPackages/stb ExternalPackages/vulkan-headers/include
     Exhibits/Workbench/Editor Exhibits/Workbench/Editor/Counterparts Exhibits/Workbench/IconArt)
-target_compile_definitions(FrontierNativeProof PRIVATE FRONTIER_DEVELOPMENT TVG_STATIC)
+target_compile_definitions(FrontierNativeProof PRIVATE FRONTIER_DEVELOPMENT TVG_STATIC IMGUI_ENABLE_TEST_ENGINE)
 target_link_libraries(FrontierNativeProof PRIVATE thorvg_static)
 if(MSVC)
     target_compile_definitions(FrontierNativeProof PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)

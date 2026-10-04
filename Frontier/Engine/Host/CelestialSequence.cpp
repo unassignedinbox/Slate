@@ -4,6 +4,7 @@
 //============================================================================================================================================
 
 #include "CelestialSequence.h"
+#include "../Editor/EnvironmentProjection.h"
 #include "DisplayPresentation/WeatherDiagnostics.h"
 #include "DisplayPresentation/StarFieldControls.h"
 #include "../DisplayPresentation/SunColourTemperature.h"
@@ -1089,6 +1090,8 @@ void CelestialSequence::BuildSunSheet(EditorSheet& Sheet) const noexcept
         }
 
         EditorPropertyGroup& Where = OpenGroup(Sheet, "Observer / date");
+        Push(Where, MakeSlider("Year", 1900.0f, 2100.0f, static_cast<float>(Observation.Year), 0, ""));
+        Push(Where, MakeSlider("UTC offset", -14.0f, 14.0f, Observation.UtcOffset, 2, "h"));
         Push(Where, MakeSlider("Latitude", -90.0f, 90.0f, Observation.Latitude, 2, "deg"));
         Push(Where, MakeSlider("Longitude", -180.0f, 180.0f, Observation.Longitude, 2, "deg"));
         Push(Where, MakeSlider("Day of Month", 1.0f, 31.0f, static_cast<float>(Observation.Day), 0, ""));
@@ -1405,10 +1408,18 @@ void CelestialSequence::ApplySheet(CelestialEntity Entity, const EditorSheet& Sh
         if (std::isfinite(Duration) && Duration != CurrentDuration)
             Clock.SpeedTimes = 24.0f / std::clamp(Duration, 0.01f, 168.0f);
         else if (Preset < 4u && Preset != CurrentPreset) Clock.SpeedTimes = Rates[Preset];
-        Observation.Latitude   = ReadSlider(Sheet, "Latitude", Observation.Latitude);
-        Observation.Longitude  = ReadSlider(Sheet, "Longitude", Observation.Longitude);
-        Observation.Day        = static_cast<int32_t>(ReadSlider(Sheet, "Day of Month", static_cast<float>(Observation.Day)));
-        Observation.Month      = static_cast<int32_t>(ReadSlider(Sheet, "Month", static_cast<float>(Observation.Month)));
+        const auto BoundedCalendar = [&](const char* Name, float Previous, float Minimum, float Maximum)
+        {
+            const float Value = ReadSlider(Sheet, Name, Previous);
+            return std::isfinite(Value) ? std::clamp(Value, Minimum, Maximum) : Previous;
+        };
+        Observation.Year = int32_t(std::round(BoundedCalendar("Year", float(Observation.Year), 1900, 2100)));
+        Observation.UtcOffset = BoundedCalendar("UTC offset", Observation.UtcOffset, -14, 14);
+        Observation.Latitude = BoundedCalendar("Latitude", Observation.Latitude, -90, 90);
+        Observation.Longitude = BoundedCalendar("Longitude", Observation.Longitude, -180, 180);
+        Observation.Month = int32_t(std::round(BoundedCalendar("Month", float(Observation.Month), 1, 12)));
+        Observation.Day = int32_t(std::round(BoundedCalendar("Day of Month", float(Observation.Day), 1,
+            float(EnvironmentProjection::CountMonthDays(Observation.Year, Observation.Month)))));
         Light.Intensity        = ReadSlider(Sheet, "Intensity", Light.Intensity);
         SunDirect              = ReadSlider(Sheet, "Direct", SunDirect);
         break;
