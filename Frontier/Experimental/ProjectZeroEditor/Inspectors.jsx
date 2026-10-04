@@ -1,3 +1,5 @@
+import TransformPanel from "./TransformPanel.jsx";
+import MaterialPanel from "./MaterialPanel.jsx";
 import ActionIcon, { QuickSymbol } from "./ActionIcon.jsx";
 import React, { useState, useEffect, useRef } from "react";
 import {
@@ -453,7 +455,14 @@ function MoonImage({ Preset = 0, Phase = 0.62, Size = 150, Rotation = 0 }) {
     />
   );
 }
-export function Inspector({ Subject, Values, Change, Hidden, ToggleHidden }) {
+export function Inspector({
+  Subject,
+  Values,
+  Change,
+  Hidden,
+  ToggleHidden,
+  OpenShader,
+}) {
   const Sheet = Panels[Subject.Panel] || Panels.geometry;
   const [MoonSlot, SelectMoon] = useState(0);
   const Prefix = Subject.Panel === "moon" ? "moon" + MoonSlot + ":" : "";
@@ -537,14 +546,32 @@ export function Inspector({ Subject, Values, Change, Hidden, ToggleHidden }) {
           <Glyph Name="eye" />
         </button>
       </div>
-      {[...new Set(Sheet.map((Field) => Field.Group))].map((Group) => (
-        <details open className="generic-card" key={Group}>
-          <summary>{Group}</summary>
-          {Sheet.filter((Field) => Field.Group === Group).map((Field) =>
-            F(Field.Label),
-          )}
-        </details>
-      ))}
+      {Subject.Panel === "geometry" && (
+        <>
+          <TransformPanel Values={Values} Change={Change} />
+          <MaterialPanel
+            Subject={Subject}
+            Values={Values}
+            Change={Change}
+            Expand={OpenShader}
+            Compact
+          />
+        </>
+      )}
+      {[...new Set(Sheet.map((Field) => Field.Group))]
+        .filter(
+          (Group) =>
+            Subject.Panel !== "geometry" ||
+            !["Transform", "Surface"].includes(Group),
+        )
+        .map((Group) => (
+          <details open className="generic-card" key={Group}>
+            <summary>{Group}</summary>
+            {Sheet.filter((Field) => Field.Group === Group).map((Field) =>
+              F(Field.Label),
+            )}
+          </details>
+        ))}
       <div className="generic-card">
         <h4>INSTANCE</h4>
         <div className="instance-tags">
@@ -1387,7 +1414,31 @@ export function Inspector({ Subject, Values, Change, Hidden, ToggleHidden }) {
           <Card Title={Local ? "Local bounds" : "Cloud base"} Height={452}>
             {Local ? (
               <>
-                {Fields("Centre", "Half Size")}
+                <TransformPanel
+                  Values={Values}
+                  Change={Change}
+                  Compact
+                  Space="WORLD SPACE"
+                  Rows={[
+                    [
+                      "Centre",
+                      "m",
+                      Sheet.find((Field) => Field.Label === "Centre").Default,
+                      -100000,
+                      100000,
+                      1,
+                    ],
+                    [
+                      "Half Size",
+                      "m",
+                      Sheet.find((Field) => Field.Label === "Half Size")
+                        .Default,
+                      0.001,
+                      100000,
+                      1,
+                    ],
+                  ]}
+                />
                 <Bounds />
               </>
             ) : (
@@ -1494,7 +1545,31 @@ export function Inspector({ Subject, Values, Change, Hidden, ToggleHidden }) {
             {Local ? (
               <>
                 <Bounds />
-                {Fields("Centre", "Half Size")}
+                <TransformPanel
+                  Values={Values}
+                  Change={Change}
+                  Compact
+                  Space="WORLD SPACE"
+                  Rows={[
+                    [
+                      "Centre",
+                      "m",
+                      Sheet.find((Field) => Field.Label === "Centre").Default,
+                      -100000,
+                      100000,
+                      1,
+                    ],
+                    [
+                      "Half Size",
+                      "m",
+                      Sheet.find((Field) => Field.Label === "Half Size")
+                        .Default,
+                      0.001,
+                      100000,
+                      1,
+                    ],
+                  ]}
+                />
               </>
             ) : (
               <>

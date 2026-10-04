@@ -182,15 +182,21 @@ try {
   assert.equal(await Count(), 0);
   await Open();
   await Choose("Cube");
+  await Page.locator(
+    ".construct-properties [data-material-channel=roughness]",
+  ).click();
   await Page.locator(".construct-properties")
-    .getByLabel("Roughness value", { exact: true })
+    .getByLabel("Roughness fill", { exact: true })
     .fill("0.72");
   await Page.screenshot({ path: path.join(Proof, "ConstructProperties.png") });
   await Add();
   assert.equal(await Count(), 1);
+  await Page.locator(
+    ".inspector-scroll [data-material-channel=roughness]",
+  ).click();
   assert.equal(
     await Page.locator(".inspector-scroll")
-      .getByLabel("Roughness value", { exact: true })
+      .getByLabel("Roughness fill", { exact: true })
       .inputValue(),
     "0.72",
   );

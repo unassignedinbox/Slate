@@ -13,6 +13,11 @@ const Assets = {
   Icons: {},
   Glyphs: {},
   Moons: [],
+  ShaderBall: fs
+    .readFileSync(
+      path.join(Frontier, "Exhibits/DistanceFieldGI/ShaderBall.mesh"),
+    )
+    .toString("base64"),
   Notices: {
     Fonts: fs.readFileSync(
       path.join(Frontier, "EngineContent/Fonts/SunReference/OFL.txt"),
@@ -75,5 +80,5 @@ fs.writeFileSync(
   `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Project Zero native editor UI translated to HTML. Native icons and fonts; browser-local controls, no engine connection."><title>Project-Zero — Editor</title><style>${Fonts}\n${Style}</style></head><body><div id="Editor"></div><script>window.NativeAssets=${JSON.stringify(Assets).replaceAll("<", "\\u003c")};</script><script>${Script.replaceAll("</script", "<\\/script")}</script></body></html>\n`,
 );
 console.log(
-  `Built standalone index.html (${(fs.statSync(path.join(Folder, "index.html")).size / 1024 / 1024).toFixed(2)} MiB), ${Object.keys(Assets.Icons).length} shipped icons, ${Object.keys(Assets.Glyphs).length} native vector glyphs, six moon textures.`,
+  `Built standalone index.html (${(fs.statSync(path.join(Folder, "index.html")).size / 1024 / 1024).toFixed(2)} MiB), ${Object.keys(Assets.Icons).length} shipped icons, ${Object.keys(Assets.Glyphs).length} native vector glyphs, six moon textures, and the repository shader-ball mesh.`,
 );

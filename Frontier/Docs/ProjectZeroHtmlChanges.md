@@ -10,13 +10,16 @@
 
 ## Change register
 
-| ID   | Requested change                                    | HTML progress                     | C++ progress                               |
-| ---- | --------------------------------------------------- | --------------------------------- | ------------------------------------------ |
-| C001 | Native-style Construct presentation                 | Implemented; awaiting user review | Deferred until the HTML review is finished |
-| C002 | Ctrl+A opens Construct; Shift+A must not open it    | Implemented and browser-checked   | Bug recorded; no native change made        |
-| C003 | Blank checkerboard with constructed representations | Implemented and browser-checked   | HTML-only preview, not a renderer change   |
-| C004 | Distinct filled inspector quick-action icons        | Implemented and browser-checked   | Deferred until the HTML review is finished |
-| C005 | Redesigned viewport header                          | Implemented and browser-checked   | Deferred until the HTML review is finished |
+| ID   | Requested change                                    | HTML progress                     | C++ progress                                      |
+| ---- | --------------------------------------------------- | --------------------------------- | ------------------------------------------------- |
+| C001 | Native-style Construct presentation                 | Implemented; awaiting user review | Deferred until the HTML review is finished        |
+| C002 | Ctrl+A opens Construct; Shift+A must not open it    | Implemented and browser-checked   | Bug recorded; no native change made               |
+| C003 | Blank checkerboard with constructed representations | Implemented and browser-checked   | HTML-only preview, not a renderer change          |
+| C004 | Distinct filled inspector quick-action icons        | Implemented and browser-checked   | Deferred until the HTML review is finished        |
+| C005 | Redesigned viewport header                          | Implemented and browser-checked   | Deferred until the HTML review is finished        |
+| C006 | SolidArc-style XYZ transform table                  | Implemented and browser-checked   | Deferred until the HTML review is finished        |
+| C007 | Object-bound full material channels and sources     | Implemented and browser-checked   | Native slab and producer integration deferred     |
+| C008 | Dockable ShaderEditor and shader-ball preview       | Implemented and browser-checked   | Native shader execution and BSDF preview deferred |
 
 ## 2026-10-04 — C001: Construct presentation
 
@@ -122,6 +125,99 @@ Visual proofs:
 - [Fog and wind filled quick icons / viewport header](../Experimental/ProjectZeroEditor/Screenshots/QuickTilesFog.png)
 - [Stars: distinct symbols and ON/OFF/unavailable states](../Experimental/ProjectZeroEditor/Screenshots/QuickTilesStars.png)
 - [Compact 1024-pixel toolbar](../Experimental/ProjectZeroEditor/Screenshots/Toolbar1024.png)
+
+## 2026-10-04 — C006: Transform table
+
+- Replaced the geometry inspector's read-only position / rotation controls with a compact SolidArc-style table.
+- Position, rotation and scale occupy rows; X/Y/Z occupy columns, with units and axis colours.
+- Local cloud and local fog bounds use the same table for world-space Centre / Half Size, preserving their native defaults.
+- Supports numeric entry, horizontal value scrubbing, Shift precision, row resets, and the existing instance lock.
+- Transform drafts are per object and survive selection changes and browser reloads.
+- These values are **HTML authoring state**, not native transform matrices or modifications to SolidArc geometry.
+  The checkerboard remains an analytical placement preview, not a transformed mesh renderer.
+
+## 2026-10-04 — C007: Object-bound material channels
+
+### Presentation and ownership
+
+- Replaced the geometry inspector's small Surface block with object-bound Material channels.
+- Used the supplied traffic-dashboard image for rounded charcoal cards, light typography, pill selectors,
+  understated borders, status counters and restrained colour accents. Preserved the existing editor shell.
+- Shows all 20 rows from `Engine/DisplayPresentation/MaterialInspector.cpp`: base colour, metallic, roughness,
+  reflectance/IOR, orientation, occlusion, emission, opacity, anisotropy, anisotropy direction, coat, coat roughness,
+  coat orientation, sheen colour, sheen roughness, subsurface colour, thickness, transmission, refraction IOR,
+  and displacement. A searchable list selects the channel editor.
+- Material drafts belong to the selected geometry object's surface slot 0. The separate ShaderEditor remains pinned
+  to that owner when outliner selection changes; its target selector deliberately changes the owner.
+- This does not claim discovery of native shared material assets or multiple resolved submesh slots.
+  Non-surface environment / light / camera inspectors retain their existing domain-specific controls.
+- Reflectance and refraction share the same IOR carrier, matching the inspected native slab semantics.
+- Added Standard, SSR, Glass, Fabric, Metal, Clear coat, Subsurface, Emissive and Unlit profiles.
+  Profiles adjust fill defaults while retaining authored gradient, texture and code drafts.
+- **SSR is explicitly identified as a reflection route, not a BSDF or a working browser ray-tracing mode.**
+
+### One active source per channel
+
+- **Fill:** typed colour or scalar value, with hex entry, numeric limits and sliders as appropriate.
+- **Gradient:** 2–8 stops; add/remove; pointer dragging; keyboard movement; explicit stop position and colour/value;
+  U/V direction; linear interpolation. Scalar channels interpolate scalar values rather than RGB colours.
+- **Texture:** local PNG/JPEG/WebP selection, replace/remove, RGB or component sampling, and UV repeat.
+  Inputs are limited to 8 MB. A maximum 160-pixel image retaining alpha is embedded for the browser preview;
+  this is not the original full-resolution texture or a native resource descriptor. No external upload occurs.
+- **Code link:** C++, Slang/HLSL or GLSL provider, symbol/entry point, source/integration notes, and stored fill fallback.
+  These are unresolved descriptors. No text is evaluated, compiled or executed by the HTML editor.
+- Switching sources preserves the other source drafts. Material state and bounded texture previews use the existing
+  per-object save/export data. Storage failures now show an explicit warning instead of silently failing.
+- Restored material values are constrained to the channel schema; embedded image sources are restricted to data URLs.
+
+## 2026-10-04 — C008: ShaderEditor window and preview
+
+- The material card's expand arrow opens a separate, movable, resizable **non-modal window inside the HTML app**.
+- Dock buttons attach it to Left, Centre or Right. The docked ShaderEditor uses the existing trapezoidal tab strip
+  and tab drag/drop; Float window undocks it. It can be closed and reopened without discarding material data.
+- Owner selection is explicit; missing/deleted owners show a recovery prompt instead of silently editing another object.
+- Uses the existing `Exhibits/DistanceFieldGI/ShaderBall.mesh`, embedded by the standalone build: 35,897 vertices,
+  67,832 triangles. Mesh provenance is shown in the preview details, following the native exhibit's identification
+  of Pseudopode / UnityShaderBall as CC0. No replacement generated illustration is used.
+- A browser-side software rasterizer displays the actual mesh with orbit and softbox/warm/cool lighting controls.
+  Supported channel edits change preview pixels, including image UV sampling and gradients.
+- Preview coverage: colour, roughness, metallic, IOR, occlusion, emission, opacity, coat, sheen, and approximate
+  transmission. Orientation, anisotropy, subsurface and displacement are stored but not evaluated by this preview.
+- **This is a lighting/authoring study, not the native BSDF, shader compiler, SSR renderer or native shader-ball exhibit.**
+  Code-driven channels use their fill fallback until a real producer is connected later.
+
+### Browser verification for C006–C008
+
+Executed on 2026-10-04 using headless Chromium, without a C++ build:
+
+- `CheckMaterials.mjs`: XYZ edit/scrub/reset/lock/persistence; all 20 typed channel rows and nine profiles;
+  pinned ownership; shared IOR; channel search; signed scalar typing; gradient editing, limits and retained drafts;
+  texture pixel changes, embedded data, failed-decode preservation and removal; code descriptors; floating movement;
+  docking/tab dragging/undocking; non-overlapping docked cards; reload persistence.
+- Material window layouts checked at 1024, 1280, 1366, 1440 and 1920 pixels wide without horizontal content overflow.
+- `CheckBrowser.mjs`: all 18 inspector sheets, now 128 numeric edits, and existing shell/Control Centre regressions.
+- `CheckConstruction.mjs`: all 23 catalogue entries, including material roughness carried from the new channel UI
+  into the constructed object's inspector. Its selector was updated to the new channel editor, not bypassed.
+- `CheckQuickTools.mjs`: prior filled-icon and viewport-toolbar regressions retained.
+- All four suites reported no browser errors. No native source files, SolidArc or Fluid files were changed.
+
+Visual proofs:
+
+- [XYZ transform table](../Experimental/ProjectZeroEditor/Screenshots/TransformTable.png)
+- [ShaderEditor with gradient and shader ball](../Experimental/ProjectZeroEditor/Screenshots/ShaderGradient.png)
+- [Texture source and shader-ball response](../Experimental/ProjectZeroEditor/Screenshots/ShaderTexture.png)
+- [Unresolved code producer](../Experimental/ProjectZeroEditor/Screenshots/ShaderCodeLink.png)
+- [ShaderEditor docked in the main workspace](../Experimental/ProjectZeroEditor/Screenshots/ShaderDocked.png)
+
+### Deferred native acceptance work
+
+- Resolve real object/submesh/material ownership rather than copying the HTML slot-0 convention.
+- Map every channel and its typed source to native slab descriptors; preserve shared IOR semantics and colour spaces.
+- Map Glass/Fabric/Metal profiles to native material models and parameters; keep SSR in reflection configuration.
+- Connect gradients, full-resolution textures, and authorized native code/shader producers through the appropriate
+  resource and compilation paths. The browser's text descriptor is not a compiled or trusted native producer.
+- Integrate native transform editing, native docking, and the native shader-ball renderer only after the HTML review
+  is finished. Do not replace the engine BSDF with this lightweight browser preview.
 
 ## Next review
 

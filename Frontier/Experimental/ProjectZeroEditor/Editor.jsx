@@ -1,3 +1,5 @@
+import MaterialPanel from "./MaterialPanel.jsx";
+import ShaderPanel from "./ShaderPanel.jsx";
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { Inspector, Icon, Glyph, Panels } from "./Inspectors.jsx";
@@ -210,6 +212,99 @@ function App() {
     }),
     [LeftWidth, ResizeLeft] = useState(316),
     [RightWidth, ResizeRight] = useState(340);
+  const [ShaderTarget, SelectShaderTarget] = useState(null),
+    [ShaderFloating, FloatShader] = useState(false);
+  const ShaderSubject = Rows.find(
+    (Row) => Row.Id === ShaderTarget && Row.Panel === "geometry",
+  );
+  const RemoveShaderTabs = () => {
+    AssignTabs((Previous) =>
+      Object.fromEntries(
+        Object.entries(Previous).map(([Side, Tabs]) => [
+          Side,
+          Tabs.filter((Tab) => Tab !== "ShaderEditor"),
+        ]),
+      ),
+    );
+    Activate((Previous) =>
+      Object.fromEntries(
+        Object.entries(Previous).map(([Side, Tab]) => [
+          Side,
+          Tab === "ShaderEditor"
+            ? PaneTabs[Side]?.find((Item) => Item !== "ShaderEditor") || ""
+            : Tab,
+        ]),
+      ),
+    );
+  };
+  const OpenShader = (Id) => {
+    SelectShaderTarget(Id);
+    RemoveShaderTabs();
+    FloatShader(true);
+  };
+  const DockShader = (Side) => {
+    FloatShader(false);
+    RemoveShaderTabs();
+    AssignTabs((Previous) => ({
+      ...Previous,
+      [Side]: [...Previous[Side], "ShaderEditor"],
+    }));
+    Activate((Previous) => ({ ...Previous, [Side]: "ShaderEditor" }));
+  };
+  const ShaderBody = (Docked = false) => (
+    <div className="shader-document-body">
+      <div className="shader-target">
+        <label>
+          Bound to
+          <select
+            aria-label="ShaderEditor target"
+            value={ShaderSubject?.Id || ""}
+            onChange={(Event) => SelectShaderTarget(Event.target.value)}
+          >
+            <option value="" disabled>
+              Select a material owner
+            </option>
+            {Rows.filter((Row) => Row.Panel === "geometry").map((Row) => (
+              <option key={Row.Id} value={Row.Id}>
+                {Row.Name} · surface
+              </option>
+            ))}
+          </select>
+        </label>
+        {Docked && (
+          <button
+            aria-label="Undock ShaderEditor"
+            onClick={() => {
+              RemoveShaderTabs();
+              FloatShader(true);
+            }}
+          >
+            ↗ Float window
+          </button>
+        )}
+      </div>
+      {ShaderSubject ? (
+        <MaterialPanel
+          key={ShaderSubject.Id}
+          Subject={ShaderSubject}
+          Values={Values[ShaderSubject.Id] || {}}
+          Change={(Key, Value) =>
+            AssignValues((Previous) => ({
+              ...Previous,
+              [ShaderSubject.Id]: {
+                ...Previous[ShaderSubject.Id],
+                [Key]: Value,
+              },
+            }))
+          }
+        />
+      ) : (
+        <div className="empty-dock">
+          The material owner is missing. Choose an object above.
+        </div>
+      )}
+    </div>
+  );
   const FileInput = useRef(null),
     SearchInput = useRef(null),
     Divider = useRef(null);
@@ -256,7 +351,11 @@ function App() {
           Name,
         }),
       );
-    } catch {}
+    } catch {
+      Notify(
+        "Browser storage is full or unavailable. Export the scene to keep your material drafts.",
+      );
+    }
   }, [Rows, Selected, Values, Hidden, Collapsed, Settings, Name]);
   useEffect(() => {
     const Key = (Event) => {
@@ -561,6 +660,16 @@ function App() {
     </div>
   );
   const RestoreTab = (Tab) => {
+    if (Tab === "ShaderEditor") {
+      SelectShaderTarget(
+        Subject.Panel === "geometry"
+          ? Selected
+          : Rows.find((Row) => Row.Panel === "geometry")?.Id,
+      );
+      DockShader("Centre");
+      ShowMenu(null);
+      return;
+    }
     const Side =
       Tab === "Outliner" ? "Left" : Tab === "Inspector" ? "Right" : "Centre";
     AssignTabs((Previous) =>
@@ -1028,6 +1137,8 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
       Outliner()
     ) : Tab === "Viewport" ? (
       Viewport()
+    ) : Tab === "ShaderEditor" ? (
+      ShaderBody(true)
     ) : Tab === "Inspector" ? (
       <>
         <div className="inspector-scroll" key={Subject.Id}>
@@ -1037,6 +1148,7 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
             Change={Change}
             Hidden={Hidden[Selected]}
             ToggleHidden={() => ToggleHidden(Selected)}
+            OpenShader={() => OpenShader(Selected)}
           />
         </div>
         <footer className="inspector-footer">
@@ -1085,6 +1197,13 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
           </section>
         ))}
       </main>
+      {ShaderFloating && (
+        <ShaderPanel
+          Close={() => FloatShader(false)}
+          Dock={DockShader}
+          Children={ShaderBody()}
+        />
+      )}
       <Notch
         Open={Shade}
         Toggle={OpenShade}
@@ -1115,11 +1234,13 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
             {Menu.Type === "Tabs" ? (
               <>
                 <label>WORKSPACE</label>
-                {["Outliner", "Viewport", "Inspector"].map((Tab) => (
-                  <button key={Tab} onClick={() => RestoreTab(Tab)}>
-                    {Tab}
-                  </button>
-                ))}
+                {["Outliner", "Viewport", "Inspector", "ShaderEditor"].map(
+                  (Tab) => (
+                    <button key={Tab} onClick={() => RestoreTab(Tab)}>
+                      {Tab}
+                    </button>
+                  ),
+                )}
                 <hr />
                 <button
                   onClick={() => {
