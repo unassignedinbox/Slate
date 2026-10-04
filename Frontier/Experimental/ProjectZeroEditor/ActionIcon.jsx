@@ -28,6 +28,7 @@ export function QuickSymbol(Label, Context = "", Fallback = "visible") {
   if (Label === "Enabled")
     return (
       {
+        wind: "wind",
         clouds: "cloud",
         "local-cloud": "cloud",
         "height-fog": "fog",
@@ -43,6 +44,30 @@ export function QuickSymbol(Label, Context = "", Fallback = "visible") {
 export default function ActionIcon({ Name, Size = 24 }) {
   let Drawing;
   switch (Name) {
+    case "lock":
+      Drawing = (
+        <>
+          <rect x="5" y="10" width="14" height="12" rx="3" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4h-3V7a2 2 0 0 0-4 0v4Z" />
+        </>
+      );
+      break;
+    case "shadow":
+      Drawing = (
+        <>
+          <path d="M3 5h10v10H3z" />
+          <path d="m13 8 9 9-8 5-8-7h7Z" opacity=".4" />
+        </>
+      );
+      break;
+    case "gi":
+      Drawing = (
+        <>
+          <circle cx="8" cy="8" r="5" />
+          <path d="m3 19 8-7 3 3 7-7v6h-3v-1l-4 6-4-3-5 5Z" />
+        </>
+      );
+      break;
     case "visible":
       Drawing = (
         <path

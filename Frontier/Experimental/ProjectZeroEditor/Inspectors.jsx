@@ -1,3 +1,4 @@
+import { WindInspector, WindBinding } from "./WindPanel.jsx";
 import TransformPanel from "./TransformPanel.jsx";
 import MaterialPanel from "./MaterialPanel.jsx";
 import ActionIcon, { QuickSymbol } from "./ActionIcon.jsx";
@@ -14,7 +15,6 @@ import {
   CloudAltitude,
 } from "../FrontierEditor/property-graphics.jsx";
 import {
-  WindFlow,
   HazeTransmission,
   OzoneAbsorption,
   GroundFogProfile,
@@ -153,6 +153,16 @@ export function Glyph({ Name, Size = 18 }) {
   );
 }
 export function Icon({ Name, Size = 24 }) {
+  if (Name === "outliner-precipitation")
+    return (
+      <span
+        className="native-icon precipitation-symbol"
+        data-native-icon={Name}
+        style={{ color: "#91b7cd", display: "inline-flex" }}
+      >
+        <ActionIcon Name="rain" Size={Size} />
+      </span>
+    );
   const Source = window.NativeAssets?.Icons[Name];
   return Source ? (
     <img
@@ -462,6 +472,11 @@ export function Inspector({
   Hidden,
   ToggleHidden,
   OpenShader,
+  OpenWind,
+  OpenWindField,
+  WindFields = [],
+  AllValues = {},
+  AllHidden = {},
 }) {
   const Sheet = Panels[Subject.Panel] || Panels.geometry;
   const [MoonSlot, SelectMoon] = useState(0);
@@ -534,6 +549,64 @@ export function Inspector({
       <p className="eyebrow">{Subject.Description}</p>
     </header>
   );
+  const Capabilities = () => (
+    <section
+      className="generic-card entity-capabilities"
+      data-card="Quick controls"
+    >
+      <h4>QUICK CONTROLS</h4>
+      <div className="tiles">
+        <Tile
+          Label={Subject.Panel === "post" ? "Enabled" : "Visible"}
+          Context={Subject.Panel}
+          IconName="visible"
+          On={!Hidden}
+          Action={ToggleHidden}
+        />
+        {(Subject.Panel === "geometry"
+          ? [
+              ["Dynamic", "DYNAMIC", false, "motion"],
+              ["Cast shadows", "Cast shadows", true, "shadow"],
+              ["GI", "GI", true, "gi"],
+              ["Physics", "PHYSICS", false, "collision"],
+              ["Locked", "LOCKED", false, "lock"],
+            ]
+          : Subject.Panel === "light"
+            ? [
+                ["Cast shadows", "Cast shadows", true, "shadow"],
+                ["GI", "GI", true, "gi"],
+              ]
+            : []
+        ).map(([Label, Key, Default, Symbol]) => (
+          <Tile
+            key={Key}
+            Label={Label}
+            IconName={Symbol}
+            On={Values[Key] ?? Default}
+            Action={() => {
+              const Next = !(Values[Key] ?? Default);
+              Change(Key, Next);
+              if (Key === "PHYSICS" && Next) Change("DYNAMIC", true);
+              if (Key === "DYNAMIC" && !Next) Change("PHYSICS", false);
+            }}
+          />
+        ))}
+      </div>
+      {Subject.Panel === "geometry" && (
+        <p>
+          {Values.DYNAMIC ? "Dynamic object" : "Static object"} ·{" "}
+          {Values.PHYSICS ? "Physics requested" : "Physics off"}. Shadows, GI
+          and physics are authored flags; native execution is pending.
+        </p>
+      )}
+      {Subject.Panel === "light" && (
+        <p>
+          Shadow and GI participation are authored flags; native execution is
+          pending.
+        </p>
+      )}
+    </section>
+  );
   const Generic = () => (
     <>
       <div className="ident">
@@ -546,6 +619,7 @@ export function Inspector({
           <Glyph Name="eye" />
         </button>
       </div>
+      {Capabilities()}
       {Subject.Panel === "geometry" && (
         <>
           <TransformPanel Values={Values} Change={Change} />
@@ -572,29 +646,6 @@ export function Inspector({
             )}
           </details>
         ))}
-      <div className="generic-card">
-        <h4>INSTANCE</h4>
-        <div className="instance-tags">
-          <button onClick={ToggleHidden}>
-            {Hidden ? "HIDDEN" : "VISIBLE"}
-          </button>
-          {["LOCKED", "DYNAMIC", "PHYSICS"].map((Name) => (
-            <button
-              key={Name}
-              aria-pressed={!!Values[Name]}
-              onClick={() => Change(Name, !Values[Name])}
-            >
-              {Name}
-            </button>
-          ))}
-        </div>
-        <div className="readout">
-          TYPE <span>{Subject.Panel}</span>
-        </div>
-        <div className="readout">
-          ID <span>#{Subject.Id}</span>
-        </div>
-      </div>
       <details className="generic-card" open>
         <summary>NOTES</summary>
         <textarea
@@ -1271,39 +1322,33 @@ export function Inspector({
   } else if (Subject.Panel === "wind") {
     Content = (
       <>
-        {Header("Environment", "Wind")}
-        <div className="card-grid">
-          <Card Title="Direction + magnitude" Height={530}>
-            <Metric Value={V("Speed").toFixed(1)} Unit="m/s" />
-            <WindFlow
-              speed={V("Speed")}
-              bearing={V("Bearing")}
-              gusts={V("Gust") * 100}
-              active
-              onChange={(Bearing, Speed) => {
-                AssignProperty("Bearing", Bearing);
-                AssignProperty("Speed", Speed);
-              }}
+        {Header("Environment", Subject.Name)}
+        <Card Title="Wind controls">
+          <div className="tiles">
+            <Tile
+              Label="Enabled"
+              Context="wind"
+              On={!Hidden}
+              Action={ToggleHidden}
             />
-            <p>Drag the compass · authored wind direction</p>
-          </Card>
-          <Card Title="Atmospheric flow" Height={530}>
-            {Fields("Speed", "Bearing", "Shear", "Veer")}
-            {Tiles(["Air shear"])}
-            <p>
-              Air shear off = wind slides the cloud rigidly; on = it leans with
-              altitude.
-            </p>
-          </Card>
-          <Card Title="Variation" Height={372}>
-            {Fields("Gust", "Turbulence", "Steadiness")}
-          </Card>
-          <Card Title="Gust envelope" Height={372}>
-            <Curve Variant="gust" Value={V("Gust")} />
-            <p>Shared gust model · phase 0–2π · vertical scale 0–2×.</p>
-            {F("Force")}
-          </Card>
-        </div>
+          </div>
+        </Card>
+        <WindInspector
+          Values={Values}
+          Change={Change}
+          Open={OpenWind}
+          Hidden={Hidden}
+        />
+        <Card Title="Atmospheric modifiers · native draft">
+          {Fields("Shear", "Veer", "Turbulence", "Steadiness")}
+          {Tiles(["Air shear"])}
+          {F("Force")}
+          <p>
+            Stored atmospheric descriptors for the native mirror. Altitude
+            shear, veer and turbulence are not evaluated by this horizontal 2D
+            field preview.
+          </p>
+        </Card>
       </>
     );
   } else if (Subject.Panel === "precipitation") {
@@ -1494,9 +1539,14 @@ export function Inspector({
             ).map((Field) => F(Field.Label))}
           </details>
         )}
-        <Card Title="Wind binding">
-          {Fields("Wind source", "Owned wind component")}
-        </Card>
+        <WindBinding
+          Values={Values}
+          Change={Change}
+          Fields={WindFields}
+          Open={OpenWindField}
+          AllValues={AllValues}
+          Hidden={AllHidden}
+        />
       </>
     );
   } else if (Subject.Panel.includes("fog")) {

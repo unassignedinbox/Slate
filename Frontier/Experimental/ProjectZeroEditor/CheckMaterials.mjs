@@ -90,9 +90,9 @@ try {
     await Page.getByLabel("Rotation Z", { exact: true }).inputValue(),
     "0",
   );
-  await Page.getByRole("button", { name: "LOCKED", exact: true }).click();
+  await Page.getByRole("button", { name: "Locked", exact: true }).click();
   assert.ok(await Position.isDisabled());
-  await Page.getByRole("button", { name: "LOCKED", exact: true }).click();
+  await Page.getByRole("button", { name: "Locked", exact: true }).click();
   await Page.locator(".inspector-scroll").evaluate(
     (Node) => (Node.scrollTop = 0),
   );

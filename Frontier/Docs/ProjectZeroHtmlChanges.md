@@ -23,6 +23,10 @@
 | C009 | Matching top/bottom drawers and page-close gestures | Implemented; mouse/touch checked | Reported native drag problem recorded; mirror deferred |
 | C010 | Material, imported-file and engine asset browser | Implemented and browser-checked | Native asset pipeline integration deferred |
 | C011 | Viewport-only settings/debug menu | Implemented and browser-checked | Deferred until the HTML review is finished |
+| C012 | Entity-relevant circular quick toggles | Implemented and browser-checked | Per-entity shadow/GI/physics bindings deferred |
+| C013 | Precipitation icon instead of umbrella | HTML rain-cloud symbol implemented | Native artwork unchanged |
+| C014 | Animated composite WindEditor | Implemented; evaluator and browser checked | Native wind field evaluation deferred |
+| C015 | Cloud selection of a composite wind field | Implemented and browser-checked | Native cloud advection binding deferred |
 
 ## 2026-10-04 — C001: Construct presentation
 
@@ -324,3 +328,112 @@ Committed browser screenshots (not native screenshots):
 
 **Status:** HTML implemented and verified; awaiting user review. C++ mirroring
 remains deferred until the HTML changes are finished and approved.
+
+## 2026-10-04 — C012–C015: Relevant quick tiles and composite wind fields
+
+### C012 — Replace the blanket Instance flags
+
+Removed the generic `INSTANCE` tag card (Visible / Locked / Dynamic / Physics)
+that was appearing on inappropriate entities. The replacement uses the existing
+filled-icon quick-tile styling with **circular green/red icon seats**:
+
+| Entity | Quick controls |
+| --- | --- |
+| Geometry | Visible, Dynamic, Cast shadows, GI, Physics, Locked |
+| Local lights | Visible, Cast shadows, GI |
+| Post Process | Enabled only |
+| Collections / generic fallback | Visible only |
+| Specialized environment panels | Their existing relevant controls; no blanket physics/dynamic card |
+
+Dynamic off means static. Requesting physics turns Dynamic on; changing to static
+turns physics off. Geometry locking retains the existing transform-edit lock.
+Visibility continues to use the scene's actual HTML hidden-state map. Shadow/GI
+participation and physics are **saved authoring flags**, not claims that the HTML
+checkerboard runs a native renderer or rigid-body simulation. Existing stored
+values on unsupported entities are not exposed as working capabilities.
+
+### C013 — Precipitation symbol
+
+Replaced the HTML outliner/Construct umbrella with a **filled rain cloud and
+falling rain streaks**, tinted pale blue. This shares the precipitation quick
+control's semantic symbol. Native icon files and the engine-resource catalogue
+have not been rewritten; the native artwork mirror remains deferred.
+
+### C014 — Wind preview and expanded WindEditor
+
+Selecting a wind now shows a live canvas with vector arrows, a smoothly sampled
+speed gradient, and animated particles. The expand button opens a two-view editor:
+
+1. **Component placement:** an XZ map, numbered handles, influence-radius
+   outlines, mouse/touch pointer dragging and keyboard position adjustments.
+2. **Combined vector field:** actual evaluation of all enabled components,
+   with independent vector/gradient/particle visibility and pause/resume.
+
+The editor supports multiple separately named wind-field entities. Each field can
+contain up to 64 independently named/enabled components:
+
+- **Directional:** uniform background flow, strength and travel bearing.
+- **Gust:** local directional flow with smooth radial falloff and a time-varying
+  envelope controlled by frequency.
+- **Tornado:** local tangential flow plus inward pull, with strength and radius.
+- **Radial:** local outward flow with smooth falloff.
+
+All enabled contributions are **linearly summed**, rather than merely drawing
+unrelated arrows or choosing one component. Components can be created, selected,
+renamed, moved, retyped and removed. Numeric drafts commit on blur/Enter, allowing
+negative positions and normal typing of bounded values. Preview width/depth are
+editable; directional flow is global, while local influence is controlled by
+component radius. Component handles also support arrow keys (10 m per step).
+
+Field descriptors live under `Values[windEntityId].WindField` and therefore use
+the existing scene save/export/import mechanism. New fields receive distinct
+scene IDs. Unmodified legacy wind speed/bearing/gust seed the initial prevailing
+flow and gust. Legacy altitude/shear/veer/turbulence/steadiness descriptors remain
+editable in a clearly marked native-draft card, but are not secretly included in
+this horizontal evaluator.
+
+**Scope:** this is a deterministic 2D browser authoring/evaluation preview, not a
+3D fluid/tornado solver. Speed colours saturate at 30 m/s; particles are visualized
+at 8× advection time. There is no vertical tornado simulation, native atmospheric
+solver, native terrain interaction or native cloud renderer connection here.
+
+### C015 — Cloud wind-field selection
+
+Global and local clouds now choose a specific wind entity by stable ID through
+**Wind binding → Wind field**. The binding previews the selected field's complete
+component sum, not just its first component. `Follow Wind` gates the preview;
+`None` explicitly means still air. Hidden fields produce disabled output, and a
+removed assigned field is reported as missing instead of silently redirecting
+the cloud to another field.
+
+The binding's **Edit wind field** button opens that field in WindEditor without
+changing ownership to the selected cloud. Edits stay on the wind entity, and
+renaming it does not invalidate the cloud's ID reference. Native cloud advection
+must consume this binding when the C++ mirror is authorized.
+
+### Verification and evidence
+
+Final standalone HTML build: **4.13 MiB**. All six browser suites passed with
+`Errors: []`: `CheckBrowser`, `CheckConstruction`, `CheckQuickTools`,
+`CheckMaterials`, `CheckAssets`, and the new `CheckWind`.
+
+`CheckWind.mjs` covers finite evaluation, exact linear summation, radial falloff,
+gust time variation, empty/disabled fields, entity-specific toggles, circular
+seats, keyboard toggling, physics/static coupling, visibility persistence, the
+precipitation symbol, animated pixels, numeric entry, component CRUD, mouse/touch and
+keyboard placement, pause/resume, independent fields, cloud-bound editor
+ownership, Follow Wind gating, reload, missing fields, still air, Escape/focus
+restoration, and 1024/1280/1366/1920 layouts. Existing material tests retain the
+transform lock regression using the renamed `Locked` tile.
+
+Committed **browser** evidence:
+
+- [Entity quick tiles](../Experimental/ProjectZeroEditor/Screenshots/EntityQuickTiles.png)
+- [Selected wind preview](../Experimental/ProjectZeroEditor/Screenshots/WindInspector.png)
+- [Expanded WindEditor](../Experimental/ProjectZeroEditor/Screenshots/WindEditor.png)
+- [Actual browser field animation](../Experimental/ProjectZeroEditor/Screenshots/WindFieldAnimation.gif)
+- [Cloud field binding](../Experimental/ProjectZeroEditor/Screenshots/CloudWindBinding.png)
+
+**Status:** HTML review checkpoint. No C++ sources were changed and no native
+build was run. Native entity capability binding, composite wind evaluation and
+cloud advection integration remain deferred until the HTML review is finished.

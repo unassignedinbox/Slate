@@ -1,3 +1,4 @@
+import WindEditor from "./WindPanel.jsx";
 import AssetPanel from "./AssetPanel.jsx";
 import { RestoreAssets } from "./AssetDepot.js";
 import MaterialPanel from "./MaterialPanel.jsx";
@@ -225,6 +226,21 @@ function App() {
     OpenAssets(Next);
     if (Next) OpenShade(false);
   };
+  const [WindTarget, EditWind] = useState(null);
+  const WindOpener = useRef(null);
+  const CloseWind = () => {
+    EditWind(null);
+    requestAnimationFrame(() => {
+      const Target = WindOpener.current?.isConnected
+        ? WindOpener.current
+        : document.querySelector('[aria-label="Expand WindEditor"]');
+      Target?.focus({ preventScroll: true });
+    });
+  };
+  const WindSubject = Rows.find(
+    (Row) => Row.Id === WindTarget && Row.Panel === "wind",
+  );
+  const WindFields = Rows.filter((Row) => Row.Panel === "wind");
   const [ShaderTarget, SelectShaderTarget] = useState(null),
     [ShaderFloating, FloatShader] = useState(false);
   const ShaderAsset = AssetRecords.find(
@@ -406,7 +422,7 @@ function App() {
         )
       )
         return;
-      if (Construct || Shade || AssetsOpen) return;
+      if (Construct || Shade || AssetsOpen || WindSubject) return;
       if (Event.key === "F3") {
         Event.preventDefault();
         SetDebug((Previous) => (Previous + (Event.shiftKey ? 15 : 1)) % 16);
@@ -449,7 +465,7 @@ function App() {
     };
     window.addEventListener("keydown", Key);
     return () => window.removeEventListener("keydown", Key);
-  }, [Selected, Construct, Shade, AssetsOpen]);
+  }, [Selected, Construct, Shade, AssetsOpen, WindSubject]);
   useEffect(() => {
     const Move = (Event) => {
       if (!Divider.current) return;
@@ -623,6 +639,7 @@ function App() {
     Filter([]);
     Collapse({});
     Toast("Added " + Name + " · analytical HTML preview");
+    return Id;
   };
   const TabStrip = (Side) => (
     <div
@@ -1268,6 +1285,17 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
             Hidden={Hidden[Selected]}
             ToggleHidden={() => ToggleHidden(Selected)}
             OpenShader={() => OpenShader(Selected)}
+            OpenWind={() => {
+              WindOpener.current = document.activeElement;
+              EditWind(Selected);
+            }}
+            OpenWindField={(Id) => {
+              WindOpener.current = document.activeElement;
+              EditWind(Id);
+            }}
+            WindFields={WindFields}
+            AllValues={Values}
+            AllHidden={Hidden}
           />
         </div>
         <footer className="inspector-footer">
@@ -1282,7 +1310,7 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
     <>
       <main
         className={"workspace " + (Wide ? "inspector-workspace" : "")}
-        inert={Construct || Shade || AssetsOpen ? "" : undefined}
+        inert={Construct || Shade || AssetsOpen || WindSubject ? "" : undefined}
         style={{ "--left": LeftWidth + "px", "--right": RightWidth + "px" }}
       >
         {["Left", "Centre", "Right"].map((Side) => (
@@ -1317,7 +1345,7 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
         ))}
       </main>
       {ShaderFloating && (
-        <div inert={Shade || AssetsOpen ? "" : undefined}>
+        <div inert={Shade || AssetsOpen || WindSubject ? "" : undefined}>
           <ShaderPanel
             Close={() => FloatShader(false)}
             Dock={DockShader}
@@ -1325,40 +1353,42 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
           />
         </div>
       )}
-      <Notch
-        Open={Shade}
-        Toggle={ToggleShade}
-        Activate={() => OpenAssets(false)}
-        Settings={Settings}
-        Assign={Assign}
-        Name={Name}
-      />
-      <AssetPanel
-        Open={AssetsOpen}
-        Toggle={ToggleAssets}
-        Activate={() => OpenShade(false)}
-        Assets={AssetRecords}
-        Store={StoreAssets}
-        Subject={Subject}
-        Values={Values[Selected] || {}}
-        Targets={Rows.filter((Row) => Row.Panel === "geometry")}
-        Apply={(Material, Id) =>
-          AssignValues((Previous) => ({
-            ...Previous,
-            [Id]: { ...Previous[Id], Material },
-          }))
-        }
-        EditMaterial={OpenShader}
-      />
-      {Wide && (
-        <button
-          className="return-viewport"
-          onClick={() => Expand(false)}
-          title="Return to three-column layout"
-        >
-          ← Viewport
-        </button>
-      )}
+      <div inert={WindSubject ? "" : undefined}>
+        <Notch
+          Open={Shade}
+          Toggle={ToggleShade}
+          Activate={() => OpenAssets(false)}
+          Settings={Settings}
+          Assign={Assign}
+          Name={Name}
+        />
+        <AssetPanel
+          Open={AssetsOpen}
+          Toggle={ToggleAssets}
+          Activate={() => OpenShade(false)}
+          Assets={AssetRecords}
+          Store={StoreAssets}
+          Subject={Subject}
+          Values={Values[Selected] || {}}
+          Targets={Rows.filter((Row) => Row.Panel === "geometry")}
+          Apply={(Material, Id) =>
+            AssignValues((Previous) => ({
+              ...Previous,
+              [Id]: { ...Previous[Id], Material },
+            }))
+          }
+          EditMaterial={OpenShader}
+        />
+        {Wide && (
+          <button
+            className="return-viewport"
+            onClick={() => Expand(false)}
+            title="Return to three-column layout"
+          >
+            ← Viewport
+          </button>
+        )}
+      </div>
       {Menu && (
         <>
           <div className="menu-dismiss" onPointerDown={() => ShowMenu(null)} />
@@ -1535,6 +1565,38 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
             )}
           </div>
         </>
+      )}
+      {WindSubject && (
+        <WindEditor
+          key={WindSubject.Id}
+          Subject={WindSubject}
+          Values={Values[WindSubject.Id] || {}}
+          Fields={WindFields}
+          Hidden={Hidden[WindSubject.Id]}
+          SelectField={EditWind}
+          NewField={() =>
+            EditWind(
+              AddRow(
+                InitialRows.find((Row) => Row.Panel === "wind"),
+                {},
+              ),
+            )
+          }
+          Rename={(Name) =>
+            AssignRows((Previous) =>
+              Previous.map((Row) =>
+                Row.Id === WindSubject.Id ? { ...Row, Name } : Row,
+              ),
+            )
+          }
+          Change={(Key, Value) =>
+            AssignValues((Previous) => ({
+              ...Previous,
+              [WindSubject.Id]: { ...Previous[WindSubject.Id], [Key]: Value },
+            }))
+          }
+          Close={CloseWind}
+        />
       )}
       {Construct && (
         <ConstructPanel
