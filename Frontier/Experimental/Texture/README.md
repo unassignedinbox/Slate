@@ -52,9 +52,22 @@ Colour channels are stored sRGB-encoded, scalars linear, all of them UNORM8. The
 `height` at export, so there is no separate normal channel to keep in sync. Each layer carries a per-channel write mask:
 a layer can own roughness and metalness without touching colour.
 
+**Channels are chips, not a checklist.** The Channels group lists only what the layer actually writes, as pills in the
+packing order, each one carrying its channel's colour. Clicking a pill focuses it — the group collapses to that channel's
+controls alone — and its cross drops the channel. The `+` opens a shelf of everything the layer is not writing yet,
+grouped the way the targets are packed. Painting a layer that has no colour channel adds one rather than refusing the
+stroke, so a new layer starts lean and grows into whatever it is asked to do.
+
+**A sheet per layer.** Every layer paints on the document's resolution by default, but the Layer group's **Sheet** row
+gives it one of its own — 256² to 4096², independent of the document and of every other layer. A decal sheet can be 4K
+while the base fill stays at 1K; the compositor samples by coordinate, so the sizes never have to agree. Changing a
+layer's sheet resamples what is already painted on it rather than discarding it, in both directions.
+
 **Layer stack.** Visibility, lock, opacity, ten blend modes (normal, multiply, screen, overlay, add, subtract, darken,
 lighten, difference, linear-burn), drag reorder, duplicate, delete, double-click rename, and a mask per layer. Each row is
-a card: the layer's colour plate, its kind, blend and channel count, the opacity read large, and a pair of chips —
+a card: a thumbnail of what the layer actually holds — its coverage blitted down to 64² on the GPU and read back, over a
+checkerboard where the layer is transparent, falling back to the kind's glyph until something is painted — its kind,
+blend and channel count, the opacity read large, and a pair of chips —
 **Content** and **Mask** — naming where the next stroke will land. Rows keep their full height however many there are:
 the stack scrolls inside the panel rather than squeezing, with the heading, filters and footer staying put. Five kinds
 of layer:
@@ -155,8 +168,14 @@ stamp burns the artwork into the mask at the value of its tint.
 of that colour when the mask is the target, a dark wash for the eraser — and off the mesh it becomes a dashed outline that
 follows the pointer. With the decal tool in hand the artwork itself is drawn where it would land, hairline footprint and
 all, before the click that commits it. Symmetry draws too: the mirror button in the viewport bar (or <kbd>S</kbd>)
-cycles off → X → Y → Z, the seam where the plane cuts the model is drawn in green, and the mirrored cursor shows the
-twin stroke.
+cycles off → X → Y → Z → radial, the seam where the plane cuts the model is drawn in green, and the mirrored cursor
+shows the twin stroke.
+
+**The brush pod.** The transport carries one button that says what the brush is — size, flow, hardness, and the symmetry
+if any — and opens a pod above itself holding all of it: size, flow, hardness, spacing, jitter, facing angle, and the
+symmetry chips. Beside it sit the colours the brush has lately carried, newest first; one click takes the brush back to
+one of them. **Radial symmetry** repeats a stroke around the standing axis as many times as the sector count asks, from
+two to sixteen — a cursor in every sector, the spokes drawn on the model, and decal stamps repeated the same way.
 
 **Objects and UDIM tiles.** A document holds a scene, not a single mesh. The outliner above the stack lists every
 object — select, rename (double-click), hide, isolate, add and remove — and each object owns a UDIM tile, numbered the
@@ -166,6 +185,11 @@ spatial index and a single stroke serve the whole scene: a brush dragged across 
 sheet stays square so texels stay square. Isolating simply reassembles the scene without the others. Clicking an object
 with the camera tool selects it; the texture view draws the tile grid over the sheet with each tile's number and owner.
 
+**The unwrap, drawn.** Texture space (<kbd>X</kbd>) draws the unwrap itself over the sheet: every triangle of every
+visible object, with the object in hand picked out in green. The chip at the top left puts it away (<kbd>W</kbd>) and
+the note beside it counts what is down there. It is redrawn only when the picture would differ, so panning and zooming
+cost nothing.
+
 **Layers that belong to an object.** Every layer carries a scope: the whole scene by default, or one object. A scoped
 layer only paints its object's tile of the sheet, so a decal on the bonnet cannot bleed onto the wheel. The button above
 the stack switches between *Whole scene* and the selected object — scoped, the stack lists that object's layers over the
@@ -174,8 +198,10 @@ object is isolated) belongs to that object.
 
 **Timeline and branches.** The fourth inspector tab reads the session back as a story: every stroke, layer, material,
 decal, generator and surface change becomes a typed event on a vertical rail — coloured node, badge, short hash,
-timestamp, and a colour chip when the edit had a colour. The head follows undo and redo, and events past it dim rather
-than vanish. Editing after stepping back **forks a branch** instead of discarding the future, so one document can carry
+timestamp, and a colour chip when the edit had a colour. Entries are grouped into days under sticky headings, newest
+first, and **each one draws what it did in texture space**: the path a stroke took, the footprint and angle of a stamp
+where it landed, the tile that was touched. That picture is a handful of numbers on the event rather than an image, so a
+long session costs nothing to remember. The head follows undo and redo, and events past it dim rather than vanish. Editing after stepping back **forks a branch** instead of discarding the future, so one document can carry
 several versions of itself; the pills at the top switch between them, `+` forks on the spot, and up to eight branches
 live side by side.
 
@@ -196,10 +222,11 @@ set. Each writes one PNG per channel named `<project-name>_<Channel>.png` next t
 | Orbit / brush / eraser | <kbd>1 2 3</kbd> | Content ⇄ mask (adds one if needed) | <kbd>M</kbd> |
 | Flood / decal / pick | <kbd>4 5 6</kbd> | Mask view: off → overlay → mask | <kbd>⇧ M</kbd> |
 | Brush size | <kbd>[</kbd> <kbd>]</kbd> | Texture space | <kbd>X</kbd> |
+| Show / hide the unwrap | <kbd>W</kbd> | | |
 | Brush size, live | <kbd>Alt</kbd> + wheel | Frame the surface | <kbd>F</kbd> |
 | Search layers | <kbd>/</kbd> | Content browser | <kbd>B</kbd> |
 | Undo / redo | <kbd>Ctrl Z</kbd> / <kbd>Ctrl ⇧ Z</kbd> | Save `.pigment` / export | <kbd>Ctrl S</kbd> / <kbd>Ctrl E</kbd> |
-| Symmetry: off → X → Y → Z | <kbd>S</kbd> | | |
+| Symmetry: off → X → Y → Z → radial | <kbd>S</kbd> | | |
 
 The **right button always paints** into the selected layer, whichever tool is in hand, so the camera can stay on the
 left button. Middle-drag and <kbd>Space</kbd>-drag pan; a click that never becomes a drag selects the object under it.

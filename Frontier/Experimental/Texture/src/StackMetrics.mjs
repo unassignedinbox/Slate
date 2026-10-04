@@ -9,7 +9,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { TimelineSequence, CreateEvent, EventByKind, EventKinds, ShortHash, EventClock, BranchLimit } from "./TimelineSequence.js";
+import {
+    TimelineSequence,
+    CreateEvent,
+    EventByKind,
+    EventKinds,
+    ShortHash,
+    EventClock,
+    BranchLimit,
+    SanitisePreview,
+    PreviewLimit,
+} from "./TimelineSequence.js";
 import { ComposeDocument, ReadDocument, DocumentFormat, DocumentExtension } from "./ExportSequence.js";
 
 import {
@@ -67,6 +77,7 @@ import {
     LayerChannelCount,
     LayerBadge,
     LayerSummary,
+    LayerResolutions,
     SanitiseLayer,
     MaskKinds,
     ResetLayerCounter,
@@ -75,7 +86,17 @@ import {
     MarkLimit,
 } from "./LayerSpecification.js";
 import { RevisionQueue } from "./RevisionQueue.js";
-import { StrokeProjection, BrushDefaults, MirrorVector, ToolOrdering, MarkReach, MarkUnderPoint } from "./StrokeProjection.js";
+import {
+    StrokeProjection,
+    BrushDefaults,
+    MirrorVector,
+    ToolOrdering,
+    MarkReach,
+    MarkUnderPoint,
+    SymmetryTwins,
+    SymmetryOrdering,
+    SectorLimits,
+} from "./StrokeProjection.js";
 import { FlipRows, MaterialDescriptor } from "./ExportSequence.js";
 import { ExportSlots, SlotByIdentifier } from "./ShadingGlsl.js";
 
@@ -869,4 +890,73 @@ test("a fresh mark waits for its first click, and an old one does not", () =>
     const Read = SanitiseLayer({ Kind: "decal", Decal: { Marks: [{ Name: "A" }, { Name: "B", Placed: false }] } });
     assert.equal(Read.Decal.Marks[0].Placed, true, "a saved mark defaults to placed");
     assert.equal(Read.Decal.Marks[1].Placed, false);
+});
+
+test("symmetry hands back one twin per copy a stroke will paint", () =>
+{
+    assert.equal(SymmetryTwins("none").length, 0, "no symmetry paints once and once only");
+    assert.equal(SymmetryTwins("nonsense").length, 0, "an unknown axis is off rather than a crash");
+    assert.equal(SymmetryTwins("x").length, 1);
+    assert.deepEqual(SymmetryTwins("x")[0]([2, 3, 4]), [-2, 3, 4]);
+    assert.deepEqual(SymmetryTwins("z")[0]([2, 3, 4]), [2, 3, -4]);
+
+    const Six = SymmetryTwins("radial", 6);
+    assert.equal(Six.length, 5, "six sectors means the original plus five twins");
+    const Turned = Six[2]([1, 0, 0]);
+    assert.ok(Math.abs(Math.hypot(Turned[0], Turned[2]) - 1) < 1e-9, "a radial twin keeps its distance from the axis");
+    assert.ok(Math.abs(Turned[1]) < 1e-9, "and its height");
+    assert.ok(Math.abs(Turned[0] + 1) < 1e-9 && Math.abs(Turned[2]) < 1e-9, "three of six sectors is half a turn");
+
+    assert.equal(SymmetryTwins("radial", 500).length, SectorLimits.Maximum - 1, "an absurd sector count is clamped");
+    assert.equal(SymmetryTwins("radial", 1).length, SectorLimits.Minimum - 1, "and so is a useless one");
+    assert.equal(SymmetryTwins("radial", 0).length, BrushDefaults.Sectors - 1, "a missing count falls back to the default");
+    assert.ok(SymmetryOrdering.some((Entry) => Entry.Identifier === "radial"), "radial is offered in the rail");
+});
+
+test("the brush clamps its sector count however it is asked", () =>
+{
+    const Projection = new StrokeProjection();
+    assert.equal(Projection.Brush.Sectors, BrushDefaults.Sectors);
+    assert.equal(Projection.Twins.length, 0, "a brush starts without symmetry");
+    Projection.Configure({ Symmetry: "radial", Sectors: 12 });
+    assert.equal(Projection.Twins.length, 11);
+    Projection.Configure({ Sectors: 1 });
+    assert.equal(Projection.Brush.Sectors, SectorLimits.Minimum);
+    Projection.Configure({ Sectors: 64 });
+    assert.equal(Projection.Brush.Sectors, SectorLimits.Maximum);
+    Projection.Configure({ Sectors: "rubbish" });
+    assert.equal(Projection.Brush.Sectors, BrushDefaults.Sectors, "nonsense falls back to the default");
+});
+
+test("an event preview keeps the few numbers it needs and refuses the rest", () =>
+{
+    assert.equal(SanitisePreview(null), null);
+    assert.equal(SanitisePreview("stamp"), null);
+    assert.equal(SanitisePreview({ Shape: "fictional" }).Shape, "swatch", "an unknown shape still draws something");
+
+    const Stamp = SanitisePreview({ Shape: "stamp", Coordinate: [0.25, 0.75], Size: [0.2, 0.1], Rotation: 395 });
+    assert.equal(Stamp.Shape, "stamp");
+    assert.deepEqual(Stamp.Coordinate, [0.25, 0.75]);
+    assert.equal(Stamp.Rotation, 35, "rotation is wrapped into a single turn");
+
+    const Long = SanitisePreview({ Shape: "path", Points: Array.from({ length: 400 }, (Ignored, Index) => [Index / 400, 0.5]) });
+    assert.equal(Long.Points.length, PreviewLimit, "a long stroke keeps only a sampled handful");
+
+    const Hostile = SanitisePreview({ Shape: "path", Points: ["nope", [Number.NaN, 1e9], [0.5, 0.5]] });
+    assert.deepEqual(Hostile.Points, [[0.5, 5], [0.5, 0.5]], "nonsense coordinates are clamped rather than trusted");
+
+    const Event = CreateEvent({ Kind: "stroke", Title: "Added stroke", Preview: { Shape: "flood" } });
+    assert.equal(Event.Preview.Shape, "flood", "an event carries its preview");
+    assert.equal(CreateEvent({ Kind: "stroke", Title: "No preview" }).Preview, null);
+});
+
+test("a layer can keep a sheet size of its own", () =>
+{
+    assert.equal(CreateLayer("stroke").Resolution, 0, "a new layer follows the document");
+    assert.ok(LayerResolutions.includes(0) && LayerResolutions.includes(4096));
+    assert.equal(SanitiseLayer({ Kind: "stroke", Resolution: 2048 }).Resolution, 2048);
+    assert.equal(SanitiseLayer({ Kind: "stroke", Resolution: 999 }).Resolution, 0, "a size nobody ships is refused");
+    assert.equal(SanitiseLayer({ Kind: "stroke", Resolution: "big" }).Resolution, 0);
+    const Copy = CloneLayer(CreateLayer("stroke", { Resolution: 512 }));
+    assert.equal(Copy.Resolution, 512, "a duplicate paints at the same size");
 });
