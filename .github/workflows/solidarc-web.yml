@@ -1,0 +1,31 @@
+name: SolidArc WebAssembly
+on:
+  push:
+    branches: [arena/01a0fd48-slate]
+    paths:
+      - '.github/workflows/solidarc-web.yml'
+      - 'Frontier/Experimental/SolidArc/Native/**'
+      - 'Frontier/Editor/AuthoringTools/Modelling/SolidArc/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - name: Install Emscripten 4.0.15
+        run: |
+          curl -fsSL https://codeload.github.com/emscripten-core/emsdk/tar.gz/refs/tags/4.0.15 | tar xz -C "$RUNNER_TEMP"
+          "$RUNNER_TEMP/emsdk-4.0.15/emsdk" install 4.0.15
+          "$RUNNER_TEMP/emsdk-4.0.15/emsdk" activate 4.0.15
+      - name: Compile the actual CAD implementation
+        run: |
+          source "$RUNNER_TEMP/emsdk-4.0.15/emsdk_env.sh"
+          python3 Frontier/Experimental/SolidArc/Native/CompileSequence.py
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: solidarc-web-runtime
+          path: Frontier/Experimental/SolidArc/Runtime/
+          retention-days: 30
