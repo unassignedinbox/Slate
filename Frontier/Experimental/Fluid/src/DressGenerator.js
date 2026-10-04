@@ -58,6 +58,7 @@ export class DressGenerator {
     const vertexCount = numCols * numRows;
 
     const dressStyle = params.dressStyle ?? 0;
+    const isMale = (params.avatarBodyType ?? 0) === 1;
     const skirtLength = params.skirtLength ?? 0.92; // [m] from waist (1.03m) downward
     const skirtFlare = params.skirtFlare ?? 0.58;   // radial flare expansion
     const waistCinch = params.waistCinch ?? 0.82;   // 0..1 waist tailoring tightness
@@ -155,19 +156,19 @@ export class DressGenerator {
         let centerZ = 0.0;
 
         if (v <= waistRowFrac) {
-          // Bodice region (from shoulders/bust down to natural waist)
+          // Bodice region (from shoulders/bust/pectorals down to natural waist)
           const tv = v / waistRowFrac;
           const bustBell = Math.exp(-Math.pow((tv - 0.52) / 0.32, 2));
-          const shoulderFlare = Math.pow(1 - tv, 1.5) * (0.035 + sleeveDrape * 0.08);
-          const waistTaper = Math.pow(tv, 1.3) * (0.022 * waistCinch);
+          const shoulderFlare = Math.pow(1 - tv, 1.5) * ((isMale ? 0.048 : 0.035) + sleeveDrape * 0.08);
+          const waistTaper = Math.pow(tv, 1.3) * ((isMale ? 0.014 : 0.022) * waistCinch);
 
-          rx = 0.156 + shoulderFlare + 0.012 * bustBell - waistTaper;
-          rz = 0.106 + 0.018 * bustBell - waistTaper * 0.75;
+          rx = (isMale ? 0.184 : 0.156) + shoulderFlare + (isMale ? 0.008 : 0.012) * bustBell - waistTaper;
+          rz = (isMale ? 0.118 : 0.106) + (isMale ? 0.012 : 0.018) * bustBell - waistTaper * 0.75;
 
-          // Extra anterior contour over bust spheres
+          // Extra anterior contour over female bust spheres or male pectorals
           if (sinA > 0) {
             const bustFront = Math.exp(-Math.pow((tv - 0.50) / 0.28, 2)) * Math.pow(sinA, 1.2);
-            rz += 0.038 * bustFront;
+            rz += (isMale ? 0.022 : 0.038) * bustFront;
           }
         } else {
           // Skirt region (from waist at v=waistRowFrac down to hem at v=1.0)
@@ -175,8 +176,8 @@ export class DressGenerator {
 
           // Hip contour swell between waist (sv=0) and hips (sv ~ 0.24)
           const hipSwell = Math.sin(Math.min(1, sv / 0.26) * Math.PI * 0.5);
-          const baseHipRx = 0.134 + 0.056 * hipSwell;
-          const baseHipRz = 0.098 + 0.044 * hipSwell;
+          const baseHipRx = (isMale ? 0.156 : 0.134) + (isMale ? 0.028 : 0.056) * hipSwell;
+          const baseHipRz = (isMale ? 0.110 : 0.098) + (isMale ? 0.026 : 0.044) * hipSwell;
 
           // Style-specific skirt flare profile
           let flareCurve = Math.pow(sv, 1.25) * skirtFlare * 0.48;

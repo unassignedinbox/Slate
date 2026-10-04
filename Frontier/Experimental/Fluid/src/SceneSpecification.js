@@ -74,6 +74,7 @@ export const PresetPresentation = {
 export const PATTERN_REBUILD_KEYS = new Set([
   "dressStyle",
   "gridResolution",
+  "avatarBodyType",
   "skirtLength",
   "skirtFlare",
   "waistCinch",

@@ -290,6 +290,12 @@ class ClothPanel {
     const Previous = this.Parameters[Key];
     this.Parameters[Key] = Value;
     try {
+      if (Key === "avatarBodyType") {
+        this.Avatar.setBodyType(Value);
+        this.Engine?.initAvatarBuffers();
+        this.Names.avatar = Value === 1 ? "Male mannequin" : "Female mannequin";
+        this.ConstructSceneRows();
+      }
       if (PATTERN_REBUILD_KEYS.has(Key)) {
         this.Engine?.rebuildDress(this.Parameters);
       }
@@ -357,6 +363,9 @@ class ClothPanel {
       }
       MeshResSelect.value = this.Parameters.gridResolution;
     }
+
+    if (Select("#body-type-select"))
+      Select("#body-type-select").value = this.Parameters.avatarBodyType ?? 0;
 
     Select("#render-channel").value = this.Parameters.renderChannel;
     Select("#diagnostic-channel").value = this.Parameters.renderChannel;
@@ -562,6 +571,9 @@ class ClothPanel {
   ApplySceneParameters(Parameters) {
     Object.assign(this.Parameters, Parameters);
     try {
+      if (this.Avatar.setBodyType(this.Parameters.avatarBodyType ?? 0)) {
+        this.Engine?.initAvatarBuffers();
+      }
       this.Engine?.rebuildDress(this.Parameters);
       this.ResizeViewport();
     } catch (ErrorValue) {
@@ -629,6 +641,7 @@ class ClothPanel {
         "Silhouette & mesh resolution",
         [
           "garmentEnabled",
+          "avatarBodyType",
           "gridResolution",
           "pieAutoResolution",
           "dressStyle",
@@ -639,7 +652,7 @@ class ClothPanel {
         ],
         "PATTERN",
         true,
-        "Adjust Garment mesh resolution (32–160) or use Zhang et al. 2025 PIE adaptive sizing map.",
+        "Switch between Female & Male sculpted mannequins and adjust Garment mesh resolution (32–320).",
       );
       AddGroup(
         "Bodice & neckline",
@@ -673,6 +686,7 @@ class ClothPanel {
         "Human avatar & pose",
         [
           "avatarVisible",
+          "avatarBodyType",
           "avatarPose",
           "avatarMotionSpeed",
           "avatarFinish",
@@ -763,6 +777,12 @@ class ClothPanel {
       this.LoadPreset("sunburst_pleated_midi");
     } else if (Kind === "ballgown") {
       this.LoadPreset("couture_ballgown");
+    } else if (Kind === "female-body") {
+      this.ApplyParameter("avatarBodyType", 0);
+      this.Notify("Switched to sculpted Female couture mannequin.");
+    } else if (Kind === "male-body") {
+      this.ApplyParameter("avatarBodyType", 1);
+      this.Notify("Switched to sculpted Male tailoring mannequin.");
     } else if (Kind === "catwalk") {
       this.ApplyParameter("avatarPose", 1);
       this.SelectObject("avatar");
@@ -942,6 +962,17 @@ class ClothPanel {
     Select("#quick-pleats").addEventListener("input", (e) =>
       this.ApplyParameter("pleatCount", Number(e.target.value)),
     );
+
+    // Top viewport bar mannequin body form selector (Female / Male)
+    Select("#body-type-select")?.addEventListener("change", (e) => {
+      const bodyType = Number(e.target.value);
+      this.ApplyParameter("avatarBodyType", bodyType);
+      this.Notify(
+        bodyType === 1
+          ? "Switched to sculpted Male tailoring mannequin and re-fitted garment."
+          : "Switched to sculpted Female couture mannequin and re-fitted garment.",
+      );
+    });
 
     // Top viewport bar garment resolution dropdown & clickable HUD badge
     Select("#mesh-res-select")?.addEventListener("change", (e) => {

@@ -56,22 +56,30 @@ Test("Zhang et al. 2025 (SIGGRAPH '25) PieSizingEstimator evaluates optimal reso
   Assert.ok(sWaist <= sMidSkirt);
 });
 
-Test("HumanAvatar constructs sculpted 3D body mesh and 16 articulated SDF capsules", () => {
-  const avatar = new HumanAvatar();
-  Assert.ok(avatar.vertexCount > 2000);
-  Assert.ok(avatar.indexCount > 6000);
+Test("HumanAvatar constructs sculpted 3D Female and Male body meshes and 16 articulated SDF capsules", () => {
+  const avatar = new HumanAvatar(0);
+  Assert.equal(avatar.bodyType, 0);
+  Assert.ok(avatar.vertexCount > 12000);
+  Assert.ok(avatar.indexCount > 70000);
   Assert.equal(avatar.capsuleData.length, 16 * 12);
 
-  for (let pose = 0; pose < 4; pose++) {
-    avatar.evaluatePose(1.25, 0.016, { avatarPose: pose, avatarMotionSpeed: 1.0 });
-    Assert.ok(avatar.interleaved.every(Number.isFinite));
-    Assert.ok(avatar.capsuleData.every(Number.isFinite));
-    for (let c = 0; c < 16; c++) {
-      const rA = avatar.capsuleData[c * 12 + 3];
-      const rB = avatar.capsuleData[c * 12 + 7];
-      Assert.ok(rA > 0.02 && rA < 0.25);
-      Assert.ok(rB > 0.02 && rB < 0.25);
+  for (const bodyType of [0, 1]) {
+    avatar.setBodyType(bodyType);
+    Assert.equal(avatar.bodyType, bodyType);
+    for (let pose = 0; pose < 4; pose++) {
+      avatar.evaluatePose(1.25, 0.016, { avatarBodyType: bodyType, avatarPose: pose, avatarMotionSpeed: 1.0 });
+      Assert.ok(avatar.interleaved.every(Number.isFinite));
+      Assert.ok(avatar.capsuleData.every(Number.isFinite));
+      for (let c = 0; c < 16; c++) {
+        const rA = avatar.capsuleData[c * 12 + 3];
+        const rB = avatar.capsuleData[c * 12 + 7];
+        Assert.ok(rA > 0.02 && rA < 0.25);
+        Assert.ok(rB > 0.02 && rB < 0.25);
+      }
     }
+    const dress = DressGenerator.buildDress({ ...DEFAULT_PARAMS, avatarBodyType: bodyType });
+    Assert.ok(dress.vertexCount > 10000);
+    Assert.ok(dress.initialPositions.every(Number.isFinite));
   }
 
   // Test custom Wavefront .OBJ body import

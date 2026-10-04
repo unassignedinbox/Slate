@@ -72,6 +72,7 @@ export const DEFAULT_PARAMS = {
 
   // Human Avatar Collider
   avatarVisible: true,
+  avatarBodyType: 0,
   avatarPose: 0,
   avatarMotionSpeed: 1.0,
   avatarFinish: 0,
@@ -148,6 +149,15 @@ export const CONTROL_GROUPS = [
     title: "Human Avatar & Pose",
     controls: [
       { key: "avatarVisible", label: "Show human mannequin", type: "toggle" },
+      {
+        key: "avatarBodyType",
+        label: "Mannequin body form",
+        type: "select",
+        options: [
+          { id: 0, label: "Female couture form" },
+          { id: 1, label: "Male tailoring form" },
+        ],
+      },
       {
         key: "avatarPose",
         label: "Character motion",

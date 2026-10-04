@@ -1,7 +1,11 @@
 /**
- * Sculpted 3D Human Body / Couture Mannequin Avatar with Articulated Pose Animation,
- * 16-Capsule Analytical SDF Collision Primitives for WebGPU Compute Shaders,
- * and Custom Wavefront .OBJ Avatar Import.
+ * Sculpted 3D Female & Male Human Body / Couture Mannequin Avatar
+ * - Supports both Female Couture Form (bodyType = 0) and Male Tailoring Form (bodyType = 1)
+ * - Smooth C² monotone cubic Hermite anatomical splines for torso, bust/pectorals, waist, pelvis,
+ *   sloping trapezius, sternocleidomastoid neck, and 3D sculpted head (jawline, chin, nose bridge, brow, cranium)
+ * - Orthonormal Bishop-frame articulated arms with deltoid caps, elbows, oval wrists, and sculpted hands
+ * - Anatomical legs with gluteal-thigh blend, patella knee contour, gastrocnemius calves, ankles, and feet
+ * - 16-Capsule Analytical SDF Collision Primitives for WebGPU Compute Shaders + Custom Wavefront .OBJ Import
  */
 
 export const POSE_MODES = [
@@ -11,8 +15,51 @@ export const POSE_MODES = [
   { id: 3, label: "Breeze sway" },
 ];
 
+export const BODY_TYPES = [
+  { id: 0, label: "Female couture form" },
+  { id: 1, label: "Male tailoring form" },
+];
+
+/**
+ * Evaluates a smooth C¹/C² piecewise cubic Hermite spline through sorted (y, val) knots.
+ */
+function evalHermiteProfile(y, knots) {
+  if (y <= knots[0][0]) return knots[0][1];
+  const last = knots.length - 1;
+  if (y >= knots[last][0]) return knots[last][1];
+
+  let k = 0;
+  while (k < last - 1 && y > knots[k + 1][0]) k++;
+
+  const [y0, v0] = knots[k];
+  const [y1, v1] = knots[k + 1];
+  const h = Math.max(1e-6, y1 - y0);
+  const t = (y - y0) / h;
+
+  // Catmull-Rom / finite-difference tangents
+  const m0 =
+    k > 0
+      ? 0.5 * ((v1 - v0) / h + (v0 - knots[k - 1][1]) / Math.max(1e-6, y0 - knots[k - 1][0]))
+      : (v1 - v0) / h;
+  const m1 =
+    k + 2 <= last
+      ? 0.5 * ((knots[k + 2][1] - v1) / Math.max(1e-6, knots[k + 2][0] - y1) + (v1 - v0) / h)
+      : (v1 - v0) / h;
+
+  const t2 = t * t;
+  const t3 = t2 * t;
+  const h00 = 2 * t3 - 3 * t2 + 1;
+  const h10 = t3 - 2 * t2 + t;
+  const h01 = -2 * t3 + 3 * t2;
+  const h11 = t3 - t2;
+
+  return h00 * v0 + h10 * h * m0 + h01 * v1 + h11 * h * m1;
+}
+
 export class HumanAvatar {
-  constructor() {
+  constructor(bodyType = 0) {
+    this.bodyType = bodyType; // 0 = Female couture form, 1 = Male tailoring form
+    this.isCustomObj = false;
     this.capsuleCount = 16;
     // 16 capsules * 12 floats (vec4 pA_rA, vec4 pB_rB, vec4 vel_pad)
     this.capsuleData = new Float32Array(this.capsuleCount * 12);
@@ -30,23 +77,36 @@ export class HumanAvatar {
       shoulderTilt: 0,
     };
 
-    this.twirlImpulse = 0; // Remaining twirl impulse timer
-    this.buildProceduralBody();
+    this.twirlImpulse = 0;
+    this.buildProceduralBody(this.bodyType);
   }
 
   triggerTwirl() {
     this.twirlImpulse = 2.6;
   }
 
+  setBodyType(bodyType) {
+    const nextType = bodyType ? 1 : 0;
+    if (this.bodyType === nextType && !this.isCustomObj) return false;
+    this.bodyType = nextType;
+    this.isCustomObj = false;
+    this.hasPrevCapsules = false;
+    this.buildProceduralBody(this.bodyType);
+    return true;
+  }
+
   /**
-   * Constructs a smooth, anatomically proportioned 3D female mannequin mesh
-   * (torso + head + neck + bust + waist + pelvis + articulated legs + arms + studio plinth).
+   * Constructs a high-resolution, anatomically sculpted 3D Female or Male mannequin mesh
+   * (pelvis + torso + bust/pectorals + trapezius + neck + sculpted head + deltoid arms + hands + legs + feet + plinth).
    */
-  buildProceduralBody() {
+  buildProceduralBody(bodyType = this.bodyType) {
+    this.bodyType = bodyType ? 1 : 0;
+    const isMale = this.bodyType === 1;
+
     const positions = [];
     const normals = [];
     const boneIds = []; // 0=torso/head, 1=leftLeg, 2=rightLeg, 3=leftArm, 4=rightArm, 5=plinth
-    const boneWeights = []; // vertical parameter along limb [0..1]
+    const boneWeights = [];
     const indices = [];
 
     const addRingLoft = (rings, boneId) => {
@@ -78,65 +138,72 @@ export class HumanAvatar {
       }
     };
 
-    // 1. Torso + Pelvis + Neck + Head Loft (y from 0.79m to 1.72m)
+    // =========================================================================
+    // 1. TORSO + PELVIS + TRAPEZIUS + NECK + SCULPTED 3D HEAD LOFT
+    // =========================================================================
+    // Keyframe knots: [y_meters, rx_halfWidth, rz_halfDepth, centerZ_offset]
+    const femaleTorsoKnots = [
+      [0.775, 0.012, 0.012, -0.008], // Perineum / lower pelvic floor cap
+      [0.805, 0.126, 0.095, -0.010], // Lower pelvis / sub-gluteal
+      [0.865, 0.168, 0.114, -0.012], // Gluteal maximum & hip trochanter
+      [0.915, 0.174, 0.112, -0.008], // Iliac hip crest
+      [0.985, 0.142, 0.098, -0.002], // High hip / lower abdomen
+      [1.050, 0.120, 0.089,  0.002], // Sculpted hourglass natural waist
+      [1.135, 0.132, 0.096,  0.004], // Lower ribcage
+      [1.235, 0.146, 0.104,  0.005], // Bust / mid-thorax level
+      [1.315, 0.156, 0.098,  0.002], // Upper chest / sub-clavicle
+      [1.372, 0.176, 0.094, -0.004], // Lateral clavicle / acromion shoulder peak
+      [1.405, 0.118, 0.074, -0.005], // Sloping trapezius mid-ridge
+      [1.438, 0.056, 0.055, -0.002], // Base of neck (cervical C7)
+      [1.480, 0.049, 0.051,  0.002], // Mid-neck column
+      [1.515, 0.051, 0.054,  0.006], // Upper neck / submental jaw transition
+      [1.555, 0.063, 0.078,  0.012], // Mandibular jaw & chin level
+      [1.605, 0.072, 0.089,  0.010], // Zygomatic cheekbones & mid-face
+      [1.655, 0.075, 0.092,  0.002], // Forehead & parietal cranium
+      [1.702, 0.056, 0.070, -0.004], // Upper cranial dome
+      [1.730, 0.002, 0.002, -0.006], // Crown apex
+    ];
+
+    const maleTorsoKnots = [
+      [0.775, 0.014, 0.014, -0.008], // Lower pelvic cap
+      [0.805, 0.128, 0.096, -0.010], // Lower pelvis
+      [0.870, 0.156, 0.110, -0.012], // Male glutes & hip trochanter
+      [0.925, 0.158, 0.108, -0.006], // Iliac crest
+      [0.990, 0.148, 0.104,  0.000], // External oblique flank
+      [1.045, 0.142, 0.102,  0.002], // Athletic male waist
+      [1.140, 0.158, 0.110,  0.004], // Lower ribcage & serratus anterior
+      [1.245, 0.178, 0.118,  0.006], // Broad latissimus dorsi & pectorals
+      [1.320, 0.190, 0.112,  0.002], // Upper pectorals & deltoid junction
+      [1.380, 0.204, 0.104, -0.005], // Broad male acromion shoulder peak
+      [1.418, 0.136, 0.082, -0.006], // Muscular trapezius slope
+      [1.450, 0.064, 0.063, -0.002], // Thick cervical neck base
+      [1.490, 0.058, 0.060,  0.002], // Mid-neck column
+      [1.522, 0.060, 0.063,  0.006], // Upper neck / jaw base
+      [1.562, 0.070, 0.084,  0.013], // Square male mandible & chin
+      [1.612, 0.076, 0.093,  0.010], // Cheekbones & nasal bridge
+      [1.665, 0.079, 0.096,  0.002], // Brow ridge & cranium
+      [1.712, 0.058, 0.072, -0.004], // Upper cranial vault
+      [1.740, 0.002, 0.002, -0.006], // Crown apex
+    ];
+
+    const knots = isMale ? maleTorsoKnots : femaleTorsoKnots;
+    const rxKnots = knots.map((k) => [k[0], k[1]]);
+    const rzKnots = knots.map((k) => [k[0], k[2]]);
+    const czKnots = knots.map((k) => [k[0], k[3]]);
+
+    const minY = knots[0][0];
+    const maxY = knots[knots.length - 1][0];
+    const torsoSegs = 72;
+    const torsoSteps = 112;
     const torsoRings = [];
-    const torsoSegs = 64;
-    const torsoSteps = 96;
+
     for (let i = 0; i <= torsoSteps; i++) {
       const t = i / torsoSteps;
-      const y = 0.79 + t * (1.72 - 0.79);
+      const y = minY + t * (maxY - minY);
 
-      // Smooth anatomical profile rx (half-width) and rz (half-depth)
-      let rx = 0.14;
-      let rz = 0.10;
-      let centerZ = 0.0;
-
-      if (y < 0.88) {
-        // Lower pelvis saddle to hip crest
-        const u = (y - 0.79) / 0.09;
-        const s = Math.sin(u * Math.PI * 0.5);
-        rx = 0.105 + 0.068 * s;
-        rz = 0.088 + 0.032 * s;
-        centerZ = -0.008;
-      } else if (y < 1.04) {
-        // Hips (0.88) to natural waist cinch (1.04)
-        const u = (y - 0.88) / 0.16;
-        const smooth = 0.5 - 0.5 * Math.cos(u * Math.PI);
-        rx = 0.173 * (1 - smooth) + 0.120 * smooth;
-        rz = 0.120 * (1 - smooth) + 0.092 * smooth;
-        centerZ = -0.008 * (1 - smooth);
-      } else if (y < 1.30) {
-        // Waist (1.04) through ribcage & bust (1.24) to upper chest (1.30)
-        const u = (y - 1.04) / 0.26;
-        const smooth = 0.5 - 0.5 * Math.cos(u * Math.PI);
-        rx = 0.120 + 0.032 * smooth;
-        rz = 0.092 + 0.020 * Math.sin(u * Math.PI);
-        centerZ = 0.006 * Math.sin(u * Math.PI);
-      } else if (y < 1.42) {
-        // Upper chest (1.30) to broad deltoid/clavicle shoulders (1.375) then smooth C1 taper to neck base (1.42)
-        const u = (y - 1.30) / 0.12;
-        const shoulderPeak = Math.exp(-Math.pow((y - 1.372) / 0.030, 2));
-        const neckTaper = u > 0.52 ? 0.5 - 0.5 * Math.cos(((u - 0.52) / 0.48) * Math.PI) : 0;
-        const chestRx = 0.152 + 0.038 * shoulderPeak;
-        const chestRz = 0.100 + 0.008 * shoulderPeak;
-        rx = chestRx * (1 - neckTaper) + 0.053 * neckTaper;
-        rz = chestRz * (1 - neckTaper) + 0.055 * neckTaper;
-        centerZ = -0.003 * (1 - neckTaper);
-      } else if (y < 1.52) {
-        // Smooth cylindrical neck column (1.42 to 1.52)
-        const u = (y - 1.42) / 0.10;
-        rx = 0.053 - 0.003 * Math.sin(u * Math.PI);
-        rz = 0.055 - 0.002 * Math.sin(u * Math.PI);
-        centerZ = 0.003 * u;
-      } else {
-        // Sculpted head (1.52 to 1.72) — smoothly expands from neck (0.053) into jaw/cranium and closes at crown (u=1)
-        const u = (y - 1.52) / 0.20;
-        const neckBlend = Math.exp(-Math.pow(u / 0.18, 2));
-        const craniumEnv = Math.sin(Math.pow(u, 0.62) * Math.PI);
-        rx = 0.053 * neckBlend + 0.078 * craniumEnv * (1 - 0.35 * neckBlend);
-        rz = 0.055 * neckBlend + 0.092 * craniumEnv * (1 - 0.30 * neckBlend);
-        centerZ = 0.003 * neckBlend + 0.012 * Math.sin(u * Math.PI) * (1 - u * 0.4);
-      }
+      const baseRx = evalHermiteProfile(y, rxKnots);
+      const baseRz = evalHermiteProfile(y, rzKnots);
+      const baseCz = evalHermiteProfile(y, czKnots);
 
       const points = [];
       for (let s = 0; s < torsoSegs; s++) {
@@ -144,33 +211,105 @@ export class HumanAvatar {
         const cosA = Math.cos(angle); // +X right, -X left
         const sinA = Math.sin(angle); // +Z front, -Z back
 
-        let x = cosA * rx;
-        let z = centerZ + sinA * rz;
+        // Squircle superellipse factor: human ribcage/waist is slightly flatter on front/back than a pure ellipse
+        const squircle = 1.0 - 0.045 * Math.pow(Math.sin(2 * angle), 2) * (y < 1.42 ? 1.0 : 0.2);
+        let x = cosA * baseRx * squircle;
+        let z = baseCz + sinA * baseRz * squircle;
 
-        // Sculpted anterior bust contour around y = 1.235m, z > 0
-        if (y > 1.12 && y < 1.34 && sinA > 0) {
-          const bustY = Math.exp(-Math.pow((y - 1.235) / 0.058, 2));
-          const leftLobe = Math.exp(-Math.pow((x + 0.074) / 0.056, 2));
-          const rightLobe = Math.exp(-Math.pow((x - 0.074) / 0.056, 2));
-          const bustBridge = 0.22 * Math.exp(-Math.pow(x / 0.05, 2));
-          const bustProj = 0.044 * bustY * Math.pow(sinA, 1.3) * (leftLobe + rightLobe + bustBridge);
-          z += bustProj;
-          x *= 1 + 0.06 * bustY;
+        // 1A. Anterior Chest: Female Sculpted Bust vs. Male Sculpted Pectorals
+        if (!isMale) {
+          // Female anatomical bust (y ∈ [1.13, 1.33], anterior z > 0)
+          if (y > 1.12 && y < 1.34 && sinA > -0.1) {
+            const dy = (y - 1.232) / 0.062;
+            // Teardrop vertical asymmetry: fuller lower pole, gentler upper slope
+            const bustVert = Math.exp(-dy * dy * (dy < 0 ? 1.35 : 0.85));
+            const leftBreast = Math.exp(-Math.pow((x + 0.072) / 0.055, 2));
+            const rightBreast = Math.exp(-Math.pow((x - 0.072) / 0.055, 2));
+            const sternumValley = 0.16 * Math.exp(-Math.pow(x / 0.038, 2));
+            const frontMask = Math.pow(Math.max(0, sinA), 1.15);
+            const bustProj = 0.046 * bustVert * frontMask * (leftBreast + rightBreast + sternumValley);
+            z += bustProj;
+            x *= 1 + 0.05 * bustVert * (leftBreast + rightBreast);
+          }
+        } else {
+          // Male sculpted pectoralis major plates (y ∈ [1.17, 1.35], anterior z > 0)
+          if (y > 1.16 && y < 1.36 && sinA > 0) {
+            const pecY = Math.exp(-Math.pow((y - 1.258) / 0.055, 2));
+            // Broad flat-topped pectoral plates with sharp sternal cleavage groove
+            const leftPec = Math.exp(-Math.pow((x + 0.082) / 0.068, 4));
+            const rightPec = Math.exp(-Math.pow((x - 0.082) / 0.068, 4));
+            const frontMask = Math.pow(sinA, 1.25);
+            z += 0.024 * pecY * frontMask * (leftPec + rightPec);
+
+            // Male rectus abdominis (subtle 6-pack & linea alba between y = 0.96 and 1.16)
+          }
+          if (y > 0.95 && y < 1.17 && sinA > 0.4) {
+            const abEnv = Math.sin(((y - 0.95) / 0.22) * Math.PI);
+            const abPair = Math.exp(-Math.pow((Math.abs(x) - 0.036) / 0.026, 2));
+            const rows = 0.65 + 0.35 * Math.cos(((y - 0.98) / 0.055) * Math.PI * 2);
+            z += 0.006 * abEnv * abPair * rows * (sinA - 0.4);
+          }
         }
 
-        // Sculpted posterior gluteal contour around y = 0.88m, z < 0
-        if (y > 0.80 && y < 0.98 && sinA < 0) {
-          const gluteY = Math.exp(-Math.pow((y - 0.885) / 0.055, 2));
-          const gluteLobe =
-            Math.exp(-Math.pow((x + 0.065) / 0.058, 2)) +
-            Math.exp(-Math.pow((x - 0.065) / 0.058, 2));
-          z -= 0.032 * gluteY * Math.pow(-sinA, 1.4) * gluteLobe;
+        // 1B. Clavicle Ridge & Jugular Notch (y ≈ 1.365..1.385, front)
+        if (y > 1.34 && y < 1.40 && sinA > 0.2) {
+          const clavY = Math.exp(-Math.pow((y - 1.368) / 0.014, 2));
+          const clavLateral = Math.exp(-Math.pow((Math.abs(x) - 0.075) / 0.055, 2));
+          const jugularNotch = Math.exp(-Math.pow(x / 0.022, 2));
+          z += (0.006 * clavLateral - 0.005 * jugularNotch) * clavY * sinA;
         }
 
-        // Subtle spinal groove along back
-        if (y > 0.96 && y < 1.36 && sinA < -0.7) {
-          const groove = Math.exp(-Math.pow(x / 0.025, 2));
-          z += 0.007 * groove * (-sinA - 0.7);
+        // 1C. Posterior Gluteal Lobe & Cleft Sculpting (y ∈ [0.79, 0.97], back z < 0)
+        if (y > 0.79 && y < 0.98 && sinA < 0) {
+          const gluteY = Math.exp(-Math.pow((y - 0.875) / 0.055, 2));
+          const glutePeakX = isMale ? 0.062 : 0.068;
+          const gluteAmp = isMale ? 0.024 : 0.034;
+          const gluteLobes =
+            Math.exp(-Math.pow((x + glutePeakX) / 0.055, 2)) +
+            Math.exp(-Math.pow((x - glutePeakX) / 0.055, 2));
+          const gluteCleft = Math.exp(-Math.pow(x / 0.018, 2));
+          z -= gluteAmp * gluteY * Math.pow(-sinA, 1.3) * (gluteLobes - 0.38 * gluteCleft);
+        }
+
+        // 1D. Posterior Spinal Groove & Scapula (Shoulder Blades) (y ∈ [0.95, 1.36], back z < 0)
+        if (y > 0.95 && y < 1.36 && sinA < -0.5) {
+          const spineGroove = Math.exp(-Math.pow(x / 0.022, 2));
+          const spineEnv = Math.sin(((y - 0.95) / 0.41) * Math.PI);
+          z += 0.007 * spineGroove * spineEnv * (-sinA - 0.5);
+        }
+
+        // 1E. Sculpted 3D Head & Facial Features (y > 1.52m)
+        if (y > 1.52 && y < maxY - 0.005) {
+          const headH = maxY - 1.52;
+          const hu = (y - 1.52) / headH; // 0 = chin base, 1 = crown
+
+          // Anterior Chin & Jawline projection (hu ∈ [0.05, 0.32], front sinA > 0)
+          if (sinA > 0) {
+            const chinEnv = Math.exp(-Math.pow((hu - 0.14) / 0.09, 2));
+            const chinCenter = Math.exp(-Math.pow(cosA / (isMale ? 0.42 : 0.32), 2));
+            z += (isMale ? 0.014 : 0.011) * chinEnv * chinCenter * Math.pow(sinA, 1.5);
+
+            // Nose bridge & nasal tip (hu ∈ [0.32, 0.56], center front)
+            const noseEnv = Math.exp(-Math.pow((hu - 0.42) / 0.10, 2));
+            const noseRidge = Math.exp(-Math.pow(cosA / 0.15, 2));
+            z += 0.014 * noseEnv * noseRidge * Math.pow(sinA, 2.0);
+
+            // Orbital eye hollows (hu ≈ 0.50, cosA ≈ ±0.32)
+            const eyeEnv = Math.exp(-Math.pow((hu - 0.50) / 0.055, 2));
+            const eyeSockets =
+              Math.exp(-Math.pow((cosA + 0.32) / 0.16, 2)) +
+              Math.exp(-Math.pow((cosA - 0.32) / 0.16, 2));
+            z -= 0.006 * eyeEnv * eyeSockets * sinA;
+
+            // Supraorbital brow ridge (hu ≈ 0.57)
+            const browEnv = Math.exp(-Math.pow((hu - 0.57) / 0.045, 2));
+            z += (isMale ? 0.006 : 0.003) * browEnv * Math.pow(sinA, 1.4);
+          }
+
+          // Subtle sculpted ear silhouettes (hu ∈ [0.36, 0.56], lateral cosA ≈ ±1)
+          const earEnv = Math.exp(-Math.pow((hu - 0.46) / 0.08, 2));
+          const earSide = Math.exp(-Math.pow((sinA + 0.08) / 0.18, 2));
+          x += Math.sign(cosA) * 0.006 * earEnv * earSide * Math.pow(Math.abs(cosA), 2.0);
         }
 
         points.push([x, y, z]);
@@ -179,54 +318,92 @@ export class HumanAvatar {
     }
     addRingLoft(torsoRings, 0);
 
-    // 2. Left & Right Articulated Legs (y from 0.85m hip down to 0.0m foot)
+    // =========================================================================
+    // 2. LEFT & RIGHT SCULPTED ANATOMICAL LEGS, KNEES, CALVES & FEET
+    // =========================================================================
+    // Starts at y = 0.885m inside the pelvis/glutes so there is a seamless hip-to-thigh transition
+    const legRadiusKnotsF = [
+      [0.010, 0.010, 0.012,  0.042], // Toe tip cap
+      [0.022, 0.040, 0.088,  0.036], // Sculpted forefoot & sole
+      [0.052, 0.034, 0.064,  0.014], // Instep arch & heel
+      [0.088, 0.033, 0.038, -0.004], // Slender ankle / malleoli
+      [0.180, 0.040, 0.043, -0.005], // Lower Achilles taper
+      [0.335, 0.056, 0.060, -0.010], // Gastrocnemius calf peak
+      [0.440, 0.049, 0.052, -0.003], // Sub-knee taper
+      [0.490, 0.053, 0.056,  0.003], // Patella (kneecap) joint
+      [0.640, 0.068, 0.072,  0.001], // Mid-thigh quadriceps
+      [0.790, 0.083, 0.088, -0.003], // Upper thigh
+      [0.865, 0.086, 0.092, -0.006], // Hip-thigh junction
+      [0.895, 0.045, 0.050, -0.008], // Internal hip socket cap
+    ];
+
+    const legRadiusKnotsM = [
+      [0.010, 0.012, 0.014,  0.046],
+      [0.024, 0.044, 0.096,  0.038],
+      [0.055, 0.038, 0.070,  0.014],
+      [0.090, 0.038, 0.043, -0.004],
+      [0.185, 0.046, 0.049, -0.006],
+      [0.340, 0.064, 0.068, -0.012], // Muscular male calf
+      [0.445, 0.055, 0.058, -0.003],
+      [0.495, 0.059, 0.062,  0.004], // Male knee
+      [0.645, 0.076, 0.080,  0.002], // Muscular quadriceps
+      [0.790, 0.086, 0.091, -0.003],
+      [0.865, 0.085, 0.090, -0.006],
+      [0.895, 0.045, 0.050, -0.008],
+    ];
+
+    const legKnots = isMale ? legRadiusKnotsM : legRadiusKnotsF;
+    const legRxK = legKnots.map((k) => [k[0], k[1]]);
+    const legRzK = legKnots.map((k) => [k[0], k[2]]);
+    const legCzK = legKnots.map((k) => [k[0], k[3]]);
+
     const buildLeg = (side, boneId) => {
       const legRings = [];
-      const segs = 32;
-      const steps = 42;
+      const segs = 36;
+      const steps = 54;
+      const topY = 0.895;
+      const botY = 0.010;
+
+      const hipX = side * (isMale ? 0.088 : 0.090);
+      const kneeX = side * (isMale ? 0.084 : 0.078);
+      const ankleX = side * (isMale ? 0.080 : 0.072);
+
+      const xKnots = [
+        [0.010, ankleX],
+        [0.090, ankleX],
+        [0.490, kneeX],
+        [0.895, hipX],
+      ];
+
       for (let i = 0; i <= steps; i++) {
-        const t = i / steps; // 0 = hip (0.85m), 1 = sole (0.01m)
-        const y = 0.85 * (1 - t) + 0.01 * t;
+        const t = i / steps; // 0 = hip socket (0.895m), 1 = sole (0.010m)
+        const y = topY * (1 - t) + botY * t;
 
-        // Lateral hip-to-ankle centerline
-        const hipX = side * 0.094;
-        const kneeX = side * 0.082;
-        const ankleX = side * 0.076;
-        const cx = t < 0.5 ? hipX * (1 - t * 2) + kneeX * (t * 2) : kneeX * (1 - (t - 0.5) * 2) + ankleX * ((t - 0.5) * 2);
-
-        // Anatomical leg radius profile (thigh -> knee -> calf -> ankle -> foot)
-        let rx = 0.06;
-        let rz = 0.06;
-        let cz = 0.0;
-        if (y > 0.48) {
-          // Thigh to knee
-          const u = (0.85 - y) / (0.85 - 0.48);
-          rx = 0.082 * (1 - u) + 0.053 * u;
-          rz = 0.086 * (1 - u) + 0.055 * u;
-        } else if (y > 0.09) {
-          // Knee through gastrocnemius calf muscle to ankle
-          const u = (0.48 - y) / (0.48 - 0.09);
-          const calfBulge = Math.exp(-Math.pow((y - 0.33) / 0.085, 2));
-          rx = 0.053 * (1 - u) + 0.035 * u + 0.011 * calfBulge;
-          rz = 0.055 * (1 - u) + 0.038 * u + 0.016 * calfBulge;
-          cz = -0.009 * calfBulge;
-        } else {
-          // Sculpted foot arch & toe box
-          const u = (0.09 - y) / 0.08;
-          const footCap = Math.sin(Math.min(1, u * 1.15) * Math.PI * 0.5);
-          rx = (0.036 + 0.008 * footCap) * (u > 0.92 ? 0.25 : 1.0);
-          rz = (0.042 + 0.055 * footCap) * (u > 0.92 ? 0.25 : 1.0);
-          cz = 0.038 * footCap;
-        }
+        const cx = evalHermiteProfile(y, xKnots);
+        const rx = evalHermiteProfile(y, legRxK);
+        const rz = evalHermiteProfile(y, legRzK);
+        const cz = evalHermiteProfile(y, legCzK);
 
         const points = [];
         for (let s = 0; s < segs; s++) {
           const angle = (s / segs) * Math.PI * 2;
-          points.push([
-            cx + Math.cos(angle) * rx,
-            y,
-            cz + Math.sin(angle) * rz,
-          ]);
+          const cosA = Math.cos(angle);
+          const sinA = Math.sin(angle);
+
+          let lx = cx + cosA * rx;
+          let ly = y;
+          let lz = cz + sinA * rz;
+
+          // Subtle patella (kneecap) anterior relief at y ≈ 0.49m
+          if (y > 0.45 && y < 0.53 && sinA > 0.3) {
+            const kneeEnv = Math.exp(-Math.pow((y - 0.49) / 0.024, 2));
+            lz += 0.005 * kneeEnv * Math.pow(sinA, 2.0);
+          }
+
+          // Flat plantar sole clamping at bottom of foot
+          if (ly < 0.012) ly = 0.012;
+
+          points.push([lx, ly, lz]);
         }
         legRings.push({ points, weight: t });
       }
@@ -235,47 +412,95 @@ export class HumanAvatar {
     buildLeg(-1, 1); // Left leg
     buildLeg(1, 2);  // Right leg
 
-    // 3. Left & Right Articulated Arms (graceful A-pose abduction away from dress waist/skirt)
+    // =========================================================================
+    // 3. LEFT & RIGHT SCULPTED ARMS, DELTOIDS, FOREARMS & HANDS (BISHOP FRAME)
+    // =========================================================================
+    // Uses an exact orthonormal frame perpendicular to the arm tangent curve so
+    // deltoid caps, elbows, wrists, and sculpted hands never shear or pinch.
     const buildArm = (side, boneId) => {
       const armRings = [];
-      const segs = 28;
-      const steps = 34;
-      const shoulder = [side * 0.178, 1.375, -0.008];
-      const elbow = [side * 0.255, 1.115, -0.022];
-      const wrist = [side * 0.315, 0.875, 0.018];
-      const fingertips = [side * 0.332, 0.775, 0.032];
+      const segs = 32;
+      const steps = 48;
+
+      const shX = isMale ? 0.184 : 0.160;
+      const elX = isMale ? 0.258 : 0.236;
+      const wrX = isMale ? 0.308 : 0.288;
+      const fnX = isMale ? 0.322 : 0.302;
+
+      // Smooth 3D arm centerline knots [t, x, y, z, rMajor_mediolateral, rMinor_anteroposterior]
+      const armKnots = [
+        [0.00, side * (shX - 0.035), 1.378, -0.006, 0.004, 0.004], // Internal shoulder socket cap
+        [0.06, side * shX,           1.372, -0.008, isMale ? 0.056 : 0.047, isMale ? 0.054 : 0.046], // Rounded deltoid cap
+        [0.24, side * (shX + (elX - shX) * 0.48), 1.245, -0.016, isMale ? 0.048 : 0.039, isMale ? 0.049 : 0.040], // Biceps / triceps belly
+        [0.44, side * elX,           1.120, -0.022, isMale ? 0.041 : 0.034, isMale ? 0.039 : 0.033], // Elbow joint
+        [0.56, side * (elX + (wrX - elX) * 0.32), 1.045, -0.010, isMale ? 0.043 : 0.035, isMale ? 0.040 : 0.033], // Forearm brachioradialis swell
+        [0.80, side * wrX,           0.885,  0.016, isMale ? 0.030 : 0.025, isMale ? 0.022 : 0.018], // Oval wrist joint
+        [0.90, side * (wrX + (fnX - wrX) * 0.55), 0.825,  0.026, isMale ? 0.035 : 0.030, isMale ? 0.015 : 0.013], // Sculpted palm & thumb base
+        [0.97, side * fnX,           0.778,  0.032, isMale ? 0.024 : 0.020, isMale ? 0.010 : 0.008], // Tapered fingers
+        [1.00, side * (fnX + 0.003), 0.765,  0.034, 0.002, 0.002], // Fingertip cap
+      ];
+
+      const axK = armKnots.map((k) => [k[0], k[1]]);
+      const ayK = armKnots.map((k) => [k[0], k[2]]);
+      const azK = armKnots.map((k) => [k[0], k[3]]);
+      const rMajK = armKnots.map((k) => [k[0], k[4]]);
+      const rMinK = armKnots.map((k) => [k[0], k[5]]);
 
       for (let i = 0; i <= steps; i++) {
         const t = i / steps;
-        let cx, cy, cz, r;
-        if (t < 0.45) {
-          const u = t / 0.45;
-          cx = shoulder[0] * (1 - u) + elbow[0] * u;
-          cy = shoulder[1] * (1 - u) + elbow[1] * u;
-          cz = shoulder[2] * (1 - u) + elbow[2] * u;
-          r = 0.048 * (1 - u) + 0.037 * u;
-        } else if (t < 0.84) {
-          const u = (t - 0.45) / 0.39;
-          cx = elbow[0] * (1 - u) + wrist[0] * u;
-          cy = elbow[1] * (1 - u) + wrist[1] * u;
-          cz = elbow[2] * (1 - u) + wrist[2] * u;
-          const forearmCurve = Math.sin(u * Math.PI) * 0.005;
-          r = 0.037 * (1 - u) + 0.026 * u + forearmCurve;
-        } else {
-          const u = (t - 0.84) / 0.16;
-          cx = wrist[0] * (1 - u) + fingertips[0] * u;
-          cy = wrist[1] * (1 - u) + fingertips[1] * u;
-          cz = wrist[2] * (1 - u) + fingertips[2] * u;
-          r = 0.027 * (1 - u * 0.75);
-        }
+        const cx = evalHermiteProfile(t, axK);
+        const cy = evalHermiteProfile(t, ayK);
+        const cz = evalHermiteProfile(t, azK);
+        const rMaj = evalHermiteProfile(t, rMajK);
+        const rMin = evalHermiteProfile(t, rMinK);
+
+        // Compute tangent T along arm centerline
+        const dt = 0.005;
+        const tNext = Math.min(1.0, t + dt);
+        const tPrev = Math.max(0.0, t - dt);
+        let tx = evalHermiteProfile(tNext, axK) - evalHermiteProfile(tPrev, axK);
+        let ty = evalHermiteProfile(tNext, ayK) - evalHermiteProfile(tPrev, ayK);
+        let tz = evalHermiteProfile(tNext, azK) - evalHermiteProfile(tPrev, azK);
+        const tLen = Math.hypot(tx, ty, tz) || 1;
+        tx /= tLen;
+        ty /= tLen;
+        tz /= tLen;
+
+        // Orthonormal frame: B = normalize(T × [0, 0, 1]), N = B × T
+        let bx = ty * 1.0 - tz * 0.0;
+        let by = tz * 0.0 - tx * 1.0;
+        let bz = tx * 0.0 - ty * 0.0;
+        const bLen = Math.hypot(bx, by, bz) || 1;
+        bx /= bLen;
+        by /= bLen;
+        bz /= bLen;
+
+        const nx = by * tz - bz * ty;
+        const ny = bz * tx - bx * tz;
+        const nz = bx * ty - by * tx;
 
         const points = [];
         for (let s = 0; s < segs; s++) {
           const angle = (s / segs) * Math.PI * 2;
-          // Frame perpendicular to arm direction
-          const nx = Math.cos(angle) * r;
-          const nz = Math.sin(angle) * r;
-          points.push([cx + nx, cy - side * nx * 0.24, cz + nz]);
+          const cosA = Math.cos(angle);
+          const sinA = Math.sin(angle);
+
+          // Thumb silhouette bulge on anterior palm (t ∈ [0.82, 0.93], sinA > 0.5)
+          let thumbExtra = 0.0;
+          if (t > 0.81 && t < 0.94 && sinA > 0.4) {
+            const thumbT = Math.exp(-Math.pow((t - 0.87) / 0.035, 2));
+            const thumbAng = Math.exp(-Math.pow((sinA - 0.85) / 0.25, 2));
+            thumbExtra = 0.010 * thumbT * thumbAng;
+          }
+
+          const uComp = cosA * rMaj;
+          const vComp = sinA * (rMin + thumbExtra);
+
+          points.push([
+            cx + bx * uComp + nx * vComp,
+            cy + by * uComp + ny * vComp,
+            cz + bz * uComp + nz * vComp,
+          ]);
         }
         armRings.push({ points, weight: t });
       }
@@ -284,7 +509,9 @@ export class HumanAvatar {
     buildArm(-1, 3); // Left arm
     buildArm(1, 4);  // Right arm
 
-    // 4. Studio Runway Pedestal Plinth (y from -0.04m to 0.005m)
+    // =========================================================================
+    // 4. STUDIO RUNWAY PEDESTAL PLINTH (y from -0.038m to 0.005m)
+    // =========================================================================
     const plinthRings = [
       { radius: 0.001, y: 0.005 },
       { radius: 0.44, y: 0.005 },
@@ -293,7 +520,7 @@ export class HumanAvatar {
       { radius: 0.001, y: -0.038 },
     ].map(({ radius, y }) => {
       const pts = [];
-      const segs = 36;
+      const segs = 48;
       for (let s = 0; s < segs; s++) {
         const a = (s / segs) * Math.PI * 2;
         pts.push([Math.cos(a) * radius, y, Math.sin(a) * radius]);
@@ -315,7 +542,7 @@ export class HumanAvatar {
 
     this.computeBaseNormals();
     this.baseNormals = new Float32Array(this.normals);
-    this.evaluatePose(0, 0.016, {});
+    this.evaluatePose(0, 0.016, { avatarBodyType: this.bodyType });
   }
 
   computeBaseNormals() {
@@ -361,6 +588,12 @@ export class HumanAvatar {
    * 3. `this.motionState` (upper-body transform for dress shoulder/bodice pins)
    */
   evaluatePose(time, dt = 0.016, params = {}) {
+    const requestedBodyType = params.avatarBodyType ?? this.bodyType;
+    if (!this.isCustomObj && requestedBodyType !== this.bodyType) {
+      this.setBodyType(requestedBodyType);
+    }
+
+    const isMale = this.bodyType === 1;
     const poseMode = params.avatarPose ?? 0;
     const motionSpeed = params.avatarMotionSpeed ?? 1.0;
     const t = time * motionSpeed;
@@ -385,7 +618,7 @@ export class HumanAvatar {
 
     if (poseMode === 0) {
       // Studio contrapposto: gentle breathing & natural weight shift
-      hipSwingX = Math.sin(t * 1.3) * 0.014;
+      hipSwingX = Math.sin(t * 1.3) * (isMale ? 0.010 : 0.014);
       hipBobY = Math.sin(t * 2.6) * 0.003;
       torsoSwayX = -Math.sin(t * 1.3) * 0.008;
       armSwing = Math.sin(t * 1.3) * 0.04;
@@ -394,7 +627,7 @@ export class HumanAvatar {
       // Runway catwalk stride
       const walkFreq = 3.2;
       legSwing = Math.sin(t * walkFreq) * 0.34;
-      hipSwingX = Math.cos(t * walkFreq) * 0.034;
+      hipSwingX = Math.cos(t * walkFreq) * (isMale ? 0.022 : 0.034);
       hipBobY = Math.abs(Math.sin(t * walkFreq)) * 0.014 - 0.007;
       torsoSwayX = -Math.cos(t * walkFreq) * 0.018;
       armSwing = -Math.sin(t * walkFreq) * 0.22;
@@ -499,41 +732,47 @@ export class HumanAvatar {
       }
     }
 
-    // Update the 16 anatomical collision capsules in world space
+    // Update the 16 anatomical collision capsules in world space (adapted for Female vs. Male anatomy)
     // Each capsule: [ax, ay, az, rA, bx, by, bz, rB, boneId, wA, wB]
+    const shX = isMale ? 0.180 : 0.155;
+    const chestR = isMale ? 0.132 : 0.118;
+    const waistR = isMale ? 0.122 : 0.104;
+    const hipX = isMale ? 0.056 : 0.062;
+    const hipR = isMale ? 0.110 : 0.116;
+
     const localCapsules = [
       // 0: Head & Neck
-      [0.0, 1.44, 0.0, 0.056, 0.0, 1.63, 0.008, 0.082, 0, 0.7, 0.95],
+      [0.0, 1.44, 0.0, isMale ? 0.062 : 0.054, 0.0, 1.63, 0.008, 0.082, 0, 0.7, 0.95],
       // 1: Shoulder / Clavicle Bridge (Left to Right shoulder)
-      [-0.155, 1.365, -0.006, 0.054, 0.155, 1.365, -0.006, 0.054, 0, 0.62, 0.62],
+      [-shX, 1.368, -0.006, 0.054, shX, 1.368, -0.006, 0.054, 0, 0.62, 0.62],
       // 2: Upper Chest / Ribcage
-      [0.0, 1.28, -0.004, 0.118, 0.0, 1.13, -0.002, 0.108, 0, 0.52, 0.36],
-      // 3: Left Bust Sphere
-      [-0.072, 1.235, 0.042, 0.076, -0.068, 1.230, 0.050, 0.074, 0, 0.48, 0.48],
-      // 4: Right Bust Sphere
-      [0.072, 1.235, 0.042, 0.076, 0.068, 1.230, 0.050, 0.074, 0, 0.48, 0.48],
+      [0.0, 1.28, -0.004, chestR, 0.0, 1.13, -0.002, waistR + 0.006, 0, 0.52, 0.36],
+      // 3: Left Bust / Pectoral Sphere
+      [-0.074, 1.238, isMale ? 0.032 : 0.042, isMale ? 0.072 : 0.076, -0.070, 1.232, isMale ? 0.036 : 0.050, 0.072, 0, 0.48, 0.48],
+      // 4: Right Bust / Pectoral Sphere
+      [0.074, 1.238, isMale ? 0.032 : 0.042, isMale ? 0.072 : 0.076, 0.070, 1.232, isMale ? 0.036 : 0.050, 0.072, 0, 0.48, 0.48],
       // 5: Natural Waist Column
-      [0.0, 1.07, 0.0, 0.104, 0.0, 0.98, -0.004, 0.108, 0, 0.30, 0.20],
+      [0.0, 1.07, 0.0, waistR, 0.0, 0.98, -0.004, waistR + 0.004, 0, 0.30, 0.20],
       // 6: Upper Pelvis / Hip Crest Bridge
-      [-0.062, 0.90, -0.008, 0.116, 0.062, 0.90, -0.008, 0.116, 0, 0.12, 0.12],
+      [-hipX, 0.90, -0.008, hipR, hipX, 0.90, -0.008, hipR, 0, 0.12, 0.12],
       // 7: Lower Pelvis / Gluteal Bridge
-      [-0.058, 0.85, -0.018, 0.114, 0.058, 0.85, -0.018, 0.114, 0, 0.06, 0.06],
+      [-0.056, 0.85, -0.018, hipR - 0.002, 0.056, 0.85, -0.018, hipR - 0.002, 0, 0.06, 0.06],
       // 8: Left Thigh Capsule
-      [-0.092, 0.83, 0.0, 0.086, -0.082, 0.48, 0.0, 0.058, 1, 0.05, 0.45],
+      [-0.090, 0.83, 0.0, isMale ? 0.090 : 0.086, -0.080, 0.48, 0.0, 0.058, 1, 0.05, 0.45],
       // 9: Right Thigh Capsule
-      [0.092, 0.83, 0.0, 0.086, 0.082, 0.48, 0.0, 0.058, 2, 0.05, 0.45],
+      [0.090, 0.83, 0.0, isMale ? 0.090 : 0.086, 0.080, 0.48, 0.0, 0.058, 2, 0.05, 0.45],
       // 10: Left Calf Capsule
-      [-0.082, 0.47, 0.0, 0.056, -0.076, 0.08, 0.0, 0.040, 1, 0.46, 0.92],
+      [-0.080, 0.47, 0.0, 0.056, -0.074, 0.08, 0.0, 0.040, 1, 0.46, 0.92],
       // 11: Right Calf Capsule
-      [0.082, 0.47, 0.0, 0.056, 0.076, 0.08, 0.0, 0.040, 2, 0.46, 0.92],
+      [0.080, 0.47, 0.0, 0.056, 0.074, 0.08, 0.0, 0.040, 2, 0.46, 0.92],
       // 12: Left Upper Arm Capsule
-      [-0.178, 1.375, -0.008, 0.049, -0.255, 1.115, -0.022, 0.039, 3, 0.0, 0.45],
+      [-(shX + 0.012), 1.372, -0.008, 0.049, -(shX + 0.082), 1.120, -0.022, 0.039, 3, 0.0, 0.45],
       // 13: Right Upper Arm Capsule
-      [0.178, 1.375, -0.008, 0.049, 0.255, 1.115, -0.022, 0.039, 4, 0.0, 0.45],
+      [shX + 0.012, 1.372, -0.008, 0.049, shX + 0.082, 1.120, -0.022, 0.039, 4, 0.0, 0.45],
       // 14: Left Forearm Capsule
-      [-0.255, 1.115, -0.022, 0.038, -0.320, 0.83, 0.022, 0.030, 3, 0.45, 0.90],
+      [-(shX + 0.082), 1.120, -0.022, 0.038, -(shX + 0.135), 0.83, 0.022, 0.030, 3, 0.45, 0.90],
       // 15: Right Forearm Capsule
-      [0.255, 1.115, -0.022, 0.038, 0.320, 0.83, 0.022, 0.030, 4, 0.45, 0.90],
+      [shX + 0.082, 1.120, -0.022, 0.038, shX + 0.135, 0.83, 0.022, 0.030, 4, 0.45, 0.90],
     ];
 
     const invDt = dt > 1e-4 ? 1.0 / dt : 0.0;
@@ -643,6 +882,7 @@ export class HumanAvatar {
       }
     }
 
+    this.isCustomObj = true;
     this.vertexCount = rawV.length;
     this.indexCount = faces.length;
     this.basePositions = pos;
