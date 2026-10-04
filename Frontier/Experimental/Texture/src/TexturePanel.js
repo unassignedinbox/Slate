@@ -376,6 +376,7 @@ class TexturePanel
         this.PickingMaskColour = false;
         this.ToolBefore = "";
         this.Isolated = false;
+        this.ScopedStack = false;
         this.HoverTile = FirstTile;
         this.HoverObject = "";
         this.SecondaryPainting = false;
@@ -586,6 +587,8 @@ class TexturePanel
         if (!this.Project.Objects.some((Entry) => Entry.Identifier === Identifier)) return;
         this.Project.Object = Identifier;
         this.RenderObjects();
+        if (this.ScopedStack) this.RenderStack();
+        this.SyncScopeToggle();
         if (this.InspectorTab === "surface") this.RenderInspector();
         if (this.Isolated) this.RebuildSurface();
         if (Announce) this.Notify(`${this.ActiveObject.Name} selected.`);
@@ -701,12 +704,31 @@ class TexturePanel
             if (Row) this.RenameObject(Row.dataset.objectRow);
         });
         Select("#add-object").addEventListener("click", () => this.AddObject("cube"));
+        Select("#scope-toggle").addEventListener("click", () => this.SetStackScope(!this.ScopedStack));
         Select("#isolate-button").addEventListener("click", () => this.SetIsolation(!this.Isolated));
         Select("#outliner-fold").addEventListener("click", () =>
         {
             const Folded = Select("#outliner").classList.toggle("folded");
             Select("#outliner-fold").setAttribute("aria-expanded", String(!Folded));
         });
+    }
+
+    // The stack can follow the outliner: scoped, it lists the selected object's layers and the scene-wide ones.
+    SetStackScope(State)
+    {
+        this.ScopedStack = Boolean(State);
+        this.SyncScopeToggle();
+        this.RenderStack();
+        this.Notify(this.ScopedStack ? `Stack scoped to ${this.ActiveObject?.Name}.` : "Stack showing the whole scene.");
+    }
+
+    SyncScopeToggle()
+    {
+        const Button = Select("#scope-toggle");
+        if (!Button) return;
+        Button.classList.toggle("active", this.ScopedStack);
+        Button.setAttribute("aria-pressed", String(this.ScopedStack));
+        Select("#scope-label").textContent = this.ScopedStack ? this.ActiveObject?.Name || "Object" : "Whole scene";
     }
 
     RenameObject(Identifier)
@@ -1423,6 +1445,8 @@ class TexturePanel
             .reverse()
             .filter((Layer) =>
             {
+                // Scoped to the selected object, the stack shows that object's layers and the scene-wide ones under them.
+                if (this.ScopedStack && Layer.Object && Layer.Object !== this.Project.Object) return false;
                 if (this.LayerFilter === "masked")
                 {
                     if (Layer.Mask.Kind === "none") return false;
@@ -1571,6 +1595,7 @@ class TexturePanel
         };
         const Factory = Descriptor[Kind] || Descriptor.fill;
         const Layer = Factory();
+        if (this.ScopedStack || this.Isolated) Layer.Object = this.Project.Object;
         const Index = this.LayerIndex(this.Project.Selection);
         this.CaptureStack(() =>
         {
@@ -2839,6 +2864,13 @@ class TexturePanel
             if (Committed || Path === "Mask.Kind") this.RenderInspector();
             return;
         }
+        if (Path === "Layer.Object")
+        {
+            this.Recomposite();
+            this.RenderStack();
+            this.Chronicle("structure", `${this.ActiveLayer.Name} → ${this.ActiveLayer.Object ? this.ActiveObjectName(this.ActiveLayer.Object) : "every object"}`, "layer scope");
+            return;
+        }
         if (Path.startsWith("Layer.") || Path.startsWith("Channels.") || Path.startsWith("Decal."))
         {
             this.Recomposite();
@@ -3082,6 +3114,18 @@ class TexturePanel
                         Value: Layer.Blend,
                         Options: BlendOrdering.map((Blend) => ({ Value: Blend.Identifier, Label: Blend.Label })),
                     }),
+                    this.Project.Objects.length > 1
+                        ? SelectRow({
+                              Label: "Applies to",
+                              Path: "Layer.Object",
+                              Value: Layer.Object,
+                              Options: [
+                                  { Value: "", Label: "Every object" },
+                                  ...this.Project.Objects.map((Entry) => ({ Value: Entry.Identifier, Label: `${Entry.Name} · tile ${Entry.Tile}` })),
+                              ],
+                              Hint: "A scoped layer only paints its object's tile of the sheet.",
+                          })
+                        : "",
                     SliderRow({
                         Label: "Opacity",
                         Path: "Layer.Opacity",
@@ -3619,6 +3663,11 @@ class TexturePanel
                     <button class="button" data-action="document-open">${Icon("folder")}Open</button>
                 </div>
             </div>`;
+    }
+
+    ActiveObjectName(Identifier)
+    {
+        return this.Project.Objects.find((Entry) => Entry.Identifier === Identifier)?.Name || "an object";
     }
 
     BranchName(Identifier)

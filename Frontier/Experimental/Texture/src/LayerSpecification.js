@@ -194,6 +194,7 @@ export const CreateLayer = (Kind = "fill", Overrides = {}) =>
         Identifier: NextLayerIdentifier(),
         Name: LayerKindByIdentifier[Descriptor].Label,
         Kind: Descriptor,
+        Object: "",                 // empty is the whole scene; otherwise the object whose tile this layer paints
         Visible: true,
         Locked: false,
         Opacity: 1,
@@ -458,6 +459,7 @@ export const SanitiseLayer = (Candidate) =>
     const Layer = CreateLayer(LayerKindByIdentifier[Candidate.Kind] ? Candidate.Kind : "fill");
     Layer.Identifier = typeof Candidate.Identifier === "string" ? Candidate.Identifier : Layer.Identifier;
     Layer.Name = typeof Candidate.Name === "string" ? Candidate.Name.slice(0, 64) : Layer.Name;
+    Layer.Object = typeof Candidate.Object === "string" ? Candidate.Object.slice(0, 64) : "";
     Layer.Visible = Candidate.Visible !== false;
     Layer.Locked = Boolean(Candidate.Locked);
     Layer.Opacity = Clamp(Candidate.Opacity ?? 1, 0, 1);

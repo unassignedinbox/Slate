@@ -792,3 +792,13 @@ test("a .pigment document carries the project, the camera and the timeline", () 
     assert.equal(Legacy.Timeline, null);
     assert.equal(Legacy.Camera.Distance, 5);
 });
+
+test("a layer can be scoped to one object", () =>
+{
+    const Layer = CreateLayer("fill");
+    assert.equal(Layer.Object, "", "a new layer belongs to the whole scene");
+    const Scoped = SanitiseLayer({ Kind: "fill", Object: "object-7" });
+    assert.equal(Scoped.Object, "object-7");
+    assert.equal(SanitiseLayer({ Kind: "fill", Object: 42 }).Object, "", "a nonsense scope is dropped");
+    assert.ok(SanitiseLayer({ Kind: "fill", Object: "x".repeat(200) }).Object.length <= 64);
+});

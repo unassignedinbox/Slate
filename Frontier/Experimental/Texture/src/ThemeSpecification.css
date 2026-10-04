@@ -3255,3 +3255,36 @@ dialog {
 .timeline-foot .button {
   flex: 1;
 }
+
+/* ------------------------------------------------------------------ stack scope */
+.scope-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 16px 8px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #111;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.scope-toggle [data-icon],
+.scope-toggle svg {
+  width: 13px;
+  height: 13px;
+}
+.scope-toggle:hover {
+  color: var(--text);
+}
+.scope-toggle.active {
+  background: var(--raised);
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.scope-toggle.active [data-icon],
+.scope-toggle.active svg {
+  color: var(--green);
+}

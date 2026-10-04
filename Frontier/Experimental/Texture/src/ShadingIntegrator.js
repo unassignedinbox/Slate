@@ -28,6 +28,7 @@ import { ChannelSpecification, BlendIndex } from "./ChannelSpecification.js";
 import { GeneratorIndex } from "./GeneratorSpecification.js";
 import { FinishFamilyIndex, FinishStyleIndex } from "./FinishSpecification.js";
 import { EnvironmentByIdentifier } from "./MaterialSpecification.js";
+import { TileRectangle } from "./SceneStructure.js";
 
 const MaskKindIndex = (Kind) => ({ stroke: 1, generator: 2, colour: 3 })[Kind] ?? 0;
 
@@ -885,6 +886,15 @@ export class ShadingIntegrator
             Device.uniform4f(Uniforms.get("uFinishShape"), Finish.Scale * Scale, Finish.Density, Finish.Strength, Finish.Gloss);
             Device.uniform4f(Uniforms.get("uFinishTrim"), Finish.Coat, Finish.Angle, Finish.Variation, Finish.Seed);
         }
+
+        // Layer scope: the UDIM tile of the object the layer belongs to, or the whole sheet when it belongs to the scene.
+        const Range = Layer.Object ? (this.Surface?.Ranges || []).find((Entry) => Entry.Identifier === Layer.Object) : null;
+        if (Range)
+        {
+            const Rectangle = TileRectangle(Range.Tile, this.Surface.Tiles?.Columns || 1);
+            Device.uniform4f(Uniforms.get("uScope"), Rectangle.Left, Rectangle.Bottom, Rectangle.Size, 1);
+        }
+        else Device.uniform4f(Uniforms.get("uScope"), 0, 0, 1, 0);
 
         const Decal = Mark || Layer.Decal;
         const Transform = Decal.Transform;

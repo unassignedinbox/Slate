@@ -725,6 +725,8 @@ uniform vec3 uDecalTint;
 uniform float uDecalColorise;
 uniform float uDecalEmboss;
 
+uniform vec4 uScope;            // left, bottom, size of the object's tile; w on or off
+
 layout(location = 0) out vec4 oChannel0;
 layout(location = 1) out vec4 oChannel1;
 layout(location = 2) out vec4 oChannel2;
@@ -816,6 +818,13 @@ void main()
         Coverage *= SampleMask(
             uMaskKind, texture(uMaskMap, vCoordinate).a, vCoordinate, Position, Normal, Field,
             uMaskField, uMaskA, uMaskB, Lower0.rgb, uMaskColour, uMaskTolerance, uMaskSoftness, uMaskInvert);
+
+    // A layer scoped to one object only touches that object's tile of the sheet.
+    if (uScope.w > 0.5)
+    {
+        vec2 Inside = step(vec2(uScope.x, uScope.y), vCoordinate) * step(vCoordinate, vec2(uScope.x, uScope.y) + uScope.z);
+        Coverage *= Inside.x * Inside.y;
+    }
 
     Coverage = clamp(Coverage * uOpacity, 0.0, 1.0) * Surface.w;
     if (Coverage <= 0.0)

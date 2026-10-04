@@ -138,6 +138,12 @@ spatial index and a single stroke serve the whole scene: a brush dragged across 
 sheet stays square so texels stay square. Isolating simply reassembles the scene without the others. Clicking an object
 with the camera tool selects it; the texture view draws the tile grid over the sheet with each tile's number and owner.
 
+**Layers that belong to an object.** Every layer carries a scope: the whole scene by default, or one object. A scoped
+layer only paints its object's tile of the sheet, so a decal on the bonnet cannot bleed onto the wheel. The button above
+the stack switches between *Whole scene* and the selected object — scoped, the stack lists that object's layers over the
+scene-wide ones and follows the outliner as the selection changes, and anything added while it is on (or while the
+object is isolated) belongs to that object.
+
 **Timeline and branches.** The fourth inspector tab reads the session back as a story: every stroke, layer, material,
 decal, generator and surface change becomes a typed event on a vertical rail — coloured node, badge, short hash,
 timestamp, and a colour chip when the edit had a colour. The head follows undo and redo, and events past it dim rather
