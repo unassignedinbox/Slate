@@ -50,10 +50,11 @@ Frontier::Vehicle::ChassisState VehicleChassisBody::State() const noexcept
 { return {Position, Orientation, LinearVelocity, AngularVelocity}; }
 
 //------------------------------------------------------------------------------------------------------------------------ construction
-void VehicleInstanceSequence::Construct(const Frontier::Vehicle::VehicleGeometry& Geometry,
+bool VehicleInstanceSequence::Construct(const Frontier::Vehicle::VehicleGeometry& Geometry,
                                         const VehicleInstanceConfiguration& Configuration,
                                         Frontier::Vehicle::XPBDSoftTyre::GroundQuery Ground) noexcept
 {
+    Built = false;
     Instancing = Configuration;
     ActiveConfiguration = Frontier::Vehicle::VehicleSolverConfiguration{};
     ActiveConfiguration.ActiveScheme = Frontier::Vehicle::DrivingScheme::PacejkaDrivetrain;
@@ -94,7 +95,7 @@ void VehicleInstanceSequence::Construct(const Frontier::Vehicle::VehicleGeometry
             Body.Position = SpawnPosition;
             Body.Orientation = SpawnOrientation;
         }
-        else std::fputs("[Drive] Spawn terrain is incomplete; retaining requested pose.\n", stderr);
+        else { std::fputs("[Drive] Spawn terrain is incomplete; deployment refused.\n", stderr); return false; }
     }
     ActiveVehicleSolver.Build(ActiveConfiguration, h, Body.State());
 
@@ -103,6 +104,7 @@ void VehicleInstanceSequence::Construct(const Frontier::Vehicle::VehicleGeometry
     Accumulator = 0.0f;
     RestCaptured = false;
     Built = true;
+    return true;
 }
 
 void VehicleInstanceSequence::Reconfigure(const Frontier::Vehicle::VehicleSolverConfiguration& Edited) noexcept

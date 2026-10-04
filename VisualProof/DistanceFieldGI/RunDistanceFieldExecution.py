@@ -12,6 +12,10 @@ Engine = Root / "Frontier"
 Output = Root / "_AgentScratch/build/sdf-execution"
 Shaders = Output / "Shaders"
 Images = Output / "Images"
+# Use the CPU Vulkan implementation, not a rewritten approximation of the shader equations.
+CpuDrivers = sorted(Path("/usr/share/vulkan/icd.d").glob("*lvp*.json"))
+if CpuDrivers:
+    os.environ["VK_ICD_FILENAMES"] = str(CpuDrivers[0])
 Shaders.mkdir(parents=True, exist_ok=True)
 Images.mkdir(parents=True, exist_ok=True)
 for Name in ("DistanceFieldConstruct", "DistanceFieldCapture", "DistanceFieldCaptureFixed", "DistanceFieldRadiance", "DistanceFieldGIResolve", "DistanceFieldGIResolveFixed"):

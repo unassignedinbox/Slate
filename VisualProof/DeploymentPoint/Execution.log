@@ -1,0 +1,6 @@
+Executed on Linux with the real project callbacks and production vehicle solver; no GPU required.
+PASS consume-on-success: actor removed; player identity/loadout transferred and still alive; respawn refused
+PASS retained actor: 64 respawns preserve player data; failed/reentrant/throwing spawns retain the actor
+PASS disabled/invalid actors refused; strict configuration decode is atomic and preserves player metadata
+PASS real deployment callbacks: configured position/yaw, edit-mode safety, optional deletion, respawn edge and new-session restoration
+PASS 18 slope/heading fits, tyre envelopes, uneven terrain, missing/degenerate support, reset orientation and retained ground callback

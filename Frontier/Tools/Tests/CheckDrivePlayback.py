@@ -40,6 +40,8 @@ def Link(Name, Sources, Arguments=()):
     return Output
 
 
+Link("DeploymentPointChecks", ["../VisualProof/DeploymentPoint/DeploymentPointChecks.cpp"])
+
 Simulation = json.loads((Root / "Projects/Project-Drive/Build/DriveSimulationSources.json").read_text())["sources"]
 Link("DriveInterchangeChecks", [*Simulation, "Projects/Project-Drive/Source/DriveInterchangeChecks.cpp"])
 Link("DriveSpawnChecks", [*Simulation, "Projects/Project-Drive/Source/DriveSpawnChecks.cpp"])

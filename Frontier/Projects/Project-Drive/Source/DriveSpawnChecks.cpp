@@ -75,6 +75,8 @@ int main()
     assert((Vehicle.Chassis().Position - Spawn.Position).LengthSq() < 1e-10f);
     assert((Vehicle.Chassis().Orientation.Rotate({1,0,0}) - Spawn.Orientation.Rotate({1,0,0})).LengthSq() < 1e-10f);
     assert(Vehicle.Chassis().LinearVelocity.LengthSq() == 0);
+    Frontier::Drive::VehicleInstanceSequence Unsupported;
+    assert(!Unsupported.Construct(Geometry, Instance, [](const Vec3&, Vec3&, Vec3&) { return false; }));
     const auto PreviousQueries = Queries;
     Vehicle.Reconfigure(Vehicle.Configuration()); Vehicle.AdvanceVehicle({}, Rows, 1.0f/60);
     assert(Queries > PreviousQueries);

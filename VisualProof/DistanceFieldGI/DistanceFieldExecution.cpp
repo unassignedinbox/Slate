@@ -75,7 +75,14 @@ public:
         uint32_t Count=0u; Accept(vkEnumeratePhysicalDevices(Instance,&Count,nullptr));
         Require(Count>0u,"No Vulkan device: software Vulkan is acceptable but execution may not be skipped");
         std::vector<VkPhysicalDevice> PhysicalDevices(Count); Accept(vkEnumeratePhysicalDevices(Instance,&Count,PhysicalDevices.data()));
-        Physical=PhysicalDevices[0];
+        Physical=VK_NULL_HANDLE;
+        for (const auto Candidate : PhysicalDevices)
+        {
+            VkPhysicalDeviceProperties Information{};
+            vkGetPhysicalDeviceProperties(Candidate, &Information);
+            if (Information.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU) { Physical = Candidate; break; }
+        }
+        Require(Physical != VK_NULL_HANDLE, "CPU execution required: install the lavapipe Vulkan ICD");
         VkPhysicalDeviceProperties Properties{}; vkGetPhysicalDeviceProperties(Physical,&Properties);
         std::cout << "Vulkan execution device: " << Properties.deviceName << '\n';
         vkGetPhysicalDeviceMemoryProperties(Physical,&Memory);
@@ -225,6 +232,7 @@ int main(int Count,char** Arguments)
         Require(Count==3,"Usage: DistanceFieldExecution shader-directory output-directory");
         {
             ExecutionHost Host;
+            Require(Host.TextureIndexing, "CPU proof requires descriptor-indexed production textures; skipping is not validation");
             constexpr uint32_t Width=32u, Height=24u;
             std::filesystem::create_directories(Arguments[2]);
             std::vector<VertexRecord> Vertices(6);
@@ -294,6 +302,7 @@ int main(int Count,char** Arguments)
             Frame.CameraEye[0]=Frame.CameraEye[1]=0.0f; Frame.CameraEye[2]=0.5f;
             Frame.SunRadiance=0.0f; Frame.SkyAmbient[0]=Frame.SkyAmbient[1]=Frame.SkyAmbient[2]=0.0f;
             Frame.FeatureFlags=1u; Frame.ReflectionMode=0u; Frame.RenderWidth=Width; Frame.RenderHeight=Height;
+            std::vector<unsigned char> LastPixels;
             auto Execute=[&](uint32_t Frames,const char* Name)
             {
                 for(uint32_t Index=0u;Index<Frames;++Index)
@@ -324,6 +333,19 @@ int main(int Count,char** Arguments)
                 ReadCards(Stage.QueryNormalImage(),NormalCards);
                 Host.Submit();
                 auto Bytes=Host.Read(Pixels); Bytes.resize(Output.Width*Output.Height*4u);
+                LastPixels.assign(Bytes.begin(), Bytes.end());
+                for (size_t Index = 0u; Index < Bytes.size(); Index += 4u)
+                    Require(Bytes[Index + 3u] == 255u, "Unwritten/invalid resolve pixel");
+                for (const auto& Plane : {Cache, DiffuseCards, EmissiveCards, NormalCards})
+                {
+                    const auto Values = Host.Read(Plane);
+                    for (size_t Index = 0; Index < size_t(Stage.QueryCardWidth()) * Stage.QueryCardHeight() * 4u; ++Index)
+                    {
+                        float Value; std::memcpy(&Value, Values.data() + Index * sizeof(float), sizeof(float));
+                        Require(std::isfinite(Value), "Non-finite atlas value (hidden by tone mapping)");
+                        if (Plane.Buffer != NormalCards.Buffer) Require(Value >= 0.0f && Value <= 65504.0f, "Negative/unbounded atlas radiance or material");
+                    }
+                }
                 std::ofstream Image(std::filesystem::path(Arguments[2])/(std::string(Name)+".ppm"),std::ios::binary);
                 Image<<"P6\n"<<Output.Width<<' '<<Output.Height<<"\n255\n";
                 double Red=0.0, Green=0.0;
@@ -438,6 +460,43 @@ int main(int Count,char** Arguments)
                 Host.Replace(MaterialBuffer,Materials.data(),Materials.size()*sizeof(MaterialRecord)); ++Frame.MaterialRevision;
                 Require(Stage.Bring(Initialization),"Textured surface-card scene creation failed");
                 auto Bounced=Execute(8u,"textured-card-bounce");
+                const auto InitialTextured = LastPixels;
+                (void)Execute(32u, "static-warmup");
+                auto PreviousPixels = LastPixels;
+                double MaximumTemporalRms = 0.0;
+                uint32_t MaximumTemporalDifference = 0u, DarkHoles = 0u;
+                for (uint32_t FrameIndex = 0u; FrameIndex < 16u; ++FrameIndex)
+                {
+                    const auto Name = "static-frame-" + std::to_string(FrameIndex);
+                    (void)Execute(1u, Name.c_str());
+                    double SquaredDifference = 0.0;
+                    for (size_t Pixel = 1u; Pixel < Width * Height; ++Pixel) // pixel 0 is the intentional background sentinel
+                    {
+                        uint32_t Energy = 0u;
+                        for (size_t Channel = 0u; Channel < 3u; ++Channel)
+                        {
+                            const int Difference = int(LastPixels[Pixel*4u+Channel]) - int(PreviousPixels[Pixel*4u+Channel]);
+                            SquaredDifference += Difference * Difference;
+                            MaximumTemporalDifference = std::max(MaximumTemporalDifference, uint32_t(std::abs(Difference)));
+                            Energy += LastPixels[Pixel*4u+Channel];
+                        }
+                        if (Energy < 16u) ++DarkHoles;
+                    }
+                    MaximumTemporalRms = std::max(MaximumTemporalRms, std::sqrt(SquaredDifference / ((Width*Height-1u)*3u)));
+                    PreviousPixels = LastPixels;
+                }
+                std::cout << "ARTIFACT static textured fixture: max adjacent-frame RMS=" << MaximumTemporalRms
+                          << " max channel delta=" << MaximumTemporalDifference << " dark holes=" << DarkHoles << '\n';
+                Require(DarkHoles == 0u, "Unexpected black holes in a fully illuminated receiver");
+                Require(MaximumTemporalRms <= 3.0 && MaximumTemporalDifference <= 12u, "Visible temporal flicker in a static SDF scene");
+                Stage.Destroy(); Require(Stage.Bring(Initialization), "Artifact replay recreation failed");
+                (void)Execute(8u, "textured-replay");
+                uint32_t ReplayDifference = 0u;
+                for (size_t Index = 0u; Index < LastPixels.size(); ++Index)
+                    ReplayDifference = std::max(ReplayDifference, uint32_t(std::abs(int(LastPixels[Index]) - int(InitialTextured[Index]))));
+                std::cout << "ARTIFACT clean restart max channel delta=" << ReplayDifference << '\n';
+                Require(ReplayDifference <= 1u, "Stale history or non-reproducible production output after recreation");
+                std::cout << "PASS artifact checks: full writes, finite bounded atlases, no black holes, static temporal stability and pixelwise restart reproducibility\n";
                 auto DiffuseBytes=Host.Read(DiffuseCards), EmissionBytes=Host.Read(EmissiveCards), NormalBytes=Host.Read(NormalCards), BounceBytes=Host.Read(Cache);
                 const float* DiffuseValues=reinterpret_cast<const float*>(DiffuseBytes.data());
                 const float* EmissionValues=reinterpret_cast<const float*>(EmissionBytes.data());

@@ -7,6 +7,10 @@
 
 #include "VehicleInstanceSequence.h"
 #include "ChaseCameraSolver.h"
+#include "../../../Engine/ProjectInterchange/DeploymentCodec.h"
+#include <fstream>
+#include <filesystem>
+#include <memory>
 #include "../../../Engine/PhysicalDynamics/Vehicle/DriverInputIntegrator.h"
 
 #include <algorithm>
@@ -22,19 +26,49 @@ struct DriveSequence
 {
     FrontierProjectHostInterchange Reception{};
     Frontier::Vehicle::VehicleGeometry Geometry;
-    Frontier::Drive::VehicleInstanceSequence Vehicle;
+    std::unique_ptr<Frontier::Drive::VehicleInstanceSequence> Vehicle;
+    Frontier::DeploymentPoint DeploymentTemplate;
+    Frontier::DeploymentSequence Deployments;
+    std::optional<Frontier::DeploymentReading> ActivePlayer;
+    uint64_t DeploymentIdentifier = 0u;
+    uint64_t SpawnNumber = 0u;
     Frontier::Drive::ChaseCameraSolver Camera;
     Frontier::Vehicle::DriverInputIntegrator Input;
     std::vector<Frontier::InstanceRecord> Poses{5u};
     uint32_t PreviousTransport = 0u;
     bool PreviousReset = false;
 
-    void Construct()
+    void RestoreDeployment()
     {
-        Frontier::Drive::VehicleInstanceConfiguration Placement;
-        Placement.SpawnHeight = Geometry.CoMHeight + 0.02f;
-        Vehicle.Construct(Geometry, Placement);
+        Deployments.Retire(DeploymentIdentifier);
+        DeploymentIdentifier = Deployments.Register(DeploymentTemplate);
+        Vehicle.reset();
+        ActivePlayer.reset();
         Input = Frontier::Vehicle::DriverInputIntegrator{};
+    }
+
+    bool DeployVehicle()
+    {
+        try
+        {
+            auto Spawned = Deployments.Deploy(DeploymentIdentifier, [&](const Frontier::DeploymentPoint& Point) -> uint64_t
+            {
+                if (Point.Archetype != "ControlVehicle") return 0u;
+                auto Candidate = std::make_unique<Frontier::Drive::VehicleInstanceSequence>();
+                Frontier::Drive::VehicleInstanceConfiguration Placement;
+                Placement.SpawnLocation = {Point.Position[0], Point.Position[1], Point.Position[2]};
+                Placement.SpawnHeight = Point.Position[2];
+                Placement.SpawnRotation = {Point.Rotation[0], Point.Rotation[1], Point.Rotation[2], Point.Rotation[3]};
+                if (!Candidate->Construct(Geometry, Placement)) return 0u;
+                Vehicle = std::move(Candidate); // hooks retain their allocated object's address
+                return ++SpawnNumber;
+            });
+            if (!Spawned) return false;
+            ActivePlayer = std::move(Spawned); // player data outlives a consumed deployment actor
+            Input = Frontier::Vehicle::DriverInputIntegrator{};
+            return true;
+        }
+        catch (...) { return false; }
     }
 
     void DeliverPoses()
@@ -62,7 +96,7 @@ struct DriveSequence
 
     void DeliverCamera(float Seconds, bool Snap)
     {
-        const auto& Chassis = Vehicle.Chassis();
+        const auto& Chassis = Vehicle->Chassis();
         const auto Forward = Chassis.Orientation.Rotate({1.0f, 0.0f, 0.0f});
         const Frontier::Vector3 Position{Chassis.Position.x, Chassis.Position.y, Chassis.Position.z};
         const Frontier::Vector3 Direction{Forward.x, Forward.y, Forward.z};
@@ -138,7 +172,19 @@ uint32_t FRONTIER_CODE_IMAGE_CALL ConstructProject(
         return 0u;
     }
     Sequence->Reception = *HostInterchange;
-    Sequence->Construct();
+    Sequence->DeploymentTemplate.Position[2] = Sequence->Geometry.CoMHeight + 0.02f;
+    if (ActiveLaunch->SpecificationLocation && ActiveLaunch->SpecificationLocation[0])
+    {
+        std::ifstream Stream(std::filesystem::u8path(ActiveLaunch->SpecificationLocation));
+        std::string Explanation;
+        if (!Stream || !Frontier::DecodeDeploymentPoint(Stream, Sequence->DeploymentTemplate, Explanation))
+        {
+            delete Sequence;
+            WriteRefusal(Refusal, FrontierProjectRefusalConstruction, Explanation.empty() ? "Cannot read deployment specification" : Explanation.c_str());
+            return 0u;
+        }
+    }
+    Sequence->RestoreDeployment();
     *ProjectRecord = Sequence;
     return 1u;
 }
@@ -164,10 +210,25 @@ uint32_t FRONTIER_CODE_IMAGE_CALL AdvanceProject(
     const uint32_t Transport = Reading->TransportNumber;
     const bool Started = Transport != 0u && Sequence.PreviousTransport == 0u;
     const bool Reset = Reading->ResetPressed != 0u && !Sequence.PreviousReset && Reading->KeyboardCaptured == 0u;
-    if (Started || Reset || (Transport == 0u && Sequence.PreviousTransport != 0u)) Sequence.Construct();
+    // Stop/new Play is a new editor session. Reset inside Play is a respawn, never a resurrection of a consumed point.
+    if (Transport == 0u && Sequence.PreviousTransport != 0u) Sequence.RestoreDeployment();
+    bool Deployed = false;
+    if (Transport != 0u && (Started || Reset))
+    {
+        Deployed = Sequence.DeployVehicle();
+        if (!Deployed && Sequence.Reception.ReceiveDiagnostic)
+        {
+            FrontierProjectDiagnostic Diagnostic{};
+            Diagnostic.StructureSize = sizeof(Diagnostic);
+            Diagnostic.SeverityNumber = 1u;
+            Diagnostic.SubjectName = "DeploymentPoint";
+            Diagnostic.Explanation = "Deployment refused: point disabled/consumed, unsupported archetype, or missing terrain support. Existing player preserved.";
+            Sequence.Reception.ReceiveDiagnostic(&Diagnostic, Sequence.Reception.ProjectReception);
+        }
+    }
     Sequence.PreviousTransport = Transport;
     Sequence.PreviousReset = Reading->ResetPressed != 0u;
-    if (Transport == 0u) return 1u;
+    if (Transport == 0u || !Sequence.Vehicle) return 1u;
 
     const float Seconds = Reading->Paused ? (Reading->SimulationStep ? 1.0f / 60.0f : 0.0f)
                                          : std::clamp(ActiveCycle->CycleSeconds, 0.0f, 0.1f);
@@ -178,12 +239,12 @@ uint32_t FRONTIER_CODE_IMAGE_CALL AdvanceProject(
     Sequence.Input.ForwardSteerRightKey(Driving && Reading->MoveAxisX > 0.0f);
     Sequence.Input.ForwardHandbrakeKey(Driving && Reading->HandbrakePressed != 0u);
     const auto Command = Sequence.Input.Advance(Seconds);
-    if (Seconds > 0.0f || Started || Reset)
+    if (Seconds > 0.0f || Deployed)
     {
-        Sequence.Vehicle.AdvanceVehicle(Command.Drive, Sequence.Poses, Seconds);
+        Sequence.Vehicle->AdvanceVehicle(Command.Drive, Sequence.Poses, Seconds);
         Sequence.DeliverPoses();
     }
-    if (Transport == 1u) Sequence.DeliverCamera(Seconds, Started || Reset);
+    if (Transport == 1u) Sequence.DeliverCamera(Seconds, Deployed);
     return 1u;
 }
 

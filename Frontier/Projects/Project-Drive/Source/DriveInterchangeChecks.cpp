@@ -9,6 +9,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
+#include <filesystem>
 
 namespace {
 struct ReceptionMetrics
@@ -127,4 +129,33 @@ int main()
     std::puts("PASS text-input capture suppresses driving");
     Project.RetireProject(Record);
     std::puts("PASS project retirement");
+    // Exercise the actual project callback, not only the generic actor container.
+    for (bool Consume : {false, true})
+    {
+        const std::string Specification = (std::filesystem::current_path() / "DeploymentCheck.frontier").string();
+        {
+            std::ofstream File(Specification);
+            File << "[DeploymentPoint]\nPosition = [2,3,0.55]\nPlayerIdentifier = 73\n"
+                    "Rotation = [0,0,0.70710678,0.70710678]\nDeleteAfterSpawn = " << (Consume ? "true" : "false") << "\n";
+        }
+        Launch.SpecificationLocation = Specification.c_str();
+        Reception = {}; Input = {}; Input.StructureSize = sizeof(Input); Record = nullptr;
+        assert(Project.ConstructProject(&Launch, &Host, &Record, &Refusal));
+        Input.ResetPressed = 1u; Advance(1); // edit-mode R must not consume a pre-game deployment actor
+        Input.ResetPressed = 0u; Input.TransportNumber = 1u; Input.Paused = 1u; Advance(1);
+        assert(Reception.Mutations == 5u);
+        assert(std::abs(Reception.Body[12] - 2.0f) < 1e-4f && std::abs(Reception.Body[13] - 3.0f) < 1e-4f);
+        assert(std::abs(Reception.Body[0]) < 1e-4f && Reception.Body[1] > .99f);
+        Input.ResetPressed = 1u; Advance(1);
+        assert(Reception.Mutations == (Consume ? 5u : 10u));
+        Advance(1); // held key never repeatedly deploys
+        assert(Reception.Mutations == (Consume ? 5u : 10u));
+        Input.TransportNumber = 0u; Advance(1);
+        Input.TransportNumber = 1u; Advance(1); // a new editor session restores the authored point
+        assert(Reception.Mutations == (Consume ? 10u : 15u));
+        Project.RetireProject(Record);
+        std::filesystem::remove(Specification);
+    }
+    std::puts("PASS real deployment callbacks: configured position/yaw, edit-mode safety, optional deletion, respawn edge and new-session restoration");
+
 }

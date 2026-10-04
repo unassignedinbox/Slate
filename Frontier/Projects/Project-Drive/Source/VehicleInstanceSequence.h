@@ -71,7 +71,7 @@ class VehicleInstanceSequence
 public:
     // Brings the solver up over the DriveCourse ground and seeds the chassis at the spawn pose. `geometry`
     //    supplies the real ControlVehicle socket layout; `config` is filled from it via ApplyGeometry.
-    void Construct(const Frontier::Vehicle::VehicleGeometry& Geometry,
+    bool Construct(const Frontier::Vehicle::VehicleGeometry& Geometry,
                    const VehicleInstanceConfiguration& Configuration,
                    Frontier::Vehicle::XPBDSoftTyre::GroundQuery Ground = {}) noexcept;
 
