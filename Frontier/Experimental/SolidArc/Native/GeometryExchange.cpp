@@ -121,13 +121,15 @@ EMSCRIPTEN_KEEPALIVE const char* DescribeDocument()
            << ",\"dragging\":" << Host.Gizmo().Dragging() << ",\"hover\":" << int(Host.Gizmo().Hovered())
            << ",\"readout\":" << EncodeText(Host.Gizmo().Drag().Readout) << ",\"grips\":[";
     Separator = false;
-    for (int Index = 1; Index <= 12; ++Index)
+    const bool Selected = Host.Document().SelectedCount() + Host.Document().SelectedPoleCount() + Host.Document().SelectedFaceCount() + Host.Document().SelectedEdgeCount() > 0;
+    for (int Index = 1; Selected && Host.GizmoVisible() && Index <= 12; ++Index)
     {
         const auto Grip = static_cast<GizmoGrip>(Index);
         if (!Host.Gizmo().Visible(Grip)) continue;
         const Vec3 Anchor = Host.Gizmo().GripAnchor(Grip, Host.Camera(), Host.Raster().Height());
         double Horizontal = 0, Vertical = 0;
         if (!Host.Camera().WorldToPixel(Anchor, Host.Raster().Width(), Host.Raster().Height(), Horizontal, Vertical)) continue;
+        if (!std::isfinite(Horizontal) || !std::isfinite(Vertical)) continue;
         if (Separator) Stream << ',';
         Separator = true;
         Stream << "{\"id\":" << Index << ",\"name\":" << EncodeText(GizmoGripName(Grip))

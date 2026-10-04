@@ -1389,7 +1389,8 @@ Vec3 ConsoleHost::SelectionPivot() const noexcept
         }
         if (!B.Empty()) return B.Centre();
     }
-    return Scene.Bounds(true).Centre();
+    const auto Bounds = Scene.Bounds(true);
+    return Bounds.Empty() ? Plane.Origin : Bounds.Centre();
 }
 
 void ConsoleHost::RefreshGizmoPivot() noexcept
