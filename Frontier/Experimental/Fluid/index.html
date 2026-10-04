@@ -218,11 +218,11 @@
             </select>
             <div class="viewport-bar-end">
               <select id="mesh-res-select" aria-label="Garment mesh resolution" title="Garment cloth mesh resolution">
-                <option value="48">48×36 · Fast</option>
-                <option value="64">64×48 · Standard</option>
-                <option value="96" selected>96×72 · High HD</option>
-                <option value="128">128×96 · Ultra</option>
-                <option value="160">160×120 · Couture</option>
+                <option value="96">96×68 · Standard (6.5K vtx)</option>
+                <option value="144">144×102 · High HD (14.7K vtx)</option>
+                <option value="192" selected>192×136 · Ultra HD (26K vtx)</option>
+                <option value="256">256×180 · Couture 4K (46K vtx)</option>
+                <option value="320">320×224 · Extreme 8K (71K vtx)</option>
               </select
               ><select id="render-channel" aria-label="Render channel"></select
               ><button
@@ -285,7 +285,7 @@
               </div>
               <div class="node-quick-bar" id="node-quick-bar">
                 <span class="node-quick-badge" id="active-node-badge">SKIRT SILHOUETTE</span>
-                <label>Mesh <input type="range" id="quick-grid-res" min="32" max="160" step="4" value="96" title="Garment mesh resolution (32–160)" /></label>
+                <label>Mesh <input type="range" id="quick-grid-res" min="32" max="320" step="8" value="192" title="Garment mesh resolution (32–320)" /></label>
                 <label>Length <input type="range" id="quick-skirt-length" min="0.35" max="1.02" step="0.01" value="0.92" /></label>
                 <label>Flare <input type="range" id="quick-skirt-flare" min="0.10" max="1.35" step="0.01" value="0.62" /></label>
                 <label>Pleats <input type="range" id="quick-pleats" min="0" max="36" step="2" value="16" /></label>
@@ -348,7 +348,7 @@
               </div>
               <div class="viewport-right-hud">
                 <span class="live-metric"><b id="fps">—</b> FPS</span
-                ><span class="live-metric" id="grid-hud" title="Click to cycle garment mesh resolution (64 / 96 / 128 / 160)" style="cursor:pointer;">96×72 MESH</span>
+                ><span class="live-metric" id="grid-hud" title="Click to cycle garment mesh resolution (144 / 192 / 256 / 320)" style="cursor:pointer;">192×136 MESH</span>
               </div>
               <div class="viewport-help">
                 <span>Drag to orbit</span><i>·</i

@@ -54,7 +54,7 @@ export const DEFAULT_PARAMS = {
   pieDownPressure: 0.0,
 
   // WebGPU XPBD Solver & Physics
-  gridResolution: 96,
+  gridResolution: 192,
   substeps: 14,
   stretchCompliance: 0.006,
   shearCompliance: 0.018,
@@ -173,7 +173,7 @@ export const CONTROL_GROUPS = [
   {
     title: "XPBD Solver & Wind",
     controls: [
-      { key: "gridResolution", label: "Garment mesh resolution", type: "range", min: 32, max: 160, step: 4 },
+      { key: "gridResolution", label: "Garment mesh resolution", type: "range", min: 32, max: 320, step: 8 },
       { key: "substeps", label: "XPBD substeps", type: "range", min: 4, max: 24, step: 1 },
       { key: "stretchCompliance", label: "Warp / weft stretch", type: "range", min: 0.0, max: 0.08, step: 0.001 },
       { key: "shearCompliance", label: "Bias shear drape", type: "range", min: 0.0, max: 0.15, step: 0.002 },
@@ -261,6 +261,7 @@ export const PRESETS = {
     triggerTwirlOnLoad: true,
     params: {
       dressStyle: 1,
+      gridResolution: 256,
       skirtLength: 0.72,
       skirtFlare: 0.78,
       waistCinch: 0.92,

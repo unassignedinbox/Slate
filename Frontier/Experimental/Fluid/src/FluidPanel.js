@@ -347,12 +347,12 @@ class ClothPanel {
     const MeshResSelect = Select("#mesh-res-select");
     if (MeshResSelect) {
       MeshResSelect.querySelector("[data-custom]")?.remove();
-      if (![48, 64, 96, 128, 160].includes(this.Parameters.gridResolution)) {
-        const c = this.Parameters.gridResolution;
-        const r = this.Engine?.numRows || Math.round(c * 0.75);
+      if (![96, 144, 192, 256, 320].includes(this.Parameters.gridResolution)) {
+        const c = this.Engine?.numCols || this.Parameters.gridResolution;
+        const r = this.Engine?.numRows || Math.round(c * 0.72);
         MeshResSelect.insertAdjacentHTML(
           "beforeend",
-          `<option data-custom value="${c}">${c}×${r} · Custom</option>`,
+          `<option data-custom value="${this.Parameters.gridResolution}">${c}×${r} · Custom</option>`,
         );
       }
       MeshResSelect.value = this.Parameters.gridResolution;
@@ -951,7 +951,7 @@ class ClothPanel {
       );
     });
     Select("#grid-hud")?.addEventListener("click", () => {
-      const cycle = [64, 96, 128, 160, 48];
+      const cycle = [144, 192, 256, 320, 96];
       const cur = this.Parameters.gridResolution;
       const next = cycle[(cycle.indexOf(cur) + 1) % cycle.length];
       this.ApplyParameter("gridResolution", next);

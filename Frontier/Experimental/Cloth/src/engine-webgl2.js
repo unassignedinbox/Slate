@@ -392,7 +392,7 @@ export class WebGL2ClothEngine {
             const iDown = idxOf(c, r + 1);
             addSpring(iDown, rl[i4 + 1], warpStiff, lockingRelief * 0.5);
             addSpring(idxOf(c + 1, r + 1), rl[i4 + 2], shearStiff);
-            addSpring(idxOf(c - 1, r + 1), rl[i4 + 2], shearStiff);
+            addSpring(idxOf(c - 1, r + 1), rl[iLeft * 4 + 2], shearStiff);
           }
           if (r > 0) {
             const iUp = idxOf(c, r - 1);
@@ -400,7 +400,7 @@ export class WebGL2ClothEngine {
             const iLU = idxOf(c - 1, r - 1);
             const iRU = idxOf(c + 1, r - 1);
             addSpring(iLU, rl[iLU * 4 + 2], shearStiff);
-            addSpring(iRU, rl[iRU * 4 + 2], shearStiff);
+            addSpring(iRU, rl[iUp * 4 + 2], shearStiff);
           }
 
           const iR2 = idxOf(c + 2, r);

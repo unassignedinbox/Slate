@@ -80,8 +80,8 @@ export class HumanAvatar {
 
     // 1. Torso + Pelvis + Neck + Head Loft (y from 0.79m to 1.72m)
     const torsoRings = [];
-    const torsoSegs = 40;
-    const torsoSteps = 54;
+    const torsoSegs = 64;
+    const torsoSteps = 96;
     for (let i = 0; i <= torsoSteps; i++) {
       const t = i / torsoSteps;
       const y = 0.79 + t * (1.72 - 0.79);
@@ -112,28 +112,30 @@ export class HumanAvatar {
         rx = 0.120 + 0.032 * smooth;
         rz = 0.092 + 0.020 * Math.sin(u * Math.PI);
         centerZ = 0.006 * Math.sin(u * Math.PI);
-      } else if (y < 1.41) {
-        // Upper chest (1.30) to broad deltoid/clavicle shoulders (1.38) then taper to neck base (1.41)
-        const u = (y - 1.30) / 0.11;
-        const shoulderPeak = Math.exp(-Math.pow((y - 1.375) / 0.032, 2));
-        const neckTaper = u > 0.65 ? (u - 0.65) / 0.35 : 0;
-        rx = (0.152 + 0.040 * shoulderPeak) * (1 - 0.68 * neckTaper);
-        rz = (0.100 + 0.008 * shoulderPeak) * (1 - 0.46 * neckTaper);
-        centerZ = -0.004 * u;
+      } else if (y < 1.42) {
+        // Upper chest (1.30) to broad deltoid/clavicle shoulders (1.375) then smooth C1 taper to neck base (1.42)
+        const u = (y - 1.30) / 0.12;
+        const shoulderPeak = Math.exp(-Math.pow((y - 1.372) / 0.030, 2));
+        const neckTaper = u > 0.52 ? 0.5 - 0.5 * Math.cos(((u - 0.52) / 0.48) * Math.PI) : 0;
+        const chestRx = 0.152 + 0.038 * shoulderPeak;
+        const chestRz = 0.100 + 0.008 * shoulderPeak;
+        rx = chestRx * (1 - neckTaper) + 0.053 * neckTaper;
+        rz = chestRz * (1 - neckTaper) + 0.055 * neckTaper;
+        centerZ = -0.003 * (1 - neckTaper);
       } else if (y < 1.52) {
-        // Slender neck column
-        const u = (y - 1.41) / 0.11;
-        rx = 0.054 - 0.004 * Math.sin(u * Math.PI);
-        rz = 0.056 - 0.003 * Math.sin(u * Math.PI);
-        centerZ = 0.004 * u;
+        // Smooth cylindrical neck column (1.42 to 1.52)
+        const u = (y - 1.42) / 0.10;
+        rx = 0.053 - 0.003 * Math.sin(u * Math.PI);
+        rz = 0.055 - 0.002 * Math.sin(u * Math.PI);
+        centerZ = 0.003 * u;
       } else {
-        // Sculpted head (1.52 to 1.72)
+        // Sculpted head (1.52 to 1.72) — smoothly expands from neck (0.053) into jaw/cranium and closes at crown (u=1)
         const u = (y - 1.52) / 0.20;
-        const sphereProfile = Math.sqrt(Math.max(0.002, 1 - Math.pow(u * 2 - 1, 2)));
-        const jawTaper = u < 0.45 ? 0.78 + 0.22 * (u / 0.45) : 1.0;
-        rx = 0.076 * sphereProfile * jawTaper;
-        rz = 0.090 * sphereProfile * (u < 0.4 ? 0.88 : 1.0);
-        centerZ = 0.010 * (1 - u * 0.6);
+        const neckBlend = Math.exp(-Math.pow(u / 0.18, 2));
+        const craniumEnv = Math.sin(Math.pow(u, 0.62) * Math.PI);
+        rx = 0.053 * neckBlend + 0.078 * craniumEnv * (1 - 0.35 * neckBlend);
+        rz = 0.055 * neckBlend + 0.092 * craniumEnv * (1 - 0.30 * neckBlend);
+        centerZ = 0.003 * neckBlend + 0.012 * Math.sin(u * Math.PI) * (1 - u * 0.4);
       }
 
       const points = [];
@@ -180,8 +182,8 @@ export class HumanAvatar {
     // 2. Left & Right Articulated Legs (y from 0.85m hip down to 0.0m foot)
     const buildLeg = (side, boneId) => {
       const legRings = [];
-      const segs = 22;
-      const steps = 28;
+      const segs = 32;
+      const steps = 42;
       for (let i = 0; i <= steps; i++) {
         const t = i / steps; // 0 = hip (0.85m), 1 = sole (0.01m)
         const y = 0.85 * (1 - t) + 0.01 * t;
@@ -236,8 +238,8 @@ export class HumanAvatar {
     // 3. Left & Right Articulated Arms (graceful A-pose abduction away from dress waist/skirt)
     const buildArm = (side, boneId) => {
       const armRings = [];
-      const segs = 18;
-      const steps = 22;
+      const segs = 28;
+      const steps = 34;
       const shoulder = [side * 0.178, 1.375, -0.008];
       const elbow = [side * 0.255, 1.115, -0.022];
       const wrist = [side * 0.315, 0.875, 0.018];

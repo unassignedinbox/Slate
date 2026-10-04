@@ -4,7 +4,7 @@
  *  - Cerda & Mahadevan [2003] characteristic wrinkle wavelength λ & optimal orthotropic resolution (r_weft, r_warp)
  *  - Vandeparre et al. [2011] wrinklon wavelength transition L_w & power law Δr = x^m
  *  - Stationary garment boundary condition sources (Shirring, Folding, Long-Short Stitching, Down-Filling, High-Collision)
- *  - Non-uniform Sizing Map S(u, v) adaptive vertex grading & shirring contraction rest-lengths
+ *  - Harmonic pleat-locked high-density subdivision (up to 320×224 = 71,680 vertices) with twist-free intrinsic rest lengths
  */
 
 import { PieSizingEstimator } from "./PieSizingEstimator.js";
@@ -36,13 +36,25 @@ export class DressGenerator {
     const pieActive = params.pieAutoResolution !== false;
     const anisoRatio = Math.max(0.6, Math.min(2.5, params.pieAnisotropy ?? 1.45));
 
-    const baseCols = Math.max(24, Math.min(160, Math.round(params.gridResolution || 96)));
-    const numCols = baseCols;
-    // §4.1.2 Orthotropic Anisotropy: coarser warp resolution along vertical hang when pieAnisotropy > 1
+    const pleatCount = Math.round(params.pleatCount ?? 16);
+    const rawCols = Math.max(32, Math.min(320, Math.round(params.gridResolution || 192)));
+
+    // §4.2.3 Folding / Pleating Harmonic Alignment:
+    // Lock numCols to an integer multiple of pleatCount (with >= 6 columns per pleat when possible)
+    // so every pleat crest and valley lands symmetrically on mesh vertices with zero Moiré / sawtooth aliasing.
+    let numCols = rawCols;
+    if (pleatCount >= 4 && rawCols >= 64) {
+      const colsPerPleat = Math.max(4, Math.round(rawCols / pleatCount));
+      // Prefer even colsPerPleat so both crests (+1) and troughs (-1) hit exact vertices
+      const evenColsPerPleat = colsPerPleat % 2 === 0 ? colsPerPleat : colsPerPleat + 1;
+      numCols = Math.max(32, Math.min(320, pleatCount * evenColsPerPleat));
+    }
+
+    // §4.1.2 Orthotropic Anisotropy: warp row resolution scaled by anisotropy ratio
     const warpAspect = pieActive
-      ? Math.max(0.56, Math.min(0.92, 0.84 / Math.pow(anisoRatio, 0.28)))
-      : 0.78;
-    const numRows = Math.max(20, Math.min(128, Math.round(numCols * warpAspect)));
+      ? Math.max(0.62, Math.min(0.88, 0.78 / Math.pow(anisoRatio, 0.22)))
+      : 0.72;
+    const numRows = Math.max(24, Math.min(224, Math.round(numCols * warpAspect)));
     const vertexCount = numCols * numRows;
 
     const dressStyle = params.dressStyle ?? 0;
@@ -51,13 +63,13 @@ export class DressGenerator {
     const waistCinch = params.waistCinch ?? 0.82;   // 0..1 waist tailoring tightness
     const necklineDepth = params.necklineDepth ?? 0.14;
     const strapWidth = params.strapWidth ?? 0.065;
-    const pleatCount = Math.round(params.pleatCount ?? 16);
     const pleatDepth = params.pleatDepth ?? 0.018;
     const asymmetry = params.asymmetry ?? 0.0;
     const sleeveDrape = params.sleeveDrape ?? 0.12;
     const shirringRatio = Math.max(0.35, Math.min(1.0, params.pieShirringRatio ?? 0.64));
 
     const initialPositions = new Float32Array(vertexCount * 4);
+    const unpleatedPositions = new Float32Array(vertexCount * 3);
     const anchorTargets = new Float32Array(vertexCount * 4);
     const uvsAndPanel = new Float32Array(vertexCount * 4);
     const restLengths = new Float32Array(vertexCount * 4);
@@ -66,20 +78,17 @@ export class DressGenerator {
     const waistRowFrac = 0.28; // Row fraction where bodice meets skirt at natural waist (y ~ 1.04m)
     const hemBaseY = Math.max(0.05, 1.04 - skirtLength);
 
-    // §4.3 Non-Uniform Sizing Map Vertex Distribution:
-    // Build warp (v) and weft (u) cumulative inverse-sizing distribution CDFs so mesh vertices
-    // concentrate in fine-wrinkle regions (shirred waistband v=0.28, neckline v=0, side seams, pleat folds, hip/knee collision zones)
+    // §4.3 Smooth Non-Uniform Warp Sizing Grading (vMapped):
+    // Gently concentrates vertical rows near the shirred waistband (v = 0.28) and hip contour
+    // while maintaining C∞ smoothness across the entire skirt.
     const vMapped = new Float32Array(numRows);
-    const uMapped = new Float32Array(numCols);
-
     if (pieActive) {
       const N_SAMPLES = 256;
       const vCdf = new Float32Array(N_SAMPLES + 1);
       for (let i = 1; i <= N_SAMPLES; i++) {
         const vs = (i - 0.5) / N_SAMPLES;
         const sMeters = (pieReport.sampleSizingMeters(0.25, vs) + pieReport.sampleSizingMeters(0.0, vs)) * 0.5;
-        // Weight inversely proportional to local sizing r(u,v) (blended with uniform for smooth grading)
-        const invWeight = 0.42 + 0.58 * Math.pow(0.006 / Math.max(0.0025, sMeters), 0.55);
+        const invWeight = 0.72 + 0.28 * Math.pow(0.006 / Math.max(0.0025, sMeters), 0.35);
         vCdf[i] = vCdf[i - 1] + invWeight;
       }
       const vTotal = vCdf[N_SAMPLES];
@@ -96,31 +105,8 @@ export class DressGenerator {
         const span = Math.max(1e-6, vCdf[idx] - prevCdf);
         vMapped[r] = Math.max(0.0, Math.min(1.0, (idx - 1 + (target - prevCdf) / span) / N_SAMPLES));
       }
-
-      const uCdf = new Float32Array(N_SAMPLES + 1);
-      for (let i = 1; i <= N_SAMPLES; i++) {
-        const us = (i - 0.5) / N_SAMPLES;
-        const sMeters = pieReport.sampleSizingMeters(us, waistRowFrac + 0.12);
-        const invWeight = 0.62 + 0.38 * Math.pow(0.006 / Math.max(0.0025, sMeters), 0.45);
-        uCdf[i] = uCdf[i - 1] + invWeight;
-      }
-      const uTotal = uCdf[N_SAMPLES];
-      for (let c = 0; c < numCols; c++) {
-        const target = (c / numCols) * uTotal;
-        let lo = 0, hi = N_SAMPLES;
-        while (lo < hi) {
-          const mid = (lo + hi) >> 1;
-          if (uCdf[mid] < target) lo = mid + 1;
-          else hi = mid;
-        }
-        const idx = Math.max(1, lo);
-        const prevCdf = uCdf[idx - 1];
-        const span = Math.max(1e-6, uCdf[idx] - prevCdf);
-        uMapped[c] = Math.max(0.0, Math.min(0.9999, (idx - 1 + (target - prevCdf) / span) / N_SAMPLES));
-      }
     } else {
       for (let r = 0; r < numRows; r++) vMapped[r] = r / (numRows - 1);
-      for (let c = 0; c < numCols; c++) uMapped[c] = c / numCols;
     }
 
     // Compute 3D tailored initial positions on the human avatar
@@ -128,7 +114,7 @@ export class DressGenerator {
       const v = vMapped[r]; // 0 = top neckline/straps, 1 = bottom hemline
 
       for (let c = 0; c < numCols; c++) {
-        const u = uMapped[c];
+        const u = c / numCols;
         const angle = u * Math.PI * 2;
         const cosA = Math.cos(angle); // +X right shoulder/hip, -X left shoulder/hip
         const sinA = Math.sin(angle); // +Z front chest/skirt, -Z back spine
@@ -217,41 +203,44 @@ export class DressGenerator {
           }
         }
 
-        // Radial accordion pleats + Cerda & Mahadevan [2003] characteristic wrinklon harmonic
-        const pleatEnv = v > waistRowFrac * 0.6
-          ? Math.min(1.0, (v - waistRowFrac * 0.6) / (1 - waistRowFrac * 0.6))
+        // Smooth C1 radial accordion pleat envelope (0 in bodice, smoothly grows below waist)
+        const pleatRaw = v > waistRowFrac
+          ? (v - waistRowFrac) / (1 - waistRowFrac)
           : 0.0;
+        const pleatEnv = pleatRaw * pleatRaw * (3 - 2 * pleatRaw);
         const pleatWave = pleatCount > 0
-          ? Math.sin(angle * pleatCount) * pleatDepth * (0.35 + 0.65 * pleatEnv)
+          ? Math.sin(angle * pleatCount) * pleatDepth * pleatEnv
           : 0.0;
 
-        // Shirring micro-wrinkles near waistband (v ≈ waistRowFrac) per §4.2.2
-        const waistShirringEnv = Math.exp(-Math.pow((v - waistRowFrac) / 0.085, 2)) * (1.0 - shirringRatio);
-        const shirringWave = Math.sin(angle * Math.max(18, Math.round(numCols * 0.42))) * 0.009 * waistShirringEnv;
+        // Smooth organic couture drape fold harmonic (well below Nyquist limit)
+        const drapeHarmonic = Math.cos(angle * 6 + 0.4) * 0.004 * Math.pow(pleatRaw, 1.3);
 
-        // Secondary organic couture drape fold harmonic
-        const drapeHarmonic = Math.cos(angle * 7 + 0.4) * 0.006 * Math.pow(v, 1.4);
-
-        const effRx = rx + pleatWave + shirringWave + drapeHarmonic;
-        const effRz = rz + pleatWave + shirringWave + drapeHarmonic;
+        const effRx = rx + pleatWave + drapeHarmonic;
+        const effRz = rz + pleatWave + drapeHarmonic;
 
         const x = cosA * effRx;
         const z = centerZ + sinA * effRz;
+
+        // Store unpleated base shell position for intrinsic vertical warp rest-length calculation
+        const idx = r * numCols + c;
+        const idx3 = idx * 3;
+        unpleatedPositions[idx3 + 0] = cosA * rx;
+        unpleatedPositions[idx3 + 1] = y;
+        unpleatedPositions[idx3 + 2] = centerZ + sinA * rz;
 
         // Pin / Tailoring Weight calculation:
         let pinStrength = 0.0;
         if (r === 0) {
           const strapMask = Math.exp(-Math.pow((Math.abs(cosA) - 0.82) / Math.max(0.08, strapWidth * 2.2), 2));
-          pinStrength = 0.72 + 0.26 * strapMask;
+          pinStrength = 0.76 + 0.22 * strapMask;
         } else if (r === 1) {
-          pinStrength = 0.42;
+          pinStrength = 0.48;
         } else if (r === 2) {
-          pinStrength = 0.18;
-        } else if (Math.abs(v - waistRowFrac) < 0.032) {
-          pinStrength = 0.16 * waistCinch;
+          pinStrength = 0.24;
+        } else if (Math.abs(v - waistRowFrac) < 0.028) {
+          pinStrength = 0.20 * waistCinch;
         }
 
-        const idx = r * numCols + c;
         const idx4 = idx * 4;
         initialPositions[idx4 + 0] = x;
         initialPositions[idx4 + 1] = y;
@@ -283,32 +272,46 @@ export class DressGenerator {
     }
 
     // Precompute exact rest lengths for every vertex (c, r):
-    // [weftRight (with §4.2.2 shirring contraction), warpDown, shearDiagRightDown, bendRight2]
-    const distBetween = (c0, r0, c1, r1) => {
+    // [weftRight, warpDown (intrinsic unpleated generator length), shearDiag (symmetric hypot), bendRight2]
+    const distBetween3D = (c0, r0, c1, r1) => {
       const i0 = (r0 * numCols + ((c0 + numCols) % numCols)) * 4;
       const i1 = (r1 * numCols + ((c1 + numCols) % numCols)) * 4;
       const dx = initialPositions[i1] - initialPositions[i0];
       const dy = initialPositions[i1 + 1] - initialPositions[i0 + 1];
       const dz = initialPositions[i1 + 2] - initialPositions[i0 + 2];
-      return Math.max(0.002, Math.hypot(dx, dy, dz));
+      return Math.max(0.001, Math.hypot(dx, dy, dz));
+    };
+
+    const distBetweenBase = (c0, r0, c1, r1) => {
+      const i0 = (r0 * numCols + ((c0 + numCols) % numCols)) * 3;
+      const i1 = (r1 * numCols + ((c1 + numCols) % numCols)) * 3;
+      const dx = unpleatedPositions[i1] - unpleatedPositions[i0];
+      const dy = unpleatedPositions[i1 + 1] - unpleatedPositions[i0 + 1];
+      const dz = unpleatedPositions[i1 + 2] - unpleatedPositions[i0 + 2];
+      return Math.max(0.001, Math.hypot(dx, dy, dz));
     };
 
     for (let r = 0; r < numRows; r++) {
       const v = vMapped[r];
-      // §4.2.2 Shirring shrinkage factor at waistband (v ≈ waistRowFrac) and gathered neckline
-      const waistGather = Math.exp(-Math.pow((v - waistRowFrac) / 0.045, 2));
-      const localShirringScale = 1.0 - (1.0 - shirringRatio) * 0.28 * waistGather;
+      // §4.2.2 Shirring shrinkage factor at waistband (v ≈ waistRowFrac)
+      const waistGather = Math.exp(-Math.pow((v - waistRowFrac) / 0.042, 2));
+      const localShirringScale = 1.0 - (1.0 - shirringRatio) * 0.16 * waistGather;
 
       for (let c = 0; c < numCols; c++) {
         const idx4 = (r * numCols + c) * 4;
-        // 0: Weft right neighbor (c+1, r) with shirring gather contraction
-        restLengths[idx4 + 0] = distBetween(c, r, c + 1, r) * localShirringScale;
-        // 1: Warp down neighbor (c, r+1)
-        restLengths[idx4 + 1] = r < numRows - 1 ? distBetween(c, r, c, r + 1) : 0.0;
-        // 2: Shear diagonal right-down (c+1, r+1)
-        restLengths[idx4 + 2] = r < numRows - 1 ? distBetween(c, r, c + 1, r + 1) : 0.0;
+        // 0: Weft right neighbor (c+1, r)
+        const weftL = distBetween3D(c, r, c + 1, r) * localShirringScale;
+        // 1: Warp down neighbor (c, r+1) — uses intrinsic unpleated generator distance so pleat ridges & valleys hang at identical height
+        const warpL = r < numRows - 1 ? distBetweenBase(c, r, c, r + 1) : 0.0;
+        // 2: Symmetric orthogonal shear diagonal rest length sqrt(weft^2 + warp^2)
+        const shearL = r < numRows - 1 ? Math.hypot(weftL, warpL) : 0.0;
         // 3: 2-hop circumferential bending/pleat spring (c+2, r)
-        restLengths[idx4 + 3] = distBetween(c, r, c + 2, r);
+        const bendL = distBetween3D(c, r, c + 2, r);
+
+        restLengths[idx4 + 0] = weftL;
+        restLengths[idx4 + 1] = warpL;
+        restLengths[idx4 + 2] = shearL;
+        restLengths[idx4 + 3] = bendL;
       }
     }
 

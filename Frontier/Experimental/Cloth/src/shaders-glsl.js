@@ -241,10 +241,12 @@ void main() {
     if (panelId == 1) pCol = vec3(0.32, 0.72, 0.58);
     if (panelId == 2) pCol = vec3(0.88, 0.58, 0.30);
     if (panelId == 3) pCol = vec3(0.76, 0.42, 0.72);
-    float gridU = abs(fract(uv.x * 24.0) - 0.5);
-    float gridV = abs(fract(uv.y * 24.0) - 0.5);
-    float line = min(gridU, gridV) < 0.04 ? 0.25 : 0.0;
-    fragColor = vec4(pCol + vec3(line), 1.0);
+    vec2 uvScaled = uv * 24.0;
+    vec2 duv = max(fwidth(uvScaled), vec2(1e-4));
+    vec2 gridDist = abs(fract(uvScaled - 0.5) - 0.5) / duv;
+    float line = 1.0 - clamp(min(gridDist.x, gridDist.y), 0.0, 1.0);
+    vec3 shadedPanel = pCol * (0.76 + 0.24 * ndl) + vec3(line * 0.28);
+    fragColor = vec4(clamp(shadedPanel, vec3(0.0), vec3(1.0)), 1.0);
     return;
   } else if (channel == 3) {
     fragColor = vec4(N * 0.5 + vec3(0.5), 1.0);

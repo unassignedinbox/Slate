@@ -220,21 +220,22 @@ fn csSolveConstraints(@builtin(global_invocation_id) gid : vec3<u32>) {
     weightSum += 1.0;
   }
 
-  // 3. Coupled Diagonal Shear Springs (with locking relief)
+  // 3. Coupled Diagonal Shear Springs (symmetric quad rest-lengths: rlSelf.z for Q(c,r), rlLeft.z for Q(c-1,r), rlLU.z for Q(c-1,r-1), rlUp.z for Q(c,r-1))
   if (r < numRows - 1) {
     let idxRD = idxOf(c + 1, r + 1, numCols);
     corr += solveSpringPairPIE(pSelf, posIn[idxRD].xyz, rlSelf.z, shearStiff, lockingRelief);
     let idxLD = idxOf(c - 1, r + 1, numCols);
-    corr += solveSpringPairPIE(pSelf, posIn[idxLD].xyz, rlSelf.z, shearStiff, lockingRelief);
+    corr += solveSpringPairPIE(pSelf, posIn[idxLD].xyz, rlLeft.z, shearStiff, lockingRelief);
     weightSum += 1.4;
   }
   if (r > 0) {
     let idxLU = idxOf(c - 1, r - 1, numCols);
     let rlLU = restLengths[idxLU];
     corr += solveSpringPairPIE(pSelf, posIn[idxLU].xyz, rlLU.z, shearStiff, lockingRelief);
+    let idxUp = idxOf(c, r - 1, numCols);
+    let rlUp = restLengths[idxUp];
     let idxRU = idxOf(c + 1, r - 1, numCols);
-    let rlRU = restLengths[idxRU];
-    corr += solveSpringPairPIE(pSelf, posIn[idxRU].xyz, rlRU.z, shearStiff, lockingRelief);
+    corr += solveSpringPairPIE(pSelf, posIn[idxRU].xyz, rlUp.z, shearStiff, lockingRelief);
     weightSum += 1.4;
   }
 
@@ -635,15 +636,17 @@ fn fsCloth(
     // Warp/Weft Strain Heatmap
     return vec4<f32>(heatmapColor(strain * 1.6), 1.0);
   } else if (channel == 2) {
-    // 2D Pattern Panels & UV Grid
+    // 2D Pattern Panels & Anti-Aliased UV Grid
     var pCol = vec3<f32>(0.22, 0.55, 0.85);
     if (panelId == 1) { pCol = vec3<f32>(0.32, 0.72, 0.58); }
     if (panelId == 2) { pCol = vec3<f32>(0.88, 0.58, 0.30); }
     if (panelId == 3) { pCol = vec3<f32>(0.76, 0.42, 0.72); }
-    let gridU = abs(fract(uv.x * 24.0) - 0.5);
-    let gridV = abs(fract(uv.y * 24.0) - 0.5);
-    let line = select(0.0, 0.25, min(gridU, gridV) < 0.04);
-    return vec4<f32>(pCol + vec3<f32>(line), 1.0);
+    let uvScaled = uv * 24.0;
+    let duv = max(fwidth(uvScaled), vec2<f32>(1e-4));
+    let gridDist = abs(fract(uvScaled - 0.5) - 0.5) / duv;
+    let line = 1.0 - clamp(min(gridDist.x, gridDist.y), 0.0, 1.0);
+    let shadedPanel = pCol * (0.76 + 0.24 * ndl) + vec3<f32>(line * 0.28);
+    return vec4<f32>(clamp(shadedPanel, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
   } else if (channel == 3) {
     // Procedural Weave Normals
     return vec4<f32>(N * 0.5 + vec3<f32>(0.5), 1.0);
