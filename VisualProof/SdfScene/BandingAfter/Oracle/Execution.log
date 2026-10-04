@@ -1,0 +1,5 @@
+Vulkan execution device: llvmpipe (LLVM 20.1.2, 256 bits)
+CPU JIT flags: nopt
+SCENE case=Oracle scale=1 offset=0,0,0 facets=292 instances=10
+CAPTURE Scene-GI frames=32
+PASS dense production-shader quadrature reference; not a shipping performance result
