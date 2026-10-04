@@ -122,6 +122,9 @@ export const DescribeDeviceFailure = (Notes = []) =>
 {
     const Spoken = Notes.join(" ");
     const Crowded = /too many|context limit|maximum number/i.test(Spoken);
+    // Chromium answers a browser-wide switch-off with GL_VENDOR = Disabled and a BindToCurrentSequence failure. That is a
+    // different world from a missing driver: nothing is wrong with the machine, the browser is simply not handing out GPUs.
+    const Switched = /GL_VENDOR\s*=\s*Disabled|GL_RENDERER\s*=\s*Disabled|BindToCurrentSequence|GPU access is disabled/i.test(Spoken);
     let Legacy = null;
     let Renderer = "";
     try
@@ -148,6 +151,22 @@ export const DescribeDeviceFailure = (Notes = []) =>
             Advice: [
                 "Close other tabs that are running 3D or video — each holds a context open.",
                 "Reload this page once they are closed.",
+            ],
+            Detail: Notes,
+            Renderer,
+        };
+
+    if (Switched)
+        return {
+            Message:
+                "This browser has GPU access switched off for every page, not only this one — it reports its own GL vendor and " +
+                "renderer as Disabled. Any WebGL site will fail here in the same way until it is turned back on.",
+            Advice: [
+                "Chrome or Edge: Settings → System → turn on “Use graphics acceleration when available”, then relaunch the browser.",
+                "If that switch is greyed out the browser is managed by policy — open chrome://policy and look for HardwareAccelerationModeEnabled.",
+                "Open chrome://gpu: WebGL2 will read Disabled, and “Problems Detected” at the foot of the page names the reason.",
+                "Blocklisted driver — common on virtual machines, remote desktops and the Microsoft Basic Render Driver? Set chrome://flags/#ignore-gpu-blocklist to Enabled and relaunch.",
+                "Software rendering is no longer automatic: launching the browser with --enable-unsafe-swiftshader gives a slow CPU context that will run this editor.",
             ],
             Detail: Notes,
             Renderer,

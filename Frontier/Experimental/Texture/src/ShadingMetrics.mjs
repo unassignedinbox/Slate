@@ -446,3 +446,25 @@ test("a context with no float rendering at all refuses with advice rather than a
     assert.match(Integrator.Failure, /floating-point/i);
     assert.ok(Integrator.Advice.length >= 1);
 });
+
+test("a browser with GPU access switched off is told so, not blamed for its driver", () =>
+{
+    const Spoken =
+        "Could not create a WebGL context, VENDOR = 0xffff, DEVICE = 0xffff, GL_VENDOR = Disabled, GL_RENDERER = Disabled, " +
+        "Sandboxed = yes, Optimus = no, AMD switchable = no, Reset notification strategy = 0x0000, " +
+        "ErrorMessage = BindToCurrentSequence failed: .";
+    const Diagnosis = DescribeDeviceFailure([Spoken]);
+    assert.match(Diagnosis.Message, /switched off for every page/i);
+    assert.ok(Diagnosis.Advice.some((Entry) => /graphics acceleration/i.test(Entry)), "the settings switch is the first fix");
+    assert.ok(Diagnosis.Advice.some((Entry) => /chrome:\/\/policy/i.test(Entry)), "a managed browser needs the policy page");
+    assert.ok(Diagnosis.Advice.some((Entry) => /ignore-gpu-blocklist/i.test(Entry)), "a blocklisted driver needs the flag");
+    assert.ok(Diagnosis.Advice.some((Entry) => /swiftshader/i.test(Entry)), "software rendering is the last resort");
+    assert.deepEqual(Diagnosis.Detail, [Spoken], "the browser's own words are kept");
+});
+
+test("the switched-off diagnosis wins over the WebGL 1 reading", () =>
+{
+    const Diagnosis = DescribeDeviceFailure(["ErrorMessage = BindToCurrentSequence failed: ."]);
+    assert.match(Diagnosis.Message, /switched off/i);
+    assert.ok(!/WebGL 1/.test(Diagnosis.Message));
+});
