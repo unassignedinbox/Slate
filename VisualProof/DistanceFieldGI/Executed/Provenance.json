@@ -1,18 +1,25 @@
 {
   "Browser": {
-    "commit": "3135337051a1e6c1fd032562f035372bd3fd22b8",
-    "run": "https://github.com/unassignedinbox/Slate/actions/runs/37182789289"
+    "commit": "28284487c945c585dd5332dac71add985c02108d",
+    "run": "https://github.com/unassignedinbox/Slate/actions/runs/37184302718"
   },
   "SDF": {
-    "commit": "361f7935909fbf7e045db72f9b6fdd54db6e3db9",
-    "run": "https://github.com/unassignedinbox/Slate/actions/runs/37182423955",
-    "display": "Nearest-neighbour enlargement of exact production Vulkan readback pixels; no reconstructed renderer or image generation.",
+    "commit": "28284487c945c585dd5332dac71add985c02108d",
+    "run": "https://github.com/unassignedinbox/Slate/actions/runs/37184302718",
+    "artifact_checks_passed": true,
+    "display": "Nearest-neighbour enlargement of exact production Vulkan readback pixels; no reconstructed renderer or image generation. The top-left background sentinel is intentionally black.",
     "execution": [
       "Vulkan execution device: llvmpipe (LLVM 20.1.2, 256 bits)",
+      "CPU JIT flags: nopt",
       "PASS descriptor-indexed production resolve and actual texture sampling",
+      "ARTIFACT static textured fixture: max adjacent-frame RMS=0 max channel delta=0 dark holes=0",
+      "ARTIFACT clean restart max channel delta=0",
+      "PASS artifact checks: full writes, finite bounded atlases, no black holes, static temporal stability and pixelwise restart reproducibility",
       "PASS spatial atlas: diffuse range=0.1..0.9 emission range=0..8 green diffuse bounce=26.5604 range=0.00984375..1.1184",
       "PASS material-only recapture, history reset and secondary cutout visibility",
       "PASS unresident texture slot refused before descriptor access",
+      "ARTIFACT coplanar cards: max neighbor delta=1 card resolution=4 volume resolution=32",
+      "PASS coplanar card continuity at shipping card/volume resolutions",
       "PASS production SDF pipelines: populated three-level fields, emissive GI, bounce cache, GI toggle, moving instances, history reset, solar shadows, camera re-snapping, recreation, mesh reflection, thin/solid refraction, Beer attenuation and resize",
       "PASS Vulkan validation including synchronization and resource destruction: zero errors"
     ]
