@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Marker Design Chooser</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+    background: #08080a; color: #e4e4e7; padding: 28px; }
+  h1 { font-size: 16px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: #a1a1aa; margin-bottom: 4px; }
+  .sub { font-size: 12.5px; color: #71717a; margin-bottom: 8px; line-height: 1.5; }
+  .anatomy { font-size: 12px; color: #8a8a8a; margin-bottom: 20px; }
+  .anatomy b { color: #5b8def; }
+  h2 { font-size: 13px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: #5b8def; margin: 26px 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; }
+  .card { background: #0d0d10; border: 1px solid #1c1c20; border-radius: 12px; padding: 12px 14px; }
+  .card .tag { font-size: 12px; font-weight: 700; color: #f4f4f5; margin-bottom: 8px; }
+  .card .tag span { color: #71717a; font-weight: 500; }
+  .full { width: 100%; aspect-ratio: 5 / 1; background: #141418; border-radius: 8px; margin-bottom: 6px; display: flex; align-items: center; }
+  .full svg { width: 100%; height: 100%; filter: drop-shadow(0 2px 3px rgba(0,0,0,.6)); }
+  .cropwrap { display: flex; align-items: center; gap: 8px; }
+  .croplbl { font-size: 10px; color: #52525b; letter-spacing: .04em; white-space: nowrap; }
+  .crop { flex: 1; aspect-ratio: 9 / 2; background: #17212e; border: 1px solid #2e4666; border-radius: 6px; display: flex; align-items: center; padding: 0 8px; }
+  .crop svg { width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+
+<h1>Marker Design Chooser</h1>
+<div class="sub">Ink markers — fineliners / technical pens, alcohol twin-tip art markers, brush pens, paint markers.<br>Same minimal / ergonomic / aesthetic language. Top swatch = whole marker; bottom (blue) = library crop. Tell me the winners.</div>
+<div class="anatomy">Anatomy: a <b>barrel</b> (round or squared) &rarr; <b>cap</b> (posted or over the tip) &rarr; <b>tip</b> — fine plastic point · chisel/broad · flexible brush · bullet valve. Alcohol markers are <b>twin-tip</b> (a nib at each end).</div>
+
+<h2>Fineliners &amp; Technical Pens</h2>
+<div class="grid" id="fine"></div>
+
+<h2>Alcohol Art Markers (twin-tip)</h2>
+<div class="grid" id="alcohol"></div>
+
+<h2>Brush Pens</h2>
+<div class="grid" id="brush"></div>
+
+<h2>Paint Markers</h2>
+<div class="grid" id="paint"></div>
+
+<h2>Highlighters</h2>
+<div class="grid" id="hilite"></div>
+
+<h2>Metallic Markers</h2>
+<div class="grid" id="metallic"></div>
+
+<script>
+const grad = (id, stops, x1=0,y1=0,x2=0,y2=1) =>
+  `<linearGradient id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">${stops}</linearGradient>`;
+const s = (o,c,op=1) => `<stop offset="${o}" stop-color="${c}" ${op<1 ? `stop-opacity="${op}"` : ""} />`;
+const svg = (inner) => `<svg viewBox="0 0 300 60" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
+
+/* darken (f<1) or lighten-toward-white (f>1) a #rrggbb colour */
+function shade(hex, f)
+{
+  const n = parseInt(hex.slice(1), 16);
+  let r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  if (f < 1) { r *= f; g *= f; b *= f; }
+  else { const t = f - 1; r += (255-r)*t; g += (255-g)*t; b += (255-b)*t; }
+  return '#' + [r,g,b].map(v => Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join('');
+}
+/* cylinder shading stops: dark rim → specular → mid → shaded → dark rim */
+function cyl(c1, c2, c3)
+{
+  return s(0,shade(c2,0.6)) + s(.1,shade(c1,1.25)) + s(.28,c1) + s(.5,c2) + s(.78,c3) + s(1,shade(c3,0.58));
+}
+
+/* ---- barrel / cap colour triplets [light, mid, dark] ---- */
+const BODY = {
+  white:['#fbfbfd','#e2e2e8','#b4b4bc'], black:['#3a3a42','#1a1a1f','#050506'],
+  grey:['#9aa0aa','#6a707a','#3a3e44'],  cream:['#f2ead4','#d8caa2','#a89e78'],
+  navy:['#3a5aa0','#1e3470','#0c1a40'],  charcoal:['#4a4a52','#2a2a30','#121216'],
+  silver:['#d4d8de','#a8aeb6','#70767e'],slate:['#7a838c','#4a4e54','#26292e'],
+  clear:['#c8ccd4','#9aa0a8','#5a5f66'], // frosted plastic (shows ink)
+};
+/* ---- ink / tip colours [bright, deep] ---- */
+const INK = {
+  black:['#33333a','#0a0a0c'],  red:['#e0342e','#8a0f14'],   crimson:['#d8283e','#7a0a1e'],
+  cobalt:['#2a72c8','#0f3a7a'],  teal:['#1aa8a0','#0a5a54'],  green:['#1aa84a','#0a5a24'],
+  orange:['#e8721e','#8a3a08'],  violet:['#7a3ab0','#3a1868'], magenta:['#d828a0','#6a0a54'],
+  yellow:['#f0c62a','#b58410'],  brown:['#8a5a30','#3a2410'],  grey:['#7a808a','#3a3e44'],
+  sky:['#3aa5e0','#166a9a'],     pink:['#f06aa0','#a01a5a'],   sepia:['#9c6a3a','#4a2e14'],
+  // fluorescent highlighter inks (bright, slightly acid)
+  fyellow:['#f2f24a','#c8c81a'], fgreen:['#8ef05a','#3ac81a'], forange:['#ffb04a','#f0781a'],
+  fpink:['#ff7ac0','#f01a8a'],   fblue:['#6ad8f0','#1aa8d8'],  fviolet:['#c89af0','#8a4ad8'],
+};
+/* ---- metallic inks [rim-dark, sheen-light, core] for a lengthwise metal ramp ---- */
+const METALLIC = {
+  gold:   ['#6a4a10','#fff0b0','#c8a028'], silver:['#5a606a','#ffffff','#c0c6ce'],
+  copper: ['#5a2a12','#ffcaa0','#c17a42'], bronze:['#4a3410','#e8c878','#a5822f'],
+  rose:   ['#6a2a3a','#ffd8e0','#d88a9a'], steel:['#3a4650','#dfeaf2','#8a97a4'],
+};
+/* metallic lengthwise gradient (root → moving sheen → tip) */
+function metalRamp(name)
+{
+  const [rd, lt, co] = METALLIC[name];
+  return s(0,rd) + s(.28,co) + s(.46,lt) + s(.6,co) + s(1,shade(rd,1.2));
+}
+
+/* resolve an ink name to a [bright, deep] pair — INK first, else metallic */
+function inkPair(name)
+{
+  if (INK[name]) return INK[name];
+  if (METALLIC[name]) return [METALLIC[name][2], METALLIC[name][0]];
+  return INK.black;
+}
+
+/* resolve a colour name to a [light, mid, dark] triplet — BODY first, else INK */
+function triplet(name)
+{
+  if (BODY[name]) return BODY[name];
+  if (INK[name]) { const [b,d] = INK[name]; return [shade(b,1.15), b, d]; }
+  return BODY.grey;
+}
+
+/* ---- layout: barrel back at x0, tip at x1 ---- */
+const LAY = { fine:{x0:40,x1:250,hh:5}, alcohol:{x0:34,x1:262,hh:7}, brush:{x0:40,x1:252,hh:6.5},
+  paint:{x0:40,x1:252,hh:6.5}, hilite:{x0:44,x1:250,hh:8}, metallic:{x0:40,x1:252,hh:6.5} };
+
+/* specular highlight line along the top of a rounded barrel */
+function gloss(x0, x1, hh, op)
+{
+  return `<rect x="${x0}" y="${30-hh*0.62}" width="${x1-x0}" height="1.2" rx="0.6" fill="#fff" opacity="${op||0.4}"/>`;
+}
+
+/* ═══════════ TIPS ═══════════ */
+// fine plastic / felt point — slim cone in a small metal or plastic collar
+function fineTip(x, hh, u, ink, metal)
+{
+  const [ib, id] = inkPair(ink);
+  const cx = x - 16;   // collar start
+  let m = `<path d="M ${cx},${30-hh*0.55} L ${x-7},${30-2.2} L ${x-7},${30+2.2} L ${cx},${30+hh*0.55} Z" fill="url(#${u}col)"/>`;  // tapered collar
+  m += `<line x1="${cx}" y1="${30-hh*0.5}" x2="${x-7},"  y2="${30-2}" stroke="#fff" stroke-width="0.4" opacity="0.3"/>`.replace(',"','"');
+  // fine nib
+  m += grad(u+'ink', s(0,ib)+s(1,id), 0,0,1,0)
+    + `<path d="M ${x-7},${30-1.4} L ${x-0.5},${30-0.45} L ${x-0.5},${30+0.45} L ${x-7},${30+1.4} Z" fill="url(#${u}ink)"/>`;
+  return m;
+}
+// chisel / broad wedge tip (points right) — white nib holder + angled ink wedge.
+// The wedge is a clean parallelogram cut on a slant, like a real broad nib.
+function chiselTip(x, hh, u, ink)
+{
+  const [ib, id] = inkPair(ink);
+  const hx = x - 16, nb = hh * 0.72;   // holder start, nib half-height
+  // white plastic nib housing (shoulders down from the barrel)
+  let m = `<path d="M ${hx},${30-hh} L ${hx+7},${30-nb} L ${hx+7},${30+nb} L ${hx},${30+hh} Z" fill="url(#${u}col)"/>`;
+  m += `<line x1="${hx}" y1="${30-hh+1}" x2="${hx+7}" y2="${30-nb+0.5}" stroke="#fff" stroke-width="0.5" opacity="0.4"/>`;
+  // slanted felt wedge (top corner reaches furthest)
+  m += grad(u+'ink', s(0,ib)+s(1,id), 0,0,1,0)
+    + `<path d="M ${hx+7},${30-nb} L ${x},${30-nb-1} L ${x-2},${30+nb} L ${hx+7},${30+nb} Z" fill="url(#${u}ink)"/>`;
+  // slant highlight + darkened cut face
+  m += `<line x1="${hx+7}" y1="${30-nb}" x2="${x}" y2="${30-nb-1}" stroke="#fff" stroke-width="0.5" opacity="0.3"/>`
+    + `<path d="M ${x},${30-nb-1} L ${x-2},${30+nb} L ${x-4},${30+nb-1} L ${x-2.5},${30-nb} Z" fill="#000" opacity="0.18"/>`;
+  return m;
+}
+// bullet / fine round tip on the opposite (left) end of a twin marker
+function bulletTipLeft(x, hh, u, ink)
+{
+  const [ib, id] = inkPair(ink);
+  const hx = x + 12, nb = hh * 0.5;
+  // white nib holder tapering left
+  let m = `<path d="M ${hx},${30-hh} L ${hx-6},${30-nb} L ${hx-6},${30+nb} L ${hx},${30+hh} Z" fill="url(#${u}col)"/>`;
+  // rounded bullet nib
+  m += grad(u+'ink', s(0,id)+s(1,ib), 0,0,1,0)
+    + `<path d="M ${hx-6},${30-nb} C ${hx-13},${30-nb} ${hx-13},${30+nb} ${hx-6},${30+nb} Z" fill="url(#${u}ink)"/>`;
+  m += `<circle cx="${hx-9}" cy="${30-nb*0.4}" r="0.9" fill="#fff" opacity="0.3"/>`;
+  return m;
+}
+// flexible brush tip (points right) — long belly tapering to a fine point.
+// Ferrule seats at the grip end (x-18) so it doesn't collide with the barrel grip.
+function brushTip(x, hh, u, ink)
+{
+  const [ib, id] = inkPair(ink);
+  const fx = x - 18, nb = hh * 0.6, tipX = x + 16;
+  // conical white ferrule bridging grip → brush
+  let m = `<path d="M ${fx-2},${30-hh} L ${fx+8},${30-nb} L ${fx+8},${30+nb} L ${fx-2},${30+hh} Z" fill="url(#${u}col)"/>`;
+  m += `<line x1="${fx-2}" y1="${30-hh+1}" x2="${fx+8}" y2="${30-nb+0.5}" stroke="#fff" stroke-width="0.5" opacity="0.35"/>`;
+  // brush belly: base bulge → long taper to a fine point
+  m += grad(u+'ink', s(0,ib)+s(.5,id)+s(1,id), 0,0,1,0)
+    + `<path d="M ${fx+8},${30-nb} C ${fx+20},${30-nb*1.18} ${tipX-18},${30-nb*0.45} ${tipX},30 C ${tipX-18},${30+nb*0.45} ${fx+20},${30+nb*1.18} ${fx+8},${30+nb} Z" fill="url(#${u}ink)"/>`;
+  // hair strokes converging to the point
+  m += `<g opacity="0.22">${[-1.5,-0.6,0.6,1.5].map(i=>`<line x1="${fx+14}" y1="${(30+i*nb*0.62).toFixed(1)}" x2="${tipX-3}" y2="30" stroke="#000" stroke-width="0.3"/>`).join('')}</g>`;
+  m += `<line x1="${fx+13}" y1="${30-nb*0.55}" x2="${tipX-4}" y2="${30-0.4}" stroke="#fff" stroke-width="0.5" opacity="0.3"/>`;
+  return m;
+}
+// paint-marker bullet valve tip — fat rounded nib in a wide metal collar.
+// Metallic inks get the lengthwise shine ramp instead of a flat 2-stop fill.
+function paintTip(x, hh, u, ink)
+{
+  const [ib, id] = inkPair(ink);
+  const cx = x - 22, nb = hh * 0.62;
+  // metal collar (ring nut)
+  let m = `<rect x="${cx}" y="${30-hh*0.82}" width="8" height="${hh*1.64}" rx="1.8" fill="url(#${u}col)"/>`;
+  m += `<rect x="${cx+1}" y="${30-hh*0.7}" width="6" height="1.3" rx="0.6" fill="#fff" opacity="0.35"/>`
+    + `<line x1="${cx+8}" y1="${30-hh*0.7}" x2="${cx+8}" y2="${30+hh*0.7}" stroke="#000" stroke-width="0.5" opacity="0.22"/>`;
+  // fat rounded valve nib
+  const inkStops = METALLIC[ink] ? metalRamp(ink) : s(0,ib)+s(1,id);
+  m += grad(u+'ink', inkStops, 0,0,1,0)
+    + `<path d="M ${cx+8},${30-nb} L ${x-5},${30-nb} C ${x+2},${30-nb} ${x+2},${30+nb} ${x-5},${30+nb} L ${cx+8},${30+nb} Z" fill="url(#${u}ink)"/>`;
+  m += `<line x1="${cx+9}" y1="${30-nb+0.6}" x2="${x-4}" y2="${30-nb+0.6}" stroke="#fff" stroke-width="0.6" opacity="0.3"/>`;
+  return m;
+}
+// highlighter chisel tip — broad, blunt, angled fluoro wedge (much chunkier
+// than an art-marker chisel). Flat leading face, no sharp point.
+function hiliteTip(x, hh, u, ink)
+{
+  const [ib, id] = inkPair(ink);
+  const hx = x - 20, nb = hh * 0.92;
+  // wide white nib housing shouldered down from the barrel
+  let m = `<path d="M ${hx},${30-hh} L ${hx+8},${30-nb} L ${hx+8},${30+nb} L ${hx},${30+hh} Z" fill="url(#${u}col)"/>`;
+  m += `<line x1="${hx}" y1="${30-hh+1}" x2="${hx+8}" y2="${30-nb+0.5}" stroke="#fff" stroke-width="0.6" opacity="0.4"/>`;
+  // broad translucent fluoro wedge: tall back, angled to a blunt flat front edge
+  m += grad(u+'ink', s(0,shade(ib,1.12))+s(.5,ib)+s(1,shade(ib,0.9)), 0,0,1,0)
+    + `<path d="M ${hx+8},${30-nb} L ${x-1},${30-nb-1.2} L ${x+1},${30+nb-2.5} L ${x-3},${30+nb} L ${hx+8},${30+nb} Z" fill="url(#${u}ink)" opacity="0.92"/>`;
+  // blunt front face + top-edge sheen
+  m += `<line x1="${x-1}" y1="${30-nb-1.2}" x2="${x+1}" y2="${30+nb-2.5}" stroke="#000" stroke-width="0.5" opacity="0.16"/>`
+    + `<line x1="${hx+8}" y1="${30-nb}" x2="${x-1}" y2="${30-nb-1.2}" stroke="#fff" stroke-width="0.7" opacity="0.45"/>`;
+  return m;
+}
+
+/* ═══════════ CAP DECOR (posted on the back) ═══════════ */
+function backCap(u, x0, hh, style)
+{
+  let m = '';
+  if (style === 'clip')   // pocket clip
+    m = `<path d="M ${x0+6},${30-hh} L ${x0+24},${30-hh-1.6} L ${x0+26},${30-hh+0.4} L ${x0+6},${30-hh+2.4} Z" fill="url(#${u}cap)"/>`;
+  else if (style === 'vent') // vented cap top
+    m = `<rect x="${x0-3}" y="${30-hh*0.7}" width="4" height="${hh*1.4}" rx="1.4" fill="url(#${u}cap)"/>`;
+  else if (style === 'button')
+    m = `<circle cx="${x0-1}" cy="30" r="${hh*0.6}" fill="url(#${u}cap)"/>`;
+  return m;
+}
+
+/* ═══════════ ASSEMBLE ONE MARKER ═══════════ */
+function mkMarker(u, cfg)
+{
+  const [b1,b2,b3] = triplet(cfg.body);
+  const [c1,c2,c3] = triplet(cfg.cap || cfg.body);
+  const L = LAY[cfg.form];
+  const x0 = L.x0, x1 = L.x1, hh = L.hh;
+  const isMetal = !!METALLIC[cfg.ink];
+  const [ib, id] = isMetal ? [METALLIC[cfg.ink][2], METALLIC[cfg.ink][0]] : INK[cfg.ink];
+  let defs = grad(u+'bar', cyl(b1,b2,b3)) + grad(u+'cap', cyl(c1,c2,c3))
+    + grad(u+'col', cyl('#c8ccd2','#8a9098','#4a4e54'))
+    + grad(u+'band', isMetal ? metalRamp(cfg.ink) : s(0,ib)+s(1,id), 0,0,1,0);
+  let m = `<defs>${defs}</defs>`;
+
+  if (cfg.form === 'alcohol')
+  {
+    // squared twin-tip marker shown UNCAPPED: broad chisel nib (right) + fine
+    // bullet nib (left) both exposed; colour end-blocks flank a light barrel with
+    // a colour band + label. (Copic/Posca profile.)
+    const nibR = x1 - 16, nibL = x0 + 12;       // where each nib emerges
+    const blkR = nibR - 26, blkL = nibL + 26;   // inner edge of each colour block
+    // centre barrel (rounded rectangle)
+    m += `<rect x="${blkL}" y="${30-hh}" width="${blkR-blkL}" height="${2*hh}" rx="2.5" fill="url(#${u}bar)"/>`;
+    m += gloss(blkL, blkR, hh, 0.3);
+    // colour end-blocks (ink colour) at each end of the barrel
+    m += `<rect x="${blkR}" y="${30-hh}" width="26" height="${2*hh}" rx="2.5" fill="url(#${u}band)"/>`
+      + `<rect x="${nibL}" y="${30-hh}" width="${blkL-nibL}" height="${2*hh}" rx="2.5" fill="url(#${u}band)"/>`;
+    m += `<rect x="${blkR+1}" y="${30-hh*0.6}" width="24" height="1.2" fill="#fff" opacity="0.28"/>`
+      + `<rect x="${nibL+1}" y="${30-hh*0.6}" width="${blkL-nibL-2}" height="1.2" fill="#fff" opacity="0.28"/>`;
+    // label patch + colour name bar on the barrel
+    const lc = (blkL + blkR) / 2;
+    m += `<rect x="${lc-20}" y="${30-2.6}" width="40" height="5.2" rx="1" fill="#fff" opacity="0.72"/>`
+      + `<rect x="${lc-16}" y="${30-0.7}" width="24" height="1.4" rx="0.5" fill="${id}" opacity="0.6"/>`
+      + `<circle cx="${lc+13}" cy="30" r="1.9" fill="url(#${u}band)"/>`
+      + `<circle cx="${lc+13}" cy="30" r="1.9" fill="none" stroke="${id}" stroke-width="0.3" opacity="0.5"/>`;
+    // seams where colour blocks meet the barrel
+    m += `<line x1="${blkR}" y1="${30-hh}" x2="${blkR}" y2="${30+hh}" stroke="#000" stroke-width="0.5" opacity="0.22"/>`
+      + `<line x1="${blkL}" y1="${30-hh}" x2="${blkL}" y2="${30+hh}" stroke="#000" stroke-width="0.5" opacity="0.22"/>`;
+    // both nibs exposed
+    m += chiselTip(x1, hh, u, cfg.ink);
+    m += bulletTipLeft(nibL, hh, u, cfg.ink);
+    return svg(m);
+  }
+
+  // single-tip markers (fine / brush / paint): barrel + posted back cap + tip
+  const cap = cfg.cap ? cfg.cap : cfg.body;
+  // barrel
+  m += `<rect x="${x0+4}" y="${30-hh}" width="${x1-24-(x0+4)}" height="${2*hh}" rx="${hh*0.5}" fill="url(#${u}bar)"/>`;
+  m += backCap(u, x0+4, hh, cfg.back || 'clip');
+  // rounded back end
+  m += `<path d="M ${x0+4},${30-hh} Q ${x0-2},30 ${x0+4},${30+hh}" fill="url(#${u}bar)"/>`;
+  m += gloss(x0+4, x1-24, hh);
+  // grip section (near the tip) in the cap colour
+  const gripX = x1 - 24;
+  m += `<path d="M ${gripX},${30-hh} L ${gripX+8},${30-hh*0.7} L ${gripX+8},${30+hh*0.7} L ${gripX},${30+hh} Z" fill="url(#${u}cap)"/>`;
+  m += `<rect x="${gripX+1}" y="${30-hh*0.6}" width="6" height="1.1" fill="#fff" opacity="0.28"/>`;
+  // colour band ring at the barrel/grip seam
+  m += `<rect x="${gripX-3}" y="${30-hh}" width="3" height="${2*hh}" fill="url(#${u}band)"/>`;
+
+  if (cfg.form === 'fine')  m += fineTip(x1, hh, u, cfg.ink);
+  else if (cfg.form === 'brush') m += brushTip(x1, hh, u, cfg.ink);
+  else if (cfg.form === 'paint') m += paintTip(x1, hh, u, cfg.ink);
+  else if (cfg.form === 'hilite') m += hiliteTip(x1, hh, u, cfg.ink);
+  else if (cfg.form === 'metallic') m += paintTip(x1, hh, u, cfg.ink);
+  return svg(m);
+}
+
+/* ═══════════ CONFIGS ═══════════ */
+const FINE = {
+  'A · Black · technical fineliner': { form:'fine', body:'black',  cap:'black',  ink:'black',  back:'clip' },
+  'B · Sepia · drawing liner':       { form:'fine', body:'cream',  cap:'sepia',  ink:'sepia',  back:'clip' },
+  'C · Cobalt · fineliner':          { form:'fine', body:'white',  cap:'cobalt', ink:'cobalt', back:'clip' },
+  'D · Crimson · fineliner':         { form:'fine', body:'white',  cap:'crimson',ink:'crimson',back:'clip' },
+  'E · Grey · technical pen':        { form:'fine', body:'slate',  cap:'charcoal',ink:'grey',  back:'button' },
+};
+const ALCOHOL = {
+  'A · Cobalt · twin-tip':           { form:'alcohol', body:'grey',  ink:'cobalt' },
+  'B · Crimson · twin-tip':          { form:'alcohol', body:'grey',  ink:'crimson' },
+  'C · Green · twin-tip':            { form:'alcohol', body:'grey',  ink:'green' },
+  'D · Orange · twin-tip':           { form:'alcohol', body:'grey',  ink:'orange' },
+  'E · Violet · twin-tip':           { form:'alcohol', body:'grey',  ink:'violet' },
+  'F · Grey · neutral twin-tip':     { form:'alcohol', body:'white', ink:'grey' },
+};
+const BRUSH = {
+  'A · Black · brush pen':           { form:'brush', body:'black', cap:'black', ink:'black',   back:'clip' },
+  'B · Teal · brush pen':            { form:'brush', body:'white', cap:'teal',  ink:'teal',    back:'clip' },
+  'C · Magenta · brush pen':         { form:'brush', body:'white', cap:'magenta',ink:'magenta',back:'clip' },
+  'D · Sepia · watercolour brush':   { form:'brush', body:'cream', cap:'sepia', ink:'sepia',   back:'button' },
+};
+const PAINT = {
+  'A · White · paint marker':        { form:'paint', body:'silver', cap:'white', ink:'yellow', back:'vent' },
+  'B · Red · paint marker':          { form:'paint', body:'silver', cap:'black', ink:'red',    back:'vent' },
+  'C · Cobalt · paint marker':       { form:'paint', body:'black',  cap:'black', ink:'cobalt', back:'vent' },
+  'D · Green · paint marker':        { form:'paint', body:'silver', cap:'black', ink:'green',  back:'vent' },
+};
+const HILITE = {
+  'A · Fluoro yellow · highlighter':  { form:'hilite', body:'fyellow', cap:'fyellow', ink:'fyellow', back:'clip' },
+  'B · Fluoro green · highlighter':   { form:'hilite', body:'fgreen',  cap:'fgreen',  ink:'fgreen',  back:'clip' },
+  'C · Fluoro pink · highlighter':    { form:'hilite', body:'fpink',   cap:'fpink',   ink:'fpink',   back:'clip' },
+  'D · Fluoro orange · highlighter':  { form:'hilite', body:'forange', cap:'forange', ink:'forange', back:'clip' },
+  'E · Fluoro blue · highlighter':    { form:'hilite', body:'fblue',   cap:'fblue',   ink:'fblue',   back:'clip' },
+  'F · Fluoro violet · highlighter':  { form:'hilite', body:'fviolet', cap:'fviolet', ink:'fviolet', back:'clip' },
+};
+const METAL = {
+  'A · Gold · metallic marker':       { form:'metallic', body:'black',    cap:'black',    ink:'gold',   back:'vent' },
+  'B · Silver · metallic marker':     { form:'metallic', body:'black',    cap:'black',    ink:'silver', back:'vent' },
+  'C · Copper · metallic marker':     { form:'metallic', body:'charcoal', cap:'charcoal', ink:'copper', back:'vent' },
+  'D · Bronze · metallic marker':     { form:'metallic', body:'charcoal', cap:'charcoal', ink:'bronze', back:'vent' },
+  'E · Rose-gold · metallic marker':  { form:'metallic', body:'black',    cap:'black',    ink:'rose',   back:'vent' },
+  'F · Steel · metallic marker':      { form:'metallic', body:'slate',    cap:'charcoal', ink:'steel',  back:'vent' },
+};
+
+let uid = 0;
+function mountSet(hostId, set)
+{
+  const host = document.getElementById(hostId);
+  Object.entries(set).forEach(([name, cfg]) =>
+  {
+    const u = 'm' + (uid++) + '_';
+    const markup = mkMarker(u, cfg);
+    const parts = name.split(' · ');
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="tag">${parts[0]} <span>· ${parts.slice(1).join(' · ')}</span></div>
+      <div class="full">${markup}</div>
+      <div class="cropwrap">
+        <span class="croplbl">library crop &rarr;</span>
+        <div class="crop">${markup}</div>
+      </div>`;
+    const cropSvg = card.querySelector('.crop svg');
+    if (cropSvg) cropSvg.setAttribute('viewBox', '150 16 130 28');
+    host.appendChild(card);
+  });
+}
+mountSet('fine', FINE);
+mountSet('alcohol', ALCOHOL);
+mountSet('brush', BRUSH);
+mountSet('paint', PAINT);
+mountSet('hilite', HILITE);
+mountSet('metallic', METAL);
+</script>
+</body>
+</html>

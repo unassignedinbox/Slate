@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Dry Media Design Chooser</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+    background: #08080a; color: #e4e4e7; padding: 28px; }
+  h1 { font-size: 16px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: #a1a1aa; margin-bottom: 4px; }
+  .sub { font-size: 12.5px; color: #71717a; margin-bottom: 8px; line-height: 1.5; }
+  .anatomy { font-size: 12px; color: #8a8a8a; margin-bottom: 20px; }
+  .anatomy b { color: #5b8def; }
+  h2 { font-size: 13px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: #5b8def; margin: 26px 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; }
+  .card { background: #0d0d10; border: 1px solid #1c1c20; border-radius: 12px; padding: 12px 14px; }
+  .card .tag { font-size: 12px; font-weight: 700; color: #f4f4f5; margin-bottom: 8px; }
+  .card .tag span { color: #71717a; font-weight: 500; }
+  .full { width: 100%; aspect-ratio: 5 / 1; background: #141418; border-radius: 8px; margin-bottom: 6px; display: flex; align-items: center; }
+  .full svg { width: 100%; height: 100%; filter: drop-shadow(0 2px 3px rgba(0,0,0,.6)); }
+  .cropwrap { display: flex; align-items: center; gap: 8px; }
+  .croplbl { font-size: 10px; color: #52525b; letter-spacing: .04em; white-space: nowrap; }
+  .crop { flex: 1; aspect-ratio: 9 / 2; background: #17212e; border: 1px solid #2e4666; border-radius: 6px; display: flex; align-items: center; padding: 0 8px; }
+  .crop svg { width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+
+<h1>Dry Media Design Chooser</h1>
+<div class="sub">Raw handle-less sticks — soft/hard pastel, conté, chalk, charcoal, oil pastel, graphite.<br>Top swatch = whole stick; bottom (blue) = exact library crop. Tell me the winners, e.g. &ldquo;Charcoal A, Pastel C, Conté B&rdquo;.</div>
+<div class="anatomy">Anatomy per stick: a <b>pigment body</b> (round / square-faceted / twig / wrapped) with a <b>dusty grain</b> and a <b>worn / broken end</b>. Wrapped sticks add a <b>paper band</b>.</div>
+
+<h2>Charcoal (vine, willow, compressed)</h2>
+<div class="grid" id="charcoal"></div>
+
+<h2>Soft &amp; Hard Pastels</h2>
+<div class="grid" id="pastels"></div>
+
+<h2>Conté &amp; Chalk</h2>
+<div class="grid" id="conte"></div>
+
+<h2>Graphite &amp; Woodless</h2>
+<div class="grid" id="graphite"></div>
+
+<script>
+const grad = (id, stops, x1=0,y1=0,x2=0,y2=1) =>
+  `<linearGradient id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">${stops}</linearGradient>`;
+const s = (o,c,op=1) => `<stop offset="${o}" stop-color="${c}" ${op<1 ? `stop-opacity="${op}"` : ""} />`;
+const svg = (inner) => `<svg viewBox="0 0 300 60" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
+
+/* ---- pigment palettes [top-light, mid, bottom-dark] for cylindrical shading ---- */
+const PIG = {
+  charcoal: ['#3a3a40','#1c1c20','#050506'], grey:['#8a909a','#5a5f66','#2e3238'],
+  white:['#ffffff','#e6e6ec','#b8b8c2'],     sanguine:['#c86a44','#9c4224','#54200e'],
+  sepia:['#a5764a','#674024','#361f0e'],     bistre:['#7a5a34','#463014','#231708'],
+  ochre:['#e6b652','#b5842a','#6a4a10'],     ultramarine:['#5266b8','#2c3c8e','#141e4a'],
+  viridian:['#3aa87e','#1a6a4a','#0a3a24'],  crimson:['#d84a60','#a0243c','#560e1e'],
+  violet:['#9060b8','#5a3a8a','#281848'],    terracotta:['#e67e40','#b0501e','#682a08'],
+  flesh:['#ecab8e','#c87a5a','#88482e'],     sky:['#5aa8dc','#2a72ae','#124a70'],
+};
+
+/* ---- paper-wrap band colours ---- */
+const WRAP = {
+  kraft:['#b8905a','#8a6238'], black:['#26262c','#0e0e12'], white:['#e8e8ee','#c0c0c8'],
+  navy:['#2a3a6a','#16224a'], crimson:['#9c243c','#5a0e1e'],
+};
+
+/* ---- default span + half-heights per form ---- */
+const FORM = {
+  round:{x0:70,x1:230,hh:7}, square:{x0:74,x1:226,hh:8}, vine:{x0:64,x1:236,hh:3.2},
+  wrapped:{x0:66,x1:232,hh:7.5}, block:{x0:82,x1:224,hh:10}, chalk:{x0:78,x1:224,hh:7.5},
+};
+
+/* deterministic dusty speckle over a body region */
+function speckle(x0, x1, hh, tone, density)
+{
+  const n = density || 22, len = x1 - x0;
+  let m = '<g opacity="0.18">';
+  for (let i = 0; i < n; i++)
+  {
+    const px = x0 + ((i * 53) % (len - 6)) + 3;
+    const py = 30 - hh + 1.5 + ((i * 29) % (2 * hh - 3));
+    const r = 0.3 + ((i * 7) % 5) * 0.14;
+    m += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${r.toFixed(2)}" fill="${tone}"/>`;
+  }
+  return m + '</g>';
+}
+
+/* worn / broken pigment end at x (right), returns a chunky fracture face */
+function brokenEnd(x, hh, dark)
+{
+  return `<path d="M ${x-4},${30-hh} L ${x+1},${30-hh+2.5} L ${x-2},${30-1} L ${x+2},${30+2} L ${x-3},${30+hh} L ${x-5},${30+hh-1} L ${x-4},${30-hh} Z" fill="${dark}" opacity="0.5"/>`
+    + `<path d="M ${x-4},${30-hh} L ${x+1},${30-hh+2.5} L ${x-1},30 L ${x-4},${30-hh} Z" fill="#fff" opacity="0.14"/>`;
+}
+
+/* ═══════════ FORMS ═══════════ */
+// round soft stick — capsule, rounded left cap, broken right end
+function roundBody(x0, x1, hh, u, pig)
+{
+  const dk = PIG[pig][2];
+  return `<path d="M ${x0+hh},${30-hh} L ${x1-3},${30-hh} L ${x1},${30-hh+2} L ${x1},${30+hh-2} L ${x1-3},${30+hh} L ${x0+hh},${30+hh} A ${hh} ${hh} 0 0 1 ${x0+hh},${30-hh} Z" fill="url(#${u}pig)"/>`
+    + `<rect x="${x0+hh}" y="${30-hh+1}" width="${x1-x0-hh-3}" height="${hh*0.55}" fill="#fff" opacity="0.10"/>`
+    + speckle(x0+hh, x1-2, hh, dk)
+    + brokenEnd(x1, hh, dk);
+}
+// square faceted stick (conté / hard pastel) — chamfered corners, 3 facets
+function squareBody(x0, x1, hh, u, pig)
+{
+  const c = 1.8, dk = PIG[pig][2];
+  return `<path d="M ${x0+c},${30-hh} L ${x1-c},${30-hh} L ${x1},${30-hh+c} L ${x1},${30+hh-c} L ${x1-c},${30+hh} L ${x0+c},${30+hh} L ${x0},${30+hh-c} L ${x0},${30-hh+c} Z" fill="url(#${u}pig)"/>`
+    + `<rect x="${x0+c}" y="${30-hh}" width="${x1-x0-2*c}" height="${hh*0.5}" fill="#fff" opacity="0.11"/>`
+    + `<rect x="${x0+c}" y="${30+hh*0.5}" width="${x1-x0-2*c}" height="${hh*0.5}" fill="#000" opacity="0.16"/>`
+    + `<line x1="${x0}" y1="${30-hh*0.35}" x2="${x1}" y2="${30-hh*0.35}" stroke="#000" stroke-width="0.4" opacity="0.14"/>`
+    + speckle(x0+c, x1-c, hh, dk, 26)
+    + brokenEnd(x1, hh, dk);
+}
+// vine / willow charcoal — thin irregular tapered twig with knots
+function vineBody(x0, x1, u, pig)
+{
+  const dk = PIG[pig][2];
+  const top = `M ${x0},30.4 C ${x0+30},28.2 ${x0+70},29.2 ${x0+110},27.8 C ${x0+140},26.8 ${x1-14},27.9 ${x1-2},27.2`;
+  const bot = `L ${x1-1},32.6 C ${x1-16},33.0 ${x0+140},31.4 ${x0+108},32.6 C ${x0+68},33.8 ${x0+28},32.4 ${x0},32.9 Z`;
+  return `<path d="${top} ${bot}" fill="url(#${u}pig)"/>`
+    + `<path d="M ${x0+4},30 C ${x0+40},28.6 ${x0+90},29 ${x1-6},28.2" stroke="#fff" stroke-width="0.4" opacity="0.14" fill="none"/>`
+    // knots
+    + `<circle cx="${x0+56}" cy="30.4" r="1.4" fill="${dk}" opacity="0.4"/>`
+    + `<circle cx="${x0+128}" cy="29.9" r="1.2" fill="${dk}" opacity="0.4"/>`
+    + speckle(x0+4, x1-4, 3, dk, 14)
+    + brokenEnd(x1, 3, dk);
+}
+// wrapped stick (soft / oil pastel) — round body with a paper band round the middle
+function wrappedBody(x0, x1, hh, u, pig, wrapName, glossy)
+{
+  const dk = PIG[pig][2];
+  const mid = (x0 + x1) / 2, bw = 40;
+  let m = `<path d="M ${x0+hh},${30-hh} L ${x1-3},${30-hh} L ${x1},${30-hh+2} L ${x1},${30+hh-2} L ${x1-3},${30+hh} L ${x0+hh},${30+hh} A ${hh} ${hh} 0 0 1 ${x0+hh},${30-hh} Z" fill="url(#${u}pig)"/>`;
+  if (glossy) m += `<rect x="${x0+hh}" y="${30-hh+0.8}" width="${x1-x0-hh-3}" height="1.4" rx="0.7" fill="#fff" opacity="0.3"/>`;
+  m += speckle(x0+hh, mid-bw/2, hh, dk, 8) + speckle(mid+bw/2, x1-2, hh, dk, 8);
+  // paper band
+  m += `<rect x="${mid-bw/2}" y="${30-hh-0.4}" width="${bw}" height="${2*hh+0.8}" rx="1" fill="url(#${u}wrap)"/>`
+    + `<rect x="${mid-bw/2}" y="${30-hh+0.6}" width="${bw}" height="1.4" fill="#fff" opacity="0.22"/>`
+    + `<line x1="${mid-bw/2}" y1="${30-hh-0.4}" x2="${mid-bw/2}" y2="${30+hh+0.4}" stroke="#000" stroke-width="0.5" opacity="0.3"/>`
+    + `<line x1="${mid+bw/2}" y1="${30-hh-0.4}" x2="${mid+bw/2}" y2="${30+hh+0.4}" stroke="#000" stroke-width="0.5" opacity="0.3"/>`
+    + `<rect x="${mid-9}" y="${30-1.6}" width="18" height="3.2" rx="0.6" fill="#000" opacity="0.14"/>`;  // label patch
+  m += brokenEnd(x1, hh, dk);
+  return m;
+}
+// chunky graphite block — tall rectangle, bevelled corners, worn diagonal end
+function blockBody(x0, x1, hh, u, pig)
+{
+  const c = 2.4, dk = PIG[pig][2];
+  return `<path d="M ${x0+c},${30-hh} L ${x1-6},${30-hh} L ${x1},${30-hh+4} L ${x1},${30+hh-4} L ${x1-6},${30+hh} L ${x0+c},${30+hh} L ${x0},${30+hh-c} L ${x0},${30-hh+c} Z" fill="url(#${u}pig)"/>`
+    + `<rect x="${x0+c}" y="${30-hh}" width="${x1-x0-c-6}" height="${hh*0.4}" fill="#fff" opacity="0.13"/>`
+    + `<rect x="${x0+c}" y="${30+hh*0.55}" width="${x1-x0-c-6}" height="${hh*0.45}" fill="#000" opacity="0.2"/>`
+    + `<path d="M ${x1-6},${30-hh} L ${x1},${30-hh+4} L ${x1},${30+hh-4} L ${x1-6},${30+hh} Z" fill="#000" opacity="0.22"/>`  // worn end facet
+    + speckle(x0+c, x1-8, hh, dk, 20);
+}
+const BODY = {
+  round: roundBody, square: squareBody, vine: vineBody,
+  wrapped: wrappedBody, block: blockBody, chalk: squareBody,
+};
+
+/* ═══════════ ASSEMBLE ONE STICK ═══════════ */
+function mkStick(u, cfg)
+{
+  const [p1, p2, p3] = PIG[cfg.pig];
+  const F = FORM[cfg.form];
+  let defs = grad(u+'pig', s(0,p1)+s(.5,p2)+s(1,p3));
+  if (cfg.form === 'wrapped')
+  {
+    const [w1, w2] = WRAP[cfg.wrap] || WRAP.kraft;
+    defs += grad(u+'wrap', s(0,w1)+s(1,w2));
+  }
+  let m = `<defs>${defs}</defs>`;
+  if (cfg.form === 'vine') m += vineBody(F.x0, F.x1, u, cfg.pig);
+  else if (cfg.form === 'wrapped') m += wrappedBody(F.x0, F.x1, F.hh, u, cfg.pig, cfg.wrap, cfg.glossy);
+  else m += BODY[cfg.form](F.x0, F.x1, F.hh, u, cfg.pig);
+  return svg(m);
+}
+
+/* ═══════════ CONFIGS ═══════════ */
+const CHARCOAL = {
+  'A · Willow · thin vine':        { form:'vine',   pig:'charcoal' },
+  'B · Grey · medium vine':        { form:'vine',   pig:'grey' },
+  'C · Compressed · round stick':  { form:'round',  pig:'charcoal' },
+  'D · Compressed · square stick': { form:'square', pig:'charcoal' },
+};
+const PASTELS = {
+  'A · Ultramarine · soft wrapped':{ form:'wrapped', pig:'ultramarine', wrap:'navy' },
+  'B · Crimson · soft wrapped':    { form:'wrapped', pig:'crimson',     wrap:'crimson' },
+  'C · Violet · soft wrapped':     { form:'wrapped', pig:'violet',      wrap:'kraft' },
+  'D · Terracotta · soft wrapped': { form:'wrapped', pig:'terracotta',  wrap:'kraft' },
+  'E · Viridian · hard square':    { form:'square',  pig:'viridian' },
+  'F · Ochre · hard square':       { form:'square',  pig:'ochre' },
+  'G · Sky · hard square':         { form:'square',  pig:'sky' },
+};
+const CONTE = {
+  'A · Sanguine · conté square':   { form:'square', pig:'sanguine' },
+  'B · Sepia · conté square':      { form:'square', pig:'sepia' },
+  'C · Bistre · conté square':     { form:'square', pig:'bistre' },
+  'D · Black · conté square':      { form:'square', pig:'charcoal' },
+  'E · White · chalk stick':       { form:'chalk',  pig:'white' },
+  'F · Flesh · conté square':      { form:'square', pig:'flesh' },
+};
+const GRAPHITE = {
+  'A · Graphite · chunky block':   { form:'block',  pig:'grey' },
+  'B · Graphite · square stick':   { form:'square', pig:'grey' },
+  'C · Woodless · round stick':    { form:'round',  pig:'charcoal' },
+};
+
+let uid = 0;
+function mountSet(hostId, set)
+{
+  const host = document.getElementById(hostId);
+  Object.entries(set).forEach(([name, cfg]) =>
+  {
+    const u = 'd' + (uid++) + '_';
+    const markup = mkStick(u, cfg);
+    const parts = name.split(' · ');
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="tag">${parts[0]} <span>· ${parts.slice(1).join(' · ')}</span></div>
+      <div class="full">${markup}</div>
+      <div class="cropwrap">
+        <span class="croplbl">library crop &rarr;</span>
+        <div class="crop">${markup}</div>
+      </div>`;
+    const cropSvg = card.querySelector('.crop svg');
+    if (cropSvg) cropSvg.setAttribute('viewBox', '60 16 200 28');
+    host.appendChild(card);
+  });
+}
+mountSet('charcoal', CHARCOAL);
+mountSet('pastels', PASTELS);
+mountSet('conte', CONTE);
+mountSet('graphite', GRAPHITE);
+</script>
+</body>
+</html>

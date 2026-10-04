@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Pencil Design Chooser</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+    background: #08080a; color: #e4e4e7; padding: 28px; }
+  h1 { font-size: 16px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: #a1a1aa; margin-bottom: 4px; }
+  .sub { font-size: 12.5px; color: #71717a; margin-bottom: 8px; line-height: 1.5; }
+  .anatomy { font-size: 12px; color: #8a8a8a; margin-bottom: 20px; }
+  .anatomy b { color: #5b8def; }
+  h2 { font-size: 13px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: #5b8def; margin: 26px 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; }
+  .card { background: #0d0d10; border: 1px solid #1c1c20; border-radius: 12px; padding: 12px 14px; }
+  .card .tag { font-size: 12px; font-weight: 700; color: #f4f4f5; margin-bottom: 8px; }
+  .card .tag span { color: #71717a; font-weight: 500; }
+  .full { width: 100%; aspect-ratio: 5 / 1; background: #141418; border-radius: 8px; margin-bottom: 6px; display: flex; align-items: center; }
+  .full svg { width: 100%; height: 100%; filter: drop-shadow(0 2px 3px rgba(0,0,0,.6)); }
+  .cropwrap { display: flex; align-items: center; gap: 8px; }
+  .croplbl { font-size: 10px; color: #52525b; letter-spacing: .04em; white-space: nowrap; }
+  .crop { flex: 1; aspect-ratio: 9 / 2; background: #17212e; border: 1px solid #2e4666; border-radius: 6px; display: flex; align-items: center; padding: 0 8px; }
+  .crop svg { width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+
+<h1>Pencil Design Chooser</h1>
+<div class="sub">Full categorized set — same minimal / ergonomic / aesthetic language as the pens &amp; brushes.<br>Top swatch = whole pencil; bottom (blue) = exact library crop (sharpened end). Tell me the winners, e.g. &ldquo;Graphite B, Colour D, Mechanical A&rdquo;.</div>
+<div class="anatomy">Anatomy per pencil: <b>faceted barrel</b> &rarr; <b>sharpened wood cone</b> &rarr; <b>exposed core</b> — graphite / coloured pigment / charcoal. Mechanical = barrel &rarr; <b>grip</b> &rarr; <b>metal tip</b> &rarr; thin lead.</div>
+
+<h2>Graphite (wood-cased)</h2>
+<div class="grid" id="graphite"></div>
+
+<h2>Colour Pencils</h2>
+<div class="grid" id="colour"></div>
+
+<h2>Mechanical &amp; Clutch</h2>
+<div class="grid" id="mech"></div>
+
+<h2>Charcoal &amp; Pastel</h2>
+<div class="grid" id="charcoal"></div>
+
+<script>
+const grad = (id, stops, x1=0,y1=0,x2=0,y2=1) =>
+  `<linearGradient id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">${stops}</linearGradient>`;
+const s = (o,c,op=1) => `<stop offset="${o}" stop-color="${c}" ${op<1 ? `stop-opacity="${op}"` : ""} />`;
+const svg = (inner) => `<svg viewBox="0 0 300 60" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
+
+/* ---- metal fills (ferrules, mechanical tips, bands) ---- */
+const METAL = {
+  gold:   s(0,'#8a6a2a')+s(.4,'#f0cf7e')+s(.7,'#a5822f')+s(1,'#4a370f'),
+  silver: s(0,'#66707a')+s(.4,'#eef2f6')+s(.7,'#454b52')+s(1,'#22262b'),
+  copper: s(0,'#7a3a1a')+s(.4,'#e8a878')+s(.7,'#a5551f')+s(1,'#4a1f08'),
+  chrome: s(0,'#8a949c')+s(.3,'#fdfefe')+s(.55,'#c4ccd4')+s(1,'#6e767e'),
+  black:  s(0,'#17171b')+s(.5,'#3a3a42')+s(1,'#050507'),
+};
+
+/* ---- barrel palettes [top, mid, bottom] for a cross-barrel gradient ---- */
+const PAL = {
+  yellow:['#c99310','#f7d24a','#a8760a'], black:['#17171b','#33333b','#050507'],
+  natural:['#a8743e','#d8a566','#7a5228'], green:['#1a4a2a','#3aa05a','#0f2e18'],
+  navy:['#16305e','#3a5f9c','#0c1c3a'], red:['#7a0f14','#d8342e','#4a0808'],
+  crimson:['#5a0a1a','#a8243c','#3a0610'], teal:['#0f3d43','#2b7f88','#082227'],
+  amber:['#7a4410','#d98c2b','#5a300a'], purple:['#2a1a4a','#5a3a8a','#180e30'],
+  orange:['#8a3a08','#e87b1e','#5a2404'], pink:['#8a1a4a','#d8478a','#5a0e30'],
+  sky:['#1a5a8a','#4aa5d8','#0f3a5a'], lime:['#3a6a10','#8ac02e','#264a08'],
+  brown:['#3a2410','#7a5228','#241408'], grey:['#3a3e44','#7a838c','#22262b'],
+  white:['#cdcdd2','#ffffff','#adadb4'], graphite:['#26262a','#52525a','#141416'],
+};
+
+/* ---- core (exposed tip) colours: root shade → point shade ---- */
+const CORE = {
+  graphite: ['#4a4a52','#1c1c22'], charcoal: ['#2a2a2e','#0a0a0c'],
+  yellow:['#e8c848','#c99310'], red:['#e0342e','#8a0f14'], crimson:['#c8243c','#5a0a1a'],
+  green:['#3aa05a','#0f3a20'], navy:['#3a5f9c','#0c1c3a'], teal:['#2b9f9a','#083a37'],
+  amber:['#e0a02b','#7a4410'], purple:['#7a4ab0','#2a1a4a'], orange:['#e87b1e','#8a3a08'],
+  pink:['#e05a9a','#8a1a4a'], sky:['#4aa5d8','#1a5a8a'], lime:['#9ad03a','#3a6a10'],
+  brown:['#8a5a30','#3a2410'], white:['#f4f4f6','#c4c4cc'], grey:['#8a909a','#3a3e44'],
+};
+
+/* ---- layout: barrel back at 24; barrel→sharpen at sx; wood cone→core at wx; point at tx ---- */
+const LAYOUT = {
+  graphite:{sx:196,wx:224,tx:240,hh:7},   colour:{sx:196,wx:224,tx:240,hh:7},
+  charcoal:{sx:194,wx:220,tx:236,hh:7.5},  mech:{sx:0,wx:0,tx:0,hh:6.5}, // mech drawn separately
+};
+
+/* ═══════════ FACETED BARREL (hex look via top/bottom shading) ═══════════ */
+function barrel(u, bx, sx, hh, faceted)
+{
+  let m = `<rect x="${bx}" y="${30-hh}" width="${sx-bx}" height="${2*hh}" fill="url(#${u}bar)"/>`;
+  if (faceted)
+  {
+    // three long facets: top highlight, centre, bottom shade
+    m += `<rect x="${bx}" y="${30-hh}" width="${sx-bx}" height="${hh*0.5}" fill="#fff" opacity="0.10"/>`
+       + `<rect x="${bx}" y="${30+hh*0.45}" width="${sx-bx}" height="${hh*0.55}" fill="#000" opacity="0.22"/>`
+       + `<line x1="${bx}" y1="${30-hh*0.35}" x2="${sx}" y2="${30-hh*0.35}" stroke="#000" stroke-width="0.4" opacity="0.18"/>`
+       + `<line x1="${bx}" y1="${30+hh*0.4}" x2="${sx}" y2="${30+hh*0.4}" stroke="#000" stroke-width="0.4" opacity="0.18"/>`;
+  }
+  else
+  {
+    m += `<rect x="${bx}" y="${30-hh+1}" width="${sx-bx}" height="1.6" rx="0.8" fill="#fff" opacity="0.14"/>`
+       + `<rect x="${bx}" y="${30+hh*0.4}" width="${sx-bx}" height="${hh*0.6}" fill="#000" opacity="0.14"/>`;
+  }
+  return m;
+}
+
+/* ---- barrel back-ends ---- */
+const BACK = {
+  flat:   (u, bx, hh) => `<rect x="${bx-2}" y="${30-hh}" width="2" height="${2*hh}" fill="#000" opacity="0.35"/>`,
+  eraser: (u, bx, hh) => `<rect x="${bx-9}" y="${30-hh+0.5}" width="6" height="${2*hh-1}" rx="1.5" fill="#d98a8a"/>`
+    + `<rect x="${bx-9}" y="${30-hh+0.5}" width="6" height="1.4" rx="0.7" fill="#fff" opacity="0.3"/>`
+    + `<rect x="${bx-4}" y="${30-hh}" width="4" height="${2*hh}" fill="url(#${u}acc)"/>`  // metal ferrule
+    + `<g opacity="0.3"><line x1="${bx-3}" y1="${30-hh}" x2="${bx-3}" y2="${30+hh}" stroke="#000" stroke-width="0.4"/><line x1="${bx-1}" y1="${30-hh}" x2="${bx-1}" y2="${30+hh}" stroke="#000" stroke-width="0.4"/></g>`,
+  cap:    (u, bx, hh) => `<path d="M ${bx},${30-hh} L ${bx-6},${30-hh*0.55} C ${bx-9},30 ${bx-6},${30+hh*0.55} ${bx},${30+hh} Z" fill="url(#${u}acc)"/>`,
+  dip:    (u, bx, hh) => `<path d="M ${bx},${30-hh} C ${bx-7},${30-hh} ${bx-7},${30+hh} ${bx},${30+hh} Z" fill="url(#${u}bar)"/>`
+    + `<rect x="${bx-3}" y="${30-hh*0.8}" width="2.2" height="${hh*1.6}" rx="1" fill="url(#${u}acc)"/>`,
+};
+
+/* ═══════════ SHARPENED WOOD CONE + EXPOSED CORE ═══════════ */
+function sharpenedTip(u, sx, wx, tx, hh, coreName)
+{
+  const [cr, cp] = CORE[coreName];
+  // wood cone (natural pale wood regardless of barrel)
+  let m = `<path d="M ${sx},${30-hh} L ${wx},${30-2.4} L ${wx},${30+2.4} L ${sx},${30+hh} Z" fill="url(#${u}wood)"/>`
+    // shaving facets on the cone
+    + `<path d="M ${sx},${30-hh} L ${wx},${30-2.4} L ${wx},30 L ${sx},${30-hh*0.2} Z" fill="#fff" opacity="0.12"/>`
+    + `<path d="M ${sx},${30+hh*0.2} L ${wx},30 L ${wx},${30+2.4} L ${sx},${30+hh} Z" fill="#000" opacity="0.20"/>`
+    + `<line x1="${sx}" y1="${30-hh}" x2="${sx}" y2="${30+hh}" stroke="#000" stroke-width="0.5" opacity="0.25"/>`
+    // exposed core — cone to a fine point, root shade → point shade
+    + grad(u+'core', s(0,cr)+s(1,cp), 0,0,1,0)
+    + `<path d="M ${wx},${30-2.4} L ${tx},30 L ${wx},${30+2.4} Z" fill="url(#${u}core)"/>`;
+  return m;
+}
+
+/* ═══════════ MECHANICAL / CLUTCH (separate anatomy) ═══════════ */
+function mechanical(u, cfg)
+{
+  const hh = 6.5, bx = 26, gripX = 176, coneX = 202, tipX = 216, leadX = 232;
+  const [cr, cp] = CORE[cfg.core];
+  let m = '';
+  // back cap + push button
+  m += `<rect x="${bx-8}" y="${30-hh*0.7}" width="5" height="${hh*1.4}" rx="1.5" fill="url(#${u}acc)"/>`;
+  m += `<rect x="${bx-3}" y="${30-hh}" width="3" height="${2*hh}" fill="url(#${u}acc)"/>`;
+  // clip
+  m += `<path d="M ${bx+4},${30-hh} L ${bx+22},${30-hh-1.5} L ${bx+24},${30-hh+0.5} L ${bx+4},${30-hh+2.5} Z" fill="url(#${u}acc)"/>`;
+  // barrel
+  m += barrel(u, bx, gripX, hh, false);
+  // grip — knurled metal or moulded
+  if (cfg.grip === 'knurl')
+    m += `<rect x="${gripX}" y="${30-hh}" width="${coneX-gripX}" height="${2*hh}" fill="url(#${u}acc)"/>`
+       + `<g opacity="0.32">${Array.from({length:11}).map((_,i)=>`<line x1="${gripX+2+i*2}" y1="${30-hh+1}" x2="${gripX+2+i*2}" y2="${30+hh-1}" stroke="#000" stroke-width="0.5"/>`).join('')}</g>`;
+  else
+    m += `<path d="M ${gripX},${30-hh} L ${coneX},${30-hh*0.7} L ${coneX},${30+hh*0.7} L ${gripX},${30+hh} Z" fill="url(#${u}acc)"/>`
+       + `<rect x="${gripX+2}" y="${30-hh+1}" width="${coneX-gripX-4}" height="1.4" fill="#fff" opacity="0.25"/>`;
+  // metal cone tip
+  m += `<path d="M ${coneX},${30-hh*0.7} L ${tipX},${30-1.6} L ${tipX},${30+1.6} L ${coneX},${30+hh*0.7} Z" fill="url(#${u}acc)"/>`;
+  // lead sleeve + thin protruding lead
+  m += `<rect x="${tipX}" y="${30-1}" width="4" height="2" fill="#5a5f66"/>`;
+  m += grad(u+'core', s(0,cr)+s(1,cp), 0,0,1,0)
+    + `<rect x="${tipX+4}" y="${30-0.7}" width="${leadX-tipX-4}" height="1.4" fill="url(#${u}core)"/>`;
+  return m;
+}
+
+/* ═══════════ ASSEMBLE ONE PENCIL ═══════════ */
+function mkPencil(u, cfg)
+{
+  const accStops = METAL[cfg.accent] || METAL.silver;
+  if (cfg.type === 'mech')
+  {
+    const [c1,c2,c3] = PAL[cfg.bar];
+    const defs = grad(u+'bar', s(0,c1)+s(.5,c2)+s(1,c3)) + grad(u+'acc', accStops);
+    return svg(`<defs>${defs}</defs>` + mechanical(u, cfg));
+  }
+  const [c1, c2, c3] = PAL[cfg.bar];
+  const L = LAYOUT[cfg.type];
+  const bx = 26;
+  const defs =
+    grad(u+'bar', s(0,c1)+s(.5,c2)+s(1,c3)) +
+    grad(u+'acc', accStops) +
+    grad(u+'wood', s(0,'#e8cfa0')+s(.5,'#d0ad72')+s(1,'#a8823e'));
+  let m = `<defs>${defs}</defs>`;
+  m += BACK[cfg.back](u, bx, L.hh);
+  m += barrel(u, bx, L.sx, L.hh, cfg.faceted !== false);
+  m += sharpenedTip(u, L.sx, L.wx, L.tx, L.hh, cfg.core);
+  return svg(m);
+}
+
+/* ═══════════ CONFIGS ═══════════ */
+const GRAPHITE = {
+  'A · Classic yellow · eraser':   { type:'graphite', bar:'yellow', core:'graphite', back:'eraser', accent:'gold' },
+  'B · Studio black · flat end':   { type:'graphite', bar:'black',  core:'graphite', back:'flat',   accent:'silver' },
+  'C · Natural cedar · cap':       { type:'graphite', bar:'natural',core:'graphite', back:'cap',    accent:'chrome' },
+  'D · Forest green · dipped':     { type:'graphite', bar:'green',  core:'graphite', back:'dip',    accent:'gold' },
+  'E · Navy · round (unfaceted)':  { type:'graphite', bar:'navy',   core:'graphite', back:'flat',   accent:'silver', faceted:false },
+};
+const COLOUR = {
+  'A · Red · self-coloured':       { type:'colour', bar:'red',     core:'red',     back:'flat', accent:'silver' },
+  'B · Sky · self-coloured':       { type:'colour', bar:'sky',     core:'sky',     back:'flat', accent:'silver' },
+  'C · Lime · self-coloured':      { type:'colour', bar:'lime',    core:'lime',    back:'flat', accent:'silver' },
+  'D · Amber · self-coloured':     { type:'colour', bar:'amber',   core:'amber',   back:'flat', accent:'gold' },
+  'E · Purple · self-coloured':    { type:'colour', bar:'purple',  core:'purple',  back:'flat', accent:'silver' },
+  'F · Pink · self-coloured':      { type:'colour', bar:'pink',    core:'pink',    back:'flat', accent:'silver' },
+  'G · Teal · self-coloured':      { type:'colour', bar:'teal',    core:'teal',    back:'flat', accent:'chrome' },
+  'H · White · dark barrel core':  { type:'colour', bar:'graphite',core:'white',   back:'flat', accent:'silver' },
+};
+const MECH = {
+  'A · Graphite · knurled grip':   { type:'mech', bar:'graphite', core:'graphite', grip:'knurl',  accent:'chrome' },
+  'B · Black · moulded grip':      { type:'mech', bar:'black',    core:'graphite', grip:'moulded',accent:'silver' },
+  'C · Navy · knurled brass':      { type:'mech', bar:'navy',     core:'graphite', grip:'knurl',  accent:'gold' },
+  'D · Crimson · moulded':         { type:'mech', bar:'crimson',  core:'graphite', grip:'moulded',accent:'chrome' },
+};
+const CHARCOAL = {
+  'A · Charcoal · natural barrel':  { type:'charcoal', bar:'brown', core:'charcoal', back:'flat', accent:'silver' },
+  'B · Sanguine · pastel core':     { type:'charcoal', bar:'crimson',core:'crimson', back:'flat', accent:'copper' },
+  'C · Sepia · pastel core':        { type:'charcoal', bar:'brown', core:'brown',    back:'flat', accent:'copper' },
+  'D · White chalk · dark barrel':  { type:'charcoal', bar:'grey',  core:'white',    back:'flat', accent:'silver' },
+};
+
+let uid = 0;
+function mountSet(hostId, set)
+{
+  const host = document.getElementById(hostId);
+  Object.entries(set).forEach(([name, cfg]) =>
+  {
+    const u = 'c' + (uid++) + '_';
+    const markup = mkPencil(u, cfg);
+    const parts = name.split(' · ');
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="tag">${parts[0]} <span>· ${parts.slice(1).join(' · ')}</span></div>
+      <div class="full">${markup}</div>
+      <div class="cropwrap">
+        <span class="croplbl">library crop &rarr;</span>
+        <div class="crop">${markup}</div>
+      </div>`;
+    const cropSvg = card.querySelector('.crop svg');
+    if (cropSvg) cropSvg.setAttribute('viewBox', '150 12 145 36');
+    host.appendChild(card);
+  });
+}
+mountSet('graphite', GRAPHITE);
+mountSet('colour', COLOUR);
+mountSet('mech', MECH);
+mountSet('charcoal', CHARCOAL);
+</script>
+</body>
+</html>

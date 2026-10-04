@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Paint Brush Design Chooser</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+    background: #08080a; color: #e4e4e7; padding: 28px; }
+  h1 { font-size: 16px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: #a1a1aa; margin-bottom: 4px; }
+  .sub { font-size: 12.5px; color: #71717a; margin-bottom: 8px; line-height: 1.5; }
+  .anatomy { font-size: 12px; color: #8a8a8a; margin-bottom: 20px; }
+  .anatomy b { color: #5b8def; }
+  h2 { font-size: 13px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: #5b8def; margin: 26px 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; }
+  .card { background: #0d0d10; border: 1px solid #1c1c20; border-radius: 12px; padding: 12px 14px; }
+  .card .tag { font-size: 12px; font-weight: 700; color: #f4f4f5; margin-bottom: 8px; }
+  .card .tag span { color: #71717a; font-weight: 500; }
+  .full { width: 100%; aspect-ratio: 5 / 1; background: #141418; border-radius: 8px; margin-bottom: 6px; display: flex; align-items: center; }
+  .full svg { width: 100%; height: 100%; filter: drop-shadow(0 2px 3px rgba(0,0,0,.6)); }
+  .cropwrap { display: flex; align-items: center; gap: 8px; }
+  .croplbl { font-size: 10px; color: #52525b; letter-spacing: .04em; white-space: nowrap; }
+  .crop { flex: 1; aspect-ratio: 9 / 2; background: #17212e; border: 1px solid #2e4666; border-radius: 6px; display: flex; align-items: center; padding: 0 8px; }
+  .crop svg { width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+
+<h1>Paint Brush Design Chooser</h1>
+<div class="sub">Full categorized set — same minimal / ergonomic / aesthetic language as the pens.<br>Top swatch = whole brush; bottom (blue) = exact library crop (ferrule + head). Tell me the winners, e.g. &ldquo;Round A, Flat C, Filbert B&rdquo;.</div>
+<div class="anatomy">Anatomy per brush: <b>tapered handle</b> &rarr; <b>metal ferrule</b> (crimp / seamless / banded) &rarr; <b>bristle head</b> — shape defines the category.</div>
+
+<h2>Rounds (point &amp; line work)</h2>
+<div class="grid" id="rounds"></div>
+
+<h2>Flats (edges &amp; washes)</h2>
+<div class="grid" id="flats"></div>
+
+<h2>Filberts &amp; Angles (soft edges &amp; strokes)</h2>
+<div class="grid" id="filberts"></div>
+
+<h2>Blending &amp; Specialty</h2>
+<div class="grid" id="specialty"></div>
+
+<h2>Texture &amp; Shaping</h2>
+<div class="grid" id="texture"></div>
+
+<script>
+const grad = (id, stops, x1=0,y1=0,x2=0,y2=1) =>
+  `<linearGradient id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">${stops}</linearGradient>`;
+const s = (o,c,op=1) => `<stop offset="${o}" stop-color="${c}" ${op<1 ? `stop-opacity="${op}"` : ""} />`;
+const svg = (inner) => `<svg viewBox="0 0 300 60" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
+
+/* ---- metal fills (ferrules / accent bands) ---- */
+const METAL = {
+  gold:   s(0,'#8a6a2a')+s(.4,'#f0cf7e')+s(.7,'#a5822f')+s(1,'#4a370f'),
+  silver: s(0,'#66707a')+s(.4,'#eef2f6')+s(.7,'#454b52')+s(1,'#22262b'),
+  copper: s(0,'#7a3a1a')+s(.4,'#e8a878')+s(.7,'#a5551f')+s(1,'#4a1f08'),
+  chrome: s(0,'#8a949c')+s(.3,'#fdfefe')+s(.55,'#c4ccd4')+s(1,'#6e767e'),
+  black:  s(0,'#17171b')+s(.5,'#3a3a42')+s(1,'#050507'),
+};
+
+/* ---- handle colour palettes [top, mid, bottom] for a cylindrical gradient ---- */
+const PAL = {
+  navy:['#16305e','#3a5f9c','#0c1c3a'], burgundy:['#4a0f1a','#8a2436','#2a0810'],
+  forest:['#123a20','#2f7d4a','#0a2412'], black:['#17171b','#33333b','#050507'],
+  teal:['#0f3d43','#2b7f88','#082227'], amber:['#7a4410','#d98c2b','#5a300a'],
+  purple:['#2a1a4a','#5a3a8a','#180e30'], ivory:['#cfc8b8','#faf6ec','#a89f8c'],
+  slate:['#3a3e44','#7a838c','#22262b'], wood:['#5a3a1c','#a8743e','#3a2410'],
+  marble:['#3a2a4a','#6a4a8a','#1a1028'], red:['#7a0f14','#d8342e','#4a0808'],
+  green:['#1a4a2a','#3aa05a','#0f2e18'], walnut:['#4a2f18','#8a5a30','#2e1e0e'],
+  graphite:['#26262a','#52525a','#141416'], copper:['#5a2a12','#c17a42','#3a1808'],
+};
+
+/* ---- bristle materials (HORIZONTAL gradient: root → tip) ---- */
+const BRISTLE = {
+  sable:    s(0,'#5a3c1e')+s(.45,'#c49a5e')+s(.8,'#8a5f32')+s(1,'#6a4526'),
+  synth:    s(0,'#0c0c10')+s(.45,'#3a3a44')+s(.8,'#17171b')+s(1,'#0a0a0e'),
+  hog:      s(0,'#ab935f')+s(.45,'#f2e6c8')+s(.85,'#d8c496')+s(1,'#b8a074'),
+  squirrel: s(0,'#4a4038')+s(.45,'#9a8e80')+s(.85,'#6a5e52')+s(1,'#4a4038'),
+  taklon:   s(0,'#8a5a1a')+s(.45,'#e8b45e')+s(.85,'#b5822a')+s(1,'#8a5a1a'),
+  rubber:   s(0,'#4a4e54')+s(.4,'#9aa0a8')+s(.7,'#5a5f66')+s(1,'#33363b'),
+  sponge:   s(0,'#8a7048')+s(.45,'#d8bd8a')+s(.85,'#a5895a')+s(1,'#7a6038'),
+};
+
+/* ---- fixed anatomy: handle 20→HX, ferrule HX→FX, bristles FX→tx ---- */
+const HX = 166;      // handle end / ferrule start
+const FX = 196;      // ferrule end / bristle root
+const HH = 5.5;      // handle half-height at the ferrule
+
+/* ---- per-type: bristle tip x (tx) + root half-height (hr) ---- */
+const BLAYOUT = {
+  round:{tx:244,hr:5},    detail:{tx:242,hr:3},   rigger:{tx:264,hr:2.4}, spotter:{tx:230,hr:3.6},
+  flat:{tx:238,hr:7},     bright:{tx:226,hr:7.5},  wash:{tx:234,hr:11},    onestroke:{tx:242,hr:6},
+  filbert:{tx:240,hr:7},  angle:{tx:240,hr:7},     dagger:{tx:252,hr:6},
+  fan:{tx:236,hr:4},      mop:{tx:246,hr:9},        deerfoot:{tx:236,hr:6}, rake:{tx:238,hr:7},
+  hake:{tx:230,hr:13},    egbert:{tx:252,hr:6.5},   oval:{tx:246,hr:8},
+  stippler:{tx:224,hr:6}, shaper:{tx:244,hr:4.5},   sponge:{tx:238,hr:10},
+};
+
+/* ═══════════ BRISTLE HEADS ═══════════ */
+function hairs(fx, tx, hr)      // fine strokes converging to a point
+{
+  let m = '';
+  for (let i = -2; i <= 2; i++)
+    m += `<line x1="${fx+3}" y1="${30+i*hr*0.7}" x2="${tx-2}" y2="30" stroke="#000" stroke-width="0.35" opacity="0.13"/>`;
+  return m;
+}
+function hairsFlat(fx, tx, hr)  // parallel strokes for flat/edge heads
+{
+  let m = '';
+  for (let i = -2; i <= 2; i++)
+    m += `<line x1="${fx+3}" y1="${30+i*hr*0.55}" x2="${tx-3}" y2="${30+i*hr*0.55}" stroke="#000" stroke-width="0.35" opacity="0.11"/>`;
+  return m;
+}
+
+// pointed round — belly bulges then converges to a fine point
+function roundHead(fx, tx, u, hr)
+{
+  return `<path d="M ${fx},${30-hr} C ${fx+10},${30-hr-2} ${tx-16},${30-hr*0.45} ${tx},30 C ${tx-16},${30+hr*0.45} ${fx+10},${30+hr+2} ${fx},${30+hr} Z" fill="url(#${u}bris)"/>`
+    + hairs(fx, tx, hr);
+}
+// soft blunt dome (mop)
+function mopHead(fx, tx, u, hr)
+{
+  return `<path d="M ${fx},${30-hr} C ${fx+4},${30-hr-3.5} ${tx-6},${30-hr-2} ${tx},30 C ${tx-6},${30+hr+2} ${fx+4},${30+hr+3.5} ${fx},${30+hr} Z" fill="url(#${u}bris)"/>`
+    + hairs(fx, tx, hr);
+}
+// squared flat, softly rounded corners
+function flatHead(fx, tx, u, hr)
+{
+  const r = 1.6;
+  return `<path d="M ${fx},${30-hr} L ${tx-r},${30-hr} Q ${tx},${30-hr} ${tx},${30-hr+r} L ${tx},${30+hr-r} Q ${tx},${30+hr} ${tx-r},${30+hr} L ${fx},${30+hr} Z" fill="url(#${u}bris)"/>`
+    + hairsFlat(fx, tx, hr);
+}
+// filbert — flat sides, domed end
+function filbertHead(fx, tx, u, hr)
+{
+  return `<path d="M ${fx},${30-hr} L ${tx-9},${30-hr} C ${tx+2},${30-hr} ${tx+2},${30+hr} ${tx-9},${30+hr} L ${fx},${30+hr} Z" fill="url(#${u}bris)"/>`
+    + hairsFlat(fx, tx, hr);
+}
+// angular shader — diagonal cutting edge, long toe / short heel
+function angleHead(fx, tx, u, hr)
+{
+  return `<path d="M ${fx},${30-hr} L ${tx},${30-hr} L ${fx+9},${30+hr} L ${fx},${30+hr} Z" fill="url(#${u}bris)"/>`
+    + `<g opacity="0.13">${Array.from({length:4}).map((_,i)=>`<line x1="${fx+3}" y1="${30-hr+2+i*hr*0.45}" x2="${tx-3}" y2="${30-hr+1+i*hr*0.45}" stroke="#000" stroke-width="0.35"/>`).join('')}</g>`;
+}
+// dagger / sword — straight upper edge sweeping to a fine point, concave lower edge
+function daggerHead(fx, tx, u, hr)
+{
+  return `<path d="M ${fx},${30-hr} C ${fx+16},${30-hr} ${tx-10},${30-hr+1} ${tx},${30-1} L ${tx},${30+1} C ${tx-16},${30+hr+1} ${fx+12},${30+hr} ${fx},${30+hr} Z" fill="url(#${u}bris)"/>`
+    + hairs(fx, tx, hr);
+}
+// fan blender — narrow root splaying to a wide arc
+function fanHead(fx, tx, u, hr)
+{
+  const w = hr * 1.9;
+  let m = `<path d="M ${fx},${30-2.5} L ${tx-2},${30-w} Q ${tx+3},30 ${tx-2},${30+w} L ${fx},${30+2.5} Z" fill="url(#${u}bris)"/>`;
+  for (let i = -3; i <= 3; i++)
+    m += `<line x1="${fx+2}" y1="30" x2="${tx-1}" y2="${30+i*w/3.2}" stroke="#000" stroke-width="0.4" opacity="0.16"/>`;
+  return m;
+}
+// deerfoot stippler — cylinder cut at a slant (blunt oval)
+function deerfootHead(fx, tx, u, hr)
+{
+  return `<path d="M ${fx},${30-hr} L ${tx-9},${30-hr} C ${tx+2},${30-hr} ${tx+1},${30+hr} ${tx-13},${30+hr} L ${fx},${30+hr} Z" fill="url(#${u}bris)"/>`
+    + hairsFlat(fx, tx, hr);
+}
+// rake / comb — solid base splitting into separated tines
+function rakeHead(fx, tx, u, hr)
+{
+  const tines = 5, gap = (2*hr)/tines, base = fx + (tx-fx)*0.42;
+  let m = `<rect x="${fx}" y="${30-hr}" width="${base-fx}" height="${2*hr}" fill="url(#${u}bris)"/>`;
+  for (let i = 0; i < tines; i++)
+    m += `<rect x="${base}" y="${30-hr + i*gap + gap*0.16}" width="${tx-base}" height="${gap*0.68}" rx="0.6" fill="url(#${u}bris)"/>`;
+  return m;
+}
+// hake — very wide, thin flat wash head; slim ferrule crimp implied by many hairs
+function hakeHead(fx, tx, u, hr)
+{
+  return `<path d="M ${fx},${30-hr} L ${tx},${30-hr} L ${tx},${30+hr} L ${fx},${30+hr} Z" fill="url(#${u}bris)"/>`
+    + `<g opacity="0.12">${Array.from({length:9}).map((_,i)=>`<line x1="${fx+3}" y1="${30-hr+1.5+i*(2*hr-3)/8}" x2="${tx-2}" y2="${30-hr+1.5+i*(2*hr-3)/8}" stroke="#000" stroke-width="0.35"/>`).join('')}</g>`;
+}
+// egbert — extra-long filbert: flat sides run long, then a soft dome
+function egbertHead(fx, tx, u, hr)
+{
+  return `<path d="M ${fx},${30-hr} L ${tx-13},${30-hr*0.9} C ${tx+3},${30-hr*0.75} ${tx+3},${30+hr*0.75} ${tx-13},${30+hr*0.9} L ${fx},${30+hr} Z" fill="url(#${u}bris)"/>`
+    + hairs(fx, tx, hr);
+}
+// oval wash / cat's-tongue — flat that swells to a belly then a soft point
+function ovalHead(fx, tx, u, hr)
+{
+  return `<path d="M ${fx},${30-hr} C ${fx+12},${30-hr-2} ${tx-14},${30-hr*0.5} ${tx},30 C ${tx-14},${30+hr*0.5} ${fx+12},${30+hr+2} ${fx},${30+hr} Z" fill="url(#${u}bris)"/>`
+    + hairs(fx, tx, hr);
+}
+// stippler / stencil — short, blunt flat-topped cylinder for dabbing
+function stipplerHead(fx, tx, u, hr)
+{
+  let m = `<rect x="${fx}" y="${30-hr}" width="${tx-fx}" height="${2*hr}" rx="1" fill="url(#${u}bris)"/>`;
+  m += `<line x1="${tx}" y1="${30-hr+1}" x2="${tx}" y2="${30+hr-1}" stroke="#000" stroke-width="0.6" opacity="0.2"/>`;
+  m += `<g opacity="0.16">${Array.from({length:7}).map((_,i)=>`<circle cx="${tx-1}" cy="${30-hr+2+i*(2*hr-4)/6}" r="0.5" fill="#000"/>`).join('')}</g>`;
+  return m;
+}
+// colour shaper — firm rubber/silicone chisel tip (non-bristle, smooth)
+function shaperHead(fx, tx, u, hr)
+{
+  return `<path d="M ${fx},${30-hr} L ${tx-7},${30-hr*0.55} L ${tx},${30-1.4} L ${tx},${30+1.4} L ${tx-7},${30+hr*0.55} L ${fx},${30+hr} Z" fill="url(#${u}bris)"/>`
+    + `<path d="M ${fx+2},${30-hr+1} L ${tx-7},${30-hr*0.55+1}" stroke="#fff" stroke-width="0.5" opacity="0.28"/>`;
+}
+// sponge dabber — mottled rounded pad for texture
+function spongeHead(fx, tx, u, hr)
+{
+  let m = `<path d="M ${fx},${30-hr} C ${fx+6},${30-hr-3} ${tx-4},${30-hr-2} ${tx},30 C ${tx-4},${30+hr+2} ${fx+6},${30+hr+3} ${fx},${30+hr} Z" fill="url(#${u}bris)"/>`;
+  const holes = [[fx+10,26,1.4],[fx+16,32,1.8],[fx+22,28,1.2],[fx+13,34,1.1],[fx+24,33,1.5],[fx+8,31,1.0],[fx+19,25,1.3]];
+  m += `<g opacity="0.24">${holes.map(([cx,cy,r])=>`<circle cx="${cx}" cy="${cy}" r="${r}" fill="#000"/>`).join('')}</g>`;
+  return m;
+}
+const HEAD = {
+  round: roundHead, detail: roundHead, rigger: roundHead, spotter: roundHead,
+  flat: flatHead, bright: flatHead, wash: flatHead, onestroke: flatHead,
+  filbert: filbertHead, angle: angleHead, dagger: daggerHead,
+  fan: fanHead, mop: mopHead, deerfoot: deerfootHead, rake: rakeHead,
+  hake: hakeHead, egbert: egbertHead, oval: ovalHead,
+  stippler: stipplerHead, shaper: shaperHead, sponge: spongeHead,
+};
+
+/* ═══════════ HANDLE + FERRULE ═══════════ */
+function handle(u)
+{
+  return `<path d="M 20,30 C 36,${30-HH*0.5} ${HX-40},${30-HH} ${HX},${30-HH} L ${HX},${30+HH} C ${HX-40},${30+HH} 36,${30+HH*0.5} 20,30 Z" fill="url(#${u}bar)"/>`
+    + `<rect x="46" y="${30-HH+1}" width="${HX-70}" height="1.4" rx="0.7" fill="#fff" opacity="0.12"/>`;
+}
+const HBACK = {
+  taper: (u) => ``,
+  round: (u) => `<circle cx="23" cy="30" r="${HH*0.7}" fill="url(#${u}bar)"/>`,
+  crest: (u) => `<rect x="30" y="${30-HH*0.8}" width="3" height="${HH*1.6}" rx="1" fill="url(#${u}acc)"/>`,
+  flat:  (u) => `<rect x="20" y="${30-HH*0.6}" width="6" height="${HH*1.2}" rx="1" fill="url(#${u}bar)"/>`,
+};
+function ferrule(u, fh, style)
+{
+  const w = FX - HX;
+  let m = `<rect x="${HX}" y="${30-fh}" width="${w}" height="${2*fh}" rx="1.8" fill="url(#${u}fer)"/>`
+    + `<rect x="${HX+1}" y="${30-fh+1}" width="${w-2}" height="1.7" rx="0.85" fill="#fff" opacity="0.3"/>`;
+  if (style === 'crimp')
+    m += `<line x1="${HX+9}" y1="${30-fh+1.5}" x2="${HX+9}" y2="${30+fh-1.5}" stroke="#000" stroke-width="0.7" opacity="0.32"/>`
+       + `<line x1="${HX+w-9}" y1="${30-fh+1.5}" x2="${HX+w-9}" y2="${30+fh-1.5}" stroke="#000" stroke-width="0.7" opacity="0.32"/>`;
+  else if (style === 'banded')
+    m += `<rect x="${HX+w/2-1.5}" y="${30-fh}" width="3" height="${2*fh}" fill="url(#${u}acc)"/>`;
+  // seamless → just the base + highlight
+  return m;
+}
+
+/* ═══════════ ASSEMBLE ONE BRUSH ═══════════ */
+function mkBrush(u, cfg)
+{
+  const [c1, c2, c3] = PAL[cfg.bar];
+  const ferStops = METAL[cfg.ferrule] || METAL.chrome;
+  const accStops = METAL[cfg.accent] || ferStops;
+  const L = BLAYOUT[cfg.type];
+  const fh = Math.max(6, L.hr + 1.5);
+  const defs =
+    grad(u+'bar', s(0,c1)+s(.5,c2)+s(1,c3)) +
+    grad(u+'fer', ferStops) +
+    grad(u+'acc', accStops) +
+    grad(u+'bris', BRISTLE[cfg.hair], 0,0,1,0);
+  let m = `<defs>${defs}</defs>`;
+  m += HBACK[cfg.back](u);
+  m += handle(u);
+  m += ferrule(u, fh, cfg.crimp);
+  m += HEAD[cfg.type](FX, L.tx, u, L.hr);
+  return svg(m);
+}
+
+/* ═══════════ CONFIGS ═══════════ */
+const ROUNDS = {
+  'A · Sable · pointed round':     { type:'round',   bar:'wood',   ferrule:'chrome', hair:'sable',    back:'taper', crimp:'crimp' },
+  'B · Taklon · detail round':     { type:'detail',  bar:'red',    ferrule:'silver', hair:'taklon',   back:'round', crimp:'crimp' },
+  'C · Squirrel · rigger / liner': { type:'rigger',  bar:'black',  ferrule:'chrome', hair:'squirrel', back:'taper', crimp:'seamless' },
+  'D · Synthetic · spotter':       { type:'spotter', bar:'teal',   ferrule:'silver', hair:'synth',    back:'crest', crimp:'banded' },
+};
+const FLATS = {
+  'A · Hog · flat shader':         { type:'flat',      bar:'navy',   ferrule:'chrome', hair:'hog',      back:'taper', crimp:'crimp' },
+  'B · Synthetic · bright':        { type:'bright',    bar:'black',  ferrule:'silver', hair:'synth',    back:'flat',  crimp:'crimp' },
+  'C · Squirrel · wash':           { type:'wash',      bar:'walnut', ferrule:'chrome', hair:'squirrel', back:'round', crimp:'seamless' },
+  'D · Taklon · one-stroke':       { type:'onestroke', bar:'amber',  ferrule:'gold',   hair:'taklon',   back:'crest', crimp:'banded' },
+  'E · Goat · hake wash':          { type:'hake',      bar:'wood',   ferrule:'chrome', hair:'hog',      back:'flat',  crimp:'seamless' },
+};
+const FILBERTS = {
+  'A · Sable · filbert':           { type:'filbert', bar:'burgundy', ferrule:'gold',   hair:'sable',  back:'taper', crimp:'crimp' },
+  'B · Synthetic · angular shader':{ type:'angle',   bar:'graphite', ferrule:'silver', hair:'synth',  back:'round', crimp:'crimp' },
+  'C · Taklon · dagger / sword':   { type:'dagger',  bar:'purple',   ferrule:'chrome', hair:'taklon', back:'crest', crimp:'seamless' },
+  'D · Sable · egbert (long filbert)':{ type:'egbert', bar:'teal',   ferrule:'silver', hair:'sable',  back:'taper', crimp:'crimp' },
+  'E · Squirrel · oval wash':      { type:'oval',    bar:'navy',     ferrule:'chrome', hair:'squirrel', back:'round', crimp:'seamless' },
+};
+const SPECIALTY = {
+  'A · Hog · fan blender':         { type:'fan',      bar:'forest', ferrule:'chrome', hair:'hog',      back:'taper', crimp:'crimp' },
+  'B · Squirrel · mop':            { type:'mop',      bar:'marble', ferrule:'silver', hair:'squirrel', back:'round', crimp:'seamless' },
+  'C · Synthetic · deerfoot':      { type:'deerfoot', bar:'slate',  ferrule:'chrome', hair:'synth',    back:'taper', crimp:'crimp' },
+  'D · Taklon · rake / comb':      { type:'rake',     bar:'copper', ferrule:'copper', hair:'taklon',   back:'crest', crimp:'banded' },
+};
+const TEXTURE = {
+  'A · Synthetic · stippler / stencil':{ type:'stippler', bar:'graphite', ferrule:'silver', hair:'synth',  back:'flat',  crimp:'crimp' },
+  'B · Rubber · colour shaper':    { type:'shaper',   bar:'black',  ferrule:'chrome', hair:'rubber', back:'taper', crimp:'seamless' },
+  'C · Sponge · texture dabber':   { type:'sponge',   bar:'wood',   ferrule:'copper', hair:'sponge', back:'round', crimp:'banded' },
+};
+
+let uid = 0;
+function mountSet(hostId, set)
+{
+  const host = document.getElementById(hostId);
+  Object.entries(set).forEach(([name, cfg]) =>
+  {
+    const u = 'b' + (uid++) + '_';
+    const markup = mkBrush(u, cfg);
+    const parts = name.split(' · ');
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="tag">${parts[0]} <span>· ${parts.slice(1).join(' · ')}</span></div>
+      <div class="full">${markup}</div>
+      <div class="cropwrap">
+        <span class="croplbl">library crop &rarr;</span>
+        <div class="crop">${markup}</div>
+      </div>`;
+    const cropSvg = card.querySelector('.crop svg');
+    if (cropSvg) cropSvg.setAttribute('viewBox', '150 12 145 36');
+    host.appendChild(card);
+  });
+}
+mountSet('rounds', ROUNDS);
+mountSet('flats', FLATS);
+mountSet('filberts', FILBERTS);
+mountSet('specialty', SPECIALTY);
+mountSet('texture', TEXTURE);
+</script>
+</body>
+</html>

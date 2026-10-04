@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Pen Design Chooser — v2 (tips fixed)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+    background: #08080a; color: #e4e4e7; padding: 28px; }
+  h1 { font-size: 16px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: #a1a1aa; margin-bottom: 4px; }
+  .sub { font-size: 12.5px; color: #71717a; margin-bottom: 8px; line-height: 1.5; }
+  .anatomy { font-size: 12px; color: #8a8a8a; margin-bottom: 20px; }
+  .anatomy b { color: #5b8def; }
+  h2 { font-size: 13px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: #5b8def; margin: 26px 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; }
+  .card { background: #0d0d10; border: 1px solid #1c1c20; border-radius: 12px; padding: 12px 14px; }
+  .card .tag { font-size: 12px; font-weight: 700; color: #f4f4f5; margin-bottom: 8px; }
+  .card .tag span { color: #71717a; font-weight: 500; }
+  .full { width: 100%; aspect-ratio: 5 / 1; background: #141418; border-radius: 8px; margin-bottom: 6px; display: flex; align-items: center; }
+  .full svg { width: 100%; height: 100%; filter: drop-shadow(0 2px 3px rgba(0,0,0,.6)); }
+  .cropwrap { display: flex; align-items: center; gap: 8px; }
+  .croplbl { font-size: 10px; color: #52525b; letter-spacing: .04em; white-space: nowrap; }
+  .crop { flex: 1; aspect-ratio: 9 / 2; background: #17212e; border: 1px solid #2e4666; border-radius: 6px; display: flex; align-items: center; padding: 0 8px; }
+  .crop svg { width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+
+<h1>Pen Design Chooser — v2</h1>
+<div class="sub">Tips reworked. Straight barrels, a distinct grip section, and correctly-shaped nibs.<br>Top swatch = full pen; bottom (blue) = exact library crop. Tell me the winners, e.g. &ldquo;Fountain F, Dip B, Ball C&rdquo;.</div>
+<div class="anatomy">Anatomy per pen: <b>straight barrel</b> &rarr; <b>grip section</b> (one of 10 treatments) &rarr; <b>tip</b> — fountain = camel-hump profile to a fine point · ball = slim cone + tiny ball · dip = fine flexible point.</div>
+
+<h2>Fountain Pens (camel-hump nib)</h2>
+<div class="grid" id="fountains"></div>
+
+<h2>Calligraphy Pens (broad-edge nib variants)</h2>
+<div class="grid" id="cals"></div>
+
+<h2>Ballpoints (small fine tip)</h2>
+<div class="grid" id="balls"></div>
+
+<h2>Dip Pens (fine flexible nib)</h2>
+<div class="grid" id="dips"></div>
+
+<script>
+const grad = (id, stops, x1=0,y1=0,x2=0,y2=1) =>
+  `<linearGradient id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">${stops}</linearGradient>`;
+const s = (o,c,op=1) => `<stop offset="${o}" stop-color="${c}" ${op<1 ? `stop-opacity="${op}"` : ""} />`;
+const svg = (inner) => `<svg viewBox="0 0 300 60" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
+
+/* ---- metal fills ---- */
+const METAL = {
+  gold:   s(0,'#8a6a2a')+s(.4,'#f0cf7e')+s(.7,'#a5822f')+s(1,'#4a370f'),
+  silver: s(0,'#66707a')+s(.4,'#eef2f6')+s(.7,'#454b52')+s(1,'#22262b'),
+  copper: s(0,'#7a3a1a')+s(.4,'#e8a878')+s(.7,'#a5551f')+s(1,'#4a1f08'),
+  chrome: s(0,'#8a949c')+s(.3,'#fdfefe')+s(.55,'#c4ccd4')+s(1,'#6e767e'),
+  black:  s(0,'#17171b')+s(.5,'#3a3a42')+s(1,'#050507'),
+};
+const STEEL = s(0,'#8a949c')+s(.3,'#fdfefe')+s(.55,'#c4ccd4')+s(1,'#6e767e');
+
+/* ---- barrel colour palettes [top, mid, bottom] for a cylindrical gradient ---- */
+const PAL = {
+  navy:['#16305e','#3a5f9c','#0c1c3a'], burgundy:['#4a0f1a','#8a2436','#2a0810'],
+  forest:['#123a20','#2f7d4a','#0a2412'], black:['#17171b','#33333b','#050507'],
+  teal:['#0f3d43','#2b7f88','#082227'], amber:['#7a4410','#d98c2b','#5a300a'],
+  purple:['#2a1a4a','#5a3a8a','#180e30'], ivory:['#cfc8b8','#faf6ec','#a89f8c'],
+  bronze:['#5a3a1a','#a8763a','#3a2410'], slate:['#3a3e44','#7a838c','#22262b'],
+  wood:['#5a3a1c','#a8743e','#3a2410'], marble:['#3a2a4a','#6a4a8a','#1a1028'],
+  pearl:['#c2c8d4','#f8fbff','#a2aab8'], red:['#7a0f14','#d8342e','#4a0808'],
+  green:['#1a4a2a','#3aa05a','#0f2e18'], walnut:['#4a2f18','#8a5a30','#2e1e0e'],
+  alloy:['#5a5f66','#c8ccd2','#3a3e44'], silver:['#66707a','#dfe4ea','#3a3e44'],
+  blue:['#12407a','#3a72c4','#0a2450'], graphite:['#26262a','#52525a','#141416'],
+  copper:['#5a2a12','#c17a42','#3a1808'], white:['#cdcdd2','#ffffff','#adadb4'],
+};
+
+/* ---- layout per pen type: barrel ends at bx, section runs bx→sx, nib tip at tx ---- */
+const LAYOUT = { fountain:{bx:176,sx:198,tx:228}, dip:{bx:168,sx:188,tx:224}, ball:{bx:176,sx:198,tx:220}, cal:{bx:176,sx:196,tx:230} };
+
+/* ═══════════ TIPS ═══════════ */
+
+/* Fountain nib — slim camel-hump profile. Top edge dips at the neck, rises to a low
+   crown, then sweeps down; the bottom edge tapers up so the two converge to ONE fine
+   point. A short feed fin sits under the shoulder. Slit + breather hole + tipping bead. */
+function fountainNib(sx, tx, u, nibType)
+{
+  const slit = nibType === 'gold' ? '#5a4205' : '#3a4046';
+  const hole = nibType === 'gold' ? '#6b4e0a' : '#2f343a';
+  const bead = nibType === 'gold' ? '#fff8e0' : '#eef2f6';
+  // Symmetric about the centreline (y=30): each edge dips in at the neck, bulges
+  // out to a shoulder crown, then converges to the fine point at tx (camel-hump).
+  const crown = sx + 8;                 // shoulder (widest) — pulled near the base
+  return ``
+    + `<path d="M ${sx},28.6 `
+      + `C ${sx+3},28.9 ${sx+5},28.9 ${crown},27.6 `        // top: neck dip → shoulder crown
+      + `C ${sx+14},27.9 ${sx+22},28.8 ${tx},30 `           // top: crown → fine point
+      + `C ${sx+22},31.2 ${sx+14},32.1 ${crown},32.4 `      // bottom: point → shoulder crown
+      + `C ${sx+5},33.1 ${sx+3},33.1 ${sx},31.4 Z" `        // bottom: crown → neck
+      + `fill="url(#${u}nib)"/>`
+    // shoulder highlights tracing both edges
+    + `<path d="M ${sx+1},28.8 C ${sx+4},29 ${sx+5},29 ${crown},27.9 C ${sx+15},28.2 ${sx+22},29 ${tx-1},29.9" fill="none" stroke="#fff" stroke-width="0.4" opacity="0.35"/>`
+    // slit from breather hole to the tip
+    + `<line x1="${crown}" y1="30" x2="${tx}" y2="30" stroke="${slit}" stroke-width="0.7"/>`
+    // breather hole at the shoulder
+    + `<circle cx="${crown}" cy="30" r="1.15" fill="${hole}"/>`
+    + `<circle cx="${crown}" cy="30" r="1.15" fill="none" stroke="${slit}" stroke-width="0.3" opacity="0.6"/>`
+    // tipping bead at the point
+    + `<circle cx="${tx}" cy="30" r="0.7" fill="${bead}"/>`;
+}
+
+/* ── CALLIGRAPHY nib variants — broad writing edges. Each returns markup for the
+   grip→tip span (sx→tx). Selected per-pen via cfg.calTip. ── */
+function calBody(sx, tx, u, topY, botY, tipTop, tipBot, roundCorners)
+{
+  const q = roundCorners ? 1.6 : 0;      // corner rounding at the writing edge
+  return `<path d="M ${sx},27.6 `
+    + `C ${sx+6},27 ${sx+14},26.9 ${sx+22},${topY} `
+    + `L ${tx-q},${tipTop} Q ${tx},${tipTop} ${tx},${tipTop+q} `
+    + `L ${tx},${tipBot-q} Q ${tx},${tipBot} ${tx-q},${tipBot} `
+    + `L ${sx+22},${botY} C ${sx+14},33.1 ${sx+6},33 ${sx},32.4 Z" fill="url(#${u}nib)"/>`
+    + `<path d="M ${sx+2},27.9 C ${sx+9},27.5 ${sx+16},27.4 ${tx-2},${topY+0.4}" stroke="#fff" stroke-width="0.4" opacity="0.3" fill="none"/>`
+    + `<line x1="${sx+8}" y1="30" x2="${tx}" y2="30" stroke="#3a4046" stroke-width="0.8"/>`
+    + `<circle cx="${sx+8}" cy="30" r="1.15" fill="#2f343a"/>`;
+}
+const CAL = {
+  // broad flat edge, crisp square corners
+  italic: (sx, tx, u) => calBody(sx, tx, u, 26.9, 33.1, 26.8, 33.2, false)
+    + `<rect x="${tx-1}" y="26.8" width="1.3" height="6.4" fill="#262b30"/>`,
+  // broad edge, softened corners
+  stub: (sx, tx, u) => calBody(sx, tx, u, 27.1, 32.9, 27.4, 32.6, true)
+    + `<rect x="${tx-1}" y="27.6" width="1.3" height="4.8" rx="0.6" fill="#262b30"/>`,
+  // angled cut — top corner reaches further than bottom
+  oblique: (sx, tx, u) =>
+    `<path d="M ${sx},27.6 C ${sx+6},27 ${sx+14},26.9 ${sx+22},26.9 L ${tx},27 L ${tx-3.5},33.1 L ${sx+22},33.1 C ${sx+14},33.1 ${sx+6},33 ${sx},32.4 Z" fill="url(#${u}nib)"/>`
+    + `<line x1="${sx+8}" y1="30" x2="${tx-1.6}" y2="30" stroke="#3a4046" stroke-width="0.8"/>`
+    + `<circle cx="${sx+8}" cy="30" r="1.15" fill="#2f343a"/>`
+    + `<path d="M ${tx},27 L ${tx-3.5},33.1" stroke="#262b30" stroke-width="1.4"/>`,
+  // flexible pointed — single leaf-shaped blade tapering to one sharp point;
+  // centre slit + breather hole hint at the two tines without gapping open.
+  flex: (sx, tx, u) =>
+    `<path d="M ${sx},27.9 C ${sx+8},27.4 ${sx+18},28 ${tx},30 C ${sx+18},32 ${sx+8},32.6 ${sx},32.1 Z" fill="url(#${u}nib)"/>`
+    + `<path d="M ${sx+1},28.2 C ${sx+9},27.8 ${sx+18},28.4 ${tx-1},29.9" fill="none" stroke="#fff" stroke-width="0.4" opacity="0.35"/>`
+    + `<line x1="${sx+9}" y1="30" x2="${tx}" y2="30" stroke="#3a4046" stroke-width="0.7"/>`
+    + `<circle cx="${sx+9}" cy="30" r="1.15" fill="#2f343a"/>`,
+  // music nib — extra-broad with a double slit
+  music: (sx, tx, u) => calBody(sx, tx, u, 26.4, 33.6, 26.2, 33.8, false)
+    + `<line x1="${sx+9}" y1="28.6" x2="${tx}" y2="28.6" stroke="#3a4046" stroke-width="0.6"/>`
+    + `<line x1="${sx+9}" y1="31.4" x2="${tx}" y2="31.4" stroke="#3a4046" stroke-width="0.6"/>`
+    + `<circle cx="${sx+9}" cy="30" r="1.2" fill="#2f343a"/>`
+    + `<rect x="${tx-1}" y="26.2" width="1.3" height="7.6" fill="#262b30"/>`,
+  // rounded broad ("scroll") — flat blade capped by a neat rounded knob for
+  // ornamental swells; slit runs from the breather hole into the knob.
+  scroll: (sx, tx, u) =>
+    `<path d="M ${sx},27.7 C ${sx+8},27.1 ${sx+16},27.2 ${tx-4},27.6 L ${tx-4},32.4 C ${sx+16},32.8 ${sx+8},32.9 ${sx},32.3 Z" fill="url(#${u}nib)"/>`
+    + `<circle cx="${tx-4}" cy="30" r="2.5" fill="url(#${u}nib)"/>`
+    + `<circle cx="${tx-4}" cy="30" r="2.5" fill="none" stroke="#3a4046" stroke-width="0.4" opacity="0.5"/>`
+    + `<path d="M ${sx+2},28 C ${sx+9},27.5 ${sx+15},27.6 ${tx-5},27.9" fill="none" stroke="#fff" stroke-width="0.4" opacity="0.3"/>`
+    + `<line x1="${sx+8}" y1="30" x2="${tx-2}" y2="30" stroke="#3a4046" stroke-width="0.8"/>`
+    + `<circle cx="${sx+8}" cy="30" r="1.15" fill="#2f343a"/>`,
+};
+
+/* Ballpoint — slim cone → fine needle → TINY ball (0.6px). No big ink blob. */
+function ballTip(sx, u)
+{
+  return `<path d="M ${sx},27.6 L ${sx+13},29 L ${sx+13},31 L ${sx},32.4 Z" fill="url(#${u}sec)"/>`
+    + `<path d="M ${sx},27.6 L ${sx+13},29" stroke="#fff" stroke-width="0.4" opacity="0.4"/>`
+    + `<path d="M ${sx+13},29.3 L ${sx+20},29.75 L ${sx+20},30.25 L ${sx+13},30.7 Z" fill="#3a3a40"/>`
+    + `<circle cx="${sx+20.3}" cy="30" r="0.6" fill="#1c1c1e"/>`;
+}
+
+/* Dip nib — fine flexible steel point: shoulders taper straight to a sharp tip,
+   with a breather hole + slit. Slim, no bulge. */
+function dipNib(sx, tx, u)
+{
+  return `<path d="M ${sx},27.8 C ${sx+10},27.5 ${sx+17},28.1 ${sx+26},29.3 L ${tx},30 L ${sx+26},30.7 C ${sx+17},31.9 ${sx+10},32.5 ${sx},32.2 Z" fill="url(#${u}nib)"/>`
+    + `<line x1="${sx+10}" y1="30" x2="${tx}" y2="30" stroke="#3a4046" stroke-width="0.7"/>`
+    + `<circle cx="${sx+10}" cy="30" r="1.15" fill="#2f343a"/>`
+    + `<path d="M ${sx+4},28.6 Q ${sx+3},30 ${sx+4},31.4" stroke="#fff" stroke-width="0.4" opacity="0.35" fill="none"/>`;
+}
+
+/* ═══════════ GRIP SECTIONS (bx → sx) — 10 treatments ═══════════ */
+const taperPath = (bx, sx, u) =>
+  `<path d="M ${bx},25 C ${bx+7},26.5 ${sx-4},26.9 ${sx},27.4 L ${sx},32.6 C ${sx-4},33.1 ${bx+7},33.5 ${bx},35 Z" fill="url(#${u}sec)"/>`
+  + `<path d="M ${bx+4},26 C ${bx+9},27 ${sx-4},27.4 ${sx},27.8" stroke="#fff" stroke-width="0.4" opacity="0.3" fill="none"/>`;
+
+const SEC = {
+  taper: (bx, sx, u) => taperPath(bx, sx, u),
+  step: (bx, sx, u) =>
+    `<rect x="${bx}" y="25" width="5" height="10" fill="url(#${u}sec)"/>`
+    + `<rect x="${bx+5}" y="26" width="5" height="8" fill="url(#${u}sec)"/>`
+    + `<path d="M ${bx+10},26.6 L ${sx},27.6 L ${sx},32.4 L ${bx+10},33.4 Z" fill="url(#${u}sec)"/>`
+    + `<line x1="${bx+5}" y1="25" x2="${bx+5}" y2="35" stroke="#000" stroke-width="0.5" opacity="0.3"/>`
+    + `<line x1="${bx+10}" y1="26.6" x2="${bx+10}" y2="33.4" stroke="#000" stroke-width="0.5" opacity="0.3"/>`,
+  knurl: (bx, sx, u) => taperPath(bx, sx, u)
+    + `<g opacity="0.35">${Array.from({length:9}).map((_,i)=>`<line x1="${bx+2+i*2}" y1="26" x2="${bx+2+i*2}" y2="34" stroke="#000" stroke-width="0.5"/>`).join('')}</g>`,
+  collar: (bx, sx, u) =>
+    `<rect x="${bx}" y="24.5" width="5" height="11" rx="1" fill="url(#${u}acc)"/>`
+    + taperPath(bx+5, sx, u),
+  thread: (bx, sx, u) => taperPath(bx, sx, u)
+    + `<g opacity="0.3">${Array.from({length:8}).map((_,i)=>`<line x1="${bx+i*2.4}" y1="26" x2="${bx+2+i*2.4}" y2="34" stroke="#000" stroke-width="0.5"/>`).join('')}</g>`,
+  facet: (bx, sx, u) => taperPath(bx, sx, u)
+    + `<path d="M ${bx},25.5 C ${bx+7},27 ${sx-4},27.2 ${sx},27.6 L ${sx},29 C ${sx-4},28.6 ${bx+7},28.4 ${bx},27 Z" fill="#fff" opacity="0.1"/>`
+    + `<path d="M ${bx},33 C ${bx+7},31.6 ${sx-4},31.4 ${sx},31 L ${sx},32.6 C ${sx-4},33 ${bx+7},33.5 ${bx},35 Z" fill="#000" opacity="0.28"/>`,
+  band: (bx, sx, u) => taperPath(bx, sx, u)
+    + `<rect x="${bx+2}" y="24.6" width="2.5" height="10.8" fill="url(#${u}acc)"/>`
+    + `<rect x="${sx-5}" y="25.4" width="2.5" height="9.2" fill="url(#${u}acc)"/>`,
+  ring: (bx, sx, u) => taperPath(bx, sx, u)
+    + `<rect x="${sx-4}" y="25.6" width="2.4" height="8.8" rx="0.6" fill="url(#${u}acc)"/>`,
+  hex: (bx, sx, u) => taperPath(bx, sx, u)
+    + `<g opacity="0.28">${[0,1,2,3].map(i=>`<line x1="${bx+3+i*4}" y1="26" x2="${bx+3+i*4}" y2="34" stroke="#000" stroke-width="0.6"/>`).join('')}</g>`,
+};
+
+/* ═══════════ BARREL BACK-END styles ═══════════ */
+const BACK = {
+  flat:  (u) => `<rect x="16" y="25" width="20" height="10" fill="url(#${u}bar)"/>`,
+  round: (u) => `<path d="M 22,25 C 14,25 14,35 22,35 L 36,35 L 36,25 Z" fill="url(#${u}bar)"/>`,
+  taper: (u) => `<path d="M 10,30 L 36,25 L 36,35 Z" fill="url(#${u}bar)"/>`,
+  finial:(u) => `<rect x="12" y="26.5" width="4" height="7" rx="1.5" fill="url(#${u}acc)"/>`
+    + `<path d="M 22,25 C 16,25 16,35 22,35 L 36,35 L 36,25 Z" fill="url(#${u}bar)"/>`,
+};
+
+/* ═══════════ ASSEMBLE ONE PEN ═══════════ */
+function mkPen(u, cfg)
+{
+  const [c1, c2, c3] = PAL[cfg.bar];
+  const accStops = METAL[cfg.accent] || METAL.chrome;
+  const nibStops = cfg.nib === 'gold' ? METAL.gold : STEEL;
+  const defs =
+    grad(u+'bar', s(0,c1)+s(.5,c2)+s(1,c3)) +
+    grad(u+'sec', accStops) +
+    grad(u+'acc', accStops) +
+    grad(u+'nib', nibStops);
+  const L = LAYOUT[cfg.type];
+  let m = `<defs>${defs}</defs>`;
+  m += BACK[cfg.back](u);
+  m += `<rect x="36" y="25" width="${L.bx-36}" height="10" fill="url(#${u}bar)"/>`;
+  m += `<rect x="42" y="26.2" width="${L.bx-54}" height="1.5" rx="0.7" fill="#fff" opacity="0.12"/>`;
+  m += SEC[cfg.sec](L.bx, L.sx, u);
+  if (cfg.type === 'fountain') m += fountainNib(L.sx, L.tx, u, cfg.nib);
+  else if (cfg.type === 'dip') m += dipNib(L.sx, L.tx, u);
+  else if (cfg.type === 'cal') m += CAL[cfg.calTip](L.sx, L.tx, u);
+  else m += ballTip(L.sx, u);
+  return svg(m);
+}
+
+/* ═══════════ 30 CONFIGS ═══════════ */
+const FOUNTAINS = {
+  'A · Navy · waisted grip':      { type:'fountain', bar:'navy',     back:'round',  sec:'taper',   accent:'chrome', nib:'steel' },
+};
+const BALLS = {
+  'A · Onyx · knurled':           { type:'ball', bar:'black',    back:'flat',   sec:'knurl',   accent:'silver' },
+  'B · Silver · waisted':         { type:'ball', bar:'silver',   back:'round',  sec:'taper',   accent:'chrome' },
+  'C · Blue · chrome collar':     { type:'ball', bar:'blue',     back:'finial', sec:'collar',  accent:'chrome' },
+  'D · Red · faceted':            { type:'ball', bar:'red',      back:'flat',   sec:'facet',   accent:'silver' },
+  'E · Graphite · stepped':       { type:'ball', bar:'graphite', back:'round',  sec:'step',    accent:'chrome' },
+  'F · Copper · minimal ring':    { type:'ball', bar:'copper',   back:'taper',  sec:'ring',    accent:'copper' },
+  'G · White · twin bands':       { type:'ball', bar:'white',    back:'flat',   sec:'band',    accent:'silver' },
+  'H · Green · faceted grip':     { type:'ball', bar:'green',    back:'round',  sec:'facet',   accent:'chrome' },
+  'I · Purple · threaded':        { type:'ball', bar:'purple',   back:'finial', sec:'thread',  accent:'silver' },
+  'J · Teal · hex grooves':       { type:'ball', bar:'teal',     back:'flat',   sec:'hex',     accent:'chrome' },
+};
+const CALS = {
+  'A · Purple · broad italic':    { type:'cal', bar:'purple',   back:'round',  sec:'band',    accent:'silver', calTip:'italic',  nib:'steel' },
+  'B · Onyx · soft stub':         { type:'cal', bar:'black',    back:'flat',   sec:'facet',   accent:'chrome', calTip:'stub',    nib:'steel' },
+  'C · Bronze · oblique cut':     { type:'cal', bar:'bronze',   back:'finial', sec:'collar',  accent:'gold',   calTip:'oblique', nib:'gold' },
+  'D · Teal · flexible point':    { type:'cal', bar:'teal',     back:'round',  sec:'taper',   accent:'silver', calTip:'flex',    nib:'steel' },
+  'E · Burgundy · music nib':     { type:'cal', bar:'burgundy', back:'flat',   sec:'ring',    accent:'gold',   calTip:'music',   nib:'gold' },
+  'F · Ivory · rounded scroll':   { type:'cal', bar:'ivory',    back:'taper',  sec:'thread',  accent:'gold',   calTip:'scroll',  nib:'gold' },
+  'G · Navy · broad italic':      { type:'cal', bar:'navy',     back:'flat',   sec:'knurl',   accent:'chrome', calTip:'italic',  nib:'steel' },
+  'H · Forest · oblique cut':     { type:'cal', bar:'forest',   back:'round',  sec:'knurl',   accent:'gold',   calTip:'oblique', nib:'gold' },
+};
+const DIPS = {
+  'A · Wood · silver collar':     { type:'dip', bar:'wood',     back:'taper',  sec:'collar',  accent:'silver' },
+  'B · Onyx · knurled alloy':     { type:'dip', bar:'black',    back:'round',  sec:'knurl',   accent:'chrome' },
+  'C · Marble · faceted':         { type:'dip', bar:'marble',   back:'flat',   sec:'facet',   accent:'chrome' },
+  'D · Pearl · gold bands':       { type:'dip', bar:'pearl',    back:'round',  sec:'band',    accent:'gold' },
+  'E · Red lacquer · ring':       { type:'dip', bar:'red',      back:'taper',  sec:'ring',    accent:'silver' },
+  'F · Green · stepped':          { type:'dip', bar:'green',    back:'flat',   sec:'step',    accent:'chrome' },
+  'G · Walnut · threaded brass':  { type:'dip', bar:'walnut',   back:'finial', sec:'thread',  accent:'copper' },
+  'H · Teal · faceted grip':      { type:'dip', bar:'teal',     back:'round',  sec:'facet',   accent:'chrome' },
+  'I · Alloy · hex grooves':      { type:'dip', bar:'alloy',    back:'flat',   sec:'hex',     accent:'chrome' },
+  'J · Navy · waisted grip':      { type:'dip', bar:'navy',     back:'taper',  sec:'taper',   accent:'silver' },
+};
+
+let uid = 0;
+function mountSet(hostId, set)
+{
+  const host = document.getElementById(hostId);
+  Object.entries(set).forEach(([name, cfg]) =>
+  {
+    const u = 'p' + (uid++) + '_';
+    const markup = mkPen(u, cfg);
+    const parts = name.split(' · ');
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="tag">${parts[0]} <span>· ${parts.slice(1).join(' · ')}</span></div>
+      <div class="full">${markup}</div>
+      <div class="cropwrap">
+        <span class="croplbl">library crop &rarr;</span>
+        <div class="crop">${markup}</div>
+      </div>`;
+    const cropSvg = card.querySelector('.crop svg');
+    if (cropSvg) cropSvg.setAttribute('viewBox', '120 14 130 32');
+    host.appendChild(card);
+  });
+}
+mountSet('fountains', FOUNTAINS);
+mountSet('cals', CALS);
+mountSet('balls', BALLS);
+mountSet('dips', DIPS);
+</script>
+</body>
+</html>
