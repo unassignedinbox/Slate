@@ -1,7 +1,7 @@
 {
-  "harnessSource": "20409561bdf3fb8d37ec06c9bc14d921314e453b",
-  "run": "37227335799",
-  "shaderSource": "20409561bdf3fb8d37ec06c9bc14d921314e453b",
+  "harnessSource": "00681169cb3e2d48067a3a63708b811dfc462245",
+  "run": "37228808856",
+  "shaderSource": "00681169cb3e2d48067a3a63708b811dfc462245",
   "reference": "matte-reference.png is independent CPU area quadrature, not a Vulkan readback.",
   "execution": "Production SPIR-V on CPU Vulkan. Receiver-plane lighting maps, not perspective camera renders.",
   "shaders": {
@@ -19,6 +19,7 @@
     "matte-single-bounce.png": "4f9e6eb26d54fe2fdea53b32d4033b36d7e16c6f2af8122b48d69a1a73d7c865",
     "shadow-base.png": "e1d0407b451f7b5e340b909b5757e81f94f711b060fcdebaad63913f57a19aa0",
     "shadow-camera-1.png": "e1d0407b451f7b5e340b909b5757e81f94f711b060fcdebaad63913f57a19aa0",
+    "matte-subdivided.png": "b64c6b7e089c48cf09f814b5580be6515a31d3eb6b181fd8f5e4875e2b2e6927",
     "matte-reference.png": "65551160a183acd4ed257c65dae75f37843bea335b707d48de001b9c96696560",
     "shadow-camera-4.png": "e1d0407b451f7b5e340b909b5757e81f94f711b060fcdebaad63913f57a19aa0",
     "shadow-camera-2.png": "e1d0407b451f7b5e340b909b5757e81f94f711b060fcdebaad63913f57a19aa0"
