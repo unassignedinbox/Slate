@@ -1,0 +1,11 @@
+Vulkan execution device: llvmpipe (LLVM 20.1.2, 256 bits)
+CPU JIT flags: nopt
+ARTIFACT rendered shadow-base
+ARTIFACT rendered shadow-camera-1
+ARTIFACT rendered shadow-camera-2
+ARTIFACT rendered shadow-camera-3
+ARTIFACT rendered shadow-camera-4
+METRIC shadow_camera_rms 17.476
+ARTIFACT rendered matte-diffuse
+ARTIFACT rendered matte-reflections-enabled
+METRIC zero_specular_reflection_delta 106
