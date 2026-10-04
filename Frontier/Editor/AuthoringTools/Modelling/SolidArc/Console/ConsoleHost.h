@@ -112,6 +112,15 @@ public:
     //    size); true when it drew. A full-size anti-aliased draw is far dearer than the hash that decides whether it is needed.
     bool RenderIfChanged() noexcept;
 
+    // Browser gestures use the original analytic gizmo. Preview is reversible; release journals a world-space affine
+    // command, never screen coordinates, so save/replay is independent of the camera and viewport resolution.
+    bool BeginGizmoAtView(double Horizontal, double Vertical) noexcept;
+    bool DragGizmoAtView(double Horizontal, double Vertical, bool Snapping) noexcept;
+    bool FinishGizmoAtView(bool Cancel) noexcept;
+    int AimGizmoAtView(double Horizontal, double Vertical) noexcept;
+    void ResizeGizmoAtView(double Pixels) noexcept { GizmoRig.Resize(Pixels); }
+    [[nodiscard]] bool GizmoVisible() const noexcept { return GizmoShown; }
+
 private:
     using Command = std::function<bool(const CommandLine&)>;
     void Register() noexcept;

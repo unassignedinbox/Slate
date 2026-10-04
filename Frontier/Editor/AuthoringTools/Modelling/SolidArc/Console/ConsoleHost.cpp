@@ -19,6 +19,7 @@
 #include <cstdarg>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 #include <set>
 
@@ -1412,6 +1413,61 @@ void ConsoleHost::ApplyDeltaToSelection(const Mat4& Delta) noexcept
 }
 
 void ConsoleHost::ApplyGizmoDelta(const Mat4& Delta) noexcept { ApplyDeltaToSelection(Delta); }
+
+int ConsoleHost::AimGizmoAtView(double Horizontal, double Vertical) noexcept
+{
+    if (!GizmoShown || Tool.Active() || GizmoRig.Dragging()) return 0;
+    const bool Selected = Scene.SelectedCount() + Scene.SelectedPoleCount() + Scene.SelectedFaceCount() + Scene.SelectedEdgeCount() > 0;
+    if (!Selected) { GizmoRig.MarkHovered(GizmoGrip::None); return 0; }
+    RefreshGizmoPivot();
+    const auto Grip = GizmoRig.Locate(Horizontal, Vertical, View, Surface->Width(), Surface->Height());
+    GizmoRig.MarkHovered(Grip);
+    return int(Grip);
+}
+
+bool ConsoleHost::BeginGizmoAtView(double Horizontal, double Vertical) noexcept
+{
+    if (!AimGizmoAtView(Horizontal, Vertical)) return false;
+    for (const auto& Figure : Scene.Figures())
+        if (Figure.Locked && (Figure.Selected || !Figure.SelectedPoles.empty() || !Figure.SelectedEdges.empty() || !Figure.SelectedFaces.empty()))
+            return false;
+    if (!GizmoRig.BeginDrag(Horizontal, Vertical, View, Surface->Width(), Surface->Height())) return false;
+    GizmoOriginals.clear();
+    for (const auto& Figure : Scene.Figures())
+        if (Figure.Selected || !Figure.SelectedPoles.empty() || !Figure.SelectedEdges.empty() || !Figure.SelectedFaces.empty())
+            GizmoOriginals.emplace_back(Figure.Identity, Figure);
+    return true;
+}
+
+bool ConsoleHost::DragGizmoAtView(double Horizontal, double Vertical, bool Snapping) noexcept
+{
+    if (!GizmoRig.Dragging()) return false;
+    GizmoRig.UpdateDrag(Horizontal, Vertical, Snapping, View, Surface->Width(), Surface->Height());
+    ApplyGizmoDelta(GizmoRig.Drag().Delta);
+    return true;
+}
+
+bool ConsoleHost::FinishGizmoAtView(bool Cancel) noexcept
+{
+    if (!GizmoRig.Dragging()) return false;
+    const auto Drag = GizmoRig.EndDrag();
+    for (const auto& [Identity, Original] : GizmoOriginals)
+        if (auto* Figure = Scene.Find(Identity)) *Figure = Original;
+    GizmoOriginals.clear();
+    RefreshGizmoPivot();
+    if (Cancel) return true;
+    const Mat4 Identity;
+    bool Changed = false;
+    for (int Index = 0; Index < 16; ++Index)
+        Changed |= std::fabs(Drag.Delta.M[Index] - Identity.M[Index]) > 1e-12;
+    if (!Changed) return true;
+    std::ostringstream Command;
+    Command << std::setprecision(17) << "transform selected";
+    for (double Cell : Drag.Delta.M) Command << ' ' << Cell;
+    if (Mode == SelectMode::Control) Command << " --components";
+    return Execute(Command.str());
+}
+
 
 //------------------------------------------------------------------------------------------------------------------------
 //                                                  COMMANDS
@@ -4153,6 +4209,87 @@ void ConsoleHost::Register() noexcept
         CommandLine Sub = C; Sub.Arguments.pop_back();
         Mat4 M = Mat4::Translation(D);
         for (SceneFigure* I : ResolveMany(Sub, 0)) { I->Transform(M); DescribeFigure(*I); }
+        return true;
+    });
+
+    Add("transform", "transform <figure|selected> [--move=(x,y,z)] [--rotate=(x,y,z)] [--scale=(x,y,z)] [--pivot=(x,y,z)]  or  <16 column-major affine cells> [--components]", [this](const CommandLine& Input)
+    {
+        if (Input.Count() != 1 && Input.Count() != 17) return Refuse("transform: target and optional sixteen matrix cells required");
+        std::vector<SceneFigure*> Targets;
+        if (Input.Arguments[0] == "selected")
+        {
+            for (auto& Figure : Scene.Figures())
+                if (Figure.Selected || !Figure.SelectedPoles.empty() || !Figure.SelectedEdges.empty() || !Figure.SelectedFaces.empty())
+                    Targets.push_back(&Figure);
+        }
+        else if (auto* Figure = Resolve(Input.Arguments[0])) Targets.push_back(Figure);
+        if (Targets.empty()) return Refuse("transform: no figures selected");
+        Box3 Bounds;
+        for (const auto* Figure : Targets)
+        {
+            if (Figure->Locked) return Refuse("transform: a selected figure is locked");
+            const auto Extent = Figure->Bounds();
+            if (!Extent.Empty()) { Bounds.Include(Extent.Low); Bounds.Include(Extent.High); }
+        }
+        Mat4 Affine;
+        if (Input.Count() == 17)
+        {
+            for (int Index = 0; Index < 16; ++Index)
+            {
+                const auto Cell = Input.Number(Index + 1);
+                if (!Cell || !std::isfinite(*Cell) || std::fabs(*Cell) > 1e9) return Refuse("transform: invalid affine cell");
+                Affine.M[Index] = *Cell;
+            }
+        }
+        else
+        {
+            Vec3 Movement{}, Rotation{}, Scale{1, 1, 1}, Pivot = Bounds.Empty() ? Vec3{} : Bounds.Centre();
+            auto Parse = [&](const char* Name, Vec3& Value)
+            {
+                if (const auto Token = Input.SwitchText(Name))
+                {
+                    const auto Point = CommandCodec::ParsePoint(*Token);
+                    if (!Point) return false;
+                    Value = *Point;
+                }
+                return std::isfinite(Value.X) && std::isfinite(Value.Y) && std::isfinite(Value.Z) &&
+                       std::max({std::fabs(Value.X), std::fabs(Value.Y), std::fabs(Value.Z)}) <= 1e9;
+            };
+            if (!Parse("move", Movement) || !Parse("rotate", Rotation) || !Parse("scale", Scale) || !Parse("pivot", Pivot))
+                return Refuse("transform: finite XYZ vectors required");
+            if (std::min({Scale.X, Scale.Y, Scale.Z}) < 1e-6) return Refuse("transform: positive scale required");
+            Affine = Mat4::Translation(Movement + Pivot) *
+                     Mat4::Rotation(Vec3::UnitZ(), ScalarCriteria::Radians(Rotation.Z)) *
+                     Mat4::Rotation(Vec3::UnitY(), ScalarCriteria::Radians(Rotation.Y)) *
+                     Mat4::Rotation(Vec3::UnitX(), ScalarCriteria::Radians(Rotation.X)) *
+                     Mat4::Scaling(Scale) * Mat4::Translation(Pivot * -1.0);
+        }
+        const Vec3 AxisX{Affine.M[0], Affine.M[1], Affine.M[2]};
+        const Vec3 AxisY{Affine.M[4], Affine.M[5], Affine.M[6]};
+        const Vec3 AxisZ{Affine.M[8], Affine.M[9], Affine.M[10]};
+        if (Affine.M[3] != 0 || Affine.M[7] != 0 || Affine.M[11] != 0 || Affine.M[15] != 1 ||
+            std::fabs(AxisX.Dot(AxisY.Cross(AxisZ))) < 1e-12) return Refuse("transform: nonsingular affine matrix required");
+        const Mat4 Identity;
+        bool Translation = true;
+        for (int Index = 0; Index < 12; ++Index)
+            Translation &= std::fabs(Affine.M[Index] - Identity.M[Index]) < 1e-12;
+        for (auto* Figure : Targets)
+        {
+            if (Input.Switch("components") && !Figure->SelectedPoles.empty())
+            {
+                for (int Pole : Figure->SelectedPoles) Figure->MovePole(Pole, Affine.TransformPoint(Figure->PolePosition(Pole)));
+                Figure->Blueprint.Form = SceneFigure::ParametricForm::None;
+                Figure->Recipe = FigureRecipe();
+            }
+            else
+            {
+                TransformFigure(*Figure, Affine);
+                // A primitive blueprint cannot generally represent affine-scaled or rotated NURBS. Keep the actual
+                // authored geometry instead of allowing a later dimension edit to snap it back to its old recipe.
+                if (!Translation) Figure->Blueprint.Form = SceneFigure::ParametricForm::None;
+            }
+            AutoEmitDimensions(*Figure);
+        }
         return true;
     });
 

@@ -78,7 +78,7 @@ EMSCRIPTEN_KEEPALIVE const char* DescribeDocument()
         const auto Bounds = Figure.Bounds();
         Stream << "{\"id\":" << Figure.Identity << ",\"name\":" << EncodeText(Figure.Name)
                << ",\"classification\":" << int(Figure.Classification) << ",\"selected\":" << Figure.Selected
-               << ",\"hidden\":" << Figure.Hidden << ",\"faces\":" << Figure.Body.Faces.size()
+               << ",\"locked\":" << Figure.Locked << ",\"hidden\":" << Figure.Hidden << ",\"faces\":" << Figure.Body.Faces.size()
                << ",\"edges\":" << Figure.Body.Edges.size() << ",\"vertices\":" << Figure.Body.Vertices.size()
                << ",\"poles\":" << Figure.PoleCount() << ",\"low\":";
         EncodePosition(Stream, Bounds.Empty() ? Vec3{} : Bounds.Low);
@@ -117,8 +117,26 @@ EMSCRIPTEN_KEEPALIVE const char* DescribeDocument()
         Separator = true;
         Stream << EncodeText(Revision.Label);
     }
-    Stream << "],\"camera\":{" << "\"yaw\":" << Host.Camera().Yaw << ",\"pitch\":" << Host.Camera().Pitch
-           << ",\"distance\":" << Host.Camera().Distance << ",\"orthographic\":" << Host.Camera().Orthographic << "}}";
+    Stream << "],\"gizmo\":{\"visible\":" << Host.GizmoVisible() << ",\"layout\":" << int(Host.Gizmo().CurrentLayout())
+           << ",\"dragging\":" << Host.Gizmo().Dragging() << ",\"hover\":" << int(Host.Gizmo().Hovered())
+           << ",\"readout\":" << EncodeText(Host.Gizmo().Drag().Readout) << ",\"grips\":[";
+    Separator = false;
+    for (int Index = 1; Index <= 12; ++Index)
+    {
+        const auto Grip = static_cast<GizmoGrip>(Index);
+        if (!Host.Gizmo().Visible(Grip)) continue;
+        const Vec3 Anchor = Host.Gizmo().GripAnchor(Grip, Host.Camera(), Host.Raster().Height());
+        double Horizontal = 0, Vertical = 0;
+        if (!Host.Camera().WorldToPixel(Anchor, Host.Raster().Width(), Host.Raster().Height(), Horizontal, Vertical)) continue;
+        if (Separator) Stream << ',';
+        Separator = true;
+        Stream << "{\"id\":" << Index << ",\"name\":" << EncodeText(GizmoGripName(Grip))
+               << ",\"u\":" << Horizontal / Host.Raster().Width() << ",\"v\":" << Vertical / Host.Raster().Height() << '}';
+    }
+    Stream << "]},\"camera\":{" << "\"yaw\":" << Host.Camera().Yaw << ",\"pitch\":" << Host.Camera().Pitch
+           << ",\"distance\":" << Host.Camera().Distance << ",\"orthographic\":" << Host.Camera().Orthographic << ",\"pivot\":";
+    EncodePosition(Stream, Host.Camera().Pivot);
+    Stream << "}}";
     Summary = Stream.str();
     return Summary.c_str();
 }
@@ -141,7 +159,31 @@ EMSCRIPTEN_KEEPALIVE void PanDocument(double Horizontal, double Vertical, double
 }
 EMSCRIPTEN_KEEPALIVE void ZoomDocument(double Steps)
 {
-    ActiveDocument().Camera().Dolly(Steps);
+    if (!std::isfinite(Steps)) return;
+    auto& Camera = ActiveDocument().Camera();
+    Camera.Dolly(std::clamp(Steps, -40.0, 40.0));
+    Camera.Distance = std::clamp(Camera.Distance, 0.01, 1e8);
+}
+EMSCRIPTEN_KEEPALIVE void SeatDocument(int Width, int Height, double Scale)
+{
+    ActiveDocument().SeatSurface(std::clamp(Width, 64, 1600), std::clamp(Height, 64, 1200), 1);
+    ActiveDocument().ResizeGizmoAtView(110.0 * std::clamp(Scale, 0.1, 2.0));
+}
+EMSCRIPTEN_KEEPALIVE int AimGizmoDocument(double Horizontal, double Vertical)
+{
+    return ActiveDocument().AimGizmoAtView(Horizontal, Vertical);
+}
+EMSCRIPTEN_KEEPALIVE int BeginGizmoDocument(double Horizontal, double Vertical)
+{
+    return ActiveDocument().BeginGizmoAtView(Horizontal, Vertical);
+}
+EMSCRIPTEN_KEEPALIVE int DragGizmoDocument(double Horizontal, double Vertical, int Snapping)
+{
+    return ActiveDocument().DragGizmoAtView(Horizontal, Vertical, Snapping != 0);
+}
+EMSCRIPTEN_KEEPALIVE int FinishGizmoDocument(int Cancel)
+{
+    return ActiveDocument().FinishGizmoAtView(Cancel != 0);
 }
 EMSCRIPTEN_KEEPALIVE int PickDocument(double Horizontal, double Vertical, int Extend)
 {
