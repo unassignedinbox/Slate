@@ -8,7 +8,7 @@
 
 import { ShadingIntegrator, ProbeAcceleration, DeviceReport } from "./ShadingIntegrator.js";
 import { OrbitProjection } from "./OrbitProjection.js";
-import { StrokeProjection, ToolOrdering, SymmetryOrdering, MirrorVector } from "./StrokeProjection.js";
+import { StrokeProjection, ToolOrdering, SymmetryOrdering, MirrorVector, MarkUnderPoint } from "./StrokeProjection.js";
 import { BuildSurface, SurfaceIndex, BakeOcclusion, ParseWavefront } from "./SurfaceStructure.js";
 import {
     AssembleScene,
@@ -2512,6 +2512,20 @@ class TexturePanel
             this.RenderStack();
             if (this.InspectorTab === "layer") this.RenderInspector();
             this.Notify(`${Waiting.Name} placed — drag to move it.`);
+            return;
+        }
+        // A click that lands on a decal already on the model takes hold of it instead of dropping another on top.
+        const Taken = MarkUnderPoint(Decal.Marks, Frame.Position);
+        if (Taken)
+        {
+            if (Decal.Selection !== Taken.Identifier)
+            {
+                Decal.Selection = Taken.Identifier;
+                this.RenderStack();
+                if (this.InspectorTab === "layer") this.RenderInspector();
+            }
+            this.MovingMark = Taken.Identifier;
+            this.Notify(`${Taken.Name} picked up — drag to move it, or click clear surface to add another.`);
             return;
         }
         if (Decal.Marks.length >= MarkLimit)

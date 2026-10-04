@@ -75,7 +75,7 @@ import {
     MarkLimit,
 } from "./LayerSpecification.js";
 import { RevisionQueue } from "./RevisionQueue.js";
-import { StrokeProjection, BrushDefaults, MirrorVector, ToolOrdering } from "./StrokeProjection.js";
+import { StrokeProjection, BrushDefaults, MirrorVector, ToolOrdering, MarkReach, MarkUnderPoint } from "./StrokeProjection.js";
 import { FlipRows, MaterialDescriptor } from "./ExportSequence.js";
 import { ExportSlots, SlotByIdentifier } from "./ShadingGlsl.js";
 
@@ -285,6 +285,37 @@ test("a placement frame is orthonormal even when the tangent degenerates", () =>
     const Dot = Frame.Tangent[0] * Frame.Normal[0] + Frame.Tangent[1] * Frame.Normal[1] + Frame.Tangent[2] * Frame.Normal[2];
     assert.ok(Math.abs(Dot) < 1e-6, "tangent is not perpendicular to the normal");
     assert.deepEqual(Frame.Position, [1, 2, 3]);
+});
+
+test("a click finds the placement it landed on", () =>
+{
+    const Decal = CreateLayer("decal", { Decal: { Placement: "project" } }).Decal;
+    const Mark = Decal.Marks[0];
+    Mark.Placed = true;
+    Mark.Transform.Position = [0, 0, 0];
+    Mark.Transform.Normal = [0, 1, 0];
+    Mark.Transform.Tangent = [1, 0, 0];
+    Mark.Transform.Size = 0.4;
+    Mark.Transform.Aspect = 1;
+    Mark.Transform.Depth = 0.2;
+
+    assert.equal(MarkReach(Mark, [0, 0, 0]), 0, "the centre reads as the middle of the footprint");
+    assert.ok(Math.abs(MarkReach(Mark, [0.2, 0, 0]) - 1) < 1e-9, "the edge reads as one");
+    assert.equal(MarkReach(Mark, [0.26, 0, 0]), null, "past the edge is outside");
+    assert.equal(MarkReach(Mark, [0, 0.3, 0]), null, "too far off the surface is outside");
+
+    assert.equal(MarkUnderPoint([Mark], [0.05, 0, 0.05]).Identifier, Mark.Identifier);
+    assert.equal(MarkUnderPoint([Mark], [1, 1, 1]), null, "a click on clear surface takes hold of nothing");
+
+    Mark.Visible = false;
+    assert.equal(MarkUnderPoint([Mark], [0, 0, 0]), null, "a hidden placement cannot be grabbed");
+    Mark.Visible = true;
+    Mark.Placed = false;
+    assert.equal(MarkUnderPoint([Mark], [0, 0, 0]), null, "nor can one that has never been clicked onto the model");
+
+    Mark.Placed = true;
+    const Small = { ...Mark, Identifier: "small", Transform: { ...Mark.Transform, Size: 0.1 } };
+    assert.equal(MarkUnderPoint([Mark, Small], [0.01, 0, 0]).Identifier, "small", "the tightest one wins so a decal on a decal is reachable");
 });
 
 test("the revision queue walks edits in order and evicts by byte budget", () =>

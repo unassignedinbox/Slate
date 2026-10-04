@@ -126,8 +126,9 @@ both outright:
   landed on. From then on it is paint: the eraser takes it off, the brush works over it, undo lifts the last stamp, and
   with the mask as the target the stamp lands in the mask instead. This is what a new decal layer does.
 - **Placed on the surface · 3D** — the artwork stays a projector that lives on the model. A click puts it down, a drag
-  slides it along the surface, it keeps following the face normals it is sitting on, and its frame, size, rotation and
-  angle limit can be edited forever after.
+  slides it along the surface, it keeps turning to the face normals it is sitting on, and its frame, size, rotation and
+  angle limit can be edited forever after. Clicking a decal that is already there picks it up to move instead of
+  dropping another on top of it; clicking clear surface adds the next one.
 
 A placed decal layer holds **one piece of artwork and up to thirty-two marks** of it. The layer opens with one mark
 waiting — nothing is composited until you click the model, and the preview shows exactly where it will land. After that

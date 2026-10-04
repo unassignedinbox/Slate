@@ -44,6 +44,59 @@ export const MirrorVector = (Vector, Axis) =>
     return Mirrored;
 };
 
+const Dot = (Left, Right) => Left[0] * Right[0] + Left[1] * Right[1] + Left[2] * Right[2];
+
+const Cross = (Left, Right) => [
+    Left[1] * Right[2] - Left[2] * Right[1],
+    Left[2] * Right[0] - Left[0] * Right[2],
+    Left[0] * Right[1] - Left[1] * Right[0],
+];
+
+const Turn = (Vector, Axis, Angle) =>
+{
+    const Cosine = Math.cos(Angle);
+    const Sine = Math.sin(Angle);
+    const Along = Dot(Vector, Axis);
+    const Sideways = Cross(Axis, Vector);
+    return [0, 1, 2].map((Index) => Vector[Index] * Cosine + Sideways[Index] * Sine + Axis[Index] * Along * (1 - Cosine));
+};
+
+// How far inside a placement's footprint a point on the surface falls: 0 at its centre, 1 at its edge, null outside it.
+// The frame is the one the compositor uses, so what reads as inside here is exactly what is drawn there.
+export const MarkReach = (Mark, Position) =>
+{
+    const Transform = Mark.Transform;
+    const Normal = Transform.Normal;
+    const Edge = Turn(Transform.Tangent, Normal, (Transform.Rotation * Math.PI) / 180);
+    const Across = Cross(Normal, Edge);
+    const Delta = [Position[0] - Transform.Position[0], Position[1] - Transform.Position[1], Position[2] - Transform.Position[2]];
+    if (Math.abs(Dot(Delta, Normal)) > Math.max(Transform.Depth, 0.001)) return null;
+    const Along = Dot(Delta, Edge) / Math.max(Transform.Size, 0.001);
+    const Sideways = (Dot(Delta, Across) * Math.max(Transform.Aspect, 0.05)) / Math.max(Transform.Size, 0.001);
+    const Reach = Math.max(Math.abs(Along), Math.abs(Sideways)) * 2;
+    return Reach <= 1 ? Reach : null;
+};
+
+// The placement a click takes hold of: the smallest one under the point, so a decal sitting on another can still be had.
+export const MarkUnderPoint = (Marks, Position) =>
+{
+    let Taken = null;
+    let Tightest = Infinity;
+    for (const Mark of Marks || [])
+    {
+        if (Mark.Visible === false || Mark.Placed === false) continue;
+        const Reach = MarkReach(Mark, Position);
+        if (Reach === null) continue;
+        const Span = Mark.Transform.Size * Mark.Transform.Size;
+        if (Span < Tightest)
+        {
+            Tightest = Span;
+            Taken = Mark;
+        }
+    }
+    return Taken;
+};
+
 export class StrokeProjection
 {
     constructor()
