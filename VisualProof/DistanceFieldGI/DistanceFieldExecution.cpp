@@ -225,12 +225,15 @@ public:
 };
 }
 
+#include "DistanceFieldArtifactProof.h"
+
 int main(int Count,char** Arguments)
 {
     std::cout << std::unitbuf;
     using namespace Frontier;
     try
     {
+        if (Count==4 && std::string(Arguments[3])=="--artifacts") return RunDistanceArtifacts(Arguments[1],Arguments[2]);
         Require(Count==3,"Usage: DistanceFieldExecution shader-directory output-directory");
         {
             ExecutionHost Host;

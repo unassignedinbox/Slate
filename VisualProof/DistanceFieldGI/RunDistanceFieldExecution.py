@@ -61,6 +61,11 @@ if Completed.returncode:
         if "FAIL" in Line or "Validation Error" in Line or "VUID" in Line:
             print("::error::" + Line.replace("%", "%25").replace("\r", "%0D"))
     raise SystemExit(Completed.returncode)
+Artifacts = subprocess.run([str(Output / "DistanceFieldExecution"), str(Shaders), str(Images), "--artifacts"],
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=900)
+(Output / "Artifacts.log").write_text(Artifacts.stdout, encoding="utf-8")
+print(Artifacts.stdout, flush=True)
+# Retain images even if a quantitative artifact gate fails.
 for Source in Images.glob("*.ppm"):
     Magic, Extent, Maximum, Pixels = Source.read_bytes().split(b"\n", 3)
     Width, Height = map(int, Extent.split())
@@ -73,3 +78,5 @@ for Source in Images.glob("*.ppm"):
     Image += Chunk(b"IDAT", zlib.compress(Raster)) + Chunk(b"IEND", b"")
     Source.with_suffix(".png").write_bytes(Image)
 print("PASS: production SPIR-V validated and executed; pixel proofs saved (device identity recorded in Execution.log)")
+
+Artifacts.check_returncode()
