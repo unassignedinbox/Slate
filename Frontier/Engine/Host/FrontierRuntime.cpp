@@ -143,7 +143,7 @@ int Frontier::RunFrontierRuntime(
     int argc,
     char** argv,
     const ProjectSpecification& ResolvedSpecification,
-    CodeInterchange& ActiveInterchange)
+    CodeInterchange& ActiveInterchange, ProjectReception& ActiveReception)
 {
     // Dev/debug-only in-RAM telemetry probe (TelemetryProbe.h): pins the boot epoch FIRST so every startup phase,
     //    shader load and frame row is measured against the true start of main. Ship builds compile this to nothing.
@@ -1046,7 +1046,7 @@ int Frontier::RunFrontierRuntime(
             RtActive = false;                                   // the guard: degrade to plain raster
         // Raytraced reflections need the raytracing budget; without it, degrade to sky reflections (never SSR).
         Frontier::ReflectionModeCategory EffReflMode = S.ReflectionMode;
-        if (!RtActive && !(GiActive && Surface.QueryDistanceFieldGIReady()) && EffReflMode == Frontier::ReflectionModeCategory::Raytraced)
+        if (!RtActive && EffReflMode == Frontier::ReflectionModeCategory::Raytraced)
             EffReflMode = Frontier::ReflectionModeCategory::Sky;
         const uint32_t RenderPath = RtActive ? 0u : (GiActive ? 1u : 2u);   // 0 raytraced ReSTIR / 1 Distance Field GI / 2 plain raster
         Integrator.AssignRenderPath(RenderPath);
@@ -1432,6 +1432,9 @@ int Frontier::RunFrontierRuntime(
 
     Startup.Mark("FrameLoopReady"); uint32_t StartupFrames=0;
     auto LastMemorySample = Frontier::HostRuntime::StartupLog::Now();
+    uint32_t PreviousTransport = 0u;
+    std::vector<Frontier::InstanceRecord> ProjectRestInstances;
+    Frontier::HostRuntime::FlyThroughSolver ProjectEditCamera = Camera;
     while (!Surface.CloseRequested() && !Panel.Convert<bool>())
     {
         const auto  NowTime = Clock::now();
@@ -1448,28 +1451,6 @@ int Frontier::RunFrontierRuntime(
 
         // ① Poll input — GLFW callbacks forward into Input
         Surface.PollInput(Input);
-
-        FrontierProjectInputReading ProjectInput{};
-        ProjectInput.StructureSize = sizeof(FrontierProjectInputReading);
-        ProjectInput.PointerX = Input.QueryCursorPositionX();
-        ProjectInput.PointerY = Input.QueryCursorPositionY();
-        ProjectInput.MoveAxisX = (Input.IsKeyPressed(Frontier::VirtualKeyCategory::KeyD) ? 1.0f : 0.0f) -
-                                 (Input.IsKeyPressed(Frontier::VirtualKeyCategory::KeyA) ? 1.0f : 0.0f);
-        ProjectInput.MoveAxisY = (Input.IsKeyPressed(Frontier::VirtualKeyCategory::KeyW) ? 1.0f : 0.0f) -
-                                 (Input.IsKeyPressed(Frontier::VirtualKeyCategory::KeyS) ? 1.0f : 0.0f);
-        ProjectInput.PrimaryPressed = Input.IsMouseButtonPressed(Frontier::MouseButtonCategory::ButtonLeft) ? 1u : 0u;
-        ProjectInput.SecondaryPressed = Input.IsMouseButtonPressed(Frontier::MouseButtonCategory::ButtonRight) ? 1u : 0u;
-
-        std::string ProjectRefusal;
-        if (!ActiveInterchange.AdvanceProject(
-                static_cast<float>(Frontier::HostRuntime::StartupLog::Elapsed(StartupTime) / 1000.0),
-                Δτ,
-                &ProjectInput,
-                ProjectRefusal))
-        {
-            Logger.RecordMessage(Frontier::DiagnosticSeverity::Refusal, "Project", ProjectRefusal.c_str());
-            break;
-        }
 
         // ①b Control Centre owns the pointer while hovered / grabbed / pulled down; the camera never sees those clicks
         //    Display → UI Scale: the overlay lives in logical pixels (physical ÷ scale); the pointer is mapped the same way.
@@ -1741,7 +1722,99 @@ int Frontier::RunFrontierRuntime(
         // Holding RMB always grants viewport steering + flight.
         const bool RmbDown = Input.IsMouseButtonPressed(Frontier::MouseButtonCategory::ButtonRight);
         const bool TypingText = ImGui::GetCurrentContext() && ImGui::GetIO().WantTextInput;
-        if (!ControlCentre.CoversPointer() && (!TypingText || RmbDown))
+        FrontierProjectInputReading ProjectInput{};
+        ProjectInput.StructureSize = sizeof(FrontierProjectInputReading);
+        ProjectInput.PointerX = Input.QueryCursorPositionX();
+        ProjectInput.PointerY = Input.QueryCursorPositionY();
+        ProjectInput.MoveAxisX = (Input.IsKeyPressed(Frontier::VirtualKeyCategory::KeyD) ? 1.0f : 0.0f) -
+                                 (Input.IsKeyPressed(Frontier::VirtualKeyCategory::KeyA) ? 1.0f : 0.0f);
+        ProjectInput.MoveAxisY = (Input.IsKeyPressed(Frontier::VirtualKeyCategory::KeyW) ? 1.0f : 0.0f) -
+                                 (Input.IsKeyPressed(Frontier::VirtualKeyCategory::KeyS) ? 1.0f : 0.0f);
+        ProjectInput.PrimaryPressed = Input.IsMouseButtonPressed(Frontier::MouseButtonCategory::ButtonLeft) ? 1u : 0u;
+        ProjectInput.SecondaryPressed = Input.IsMouseButtonPressed(Frontier::MouseButtonCategory::ButtonRight) ? 1u : 0u;
+
+        const uint32_t Transport = Panel.QueryTransport();
+        ProjectInput.TransportNumber = Transport;
+        ProjectInput.Paused = Panel.QueryPaused() ? 1u : 0u;
+        ProjectInput.SimulationStep = Panel.TakeSimulationStep() ? 1u : 0u;
+        ProjectInput.HandbrakePressed = Input.IsKeyPressed(Frontier::VirtualKeyCategory::KeySpace) ? 1u : 0u;
+        ProjectInput.ResetPressed = Input.IsKeyPressed(Frontier::VirtualKeyCategory::KeyR) ? 1u : 0u;
+        ProjectInput.KeyboardCaptured = (TypingText || ControlCentre.CoversPointer()) ? 1u : 0u;
+        if (Transport != 0u && PreviousTransport == 0u)
+        {
+            ProjectRestInstances = AnimatedInstances;
+            ProjectEditCamera = Camera;
+        }
+        bool ProjectMoved = false;
+        std::string ProjectRefusal;
+        if (!ActiveInterchange.AdvanceProject(
+                static_cast<float>(Frontier::HostRuntime::StartupLog::Elapsed(StartupTime) / 1000.0),
+                Δτ,
+                &ProjectInput,
+                ProjectRefusal))
+        {
+            Logger.RecordMessage(Frontier::DiagnosticSeverity::Refusal, "Project", ProjectRefusal.c_str());
+            break;
+        }
+
+        if (!ProjectRestInstances.empty())
+        {
+            for (const auto& Mutation : ActiveReception.SceneMutations)
+                for (const auto& Placement : Level.QueryPlacements())
+                {
+                    if (Placement.Name != Mutation.SubjectName || Placement.FirstInstance >= AnimatedInstances.size()) continue;
+                    for (uint32_t Offset = 0u; Offset < Placement.InstanceCount && Placement.FirstInstance + Offset < AnimatedInstances.size(); ++Offset)
+                    {
+                        const uint32_t Slot = Placement.FirstInstance + Offset;
+                        auto& Live = AnimatedInstances[Slot];
+                        std::copy_n(Live.World, 16u, Live.PreviousWorld);
+                        const float* Rest = ProjectRestInstances[Slot].World;
+                        for (uint32_t Column = 0u; Column < 4u; ++Column)
+                            for (uint32_t Row = 0u; Row < 4u; ++Row)
+                            {
+                                float Sum = 0.0f;
+                                for (uint32_t K = 0u; K < 4u; ++K) Sum += Mutation.Transform[K * 4u + Row] * Rest[Column * 4u + K];
+                                Live.World[Column * 4u + Row] = Sum;
+                            }
+                        ProjectMoved = true;
+                    }
+                }
+        }
+        if (Transport == 0u && PreviousTransport != 0u)
+        {
+            if (!ProjectRestInstances.empty()) AnimatedInstances = ProjectRestInstances;
+            Camera = ProjectEditCamera;
+            ProjectRestInstances.clear();
+            ProjectMoved = true;
+        }
+        if (ProjectMoved)
+        {
+            (void)Surface.RefreshInstances(AnimatedInstances.data(), static_cast<uint32_t>(AnimatedInstances.size()));
+            if (InstancesResident)
+            {
+                bool Valid = true;
+                for (size_t Slot = 0u; Slot < InstanceRows.size() && Valid; ++Slot)
+                    Valid = Frontier::RelativeMatrix(AnimatedInstances[Slot].World, RestWorlds[Slot].World, InstanceRows[Slot].Transform);
+                if (Valid && InstanceStructure.UpdateTopLevel(InstanceRows))
+                    (void)Surface.RefreshInstanceTraversal(InstanceStructure);
+            }
+            Integrator.ResetAccumulation("project motion");
+        }
+        if (Transport == 1u && !ActiveReception.CameraRequests.empty())
+        {
+            const auto& Requested = ActiveReception.CameraRequests.back();
+            Camera.AssignSpatialLocation({ Requested.Eye[0], Requested.Eye[1], Requested.Eye[2] });
+            Camera.AssignOrientationEuler(std::atan2(Requested.Forward[2], std::hypot(Requested.Forward[0], Requested.Forward[1])),
+                                          std::atan2(Requested.Forward[0], Requested.Forward[1]), 0.0f);
+            Camera.AssignFieldOfView(Requested.VerticalFieldOfView * 57.2957795f);
+        }
+        const bool ProjectCamera = Transport == 1u && !ActiveReception.CameraRequests.empty();
+        ActiveReception.SceneMutations.clear();
+        ActiveReception.CameraRequests.clear();
+        ActiveReception.Diagnostics.clear();
+        ActiveReception.RenderingPreferences.clear();
+        PreviousTransport = Transport;
+        if (!ProjectCamera && !ControlCentre.CoversPointer() && (!TypingText || RmbDown))
             Camera.AdvanceLocomotion(Input, Δτ);
         Camera.AssignAspectRatio(
             static_cast<float>(Surface.QueryWidth()) /
@@ -1909,7 +1982,8 @@ int Frontier::RunFrontierRuntime(
             Frame.RenderWidth               = RenderWidth;
             Frame.RenderHeight              = RenderHeight;
             const auto Halton = [](uint32_t Index, uint32_t Base) { float F = 1.0f, R = 0.0f; for (Index += 1u; Index > 0u; Index /= Base) { F /= static_cast<float>(Base); R += F * static_cast<float>(Index % Base); } return R; };
-            const bool Jittered = Integrator.QueryConfiguration().AntiAliasing;
+            const bool Jittered = Integrator.QueryConfiguration().AntiAliasing
+                               && Integrator.QueryConfiguration().RenderPath == 0u;
             Frame.JitterX          = Jittered ? Halton(Integrator.QueryAccumulationIndex(), 2u) : 0.5f;
             Frame.JitterY          = Jittered ? Halton(Integrator.QueryAccumulationIndex(), 3u) : 0.5f;
             Frame.FrameIndex       = Integrator.QueryAccumulationIndex();

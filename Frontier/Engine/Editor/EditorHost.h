@@ -97,6 +97,9 @@ public:
     void AssignReadout(const EditorReadout* Readout) noexcept;
 
     // The shared widget vocabulary, so a tool window drawn beside the panels uses the same sliders they do.
+    [[nodiscard]] uint32_t QueryTransport() const noexcept { return Viewport_.QueryTransport(); }
+    [[nodiscard]] bool QueryPaused() const noexcept { return Viewport_.QueryPaused(); }
+    bool TakeSimulationStep() noexcept { return Viewport_.TakeSimulationStep(); }
     [[nodiscard]] ControlPanel& QueryControls() noexcept { return Controls_; }
     // Bumps when a drag reparents a row: the project re-reads the roster order.
     [[nodiscard]] uint32_t QueryOrderRevision() const noexcept;

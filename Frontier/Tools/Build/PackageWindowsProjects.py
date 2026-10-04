@@ -21,7 +21,7 @@ Projects = (("Project-Zero", "ProjectZero"), ("Project-Drive", "ProjectDrive"))
 
 
 class ProjectInterchange(ctypes.Structure):
-    # Exact revision-2 C layout from Engine/ProjectInterchange/ProjectInterchange.h.
+    # Exact revision-3 C layout from Engine/ProjectInterchange/ProjectInterchange.h.
     _fields_ = [("StructureSize", ctypes.c_uint32), ("CodeInterchangeNumber", ctypes.c_uint32),
                 ("InterfaceFingerprint", ctypes.c_uint64), ("ConstructProject", ctypes.c_void_p),
                 ("AdvanceProject", ctypes.c_void_p), ("RetireProject", ctypes.c_void_p)]
@@ -54,8 +54,8 @@ def VerifyInterchange(Location: Path, Specification: dict) -> None:
     Refusal = ProjectRefusal()
     Revision = Specification["CodeInterchangeNumber"]
     Fingerprint = Specification["InterfaceFingerprint"]
-    if Revision != 2:
-        raise RuntimeError("The package verifier requires the revision-2 C layout")
+    if Revision != 3:
+        raise RuntimeError("The package verifier requires the revision-3 C layout")
     if Entry(Revision, Fingerprint, ctypes.byref(Delivered), ctypes.byref(Refusal)) != 1:
         raise RuntimeError(f"{Location.name} rejected its specification: {Refusal.Explanation!r}")
     if (Delivered.StructureSize != ctypes.sizeof(ProjectInterchange)

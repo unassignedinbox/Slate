@@ -127,7 +127,7 @@ void AuditShaders() noexcept
 
     struct Pass { const char* Label; const char* Path; bool NeedsResolve; };
     const Pass kPasses[3] = {
-        { "ReSTIR kernel",   "Frontier/Engine/Shaders/ReSTIRViewport.slang",        true },
+        { "ReSTIR kernel",   "Frontier/Engine/Shaders/ViewportIntegrator.slang",        true },
         { "Surfel update",   "Frontier/Engine/Shaders/SurfelIrradianceUpdate.slang", true },
         { "Surfel resolve",  "Frontier/Engine/Shaders/SurfelGIResolve.slang",        true } };
 

@@ -9,5 +9,5 @@ ProjectFormatNumber     = 1
 ContentLocation         = "Content"
 OpeningScene            = "Content/Scenes/Materials.gltf"
 CodeImage               = "Build/ProjectZero.dll"
-CodeInterchangeNumber   = 2
-InterfaceFingerprint    = 0xdd4363893c94c8f0
+CodeInterchangeNumber   = 3
+InterfaceFingerprint    = 0xb6725f24d0869173

@@ -15,6 +15,7 @@
 #include <thorvg.h>
 
 #include "SwapchainExchange.h"
+#include "RayQueryExchange.h"
 
 #include "TelemetryProbe.h"   // dev/debug-only: exact shader-load and bring-up stage timings; compiles out of ship builds
 #include "../ContentInterchange/MaterialIndex.h"
@@ -104,6 +105,9 @@ static constexpr uint32_t kStarRecordBytes = 32u;
 
 struct SwapchainExchange::VulkanRecord
 {
+    struct TransferExtent { VkBuffer Destination; std::vector<unsigned char> Bytes; };
+    std::vector<TransferExtent> PendingTraversal;
+
     // ── Instance and surface ──────────────────────────────────────────────────────────────────────────────────────────
     VkInstance               Instance              = VK_NULL_HANDLE;
     VkDebugUtilsMessengerEXT DebugMessenger        = VK_NULL_HANDLE;
@@ -272,6 +276,13 @@ struct SwapchainExchange::VulkanRecord
     PipelineDiagnostics::Options PipelineOptions{};
     VkPipelineCache          PipelineCache           = VK_NULL_HANDLE;
     VkPipeline               ComputePipeline         = VK_NULL_HANDLE;
+    RayQueryExchange         RayQueries;
+    bool                     RayQueryEnabled = false;
+    uint32_t                 RayQueryInstanceCount = 0u;
+    VkPipeline               RayQueryPipeline = VK_NULL_HANDLE;
+    VkPipelineLayout         RayQueryPipelineLayout = VK_NULL_HANDLE;
+    VkPipeline               RasterPipeline          = VK_NULL_HANDLE;
+    VkPipelineLayout         RasterPipelineLayout    = VK_NULL_HANDLE;
 
     // R7 denoiser: its own pipeline and a small per-level descriptor set. Six sets are allocated (five à-trous
     //    levels plus one spare) so a level's bindings can be written once at bring-up instead of every frame.
@@ -583,6 +594,7 @@ void SwapchainExchange::Retire() noexcept
 
     DistanceFieldStage.Destroy();
     SurfelStage.Destroy();
+    Vulkan->RayQueries.Retire();
     Visibility.Retire();
     RetireSwapchain();
 
@@ -654,6 +666,10 @@ void SwapchainExchange::Retire() noexcept
     Vulkan->ReleaseSemaphores.clear();
 
     if (Vulkan->ComputeCommandPool)    vkDestroyCommandPool       (Vulkan->Device, Vulkan->ComputeCommandPool,    nullptr);
+    if (Vulkan->RayQueryPipeline) vkDestroyPipeline(Vulkan->Device, Vulkan->RayQueryPipeline, nullptr);
+    if (Vulkan->RayQueryPipelineLayout) vkDestroyPipelineLayout(Vulkan->Device, Vulkan->RayQueryPipelineLayout, nullptr);
+    if (Vulkan->RasterPipeline) vkDestroyPipeline(Vulkan->Device, Vulkan->RasterPipeline, nullptr);
+    if (Vulkan->RasterPipelineLayout) vkDestroyPipelineLayout(Vulkan->Device, Vulkan->RasterPipelineLayout, nullptr);
     if (Vulkan->ComputePipeline)       vkDestroyPipeline          (Vulkan->Device, Vulkan->ComputePipeline,       nullptr);
     if (Vulkan->ComputePipelineLayout) vkDestroyPipelineLayout    (Vulkan->Device, Vulkan->ComputePipelineLayout, nullptr);
     if (Vulkan->DenoisePipeline)       vkDestroyPipeline          (Vulkan->Device, Vulkan->DenoisePipeline,       nullptr);
@@ -923,7 +939,8 @@ bool SwapchainExchange::BringPhysicalDevice() noexcept
     const RayTracingTierCategory Resolved  = Capabilities.ResolveTier(RayTracingRequest);
     std::cerr << "[SwapchainExchange] Ray tracing: supported = " << RayTracingCapabilitySet::TierName(Supported)
               << ", requested = " << RayTracingCapabilitySet::RequestName(RayTracingRequest)
-              << ", using = " << RayTracingCapabilitySet::TierName(Resolved)
+              << ", selected capability = " << RayTracingCapabilitySet::TierName(Resolved)
+              << "; actual traversal is reported after scene upload"
               << "  [AS ext " << Capabilities.AccelerationStructureExtension << " feat " << Capabilities.AccelerationStructureFeature
               << " | RQ ext " << Capabilities.RayQueryExtension << " feat " << Capabilities.RayQueryFeature
               << " | RP ext " << Capabilities.RayTracingPipelineExtension
@@ -957,7 +974,19 @@ bool SwapchainExchange::BringLogicalDevice() noexcept
     AddQueueFamily(Vulkan->GraphicsFamily);
     AddQueueFamily(Vulkan->ComputeFamily);
 
-    const char* DeviceExtensions[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+    std::vector<const char*> DeviceExtensions{ VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+    const bool RayQueryRequested = Capabilities.ResolveTier(RayTracingRequest) >= RayTracingTierCategory::RayQuery;
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR Acceleration{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR };
+    VkPhysicalDeviceRayQueryFeaturesKHR RayQuery{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR };
+    if (RayQueryRequested)
+    {
+        DeviceExtensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
+        DeviceExtensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
+        DeviceExtensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+        Acceleration.accelerationStructure = VK_TRUE;
+        Acceleration.pNext = &RayQuery;
+        RayQuery.rayQuery = VK_TRUE;
+    }
 
     VkPhysicalDeviceFeatures DeviceFeatures{};
     DeviceFeatures.shaderStorageImageWriteWithoutFormat = VK_TRUE;
@@ -969,6 +998,8 @@ bool SwapchainExchange::BringLogicalDevice() noexcept
     vkGetPhysicalDeviceFeatures2(Vulkan->PhysicalDevice, &Supported2);
     VkPhysicalDeviceVulkan12Features Enabled12{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
     Enabled12.drawIndirectCount = Supported12.drawIndirectCount;
+    Enabled12.bufferDeviceAddress = RayQueryRequested ? VK_TRUE : VK_FALSE;
+    if (RayQueryRequested) Enabled12.pNext = &Acceleration;
     DrawIndirectCountSupported  = Supported12.drawIndirectCount == VK_TRUE;
     // R4a: bindless texture table — Vulkan 1.2 descriptor indexing (core on every Vulkan 1.2 driver incl. Pascal).
     //    Requested only when offered; without it the material table uploads but textures stay off (logged once).
@@ -997,8 +1028,8 @@ bool SwapchainExchange::BringLogicalDevice() noexcept
     DeviceInfo.pNext                   = &EnabledFeatures2;
     DeviceInfo.queueCreateInfoCount    = static_cast<uint32_t>(QueueInfoList.size());
     DeviceInfo.pQueueCreateInfos       = QueueInfoList.data();
-    DeviceInfo.enabledExtensionCount   = 1u;
-    DeviceInfo.ppEnabledExtensionNames = DeviceExtensions;
+    DeviceInfo.enabledExtensionCount   = static_cast<uint32_t>(DeviceExtensions.size());
+    DeviceInfo.ppEnabledExtensionNames = DeviceExtensions.data();
     DeviceInfo.pEnabledFeatures        = nullptr;
 
     const VkResult DeviceResult = vkCreateDevice(Vulkan->PhysicalDevice, &DeviceInfo, nullptr, &Vulkan->Device);
@@ -1011,6 +1042,15 @@ bool SwapchainExchange::BringLogicalDevice() noexcept
     vkGetDeviceQueue(Vulkan->Device, Vulkan->GraphicsFamily, 0u, &Vulkan->GraphicsQueue);
     vkGetDeviceQueue(Vulkan->Device, Vulkan->ComputeFamily,  0u, &Vulkan->ComputeQueue);
 
+    if (RayQueryRequested)
+    {
+        Vulkan->RayQueryEnabled = Vulkan->RayQueries.Construct(Vulkan->Device, Vulkan->PhysicalDevice, Vulkan->GraphicsQueue, Vulkan->GraphicsFamily);
+        if (!Vulkan->RayQueryEnabled)
+        {
+            Vulkan->RayQueries.Retire();
+            std::cerr << "[RayQuery] Device resources refused; using software traversal.\n";
+        }
+    }
     Vulkan->PipelineOptions=PipelineDiagnostics::Parse(std::getenv("FRONTIER_PIPELINE_TEST"));
     if(!Vulkan->PipelineOptions.Recognized) std::cerr<<"[GPU startup] Unknown FRONTIER_PIPELINE_TEST; using default"<<std::endl;
     std::cerr<<"[GPU startup] Pipeline test: disable_restir_optimization="<<Vulkan->PipelineOptions.DisableOptimization
@@ -1570,6 +1610,29 @@ bool SwapchainExchange::BringComputePipeline() noexcept
     {
         std::cerr << "[SwapchainExchange] vkCreateComputePipelines failed (VkResult " << static_cast<int>(PipelineResult) << ").\n";
         return false;
+    }
+    if (Vulkan->RayQueryEnabled)
+    {
+        const auto HardwareSpirv = LoadSpirv("Engine/Shaders/RayQueryViewport.spv");
+        const VkDescriptorSetLayout Sets[] = { Vulkan->ComputeDescriptorLayout, Vulkan->RayQueries.DescriptorLayout() };
+        VkPipelineLayoutCreateInfo Layout{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+        Layout.setLayoutCount = 2u;
+        Layout.pSetLayouts = Sets;
+        Layout.pushConstantRangeCount = 1u;
+        Layout.pPushConstantRanges = &PushRange;
+        VkShaderModule Compiled = VK_NULL_HANDLE;
+        VkShaderModuleCreateInfo Shader{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
+        Shader.codeSize = HardwareSpirv.size() * sizeof(uint32_t);
+        Shader.pCode = HardwareSpirv.data();
+        if (!HardwareSpirv.empty() && vkCreatePipelineLayout(Vulkan->Device, &Layout, nullptr, &Vulkan->RayQueryPipelineLayout) == VK_SUCCESS
+            && vkCreateShaderModule(Vulkan->Device, &Shader, nullptr, &Compiled) == VK_SUCCESS)
+        {
+            ComputeInfo.stage.module = Compiled;
+            ComputeInfo.layout = Vulkan->RayQueryPipelineLayout;
+            if (vkCreateComputePipelines(Vulkan->Device, Vulkan->PipelineCache, 1u, &ComputeInfo, nullptr, &Vulkan->RayQueryPipeline) != VK_SUCCESS)
+                std::cerr << "[RayQuery] Shader refused; using software traversal.\n";
+        }
+        if (Compiled) vkDestroyShaderModule(Vulkan->Device, Compiled, nullptr);
     }
     SavePipelineCache("ReSTIR ready");
     return true;
@@ -2830,6 +2893,7 @@ void SwapchainExchange::UploadInstanceTraversal(const InstanceAcceleration& Inst
     if (BlasNodes.empty() || BlasLeaves.empty() || Nodes.empty() || Primitives.empty() || Rows.empty() || Places.empty()) return;
 
     vkDeviceWaitIdle(Vulkan->Device);
+    Vulkan->PendingTraversal.clear();
     if (Vulkan->TraversalNodeBuffer) vkDestroyBuffer(Vulkan->Device, Vulkan->TraversalNodeBuffer, nullptr);
     if (Vulkan->TraversalLeafBuffer) vkDestroyBuffer(Vulkan->Device, Vulkan->TraversalLeafBuffer, nullptr);
     if (Vulkan->TlasNodeBuffer)      vkDestroyBuffer(Vulkan->Device, Vulkan->TlasNodeBuffer, nullptr);
@@ -2851,7 +2915,7 @@ void SwapchainExchange::UploadInstanceTraversal(const InstanceAcceleration& Inst
     const auto Upload = [&](const void* Source, VkDeviceSize ByteCount, VkBuffer& Buffer, VkDeviceMemory& Memory) -> bool
     {
         if (!Source || ByteCount == 0u) return false;
-        AllocateBuffer(Vulkan->Device, Vulkan->MemoryProperties, ByteCount, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, HostVisible, Buffer, Memory);
+        AllocateBuffer(Vulkan->Device, Vulkan->MemoryProperties, ByteCount, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, HostVisible, Buffer, Memory);
         if (!Buffer || !Memory) return false;
         void* Mapped = nullptr;
         if (vkMapMemory(Vulkan->Device, Memory, 0u, ByteCount, 0u, &Mapped) != VK_SUCCESS || Mapped == nullptr) return false;
@@ -2889,14 +2953,19 @@ bool SwapchainExchange::RefreshInstanceTraversal(const InstanceAcceleration& Ins
     if (!Vulkan->TlasNodeBuffer || !Vulkan->TlasPrimitiveBuffer || !Vulkan->TlasInstanceBuffer || !Vulkan->BlasPlacementBuffer) return false;
 
     const auto Refresh = [&](const void* Source, size_t Count, VkDeviceSize ElementBytes,
-                             VkDeviceMemory Memory, VkDeviceSize Capacity) -> bool
+                             VkBuffer Destination, VkDeviceSize Capacity) -> bool
     {
         const VkDeviceSize ByteCount = static_cast<VkDeviceSize>(Count) * ElementBytes;
         if (ByteCount == 0u || ByteCount > Capacity) return false;
-        void* Mapped = nullptr;
-        if (vkMapMemory(Vulkan->Device, Memory, 0u, ByteCount, 0u, &Mapped) != VK_SUCCESS || Mapped == nullptr) return false;
-        std::memcpy(Mapped, Source, static_cast<size_t>(ByteCount));
-        vkUnmapMemory(Vulkan->Device, Memory);
+        auto Existing = std::find_if(Vulkan->PendingTraversal.begin(), Vulkan->PendingTraversal.end(),
+            [&](const auto& Transfer) { return Transfer.Destination == Destination; });
+        if (Existing == Vulkan->PendingTraversal.end())
+        {
+            Vulkan->PendingTraversal.push_back({ Destination, {} });
+            Existing = Vulkan->PendingTraversal.end() - 1;
+        }
+        const auto* Bytes = static_cast<const unsigned char*>(Source);
+        Existing->Bytes.assign(Bytes, Bytes + ByteCount);
         return true;
     };
 
@@ -2904,10 +2973,10 @@ bool SwapchainExchange::RefreshInstanceTraversal(const InstanceAcceleration& Ins
     const std::vector<uint32_t>& Primitives = Instances.QueryTlasPrimitiveList();
     const std::vector<TlasInstanceRecord>& Rows = Instances.QueryInstances();
     const std::vector<BlasPlacement>&      Places = Instances.QueryBlasPlacements();
-    if (!Refresh(Nodes.data(), Nodes.size(), sizeof(float), Vulkan->TlasNodeMemory, TlasNodeCapacity)) return false;
-    if (!Refresh(Primitives.data(), Primitives.size(), sizeof(uint32_t), Vulkan->TlasPrimitiveMemory, TlasPrimitiveCapacity)) return false;
-    if (!Refresh(Rows.data(), Rows.size(), sizeof(TlasInstanceRecord), Vulkan->TlasInstanceMemory, TlasInstanceCapacity)) return false;
-    if (!Refresh(Places.data(), Places.size(), sizeof(BlasPlacement), Vulkan->BlasPlacementMemory, BlasPlacementCapacity)) return false;
+    if (!Refresh(Nodes.data(), Nodes.size(), sizeof(float), Vulkan->TlasNodeBuffer, TlasNodeCapacity)) return false;
+    if (!Refresh(Primitives.data(), Primitives.size(), sizeof(uint32_t), Vulkan->TlasPrimitiveBuffer, TlasPrimitiveCapacity)) return false;
+    if (!Refresh(Rows.data(), Rows.size(), sizeof(TlasInstanceRecord), Vulkan->TlasInstanceBuffer, TlasInstanceCapacity)) return false;
+    if (!Refresh(Places.data(), Places.size(), sizeof(BlasPlacement), Vulkan->BlasPlacementBuffer, BlasPlacementCapacity)) return false;
     return true;
 }
 
@@ -3025,6 +3094,15 @@ void SwapchainExchange::UploadScene(const SceneStructure& Scene, const Traversal
     UploadTriangles(Scene.QueryFlatTriangles());   // kernel: material / normal lookup by CWBVH primitive index
     UploadMaterials(Scene.QueryMaterials());       // R4a: MaterialRecord + MaterialSlabRecord (bindings 2, 10)
     UploadTraversal(Traversal);                    // R3: CWBVH node + triangle blobs (bindings 8-9)
+    if (Vulkan->RayQueryPipeline)
+    {
+        Vulkan->RayQueryInstanceCount = static_cast<uint32_t>(Scene.QueryInstances().size());
+        if (!Vulkan->RayQueries.ConstructScene(Scene))
+            std::cerr << "[RayQuery] Triangle acceleration construction refused; using software traversal.\n";
+        else
+            std::cerr << "[RayQuery] Hardware triangle BLAS/TLAS resident: " << Vulkan->RayQueryInstanceCount
+                      << " instances; inline ray queries enabled for ReSTIR GI, shadows and mesh reflections.\n";
+    }
     BuildSurfelSamples(Scene);
     try
     {
@@ -3057,12 +3135,38 @@ bool SwapchainExchange::BringVisibility() noexcept
     if (!Visibility.Bring(Vulkan->Device, Vulkan->PhysicalDevice, kCycleSlotCount, DrawIndirectCountSupported, Vulkan->DescriptorIndexing ? kTextureSlotCapacity : 0u)) return false;
     if (!Visibility.Resize(Configuration.Width, Configuration.Height, Vulkan->StorageImageView)) return false;
     WriteDescriptorSet();
-    return true;
+    const VkDescriptorSetLayout Sets[] = { Vulkan->ComputeDescriptorLayout,
+        reinterpret_cast<VkDescriptorSetLayout>(Visibility.QueryShadowDescriptorLayout()) };
+    if (!Visibility.IsShadowReady() || !Sets[1]) return false;
+    VkPushConstantRange Push{ VK_SHADER_STAGE_COMPUTE_BIT, 0u, sizeof(DispatchConfiguration) };
+    VkPipelineLayoutCreateInfo Layout{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+    Layout.setLayoutCount = 2u;
+    Layout.pSetLayouts = Sets;
+    Layout.pushConstantRangeCount = 1u;
+    Layout.pPushConstantRanges = &Push;
+    if (vkCreatePipelineLayout(Vulkan->Device, &Layout, nullptr, &Vulkan->RasterPipelineLayout) != VK_SUCCESS) return false;
+    const auto Spirv = LoadSpirv("Engine/Shaders/RasterViewport.spv");
+    if (Spirv.empty()) return false;
+    VkShaderModuleCreateInfo Shader{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
+    Shader.codeSize = Spirv.size() * sizeof(uint32_t);
+    Shader.pCode = Spirv.data();
+    VkShaderModule Compiled = VK_NULL_HANDLE;
+    if (vkCreateShaderModule(Vulkan->Device, &Shader, nullptr, &Compiled) != VK_SUCCESS) return false;
+    VkComputePipelineCreateInfo Compute{ VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO };
+    Compute.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    Compute.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    Compute.stage.module = Compiled;
+    Compute.stage.pName = "main";
+    Compute.layout = Vulkan->RasterPipelineLayout;
+    const VkResult Result = vkCreateComputePipelines(Vulkan->Device, Vulkan->PipelineCache, 1u, &Compute, nullptr, &Vulkan->RasterPipeline);
+    vkDestroyShaderModule(Vulkan->Device, Compiled, nullptr);
+    return Result == VK_SUCCESS;
 }
 
 bool SwapchainExchange::RefreshInstances(const InstanceRecord* Rows, uint32_t Count) noexcept
 {
     if (!Visibility.RefreshInstances(Rows, Count)) return false;
+    if (Vulkan->RayQueries.Ready() && !Vulkan->RayQueries.RefreshPlacements(Rows, Count)) return false;
     try
     {
         if (DistanceGeometry.RefreshInstances(Rows, Count)) return true;
@@ -3302,6 +3406,24 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
     VkCommandBufferBeginInfo BeginInfo{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
     BeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     (void)vkBeginCommandBuffer(Command, &BeginInfo);
+    if ((Dispatch.FeatureFlags & DispatchFeatureRaytracing) != 0u) Vulkan->RayQueries.RecordRefit(Command);
+    if (!Vulkan->PendingTraversal.empty())
+    {
+        VkMemoryBarrier Transfer{ VK_STRUCTURE_TYPE_MEMORY_BARRIER };
+        Transfer.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        Transfer.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        vkCmdPipelineBarrier(Command, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             0u, 1u, &Transfer, 0u, nullptr, 0u, nullptr);
+        for (const auto& Upload : Vulkan->PendingTraversal)
+            for (VkDeviceSize Offset = 0u; Offset < Upload.Bytes.size(); Offset += 65536u)
+                vkCmdUpdateBuffer(Command, Upload.Destination, Offset,
+                    std::min<VkDeviceSize>(65536u, Upload.Bytes.size() - Offset), Upload.Bytes.data() + Offset);
+        Transfer.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        Transfer.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        vkCmdPipelineBarrier(Command, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                             0u, 1u, &Transfer, 0u, nullptr, 0u, nullptr);
+        Vulkan->PendingTraversal.clear();
+    }
     // Queue-ordered update protects the shared post/weather UBO across cycle slots.
     // vkCmdUpdateBuffer copies these 544 bytes while recording the command.
     if(Vulkan->PostBuffer){
@@ -3376,7 +3498,8 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
     // ①c R6 reservoirs: zero-fill once, then order the previous frame's writes before this frame's access. The
     //    indirect pool's pair (kFeatureGiReuse) is filled and ordered in the same two calls — same record, same
     //    lifetime, and a pair that missed either would be read uninitialised on the very first frame.
-    if (Vulkan->ReservoirBuffers[0u] && Vulkan->ReservoirBuffers[1u] && Vulkan->ReservoirBytes > 0u)
+    if ((Dispatch.FeatureFlags & DispatchFeatureRaytracing) != 0u
+        && Vulkan->ReservoirBuffers[0u] && Vulkan->ReservoirBuffers[1u] && Vulkan->ReservoirBytes > 0u)
     {
         VkBuffer ReservoirSet[4] =
         {
@@ -3502,37 +3625,41 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
         NonRaytracedGIRecorded = SurfelStage.RecordFrame(Command, SurfelParams);
     }
 
-    // R10 ①d — the GI-off shadow stage. With Global Illumination off the ReSTIR kernel is not dispatched at all:
-    //    light visibility comes from shadow maps rasterised here, and ShadowResolve writes the presentation image
-    //    directly. The whole no-ray path lives in this branch, so with GI ON nothing below costs anything.
-    //
-    //    The fallback matters. If the stage cannot be recorded — no shadow SPIR-V, no emissive geometry in the
-    //    scene, an unsupported map size — we must NOT skip straight to present: the presentation image would keep
-    //    whatever the last frame left in it and the viewport would freeze on a stale picture. Dropping through to
-    //    the kernel is the honest failure, since that path always writes every pixel.
-    const bool GlobalIlluminationOff = (Dispatch.FeatureFlags & DispatchFeatureGlobalIllumination) == 0u;
+    // Raster and SDF failure never silently request ReSTIR. Weather belongs in both resolves.
+    const bool TraceRequested = (Dispatch.FeatureFlags & DispatchFeatureRaytracing) != 0u;
     bool ShadowStageRecorded = false;
-    // ShadowResolve has no celestial bindings. Use the existing compute fallback when
-    // weather is active; the GI feature flag remains OFF (zero secondary bounces).
-    // Disabling weather restores the map-only path. This costs direct shadow rays.
-    if (Frame.DebugView == DebugViewCategory::Off && !NonRaytracedGIRecorded && GlobalIlluminationOff && !Vulkan->PostWeatherActive && ShadowFrameValid && Visibility.IsShadowReady())
+    if (Frame.DebugView == DebugViewCategory::Off && !NonRaytracedGIRecorded && !TraceRequested)
     {
         ShadowFrameConfiguration Shadow = ShadowFrame;
-        if (Visibility.PlaceShadowTaps(Shadow))
-            ShadowStageRecorded = Visibility.RecordShadowFrame(Command, Vulkan->ActiveSlot, Shadow);
+        (void)Visibility.PlaceShadowTaps(Shadow);
+        ShadowStageRecorded = Visibility.RecordShadowFrame(Command, Vulkan->ActiveSlot, Shadow, false);
     }
 
-    if (Frame.DebugView == DebugViewCategory::Off && !NonRaytracedGIRecorded && !ShadowStageRecorded)
+    if (Frame.DebugView == DebugViewCategory::Off && !NonRaytracedGIRecorded)
     {
-        DispatchConfiguration LiveDispatch=Dispatch;
-        if(!Vulkan->HistoryContentsValid || Vulkan->HistoryWidth!=RenderWidth || Vulkan->HistoryHeight!=RenderHeight)
-            LiveDispatch.AccumulationIndex=0;
-        // ② Dispatch ReSTIR compute
-        vkCmdBindPipeline(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Vulkan->ComputePipeline);
-        vkCmdBindDescriptorSets(Command, VK_PIPELINE_BIND_POINT_COMPUTE,
-            Vulkan->ComputePipelineLayout, 0u, 1u, &Vulkan->ComputeDescriptorSet, 0u, nullptr);
-        vkCmdPushConstants(Command, Vulkan->ComputePipelineLayout,
-            VK_SHADER_STAGE_COMPUTE_BIT, 0u, sizeof(DispatchConfiguration), &LiveDispatch);
+        DispatchConfiguration LiveDispatch = Dispatch;
+        if (!TraceRequested || !Vulkan->HistoryContentsValid || Vulkan->HistoryWidth != RenderWidth || Vulkan->HistoryHeight != RenderHeight)
+            LiveDispatch.AccumulationIndex = 0;
+        if (!TraceRequested)
+        {
+            LiveDispatch.FeatureFlags &= ~(DispatchFeatureDenoise | DispatchFeatureGiReuse | DispatchFeatureGlobalIllumination);
+            LiveDispatch.MaxReflectionBounces = LiveDispatch.MaxGiBounces = 0u;
+        }
+        const bool Hardware = TraceRequested && QueryRayTracingTier() == RayTracingTierCategory::RayQuery;
+        const VkPipelineLayout Layout = Hardware ? Vulkan->RayQueryPipelineLayout : TraceRequested ? Vulkan->ComputePipelineLayout : Vulkan->RasterPipelineLayout;
+        vkCmdBindPipeline(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Hardware ? Vulkan->RayQueryPipeline : TraceRequested ? Vulkan->ComputePipeline : Vulkan->RasterPipeline);
+        if (Hardware)
+        {
+            const VkDescriptorSet Acceleration = Vulkan->RayQueries.Descriptors();
+            vkCmdBindDescriptorSets(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Layout, 1u, 1u, &Acceleration, 0u, nullptr);
+        }
+        vkCmdBindDescriptorSets(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Layout, 0u, 1u, &Vulkan->ComputeDescriptorSet, 0u, nullptr);
+        if (!TraceRequested)
+        {
+            const VkDescriptorSet Shadows = reinterpret_cast<VkDescriptorSet>(Visibility.QueryShadowDescriptors(Vulkan->ActiveSlot));
+            vkCmdBindDescriptorSets(Command, VK_PIPELINE_BIND_POINT_COMPUTE, Layout, 1u, 1u, &Shadows, 0u, nullptr);
+        }
+        vkCmdPushConstants(Command, Layout, VK_SHADER_STAGE_COMPUTE_BIT, 0u, sizeof(DispatchConfiguration), &LiveDispatch);
         // Snapshot all temporal inputs BEFORE any invocation can overwrite the current
         // images. Frame-zero does not read history; skip its undefined contents.
         if(LiveDispatch.AccumulationIndex > 0u) {
@@ -3570,16 +3697,16 @@ void SwapchainExchange::RecordComputeCommands(uint32_t ImageOrdinal, const Dispa
         // R10 ② — bracket the ReSTIR dispatch itself. The trailing span (query 10→11) also contains the à-trous
         //    denoise and the luminance reduction, so without this pair "kernel" was really "kernel + denoise +
         //    luminance" and no tier comparison could tell which of the three a change had moved.
-        Visibility.RecordRestirBegin(Command, Vulkan->ActiveSlot);
+        if (TraceRequested) Visibility.RecordRestirBegin(Command, Vulkan->ActiveSlot);
         vkCmdDispatch(Command, GroupX, GroupY, 1u);
-        Visibility.RecordRestirEnd(Command, Vulkan->ActiveSlot);
+        if (TraceRequested) Visibility.RecordRestirEnd(Command, Vulkan->ActiveSlot);
         Vulkan->HistoryContentsValid=true;
         Vulkan->HistoryWidth=RenderWidth; Vulkan->HistoryHeight=RenderHeight;
 
         // ②a R7 à-trous denoise. The kernel wrote LINEAR radiance + variance into denoise slot 0 and, with the
         //     feature on, skipped the tone map; the final level here performs it into the presentation image.
         //     Each level reads what the previous one wrote, so they are strictly ordered by a barrier.
-        if ((Dispatch.FeatureFlags & DispatchFeatureDenoise) != 0u && Vulkan->DenoisePipeline)
+        if (TraceRequested && (Dispatch.FeatureFlags & DispatchFeatureDenoise) != 0u && Vulkan->DenoisePipeline)
         {
             const uint32_t DenoiseGroupX = (RenderWidth  + kDenoiseGroupSize - 1u) / kDenoiseGroupSize;
             const uint32_t DenoiseGroupY = (RenderHeight + kDenoiseGroupSize - 1u) / kDenoiseGroupSize;
@@ -4312,3 +4439,12 @@ void SwapchainExchange::OnFramebuffer(GLFWwindow* Window, int, int) noexcept
 }
 
 } // namespace Frontier
+
+namespace Frontier {
+RayTracingTierCategory SwapchainExchange::QueryRayTracingTier() const noexcept
+{
+    return Vulkan && Vulkan->RayQueryPipeline && Vulkan->RayQueries.Ready()
+        && (InstanceTraversalResident || Vulkan->RayQueryInstanceCount == 1u)
+        ? RayTracingTierCategory::RayQuery : RayTracingTierCategory::Software;
+}
+}

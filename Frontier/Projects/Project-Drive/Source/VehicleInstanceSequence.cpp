@@ -109,6 +109,7 @@ void VehicleInstanceSequence::Reconfigure(const Frontier::Vehicle::VehicleSolver
 
 void VehicleInstanceSequence::ResetToSpawn() noexcept
 {
+    Accumulator          = 0.0f;
     Body.Position        = SpawnPosition;
     Body.Orientation     = Quat{0,0,0,1};
     Body.LinearVelocity  = Vec3{};

@@ -127,6 +127,9 @@ public:
     //    drag sweeps a box instead of orbiting (Shift adds to the pick, Alt takes from it). The box is read once, in view fractions.
     [[nodiscard]] bool QueryViewBox(float* U0, float* V0, float* U1, float* V1, bool* Extend, bool* Subtract) noexcept;
 
+    [[nodiscard]] uint32_t QueryTransport() const noexcept { return Transport_; }
+    [[nodiscard]] bool QueryPaused() const noexcept { return Paused_; }
+    bool TakeSimulationStep() noexcept { const bool Pending = SimulationStep_; SimulationStep_ = false; return Pending; }
     void Record(EditorInstance* Instances, uint32_t InstanceCount) noexcept;
 
 private:
@@ -194,6 +197,7 @@ private:
 
     uint32_t Transport_ = 0u;   // 0 edit, 1 play, 2 simulate — the reference's three runs
     bool     Paused_    = false;
+    bool     SimulationStep_ = false;
     bool     Realtime_  = true;   // the viewport boots live, like the reference
 
     bool     MarkersOn_ = true;

@@ -36,7 +36,7 @@ namespace Frontier {
 namespace Drive {
 
 // Bump whenever Construct() changes what the level contains, so an older DriveCourse.gltf is regenerated.
-inline constexpr uint32_t kDriveSceneRevision = 3u;   // 3: authored .blend material families, real rim mesh, StaticPose wheels
+inline constexpr uint32_t kDriveSceneRevision = 4u;   // 4: ground-referenced opening body and wheel placement
 
 // True when the file at Path was written by this revision (cheap header scan). Missing/older ⇒ false ⇒ re-export.
 [[nodiscard]] bool DriveSceneMatchesRevision(const std::string& Path) noexcept;

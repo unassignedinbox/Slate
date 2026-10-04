@@ -132,6 +132,10 @@ jobs:
             & ./Tools/Build/ToolchainSequence.ps1 -Configuration Release -SetupDependencies -Parallel 2 *>&1 | Tee-Object -FilePath ../_AgentScratch/logs/msvc-ci/CompilerOutput.log
             if ($LASTEXITCODE -ne 0) { throw 'Frontier build failed' }
             if (-not (Test-Path Build/Output/Windows/Release/Binary/Frontier.exe)) { throw 'Frontier.exe was not produced' }
+            python Tools/Tests/CheckViewportPrograms.py
+            if ($LASTEXITCODE -ne 0) { throw 'Compiled viewport program checks failed' }
+            python Tools/Tests/CheckDrivePlayback.py
+            if ($LASTEXITCODE -ne 0) { throw 'Drive playback or scene placement checks failed' }
             & ../VisualProof/DistanceFieldGI/BuildDistanceFieldGIProof.ps1 *>&1 | Tee-Object -FilePath ../_AgentScratch/logs/msvc-ci/SdfProof.log
             if ($LASTEXITCODE -ne 0) { throw 'SDF CPU proof or GPU dispatch refusal checks failed' }
           } catch {

@@ -9,5 +9,5 @@ ProjectFormatNumber     = 1
 ContentLocation         = "Content"
 OpeningScene            = "Content/Scenes/TractrixCourse.gltf"
 CodeImage               = "Build/ProjectTractrix.dll"
-CodeInterchangeNumber   = 1
-InterfaceFingerprint    = 0x4f0b3cbd4fd15f29
+CodeInterchangeNumber   = 3
+InterfaceFingerprint    = 0xb6725f24d0869173

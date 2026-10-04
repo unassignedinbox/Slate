@@ -160,3 +160,14 @@ vehicle physics TUs (`Engine/PhysicalDynamics/Vehicle/*` plus `VehiclePhysicsThr
 `XPBDTyreSolver.cpp`) are compiled into **no** image, and no built translation unit references them. Project-Drive
 will load and show its panels; it will not drive. These are recorded as explicit allowlist entries in the gate
 rather than left as silent omissions.
+
+## Viewport traversal ownership
+
+`Frontier/Engine/DeviceExchange/RayQueryExchange` owns optional Vulkan triangle BLAS/TLAS resources and queue-ordered
+placement refits. `SwapchainExchange` selects its hardware-query program only after those resources and the shader
+are resident; unsupported devices retain the software BVH program. A ray-pipeline capability is not an executed
+ray pipeline: the implemented hardware route is inline `VK_KHR_ray_query`.
+
+The shader entry points `ReSTIRViewport`, `RayQueryViewport` and `RasterViewport` share `ViewportIntegrator`.
+Raster reads material/visibility records and shadow maps without reservoir access; sky and weather do not enable
+ReSTIR implicitly. `Tools/Tests/CheckViewportPrograms.py` checks the compiled SPIR-V resource separation.

@@ -35,6 +35,11 @@ void VehicleSolver::Build(const VehicleSolverConfiguration& config, const Hooks&
         const WheelMount& w = ActiveConfiguration.Wheels[i];
         const Vec3 hub = initial.Position + initial.Orientation.Rotate(w.LocalOffset);
         SoftTyres[i].Build(ActiveConfiguration.Tyre, hub, initial.Orientation);
+        if (i < CurrentTelemetry.Wheels.size())
+        {
+            CurrentTelemetry.Wheels[i].HubPosition = hub;
+            CurrentTelemetry.Wheels[i].HubRotation = initial.Orientation;
+        }
     }
     CurrentTelemetry.WheelCount = static_cast<uint32_t>(SoftTyres.size());
 

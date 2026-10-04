@@ -212,7 +212,9 @@ public:
     //    reallocated when the side actually changes. Returns false if the stage could not be recorded (no shadow
     //    pipelines, no scene, or no live taps), in which case the caller must fall back rather than present a
     //    never-written image.
-    [[nodiscard]] bool  RecordShadowFrame(void* Command, uint32_t CycleSlot, const ShadowFrameConfiguration& Shadow) noexcept;
+    [[nodiscard]] bool  RecordShadowFrame(void* Command, uint32_t CycleSlot, const ShadowFrameConfiguration& Shadow, bool Resolve = true) noexcept;
+    [[nodiscard]] void* QueryShadowDescriptorLayout() const noexcept;
+    [[nodiscard]] void* QueryShadowDescriptors(uint32_t Slot) const noexcept;
 
     // True once the shadow pipelines exist — Bring() reports but does not fail on a missing shadow SPIR-V, so an
     //    engine built before these shaders were compiled still runs everything else.

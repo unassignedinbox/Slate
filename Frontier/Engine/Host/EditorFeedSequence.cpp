@@ -35,7 +35,7 @@ constexpr float kLightTint[3]       = { 0.961f, 0.827f, 0.294f };   // the lamp 
 constexpr float kCameraTint[3]      = { 0.412f, 0.765f, 1.000f };   // the camera rows
 constexpr float kPostProcessTint[3] = { 1.000f, 0.541f, 0.396f };   // post process accent
 
-// True when any of the placement's instances sits on an emissive material. Reads the flattened records —
+// True only when all of the placement's instances sit on emissive materials. Reads the flattened records —
 //    emission_luminance × emission_color — so the test matches what the kernel lights from.
 bool PlacementEmits(const PlacementRecord& P, const SceneStructure& Level) noexcept
 {
@@ -44,17 +44,19 @@ bool PlacementEmits(const PlacementRecord& P, const SceneStructure& Level) noexc
     if (P.FirstInstance >= Instances.size()
         || P.InstanceCount > Instances.size() - P.FirstInstance)
         return false;
+    if (P.InstanceCount == 0u) return false;
     for (uint32_t I = 0u; I < P.InstanceCount; ++I)
     {
         const uint32_t Slot = Instances[P.FirstInstance + I].MaterialIndex;
         if (Slot < Records.size())
         {
             const MaterialRecord& R = Records[Slot];
-            if (R.EmissiveR + R.EmissiveG + R.EmissiveB > 0.0f)
-                return true;
+            if (R.EmissiveR + R.EmissiveG + R.EmissiveB <= 0.0f)
+                return false;
         }
+        else return false;
     }
-    return false;
+    return true;
 }
 
 // Each placement belongs to exactly one folder: file cameras under Cameras, emissive and luminaire carriers
@@ -64,6 +66,7 @@ uint32_t PlacementFolder(const PlacementRecord& P, const SceneStructure& Level) 
 {
     if (P.Camera != kPlacementNone)
         return kFolderCameras;
+    if (P.Dynamic) return kFolderObjects;
     if (PlacementEmits(P, Level)
         || (P.Luminaire != kPlacementNone && P.Luminaire < Level.QueryPunctualLuminaires().size()))
         return kFolderLighting;
@@ -99,32 +102,31 @@ uint32_t BuildLayout(const SceneStructure& Level, FeedRow* Layout, uint32_t Capa
         if (Rows < Capacity) { Layout[Rows].Kind = Kind; Layout[Rows].Ordinal = Ordinal; ++Rows; }
     };
 
-    // 1. Cameras folder + cameras
-    Push(FeedRowKind::Folder, kFolderCameras);
-    Push(FeedRowKind::FlyCamera, 0u);
-    Push(FeedRowKind::CineCamera, 0u);
-    Push(FeedRowKind::PostProcess, 0u);
-    for (uint32_t P = 0u; P < Placements.size(); ++P)
-        if (PlacementFolder(Placements[P], Level) == kFolderCameras)
-            Push(FeedRowKind::Placement, P);
-
-    // 2. Lighting folder + luminaires
-    Push(FeedRowKind::Folder, kFolderLighting);
-    for (uint32_t P = 0u; P < Placements.size(); ++P)
-        if (PlacementFolder(Placements[P], Level) == kFolderLighting)
-            Push(FeedRowKind::Placement, P);
-
-    // 3. Objects folder + dynamic objects
-    Push(FeedRowKind::Folder, kFolderObjects);
-    for (uint32_t P = 0u; P < Placements.size(); ++P)
-        if (PlacementFolder(Placements[P], Level) == kFolderObjects)
-            Push(FeedRowKind::Placement, P);
-
-    // 4. Room folder + static scenery / plinths
-    Push(FeedRowKind::Folder, kFolderRoom);
-    for (uint32_t P = 0u; P < Placements.size(); ++P)
-        if (PlacementFolder(Placements[P], Level) == kFolderRoom)
-            Push(FeedRowKind::Placement, P);
+    std::vector<bool> Written(Placements.size(), false);
+    const auto EmitPlacement = [&](auto&& Emit, uint32_t Slot) -> void
+    {
+        if (Slot >= Placements.size() || Written[Slot] || Rows >= Capacity) return;
+        Written[Slot] = true;
+        Push(FeedRowKind::Placement, Slot);
+        for (uint32_t Next = 0u; Next < Placements.size(); ++Next)
+            if (Placements[Next].Ancestor == Slot) Emit(Emit, Next);
+    };
+    for (uint32_t Folder = kFolderCameras; Folder <= kFolderRoom; ++Folder)
+    {
+        Push(FeedRowKind::Folder, Folder);
+        if (Folder == kFolderCameras)
+        {
+            Push(FeedRowKind::FlyCamera, 0u);
+            Push(FeedRowKind::CineCamera, 0u);
+            Push(FeedRowKind::PostProcess, 0u);
+        }
+        for (uint32_t Slot = 0u; Slot < Placements.size(); ++Slot)
+            if (Placements[Slot].Ancestor >= Placements.size() && PlacementFolder(Placements[Slot], Level) == Folder)
+                EmitPlacement(EmitPlacement, Slot);
+    }
+    // Broken/cyclic links remain selectable, rather than disappearing from the roster.
+    for (uint32_t Slot = 0u; Slot < Placements.size(); ++Slot)
+        if (!Written[Slot]) EmitPlacement(EmitPlacement, Slot);
 
     return Rows;
 }
@@ -310,7 +312,13 @@ uint32_t EditorFeedSequence::FillRoster(EditorInstance* Instances, const SceneSt
             Row.Depth = PlacementDepth(Entry.Ordinal, Level);
             Row.Dynamic = P.Dynamic;
             const uint32_t Folder = PlacementFolder(P, Level);
-            if (Folder == kFolderLighting)
+            if (P.InstanceCount == 0u && P.Camera == kPlacementNone && P.Luminaire == kPlacementNone)
+            {
+                Row.Category = EditorInstanceCategory::Folder;
+                Row.Glyph = EditorGlyph::Folder;
+                CopyTint(Row.Tint, kFolderTint);
+            }
+            else if (Folder == kFolderLighting)
             {
                 Row.Category = EditorInstanceCategory::Light;
                 CopyTint(Row.Tint, kLightTint);

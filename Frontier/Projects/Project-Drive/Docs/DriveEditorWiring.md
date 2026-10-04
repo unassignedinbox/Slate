@@ -33,3 +33,17 @@ must not cause the Frontier host source list to recompile.
 
 The former `DriveExecution.cpp` route is retired. Do not restore a project `main`, a project-owned window, or a
 Project-Zero source include.
+
+## Playing the course
+
+Select **Play** in the viewport transport to use the chase camera and drive: W accelerates, S brakes/reverses,
+A/D steer, Space applies the handbrake, and R resets. Text entry suppresses driving input. **Simulate** advances
+the vehicle without taking the editor camera or driving from the keyboard. Pause holds simulation; Step advances
+one interval. **Edit/Stop** restores the pre-play placements and editor camera.
+
+The revision-3 C interchange carries transport and keyboard ownership explicitly. The project owns the existing
+fixed-step vehicle solver; Frontier consumes named placement deltas and camera requests. Multi-material body and
+wheel placements move all their raster instances together, independent of glTF primitive ordering.
+
+Run `python Tools/Tests/CheckDrivePlayback.py` from `Frontier/` for window-free callback, placement and roster checks.
+Both the host and project DLL must be rebuilt together when the interchange revision changes.

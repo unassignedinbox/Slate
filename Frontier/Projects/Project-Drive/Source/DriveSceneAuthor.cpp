@@ -317,14 +317,22 @@ void DriveSceneAuthor::Construct(bool StaticPose) noexcept
 
     // span 0 — body (dynamic) -> instance 0.  Its faces are partitioned into MAMetalicCoat, MAGlass and MAPlastic.
     { auto s = OpenSpan("ControlVehicle — paint / glass / plastic", /*Dynamic=*/true); (void)s;
-      AppendVehicleBody(comH, MatBodyPaint); }
+      AppendVehicleBody(comH, MatBodyPaint);
+      if (StaticPose)
+          for (auto& Facet : Triangles)
+          {
+              Facet.VertexAlphaZ += comH + 0.02f;
+              Facet.VertexBetaZ  += comH + 0.02f;
+              Facet.VertexGammaZ += comH + 0.02f;
+          }
+    }
 
     // spans 1..4 — wheels (dynamic) -> instances 1..4 (FL, FR, RL, RR).  Every wheel emits MARubber + hub + brake.
     const char* wheelNames[4] = { "XPBD Tyre FL", "XPBD Tyre FR", "XPBD Tyre RL", "XPBD Tyre RR" };
     for (int w = 0; w < 4; ++w)
     { auto s = OpenSpan(wheelNames[w], /*Dynamic=*/true); (void)s;
       const Frontier::Vehicle::Vec3 Rest = geo.AxleMountLocal(static_cast<uint32_t>(w));
-      const Vector3 Hub = StaticPose ? Vector3{ Rest.x, Rest.y, Rest.z } : Vector3{0,0,0};
+      const Vector3 Hub = StaticPose ? Vector3{ Rest.x, Rest.y, Rest.z + comH + 0.02f } : Vector3{0,0,0};
       AppendWheel(Hub, radius, halfW, /*Segments=*/kDriveWheelSegmentCount, MatTyre); }
     // 📝 Rim/mag spokes are off for now (kDriveWheelSpokeCount = 0): the wheel closes with a plain hub face while
     //    the tyre itself is the thing under review. Restoring them is one constant, not a rewrite.

@@ -108,19 +108,19 @@ DispatchConfiguration ReSTIRIntegrator::BuildDispatch(
     //    uploaded a two-level structure — the kernel then reserves the object-space arm for the same feature flags.
     Dispatch.TlasInstanceCount     = ResidentInstanceCount;
     Dispatch.FeatureFlags          = (ActiveConfiguration.GlobalIllumination ? DispatchFeatureGlobalIllumination : 0u)
-                                   | (ActiveConfiguration.AntiAliasing       ? DispatchFeatureAntiAliasing       : 0u)
+                                   | (ActiveConfiguration.RenderPath == 0u && ActiveConfiguration.AntiAliasing       ? DispatchFeatureAntiAliasing       : 0u)
                                    | (ActiveConfiguration.AmbientFloor       ? DispatchFeatureAmbientFloor       : 0u)
-                                   | (ActiveConfiguration.TemporalReuse      ? DispatchFeatureTemporalReuse      : 0u)
-                                   | (ActiveConfiguration.SpatialReuse       ? DispatchFeatureSpatialReuse       : 0u)
+                                   | (ActiveConfiguration.RenderPath == 0u && ActiveConfiguration.TemporalReuse      ? DispatchFeatureTemporalReuse      : 0u)
+                                   | (ActiveConfiguration.RenderPath == 0u && ActiveConfiguration.SpatialReuse       ? DispatchFeatureSpatialReuse       : 0u)
                                    // ON by default (the configuration's initialiser), so the shipped pipeline reuses the
                                    //    indirect half unless something turns it off — the mirror's measured arm.
-                                   | (ActiveConfiguration.GlobalIlluminationReuse ? DispatchFeatureGiReuse        : 0u)
-                                   | (ActiveConfiguration.AliasPick          ? DispatchFeatureAliasPick          : 0u)
-                                   | (ActiveConfiguration.TemporalReprojection ? DispatchFeatureTemporalReprojection : 0u)
-                                   | (ActiveConfiguration.Denoise            ? DispatchFeatureDenoise            : 0u)
+                                   | (ActiveConfiguration.RenderPath == 0u && ActiveConfiguration.GlobalIllumination && ActiveConfiguration.GlobalIlluminationReuse ? DispatchFeatureGiReuse        : 0u)
+                                   | (ActiveConfiguration.RenderPath == 0u && ActiveConfiguration.AliasPick          ? DispatchFeatureAliasPick          : 0u)
+                                   | (ActiveConfiguration.RenderPath == 0u && ActiveConfiguration.TemporalReprojection ? DispatchFeatureTemporalReprojection : 0u)
+                                   | (ActiveConfiguration.RenderPath == 0u && ActiveConfiguration.Denoise            ? DispatchFeatureDenoise            : 0u)
                                    // #27B ON by default (the configuration's initialiser): the sky rides the reservoir
                                    //    unless something turns it off — off is the bit-for-bit pre-sky estimator.
-                                   | (ActiveConfiguration.SkyReservoir       ? DispatchFeatureSkyReservoir       : 0u)
+                                   | (ActiveConfiguration.RenderPath == 0u && ActiveConfiguration.SkyReservoir       ? DispatchFeatureSkyReservoir       : 0u)
                                    // Thread E. Raytracing ON ⇔ RenderPath 0 (the raytraced ReSTIR kernel is the active
                                    //    path); the surfel-GI and plain-raster paths clear bit 11 so the kernel early-outs
                                    //    when the host dispatches one of them instead. The Reflections tile is a 2-bit field
@@ -130,7 +130,7 @@ DispatchConfiguration ReSTIRIntegrator::BuildDispatch(
                                    | ((ActiveConfiguration.ReflectionMode & 3u) << DispatchFeatureReflectionShift)
                                    // The denoiser detail-guide id, packed into bits [12..14] (see DispatchGuideShift).
                                    //    Standard (0) leaves these bits clear = the pre-guide à-trous, bit-for-bit.
-                                   | ((static_cast<uint32_t>(ActiveConfiguration.DenoiseGuide) << DispatchGuideShift) & DispatchGuideMask);
+                                   | ((static_cast<uint32_t>(ActiveConfiguration.RenderPath == 0u && ActiveConfiguration.DenoiseGuide) << DispatchGuideShift) & DispatchGuideMask);
 
     // The power-proportional sun coin (0 = the kernel's legacy fixed 0.5); see AssignSunPickProbability.
     Dispatch.SunPickProbability    = SunPickProbability;

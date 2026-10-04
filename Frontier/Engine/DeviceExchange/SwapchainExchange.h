@@ -345,7 +345,7 @@ public:
     //    Slate.config.toml [render] ray_tracing_tier; the resolved tier is what the renderer must build for.
     void                        AssignRayTracingRequest(RayTracingRequestCategory Request) noexcept { RayTracingRequest = Request; }
     [[nodiscard]] const RayTracingCapabilitySet& QueryRayTracingCapabilities() const noexcept { return Capabilities; }
-    [[nodiscard]] RayTracingTierCategory QueryRayTracingTier() const noexcept { return Capabilities.ResolveTier(RayTracingRequest); }
+    [[nodiscard]] RayTracingTierCategory QueryRayTracingTier() const noexcept;
     [[nodiscard]] RayTracingRequestCategory QueryRayTracingRequest() const noexcept { return RayTracingRequest; }
     [[nodiscard]] bool          QueryFullscreen() const noexcept { return FullscreenActive; }
     [[nodiscard]] const char*   QueryPresentModeName() const noexcept;   // resolved VkPresentModeKHR, for diagnostics

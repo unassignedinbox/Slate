@@ -107,6 +107,30 @@ public:
         (void)On;
 #endif
     }
+    uint32_t QueryTransport() const noexcept
+    {
+#ifdef FRONTIER_DEVELOPMENT
+        return Editor_.QueryTransport();
+#else
+        return 1u;
+#endif
+    }
+    bool QueryPaused() const noexcept
+    {
+#ifdef FRONTIER_DEVELOPMENT
+        return Editor_.QueryPaused();
+#else
+        return false;
+#endif
+    }
+    bool TakeSimulationStep() noexcept
+    {
+#ifdef FRONTIER_DEVELOPMENT
+        return Editor_.TakeSimulationStep();
+#else
+        return false;
+#endif
+    }
     void AssignEditorReadout(const EditorReadout* Readout) noexcept;
     // Bumps when the outliner reparents a row by drag; the game re-reads the roster order.
     [[nodiscard]] uint32_t QueryEditorOrderRevision() const noexcept;

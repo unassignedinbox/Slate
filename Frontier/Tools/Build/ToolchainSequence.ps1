@@ -380,6 +380,8 @@ $ShaderTable = @(
     @{ Source = '../../Projects/Project-Fluid/Shaders/ParticleSplat.slang'; Stage = 'compute'; Output = 'FluidParticleSplat.spv' }
     @{ Source = '../../Projects/Project-Fluid/Shaders/SurfaceResolve.slang'; Stage = 'compute'; Output = 'FluidSurfaceResolve.spv' }
     @{ Source = 'ReSTIRViewport.slang';        Stage = 'compute';  Output = 'ReSTIRViewport.spv' }
+    @{ Source = 'RasterViewport.slang';        Stage = 'compute';  Output = 'RasterViewport.spv' }
+    @{ Source = 'RayQueryViewport.slang';        Stage = 'compute';  Output = 'RayQueryViewport.spv' }
     @{ Source = 'SurfelIrradianceUpdate.slang'; Stage = 'compute';  Output = 'SurfelIrradianceUpdate.spv' }
     @{ Source = 'SurfelCommit.slang';           Stage = 'compute';  Output = 'SurfelCommit.spv' }
     @{ Source = 'DistanceFieldConstruct.slang'; Stage = 'compute'; Output = 'DistanceFieldConstruct.spv' }
@@ -413,7 +415,7 @@ $ShaderTable = @(
     @{ Source = 'GizmoRaster.vert.slang';      Stage = 'vertex';   Output = 'GizmoRaster.vert.spv' }
     @{ Source = 'GizmoRaster.frag.slang';      Stage = 'fragment'; Output = 'GizmoRaster.frag.spv' }
 )
-$ShaderIncludeNames = @('DistanceFieldCaptureBody.slang', 'DistanceFieldMaterial.slang', 'DistanceFieldTransport.slang', 'DistanceFieldGIResolveBody.slang', 'SceneMaterialResolve.slang', 'DistanceFieldRecords.slang', 'GlobalDistanceField.slang', 'SurfaceCacheRecords.slang', 'PatchSelection.slang', 'PatchPolicy.shared.h', 'PresentationDither.slang', 'SceneRecords.slang', 'RayGeneration.slang', 'TraversalCWBVH.slang', 'InterfaceRecords.slang', 'InterfaceSignedDistance.slang', 'SkyRecords.slang', 'MoonRecords.slang', 'PostRecords.slang', 'CloudShadow.slang', 'WeatherMedia.slang', 'MaterialEvaluation.slang', 'ShadowRecords.slang', 'ShadowSample.slang', 'OutlineRecords.slang', 'GizmoRecords.slang')
+$ShaderIncludeNames = @('ViewportIntegrator.slang', 'RayQueryTraversal.slang', 'DistanceFieldCaptureBody.slang', 'DistanceFieldMaterial.slang', 'DistanceFieldTransport.slang', 'DistanceFieldGIResolveBody.slang', 'SceneMaterialResolve.slang', 'DistanceFieldRecords.slang', 'GlobalDistanceField.slang', 'SurfaceCacheRecords.slang', 'PatchSelection.slang', 'PatchPolicy.shared.h', 'PresentationDither.slang', 'SceneRecords.slang', 'RayGeneration.slang', 'TraversalCWBVH.slang', 'InterfaceRecords.slang', 'InterfaceSignedDistance.slang', 'SkyRecords.slang', 'MoonRecords.slang', 'PostRecords.slang', 'CloudShadow.slang', 'WeatherMedia.slang', 'MaterialEvaluation.slang', 'ShadowRecords.slang', 'ShadowSample.slang', 'OutlineRecords.slang', 'GizmoRecords.slang')
 
 function Invoke-ShaderLowering([string] $VulkanRoot)
 {
@@ -595,6 +597,7 @@ $EngineRelative = @(
     #    renamed/deleted entry; `Tools/Build/CheckBuildSourceList.sh` catches an absent one and holds the CMake
     #    agreement, so run it with any build-system change.
     'Engine\DeviceExchange\SwapchainExchange.cpp'
+    'Engine\DeviceExchange\RayQueryExchange.cpp'
     'Engine\GeometricRaster\DistanceFieldStructure.cpp'
     'Engine\DeviceExchange\DistanceFieldGIStage.cpp'
     'Engine\DeviceExchange\SurfelGIStage.cpp'
@@ -872,10 +875,13 @@ Write-Produced (Join-Path $RootBinary 'Frontier.exe')
 # Project code images are deliberately separate /DLL links. Editing either source below does not rebuild Frontier.exe.
 function Invoke-ProjectCodeImage
 {
-    param([string] $ProjectFolder, [string] $ImageName, [string] $SourceRelative)
+    param([string] $ProjectFolder, [string] $ImageName, [string[]] $SourceRelative)
 
-    $SourcePath = Join-Path $RepositoryRoot $SourceRelative
-    if (-not (Test-Path $SourcePath)) { throw "project code image source is missing: $SourceRelative" }
+    $SourcePath = @($SourceRelative | ForEach-Object {
+        $Source = Join-Path $RepositoryRoot $_
+        if (-not (Test-Path $Source)) { throw "project code image source is missing: $_" }
+        $Source
+    })
     $ProjectBuild = Join-Path $RepositoryRoot ("Projects\\$ProjectFolder\\Build")
     $ProjectObject = Join-Path $OutputRoot ("Object\\$ImageName")
     New-Item -ItemType Directory -Force -Path $ProjectBuild, $ProjectObject | Out-Null
@@ -895,7 +901,8 @@ function Invoke-ProjectCodeImage
 }
 
 Invoke-ProjectCodeImage 'Project-Zero' 'ProjectZero' 'Projects\\Project-Zero\\Source\\ProjectZeroInterchange.cpp'
-Invoke-ProjectCodeImage 'Project-Drive' 'ProjectDrive' 'Projects\\Project-Drive\\Source\\ProjectDriveInterchange.cpp'
+$DriveSimulation = Get-Content (Join-Path $RepositoryRoot 'Projects/Project-Drive/Build/DriveSimulationSources.json') -Raw | ConvertFrom-Json
+Invoke-ProjectCodeImage 'Project-Drive' 'ProjectDrive' $DriveSimulation.sources
 
 # Project-owned content must exist before the shared host attempts to decode its opening scene.
 & python (Join-Path $RepositoryRoot 'Tools\Build\BuildDriveContent.py')

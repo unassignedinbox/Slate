@@ -22,14 +22,13 @@ extern "C"
 
 enum
 {
-    // Revision 2 adds the host reception callbacks and their C-layout payloads. Code
-    // images built against revision 1 must be refused rather than called with this layout.
-    FrontierCodeInterchangeNumber = 2u,
+    // Revision 3 adds transport, pause, stepping and vehicle input readings. Earlier images are refused.
+    FrontierCodeInterchangeNumber = 3u,
     FrontierProjectInterchangeMaximumText = 1024u,
 };
 
-// FNV-1a-64 of the revision-2 C layout. An MSVC C enum would truncate this to 32 bits.
-static const uint64_t FrontierCodeInterchangeFingerprint = UINT64_C(0xdd4363893c94c8f0);
+// Revision-3 C-layout fingerprint. An MSVC C enum would truncate this to 32 bits.
+static const uint64_t FrontierCodeInterchangeFingerprint = UINT64_C(0xb6725f24d0869173);
 
 typedef enum FrontierProjectRefusalNumber
 {
@@ -75,6 +74,12 @@ struct FrontierProjectInputReading
     float    MoveAxisY;                     // [-] - project-neutral forward input reading
     uint32_t PrimaryPressed;                // [-] - primary interaction reading
     uint32_t SecondaryPressed;              // [-] - secondary interaction reading
+    uint32_t TransportNumber;               // [-] - 0 edit, 1 play, 2 simulate
+    uint32_t Paused;                        // [-] - suspend time integration
+    uint32_t SimulationStep;                // [-] - consume one fixed display interval while paused
+    uint32_t HandbrakePressed;              // [-] - vehicle parking/drift input
+    uint32_t ResetPressed;                  // [-] - reset to the project spawn
+    uint32_t KeyboardCaptured;              // [-] - editing text or a modal control owns keyboard input
 };
 
 typedef struct FrontierProjectSceneMutation

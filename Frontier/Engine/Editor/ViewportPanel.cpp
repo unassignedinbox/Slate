@@ -533,6 +533,7 @@ void ViewportPanel::SetTransport(uint32_t Mode) noexcept
     // A run is always realtime; coming home unpauses. The world snapshot the reference keeps belongs to
     //    the engine wiring, so the UI keeps the mode machine and its two rules.
     Transport_ = Mode;
+    SimulationStep_ = false;
     if (Mode == kEdit)
     {
         Paused_ = false;
@@ -556,6 +557,7 @@ void ViewportPanel::SetRealtime(bool Realtime) noexcept
 
 void ViewportPanel::StepOnce() noexcept
 {
+    SimulationStep_ = Transport_ != kEdit;
     // One tick past the pause.
     if (!Paused_)
     {

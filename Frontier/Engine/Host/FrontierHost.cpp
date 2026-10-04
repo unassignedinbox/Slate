@@ -10,26 +10,14 @@
 #include "../ProjectInterchange/ProjectSpecification.h"
 
 #include <cstdio>
+#include <algorithm>
 #include <string>
 #include <vector>
 
 namespace
 {
 
-struct DeclaredPanel
-{
-    std::string StableName;
-    std::string DisplayName;
-};
-
-struct ProjectReception
-{
-    std::vector<DeclaredPanel>                       DeclaredPanels;
-    std::vector<FrontierProjectSceneMutation>        SceneMutations;
-    std::vector<FrontierProjectCameraRequest>        CameraRequests;
-    std::vector<FrontierProjectRenderingPreference>  RenderingPreferences;
-    std::vector<FrontierProjectDiagnostic>           Diagnostics;
-};
+using Frontier::ProjectReception;
 
 void ReceiveSceneMutation(const FrontierProjectSceneMutation* ActiveMutation, void* ReceptionAddress)
 {
@@ -37,7 +25,11 @@ void ReceiveSceneMutation(const FrontierProjectSceneMutation* ActiveMutation, vo
         ReceptionAddress == nullptr)
         return;
 
-    static_cast<ProjectReception*>(ReceptionAddress)->SceneMutations.push_back(*ActiveMutation);
+    if (ActiveMutation->MutationNumber != 2u || ActiveMutation->SubjectName == nullptr) return;
+    ProjectReception::ScenePlacement Placement;
+    Placement.SubjectName = ActiveMutation->SubjectName;
+    std::copy_n(ActiveMutation->Transform, 16u, Placement.Transform);
+    static_cast<ProjectReception*>(ReceptionAddress)->SceneMutations.push_back(std::move(Placement));
 }
 
 void ReceiveCameraRequest(const FrontierProjectCameraRequest* ActiveRequest, void* ReceptionAddress)
@@ -137,7 +129,7 @@ int RunFrontierHost(int ArgumentCount, char** ArgumentVector)
         return 67;
     }
 
-    return RunFrontierRuntime(ArgumentCount, ArgumentVector, ResolvedSpecification, ActiveInterchange);
+    return RunFrontierRuntime(ArgumentCount, ArgumentVector, ResolvedSpecification, ActiveInterchange, ActiveReception);
 }
 
 } // namespace Frontier

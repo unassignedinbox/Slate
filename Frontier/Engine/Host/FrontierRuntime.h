@@ -5,8 +5,23 @@
 
 #pragma once
 
+#include "../ProjectInterchange/ProjectInterchange.h"
+#include <string>
+#include <vector>
+
 namespace Frontier
 {
+
+struct ProjectReception
+{
+    struct DeclaredPanel { std::string StableName, DisplayName; };
+    struct ScenePlacement { std::string SubjectName; float Transform[16]; };
+    std::vector<DeclaredPanel> DeclaredPanels;
+    std::vector<ScenePlacement> SceneMutations;
+    std::vector<FrontierProjectCameraRequest> CameraRequests;
+    std::vector<FrontierProjectRenderingPreference> RenderingPreferences;
+    std::vector<FrontierProjectDiagnostic> Diagnostics;
+};
 
 class CodeInterchange;
 struct ProjectSpecification;
@@ -21,6 +36,7 @@ int RunFrontierRuntime(
     int ArgumentCount,
     char** ArgumentVector,
     const ProjectSpecification& ResolvedSpecification,
-    CodeInterchange& ActiveInterchange);
+    CodeInterchange& ActiveInterchange,
+    ProjectReception& ActiveReception);
 
 } // namespace Frontier
