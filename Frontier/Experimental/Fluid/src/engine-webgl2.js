@@ -127,6 +127,7 @@ export class WebGL2ClothEngine {
     this.params = params;
     const dress = DressGenerator.buildDress(params);
     this.dressData = dress;
+    this.pieReport = dress.pieReport;
     this.numCols = dress.numCols;
     this.numRows = dress.numRows;
     this.vertexCount = dress.vertexCount;
@@ -266,7 +267,10 @@ export class WebGL2ClothEngine {
     const updraft = this.updraftTimer > 0 ? 11.5 * Math.sin((this.updraftTimer / 1.6) * Math.PI) : 0.0;
     const twirlOmega = this.twirlTimer > 0 ? 4.2 * Math.sin((this.twirlTimer / 2.4) * Math.PI) : this.avatar.motionState.yawVelocity * 0.4;
 
+    const aniso = Math.max(0.5, Math.min(2.5, this.params.pieAnisotropy ?? 1.45));
+    const lockingRelief = Math.max(0.0, Math.min(1.0, this.params.pieLockingRelief ?? 0.68));
     const stretchStiff = Math.max(0.15, Math.min(0.95, 1.0 / (1.0 + (this.params.stretchCompliance ?? 0.006) * 28.0)));
+    const warpStiff = Math.max(0.18, Math.min(0.97, 1.0 / (1.0 + ((this.params.stretchCompliance ?? 0.006) / aniso) * 28.0)));
     const shearStiff = Math.max(0.08, Math.min(0.75, 1.0 / (1.0 + (this.params.shearCompliance ?? 0.018) * 36.0)));
     const bendStiff = Math.max(0.02, Math.min(0.45, (this.params.bendStiffness ?? 0.42) * 0.45));
 
@@ -359,7 +363,7 @@ export class WebGL2ClothEngine {
           const sx = posB[i4], sy = posB[i4 + 1], sz = posB[i4 + 2];
           let cx = 0, cy = 0, cz = 0, wSum = 0, strainAcc = 0;
 
-          const addSpring = (otherIdx, restL, stiff) => {
+          const addSpring = (otherIdx, restL, stiff, relief = lockingRelief) => {
             if (restL <= 0.0001) return;
             const o4 = otherIdx * 4;
             const dx = posB[o4] - sx;
@@ -367,7 +371,9 @@ export class WebGL2ClothEngine {
             const dz = posB[o4 + 2] - sz;
             const d = Math.hypot(dx, dy, dz);
             if (d > 1e-6) {
-              const s = ((d - restL) / d) * stiff;
+              const err = d - restL;
+              const compScale = err < 0 ? Math.max(0.18, 1.0 - relief * 0.78) : 1.0;
+              const s = (err / d) * stiff * compScale;
               cx += dx * s;
               cy += dy * s;
               cz += dz * s;
@@ -384,13 +390,13 @@ export class WebGL2ClothEngine {
 
           if (r < numRows - 1) {
             const iDown = idxOf(c, r + 1);
-            addSpring(iDown, rl[i4 + 1], stretchStiff);
+            addSpring(iDown, rl[i4 + 1], warpStiff, lockingRelief * 0.5);
             addSpring(idxOf(c + 1, r + 1), rl[i4 + 2], shearStiff);
             addSpring(idxOf(c - 1, r + 1), rl[i4 + 2], shearStiff);
           }
           if (r > 0) {
             const iUp = idxOf(c, r - 1);
-            addSpring(iUp, rl[iUp * 4 + 1], stretchStiff);
+            addSpring(iUp, rl[iUp * 4 + 1], warpStiff, lockingRelief * 0.5);
             const iLU = idxOf(c - 1, r - 1);
             const iRU = idxOf(c + 1, r - 1);
             addSpring(iLU, rl[iLU * 4 + 2], shearStiff);
@@ -399,8 +405,8 @@ export class WebGL2ClothEngine {
 
           const iR2 = idxOf(c + 2, r);
           const iL2 = idxOf(c - 2, r);
-          addSpring(iR2, rl[i4 + 3], bendStiff);
-          addSpring(iL2, rl[iL2 * 4 + 3], bendStiff);
+          addSpring(iR2, rl[i4 + 3], bendStiff, 0.0);
+          addSpring(iL2, rl[iL2 * 4 + 3], bendStiff, 0.0);
 
           const scale = (1 - pinW * 0.92) / Math.max(1.0, wSum * 0.52);
           posA[i4] = sx + cx * scale;

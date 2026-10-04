@@ -5,6 +5,7 @@
 
 import { COLOR_PALETTES } from "./presets.js";
 import { DRESS_STYLES, WEAVE_TYPES } from "./DressGenerator.js";
+import { PieSizingEstimator } from "./PieSizingEstimator.js";
 
 export class SubstanceClothGraphEditor {
   constructor(options) {
@@ -18,22 +19,22 @@ export class SubstanceClothGraphEditor {
     this.panX = 24;
     this.panY = 22;
     this.zoom = 0.88;
-    this.selectedNodeId = "skirt";
+    this.selectedNodeId = "pie";
     this.hoveredNodeId = null;
     this.hoveredHandle = null;
     this.animPhase = 0;
 
-    // Define the 7 Substance Designer Procedural Garment & Material Nodes
+    // Define the 8 Substance Designer Procedural Garment, PIE Sizing & Material Nodes
     this.nodes = [
       {
         id: "bodice",
         title: "Bodice Pattern",
         category: "2D PATTERN",
         color: "#efa56f",
-        x: 24,
-        y: 26,
-        w: 156,
-        h: 132,
+        x: 20,
+        y: 22,
+        w: 152,
+        h: 128,
         bypassed: false,
         inputs: [],
         outputs: [{ id: "out", label: "Bodice 2D" }],
@@ -44,10 +45,10 @@ export class SubstanceClothGraphEditor {
         title: "Skirt Silhouette",
         category: "2D PATTERN",
         color: "#efa56f",
-        x: 24,
-        y: 182,
-        w: 156,
-        h: 132,
+        x: 20,
+        y: 174,
+        w: 152,
+        h: 128,
         bypassed: false,
         inputs: [],
         outputs: [{ id: "out", label: "Skirt 2D" }],
@@ -58,27 +59,44 @@ export class SubstanceClothGraphEditor {
         title: "Radial Pleater",
         category: "FOLD MODIFIER",
         color: "#5bc0be",
-        x: 222,
-        y: 182,
-        w: 156,
-        h: 132,
+        x: 206,
+        y: 174,
+        w: 152,
+        h: 128,
         bypassed: false,
         inputs: [{ id: "in", label: "Skirt In" }],
         outputs: [{ id: "out", label: "Pleated" }],
         params: ["pleatCount", "pleatDepth", "bendStiffness"],
       },
       {
+        id: "pie",
+        title: "PIE Sizing Map",
+        category: "SIGGRAPH 25",
+        color: "#ff7b72",
+        x: 206,
+        y: 22,
+        w: 152,
+        h: 128,
+        bypassed: false,
+        inputs: [
+          { id: "bodice", label: "Bodice" },
+          { id: "pleats", label: "Folds" },
+        ],
+        outputs: [{ id: "sizing", label: "r(u,v)" }],
+        params: ["pieAutoResolution", "pieAnisotropy", "pieLockingRelief", "pieShirringRatio"],
+      },
+      {
         id: "seams",
         title: "Seam Assembler",
         category: "3D TAILORING",
         color: "#5aa9ff",
-        x: 420,
-        y: 96,
-        w: 160,
-        h: 136,
+        x: 396,
+        y: 92,
+        w: 156,
+        h: 134,
         bypassed: false,
         inputs: [
-          { id: "bodice", label: "Bodice" },
+          { id: "sizing", label: "PIE r(u,v)" },
           { id: "skirt", label: "Skirt" },
         ],
         outputs: [{ id: "mesh", label: "3D Garment" }],
@@ -89,10 +107,10 @@ export class SubstanceClothGraphEditor {
         title: "Weave Generator",
         category: "SUBSTANCE MAP",
         color: "#34c759",
-        x: 222,
-        y: 340,
-        w: 156,
-        h: 132,
+        x: 206,
+        y: 326,
+        w: 152,
+        h: 128,
         bypassed: false,
         inputs: [],
         outputs: [{ id: "normal", label: "Micro-Weave" }],
@@ -103,10 +121,10 @@ export class SubstanceClothGraphEditor {
         title: "Dye & Sheen Ramp",
         category: "PBR FABRIC",
         color: "#c77dff",
-        x: 420,
-        y: 340,
-        w: 160,
-        h: 132,
+        x: 396,
+        y: 326,
+        w: 156,
+        h: 128,
         bypassed: false,
         inputs: [{ id: "weave", label: "Weave" }],
         outputs: [{ id: "mat", label: "PBR Shader" }],
@@ -117,10 +135,10 @@ export class SubstanceClothGraphEditor {
         title: "WebGPU Cloth Out",
         category: "LIVE SOLVER",
         color: "#ffd166",
-        x: 622,
-        y: 210,
-        w: 164,
-        h: 142,
+        x: 590,
+        y: 204,
+        w: 162,
+        h: 138,
         bypassed: false,
         inputs: [
           { id: "mesh", label: "Garment" },
@@ -132,8 +150,10 @@ export class SubstanceClothGraphEditor {
     ];
 
     this.links = [
-      { from: "bodice", fromOut: 0, to: "seams", toIn: 0 },
+      { from: "bodice", fromOut: 0, to: "pie", toIn: 0 },
       { from: "skirt", fromOut: 0, to: "pleats", toIn: 0 },
+      { from: "pleats", fromOut: 0, to: "pie", toIn: 1 },
+      { from: "pie", fromOut: 0, to: "seams", toIn: 0 },
       { from: "pleats", fromOut: 0, to: "seams", toIn: 1 },
       { from: "seams", fromOut: 0, to: "output", toIn: 0 },
       { from: "weave", fromOut: 0, to: "dye", toIn: 0 },
@@ -160,13 +180,14 @@ export class SubstanceClothGraphEditor {
 
   autoLayout() {
     const positions = {
-      bodice: [24, 26],
-      skirt: [24, 182],
-      pleats: [222, 182],
-      seams: [420, 96],
-      weave: [222, 340],
-      dye: [420, 340],
-      output: [622, 210],
+      bodice: [20, 22],
+      skirt: [20, 174],
+      pleats: [206, 174],
+      pie: [206, 22],
+      seams: [396, 92],
+      weave: [206, 326],
+      dye: [396, 326],
+      output: [590, 204],
     };
     for (const node of this.nodes) {
       if (positions[node.id]) {
@@ -216,6 +237,8 @@ export class SubstanceClothGraphEditor {
             this.onChangeParam?.("pleatDepth", node.bypassed ? 0.0 : 0.022);
           } else if (node.id === "weave") {
             this.onChangeParam?.("weaveBump", node.bypassed ? 0.0 : 0.45);
+          } else if (node.id === "pie") {
+            this.onChangeParam?.("pieAutoResolution", !node.bypassed);
           }
           this.render();
           return;
@@ -354,6 +377,9 @@ export class SubstanceClothGraphEditor {
       } else if (activeHandle.param === "necklineDepth") {
         const next = Math.max(0.03, Math.min(0.24, activeHandle.startVal + dy * 0.003));
         this.onChangeParam?.("necklineDepth", Number(next.toFixed(3)));
+      } else if (activeHandle.param === "pieShirringRatio") {
+        const next = Math.max(0.35, Math.min(1.0, activeHandle.startVal + dx * 0.006));
+        this.onChangeParam?.("pieShirringRatio", Number(next.toFixed(2)));
       }
       this.render();
     });
@@ -642,6 +668,28 @@ export class SubstanceClothGraphEditor {
         else ctx.lineTo(x + px, py);
       }
       ctx.stroke();
+    } else if (node.id === "pie") {
+      // Zhang et al. 2025 (SIGGRAPH '25) PIE Sizing Map r(u,v) Live Heatmap Preview
+      const pie = PieSizingEstimator.evaluateGarmentSizing(params);
+      const step = 5;
+      for (let py = 0; py < h; py += step) {
+        const v = py / Math.max(1, h);
+        for (let px = 0; px < w; px += step) {
+          const u = px / Math.max(1, w);
+          const sMm = pie.sampleSizingMeters(u, v) * 1000.0;
+          const t = Math.max(0, Math.min(1, (sMm - 2.5) / 10.5));
+          const rCol = Math.round(56 + t * 190);
+          const gCol = Math.round(46 + Math.sin(t * Math.PI) * 175);
+          const bCol = Math.round(215 - t * 155);
+          ctx.fillStyle = `rgb(${rCol}, ${gCol}, ${bCol})`;
+          ctx.fillRect(x + px, y + py, step - 0.5, step - 0.5);
+        }
+      }
+      ctx.fillStyle = "rgba(10, 12, 16, 0.72)";
+      ctx.fillRect(x + 3, y + h - 18, w - 6, 15);
+      ctx.fillStyle = "#ffd166";
+      ctx.font = '600 8.5px "DM Sans", sans-serif';
+      ctx.fillText(`r_u ${pie.rWeftOptMm}mm · λ ${pie.wavelengthMm}mm`, x + 6, y + h - 7);
     } else if (node.id === "seams") {
       // Draw 4 stitched panels (Front/Back Bodice + Skirt)
       ctx.strokeStyle = "#5aa9ff";
@@ -868,6 +916,14 @@ export class SubstanceClothGraphEditor {
         color: "#5aa9ff",
       },
       {
+        id: "shirring",
+        label: "SHIRR (ρ)",
+        param: "pieShirringRatio",
+        x: frontCX,
+        y: skirtTopY,
+        color: "#ff7b72",
+      },
+      {
         id: "flare",
         label: "FLARE",
         param: "skirtFlare",
@@ -907,10 +963,19 @@ export class SubstanceClothGraphEditor {
     ctx.textAlign = "left";
     const styleName = DRESS_STYLES[params.dressStyle ?? 0]?.label || "Custom dress";
     const weaveName = WEAVE_TYPES[params.weaveType ?? 0]?.label || "Silk";
+    const pie = PieSizingEstimator.evaluateGarmentSizing(params);
     ctx.fillText(
-      `2D PATTERN CAD · ${styleName.toUpperCase()} · ${weaveName.toUpperCase()} (Drag handles to tailor live)`,
+      `2D PATTERN CAD · ${styleName.toUpperCase()} · ${weaveName.toUpperCase()}`,
       12,
       15,
+    );
+
+    ctx.fillStyle = "rgba(255, 123, 114, 0.85)";
+    ctx.font = '500 8.5px "DM Sans", sans-serif';
+    ctx.fillText(
+      `PIE [SIGGRAPH '25] · r_weft: ${pie.rWeftOptMm}mm · r_warp: ${pie.rWarpOptMm}mm · r_shirr: ${pie.rShirringMm}mm · λ: ${pie.wavelengthMm}mm · L_w: ${pie.wrinklonLwMm}mm`,
+      12,
+      ch - 7,
     );
 
     ctx.restore();

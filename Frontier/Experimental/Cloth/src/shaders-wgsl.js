@@ -1,7 +1,11 @@
 /**
  * WebGPU WGSL Compute & Physically-Based Render Shaders for Real-Time Dress Simulation
  * - @compute @workgroup_size(64) XPBD Cloth Solver with 16-Capsule Articulated Human Avatar SDF Collision
- * - Physically-based Anisotropic Silk/Satin/Velvet/Organza Dress Shader + Sculpted Mannequin Shader
+ * - Incorporates Zhang et al. (ACM SIGGRAPH 2025) "Physics-inspired Estimation of Optimal Cloth Mesh Resolution" (PIE):
+ *   * §4.1.2 & §5 Orthotropic Baraff-Witkin warp/weft elasticity + 2-hop discrete bending
+ *   * §4.1.3 In-plane compressive resistance relaxation in the buckling regime to eliminate membrane locking
+ *   * §4.2.2 Shirring contraction & §4.2.5 Down-filling chamber inflation pressure
+ *   * §4.3 Live 3D PIE Sizing Map r(u,v) [2.5 mm – 14 mm] visualization channel
  */
 
 export const WGSL_CLOTH_COMPUTE_SHADER = /* wgsl */ `
@@ -14,6 +18,7 @@ struct SimParams {
   brushPos     : vec4<f32>, // x, y, z, w: active (0 or 1)
   brushVel     : vec4<f32>, // x, y, z, w: radius
   impulseInfo  : vec4<f32>, // x: updraft, y: twirlOmega, z: windEnabled, w: pad
+  pieInfo      : vec4<f32>, // x: pieAnisotropy, y: pieLockingRelief, z: pieShirringRatio, w: pieDownPressure
   capsules     : array<vec4<f32>, 48>, // 16 capsules * 3 vec4f (pA_rA, pB_rB, vel_pad)
 };
 
@@ -69,6 +74,7 @@ fn csPredict(@builtin(global_invocation_id) gid : vec3<u32>) {
   prevPos[idx] = vec4<f32>(pCurr.xyz, pinWeight);
 
   var acc = vec3<f32>(0.0, -uSim.envInfo.x, 0.0);
+  let nrm = normalsOut[idx].xyz;
 
   // Aerodynamic wind + spatial gust turbulence
   if (uSim.impulseInfo.z > 0.5) {
@@ -80,9 +86,17 @@ fn csPredict(@builtin(global_invocation_id) gid : vec3<u32>) {
       cos(pCurr.x * 5.2 + pCurr.y * 4.1 - t * 3.1)
     ) * turb;
     let windVec = uSim.windInfo.xyz + gust;
-    let nrm = normalsOut[idx].xyz;
     let normalFacing = abs(dot(nrm, normalize(windVec + vec3<f32>(1e-4, 0.0, 0.0))));
     acc += windVec * (0.85 + 1.65 * normalFacing);
+  }
+
+  // Zhang et al. 2025 §4.2.5 Down-filling internal chamber pressure p
+  let downPressure = uSim.pieInfo.w;
+  if (downPressure > 0.001) {
+    let numCols = i32(uSim.gridInfo.x);
+    let r = i32(idx) / numCols;
+    let chamberMask = abs(sin(f32(r) * 0.65));
+    acc += nrm * (downPressure * 4.5 * chamberMask);
   }
 
   // Updraft gust & centrifugal twirl impulse
@@ -121,11 +135,14 @@ fn csPredict(@builtin(global_invocation_id) gid : vec3<u32>) {
   posOut[idx] = vec4<f32>(pred, pCurr.w);
 }
 
-fn solveSpringPair(
+// Zhang et al. 2025 §4.1.3: Spring projection with in-plane compressive resistance relaxation
+// in the Cerda-Mahadevan buckling strain regime to prevent membrane locking on coarser elements.
+fn solveSpringPairPIE(
   pSelf: vec3<f32>,
   pOther: vec3<f32>,
   restLen: f32,
-  stiffness: f32
+  stiffness: f32,
+  lockingRelief: f32
 ) -> vec3<f32> {
   if (restLen <= 0.0001) {
     return vec3<f32>(0.0);
@@ -136,7 +153,10 @@ fn solveSpringPair(
     return vec3<f32>(0.0);
   }
   let err = d - restLen;
-  return (delta / d) * (err * stiffness);
+  // When err < 0 (in-plane compression within buckling strain window), relax compressive resistance
+  // so compression converts into out-of-plane wrinkles of wavelength λ instead of locking.
+  let compFactor = select(1.0, max(0.18, 1.0 - lockingRelief * 0.78), err < 0.0);
+  return (delta / d) * (err * stiffness * compFactor);
 }
 
 @compute @workgroup_size(64)
@@ -159,7 +179,11 @@ fn csSolveConstraints(@builtin(global_invocation_id) gid : vec3<u32>) {
     return;
   }
 
-  let stretchStiff = clamp(1.0 / (1.0 + uSim.solverInfo.x * 28.0), 0.15, 0.95);
+  // §4.1.2 & §5 Orthotropic Baraff-Witkin Anisotropy (distinct weft vs. warp stiffness)
+  let aniso = clamp(uSim.pieInfo.x, 0.5, 2.5);
+  let lockingRelief = clamp(uSim.pieInfo.y, 0.0, 1.0);
+  let weftStiff = clamp(1.0 / (1.0 + uSim.solverInfo.x * 28.0), 0.15, 0.95);
+  let warpStiff = clamp(1.0 / (1.0 + (uSim.solverInfo.x / aniso) * 28.0), 0.18, 0.97);
   let shearStiff = clamp(1.0 / (1.0 + uSim.solverInfo.y * 36.0), 0.08, 0.75);
   let bendStiff = clamp(uSim.solverInfo.z * 0.45, 0.02, 0.45);
 
@@ -167,24 +191,24 @@ fn csSolveConstraints(@builtin(global_invocation_id) gid : vec3<u32>) {
   var weightSum = 0.0;
   var strainAcc = 0.0;
 
-  // 1. Structural Weft Right (c+1, r) & Left (c-1, r)
+  // 1. Structural Weft Right (c+1, r) & Left (c-1, r) with PIE §4.1.3 anti-locking
   let rlSelf = restLengths[idx];
   let idxRight = idxOf(c + 1, r, numCols);
   let idxLeft = idxOf(c - 1, r, numCols);
   let rlLeft = restLengths[idxLeft];
 
-  let dRight = solveSpringPair(pSelf, posIn[idxRight].xyz, rlSelf.x, stretchStiff);
-  let dLeft = solveSpringPair(pSelf, posIn[idxLeft].xyz, rlLeft.x, stretchStiff);
+  let dRight = solveSpringPairPIE(pSelf, posIn[idxRight].xyz, rlSelf.x, weftStiff, lockingRelief);
+  let dLeft = solveSpringPairPIE(pSelf, posIn[idxLeft].xyz, rlLeft.x, weftStiff, lockingRelief);
   corr += dRight + dLeft;
   weightSum += 2.0;
 
   let curWeft = length(posIn[idxRight].xyz - pSelf);
   strainAcc += abs(curWeft - rlSelf.x) / max(0.005, rlSelf.x);
 
-  // 2. Structural Warp Down (c, r+1) & Up (c, r-1)
+  // 2. Structural Warp Down (c, r+1) & Up (c, r-1) with orthotropic warpStiff
   if (r < numRows - 1) {
     let idxDown = idxOf(c, r + 1, numCols);
-    corr += solveSpringPair(pSelf, posIn[idxDown].xyz, rlSelf.y, stretchStiff);
+    corr += solveSpringPairPIE(pSelf, posIn[idxDown].xyz, rlSelf.y, warpStiff, lockingRelief * 0.5);
     weightSum += 1.0;
     let curWarp = length(posIn[idxDown].xyz - pSelf);
     strainAcc += abs(curWarp - rlSelf.y) / max(0.005, rlSelf.y);
@@ -192,35 +216,50 @@ fn csSolveConstraints(@builtin(global_invocation_id) gid : vec3<u32>) {
   if (r > 0) {
     let idxUp = idxOf(c, r - 1, numCols);
     let rlUp = restLengths[idxUp];
-    corr += solveSpringPair(pSelf, posIn[idxUp].xyz, rlUp.y, stretchStiff);
+    corr += solveSpringPairPIE(pSelf, posIn[idxUp].xyz, rlUp.y, warpStiff, lockingRelief * 0.5);
     weightSum += 1.0;
   }
 
-  // 3. Diagonal Shear Springs
+  // 3. Coupled Diagonal Shear Springs (with locking relief)
   if (r < numRows - 1) {
     let idxRD = idxOf(c + 1, r + 1, numCols);
-    corr += solveSpringPair(pSelf, posIn[idxRD].xyz, rlSelf.z, shearStiff);
+    corr += solveSpringPairPIE(pSelf, posIn[idxRD].xyz, rlSelf.z, shearStiff, lockingRelief);
     let idxLD = idxOf(c - 1, r + 1, numCols);
-    corr += solveSpringPair(pSelf, posIn[idxLD].xyz, rlSelf.z, shearStiff);
+    corr += solveSpringPairPIE(pSelf, posIn[idxLD].xyz, rlSelf.z, shearStiff, lockingRelief);
     weightSum += 1.4;
   }
   if (r > 0) {
     let idxLU = idxOf(c - 1, r - 1, numCols);
     let rlLU = restLengths[idxLU];
-    corr += solveSpringPair(pSelf, posIn[idxLU].xyz, rlLU.z, shearStiff);
+    corr += solveSpringPairPIE(pSelf, posIn[idxLU].xyz, rlLU.z, shearStiff, lockingRelief);
     let idxRU = idxOf(c + 1, r - 1, numCols);
     let rlRU = restLengths[idxRU];
-    corr += solveSpringPair(pSelf, posIn[idxRU].xyz, rlRU.z, shearStiff);
+    corr += solveSpringPairPIE(pSelf, posIn[idxRU].xyz, rlRU.z, shearStiff, lockingRelief);
     weightSum += 1.4;
   }
 
-  // 4. 2-Hop Circumferential Pleat / Bending Springs (c+2, r) & (c-2, r)
+  // 4. 2-Hop Circumferential & Warp Discrete Bending Springs (c±2, r) & (c, r±2)
   let idxR2 = idxOf(c + 2, r, numCols);
   let idxL2 = idxOf(c - 2, r, numCols);
   let rlL2 = restLengths[idxL2];
-  corr += solveSpringPair(pSelf, posIn[idxR2].xyz, rlSelf.w, bendStiff);
-  corr += solveSpringPair(pSelf, posIn[idxL2].xyz, rlL2.w, bendStiff);
+  corr += solveSpringPairPIE(pSelf, posIn[idxR2].xyz, rlSelf.w, bendStiff, 0.0);
+  corr += solveSpringPairPIE(pSelf, posIn[idxL2].xyz, rlL2.w, bendStiff, 0.0);
   weightSum += 1.0;
+
+  if (r < numRows - 2) {
+    let idxD1 = idxOf(c, r + 1, numCols);
+    let idxD2 = idxOf(c, r + 2, numCols);
+    let restV2 = rlSelf.y + restLengths[idxD1].y;
+    corr += solveSpringPairPIE(pSelf, posIn[idxD2].xyz, restV2, bendStiff * 0.75, 0.0);
+    weightSum += 0.4;
+  }
+  if (r >= 2) {
+    let idxU1 = idxOf(c, r - 1, numCols);
+    let idxU2 = idxOf(c, r - 2, numCols);
+    let restU2 = restLengths[idxU1].y + restLengths[idxU2].y;
+    corr += solveSpringPairPIE(pSelf, posIn[idxU2].xyz, restU2, bendStiff * 0.75, 0.0);
+    weightSum += 0.4;
+  }
 
   let mobility = 1.0 - pinWeight * 0.92;
   let newPos = pSelf + (corr / max(1.0, weightSum * 0.55)) * mobility;
@@ -467,7 +506,7 @@ struct ClothVSOut {
   @builtin(position) pos : vec4<f32>,
   @location(0) worldPos  : vec3<f32>,
   @location(1) normal    : vec3<f32>,
-  @location(2) uvPanel   : vec4<f32>, // u, v, panelId, pleatPhase
+  @location(2) uvPanel   : vec4<f32>, // u, v, panelId + sizingFrac, pleatPhase
   @location(3) telemetry : vec4<f32>, // strain, velLen, sdfClearance, pinWeight
 };
 
@@ -540,6 +579,22 @@ fn heatmapColor(t: f32) -> vec3<f32> {
   );
 }
 
+// Zhang et al. 2025 (SIGGRAPH '25) PIE Sizing Map Color Ramp:
+// Deep violet/blue (2.5 mm fine shirred/pleated resolution) -> cyan -> emerald -> amber/coral (14 mm coarse base)
+fn pieSizingColor(sizingMm: f32) -> vec3<f32> {
+  let t = clamp((sizingMm - 2.5) / 10.5, 0.0, 1.0);
+  let c0 = vec3<f32>(0.22, 0.18, 0.78); // 2.5 mm: fine source resolution (shirring / stitching)
+  let c1 = vec3<f32>(0.12, 0.68, 0.88); // 5.5 mm: wrinklon transition zone (L_w)
+  let c2 = vec3<f32>(0.28, 0.85, 0.52); // 9.0 mm: intermediate merged wrinkles (2λ)
+  let c3 = vec3<f32>(0.98, 0.62, 0.24); // 13+ mm: coarse base fabric resolution r_opt
+  if (t < 0.33) {
+    return mix(c0, c1, t / 0.33);
+  } else if (t < 0.66) {
+    return mix(c1, c2, (t - 0.33) / 0.33);
+  }
+  return mix(c2, c3, (t - 0.66) / 0.34);
+}
+
 @fragment
 fn fsCloth(
   in : ClothVSOut,
@@ -551,7 +606,8 @@ fn fsCloth(
   }
 
   let uv = in.uvPanel.xy;
-  let panelId = i32(in.uvPanel.z + 0.5);
+  let panelId = i32(floor(in.uvPanel.z + 0.0001));
+  let sizingMm = fract(in.uvPanel.z) * 20.0;
   let pleatPhase = in.uvPanel.w;
   let strain = in.telemetry.x;
   let velMag = in.telemetry.y;
@@ -570,6 +626,9 @@ fn fsCloth(
   let T = normalize(cross(up, N) + vec3<f32>(1e-4, 0.0, 0.0));
   let B = normalize(cross(N, T));
   N = normalize(N + (T * weave.x + B * weave.y) * weaveBump * 0.32);
+
+  let L = normalize(uRender.lightDir.xyz);
+  let ndl = max(0.0, dot(N, L));
 
   // Debug Render Channels
   if (channel == 1) {
@@ -594,13 +653,18 @@ fn fsCloth(
   } else if (channel == 5) {
     // Avatar SDF Collision Clearance
     return vec4<f32>(heatmapColor(1.0 - sdfClear), 1.0);
+  } else if (channel == 6) {
+    // Zhang et al. 2025 (SIGGRAPH '25) PIE Mesh Sizing Map r(u,v) [mm] + Wrinklon Isolines
+    let baseCol = pieSizingColor(sizingMm);
+    let iso = abs(fract(sizingMm * 0.75) - 0.5);
+    let isoLine = smoothstep(0.06, 0.015, iso) * 0.28;
+    let shaded = baseCol * (0.68 + 0.32 * ndl) + vec3<f32>(isoLine);
+    return vec4<f32>(clamp(shaded, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
   }
 
   let V = normalize(uRender.cameraPos.xyz - in.worldPos);
-  let L = normalize(uRender.lightDir.xyz);
   let H = normalize(V + L);
 
-  let ndl = max(0.0, dot(N, L));
   let ndv = max(0.001, dot(N, V));
   let ndh = max(0.0, dot(N, H));
 

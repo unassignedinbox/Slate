@@ -83,6 +83,13 @@ export const PATTERN_REBUILD_KEYS = new Set([
   "pleatCount",
   "pleatDepth",
   "asymmetry",
+  "pieAutoResolution",
+  "pieAnisotropy",
+  "pieShirringRatio",
+  "pieDownPressure",
+  "weaveType",
+  "bendStiffness",
+  "stretchCompliance",
 ]);
 
 export function ValidateParameter(Key, Value) {

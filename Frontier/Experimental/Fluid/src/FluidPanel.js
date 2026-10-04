@@ -266,7 +266,7 @@ class ClothPanel {
     if (["bodice", "skirt", "pleats"].includes(Node.id)) {
       this.Selection = "garment";
       this.Tab = "source";
-    } else if (["seams", "output"].includes(Node.id)) {
+    } else if (["pie", "seams", "output"].includes(Node.id)) {
       this.Selection = "garment";
       this.Tab = "simulation";
     } else if (["weave", "dye"].includes(Node.id)) {
@@ -638,6 +638,19 @@ class ClothPanel {
     }
 
     if (this.Tab === "simulation") {
+      AddGroup(
+        "PIE optimal mesh (SIGGRAPH '25)",
+        [
+          "pieAutoResolution",
+          "pieAnisotropy",
+          "pieLockingRelief",
+          "pieShirringRatio",
+          "pieDownPressure",
+        ],
+        "PIE",
+        true,
+        "Zhang et al. 2025: Cerda-Mahadevan wrinkle wavelength λ(B/E), Vandeparre wrinklon transition L_w, orthotropic anisotropy, and in-plane compressive locking relief.",
+      );
       AddGroup(
         "Human avatar & pose",
         [
@@ -1351,8 +1364,9 @@ class ClothPanel {
       const Rows = this.Engine?.numRows || Math.round(Cols * 0.78);
       const Verts = this.Engine?.vertexCount || Cols * Rows;
       const Springs = this.Engine?.constraintCount || Verts * 5;
+      const Pie = this.Engine?.pieReport;
       Select("#diagnostic-values").innerHTML =
-        `<dt>Backend</dt><dd>${this.Backend === "webgpu" ? "WebGPU (WGSL)" : "WebGL2"}</dd><dt>Cloth mesh</dt><dd>${Cols} × ${Rows} (${Verts.toLocaleString()} vtx)</dd><dt>XPBD springs</dt><dd>${Springs.toLocaleString()} (${this.Parameters.substeps} substeps)</dd><dt>Avatar collider</dt><dd>16 capsules (${this.Avatar.vertexCount.toLocaleString()} vtx)</dd><dt>Canvas</dt><dd>${this.Canvas.width} × ${this.Canvas.height}</dd><dt>Simulation steps</dt><dd>${this.Engine?.stepCount || 0}</dd><dt>Solver pass</dt><dd>${(this.Engine?.simDurationMs || 0).toFixed(2)} ms</dd>`;
+        `<dt>Backend</dt><dd>${this.Backend === "webgpu" ? "WebGPU (WGSL)" : "WebGL2"}</dd><dt>Cloth mesh</dt><dd>${Cols} × ${Rows} (${Verts.toLocaleString()} vtx)</dd><dt>PIE r_weft / r_warp</dt><dd>${Pie ? `${Pie.rWeftOptMm} mm / ${Pie.rWarpOptMm} mm` : "5.4 mm / 7.2 mm"}</dd><dt>PIE λ / L_w</dt><dd>${Pie ? `λ ${Pie.wavelengthMm} mm · L_w ${Pie.wrinklonLwMm} mm` : "—"}</dd><dt>XPBD springs</dt><dd>${Springs.toLocaleString()} (${this.Parameters.substeps} substeps)</dd><dt>Avatar collider</dt><dd>16 capsules (${this.Avatar.vertexCount.toLocaleString()} vtx)</dd><dt>Solver pass</dt><dd>${(this.Engine?.simDurationMs || 0).toFixed(2)} ms</dd>`;
     }
   }
 }

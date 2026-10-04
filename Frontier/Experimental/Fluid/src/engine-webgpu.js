@@ -76,8 +76,7 @@ export class WebGPUClothEngine {
     this.twirlTimer = 0.0;
     this.crosswindTimer = 0.0;
 
-    this.simUniformData = new Float32Array(56 * 4); // 56 vec4f = 896 bytes
-    this.renderUniformData = new Float32Array(28); // mat4x4 (16) + 7 vec4f (28) = 44 floats -> pad to 48 floats (192 bytes)
+    this.simUniformData = new Float32Array(57 * 4); // 57 vec4f = 912 bytes
     this.renderUniformData = new Float32Array(48);
 
     this.depthTexture = null;
@@ -135,7 +134,7 @@ export class WebGPUClothEngine {
     };
 
     this.simUniformBuffer = device.createBuffer({
-      size: 896,
+      size: 912,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -288,6 +287,7 @@ export class WebGPUClothEngine {
     this.params = params;
     const dress = DressGenerator.buildDress(params);
     this.dressData = dress;
+    this.pieReport = dress.pieReport;
     this.numCols = dress.numCols;
     this.numRows = dress.numRows;
     this.vertexCount = dress.vertexCount;
@@ -476,8 +476,13 @@ export class WebGPUClothEngine {
     u[29] = this.twirlTimer > 0 ? 4.2 * Math.sin((this.twirlTimer / 2.4) * Math.PI) : this.avatar.motionState.yawVelocity * 0.4;
     u[30] = this.params.windEnabled ? 1.0 : 0.0;
     u[31] = 0.0;
-    // 8..55: 16 capsules * 12 floats = 192 floats
-    u.set(this.avatar.capsuleData, 32);
+    // 8: pieInfo (Zhang et al. 2025 SIGGRAPH '25)
+    u[32] = this.params.pieAnisotropy ?? 1.45;
+    u[33] = this.params.pieLockingRelief ?? 0.68;
+    u[34] = this.params.pieShirringRatio ?? 0.64;
+    u[35] = this.params.pieDownPressure ?? 0.0;
+    // 9..56: 16 capsules * 12 floats = 192 floats
+    u.set(this.avatar.capsuleData, 36);
 
     this.device.queue.writeBuffer(this.simUniformBuffer, 0, u);
 

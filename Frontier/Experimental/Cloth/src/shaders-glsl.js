@@ -195,12 +195,24 @@ vec3 heatmapColor(float t) {
   );
 }
 
+vec3 pieSizingColor(float sizingMm) {
+  float t = clamp((sizingMm - 2.5) / 10.5, 0.0, 1.0);
+  vec3 c0 = vec3(0.22, 0.18, 0.78);
+  vec3 c1 = vec3(0.12, 0.68, 0.88);
+  vec3 c2 = vec3(0.28, 0.85, 0.52);
+  vec3 c3 = vec3(0.98, 0.62, 0.24);
+  if (t < 0.33) return mix(c0, c1, t / 0.33);
+  if (t < 0.66) return mix(c1, c2, (t - 0.33) / 0.33);
+  return mix(c2, c3, (t - 0.66) / 0.34);
+}
+
 void main() {
   vec3 N = normalize(vNormal);
   if (!gl_FrontFacing) N = -N;
 
   vec2 uv = vUVPanel.xy;
-  int panelId = int(vUVPanel.z + 0.5);
+  int panelId = int(floor(vUVPanel.z + 0.0001));
+  float sizingMm = fract(vUVPanel.z) * 20.0;
   float pleatPhase = vUVPanel.w;
   float strain = vTelemetry.x;
   float velMag = vTelemetry.y;
@@ -217,6 +229,9 @@ void main() {
   vec3 T = normalize(cross(up, N) + vec3(1e-4, 0.0, 0.0));
   vec3 B = normalize(cross(N, T));
   N = normalize(N + (T * weave.x + B * weave.y) * weaveBump * 0.32);
+
+  vec3 L = normalize(uLightDir.xyz);
+  float ndl = max(0.0, dot(N, L));
 
   if (channel == 1) {
     fragColor = vec4(heatmapColor(strain * 1.6), 1.0);
@@ -240,13 +255,18 @@ void main() {
   } else if (channel == 5) {
     fragColor = vec4(heatmapColor(1.0 - sdfClear), 1.0);
     return;
+  } else if (channel == 6) {
+    vec3 baseCol = pieSizingColor(sizingMm);
+    float iso = abs(fract(sizingMm * 0.75) - 0.5);
+    float isoLine = smoothstep(0.06, 0.015, iso) * 0.28;
+    vec3 shaded = baseCol * (0.68 + 0.32 * ndl) + vec3(isoLine);
+    fragColor = vec4(clamp(shaded, vec3(0.0), vec3(1.0)), 1.0);
+    return;
   }
 
   vec3 V = normalize(uCameraPos.xyz - vWorldPos);
-  vec3 L = normalize(uLightDir.xyz);
   vec3 H = normalize(V + L);
 
-  float ndl = max(0.0, dot(N, L));
   float ndv = max(0.001, dot(N, V));
   float ndh = max(0.0, dot(N, H));
 

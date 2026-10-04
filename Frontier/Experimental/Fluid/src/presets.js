@@ -1,6 +1,7 @@
 /**
  * Couture Dress Presets, Debug Render Channels, Colour Palettes, and Control Definitions
  * for the Frontier Experimental WebGPU Cloth & Dress Simulator.
+ * Includes Zhang et al. (ACM SIGGRAPH 2025) "Physics-inspired Estimation of Optimal Cloth Mesh Resolution" (PIE).
  */
 
 export const DEBUG_CHANNELS = [
@@ -10,6 +11,7 @@ export const DEBUG_CHANNELS = [
   { id: 3, label: "Procedural weave normals" },
   { id: 4, label: "Cloth velocity vectors" },
   { id: 5, label: "Avatar SDF collision field" },
+  { id: 6, label: "PIE sizing map r(u,v) [SIGGRAPH '25]" },
 ];
 
 export const COLOR_PALETTES = [
@@ -43,6 +45,13 @@ export const DEFAULT_PARAMS = {
   pleatCount: 16,
   pleatDepth: 0.018,
   asymmetry: 0.0,
+
+  // Zhang et al. 2025 (SIGGRAPH '25) PIE Optimal Mesh Resolution & Anti-Locking
+  pieAutoResolution: true,
+  pieAnisotropy: 1.45,
+  pieLockingRelief: 0.68,
+  pieShirringRatio: 0.64,
+  pieDownPressure: 0.0,
 
   // WebGPU XPBD Solver & Physics
   gridResolution: 56,
@@ -123,6 +132,16 @@ export const CONTROL_GROUPS = [
       { key: "pleatCount", label: "Radial pleat count", type: "range", min: 0, max: 36, step: 2 },
       { key: "pleatDepth", label: "Pleat crease depth", type: "range", min: 0.0, max: 0.045, step: 0.001 },
       { key: "asymmetry", label: "Hemline asymmetry", type: "range", min: -0.60, max: 0.60, step: 0.02 },
+    ],
+  },
+  {
+    title: "PIE Sizing & Anti-Locking (SIGGRAPH '25)",
+    controls: [
+      { key: "pieAutoResolution", label: "PIE adaptive sizing map", type: "toggle" },
+      { key: "pieAnisotropy", label: "Warp / weft anisotropy", type: "range", min: 0.6, max: 2.5, step: 0.05 },
+      { key: "pieLockingRelief", label: "Compressive locking relief", type: "range", min: 0.0, max: 1.0, step: 0.02 },
+      { key: "pieShirringRatio", label: "Waist shirring ratio (ρ_sh)", type: "range", min: 0.35, max: 1.0, step: 0.02 },
+      { key: "pieDownPressure", label: "Down-fill inflation (p)", type: "range", min: 0.0, max: 1.0, step: 0.02 },
     ],
   },
   {
@@ -229,6 +248,10 @@ export const PRESETS = {
       stretchCompliance: 0.005,
       shearCompliance: 0.022,
       bendStiffness: 0.35,
+      pieAnisotropy: 1.45,
+      pieLockingRelief: 0.72,
+      pieShirringRatio: 0.62,
+      pieDownPressure: 0.0,
       windSpeed: 1.6,
       avatarPose: 0,
     },
@@ -255,6 +278,10 @@ export const PRESETS = {
       stretchCompliance: 0.004,
       shearCompliance: 0.012,
       bendStiffness: 0.68,
+      pieAnisotropy: 1.65,
+      pieLockingRelief: 0.65,
+      pieShirringRatio: 0.56,
+      pieDownPressure: 0.0,
       windSpeed: 2.1,
       avatarPose: 2,
     },
@@ -280,6 +307,10 @@ export const PRESETS = {
       stretchCompliance: 0.003,
       shearCompliance: 0.008,
       bendStiffness: 0.78,
+      pieAnisotropy: 1.55,
+      pieLockingRelief: 0.60,
+      pieShirringRatio: 0.52,
+      pieDownPressure: 0.18,
       windSpeed: 1.4,
       avatarPose: 0,
     },
@@ -305,6 +336,10 @@ export const PRESETS = {
       stretchCompliance: 0.008,
       shearCompliance: 0.032,
       bendStiffness: 0.24,
+      pieAnisotropy: 1.35,
+      pieLockingRelief: 0.78,
+      pieShirringRatio: 0.74,
+      pieDownPressure: 0.0,
       windSpeed: 1.8,
       avatarPose: 1,
     },
@@ -330,6 +365,10 @@ export const PRESETS = {
       stretchCompliance: 0.004,
       shearCompliance: 0.014,
       bendStiffness: 0.52,
+      pieAnisotropy: 1.50,
+      pieLockingRelief: 0.66,
+      pieShirringRatio: 0.58,
+      pieDownPressure: 0.0,
       windSpeed: 1.5,
       avatarPose: 0,
     },
@@ -356,6 +395,10 @@ export const PRESETS = {
       stretchCompliance: 0.010,
       shearCompliance: 0.028,
       bendStiffness: 0.18,
+      pieAnisotropy: 1.25,
+      pieLockingRelief: 0.85,
+      pieShirringRatio: 0.48,
+      pieDownPressure: 0.0,
       windSpeed: 3.4,
       windTurbulence: 1.45,
       avatarPose: 3,
@@ -382,6 +425,10 @@ export const PRESETS = {
       stretchCompliance: 0.005,
       shearCompliance: 0.016,
       bendStiffness: 0.48,
+      pieAnisotropy: 1.45,
+      pieLockingRelief: 0.68,
+      pieShirringRatio: 0.64,
+      pieDownPressure: 0.0,
       windSpeed: 2.2,
       avatarPose: 1,
     },
@@ -409,6 +456,10 @@ export const PRESETS = {
       stretchCompliance: 0.004,
       shearCompliance: 0.010,
       bendStiffness: 0.64,
+      pieAnisotropy: 1.60,
+      pieLockingRelief: 0.62,
+      pieShirringRatio: 0.55,
+      pieDownPressure: 0.12,
       windSpeed: 1.5,
       avatarPose: 0,
     },
