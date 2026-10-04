@@ -1,3 +1,4 @@
+import DrawerPanel from "./DrawerPanel.jsx";
 import React, { useState, useRef, useEffect } from "react";
 import { Glyph, Control, Card, Icon } from "./Inspectors.jsx";
 const Qualities = ["Minimal", "Economy", "Standard", "Ultra", "Reference"];
@@ -23,21 +24,19 @@ const Channels = [
   "19 IOR (refraction)",
   "20 displacement",
 ];
-export default function Notch({ Open, Toggle, Settings, Assign, Name }) {
-  const [Height, SetHeight] = useState(innerHeight);
-  useEffect(() => {
-    const Resize = () => SetHeight(innerHeight);
-    window.addEventListener("resize", Resize);
-    return () => window.removeEventListener("resize", Resize);
-  }, []);
+export default function Notch({
+  Open,
+  Toggle,
+  Settings,
+  Assign,
+  Name,
+  Activate,
+}) {
   const [Page, SelectPage] = useState("Dashboard"),
     [Tab, SelectTab] = useState("Fonts"),
-    [Offset, Move] = useState(0),
-    [Travel, SetTravel] = useState(null),
     [Draft, Change] = useState({ ...Settings }),
     [Dirty, SetDirty] = useState(false),
     [Message, Say] = useState("");
-  const Drag = useRef(null);
   useEffect(() => {
     if (Open) {
       Change({ ...Settings });
@@ -47,16 +46,6 @@ export default function Notch({ Open, Toggle, Settings, Assign, Name }) {
       return () => clearTimeout(Timer);
     }
   }, [Open]);
-  useEffect(() => {
-    const Escape = (Event) => {
-      if (Event.key === "Escape" && Open) {
-        if (Page !== "Dashboard") SelectPage("Dashboard");
-        else Toggle(false);
-      }
-    };
-    window.addEventListener("keydown", Escape);
-    return () => window.removeEventListener("keydown", Escape);
-  }, [Open, Page]);
   const Edit = (Key, Value) => {
     if (Page === "Render Settings") Assign(Key, Value);
     Change((Previous) => ({ ...Previous, [Key]: Value }));
@@ -139,67 +128,21 @@ export default function Notch({ Open, Toggle, Settings, Assign, Name }) {
     Say("Applied to HTML preview only");
     setTimeout(() => Say(""), 3000);
   };
-  const HandleDown = (Event) => {
-    if (Event.button !== 0) return;
-    Event.currentTarget.setPointerCapture(Event.pointerId);
-    Drag.current = {
-      X: Event.clientX,
-      Y: Event.clientY,
-      Offset,
-      Open,
-      Axis: null,
-      At: performance.now(),
-    };
-  };
-  const HandleMove = (Event) => {
-    const Gesture = Drag.current;
-    if (!Gesture) return;
-    const X = Event.clientX - Gesture.X,
-      Y = Event.clientY - Gesture.Y;
-    if (!Gesture.Axis && Math.hypot(X, Y) > 6)
-      Gesture.Axis = Math.abs(X) > Math.abs(Y) ? "X" : "Y";
-    if (Gesture.Axis === "X")
-      Move(
-        Math.max(
-          -(innerWidth - 200) / 2,
-          Math.min((innerWidth - 200) / 2, Gesture.Offset + X),
-        ),
-      );
-    if (Gesture.Axis === "Y")
-      SetTravel(
-        Math.max(
-          0,
-          Math.min(innerHeight - 36, (Gesture.Open ? innerHeight - 36 : 0) + Y),
-        ),
-      );
-  };
-  const HandleUp = (Event) => {
-    const Gesture = Drag.current;
-    if (!Gesture) return;
-    const Y = Event.clientY - Gesture.Y;
-    if (!Gesture.Axis) Toggle(!Open);
-    else if (Gesture.Axis === "Y")
-      Toggle(
-        Gesture.Open ? !(Y < -50) : Y > 50 || Travel > (innerHeight - 36) / 2,
-      );
-    SetTravel(null);
-    Drag.current = null;
-  };
-  const Style = {
-    transform: `translateY(${Travel !== null ? Travel - (Height - 36) : Open ? 0 : -(Height - 36)}px)`,
-    transition: Travel !== null ? "none" : undefined,
-  };
   return (
-    <div
-      className={"notch-shell " + (Open || Travel > 100 ? "open" : "")}
-      style={Style}
+    <DrawerPanel
+      Edge="top"
+      Open={Open}
+      Toggle={Toggle}
+      Activate={Activate}
+      Label={Name}
+      Name="Project-Zero control center notch"
+      ClassName="control-drawer"
+      Escape={() =>
+        Page !== "Dashboard" ? SelectPage("Dashboard") : Toggle(false)
+      }
     >
-      <div
-        className="shade"
-        onPointerDown={(Event) => {
-          if (Event.target === Event.currentTarget) Toggle(false);
-        }}
-      >
+      <div className="shade">
+        <div className="drawer-backdrop" aria-hidden="true" />
         {Page === "Dashboard" ? (
           <div className="control-dashboard">
             <header>
@@ -384,7 +327,7 @@ export default function Notch({ Open, Toggle, Settings, Assign, Name }) {
                 ))}
               </nav>
             )}
-            <div className="settings-body">
+            <div className="settings-body" data-drawer-scroll>
               {Page === "Render Settings" ? (
                 <>
                   <Card Title="Shadows">
@@ -883,30 +826,6 @@ export default function Notch({ Open, Toggle, Settings, Assign, Name }) {
           </div>
         )}
       </div>
-      <button
-        className="notch-handle"
-        aria-label="Project-Zero control center notch"
-        aria-expanded={Open}
-        style={{ left: `calc(50% - 100px + ${Offset}px)` }}
-        onPointerDown={HandleDown}
-        onPointerMove={HandleMove}
-        onPointerUp={HandleUp}
-        onPointerCancel={() => {
-          Drag.current = null;
-          SetTravel(null);
-        }}
-        onKeyDown={(Event) => {
-          if (Event.key === "Enter" || Event.key === " ") {
-            Event.preventDefault();
-            Toggle(!Open);
-          }
-        }}
-      >
-        <svg viewBox="0 0 400 36" preserveAspectRatio="none">
-          <path d="M0 0C15 0 20 6 25 15L35 28C40 34 45 36 52 36H348C355 36 360 34 365 28L375 15C380 6 385 0 400 0Z" />
-        </svg>
-        <span>{Name}</span>
-      </button>
-    </div>
+    </DrawerPanel>
   );
 }

@@ -1,3 +1,5 @@
+import AssetPanel from "./AssetPanel.jsx";
+import { RestoreAssets } from "./AssetDepot.js";
 import MaterialPanel from "./MaterialPanel.jsx";
 import ShaderPanel from "./ShaderPanel.jsx";
 import React, { useState, useEffect, useRef } from "react";
@@ -212,11 +214,25 @@ function App() {
     }),
     [LeftWidth, ResizeLeft] = useState(316),
     [RightWidth, ResizeRight] = useState(340);
+  const [AssetRecords, StoreAssets] = useState(RestoreAssets(Saved.Assets)),
+    [AssetsOpen, OpenAssets] = useState(false),
+    [ViewportSettings, ShowViewportSettings] = useState(false);
+  const ToggleShade = (Next) => {
+    OpenShade(Next);
+    if (Next) OpenAssets(false);
+  };
+  const ToggleAssets = (Next) => {
+    OpenAssets(Next);
+    if (Next) OpenShade(false);
+  };
   const [ShaderTarget, SelectShaderTarget] = useState(null),
     [ShaderFloating, FloatShader] = useState(false);
-  const ShaderSubject = Rows.find(
-    (Row) => Row.Id === ShaderTarget && Row.Panel === "geometry",
+  const ShaderAsset = AssetRecords.find(
+    (Asset) => Asset.Id === ShaderTarget && Asset.Kind === "Materials",
   );
+  const ShaderSubject =
+    ShaderAsset ||
+    Rows.find((Row) => Row.Id === ShaderTarget && Row.Panel === "geometry");
   const RemoveShaderTabs = () => {
     AssignTabs((Previous) =>
       Object.fromEntries(
@@ -238,6 +254,7 @@ function App() {
     );
   };
   const OpenShader = (Id) => {
+    OpenAssets(false);
     SelectShaderTarget(Id);
     RemoveShaderTabs();
     FloatShader(true);
@@ -264,6 +281,13 @@ function App() {
             <option value="" disabled>
               Select a material owner
             </option>
+            {AssetRecords.filter((Asset) => Asset.Kind === "Materials").map(
+              (Asset) => (
+                <option key={Asset.Id} value={Asset.Id}>
+                  {Asset.Name} · library material
+                </option>
+              ),
+            )}
             {Rows.filter((Row) => Row.Panel === "geometry").map((Row) => (
               <option key={Row.Id} value={Row.Id}>
                 {Row.Name} · surface
@@ -287,15 +311,31 @@ function App() {
         <MaterialPanel
           key={ShaderSubject.Id}
           Subject={ShaderSubject}
-          Values={Values[ShaderSubject.Id] || {}}
+          Values={
+            ShaderAsset
+              ? { Material: ShaderAsset.Material }
+              : Values[ShaderSubject.Id] || {}
+          }
           Change={(Key, Value) =>
-            AssignValues((Previous) => ({
-              ...Previous,
-              [ShaderSubject.Id]: {
-                ...Previous[ShaderSubject.Id],
-                [Key]: Value,
-              },
-            }))
+            ShaderAsset
+              ? StoreAssets((Previous) =>
+                  Previous.map((Asset) =>
+                    Asset.Id === ShaderAsset.Id
+                      ? {
+                          ...Asset,
+                          Material: Value,
+                          Name: Value.Name || Asset.Name,
+                        }
+                      : Asset,
+                  ),
+                )
+              : AssignValues((Previous) => ({
+                  ...Previous,
+                  [ShaderSubject.Id]: {
+                    ...Previous[ShaderSubject.Id],
+                    [Key]: Value,
+                  },
+                }))
           }
         />
       ) : (
@@ -343,6 +383,7 @@ function App() {
         StorageKey,
         JSON.stringify({
           Rows,
+          Assets: AssetRecords,
           Selected,
           Values,
           Hidden,
@@ -356,7 +397,7 @@ function App() {
         "Browser storage is full or unavailable. Export the scene to keep your material drafts.",
       );
     }
-  }, [Rows, Selected, Values, Hidden, Collapsed, Settings, Name]);
+  }, [Rows, Selected, Values, Hidden, Collapsed, Settings, Name, AssetRecords]);
   useEffect(() => {
     const Key = (Event) => {
       if (
@@ -365,7 +406,7 @@ function App() {
         )
       )
         return;
-      if (Construct || Shade) return;
+      if (Construct || Shade || AssetsOpen) return;
       if (Event.key === "F3") {
         Event.preventDefault();
         SetDebug((Previous) => (Previous + (Event.shiftKey ? 15 : 1)) % 16);
@@ -384,6 +425,7 @@ function App() {
       }
       if (Event.key === "Escape") {
         SetDebug(0);
+        ShowViewportSettings(false);
         ShowMenu(null);
         OpenConstruct(false);
         RenameRow(null);
@@ -407,7 +449,7 @@ function App() {
     };
     window.addEventListener("keydown", Key);
     return () => window.removeEventListener("keydown", Key);
-  }, [Selected, Construct, Shade]);
+  }, [Selected, Construct, Shade, AssetsOpen]);
   useEffect(() => {
     const Move = (Event) => {
       if (!Divider.current) return;
@@ -484,6 +526,7 @@ function App() {
           {
             Format: "Frontier HTML UI study",
             Rows,
+            Assets: AssetRecords,
             Values,
             Hidden,
             Settings,
@@ -524,6 +567,7 @@ function App() {
         throw Error();
       AssignRows(Loaded.Rows);
       AssignValues(Loaded.Values || {});
+      StoreAssets(RestoreAssets(Loaded.Assets));
       AssignHidden(Loaded.Hidden || {});
       ChangeSettings({ ...DefaultSettings, ...Loaded.Settings });
       RenameProject(Loaded.Name || "Project-Zero");
@@ -1054,15 +1098,90 @@ function App() {
             </button>
             <button
               className="viewport-icon-button"
-              aria-label="Open control center"
-              title="Control Centre"
-              onClick={() => OpenShade(!Shade)}
+              aria-label="Viewport settings"
+              aria-expanded={ViewportSettings}
+              title="Viewport settings and debug views"
+              onClick={() => ShowViewportSettings(!ViewportSettings)}
             >
               <ActionIcon Name="settings" Size={17} />
             </button>
           </div>
         </div>
       </div>
+      {ViewportSettings && (
+        <section
+          className="viewport-settings"
+          role="dialog"
+          aria-label="Viewport settings"
+          onKeyDown={(Event) => {
+            if (Event.key === "Escape") {
+              Event.stopPropagation();
+              ShowViewportSettings(false);
+            }
+          }}
+        >
+          <header>
+            Viewport settings
+            <button
+              aria-label="Close viewport settings"
+              onClick={() => ShowViewportSettings(false)}
+            >
+              ×
+            </button>
+          </header>
+          <label>
+            Debug view
+            <select
+              autoFocus
+              aria-label="Viewport debug view"
+              value={Debug}
+              onChange={(Event) => SetDebug(+Event.target.value)}
+            >
+              {DebugViews.map((View, Index) => (
+                <option key={View} value={Index}>
+                  {View}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="viewport-setting-toggle">
+            HiZ overlay
+            <input
+              type="checkbox"
+              aria-label="HiZ overlay"
+              checked={HiZ}
+              onChange={(Event) => ToggleHiZ(Event.target.checked)}
+            />
+          </label>
+          <label className="viewport-setting-toggle">
+            Alias overlay
+            <input
+              type="checkbox"
+              aria-label="Alias overlay"
+              checked={Alias}
+              onChange={(Event) => ToggleAlias(Event.target.checked)}
+            />
+          </label>
+          <label>
+            Patch error budget
+            <select
+              aria-label="Patch error budget"
+              value={PatchError}
+              onChange={(Event) => SetPatchError(+Event.target.value)}
+            >
+              {[0.5, 1, 2, 4].map((Value) => (
+                <option key={Value} value={Value}>
+                  {Value} px
+                </option>
+              ))}
+            </select>
+          </label>
+          <p>
+            F3 / Shift+F3 cycle debug views. These are HTML diagnostic
+            selections; no native render buffers are connected.
+          </p>
+        </section>
+      )}
       <div
         className={"scene-image " + (SplitView ? "split-view" : "")}
         title="Checkerboard authoring preview. Symbols represent constructed entities, not engine rendering."
@@ -1163,7 +1282,7 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
     <>
       <main
         className={"workspace " + (Wide ? "inspector-workspace" : "")}
-        inert={Construct ? "" : undefined}
+        inert={Construct || Shade || AssetsOpen ? "" : undefined}
         style={{ "--left": LeftWidth + "px", "--right": RightWidth + "px" }}
       >
         {["Left", "Centre", "Right"].map((Side) => (
@@ -1198,18 +1317,38 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
         ))}
       </main>
       {ShaderFloating && (
-        <ShaderPanel
-          Close={() => FloatShader(false)}
-          Dock={DockShader}
-          Children={ShaderBody()}
-        />
+        <div inert={Shade || AssetsOpen ? "" : undefined}>
+          <ShaderPanel
+            Close={() => FloatShader(false)}
+            Dock={DockShader}
+            Children={ShaderBody()}
+          />
+        </div>
       )}
       <Notch
         Open={Shade}
-        Toggle={OpenShade}
+        Toggle={ToggleShade}
+        Activate={() => OpenAssets(false)}
         Settings={Settings}
         Assign={Assign}
         Name={Name}
+      />
+      <AssetPanel
+        Open={AssetsOpen}
+        Toggle={ToggleAssets}
+        Activate={() => OpenShade(false)}
+        Assets={AssetRecords}
+        Store={StoreAssets}
+        Subject={Subject}
+        Values={Values[Selected] || {}}
+        Targets={Rows.filter((Row) => Row.Panel === "geometry")}
+        Apply={(Material, Id) =>
+          AssignValues((Previous) => ({
+            ...Previous,
+            [Id]: { ...Previous[Id], Material },
+          }))
+        }
+        EditMaterial={OpenShader}
       />
       {Wide && (
         <button
@@ -1234,6 +1373,14 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
             {Menu.Type === "Tabs" ? (
               <>
                 <label>WORKSPACE</label>
+                <button
+                  onClick={() => {
+                    ShowMenu(null);
+                    ToggleAssets(true);
+                  }}
+                >
+                  Asset Browser
+                </button>
                 {["Outliner", "Viewport", "Inspector", "ShaderEditor"].map(
                   (Tab) => (
                     <button key={Tab} onClick={() => RestoreTab(Tab)}>

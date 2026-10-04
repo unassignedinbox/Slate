@@ -13,6 +13,21 @@ const Assets = {
   Icons: {},
   Glyphs: {},
   Moons: [],
+  Fonts: Object.fromEntries(
+    ["Light", "Regular"].map((Weight) => [
+      Weight,
+      "data:font/ttf;base64," +
+        fs
+          .readFileSync(
+            path.join(
+              Frontier,
+              "EngineContent/Fonts/SunReference",
+              "DMSans-" + Weight + ".ttf",
+            ),
+          )
+          .toString("base64"),
+    ]),
+  ),
   ShaderBall: fs
     .readFileSync(
       path.join(Frontier, "Exhibits/DistanceFieldGI/ShaderBall.mesh"),

@@ -189,17 +189,31 @@ try {
     );
   }
   await Page.getByRole("button", {
-    name: "Open control center",
+    name: "Viewport settings",
     exact: true,
   }).click();
-  assert.equal(
-    await Page.locator(".notch-handle").getAttribute("aria-expanded"),
-    "true",
+  await Page.getByRole("dialog", {
+    name: "Viewport settings",
+    exact: true,
+  }).waitFor();
+  await Page.getByLabel("Viewport debug view", { exact: true }).selectOption(
+    "6",
   );
-  await Page.keyboard.press("Escape");
+  assert.equal(await Diagnostics.getAttribute("aria-pressed"), "true");
   assert.equal(
     await Page.locator(".notch-handle").getAttribute("aria-expanded"),
     "false",
+  );
+  await Page.getByLabel("Viewport debug view", { exact: true }).selectOption(
+    "0",
+  );
+  await Page.keyboard.press("Escape");
+  assert.equal(
+    await Page.getByRole("dialog", {
+      name: "Viewport settings",
+      exact: true,
+    }).count(),
+    0,
   );
   await Page.getByRole("button", { name: "Construct", exact: true }).click();
   await Page.getByRole("textbox", {
@@ -289,7 +303,7 @@ try {
       "independent projection and split",
       "diagnostics and F3 state",
       "three exclusive mode selectors",
-      "Control Centre open/close",
+      "viewport settings/debug routing (not Control Centre)",
       "Construct and frame eligibility",
       "1024/1280/1366/1440/1920 toolbar layouts",
     ],

@@ -20,6 +20,9 @@
 | C006 | SolidArc-style XYZ transform table                  | Implemented and browser-checked   | Deferred until the HTML review is finished        |
 | C007 | Object-bound full material channels and sources     | Implemented and browser-checked   | Native slab and producer integration deferred     |
 | C008 | Dockable ShaderEditor and shader-ball preview       | Implemented and browser-checked   | Native shader execution and BSDF preview deferred |
+| C009 | Matching top/bottom drawers and page-close gestures | Implemented; mouse/touch checked | Reported native drag problem recorded; mirror deferred |
+| C010 | Material, imported-file and engine asset browser | Implemented and browser-checked | Native asset pipeline integration deferred |
+| C011 | Viewport-only settings/debug menu | Implemented and browser-checked | Deferred until the HTML review is finished |
 
 ## 2026-10-04 — C001: Construct presentation
 
@@ -222,3 +225,102 @@ Visual proofs:
 ## Next review
 
 Await the user's review of this batch. Append subsequent requests to this document, keep their native status deferred, and obtain the final go-ahead before starting the C++ mirror.
+
+## 2026-10-04 — C009–C011: Shared drawers, content library, viewport settings
+
+### C009 — Reference and drawer interaction
+
+Used the user-supplied repository-root [`UI.html`](../../UI.html) reference
+(commit `d8a65f8`) for the top/bottom sheet interaction. Its generated demonstration
+inventory was **not** used as engine content.
+
+- Both notches now share `DrawerPanel.jsx`: closed, half-open and full-open stops;
+  vertical handle dragging; horizontal handle repositioning; distance/velocity
+  release snapping; fast flicks; and pointer cancellation.
+- Open sheets can be dragged using their blank page surface, header or grip.
+  Buttons, fields and independent scrolling regions keep their own interaction.
+- Handles support click, Enter and Space; Escape closes the browser or returns
+  through the Control Centre pages. Drawers are mutually exclusive and prevent
+  interaction with the editor behind them. Focus is contained/restored.
+- Settings dialogs and the library fit the visible half-height sheet; their
+  contents scroll independently instead of moving the drawer.
+- Real touch testing caught and fixed cancellation from bubbling
+  `lostpointercapture` when implicit touch capture transfers to the drawer root.
+
+**Native follow-up:** the user reports that their C++ build closes only through
+handle presses, not by sliding the open page/handle. Record this as a required
+native regression case, not as a browser fix proving the native issue resolved.
+`ControlCentreHost.cpp` already contains `GrabSubject::Card` and `Grip` carry
+paths. Actual hit routing/body ownership and the running build need verification
+when the mirror is authorized; the root cause has not been established here.
+No native source changes or native builds were made.
+
+### C010 — Asset Browser
+
+Added a bottom-notch content library with a dark catalogue-style layout,
+All/Project/Imported/Engine filters, categories, search, grid/list presentation,
+a selected-asset detail pane and previews.
+
+The built-in library contains **179 entries**:
+
+- 9 HTML material-authoring presets (not resolved native slab files).
+- 6 embedded moon image previews.
+- 2 actual DM Sans font resources, previewed using `FontFace`.
+- 161 repository icons.
+- The repository shader-ball mesh, shown through the existing browser preview.
+
+Materials can be created, renamed, saved from the selected object, exported,
+imported and edited in the pinned ShaderEditor. Editing an engine preset first
+creates a project copy. The assignment selector chooses a geometry object;
+applying a library material makes an **independent deep copy** rather than a
+shared live binding. Later library edits/removal do not alter that object copy.
+All previous material channels, source drafts and object-bound ownership remain.
+
+File import keeps the original bytes in browser-origin **IndexedDB**. Images
+receive thumbnails and previews; fonts can be previewed; other model/code files
+can be catalogued, downloaded and removed, but are not executed or parsed into
+native geometry. Reload and byte-identical original-image download were tested.
+
+Limits and storage boundaries:
+
+- 256 project/imported records, up to 32 files per batch, 16 MiB per file and
+  2 MiB per imported material JSON. Browser quota limits also apply.
+- Scene export contains metadata, thumbnails and material descriptions—not the
+  IndexedDB original files. Moving to another browser/origin does not transfer
+  those originals; unavailable files are reported. Download originals separately.
+- Engine moon downloads are the embedded 512×256 previews, not the source 2K maps.
+- Font preview does not change the editor's font. Code remains non-executed.
+- The shader-ball remains an approximate browser preview, not native BSDF/SSR
+  execution. There is no native asset pipeline or renderer binding in this work.
+
+### C011 — Viewport settings
+
+The viewport header gear no longer opens global Control Centre settings. It now
+opens a viewport-only popup for the debug view and Hi-Z, alias and patch-error
+controls. Diagnostics remain a separate toolbar toggle. The top notch remains
+the entry point for the global Control Centre.
+
+### Browser verification and proofs
+
+Rebuilt the self-contained `index.html` (4.11 MiB). All five suites passed with
+`Errors: []` on the final build:
+
+- `CheckBrowser.mjs`: existing settings, scene persistence and inspector checks.
+- `CheckConstruction.mjs`: Construct, shortcuts, representations and layouts.
+- `CheckQuickTools.mjs`: quick tools and the new viewport-only settings popup.
+- `CheckMaterials.mjs`: material channels/sources, ownership, docking and reload.
+- `CheckAssets.mjs`: mirrored mouse gestures, real CDP touch, page-close,
+  cancellation, flicks, half-height settings, catalogue scrolling, filters,
+  create/edit/rename/assign/export, import/reload/exact-byte download/removal,
+  invalid image rejection and 1024/1280/1366/1920 layouts.
+
+Committed browser screenshots (not native screenshots):
+
+- [Half-open drawer](../Experimental/ProjectZeroEditor/Screenshots/AssetDrawerHalf.png)
+- [Material library](../Experimental/ProjectZeroEditor/Screenshots/AssetBrowser.png)
+- [Engine images](../Experimental/ProjectZeroEditor/Screenshots/AssetImages.png)
+- [Engine fonts](../Experimental/ProjectZeroEditor/Screenshots/AssetFonts.png)
+- [Viewport settings](../Experimental/ProjectZeroEditor/Screenshots/ViewportSettings.png)
+
+**Status:** HTML implemented and verified; awaiting user review. C++ mirroring
+remains deferred until the HTML changes are finished and approved.
