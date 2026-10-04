@@ -1,7 +1,8 @@
 {
-  "harnessSource": "4b522938f895525812a738beb8721b8973cc53d5",
-  "run": "37226738770",
+  "harnessSource": "20409561bdf3fb8d37ec06c9bc14d921314e453b",
+  "run": "37227335799",
   "shaderSource": "a42147b1148ffa13f08d4d11f42b665a8afb1a0d",
+  "reference": "matte-reference.png is independent CPU area quadrature, not a Vulkan readback.",
   "execution": "Production SPIR-V on CPU Vulkan. Receiver-plane lighting maps, not perspective camera renders.",
   "shaders": {
     "DistanceFieldConstruct.spv": "a557c86c98aa09b87a9649d5bfd32022ddf4272915ae4754a6d41d00b1e01ee2",
@@ -15,8 +16,10 @@
     "matte-reflections-enabled.png": "6f30fcbf704ccd069d22129423b89079ec1042c26f78325d13b8c45c026ae91e",
     "matte-diffuse.png": "80309d686a759d89a9239dfcfa87a8de18703e05e58c9290341553428ad7e123",
     "shadow-camera-3.png": "53ea79c378dcdc4fe64dce200a213e125e8d23909b7ae01ea0c760bb28744daf",
+    "matte-single-bounce.png": "0616f5530499dcd21843b63d82360280ed0917ce7e0c58cf329eb1c6eba7071b",
     "shadow-base.png": "0ecf2f99e33dcf696ec731604895ac698fb24f74d2acdb5165b6fcdc91ac8a70",
     "shadow-camera-1.png": "e7251b22836cea4dab12aa5d0b497dd326c38cd311f0d2089f16fd28f97b58d5",
+    "matte-reference.png": "65551160a183acd4ed257c65dae75f37843bea335b707d48de001b9c96696560",
     "shadow-camera-4.png": "bce86ba33323b4a4b45b710991973315bfdabbf668889d8d80092243953d7809",
     "shadow-camera-2.png": "2fbd8895f6be170af4f6f0e26fdfa843e58d9ee230997f7901787fd9bf2ae0f3"
   }

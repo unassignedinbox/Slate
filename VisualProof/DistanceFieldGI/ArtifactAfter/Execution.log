@@ -7,9 +7,10 @@ ARTIFACT rendered shadow-camera-3
 ARTIFACT rendered shadow-camera-4
 METRIC shadow_camera_rms 0
 ARTIFACT rendered matte-diffuse
-METRIC matte_symmetry_rms 18.0377
+METRIC matte_symmetry_rms 4.23736
 ARTIFACT rendered matte-reflections-enabled
 METRIC zero_specular_reflection_delta 0
-FAIL SDF execution: Diffuse quadrature still projects directional emitter silhouettes
+ARTIFACT rendered matte-single-bounce
+METRIC single_bounce_reference_rms 2.67571
 
-Execution seconds: 46.02
+Execution seconds: 443.34

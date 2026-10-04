@@ -1,22 +1,25 @@
 {
-  "harnessSource": "4b522938f895525812a738beb8721b8973cc53d5",
-  "run": "37226738770",
-  "shaderSource": "4b522938f895525812a738beb8721b8973cc53d5",
+  "harnessSource": "20409561bdf3fb8d37ec06c9bc14d921314e453b",
+  "run": "37227335799",
+  "shaderSource": "20409561bdf3fb8d37ec06c9bc14d921314e453b",
+  "reference": "matte-reference.png is independent CPU area quadrature, not a Vulkan readback.",
   "execution": "Production SPIR-V on CPU Vulkan. Receiver-plane lighting maps, not perspective camera renders.",
   "shaders": {
     "DistanceFieldConstruct.spv": "a557c86c98aa09b87a9649d5bfd32022ddf4272915ae4754a6d41d00b1e01ee2",
-    "DistanceFieldGIResolve.spv": "83a2e14b2c905a65553e13ed15497724d5bf7d9684369893206546e309658705",
+    "DistanceFieldGIResolve.spv": "0ad564f07d009ab62de30f62750bed51f1562e6426b83e1142867fef03be5f46",
     "DistanceFieldCapture.spv": "fdb302a8485e096de662d04907b12942b87ce58f6b9e9f056fafa80af32ab467",
-    "DistanceFieldGIResolveFixed.spv": "a32be89c7b89bc57a8b1878fe8489464200b9cc473e3c9bda83398bd4ce6931d",
+    "DistanceFieldGIResolveFixed.spv": "191ff3ff5643dd5b2a58962c605214bf8178a880c6c39ed2659c0cedcf424dc6",
     "DistanceFieldCaptureFixed.spv": "7e5328cbd543bf4382fbb2755ca6e845fc012e0cc7af3470ba4b9bdc5d431804",
-    "DistanceFieldRadiance.spv": "54e41fc46caaaa6cf7a1a5fffe0f00f3fc256a0ffd4e1b4a4df7b900bc4fb698"
+    "DistanceFieldRadiance.spv": "88f11df1f9027b370bc6debcb38db9114662e990b867c3ff648ff8a0592a3c61"
   },
   "images": {
-    "matte-reflections-enabled.png": "3551fcfafe63753b12e54e4b14eb3c887370ccb2a39ac907974e04f8fb77818f",
-    "matte-diffuse.png": "3551fcfafe63753b12e54e4b14eb3c887370ccb2a39ac907974e04f8fb77818f",
+    "matte-reflections-enabled.png": "9edb0865006e1e06c5709bbeb301f599ce85e1ed384c1a2c083389e013750a11",
+    "matte-diffuse.png": "9edb0865006e1e06c5709bbeb301f599ce85e1ed384c1a2c083389e013750a11",
     "shadow-camera-3.png": "e1d0407b451f7b5e340b909b5757e81f94f711b060fcdebaad63913f57a19aa0",
+    "matte-single-bounce.png": "4f9e6eb26d54fe2fdea53b32d4033b36d7e16c6f2af8122b48d69a1a73d7c865",
     "shadow-base.png": "e1d0407b451f7b5e340b909b5757e81f94f711b060fcdebaad63913f57a19aa0",
     "shadow-camera-1.png": "e1d0407b451f7b5e340b909b5757e81f94f711b060fcdebaad63913f57a19aa0",
+    "matte-reference.png": "65551160a183acd4ed257c65dae75f37843bea335b707d48de001b9c96696560",
     "shadow-camera-4.png": "e1d0407b451f7b5e340b909b5757e81f94f711b060fcdebaad63913f57a19aa0",
     "shadow-camera-2.png": "e1d0407b451f7b5e340b909b5757e81f94f711b060fcdebaad63913f57a19aa0"
   }

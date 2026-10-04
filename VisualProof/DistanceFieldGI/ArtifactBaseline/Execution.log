@@ -10,5 +10,7 @@ ARTIFACT rendered matte-diffuse
 METRIC matte_symmetry_rms 79.2705
 ARTIFACT rendered matte-reflections-enabled
 METRIC zero_specular_reflection_delta 106
+ARTIFACT rendered matte-single-bounce
+METRIC single_bounce_reference_rms 83.1477
 
-Execution seconds: 34.59
+Execution seconds: 215.47
