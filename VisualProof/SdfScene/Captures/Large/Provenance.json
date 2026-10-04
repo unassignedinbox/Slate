@@ -1,0 +1,36 @@
+{
+  "source": "fa6ee1b78051eb6367880a29521b3ae01854451b",
+  "run": "37231216029",
+  "case": "Large",
+  "exitCode": 0,
+  "seconds": 748.865653755,
+  "method": "Production Vulkan SDF stages on CPU ICD. CPU triangle intersections supply primary visibility only; all lighting/material/transport runs in production SPIR-V.",
+  "settings": {
+    "size": [
+      384,
+      256
+    ],
+    "cardResolution": 4,
+    "volumeResolution": 32,
+    "clipCell": 0.15,
+    "warmupFrames": 32,
+    "shadowConeSlope": 0.06,
+    "sunRadiance": 1.8,
+    "skyAmbient": 0.005,
+    "reflections": 0,
+    "materials": "matte Lambert, no textures; unused specular tables are unit placeholders"
+  },
+  "shaders": {
+    "DistanceFieldConstruct.spv": "a557c86c98aa09b87a9649d5bfd32022ddf4272915ae4754a6d41d00b1e01ee2",
+    "DistanceFieldGIResolve.spv": "0ad564f07d009ab62de30f62750bed51f1562e6426b83e1142867fef03be5f46",
+    "DistanceFieldCapture.spv": "fdb302a8485e096de662d04907b12942b87ce58f6b9e9f056fafa80af32ab467",
+    "DistanceFieldGIResolveFixed.spv": "191ff3ff5643dd5b2a58962c605214bf8178a880c6c39ed2659c0cedcf424dc6",
+    "DistanceFieldCaptureFixed.spv": "7e5328cbd543bf4382fbb2755ca6e845fc012e0cc7af3470ba4b9bdc5d431804",
+    "DistanceFieldRadiance.spv": "88f11df1f9027b370bc6debcb38db9114662e990b867c3ff648ff8a0592a3c61"
+  },
+  "images": {
+    "Floor-probes.png": "a1055003db11c1cf2a8a05db0d52418c5d43fcddfb2bd6ffe530cc7525780672",
+    "Scene-GI.png": "027b1d7b62ad45194364d750c86028393ad44703f221bfdb3d757f8581f384f8",
+    "Scene-GI-off.png": "d8fb9acbdaffe717c678bc90d65641ef4393d0f58c0560df85b09c9171fb310b"
+  }
+}
