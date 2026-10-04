@@ -12,5 +12,8 @@ ARTIFACT rendered matte-reflections-enabled
 METRIC zero_specular_reflection_delta 106
 ARTIFACT rendered matte-single-bounce
 METRIC single_bounce_reference_rms 83.1477
+ARTIFACT rendered matte-subdivided
+METRIC subdivision_rms 0
 
-Execution seconds: 215.47
+Execution seconds: 245.43
+Exit code: 0
