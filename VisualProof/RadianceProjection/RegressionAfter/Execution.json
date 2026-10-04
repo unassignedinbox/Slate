@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-04",
+  "sourceSha256": {
+    "index.html": "ef15ae9a670d1f6500fa35308a0b3e20a1ee1d8afc817d29408763b13b89c720",
+    "ProbeIntegrator.js": "ff07f31386862b2136bda45b30686886d98a8cbcbcc1dc832331255343f6847c",
+    "ProbeScheduler.js": "6b7d324bb4db3e20d5bcd62516e2ffb97cafe493ab8128bf61803677754a5658"
+  },
+  "method": "Actual WebGL 2 shader execution and framebuffer readback. No replacement lighting equations.",
+  "giToggle": {
+    "rms": 10.40373309301301,
+    "maximum": 120
+  },
+  "emitterOnlyReceiverMean": 28.60905294035148,
+  "receiverChannels": 420681,
+  "refreshedMotion": {
+    "rms": 8.073555877137983,
+    "maximum": 89
+  },
+  "unlitGiDifference": {
+    "rms": 0,
+    "maximum": 0
+  },
+  "deformedVertices": 841,
+  "frozenCachePassed": true,
+  "mobileOverflow": false,
+  "errors": [],
+  "limitation": "Software-browser execution verifies behavior, not target-GPU performance or native renderer parity."
+}

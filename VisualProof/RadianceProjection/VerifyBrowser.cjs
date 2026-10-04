@@ -38,6 +38,7 @@ async function Execute()
         async function Warm(Count=3)
         {
             await Frames();
+            await Page.evaluate(Iterations=>RadianceDemo.RequestRefresh(Iterations),Count);
             const Target=await Page.evaluate(Amount=>RadianceDemo.State.Sweeps+Amount,Count);
             console.log("Warm to sweep",Target);
             await Page.waitForFunction(Goal=>RadianceDemo.State.Sweeps>=Goal,Target,{timeout:150000});
@@ -91,7 +92,7 @@ async function Execute()
         await Page.screenshot({path:Path.join(Output,'Mobile.png')});
         Assert.deepEqual(Errors,[],'Browser or shader errors');
         const SourceRoot=Path.resolve(__dirname,'../../Frontier/Experimental/RadianceProjection');
-        const SourceHashes=Object.fromEntries(['index.html','ProbeIntegrator.js'].map(Name=>[Name,Crypto.createHash('sha256').update(File.readFileSync(Path.join(SourceRoot,Name))).digest('hex')]));
+        const SourceHashes=Object.fromEntries(['index.html','ProbeIntegrator.js','ProbeScheduler.js'].map(Name=>[Name,Crypto.createHash('sha256').update(File.readFileSync(Path.join(SourceRoot,Name))).digest('hex')]));
         const Report={date:'2026-10-04',sourceSha256:SourceHashes,method:'Actual WebGL 2 shader execution and framebuffer readback. No replacement lighting equations.',
             giToggle:Toggle,emitterOnlyReceiverMean:ReceiverSum/ReceiverCount,receiverChannels:ReceiverCount,
             refreshedMotion:Motion,unlitGiDifference:NoLight,deformedVertices:ShapeAfter.length/3,

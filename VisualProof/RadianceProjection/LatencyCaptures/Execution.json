@@ -1,0 +1,81 @@
+{
+  "date": "2026-10-04",
+  "sourceSha256": {
+    "index.html": "ef15ae9a670d1f6500fa35308a0b3e20a1ee1d8afc817d29408763b13b89c720",
+    "ProbeIntegrator.js": "ff07f31386862b2136bda45b30686886d98a8cbcbcc1dc832331255343f6847c",
+    "ProbeScheduler.js": "6b7d324bb4db3e20d5bcd62516e2ffb97cafe493ab8128bf61803677754a5658"
+  },
+  "Priority": {
+    "Mode": "priority",
+    "Hot": [
+      1,
+      2,
+      5,
+      6,
+      13,
+      14,
+      17,
+      18
+    ],
+    "Arrivals": [
+      1,
+      1,
+      1,
+      1,
+      2,
+      2,
+      2,
+      2
+    ],
+    "first": 1,
+    "last": 2,
+    "mean": 1.5
+  },
+  "Baseline": {
+    "Mode": "round",
+    "Hot": [
+      1,
+      2,
+      5,
+      6,
+      13,
+      14,
+      17,
+      18
+    ],
+    "Arrivals": [
+      11,
+      11,
+      12,
+      12,
+      2,
+      2,
+      3,
+      3
+    ],
+    "first": 2,
+    "last": 12,
+    "mean": 7
+  },
+  "IdleFrame": {
+    "calls": 10,
+    "updated": [],
+    "shadowDrawn": false
+  },
+  "AdditionalSettling": {
+    "rms": 0.0190045980399932,
+    "maximum": 1
+  },
+  "GiToggle": {
+    "rms": 10.777070520516679,
+    "maximum": 115
+  },
+  "burstCap": 12,
+  "baseBudget": 4,
+  "cameraMovementInvalidates": false,
+  "invisibleMotionInvalidates": false,
+  "distantInspectorRefresh": true,
+  "frozenCursor": true,
+  "errors": [],
+  "limitation": "Frame-count response and real WebGL work verified on software graphics; not a GPU-time or complete GI convergence guarantee."
+}

@@ -1,0 +1,12 @@
+{
+  "Priority": {
+    "hotLast": 2,
+    "Commands": 192
+  },
+  "Baseline": {
+    "hotLast": 7,
+    "Commands": 240
+  },
+  "maximumContinuousGap": 24,
+  "result": "PASS"
+}

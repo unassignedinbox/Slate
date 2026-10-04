@@ -4,11 +4,12 @@
 // 📦 Full-triangle raster captures, directional irradiance integration and depth-aware dynamic diffuse transport.
 
 import * as THREE from 'three';
+import { ProbeScheduler } from './ProbeScheduler.js';
 import { OrbitControls } from '../Ocean/lib/addons/OrbitControls.js';
 
 const Element = Name => document.getElementById(Name);
 const Parameters = { Gi: true, Motion: true, Frozen: false, Amplitude: .45, Position: 0, Emission: 8, Sun: .35,
-    Recursive: true, Visibility: true, Budget: 4, Display: 0, Capture: 0, Inspect: 22 };
+    Recursive: true, Visibility: true, Prioritized: true, Burst: true, Budget: 4, Display: 0, Capture: 0, Inspect: 22 };
 const Grid = new THREE.Vector3(4, 3, 4), Origin = new THREE.Vector3(-2.4, .35, -2.4);
 const Spacing = new THREE.Vector3(1.6, 1.15, 1.6), ProbeCount = 48, TileSize = 16, AtlasColumns = 8;
 const AtlasWidth = 128, AtlasHeight = 96, FaceSize = 32;
@@ -17,6 +18,13 @@ let CubeTarget, InspectTarget, CubeCamera, Quad, QuadScene, QuadCamera, Integrat
 let ReadSlot = 0, Cursor = 0, Sweeps = 0, Phase = 0, LastFrame = 0, FrameAverage = 16, CaptureStamp = 0;
 let Alive = true, SweepStart = performance.now(), RefreshMilliseconds = 0, InspectionReady = false;
 const Materials = [], Probes = [], Radiance = [], Moments = [];
+let Schedule = new ProbeScheduler(ProbeCount), FrameNumber = 0, BurstRemaining = 0, ShadowDirty = true;
+let LastSelection = [], ShadowDrawn = false, InspectorRequested = false, RevisionStart = 0;
+let LastChange = 'Initial capture', LastSignature = '', FrameRevision = -1, FirstResponse = null;
+const ChangedBounds = new THREE.Box3(), PreviousBounds = new THREE.Box3();
+const ViewFrustum = new THREE.Frustum(), ViewProjection = new THREE.Matrix4();
+const ProbeSphere = new THREE.Sphere(new THREE.Vector3(), 1.0);
+let PriorityWeights = [];
 const SunDirection = new THREE.Vector3(.5, 1, .45).normalize();
 const ShadowTransform = new THREE.Matrix4();
 const VertexSource = `
@@ -270,6 +278,9 @@ function ConstructScene()
 }
 function DeformGeometry()
 {
+    Ribbon.updateMatrixWorld(true);
+    Ribbon.geometry.computeBoundingBox();
+    PreviousBounds.copy(Ribbon.geometry.boundingBox).applyMatrix4(Ribbon.matrixWorld);
     const Attribute = Ribbon.geometry.attributes.position, Original = Ribbon.geometry.userData.Original;
     for (let Index = 0; Index < Attribute.count; ++Index)
     {
@@ -280,12 +291,61 @@ function DeformGeometry()
     }
     Attribute.needsUpdate = true; Ribbon.geometry.computeVertexNormals(); Ribbon.geometry.computeBoundingSphere();
     Ribbon.position.x = Parameters.Position;
+    Ribbon.updateMatrixWorld(true); Ribbon.geometry.computeBoundingBox();
+    ChangedBounds.copy(Ribbon.geometry.boundingBox).applyMatrix4(Ribbon.matrixWorld).union(PreviousBounds);
+    // 📝 Prioritize both vacated/new geometry and its projected floor shadow. No probes are excluded.
+    if (Parameters.Sun > 0)
+    {
+        const Extent = ChangedBounds.clone();
+        for (let Corner = 0; Corner < 8; ++Corner)
+        {
+            const Point = new THREE.Vector3(Corner&1?Extent.max.x:Extent.min.x,
+                Corner&2?Extent.max.y:Extent.min.y, Corner&4?Extent.max.z:Extent.min.z);
+            Point.addScaledVector(SunDirection, -(Point.y + .05) / SunDirection.y);
+            ChangedBounds.expandByPoint(Point);
+        }
+    }
+    ShadowDirty = true;
 }
 function ClearHistory()
 {
     Renderer.setScissorTest(false); Renderer.setClearColor(0,0);
     for (const Target of [...Radiance,...Moments]) { Renderer.setRenderTarget(Target); Renderer.clear(); }
     Renderer.setRenderTarget(null); Cursor = 0; Sweeps = 0; SweepStart = performance.now();
+    Schedule = new ProbeScheduler(ProbeCount); FrameRevision = -1;
+    RequestRefresh(Parameters.Recursive ? 4 : 1, 'History cleared');
+    InspectionReady = false; InspectorRequested = true;
+}
+function RequestRefresh(Iterations = 4, Reason = 'Scene edit')
+{
+    // 📝 Coalesce slider + motion invalidations within a frame, but never drop their settling requirement.
+    if (FrameRevision !== FrameNumber)
+    {
+        Schedule.Invalidate(FrameNumber, Iterations); FrameRevision = FrameNumber;
+        RevisionStart = FrameNumber; FirstResponse = null;
+    }
+    else Schedule.Records.forEach(Record => { Record.Remaining = Math.max(Record.Remaining, Iterations); });
+    LastChange = Reason;
+}
+function RequestInteraction(Reason)
+{
+    RequestRefresh(Parameters.Recursive ? 4 : 1, Reason);
+    BurstRemaining = 2;
+}
+function RankProbes()
+{
+    Camera.updateMatrixWorld(true);
+    ViewProjection.multiplyMatrices(Camera.projectionMatrix, Camera.matrixWorldInverse);
+    ViewFrustum.setFromProjectionMatrix(ViewProjection);
+    PriorityWeights = Probes.map((Position, Index) =>
+    {
+        ProbeSphere.center.copy(Position);
+        const Distance = ChangedBounds.isEmpty() ? 0 : ChangedBounds.distanceToPoint(Position);
+        const Proximity = 180 / (1 + Distance * Distance);
+        const Visible = ViewFrustum.intersectsSphere(ProbeSphere) ? 25 : 0;
+        const Inspection = InspectorRequested && Index === Parameters.Inspect ? 400 : 0;
+        return Proximity + Visible + Inspection;
+    });
 }
 function ConfigureMaterials(Capture)
 {
@@ -309,14 +369,17 @@ function CopyAtlas(Source, Destination)
 }
 function CaptureProbes()
 {
+    const Budget = Parameters.Prioritized && Parameters.Burst && BurstRemaining > 0 ? Math.min(12, Parameters.Budget * 3) : Parameters.Budget;
+    LastSelection = Schedule.Select(Budget, FrameNumber, PriorityWeights, Parameters.Prioritized);
+    if (!LastSelection.length) return;
     const WriteSlot = 1 - ReadSlot;
     CopyAtlas(Radiance[ReadSlot],Radiance[WriteSlot]); CopyAtlas(Moments[ReadSlot],Moments[WriteSlot]);
     ConfigureMaterials(true); MarkerGroup.visible = false;
-    for (let Count = 0; Count < Parameters.Budget; ++Count)
+    for (const Index of LastSelection)
     {
-        const Target = Cursor === Parameters.Inspect ? InspectTarget : CubeTarget;
-        CubeCamera.renderTarget = Target; CubeCamera.position.copy(Probes[Cursor]); CubeCamera.updateMatrixWorld(true);
-        for (const Material of Materials) Material.uniforms.ProbePosition.value.copy(Probes[Cursor]);
+        const Target = Index === Parameters.Inspect ? InspectTarget : CubeTarget;
+        CubeCamera.renderTarget = Target; CubeCamera.position.copy(Probes[Index]); CubeCamera.updateMatrixWorld(true);
+        for (const Material of Materials) Material.uniforms.ProbePosition.value.copy(Probes[Index]);
         // Uncovered directions represent a black environment at the capture far distance.
         Renderer.setScissorTest(false);
         const Context = Renderer.getContext();
@@ -329,8 +392,8 @@ function CaptureProbes()
             Renderer.clearDepth();
             Renderer.render(Scene,CubeCamera.children[Face]);
         }
-        if (Cursor === Parameters.Inspect) { CaptureStamp = performance.now(); InspectionReady = true; }
-        const Column = (Cursor % AtlasColumns)*TileSize, Row = Math.floor(Cursor/AtlasColumns)*TileSize;
+        if (Index === Parameters.Inspect) { CaptureStamp = performance.now(); InspectionReady = true; InspectorRequested = false; }
+        const Column = (Index % AtlasColumns)*TileSize, Row = Math.floor(Index/AtlasColumns)*TileSize;
         Integrator.uniforms.Capture.value = Target.texture;
         Integrator.uniforms.TileOrigin.value.set(Column,Row);
         Quad.material = Integrator;
@@ -340,8 +403,14 @@ function CaptureProbes()
             Renderer.setViewport(Column,Row,TileSize,TileSize); Renderer.setScissor(Column,Row,TileSize,TileSize); Renderer.setScissorTest(true);
             Integrator.uniforms.DepthPass.value = Pass; Renderer.render(QuadScene,QuadCamera);
         }
+        Schedule.Complete(Index, FrameNumber);
         Cursor = (Cursor + 1) % ProbeCount;
-        if (Cursor === 0) { ++Sweeps; RefreshMilliseconds = performance.now()-SweepStart; SweepStart = performance.now(); }
+        if (FirstResponse === null) FirstResponse = FrameNumber - RevisionStart;
+    }
+    const Completed = Math.min(...Schedule.Records.map(Record => Record.Captures));
+    if (Completed > Sweeps)
+    {
+        Sweeps = Completed; RefreshMilliseconds = performance.now()-SweepStart; SweepStart = performance.now();
     }
     ReadSlot = WriteSlot; Renderer.setScissorTest(false);
 }
@@ -351,13 +420,41 @@ function RenderFrame(Time)
     const Delta = LastFrame ? Math.min((Time-LastFrame)/1000,.05) : 0; LastFrame = Time;
     FrameAverage = FrameAverage*.95 + (window.RadianceDemo.LastTimestamp ? Time-window.RadianceDemo.LastTimestamp : 16)*.05;
     window.RadianceDemo.LastTimestamp = Time;
-    if (Parameters.Motion) { Phase += Delta; DeformGeometry(); }
-    Controls.update(); Renderer.info.reset();
+    ++FrameNumber;
+    if (Parameters.Motion)
+    {
+        Phase += Delta;
+        if (Ribbon.visible)
+        {
+            DeformGeometry(); RequestRefresh(Parameters.Recursive ? 4 : 1, 'Animated vertices');
+        }
+    }
+    const Signature = [Parameters.Emission, Parameters.Sun, Parameters.Recursive, Parameters.Visibility,
+        Ribbon.visible, ...Ribbon.material.uniforms.BaseColour.value.toArray()].join('|');
+    if (Signature !== LastSignature)
+    {
+        const PreviousLighting = LastSignature.split('|');
+        if (PreviousLighting[1] !== String(Parameters.Sun) || PreviousLighting[2] !== String(Parameters.Recursive))
+            ChangedBounds.makeEmpty();
+        else if (PreviousLighting[0] !== String(Parameters.Emission))
+            ChangedBounds.setFromObject(Scene.getObjectByName('Emitter')).expandByScalar(.8);
+        ShadowDirty = true; RequestRefresh(Parameters.Recursive ? 4 : 1, 'Lighting / material / visibility'); LastSignature = Signature;
+    }
+    Controls.update(); RankProbes(); Renderer.info.reset();
+    LastSelection = []; ShadowDrawn = false;
     MarkerGroup.visible = false;
-    Scene.overrideMaterial = ShadowMaterial;
-    Renderer.setRenderTarget(ShadowTarget); Renderer.setViewport(0,0,512,512); Renderer.setScissorTest(false);
-    Renderer.setClearColor(0xffffff,1); Renderer.clear(); Renderer.render(Scene,ShadowCamera); Scene.overrideMaterial = null;
-    if (!Parameters.Frozen) CaptureProbes();
+    if (ShadowDirty || !Parameters.Prioritized)
+    {
+        Scene.overrideMaterial = ShadowMaterial;
+        Renderer.setRenderTarget(ShadowTarget); Renderer.setViewport(0,0,512,512); Renderer.setScissorTest(false);
+        Renderer.setClearColor(0xffffff,1); Renderer.clear(); Renderer.render(Scene,ShadowCamera); Scene.overrideMaterial = null;
+        ShadowDirty = false; ShadowDrawn = true;
+    }
+    if (!Parameters.Frozen)
+    {
+        CaptureProbes();
+        BurstRemaining = Math.max(0, BurstRemaining - 1);
+    }
     ConfigureMaterials(false); MarkerGroup.visible = Element('ShowProbes').checked;
     MarkerGroup.children.forEach((Marker,Index)=>Marker.material.color.setHex(Index===Parameters.Inspect?0xffd294:0x88bb99));
     const Width = Renderer.domElement.width, Height = Renderer.domElement.height, Ratio = Renderer.getPixelRatio();
@@ -376,14 +473,26 @@ function RenderFrame(Time)
     Element('DrawCount').textContent = Renderer.info.render.calls+' DRAWS';
     Element('TriangleCount').textContent = Renderer.info.render.triangles.toLocaleString()+' TRIANGLES / FRAME';
     Element('SweepCount').textContent = Sweeps;
-    Element('SweepProgress').style.width = (Cursor/ProbeCount*100)+'%';
-    Element('RefreshTime').textContent = RefreshMilliseconds ? Math.round(RefreshMilliseconds)+' ms' : 'warming';
+    Element('SweepProgress').style.width = (100-Schedule.QueryPending()/ProbeCount*100)+'%';
+    Element('RefreshTime').textContent = FirstResponse === null ? 'pending' : FirstResponse+' frames';
+    Element('PendingCount').textContent = Schedule.QueryPending()+' / '+ProbeCount;
+    Element('UpdatedCount').textContent = LastSelection.length+' probes / '+(LastSelection.length*6)+' views';
+    Element('CacheState').textContent = Schedule.QueryPending() ? LastChange :
+        Parameters.Prioritized ? 'Held after bounded settling' : 'Baseline recaptures unchanged probes';
     Element('CaptureAge').textContent = InspectionReady ? Math.round(Math.max(0,performance.now()-CaptureStamp))+' ms old' : 'awaiting refresh';
     Element('FrameDescription').textContent = Parameters.Frozen ? 'PROBE CACHE FROZEN · GEOMETRY STILL LIVE' :
-        Parameters.Gi ? '48 PROBES · LIVE DIFFUSE BOUNCE · FULL MESH CAPTURES' : 'GI DISABLED · DIRECT LIGHT + EMISSION ONLY';
-    Element('Status').textContent = Parameters.Frozen ? 'Frozen cache / stale lighting intentional' : 'Raster only · no triangle ray queries';
+        Parameters.Gi ? 'WORLD-SPACE PROBES · '+(Parameters.Prioritized?'CHANGE-PRIORITIZED':'ROUND-ROBIN BASELINE') : 'GI DISABLED · DIRECT LIGHT + EMISSION ONLY';
+    Element('Status').textContent = Parameters.Frozen ? 'Frozen cache / stale lighting intentional' :
+        LastSelection.length ? 'All contributors retained · '+(Parameters.Prioritized?'priority refresh':'round-robin refresh') :
+        'Static cache held · no probe capture work';
     window.RadianceDemo.State = { Sweeps, Cursor, Phase, Gi:Parameters.Gi, Frozen:Parameters.Frozen, Triangles:Renderer.info.render.triangles,
-        Calls:Renderer.info.render.calls, ShaderErrors:window.RadianceDemo.ShaderErrors, CaptureStamp };
+        Calls:Renderer.info.render.calls, ShaderErrors:window.RadianceDemo.ShaderErrors, CaptureStamp,
+        Frame:FrameNumber, Revision:Schedule.Revision, Pending:Schedule.QueryPending(), Updated:LastSelection.slice(),
+        Weights:PriorityWeights.slice(), ProbeRevisions:Schedule.Records.map(Record=>Record.Revision),
+        ShadowDrawn, BurstRemaining, FirstResponse, Mode:Parameters.Prioritized?'priority':'round-robin' };
+    window.RadianceDemo.History.push({Frame:FrameNumber, Revision:Schedule.Revision, Updated:LastSelection.slice(),
+        Pending:Schedule.QueryPending(), ShadowDrawn, Calls:Renderer.info.render.calls});
+    if (window.RadianceDemo.History.length > 240) window.RadianceDemo.History.shift();
     requestAnimationFrame(RenderFrame);
 }
 function ResizeViewport()
@@ -403,6 +512,7 @@ function ConnectControls()
             Parameters[Name] = Number(Event.target.value);
             Element(Name+'Value').textContent = Name==='Budget'?Parameters[Name]+' / 48':Parameters[Name].toFixed(Name==='Emission'||Name==='Sun'?1:2)+(Name==='Amplitude'||Name==='Position'?' m':'');
             if (Name==='Amplitude'||Name==='Position') DeformGeometry();
+            if (Name!=='Budget') RequestInteraction(Name+' edited');
         });
     }
     Element('GiToggle').onclick = () =>
@@ -421,8 +531,10 @@ function ConnectControls()
         Element('Freeze').setAttribute('aria-pressed',Parameters.Frozen);
         Element('Freeze').innerHTML = Parameters.Frozen?'Resume probe updates <span>▷</span>':'Freeze probe updates <span>II</span>';
     };
-    for (const Name of ['Recursive','Visibility']) Element(Name).onchange = Event => { Parameters[Name] = Event.target.checked; };
-    Element('RibbonVisible').onchange = Event => { Ribbon.visible = Event.target.checked; };
+    for (const Name of ['Recursive','Visibility']) Element(Name).onchange = Event => { Parameters[Name] = Event.target.checked; RequestInteraction(Name+' edited'); };
+    Element('RibbonVisible').onchange = Event => { Ribbon.visible = Event.target.checked; DeformGeometry(); RequestInteraction('Ribbon visibility'); };
+    Element('ScheduleMode').onchange = Event => { Parameters.Prioritized = Event.target.value === 'priority'; RequestRefresh(4,'Scheduler changed'); };
+    Element('Burst').onchange = Event => { Parameters.Burst = Event.target.checked; };
     Element('ResetView').onclick = ResetCamera;
     Element('ClearCache').onclick = ClearHistory;
     Element('DisplayMode').onchange = Event => { Parameters.Display = Number(Event.target.value); };
@@ -431,7 +543,7 @@ function ConnectControls()
         Parameters.Capture = Number(Event.target.value);
         Element('CaptureLabel').textContent = Parameters.Capture===2?'48 OCTAHEDRAL IRRADIANCE TILES · ACTUAL GPU ATLAS':'+X / −X / +Y · −Y / +Z / −Z';
     };
-    Element('InspectProbe').onchange = Event => { Parameters.Inspect = Number(Event.target.value); InspectionReady = false; };
+    Element('InspectProbe').onchange = Event => { Parameters.Inspect = Number(Event.target.value); InspectionReady = false; InspectorRequested = true; Schedule.Request(Parameters.Inspect, FrameNumber); };
     Element('ProbeRow').onclick = () => { Element('ShowProbes').checked = !Element('ShowProbes').checked; };
     document.querySelectorAll('[data-select]').forEach(Item => Item.onclick = () =>
     {
@@ -444,6 +556,7 @@ function ConnectControls()
     {
         Ribbon.material.uniforms.BaseColour.value.set(...Colours[Number(Button.dataset.colour)]);
         document.querySelectorAll('[data-colour]').forEach(Other=>Other.classList.remove('active')); Button.classList.add('active');
+        RequestInteraction('Ribbon material');
         Element('SelectionLabel').textContent = 'Ribbon / diffuse '+['orange','green','violet'][Number(Button.dataset.colour)];
     });
 }
@@ -454,7 +567,7 @@ function Fail(Message)
 }
 try
 {
-    window.RadianceDemo = { Ready:false, ShaderErrors:[], Parameters, State:{} };
+    window.RadianceDemo = { Ready:false, ShaderErrors:[], Parameters, State:{}, History:[] };
     const Canvas = Element('Viewport'), Context = Canvas.getContext('webgl2',{antialias:true,alpha:false,preserveDrawingBuffer:true});
     if (!Context) throw new Error('WebGL 2 is required. Enable browser hardware acceleration.');
     if (!Context.getExtension('EXT_color_buffer_float')) throw new Error('Floating-point render targets are required for HDR probe captures.');
@@ -493,6 +606,9 @@ try
     Canvas.addEventListener('webglcontextlost',Event=>{Event.preventDefault();Fail('The graphics context was lost. Reload to recreate the probe resources.');});
     window.RadianceDemo.Ready = true;
     window.RadianceDemo.Clear = ClearHistory;
+    window.RadianceDemo.RequestRefresh = Iterations => RequestRefresh(Iterations, 'Explicit refresh');
+    window.RadianceDemo.QueryScheduling = () => ({Revision:Schedule.Revision, Cursor:Schedule.Cursor,
+        Records:Schedule.Records.map(Record=>({...Record}))});
     window.RadianceDemo.ReadPixels = () =>
     {
         const Width = Canvas.width, Height = Math.max(1,Canvas.height-176);

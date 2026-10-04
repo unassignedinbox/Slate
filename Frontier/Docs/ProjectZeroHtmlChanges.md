@@ -1295,3 +1295,84 @@ Limitations remain visible: coarse probe/angular resolution, possible thin-surfa
 captures during motion, interpolation bias and finite grid coverage. Freeze/low-budget controls intentionally
 expose latency. No glossy transport, arbitrary imported/skinned asset workflow, probe relocation or native
 integration is claimed. Existing C027 native SDF correction and all C026 scale failure evidence are untouched.
+
+## C029 — Change-prioritized raster-probe refresh and static cache hold (2026-10-04)
+
+User confirmed the HTML GI works and requested reduced latency and clarification of camera-local capture.
+Updated the same `Experimental/RadianceProjection` demo, without changing the native SDF renderer.
+
+### Implemented changes
+
+- `ProbeScheduler.js` orders pending work by fresh scene revision, changed old/new ribbon bounds, projected
+  floor-shadow bounds, camera relevance and waiting age. Every scene change conservatively invalidates all
+  probes: distant/off-camera contributors are not silently excluded. This is prioritization, not an exact
+  dependency solver or a claim that distant GI cannot be affected.
+- The regular budget remains four probes per frame. A selectable **Round-robin baseline** retains the old
+  continuous update behavior for comparison. No geometric meshes are simplified, replaced or repositioned.
+- Up to four refresh captures per probe provide bounded recursive settling (one when recursive bounce is
+  disabled). After settling and with no scene changes, the irradiance/depth caches are held; no atlas copies
+  or probe raster captures are performed. This is a bounded approximation, not a general convergence proof.
+- The sun shadow map is also reused until geometry/visibility changes. The baseline mode deliberately
+  retains its old continuous shadow redraw. Main-view geometry still renders normally in both modes.
+- Invisible ribbon animation no longer invalidates lighting. Showing it again evaluates its current pose
+  and invalidates the relevant work. Camera motion alone reorders pending work but does not invalidate the
+  world-space field. Changing the diagnostic probe can explicitly refresh an otherwise-idle distant probe.
+- Optional **Interaction burst** allows up to 3× the base budget, capped at 12 probes/frame, for two frames
+  after an edit. Continuous dragging can keep requesting bursts. This spends additional rendering work;
+  it is explicitly disabled in the equal-budget comparison.
+- Inspector controls now expose scheduling, burst cost, pending probes, actual captures/views this frame
+  and first-probe response. First-probe response is not full-volume convergence. Last-capture age can be
+  large for an unchanged valid cache and is not itself edit latency.
+
+### Executed comparison — real WebGL, equal budget
+
+`VerifyLatency.cjs` changed the ribbon from X=0 to X=1.3 with motion paused, compared the same eight highest
+priority probes, and recorded actual capture selections/revisions. Both modes used four probes/frame and
+had bursts disabled. Results from the final run:
+
+| Response for those eight probes | Prioritized | Round-robin |
+|---------------------------------|-------------|-------------|
+| First refreshed probe           | 1 frame     | 2 frames    |
+| Mean refresh arrival            | 1.5 frames  | 7 frames    |
+| Last refreshed probe            | 2 frames    | 12 frames   |
+
+This is a specific edit/starting-cursor comparison, not a universal 6× frame-rate improvement. Prioritizing
+one area can delay others. Aging prevents perpetual starvation: the deterministic 240-frame continuous-
+change check served every probe, with a maximum observed gap of 24 frames at budget four.
+
+Static hold submitted **zero probe captures and zero shadow redraws**, leaving 10 main-view/inspector draw
+calls in this fixture. Four additional explicitly requested settling captures changed the held RGB image
+by RMS **0.019005**, maximum **1** (0–255 units). That supports the chosen budget in this scene only.
+GI-on/off still differed by RMS **10.7771**; the optimization did not turn off indirect light.
+
+Camera movement without scene changes preserved the field revision and submitted no probe captures.
+Frozen updates preserved their cursor; a selected distant probe still refreshed; hidden animation settled
+without perpetual invalidation; the 12-probe burst cap and mobile overflow check passed. No browser/shader
+errors occurred. Readbacks reported no WebGL errors. All application source hashes match both reports.
+
+Re-ran the previous lighting correctness suite against the optimized implementation:
+- GI-on/off RMS **10.4037**, maximum 120.
+- With sun off, otherwise-black receivers still received captured emissive lighting (mean **28.6091**).
+- Frozen versus refreshed lighting after moving geometry differed by RMS **8.07356**.
+- With sun/emission off and cleared history, GI-on/off remained exactly identical: RMS/max **0**.
+- Actual vertex deformation, frozen captures, depth/atlas inspection and mobile layout passed.
+
+Retained evidence: `VisualProof/RadianceProjection/LatencyCaptures/` and `RegressionAfter/` contain the
+unretouched screenshots, source hashes and execution reports. The original C028 `Captures/` is preserved.
+`VerifyScheduling.mjs` checks ordering/budgets/aging without graphics; `VerifyLatency.cjs` exercises actual
+WebGL. The latter uses normal Playwright Chromium, with an optional `PROBE_LAMBDA_CHROMIUM=1` scratch
+package route for this sandbox. Software-browser execution is not target-GPU timing evidence.
+
+### Camera distance and packing — what this does and does not implement
+
+The probes are anchored to **world positions**, not the main camera. The demo still has one fixed room-sized
+volume; it does not implement large-world streaming/cascades. A larger renderer can allocate dense volumes
+near important actors/camera-visible receivers and coarser or cached coverage farther away. Off-screen
+emitters, bounce surfaces and blockers must remain in the relevant probe captures.
+
+Pack probe images and draw commands, not the objects' world positions into an artificial lighting scene.
+Each scheduled capture here still rasterizes its contributing full meshes, using the probe camera's normal
+frustum culling. Static geometry G-buffer/depth reuse with dynamic-geometry compositing would be a further
+optimization; it is **not** implemented by this scheduling change. Lighting/shadow changes would still
+require reshading those cached static surfaces. Thin-surface leakage, finite probe resolution, mixed-age
+captures and higher-bounce latency remain; this iteration reduces latency rather than claiming to erase it.
