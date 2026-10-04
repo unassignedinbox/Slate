@@ -2941,3 +2941,105 @@ dialog {
 .dropdown.armed .dropdown-face {
   color: var(--green);
 }
+
+/* ------------------------------------------------------------------ decal marks */
+.mark-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 2px 0 10px;
+}
+.mark-folder {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.mark-folder > summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  list-style: none;
+  cursor: pointer;
+  padding: 4px 2px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  outline: none;
+}
+.mark-folder > summary::-webkit-details-marker {
+  display: none;
+}
+.mark-folder > summary [data-icon],
+.mark-folder > summary svg {
+  width: 13px;
+  height: 13px;
+}
+.mark-folder > summary b {
+  margin-left: auto;
+  font-weight: 400;
+  color: #6f6f6f;
+}
+.mark-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 7px;
+  border-radius: 12px;
+  background: #151515;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.mark-row:hover {
+  background: #191919;
+}
+.mark-row.selected {
+  background: var(--card);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.mark-row.muted {
+  opacity: 0.45;
+}
+.mark-chip {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: var(--mark-colour, #888);
+  color: #0b0b0b;
+  font-size: 10px;
+  font-weight: 400;
+  flex: 0 0 auto;
+}
+.mark-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-right: auto;
+}
+.mark-name {
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mark-note {
+  font-size: 10px;
+  color: #6f6f6f;
+}
+.mark-row .icon-button {
+  width: 22px;
+  height: 22px;
+  opacity: 0;
+}
+.mark-row:hover .icon-button,
+.mark-row.selected .icon-button,
+.mark-row.muted .icon-button {
+  opacity: 1;
+}
+.mark-row .icon-button svg {
+  width: 12px;
+  height: 12px;
+}

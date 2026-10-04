@@ -61,6 +61,8 @@ import {
     LayerChannelCount,
     LayerSummary,
     MaskKinds,
+    CreateMark,
+    MarkLimit,
 } from "./LayerSpecification.js";
 import { DecalLibrary, DecalCategories, DecalResolution, FontArchive, RasteriseDecal, SanitiseMarkup } from "./DecalSpecification.js";
 
@@ -376,6 +378,7 @@ class TexturePanel
         this.SecondaryPainting = false;
         this.PickCandidate = null;
         this.Placement = null;
+        this.MovingMark = "";
         this.PlaneZoom = 0.82;
         this.PlanePan = [0, 0];
         this.Dirty = false;
@@ -1220,7 +1223,8 @@ class TexturePanel
             return;
         }
         const Frame = StrokeProjection.PlacementFrame(Hit);
-        const Transform = Layer.Decal.Transform;
+        const Template = this.ActiveMark || Layer.Decal;
+        const Transform = Template.Transform;
         this.Placement = {
             Layer: Layer.Identifier,
             Position: Frame.Position,
@@ -1228,8 +1232,8 @@ class TexturePanel
             Tangent: Frame.Tangent,
             Rotation: Transform.Rotation,
             Size: [Transform.Size, Transform.Size / Math.max(Transform.Aspect, 0.05)],
-            Tint: Layer.Decal.Tint,
-            Colorise: Layer.Decal.Colorise,
+            Tint: Template.Tint,
+            Colorise: Template.Colorise,
         };
     }
 
@@ -1451,7 +1455,11 @@ class TexturePanel
                     <span class="layer-swatch" style="--swatch:${Swatch}">${Icon(Kind.Glyph)}</span>
                     <span class="layer-copy">
                         <span class="layer-name">${Escape(Layer.Name)}</span>
-                        <span class="layer-note">${Escape(LayerBadge(Layer).toLowerCase())} · ${Escape(Layer.Blend)} · ${LayerChannelCount(Layer)} channels</span>
+                        <span class="layer-note">${Escape(LayerBadge(Layer).toLowerCase())} · ${Escape(Layer.Blend)} · ${
+                            Layer.Kind === "decal"
+                                ? `${Layer.Decal.Marks.length} mark${Layer.Decal.Marks.length === 1 ? "" : "s"}`
+                                : `${LayerChannelCount(Layer)} channels`
+                        }</span>
                     </span>
                     <span class="layer-metric"><strong>${Math.round(Layer.Opacity * 100)}</strong><small>%</small></span>
                     <button class="icon-button row-toggle" data-toggle-layer="${Layer.Identifier}"
@@ -2128,6 +2136,11 @@ class TexturePanel
         this.NoteHover(Hit ? ObjectAtTriangle(this.SurfaceRecord, Hit.Triangle) : null);
         this.NotePlacement(Hit);
         this.SyncGhost(Event, Hit);
+        if (this.MovingMark && this.PointerButton !== undefined)
+        {
+            this.MoveMark(Hit);
+            return;
+        }
         if (!Hit || !this.Projection.Active) return;
         if (this.StrokeTool !== "brush" && this.StrokeTool !== "eraser") return;
         const Segment = this.Projection.Extend(Hit);
@@ -2150,6 +2163,11 @@ class TexturePanel
                 const Owner = Hit ? ObjectAtTriangle(this.SurfaceRecord, Hit.Triangle) : null;
                 if (Owner && Owner.Identifier !== this.Project.Object) this.SelectObject(Owner.Identifier, true);
             }
+        }
+        if (this.MovingMark)
+        {
+            this.RenderInspector();
+            this.MovingMark = "";
         }
         this.PickCandidate = null;
         this.SecondaryPainting = false;
@@ -2277,6 +2295,20 @@ class TexturePanel
         this.UpdateStatusBar();
     }
 
+    get ActiveMark()
+    {
+        const Layer = this.ActiveLayer;
+        if (Layer?.Kind !== "decal") return null;
+        const Marks = Layer.Decal.Marks || [];
+        return Marks.find((Mark) => Mark.Identifier === Layer.Decal.Selection) || Marks[Marks.length - 1] || null;
+    }
+
+    MarkByIdentifier(Identifier)
+    {
+        return (this.ActiveLayer?.Decal?.Marks || []).find((Mark) => Mark.Identifier === Identifier) || null;
+    }
+
+    // Clicking the model drops another placement of the layer's artwork; dragging from that click moves it.
     PlaceDecal(Hit)
     {
         const Layer = this.ActiveLayer;
@@ -2285,15 +2317,152 @@ class TexturePanel
             this.Notify("Select a decal layer, or add one from the + menu.");
             return;
         }
+        const Decal = Layer.Decal;
+        if (Decal.Marks.length >= MarkLimit)
+        {
+            this.Notify(`A decal layer holds ${MarkLimit} marks. Remove one, or add another layer.`);
+            return;
+        }
         const Frame = StrokeProjection.PlacementFrame(Hit);
+        const Template = this.ActiveMark || Decal;
+        const Mark = CreateMark(Decal, {
+            Name: `Mark ${Decal.Marks.length + 1}`,
+            Folder: this.ActiveMark?.Folder || "",
+            Mode: "projection",
+            Tint: [...Template.Tint],
+            Colorise: Template.Colorise !== false,
+            Softness: Template.Softness,
+            Emboss: Template.Emboss,
+            Transform: { ...Template.Transform, Position: Frame.Position, Normal: Frame.Normal, Tangent: Frame.Tangent },
+        });
         this.CaptureStack(() =>
         {
-            Layer.Decal.Mode = "projection";
-            Layer.Decal.Transform.Position = Frame.Position;
-            Layer.Decal.Transform.Normal = Frame.Normal;
-            Layer.Decal.Transform.Tangent = Frame.Tangent;
+            Decal.Marks.push(Mark);
+            Decal.Selection = Mark.Identifier;
         });
-        this.Notify(`${Layer.Name} placed on the surface.`);
+        this.MovingMark = Mark.Identifier;
+        this.Recomposite();
+        this.RenderStack();
+        if (this.InspectorTab === "layer") this.RenderInspector();
+        this.Notify(`${Mark.Name} placed — drag to move it.`);
+    }
+
+    // Dragging after the click slides the placement across the surface.
+    MoveMark(Hit)
+    {
+        const Mark = this.MarkByIdentifier(this.MovingMark);
+        if (!Mark || !Hit) return;
+        const Frame = StrokeProjection.PlacementFrame(Hit);
+        Mark.Transform.Position = Frame.Position;
+        Mark.Transform.Normal = Frame.Normal;
+        Mark.Transform.Tangent = Frame.Tangent;
+        Mark.Mode = "projection";
+        this.Recomposite();
+        this.MarkDirty();
+    }
+
+    SelectMark(Identifier)
+    {
+        const Layer = this.ActiveLayer;
+        if (Layer?.Kind !== "decal" || !this.MarkByIdentifier(Identifier)) return;
+        Layer.Decal.Selection = Identifier;
+        this.RenderInspector();
+    }
+
+    MarkAction(Action, Identifier)
+    {
+        const Layer = this.ActiveLayer;
+        if (Layer?.Kind !== "decal") return;
+        const Decal = Layer.Decal;
+        const Index = Decal.Marks.findIndex((Mark) => Mark.Identifier === Identifier);
+        const Mark = Decal.Marks[Index];
+        if (Action === "mark-select")
+        {
+            this.SelectMark(Identifier);
+            return;
+        }
+        if (!Mark && Action !== "mark-add") return;
+        this.CaptureStack(() =>
+        {
+            if (Action === "mark-add")
+            {
+                if (Decal.Marks.length >= MarkLimit) return;
+                const Template = this.ActiveMark || Decal;
+                const Fresh = CreateMark(Decal, {
+                    Name: `Mark ${Decal.Marks.length + 1}`,
+                    Folder: Template.Folder || "",
+                    Transform: { ...Template.Transform, Position: [...Template.Transform.Position] },
+                });
+                Decal.Marks.push(Fresh);
+                Decal.Selection = Fresh.Identifier;
+            }
+            else if (Action === "mark-duplicate")
+            {
+                if (Decal.Marks.length >= MarkLimit) return;
+                const Copy = structuredClone(Mark);
+                Copy.Identifier = CreateMark(Decal).Identifier;
+                Copy.Name = `${Mark.Name} copy`;
+                Copy.Transform.Position = Mark.Transform.Position.map((Component, Axis) => Component + (Axis === 0 ? 0.06 : 0));
+                Decal.Marks.splice(Index + 1, 0, Copy);
+                Decal.Selection = Copy.Identifier;
+            }
+            else if (Action === "mark-remove")
+            {
+                if (Decal.Marks.length <= 1) return;
+                Decal.Marks.splice(Index, 1);
+                Decal.Selection = Decal.Marks[Math.min(Index, Decal.Marks.length - 1)].Identifier;
+            }
+            else if (Action === "mark-visible") Mark.Visible = !Mark.Visible;
+            else if (Action === "mark-raise" && Index < Decal.Marks.length - 1)
+                Decal.Marks.splice(Index + 1, 0, Decal.Marks.splice(Index, 1)[0]);
+            else if (Action === "mark-lower" && Index > 0)
+                Decal.Marks.splice(Index - 1, 0, Decal.Marks.splice(Index, 1)[0]);
+        });
+        this.Recomposite();
+        this.RenderStack();
+        this.RenderInspector();
+    }
+
+    // A folder is renamed in place, and every mark inside it follows.
+    RenameFolder(Summary)
+    {
+        const Layer = this.ActiveLayer;
+        if (Layer?.Kind !== "decal") return;
+        const Label = Summary.childNodes[1];
+        const Before = Summary.textContent.replace(/\d+$/, "").trim();
+        Summary.contentEditable = "true";
+        Summary.focus();
+        const Commit = () =>
+        {
+            Summary.contentEditable = "false";
+            const After = Summary.textContent.replace(/\d+$/, "").trim().slice(0, 48);
+            if (After && After !== Before)
+                this.CaptureStack(() =>
+                {
+                    for (const Mark of Layer.Decal.Marks) if ((Mark.Folder || "") === Before) Mark.Folder = After;
+                });
+            this.RenderInspector();
+        };
+        Summary.addEventListener("blur", Commit, { once: true });
+        Summary.addEventListener("keydown", (Event) =>
+        {
+            Event.stopPropagation();
+            if (Event.key === "Enter")
+            {
+                Event.preventDefault();
+                Summary.blur();
+            }
+        });
+        void Label;
+    }
+
+    // Folders are just a name on each mark; the list groups by it, so a busy layer can be read at a glance.
+    FoldMark(Identifier, Folder)
+    {
+        const Mark = this.MarkByIdentifier(Identifier);
+        if (!Mark) return;
+        this.CaptureStack(() => (Mark.Folder = String(Folder || "").slice(0, 48)));
+        this.RenderInspector();
     }
 
     //----------------------------------------------------------------------------------------------------------------------
@@ -2453,11 +2622,24 @@ class TexturePanel
         const Body = Select("#inspector-body");
         Body.addEventListener("input", (Event) => this.OnInspectorInput(Event));
         Body.addEventListener("change", (Event) => this.OnInspectorInput(Event, true));
+        Body.addEventListener("change", (Event) =>
+        {
+            const Field = Event.target.closest("[data-mark-folder]");
+            if (!Field || !this.ActiveMark) return;
+            const Existing = new Set((this.ActiveLayer.Decal.Marks || []).map((Mark) => Mark.Folder).filter(Boolean));
+            const Folder = Field.value === "__new" ? `Group ${Existing.size + 1}` : Field.value;
+            this.FoldMark(this.ActiveMark.Identifier, Folder);
+        });
         Body.addEventListener("click", (Event) =>
         {
             const Button = Event.target.closest("[data-action]");
             if (!Button) return;
             this.OnInspectorAction(Button.dataset.action, Button.dataset.argument);
+        });
+        Body.addEventListener("dblclick", (Event) =>
+        {
+            const Summary = Event.target.closest(".mark-folder > summary");
+            if (Summary) this.RenameFolder(Summary);
         });
         Select("#channel-strip").addEventListener("click", (Event) =>
         {
@@ -2480,6 +2662,7 @@ class TexturePanel
             Mask: Layer?.Mask,
             Generator: Layer?.Generator,
             Decal: Layer?.Decal,
+            Mark: this.ActiveMark,
             Finish: Layer?.Finish,
             Project: this.Project,
             Object: this.ActiveObject,
@@ -2573,6 +2756,12 @@ class TexturePanel
             this.UpdateStatusBar();
             return;
         }
+        if (Path.startsWith("Mark."))
+        {
+            this.Recomposite();
+            if (Path === "Mark.Mode" && Committed) this.RenderInspector();
+            return;
+        }
         if (Path.startsWith("Decal.Text.") || Path.startsWith("Decal.Library") || Path.startsWith("Decal.SourceKind"))
         {
             this.RefreshDecal(this.ActiveLayer);
@@ -2621,6 +2810,15 @@ class TexturePanel
         const Layer = this.ActiveLayer;
         switch (Action)
         {
+            case "mark-select":
+            case "mark-add":
+            case "mark-duplicate":
+            case "mark-remove":
+            case "mark-visible":
+            case "mark-raise":
+            case "mark-lower":
+                this.MarkAction(Action, Argument);
+                break;
             case "add-object":
                 this.AddObject("cube");
                 this.RenderInspector();
@@ -3189,45 +3387,105 @@ class TexturePanel
             ].join(""),
         });
 
+        const Mark = this.ActiveMark || Decal;
         const Placement = Group({
             Title: "Placement",
-            Badge: Decal.Mode === "plane" ? "UV" : "PROJECTED",
+            Badge: Mark.Mode === "plane" ? "UV" : "PROJECTED",
             Body: [
                 SelectRow({
                     Label: "Projection",
-                    Path: "Decal.Mode",
-                    Value: Decal.Mode,
+                    Path: "Mark.Mode",
+                    Value: Mark.Mode,
                     Options: [
                         { Value: "projection", Label: "Projected onto the surface" },
                         { Value: "plane", Label: "Placed in UV space" },
                     ],
                     Hint:
-                        Decal.Mode === "projection"
-                            ? "Choose the decal tool and click the model to drop the projection frame."
+                        Mark.Mode === "projection"
+                            ? "Choose the decal tool and click the model to drop another mark; drag to slide it."
                             : "UV placement ignores the model and lays the mark flat in texture space.",
                 }),
-                ...(Decal.Mode === "projection"
+                ...(Mark.Mode === "projection"
                     ? [
-                          SliderRow({ Label: "Size", Path: "Decal.Transform.Size", Value: Decal.Transform.Size, Minimum: 0.02, Maximum: 2.4, Step: 0.01, Unit: "m" }),
-                          SliderRow({ Label: "Aspect", Path: "Decal.Transform.Aspect", Value: Decal.Transform.Aspect, Minimum: 0.2, Maximum: 5, Step: 0.01, Unit: "×" }),
-                          SliderRow({ Label: "Rotation", Path: "Decal.Transform.Rotation", Value: Decal.Transform.Rotation, Minimum: 0, Maximum: 360, Step: 1, Unit: "°" }),
-                          SliderRow({ Label: "Depth", Path: "Decal.Transform.Depth", Value: Decal.Transform.Depth, Minimum: 0.01, Maximum: 2, Step: 0.01, Unit: "m" }),
-                          SliderRow({ Label: "Angle limit", Path: "Decal.Transform.AngleLimit", Value: Decal.Transform.AngleLimit, Minimum: 10, Maximum: 180, Step: 1, Unit: "°" }),
+                          SliderRow({ Label: "Size", Path: "Mark.Transform.Size", Value: Mark.Transform.Size, Minimum: 0.02, Maximum: 2.4, Step: 0.01, Unit: "m" }),
+                          SliderRow({ Label: "Aspect", Path: "Mark.Transform.Aspect", Value: Mark.Transform.Aspect, Minimum: 0.2, Maximum: 5, Step: 0.01, Unit: "×" }),
+                          SliderRow({ Label: "Rotation", Path: "Mark.Transform.Rotation", Value: Mark.Transform.Rotation, Minimum: 0, Maximum: 360, Step: 1, Unit: "°" }),
+                          SliderRow({ Label: "Depth", Path: "Mark.Transform.Depth", Value: Mark.Transform.Depth, Minimum: 0.01, Maximum: 2, Step: 0.01, Unit: "m" }),
+                          SliderRow({ Label: "Angle limit", Path: "Mark.Transform.AngleLimit", Value: Mark.Transform.AngleLimit, Minimum: 10, Maximum: 180, Step: 1, Unit: "°" }),
                       ]
                     : [
-                          SliderRow({ Label: "Centre U", Path: "Decal.Plane.Centre.0", Value: Decal.Plane.Centre[0], Minimum: 0, Maximum: 1, Step: 0.005, Unit: "u" }),
-                          SliderRow({ Label: "Centre V", Path: "Decal.Plane.Centre.1", Value: Decal.Plane.Centre[1], Minimum: 0, Maximum: 1, Step: 0.005, Unit: "v" }),
-                          SliderRow({ Label: "Size", Path: "Decal.Plane.Size", Value: Decal.Plane.Size, Minimum: 0.02, Maximum: 1.6, Step: 0.005, Unit: "uv" }),
-                          SliderRow({ Label: "Rotation", Path: "Decal.Plane.Rotation", Value: Decal.Plane.Rotation, Minimum: 0, Maximum: 360, Step: 1, Unit: "°" }),
-                          SliderRow({ Label: "Aspect", Path: "Decal.Plane.Aspect", Value: Decal.Plane.Aspect, Minimum: 0.2, Maximum: 5, Step: 0.01, Unit: "×" }),
+                          SliderRow({ Label: "Centre U", Path: "Mark.Plane.Centre.0", Value: Mark.Plane.Centre[0], Minimum: 0, Maximum: 1, Step: 0.005, Unit: "u" }),
+                          SliderRow({ Label: "Centre V", Path: "Mark.Plane.Centre.1", Value: Mark.Plane.Centre[1], Minimum: 0, Maximum: 1, Step: 0.005, Unit: "v" }),
+                          SliderRow({ Label: "Size", Path: "Mark.Plane.Size", Value: Mark.Plane.Size, Minimum: 0.02, Maximum: 1.6, Step: 0.005, Unit: "uv" }),
+                          SliderRow({ Label: "Rotation", Path: "Mark.Plane.Rotation", Value: Mark.Plane.Rotation, Minimum: 0, Maximum: 360, Step: 1, Unit: "°" }),
+                          SliderRow({ Label: "Aspect", Path: "Mark.Plane.Aspect", Value: Mark.Plane.Aspect, Minimum: 0.2, Maximum: 5, Step: 0.01, Unit: "×" }),
                       ]),
-                SliderRow({ Label: "Edge softness", Path: "Decal.Softness", Value: Decal.Softness, Minimum: 0.002, Maximum: 0.6, Step: 0.002, Unit: "α" }),
-                SliderRow({ Label: "Emboss", Path: "Decal.Emboss", Value: Decal.Emboss, Minimum: -0.5, Maximum: 0.5, Step: 0.01, Unit: "h" }),
-                ToggleRow({ Label: "Tint the mark", Path: "Decal.Colorise", Value: Decal.Colorise }),
-                Decal.Colorise ? ColourRow({ Label: "Tint", Path: "Decal.Tint", Value: Decal.Tint }) : "",
+                SliderRow({ Label: "Edge softness", Path: "Mark.Softness", Value: Mark.Softness, Minimum: 0.002, Maximum: 0.6, Step: 0.002, Unit: "α" }),
+                SliderRow({ Label: "Emboss", Path: "Mark.Emboss", Value: Mark.Emboss, Minimum: -0.5, Maximum: 0.5, Step: 0.01, Unit: "h" }),
+                ColourRow({ Label: "Colour", Path: "Mark.Tint", Value: Mark.Tint }),
+                ToggleRow({
+                    Label: "Colour the artwork",
+                    Path: "Mark.Colorise",
+                    Value: Mark.Colorise,
+                    Hint: "Off keeps the artwork's own colours; on treats it as a stencil and paints it in the colour above.",
+                }),
             ].join(""),
         });
-        return Source + Placement;
+        return Source + this.MarkList(Layer) + Placement;
+    }
+
+    // Every placement of the layer's artwork, in composite order, grouped by folder. The bottom of the list is painted
+    // first, so the list reads the way the stack does.
+    MarkList(Layer)
+    {
+        const Decal = Layer.Decal;
+        const Marks = Decal.Marks || [];
+        const Folders = [];
+        for (const Mark of Marks) if (!Folders.includes(Mark.Folder || "")) Folders.push(Mark.Folder || "");
+        const Row = (Mark, Index) => `
+            <div class="mark-row ${Mark.Identifier === Decal.Selection ? "selected" : ""} ${Mark.Visible ? "" : "muted"}"
+                 data-action="mark-select" data-argument="${Mark.Identifier}" title="${Escape(Mark.Name)}">
+                <span class="mark-chip" style="--mark-colour:${ToHex(Mark.Tint)}">${Index + 1}</span>
+                <span class="mark-copy">
+                    <span class="mark-name">${Escape(Mark.Name)}</span>
+                    <span class="mark-note">${Mark.Mode === "plane" ? "UV" : "projected"} · ${(Mark.Mode === "plane" ? Mark.Plane.Size : Mark.Transform.Size).toFixed(2)}${Mark.Mode === "plane" ? "uv" : "m"}</span>
+                </span>
+                <button class="icon-button" data-action="mark-lower" data-argument="${Mark.Identifier}" title="Send down" aria-label="Send down">${Icon("down")}</button
+                ><button class="icon-button" data-action="mark-raise" data-argument="${Mark.Identifier}" title="Bring up" aria-label="Bring up">${Icon("up")}</button
+                ><button class="icon-button" data-action="mark-duplicate" data-argument="${Mark.Identifier}" title="Duplicate" aria-label="Duplicate">${Icon("copy")}</button
+                ><button class="icon-button" data-action="mark-visible" data-argument="${Mark.Identifier}" title="${Mark.Visible ? "Hide" : "Show"}" aria-label="${Mark.Visible ? "Hide" : "Show"}">${Icon(Mark.Visible ? "eye" : "hidden")}</button
+                ><button class="icon-button" data-action="mark-remove" data-argument="${Mark.Identifier}" title="Remove" aria-label="Remove">${Icon("trash")}</button>
+            </div>`;
+        const Body = Folders.map((Folder) =>
+        {
+            const Inside = Marks.map((Mark, Index) => ({ Mark, Index })).filter(({ Mark }) => (Mark.Folder || "") === Folder);
+            const Rows = Inside.slice().reverse().map(({ Mark, Index }) => Row(Mark, Index)).join("");
+            if (!Folder) return `<div class="mark-folder loose">${Rows}</div>`;
+            return `
+                <details class="mark-folder" open>
+                    <summary><span data-icon="folder"></span>${Escape(Folder)}<b>${Inside.length}</b></summary>
+                    ${Rows}
+                </details>`;
+        }).join("");
+        const Named = Folders.filter((Folder) => Folder);
+        return Group({
+            Title: "Marks",
+            Badge: `${Marks.length} / ${MarkLimit}`,
+            Body: [
+                `<div class="mark-list">${Body}</div>`,
+                SelectRow({
+                    Label: "Folder",
+                    Path: "",
+                    Value: this.ActiveMark?.Folder || "",
+                    Options: [{ Value: "", Label: "No folder" }, ...Named.map((Folder) => ({ Value: Folder, Label: Folder })), { Value: "__new", Label: "New folder…" }],
+                    Hint: "Folders are only a name on each mark, so a busy layer can still be read.",
+                }).replace('data-bind=""', 'data-mark-folder="1"'),
+                ActionRow([
+                    { Action: "mark-add", Label: "Add mark", Glyph: "plus" },
+                    { Action: "mark-duplicate", Label: "Duplicate", Glyph: "copy", Argument: Decal.Selection },
+                ]),
+            ].join(""),
+        });
     }
 
     MaterialInspector()

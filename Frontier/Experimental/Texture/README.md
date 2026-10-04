@@ -115,8 +115,13 @@ travel with the descriptor at export.
 
 **Decals.** Fourteen vector presets plus anything you paste: SVG markup is sanitised (scripts, `foreignObject`, `on*`
 attributes and `javascript:`/`data:text/html` URLs are stripped) before it is rasterised at 1024². Text decals set in any
-of ten OFL families from `EngineContent/FontArchives`. Both place with position, rotation, scale, softness, emboss depth
-and a colourise tint, and both can be stamped flat against a plane or projected along the view.
+of ten OFL families from `EngineContent/FontArchives`.
+
+A decal layer holds **one piece of artwork and up to thirty-two marks** of it. The decal tool drops another mark
+wherever you click and slides it while you drag; each mark keeps its own frame, size, rotation, softness, emboss and
+**colour** — the artwork is treated as a stencil and painted in the mark's colour, so one channel carries the whole
+decal — and marks can be hidden, duplicated, reordered and dropped into named folders. They composite bottom to top
+inside the layer, exactly the way the stack does.
 
 **Previews, not guesses.** The cursor ring on the model is filled with the colour the stroke would lay down — white or
 black when the mask is the target, a dark wash for the eraser — and off the mesh it becomes a dashed outline that

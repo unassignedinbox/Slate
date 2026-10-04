@@ -104,7 +104,44 @@ export const DecalDefaults = () => ({
         AngleLimit: 78,
     },
     Plane: { Centre: [0.5, 0.5], Size: 0.4, Rotation: 0, Aspect: 1 },
+    Marks: [],                      // every placement of this artwork, composited bottom to top
+    Selection: "",                  // the mark the inspector is editing
 });
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Marks. One decal layer holds one piece of artwork and any number of placements of it, each with its own frame, colour
+// and folder, composited in order. A placement carries exactly the fields the composite pass reads.
+//--------------------------------------------------------------------------------------------------------------------------
+export const MarkLimit = 32;
+
+let MarkCounter = 0;
+
+export const NextMarkIdentifier = () =>
+{
+    MarkCounter += 1;
+    return `mark-${MarkCounter.toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+};
+
+export const ResetMarkCounter = () => (MarkCounter = 0);
+
+export const CreateMark = (Decal, Overrides = {}) =>
+{
+    const Template = Decal || DecalDefaults();
+    return {
+        Identifier: NextMarkIdentifier(),
+        Name: "Mark",
+        Folder: "",
+        Visible: true,
+        Mode: Template.Mode,
+        Tint: [...Template.Tint],
+        Colorise: Template.Colorise !== false,
+        Softness: Template.Softness,
+        Emboss: Template.Emboss,
+        Transform: { ...Template.Transform, Position: [...Template.Transform.Position], Normal: [...Template.Transform.Normal], Tangent: [...Template.Transform.Tangent] },
+        Plane: { ...Template.Plane, Centre: [...Template.Plane.Centre] },
+        ...Overrides,
+    };
+};
 
 export const MaskDefaults = () => ({
     Kind: "none",
@@ -168,7 +205,14 @@ export const CreateLayer = (Kind = "fill", Overrides = {}) =>
         Decal: DecalDefaults(),
         Finish: FinishDefaults(),
     };
-    return MergeLayer(Layer, Overrides);
+    const Built = MergeLayer(Layer, Overrides);
+    // A decal layer is never empty: it opens with one placement of its artwork, ready to be moved.
+    if (Built.Kind === "decal" && !Built.Decal.Marks.length)
+    {
+        Built.Decal.Marks = [CreateMark(Built.Decal, { Name: "Mark 1" })];
+        Built.Decal.Selection = Built.Decal.Marks[0].Identifier;
+    }
+    return Built;
 };
 
 export const MergeLayer = (Layer, Overrides = {}) =>
@@ -183,6 +227,7 @@ export const MergeLayer = (Layer, Overrides = {}) =>
     Merged.Decal = {
         ...Layer.Decal,
         ...(Overrides.Decal || {}),
+        Marks: (Overrides.Decal?.Marks || Layer.Decal.Marks || []).map((Mark) => structuredClone(Mark)),
         Text: { ...Layer.Decal.Text, ...(Overrides.Decal?.Text || {}) },
         Transform: { ...Layer.Decal.Transform, ...(Overrides.Decal?.Transform || {}) },
         Plane: { ...Layer.Decal.Plane, ...(Overrides.Decal?.Plane || {}) },
@@ -361,7 +406,50 @@ const SanitiseDecal = (Decal, Candidate) =>
             Aspect: Clamp(Candidate.Plane?.Aspect ?? Decal.Plane.Aspect, 0.2, 5),
         },
     };
+    // A project written before marks existed carries exactly one placement: the record itself.
+    const Marks = Array.isArray(Candidate.Marks) && Candidate.Marks.length
+        ? Candidate.Marks.slice(0, MarkLimit).map((Mark) => SanitiseMark(Sanitised, Mark))
+        : [CreateMark(Sanitised, { Name: "Mark 1" })];
+    Sanitised.Marks = Marks;
+    Sanitised.Selection = Marks.some((Mark) => Mark.Identifier === Candidate.Selection)
+        ? Candidate.Selection
+        : Marks[Marks.length - 1].Identifier;
     return Sanitised;
+};
+
+export const SanitiseMark = (Decal, Candidate) =>
+{
+    const Mark = CreateMark(Decal);
+    if (!Candidate || typeof Candidate !== "object") return Mark;
+    if (typeof Candidate.Identifier === "string") Mark.Identifier = Candidate.Identifier.slice(0, 64);
+    if (typeof Candidate.Name === "string") Mark.Name = Candidate.Name.slice(0, 48);
+    if (typeof Candidate.Folder === "string") Mark.Folder = Candidate.Folder.slice(0, 48);
+    Mark.Visible = Candidate.Visible !== false;
+    Mark.Mode = Candidate.Mode === "plane" ? "plane" : "projection";
+    Mark.Tint = SanitiseColour(Candidate.Tint, Mark.Tint);
+    Mark.Colorise = Candidate.Colorise !== false;
+    Mark.Softness = Clamp(Candidate.Softness ?? Mark.Softness, 0.002, 0.6);
+    Mark.Emboss = Clamp(Candidate.Emboss ?? Mark.Emboss, -0.5, 0.5);
+    Mark.Transform = {
+        Position: SanitiseVector(Candidate.Transform?.Position, Mark.Transform.Position),
+        Normal: SanitiseVector(Candidate.Transform?.Normal, Mark.Transform.Normal),
+        Tangent: SanitiseVector(Candidate.Transform?.Tangent, Mark.Transform.Tangent),
+        Size: Clamp(Candidate.Transform?.Size ?? Mark.Transform.Size, 0.02, 2.4),
+        Aspect: Clamp(Candidate.Transform?.Aspect ?? Mark.Transform.Aspect, 0.2, 5),
+        Rotation: Clamp(Candidate.Transform?.Rotation ?? Mark.Transform.Rotation, 0, 360),
+        Depth: Clamp(Candidate.Transform?.Depth ?? Mark.Transform.Depth, 0.01, 2),
+        AngleLimit: Clamp(Candidate.Transform?.AngleLimit ?? Mark.Transform.AngleLimit, 10, 180),
+    };
+    Mark.Plane = {
+        Centre: [
+            Clamp(Candidate.Plane?.Centre?.[0] ?? Mark.Plane.Centre[0], -1, 2),
+            Clamp(Candidate.Plane?.Centre?.[1] ?? Mark.Plane.Centre[1], -1, 2),
+        ],
+        Size: Clamp(Candidate.Plane?.Size ?? Mark.Plane.Size, 0.02, 1.6),
+        Rotation: Clamp(Candidate.Plane?.Rotation ?? Mark.Plane.Rotation, 0, 360),
+        Aspect: Clamp(Candidate.Plane?.Aspect ?? Mark.Plane.Aspect, 0.2, 5),
+    };
+    return Mark;
 };
 
 export const SanitiseLayer = (Candidate) =>
@@ -495,5 +583,6 @@ export const LayerSummary = (Layer) =>
               : Layer.Mask.Kind === "colour"
                 ? "colour mask"
                 : `${Layer.Mask.Generator.Kind} mask`;
-    return `${Channels} channel${Channels === 1 ? "" : "s"} · ${Mask} · ${Math.round(Layer.Opacity * 100)}%`;
+    const Marks = Layer.Kind === "decal" ? `${Layer.Decal.Marks?.length || 1} mark${(Layer.Decal.Marks?.length || 1) === 1 ? "" : "s"} · ` : "";
+    return `${Marks}${Channels} channel${Channels === 1 ? "" : "s"} · ${Mask} · ${Math.round(Layer.Opacity * 100)}%`;
 };

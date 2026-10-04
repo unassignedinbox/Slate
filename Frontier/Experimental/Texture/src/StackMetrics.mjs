@@ -67,6 +67,9 @@ import {
     SanitiseLayer,
     MaskKinds,
     ResetLayerCounter,
+    CreateMark,
+    SanitiseMark,
+    MarkLimit,
 } from "./LayerSpecification.js";
 import { RevisionQueue } from "./RevisionQueue.js";
 import { StrokeProjection, BrushDefaults, MirrorVector, ToolOrdering } from "./StrokeProjection.js";
@@ -607,4 +610,62 @@ test("a custom object consumes the imported surface", () =>
     const Scene = AssembleScene([CreateObject({ Name: "Scan", Kind: "custom", Tile: 1001 })], Imported);
     assert.equal(Scene.Triangles, Imported.Triangles);
     assert.equal(Scene.Ranges[0].Name, "Scan");
+});
+
+//========================================================================================================================
+// Decal marks. One layer holds one piece of artwork and any number of placements of it.
+//========================================================================================================================
+test("a decal layer opens with one mark and keeps its artwork shared", () =>
+{
+    const Layer = CreateLayer("decal");
+    assert.equal(Layer.Decal.Marks.length, 1);
+    assert.equal(Layer.Decal.Selection, Layer.Decal.Marks[0].Identifier);
+    assert.equal(Layer.Decal.Marks[0].Mode, "projection");
+    assert.ok(Layer.Decal.Marks[0].Transform.Size > 0);
+
+    const Copy = CloneLayer(Layer);
+    assert.equal(Copy.Decal.Marks.length, 1);
+    Copy.Decal.Marks[0].Transform.Size = 1.4;
+    assert.notEqual(Layer.Decal.Marks[0].Transform.Size, 1.4, "a clone must not share mark records");
+});
+
+test("marks are sanitised one by one and a legacy decal becomes a single mark", () =>
+{
+    const Legacy = SanitiseLayer({ Kind: "decal", Decal: { Transform: { Size: 1.1, Rotation: 540 }, Tint: [1, 0, 0] } });
+    assert.equal(Legacy.Decal.Marks.length, 1, "an old decal layer must still render");
+    assert.equal(Legacy.Decal.Marks[0].Transform.Size, 1.1);
+    assert.equal(Legacy.Decal.Marks[0].Transform.Rotation, 360, "rotation is clamped");
+    assert.deepEqual(Legacy.Decal.Marks[0].Tint, [1, 0, 0], "the mark inherits the decal colour");
+
+    const Many = SanitiseLayer({
+        Kind: "decal",
+        Decal: {
+            Marks: [
+                { Name: "Bonnet", Folder: "Body", Tint: [0, 1, 0], Transform: { Size: 9 } },
+                { Name: "Door", Visible: false, Mode: "plane", Plane: { Size: 0.3 } },
+            ],
+            Selection: "nonsense",
+        },
+    });
+    assert.equal(Many.Decal.Marks.length, 2);
+    assert.equal(Many.Decal.Marks[0].Folder, "Body");
+    assert.equal(Many.Decal.Marks[0].Transform.Size, 2.4, "size is clamped to the slider range");
+    assert.equal(Many.Decal.Marks[1].Visible, false);
+    assert.equal(Many.Decal.Marks[1].Mode, "plane");
+    assert.equal(Many.Decal.Selection, Many.Decal.Marks[1].Identifier, "a stale selection falls back to the top mark");
+
+    const Hostile = SanitiseLayer({ Kind: "decal", Decal: { Marks: new Array(MarkLimit + 12).fill({ Name: "x" }) } });
+    assert.equal(Hostile.Decal.Marks.length, MarkLimit, "the mark count is capped");
+
+    const Fresh = CreateMark(undefined, { Name: "Loose" });
+    assert.equal(Fresh.Name, "Loose");
+    assert.notEqual(Fresh.Identifier, CreateMark(undefined).Identifier);
+    assert.equal(SanitiseMark(undefined, { Mode: "plane", Tint: [0, 0, 1] }).Mode, "plane");
+});
+
+test("the layer summary counts marks", () =>
+{
+    const Layer = CreateLayer("decal");
+    Layer.Decal.Marks.push(CreateMark(Layer.Decal));
+    assert.match(LayerSummary(Layer), /2 marks/);
 });

@@ -289,7 +289,7 @@ export class ShadingIntegrator
         this.Renderer = "";
         this.Resolution = 1024;
         this.Surface = null;
-        this.Statistics = { Composites: 0, Stamps: 0, CompositeMicroseconds: 0, Layers: 0, Triangles: 0 };
+        this.Statistics = { Composites: 0, Stamps: 0, CompositeMicroseconds: 0, Layers: 0, Passes: 0, Triangles: 0 };
         this.LayerImages = new Map();
         const { Device: Acquired, Notes } = AcquireDevice(Canvas);
         this.Device = Acquired;
@@ -788,7 +788,15 @@ export class ShadingIntegrator
         Device.useProgram(Program.Program);
         Device.bindVertexArray(this.QuadArray);
         const Visible = Layers.filter((Layer) => Layer.Visible && Layer.Opacity > 0.0005);
+        // A decal layer is composited once per placement: same artwork, same mask, its own frame and colour.
+        const Passes = [];
         for (const Layer of Visible)
+        {
+            const Marks = Layer.Kind === "decal" ? (Layer.Decal?.Marks || []).filter((Mark) => Mark.Visible !== false) : [];
+            if (Marks.length) for (const Mark of Marks) Passes.push({ Layer, Mark });
+            else Passes.push({ Layer, Mark: null });
+        }
+        for (const { Layer, Mark } of Passes)
         {
             Device.bindFramebuffer(Device.FRAMEBUFFER, Destination);
             this.BindImage(Program, "uLower0", Source.Images[0], 0);
@@ -802,7 +810,7 @@ export class ShadingIntegrator
             this.BindImage(Program, "uCoverageMap", Record.Coverage || this.BlankImage(), 7);
             this.BindImage(Program, "uDecalMap", Record.Decal || this.BlankImage(), 8);
             this.BindImage(Program, "uMaskMap", Record.Mask || this.WhiteImage(), 9);
-            this.UploadLayerUniforms(Program, Layer, Material);
+            this.UploadLayerUniforms(Program, Layer, Material, Mark);
             Device.drawArrays(Device.TRIANGLES, 0, 3);
             const Swap = Source;
             Source = Destination;
@@ -813,10 +821,11 @@ export class ShadingIntegrator
         Device.bindFramebuffer(Device.FRAMEBUFFER, null);
         this.Statistics.Composites += 1;
         this.Statistics.Layers = Visible.length;
+        this.Statistics.Passes = Passes.length;
         this.Statistics.CompositeMicroseconds = Math.round((performance.now() - Started) * 1000);
     }
 
-    UploadLayerUniforms(Program, Layer, Material)
+    UploadLayerUniforms(Program, Layer, Material, Mark = null)
     {
         const Device = this.Device;
         const Uniforms = Program.Uniforms;
@@ -877,7 +886,7 @@ export class ShadingIntegrator
             Device.uniform4f(Uniforms.get("uFinishTrim"), Finish.Coat, Finish.Angle, Finish.Variation, Finish.Seed);
         }
 
-        const Decal = Layer.Decal;
+        const Decal = Mark || Layer.Decal;
         const Transform = Decal.Transform;
         Device.uniform1i(Uniforms.get("uDecalMode"), Decal.Mode === "plane" ? 1 : 0);
         Device.uniform3fv(Uniforms.get("uDecalPosition"), Transform.Position);
