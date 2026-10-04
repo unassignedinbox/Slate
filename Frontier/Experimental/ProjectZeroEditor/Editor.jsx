@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { Inspector, Icon, Glyph, Panels } from "./Inspectors.jsx";
 import Notch from "./Notch.jsx";
+import ActionIcon from "./ActionIcon.jsx";
 import ConstructPanel from "./ConstructPanel.jsx";
 import CheckerViewport, { PreviewVisible } from "./CheckerViewport.jsx";
 import "./Editor.css";
@@ -193,6 +194,7 @@ function App() {
     [Rename, RenameRow] = useState(null),
     [Construct, OpenConstruct] = useState(false),
     [Projection, SetProjection] = useState("PERSP"),
+    [SplitView, SetSplitView] = useState(false),
     [RunMode, SetRunMode] = useState("EDIT"),
     [Message, Notify] = useState(""),
     [Console, ShowConsole] = useState(false),
@@ -811,93 +813,149 @@ function App() {
   );
   const Viewport = () => (
     <>
-      <div className="viewport-toolbar">
-        <button
-          title="Frame selected"
-          onClick={() =>
-            document
-              .querySelector(`[data-preview-id="${Selected}"]`)
-              ?.scrollIntoView({
+      <div
+        className="viewport-toolbar"
+        role="toolbar"
+        aria-label="Viewport tools"
+      >
+        <div className="viewport-heading-row">
+          <div className="viewport-identity">
+            <Icon Name="folder-scene" Size={24} />
+            <div>
+              <strong>Scene</strong>
+              <span>
+                {Rows.filter((Entry) => Entry.Preview).length} constructed
+              </span>
+            </div>
+            <span
+              className="viewport-preview-badge"
+              title="Analytical HTML preview; the native renderer is not connected"
+            >
+              PREVIEW
+            </span>
+          </div>
+          <div className="viewport-modes" role="group" aria-label="Editor mode">
+            {[
+              ["EDIT", "edit", "Edit"],
+              ["SIM", "simulate", "Sim"],
+              ["PLAY", "play", "Play"],
+            ].map(([Mode, Symbol, Label]) => (
+              <button
+                key={Mode}
+                aria-label={Label + " mode"}
+                aria-pressed={RunMode === Mode}
+                className={RunMode === Mode ? "active" : ""}
+                title={
+                  Mode === "EDIT"
+                    ? "Edit the HTML scene"
+                    : "UI mode only — native simulation is not connected"
+                }
+                onClick={() => {
+                  SetRunMode(Mode);
+                  if (Mode !== "EDIT")
+                    Toast(
+                      Label +
+                        " selected · UI preview only; no native simulation runs",
+                    );
+                }}
+              >
+                <ActionIcon Name={Symbol} Size={13} />
+                <span>{Label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="viewport-action-row">
+          <button
+            className="viewport-construct"
+            aria-label="Construct"
+            title="Construct an entity · Ctrl+A"
+            onClick={() => OpenConstruct(true)}
+          >
+            <ActionIcon Name="construct" Size={18} />
+            <span>Construct</span>
+            <kbd>Ctrl+A</kbd>
+          </button>
+          <button
+            className="viewport-icon-button"
+            aria-label="Frame selected"
+            title={
+              Subject.Preview
+                ? "Frame selected marker"
+                : "Select a constructed marker to frame it"
+            }
+            disabled={
+              !Subject.Preview || !PreviewVisible(Subject, Rows, Hidden)
+            }
+            onClick={() => {
+              const Marker = [
+                ...document.querySelectorAll("[data-preview-id]"),
+              ].find((Entry) => Entry.dataset.previewId === Selected);
+              Marker?.scrollIntoView({
                 block: "center",
                 inline: "center",
                 behavior: "smooth",
-              })
-          }
-        >
-          F
-        </button>
-        <button title="Single view" onClick={() => SetProjection("PERSP")}>
-          ▣
-        </button>
-        <button title="Split view" onClick={() => SetProjection("SPLIT")}>
-          ◧
-        </button>
-        <button
-          title="Open construct menu"
-          aria-label="Construct"
-          onClick={() => OpenConstruct(true)}
-        >
-          <Glyph Name="plus" Size={15} />
-        </button>
-        <div className="toolbar-space" />
-        <div className="mode-buttons">
-          {["EDIT", "SIM", "PLAY"].map((Mode, Index) => (
-            <button
-              title={Mode}
-              key={Mode}
-              className={RunMode === Mode ? "active" : ""}
-              onClick={() => {
-                SetRunMode(Mode);
-                if (Mode !== "EDIT")
-                  Toast(
-                    Mode +
-                      " controls selected · no simulation runs in this HTML copy",
-                  );
-              }}
+              });
+            }}
+          >
+            <ActionIcon Name="focus" Size={17} />
+          </button>
+          <span className="viewport-tool-divider" />
+          <label
+            className="viewport-projection"
+            title="Projection preference only; the analytical preview stays 2D"
+          >
+            <Icon Name="camera" Size={16} />
+            <select
+              aria-label="Viewport projection"
+              value={Projection}
+              onChange={(Event) => SetProjection(Event.target.value)}
             >
-              {Index === 0 ? (
-                "EDIT"
-              ) : (
-                <Glyph Name={Index === 1 ? "sun" : "play"} Size={12} />
-              )}
+              {[
+                ["PERSP", "Perspective"],
+                ["ORTHO", "Orthographic"],
+                ["TOP", "Top"],
+                ["FRONT", "Front"],
+                ["RIGHT", "Right"],
+              ].map(([Key, Label]) => (
+                <option key={Key} value={Key}>
+                  {Label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="viewport-secondary-tools">
+            <button
+              className="viewport-icon-button"
+              aria-label="Split viewport"
+              aria-pressed={SplitView}
+              title={SplitView ? "Return to single view" : "Split viewport"}
+              onClick={() => SetSplitView((Previous) => !Previous)}
+            >
+              <ActionIcon Name="split" Size={17} />
             </button>
-          ))}
+            <button
+              className="viewport-icon-button"
+              aria-label="Viewport diagnostics"
+              aria-pressed={Debug > 0}
+              title="Diagnostics · F3"
+              onClick={() => SetDebug((Previous) => (Previous ? 0 : 1))}
+            >
+              <ActionIcon Name="diagnostics" Size={16} />
+            </button>
+            <button
+              className="viewport-icon-button"
+              aria-label="Open control center"
+              title="Control Centre"
+              onClick={() => OpenShade(!Shade)}
+            >
+              <ActionIcon Name="settings" Size={17} />
+            </button>
+          </div>
         </div>
-        <select
-          aria-label="Viewport projection"
-          value={Projection}
-          onChange={(Event) => SetProjection(Event.target.value)}
-        >
-          {["PERSP", "ORTHO", "TOP", "FRONT", "RIGHT", "SPLIT"].map((Value) => (
-            <option key={Value}>{Value}</option>
-          ))}
-        </select>
-        <button title="Focus viewport" onClick={() => Expand(false)}>
-          ◎
-        </button>
-        <button
-          className="live"
-          title="Analytical HTML preview. No engine connection."
-          onClick={() =>
-            Toast(
-              "Checkerboard preview · constructed entities use analytical markers",
-            )
-          }
-        >
-          <i />
-          PREVIEW
-        </button>
-        <button
-          aria-label="Open control center"
-          onClick={() => OpenShade(!Shade)}
-        >
-          <Glyph Name="gear" Size={18} />
-        </button>
       </div>
       <div
-        className={
-          "scene-image " + (Projection === "SPLIT" ? "split-view" : "")
-        }
+        className={"scene-image " + (SplitView ? "split-view" : "")}
         title="Checkerboard authoring preview. Symbols represent constructed entities, not engine rendering."
       >
         <CheckerViewport
@@ -906,7 +964,7 @@ function App() {
           Selected={Selected}
           Select={SelectRow}
         />
-        {Projection === "SPLIT" && (
+        {SplitView && (
           <CheckerViewport
             Rows={Rows}
             Hidden={Hidden}

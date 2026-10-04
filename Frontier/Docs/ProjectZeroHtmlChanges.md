@@ -15,6 +15,8 @@
 | C001 | Native-style Construct presentation                 | Implemented; awaiting user review | Deferred until the HTML review is finished |
 | C002 | Ctrl+A opens Construct; Shift+A must not open it    | Implemented and browser-checked   | Bug recorded; no native change made        |
 | C003 | Blank checkerboard with constructed representations | Implemented and browser-checked   | HTML-only preview, not a renderer change   |
+| C004 | Distinct filled inspector quick-action icons        | Implemented and browser-checked   | Deferred until the HTML review is finished |
+| C005 | Redesigned viewport header                          | Implemented and browser-checked   | Deferred until the HTML review is finished |
 
 ## 2026-10-04 — C001: Construct presentation
 
@@ -87,6 +89,39 @@ Visual proofs:
 - [Construct properties](../Experimental/ProjectZeroEditor/Screenshots/ConstructProperties.png)
 - [Blank checkerboard](../Experimental/ProjectZeroEditor/Screenshots/Checkerboard.png)
 - [Constructed symbols and selection](../Experimental/ProjectZeroEditor/Screenshots/ConstructedScene.png)
+
+## 2026-10-04 — C004: Filled inspector quick actions
+
+- Replaced the repeated small power/orbit glyphs with filled semantic SVG silhouettes. Each action within a quick group has a distinct symbol: fog, wind, cloud, rain, collision, stars, twinkle, sun, disc, orbit, motion, pause, baking, baked image, and optical effects.
+- Enabled icons follow the inspector context: fog layers, a cloud, falling rain, or a rainbow rather than the same generic power icon.
+- Larger icon seats, rounded tiles, and explicit **ON / OFF / UNAVAILABLE** captions use green, muted red, and grey respectively. Status is conveyed by text as well as colour.
+- Retained existing property callbacks, keyboard activation, and native-unavailable disabled states. Styling does not enable baking, imported-image playback, or any disconnected native control.
+- Original outliner artwork, inspector graphs, card styling, notch, and trapezoidal document tabs remain intact.
+
+## 2026-10-04 — C005: Viewport header
+
+- Replaced the scattered single-row controls with two grouped rows: scene identity / constructed count / preview badge / Edit–Sim–Play, followed by Construct / frame selected / projection / split / diagnostics / Control Centre.
+- Construct is the primary action, with its Ctrl+A hint at wider sizes. Compact layouts remove secondary wording rather than hiding tool buttons. Very narrow dock widths allow the action row to wrap.
+- Projection and split view are independent controls; switching the projection preference does not close split view. Projection remains a UI preference for the analytical 2D preview, not a live camera.
+- Split, diagnostics, and mode buttons expose their state through `aria-pressed`. F3 / Shift+F3 diagnostics remain synchronized with the toolbar.
+- Frame selected is disabled for reference-only or effectively hidden entities. It targets the selected constructed marker, not an engine camera.
+- Sim and Play still disclose that no native simulation is connected. The scene counter reports browser-local constructions, not engine entities.
+- C++ presentation, icons, and behavior are deliberately **not mirrored yet**.
+
+### Browser verification for C004–C005
+
+Executed on 2026-10-04 using headless Chromium:
+
+- `CheckQuickTools.mjs`: 32 quick-tile instances across 12 inspector sheets; semantic filled SVGs; distinct symbols within each quick group; click and Space activation; ON/OFF/unavailable captions; independent split and projection; diagnostics button plus F3/Shift+F3; exclusive mode selection; Control Centre open/close; Construct and frame eligibility.
+- Toolbar bounds and hit-testing checked at 1024, 1280, 1366, 1440, and 1920 pixels wide, including a 1366 × 608 content area. Screenshots wait for the existing notch resize animation to settle.
+- `CheckBrowser.mjs` and `CheckConstruction.mjs` rerun successfully, including all 18 inspector sheets, 121 numeric edits, and all 23 construction entries. All three suites reported no browser errors.
+- No C++ files changed, native build performed, or native runtime result claimed.
+
+Visual proofs:
+
+- [Fog and wind filled quick icons / viewport header](../Experimental/ProjectZeroEditor/Screenshots/QuickTilesFog.png)
+- [Stars: distinct symbols and ON/OFF/unavailable states](../Experimental/ProjectZeroEditor/Screenshots/QuickTilesStars.png)
+- [Compact 1024-pixel toolbar](../Experimental/ProjectZeroEditor/Screenshots/Toolbar1024.png)
 
 ## Next review
 

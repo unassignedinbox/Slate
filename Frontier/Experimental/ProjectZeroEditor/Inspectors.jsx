@@ -1,3 +1,4 @@
+import ActionIcon, { QuickSymbol } from "./ActionIcon.jsx";
 import React, { useState, useEffect, useRef } from "react";
 import {
   SunGizmo,
@@ -339,7 +340,8 @@ export function Tile({
   On,
   Action,
   Disabled = false,
-  IconName = "power",
+  IconName = "visible",
+  Context = "",
   Large = false,
 }) {
   return (
@@ -348,11 +350,17 @@ export function Tile({
       disabled={Disabled}
       title={Disabled ? "Not connected in the HTML UI copy" : Label}
       onClick={Action}
-      aria-pressed={On}
+      aria-pressed={Disabled ? undefined : !!On}
+      aria-label={Label}
+      data-quick-action={Label}
     >
-      <Glyph Name={IconName} />
-      <span>{Label}</span>
-      {Large && <small>{Disabled ? "UNAVAILABLE" : On ? "ON" : "OFF"}</small>}
+      <span className="quick-icon-seat">
+        <ActionIcon Name={QuickSymbol(Label, Context, IconName)} Size={26} />
+      </span>
+      <span className="quick-label">{Label}</span>
+      <small className="quick-status">
+        {Disabled ? "UNAVAILABLE" : On ? "ON" : "OFF"}
+      </small>
     </button>
   );
 }
@@ -502,6 +510,7 @@ export function Inspector({ Subject, Values, Change, Hidden, ToggleHidden }) {
         <Tile
           key={Name}
           Label={Name}
+          Context={Subject.Panel}
           On={V(Name)}
           Large={Large}
           Action={() => AssignProperty(Name, !V(Name))}
