@@ -13,7 +13,7 @@ for Phase in ('ArtifactBaseline', 'ArtifactAfter'):
     Captures = list((Source / 'Images' / Phase).glob('*.png'))
     if not Captures: continue
     for Previous in Destination.iterdir():
-        if Previous.suffix in ('.log', '.png', '.json'): Previous.unlink()
+        if Previous.name not in ('Regression.log', 'RegressionProvenance.json') and Previous.suffix in ('.log', '.png', '.json'): Previous.unlink()
     for File in Captures:
         shutil.copy2(File, Destination / File.name)
     Log = Source / (Phase+'.log')
@@ -28,3 +28,12 @@ for Phase in ('ArtifactBaseline', 'ArtifactAfter'):
               'shaders': {File.name: hashlib.sha256(File.read_bytes()).hexdigest() for File in Programs.glob('*.spv')},
               'images': {File.name: hashlib.sha256(File.read_bytes()).hexdigest() for File in Destination.glob('*.png')}}
     (Destination / 'Provenance.json').write_text(json.dumps(Report, indent=2)+'\n')
+
+Regression = Source / 'Regression.log'
+if Regression.exists():
+    Destination = Root / 'VisualProof/DistanceFieldGI/ArtifactAfter'
+    Destination.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(Regression, Destination / 'Regression.log')
+    (Destination / 'RegressionProvenance.json').write_text(json.dumps({
+        'source': os.environ['GITHUB_SHA'], 'run': os.environ['GITHUB_RUN_ID'],
+        'log': hashlib.sha256(Regression.read_bytes()).hexdigest()}, indent=2)+'\n')

@@ -62,11 +62,15 @@ jobs:
 
   sdf-execution:
     if: ${{ !inputs.export_browser_run && !contains(github.event.head_commit.message, '[export-executed-pixels]') }}
-    name: SDF production Vulkan execution and validation
+    name: SDF production Vulkan / ${{ matrix.phase }}
+    strategy:
+      fail-fast: false
+      matrix:
+        phase: [ArtifactBaseline, ArtifactAfter, Regression]
     permissions:
       contents: write
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Install software Vulkan and validation tools
@@ -74,12 +78,14 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y libvulkan-dev mesa-vulkan-drivers vulkan-validationlayers glslc spirv-tools gdb
       - name: Execute production SDF shaders with synchronization validation
+        env:
+          SDF_EXECUTION_PHASE: ${{ matrix.phase }}
         run: python3 VisualProof/DistanceFieldGI/RunDistanceFieldExecution.py
       - name: Retain Vulkan execution evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: sdf-vulkan-execution-${{ github.sha }}
+          name: sdf-vulkan-execution-${{ matrix.phase }}-${{ github.sha }}
           retention-days: 14
           path: |
             _AgentScratch/build/sdf-execution/*.log
@@ -89,8 +95,6 @@ jobs:
 
       - name: Publish CPU shader artifact evidence on the session branch
         if: ${{ always() && github.ref == 'refs/heads/arena/01a0fd48-slate' }}
-        env:
-          EVIDENCE_PHASE: ${{ contains(github.event.head_commit.message, '[sdf-baseline]') && 'ArtifactBaseline' || 'ArtifactAfter' }}
         run: |
           python3 VisualProof/DistanceFieldGI/PublishArtifactEvidence.py
           git config user.name 'github-actions[bot]'
@@ -98,8 +102,12 @@ jobs:
           git add VisualProof/DistanceFieldGI/ArtifactBaseline VisualProof/DistanceFieldGI/ArtifactAfter
           if ! git diff --cached --quiet; then
             git commit -m 'Retain executed CPU SDF artifact evidence [skip ci]'
-            git pull --rebase origin arena/01a0fd48-slate
-            git push origin HEAD:arena/01a0fd48-slate
+            for Attempt in 1 2 3 4 5; do
+              git pull --rebase origin arena/01a0fd48-slate
+              if git push origin HEAD:arena/01a0fd48-slate; then exit 0; fi
+              sleep 2
+            done
+            exit 1
           fi
 
   project-opening:

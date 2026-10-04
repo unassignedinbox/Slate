@@ -51,22 +51,26 @@ def EncodeReadbacks(Directory):
         Image += Chunk(b"IDAT", zlib.compress(Raster)) + Chunk(b"IEND", b"")
         Source.with_suffix(".png").write_bytes(Image)
 
-BaselineCommit = "a42147b1148ffa13f08d4d11f42b665a8afb1a0d"
-subprocess.run(["git", "fetch", "--depth=1", "origin", BaselineCommit], cwd=Root, check=True)
-BaselineSources = Output / "BaselineSources"
-shutil.copytree(Engine / "Engine/Shaders", BaselineSources, dirs_exist_ok=True)
-for Name in ("DistanceFieldTransport.slang", "DistanceFieldGIResolveBody.slang", "DistanceFieldRadiance.slang"):
-    Content = subprocess.check_output(["git", "show", BaselineCommit + ":Frontier/Engine/Shaders/" + Name], cwd=Root)
-    (BaselineSources / Name).write_bytes(Content)
+PhaseSelection = os.environ.get("SDF_EXECUTION_PHASE", "All")
 BaselineShaders = Output / "BaselineShaders"
-BaselineShaders.mkdir(exist_ok=True)
-for Name in ("DistanceFieldConstruct", "DistanceFieldCapture", "DistanceFieldCaptureFixed", "DistanceFieldRadiance", "DistanceFieldGIResolve", "DistanceFieldGIResolveFixed"):
-    subprocess.run(["glslc", "--target-env=vulkan1.2", "-fshader-stage=compute", "-I"+str(BaselineSources),
-                    "-I"+str(Engine / "Engine"), str(BaselineSources / (Name+".slang")),
-                    "-o", str(BaselineShaders / (Name+".spv"))], check=True)
-    subprocess.run(["spirv-val", "--target-env", "vulkan1.2", str(BaselineShaders / (Name+".spv"))], check=True)
+if PhaseSelection in ("All", "ArtifactBaseline"):
+    BaselineCommit = "a42147b1148ffa13f08d4d11f42b665a8afb1a0d"
+    subprocess.run(["git", "fetch", "--depth=1", "origin", BaselineCommit], cwd=Root, check=True)
+    BaselineSources = Output / "BaselineSources"
+    shutil.copytree(Engine / "Engine/Shaders", BaselineSources, dirs_exist_ok=True)
+    for Name in ("DistanceFieldTransport.slang", "DistanceFieldGIResolveBody.slang", "DistanceFieldRadiance.slang"):
+        Content = subprocess.check_output(["git", "show", BaselineCommit + ":Frontier/Engine/Shaders/" + Name], cwd=Root)
+        (BaselineSources / Name).write_bytes(Content)
+    BaselineShaders = Output / "BaselineShaders"
+    BaselineShaders.mkdir(exist_ok=True)
+    for Name in ("DistanceFieldConstruct", "DistanceFieldCapture", "DistanceFieldCaptureFixed", "DistanceFieldRadiance", "DistanceFieldGIResolve", "DistanceFieldGIResolveFixed"):
+        subprocess.run(["glslc", "--target-env=vulkan1.2", "-fshader-stage=compute", "-I"+str(BaselineSources),
+                        "-I"+str(Engine / "Engine"), str(BaselineSources / (Name+".slang")),
+                        "-o", str(BaselineShaders / (Name+".spv"))], check=True)
+        subprocess.run(["spirv-val", "--target-env", "vulkan1.2", str(BaselineShaders / (Name+".spv"))], check=True)
 Failures = []
 for Phase, Programs in (("ArtifactBaseline", BaselineShaders), ("ArtifactAfter", Shaders), ("Regression", Shaders)):
+    if PhaseSelection not in ("All", Phase): continue
     Directory = Images / Phase
     Directory.mkdir(exist_ok=True)
     Environment = dict(os.environ)
@@ -76,7 +80,7 @@ for Phase, Programs in (("ArtifactBaseline", BaselineShaders), ("ArtifactAfter",
     Started = time.monotonic()
     try:
         Completed = subprocess.run(Command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                   text=True, env=Environment, timeout=700)
+                                   text=True, env=Environment, timeout=1100)
         Transcript = Completed.stdout
         Code = Completed.returncode
     except subprocess.TimeoutExpired as Failure:
@@ -85,6 +89,7 @@ for Phase, Programs in (("ArtifactBaseline", BaselineShaders), ("ArtifactAfter",
         Transcript += "\nFAIL CPU shader execution timed out\n"
         Code = 124
     Transcript += f"\nExecution seconds: {time.monotonic()-Started:.2f}\n"
+    Transcript += f"Exit code: {Code}\n"
     (Output / (Phase+".log")).write_text(Transcript, encoding="utf-8")
     print(Phase+"\n"+Transcript, flush=True)
     EncodeReadbacks(Directory)

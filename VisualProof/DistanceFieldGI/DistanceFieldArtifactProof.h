@@ -160,10 +160,36 @@ int RunDistanceArtifacts(const char* Shaders, const char* Destination)
     }
     IrradianceError=std::sqrt(IrradianceError/(Width*Height));
     std::cout<<"METRIC single_bounce_reference_rms "<<IrradianceError<<'\n';
+    // Retessellate the identical emitter into six triangles to exercise internal BVH branches,
+    // not just the four-facet root leaf, against the same independent irradiance oracle.
+    Stage.Destroy();
+    for (unsigned Triangle=0;Triangle<2;++Triangle)
+    {
+        VertexRecord Center=Vertices[4];
+        Center.SpatialLocation={Triangle==0 ? -.2f : .2f,Triangle==0 ? .7f/3 : -.7f/3,1};
+        Vertices.push_back(Center);
+    }
+    Indices={0,1,2,0,2,3,4,5,8,5,6,8,6,4,8,4,6,9,6,7,9,7,4,9};
+    Instances[1].TriangleCount=6;
+    Host.Replace(InstanceBuffer,Instances.data(),Instances.size()*sizeof(InstanceRecord));
+    VertexBuffer=Host.Allocate(Vertices.size()*sizeof(VertexRecord),Vertices.data());
+    IndexBuffer=Host.Allocate(Indices.size()*sizeof(uint32_t),Indices.data());
+    Triangles=Host.Allocate(8*64);
+    Initialization.VertexBuffer=VertexBuffer.Buffer; Initialization.IndexBuffer=IndexBuffer.Buffer;
+    Initialization.TriangleBuffer=Triangles.Buffer;
+    Require(Geometry.Construct(Vertices,Indices,Instances,Materials),"Subdivided emitter update");
+    Require(Stage.Bring(Initialization),"Subdivided artifact stage initialization");
+    const auto Subdivided=Execute("matte-subdivided",48);
+    double SubdivisionError=0;
+    for (size_t Index=0;Index<SingleBounce.size();Index+=4)
+        SubdivisionError+=std::pow(double(Subdivided[Index])-SingleBounce[Index],2);
+    SubdivisionError=std::sqrt(SubdivisionError/(Width*Height));
+    std::cout<<"METRIC subdivision_rms "<<SubdivisionError<<'\n';
     if (std::getenv("SDF_REQUIRE_ARTIFACTS"))
     {
         Require(MaximumShift<0.1,"Camera-snapped clipmaps changed a static matte shadow");
         Require(ReflectionDelta<=1,"Zero specular weight still reflects scene geometry");
+        Require(SubdivisionError<6,"Diffuse area density depends excessively on BVH partitioning");
         Require(IrradianceError<6,"Diffuse irradiance differs from independent rectangular-emitter integration");
         Require(SymmetryError<10,"Diffuse quadrature still projects directional emitter silhouettes");
     }
