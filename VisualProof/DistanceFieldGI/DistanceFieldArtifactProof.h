@@ -82,6 +82,7 @@ int RunDistanceArtifacts(const char* Shaders, const char* Destination)
     {
         for (unsigned Index=0; Index<Frames; ++Index)
         {
+            Frame.RenderWidth=Frame.RenderHeight=Index+1<Frames ? 1u : Width;
             Host.Begin(); Require(Stage.RecordFrame(Host.Command,Frame),"Artifact dispatch"); Host.Submit();
         }
         Host.Begin(); Host.Transition(Output,VK_IMAGE_LAYOUT_GENERAL,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
@@ -115,12 +116,27 @@ int RunDistanceArtifacts(const char* Shaders, const char* Destination)
     Host.Replace(SlabBuffer,Slabs.data(),Slabs.size()*sizeof(MaterialSlabRecord)); ++Frame.MaterialRevision;
     Require(Geometry.Construct(Vertices,Indices,Instances,Materials),"Emitter update");
     const auto Diffuse=Execute("matte-diffuse",48);
+    double SymmetryError=0;
+    for (unsigned Row=0;Row<Height;++Row) for (unsigned Column=0;Column<Width;++Column)
+    {
+        const int Red=Diffuse[(Row*Width+Column)*4];
+        const int Mirror=Diffuse[(Row*Width+Width-1-Column)*4];
+        SymmetryError+=double((Red-Mirror)*(Red-Mirror));
+    }
+    SymmetryError=std::sqrt(SymmetryError/(Width*Height));
+    std::cout<<"METRIC matte_symmetry_rms "<<SymmetryError<<'\n';
     Frame.ReflectionMode=2;
     const auto Reflected=Execute("matte-reflections-enabled");
     unsigned ReflectionDelta=0;
     for (size_t Index=0;Index<Diffuse.size();Index+=4)
         ReflectionDelta=std::max(ReflectionDelta,unsigned(std::abs(int(Diffuse[Index])-int(Reflected[Index]))));
     std::cout<<"METRIC zero_specular_reflection_delta "<<ReflectionDelta<<'\n';
+    if (std::getenv("SDF_REQUIRE_ARTIFACTS"))
+    {
+        Require(MaximumShift<0.1,"Camera-snapped clipmaps changed a static matte shadow");
+        Require(ReflectionDelta<=1,"Zero specular weight still reflects scene geometry");
+        Require(SymmetryError<10,"Diffuse quadrature still projects directional emitter silhouettes");
+    }
     Stage.Destroy();
     Require(ValidationErrors.load()==0,"Artifact Vulkan validation errors");
     return 0;

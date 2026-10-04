@@ -68,27 +68,42 @@ vec3 ShadeHit(vec3 hp, uint FacetSlot, vec3 wo)
     vec3 Lo = F.Emission;
     vec3 L = normalize(PC.SunDirectionRadiance.xyz);
     vec3 wiLoc = ToLocal(F, L);
-    if (wiLoc.z > 0.0)
+    if (wiLoc.z > 0.0 && PC.SunDirectionRadiance.w > 0.0)
         Lo += EvaluateBsdf(m, layers, woLoc, wiLoc) * (PC.SunColour.xyz * PC.SunDirectionRadiance.w) * wiLoc.z * DistanceShadow(hp,F.Geometric);
     Lo += AmbientResponse(m, layers, woLoc) * ((PC.Counts.z & kFeatureGlobalIllumination) != 0u
         ? kInvPi * GatherField(hp, F.Normal) : PC.SkyAmbient.xyz);
     return Lo;
 }
 
-vec3 Reflection(vec3 P, vec3 N, vec3 V, float roughness, uint mode)
+vec3 Reflection(vec3 Position, SurfaceFrame Surface, vec3 View, ShadingRecord Material, ResolvedLayers Layers, uint Mode)
 {
-    if (mode == kReflectOff) return vec3(0.0);
-    vec3 R = reflect(-V, N);
-    if (mode == kReflectSky)
+    if (Mode==kReflectOff || Material.SpecularWeight<=0.0) return vec3(0.0);
+    vec3 Outgoing=ToLocal(Surface,View);
+    vec3 OutgoingAnisotropic=Layers.AnisoBasis*Outgoing;
+    vec3 Result=vec3(0.0);
+    uint Samples=Material.SpecularRoughness<0.05 ? 1u : 16u;
+    for (uint Sample=0u; Sample<Samples; ++Sample)
     {
-        // reflect the sky dome only — no scene rays. Roughness widens toward the ambient (cheap gloss).
-        return SkyAlongApprox(R, roughness);
+        vec2 Sequence=vec2(fract(float(Sample)*0.61803398875), (float(Sample)+0.5)/float(Samples));
+        bool Haze=fract(float(Sample)*0.754877666)>1.0-Material.HazinessWeight;
+        vec3 HalfDirection=SampleGgxVndf(OutgoingAnisotropic,Haze ? Layers.HazeAlpha : Layers.SpecularAlpha,Sequence);
+        vec3 IncomingAnisotropic=reflect(-OutgoingAnisotropic,HalfDirection);
+        vec3 Incoming=transpose(Layers.AnisoBasis)*IncomingAnisotropic;
+        if (Incoming.z<=0.0) continue;
+        float Density=mix(GgxVndfPdf(OutgoingAnisotropic,HalfDirection,Layers.SpecularAlpha),
+            GgxVndfPdf(OutgoingAnisotropic,HalfDirection,Layers.HazeAlpha),Material.HazinessWeight) /
+            (4.0*max(dot(OutgoingAnisotropic,HalfDirection),1e-6));
+        vec3 Direction=Surface.Tangent*Incoming.x+Surface.Bitangent*Incoming.y+Surface.Normal*Incoming.z;
+        vec3 Incident=SkyAlongApprox(Direction,Material.SpecularRoughness);
+        if (Mode==kReflectRaytraced)
+        {
+            vec3 Origin=Position+Surface.Geometric*0.002;
+            DistanceRayHit Hit=TraceDistanceMesh(Origin,Direction,1e20);
+            if (Hit.Facet!=0xFFFFFFFFu) Incident=ShadeHit(Origin+Direction*Hit.Travel,Hit.Facet,-Direction);
+        }
+        Result+=Incident*EvaluateBaseSpecular(Material,Layers,Outgoing,Incoming)*Incoming.z/max(Density,1e-8);
     }
-    // kReflectRaytraced — one reflection ray against the world triangle BVH; miss → sky, hit → the hit's own material.
-    vec3 Origin=P+N*0.001;
-    DistanceRayHit Hit=TraceDistanceMesh(Origin,R,1e20);
-    if (Hit.Facet==0xFFFFFFFFu) return SkyAlongApprox(R,roughness);
-    return ShadeHit(Origin+R*Hit.Travel,Hit.Facet,-R);
+    return Result/float(Samples);
 }
 
 
@@ -175,7 +190,7 @@ void main()
     {
         vec3 L = normalize(PC.SunDirectionRadiance.xyz);
         vec3 wiLoc = ToLocal(F, L);
-        if (wiLoc.z > 0.0)
+        if (wiLoc.z > 0.0 && PC.SunDirectionRadiance.w > 0.0)
             col += EvaluateBsdf(m, layers, woLoc, wiLoc) * (PC.SunColour.xyz * PC.SunDirectionRadiance.w) * wiLoc.z * DistanceShadow(P,F.Geometric);
     }
 
@@ -186,14 +201,8 @@ void main()
     else
         col += response * PC.SkyAmbient.xyz;                   // plain raster: sky ambient fill (never black)
 
-    // --- reflections (Off / Sky / Raytraced) ---
-    // Fresnel from the resolved slab's own F0 — metal tint, coat IOR and all — rather than a hard 0.04.
-    if (reflMode != kReflectOff)
-    {
-        vec3 f0 = mix(vec3(0.04), m.BaseColor, m.Metalness) * m.SpecularColor;
-        vec3 Fr = Fresnel(f0, max(woLoc.z, 0.0));
-        col += Fr * Reflection(P, N, V, m.SpecularRoughness, reflMode);
-    }
+    // Use the authored specular lobe and its GGX PDF, not an unconditional 4% perfect mirror.
+    col += Reflection(P,F,V,m,layers,reflMode);
 
     if (m.TransmissionWeight>0.0)
     {

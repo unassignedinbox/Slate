@@ -3,6 +3,8 @@
 from pathlib import Path
 import os
 import struct
+import shutil
+import time
 import subprocess
 import sys
 import zlib
@@ -36,47 +38,60 @@ Sources = [Root / "VisualProof/DistanceFieldGI/DistanceFieldExecution.cpp",
            Engine / "Engine/GeometricRaster/DistanceFieldStructure.cpp"]
 subprocess.run([os.environ.get("CXX", "g++"), "-std=c++20", "-O2", "-g", "-Wall", "-Wextra", "-Wno-missing-field-initializers",
                 "-I" + str(Engine), *map(str, Sources), "-lvulkan", "-o", str(Output / "DistanceFieldExecution")], check=True)
-try:
-    Completed = subprocess.run([str(Output / "DistanceFieldExecution"), str(Shaders), str(Images)],
-                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=900)
-except subprocess.TimeoutExpired as Failure:
-    Captured = Failure.stdout or b""
-    if isinstance(Captured, bytes):
-        Captured = Captured.decode("utf-8", errors="replace")
-    (Output / "Execution.log").write_text(Captured + "\nFAIL CPU execution timed out\n", encoding="utf-8")
-    print(Captured, flush=True)
-    print("::error::Production Vulkan execution exceeded 900 seconds; partial execution log retained", flush=True)
-    raise
-(Output / "Execution.log").write_text(Completed.stdout, encoding="utf-8")
-print(Completed.stdout)
-if Completed.returncode:
-    if Completed.returncode < 0:
-        Crash = subprocess.run(["gdb", "--batch", "-ex", "run", "-ex", "bt 20", "--args",
-                                str(Output / "DistanceFieldExecution"), str(Shaders), str(Images)],
-                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=180)
-        (Output / "Crash.log").write_text(Crash.stdout, encoding="utf-8")
-        print(Crash.stdout)
-    # Emit the actual driver/validation refusal in Actions annotations, even when artifact downloads are unavailable.
-    for Line in Completed.stdout.splitlines():
-        if "FAIL" in Line or "Validation Error" in Line or "VUID" in Line:
-            print("::error::" + Line.replace("%", "%25").replace("\r", "%0D"))
-    raise SystemExit(Completed.returncode)
-Artifacts = subprocess.run([str(Output / "DistanceFieldExecution"), str(Shaders), str(Images), "--artifacts"],
-                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=900)
-(Output / "Artifacts.log").write_text(Artifacts.stdout, encoding="utf-8")
-print(Artifacts.stdout, flush=True)
-# Retain images even if a quantitative artifact gate fails.
-for Source in Images.glob("*.ppm"):
-    Magic, Extent, Maximum, Pixels = Source.read_bytes().split(b"\n", 3)
-    Width, Height = map(int, Extent.split())
-    if Magic != b"P6" or Maximum != b"255" or len(Pixels) != Width * Height * 3:
-        raise SystemExit(f"Invalid Vulkan readback image: {Source}")
-    def Chunk(Kind, Content):
-        return struct.pack(">I", len(Content)) + Kind + Content + struct.pack(">I", zlib.crc32(Kind + Content) & 0xFFFFFFFF)
-    Raster = b"".join(b"\0" + Pixels[Row*Width*3:(Row+1)*Width*3] for Row in range(Height))
-    Image = b"\x89PNG\r\n\x1a\n" + Chunk(b"IHDR", struct.pack(">IIBBBBB", Width, Height, 8, 2, 0, 0, 0))
-    Image += Chunk(b"IDAT", zlib.compress(Raster)) + Chunk(b"IEND", b"")
-    Source.with_suffix(".png").write_bytes(Image)
-print("PASS: production SPIR-V validated and executed; pixel proofs saved (device identity recorded in Execution.log)")
+def EncodeReadbacks(Directory):
+    for Source in Directory.glob("*.ppm"):
+        Magic, Extent, Maximum, Pixels = Source.read_bytes().split(b"\n", 3)
+        Width, Height = map(int, Extent.split())
+        if Magic != b"P6" or Maximum != b"255" or len(Pixels) != Width * Height * 3:
+            raise SystemExit(f"Invalid Vulkan readback image: {Source}")
+        def Chunk(Kind, Content):
+            return struct.pack(">I", len(Content)) + Kind + Content + struct.pack(">I", zlib.crc32(Kind + Content) & 0xFFFFFFFF)
+        Raster = b"".join(b"\0" + Pixels[Row*Width*3:(Row+1)*Width*3] for Row in range(Height))
+        Image = b"\x89PNG\r\n\x1a\n" + Chunk(b"IHDR", struct.pack(">IIBBBBB", Width, Height, 8, 2, 0, 0, 0))
+        Image += Chunk(b"IDAT", zlib.compress(Raster)) + Chunk(b"IEND", b"")
+        Source.with_suffix(".png").write_bytes(Image)
 
-Artifacts.check_returncode()
+BaselineCommit = "a42147b1148ffa13f08d4d11f42b665a8afb1a0d"
+subprocess.run(["git", "fetch", "--depth=1", "origin", BaselineCommit], cwd=Root, check=True)
+BaselineSources = Output / "BaselineSources"
+shutil.copytree(Engine / "Engine/Shaders", BaselineSources, dirs_exist_ok=True)
+for Name in ("DistanceFieldTransport.slang", "DistanceFieldGIResolveBody.slang", "DistanceFieldRadiance.slang"):
+    Content = subprocess.check_output(["git", "show", BaselineCommit + ":Frontier/Engine/Shaders/" + Name], cwd=Root)
+    (BaselineSources / Name).write_bytes(Content)
+BaselineShaders = Output / "BaselineShaders"
+BaselineShaders.mkdir(exist_ok=True)
+for Name in ("DistanceFieldConstruct", "DistanceFieldCapture", "DistanceFieldCaptureFixed", "DistanceFieldRadiance", "DistanceFieldGIResolve", "DistanceFieldGIResolveFixed"):
+    subprocess.run(["glslc", "--target-env=vulkan1.2", "-fshader-stage=compute", "-I"+str(BaselineSources),
+                    "-I"+str(Engine / "Engine"), str(BaselineSources / (Name+".slang")),
+                    "-o", str(BaselineShaders / (Name+".spv"))], check=True)
+    subprocess.run(["spirv-val", "--target-env", "vulkan1.2", str(BaselineShaders / (Name+".spv"))], check=True)
+Failures = []
+for Phase, Programs in (("ArtifactBaseline", BaselineShaders), ("ArtifactAfter", Shaders), ("Regression", Shaders)):
+    Directory = Images / Phase
+    Directory.mkdir(exist_ok=True)
+    Environment = dict(os.environ)
+    if Phase == "ArtifactAfter": Environment["SDF_REQUIRE_ARTIFACTS"] = "1"
+    Command = [str(Output / "DistanceFieldExecution"), str(Programs), str(Directory)]
+    if Phase != "Regression": Command += ["--artifacts"]
+    Started = time.monotonic()
+    try:
+        Completed = subprocess.run(Command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                   text=True, env=Environment, timeout=700)
+        Transcript = Completed.stdout
+        Code = Completed.returncode
+    except subprocess.TimeoutExpired as Failure:
+        Transcript = Failure.stdout or b""
+        if isinstance(Transcript, bytes): Transcript = Transcript.decode("utf-8", errors="replace")
+        Transcript += "\nFAIL CPU shader execution timed out\n"
+        Code = 124
+    Transcript += f"\nExecution seconds: {time.monotonic()-Started:.2f}\n"
+    (Output / (Phase+".log")).write_text(Transcript, encoding="utf-8")
+    print(Phase+"\n"+Transcript, flush=True)
+    EncodeReadbacks(Directory)
+    if Code:
+        Failures.append(Phase)
+        for Line in Transcript.splitlines():
+            if "FAIL" in Line or "VUID" in Line:
+                print("::error::"+Line.replace("%","%25").replace("\r","%0D"), flush=True)
+if Failures: raise SystemExit("Failed CPU shader passes: "+", ".join(Failures))
+print("PASS production shaders executed on CPU: paired artifacts and complete SDF regression")

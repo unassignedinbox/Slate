@@ -61,7 +61,7 @@ float SampleSceneDistance(vec3 Position, out float Cell)
     {
         uvec3 Offset = uvec3(Corner & 1u, (Corner >> 1u) & 1u, (Corner >> 2u) & 1u);
         vec3 Weight = mix(vec3(1.0) - Fraction, Fraction, vec3(Offset));
-        Distance += Field[CellIndex(Base + Offset, uint(Level))].PositionDistance.w * Weight.x * Weight.y * Weight.z;
+        Distance += abs(Field[CellIndex(Base + Offset, uint(Level))].PositionDistance.w) * Weight.x * Weight.y * Weight.z;
     }
     return abs(Distance);
 }
@@ -167,30 +167,55 @@ DistanceRayHit TraceDistanceMesh(vec3 Origin, vec3 Direction, float Maximum)
     }
     return Hit;
 }
+// 📝 The clipmap's nearest-face sign is not a solid winding classification. A penumbra must not
+// follow its interpolated zero sheets or camera-snapped voxel boundaries. Refine the continuous
+// surface distance for shadows; retain the clipmap as the diffuse traversal accelerator.
+float ShadowSurfaceDistance(vec3 Point, vec3 Receiver, vec3 ReceiverNormal)
+{
+    float Best=1e30;
+    uint Branch=0u;
+    while (Branch<GeometryCounts.y)
+    {
+        DistanceBranch Entry=Branches[Branch];
+        if (BoxDistanceSquared(Point,Entry.Minimum.xyz,Entry.Maximum.xyz)>Best)
+        { Branch=Entry.Range.x; continue; }
+        for (uint Leaf=0u; Leaf<Entry.Range.z; ++Leaf)
+        {
+            uint Slot=Entry.Range.y+Leaf;
+            DistanceFacet Facet=Facets[Slot];
+            // A coplanar receiving surface cannot cast a shadow on itself. Without this exclusion
+            // even an empty plane darkens when the Sun is lower than the penumbra cone angle.
+            if (abs(dot(Facet.Normal.xyz,ReceiverNormal))>0.9999 &&
+                abs(dot(Facet.Normal.xyz,Receiver-Facet.Alpha.xyz))<0.003) continue;
+            vec3 Closest=ClosestOnTriangle(Point,Facet);
+            if (SurfaceCoverage(Slot,Closest)<=0.0) continue;
+            Best=min(Best,dot(Point-Closest,Point-Closest));
+        }
+        ++Branch;
+    }
+    return sqrt(Best);
+}
 float DistanceShadow(vec3 Position, vec3 Normal)
 {
     vec3 Direction=normalize(PC.SunDirectionRadiance.xyz);
-    float Cell; SampleSceneDistance(Position,Cell);
     vec3 Origin=Position+Normal*0.002;
-    float Visibility=1.0, Travel=Cell;
-    for (uint Step=0u; Step<64u; ++Step)
+    // Exact umbra confirmation also covers thin casters, clipmap exits and march-budget exhaustion.
+    if (TraceDistanceMesh(Origin,Direction,1e20).Facet!=0xFFFFFFFFu) return 0.0;
+    float Visibility=1.0, Travel=0.004;
+    float Maximum=length(Origin-Branches[0].Minimum.xyz)+length(Branches[0].Maximum.xyz-Branches[0].Minimum.xyz);
+    for (uint Step=0u; Step<64u && Travel<Maximum; ++Step)
     {
-        float Distance=SampleSceneDistance(Origin+Direction*Travel,Cell);
-        if (Distance>1e19)
-        {
-            if (TraceDistanceMesh(Origin,Direction,1e20).Facet!=0xFFFFFFFFu) return 0.0;
-            break;
-        }
-        if (Distance<Cell*0.7 && TraceDistanceMesh(Origin,Direction,Travel+Cell*2.0).Facet!=0xFFFFFFFFu) return 0.0;
-        Visibility=min(Visibility,Distance/(max(PC.Tuning.x,0.01)*max(Travel,0.001)));
-        Travel+=max(Distance*0.75,Cell*0.25);
+        float Distance=ShadowSurfaceDistance(Origin+Direction*Travel,Position,Normal);
+        if (Distance>1e14) break;
+        Visibility=min(Visibility,Distance/(max(PC.Tuning.x,0.0001)*Travel));
+        Travel+=max(Distance*0.5,0.002);
     }
     return clamp(Visibility,0.0,1.0);
 }
-vec3 HemisphereDirection(vec3 Normal, uint Sample, uint Frame)
+vec3 HemisphereDirection(vec3 Normal, uint Sample, uint SampleCount)
 {
-    float Height=(float(Sample)+0.5)/4.0;
-    float Angle=6.28318530718*fract(float(Sample)*0.61803398875+float(Frame%16u)*0.38196601125);
+    float Height=(float(Sample)+0.5)/float(SampleCount);
+    float Angle=6.28318530718*fract(float(Sample)*0.61803398875);
     vec3 Tangent=normalize(abs(Normal.z)<0.9 ? cross(Normal,vec3(0,0,1)) : cross(Normal,vec3(0,1,0)));
     return Tangent*(cos(Angle)*sqrt(1.0-Height))+cross(Normal,Tangent)*(sin(Angle)*sqrt(1.0-Height))+Normal*sqrt(Height);
 }
@@ -198,11 +223,15 @@ vec3 GatherDistanceRadiance(vec3 Position, vec3 Normal, bool Current)
 {
     float Cell; SampleSceneDistance(Position,Cell);
     vec3 Origin=Position+Normal*0.002, Result=vec3(0.0);
-    for (uint Sample=0u; Sample<4u; ++Sample)
+    // A four-direction final gather makes four sharp displaced emitter silhouettes on matte surfaces.
+    // Fixed quadrature on both paths also removes the perpetual 16-frame cycle from the radiance cache.
+    uint SampleCount=Current ? 64u : 32u;
+    for (uint Sample=0u; Sample<SampleCount; ++Sample)
     {
-        vec3 Direction=HemisphereDirection(Normal,Sample,Current ? 0u : PC.Counts.y);
+        vec3 Direction=HemisphereDirection(Normal,Sample,SampleCount);
         float Travel=Cell;
         vec3 Incoming=PC.SkyAmbient.xyz;
+        bool Resolved=false;
         for (uint Step=0u; Step<48u; ++Step)
         {
             vec3 Point=Origin+Direction*Travel;
@@ -211,6 +240,7 @@ vec3 GatherDistanceRadiance(vec3 Position, vec3 Normal, bool Current)
             {
                 DistanceRayHit Hit=TraceDistanceMesh(Origin,Direction,1e20);
                 if (Hit.Facet!=0xFFFFFFFFu) Incoming=SampleCachedRadiance(Hit.Facet,Origin+Direction*Hit.Travel,Current);
+                Resolved=true;
                 break;
             }
             if (Distance<Cell*0.7)
@@ -220,12 +250,20 @@ vec3 GatherDistanceRadiance(vec3 Position, vec3 Normal, bool Current)
                 if (Hit.Facet!=0xFFFFFFFFu)
                 {
                     Incoming=SampleCachedRadiance(Hit.Facet,Origin+Direction*Hit.Travel,Current);
+                    Resolved=true;
                     break;
                 }
             }
             Travel+=max(Distance*0.75,Cell*0.5);
         }
-        Result+=Incoming*0.25;
+        // The coarse field is an accelerator, never the visibility authority on budget exhaustion.
+        if (!Resolved)
+        {
+            DistanceRayHit FinalHit=TraceDistanceMesh(Origin,Direction,1e20);
+            Incoming=FinalHit.Facet==0xFFFFFFFFu ? PC.SkyAmbient.xyz :
+                SampleCachedRadiance(FinalHit.Facet,Origin+Direction*FinalHit.Travel,Current);
+        }
+        Result+=Incoming/float(SampleCount);
     }
     return Result;
 }
