@@ -1,0 +1,61 @@
+Vulkan execution device: llvmpipe (LLVM 20.1.2, 256 bits)
+CPU JIT flags: nopt
+Checking missing-shader refusal
+Constructing production pipelines
+Dispatching production pipelines
+emissive-gi: red=162260 green=0
+gi-off: red=0 green=0
+emitter-moved: red=19677 green=0
+emission-off: red=0 green=0
+sun-occluded: red=0 green=0
+sun-visible: red=93297 green=91887
+sun-off: red=0 green=0
+camera-shifted: red=0 green=0
+recreated: red=160818 green=0
+mesh-reflection: red=71887 green=0
+constant-material: red=169088 green=0
+Constructing descriptor-indexed production pipelines
+Dispatching descriptor-indexed production pipelines
+textured-material: red=0 green=0
+PASS descriptor-indexed production resolve and actual texture sampling
+textured-card-bounce: red=129990 green=128477
+static-warmup: red=129990 green=128477
+static-frame-0: red=129990 green=128477
+static-frame-1: red=129990 green=128477
+static-frame-2: red=129990 green=128477
+static-frame-3: red=129990 green=128477
+static-frame-4: red=129990 green=128477
+static-frame-5: red=129990 green=128477
+static-frame-6: red=129990 green=128477
+static-frame-7: red=129990 green=128477
+static-frame-8: red=129990 green=128477
+static-frame-9: red=129990 green=128477
+static-frame-10: red=129990 green=128477
+static-frame-11: red=129990 green=128477
+static-frame-12: red=129990 green=128477
+static-frame-13: red=129990 green=128477
+static-frame-14: red=129990 green=128477
+static-frame-15: red=129990 green=128477
+ARTIFACT static textured fixture: max adjacent-frame RMS=0 max channel delta=0 dark holes=0
+textured-replay: red=129990 green=128477
+ARTIFACT clean restart max channel delta=0
+PASS artifact checks: full writes, finite bounded atlases, no black holes, static temporal stability and pixelwise restart reproducibility
+PASS spatial atlas: diffuse range=0.1..0.9 emission range=0..8 green diffuse bounce=22.6609 range=0.0105608..0.971498
+textured-emission-revision: red=0 green=0
+textured-cutout-emitter: red=0 green=0
+PASS material-only recapture, history reset and secondary cutout visibility
+unresident-texture-fallback: red=0 green=0
+PASS unresident texture slot refused before descriptor access
+thin-glass: red=176410 green=0
+opaque-control: red=0 green=0
+solid-clear-glass: red=176410 green=0
+solid-tinted-glass: red=108263 green=0
+resized: red=35830 green=0
+coplanar-card-seam: red=43793 green=43789
+ARTIFACT coplanar cards: max neighbor delta=1 card resolution=4 volume resolution=32
+PASS coplanar card continuity at shipping card/volume resolutions
+PASS production SDF pipelines: populated three-level fields, emissive GI, bounce cache, GI toggle, moving instances, history reset, solar shadows, camera re-snapping, recreation, mesh reflection, thin/solid refraction, Beer attenuation and resize
+PASS Vulkan validation including synchronization and resource destruction: zero errors
+
+Execution seconds: 336.13
+Exit code: 0
