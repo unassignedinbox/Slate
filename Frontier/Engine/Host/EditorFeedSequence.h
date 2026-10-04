@@ -63,6 +63,10 @@ public:
         uint32_t InstanceCount = 0u;                 // [cnt] zero for folders / cameras / figure rows
         uint32_t Placement     = 0xFFFFFFFFu;        // [idx] the placement behind the row, none for the rest
     };
+    static void ResolveRosterSpans(RosterSpan* Destination, const EditorInstance* Rows, uint32_t RowCount,
+                                   const RosterSpan* Registered, uint32_t RegisteredCount) noexcept;
+    [[nodiscard]] static std::vector<uint32_t> CollectSelectionInstances(const EditorInstance* Rows, uint32_t RowCount,
+        const RosterSpan* Spans, const uint32_t* Picks, uint32_t PickCount, uint32_t InstanceCount);
     [[nodiscard]] uint32_t FillRosterSpans(RosterSpan* Spans, const SceneStructure& Level,
                                            uint32_t Capacity = kMaxEditorInstances) const noexcept;
 };

@@ -351,6 +351,7 @@ public:
     [[nodiscard]] const char*   QueryPresentModeName() const noexcept;   // resolved VkPresentModeKHR, for diagnostics
 
     [[nodiscard]] CelestialBufferUsage QueryCelestialBufferUsage() const noexcept;
+    [[nodiscard]] bool HasPresentedFrame() const noexcept { return PresentedFrame; }
     [[nodiscard]] uint32_t      QueryWidth()  const noexcept { return Configuration.Width;  }
     [[nodiscard]] uint32_t      QueryHeight() const noexcept { return Configuration.Height; }
 
@@ -479,6 +480,7 @@ private:
     uint64_t                BlasPlacementCapacity = 0u;   // [B] BlasPlacement rows
     VisibilityFrameConfiguration VisibilityFrame{};
     bool                    VisibilityFrameValid = false;
+    bool                    PresentedFrame = false;
     ShadowFrameConfiguration ShadowFrame{};        // R10: GI-off shadow settings (tier technique + resolution override)
     bool                    ShadowFrameValid = false;
 

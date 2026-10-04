@@ -286,6 +286,7 @@ uint32_t EditorFeedSequence::FillRoster(EditorInstance* Instances, const SceneSt
     for (uint32_t R = 0u; R < Rows && R < TargetCapacity; ++R)
     {
         EditorInstance& Row = Instances[R];
+        Row = EditorInstance{};
         Row.InspectorKey=0x100000000ull+R+1;
         Row.Visible = true;
         Row.Locked  = false;
@@ -642,6 +643,52 @@ bool EditorFeedSequence::QueryAnimatedSpan(uint32_t* First, uint32_t* Count,
         return true;
     }
     return false;
+}
+
+void EditorFeedSequence::ResolveRosterSpans(RosterSpan* Destination, const EditorInstance* Rows, uint32_t RowCount,
+                                           const RosterSpan* Registered, uint32_t RegisteredCount) noexcept
+{
+    for (uint32_t Row = 0u; Row < RowCount; ++Row)
+    {
+        Destination[Row] = RosterSpan{};
+        const uint64_t Key = Rows[Row].InspectorKey;
+        const uint32_t Ordinal = static_cast<uint32_t>(Key);
+        if ((Key >> 32u) == 1u && Ordinal > 0u && Ordinal <= RegisteredCount)
+            Destination[Row] = Registered[Ordinal - 1u];
+    }
+}
+
+std::vector<uint32_t> EditorFeedSequence::CollectSelectionInstances(const EditorInstance* Rows, uint32_t RowCount,
+    const RosterSpan* Spans, const uint32_t* Picks, uint32_t PickCount, uint32_t InstanceCount)
+{
+    std::vector<uint32_t> Result;
+    std::vector<bool> Included(InstanceCount, false);
+    for (uint32_t Pick = 0u; Pick < PickCount; ++Pick)
+    {
+        const uint32_t First = Picks[Pick];
+        if (First >= RowCount) continue;
+        uint32_t Last = First + 1u;
+        while (Last < RowCount && Rows[Last].Depth > Rows[First].Depth) ++Last;
+        for (uint32_t Row = First; Row < Last; ++Row)
+        {
+            bool Locked = Rows[Row].Locked;
+            uint32_t Depth = Rows[Row].Depth;
+            for (uint32_t Ancestor = Row; Ancestor > 0u && Depth > 0u;)
+            {
+                --Ancestor;
+                if (Rows[Ancestor].Depth < Depth) { Locked |= Rows[Ancestor].Locked; Depth = Rows[Ancestor].Depth; }
+            }
+            if (Locked) continue;
+            const auto& Span = Spans[Row];
+            if (Span.FirstInstance >= InstanceCount || Span.InstanceCount > InstanceCount - Span.FirstInstance) continue;
+            for (uint32_t Offset = 0u; Offset < Span.InstanceCount; ++Offset)
+            {
+                const uint32_t Instance = Span.FirstInstance + Offset;
+                if (!Included[Instance]) { Included[Instance] = true; Result.push_back(Instance); }
+            }
+        }
+    }
+    return Result;
 }
 
 uint32_t EditorFeedSequence::FillRosterSpans(RosterSpan* Spans, const SceneStructure& Level,

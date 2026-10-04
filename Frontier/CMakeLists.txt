@@ -86,6 +86,10 @@ set(IMGUI_SOURCES
     "${IMGUI_SRC}/backends/imgui_impl_vulkan.cpp"
 )
 
+if(WIN32)
+    list(APPEND IMGUI_SOURCES "${IMGUI_SRC}/backends/imgui_impl_win32.cpp" "${IMGUI_SRC}/backends/imgui_impl_dx11.cpp")
+endif()
+
 # ─── Vulkan ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 find_package(Vulkan REQUIRED)
 
@@ -285,6 +289,7 @@ set(FRONTIER_HOST_SOURCES
     Engine/ProjectInterchange/CodeInterchange.cpp
     Engine/Host/FrontierExecution.cpp
     Engine/Host/FrontierHost.cpp
+    Engine/Host/ProjectOpeningSequence.cpp
     Engine/Host/FrontierRuntime.cpp
     Engine/Host/WaterBodySequence.cpp
     Engine/Host/InterfaceTrialSequence.cpp
@@ -380,7 +385,7 @@ target_compile_definitions(Frontier PRIVATE
     FRONTIER_ENABLE_GLFW
 )
 if(WIN32)
-    target_link_libraries(Frontier PRIVATE psapi)
+    target_link_libraries(Frontier PRIVATE psapi d3d11 dxgi d3dcompiler dwmapi imm32 ole32 uuid)
 endif()
 
 # Project code images contain project semantics only. They do not compile the window, device, renderer, editor, or host.

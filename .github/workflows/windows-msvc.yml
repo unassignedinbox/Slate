@@ -50,6 +50,41 @@ jobs:
             _AgentScratch/build/sdf-execution/Images/*.ppm
             _AgentScratch/build/sdf-execution/Shaders/
 
+  project-opening:
+    name: Project browser real Win32 DX11 and shared ImGui checks
+    runs-on: windows-2022
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: Frontier
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Compile and execute the actual Windows project browser
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $VsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $VisualStudio = & $VsWhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          Import-Module "$VisualStudio\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
+          Enter-VsDevShell -VsInstallPath $VisualStudio -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'
+          python Tools/Bootstrap.py --package imgui
+          if ($LASTEXITCODE -ne 0) { throw 'Browser dependencies failed' }
+          python Tools/Tests/CheckProjectOpening.py
+          if ($LASTEXITCODE -ne 0) { throw 'Native project browser checks failed' }
+      - name: Retain actual DX11 readback and shared UI proofs
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: project-opening-${{ github.sha }}
+          retention-days: 14
+          path: |
+            _AgentScratch/build/project-opening/*.log
+            _AgentScratch/build/project-opening/*.png
+            _AgentScratch/build/project-opening/*.ppm
+
   solidarc:
     name: SolidArc MSVC and document checks
     runs-on: windows-2022

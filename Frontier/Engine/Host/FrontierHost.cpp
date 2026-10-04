@@ -4,6 +4,7 @@
 // 📦 Project-opening orchestration before the shared Frontier windowed runtime receives control.
 
 #include "FrontierHost.h"
+#include "ProjectOpeningSequence.h"
 
 #include "FrontierRuntime.h"
 #include "../ProjectInterchange/CodeInterchange.h"
@@ -91,8 +92,7 @@ int RunFrontierHost(int ArgumentCount, char** ArgumentVector)
     const char* SpecificationArgument = QuerySpecificationArgument(ArgumentCount, ArgumentVector);
     if (SpecificationArgument == nullptr)
     {
-        std::fputs("Frontier.exe requires one ProjectName.frontier opening stream.\n", stderr);
-        return 64;
+        return RunProjectBrowser();
     }
 
     ProjectSpecification ResolvedSpecification;

@@ -42,6 +42,7 @@ def Link(Name, Sources, Arguments=()):
 
 Simulation = json.loads((Root / "Projects/Project-Drive/Build/DriveSimulationSources.json").read_text())["sources"]
 Link("DriveInterchangeChecks", [*Simulation, "Projects/Project-Drive/Source/DriveInterchangeChecks.cpp"])
+Link("DriveSpawnChecks", [*Simulation, "Projects/Project-Drive/Source/DriveSpawnChecks.cpp"])
 Content = json.loads((Root / "Projects/Project-Drive/Build/DriveContentSources.json").read_text())["sources"]
 Scene = Scratch / "DriveCourse.gltf"
 # The file is generated within this check's own scratch directory, never over the user's authored scene.

@@ -3386,6 +3386,7 @@ void SwapchainExchange::RecordAndPresent(const DispatchConfiguration& Dispatch) 
     PresentInfo.pImageIndices      = &ImageOrdinal;
 
     const VkResult PresentResult = vkQueuePresentKHR(Vulkan->GraphicsQueue, &PresentInfo);
+    if (PresentResult == VK_SUCCESS || PresentResult == VK_SUBOPTIMAL_KHR) PresentedFrame = true;
     if (PresentResult == VK_ERROR_OUT_OF_DATE_KHR || PresentResult == VK_SUBOPTIMAL_KHR || ResizePending)
     {
         ResizePending = false;

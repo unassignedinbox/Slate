@@ -3,6 +3,8 @@
 //============================================================================================================================================
 #include "VehicleInstanceSequence.h"
 #include "DriveCourse.h"
+#include "../../../Engine/PhysicalDynamics/Vehicle/VehicleSpawnSolver.h"
+#include <cstdio>
 
 #include <algorithm>
 #include <cmath>
@@ -49,7 +51,8 @@ Frontier::Vehicle::ChassisState VehicleChassisBody::State() const noexcept
 
 //------------------------------------------------------------------------------------------------------------------------ construction
 void VehicleInstanceSequence::Construct(const Frontier::Vehicle::VehicleGeometry& Geometry,
-                                        const VehicleInstanceConfiguration& Configuration) noexcept
+                                        const VehicleInstanceConfiguration& Configuration,
+                                        Frontier::Vehicle::XPBDSoftTyre::GroundQuery Ground) noexcept
 {
     Instancing = Configuration;
     ActiveConfiguration = Frontier::Vehicle::VehicleSolverConfiguration{};
@@ -57,9 +60,12 @@ void VehicleInstanceSequence::Construct(const Frontier::Vehicle::VehicleGeometry
     Frontier::Vehicle::ApplyGeometry(ActiveConfiguration, Geometry);
     ActiveConfiguration.Aero.Enabled = true;
 
-    SpawnPosition = Vec3{0.0f, 0.0f, Instancing.SpawnHeight};
+    SpawnPosition = Instancing.SpawnLocation;
+    SpawnPosition.z = Instancing.SpawnHeight;
+    SpawnOrientation = Instancing.SpawnRotation;
     Body = VehicleChassisBody{};
     Body.Position       = SpawnPosition;
+    Body.Orientation    = SpawnOrientation;
     Body.Mass           = ActiveConfiguration.ChassisMass;
     Body.InvInertiaDiag = Geometry.InvInertia();
 
@@ -67,7 +73,7 @@ void VehicleInstanceSequence::Construct(const Frontier::Vehicle::VehicleGeometry
     h.ReadChassis       = [this]{ return Body.State(); };
     h.ApplyForceAtPoint = [this](const Vec3& f, const Vec3& p){ Body.ApplyForceAtPoint(f, p); };
     h.ApplyTorque       = [this](const Vec3& t){ Body.ApplyTorque(t); };
-    h.Ground            = [](const Vec3& p, Vec3& s, Vec3& n)
+    GroundSurface = Ground ? std::move(Ground) : Frontier::Vehicle::XPBDSoftTyre::GroundQuery([](const Vec3& p, Vec3& s, Vec3& n)
     {
         // The surface query, not a height: CourseSurface answers with the nearest point ON the course and
         //    its outward normal, so a kerb's vertical face can stop a tyre sideways instead of lifting it.
@@ -76,7 +82,20 @@ void VehicleInstanceSequence::Construct(const Frontier::Vehicle::VehicleGeometry
         s = Vec3{Sx, Sy, Sz};
         n = Vec3{Nx, Ny, Nz};
         return true;
-    };
+    });
+    h.Ground = GroundSurface;
+    if (Instancing.FitTerrain)
+    {
+        const auto Settled = Frontier::Vehicle::ResolveVehicleSpawn(ActiveConfiguration, Body.State(), GroundSurface);
+        if (Settled.Supported)
+        {
+            SpawnPosition = Settled.Pose.Position;
+            SpawnOrientation = Settled.Pose.Orientation;
+            Body.Position = SpawnPosition;
+            Body.Orientation = SpawnOrientation;
+        }
+        else std::fputs("[Drive] Spawn terrain is incomplete; retaining requested pose.\n", stderr);
+    }
     ActiveVehicleSolver.Build(ActiveConfiguration, h, Body.State());
 
     WheelSpin.assign(Instancing.WheelCount, 0.0f);
@@ -94,16 +113,7 @@ void VehicleInstanceSequence::Reconfigure(const Frontier::Vehicle::VehicleSolver
     h.ReadChassis       = [this]{ return Body.State(); };
     h.ApplyForceAtPoint = [this](const Vec3& f, const Vec3& p){ Body.ApplyForceAtPoint(f, p); };
     h.ApplyTorque       = [this](const Vec3& t){ Body.ApplyTorque(t); };
-    h.Ground            = [](const Vec3& p, Vec3& s, Vec3& n)
-    {
-        // The surface query, not a height: CourseSurface answers with the nearest point ON the course and
-        //    its outward normal, so a kerb's vertical face can stop a tyre sideways instead of lifting it.
-        float Sx, Sy, Sz, Nx, Ny, Nz;
-        CourseSurface(p.x, p.y, p.z, Sx, Sy, Sz, Nx, Ny, Nz);
-        s = Vec3{Sx, Sy, Sz};
-        n = Vec3{Nx, Ny, Nz};
-        return true;
-    };
+    h.Ground = GroundSurface;
     ActiveVehicleSolver.Build(ActiveConfiguration, h, Body.State());
 }
 
@@ -111,7 +121,7 @@ void VehicleInstanceSequence::ResetToSpawn() noexcept
 {
     Accumulator          = 0.0f;
     Body.Position        = SpawnPosition;
-    Body.Orientation     = Quat{0,0,0,1};
+    Body.Orientation     = SpawnOrientation;
     Body.LinearVelocity  = Vec3{};
     Body.AngularVelocity = Vec3{};
     Body.ForceAccum      = Vec3{};

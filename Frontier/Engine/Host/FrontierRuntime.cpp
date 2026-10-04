@@ -59,6 +59,7 @@ int RunProjectFluidPreview();
 #include "PhysicsInstanceSequence.h"
 #include "InterfaceAudioSequence.h"
 #include "FrontierRuntime.h"
+#include "ProjectOpeningSequence.h"
 #include "../ProjectInterchange/CodeInterchange.h"
 #include "../ProjectInterchange/ProjectSpecification.h"
 #include "../SpatialInterface/InterfaceScreenSequence.h"
@@ -296,6 +297,25 @@ int Frontier::RunFrontierRuntime(
     Frontier::ConfigurationRegistry Configuration;
     if (!Configuration.Load((ResolvedSpecification.ContentLocation / "Frontier.config.toml").string()))
         std::cerr << "[Configuration] " << Configuration.QueryPath() << ": " << Configuration.QueryLastError() << " - using defaults\n";
+
+    // Session overrides are read before device creation, so software-BVH testing never enables RT extensions.
+    for (int Index = 1; Index + 1 < argc; ++Index)
+    {
+        auto& Settings = Configuration.Access();
+        if (std::strcmp(argv[Index], "--quality") == 0)
+            Settings.Render.Quality = static_cast<Frontier::FidelityCategory>(std::clamp(std::atoi(argv[++Index]), 0, 4));
+        else if (std::strcmp(argv[Index], "--render-scale") == 0)
+            Settings.Render.RenderScale = std::clamp(static_cast<float>(std::atof(argv[++Index])), 0.25f, 1.0f);
+        else if (std::strcmp(argv[Index], "--render-preset") == 0)
+        {
+            const int Preset = std::clamp(std::atoi(argv[++Index]), 0, 3);
+            Settings.Backend.RayTracingTier = Preset == 1 ? Frontier::RayTracingTierRequestCategory::Auto : Frontier::RayTracingTierRequestCategory::Software;
+            Settings.Render.Raytracing = Preset < 2;
+            Settings.Render.GlobalIllumination = Preset != 3;
+            Settings.Render.GiBounces = Preset == 3 ? 0u : 2u;
+            Settings.Render.ReflectionMode = Preset < 2 ? Frontier::ReflectionModeCategory::Raytraced : Frontier::ReflectionModeCategory::Off;
+        }
+    }
 
     Frontier::SceneStructure Level;
     Frontier::TextureIndex   Textures;
@@ -1191,6 +1211,7 @@ int Frontier::RunFrontierRuntime(
     bool     GizmoDragging    = false;
     Frontier::GizmoDemand GizmoDemandNow{};
     Frontier::GizmoPose   GizmoPoseNow{};           // seated from the picked placement every tick
+    std::vector<uint32_t> GizmoSeizedSlots;
     std::vector<float>    GizmoSeized;              // the seized span's worlds at the press, 16 floats each
     // The local volumes (local cloud, local fog) are the celestial entities that DO have a world-space centre.
     //    They are not instances — no triangles, no roster span — so the gizmo seats itself from the centre and
@@ -1406,6 +1427,8 @@ int Frontier::RunFrontierRuntime(
     // Row ↔ instance spans for GPU picking: the packed id the visibility image hands back names an instance;
     //    the span holding it names the outliner row, and the reverse walk feeds the outline's ordinals.
     std::vector<Frontier::HostRuntime::EditorFeedSequence::RosterSpan> RosterSpans(Frontier::kMaxEditorInstances);
+    std::vector<Frontier::HostRuntime::EditorFeedSequence::RosterSpan> CanonicalSpans(Frontier::kMaxEditorInstances);
+    uint32_t CanonicalSpanCount = 0u;
     uint32_t RosterSpanCount = 0u;
     bool     PickAwaited     = false;   // a tap flew with the frame; watch for its answer
     bool     PickAdditiveAwaited = false;   // Shift rode the tap: extend the picks rather than replace them
@@ -1429,6 +1452,7 @@ int Frontier::RunFrontierRuntime(
     Frontier::HostRuntime::PerformanceTelemetrySequence PerformanceTelemetry{ 5.0f };
 
     Startup.Mark("FrameLoopReady"); uint32_t StartupFrames=0;
+    bool OpeningCompleted = false;
     auto LastMemorySample = Frontier::HostRuntime::StartupLog::Now();
     uint32_t PreviousTransport = 0u;
     std::vector<Frontier::InstanceRecord> ProjectRestInstances;
@@ -1826,7 +1850,9 @@ int Frontier::RunFrontierRuntime(
 #ifdef FRONTIER_DEVELOPMENT
         if (!SceneReady)
         {
+            Panel.ClearPicks();
             SceneRowCount = Feed.FillRoster(SceneInstances.data(), Level, Frontier::kMaxEditorInstances);
+            CanonicalSpanCount = Feed.FillRosterSpans(CanonicalSpans.data(), Level, Frontier::kMaxEditorInstances);
             // The celestial entities follow the scene's own rows, under their own folder. Appended rather
             //    than merged so the scene walk stays exactly what it was.
             CelestialFirstRow = SceneRowCount;
@@ -2011,18 +2037,20 @@ int Frontier::RunFrontierRuntime(
             const float RightArray[3]   = { Right.x, Right.y, Right.z };
             const float UpArray[3]      = { Upward.x, Upward.y, Upward.z };
 
-            // The roster spans, seated once beside the roster itself.
-            if (SceneReady && RosterSpanCount == 0u)
-                RosterSpanCount = Feed.FillRosterSpans(RosterSpans.data(), Level, Frontier::kMaxEditorInstances);
-
-            // The primary picked row's span — the object the gizmo grips.
+            // Presentation rows can move. Resolve instance spans by the registered key, never the screen ordinal.
+            RosterSpanCount = SceneRowCount;
+            Feed.ResolveRosterSpans(RosterSpans.data(), SceneInstances.data(), SceneRowCount, CanonicalSpans.data(), CanonicalSpanCount);
+            uint32_t PickedRows[Frontier::kMaxEditorPicked]{};
+            const uint32_t PickedCount = std::min(Panel.QueryPickedCount(), Frontier::kMaxEditorPicked);
+            for (uint32_t Slot = 0u; Slot < PickedCount; ++Slot) PickedRows[Slot] = Panel.QueryPickedAt(Slot);
+            const auto SelectionInstances = Feed.CollectSelectionInstances(SceneInstances.data(), SceneRowCount,
+                RosterSpans.data(), PickedRows, PickedCount, static_cast<uint32_t>(AnimatedInstances.size()));
             const uint32_t PrimaryRow = Panel.QueryPickedInstance();
-            const bool RowSpanLive = PrimaryRow < RosterSpanCount && RosterSpans[PrimaryRow].InstanceCount > 0u
-                                   && RosterSpans[PrimaryRow].FirstInstance < AnimatedInstances.size();
+            const bool RowSpanLive = !SelectionInstances.empty();
             // A picked local volume gets the same gizmo. Geometry wins if a row somehow claims both.
             const float* VolumeCentre = RowSpanLive ? nullptr
                                                     : InspectorSession.PickedVolumeCentre(PrimaryRow, &GizmoVolumeEntity);
-            GizmoVolumeLive = VolumeCentre != nullptr;
+            if (!GizmoDragging) GizmoVolumeLive = VolumeCentre != nullptr;
             if (GizmoVolumeLive) GizmoModeNow = Frontier::GizmoMode::Translate;   // a centre only moves
             GizmoShown = (RowSpanLive || GizmoVolumeLive) && GizmoReady;
 
@@ -2044,7 +2072,7 @@ int Frontier::RunFrontierRuntime(
             //    proportions stay the reference's exactly.
             if (GizmoShown && RowSpanLive && !GizmoDragging)
             {
-                const float* W = AnimatedInstances[RosterSpans[PrimaryRow].FirstInstance].World;
+                const float* W = AnimatedInstances[SelectionInstances.front()].World;
                 // The origin is the object's WORLD centre, not the World matrix's translation column: the
                 //    showcase seats its geometry in the vertices with near-identity instance worlds, so the
                 //    translation column is ~(0,0,0) — the scene centre — and the gizmo drew there. Every
@@ -2054,9 +2082,9 @@ int Frontier::RunFrontierRuntime(
                     const auto& LevelClusters = Level.QueryClusters();
                     float Lo[3] = { 1e30f, 1e30f, 1e30f }, Hi[3] = { -1e30f, -1e30f, -1e30f };
                     bool CentreSeated = false;
-                    for (uint32_t I = 0u; I < RosterSpans[PrimaryRow].InstanceCount; ++I)
+                    for (uint32_t Slot : SelectionInstances)
                     {
-                        const auto& Inst = AnimatedInstances[RosterSpans[PrimaryRow].FirstInstance + I];
+                        const auto& Inst = AnimatedInstances[Slot];
                         for (uint32_t C = 0u; C < Inst.ClusterCount; ++C)
                         {
                             if (Inst.ClusterOffset + C >= LevelClusters.size()) break;
@@ -2157,10 +2185,11 @@ int Frontier::RunFrontierRuntime(
                     }
                     else
                     {
-                        GizmoSeized.assign(static_cast<size_t>(RosterSpans[PrimaryRow].InstanceCount) * 16u, 0.0f);
-                        for (uint32_t I = 0u; I < RosterSpans[PrimaryRow].InstanceCount; ++I)
+                        GizmoSeizedSlots = SelectionInstances;
+                        GizmoSeized.assign(GizmoSeizedSlots.size() * 16u, 0.0f);
+                        for (uint32_t I = 0u; I < GizmoSeizedSlots.size(); ++I)
                             std::memcpy(GizmoSeized.data() + static_cast<size_t>(I) * 16u,
-                                        AnimatedInstances[RosterSpans[PrimaryRow].FirstInstance + I].World, 16u * sizeof(float));
+                                        AnimatedInstances[GizmoSeizedSlots[I]].World, 16u * sizeof(float));
                     }
                 }
                 else
@@ -2223,8 +2252,8 @@ int Frontier::RunFrontierRuntime(
                     }
                     else
                     {
-                        for (uint32_t I = 0u; I < RosterSpans[PrimaryRow].InstanceCount; ++I)
-                            std::memcpy(AnimatedInstances[RosterSpans[PrimaryRow].FirstInstance + I].World,
+                        for (uint32_t I = 0u; I < GizmoSeizedSlots.size(); ++I)
+                            std::memcpy(AnimatedInstances[GizmoSeizedSlots[I]].World,
                                         GizmoSeized.data() + static_cast<size_t>(I) * 16u, 16u * sizeof(float));
                         GizmoMovedNow = true;
                     }
@@ -2257,10 +2286,10 @@ int Frontier::RunFrontierRuntime(
                         }
                         else
                         {
-                            for (uint32_t I = 0u; I < RosterSpans[PrimaryRow].InstanceCount; ++I)
+                            for (uint32_t I = 0u; I < GizmoSeizedSlots.size(); ++I)
                             {
                                 const float* Press = GizmoSeized.data() + static_cast<size_t>(I) * 16u;
-                                float* Live = AnimatedInstances[RosterSpans[PrimaryRow].FirstInstance + I].World;
+                                float* Live = AnimatedInstances[GizmoSeizedSlots[I]].World;
                                 ApplyGizmoDemand(GizmoDemandNow, GizmoPoseNow, Press, Live);
                             }
                             GizmoMovedNow = true;
@@ -2810,6 +2839,11 @@ int Frontier::RunFrontierRuntime(
         auto FinalDispatch = Dispatch;
         FinalDispatch.AccumulationIndex = Integrator.QueryAccumulationIndex();
         Surface.RecordAndPresent(FinalDispatch);
+        if (!OpeningCompleted && Surface.HasPresentedFrame())
+        {
+            Frontier::CompleteProjectOpening(argc, argv);
+            OpeningCompleted = true;
+        }
         if(++StartupFrames==1)Startup.Mark("FirstPresentReturned");
         if(StartupFrames==120)Startup.Mark("After120Frames");
         // Sample after presentation, not on a background thread: this measures the render-loop

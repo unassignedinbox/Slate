@@ -40,6 +40,9 @@ struct VehicleInstanceConfiguration
     uint32_t WheelCount     = 4u;          // [cnt]
     float    SubStepSeconds = 1.0f/240.0f; // [s]   fixed physics step; the frame's dt is consumed in whole sub-steps
     float    SpawnHeight     = 0.42f;      // [m]   CoM z so the wheels rest on the pad (hub 0.0914 below + r 0.34)
+    Frontier::Vehicle::Vec3 SpawnLocation{};      // [m] - requested XY; SpawnHeight supplies initial Z
+    Frontier::Vehicle::Quat SpawnRotation{};      // [-] - heading retained when fitting the support plane
+    bool FitTerrain = true;                       // [-] - equilibrium placement before physics begins
     float    MaxFrameSeconds = 0.10f;      // [s]   clamp a long frame so a hitch never explodes the integrator
 };
 
@@ -69,7 +72,8 @@ public:
     // Brings the solver up over the DriveCourse ground and seeds the chassis at the spawn pose. `geometry`
     //    supplies the real ControlVehicle socket layout; `config` is filled from it via ApplyGeometry.
     void Construct(const Frontier::Vehicle::VehicleGeometry& Geometry,
-                   const VehicleInstanceConfiguration& Configuration) noexcept;
+                   const VehicleInstanceConfiguration& Configuration,
+                   Frontier::Vehicle::XPBDSoftTyre::GroundQuery Ground = {}) noexcept;
 
     // The one call the frame loop makes. Consumes `input` (already mapped from the device by DriverInputExchange),
     //    advances the physics by whole sub-steps covering DeltaSeconds, and writes the body + wheel World rows into
@@ -106,6 +110,8 @@ private:
     Frontier::Vehicle::ChassisState         ChassisState_{};
     Frontier::Vehicle::Vec3                 SpawnPosition{0.0f,0.0f,0.42f};
 
+    Frontier::Vehicle::Quat SpawnOrientation{};
+    Frontier::Vehicle::XPBDSoftTyre::GroundQuery GroundSurface;
     std::vector<float>                      WheelSpin;      // [rad] integrated spin angle per wheel (visual)
     float                                   Accumulator = 0.0f;
 

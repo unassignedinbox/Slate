@@ -54,6 +54,35 @@ int main(int ArgumentCount, char** Arguments)
     assert(VehiclePlacements == 5u);
     std::puts("PASS vehicle and all four tyres are geometry, and all tyres clear the ground by 20 mm");
 
+    auto Original = std::make_unique<EditorInstance[]>(kMaxEditorInstances);
+    auto Canonical = std::make_unique<HostRuntime::EditorFeedSequence::RosterSpan[]>(kMaxEditorInstances);
+    std::copy_n(Rows.get(), Count, Original.get());
+    std::copy_n(Spans.get(), Count, Canonical.get());
+    std::reverse(Rows.get(), Rows.get() + Count);
+    Feed.ResolveRosterSpans(Spans.get(), Rows.get(), Count, Canonical.get(), Count);
+    for (uint32_t Slot = 0u; Slot < Count; ++Slot)
+        assert(Spans[Slot].Placement == Canonical[Count - Slot - 1u].Placement);
+    std::copy_n(Original.get(), Count, Rows.get());
+    Feed.ResolveRosterSpans(Spans.get(), Rows.get(), Count, Canonical.get(), Count);
+    uint32_t Picks[3]{};
+    uint32_t Found = 0u;
+    for (uint32_t Slot = 0u; Slot < Count && Found < 2u; ++Slot)
+        if (std::strstr(Rows[Slot].Label, "XPBD Tyre")) Picks[Found++] = Slot;
+    assert(Found == 2u);
+    Picks[2] = Picks[0];
+    auto Selection = Feed.CollectSelectionInstances(Rows.get(), Count, Spans.get(), Picks, 3u,
+        static_cast<uint32_t>(Scene.QueryInstances().size()));
+    assert(Selection.size() == 4u);
+    Rows[Picks[0]].Locked = true;
+    Selection = Feed.CollectSelectionInstances(Rows.get(), Count, Spans.get(), Picks, 3u,
+        static_cast<uint32_t>(Scene.QueryInstances().size()));
+    assert(Selection.size() == 2u);
+    Rows[Picks[0]].Artwork = IconSymbol::Sun;
+    Rows[Picks[0]].Glyph = EditorGlyph::Sun;
+    Feed.FillRoster(Rows.get(), Scene);
+    assert(Rows[Picks[0]].Artwork != IconSymbol::Sun && Rows[Picks[0]].Glyph != EditorGlyph::Sun);
+    std::puts("PASS reordered keys retain geometry, multiselect is deduplicated, locked rows stay fixed, refill removes stale sun icons");
+
     SceneStructure Grouped;
     Matrix4x4 Identity{};
     for (uint32_t Cell = 0u; Cell < 4u; ++Cell) Identity.Columns[Cell][Cell] = 1.0f;

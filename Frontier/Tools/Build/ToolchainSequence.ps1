@@ -578,6 +578,8 @@ $ImGuiSources = @(
     (Join-Path $PackageRoot 'imgui\imgui_widgets.cpp')
     (Join-Path $PackageRoot 'imgui\backends\imgui_impl_glfw.cpp')
     (Join-Path $PackageRoot 'imgui\backends\imgui_impl_vulkan.cpp')
+    (Join-Path $PackageRoot 'imgui\backends\imgui_impl_win32.cpp')
+    (Join-Path $PackageRoot 'imgui\backends\imgui_impl_dx11.cpp')
 )
 
 $EngineRelative = @(
@@ -703,6 +705,7 @@ $EngineRelative = @(
     'Engine\ProjectInterchange\CodeInterchange.cpp'
     'Engine\Host\FrontierExecution.cpp'
     'Engine\Host\FrontierHost.cpp'
+    'Engine\Host\ProjectOpeningSequence.cpp'
     'Engine\Host\FrontierRuntime.cpp'
     # The shared host source beneath is listed in both CMake and the direct MSVC route. It carries material inspection,
     # acceleration construction, container translation, and preview support exactly once into Frontier.exe.
@@ -838,6 +841,7 @@ $LinkArgs.Add($JoltLib)
 $LinkArgs.Add('gdi32.lib')
 $LinkArgs.Add('user32.lib')
 $LinkArgs.Add('shell32.lib')
+foreach ($Library in @('d3d11.lib', 'dxgi.lib', 'd3dcompiler.lib', 'dwmapi.lib', 'imm32.lib', 'ole32.lib', 'uuid.lib')) { $LinkArgs.Add($Library) }
 
 Write-Building 'Linking Frontier.exe...'
 $Diagnostics = & link.exe @($LinkArgs.ToArray())
