@@ -298,6 +298,91 @@
            display:grid;place-content:center;text-align:center;color:var(--dim)}
   .nothing small{display:block;color:var(--faint);font-size:11px;margin-top:6px}
 
+  /* ── the Sun-reference inspector grammar ────────────────────────────────
+     SunInspectorPanel.cpp / CameraInspectorPanel.cpp / StarsInspectorPanel.cpp /
+     CloudsInspectorPanel.cpp / FogInspectorPanel.cpp / WeatherInspectorPanel.cpp /
+     MoonInspectorPanel.cpp / AtmosphereSkyInspectorPanel.cpp / LensFlareInspectorPanel.cpp:
+     Ink #e9e9e9 · Muted #919191 · card = radius 22, #252525→#202020 gradient, #343434 hairline,
+     title 12 px at (24,23) behind a 17 px accent mark · slider block = 11 px muted label + 30 px
+     SliderPill · tile = 65 px, radius 13, #222 on #383838 · wrap prose 11 px muted.         */
+  .env{padding:20px 20px 24px;color:#e9e9e9}
+  .env .crumb{font-size:9px;color:#919191;letter-spacing:.02em}
+  .env .big{font-size:25px;font-weight:300;margin:12px 0 0;line-height:1.1}
+  .env .big.display{font-size:34px}
+  .env .kicker{font-size:10px;color:#919191;margin-top:9px;letter-spacing:.06em}
+  .env .enabled{float:right;height:32px;border-radius:16px;background:#262626;border:1px solid #3b3b3b;
+                display:inline-flex;align-items:center;gap:8px;padding:0 14px;font-size:11px;margin-top:-34px}
+  .env .enabled i{width:6px;height:6px;border-radius:50%;background:#96cfa1;display:block}
+  .env .enabled.off i{background:#c67370}
+  .ecard{margin-top:16px;border:1px solid #343434;border-radius:22px;
+         background:linear-gradient(160deg,#252525,#202020);padding:21px 24px 24px}
+  .ecard > header{display:flex;align-items:center;gap:11px;font-size:12px;color:#cacaca;margin-bottom:4px}
+  .ecard > header svg{flex:none}
+  .ecard .figure{font-size:30px;font-weight:300;margin:14px 0 0;line-height:1}
+  .ecard .figure small{font-size:17px;color:#919191;margin-left:7px;font-weight:300}
+  .ecard .figure em{font-style:normal;color:#5e5e5e}
+  .prose{font-size:11px;color:#919191;margin:10px 0 0;line-height:1.5}
+  .sblock{margin-top:16px}
+  .sblock > span{display:block;font-size:11px;color:#919191;margin-bottom:6px}
+  .tiles2{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+  .etile{flex:1 1 112px;height:65px;border-radius:13px;background:#222;border:1px solid #383838;
+         display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+  .etile .mark{width:16px;height:16px;border-radius:50%;border:1.4px solid currentColor;position:relative}
+  .etile .mark::after{content:"";position:absolute;left:50%;top:-5px;width:1.5px;height:9px;
+                      background:currentColor;transform:translateX(-50%)}
+  .etile .cap{font-size:10px;letter-spacing:.04em}
+  .etile.on{color:#83cf9e}
+  .etile.off{color:#dd8989}
+  .etile.na{color:#919191;opacity:.75;cursor:not-allowed}
+  .etile.na .mark{border-style:dashed;border-radius:3px}
+  .etile.na .mark::after{display:none}
+  .quick{display:flex;gap:9px;margin-top:14px;flex-wrap:wrap}
+  .qtile{flex:1 1 112px;height:106px;border-radius:16px;background:#202020;border:1px solid #323232;
+         display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px}
+  .qtile .orb{width:31px;height:31px;border-radius:50%;background:#6a6a6a;display:grid;place-items:center;
+              color:#1a1a1a}
+  .qtile.on .orb{background:#69c884}
+  .qtile.off .orb{background:#cc7673}
+  .qtile .lbl{font-size:10px;color:#c8c8c8}
+  .qtile .st{font-size:8px;letter-spacing:.1em}
+  .qtile.on .st{color:#69c884}.qtile.off .st{color:#cc7673}.qtile.na .st{color:#6a6a6a}
+  .ebtn{height:32px;border-radius:8px;background:#282828;border:1px solid #414141;color:#cccccc;
+        display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 14px;font-size:11px}
+  .ebtn[disabled]{color:#707070;cursor:not-allowed}
+  .ebtn.wide{width:100%}
+  .erule{height:1px;background:rgba(255,255,255,.05);margin:16px 0}
+  .ediag{margin-top:14px;border-radius:12px;overflow:hidden;background:#1b1a1e}
+  .ediag svg{display:block;width:100%}
+  .scale{display:flex;justify-content:space-between;font-size:10px;color:#919191;margin-top:6px}
+  .gradbar{height:16px;border-radius:8px;margin-top:14px;
+           background:linear-gradient(90deg,#b9764e 0%,#d9b790 35%,#e0dbcd 58%,#92b2d0 85%,#7791b8 100%)}
+  .typegrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+  .tcell{height:84px;border-radius:12px;background:#1d2021;border:1px solid #3b3e3f;display:flex;
+         flex-direction:column;align-items:center;justify-content:center;gap:8px;font-size:11px;color:#919191}
+  .tcell.sel{border-color:#a9c3e4;color:#a9c3e4}
+  .swatchline{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:11px;color:#aaa}
+  .swatchline i{width:12px;height:12px;border-radius:3px;display:block}
+  .endnote{font-size:11px;color:#8b8b8b;margin:18px 0 0;line-height:1.5}
+  .strip{display:flex;gap:12px;overflow-x:auto;margin-top:14px;padding-bottom:6px}
+  .strip .body{flex:none;width:112px;height:124px;border-radius:14px;background:#202020;border:1px solid #2b2b2b;
+               display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px;padding-bottom:6px}
+  .strip .body.sel{background:#2a2b2e;border-color:#c0a7d8}
+  .strip .body span{font-size:12px;color:#919191}
+  .strip .body.sel span{color:#e9e9e9}
+
+  /* ── the tyre card (TyreInspectorPanel.cpp) ─────────────────────────────── */
+  .tcard{background:var(--inset);border:1px solid rgba(255,255,255,.05);border-radius:18px;
+         padding:15px 17px 12px;margin-bottom:12px}
+  .tcard header{display:flex;align-items:center;gap:9px;font-size:13px}
+  .tcard header i{width:3px;height:13px;border-radius:1.5px;display:block}
+  .tcard .head{font-size:30px;font-weight:300;margin-top:6px;line-height:1.1}
+  .tcard .head em{font-style:normal;color:#5e5e5e}
+  .tcard .head small{font-size:12px;color:var(--dim);margin-left:5px}
+  .tcard .cap{font-size:11px;color:var(--dim);margin-top:6px;line-height:1.5}
+  .trow{display:flex;align-items:center;min-height:30px;margin-top:6px}
+  .trow .k{width:86px;flex:none;font-size:11px;color:var(--dim)}
+  .trow .z{flex:1;min-width:0;display:flex;align-items:center}
+
   /* popovers */
   .pop{position:absolute;z-index:50;background:rgba(15,17,20,.98);border:1px solid rgba(255,255,255,.18);
        border-radius:12px;padding:8px;min-width:220px;display:none}
@@ -877,6 +962,736 @@ function card(title, body, key){
   const b = el("div","body"); body.forEach(n => b.append(n));
   c.append(h, b); return c;
 }
+/* ═══ THE PER-TYPE INSPECTORS ══════════════════════════════════════════════
+   EditorHost routes every EditorSheetAppearance to its own panel; the generic
+   sheet above is only the fallback for plain geometry and folders.  These
+   builders follow the shipped panels one card at a time:
+
+     Frontier/Engine/Editor/SunInspectorPanel.cpp        · Sun
+     Frontier/Engine/Editor/AtmosphereSkyInspectorPanel  · Sky
+     Frontier/Engine/Editor/StarsInspectorPanel.cpp      · Stars
+     Frontier/Engine/Editor/CloudsInspectorPanel.cpp     · Clouds (global/local)
+     Frontier/Engine/Editor/FogInspectorPanel.cpp        · Height / aerial / local fog
+     Frontier/Engine/Editor/WeatherInspectorPanel.cpp    · Wind · Precipitation · Rainbow
+     Frontier/Engine/Editor/MoonInspectorPanel.cpp       · Moon
+     Frontier/Engine/Editor/CameraInspectorPanel.cpp     · Camera
+     Frontier/Engine/Editor/LensFlareInspectorPanel.cpp  · Lens flare
+     Frontier/Engine/Editor/TyreInspectorPanel.cpp       · Tyre quick strip
+
+   The inspector column is 340 px wide, so every panel is drawn in its narrow
+   branch (W < 680 for the Sun, W < 760 elsewhere): one column, stacked fields,
+   wrapped tiles.                                                            */
+
+const APPEARANCE = {
+  "Sun":"sun", "Sky":"sky", "Atmosphere":"sky", "Stars":"stars",
+  "Cloud Layer":"clouds", "Clouds":"clouds", "Local Cloud":"localcloud",
+  "Height Fog":"heightfog", "Atmospheric Fog":"aerialfog", "Local Volumetric Fog":"localfog",
+  "Wind":"wind", "Precipitation":"precipitation", "Rainbow":"rainbow",
+  "Moons":"moon", "Luna":"moon", "Camera":"camera", "Cine Camera":"camera",
+  "Lens Flare":"lensflare",
+  "Front Left Tyre":"tyre", "Tread Pattern":"tyre", "Wheel Rim":"tyre",
+};
+const appearanceOf = r => APPEARANCE[r.label] || null;
+
+/* ── the panel vocabulary ────────────────────────────────────────────────── */
+const ACCENT = "#c0a7d8";
+function mark(kind, tint){                       /* Panel::Icon's Mark set */
+  const d = {
+    sun:'<circle cx="12" cy="12" r="4.6"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>',
+    orbit:'<ellipse cx="12" cy="12" rx="9.5" ry="4.5"/><circle cx="12" cy="12" r="3"/>',
+    sparkles:'<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8Z"/><path d="M18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9Z"/>',
+    bake:'<path d="M12 5h7a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-6"/><path d="M2 9h11M9 5l4 4-4 4"/>',
+    upload:'<path d="M12 16V3M7 8l5-5 5 5M3 16v5h18v-5"/>',
+    reset:'<path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v4h4"/>',
+    arrow:'<path d="M9 5l7 7-7 7"/>',
+  }[kind] || "";
+  return `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="${tint||ACCENT}"
+           stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+}
+function eCard(title, glyph, nodes){
+  const c = el("section","ecard");
+  if (title){
+    const h = el("header");
+    if (glyph){ const s = el("span"); s.innerHTML = mark(glyph); h.append(s); }
+    h.append(el("span",null,title));
+    c.append(h);
+  }
+  (nodes||[]).filter(Boolean).forEach(n => c.append(n));
+  return c;
+}
+function figure(whole, frac, unit){
+  const f = el("div","figure"); f.append(el("span",null,whole));
+  if (frac) f.append(Object.assign(el("em"),{textContent:frac}));
+  if (unit) f.append(el("small",null,unit));
+  return f;
+}
+function prose(t){ return el("p","prose",t); }
+function note(t){ return el("p","endnote",t); }
+function rule(){ return el("div","erule"); }
+/* Panel::Slider — an 11 px muted caption over a 30 px ControlPanel::SliderPill */
+function eSlider(p){
+  const b = el("div","sblock");
+  b.append(el("span",null,p.label));
+  const host = el("div","prow stacked"); const zone = el("div","pzone");
+  zone.append(propNode(p).querySelector(".pzone").firstChild);
+  host.append(zone); b.append(host); return b;
+}
+function eTile(name, state){                     /* Panel::Tile — 65 px */
+  const t = el("div","etile " + state);
+  t.append(el("div","mark"), el("div","cap",name));
+  if (state !== "na") t.onclick = () => { t.classList.toggle("on"); t.classList.toggle("off"); };
+  return t;
+}
+function tileRow(list){
+  const w = el("div","tiles2"); list.forEach(([n,s]) => w.append(eTile(n,s))); return w;
+}
+function qTile(name, state, word){               /* the Sun's 106 px Quick tile */
+  const t = el("div","qtile " + state);
+  const o = el("div","orb"); o.innerHTML = state === "na"
+    ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#303030" stroke-width="2"><path d="M9 3v5M15 3v5M7 8h10v5a5 5 0 0 1-10 0Z M12 18v3"/></svg>'
+    : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#17301f" stroke-width="2.4"><path d="M5 12.5l4.5 4.5L19 7"/></svg>';
+  t.append(o, el("div","lbl",name), el("div","st", word || (state==="on"?"ON":state==="off"?"OFF":"UNAVAILABLE")));
+  return t;
+}
+function eButton(label, glyph, disabled){
+  const b = el("button","ebtn wide" + (disabled?"":""));
+  if (disabled) b.disabled = true;
+  if (glyph){ const s = el("span"); s.innerHTML = mark(glyph, disabled ? "#707070" : "#c9c9c9"); b.append(s); }
+  b.append(el("span",null,label)); return b;
+}
+function scale(a,b){ const s = el("div","scale"); s.append(el("span",null,a), el("span",null,b)); return s; }
+function svgBox(h, inner){
+  const d = el("div","ediag");
+  d.innerHTML = `<svg viewBox="0 0 300 ${h}" preserveAspectRatio="none" height="${h}">${inner}</svg>`;
+  return d;
+}
+function header(crumb, title, subtitle, kicker, pill){
+  const f = document.createDocumentFragment();
+  f.append(el("div","crumb",crumb));
+  if (kicker) f.append(Object.assign(el("div","kicker"),{textContent:kicker,style:"margin:14px 0 -4px"}));
+  f.append(el("h2","big" + (kicker?" display":""), title));
+  if (pill){ const p = el("div","enabled" + (pill[1]?"":" off")); p.append(el("i"), el("span",null,pill[0])); f.append(p); }
+  if (subtitle) f.append(el("div","kicker", subtitle));
+  return f;
+}
+function sectionLabel(t){
+  const d = el("div","kicker", t);
+  d.style.cssText = "margin-top:22px;letter-spacing:.12em;font-size:10px;color:#8a8a8a"; return d;
+}
+
+/* ── Sun · SunInspectorPanel.cpp ─────────────────────────────────────────── */
+function panelSun(){
+  const f = document.createDocumentFragment();
+  f.append(header("Inspector  /  Environment","Sun","Light, direction & atmosphere","DIRECTIONAL LIGHT",["Enabled",true]));
+  const reset = eButton("Reset", "reset", true); reset.classList.remove("wide");
+  reset.style.cssText += "margin-top:12px";
+  f.append(reset);
+
+  f.append(sectionLabel("BAKING"));
+  [["Sun lighting","Bake lighting"],["Sun disc","Bake disc"]].forEach(([t,b]) => {
+    f.append(eCard(t, "bake", [
+      qTile("Use baked image","na"),
+      Object.assign(eButton(b,"bake"),{style:"margin-top:12px"}),
+      Object.assign(eButton("Load image","upload"),{style:"margin-top:8px"}),
+      prose("No image source connected."),
+    ]));
+  });
+
+  f.append(sectionLabel("PROPERTIES"));
+  const q = el("div","quick");
+  q.append(qTile("Sunlight","off"), qTile("Sun disc","off"),
+           qTile("Day cycle","on","ANIMATE"), qTile("Dynamic","on","ANIMATE"));
+  f.append(q);
+
+  const link = el("div","ecard");
+  link.style.cssText = "padding:14px 18px;display:flex;align-items:center;gap:12px;opacity:.6";
+  const li = el("span"); li.innerHTML = mark("sparkles","#8d8d8d");
+  const lt = el("div"); lt.append(el("div",null,"Lens Flare"), el("div","prose","Optical effect subcomponent"));
+  const la = el("span"); la.style.marginLeft = "auto"; la.innerHTML = mark("arrow","#6d6d6d");
+  link.append(li, lt, la); f.append(link);
+
+  /* Sun direction — the stacked branch: dial, Local Hours, then the solved angles */
+  const dial = svgBox(200, `
+    <ellipse cx="150" cy="150" rx="128" ry="46" fill="none" stroke="#3a3a3a"/>
+    <path d="M22 150A128 128 0 0 1 278 150" fill="none" stroke="#333"/>
+    <line x1="10" y1="150" x2="290" y2="150" stroke="#444"/>
+    <path d="M60 150A90 60 0 0 1 240 150" fill="none" stroke="#5a5a5a" stroke-dasharray="3 4"/>
+    <circle cx="206" cy="92" r="9" fill="#ffd9a0"/><circle cx="206" cy="92" r="17" fill="#ffd9a0" opacity=".16"/>
+    <line x1="150" y1="150" x2="206" y2="92" stroke="#c0a7d8" stroke-width="1.3"/>
+    <text x="150" y="172" fill="#7d7d7d" font-size="9" text-anchor="middle">HORIZON</text>`);
+  f.append(eCard("Sun direction","orbit",[
+    figure("34",".2","°"),
+    prose("Above the horizon"),
+    dial,
+    eSlider({label:"Local Hours", kind:"slider", min:0, max:24, value:14.3, dec:2, unit:"h", hi:true}),
+    rule(),
+    eSlider({label:"Azimuth", kind:"slider", min:0, max:360, value:221.4, dec:1, unit:"°"}),
+    eSlider({label:"Elevation", kind:"slider", min:-90, max:90, value:34.2, dec:1, unit:"°"}),
+    prose("Shared time above · angles solved by date / location"),
+  ]));
+
+  f.append(eCard("Sunlight intensity","sun",[
+    figure("1",".00","×"),
+    svgBox(120, `<path d="M0 108C70 104 118 72 160 42 202 12 248 6 300 4" fill="none" stroke="#c0a7d8" stroke-width="1.6"/>
+                 <path d="M0 108C70 104 118 72 160 42 202 12 248 6 300 4L300 120L0 120Z" fill="#c0a7d8" opacity=".09"/>`),
+    eSlider({label:"Intensity", kind:"slider", min:0, max:60, value:1, dec:2, unit:"×", hi:true}),
+    scale("0 ×","60 ×"),
+  ]));
+
+  f.append(eCard("Temperature","sun",[
+    figure("5 500",null,"K"),
+    propNode({label:"Colour source", kind:"select", options:["Kelvin","RGB"]}),
+    el("div","gradbar"),
+    eSlider({label:"Temperature", kind:"slider", min:1500, max:15000, value:5500, dec:0, unit:"K"}),
+    (() => { const s = el("div","swatchline"); const i = el("i"); i.style.background = "#ffd9ab";
+             s.append(i, el("span",null,"Natural daylight")); return s; })(),
+  ]));
+
+  f.append(eCard("Daylight cycle","orbit",[
+    figure("14:18"),
+    (() => { const c = el("div","swatchline"); c.append(el("span",null,"Afternoon")); return c; })(),
+    svgBox(110, `<path d="M18 104A132 132 0 0 1 282 104" fill="none" stroke="#3d3d3d" stroke-width="1.4"/>
+                 <circle cx="214" cy="35" r="7" fill="#ffd9a0"/>
+                 <line x1="18" y1="104" x2="282" y2="104" stroke="#2f2f2f"/>`),
+    eSlider({label:"Time", kind:"slider", min:0, max:24, value:14.3, dec:2, unit:"h", hi:true}),
+    scale("00:00","24:00"),
+  ]));
+
+  f.append(eCard("Sun disc","sun",[
+    figure("0",".53","°"),
+    svgBox(120, `<circle cx="150" cy="60" r="46" fill="#ffe2b4" opacity=".10"/>
+                 <circle cx="150" cy="60" r="28" fill="#ffe2b4" opacity=".22"/>
+                 <circle cx="150" cy="60" r="15" fill="#ffefd2"/>`),
+    eSlider({label:"Angular Diameter", kind:"slider", min:.1, max:2, value:.53, dec:2, unit:"°"}),
+    prose("Pinpoint · a hard-edged disc"),
+  ]));
+
+  f.append(eCard("Dynamic settings","orbit",[
+    prose("Dynamic · clock advancing"),
+    eSlider({label:"Day Duration", kind:"slider", min:10, max:3600, value:600, dec:0, unit:"s"}),
+  ]));
+
+  f.append(eCard("Additional Sun settings","orbit",[
+    eSlider({label:"Direct", kind:"slider", min:0, max:1, value:1, dec:2, unit:""}),
+    propNode({label:"Sun Tint", kind:"colour", tint:"rgb(255,217,171)"}),
+    eSlider({label:"Day of Month", kind:"slider", min:1, max:31, value:21, dec:0, unit:""}),
+    eSlider({label:"Month", kind:"slider", min:1, max:12, value:6, dec:0, unit:""}),
+  ]));
+
+  f.append(note("Direction, intensity and colour drive the atmosphere, clouds and fog. Baked images are a separate source."));
+  return f;
+}
+
+/* ── Sky · AtmosphereSkyInspectorPanel.cpp ───────────────────────────────── */
+function panelSky(){
+  const f = document.createDocumentFragment();
+  f.append(header("Inspector / Environment","Atmospheric scattering","How air molecules scatter sunlight"));
+  f.append(sectionLabel("BAKING"));
+  f.append(eCard("Atmosphere bake","bake",[
+    prose("RGBA16F · 256 × 512 · radiance + transmittance"),
+    svgBox(120, `<rect width="300" height="120" fill="#101214"/>
+                 <text x="150" y="64" fill="#5d5d5d" font-size="10" text-anchor="middle">NO BAKED IMAGE</text>`),
+    prose("Bake the atmosphere to see the actual HDR image here. No substitute illustration."),
+    Object.assign(eButton("Bake atmosphere","bake"),{style:"margin-top:12px"}),
+  ]));
+  f.append(eCard("Baked atmosphere","orbit",[
+    prose("Full sphere · zenith / horizon / nadir; black below ground is expected"),
+    prose("Altitude profile · sampled opposite the baked Sun · zenith above, horizon below"),
+  ]));
+  f.append(sectionLabel("LIGHT SOURCE"));
+  f.append(eCard("Rayleigh","orbit",[
+    figure("1",".00","×"),
+    prose("How air molecules scatter sunlight"),
+    svgBox(90, `<rect width="300" height="90" fill="#131316"/>
+                <path d="M10 70C70 66 130 44 190 26 230 14 265 10 290 8" fill="none" stroke="#7fa8e0" stroke-width="1.6"/>
+                <text x="10" y="84" fill="#7d7d7d" font-size="9">380 nm</text>
+                <text x="290" y="84" fill="#7d7d7d" font-size="9" text-anchor="end">780 nm</text>`),
+    eSlider({label:"Rayleigh", kind:"slider", min:0, max:4, value:1, dec:2, unit:"×", hi:true}),
+    eSlider({label:"Density falloff", kind:"slider", min:1, max:16, value:8, dec:2, unit:"km"}),
+  ]));
+  f.append(eCard("Aerosol haze","orbit",[
+    prose("Suspended particles soften and attenuate light"),
+    eSlider({label:"Mie", kind:"slider", min:0, max:4, value:1, dec:2, unit:"×"}),
+    eSlider({label:"Mie Scale H", kind:"slider", min:.2, max:4, value:1.2, dec:2, unit:"km"}),
+  ]));
+  f.append(eCard("Ozone absorption","orbit",[
+    prose("Selective absorption across visible wavelengths"),
+    eSlider({label:"Ozone", kind:"slider", min:0, max:4, value:1, dec:2, unit:"×"}),
+  ]));
+  f.append(eCard("Ground reflectance","orbit",[
+    propNode({label:"Albedo", kind:"colour", tint:"rgb(76,69,58)"}),
+    prose("Original RGB ground albedo · applied separately, not stored in the smooth dome bake."),
+  ]));
+  f.append(note("Atmospheric scattering only: the bright area is scattered sunlight, not the Sun disc. Moon, stars, clouds and fog remain separate."));
+  return f;
+}
+
+/* ── Stars · StarsInspectorPanel.cpp ─────────────────────────────────────── */
+function panelStars(){
+  const f = document.createDocumentFragment();
+  f.append(header("Inspector / Environment","Stars","Catalogue field · scintillation · celestial pole"));
+  f.append(eCard("Stars settings","sparkles",[
+    tileRow([["Star field","on"],["Twinkle","on"],["Bake","na"],["Use baked","na"]]),
+  ]));
+  let dots = ""; let s = 1234;
+  for (let i = 0; i < 150; i++){ s = (s*1103515245 + 12345) & 0x7fffffff;
+    const x = (s % 2960)/10, y = ((s>>11) % 1560)/10, r = .5 + ((s>>7)%10)/8;
+    dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="#dcd8ee" opacity="${(.25+((s>>5)%70)/100).toFixed(2)}"/>`; }
+  f.append(eCard("Star field","sparkles",[
+    figure("6",".5","mag"),
+    svgBox(156, `<rect width="300" height="156" fill="#1b1a1e"/>${dots}`),
+    eSlider({label:"Limiting Magnitude", kind:"slider", min:-1.5, max:8, value:6.5, dec:1, unit:"mag", hi:true}),
+    prose("4 812 / 9 110 stars"),
+  ]));
+  f.append(eCard("Twinkle","sparkles",[
+    figure("45",null,"%"),
+    svgBox(96, `<rect width="300" height="96" fill="#1b1a1e"/>
+                <path d="M0 48 Q15 18 30 48 T60 48 T90 30 T120 60 T150 42 T180 54 T210 24 T240 60 T270 40 T300 48"
+                      fill="none" stroke="#c8aee0" stroke-width="1.4"/>`),
+    eSlider({label:"Twinkle Depth", kind:"slider", min:0, max:100, value:45, dec:0, unit:"%"}),
+    eSlider({label:"Twinkle Rate", kind:"slider", min:.1, max:8, value:2.4, dec:2, unit:"Hz"}),
+  ]));
+  f.append(eCard("Celestial rotation","orbit",[
+    figure("128",null,"°"),
+    svgBox(170, `<circle cx="150" cy="85" r="74" fill="none" stroke="#3a3a3a"/>
+                 <circle cx="150" cy="85" r="46" fill="none" stroke="#2e2e2e"/>
+                 <line x1="150" y1="85" x2="208" y2="40" stroke="#c0a7d8" stroke-width="1.4"/>
+                 <circle cx="150" cy="85" r="3" fill="#c0a7d8"/>
+                 <text x="150" y="8" fill="#7d7d7d" font-size="9" text-anchor="middle">0</text>
+                 <text x="232" y="88" fill="#7d7d7d" font-size="9">90</text>
+                 <text x="150" y="176" fill="#7d7d7d" font-size="9" text-anchor="middle">180</text>
+                 <text x="56" y="88" fill="#7d7d7d" font-size="9" text-anchor="end">270</text>`),
+    eSlider({label:"Celestial Rotation", kind:"slider", min:0, max:360, value:128, dec:0, unit:"°"}),
+  ]));
+  f.append(eCard("Renderer scale","orbit",[
+    eSlider({label:"Brightness", kind:"slider", min:0, max:4, value:1, dec:2, unit:"×"}),
+    eSlider({label:"Point Size", kind:"slider", min:.5, max:4, value:1.4, dec:2, unit:"px"}),
+  ]));
+  f.append(note("The catalogue is fixed; limiting magnitude only chooses how much of it is drawn."));
+  return f;
+}
+
+/* ── Clouds · CloudsInspectorPanel.cpp ───────────────────────────────────── */
+function panelClouds(local){
+  const f = document.createDocumentFragment();
+  f.append(header("Inspector / Environment", local ? "Local Cloud" : "Clouds",
+                  local ? "LOCAL VOLUMETRIC CLOUD · bounded volume"
+                        : "GLOBAL VOLUMETRIC CLOUDS · atmospheric layer"));
+  f.append(eCard("Cloud settings","orbit",[ tileRow([["Enabled","on"],["Follow wind","on"]]) ]));
+  f.append(eCard("Cloud coverage","orbit",[
+    figure("45",null,"%"),
+    svgBox(150, `<rect width="300" height="150" fill="#16181b"/>
+                 <g fill="#cfd6de" opacity=".5">
+                   <ellipse cx="80" cy="54" rx="46" ry="26"/><ellipse cx="190" cy="40" rx="58" ry="22"/>
+                   <ellipse cx="128" cy="104" rx="64" ry="28"/><ellipse cx="240" cy="110" rx="40" ry="20"/>
+                 </g>
+                 <text x="10" y="142" fill="#6f6f6f" font-size="9">TOP-DOWN DENSITY</text>`),
+    eSlider({label:"Coverage", kind:"slider", min:0, max:100, value:45, dec:0, unit:"%", hi:true}),
+  ]));
+  f.append(local
+    ? eCard("Local bounds","orbit",[
+        figure("180",null,"m"),
+        svgBox(140, `<g fill="none" stroke="#5f6a76"><path d="M70 40h120v70H70Z"/><path d="M110 20h120v70H110Z"/>
+                     <path d="M70 40 110 20M190 40 230 20M190 110 230 90M70 110 110 90"/></g>`),
+        propNode({label:"Centre", kind:"axis", axes:[0,0,220]}),
+        propNode({label:"Half-Size", kind:"axis", axes:[90,70,40]}),
+      ])
+    : eCard("Cloud base","orbit",[
+        figure("1",".80","km"),
+        svgBox(130, `<rect width="300" height="130" fill="#16181b"/>
+                     <line x1="0" y1="46" x2="300" y2="46" stroke="#8fa4bd" stroke-dasharray="4 4"/>
+                     <line x1="0" y1="92" x2="300" y2="92" stroke="#8fa4bd"/>
+                     <text x="8" y="40" fill="#7d7d7d" font-size="9">TOP 3.4 km</text>
+                     <text x="8" y="106" fill="#7d7d7d" font-size="9">BASE 1.8 km</text>`),
+        eSlider({label:"Base", kind:"slider", min:.2, max:8, value:1.8, dec:2, unit:"km"}),
+      ]));
+  f.append(eCard(local ? "Volume section" : "Layer thickness","orbit",[
+    figure("1",".60","km"),
+    eSlider({label:"Thickness", kind:"slider", min:.1, max:6, value:1.6, dec:2, unit:"km"}),
+  ]));
+  f.append(eCard("Cloud body","orbit",[
+    eSlider({label:"Density", kind:"slider", min:0, max:4, value:1, dec:2, unit:"×"}),
+    eSlider({label:"Feature Scale", kind:"slider", min:.1, max:4, value:1, dec:2, unit:"×"}),
+    eSlider({label:"Anisotropy", kind:"slider", min:-1, max:1, value:.35, dec:2, unit:""}),
+    local ? null : propNode({label:"Type", kind:"select", options:["Cumulus","Stratus","Cirrus","Cumulonimbus"]}),
+    local ? null : eSlider({label:"Anvil", kind:"slider", min:0, max:1, value:.2, dec:2, unit:""}),
+    local ? null : eSlider({label:"Ceiling", kind:"slider", min:1, max:12, value:6, dec:2, unit:"km"}),
+  ]));
+  const shadow = el("div","ecard");
+  shadow.style.cssText = "padding:16px 20px;display:flex;align-items:center;gap:10px";
+  const si = el("span"); si.innerHTML = mark("orbit","#8d8d8d");
+  shadow.append(si, el("span","prose","GPU cloud shadows · separate field"));
+  f.append(shadow);
+  f.append(note("Coverage and density drive the volumetric march; the shadow field is baked separately."));
+  return f;
+}
+
+/* ── Fog · FogInspectorPanel.cpp ─────────────────────────────────────────── */
+function panelFog(sort){
+  const text = {height:["Height Fog","HEIGHT FOG · exponential vertical density"],
+                aerial:["Atmospheric Fog","AERIAL PERSPECTIVE · surface-distance fog"],
+                local :["Local Volumetric Fog","LOCAL VOLUMETRIC FOG · bounded medium"]}[sort];
+  const f = document.createDocumentFragment();
+  f.append(header("Inspector / Environment", text[0], text[1]));
+  f.append(eCard("Fog settings","orbit",[
+    tileRow(sort === "local" ? [["Enabled","on"],["Follow wind","on"]] : [["Enabled","on"]]),
+  ]));
+  f.append(eCard("Visibility through fog","orbit",[
+    figure("38",".4","%"),
+    svgBox(140, `<rect width="300" height="140" fill="#16181b"/>
+                 <path d="M0 12C60 40 120 82 300 124" fill="none" stroke="#9fb6cc" stroke-width="1.6"/>
+                 <circle cx="150" cy="78" r="4" fill="#c0a7d8"/>
+                 <line x1="150" y1="0" x2="150" y2="140" stroke="#303030"/>`),
+    scale("0 m","2 000 m"),
+    prose("Transmittance at the probe distance"),
+  ]));
+  f.append(eCard("Medium","orbit",[
+    eSlider({label:"Density", kind:"slider", min:0, max:4, value:1, dec:2, unit:"×", hi:true}),
+    sort === "height" ? eSlider({label:"Falloff Height", kind:"slider", min:10, max:4000, value:391, dec:0, unit:"m"}) : null,
+    sort === "aerial" ? eSlider({label:"Start", kind:"slider", min:0, max:20000, value:800, dec:0, unit:"m"}) : null,
+    sort === "local"  ? eSlider({label:"Coverage", kind:"slider", min:0, max:100, value:60, dec:0, unit:"%"}) : null,
+    eSlider({label:"Feature Scale", kind:"slider", min:.1, max:4, value:1, dec:2, unit:"×"}),
+    eSlider({label:"Mie Blend", kind:"slider", min:0, max:1, value:.5, dec:2, unit:""}),
+    eSlider({label:"Sun Scatter", kind:"slider", min:0, max:4, value:1.2, dec:2, unit:"×"}),
+    eSlider({label:"Anisotropy", kind:"slider", min:-1, max:1, value:.4, dec:2, unit:""}),
+  ]));
+  f.append(sort === "local"
+    ? eCard("Local bounds","orbit",[
+        propNode({label:"Centre", kind:"axis", axes:[0,0,18]}),
+        propNode({label:"Half-Size", kind:"axis", axes:[18,18,9]}),
+      ])
+    : eCard("Height and tint","orbit",[
+        svgBox(110, `<rect width="300" height="110" fill="#16181b"/>
+                     <path d="M10 100C60 98 92 66 120 44 160 14 230 8 290 6" fill="none" stroke="#9fb6cc" stroke-width="1.5"/>`),
+        propNode({label:"Tint", kind:"colour", tint:"rgb(159,176,196)"}),
+      ]));
+  f.append(eCard("Spectral transmission","orbit",[
+    (() => { const w = el("div");
+      [["RED","62.1 %","#d08b86"],["GREEN","48.6 %","#8fcf9a"],["BLUE","33.0 %","#8aa9d8"]].forEach(([k,v,c]) => {
+        const l = el("div","specline"); const kk = el("div","k caps",k); kk.style.color = c;
+        l.append(kk, el("div","v mono",v)); w.append(l); });
+      return w; })(),
+  ]));
+  f.append(eCard("Neutral-light reference","orbit",[
+    (() => { const s = el("div","swatchline"); const i = el("i"); i.style.background = "#cfd7df";
+             s.append(i, el("span",null,"Neutral white reference")); return s; })(),
+    prose("The swatch is a fixed neutral light, not the scene's Sun."),
+  ]));
+  return f;
+}
+
+/* ── Weather · WeatherInspectorPanel.cpp ─────────────────────────────────── */
+function panelWind(){
+  const f = document.createDocumentFragment();
+  f.append(header("Inspector / Environment","Wind","WIND / AIR · shared advection field"));
+  f.append(eCard("Direction + magnitude","orbit",[
+    figure("4",".2","m/s"),
+    svgBox(190, `<circle cx="150" cy="95" r="84" fill="none" stroke="#343434"/>
+                 <circle cx="150" cy="95" r="56" fill="none" stroke="#2c2c2c"/>
+                 <circle cx="150" cy="95" r="28" fill="none" stroke="#262626"/>
+                 <line x1="150" y1="95" x2="96" y2="146" stroke="#c0a7d8" stroke-width="2"/>
+                 <circle cx="96" cy="146" r="5" fill="#c0a7d8"/>
+                 <text x="150" y="12" fill="#7d7d7d" font-size="9" text-anchor="middle">N</text>
+                 <text x="150" y="188" fill="#7d7d7d" font-size="9" text-anchor="middle">S</text>`),
+    prose("Drag outward for speed, around for bearing. Blows TOWARD N = +Y, E = +X. Outer ring = 40 m/s."),
+    eSlider({label:"Speed", kind:"slider", min:0, max:40, value:4.2, dec:2, unit:"m/s", hi:true}),
+    eSlider({label:"Bearing", kind:"slider", min:0, max:360, value:225, dec:0, unit:"°"}),
+    eSlider({label:"Shear", kind:"slider", min:0, max:1, value:.3, dec:2, unit:""}),
+    eSlider({label:"Veer", kind:"slider", min:-90, max:90, value:12, dec:0, unit:"°"}),
+    tileRow([["Air shear","on"]]),
+    prose("Air shear off = wind slides the cloud rigidly; on = it leans with altitude (a bounded, coherent tilt)."),
+    prose("Beaufort 3 · gentle breeze"),
+  ]));
+  f.append(eCard("Variation","orbit",[
+    eSlider({label:"Gust", kind:"slider", min:0, max:1, value:.35, dec:2, unit:""}),
+    eSlider({label:"Turbulence", kind:"slider", min:0, max:1, value:.25, dec:2, unit:""}),
+    eSlider({label:"Steadiness", kind:"slider", min:0, max:1, value:.7, dec:2, unit:""}),
+  ]));
+  f.append(eCard("Gust envelope","orbit",[
+    svgBox(110, `<rect width="300" height="110" fill="#1b1a1e"/>
+                 <path d="M0 70 Q25 30 50 62 T100 54 T150 76 T200 40 T250 66 T300 52"
+                       fill="none" stroke="#c8aee0" stroke-width="1.5"/>`),
+    prose("Actual shared gust model · phase 0–2π · vertical scale 0–2×. Steadiness scales variation in this backend: 0 removes gust and swirl."),
+  ]));
+  return f;
+}
+function panelPrecipitation(){
+  const f = document.createDocumentFragment();
+  f.append(header("Inspector / Environment","Precipitation","CLOUDS / PRECIPITATION · world-space simulation"));
+  f.append(eCard("Emission + collision","orbit",[
+    tileRow([["Enabled","on"],["Follow Wind","on"],["Spawn from Clouds","on"],["Ground Collision","on"]]),
+  ]));
+  const kinds = [["Rain","💧"],["Snow","❄"],["Hail","◍"],["Drizzle","⋮"],["Sleet","✻"]];
+  const order = [0,3,2,1,4];
+  const grid = el("div","typegrid");
+  order.forEach(k => { const c = el("div","tcell" + (k === 0 ? " sel":""));
+    const g = el("div"); g.style.cssText = "font-size:19px"; g.textContent = kinds[k][1];
+    c.append(g, el("span",null,kinds[k][0]));
+    c.onclick = () => { grid.querySelectorAll(".tcell").forEach(n => n.classList.remove("sel")); c.classList.add("sel"); };
+    grid.append(c); });
+  f.append(eCard("Precipitation type","orbit",[grid]));
+  f.append(eCard("Fall + density","orbit",[
+    figure("12",".0","mm/h"),
+    eSlider({label:"Intensity", kind:"slider", min:0, max:60, value:12, dec:1, unit:"mm/h", hi:true}),
+    eSlider({label:"Density", kind:"slider", min:0, max:4, value:1, dec:2, unit:"×"}),
+    eSlider({label:"Particle Size", kind:"slider", min:.1, max:4, value:1, dec:2, unit:"×"}),
+    eSlider({label:"Wind Drift", kind:"slider", min:0, max:2, value:1, dec:2, unit:"×"}),
+  ]));
+  f.append(eCard("Particle scale","orbit",[
+    figure("2",".40","mm"),
+    svgBox(110, `<rect width="300" height="110" fill="#16181b"/>
+                 <path d="M150 24c14 22 22 34 22 46a22 22 0 0 1-44 0c0-12 8-24 22-46Z" fill="#8fb6dd" opacity=".75"/>
+                 <line x1="10" y1="100" x2="290" y2="100" stroke="#3a3a3a"/>
+                 <text x="10" y="94" fill="#6f6f6f" font-size="9">0</text>
+                 <text x="290" y="94" fill="#6f6f6f" font-size="9" text-anchor="end">30 mm</text>`),
+    prose("Nominal diameter · type radius × size scale"),
+    prose("Magnified physical-size reference, not a particle count preview. Size scale changes drawn size; the backend uses type-specific fall speeds."),
+    prose("Terminal speed 6.8 m/s"),
+  ]));
+  f.append(eCard("Simulation + settling","orbit",[
+    eSlider({label:"Accumulation", kind:"slider", min:0, max:1, value:.4, dec:2, unit:""}),
+    (() => { const w = el("div");
+      [["PARTICLES","18 420"],["SPAWNED/S","3 100"],["COLLIDED/S","2 870"]].forEach(([k,v]) => {
+        const l = el("div","specline"); l.append(el("div","k caps",k), el("div","v mono",v)); w.append(l); });
+      return w; })(),
+    prose("Cloud-source and altitude gates apply in the simulation. Accumulation uses a bounded depth field, not permanently retained particles. No surface-wetness control."),
+  ]));
+  return f;
+}
+function panelRainbow(){
+  const f = document.createDocumentFragment();
+  f.append(header("Inspector / Environment","Rainbow","RAINBOW · liquid-water optics"));
+  f.append(eCard("Bake / image","bake",[ tileRow([["Bake","na"],["Use baked image","na"]]) ]));
+  f.append(eCard("Visibility","orbit",[ tileRow([["Enabled","on"],["Alexander's Band","on"]]) ]));
+  f.append(eCard("Optical preview","orbit",[
+    svgBox(130, `<rect width="300" height="130" fill="#101214"/>
+      <g fill="none" stroke-width="3">
+        <path d="M30 128A120 120 0 0 1 270 128" stroke="#d05b5b" opacity=".8"/>
+        <path d="M36 128A114 114 0 0 1 264 128" stroke="#d9a65a" opacity=".8"/>
+        <path d="M42 128A108 108 0 0 1 258 128" stroke="#cfd264" opacity=".8"/>
+        <path d="M48 128A102 102 0 0 1 252 128" stroke="#6fc077" opacity=".8"/>
+        <path d="M54 128A96 96 0 0 1 246 128" stroke="#6b8fd0" opacity=".8"/>
+        <path d="M60 128A90 90 0 0 1 240 128" stroke="#9a74c8" opacity=".8"/>
+      </g>`),
+    prose("Shared spectral kernel · sun 10° behind viewer · rain visibility 1 · rain path 500 m. Fixed test conditions, not the scene camera."),
+  ]));
+  f.append(eCard("Bow response","orbit",[
+    eSlider({label:"Intensity", kind:"slider", min:0, max:4, value:1, dec:2, unit:"×", hi:true}),
+    eSlider({label:"Width", kind:"slider", min:.2, max:4, value:1, dec:2, unit:"×"}),
+    eSlider({label:"Secondary", kind:"slider", min:0, max:1, value:.4, dec:2, unit:""}),
+    eSlider({label:"Minimum Path", kind:"slider", min:0, max:2000, value:500, dec:0, unit:"m"}),
+  ]));
+  return f;
+}
+
+/* ── Moon · MoonInspectorPanel.cpp ───────────────────────────────────────── */
+function panelMoon(){
+  const f = document.createDocumentFragment();
+  f.append(header("Inspector / Environment","Moon","Scene moons · choose a body for each"));
+  f.append(eCard("Moon settings","orbit",[
+    propNode({label:"Instance", kind:"select", options:["Luna","Moon 2","Moon 3","Moon 4"]}),
+    tileRow([["Visible","on"],["Follow sky","on"]]),
+  ]));
+  const strip = el("div","strip");
+  ["Luna","Phobos","Deimos","Io","Europa","Titan"].forEach((n,k) => {
+    const b = el("div","body" + (k===0?" sel":""));
+    const t = el("div"); t.style.cssText =
+      "width:62px;height:62px;border-radius:50%;background:radial-gradient(circle at 36% 32%,#e8e4da,#8e8a82 62%,#4a4844)";
+    b.append(t, el("span",null,n));
+    b.onclick = () => { strip.querySelectorAll(".body").forEach(x => x.classList.remove("sel")); b.classList.add("sel"); };
+    strip.append(b); });
+  f.append(eCard("Moon catalogue","orbit",[strip]));
+  f.append(eCard("Lunar phase","orbit",[
+    figure("18",".3","days"),
+    svgBox(140, `<circle cx="150" cy="70" r="56" fill="#4a4844"/>
+                 <path d="M150 14a56 56 0 0 1 0 112a38 56 0 0 0 0-112Z" fill="#ded9cf"/>`),
+    prose("62 % illuminated"),
+    eSlider({label:"Phase", kind:"slider", min:0, max:29.53, value:18.3, dec:2, unit:"d", hi:true}),
+  ]));
+  f.append(eCard("Moonlight","sun",[
+    figure("1",".00","×"),
+    eSlider({label:"Bright", kind:"slider", min:0, max:4, value:1, dec:2, unit:"×"}),
+    eSlider({label:"Glow", kind:"slider", min:0, max:4, value:1, dec:2, unit:"×"}),
+  ]));
+  f.append(eCard("Moon size","orbit",[
+    figure("0",".52","°"),
+    eSlider({label:"Size", kind:"slider", min:.05, max:4, value:.52, dec:2, unit:"°"}),
+    Object.assign(eButton("Natural size · 0.52°","reset"),{style:"margin-top:12px"}),
+  ]));
+  f.append(eCard("Lunar position","orbit",[
+    svgBox(150, `<circle cx="150" cy="75" r="66" fill="none" stroke="#343434"/>
+                 <ellipse cx="150" cy="75" rx="66" ry="22" fill="none" stroke="#2b2b2b"/>
+                 <line x1="150" y1="75" x2="198" y2="38" stroke="#c0a7d8" stroke-width="1.4"/>`),
+    eSlider({label:"Azimuth", kind:"slider", min:0, max:360, value:96, dec:0, unit:"°"}),
+    eSlider({label:"Elevation", kind:"slider", min:-90, max:90, value:28, dec:0, unit:"°"}),
+  ]));
+  f.append(eCard("Moon rotation","orbit",[
+    eSlider({label:"Roll", kind:"slider", min:-180, max:180, value:0, dec:0, unit:"°"}),
+    eSlider({label:"Pitch", kind:"slider", min:-90, max:90, value:0, dec:0, unit:"°"}),
+    Object.assign(eButton("Reset orientation","reset"),{style:"margin-top:12px"}),
+  ]));
+  return f;
+}
+
+/* ── Camera · CameraInspectorPanel.cpp ───────────────────────────────────── */
+function panelCamera(r){
+  const live = r.label === "Camera";
+  const f = document.createDocumentFragment();
+  f.append(header("Inspector / Scene / Cameras", live ? "Main Camera" : "Cine Camera",
+                  live ? "Live viewport camera" : "Cine Camera · lens study"));
+  f.append(eCard("Lens + field of view","orbit",[
+    figure("35",".0","mm"),
+    svgBox(140, `<rect width="300" height="140" fill="#16181b"/>
+                 <rect x="18" y="48" width="12" height="44" fill="#4a4a4a"/>
+                 <path d="M30 70L250 24L250 116Z" fill="#c0a7d8" opacity=".16"/>
+                 <line x1="30" y1="70" x2="250" y2="24" stroke="#c0a7d8"/>
+                 <line x1="30" y1="70" x2="250" y2="116" stroke="#c0a7d8"/>
+                 <ellipse cx="120" cy="70" rx="7" ry="22" fill="none" stroke="#9fb6cc"/>
+                 <line x1="250" y1="14" x2="250" y2="126" stroke="#3e3e3e" stroke-dasharray="3 3"/>
+                 <text x="150" y="134" fill="#7d7d7d" font-size="9" text-anchor="middle">54.4° HORIZONTAL</text>`),
+    eSlider({label:"Focal Length", kind:"slider", min:8, max:300, value:35, dec:1, unit:"mm", hi:true}),
+  ]));
+  f.append(eCard("Aperture study","orbit",[
+    figure("f / 2",".8"),
+    svgBox(132, `<circle cx="150" cy="66" r="52" fill="none" stroke="#3a3a3a"/>
+                 <path d="M150 20 196 46 196 98 150 124 104 98 104 46Z" fill="#0f0f0f" stroke="#6f6f6f"/>
+                 <circle cx="150" cy="72" r="20" fill="#d9d2e4" opacity=".16"/>`),
+    eSlider({label:"Aperture", kind:"slider", min:1.2, max:22, value:2.8, dec:1, unit:"f"}),
+    prose("Entrance pupil 12.5 mm · in-focus depth 0.42 m"),
+  ]));
+  f.append(eCard("Subject plane + sharpness","orbit",[
+    figure("3",".2","m"),
+    svgBox(120, `<rect width="300" height="120" fill="#16181b"/>
+                 <line x1="18" y1="60" x2="282" y2="60" stroke="#3a3a3a"/>
+                 <rect x="150" y="18" width="3" height="84" fill="#c0a7d8"/>
+                 <rect x="118" y="30" width="66" height="60" fill="#c0a7d8" opacity=".12"/>`),
+    eSlider({label:"Subject Distance", kind:"slider", min:.2, max:120, value:3.2, dec:2, unit:"m"}),
+    prose("Near 3.01 m · far 3.43 m"),
+  ]));
+  f.append(eCard("Sensor / support","orbit",[
+    eSlider({label:"Sensor Width", kind:"slider", min:6, max:70, value:36, dec:1, unit:"mm"}),
+    prose("Aspect 1.778 · hyperfocal 14.6 m"),
+  ]));
+  return f;
+}
+
+/* ── Lens flare · LensFlareInspectorPanel.cpp ────────────────────────────── */
+function panelLensFlare(){
+  const f = document.createDocumentFragment();
+  f.append(header("Inspector / Environment / Optics","Lens flare","Layered light · additive linear radiance"));
+  f.append(sectionLabel("BAKING"));
+  f.append(eCard("Lens flare image","bake",[
+    svgBox(110, `<rect width="300" height="110" fill="#0f1012"/>
+                 <circle cx="96" cy="55" r="16" fill="#ffe9c0" opacity=".85"/>
+                 <circle cx="150" cy="55" r="9" fill="#c0a7d8" opacity=".5"/>
+                 <circle cx="196" cy="55" r="13" fill="#9fd4c0" opacity=".4"/>
+                 <circle cx="240" cy="55" r="6" fill="#d8a7a7" opacity=".5"/>`),
+    prose("One cached image feeds this thumbnail and the composite. Scene baked-image playback is not wired yet."),
+    Object.assign(eButton("Export HDR","upload"),{style:"margin-top:12px"}),
+  ]));
+  f.append(eCard("Flare composite","sun",[
+    prose("Drag the light · ghosts follow the optical axis"),
+    eSlider({label:"Intensity", kind:"slider", min:0, max:4, value:1, dec:2, unit:"×", hi:true}),
+  ]));
+  f.append(eCard("Flare layers","sparkles",[
+    prose("6 elements"),
+    propNode({label:"Type", kind:"select", options:["Modern","Legacy preset"]}),
+    eSlider({label:"Ghosts", kind:"slider", min:0, max:12, value:6, dec:0, unit:""}),
+    eSlider({label:"Ghost spacing", kind:"slider", min:0, max:2, value:.6, dec:2, unit:""}),
+    eSlider({label:"Aperture Blades", kind:"slider", min:3, max:12, value:6, dec:0, unit:""}),
+    eSlider({label:"Rotation", kind:"slider", min:0, max:360, value:0, dec:0, unit:"°"}),
+    prose("Aperture-shaped internal reflections"),
+  ]));
+  f.append(eCard("Halo & optical response","orbit",[
+    eSlider({label:"Halo Radius", kind:"slider", min:0, max:2, value:.8, dec:2, unit:""}),
+    eSlider({label:"Halo brightness", kind:"slider", min:0, max:4, value:1, dec:2, unit:"×"}),
+    eSlider({label:"Spread", kind:"slider", min:0, max:2, value:1, dec:2, unit:""}),
+    prose("Anamorphic stays horizontal. Rotation affects streaks and starburst."),
+  ]));
+  f.append(eCard("Legacy preset settings","orbit",[ prose("Legacy preset: round ghosts, maximum 8") ]));
+  return f;
+}
+
+/* ── Tyre quick strip · TyreInspectorPanel.cpp ───────────────────────────── */
+function tyreGroups(label){
+  if (label === "Tread Pattern") return [
+    {title:"Tread pattern", head:["3",".5","mm"], cap:"One swept line per layer; noise layers are skipped by the section view.",
+     rows:[{label:"Depth", kind:"slider", min:0, max:12, value:3.5, dec:2, unit:"mm"},
+           {label:"Pitch", kind:"slider", min:4, max:64, value:28, dec:1, unit:"mm"},
+           {label:"Kind", kind:"select", options:["Swept line","Block","Sipe","Noise"]},
+           {label:"Void ratio", kind:"slider", min:0, max:.6, value:.28, dec:2, unit:""}]},
+    {title:"Layers", head:null, cap:"The layer sequence lives in the Tyre Generator window.",
+     rows:[{label:"Count", kind:"readout", text:"4"},
+           {label:"Noise", kind:"switch", on:true}]}];
+  if (label === "Wheel Rim") return [
+    {title:"Rim", head:["18","","in"], cap:"Rim diameter and width set the tyre's seat.",
+     rows:[{label:"Diameter", kind:"slider", min:12, max:24, value:18, dec:0, unit:"in"},
+           {label:"Width", kind:"slider", min:4, max:14, value:8, dec:1, unit:"J"},
+           {label:"Offset", kind:"slider", min:-40, max:60, value:35, dec:0, unit:"mm"},
+           {label:"Finish", kind:"colour", tint:"rgb(204,219,237)"}]}];
+  return [
+    {title:"Casing", head:["225","","mm"], cap:"Section width, aspect and rim diameter — the moulded size.",
+     rows:[{label:"Section", kind:"slider", min:125, max:355, value:225, dec:0, unit:"mm"},
+           {label:"Aspect", kind:"slider", min:25, max:85, value:45, dec:0, unit:"%"},
+           {label:"Rim", kind:"slider", min:12, max:24, value:18, dec:0, unit:"in"},
+           {label:"Profile", kind:"select", options:["Road","Sport","Off-road"]}]},
+    {title:"Tread", head:["7",".8","mm"], cap:"Depth is cut from the moulded surface by the contact weight.",
+     rows:[{label:"Tread Depth", kind:"slider", min:0, max:16, value:7.8, dec:2, unit:"mm"},
+           {label:"Tread Width", kind:"slider", min:80, max:320, value:196, dec:0, unit:"mm"},
+           {label:"Shoulder", kind:"slider", min:0, max:1, value:.35, dec:2, unit:""}]},
+    {title:"Contact", head:["2",".40","bar"], cap:"Pressure and load set the contact patch the solver uses.",
+     rows:[{label:"Pressure", kind:"slider", min:1, max:4.5, value:2.4, dec:2, unit:"bar"},
+           {label:"Load", kind:"slider", min:0, max:12, value:4.1, dec:2, unit:"kN"},
+           {label:"Camber", kind:"slider", min:-6, max:6, value:-1.2, dec:2, unit:"°"},
+           {label:"Patch", kind:"readout", text:"182 × 141 mm"}]},
+    {title:"Rubber", head:null, cap:"Compound and sidewall tint; the generator bakes them into the asset.",
+     rows:[{label:"Compound", kind:"select", options:["Soft","Medium","Hard"]},
+           {label:"Sidewall", kind:"colour", tint:"rgb(33,33,36)"},
+           {label:"Stiffness", kind:"slider", min:0, max:1, value:.55, dec:2, unit:""}]}];
+}
+function panelTyre(r){
+  const f = document.createDocumentFragment();
+  tyreGroups(r.label).forEach(g => {
+    const c = el("section","tcard");
+    const h = el("header"); const bar = el("i"); bar.style.background = r.tint;
+    h.append(bar, el("span",null,g.title)); c.append(h);
+    if (g.head){ const fig = el("div","head");
+      fig.append(el("span",null,g.head[0]));
+      if (g.head[1]) fig.append(Object.assign(el("em"),{textContent:g.head[1]}));
+      if (g.head[2]) fig.append(el("small",null,g.head[2]));
+      c.append(fig); }
+    if (g.cap) c.append(el("div","cap",g.cap));
+    g.rows.forEach(p => {
+      const row = el("div","trow"); row.append(el("div","k",p.label));
+      const z = el("div","z"); z.append(propNode(p).querySelector(".pzone").firstChild);
+      row.append(z); c.append(row); });
+    f.append(c);
+  });
+  return f;
+}
+
+/* ── the router ──────────────────────────────────────────────────────────── */
+function dedicatedPanel(r){
+  switch (appearanceOf(r)){
+    case "sun":           return panelSun();
+    case "sky":           return panelSky();
+    case "stars":         return panelStars();
+    case "clouds":        return panelClouds(false);
+    case "localcloud":    return panelClouds(true);
+    case "heightfog":     return panelFog("height");
+    case "aerialfog":     return panelFog("aerial");
+    case "localfog":      return panelFog("local");
+    case "wind":          return panelWind();
+    case "precipitation": return panelPrecipitation();
+    case "rainbow":       return panelRainbow();
+    case "moon":          return panelMoon();
+    case "camera":        return panelCamera(r);
+    case "lensflare":     return panelLensFlare();
+    case "tyre":          return panelTyre(r);
+    default:              return null;
+  }
+}
+
 function renderInspector(){
   const ident = $("#ident"), props = $("#props"), foot = $("#i-foot");
   ident.innerHTML = ""; props.innerHTML = ""; foot.innerHTML = "";
@@ -908,7 +1723,25 @@ function renderInspector(){
   eye.onclick = () => { r.visible = !r.visible; render(); };
   ident.append(sw, who, lock, eye);
 
-  /* the schema cards */
+  /* the dedicated per-type panel, when the row carries an appearance */
+  const dedicated = dedicatedPanel(r);
+  if (dedicated){
+    const page = el("div", appearanceOf(r) === "tyre" ? "" : "env");
+    page.append(dedicated);
+    props.append(page);
+    foot.append(el("div",null,
+      `${kindLabel(r.kind)} · ${r.dynamic?"dynamic":"static"}${r.locked?" · locked":""}`));
+    const fr = el("div","right");
+    fr.append(el("span","caps","FPS"));
+    fr.append(Object.assign(el("b","mono"), {textContent:"60", style:"color:var(--green)"}));
+    fr.append(el("span",null,"·"));
+    fr.append(el("span","caps","TRIS"));
+    fr.append(Object.assign(el("b","mono"), {textContent:"5994"}));
+    foot.append(fr);
+    return;
+  }
+
+  /* the generic fallback sheet — folders and plain geometry */
   if (!r.sheet || r.sheetFor !== r.kind){ r.sheet = sheetFor(r, i); r.sheetFor = r.kind; }
   r.sheet.forEach((g, k) => props.append(card(g.title, g.props.map(propNode), r.kind + k)));
 
