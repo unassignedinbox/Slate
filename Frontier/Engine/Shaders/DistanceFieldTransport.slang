@@ -219,19 +219,86 @@ vec3 HemisphereDirection(vec3 Normal, uint Sample, uint SampleCount)
     vec3 Tangent=normalize(abs(Normal.z)<0.9 ? cross(Normal,vec3(0,0,1)) : cross(Normal,vec3(0,1,0)));
     return Tangent*(cos(Angle)*sqrt(1.0-Height))+cross(Normal,Tangent)*(sin(Angle)*sqrt(1.0-Height))+Normal*sqrt(Height);
 }
+// Sample actual textured surface cards as well as cosine directions. The balance heuristic
+// prevents a small bright card from becoming a sharp translated image of itself at low ray counts.
+float BranchSolidAngle(uint Slot, vec3 Position, vec3 Normal)
+{
+    DistanceBranch Entry=Branches[Slot];
+    vec3 Center=(Entry.Minimum.xyz+Entry.Maximum.xyz)*0.5-Position;
+    vec3 Extent=(Entry.Maximum.xyz-Entry.Minimum.xyz)*0.5;
+    if (dot(Center,Normal)+dot(Extent,abs(Normal))<=0.0) return 0.0;
+    float Area=max(Extent.x*Extent.y+Extent.y*Extent.z+Extent.z*Extent.x,1e-12);
+    return Area/(dot(Center,Center)+Area);
+}
+float FacetSolidAngle(uint Slot, vec3 Position, vec3 Normal)
+{
+    DistanceFacet Facet=Facets[Slot];
+    vec3 Delta=(Facet.Alpha.xyz+Facet.Beta.xyz+Facet.Gamma.xyz)/3.0-Position;
+    float Height=max(dot(Facet.Alpha.xyz-Position,Normal),max(dot(Facet.Beta.xyz-Position,Normal),dot(Facet.Gamma.xyz-Position,Normal)));
+    if (Height<=0.0) return 0.0;
+    float Area=0.5*length(cross(Facet.Beta.xyz-Facet.Alpha.xyz,Facet.Gamma.xyz-Facet.Alpha.xyz));
+    float DistanceSquared=max(dot(Delta,Delta),1e-12);
+    return Area*min(1.0,Height/sqrt(DistanceSquared))*abs(dot(Facet.Normal.xyz,Delta))/
+        (sqrt(DistanceSquared)*(DistanceSquared+Area*0.1));
+}
+// The preorder BVH splits each contiguous facet range in half. Both sampling and PDF
+// evaluation follow that same partition; no array, recursion, or per-pixel all-facet scan.
+uint SelectRadianceFacet(vec3 Position, vec3 Normal, float Sequence, uint Requested, out float Probability)
+{
+    uint Branch=0u, First=0u, Count=GeometryCounts.z;
+    Probability=1.0;
+    if (Count==0u) { Probability=0.0; return 0xFFFFFFFFu; }
+    while (Branches[Branch].Range.z==0u)
+    {
+        uint Left=Branch+1u, Right=Branches[Left].Range.x, Half=Count/2u;
+        float Alpha=BranchSolidAngle(Left,Position,Normal), Beta=BranchSolidAngle(Right,Position,Normal);
+        if (Alpha+Beta<=0.0) { Probability=0.0; return 0xFFFFFFFFu; }
+        float Split=Alpha/(Alpha+Beta);
+        bool ChooseLeft=Requested==0xFFFFFFFFu ? Sequence<Split : Requested<First+Half;
+        if (ChooseLeft)
+        {
+            Probability*=Split; Sequence/=max(Split,1e-20); Branch=Left; Count=Half;
+        }
+        else
+        {
+            Probability*=1.0-Split; Sequence=(Sequence-Split)/max(1.0-Split,1e-20);
+            Branch=Right; First+=Half; Count-=Half;
+        }
+    }
+    DistanceBranch Entry=Branches[Branch];
+    vec4 Weights=vec4(0.0);
+    float Sum=0.0;
+    for (uint Index=0u; Index<Entry.Range.z; ++Index)
+    { Weights[Index]=FacetSolidAngle(Entry.Range.y+Index,Position,Normal); Sum+=Weights[Index]; }
+    if (Sum<=0.0) { Probability=0.0; return 0xFFFFFFFFu; }
+    float Target=clamp(Sequence,0.0,0.999999)*Sum, Accumulated=0.0;
+    for (uint Index=0u; Index<Entry.Range.z; ++Index)
+    {
+        Accumulated+=Weights[Index];
+        if (Requested==Entry.Range.y+Index || (Requested==0xFFFFFFFFu && Target<Accumulated))
+        { Probability*=Weights[Index]/Sum; return Entry.Range.y+Index; }
+    }
+    Probability=0.0; return 0xFFFFFFFFu;
+}
+float RadianceDirectionDensity(uint Facet, vec3 Origin, vec3 Point, float Probability)
+{
+    vec3 Delta=Point-Origin;
+    float Area=0.5*length(cross(Facets[Facet].Beta.xyz-Facets[Facet].Alpha.xyz,Facets[Facet].Gamma.xyz-Facets[Facet].Alpha.xyz));
+    return Probability*dot(Delta,Delta)/max(Area*abs(dot(Facets[Facet].Normal.xyz,normalize(Delta))),1e-20);
+}
 vec3 GatherDistanceRadiance(vec3 Position, vec3 Normal, bool Current)
 {
     float Cell; SampleSceneDistance(Position,Cell);
     vec3 Origin=Position+Normal*0.002, Result=vec3(0.0);
-    // A four-direction final gather makes four sharp displaced emitter silhouettes on matte surfaces.
-    // Fixed quadrature on both paths also removes the perpetual 16-frame cycle from the radiance cache.
-    uint SampleCount=Current ? 64u : 32u;
+    // Fixed quadrature removes the perpetual frame cycle; area/cosine MIS reduces spatial aliasing.
+    uint SampleCount=Current ? 32u : 16u;
     for (uint Sample=0u; Sample<SampleCount; ++Sample)
     {
         vec3 Direction=HemisphereDirection(Normal,Sample,SampleCount);
         float Travel=Cell;
         vec3 Incoming=PC.SkyAmbient.xyz;
         bool Resolved=false;
+        DistanceRayHit GatherHit; GatherHit.Facet=0xFFFFFFFFu; GatherHit.Travel=0.0;
         for (uint Step=0u; Step<48u; ++Step)
         {
             vec3 Point=Origin+Direction*Travel;
@@ -240,6 +307,7 @@ vec3 GatherDistanceRadiance(vec3 Position, vec3 Normal, bool Current)
             {
                 DistanceRayHit Hit=TraceDistanceMesh(Origin,Direction,1e20);
                 if (Hit.Facet!=0xFFFFFFFFu) Incoming=SampleCachedRadiance(Hit.Facet,Origin+Direction*Hit.Travel,Current);
+                GatherHit=Hit;
                 Resolved=true;
                 break;
             }
@@ -250,6 +318,7 @@ vec3 GatherDistanceRadiance(vec3 Position, vec3 Normal, bool Current)
                 if (Hit.Facet!=0xFFFFFFFFu)
                 {
                     Incoming=SampleCachedRadiance(Hit.Facet,Origin+Direction*Hit.Travel,Current);
+                    GatherHit=Hit;
                     Resolved=true;
                     break;
                 }
@@ -260,10 +329,34 @@ vec3 GatherDistanceRadiance(vec3 Position, vec3 Normal, bool Current)
         if (!Resolved)
         {
             DistanceRayHit FinalHit=TraceDistanceMesh(Origin,Direction,1e20);
+            GatherHit=FinalHit;
             Incoming=FinalHit.Facet==0xFFFFFFFFu ? PC.SkyAmbient.xyz :
                 SampleCachedRadiance(FinalHit.Facet,Origin+Direction*FinalHit.Travel,Current);
         }
-        Result+=Incoming/float(SampleCount);
+        float CosineDensity=max(dot(Normal,Direction),0.0)/3.14159265359;
+        float AreaDensity=0.0;
+        if (GatherHit.Facet!=0xFFFFFFFFu)
+        {
+            float Probability;
+            SelectRadianceFacet(Origin,Normal,0.0,GatherHit.Facet,Probability);
+            AreaDensity=RadianceDirectionDensity(GatherHit.Facet,Origin,Origin+Direction*GatherHit.Travel,Probability);
+        }
+        Result+=Incoming*(CosineDensity/max(CosineDensity+AreaDensity,1e-20))/float(SampleCount);
+        float Probability;
+        uint Facet=SelectRadianceFacet(Origin,Normal,(float(Sample)+0.5)/float(SampleCount),0xFFFFFFFFu,Probability);
+        if (Facet==0xFFFFFFFFu || Probability<=0.0) continue;
+        vec2 Coordinate=fract(vec2(0.5)+float(Sample)*vec2(0.754877666,0.569840296));
+        vec3 Point=CardPosition(Facet,Coordinate), Delta=Point-Origin;
+        float TravelToCard=length(Delta);
+        if (TravelToCard<1e-4) continue;
+        Direction=Delta/TravelToCard;
+        CosineDensity=max(dot(Normal,Direction),0.0)/3.14159265359;
+        if (CosineDensity<=0.0) continue;
+        DistanceRayHit CardHit=TraceDistanceMesh(Origin,Direction,TravelToCard+0.002);
+        if (CardHit.Facet!=Facet) continue;
+        AreaDensity=RadianceDirectionDensity(Facet,Origin,Point,Probability);
+        Result+=SampleCachedRadiance(Facet,Point,Current)*
+            (CosineDensity/max(CosineDensity+AreaDensity,1e-20))/float(SampleCount);
     }
     return Result;
 }

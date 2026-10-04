@@ -131,10 +131,40 @@ int RunDistanceArtifacts(const char* Shaders, const char* Destination)
     for (size_t Index=0;Index<Diffuse.size();Index+=4)
         ReflectionDelta=std::max(ReflectionDelta,unsigned(std::abs(int(Diffuse[Index])-int(Reflected[Index]))));
     std::cout<<"METRIC zero_specular_reflection_delta "<<ReflectionDelta<<'\n';
+    // Independent irradiance quadrature: an absorbing red emitter prevents further bounces.
+    // This is an oracle only; the measured image still executes unmodified production stages.
+    Frame.ReflectionMode=0;
+    Materials[1].AlbedoR=Materials[1].AlbedoG=Materials[1].AlbedoB=0;
+    Slabs[1].BaseColorR=Slabs[1].BaseColorG=Slabs[1].BaseColorB=0;
+    Host.Replace(MaterialBuffer,Materials.data(),Materials.size()*sizeof(MaterialRecord));
+    Host.Replace(SlabBuffer,Slabs.data(),Slabs.size()*sizeof(MaterialSlabRecord)); ++Frame.MaterialRevision;
+    Require(Geometry.Construct(Vertices,Indices,Instances,Materials),"Absorbing emitter update");
+    const auto SingleBounce=Execute("matte-single-bounce",48);
+    std::ofstream Reference(std::filesystem::path(Destination)/"matte-reference.ppm",std::ios::binary);
+    Reference<<"P6\n"<<Width<<' '<<Height<<"\n255\n";
+    double IrradianceError=0;
+    for (unsigned Row=0;Row<Height;++Row) for (unsigned Column=0;Column<Width;++Column)
+    {
+        const double X=(double(Column)+.5)/Width*4-2, Y=(double(Row)+.5)/Height*4-2;
+        double Irradiance=0;
+        for (unsigned Beta=0;Beta<32;++Beta) for (unsigned Alpha=0;Alpha<32;++Alpha)
+        {
+            const double DeltaX=(Alpha+.5)/32*1.2-.6-X, DeltaY=(Beta+.5)/32*1.4-.7-Y;
+            const double DistanceSquared=DeltaX*DeltaX+DeltaY*DeltaY+1;
+            Irradiance+=1.2*1.4/(32*32*3.141592653589793*DistanceSquared*DistanceSquared);
+        }
+        const double Radiance=.7*4*Irradiance;
+        const unsigned char Pixel[3]={static_cast<unsigned char>(std::lround(255*std::pow(Radiance/(Radiance+1),1/2.2))),0,0};
+        Reference.write(reinterpret_cast<const char*>(Pixel),3);
+        IrradianceError+=std::pow(double(SingleBounce[(Row*Width+Column)*4])-Pixel[0],2);
+    }
+    IrradianceError=std::sqrt(IrradianceError/(Width*Height));
+    std::cout<<"METRIC single_bounce_reference_rms "<<IrradianceError<<'\n';
     if (std::getenv("SDF_REQUIRE_ARTIFACTS"))
     {
         Require(MaximumShift<0.1,"Camera-snapped clipmaps changed a static matte shadow");
         Require(ReflectionDelta<=1,"Zero specular weight still reflects scene geometry");
+        Require(IrradianceError<6,"Diffuse irradiance differs from independent rectangular-emitter integration");
         Require(SymmetryError<10,"Diffuse quadrature still projects directional emitter silhouettes");
     }
     Stage.Destroy();
