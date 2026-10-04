@@ -37,6 +37,7 @@
 | C022 | Resizable statistics/debug card | Implemented and browser-checked | Native card with engine intervals/completed GPU telemetry |
 | C023 | Native conversion, bottom baking, stack safety | Approved HTML baseline retained | Initial native checkpoint; see remaining work below |
 | C024 | Native Sun and atmosphere graph controls | Approved HTML baseline retained | Eight interactive plots; native input and low-stack checks passed |
+| C030 | Polygon-only cliff shapes, bounded joints and local spalls | Implemented; geometry/browser checks passed | Not changed; HTML-only geological modelling pass |
 
 ## 2026-10-04 — C001: Construct presentation
 
@@ -1376,3 +1377,139 @@ frustum culling. Static geometry G-buffer/depth reuse with dynamic-geometry comp
 optimization; it is **not** implemented by this scheduling change. Lighting/shadow changes would still
 require reshading those cached static surfaces. Thin-surface leakage, finite probe resolution, mixed-age
 captures and higher-bounce latency remain; this iteration reduces latency rather than claiming to erase it.
+
+## 2026-10-05 — C030: polygon-only cliff construction workspace
+
+### Scope and inspected source
+
+The user switched from the completed GI latency work to the cliff generator at
+<https://github.com/darkenigmainbox/Frontier/tree/arena%2F01a1089a-frontier>.
+Inspected source revision: `b0a0cc578b33bb73b661ae248deacf6a84eb57fb`.
+The explicit exclusion of the SDF stage governs this implementation.
+
+Source inspection found three full-width wedge masses, global plane cuts, whole-edge bevel-style chips,
+a Flask/API-dependent viewer, and a failure path that silently substituted previously exported stage OBJs.
+The Python SDF meshing/erosion path is **not** ported, invoked, or approximated with a hidden distance field.
+The other repository is unchanged; this is a new static-browser implementation in this session's Slate branch.
+
+### Delivered files and construction mechanisms
+
+`Frontier/Experimental/CliffSequence/index.html` is the entry point. It uses the repository's existing Three.js,
+OrbitControls and DM Sans assets. There is no Python backend, generated-file endpoint, third-party runtime CDN,
+or precomputed OBJ fallback. The new module does not change the native engine, Fluid, SolidArc, or GI demo.
+
+- `CliffSpecification.js`: three authored landforms—headland, stepped escarpment and amphitheatre—with crown,
+  bay, buttress and cross-section profiles. Width, height, depth, relief and retreat expose geometric controls.
+  Seed chooses discrete bedding, joint, spall and fissure catalogue entries/occurrences, not vertex offsets.
+  The base silhouette is controlled by the chosen profile and dimensions, not by a spatial noise function.
+- `PolyhedronSolver.js`: build a continuous profile loft through convex construction cells; clip cells against
+  geological planes; cancel internal interfaces and stitch coplanar contours before meshing. Subdivide shared
+  constraints consistently and triangulate planar faces, including incision holes, with constrained Delaunay
+  triangulation. This is polygon meshing, not Voronoi fracture/noise generation.
+- `FractureSequence.js`: five cached stage results:
+  1. Continuous macro mass with concave bays and projecting buttresses.
+  2. Coherently dipping beds using authored thickness sequences and actual joint apertures.
+  3. Staggered joints restricted to the front volume, terminating at a finite rear plane. Per-block supporting
+     face cuts create localized recesses; rear strata are not split by the vertical joint family.
+  4. Bounded edge spalls. Wedge and flake plans replace a local patch on two adjoining faces with four or six
+     real fracture facets. At least ten percent of the original edge length remains beyond each end of a cut.
+     A concave spall cavity is not an infinite bevel plane applied to an entire edge.
+  5. Finite, kinked, tapered-mouth polygon V-grooves on exposed faces, with closed bottoms and bounded depths.
+- `TriangleSolver.js`: local link-condition edge collapses, diagonal flips and cap repairs. Each cleanup
+  operation uses a 0.12 m local tolerance and rejects triangle reversal; this is not a global error bound.
+  Graded constraint refinement concentrates triangles around small cuts without changing the planar surface.
+  Spalls/fissures that increase their parent body's below-5-degree triangle count are rolled back and counted.
+- `GenerationQueue.js`: a cancellable module worker. Revisions reject obsolete messages. Structural defects,
+  non-finite/non-positive body volumes, and invalid recipes produce explicit failures, not old geometry.
+  Starting a rebuild discards the previous result and render meshes; OBJ export is disabled until completion.
+- `WorkspacePanel.js` / `.css`: native-style document rail, outliner, persistent Editor Camera entry, inspector,
+  stage navigation, draggable parameter sliders, clay/wireframe/cut-surface views, lighting controls, orbit/pan,
+  double-click rock inspection, isolation, exploded inspection, and a camera-plane scale indicator.
+  Exploded/isolated display transforms do not modify exported geometry.
+- `PlanarSolver/cdt2d.js`: locally bundled `cdt2d` 1.0.0 and exact-predicate dependencies; their MIT notices and
+  versions are retained together in `PlanarSolver/LICENSE.txt`. No dependency uses spatial noise to make shape.
+
+There are no normal/displacement maps, procedural noise textures, tessellation-based silhouette changes,
+or textured materials concealing the geometry. Clay uses the actual triangle normals. The cut-surface colour
+view is an explicitly selected diagnostic, not the default material.
+
+### Geometry verification
+
+`VisualProof/CliffSequence/VerifyGeometry.mjs` executes 13 recipes / 65 stages, including three landforms,
+multiple seeds, opposite dimensional extremes, maximum relief/retreat, zero damage, dense damage, and fine cracks.
+All tested stages passed finite/indexed triangle checks, closed edge incidence, consistent edge winding,
+vertex-link manifoldness, duplicate/degenerate triangle checks, positive body volumes and bounded rear joints.
+The spall check also verifies that both ends of each original edge survive. Replaying the default produced
+identical geometry and feature records. No-damage stages preserve their preceding triangle topology.
+
+Default recipe: headland, seed 42, 32 × 18 × 12 m:
+
+| Stage             | Mesh objects | Vertices | Triangles | Spalls | Fissures | Triangles below 5° |
+| ----------------- | ------------ | -------- | --------- | ------ | -------- | ------------------ |
+| Macro mass        | 1            | 273      | 542       | 0      | 0        | 0                  |
+| Bedding           | 7            | 4,501    | 8,966     | 0      | 0        | 0                  |
+| Bounded joints    | 56           | 8,313    | 16,390    | 0      | 0        | 0                  |
+| Edge spalls       | 56           | 12,155   | 24,074    | 141    | 0        | 0                  |
+| Surface fissures  | 56           | 14,575   | 28,914    | 141    | 25       | 0                  |
+
+All five default stages have zero open/nonmanifold edges, nonmanifold vertices, duplicate/degenerate triangles
+and edge-winding errors. Final minimum triangle angle: **5.32127°**. Two spall attempts and two fissure attempts
+were rejected by the quality check rather than silently introducing narrower triangles.
+
+`VerifyIntersections.cjs` independently checks all five default stages using a BVH broad phase and
+separating-axis triangle tests in double precision. It found **zero self-intersections and zero inter-body
+surface intersections**. Coplanar pairs are included. Shared-vertex pairs are contracted toward their
+centroids by 1e-4 to exclude legitimate boundary contact; the projection comparison tolerance is 1e-8 m.
+This numerical fixture check is not a proof for every possible parameter combination or sub-tolerance contact.
+The verifier includes known intersecting and separated triangle fixtures. Its npm packages are verification
+requirements only: `three` 0.160.0 and `three-mesh-bvh` 0.8.3; neither replaces the shipped repository assets.
+
+### Remaining limits and use
+
+- This is an authored geological modelling system, not a fracture-mechanics or physical erosion simulation.
+  It deliberately leaves SDF erosion/remeshing out. Joint apertures, finite face recesses, spalls and incisions
+  are polygon geometry; no general weathering solver is claimed.
+- Upper strata can contain disconnected solid components within one named mesh object. Counts above are mesh
+  objects, not a claim that every object contains exactly one connected rock.
+- Twelve of the thirteen tested recipes have no triangles below 5 degrees at any stage. The deliberately
+  extreme 48 × 10 × 8 m, maximum-relief/retreat, ten-bed recipe retains five such triangles in its final mesh
+  (minimum angle 3.98062 degrees). The UI reports these warnings. It does not assert universal sliver-free output.
+- Triangulation span controls tessellation density, not displacement. Fine cracks and quality refinement can
+  make later stages much denser than the macro mesh. Geometry generation is CPU work in a worker; no target-GPU
+  performance claim follows from headless browser verification.
+- Open the hosted HTML link, or serve the repository root over HTTP and open
+  `/Frontier/Experimental/CliffSequence/index.html`. ES modules/workers require HTTP; opening a bare file URL
+  is not the supported launch route. No npm install or Flask server is needed to use the delivered app.
+- Stage buttons reuse completed results. Changing a parameter rebuilds after the edit is committed; a new edit
+  cancels the old worker. Double-click a rock, scroll closer, and switch stages 3/4 to compare a finite spall.
+  `F` frames the selected rock, Escape clears selection, and Frame restores the whole cliff.
+- Export OBJ writes the chosen stage as indexed triangles in metres, with object names and flat shading.
+  Save/Load recipe uses a versioned JSON schema. Neither export depends on a server-side generated filename.
+
+### Executed browser checks and retained evidence
+
+The complete final-source run of `VerifyBrowser.cjs` passed in Chromium **133.0.6943.0** with software WebGL 2.
+The execution report records zero browser errors and a zero WebGL error readback. It covers:
+
+- All five stage buttons and actual image changes between mass, joints, spalls and fissures.
+- Clay with no colour/normal/displacement textures, full triangle wireframe and explicit cut-surface colouring.
+- Actual OBJ download: **14,575 vertices / 28,914 triangle faces**. Every face has three valid indices.
+  Exploded inspection does not change the OBJ. The downloaded file exactly matches the generated export text.
+- Double-click-equivalent selected-rock framing, selection/isolation, actual mouse orbit, and full-cliff framing.
+- Dirty settings disabling export, superseded workers being cancelled, and the newest recipe winning.
+- Deliberately invalid generation clearing the result/render meshes and showing a failure, without fallback.
+- Recipe download/import, repeated preset changes, and fresh rendered captures of both alternative landforms.
+- A 390 × 844 layout with no horizontal overflow and functioning stage buttons.
+- Deliberate WebGL context loss disabling export/rebuild and requiring reload instead of exposing a stale mesh.
+
+`VisualProof/CliffSequence/Captures/` retains the final unretouched browser screenshots, raw alternative-preset
+viewport readbacks, default JSON recipe, geometry/intersection reports and browser report with matching source
+hashes. In particular, `LocalSpallBefore.png` and `LocalSpallAfter.png` use the same camera; `SurfaceFissure.png`
+shows a genuine recessed groove; `TriangleWireframe.png` exposes the tessellation rather than hiding it.
+Generated inspection OBJs, npm packages, browser binaries and intermediate captures remain in ignored scratch.
+
+Browser limitation: the sandbox's Chromium 153 / SwiftShader build stalled during some preset readbacks with
+ground or shadows present. The same application, including shadows, completed the full suite in Chromium 133.
+This does not establish that the Chromium 153 software-rendering path is fixed, or certify target-GPU/browser
+performance. The verifier can use normal Playwright Chromium, or an explicitly selected sandbox executable;
+its optional compositor resize/readback synchronization is test-side only and does not alter the mesh.

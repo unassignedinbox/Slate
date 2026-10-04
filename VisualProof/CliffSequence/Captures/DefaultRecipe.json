@@ -1,0 +1,26 @@
+{
+  "Format": "Frontier.PolygonCliff",
+  "Version": 1,
+  "Specification": {
+    "Profile": "Headland",
+    "Seed": 42,
+    "Width": 32,
+    "Height": 18,
+    "Depth": 12,
+    "Relief": 1,
+    "Retreat": 0.48,
+    "Beds": 7,
+    "Dip": 4,
+    "Aperture": 0.07,
+    "JointSpacing": 4.6,
+    "Penetration": 0.78,
+    "FaceRecess": 0.65,
+    "SpallSize": 0.8,
+    "SpallDensity": 0.8,
+    "CrackLength": 1.4,
+    "CrackWidth": 0.12,
+    "CrackDepth": 0.18,
+    "CrackDensity": 0.55,
+    "TriangleSpan": 1.4
+  }
+}
