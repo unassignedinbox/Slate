@@ -1256,8 +1256,19 @@ a {
   line-height: 1.8;
   color: #b0b0b0;
 }
-.gpu-error .button {
+.gpu-actions {
+  display: flex;
+  gap: 8px;
   margin-top: 15px;
+}
+.gpu-error .button.quiet {
+  background: #00000000;
+  border-color: #3a3a3a;
+  color: #9a9a9a;
+}
+.gpu-error .button.quiet:hover {
+  color: var(--text);
+  border-color: #585858;
 }
 .gpu-advice {
   list-style: none;

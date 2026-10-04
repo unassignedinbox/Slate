@@ -10,7 +10,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { ShadingIntegrator, AcquireDevice, DescribeDeviceFailure, DeviceAttributeSets } from "./ShadingIntegrator.js";
+import {
+    ShadingIntegrator,
+    AcquireDevice,
+    DescribeDeviceFailure,
+    DeviceAttributeSets,
+    ProbeAcceleration,
+    DeviceReport,
+} from "./ShadingIntegrator.js";
 import { BuildSurface } from "./SurfaceStructure.js";
 import { OrbitProjection } from "./OrbitProjection.js";
 import { DefaultStack, DefaultProject, CreateLayer } from "./LayerSpecification.js";
@@ -467,4 +474,30 @@ test("the switched-off diagnosis wins over the WebGL 1 reading", () =>
     const Diagnosis = DescribeDeviceFailure(["ErrorMessage = BindToCurrentSequence failed: ."]);
     assert.match(Diagnosis.Message, /switched off/i);
     assert.ok(!/WebGL 1/.test(Diagnosis.Message));
+});
+
+test("the acceleration probe answers even where neither graphics API exists", async () =>
+{
+    const Probe = await ProbeAcceleration();
+    assert.equal(Probe.Legacy, false, "there is no canvas in the test runner");
+    assert.equal(Probe.Modern, false);
+    assert.equal(typeof Probe.Agent, "string");
+});
+
+test("the renderer report carries everything worth pasting into a bug report", () =>
+{
+    const Text = DeviceReport("No context.", ["GL_VENDOR = Disabled"], {
+        Agent: "Mozilla/5.0 Chrome/999",
+        Ratio: 1.5,
+        Legacy: false,
+        Modern: true,
+        Adapter: "nvidia ada",
+        Address: "https://example.test/index.html",
+    });
+    assert.match(Text, /Failure   : No context\./);
+    assert.match(Text, /Chrome\/999/);
+    assert.match(Text, /WebGPU    : adapter available — nvidia ada/);
+    assert.match(Text, /GL_VENDOR = Disabled/);
+    assert.match(Text, /Attempts  : 5 attribute sets/);
+    assert.match(Text, /Address   : https:\/\/example\.test\/index\.html/, "the report should say which copy was loaded");
 });

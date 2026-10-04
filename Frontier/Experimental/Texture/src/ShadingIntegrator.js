@@ -197,6 +197,71 @@ export const DescribeDeviceFailure = (Notes = []) =>
     };
 };
 
+//--------------------------------------------------------------------------------------------------------------------------
+// Asking a second graphics API separates two very different failures: if WebGPU hands over an adapter then the GPU process
+// is alive and well and WebGL alone has been switched off, which is a browser setting rather than a broken machine.
+//--------------------------------------------------------------------------------------------------------------------------
+export const ProbeAcceleration = async () =>
+{
+    const Report = { Legacy: false, Modern: false, Adapter: "", Agent: "", Ratio: 1, Address: "" };
+    try
+    {
+        Report.Agent = String(navigator?.userAgent || "");
+        Report.Ratio = Number(globalThis.devicePixelRatio) || 1;
+        Report.Address = String(globalThis.location?.href || "");
+    }
+    catch
+    {
+        Report.Agent = "";
+    }
+    try
+    {
+        const Probe = document.createElement("canvas");
+        const Legacy = Probe.getContext("webgl") || Probe.getContext("experimental-webgl");
+        Report.Legacy = Boolean(Legacy);
+        Legacy?.getExtension?.("WEBGL_lose_context")?.loseContext();
+    }
+    catch
+    {
+        Report.Legacy = false;
+    }
+    try
+    {
+        const Adapter = await navigator?.gpu?.requestAdapter?.();
+        if (Adapter)
+        {
+            Report.Modern = true;
+            const Described = Adapter.info || (await Adapter.requestAdapterInfo?.()) || {};
+            Report.Adapter =
+                [Described.vendor, Described.architecture, Described.device, Described.description].filter(Boolean).join(" ") ||
+                "an unnamed adapter";
+        }
+    }
+    catch
+    {
+        Report.Modern = false;
+    }
+    return Report;
+};
+
+//--------------------------------------------------------------------------------------------------------------------------
+// One block of text worth pasting into a bug report or a chat window.
+//--------------------------------------------------------------------------------------------------------------------------
+export const DeviceReport = (Failure, Notes = [], Probe = null) =>
+    [
+        "Frontier Texture — renderer report",
+        `When      : ${new Date().toISOString()}`,
+        `Failure   : ${Failure || "none"}`,
+        `Browser   : ${Probe?.Agent || "unknown"}`,
+        `Address   : ${Probe?.Address || "unknown"}`,
+        `Pixel ratio: ${Probe?.Ratio ?? "unknown"}`,
+        `WebGL 1   : ${Probe ? (Probe.Legacy ? "available" : "unavailable") : "not probed"}`,
+        `WebGL 2   : unavailable`,
+        `WebGPU    : ${Probe ? (Probe.Modern ? `adapter available — ${Probe.Adapter}` : "no adapter") : "not probed"}`,
+        `Attempts  : ${DeviceAttributeSets.length} attribute sets`,
+        ...(Notes.length ? ["Browser said:", ...Notes.map((Note) => `  ${Note}`)] : ["Browser said: nothing"]),
+    ].join("\n");
+
 export class ShadingIntegrator
 {
     constructor(Canvas)

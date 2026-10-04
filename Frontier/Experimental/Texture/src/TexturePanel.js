@@ -6,7 +6,7 @@
 // touches WebGL directly; nothing in the integrator knows about the DOM.
 //============================================================================================================================================
 
-import { ShadingIntegrator } from "./ShadingIntegrator.js";
+import { ShadingIntegrator, ProbeAcceleration, DeviceReport } from "./ShadingIntegrator.js";
 import { OrbitProjection } from "./OrbitProjection.js";
 import { StrokeProjection, ToolOrdering, SymmetryOrdering, MirrorVector } from "./StrokeProjection.js";
 import { BuildSurface, SurfaceIndex, BakeOcclusion, ParseWavefront } from "./SurfaceStructure.js";
@@ -2218,6 +2218,7 @@ class TexturePanel
         Detail.textContent = Lines.join(" · ");
         Detail.hidden = Lines.length === 0;
         this.SetStatus("GPU unavailable", "error");
+        this.RefineFailure(Integrator, Lines);
         // A GPU process that was restarting a moment ago is often back before anyone finishes reading the first line, so
         // try again quietly a couple of times. A lost context is left alone: the browser announces its own restoration.
         if (!Integrator?.Device && !this.RecoveryTimer && this.RecoveryAttempts < 2)
@@ -2229,6 +2230,31 @@ class TexturePanel
                 if (!this.Integrator.Ready) this.RetryDevice();
             }, 1500);
         }
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // Asking WebGPU for an adapter settles the only question the WebGL error leaves open: whether the machine has no usable
+    // GPU, or has one the browser is simply refusing to lend to WebGL. The answer arrives a tick later, so it is folded in
+    // once it does.
+    //----------------------------------------------------------------------------------------------------------------------
+    RefineFailure(Integrator, Lines)
+    {
+        ProbeAcceleration().then((Probe) =>
+        {
+            this.Acceleration = Probe;
+            this.Report = DeviceReport(Integrator?.Failure, Integrator?.Notes || [], Probe);
+            if (Select("#gpu-error").hidden) return;
+            const Detail = Select("#gpu-error-detail");
+            Detail.textContent = [...Lines, Probe.Modern ? `WebGPU adapter: ${Probe.Adapter}` : "WebGPU: no adapter"].join(" · ");
+            Detail.hidden = false;
+            if (!Probe.Modern) return;
+            const Advice = Select("#gpu-error-advice");
+            const First = document.createElement("li");
+            First.textContent =
+                `The GPU itself is fine — WebGPU sees ${Probe.Adapter} on this machine. WebGL alone is being refused, so this ` +
+                "is browser configuration rather than hardware: chrome://flags/#ignore-gpu-blocklist and chrome://gpu are the places to look.";
+            Advice.prepend(First);
+        });
     }
 
     //----------------------------------------------------------------------------------------------------------------------
@@ -2245,8 +2271,24 @@ class TexturePanel
             this.ReportFailure(this.Integrator);
         });
         this.Canvas.addEventListener("webglcontextrestored", () => this.RetryDevice());
-        const Retry = Select("#gpu-retry");
-        if (Retry) Retry.addEventListener("click", () => this.RetryDevice());
+        if (this.RecoveryBound) return;
+        this.RecoveryBound = true;
+        Select("#gpu-retry")?.addEventListener("click", () => this.RetryDevice());
+        Select("#gpu-copy")?.addEventListener("click", async () =>
+        {
+            const Text = this.Report || DeviceReport(this.Integrator?.Failure, this.Integrator?.Notes || [], this.Acceleration);
+            try
+            {
+                await navigator.clipboard.writeText(Text);
+                this.Notify("Renderer report copied.");
+            }
+            catch
+            {
+                // Clipboard permission is not a given on a file:// or an unfocused page — show it instead.
+                Select("#gpu-error-detail").textContent = Text;
+                Select("#gpu-error-detail").hidden = false;
+            }
+        });
     }
 
     RetryDevice()
