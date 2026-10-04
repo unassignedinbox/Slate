@@ -87,7 +87,18 @@ EMSCRIPTEN_KEEPALIVE const char* DescribeDocument()
         for (size_t Index = 0; Index < Figure.SelectedFaces.size(); ++Index) { if (Index) Stream << ','; Stream << Figure.SelectedFaces[Index]; }
         Stream << "],\"pickedEdges\":[";
         for (size_t Index = 0; Index < Figure.SelectedEdges.size(); ++Index) { if (Index) Stream << ','; Stream << Figure.SelectedEdges[Index]; }
+        Stream << "],\"pickedPoles\":[";
+        for (size_t Index = 0; Index < Figure.SelectedPoles.size(); ++Index) { if (Index) Stream << ','; Stream << Figure.SelectedPoles[Index]; }
         Stream << "]}";
+    }
+    Stream << "],\"areas\":[";
+    Separator = false;
+    for (const auto& Region : Host.Document().Areas())
+    {
+        if (Separator) Stream << ',';
+        Separator = true;
+        Stream << "{\"id\":" << Region.Identity - SceneDocument::AreaIdentityBase << ",\"selected\":" << Region.Selected
+               << ",\"area\":" << Region.Cell.Area << ",\"holes\":" << Region.Cell.Holes.size() << '}';
     }
     Stream << "],\"dimensions\":[";
     Separator = false;
