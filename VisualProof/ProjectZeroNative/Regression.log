@@ -1,0 +1,13 @@
+Test project /home/user/Slate/_AgentScratch/build/NativeEditor
+    Start 2: NativeBillboards
+    Start 4: NativeEditorConversion
+1/4 Test #4: NativeEditorConversion ...........   Passed    8.04 sec
+    Start 1: BootstrapSafety
+2/4 Test #1: BootstrapSafety ..................   Passed    0.18 sec
+    Start 3: NativeWindBindings
+3/4 Test #3: NativeWindBindings ...............   Passed    0.05 sec
+4/4 Test #2: NativeBillboards .................   Passed  181.17 sec
+
+100% tests passed out of 4
+
+Total Test time (real) = 181.17 sec

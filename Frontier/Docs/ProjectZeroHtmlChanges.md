@@ -23,13 +23,19 @@
 | C008 | Dockable ShaderEditor and shader-ball preview       | Implemented and browser-checked   | Native shader execution and BSDF preview deferred |
 | C009 | Matching top/bottom drawers and page-close gestures | Implemented; mouse/touch checked | Reported native drag problem recorded; mirror deferred |
 | C010 | Material, imported-file and engine asset browser | Implemented and browser-checked | Native asset pipeline integration deferred |
-| C011 | Viewport-only settings/debug menu | Implemented and browser-checked | Deferred until the HTML review is finished |
+| C011 | Viewport-only settings/debug menu | Implemented and browser-checked | Native settings/statistics menu implemented; broader parity pending |
 | C012 | Entity-relevant circular quick toggles | Implemented and browser-checked | Per-entity shadow/GI/physics bindings deferred |
 | C013 | Precipitation icon instead of umbrella | HTML rain-cloud symbol implemented | Native artwork unchanged |
 | C014 | Animated composite WindEditor | Implemented; evaluator and browser checked | Native wind field evaluation deferred |
 | C015 | Cloud selection of a composite wind field | Implemented and browser-checked | Native cloud advection binding deferred |
 | C016 | Local fog volume shape instead of fixed box bounds | Implemented and browser-checked | Native shape masks/SDF integration deferred |
 | C017 | Permanent first Editor Camera | Implemented and browser-checked | Editor Camera pinned/locked; native feed checked |
+| C018 | Interactive environment graphs | Implemented and browser-checked | Added HTML probes/plots still to mirror |
+| C019 | AtmosphereLab atlas and space study | Implemented and browser-checked | Still to mirror; real native dome bake retained |
+| C020 | Pill viewport header | Implemented and browser-checked | Existing native pill rail retained |
+| C021 | Folder/collection inspector | Implemented and browser-checked | Native census, search and bounded paging; native roster cap unchanged |
+| C022 | Resizable statistics/debug card | Implemented and browser-checked | Native card with engine intervals/completed GPU telemetry |
+| C023 | Native conversion, bottom baking, stack safety | Approved HTML baseline retained | Initial native checkpoint; see remaining work below |
 
 ## 2026-10-04 — C001: Construct presentation
 
@@ -821,13 +827,33 @@ User authorization now includes headless native execution, Windows/MSVC and stac
 - Actual compiled native proof executes under a **262,144-byte Linux stack limit**, including a 10,000-level
   collection fixture, a 10,000-placement real SceneStructure, native camera protection, Construct shortcuts,
   a pointer click on the relocated atmosphere bake button and a 256 × 512 × RGBA16F bake.
+  The real `.environment` export/reload also passes with every HDR texel preserved exactly.
 - GCC `-fstack-usage` gates the critical compiled UI/traversal functions at 8 KiB each. This is not a measurement
   of the complete Vulkan runtime entry point or a diagnosis of the user's historical crash.
 - Native captures are CPU rasterizations of production ImGui commands, with real baked atmosphere pixels.
   Folder and timing records in the proof are labeled fixtures; the proof does not claim GPU execution.
 - The native CMake proof route was repaired to compile the consolidated `Engine/Host` sources and current
   shading dependencies rather than removed Project-Zero source paths. Windows MSVC proof job added.
-- Linux conversion proof passed. Renderer regression and Windows/MSVC results are pending at this checkpoint.
+- All four Linux CTest targets passed: bootstrap safety, native renderer/billboards (113 assertions),
+  native wind bindings, and the low-stack conversion proof. Final run: 181.17 seconds in this sandbox,
+  using production source `28946b3c1ca7f4f1e552921ddbedc180dcdf59cf`.
+- The renderer proof had stale assumptions: it expected removed global-system billboards and expected
+  zero wind to stop independent density evolution. The proof now locates the actual Markers control by ID,
+  tests only physical local-volume proxies, and separately verifies zero bulk velocity and continuing
+  procedural evolution. No renderer behavior was changed to make those assertions pass.
+- First MSVC proof attempt exposed missing `NOMINMAX` in the CMake proof configuration, not a runtime
+  stack overflow. After that fix, MSVC exposed the headless target's accidental Vulkan device dependency:
+  the debug-view label function lived in the device implementation. Labels now live beside their enum,
+  without duplicating/stubbing any renderer function, and the proof no longer links device creation.
+  A subsequent MSVC link identified missing environment codec/export translation units, now linked directly
+  rather than stubbed. A Linux link without section garbage collection independently passed as well.
+- **Windows/MSVC Release build and native conversion execution passed** on the same source commit:
+  [run 37222602604, native editor job 111495857820][NativeMsvcProof]. This executes the real bake and
+  export/reload with the default MSVC stack reserve, not an increased reserve. The 256 KiB limit and
+  compiler-frame measurements above are Linux-only. The broader full-application job is still pending;
+  this result does not claim a complete Vulkan application launch.
+
+[NativeMsvcProof]: https://github.com/unassignedinbox/Slate/actions/runs/37222602604/job/111495857820
 
 Proof sources, captures and compiler stack report: `VisualProof/ProjectZeroNative/` at repository root.
 

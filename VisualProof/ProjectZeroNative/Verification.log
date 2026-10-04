@@ -21,6 +21,9 @@ PASS renderer consumes relocated bake request
 PASS bake request consumed exactly once
 PASS real texture bake stays heap backed
 PASS inspector borrows actual bake pixels
+PASS real baked environment export
+PASS real baked environment reload
+PASS baked environment export/reload preserves every HDR texel
 PASS native image written
 PASS native image written
 PASS baking remains reachable at bottom of a scrollable native inspector

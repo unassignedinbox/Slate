@@ -3,8 +3,13 @@
   "budgetBytes": 8192,
   "frames": [
     {
+      "function": "VisualProof/ProjectZeroNative/EditorConversionProof.cpp:118:21:RunEditorConversion(const char*)::<lambda()>",
+      "bytes": 32,
+      "classification": "static"
+    },
+    {
       "function": "VisualProof/ProjectZeroNative/EditorConversionProof.cpp:44:5:int RunEditorConversion(const char*)",
-      "bytes": 1424,
+      "bytes": 1520,
       "classification": "dynamic,bounded"
     },
     {
