@@ -1,3 +1,13 @@
+import AtmosphereLab, { AtmosphereProfile } from "./AtmosphereLab.jsx";
+import {
+  GraphContext,
+  PropertyGraph,
+  FogGraph,
+  SunGraph,
+  FogSpectrum,
+  CloudSection,
+  CloudBounds,
+} from "./LiveGraph.jsx";
 import FogShapePanel from "./FogShapePanel.jsx";
 import { IsEditorCamera } from "./ScenePolicy.js";
 import { WindInspector, WindBinding } from "./WindPanel.jsx";
@@ -5,22 +15,13 @@ import TransformPanel from "./TransformPanel.jsx";
 import MaterialPanel from "./MaterialPanel.jsx";
 import ActionIcon, { QuickSymbol } from "./ActionIcon.jsx";
 import React, { useState, useEffect, useRef } from "react";
-import {
-  SunGizmo,
-  IlluminanceCurve,
-  ScatteringGraph,
-} from "../FrontierEditor/environment-graphics.jsx";
+import { SunGizmo } from "../FrontierEditor/environment-graphics.jsx";
 import { DepthOfField } from "../FrontierEditor/camera-graphics.jsx";
 import {
   Iris,
   CloudCoverage,
   CloudAltitude,
 } from "../FrontierEditor/property-graphics.jsx";
-import {
-  HazeTransmission,
-  OzoneAbsorption,
-  GroundFogProfile,
-} from "../FrontierEditor/weather-graphics.jsx";
 import {
   CelestialRotation,
   TwinkleSignal,
@@ -324,6 +325,7 @@ export function Card({
   Wide = false,
   Accent,
   Class = "",
+  GraphHandled = false,
 }) {
   const Mark = {
     "Sun direction": "celestial-orbit",
@@ -346,6 +348,9 @@ export function Card({
         <span>{Title}</span>
       </h3>
       {children || Children}
+      {!GraphHandled && (
+        <PropertyGraph Children={children || Children} Title={Title} />
+      )}
     </section>
   );
 }
@@ -382,7 +387,18 @@ function Metric({ Value, Unit, Caption }) {
   return (
     <>
       <div className="metric">
-        {Value}
+        {typeof Value === "string" || typeof Value === "number" ? (
+          <>
+            <span>{String(Value).split(".")[0]}</span>
+            {String(Value).includes(".") && (
+              <span className="metric-fraction">
+                .{String(Value).split(".").slice(1).join(".")}
+              </span>
+            )}
+          </>
+        ) : (
+          Value
+        )}
         <small>{Unit}</small>
       </div>
       {Caption && <p>{Caption}</p>}
@@ -405,53 +421,6 @@ function Bake({ Title, Sun = false }) {
       </div>
       <p className="card-foot">Renderer / imported-image binding unavailable</p>
     </Card>
-  );
-}
-function Curve({ Variant = "density", Value = 1 }) {
-  const Points = Array.from({ length: 81 }, (_, Index) => {
-    let X = Index / 80,
-      Y =
-        Variant === "gust"
-          ? 0.48 + 0.15 * Math.sin(X * 13) + 0.08 * Math.sin(X * 31)
-          : Math.exp(-X * Math.max(0.2, Value) * 3);
-    return `${Index ? "L" : "M"}${20 + X * 300},${160 - Y * 120}`;
-  }).join(" ");
-  return (
-    <svg viewBox="0 0 340 200" role="img" aria-label={Variant + " diagram"}>
-      <path
-        d="M20 30V160H320M20 100H320M20 60H320"
-        fill="none"
-        stroke="#ffffff12"
-        strokeDasharray="3 5"
-      />
-      <path
-        d={Points}
-        fill="none"
-        stroke={Variant === "gust" ? "#a1cfb7" : "#9ab9dc"}
-        strokeWidth="1.5"
-      />
-      <text x="20" y="186">
-        0
-      </text>
-      <text x="290" y="186">
-        100%
-      </text>
-    </svg>
-  );
-}
-function Bounds() {
-  return (
-    <svg viewBox="0 0 340 200" aria-label="World-space bounds">
-      <path
-        d="m55 73 153-43 84 66-157 57Z M55 73v60l80 53 157-57V96M135 153v33M208 30v67l84 32M55 133l153-36M208 97l-73 56"
-        fill="none"
-        stroke="#9eb9d7"
-        strokeWidth="1"
-      />
-      <text x="80" y="199">
-        World-space bounds · Z up
-      </text>
-    </svg>
   );
 }
 function MoonImage({ Preset = 0, Phase = 0.62, Size = 150, Rotation = 0 }) {
@@ -646,6 +615,14 @@ export function Inspector({
             {Sheet.filter((Field) => Field.Group === Group).map((Field) =>
               F(Field.Label),
             )}
+            {["light", "post"].includes(Subject.Panel) && (
+              <PropertyGraph
+                Title={Group}
+                Children={Sheet.filter((Field) => Field.Group === Group).map(
+                  (Field) => F(Field.Label),
+                )}
+              />
+            )}
           </details>
         ))}
       <details className="generic-card" open>
@@ -660,9 +637,25 @@ export function Inspector({
   );
   if (["geometry", "light", "post", "group"].includes(Subject.Panel))
     return (
-      <div className="generic-inspector" data-panel={Subject.Panel}>
-        {Generic()}
-      </div>
+      <GraphContext.Provider
+        value={
+          ["light", "post"].includes(Subject.Panel)
+            ? { Panel: Subject.Panel }
+            : null
+        }
+      >
+        <div
+          className={
+            "generic-inspector " +
+            (["light", "post"].includes(Subject.Panel)
+              ? "environment-live"
+              : "")
+          }
+          data-panel={Subject.Panel}
+        >
+          {Generic()}
+        </div>
+      </GraphContext.Provider>
     );
   let Content;
   if (Subject.Panel === "sun") {
@@ -769,26 +762,27 @@ export function Inspector({
             </div>
             <p>Shared time above · angles solved by date / location</p>
           </Card>
-          <Card Title="Sunlight intensity" Height={347}>
+          <Card Title="Sunlight intensity" Height={347} GraphHandled>
             <Metric
               Value={Number(V("Intensity")).toFixed(1)}
               Unit="×"
               Caption="Sunlight intensity multiplier"
             />
-            <IlluminanceCurve intensity={(V("Intensity") / 60) * 150} />
+            <SunGraph V={V} Change={AssignProperty} Mode="gain" />
             {F("Intensity")}
             <div className="ends">
               <span>0 ×</span>
               <span>60 ×</span>
             </div>
           </Card>
-          <Card Title="Temperature" Height={347}>
+          <Card Title="Temperature" Height={347} GraphHandled>
             <Metric
               Value={V("Colour source") ? V("Temperature") : "RGB"}
               Unit={V("Colour source") ? "K" : ""}
             />
             {F("Colour source")}
             <div className="temperature-spectrum" />
+            <SunGraph V={V} Change={AssignProperty} Mode="temperature" />
             <div className="ends">
               <span>Warm</span>
               <span>Cool</span>
@@ -797,30 +791,11 @@ export function Inspector({
             <p>Blackbody tint approximation · linear RGB</p>
             {F("Sun Tint", !!V("Colour source"))}
           </Card>
-          <Card Title="Daylight cycle" Height={329}>
+          <Card Title="Daylight cycle" Height={329} GraphHandled>
             <Metric
               Value={`${String(Math.floor(Time)).padStart(2, "0")}:${String(Math.floor((Time % 1) * 60)).padStart(2, "0")}`}
             />
-            <svg viewBox="0 0 500 123">
-              <path
-                d="M15 96Q250 -85 485 96"
-                stroke="#807765"
-                fill="none"
-                strokeWidth="2"
-              />
-              <path d="M15 96H485" stroke="#ffffff30" />
-              <circle
-                cx={15 + (Time / 24) * 470}
-                cy={96 - Math.sin((Time / 24) * Math.PI) * 90}
-                r="8"
-                fill="#e8bc72"
-              />
-              {[0, 6, 12, 18, 24].map((T, Index) => (
-                <text key={T} x={Index * 115 + 10} y="120">
-                  {String(T).padStart(2, "0")}:00
-                </text>
-              ))}
-            </svg>
+            <SunGraph V={V} Change={AssignProperty} Mode="day" />
             {F("Local Hours")}
           </Card>
           <Card Title="Sun disc" Height={329}>
@@ -835,7 +810,8 @@ export function Inspector({
             {F("Angular Diameter")}
           </Card>
         </div>
-        <Card Title="Dynamic settings" Wide>
+        <Card Title="Dynamic settings" Wide GraphHandled>
+          <SunGraph V={V} Change={AssignProperty} Mode="year" />
           {Fields(
             "Animate",
             "Day duration",
@@ -1173,6 +1149,7 @@ export function Inspector({
     Content = (
       <>
         {Header("Environment", "Atmosphere")}
+        <AtmosphereLab V={V} Change={AssignProperty} />
         <div className="section-caption">BAKING</div>
         <Bake Title="Atmosphere bake" Sun />
         <Card Title="Baked atmosphere" Height={210}>
@@ -1183,38 +1160,38 @@ export function Inspector({
           </p>
           {F("Fetch Baked Dome", true)}
         </Card>
-        <Card Title="Atmospheric scattering" Height={485}>
+        <Card Title="Atmospheric scattering" Height={485} GraphHandled>
           <Metric
             Value={V("Rayleigh").toFixed(1)}
             Unit="×"
             Caption="How air molecules scatter sunlight"
           />
-          <ScatteringGraph rayleigh={V("Rayleigh")} haze={V("Mie")} />
+          <AtmosphereProfile V={V} Change={AssignProperty} Mode="spectrum" />
           {F("Rayleigh")}
         </Card>
         <div className="card-grid">
-          <Card Title="Aerosol haze" Height={380}>
+          <Card Title="Aerosol haze" Height={380} GraphHandled>
             <Metric
               Value={V("Mie").toFixed(2)}
               Unit="×"
               Caption="Suspended particles soften and attenuate light"
             />
-            <HazeTransmission haze={(V("Mie") / 6) * 100} />
+            <AtmosphereProfile V={V} Change={AssignProperty} Mode="haze" />
             {F("Mie")}
           </Card>
-          <Card Title="Ozone absorption" Height={380}>
+          <Card Title="Ozone absorption" Height={380} GraphHandled>
             <Metric
               Value={V("Ozone").toFixed(2)}
               Unit="×"
               Caption="Selective absorption across visible wavelengths"
             />
-            <OzoneAbsorption amount={(V("Ozone") / 4) * 100} />
+            <AtmosphereProfile V={V} Change={AssignProperty} Mode="ozone" />
             {F("Ozone")}
           </Card>
         </div>
-        <Card Title="Density falloff" Height={410}>
+        <Card Title="Density falloff" Height={410} GraphHandled>
           {F("Rayleigh Scale H")}
-          <GroundFogProfile density={V("Rayleigh Scale H") / 15000} />
+          <AtmosphereProfile V={V} Change={AssignProperty} Mode="height" />
           {F("Mie Scale H")}
         </Card>
         <Card Title="Ground reflectance" Height={150}>
@@ -1492,7 +1469,7 @@ export function Inspector({
                     ],
                   ]}
                 />
-                <Bounds />
+                <CloudBounds V={V} Change={AssignProperty} />
               </>
             ) : (
               <>
@@ -1513,9 +1490,10 @@ export function Inspector({
           <Card
             Title={Local ? "Volume section" : "Layer thickness"}
             Height={452}
+            GraphHandled
           >
             {Local ? (
-              <Bounds />
+              <CloudSection V={V} Change={AssignProperty} Local />
             ) : (
               <>
                 <Metric
@@ -1523,7 +1501,7 @@ export function Inspector({
                   Unit="km"
                   Caption="Vertical development · density profile"
                 />
-                <Curve Value={V("Density")} />
+                <CloudSection V={V} Change={AssignProperty} />
                 {F("Thickness")}
               </>
             )}
@@ -1545,6 +1523,14 @@ export function Inspector({
                 Field.Group,
               ),
             ).map((Field) => F(Field.Label))}
+            <PropertyGraph
+              Title="Cloud shadows"
+              Children={Sheet.filter((Field) =>
+                ["Cloud Shadows", "Shadow Clock", "Tier Budget"].includes(
+                  Field.Group,
+                ),
+              ).map((Field) => F(Field.Label))}
+            />
           </details>
         )}
         <WindBinding
@@ -1566,20 +1552,8 @@ export function Inspector({
         <Card Title="Fog settings" Height={142}>
           {Tiles(Local ? ["Enabled", "Follow Wind"] : ["Enabled"])}
         </Card>
-        <Card Title="Visibility through fog" Height={435}>
-          <Metric
-            Value={(
-              Math.exp(-V("Density") * (Local ? 1 : Aerial ? 0.2 : 200)) * 100
-            ).toFixed(1)}
-            Unit="%"
-            Caption="Light transmitted at 200 m"
-          />
-          <p>
-            {Local
-              ? "Illustrative density study · does not ray-march the selected shape"
-              : "Horizontal probe at world Z = 2 m · selected medium only"}
-          </p>
-          <HazeTransmission haze={V("Density") * (Aerial ? 25 : 100)} />
+        <Card Title="Visibility through fog" GraphHandled>
+          <FogGraph Kind={Subject.Panel} V={V} Change={AssignProperty} />
         </Card>
         <div className="card-grid">
           <Card Title="Medium" Height={416}>
@@ -1596,10 +1570,18 @@ export function Inspector({
             <Card
               Title={Aerial ? "Spectral transmission" : "Density with altitude"}
               Height={416}
+              GraphHandled
             >
-              <Curve
-                Value={Aerial ? V("Density") : V("Falloff Height") / 500}
-              />
+              {Aerial ? (
+                <FogSpectrum V={V} Change={AssignProperty} />
+              ) : (
+                <FogGraph
+                  Kind={Subject.Panel}
+                  V={V}
+                  Change={AssignProperty}
+                  Density
+                />
+              )}
               {!Aerial && F("Colour")}
             </Card>
           )}
@@ -1611,11 +1593,13 @@ export function Inspector({
     );
   } else Content = Generic();
   return (
-    <div
-      className={"specialized-inspector " + Subject.Panel}
-      data-panel={Subject.Panel}
-    >
-      {Content}
-    </div>
+    <GraphContext.Provider value={{ Panel: Subject.Panel }}>
+      <div
+        className={"specialized-inspector environment-live " + Subject.Panel}
+        data-panel={Subject.Panel}
+      >
+        {Content}
+      </div>
+    </GraphContext.Provider>
   );
 }

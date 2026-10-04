@@ -528,3 +528,135 @@ Committed browser screenshots:
 **Status:** HTML review checkpoint. No C++ sources changed and no native build
 was run. Native fog-shape masks and permanent editor-camera ownership/removal
 rules remain deferred until the HTML review is finished.
+
+## 2026-10-04 — C018–C019: Live environment graphs and AtmosphereLab
+
+### Change-log continuity and scope
+
+C016–C017 were published at `e5f1dbf`; the user's `728a579` screenshot predates
+that checkpoint. This update retains the existing environment cards, fog-shape
+editor, permanent Editor Camera, wind/cloud bindings, material editor and
+geometry workflow. It changes the HTML prototype only. **No C++ sources were
+changed and no native build was run.** Materials and geometry do not receive
+this new card/graph treatment.
+
+### C018 — Actual data in the existing cards
+
+- **Height Fog:** replaced the unrelated decorative density and transmission
+  illustrations with interactive sampled curves. Both use the same altitude
+  and distance probe and exponential model:
+  `sigma(z) = Density * exp(-max(0,z) / max(10,Falloff Height))`,
+  `T(d,z) = 100 * exp(-sigma(z) * d)`. At density 0.02/m, height 2 m,
+  falloff 400 m and distance 200 m, transmission is approximately **1.868%**,
+  not the old unrelated 92% readout. Disabled fog gives zero extinction and
+  100% transmission. The visibility graph represents a horizontal path at the
+  selected height, not an integrated sloping ray.
+- Drag or touch a graph to set its probe; hover to inspect; arrow keys and
+  Home/End provide keyboard control. Density and visibility share saved probes.
+  Numerical probe inputs remain available. SVG chart dimensions follow the
+  actual card width, keeping axes readable in the narrow inspector.
+- **Local and aerial fog:** visibility studies now respond to authored settings.
+  Local fog uses an explicitly illustrative `0.01 * Density * Coverage` /m
+  coefficient; aerial fog uses `0.001 * Density` /m after Start. These are HTML
+  authoring approximations, not recovered native scattering coefficients.
+  Local visibility is not ray-marched through the selected shape. Aerial
+  spectral transmission now responds to Density, Mie Blend and the shared
+  distance probe; its 550 nm sample agrees with the visibility graph.
+- **Sun:** the existing daylight card now samples the existing NOAA-style solar
+  solver across 24 hours, rather than drawing an unrelated parabola. The
+  existing Dynamic settings card gains a 2026 local-noon seasonal curve; dragging
+  it edits Month and Day of Month. Sunlight intensity plots `Intensity * Direct`
+  as relative gain, explicitly not measured lux. Temperature gains a normalized
+  visible Planck spectrum and wavelength probe; RGB mode explicitly treats this
+  as the temperature draft, not the active RGB tint's spectrum. No duplicate Sun
+  cards were introduced.
+- **Atmosphere:** scattering, aerosol haze, ozone absorption and density falloff
+  cards now contain interactive wavelength/distance/altitude studies connected
+  to their controls. The ozone Gaussian and aerosol attenuation are labelled
+  illustrative, not native LUT or measured spectroscopy results.
+- **Clouds:** replaced the old generic exponential sketch with an interactive
+  vertical density envelope using actual base/centre, thickness, density and
+  coverage. The sine-squared profile is explicitly an unlit authoring study,
+  not a native volume-field sample. Local Cloud's bounds are now projected from
+  its actual Half Size; X/Y/Z handles resize those native fields and derived
+  world Min/Max/Size readouts follow Centre. The existing Volume section card
+  shows the density study rather than repeating the same fixed box drawing.
+  The separate GPU-cloud-shadow controls also receive a live parameter map;
+  unavailable runtime march/tap counters remain unavailable.
+- **Other cards:** numeric and colour controls are shown in collapsible,
+  directly editable SVG parameter-column maps, with exact native-valued
+  readouts. Heights represent each control's fraction of its declared range;
+  these are authored data, not simulated telemetry. RGB columns edit the
+  actual hex colour (including Ground reflectance). This covers environment,
+  camera, light and post-processing cards while excluding materials/geometry.
+  Existing useful previews, controls, disabled native actions and cards remain.
+- Rounded, quieter dark surfaces and subdued fractional digits follow the
+  supplied dashboard references, particularly `62c17c83ea725348903581db2a824349`.
+  Styling is scoped rather than changing the material/geometry layout.
+
+### C019 — Reconstructed 2D atlas and a space-view study
+
+Searched the current Experimental and broader Frontier source tree for the old
+Arctic/smog/Mars atlas, but did not recover its implementation. **This is a
+reconstruction, not a claim to have restored the historical atlas or its entire
+inventory.** The UI says so explicitly.
+
+A single coloured 2D map plots **Rayleigh strength (0–4)** against **Mie strength
+(0–6)**. Its nine representative presets are Arctic clear, Alpine, Temperate
+Earth, Tropical humid, Desert dust, Urban haze, Thick smog, Mars-like dust and
+Dense golden haze. The colour field is an inverse-distance authoring palette,
+not a physically simulated sky colour or exhaustive atmospheric taxonomy.
+
+Named dots/buttons apply complete presets, including scale heights, tint,
+ground reflectance, ozone, anisotropy and atmosphere extent. Switching back
+from Mars-like restores Earth radius/other defaults instead of leaving stale
+planet settings. A preset is active only while its associated settings match.
+Dragging empty map space or using its arrow keys edits Rayleigh/Mie and marks
+it Custom. Atlas pointer coordinates use the SVG screen transform, including
+letterboxing in small cards and compact workbench layouts.
+
+**Atmosphere from space** renders a CPU spherical, single-scatter study with
+Rayleigh/Mie terms, approximate ozone absorption, a planet shadow and a
+procedural surface. It responds to atmosphere settings, ground colour,
+observer altitude, orbit and a preview-only sun angle. It is not the native sky
+renderer, real planet imagery, a multiple-scattering solution or a composition-
+accurate Mars model. Default limb exaggeration is **8×**, visibly labelled;
+1× is available. The preview sun angle is independent of the scene Sun.
+
+Drag/arrow keys orbit; Animate/Pause uses one shared clock between the inspector
+and expanded workbench. **Expand AtmosphereLab** presents the atlas and space
+view together. The modal makes the editor inert, traps Tab, closes with Escape
+and restores focus. It fits the tested desktop widths, with a compact treatment
+at 1366×768. Background preview drawing is skipped while the workbench is open.
+
+Probe values, atlas-applied properties and orbit/observer settings use the
+existing scene Values/save path. Planet radius and preview controls are HTML
+study descriptors, not newly implemented native fields. Baking/LUT fetching
+remains explicitly unavailable; no fake bake results were added.
+
+### Verification and committed proofs
+
+Rebuilt the standalone `index.html` (**4.16 MiB**). All **eight** browser suites
+passed on the final build: `CheckBrowser`, `CheckConstruction`, `CheckQuickTools`,
+`CheckMaterials`, `CheckAssets`, `CheckWind`, `CheckFogCamera`, and the new
+`CheckEnvironmentGraphs`.
+
+New checks cover shared fog equations/probes and disabled state, real touch
+input and endpoint clamping, mouse/keyboard edits, solar date/time response,
+atlas preset completeness and free-map edits, changed canvas pixels for
+presets/orbit, animation, modal Tab/Escape/inert/focus restoration, RGB edits,
+reload persistence, native local-cloud extent edits, aerial spectral response,
+cloud-shadow graphs, and exclusion of geometry/materials. Workbench layout
+checks cover 1024/1280/1366/1920 widths; a separate real 1366×768 proof is included.
+
+- [Height Fog — live visibility probe](../Experimental/ProjectZeroEditor/Screenshots/HeightFogVisibility.png)
+- [Height Fog — altitude density study](../Experimental/ProjectZeroEditor/Screenshots/HeightFogDensity.png)
+- [Sun — seasonal graph in the existing card](../Experimental/ProjectZeroEditor/Screenshots/SunSeasonalGraph.png)
+- [AtmosphereLab — atlas and Arctic space study](../Experimental/ProjectZeroEditor/Screenshots/AtmosphereAtlas.png)
+- [AtmosphereLab — actual 1366×768 layout](../Experimental/ProjectZeroEditor/Screenshots/AtmosphereDesktop.png)
+- [AtmosphereLab — Mars-like preset](../Experimental/ProjectZeroEditor/Screenshots/AtmosphereMars.png)
+- [Local Cloud — live bounds and derived extents](../Experimental/ProjectZeroEditor/Screenshots/LocalCloudBounds.png)
+- [Environment graph test report](../Experimental/ProjectZeroEditor/Screenshots/EnvironmentGraphs.json)
+
+**Status:** HTML review checkpoint. Native integration, physical calibration,
+real volume sampling and native atmosphere rendering remain deferred.

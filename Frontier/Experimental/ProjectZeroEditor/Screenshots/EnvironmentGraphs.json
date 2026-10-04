@@ -1,0 +1,10 @@
+{
+  "Checks": [
+    "Consistent exponential fog density/transmission; shared distance/altitude probes; graph drag, keyboard and parameter editing; disabled medium gives 100% transmission",
+    "Solar daylight and seasonal plots update real time/date controls using the existing solver; relative intensity graph edits gain",
+    "Reconstructed atlas preset and free-map editing; responsive orbital single-scatter preview; changed pixels for Mars/Arctic and orbit; animation, modal focus/inert, RGB graph editing and reload",
+    "Environment/camera/light/post cards expose actual data graphs; geometry and materials excluded",
+    "Aerial spectral mixture, cloud vertical probes, editable local bounds/derived extents, cloud-shadow parameter graph, and real touch drag/clamping"
+  ],
+  "Errors": []
+}
