@@ -1259,6 +1259,43 @@ a {
 .gpu-error .button {
   margin-top: 15px;
 }
+.gpu-advice {
+  list-style: none;
+  margin: 4px 0 2px;
+  padding: 0;
+  max-width: 430px;
+  text-align: left;
+  display: grid;
+  gap: 7px;
+}
+.gpu-advice:empty {
+  display: none;
+}
+.gpu-advice li {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #c6c6c6;
+  padding-left: 16px;
+  position: relative;
+}
+.gpu-advice li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 8px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--green);
+}
+.gpu-detail {
+  margin-top: 14px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: #6f6f6f;
+  max-width: 430px;
+  word-break: break-word;
+}
 .diagnostics {
   position: absolute;
   right: 14px;

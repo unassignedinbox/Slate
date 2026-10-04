@@ -232,13 +232,25 @@ class TexturePanel
         this.Maximised = false;
         this.Compact = false;
         this.Status = "Initialising";
+        this.RecoveryTimer = 0;
+        this.RecoveryAttempts = 0;
 
+        this.BindRecovery();
         if (!this.Integrator.Ready)
         {
-            this.ReportFailure(this.Integrator.Failure);
+            this.ReportFailure(this.Integrator);
             return;
         }
+        this.Commence();
+    }
 
+    //----------------------------------------------------------------------------------------------------------------------
+    // Everything past a working device. Kept apart from the constructor so a retry after a failed context can run it.
+    //----------------------------------------------------------------------------------------------------------------------
+    Commence()
+    {
+        if (this.Commenced) return;
+        this.Commenced = true;
         this.Documents = new DocumentSequence(this, Icon);
         this.BindHeader();
         this.BindStack();
@@ -736,7 +748,11 @@ class TexturePanel
     //----------------------------------------------------------------------------------------------------------------------
     // Viewport interaction.
     //----------------------------------------------------------------------------------------------------------------------
-    BindViewport()
+    //----------------------------------------------------------------------------------------------------------------------
+    // Pointer wiring lives on the canvas element itself, so it is re-applied on its own whenever the canvas is replaced
+    // after a lost or refused context. The rest of the viewport chrome is bound once and stays bound.
+    //----------------------------------------------------------------------------------------------------------------------
+    BindSurfacePointers()
     {
         const Canvas = this.Canvas;
         Canvas.addEventListener("contextmenu", (Event) => Event.preventDefault());
@@ -770,6 +786,11 @@ class TexturePanel
             },
             { passive: false },
         );
+    }
+
+    BindViewport()
+    {
+        this.BindSurfacePointers();
         SelectAll("[data-tool]").forEach((Button) =>
             Button.addEventListener("click", () => this.SetTool(Button.dataset.tool)),
         );
@@ -2179,11 +2200,82 @@ class TexturePanel
         Element.dataset.kind = Kind || "";
     }
 
-    ReportFailure(Message)
+    //----------------------------------------------------------------------------------------------------------------------
+    // A missing context is worth explaining properly: say what the browser refused, what to do about it, and offer the
+    // retry, because a GPU process that was down a second ago is often back by the time somebody reads the first line.
+    //----------------------------------------------------------------------------------------------------------------------
+    ReportFailure(Integrator)
     {
+        const Advice = Integrator?.Advice || [];
+        const Notes = Integrator?.Notes || [];
+        const Renderer = Integrator?.Renderer || "";
         Select("#gpu-error").hidden = false;
-        Select("#gpu-error-message").textContent = Message;
+        Select("#gpu-error-message").textContent = Integrator?.Failure || "The renderer could not start.";
+        Select("#gpu-error-advice").innerHTML = Advice.map((Entry) => `<li>${Escape(Entry)}</li>`).join("");
+        const Detail = Select("#gpu-error-detail");
+        const Lines = [...Notes];
+        if (Renderer) Lines.push(`Renderer: ${Renderer}`);
+        Detail.textContent = Lines.join(" · ");
+        Detail.hidden = Lines.length === 0;
         this.SetStatus("GPU unavailable", "error");
+        // A GPU process that was restarting a moment ago is often back before anyone finishes reading the first line, so
+        // try again quietly a couple of times. A lost context is left alone: the browser announces its own restoration.
+        if (!Integrator?.Device && !this.RecoveryTimer && this.RecoveryAttempts < 2)
+        {
+            this.RecoveryAttempts += 1;
+            this.RecoveryTimer = setTimeout(() =>
+            {
+                this.RecoveryTimer = 0;
+                if (!this.Integrator.Ready) this.RetryDevice();
+            }, 1500);
+        }
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // Retrying has to start from a fresh canvas: once a canvas has been refused a context the browser keeps refusing that
+    // same element. Context loss is the same story with a happier ending, so both routes land here.
+    //----------------------------------------------------------------------------------------------------------------------
+    BindRecovery()
+    {
+        this.Canvas.addEventListener("webglcontextlost", (Event) =>
+        {
+            Event.preventDefault();
+            this.Integrator.Failure = "The GPU context was lost — the driver or the browser reset it.";
+            this.Integrator.Advice = ["Press Try again to rebuild the renderer. Painted coverage from this session is lost."];
+            this.ReportFailure(this.Integrator);
+        });
+        this.Canvas.addEventListener("webglcontextrestored", () => this.RetryDevice());
+        const Retry = Select("#gpu-retry");
+        if (Retry) Retry.addEventListener("click", () => this.RetryDevice());
+    }
+
+    RetryDevice()
+    {
+        const Replacement = this.Canvas.cloneNode(false);
+        this.Canvas.replaceWith(Replacement);
+        this.Canvas = Replacement;
+        this.Integrator = new ShadingIntegrator(this.Canvas);
+        this.BindRecovery();
+        if (!this.Integrator.Ready)
+        {
+            this.ReportFailure(this.Integrator);
+            return;
+        }
+        clearTimeout(this.RecoveryTimer);
+        this.RecoveryTimer = 0;
+        Select("#gpu-error").hidden = true;
+        if (this.Commenced)
+        {
+            this.BindSurfacePointers();
+            this.Integrator.Configure(this.Project.Resolution);
+            this.RebuildSurface(true);
+            this.InvalidateDecals();
+            this.Recomposite();
+            this.SetStatus("Renderer rebuilt", "ready");
+            this.Notify("The renderer was rebuilt. Painted coverage from before the reset is gone.");
+            return;
+        }
+        this.Commence();
     }
 
     UpdateCaption()
@@ -2246,6 +2338,12 @@ class TexturePanel
     //----------------------------------------------------------------------------------------------------------------------
     Advance()
     {
+        if (!this.Integrator.Ready)
+        {
+            // The device went away mid-session. Keep the loop alive so a rebuilt context picks straight back up.
+            requestAnimationFrame(() => this.Advance());
+            return;
+        }
         const Now = performance.now();
         const Delta = Math.min((Now - this.LastTime) / 1000, 0.1);
         this.LastTime = Now;

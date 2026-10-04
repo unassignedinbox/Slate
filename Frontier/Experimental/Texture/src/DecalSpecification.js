@@ -7,26 +7,31 @@
 //============================================================================================================================================
 
 import { SanitiseMarkup } from "./LayerSpecification.js";
-import DmSansLight from "../../../EngineContent/Fonts/SunReference/DMSans-Light.ttf?url";
-import DmSansRegular from "../../../EngineContent/Fonts/SunReference/DMSans-Regular.ttf?url";
-import ArchivoRegular from "../../../../EngineContent/FontArchives/Archivo/Archivo-Regular.ttf?url";
-import ArchivoBold from "../../../../EngineContent/FontArchives/Archivo/Archivo-Bold.ttf?url";
-import ClashRegular from "../../../../EngineContent/FontArchives/ClashDisplay/ClashDisplay-Regular.ttf?url";
-import ClashBold from "../../../../EngineContent/FontArchives/ClashDisplay/ClashDisplay-Bold.ttf?url";
-import FiraRegular from "../../../../EngineContent/FontArchives/FiraSans/FiraSans-Regular.ttf?url";
-import FiraBold from "../../../../EngineContent/FontArchives/FiraSans/FiraSans-Bold.ttf?url";
-import InterRegular from "../../../../EngineContent/FontArchives/Inter/Inter-Regular.otf?url";
-import InterBold from "../../../../EngineContent/FontArchives/Inter/Inter-Bold.otf?url";
-import MonoRegular from "../../../../EngineContent/FontArchives/JetBrainsMono/JetBrainsMono-Regular.ttf?url";
-import MonoBold from "../../../../EngineContent/FontArchives/JetBrainsMono/JetBrainsMono-Bold.ttf?url";
-import LatoRegular from "../../../../EngineContent/FontArchives/Lato/Lato-Regular.ttf?url";
-import LatoBold from "../../../../EngineContent/FontArchives/Lato/Lato-Bold.ttf?url";
-import MontserratRegular from "../../../../EngineContent/FontArchives/Montserrat/Montserrat-Regular.ttf?url";
-import MontserratBold from "../../../../EngineContent/FontArchives/Montserrat/Montserrat-Bold.ttf?url";
-import PoppinsRegular from "../../../../EngineContent/FontArchives/Poppins/Poppins-Regular.ttf?url";
-import PoppinsBold from "../../../../EngineContent/FontArchives/Poppins/Poppins-Bold.ttf?url";
-import GroteskRegular from "../../../../EngineContent/FontArchives/SpaceGrotesk/SpaceGrotesk-Regular.ttf?url";
-import GroteskBold from "../../../../EngineContent/FontArchives/SpaceGrotesk/SpaceGrotesk-Bold.ttf?url";
+//--------------------------------------------------------------------------------------------------------------------------
+// Font addresses resolve against this module rather than through a bundler plugin, so the editor runs from a plain static
+// host as happily as it does under the dev server — and the literal form is the one a bundler can still rewrite.
+//--------------------------------------------------------------------------------------------------------------------------
+
+const DmSansLight = new URL("../../../EngineContent/Fonts/SunReference/DMSans-Light.ttf", import.meta.url).href;
+const DmSansRegular = new URL("../../../EngineContent/Fonts/SunReference/DMSans-Regular.ttf", import.meta.url).href;
+const ArchivoRegular = new URL("../../../../EngineContent/FontArchives/Archivo/Archivo-Regular.ttf", import.meta.url).href;
+const ArchivoBold = new URL("../../../../EngineContent/FontArchives/Archivo/Archivo-Bold.ttf", import.meta.url).href;
+const ClashRegular = new URL("../../../../EngineContent/FontArchives/ClashDisplay/ClashDisplay-Regular.ttf", import.meta.url).href;
+const ClashBold = new URL("../../../../EngineContent/FontArchives/ClashDisplay/ClashDisplay-Bold.ttf", import.meta.url).href;
+const FiraRegular = new URL("../../../../EngineContent/FontArchives/FiraSans/FiraSans-Regular.ttf", import.meta.url).href;
+const FiraBold = new URL("../../../../EngineContent/FontArchives/FiraSans/FiraSans-Bold.ttf", import.meta.url).href;
+const InterRegular = new URL("../../../../EngineContent/FontArchives/Inter/Inter-Regular.otf", import.meta.url).href;
+const InterBold = new URL("../../../../EngineContent/FontArchives/Inter/Inter-Bold.otf", import.meta.url).href;
+const MonoRegular = new URL("../../../../EngineContent/FontArchives/JetBrainsMono/JetBrainsMono-Regular.ttf", import.meta.url).href;
+const MonoBold = new URL("../../../../EngineContent/FontArchives/JetBrainsMono/JetBrainsMono-Bold.ttf", import.meta.url).href;
+const LatoRegular = new URL("../../../../EngineContent/FontArchives/Lato/Lato-Regular.ttf", import.meta.url).href;
+const LatoBold = new URL("../../../../EngineContent/FontArchives/Lato/Lato-Bold.ttf", import.meta.url).href;
+const MontserratRegular = new URL("../../../../EngineContent/FontArchives/Montserrat/Montserrat-Regular.ttf", import.meta.url).href;
+const MontserratBold = new URL("../../../../EngineContent/FontArchives/Montserrat/Montserrat-Bold.ttf", import.meta.url).href;
+const PoppinsRegular = new URL("../../../../EngineContent/FontArchives/Poppins/Poppins-Regular.ttf", import.meta.url).href;
+const PoppinsBold = new URL("../../../../EngineContent/FontArchives/Poppins/Poppins-Bold.ttf", import.meta.url).href;
+const GroteskRegular = new URL("../../../../EngineContent/FontArchives/SpaceGrotesk/SpaceGrotesk-Regular.ttf", import.meta.url).href;
+const GroteskBold = new URL("../../../../EngineContent/FontArchives/SpaceGrotesk/SpaceGrotesk-Bold.ttf", import.meta.url).href;
 
 //--------------------------------------------------------------------------------------------------------------------------
 // OFL faces shipped with the engine. Loaded on demand — selecting a family fetches two weights, not twenty.

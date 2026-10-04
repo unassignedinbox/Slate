@@ -10,7 +10,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { ShadingIntegrator } from "./ShadingIntegrator.js";
+import { ShadingIntegrator, AcquireDevice, DescribeDeviceFailure, DeviceAttributeSets } from "./ShadingIntegrator.js";
 import { BuildSurface } from "./SurfaceStructure.js";
 import { OrbitProjection } from "./OrbitProjection.js";
 import { DefaultStack, DefaultProject, CreateLayer } from "./LayerSpecification.js";
@@ -360,4 +360,89 @@ test("resizing only reconfigures the canvas when the pixel size changes", () =>
     assert.equal(Integrator.Resize(800, 600, 1), true);
     assert.equal(Integrator.Resize(800, 600, 1), false, "an identical resize was not ignored");
     assert.equal(Integrator.Resize(800, 600, 2), true, "a ratio change was ignored");
+});
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Context acquisition. A browser that refuses a context does so silently, so these cover the retry ladder and the story
+// the panel tells a person when every rung fails.
+//--------------------------------------------------------------------------------------------------------------------------
+const CreateReluctantCanvas = (Refusals, Message = "") =>
+{
+    const Listeners = [];
+    const Canvas = {
+        Attempts: [],
+        Device: CreateDevice(),
+        width: 1280,
+        height: 720,
+        style: {},
+        addEventListener: (Kind, Listener) => Kind === "webglcontextcreationerror" && Listeners.push(Listener),
+        removeEventListener: (Kind, Listener) => Listeners.splice(Listeners.indexOf(Listener) >>> 0, 1),
+        getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 720 }),
+        getContext: (Kind, Attributes) =>
+        {
+            Canvas.Attempts.push(Attributes);
+            if (Canvas.Attempts.length <= Refusals)
+            {
+                for (const Listener of Listeners) Listener({ statusMessage: Message, preventDefault: () => {} });
+                return null;
+            }
+            return Canvas.Device;
+        },
+    };
+    return Canvas;
+};
+
+test("a refused context is asked for again with humbler attributes", () =>
+{
+    const Canvas = CreateReluctantCanvas(2);
+    const { Device, Notes } = AcquireDevice(Canvas);
+    assert.ok(Device, "the third attempt should have been granted");
+    assert.equal(Canvas.Attempts.length, 3);
+    assert.equal(Canvas.Attempts[0].powerPreference, "high-performance");
+    assert.equal(Canvas.Attempts[1].powerPreference, undefined, "the discrete GPU request should be dropped first");
+    assert.equal(Notes.length, 0, "a silent refusal should not invent a note");
+});
+
+test("whatever the browser says about a refusal is kept, once", () =>
+{
+    const Canvas = CreateReluctantCanvas(99, "Could not create a WebGL2 context. GPU process isn't usable.");
+    const { Device, Notes } = AcquireDevice(Canvas);
+    assert.equal(Device, null);
+    assert.equal(Canvas.Attempts.length, DeviceAttributeSets.length, "every attribute set should have been tried");
+    assert.deepEqual(Notes, ["Could not create a WebGL2 context. GPU process isn't usable."]);
+});
+
+test("a device that never arrives produces a readable failure with steps to take", () =>
+{
+    const Integrator = new ShadingIntegrator(CreateReluctantCanvas(99, "GPU process isn't usable."));
+    assert.equal(Integrator.Ready, false);
+    assert.match(Integrator.Failure, /WebGL/i);
+    assert.ok(Integrator.Advice.length >= 2, "a failure with no advice is just a shrug");
+    assert.ok(Integrator.Notes.includes("GPU process isn't usable."));
+});
+
+test("the diagnosis names the context ceiling when that is what the browser hit", () =>
+{
+    const Diagnosis = DescribeDeviceFailure(["Too many active WebGL contexts. Oldest context will be lost."]);
+    assert.match(Diagnosis.Message, /run out of WebGL contexts/i);
+    assert.ok(Diagnosis.Advice.some((Entry) => /close other tabs/i.test(Entry)));
+});
+
+test("half-float rendering on its own is enough to start", () =>
+{
+    const Canvas = CreateCanvas();
+    Canvas.Device.getExtension = (Name) => (Name === "EXT_color_buffer_half_float" ? {} : null);
+    const Integrator = new ShadingIntegrator(Canvas);
+    assert.equal(Integrator.Failure, "", "half-float rendering should satisfy the bake targets");
+    assert.ok(Integrator.Ready);
+});
+
+test("a context with no float rendering at all refuses with advice rather than a blank viewport", () =>
+{
+    const Canvas = CreateCanvas();
+    Canvas.Device.getExtension = () => null;
+    const Integrator = new ShadingIntegrator(Canvas);
+    assert.equal(Integrator.Ready, false);
+    assert.match(Integrator.Failure, /floating-point/i);
+    assert.ok(Integrator.Advice.length >= 1);
 });

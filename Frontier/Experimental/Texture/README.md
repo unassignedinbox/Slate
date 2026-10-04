@@ -9,11 +9,23 @@ with a full layer stack, a material library and SVG/text decals. It shares its s
 cd Frontier/Experimental/Texture
 npm install
 npm run dev        # http://localhost:5173
-npm test           # 36 unit tests, no browser required
+npm run build      # dist/, fonts and all
+npm test           # 42 unit tests, no browser required
 ```
 
-Requires WebGL2 with `EXT_color_buffer_float`. The editor reports a readable failure in the viewport if the extension is
-missing rather than rendering a black frame.
+There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
+`new URL(..., import.meta.url)`, so the checked-out tree runs straight off any static host. From a browser, with nothing
+installed:
+
+```
+https://raw.githack.com/unassignedinbox/Slate/<branch-or-commit>/Frontier/Experimental/Texture/index.html
+```
+
+Requires WebGL 2 and floating-point render targets (`EXT_color_buffer_float`, or `EXT_color_buffer_half_float`). If the
+context is refused the viewport says why — the browser's own refusal message, whether WebGL 1 is present, the renderer
+string — and lists what to do about it. It then retries quietly a couple of times, because a browser waiting to be
+relaunched for an update keeps its GPU process down and usually has it back a second later. A context lost mid-session
+raises the same panel and rebuilds the renderer when the browser restores it.
 
 ---
 
@@ -94,7 +106,7 @@ set. Each writes one PNG per channel named `<project-name>_<Channel>.png` next t
 | `RevisionQueue.js` | Byte-budgeted undo of both painted images and structural edits. |
 | `DocumentSequence.js` | Up to four resident documents and their tabs. |
 | `ExportSequence.js` | Slot resolve, PNG emission, OpenPBR descriptor. |
-| `*.mjs` | Node test files — surface maths, stack semantics, and the device driven against a recording WebGL2 stand-in. |
+| `*.mjs` | Node test files — surface maths, stack semantics, device behaviour and context recovery, against a recording WebGL2 stand-in. |
 
 `TexturePanel.css` holds the editor-specific rules; `ThemeSpecification.css` is the shared Frontier chrome and should stay
 in step with the fluid app's copy of the same file.

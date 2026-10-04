@@ -74,34 +74,149 @@ const Link = (Device, VertexSource, FragmentSource, Requested = []) =>
     return { Program, Uniforms };
 };
 
+//--------------------------------------------------------------------------------------------------------------------------
+// Context creation is the most fragile step in any browser renderer, and it fails quietly: a pending browser update, a
+// driver reset, a disabled acceleration switch or simply too many live contexts all arrive as a null return rather than an
+// exception. Ask progressively humbler attribute sets — a discrete GPU request is the usual thing a tired driver refuses —
+// and keep every refusal the browser bothered to describe.
+//--------------------------------------------------------------------------------------------------------------------------
+export const DeviceAttributeSets = [
+    { alpha: false, antialias: true, depth: true, preserveDrawingBuffer: false, powerPreference: "high-performance" },
+    { alpha: false, antialias: true, depth: true, preserveDrawingBuffer: false },
+    { alpha: false, antialias: false, depth: true, preserveDrawingBuffer: false, failIfMajorPerformanceCaveat: false },
+    { alpha: true, antialias: false, depth: false },
+    {},
+];
+
+export const AcquireDevice = (Canvas) =>
+{
+    const Notes = [];
+    const Listen = (Event) =>
+    {
+        if (Event?.statusMessage) Notes.push(String(Event.statusMessage).trim());
+        Event?.preventDefault?.();
+    };
+    Canvas.addEventListener?.("webglcontextcreationerror", Listen, false);
+    let Device = null;
+    for (const Attributes of DeviceAttributeSets)
+    {
+        try
+        {
+            Device = Canvas.getContext("webgl2", Attributes);
+        }
+        catch (Error)
+        {
+            Notes.push(Error?.message || String(Error));
+        }
+        if (Device) break;
+    }
+    Canvas.removeEventListener?.("webglcontextcreationerror", Listen, false);
+    return { Device, Notes: [...new Set(Notes)] };
+};
+
+//--------------------------------------------------------------------------------------------------------------------------
+// When every attempt fails, work out which of the three usual worlds we are in — no WebGL at all, WebGL 1 only, or a
+// browser that simply ran out of contexts — and answer with steps rather than a shrug.
+//--------------------------------------------------------------------------------------------------------------------------
+export const DescribeDeviceFailure = (Notes = []) =>
+{
+    const Spoken = Notes.join(" ");
+    const Crowded = /too many|context limit|maximum number/i.test(Spoken);
+    let Legacy = null;
+    let Renderer = "";
+    try
+    {
+        const Probe = document.createElement("canvas");
+        Legacy = Probe.getContext("webgl") || Probe.getContext("experimental-webgl");
+        if (Legacy)
+        {
+            const Reflection = Legacy.getExtension("WEBGL_debug_renderer_info");
+            Renderer = String(
+                (Reflection && Legacy.getParameter(Reflection.UNMASKED_RENDERER_WEBGL)) || Legacy.getParameter(Legacy.RENDERER) || "",
+            );
+            Legacy.getExtension("WEBGL_lose_context")?.loseContext();
+        }
+    }
+    catch
+    {
+        Legacy = null;
+    }
+
+    if (Crowded)
+        return {
+            Message: "The browser has run out of WebGL contexts, so this page could not open one.",
+            Advice: [
+                "Close other tabs that are running 3D or video — each holds a context open.",
+                "Reload this page once they are closed.",
+            ],
+            Detail: Notes,
+            Renderer,
+        };
+
+    if (Legacy)
+        return {
+            Message: "This browser offers WebGL 1 but refused a WebGL 2 context, which the editor needs for multiple render targets.",
+            Advice: [
+                "Update the browser — WebGL 2 has shipped in Chrome, Edge, Firefox and Safari since 2021.",
+                "In Chrome or Edge, open chrome://flags and make sure nothing disables WebGL 2 or forces ANGLE to a software backend.",
+                "Update the graphics driver, then restart the browser.",
+            ],
+            Detail: Notes,
+            Renderer,
+        };
+
+    return {
+        Message: "The browser would not create a WebGL context at all, which usually means its GPU process is not running.",
+        Advice: [
+            "If the browser is waiting to be relaunched for an update, relaunch it — a half-updated browser keeps the GPU process down.",
+            "Chrome and Edge: Settings → System → turn on “Use graphics acceleration when available”, then relaunch.",
+            "Open chrome://gpu and check that “WebGL2” reads Hardware accelerated.",
+            "Try a window without extensions, or another browser profile, to rule out a blocking extension.",
+        ],
+        Detail: Notes,
+        Renderer,
+    };
+};
+
 export class ShadingIntegrator
 {
     constructor(Canvas)
     {
         this.Canvas = Canvas;
         this.Failure = "";
+        this.Advice = [];
+        this.Notes = [];
+        this.Renderer = "";
         this.Resolution = 1024;
         this.Surface = null;
         this.Statistics = { Composites: 0, Stamps: 0, CompositeMicroseconds: 0, Layers: 0, Triangles: 0 };
         this.LayerImages = new Map();
-        this.Device = Canvas.getContext("webgl2", {
-            alpha: false,
-            antialias: true,
-            depth: true,
-            preserveDrawingBuffer: false,
-            powerPreference: "high-performance",
-        });
+        const { Device: Acquired, Notes } = AcquireDevice(Canvas);
+        this.Device = Acquired;
+        this.Notes = Notes;
         if (!this.Device)
         {
-            this.Failure = "WebGL2 is unavailable in this browser.";
+            const Diagnosis = DescribeDeviceFailure(Notes);
+            this.Failure = Diagnosis.Message;
+            this.Advice = Diagnosis.Advice;
+            this.Renderer = Diagnosis.Renderer;
             return;
         }
         const Device = this.Device;
-        this.FloatRender = Device.getExtension("EXT_color_buffer_float");
+        const Reflection = Device.getExtension("WEBGL_debug_renderer_info");
+        this.Renderer = String(
+            (Reflection && Device.getParameter(Reflection.UNMASKED_RENDERER_WEBGL)) || Device.getParameter(Device.RENDERER) || "",
+        );
+        // Rendering into RGBA16F needs one of these two. The second is the mobile and software-backend spelling of the first.
+        this.FloatRender = Device.getExtension("EXT_color_buffer_float") || Device.getExtension("EXT_color_buffer_half_float");
         this.FloatFilter = Device.getExtension("OES_texture_float_linear");
         if (!this.FloatRender)
         {
-            this.Failure = "EXT_color_buffer_float is required for the surface bake.";
+            this.Failure = "This WebGL 2 context cannot render into floating-point images, which the surface pass needs.";
+            this.Advice = [
+                "Update the graphics driver and relaunch the browser.",
+                "Open chrome://gpu and check whether the GPU is being emulated in software.",
+            ];
             return;
         }
         if (Device.getParameter(Device.MAX_DRAW_BUFFERS) < 4)
