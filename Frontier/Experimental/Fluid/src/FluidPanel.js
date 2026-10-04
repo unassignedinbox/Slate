@@ -335,12 +335,28 @@ class ClothPanel {
     });
 
     // Quick bar sliders in left Substance Editor
+    if (Select("#quick-grid-res"))
+      Select("#quick-grid-res").value = this.Parameters.gridResolution;
     if (Select("#quick-skirt-length"))
       Select("#quick-skirt-length").value = this.Parameters.skirtLength;
     if (Select("#quick-skirt-flare"))
       Select("#quick-skirt-flare").value = this.Parameters.skirtFlare;
     if (Select("#quick-pleats"))
       Select("#quick-pleats").value = this.Parameters.pleatCount;
+
+    const MeshResSelect = Select("#mesh-res-select");
+    if (MeshResSelect) {
+      MeshResSelect.querySelector("[data-custom]")?.remove();
+      if (![48, 64, 96, 128, 160].includes(this.Parameters.gridResolution)) {
+        const c = this.Parameters.gridResolution;
+        const r = this.Engine?.numRows || Math.round(c * 0.75);
+        MeshResSelect.insertAdjacentHTML(
+          "beforeend",
+          `<option data-custom value="${c}">${c}×${r} · Custom</option>`,
+        );
+      }
+      MeshResSelect.value = this.Parameters.gridResolution;
+    }
 
     Select("#render-channel").value = this.Parameters.renderChannel;
     Select("#diagnostic-channel").value = this.Parameters.renderChannel;
@@ -610,9 +626,11 @@ class ClothPanel {
 
     if (this.Tab === "source") {
       AddGroup(
-        "Silhouette & cut",
+        "Silhouette & mesh resolution",
         [
           "garmentEnabled",
+          "gridResolution",
+          "pieAutoResolution",
           "dressStyle",
           "skirtLength",
           "skirtFlare",
@@ -621,7 +639,7 @@ class ClothPanel {
         ],
         "PATTERN",
         true,
-        "Linked directly to the Skirt Silhouette and Seam Assembler nodes in the left Substance graph.",
+        "Adjust Garment mesh resolution (32–160) or use Zhang et al. 2025 PIE adaptive sizing map.",
       );
       AddGroup(
         "Bodice & neckline",
@@ -912,6 +930,9 @@ class ClothPanel {
     );
 
     // Quick sliders in the Substance Node Graph bottom bar
+    Select("#quick-grid-res")?.addEventListener("input", (e) =>
+      this.ApplyParameter("gridResolution", Number(e.target.value)),
+    );
     Select("#quick-skirt-length").addEventListener("input", (e) =>
       this.ApplyParameter("skirtLength", Number(e.target.value)),
     );
@@ -921,6 +942,23 @@ class ClothPanel {
     Select("#quick-pleats").addEventListener("input", (e) =>
       this.ApplyParameter("pleatCount", Number(e.target.value)),
     );
+
+    // Top viewport bar garment resolution dropdown & clickable HUD badge
+    Select("#mesh-res-select")?.addEventListener("change", (e) => {
+      this.ApplyParameter("gridResolution", Number(e.target.value));
+      this.Notify(
+        `Garment mesh resolution set to ${this.Engine?.numCols || e.target.value}×${this.Engine?.numRows || ""} (${(this.Engine?.vertexCount || 0).toLocaleString()} vertices).`,
+      );
+    });
+    Select("#grid-hud")?.addEventListener("click", () => {
+      const cycle = [64, 96, 128, 160, 48];
+      const cur = this.Parameters.gridResolution;
+      const next = cycle[(cycle.indexOf(cur) + 1) % cycle.length];
+      this.ApplyParameter("gridResolution", next);
+      this.Notify(
+        `Garment mesh resolution cycled to ${this.Engine?.numCols || next}×${this.Engine?.numRows || ""} (${(this.Engine?.vertexCount || 0).toLocaleString()} vertices).`,
+      );
+    });
 
     // Draggable vertical splitter between Left Editor and Right 3D Simulation
     const Splitter = Select("#pane-splitter");

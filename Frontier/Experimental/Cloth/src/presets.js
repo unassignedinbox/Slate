@@ -54,8 +54,8 @@ export const DEFAULT_PARAMS = {
   pieDownPressure: 0.0,
 
   // WebGPU XPBD Solver & Physics
-  gridResolution: 56,
-  substeps: 12,
+  gridResolution: 96,
+  substeps: 14,
   stretchCompliance: 0.006,
   shearCompliance: 0.018,
   bendStiffness: 0.42,
@@ -173,8 +173,8 @@ export const CONTROL_GROUPS = [
   {
     title: "XPBD Solver & Wind",
     controls: [
-      { key: "gridResolution", label: "Mesh circumference", type: "range", min: 32, max: 80, step: 4 },
-      { key: "substeps", label: "XPBD substeps", type: "range", min: 4, max: 20, step: 1 },
+      { key: "gridResolution", label: "Garment mesh resolution", type: "range", min: 32, max: 160, step: 4 },
+      { key: "substeps", label: "XPBD substeps", type: "range", min: 4, max: 24, step: 1 },
       { key: "stretchCompliance", label: "Warp / weft stretch", type: "range", min: 0.0, max: 0.08, step: 0.001 },
       { key: "shearCompliance", label: "Bias shear drape", type: "range", min: 0.0, max: 0.15, step: 0.002 },
       { key: "bendStiffness", label: "Fold stiffness", type: "range", min: 0.05, max: 1.0, step: 0.02 },

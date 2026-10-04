@@ -506,6 +506,14 @@ export class WebGPUClothEngine {
       pass.setBindGroup(0, this.computeBG_AB);
       pass.dispatchWorkgroups(workgroups);
 
+      if (this.numCols > 72) {
+        // Extra ping-pong Jacobi constraint passes for high-resolution HD/Ultra meshes (96..160 cols)
+        pass.setBindGroup(0, this.computeBG_BA);
+        pass.dispatchWorkgroups(workgroups);
+        pass.setBindGroup(0, this.computeBG_AB);
+        pass.dispatchWorkgroups(workgroups);
+      }
+
       // 4. Collide & Update Velocity: B -> A
       pass.setPipeline(this.computePipelines.collide);
       pass.setBindGroup(0, this.computeBG_BA);

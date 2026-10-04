@@ -36,13 +36,13 @@ export class DressGenerator {
     const pieActive = params.pieAutoResolution !== false;
     const anisoRatio = Math.max(0.6, Math.min(2.5, params.pieAnisotropy ?? 1.45));
 
-    const baseCols = Math.max(24, Math.min(96, Math.round(params.gridResolution || 56)));
+    const baseCols = Math.max(24, Math.min(160, Math.round(params.gridResolution || 96)));
     const numCols = baseCols;
     // §4.1.2 Orthotropic Anisotropy: coarser warp resolution along vertical hang when pieAnisotropy > 1
     const warpAspect = pieActive
       ? Math.max(0.56, Math.min(0.92, 0.84 / Math.pow(anisoRatio, 0.28)))
       : 0.78;
-    const numRows = Math.max(20, Math.min(72, Math.round(numCols * warpAspect)));
+    const numRows = Math.max(20, Math.min(128, Math.round(numCols * warpAspect)));
     const vertexCount = numCols * numRows;
 
     const dressStyle = params.dressStyle ?? 0;
