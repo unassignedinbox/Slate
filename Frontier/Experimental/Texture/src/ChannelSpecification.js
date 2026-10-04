@@ -231,6 +231,7 @@ export const DisplayOrdering = [
     { Identifier: "curvature", Label: "Curvature" },
     { Identifier: "occlusion_bake", Label: "Baked AO" },
     { Identifier: "checker", Label: "UV checker" },
+    { Identifier: "mask", Label: "Layer mask" },
 ];
 
 export const DisplayIndex = (Identifier) =>

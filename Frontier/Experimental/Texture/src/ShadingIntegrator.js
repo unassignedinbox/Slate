@@ -635,6 +635,17 @@ export class ShadingIntegrator
         this.LayerImages.delete(Identifier);
     }
 
+    // Dropping a mask frees its image so the next one the layer is given starts from a clean sheet.
+    ReleaseMask(Identifier)
+    {
+        const Record = this.LayerImages.get(Identifier);
+        if (!Record) return;
+        if (Record.Mask) this.Device.deleteTexture(Record.Mask);
+        if (Record.MaskTarget) this.Device.deleteFramebuffer(Record.MaskTarget);
+        Record.Mask = null;
+        Record.MaskTarget = null;
+    }
+
     ClearImage(Target, Colour)
     {
         const Device = this.Device;
@@ -861,6 +872,13 @@ export class ShadingIntegrator
         Device.uniform1f(Uniforms.get("uDecalEmboss"), Decal.Emboss);
     }
 
+    // The mask inspection draws whichever layer is selected; a layer without one reads as fully revealed.
+    MaskImage(Identifier)
+    {
+        const Record = Identifier ? this.LayerImages.get(Identifier) : null;
+        return Record?.Mask || this.WhiteImage();
+    }
+
     BlankImage()
     {
         if (!this.Blank)
@@ -982,6 +1000,7 @@ export class ShadingIntegrator
         this.BindImage(Shade, "uChannel2", Images[2], 2);
         this.BindImage(Shade, "uChannel3", Images[3], 3);
         this.BindImage(Shade, "uField", this.FieldTarget.Images[0], 4);
+        this.BindImage(Shade, "uMaskPreview", this.MaskImage(Options.MaskLayer), 5);
         this.UploadEnvironment(Shade, Options.Environment, Options.Material);
         const Uniforms = Shade.Uniforms;
         Device.uniformMatrix4fv(Uniforms.get("uViewClip"), false, Camera.ViewClip);
@@ -1032,6 +1051,7 @@ export class ShadingIntegrator
         this.BindImage(Program, "uChannel2", Images[2], 2);
         this.BindImage(Program, "uChannel3", Images[3], 3);
         this.BindImage(Program, "uField", this.FieldTarget.Images[0], 4);
+        this.BindImage(Program, "uMaskPreview", this.MaskImage(Options.MaskLayer), 5);
         Device.uniform2fv(Program.Uniforms.get("uPan"), Options.Pan);
         Device.uniform1f(Program.Uniforms.get("uZoom"), Options.Zoom);
         Device.uniform1f(Program.Uniforms.get("uAspect"), this.Canvas.width / Math.max(this.Canvas.height, 1));

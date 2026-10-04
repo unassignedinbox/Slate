@@ -23,9 +23,6 @@ import {
     ExportOrdering,
 } from "./ChannelSpecification.js";
 import {
-    MaterialLibrary,
-    MaterialCategories,
-    MaterialByIdentifier,
     SurfaceControls,
     EnvironmentOrdering,
 } from "./MaterialSpecification.js";
@@ -33,15 +30,14 @@ import { GeneratorOrdering, GeneratorByIdentifier, GeneratorControls, NormaliseG
 import {
     CreateLayer,
     CloneLayer,
-    ExpandMaterial,
     DefaultProject,
     DefaultStack,
     SanitiseProject,
     SurfaceOrdering,
     LayerKindByIdentifier,
     LayerBadge,
-    LayerSummary,
     LayerChannelCount,
+    LayerSummary,
 } from "./LayerSpecification.js";
 import { DecalLibrary, DecalCategories, FontArchive, RasteriseDecal, SanitiseMarkup } from "./DecalSpecification.js";
 
@@ -187,6 +183,112 @@ const ActionRow = (Actions) => `
         ).join("")}
     </div>`;
 
+//--------------------------------------------------------------------------------------------------------------------------
+// Native dropdowns paint themselves with the platform's own menu, which ignores every colour in the theme. Rather than
+// replace the element — every binding in the panel reads the select — it is hidden behind a face button and a list that
+// writes the value back and re-fires change, so the record never notices the difference.
+//--------------------------------------------------------------------------------------------------------------------------
+const ShutDropdowns = (Root, Except) =>
+{
+    for (const Shell of Root.querySelectorAll(".dropdown.open"))
+    {
+        if (Shell === Except) continue;
+        Shell.classList.remove("open");
+        Shell.querySelector(".dropdown-list").hidden = true;
+        Shell.querySelector(".dropdown-face").setAttribute("aria-expanded", "false");
+    }
+};
+
+const DressSelect = (Field) =>
+{
+    if (Field.dataset.dressed) return;
+    Field.dataset.dressed = "1";
+    const Shell = Field.ownerDocument.createElement("div");
+    Shell.className = "dropdown";
+    Field.parentNode.insertBefore(Shell, Field);
+    Shell.appendChild(Field);
+
+    const Face = Field.ownerDocument.createElement("button");
+    Face.type = "button";
+    Face.className = "dropdown-face";
+    Face.setAttribute("aria-haspopup", "listbox");
+    Face.setAttribute("aria-expanded", "false");
+    if (Field.getAttribute("aria-label")) Face.setAttribute("aria-label", Field.getAttribute("aria-label"));
+    Shell.appendChild(Face);
+
+    const List = Field.ownerDocument.createElement("div");
+    List.className = "dropdown-list";
+    List.setAttribute("role", "listbox");
+    List.hidden = true;
+    Shell.appendChild(List);
+
+    const Paint = () =>
+    {
+        const Chosen = Field.options[Field.selectedIndex];
+        Face.innerHTML =
+            `<span>${Escape(Chosen ? Chosen.textContent.trim() : "")}</span>` +
+            `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9.5 12 15.5 18 9.5" /></svg>`;
+        List.innerHTML = [...Field.options].map(
+            (Option, Index) =>
+                `<button type="button" role="option" data-index="${Index}" class="${Index === Field.selectedIndex ? "chosen" : ""}"
+                         aria-selected="${Index === Field.selectedIndex}">${Escape(Option.textContent.trim())}</button>`,
+        ).join("");
+    };
+
+    const Shut = () =>
+    {
+        List.hidden = true;
+        Shell.classList.remove("open");
+        Face.setAttribute("aria-expanded", "false");
+    };
+
+    Face.addEventListener("click", (Event) =>
+    {
+        Event.preventDefault();
+        Event.stopPropagation();
+        const Opening = List.hidden;
+        ShutDropdowns(Field.ownerDocument, Shell);
+        List.hidden = !Opening;
+        Shell.classList.toggle("open", Opening);
+        Face.setAttribute("aria-expanded", String(Opening));
+        if (Opening)
+        {
+            // Drop upwards when the list would run off the bottom of the window.
+            const Room = (Field.ownerDocument.defaultView?.innerHeight || 800) - Face.getBoundingClientRect().bottom;
+            Shell.classList.toggle("drop-up", Room < Math.min(264, Field.options.length * 34 + 16));
+            List.querySelector(".chosen")?.scrollIntoView?.({ block: "nearest" });
+        }
+    });
+    List.addEventListener("click", (Event) =>
+    {
+        const Option = Event.target.closest("[data-index]");
+        if (!Option) return;
+        Field.selectedIndex = Number(Option.dataset.index);
+        Paint();
+        Shut();
+        Field.dispatchEvent(new Field.ownerDocument.defaultView.Event("change", { bubbles: true }));
+    });
+    Face.addEventListener("keydown", (Event) =>
+    {
+        if (Event.key !== "ArrowDown" && Event.key !== "ArrowUp") return;
+        Event.preventDefault();
+        const Step = Event.key === "ArrowDown" ? 1 : -1;
+        const Next = Math.min(Field.options.length - 1, Math.max(0, Field.selectedIndex + Step));
+        if (Next === Field.selectedIndex) return;
+        Field.selectedIndex = Next;
+        Paint();
+        Field.dispatchEvent(new Field.ownerDocument.defaultView.Event("change", { bubbles: true }));
+    });
+    Field.addEventListener("change", Paint);
+    Field.addEventListener("dressrefresh", Paint);
+    Paint();
+};
+
+const DressSelects = (Root) => Root.querySelectorAll("select").forEach((Field) => DressSelect(Field));
+
+// Setting .value in code fires nothing, so the face is asked to redraw itself.
+const RefreshSelect = (Field) => Field?.dispatchEvent(new Field.ownerDocument.defaultView.Event("dressrefresh"));
+
 const Group = ({ Title, Badge, Body, Open = true }) => `
     <details class="property-group" ${Open ? "open" : ""}>
         <summary>${Escape(Title)}${Badge ? `<span class="section-badge">${Escape(Badge)}</span>` : ""}</summary>
@@ -219,6 +321,7 @@ class TexturePanel
         this.DecalCategory = "all";
         this.ViewMode = "surface";
         this.Display = "material";
+        this.DisplayBefore = "";
         this.PlaneZoom = 0.82;
         this.PlanePan = [0, 0];
         this.Dirty = false;
@@ -255,7 +358,6 @@ class TexturePanel
         this.Documents = new DocumentSequence(this, Icon);
         this.BindHeader();
         this.BindStack();
-        this.BindLibrary();
         this.BindViewport();
         this.BindTransport();
         this.BindInspector();
@@ -264,9 +366,10 @@ class TexturePanel
         this.Integrator.Configure(this.Project.Resolution);
         this.RebuildSurface(true);
         this.RenderStack();
-        this.RenderLibrary();
         this.RenderInspector();
         this.RenderChannelStrip();
+        this.SyncPaintTarget();
+        DressSelects(document);
         this.Advance();
         this.SetStatus("Ready", "ready");
     }
@@ -293,10 +396,13 @@ class TexturePanel
     {
         if (this.Project.Selection === Identifier) return;
         this.Project.Selection = Identifier;
+        const Layer = this.ActiveLayer;
+        if (this.Projection.Brush.Target === "mask" && Layer && Layer.Mask.Kind === "none")
+            this.Projection.Configure({ Target: "coverage" });
         this.RenderStack();
         this.RenderInspector();
         this.RenderChannelStrip();
-        this.UpdateCaption();
+        this.SyncPaintTarget();
     }
 
     //----------------------------------------------------------------------------------------------------------------------
@@ -366,16 +472,23 @@ class TexturePanel
         Select("#import-button").addEventListener("click", () => Select("#import-file").click());
         Select("#import-file").addEventListener("change", (Event) => this.ImportProject(Event.target.files?.[0]));
         Select("#help-button").addEventListener("click", () => Select("#help-dialog").showModal());
-        Select("#workspace-button").addEventListener("click", () => this.FocusPane("workspace"));
-        Select("#library-button").addEventListener("click", () => this.FocusPane("library"));
+        Select("#workspace-button").addEventListener("click", () => this.SetViewMode("surface"));
+        Select("#shelf-button").addEventListener("click", () => this.SetViewMode("plane"));
     }
 
-    FocusPane(Pane)
+    //----------------------------------------------------------------------------------------------------------------------
+    // The surface and its unwrapped texture are two ways of looking at the same paint, so the switch lives in the header,
+    // in the viewport bar and on the X key — all three come through here.
+    //----------------------------------------------------------------------------------------------------------------------
+    SetViewMode(Mode)
     {
-        Select("#workspace-button").classList.toggle("active", Pane === "workspace");
-        Select("#library-button").classList.toggle("active", Pane === "library");
-        Select(".left-panel").classList.toggle("library-focus", Pane === "library");
-        if (Pane === "library") Select("#material-search").focus();
+        this.ViewMode = Mode === "plane" ? "plane" : "surface";
+        Select("#view-mode").value = this.ViewMode;
+        RefreshSelect(Select("#view-mode"));
+        Select(".viewport").classList.toggle("plane-view", this.ViewMode === "plane");
+        Select("#workspace-button").classList.toggle("active", this.ViewMode === "surface");
+        Select("#shelf-button").classList.toggle("active", this.ViewMode === "plane");
+        this.UpdateCaption();
     }
 
     //----------------------------------------------------------------------------------------------------------------------
@@ -394,12 +507,6 @@ class TexturePanel
             if (!Button) return;
             this.LayerFilter = Button.dataset.layerFilter;
             this.RenderStack();
-        });
-        Select("#collection-toggle").addEventListener("click", (Event) =>
-        {
-            const Expanded = Event.currentTarget.getAttribute("aria-expanded") === "true";
-            Event.currentTarget.setAttribute("aria-expanded", String(!Expanded));
-            Select("#layer-stack").hidden = Expanded;
         });
         Select("#compact-outliner").addEventListener("click", (Event) =>
         {
@@ -431,6 +538,7 @@ class TexturePanel
         });
         document.addEventListener("click", (Event) =>
         {
+            if (!Event.target.closest(".dropdown")) ShutDropdowns(document);
             if (!Event.target.closest("#add-menu") && !Event.target.closest("#add-button"))
             {
                 Select("#add-menu").hidden = true;
@@ -439,6 +547,14 @@ class TexturePanel
         });
         Select("#layer-stack").addEventListener("click", (Event) =>
         {
+            const Chip = Event.target.closest("[data-chip]");
+            if (Chip)
+            {
+                Event.stopPropagation();
+                this.SelectLayer(Chip.dataset.chipLayer);
+                this.SetPaintTarget(Chip.dataset.chip === "mask" ? "mask" : "coverage");
+                return;
+            }
             const Toggle = Event.target.closest("[data-toggle-layer]");
             if (Toggle)
             {
@@ -473,22 +589,22 @@ class TexturePanel
         {
             Event.preventDefault();
             const Row = Event.target.closest("[data-layer]");
-            SelectAll(".scene-row.drop-target").forEach((Element) => Element.classList.remove("drop-target"));
+            SelectAll(".layer-row.drop-target").forEach((Element) => Element.classList.remove("drop-target"));
             if (Row && Row.dataset.layer !== this.DragIdentifier) Row.classList.add("drop-target");
         });
         Stack.addEventListener("drop", (Event) =>
         {
             Event.preventDefault();
             const Row = Event.target.closest("[data-layer]");
-            SelectAll(".scene-row.drop-target").forEach((Element) => Element.classList.remove("drop-target"));
+            SelectAll(".layer-row.drop-target").forEach((Element) => Element.classList.remove("drop-target"));
             if (!Row || !this.DragIdentifier) return;
             this.MoveLayer(this.DragIdentifier, Row.dataset.layer);
             this.DragIdentifier = "";
         });
         Stack.addEventListener("dragend", () =>
         {
-            SelectAll(".scene-row.dragging").forEach((Element) => Element.classList.remove("dragging"));
-            SelectAll(".scene-row.drop-target").forEach((Element) => Element.classList.remove("drop-target"));
+            SelectAll(".layer-row.dragging").forEach((Element) => Element.classList.remove("dragging"));
+            SelectAll(".layer-row.drop-target").forEach((Element) => Element.classList.remove("drop-target"));
         });
     }
 
@@ -498,48 +614,74 @@ class TexturePanel
             .reverse()
             .filter((Layer) =>
             {
-                if (this.LayerFilter !== "all" && Layer.Kind !== this.LayerFilter) return false;
+                if (this.LayerFilter === "masked")
+                {
+                    if (Layer.Mask.Kind === "none") return false;
+                }
+                else if (this.LayerFilter !== "all" && Layer.Kind !== this.LayerFilter) return false;
                 if (!this.LayerQuery) return true;
                 return `${Layer.Name} ${Layer.Kind} ${LayerBadge(Layer)}`.toLowerCase().includes(this.LayerQuery);
             });
     }
 
+    //----------------------------------------------------------------------------------------------------------------------
+    // One card per layer. Each carries the two things a paint session keeps asking about: what the layer is, and whether
+    // the brush is about to land in its content or in its mask.
+    //----------------------------------------------------------------------------------------------------------------------
     RenderStack()
     {
         const Rows = this.VisibleLayers();
-        const Visible = this.Layers.filter((Layer) => Layer.Visible).length;
+        const Masked = this.Layers.filter((Layer) => Layer.Mask.Kind !== "none").length;
         Select("#layer-count").textContent = String(this.Layers.length);
-        Select("#visible-count").textContent = String(Visible);
-        Select("#hidden-count").textContent = String(this.Layers.length - Visible);
         SelectAll("#layer-filters button").forEach((Button) =>
         {
             const Active = Button.dataset.layerFilter === this.LayerFilter;
             Button.classList.toggle("active", Active);
             Button.setAttribute("aria-pressed", String(Active));
         });
+        const Masking = this.Projection.Brush.Target === "mask";
         Select("#layer-stack").innerHTML = Rows.length
             ? Rows.map((Layer) =>
               {
                   const Kind = LayerKindByIdentifier[Layer.Kind];
                   const Selected = Layer.Identifier === this.Project.Selection;
+                  const Carried = Layer.Mask.Kind !== "none";
+                  const Swatch = ToHex(Layer.Channels.base_color || [0.8, 0.8, 0.8]);
+                  const MaskNote = !Carried
+                      ? "Add mask"
+                      : Layer.Mask.Kind === "generator"
+                        ? `${Layer.Mask.Generator.Kind}${Layer.Mask.Invert ? " · inverted" : ""}`
+                        : `Painted${Layer.Mask.Invert ? " · inverted" : ""}`;
                   return `
-                <div class="scene-row ${Selected ? "selected" : ""} ${Layer.Visible ? "" : "muted"}"
+                <div class="layer-row ${Selected ? "selected" : ""} ${Layer.Visible ? "" : "muted"}"
                      data-layer="${Layer.Identifier}" data-object="${Layer.Kind}" draggable="true"
                      role="treeitem" aria-selected="${Selected}" tabindex="0">
-                    <span class="row-chevron"></span>
-                    <span class="row-icon">${Icon(Kind.Glyph)}</span>
-                    <span class="scene-label">${Escape(Layer.Name)}
-                        <small>${Escape(LayerSummary(Layer))}</small>
+                    <span class="layer-accent"></span>
+                    <span class="layer-swatch" style="--swatch:${Swatch}">${Icon(Kind.Glyph)}</span>
+                    <span class="layer-copy">
+                        <span class="layer-name">${Escape(Layer.Name)}</span>
+                        <span class="layer-note">${Escape(LayerBadge(Layer).toLowerCase())} · ${Escape(Layer.Blend)} · ${LayerChannelCount(Layer)} channels</span>
                     </span>
-                    <span class="row-badge">${LayerBadge(Layer)}</span>
-                    ${Layer.Mask.Kind !== "none" ? `<span class="row-mask" title="Masked">${Icon("mask")}</span>` : ""}
+                    <span class="layer-metric"><strong>${Math.round(Layer.Opacity * 100)}</strong><small>%</small></span>
                     <button class="icon-button row-toggle" data-toggle-layer="${Layer.Identifier}"
                             aria-label="${Layer.Visible ? "Hide" : "Show"} ${Escape(Layer.Name)}"
                             title="${Layer.Visible ? "Hide" : "Show"} layer">${Icon(Layer.Visible ? "eye" : "hidden")}</button>
+                    <span class="layer-chips">
+                        <button class="row-chip ${Selected && !Masking ? "targeted" : ""}" data-chip="content"
+                                data-chip-layer="${Layer.Identifier}" title="Paint into the layer">
+                            <span class="chip-swatch" style="--swatch:${Swatch}"></span>Content
+                        </button>
+                        <button class="row-chip mask-chip ${Carried ? "present" : "absent"} ${Selected && Masking ? "targeted" : ""}"
+                                data-chip="mask" data-chip-layer="${Layer.Identifier}"
+                                title="${Carried ? "Paint into the mask" : "Add a black mask"}">
+                            ${Icon(Carried ? "mask" : "plus")}${Escape(MaskNote)}
+                        </button>
+                    </span>
                 </div>`;
               }).join("")
             : `<div class="outliner-empty">No layers match that filter.</div>`;
-        Select("#stack-subtitle").textContent = `${this.Layers.length} layer${this.Layers.length === 1 ? "" : "s"} · top of stack first`;
+        Select("#stack-subtitle").textContent =
+            `${this.Layers.length} layer${this.Layers.length === 1 ? "" : "s"} · ${Masked} masked · top first`;
     }
 
     CaptureStack(Mutate)
@@ -571,7 +713,7 @@ class TexturePanel
         this.RenderStack();
         this.RenderInspector();
         this.RenderChannelStrip();
-        this.UpdateCaption();
+        this.SyncPaintTarget();
         this.UpdateStatusBar();
     }
 
@@ -666,87 +808,6 @@ class TexturePanel
     }
 
     //----------------------------------------------------------------------------------------------------------------------
-    // Material library.
-    //----------------------------------------------------------------------------------------------------------------------
-    BindLibrary()
-    {
-        Select("#material-filters").innerHTML = MaterialCategories.map(
-            (Category) =>
-                `<button data-filter="${Category.Identifier}" class="${Category.Identifier === this.MaterialFilter ? "active" : ""}">${Escape(Category.Label)}</button>`,
-        ).join("");
-        Select("#material-search").addEventListener("input", (Event) =>
-        {
-            this.MaterialQuery = Event.target.value.trim().toLowerCase();
-            this.RenderLibrary();
-        });
-        Select("#material-filters").addEventListener("click", (Event) =>
-        {
-            const Button = Event.target.closest("[data-filter]");
-            if (!Button) return;
-            this.MaterialFilter = Button.dataset.filter;
-            this.RenderLibrary();
-        });
-        Select("#material-list").addEventListener("click", (Event) =>
-        {
-            const Card = Event.target.closest("[data-material]");
-            if (!Card) return;
-            this.ApplyMaterial(Card.dataset.material);
-        });
-        Select("#reset-search").addEventListener("click", () =>
-        {
-            Select("#material-search").value = "";
-            this.MaterialQuery = "";
-            this.RenderLibrary();
-        });
-    }
-
-    RenderLibrary()
-    {
-        const Entries = MaterialLibrary.filter((Material) =>
-        {
-            if (this.MaterialFilter !== "all" && Material.Category !== this.MaterialFilter) return false;
-            if (!this.MaterialQuery) return true;
-            return `${Material.Label} ${Material.Note} ${Material.Category}`.toLowerCase().includes(this.MaterialQuery);
-        });
-        Select("#material-count").textContent = String(Entries.length);
-        SelectAll("#material-filters button").forEach((Button) =>
-            Button.classList.toggle("active", Button.dataset.filter === this.MaterialFilter),
-        );
-        Select("#material-list").innerHTML = Entries.map(
-            (Material) => `
-            <button class="preset-card" data-material="${Material.Identifier}" data-category="${Material.Category}">
-                <span class="preset-swatch" style="--swatch:${Material.Swatch}">${Icon(Material.Modifier ? "wand" : "palette")}</span>
-                <span class="preset-copy">
-                    <strong>${Escape(Material.Label)}</strong>
-                    <small>${Escape(Material.Note)}</small>
-                </span>
-                <span class="preset-arrow">${Icon("plus")}</span>
-            </button>`,
-        ).join("");
-        Select("#empty-materials").hidden = Entries.length > 0;
-    }
-
-    ApplyMaterial(Identifier)
-    {
-        const Material = MaterialByIdentifier[Identifier];
-        if (!Material) return;
-        const Added = ExpandMaterial(Material);
-        this.CaptureStack(() =>
-        {
-            if (!Material.Modifier)
-            {
-                // A full material replaces the stack below the painted layers, keeping hand work on top.
-                const Painted = this.Project.Layers.filter((Layer) => Layer.Kind === "stroke" || Layer.Kind === "decal");
-                this.Project.Layers = [...Added, ...Painted];
-            }
-            else this.Project.Layers.push(...Added);
-            if (Material.Surface) Object.assign(this.Project.Material, Material.Surface);
-            this.Project.Selection = Added[Added.length - 1].Identifier;
-        });
-        this.Notify(`${Material.Label} · ${Added.length} layer${Added.length === 1 ? "" : "s"} applied.`);
-    }
-
-    //----------------------------------------------------------------------------------------------------------------------
     // Viewport interaction.
     //----------------------------------------------------------------------------------------------------------------------
     //----------------------------------------------------------------------------------------------------------------------
@@ -795,18 +856,15 @@ class TexturePanel
         SelectAll("[data-tool]").forEach((Button) =>
             Button.addEventListener("click", () => this.SetTool(Button.dataset.tool)),
         );
-        Select("#view-mode").addEventListener("change", (Event) =>
-        {
-            this.ViewMode = Event.target.value;
-            Select(".viewport").classList.toggle("plane-view", this.ViewMode === "plane");
-            this.UpdateCaption();
-        });
+        Select("#view-mode").addEventListener("change", (Event) => this.SetViewMode(Event.target.value));
         Select("#channel-select").innerHTML = DisplayOrdering.map(
             (Display) => `<option value="${Display.Identifier}">${Display.Label}</option>`,
         ).join("");
         Select("#channel-select").addEventListener("change", (Event) =>
         {
             this.Display = Event.target.value;
+            if (this.Display !== "mask") this.DisplayBefore = "";
+            this.RenderInspector();
             this.UpdateCaption();
         });
         Select("#focus-button").addEventListener("click", () =>
@@ -833,14 +891,8 @@ class TexturePanel
             Select("#diagnostics-button").classList.remove("active");
         });
         Select("#mask-toggle").addEventListener("click", () =>
-        {
-            const Target = this.Projection.Brush.Target === "mask" ? "coverage" : "mask";
-            this.Projection.Configure({ Target });
-            Select("#mask-toggle").classList.toggle("active", Target === "mask");
-            Select("#mask-toggle").setAttribute("aria-pressed", String(Target === "mask"));
-            this.UpdateCaption();
-            this.Notify(Target === "mask" ? "Painting into the layer mask." : "Painting into layer coverage.");
-        });
+            this.SetPaintTarget(this.Projection.Brush.Target === "mask" ? "coverage" : "mask"),
+        );
         new ResizeObserver(() => this.Resize()).observe(Select("#viewport"));
     }
 
@@ -868,6 +920,141 @@ class TexturePanel
         const X = (Event.clientX - Bounds.left) / Bounds.width - 0.5;
         const Y = 1 - (Event.clientY - Bounds.top) / Bounds.height - 0.5;
         return [(X * Aspect) / this.PlaneZoom + 0.5 + this.PlanePan[0], Y / this.PlaneZoom + 0.5 + this.PlanePan[1]];
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // Masks. A mask is a greyscale image multiplied into the layer's coverage: black hides, white reveals. The brush paints
+    // into either the layer's content or its mask, and which one it is landing in is stated in three places at once — the
+    // row chips, the viewport toggle and the stack footer — because painting into the wrong one is the classic mistake.
+    //----------------------------------------------------------------------------------------------------------------------
+    SetPaintTarget(Target, Announce = true)
+    {
+        const Wanted = Target === "mask" ? "mask" : "coverage";
+        if (Wanted === "mask")
+        {
+            const Layer = this.ActiveLayer;
+            if (!Layer) return;
+            if (Layer.Mask.Kind === "none") this.AddMask("black", false);
+        }
+        this.Projection.Configure({ Target: Wanted });
+        this.SyncPaintTarget();
+        if (Announce) this.Notify(Wanted === "mask" ? "Painting into the layer mask." : "Painting into the layer.");
+    }
+
+    SyncPaintTarget()
+    {
+        const Masking = this.Projection.Brush.Target === "mask";
+        const Toggle = Select("#mask-toggle");
+        Toggle.classList.toggle("active", Masking);
+        Toggle.setAttribute("aria-pressed", String(Masking));
+        const Note = Select("#paint-target-note");
+        Note.textContent = Masking ? "Painting into the mask" : "Painting into layer content";
+        Note.classList.toggle("masking", Masking);
+        SelectAll(".row-chip").forEach((Chip) =>
+            Chip.classList.toggle(
+                "targeted",
+                Chip.dataset.chip === (Masking ? "mask" : "content") && Chip.dataset.chipLayer === this.Project.Selection,
+            ),
+        );
+        SelectAll(".target-switch button").forEach((Button) =>
+        {
+            const Active = Button.dataset.action === (Masking ? "target-mask" : "target-content");
+            Button.classList.toggle("active", Active);
+            Button.setAttribute("aria-pressed", String(Active));
+        });
+        this.UpdateCaption();
+    }
+
+    // A black mask hides the layer and is painted back in — the habit Substance teaches; a white one reveals and is painted away.
+    AddMask(Mode = "black", Announce = true)
+    {
+        const Layer = this.ActiveLayer;
+        if (!Layer) return;
+        this.CaptureStack(() =>
+        {
+            Layer.Mask.Kind = Mode === "generator" ? "generator" : "stroke";
+            Layer.Mask.Invert = false;
+        });
+        if (Mode !== "generator")
+        {
+            this.Integrator.EnsureMask(Layer);
+            this.Integrator.FloodLayer(Layer, "mask", [1, 1, 1], Mode === "white" ? 1 : 0);
+        }
+        this.Recomposite();
+        this.RenderStack();
+        this.RenderInspector();
+        if (Announce)
+            this.Notify(Mode === "generator" ? "Generator mask added." : `${Mode === "white" ? "White" : "Black"} mask added.`);
+    }
+
+    RemoveMask()
+    {
+        const Layer = this.ActiveLayer;
+        if (!Layer || Layer.Mask.Kind === "none") return;
+        this.CaptureStack(() =>
+        {
+            Layer.Mask.Kind = "none";
+            Layer.Mask.Invert = false;
+        });
+        this.Integrator.ReleaseMask(Layer.Identifier);
+        if (this.Projection.Brush.Target === "mask") this.Projection.Configure({ Target: "coverage" });
+        this.Recomposite();
+        this.RenderStack();
+        this.RenderInspector();
+        this.SyncPaintTarget();
+        this.Notify("Mask removed.");
+    }
+
+    InvertMask()
+    {
+        const Layer = this.ActiveLayer;
+        if (!Layer || Layer.Mask.Kind === "none") return;
+        this.CaptureStack(() => (Layer.Mask.Invert = !Layer.Mask.Invert));
+        this.Recomposite();
+        this.RenderStack();
+        this.RenderInspector();
+        this.Notify(Layer.Mask.Invert ? "Mask inverted." : "Mask inversion cleared.");
+    }
+
+    // Substance shows the mask on its own when you ask to see it; the previous view is remembered so the trip is one key
+    // out and one key back.
+    ViewMask()
+    {
+        const Layer = this.ActiveLayer;
+        if (!Layer) return;
+        if (this.Display === "mask")
+        {
+            this.Display = this.DisplayBefore || "material";
+            this.DisplayBefore = "";
+        }
+        else
+        {
+            if (Layer.Mask.Kind === "none") this.AddMask("black", false);
+            this.DisplayBefore = this.Display;
+            this.Display = "mask";
+        }
+        Select("#channel-select").value = this.Display;
+        RefreshSelect(Select("#channel-select"));
+        this.RenderInspector();
+        this.UpdateCaption();
+        this.Notify(this.Display === "mask" ? "Showing the layer mask." : "Back to the shaded surface.");
+    }
+
+    FillMask(Value)
+    {
+        const Layer = this.ActiveLayer;
+        if (!Layer) return;
+        if (Layer.Mask.Kind !== "stroke") this.AddMask(Value >= 0.5 ? "white" : "black", false);
+        else
+        {
+            this.Integrator.EnsureMask(Layer);
+            this.Integrator.FloodLayer(Layer, "mask", [1, 1, 1], Value);
+            this.Recomposite();
+        }
+        this.RenderStack();
+        this.Notify(
+            Value >= 0.5 ? "Mask filled white — the layer shows everywhere." : "Mask cleared to black — the layer is hidden.",
+        );
     }
 
     PaintTargetLayer()
@@ -1452,6 +1639,35 @@ class TexturePanel
             case "lower-layer":
                 this.ShiftLayer(-1);
                 break;
+            case "mask-add-black":
+                this.AddMask("black");
+                this.SetPaintTarget("mask", false);
+                break;
+            case "mask-add-white":
+                this.AddMask("white");
+                this.SetPaintTarget("mask", false);
+                break;
+            case "mask-add-generator":
+                this.AddMask("generator");
+                break;
+            case "mask-view":
+                this.ViewMask();
+                break;
+            case "mask-fill":
+                this.FillMask(1);
+                break;
+            case "mask-clear":
+                this.FillMask(0);
+                break;
+            case "mask-remove":
+                this.RemoveMask();
+                break;
+            case "target-content":
+                this.SetPaintTarget("coverage");
+                break;
+            case "target-mask":
+                this.SetPaintTarget("mask");
+                break;
             case "flood-layer":
                 this.FloodActive();
                 break;
@@ -1566,6 +1782,7 @@ class TexturePanel
                   ? this.SurfaceInspector()
                   : this.LayerInspector(Layer);
         FillIcons(Body);
+        DressSelects(Body);
     }
 
     LayerInspector(Layer)
@@ -1647,26 +1864,54 @@ class TexturePanel
         Sections.push(
             Group({
                 Title: "Mask",
-                Badge: Layer.Mask.Kind === "none" ? "OFF" : Layer.Mask.Kind.toUpperCase(),
+                Badge: Layer.Mask.Kind === "none" ? "OFF" : Layer.Mask.Invert ? "INVERTED" : Layer.Mask.Kind.toUpperCase(),
                 Open: Layer.Mask.Kind !== "none",
-                Body: [
-                    SelectRow({
-                        Label: "Mask source",
-                        Path: "Mask.Kind",
-                        Value: Layer.Mask.Kind,
-                        Options: [
-                            { Value: "none", Label: "No mask" },
-                            { Value: "stroke", Label: "Painted mask" },
-                            { Value: "generator", Label: "Generator mask" },
-                        ],
-                        Hint: "A painted mask takes the brush while the mask toggle in the viewport tools is lit.",
-                    }),
-                    Layer.Mask.Kind === "none" ? "" : ToggleRow({ Label: "Invert", Path: "Mask.Invert", Value: Layer.Mask.Invert }),
-                    Layer.Mask.Kind === "generator" ? this.GeneratorBody("Mask.Generator", Layer.Mask.Generator) : "",
-                ].join(""),
+                Body:
+                    Layer.Mask.Kind === "none"
+                        ? `<p class="mask-blurb">A mask hides the layer and lets you paint it back in. Black conceals, white reveals.</p>
+                           ${ActionRow([
+                               { Action: "mask-add-black", Label: "Add black mask", Glyph: "mask" },
+                               { Action: "mask-add-white", Label: "Add white mask", Glyph: "mask" },
+                               { Action: "mask-add-generator", Label: "Generator", Glyph: "noise" },
+                           ])}`
+                        : `${this.MaskTargetRow()}
+                           ${SelectRow({
+                               Label: "Mask source",
+                               Path: "Mask.Kind",
+                               Value: Layer.Mask.Kind,
+                               Options: [
+                                   { Value: "none", Label: "No mask" },
+                                   { Value: "stroke", Label: "Painted mask" },
+                                   { Value: "generator", Label: "Generator mask" },
+                               ],
+                               Hint: "A painted mask takes the brush while the mask target above is lit.",
+                           })}
+                           ${ToggleRow({ Label: "Invert", Path: "Mask.Invert", Value: Layer.Mask.Invert })}
+                           ${Layer.Mask.Kind === "generator" ? this.GeneratorBody("Mask.Generator", Layer.Mask.Generator) : ""}
+                           ${ActionRow([
+                               { Action: "mask-view", Label: this.Display === "mask" ? "Hide mask view" : "View mask", Glyph: "eye" },
+                               { Action: "mask-fill", Label: "Fill white", Glyph: "fill" },
+                               { Action: "mask-clear", Label: "Clear black", Glyph: "eraser" },
+                               { Action: "mask-remove", Label: "Remove", Glyph: "trash" },
+                           ])}`,
             }),
         );
         return Sections.join("");
+    }
+
+    // The same content-or-mask question the rows ask, restated where the mask itself is being set up.
+    MaskTargetRow()
+    {
+        const Masking = this.Projection.Brush.Target === "mask";
+        return `
+        <div class="property-row target-row">
+            <span class="property-label">Brush target</span>
+            <div class="target-switch" role="group" aria-label="Brush target">
+                <button class="${Masking ? "" : "active"}" data-action="target-content" aria-pressed="${!Masking}">Content</button>
+                <button class="${Masking ? "active" : ""}" data-action="target-mask" aria-pressed="${Masking}">Mask</button>
+            </div>
+        </div>
+        <p class="property-hint">M switches between them while painting.</p>`;
     }
 
     ChannelControl(Layer, Channel)
@@ -2104,6 +2349,8 @@ class TexturePanel
         Select("#document-name").value = this.Project.Name;
         Select("#channel-select").value = this.Display;
         Select("#view-mode").value = this.ViewMode;
+        RefreshSelect(Select("#channel-select"));
+        RefreshSelect(Select("#view-mode"));
         this.SetTool(this.Tool);
         this.Revisions.Clear();
         this.Integrator.Configure(this.Project.Resolution);
@@ -2160,19 +2407,19 @@ class TexturePanel
             if (Key === "[") this.Projection.Configure({ Radius: Clamp(this.Projection.Brush.Radius * 0.84, 0.004, 1.2) });
             if (Key === "]") this.Projection.Configure({ Radius: Clamp(this.Projection.Brush.Radius * 1.19, 0.004, 1.2) });
             if (Key === "[" || Key === "]") this.SyncBrushControls();
-            if (Key === "m") Select("#mask-toggle").click();
+            if (Key === "m" && Event.shiftKey) this.ViewMask();
+            else if (Key === "m") Select("#mask-toggle").click();
             if (Key === "f") Select("#focus-button").click();
             if (Key === "x")
             {
-                this.ViewMode = this.ViewMode === "plane" ? "surface" : "plane";
-                Select("#view-mode").value = this.ViewMode;
+                this.SetViewMode(this.ViewMode === "plane" ? "surface" : "plane");
                 Select(".viewport").classList.toggle("plane-view", this.ViewMode === "plane");
                 this.UpdateCaption();
             }
             if (Key === "/")
             {
                 Event.preventDefault();
-                Select("#material-search").focus();
+                Select("#layer-search").focus();
             }
         });
         window.addEventListener("keyup", (Event) =>
@@ -2351,7 +2598,7 @@ class TexturePanel
         const Layer = this.ActiveLayer;
         if (!Layer) return;
         const Tool = ToolOrdering.find((Entry) => Entry.Identifier === this.Tool);
-        const Target = this.Projection.Brush.Target === "mask" ? "mask" : "coverage";
+        const Target = this.Projection.Brush.Target === "mask" ? "mask" : "layer";
         Select("#viewport-object").textContent = Layer.Name;
         Select("#viewport-subtitle").textContent =
             this.ViewMode === "plane"
@@ -2430,6 +2677,7 @@ class TexturePanel
             Environment: this.Project.Environment,
             Material: this.Project.Material,
             Display: DisplayIndex(this.Display),
+            MaskLayer: this.Project.Selection,
             CheckerScale: 16,
             Cursor: this.Tool === "brush" || this.Tool === "eraser" ? this.Cursor : null,
         };

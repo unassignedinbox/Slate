@@ -600,6 +600,7 @@ uniform sampler2D uChannel1;
 uniform sampler2D uChannel2;
 uniform sampler2D uChannel3;
 uniform sampler2D uField;
+uniform sampler2D uMaskPreview;
 
 uniform vec3 uViewPosition;
 uniform float uNormalGain;
@@ -743,6 +744,12 @@ void main()
         else if (Mode == 10) Inspection = vec3(Channel3.a);
         else if (Mode == 11) Inspection = vec3(Field.r, Field.g, 0.0);
         else if (Mode == 12) Inspection = vec3(Field.a);
+        else if (Mode == 14)
+        {
+            // The selected layer's mask on its own: black is hidden, white is revealed, as the brush sees it.
+            float Mask = texture(uMaskPreview, vCoordinate).a;
+            Inspection = mix(vec3(0.04, 0.05, 0.07), vec3(0.96), Mask);
+        }
         else
         {
             vec2 Cell = floor(vCoordinate * uCheckerScale);
@@ -873,6 +880,7 @@ uniform sampler2D uChannel1;
 uniform sampler2D uChannel2;
 uniform sampler2D uChannel3;
 uniform sampler2D uField;
+uniform sampler2D uMaskPreview;
 uniform vec2 uPan;
 uniform float uZoom;
 uniform float uAspect;
@@ -922,6 +930,7 @@ void main()
             vec2 CheckerCell = floor(Coordinate * uCheckerScale);
             Colour = mix(vec3(0.16), vec3(0.62), mod(CheckerCell.x + CheckerCell.y, 2.0));
         }
+        else if (Mode == 14) Colour = mix(vec3(0.04, 0.05, 0.07), vec3(0.96), texture(uMaskPreview, Coordinate).a);
         else Colour = Channel0.rgb;
         if (Field.a <= 0.0 && Mode == 0) Colour *= 0.35;
     }

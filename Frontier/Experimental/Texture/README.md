@@ -1,7 +1,7 @@
 # Frontier Texture
 
 An experimental, browser-resident texture authoring editor: paint an **OpenPBR Surface** texture set straight onto a model,
-with a full layer stack, a material library and SVG/text decals. It shares its shell, theme and conventions with the
+with a full layer stack, Substance-style masks and SVG/text decals. It shares its shell, theme and conventions with the
 [Frontier fluid app](https://github.com/unassignedinbox/Slate/tree/ed7d5dfbda50ee856ad27471767c1f06197a0c18/Frontier/Experimental/Fluid)
 — same DM Sans chrome, same rounded panels, same slider pills — but the subject is surfaces rather than gas.
 
@@ -53,8 +53,9 @@ Colour channels are stored sRGB-encoded, scalars linear, all of them UNORM8. The
 a layer can own roughness and metalness without touching colour.
 
 **Layer stack.** Visibility, lock, opacity, ten blend modes (normal, multiply, screen, overlay, add, subtract, darken,
-lighten, difference, linear-burn), drag reorder, duplicate, delete, double-click rename, and an optional mask per layer
-(painted or generator-driven). Four kinds of layer:
+lighten, difference, linear-burn), drag reorder, duplicate, delete, double-click rename, and a mask per layer. Each row is
+a card: the layer's colour plate, its kind, blend and channel count, the opacity read large, and a pair of chips —
+**Content** and **Mask** — naming where the next stroke will land. Four kinds of layer:
 
 - **fill** — a flat value per channel, the base of most materials.
 - **stroke** — painted coverage, written by the brush, eraser and flood tools.
@@ -62,12 +63,17 @@ lighten, difference, linear-burn), drag reorder, duplicate, delete, double-click
   (curvature, cavity, occlusion, inclination, altitude), each with scale, detail, contrast, balance, warp, angle and seed.
 - **decal** — an SVG or text decal projected onto the surface or planted on a plane.
 
+**Masks.** A mask is a greyscale image multiplied into the layer's coverage: black conceals, white reveals, the same way
+Substance Painter does it. A layer with no mask shows a dashed *Add mask* chip; clicking it attaches a black mask and aims
+the brush at it in one step, so the layer disappears and you paint it back. The Mask group in the inspector adds a black,
+white or generator mask, switches the brush between content and mask, inverts, fills white, clears to black or removes the
+mask altogether; `M` flips the target while painting and the stack footer always states which one is live. Masks are
+undoable with the rest of the stack, and a removed mask frees its image so the next one starts clean.
+
 Painting on a layer that cannot hold coverage inserts a stroke layer above it rather than refusing the stroke. The stack
 is capped at 64 layers.
 
-**Material system.** Sixteen library entries across metal, mineral, organic, coated and effect categories, two of which — edge
-wear and settled dust — are modifiers that append to the stack rather than replace it. Applying a full material rebuilds the
-non-painted layers and leaves your strokes alone. Eighteen surface-level constants that are uniform over the model — specular
+**Material system.** Eighteen surface-level constants that are uniform over the model — specular
 IOR and colour, anisotropy, coat IOR and darkening, fuzz colour, thin-film weight/thickness/IOR, transmission colour and
 depth, emission luminance, normal intensity, height scale — live beside the painted channels in the **Material** tab and
 travel with the descriptor at export.
@@ -87,10 +93,11 @@ set. Each writes one PNG per channel named `<project-name>_<Channel>.png` next t
 
 | | | | |
 | --- | --- | --- | --- |
-| Orbit / brush / eraser | <kbd>1 2 3</kbd> | Paint the mask | <kbd>M</kbd> |
-| Flood / decal / pick | <kbd>4 5 6</kbd> | Texture space | <kbd>X</kbd> |
-| Brush size | <kbd>[</kbd> <kbd>]</kbd> | Frame the surface | <kbd>F</kbd> |
-| Brush size, live | <kbd>Alt</kbd> + wheel | Search materials | <kbd>/</kbd> |
+| Orbit / brush / eraser | <kbd>1 2 3</kbd> | Content ⇄ mask | <kbd>M</kbd> |
+| Flood / decal / pick | <kbd>4 5 6</kbd> | See the mask on its own | <kbd>⇧ M</kbd> |
+| Brush size | <kbd>[</kbd> <kbd>]</kbd> | Texture space | <kbd>X</kbd> |
+| Brush size, live | <kbd>Alt</kbd> + wheel | Frame the surface | <kbd>F</kbd> |
+| Search layers | <kbd>/</kbd> | | |
 | Undo / redo | <kbd>Ctrl Z</kbd> / <kbd>Ctrl ⇧ Z</kbd> | Save / export | <kbd>Ctrl S</kbd> / <kbd>Ctrl E</kbd> |
 
 ---
@@ -99,9 +106,9 @@ set. Each writes one PNG per channel named `<project-name>_<Channel>.png` next t
 
 | File | Role |
 | --- | --- |
-| `TexturePanel.js` | The panel: stack, inspector, library, tools, documents, shortcuts, dialogs. |
+| `TexturePanel.js` | The panel: stack, masks, inspector, tools, documents, shortcuts, dialogs. |
 | `ChannelSpecification.js` | The twelve channels, their packing, encodings, blend and export orderings. |
-| `MaterialSpecification.js` | Surface constants, the material library, the six-light environments. |
+| `MaterialSpecification.js` | Surface constants, material presets, the six-light environments. |
 | `GeneratorSpecification.js` | Procedural and surface-signal generators and their parameter ranges. |
 | `LayerSpecification.js` | Layer, mask and decal records; sanitisers; project defaults and validation. |
 | `DecalSpecification.js` | Vector library, font archive, SVG/text rasterisation. |

@@ -20,7 +20,7 @@
                     <button id="new-document" class="icon-button" title="New texture document" aria-label="New texture document" data-icon="plus"></button>
                 </div>
                 <nav class="top-nav" aria-label="Workspace">
-                    <button class="nav-button active" id="workspace-button">Workspace</button><button class="nav-button" id="library-button">Materials</button>
+                    <button class="nav-button active" id="workspace-button">Surface</button><button class="nav-button" id="shelf-button">Texture space</button>
                 </nav>
                 <div class="header-end">
                     <span class="gas-tag"><i></i> OpenPBR surface</span><button
@@ -46,55 +46,34 @@
             </div>
             <main class="workspace" id="texture-workspace">
                 <aside class="left-panel">
-                    <div class="outliner-heading">
-                        <div>
-                            <h1>Stack</h1>
-                            <span class="outliner-subtitle" id="stack-subtitle">4 layers · top of stack first</span>
+                    <div class="stack-heading">
+                        <div class="stack-title">
+                            <h1>Layers</h1>
+                            <span class="stack-count" id="layer-count">4</span>
                         </div>
-                        <button id="compact-outliner" class="icon-button" title="Compact stack" aria-label="Compact stack" aria-pressed="false">
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5v14M17 5v14" /></svg>
-                        </button>
-                    </div>
-                    <div class="scene-statistics">
-                        <div class="scene-stat">
-                            <span class="stat-symbol enabled-symbol">✓</span><span class="stat-label">Visible</span><strong id="visible-count">4</strong>
-                        </div>
-                        <div class="scene-stat">
-                            <span class="stat-symbol disabled-symbol" data-icon="hidden"></span><span class="stat-label">Hidden</span><strong id="hidden-count">0</strong>
+                        <div class="stack-heading-actions">
+                            <button id="compact-outliner" class="icon-button" title="Compact rows" aria-label="Compact rows" aria-pressed="false">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5v14M17 5v14" /></svg>
+                            </button>
+                            <button id="add-button" class="button stack-add" title="Add a layer" aria-label="Add a layer" aria-expanded="false">
+                                <span data-icon="plus"></span>New
+                            </button>
                         </div>
                     </div>
+                    <span class="stack-subtitle" id="stack-subtitle">4 layers · top of stack first</span>
                     <label class="search scene-search"
                         ><span data-icon="search"></span><input type="search" id="layer-search" placeholder="Search layers…" aria-label="Search layers" /><kbd>⇧ F</kbd></label
                     >
                     <div class="scene-filters" id="layer-filters" aria-label="Stack filters">
                         <button data-layer-filter="all" class="active" aria-pressed="true">All</button><button data-layer-filter="fill" aria-pressed="false">Fill</button
                         ><button data-layer-filter="stroke" aria-pressed="false">Painted</button><button data-layer-filter="generator" aria-pressed="false">Field</button
-                        ><button data-layer-filter="decal" aria-pressed="false">Decal</button>
-                    </div>
-                    <div class="scene-toolbar">
-                        <button id="collection-toggle" aria-expanded="true" aria-controls="layer-stack">
-                            <span class="collection-chevron">⌄</span><span data-icon="layers"></span><span>Layer stack</span><span class="count" id="layer-count">4</span></button
-                        ><button id="add-button" class="icon-button" title="Add a layer" aria-label="Add a layer" aria-expanded="false" data-icon="plus"></button>
+                        ><button data-layer-filter="decal" aria-pressed="false">Decal</button><button data-layer-filter="masked" aria-pressed="false">Masked</button>
                     </div>
                     <div id="layer-stack" class="scene-tree" role="tree" aria-label="Layer stack"></div>
-                    <div class="scene-footnote"><span data-icon="link"></span>Compositing live into the texture set</div>
-                    <div class="library" id="library">
-                        <div class="panel-heading">
-                            <span>Material library</span><span class="count" id="material-count"></span><span data-icon="grid"></span>
-                        </div>
-                        <label class="search"
-                            ><span data-icon="search"></span><input type="search" id="material-search" placeholder="Find a material…" aria-label="Search materials" /><kbd>/</kbd></label
-                        >
-                        <div class="filter-row" id="material-filters">
-                            <button class="active" data-filter="all">All</button><button data-filter="metal">Metal</button><button data-filter="mineral">Mineral</button
-                            ><button data-filter="organic">Organic</button><button data-filter="coating">Coating</button><button data-filter="wear">Wear</button>
-                        </div>
-                        <div class="preset-list" id="material-list"></div>
-                        <div id="empty-materials" class="empty-presets" hidden>
-                            No matching materials.<button class="text-button" id="reset-search">Clear search</button>
-                        </div>
+                    <div class="stack-footer">
+                        <span id="paint-target-note">Painting into layer content</span>
+                        <span class="stack-footer-hint">M switches to the mask</span>
                     </div>
-                    <div class="left-footer"><span data-icon="box"></span><span>Layers composite into twelve channels</span></div>
                 </aside>
                 <section class="center-panel">
                     <div class="viewport-bar">
@@ -235,9 +214,9 @@
             <div class="shortcut-list">
                 <span>Orbit / brush / eraser<kbd>1 / 2 / 3</kbd></span><span>Flood / decal / pick<kbd>4 / 5 / 6</kbd></span
                 ><span>Brush size<kbd>[ / ]</kbd></span><span>Brush size, live<kbd>Alt + wheel</kbd></span
-                ><span>Paint the mask<kbd>M</kbd></span><span>Texture space<kbd>X</kbd></span><span>Frame surface<kbd>F</kbd></span
+                ><span>Content ⇄ mask<kbd>M</kbd></span><span>See the mask<kbd>⇧ M</kbd></span><span>Texture space<kbd>X</kbd></span><span>Frame surface<kbd>F</kbd></span
                 ><span>Undo / redo<kbd>Ctrl Z / Ctrl ⇧ Z</kbd></span><span>Save project<kbd>Ctrl S</kbd></span><span>Export set<kbd>Ctrl E</kbd></span
-                ><span>Search materials<kbd>/</kbd></span>
+                ><span>Search layers<kbd>/</kbd></span>
             </div>
             <div class="help-note">
                 Projects save the layer record, materials and camera, plus the vector and text decals — painted coverage is a

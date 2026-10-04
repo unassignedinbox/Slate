@@ -22,7 +22,7 @@ import {
 import { BuildSurface } from "./SurfaceStructure.js";
 import { OrbitProjection } from "./OrbitProjection.js";
 import { DefaultStack, DefaultProject, CreateLayer } from "./LayerSpecification.js";
-import { ExportSlots } from "./ShadingGlsl.js";
+import { ExportSlots, SurfaceFragment, PlaneFragment } from "./ShadingGlsl.js";
 import { DisplayIndex } from "./ChannelSpecification.js";
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -312,6 +312,46 @@ test("releasing a layer frees its images and only its images", () =>
     Integrator.ReleaseLayer(First.Identifier);
     assert.equal(Integrator.LayerImages.size, 1);
     assert.ok(Integrator.LayerImages.has(Second.Identifier));
+});
+
+test("dropping a mask frees the mask image and leaves the coverage alone", () =>
+{
+    const { Integrator } = Prepare();
+    const Layer = CreateLayer("stroke");
+    Integrator.EnsureCoverage(Layer);
+    Integrator.EnsureMask(Layer);
+    const Record = Integrator.LayerImages.get(Layer.Identifier);
+    assert.ok(Record.Mask && Record.MaskTarget, "the mask image was not created");
+    Integrator.ReleaseMask(Layer.Identifier);
+    assert.equal(Record.Mask, null, "the mask image survived the release");
+    assert.equal(Record.MaskTarget, null, "the mask target survived the release");
+    assert.ok(Record.Coverage, "releasing the mask took the coverage with it");
+    assert.ok(Integrator.LayerImages.has(Layer.Identifier), "the layer record itself was dropped");
+    Integrator.EnsureMask(Layer);
+    assert.ok(Integrator.LayerImages.get(Layer.Identifier).Mask, "a replacement mask could not be made");
+});
+
+test("a layer with no mask of its own inspects as fully revealed", () =>
+{
+    const { Integrator } = Prepare();
+    const Layer = CreateLayer("stroke");
+    assert.equal(Integrator.MaskImage(Layer.Identifier), Integrator.WhiteImage(), "a missing mask should read white");
+    Integrator.EnsureMask(Layer);
+    assert.equal(
+        Integrator.MaskImage(Layer.Identifier),
+        Integrator.LayerImages.get(Layer.Identifier).Mask,
+        "the layer's own mask should be the one inspected",
+    );
+});
+
+test("the mask inspection is wired to the display mode the shaders switch on", () =>
+{
+    assert.equal(DisplayIndex("mask"), 14, "the mask view moved away from the GLSL branch that draws it");
+    for (const Source of [SurfaceFragment, PlaneFragment])
+    {
+        assert.match(Source, /uniform sampler2D uMaskPreview;/, "a fragment stage cannot reach the mask image");
+        assert.match(Source, /Mode == 14/, "a fragment stage has no branch for the mask view");
+    }
 });
 
 test("the viewport and texture-space passes both draw", () =>
