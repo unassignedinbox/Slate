@@ -1,0 +1,73 @@
+{
+  "method": "RGB errors on identical, exposed floor points; occluded object footprints excluded. Display units 0..255.",
+  "thresholdRms": 1.0,
+  "thresholdMaximum": 5.0,
+  "probeCount": 850,
+  "cases": {
+    "Reference": {
+      "rms": 0.0,
+      "maximum": 0.0,
+      "withinTolerance": true,
+      "giToggleRms": 16.12569339914044,
+      "source": "fa6ee1b78051eb6367880a29521b3ae01854451b"
+    },
+    "Orbit": {
+      "rms": 0.04428074427700476,
+      "maximum": 1.0,
+      "withinTolerance": true,
+      "giToggleRms": 11.623162966457757,
+      "source": "fa6ee1b78051eb6367880a29521b3ae01854451b"
+    },
+    "High": {
+      "rms": 0.04428074427700476,
+      "maximum": 1.0,
+      "withinTolerance": true,
+      "giToggleRms": 17.955051673978396,
+      "source": "fa6ee1b78051eb6367880a29521b3ae01854451b"
+    },
+    "Far": {
+      "rms": 0.04428074427700476,
+      "maximum": 1.0,
+      "withinTolerance": true,
+      "giToggleRms": 16.33990906674397,
+      "source": "fa6ee1b78051eb6367880a29521b3ae01854451b"
+    },
+    "Small": {
+      "rms": 9.328661295632266,
+      "maximum": 80.0,
+      "withinTolerance": false,
+      "giToggleRms": 15.981913622671557,
+      "source": "fa6ee1b78051eb6367880a29521b3ae01854451b"
+    },
+    "Large": {
+      "rms": 1.3071447704750963,
+      "maximum": 17.0,
+      "withinTolerance": false,
+      "giToggleRms": 16.137125718142695,
+      "source": "fa6ee1b78051eb6367880a29521b3ae01854451b"
+    },
+    "Offset": {
+      "rms": 1.3201307124823722,
+      "maximum": 17.0,
+      "withinTolerance": false,
+      "giToggleRms": 16.12349513192153,
+      "source": "fa6ee1b78051eb6367880a29521b3ae01854451b"
+    },
+    "Extreme": {
+      "rms": 8.770874260535129,
+      "maximum": 94.0,
+      "withinTolerance": false,
+      "giToggleRms": 14.805915782014202,
+      "source": "fa6ee1b78051eb6367880a29521b3ae01854451b"
+    }
+  },
+  "restoredImageRms": 0.0,
+  "restoredImageMaximum": 0.0,
+  "failingCases": [
+    "Small",
+    "Large",
+    "Offset",
+    "Extreme"
+  ],
+  "overallInvariancePass": false
+}

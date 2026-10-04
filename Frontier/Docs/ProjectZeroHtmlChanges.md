@@ -1039,3 +1039,78 @@ samples cost more than the old undersampled path; GPU performance remains unmeas
 The fixture deliberately uses shadow cone slope 0.06; the application's existing default
 softness and solar angular-size wiring have not been changed. This phase adds no editor
 cards, changes no bake-control placement and does not close C018's remaining native UI work.
+
+## C026 — Independent perspective SDF stress scene; broader fix is incomplete (2026-10-04)
+
+The user requested actual Project Drive/material-grid renders, then selected an **independent custom scene**
+when asked about the full shader-ball grid's SDF storage limits. This phase follows that revised request.
+It does not claim to have rendered Project Drive or the full material grid.
+
+### Method and captures
+
+- Production shader source is unchanged from C025. Only the proof harness, workflow and evidence changed.
+- Headless Vulkan host code was extracted without changing its implementation into `VulkanExecutionHost.h`.
+  All three existing production SDF verification jobs passed again after this refactor.
+- New scene: 292 triangles, ten instances, a ground plane, coloured walls, stairs, a smooth-normal sphere,
+  a movable box, a thin post and a warm emissive ceiling panel. Materials are matte Lambertian with no maps.
+  Reflections are disabled to isolate indirect diffuse artifacts. Unit placeholder specular tables are unused
+  by these zero-specular/zero-coat/zero-fuzz materials; this is **not** a full material-lobe parity proof.
+- Double-precision CPU triangle intersections produce perspective primary positions/primitive IDs from the
+  same float geometry submitted to the stage. All material evaluation, SDF construction, card capture,
+  radiance propagation, occlusion and final lighting execute the **unchanged production SPIR-V** on CPU Vulkan.
+  This is not a rewritten CPU lighting equation or a full-application GPU raster screenshot.
+- Readbacks are 384 × 256, with card resolution 4, volume resolution 32, cell size 0.15 m, shadow cone slope
+  0.06, sun radiance 1.8, sky ambient 0.005 and 32 cache updates. These settings remain fixed across cases.
+  No denoising, image smoothing, exposure adjustment or retouching was applied to the retained pixels.
+- Camera variants are front, left orbit, high view and a camera twenty times farther from the target with a
+  correspondingly narrower field of view. Geometry cases scale the entire scene and camera by 0.01 and 100,
+  or translate both by (+10,000, −25,000, +1,000) m and (+1,000,000, −1,000,000, +1,000,000) m.
+- The reference case moves one instance 1.5 m **without recreating the stage**, refreshes production geometry,
+  captures its first frame and settled state, then restores it. Camera variants are separately warmed views,
+  not a continuous interactive flythrough or a real-time performance demonstration.
+
+Source: `fa6ee1b78051eb6367880a29521b3ae01854451b`.
+[CPU scene workflow 37231216029](https://github.com/unassignedinbox/Slate/actions/runs/37231216029)
+completed all eight execution jobs with no Vulkan validation errors. This is an **execution pass**,
+not an image-quality or scale-invariance pass.
+
+### Independent assessment — FAIL overall
+
+`AssessSceneReadbacks.py` checks matching shader/image hashes and compares 850 identical physical floor
+probe locations, excluding footprints hidden by objects. Errors are RGB display units on the 0–255 scale.
+The fixed acceptance thresholds are RMS ≤ 1 and maximum channel difference ≤ 5.
+
+| Case                               | Probe RMS | Maximum difference | Invariance result |
+|------------------------------------|-----------|--------------------|-------------------|
+| Left orbit                         | 0.0443    | 1                  | Within tolerance  |
+| High camera                        | 0.0443    | 1                  | Within tolerance  |
+| Camera twenty times farther        | 0.0443    | 1                  | Within tolerance  |
+| Scene scaled to 0.01                | 9.3287    | 80                 | FAIL              |
+| Scene scaled to 100                 | 1.3071    | 17                 | FAIL              |
+| Translation (+10k, −25k, +1k) m      | 1.3201    | 17                 | FAIL              |
+| Translation (+1M, −1M, +1M) m       | 8.7709    | 94                 | FAIL              |
+
+Restoring the moved instance reproduces the original entire RGB image exactly: RMS 0 and maximum 0.
+This does not establish artifact-free lighting during continuous motion.
+`AssessSceneReadbacks.py --enforce` returns failure for the four scale/translation cases; thresholds were
+not relaxed to turn these into passes. `Assessment.json` explicitly records `overallInvariancePass: false`.
+
+**Visual inspection also fails the broader quality claim:** GI-on renders retain obvious triangular,
+patchy/banded indirect lighting on the floor and coloured walls. These artifacts are absent from the
+corresponding GI-off lighting. C025's restricted receiver-plane correction is therefore **not a complete
+fix for general scenes**, even though its earlier numerical checks and the execution regressions passed.
+
+Fixed world-space ray offsets/tolerances and float world-coordinate precision remain relevant suspects
+for scale/translation sensitivity. Finite sampling/card representation remains relevant to the spatial
+GI artifacts. This phase records those observations, not a verified diagnosis or a new production fix.
+Far/large cases may use the production exact-mesh fallback outside finite clipmaps; their output does not
+prove voxel coverage at arbitrary distances. No finite set of captures proves "any scale or distance".
+
+### Retained deliverables
+
+`VisualProof/SdfScene/LightingAndMotion.png` shows GI off/on and live-instance motion.
+`VisualProof/SdfScene/ScaleDistanceAndViews.png` shows all eight views/stresses.
+Individual unaltered PNGs, logs and source/SPIR-V/image provenance are under `Captures/<case>/`.
+`Assessment.json` and the repeatable assessor retain both passing and failing measurements.
+The user has not retested these changes on their own GPU; GPU performance and full application parity
+remain unverified. No editor layout, baking placement or production shader was altered in this phase.

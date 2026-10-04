@@ -1,3 +1,8 @@
+//============================================================================================================================================
+//                                                         DISTANCEFIELDEXECUTION.CPP
+//============================================================================================================================================
+// 📦 Exercises production SDF pipelines using the shared CPU Vulkan execution host.
+
 #include "VulkanExecutionHost.h"
 
 #include "DistanceFieldArtifactProof.h"

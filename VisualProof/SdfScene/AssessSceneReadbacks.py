@@ -2,6 +2,7 @@
 from pathlib import Path
 import hashlib
 import json
+import sys
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
@@ -33,6 +34,8 @@ for Case in Cases:
 ReturnError=Pixels('Reference','Restored')-Pixels('Reference','Scene-GI')
 Report['restoredImageRms']=float(np.sqrt(np.mean(ReturnError**2)))
 Report['restoredImageMaximum']=float(np.max(np.abs(ReturnError)))
+Report['failingCases']=[Case for Case,Result in Report['cases'].items() if not Result['withinTolerance']]
+Report['overallInvariancePass']=not Report['failingCases']
 (Root/'Assessment.json').write_text(json.dumps(Report,indent=2)+'\n')
 FontPath='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
 def Font(Size): return ImageFont.truetype(FontPath,Size)
@@ -49,7 +52,7 @@ def Sheet(File, Panels, Columns, Title, Subtitle):
     Canvas.save(Root/File)
 Sheet('LightingAndMotion.png',[
  ('Reference','Scene-GI-off','GI OFF / same sun and exposure','Direct lighting + fixed sky fill'),
- ('Reference','Scene-GI','SDF GI ON','Production textured-card transport; matte scene'),
+ ('Reference','Scene-GI','SDF GI ON','Production surface-card transport; matte scene'),
  ('Reference','Moved-first-frame','MOVED / first frame','Same running stage; instance moved 1.5 m'),
  ('Reference','Moved-settled','MOVED / settled','32 production cache updates after motion')],2,
  'SDF GI / INDEPENDENT CUSTOM SCENE','Actual production SPIR-V executed on CPU Vulkan; CPU triangles supply primary visibility.')
@@ -62,3 +65,6 @@ for Case in Cases:
 Sheet('ScaleDistanceAndViews.png',Panels,2,'SDF GI / SCALE, DISTANCE AND CAMERA',
       'Same shaders, materials, light, cell size and card resolution. Finite stress cases, not an any-distance guarantee.')
 print(json.dumps(Report,indent=2))
+
+if '--enforce' in sys.argv and not Report['overallInvariancePass']:
+    raise SystemExit('FAIL invariance gates: '+', '.join(Report['failingCases']))
