@@ -603,6 +603,11 @@ a {
   background: transparent;
   color: #ababab;
 }
+#fabric-preset-select {
+  max-width: 164px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .viewport-bar-end {
   margin-left: auto;
   display: flex;
@@ -1588,6 +1593,9 @@ dialog a {
   .viewport-bar strong,
   .bar-divider {
     display: none;
+  }
+  #fabric-preset-select {
+    max-width: 108px;
   }
   .viewport-help {
     max-width: 80%;

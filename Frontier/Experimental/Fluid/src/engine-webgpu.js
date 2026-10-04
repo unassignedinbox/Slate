@@ -6,7 +6,7 @@
 
 import { WGSL_CLOTH_COMPUTE_SHADER, WGSL_CLOTH_RENDER_SHADER } from "./shaders-wgsl.js";
 import { DressGenerator } from "./DressGenerator.js";
-import { COLOR_PALETTES } from "./presets.js";
+import { COLOR_PALETTES, getFabricLoadScale } from "./presets.js";
 
 export class WebGPUClothEngine {
   static async isAvailable() {
@@ -286,11 +286,13 @@ export class WebGPUClothEngine {
   rebuildDress(params = this.params) {
     this.params = params;
     const dress = DressGenerator.buildDress(params);
+    DressGenerator.updateAttachments(dress, this.avatar);
     this.dressData = dress;
     this.pieReport = dress.pieReport;
     this.numCols = dress.numCols;
     this.numRows = dress.numRows;
-    this.vertexCount = dress.vertexCount;
+    this.vertexCount = dress.vertexCount; // XPBD body/skirt simulation grid
+    this.renderVertexCount = dress.renderVertexCount ?? dress.vertexCount;
     this.constraintCount = dress.constraintCount;
     this.indexCount = dress.indexCount;
     this.gridRes = dress.numCols;
@@ -308,7 +310,7 @@ export class WebGPUClothEngine {
       this.clothIndexBuffer,
     ].forEach((b) => b?.destroy());
 
-    const byteSize = dress.vertexCount * 16; // vec4f per vertex
+    const byteSize = this.renderVertexCount * 16; // vec4f per visible cloth/accessory vertex
     const makeStorage = (data, extraUsage = 0) => {
       const buf = device.createBuffer({
         size: byteSize,
@@ -319,12 +321,9 @@ export class WebGPUClothEngine {
     };
 
     // Transform initial positions to current avatar pose so re-draping matches avatar
-    const initPos = new Float32Array(dress.initialPositions);
-    const zeroVel = new Float32Array(dress.vertexCount * 4);
-    const initNrm = new Float32Array(dress.vertexCount * 4);
-    for (let i = 0; i < dress.vertexCount; i++) {
-      initNrm[i * 4 + 2] = 1.0;
-    }
+    const initPos = new Float32Array(dress.renderInitialPositions);
+    const zeroVel = new Float32Array(dress.renderVelocities);
+    const initNrm = new Float32Array(dress.renderNormals);
 
     this.posBufferA = makeStorage(initPos);
     this.posBufferB = makeStorage(initPos);
@@ -333,7 +332,7 @@ export class WebGPUClothEngine {
     this.restLenBuffer = makeStorage(dress.restLengths);
     this.anchorBuffer = makeStorage(dress.anchorTargets);
     this.normalBuffer = makeStorage(initNrm);
-    this.uvBuffer = makeStorage(dress.uvsAndPanel);
+    this.uvBuffer = makeStorage(dress.renderUvsAndPanel);
 
     this.clothIndexBuffer = device.createBuffer({
       size: dress.indices.byteLength,
@@ -425,6 +424,14 @@ export class WebGPUClothEngine {
     // 1. Evaluate articulated human body pose & collision capsules
     this.avatar.evaluatePose(this.time, scaledDt, this.params);
     this.device.queue.writeBuffer(this.avatarVertexBuffer, 0, this.avatar.interleaved);
+    if (this.dressData.attachmentWeights?.length) {
+      DressGenerator.updateAttachments(this.dressData, this.avatar);
+      const offsetBytes = this.dressData.attachmentOffset * 16;
+      this.device.queue.writeBuffer(this.posBufferA, offsetBytes,
+        this.dressData.renderInitialPositions.subarray(this.dressData.attachmentOffset * 4));
+      this.device.queue.writeBuffer(this.normalBuffer, offsetBytes,
+        this.dressData.renderNormals.subarray(this.dressData.attachmentOffset * 4));
+    }
 
     const substeps = Math.max(4, Math.min(20, Math.round(this.params.substeps || 12)));
     const subDt = Math.max(0.0005, scaledDt / substeps);
@@ -447,7 +454,7 @@ export class WebGPUClothEngine {
     u[6] = this.params.bendStiffness ?? 0.42;
     u[7] = this.params.damping ?? 0.22;
     // 2: envInfo
-    u[8] = this.params.gravity ?? 9.81;
+    u[8] = (this.params.gravity ?? 9.81) * getFabricLoadScale(this.params.arealDensity ?? 85);
     u[9] = this.params.clothThickness ?? 0.012;
     u[10] = this.params.bodyFriction ?? 0.28;
     u[11] = this.time;
@@ -475,7 +482,7 @@ export class WebGPUClothEngine {
     u[28] = this.updraftTimer > 0 ? 11.5 * Math.sin((this.updraftTimer / 1.6) * Math.PI) : 0.0;
     u[29] = this.twirlTimer > 0 ? 4.2 * Math.sin((this.twirlTimer / 2.4) * Math.PI) : this.avatar.motionState.yawVelocity * 0.4;
     u[30] = this.params.windEnabled ? 1.0 : 0.0;
-    u[31] = 0.0;
+    u[31] = this.params.windResponse ?? 1.0;
     // 8: pieInfo (Zhang et al. 2025 SIGGRAPH '25)
     u[32] = this.params.pieAnisotropy ?? 1.45;
     u[33] = this.params.pieLockingRelief ?? 0.68;
@@ -507,7 +514,7 @@ export class WebGPUClothEngine {
       pass.dispatchWorkgroups(workgroups);
 
       if (this.numCols > 72) {
-        // Extra ping-pong Jacobi constraint passes for high-resolution HD/Ultra meshes (96..160 cols)
+        // Extra ping-pong Jacobi constraint passes for high-resolution meshes (96..320 cols)
         pass.setBindGroup(0, this.computeBG_BA);
         pass.dispatchWorkgroups(workgroups);
         pass.setBindGroup(0, this.computeBG_AB);
@@ -596,6 +603,10 @@ export class WebGPUClothEngine {
     ru[41] = this.params.subsurfaceScatter ?? 0.65;
     ru[42] = this.params.showSeamLines ? 1.0 : 0.0;
     ru[43] = this.params.avatarFinish ?? 0;
+    ru[44] = this.params.dressStyle ?? 0;
+    ru[45] = this.params.arealDensity ?? 85;
+    ru[46] = this.params.windResponse ?? 1.0;
+    ru[47] = 0.0;
 
     this.device.queue.writeBuffer(this.renderUniformBuffer, 0, ru);
 

@@ -23,7 +23,36 @@ export const COLOR_PALETTES = [
   { id: 5, label: "Obsidian atelier noir", primary: [0.11, 0.11, 0.13], sheen: [0.52, 0.54, 0.60], trim: [0.86, 0.74, 0.48] },
   { id: 6, label: "Wisteria silk chiffon", primary: [0.44, 0.36, 0.62], sheen: [0.82, 0.74, 0.98], trim: [0.88, 0.84, 0.94] },
   { id: 7, label: "Ivory bridal brocade", primary: [0.86, 0.84, 0.79], sheen: [1.00, 0.98, 0.94], trim: [0.90, 0.78, 0.52] },
+  { id: 8, label: "Noir & porcelain contrast", primary: [0.025, 0.025, 0.032], sheen: [0.24, 0.25, 0.28], trim: [0.92, 0.91, 0.88] },
+  { id: 9, label: "Ivory & pewter atelier", primary: [0.84, 0.82, 0.77], sheen: [0.95, 0.92, 0.87], trim: [0.47, 0.49, 0.50] },
 ];
+
+// Textile library values are authored as coherent physical + visual profiles.
+// Areal density is in g/m²; compliance is the XPBD stretch/shear softness; bend is normalized.
+export const FABRIC_PRESETS = [
+  { id: 0, label: "Silk charmeuse · 85 gsm", arealDensity: 85, windResponse: 1.00, stretchCompliance: 0.0060, shearCompliance: 0.022, bendStiffness: 0.30, damping: 0.18, clothThickness: 0.009, weaveType: 0, weaveScale: 32, weaveBump: 0.36, sheenIntensity: 1.45, fabricRoughness: 0.23, subsurfaceScatter: 0.48 },
+  { id: 1, label: "Silk chiffon · 25 gsm", arealDensity: 25, windResponse: 1.85, stretchCompliance: 0.0120, shearCompliance: 0.038, bendStiffness: 0.16, damping: 0.12, clothThickness: 0.006, weaveType: 4, weaveScale: 44, weaveBump: 0.22, sheenIntensity: 0.88, fabricRoughness: 0.40, subsurfaceScatter: 1.05 },
+  { id: 2, label: "Cotton poplin · 145 gsm", arealDensity: 145, windResponse: 0.67, stretchCompliance: 0.0032, shearCompliance: 0.012, bendStiffness: 0.55, damping: 0.28, clothThickness: 0.010, weaveType: 6, weaveScale: 30, weaveBump: 0.34, sheenIntensity: 0.24, fabricRoughness: 0.64, subsurfaceScatter: 0.04 },
+  { id: 3, label: "Heavy cotton canvas · 320 gsm", arealDensity: 320, windResponse: 0.42, stretchCompliance: 0.0020, shearCompliance: 0.008, bendStiffness: 0.80, damping: 0.40, clothThickness: 0.016, weaveType: 7, weaveScale: 22, weaveBump: 0.58, sheenIntensity: 0.12, fabricRoughness: 0.82, subsurfaceScatter: 0.00 },
+  { id: 4, label: "Raw denim · 380 gsm", arealDensity: 380, windResponse: 0.36, stretchCompliance: 0.0018, shearCompliance: 0.007, bendStiffness: 0.84, damping: 0.38, clothThickness: 0.015, weaveType: 8, weaveScale: 27, weaveBump: 0.50, sheenIntensity: 0.18, fabricRoughness: 0.72, subsurfaceScatter: 0.02 },
+  { id: 5, label: "Wool suiting · 320 gsm", arealDensity: 320, windResponse: 0.40, stretchCompliance: 0.0024, shearCompliance: 0.009, bendStiffness: 0.76, damping: 0.36, clothThickness: 0.013, weaveType: 9, weaveScale: 26, weaveBump: 0.30, sheenIntensity: 0.26, fabricRoughness: 0.66, subsurfaceScatter: 0.06 },
+  { id: 6, label: "Leather · 850 gsm", arealDensity: 850, windResponse: 0.18, stretchCompliance: 0.0010, shearCompliance: 0.004, bendStiffness: 0.94, damping: 0.52, clothThickness: 0.022, weaveType: 10, weaveScale: 36, weaveBump: 0.42, sheenIntensity: 0.32, fabricRoughness: 0.60, subsurfaceScatter: 0.01 },
+  { id: 7, label: "Velvet · 360 gsm", arealDensity: 360, windResponse: 0.34, stretchCompliance: 0.0026, shearCompliance: 0.010, bendStiffness: 0.70, damping: 0.34, clothThickness: 0.018, weaveType: 3, weaveScale: 22, weaveBump: 0.50, sheenIntensity: 0.72, fabricRoughness: 0.48, subsurfaceScatter: 0.14 },
+  { id: 8, label: "Silk organza · 38 gsm", arealDensity: 38, windResponse: 1.55, stretchCompliance: 0.0100, shearCompliance: 0.032, bendStiffness: 0.24, damping: 0.16, clothThickness: 0.006, weaveType: 4, weaveScale: 48, weaveBump: 0.18, sheenIntensity: 0.72, fabricRoughness: 0.38, subsurfaceScatter: 0.70 },
+  { id: 9, label: "Jacquard brocade · 280 gsm", arealDensity: 280, windResponse: 0.48, stretchCompliance: 0.0022, shearCompliance: 0.009, bendStiffness: 0.76, damping: 0.34, clothThickness: 0.014, weaveType: 5, weaveScale: 22, weaveBump: 0.66, sheenIntensity: 0.72, fabricRoughness: 0.48, subsurfaceScatter: 0.08 },
+];
+
+export function getFabricPresetParameters(id = 0) {
+  const profile = FABRIC_PRESETS.find((item) => item.id === Number(id)) || FABRIC_PRESETS[0];
+  const { id: fabricPreset, label, ...properties } = profile;
+  return { fabricPreset, ...properties };
+}
+
+// The solver is unit-mass XPBD. This gentle load correction approximates the greater
+// gravitational tension of heavier cloth without changing the user's world gravity.
+export function getFabricLoadScale(arealDensity = 85) {
+  return Math.max(0.78, Math.min(1.65, 1 + 0.24 * Math.log(Math.max(20, arealDensity) / 85)));
+}
 
 export const AVATAR_FINISHES = [
   { id: 0, label: "Warm porcelain mannequin" },
@@ -57,11 +86,11 @@ export const DEFAULT_PARAMS = {
   gridResolution: 192,
   substeps: 14,
   stretchCompliance: 0.006,
-  shearCompliance: 0.018,
-  bendStiffness: 0.42,
+  shearCompliance: 0.022,
+  bendStiffness: 0.30,
   gravity: 9.81,
-  damping: 0.22,
-  clothThickness: 0.012,
+  damping: 0.18,
+  clothThickness: 0.009,
   bodyFriction: 0.28,
   windEnabled: true,
   windSpeed: 1.65,
@@ -80,12 +109,15 @@ export const DEFAULT_PARAMS = {
   // Procedural Fabric & Shading
   colorPalette: 0,
   weaveType: 0,
-  weaveScale: 28,
-  weaveBump: 0.45,
-  sheenIntensity: 1.35,
-  fabricRoughness: 0.28,
+  weaveScale: 32,
+  weaveBump: 0.36,
+  sheenIntensity: 1.45,
+  fabricRoughness: 0.23,
   hemTrim: 0.55,
-  subsurfaceScatter: 0.65,
+  subsurfaceScatter: 0.48,
+  fabricPreset: 0,
+  arealDensity: 85,
+  windResponse: 1.0,
   sunIntensity: 2.6,
   sunElevation: 44,
   sunAzimuth: 36,
@@ -122,6 +154,8 @@ export const CONTROL_GROUPS = [
           { id: 5, label: "Grecian chiffon column" },
           { id: 6, label: "Asymmetric wrap dress" },
           { id: 7, label: "Velvet opera gown" },
+          { id: 8, label: "Noir tuxedo pleated coat gown" },
+          { id: 9, label: "Embroidered ivory wrap coat gown" },
         ],
       },
       { key: "skirtLength", label: "Skirt length", type: "range", min: 0.35, max: 1.02, step: 0.01 },
@@ -200,6 +234,9 @@ export const CONTROL_GROUPS = [
   {
     title: "Procedural Weave & Shading",
     controls: [
+      { key: "fabricPreset", label: "Fabric material preset", type: "select", options: FABRIC_PRESETS },
+      { key: "arealDensity", label: "Areal weight", type: "range", min: 20, max: 1000, step: 5 },
+      { key: "windResponse", label: "Wind response", type: "range", min: 0.15, max: 2.0, step: 0.05 },
       { key: "colorPalette", label: "Dye palette", type: "select", options: COLOR_PALETTES },
       {
         key: "weaveType",
@@ -212,6 +249,11 @@ export const CONTROL_GROUPS = [
           { id: 3, label: "Velvet pile" },
           { id: 4, label: "Sheer organza" },
           { id: 5, label: "Sequined brocade" },
+          { id: 6, label: "Cotton plain weave" },
+          { id: 7, label: "Heavy canvas basket weave" },
+          { id: 8, label: "Denim diagonal twill" },
+          { id: 9, label: "Wool suiting nap" },
+          { id: 10, label: "Leather grain" },
         ],
       },
       { key: "weaveScale", label: "Thread density", type: "range", min: 8, max: 64, step: 2 },
@@ -219,7 +261,7 @@ export const CONTROL_GROUPS = [
       { key: "sheenIntensity", label: "Anisotropic sheen", type: "range", min: 0.0, max: 2.5, step: 0.05 },
       { key: "fabricRoughness", label: "Surface roughness", type: "range", min: 0.08, max: 0.95, step: 0.02 },
       { key: "hemTrim", label: "Metallic couture trim", type: "range", min: 0.0, max: 1.0, step: 0.05 },
-      { key: "subsurfaceScatter", label: "Silk translucency", type: "range", min: 0.0, max: 1.5, step: 0.05 },
+      { key: "subsurfaceScatter", label: "Material translucency", type: "range", min: 0.0, max: 1.5, step: 0.05 },
       { key: "sunIntensity", label: "Key light intensity", type: "range", min: 0.0, max: 5.0, step: 0.1 },
       { key: "sunElevation", label: "Key light elevation", type: "range", min: 5, max: 85, step: 1 },
       { key: "sunAzimuth", label: "Key light azimuth", type: "range", min: -180, max: 180, step: 5 },
@@ -240,6 +282,7 @@ export const PRESETS = {
   emerald_evening_gown: {
     description: "Floor-length bias-cut emerald silk charmeuse evening gown with fluid drape and gold trim.",
     params: {
+      fabricPreset: 0,
       dressStyle: 0,
       skirtLength: 0.94,
       skirtFlare: 0.68,
@@ -267,9 +310,10 @@ export const PRESETS = {
     },
   },
   sunburst_pleated_midi: {
-    description: "High-waisted champagne knife-pleated midi dress that fans open during runway twirls.",
+    description: "High-waisted champagne cotton-poplin knife-pleated midi dress that holds its folds during runway twirls.",
     triggerTwirlOnLoad: true,
     params: {
+      fabricPreset: 2,
       dressStyle: 1,
       gridResolution: 256,
       skirtLength: 0.72,
@@ -298,8 +342,9 @@ export const PRESETS = {
     },
   },
   couture_ballgown: {
-    description: "Voluminous midnight sapphire princess-seam ballgown with structured corset and bell skirt.",
+    description: "Voluminous midnight sapphire princess-seam ballgown in structured jacquard brocade.",
     params: {
+      fabricPreset: 9,
       dressStyle: 2,
       skirtLength: 0.98,
       skirtFlare: 1.18,
@@ -327,8 +372,9 @@ export const PRESETS = {
     },
   },
   satin_cocktail_slip: {
-    description: "Knee-length rose quartz bias-cut satin cocktail slip dress on a runway catwalk stride.",
+    description: "Knee-length rose quartz bias-cut silk satin cocktail slip dress on a runway catwalk stride.",
     params: {
+      fabricPreset: 0,
       dressStyle: 3,
       skirtLength: 0.52,
       skirtFlare: 0.38,
@@ -358,6 +404,7 @@ export const PRESETS = {
   mermaid_trumpet_gown: {
     description: "Sculpted crimson velvet mermaid gown fitted through the hips with a dramatic lower flare.",
     params: {
+      fabricPreset: 7,
       dressStyle: 4,
       skirtLength: 0.96,
       skirtFlare: 0.95,
@@ -387,6 +434,7 @@ export const PRESETS = {
   grecian_chiffon_column: {
     description: "Lightweight wisteria silk chiffon column dress billowing gracefully in a studio breeze.",
     params: {
+      fabricPreset: 1,
       dressStyle: 5,
       skirtLength: 0.93,
       skirtFlare: 0.46,
@@ -416,8 +464,9 @@ export const PRESETS = {
     },
   },
   asymmetric_wrap_dress: {
-    description: "Avant-garde obsidian atelier dress with diagonal wrap cut and high-low hemline.",
+    description: "Avant-garde obsidian cotton-twill dress with diagonal wrap cut and high-low hemline.",
     params: {
+      fabricPreset: 3,
       dressStyle: 6,
       skirtLength: 0.68,
       skirtFlare: 0.64,
@@ -445,8 +494,9 @@ export const PRESETS = {
     },
   },
   ivory_bridal_brocade: {
-    description: "Regal ivory bridal gown with sequined brocade relief, wide train flare, and golden trim.",
+    description: "Regal ivory bridal gown with sequined jacquard brocade relief, wide train flare, and golden trim.",
     params: {
+      fabricPreset: 9,
       dressStyle: 2,
       skirtLength: 1.00,
       skirtFlare: 1.08,
@@ -473,6 +523,47 @@ export const PRESETS = {
       pieDownPressure: 0.12,
       windSpeed: 1.5,
       avatarPose: 0,
+    },
+  },
+
+  noir_tuxedo_coat_gown: {
+    description: "Floor-length black tuxedo-inspired coat gown with sculpted white peak lapels, fitted long sleeves, and a fan-pleated ivory side inset.",
+    params: {
+      fabricPreset: 5,
+      dressStyle: 8,
+      skirtLength: 1.00,
+      skirtFlare: 0.38,
+      waistCinch: 0.94,
+      necklineDepth: 0.22,
+      strapWidth: 0.06,
+      sleeveDrape: 0.08,
+      pleatCount: 12,
+      pleatDepth: 0.012,
+      asymmetry: 0.0,
+      colorPalette: 8,
+      hemTrim: 0.08,
+      avatarPose: 0,
+      windSpeed: 1.25,
+    },
+  },
+  ivory_embroidered_wrap_gown: {
+    description: "Full-length ivory wrap coat gown with long cuffed sleeves, silver vine-embroidered lapels, and paired metallic frog fasteners.",
+    params: {
+      fabricPreset: 5,
+      dressStyle: 9,
+      skirtLength: 1.00,
+      skirtFlare: 0.42,
+      waistCinch: 0.91,
+      necklineDepth: 0.23,
+      strapWidth: 0.06,
+      sleeveDrape: 0.06,
+      pleatCount: 12,
+      pleatDepth: 0.004,
+      asymmetry: 0.0,
+      colorPalette: 9,
+      hemTrim: 0.07,
+      avatarPose: 0,
+      windSpeed: 0.9,
     },
   },
 };

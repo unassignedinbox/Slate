@@ -888,6 +888,66 @@ export class SubstanceClothGraphEditor {
     drawPatternSet(frontCX, "FRONT", true);
     drawPatternSet(backCX, "BACK", false);
 
+    // Coat-gown pattern callouts: peak-lapel facings, long sleeves, and the contrast pleated inset.
+    if ((params.dressStyle ?? 0) >= 8) {
+      ctx.fillStyle = (params.dressStyle ?? 0) === 8 ? strokeTrim : fillPrimary;
+      ctx.strokeStyle = strokeTrim;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(frontCX - bustHalfW + 7, topY + 2);
+      ctx.lineTo(frontCX - 5, topY + 3);
+      ctx.lineTo(frontCX + 7, topY + neckDrop * 1.55);
+      ctx.lineTo(frontCX - 12, topY + neckDrop * 0.82);
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(frontCX + bustHalfW - 7, topY + 2);
+      ctx.lineTo(frontCX + 5, topY + 3);
+      ctx.lineTo(frontCX - 7, topY + neckDrop * 1.55);
+      ctx.lineTo(frontCX + 12, topY + neckDrop * 0.82);
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
+
+      // Sewn-in sleeve pattern pieces (schematic in the flat CAD view).
+      ctx.fillStyle = fillPrimary;
+      for (const side of [-1, 1]) {
+        const sx = frontCX + side * (bustHalfW + 18);
+        ctx.beginPath();
+        ctx.moveTo(sx - 7, topY + 3);
+        ctx.lineTo(sx + 7, topY + 3);
+        ctx.lineTo(sx + 5, topY + bodiceH * 1.7);
+        ctx.lineTo(sx - 5, topY + bodiceH * 1.7);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+      }
+
+      if ((params.dressStyle ?? 0) === 8) {
+        const insetX = frontCX + hemHalfW * 0.40;
+        const insetTop = skirtTopY + skirtH * 0.12;
+        const insetBottom = skirtTopY + skirtH - 2;
+        ctx.fillStyle = (params.dressStyle ?? 0) === 8 ? strokeTrim : fillPrimary;
+        ctx.fillRect(insetX - 6, insetTop, 12, insetBottom - insetTop);
+        ctx.strokeStyle = strokeTrim;
+        ctx.beginPath();
+        ctx.moveTo(insetX - 6, insetTop); ctx.lineTo(insetX - 6, insetBottom);
+        ctx.moveTo(insetX + 6, insetTop); ctx.lineTo(insetX + 6, insetBottom);
+        for (let i = 1; i < 6; i++) {
+          const x = insetX - 6 + i * 2;
+          ctx.moveTo(x, insetTop + 2); ctx.lineTo(x, insetBottom - 2);
+        }
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = strokeTrim;
+        ctx.lineWidth = 0.7;
+        for (let i = 0; i < 5; i++) {
+          ctx.beginPath();
+          ctx.moveTo(frontCX - bustHalfW + 13 + i * 5, topY + 7);
+          ctx.quadraticCurveTo(frontCX - 10 + i * 2, topY + neckDrop * 0.48, frontCX - 4, topY + neckDrop * 1.25);
+          ctx.stroke();
+        }
+      }
+    }
+
     // Side Seam Stitch Connector between Front & Back Skirt
     ctx.strokeStyle = "rgba(90, 169, 255, 0.45)";
     ctx.setLineDash([4, 4]);

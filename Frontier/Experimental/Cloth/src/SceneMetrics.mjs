@@ -1,6 +1,14 @@
 import Test from "node:test";
 import Assert from "node:assert/strict";
-import { PRESETS, DEFAULT_PARAMS, DEBUG_CHANNELS, COLOR_PALETTES } from "./presets.js";
+import {
+  PRESETS,
+  DEFAULT_PARAMS,
+  DEBUG_CHANNELS,
+  COLOR_PALETTES,
+  FABRIC_PRESETS,
+  getFabricPresetParameters,
+  getFabricLoadScale,
+} from "./presets.js";
 import {
   InitialParameters,
   ControlSpecification,
@@ -26,7 +34,21 @@ Test("Couture dress presets validate and construct tailored parameters", () => {
     }
   }
   Assert.equal(DEBUG_CHANNELS.length, 7);
-  Assert.equal(COLOR_PALETTES.length, 8);
+  Assert.equal(COLOR_PALETTES.length, 10);
+  Assert.ok(FABRIC_PRESETS.length >= 10);
+  const silk = getFabricPresetParameters(0);
+  const canvas = getFabricPresetParameters(3);
+  const leather = getFabricPresetParameters(6);
+  Assert.ok(silk.windResponse > canvas.windResponse && canvas.windResponse > leather.windResponse);
+  Assert.ok(silk.bendStiffness < canvas.bendStiffness && canvas.bendStiffness < leather.bendStiffness);
+  Assert.ok(getFabricLoadScale(850) > getFabricLoadScale(85));
+  const tuxedo = ConstructPresetParameters("noir_tuxedo_coat_gown");
+  const ivoryWrap = ConstructPresetParameters("ivory_embroidered_wrap_gown");
+  Assert.equal(tuxedo.dressStyle, 8);
+  Assert.equal(ivoryWrap.dressStyle, 9);
+  Assert.equal(tuxedo.fabricPreset, 5);
+  Assert.equal(tuxedo.weaveType, 9);
+  Assert.ok(tuxedo.bendStiffness > silk.bendStiffness);
 });
 
 Test("Zhang et al. 2025 (SIGGRAPH '25) PieSizingEstimator evaluates optimal resolution & wrinklon sizing map", () => {
@@ -122,7 +144,32 @@ Test("DressGenerator builds periodic 3D dress mesh, PIE sizing map, rest lengths
     Assert.ok(dress.initialPositions.every(Number.isFinite));
     Assert.ok(dress.restLengths.every((v) => Number.isFinite(v) && v >= 0));
     Assert.ok(dress.pattern2D.hemHalfW > 0.1);
+    if (params.dressStyle >= 8) {
+      Assert.equal(dress.renderVertexCount, dress.vertexCount + 2 * 31 * 24);
+      Assert.ok(dress.indexCount > dress.numCols * (dress.numRows - 1) * 6);
+      const panelIds = new Set();
+      for (let i = 0; i < dress.vertexCount; i++) panelIds.add(Math.floor(dress.uvsAndPanel[i * 4 + 2]));
+      if (params.dressStyle === 8) Assert.ok(panelIds.has(4) && panelIds.has(5));
+      Assert.ok(dress.renderInitialPositions.every(Number.isFinite));
+      Assert.ok(dress.renderNormals.every(Number.isFinite));
+    }
   }
+
+  const tailored = DressGenerator.buildDress(ConstructPresetParameters("noir_tuxedo_coat_gown"));
+  const avatar = new HumanAvatar(0);
+  avatar.evaluatePose(0.7, 0.016, { avatarBodyType: 0, avatarPose: 1, avatarMotionSpeed: 1.0 });
+  DressGenerator.updateAttachments(tailored, avatar);
+  Assert.ok(tailored.renderNormals.every(Number.isFinite));
+  let articulatedSleeveMoved = false;
+  for (let i = 0; i < tailored.attachmentWeights.length; i++) {
+    const dst = (tailored.attachmentOffset + i) * 4;
+    const src = i * 3;
+    if (Math.abs(tailored.renderInitialPositions[dst] - tailored.attachmentPositions[src]) > 1e-4) {
+      articulatedSleeveMoved = true;
+      break;
+    }
+  }
+  Assert.ok(articulatedSleeveMoved, "long sleeve shells should follow animated arm bones");
 });
 
 Test("Scene validation accepts valid garment documents and rejects malformed input", () => {

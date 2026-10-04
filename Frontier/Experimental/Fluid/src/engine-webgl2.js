@@ -12,7 +12,7 @@ import {
   GLSL_CLOTH_FS,
 } from "./shaders-glsl.js";
 import { DressGenerator } from "./DressGenerator.js";
-import { COLOR_PALETTES } from "./presets.js";
+import { COLOR_PALETTES, getFabricLoadScale } from "./presets.js";
 
 export class WebGL2ClothEngine {
   constructor(canvas, params, avatar) {
@@ -126,23 +126,25 @@ export class WebGL2ClothEngine {
   rebuildDress(params = this.params) {
     this.params = params;
     const dress = DressGenerator.buildDress(params);
+    DressGenerator.updateAttachments(dress, this.avatar);
     this.dressData = dress;
     this.pieReport = dress.pieReport;
     this.numCols = dress.numCols;
     this.numRows = dress.numRows;
-    this.vertexCount = dress.vertexCount;
+    this.vertexCount = dress.vertexCount; // simulated skirt/body grid
+    this.renderVertexCount = dress.renderVertexCount ?? dress.vertexCount;
     this.constraintCount = dress.constraintCount;
     this.indexCount = dress.indexCount;
     this.gridRes = dress.numCols;
 
-    this.posA = new Float32Array(dress.initialPositions);
-    this.posB = new Float32Array(dress.initialPositions);
-    this.prevPos = new Float32Array(dress.initialPositions);
-    this.velocities = new Float32Array(dress.vertexCount * 4);
-    this.normals = new Float32Array(dress.vertexCount * 4);
+    this.posA = new Float32Array(dress.renderInitialPositions);
+    this.posB = new Float32Array(dress.renderInitialPositions);
+    this.prevPos = new Float32Array(dress.renderInitialPositions);
+    this.velocities = new Float32Array(dress.renderVelocities);
+    this.normals = new Float32Array(dress.renderNormals);
     this.restLengths = dress.restLengths;
     this.anchorTargets = dress.anchorTargets;
-    this.uvsAndPanel = dress.uvsAndPanel;
+    this.uvsAndPanel = dress.renderUvsAndPanel;
 
     this.computeNormalsCPU();
 
@@ -244,6 +246,12 @@ export class WebGL2ClothEngine {
     if (this.crosswindTimer > 0) this.crosswindTimer = Math.max(0, this.crosswindTimer - scaledDt);
 
     this.avatar.evaluatePose(this.time, scaledDt, this.params);
+    if (this.dressData.attachmentWeights?.length) {
+      DressGenerator.updateAttachments(this.dressData, this.avatar);
+      const offset4 = this.dressData.attachmentOffset * 4;
+      this.posA.set(this.dressData.renderInitialPositions.subarray(offset4), offset4);
+      this.normals.set(this.dressData.renderNormals.subarray(offset4), offset4);
+    }
     const gl = this.gl;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.avatarVBO);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.avatar.interleaved);
@@ -260,7 +268,8 @@ export class WebGL2ClothEngine {
     const windX = Math.cos(windAz) * windSpeed + extraCrosswind;
     const windZ = Math.sin(windAz) * windSpeed;
     const turb = this.params.windTurbulence ?? 0.85;
-    const gravity = this.params.gravity ?? 9.81;
+    const gravity = (this.params.gravity ?? 9.81) * getFabricLoadScale(this.params.arealDensity ?? 85);
+    const windResponse = Math.max(0.05, this.params.windResponse ?? 1.0);
     const thickness = this.params.clothThickness ?? 0.012;
     const friction = this.params.bodyFriction ?? 0.28;
     const damping = this.params.damping ?? 0.22;
@@ -303,9 +312,9 @@ export class WebGL2ClothEngine {
           const gx = Math.sin(py * 5.5 + pz * 3.8 + this.time * 3.4) * turb;
           const gy = 0.35 * Math.cos(px * 4.8 - this.time * 2.7) * turb;
           const gz = Math.cos(px * 5.2 + py * 4.1 - this.time * 3.1) * turb;
-          ax += (windX + gx) * 1.4;
-          ay += (0.25 * windSpeed + gy) * 1.4;
-          az += (windZ + gz) * 1.4;
+          ax += (windX + gx) * 1.4 * windResponse;
+          ay += (0.25 * windSpeed + gy) * 1.4 * windResponse;
+          az += (windZ + gz) * 1.4 * windResponse;
         }
         if (Math.abs(updraft) > 1e-3) {
           ay += updraft;
@@ -590,6 +599,7 @@ export class WebGL2ClothEngine {
       gl.uniform4f(gl.getUniformLocation(this.clothProg, "uTrimCol"), pal.trim[0], pal.trim[1], pal.trim[2], this.params.hemTrim ?? 0.55);
       gl.uniform4f(gl.getUniformLocation(this.clothProg, "uWeaveParams"), this.params.weaveType ?? 0, this.params.weaveScale ?? 28, this.params.weaveBump ?? 0.45, this.params.fabricRoughness ?? 0.28);
       gl.uniform4f(gl.getUniformLocation(this.clothProg, "uExtraParams"), this.params.renderChannel ?? 0, this.params.subsurfaceScatter ?? 0.65, this.params.showSeamLines ? 1 : 0, this.params.avatarFinish ?? 0);
+      gl.uniform4f(gl.getUniformLocation(this.clothProg, "uStyleInfo"), this.params.dressStyle ?? 0, this.params.arealDensity ?? 85, this.params.windResponse ?? 1, 0);
       gl.bindVertexArray(this.clothVAO);
       gl.drawElements(gl.TRIANGLES, this.indexCount, gl.UNSIGNED_INT, 0);
     }

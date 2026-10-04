@@ -85,7 +85,7 @@ fn csPredict(@builtin(global_invocation_id) gid : vec3<u32>) {
       0.35 * cos(pCurr.x * 4.8 - t * 2.7),
       cos(pCurr.x * 5.2 + pCurr.y * 4.1 - t * 3.1)
     ) * turb;
-    let windVec = uSim.windInfo.xyz + gust;
+    let windVec = (uSim.windInfo.xyz + gust) * max(0.05, uSim.impulseInfo.w);
     let normalFacing = abs(dot(nrm, normalize(windVec + vec3<f32>(1e-4, 0.0, 0.0))));
     acc += windVec * (0.85 + 1.65 * normalFacing);
   }
@@ -384,6 +384,7 @@ struct RenderUniforms {
   trimColor    : vec4<f32>, // rgb: couture trim, w: hemTrim
   weaveParams  : vec4<f32>, // x: weaveType, y: weaveScale, z: weaveBump, w: roughness
   extraParams  : vec4<f32>, // x: renderChannel, y: subsurface, z: showSeamLines, w: avatarFinish
+  styleInfo    : vec4<f32>, // x: dressStyle, y: arealDensity_gsm, z: windResponse, w: reserved
 };
 
 @group(0) @binding(0) var<uniform> uRender : RenderUniforms;
@@ -558,12 +559,32 @@ fn evalWeavePattern(uv: vec2<f32>, weaveType: i32, scale: f32) -> vec3<f32> {
     // Sheer organza: crisp open filament mesh
     let grid = max(abs(wx), abs(wy));
     return vec3<f32>(wx * 0.4, wy * 0.4, grid);
-  } else {
+  } else if (weaveType == 5) {
     // Sequined brocade: hexagonal metallic paillettes
     let cell = fract(p * 0.85) - vec2<f32>(0.5);
     let d = length(cell);
     let seq = smoothstep(0.45, 0.22, d);
     return vec3<f32>(cell.x * seq * 1.4, cell.y * seq * 1.4, seq);
+  } else if (weaveType == 6) {
+    // Cotton plain weave: matte cross-thread texture with restrained relief.
+    let interlace = wx * wy;
+    return vec3<f32>(cos(p.x * 6.28318) * 0.20, cos(p.y * 6.28318) * 0.20, interlace * 0.55);
+  } else if (weaveType == 7) {
+    // Heavy canvas: coarser basket weave and softened yarn crossings.
+    let basket = sin(p.x * 3.14159) * sin(p.y * 3.14159);
+    return vec3<f32>(cos(p.x * 3.14159) * 0.28, cos(p.y * 3.14159) * 0.28, basket * 0.75);
+  } else if (weaveType == 8) {
+    // Denim: compact diagonal twill ribs.
+    let twill = sin((p.x * 0.72 + p.y * 1.8) * 6.2831853);
+    return vec3<f32>(twill * 0.38, -twill * 0.26, twill * 0.72);
+  } else if (weaveType == 9) {
+    // Wool suiting: low-contrast short staple / nap grain.
+    let nap = sin(p.x * 2.1 + sin(p.y * 5.7) * 0.8) * cos(p.y * 1.7);
+    return vec3<f32>(nap * 0.20, cos(p.y * 5.7) * 0.25, nap * 0.48);
+  } else {
+    // Leather: fine pebble grain with sparse shallow pores, not a woven silk highlight.
+    let grain = sin(p.x * 8.5 + sin(p.y * 6.2) * 1.3) * cos(p.y * 9.0 - p.x * 2.4);
+    return vec3<f32>(grain * 0.20, -grain * 0.16, grain * 0.52);
   }
 }
 
@@ -619,6 +640,7 @@ fn fsCloth(
   let weaveBump = uRender.weaveParams.z;
   let roughness = uRender.weaveParams.w;
   let channel = i32(uRender.extraParams.x + 0.5);
+  let dressStyle = i32(uRender.styleInfo.x + 0.5);
 
   let weave = evalWeavePattern(uv, weaveType, weaveScale);
 
@@ -641,6 +663,9 @@ fn fsCloth(
     if (panelId == 1) { pCol = vec3<f32>(0.32, 0.72, 0.58); }
     if (panelId == 2) { pCol = vec3<f32>(0.88, 0.58, 0.30); }
     if (panelId == 3) { pCol = vec3<f32>(0.76, 0.42, 0.72); }
+    if (panelId == 4) { pCol = vec3<f32>(0.92, 0.90, 0.84); }
+    if (panelId == 5) { pCol = vec3<f32>(0.82, 0.82, 0.79); }
+    if (panelId == 6) { pCol = vec3<f32>(0.62, 0.48, 0.36); }
     let uvScaled = uv * 24.0;
     let duv = max(fwidth(uvScaled), vec2<f32>(1e-4));
     let gridDist = abs(fract(uvScaled - 0.5) - 0.5) / duv;
@@ -679,9 +704,38 @@ fn fsCloth(
   let pleatAO = 0.86 + 0.14 * pleatPhase;
   albedo *= pleatAO;
 
-  // Interior lining slightly darker satin tone
+  // Interior lining slightly darker; tailored accent pieces are deliberately separate zones.
   if (!isFront) {
     albedo *= 0.72;
+  }
+  if (dressStyle == 8 && (panelId == 4 || panelId == 5)) {
+    // Black tuxedo coat with crisp porcelain-white pleated inset and peak lapels.
+    albedo = mix(albedo, uRender.trimColor.rgb, 0.96);
+  }
+  if (dressStyle == 9 && panelId == 5) {
+    // Ivory coat lapels stay ivory; fine pewter vine embroidery is layered below.
+    albedo = uRender.primaryColor.rgb * 1.035;
+    let vine = abs(sin(uv.x * 230.0 + sin(uv.y * 62.0) * 2.5));
+    let sprig = abs(sin(uv.x * 490.0 + sin(uv.y * 136.0) * 1.4));
+    let embroidery = max(1.0 - smoothstep(0.035, 0.19, vine),
+      0.62 * (1.0 - smoothstep(0.025, 0.15, sprig)));
+    albedo = mix(albedo, uRender.trimColor.rgb, embroidery * 0.72);
+  }
+  if (dressStyle == 9 && (panelId == 0 || panelId == 2) && sin(uv.x * 6.2831853) > 0.0) {
+    let frontX = cos(uv.x * 6.2831853);
+    let wrapAxis = 0.72 - 1.70 * uv.y;
+    let wrapEdge = 1.0 - smoothstep(0.006, 0.022, abs(frontX - wrapAxis));
+    albedo = mix(albedo, uRender.trimColor.rgb * 0.82, wrapEdge * 0.28);
+    let fastenerX = 1.0 - smoothstep(0.035, 0.060, abs(frontX - 0.22));
+    let claspA = 1.0 - smoothstep(0.002, 0.005, abs(uv.y - 0.255));
+    let claspB = 1.0 - smoothstep(0.002, 0.005, abs(uv.y - 0.282));
+    let frogClasp = fastenerX * max(claspA, claspB);
+    albedo = mix(albedo, uRender.trimColor.rgb, frogClasp * 0.92);
+  }
+  if (dressStyle == 9 && panelId == 6) {
+    let cuff = 1.0 - smoothstep(0.006, 0.018, abs(uv.y - 0.94));
+    let cuffEdge = 1.0 - smoothstep(0.006, 0.018, abs(uv.y - 0.90));
+    albedo = mix(albedo, uRender.trimColor.rgb, max(cuff, cuffEdge) * 0.45);
   }
 
   // Couture metallic border trim at neckline (uv.y < 0.03) and hemline (uv.y > 0.955)

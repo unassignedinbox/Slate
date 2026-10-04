@@ -1,4 +1,9 @@
-import { DEFAULT_PARAMS, CONTROL_GROUPS, PRESETS } from "./presets.js";
+import {
+  DEFAULT_PARAMS,
+  CONTROL_GROUPS,
+  PRESETS,
+  getFabricPresetParameters,
+} from "./presets.js";
 
 export const SourceRevision = "6e43918e4477eaddcf5bd74aff4e18bdd27e03c5";
 export const InitialParameters = {
@@ -67,6 +72,18 @@ export const PresetPresentation = {
     "silk",
     "Sequined relief · regal train flare",
     "weave",
+  ],
+  noir_tuxedo_coat_gown: [
+    "Noir tuxedo coat gown",
+    "tailored",
+    "Sharp white lapels · pleated ivory inset · wool suiting",
+    "dress",
+  ],
+  ivory_embroidered_wrap_gown: [
+    "Ivory embroidered wrap gown",
+    "tailored",
+    "Silver vine lapels · frog closures · full-length sleeves",
+    "dress",
   ],
 };
 
@@ -187,5 +204,11 @@ export function ValidateScene(Input) {
 
 export function ConstructPresetParameters(Key) {
   if (!Object.hasOwn(PRESETS, Key)) throw new Error("Unknown preset");
-  return { ...InitialParameters, ...PRESETS[Key].params };
+  const Parameters = { ...InitialParameters, ...PRESETS[Key].params };
+  // A dress preset's selected textile is authoritative: mechanical and shading
+  // values travel together instead of every fabric inheriting silk-like settings.
+  return {
+    ...Parameters,
+    ...getFabricPresetParameters(Parameters.fabricPreset),
+  };
 }

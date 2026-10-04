@@ -3,7 +3,12 @@ import { WebGL2ClothEngine } from "./engine-webgl2.js";
 import { WebGPUClothEngine } from "./engine-webgpu.js";
 import { HumanAvatar, POSE_MODES } from "./HumanAvatar.js";
 import { SubstanceClothGraphEditor } from "./GraphEditor.js";
-import { PRESETS, DEBUG_CHANNELS } from "./presets.js";
+import {
+  PRESETS,
+  DEBUG_CHANNELS,
+  FABRIC_PRESETS,
+  getFabricPresetParameters,
+} from "./presets.js";
 import {
   InitialParameters,
   ControlSpecification,
@@ -287,8 +292,11 @@ class ClothPanel {
       return;
     }
     if (this.Parameters[Key] === Value) return;
-    const Previous = this.Parameters[Key];
+    const PreviousParameters = { ...this.Parameters };
     this.Parameters[Key] = Value;
+    if (Key === "fabricPreset") {
+      Object.assign(this.Parameters, getFabricPresetParameters(Value));
+    }
     try {
       if (Key === "avatarBodyType") {
         this.Avatar.setBodyType(Value);
@@ -302,7 +310,7 @@ class ClothPanel {
       if (Key === "renderScale") this.ResizeViewport();
       if (Key === "interactionMode") this.Engine?.setBrush(null, null, false);
     } catch (ErrorValue) {
-      this.Parameters[Key] = Previous;
+      Object.assign(this.Parameters, PreviousParameters);
       this.ShowGpuError(ErrorValue.message);
     }
     this.MarkDirty();
@@ -366,6 +374,8 @@ class ClothPanel {
 
     if (Select("#body-type-select"))
       Select("#body-type-select").value = this.Parameters.avatarBodyType ?? 0;
+    if (Select("#fabric-preset-select"))
+      Select("#fabric-preset-select").value = this.Parameters.fabricPreset ?? 0;
 
     Select("#render-channel").value = this.Parameters.renderChannel;
     Select("#diagnostic-channel").value = this.Parameters.renderChannel;
@@ -608,6 +618,8 @@ class ClothPanel {
         renderScale: "×",
         avatarMotionSpeed: "×",
         weaveScale: "×",
+        arealDensity: "g/m²",
+        windResponse: "×",
       }[Key] || "—";
     return `<div class="property-row slider-row"><label class="property-label" for="property-${Key}">${Label}</label><div class="slider-control"><div class="value-pill"><input id="property-${Key}" data-param="${Key}" type="number" value="${FormatNumber(Value, Control.step)}" min="${Control.min}" max="${Control.max}" step="${Control.step}"/><span class="unit-cell" aria-hidden="true">${Unit}</span></div><input type="range" aria-label="${Label} slider" data-param="${Key}" min="${Control.min}" max="${Control.max}" step="${Control.step}" value="${Value}"/></div></div>`;
   }
@@ -721,6 +733,22 @@ class ClothPanel {
 
     if (this.Tab === "rendering") {
       AddGroup(
+        "Fabric preset & physical response",
+        [
+          "fabricPreset",
+          "arealDensity",
+          "windResponse",
+          "stretchCompliance",
+          "shearCompliance",
+          "bendStiffness",
+          "damping",
+          "clothThickness",
+        ],
+        "MATERIAL",
+        true,
+        "Preset profiles set textile weight, wind response, XPBD stretch/shear and bend stiffness, damping, thickness, roughness, sheen and procedural weave together. Heavier fabric receives more gravitational loading and less wind acceleration in both GPU backends.",
+      );
+      AddGroup(
         "Substance weave & dye",
         [
           "colorPalette",
@@ -734,7 +762,7 @@ class ClothPanel {
         ],
         "FABRIC",
         true,
-        "Procedural warp/weft micro-normal and anisotropic silk sheen evaluated per pixel.",
+        "Fabric-specific cotton, denim, wool, leather, velvet, silk and brocade grain with material-matched roughness and sheen.",
       );
       AddGroup(
         "Studio lighting",
@@ -777,6 +805,10 @@ class ClothPanel {
       this.LoadPreset("sunburst_pleated_midi");
     } else if (Kind === "ballgown") {
       this.LoadPreset("couture_ballgown");
+    } else if (Kind === "noir-coat") {
+      this.LoadPreset("noir_tuxedo_coat_gown");
+    } else if (Kind === "ivory-wrap") {
+      this.LoadPreset("ivory_embroidered_wrap_gown");
     } else if (Kind === "female-body") {
       this.ApplyParameter("avatarBodyType", 0);
       this.Notify("Switched to sculpted Female couture mannequin.");
@@ -904,6 +936,18 @@ class ClothPanel {
   }
 
   ConnectInterface() {
+    const FabricSelect = Select("#fabric-preset-select");
+    if (FabricSelect) {
+      FabricSelect.innerHTML = FABRIC_PRESETS.map(
+        (Material) => `<option value="${Material.id}">${Escape(Material.label)}</option>`,
+      ).join("");
+      FabricSelect.addEventListener("change", (Event) => {
+        const Material = FABRIC_PRESETS.find((Item) => Item.id === Number(Event.target.value));
+        this.ApplyParameter("fabricPreset", Number(Event.target.value));
+        if (Material) this.Notify(`${Material.label} applied · physics, texture, and wind response updated.`);
+      });
+    }
+
     ["#render-channel", "#diagnostic-channel"].forEach((Selector) => {
       Select(Selector).innerHTML = DEBUG_CHANNELS.map(
         (Channel) => `<option value="${Channel.id}">${Channel.label}</option>`,

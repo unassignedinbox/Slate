@@ -180,6 +180,7 @@
               ><button data-filter="gown">Gown</button
               ><button data-filter="pleated">Pleated</button
               ><button data-filter="cocktail">Cocktail</button
+              ><button data-filter="tailored">Tailored</button
               ><button data-filter="silk">Silk</button>
             </div>
             <div class="preset-list" id="presets-list"></div>
@@ -214,6 +215,7 @@
               <option value="0" selected>Female form</option>
               <option value="1">Male form</option>
             </select
+            ><select id="fabric-preset-select" aria-label="Fabric material preset" title="Choose material physics, areal weight, weave, roughness, and wind response"></select
             ><select id="camera-view" aria-label="Camera view">
               <option value="perspective">Perspective</option>
               <option value="front">Front</option>
@@ -539,6 +541,14 @@
       <button data-add="ballgown" role="menuitem">
         <span data-icon="dress"></span
         ><span>Couture ballgown<small>Structured corset and bell skirt</small></span>
+      </button>
+      <button data-add="noir-coat" role="menuitem">
+        <span data-icon="dress"></span
+        ><span>Noir tuxedo coat gown<small>White lapels and pleated ivory inset</small></span>
+      </button>
+      <button data-add="ivory-wrap" role="menuitem">
+        <span data-icon="dress"></span
+        ><span>Ivory embroidered wrap gown<small>Silver lapels and long sleeves</small></span>
       </button>
       <div class="menu-divider"></div>
       <button data-add="female-body" role="menuitem">

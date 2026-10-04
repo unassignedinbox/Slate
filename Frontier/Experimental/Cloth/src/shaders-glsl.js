@@ -1,6 +1,6 @@
 /**
  * WebGL2 GLSL 300 es Shaders for the Cloth & Human Avatar Fallback Engine
- * Matches the WGSL physically-based anisotropic silk/satin/velvet shading and debug channels.
+ * Matches the WGSL textile-specific silk/cotton/denim/wool/leather shading and debug channels.
  */
 
 export const GLSL_FLOOR_VS = `#version 300 es
@@ -150,6 +150,7 @@ uniform vec4 uSheenCol;
 uniform vec4 uTrimCol;
 uniform vec4 uWeaveParams;
 uniform vec4 uExtraParams;
+uniform vec4 uStyleInfo; // x: dressStyle, y: arealDensity_gsm, z: windResponse, w: reserved
 
 out vec4 fragColor;
 
@@ -174,11 +175,26 @@ vec3 evalWeavePattern(vec2 uv, int weaveType, float scale) {
   } else if (weaveType == 4) {
     float grid = max(abs(wx), abs(wy));
     return vec3(wx * 0.4, wy * 0.4, grid);
-  } else {
+  } else if (weaveType == 5) {
     vec2 cell = fract(p * 0.85) - vec2(0.5);
     float d = length(cell);
     float seq = smoothstep(0.45, 0.22, d);
     return vec3(cell.x * seq * 1.4, cell.y * seq * 1.4, seq);
+  } else if (weaveType == 6) {
+    float interlace = wx * wy;
+    return vec3(cos(p.x * 6.28318) * 0.20, cos(p.y * 6.28318) * 0.20, interlace * 0.55);
+  } else if (weaveType == 7) {
+    float basket = sin(p.x * 3.14159) * sin(p.y * 3.14159);
+    return vec3(cos(p.x * 3.14159) * 0.28, cos(p.y * 3.14159) * 0.28, basket * 0.75);
+  } else if (weaveType == 8) {
+    float twill = sin((p.x * 0.72 + p.y * 1.8) * 6.2831853);
+    return vec3(twill * 0.38, -twill * 0.26, twill * 0.72);
+  } else if (weaveType == 9) {
+    float nap = sin(p.x * 2.1 + sin(p.y * 5.7) * 0.8) * cos(p.y * 1.7);
+    return vec3(nap * 0.20, cos(p.y * 5.7) * 0.25, nap * 0.48);
+  } else {
+    float grain = sin(p.x * 8.5 + sin(p.y * 6.2) * 1.3) * cos(p.y * 9.0 - p.x * 2.4);
+    return vec3(grain * 0.20, -grain * 0.16, grain * 0.52);
   }
 }
 
@@ -223,6 +239,7 @@ void main() {
   float weaveBump = uWeaveParams.z;
   float roughness = uWeaveParams.w;
   int channel = int(uExtraParams.x + 0.5);
+  int dressStyle = int(uStyleInfo.x + 0.5);
 
   vec3 weave = evalWeavePattern(uv, weaveType, weaveScale);
   vec3 up = vec3(0.0, 1.0, 0.0);
@@ -241,6 +258,9 @@ void main() {
     if (panelId == 1) pCol = vec3(0.32, 0.72, 0.58);
     if (panelId == 2) pCol = vec3(0.88, 0.58, 0.30);
     if (panelId == 3) pCol = vec3(0.76, 0.42, 0.72);
+    if (panelId == 4) pCol = vec3(0.92, 0.90, 0.84);
+    if (panelId == 5) pCol = vec3(0.82, 0.82, 0.79);
+    if (panelId == 6) pCol = vec3(0.62, 0.48, 0.36);
     vec2 uvScaled = uv * 24.0;
     vec2 duv = max(fwidth(uvScaled), vec2(1e-4));
     vec2 gridDist = abs(fract(uvScaled - 0.5) - 0.5) / duv;
@@ -277,6 +297,33 @@ void main() {
   float pleatAO = 0.86 + 0.14 * pleatPhase;
   albedo *= pleatAO;
   if (!gl_FrontFacing) albedo *= 0.72;
+  if (dressStyle == 8 && (panelId == 4 || panelId == 5)) {
+    albedo = mix(albedo, uTrimCol.rgb, 0.96);
+  }
+  if (dressStyle == 9 && panelId == 5) {
+    albedo = uPrimaryCol.rgb * 1.035;
+    float vine = abs(sin(uv.x * 230.0 + sin(uv.y * 62.0) * 2.5));
+    float sprig = abs(sin(uv.x * 490.0 + sin(uv.y * 136.0) * 1.4));
+    float embroidery = max(1.0 - smoothstep(0.035, 0.19, vine),
+      0.62 * (1.0 - smoothstep(0.025, 0.15, sprig)));
+    albedo = mix(albedo, uTrimCol.rgb, embroidery * 0.72);
+  }
+  if (dressStyle == 9 && (panelId == 0 || panelId == 2) && sin(uv.x * 6.2831853) > 0.0) {
+    float frontX = cos(uv.x * 6.2831853);
+    float wrapAxis = 0.72 - 1.70 * uv.y;
+    float wrapEdge = 1.0 - smoothstep(0.006, 0.022, abs(frontX - wrapAxis));
+    albedo = mix(albedo, uTrimCol.rgb * 0.82, wrapEdge * 0.28);
+    float fastenerX = 1.0 - smoothstep(0.035, 0.060, abs(frontX - 0.22));
+    float claspA = 1.0 - smoothstep(0.002, 0.005, abs(uv.y - 0.255));
+    float claspB = 1.0 - smoothstep(0.002, 0.005, abs(uv.y - 0.282));
+    float frogClasp = fastenerX * max(claspA, claspB);
+    albedo = mix(albedo, uTrimCol.rgb, frogClasp * 0.92);
+  }
+  if (dressStyle == 9 && panelId == 6) {
+    float cuff = 1.0 - smoothstep(0.006, 0.018, abs(uv.y - 0.94));
+    float cuffEdge = 1.0 - smoothstep(0.006, 0.018, abs(uv.y - 0.90));
+    albedo = mix(albedo, uTrimCol.rgb, max(cuff, cuffEdge) * 0.45);
+  }
 
   float hemBand = smoothstep(0.952, 0.968, uv.y) + smoothstep(0.032, 0.015, uv.y);
   float lacePattern = 0.5 + 0.5 * sin(uv.x * 120.0);

@@ -653,6 +653,8 @@ export class HumanAvatar {
     this.motionState.hipSwingX = hipSwingX;
     this.motionState.offsetY = hipBobY;
     this.motionState.shoulderTilt = torsoSwayX;
+    this.motionState.armSwing = armSwing;
+    this.motionState.torsoSwayX = torsoSwayX;
 
     const cosY = Math.cos(yaw);
     const sinY = Math.sin(yaw);
@@ -704,6 +706,20 @@ export class HumanAvatar {
       const wx = lx * cosY + lz * sinY;
       const wz = -lx * sinY + lz * cosY;
       return [wx, ly, wz];
+    };
+    this.transformPoint = transformPoint;
+    this.transformNormal = (nx, ny, nz, boneId, w = 0) => {
+      let ly = ny;
+      let lz = nz;
+      if (boneId === 3 || boneId === 4) {
+        const sign = boneId === 3 ? 1 : -1;
+        const aAngle = sign * armSwing * w;
+        const c = Math.cos(aAngle);
+        const s = Math.sin(aAngle);
+        ly = ny * c - nz * s;
+        lz = ny * s + nz * c;
+      }
+      return [nx * cosY + lz * sinY, ly, -nx * sinY + lz * cosY];
     };
 
     // Update all mesh vertices and normals

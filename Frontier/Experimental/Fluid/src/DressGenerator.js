@@ -18,6 +18,8 @@ export const DRESS_STYLES = [
   { id: 5, label: "Grecian chiffon column" },
   { id: 6, label: "Asymmetric wrap dress" },
   { id: 7, label: "Velvet opera gown" },
+  { id: 8, label: "Noir tuxedo pleated coat gown" },
+  { id: 9, label: "Embroidered ivory wrap coat gown" },
 ];
 
 export const WEAVE_TYPES = [
@@ -27,7 +29,117 @@ export const WEAVE_TYPES = [
   { id: 3, label: "Velvet pile" },
   { id: 4, label: "Sheer organza" },
   { id: 5, label: "Sequined brocade" },
+  { id: 6, label: "Cotton plain weave" },
+  { id: 7, label: "Heavy canvas basket weave" },
+  { id: 8, label: "Denim diagonal twill" },
+  { id: 9, label: "Wool suiting nap" },
+  { id: 10, label: "Leather grain" },
 ];
+
+function evalSleeveProfile(t, knots) {
+  if (t <= knots[0][0]) return knots[0][1];
+  const last = knots.length - 1;
+  if (t >= knots[last][0]) return knots[last][1];
+  let k = 0;
+  while (k < last - 1 && t > knots[k + 1][0]) k++;
+  const [t0, v0] = knots[k];
+  const [t1, v1] = knots[k + 1];
+  const h = Math.max(1e-6, t1 - t0);
+  const u = (t - t0) / h;
+  const m0 = k > 0
+    ? 0.5 * ((v1 - v0) / h + (v0 - knots[k - 1][1]) / Math.max(1e-6, t0 - knots[k - 1][0]))
+    : (v1 - v0) / h;
+  const m1 = k + 2 <= last
+    ? 0.5 * ((knots[k + 2][1] - v1) / Math.max(1e-6, knots[k + 2][0] - t1) + (v1 - v0) / h)
+    : (v1 - v0) / h;
+  const u2 = u * u, u3 = u2 * u;
+  return (2 * u3 - 3 * u2 + 1) * v0 + (u3 - 2 * u2 + u) * h * m0
+    + (-2 * u3 + 3 * u2) * v1 + (u3 - u2) * h * m1;
+}
+
+function buildLongSleeves(isMale) {
+  const positions = [], normals = [], uvPanel = [], weights = [], boneIds = [], indices = [];
+  const shX = isMale ? 0.184 : 0.160;
+  const elX = isMale ? 0.258 : 0.236;
+  const wrX = isMale ? 0.308 : 0.288;
+  const steps = 30, segments = 24;
+
+  for (const side of [-1, 1]) {
+    const knots = [
+      [0.00, side * (shX - 0.035), 1.378, -0.006, 0.008, 0.008],
+      [0.06, side * shX, 1.372, -0.008, isMale ? 0.063 : 0.054, isMale ? 0.060 : 0.052],
+      [0.24, side * (shX + (elX - shX) * 0.48), 1.245, -0.016, isMale ? 0.054 : 0.045, isMale ? 0.055 : 0.046],
+      [0.44, side * elX, 1.120, -0.022, isMale ? 0.047 : 0.040, isMale ? 0.045 : 0.039],
+      [0.56, side * (elX + (wrX - elX) * 0.32), 1.045, -0.010, isMale ? 0.049 : 0.041, isMale ? 0.046 : 0.040],
+      [0.80, side * wrX, 0.885, 0.016, isMale ? 0.037 : 0.032, isMale ? 0.029 : 0.025],
+      [0.88, side * (wrX + 0.010), 0.838, 0.024, 0.030, 0.024],
+    ];
+    const profiles = Array.from({ length: 5 }, (_, p) => knots.map((k) => [k[0], k[p + 1]]));
+    const baseVertex = positions.length / 3;
+    const firstT = 0.025, lastT = 0.86;
+
+    for (let r = 0; r <= steps; r++) {
+      const t = firstT + (lastT - firstT) * r / steps;
+      const cx = evalSleeveProfile(t, profiles[0]);
+      const cy = evalSleeveProfile(t, profiles[1]);
+      const cz = evalSleeveProfile(t, profiles[2]);
+      const rMajor = evalSleeveProfile(t, profiles[3]) + 0.005;
+      const rMinor = evalSleeveProfile(t, profiles[4]) + 0.005;
+      const dt = 0.003;
+      let tx = evalSleeveProfile(Math.min(lastT, t + dt), profiles[0]) - evalSleeveProfile(Math.max(firstT, t - dt), profiles[0]);
+      let ty = evalSleeveProfile(Math.min(lastT, t + dt), profiles[1]) - evalSleeveProfile(Math.max(firstT, t - dt), profiles[1]);
+      let tz = evalSleeveProfile(Math.min(lastT, t + dt), profiles[2]) - evalSleeveProfile(Math.max(firstT, t - dt), profiles[2]);
+      const tl = Math.hypot(tx, ty, tz) || 1;
+      tx /= tl; ty /= tl; tz /= tl;
+      let bx = ty, by = -tx, bz = 0;
+      let bl = Math.hypot(bx, by, bz);
+      if (bl < 1e-5) { bx = 0; by = 1; bz = 0; bl = 1; }
+      bx /= bl; by /= bl; bz /= bl;
+      let nx = by * tz - bz * ty;
+      let ny = bz * tx - bx * tz;
+      let nz = bx * ty - by * tx;
+      const nl = Math.hypot(nx, ny, nz) || 1;
+      nx /= nl; ny /= nl; nz /= nl;
+
+      for (let s = 0; s < segments; s++) {
+        const angle = (s / segments) * Math.PI * 2;
+        const ca = Math.cos(angle), sa = Math.sin(angle);
+        positions.push(cx + bx * ca * rMajor + nx * sa * rMinor,
+          cy + by * ca * rMajor + ny * sa * rMinor,
+          cz + bz * ca * rMajor + nz * sa * rMinor);
+        const nnx = bx * ca / rMajor + nx * sa / rMinor;
+        const nny = by * ca / rMajor + ny * sa / rMinor;
+        const nnz = bz * ca / rMajor + nz * sa / rMinor;
+        const nLen = Math.hypot(nnx, nny, nnz) || 1;
+        normals.push(nnx / nLen, nny / nLen, nnz / nLen);
+        uvPanel.push(s / segments, r / steps, 6.50, 0);
+        weights.push(t);
+        boneIds.push(side < 0 ? 3 : 4);
+      }
+    }
+
+    for (let r = 0; r < steps; r++) {
+      for (let s = 0; s < segments; s++) {
+        const next = (s + 1) % segments;
+        const a = baseVertex + r * segments + s;
+        const b = baseVertex + r * segments + next;
+        const c = baseVertex + (r + 1) * segments + s;
+        const d = baseVertex + (r + 1) * segments + next;
+        indices.push(a, c, d, a, d, b);
+      }
+    }
+  }
+
+  return {
+    positions: new Float32Array(positions),
+    normals: new Float32Array(normals),
+    uvPanel: new Float32Array(uvPanel),
+    weights: new Float32Array(weights),
+    boneIds: new Uint8Array(boneIds),
+    indices: new Uint32Array(indices),
+    vertexCount: weights.length,
+  };
+}
 
 export class DressGenerator {
   static buildDress(params = {}) {
@@ -77,7 +189,8 @@ export class DressGenerator {
     const sizingMapMm = new Float32Array(vertexCount);
 
     const waistRowFrac = 0.28; // Row fraction where bodice meets skirt at natural waist (y ~ 1.04m)
-    const hemBaseY = Math.max(0.05, 1.04 - skirtLength);
+    const hemFloorGap = dressStyle >= 8 ? 0.014 : 0.035;
+    const hemBaseY = Math.max(hemFloorGap, 1.04 - skirtLength);
 
     // §4.3 Smooth Non-Uniform Warp Sizing Grading (vMapped):
     // Gently concentrates vertical rows near the shirred waistband (v = 0.28) and hip contour
@@ -132,6 +245,9 @@ export class DressGenerator {
         } else if (dressStyle === 6) {
           // Asymmetric wrap neckline
           neckDrop = necklineDepth * (0.65 + 0.35 * Math.sin(angle + 0.6));
+        } else if (dressStyle === 8 || dressStyle === 9) {
+          // Tailored coat gowns have a deep, clean front V rather than a strap/scoop edge.
+          neckDrop = (dressStyle === 8 ? 0.225 : 0.235) * Math.pow(Math.max(0, sinA), 1.25);
         }
 
         const topY = 1.385 - neckDrop + 0.012 * shoulderProximity;
@@ -139,7 +255,7 @@ export class DressGenerator {
 
         // Asymmetric hemline modulation
         const asymOffset = asymmetry * 0.22 * Math.sin(angle + 0.35);
-        const effHemY = Math.max(0.035, hemBaseY + asymOffset);
+        const effHemY = Math.max(hemFloorGap, hemBaseY + asymOffset);
 
         let y;
         if (v <= waistRowFrac) {
@@ -209,12 +325,23 @@ export class DressGenerator {
           ? (v - waistRowFrac) / (1 - waistRowFrac)
           : 0.0;
         const pleatEnv = pleatRaw * pleatRaw * (3 - 2 * pleatRaw);
-        const pleatWave = pleatCount > 0
-          ? Math.sin(angle * pleatCount) * pleatDepth * pleatEnv
-          : 0.0;
+        const sideInsetStart = 0.74;
+        const sideInsetSpan = 0.68;
+        const sideInsetT = Math.max(0, Math.min(1, (angle - sideInsetStart) / sideInsetSpan));
+        const inSideInset = dressStyle === 8 && sinA > 0 && v >= waistRowFrac
+          && angle >= sideInsetStart && angle <= sideInsetStart + sideInsetSpan;
+        let pleatWave = 0.0;
+        if (dressStyle === 8) {
+          // Confine knife-pleat relief to the narrow ivory side insert, leaving the noir skirt clean.
+          if (inSideInset) pleatWave = Math.sin(sideInsetT * Math.PI * 2 * 6) * pleatDepth * pleatEnv;
+        } else if (dressStyle < 8 && pleatCount > 0) {
+          pleatWave = Math.sin(angle * pleatCount) * pleatDepth * pleatEnv;
+        }
 
         // Smooth organic couture drape fold harmonic (well below Nyquist limit)
-        const drapeHarmonic = Math.cos(angle * 6 + 0.4) * 0.004 * Math.pow(pleatRaw, 1.3);
+        const drapeHarmonic = dressStyle < 8
+          ? Math.cos(angle * 6 + 0.4) * 0.004 * Math.pow(pleatRaw, 1.3)
+          : 0.0;
 
         const effRx = rx + pleatWave + drapeHarmonic;
         const effRz = rz + pleatWave + drapeHarmonic;
@@ -257,13 +384,23 @@ export class DressGenerator {
         const localSizingMm = pieReport.sampleSizingMeters(u, v) * 1000.0;
         sizingMapMm[idx] = localSizingMm;
 
-        // Panel ID: 0 = Front Bodice, 1 = Back Bodice, 2 = Front Skirt, 3 = Back Skirt
-        // Fractional part of uvsAndPanel.z encodes normalized PIE sizing (localSizingMm / 20.0) in (0.01..0.98)
+        // Panel IDs: 0..3 base bodice/skirt panels, 4 contrast side inset, 5 tailored lapels.
+        // The fractional part still encodes the PIE sizing value for the render diagnostic.
         const isFront = sinA >= 0;
         const isBodice = v <= waistRowFrac;
-        const panelId = isBodice ? (isFront ? 0 : 1) : (isFront ? 2 : 3);
+        let panelId = isBodice ? (isFront ? 0 : 1) : (isFront ? 2 : 3);
+        const bodiceT = Math.max(0, Math.min(1, v / waistRowFrac));
+        const lapelAxis = 0.78 - 0.68 * bodiceT;
+        const lapelWidth = 0.12 + 0.025 * bodiceT;
+        const isLapel = (dressStyle === 8 || dressStyle === 9) && isFront
+          && sinA > 0.18 && v < waistRowFrac * 0.78
+          && Math.abs(Math.abs(cosA) - lapelAxis) < lapelWidth;
+        if (isLapel) panelId = 5;
+        else if (inSideInset) panelId = 4;
         const encodedSizingFrac = Math.max(0.01, Math.min(0.98, localSizingMm / 20.0));
-        const pleatPhase = pleatCount > 0 ? Math.sin(angle * pleatCount) : 0;
+        let pleatPhase = pleatCount > 0 ? Math.sin(angle * pleatCount) : 0;
+        if (dressStyle === 8) pleatPhase = inSideInset ? Math.sin(sideInsetT * Math.PI * 2 * 6) : 0;
+        if (dressStyle === 9) pleatPhase = 0;
 
         uvsAndPanel[idx4 + 0] = u;
         uvsAndPanel[idx4 + 1] = v;
@@ -317,7 +454,7 @@ export class DressGenerator {
     }
 
     // Triangle index buffer (periodic cylinder topology)
-    const indices = new Uint32Array(numCols * (numRows - 1) * 6);
+    let indices = new Uint32Array(numCols * (numRows - 1) * 6);
     let ptr = 0;
     for (let r = 0; r < numRows - 1; r++) {
       for (let c = 0; c < numCols; c++) {
@@ -336,6 +473,42 @@ export class DressGenerator {
       }
     }
 
+    // Tailored coat-gowns receive articulated, low-poly sleeve shells. They are skinned to
+    // the mannequin arm bones and drawn with the cloth shader; the torso/skirt remain XPBD.
+    const attachments = dressStyle >= 8 ? buildLongSleeves(isMale) : {
+      positions: new Float32Array(0), normals: new Float32Array(0), uvPanel: new Float32Array(0),
+      weights: new Float32Array(0), boneIds: new Uint8Array(0), indices: new Uint32Array(0), vertexCount: 0,
+    };
+    const attachmentOffset = vertexCount;
+    const renderVertexCount = vertexCount + attachments.vertexCount;
+    const renderInitialPositions = new Float32Array(renderVertexCount * 4);
+    const renderNormals = new Float32Array(renderVertexCount * 4);
+    const renderUvsAndPanel = new Float32Array(renderVertexCount * 4);
+    const renderVelocities = new Float32Array(renderVertexCount * 4);
+    renderInitialPositions.set(initialPositions);
+    renderUvsAndPanel.set(uvsAndPanel);
+    for (let i = 0; i < vertexCount; i++) renderNormals[i * 4 + 2] = 1;
+    for (let i = 0; i < attachments.vertexCount; i++) {
+      const dst4 = (attachmentOffset + i) * 4;
+      const src3 = i * 3;
+      renderInitialPositions[dst4] = attachments.positions[src3];
+      renderInitialPositions[dst4 + 1] = attachments.positions[src3 + 1];
+      renderInitialPositions[dst4 + 2] = attachments.positions[src3 + 2];
+      renderNormals[dst4] = attachments.normals[src3];
+      renderNormals[dst4 + 1] = attachments.normals[src3 + 1];
+      renderNormals[dst4 + 2] = attachments.normals[src3 + 2];
+      renderUvsAndPanel.set(attachments.uvPanel.subarray(i * 4, i * 4 + 4), dst4);
+      renderVelocities[dst4 + 3] = 1;
+    }
+    if (attachments.vertexCount) {
+      const combined = new Uint32Array(indices.length + attachments.indices.length);
+      combined.set(indices);
+      for (let i = 0; i < attachments.indices.length; i++) {
+        combined[indices.length + i] = attachmentOffset + attachments.indices[i];
+      }
+      indices = combined;
+    }
+
     // Total active spring constraints in the solver (weft + warp + 2*shear + 2*bending)
     const constraintCount =
       numCols * numRows +               // Weft structural
@@ -351,17 +524,54 @@ export class DressGenerator {
       numCols,
       numRows,
       vertexCount,
+      renderVertexCount,
       constraintCount,
       indexCount: indices.length,
       initialPositions,
       anchorTargets,
       uvsAndPanel,
       restLengths,
+      renderInitialPositions,
+      renderNormals,
+      renderUvsAndPanel,
+      renderVelocities,
+      attachmentOffset,
+      attachmentPositions: attachments.positions,
+      attachmentNormals: attachments.normals,
+      attachmentBoneIds: attachments.boneIds,
+      attachmentWeights: attachments.weights,
       sizingMapMm,
       pieReport,
       indices,
       pattern2D,
     };
+  }
+
+  /** Kinematically skins tailored sleeve shells to the current animated arm pose. */
+  static updateAttachments(dress, avatar) {
+    if (!dress?.attachmentWeights?.length) return;
+    const pointTransform = avatar?.transformPoint;
+    const normalTransform = avatar?.transformNormal;
+    const offset = dress.attachmentOffset;
+    for (let i = 0; i < dress.attachmentWeights.length; i++) {
+      const i3 = i * 3;
+      const i4 = (offset + i) * 4;
+      const boneId = dress.attachmentBoneIds[i];
+      const weight = dress.attachmentWeights[i];
+      const x = dress.attachmentPositions[i3];
+      const y = dress.attachmentPositions[i3 + 1];
+      const z = dress.attachmentPositions[i3 + 2];
+      const p = pointTransform ? pointTransform(x, y, z, boneId, weight) : [x, y, z];
+      const n = normalTransform
+        ? normalTransform(dress.attachmentNormals[i3], dress.attachmentNormals[i3 + 1], dress.attachmentNormals[i3 + 2], boneId, weight)
+        : [dress.attachmentNormals[i3], dress.attachmentNormals[i3 + 1], dress.attachmentNormals[i3 + 2]];
+      dress.renderInitialPositions[i4] = p[0];
+      dress.renderInitialPositions[i4 + 1] = p[1];
+      dress.renderInitialPositions[i4 + 2] = p[2];
+      dress.renderNormals[i4] = n[0];
+      dress.renderNormals[i4 + 1] = n[1];
+      dress.renderNormals[i4 + 2] = n[2];
+    }
   }
 
   /**
