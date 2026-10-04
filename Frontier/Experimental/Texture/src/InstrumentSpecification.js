@@ -572,8 +572,10 @@ export const VisibleControls = (Instrument, Settings) =>
 //--------------------------------------------------------------------------------------------------------------------------
 // The library. One family per rail row, one tile per type, and every type carries its own settings and swatches.
 //--------------------------------------------------------------------------------------------------------------------------
+// 📝 Even a black marker's nib is drawn a shade up from the card it sits on. A true #15161a nib on a #1c1c1c tile is
+//    technically right and visually absent, and a tile nobody can read is not a choice anybody can make.
 const Ink = {
-    Dark: ["#15161a", "#2b2d33", "#4a4e57"],
+    Dark: ["#3a3d45", "#595e68", "#23252b"],
     Warm: ["#c0303a", "#e0a13a", "#8d1e26"],
 };
 

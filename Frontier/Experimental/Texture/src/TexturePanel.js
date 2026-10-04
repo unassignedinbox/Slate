@@ -3381,7 +3381,10 @@ class TexturePanel
         });
         Select("#brush-colour").value = ToHex(this.BrushColour);
         Select("#brush-swatch").style.setProperty("--swatch", ToHex(this.BrushColour));
-        Select("#brush-hud").textContent = `BRUSH ${(Brush.Radius * 100).toFixed(1)} cm`;
+        // The HUD names the instrument in hand rather than the word "brush", because once an instrument has been chosen
+        // that is the thing the next stroke will be.
+        Select("#brush-hud").textContent =
+            `${(this.Instrument?.Label || "Brush").toUpperCase()} ${(Brush.Radius * 100).toFixed(1)} cm`;
         this.SyncPodSummary();
         this.RenderSwatchRail();
     }
