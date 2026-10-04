@@ -170,14 +170,6 @@ a {
   align-items: center;
   margin-left: auto;
 }
-.gas-tag {
-  color: #a5a5a5;
-  font-size: 11px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.gas-tag i,
 .live-pill i,
 .status-ready i {
   background: var(--green);
@@ -195,14 +187,6 @@ a {
   background: #333333;
   padding: 8px 12px;
   white-space: nowrap;
-}
-.export-button {
-  font-size: 11px;
-  padding: 7px 10px;
-}
-.export-button svg {
-  width: 14px;
-  height: 14px;
 }
 .icon-button {
   width: 28px;
@@ -244,10 +228,6 @@ a {
   field-sizing: content;
   max-width: 240px;
 }
-.document-extension {
-  color: #6f6f6f;
-  font-size: 11px;
-}
 .dirty-indicator {
   width: 5px;
   height: 5px;
@@ -256,13 +236,6 @@ a {
 }
 .dirty-indicator.clean {
   visibility: hidden;
-}
-.document-note {
-  margin-left: 17px;
-  padding-left: 17px;
-  border-left: 1px solid #3c3c3c;
-  color: #7a7a7a;
-  font-size: 10px;
 }
 .document-bar .text-button {
   margin-left: auto;
@@ -1247,8 +1220,6 @@ dialog a {
   .workspace {
     grid-template-columns: 175px minmax(260px, 1fr) 245px;
   }
-  .document-note,
-  .gas-tag,
   .top-nav {
     display: none;
   }
@@ -1360,9 +1331,6 @@ dialog a {
   .inspector-panel {
     display: none;
   }
-  .document-note {
-    display: none;
-  }
   .viewport-help {
     font-size: 9px;
   }
@@ -1377,8 +1345,5 @@ dialog a {
   }
   .shortcut-list {
     grid-template-columns: 1fr;
-  }
-  .header-end .export-button {
-    font-size: 10px;
   }
 }

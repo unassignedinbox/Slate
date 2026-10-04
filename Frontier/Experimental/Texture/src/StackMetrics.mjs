@@ -20,7 +20,15 @@ import {
     SanitisePreview,
     PreviewLimit,
 } from "./TimelineSequence.js";
-import { ComposeDocument, ReadDocument, DocumentFormat, DocumentExtension } from "./ExportSequence.js";
+import { ComposeDocument, ReadDocument, DocumentFormat, DocumentExtension, FlipGreen, ExportSizes } from "./ExportSequence.js";
+import {
+    InstrumentFamilies,
+    InstrumentByKey,
+    InstrumentArtwork,
+    InstrumentRecord,
+    BrushFromInstrument,
+    VisibleControls,
+} from "./InstrumentSpecification.js";
 
 import {
     TileNumber,
@@ -959,4 +967,83 @@ test("a layer can keep a sheet size of its own", () =>
     assert.equal(SanitiseLayer({ Kind: "stroke", Resolution: "big" }).Resolution, 0);
     const Copy = CloneLayer(CreateLayer("stroke", { Resolution: 512 }));
     assert.equal(Copy.Resolution, 512, "a duplicate paints at the same size");
+});
+
+test("an instrument folds down onto the brush without inventing settings", () =>
+{
+    const Brush = InstrumentByKey["brush-round"];
+    const Pushed = BrushFromInstrument(Brush, Brush.Settings);
+    assert.equal(Pushed.Radius, 0.09, "size is authored in centimetres and the brush works in metres");
+    assert.equal(Pushed.Hardness, 0.4);
+    // Opacity and flow fold into one deposit strength, because the stamping pass has only the one.
+    assert.ok(Math.abs(Pushed.Flow - 0.92 * 0.8) < 1e-9);
+    assert.equal(Pushed.Spacing, 0.1);
+    assert.equal(Pushed.Jitter, 0, "a brush has no grain control, so it inherits no jitter");
+
+    const Chalk = InstrumentByKey["dry-chalk"];
+    assert.equal(BrushFromInstrument(Chalk, Chalk.Settings).Jitter, 0.78, "a dry stick's tooth does reach the jitter");
+
+    const Pen = InstrumentByKey["pen-fineliner"];
+    assert.equal(BrushFromInstrument(Pen, { ...Pen.Settings, Grain: 90 }).Jitter, 0, "a grain value on a pen is ignored");
+
+    const Huge = BrushFromInstrument(Brush, { ...Brush.Settings, Size: 900, Opacity: 0, Flow: 0, Spacing: 0 });
+    assert.equal(Huge.Radius, 0.6, "radius is clamped to what the brush accepts");
+    assert.equal(Huge.Flow, 0.02, "and so is a flow of nothing");
+    assert.equal(Huge.Spacing, 0.05);
+});
+
+test("a dependent control is hidden rather than ground out", () =>
+{
+    const Brush = InstrumentByKey["brush-round"];
+    const Keys = (Settings) => VisibleControls(Brush, Settings).map((Control) => Control.Key);
+    assert.ok(Keys({ ...Brush.Settings, Pressure: true }).includes("Taper"));
+    assert.ok(!Keys({ ...Brush.Settings, Pressure: false }).includes("Taper"), "taper belongs to pressure");
+
+    const Record = InstrumentRecord(Brush, { ...Brush.Settings, Pressure: false });
+    assert.equal(Record.Key, "brush-round");
+    assert.equal(Record.Settings.Head, "Round", "the record keeps what the brush cannot carry");
+    assert.ok(Record.Wired.includes("Size") && Record.Wired.includes("Flow"));
+    assert.ok(!Record.Wired.includes("Smoothing"), "a preview-only control is not claimed as wired");
+    Record.Settings.Size = 99;
+    assert.notEqual(Brush.Settings.Size, 99, "the record holds a copy, so a later edit cannot rewrite its past");
+});
+
+test("every instrument draws at both scales", () =>
+{
+    assert.equal(InstrumentFamilies.length, 6);
+    for (const Family of InstrumentFamilies)
+    {
+        for (const Type of Family.Types)
+        {
+            const Full = InstrumentArtwork(Type);
+            const Nib = InstrumentArtwork(Type, Family.Crop);
+            for (const Drawing of [Full, Nib])
+            {
+                assert.ok(Drawing.startsWith("<svg"), `${Type.Key} draws`);
+                assert.ok(!/undefined|NaN/.test(Drawing), `${Type.Key} has no holes in its geometry`);
+                // 🔴 Gradient identifiers must be namespaced per instrument, or tiles borrow each other's colours.
+                for (const Match of Drawing.matchAll(/<linearGradient id="([^"]+)"/g))
+                    assert.ok(Match[1].startsWith(Type.Key.replace(/[^a-z0-9]/gi, "")), `${Match[1]} is namespaced`);
+            }
+            assert.equal(Nib.match(/viewBox="([^"]+)"/)[1], Family.Crop, "the tile is the same drawing, cropped");
+        }
+    }
+});
+
+test("an export preset says which way its normals point", () =>
+{
+    for (const Preset of ExportOrdering) assert.ok(["opengl", "directx"].includes(Preset.Handedness), Preset.Identifier);
+    const Unreal = ExportOrdering.find((Preset) => Preset.Identifier === "unreal");
+    assert.equal(Unreal.Handedness, "directx", "Unreal reads green-down normals");
+    assert.ok(Unreal.Channels.includes("metallic_roughness"), "and wants the packed ORM");
+    const Blender = ExportOrdering.find((Preset) => Preset.Identifier === "blender");
+    assert.equal(Blender.Handedness, "opengl");
+    assert.ok(Blender.Channels.includes("specular_roughness") && Blender.Channels.includes("base_metalness"));
+
+    const Pixels = new Uint8ClampedArray([10, 20, 30, 40, 200, 100, 50, 255]);
+    const Flipped = FlipGreen(Pixels);
+    assert.deepEqual([...Flipped], [10, 235, 30, 40, 200, 155, 50, 255], "only the green byte moves");
+    assert.equal(Pixels[1], 20, "and the original is left alone");
+
+    assert.deepEqual(ExportSizes.map((Entry) => Entry.Size), [0, 512, 1024, 2048, 4096]);
 });

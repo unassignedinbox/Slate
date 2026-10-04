@@ -17,11 +17,14 @@ import {
     CoordinateTile,
     TileNumber,
     TilePlacement,
+    TileLabel,
+    TileColumns,
     FirstTile,
 } from "./SceneStructure.js";
+import { InstrumentPanel } from "./InstrumentPanel.js";
 import { RevisionQueue } from "./RevisionQueue.js";
 import { DocumentSequence } from "./DocumentSequence.js";
-import { EmitTextureSet, EmitProject, ReadDocument, DocumentExtension } from "./ExportSequence.js";
+import { EmitTextureSet, EmitProject, ReadDocument, DocumentExtension, ExportSizes } from "./ExportSequence.js";
 import { TimelineSequence, EventByKind, EventClock, PreviewLimit } from "./TimelineSequence.js";
 import {
     ChannelSpecification,
@@ -388,6 +391,7 @@ class TexturePanel
         this.SyncedLayer = "";
         this.RecentColours = ["#db5233", "#2f3338", "#c9ab6a", "#4a7bd0", "#e8e2d6"];
         this.PlaneWire = true;          // the unwrapped triangles drawn over the sheet in the plane view
+        this.PlaneTiles = true;         // the numbered UDIM squares over the same sheet
         this.WireSignature = "";
         this.ChannelShelf = false;
         this.ChannelFocus = "";
@@ -433,6 +437,7 @@ class TexturePanel
         this.BindTransport();
         this.BindInspector();
         this.BindDialogs();
+        this.BindInstruments();
         this.BindKeyboard();
         this.Integrator.Configure(this.Project.Resolution);
         this.RebuildSurface(true);
@@ -560,6 +565,7 @@ class TexturePanel
             this.MarkDirty();
         });
         Select("#export-button").addEventListener("click", () => this.OpenExport());
+        Select("#flatten-button").addEventListener("click", () => this.FlattenStack());
         Select("#import-button").addEventListener("click", () => Select("#import-file").click());
         Select("#import-file").addEventListener("change", (Event) => this.ImportProject(Event.target.files?.[0]));
         Select("#help-button").addEventListener("click", () => Select("#help-dialog").showModal());
@@ -643,6 +649,60 @@ class TexturePanel
         this.RebuildSurface();
         this.Chronicle("surface", `Removed ${Gone.Name}`, `${this.Project.Objects.length} objects left`);
         this.Notify(`${Gone.Name} removed.`);
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // UDIM tiles.
+    //
+    // 📝 A tile is where an object's unwrap lives on the sheet, so moving one is a scene edit and not a view setting:
+    //    the surface is reassembled, every layer scoped to that object follows it, and the move is undoable.
+    // 🔴 Two objects on one tile is allowed and sometimes wanted (a body and its trim sharing a texture), so the move
+    //    does not swap occupants. It says what happened instead and lets the stack decide.
+    //----------------------------------------------------------------------------------------------------------------------
+    MoveObjectToTile(Tile, Identifier = this.Project.Object)
+    {
+        const Object_ = this.Project.Objects.find((Entry) => Entry.Identifier === Identifier);
+        if (!Object_) return;
+        const Wanted = Clamp(Math.round(Tile), FirstTile, FirstTile + 99);
+        if (Object_.Tile === Wanted) return;
+        const Sharing = this.Project.Objects.filter((Entry) => Entry !== Object_ && Entry.Tile === Wanted);
+        this.CaptureStack(() => (Object_.Tile = Wanted));
+        this.RebuildSurface();
+        this.Chronicle("surface", `${Object_.Name} → ${Wanted}`, TileLabel(Wanted));
+        this.Notify(
+            Sharing.length
+                ? `${Object_.Name} moved to ${Wanted}, shared with ${Sharing.map((Entry) => Entry.Name).join(", ")}.`
+                : `${Object_.Name} moved to ${Wanted}.`,
+        );
+    }
+
+    // Lay every object out across the sheet in stack order, one per tile, filling rows of ten the way UDIM numbers run.
+    SpreadTiles()
+    {
+        const Objects = this.Project.Objects || [];
+        if (!Objects.length) return;
+        this.CaptureStack(() =>
+        {
+            Objects.forEach((Entry, Index) => (Entry.Tile = TileNumber(Index % TileColumns, Math.floor(Index / TileColumns))));
+        });
+        this.RebuildSurface();
+        this.Chronicle("surface", "Spread across tiles", `${Objects.length} objects · ${FirstTile}–${Objects[Objects.length - 1].Tile}`);
+        this.Notify(`${Objects.length} objects laid out from ${FirstTile}.`);
+    }
+
+    // The opposite: everything shares 1001, which is what a single-texture asset wants and what most engines import
+    // without a UDIM-aware material.
+    CollapseTiles()
+    {
+        const Objects = this.Project.Objects || [];
+        if (!Objects.length) return;
+        this.CaptureStack(() =>
+        {
+            for (const Entry of Objects) Entry.Tile = FirstTile;
+        });
+        this.RebuildSurface();
+        this.Chronicle("surface", "Collapsed to one tile", `${Objects.length} objects on ${FirstTile}`);
+        this.Notify(`Every object now shares ${FirstTile}. They overlap unless their unwraps already did not.`);
     }
 
     ToggleObject(Identifier)
@@ -1532,6 +1592,15 @@ class TexturePanel
                 this.CaptureStack(() => (Layer.Visible = !Layer.Visible));
                 return;
             }
+            // Deleting is a row action, not a menu entry: the layer you mean is the one your pointer is already on.
+            const Discard = Event.target.closest("[data-remove-layer]");
+            if (Discard)
+            {
+                Event.stopPropagation();
+                this.SelectLayer(Discard.dataset.removeLayer);
+                this.RemoveLayer();
+                return;
+            }
             const Row = Event.target.closest("[data-layer]");
             if (Row) this.SelectLayer(Row.dataset.layer);
         });
@@ -1649,6 +1718,8 @@ class TexturePanel
                     <button class="icon-button row-toggle" data-toggle-layer="${Layer.Identifier}"
                             aria-label="${Layer.Visible ? "Hide" : "Show"} ${Escape(Layer.Name)}"
                             title="${Layer.Visible ? "Hide" : "Show"} layer">${Icon(Layer.Visible ? "eye" : "hidden")}</button>
+                    <button class="icon-button row-remove" data-remove-layer="${Layer.Identifier}"
+                            aria-label="Delete ${Escape(Layer.Name)}" title="Delete layer · Del">${Icon("trash")}</button>
                     <span class="layer-chips">
                         <button class="row-chip ${Selected && !Masking ? "targeted" : ""}" data-chip="content"
                                 data-chip-layer="${Layer.Identifier}" title="Paint into the layer">
@@ -1677,16 +1748,40 @@ class TexturePanel
         this.AfterStackChange();
     }
 
+    //----------------------------------------------------------------------------------------------------------------------
+    // 🔴 The scene travels in the undo record alongside the stack. Adding an object, moving one to another UDIM tile or
+    //    hiding it are all edits a person expects Ctrl Z to take back, and leaving them out made undo quietly skip half
+    //    of what had just happened — the layers rewound and the objects did not.
+    //----------------------------------------------------------------------------------------------------------------------
     StackRecord()
     {
-        return { Layers: this.Layers, Selection: this.Project.Selection, Material: this.Project.Material };
+        return {
+            Layers: this.Layers,
+            Selection: this.Project.Selection,
+            Material: this.Project.Material,
+            Objects: this.Project.Objects,
+            Object: this.Project.Object,
+        };
     }
 
     ApplyStackRecord(Record)
     {
+        const Scene = JSON.stringify(this.Project.Objects || []);
         this.Project.Layers = structuredClone(Record.Layers);
         this.Project.Selection = Record.Selection;
         this.Project.Material = structuredClone(Record.Material);
+        if (Record.Objects)
+        {
+            this.Project.Objects = structuredClone(Record.Objects);
+            this.Project.Object = Record.Object || this.Project.Objects[0]?.Identifier || "";
+        }
+        // 📝 Reassembling the surface is expensive, so it only happens when the objects actually differ. An undo that
+        //    only touched the stack must not pay for a re-bake.
+        if (JSON.stringify(this.Project.Objects || []) !== Scene)
+        {
+            this.RebuildSurface();
+            this.RenderObjects();
+        }
         this.AfterStackChange();
     }
 
@@ -1842,6 +1937,90 @@ class TexturePanel
     }
 
     //----------------------------------------------------------------------------------------------------------------------
+    // Flattening the stack into one painted layer.
+    //
+    // 🔴 Only the colour channel survives per texel, and the rest are carried as their composited AVERAGE. A layer owns
+    //    one coverage image and a constant for every other channel — that is the whole storage model — so a flatten that
+    //    claimed to keep per-texel roughness would be inventing a layer kind that cannot be saved, painted or undone.
+    //    The honest result is: the surface looks identical in colour, every other channel becomes the single value the
+    //    stack averaged to, and the toast says so while the undo entry is still one keystroke away.
+    // 📝 Flattening is what an export wants, so it opens the export dialogue afterwards: the two are one action in the
+    //    user's head — "give me one texture I can hand to an engine".
+    //----------------------------------------------------------------------------------------------------------------------
+    FlattenStack()
+    {
+        if (!this.Integrator?.Ready)
+        {
+            this.Notify("The renderer is not running, so there is nothing to flatten.");
+            return;
+        }
+        const Count = this.Layers.length;
+        const Colour = this.Integrator.ComposedImage(0);
+        if (!Colour)
+        {
+            this.Notify("The composite could not be read back.");
+            return;
+        }
+        // Coverage is premultiplied, and a flattened layer covers everything, so the alpha goes to one and the colour
+        // bytes carry straight over.
+        const Pixels = new Uint8Array(Colour.Pixels);
+        for (let Index = 3; Index < Pixels.length; Index += 4) Pixels[Index] = 255;
+        const Averages = this.ChannelAverages();
+        const Layer = CreateLayer("stroke", {
+            Name: "Flattened surface",
+            Channels: { ...Averages },
+            Enabled: Object.fromEntries(ChannelSpecification.map((Channel) => [Channel.Identifier, true])),
+        });
+        const Kept = this.Layers.map((Entry) => Entry.Identifier);
+        this.CaptureStack(() =>
+        {
+            this.Project.Layers = [Layer];
+            this.Project.Selection = Layer.Identifier;
+        });
+        this.Integrator.EnsureCoverage(Layer);
+        this.Integrator.RestoreLayer(Layer, "coverage", { Resolution: Colour.Width, Pixels });
+        // 📝 The old layers' images are deliberately NOT released: undo puts those layers straight back, and a released
+        //    coverage image would come back blank.
+        this.Recomposite();
+        this.RenderStack();
+        this.RenderInspector();
+        this.Chronicle("structure", "Flattened the stack", `${Count} layers → 1`, Layer.Channels.base_color);
+        this.Notify(`${Count} layers flattened into one · colour per texel, every other channel averaged · Ctrl Z restores`);
+        this.FlattenedFrom = Kept.length;
+        this.OpenExport();
+    }
+
+    // The composited mean of every channel, read out of the four packed targets in one pass each. Sampling every fourth
+    // texel is plenty for an average and keeps a 4096² flatten off the main thread for less than a frame.
+    ChannelAverages()
+    {
+        const Targets = [0, 1, 2, 3].map((Index) => this.Integrator.ComposedImage(Index));
+        const Component = { r: 0, g: 1, b: 2, a: 3 };
+        const Averages = {};
+        const Mean = (Pixels, Offset, Stride) =>
+        {
+            let Total = 0;
+            let Count = 0;
+            for (let Index = Offset; Index < Pixels.length; Index += Stride)
+            {
+                Total += Pixels[Index];
+                Count += 1;
+            }
+            return Count ? Total / Count / 255 : 0;
+        };
+        for (const Channel of ChannelSpecification)
+        {
+            const Image = Targets[Channel.Target];
+            if (!Image) continue;
+            if (Channel.Swizzle === "rgb")
+                Averages[Channel.Identifier] = [0, 1, 2].map((Offset) => Mean(Image.Pixels, Offset, 16));
+            else Averages[Channel.Identifier] = Mean(Image.Pixels, Component[Channel.Swizzle] ?? 0, 16);
+        }
+        // The flattened layer paints its colour from the coverage image, so the stored constant is only a swatch.
+        return Averages;
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
     // Viewport interaction.
     //----------------------------------------------------------------------------------------------------------------------
     //----------------------------------------------------------------------------------------------------------------------
@@ -1916,6 +2095,25 @@ class TexturePanel
             this.WireSignature = "";
             this.SyncPlaneOverlay();
             this.Notify(this.PlaneWire ? "Unwrap shown." : "Unwrap hidden.");
+        });
+        Select("#tiles-button")?.addEventListener("click", () =>
+        {
+            this.PlaneTiles = !this.PlaneTiles;
+            Select("#tiles-button").classList.toggle("active", this.PlaneTiles);
+            Select("#uv-tiles").hidden = !this.PlaneTiles;
+            this.Notify(this.PlaneTiles ? "UDIM tiles shown." : "UDIM tiles hidden.");
+        });
+        // 🔴 Clicking a tile is the UDIM workflow, not a decoration: an occupied tile selects the object that lives on
+        //    it, and an empty one moves the object in hand there. Both read as "this square is where that object's
+        //    texture is", which is the only thing a UDIM number means.
+        Select("#uv-tiles")?.addEventListener("click", (Event) =>
+        {
+            const Cell = Event.target.closest("[data-tile]");
+            if (!Cell) return;
+            const Tile = Number(Cell.dataset.tile);
+            const Owner = (this.SurfaceRecord?.Ranges || []).find((Range) => Range.Tile === Tile);
+            if (Owner && Owner.Identifier !== this.Project.Object) this.SelectObject(Owner.Identifier, true);
+            else if (!Owner) this.MoveObjectToTile(Tile);
         });
         Select("#focus-button").addEventListener("click", () =>
         {
@@ -3046,6 +3244,39 @@ class TexturePanel
         this.SyncBrushControls();
     }
 
+    //----------------------------------------------------------------------------------------------------------------------
+    // The instrument card.
+    //
+    // 🔴 The card is handed callbacks and never the editor. It can set the brush and the colour, and it can ask whether
+    //    a mask is the paint target — nothing else. A card that could read the stack would be a second path into it, and
+    //    the first thing a second path does is forget to bump a revision.
+    //----------------------------------------------------------------------------------------------------------------------
+    BindInstruments()
+    {
+        this.Instruments = new InstrumentPanel(document.body, {
+            OnChoose: (Brush, Record, Announce) =>
+            {
+                this.Projection.Configure(Brush);
+                this.Instrument = Record;
+                this.SyncBrushControls();
+                if (!Announce) return;
+                // Picking an instrument is a positive act of reaching for paint, so it leaves whatever tool was in hand
+                // for the brush — unless the layer in hand cannot take one.
+                if (this.ToolsForLayer().includes("brush")) this.SetTool("brush", true);
+                this.Notify(`${Record.Name} · ${Record.Settings.Size} cm`);
+            },
+            OnColour: (Code) => this.SetBrushColour(FromHex(Code)),
+            Masking: () => this.Projection.Brush.Target === "mask",
+            ReadLevel: () => this.MaskInk()[0],
+            OnLevel: (Level) => this.SetBrushColour([Level, Level, Level]),
+        });
+        Select("#instrument-button")?.addEventListener("click", (Event) =>
+        {
+            Event.stopPropagation();
+            this.Instruments.Toggle();
+        });
+    }
+
     // One way in for the brush colour, whether it came from the picker, a swatch on the rail or a sampled texel: the
     // stroke layer in hand follows the brush, because a hand-painted layer is the colour it was painted with.
     SetBrushColour(Colour)
@@ -3056,6 +3287,7 @@ class TexturePanel
         if (Field) Field.value = Code;
         Select("#brush-swatch")?.style.setProperty("--swatch", Code);
         this.NoteColour(this.BrushColour);
+        this.Instruments?.SyncLevel();
         const Layer = this.ActiveLayer;
         if (Layer?.Kind === "stroke")
         {
@@ -3626,6 +3858,12 @@ class TexturePanel
                 this.Notify("Custom SVG rasterised.");
                 break;
             }
+            case "spread-tiles":
+                this.SpreadTiles();
+                break;
+            case "collapse-tiles":
+                this.CollapseTiles();
+                break;
             case "bake-occlusion":
                 this.ScheduleOcclusion();
                 this.Notify("Re-baking per-vertex occlusion.");
@@ -4576,6 +4814,10 @@ class TexturePanel
                               Hint: "Shared by every tile, so a wider sheet means fewer texels per object.",
                           }),
                           ActionRow([
+                              { Action: "spread-tiles", Label: "Spread across tiles", Glyph: "grid" },
+                              { Action: "collapse-tiles", Label: "Collapse to 1001", Glyph: "focus" },
+                          ]),
+                          ActionRow([
                               { Action: "import-mesh", Label: "Import OBJ", Glyph: "folder" },
                               { Action: "bake-occlusion", Label: "Re-bake AO", Glyph: "rotate" },
                           ]),
@@ -4618,6 +4860,10 @@ class TexturePanel
             (Preset) => `<option value="${Preset.Identifier}">${Preset.Label}</option>`,
         ).join("");
         Select("#export-preset").addEventListener("change", () => this.DescribeExport());
+        Select("#export-size").innerHTML = ExportSizes.map(
+            (Entry) => `<option value="${Entry.Size}">${Entry.Label}</option>`,
+        ).join("");
+        Select("#export-size").addEventListener("change", () => this.DescribeExport());
         Select("#export-confirm").addEventListener("click", () => this.RunExport());
         Select("#export-project").addEventListener("click", () => this.SaveDocument());
         Select("#svg-file").addEventListener("change", async (Event) =>
@@ -4668,24 +4914,43 @@ class TexturePanel
     DescribeExport()
     {
         const Preset = ExportOrdering.find((Entry) => Entry.Identifier === Select("#export-preset").value) || ExportOrdering[0];
-        Select("#export-note").textContent = Preset.Note;
+        const Size = Number(Select("#export-size").value) || 0;
+        const Written = Size || this.Project.Resolution;
+        Select("#export-note").textContent =
+            `${Preset.Note} Writing ${Written} × ${Written}` +
+            (Size && Size !== this.Project.Resolution ? ` — resampled from the ${this.Project.Resolution}² document.` : ".");
         Select("#export-list").innerHTML = Preset.Channels.map(
             (Identifier) => `<span>${Escape(ChannelByIdentifier[Identifier]?.Label || Identifier)}</span>`,
         ).join("");
         Select("#export-scale").textContent = `${this.Project.Resolution} × ${this.Project.Resolution}`;
+        const Stack = Select("#export-stack");
+        if (Stack)
+            Stack.textContent =
+                this.Layers.length === 1
+                    ? this.FlattenedFrom
+                        ? `Flattened from ${this.FlattenedFrom}`
+                        : "1 layer"
+                    : `${this.Layers.length} layers`;
     }
 
     async RunExport()
     {
         const Preset = Select("#export-preset").value;
+        const Size = Number(Select("#export-size").value) || 0;
         Select("#export-confirm").disabled = true;
         try
         {
-            const Result = await EmitTextureSet(this.Integrator, this.Project, Preset, (Message) =>
-            {
-                Select("#export-progress").textContent = Message;
-            });
-            Select("#export-progress").textContent = `${Result.Count} images written as ${Result.Preset}.`;
+            const Result = await EmitTextureSet(
+                this.Integrator,
+                this.Project,
+                Preset,
+                (Message) =>
+                {
+                    Select("#export-progress").textContent = Message;
+                },
+                Size,
+            );
+            Select("#export-progress").textContent = `${Result.Count} images written as ${Result.Preset} at ${Result.Size}².`;
             this.Chronicle("export", `Exported ${Result.Preset}`, `${Result.Count} images`);
             this.Notify(`${Result.Count} images and one descriptor written.`);
             this.Dirty = false;
@@ -4816,6 +5081,15 @@ class TexturePanel
                 return;
             }
             if (Event.ctrlKey || Event.metaKey) return;
+            // 🔴 preventDefault is not optional. Tab's default action walks focus to the next focusable element, so
+            //    without it the card opens AND the focus ring wanders off into the stack, and the next Tab is swallowed
+            //    by whatever it landed on.
+            if (Event.key === "Tab")
+            {
+                Event.preventDefault();
+                this.Instruments?.Step();
+                return;
+            }
             const Tools = ["orbit", "brush", "eraser", "fill", "decal", "picker"];
             if (/^[1-6]$/.test(Key))
             {
@@ -4826,6 +5100,14 @@ class TexturePanel
                     return;
                 }
                 this.SetTool(Wanted, true);
+                return;
+            }
+            // Delete removes the selected layer. Backspace does the same, because half the world reaches for that key
+            // first and a stack that keeps at least one layer cannot be emptied by a mistake anyway.
+            if (Key === "delete" || Key === "backspace")
+            {
+                Event.preventDefault();
+                this.RemoveLayer();
                 return;
             }
             if (Key === "[") this.Projection.Configure({ Radius: Clamp(this.Projection.Brush.Radius * 0.84, 0.004, 1.2) });
@@ -4840,6 +5122,11 @@ class TexturePanel
             if (Key === "w" && this.ViewMode === "plane")
             {
                 Select("#wire-button")?.click();
+                return;
+            }
+            if (Key === "u" && this.ViewMode === "plane")
+            {
+                Select("#tiles-button")?.click();
                 return;
             }
             if (Key === "x")

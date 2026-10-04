@@ -10,7 +10,7 @@ cd Frontier/Experimental/Texture
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
-npm test           # 42 unit tests, no browser required
+npm test           # 85 unit tests, no browser required
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -68,7 +68,9 @@ lighten, difference, linear-burn), drag reorder, duplicate, delete, double-click
 a card: a thumbnail of what the layer actually holds — its coverage blitted down to 64² on the GPU and read back, over a
 checkerboard where the layer is transparent, falling back to the kind's glyph until something is painted — its kind,
 blend and channel count, the opacity read large, and a pair of chips —
-**Content** and **Mask** — naming where the next stroke will land. Rows keep their full height however many there are:
+**Content** and **Mask** — naming where the next stroke will land. The eye and the bin sit at the right of the row and
+appear on hover, so hiding or deleting a layer is one click on the layer you are already pointing at; <kbd>Del</kbd>
+does the same to the selected one, and a stack always keeps its last layer. Rows keep their full height however many there are:
 the stack scrolls inside the panel rather than squeezing, with the heading, filters and footer staying put. Five kinds
 of layer:
 
@@ -177,6 +179,23 @@ symmetry chips. Beside it sit the colours the brush has lately carried, newest f
 one of them. **Radial symmetry** repeats a stroke around the standing axis as many times as the sector count asks, from
 two to sixteen — a cursor in every sector, the spokes drawn on the model, and decal stamps repeated the same way.
 
+**The instrument card (<kbd>Tab</kbd>).** The card is the tool menu: a rail of six media families down the left — paint
+brushes, pencils, pens, markers, dry media, wax and oil — and the types within the family as tiles beside it, each one
+drawn as the instrument itself sitting in a dished well. Pick a tile and the card slides one pane left to that
+instrument's settings: size, opacity, flow, hardness and spacing, plus whatever belongs to the medium alone — a
+pencil's grade and grain, a marker's nib and bleed, a brush's head and wetness, a dry stick's tooth and scatter. Above
+them a ribbon of dabs is drawn with the same falloff the stamping pass uses, on paper rather than on panel, so the
+settings are judged against something a stroke would actually look like. <kbd>Tab</kbd> steps forward through the card —
+closed → tiles → settings → closed — and <kbd>Esc</kbd> steps back out of it.
+
+Every instrument is one 300 × 60 drawing with its working tip at the right, and the tile is that same drawing under a
+cropped viewBox, so nothing is authored twice. Where a setting reaches the brush it drives it — size in centimetres,
+opacity and flow folded into the single deposit strength the stamping pass has, hardness, spacing, and the dry media's
+tooth onto the per-texel jitter — and where it does not, the foot of the card says how many settings are preview only
+rather than pretending. The whole set is kept on the instrument record either way, because it is exactly what a
+reconstruction would need. Aim at a mask and the colour swatches are replaced by a black-to-white value ramp: a mask
+holds coverage, not colour, so a hue picker there would offer a choice that cannot be expressed.
+
 **Objects and UDIM tiles.** A document holds a scene, not a single mesh. The outliner above the stack lists every
 object — select, rename (double-click), hide, isolate, add and remove — and each object owns a UDIM tile, numbered the
 usual way (`1001` is the first, `1002` is one column right, `1011` is one row up). Every visible object is built,
@@ -189,6 +208,14 @@ with the camera tool selects it; the texture view draws the tile grid over the s
 visible object, with the object in hand picked out in green. The chip at the top left puts it away (<kbd>W</kbd>) and
 the note beside it counts what is down there. It is redrawn only when the picture would differ, so panning and zooming
 cost nothing.
+
+**UDIM tools.** The texture view draws the numbered tile grid over the sheet, and the squares are live: clicking an
+occupied one selects the object that lives there, clicking an empty one moves the object in hand onto it. The `UDIM`
+chip (<kbd>U</kbd>) puts the grid away. In the inspector's UV group, *Spread across tiles* lays every object out in
+order from `1001`, filling rows of ten the way UDIM numbers run, and *Collapse to 1001* puts them all back on one tile
+for an engine that imports a single texture. Tile moves are scene edits, so the surface is reassembled and
+<kbd>Ctrl Z</kbd> takes them back — along with adding, removing and hiding an object, which now travel in the undo
+record beside the stack.
 
 **Layers that belong to an object.** Every layer carries a scope: the whole scene by default, or one object. A scoped
 layer only paints its object's tile of the sheet, so a decal on the bonnet cannot bleed onto the wheel. The button above
@@ -209,9 +236,18 @@ live side by side.
 document holding the project record, the camera pose and the whole branching timeline. Opening one restores all three,
 and the flat `.texture.json` files earlier builds wrote still open.
 
-**Export.** Three presets — the full OpenPBR channel set, glTF metallic-roughness (ORM-packed), or a three-image compact
-set. Each writes one PNG per channel named `<project-name>_<Channel>.png` next to a JSON descriptor tagged
+**Flatten and export, at the foot of the stack.** The two buttons under the layer stack are where a surface leaves the
+editor. **Flatten** composites the whole stack into one painted layer and opens the export dialogue on top of it; it is
+honest about the trade, because a layer owns one coverage image and a constant for every other channel — colour
+survives per texel, everything else becomes the value the stack averaged to, the toast says so, and <kbd>Ctrl Z</kbd>
+puts the stack back.
+
+**Export** offers five targets — Unreal Engine 5, Blender's Principled BSDF, the full OpenPBR channel set, glTF
+metallic-roughness, or a three-image compact set — at the document resolution or resampled to 512², 1024², 2048² or
+4096². Each writes one PNG per channel named `<project-name>_<Channel>.png` next to a JSON descriptor tagged
 `"specification": "OpenPBR Surface 1.1.1"`, which is the shape the engine's `ContentInterchange/MaterialCodec` reads.
+A preset also declares which way its normals point and the writer obeys it: Unreal reads DirectX-handed normals, so the
+green channel is flipped on the way out rather than left for someone to discover in the lighting.
 
 ---
 
@@ -222,7 +258,8 @@ set. Each writes one PNG per channel named `<project-name>_<Channel>.png` next t
 | Orbit / brush / eraser | <kbd>1 2 3</kbd> | Content ⇄ mask (adds one if needed) | <kbd>M</kbd> |
 | Flood / decal / pick | <kbd>4 5 6</kbd> | Mask view: off → overlay → mask | <kbd>⇧ M</kbd> |
 | Brush size | <kbd>[</kbd> <kbd>]</kbd> | Texture space | <kbd>X</kbd> |
-| Show / hide the unwrap | <kbd>W</kbd> | | |
+| Show / hide the unwrap | <kbd>W</kbd> | Show / hide the UDIM tiles | <kbd>U</kbd> |
+| Instrument card: tiles → settings → closed | <kbd>Tab</kbd> | Delete the selected layer | <kbd>Del</kbd> / <kbd>⌫</kbd> |
 | Brush size, live | <kbd>Alt</kbd> + wheel | Frame the surface | <kbd>F</kbd> |
 | Search layers | <kbd>/</kbd> | Content browser | <kbd>B</kbd> |
 | Undo / redo | <kbd>Ctrl Z</kbd> / <kbd>Ctrl ⇧ Z</kbd> | Save `.pigment` / export | <kbd>Ctrl S</kbd> / <kbd>Ctrl E</kbd> |
@@ -244,6 +281,8 @@ left button. Middle-drag and <kbd>Space</kbd>-drag pan; a click that never becom
 | `FinishSpecification.js` | Procedural material families, their styles, named controls and the preset shelf. |
 | `LayerSpecification.js` | Layer, mask and decal records; sanitisers; project defaults and validation. |
 | `DecalSpecification.js` | Vector library, font archive, SVG/text rasterisation. |
+| `InstrumentSpecification.js` | The instrument library: six media families, their drawings, settings schema and brush mapping. |
+| `InstrumentPanel.js` | The summoned instrument card: family rail, tiles, settings carousel, ribbon preview. |
 | `SurfaceStructure.js` | Built-in surfaces, Wavefront import, tangents, bounds, occlusion, spatial index. |
 | `SceneStructure.js` | Object records, UDIM tiles, and the assembly that folds a scene into one surface. |
 | `OrbitProjection.js` | Damped orbit camera, framing, panning, picking rays. |

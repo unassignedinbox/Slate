@@ -242,9 +242,36 @@ export const DisplayIndex = (Identifier) =>
     );
 
 //--------------------------------------------------------------------------------------------------------------------------
-// Export presets — which channels leave the editor, and under which interchange convention.
+// Export presets — which channels leave the editor, under which interchange convention, and for which renderer.
+//
+// 🔴 `Handedness` is not decoration. A tangent normal map is green-up in the OpenGL convention and green-down in the
+//    DirectX one, and Unreal reads DirectX. Writing the same bytes under both labels is the single most common reason a
+//    surface lights inverted after an import, so the preset says which way it wants the green channel and the writer
+//    actually flips it.
 //--------------------------------------------------------------------------------------------------------------------------
 export const ExportOrdering = [
+    {
+        Identifier: "unreal",
+        Label: "Unreal Engine 5",
+        Channels: ["base_color", "metallic_roughness", "geometry_normal", "emission_color", "height"],
+        Handedness: "directx",
+        Note: "ORM packing for the UE material graph — occlusion → R, roughness → G, metalness → B — with a DirectX-handed normal.",
+    },
+    {
+        Identifier: "blender",
+        Label: "Blender · Principled BSDF",
+        Channels: [
+            "base_color",
+            "specular_roughness",
+            "base_metalness",
+            "geometry_normal",
+            "emission_color",
+            "ambient_occlusion",
+            "height",
+        ],
+        Handedness: "opengl",
+        Note: "One image per Principled input. The normal stays OpenGL-handed, which is what Blender's Normal Map node expects.",
+    },
     {
         Identifier: "openpbr",
         Label: "OpenPBR channel set",
@@ -252,18 +279,21 @@ export const ExportOrdering = [
             "geometry_normal",
             "ambient_occlusion",
         ]),
+        Handedness: "opengl",
         Note: "One image per OpenPBR identifier plus the derived tangent normal.",
     },
     {
         Identifier: "gltf",
         Label: "glTF metallic-roughness",
         Channels: ["base_color", "metallic_roughness", "geometry_normal", "emission_color", "ambient_occlusion"],
+        Handedness: "opengl",
         Note: "ORM packing: occlusion → R, roughness → G, metalness → B.",
     },
     {
         Identifier: "compact",
         Label: "Compact set",
         Channels: ["base_color", "metallic_roughness", "geometry_normal"],
+        Handedness: "opengl",
         Note: "Three images for lightweight previews.",
     },
 ];

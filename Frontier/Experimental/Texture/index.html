@@ -17,30 +17,23 @@
             <header class="app-header">
                 <div class="document-dock">
                     <div id="document-tabs" class="document-tabs" role="tablist" aria-label="Texture documents"></div>
-                    <button id="new-document" class="icon-button" title="New texture document" aria-label="New texture document" data-icon="plus"></button>
+                    <button id="new-document" class="icon-button" title="New texture document" aria-label="New texture document" data-icon="plus"></button
+                    ><button id="import-button" class="icon-button" title="Open a .pigment project" aria-label="Open a project" data-icon="folder"></button>
                 </div>
                 <nav class="top-nav" aria-label="Workspace">
                     <button class="nav-button active" id="workspace-button">Surface</button><button class="nav-button" id="shelf-button">Texture space</button>
                 </nav>
                 <div class="header-end">
-                    <span class="gas-tag"><i></i> OpenPBR surface</span><button
-                        class="icon-button"
-                        id="help-button"
-                        title="Shortcuts and prototype information"
-                        aria-label="Help"
-                        data-icon="help"
-                    ></button><button id="export-button" class="button export-button">
-                        <span data-icon="download"></span>Export set
-                    </button>
+                    <button class="icon-button" id="help-button" title="Shortcuts and prototype information" aria-label="Help" data-icon="help"></button>
                 </div>
             </header>
             <div class="document-bar">
                 <span data-icon="file"></span><input id="document-name" value="Foundry crate" aria-label="Surface name" maxlength="64" /><span
-                    class="document-extension"
-                    >.pigment</span
-                ><span id="dirty-indicator" title="Unsaved work" class="dirty-indicator clean"></span><span class="document-note">Layered surface authoring</span
-                ><button id="import-button" class="text-button">Open project<span data-icon="folder"></span></button
-                ><input type="file" id="import-file" accept=".pigment,.json,.texture,application/json" hidden />
+                    id="dirty-indicator"
+                    title="Unsaved work"
+                    class="dirty-indicator clean"
+                ></span>
+                <input type="file" id="import-file" accept=".pigment,.json,.texture,application/json" hidden />
                 <input type="file" id="svg-file" accept=".svg,image/svg+xml" hidden />
                 <input type="file" id="mesh-file" accept=".obj" hidden />
             </div>
@@ -89,6 +82,12 @@
                         <span id="paint-target-note">Painting into layer content</span>
                         <span class="stack-footer-hint">M switches to the mask</span>
                     </div>
+                    <div class="stack-output">
+                        <button id="flatten-button" class="button quiet" title="Composite every visible layer into one painted layer">
+                            <span data-icon="layers"></span>Flatten
+                        </button>
+                        <button id="export-button" class="button" title="Write the texture set · Ctrl E"><span data-icon="download"></span>Export</button>
+                    </div>
                 </aside>
                 <section class="center-panel">
                     <div class="viewport-bar">
@@ -117,6 +116,9 @@
                                 <button class="plane-chip active" id="wire-button" title="Show the unwrap · W" aria-label="Show the unwrap">
                                     <i data-icon="layers"></i><span>Unwrap</span>
                                 </button>
+                                <button class="plane-chip active" id="tiles-button" title="Show the UDIM tiles · U" aria-label="Show the UDIM tiles">
+                                    <i data-icon="grid"></i><span>UDIM</span>
+                                </button>
                                 <span class="plane-note" id="plane-note"></span>
                             </div>
                         </div>
@@ -132,6 +134,7 @@
                             ><button class="icon-button" data-tool="fill" title="Flood the layer · 4" aria-label="Flood the layer" data-icon="fill"></button
                             ><button class="icon-button" data-tool="decal" title="Place the decal · 5" aria-label="Place the decal" data-icon="decal"></button
                             ><button class="icon-button" data-tool="picker" title="Pick a texel · 6" aria-label="Pick a texel" data-icon="picker"></button><span></span
+                            ><button id="instrument-button" class="icon-button" title="Instruments · Tab" aria-label="Instruments" data-icon="palette"></button
                             ><button id="mask-toggle" class="icon-button" title="Paint the mask · M" aria-label="Paint the mask" aria-pressed="false" data-icon="mask"></button
                             ><button id="mirror-button" class="icon-button" title="Symmetry · S" aria-label="Symmetry" aria-pressed="false" data-icon="mirror"></button>
                         </div>
@@ -293,10 +296,11 @@
                 once, so one stroke can write colour, roughness, metalness and height together.
             </p>
             <div class="shortcut-list">
-                <span>Orbit / brush / eraser<kbd>1 / 2 / 3</kbd></span><span>Flood / decal / pick<kbd>4 / 5 / 6</kbd></span
-                ><span>Brush size<kbd>[ / ]</kbd></span><span>Brush size, live<kbd>Alt + wheel</kbd></span
+                <span>Instruments<kbd>Tab</kbd></span><span>Orbit / brush / eraser<kbd>1 / 2 / 3</kbd></span
+                ><span>Flood / decal / pick<kbd>4 / 5 / 6</kbd></span><span>Brush size<kbd>[ / ]</kbd></span
+                ><span>Brush size, live<kbd>Alt + wheel</kbd></span><span>Delete the layer<kbd>Del</kbd></span
                 ><span>Content ⇄ mask<kbd>M</kbd></span><span>Mask view<kbd>⇧ M</kbd></span><span>Content browser<kbd>B</kbd></span
-                ><span>Texture space<kbd>X</kbd></span><span>Frame surface<kbd>F</kbd></span
+                ><span>Texture space<kbd>X</kbd></span><span>Unwrap / UDIM tiles<kbd>W / U</kbd></span><span>Frame surface<kbd>F</kbd></span
                 ><span>Undo / redo<kbd>Ctrl Z / Ctrl ⇧ Z</kbd></span><span>Save project<kbd>Ctrl S</kbd></span><span>Export set<kbd>Ctrl E</kbd></span
                 ><span>Search layers<kbd>/</kbd></span>
             </div>
@@ -321,8 +325,10 @@
                 with its OpenPBR parameter. Colour channels are written sRGB-encoded; the rest stay linear.
             </p>
             <fieldset class="export-settings">
-                <label>Convention<select id="export-preset"></select></label>
-                <label>Resolution<span class="static-field" id="export-scale">1024 × 1024</span></label>
+                <label>Target<select id="export-preset"></select></label>
+                <label>Size<select id="export-size"></select></label>
+                <label>Document<span class="static-field" id="export-scale">1024 × 1024</span></label>
+                <label>Stack<span class="static-field" id="export-stack">4 layers</span></label>
             </fieldset>
             <p id="export-note" class="dialog-description"></p>
             <div class="export-list" id="export-list"></div>

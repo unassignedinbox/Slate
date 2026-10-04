@@ -1312,6 +1312,29 @@ export class ShadingIntegrator
         return { Width: Size, Height: Size, Pixels };
     }
 
+    //----------------------------------------------------------------------------------------------------------------------
+    // One composited render target, read straight back.
+    //
+    // 🔴 Deliberately not ResolveSlot. The resolve pass re-encodes a slot for export — sRGB on the colour channels, a
+    //    packed ORM, a tangent normal — and flattening needs the texels in the same space the coverage images are
+    //    painted in, so a flattened layer paints back exactly what the stack composited. Round-tripping through the
+    //    export encoding would brighten the whole surface by the sRGB curve on the first flatten and again on the next.
+    //----------------------------------------------------------------------------------------------------------------------
+    ComposedImage(Attachment = 0)
+    {
+        if (!this.Ready) return null;
+        const Device = this.Device;
+        const Size = this.Resolution;
+        const Target = this.ChannelTargets[this.ChannelIndex];
+        const Pixels = new Uint8Array(Size * Size * 4);
+        Device.bindFramebuffer(Device.READ_FRAMEBUFFER, Target);
+        Device.readBuffer(Device.COLOR_ATTACHMENT0 + Attachment);
+        Device.readPixels(0, 0, Size, Size, Device.RGBA, Device.UNSIGNED_BYTE, Pixels);
+        Device.readBuffer(Device.COLOR_ATTACHMENT0);
+        Device.bindFramebuffer(Device.READ_FRAMEBUFFER, null);
+        return { Width: Size, Height: Size, Pixels };
+    }
+
     PickTexel(Coordinate)
     {
         if (!this.Ready) return null;

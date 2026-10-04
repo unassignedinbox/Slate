@@ -113,14 +113,6 @@ b {
   padding: 9px 15px;
   font-size: 12px;
 }
-.export-button {
-  height: 36px;
-  padding: 0 14px;
-}
-.gas-tag {
-  font-size: 11px;
-  color: #909090;
-}
 .icon-button {
   border-radius: 999px;
   color: #8f8f8f;
@@ -139,10 +131,6 @@ b {
 .document-bar input {
   font-size: 12px;
   width: 104px;
-}
-.document-note {
-  color: #666;
-  border-color: #ffffff14;
 }
 .workspace {
   grid-template-columns: 316px minmax(320px, 1fr) 368px;
@@ -816,9 +804,6 @@ dialog {
   .app-header {
     padding: 0 15px;
   }
-  .gas-tag {
-    display: none;
-  }
 }
 @media (max-height: 780px) and (min-width: 761px) {
   .outliner-heading {
@@ -982,9 +967,6 @@ dialog {
   #channel-select {
     max-width: 92px;
     margin-right: 2px;
-  }
-  .header-end .gas-tag {
-    display: none;
   }
 }
 @media (max-width: 580px) {
@@ -1445,10 +1427,10 @@ dialog {
   --row-accent: #dfe6f5;
   position: relative;
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) auto auto;
+  grid-template-columns: 46px minmax(0, 1fr) auto auto auto;
   grid-template-areas:
-    "swatch copy metric toggle"
-    "swatch chips chips chips";
+    "swatch copy metric toggle remove"
+    "swatch chips chips chips chips";
   align-items: center;
   column-gap: 12px;
   row-gap: 9px;
@@ -1648,6 +1630,22 @@ dialog {
 .layer-row.muted .row-toggle {
   color: #ff6b5e;
 }
+.layer-row .row-remove {
+  grid-area: remove;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  opacity: 0;
+}
+.layer-row:hover .row-remove,
+.layer-row.selected .row-remove,
+.layer-row:focus-within .row-remove {
+  opacity: 1;
+}
+.layer-row .row-remove:hover {
+  color: #ff6b5e;
+  background: color-mix(in srgb, #ff6b5e 16%, transparent);
+}
 .stack-footer {
   margin-top: auto;
   flex: 0 0 auto;
@@ -1683,13 +1681,31 @@ dialog {
 .stack-footer-hint {
   color: #5a5a5a;
 }
+.stack-footer {
+  padding-bottom: 10px;
+}
+.stack-output {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  padding: 0 20px 18px;
+}
+.stack-output .button {
+  justify-content: center;
+  height: 36px;
+}
+.stack-output .button svg {
+  width: 15px;
+  height: 15px;
+}
 .left-panel.compact-outliner .layer-chips,
 .left-panel.compact-outliner .layer-note {
   display: none;
 }
 .left-panel.compact-outliner .layer-row {
-  grid-template-columns: 34px minmax(0, 1fr) auto auto;
-  grid-template-areas: "swatch copy metric toggle";
+  grid-template-columns: 34px minmax(0, 1fr) auto auto auto;
+  grid-template-areas: "swatch copy metric toggle remove";
   row-gap: 0;
   padding: 9px 10px 9px 12px;
   border-radius: 15px;
@@ -2802,6 +2818,12 @@ dialog {
 .uv-tiles {
   position: absolute;
   inset: 0;
+  /* 🔴 The overlay above is pointer-transparent so orbiting and painting pass through it. The tiles opt back in,
+     because clicking a UDIM square is how an object is moved onto it. */
+  pointer-events: auto;
+}
+.uv-tiles[hidden] {
+  display: none;
 }
 .uv-tile {
   position: absolute;
@@ -2826,6 +2848,22 @@ dialog {
 .uv-tile.hovered {
   background: rgba(52, 199, 89, 0.07);
   color: var(--green);
+}
+.uv-tile {
+  cursor: pointer;
+}
+.uv-tile:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+}
+.uv-tile:hover:not(.occupied)::after {
+  content: "move here";
+  position: absolute;
+  left: 7px;
+  bottom: 6px;
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  color: #8a8a8a;
 }
 .uv-tile small {
   font-size: 9px;
@@ -3745,4 +3783,432 @@ details.channel-control > summary code {
   background: #232323;
   border-color: rgba(52, 199, 89, 0.34);
   color: var(--green);
+}
+
+/*------------------------------------------------------------------------------------------------------------------------
+                                                   THE INSTRUMENT CARD
+------------------------------------------------------------------------------------------------------------------------*/
+
+/* Two panes on one track: [ family rail | tiles ] slides to [ family rail | settings ].
+
+   🔴 The track is sized by its content and each slide is pinned to exactly one card width. Percentages here (track 200%,
+      slide 50%) look equivalent and are not — they resolve against a containing block that includes the card's borders,
+      so each slide comes out two pixels short and the next pane's rail shows along the right edge. */
+.tool-card {
+  --card-width: 560px;
+  position: fixed;
+  z-index: 60;
+  box-sizing: content-box;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  background: #151515;
+  border: 1px solid #ffffff14;
+  border-radius: 22px;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.66);
+  color: var(--text);
+  user-select: none;
+  transition:
+    width 0.16s ease,
+    height 0.16s ease,
+    opacity 0.12s ease;
+}
+.tool-card.open {
+  width: var(--card-width);
+  height: min(430px, 78vh);
+  opacity: 1;
+  pointer-events: auto;
+}
+.tool-track {
+  display: flex;
+  width: max-content;
+  height: 100%;
+  transition: transform 0.22s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.tool-card.properties .tool-track {
+  transform: translateX(calc(-1 * var(--card-width)));
+}
+/* 🔴 The rail column is pinned, not auto: an auto column resolves differently in each pane, so the seam between rail
+      and body steps sideways as the track slides. */
+.tool-slide {
+  display: grid;
+  grid-template-columns: 186px minmax(0, 1fr);
+  width: var(--card-width);
+  flex: 0 0 var(--card-width);
+  height: 100%;
+}
+.tool-rail {
+  background: #0e0e0e;
+  border-right: 1px solid var(--line);
+  padding: 10px 8px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.tool-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* 🔴 Fixed height, shared by both panes. If the two heads differ by a pixel the title jitters as the track slides. */
+.pane-head {
+  flex: 0 0 54px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+}
+.pane-title {
+  font-size: 13px;
+  letter-spacing: 0.01em;
+}
+.pane-sub {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.pane-key {
+  margin-left: auto;
+  font-size: 10px;
+  color: #6a6a6a;
+  background: #1e1e1e;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 3px 7px;
+}
+.pane-back {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.pane-back svg {
+  width: 15px;
+  height: 15px;
+}
+.pane-back:hover {
+  background: var(--raised);
+  color: var(--text);
+}
+/* 🔴 min-height:0 is load-bearing. A flex item defaults to min-height:auto and refuses to shrink below its content, so
+      overflow-y never engages: the pane grows past the card and everything below the fold becomes unreachable. */
+.pane-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 16px;
+}
+.tool-rail,
+.pane-scroll {
+  scrollbar-width: none;
+}
+.tool-rail::-webkit-scrollbar,
+.pane-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+.pane-foot {
+  flex: 0 0 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: #6f6f6f;
+}
+.foot-action {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: #b4b4b4;
+  border-radius: 999px;
+  padding: 5px 13px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.foot-action:hover {
+  background: var(--raised);
+  color: var(--text);
+}
+.rail-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 33px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.rail-item:hover {
+  background: #1b1b1b;
+  color: var(--text);
+}
+.rail-item.active {
+  background: #232323;
+  color: var(--text);
+}
+.rail-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: var(--green);
+}
+.rail-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  transition: transform 0.14s ease;
+}
+.rail-item.active .rail-dot {
+  transform: scale(1.3);
+}
+.rail-tally {
+  margin-left: auto;
+  font-size: 10px;
+  color: #5a5a5a;
+}
+.tool-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.tool-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: #1c1c1c;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.tool-tile:hover {
+  background: #242424;
+  color: var(--text);
+}
+.tool-tile.active {
+  border-color: color-mix(in srgb, var(--green) 55%, transparent);
+  color: var(--text);
+}
+/* 📝 The well is a dish, not a flat disc: the inset shadow is what makes a tile read as a recess holding the
+      instrument rather than a sticker printed on the panel. */
+.tile-well {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 34%, #2b2b2b, #161616 72%);
+  box-shadow: inset 0 2px 9px rgba(0, 0, 0, 0.6);
+}
+.tile-well svg {
+  width: 34px;
+  height: 34px;
+  display: block;
+}
+.tile-name {
+  font-size: 10px;
+  line-height: 1.25;
+  text-align: center;
+  max-width: 88px;
+}
+.tool-tile.rising {
+  animation: TileRise 0.2s ease both;
+}
+@keyframes TileRise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* 🔴 Pale, not dark. Pigment is judged against paper — a chalk stroke on a near-black panel reads as bright paint,
+      which is the opposite of what the instrument does. */
+.ribbon-strip {
+  background: #f4f1ea;
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.ribbon-stand {
+  display: grid;
+  place-items: center;
+  height: 64px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+.ribbon-stand svg {
+  width: 260px;
+  height: 52px;
+}
+.ribbon-canvas {
+  display: block;
+  width: 100%;
+  height: 64px;
+}
+.control-row {
+  margin-bottom: 14px;
+}
+.control-row.inert .control-head {
+  color: #5f5f5f;
+}
+.control-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.control-head svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+}
+.control-value {
+  margin-left: auto;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+/* 📝 The visible bar is 4px and the hit area is 22px. A 4px pointer target is a miss most of the time. */
+.slider-track {
+  position: relative;
+  height: 22px;
+  cursor: pointer;
+  touch-action: none;
+}
+.slider-rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 9px;
+  height: 4px;
+  border-radius: 2px;
+  background: #262626;
+}
+.slider-fill {
+  position: absolute;
+  left: 0;
+  top: 9px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--slider-fill);
+}
+.slider-knob {
+  position: absolute;
+  top: 4px;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  border-radius: 50%;
+  background: var(--slider-thumb);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+}
+.segmented {
+  display: flex;
+  gap: 4px;
+  background: #121212;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px;
+}
+.segment {
+  flex: 1 1 0;
+  height: 26px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.segment:hover {
+  color: var(--text);
+}
+.segment.active {
+  background: var(--raised);
+  color: var(--text);
+}
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.switch-row svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+}
+.switch-row .switch {
+  margin-left: auto;
+}
+.swatch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tool-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid #ffffff1a;
+  cursor: pointer;
+  padding: 0;
+}
+.tool-swatch.active {
+  box-shadow:
+    0 0 0 2px var(--panel),
+    0 0 0 4px var(--green);
+}
+.mask-ramp {
+  position: relative;
+  height: 22px;
+  margin-bottom: 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: linear-gradient(to right, #000, #fff);
+  cursor: pointer;
+  touch-action: none;
+}
+.ramp-knob {
+  position: absolute;
+  top: -2px;
+  width: 10px;
+  height: 24px;
+  margin-left: -5px;
+  border-radius: 6px;
+  background: #fff;
+  border: 2px solid #111;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.6);
 }

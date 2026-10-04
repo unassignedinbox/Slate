@@ -31,7 +31,16 @@ export const FlipRows = (Pixels, Width, Height) =>
     return Flipped;
 };
 
-export const SlotToCanvas = (Resolved) =>
+// A tangent normal is green-up as it leaves the resolve pass. DirectX engines — Unreal among them — read green-down, so
+// the one byte that differs between the two conventions is flipped here rather than asked of the artist afterwards.
+export const FlipGreen = (Pixels) =>
+{
+    const Flipped = new Uint8ClampedArray(Pixels);
+    for (let Index = 1; Index < Flipped.length; Index += 4) Flipped[Index] = 255 - Flipped[Index];
+    return Flipped;
+};
+
+export const SlotToCanvas = (Resolved, Size = 0) =>
 {
     const Surface = document.createElement("canvas");
     Surface.width = Resolved.Width;
@@ -39,8 +48,28 @@ export const SlotToCanvas = (Resolved) =>
     const Context = Surface.getContext("2d");
     const Image = new ImageData(FlipRows(Resolved.Pixels, Resolved.Width, Resolved.Height), Resolved.Width, Resolved.Height);
     Context.putImageData(Image, 0, 0);
-    return Surface;
+    if (!Size || Size === Resolved.Width) return Surface;
+    // 🔴 Resampling happens on the canvas, after the flip, and never on the texel array. The browser's own filter is the
+    //    one the rest of the image stack agrees with, and a hand-rolled box filter here would quietly disagree with the
+    //    mip chain the engine builds from the same file.
+    const Scaled = document.createElement("canvas");
+    Scaled.width = Size;
+    Scaled.height = Size;
+    const Pen = Scaled.getContext("2d");
+    Pen.imageSmoothingEnabled = true;
+    Pen.imageSmoothingQuality = "high";
+    Pen.drawImage(Surface, 0, 0, Size, Size);
+    return Scaled;
 };
+
+// The sizes an export is allowed to land on. 0 means "whatever the document is", which is the common case.
+export const ExportSizes = [
+    { Size: 0, Label: "Document resolution" },
+    { Size: 512, Label: "512 × 512" },
+    { Size: 1024, Label: "1024 × 1024" },
+    { Size: 2048, Label: "2048 × 2048" },
+    { Size: 4096, Label: "4096 × 4096" },
+];
 
 const Download = (Blob, Name) =>
 {
@@ -67,19 +96,22 @@ export const ResolveSet = (Integrator, Project, PresetIdentifier) =>
         if (!Slot) continue;
         const Resolved = Integrator.ResolveSlot(Slot.Slot, Project.Material);
         if (!Resolved) continue;
+        if (Identifier === "geometry_normal" && Preset.Handedness === "directx")
+            Resolved.Pixels = FlipGreen(Resolved.Pixels);
         Images.push({ Identifier, Slot, Resolved });
     }
     return { Preset, Images };
 };
 
-export const MaterialDescriptor = (Project, Preset, Images) => ({
+export const MaterialDescriptor = (Project, Preset, Images, Size = 0) => ({
     specification: "OpenPBR Surface 1.1.1",
     generator: "Frontier Texture 0.1",
     name: Project.Name,
     authored: new Date().toISOString(),
-    resolution: Project.Resolution,
+    resolution: Size || Project.Resolution,
     surface: Project.Surface,
     convention: Preset.Identifier,
+    normals: Preset.Handedness || "opengl",
     constants: Object.fromEntries(
         Object.keys(SurfaceDefaults).map((Identifier) => [Identifier, Project.Material[Identifier]]),
     ),
@@ -107,23 +139,24 @@ export const MaterialDescriptor = (Project, Preset, Images) => ({
     })),
 });
 
-export const EmitTextureSet = async (Integrator, Project, PresetIdentifier, Report = () => {}) =>
+export const EmitTextureSet = async (Integrator, Project, PresetIdentifier, Report = () => {}, Size = 0) =>
 {
     const { Preset, Images } = ResolveSet(Integrator, Project, PresetIdentifier);
     const Stem = Slug(Project.Name);
+    const Written = Size || Project.Resolution;
     let Index = 0;
     for (const Entry of Images)
     {
         Index += 1;
         Report(`Writing ${Entry.Slot.Export} · ${Index}/${Images.length + 1}`);
-        const Blob = await Encode(SlotToCanvas(Entry.Resolved));
+        const Blob = await Encode(SlotToCanvas(Entry.Resolved, Size));
         Download(Blob, `${Stem}_${Entry.Slot.Export}.png`);
         await new Promise((Resolve) => setTimeout(Resolve, 110));
     }
     Report(`Writing descriptor · ${Images.length + 1}/${Images.length + 1}`);
-    const Descriptor = MaterialDescriptor(Project, Preset, Images);
+    const Descriptor = MaterialDescriptor(Project, Preset, Images, Written);
     Download(new Blob([JSON.stringify(Descriptor, null, 4)], { type: "application/json" }), `${Stem}.material.json`);
-    return { Count: Images.length, Preset: Preset.Label };
+    return { Count: Images.length, Preset: Preset.Label, Size: Written };
 };
 
 // A .pigment document is the whole session in one file: the project record, the camera pose and the branching timeline.
