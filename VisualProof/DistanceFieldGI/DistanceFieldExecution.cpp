@@ -9,6 +9,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstring>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -85,6 +86,7 @@ public:
         Require(Physical != VK_NULL_HANDLE, "CPU execution required: install the lavapipe Vulkan ICD");
         VkPhysicalDeviceProperties Properties{}; vkGetPhysicalDeviceProperties(Physical,&Properties);
         std::cout << "Vulkan execution device: " << Properties.deviceName << '\n';
+        std::cout << "CPU JIT flags: " << (std::getenv("GALLIVM_PERF") ? std::getenv("GALLIVM_PERF") : "default") << '\n';
         vkGetPhysicalDeviceMemoryProperties(Physical,&Memory);
         vkGetPhysicalDeviceQueueFamilyProperties(Physical,&Count,nullptr);
         std::vector<VkQueueFamilyProperties> Families(Count); vkGetPhysicalDeviceQueueFamilyProperties(Physical,&Count,Families.data());
@@ -424,7 +426,9 @@ int main(int Count,char** Arguments)
                 Initialization.TextureCapacity=4u; Initialization.TextureCount=1u;
                 Initialization.TextureSampler=Host.Sampler; Initialization.TextureViews=&Pigment.View;
                 Initialization.TextureUpdateAfterBind=Host.TextureUpdateAfterBind;
+                std::cout << "Constructing descriptor-indexed production pipelines\n";
                 Require(Stage.Bring(Initialization),"Bindless production resolve creation failed");
+                std::cout << "Dispatching descriptor-indexed production pipelines\n";
                 auto Textured=Execute(4u,"textured-material");
                 Require(Constant[0]>1000.0 && Textured[0]<Constant[0]*0.1,"Texture descriptor indexing did not modulate the resolved material");
                 std::cout<<"PASS descriptor-indexed production resolve and actual texture sampling\n";

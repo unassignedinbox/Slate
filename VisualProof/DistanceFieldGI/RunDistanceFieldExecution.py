@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile and execute the production SDF Vulkan pipeline with validation; never substitute a CPU renderer."""
+"""Compile and execute the production SDF Vulkan pipeline with validation; never substitute a hand-written shader approximation."""
 from pathlib import Path
 import os
 import struct
@@ -16,6 +16,9 @@ Images = Output / "Images"
 CpuDrivers = sorted(Path("/usr/share/vulkan/icd.d").glob("*lvp*.json"))
 if CpuDrivers:
     os.environ["VK_ICD_FILENAMES"] = str(CpuDrivers[0])
+# Mesa's documented nopt switch only disables expensive LLVM optimization passes; the same
+# production SPIR-V still executes, with all texture paths and Vulkan validation enabled.
+os.environ.setdefault("GALLIVM_PERF", "nopt")
 Shaders.mkdir(parents=True, exist_ok=True)
 Images.mkdir(parents=True, exist_ok=True)
 for Name in ("DistanceFieldConstruct", "DistanceFieldCapture", "DistanceFieldCaptureFixed", "DistanceFieldRadiance", "DistanceFieldGIResolve", "DistanceFieldGIResolveFixed"):
@@ -40,7 +43,7 @@ except subprocess.TimeoutExpired as Failure:
     Captured = Failure.stdout or b""
     if isinstance(Captured, bytes):
         Captured = Captured.decode("utf-8", errors="replace")
-    (Output / "Execution.log").write_text(Captured, encoding="utf-8")
+    (Output / "Execution.log").write_text(Captured + "\nFAIL CPU execution timed out\n", encoding="utf-8")
     print(Captured, flush=True)
     print("::error::Production Vulkan execution exceeded 600 seconds; partial execution log retained", flush=True)
     raise

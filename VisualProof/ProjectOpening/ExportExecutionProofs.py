@@ -20,10 +20,16 @@ for Kind, Run, Prefix in (("Browser", BrowserRun, "project-opening"), ("SDF", Sd
 Native = Scratch / "Browser/ProjectBrowserWindows.png"
 assert Native.is_file(), "A real DX11 readback, not the shared CPU UI proof, is required"
 shutil.copyfile(Native, Root / "VisualProof/ProjectOpening/ProjectBrowserWindows.png")
-Target = Root / "VisualProof/DistanceFieldGI/Executed"
+Log = (Scratch / "SDF/Execution.log").read_text(encoding="utf-8", errors="replace")
+Verified = "zero errors" in Log and "PASS spatial atlas" in Log and "PASS artifact checks" in Log
+assert Verified or "FAIL" in Log, "Incomplete run: retain its artifact, but do not publish it as verified pixels"
+Target = Root / ("VisualProof/DistanceFieldGI/Executed" if Verified else "VisualProof/DistanceFieldGI/ArtifactFailure")
 Target.mkdir(parents=True, exist_ok=True)
 Images = list((Scratch / "SDF/Images").glob("*.ppm"))
-assert len(Images) >= 20, "The complete production execution fixture must be retained"
+assert len(Images) >= (20 if Verified else 1), "No suitable execution pixels were produced"
+for Previous in Target.glob("*.png"):
+    Previous.unlink()
+Frames = {}
 for Source in Images:
     Magic, Extent, Maximum, Pixels = Source.read_bytes().split(b"\n", 3)
     Width, Height = map(int, Extent.split())
@@ -36,11 +42,29 @@ for Source in Images:
     def Chunk(Kind, Data):
         return struct.pack(">I", len(Data)) + Kind + Data + struct.pack(">I", zlib.crc32(Kind + Data) & 0xFFFFFFFF)
     Png = b"\x89PNG\r\n\x1a\n" + Chunk(b"IHDR", struct.pack(">IIBBBBB", Width*Zoom, Height*Zoom, 8, 2, 0, 0, 0))
-    Png += Chunk(b"IDAT", zlib.compress(b"".join(Rows), 9)) + Chunk(b"IEND", b"")
+    Compressed = zlib.compress(b"".join(Rows), 9)
+    Png += Chunk(b"IDAT", Compressed) + Chunk(b"IEND", b"")
+    if Source.stem.startswith("static-frame-"):
+        Frames[int(Source.stem.rsplit("-", 1)[1])] = (Width*Zoom, Height*Zoom, Compressed)
     (Target / (Source.stem + ".png")).write_bytes(Png)
-Log = (Scratch / "SDF/Execution.log").read_text(encoding="utf-8", errors="replace")
-assert "zero errors" in Log and "PASS spatial atlas" in Log
-Provenance["SDF"]["display"] = "Nearest-neighbour enlargement of exact production Vulkan readback pixels; no reconstructed renderer or image generation."
-Provenance["SDF"]["execution"] = [Line for Line in Log.splitlines() if "device" in Line.lower() or Line.startswith("PASS")]
+if len(Frames) == 16:
+    Width, Height, _ = Frames[0]
+    Animation = b"\x89PNG\r\n\x1a\n" + Chunk(b"IHDR", struct.pack(">IIBBBBB", Width, Height, 8, 2, 0, 0, 0))
+    Animation += Chunk(b"acTL", struct.pack(">II", len(Frames), 0))
+    Sequence = 0
+    for Index in sorted(Frames):
+        FrameWidth, FrameHeight, Compressed = Frames[Index]
+        assert (FrameWidth, FrameHeight) == (Width, Height)
+        Animation += Chunk(b"fcTL", struct.pack(">IIIIIHHBB", Sequence, Width, Height, 0, 0, 1, 8, 0, 0))
+        Sequence += 1
+        if Index == 0:
+            Animation += Chunk(b"IDAT", Compressed)
+        else:
+            Animation += Chunk(b"fdAT", struct.pack(">I", Sequence) + Compressed)
+            Sequence += 1
+    (Target / "static-sequence.png").write_bytes(Animation + Chunk(b"IEND", b""))
+Provenance["SDF"]["artifact_checks_passed"] = Verified
+Provenance["SDF"]["display"] = "Nearest-neighbour enlargement of exact production Vulkan readback pixels; no reconstructed renderer or image generation. The top-left background sentinel is intentionally black."
+Provenance["SDF"]["execution"] = [Line for Line in Log.splitlines() if "device" in Line.lower() or Line.startswith(("PASS", "FAIL", "ARTIFACT", "CPU JIT"))]
 (Target / "Provenance.json").write_text(json.dumps(Provenance, indent=2) + "\n")
 print("Retained actual DX11 card and", len(Images), "production SDF readbacks")
