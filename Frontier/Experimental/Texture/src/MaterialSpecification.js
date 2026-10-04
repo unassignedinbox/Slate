@@ -1,0 +1,470 @@
+//============================================================================================================================================
+// 🧪 MaterialSpecification.js — OpenPBR surface constants and the smart-material library that builds layer stacks
+//============================================================================================================================================
+// Two halves:
+//   ① SurfaceDefaults  — the OpenPBR Surface parameters that are constant across the whole surface (IOR, coat colour,
+//                        fuzz colour, emission luminance, thin-film, authoring scales). Painted parameters live in
+//                        ChannelSpecification.js instead.
+//   ② MaterialLibrary  — smart materials. Each entry expands into one or more layers with their own channels, generators
+//                        and masks, so applying a material is an edit of the stack rather than a hidden shader switch.
+//============================================================================================================================================
+
+//--------------------------------------------------------------------------------------------------------------------------
+// ① Surface-wide OpenPBR parameters.
+//--------------------------------------------------------------------------------------------------------------------------
+export const SurfaceDefaults = {
+    base_diffuse_roughness: 0.0,           // [-]    EON rough-diffuse width
+    specular_color: [1, 1, 1],             // [-]    dielectric tint / F82 edge tint for metals
+    specular_ior: 1.5,                     // [-]    interface index of refraction
+    specular_roughness_anisotropy: 0.0,    // [-]    0 isotropic, 1 fully stretched along the tangent
+    coat_color: [1, 1, 1],                 // [-]    coat absorption tint
+    coat_ior: 1.6,                         // [-]    coat index of refraction
+    coat_darkening: 1.0,                   // [-]    base darkening under total internal reflection
+    fuzz_color: [1, 1, 1],                 // [-]    sheen tint
+    fuzz_roughness: 0.5,                   // [-]    sheen lobe width
+    emission_luminance: 0.0,               // [nit]  photometric emission multiplier
+    transmission_color: [1, 1, 1],         // [-]    Beer–Lambert transmission tint
+    transmission_depth: 0.04,              // [m]    absorption distance
+    thin_film_weight: 0.0,                 // [-]    Belcour–Barla iridescence weight
+    thin_film_thickness: 0.5,              // [µm]   film thickness
+    thin_film_ior: 1.4,                    // [-]    film index of refraction
+    geometry_thin_walled: false,           // [-]    thin-sheet transmission
+    normal_intensity: 1.0,                 // [-]    authoring: height → geometry_normal gain
+    height_scale: 4.0,                     // [mm]   authoring: displacement range mapped onto the height channel
+    texture_scale: 1.0,                    // [-]    authoring: UV multiplier for every procedural generator
+};
+
+export const SurfaceControls = [
+    { Identifier: "base_diffuse_roughness", Label: "Diffuse roughness", Group: "Base", Minimum: 0, Maximum: 1, Step: 0.01, Unit: "—" },
+    { Identifier: "specular_color", Label: "Specular colour", Group: "Specular", Kind: "color" },
+    { Identifier: "specular_ior", Label: "Specular IOR", Group: "Specular", Minimum: 1, Maximum: 3, Step: 0.01, Unit: "n" },
+    { Identifier: "specular_roughness_anisotropy", Label: "Anisotropy", Group: "Specular", Minimum: 0, Maximum: 1, Step: 0.01, Unit: "—" },
+    { Identifier: "coat_color", Label: "Coat colour", Group: "Coat", Kind: "color" },
+    { Identifier: "coat_ior", Label: "Coat IOR", Group: "Coat", Minimum: 1, Maximum: 2.5, Step: 0.01, Unit: "n" },
+    { Identifier: "coat_darkening", Label: "Coat darkening", Group: "Coat", Minimum: 0, Maximum: 1, Step: 0.01, Unit: "—" },
+    { Identifier: "fuzz_color", Label: "Fuzz colour", Group: "Fuzz", Kind: "color" },
+    { Identifier: "fuzz_roughness", Label: "Fuzz roughness", Group: "Fuzz", Minimum: 0, Maximum: 1, Step: 0.01, Unit: "—" },
+    { Identifier: "emission_luminance", Label: "Emission", Group: "Emission", Minimum: 0, Maximum: 40, Step: 0.1, Unit: "nit" },
+    { Identifier: "transmission_color", Label: "Transmission tint", Group: "Transmission", Kind: "color" },
+    { Identifier: "transmission_depth", Label: "Absorption depth", Group: "Transmission", Minimum: 0.001, Maximum: 0.5, Step: 0.001, Unit: "m" },
+    { Identifier: "thin_film_weight", Label: "Thin film", Group: "Thin film", Minimum: 0, Maximum: 1, Step: 0.01, Unit: "—" },
+    { Identifier: "thin_film_thickness", Label: "Film thickness", Group: "Thin film", Minimum: 0.1, Maximum: 3, Step: 0.01, Unit: "µm" },
+    { Identifier: "thin_film_ior", Label: "Film IOR", Group: "Thin film", Minimum: 1, Maximum: 3, Step: 0.01, Unit: "n" },
+    { Identifier: "normal_intensity", Label: "Normal intensity", Group: "Geometry", Minimum: 0, Maximum: 4, Step: 0.01, Unit: "—" },
+    { Identifier: "height_scale", Label: "Height range", Group: "Geometry", Minimum: 0, Maximum: 24, Step: 0.1, Unit: "mm" },
+    { Identifier: "texture_scale", Label: "Texture scale", Group: "Geometry", Minimum: 0.1, Maximum: 8, Step: 0.05, Unit: "×" },
+];
+
+//--------------------------------------------------------------------------------------------------------------------------
+// ② Smart-material library. Values are sRGB triples in 0..1 so that the inspector swatches round-trip exactly.
+//--------------------------------------------------------------------------------------------------------------------------
+export const MaterialCategories = [
+    { Identifier: "all", Label: "All" },
+    { Identifier: "metal", Label: "Metal" },
+    { Identifier: "mineral", Label: "Mineral" },
+    { Identifier: "organic", Label: "Organic" },
+    { Identifier: "coated", Label: "Coated" },
+    { Identifier: "effect", Label: "Effect" },
+];
+
+export const MaterialLibrary = [
+    {
+        Identifier: "brushed-aluminium",
+        Label: "Brushed aluminium",
+        Category: "metal",
+        Note: "Anisotropic mill finish · 6061",
+        Swatch: "#b9bcc0",
+        Surface: { specular_roughness_anisotropy: 0.65, specular_ior: 1.5 },
+        Layers: [
+            {
+                Name: "Aluminium",
+                Kind: "fill",
+                Channels: { base_color: [0.68, 0.7, 0.72], base_metalness: 1, specular_roughness: 0.3, specular_weight: 1 },
+            },
+            {
+                Name: "Mill scratches",
+                Kind: "generator",
+                Blend: "overlay",
+                Opacity: 0.55,
+                Generator: { Kind: "scratches", Scale: 7, Contrast: 0.7, Angle: 0, Detail: 3 },
+                Channels: { specular_roughness: 0.52, height: 0.52 },
+            },
+        ],
+    },
+    {
+        Identifier: "polished-gold",
+        Label: "Polished gold",
+        Category: "metal",
+        Note: "24 ct · F82 edge tint",
+        Swatch: "#d4a24a",
+        Surface: { specular_color: [1, 0.86, 0.62] },
+        Layers: [
+            {
+                Name: "Gold",
+                Kind: "fill",
+                Channels: { base_color: [1, 0.77, 0.34], base_metalness: 1, specular_roughness: 0.08, specular_weight: 1 },
+            },
+        ],
+    },
+    {
+        Identifier: "rusted-iron",
+        Label: "Rusted iron",
+        Category: "metal",
+        Note: "Pitted oxide over cast iron",
+        Swatch: "#7c4a2d",
+        Layers: [
+            {
+                Name: "Cast iron",
+                Kind: "fill",
+                Channels: { base_color: [0.26, 0.26, 0.27], base_metalness: 1, specular_roughness: 0.42 },
+            },
+            {
+                Name: "Oxide field",
+                Kind: "generator",
+                Opacity: 0.95,
+                Generator: { Kind: "fbm", Scale: 4.5, Detail: 6, Contrast: 0.62, Warp: 0.4, Balance: 0.45 },
+                Channels: { base_color: [0.42, 0.18, 0.08], base_metalness: 0, specular_roughness: 0.86, height: 0.57 },
+            },
+            {
+                Name: "Pitting",
+                Kind: "generator",
+                Opacity: 0.7,
+                Generator: { Kind: "cells", Scale: 26, Contrast: 0.78, Balance: 0.62 },
+                Channels: { base_color: [0.2, 0.09, 0.04], specular_roughness: 0.95, height: 0.4, ambient_occlusion: 0.55 },
+                Mask: { Kind: "fbm", Scale: 3, Contrast: 0.5, Balance: 0.42 },
+            },
+        ],
+    },
+    {
+        Identifier: "copper-patina",
+        Label: "Copper patina",
+        Category: "metal",
+        Note: "Verdigris in the cavities",
+        Swatch: "#6f9c84",
+        Layers: [
+            {
+                Name: "Copper",
+                Kind: "fill",
+                Channels: { base_color: [0.95, 0.64, 0.54], base_metalness: 1, specular_roughness: 0.26 },
+            },
+            {
+                Name: "Verdigris",
+                Kind: "generator",
+                Opacity: 0.9,
+                Generator: { Kind: "fbm", Scale: 6, Detail: 5, Contrast: 0.55, Warp: 0.65, Balance: 0.52 },
+                Channels: { base_color: [0.3, 0.56, 0.47], base_metalness: 0, specular_roughness: 0.78, height: 0.54 },
+                Mask: { Kind: "cavity", Contrast: 0.6, Balance: 0.45 },
+            },
+        ],
+    },
+    {
+        Identifier: "car-coat",
+        Label: "Automotive coat",
+        Category: "coated",
+        Note: "Metallic flake under 2K lacquer",
+        Swatch: "#2f4f82",
+        Surface: { coat_ior: 1.55, coat_darkening: 0.85 },
+        Layers: [
+            {
+                Name: "Base coat",
+                Kind: "fill",
+                Channels: {
+                    base_color: [0.07, 0.14, 0.32],
+                    base_metalness: 0.15,
+                    specular_roughness: 0.3,
+                    coat_weight: 1,
+                    coat_roughness: 0.035,
+                },
+            },
+            {
+                Name: "Metallic flake",
+                Kind: "generator",
+                Blend: "overlay",
+                Opacity: 0.45,
+                Generator: { Kind: "cells", Scale: 180, Contrast: 0.85, Balance: 0.55 },
+                Channels: { base_metalness: 0.9, specular_roughness: 0.18, base_color: [0.55, 0.62, 0.78] },
+            },
+        ],
+    },
+    {
+        Identifier: "glossy-ceramic",
+        Label: "Glazed ceramic",
+        Category: "coated",
+        Note: "Fired porcelain with a thin glaze",
+        Swatch: "#e7e3dc",
+        Layers: [
+            {
+                Name: "Porcelain",
+                Kind: "fill",
+                Channels: {
+                    base_color: [0.92, 0.9, 0.87],
+                    base_metalness: 0,
+                    specular_roughness: 0.12,
+                    coat_weight: 0.6,
+                    coat_roughness: 0.04,
+                },
+            },
+            {
+                Name: "Glaze pooling",
+                Kind: "generator",
+                Blend: "multiply",
+                Opacity: 0.35,
+                Generator: { Kind: "fbm", Scale: 3, Detail: 4, Contrast: 0.35, Warp: 0.2 },
+                Channels: { base_color: [0.82, 0.85, 0.88], specular_roughness: 0.2 },
+            },
+        ],
+    },
+    {
+        Identifier: "matte-polymer",
+        Label: "Matte polymer",
+        Category: "coated",
+        Note: "Injection-moulded ABS, bead blasted",
+        Swatch: "#4b4e52",
+        Layers: [
+            {
+                Name: "ABS",
+                Kind: "fill",
+                Channels: { base_color: [0.19, 0.2, 0.22], base_metalness: 0, specular_roughness: 0.62, specular_weight: 0.75 },
+            },
+            {
+                Name: "Blast texture",
+                Kind: "generator",
+                Opacity: 0.5,
+                Generator: { Kind: "fbm", Scale: 90, Detail: 2, Contrast: 0.5 },
+                Channels: { specular_roughness: 0.72, height: 0.52 },
+            },
+        ],
+    },
+    {
+        Identifier: "oak-plank",
+        Label: "Oak plank",
+        Category: "organic",
+        Note: "Quarter-sawn grain, satin oil",
+        Swatch: "#9a6a3c",
+        Layers: [
+            {
+                Name: "Oak",
+                Kind: "fill",
+                Channels: { base_color: [0.54, 0.36, 0.2], base_metalness: 0, specular_roughness: 0.48 },
+            },
+            {
+                Name: "Grain",
+                Kind: "generator",
+                Blend: "multiply",
+                Opacity: 0.8,
+                Generator: { Kind: "wood", Scale: 9, Detail: 5, Contrast: 0.6, Warp: 0.5, Angle: 90 },
+                Channels: { base_color: [0.3, 0.17, 0.08], specular_roughness: 0.56, height: 0.46 },
+            },
+        ],
+    },
+    {
+        Identifier: "worn-leather",
+        Label: "Worn leather",
+        Category: "organic",
+        Note: "Pebble grain with edge polish",
+        Swatch: "#6b4530",
+        Layers: [
+            {
+                Name: "Leather",
+                Kind: "fill",
+                Channels: { base_color: [0.24, 0.14, 0.09], specular_roughness: 0.58, fuzz_weight: 0.18 },
+            },
+            {
+                Name: "Pebble grain",
+                Kind: "generator",
+                Opacity: 0.75,
+                Generator: { Kind: "cells", Scale: 46, Contrast: 0.5, Balance: 0.5 },
+                Channels: { height: 0.62, specular_roughness: 0.52, ambient_occlusion: 0.82 },
+            },
+            {
+                Name: "Edge polish",
+                Kind: "generator",
+                Blend: "screen",
+                Opacity: 0.6,
+                Generator: { Kind: "curvature", Contrast: 0.7, Balance: 0.55 },
+                Channels: { specular_roughness: 0.3, base_color: [0.42, 0.28, 0.18] },
+            },
+        ],
+    },
+    {
+        Identifier: "woven-fabric",
+        Label: "Woven fabric",
+        Category: "organic",
+        Note: "Twill weave with a fuzz lobe",
+        Swatch: "#39506b",
+        Surface: { fuzz_roughness: 0.4, fuzz_color: [0.9, 0.93, 1] },
+        Layers: [
+            {
+                Name: "Denim",
+                Kind: "fill",
+                Channels: { base_color: [0.15, 0.22, 0.34], specular_roughness: 0.88, fuzz_weight: 0.85, specular_weight: 0.4 },
+            },
+            {
+                Name: "Weave",
+                Kind: "generator",
+                Opacity: 0.85,
+                Generator: { Kind: "weave", Scale: 110, Contrast: 0.6 },
+                Channels: { height: 0.6, ambient_occlusion: 0.8, base_color: [0.2, 0.28, 0.42] },
+            },
+        ],
+    },
+    {
+        Identifier: "carbon-weave",
+        Label: "Carbon fibre",
+        Category: "coated",
+        Note: "2 × 2 twill under clear coat",
+        Swatch: "#232528",
+        Layers: [
+            {
+                Name: "Resin",
+                Kind: "fill",
+                Channels: { base_color: [0.04, 0.04, 0.045], base_metalness: 0.1, specular_roughness: 0.22, coat_weight: 1, coat_roughness: 0.03 },
+            },
+            {
+                Name: "Tow",
+                Kind: "generator",
+                Opacity: 1,
+                Generator: { Kind: "weave", Scale: 42, Contrast: 0.85 },
+                Channels: { base_color: [0.1, 0.1, 0.11], specular_roughness: 0.3, base_metalness: 0.4, height: 0.56 },
+            },
+        ],
+    },
+    {
+        Identifier: "cast-concrete",
+        Label: "Cast concrete",
+        Category: "mineral",
+        Note: "Board-formed, air pockets",
+        Swatch: "#8a8880",
+        Layers: [
+            {
+                Name: "Concrete",
+                Kind: "fill",
+                Channels: { base_color: [0.52, 0.51, 0.48], specular_roughness: 0.84, specular_weight: 0.5 },
+            },
+            {
+                Name: "Aggregate",
+                Kind: "generator",
+                Opacity: 0.6,
+                Generator: { Kind: "fbm", Scale: 28, Detail: 5, Contrast: 0.55 },
+                Channels: { base_color: [0.4, 0.39, 0.37], height: 0.47, specular_roughness: 0.9 },
+            },
+            {
+                Name: "Air pockets",
+                Kind: "generator",
+                Opacity: 0.5,
+                Generator: { Kind: "cells", Scale: 60, Contrast: 0.9, Balance: 0.78 },
+                Channels: { height: 0.34, ambient_occlusion: 0.45, base_color: [0.3, 0.29, 0.28] },
+            },
+        ],
+    },
+    {
+        Identifier: "frosted-glass",
+        Label: "Frosted glass",
+        Category: "effect",
+        Note: "Acid-etched soda lime",
+        Swatch: "#9fb6bd",
+        Surface: { transmission_color: [0.86, 0.94, 0.95], transmission_depth: 0.12, specular_ior: 1.52 },
+        Layers: [
+            {
+                Name: "Glass",
+                Kind: "fill",
+                Channels: {
+                    base_color: [0.92, 0.96, 0.97],
+                    specular_roughness: 0.18,
+                    base_metalness: 0,
+                    transmission_weight: 1,
+                    specular_weight: 1,
+                },
+            },
+            {
+                Name: "Etch",
+                Kind: "generator",
+                Opacity: 0.7,
+                Generator: { Kind: "fbm", Scale: 50, Detail: 3, Contrast: 0.4 },
+                Channels: { specular_roughness: 0.46, height: 0.52 },
+            },
+        ],
+    },
+    {
+        Identifier: "iridescent-film",
+        Label: "Iridescent film",
+        Category: "effect",
+        Note: "Thin-film interference over steel",
+        Swatch: "#8f6fae",
+        Surface: { thin_film_weight: 1, thin_film_thickness: 0.62, thin_film_ior: 1.45 },
+        Layers: [
+            {
+                Name: "Steel",
+                Kind: "fill",
+                Channels: { base_color: [0.56, 0.57, 0.58], base_metalness: 1, specular_roughness: 0.16 },
+            },
+            {
+                Name: "Film thickness",
+                Kind: "generator",
+                Blend: "overlay",
+                Opacity: 0.6,
+                Generator: { Kind: "fbm", Scale: 5, Detail: 4, Contrast: 0.4, Warp: 0.8 },
+                Channels: { specular_roughness: 0.22, base_color: [0.68, 0.6, 0.72] },
+            },
+        ],
+    },
+    {
+        Identifier: "edge-wear",
+        Label: "Edge wear",
+        Category: "effect",
+        Note: "Modifier · exposes metal on convex edges",
+        Swatch: "#cfd2d6",
+        Modifier: true,
+        Layers: [
+            {
+                Name: "Edge wear",
+                Kind: "generator",
+                Opacity: 0.9,
+                Generator: { Kind: "curvature", Contrast: 0.75, Balance: 0.62 },
+                Channels: { base_color: [0.78, 0.79, 0.8], base_metalness: 1, specular_roughness: 0.22 },
+            },
+        ],
+    },
+    {
+        Identifier: "settled-dust",
+        Label: "Settled dust",
+        Category: "effect",
+        Note: "Modifier · accumulates on up-facing texels",
+        Swatch: "#b3a894",
+        Modifier: true,
+        Layers: [
+            {
+                Name: "Settled dust",
+                Kind: "generator",
+                Opacity: 0.7,
+                Generator: { Kind: "occlusion", Contrast: 0.5, Balance: 0.5 },
+                Channels: { base_color: [0.62, 0.58, 0.5], specular_roughness: 0.92, base_metalness: 0, fuzz_weight: 0.3 },
+                Mask: { Kind: "fbm", Scale: 10, Contrast: 0.4, Balance: 0.4 },
+            },
+        ],
+    },
+];
+
+export const MaterialByIdentifier = Object.fromEntries(
+    MaterialLibrary.map((Material) => [Material.Identifier, Material]),
+);
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Environment presets for the viewport. Analytic, so roughness widens the lobe instead of sampling a prefiltered cubemap.
+//--------------------------------------------------------------------------------------------------------------------------
+export const EnvironmentOrdering = [
+    { Identifier: "studio", Label: "Studio", Zenith: [0.52, 0.56, 0.62], Horizon: [0.32, 0.33, 0.36], Ground: [0.07, 0.07, 0.08], Key: 7.0, Fill: 1.6, Rim: 2.4 },
+    { Identifier: "sunset", Label: "Sunset", Zenith: [0.24, 0.3, 0.5], Horizon: [0.75, 0.42, 0.22], Ground: [0.08, 0.06, 0.05], Key: 9.0, Fill: 0.9, Rim: 1.6 },
+    { Identifier: "overcast", Label: "Overcast", Zenith: [0.6, 0.63, 0.68], Horizon: [0.48, 0.5, 0.54], Ground: [0.12, 0.12, 0.13], Key: 2.2, Fill: 2.0, Rim: 1.2 },
+    { Identifier: "workshop", Label: "Night shop", Zenith: [0.06, 0.07, 0.09], Horizon: [0.1, 0.1, 0.12], Ground: [0.03, 0.03, 0.035], Key: 12.0, Fill: 0.5, Rim: 3.2 },
+];
+
+export const EnvironmentByIdentifier = Object.fromEntries(
+    EnvironmentOrdering.map((Environment) => [Environment.Identifier, Environment]),
+);
+
+export const EnvironmentIndex = (Identifier) =>
+    Math.max(
+        0,
+        EnvironmentOrdering.findIndex((Environment) => Environment.Identifier === Identifier),
+    );

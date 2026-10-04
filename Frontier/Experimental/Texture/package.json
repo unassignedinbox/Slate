@@ -1,0 +1,23 @@
+{
+  "name": "frontier-texture-editor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Experimental OpenPBR texture authoring editor — layer stack, material system, SVG and text decals",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node --test src/SurfaceMetrics.mjs src/StackMetrics.mjs src/ShadingMetrics.mjs"
+  },
+  "devDependencies": {
+    "vite": "^7.3.1"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "reference": {
+    "theme": "Frontier/Experimental/Fluid @ ed7d5dfbda50ee856ad27471767c1f06197a0c18",
+    "scope": "Texture authoring only. Shares the Fluid editor chrome (ThemeSpecification.css) and the DM Sans OFL assets."
+  }
+}
