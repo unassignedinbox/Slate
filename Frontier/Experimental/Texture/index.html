@@ -46,6 +46,18 @@
             </div>
             <main class="workspace" id="texture-workspace">
                 <aside class="left-panel">
+                    <section class="outliner" id="outliner" aria-label="Objects">
+                        <div class="outliner-heading">
+                            <button id="outliner-fold" class="outliner-fold" aria-expanded="true" title="Collapse the outliner">
+                                <span data-icon="down"></span><h2>Objects</h2><span class="stack-count" id="object-count">1</span>
+                            </button>
+                            <div class="outliner-actions">
+                                <button id="isolate-button" class="icon-button" title="Isolate the selected object" aria-label="Isolate object" aria-pressed="false" data-icon="eye"></button
+                                ><button id="add-object" class="icon-button" title="Add an object" aria-label="Add an object" data-icon="plus"></button>
+                            </div>
+                        </div>
+                        <div id="object-list" class="object-list" role="tree" aria-label="Scene objects"></div>
+                    </section>
                     <div class="stack-heading">
                         <div class="stack-title">
                             <h1>Layers</h1>
@@ -92,9 +104,13 @@
                     </div>
                     <div class="viewport" id="viewport">
                         <canvas id="surface-canvas" aria-label="Interactive painted surface viewport"></canvas>
+                        <div class="uv-overlay" id="uv-overlay" hidden aria-hidden="true">
+                            <div class="uv-plane" id="uv-plane"><div class="uv-tiles" id="uv-tiles"></div></div>
+                        </div>
                         <div class="viewport-caption">
                             <span class="live-pill" id="live-pill"><i></i><span>OPENPBR</span></span><span id="viewport-object">Base fill</span
-                            ><small id="viewport-subtitle">Brush → coverage</small>
+                            ><small id="viewport-subtitle">Brush → coverage</small
+                            ><small class="viewport-hover" id="viewport-hover"></small>
                         </div>
                         <div class="viewport-tools" aria-label="Viewport tools">
                             <button class="icon-button" data-tool="orbit" title="Orbit camera · 1" aria-label="Orbit camera" data-icon="orbit"></button

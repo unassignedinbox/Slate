@@ -10,6 +10,15 @@ import { ShadingIntegrator, ProbeAcceleration, DeviceReport } from "./ShadingInt
 import { OrbitProjection } from "./OrbitProjection.js";
 import { StrokeProjection, ToolOrdering, SymmetryOrdering, MirrorVector } from "./StrokeProjection.js";
 import { BuildSurface, SurfaceIndex, BakeOcclusion, ParseWavefront } from "./SurfaceStructure.js";
+import {
+    AssembleScene,
+    CreateObject,
+    ObjectAtTriangle,
+    CoordinateTile,
+    TileNumber,
+    TilePlacement,
+    FirstTile,
+} from "./SceneStructure.js";
 import { RevisionQueue } from "./RevisionQueue.js";
 import { DocumentSequence } from "./DocumentSequence.js";
 import { EmitTextureSet, EmitProject } from "./ExportSequence.js";
@@ -361,6 +370,11 @@ class TexturePanel
         this.BrowserOpen = ["materials"];
         this.PickingMaskColour = false;
         this.ToolBefore = "";
+        this.Isolated = false;
+        this.HoverTile = FirstTile;
+        this.HoverObject = "";
+        this.SecondaryPainting = false;
+        this.PickCandidate = null;
         this.PlaneZoom = 0.82;
         this.PlanePan = [0, 0];
         this.Dirty = false;
@@ -397,6 +411,7 @@ class TexturePanel
         this.Documents = new DocumentSequence(this, Icon);
         this.BindHeader();
         this.BindStack();
+        this.BindObjects();
         this.BindViewport();
         this.BindBrowser();
         this.BindTransport();
@@ -406,6 +421,7 @@ class TexturePanel
         this.Integrator.Configure(this.Project.Resolution);
         this.RebuildSurface(true);
         this.RenderStack();
+        this.RenderObjects();
         this.RenderInspector();
         this.RenderChannelStrip();
         this.SyncPaintTarget();
@@ -453,14 +469,12 @@ class TexturePanel
     //----------------------------------------------------------------------------------------------------------------------
     RebuildSurface(Initial = false)
     {
-        const Descriptor = this.Project.Surface;
-        this.SetStatus(`Building ${Descriptor.Kind}`, "busy");
-        this.SurfaceRecord =
-            Descriptor.Kind === "custom" && this.ImportedSurface
-                ? this.ImportedSurface
-                : BuildSurface(Descriptor.Kind, Descriptor.Subdivision);
+        const Objects = this.SceneObjects;
+        this.SetStatus(Objects.length === 1 ? `Building ${Objects[0].Kind}` : `Building ${Objects.length} objects`, "busy");
+        this.SurfaceRecord = AssembleScene(Objects, this.ImportedSurface);
         this.Index = new SurfaceIndex(this.SurfaceRecord);
         this.Integrator.SetSurface(this.SurfaceRecord);
+        this.RenderObjects();
         if (Initial) this.Camera.Frame(this.SurfaceRecord.Bounds.Radius, this.SurfaceRecord.Bounds.Centre);
         this.ScheduleOcclusion();
         this.InvalidateDecals();
@@ -522,6 +536,202 @@ class TexturePanel
         Select("#help-button").addEventListener("click", () => Select("#help-dialog").showModal());
         Select("#workspace-button").addEventListener("click", () => this.SetViewMode("surface"));
         Select("#shelf-button").addEventListener("click", () => this.SetViewMode("plane"));
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // Objects. A scene is a list of them; the renderer only ever sees the one surface they are folded into, so a stroke
+    // crosses from object to object without knowing it, and isolation is simply leaving the others out of the assembly.
+    //----------------------------------------------------------------------------------------------------------------------
+    get SceneObjects()
+    {
+        const Objects = this.Project.Objects || [];
+        if (!Objects.length) this.Project.Objects = [CreateObject({ Name: "Object", Kind: this.Project.Surface.Kind })];
+        if (this.Isolated)
+        {
+            const Only = this.Project.Objects.find((Entry) => Entry.Identifier === this.Project.Object);
+            if (Only) return [{ ...Only, Visible: true }];
+        }
+        return this.Project.Objects;
+    }
+
+    get ActiveObject()
+    {
+        return (
+            this.Project.Objects.find((Entry) => Entry.Identifier === this.Project.Object) ||
+            this.Project.Objects[0] ||
+            null
+        );
+    }
+
+    SelectObject(Identifier, Announce = false)
+    {
+        if (!this.Project.Objects.some((Entry) => Entry.Identifier === Identifier)) return;
+        this.Project.Object = Identifier;
+        this.RenderObjects();
+        if (this.InspectorTab === "surface") this.RenderInspector();
+        if (this.Isolated) this.RebuildSurface();
+        if (Announce) this.Notify(`${this.ActiveObject.Name} selected.`);
+    }
+
+    AddObject(Kind = "cube")
+    {
+        const Taken = new Set(this.Project.Objects.map((Entry) => Entry.Tile));
+        let Tile = FirstTile;
+        while (Taken.has(Tile) && Tile < FirstTile + 99) Tile += 1;
+        const Label = SurfaceOrdering.find((Entry) => Entry.Identifier === Kind)?.Label || "Object";
+        const Count = this.Project.Objects.length;
+        const Spread = 1.9;
+        const Object_ = CreateObject({
+            Name: `${Label} ${Count + 1}`,
+            Kind,
+            Subdivision: 2,
+            Tile,
+            Offset: [((Count % 3) - 1) * Spread, 0, Math.floor(Count / 3) * -Spread],
+        });
+        this.CaptureStack(() =>
+        {
+            this.Project.Objects.push(Object_);
+            this.Project.Object = Object_.Identifier;
+        });
+        this.RebuildSurface();
+        this.Notify(`${Object_.Name} added on tile ${Tile}.`);
+        return Object_;
+    }
+
+    RemoveObject(Identifier)
+    {
+        if (this.Project.Objects.length <= 1) return;
+        const Index = this.Project.Objects.findIndex((Entry) => Entry.Identifier === Identifier);
+        if (Index < 0) return;
+        const [Gone] = this.Project.Objects.splice(Index, 1);
+        this.CaptureStack(() =>
+        {
+            if (this.Project.Object === Identifier) this.Project.Object = this.Project.Objects[0].Identifier;
+        });
+        this.RebuildSurface();
+        this.Notify(`${Gone.Name} removed.`);
+    }
+
+    ToggleObject(Identifier)
+    {
+        const Object_ = this.Project.Objects.find((Entry) => Entry.Identifier === Identifier);
+        if (!Object_) return;
+        if (Object_.Visible && this.Project.Objects.filter((Entry) => Entry.Visible).length === 1) return;
+        this.CaptureStack(() => (Object_.Visible = !Object_.Visible));
+        this.RebuildSurface();
+    }
+
+    SetIsolation(State)
+    {
+        this.Isolated = Boolean(State);
+        Select("#isolate-button").classList.toggle("active", this.Isolated);
+        Select("#isolate-button").setAttribute("aria-pressed", String(this.Isolated));
+        this.RebuildSurface();
+        this.Notify(this.Isolated ? `Isolated ${this.ActiveObject?.Name}.` : "Showing every object.");
+    }
+
+    RenderObjects()
+    {
+        const List = Select("#object-list");
+        if (!List) return;
+        const Objects = this.Project.Objects || [];
+        Select("#object-count").textContent = String(Objects.length);
+        List.innerHTML = Objects.map((Entry) =>
+        {
+            const Selected = Entry.Identifier === this.Project.Object;
+            const Record = this.SurfaceRecord?.Ranges?.find((Range) => Range.Identifier === Entry.Identifier);
+            const Glyph = GlyphPaths[Entry.Kind] ? Entry.Kind : "box";
+            return `
+            <div class="object-row ${Selected ? "selected" : ""} ${Entry.Visible ? "" : "muted"}"
+                 data-object-row="${Entry.Identifier}" role="treeitem" aria-selected="${Selected}" tabindex="0">
+                <span class="object-symbol">${Icon(Glyph)}</span>
+                <span class="object-copy">
+                    <span class="object-name">${Escape(Entry.Name)}</span>
+                    <span class="object-note">${Escape(Entry.Kind)} · ${Record ? `${Record.TriangleCount.toLocaleString()} tris` : "—"}</span>
+                </span>
+                <span class="object-tile" title="UDIM tile">${Entry.Tile}</span>
+                <button class="icon-button row-toggle" data-object-toggle="${Entry.Identifier}"
+                        aria-label="${Entry.Visible ? "Hide" : "Show"} ${Escape(Entry.Name)}" title="${Entry.Visible ? "Hide" : "Show"}">
+                    ${Icon(Entry.Visible ? "eye" : "hidden")}
+                </button>
+            </div>`;
+        }).join("");
+        const Tiles = this.SurfaceRecord?.Tiles?.Columns || 1;
+        Select("#uv-tiles")?.replaceChildren();
+        this.RenderTileGrid(Tiles);
+    }
+
+    BindObjects()
+    {
+        Select("#object-list").addEventListener("click", (Event) =>
+        {
+            const Toggle = Event.target.closest("[data-object-toggle]");
+            if (Toggle)
+            {
+                this.ToggleObject(Toggle.dataset.objectToggle);
+                return;
+            }
+            const Row = Event.target.closest("[data-object-row]");
+            if (Row) this.SelectObject(Row.dataset.objectRow);
+        });
+        Select("#object-list").addEventListener("dblclick", (Event) =>
+        {
+            const Row = Event.target.closest("[data-object-row]");
+            if (Row) this.RenameObject(Row.dataset.objectRow);
+        });
+        Select("#add-object").addEventListener("click", () => this.AddObject("cube"));
+        Select("#isolate-button").addEventListener("click", () => this.SetIsolation(!this.Isolated));
+        Select("#outliner-fold").addEventListener("click", () =>
+        {
+            const Folded = Select("#outliner").classList.toggle("folded");
+            Select("#outliner-fold").setAttribute("aria-expanded", String(!Folded));
+        });
+    }
+
+    RenameObject(Identifier)
+    {
+        const Object_ = this.Project.Objects.find((Entry) => Entry.Identifier === Identifier);
+        const Row = Select(`[data-object-row="${Identifier}"] .object-name`);
+        if (!Object_ || !Row) return;
+        Row.contentEditable = "true";
+        Row.focus();
+        const Commit = () =>
+        {
+            Row.contentEditable = "false";
+            const Name = Row.textContent.trim().slice(0, 64) || Object_.Name;
+            this.CaptureStack(() => (Object_.Name = Name));
+            this.RenderObjects();
+        };
+        Row.addEventListener("blur", Commit, { once: true });
+        Row.addEventListener("keydown", (Event) =>
+        {
+            Event.stopPropagation();
+            if (Event.key === "Enter")
+            {
+                Event.preventDefault();
+                Row.blur();
+            }
+        });
+    }
+
+    // The UV view draws its tile grid as an overlay rather than in the shader, because the tiles want numbers on them.
+    RenderTileGrid(Span)
+    {
+        const Host = Select("#uv-tiles");
+        if (!Host) return;
+        Host.dataset.span = String(Span);
+        Host.innerHTML = Array.from({ length: Span * Span }, (Ignored, Index) =>
+        {
+            const Column = Index % Span;
+            const Row = Math.floor(Index / Span);
+            const Tile = TileNumber(Column, Row);
+            const Occupied = (this.SurfaceRecord?.Ranges || []).some((Range) => Range.Tile === Tile);
+            const Owner = (this.SurfaceRecord?.Ranges || []).find((Range) => Range.Tile === Tile);
+            return `<div class="uv-tile ${Occupied ? "occupied" : ""} ${Tile === this.HoverTile ? "hovered" : ""}" data-tile="${Tile}"
+                         style="left:${(Column / Span) * 100}%; bottom:${(Row / Span) * 100}%; width:${100 / Span}%; height:${100 / Span}%">
+                        <span>${Tile}</span>${Owner ? `<small>${Escape(Owner.Name)}</small>` : ""}
+                    </div>`;
+        }).join("");
     }
 
     //----------------------------------------------------------------------------------------------------------------------
@@ -938,6 +1148,42 @@ class TexturePanel
     // The surface and its unwrapped texture are two ways of looking at the same paint, so the switch lives in the header,
     // in the viewport bar and on the X key — all three come through here.
     //----------------------------------------------------------------------------------------------------------------------
+    MarkHoveredTile()
+    {
+        for (const Element of document.querySelectorAll("#uv-tiles .uv-tile"))
+            Element.classList.toggle("hovered", Element.dataset.tile === String(this.HoverTile));
+    }
+
+    // Names the object beneath the pointer in the viewport caption without redrawing anything else.
+    NoteHover(Owner)
+    {
+        const Identifier = Owner?.Identifier || "";
+        if (Identifier === this.HoverObject) return;
+        this.HoverObject = Identifier;
+        if (Owner) this.HoverTile = Owner.Tile;
+        const Hint = Select("#viewport-hover");
+        if (Hint) Hint.textContent = Owner && this.Project.Objects.length > 1 ? `${Owner.Name} · ${Owner.Tile}` : "";
+    }
+
+    SyncPlaneOverlay()
+    {
+        const Overlay = Select("#uv-overlay");
+        if (!Overlay) return;
+        const Showing = this.ViewMode === "plane";
+        Overlay.hidden = !Showing;
+        if (!Showing) return;
+        const Canvas = Select("#surface-canvas");
+        const Aspect = (Canvas.clientWidth || 1) / Math.max(Canvas.clientHeight || 1, 1);
+        const Zoom = this.PlaneZoom;
+        const Left = ((-0.5 - this.PlanePan[0]) * Zoom) / Aspect + 0.5;
+        const Bottom = (-0.5 - this.PlanePan[1]) * Zoom + 0.5;
+        const Plane = Select("#uv-plane");
+        Plane.style.left = `${Left * 100}%`;
+        Plane.style.bottom = `${Bottom * 100}%`;
+        Plane.style.width = `${(Zoom / Aspect) * 100}%`;
+        Plane.style.height = `${Zoom * 100}%`;
+    }
+
     SetViewMode(Mode)
     {
         this.ViewMode = Mode === "plane" ? "plane" : "surface";
@@ -946,6 +1192,7 @@ class TexturePanel
         Select(".viewport").classList.toggle("plane-view", this.ViewMode === "plane");
         Select("#workspace-button").classList.toggle("active", this.ViewMode === "surface");
         Select("#shelf-button").classList.toggle("active", this.ViewMode === "plane");
+        this.SyncPlaneOverlay();
         this.UpdateCaption();
     }
 
@@ -1682,13 +1929,15 @@ class TexturePanel
         this.Canvas.setPointerCapture(Event.pointerId);
         this.PointerButton = Event.button;
         this.PointerPrevious = [Event.clientX, Event.clientY];
-        const Navigating = this.Tool === "orbit" || Event.button === 1 || Event.button === 2 || this.SpaceHeld;
+        this.SecondaryPainting = Event.button === 2 && !this.SpaceHeld;
+        const Navigating = !this.SecondaryPainting && (this.Tool === "orbit" || Event.button === 1 || this.SpaceHeld);
         this.Navigating = Navigating;
+        this.PickCandidate = Navigating && this.Tool === "orbit" && Event.button === 0 ? [Event.clientX, Event.clientY] : null;
         if (Navigating) return;
 
         if (this.ViewMode === "plane")
         {
-            if (this.Tool === "brush" || this.Tool === "eraser")
+            if (this.StrokeTool === "brush" || this.StrokeTool === "eraser")
             {
                 const Coordinate = this.PlaneCoordinates(Event);
                 const Layer = this.PaintTargetLayer();
@@ -1706,7 +1955,7 @@ class TexturePanel
             this.Navigating = true;
             return;
         }
-        if (this.Tool === "picker")
+        if (this.StrokeTool === "picker")
         {
             const Sample = this.Integrator.PickTexel(Hit.Coordinate);
             if (Sample)
@@ -1723,12 +1972,12 @@ class TexturePanel
             }
             return;
         }
-        if (this.Tool === "decal")
+        if (this.StrokeTool === "decal")
         {
             this.PlaceDecal(Hit);
             return;
         }
-        if (this.Tool === "fill")
+        if (this.StrokeTool === "fill")
         {
             this.FloodActive();
             return;
@@ -1768,7 +2017,13 @@ class TexturePanel
             const Coordinate = this.PlaneCoordinates(Event);
             const PlaneRadius = this.PlaneRadius();
             this.PlaneCursor = [Coordinate[0], Coordinate[1], PlaneRadius];
-            if (this.Projection.Active && (this.Tool === "brush" || this.Tool === "eraser"))
+            const Tile = CoordinateTile(this.SurfaceRecord, Coordinate);
+            if (Tile !== this.HoverTile)
+            {
+                this.HoverTile = Tile;
+                this.MarkHoveredTile();
+            }
+            if (this.Projection.Active && (this.StrokeTool === "brush" || this.StrokeTool === "eraser"))
             {
                 const Segment = this.Projection.ExtendPlane(Coordinate, PlaneRadius);
                 if (Segment) this.StampPlane(this.ActiveLayer, Segment.StartPlane, Segment.EndPlane);
@@ -1786,8 +2041,9 @@ class TexturePanel
                   Hardness: this.Projection.Brush.Hardness,
               }
             : null;
+        this.NoteHover(Hit ? ObjectAtTriangle(this.SurfaceRecord, Hit.Triangle) : null);
         if (!Hit || !this.Projection.Active) return;
-        if (this.Tool !== "brush" && this.Tool !== "eraser") return;
+        if (this.StrokeTool !== "brush" && this.StrokeTool !== "eraser") return;
         const Segment = this.Projection.Extend(Hit);
         if (Segment) this.StampSurface(this.ActiveLayer, Segment);
     }
@@ -1797,9 +2053,30 @@ class TexturePanel
         if (this.Canvas.hasPointerCapture?.(Event.pointerId)) this.Canvas.releasePointerCapture(Event.pointerId);
         if (this.Projection.Active) this.CommitStrokeRevision();
         this.Projection.End();
+        // A click that never became a drag, with the camera tool in hand, selects whatever object sits under it.
+        if (this.PickCandidate && this.ViewMode === "surface")
+        {
+            const Travel = Math.hypot(Event.clientX - this.PickCandidate[0], Event.clientY - this.PickCandidate[1]);
+            if (Travel < 4)
+            {
+                const [DeviceX, DeviceY] = this.DeviceCoordinates(Event);
+                const Hit = this.Projection.Resolve(this.Index, this.Camera, DeviceX, DeviceY);
+                const Owner = Hit ? ObjectAtTriangle(this.SurfaceRecord, Hit.Triangle) : null;
+                if (Owner && Owner.Identifier !== this.Project.Object) this.SelectObject(Owner.Identifier, true);
+            }
+        }
+        this.PickCandidate = null;
+        this.SecondaryPainting = false;
         this.Navigating = false;
         this.PointerButton = undefined;
         this.PointerPrevious = null;
+    }
+
+    // The tool the pointer is actually driving: the right button always paints, whatever is selected in the toolbar.
+    get StrokeTool()
+    {
+        if (!this.SecondaryPainting) return this.Tool;
+        return this.Tool === "eraser" ? "eraser" : "brush";
     }
 
     PlaneRadius()
@@ -2115,6 +2392,7 @@ class TexturePanel
             Decal: Layer?.Decal,
             Finish: Layer?.Finish,
             Project: this.Project,
+            Object: this.ActiveObject,
             Material: this.Project.Material,
             Environment: this.Project.Environment,
             Surface: this.Project.Surface,
@@ -2177,9 +2455,25 @@ class TexturePanel
     AfterInspectorChange(Path, Committed)
     {
         this.MarkDirty();
-        if (Path.startsWith("Surface."))
+        if (Path === "Project.Object")
         {
-            if (Committed) this.RebuildSurface();
+            this.SelectObject(this.Project.Object);
+            this.RenderInspector();
+            return;
+        }
+        if (Path.startsWith("Surface.") || Path.startsWith("Object."))
+        {
+            if (Path === "Object.Kind" && this.ActiveObject)
+            {
+                const Label = SurfaceOrdering.find((Entry) => Entry.Identifier === this.ActiveObject.Kind)?.Label;
+                if (Label && /^(Shader ball|Sphere|Rounded cube|Cylinder|Torus|Plane|Imported mesh|Object)/.test(this.ActiveObject.Name))
+                    this.ActiveObject.Name = Label;
+            }
+            if (Committed || Path === "Object.Kind" || Path === "Object.Tile")
+            {
+                this.RebuildSurface();
+                this.RenderInspector();
+            }
             return;
         }
         if (Path === "Project.Resolution")
@@ -2237,6 +2531,14 @@ class TexturePanel
         const Layer = this.ActiveLayer;
         switch (Action)
         {
+            case "add-object":
+                this.AddObject("cube");
+                this.RenderInspector();
+                break;
+            case "remove-object":
+                this.RemoveObject(this.Project.Object);
+                this.RenderInspector();
+                break;
             case "duplicate-layer":
                 this.DuplicateLayer();
                 break;
@@ -2878,33 +3180,63 @@ class TexturePanel
 
     SurfaceInspector()
     {
-        const Surface = this.Project.Surface;
         const Environment = this.Project.Environment;
         const Record = this.SurfaceRecord;
+        const Object_ = this.ActiveObject;
+        const Range = Record?.Ranges?.find((Entry) => Entry.Identifier === Object_?.Identifier);
+        const Span = Record?.Tiles?.Columns || 1;
+        const Placement = Object_ ? TilePlacement(Object_.Tile) : { Column: 0, Row: 0 };
         return [
             Group({
-                Title: "Surface",
-                Badge: Record ? `${Record.Triangles.toLocaleString()} TRIS` : "",
-                Body: [
-                    SelectRow({
-                        Label: "Mesh",
-                        Path: "Surface.Kind",
-                        Value: Surface.Kind,
-                        Options: SurfaceOrdering.map((Entry) => ({ Value: Entry.Identifier, Label: `${Entry.Label} · ${Entry.Note}` })),
-                    }),
-                    SliderRow({ Label: "Subdivision", Path: "Surface.Subdivision", Value: Surface.Subdivision, Minimum: 0, Maximum: 3, Step: 1, Unit: "lvl" }),
-                    SelectRow({
-                        Label: "Texture resolution",
-                        Path: "Project.Resolution",
-                        Value: String(this.Project.Resolution),
-                        Options: ResolutionOrdering.map((Entry) => ({ Value: String(Entry.Value), Label: `${Entry.Label} · ${Entry.Note}` })),
-                        Hint: "Painted layers are resampled when the resolution changes.",
-                    }),
-                    ActionRow([
-                        { Action: "import-mesh", Label: "Import OBJ", Glyph: "folder" },
-                        { Action: "bake-occlusion", Label: "Re-bake AO", Glyph: "rotate" },
-                    ]),
-                ].join(""),
+                Title: "Object",
+                Badge: Range ? `${Range.TriangleCount.toLocaleString()} TRIS` : "",
+                Body: Object_
+                    ? [
+                          SelectRow({
+                              Label: "Object",
+                              Path: "Project.Object",
+                              Value: Object_.Identifier,
+                              Options: this.Project.Objects.map((Entry) => ({ Value: Entry.Identifier, Label: `${Entry.Name} · ${Entry.Tile}` })),
+                          }),
+                          SelectRow({
+                              Label: "Mesh",
+                              Path: "Object.Kind",
+                              Value: Object_.Kind,
+                              Options: SurfaceOrdering.map((Entry) => ({ Value: Entry.Identifier, Label: `${Entry.Label} · ${Entry.Note}` })),
+                          }),
+                          SliderRow({ Label: "Subdivision", Path: "Object.Subdivision", Value: Object_.Subdivision, Minimum: 0, Maximum: 3, Step: 1, Unit: "lvl" }),
+                          SliderRow({ Label: "Scale", Path: "Object.Scale", Value: Object_.Scale, Minimum: 0.1, Maximum: 10, Step: 0.01, Unit: "×" }),
+                          SliderRow({ Label: "Spin", Path: "Object.Rotation", Value: Object_.Rotation, Minimum: 0, Maximum: 360, Step: 1, Unit: "°" }),
+                          SliderRow({ Label: "Offset X", Path: "Object.Offset.0", Value: Object_.Offset[0], Minimum: -12, Maximum: 12, Step: 0.01, Unit: "m" }),
+                          SliderRow({ Label: "Offset Y", Path: "Object.Offset.1", Value: Object_.Offset[1], Minimum: -12, Maximum: 12, Step: 0.01, Unit: "m" }),
+                          SliderRow({ Label: "Offset Z", Path: "Object.Offset.2", Value: Object_.Offset[2], Minimum: -12, Maximum: 12, Step: 0.01, Unit: "m" }),
+                          ActionRow([
+                              { Action: "add-object", Label: "Add object", Glyph: "plus" },
+                              { Action: "remove-object", Label: "Remove", Glyph: "trash" },
+                          ]),
+                      ].join("")
+                    : "",
+            }),
+            Group({
+                Title: "UV tiles",
+                Badge: `${Span}×${Span} UDIM`,
+                Open: false,
+                Body: Object_
+                    ? [
+                          SliderRow({ Label: "Tile", Path: "Object.Tile", Value: Object_.Tile, Minimum: 1001, Maximum: 1100, Step: 1, Unit: "" , Hint: `Column ${Placement.Column + 1}, row ${Placement.Row + 1} of the UDIM sheet.` }),
+                          SelectRow({
+                              Label: "Texture resolution",
+                              Path: "Project.Resolution",
+                              Value: String(this.Project.Resolution),
+                              Options: ResolutionOrdering.map((Entry) => ({ Value: String(Entry.Value), Label: `${Entry.Label} · ${Entry.Note}` })),
+                              Hint: "Shared by every tile, so a wider sheet means fewer texels per object.",
+                          }),
+                          ActionRow([
+                              { Action: "import-mesh", Label: "Import OBJ", Glyph: "folder" },
+                              { Action: "bake-occlusion", Label: "Re-bake AO", Glyph: "rotate" },
+                          ]),
+                      ].join("")
+                    : "",
             }),
             Group({
                 Title: "Environment",
@@ -2924,7 +3256,7 @@ class TexturePanel
             }),
             Group({
                 Title: "Stack",
-                Badge: `${this.Layers.length} LAYERS`,
+                Badge: `${Record ? Record.Triangles.toLocaleString() : 0} TRIS`,
                 Open: false,
                 Body: ActionRow([{ Action: "reset-stack", Label: "Reset to the default stack", Glyph: "layers" }]),
             }),
@@ -3364,8 +3696,10 @@ class TexturePanel
     {
         const Resolution = this.Project.Resolution;
         Select("#texel-count").textContent = `${((Resolution * Resolution) / 1e6).toFixed(2)} Mtexel · ${Resolution}²`;
+        const Span = this.SurfaceRecord?.Tiles?.Columns || 1;
         Select("#surface-status").textContent = this.SurfaceRecord
-            ? `${this.SurfaceRecord.Label} · ${this.SurfaceRecord.Triangles.toLocaleString()} tris`
+            ? `${this.SurfaceRecord.Label} · ${this.SurfaceRecord.Triangles.toLocaleString()} tris` +
+              (Span > 1 ? ` · ${Span}×${Span} UDIM` : "")
             : "No surface";
         Select("#revision-status").textContent = `${this.Revisions.Depth} revisions · ${this.Revisions.Megabytes.toFixed(1)} MB`;
         Select("#undo-button").disabled = !this.Revisions.CanUndo;
@@ -3425,6 +3759,7 @@ class TexturePanel
             this.UpdateDiagnostics();
         }
         this.Camera.Advance(Delta);
+        if (this.ViewMode === "plane") this.SyncPlaneOverlay();
         const Options = {
             Environment: this.Project.Environment,
             Material: this.Project.Material,
@@ -3432,7 +3767,7 @@ class TexturePanel
             MaskLayer: this.Project.Selection,
             MaskTint: this.ActiveLayer?.Mask?.Tint || [0.95, 0.22, 0.3],
             CheckerScale: 16,
-            Cursor: this.Tool === "brush" || this.Tool === "eraser" ? this.Cursor : null,
+            Cursor: this.StrokeTool === "brush" || this.StrokeTool === "eraser" ? this.Cursor : null,
         };
         if (this.ViewMode === "plane")
             this.Integrator.RenderPlane({

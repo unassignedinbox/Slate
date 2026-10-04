@@ -2710,3 +2710,212 @@ dialog {
   color: #6f6f6f;
   font-style: italic;
 }
+
+/* ------------------------------------------------------------------ object outliner */
+.outliner {
+  border-bottom: 1px solid var(--line);
+  padding: 14px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-height: 0;
+}
+.outliner-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.outliner-fold {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+}
+.outliner-fold h2 {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+.outliner-fold [data-icon] {
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+  transition: transform 0.18s ease;
+}
+.outliner.folded .outliner-fold [data-icon] {
+  transform: rotate(-90deg);
+}
+.outliner.folded .object-list {
+  display: none;
+}
+.outliner-actions {
+  display: flex;
+  gap: 2px;
+}
+.object-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 188px;
+  overflow: auto;
+  scrollbar-width: none;
+}
+.object-list::-webkit-scrollbar {
+  display: none;
+}
+.object-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto 24px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px 7px 7px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: #151515;
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease;
+}
+.object-row:hover {
+  background: #191919;
+}
+.object-row.selected {
+  background: var(--card);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.object-row.muted {
+  opacity: 0.44;
+}
+.object-symbol {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: #0d0d0d;
+  color: var(--muted);
+}
+.object-row.selected .object-symbol {
+  color: var(--text);
+}
+.object-symbol [data-icon],
+.object-symbol svg {
+  width: 13px;
+  height: 13px;
+}
+.object-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.object-name {
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  outline: none;
+}
+.object-name[contenteditable="true"] {
+  background: var(--field);
+  border-radius: 5px;
+  padding: 0 3px;
+  text-overflow: clip;
+}
+.object-note {
+  font-size: 10px;
+  color: #6f6f6f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.object-tile {
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  background: #0d0d0d;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 7px;
+}
+.object-row .row-toggle {
+  width: 24px;
+  height: 24px;
+  opacity: 0;
+}
+.object-row:hover .row-toggle,
+.object-row.selected .row-toggle,
+.object-row.muted .row-toggle {
+  opacity: 1;
+}
+#isolate-button.active {
+  background: var(--raised);
+  color: var(--green);
+}
+
+/* ------------------------------------------------------------------ UDIM overlay in the plane view */
+.uv-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 3;
+}
+.uv-plane {
+  position: absolute;
+  outline: 1px solid rgba(255, 255, 255, 0.16);
+}
+.uv-tiles {
+  position: absolute;
+  inset: 0;
+}
+.uv-tile {
+  position: absolute;
+  border-right: 1px dashed rgba(255, 255, 255, 0.11);
+  border-top: 1px dashed rgba(255, 255, 255, 0.11);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: flex-start;
+  padding: 5px 7px;
+  gap: 1px;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.3);
+}
+.uv-tile.occupied {
+  border-right-style: solid;
+  border-top-style: solid;
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.62);
+}
+.uv-tile.hovered {
+  background: rgba(52, 199, 89, 0.07);
+  color: var(--green);
+}
+.uv-tile small {
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  color: #7a7a7a;
+}
+.viewport-hover:not(:empty) {
+  margin-left: 10px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #0d0d0dcc;
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}

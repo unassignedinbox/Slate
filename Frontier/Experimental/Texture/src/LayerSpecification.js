@@ -16,6 +16,7 @@ import {
 } from "./ChannelSpecification.js";
 import { DefaultGenerator, NormaliseGenerator } from "./GeneratorSpecification.js";
 import { FinishDefaults, SanitiseFinish, FinishBadge } from "./FinishSpecification.js";
+import { CreateObject, SanitiseObject, FirstTile } from "./SceneStructure.js";
 import { SurfaceDefaults, SurfaceControls } from "./MaterialSpecification.js";
 
 export const LayerKinds = [
@@ -241,6 +242,8 @@ export const DefaultProject = () => ({
     Version: 1,
     Name: "Surface study",
     Surface: { Kind: "shaderball", Subdivision: 2, Scale: 1 },
+    Objects: [CreateObject({ Name: "Shader ball", Kind: "shaderball", Subdivision: 2, Tile: FirstTile })],
+    Object: "",
     Resolution: 1024,
     Environment: { Identifier: "studio", Rotation: 35, Intensity: 1, Exposure: 0, Background: true, Shadow: true },
     Material: { ...SurfaceDefaults },
@@ -414,6 +417,21 @@ export const SanitiseProject = (Candidate) =>
             Subdivision: Math.round(Clamp(Candidate.Surface.Subdivision ?? 2, 0, 3)),
             Scale: Clamp(Candidate.Surface.Scale ?? 1, 0.1, 10),
         };
+    // Objects are the scene; a project written before they existed is given one object built from its surface record.
+    const Incoming = Array.isArray(Candidate.Objects) ? Candidate.Objects.slice(0, 16) : [];
+    Project.Objects = Incoming.length
+        ? Incoming.map((Entry) => SanitiseObject(Entry, SurfaceOrdering))
+        : [
+              CreateObject({
+                  Name: SurfaceOrdering.find((Entry) => Entry.Identifier === Project.Surface.Kind)?.Label || "Object",
+                  Kind: Project.Surface.Kind,
+                  Subdivision: Project.Surface.Subdivision,
+                  Scale: Project.Surface.Scale,
+              }),
+          ];
+    Project.Object = Project.Objects.some((Entry) => Entry.Identifier === Candidate.Object)
+        ? Candidate.Object
+        : Project.Objects[0].Identifier;
     if ([512, 1024, 2048, 4096].includes(Candidate.Resolution)) Project.Resolution = Candidate.Resolution;
     if (Candidate.Environment && typeof Candidate.Environment === "object")
         Project.Environment = {

@@ -10,6 +10,21 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+    TileNumber,
+    TilePlacement,
+    TileLabel,
+    CreateObject,
+    SanitiseObject,
+    SceneTiles,
+    TileRectangle,
+    AssembleScene,
+    ObjectAtTriangle,
+    ObjectAtCoordinate,
+    CoordinateTile,
+    FirstTile,
+} from "./SceneStructure.js";
+
+import {
     ChannelSpecification,
     ChannelIdentifiers,
     ChannelByIdentifier,
@@ -451,4 +466,145 @@ test("a colour mask records a key, a tolerance and the wash it draws in the view
 
     const Nonsense = SanitiseLayer({ Kind: "fill", Mask: { Kind: "spectral" } });
     assert.equal(Nonsense.Mask.Kind, "none", "an unknown mask kind must not reach the shader");
+});
+
+//========================================================================================================================
+// Scene assembly. Several objects are folded into one surface so a single bake, a single index and a single stroke serve
+// the whole scene; the UDIM tile each object is given is what keeps their texels apart.
+//========================================================================================================================
+test("udim numbers and tile placements are inverses of one another", () =>
+{
+    assert.equal(FirstTile, 1001);
+    assert.equal(TileNumber(0, 0), 1001);
+    assert.equal(TileNumber(3, 0), 1004);
+    assert.equal(TileNumber(0, 1), 1011);
+    assert.equal(TileNumber(9, 2), 1030);
+    for (const Tile of [1001, 1004, 1011, 1030, 1099])
+    {
+        const { Column, Row } = TilePlacement(Tile);
+        assert.equal(TileNumber(Column, Row), Tile, `tile ${Tile} did not survive the round trip`);
+    }
+    assert.match(TileLabel(1012), /1012/);
+});
+
+test("an object record is clamped into renderable ranges", () =>
+{
+    const Loose = SanitiseObject({
+        Name: "x".repeat(200),
+        Kind: "dodecahedron",
+        Subdivision: 9,
+        Scale: 400,
+        Offset: [99, -99, "nonsense"],
+        Rotation: 900,
+        Tile: 2500,
+        Visible: "yes",
+    });
+    assert.ok(Loose.Name.length <= 64);
+    assert.equal(Loose.Kind, "cube", "an unknown mesh must fall back to something buildable");
+    assert.equal(Loose.Subdivision, 3);
+    assert.equal(Loose.Scale, 10);
+    assert.deepEqual(Loose.Offset, [12, -12, 0]);
+    assert.ok(Loose.Rotation >= 0 && Loose.Rotation <= 360);
+    assert.ok(Loose.Tile >= 1001 && Loose.Tile <= 1100);
+    assert.equal(Loose.Visible, true);
+    assert.ok(Loose.Identifier.length > 0);
+
+    const First = CreateObject({ Name: "One" });
+    const Second = CreateObject({ Name: "Two" });
+    assert.notEqual(First.Identifier, Second.Identifier, "identifiers must not collide");
+});
+
+test("the tile sheet stays square so texels stay square", () =>
+{
+    assert.deepEqual(SceneTiles([{ Tile: 1001 }]), { Columns: 1, Rows: 1 });
+    assert.deepEqual(SceneTiles([{ Tile: 1001 }, { Tile: 1002 }]), { Columns: 2, Rows: 2 });
+    assert.deepEqual(SceneTiles([{ Tile: 1001 }, { Tile: 1021 }]), { Columns: 3, Rows: 3 });
+
+    const Rectangle = TileRectangle(1012, 2);
+    assert.equal(Rectangle.Size, 0.5);
+    assert.equal(Rectangle.Left, 0.5);
+    assert.equal(Rectangle.Bottom, 0.5);
+});
+
+test("one object assembles into the whole zero-to-one square", () =>
+{
+    const Scene = AssembleScene([CreateObject({ Name: "Ball", Kind: "sphere", Subdivision: 1, Tile: 1001 })]);
+    assert.deepEqual(Scene.Tiles, { Columns: 1, Rows: 1 });
+    assert.equal(Scene.Ranges.length, 1);
+    assert.equal(Scene.Ranges[0].FirstVertex, 0);
+    assert.equal(Scene.Ranges[0].TriangleCount, Scene.Triangles);
+    let Highest = 0;
+    for (const Value of Scene.Coordinates) Highest = Math.max(Highest, Value);
+    assert.ok(Highest > 0.9, "a lone object should still fill its tile");
+});
+
+test("several objects become one surface with one range each", () =>
+{
+    const Objects = [
+        CreateObject({ Name: "Ball", Kind: "sphere", Subdivision: 1, Tile: 1001 }),
+        CreateObject({ Name: "Box", Kind: "cube", Subdivision: 1, Tile: 1002, Offset: [2, 0, 0] }),
+        CreateObject({ Name: "Pipe", Kind: "cylinder", Subdivision: 1, Tile: 1011 }),
+    ];
+    const Scene = AssembleScene(Objects);
+    assert.deepEqual(Scene.Tiles, { Columns: 2, Rows: 2 });
+    assert.equal(Scene.Ranges.length, 3);
+    assert.equal(Scene.Vertices, Scene.Positions.length / 3);
+    assert.equal(Scene.Triangles, Scene.Indices.length / 3);
+    assert.equal(Scene.Ownership.length, Scene.Vertices, "every vertex must know which object it came from");
+
+    let Running = 0;
+    for (const Range of Scene.Ranges)
+    {
+        assert.equal(Range.FirstVertex, Running, "ranges must be contiguous");
+        Running += Range.VertexCount;
+    }
+    assert.equal(Running, Scene.Vertices);
+
+    for (const Range of Scene.Ranges)
+    {
+        const { Left, Bottom, Size } = TileRectangle(Range.Tile, Scene.Tiles.Columns);
+        for (let Vertex = Range.FirstVertex; Vertex < Range.FirstVertex + Range.VertexCount; Vertex += 1)
+        {
+            const U = Scene.Coordinates[Vertex * 2];
+            const V = Scene.Coordinates[Vertex * 2 + 1];
+            assert.ok(U >= Left - 1e-6 && U <= Left + Size + 1e-6, `u ${U} escaped tile ${Range.Tile}`);
+            assert.ok(V >= Bottom - 1e-6 && V <= Bottom + Size + 1e-6, `v ${V} escaped tile ${Range.Tile}`);
+        }
+    }
+
+    // Offsets move geometry without moving texels.
+    assert.ok(Scene.Bounds.Maximum[0] > 1.5, "the offset box should push the bounds out");
+
+    const Owner = ObjectAtTriangle(Scene, Scene.Ranges[2].FirstTriangle);
+    assert.equal(Owner.Name, "Pipe");
+    assert.equal(ObjectAtTriangle(Scene, -1), null);
+    assert.equal(ObjectAtCoordinate(Scene, [0.1, 0.1]).Name, "Ball");
+    assert.equal(ObjectAtCoordinate(Scene, [0.6, 0.1]).Name, "Box");
+    assert.equal(ObjectAtCoordinate(Scene, [0.1, 0.6]).Name, "Pipe");
+    assert.equal(ObjectAtCoordinate(Scene, [0.6, 0.6]), null, "an empty tile owns nothing");
+    assert.equal(CoordinateTile(Scene, [0.6, 0.6]), 1012);
+    assert.equal(CoordinateTile(Scene, [0.1, 0.1]), 1001);
+});
+
+test("hidden objects leave the assembly, but an empty scene still renders", () =>
+{
+    const Objects = [
+        CreateObject({ Name: "Ball", Kind: "sphere", Subdivision: 0, Tile: 1001 }),
+        CreateObject({ Name: "Box", Kind: "cube", Subdivision: 0, Tile: 1002, Visible: false }),
+    ];
+    const Visible = AssembleScene(Objects);
+    assert.equal(Visible.Ranges.length, 1);
+    assert.equal(Visible.Ranges[0].Name, "Ball");
+
+    const Nothing = AssembleScene(Objects.map((Entry) => ({ ...Entry, Visible: false })));
+    assert.equal(Nothing.Ranges.length, 1, "with everything hidden the first object still stands in");
+    assert.ok(Nothing.Triangles > 0);
+});
+
+test("a custom object consumes the imported surface", () =>
+{
+    const Imported = AssembleScene([CreateObject({ Kind: "cube", Subdivision: 0, Tile: 1001 })]);
+    const Scene = AssembleScene([CreateObject({ Name: "Scan", Kind: "custom", Tile: 1001 })], Imported);
+    assert.equal(Scene.Triangles, Imported.Triangles);
+    assert.equal(Scene.Ranges[0].Name, "Scan");
 });

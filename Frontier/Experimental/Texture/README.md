@@ -118,6 +118,14 @@ attributes and `javascript:`/`data:text/html` URLs are stripped) before it is ra
 of ten OFL families from `EngineContent/FontArchives`. Both place with position, rotation, scale, softness, emboss depth
 and a colourise tint, and both can be stamped flat against a plane or projected along the view.
 
+**Objects and UDIM tiles.** A document holds a scene, not a single mesh. The outliner above the stack lists every
+object — select, rename (double-click), hide, isolate, add and remove — and each object owns a UDIM tile, numbered the
+usual way (`1001` is the first, `1002` is one column right, `1011` is one row up). Every visible object is built,
+transformed and folded into **one** surface whose UVs have been pushed into their tiles, so a single bake, a single
+spatial index and a single stroke serve the whole scene: a brush dragged across a seam paints both objects, and the
+sheet stays square so texels stay square. Isolating simply reassembles the scene without the others. Clicking an object
+with the camera tool selects it; the texture view draws the tile grid over the sheet with each tile's number and owner.
+
 **Export.** Three presets — the full OpenPBR channel set, glTF metallic-roughness (ORM-packed), or a three-image compact
 set. Each writes one PNG per channel named `<project-name>_<Channel>.png` next to a JSON descriptor tagged
 `"specification": "OpenPBR Surface 1.1.1"`, which is the shape the engine's `ContentInterchange/MaterialCodec` reads.
@@ -135,6 +143,9 @@ set. Each writes one PNG per channel named `<project-name>_<Channel>.png` next t
 | Search layers | <kbd>/</kbd> | Content browser | <kbd>B</kbd> |
 | Undo / redo | <kbd>Ctrl Z</kbd> / <kbd>Ctrl ⇧ Z</kbd> | Save / export | <kbd>Ctrl S</kbd> / <kbd>Ctrl E</kbd> |
 
+The **right button always paints** into the selected layer, whichever tool is in hand, so the camera can stay on the
+left button. Middle-drag and <kbd>Space</kbd>-drag pan; a click that never becomes a drag selects the object under it.
+
 ---
 
 ## Modules
@@ -149,6 +160,7 @@ set. Each writes one PNG per channel named `<project-name>_<Channel>.png` next t
 | `LayerSpecification.js` | Layer, mask and decal records; sanitisers; project defaults and validation. |
 | `DecalSpecification.js` | Vector library, font archive, SVG/text rasterisation. |
 | `SurfaceStructure.js` | Built-in surfaces, Wavefront import, tangents, bounds, occlusion, spatial index. |
+| `SceneStructure.js` | Object records, UDIM tiles, and the assembly that folds a scene into one surface. |
 | `OrbitProjection.js` | Damped orbit camera, framing, panning, picking rays. |
 | `ShadingGlsl.js` | Every shader stage and the export slot table. |
 | `ShadingIntegrator.js` | The WebGL2 device: targets, stamping, compositing, viewport and plane passes, readback. |
