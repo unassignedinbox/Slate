@@ -937,3 +937,79 @@ materials/ShaderEditor, asset drawers, composite wind and renderer fog shapes ar
 and remain outstanding. This checkpoint does not claim full C001–C022 native parity.
 
 [EnvironmentMsvcProof]: https://github.com/unassignedinbox/Slate/actions/runs/37224368522/job/111500910577
+
+## C025 — SDF artifact reproduction and transport correction (2026-10-04)
+
+### Scope and faithful CPU execution
+
+The user has **not** retested the recent build on their PC. This work investigates their
+previous reports of reflection-like diffuse lighting, unstable shadows, and wavy shadow
+outlines. `VisualProof/DistanceFieldGI/RunDistanceFieldExecution.py` compiles and executes
+the actual production SPIR-V and Vulkan stage on Mesa lavapipe/llvmpipe, with Vulkan
+synchronization validation. It does not substitute a separately written CPU renderer.
+
+The fixture supplies raster-style positions and primitive IDs on a 160 × 160 receiver
+plane under a rectangular overhead surface. Its images are **diagnostic lighting maps**,
+not perspective screenshots of the application or the user's scene. All comparison pixels
+come from Vulkan readback, enlarged without filtering. `matte-reference.png` is separately
+labelled independent rectangular-emitter irradiance quadrature, used only as an oracle.
+
+### Production changes
+
+- Interpolate unsigned corner distances rather than allowing unrelated nearest-face signs
+  to cancel into false zero sheets. The original nearest-face sign was not a solid winding
+  classification, particularly around open meshes.
+- Refine shadow distance against actual triangles with a stackless BVH traversal; exclude
+  the coplanar receiver and confirm central-ray occlusion exactly. Penumbra stepping no
+  longer depends on camera-snapped clipmap cells. This is a geometry-refined shadow path,
+  not a claim that coarse voxels alone can reproduce thin occluders reliably.
+- Combine cosine hemisphere sampling with spatially selected **textured surface-card area
+  sampling**, using matching solid-angle PDFs and balance-heuristic multiple importance
+  sampling. Source cards retain authored textures, emission and cutout coverage; this is
+  not a flattened lighting coefficient or a post-process blur.
+- Keep the sampling sequence fixed in world-space transport. Remove the repeating
+  sixteen-frame direction cycle in the radiance-cache update. Preserve Jacobi ping-pong
+  and material/geometry history invalidation.
+- Confirm diffuse traversal against the mesh if the distance-march budget expires.
+- Replace the unconditional fixed-Fresnel mirror contribution with the authored base
+  specular lobe, GGX visible-normal sampling and its PDF. Zero base specular weight no
+  longer creates an unwanted mirror. Roughness, anisotropy and haziness affect this lobe.
+  Full coat/fuzz secondary-reflection parity is not established by this correction.
+- Skip solar shadow evaluation when solar radiance is zero.
+
+A first attempt that only increased cosine-ray counts still showed stepped diffuse
+silhouettes and **failed** the new quality gate. It was not accepted as the finished fix.
+
+### Executed focused measurements
+
+Baseline shaders: `a42147b1148ffa13f08d4d11f42b665a8afb1a0d` (unchanged production shaders).
+Corrected shaders: `20409561bdf3fb8d37ec06c9bc14d921314e453b`.
+Both were executed with the same fixture in run `37227335799`.
+Errors below are in 8-bit red-channel display units, not linear radiance units.
+
+| Measurement | Before | Corrected |
+|---|---:|---:|
+| Maximum camera-shift shadow RMS, fixed scene/light | 17.476 | 0 |
+| Zero-specular reflection-toggle maximum delta | 106 | 0 |
+| Symmetric scene's left/right diffuse RMS | 79.2705 | 4.23736 |
+| Single-bounce error versus independent area integral | 83.1477 | 2.67571 |
+
+The focused corrected execution passed its numerical gates and Vulkan validation.
+The combined workflow exceeded its 20-minute job limit during the broader regression
+phase; that is **not** recorded as a complete regression pass. Subsequent proof phases
+are split into independent parallel CI jobs. The fixture also retessellates the same
+emitter to exercise internal BVH branches and measure dependence on subdivision.
+
+Evidence: `VisualProof/DistanceFieldGI/ArtifactBaseline/`, `ArtifactAfter/`, and
+`SdfComparison.png`. Provenance includes source revisions, workflow IDs, shader hashes
+and image hashes. Regression evidence has a separate provenance record.
+
+### Boundaries
+
+This establishes the artifacts and focused corrections on the production software-Vulkan
+path. It does not establish GPU frame time, driver parity on the user's hardware, or
+artifact-free output for every scene. The refined shadow queries and additional transport
+samples cost more than the old undersampled path; GPU performance remains unmeasured.
+The fixture deliberately uses shadow cone slope 0.06; the application's existing default
+softness and solar angular-size wiring have not been changed. This phase adds no editor
+cards, changes no bake-control placement and does not close C018's remaining native UI work.
