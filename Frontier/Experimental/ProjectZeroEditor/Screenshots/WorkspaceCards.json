@@ -1,0 +1,8 @@
+{
+  "Results": [
+    "Indexed 10,000-level hierarchy without recursion in 24.9 ms; inherited visibility and cycle guard correct",
+    "Header pills; folder counts, inherited visibility and saved notes; live rAF FPS/interval history, pause/probe, metric/view switches, honest GPU absence, pointer/keyboard resizing/moving, persisted layout and responsive bounds",
+    "2,500-record browser fixture: exact aggregate counts, bounded DOM pagination, search, type filtering, page-size changes, visibility writes, drill-through/ancestor expansion, protected camera and empty state"
+  ],
+  "Errors": []
+}

@@ -660,3 +660,124 @@ checks cover 1024/1280/1366/1920 widths; a separate real 1366×768 proof is incl
 
 **Status:** HTML review checkpoint. Native integration, physical calibration,
 real volume sampling and native atmosphere rendering remain deferred.
+
+## 2026-10-04 — C020–C022: Header pills, collection inventory and performance cards
+
+### Change-log continuity
+
+The C018–C019 environment graphs and reconstructed AtmosphereLab were published
+at `8b13c12` and accepted as looking better. This update retains those cards and
+adds the requested header, folder and debug-view changes. It remains HTML-only:
+**no C++ sources changed, no native build run, no native timing values invented.**
+
+### C020 — Pill-shaped viewport header controls
+
+Construct, frame-selection, projection, split, diagnostics/settings and the
+Edit/Sim/Play controls now use pill rounding. Icon-only actions use short
+capsules, with compact sizing in narrower viewports. Existing actions, keyboard
+shortcuts, disabled states and pressed-state styling are retained. Document
+tabs keep their existing trapezoidal shape; materials and geometry inspectors
+are not restyled by this change.
+
+### C021 — Informative folder/collection inspector
+
+Replaced the generic folder panel's static `5 direct · 14 total` readout with
+an inventory derived from the actual scene hierarchy:
+
+- Collection name, description, ancestor breadcrumbs and stable identity.
+- Total descendant entries, direct children, nested folders and maximum depth.
+  Counts include folders and entity attachments, not only geometry leaves.
+- Effective visible/hidden counts, including ancestor visibility. The protected
+  Editor Camera remains visible. The two visibility cards also filter contents.
+- Proportional type-distribution bar and clickable type/count legend. Constructed
+  preview marker counts are separate; these are scene records, not renderer
+  workload, resident memory, triangle counts or file-size claims.
+- Search by name, ID or description; direct-child/all-descendant scope; type
+  and visibility filters; name/type/depth sorting; 25/50/100-entry pages. Only
+  the current results page is mounted, rather than thousands of inspector rows.
+- Each result shows its type, hierarchy level, parent and visibility reason.
+  Open an entry to inspect it, expand its ancestors and clear outliner filters
+  so the selected row is discoverable. Per-entry visibility uses the existing
+  protected-camera policy; an inherited hidden state is explained rather than
+  presented as an effective visible toggle.
+- Empty/no-match states, filter reset, persistent notes and the existing Tint
+  draft. Tint now colours collection accents only, not child objects/materials.
+
+`FolderInventory.mjs` builds indexed parent/identity maps and traverses
+iteratively with a cycle guard. The outliner also reuses the child index and
+iterative traversal, replacing per-node full-array scans/recursive descent.
+The existing outliner remains a tree, not a newly virtualized asset database;
+the bounded-page guarantee applies to the new folder contents list.
+
+### C022 — Movable, resizable performance/debug card
+
+The diagnostics header button and existing F3 route now open a rounded dark
+performance card, following the supplied dashboard references. Large metrics,
+subdued fractional digits, restrained accents and real history replace the
+old monospace diagnostic block.
+
+Metric choices:
+
+- **Frame rate / FPS:** actual browser `requestAnimationFrame` cadence.
+- **Frame interval / ms:** measured callback intervals, not CPU execution or GPU
+  render duration. Half-second samples report mean interval/FPS and latest
+  interval p95; window statistics report mean and low/high sampled values.
+- **GPU timing:** a clearly unavailable state and unpopulated stage timings.
+  There is no native GPU timing connection in this HTML app, so no synthetic
+  values or timing graph are shown.
+- **Scene counts:** actual scene records, visible/hidden counts, folders and
+  constructed preview markers. These are not draw calls or memory telemetry.
+
+Choose **Graph + stats**, **Graph**, or **Stats**, and 15/30/60-second history.
+Hover or use arrow/Home/End keys on the graph to inspect recorded samples.
+Pause/Resume freezes the browser sample snapshot, not the scene authoring state.
+The independent FPS badge now uses the same browser timing sampler. Sampling
+runs only while subscribed, and visibility-change handling resets timing
+intervals so a suspended/background tab is not counted as one giant frame.
+
+Drag the header to move the card; drag its lower-right handle to resize. Both
+handles accept arrow keys (10 px; Shift = 30 px). Layout stays inside the
+viewport and adapts when the viewport shrinks. Metric, presentation, history
+window, position and size persist in `Frontier.DiagnosticsCard.v1`; live timing
+history itself does not persist. Header reset restores the default layout.
+Pause/history controls and the resize handle remain in the fixed card footer;
+content scrolls when the card is small. Close/Escape restores the diagnostics
+button's focus.
+
+Existing native-buffer selections and F3/Shift+F3, F4, F5 and F6 controls remain
+available in viewport settings and the card's expandable native-debug details.
+They are still selections only, not rendered native buffers. F3 cycles those
+buffer selections; the card's metric selector changes its statistics view.
+
+### Browser verification and proofs
+
+Standalone HTML rebuilt at **4.19 MiB**. All **nine** browser suites passed:
+`CheckBrowser`, `CheckConstruction`, `CheckQuickTools`, `CheckMaterials`,
+`CheckAssets`, `CheckWind`, `CheckFogCamera`, `CheckEnvironmentGraphs`, and the new
+`CheckWorkspaceCards`.
+
+New coverage includes pill geometry, actual collection counts, inherited
+visibility, persistent notes/tint, a generated **2,500-record browser fixture**,
+search/filter/page-size changes, bounded result DOM, drill-through, camera
+protection and empty state. A separate pure-model test traverses a
+**10,000-level hierarchy** without recursive stack growth (24.9 ms in this
+sandbox run; not a native performance guarantee).
+
+Diagnostics checks exercise actual callback samples, deliberately induced
+browser main-thread stalls, history probing, pause/resume, metric/presentation
+switches, unavailable GPU state, mouse/keyboard movement and resizing,
+close/reopen persistence, Escape from a focused select and viewport bounds at
+1024/1280/1366/1920 widths. Existing environment, material, wind, fog-shape,
+assets, construction and permanent-camera regression suites also pass.
+
+Committed screenshots and report:
+
+- [Folder inventory and resized FPS card](../Experimental/ProjectZeroEditor/Screenshots/FolderDiagnostics.png)
+- [Frame-interval graph](../Experimental/ProjectZeroEditor/Screenshots/FrameTimingCard.png)
+- [GPU timing — explicit unavailable state](../Experimental/ProjectZeroEditor/Screenshots/GpuTimingUnavailable.png)
+- [Large collection summary — generated browser test records](../Experimental/ProjectZeroEditor/Screenshots/LargeCollection.png)
+- [Searchable/paginated collection browser — same fixture](../Experimental/ProjectZeroEditor/Screenshots/CollectionBrowser.png)
+- [Workspace-card test report](../Experimental/ProjectZeroEditor/Screenshots/WorkspaceCards.json)
+
+**Status:** published HTML review checkpoint. Native GPU/CPU frame telemetry,
+renderer-buffer visualization and C++ UI mirroring remain deferred.

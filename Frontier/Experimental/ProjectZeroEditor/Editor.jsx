@@ -1,10 +1,14 @@
+import FolderInspector from "./FolderInspector.jsx";
+import { FolderInventory } from "./FolderInventory.mjs";
+import DiagnosticsCard from "./DiagnosticsCard.jsx";
+import { BrowserFPS } from "./BrowserTiming.js";
 import { EnsureEditorCamera, IsEditorCamera } from "./ScenePolicy.js";
 import WindEditor from "./WindPanel.jsx";
 import AssetPanel from "./AssetPanel.jsx";
 import { RestoreAssets } from "./AssetDepot.js";
 import MaterialPanel from "./MaterialPanel.jsx";
 import ShaderPanel from "./ShaderPanel.jsx";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { Inspector, Icon, Glyph, Panels } from "./Inspectors.jsx";
 import Notch from "./Notch.jsx";
@@ -508,42 +512,53 @@ function App() {
     Select(Id);
     ShowMenu(null);
   };
-  const HasChildren = (Id) => Rows.some((Row) => Row.Parent === Id);
+  const SceneInventory = useMemo(
+    () => FolderInventory(Rows, null, Hidden),
+    [Rows, Hidden],
+  );
+  const HasChildren = (Id) => SceneInventory.Children.has(Id);
   const DisplayRows = () => {
     const Result = [];
-    function Walk(Parent, Depth) {
-      for (const Row of Rows.filter((Row) => Row.Parent === Parent)) {
-        const Match =
-          (!Query || Row.Name.toLowerCase().includes(Query.toLowerCase())) &&
-          (!Filters.length ||
-            Filters.some((Filter) =>
-              Filter === "Camera"
-                ? Row.Panel === "camera"
-                : Filter === "Lights"
-                  ? ["sun", "light", "flare"].includes(Row.Panel)
-                  : Filter === "Geometry"
-                    ? Row.Panel === "geometry"
-                    : Filter === "Bodies"
-                      ? Row.Panel === "moon"
-                      : [
-                          "atmosphere",
-                          "clouds",
-                          "local-cloud",
-                          "stars",
-                          "height-fog",
-                          "aerial-fog",
-                          "local-fog",
-                          "wind",
-                          "rainbow",
-                          "precipitation",
-                        ].includes(Row.Panel),
-            ));
-        if (Match) Result.push({ ...Row, Depth });
-        if (!Collapsed[Row.Id] || Query || Filters.length)
-          Walk(Row.Id, Depth + 1);
+    const Seen = new Set(),
+      Stack = [...(SceneInventory.Children.get(null) || [])]
+        .reverse()
+        .map((Row) => ({ Row, Depth: 0 }));
+    while (Stack.length) {
+      const { Row, Depth } = Stack.pop();
+      if (Seen.has(Row.Id)) continue;
+      Seen.add(Row.Id);
+      const Match =
+        (!Query || Row.Name.toLowerCase().includes(Query.toLowerCase())) &&
+        (!Filters.length ||
+          Filters.some((Filter) =>
+            Filter === "Camera"
+              ? Row.Panel === "camera"
+              : Filter === "Lights"
+                ? ["sun", "light", "flare"].includes(Row.Panel)
+                : Filter === "Geometry"
+                  ? Row.Panel === "geometry"
+                  : Filter === "Bodies"
+                    ? Row.Panel === "moon"
+                    : [
+                        "atmosphere",
+                        "clouds",
+                        "local-cloud",
+                        "stars",
+                        "height-fog",
+                        "aerial-fog",
+                        "local-fog",
+                        "wind",
+                        "rainbow",
+                        "precipitation",
+                      ].includes(Row.Panel),
+          ));
+      if (Match) Result.push({ ...Row, Depth });
+      if (!Collapsed[Row.Id] || Query || Filters.length) {
+        const Children = SceneInventory.Children.get(Row.Id) || [];
+        for (let I = Children.length - 1; I >= 0; I--)
+          Stack.push({ Row: Children[I], Depth: Depth + 1 });
       }
     }
-    Walk(null, 0);
     return Result;
   };
   const SaveFile = () => {
@@ -1242,21 +1257,25 @@ function App() {
           />
         )}
         {Debug > 0 && (
-          <div className="diagnostic-overlay">
-            <strong>Debug View · {DebugViews[Debug]}</strong>
-            <pre>{`clusters   — → frustum — → cone — → visible —
-drawn      phase 1 — + phase 2 — (— triangles)
-indirect   — | HiZ occlusion ${HiZ ? "on" : "OFF"} | patch error ${PatchError} px
-gpu        cull — · raster — · HiZ — · resolve — ms
-shading    shadow — · restir — · sky — · volume —
-restir     temporal — · spatial — · alias pick ${Alias ? "on" : "OFF"}
-scene      — mats → — slabs · — tex
-HTML preview · no GPU telemetry or debug rendering
-F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</pre>
-          </div>
+          <DiagnosticsCard
+            Rows={Rows}
+            VisibleCount={SceneInventory.Visible}
+            DebugName={DebugViews[Debug]}
+            HiZ={HiZ}
+            Alias={Alias}
+            PatchError={PatchError}
+            Close={() => {
+              SetDebug(0);
+              document
+                .querySelector('[aria-label="Viewport diagnostics"]')
+                ?.focus();
+            }}
+          />
         )}
         {Settings.FPS && (
-          <div className="fps-overlay">FPS — · HTML preview</div>
+          <div className="fps-overlay">
+            <BrowserFPS />
+          </div>
         )}
         {Console && (
           <div className="console">
@@ -1301,25 +1320,55 @@ F3 next · Shift+F3 previous · F4 HiZ · F5 alias · F6 error · Esc close`}</p
     ) : Tab === "Inspector" ? (
       <>
         <div className="inspector-scroll" key={Subject.Id}>
-          <Inspector
-            Subject={Subject}
-            Values={Values[Selected] || {}}
-            Change={Change}
-            Hidden={Hidden[Selected]}
-            ToggleHidden={() => ToggleHidden(Selected)}
-            OpenShader={() => OpenShader(Selected)}
-            OpenWind={() => {
-              WindOpener.current = document.activeElement;
-              EditWind(Selected);
-            }}
-            OpenWindField={(Id) => {
-              WindOpener.current = document.activeElement;
-              EditWind(Id);
-            }}
-            WindFields={WindFields}
-            AllValues={Values}
-            AllHidden={Hidden}
-          />
+          {Subject.Panel === "group" ? (
+            <FolderInspector
+              Subject={Subject}
+              Rows={Rows}
+              Hidden={Hidden}
+              Values={Values[Selected] || {}}
+              Change={Change}
+              Select={(Id) => {
+                const Seen = new Set();
+                let Row = SceneInventory.ById.get(Id);
+                const Parents = [];
+                while (Row?.Parent && !Seen.has(Row.Parent)) {
+                  Seen.add(Row.Parent);
+                  Parents.push(Row.Parent);
+                  Row = SceneInventory.ById.get(Row.Parent);
+                }
+                Collapse((Previous) => ({
+                  ...Previous,
+                  ...Object.fromEntries(
+                    Parents.map((Parent) => [Parent, false]),
+                  ),
+                }));
+                Search("");
+                Filter([]);
+                SelectRow(Id);
+              }}
+              ToggleHidden={ToggleHidden}
+            />
+          ) : (
+            <Inspector
+              Subject={Subject}
+              Values={Values[Selected] || {}}
+              Change={Change}
+              Hidden={Hidden[Selected]}
+              ToggleHidden={() => ToggleHidden(Selected)}
+              OpenShader={() => OpenShader(Selected)}
+              OpenWind={() => {
+                WindOpener.current = document.activeElement;
+                EditWind(Selected);
+              }}
+              OpenWindField={(Id) => {
+                WindOpener.current = document.activeElement;
+                EditWind(Id);
+              }}
+              WindFields={WindFields}
+              AllValues={Values}
+              AllHidden={Hidden}
+            />
+          )}
         </div>
         <footer className="inspector-footer">
           <span>{Subject.Description}</span>
