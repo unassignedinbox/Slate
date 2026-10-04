@@ -8,7 +8,7 @@ on:
       - 'Frontier/Editor/AuthoringTools/Modelling/SolidArc/**'
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   compile:
     runs-on: ubuntu-24.04
@@ -29,3 +29,15 @@ jobs:
           name: solidarc-web-runtime
           path: Frontier/Experimental/SolidArc/Runtime/
           retention-days: 30
+      - name: Publish browser runtime on the session branch
+        run: |
+          python3 - <<'PYTHON'
+          import json, os
+          from pathlib import Path
+          Path('Frontier/Experimental/SolidArc/Runtime/Provenance.json').write_text(json.dumps({'sourceRevision': os.environ['GITHUB_SHA'], 'emscripten': '4.0.15', 'workflowRun': os.environ['GITHUB_RUN_ID'], 'implementation': 'Original SolidArc C++ sources; native software raster; no substitute CAD library'}, indent=2) + '\n')
+          PYTHON
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Frontier/Experimental/SolidArc/Runtime
+          git commit -m "Publish native SolidArc WebAssembly runtime"
+          git push origin HEAD:arena/01a0fd48-slate

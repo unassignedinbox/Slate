@@ -95,7 +95,7 @@ EMSCRIPTEN_KEEPALIVE const char* DescribeDocument()
     {
         if (Separator) Stream << ',';
         Separator = true;
-        Stream << "{\"id\":" << Dimension.Id << ",\"anchor\":" << Dimension.Anchor << ",\"label\":" << EncodeText(Dimension.Label)
+        Stream << "{\"id\":" << Dimension.Id << ",\"anchor\":" << Dimension.Anchor << ",\"label\":" << EncodeText(Dimension.Label.empty() ? Dimension.AnchorName : Dimension.Label)
                << ",\"number\":" << Dimension.Value << ",\"slot\":" << Dimension.Slot << ",\"form\":" << int(Dimension.Form) << '}';
     }
     Stream << "],\"history\":[";
