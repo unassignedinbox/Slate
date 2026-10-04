@@ -1004,6 +1004,32 @@ Evidence: `VisualProof/DistanceFieldGI/ArtifactBaseline/`, `ArtifactAfter/`, and
 `SdfComparison.png`. Provenance includes source revisions, workflow IDs, shader hashes
 and image hashes. Regression evidence has a separate provenance record.
 
+### Completed independent verification
+
+Final harness source: `00681169cb3e2d48067a3a63708b811dfc462245`; its production shaders
+are unchanged from `2040956`. All three CPU Vulkan jobs passed in
+[run 37228808856](https://github.com/unassignedinbox/Slate/actions/runs/37228808856):
+
+- Baseline reproduction: **passed**, job `111513986487` (4m58s).
+- Corrected artifact gates: **passed**, job `111513986626` (9m21s). The measurements above
+  repeated exactly. Retessellating the identical emitter from two to six triangles,
+  introducing internal BVH branches, changed the single-bounce map by **2.76445 RMS**,
+  below the fixed 6-unit gate. The shadow and reflection-toggle maps are byte-identical
+  across their respective comparisons, including all RGB channels.
+- Full production SDF regression: **passed**, job `111513986649` (6m25s): textured material
+  sampling and spatial card radiance, cutouts, emission/material revisions, unresident
+  texture refusal, GI switching, moving geometry, camera re-snapping, clean restart,
+  actual scene reflections, thin/solid glass and Beer attenuation, resize, and coplanar
+  card continuity. Static frame RMS and restart maximum delta are both zero; coplanar
+  card maximum neighbour delta is 1. **Zero Vulkan validation errors**, including
+  synchronization and destruction checks.
+- Windows/MSVC native editor/stack-safe conversion, project browser and Drive checks
+  passed for the same harness revision. The broader Windows application build is still
+  in progress; its completion is not required or claimed for these CPU-rendered results.
+
+The numerical gates are enforced, not merely printed. Evidence and the cumulative
+change record are retained on `arena/01a0fd48-slate`.
+
 ### Boundaries
 
 This establishes the artifacts and focused corrections on the production software-Vulkan
