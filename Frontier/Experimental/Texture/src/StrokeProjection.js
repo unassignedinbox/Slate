@@ -22,7 +22,8 @@ export const BrushDefaults = {
     Spacing: 0.22,       // [-]   fraction of the radius between stamps
     Facing: 72,          // [°]   stop painting past this angle from the surface normal under the cursor
     Jitter: 0,           // [-]   per-texel alpha noise
-    Symmetry: "none",    // none | x | y | z
+    Symmetry: "none",    // none | x | y | z | radial
+    Sectors: 6,          // [-]   how many times a radial stroke repeats around the up axis
     Target: "coverage",  // coverage | mask
 };
 
@@ -31,7 +32,12 @@ export const SymmetryOrdering = [
     { Identifier: "x", Label: "Mirror X" },
     { Identifier: "y", Label: "Mirror Y" },
     { Identifier: "z", Label: "Mirror Z" },
+    { Identifier: "radial", Label: "Radial" },
 ];
+
+// Radial symmetry turns around the standing axis: a hub cap, a shield boss and a compass rose are all drawn this way.
+export const RadialAxis = [0, 1, 0];
+export const SectorLimits = { Minimum: 2, Maximum: 16 };
 
 const MirrorAxis = { x: 0, y: 1, z: 2 };
 
@@ -59,6 +65,23 @@ const Turn = (Vector, Axis, Angle) =>
     const Along = Dot(Vector, Axis);
     const Sideways = Cross(Axis, Vector);
     return [0, 1, 2].map((Index) => Vector[Index] * Cosine + Sideways[Index] * Sine + Axis[Index] * Along * (1 - Cosine));
+};
+
+// Every twin a stroke has under the symmetry in force, as functions from a vector to its copy. Mirroring gives one
+// twin, radial gives one per sector less the original; `none` gives an empty list and the paint path simply stamps once.
+export const SymmetryTwins = (Symmetry, Sectors = BrushDefaults.Sectors) =>
+{
+    if (Symmetry === "radial")
+    {
+        const Count = Math.round(Math.max(SectorLimits.Minimum, Math.min(SectorLimits.Maximum, Sectors || BrushDefaults.Sectors)));
+        return Array.from({ length: Count - 1 }, (Ignored, Index) =>
+        {
+            const Angle = (2 * Math.PI * (Index + 1)) / Count;
+            return (Vector) => (Vector ? Turn(Vector, RadialAxis, Angle) : null);
+        });
+    }
+    if (MirrorAxis[Symmetry] === undefined) return [];
+    return [(Vector) => MirrorVector(Vector, Symmetry)];
 };
 
 // How far inside a placement's footprint a point on the surface falls: 0 at its centre, 1 at its edge, null outside it.
@@ -113,6 +136,16 @@ export class StrokeProjection
     Configure(Patch)
     {
         Object.assign(this.Brush, Patch);
+        if (Patch.Sectors !== undefined)
+            this.Brush.Sectors = Math.round(
+                Math.max(SectorLimits.Minimum, Math.min(SectorLimits.Maximum, Number(Patch.Sectors) || BrushDefaults.Sectors)),
+            );
+    }
+
+    // The twins the brush in hand will paint alongside the stroke itself.
+    get Twins()
+    {
+        return SymmetryTwins(this.Brush.Symmetry, this.Brush.Sectors);
     }
 
     // Screen → surface. `Device` is a normalised device coordinate pair in [-1, 1].

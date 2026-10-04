@@ -989,8 +989,9 @@ uniform float uBrushHardness;
 uniform float uBrushVisible;
 uniform vec3 uBrushInk;            // what the stroke would lay down, shown inside the ring
 uniform float uBrushPreview;       // strength of that preview wash, 0 for ring only
-uniform vec4 uMirror;              // xyz axis mask, w on or off
+uniform vec4 uMirror;              // xyz axis, w: 0 off, 1 mirrored, 2 radial
 uniform float uMirrorSpan;         // surface radius, so the seam line scales with the model
+uniform float uMirrorSectors;      // how many times a radial stroke repeats around the axis
 
 uniform sampler2D uDecalPreview;
 uniform vec3 uPlacePosition;
@@ -1003,6 +1004,12 @@ uniform float uPlaceVisible;
 
 out vec4 oColour;
 
+vec3 TurnAround(vec3 Vector, vec3 Axis, float Angle)
+{
+    float Cosine = cos(Angle);
+    float Sine = sin(Angle);
+    return Vector * Cosine + cross(Axis, Vector) * Sine + Axis * dot(Axis, Vector) * (1.0 - Cosine);
+}
 float BrushMark(vec3 Position, vec3 Centre, vec3 Normal, out float Fill)
 {
     float Distance = length(Position - Centre);
@@ -1223,7 +1230,24 @@ void main()
     {
         float Fill = 0.0;
         float Ring = BrushMark(vPosition, uBrushCentre, uBrushNormal, Fill);
-        if (uMirror.w > 0.5)
+        if (uMirror.w > 1.5)
+        {
+            // Radial symmetry: a cursor in every sector, so a stroke about to repeat twelve times says so first.
+            for (int Index = 1; Index < 16; Index += 1)
+            {
+                if (float(Index) >= uMirrorSectors) break;
+                float Angle = 6.2831853 * float(Index) / max(uMirrorSectors, 1.0);
+                float TwinFill = 0.0;
+                float TwinRing = BrushMark(
+                    vPosition,
+                    TurnAround(uBrushCentre, uMirror.xyz, Angle),
+                    TurnAround(uBrushNormal, uMirror.xyz, Angle),
+                    TwinFill);
+                Ring = max(Ring, TwinRing * 0.8);
+                Fill = max(Fill, TwinFill * 0.8);
+            }
+        }
+        else if (uMirror.w > 0.5)
         {
             // The mirrored twin is drawn from the reflected centre, so what symmetry will paint is never a surprise.
             vec3 Flip = vec3(1.0) - 2.0 * uMirror.xyz;
@@ -1236,7 +1260,18 @@ void main()
         Radiance = mix(Radiance, vec3(1.6, 1.6, 1.7) * (0.3 + Luminance(Radiance)), Ring * 0.75);
     }
 
-    if (uMirror.w > 0.5)
+    if (uMirror.w > 1.5)
+    {
+        // The spokes a radial brush paints along, drawn where they fall on the model and meeting at the axis.
+        float Sector = 6.2831853 / max(uMirrorSectors, 1.0);
+        float Around = atan(vPosition.z, vPosition.x);
+        float Phase = abs(mod(Around + Sector * 0.5, Sector) - Sector * 0.5);
+        float Reach = length(vPosition.xz);
+        float Width = max(uMirrorSpan * 0.004, 0.0012);
+        float Seam = 1.0 - smoothstep(Width, Width * 2.6, Phase * Reach);
+        Radiance = mix(Radiance, vec3(0.2, 0.78, 0.35) * (0.5 + Luminance(Radiance) * 1.5), Seam * 0.45);
+    }
+    else if (uMirror.w > 0.5)
     {
         // Where the mirror plane cuts the surface, so the axis in the viewport bar means something on the model.
         float Across = abs(dot(vPosition, uMirror.xyz));

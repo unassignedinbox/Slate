@@ -1219,9 +1219,11 @@ export class ShadingIntegrator
         Device.uniform1f(Uniforms.get("uBrushPreview"), Cursor?.Preview ?? 0);
 
         // Symmetry, drawn rather than described: the mirrored cursor and the seam where the plane cuts the model.
-        const Mirror = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }[Options.Symmetry] || null;
-        Device.uniform4f(Uniforms.get("uMirror"), ...(Mirror || [0, 0, 0]), Mirror ? 1 : 0);
+        const Radial = Options.Symmetry === "radial";
+        const Mirror = Radial ? [0, 1, 0] : { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }[Options.Symmetry] || null;
+        Device.uniform4f(Uniforms.get("uMirror"), ...(Mirror || [0, 0, 0]), Radial ? 2 : Mirror ? 1 : 0);
         Device.uniform1f(Uniforms.get("uMirrorSpan"), this.Surface?.Bounds?.Radius || 1);
+        Device.uniform1f(Uniforms.get("uMirrorSectors"), Math.max(Options.Sectors || 6, 2));
 
         // Where the decal in hand would land.
         const Place = Options.Placement;

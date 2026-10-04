@@ -640,9 +640,6 @@ b {
   background: #fff;
   color: #111;
 }
-.timeline {
-  background: #111;
-}
 .status-bar {
   background: #0b0b0b;
   border-top: 0;
@@ -1037,96 +1034,12 @@ dialog {
   opacity: 0;
   cursor: pointer;
 }
-.brush-controls {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-}
-.brush-field {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 10px;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.brush-field span {
-  letter-spacing: 0.4px;
-}
-.brush-field b {
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-  min-width: 26px;
-  text-align: right;
-  font-size: 11px;
-}
-.brush-field small {
-  color: #6d6d6d;
-  font-size: 9px;
-}
-.brush-field input[type="range"] {
-  width: 84px;
-  height: 26px;
-}
 #brush-hud {
   font-variant-numeric: tabular-nums;
 }
 .transport-actions .button {
   height: 30px;
   border-radius: 999px;
-}
-/* Channel strip ---------------------------------------------------------------------------------------------- */
-.timeline {
-  height: 76px;
-  min-height: 76px;
-  background: #141414;
-}
-.timeline-label #channel-counter {
-  margin-left: auto;
-  color: #7a7a7a;
-}
-.ruler#channel-strip {
-  background: none;
-  margin: 0 17px 12px;
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 6px;
-  overflow: auto;
-  scrollbar-width: thin;
-}
-.channel-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 25px;
-  padding: 0 11px;
-  border-radius: 999px;
-  border: 1px solid #ffffff0d;
-  background: #1c1c1c;
-  color: #8d8d8d;
-  font-size: 10px;
-  letter-spacing: 0.2px;
-  cursor: pointer;
-}
-.channel-chip i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--chip, #777);
-  opacity: 0.35;
-}
-.channel-chip.active {
-  background: #232323;
-  border-color: #ffffff1f;
-  color: var(--text);
-}
-.channel-chip.active i {
-  opacity: 1;
-  box-shadow: 0 0 7px var(--chip, #777);
 }
 /* Stack rows ------------------------------------------------------------------------------------------------- */
 .scene-row .row-mask {
@@ -3618,4 +3531,218 @@ details.channel-control > summary code {
 }
 .timeline-event.undone .event-preview {
   opacity: 0.4;
+}
+
+/*==========================================================================================================================================*/
+/* The plane view draws the unwrap itself over the sheet, with a chip to put it away and a note on what is down there.  */
+/*==========================================================================================================================================*/
+.uv-wire {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: auto;
+  pointer-events: none;
+}
+.plane-tools {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: auto;
+}
+.plane-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #0d0d0dcc;
+  backdrop-filter: blur(8px);
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition:
+    color 0.14s ease,
+    border-color 0.14s ease;
+}
+.plane-chip svg {
+  width: 13px;
+  height: 13px;
+}
+.plane-chip:hover {
+  color: var(--text);
+}
+.plane-chip.active {
+  color: var(--green);
+  border-color: rgba(52, 199, 89, 0.34);
+}
+.plane-note {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #0d0d0dcc;
+  border: 1px solid var(--line);
+  color: #7a7a7a;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+.plane-note:empty {
+  display: none;
+}
+
+/*==========================================================================================================================================*/
+/* The brush pod: one button in the transport that says what the brush is, and a popover above it holding everything   */
+/* the brush can be. Beside it, the colours the brush has lately carried.                                              */
+/*==========================================================================================================================================*/
+.brush-pod-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 13px 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #191919;
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease;
+}
+.brush-pod-button:hover {
+  background: #202020;
+}
+.brush-pod-button.active {
+  background: var(--raised);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.brush-pod-button svg {
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+}
+.brush-pod-button .pod-caret svg {
+  width: 11px;
+  height: 11px;
+  transform: rotate(180deg);
+}
+.pod-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  line-height: 1.15;
+}
+.pod-copy b {
+  font-weight: 400;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.pod-copy small {
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: #7a7a7a;
+}
+.swatch-rail {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  padding-left: 4px;
+}
+.rail-swatch {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border-radius: 7px;
+  border: 1px solid #ffffff1a;
+  background: var(--swatch, #777);
+  cursor: pointer;
+  padding: 0;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.rail-swatch:hover {
+  transform: translateY(-1px);
+}
+.rail-swatch.active {
+  box-shadow:
+    0 0 0 2px #0b0b0b,
+    0 0 0 3px rgba(255, 255, 255, 0.4);
+}
+.popover.brush-pod {
+  width: 268px;
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pod-field {
+  display: grid;
+  grid-template-columns: 58px 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.pod-field span {
+  letter-spacing: 0.4px;
+}
+.pod-field b {
+  color: var(--text);
+  font-weight: 400;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  min-width: 28px;
+  text-align: right;
+}
+.pod-field small {
+  color: #6d6d6d;
+  font-size: 9px;
+  width: 11px;
+}
+.pod-field input[type="range"] {
+  width: 100%;
+  height: 26px;
+}
+#sector-field {
+  display: none;
+}
+#sector-field.shown {
+  display: grid;
+}
+.pod-symmetry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 0 6px;
+}
+.pod-chip {
+  height: 26px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid #ffffff0d;
+  background: #1c1c1c;
+  color: #8d8d8d;
+  font-size: 10px;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+}
+.pod-chip:hover {
+  color: var(--text);
+}
+.pod-chip.active {
+  background: #232323;
+  border-color: rgba(52, 199, 89, 0.34);
+  color: var(--green);
 }

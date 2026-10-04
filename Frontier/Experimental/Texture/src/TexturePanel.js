@@ -8,7 +8,7 @@
 
 import { ShadingIntegrator, ProbeAcceleration, DeviceReport } from "./ShadingIntegrator.js";
 import { OrbitProjection } from "./OrbitProjection.js";
-import { StrokeProjection, ToolOrdering, SymmetryOrdering, MirrorVector, MarkUnderPoint } from "./StrokeProjection.js";
+import { StrokeProjection, ToolOrdering, SymmetryOrdering, SectorLimits, MarkUnderPoint } from "./StrokeProjection.js";
 import { BuildSurface, SurfaceIndex, BakeOcclusion, ParseWavefront } from "./SurfaceStructure.js";
 import {
     AssembleScene,
@@ -386,6 +386,9 @@ class TexturePanel
         this.MovingMark = "";
         this.ChosenTool = "";
         this.SyncedLayer = "";
+        this.RecentColours = ["#db5233", "#2f3338", "#c9ab6a", "#4a7bd0", "#e8e2d6"];
+        this.PlaneWire = true;          // the unwrapped triangles drawn over the sheet in the plane view
+        this.WireSignature = "";
         this.ChannelShelf = false;
         this.ChannelFocus = "";
         this.PlaneZoom = 0.82;
@@ -436,7 +439,6 @@ class TexturePanel
         this.RenderStack();
         this.RenderObjects();
         this.RenderInspector();
-        this.RenderChannelStrip();
         this.SyncPaintTarget();
         this.SyncMaskView();
         this.SyncToolRail();
@@ -479,7 +481,6 @@ class TexturePanel
         this.SyncToolRail();
         this.RenderStack();
         this.RenderInspector();
-        this.RenderChannelStrip();
         this.SyncPaintTarget();
         this.SyncMaskView();
         if (this.MaskView !== "off") this.Recomposite();
@@ -493,6 +494,7 @@ class TexturePanel
         const Objects = this.SceneObjects;
         this.SetStatus(Objects.length === 1 ? `Building ${Objects[0].Kind}` : `Building ${Objects.length} objects`, "busy");
         this.SurfaceRecord = AssembleScene(Objects, this.ImportedSurface);
+        this.WireSignature = "";
         this.Index = new SurfaceIndex(this.SurfaceRecord);
         this.Integrator.SetSurface(this.SurfaceRecord);
         this.RenderObjects();
@@ -1282,6 +1284,67 @@ class TexturePanel
         Plane.style.bottom = `${Bottom * 100}%`;
         Plane.style.width = `${(Zoom / Aspect) * 100}%`;
         Plane.style.height = `${Zoom * 100}%`;
+        this.DrawPlaneWire(Plane.clientWidth || Canvas.clientWidth * (Zoom / Aspect));
+        const Note = Select("#plane-note");
+        const Surface = this.SurfaceRecord;
+        const Span = Surface?.Tiles?.Columns || 1;
+        const Text = Surface
+            ? `${Surface.Triangles.toLocaleString()} tris · ${Surface.Ranges.length} object${Surface.Ranges.length === 1 ? "" : "s"} · ${Span}×${Span} tiles`
+            : "";
+        if (Note && Note.textContent !== Text) Note.textContent = Text;
+    }
+
+    // The unwrap itself, drawn over the sheet: every triangle of every visible object, with the one in hand picked out.
+    // It is redrawn only when the picture would actually differ — the box it sits in is positioned by CSS, so panning
+    // and small zooms cost nothing at all.
+    DrawPlaneWire(Width)
+    {
+        const Canvas = Select("#uv-wire");
+        if (!Canvas) return;
+        Canvas.hidden = !this.PlaneWire;
+        const Surface = this.SurfaceRecord;
+        if (!this.PlaneWire || !Surface) return;
+        const Size = Clamp(Math.round((Width || 0) / 256) * 256, 512, 2048);
+        const Owner = this.ActiveLayer?.Object || this.Project.Object || "";
+        const Hidden = this.Project.Objects.filter((Entry) => !Entry.Visible).length;
+        const Signature = `${Size}:${Surface.Vertices}:${Surface.Triangles}:${Owner}:${Hidden}`;
+        if (Signature === this.WireSignature) return;
+        const Context = Canvas.getContext("2d");
+        // A stand-in canvas has no raster behind it; the overlay simply stays empty.
+        if (typeof Context?.beginPath !== "function" || typeof Context.stroke !== "function") return;
+        this.WireSignature = Signature;
+        Canvas.width = Size;
+        Canvas.height = Size;
+        Context.clearRect(0, 0, Size, Size);
+        const Coordinates = Surface.Coordinates;
+        const Indices = Surface.Indices;
+        const Trace = (Range) =>
+        {
+            Context.beginPath();
+            const Last = (Range.FirstTriangle + Range.TriangleCount) * 3;
+            for (let Corner = Range.FirstTriangle * 3; Corner < Last; Corner += 3)
+            {
+                const A = Indices[Corner] * 2;
+                const B = Indices[Corner + 1] * 2;
+                const C = Indices[Corner + 2] * 2;
+                const Ax = Coordinates[A] * Size;
+                const Ay = (1 - Coordinates[A + 1]) * Size;
+                Context.moveTo(Ax, Ay);
+                Context.lineTo(Coordinates[B] * Size, (1 - Coordinates[B + 1]) * Size);
+                Context.lineTo(Coordinates[C] * Size, (1 - Coordinates[C + 1]) * Size);
+                Context.lineTo(Ax, Ay);
+            }
+            Context.stroke();
+        };
+        Context.lineWidth = Math.max(Size / 1400, 0.6);
+        for (const Range of Surface.Ranges)
+        {
+            const Entry = this.Project.Objects.find((Candidate) => Candidate.Identifier === Range.Identifier);
+            if (Entry && !Entry.Visible) continue;
+            const Lit = Owner ? Range.Identifier === Owner : Range.Identifier === this.ActiveObject?.Identifier;
+            Context.strokeStyle = Lit ? "rgba(52, 199, 89, 0.42)" : "rgba(255, 255, 255, 0.16)";
+            Trace(Range);
+        }
     }
 
     // Symmetry is only useful if you can see it: the button lights, the seam is drawn on the model, and the mirrored
@@ -1290,6 +1353,8 @@ class TexturePanel
     {
         const Known = SymmetryOrdering.some((Entry) => Entry.Identifier === Axis) ? Axis : "none";
         this.Projection.Configure({ Symmetry: Known });
+        Select("#sector-field")?.classList.toggle("shown", Known === "radial");
+        this.SyncPodSummary();
         const Field = Select("#symmetry-select");
         if (Field)
         {
@@ -1302,11 +1367,22 @@ class TexturePanel
         {
             Button.classList.toggle("active", Known !== "none");
             Button.setAttribute("aria-pressed", String(Known !== "none"));
-            Button.title = Known === "none" ? "Symmetry · S" : `Symmetry: mirror ${Known.toUpperCase()} · S`;
+            Button.title =
+                Known === "none"
+                    ? "Symmetry · S"
+                    : Known === "radial"
+                      ? `Symmetry: radial ×${this.Projection.Brush.Sectors} · S`
+                      : `Symmetry: mirror ${Known.toUpperCase()} · S`;
         }
         this.UpdateCaption();
         if (Announce)
-            this.Notify(Known === "none" ? "Symmetry off." : `Mirroring across ${Known.toUpperCase()}.`);
+            this.Notify(
+                Known === "none"
+                    ? "Symmetry off."
+                    : Known === "radial"
+                      ? `Repeating every ${(360 / this.Projection.Brush.Sectors).toFixed(0)}° around the up axis.`
+                      : `Mirroring across ${Known.toUpperCase()}.`,
+            );
     }
 
     // The decal in hand, shown where it would land before the click that commits it.
@@ -1621,7 +1697,6 @@ class TexturePanel
         this.Recomposite();
         this.RenderStack();
         this.RenderInspector();
-        this.RenderChannelStrip();
         this.SyncPaintTarget();
         this.SyncMaskView();
         this.UpdateStatusBar();
@@ -1833,6 +1908,14 @@ class TexturePanel
             this.SyncMaskView();
             this.RenderInspector();
             this.UpdateCaption();
+        });
+        Select("#wire-button")?.addEventListener("click", () =>
+        {
+            this.PlaneWire = !this.PlaneWire;
+            Select("#wire-button").classList.toggle("active", this.PlaneWire);
+            this.WireSignature = "";
+            this.SyncPlaneOverlay();
+            this.Notify(this.PlaneWire ? "Unwrap shown." : "Unwrap hidden.");
         });
         Select("#focus-button").addEventListener("click", () =>
         {
@@ -2439,14 +2522,14 @@ class TexturePanel
             Mode: "surface",
         };
         this.Integrator.Stamp(Layer, Options);
-        const Axis = Brush.Symmetry;
-        if (Axis !== "none")
-        {
-            const Start = MirrorVector(Segment.Start, Axis);
-            const End = MirrorVector(Segment.End, Axis);
-            const Normal = MirrorVector(Segment.Normal, Axis);
-            if (Start) this.Integrator.Stamp(Layer, { ...Options, Start, End, Normal });
-        }
+        // Symmetry is paint, not a view: each twin is stamped in turn, so what is mirrored or turned is in the texture.
+        for (const Twin of this.Projection.Twins)
+            this.Integrator.Stamp(Layer, {
+                ...Options,
+                Start: Twin(Segment.Start),
+                End: Twin(Segment.End),
+                Normal: Twin(Segment.Normal),
+            });
         this.Recomposite();
         this.MarkDirty();
     }
@@ -2727,16 +2810,15 @@ class TexturePanel
         else this.Integrator.EnsureCoverage(Layer);
         this.BeginStrokeRevision(Layer);
         this.Integrator.Stamp(Layer, Options);
-        const Axis = this.Projection.Brush.Symmetry;
-        if (Axis !== "none")
+        for (const Twin of this.Projection.Twins)
         {
-            const Mirrored = {
+            const Twinned = {
                 ...Record,
-                Position: MirrorVector(Record.Position, Axis),
-                Normal: MirrorVector(Record.Normal, Axis),
-                Tangent: MirrorVector(Record.Tangent, Axis),
+                Position: Twin(Record.Position),
+                Normal: Twin(Record.Normal),
+                Tangent: Twin(Record.Tangent),
             };
-            if (Mirrored.Position) this.Integrator.Stamp(Layer, { ...Options, Decal: Mirrored, Normal: Mirrored.Normal });
+            if (Twinned.Position) this.Integrator.Stamp(Layer, { ...Options, Decal: Twinned, Normal: Twinned.Normal });
         }
         this.CommitStrokeRevision(false);
         this.Recomposite();
@@ -2911,18 +2993,7 @@ class TexturePanel
     {
         Select("#undo-button").addEventListener("click", () => this.Undo());
         Select("#redo-button").addEventListener("click", () => this.Redo());
-        Select("#brush-colour").addEventListener("input", (Event) =>
-        {
-            this.BrushColour = FromHex(Event.target.value);
-            Select("#brush-swatch").style.setProperty("--swatch", Event.target.value);
-            const Layer = this.ActiveLayer;
-            if (Layer?.Kind === "stroke")
-            {
-                Layer.Channels.base_color = [...this.BrushColour];
-                this.RenderInspector();
-                this.Recomposite();
-            }
-        });
+        Select("#brush-colour").addEventListener("input", (Event) => this.SetBrushColour(FromHex(Event.target.value)));
         Select("#symmetry-select").innerHTML = SymmetryOrdering.map(
             (Entry) => `<option value="${Entry.Identifier}">${Entry.Label}</option>`,
         ).join("");
@@ -2934,6 +3005,29 @@ class TexturePanel
             this.SetSymmetry(Next, true);
         });
         Select("#clear-layer").addEventListener("click", () => this.ClearActive());
+        Select("#brush-pod-button").addEventListener("click", (Event) =>
+        {
+            Event.stopPropagation();
+            this.TogglePod(Select("#brush-pod").hidden);
+        });
+        Select("#brush-pod").addEventListener("click", (Event) =>
+        {
+            const Button = Event.target.closest("[data-symmetry]");
+            if (!Button) return;
+            this.SetSymmetry(Button.dataset.symmetry, true);
+            this.RenderSymmetryChips();
+        });
+        document.addEventListener("click", (Event) =>
+        {
+            if (!Event.target.closest("#brush-pod") && !Event.target.closest("#brush-pod-button")) this.TogglePod(false);
+        });
+        Select("#swatch-rail").addEventListener("click", (Event) =>
+        {
+            const Swatch = Event.target.closest("[data-swatch]");
+            if (Swatch) this.SetBrushColour(FromHex(Swatch.dataset.swatch));
+        });
+        this.RenderSymmetryChips();
+        this.RenderSwatchRail();
         SelectAll("[data-brush]").forEach((Control) =>
             Control.addEventListener("input", (Event) =>
             {
@@ -2941,7 +3035,8 @@ class TexturePanel
                 const Value = Number(Event.target.value);
                 this.Projection.Configure({ [Key]: Value });
                 const Display = Select(`[data-brush-readout="${Key}"]`);
-                if (Display) Display.textContent = Key === "Radius" ? `${(Value * 100).toFixed(1)}` : Value.toFixed(2);
+                if (Display) Display.textContent = BrushReadout(Key, Value);
+                this.SyncPodSummary();
                 Event.target.style.setProperty(
                     "--fraction",
                     String((Value - Number(Event.target.min)) / (Number(Event.target.max) - Number(Event.target.min))),
@@ -2949,6 +3044,93 @@ class TexturePanel
             }),
         );
         this.SyncBrushControls();
+    }
+
+    // One way in for the brush colour, whether it came from the picker, a swatch on the rail or a sampled texel: the
+    // stroke layer in hand follows the brush, because a hand-painted layer is the colour it was painted with.
+    SetBrushColour(Colour)
+    {
+        this.BrushColour = [...Colour];
+        const Code = ToHex(this.BrushColour);
+        const Field = Select("#brush-colour");
+        if (Field) Field.value = Code;
+        Select("#brush-swatch")?.style.setProperty("--swatch", Code);
+        this.NoteColour(this.BrushColour);
+        const Layer = this.ActiveLayer;
+        if (Layer?.Kind === "stroke")
+        {
+            Layer.Channels.base_color = [...this.BrushColour];
+            this.RenderInspector();
+            this.Recomposite();
+        }
+    }
+
+    // The pod sits above the button that opens it, so the sliders are near the hand that wants them.
+    TogglePod(Open)
+    {
+        const Pod = Select("#brush-pod");
+        const Button = Select("#brush-pod-button");
+        if (!Pod || !Button) return;
+        Pod.hidden = !Open;
+        Button.setAttribute("aria-expanded", String(Open));
+        Button.classList.toggle("active", Open);
+        if (!Open) return;
+        const Anchor = Button.getBoundingClientRect();
+        Pod.style.left = `${Math.round(Anchor.left)}px`;
+        Pod.style.top = `${Math.round(Anchor.top - 8 - (Pod.offsetHeight || 352))}px`;
+        this.SyncBrushControls();
+    }
+
+    RenderSymmetryChips()
+    {
+        const Host = Select("#pod-symmetry");
+        if (!Host) return;
+        const Current = this.Projection.Brush.Symmetry;
+        Host.innerHTML = SymmetryOrdering.map(
+            (Entry) => `
+            <button class="pod-chip ${Entry.Identifier === Current ? "active" : ""}" data-symmetry="${Entry.Identifier}"
+                    aria-pressed="${Entry.Identifier === Current}">${Escape(Entry.Label)}</button>`,
+        ).join("");
+        Select("#sector-field")?.classList.toggle("shown", Current === "radial");
+    }
+
+    // Colours the brush has actually carried, newest first. Mixing is a thing people do by eye, and reaching back for
+    // the shade from two strokes ago should not mean finding it again in a colour wheel.
+    NoteColour(Colour)
+    {
+        const Code = ToHex(Colour);
+        this.RecentColours = [Code, ...(this.RecentColours || []).filter((Entry) => Entry !== Code)].slice(0, 9);
+        this.RenderSwatchRail();
+    }
+
+    RenderSwatchRail()
+    {
+        const Rail = Select("#swatch-rail");
+        if (!Rail) return;
+        const Current = ToHex(this.BrushColour);
+        Rail.innerHTML = (this.RecentColours || [])
+            .map(
+                (Code) => `
+            <button class="rail-swatch ${Code === Current ? "active" : ""}" data-swatch="${Code}" title="${Code.toUpperCase()}"
+                    style="--swatch:${Code}" aria-label="Use ${Code.toUpperCase()}"></button>`,
+            )
+            .join("");
+    }
+
+    SyncPodSummary()
+    {
+        const Brush = this.Projection.Brush;
+        const Size = Select("#pod-size");
+        if (Size) Size.textContent = `${(Brush.Radius * 100).toFixed(1)} cm`;
+        const Note = Select("#pod-note");
+        if (Note)
+            Note.textContent =
+                `flow ${Brush.Flow.toFixed(2)} · hard ${Brush.Hardness.toFixed(2)}` +
+                (Brush.Symmetry === "none"
+                    ? ""
+                    : Brush.Symmetry === "radial"
+                      ? ` · radial ×${Brush.Sectors}`
+                      : ` · mirror ${Brush.Symmetry.toUpperCase()}`);
     }
 
     SyncBrushControls()
@@ -2963,11 +3145,13 @@ class TexturePanel
                 String((Brush[Key] - Number(Control.min)) / (Number(Control.max) - Number(Control.min))),
             );
             const Display = Select(`[data-brush-readout="${Key}"]`);
-            if (Display) Display.textContent = Key === "Radius" ? `${(Brush[Key] * 100).toFixed(1)}` : Brush[Key].toFixed(2);
+            if (Display) Display.textContent = BrushReadout(Key, Brush[Key]);
         });
         Select("#brush-colour").value = ToHex(this.BrushColour);
         Select("#brush-swatch").style.setProperty("--swatch", ToHex(this.BrushColour));
         Select("#brush-hud").textContent = `BRUSH ${(Brush.Radius * 100).toFixed(1)} cm`;
+        this.SyncPodSummary();
+        this.RenderSwatchRail();
     }
 
     Undo()
@@ -3057,15 +3241,6 @@ class TexturePanel
         {
             const Summary = Event.target.closest(".mark-folder > summary");
             if (Summary) this.RenameFolder(Summary);
-        });
-        Select("#channel-strip").addEventListener("click", (Event) =>
-        {
-            const Chip = Event.target.closest("[data-channel]");
-            if (!Chip) return;
-            const Layer = this.ActiveLayer;
-            if (!Layer) return;
-            const Identifier = Chip.dataset.channel;
-            this.CaptureStack(() => (Layer.Enabled[Identifier] = !Layer.Enabled[Identifier]));
         });
     }
 
@@ -4432,21 +4607,6 @@ class TexturePanel
         ].join("");
     }
 
-    RenderChannelStrip()
-    {
-        const Layer = this.ActiveLayer;
-        if (!Layer) return;
-        Select("#channel-strip").innerHTML = ChannelSpecification.map(
-            (Channel) => `
-            <button class="channel-chip ${Layer.Enabled[Channel.Identifier] ? "active" : ""}"
-                    data-channel="${Channel.Identifier}" title="${Escape(Channel.Hint)}"
-                    aria-pressed="${Layer.Enabled[Channel.Identifier]}">
-                <i style="--chip:${ChannelTint(Channel.Identifier)}"></i>${Escape(Channel.Label)}
-            </button>`,
-        ).join("");
-        Select("#channel-counter").textContent = `${LayerChannelCount(Layer)} WRITTEN`;
-    }
-
     //----------------------------------------------------------------------------------------------------------------------
     // Dialogs, import and export.
     //----------------------------------------------------------------------------------------------------------------------
@@ -4559,8 +4719,7 @@ class TexturePanel
             this.RenderStack();
             this.RenderObjects();
             this.RenderInspector();
-            this.RenderChannelStrip();
-            this.Notify(
+                this.Notify(
                 `${File.name} opened · ${Record.Layers.length} layers · ${this.Timeline.Branches.length} branch${this.Timeline.Branches.length === 1 ? "" : "es"}.`,
             );
         }
@@ -4618,7 +4777,6 @@ class TexturePanel
         this.RenderStack();
         this.RenderObjects();
         this.RenderInspector();
-        this.RenderChannelStrip();
         this.UpdateCaption();
     }
 
@@ -4679,6 +4837,11 @@ class TexturePanel
             if (Key === "b") this.SetBrowserState(this.BrowserState === "closed" ? "half" : "closed");
             if (Key === "f") Select("#focus-button").click();
             if (Key === "s") Select("#mirror-button").click();
+            if (Key === "w" && this.ViewMode === "plane")
+            {
+                Select("#wire-button")?.click();
+                return;
+            }
             if (Key === "x")
             {
                 this.SetViewMode(this.ViewMode === "plane" ? "surface" : "plane");
@@ -4873,7 +5036,8 @@ class TexturePanel
         const Artwork = Layer?.Kind === "decal" && Layer.Decal.SourceKind === "text" ? "Text" : "Decal";
         const ToolLabel = Placing ? `${Artwork} ${Layer.Decal.Placement === "stamp" ? "stamp" : "placement"}` : Tool?.Label;
         const Axis = this.Projection.Brush.Symmetry;
-        const Mirror = Axis === "none" ? "" : ` · mirror ${Axis.toUpperCase()}`;
+        const Mirror =
+            Axis === "none" ? "" : Axis === "radial" ? ` · radial ×${this.Projection.Brush.Sectors}` : ` · mirror ${Axis.toUpperCase()}`;
         Select("#viewport-subtitle").textContent =
             this.ViewMode === "plane"
                 ? `Texture space · ${DisplayOrdering.find((Entry) => Entry.Identifier === this.Display)?.Label}`
@@ -4958,6 +5122,7 @@ class TexturePanel
             MaskTint: this.ActiveLayer?.Mask?.Tint || [0.95, 0.22, 0.3],
             CheckerScale: 16,
             Symmetry: this.Projection.Brush.Symmetry,
+            Sectors: this.Projection.Brush.Sectors,
             Placement: this.Placement,
             Cursor:
                 this.StrokeTool === "brush" || this.StrokeTool === "eraser"
@@ -4977,6 +5142,11 @@ class TexturePanel
         requestAnimationFrame(() => this.Advance());
     }
 }
+
+// What a brush control says on its pill: centimetres for size, whole numbers for the counted ones, two places for the
+// rest. The slider carries the value; this only decides how it reads.
+const BrushReadout = (Key, Value) =>
+    Key === "Radius" ? `${(Value * 100).toFixed(1)}` : Key === "Sectors" || Key === "Facing" ? String(Math.round(Value)) : Value.toFixed(2);
 
 const ChannelLabel = (Identifier) => ChannelSpecification.find((Channel) => Channel.Identifier === Identifier)?.Label || Identifier;
 

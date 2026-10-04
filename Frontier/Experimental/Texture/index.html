@@ -109,7 +109,16 @@
                         <canvas id="surface-canvas" aria-label="Interactive painted surface viewport"></canvas>
                         <div class="brush-ghost" id="brush-ghost" hidden aria-hidden="true"></div>
                         <div class="uv-overlay" id="uv-overlay" hidden aria-hidden="true">
-                            <div class="uv-plane" id="uv-plane"><div class="uv-tiles" id="uv-tiles"></div></div>
+                            <div class="uv-plane" id="uv-plane">
+                                <canvas class="uv-wire" id="uv-wire" aria-hidden="true"></canvas>
+                                <div class="uv-tiles" id="uv-tiles"></div>
+                            </div>
+                            <div class="plane-tools">
+                                <button class="plane-chip active" id="wire-button" title="Show the unwrap · W" aria-label="Show the unwrap">
+                                    <i data-icon="layers"></i><span>Unwrap</span>
+                                </button>
+                                <span class="plane-note" id="plane-note"></span>
+                            </div>
                         </div>
                         <div class="viewport-caption">
                             <span class="live-pill" id="live-pill"><i></i><span>OPENPBR</span></span><span id="viewport-object">Base fill</span
@@ -201,25 +210,15 @@
                                 <input type="color" id="brush-colour" value="#db5233" aria-label="Brush colour" /></label
                             ><button class="icon-button" id="redo-button" title="Redo · Ctrl ⇧ Z" aria-label="Redo" data-icon="redo"></button>
                         </div>
-                        <div class="brush-controls">
-                            <label class="brush-field"
-                                ><span>Size</span><input type="range" data-brush="Radius" min="0.004" max="0.6" step="0.002" value="0.09" /><b data-brush-readout="Radius">9.0</b
-                                ><small>cm</small></label
-                            ><label class="brush-field"
-                                ><span>Flow</span><input type="range" data-brush="Flow" min="0.02" max="1" step="0.01" value="0.85" /><b data-brush-readout="Flow">0.85</b></label
-                            ><label class="brush-field"
-                                ><span>Hardness</span><input type="range" data-brush="Hardness" min="0" max="1" step="0.01" value="0.45" /><b data-brush-readout="Hardness">0.45</b></label
-                            ><label class="brush-field"
-                                ><span>Spacing</span><input type="range" data-brush="Spacing" min="0.05" max="1" step="0.01" value="0.22" /><b data-brush-readout="Spacing">0.22</b></label
-                            >
-                        </div>
+                        <button class="brush-pod-button" id="brush-pod-button" aria-expanded="false" aria-label="Brush settings">
+                            <span data-icon="brush"></span>
+                            <span class="pod-copy"><b id="pod-size">9.0 cm</b><small id="pod-note">flow 0.85 · hard 0.45</small></span>
+                            <span class="pod-caret" data-icon="down"></span>
+                        </button>
+                        <div class="swatch-rail" id="swatch-rail" aria-label="Recent colours"></div>
                         <div class="transport-actions">
                             <button class="button" id="clear-layer"><span data-icon="eraser"></span>Clear layer</button>
                         </div>
-                    </div>
-                    <div class="timeline" aria-label="Channels written by the selected layer">
-                        <div class="timeline-label"><span data-icon="layers"></span>CHANNELS<span id="channel-counter">—</span></div>
-                        <div class="ruler" id="channel-strip" aria-label="Channel toggles"></div>
                     </div>
                 </section>
                 <aside class="inspector-panel">
@@ -245,6 +244,29 @@
                     ><span class="gpu-dot"></span><span>WebGL2</span><span class="status-divider"></span>FRONTIER / TEXTURE <span class="version">0.1</span></span
                 >
             </footer>
+        </div>
+        <div id="brush-pod" class="popover brush-pod" hidden role="dialog" aria-label="Brush settings">
+            <div class="popover-label">BRUSH</div>
+            <label class="pod-field"
+                ><span>Size</span><input type="range" data-brush="Radius" min="0.004" max="0.6" step="0.002" value="0.09" /><b data-brush-readout="Radius">9.0</b
+                ><small>cm</small></label
+            ><label class="pod-field"
+                ><span>Flow</span><input type="range" data-brush="Flow" min="0.02" max="1" step="0.01" value="0.85" /><b data-brush-readout="Flow">0.85</b></label
+            ><label class="pod-field"
+                ><span>Hardness</span><input type="range" data-brush="Hardness" min="0" max="1" step="0.01" value="0.45" /><b data-brush-readout="Hardness">0.45</b></label
+            ><label class="pod-field"
+                ><span>Spacing</span><input type="range" data-brush="Spacing" min="0.05" max="1" step="0.01" value="0.22" /><b data-brush-readout="Spacing">0.22</b></label
+            ><label class="pod-field"
+                ><span>Jitter</span><input type="range" data-brush="Jitter" min="0" max="1" step="0.01" value="0" /><b data-brush-readout="Jitter">0.00</b></label
+            ><label class="pod-field"
+                ><span>Facing</span><input type="range" data-brush="Facing" min="20" max="90" step="1" value="72" /><b data-brush-readout="Facing">72</b><small>°</small></label
+            >
+            <div class="menu-divider"></div>
+            <div class="popover-label">SYMMETRY</div>
+            <div class="pod-symmetry" id="pod-symmetry" role="group" aria-label="Symmetry"></div>
+            <label class="pod-field" id="sector-field"
+                ><span>Sectors</span><input type="range" data-brush="Sectors" min="2" max="16" step="1" value="6" /><b data-brush-readout="Sectors">6</b></label
+            >
         </div>
         <div id="add-menu" class="popover add-menu" hidden role="menu">
             <div class="popover-label">ADD A LAYER</div>
