@@ -1,0 +1,16 @@
+{
+  "exit": 0,
+  "stackBytes": 262144,
+  "execution": "Production C++ inspectors; CPU raster of native ImGui commands. Not a GPU screenshot.",
+  "images": [
+    "Atmosphere.png",
+    "AtmosphereBaked.png",
+    "BakingAtBottom.png",
+    "Collection.png",
+    "Diagnostics.png",
+    "LensFlare.png",
+    "Rainbow.png",
+    "Stars.png",
+    "Sun.png"
+  ]
+}

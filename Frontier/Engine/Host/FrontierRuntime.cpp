@@ -902,9 +902,13 @@ int Frontier::RunFrontierRuntime(
     //──────────────────────────────────────────────────────────────────────────
     // ImGui panel — apply theme once after context exists
     //──────────────────────────────────────────────────────────────────────────
-    Frontier::RenderScheduler Panel;
+    // Long-lived editor state is constructed directly in heap storage. No aggregate
+    // temporary, oversized runtime stack frame, or increased Windows stack reserve.
+    std::vector<Frontier::RenderScheduler> PanelStorage(1);
+    Frontier::RenderScheduler& Panel=PanelStorage.front();
     // The sky, the weather and everything that carries them. Prepared once; ticked with the frame.
-    Frontier::HostRuntime::CelestialSequence Celestial;
+    std::vector<Frontier::HostRuntime::CelestialSequence> CelestialStorage(1);
+    auto& Celestial=CelestialStorage.front();
     Celestial.Prepare();
     // #26A the baked-dome boolean, seeded from [render] sky_dome_baked. OFF by default — the analytic march is
     //    the resting rule (the editor's own), and identical bytes to the pre-bake build. When ON, ④d below
@@ -1426,7 +1430,8 @@ int Frontier::RunFrontierRuntime(
     //    seats from the fly camera below.
     //    Without FRONTIER_DEVELOPMENT the panel below ignores all of this (see the ifdef at the feed block).
     std::vector<Frontier::EditorInstance> SceneInstances(Frontier::kMaxEditorInstances);
-    Frontier::EditorSheet    PickedSheet = {};
+    std::vector<Frontier::EditorSheet> PickedSheetStorage(1);
+    Frontier::EditorSheet& PickedSheet=PickedSheetStorage.front();
     bool                     SceneReady = false;
 #ifdef FRONTIER_DEVELOPMENT
     // Row ↔ instance spans for GPU picking: the packed id the visibility image hands back names an instance;
@@ -1441,6 +1446,7 @@ int Frontier::RunFrontierRuntime(
 #endif
 #ifdef FRONTIER_DEVELOPMENT
     Frontier::EditorReadout  EditorFooter{};
+    EditorFooter.DiagnosticsOpen = Diagnostics.AccessOpen();
 #endif
     uint32_t                 SceneRowCount = 0u;
     uint32_t                 AppliedOrbit = 0u;
@@ -1490,6 +1496,7 @@ int Frontier::RunFrontierRuntime(
         Notifications.Advance(Δτ);
         Configuration.Advance(Δτ);
         Telemetry.RecordFrame(Δτ);
+        Diagnostics.RecordDurations(static_cast<float>(Δτ), Surface.QueryVisibilityTelemetry());
         FRONTIER_PROBE_LAP(InputAndUi);
 
         double CpuCelestialTickMs=0, CpuSkyPackUploadMs=0, CpuWeatherPostPackUploadMs=0;
@@ -1766,7 +1773,7 @@ int Frontier::RunFrontierRuntime(
         ProjectInput.SimulationStep = Panel.TakeSimulationStep() ? 1u : 0u;
         ProjectInput.HandbrakePressed = Input.IsKeyPressed(Frontier::VirtualKeyCategory::KeySpace) ? 1u : 0u;
         ProjectInput.ResetPressed = Input.IsKeyPressed(Frontier::VirtualKeyCategory::KeyR) ? 1u : 0u;
-        ProjectInput.KeyboardCaptured = (TypingText || ControlCentre.CoversPointer()) ? 1u : 0u;
+        ProjectInput.KeyboardCaptured = (TypingText || ControlCentre.CoversPointer() || Diagnostics.QueryPointerCaptured()) ? 1u : 0u;
         if (Transport != 0u && PreviousTransport == 0u)
         {
             ProjectRestInstances = AnimatedInstances;
@@ -1841,7 +1848,7 @@ int Frontier::RunFrontierRuntime(
         ActiveReception.Diagnostics.clear();
         ActiveReception.RenderingPreferences.clear();
         PreviousTransport = Transport;
-        if (!ProjectCamera && !ControlCentre.CoversPointer() && (!TypingText || RmbDown))
+        if (!ProjectCamera && !ControlCentre.CoversPointer() && !Diagnostics.QueryPointerCaptured() && (!TypingText || RmbDown))
             Camera.AdvanceLocomotion(Input, Δτ);
         Camera.AssignAspectRatio(
             static_cast<float>(Surface.QueryWidth()) /

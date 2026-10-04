@@ -1677,9 +1677,9 @@ void ViewportPanel::RecordBar() noexcept
         if (GearHot)
         {
             ImGui::SetTooltip("Viewport settings");
-            if (ImGui::IsMouseClicked(0) && ShadeOpen_ != nullptr) *ShadeOpen_ = !*ShadeOpen_;
+            if (ImGui::IsMouseClicked(0)) ImGui::OpenPopup("##viewport-settings");
         }
-        const bool GearOn = (ShadeOpen_ != nullptr && *ShadeOpen_);
+        const bool GearOn = ImGui::IsPopupOpen("##viewport-settings");
         if (GearHot || GearOn)
             Draw->AddCircleFilled(ImVec2(GX + 14.0f, BtnY + 13.0f), 12.0f, GearHot ? kHover : IM_COL32(255, 255, 255, 16));
         const ImVec2 GearC(GX + 14.0f, BtnY + 13.0f);
@@ -1692,6 +1692,16 @@ void ViewportPanel::RecordBar() noexcept
                           ImVec2(GearC.x + 8.2f * std::cos(A), GearC.y + 8.2f * std::sin(A)), GearTint, 1.6f);
         }
         Draw->AddCircleFilled(GearC, 1.6f, GearTint);
+        if (ImGui::BeginPopup("##viewport-settings"))
+        {
+            ImGui::TextDisabled("VIEWPORT / SETTINGS");
+            if (Readout_ && Readout_->DiagnosticsOpen)
+                ImGui::MenuItem("Statistics / Debug", "F3", Readout_->DiagnosticsOpen);
+            ImGui::Checkbox("Realtime", &Realtime_);
+            if (ShadeOpen_ && ImGui::MenuItem("Display and rendering settings")) *ShadeOpen_ = true;
+            ImGui::EndPopup();
+        }
+
     }
 
     ImGui::SetCursorScreenPos(ImVec2(Cursor.x, Cursor.y + kBarHeight + kHairlineHeight));

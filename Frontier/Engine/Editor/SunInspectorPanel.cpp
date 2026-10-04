@@ -166,12 +166,7 @@ void RecordSunInspector(ControlPanel& Controls,EditorInstance& Row,EditorSheet& 
     ImGui::SetCursorScreenPos(U.At(W-98,62));if(ImGui::InvisibleButton("##sun-enabled",{98,32}))Row.Visible=!Row.Visible;
     U.D->AddRectFilled(U.At(W-98,62),U.At(W,94),Colour(38,38,38),16);U.D->AddRect(U.At(W-98,62),U.At(W,94),Colour(59,59,59),16);
     U.D->AddCircleFilled(U.At(W-82,78),3,Row.Visible?Colour(150,207,161):Colour(198,115,112));U.Text(W-70,71,Row.Visible?"Enabled":"Disabled",11);
-    // The requested quick bake area is at the top, with distinct lighting and disk targets.
-    U.Text(0,129,"BAKING",10,Muted);U.Text(W-190,129,"Native target bindings pending",9,Colour(129,126,121));
-    float BakeW=Two?(W-12)/2:W;
-    U.Bake(0,153,BakeW,"Sun lighting bake","sun-lighting-bake");
-    U.Bake(Two?BakeW+12:0,Two?153:390,BakeW,"Sun disk bake","sun-disk-bake");
-    float Y=Two?404:641;
+    float Y=129;
     U.Text(0,Y,"PROPERTIES",10,Muted);U.Text(125,Y,"Light, direction & atmosphere",10,Colour(133,133,133));Y+=32;
     const bool WrapTiles=W<600;
     float Tile=std::min(160.0f,(W-(WrapTiles?9:27))/(WrapTiles?2:4));
@@ -296,7 +291,14 @@ void RecordSunInspector(ControlPanel& Controls,EditorInstance& Row,EditorSheet& 
     ImGui::PopStyleColor();ImGui::PopStyleVar();
     // Parent draw list is submitted before its child: same gradient/radius as every other card.
     U.Surface(0,End,W,CardHeight,22);
-    ImGui::SetCursorScreenPos({Origin.x,ImGui::GetCursorScreenPos().y+12});ImGui::TextDisabled("Bound controls apply in real time. Unavailable controls are disabled.");
+    // Export targets always follow authoring, previews and native settings.
+    float BakeY=End+CardHeight+22;
+    U.Text(0,BakeY,"BAKING / TEXTURES",10,Muted);
+    U.Text(0,BakeY+20,"Native target bindings pending",10,Muted);
+    const float BakeW=Two?(W-12)/2:W;
+    U.Bake(0,BakeY+44,BakeW,"Sun lighting bake","sun-lighting-bake");
+    U.Bake(Two?BakeW+12:0,BakeY+(Two?44:281),BakeW,"Sun disk bake","sun-disk-bake");
+    ImGui::SetCursorScreenPos(U.At(0,BakeY+(Two?290:527)));ImGui::TextDisabled("Bound controls apply in real time. Unavailable controls are disabled.");
     ImGui::Dummy({0,16});ImGui::PopFont();
 }
 }

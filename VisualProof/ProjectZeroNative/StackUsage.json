@@ -1,0 +1,51 @@
+{
+  "compiler": "GCC -O2 -fstack-usage",
+  "budgetBytes": 8192,
+  "frames": [
+    {
+      "function": "VisualProof/ProjectZeroNative/EditorConversionProof.cpp:44:5:int RunEditorConversion(const char*)",
+      "bytes": 1424,
+      "classification": "dynamic,bounded"
+    },
+    {
+      "function": "Frontier/Engine/DisplayPresentation/DiagnosticInspector.cpp:80:6:void Frontier::DiagnosticInspector::ConstructInspectorLayout(Frontier::PixelSpace&, float, float, const Frontier::VisibilityTelemetry&, uint32_t, bool, const Frontier::ReSTIRIntegratorConfiguration&, const Frontier::MaterialIndexMetrics&, const Frontier::TextureIndexMetrics&, uint32_t, const char*)",
+      "bytes": 1856,
+      "classification": "dynamic,bounded"
+    },
+    {
+      "function": "Frontier/Engine/Host/EditorFeedSequence.cpp:103:32:Frontier::HostRuntime::{anonymous}::BuildLayout(const Frontier::SceneStructure&, FeedRow*, uint32_t)::<lambda(uint32_t)>",
+      "bytes": 112,
+      "classification": "static"
+    },
+    {
+      "function": "Frontier/Engine/Host/EditorFeedSequence.cpp:79:10:uint32_t Frontier::HostRuntime::{anonymous}::BuildLayout(const Frontier::SceneStructure&, FeedRow*, uint32_t)",
+      "bytes": 384,
+      "classification": "static"
+    },
+    {
+      "function": "Frontier/Engine/Editor/InspectorPanel.cpp:280:6:void Frontier::InspectorPanel::RecordCollection(Frontier::EditorInstance&, uint32_t)",
+      "bytes": 112,
+      "classification": "dynamic,bounded"
+    },
+    {
+      "function": "Frontier/Engine/Editor/SunInspectorPanel.cpp:146:6:void Frontier::RecordSunInspector(ControlPanel&, EditorInstance&, EditorSheet&)",
+      "bytes": 1648,
+      "classification": "dynamic,bounded"
+    },
+    {
+      "function": "Frontier/Engine/Editor/LensFlareInspectorPanel.cpp:120:6:void Frontier::RecordLensFlareInspector(ControlPanel&, EditorInstance&, EditorSheet&)",
+      "bytes": 736,
+      "classification": "dynamic,bounded"
+    },
+    {
+      "function": "Frontier/Engine/Editor/AtmosphereSkyInspectorPanel.cpp:136:6:void Frontier::RecordAtmosphereSkyInspector(ControlPanel&, EditorInstance&, EditorSheet&)",
+      "bytes": 1216,
+      "classification": "dynamic,bounded"
+    },
+    {
+      "function": "Frontier/Engine/Editor/WeatherInspectorPanel.cpp:85:6:void Frontier::RecordWeatherInspector(ControlPanel&, EditorInstance&, EditorSheet&)",
+      "bytes": 720,
+      "classification": "dynamic,bounded"
+    }
+  ]
+}

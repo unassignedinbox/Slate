@@ -111,10 +111,11 @@ void EditorHost::RecordTabAdd() noexcept
 {
 #ifdef FRONTIER_DEVELOPMENT
     if(ImGui::DockNodeConsumeAddRequest(LeftColumn_))Construct_.Open();
-    // Shift+A opens Construct — and Shift+A is ALSO "boost + strafe left" in flight. While the camera steers
-    //    the letter belongs to the camera, so the menu no longer opens itself behind the viewport every time
-    //    the pilot boosts to the left.
-    if(!Steering_ && !ImGui::GetIO().WantTextInput && ImGui::GetIO().KeyShift && ImGui::IsKeyPressed(ImGuiKey_A))Construct_.Open();
+    // Ctrl+A belongs to Construct only outside text editing and camera steering.
+    // Shift+WASD remains fast flight; holding A must not reopen the dialog.
+    const ImGuiIO& Io=ImGui::GetIO();
+    if(!Steering_ && !Io.WantTextInput && Io.KeyCtrl && !Io.KeyShift && !Io.KeyAlt && !Io.KeySuper
+       && ImGui::IsKeyPressed(ImGuiKey_A,false))Construct_.Open();
 #endif
 }
 
@@ -487,6 +488,7 @@ void EditorHost::Record(EditorInstance* Instances, uint32_t InstanceCount, Edito
     ImGui::End();
     ImGui::PopStyleVar(2);
 
+    Inspector_.AssignRoster(Instances, InstanceCount);
     Outliner_.Record(Instances, InstanceCount);
     if(!InspectorWorkspace_) {
         const uint32_t Before=Outliner_.QueryPicked();
@@ -515,6 +517,8 @@ void EditorHost::Record(EditorInstance* Instances, uint32_t InstanceCount, Edito
         ImGui::SetWindowFocus("Outliner");
         OutlinerRaised_ = true;
     }
+    const uint32_t CollectionPick=Inspector_.ConsumeCollectionPick();
+    if(CollectionPick<InstanceCount)Outliner_.RevealInstance(CollectionPick,Instances,InstanceCount);
     RecordTabAdd();
     const uint32_t ConstructPick=Construct_.Record(Instances,InstanceCount,Inspector_,InspectorExchange_,InspectorContext_);
     if(ConstructPick<InstanceCount)PickInstance(ConstructPick);

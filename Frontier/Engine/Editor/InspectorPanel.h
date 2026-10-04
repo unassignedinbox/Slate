@@ -7,6 +7,7 @@
 #pragma once
 
 #include "EditorInstance.h"
+#include "CollectionSequence.h"
 
 #include <imgui.h>
 
@@ -31,9 +32,12 @@ public:
     // The foot strip's live figures (realtime, triangle total); without a readout the strip prints its dashes.
     void AssignReadout(const EditorReadout* Readout) noexcept;
 
+    void AssignRoster(EditorInstance* Rows, uint32_t Count) noexcept { Roster_ = Rows; RosterCount_ = Count; }
+    uint32_t ConsumeCollectionPick() noexcept { const auto Selected = CollectionPick_; CollectionPick_ = kNoEditorInstance; return Selected; }
     void Record(EditorInstance* Picked, uint32_t PickedIndex, EditorSheet* Sheet, bool Embedded=false) noexcept;
 
 private:
+    void  RecordCollection(EditorInstance& Selected, uint32_t Index) noexcept;
     void  RecordEmpty() noexcept;
     void  RecordIdent(EditorInstance* Picked, uint32_t PickedIndex) noexcept;
     void  RecordCard(EditorPropertyGroup& Group, uint32_t Card) noexcept;
@@ -42,6 +46,10 @@ private:
     void  RecordFooter(EditorInstance* Picked) noexcept;
     float RecordCaps(const char* Text, const ImVec2& At, ImU32 Tint) noexcept;
 
+    CollectionSequence   Collection_;
+    EditorInstance*      Roster_ = nullptr;
+    uint32_t             RosterCount_ = 0;
+    uint32_t             CollectionPick_ = kNoEditorInstance;
     ControlPanel*        Controls_ = nullptr;
     bool*                TabOpen_ = nullptr;
     const EditorReadout* Readout_  = nullptr;

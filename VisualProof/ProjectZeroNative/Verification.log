@@ -1,0 +1,28 @@
+PASS 10000-deep iterative collection traversal
+PASS inherited hidden visibility census
+PASS direct-content narrowing
+PASS pagination clamps without row-sized automatic storage
+PASS case-insensitive search and shrinking result page
+PASS deep scene roster stops at native capacity
+PASS real scene feed retains depth beyond old eight-level truncation
+PASS permanent protected Editor Camera in native scene feed
+PASS native image written
+PASS Shift+A remains camera flight, not Construct
+PASS Ctrl+A opens native Construct
+PASS Escape closes native Construct
+PASS native image written
+PASS native image written
+PASS native image written
+PASS native image written
+PASS native image written
+PASS native atmosphere properties and final settings are visible
+PASS relocated bottom bake button queues the real native action
+PASS renderer consumes relocated bake request
+PASS bake request consumed exactly once
+PASS real texture bake stays heap backed
+PASS inspector borrows actual bake pixels
+PASS native image written
+PASS native image written
+PASS baking remains reachable at bottom of a scrollable native inspector
+PASS native image written
+SIZE EditorSheet=19392 EditorHost=37040 CelestialSequence=2200 CollectionSequence=216

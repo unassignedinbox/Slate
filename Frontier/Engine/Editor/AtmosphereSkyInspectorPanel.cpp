@@ -137,7 +137,10 @@ void RecordAtmosphereSkyInspector(ControlPanel& Controls,EditorInstance&,EditorS
     if(!Find(Sheet,"Rayleigh")||!Find(Sheet,"Fetch Baked Dome")){ImGui::TextUnformatted("Atmosphere / Sky properties unavailable");return;}
     auto& Cached=Cache();Update(Cached,Sheet.SkyImage);ImFont* Font=ImGui::GetFont();for(auto* F:ImGui::GetIO().Fonts->Fonts)if(std::strcmp(F->GetDebugName(),"Sun reference / regular")==0)Font=F;
     ImGui::PushFont(Font,14);float W=std::max(240.f,ImGui::GetContentRegionAvail().x-40);auto Origin=ImGui::GetCursorScreenPos();Origin.x+=20;Origin.y+=20;Panel U{Controls,Sheet,ImGui::GetWindowDrawList(),Origin,Font};bool Wide=W>=700;float Col=Wide?(W-16)/2:W;
-    U.Text(0,0,"Inspector / Environment",10,Muted);U.Text(0,40,"Atmosphere",W<360?24:32);U.Text(0,97,"BAKING",10,Muted);
+    U.Text(0,0,"Inspector / Environment",10,Muted);U.Text(0,40,"Atmosphere",W<360?24:32);
+    auto RecordBaking=[&](float PositionY) {
+        const ImVec2 Saved=U.O;U.O.y+=PositionY-97;
+U.Text(0,97,"BAKING",10,Muted);
     U.Card(0,120,W,225,"Atmosphere bake");auto* Fetch=Find(Sheet,"Fetch Baked Dome");float TileW=W<360?96:119,BakeX=TileW+36;
     ImGui::SetCursorScreenPos(U.At(24,179));if(ImGui::InvisibleButton("##sky-fetch",{TileW,106}))Fetch->On=!Fetch->On;
     ImU32 Key=Fetch->On?IM_COL32(105,200,132,255):IM_COL32(204,118,115,255);
@@ -162,6 +165,9 @@ void RecordAtmosphereSkyInspector(ControlPanel& Controls,EditorInstance&,EditorS
     else U.Wrap(44,Y+108+ImageH/2,W-88,"Bake the atmosphere to see the actual HDR image here. No substitute illustration.");
     U.Wrap(24,Y+116+ImageH,W-48,Cached.View==0?"Altitude profile · sampled opposite the baked Sun · zenith above, horizon below":Cached.View==3?"Full sphere · zenith / horizon / nadir; black below ground is expected":"360° sky panorama · zenith at top, horizon below · decoded from the bake");Y+=Height+16;
     U.Wrap(8,Y,W-16,"Atmospheric scattering only: the bright area is scattered sunlight, not the Sun disc. Moon, stars, clouds and fog remain separate.");Y+=52;
+        U.O=Saved;return Y-97;
+    };
+    float Y=110;
     U.Card(0,Y,W,485,"Atmospheric scattering");char Text[64];std::snprintf(Text,sizeof(Text),"%.1f ×",double(Find(Sheet,"Rayleigh")->Figure));U.Text(24,Y+65,Text,40);U.Text(24,Y+115,"How air molecules scatter sunlight",11,Muted);
     U.D->PushClipRect(U.At(24,Y+145),U.At(W-24,Y+395),true);Scattering(Fit(U.D,U.At(24,Y+145),{W-48,250},620,225),Find(Sheet,"Rayleigh")->Figure,Find(Sheet,"Mie")->Figure/6*100);U.D->PopClipRect();U.Slider(24,Y+409,W-48,"Rayleigh");Y+=501;
     U.Card(0,Y,Col,380,"Aerosol haze");std::snprintf(Text,sizeof(Text),"%.2f ×",double(Find(Sheet,"Mie")->Figure));U.Text(24,Y+62,Text,38);U.Wrap(24,Y+110,Col-48,"Suspended particles soften and attenuate light");Haze(Fit(U.D,U.At(24,Y+146),{Col-48,160},360,150),Find(Sheet,"Mie")->Figure/6*100);U.Slider(24,Y+308,Col-48,"Mie");
@@ -183,6 +189,7 @@ void RecordAtmosphereSkyInspector(ControlPanel& Controls,EditorInstance&,EditorS
         ImGui::Dummy({0,12});ImGui::PopID();
     }
     ImGui::EndChild();float EH=ImGui::GetItemRectSize().y;ImGui::PopStyleVar();U.Card(0,Y,W,EH,"");
-    ImGui::SetCursorScreenPos(U.At(0,Y+EH+20));ImGui::TextDisabled("Reference diagrams are illustrative. The panorama alone displays actual baked pixels.");ImGui::Dummy({0,20});ImGui::PopFont();
+    Y+=EH+20;Y+=RecordBaking(Y);
+    ImGui::SetCursorScreenPos(U.At(0,Y+20));ImGui::TextDisabled("Reference diagrams are illustrative. The panorama alone displays actual baked pixels.");ImGui::Dummy({0,20});ImGui::PopFont();
 }
 }

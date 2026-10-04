@@ -51,6 +51,7 @@ public:
     [[nodiscard]] uint32_t QueryPicked() const noexcept;                 // the primary pick, or kNoEditorInstance
     [[nodiscard]] uint32_t QueryPickedCount() const noexcept;
     [[nodiscard]] uint32_t QueryPickedAt(uint32_t Slot) const noexcept;
+    void RevealInstance(uint32_t Index, const EditorInstance* Rows, uint32_t Count) noexcept;
     void PickInstance(uint32_t Index) noexcept;                            // the test seam; the proof drives the pick
 
     // Selection operations are public because EditorHost and RenderScheduler expose the same editor seams to the

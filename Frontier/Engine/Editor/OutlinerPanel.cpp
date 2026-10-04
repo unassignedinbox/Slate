@@ -1011,6 +1011,25 @@ uint32_t OutlinerPanel::QueryPickedAt(uint32_t Slot) const noexcept
     return Slot < PickedCount_ ? Picked_[Slot] : kNoEditorInstance;
 }
 
+void OutlinerPanel::RevealInstance(uint32_t Index, const EditorInstance* Rows, uint32_t Count) noexcept
+{
+    if (!Rows || Index >= Count || Index >= kMaxEditorInstances) return;
+    QueryText_[0] = 0;
+    for (bool& Enabled : FilterOn_) Enabled = false;
+    uint32_t Depth = Rows[Index].Depth;
+    for (uint32_t Earlier = Index; Earlier > 0 && Depth > 0;)
+    {
+        --Earlier;
+        if (Rows[Earlier].Depth < Depth)
+        {
+            Shut_[Earlier] = false;
+            Depth = Rows[Earlier].Depth;
+        }
+    }
+    PickInstance(Index);
+    Revealed_ = kNoEditorInstance;
+}
+
 void OutlinerPanel::PickInstance(uint32_t Index) noexcept
 {
     ExplicitPick_=true;

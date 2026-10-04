@@ -22,6 +22,7 @@ struct FeedRow
 {
     FeedRowKind Kind    = FeedRowKind::Folder;
     uint32_t    Ordinal = 0u;
+    uint32_t    Depth = 0u;
 };
 
 constexpr uint32_t kFolderCameras     = 0u;
@@ -73,24 +74,6 @@ uint32_t PlacementFolder(const PlacementRecord& P, const SceneStructure& Level) 
     return P.Dynamic ? kFolderObjects : kFolderRoom;
 }
 
-// Depth below its folder: roots sit at 1, nested placements deepen. The ancestor chase is capped so a corrupt
-//    link idles at the root instead of looping.
-uint32_t PlacementDepth(uint32_t Ordinal, const SceneStructure& Level) noexcept
-{
-    const auto& Placements = Level.QueryPlacements();
-    uint32_t Depth = 1u;
-    uint32_t Walk  = Ordinal;
-    for (uint32_t Hops = 0u; Hops < 8u && Walk < Placements.size(); ++Hops)
-    {
-        const uint32_t Parent = Placements[Walk].Ancestor;
-        if (Parent == kPlacementNone || Parent >= Placements.size())
-            break;
-        ++Depth;
-        Walk = Parent;
-    }
-    return Depth;
-}
-
 // The shared row layout: Cameras -> Lighting -> Objects -> Room (scenery/plinths).
 //    Both builders run this, so the sheet's row means what the roster showed.
 uint32_t BuildLayout(const SceneStructure& Level, FeedRow* Layout, uint32_t Capacity) noexcept
@@ -99,17 +82,39 @@ uint32_t BuildLayout(const SceneStructure& Level, FeedRow* Layout, uint32_t Capa
     uint32_t Rows = 0u;
     auto Push = [&](FeedRowKind Kind, uint32_t Ordinal)
     {
-        if (Rows < Capacity) { Layout[Rows].Kind = Kind; Layout[Rows].Ordinal = Ordinal; ++Rows; }
+        if (Rows < Capacity) { Layout[Rows].Kind = Kind; Layout[Rows].Ordinal = Ordinal; Layout[Rows].Depth = 0; ++Rows; }
     };
 
     std::vector<bool> Written(Placements.size(), false);
-    const auto EmitPlacement = [&](auto&& Emit, uint32_t Slot) -> void
+    // 📝 Adjacency and traversal both live on the heap. No recursion per scene depth,
+    // and no repeated full-scene scan for every nested placement.
+    std::vector<uint32_t> First(Placements.size(), kPlacementNone);
+    std::vector<uint32_t> Next(Placements.size(), kPlacementNone);
+    for (uint32_t Index = 0; Index < Placements.size(); ++Index)
     {
-        if (Slot >= Placements.size() || Written[Slot] || Rows >= Capacity) return;
-        Written[Slot] = true;
-        Push(FeedRowKind::Placement, Slot);
-        for (uint32_t Next = 0u; Next < Placements.size(); ++Next)
-            if (Placements[Next].Ancestor == Slot) Emit(Emit, Next);
+        const uint32_t Enclosing = Placements[Index].Ancestor;
+        if (Enclosing < Placements.size())
+        {
+            Next[Index] = First[Enclosing];
+            First[Enclosing] = Index;
+        }
+    }
+    std::vector<std::pair<uint32_t, uint32_t>> Pending;
+    const auto EmitPlacement = [&](uint32_t Slot)
+    {
+        Pending.clear();
+        Pending.emplace_back(Slot, 1u);
+        while (!Pending.empty() && Rows < Capacity)
+        {
+            const auto Current = Pending.back();
+            Pending.pop_back();
+            if (Current.first >= Placements.size() || Written[Current.first]) continue;
+            Written[Current.first] = true;
+            Push(FeedRowKind::Placement, Current.first);
+            Layout[Rows - 1].Depth = Current.second;
+            for (uint32_t Nested = First[Current.first]; Nested != kPlacementNone; Nested = Next[Nested])
+                if (!Written[Nested]) Pending.emplace_back(Nested, Current.second + 1);
+        }
     };
     for (uint32_t Folder = kFolderCameras; Folder <= kFolderRoom; ++Folder)
     {
@@ -122,11 +127,11 @@ uint32_t BuildLayout(const SceneStructure& Level, FeedRow* Layout, uint32_t Capa
         }
         for (uint32_t Slot = 0u; Slot < Placements.size(); ++Slot)
             if (Placements[Slot].Ancestor >= Placements.size() && PlacementFolder(Placements[Slot], Level) == Folder)
-                EmitPlacement(EmitPlacement, Slot);
+                EmitPlacement(Slot);
     }
     // Broken/cyclic links remain selectable, rather than disappearing from the roster.
     for (uint32_t Slot = 0u; Slot < Placements.size(); ++Slot)
-        if (!Written[Slot]) EmitPlacement(EmitPlacement, Slot);
+        if (!Written[Slot]) EmitPlacement(Slot);
 
     return Rows;
 }
@@ -310,7 +315,7 @@ uint32_t EditorFeedSequence::FillRoster(EditorInstance* Instances, const SceneSt
             const PlacementRecord& P = Placements[Entry.Ordinal];
             if (!P.Name.empty()) std::snprintf(Row.Label, sizeof(Row.Label), "%s", P.Name.c_str());
             else                 std::snprintf(Row.Label, sizeof(Row.Label), "Object %u", Entry.Ordinal);
-            Row.Depth = PlacementDepth(Entry.Ordinal, Level);
+            Row.Depth = Entry.Depth;
             Row.Dynamic = P.Dynamic;
             const uint32_t Folder = PlacementFolder(P, Level);
             if (P.InstanceCount == 0u && P.Camera == kPlacementNone && P.Luminaire == kPlacementNone)
@@ -345,8 +350,9 @@ uint32_t EditorFeedSequence::FillRoster(EditorInstance* Instances, const SceneSt
             break;
         }
         case FeedRowKind::FlyCamera:
-            std::snprintf(Row.Label, sizeof(Row.Label), "Main Camera");
+            std::snprintf(Row.Label, sizeof(Row.Label), "Editor Camera");
             Row.Depth    = 1u;
+            Row.Pinned = true;Row.Locked = true;
             Row.Category = EditorInstanceCategory::Camera;
             Row.Glyph    = EditorGlyph::Camera;Row.Artwork=IconSymbol::Camera;
             Row.Narrowing = EditorNarrowing::Camera;

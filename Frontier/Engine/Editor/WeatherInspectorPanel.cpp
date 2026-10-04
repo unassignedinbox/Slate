@@ -72,14 +72,14 @@ void Cleanup(ImGuiContext*,ImGuiContextHook* H){auto* C=static_cast<BowCache*>(H
 BowCache& Cache(){constexpr ImGuiID Owner=0x57454154;for(auto& H:ImGui::GetCurrentContext()->Hooks)if(H.Owner==Owner)return *static_cast<BowCache*>(H.UserData);auto* P=new BowCache;ImGuiContextHook H;H.Owner=Owner;H.Type=ImGuiContextHookType_Shutdown;H.Callback=Cleanup;H.UserData=P;ImGui::AddContextHook(ImGui::GetCurrentContext(),&H);return *P;}
 void RainbowPanel(Panel& U,float W){
  U.Text(0,83,"RAINBOW · liquid-water optics",10,Muted);char T[160];
- U.Card(0,110,W,W<420?228:167,"Bake / image");float TW=W<420?(W-56)/2:std::min(160.f,(W-64)/3);U.Tile(24,164,TW,"Bake",nullptr);U.Tile(32+TW,164,TW,"Use baked image",nullptr);U.Wrap(24,W<420?248:239,W-48,"No Rainbow bake or image-playback path exists in this target.");
- float Y=W<420?354:293;U.Card(0,Y,W,154,"Visibility");float BW=std::min(180.f,(W-58)/2);U.Tile(24,Y+54,BW,"Enabled",&Find(U.Sheet,"Enabled")->On);U.Tile(34+BW,Y+54,BW,"Alexander's Band",&Find(U.Sheet,"Alexander's Band")->On);
+ float Y=110;U.Card(0,Y,W,154,"Visibility");float BW=std::min(180.f,(W-58)/2);U.Tile(24,Y+54,BW,"Enabled",&Find(U.Sheet,"Enabled")->On);U.Tile(34+BW,Y+54,BW,"Alexander's Band",&Find(U.Sheet,"Alexander's Band")->On);
  RainbowSettings B;B.Enabled=Find(U.Sheet,"Enabled")->On;B.AlexanderBand=Find(U.Sheet,"Alexander's Band")->On;B.Intensity=Value(U,"Intensity");B.Width=Value(U,"Width");B.SecondaryGain=Value(U,"Secondary");B.MinimumPathMetres=Value(U,"Minimum Path");
  Y+=170;float PH=(W-48)*112/192;U.Card(0,Y,W,PH+163,"Optical preview");auto& C=Cache();std::array<float,7> Key={float(B.Enabled),B.Intensity,B.Width,B.SecondaryGain,float(B.AlexanderBand),B.MinimumPathMetres,1};if(!C.Valid||C.Key!=Key){C.Key=Key;C.Valid=true;for(int J=0;J<C.Image.Height;++J)for(int I=0;I<C.Image.Width;++I){float RGB[3];WeatherDiagnostics::RainbowPixel(B,(I+.5f)/C.Image.Width,(J+.5f)/C.Image.Height,RGB);auto* P=C.Image.Pixels+(J*C.Image.Width+I)*4;for(int K=0;K<3;++K)P[K]=static_cast<unsigned char>(255*SunColourTemperature::DisplayChannel(RGB[K])+.5f);P[3]=255;}ImTextureDataQueueUpload(&C.Image,0,0,C.Image.Width,C.Image.Height);}
  U.D->AddImageRounded(C.Image.GetTexRef(),U.At(24,Y+59),U.At(W-24,Y+59+PH),{0,0},{1,1},IM_COL32_WHITE,12);
  U.Wrap(24,Y+PH+77,W-48,"Shared spectral kernel · sun 10° behind viewer · rain visibility 1 · rain path 500 m. Fixed test conditions, not the scene camera.");
  Y+=PH+179;U.Card(0,Y,W,458,"Bow response");float SW=std::min(540.f,W-48);const char* Fields[]={"Intensity","Width","Secondary","Minimum Path"};for(int I=0;I<4;++I)U.Slider(24,Y+66+I*78,SW,Fields[I]);std::snprintf(T,sizeof(T),"Current authored rain visibility: %.0f%%",double(U.Sheet.WeatherPreview.RainVisibility*100));U.Wrap(24,Y+391,W-48,T);
- End(U,W,Y+482,"Rain and drizzle feed the existing GPU Rainbow post record; snow, hail and sleet do not. CPU optical preview and shader compilation are verified separately from GPU execution. Bake stays unavailable.");
+ Y+=474;U.Card(0,Y,W,190,"Baking / image");float TW=(W-56)/2;U.Tile(24,Y+54,TW,"Bake",nullptr);U.Tile(32+TW,Y+54,TW,"Use baked image",nullptr);U.Wrap(24,Y+136,W-48,"No Rainbow bake or image-playback path exists in this target.");
+ End(U,W,Y+210,"Rain and drizzle feed the existing GPU Rainbow post record; snow, hail and sleet do not. CPU optical preview and shader compilation are verified separately from GPU execution. Bake stays unavailable.");
 }
 }
 void RecordWeatherInspector(ControlPanel& Controls,EditorInstance&,EditorSheet& Sheet){

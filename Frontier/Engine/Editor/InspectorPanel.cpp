@@ -214,6 +214,17 @@ void InspectorPanel::Record(EditorInstance* Picked, uint32_t PickedIndex, Editor
         ImGui::PopID();ImGui::EndChild();RecordFooter(Picked);if(!Embedded)ImGui::End();return;
     }
 
+    if (Picked->Category == EditorInstanceCategory::Folder && Roster_ && PickedIndex < RosterCount_)
+    {
+        ImGui::BeginChild("##collection-content", ImVec2(0, 0));
+        RecordIdent(Picked, PickedIndex);
+        RecordCollection(*Picked, PickedIndex);
+        RecordNotes(Picked);
+        ImGui::EndChild();
+        if (!Embedded) ImGui::End();
+        return;
+    }
+
     if (Sheet->Appearance == EditorSheetAppearance::Sun)
     {
         ImGui::BeginChild("##sun-properties", ImVec2(0.0f, ImMax(0.0f, Controls_->QueryFootTop() - ImGui::GetCursorScreenPos().y)), false);
@@ -265,6 +276,85 @@ float InspectorPanel::RecordCaps(const char* Text, const ImVec2& At, ImU32 Tint)
 //------------------------------------------------------------------------------------------------------------------------
 //                                                           EMPTY
 //------------------------------------------------------------------------------------------------------------------------
+
+void InspectorPanel::RecordCollection(EditorInstance& Selected, uint32_t Index) noexcept
+{
+    auto& Collection = Collection_;
+    Collection.Traverse(Roster_, RosterCount_, Index);
+    ImGui::PushID("collection");
+    ImGui::PushFont(Controls_->QueryUi(), 14);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 18.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(20, 20));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(32, 32, 32, 255));
+    ImGui::BeginChild("##collection-summary", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding);
+    ImGui::TextDisabled("COLLECTION / LIVE SCENE ROSTER");
+    ImGui::PushFont(Controls_->QueryUi(), 28);
+    ImGui::Text("%u records", Collection.Total);
+    ImGui::PopFont();
+    ImGui::TextWrapped("%u direct  /  %u folders  /  %u levels deep", Collection.Direct, Collection.Folders, Collection.MaximumDepth);
+    ImGui::Separator();
+    ImGui::Text("%u visible    %u hidden", Collection.Visible, Collection.Total - Collection.Visible);
+    ImGui::Text("%u locked / protected", Collection.Locked);
+    ImGui::TextWrapped("Effective visibility includes enclosing folders. Counts describe scene records, not GPU draws or memory.");
+    ImGui::ColorEdit3("Folder tint", Selected.Tint, ImGuiColorEditFlags_NoInputs);
+    ImGui::EndChild();
+    ImGui::Dummy(ImVec2(0, 10));
+    ImGui::BeginChild("##collection-browser", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding);
+    ImGui::TextUnformatted("Browse contents");
+    ImGui::SetNextItemWidth(-1);
+    bool Changed = ImGui::InputTextWithHint("##search", "Search names...", Collection.Search, sizeof(Collection.Search));
+    ImGui::SetNextItemWidth(-1);
+    Changed |= ImGui::Combo("##category", &Collection.Category, "All records\0Folders\0Geometry\0Lights\0Cameras\0");
+    ImGui::SetNextItemWidth(-1);
+    Changed |= ImGui::Combo("##visibility", &Collection.Visibility, "Any visibility\0Visible\0Hidden (including inherited)\0");
+    Changed |= ImGui::Checkbox("Direct contents only", &Collection.DirectOnly);
+    if (Changed) Collection.Page = 0;
+    Collection.Traverse(Roster_, RosterCount_, Index);
+    ImGui::TextDisabled("%zu matching records", Collection.Matches.size());
+    const size_t First = size_t(Collection.Page) * Collection.PageSize;
+    const size_t Last = std::min(Collection.Matches.size(), First + Collection.PageSize);
+    if (ImGui::BeginTable("##contents", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp))
+    {
+        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed, 65.0f);
+        ImGui::TableHeadersRow();
+        for (size_t Position = First; Position < Last; ++Position)
+        {
+            const auto& Match = Collection.Matches[Position];
+            const auto& Row = Roster_[Match.Index];
+            ImGui::PushID(int(Match.Index));
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            if (ImGui::Selectable(Row.Label, false, ImGuiSelectableFlags_SpanAllColumns)) CollectionPick_ = Match.Index;
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s\nOpen in Outliner and Inspector", Row.Label);
+            ImGui::TableNextColumn();
+            ImGui::TextDisabled(Row.Pinned ? "Protected" : Match.Visible ? "Visible" : "Hidden");
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
+    }
+    if (Collection.Matches.empty()) ImGui::TextDisabled("No matching contents.");
+    ImGui::BeginDisabled(Collection.Page == 0);
+    if (ImGui::Button("Previous")) --Collection.Page;
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::BeginDisabled(Last >= Collection.Matches.size());
+    if (ImGui::Button("Next")) ++Collection.Page;
+    ImGui::EndDisabled();
+    ImGui::Text("Page %d / %d", Collection.Page + 1, std::max(1, (int(Collection.Matches.size()) + Collection.PageSize - 1) / Collection.PageSize));
+    ImGui::SetNextItemWidth(-1);
+    int PageChoice = Collection.PageSize == 25 ? 0 : Collection.PageSize == 50 ? 1 : 2;
+    if (ImGui::Combo("##page-size", &PageChoice, "25 per page\0 50 per page\0 100 per page\0"))
+    {
+        Collection.PageSize = PageChoice == 0 ? 25 : PageChoice == 1 ? 50 : 100;
+        Collection.Page = 0;
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(2);
+    ImGui::PopFont();
+    ImGui::PopID();
+}
 
 void InspectorPanel::RecordEmpty() noexcept
 {
@@ -334,9 +424,11 @@ void InspectorPanel::RecordIdent(EditorInstance* Picked, uint32_t PickedIndex) n
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2.0f, 2.0f));
     ImGui::PushFont(Ui);
+    ImGui::BeginDisabled(Picked->Pinned);
     const bool NameDone = ImGui::InputText("##pickname", NameText_, sizeof(NameText_),
         ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
     const bool NameEdited = ImGui::IsItemDeactivatedAfterEdit();
+    ImGui::EndDisabled();
     const ImVec2 NameMin = ImGui::GetItemRectMin();
     const ImVec2 NameMax = ImGui::GetItemRectMax();
     const bool NameHot = ImGui::IsItemFocused();
@@ -348,7 +440,7 @@ void InspectorPanel::RecordIdent(EditorInstance* Picked, uint32_t PickedIndex) n
     {
         Draw->AddRect(NameMin, NameMax, kStrong, 6.0f);
     }
-    if (NameDone || NameEdited)
+    if (!Picked->Pinned && (NameDone || NameEdited))
     {
         std::snprintf(Picked->Label, sizeof(Picked->Label), "%.*s", int(sizeof(Picked->Label) - 1u), NameText_);
     }
@@ -381,7 +473,7 @@ void InspectorPanel::RecordIdent(EditorInstance* Picked, uint32_t PickedIndex) n
     ImGui::SetCursorScreenPos(LockMin);
     ImGui::InvisibleButton("##identlock", ImVec2(28.0f, 28.0f));
     const bool LockHot = ImGui::IsItemHovered();
-    if (LockHot && ImGui::IsMouseClicked(0))
+    if (!Picked->Pinned && LockHot && ImGui::IsMouseClicked(0))
     {
         Picked->Locked = !Picked->Locked;
     }
@@ -389,7 +481,7 @@ void InspectorPanel::RecordIdent(EditorInstance* Picked, uint32_t PickedIndex) n
     ImGui::SetCursorScreenPos(VisMin);
     ImGui::InvisibleButton("##identvis", ImVec2(28.0f, 28.0f));
     const bool VisHot = ImGui::IsItemHovered();
-    if (VisHot && ImGui::IsMouseClicked(0))
+    if (!Picked->Pinned && VisHot && ImGui::IsMouseClicked(0))
     {
         Picked->Visible = !Picked->Visible;
     }
@@ -602,7 +694,9 @@ void InspectorPanel::RecordStanding(EditorInstance* Picked, uint32_t PickedIndex
         ImGui::PopFont();
         ImGui::SetCursorScreenPos(ImVec2(PX, PY));
         ImGui::PushID(static_cast<int>(10 + i));
+        ImGui::BeginDisabled(Picked->Pinned);
         Controls_->PillToggle(Pills[i], Standing[i]);
+        ImGui::EndDisabled();
         ImGui::PopID();
         PX += Glyph.x + 20.0f + 8.0f;
     }

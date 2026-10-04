@@ -1,10 +1,11 @@
-# Project Zero HTML changes and deferred C++ mirror
+# Project Zero HTML changes and C++ conversion
 
 ## Working agreement
 
 - Make and review editor changes in `Experimental/ProjectZeroEditor` first.
 - Keep this document as the cumulative change record for subsequent requests.
-- **Do not mirror changes into C++ until the user says the HTML changes are finished.**
+- Initial HTML-only gate was lifted on 2026-10-04: the user authorized C++ conversion and native build verification.
+- All baking/export controls belong below authoring settings; native work must avoid stack-sized scene storage.
 - Record browser verification separately from native verification. A browser check does not prove a C++ fix.
 - Preserve the approved SolidArc and Fluid work.
 
@@ -13,7 +14,7 @@
 | ID   | Requested change                                    | HTML progress                     | C++ progress                                      |
 | ---- | --------------------------------------------------- | --------------------------------- | ------------------------------------------------- |
 | C001 | Native-style Construct presentation                 | Implemented; awaiting user review | Deferred until the HTML review is finished        |
-| C002 | Ctrl+A opens Construct; Shift+A must not open it    | Implemented and browser-checked   | Bug recorded; no native change made               |
+| C002 | Ctrl+A opens Construct; Shift+A must not open it    | Implemented and browser-checked   | Implemented; native shortcut checks pass               |
 | C003 | Blank checkerboard with constructed representations | Implemented and browser-checked   | HTML-only preview, not a renderer change          |
 | C004 | Distinct filled inspector quick-action icons        | Implemented and browser-checked   | Deferred until the HTML review is finished        |
 | C005 | Redesigned viewport header                          | Implemented and browser-checked   | Deferred until the HTML review is finished        |
@@ -28,7 +29,7 @@
 | C014 | Animated composite WindEditor | Implemented; evaluator and browser checked | Native wind field evaluation deferred |
 | C015 | Cloud selection of a composite wind field | Implemented and browser-checked | Native cloud advection binding deferred |
 | C016 | Local fog volume shape instead of fixed box bounds | Implemented and browser-checked | Native shape masks/SDF integration deferred |
-| C017 | Permanent first Editor Camera | Implemented and browser-checked | Native camera ownership/removal guards deferred |
+| C017 | Permanent first Editor Camera | Implemented and browser-checked | Editor Camera pinned/locked; native feed checked |
 
 ## 2026-10-04 — C001: Construct presentation
 
@@ -781,3 +782,60 @@ Committed screenshots and report:
 
 **Status:** published HTML review checkpoint. Native GPU/CPU frame telemetry,
 renderer-buffer visualization and C++ UI mirroring remain deferred.
+
+
+## 2026-10-04 — C023: Native conversion begins; baking and stack safety
+
+**This is a partial native checkpoint, not a claim that C001–C022 are all ported.**
+The approved HTML baseline remains `95cfb8e68ad25b8aca17d9ee0d5421d168ec19a2`.
+User authorization now includes headless native execution, Windows/MSVC and stack checks.
+
+### Implemented in the native editor
+
+- C002: Ctrl+A opens Construct, with no repeat; Shift+A stays available for fast flight.
+  Text editing, steering and conflicting modifiers are excluded.
+- C011: the viewport gear opens a settings menu, including Statistics/Debug and rendering settings.
+- C017: the stock first camera is named Editor Camera and is pinned/locked; generic inspector identity,
+  visibility and lock controls cannot change a pinned record. This retains the native camera owner.
+- C021: native folder inspector displays real roster totals, direct contents, depth, inherited visibility,
+  protected counts, tint and notes. Search, category/visibility narrowing and 25/50/100-row pages are bounded.
+  Selecting a result reveals it in the outliner, clearing search/category exclusions and opening enclosing rows.
+  The runtime's existing 1,024-row capacity is unchanged; the larger traversal proof is explicitly a fixture.
+- C022: native movable/resizable Statistics/Debug window, FPS/frame-interval/GPU selection,
+  stats/graph modes, pause/clear, 15/30/60-second sample windows and graph inspection.
+  Frame intervals come from the engine clock; GPU values use valid completed timestamp telemetry, not an estimate.
+  The old renderer detail rows and F3–F6 shortcuts remain available.
+- Sun, Atmosphere/Sky, Lens Flare, Stars and Rainbow baking/export sections now follow properties.
+  Actual atmosphere pixels and all their preview selectors move with the bake section.
+  The atmosphere request still reaches the renderer queue; Lens Flare still exports the real HDR image.
+  Unsupported Sun/Stars/Rainbow targets and flare scene playback remain explicitly unavailable, not fake successes.
+
+### Stack work and verification
+
+- Runtime scheduler/editor, celestial owner and selected sheet are constructed directly in heap-backed storage.
+  The sheet alone is 19,392 bytes and the current editor owner is 37,040 bytes on this Linux build.
+  No stack reserve increase was used.
+- Removed recursive scene-roster traversal and repeated whole-scene scans during traversal. Heap-backed
+  adjacency and an explicit pending list preserve preorder and terminate cyclic links through visited records.
+  Roster depth is carried by the traversal rather than truncated to eight enclosing links.
+- Actual compiled native proof executes under a **262,144-byte Linux stack limit**, including a 10,000-level
+  collection fixture, a 10,000-placement real SceneStructure, native camera protection, Construct shortcuts,
+  a pointer click on the relocated atmosphere bake button and a 256 × 512 × RGBA16F bake.
+- GCC `-fstack-usage` gates the critical compiled UI/traversal functions at 8 KiB each. This is not a measurement
+  of the complete Vulkan runtime entry point or a diagnosis of the user's historical crash.
+- Native captures are CPU rasterizations of production ImGui commands, with real baked atmosphere pixels.
+  Folder and timing records in the proof are labeled fixtures; the proof does not claim GPU execution.
+- The native CMake proof route was repaired to compile the consolidated `Engine/Host` sources and current
+  shading dependencies rather than removed Project-Zero source paths. Windows MSVC proof job added.
+- Linux conversion proof passed. Renderer regression and Windows/MSVC results are pending at this checkpoint.
+
+Proof sources, captures and compiler stack report: `VisualProof/ProjectZeroNative/` at repository root.
+
+### Still to convert or reconcile
+
+Full native parity still requires the HTML material-channel/source editor and dockable ShaderEditor,
+asset-browser expansion and drawer gestures, remaining relevant quick tiles, the composite WindEditor,
+local-fog shape masks in the actual renderer, the added interactive environment graphs, and the
+AtmosphereLab 2D colour atlas/space study. Existing native environment inspectors and wind-component
+bindings are retained, but they are not presented as implementations of the newer HTML composite model.
+The new native statistics card also does not yet reproduce every browser-only keyboard/persistence detail.

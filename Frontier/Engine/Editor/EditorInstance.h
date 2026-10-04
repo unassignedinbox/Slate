@@ -146,6 +146,7 @@ inline EditorFpsBand EditorFpsBandFor(float Fps) noexcept
 // The outliner's footer strip: five figures the tick refreshes — the page's Realtime / Quality / Sun / Moons / Cam.
 struct EditorReadout
 {
+    bool* DiagnosticsOpen = nullptr;
     float    Fps            = 60.0f;
     char     Quality[16]    = "Standard";
     char     Pixels[16]     = {};                           // "1280×720"

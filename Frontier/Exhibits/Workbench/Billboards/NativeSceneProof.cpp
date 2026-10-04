@@ -8,7 +8,7 @@
 #include <cstdio>
 #include <stdexcept>
 #include <limits>
-using namespace Frontier;using namespace Frontier::ProjectZero;
+using namespace Frontier;using namespace Frontier::HostRuntime;
 unsigned Checks=0;
 void Check(bool V,const char* N){++Checks;if(!V)throw std::runtime_error(N);std::printf("PASS %s\n",N);}
 EditorProperty& Find(EditorSheet& S,const char* N){for(unsigned G=0;G<S.GroupCount;++G)for(unsigned P=0;P<S.Groups[G].PropertyCount;++P)if(!std::strcmp(S.Groups[G].Properties[P].Label,N))return S.Groups[G].Properties[P];throw std::runtime_error(N);}
@@ -23,7 +23,8 @@ void Box(SceneStructure& L,const char* Name,float X,float Y,float Z,float SX,flo
  Matrix4x4 Identity;auto First=L.RegisterInstance(Mesh,Identity,Mat,InstanceFlagDoubleSided);auto Place=L.RegisterPlacement(Name,0xffffffffu,Identity,Identity);L.AttachInstances(Place,First,1);
 }
 #include "../WindBindings/NativeWindProof.h"
-int main(int argc,char** argv){if(argc>1&&!std::strcmp(argv[1],"--wind-bindings"))return RunWindBindings();try{
+int RunEditorConversion(const char* Output);
+int main(int argc,char** argv){if(argc>2&&!std::strcmp(argv[1],"--editor-conversion"))return RunEditorConversion(argv[2]);if(argc>1&&!std::strcmp(argv[1],"--wind-bindings"))return RunWindBindings();try{
  auto Level=std::make_unique<SceneStructure>();
  Box(*Level,"Ground",0,500,-4,1500,1800,4,.25f,.29f,.24f);
  for(int I=0;I<7;++I){float Y=60.f+I*95;Box(*Level,"Distance columns left",-45-I*70,Y,0,7,9,27+I*3,.55f,.43f,.29f);Box(*Level,"Distance columns right",45+I*70,Y,0,7,9,40+I*4,.25f,.36f,.45f);}
