@@ -7,13 +7,13 @@ ARTIFACT rendered shadow-camera-3
 ARTIFACT rendered shadow-camera-4
 METRIC shadow_camera_rms 0
 ARTIFACT rendered matte-diffuse
-METRIC matte_symmetry_rms 4.23736
+METRIC matte_symmetry_rms 0.637561
 ARTIFACT rendered matte-reflections-enabled
 METRIC zero_specular_reflection_delta 0
 ARTIFACT rendered matte-single-bounce
-METRIC single_bounce_reference_rms 2.67571
+METRIC single_bounce_reference_rms 0.543786
 ARTIFACT rendered matte-subdivided
-METRIC subdivision_rms 2.76445
+METRIC subdivision_rms 0.58333
 
-Execution seconds: 513.78
+Execution seconds: 360.58
 Exit code: 0
