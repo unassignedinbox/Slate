@@ -203,12 +203,14 @@ export const DescribeDeviceFailure = (Notes = []) =>
 //--------------------------------------------------------------------------------------------------------------------------
 export const ProbeAcceleration = async () =>
 {
-    const Report = { Legacy: false, Modern: false, Adapter: "", Agent: "", Ratio: 1, Address: "" };
+    const Report = { Legacy: false, Modern: false, Adapter: "", Agent: "", Ratio: 1, Address: "", Framed: false, Secure: true };
     try
     {
         Report.Agent = String(navigator?.userAgent || "");
         Report.Ratio = Number(globalThis.devicePixelRatio) || 1;
         Report.Address = String(globalThis.location?.href || "");
+        Report.Framed = Boolean(globalThis.top) && globalThis.top !== globalThis.self;
+        Report.Secure = globalThis.isSecureContext !== false;
     }
     catch
     {
@@ -255,6 +257,7 @@ export const DeviceReport = (Failure, Notes = [], Probe = null) =>
         `Browser   : ${Probe?.Agent || "unknown"}`,
         `Address   : ${Probe?.Address || "unknown"}`,
         `Pixel ratio: ${Probe?.Ratio ?? "unknown"}`,
+        `Framed    : ${Probe ? (Probe.Framed ? "yes, inside an iframe" : "no, top level") : "not probed"}`,
         `WebGL 1   : ${Probe ? (Probe.Legacy ? "available" : "unavailable") : "not probed"}`,
         `WebGL 2   : unavailable`,
         `WebGPU    : ${Probe ? (Probe.Modern ? `adapter available — ${Probe.Adapter}` : "no adapter") : "not probed"}`,

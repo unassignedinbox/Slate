@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Renderer check — Frontier Texture</title>
+        <!--
+            Deliberately dependency-free: no modules, no imports, no framework, nothing from the editor. If this page cannot
+            obtain a context then no page in this browser can, and the editor is not the thing that is broken.
+        -->
+        <style>
+            :root { color-scheme: dark; }
+            body {
+                margin: 0;
+                padding: 28px 22px 40px;
+                background: #0b0b0b;
+                color: #f0f0f0;
+                font: 13px/1.7 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+            }
+            main { max-width: 760px; margin: 0 auto; }
+            h1 { font-size: 19px; font-weight: 500; margin: 0 0 4px; }
+            p.lead { color: #888; margin: 0 0 22px; }
+            #verdict {
+                border-radius: 18px;
+                border: 1px solid #ffffff12;
+                background: #161616;
+                padding: 18px 20px;
+                margin-bottom: 18px;
+                font-size: 15px;
+                line-height: 1.6;
+            }
+            #verdict.good { border-color: #34c75955; background: #13200f; }
+            #verdict.bad { border-color: #ff6b4a44; background: #1f1312; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+            th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid #ffffff0c; vertical-align: top; }
+            th { width: 170px; color: #8b8b8b; font-weight: 400; }
+            td.yes { color: #34c759; }
+            td.no { color: #ff7a5c; }
+            pre {
+                background: #000;
+                border: 1px solid #ffffff10;
+                border-radius: 14px;
+                padding: 15px 16px;
+                white-space: pre-wrap;
+                word-break: break-word;
+                font: 11px/1.7 ui-monospace, "JetBrains Mono", Consolas, monospace;
+                color: #c9c9c9;
+            }
+            button {
+                font: inherit;
+                color: #f0f0f0;
+                background: #333;
+                border: 1px solid #484848;
+                border-radius: 999px;
+                padding: 8px 16px;
+                cursor: pointer;
+            }
+            button:hover { background: #3d3d3d; }
+            canvas { display: none; }
+        </style>
+    </head>
+    <body>
+        <main>
+            <h1>Renderer check</h1>
+            <p class="lead">
+                Nothing on this page comes from the texture editor — it asks the browser for a drawing context and reports
+                exactly what came back.
+            </p>
+            <div id="verdict">Asking the browser…</div>
+            <table id="results"></table>
+            <button id="copy">Copy this report</button>
+            <pre id="report"></pre>
+        </main>
+        <script>
+            (function ()
+            {
+                var Rows = [];
+                var Record = function (Label, Value, Good)
+                {
+                    Rows.push({ Label: Label, Value: String(Value), Good: Good });
+                };
+
+                // --- the only question that matters ------------------------------------------------------------------
+                var Statuses = [];
+                var Attempt = function (Kind, Attributes)
+                {
+                    var Canvas = document.createElement("canvas");
+                    Canvas.width = 32;
+                    Canvas.height = 32;
+                    Canvas.addEventListener("webglcontextcreationerror", function (Event)
+                    {
+                        if (Event.statusMessage && Statuses.indexOf(Event.statusMessage) < 0) Statuses.push(Event.statusMessage);
+                    });
+                    document.body.appendChild(Canvas);
+                    try { return Canvas.getContext(Kind, Attributes) || null; }
+                    catch (Error) { Statuses.push(String(Error && Error.message)); return null; }
+                };
+
+                var Second = Attempt("webgl2", {}) || Attempt("webgl2", { antialias: false, depth: false, alpha: true });
+                var First = Attempt("webgl") || Attempt("experimental-webgl");
+                var Flat = Attempt("2d");
+
+                var Describe = function (Context)
+                {
+                    if (!Context) return "";
+                    try
+                    {
+                        var Reflection = Context.getExtension("WEBGL_debug_renderer_info");
+                        return String(
+                            (Reflection && Context.getParameter(Reflection.UNMASKED_RENDERER_WEBGL)) ||
+                            Context.getParameter(Context.RENDERER) || "",
+                        );
+                    }
+                    catch (Error) { return ""; }
+                };
+
+                Record("WebGL 2", Second ? "available — " + (Describe(Second) || "renderer withheld") : "refused", Boolean(Second));
+                Record("WebGL 1", First ? "available — " + (Describe(First) || "renderer withheld") : "refused", Boolean(First));
+                Record("Canvas 2D", Flat ? "available" : "refused", Boolean(Flat));
+                Record("WebGPU", "asking…", null);
+                Record("Page is framed", window.top === window.self ? "no, top level" : "yes, inside an iframe", window.top === window.self);
+                Record("Secure context", window.isSecureContext ? "yes" : "no", Boolean(window.isSecureContext));
+                Record("Address", location.href, null);
+                Record("Browser", navigator.userAgent, null);
+                Record("Pixel ratio", window.devicePixelRatio, null);
+                Record("Screen", screen.width + "×" + screen.height, null);
+
+                var Paint = function ()
+                {
+                    var Table = document.getElementById("results");
+                    Table.innerHTML = Rows.map(function (Row)
+                    {
+                        var Class = Row.Good === null ? "" : Row.Good ? "yes" : "no";
+                        return "<tr><th>" + Row.Label + "</th><td class='" + Class + "'>" +
+                            String(Row.Value).replace(/[<>&]/g, function (Character)
+                            {
+                                return { "<": "&lt;", ">": "&gt;", "&": "&amp;" }[Character];
+                            }) + "</td></tr>";
+                    }).join("");
+
+                    var Verdict = document.getElementById("verdict");
+                    if (Second)
+                    {
+                        Verdict.className = "good";
+                        Verdict.textContent =
+                            "This browser does give out WebGL 2 contexts. If the texture editor still refuses to start in this " +
+                            "same browser, the fault is in the editor — send this report.";
+                    }
+                    else
+                    {
+                        Verdict.className = "bad";
+                        Verdict.textContent =
+                            "This browser refuses a WebGL 2 context to a page containing nothing but this check. No site can " +
+                            (First ? "use WebGL 2 here — WebGL 1 still works, so the browser is capping itself." :
+                                     "draw with the GPU here. The browser or the display driver is the thing to fix, not the page.");
+                    }
+
+                    document.getElementById("report").textContent =
+                        "Renderer check — " + new Date().toISOString() + "\n" +
+                        Rows.map(function (Row) { return Row.Label.padEnd(16, " ") + ": " + Row.Value; }).join("\n") +
+                        (Statuses.length ? "\nBrowser said:\n  " + Statuses.join("\n  ") : "\nBrowser said: nothing");
+                };
+
+                Paint();
+                document.getElementById("copy").addEventListener("click", function ()
+                {
+                    var Text = document.getElementById("report").textContent;
+                    if (navigator.clipboard) navigator.clipboard.writeText(Text);
+                    else window.prompt("Copy this:", Text);
+                });
+
+                // --- WebGPU answers a moment later -------------------------------------------------------------------
+                var Finish = function (Value, Good)
+                {
+                    for (var Index = 0; Index < Rows.length; Index += 1)
+                        if (Rows[Index].Label === "WebGPU") { Rows[Index].Value = Value; Rows[Index].Good = Good; }
+                    Paint();
+                };
+                if (!navigator.gpu) Finish("not exposed by this browser", false);
+                else
+                    navigator.gpu.requestAdapter().then(function (Adapter)
+                    {
+                        if (!Adapter) { Finish("exposed, but no adapter — the browser sees no usable GPU", false); return; }
+                        var Info = Adapter.info || {};
+                        var Name = [Info.vendor, Info.architecture, Info.device, Info.description].filter(Boolean).join(" ");
+                        Finish("adapter available — " + (Name || "unnamed"), true);
+                    }).catch(function (Error) { Finish("request failed — " + Error, false); });
+            })();
+        </script>
+    </body>
+</html>

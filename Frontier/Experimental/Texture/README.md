@@ -21,6 +21,9 @@ installed:
 https://raw.githack.com/unassignedinbox/Slate/<branch-or-commit>/Frontier/Experimental/Texture/index.html
 ```
 
+`RendererCheck.html` sits beside the editor: a dependency-free page that asks the browser for WebGL 2, WebGL 1, Canvas 2D
+and a WebGPU adapter and prints what came back. If it cannot get a context, nothing on the web can on that machine.
+
 Requires WebGL 2 and floating-point render targets (`EXT_color_buffer_float`, or `EXT_color_buffer_half_float`). If the
 context is refused the viewport says why — the browser's own refusal message, whether WebGL 1 is present, the renderer
 string — and lists what to do about it. It then retries quietly a couple of times, because a browser waiting to be

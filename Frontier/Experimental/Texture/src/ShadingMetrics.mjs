@@ -493,6 +493,7 @@ test("the renderer report carries everything worth pasting into a bug report", (
         Modern: true,
         Adapter: "nvidia ada",
         Address: "https://example.test/index.html",
+        Framed: true,
     });
     assert.match(Text, /Failure   : No context\./);
     assert.match(Text, /Chrome\/999/);
@@ -500,4 +501,5 @@ test("the renderer report carries everything worth pasting into a bug report", (
     assert.match(Text, /GL_VENDOR = Disabled/);
     assert.match(Text, /Attempts  : 5 attribute sets/);
     assert.match(Text, /Address   : https:\/\/example\.test\/index\.html/, "the report should say which copy was loaded");
+    assert.match(Text, /Framed    : yes, inside an iframe/, "a framed page is worth knowing about");
 });
