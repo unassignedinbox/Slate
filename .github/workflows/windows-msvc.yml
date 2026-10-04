@@ -201,8 +201,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Native editor dependencies failed' }
           cmake -S Frontier -B _AgentScratch/build/native-editor-msvc -DFRONTIER_PROOF_ONLY=ON -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL
           if ($LASTEXITCODE -ne 0) { throw 'Native editor configure failed' }
-          cmake --build _AgentScratch/build/native-editor-msvc --config Release --parallel 2
-          if ($LASTEXITCODE -ne 0) { throw 'Native editor MSVC compilation failed' }
+          cmake --build _AgentScratch/build/native-editor-msvc --config Release --parallel 2 *>&1 | Tee-Object _AgentScratch/build/native-editor-msvc/Compiler.log
+          if ($LASTEXITCODE -ne 0) {
+            Get-Content _AgentScratch/build/native-editor-msvc/Compiler.log | Select-String '(error C[0-9]+|error LNK[0-9]+|fatal error)' | ForEach-Object {
+              $Line = $_.Line.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+              Write-Host "::error title=Native editor MSVC::$Line"
+            }
+            throw 'Native editor MSVC compilation failed'
+          }
           ctest --test-dir _AgentScratch/build/native-editor-msvc -C Release -R NativeEditorConversion --output-on-failure
           if ($LASTEXITCODE -ne 0) { throw 'Native editor execution failed' }
       - name: Retain native editor verification and pixels
@@ -213,6 +219,7 @@ jobs:
           path: |
             _AgentScratch/build/native-editor-msvc/editor-conversion/
             _AgentScratch/build/native-editor-msvc/Testing/Temporary/
+            _AgentScratch/build/native-editor-msvc/Compiler.log
 
   frontier:
     permissions:

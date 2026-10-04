@@ -77,6 +77,7 @@ target_include_directories(FrontierNativeProof PRIVATE
 target_compile_definitions(FrontierNativeProof PRIVATE FRONTIER_DEVELOPMENT TVG_STATIC)
 target_link_libraries(FrontierNativeProof PRIVATE thorvg_static)
 if(MSVC)
+    target_compile_definitions(FrontierNativeProof PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
     target_compile_options(FrontierNativeProof PRIVATE /utf-8 /Gy /O2 /UNDEBUG)
     target_link_options(FrontierNativeProof PRIVATE /OPT:REF)
     target_link_libraries(FrontierNativeProof PRIVATE user32)
