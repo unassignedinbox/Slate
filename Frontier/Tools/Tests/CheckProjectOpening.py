@@ -23,7 +23,7 @@ def Check(Name, Extra, Native=False):
                    "/DNOMINMAX", "/DWIN32_LEAN_AND_MEAN", "/D_CRT_SECURE_NO_WARNINGS", "/I" + str(ImGui),
                    *map(str, Files), "/Fe:" + str(Executable)]
         if Native:
-            Command += ["/link", "d3d11.lib", "dxgi.lib", "d3dcompiler.lib", "dwmapi.lib", "imm32.lib", "ole32.lib", "uuid.lib", "user32.lib", "gdi32.lib", "shell32.lib"]
+            Command += ["/link", "d3d11.lib", "dxgi.lib", "d3dcompiler.lib", "dwmapi.lib", "imm32.lib", "ole32.lib", "uuid.lib", "windowscodecs.lib", "user32.lib", "gdi32.lib", "shell32.lib"]
     else:
         Command = [os.environ.get("CXX", "g++"), "-std=c++20", "-O1", "-UNDEBUG", "-I" + str(ImGui),
                    *map(str, Files), "-o", str(Executable)]
@@ -44,6 +44,10 @@ if Windows:
     Width, Height = map(int, Extent.split())
     assert Magic == b"P6" and Maximum == b"255" and (Width, Height) == (840, 640)
     assert len(Pixels) == Width * Height * 3 and len(set(Pixels)) > 32, "Blank native render target"
+    ColourPixels = sum(max(Pixels[Offset:Offset+3]) - min(Pixels[Offset:Offset+3]) > 10
+                       for Row in range(145, 270) for Column in range(36, 296)
+                       for Offset in [(Row * Width + Column) * 3])
+    assert ColourPixels > 500, "Native project preview is missing or not sampled by DX11"
     def Chunk(Kind, Data):
         return struct.pack(">I", len(Data)) + Kind + Data + struct.pack(">I", zlib.crc32(Kind + Data) & 0xFFFFFFFF)
     Raster = b"".join(b"\0" + Pixels[Y*Width*3:(Y+1)*Width*3] for Y in range(Height))

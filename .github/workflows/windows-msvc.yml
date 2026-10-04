@@ -106,7 +106,7 @@ jobs:
           $VisualStudio = & $VsWhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
           Import-Module "$VisualStudio\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
           Enter-VsDevShell -VsInstallPath $VisualStudio -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'
-          python Tools/Bootstrap.py --package imgui
+          python Tools/Bootstrap.py --package imgui --package stb
           if ($LASTEXITCODE -ne 0) { throw 'Browser dependencies failed' }
           python Tools/Tests/CheckProjectOpening.py
           if ($LASTEXITCODE -ne 0) { throw 'Native project browser checks failed' }
@@ -183,7 +183,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Drive playback or scene placement checks failed' }
 
   frontier:
-    needs: sdf-execution
+    permissions:
+      contents: write
+    needs: [sdf-execution, project-opening]
     # Retain failure diagnostics, but do not launch another build from a superseded run.
     if: ${{ always() && !cancelled() && !inputs.export_browser_run && !contains(github.event.head_commit.message, '[export-executed-pixels]') }}
     name: Frontier + Project-Zero + Project-Drive
@@ -255,6 +257,32 @@ jobs:
           $env:PATH = "$env:VULKAN_SDK\Bin;$env:PATH"
           python Tools/Build/PackageWindowsProjects.py *>&1 | Tee-Object -FilePath ../_AgentScratch/logs/msvc-ci/ProjectPackage.log
           if ($LASTEXITCODE -ne 0) { throw 'Windows project packaging, DLL or scene-import verification failed' }
+      - name: Retain runnable Windows ZIP
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: frontier-windows-zip-${{ github.sha }}
+          retention-days: 14
+          if-no-files-found: error
+          compression-level: 0
+          path: |
+            _AgentScratch/build/Frontier-Windows-x64-*.zip
+            _AgentScratch/build/Frontier-Windows-x64-*.sha256
+            _AgentScratch/build/Frontier-Windows-Release/Docs/ProjectBrowser.png
+            _AgentScratch/build/Frontier-Windows-Release/BuildManifest.json
+      - name: Publish downloadable Windows test build
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/arena/01a0fd48-slate' && needs.project-opening.result == 'success' && needs.sdf-execution.result == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $Revision = $env:GITHUB_SHA.Substring(0,7)
+          $Tag = "frontier-browser-$Revision"
+          $Archive = "../_AgentScratch/build/Frontier-Windows-x64-$Revision.zip"
+          $Checksum = "../_AgentScratch/build/Frontier-Windows-x64-$Revision.sha256"
+          $Preview = "../_AgentScratch/build/Frontier-Windows-Release/Docs/ProjectBrowser.png"
+          $Manifest = "../_AgentScratch/build/Frontier-Windows-Release/BuildManifest.json"
+          gh release create $Tag $Archive $Checksum $Preview $Manifest --target $env:GITHUB_SHA --prerelease --title "Frontier Windows x64 - OLED project browser ($Revision)" --notes "Extract the entire ZIP and run Frontier.exe. OLED-black browser with white pill controls, circular close button and folder-configurable project previews. Both projects, content, shaders and app-local Visual C++ runtime included. Put an image in Projects/Project-Drive/Preview or Projects/Project-Zero/Preview, replacing Project.png, then Scan. Native DX11 browser and packaged scene imports verified in CI; physical-GPU gameplay still requires testing. Unsigned test build."
+          if ($LASTEXITCODE -ne 0) { throw 'Windows ZIP release publication failed' }
       - name: Build and exercise runnable SolidArc application
         run: |
           $ErrorActionPreference = 'Stop'

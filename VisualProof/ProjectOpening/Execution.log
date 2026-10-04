@@ -1,0 +1,3 @@
+PASS real ImGui: OLED theme, two actual image textures, deterministic folder discovery/refresh, clipped image requests, all dropdown selections, Scan, selection, software-BVH default, disabled empty/loading launch, open request, close and rendered error card
+
+PASS startup browser checks; proofs in /home/user/Slate/_AgentScratch/build/project-opening

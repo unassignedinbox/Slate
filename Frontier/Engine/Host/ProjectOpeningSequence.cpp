@@ -26,6 +26,7 @@
 #include <shobjidl.h>
 #include <imgui.h>
 #include "ProjectOpeningPanel.h"
+#include "ProjectPreviewCodec.h"
 #include <backends/imgui_impl_win32.h>
 #include <backends/imgui_impl_dx11.h>
 
@@ -195,10 +196,12 @@ int RunProjectBrowser(const char* ProofImage)
     ProjectSpecification Specification;
     bool Running = true, Launched = false;
     int Result = 0, ProofFrames = 0;
-    if (ProofImage && !Projects.empty()) { SelectedProject = Projects.front(); Opening.SelectionChanged = true; }
+    if (!Projects.empty()) { SelectedProject = Projects.front(); Opening.SelectionChanged = true; }
     double OpeningStarted = 0.0;
     PROCESS_INFORMATION Child{};
     HANDLE Ready = nullptr;
+    std::map<std::filesystem::path, Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>> PreviewTextures;
+    bool RefreshPreviews = false;
     while (Running)
     {
         MSG Message{};
@@ -219,6 +222,13 @@ int RunProjectBrowser(const char* ProofImage)
                 Child = {}; Ready = nullptr;
             }
         }
+        if (RefreshPreviews)
+        {
+            // 📝 Reclaim before recording, never while a draw list still references the previous images.
+            PreviewTextures.clear();
+            Opening.Previews.clear();
+            RefreshPreviews = false;
+        }
         ImGui_ImplDX11_NewFrame(); ImGui_ImplWin32_NewFrame(); ImGui::NewFrame();
         Opening.Loading = Child.hProcess != nullptr;
         Opening.LoadingSeconds = ImGui::GetTime() - OpeningStarted;
@@ -238,6 +248,16 @@ int RunProjectBrowser(const char* ProofImage)
         {
             Projects = Scan(std::filesystem::u8path(Directory), true);
             Opening.Scan = false;
+            RefreshPreviews = true;
+            if (std::find(Projects.begin(), Projects.end(), SelectedProject) == Projects.end())
+                SelectedProject = Projects.empty() ? std::filesystem::path{} : Projects.front();
+            if (SelectedProject.empty())
+            {
+                SelectedScene.clear();
+                Scenes.clear();
+                Refusal.clear();
+            }
+            else Opening.SelectionChanged = true;
         }
         if (Opening.SelectionChanged)
         {
@@ -279,11 +299,57 @@ int RunProjectBrowser(const char* ProofImage)
                 }
 
         }
+        unsigned Decoded = 0;
+        for (const auto& Project : Opening.PreviewRequests)
+        {
+            if (Opening.Previews.contains(Project)) continue;
+            if (Decoded++ == 2) break;
+            if (Opening.Previews.size() >= 32)
+            {
+                const auto Evicted = std::find_if(Opening.Previews.begin(), Opening.Previews.end(), [&](const auto& Entry)
+                {
+                    return std::find(Opening.PreviewRequests.begin(), Opening.PreviewRequests.end(), Entry.first) == Opening.PreviewRequests.end();
+                });
+                if (Evicted == Opening.Previews.end()) break;
+                PreviewTextures.erase(Evicted->first);
+                Opening.Previews.erase(Evicted);
+            }
+            auto& Preview = Opening.Previews[Project];
+            if (!FindProjectPreview(Project, Preview.Source, Preview.Refusal)) continue;
+            ProjectPreviewPixels Pixels;
+            if (!DecodeProjectPreview(Preview.Source, Pixels))
+            {
+                Preview.Refusal = Pixels.Refusal;
+                continue;
+            }
+            D3D11_TEXTURE2D_DESC Description{};
+            Description.Width = Pixels.Width;
+            Description.Height = Pixels.Height;
+            Description.MipLevels = 1;
+            Description.ArraySize = 1;
+            Description.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            Description.SampleDesc.Count = 1;
+            Description.Usage = D3D11_USAGE_IMMUTABLE;
+            Description.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+            const D3D11_SUBRESOURCE_DATA Content{Pixels.Pixels.data(), Pixels.Width * 4u, 0};
+            Microsoft::WRL::ComPtr<ID3D11Texture2D> Texture;
+            Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> View;
+            if (FAILED(Device->CreateTexture2D(&Description, &Content, Texture.GetAddressOf())) ||
+                FAILED(Device->CreateShaderResourceView(Texture.Get(), nullptr, View.GetAddressOf())))
+            {
+                Preview.Refusal = "The display could not upload this preview image.";
+                continue;
+            }
+            Preview.Texture = ImTextureRef(static_cast<ImTextureID>(reinterpret_cast<std::uintptr_t>(View.Get())));
+            Preview.Width = static_cast<int>(Pixels.Width);
+            Preview.Height = static_cast<int>(Pixels.Height);
+            PreviewTextures.emplace(Project, std::move(View));
+        }
         ImGui::Render();
-        const float Clear[] = {.043f,.043f,.043f,1};
+        const float Clear[] = {0,0,0,1};
         Commands->OMSetRenderTargets(1, &Target, nullptr); Commands->ClearRenderTargetView(Target, Clear);
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-        if (ProofImage && ++ProofFrames == 3)
+        if (ProofImage && ++ProofFrames == 6)
         {
             // Read the actual DX11 render target, including the real backend's font/textures and clipping.
             ID3D11Texture2D* Source = nullptr;
@@ -325,6 +391,8 @@ int RunProjectBrowser(const char* ProofImage)
         CloseHandle(Child.hProcess); CloseHandle(Child.hThread);
     }
     if (Ready) CloseHandle(Ready);
+    PreviewTextures.clear();
+    Opening.Previews.clear();
     ImGui_ImplDX11_Shutdown(); ImGui_ImplWin32_Shutdown(); ImGui::DestroyContext();
     Target->Release(); Chain->Release(); Commands->Release(); Device->Release();
     DestroyWindow(Window); UnregisterClassW(Class.lpszClassName, Class.hInstance);

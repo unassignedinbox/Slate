@@ -385,7 +385,7 @@ target_compile_definitions(Frontier PRIVATE
     FRONTIER_ENABLE_GLFW
 )
 if(WIN32)
-    target_link_libraries(Frontier PRIVATE psapi d3d11 dxgi d3dcompiler dwmapi imm32 ole32 uuid)
+    target_link_libraries(Frontier PRIVATE psapi d3d11 dxgi d3dcompiler dwmapi imm32 ole32 uuid windowscodecs)
 endif()
 
 # Project code images contain project semantics only. They do not compile the window, device, renderer, editor, or host.

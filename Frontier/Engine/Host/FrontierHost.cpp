@@ -11,6 +11,7 @@
 #include "../ProjectInterchange/ProjectSpecification.h"
 
 #include <cstdio>
+#include <cstring>
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -92,6 +93,9 @@ int RunFrontierHost(int ArgumentCount, char** ArgumentVector)
     const char* SpecificationArgument = QuerySpecificationArgument(ArgumentCount, ArgumentVector);
     if (SpecificationArgument == nullptr)
     {
+        for (int Index = 1; Index + 1 < ArgumentCount; ++Index)
+            if (std::strcmp(ArgumentVector[Index], "--verify-project-browser") == 0)
+                return RunProjectBrowser(ArgumentVector[Index + 1]);
         return RunProjectBrowser();
     }
 

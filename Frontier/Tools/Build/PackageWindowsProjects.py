@@ -13,6 +13,7 @@ import subprocess
 import tempfile
 import sys
 import tomllib
+import zlib
 
 Root = Path(__file__).resolve().parents[2]
 Binary = Root / "Build/Output/Windows/Release/Binary"
@@ -85,6 +86,43 @@ def VerifyScene(SpecificationPath: Path, SceneOverride: Path | None = None, Expe
         raise RuntimeError("Host did not confirm the opening-scene import")
 
 
+
+def CopyVisualCppRuntime() -> None:
+    Locator = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Microsoft Visual Studio/Installer/vswhere.exe"
+    Installation = subprocess.check_output([str(Locator), "-latest", "-products", "*", "-requires",
+                                            "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationPath"],
+                                           text=True).strip()
+    Candidates = sorted((Path(Installation) / "VC/Redist/MSVC").glob("*/x64/Microsoft.VC*.CRT"))
+    if not Candidates:
+        raise RuntimeError("No redistributable x64 Visual C++ runtime found")
+    for Library in Candidates[-1].glob("*.dll"):
+        VerifyImage(Library, True)
+        shutil.copy2(Library, Destination)
+    if not all((Destination / Name).is_file() for Name in ("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")):
+        raise RuntimeError("Incomplete app-local Visual C++ runtime")
+
+
+def VerifyBrowser() -> None:
+    PixelsPath = Destination.parent / "PackagedProjectBrowser.ppm"
+    subprocess.run([str(Destination / "Frontier.exe"), "--verify-project-browser", str(PixelsPath)],
+                   cwd=Destination, check=True, timeout=90)
+    Magic, Extent, Maximum, Pixels = PixelsPath.read_bytes().split(b"\n", 3)
+    Width, Height = map(int, Extent.split())
+    if Magic != b"P6" or Maximum != b"255" or (Width, Height) != (840, 640) or len(Pixels) != Width * Height * 3:
+        raise RuntimeError("Packaged browser did not return the expected DX11 pixels")
+    ColourPixels = sum(max(Pixels[Offset:Offset+3]) - min(Pixels[Offset:Offset+3]) > 10
+                       for Row in range(145, 270) for Column in range(36, 296)
+                       for Offset in [(Row * Width + Column) * 3])
+    if ColourPixels <= 500 or Pixels[(540*Width+600)*3:(540*Width+600)*3+3] != b"\0\0\0":
+        raise RuntimeError("Packaged browser must render its actual project image on the OLED-black theme")
+    def Chunk(Signature, Content):
+        return struct.pack(">I", len(Content)) + Signature + Content + struct.pack(">I", zlib.crc32(Signature + Content) & 0xFFFFFFFF)
+    Raster = b"".join(b"\0" + Pixels[Row*Width*3:(Row+1)*Width*3] for Row in range(Height))
+    Png = b"\x89PNG\r\n\x1a\n" + Chunk(b"IHDR", struct.pack(">IIBBBBB", Width, Height, 8, 2, 0, 0, 0))
+    (Destination / "Docs/ProjectBrowser.png").write_bytes(Png + Chunk(b"IDAT", zlib.compress(Raster)) + Chunk(b"IEND", b""))
+    print("PASS packaged Frontier.exe: actual Win32/DX11 browser, OLED-black pixels and project preview texture")
+
+
 def Main() -> None:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     if sys.platform != "win32" or ctypes.sizeof(ctypes.c_void_p) != 8:
@@ -104,6 +142,7 @@ def Main() -> None:
     if Destination.exists():
         shutil.rmtree(Destination)
     shutil.copytree(Binary, Destination, ignore=shutil.ignore_patterns("*.pdb", "*.ilk", "*.lib", "*.exp"))
+    CopyVisualCppRuntime()
     shutil.copytree(Root / "EngineContent", Destination / "EngineContent", dirs_exist_ok=True)
     PackagedProjects = []
     for Folder, Name in Projects:
@@ -116,6 +155,8 @@ def Main() -> None:
         (Target / "Build").mkdir(parents=True)
         shutil.copy2(SpecificationPath, Target)
         shutil.copytree(Source / "Content", Target / "Content")
+        if (Source / "Preview").is_dir():
+            shutil.copytree(Source / "Preview", Target / "Preview")
         Library = Target / Specification["CodeImage"]
         shutil.copy2(Source / Specification["CodeImage"], Library)
         VerifyImage(Library, True)
@@ -158,9 +199,33 @@ def Main() -> None:
                                  "openingScene": OpeningScene.relative_to(Destination).as_posix(),
                                  "missingAndCorruptSceneRefusalVerified": True})
 
+    (Destination / "Docs").mkdir(exist_ok=True)
+    (Destination / "Docs/ProjectBrowser.txt").write_text(
+        "FRONTIER WINDOWS x64 / RELEASE\n\n"
+        "Extract the entire ZIP, then double-click Frontier.exe to open the project browser.\n"
+        "Select a project and scene, choose session options, then Open project.\n"
+        "The Start-Project*.cmd files launch a project directly, bypassing the browser.\n\n"
+        "CUSTOM PREVIEWS\n"
+        "Place an image in the Preview folder beside your project's .frontier file.\n"
+        "Example: Projects/Project-Drive/Preview/My car.jpg\n"
+        "Replace/remove the included Project.png when adding your own picture, then click Scan.\n"
+        "Any filename: PNG, JPEG, BMP, GIF or TIFF. With several images, the alphabetically\n"
+        "first supported filename wins. GIF/TIFF use the first frame/page.\n"
+        "Missing or corrupt images show a folder icon; hover the large preview for the reason.\n"
+        "Images retain their aspect ratio and transparency. Limit: 32 MiB, 64 million pixels,\n"
+        "32768 pixels per axis. Decoded thumbnails are bounded to 512 x 288.\n\n"
+        "REQUIREMENTS\n"
+        "Windows x64 and a compatible Vulkan GPU with its installed driver.\n"
+        "The Visual C++ runtime DLLs are included. This is an unsigned test build.\n"
+        "BuildManifest.json identifies the source and file hashes. The browser was rendered\n"
+        "and read back on Windows in CI; physical-GPU gameplay is not verified by CI.\n",
+        encoding="utf-8")
+    VerifyBrowser()
     Manifest = {"sourceCommit": os.environ.get("GITHUB_SHA", "local"),
                 "configuration": "Release", "architecture": "x64", "compiler": "MSVC",
                 "projects": PackagedProjects, "compiledShaderCount": len(Shaders),
+                "projectBrowserDx11Verified": True, "visualCppRuntimeBundled": True,
+                "previewFolder": "Preview", "previewSelection": "alphabetically first supported filename",
                 "gpuRuntimeVerified": False,
                 "gpuRuntimeVerificationScope": "Interactive Windows host on physical GPU hardware is not exercised by CI",
                 "sdfGi": {"importedCommit": "46476f3e5632256297de795ef1a6ab247f92f5f0",
@@ -170,13 +235,18 @@ def Main() -> None:
                           "transport": "Three camera-snapped distance volumes, GPU-captured textured surface-card atlas with Jacobi radiance, exact mesh secondary rays",
                           "activation": "Only after all scene resources and shader pipelines are ready",
                           "fallback": "Existing Surfel GI, or existing compute fallback if Surfel is unavailable"},
-                "requirements": ["Windows x64", "Microsoft Visual C++ x64 runtime",
+                "requirements": ["Windows x64", "Microsoft Visual C++ x64 runtime (bundled)",
                                  "Compatible Vulkan GPU and its installed driver"],
                 "sha256": {Location.relative_to(Destination).as_posix(): hashlib.sha256(Location.read_bytes()).hexdigest()
                            for Location in sorted(Destination.rglob("*")) if Location.is_file()}}
     (Destination / "BuildManifest.json").write_text(json.dumps(Manifest, indent=2) + "\n", encoding="utf-8")
     print(f"PASS package: Frontier.exe, both project DLLs, specifications, content and {len(Shaders)} shaders")
+    Revision = os.environ.get("GITHUB_SHA", "local")[:7]
+    Archive = Path(shutil.make_archive(str(Destination.parent / f"Frontier-Windows-x64-{Revision}"), "zip", Destination))
+    Checksum = hashlib.sha256(Archive.read_bytes()).hexdigest()
+    Archive.with_suffix(".sha256").write_text(f"{Checksum}  {Archive.name}\n", encoding="ascii")
     print(f"Package: {Destination}")
+    print(f"ZIP: {Archive} / SHA256 {Checksum}")
 
 
 if __name__ == "__main__":

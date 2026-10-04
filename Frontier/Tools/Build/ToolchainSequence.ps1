@@ -841,7 +841,7 @@ $LinkArgs.Add($JoltLib)
 $LinkArgs.Add('gdi32.lib')
 $LinkArgs.Add('user32.lib')
 $LinkArgs.Add('shell32.lib')
-foreach ($Library in @('d3d11.lib', 'dxgi.lib', 'd3dcompiler.lib', 'dwmapi.lib', 'imm32.lib', 'ole32.lib', 'uuid.lib')) { $LinkArgs.Add($Library) }
+foreach ($Library in @('d3d11.lib', 'dxgi.lib', 'd3dcompiler.lib', 'dwmapi.lib', 'imm32.lib', 'ole32.lib', 'uuid.lib', 'windowscodecs.lib')) { $LinkArgs.Add($Library) }
 
 Write-Building 'Linking Frontier.exe...'
 $Diagnostics = & link.exe @($LinkArgs.ToArray())
