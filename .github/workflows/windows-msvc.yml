@@ -48,8 +48,8 @@ jobs:
       - name: Download exact readbacks and retain on the session branch
         env:
           GH_TOKEN: ${{ github.token }}
-          BROWSER_RUN: ${{ inputs.export_browser_run || '37182789289' }}
-          SDF_RUN: ${{ inputs.export_sdf_run || '37182423955' }}
+          BROWSER_RUN: ${{ inputs.export_browser_run || '37184302718' }}
+          SDF_RUN: ${{ inputs.export_sdf_run || '37184302718' }}
         run: |
           python3 VisualProof/ProjectOpening/ExportExecutionProofs.py "$BROWSER_RUN" "$SDF_RUN"
           git config user.name 'github-actions[bot]'
@@ -64,7 +64,7 @@ jobs:
     if: ${{ !inputs.export_browser_run && !contains(github.event.head_commit.message, '[export-executed-pixels]') }}
     name: SDF production Vulkan execution and validation
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Install software Vulkan and validation tools

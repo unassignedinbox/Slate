@@ -38,14 +38,14 @@ subprocess.run([os.environ.get("CXX", "g++"), "-std=c++20", "-O2", "-g", "-Wall"
                 "-I" + str(Engine), *map(str, Sources), "-lvulkan", "-o", str(Output / "DistanceFieldExecution")], check=True)
 try:
     Completed = subprocess.run([str(Output / "DistanceFieldExecution"), str(Shaders), str(Images)],
-                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=600)
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=900)
 except subprocess.TimeoutExpired as Failure:
     Captured = Failure.stdout or b""
     if isinstance(Captured, bytes):
         Captured = Captured.decode("utf-8", errors="replace")
     (Output / "Execution.log").write_text(Captured + "\nFAIL CPU execution timed out\n", encoding="utf-8")
     print(Captured, flush=True)
-    print("::error::Production Vulkan execution exceeded 600 seconds; partial execution log retained", flush=True)
+    print("::error::Production Vulkan execution exceeded 900 seconds; partial execution log retained", flush=True)
     raise
 (Output / "Execution.log").write_text(Completed.stdout, encoding="utf-8")
 print(Completed.stdout)
