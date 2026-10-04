@@ -1,16 +1,18 @@
 {
-  "harnessSource": "fa6ee1b78051eb6367880a29521b3ae01854451b",
-  "run": "37231215971",
+  "harnessSource": "259c46c67e28b33ad621070eb2d1be3d2482d4d8",
+  "run": "37233160945",
   "shaderSource": "a42147b1148ffa13f08d4d11f42b665a8afb1a0d",
   "reference": "matte-reference.png is independent CPU area quadrature, not a Vulkan readback.",
   "execution": "Production SPIR-V on CPU Vulkan. Receiver-plane lighting maps, not perspective camera renders.",
   "shaders": {
-    "DistanceFieldConstruct.spv": "a557c86c98aa09b87a9649d5bfd32022ddf4272915ae4754a6d41d00b1e01ee2",
-    "DistanceFieldGIResolve.spv": "6c5aa872568487df5cd8687169590751c6738b6ee5235931b20e7670cffcbc55",
-    "DistanceFieldCapture.spv": "fdb302a8485e096de662d04907b12942b87ce58f6b9e9f056fafa80af32ab467",
-    "DistanceFieldGIResolveFixed.spv": "777410f69141fee3745ba9fbab82f496dc3193dfaeb051b09c66dcca97981908",
-    "DistanceFieldCaptureFixed.spv": "7e5328cbd543bf4382fbb2755ca6e845fc012e0cc7af3470ba4b9bdc5d431804",
-    "DistanceFieldRadiance.spv": "c4e770aa3ecf18dde2fcb4134f129756b677116916eb4bf7c5030507e1426854"
+    "DistanceFieldGatherFixed.spv": "738fb9488b8b954b08111fadc74a0b212e50ea9c83b4c7e5ec6c853519feff1f",
+    "DistanceFieldConstruct.spv": "4a35deef7dc6ea24f14512d91a5ece51f446bfc327b02a04308d6cbca49d7af6",
+    "DistanceFieldGIResolve.spv": "4f09f72af72e8db1d1fd2426eaa23de156889c63847006acd38ca2c528cbd80e",
+    "DistanceFieldGather.spv": "66c96adcdcaa158b022fd485197be2527600bd9d1b259bb21fc41d6f90875340",
+    "DistanceFieldCapture.spv": "e961a784a7484ac90c9db92c41258bdac36d9c784b65ed8a96974a7a3b7582ba",
+    "DistanceFieldGIResolveFixed.spv": "970cd276e1c213cec2b47565995cefddae2c98b25350f36f3a6de42dafa29a94",
+    "DistanceFieldCaptureFixed.spv": "b17923cc09fe65a00a78f4a1fcaf6045ac1dc7cae2fa390e9363e61ab1c1b02d",
+    "DistanceFieldRadiance.spv": "9504043c2e8c1e1866ccb7341b7da3b30877b20368d9e40837e47bbda13b7b60"
   },
   "images": {
     "matte-reflections-enabled.png": "6f30fcbf704ccd069d22129423b89079ec1042c26f78325d13b8c45c026ae91e",
