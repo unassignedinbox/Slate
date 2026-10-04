@@ -4,7 +4,7 @@
  */
 
 import { COLOR_PALETTES } from "./presets.js";
-import { DRESS_STYLES, WEAVE_TYPES } from "./DressGenerator.js";
+import { DRESS_STYLES, WEAVE_TYPES, getSafeNecklineDepth } from "./DressGenerator.js";
 import { PieSizingEstimator } from "./PieSizingEstimator.js";
 
 export class SubstanceClothGraphEditor {
@@ -618,7 +618,7 @@ export class SubstanceClothGraphEditor {
 
     if (node.id === "bodice") {
       // Draw 2D Bodice pattern piece with live neckline drop & strap width
-      const neckDrop = (params.necklineDepth || 0.14) * 110;
+      const neckDrop = getSafeNecklineDepth(params.necklineDepth) * 110;
       const waistW = 28 - (params.waistCinch || 0.8) * 7;
       const bustW = 30;
       const strapW = Math.max(4, (params.strapWidth || 0.06) * 90);
@@ -800,7 +800,7 @@ export class SubstanceClothGraphEditor {
     const bustHalfW = Math.min(cw * 0.14, 52);
     const waistHalfW = bustHalfW * (0.92 - 0.34 * (params.waistCinch ?? 0.84));
     const strapW = Math.max(6, (params.strapWidth ?? 0.065) * 180);
-    const neckDrop = (params.necklineDepth ?? 0.14) * 145;
+    const neckDrop = getSafeNecklineDepth(params.necklineDepth) * 145;
     const bodiceH = Math.min(ch * 0.26, 58);
 
     const waistY = topY + bodiceH;

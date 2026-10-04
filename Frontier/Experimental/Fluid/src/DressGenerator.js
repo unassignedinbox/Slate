@@ -36,6 +36,14 @@ export const WEAVE_TYPES = [
   { id: 10, label: "Leather grain" },
 ];
 
+// Keep all front neck openings above the mannequin's bust while preserving legacy control values.
+// The UI/import range remains 30–240 mm; it maps proportionally to a fitting-safe 30–85 mm drape.
+export function getSafeNecklineDepth(value = 0.14) {
+  const raw = Number(value);
+  const normalized = Math.max(0, Math.min(1, ((Number.isFinite(raw) ? raw : 0.14) - 0.03) / 0.21));
+  return 0.03 + normalized * 0.055;
+}
+
 function evalSleeveProfile(t, knots) {
   if (t <= knots[0][0]) return knots[0][1];
   const last = knots.length - 1;
@@ -174,7 +182,7 @@ export class DressGenerator {
     const skirtLength = params.skirtLength ?? 0.92; // [m] from waist (1.03m) downward
     const skirtFlare = params.skirtFlare ?? 0.58;   // radial flare expansion
     const waistCinch = params.waistCinch ?? 0.82;   // 0..1 waist tailoring tightness
-    const necklineDepth = params.necklineDepth ?? 0.14;
+    const necklineDepth = getSafeNecklineDepth(params.necklineDepth);
     const strapWidth = params.strapWidth ?? 0.065;
     const pleatDepth = params.pleatDepth ?? 0.018;
     const asymmetry = params.asymmetry ?? 0.0;
@@ -246,10 +254,11 @@ export class DressGenerator {
           // Asymmetric wrap neckline
           neckDrop = necklineDepth * (0.65 + 0.35 * Math.sin(angle + 0.6));
         } else if (dressStyle === 8 || dressStyle === 9) {
-          // Tailored coat gowns have a deep, clean front V rather than a strap/scoop edge.
-          neckDrop = (dressStyle === 8 ? 0.225 : 0.235) * Math.pow(Math.max(0, sinA), 1.25);
+          // Tailored coat gowns use a clean V, but keep the full bust covered on the fitting form.
+          neckDrop = necklineDepth * Math.pow(Math.max(0, sinA), 1.25);
         }
 
+        neckDrop = Math.min(0.085, neckDrop);
         const topY = 1.385 - neckDrop + 0.012 * shoulderProximity;
         const waistY = 1.035;
 
@@ -278,8 +287,9 @@ export class DressGenerator {
           const shoulderFlare = Math.pow(1 - tv, 1.5) * ((isMale ? 0.048 : 0.035) + sleeveDrape * 0.08);
           const waistTaper = Math.pow(tv, 1.3) * ((isMale ? 0.014 : 0.022) * waistCinch);
 
-          rx = (isMale ? 0.184 : 0.156) + shoulderFlare + (isMale ? 0.008 : 0.012) * bustBell - waistTaper;
-          rz = (isMale ? 0.118 : 0.106) + (isMale ? 0.012 : 0.018) * bustBell - waistTaper * 0.75;
+          // A little positive ease keeps the simulated shell outside the padded fitting-form bust.
+          rx = (isMale ? 0.184 : 0.156) + shoulderFlare + (isMale ? 0.008 : 0.012) * bustBell - waistTaper + 0.008;
+          rz = (isMale ? 0.118 : 0.106) + (isMale ? 0.012 : 0.018) * bustBell - waistTaper * 0.75 + 0.012;
 
           // Extra anterior contour over female bust spheres or male pectorals
           if (sinA > 0) {
@@ -360,7 +370,8 @@ export class DressGenerator {
         let pinStrength = 0.0;
         if (r === 0) {
           const strapMask = Math.exp(-Math.pow((Math.abs(cosA) - 0.82) / Math.max(0.08, strapWidth * 2.2), 2));
-          pinStrength = 0.76 + 0.22 * strapMask;
+          // Lock the neckline edge to the fitting form so gravity cannot drop it through the bust.
+          pinStrength = 0.98 + 0.015 * strapMask;
         } else if (r === 1) {
           pinStrength = 0.48;
         } else if (r === 2) {
@@ -581,7 +592,7 @@ export class DressGenerator {
     const skirtLength = params.skirtLength ?? 0.92;
     const skirtFlare = params.skirtFlare ?? 0.58;
     const waistCinch = params.waistCinch ?? 0.82;
-    const necklineDepth = params.necklineDepth ?? 0.14;
+    const necklineDepth = getSafeNecklineDepth(params.necklineDepth);
     const strapWidth = params.strapWidth ?? 0.065;
     const asymmetry = params.asymmetry ?? 0.0;
 

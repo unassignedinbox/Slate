@@ -604,7 +604,6 @@ class ClothPanel {
     const Unit =
       {
         skirtLength: "m",
-        necklineDepth: "m",
         strapWidth: "m",
         sleeveDrape: "m",
         pleatDepth: "m",
@@ -671,6 +670,7 @@ class ClothPanel {
         ["necklineDepth", "strapWidth", "sleeveDrape"],
         "BODICE",
         true,
+        "The garment shell has positive chest ease and a fit-safe neckline so the mannequin's bust stays inside the cloth.",
       );
       AddGroup(
         "Radial pleats & folds",

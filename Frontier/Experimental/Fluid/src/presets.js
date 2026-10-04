@@ -162,7 +162,7 @@ export const CONTROL_GROUPS = [
       { key: "skirtLength", label: "Skirt length", type: "range", min: 0.35, max: 1.02, step: 0.01 },
       { key: "skirtFlare", label: "Skirt flare", type: "range", min: 0.10, max: 1.35, step: 0.01 },
       { key: "waistCinch", label: "Waist cinch", type: "range", min: 0.0, max: 1.0, step: 0.01 },
-      { key: "necklineDepth", label: "Neckline drop", type: "range", min: 0.03, max: 0.24, step: 0.005 },
+      { key: "necklineDepth", label: "Neckline opening", type: "range", min: 0.03, max: 0.24, step: 0.005 },
       { key: "strapWidth", label: "Shoulder strap width", type: "range", min: 0.02, max: 0.14, step: 0.005 },
       { key: "sleeveDrape", label: "Shoulder cape drape", type: "range", min: 0.0, max: 0.40, step: 0.01 },
       { key: "pleatCount", label: "Radial pleat count", type: "range", min: 0, max: 36, step: 2 },

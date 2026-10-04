@@ -19,7 +19,7 @@ import {
   ConstructPresetParameters,
 } from "./SceneSpecification.js";
 import { HumanAvatar } from "./HumanAvatar.js";
-import { DressGenerator } from "./DressGenerator.js";
+import { DressGenerator, getSafeNecklineDepth } from "./DressGenerator.js";
 import { PieSizingEstimator, PIE_C1, PIE_C2, PIE_MIN_RES_MM } from "./PieSizingEstimator.js";
 import { WGSL_CLOTH_COMPUTE_SHADER, WGSL_CLOTH_RENDER_SHADER } from "./shaders-wgsl.js";
 import { GLSL_CLOTH_VS, GLSL_CLOTH_FS, GLSL_AVATAR_VS, GLSL_AVATAR_FS } from "./shaders-glsl.js";
@@ -41,6 +41,8 @@ Test("Couture dress presets validate and construct tailored parameters", () => {
   Assert.equal(AVATAR_FINISHES.length, 5);
   Assert.match(AVATAR_FINISHES[0].label, /toile|fitting form/i);
   Assert.equal(ValidateParameter("avatarFinish", 4), 4);
+  Assert.ok(Math.abs(getSafeNecklineDepth(0.24) - 0.085) < 1e-9);
+  Assert.ok(getSafeNecklineDepth(0.14) > getSafeNecklineDepth(0.03));
   const silk = getFabricPresetParameters(0);
   const canvas = getFabricPresetParameters(3);
   const leather = getFabricPresetParameters(6);
@@ -156,6 +158,11 @@ Test("DressGenerator builds periodic 3D dress mesh, PIE sizing map, rest lengths
     Assert.equal(dress.initialPositions.length, dress.vertexCount * 4);
     Assert.equal(dress.restLengths.length, dress.vertexCount * 4);
     Assert.equal(dress.sizingMapMm.length, dress.vertexCount);
+    const frontTop = Math.round(dress.numCols / 4) * 4 + 1;
+    Assert.ok(dress.initialPositions[frontTop] >= 1.299, `${key} neckline should cover the mannequin chest`);
+    for (let c = 0; c < dress.numCols; c++) {
+      Assert.ok(dress.initialPositions[c * 4 + 3] >= 0.96, `${key} neckline vertices should stay anchored`);
+    }
     Assert.ok(dress.pieReport.wavelengthMm > 0);
     Assert.ok(dress.initialPositions.every(Number.isFinite));
     Assert.ok(dress.restLengths.every((v) => Number.isFinite(v) && v >= 0));
