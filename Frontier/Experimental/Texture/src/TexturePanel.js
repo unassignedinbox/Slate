@@ -21,7 +21,8 @@ import {
 } from "./SceneStructure.js";
 import { RevisionQueue } from "./RevisionQueue.js";
 import { DocumentSequence } from "./DocumentSequence.js";
-import { EmitTextureSet, EmitProject } from "./ExportSequence.js";
+import { EmitTextureSet, EmitProject, ReadDocument, DocumentExtension } from "./ExportSequence.js";
+import { TimelineSequence, EventByKind, EventClock, EventKinds } from "./TimelineSequence.js";
 import {
     ChannelSpecification,
     ChannelByIdentifier,
@@ -352,6 +353,8 @@ class TexturePanel
         this.Camera = new OrbitProjection();
         this.Projection = new StrokeProjection();
         this.Revisions = new RevisionQueue();
+        this.Timeline = new TimelineSequence();
+        this.Timeline.Listener = () => this.RenderTimeline();
         this.Canvas = Select("#surface-canvas");
         this.Integrator = new ShadingIntegrator(this.Canvas);
         this.BrushColour = [0.86, 0.32, 0.2];
@@ -432,6 +435,11 @@ class TexturePanel
         this.SyncMaskView();
         DressSelects(document);
         this.Advance();
+        this.Timeline.Clear({
+            Kind: "document",
+            Title: "Canvas created",
+            Detail: `${this.Project.Resolution}² · ${this.SurfaceRecord?.Label || "surface"}`,
+        });
         this.SetStatus("Ready", "ready");
     }
 
@@ -523,6 +531,12 @@ class TexturePanel
         Select("#dirty-indicator").classList.remove("clean");
     }
 
+    MarkClean()
+    {
+        this.Dirty = false;
+        Select("#dirty-indicator").classList.add("clean");
+    }
+
     //----------------------------------------------------------------------------------------------------------------------
     // Header, document bar and export.
     //----------------------------------------------------------------------------------------------------------------------
@@ -598,6 +612,7 @@ class TexturePanel
             this.Project.Object = Object_.Identifier;
         });
         this.RebuildSurface();
+        this.Chronicle("surface", `Added ${Object_.Name}`, `tile ${Tile} · ${this.Project.Objects.length} objects`);
         this.Notify(`${Object_.Name} added on tile ${Tile}.`);
         return Object_;
     }
@@ -613,6 +628,7 @@ class TexturePanel
             if (this.Project.Object === Identifier) this.Project.Object = this.Project.Objects[0].Identifier;
         });
         this.RebuildSurface();
+        this.Chronicle("surface", `Removed ${Gone.Name}`, `${this.Project.Objects.length} objects left`);
         this.Notify(`${Gone.Name} removed.`);
     }
 
@@ -631,6 +647,7 @@ class TexturePanel
         Select("#isolate-button").classList.toggle("active", this.Isolated);
         Select("#isolate-button").setAttribute("aria-pressed", String(this.Isolated));
         this.RebuildSurface();
+        this.Chronicle("surface", this.Isolated ? `Isolated ${this.ActiveObject?.Name}` : "Showing every object", `${this.Project.Objects.length} objects`);
         this.Notify(this.Isolated ? `Isolated ${this.ActiveObject?.Name}.` : "Showing every object.");
     }
 
@@ -1076,6 +1093,7 @@ class TexturePanel
                 this.Project.Material = { ...this.Project.Material, ...(Preset.Surface || {}) };
                 this.Project.Selection = Layers[Layers.length - 1].Identifier;
             });
+            this.Chronicle("material", `Create ${Preset.Label}`, `${Layers.length} layer${Layers.length === 1 ? "" : "s"}`, Layers[0]?.Channels?.base_color);
             this.Notify(`${Preset.Label} added — ${Layers.length} layer${Layers.length === 1 ? "" : "s"}.`);
             return;
         }
@@ -1145,6 +1163,7 @@ class TexturePanel
             this.Project.Layers.splice(Index + 1, 0, Layer);
             this.Project.Selection = Layer.Identifier;
         });
+        this.Chronicle(Layer.Kind === "decal" ? "decal" : "structure", `Added ${Layer.Name}`, `${LayerBadge(Layer)} layer`, Layer.Channels.base_color);
         this.Notify(`${Layer.Name} added.`);
     }
 
@@ -1560,6 +1579,7 @@ class TexturePanel
         });
         if (Layer.Kind === "decal") this.RefreshDecal(Layer);
         if (Layer.Kind === "stroke") this.Integrator.EnsureCoverage(Layer);
+        this.Chronicle(Layer.Kind === "decal" ? "decal" : "structure", `Added ${Layer.Name}`, `${LayerBadge(Layer)} layer`, Layer.Channels.base_color);
         this.Notify(`${Layer.Name} added above ${Index >= 0 ? this.Layers[Index]?.Name || "the stack" : "the stack"}.`);
     }
 
@@ -1576,6 +1596,7 @@ class TexturePanel
             this.Project.Layers.splice(Index + 1, 0, Layer);
             this.Project.Selection = Layer.Identifier;
         });
+        this.Chronicle("material", `Create ${Layer.Name}`, FinishLabel(Finish), Finish.ColourA);
         this.Notify(`${Layer.Name} added as a material layer.`);
         return Layer;
     }
@@ -1617,6 +1638,7 @@ class TexturePanel
             this.Project.Selection = Copy.Identifier;
         });
         if (Copy.Kind === "decal") this.RefreshDecal(Copy);
+        this.Chronicle("structure", `Duplicated ${Layer.Name}`, `${this.Layers.length} layers`, Layer.Channels.base_color);
         this.Notify(`${Layer.Name} duplicated.`);
     }
 
@@ -1635,6 +1657,7 @@ class TexturePanel
             this.Project.Selection = this.Layers[Math.max(0, Index - 1)].Identifier;
         });
         this.Integrator.ReleaseLayer(Layer.Identifier);
+        this.Chronicle("structure", `Removed ${Layer.Name}`, `${this.Layers.length} layers left`);
         this.Notify(`${Layer.Name} removed.`);
     }
 
@@ -2289,7 +2312,17 @@ class TexturePanel
         if (Layer)
         {
             this.StrokeRecord.After = this.Integrator.SnapshotLayer(Layer, this.StrokeRecord.Target);
-            if (this.StrokeRecord.Before && this.StrokeRecord.After) this.Revisions.Record(this.StrokeRecord);
+            if (this.StrokeRecord.Before && this.StrokeRecord.After)
+            {
+                this.Revisions.Record(this.StrokeRecord);
+                const Points = this.Projection.Segments || 1;
+                this.Chronicle(
+                    "stroke",
+                    `Added stroke (${Points} point${Points === 1 ? "" : "s"})`,
+                    `${Layer.Name} · ${this.StrokeRecord.Target === "mask" ? "mask" : "content"}`,
+                    this.Projection.Brush.Target === "mask" ? null : this.BrushColour,
+                );
+            }
         }
         this.StrokeRecord = null;
         this.UpdateStatusBar();
@@ -2341,6 +2374,7 @@ class TexturePanel
             Decal.Selection = Mark.Identifier;
         });
         this.MovingMark = Mark.Identifier;
+        this.Chronicle("decal", `Placed ${Mark.Name}`, `${Layer.Name} · ${Decal.Marks.length} marks`, Mark.Tint);
         this.Recomposite();
         this.RenderStack();
         if (this.InspectorTab === "layer") this.RenderInspector();
@@ -2563,6 +2597,7 @@ class TexturePanel
             this.Notify("Nothing to undo.");
             return;
         }
+        this.Timeline.StepBack();
         this.ApplyRevision(Entry, "Before");
     }
 
@@ -2574,6 +2609,7 @@ class TexturePanel
             this.Notify("Nothing to redo.");
             return;
         }
+        this.Timeline.StepForward();
         this.ApplyRevision(Entry, "After");
     }
 
@@ -2728,6 +2764,14 @@ class TexturePanel
     AfterInspectorChange(Path, Committed)
     {
         this.MarkDirty();
+        if (Path === "Generator.Kind" && Committed)
+            this.Chronicle("generator", `Switch to ${this.ActiveLayer?.Generator?.Kind}`, this.ActiveLayer?.Name || "");
+        if (Path === "Object.Kind" && Committed)
+            this.Chronicle("surface", `Mesh changed to ${this.ActiveObject?.Kind}`, this.ActiveObject?.Name || "");
+        if (Path === "Object.Tile" && Committed)
+            this.Chronicle("surface", `Tile ${this.ActiveObject?.Tile}`, this.ActiveObject?.Name || "");
+        if (Path === "Project.Resolution" && Committed)
+            this.Chronicle("surface", `Resolution ${this.Project.Resolution}²`, "every layer resampled");
         if (Path === "Project.Object")
         {
             this.SelectObject(this.Project.Object);
@@ -2810,6 +2854,16 @@ class TexturePanel
         const Layer = this.ActiveLayer;
         switch (Action)
         {
+            case "branch-switch":
+            case "branch-fork":
+            case "timeline-back":
+            case "timeline-forward":
+            case "timeline-clear":
+            case "timeline-visit":
+            case "document-save":
+            case "document-open":
+                this.TimelineAction(Action, Argument);
+                break;
             case "mark-select":
             case "mark-add":
             case "mark-duplicate":
@@ -3006,7 +3060,10 @@ class TexturePanel
                 ? this.MaterialInspector()
                 : this.InspectorTab === "surface"
                   ? this.SurfaceInspector()
-                  : this.LayerInspector(Layer);
+                  : this.InspectorTab === "timeline"
+                    ? this.TimelineInspector()
+                    : this.LayerInspector(Layer);
+        Body.classList.toggle("timeline-body", this.InspectorTab === "timeline");
         FillIcons(Body);
         DressSelects(Body);
     }
@@ -3488,6 +3545,121 @@ class TexturePanel
         });
     }
 
+    //----------------------------------------------------------------------------------------------------------------------
+    // Timeline. The revision queue remembers pixels; this reads the session back as a story, on branches that can be
+    // forked, named and revisited.
+    //----------------------------------------------------------------------------------------------------------------------
+    Chronicle(Kind, Title, Detail = "", Colour = null)
+    {
+        const Event = this.Timeline.Record({ Kind, Title, Detail, Colour });
+        return Event;
+    }
+
+    RenderTimeline()
+    {
+        if (this.InspectorTab !== "timeline") return;
+        const Body = Select("#inspector-body");
+        if (!Body) return;
+        Body.innerHTML = this.TimelineInspector();
+        FillIcons(Body);
+    }
+
+    TimelineInspector()
+    {
+        const Timeline = this.Timeline;
+        const Events = Timeline.Events;
+        const Pills = Timeline.Branches.map(
+            (Branch) => `
+            <button class="branch-pill ${Branch.Identifier === Timeline.Active ? "active" : ""}"
+                    data-action="branch-switch" data-argument="${Branch.Identifier}"
+                    title="${Escape(Branch.Name)} · ${Branch.Events.length} events">
+                ${Escape(Branch.Name)}<b>${Branch.Events.length}</b>
+            </button>`,
+        ).join("");
+        const Rows = Events.map((Event, Index) =>
+        {
+            const Kind = EventByKind[Event.Kind];
+            const Spent = Index >= Timeline.Head;
+            return `
+            <li class="timeline-event ${Spent ? "undone" : ""} ${Index === Timeline.Head - 1 ? "head" : ""}"
+                data-action="timeline-visit" data-argument="${Event.Identifier}" style="--event-accent:${Kind.Accent}">
+                <span class="event-node"></span>
+                <span class="event-copy">
+                    <span class="event-title">
+                        ${Event.Colour ? `<i class="event-chip" style="--chip:${ToHex(Event.Colour)}"></i>` : ""}${Escape(Event.Title)}
+                    </span>
+                    <span class="event-note">${Escape(Event.Detail || Kind.Label)}</span>
+                </span>
+                <span class="event-meta">
+                    <span class="event-badge">${Kind.Badge}</span>
+                    <span class="event-hash">${Event.Hash}</span>
+                    <span class="event-clock">${EventClock(Event.Stamp)}</span>
+                </span>
+            </li>`;
+        }).reverse().join("");
+        return `
+            <div class="timeline">
+                <div class="timeline-head">
+                    <div class="branch-pills">${Pills}
+                        <button class="branch-pill ghost" data-action="branch-fork" title="Fork a branch here" aria-label="Fork a branch">+</button>
+                    </div>
+                    <div class="timeline-actions">
+                        <button class="icon-button" data-action="timeline-back" title="Step back · Ctrl Z" aria-label="Step back" ${Timeline.CanStepBack ? "" : "disabled"}>${Icon("undo")}</button
+                        ><button class="icon-button" data-action="timeline-forward" title="Step forward · Ctrl ⇧ Z" aria-label="Step forward" ${Timeline.CanStepForward ? "" : "disabled"}>${Icon("redo")}</button
+                        ><button class="icon-button" data-action="timeline-clear" title="Clear the timeline" aria-label="Clear the timeline">${Icon("trash")}</button>
+                    </div>
+                </div>
+                <div class="timeline-summary">
+                    <span>${Timeline.Branch.Name}</span><b>${Timeline.Head}</b> of ${Events.length} events
+                    ${Timeline.Branch.Parent ? `· forked from ${Escape(this.BranchName(Timeline.Branch.Parent))} at ${Timeline.Branch.Origin}` : ""}
+                </div>
+                ${Events.length ? `<ol class="timeline-rail">${Rows}</ol>` : `<p class="timeline-empty">Nothing has happened yet. Paint something.</p>`}
+                <div class="timeline-foot">
+                    <button class="button" data-action="document-save">${Icon("download")}Save ${DocumentExtension}</button>
+                    <button class="button" data-action="document-open">${Icon("folder")}Open</button>
+                </div>
+            </div>`;
+    }
+
+    BranchName(Identifier)
+    {
+        return this.Timeline.Branches.find((Branch) => Branch.Identifier === Identifier)?.Name || "a branch";
+    }
+
+    TimelineAction(Action, Argument)
+    {
+        const Timeline = this.Timeline;
+        if (Action === "branch-switch" && Timeline.Switch(Argument)) this.Notify(`On ${Timeline.Branch.Name}.`);
+        else if (Action === "branch-fork")
+        {
+            const Branch = Timeline.Fork();
+            this.Notify(`Forked ${Branch.Name} from ${this.BranchName(Branch.Parent)}.`);
+        }
+        else if (Action === "timeline-back") this.Undo();
+        else if (Action === "timeline-forward") this.Redo();
+        else if (Action === "timeline-clear")
+        {
+            Timeline.Clear({ Kind: "document", Title: "Timeline cleared", Detail: this.Project.Name });
+            this.Notify("Timeline cleared.");
+        }
+        else if (Action === "timeline-visit")
+        {
+            const Head = Timeline.Visit(Argument);
+            if (Head >= 0) this.Notify(`Looking at event ${Head} of ${Timeline.Depth}.`);
+        }
+        else if (Action === "document-save") this.SaveDocument();
+        else if (Action === "document-open") Select("#import-file").click();
+        this.RenderTimeline();
+    }
+
+    SaveDocument()
+    {
+        EmitProject(this.Project, this.Camera.Serialise(), this.Timeline.Serialise());
+        this.Chronicle("export", "Document written", `${this.Project.Name}${DocumentExtension}`);
+        this.MarkClean();
+        this.Notify(`${this.Project.Name}${DocumentExtension} written.`);
+    }
+
     MaterialInspector()
     {
         const Material = this.Project.Material;
@@ -3638,11 +3810,7 @@ class TexturePanel
         ).join("");
         Select("#export-preset").addEventListener("change", () => this.DescribeExport());
         Select("#export-confirm").addEventListener("click", () => this.RunExport());
-        Select("#export-project").addEventListener("click", () =>
-        {
-            EmitProject(this.Project, this.Camera.Serialise());
-            this.Notify("Project written.");
-        });
+        Select("#export-project").addEventListener("click", () => this.SaveDocument());
         Select("#svg-file").addEventListener("change", async (Event) =>
         {
             const File = Event.target.files?.[0];
@@ -3709,6 +3877,7 @@ class TexturePanel
                 Select("#export-progress").textContent = Message;
             });
             Select("#export-progress").textContent = `${Result.Count} images written as ${Result.Preset}.`;
+            this.Chronicle("export", `Exported ${Result.Preset}`, `${Result.Count} images`);
             this.Notify(`${Result.Count} images and one descriptor written.`);
             this.Dirty = false;
             Select("#dirty-indicator").classList.add("clean");
@@ -3725,18 +3894,26 @@ class TexturePanel
         if (!File) return;
         try
         {
-            const Record = SanitiseProject(JSON.parse(await File.text()));
+            const Document_ = ReadDocument(await File.text());
+            const Record = SanitiseProject(Document_.Project);
             this.Project = Record;
             Select("#document-name").value = Record.Name;
             this.Documents.Synchronise(Record.Name);
             this.Revisions.Clear();
             this.Integrator.Configure(Record.Resolution);
+            if (Document_.Camera) this.Camera.Restitute(Document_.Camera);
             this.RebuildSurface(true);
             this.InvalidateDecals();
+            if (!this.Timeline.Restitute(Document_.Timeline))
+                this.Timeline.Clear({ Kind: "document", Title: "Document opened", Detail: File.name });
+            else this.Chronicle("document", "Document opened", File.name);
             this.RenderStack();
+            this.RenderObjects();
             this.RenderInspector();
             this.RenderChannelStrip();
-            this.Notify(`${File.name} opened · ${Record.Layers.length} layers.`);
+            this.Notify(
+                `${File.name} opened · ${Record.Layers.length} layers · ${this.Timeline.Branches.length} branch${this.Timeline.Branches.length === 1 ? "" : "es"}.`,
+            );
         }
         catch (Error)
         {
@@ -3752,6 +3929,7 @@ class TexturePanel
         return {
             Project: structuredClone(this.Project),
             Camera: this.Camera.Serialise(),
+            Timeline: this.Timeline.Serialise(),
             Tool: this.Tool,
             Display: this.Display,
             ViewMode: this.ViewMode,
@@ -3767,11 +3945,14 @@ class TexturePanel
             this.Project.Layers = DefaultStack();
             this.Project.Selection = this.Project.Layers[this.Project.Layers.length - 1].Identifier;
             this.Camera.Restore();
+            this.Timeline.Clear({ Kind: "document", Title: "Canvas created", Detail: Name });
         }
         else
         {
             this.Project = Record.Project;
             this.Camera.Restitute(Record.Camera);
+            if (!this.Timeline.Restitute(Record.Timeline))
+                this.Timeline.Clear({ Kind: "document", Title: "Canvas restored", Detail: Name });
             this.Tool = Record.Tool || "brush";
             this.Display = Record.Display || "material";
             this.ViewMode = Record.ViewMode || "surface";
@@ -3786,6 +3967,7 @@ class TexturePanel
         this.Integrator.Configure(this.Project.Resolution);
         this.RebuildSurface(true);
         this.RenderStack();
+        this.RenderObjects();
         this.RenderInspector();
         this.RenderChannelStrip();
         this.UpdateCaption();
@@ -3817,8 +3999,7 @@ class TexturePanel
             if ((Event.ctrlKey || Event.metaKey) && Key === "s")
             {
                 Event.preventDefault();
-                EmitProject(this.Project, this.Camera.Serialise());
-                this.Notify("Project written.");
+                this.SaveDocument();
                 return;
             }
             if ((Event.ctrlKey || Event.metaKey) && Key === "e")

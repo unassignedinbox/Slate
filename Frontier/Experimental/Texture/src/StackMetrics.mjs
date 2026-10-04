@@ -9,6 +9,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
+import { TimelineSequence, CreateEvent, EventByKind, EventKinds, ShortHash, EventClock, BranchLimit } from "./TimelineSequence.js";
+import { ComposeDocument, ReadDocument, DocumentFormat, DocumentExtension } from "./ExportSequence.js";
+
 import {
     TileNumber,
     TilePlacement,
@@ -668,4 +671,124 @@ test("the layer summary counts marks", () =>
     const Layer = CreateLayer("decal");
     Layer.Decal.Marks.push(CreateMark(Layer.Decal));
     assert.match(LayerSummary(Layer), /2 marks/);
+});
+
+//========================================================================================================================
+// The timeline. Typed events on branches, a head that steps, and a .pigment document that carries all of it.
+//========================================================================================================================
+test("every event kind has a badge and an accent the rail can draw", () =>
+{
+    assert.ok(EventKinds.length >= 6);
+    for (const Kind of EventKinds)
+    {
+        assert.match(Kind.Badge, /^[A-Z]{2,9}$/);
+        assert.match(Kind.Accent, /^#[0-9a-f]{6}$/i);
+        assert.equal(EventByKind[Kind.Identifier], Kind);
+    }
+    const Event = CreateEvent({ Kind: "nonsense", Title: "x".repeat(200) });
+    assert.equal(Event.Kind, "structure", "an unknown kind must still render");
+    assert.ok(Event.Title.length <= 96);
+    assert.match(Event.Hash, /^[0-9a-f]{7}$/);
+    assert.match(EventClock(Date.UTC(2026, 0, 2, 3, 4, 5)), /^\d{2}:\d{2}:\d{2}$/);
+    assert.equal(ShortHash("same"), ShortHash("same"), "the hash is stable");
+    assert.notEqual(ShortHash("same"), ShortHash("other"));
+});
+
+test("the head steps back and forward over the events", () =>
+{
+    const Timeline = new TimelineSequence();
+    assert.equal(Timeline.Depth, 0);
+    assert.equal(Timeline.CanStepBack, false);
+    Timeline.Record({ Kind: "document", Title: "Canvas created" });
+    Timeline.Record({ Kind: "stroke", Title: "Added stroke (412 points)" });
+    Timeline.Record({ Kind: "material", Title: "Create M_CarPaint", Colour: [0.8, 0.1, 0.1] });
+    assert.equal(Timeline.Depth, 3);
+    assert.equal(Timeline.Head, 3);
+    assert.equal(Timeline.CanStepForward, false);
+
+    assert.equal(Timeline.StepBack(), true);
+    assert.equal(Timeline.Head, 2);
+    assert.equal(Timeline.CanStepForward, true);
+    assert.equal(Timeline.StepForward(), true);
+    assert.equal(Timeline.Head, 3);
+    assert.equal(Timeline.Visit(Timeline.Events[0].Identifier), 1);
+    assert.equal(Timeline.Visit("nothing"), -1);
+});
+
+test("editing after stepping back forks a branch instead of losing the future", () =>
+{
+    const Timeline = new TimelineSequence();
+    Timeline.Record({ Kind: "document", Title: "Canvas created" });
+    Timeline.Record({ Kind: "stroke", Title: "Added stroke" });
+    Timeline.Record({ Kind: "generator", Title: "Generator applied" });
+    Timeline.StepBack();
+    Timeline.StepBack();
+    Timeline.Record({ Kind: "material", Title: "Params changed" });
+
+    assert.equal(Timeline.Branches.length, 2, "the edit should have forked");
+    assert.equal(Timeline.Depth, 2, "the branch keeps what came before the head");
+    assert.equal(Timeline.Branch.Parent, "branch-1");
+    assert.equal(Timeline.Branch.Origin, 1);
+    assert.equal(Timeline.Branches[0].Events.length, 3, "the first branch is untouched");
+
+    const Named = Timeline.Fork("Experiment");
+    assert.equal(Named.Name, "Experiment");
+    Timeline.Rename(Named.Identifier, "Varnish study");
+    assert.equal(Timeline.Branch.Name, "Varnish study");
+    assert.equal(Timeline.Switch("branch-1"), true);
+    assert.equal(Timeline.Depth, 3);
+    assert.equal(Timeline.Switch("branch-99"), false);
+    assert.equal(Timeline.Remove(Named.Identifier), true);
+    assert.equal(Timeline.Branches.length, 2);
+
+    while (Timeline.Branches.length < BranchLimit) Timeline.Fork();
+    const Capped = Timeline.Branches.length;
+    Timeline.Fork();
+    assert.equal(Timeline.Branches.length, Capped, "the branch count is capped");
+});
+
+test("a timeline survives serialisation, and clearing leaves one seeded branch", () =>
+{
+    const Timeline = new TimelineSequence();
+    Timeline.Record({ Kind: "document", Title: "Canvas created" });
+    Timeline.Record({ Kind: "decal", Title: "Placed Mark 2", Colour: [0, 1, 0] });
+    Timeline.Fork("Side");
+    Timeline.Record({ Kind: "surface", Title: "Tile 1002" });
+
+    const Record = Timeline.Serialise();
+    const Copy = new TimelineSequence();
+    assert.equal(Copy.Restitute(Record), true);
+    assert.equal(Copy.Branches.length, 2);
+    assert.equal(Copy.Branch.Name, "Side");
+    assert.equal(Copy.Depth, 3);
+    assert.deepEqual(Copy.Events[1].Colour, [0, 1, 0]);
+    assert.equal(Copy.Restitute({ Branches: [] }), false, "an empty record must not wipe the timeline");
+
+    Copy.Clear({ Kind: "document", Title: "Timeline cleared" });
+    assert.equal(Copy.Branches.length, 1);
+    assert.equal(Copy.Depth, 1);
+    assert.equal(Copy.Head, 1);
+});
+
+test("a .pigment document carries the project, the camera and the timeline", () =>
+{
+    const Timeline = new TimelineSequence();
+    Timeline.Record({ Kind: "document", Title: "Canvas created" });
+    const Project = DefaultProject();
+    const Written = ComposeDocument(Project, { Distance: 3 }, Timeline.Serialise());
+    assert.equal(Written.Format, DocumentFormat);
+    assert.equal(DocumentExtension, ".pigment");
+    assert.equal(Written.Project.Name, Project.Name);
+    assert.equal(Written.Timeline.Branches.length, 1);
+
+    const Read = ReadDocument(JSON.stringify(Written));
+    assert.equal(Read.Project.Name, Project.Name);
+    assert.equal(Read.Camera.Distance, 3);
+    assert.equal(Read.Timeline.Branches[0].Events.length, 1);
+
+    // The flat project files earlier builds wrote must still open.
+    const Legacy = ReadDocument(JSON.stringify({ ...Project, Camera: { Distance: 5 } }));
+    assert.equal(Legacy.Project.Name, Project.Name);
+    assert.equal(Legacy.Timeline, null);
+    assert.equal(Legacy.Camera.Distance, 5);
 });

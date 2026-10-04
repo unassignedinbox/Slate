@@ -37,10 +37,10 @@
             <div class="document-bar">
                 <span data-icon="file"></span><input id="document-name" value="Foundry crate" aria-label="Surface name" maxlength="64" /><span
                     class="document-extension"
-                    >.texture</span
+                    >.pigment</span
                 ><span id="dirty-indicator" title="Unsaved work" class="dirty-indicator clean"></span><span class="document-note">Layered surface authoring</span
                 ><button id="import-button" class="text-button">Open project<span data-icon="folder"></span></button
-                ><input type="file" id="import-file" accept=".json,.texture,application/json" hidden />
+                ><input type="file" id="import-file" accept=".pigment,.json,.texture,application/json" hidden />
                 <input type="file" id="svg-file" accept=".svg,image/svg+xml" hidden />
                 <input type="file" id="mesh-file" accept=".obj" hidden />
             </div>
@@ -229,7 +229,7 @@
                         <label class="switch" title="Show the selected layer"><input type="checkbox" id="layer-enabled" aria-label="Show the selected layer" checked /><span></span></label>
                     </div>
                     <div class="inspector-tabs" id="inspector-tabs">
-                        <button class="active" data-tab="layer">Layer</button><button data-tab="material">Material</button><button data-tab="surface">Surface</button>
+                        <button class="active" data-tab="layer">Layer</button><button data-tab="material">Material</button><button data-tab="surface">Surface</button><button data-tab="timeline">Timeline</button>
                     </div>
                     <div id="inspector-body" class="inspector-body"></div>
                     <div class="inspector-footer"><span data-icon="link"></span>Edits composite immediately</div>
@@ -302,7 +302,7 @@
             <div class="export-list" id="export-list"></div>
             <div class="dialog-actions">
                 <span id="export-progress" class="export-progress"></span>
-                <button class="text-button" id="export-project">Save project file</button><button class="button" id="export-confirm"><span data-icon="download"></span>Write images</button>
+                <button class="text-button" id="export-project">Save .pigment document</button><button class="button" id="export-confirm"><span data-icon="download"></span>Write images</button>
             </div>
         </dialog>
         <script type="module" src="./src/TexturePanel.js"></script>

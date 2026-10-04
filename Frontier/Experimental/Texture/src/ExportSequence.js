@@ -126,10 +126,35 @@ export const EmitTextureSet = async (Integrator, Project, PresetIdentifier, Repo
     return { Count: Images.length, Preset: Preset.Label };
 };
 
-export const EmitProject = (Project, Camera) =>
+// A .pigment document is the whole session in one file: the project record, the camera pose and the branching timeline.
+export const DocumentFormat = "pigment";
+export const DocumentVersion = 1;
+export const DocumentExtension = ".pigment";
+
+export const ComposeDocument = (Project, Camera, Timeline = null) => ({
+    Format: DocumentFormat,
+    Version: DocumentVersion,
+    Generator: "Frontier Texture 0.1",
+    Written: new Date().toISOString(),
+    Project,
+    Camera,
+    Timeline,
+});
+
+export const EmitProject = (Project, Camera, Timeline = null) =>
 {
-    const Record = { ...Project, Camera, Version: 1, Generator: "Frontier Texture 0.1" };
-    Download(new Blob([JSON.stringify(Record, null, 4)], { type: "application/json" }), `${Slug(Project.Name)}.texture.json`);
+    const Record = ComposeDocument(Project, Camera, Timeline);
+    Download(new Blob([JSON.stringify(Record, null, 4)], { type: "application/json" }), `${Slug(Project.Name)}${DocumentExtension}`);
+    return Record;
+};
+
+// Reading accepts both the .pigment document and the flat project record earlier builds wrote.
+export const ReadDocument = (Text) =>
+{
+    const Parsed = JSON.parse(Text);
+    if (Parsed && Parsed.Format === DocumentFormat && Parsed.Project)
+        return { Project: Parsed.Project, Camera: Parsed.Camera || null, Timeline: Parsed.Timeline || null };
+    return { Project: Parsed, Camera: Parsed?.Camera || null, Timeline: null };
 };
 
 export const ExportSlotLabels = ExportSlots;

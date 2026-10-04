@@ -138,6 +138,17 @@ spatial index and a single stroke serve the whole scene: a brush dragged across 
 sheet stays square so texels stay square. Isolating simply reassembles the scene without the others. Clicking an object
 with the camera tool selects it; the texture view draws the tile grid over the sheet with each tile's number and owner.
 
+**Timeline and branches.** The fourth inspector tab reads the session back as a story: every stroke, layer, material,
+decal, generator and surface change becomes a typed event on a vertical rail — coloured node, badge, short hash,
+timestamp, and a colour chip when the edit had a colour. The head follows undo and redo, and events past it dim rather
+than vanish. Editing after stepping back **forks a branch** instead of discarding the future, so one document can carry
+several versions of itself; the pills at the top switch between them, `+` forks on the spot, and up to eight branches
+live side by side.
+
+**The `.pigment` document.** Save (<kbd>Ctrl S</kbd>, the timeline's Save button, or the export dialog) writes one JSON
+document holding the project record, the camera pose and the whole branching timeline. Opening one restores all three,
+and the flat `.texture.json` files earlier builds wrote still open.
+
 **Export.** Three presets — the full OpenPBR channel set, glTF metallic-roughness (ORM-packed), or a three-image compact
 set. Each writes one PNG per channel named `<project-name>_<Channel>.png` next to a JSON descriptor tagged
 `"specification": "OpenPBR Surface 1.1.1"`, which is the shape the engine's `ContentInterchange/MaterialCodec` reads.
@@ -153,7 +164,8 @@ set. Each writes one PNG per channel named `<project-name>_<Channel>.png` next t
 | Brush size | <kbd>[</kbd> <kbd>]</kbd> | Texture space | <kbd>X</kbd> |
 | Brush size, live | <kbd>Alt</kbd> + wheel | Frame the surface | <kbd>F</kbd> |
 | Search layers | <kbd>/</kbd> | Content browser | <kbd>B</kbd> |
-| Undo / redo | <kbd>Ctrl Z</kbd> / <kbd>Ctrl ⇧ Z</kbd> | Save / export | <kbd>Ctrl S</kbd> / <kbd>Ctrl E</kbd> |
+| Undo / redo | <kbd>Ctrl Z</kbd> / <kbd>Ctrl ⇧ Z</kbd> | Save `.pigment` / export | <kbd>Ctrl S</kbd> / <kbd>Ctrl E</kbd> |
+| Symmetry: off → X → Y → Z | <kbd>S</kbd> | | |
 
 The **right button always paints** into the selected layer, whichever tool is in hand, so the camera can stay on the
 left button. Middle-drag and <kbd>Space</kbd>-drag pan; a click that never becomes a drag selects the object under it.
@@ -178,6 +190,7 @@ left button. Middle-drag and <kbd>Space</kbd>-drag pan; a click that never becom
 | `ShadingIntegrator.js` | The WebGL2 device: targets, stamping, compositing, viewport and plane passes, readback. |
 | `StrokeProjection.js` | Brush state, stroke spacing, symmetry, placement frames. |
 | `RevisionQueue.js` | Byte-budgeted undo of both painted images and structural edits. |
+| `TimelineSequence.js` | Typed timeline events, the head that steps with undo, and the branches a document forks into. |
 | `DocumentSequence.js` | Up to four resident documents and their tabs. |
 | `ExportSequence.js` | Slot resolve, PNG emission, OpenPBR descriptor. |
 | `*.mjs` | Node test files — surface maths, stack semantics, device behaviour and context recovery, against a recording WebGL2 stand-in. |

@@ -3043,3 +3043,215 @@ dialog {
   width: 12px;
   height: 12px;
 }
+
+/* ------------------------------------------------------------------ timeline */
+.inspector-body.timeline-body {
+  padding-top: 10px;
+}
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.timeline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.branch-pills {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.branch-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #111;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    color 0.14s ease;
+}
+.branch-pill b {
+  font-weight: 400;
+  font-size: 10px;
+  color: #6f6f6f;
+  background: #000;
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+.branch-pill:hover {
+  color: var(--text);
+}
+.branch-pill.active {
+  background: var(--raised);
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.branch-pill.active b {
+  color: var(--green);
+}
+.branch-pill.ghost {
+  width: 28px;
+  padding: 0;
+  justify-content: center;
+  font-size: 15px;
+  line-height: 1;
+}
+.timeline-actions {
+  display: flex;
+  gap: 2px;
+}
+.timeline-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: #6f6f6f;
+}
+.timeline-summary span {
+  color: var(--text);
+}
+.timeline-summary b {
+  font-weight: 400;
+  color: var(--green);
+}
+.timeline-rail {
+  position: relative;
+  list-style: none;
+  margin: 0;
+  padding: 2px 0 2px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.timeline-rail::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 12px;
+  bottom: 12px;
+  width: 1px;
+  background: linear-gradient(to bottom, #ffffff26, #ffffff10);
+}
+.timeline-event {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    opacity 0.14s ease;
+}
+.timeline-event:hover {
+  background: #151515;
+}
+.timeline-event.head {
+  background: var(--card);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.timeline-event.undone {
+  opacity: 0.38;
+}
+.event-node {
+  position: absolute;
+  left: -18px;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin-top: -4.5px;
+  border-radius: 50%;
+  background: var(--event-accent, #888);
+  box-shadow: 0 0 0 3px #0b0b0b;
+}
+.timeline-event.head .event-node {
+  box-shadow:
+    0 0 0 3px #0b0b0b,
+    0 0 0 5px color-mix(in srgb, var(--event-accent, #888) 45%, transparent);
+}
+.event-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.event-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.event-chip {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--chip, #888);
+  flex: 0 0 auto;
+}
+.event-note {
+  font-size: 10.5px;
+  color: #6f6f6f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.event-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+.event-badge {
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+  color: var(--event-accent, #888);
+  border: 1px solid
+    color-mix(in srgb, var(--event-accent, #888) 40%, transparent);
+  border-radius: 999px;
+  padding: 2px 7px;
+}
+.event-hash {
+  font-size: 9.5px;
+  color: #5f5f5f;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+.event-clock {
+  font-size: 9.5px;
+  color: #5f5f5f;
+}
+.timeline-empty {
+  margin: 18px 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.timeline-foot {
+  display: flex;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+  margin-top: 2px;
+}
+.timeline-foot .button {
+  flex: 1;
+}
