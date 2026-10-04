@@ -3,13 +3,28 @@
   "budgetBytes": 8192,
   "frames": [
     {
-      "function": "VisualProof/ProjectZeroNative/EditorConversionProof.cpp:118:21:RunEditorConversion(const char*)::<lambda()>",
-      "bytes": 32,
+      "function": "VisualProof/ProjectZeroNative/EditorConversionProof.cpp:159:25:RunEditorConversion(const char*)::<lambda()>",
+      "bytes": 16,
       "classification": "static"
     },
     {
-      "function": "VisualProof/ProjectZeroNative/EditorConversionProof.cpp:44:5:int RunEditorConversion(const char*)",
-      "bytes": 1520,
+      "function": "VisualProof/ProjectZeroNative/EditorConversionProof.cpp:146:21:RunEditorConversion(const char*)::<lambda()>",
+      "bytes": 64,
+      "classification": "static"
+    },
+    {
+      "function": "VisualProof/ProjectZeroNative/EditorConversionProof.cpp:221:22:RunEditorConversion(const char*)::<lambda(const char*, float)>",
+      "bytes": 176,
+      "classification": "static"
+    },
+    {
+      "function": "VisualProof/ProjectZeroNative/EditorConversionProof.cpp:205:25:RunEditorConversion(const char*)::<lambda(const char*)>",
+      "bytes": 128,
+      "classification": "static"
+    },
+    {
+      "function": "VisualProof/ProjectZeroNative/EditorConversionProof.cpp:71:5:int RunEditorConversion(const char*)",
+      "bytes": 1728,
       "classification": "dynamic,bounded"
     },
     {
@@ -33,8 +48,23 @@
       "classification": "dynamic,bounded"
     },
     {
-      "function": "Frontier/Engine/Editor/SunInspectorPanel.cpp:146:6:void Frontier::RecordSunInspector(ControlPanel&, EditorInstance&, EditorSheet&)",
-      "bytes": 1648,
+      "function": "Frontier/Engine/Editor/SunInspectorPanel.cpp:305:57:Frontier::RecordSunInspector(ControlPanel&, EditorInstance&, EditorSheet&)::<lambda(float)>",
+      "bytes": 112,
+      "classification": "static"
+    },
+    {
+      "function": "Frontier/Engine/Editor/CurvePanel.h:93:11:float Frontier::CurvePanel::RecordCurve(Function, ImU32) const [with Function = Frontier::RecordSunInspector(ControlPanel&, EditorInstance&, EditorSheet&)::<lambda(float)>]",
+      "bytes": 208,
+      "classification": "static"
+    },
+    {
+      "function": "Frontier/Engine/Editor/CurvePanel.h:32:10:bool Frontier::CurvePanel::RecordProbe(const char*, float&, float, const char*)",
+      "bytes": 208,
+      "classification": "dynamic,bounded"
+    },
+    {
+      "function": "Frontier/Engine/Editor/SunInspectorPanel.cpp:148:6:void Frontier::RecordSunInspector(ControlPanel&, EditorInstance&, EditorSheet&)",
+      "bytes": 1840,
       "classification": "dynamic,bounded"
     },
     {
@@ -43,8 +73,18 @@
       "classification": "dynamic,bounded"
     },
     {
-      "function": "Frontier/Engine/Editor/AtmosphereSkyInspectorPanel.cpp:136:6:void Frontier::RecordAtmosphereSkyInspector(ControlPanel&, EditorInstance&, EditorSheet&)",
-      "bytes": 1216,
+      "function": "Frontier/Engine/Editor/CurvePanel.h:32:10:bool Frontier::CurvePanel::RecordProbe(const char*, float&, float, const char*)",
+      "bytes": 192,
+      "classification": "dynamic,bounded"
+    },
+    {
+      "function": "Frontier/Engine/Editor/AtmosphereSkyInspectorPanel.cpp:101:23:Frontier::RecordAtmosphereSkyInspector(ControlPanel&, EditorInstance&, EditorSheet&)::<lambda(float)>",
+      "bytes": 224,
+      "classification": "dynamic,bounded"
+    },
+    {
+      "function": "Frontier/Engine/Editor/AtmosphereSkyInspectorPanel.cpp:96:6:void Frontier::RecordAtmosphereSkyInspector(ControlPanel&, EditorInstance&, EditorSheet&)",
+      "bytes": 704,
       "classification": "dynamic,bounded"
     },
     {

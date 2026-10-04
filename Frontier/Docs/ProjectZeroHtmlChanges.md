@@ -30,12 +30,13 @@
 | C015 | Cloud selection of a composite wind field | Implemented and browser-checked | Native cloud advection binding deferred |
 | C016 | Local fog volume shape instead of fixed box bounds | Implemented and browser-checked | Native shape masks/SDF integration deferred |
 | C017 | Permanent first Editor Camera | Implemented and browser-checked | Editor Camera pinned/locked; native feed checked |
-| C018 | Interactive environment graphs | Implemented and browser-checked | Added HTML probes/plots still to mirror |
+| C018 | Interactive environment graphs | Implemented and browser-checked | Native Sun/atmosphere plots implemented; remaining graphs pending (C024) |
 | C019 | AtmosphereLab atlas and space study | Implemented and browser-checked | Still to mirror; real native dome bake retained |
 | C020 | Pill viewport header | Implemented and browser-checked | Existing native pill rail retained |
 | C021 | Folder/collection inspector | Implemented and browser-checked | Native census, search and bounded paging; native roster cap unchanged |
 | C022 | Resizable statistics/debug card | Implemented and browser-checked | Native card with engine intervals/completed GPU telemetry |
 | C023 | Native conversion, bottom baking, stack safety | Approved HTML baseline retained | Initial native checkpoint; see remaining work below |
+| C024 | Native Sun and atmosphere graph controls | Approved HTML baseline retained | Eight interactive plots; native input and low-stack checks passed |
 
 ## 2026-10-04 — C001: Construct presentation
 
@@ -865,3 +866,74 @@ local-fog shape masks in the actual renderer, the added interactive environment 
 AtmosphereLab 2D colour atlas/space study. Existing native environment inspectors and wind-component
 bindings are retained, but they are not presented as implementations of the newer HTML composite model.
 The new native statistics card also does not yet reproduce every browser-only keyboard/persistence detail.
+
+
+## 2026-10-04 — C024: Native Sun and atmosphere graph controls
+
+Second native conversion phase, continuing C018 without changing the approved HTML.
+This phase replaces decorative studies inside the existing Sun and Atmosphere cards;
+it does not add duplicate cards or move baking above authoring controls.
+
+### Implemented
+
+- Sun daylight plot samples the production `CelestialSolver` through 24 local hours.
+  Dragging edits Local Hours; the native owner then solves the scene light direction.
+- Seasonal plot samples that same solver at 12:00 local wall-clock time, not solar noon.
+  Dragging edits Month and Day of Month. It uses the actual native year, UTC offset,
+  latitude and longitude rather than a second hard-coded observer.
+- Exposed existing native Year and UTC offset alongside the additional Sun settings.
+  Calendar writeback clamps actual month lengths, including Gregorian leap-century rules.
+- Sunlight gain plots Intensity × Direct and edits the real Intensity property.
+  Units remain authored multipliers, not lux. Temperature contains a normalized visible
+  Planck spectrum probe, explicitly not the active spectrum when RGB tint is selected.
+- Atmosphere scattering retains the approved relative wavelength studies: Rayleigh power −4
+  and illustrative aerosol power −1.3. Haze retains the normalized-path attenuation study;
+  ozone retains the illustrative 600 nm Gaussian transmission band. These are labelled
+  authoring illustrations, not native spectral coefficients, measured visibility or LUTs.
+- Density plots both exponential scale heights up to the authored atmosphere extent.
+  Native sliders continue through the existing medium writeback. Scattering and ozone
+  share a wavelength probe; diagnostic probes do not edit medium settings.
+- All eight plots support dragging, hover inspection, arrow keys and Home/End.
+  Hover never writes a scene parameter. Diagnostic probe positions live in the inspector's
+  UI-session storage; project-file persistence for these probes is not implemented.
+- Curve sampling emits bounded line segments without automatic sample arrays or recursive calls.
+  Existing baking, preview, export and unsupported-target states remain below the controls.
+
+### Executed verification
+
+Production source: `186f82446cbeb183ffd4e7272f33b880527be710`.
+
+- Linux Release: **4/4 CTest targets passed**, 165.17 seconds total.
+  The production CPU renderer still passes 113 assertions; wind and bootstrap checks also pass.
+- Conversion execution passed with a **256 KiB stack** and the **8 KiB critical-frame gate**.
+  GCC reports Sun inspector 1,840 bytes, Atmosphere inspector 704 bytes and proof entry 1,728 bytes.
+  This remains a scoped native proof, not a diagnosis of every possible runtime stack failure.
+- ImGui's optional item hooks are enabled only in the proof target. Checks locate actual
+  submitted graph items and inject mouse/key input, rather than editing fields to fake a click.
+  Pointer tolerances allow one native screen pixel; keyboard endpoints are checked exactly.
+- Verified hover non-mutation, real gain/time/date writeback, resulting native solar-direction
+  changes, every date in five common/leap/century years, February clamping, spectral and density
+  equations, shared probes, and plot bounds in 900 px and 480 px inspector captures.
+- Repeated the real bottom bake click, request consumption, heap-backed texture creation,
+  `.environment` export/reload with exact HDR texel equality, and scrolling to baking.
+- **Windows/MSVC Release compilation and NativeEditorConversion execution passed** for this source:
+  [run 37224368522, native editor job 111500910577][EnvironmentMsvcProof]. The MSVC stack reserve
+  remains unchanged; the 256 KiB restriction and compiler-frame report are Linux-specific.
+  The broader application build for this source is still pending.
+  The preceding source `28946b3` also completed its full Frontier/Project-Zero/Project-Drive
+  build job successfully before this phase, independently of this phase's new checks.
+
+Captures and execution reports remain in `VisualProof/ProjectZeroNative/`:
+`SunGraphs.png`, `SunGraphsNarrow.png`, `AtmosphereGraphs.png`, `AtmosphereGraphsNarrow.png`,
+`Verification.log`, `StackUsage.json`, `Regression.log` and `Provenance.json`.
+They are actual native ImGui command rasterizations, not browser screenshots or Vulkan readbacks.
+`AtmosphereGraphsDetail.png` is an unscaled crop of `AtmosphereGraphs.png` for convenient viewing.
+
+### Still outstanding
+
+C018 is not complete: the remaining fog/cloud studies, cloud bounds handles and generic
+parameter-column maps still need reconciliation. AtmosphereLab's atlas/orbital study,
+materials/ShaderEditor, asset drawers, composite wind and renderer fog shapes are unchanged
+and remain outstanding. This checkpoint does not claim full C001–C022 native parity.
+
+[EnvironmentMsvcProof]: https://github.com/unassignedinbox/Slate/actions/runs/37224368522/job/111500910577

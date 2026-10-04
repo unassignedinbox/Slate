@@ -15,6 +15,51 @@ PASS native image written
 PASS native image written
 PASS native image written
 PASS native image written
+PASS calendar roundtrip for every day in five leap/common/century years
+PASS Gregorian leap-century boundaries
+PASS density at scale height is one over e
+PASS Rayleigh wavelength study favours blue
+PASS haze study clear endpoints
+PASS haze study follows authored strength
+PASS ozone illustrative peak and wings
+PASS Planck study changes spectral balance with Kelvin
+PASS solar studies receive actual native year and UTC offset
+PASS hover inspects without editing authored intensity
+PASS actual native curve receives pointer input
+PASS gain plot writes the real native intensity property
+PASS gain End clamps to native maximum
+PASS gain Home clamps to native minimum
+PASS focused curve arrow key edits rather than navigating away
+PASS actual native curve receives pointer input
+PASS daylight graph writes local time
+PASS actual native curve receives pointer input
+PASS graph time reaches the native celestial solver
+PASS actual native curve receives pointer input
+PASS season graph reaches December 31 in leap year
+PASS season Home selects January 1
+PASS actual native curve receives pointer input
+PASS spectrum probe does not overwrite colour temperature
+PASS native date writeback clamps February in leap year
+PASS native image written
+PASS sun graph fits narrow inspector
+PASS sun graph fits narrow inspector
+PASS sun graph fits narrow inspector
+PASS sun graph fits narrow inspector
+PASS native image written
+PASS actual native curve receives pointer input
+PASS actual native curve receives pointer input
+PASS actual native curve receives pointer input
+PASS actual native curve receives pointer input
+PASS atmosphere diagnostic probes do not alter medium settings
+PASS density probe keyboard reaches altitude endpoint
+PASS scattering and ozone share the wavelength probe
+PASS graph controls retain actual native medium writeback
+PASS native image written
+PASS atmosphere graph fits narrow inspector
+PASS atmosphere graph fits narrow inspector
+PASS atmosphere graph fits narrow inspector
+PASS atmosphere graph fits narrow inspector
+PASS native image written
 PASS native atmosphere properties and final settings are visible
 PASS relocated bottom bake button queues the real native action
 PASS renderer consumes relocated bake request

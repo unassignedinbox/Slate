@@ -1,35 +1,53 @@
 {
-  "productionSourceCommit": "28946b3c1ca7f4f1e552921ddbedc180dcdf59cf",
+  "productionSourceCommit": "186f82446cbeb183ffd4e7272f33b880527be710",
   "htmlBaseline": "95cfb8e68ad25b8aca17d9ee0d5421d168ec19a2",
   "nativeConversion": "partial",
   "linux": {
     "result": "4/4 CTest targets passed",
-    "seconds": 181.17,
+    "seconds": 165.17,
     "conversionStackLimitBytes": 262144,
     "criticalFunctionFrameBudgetBytes": 8192,
     "rendererAssertions": 113,
-    "linkWithoutSectionGarbageCollection": "passed",
-    "environmentExportReload": "all HDR texels identical"
+    "environmentExportReload": "all HDR texels identical",
+    "environmentGraphChecks": "Eight real ImGui plot hit regions; pointer and keyboard input; native settings/solar solver; hover non-mutation; Gregorian calendar; 480/900 px bounds"
   },
   "windows": {
-    "run": 37222602604,
-    "nativeEditorJob": 111495857820,
+    "run": 37224368522,
+    "nativeEditorJob": 111500910577,
     "nativeEditorStatus": "MSVC Release build and NativeEditorConversion CTest passed",
     "stackReserve": "default MSVC reserve; no increase",
-    "artifact": 11311021667,
-    "url": "https://github.com/unassignedinbox/Slate/actions/runs/37222602604/job/111495857820",
+    "artifact": 11311905430,
+    "url": "https://github.com/unassignedinbox/Slate/actions/runs/37224368522/job/111500910577",
     "fullApplicationStatus": "pending; not claimed by these captures"
   },
-  "imageProvenance": "Linux CPU raster of production C++ ImGui commands; atmosphere uses real baked HDR pixels. Collection and timing records are labeled proof fixtures, not workload benchmarks.",
+  "imageProvenance": "Linux CPU raster of production C++ ImGui commands; real baked HDR atmosphere. Graph captures contain explicit authored proof settings. Solar graphs sample CelestialSolver; spectral/atmosphere studies are labelled authoring illustrations, not GPU results. Collection and timing records are labelled fixtures.",
   "sha256": {
-    "Atmosphere.png": "4d5a3474749b8f1b086b77f93d45234a104f36785f9f06fb83ef8a3c873d03f8",
-    "AtmosphereBaked.png": "4feae8769c2881652bdcbc5645d189b1e163b4b5323a6e32dfd7559220e3f387",
-    "BakingAtBottom.png": "c35608eb5b6acf9431fa1b9b62aa8377ece945021197f683cb3acd7862491125",
+    "Atmosphere.png": "977a14447cfb7530dbdfa636a4984ce3870f0fccb6dee0be41f63e76547b7ddc",
+    "AtmosphereBaked.png": "54e9a750807c950ee05ee78c6f91020a4d39832818a60e7a450acdf2b126b07c",
+    "AtmosphereGraphs.png": "733921ab15b7ec3608b2087c2ca449b439d4d931470807d34245933600182b68",
+    "AtmosphereGraphsDetail.png": "04eb264ad6c57e919d30628c7c0df00665f8f893f60072b859d2fdc9bc5c3d2f",
+    "AtmosphereGraphsNarrow.png": "4ef754954f2591d9866d0ef9f41c94ddb4819bfb00d9c2f45a6be099c09f6c6a",
+    "BakingAtBottom.png": "f6884a9a3994d4dab9bab3625fb294e84aba0f350db8fc6bfe82f542a5066062",
     "Collection.png": "7e70b846b23bac18ac561a90d1bf50e85b2fe1529b5708d7a3677e105c4e2ec6",
     "Diagnostics.png": "cdc7807fabf82059371bb8069ba56cac2d2f99cb36f34e8278d5e3ab49c17689",
-    "LensFlare.png": "989a27a3cce0e32a2f3c6f07e54898a4f95ab2a7c8428cbabbaa880298a22963",
-    "Rainbow.png": "b0b3e667ba289a2f9e0901b4bf4a628feb0ea629ac82485aaff6133d1c77fcf8",
-    "Stars.png": "ddd4d96b78ac74917777a83d71ffb1649a28f501255b69972ca5034b9cd67e72",
-    "Sun.png": "5ecea862686f4098180fd3c4c4e22bd6949345a9613b13ac3ecf99bddca64d48"
+    "LensFlare.png": "9c95251c459b83664a71847f756a6c7751aea5b8b249748b5bfac308211b495d",
+    "Rainbow.png": "79df6b607f4d44695b446f694d2bac3453211857f8aba10bd4d8722068275cda",
+    "Stars.png": "359e1797d0c28c3536b194afe2e3af48577bc0f4f5fd8f6089069a1de51ed3e5",
+    "Sun.png": "a1efdb395310e70e360ba0aa0c3e794705e8e4391b1008fa3ae77311eface04d",
+    "SunGraphs.png": "6ed6efd10b8cb3ced8dae33170ed81c385cbdaca3652bf32d2603b34a7033e0e",
+    "SunGraphsNarrow.png": "f9637372c7e10482036998959c4b62086f7aa0c2cf1ae792946ab7ec3ae61d96"
+  },
+  "phase": "C024 native Sun and atmosphere graphs; remaining editor parity is unfinished",
+  "crops": {
+    "AtmosphereGraphsDetail.png": {
+      "source": "AtmosphereGraphs.png",
+      "rectangle": [
+        0,
+        0,
+        900,
+        1490
+      ],
+      "rescaled": false
+    }
   }
 }
