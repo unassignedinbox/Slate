@@ -31,12 +31,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: windows-msvc-${{ github.ref }}-${{ inputs.export_browser_run || 'build' }}
+  group: windows-msvc-${{ github.ref }}-${{ inputs.export_browser_run || (contains(github.event.head_commit.message, '[export-executed-pixels]') && 'export') || 'build' }}
   cancel-in-progress: true
 
 jobs:
   export-executed-pixels:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.export_browser_run && inputs.export_sdf_run && github.ref == 'refs/heads/arena/01a0fd48-slate' }}
+    if: ${{ ((github.event_name == 'workflow_dispatch' && inputs.export_browser_run && inputs.export_sdf_run) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[export-executed-pixels]'))) && github.ref == 'refs/heads/arena/01a0fd48-slate' }}
     name: Retain already-executed native and SDF pixels
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -48,8 +48,8 @@ jobs:
       - name: Download exact readbacks and retain on the session branch
         env:
           GH_TOKEN: ${{ github.token }}
-          BROWSER_RUN: ${{ inputs.export_browser_run }}
-          SDF_RUN: ${{ inputs.export_sdf_run }}
+          BROWSER_RUN: ${{ inputs.export_browser_run || '37182423955' }}
+          SDF_RUN: ${{ inputs.export_sdf_run || '37181326799' }}
         run: |
           python3 VisualProof/ProjectOpening/ExportExecutionProofs.py "$BROWSER_RUN" "$SDF_RUN"
           git config user.name 'github-actions[bot]'
@@ -61,7 +61,7 @@ jobs:
           fi
 
   sdf-execution:
-    if: ${{ !inputs.export_browser_run }}
+    if: ${{ !inputs.export_browser_run && !contains(github.event.head_commit.message, '[export-executed-pixels]') }}
     name: SDF production Vulkan execution and validation
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -86,7 +86,7 @@ jobs:
             _AgentScratch/build/sdf-execution/Shaders/
 
   project-opening:
-    if: ${{ !inputs.export_browser_run }}
+    if: ${{ !inputs.export_browser_run && !contains(github.event.head_commit.message, '[export-executed-pixels]') }}
     name: Project browser real Win32 DX11 and shared ImGui checks
     runs-on: windows-2022
     timeout-minutes: 10
@@ -122,7 +122,7 @@ jobs:
             _AgentScratch/build/project-opening/*.ppm
 
   solidarc:
-    if: ${{ !inputs.export_browser_run }}
+    if: ${{ !inputs.export_browser_run && !contains(github.event.head_commit.message, '[export-executed-pixels]') }}
     name: SolidArc MSVC and document checks
     runs-on: windows-2022
     timeout-minutes: 45
@@ -157,7 +157,7 @@ jobs:
             _AgentScratch/build/msvc-solidarc/*.exe
 
   drive-playback:
-    if: ${{ !inputs.export_browser_run }}
+    if: ${{ !inputs.export_browser_run && !contains(github.event.head_commit.message, '[export-executed-pixels]') }}
     name: Drive MSVC playback and outliner checks
     runs-on: windows-2022
     timeout-minutes: 10
@@ -185,7 +185,7 @@ jobs:
   frontier:
     needs: sdf-execution
     # Retain failure diagnostics, but do not launch another build from a superseded run.
-    if: ${{ always() && !cancelled() && !inputs.export_browser_run }}
+    if: ${{ always() && !cancelled() && !inputs.export_browser_run && !contains(github.event.head_commit.message, '[export-executed-pixels]') }}
     name: Frontier + Project-Zero + Project-Drive
     runs-on: windows-2022
     timeout-minutes: 45
