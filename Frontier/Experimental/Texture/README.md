@@ -118,6 +118,13 @@ attributes and `javascript:`/`data:text/html` URLs are stripped) before it is ra
 of ten OFL families from `EngineContent/FontArchives`. Both place with position, rotation, scale, softness, emboss depth
 and a colourise tint, and both can be stamped flat against a plane or projected along the view.
 
+**Previews, not guesses.** The cursor ring on the model is filled with the colour the stroke would lay down — white or
+black when the mask is the target, a dark wash for the eraser — and off the mesh it becomes a dashed outline that
+follows the pointer. With the decal tool in hand the artwork itself is drawn where it would land, hairline footprint and
+all, before the click that commits it. Symmetry draws too: the mirror button in the viewport bar (or <kbd>S</kbd>)
+cycles off → X → Y → Z, the seam where the plane cuts the model is drawn in green, and the mirrored cursor shows the
+twin stroke.
+
 **Objects and UDIM tiles.** A document holds a scene, not a single mesh. The outliner above the stack lists every
 object — select, rename (double-click), hide, isolate, add and remove — and each object owns a UDIM tile, numbered the
 usual way (`1001` is the first, `1002` is one column right, `1011` is one row up). Every visible object is built,

@@ -947,9 +947,32 @@ uniform vec3 uBrushNormal;
 uniform float uBrushRadius;
 uniform float uBrushHardness;
 uniform float uBrushVisible;
+uniform vec3 uBrushInk;            // what the stroke would lay down, shown inside the ring
+uniform float uBrushPreview;       // strength of that preview wash, 0 for ring only
+uniform vec4 uMirror;              // xyz axis mask, w on or off
+uniform float uMirrorSpan;         // surface radius, so the seam line scales with the model
+
+uniform sampler2D uDecalPreview;
+uniform vec3 uPlacePosition;
+uniform vec3 uPlaceNormal;
+uniform vec3 uPlaceTangent;
+uniform vec2 uPlaceSize;
+uniform vec3 uPlaceTint;
+uniform float uPlaceColorise;
+uniform float uPlaceVisible;
 
 out vec4 oColour;
 
+float BrushMark(vec3 Position, vec3 Centre, vec3 Normal, out float Fill)
+{
+    float Distance = length(Position - Centre);
+    float Facing = step(0.0, dot(normalize(vNormal), Normal));
+    float Width = max(uBrushRadius * 0.035, 0.0016);
+    float Outer = 1.0 - smoothstep(Width, Width * 2.2, abs(Distance - uBrushRadius));
+    float Inner = (1.0 - smoothstep(Width * 0.7, Width * 1.6, abs(Distance - uBrushRadius * max(uBrushHardness, 0.05)))) * 0.45;
+    Fill = (1.0 - smoothstep(uBrushRadius * max(uBrushHardness, 0.05), uBrushRadius, Distance)) * Facing;
+    return clamp(Outer + Inner, 0.0, 1.0) * Facing;
+}
 float DistributionGgx(float NdotH, float Roughness)
 {
     float Alpha = max(Roughness * Roughness, 1e-4);
@@ -1158,13 +1181,48 @@ void main()
     // Brush ring: drawn in world space so it hugs the surface rather than the screen.
     if (uBrushVisible > 0.5)
     {
-        float Distance = length(vPosition - uBrushCentre);
-        float Facing = step(0.0, dot(normalize(vNormal), uBrushNormal));
-        float Width = max(uBrushRadius * 0.035, 0.0016);
-        float Outer = 1.0 - smoothstep(Width, Width * 2.2, abs(Distance - uBrushRadius));
-        float Inner = (1.0 - smoothstep(Width * 0.7, Width * 1.6, abs(Distance - uBrushRadius * max(uBrushHardness, 0.05)))) * 0.45;
-        float Ring = clamp(Outer + Inner, 0.0, 1.0) * Facing;
+        float Fill = 0.0;
+        float Ring = BrushMark(vPosition, uBrushCentre, uBrushNormal, Fill);
+        if (uMirror.w > 0.5)
+        {
+            // The mirrored twin is drawn from the reflected centre, so what symmetry will paint is never a surprise.
+            vec3 Flip = vec3(1.0) - 2.0 * uMirror.xyz;
+            float TwinFill = 0.0;
+            float TwinRing = BrushMark(vPosition, uBrushCentre * Flip, uBrushNormal * Flip, TwinFill);
+            Ring = max(Ring, TwinRing * 0.8);
+            Fill = max(Fill, TwinFill * 0.8);
+        }
+        Radiance = mix(Radiance, uBrushInk * (0.35 + Luminance(Radiance) * 1.4), Fill * uBrushPreview);
         Radiance = mix(Radiance, vec3(1.6, 1.6, 1.7) * (0.3 + Luminance(Radiance)), Ring * 0.75);
+    }
+
+    if (uMirror.w > 0.5)
+    {
+        // Where the mirror plane cuts the surface, so the axis in the viewport bar means something on the model.
+        float Across = abs(dot(vPosition, uMirror.xyz));
+        float Width = max(uMirrorSpan * 0.004, 0.0012);
+        float Seam = 1.0 - smoothstep(Width, Width * 2.6, Across);
+        Radiance = mix(Radiance, vec3(0.2, 0.78, 0.35) * (0.5 + Luminance(Radiance) * 1.5), Seam * 0.55);
+    }
+
+    if (uPlaceVisible > 0.5)
+    {
+        // The decal where it would land: the stencil itself, plus a hairline around its footprint.
+        vec3 Bitangent = normalize(cross(uPlaceNormal, uPlaceTangent));
+        vec3 Delta = vPosition - uPlacePosition;
+        vec2 Local = vec2(dot(Delta, uPlaceTangent) / max(uPlaceSize.x, 1e-4), dot(Delta, Bitangent) / max(uPlaceSize.y, 1e-4)) + 0.5;
+        float Depth = abs(dot(Delta, uPlaceNormal));
+        float Facing = step(0.0, dot(normalize(vNormal), uPlaceNormal));
+        float Inside = step(0.0, Local.x) * step(Local.x, 1.0) * step(0.0, Local.y) * step(Local.y, 1.0);
+        float Near = 1.0 - smoothstep(uPlaceSize.x * 0.6, uPlaceSize.x, Depth);
+        float Within = Inside * Facing * Near;
+        vec4 Stencil = texture(uDecalPreview, vec2(Local.x, 1.0 - Local.y));
+        vec3 Ink = mix(Stencil.rgb, uPlaceTint, uPlaceColorise);
+        float Border = max(
+            max(1.0 - smoothstep(0.0, 0.012, Local.x), 1.0 - smoothstep(0.0, 0.012, 1.0 - Local.x)),
+            max(1.0 - smoothstep(0.0, 0.012, Local.y), 1.0 - smoothstep(0.0, 0.012, 1.0 - Local.y)));
+        Radiance = mix(Radiance, Ink * (0.4 + Luminance(Radiance) * 1.3), Within * Stencil.a * 0.7);
+        Radiance = mix(Radiance, vec3(1.5, 1.5, 1.6) * (0.3 + Luminance(Radiance)), Within * Border * 0.55);
     }
 
     vec3 Shaded = ToneMap(Radiance);
@@ -1217,6 +1275,8 @@ uniform float uCheckerScale;
 uniform vec3 uMaskTint;
 uniform vec3 uCursor;          // texture-space x, y, radius
 uniform float uCursorVisible;
+uniform vec3 uCursorInk;
+uniform float uCursorPreview;
 out vec4 oColour;
 void main()
 {
@@ -1269,6 +1329,8 @@ void main()
     }
     if (uCursorVisible > 0.5)
     {
+        float Fill = 1.0 - smoothstep(uCursor.z * 0.35, uCursor.z, length(Coordinate - uCursor.xy));
+        Colour = mix(Colour, uCursorInk, Fill * uCursorPreview);
         float Ring = abs(length(Coordinate - uCursor.xy) - uCursor.z);
         float Width = max(0.9 / max(uZoom, 1e-3) * 0.0016, 0.0006);
         Colour = mix(Colour, vec3(0.95), 1.0 - smoothstep(Width, Width * 2.6, Ring));

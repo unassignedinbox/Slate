@@ -375,6 +375,7 @@ class TexturePanel
         this.HoverObject = "";
         this.SecondaryPainting = false;
         this.PickCandidate = null;
+        this.Placement = null;
         this.PlaneZoom = 0.82;
         this.PlanePan = [0, 0];
         this.Dirty = false;
@@ -1184,6 +1185,86 @@ class TexturePanel
         Plane.style.height = `${Zoom * 100}%`;
     }
 
+    // Symmetry is only useful if you can see it: the button lights, the seam is drawn on the model, and the mirrored
+    // cursor shows where the twin stroke will land.
+    SetSymmetry(Axis, Announce = false)
+    {
+        const Known = SymmetryOrdering.some((Entry) => Entry.Identifier === Axis) ? Axis : "none";
+        this.Projection.Configure({ Symmetry: Known });
+        const Field = Select("#symmetry-select");
+        if (Field)
+        {
+            Field.value = Known;
+            RefreshSelect(Field);
+            Field.closest(".dropdown")?.classList.toggle("armed", Known !== "none");
+        }
+        const Button = Select("#mirror-button");
+        if (Button)
+        {
+            Button.classList.toggle("active", Known !== "none");
+            Button.setAttribute("aria-pressed", String(Known !== "none"));
+            Button.title = Known === "none" ? "Symmetry · S" : `Symmetry: mirror ${Known.toUpperCase()} · S`;
+        }
+        this.UpdateCaption();
+        if (Announce)
+            this.Notify(Known === "none" ? "Symmetry off." : `Mirroring across ${Known.toUpperCase()}.`);
+    }
+
+    // The decal in hand, shown where it would land before the click that commits it.
+    NotePlacement(Hit)
+    {
+        const Layer = this.ActiveLayer;
+        if (!Hit || this.StrokeTool !== "decal" || Layer?.Kind !== "decal")
+        {
+            this.Placement = null;
+            return;
+        }
+        const Frame = StrokeProjection.PlacementFrame(Hit);
+        const Transform = Layer.Decal.Transform;
+        this.Placement = {
+            Layer: Layer.Identifier,
+            Position: Frame.Position,
+            Normal: Frame.Normal,
+            Tangent: Frame.Tangent,
+            Rotation: Transform.Rotation,
+            Size: [Transform.Size, Transform.Size / Math.max(Transform.Aspect, 0.05)],
+            Tint: Layer.Decal.Tint,
+            Colorise: Layer.Decal.Colorise,
+        };
+    }
+
+    // Off the mesh there is nothing to draw the ring on, so a dashed outline follows the pointer instead.
+    SyncGhost(Event, Hit)
+    {
+        const Ghost = Select("#brush-ghost");
+        if (!Ghost) return;
+        const Painting = this.StrokeTool === "brush" || this.StrokeTool === "eraser";
+        if (!Painting || Hit || this.ViewMode !== "surface")
+        {
+            Ghost.hidden = true;
+            return;
+        }
+        const Bounds = this.Canvas.getBoundingClientRect();
+        const Height = Bounds.height || 1;
+        const Pixels = (this.Projection.Brush.Radius * Height) / (2 * Math.tan(this.Camera.FieldOfView / 2) * Math.max(this.Camera.Distance, 0.1));
+        Ghost.hidden = false;
+        Ghost.style.width = `${Math.max(Pixels * 2, 8)}px`;
+        Ghost.style.height = `${Math.max(Pixels * 2, 8)}px`;
+        Ghost.style.left = `${Event.clientX - Bounds.left}px`;
+        Ghost.style.top = `${Event.clientY - Bounds.top}px`;
+        Ghost.style.borderColor = ToHex(this.PreviewInk().Ink) + "88";
+    }
+
+    // What the next stroke would lay down, so the ring is a preview rather than an outline.
+    PreviewInk()
+    {
+        const Brush = this.Projection.Brush;
+        const Erasing = this.StrokeTool === "eraser";
+        if (Brush.Target === "mask") return { Ink: Erasing ? [0.04, 0.04, 0.05] : [0.95, 0.95, 0.98], Preview: 0.4 };
+        if (Erasing) return { Ink: [0.06, 0.06, 0.07], Preview: 0.32 };
+        return { Ink: this.BrushColour, Preview: Clamp(Brush.Flow * 0.7, 0.12, 0.6) };
+    }
+
     SetViewMode(Mode)
     {
         this.ViewMode = Mode === "plane" ? "plane" : "surface";
@@ -1568,6 +1649,9 @@ class TexturePanel
         {
             this.Cursor = null;
             this.PlaneCursor = null;
+            this.Placement = null;
+            const Ghost = Select("#brush-ghost");
+            if (Ghost) Ghost.hidden = true;
         });
         Canvas.addEventListener(
             "wheel",
@@ -2042,6 +2126,8 @@ class TexturePanel
               }
             : null;
         this.NoteHover(Hit ? ObjectAtTriangle(this.SurfaceRecord, Hit.Triangle) : null);
+        this.NotePlacement(Hit);
+        this.SyncGhost(Event, Hit);
         if (!Hit || !this.Projection.Active) return;
         if (this.StrokeTool !== "brush" && this.StrokeTool !== "eraser") return;
         const Segment = this.Projection.Extend(Hit);
@@ -2256,9 +2342,13 @@ class TexturePanel
         Select("#symmetry-select").innerHTML = SymmetryOrdering.map(
             (Entry) => `<option value="${Entry.Identifier}">${Entry.Label}</option>`,
         ).join("");
-        Select("#symmetry-select").addEventListener("change", (Event) =>
-            this.Projection.Configure({ Symmetry: Event.target.value }),
-        );
+        Select("#symmetry-select").addEventListener("change", (Event) => this.SetSymmetry(Event.target.value));
+        Select("#mirror-button").addEventListener("click", () =>
+        {
+            const Order = SymmetryOrdering.map((Entry) => Entry.Identifier);
+            const Next = Order[(Order.indexOf(this.Projection.Brush.Symmetry) + 1) % Order.length];
+            this.SetSymmetry(Next, true);
+        });
         Select("#clear-layer").addEventListener("click", () => this.ClearActive());
         SelectAll("[data-brush]").forEach((Control) =>
             Control.addEventListener("input", (Event) =>
@@ -3494,6 +3584,7 @@ class TexturePanel
             else if (Key === "m") Select("#mask-toggle").click();
             if (Key === "b") this.SetBrowserState(this.BrowserState === "closed" ? "half" : "closed");
             if (Key === "f") Select("#focus-button").click();
+            if (Key === "s") Select("#mirror-button").click();
             if (Key === "x")
             {
                 this.SetViewMode(this.ViewMode === "plane" ? "surface" : "plane");
@@ -3684,10 +3775,12 @@ class TexturePanel
         const Tool = ToolOrdering.find((Entry) => Entry.Identifier === this.Tool);
         const Target = this.Projection.Brush.Target === "mask" ? "mask" : "layer";
         Select("#viewport-object").textContent = Layer.Name;
+        const Axis = this.Projection.Brush.Symmetry;
+        const Mirror = Axis === "none" ? "" : ` · mirror ${Axis.toUpperCase()}`;
         Select("#viewport-subtitle").textContent =
             this.ViewMode === "plane"
                 ? `Texture space · ${DisplayOrdering.find((Entry) => Entry.Identifier === this.Display)?.Label}`
-                : `${Tool?.Label} → ${Target} · ${LayerSummary(Layer)}`;
+                : `${Tool?.Label} → ${Target} · ${LayerSummary(Layer)}${Mirror}`;
         Select("#live-pill").querySelector("span").textContent =
             this.ViewMode === "plane" ? "TEXTURE SPACE" : this.Display === "material" ? "OPENPBR" : this.Display.toUpperCase();
     }
@@ -3767,13 +3860,20 @@ class TexturePanel
             MaskLayer: this.Project.Selection,
             MaskTint: this.ActiveLayer?.Mask?.Tint || [0.95, 0.22, 0.3],
             CheckerScale: 16,
-            Cursor: this.StrokeTool === "brush" || this.StrokeTool === "eraser" ? this.Cursor : null,
+            Symmetry: this.Projection.Brush.Symmetry,
+            Placement: this.Placement,
+            Cursor:
+                this.StrokeTool === "brush" || this.StrokeTool === "eraser"
+                    ? this.Cursor && { ...this.Cursor, ...this.PreviewInk() }
+                    : null,
         };
         if (this.ViewMode === "plane")
             this.Integrator.RenderPlane({
                 ...Options,
                 Pan: this.PlanePan,
                 Zoom: this.PlaneZoom,
+                CursorInk: this.PreviewInk().Ink,
+                CursorPreview: this.StrokeTool === "brush" || this.StrokeTool === "eraser" ? this.PreviewInk().Preview : 0,
                 Cursor: this.Tool === "brush" || this.Tool === "eraser" ? this.PlaneCursor : null,
             });
         else this.Integrator.RenderViewport(this.Camera, Options);

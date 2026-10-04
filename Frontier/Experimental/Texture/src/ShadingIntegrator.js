@@ -1101,6 +1101,28 @@ export class ShadingIntegrator
         Device.uniform3fv(Uniforms.get("uBrushNormal"), Cursor ? Cursor.Normal : [0, 1, 0]);
         Device.uniform1f(Uniforms.get("uBrushRadius"), Cursor ? Cursor.Radius : 0);
         Device.uniform1f(Uniforms.get("uBrushHardness"), Cursor ? Cursor.Hardness : 0.5);
+        Device.uniform3fv(Uniforms.get("uBrushInk"), Cursor?.Ink || [1, 1, 1]);
+        Device.uniform1f(Uniforms.get("uBrushPreview"), Cursor?.Preview ?? 0);
+
+        // Symmetry, drawn rather than described: the mirrored cursor and the seam where the plane cuts the model.
+        const Mirror = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }[Options.Symmetry] || null;
+        Device.uniform4f(Uniforms.get("uMirror"), ...(Mirror || [0, 0, 0]), Mirror ? 1 : 0);
+        Device.uniform1f(Uniforms.get("uMirrorSpan"), this.Surface?.Bounds?.Radius || 1);
+
+        // Where the decal in hand would land.
+        const Place = Options.Placement;
+        const PlaceImage = Place ? this.LayerImages.get(Place.Layer)?.Decal : null;
+        this.BindImage(Shade, "uDecalPreview", PlaceImage || this.BlankImage(), 6);
+        Device.uniform1f(Uniforms.get("uPlaceVisible"), Place && PlaceImage ? 1 : 0);
+        Device.uniform3fv(Uniforms.get("uPlacePosition"), Place?.Position || [0, 0, 0]);
+        Device.uniform3fv(Uniforms.get("uPlaceNormal"), Place?.Normal || [0, 1, 0]);
+        Device.uniform3fv(
+            Uniforms.get("uPlaceTangent"),
+            Place ? RotateAround(Place.Tangent, Place.Normal, ((Place.Rotation || 0) * Math.PI) / 180) : [1, 0, 0],
+        );
+        Device.uniform2fv(Uniforms.get("uPlaceSize"), Place?.Size || [0.2, 0.2]);
+        Device.uniform3fv(Uniforms.get("uPlaceTint"), Place?.Tint || [1, 1, 1]);
+        Device.uniform1f(Uniforms.get("uPlaceColorise"), Place?.Colorise ? 1 : 0);
         Device.drawElements(Device.TRIANGLES, this.Surface.Indices.length, Device.UNSIGNED_INT, 0);
         Device.bindVertexArray(null);
     }
@@ -1132,6 +1154,8 @@ export class ShadingIntegrator
         Device.uniform3fv(Program.Uniforms.get("uMaskTint"), Options.MaskTint || [0.95, 0.22, 0.3]);
         Device.uniform3fv(Program.Uniforms.get("uCursor"), Options.Cursor || [0, 0, 0]);
         Device.uniform1f(Program.Uniforms.get("uCursorVisible"), Options.Cursor ? 1 : 0);
+        Device.uniform3fv(Program.Uniforms.get("uCursorInk"), Options.CursorInk || [1, 1, 1]);
+        Device.uniform1f(Program.Uniforms.get("uCursorPreview"), Options.CursorPreview ?? 0);
         Device.drawArrays(Device.TRIANGLES, 0, 3);
         Device.bindVertexArray(null);
     }
