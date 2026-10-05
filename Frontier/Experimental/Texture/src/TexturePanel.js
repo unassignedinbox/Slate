@@ -2732,7 +2732,12 @@ export class TexturePanel
         Toggle.classList.toggle("active", Masking);
         Toggle.setAttribute("aria-pressed", String(Masking));
         const Note = Select("#paint-target-note");
-        Note.textContent = Masking ? "Painting into the mask · value of the colour" : "Painting into layer content";
+        // The note names the LAYER, because the whole confusion the mask used to cause was not knowing which one's
+        // mask was under the brush — the switch is global on screen and the thing it switches is not.
+        const Layer = this.ActiveLayer;
+        Note.textContent = Masking
+            ? `Painting the mask on ${Layer?.Name || "this layer"} · white reveals, black hides`
+            : `Painting ${Layer?.Name || "the layer"} itself`;
         Note.classList.toggle("masking", Masking);
         SelectAll(".row-chip").forEach((Chip) =>
             Chip.classList.toggle(

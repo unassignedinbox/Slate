@@ -59,6 +59,10 @@ export class InstrumentPanel
     }
 
     // The pane the rail is pointing at. With nothing chosen — or a key that no longer applies — it is the first one.
+    //
+    // 🔴 Everything compares panes by KEY, never by identity. The host builds its list fresh on every call — it has to,
+    //    because the rail's tallies are read off the live brush — so two calls hand back two sets of objects that
+    //    describe the same panes. An identity test would find no match on any of them.
     get Standing()
     {
         const Panes = this.Sections();
@@ -97,11 +101,11 @@ export class InstrumentPanel
         const Rail = this.Root.querySelector("[data-rail]");
         if (!Rail) return;
         const Panes = this.Sections();
-        const Standing = this.Standing;
+        const Standing = Panes.find((Entry) => Entry.Key === this.Section) || Panes[0] || null;
         Rail.innerHTML = Panes.length
             ? Panes.map(
                   (Entry) => `
-            <button class="rail-item ${Entry === Standing ? "active" : ""}" data-section="${Escape(Entry.Key)}"
+            <button class="rail-item ${Entry.Key === Standing?.Key ? "active" : ""}" data-section="${Escape(Entry.Key)}"
                     title="${Escape(Entry.Note || Entry.Label)}">
                 <span class="rail-dot" style="background:${Entry.Tone || "#8a8a8a"}"></span>
                 <span>${Escape(Entry.Label)}</span>
@@ -354,7 +358,8 @@ export class InstrumentPanel
             return;
         }
         const Panes = this.Sections();
-        const Index = Panes.findIndex((Entry) => Entry === this.Standing);
+        const Standing = this.Standing;
+        const Index = Panes.findIndex((Entry) => Entry.Key === Standing?.Key);
         if (Index < 0 || Index >= Panes.length - 1)
         {
             this.Hide();
