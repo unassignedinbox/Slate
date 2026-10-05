@@ -64,4 +64,7 @@ $ <repository>/_AgentScratch/build/DriveExecution/Loaded/SceneExecution <reposit
 Vulkan execution device: llvmpipe (LLVM 20.1.2, 256 bits)
 CPU JIT flags: nopt
 SCENE case=Drive scale=1 offset=0,0,0 facets=22046 instances=22
-FAIL SDF initialization is missing scene resources or has invalid clipmap dimensions
+CAPTURE Scene-GI frames=8
+CAPTURE Scene-GI-off frames=1
+METRIC gi_on_off_rms 3.5993
+PASS full Drive geometry, production SDF diffuse GI and GI-off readbacks; software Vulkan, not hardware timing

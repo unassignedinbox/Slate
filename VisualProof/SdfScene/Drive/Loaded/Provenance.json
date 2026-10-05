@@ -1,8 +1,8 @@
 {
-  "source": "4bbea45259e1443ff8f935af9685997909846da5",
+  "source": "4eee806f47b327120647302cf3934be3951238d0",
   "pose": "Loaded",
-  "run": "37374663397",
-  "exitCode": 1,
+  "run": "37375125331",
+  "exitCode": 0,
   "method": "Actual Project Drive DLL and complete opening glTF. CPU BVH supplies primary visibility only; production Vulkan SDF shaders perform lighting on lavapipe.",
   "limitations": [
     "Not an interactive Frontier window or hardware performance measurement.",
@@ -15,7 +15,7 @@
       512,
       320
     ],
-    "cardResolution": 1,
+    "cardResolution": 2,
     "volumeResolution": 32,
     "clipCell": 0.15,
     "warmupFrames": 8,
@@ -26,8 +26,7 @@
     "reflections": 0
   },
   "geometrySha256": "377e4d59fb752fca0b16003b41d26f39b0f921e519bc6faebb0b04ad461ef53b",
-  "refusal": "Command '['/home/runner/work/Slate/Slate/_AgentScratch/build/DriveExecution/Loaded/SceneExecution', '/home/runner/work/Slate/Slate/_AgentScratch/build/DriveExecution/Loaded/Shaders', '/home/runner/work/Slate/Slate/_AgentScratch/build/DriveExecution/Loaded', 'Drive', '/home/runner/work/Slate/Slate/_AgentScratch/build/TyreDeformation/Images/DriveLoaded.bin']' returned non-zero exit status 1.",
-  "seconds": 96.80446105000001,
+  "seconds": 1513.7169596380002,
   "shaders": {
     "DistanceFieldGatherFixed.spv": "98aee7bbd27898532b757061497213c180db3b059e9cf06a1243ea9d32fcdb9c",
     "DistanceFieldConstruct.spv": "4a35deef7dc6ea24f14512d91a5ece51f446bfc327b02a04308d6cbca49d7af6",
@@ -38,5 +37,8 @@
     "DistanceFieldCaptureFixed.spv": "b17923cc09fe65a00a78f4a1fcaf6045ac1dc7cae2fa390e9363e61ab1c1b02d",
     "DistanceFieldRadiance.spv": "3e3a3beb255aba6c33f76a29237a73f23233c5103ac72b6be06d648978734f3a"
   },
-  "images": {}
+  "images": {
+    "Scene-GI.png": "6f187e3ef56da043546a87066340815115e6dd5d8dc9a194b22df731f9f09135",
+    "Scene-GI-off.png": "c735584f06c4291ddf66fffd9bc52f3e2c033e425d4c1566596ddfccb800f9a3"
+  }
 }
