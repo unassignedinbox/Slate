@@ -943,6 +943,12 @@ export class ShadingIntegrator
             Options.Travel?.[0] ?? 0,
             Options.Travel?.[1] ?? 0,
         ]);
+        // 🔴 Which ground this dab may claim. Segments are stamped a tenth of a radius apart and each covers a whole
+        //    capsule, so without this every texel is painted by dozens of them and whatever the medium does to one
+        //    deposit is averaged away. The direction the segment before this one ran in is what lets a dab tell the
+        //    wedge on the outside of a turn — which nobody painted — from the ground its predecessor already has.
+        Device.uniform4fv(Uniforms.get("uStrokeBefore"), Options.Before || [0, 0, 0, 0]);
+        Device.uniform1f(Uniforms.get("uStrokeCap"), Options.Cap ? 1 : 0);
         const Burn = Options.Mode === "decal" ? Options.Decal : null;
         const Gradient = Options.Mode === "gradient" ? Options.Gradient || {} : null;
         // Texture space has its own two modes: a gradient laid across the sheet and a decal burned onto it, both

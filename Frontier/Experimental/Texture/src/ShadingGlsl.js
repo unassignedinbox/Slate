@@ -994,6 +994,10 @@ uniform float uStampSoftness;
 uniform float uStampColourise;
 uniform vec4 uStampPlane;      // texture space: centre.xy, rotation in radians, spare
 uniform vec4 uStrokePress;     // pressure at the segment's start and end, travel in metres at each
+// Which ground this dab is allowed to claim. xyz is the direction the segment BEFORE this one ran in and w says
+// whether there was one; uStrokeCap turns the dab into the closing cap of the whole stroke.
+uniform vec4 uStrokeBefore;
+uniform float uStrokeCap;
 
 // The channel values this dab is carrying. They go down with the paint, premultiplied by the same alpha, so that the
 // ordinary source-over blend leaves each texel holding whatever the last thing to cover it was carrying.
@@ -1028,6 +1032,22 @@ void Emit(vec4 Cover, float Alpha, vec2 Grain)
     oSurfacing = Surfacing;
     oCoating = Coating;
     oRadiance = Radiance;
+}
+
+// 🔴 Which segment owns a texel. A stroke is a path, not a pile of dabs: every segment covers a whole capsule of
+//    paint, and at a tenth of a radius between them forty of them cover the same texel. Compositing all forty is
+//    what turned a brush into an airbrush — the comb of a head survives one deposit and nothing survives forty, so
+//    the card's ribbon and the surface showed two different instruments. A segment therefore keeps only the ground
+//    between its own two ends: the first dab of a stroke keeps the round cap behind it, the closing dab keeps the
+//    one in front, and the wedge on the outside of a turn goes to the segment whose predecessor could not reach it.
+//    Place is how far along this segment the texel sits, in spans; Past is how far beyond the previous segment's
+//    end it sits, which is positive only where that segment gave up.
+bool OwnsTexel(float Place, float Past)
+{
+    if (uStrokeCap > 0.5) return Place > 1.0;
+    if (Place > 1.0) return false;
+    if (Place < 0.0 && uStrokeBefore.w > 0.5 && Past <= 0.0) return false;
+    return true;
 }
 
 float GradientRamp(float Fraction)
@@ -1156,7 +1176,9 @@ void main()
         vec2 Segment = uStrokeEndPlane - uStrokeStartPlane;
         float Span = length(Segment);
         vec2 Ahead = Span > 1e-6 ? Segment / Span : vec2(1.0, 0.0);
-        Travel = Span > 1e-6 ? clamp(dot(vCoordinate - uStrokeStartPlane, Ahead) / Span, 0.0, 1.0) : 0.0;
+        float Place = Span > 1e-6 ? dot(vCoordinate - uStrokeStartPlane, Ahead) / Span : 0.0;
+        if (!OwnsTexel(Place, dot(vCoordinate - uStrokeStartPlane, uStrokeBefore.xy))) discard;
+        Travel = clamp(Place, 0.0, 1.0);
         vec2 Offset = vCoordinate - (uStrokeStartPlane + Segment * Travel);
         Side = length(Offset) * (dot(Offset, vec2(-Ahead.y, Ahead.x)) < 0.0 ? -1.0 : 1.0);
         Radius = uPlaneRadius;
@@ -1175,7 +1197,9 @@ void main()
         if (dot(Sideways, Sideways) < 1e-10)
             Sideways = cross(Normal, abs(Normal.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0));
         Sideways = normalize(Sideways);
-        Travel = Span > 1e-6 ? clamp(dot(Position - uStrokeStart, Ahead) / Span, 0.0, 1.0) : 0.0;
+        float Place = Span > 1e-6 ? dot(Position - uStrokeStart, Ahead) / Span : 0.0;
+        if (!OwnsTexel(Place, dot(Position - uStrokeStart, uStrokeBefore.xyz))) discard;
+        Travel = clamp(Place, 0.0, 1.0);
         vec3 Offset = Position - (uStrokeStart + Segment * Travel);
         Side = length(Offset) * (dot(Offset, Sideways) < 0.0 ? -1.0 : 1.0);
         Facing = smoothstep(uFacingLimit, mix(uFacingLimit, 1.0, 0.45), dot(Normal, uStrokeNormal));

@@ -435,5 +435,68 @@ Check("the plate is checkered in greys", /\.layer-swatch\.plate-sheet \{[^}]*bac
 Check("and the read-back over it carries no checker of its own", /\.layer-swatch\.plate-sheet canvas \{[^}]*background-image: none/.test(Theme));
 Check("the empty plate speaks in the word it was given", Theme.includes("content: attr(data-empty)"));
 
+//--------------------------------------------------------------------------------------------------------------------------
+// One brush, read two ways. The pod and the card are the same instrument seen twice, so taking one out of the library
+// has to re-read both — and what the instrument owns, the pod shows without offering.
+//--------------------------------------------------------------------------------------------------------------------------
+Panel.TakeInstrument("brush-filbert");
+await Settle(Window, 2);
+const Slider = (Key) => Find(`[data-brush="${Key}"]`);
+Check("the pod reads the instrument that was just taken", Number(Slider("Hardness").value) === 0.46, Slider("Hardness").value);
+Check("including the flow, which is opacity through flow", Math.abs(Number(Slider("Flow").value) - 0.67) < 0.011, Slider("Flow").value);
+Check("and the size it was shipped at", Math.abs(Number(Slider("Radius").value) - 0.12) < 1e-6, Slider("Radius").value);
+Check(
+    "what the instrument owns is shown and not offered",
+    All('.pod-field[data-owned="instrument"]').every((Field) => Field.classList.contains("is-locked") && Field.querySelector("input").disabled),
+    All('.pod-field[data-owned="instrument"]').map((Field) => Field.querySelector("input").disabled).join(","),
+);
+Check("the size is still the painter's", Slider("Radius").disabled === false);
+Check("and the pod says whose settings they are", (Find("#brush-lock").textContent || "").toLowerCase().includes("filbert"), Find("#brush-lock").textContent);
+
+// A size is the instrument's too: tuning any of its own controls rebuilds the brush, and a size kept only on the
+// slider snapped back to the one the library shipped.
+Panel.SetRadius(0.05);
+Panel.TuneInstrument("Wetness", 70);
+await Settle(Window, 2);
+Check("the size survives the instrument being tuned", Math.abs(Panel.Projection.Brush.Radius - 0.05) < 1e-9, String(Panel.Projection.Brush.Radius));
+Check("and the medium's reach is measured from the head in hand", Panel.Projection.Brush.Media.Reach < 1.3, String(Panel.Projection.Brush.Media.Reach));
+
+// Altering the medium by hand is what hands the raw sliders back.
+Panel.SetMedia({ Bristles: 30 });
+await Settle(Window, 2);
+Check(
+    "an altered instrument stops owning them",
+    All('.pod-field[data-owned="instrument"]').every((Field) => !Field.classList.contains("is-locked")),
+);
+
+//--------------------------------------------------------------------------------------------------------------------------
+// A stroke is a path, not a pile of dabs: each segment keeps the ground between its own ends and the last one is
+// sealed, or every texel is painted by the dozens of dabs that reach it and the medium is averaged away.
+//--------------------------------------------------------------------------------------------------------------------------
+const Headings = [];
+const Stamped = Panel.Integrator.Stamp.bind(Panel.Integrator);
+Panel.Integrator.Stamp = (Layer, Options) => { Headings.push(Options); return Stamped(Layer, Options); };
+Panel.TakeInstrument("brush-round");
+const Hit = { Position: [0, 0, 0], Normal: [0, 1, 0], Coordinate: [0.5, 0.5], Triangle: 0 };
+const Walk = (X) => ({ ...Hit, Position: [X, 0, 0], Coordinate: [0.5 + X * 0.1, 0.5] });
+const Target = Panel.PaintTargetLayer();
+Panel.StampSurface(Target, Panel.Projection.Begin(Hit, { Time: 0 }));
+for (let Step = 1; Step <= 4; Step += 1)
+{
+    const Segment = Panel.Projection.Extend(Walk(Step * 0.05), { Time: Step * 16 });
+    if (Segment) Panel.StampSurface(Target, Segment);
+}
+Check("the first dab of a stroke has nothing behind it", Headings[0]?.Before?.[3] === 0, JSON.stringify(Headings[0]?.Before));
+const Followed = Headings.find((Options) => Options.Before?.[3] === 1);
+Check("every dab after it knows which way the one before ran", !!Followed, String(Headings.length));
+Check("and knows it as a direction", !!Followed && Math.abs(Math.hypot(...Followed.Before.slice(0, 3)) - 1) < 1e-6);
+Check("none of them is a cap while the hand is down", Headings.every((Options) => !Options.Cap));
+Panel.SealStroke();
+Check("lifting the hand seals the far end", Headings.at(-1)?.Cap === true, JSON.stringify(Headings.at(-1)?.Cap));
+Check("and seals it with the same dab", Headings.at(-1)?.Start?.[0] === Headings.at(-2)?.Start?.[0]);
+Check("sealing twice seals nothing", (Panel.SealStroke(), Headings.at(-1)?.Cap === true));
+Panel.Integrator.Stamp = Stamped;
+Panel.Projection.End();
+
 Report();
 process.exit(process.exitCode || 0);

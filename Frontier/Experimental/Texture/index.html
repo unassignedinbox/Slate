@@ -278,17 +278,18 @@
             <label class="pod-field"
                 ><span>Size</span><input type="range" data-brush="Radius" min="0.004" max="0.6" step="0.002" value="0.09" /><b data-brush-readout="Radius">9.0</b
                 ><small>cm</small></label
-            ><label class="pod-field"
+            ><label class="pod-field" data-owned="instrument"
                 ><span>Flow</span><input type="range" data-brush="Flow" min="0.02" max="1" step="0.01" value="0.85" /><b data-brush-readout="Flow">0.85</b></label
-            ><label class="pod-field"
+            ><label class="pod-field" data-owned="instrument"
                 ><span>Hardness</span><input type="range" data-brush="Hardness" min="0" max="1" step="0.01" value="0.45" /><b data-brush-readout="Hardness">0.45</b></label
-            ><label class="pod-field"
+            ><label class="pod-field" data-owned="instrument"
                 ><span>Spacing</span><input type="range" data-brush="Spacing" min="0.05" max="1" step="0.01" value="0.22" /><b data-brush-readout="Spacing">0.22</b></label
-            ><label class="pod-field"
+            ><label class="pod-field" data-owned="instrument"
                 ><span>Jitter</span><input type="range" data-brush="Jitter" min="0" max="1" step="0.01" value="0" /><b data-brush-readout="Jitter">0.00</b></label
             ><label class="pod-field"
                 ><span>Facing</span><input type="range" data-brush="Facing" min="20" max="90" step="1" value="72" /><b data-brush-readout="Facing">72</b><small>°</small></label
             >
+            <p class="pod-lock" id="brush-lock" hidden></p>
             <div class="menu-divider"></div>
             <div class="popover-label">SYMMETRY</div>
             <div class="pod-symmetry" id="pod-symmetry" role="group" aria-label="Symmetry"></div>

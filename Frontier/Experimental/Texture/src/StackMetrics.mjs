@@ -2395,3 +2395,32 @@ test("what an instrument lays is a defensible OpenPBR material", () =>
     assert.ok(Lays("wax-oilstick").height > Lays("brush-flat").height, "an oil stick is thinner than a brush mark");
     assert.ok(!("height" in Lays("pen-fineliner")), "a fineliner embosses the paper");
 });
+
+test("a stroke hands each segment the one before it", () =>
+{
+    // Every dab keeps only the ground between its own two ends, so it has to know where the stroke came from: the
+    // wedge on the outside of a turn is ground the previous segment could not reach, and without the heading there
+    // is nobody to claim it.
+    const Projection = new StrokeProjection();
+    Projection.Configure(BrushFromInstrument(InstrumentByKey["brush-round"], InstrumentByKey["brush-round"].Settings));
+    const At = (X, Z) => ({ Position: [X, 0, Z], Normal: [0, 1, 0], Coordinate: [0.5, 0.5], Triangle: 0 });
+
+    const Opening = Projection.Begin(At(0, 0), { Time: 0 });
+    assert.deepEqual(Opening.Before, [0, 0, 0, 0], "the first dab of a stroke claimed a predecessor");
+
+    const Along = Projection.Extend(At(0.2, 0), { Time: 16 });
+    assert.ok(Along, "the stroke never moved");
+    assert.deepEqual(Along.Before, [0, 0, 0, 0], "a stroke's second dab has a heading it was never given");
+
+    const Turned = Projection.Extend(At(0.2, 0.2), { Time: 32 });
+    assert.ok(Turned, "the stroke never turned");
+    assert.equal(Turned.Before[3], 1, "the dab after a move does not know the stroke came from somewhere");
+    assert.ok(Math.abs(Math.hypot(...Turned.Before.slice(0, 3)) - 1) < 1e-9, "the heading is not a direction");
+    assert.ok(Turned.Before[0] > 0.99, `the heading is not the way the last segment ran: ${Turned.Before.join(",")}`);
+
+    // And a stroke that has ended carries nothing into the next one.
+    Projection.End();
+    assert.deepEqual(Projection.Heading, [0, 0, 0, 0], "a finished stroke kept its heading for the next one");
+    const Second = Projection.Begin(At(1, 1), { Time: 48 });
+    assert.deepEqual(Second.Before, [0, 0, 0, 0]);
+});

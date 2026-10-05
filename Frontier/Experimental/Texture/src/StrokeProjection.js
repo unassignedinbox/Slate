@@ -227,6 +227,10 @@ export class StrokeProjection
         this.Segments = 0;
         this.Press = 1;
         this.Moment = 0;
+        // 🔴 The way the last segment ran, carried into the next one. Each dab keeps only the ground between its own
+        //    ends, so the wedge on the outside of a turn would belong to nobody; knowing where the stroke came from
+        //    is what lets the dab recognise the ground its predecessor could not reach and take that as well.
+        this.Heading = [0, 0, 0, 0];
     }
 
     Configure(Patch)
@@ -310,6 +314,7 @@ export class StrokeProjection
         this.Travelled = 0;
         this.Reached = 0;
         this.Segments = 0;
+        this.Heading = [0, 0, 0, 0];
         this.Moment = Reading?.Time ?? 0;
         // A stroke starts at the weight the taper allows and climbs from there.
         const Media = this.Brush.Media || PlainMedia;
@@ -360,6 +365,7 @@ export class StrokeProjection
     End()
     {
         this.Active = false;
+        this.Heading = [0, 0, 0, 0];
         this.Previous = null;
         this.Raw = null;
         this.PreviousPlane = null;
@@ -374,12 +380,16 @@ export class StrokeProjection
         const Length = Math.hypot(...Normal) || 1;
         const Facing = Normal.map((Component) => Component / Length);
         const Direction = [0, 1, 2].map((Axis) => To.Position[Axis] - From.Position[Axis]);
+        const Before = this.Heading;
+        const Walk = Math.hypot(...Direction);
+        if (Walk > 1e-9) this.Heading = [...Direction.map((Component) => Component / Walk), 1];
         return {
             Start: From.Position,
             End: To.Position,
             Normal: Facing,
             Press,
             Travel,
+            Before,
             // A round head answers 1 whichever way it is dragged; a chisel answers its waist.
             Width: MediaWidth(this.Brush.Media, this.SurfaceTurn(Direction, Facing)),
         };
@@ -397,7 +407,8 @@ export class StrokeProjection
         const Media = this.Brush.Media || PlainMedia;
         this.Press = Media.Pressure ? Clamp(1 - Media.Taper * 0.88, 0.02, 1) : 1;
         const Press = this.ReadPressure(Reading, 0, 0);
-        return { StartPlane: Coordinate, EndPlane: Coordinate, Press: [Press, Press], Travel: [0, 0], Width: 1 };
+        this.Heading = [0, 0, 0, 0];
+        return { StartPlane: Coordinate, EndPlane: Coordinate, Press: [Press, Press], Travel: [0, 0], Before: [0, 0, 0, 0], Width: 1 };
     }
 
     ExtendPlane(Coordinate, PlaneRadius, Reading)
@@ -414,13 +425,16 @@ export class StrokeProjection
         // of its size — the ratio between them is the number of metres a UV unit is worth under this stroke.
         const Scale = PlaneRadius > 1e-6 ? this.Brush.Radius / PlaneRadius : 1;
         const After = this.ReadPressure(Reading, Distance * Scale, Elapsed);
+        const Run = [Drawn[0] - this.PreviousPlane[0], Drawn[1] - this.PreviousPlane[1]];
         const Segment = {
             StartPlane: this.PreviousPlane,
             EndPlane: Drawn,
             Press: [Before, After],
             Travel: [this.Travelled, this.Travelled + Distance],
-            Width: MediaWidth(this.Brush.Media, Math.atan2(Drawn[1] - this.PreviousPlane[1], Drawn[0] - this.PreviousPlane[0])),
+            Before: this.Heading,
+            Width: MediaWidth(this.Brush.Media, Math.atan2(Run[1], Run[0])),
         };
+        if (Distance > 1e-9) this.Heading = [Run[0] / Distance, Run[1] / Distance, 0, 1];
         this.Travelled += Distance;
         this.Reached += Distance * Scale;
         this.Segments += 1;

@@ -885,3 +885,33 @@ test("the medium writes a material and not only a colour", () =>
     assert.match(StampFragment, /Emit\([^;]*Media\.zw\);/, "the stroke throws the medium's material away");
     assert.equal((StampFragment.match(/Emit\(.*vec2\(0\.0\)\);/g) || []).length, 3, "a decal or a gradient grew a grain of its own");
 });
+
+test("a stroke is a path and not a pile of dabs", () =>
+{
+    // Segments are stamped a tenth of a radius apart and each one covers a whole capsule, so without an owner every
+    // texel is painted by dozens of them. Whatever the medium does to one deposit — the comb of a head, the grain of
+    // a stick — is averaged away by the fortieth, which is why the card's ribbon and the surface used to disagree.
+    assert.match(StampFragment, /uniform vec4 uStrokeBefore;/, "a dab cannot tell which way the stroke came from");
+    assert.match(StampFragment, /uniform float uStrokeCap;/, "a stroke has no way to close its far end");
+    assert.match(StampFragment, /bool OwnsTexel\(float Place, float Past\)/, "nothing decides which segment owns a texel");
+    assert.match(StampFragment, /if \(uStrokeCap > 0\.5\) return Place > 1\.0;/, "the closing cap claims more than the ground past the end");
+    assert.match(StampFragment, /if \(Place > 1\.0\) return false;/, "a segment paints past its own end");
+    assert.match(StampFragment, /uStrokeBefore\.w > 0\.5 && Past <= 0\.0/, "the wedge on the outside of a turn has no owner");
+    // Both painting views, and only those: a decal, a gradient and a burn return before the stroke's own frame.
+    assert.equal((StampFragment.match(/OwnsTexel\(Place,/g) || []).length, 2, "the two painting views do not agree on ownership");
+
+    const { Integrator, Device } = Prepare();
+    const Layer = CreateLayer("stroke");
+    Integrator.EnsureCoverage(Layer);
+    const Sent = (Name) => Device.Calls.filter((Call) => Call.Arguments?.[0]?.Name === Name).at(-1)?.Arguments;
+    const Options = {
+        Target: "coverage", Start: [0, 0, 0.8], End: [0.1, 0, 0.8], Normal: [0, 0, 1], Colour: [1, 1, 1],
+        Radius: 0.05, Hardness: 0.5, Flow: 1,
+    };
+    Integrator.Stamp(Layer, { ...Options, Before: [1, 0, 0, 1] });
+    assert.deepEqual([...Sent("uStrokeBefore")[1]], [1, 0, 0, 1], "the heading never reaches the pass");
+    assert.equal(Sent("uStrokeCap")[1], 0, "an ordinary dab went up as a cap");
+    Integrator.Stamp(Layer, { ...Options, Cap: true });
+    assert.equal(Sent("uStrokeCap")[1], 1, "the closing dab did not go up as a cap");
+    assert.deepEqual([...Sent("uStrokeBefore")[1]], [0, 0, 0, 0], "a dab with nothing behind it claimed a predecessor");
+});

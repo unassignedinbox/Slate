@@ -1886,7 +1886,18 @@ export class TexturePanel
     //    redraws a CPU-rasterised ribbon with it, so one rebuild per event turns a drag into a slideshow.
     SetRadius(Value)
     {
-        this.Projection.Configure({ Radius: Clamp(Value, 0.004, 1.2) });
+        const Radius = Clamp(Value, 0.004, 1.2);
+        // 🔴 A head's size is the instrument's, not the slider's. Turning any of the instrument's own controls
+        //    rebuilds the brush from its settings, so a size kept only on the brush snapped back to the one the
+        //    library shipped — and the medium's reach, which is measured from the size, went on being the reach of
+        //    a head nobody was holding. Written back, both follow the hand.
+        const Type = this.Holding;
+        if (Type && !this.Instrument.Altered)
+        {
+            this.Instrument.Settings = { ...this.Instrument.Settings, Size: Radius * 100 };
+            this.Projection.Configure({ ...BrushFromInstrument(Type, this.Instrument.Settings), Radius });
+        }
+        else this.Projection.Configure({ Radius });
         this.SyncBrushControls();
         if (!this.Instruments?.Open || this.SizeTurn) return;
         this.SizeTurn = requestAnimationFrame(() =>
@@ -3346,6 +3357,7 @@ export class TexturePanel
             // the model, so the undo step covers exactly what was painted before the hand moved to the camera.
             if (this.Projection.Active)
             {
+                this.SealStroke();
                 this.CommitStrokeRevision();
                 this.Projection.End();
             }
@@ -3579,6 +3591,7 @@ export class TexturePanel
             this.PointerPrevious = null;
             return;
         }
+        if (this.Projection.Active) this.SealStroke();
         if (this.Projection.Active) this.CommitStrokeRevision();
         this.Projection.End();
         // A click that never became a drag, with the camera tool in hand, selects whatever object sits under it.
@@ -3762,6 +3775,7 @@ export class TexturePanel
             this.StampSurface(Layer, Segment);
             Laid += 1;
         }
+        if (this.Projection.Active) this.SealStroke();
         if (this.Projection.Active) this.CommitStrokeRevision();
         this.Projection.End();
         if (!Laid) this.Notify("The line missed the model.");
@@ -3878,6 +3892,7 @@ export class TexturePanel
             this.StampPlane(Layer, Segment);
             Laid += 1;
         }
+        if (this.Projection.Active) this.SealStroke();
         if (this.Projection.Active) this.CommitStrokeRevision();
         this.Projection.End();
         this.Notify(`Line laid down — ${Laid} mark${Laid === 1 ? "" : "s"}.`);
@@ -3935,6 +3950,10 @@ export class TexturePanel
             Media: Erase ? null : Brush.Media,
             Press: Shaped,
             Travel: Segment.Travel,
+            // 🔴 A segment keeps only the ground between its own two ends, or every texel is painted by the forty
+            //    dabs that reach it and the medium is averaged into an airbrush. This is the direction the segment
+            //    before it ran in, which is how the wedge on the outside of a turn finds an owner.
+            Before: Segment.Before,
             Erase,
             Mode: "surface",
         };
@@ -3946,7 +3965,38 @@ export class TexturePanel
                 Start: Twin(Segment.Start),
                 End: Twin(Segment.End),
                 Normal: Twin(Segment.Normal),
+                Before: TwinHeading(Twin, Segment.Before),
             });
+        // What it would take to round off the far end once the hand lifts: the same dab, claiming the ground past
+        // the end that no later segment is going to arrive to cover.
+        this.StrokeSeal = { Layer, Options };
+        this.Recomposite();
+        this.MarkDirty();
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // The end of a stroke. Every dab keeps the ground between its own ends and hands the rest to the next one, so the
+    // last dab of all is left with a flat edge where the hand stopped. Sealing it is one more draw of the same dab
+    // with the cap flag set, which claims exactly the half-disc past the end and nothing that is already painted.
+    //----------------------------------------------------------------------------------------------------------------------
+    SealStroke()
+    {
+        const Seal = this.StrokeSeal;
+        this.StrokeSeal = null;
+        if (!Seal || !Seal.Layer) return;
+        const Options = { ...Seal.Options, Cap: true };
+        this.Integrator.Stamp(Seal.Layer, Options);
+        // Texture space paints no twins, so it has none to seal either.
+        for (const Twin of Options.Mode === "plane" ? [] : this.Projection.Twins)
+        {
+            this.Integrator.Stamp(Seal.Layer, {
+                ...Options,
+                Start: Twin(Options.Start),
+                End: Twin(Options.End),
+                Normal: Twin(Options.Normal),
+                Before: TwinHeading(Twin, Options.Before),
+            });
+        }
         this.Recomposite();
         this.MarkDirty();
     }
@@ -3955,7 +4005,7 @@ export class TexturePanel
     {
         const Brush = this.Projection.Brush;
         const Erase = this.Tool === "eraser";
-        this.Integrator.Stamp(Layer, {
+        const Options = {
             Target: Brush.Target,
             Start: [0, 0, 0],
             End: [0, 0, 0],
@@ -3979,12 +4029,15 @@ export class TexturePanel
                       EvaluateCurve(this.Curves.Size, Segment.Press?.[1] ?? 1),
                   ],
             Travel: Segment.Travel,
+            Before: Segment.Before,
             // The flattened view measures in UV. This is what a UV unit is worth in metres, so the paper comes out the
             // same size here as it does on the surface instead of hundreds of times too fine to see.
             Span: (this.SurfaceRecord?.Bounds.Radius || 1) * 3.2,
             Erase,
             Mode: "plane",
-        });
+        };
+        this.Integrator.Stamp(Layer, Options);
+        this.StrokeSeal = { Layer, Options };
         this.Recomposite();
         this.MarkDirty();
     }
@@ -5377,6 +5430,11 @@ export class TexturePanel
         }
 
         if (Options.Quiet) return;
+        // 🔴 The pod is the same brush read a second way, so it has to be re-read here. Leaving it showing the last
+        //    instrument's numbers is how a filbert came to paint with a round's flow: the sliders kept the values
+        //    they were last drawn with, and the first one touched pushed that stale number back onto the new head.
+        this.SyncBrushControls();
+        this.SyncStrokeChip();
         this.Instruments?.Refresh();
         this.Instruments?.ScheduleRibbon();
         this.Notify(`${Type.Name} · ${MediaSummary(this.Projection.Brush.Media)}`);
@@ -7296,6 +7354,23 @@ export class TexturePanel
             const Display = Select(`[data-brush-readout="${Key}"]`);
             if (Display) Display.textContent = BrushReadout(Key, Brush[Key]);
         });
+        // What the instrument owns is shown and not offered. A preset is a preset: a filbert is 0.46 hard and 10%
+        // spaced because that is what a filbert is, and the way to change what is in hand is to tune it on the card
+        // — which marks it as altered and hands these back.
+        const Held = this.Holding;
+        const Locked = !!Held && !this.Instrument?.Altered;
+        SelectAll('.pod-field[data-owned="instrument"]').forEach((Field) =>
+        {
+            Field.classList.toggle("is-locked", Locked);
+            const Slider = Field.querySelector("input");
+            if (Slider) Slider.disabled = Locked;
+        });
+        const Note = Select("#brush-lock");
+        if (Note)
+        {
+            Note.hidden = !Locked;
+            Note.textContent = Locked ? `Flow, hardness, spacing and jitter are the ${Held.Name} itself. Tune it on the card.` : "";
+        }
         Select("#brush-colour").value = ToHex(this.BrushColour);
         Select("#brush-swatch").style.setProperty("--swatch", ToHex(this.BrushColour));
         // The HUD names the medium in hand rather than the word "brush", because that is what the next stroke will
@@ -9636,6 +9711,19 @@ export class TexturePanel
 
 // What a brush control says on its pill: centimetres for size, whole numbers for the counted ones, two places for the
 // rest. The slider carries the value; this only decides how it reads.
+// A mirrored or turned dab needs its heading mirrored or turned with it, or the wedge test at a corner would be
+// answered with the direction the original stroke ran in. Every symmetry here is affine, so the direction is the
+// difference between two mapped points rather than the map of a direction.
+const TwinHeading = (Twin, Before) =>
+{
+    if (!Before || !(Before[3] > 0.5)) return [0, 0, 0, 0];
+    const Origin = Twin([0, 0, 0]);
+    const Moved = Twin([Before[0], Before[1], Before[2]]);
+    const Run = [0, 1, 2].map((Axis) => Moved[Axis] - Origin[Axis]);
+    const Length = Math.hypot(...Run) || 1;
+    return [Run[0] / Length, Run[1] / Length, Run[2] / Length, 1];
+};
+
 const BrushReadout = (Key, Value) =>
     Key === "Radius" ? `${(Value * 100).toFixed(1)}` : Key === "Sectors" || Key === "Facing" ? String(Math.round(Value)) : Value.toFixed(2);
 

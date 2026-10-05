@@ -493,6 +493,33 @@ painter photographs their own work, so the ribbon shows the impasto and the toot
 line against each other; the unit tests pin the constants the two have to agree on. The eraser always lifts with the
 plain medium whatever is in hand, because an undo of the surface that leaves bristle marks of its own is not one.
 
+**A stroke is a path, not a pile of dabs.** The ribbon and the surface ran the same model and did not agree, and the
+reason was arithmetic rather than physics. The ribbon asks, for each pixel, where the nearest point on the whole path
+is, and deposits once. The surface stamps a capsule every tenth of a radius and lets them composite, so a texel in the
+middle of a stroke was painted by something like forty of them: at flow 0.67 the fortieth leaves it saturated, the comb
+of a bristle head is averaged with thirty-nine neighbouring combs until it is a smooth blob, and a slow hand — which
+stamps more dabs over the same ground — paints darker than a fast one with the same pressure. So every dab now keeps
+only the ground between its own two ends. It is given the direction the segment before it ran in, and it discards any
+texel that lies past its own end or behind its start on the near side of a turn; the first dab of a stroke keeps its
+back cap, because nothing is behind it, and lifting the hand stamps one more dab that claims only the ground past the
+far end, which is the rounded tip. The wedge on the outside of a corner, which no segment's span covers, goes to the
+one whose predecessor could not reach it. Each texel is therefore painted exactly once per stroke, by the segment it
+actually belongs to, at the flow it was asked for — the same reading the ribbon takes.
+
+![The same stroke read three ways](stroke-ownership.png)
+
+Strokes are lighter for it, and they no longer darken where the hand slowed down. Both are the point: that is what the
+scratchpad was always showing.
+
+**An instrument is a preset.** A filbert is 0.46 hard and spaced a tenth of its width because that is what a filbert
+is, so the brush pod shows its flow, hardness, spacing and jitter greyed out rather than offering them — the card is
+where an instrument is tuned, and tuning one there marks it as altered and hands the raw sliders straight back. Size
+and colour stay live whatever is in hand, and a size set with the brackets, the wheel or the radial drag is written
+back into the instrument, so tuning anything else afterwards cannot snap the head back to the size the library shipped
+and the medium's reach — which is measured from the head — follows the hand instead of belonging to a brush nobody is
+holding. Picking an instrument up re-reads the pod as well as the card: they are one brush seen twice, and a pod left
+showing the last instrument's numbers is a pod that pushes them back the moment anything is touched.
+
 **Objects and UDIM tiles.** A document holds a scene, not a single mesh. The outliner above the stack lists every
 object — select, rename (double-click), hide, isolate, add and remove — and each object owns a UDIM tile, numbered the
 usual way (`1001` is the first, `1002` is one column right, `1011` is one row up). Every visible object is built,
