@@ -1764,7 +1764,7 @@ export class TexturePanel
     SyncGhost(Event, Hit)
     {
         const Ghost = Select("#brush-ghost");
-        if (!Ghost) return;
+        if (!Ghost || this.Sizing) return;   // while S is held the ring belongs to the size, not to the cursor
         const Painting = this.Tool === "brush" || this.Tool === "eraser";
         if (!Painting || Hit || this.ViewMode !== "surface")
         {
@@ -1857,14 +1857,14 @@ export class TexturePanel
         };
     }
 
-    // Resizing the head from the keyboard: `S` and `[` take it down a step, `⇧S` and `]` take it up one, by the same
-    // ratio either way so a key held down walks evenly in both directions.
+    // One way in for the size of the head, wherever it was asked for: the brackets, a wheel with Alt down, the slider
+    // on the card, or the hand holding S and dragging.
     //
-    // 📝 The card follows, but only once a frame. Key repeat fires about thirty times a second and a rebuilt pane
-    //    redraws a CPU-rasterised ribbon with it, so one rebuild per keystroke turns a held key into a slideshow.
-    NudgeRadius(Factor)
+    // 📝 The card follows, but only once a frame. A drag fires a move every few milliseconds and a rebuilt pane
+    //    redraws a CPU-rasterised ribbon with it, so one rebuild per event turns a drag into a slideshow.
+    SetRadius(Value)
     {
-        this.Projection.Configure({ Radius: Clamp(this.Projection.Brush.Radius * Factor, 0.004, 1.2) });
+        this.Projection.Configure({ Radius: Clamp(Value, 0.004, 1.2) });
         this.SyncBrushControls();
         if (!this.Instruments?.Open || this.SizeTurn) return;
         this.SizeTurn = requestAnimationFrame(() =>
@@ -1872,6 +1872,85 @@ export class TexturePanel
             this.SizeTurn = 0;
             if (this.Instruments?.Open) this.Instruments.RenderPane(false);
         });
+    }
+
+    NudgeRadius(Factor)
+    {
+        this.SetRadius(this.Projection.Brush.Radius * Factor);
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // Sizing the head by hand: hold `S` and drag. Out from where the key went down grows it, back in shrinks it, and
+    // the ring on the canvas is the size itself rather than a number to be pictured.
+    //
+    // 🔴 The drag is measured ALONG the direction it set off in, not as a raw distance from the anchor. A distance
+    //    cannot be negative, so a brush sized by one could only ever grow; a signed length along the first few pixels
+    //    of travel lets the hand come back through the anchor and keep shrinking, which is what dragging in means.
+    //
+    // 📝 Exponential, not linear. A step of so many pixels should be worth the same fraction of the head at every
+    //    size, or a brush that starts small cannot be grown and one that starts large cannot be tuned.
+    //----------------------------------------------------------------------------------------------------------------------
+    BeginSizing()
+    {
+        if (this.Sizing || !this.Canvas) return;
+        const Bounds = this.Canvas.getBoundingClientRect?.() || { left: 0, top: 0, width: 0, height: 0 };
+        this.Sizing = {
+            Anchor: this.PointerAt ? [...this.PointerAt] : [Bounds.left + Bounds.width / 2, Bounds.top + Bounds.height / 2],
+            From: this.Projection.Brush.Radius,
+            Axis: null,
+        };
+        this.DrawSizingRing();
+        if (!this.SizingTold)
+        {
+            this.SizingTold = true;
+            this.Notify("Drag out to grow the head, back in to shrink it.");
+        }
+    }
+
+    DragSizing(Event)
+    {
+        const Sizing = this.Sizing;
+        if (!Sizing) return;
+        const Away = [Event.clientX - Sizing.Anchor[0], Event.clientY - Sizing.Anchor[1]];
+        const Reach = Math.hypot(Away[0], Away[1]);
+        if (!Sizing.Axis)
+        {
+            if (Reach < 6) return;      // the first few pixels only say which way "out" is
+            Sizing.Axis = [Away[0] / Reach, Away[1] / Reach];
+        }
+        const Along = Away[0] * Sizing.Axis[0] + Away[1] * Sizing.Axis[1];
+        this.SetRadius(Sizing.From * Math.exp(Along / 170));
+        this.DrawSizingRing();
+    }
+
+    EndSizing()
+    {
+        if (!this.Sizing) return;
+        this.Sizing = null;
+        const Ghost = Select("#brush-ghost");
+        if (!Ghost) return;
+        Ghost.classList.remove("sizing");
+        Ghost.hidden = true;
+    }
+
+    // The ring sits where the key went down, not under the pointer: the hand is dragging the EDGE of the head out,
+    // and a ring that chased the cursor would be showing the size somewhere the paint is not going to land.
+    DrawSizingRing()
+    {
+        const Ghost = Select("#brush-ghost");
+        if (!Ghost || !this.Sizing || this.ViewMode !== "surface") return;
+        const Bounds = this.Canvas.getBoundingClientRect();
+        const Height = Bounds.height || 1;
+        const Pixels =
+            (this.Projection.Brush.Radius * Height) /
+            (2 * Math.tan(this.Camera.FieldOfView / 2) * Math.max(this.Camera.Distance, 0.1));
+        Ghost.hidden = false;
+        Ghost.classList.add("sizing");
+        Ghost.style.width = `${Math.max(Pixels * 2, 8)}px`;
+        Ghost.style.height = `${Math.max(Pixels * 2, 8)}px`;
+        Ghost.style.left = `${this.Sizing.Anchor[0] - Bounds.left}px`;
+        Ghost.style.top = `${this.Sizing.Anchor[1] - Bounds.top}px`;
+        Ghost.style.borderColor = `${ToHex(this.PreviewInk().Ink)}cc`;
     }
 
     // Scaling the gradient, from the keyboard as well as the card: `G` shortens it, `⇧G` lengthens it, by the same
@@ -2673,9 +2752,7 @@ export class TexturePanel
                 Event.preventDefault();
                 if (Event.altKey || Event.metaKey)
                 {
-                    const Step = Event.deltaY < 0 ? 1.08 : 0.926;
-                    this.Projection.Configure({ Radius: Clamp(this.Projection.Brush.Radius * Step, 0.004, 1.2) });
-                    this.SyncBrushControls();
+                    this.NudgeRadius(Event.deltaY < 0 ? 1.08 : 0.926);
                     return;
                 }
                 if (this.ViewMode === "plane")
@@ -3198,6 +3275,13 @@ export class TexturePanel
     OnPointerDown(Event)
     {
         if (!this.Integrator.Ready) return;
+        this.PointerAt = [Event.clientX, Event.clientY];
+        // A press while the head is being sized settles it rather than painting with it: the hand is still holding S.
+        if (this.Sizing)
+        {
+            this.EndSizing();
+            return;
+        }
         this.Canvas.setPointerCapture(Event.pointerId);
         this.PointerButton = Event.button;
         this.PointerPrevious = [Event.clientX, Event.clientY];
@@ -3308,6 +3392,13 @@ export class TexturePanel
     OnPointerMove(Event)
     {
         if (!this.Integrator.Ready) return;
+        // Where the pointer is, kept whatever it is doing: it is the anchor the next S-drag starts from.
+        this.PointerAt = [Event.clientX, Event.clientY];
+        if (this.Sizing)
+        {
+            this.DragSizing(Event);
+            return;
+        }
         const Delta = this.PointerPrevious
             ? [Event.clientX - this.PointerPrevious[0], Event.clientY - this.PointerPrevious[1]]
             : [0, 0];
@@ -4996,8 +5087,10 @@ export class TexturePanel
                 Shelf,
             ];
 
+        // 🔴 Head and Hand before Paint. The order is the order the question is asked in: what is making the mark,
+        //    how it is being moved, and only then what it is leaving behind. Colour led the rail while it was the
+        //    newest thing on it, which put the two rows a hand touches least at the top of every card.
         return [
-            ...Paint,
             {
                 Key: "shape",
                 Group: "Head",
@@ -5042,6 +5135,7 @@ export class TexturePanel
                 Note: "How a mark starts, and what the hand's pressure is worth",
                 Render: () => this.TaperPane(),
             },
+            ...Paint,
             Shelf,
         ];
     }
@@ -8797,6 +8891,7 @@ export class TexturePanel
             //    to walk focus to the next focusable thing, and with the card open that is the next row of its
             //    rail. Letting the browser have it looked exactly like the card stepping through its own panes:
             //    the focus ring crawled down the rail, one press per row, and the card never went away.
+            if (Event.key === "Escape") this.EndSizing();
             const Tabbing = Event.key === "Tab" || Event.code === "Tab";
             if (Tabbing && !Event.ctrlKey && !Event.metaKey && !Event.altKey && !document.querySelector("dialog[open]"))
             {
@@ -8870,12 +8965,12 @@ export class TexturePanel
             }
             if (Key === "b") this.SetBrowserState(this.BrowserState === "closed" ? "half" : "closed");
             if (Key === "f") Select("#focus-button").click();
-            // 🔴 `S` is size — the brush's, not the gradient's. It is the letter the hand reaches for when the mark
-            //    is the wrong width, and it had been spent on the ramp; the ramp is now `G`, which is the letter of
-            //    the thing it scales. Symmetry sits on `Y`, where it moved when the ramp arrived.
+            // 🔴 `S` is size — the brush's, not the gradient's. Held down it hands the head to the mouse: drag out
+            //    to grow it, back in to shrink it, with the ring on the canvas showing the answer. The ramp moved to
+            //    `G`, the letter of the thing it scales, and symmetry sits on `Y` where it went when the ramp came.
             if (Key === "s")
             {
-                this.NudgeRadius(Event.shiftKey ? 1.19 : 0.84);
+                if (!Event.repeat) this.BeginSizing();
                 return;
             }
             if (Key === "g")
@@ -8909,7 +9004,11 @@ export class TexturePanel
         window.addEventListener("keyup", (Event) =>
         {
             if (Event.code === "Space") this.SpaceHeld = false;
+            if (Event.key?.toLowerCase?.() === "s") this.EndSizing();
         });
+        // A key held while the window goes away never gets its keyup, and a brush left mid-size would follow the
+        // pointer around the next time it crossed the canvas.
+        window.addEventListener("blur", () => this.EndSizing());
     }
 
     //----------------------------------------------------------------------------------------------------------------------

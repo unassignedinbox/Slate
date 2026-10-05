@@ -79,7 +79,11 @@ const Card = Panel.Instruments;
 Card.Show();
 const Rail = () => [...Card.Root.querySelectorAll(".tool-rail [data-section]")].map((Row) => Row.dataset.section);
 const Pane = () => Card.Root.querySelector("[data-pane]");
-Check("the paint rail is the six grouped rows", Rail().join(",") === "colour,material,shape,grain,stroke,taper", Rail().join(","));
+Check(
+    "the paint rail is the six grouped rows, the head and the hand before the pigment",
+    Rail().join(",") === "shape,grain,stroke,taper,colour,material",
+    Rail().join(","),
+);
 const Shelf = Card.Root.querySelector("[data-shelf] [data-section='library']");
 Check("the library is pinned in the foot", !!Shelf);
 Shelf.dispatchEvent(new Window.MouseEvent("click", { bubbles: true }));
@@ -274,18 +278,17 @@ Check(
 const Held = Panel.Projection.Brush.Radius;
 const Range = Pane().querySelector("input[type=range]");
 Range.focus();
-Window.dispatchEvent(new Window.KeyboardEvent("keydown", { key: "S", shiftKey: true, bubbles: true }));
-Check("S sizes the brush with a slider focused", Panel.Projection.Brush.Radius > Held, `${Held} → ${Panel.Projection.Brush.Radius}`);
+Window.dispatchEvent(new Window.KeyboardEvent("keydown", { key: "]", bubbles: true }));
+Check("the brackets size the brush with a slider focused", Panel.Projection.Brush.Radius > Held, `${Held} → ${Panel.Projection.Brush.Radius}`);
 const Grew = Panel.Projection.Brush.Radius;
-Window.dispatchEvent(new Window.KeyboardEvent("keydown", { key: "s", bubbles: true }));
+Window.dispatchEvent(new Window.KeyboardEvent("keydown", { key: "[", bubbles: true }));
 Check("and back down", Panel.Projection.Brush.Radius < Grew, `${Grew} → ${Panel.Projection.Brush.Radius}`);
 
-// A field that is genuinely typed into keeps its letters.
+// A field that is genuinely typed into keeps its letters: an s typed into the search box is an s, not a brush size.
 const Search = Window.document.querySelector("#layer-search");
 Search.focus();
-const Standing2 = Panel.Projection.Brush.Radius;
 Search.dispatchEvent(new Window.KeyboardEvent("keydown", { key: "s", bubbles: true }));
-Check("but typing an s into a search box is still an s", Panel.Projection.Brush.Radius === Standing2);
+Check("but typing an s into a search box is still an s", !Panel.Sizing);
 Search.blur();
 
 Check("the status bar names the build on screen", Window.document.querySelector("#build-mark")?.textContent?.startsWith("build "), Window.document.querySelector("#build-mark")?.textContent);

@@ -11,7 +11,7 @@ npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
 npm test           # 128 unit tests, no browser required
-npm run drive      # 142 checks against the whole editor, booted in a headless window
+npm run drive      # 150 checks against the whole editor, booted in a headless window
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -139,7 +139,9 @@ be typed.
 row of preset colour chips on it, because choosing a colour and tuning the paint are different acts and a card that
 tried to be both kept the controls one slide away from the thing they described. The rail is contextual
 to the layer and it is grouped, because painting one thing in three dimensions is never one setting: a paint layer gets
-**Paint** (*Colour*, *Material*), **Head** (*Shape*, *Grain*) and **Hand** (*Stroke*, *Taper*); a decal layer gets
+**Head** (*Shape*, *Grain*), **Hand** (*Stroke*, *Taper*) and **Paint** (*Colour*, *Material*) — in that order,
+because that is the order the question is asked in: what is making the mark, how it is being moved, and only then
+what it is leaving behind; a decal layer gets
 **Artwork** (*Artwork*, *Placement*) and **Paint** (*Ink*, *Material*); a folder gets none, because painting
 on a folder opens a layer inside it and that layer is what the panes would be about. A metallic marker with a
 silver-to-gold fade is a colour, a gradient, a metalness and a roughness all at once — eight flat rows made the hand
@@ -204,6 +206,13 @@ there are no finish chips next to the colour any more: what a stroke lays is dec
 held in, which is how it works at a desk.
 
 ![A silver-to-gold marker, written on the card's own test sheet](test-sheet.png)
+
+**Sizing the head by hand.** Hold <kbd>S</kbd> and drag: out from where the key went down grows the brush, back in
+shrinks it, and the ring drawn on the canvas is the size itself rather than a number to be pictured. The drag is
+measured along the direction it set off in rather than as a distance from the anchor — a distance cannot be
+negative, so a brush sized by one could only ever grow — and it is exponential, so a step of so many pixels is
+worth the same fraction of the head whether the head is a hair or a house. A press settles it, <kbd>Esc</kbd>
+abandons it, and the brackets and <kbd>Alt</kbd> + wheel still step it without the drag.
 
 **A test sheet, before the model.** The expand button in the head of any pane opens a third column on the card: a sheet
 of paper the width of the column, drawn on with the pointer. It runs the same deposition model the ribbon and the GPU
@@ -589,10 +598,10 @@ the header now.
 | --- | --- | --- | --- |
 | Orbit / brush / eraser | <kbd>1 2 3</kbd> | Content ⇄ mask (adds one if needed) | <kbd>M</kbd> |
 | Flood / decal / pick | <kbd>4 5 6</kbd> | Mask view: off → overlay → mask | <kbd>⇧ M</kbd> |
-| Brush size down / up | <kbd>S</kbd> / <kbd>⇧ S</kbd> · <kbd>[</kbd> <kbd>]</kbd> | Texture space | <kbd>X</kbd> |
+| Size the head by hand | hold <kbd>S</kbd> · drag out / in | Texture space | <kbd>X</kbd> |
+| Brush size by steps | <kbd>[</kbd> <kbd>]</kbd> · <kbd>Alt</kbd> + wheel | Frame the surface | <kbd>F</kbd> |
 | Show / hide the unwrap | <kbd>W</kbd> | Show / hide the UDIM tiles | <kbd>U</kbd> |
 | Paint card: open, and closed again | <kbd>Tab</kbd> | Delete the selected layer | <kbd>Del</kbd> / <kbd>⌫</kbd> |
-| Brush size, live | <kbd>Alt</kbd> + wheel | Frame the surface | <kbd>F</kbd> |
 | Search layers | <kbd>/</kbd> | Content browser | <kbd>B</kbd> |
 | Undo / redo | <kbd>Ctrl Z</kbd> / <kbd>Ctrl ⇧ Z</kbd> | Save `.pigment` / export | <kbd>Ctrl S</kbd> / <kbd>Ctrl E</kbd> |
 | Symmetry: off → X → Y → Z → radial | <kbd>Y</kbd> | Isolate the selected layer | <kbd>I</kbd> |

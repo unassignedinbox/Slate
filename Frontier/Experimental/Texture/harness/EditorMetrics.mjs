@@ -96,7 +96,9 @@ Panel.SetPaintTarget("mask");
 Check("aiming at the mask adds one", Layer.Mask.Kind === "stroke", Layer.Mask.Kind);
 Check("the layer says so", Layer.Target === "mask", String(Layer.Target));
 Check("and the brush agrees", Panel.Projection.Brush.Target === "mask");
-Check("the card offers the value ramp, not a hue", Panel.Instruments.Sections()[0].Label === "Value", Panel.Instruments.Sections()[0].Label);
+const ColourRow = () => Panel.Instruments.Sections().find((Entry) => Entry.Key === "colour");
+Check("the card offers the value ramp, not a hue", ColourRow()?.Label === "Value", ColourRow()?.Label);
+Check("and it sits after the head and the hand", Panel.Instruments.Sections()[0].Key === "shape", Panel.Instruments.Sections()[0].Key);
 Panel.SetPaintTarget("coverage");
 Check("and aiming back at the paint lets go of it", Panel.Projection.Brush.Target === "coverage" && Layer.Target === "coverage");
 Check("the mask it made is kept", Layer.Mask.Kind === "stroke", "a mask is not thrown away when the aim moves off it");
@@ -126,14 +128,31 @@ Check("brackets size the head", Wider > Radius, `${Radius} → ${Wider}`);
 Type("[");
 Check("both ways", Panel.Projection.Brush.Radius < Wider, String(Panel.Projection.Brush.Radius));
 
-// 🔴 S is size. It used to scale the gradient, which is the one thing a hand pressing S is never asking for.
+// 🔴 S is size, and it is held rather than tapped: the hand drags the edge of the head out to grow it and back in
+//    to shrink it. It used to scale the gradient, which is the one thing a hand pressing S is never asking for.
+const Surface = Window.document.querySelector("#surface-canvas");
+const Point = (Kind, X, Y) =>
+    Surface.dispatchEvent(new Window.MouseEvent(Kind, { bubbles: true, clientX: X, clientY: Y, pointerId: 9, pressure: 0 }));
 const Held = Panel.Projection.Brush.Radius;
 const Span = Panel.Gradient.Span;
-Type("s", { shiftKey: true });
-Check("S sizes the head too", Panel.Projection.Brush.Radius > Held, `${Held} → ${Panel.Projection.Brush.Radius}`);
-const Grown = Panel.Projection.Brush.Radius;
+
+Point("pointermove", 400, 300);
 Type("s");
-Check("and down again", Panel.Projection.Brush.Radius < Grown, `${Grown} → ${Panel.Projection.Brush.Radius}`);
+Check("holding S takes hold of the size", !!Panel.Sizing, String(!!Panel.Sizing));
+Check("anchored where the key went down", Panel.Sizing.Anchor[0] === 400 && Panel.Sizing.Anchor[1] === 300);
+Point("pointermove", 480, 300);
+const Grown = Panel.Projection.Brush.Radius;
+Check("dragging out grows the head", Grown > Held, `${Held} → ${Grown}`);
+Check("and the ring shows it", Window.document.querySelector("#brush-ghost")?.classList.contains("sizing"));
+Point("pointermove", 320, 300);
+Check("dragging back in shrinks it past where it started", Panel.Projection.Brush.Radius < Held, `${Held} → ${Panel.Projection.Brush.Radius}`);
+Check("nothing is painted while the head is being sized", Panel.Painting !== true);
+Window.dispatchEvent(new Window.KeyboardEvent("keyup", { key: "s", bubbles: true }));
+Check("letting go of S lets go of the size", !Panel.Sizing);
+Check("and takes the ring away", Window.document.querySelector("#brush-ghost")?.hidden === true);
+Point("pointermove", 500, 300);
+const Settled = Panel.Projection.Brush.Radius;
+Check("the pointer no longer drags it", Settled === Panel.Projection.Brush.Radius);
 Check("leaving the gradient alone", Panel.Gradient.Span === Span, `${Span} → ${Panel.Gradient.Span}`);
 
 const Stretched = Panel.Projection.Brush.Radius;
