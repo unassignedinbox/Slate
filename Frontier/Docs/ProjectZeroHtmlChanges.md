@@ -2345,7 +2345,9 @@ Both supplied branches have overlapping runtime and baked capabilities:
 Thirteen imported source modules are unchanged and hash-pinned in `SourceDepot/Provenance.json`. This combines
 selected numerical components for the HTML review; it is not yet the complete native fracture system. Jolt debris
 and breakable constraints, native GPU/VAT playback, editor-created arbitrary geometry, support-island release and
-native asset serialization remain integration gates. Shell extraction is approximate; material values and prescribed
+native asset serialization remain integration gates. Shell extraction retains all qualifying regions, rather than discarding them at the solid-fragment ceiling.
+Coverage explicitly reports missing crack cells and small specks; this is not mass-conserving collision geometry.
+Material values and prescribed
 metal tool travel are research/demo parameters, not validated engineering failure predictions.
 
 Verification: fourteen browser checks pass with no page errors, including both algorithms, cached pattern reuse,

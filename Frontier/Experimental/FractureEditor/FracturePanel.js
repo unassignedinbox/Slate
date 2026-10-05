@@ -151,7 +151,7 @@ function MeshRecord(Geometry, Center) {
 }
 function PatternShell(Net, Elapsed, Settings) {
   const Extractor = new RegionExtractor(Net),
-    Fragments = Extractor.harvest(true, 4, Settings.budget);
+    Fragments = Extractor.harvest(true, 4, Net.nx * Net.ny);
   const Records = Fragments.map((Fragment) => {
     const Geometry = new THREE.BufferGeometry();
     Geometry.setAttribute(
@@ -169,8 +169,13 @@ function PatternShell(Net, Elapsed, Settings) {
     records: Records,
     settings: Settings,
     time: Elapsed,
-    metric: String(Extractor.skipped),
-    metricLabel: "EXTRACTION SKIPS",
+    metric:
+      (
+        (Fragments.reduce((Sum, Fragment) => Sum + Fragment.area, 0) /
+          (Net.W * Net.H)) *
+        100
+      ).toFixed(1) + "%",
+    metricLabel: "REGION COVERAGE",
     shell: true,
     stats: Net.stats(),
   };
@@ -345,7 +350,7 @@ function ShowPattern(Pattern) {
     ? "Crack network → extracted plate regions"
     : "Energy-limited fragmentation · finite cut surfaces";
   Element("bottom-note").textContent = Pattern.shell
-    ? "Shell extraction is grid-based and approximate. Border attachment and rigid-body release are not simulated here."
+    ? "Grid-based shell extraction omits crack cells and tiny specks; coverage is shown above. Not mass-conserving collision geometry."
     : "Exterior and interior faces are actual geometry. No displacement/noise surface-detail substitute is enabled.";
   if (Pattern.metal) {
     Element("viewport-status").textContent =
@@ -506,6 +511,8 @@ function SelectAsset(Id) {
     : "";
   for (const Id of ["seed", "budget", "pattern-count"])
     Element(Id).closest("label").hidden = !!Selected.Metal;
+  Element("budget").closest("label").hidden =
+    !!Selected.Metal || !!Selected.Shell;
   Element("bake-controls").hidden = Mode !== "baked" || !!Selected.Metal;
   Impact.visible = !Selected.Metal;
   ImpactPosition();
