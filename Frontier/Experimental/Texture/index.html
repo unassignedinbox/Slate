@@ -148,7 +148,8 @@
                             <span class="live-metric"><b id="frames">—</b> FPS</span><span class="live-metric" id="brush-hud">BRUSH 9.0 cm</span>
                         </div>
                         <div class="viewport-help">
-                            <span>Drag to paint</span><i>·</i><span>Right-drag to pan</span><i>·</i><span>Alt + wheel sizes the brush</span>
+                            <span>Left-drag paints</span><i>·</i><span>Right-drag orbits</span><i>·</i><span>Middle or ⇧ right-drag pans</span><i>·</i
+                            ><span>Alt + wheel sizes the brush</span>
                         </div>
                         <div class="axis-gizmo" aria-label="World axes">
                             <svg viewBox="0 0 76 76">
@@ -302,7 +303,14 @@
                 ><span>Content ⇄ mask<kbd>M</kbd></span><span>Mask view<kbd>⇧ M</kbd></span><span>Content browser<kbd>B</kbd></span
                 ><span>Texture space<kbd>X</kbd></span><span>Unwrap / UDIM tiles<kbd>W / U</kbd></span><span>Frame surface<kbd>F</kbd></span
                 ><span>Undo / redo<kbd>Ctrl Z / Ctrl ⇧ Z</kbd></span><span>Save project<kbd>Ctrl S</kbd></span><span>Export set<kbd>Ctrl E</kbd></span
-                ><span>Search layers<kbd>/</kbd></span>
+                ><span>Search layers<kbd>/</kbd></span><span>Orbit the camera<kbd>Right-drag</kbd></span
+                ><span>Pan the camera<kbd>Middle-drag</kbd></span>
+            </div>
+            <div class="help-note">
+                The left button is the only one that paints, so the tool in the toolbar is always the tool in hand. The right
+                button orbits and the middle button pans, whatever is selected; hold <kbd>⇧</kbd> to pan with either, and
+                <kbd>Space</kbd> to pan from the left button. With the orbit tool in hand a left click that never becomes a
+                drag selects the object under it.
             </div>
             <div class="help-note">
                 Projects save the layer record, materials and camera, plus the vector and text decals — painted coverage is a

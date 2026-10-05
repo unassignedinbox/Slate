@@ -10,7 +10,7 @@ cd Frontier/Experimental/Texture
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
-npm test           # 108 unit tests, no browser required
+npm test           # 110 unit tests, no browser required
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -345,8 +345,11 @@ green channel is flipped on the way out rather than left for someone to discover
 | Undo / redo | <kbd>Ctrl Z</kbd> / <kbd>Ctrl ⇧ Z</kbd> | Save `.pigment` / export | <kbd>Ctrl S</kbd> / <kbd>Ctrl E</kbd> |
 | Symmetry: off → X → Y → Z → radial | <kbd>S</kbd> | | |
 
-The **right button always paints** into the selected layer, whichever tool is in hand, so the camera can stay on the
-left button. Middle-drag and <kbd>Space</kbd>-drag pan; a click that never becomes a drag selects the object under it.
+**Only the left button paints.** The tool in the toolbar is the tool in hand, and nothing else puts a mark on the
+model: right-drag orbits, middle-drag pans, <kbd>⇧</kbd> turns either into a pan, and <kbd>Space</kbd> pans from the
+left button. One rule, `PointerIntent`, answers for both the press and the drag. A camera button pressed in the middle
+of a stroke closes the stroke rather than dragging it round with the model, so the undo step covers exactly what was
+painted. With the orbit tool in hand, a left click that never becomes a drag selects the object under it.
 
 ---
 

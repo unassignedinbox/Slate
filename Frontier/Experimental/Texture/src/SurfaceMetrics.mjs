@@ -261,11 +261,12 @@ test("every surface agrees with itself about which way is out", () =>
     }
 });
 
-test("the shader ball keeps its two parts in separate UV bands", () =>
+test("the shader ball unwraps to one unbroken island that uses the whole sheet", () =>
 {
     const Surface = BuildSurface("shaderball", 1);
     let Lowest = 1;
     let Highest = 0;
+    const Seen = new Set();
     for (let Index = 0; Index < Surface.Coordinates.length; Index += 2)
     {
         assert.ok(Surface.Coordinates[Index] >= -1e-6 && Surface.Coordinates[Index] <= 1 + 1e-6, "U left the sheet");
@@ -273,14 +274,71 @@ test("the shader ball keeps its two parts in separate UV bands", () =>
         assert.ok(V >= -1e-6 && V <= 1 + 1e-6, "V left the sheet");
         Lowest = Math.min(Lowest, V);
         Highest = Math.max(Highest, V);
+        Seen.add(V);
     }
     assert.ok(Lowest > 0.005, "the island runs into the bottom edge of the sheet");
     assert.ok(Highest < 0.995, "the island runs into the top edge of the sheet");
-    // Nothing is allowed in the gutter between the two islands, or the shell would share texels with the body.
-    const Gutter = [...Array(Surface.Coordinates.length / 2).keys()].filter((Index) =>
+    assert.ok(Highest - Lowest > 0.95, "the island leaves most of the sheet unused");
+
+    // One revolved profile is one island. Welding the corners by position and walking the triangles has to reach every
+    // vertex from any one of them: a second component is a second part, which is how the old flared shell was built.
+    const Parent = new Int32Array(Surface.Positions.length / 3).map((Ignored, Index) => Index);
+    const Find = (Index) =>
     {
-        const V = Surface.Coordinates[Index * 2 + 1];
-        return V > 0.593 && V < 0.607;
-    });
-    assert.equal(Gutter.length, 0, "vertices sit inside the gutter between the two islands");
+        let Root = Index;
+        while (Parent[Root] !== Root) Root = Parent[Root];
+        while (Parent[Index] !== Root)
+        {
+            const Next = Parent[Index];
+            Parent[Index] = Root;
+            Index = Next;
+        }
+        return Root;
+    };
+    const Welded = new Map();
+    for (let Vertex = 0; Vertex < Parent.length; Vertex += 1)
+    {
+        const Key = [0, 1, 2].map((Axis) => Math.round(Surface.Positions[Vertex * 3 + Axis] * 1e5)).join(":");
+        if (Welded.has(Key)) Parent[Find(Vertex)] = Find(Welded.get(Key));
+        else Welded.set(Key, Vertex);
+    }
+    for (let Index = 0; Index < Surface.Indices.length; Index += 3)
+    {
+        Parent[Find(Surface.Indices[Index])] = Find(Surface.Indices[Index + 1]);
+        Parent[Find(Surface.Indices[Index + 1])] = Find(Surface.Indices[Index + 2]);
+    }
+    const Pieces = new Set([...Array(Parent.length).keys()].map(Find));
+    assert.equal(Pieces.size, 1, `the model is in ${Pieces.size} pieces — the ball is not alone on its stand`);
+});
+
+test("the shader ball is a ball on a stand, with nothing wrapped around it", () =>
+{
+    // The subject has to be the sphere. Anything that reaches back out to the width of the plinth once it is above the
+    // stand is a bowl growing around the ball — which is exactly what this model used to have, and what it reads as.
+    const Surface = BuildSurface("shaderball", 2);
+    let Widest = 0;
+    let Tallest = 0;
+    for (let Index = 0; Index < Surface.Positions.length; Index += 3)
+    {
+        Widest = Math.max(Widest, Math.hypot(Surface.Positions[Index], Surface.Positions[Index + 2]));
+        Tallest = Math.max(Tallest, Surface.Positions[Index + 1]);
+    }
+    const Shoulder = Tallest * 0.3;                                    // above the stand, below the sphere's equator
+    let Reach = 0;
+    for (let Index = 0; Index < Surface.Positions.length; Index += 3)
+    {
+        if (Surface.Positions[Index + 1] < Shoulder) continue;
+        Reach = Math.max(Reach, Math.hypot(Surface.Positions[Index], Surface.Positions[Index + 2]));
+    }
+    assert.ok(Reach < Widest * 0.92, `the model is ${Reach.toFixed(2)} wide above its stand — something surrounds the ball`);
+
+    // And the stand has to be narrow where it passes under the ball, or the overhang a material is judged on is gone.
+    let Waist = Infinity;
+    for (let Index = 0; Index < Surface.Positions.length; Index += 3)
+    {
+        const Height = Surface.Positions[Index + 1];
+        if (Height < Tallest * 0.22 || Height > Tallest * 0.32) continue;
+        Waist = Math.min(Waist, Math.hypot(Surface.Positions[Index], Surface.Positions[Index + 2]));
+    }
+    assert.ok(Waist < Reach * 0.5, `the stem is ${Waist.toFixed(2)} across — the sphere has no undercut to catch light`);
 });

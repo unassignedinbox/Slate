@@ -1142,13 +1142,17 @@ dialog p {
   color: #c0c0c0;
   gap: 4px;
 }
-.shortcut-list kbd {
+.shortcut-list kbd,
+.help-note kbd {
   padding: 3px 5px;
   font-size: 9px;
   border: 1px solid #575757;
   border-radius: 3px;
   color: #bebebe;
   background: #252525;
+}
+.help-note + .help-note {
+  margin-top: 10px;
 }
 .help-note {
   padding: 13px;

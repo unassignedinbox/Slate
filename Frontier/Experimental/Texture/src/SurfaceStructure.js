@@ -335,63 +335,23 @@ const ProfileCurve = (Into, A, B, C, D, Steps) =>
     }
 };
 
-// Offsets a centreline into a closed sliver of the given thickness: up one face, round the tip, back down the other.
-const ProfileBlade = (Centreline, Thickness, TipSteps) =>
-{
-    const Normal = (Index) =>
-    {
-        const Before = Centreline[Math.max(0, Index - 1)];
-        const After = Centreline[Math.min(Centreline.length - 1, Index + 1)];
-        const Run = [After[0] - Before[0], After[1] - Before[1]];
-        const Length = Math.hypot(Run[0], Run[1]) || 1;
-        return [Run[1] / Length, -Run[0] / Length];
-    };
-    const Outline = [];
-    for (let Index = 0; Index < Centreline.length; Index += 1)
-    {
-        const Side = Normal(Index);
-        Outline.push([Centreline[Index][0] + Side[0] * Thickness, Centreline[Index][1] + Side[1] * Thickness]);
-    }
-    // Round the tip through the far side, then walk the inner face home.
-    const Tip = Centreline[Centreline.length - 1];
-    const Side = Normal(Centreline.length - 1);
-    const Along = [-Side[1], Side[0]];
-    for (let Step = 1; Step < TipSteps; Step += 1)
-    {
-        const Angle = (Step / TipSteps) * Math.PI;
-        const Across = Math.cos(Angle);
-        const Out = Math.sin(Angle);
-        Outline.push([
-            Tip[0] + Side[0] * Thickness * Across + Along[0] * Thickness * Out,
-            Tip[1] + Side[1] * Thickness * Across + Along[1] * Thickness * Out,
-        ]);
-    }
-    for (let Index = Centreline.length - 1; Index >= 0; Index -= 1)
-    {
-        const Face = Normal(Index);
-        Outline.push([Centreline[Index][0] - Face[0] * Thickness, Centreline[Index][1] - Face[1] * Thickness]);
-    }
-    return Outline;
-};
-
-// Revolves one profile into the builder. `Wrap` closes the cross-section, which is what turns a sliver into a solid.
-// The patch is walked from the end of the profile to its start so the winding matches the rest of the catalogue —
-// every other builder runs its second parameter downward — while the texture coordinate still climbs with the model.
-const Revolve = (Builder, Profile, Columns, Bottom, Top, Wrap = false) =>
+// Revolves one profile into the builder. The patch is walked from the end of the profile to its start so the winding
+// matches the rest of the catalogue — every other builder runs its second parameter downward — while the texture
+// coordinate still climbs with the model.
+const Revolve = (Builder, Profile, Columns, Bottom, Top) =>
 {
     const Count = Profile.length;
     const Lengths = [0];
     for (let Index = 1; Index < Count; Index += 1)
         Lengths.push(Lengths[Index - 1] + Math.hypot(Profile[Index][0] - Profile[Index - 1][0], Profile[Index][1] - Profile[Index - 1][1]));
-    if (Wrap) Lengths.push(Lengths[Count - 1] + Math.hypot(Profile[0][0] - Profile[Count - 1][0], Profile[0][1] - Profile[Count - 1][1]));
     const Total = Lengths[Lengths.length - 1] || 1;
-    const Rows = Wrap ? Count : Count - 1;
+    const Rows = Count - 1;
     Builder.Patch(Columns, Rows, (U, V) =>
     {
         const Step = Math.round((1 - V) * Rows);
-        const Index = Wrap ? Step % Count : Math.min(Count - 1, Step);
-        const Before = Profile[Wrap ? (Index - 1 + Count) % Count : Math.max(0, Index - 1)];
-        const After = Profile[Wrap ? (Index + 1) % Count : Math.min(Count - 1, Index + 1)];
+        const Index = Math.min(Count - 1, Step);
+        const Before = Profile[Math.max(0, Index - 1)];
+        const After = Profile[Math.min(Count - 1, Index + 1)];
         const Here = Profile[Index];
         const Run = [After[0] - Before[0], After[1] - Before[1]];
         const Length = Math.hypot(Run[0], Run[1]) || 1;
@@ -407,40 +367,34 @@ const Revolve = (Builder, Profile, Columns, Bottom, Top, Wrap = false) =>
 };
 
 //--------------------------------------------------------------------------------------------------------------------------
-// The shader ball: a sphere on a waisted stem rising out of a filleted plinth, inside a flared shell that is open at the
-// top. Everything a material has to be judged on is somewhere on it — a flat, a tight convex, a deep concave throat, an
-// overhang under the sphere's equator and a broad sweep for a decal — and the two parts take separate UV bands.
+// The shader ball: one sphere lifted on a waisted stem out of a filleted plinth, revolved from a single profile so the
+// model is one closed shell on one UV island. Everything a material has to be judged on is on it — a flat underside, a
+// tight convex fillet, a deep concave throat, a hard overhang under the sphere's equator, and the ball itself as a broad
+// uninterrupted sweep for a decal. Nothing surrounds the ball: the subject is never hidden behind its own stand.
 //--------------------------------------------------------------------------------------------------------------------------
 const BuildShaderBall = (Detail) =>
 {
     const Builder = new SurfaceBuilder();
-    const Columns = 48 + Detail * 16;
+    const Columns = 64 + Detail * 24;
     const Fine = 0.7 + Detail * 0.3;
     const Steps = (Count) => Math.max(2, Math.round(Count * Fine));
 
-    // ① Plinth, stem and sphere, as one profile walked from the centre of the base to the top of the ball.
-    const Ball = { Radius: 0.46, Height: 0.88 };
+    const Ball = { Radius: 0.50, Height: 1.00 };
     const Meeting = (150 * Math.PI) / 180;                        // [rad] where the stem's shoulder joins the sphere
     const Joint = [Math.sin(Meeting) * Ball.Radius, Ball.Height + Math.cos(Meeting) * Ball.Radius];
     const Body = [[0, 0]];
-    ProfileLine(Body, [0, 0], [0.82, 0], Steps(10));
-    ProfileArc(Body, [0.82, 0.055], 0.055, -Math.PI / 2, 0, Steps(6));
-    ProfileLine(Body, [0.875, 0.055], [0.875, 0.12], Steps(3));
-    ProfileArc(Body, [0.795, 0.12], 0.08, 0, Math.PI / 2, Steps(8));
-    ProfileCurve(Body, [0.795, 0.20], [0.76, 0.33], [0.34, 0.26], [0.185, 0.42], Steps(20));
-    ProfileCurve(Body, [0.185, 0.42], [0.168, 0.46], [0.19, 0.46], Joint, Steps(8));
-    for (let Step = 1; Step <= Steps(32); Step += 1)
+    ProfileLine(Body, [0, 0], [0.58, 0], Steps(8));               // flat underside, out to the rim of the plinth
+    ProfileArc(Body, [0.58, 0.045], 0.045, -Math.PI / 2, 0, Steps(6));
+    ProfileLine(Body, [0.625, 0.045], [0.625, 0.085], Steps(3));  // plinth wall
+    ProfileArc(Body, [0.545, 0.085], 0.08, 0, Math.PI / 2, Steps(9));
+    ProfileCurve(Body, [0.545, 0.165], [0.36, 0.20], [0.20, 0.21], [0.165, 0.38], Steps(22));
+    ProfileCurve(Body, [0.165, 0.38], [0.135, 0.52], [0.16, 0.56], Joint, Steps(12));
+    for (let Step = 1; Step <= Steps(40); Step += 1)
     {
-        const Angle = Meeting * (1 - Step / Steps(32));
+        const Angle = Meeting * (1 - Step / Steps(40));
         Body.push([Math.sin(Angle) * Ball.Radius, Ball.Height + Math.cos(Angle) * Ball.Radius]);
     }
-    Revolve(Builder, Body, Columns, 0.015, 0.585);
-
-    // ② The shell: a blade swept all the way round, flaring outward as it rises and rooted inside the plinth so it
-    //   grows out of it rather than hovering. It stops under the sphere's equator, so the sphere is still the subject.
-    const Centreline = [[0.56, 0.10]];
-    ProfileCurve(Centreline, [0.56, 0.10], [0.60, 0.33], [0.72, 0.50], [0.84, 0.66], Steps(26));
-    Revolve(Builder, ProfileBlade(Centreline, 0.022, Steps(5)), Columns, 0.615, 0.985, true);
+    Revolve(Builder, Body, Columns, 0.01, 0.99);
 
     return Builder.Resolve("Shader ball");
 };

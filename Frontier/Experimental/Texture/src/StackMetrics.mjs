@@ -128,6 +128,7 @@ import {
     SymmetryTwins,
     SymmetryOrdering,
     SectorLimits,
+    PointerIntent,
 } from "./StrokeProjection.js";
 import { FlipRows, MaterialDescriptor } from "./ExportSequence.js";
 import { ExportSlots, SlotByIdentifier } from "./ShadingGlsl.js";
@@ -324,6 +325,41 @@ test("strokes segment by spacing and mirror across the chosen axis", () =>
     assert.ok(Projection.FacingLimit <= 1 && Projection.FacingLimit >= -1);
     assert.equal(ToolOrdering.length, new Set(ToolOrdering.map((Tool) => Tool.Identifier)).size);
     assert.ok(BrushDefaults.Radius > 0 && BrushDefaults.Spacing > 0);
+});
+
+test("only the left button paints, and every other button drives the camera", () =>
+{
+    // The rule the hand depends on: a brush in the toolbar must not mean a brush on the right button, or the camera
+    // cannot be moved without leaving a mark on the model.
+    for (const Tool of ToolOrdering.map((Entry) => Entry.Identifier))
+    {
+        const Left = PointerIntent({ Button: 0, Tool });
+        assert.equal(Left.Paint, Tool !== "orbit", `the left button with ${Tool} in hand`);
+        for (const Button of [1, 2, 3, 4])
+        {
+            const Other = PointerIntent({ Button, Tool });
+            assert.equal(Other.Paint, false, `button ${Button} painted with ${Tool} in hand`);
+            assert.equal(Other.Navigate, true, `button ${Button} did not reach the camera`);
+        }
+    }
+
+    // Orbit is the default camera move, because it is the one wanted mid-stroke. Sliding is asked for by name.
+    assert.equal(PointerIntent({ Button: 2, Tool: "brush" }).Orbit, true, "right-drag does not orbit");
+    assert.equal(PointerIntent({ Button: 2, Tool: "brush" }).Pan, false, "right-drag pans");
+    assert.equal(PointerIntent({ Button: 1, Tool: "brush" }).Pan, true, "middle-drag does not pan");
+    assert.equal(PointerIntent({ Button: 2, Tool: "brush", Shift: true }).Pan, true, "shift and right-drag does not pan");
+    assert.equal(PointerIntent({ Button: 0, Tool: "brush", Space: true }).Pan, true, "space and left-drag does not pan");
+    assert.equal(PointerIntent({ Button: 0, Tool: "brush", Space: true }).Paint, false, "space and left-drag painted");
+    assert.equal(PointerIntent({ Button: 0, Tool: "orbit" }).Orbit, true, "the orbit tool does not orbit from the left");
+    assert.equal(PointerIntent({ Button: 0, Tool: "brush", Shift: true }).Paint, true, "shift stopped the brush painting");
+
+    // Paint and navigate are opposites, never both and never neither, whatever is handed in.
+    for (const Reading of [{}, { Button: 0 }, { Button: 2 }, { Button: 1, Space: true }, { Tool: "orbit", Shift: true }])
+    {
+        const Intent = PointerIntent(Reading);
+        assert.equal(Intent.Paint, !Intent.Navigate, `${JSON.stringify(Reading)} is in two minds`);
+        assert.ok(!(Intent.Pan && Intent.Orbit), `${JSON.stringify(Reading)} pans and orbits at once`);
+    }
 });
 
 test("a placement frame is orthonormal even when the tangent degenerates", () =>

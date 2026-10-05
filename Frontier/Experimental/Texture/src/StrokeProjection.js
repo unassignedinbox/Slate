@@ -43,6 +43,16 @@ export const SymmetryOrdering = [
 export const RadialAxis = [0, 1, 0];
 export const SectorLimits = { Minimum: 2, Maximum: 16 };
 
+// What the hand on the pointer is asking for. One rule, read by both the press and the drag: the left button is the
+// only one that ever puts paint down, every other button drives the camera, and the camera orbits unless something
+// asks it to slide — the middle button, Shift, or Space. The orbit tool moves the left button over to the camera too.
+export const PointerIntent = ({ Button = 0, Tool = "brush", Space = false, Shift = false } = {}) =>
+{
+    const Navigate = Button !== 0 || Tool === "orbit" || !!Space;
+    const Pan = Navigate && (Button === 1 || !!Space || !!Shift);
+    return { Navigate, Paint: !Navigate, Pan, Orbit: Navigate && !Pan };
+};
+
 const MirrorAxis = { x: 0, y: 1, z: 2 };
 
 export const MirrorVector = (Vector, Axis) =>

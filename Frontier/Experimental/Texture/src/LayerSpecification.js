@@ -287,7 +287,7 @@ export const ExpandMaterial = (Material) =>
 // Project shape.
 //--------------------------------------------------------------------------------------------------------------------------
 export const SurfaceOrdering = [
-    { Identifier: "shaderball", Label: "Shader ball", Note: "Dome, skirt and plinth" },
+    { Identifier: "shaderball", Label: "Shader ball", Note: "Sphere, stem and plinth" },
     { Identifier: "sphere", Label: "Sphere", Note: "Spherical UV" },
     { Identifier: "cube", Label: "Rounded cube", Note: "Six UV islands" },
     { Identifier: "cylinder", Label: "Cylinder", Note: "Capped, seam at u = 0" },

@@ -8,7 +8,7 @@
 
 import { ShadingIntegrator, ProbeAcceleration, DeviceReport } from "./ShadingIntegrator.js";
 import { OrbitProjection } from "./OrbitProjection.js";
-import { StrokeProjection, ToolOrdering, SymmetryOrdering, SectorLimits, MarkUnderPoint } from "./StrokeProjection.js";
+import { StrokeProjection, ToolOrdering, SymmetryOrdering, SectorLimits, MarkUnderPoint, PointerIntent } from "./StrokeProjection.js";
 import { BuildSurface, SurfaceIndex, BakeOcclusion, ParseWavefront } from "./SurfaceStructure.js";
 import {
     AssembleScene,
@@ -370,7 +370,6 @@ export class TexturePanel
         this.ScopedStack = false;
         this.HoverTile = FirstTile;
         this.HoverObject = "";
-        this.SecondaryPainting = false;
         this.PickCandidate = null;
         this.Placement = null;
         this.MovingMark = "";
@@ -1436,7 +1435,7 @@ export class TexturePanel
     NotePlacement(Hit)
     {
         const Layer = this.ActiveLayer;
-        if (!Hit || this.StrokeTool !== "decal" || Layer?.Kind !== "decal")
+        if (!Hit || this.Tool !== "decal" || Layer?.Kind !== "decal")
         {
             this.Placement = null;
             return;
@@ -1461,7 +1460,7 @@ export class TexturePanel
     {
         const Ghost = Select("#brush-ghost");
         if (!Ghost) return;
-        const Painting = this.StrokeTool === "brush" || this.StrokeTool === "eraser";
+        const Painting = this.Tool === "brush" || this.Tool === "eraser";
         if (!Painting || Hit || this.ViewMode !== "surface")
         {
             Ghost.hidden = true;
@@ -1490,7 +1489,7 @@ export class TexturePanel
     PreviewInk()
     {
         const Brush = this.Projection.Brush;
-        const Erasing = this.StrokeTool === "eraser";
+        const Erasing = this.Tool === "eraser";
         if (Brush.Target === "mask") return { Ink: Erasing ? [0.04, 0.04, 0.05] : this.MaskInk(), Preview: 0.4 };
         if (Erasing) return { Ink: [0.06, 0.06, 0.07], Preview: 0.32 };
         return { Ink: this.BrushColour, Preview: Clamp(Brush.Flow * 0.7, 0.12, 0.6) };
@@ -2506,19 +2505,30 @@ export class TexturePanel
         this.Canvas.setPointerCapture(Event.pointerId);
         this.PointerButton = Event.button;
         this.PointerPrevious = [Event.clientX, Event.clientY];
-        this.SecondaryPainting = Event.button === 2 && !this.SpaceHeld;
-        const Navigating = !this.SecondaryPainting && (this.Tool === "orbit" || Event.button === 1 || this.SpaceHeld);
+        // Only the left button ever puts paint down; every other button drives the camera, so the brush can stay in
+        // hand while the model is turned. PointerIntent is the one place that rule lives.
+        const Navigating = PointerIntent({ Button: Event.button, Tool: this.Tool, Space: this.SpaceHeld }).Navigate;
         this.Navigating = Navigating;
         this.PickCandidate = Navigating && this.Tool === "orbit" && Event.button === 0 ? [Event.clientX, Event.clientY] : null;
-        if (Navigating) return;
+        if (Navigating)
+        {
+            // A camera button pressed in the middle of a stroke closes the stroke rather than dragging it round with
+            // the model, so the undo step covers exactly what was painted before the hand moved to the camera.
+            if (this.Projection.Active)
+            {
+                this.CommitStrokeRevision();
+                this.Projection.End();
+            }
+            return;
+        }
 
         if (this.ViewMode === "plane")
         {
-            if (this.StrokeTool === "brush" || this.StrokeTool === "eraser")
+            if (this.Tool === "brush" || this.Tool === "eraser")
             {
                 const Coordinate = this.PlaneCoordinates(Event);
                 const Layer = this.PaintTargetLayer();
-                if (this.Projection.Brush.Target !== "mask" && this.StrokeTool === "brush") this.EnsureChannel(Layer, "base_color");
+                if (this.Projection.Brush.Target !== "mask" && this.Tool === "brush") this.EnsureChannel(Layer, "base_color");
                 this.BeginStrokeRevision(Layer);
                 const Opening = this.Projection.BeginPlane(Coordinate, this.PointerReading(Event));
                 this.NotePaintedCoordinate(Coordinate);
@@ -2534,7 +2544,7 @@ export class TexturePanel
             this.Navigating = true;
             return;
         }
-        if (this.StrokeTool === "picker")
+        if (this.Tool === "picker")
         {
             const Sample = this.Integrator.PickTexel(Hit.Coordinate);
             if (Sample)
@@ -2551,18 +2561,18 @@ export class TexturePanel
             }
             return;
         }
-        if (this.StrokeTool === "decal")
+        if (this.Tool === "decal")
         {
             this.PlaceDecal(Hit);
             return;
         }
-        if (this.StrokeTool === "fill")
+        if (this.Tool === "fill")
         {
             this.FloodActive();
             return;
         }
         const Layer = this.PaintTargetLayer();
-        if (this.Projection.Brush.Target !== "mask" && this.StrokeTool === "brush") this.EnsureChannel(Layer, "base_color");
+        if (this.Projection.Brush.Target !== "mask" && this.Tool === "brush") this.EnsureChannel(Layer, "base_color");
         this.BeginStrokeRevision(Layer);
         const Segment = this.Projection.Begin(Hit, this.PointerReading(Event));
         this.NotePaintedCoordinate(Hit.Coordinate);
@@ -2588,7 +2598,13 @@ export class TexturePanel
                 ];
                 return;
             }
-            if (this.PointerButton === 2 || Event.shiftKey) this.Camera.Pan(Delta[0], Delta[1]);
+            const Intent = PointerIntent({
+                Button: this.PointerButton,
+                Tool: this.Tool,
+                Space: this.SpaceHeld,
+                Shift: Event.shiftKey,
+            });
+            if (Intent.Pan) this.Camera.Pan(Delta[0], Delta[1]);
             else this.Camera.Orbit(Delta[0], Delta[1]);
             return;
         }
@@ -2604,7 +2620,7 @@ export class TexturePanel
                 this.HoverTile = Tile;
                 this.MarkHoveredTile();
             }
-            if (this.Projection.Active && (this.StrokeTool === "brush" || this.StrokeTool === "eraser"))
+            if (this.Projection.Active && (this.Tool === "brush" || this.Tool === "eraser"))
             {
                 const Segment = this.Projection.ExtendPlane(Coordinate, PlaneRadius, this.PointerReading(Event));
                 if (Segment)
@@ -2635,7 +2651,7 @@ export class TexturePanel
             return;
         }
         if (!Hit || !this.Projection.Active) return;
-        if (this.StrokeTool !== "brush" && this.StrokeTool !== "eraser") return;
+        if (this.Tool !== "brush" && this.Tool !== "eraser") return;
         const Segment = this.Projection.Extend(Hit, this.PointerReading(Event));
         if (Segment)
         {
@@ -2667,17 +2683,9 @@ export class TexturePanel
             this.MovingMark = "";
         }
         this.PickCandidate = null;
-        this.SecondaryPainting = false;
         this.Navigating = false;
         this.PointerButton = undefined;
         this.PointerPrevious = null;
-    }
-
-    // The tool the pointer is actually driving: the right button always paints, whatever is selected in the toolbar.
-    get StrokeTool()
-    {
-        if (!this.SecondaryPainting) return this.Tool;
-        return this.Tool === "eraser" ? "eraser" : "brush";
     }
 
     PlaneRadius()
@@ -3034,7 +3042,7 @@ export class TexturePanel
             Flow: 1,
             FacingLimit: Math.cos((Transform.AngleLimit * Math.PI) / 180),
             Jitter: 0,
-            Erase: this.StrokeTool === "eraser",
+            Erase: this.Tool === "eraser",
         };
         if (Target !== "mask") this.EnsureChannel(Layer, "base_color");
         // The image has to exist before it can be remembered, or the first stamp would have nothing to undo to.
@@ -5404,7 +5412,7 @@ export class TexturePanel
         const Tool = ToolOrdering.find((Entry) => Entry.Identifier === this.Tool);
         const Target = this.Projection.Brush.Target === "mask" ? "mask" : "layer";
         Select("#viewport-object").textContent = Layer.Name;
-        const Placing = this.StrokeTool === "decal" && Layer?.Kind === "decal";
+        const Placing = this.Tool === "decal" && Layer?.Kind === "decal";
         const Artwork = Layer?.Kind === "decal" && Layer.Decal.SourceKind === "text" ? "Text" : "Decal";
         const ToolLabel = Placing ? `${Artwork} ${Layer.Decal.Placement === "stamp" ? "stamp" : "placement"}` : Tool?.Label;
         const Axis = this.Projection.Brush.Symmetry;
@@ -5497,7 +5505,7 @@ export class TexturePanel
             Sectors: this.Projection.Brush.Sectors,
             Placement: this.Placement,
             Cursor:
-                this.StrokeTool === "brush" || this.StrokeTool === "eraser"
+                this.Tool === "brush" || this.Tool === "eraser"
                     ? this.Cursor && { ...this.Cursor, ...this.PreviewInk() }
                     : null,
         };
@@ -5507,7 +5515,7 @@ export class TexturePanel
                 Pan: this.PlanePan,
                 Zoom: this.PlaneZoom,
                 CursorInk: this.PreviewInk().Ink,
-                CursorPreview: this.StrokeTool === "brush" || this.StrokeTool === "eraser" ? this.PreviewInk().Preview : 0,
+                CursorPreview: this.Tool === "brush" || this.Tool === "eraser" ? this.PreviewInk().Preview : 0,
                 Cursor: this.Tool === "brush" || this.Tool === "eraser" ? this.PlaneCursor : null,
             });
         else this.Integrator.RenderViewport(this.Camera, Options);
