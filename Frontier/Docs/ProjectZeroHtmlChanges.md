@@ -1809,3 +1809,105 @@ and mesh digest, and the browser reports record source hashes. Full mesh JSON, t
 packages remain ignored scratch. C031's `RevisionCaptures` remains historical evidence, not substituted for these
 new runs. Verification entry points are `VerifyVariation.mjs`, `VerifyGeometry.mjs`, `VerifyCheckpoints.mjs`,
 `VerifyIntersections.cjs`, `VerifyPresets.cjs` and `VerifyWorkflow.cjs` under `VisualProof/CliffSequence/`.
+
+## C034 — Discrete grain-weathering study and Fluid-themed cliff authoring
+
+**Date:** 2026-10-05. **Base:** C033 (`e13b040`). **Scope:** the experimental HTML cliff workspace only.
+Native code, Fluid simulation, other experiments and the approved macro-geometry solvers are unchanged.
+
+### Delivered controls and geometry
+
+The cliff and material views now use the existing experimental Fluid theme: DM Sans, charcoal rounded panels,
+trapezoid document tabs, pill sliders, outliner, inspector and document save/open actions. The Fluid theme is
+imported directly; its source is not modified. The cliff retains its five-stage workflow and explicit
+**rebuild only through the selected stage** behaviour.
+
+The new **Grain weathering** tab is an isolated material study. On first activation it freezes an available
+cliff triangle; double-clicking a cliff face selects an explicit source for **Sample cliff face**. Stored
+attachments include body name, construction stage, triangle index, triangle coordinates and per-column
+barycentrics. Requested patch size is clamped to the source triangle's interior clearance. If no ready cliff
+source exists on first activation, the study is explicitly labelled as a standalone sample.
+
+- Seeded hard-core sites and clipped Voronoi polygons form packed, irregular grain columns, not scattered spheres.
+  Shallow fixed faceted crowns sit above two to eight buried grain layers and a permanent backing.
+- Sandstone, crystalline-aggregate and weak-laminated coefficient presets control mineral fractions, initial
+  cement strength, susceptibility and iron content. The laminated preset additionally weakens directional bands.
+- A contact graph transports bounded water and dissolved tracer. Source orientation affects rain exposure and
+  tangential gravity. Drying deposits tracer, susceptibility controls cement loss, and iron/moisture affect an
+  illustrative oxidation state. Ledger residuals are displayed rather than assumed zero.
+- Only exposed grains detach. Removal changes the occupied solid and exposes lower caps and sidewalls; the
+  boundary is rebuilt as triangles. The pits remain visible in **Clay · geometry only**.
+- Four editable mineral colours are mapped directly to vertex colours, with moisture, oxide and deposited-tracer
+  modulation. Diagnostic views show moisture, bonds, oxidation/deposits, exposed layer and weak bands. Palette
+  changes do not alter particle state or vertex positions. Rendering currently uses one roughness value.
+- Run/pause, single-step, 20-cycle batches, dry cycles, particle picking and study save/open are operational.
+  Weather changes are recorded as replay events; pending weather settings and the edited palette survive saving.
+  Packing changes require rebuilding and cancel an in-flight worker. Invalid recipes cannot display stale geometry
+  as a successful result. Studies are bounded to 2,000 illustrative cycles and 2 MB input files.
+
+No material texture, sampled noise field, displacement, normal map, SDF or baking was added. The seeded noise
+options previously approved for macro landforms remain separate and unchanged.
+
+### Explicit first-prototype limits
+
+This is **not yet natural-rock fidelity**. The deliberately coarse polygon grains remain visibly cellular.
+It is a shallow **columnar** model, not arbitrary three-dimensional crystal growth or a calibrated chemical solver.
+Crystalline aggregate is presently a material-coefficient preset, not distinct cleavage geometry. There are no
+undercuts, falling debris, mechanically simulated flakes, per-grain BRDFs or subpixel grain aggregation. Source
+attachments are frozen snapshots: weathering does **not** replace, remesh or erode the full cliff mesh. Cycles do
+not correspond to geological time. These limitations are also stated in the inspector.
+
+Triangulation is performed in grain units, followed by a roundoff-only weld and conversion back to metres.
+Degenerate-area checks use the same grain units: the reported physical cutoff is `1e-10 × pitch²` square metres.
+This avoids classifying valid micrometre-scale facets as zero-area using the macro-cliff's fixed metre cutoff.
+The actual minimum physical triangle area and cutoff are both visible in Diagnostics. Minimum angles and the
+**unchanged 5° narrow-triangle warning** remain visible, including a viewport warning badge.
+
+The mesh is **not sliver-free**. Default fresh/weathered standalone snapshots retain 50/51 triangles below 5°,
+with a minimum angle of 0.548°. Dense/fine cases are worse: the tested 6 cm, 36-by-36 case retains 298 warnings
+and a 0.044° minimum angle after weathering. This remains an unresolved quality limitation, not a clean-mesh claim.
+
+Boundary rebuilding runs in a worker, but is not realtime; default snapshots took several seconds in the sandbox.
+Software-browser verification is not a hardware-GPU performance benchmark.
+
+### Executed verification
+
+`VisualProof/CliffSequence/VerifyGrains.mjs` passed **14 cases / 28 initial-and-weathered snapshots**, including:
+all three presets; multiple seeds; dry, zero dissolution, zero oxidation and zero transport; sizes 0.06–1.2 m;
+resolutions 12–36; layers 2–8; complete removal down to the backing; upward-facing attachment; and a source-clamped
+small triangle. Every tested boundary had finite coordinates, positive volume, no open/nonmanifold edges or
+vertices, no winding errors, no duplicate triangles and no triangles below the declared grain-relative area cutoff.
+
+The checks also assert bounded particle water/bonds/oxide, monotone grain removal, unchanged packed coordinates,
+conserved water/tracer ledgers, analytical occupied volume versus an independent physical-coordinate mesh-volume
+sum, deterministic initial packing, seed variation, valid source barycentrics and triangle identity, exact default
+boundary replay, wet/dry state replay and rejected invalid inputs. Dry material remains geometrically unchanged;
+zero dissolution prevents grain detachment. The standalone default removes 1,010 grains by cycle 120, reducing
+solid volume from approximately 0.00666303 to 0.00473186 cubic metres.
+
+The existing independent BVH/SAT verifier checked **six snapshots**: fresh and weathered default, fine/dense and
+small-source cases. It detected **zero self intersections**. There is one connected patch boundary per snapshot;
+this is not a test of interacting free grains or multiple weathering bodies. Reports retain mesh digests and exact
+specifications/source snapshots. Shared-boundary contraction and numerical tolerances remain documented in the
+intersection verifier.
+
+Two final-source Chromium 133 / SwiftShader browser workflows passed:
+
+- Material: source capture, 120 weathering cycles, picking, all diagnostic channels, palette edits without geometry
+  changes, actual JSON download/open with exact geometry replay, pending weather/palette persistence, run/pause,
+  packing-change cancellation, dry cycle, invalid-palette rejection, injected worker failure and rebuild recovery.
+- Cliff: the existing full workflow was rerun under the new theme, covering all five stages, worker checkpoint
+  reuse, late edits, cancellation, OBJ export, exploded-view export stability, legacy recipe import, narrow-angle
+  warnings, worker failure and WebGL context loss. Stage-local rebuilding remains intact.
+- Both views were checked at 390 × 844 with no horizontal overflow. Browser error lists were empty and both WebGL
+  contexts returned error zero before the deliberate context-loss test. No material texture maps were assigned.
+
+The actual captured cliff-face study removes **995 of 2,880 grains** at cycle 120. Water and tracer residuals are
+approximately `2.84e-17` cubic metres and `-6.59e-20` tracer units. Differences from the standalone study follow
+its captured source orientation rather than a replay mismatch.
+
+Final evidence is in **`VisualProof/CliffSequence/GrainCaptures/`**: eight material/UI captures, the saved study,
+`Grains.json`, `Intersections.json` and `Workflow.json`; `CliffWorkflow/` contains fourteen cliff regression captures
+and its workflow report. Both browser reports and the grain report have source hashes matching the delivered
+application files. The new browser entry point is `VerifyGrainWorkflow.cjs`. Full mesh dumps, dependencies and
+intermediate/failed runs remain ignored scratch. C033's earlier evidence is preserved.

@@ -1,0 +1,83 @@
+{
+  "Format": "Frontier.GrainWeathering",
+  "Version": 1,
+  "Specification": {
+    "Preset": "Sandstone",
+    "Seed": 42,
+    "Resolution": 24,
+    "Size": 0.48,
+    "Layers": 5,
+    "Rain": 0.75,
+    "Drying": 0.25,
+    "Runoff": 0.65,
+    "Solvent": 0.7,
+    "Oxidation": 0.65,
+    "BondStrength": 0.7,
+    "WeakBand": 0.7
+  },
+  "Source": {
+    "Triangle": [
+      [
+        16.16,
+        6.4500764272601705,
+        -4.914668378567203
+      ],
+      [
+        15.04,
+        10.656648010255934,
+        -5.247799949205467
+      ],
+      [
+        15.6,
+        8.553362218758052,
+        -2.1259189790733686
+      ]
+    ],
+    "BodyName": "Cliff mass",
+    "Stage": 1,
+    "TriangleIndex": 683,
+    "Origin": [
+      15.6,
+      8.553362218758052,
+      -4.0961291022820125
+    ],
+    "U": [
+      3.572219461605088e-17,
+      0,
+      -1
+    ],
+    "V": [
+      -0.25728679048620495,
+      0.9663350906602263,
+      -9.190848801887321e-18
+    ],
+    "Normal": [
+      0.9663350906602263,
+      0.25728679048620495,
+      3.4519610172883774e-17
+    ],
+    "MaximumSize": 1.3057421116146175
+  },
+  "Cycles": 120,
+  "Events": [],
+  "PendingSpecification": {
+    "Preset": "Sandstone",
+    "Seed": 42,
+    "Resolution": 24,
+    "Size": 0.48,
+    "Layers": 5,
+    "Rain": 0.3,
+    "Drying": 0.25,
+    "Runoff": 0.65,
+    "Solvent": 0.7,
+    "Oxidation": 0.65,
+    "BondStrength": 0.7,
+    "WeakBand": 0.7
+  },
+  "Palette": [
+    "#e0bca0",
+    "#b69b84",
+    "#ac927b",
+    "#97816d"
+  ]
+}

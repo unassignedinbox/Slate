@@ -11,6 +11,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cliff formation · Frontier</title>
 <link rel="stylesheet" href="WorkspacePanel.css">
+<link rel="stylesheet" href="../Fluid/src/ThemeSpecification.css">
+<link rel="stylesheet" href="MaterialPanel.css">
+<link rel="icon" href="data:,">
 <script type="importmap">{"imports":{"three":"../Ocean/lib/three.module.min.js"}}</script>
 </head>
 <body>
@@ -21,11 +24,14 @@
 <symbol id="SunIcon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M5 19l2-2M17 7l2-2"/></symbol>
 <symbol id="FrameIcon" viewBox="0 0 24 24"><path d="M3 9V3h6m6 0h6v6m0 6v6h-6m-6 0H3v-6M8 8h8v8H8z"/></symbol>
 </defs></svg>
-<header class="MenuBar"><span class="Brand">F</span><b>Frontier</b><span class="Divider"></span><span>Project Zero</span><span class="MenuMuted">/</span><span>Cliff formation</span><div class="MenuRight"><span class="Dot"></span> Polygon workspace <span class="BuildLabel">EXPERIMENTAL</span></div></header>
-<div class="DocumentBar"><button class="DocumentTab"><svg><use href="#RockIcon"/></svg>Cliff formation<span>×</span></button><span class="DocumentHint">Procedural geology / seeded formations</span></div>
-<main class="Workspace">
+<header class="app-header"><div class="document-dock"><div class="document-tabs" role="tablist" aria-label="Rock authoring views">
+<button class="document-tab active" id="GeometryTab" role="tab" aria-selected="true"><svg><use href="#RockIcon"/></svg><span>Cliff formation</span></button>
+<button class="document-tab" id="MaterialTab" role="tab" aria-selected="false"><svg><use href="#LayersIcon"/></svg><span>Grain weathering</span></button></div></div>
+<div class="HeaderEnd"><span class="gas-tag"><i></i> Polygon material study</span><button class="button" id="SaveActive">Save recipe</button></div></header>
+<div class="document-bar"><svg><use href="#RockIcon"/></svg><input id="DocumentName" value="Cliff formation" aria-label="Document name" maxlength="50"><span class="document-extension" id="DocumentExtension">.cliff</span><span class="document-note" id="DocumentNote">Procedural geometry · selected-stage rebuilds</span><span class="ToolbarSpace"></span><button id="OpenActive" class="text-button">Open recipe</button></div>
+<main class="Workspace" id="GeometryWorkspace">
 <aside class="Outliner">
-<div class="PanelHeader">Outliner <span>Scene</span></div>
+<div class="PanelHeader">Outliner <span>Scene</span></div><div class="SceneCensus"><span class="CensusTile">● <b>3</b><small>Visible</small></span><span class="CensusTile">◇ <b>1</b><small>Formation</small></span></div><label class="SceneSearch"><input id="CliffSearch" type="search" placeholder="Find a construction step…" aria-label="Find a construction step"></label>
 <div class="OutlinerEntry"><svg><use href="#CameraIcon"/></svg>Editor Camera<span class="Tile">●</span></div>
 <button class="OutlinerEntry Selected" id="SelectCliff"><svg><use href="#RockIcon"/></svg><span>Cliff formation</span><span class="Tile">●</span></button>
 <div class="OutlinerEntry Indent"><svg><use href="#LayersIcon"/></svg><span id="BodyCount">Building strata…</span></div>
@@ -53,6 +59,7 @@
 <details><summary>Method & scope</summary><div class="ControlGroup Small"><p>Landform presets establish cliff proportions. Gradient, ridged and cellular noise vary the crown, bays and cross-sections coherently. Formation and fracture seeds are independent. The same seeds reproduce the same geometry.</p><p>Kinked joints enter all four exposures and terminate against an interior core. Stage 2 offers conjugate fractures, block jointing, steep joints or optional bedding. Non-bedded cuts split selected volumes, rather than drawing rows across the entire cliff. Local edge spalls cut four- or six-facet cavities while preserving both edge ends. Surface fissures are closed-bottom polygon V-grooves.</p><p>Constrained planar triangulation and bounded topology cleanup. This is a geological modelling tool, not a fracture-mechanics or erosion simulation. SDF erosion is excluded.</p></div></details>
 </div><div class="InspectorFooter"><button id="Regenerate" class="Primary">Rebuild through 01</button><div><button id="ExportObj">Export OBJ</button><button id="ExportRecipe">Save recipe</button><button id="ImportRecipe">Load</button></div><input id="RecipeFile" type="file" accept="application/json,.json" hidden></div></aside>
 </main>
+<main class="Workspace" id="GrainWorkspace" hidden></main>
 <footer class="StatusBar"><span id="StatusDot" class="Dot"></span><span id="Status">Building geometry</span><span class="ToolbarSpace"></span><span id="TriangleCount">— triangles</span><span class="StatusDivider">|</span><span>Units: metres</span><span class="StatusDivider">|</span><span>Raster · WebGL</span></footer>
 <script type="module" src="WorkspacePanel.js"></script>
 </body>

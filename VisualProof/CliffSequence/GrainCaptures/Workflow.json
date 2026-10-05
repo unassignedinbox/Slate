@@ -1,0 +1,69 @@
+{
+  "Date": "2026-10-05",
+  "Errors": [],
+  "Checks": {
+    "Weathered": {
+      "Cycle": 120,
+      "Grains": 2880,
+      "Exposed": 576,
+      "Removed": 995,
+      "Moisture": 0.8343185619367289,
+      "Oxidation": 0.019348450210159754,
+      "Volume": 0.004756447570791747,
+      "RemovedVolume": 0.0019065778884082528,
+      "Water": 0.00015071163665289632,
+      "WaterResidual": 2.837899186480808e-17,
+      "TracerResidual": -6.590975120822525e-20,
+      "Rain": 0.0018486306411832252,
+      "Evaporation": 0.000809112169363114,
+      "Drainage": 0.0008888068351671866,
+      "Staining": 0.0000011985001000046631
+    },
+    "Picking": true,
+    "Channels": true,
+    "PaletteDoesNotDisplace": true,
+    "SaveOpenExactGeometry": true,
+    "PendingWeatherAndPalette": true,
+    "RunPause": true,
+    "CancelPacking": true,
+    "SourceCapture": true,
+    "DoubleClickSourceTriangle": true,
+    "FailureRecovery": true,
+    "StageLocalCliff": true,
+    "MobileNoOverflow": true,
+    "GlErrors": [
+      0,
+      0
+    ],
+    "NoMaterialMaps": true
+  },
+  "Captures": [
+    "01CliffTheme",
+    "02FreshGrains",
+    "03WeatheredGrains",
+    "04ClayPits",
+    "05ParticleInspection",
+    "06Palette",
+    "07MobileGrains",
+    "08MobileCliff"
+  ],
+  "SourceHashes": {
+    "CliffSpecification.js": "25851f3a9ec6ec27792fc6b09df733ca3bab41cfc5c7f57880c4b056807445be",
+    "FractureSequence.js": "62f1cdec89913ce62602fe7cf334833fa10a3b8b3bd77bae4327e4c8efd43dad",
+    "GenerationQueue.js": "89a2d407eef1920cdebc1de041a0a1d4b71d6537205f860217c6a8438b6ad999",
+    "GrainPanel.js": "9431a9222a93051625c6f49a50d97e11451828630617f4ac8aa151ee6cf1864c",
+    "GrainQueue.js": "a41aa3cbda6d7cf72c1cd95584b80b663a1a465702ce2f5137903e09b0ba3a13",
+    "GrainSequence.js": "4b21a8437616d4041ee3d5482132caadc0bce7190054ad57128d7d12e5bed0cb",
+    "GrainSpecification.js": "99313c678455d5922e58d7371b49f109a74170a474f7911f32643c8f1ab8ca26",
+    "MaterialPanel.css": "d93bc0959e9914183a3e16b0bcb35558a33dd9961115ba502e5be778fbc3f85b",
+    "PolyhedronSolver.js": "5c67f739b74c1361784110e2ef368268a71ff60d93e2f2a21543f0e119ac05a3",
+    "ReliefProjection.js": "c076ea0a0aa28b5d09b819aee915ea40b6bddebd36199d1ee9e7d407bd32a28d",
+    "RuptureSolver.js": "a98ed8ef0f684aead4394cc6368dafc5853adba8e2ab7b44320d13bbae07a242",
+    "TriangleSolver.js": "c3eb7e84c0e996649eecffab018022813fbfa2c8ffde653c94efca40e06a2094",
+    "WorkspacePanel.css": "33fdac700215540f11e66102fca764e6ea81f299fbcc2d2dc03aa75c70ae3f0c",
+    "WorkspacePanel.js": "b9e2286b4e7d9919f44437c9edad8e7065724667e2f62b72304647cceaacf1ba",
+    "index.html": "12919280876f3e64956b6ee2539f9f11ad4f281ab963cedc7af8b35ddb242fb9"
+  },
+  "BrowserVersion": "133.0.6943.0",
+  "Passed": true
+}

@@ -4,6 +4,8 @@
 // 📦 Static polygon cliff authoring workspace, clay viewport, stage inspection and triangle OBJ exchange.
 
 import * as THREE from 'three';
+import {CreateGrainPanel} from './GrainPanel.js';
+import {CaptureGrainSource} from './GrainSequence.js';
 import {OrbitControls} from '../Ocean/lib/addons/OrbitControls.js';
 import {CliffDefaults, CliffProfiles, ReadSpecification, EarliestStage, NoiseModes, FractureStyles, FormationPresets, ReadRecipe} from './CliffSpecification.js';
 
@@ -89,6 +91,7 @@ function SetPressed(Id, Value)
 
 function DisposeBodies()
 {
+    State.SourceFace=null;
     ClearSelection();
     BodyGroup.children.forEach(Body=>Body.traverse(Object=>{if(Object.geometry) Object.geometry.dispose();}));
     BodyGroup.clear();
@@ -521,11 +524,16 @@ Renderer.domElement.addEventListener('dblclick',Event=>
     const Ray=new THREE.Raycaster();
     Ray.setFromCamera(new THREE.Vector2((Event.clientX-Rect.left)/Rect.width*2-1,1-(Event.clientY-Rect.top)/Rect.height*2),Camera);
     const Hit=Ray.intersectObjects(BodyGroup.children.filter(Body=>Body.visible),false)[0];
-    if (Hit) SelectBody(Hit.object);
+    if (Hit)
+    {
+        SelectBody(Hit.object);
+        const Content=Hit.object.userData.Mesh;
+        State.SourceFace={Triangle:Content.Triangles[Hit.faceIndex].map(Index=>Content.Vertices[Index].slice()),BodyName:Content.Name,Stage:State.Stage,TriangleIndex:Hit.faceIndex};
+    }
 });
 window.addEventListener('keydown',Event=>
 {
-    if (['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName)) return;
+    if (GrainStudy.Parameters.Active||['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName)) return;
     if (Event.key.toLowerCase()==='f') FrameView(State.Selected);
     if (Event.key==='Escape') {ClearSelection();ApplyVisibility();}
 });
@@ -538,6 +546,7 @@ Renderer.domElement.addEventListener('webglcontextlost',Event=>
 function Animate()
 {
     requestAnimationFrame(Animate);
+    if (GrainStudy.Parameters.Active) return;
     if (ResizePending)
     {
         ResizePending=false;
@@ -561,6 +570,59 @@ function Animate()
         document.querySelector('.ScaleBadge b').textContent=`${ScaleLength} m`;
     }
 }
+function AcquireGrainSource()
+{
+    if (!State.Result||State.Dirty||State.Busy) throw new Error('Build the selected cliff stage before sampling its face.');
+    let Source=State.SourceFace;
+    if (!Source)
+    {
+        let Best=-Infinity;
+        for (const Content of State.Result.Stages[State.Stage-1].Meshes) for (let Index=0;Index<Content.Triangles.length;++Index)
+        {
+            if (State.Selected&&State.Selected.name!==Content.Name) continue;
+            if (Content.Tags[Index]!=='Cliff') continue;
+            const Triangle=Content.Triangles[Index].map(Vertex=>Content.Vertices[Vertex]);
+            const A=new THREE.Vector3(...Triangle[1]).sub(new THREE.Vector3(...Triangle[0]));
+            const B=new THREE.Vector3(...Triangle[2]).sub(new THREE.Vector3(...Triangle[0]));
+            const Normal=A.cross(B),Area=Normal.length();
+            if (Normal.z>0&&Area>Best) {Best=Area;Source={Triangle,BodyName:Content.Name,Stage:State.Stage,TriangleIndex:Index};}
+        }
+    }
+    if (!Source) throw new Error('Select a larger exposed cliff face to sample.');
+    return CaptureGrainSource(Source.Triangle,Source.BodyName,Source.Stage,Source.TriangleIndex);
+}
+const GrainStudy=CreateGrainPanel(Element('GrainWorkspace'),AcquireGrainSource);
+const DocumentNames={Geometry:'Cliff formation',Material:'Grain weathering'};
+function ViewDocument(Material)
+{
+    Element('GeometryWorkspace').hidden=Material;
+    Controls.enabled=!Material;
+    GrainStudy.SetActive(Material);
+    for (const [Name,Active] of [['GeometryTab',!Material],['MaterialTab',Material]])
+    {
+        Element(Name).classList.toggle('active',Active);Element(Name).setAttribute('aria-selected',String(Active));
+    }
+    Element('DocumentName').value=DocumentNames[Material?'Material':'Geometry'];
+    Element('DocumentExtension').textContent=Material?'.grain':'.cliff';
+    Element('DocumentNote').textContent=Material?'Discrete grains · isolated source-face study · no baking':'Procedural geometry · selected-stage rebuilds';
+    Element('SaveActive').textContent=Material?'Save study':'Save recipe';
+    Element('OpenActive').textContent=Material?'Open study':'Open recipe';
+    Element('Status').textContent=Material?'Grain material study · illustrative cycles, not geological time':'Cliff geometry · selected-stage rebuilds';
+    Element('TriangleCount').hidden=Material;
+    ResizePending=true;RenderRequested=true;
+}
+Element('GeometryTab').onclick=()=>ViewDocument(false);
+Element('MaterialTab').onclick=()=>ViewDocument(true);
+Element('DocumentName').oninput=Event=>
+{
+    const Name=GrainStudy.Parameters.Active?'Material':'Geometry';
+    DocumentNames[Name]=Event.target.value;
+    Element(`${Name}Tab`).querySelector('span').textContent=Event.target.value||'Untitled';
+};
+Element('SaveActive').onclick=()=>Element(GrainStudy.Parameters.Active?'GrainSave':'ExportRecipe').click();
+Element('OpenActive').onclick=()=>Element(GrainStudy.Parameters.Active?'GrainLoad':'ImportRecipe').click();
+Element('CliffSearch').oninput=Event=>document.querySelectorAll('.StageButton').forEach(Button=>{Button.hidden=!Button.textContent.toLowerCase().includes(Event.target.value.toLowerCase());});
+window.GrainApp=GrainStudy;
 window.CliffApp={State,Scene,Camera,Controls,Renderer,BodyGroup,Generate,ViewStage,FrameView,SelectBody,ObjText,
     SetSpecification:Specification=>{State.Specification=ReadSpecification({...State.Specification,...Specification});BuildControls();Generate();},
     FocusSpall:()=>

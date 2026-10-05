@@ -1,0 +1,174 @@
+{
+  "Date": "2026-10-05",
+  "SnapshotNumbers": {
+    "1": "Fresh",
+    "2": "Weathered"
+  },
+  "Cases": [
+    {
+      "Name": "Default",
+      "Specification": {
+        "Preset": "Sandstone",
+        "Seed": 42,
+        "Resolution": 24,
+        "Size": 0.48,
+        "Layers": 5,
+        "Rain": 0.75,
+        "Drying": 0.25,
+        "Runoff": 0.65,
+        "Solvent": 0.7,
+        "Oxidation": 0.65,
+        "BondStrength": 0.7,
+        "WeakBand": 0.7
+      },
+      "Source": null,
+      "Cycles": 120,
+      "MeshDigest": "31ac71ec5c726b8a5075a637f4db6044a2b1360022a1ae61cf43d340607c6329",
+      "Check": {
+        "Date": "2026-10-05",
+        "Method": "Indexed double-precision positions; BVH broad phase and double-precision separating-axis triangle tests with normalized edge directions (tolerance min(1e-8 m, shortest edge * 1e-8), with a coordinate-roundoff floor); All triangle pairs, including coplanar tessellation; shared-vertex pairs contracted toward their centroids by 1e-4 to exclude legitimate boundary contact. Cross-body pairs uncontracted.",
+        "Stages": [
+          {
+            "Stage": 1,
+            "SelfCandidates": 1885846,
+            "BodyCandidates": 0,
+            "SelfHits": 0,
+            "BodyHits": 0
+          },
+          {
+            "Stage": 2,
+            "SelfCandidates": 2129013,
+            "BodyCandidates": 0,
+            "SelfHits": 0,
+            "BodyHits": 0
+          }
+        ],
+        "Hits": []
+      }
+    },
+    {
+      "Name": "FineDense",
+      "Specification": {
+        "Preset": "Sandstone",
+        "Seed": 73,
+        "Resolution": 36,
+        "Size": 0.06,
+        "Layers": 8,
+        "Rain": 0.75,
+        "Drying": 0.25,
+        "Runoff": 0.65,
+        "Solvent": 0.7,
+        "Oxidation": 0.65,
+        "BondStrength": 0.7,
+        "WeakBand": 0.7
+      },
+      "Source": null,
+      "Cycles": 40,
+      "MeshDigest": "2b716a77fa06d4e7c0939a927d872a97295418ea2330a43653b367ca84bd4e0c",
+      "Check": {
+        "Date": "2026-10-05",
+        "Method": "Indexed double-precision positions; BVH broad phase and double-precision separating-axis triangle tests with normalized edge directions (tolerance min(1e-8 m, shortest edge * 1e-8), with a coordinate-roundoff floor); All triangle pairs, including coplanar tessellation; shared-vertex pairs contracted toward their centroids by 1e-4 to exclude legitimate boundary contact. Cross-body pairs uncontracted.",
+        "Stages": [
+          {
+            "Stage": 1,
+            "SelfCandidates": 4498662,
+            "BodyCandidates": 0,
+            "SelfHits": 0,
+            "BodyHits": 0
+          },
+          {
+            "Stage": 2,
+            "SelfCandidates": 4845225,
+            "BodyCandidates": 0,
+            "SelfHits": 0,
+            "BodyHits": 0
+          }
+        ],
+        "Hits": []
+      }
+    },
+    {
+      "Name": "SmallSource",
+      "Specification": {
+        "Preset": "Sandstone",
+        "Seed": 999999,
+        "Resolution": 36,
+        "Size": 0.48,
+        "Layers": 2,
+        "Rain": 0.75,
+        "Drying": 0.25,
+        "Runoff": 0.65,
+        "Solvent": 0.7,
+        "Oxidation": 0.65,
+        "BondStrength": 0.7,
+        "WeakBand": 0.7
+      },
+      "Source": {
+        "Triangle": [
+          [
+            0,
+            0,
+            0
+          ],
+          [
+            0.07,
+            0,
+            0
+          ],
+          [
+            0,
+            0.07,
+            0
+          ]
+        ],
+        "BodyName": "Small face",
+        "Stage": 1,
+        "TriangleIndex": 7,
+        "Origin": [
+          0.023333333333333334,
+          0.023333333333333334,
+          0
+        ],
+        "U": [
+          1,
+          0,
+          0
+        ],
+        "V": [
+          0,
+          1,
+          0
+        ],
+        "Normal": [
+          0,
+          0,
+          1
+        ],
+        "MaximumSize": 0.021933333333333343
+      },
+      "Cycles": 40,
+      "MeshDigest": "47d6c5d34f96aa7acab0ad44c5526f8ba13d3bd5cf18f51dac2095e79bebb8cd",
+      "Check": {
+        "Date": "2026-10-05",
+        "Method": "Indexed double-precision positions; BVH broad phase and double-precision separating-axis triangle tests with normalized edge directions (tolerance min(1e-8 m, shortest edge * 1e-8), with a coordinate-roundoff floor); All triangle pairs, including coplanar tessellation; shared-vertex pairs contracted toward their centroids by 1e-4 to exclude legitimate boundary contact. Cross-body pairs uncontracted.",
+        "Stages": [
+          {
+            "Stage": 1,
+            "SelfCandidates": 4172319,
+            "BodyCandidates": 0,
+            "SelfHits": 0,
+            "BodyHits": 0
+          },
+          {
+            "Stage": 2,
+            "SelfCandidates": 4261639,
+            "BodyCandidates": 0,
+            "SelfHits": 0,
+            "BodyHits": 0
+          }
+        ],
+        "Hits": []
+      }
+    }
+  ]
+}

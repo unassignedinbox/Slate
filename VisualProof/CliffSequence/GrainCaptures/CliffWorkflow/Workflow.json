@@ -1,0 +1,343 @@
+{
+  "Date": "2026-10-05",
+  "Errors": [],
+  "Checks": {
+    "PersistentWorker": true,
+    "ManualRebuildOnly": true,
+    "SelectedStageStopping": true,
+    "UnbuiltInputLabel": true,
+    "Metrics": [
+      {
+        "Stage": 1,
+        "Bodies": 1,
+        "Vertices": 360,
+        "Triangles": 716,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 10.325143688717937,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 2939.723335528047,
+        "Spalls": 0,
+        "Cracks": 0
+      },
+      {
+        "Stage": 2,
+        "Bodies": 8,
+        "Vertices": 4790,
+        "Triangles": 9544,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 5.106954132919937,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 2892.3835412368967,
+        "Spalls": 0,
+        "Cracks": 0
+      },
+      {
+        "Stage": 3,
+        "Bodies": 54,
+        "Vertices": 10354,
+        "Triangles": 20472,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 5.087724492572477,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 2818.578966701712,
+        "Spalls": 0,
+        "Cracks": 0
+      },
+      {
+        "Stage": 4,
+        "Bodies": 54,
+        "Vertices": 16325,
+        "Triangles": 32414,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 5.001083658373836,
+        "RejectedSpalls": 3,
+        "RejectedCracks": 0,
+        "Volume": 2807.3804832452224,
+        "Spalls": 219,
+        "Cracks": 0
+      },
+      {
+        "Stage": 5,
+        "Bodies": 54,
+        "Vertices": 18473,
+        "Triangles": 36710,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 5.001083658373836,
+        "RejectedSpalls": 3,
+        "RejectedCracks": 0,
+        "Volume": 2807.2133898036036,
+        "Spalls": 219,
+        "Cracks": 20
+      }
+    ],
+    "TriangleObjFaces": 36710,
+    "ExplodePreservesObj": true,
+    "LateEditReuse": true,
+    "Cancellation": true,
+    "UserRecipe": {
+      "Stage": 5,
+      "Bodies": 53,
+      "Vertices": 18270,
+      "Triangles": 36328,
+      "OpenEdges": 0,
+      "NonmanifoldEdges": 0,
+      "WindingErrors": 0,
+      "ZeroArea": 0,
+      "NonmanifoldVertices": 0,
+      "DuplicateTriangles": 0,
+      "ThinTriangles": 0,
+      "MinimumAngle": 5.014609416090203,
+      "RejectedSpalls": 4,
+      "RejectedCracks": 0,
+      "Volume": 7834.33195130784,
+      "Spalls": 204,
+      "Cracks": 15
+    },
+    "LegacyRecipe": {
+      "Stage": 3,
+      "Bodies": 77,
+      "Vertices": 11567,
+      "Triangles": 22810,
+      "OpenEdges": 0,
+      "NonmanifoldEdges": 0,
+      "WindingErrors": 0,
+      "ZeroArea": 0,
+      "NonmanifoldVertices": 0,
+      "DuplicateTriangles": 0,
+      "ThinTriangles": 1,
+      "MinimumAngle": 3.4853486315701265,
+      "RejectedSpalls": 0,
+      "RejectedCracks": 0,
+      "Volume": 3447.229445132555,
+      "Spalls": 0,
+      "Cracks": 0
+    },
+    "NarrowAngleWarningVisible": true,
+    "NoFailureFallback": true,
+    "MobileNoOverflow": true,
+    "GlError": 0,
+    "ContextLoss": true
+  },
+  "Rebuilds": [
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Milliseconds": 254.3000000002794
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Milliseconds": 194.29999999981374
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Milliseconds": 151.89999999990687
+    },
+    {
+      "Error": null,
+      "Executed": [
+        2
+      ],
+      "Reused": [
+        1
+      ],
+      "Milliseconds": 2160.600000000093
+    },
+    {
+      "Error": null,
+      "Executed": [
+        2
+      ],
+      "Reused": [
+        1
+      ],
+      "Milliseconds": 1768.6999999997206
+    },
+    {
+      "Error": null,
+      "Executed": [
+        2
+      ],
+      "Reused": [
+        1
+      ],
+      "Milliseconds": 1649.9000000003725
+    },
+    {
+      "Error": null,
+      "Executed": [
+        3
+      ],
+      "Reused": [
+        1,
+        2
+      ],
+      "Milliseconds": 4323.600000000093
+    },
+    {
+      "Error": null,
+      "Executed": [
+        4
+      ],
+      "Reused": [
+        1,
+        2,
+        3
+      ],
+      "Milliseconds": 6605.699999999721
+    },
+    {
+      "Error": null,
+      "Executed": [
+        5
+      ],
+      "Reused": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "Milliseconds": 6846.5
+    },
+    {
+      "Error": null,
+      "Executed": [
+        5
+      ],
+      "Reused": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "Milliseconds": 6316.5
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Milliseconds": 353.3000000002794
+    },
+    {
+      "Error": null,
+      "Executed": [
+        2
+      ],
+      "Reused": [
+        1
+      ],
+      "Milliseconds": 2198.5
+    },
+    {
+      "Error": null,
+      "Executed": [
+        3,
+        4,
+        5
+      ],
+      "Reused": [
+        1,
+        2
+      ],
+      "Milliseconds": 17280
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1,
+        2,
+        3
+      ],
+      "Reused": [],
+      "Milliseconds": 6058
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Milliseconds": 228.6999999997206
+    }
+  ],
+  "Captures": [
+    "01MassFront",
+    "02MassRear",
+    "03StageTwoInput",
+    "04ConjugateFractures",
+    "05Stage3",
+    "06Stage4",
+    "07Stage5",
+    "08FracturedRear",
+    "09LocalSpallAfter",
+    "10LocalSpallBefore",
+    "11UserAmphitheatreBeds",
+    "12UserAmphitheatreFinal",
+    "13LegacyTriangleWarning",
+    "14Mobile"
+  ],
+  "SourceHashes": {
+    "CliffSpecification.js": "25851f3a9ec6ec27792fc6b09df733ca3bab41cfc5c7f57880c4b056807445be",
+    "FractureSequence.js": "62f1cdec89913ce62602fe7cf334833fa10a3b8b3bd77bae4327e4c8efd43dad",
+    "GenerationQueue.js": "89a2d407eef1920cdebc1de041a0a1d4b71d6537205f860217c6a8438b6ad999",
+    "GrainPanel.js": "9431a9222a93051625c6f49a50d97e11451828630617f4ac8aa151ee6cf1864c",
+    "GrainQueue.js": "a41aa3cbda6d7cf72c1cd95584b80b663a1a465702ce2f5137903e09b0ba3a13",
+    "GrainSequence.js": "4b21a8437616d4041ee3d5482132caadc0bce7190054ad57128d7d12e5bed0cb",
+    "GrainSpecification.js": "99313c678455d5922e58d7371b49f109a74170a474f7911f32643c8f1ab8ca26",
+    "MaterialPanel.css": "d93bc0959e9914183a3e16b0bcb35558a33dd9961115ba502e5be778fbc3f85b",
+    "PolyhedronSolver.js": "5c67f739b74c1361784110e2ef368268a71ff60d93e2f2a21543f0e119ac05a3",
+    "ReliefProjection.js": "c076ea0a0aa28b5d09b819aee915ea40b6bddebd36199d1ee9e7d407bd32a28d",
+    "RuptureSolver.js": "a98ed8ef0f684aead4394cc6368dafc5853adba8e2ab7b44320d13bbae07a242",
+    "TriangleSolver.js": "c3eb7e84c0e996649eecffab018022813fbfa2c8ffde653c94efca40e06a2094",
+    "WorkspacePanel.css": "33fdac700215540f11e66102fca764e6ea81f299fbcc2d2dc03aa75c70ae3f0c",
+    "WorkspacePanel.js": "b9e2286b4e7d9919f44437c9edad8e7065724667e2f62b72304647cceaacf1ba",
+    "index.html": "12919280876f3e64956b6ee2539f9f11ad4f281ab963cedc7af8b35ddb242fb9"
+  },
+  "BrowserVersion": "133.0.6943.0",
+  "Passed": true
+}
