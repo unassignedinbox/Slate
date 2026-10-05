@@ -378,6 +378,9 @@ export class TexturePanel
         this.HoverTile = FirstTile;
         this.HoverObject = "";
         this.Solo = "";
+        this.BrowserHeld = "";
+        this.DragAsset = null;
+        this.AssetLanding = null;
         this.PickCandidate = null;
         this.Placement = null;
         this.MovingMark = "";
@@ -1112,11 +1115,58 @@ export class TexturePanel
             this.RenderBrowserLibrary();
             this.RenderBrowserItems();
         });
-        Select("#browser-items").addEventListener("click", (Event) =>
+        // 🔴 A click no longer spends the asset. Content is placed by dragging it onto the model or the stack, so a
+        //    click only picks one out — the keyboard keeps a way in, because a drag cannot be typed.
+        const Shelf = Select("#browser-items");
+        Shelf.addEventListener("click", (Event) =>
         {
             const Tile = Event.target.closest("[data-item]");
             if (!Tile) return;
+            this.BrowserHeld = this.BrowserHeld === Tile.dataset.item ? "" : Tile.dataset.item;
+            this.RenderBrowserItems();
+        });
+        Shelf.addEventListener("keydown", (Event) =>
+        {
+            const Tile = Event.target.closest("[data-item]");
+            if (!Tile || (Event.key !== "Enter" && Event.key !== " ")) return;
+            Event.preventDefault();
             this.ApplyBrowserItem(Tile.dataset.item);
+        });
+        Shelf.addEventListener("dragstart", (Event) =>
+        {
+            const Tile = Event.target.closest("[data-item]");
+            if (!Tile) return;
+            this.BrowserHeld = Tile.dataset.item;
+            this.DragAsset = { Selection: this.BrowserSelection, Identifier: Tile.dataset.item };
+            Event.dataTransfer.effectAllowed = "copy";
+            Event.dataTransfer.setData("text/plain", `${this.BrowserSelection}/${Tile.dataset.item}`);
+            Tile.classList.add("dragging");
+            Select("#texture-workspace")?.classList.add("carrying");
+        });
+        Shelf.addEventListener("dragend", () =>
+        {
+            this.DragAsset = null;
+            SelectAll("#browser-items .dragging").forEach((Element) => Element.classList.remove("dragging"));
+            Select("#texture-workspace")?.classList.remove("carrying");
+            this.Canvas?.classList.remove("drop-here");
+        });
+        // The model is the obvious place to drop a material or a decal, so the viewport takes one too.
+        this.Canvas.addEventListener("dragover", (Event) =>
+        {
+            if (!this.DragAsset) return;
+            Event.preventDefault();
+            Event.dataTransfer.dropEffect = "copy";
+            this.Canvas.classList.add("drop-here");
+        });
+        this.Canvas.addEventListener("dragleave", () => this.Canvas.classList.remove("drop-here"));
+        this.Canvas.addEventListener("drop", (Event) =>
+        {
+            if (!this.DragAsset) return;
+            Event.preventDefault();
+            this.Canvas.classList.remove("drop-here");
+            const Carried = this.DragAsset;
+            this.DragAsset = null;
+            this.ApplyBrowserItem(Carried.Identifier, { Selection: Carried.Selection });
         });
     }
 
@@ -1184,7 +1234,7 @@ export class TexturePanel
         Select("#browser-heading").textContent = Label;
         Select("#browser-count").textContent = `${Items.length} item${Items.length === 1 ? "" : "s"}${
             Query ? ` matching “${Query}”` : ""
-        }`;
+        } · drag onto the model or the stack`;
         const Shelf = Select("#browser-items");
         Shelf.dataset.view = this.BrowserView;
         if (!Items.length)
@@ -1198,34 +1248,52 @@ export class TexturePanel
         {
             const Thumb = Entry.Markup || `<span class="browser-fill" style="background:${Entry.Swatch}"></span>`;
             const Delay = `style="--delay:${((Index % 12) * 0.022).toFixed(3)}s"`;
+            const Held = Entry.Identifier === this.BrowserHeld ? "held" : "";
+            const Hint = `${Escape(Entry.Note || Entry.Label)} — drag onto the model or the stack`;
             return this.BrowserView === "list"
-                ? `<button class="browser-row ${Entry.Active ? "active" : ""}" data-item="${Entry.Identifier}" ${Delay}
-                           title="${Escape(Entry.Note || Entry.Label)}">
+                ? `<button class="browser-row ${Entry.Active ? "active" : ""} ${Held}" data-item="${Entry.Identifier}" ${Delay}
+                           draggable="true" title="${Hint}">
                        <span class="browser-swatch" style="background:${Entry.Swatch}">${Entry.Markup || ""}</span>
                        <span class="browser-row-copy"><strong>${Escape(Entry.Label)}</strong>
                            <small>${Escape(Entry.Type)} · ${Escape(Entry.Measure || "")}</small></span>
-                       <span class="browser-row-add">${Icon("plus")}</span>
+                       <span class="browser-row-add">${Icon("drag")}</span>
                    </button>`
-                : `<button class="browser-tile ${Entry.Active ? "active" : ""}" data-item="${Entry.Identifier}" ${Delay}
-                           title="${Escape(Entry.Note || Entry.Label)}">
-                       <span class="browser-thumb">${Thumb}</span>
+                : `<button class="browser-tile ${Entry.Active ? "active" : ""} ${Held}" data-item="${Entry.Identifier}" ${Delay}
+                           draggable="true" title="${Hint}">
+                       <span class="browser-thumb">${Thumb}<span class="browser-grip">${Icon("drag")}</span></span>
                        <span class="browser-name">${Escape(Entry.Label)}<small>${Escape(Entry.Type)}</small></span>
                    </button>`;
         }).join("");
         FillIcons(Shelf);
     }
 
-    ApplyBrowserItem(Identifier)
+    // `Landing` is where the drop happened: which shelf the asset came from, and optionally the row it was let go
+    // over — `{ At: layer identifier, Inside: true }` for a drop onto a folder's own row.
+    ApplyBrowserItem(Identifier, Landing = {})
     {
-        const [Section, Item] = this.BrowserSelection.split("/");
+        const [Section, Item] = (Landing.Selection || this.BrowserSelection).split("/");
+        this.AssetLanding = Landing.At ? { At: Landing.At, Inside: !!Landing.Inside } : null;
         if (Section === "materials" && Item === "presets")
         {
             const Preset = MaterialByIdentifier[Identifier];
             if (!Preset) return;
             const Layers = ExpandMaterial(Preset);
+            const Landing = this.AssetLanding;
+            this.AssetLanding = null;
+            const Anchor = Landing?.At ? this.LayerByIdentifier(Landing.At) : null;
+            const Holder = Anchor
+                ? Landing.Inside && Anchor.Kind === "folder"
+                    ? Anchor.Identifier
+                    : Anchor.Parent || ""
+                : this.ActiveLayer?.Kind === "folder" && !this.ActiveLayer.Collapsed
+                  ? this.ActiveLayer.Identifier
+                  : this.ActiveLayer?.Parent || "";
+            for (const Entry of Layers) Entry.Parent = Holder;
             this.CaptureStack(() =>
             {
-                const Index = this.LayerIndex(this.Project.Selection);
+                const Index = Anchor
+                    ? this.LayerIndex(Anchor.Identifier) - (Landing.Inside ? 1 : 0)
+                    : this.LayerIndex(this.Project.Selection);
                 this.Project.Layers.splice(Index + 1, 0, ...Layers);
                 this.Project.Material = { ...this.Project.Material, ...(Preset.Surface || {}) };
                 this.Project.Selection = Layers[Layers.length - 1].Identifier;
@@ -1294,7 +1362,16 @@ export class TexturePanel
 
     InsertBrowserLayer(Layer)
     {
-        const Index = this.LayerIndex(this.Project.Selection);
+        const Landing = this.AssetLanding;
+        this.AssetLanding = null;
+        const Anchor = Landing?.At ? this.LayerByIdentifier(Landing.At) : null;
+        if (Anchor) Layer.Parent = Landing.Inside && Anchor.Kind === "folder" ? Anchor.Identifier : Anchor.Parent || "";
+        else
+        {
+            const Chosen = this.ActiveLayer;
+            if (Chosen) Layer.Parent = Chosen.Kind === "folder" && !Chosen.Collapsed ? Chosen.Identifier : Chosen.Parent || "";
+        }
+        const Index = Anchor ? this.LayerIndex(Anchor.Identifier) - (Landing.Inside ? 1 : 0) : this.LayerIndex(this.Project.Selection);
         this.CaptureStack(() =>
         {
             this.Project.Layers.splice(Index + 1, 0, Layer);
@@ -1659,10 +1736,12 @@ export class TexturePanel
         Stack.addEventListener("dragover", (Event) =>
         {
             Event.preventDefault();
+            if (this.DragAsset) Event.dataTransfer.dropEffect = "copy";
             const Row = Event.target.closest("[data-layer]");
             SelectAll(".layer-row.drop-target, .layer-row.drop-inside").forEach((Element) =>
                 Element.classList.remove("drop-target", "drop-inside"),
             );
+            Stack.classList.toggle("drop-here", !!this.DragAsset && !Row);
             if (!Row || Row.dataset.layer === this.DragIdentifier) return;
             if (this.DragIdentifier && !CanHold(this.Layers, this.DragIdentifier, Row.dataset.layer)) return;
             Row.classList.add(Landing(Event, Row) ? "drop-inside" : "drop-target");
@@ -1675,12 +1754,30 @@ export class TexturePanel
             SelectAll(".layer-row.drop-target, .layer-row.drop-inside").forEach((Element) =>
                 Element.classList.remove("drop-target", "drop-inside"),
             );
+            Stack.classList.remove("drop-here");
+            // Content dragged out of the browser lands exactly where it was let go, folder and all.
+            if (this.DragAsset)
+            {
+                const Carried = this.DragAsset;
+                this.DragAsset = null;
+                this.ApplyBrowserItem(Carried.Identifier, {
+                    Selection: Carried.Selection,
+                    At: Row?.dataset.layer || "",
+                    Inside,
+                });
+                return;
+            }
             if (!Row || !this.DragIdentifier) return;
             this.MoveLayer(this.DragIdentifier, Row.dataset.layer, Inside);
             this.DragIdentifier = "";
         });
+        Stack.addEventListener("dragleave", (Event) =>
+        {
+            if (!Stack.contains(Event.relatedTarget)) Stack.classList.remove("drop-here");
+        });
         Stack.addEventListener("dragend", () =>
         {
+            Stack.classList.remove("drop-here");
             SelectAll(".layer-row.dragging").forEach((Element) => Element.classList.remove("dragging"));
             SelectAll(".layer-row.drop-target, .layer-row.drop-inside").forEach((Element) =>
                 Element.classList.remove("drop-target", "drop-inside"),

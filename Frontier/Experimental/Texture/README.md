@@ -10,7 +10,7 @@ cd Frontier/Experimental/Texture
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
-npm test           # 110 unit tests, no browser required
+npm test           # 112 unit tests, no browser required
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -64,7 +64,8 @@ while the base fill stays at 1K; the compositor samples by coordinate, so the si
 layer's sheet resamples what is already painted on it rather than discarding it, in both directions.
 
 **Layer stack.** Visibility, lock, opacity, ten blend modes (normal, multiply, screen, overlay, add, subtract, darken,
-lighten, difference, linear-burn), drag reorder, duplicate, delete, double-click rename, and a mask per layer. Each row is
+lighten, difference, linear-burn), drag reorder, folders, isolate, duplicate, delete, double-click rename, and a mask per
+layer. Each row is
 a card: a thumbnail of what the layer actually holds — its coverage blitted down to 64² on the GPU and read back, over a
 checkerboard where the layer is transparent, falling back to the kind's glyph until something is painted — its kind,
 blend and channel count, the opacity read large, and a pair of chips —
@@ -119,8 +120,24 @@ are undoable with the rest of the stack, and a removed mask frees its image so t
 viewport bar; it settles closed, half or full. The library column on the left walks Materials (the four finish families
 plus the multi-layer surface presets), Decals (signage, marks, plates, grunge and the ten type families), Generators
 (procedural and baked) and Scene (surfaces and lighting). The shelf on the right searches, switches between tiles and
-rows, and one click puts the thing into the document: a material layer, a decal layer, a generator layer, a new mesh or
-a new environment.
+rows, and every item is dragged out of it rather than clicked into place: pick a tile up and drop it on the model to add
+it to the top of the stack, or drop it on a layer row to say exactly where it goes — the middle of a folder row puts it
+inside, the edges put it alongside. A material preset, a decal, a generator, a mesh or an environment all travel the same
+way. A click only picks an item out so you can read it; <kbd>Enter</kbd> on a focused tile adds it, because a drag cannot
+be typed.
+
+**Folders.** A folder is a layer whose children name it as their parent, so the stack stays one flat array in the order
+the compositor walks it, repaired into a tree after every edit: no loops, no orphans, nothing nested more than four deep,
+and children always directly behind the folder so its row sits above what it holds. Groups pass through — a layer inside
+keeps its own blend against everything below it — and the folder weighs what it holds: its opacity multiplies theirs, and
+hiding it takes the whole set out of the composite. <kbd>Ctrl G</kbd> groups the selection, the arrow on the row opens and
+closes it, and grouping, ungrouping, duplicating, deleting and dragging all carry the whole subtree. Painting onto a
+folder opens the new layer inside it.
+
+**Isolate.** <kbd>I</kbd>, the target button on the row, or <kbd>Alt</kbd>-click on the eye: only that layer composites,
+and everything else steps out of the way. Isolating a folder keeps everything inside it, and an isolated layer is shown
+even when the folder around it is hidden — which is the only reading of isolate that is any use when you are hunting for
+a layer you cannot see.
 
 Painting on a layer that cannot hold coverage inserts a stroke layer above it rather than refusing the stroke. The stack
 is capped at 64 layers.
@@ -343,7 +360,8 @@ green channel is flipped on the way out rather than left for someone to discover
 | Brush size, live | <kbd>Alt</kbd> + wheel | Frame the surface | <kbd>F</kbd> |
 | Search layers | <kbd>/</kbd> | Content browser | <kbd>B</kbd> |
 | Undo / redo | <kbd>Ctrl Z</kbd> / <kbd>Ctrl ⇧ Z</kbd> | Save `.pigment` / export | <kbd>Ctrl S</kbd> / <kbd>Ctrl E</kbd> |
-| Symmetry: off → X → Y → Z → radial | <kbd>S</kbd> | | |
+| Symmetry: off → X → Y → Z → radial | <kbd>S</kbd> | Isolate the selected layer | <kbd>I</kbd> |
+| Group the selection into a folder | <kbd>Ctrl G</kbd> | | |
 
 **Only the left button paints.** The tool in the toolbar is the tool in hand, and nothing else puts a mark on the
 model: right-drag orbits, middle-drag pans, <kbd>⇧</kbd> turns either into a pan, and <kbd>Space</kbd> pans from the
