@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Realtime Fracture · glass / wood / rock / plastic / buildings</title>
+  <script type="module" crossorigin src="./assets/index-B-_1Ali8.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-C20y9bkG.css">
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div id="crosshair"></div>
+
+<aside id="ui">
+  <header>
+    <h1>Realtime Fracture</h1>
+    <p class="sub">Stress-driven crack propagation · <span class="nope">not Voronoi</span></p>
+  </header>
+
+  <section>
+    <h2>Target</h2>
+    <div id="scenes" class="chips"></div>
+    <p id="blurb" class="blurb"></p>
+  </section>
+
+  <section>
+    <h2>Impact</h2>
+    <label>Energy <output id="energyOut"></output>
+      <input id="energy" type="range" min="0" max="1000" step="1" value="340" />
+    </label>
+    <label>Fracture time scale <output id="crackOut"></output>
+      <input id="crackScale" type="range" min="0" max="100" step="1" value="42" />
+    </label>
+    <label>Debris time scale <output id="physOut"></output>
+      <input id="physScale" type="range" min="5" max="100" step="1" value="100" />
+    </label>
+    <div class="row">
+      <button id="reset">Reset ⟲</button>
+      <button id="auto">Auto-orbit</button>
+    </div>
+    <div class="row" id="deformRow" hidden>
+      <button id="deformMode">Deformer: per-vertex VAT</button>
+    </div>
+    <p class="hint">Left-click the object to fire · drag to orbit · wheel to zoom</p>
+  </section>
+
+  <section>
+    <h2>Solver readout</h2>
+    <div id="stats" class="stats"></div>
+  </section>
+
+  <footer>
+    <span id="fps">–</span>
+    <a href="https://github.com" id="docs">RESEARCH.md</a>
+  </footer>
+</aside>
+
+<div id="toast"></div>
+</body>
+</html>
