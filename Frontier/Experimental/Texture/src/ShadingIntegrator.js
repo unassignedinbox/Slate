@@ -960,6 +960,12 @@ export class ShadingIntegrator
             Gradient?.Through ? 1 : 0,
         ]);
         Device.uniform1f(Uniforms.get("uGradientEdge"), Gradient?.Softness ?? 0.5);
+        Device.uniform4fv(Uniforms.get("uGradientFar"), [
+            Gradient?.Far?.[0] ?? 0,
+            Gradient?.Far?.[1] ?? 0,
+            Gradient?.Far?.[2] ?? 0,
+            Gradient?.Pair ? 1 : 0,
+        ]);
         this.BindImage(Program, "uStampDecal", (Burn && this.LayerImages.get(Burn.Layer)?.Decal) || this.BlankImage(), 2);
         Device.uniform3fv(Uniforms.get("uStampCentre"), Burn?.Position || [0, 0, 0]);
         Device.uniform3fv(Uniforms.get("uStampAxis"), Burn?.Normal || [0, 1, 0]);

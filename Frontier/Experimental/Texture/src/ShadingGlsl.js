@@ -921,6 +921,7 @@ uniform float uAlphaJitter;
 uniform int uStampMode;        // 0 surface · 1 texture space · 2 decal burned in · 3 gradient · 4 flat gradient · 5 flat burn
 uniform vec4 uGradient;        // shape (0 linear, 1 radial), easing, reverse, wrap all the way round
 uniform float uGradientEdge;   // how soft the ends of the fade are
+uniform vec4 uGradientFar;     // the colour at the far end, and whether there is one at all
 // 🔴 Which image this draw is allowed to write, or −1 for the usual all-four draw. The hardware can mask components of
 //    ONE attachment at a time, so a stroke that writes some channels and not others is drawn once per image with the
 //    chosen one routed to location 0 and the colour mask doing the rest.
@@ -1007,9 +1008,17 @@ void main()
             vec3 Normal = normalize(texture(uNormalSource, vCoordinate).xyz);
             Face = smoothstep(uFacingLimit, mix(uFacingLimit, 1.0, 0.45), dot(Normal, uStrokeNormal));
         }
+        // With a second colour in play the paint does not fade out, it changes: full coverage all the way along, and
+        // the ramp decides which of the two is on the texel. Without one the ramp is the coverage, which is a wash.
+        vec3 Ink = clamp(uStrokeColour, 0.0, 1.0);
         float Wash = clamp(Ramp * Face * uFlow, 0.0, 1.0);
+        if (uGradientFar.w > 0.5)
+        {
+            Ink = mix(Ink, clamp(uGradientFar.rgb, 0.0, 1.0), 1.0 - Ramp);
+            Wash = clamp(Face * uFlow, 0.0, 1.0);
+        }
         if (Wash <= 0.0015) discard;
-        Emit(vec4(clamp(uStrokeColour, 0.0, 1.0) * Wash, Wash), Wash);
+        Emit(vec4(Ink * Wash, Wash), Wash);
         return;
     }
 

@@ -4640,13 +4640,27 @@ export class TexturePanel
 
         if (this.StrokeMode === "gradient" && !Masking)
         {
-            const Fade = this.CardGroup("Gradient", "The colour at the far end of the drag");
+            const Fade = this.CardGroup("Gradient", "What is at the far end of the drag");
+            const Far = document.createElement("div");
+            Far.className = "property-row colour-row";
+            Far.innerHTML = `<span class="property-label">Far colour</span>
+                <label class="colour-field"><input type="color" data-far value="${ToHex(this.Gradient.Far)}"
+                        aria-label="The colour at the far end" /><span class="colour-code">${ToHex(this.Gradient.Far).toUpperCase()}</span></label>`;
+            Far.querySelector("[data-far]").addEventListener("input", (Event) =>
+            {
+                this.Gradient.Far = FromHex(Event.target.value);
+                this.Gradient.Pair = true;
+                this.Instruments.RenderPane(false);
+            });
             Fade.append(
-                this.CardSwitch("Fade to nothing", "Otherwise it fades to the second colour", this.Gradient.Through === false, (On) =>
+                this.CardSwitch("Fade to a second colour", "Otherwise the paint fades away to nothing", this.Gradient.Pair, (On) =>
                 {
-                    this.Gradient.Through = !On;
+                    this.Gradient.Pair = On;
                     this.Instruments.RenderPane(false);
                 }),
+            );
+            if (this.Gradient.Pair) Fade.append(Far);
+            Fade.append(
                 this.CardSlider(
                     { Label: "Softness", Value: this.Gradient.Softness, Minimum: 0, Maximum: 1, Step: 0.01, Hint: "How much of the axis is doing the fading" },
                     (Value) => (this.Gradient.Softness = Value),
@@ -4669,18 +4683,18 @@ export class TexturePanel
     {
         const Group = this.CardGroup("Mix", "Saturation across · brightness down");
         const Field = document.createElement("div");
-        Field.className = "colour-field";
+        Field.className = "mix-field";
         Field.innerHTML = `
-            <div class="colour-square" data-square>
+            <div class="mix-square" data-square>
                 <div class="square-hue" data-square-hue></div>
                 <div class="square-white"></div>
                 <div class="square-black"></div>
                 <div class="square-knob" data-square-knob></div>
             </div>
-            <div class="colour-hue" data-hue><div class="hue-knob" data-hue-knob></div></div>
-            <div class="colour-readout">
-                <span class="colour-chip" data-chip></span>
-                <input class="colour-code" data-code spellcheck="false" aria-label="Hex colour" />
+            <div class="mix-hue" data-hue><div class="hue-knob" data-hue-knob></div></div>
+            <div class="mix-readout">
+                <span class="mix-chip" data-chip></span>
+                <input class="mix-code" data-code spellcheck="false" aria-label="Hex colour" />
             </div>`;
 
         const Square = Field.querySelector("[data-square]");

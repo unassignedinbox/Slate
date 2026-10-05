@@ -168,7 +168,9 @@ becomes a placement in UV, draggable with the same press, that crosses no seam b
 walked across the **screen** and raycast at every step, so it lies on the model instead of cutting through it, and the
 angle can be held to 15°, 45° or 90°. *Gradient* is two points as well, but it is not a stroke at all: one pass over the
 whole sheet, fading along the axis between them, linear or radial, with four easings, a softness and a switch for
-whether it wraps all the way round the model or stops at the silhouette. Both show a rubber band while they are aimed
+whether it wraps all the way round the model or stops at the silhouette. It fades the paint away to nothing by
+default, which is a wash; give it a second colour in the Colour pane and it lays full coverage the whole way and
+changes from one colour to the other instead, which is a fill. Both show a rubber band while they are aimed
 and put nothing down until the hand lets go, so an undo step covers exactly one line or one gradient.
 
 **Curves.** A pen reports pressure and a mouse reports the speed of the hand, and neither is what the paint should do

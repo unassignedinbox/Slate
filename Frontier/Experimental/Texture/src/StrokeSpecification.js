@@ -50,6 +50,10 @@ export const GradientDefaults = {
     // round instead, which is what you want for a ground-up dirt pass and never what you want for a logo fade.
     Through: false,
     Softness: 0.5,
+    // A gradient normally fades the paint away to nothing, which is what makes it a wash. `Pair` fades it to a second
+    // colour instead and lays full coverage the whole way, which is what makes it a fill.
+    Pair: false,
+    Far: [0.09, 0.1, 0.12],
 };
 
 // A straight line can be held to an angle. The snap is in degrees; zero is free.

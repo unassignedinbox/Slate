@@ -4754,14 +4754,14 @@ details.channel-control > summary code {
   background: #f4f1ea;
 }
 
-.colour-field {
+.mix-field {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 26px;
   grid-template-rows: 150px auto;
   gap: 10px;
 }
 
-.colour-square {
+.mix-square {
   position: relative;
   border-radius: 14px;
   overflow: hidden;
@@ -4799,7 +4799,7 @@ details.channel-control > summary code {
   pointer-events: none;
 }
 
-.colour-hue {
+.mix-hue {
   position: relative;
   border-radius: 13px;
   border: 1px solid var(--line);
@@ -4824,14 +4824,14 @@ details.channel-control > summary code {
   border-radius: 5px;
 }
 
-.colour-readout {
+.mix-readout {
   grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.colour-chip {
+.mix-chip {
   width: 30px;
   height: 30px;
   flex: 0 0 30px;
@@ -4839,7 +4839,7 @@ details.channel-control > summary code {
   border: 1px solid var(--line);
 }
 
-.colour-code {
+.mix-code {
   flex: 1 1 auto;
   min-width: 0;
   height: 30px;
@@ -4854,7 +4854,7 @@ details.channel-control > summary code {
   padding: 0 11px;
 }
 
-.colour-code:focus {
+.mix-code:focus {
   outline: none;
   border-color: #ffffff2e;
 }
