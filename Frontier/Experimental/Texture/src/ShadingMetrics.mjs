@@ -440,6 +440,25 @@ test("the compositor can write a finish without touching the flat channel values
         assert.ok(CompositeFragment.includes(Name), `${Name} is not routed through the blend`);
     assert.match(Chunks.Finish, /float FlakeField\(/, "the flake field went missing");
     assert.match(Chunks.Finish, /float WeaveField\(/, "the weave field went missing");
+
+    // The automotive branch is switched on by number in the GLSL and by identifier in the specification. If the two
+    // ever drift, a candy preset silently renders as a primer.
+    for (const [Index, Identifier] of [
+        [1, "metallic"],
+        [2, "pearl"],
+        [3, "candy"],
+        [4, "matte"],
+        [5, "chameleon"],
+        [6, "primer"],
+    ])
+    {
+        assert.ok(
+            new RegExp(`Style == ${Index}\\)[\\s\\S]{0,900}?${Identifier}`, "i").test(Chunks.Finish),
+            `the automotive branch for style ${Index} does not read as ${Identifier}`,
+        );
+    }
+    assert.match(Chunks.Finish, /float PeelAmount = clamp\(Extra\.x/, "orange peel never reaches the finish shader");
+    assert.match(CompositeFragment, /uniform vec4 uFinishExtra;/, "the extra finish uniform is not declared");
     assert.match(Chunks.Mask, /Kind == 3/, "the mask chunk has no colour branch");
 });
 

@@ -94,6 +94,7 @@ import {
     SanitiseFinish,
     FinishFamilyIndex,
     FinishStyleIndex,
+    FinishStyles,
     FinishControls,
     FinishColours,
     FinishLabel,
@@ -450,12 +451,21 @@ test("every finish family declares the controls its shader branch reads", () =>
         assert.ok(Family.Styles.length >= 4, `${Family.Identifier} offers too few styles`);
         Family.Styles.forEach((Style, Position) => assert.equal(Style.Index, Position, `${Style.Identifier} is out of order`));
         assert.equal(FinishColours(Family.Identifier).length, 2, "every family mixes exactly two colours");
+        // Seven sliders every family, but the sixth is the family's own: automotive spends it on orange peel, which
+        // is the one thing every real car panel has and no other family does, while the rest rotate their field.
         const Keys = FinishControls(Family.Identifier).map((Control) => Control.Key);
-        assert.deepEqual(Keys, ["Scale", "Density", "Strength", "Gloss", "Coat", "Angle", "Variation"], Family.Identifier);
+        const Sixth = Family.Identifier === "automotive" ? "Peel" : "Angle";
+        assert.deepEqual(Keys, ["Scale", "Density", "Strength", "Gloss", "Coat", Sixth, "Variation"], Family.Identifier);
         for (const Control of FinishControls(Family.Identifier))
             assert.ok(Control.Maximum > Control.Minimum, `${Family.Identifier}.${Control.Key} has an empty range`);
     });
     assert.equal(FinishStyleIndex("fabric", "velvet"), 4);
+    // The automotive branch is the one the GLSL switches on by number, so the order is load bearing.
+    assert.deepEqual(
+        FinishStyles("automotive").map((Style) => Style.Identifier),
+        ["solid", "metallic", "pearl", "candy", "matte", "chameleon", "primer"],
+        "the automotive styles no longer line up with the shader",
+    );
     assert.equal(FinishStyleIndex("fabric", "nonsense"), 0, "an unknown style must fall back rather than throw");
     assert.equal(FinishFamilyIndex("nonsense"), 0);
 });
@@ -477,10 +487,44 @@ test("the shelf only offers finishes the families can actually evaluate", () =>
             `${Entry.Identifier} names a style ${Entry.Style} its family does not have`,
         );
         assert.match(Entry.Swatch, /^#[0-9a-f]{6}$/i, `${Entry.Identifier} has no swatch`);
-        for (const Key of ["ColourA", "ColourB", "Scale", "Density", "Strength", "Gloss", "Coat", "Angle", "Variation"])
+        for (const Key of ["ColourA", "ColourB", "Scale", "Density", "Strength", "Gloss", "Coat", "Angle", "Variation"].concat(
+            Entry.Family === "automotive" ? ["Peel"] : [],
+        ))
             assert.ok(Key in Entry.Settings, `${Entry.Identifier} leaves ${Key} unset`);
     }
     assert.equal(FinishShelf.length, new Set(FinishShelf.map((Entry) => Entry.Identifier)).size, "two finishes share a name");
+});
+
+test("the automotive shelf covers every paint system the branch can evaluate", () =>
+{
+    const Paints = FinishShelf.filter((Entry) => Entry.Family === "automotive");
+    assert.ok(Paints.length >= 16, `only ${Paints.length} automotive finishes on the shelf`);
+    for (const Style of FinishStyles("automotive"))
+        assert.ok(
+            Paints.some((Entry) => Entry.Style === Style.Identifier),
+            `nothing on the shelf is a ${Style.Identifier}`,
+        );
+    for (const Entry of Paints)
+    {
+        const Finish = SanitiseFinish(CreateFinish(Entry.Identifier));
+        assert.equal(Finish.Family, "automotive");
+        assert.ok(Finish.Peel >= 0 && Finish.Peel <= 1, `${Entry.Identifier} has no orange peel figure`);
+        // Pigment is stored linear while the swatch is sRGB; a preset that forgot the conversion reads far too bright.
+        const Swatch = [1, 3, 5].map((At) => parseInt(Entry.Swatch.slice(At, At + 2), 16) / 255);
+        const Linear = Swatch.map((Level) => (Level <= 0.04045 ? Level / 12.92 : ((Level + 0.055) / 1.055) ** 2.4));
+        if (Entry.Style === "solid" || Entry.Style === "metallic" || Entry.Style === "matte" || Entry.Style === "primer")
+            for (let Channel = 0; Channel < 3; Channel += 1)
+                assert.ok(
+                    Math.abs(Finish.ColourA[Channel] - Linear[Channel]) < 0.02,
+                    `${Entry.Identifier} pigment does not match its swatch on channel ${Channel}`,
+                );
+        // Nothing on the shelf may be a flat mirror or a flat void; both read as a bug rather than as paint.
+        assert.ok(Finish.Gloss > 0.05 || Finish.Style === "matte" || Finish.Style === "primer", `${Entry.Identifier} has no gloss`);
+    }
+    // A clear coat with no peel at all is physically possible but never happens on a panel, so no preset claims it.
+    const Coated = Paints.filter((Entry) => Entry.Settings.Coat > 0.5);
+    assert.ok(Coated.length >= 10, "almost nothing on the shelf is clear coated");
+    assert.ok(Coated.every((Entry) => Entry.Settings.Peel > 0), "a clear coated preset claims to have levelled perfectly");
 });
 
 test("a finish record survives creation, sanitising and a hostile project file", () =>
@@ -506,7 +550,7 @@ test("a finish record survives creation, sanitising and a hostile project file",
     });
     assert.equal(Hostile.Shelf, "");
     assert.equal(Hostile.Family, "automotive");
-    assert.equal(Hostile.Style, "metallic");
+    assert.equal(Hostile.Style, "solid");
     assert.deepEqual(Hostile.ColourA, [0.5, 0.5, 0.5]);
     assert.deepEqual(Hostile.ColourB, [1, 0, 0.5]);
     assert.equal(Hostile.Scale, 4);
@@ -514,7 +558,7 @@ test("a finish record survives creation, sanitising and a hostile project file",
     assert.equal(Hostile.Gloss, 0);
     assert.equal(Hostile.Angle, 180);
     assert.equal(Hostile.Seed, 999);
-    assert.equal(FinishLabel(Hostile), "Automotive · Metallic flake");
+    assert.equal(FinishLabel(Hostile), "Automotive · Solid · single stage");
 });
 
 test("a material layer carries its finish through the stack and a project round trip", () =>

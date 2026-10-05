@@ -1790,7 +1790,7 @@ export class TexturePanel
         // opens the browser so the choice is made there.
         if (Kind === "finish")
         {
-            this.AddFinishLayer("showroom-red");
+            this.AddFinishLayer("gt-silver");
             return;
         }
         if (Kind === "browse")

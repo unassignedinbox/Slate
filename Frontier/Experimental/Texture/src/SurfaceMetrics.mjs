@@ -193,3 +193,94 @@ test("camera input is clamped and survives a serialise round trip", () =>
     assert.ok(Near(Restored.Azimuth, Camera.Azimuth), "azimuth did not restore");
     assert.ok(Near(Restored.Inclination, Camera.Inclination), "inclination did not restore");
 });
+
+//--------------------------------------------------------------------------------------------------------------------------
+// The shader ball. It is the default surface, so a hole in it is a hole in the first thing anyone sees.
+//--------------------------------------------------------------------------------------------------------------------------
+test("the shader ball is one closed shape rather than a pile of floating parts", () =>
+{
+    const Surface = BuildSurface("shaderball", 2);
+    assert.ok(Surface.Triangles > 8000 && Surface.Triangles < 48000, `${Surface.Triangles} triangles is outside the working range`);
+
+    // Every edge of a closed surface is shared by two triangles. Degenerate triangles at the poles and at the seam of
+    // a revolved patch are expected, so they are excluded rather than counted as holes.
+    const Edges = new Map();
+    const Key = (A, B) => (A < B ? `${A}:${B}` : `${B}:${A}`);
+    const Same = (A, B) =>
+        Math.abs(Surface.Positions[A * 3] - Surface.Positions[B * 3]) < 1e-6 &&
+        Math.abs(Surface.Positions[A * 3 + 1] - Surface.Positions[B * 3 + 1]) < 1e-6 &&
+        Math.abs(Surface.Positions[A * 3 + 2] - Surface.Positions[B * 3 + 2]) < 1e-6;
+    for (let Index = 0; Index < Surface.Indices.length; Index += 3)
+    {
+        const Corner = [Surface.Indices[Index], Surface.Indices[Index + 1], Surface.Indices[Index + 2]];
+        if (Same(Corner[0], Corner[1]) || Same(Corner[1], Corner[2]) || Same(Corner[2], Corner[0])) continue;
+        for (let Side = 0; Side < 3; Side += 1)
+        {
+            const Name = Key(Corner[Side], Corner[(Side + 1) % 3]);
+            Edges.set(Name, (Edges.get(Name) || 0) + 1);
+        }
+    }
+    const Open = [...Edges.values()].filter((Count) => Count !== 2).length;
+    const Boundary = Open / Edges.size;
+    assert.ok(Boundary < 0.06, `${(Boundary * 100).toFixed(1)}% of edges are unpaired — the shape is torn open`);
+});
+
+test("every surface agrees with itself about which way is out", () =>
+{
+    // The winding of a triangle and the normals stored on its corners are two independent claims about the same
+    // facing. When a patch is authored by hand they can disagree, and the shape renders inside out in patches — which
+    // is exactly what the old shader ball skirt did. Here they are made to agree.
+    for (const Entry of SurfaceOrdering)
+    {
+        if (Entry.Identifier === "custom") continue;
+        const Surface = BuildSurface(Entry.Identifier, 1);
+        let Disagreed = 0;
+        let Counted = 0;
+        for (let Index = 0; Index < Surface.Indices.length; Index += 3)
+        {
+            const Corner = [Surface.Indices[Index], Surface.Indices[Index + 1], Surface.Indices[Index + 2]];
+            const At = (Which, Axis) => Surface.Positions[Corner[Which] * 3 + Axis];
+            const Edge1 = [At(1, 0) - At(0, 0), At(1, 1) - At(0, 1), At(1, 2) - At(0, 2)];
+            const Edge2 = [At(2, 0) - At(0, 0), At(2, 1) - At(0, 1), At(2, 2) - At(0, 2)];
+            const Face = [
+                Edge1[1] * Edge2[2] - Edge1[2] * Edge2[1],
+                Edge1[2] * Edge2[0] - Edge1[0] * Edge2[2],
+                Edge1[0] * Edge2[1] - Edge1[1] * Edge2[0],
+            ];
+            const Span = Math.hypot(...Face);
+            if (Span < 1e-9) continue;                                     // degenerate at a pole, no facing to check
+            const Stored = [0, 1, 2].map((Axis) =>
+                Corner.reduce((Sum, Which) => Sum + Surface.Normals[Which * 3 + Axis], 0) / 3);
+            const Agreement = (Face[0] * Stored[0] + Face[1] * Stored[1] + Face[2] * Stored[2]) / Span;
+            Counted += 1;
+            if (Agreement < 0) Disagreed += 1;
+        }
+        assert.ok(Counted > 500, `${Entry.Identifier} had too few triangles to judge`);
+        const Share = Disagreed / Counted;
+        assert.ok(Share < 0.01, `${Entry.Identifier}: ${(Share * 100).toFixed(1)}% of triangles are wound against their normals`);
+    }
+});
+
+test("the shader ball keeps its two parts in separate UV bands", () =>
+{
+    const Surface = BuildSurface("shaderball", 1);
+    let Lowest = 1;
+    let Highest = 0;
+    for (let Index = 0; Index < Surface.Coordinates.length; Index += 2)
+    {
+        assert.ok(Surface.Coordinates[Index] >= -1e-6 && Surface.Coordinates[Index] <= 1 + 1e-6, "U left the sheet");
+        const V = Surface.Coordinates[Index + 1];
+        assert.ok(V >= -1e-6 && V <= 1 + 1e-6, "V left the sheet");
+        Lowest = Math.min(Lowest, V);
+        Highest = Math.max(Highest, V);
+    }
+    assert.ok(Lowest > 0.005, "the island runs into the bottom edge of the sheet");
+    assert.ok(Highest < 0.995, "the island runs into the top edge of the sheet");
+    // Nothing is allowed in the gutter between the two islands, or the shell would share texels with the body.
+    const Gutter = [...Array(Surface.Coordinates.length / 2).keys()].filter((Index) =>
+    {
+        const V = Surface.Coordinates[Index * 2 + 1];
+        return V > 0.593 && V < 0.607;
+    });
+    assert.equal(Gutter.length, 0, "vertices sit inside the gutter between the two islands");
+});

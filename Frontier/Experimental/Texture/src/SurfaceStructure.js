@@ -196,8 +196,10 @@ const BuildRoundedCube = (Detail) =>
     const Faces = [
         { Axis: [1, 0, 0], Up: [0, 1, 0], Right: [0, 0, -1], Island: [0, 0] },
         { Axis: [-1, 0, 0], Up: [0, 1, 0], Right: [0, 0, 1], Island: [1, 0] },
-        { Axis: [0, 1, 0], Up: [0, 0, 1], Right: [1, 0, 0], Island: [2, 0] },
-        { Axis: [0, -1, 0], Up: [0, 0, -1], Right: [1, 0, 0], Island: [0, 1] },
+        // 🔴 The two caps take a left-handed Right so their winding comes out facing the same way as their normals;
+        //    with [1, 0, 0] the top and bottom of the cube are built inside out and their islands run mirrored.
+        { Axis: [0, 1, 0], Up: [0, 0, 1], Right: [-1, 0, 0], Island: [2, 0] },
+        { Axis: [0, -1, 0], Up: [0, 0, -1], Right: [-1, 0, 0], Island: [0, 1] },
         { Axis: [0, 0, 1], Up: [0, 1, 0], Right: [1, 0, 0], Island: [1, 1] },
         { Axis: [0, 0, -1], Up: [0, 1, 0], Right: [-1, 0, 0], Island: [2, 1] },
     ];
@@ -240,9 +242,9 @@ const BuildCylinder = (Detail) =>
         const Theta = U * Tau;
         const Normal = [Math.cos(Theta), 0, Math.sin(Theta)];
         return {
-            Position: [Normal[0] * Radius, (V - 0.5) * 2 * Height, Normal[2] * Radius],
+            Position: [Normal[0] * Radius, (0.5 - V) * 2 * Height, Normal[2] * Radius],
             Normal,
-            Coordinate: [U, 0.28 + V * 0.7],
+            Coordinate: [U, 0.28 + (1 - V) * 0.7],
         };
     });
     for (const Side of [1, -1])
@@ -273,14 +275,14 @@ const BuildTorus = (Detail) =>
     Builder.Patch(Columns, Rows, (U, V) =>
     {
         const Theta = U * Tau;
-        const Phi = V * Tau;
+        const Phi = (1 - V) * Tau;                                // [rad] walked downward, so the winding faces out
         const Normal = [Math.cos(Phi) * Math.cos(Theta), Math.sin(Phi), Math.cos(Phi) * Math.sin(Theta)];
         const Position = [
             (Major + Minor * Math.cos(Phi)) * Math.cos(Theta),
             Minor * Math.sin(Phi),
             (Major + Minor * Math.cos(Phi)) * Math.sin(Theta),
         ];
-        return { Position, Normal, Coordinate: [U, V] };
+        return { Position, Normal, Coordinate: [U, 1 - V] };
     });
     return Builder.Resolve("Torus");
 };
@@ -297,65 +299,149 @@ const BuildPlane = (Detail) =>
     return Builder.Resolve("Plane");
 };
 
-// The shader ball: a dome on a swept skirt with a plinth, each part in its own UV island.
+//--------------------------------------------------------------------------------------------------------------------------
+// Profiles of revolution. A profile is a dense polyline in the (radius, height) half-plane; revolving it gives a closed
+// surface whose normals come from the profile's own tangent rather than from a guess, which is what the old shader ball
+// got wrong. Walking the outline counter-clockwise puts (dy, -dr) on the outside, at a pole as happily as on a wall.
+//--------------------------------------------------------------------------------------------------------------------------
+const ProfileLine = (Into, From, To, Steps) =>
+{
+    for (let Step = 1; Step <= Steps; Step += 1)
+    {
+        const T = Step / Steps;
+        Into.push([From[0] + (To[0] - From[0]) * T, From[1] + (To[1] - From[1]) * T]);
+    }
+};
+
+const ProfileArc = (Into, Centre, Radius, FromAngle, ToAngle, Steps) =>
+{
+    for (let Step = 1; Step <= Steps; Step += 1)
+    {
+        const Angle = FromAngle + (ToAngle - FromAngle) * (Step / Steps);
+        Into.push([Centre[0] + Math.cos(Angle) * Radius, Centre[1] + Math.sin(Angle) * Radius]);
+    }
+};
+
+const ProfileCurve = (Into, A, B, C, D, Steps) =>
+{
+    for (let Step = 1; Step <= Steps; Step += 1)
+    {
+        const T = Step / Steps;
+        const S = 1 - T;
+        Into.push([
+            S * S * S * A[0] + 3 * S * S * T * B[0] + 3 * S * T * T * C[0] + T * T * T * D[0],
+            S * S * S * A[1] + 3 * S * S * T * B[1] + 3 * S * T * T * C[1] + T * T * T * D[1],
+        ]);
+    }
+};
+
+// Offsets a centreline into a closed sliver of the given thickness: up one face, round the tip, back down the other.
+const ProfileBlade = (Centreline, Thickness, TipSteps) =>
+{
+    const Normal = (Index) =>
+    {
+        const Before = Centreline[Math.max(0, Index - 1)];
+        const After = Centreline[Math.min(Centreline.length - 1, Index + 1)];
+        const Run = [After[0] - Before[0], After[1] - Before[1]];
+        const Length = Math.hypot(Run[0], Run[1]) || 1;
+        return [Run[1] / Length, -Run[0] / Length];
+    };
+    const Outline = [];
+    for (let Index = 0; Index < Centreline.length; Index += 1)
+    {
+        const Side = Normal(Index);
+        Outline.push([Centreline[Index][0] + Side[0] * Thickness, Centreline[Index][1] + Side[1] * Thickness]);
+    }
+    // Round the tip through the far side, then walk the inner face home.
+    const Tip = Centreline[Centreline.length - 1];
+    const Side = Normal(Centreline.length - 1);
+    const Along = [-Side[1], Side[0]];
+    for (let Step = 1; Step < TipSteps; Step += 1)
+    {
+        const Angle = (Step / TipSteps) * Math.PI;
+        const Across = Math.cos(Angle);
+        const Out = Math.sin(Angle);
+        Outline.push([
+            Tip[0] + Side[0] * Thickness * Across + Along[0] * Thickness * Out,
+            Tip[1] + Side[1] * Thickness * Across + Along[1] * Thickness * Out,
+        ]);
+    }
+    for (let Index = Centreline.length - 1; Index >= 0; Index -= 1)
+    {
+        const Face = Normal(Index);
+        Outline.push([Centreline[Index][0] - Face[0] * Thickness, Centreline[Index][1] - Face[1] * Thickness]);
+    }
+    return Outline;
+};
+
+// Revolves one profile into the builder. `Wrap` closes the cross-section, which is what turns a sliver into a solid.
+// The patch is walked from the end of the profile to its start so the winding matches the rest of the catalogue —
+// every other builder runs its second parameter downward — while the texture coordinate still climbs with the model.
+const Revolve = (Builder, Profile, Columns, Bottom, Top, Wrap = false) =>
+{
+    const Count = Profile.length;
+    const Lengths = [0];
+    for (let Index = 1; Index < Count; Index += 1)
+        Lengths.push(Lengths[Index - 1] + Math.hypot(Profile[Index][0] - Profile[Index - 1][0], Profile[Index][1] - Profile[Index - 1][1]));
+    if (Wrap) Lengths.push(Lengths[Count - 1] + Math.hypot(Profile[0][0] - Profile[Count - 1][0], Profile[0][1] - Profile[Count - 1][1]));
+    const Total = Lengths[Lengths.length - 1] || 1;
+    const Rows = Wrap ? Count : Count - 1;
+    Builder.Patch(Columns, Rows, (U, V) =>
+    {
+        const Step = Math.round((1 - V) * Rows);
+        const Index = Wrap ? Step % Count : Math.min(Count - 1, Step);
+        const Before = Profile[Wrap ? (Index - 1 + Count) % Count : Math.max(0, Index - 1)];
+        const After = Profile[Wrap ? (Index + 1) % Count : Math.min(Count - 1, Index + 1)];
+        const Here = Profile[Index];
+        const Run = [After[0] - Before[0], After[1] - Before[1]];
+        const Length = Math.hypot(Run[0], Run[1]) || 1;
+        const Side = [Run[1] / Length, -Run[0] / Length];        // [-]   outward in the (radius, height) half-plane
+        const Theta = U * Tau;
+        const Along = Lengths[Step] / Total;
+        return {
+            Position: [Here[0] * Math.cos(Theta), Here[1], Here[0] * Math.sin(Theta)],
+            Normal: Normalise([Side[0] * Math.cos(Theta), Side[1], Side[0] * Math.sin(Theta)]),
+            Coordinate: [U, Bottom + Along * (Top - Bottom)],
+        };
+    });
+};
+
+//--------------------------------------------------------------------------------------------------------------------------
+// The shader ball: a sphere on a waisted stem rising out of a filleted plinth, inside a flared shell that is open at the
+// top. Everything a material has to be judged on is somewhere on it — a flat, a tight convex, a deep concave throat, an
+// overhang under the sphere's equator and a broad sweep for a decal — and the two parts take separate UV bands.
+//--------------------------------------------------------------------------------------------------------------------------
 const BuildShaderBall = (Detail) =>
 {
     const Builder = new SurfaceBuilder();
-    const Columns = 56 + Detail * 24;
-    const Rows = 28 + Detail * 12;
-    const DomeCentre = 0.42;
-    const DomeRadius = 0.56;
-    Builder.Patch(Columns, Rows, (U, V) =>
+    const Columns = 48 + Detail * 16;
+    const Fine = 0.7 + Detail * 0.3;
+    const Steps = (Count) => Math.max(2, Math.round(Count * Fine));
+
+    // ① Plinth, stem and sphere, as one profile walked from the centre of the base to the top of the ball.
+    const Ball = { Radius: 0.46, Height: 0.88 };
+    const Meeting = (150 * Math.PI) / 180;                        // [rad] where the stem's shoulder joins the sphere
+    const Joint = [Math.sin(Meeting) * Ball.Radius, Ball.Height + Math.cos(Meeting) * Ball.Radius];
+    const Body = [[0, 0]];
+    ProfileLine(Body, [0, 0], [0.82, 0], Steps(10));
+    ProfileArc(Body, [0.82, 0.055], 0.055, -Math.PI / 2, 0, Steps(6));
+    ProfileLine(Body, [0.875, 0.055], [0.875, 0.12], Steps(3));
+    ProfileArc(Body, [0.795, 0.12], 0.08, 0, Math.PI / 2, Steps(8));
+    ProfileCurve(Body, [0.795, 0.20], [0.76, 0.33], [0.34, 0.26], [0.185, 0.42], Steps(20));
+    ProfileCurve(Body, [0.185, 0.42], [0.168, 0.46], [0.19, 0.46], Joint, Steps(8));
+    for (let Step = 1; Step <= Steps(32); Step += 1)
     {
-        const Theta = U * Tau;
-        const Phi = V * Math.PI * 0.86;
-        const Normal = [Math.sin(Phi) * Math.cos(Theta), Math.cos(Phi), Math.sin(Phi) * Math.sin(Theta)];
-        return {
-            Position: [Normal[0] * DomeRadius, DomeCentre + Normal[1] * DomeRadius, Normal[2] * DomeRadius],
-            Normal,
-            Coordinate: [U, 0.36 + (1 - V) * 0.63],
-        };
-    });
-    // Skirt: a quarter-torus sweeping from the dome down to the plinth.
-    const SkirtRows = 14 + Detail * 8;
-    Builder.Patch(Columns, SkirtRows, (U, V) =>
-    {
-        const Theta = U * Tau;
-        const Sweep = V * Math.PI * 0.5;
-        const Ring = 0.5 + 0.26 * Math.sin(Sweep);
-        const Elevation = 0.1 + 0.26 * (1 - Math.cos(Sweep)) * 0.42;
-        const Normal = Normalise([
-            Math.cos(Theta) * Math.cos(Sweep),
-            -Math.sin(Sweep) * 0.8 + 0.2,
-            Math.sin(Theta) * Math.cos(Sweep),
-        ]);
-        return {
-            Position: [Math.cos(Theta) * Ring, Elevation, Math.sin(Theta) * Ring],
-            Normal,
-            Coordinate: [U, 0.17 + V * 0.17],
-        };
-    });
-    // Plinth: a short cylinder with a cap.
-    Builder.Patch(Columns, 6, (U, V) =>
-    {
-        const Theta = U * Tau;
-        const Normal = [Math.cos(Theta), 0, Math.sin(Theta)];
-        return {
-            Position: [Normal[0] * 0.76, -0.06 + V * 0.14, Normal[2] * 0.76],
-            Normal,
-            Coordinate: [U, 0.015 + V * 0.11],
-        };
-    });
-    Builder.Patch(Columns, 6, (U, V) =>
-    {
-        const Theta = U * Tau;
-        const Distance = V * 0.76;
-        return {
-            Position: [Math.cos(Theta) * Distance, -0.06, -Math.sin(Theta) * Distance],
-            Normal: [0, -1, 0],
-            Coordinate: [0.5 + Math.cos(Theta) * V * 0.07, 0.07 + Math.sin(Theta) * V * 0.06],
-        };
-    });
+        const Angle = Meeting * (1 - Step / Steps(32));
+        Body.push([Math.sin(Angle) * Ball.Radius, Ball.Height + Math.cos(Angle) * Ball.Radius]);
+    }
+    Revolve(Builder, Body, Columns, 0.015, 0.585);
+
+    // ② The shell: a blade swept all the way round, flaring outward as it rises and rooted inside the plinth so it
+    //   grows out of it rather than hovering. It stops under the sphere's equator, so the sphere is still the subject.
+    const Centreline = [[0.56, 0.10]];
+    ProfileCurve(Centreline, [0.56, 0.10], [0.60, 0.33], [0.72, 0.50], [0.84, 0.66], Steps(26));
+    Revolve(Builder, ProfileBlade(Centreline, 0.022, Steps(5)), Columns, 0.615, 0.985, true);
+
     return Builder.Resolve("Shader ball");
 };
 

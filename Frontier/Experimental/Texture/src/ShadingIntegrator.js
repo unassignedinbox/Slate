@@ -996,6 +996,7 @@ export class ShadingIntegrator
             Device.uniform3fv(Uniforms.get("uFinishColourB"), Finish.ColourB);
             Device.uniform4f(Uniforms.get("uFinishShape"), Finish.Scale * Scale, Finish.Density, Finish.Strength, Finish.Gloss);
             Device.uniform4f(Uniforms.get("uFinishTrim"), Finish.Coat, Finish.Angle, Finish.Variation, Finish.Seed);
+            Device.uniform4f(Uniforms.get("uFinishExtra"), Finish.Peel ?? 0.3, 0, 0, 0);
         }
 
         // Layer scope: the UDIM tile of the object the layer belongs to, or the whole sheet when it belongs to the scene.

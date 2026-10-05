@@ -156,7 +156,7 @@ float WeaveField(vec2 Coordinate, int Style, float Scale, out float Warp, out fl
 
 FinishSample SampleFinish(
     int Family, int Style, vec2 Coordinate, vec3 Position, vec3 Normal, vec4 Field,
-    vec3 ColourA, vec3 ColourB, vec4 Shape, vec4 Trim)
+    vec3 ColourA, vec3 ColourB, vec4 Shape, vec4 Trim, vec4 Extra)
 {
     float Scale = max(Shape.x, 0.001);
     float Density = Shape.y;
@@ -166,6 +166,7 @@ FinishSample SampleFinish(
     float Angle = radians(Trim.y);
     float Variation = Trim.z;
     float Seed = Trim.w;
+    float PeelAmount = clamp(Extra.x, 0.0, 1.0);          // [-]   how far the clear coat failed to level
 
     vec2 Turned = Rotate(Coordinate - 0.5, Angle) + 0.5;
     FinishSample Result;
@@ -181,33 +182,93 @@ FinishSample SampleFinish(
 
     if (Family == 0)
     {
-        // Automotive. A pigmented base, a flake layer, then clear coat over the top.
+        // Automotive. Real paint is a stack: primer, a pigmented basecoat that may carry aluminium or mica flake, and a
+        // clear coat over the top that never quite levels. That last part is orange peel, and it is the reason a
+        // reflection in car paint wobbles while a reflection in a mirror does not — so it is modelled here as a shallow
+        // undulation in height and a matching wobble in coat roughness, present on every style that has a coat at all.
         float Facet = 0.0;
         float Flakes = FlakeField(Turned, Scale * 240.0, Density, Seed, Facet);
         float Drift = Fractal(Turned * (2.0 + Scale * 3.0) + Seed, 4);
-        vec3 Body = mix(ColourA, ColourA * mix(0.72, 1.28, Drift), Variation);
-        if (Style == 1) Body = mix(Body, ColourB, 0.35 + 0.45 * Drift);            // candy pearl shifts between two pigments
-        float Sparkle = Flakes * Strength * mix(0.6, 1.0, Facet);
-        Result.Colour = mix(Body, ColourB, clamp(Sparkle, 0.0, 1.0));
-        Result.Metalness = clamp(Sparkle * 0.9, 0.0, 1.0);
-        Result.Roughness = clamp(mix(1.0 - Gloss, 0.18, Sparkle) + Drift * 0.04 * Variation, 0.02, 1.0);
-        Result.Height = 0.5 + (Flakes - 0.5) * 0.02 * Strength;
+        float Peel = (Fractal(Turned * 17.0 + Seed * 0.37, 3) * 0.76 + Fractal(Turned * 54.0, 2) * 0.24 - 0.5) * PeelAmount;
+        vec3 Body = mix(ColourA, ColourA * mix(0.86, 1.16, Drift), Variation);
+        float Sparkle = Flakes * Strength * mix(0.55, 1.0, Facet);
+        float Clear = clamp(mix(0.075, 0.008, Gloss) + abs(Peel) * 0.26, 0.004, 1.0);
+
+        // Style 0 · solid, single stage. Pigment and clear, nothing suspended in it.
+        Result.Colour = Body;
+        Result.Metalness = 0.0;
+        Result.Roughness = clamp(mix(0.30, 0.055, Gloss) + Drift * 0.02 * Variation, 0.02, 1.0);
         Result.Coat = Coat;
-        Result.CoatRoughness = clamp((1.0 - Gloss) * 0.22 + Fractal(Turned * 11.0, 2) * 0.05 * Variation, 0.008, 1.0);
-        if (Style == 2)
+        Result.CoatRoughness = Clear;
+        Result.Height = 0.5 + Peel * 0.1;
+
+        if (Style == 1)
         {
-            // Matte wrap: no flake, a fine grain, coat held flat.
+            // Metallic basecoat: aluminium flake suspended in the pigment, each one lying at its own angle, which is
+            // what makes the panel flare as you walk past it.
+            // Flake lifts the colour toward aluminium; it never replaces the pigment, or the panel reads as glitter.
+            Result.Colour = mix(Body, ColourB, clamp(Sparkle * 0.55, 0.0, 1.0));
+            Result.Metalness = clamp(Sparkle * 0.85, 0.0, 1.0);
+            Result.Roughness = clamp(mix(0.30, 0.055, Gloss) * (1.0 - 0.55 * Sparkle) + Drift * 0.02 * Variation, 0.02, 1.0);
+            Result.Height = 0.5 + Peel * 0.1 + (Facet - 0.5) * Flakes * 0.02 * Strength;
+        }
+        else if (Style == 2)
+        {
+            // Pearl tri-coat: mica, not metal. The flake refracts rather than reflects, so the colour shifts with its
+            // tilt while the metalness stays near nothing and the specular lifts instead.
+            float Shift = mix(0.15, 1.0, Facet) * Flakes * 0.8;
+            Result.Colour = mix(Body, ColourB, clamp(Shift * Strength, 0.0, 1.0));
+            Result.Metalness = clamp(Sparkle * 0.18, 0.0, 1.0);
+            Result.Roughness = clamp(mix(0.26, 0.05, Gloss) - Shift * 0.03, 0.02, 1.0);
+            Result.Specular = clamp(1.0 + Shift * 0.35, 0.0, 2.0);
+            Result.Height = 0.5 + Peel * 0.1 + (Facet - 0.5) * Flakes * 0.012 * Strength;
+        }
+        else if (Style == 3)
+        {
+            // Candy: a transparent tinted layer over a bright metallic ground. Depth is what makes the colour, so the
+            // tint is absorption rather than a mix — Beer's law through a coat whose thickness drifts across the panel.
+            vec3 Ground = mix(vec3(0.78, 0.79, 0.80), ColourB, 0.75);
+            float Thickness = mix(0.85, 1.9, Drift) * mix(1.0, 1.4, Variation);
+            vec3 Tint = pow(max(ColourA, vec3(0.004)), vec3(Thickness));
+            Result.Colour = Ground * Tint * mix(1.0, 1.0 + Sparkle, 0.4);
+            Result.Metalness = clamp(0.55 + Sparkle * 0.45, 0.0, 1.0);
+            Result.Roughness = clamp(mix(0.22, 0.04, Gloss), 0.02, 1.0);
+            Result.Coat = max(Coat, 0.7);
+            Result.CoatRoughness = clamp(Clear * 0.75, 0.004, 1.0);
+        }
+        else if (Style == 4)
+        {
+            // Matte wrap, or a matte clear over colour: no flake, a fine grain, and a coat held deliberately flat.
             float Grain = Fractal(Turned * 260.0 * Scale, 3);
             Result.Colour = mix(ColourA, ColourB, Grain * 0.25 * Variation);
             Result.Metalness = 0.0;
             Result.Roughness = clamp(0.62 + Grain * 0.16 - Gloss * 0.2, 0.2, 1.0);
             Result.Coat = Coat * 0.25;
             Result.CoatRoughness = 0.55;
-            Result.Height = 0.5 + (Grain - 0.5) * 0.01;
+            Result.Height = 0.5 + (Grain - 0.5) * 0.01 + Peel * 0.04;
         }
-        else if (Style == 3)
+        else if (Style == 5)
         {
-            // Primer: chalky, speckled, no coat worth the name.
+            // Flip, or chameleon: interference pigment that reads as a different colour at every angle. A texture
+            // cannot know the viewing angle, so the travel is laid across the surface instead — which is what the
+            // paint looks like over a curved panel anyway, three colours at once.
+            // Stretched across the whole hue cycle, or the field only ever visits a third of the travel.
+            float Phase = (Fractal(Turned * (1.6 + Scale * 1.6) + Seed * 0.7, 4) - 0.5) * 25.1327412;
+            vec3 Third = mix(ColourA, ColourB, 0.5).gbr * 1.6;        // the gold the other two travel through
+            // Cubed so one of the three wins at any given spot; averaged weights would read as mud rather than travel.
+            float WeightA = pow(0.5 + 0.5 * cos(Phase), 3.0);
+            float WeightB = pow(0.5 + 0.5 * cos(Phase - 2.0943951), 3.0);
+            float WeightC = pow(0.5 + 0.5 * cos(Phase - 4.1887902), 3.0);
+            vec3 Flip = (ColourA * WeightA + ColourB * WeightB + Third * WeightC) / max(WeightA + WeightB + WeightC, 1e-3);
+            Result.Colour = mix(Body, Flip, clamp(0.45 + Variation * 0.55, 0.0, 1.0));
+            Result.Metalness = clamp(0.25 + Sparkle * 0.6, 0.0, 1.0);
+            Result.Roughness = clamp(mix(0.22, 0.045, Gloss), 0.02, 1.0);
+            Result.Coat = max(Coat, 0.8);
+            Result.Height = 0.5 + Peel * 0.1 + (Facet - 0.5) * Flakes * 0.016 * Strength;
+        }
+        else if (Style == 6)
+        {
+            // Primer: chalky, speckled, no coat worth the name and no peel because there is nothing to level.
             float Speckle = Cellular(Turned * 180.0 * Scale);
             Result.Colour = mix(ColourA, ColourB, (1.0 - Speckle) * 0.3);
             Result.Metalness = 0.0;
@@ -927,6 +988,7 @@ uniform vec3 uFinishColourA;
 uniform vec3 uFinishColourB;
 uniform vec4 uFinishShape;      // scale, density, strength, gloss
 uniform vec4 uFinishTrim;       // coat, angle, variation, seed
+uniform vec4 uFinishExtra;      // orange peel, reserved, reserved, reserved
 
 uniform int uDecalMode;         // 0 projection · 1 UV plane
 uniform vec3 uDecalPosition;
@@ -1019,7 +1081,7 @@ void main()
     {
         FinishSample Finish = SampleFinish(
             uFinishFamily, uFinishStyle, vCoordinate, Position, Normal, Field,
-            uFinishColourA, uFinishColourB, uFinishShape, uFinishTrim);
+            uFinishColourA, uFinishColourB, uFinishShape, uFinishTrim, uFinishExtra);
         Colour = Finish.Colour;
         RoughnessValue = Finish.Roughness;
         MetalnessValue = Finish.Metalness;
