@@ -224,6 +224,7 @@ export const CreateLayer = (Kind = "fill", Overrides = {}) =>
         Channels: DefaultChannelValues(),
         Enabled: DefaultChannelMask(DefaultEnabledChannels[Descriptor]),
         Mask: MaskDefaults(),
+        Target: "coverage",         // coverage | mask: which side of THIS layer the brush is landing in, remembered per layer
         Generator: DefaultGenerator(Descriptor === "generator" ? "fbm" : "fbm"),
         Decal: DecalDefaults(),
         Finish: FinishDefaults(),
@@ -524,6 +525,8 @@ export const SanitiseLayer = (Candidate) =>
             Softness: Clamp(Candidate.Mask.Softness ?? 0.12, 0, 1),
             Tint: SanitiseColour(Candidate.Mask.Tint, [0.95, 0.22, 0.3]),
         };
+    // A layer whose mask was left in hand comes back with the mask in hand; one without a mask can only be its content.
+    Layer.Target = Candidate.Target === "mask" && Layer.Mask.Kind !== "none" ? "mask" : "coverage";
     Layer.Generator = NormaliseGenerator(Candidate.Generator || {});
     Layer.Finish = SanitiseFinish(Candidate.Finish);
     if (Candidate.Decal) Layer.Decal = SanitiseDecal(Layer.Decal, Candidate.Decal);

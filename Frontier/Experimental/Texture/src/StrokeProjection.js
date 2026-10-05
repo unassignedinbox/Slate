@@ -74,6 +74,15 @@ const Cross = (Left, Right) => [
     Left[0] * Right[1] - Left[1] * Right[0],
 ];
 
+// A direction with the part that points along the normal taken out of it, or nothing when there was no other part.
+const Flatten = (Vector, Normal) =>
+{
+    const Alignment = Dot(Vector, Normal);
+    const Flat = Vector.map((Component, Index) => Component - Normal[Index] * Alignment);
+    const Length = Math.hypot(...Flat);
+    return Length < 1e-4 ? null : Flat.map((Component) => Component / Length);
+};
+
 const Turn = (Vector, Axis, Angle) =>
 {
     const Cosine = Math.cos(Angle);
@@ -426,21 +435,33 @@ export class StrokeProjection
     }
 
     // Placement frame for a decal: the hit point, its normal, and a tangent that follows the surface UV direction.
-    static PlacementFrame(Hit)
+    // 🔴 The frame's UP is the viewer's up laid flat on the surface, NOT the surface's own V direction. A sign is read
+    //    off the screen, so artwork dropped at rotation zero has to stand upright on the screen wherever it lands; a
+    //    body of revolution indexed by 1 - V would otherwise hand back a frame that is upside down over half the model,
+    //    and the painter would meet a decal that needs turning 180° before it can be read. When the surface faces
+    //    straight at the viewer's up — the floor seen from above, the ceiling from below — up gives nothing to lay flat,
+    //    and the direction being looked along takes over.
+    static PlacementFrame(Hit, Reference = null)
     {
         const Normal = Hit.Normal;
-        let Tangent = Hit.Tangent;
-        const Alignment = Tangent[0] * Normal[0] + Tangent[1] * Normal[1] + Tangent[2] * Normal[2];
-        Tangent = Tangent.map((Component, Index) => Component - Normal[Index] * Alignment);
+        let Upright = null;
+        if (Reference && Reference.Up) Upright = Flatten(Reference.Up, Normal);
+        if (!Upright && Reference && Reference.Forward)
+        {
+            const Facing = Dot(Reference.Up || [0, 1, 0], Normal) >= 0 ? 1 : -1;
+            Upright = Flatten(Reference.Forward.map((Component) => Component * Facing), Normal);
+        }
+        let Tangent = Upright ? Cross(Upright, Normal) : Hit.Tangent;
+        if (!Upright)
+        {
+            const Alignment = Dot(Tangent, Normal);
+            Tangent = Tangent.map((Component, Index) => Component - Normal[Index] * Alignment);
+        }
         const Length = Math.hypot(...Tangent);
         if (Length < 1e-5)
         {
-            const Reference = Math.abs(Normal[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
-            Tangent = [
-                Reference[1] * Normal[2] - Reference[2] * Normal[1],
-                Reference[2] * Normal[0] - Reference[0] * Normal[2],
-                Reference[0] * Normal[1] - Reference[1] * Normal[0],
-            ];
+            const Fallback = Math.abs(Normal[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+            Tangent = Cross(Fallback, Normal);
         }
         const Scale = Math.hypot(...Tangent) || 1;
         return {

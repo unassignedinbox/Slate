@@ -849,7 +849,9 @@ export class ShadingIntegrator
         if (Record.Decal) Device.deleteTexture(Record.Decal);
         const Image = Device.createTexture();
         Device.bindTexture(Device.TEXTURE_2D, Image);
-        Device.pixelStorei(Device.UNPACK_FLIP_Y_WEBGL, false);
+        // 🔴 Flipped on the way in. The artwork is drawn on a canvas, whose first row is its TOP, and it is sampled in
+        //    a frame whose V runs UP — so an unflipped upload hands back every decal mirrored through its own waist.
+        Device.pixelStorei(Device.UNPACK_FLIP_Y_WEBGL, true);
         Device.pixelStorei(Device.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
         Device.texImage2D(Device.TEXTURE_2D, 0, Device.RGBA8, Device.RGBA, Device.UNSIGNED_BYTE, Source);
         Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_MIN_FILTER, Device.LINEAR_MIPMAP_LINEAR);
@@ -858,6 +860,9 @@ export class ShadingIntegrator
         Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_WRAP_T, Device.CLAMP_TO_EDGE);
         Device.generateMipmap(Device.TEXTURE_2D);
         Device.bindTexture(Device.TEXTURE_2D, null);
+        // The flip is device state, not texture state, and every other upload here hands over pixels that are already
+        // the right way up — a restored undo snapshot among them — so it is put back before anything else can read it.
+        Device.pixelStorei(Device.UNPACK_FLIP_Y_WEBGL, false);
         Record.Decal = Image;
         return Image;
     }

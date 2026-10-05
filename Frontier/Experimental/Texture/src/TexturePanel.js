@@ -433,6 +433,8 @@ export class TexturePanel
         this.Placement = null;
         this.MovingMark = "";
         this.ChosenTool = "";
+        this.ContentTool = "";      // the tool the hand had on the layer's content, handed back when the mask is let go
+        this.SyncingSide = false;   // guard: the view and the painted side drive each other, and must not drive in circles
         this.SyncedLayer = "";
         this.RecentColours = ["#db5233", "#2f3338", "#c9ab6a", "#4a7bd0", "#e8e2d6"];
         this.PlaneWire = true;          // the unwrapped triangles drawn over the sheet in the plane view
@@ -530,8 +532,15 @@ export class TexturePanel
         if (this.Project.Selection === Identifier) return;
         this.Project.Selection = Identifier;
         const Layer = this.ActiveLayer;
-        if (this.Projection.Brush.Target === "mask" && Layer && Layer.Mask.Kind === "none")
-            this.Projection.Configure({ Target: "coverage" });
+        // The side being painted travels with the layer. A layer left with its mask in hand is picked up the same way,
+        // and one that never had a mask is picked up on its content however the layer before it was being painted.
+        const Side = Layer && Layer.Mask.Kind !== "none" && Layer.Target === "mask" ? "mask" : "coverage";
+        if (this.Projection.Brush.Target !== Side)
+        {
+            this.Projection.Configure({ Target: Side });
+            if (Side === "coverage") this.ContentTool = "";
+            this.FollowPaintTarget(Side);
+        }
         this.SyncToolToLayer();
         this.SyncToolRail();
         this.RenderStack();
@@ -1592,7 +1601,7 @@ export class TexturePanel
             this.Placement = null;
             return;
         }
-        const Frame = StrokeProjection.PlacementFrame(Hit);
+        const Frame = StrokeProjection.PlacementFrame(Hit, this.ViewReference());
         const Template = this.ActiveMark || Layer.Decal;
         const Transform = Template.Transform;
         this.Placement = {
@@ -2542,7 +2551,9 @@ export class TexturePanel
         const Layer = this.ActiveLayer;
         if (!Layer) return;
         this.SyncedLayer = Layer.Identifier;
-        const Wanted = Layer.Kind === "decal" ? "decal" : "brush";
+        // A mask is painted, whatever the layer under it is made of: a decal layer's mask still wants a brush.
+        const Masking = this.Projection.Brush.Target === "mask";
+        const Wanted = Layer.Kind === "decal" && !Masking ? "decal" : "brush";
         if (this.Tool === Wanted) return;
         if (!Force)
         {
@@ -2578,11 +2589,12 @@ export class TexturePanel
     SetPaintTarget(Target, Announce = true)
     {
         const Wanted = Target === "mask" ? "mask" : "coverage";
+        const Layer = this.ActiveLayer;
+        if (!Layer) return;
+        const Leaving = this.Projection.Brush.Target;
         let Opened = "";
         if (Wanted === "mask")
         {
-            const Layer = this.ActiveLayer;
-            if (!Layer) return;
             // The mask a layer gets on the way in is the one the colour in hand will show against: a pale colour
             // wants a black mask to reveal into, a dark colour wants a white mask to cut away.
             if (Layer.Mask.Kind === "none")
@@ -2590,19 +2602,54 @@ export class TexturePanel
                 Opened = this.MaskInk()[0] >= 0.5 ? "black" : "white";
                 this.AddMask(Opened, false);
             }
+            // What was in hand for the content is kept, because coming back to the content and finding a brush where
+            // a decal tool used to be is the kind of small theft that makes a tool feel untrustworthy.
+            if (Leaving !== "mask") this.ContentTool = this.ChosenTool || this.Tool;
         }
         this.Projection.Configure({ Target: Wanted });
+        // 🔴 The side being painted belongs to the LAYER, not to the brush. The brush carries it because the stamping
+        //    pass needs one place to read it from, but it is written back here so that stepping away to another layer
+        //    and returning finds the same side in hand — a mask is part of the layer it hides, not a mode of the app.
+        Layer.Target = Wanted;
+        this.FollowPaintTarget(Wanted);
         this.SyncPaintTarget();
         this.SyncToolRail();
         this.RefreshThumbnails();
+        this.Instruments?.Refresh();
         if (Announce)
             this.Notify(
                 Wanted === "coverage"
-                    ? "Painting into the layer."
+                    ? `Painting ${Layer.Name} itself.`
                     : Opened
-                      ? `${Opened === "black" ? "Black" : "White"} mask added — painting into it.`
-                      : "Painting into the layer mask — light colours reveal, dark ones hide.",
+                      ? `${Opened === "black" ? "Black" : "White"} mask added to ${Layer.Name} — painting into it.`
+                      : `Painting the mask on ${Layer.Name} — light reveals, dark hides.`,
             );
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // What the viewport and the tool rail do when the side being painted changes. Switching to a mask that cannot be seen
+    // is painting blind, so the view follows; and a tool that cannot touch a mask — the camera, the dropper, a decal on a
+    // decal layer — hands over to the brush and is handed back on the way out.
+    //----------------------------------------------------------------------------------------------------------------------
+    FollowPaintTarget(Wanted)
+    {
+        const Outer = this.SyncingSide;
+        this.SyncingSide = true;
+        if (Wanted === "mask")
+        {
+            if (this.MaskView === "off") this.SetMaskView("overlay", false);
+            if (!["brush", "eraser", "fill"].includes(this.Tool)) this.SetTool("brush", true);
+        }
+        else
+        {
+            if (this.MaskView !== "off") this.SetMaskView("off", false);
+            const Layer = this.ActiveLayer;
+            const Restored = this.ContentTool || (Layer?.Kind === "decal" ? "decal" : "brush");
+            if (this.ToolsForLayer().includes(Restored)) this.SetTool(Restored, true);
+            else this.SyncToolToLayer(true);
+            this.ContentTool = "";
+        }
+        this.SyncingSide = Outer;
     }
 
     SyncPaintTarget()
@@ -2684,6 +2731,7 @@ export class TexturePanel
             Layer.Mask.Invert = false;
         });
         this.Integrator.ReleaseMask(Layer.Identifier);
+        Layer.Target = "coverage";
         if (this.Projection.Brush.Target === "mask") this.Projection.Configure({ Target: "coverage" });
         if (this.MaskView !== "off") this.SetMaskView("off", false);
         this.Recomposite();
@@ -2730,6 +2778,15 @@ export class TexturePanel
         }
         Select("#channel-select").value = this.Display;
         RefreshSelect(Select("#channel-select"));
+        // 🔴 Looking at a mask and painting the layer underneath it is the oldest way to lose an afternoon, so the
+        //    view and the side being painted are one switch with two handles: move either and the other follows.
+        if (!this.SyncingSide)
+        {
+            const Side = Wanted === "off" ? "coverage" : "mask";
+            this.SyncingSide = true;
+            if (this.Projection.Brush.Target !== Side) this.SetPaintTarget(Side, false);
+            this.SyncingSide = false;
+        }
         this.Recomposite();
         this.SyncMaskView();
         this.RenderInspector();
@@ -3634,7 +3691,7 @@ export class TexturePanel
             return;
         }
         const Decal = Layer.Decal;
-        const Frame = StrokeProjection.PlacementFrame(Hit);
+        const Frame = StrokeProjection.PlacementFrame(Hit, this.ViewReference());
         // A stamping layer paints the artwork into the texture; so does any layer whose mask is the target.
         if (Decal.Placement === "stamp" || this.Projection.Brush.Target === "mask")
         {
@@ -3812,12 +3869,18 @@ export class TexturePanel
         this.Notify(`${Layer.Name} stamped into the ${Target === "mask" ? "mask" : "layer"}.`);
     }
 
+    // What the viewer calls up and forward. Decal frames are built against it so artwork lands standing up.
+    ViewReference()
+    {
+        return { Up: [...this.Camera.Up], Forward: [...this.Camera.Forward] };
+    }
+
     // Dragging after the click slides the placement across the surface.
     MoveMark(Hit)
     {
         const Mark = this.MarkByIdentifier(this.MovingMark);
         if (!Mark || !Hit) return;
-        const Frame = StrokeProjection.PlacementFrame(Hit);
+        const Frame = StrokeProjection.PlacementFrame(Hit, this.ViewReference());
         Mark.Transform.Position = Frame.Position;
         Mark.Transform.Normal = Frame.Normal;
         Mark.Transform.Tangent = Frame.Tangent;
