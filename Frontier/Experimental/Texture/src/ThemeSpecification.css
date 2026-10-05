@@ -121,17 +121,6 @@ b {
   background: #ffffff14;
   color: #f0f0f0;
 }
-.document-bar {
-  height: 35px;
-  padding: 0 25px;
-  background: var(--bg);
-  border: 0;
-  gap: 9px;
-}
-.document-bar input {
-  font-size: 12px;
-  width: 104px;
-}
 .workspace {
   grid-template-columns: 316px minmax(320px, 1fr) 368px;
   gap: 10px;
@@ -772,11 +761,9 @@ dialog {
   .app-header {
     height: 54px;
   }
-  .document-bar {
-    height: 31px;
-  }
   .mobile-library .left-panel {
-    top: 85px;
+    /* The header is all the chrome there is now, so the drawer hangs straight off it. */
+    top: 60px;
     width: 276px;
     border: 1px solid #ffffff16;
   }
@@ -888,6 +875,14 @@ dialog {
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
+}
+/* The unsaved dot belongs to the document, so it is drawn on the document's own tab rather than in a bar of its own. */
+.document-tab .dirty-indicator {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--green);
 }
 .document-tab .document-rename {
   flex: 1;
@@ -2903,8 +2898,12 @@ dialog {
 .uv-tiles {
   position: absolute;
   inset: 0;
-  /* 🔴 The overlay above is pointer-transparent so orbiting and painting pass through it. The tiles opt back in,
-     because clicking a UDIM square is how an object is moved onto it. */
+  /* 🔴 Pointer-transparent by default, because a brush in texture space paints the sheet these squares are drawn
+     over and an element that takes the press is an element that eats the stroke. They opt back in only while the
+     orbit tool is in hand, which is when clicking a UDIM square means "move the object here" rather than "paint". */
+  pointer-events: none;
+}
+.uv-tiles.arranging {
   pointer-events: auto;
 }
 .uv-tiles[hidden] {
@@ -2934,14 +2933,14 @@ dialog {
   background: rgba(52, 199, 89, 0.07);
   color: var(--green);
 }
-.uv-tile {
+.arranging .uv-tile {
   cursor: pointer;
 }
-.uv-tile:hover {
+.arranging .uv-tile:hover {
   background: rgba(255, 255, 255, 0.05);
   color: var(--text);
 }
-.uv-tile:hover:not(.occupied)::after {
+.arranging .uv-tile:hover:not(.occupied)::after {
   content: "move here";
   position: absolute;
   left: 7px;
@@ -4534,6 +4533,24 @@ details.channel-control > summary code {
 
 .rail-split:first-child {
   margin-top: 3px;
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*  The decal preview — the artwork itself, inked the way the surface will ink it                                       */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+.decal-preview {
+  margin: 2px 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #121212;
+}
+
+.preview-sheet {
+  display: block;
+  width: 100%;
+  height: 128px;
 }
 
 /* ------------------------------------------------------------------------------------------------------------------ */

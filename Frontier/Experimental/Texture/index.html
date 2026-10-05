@@ -27,16 +27,9 @@
                     <button class="icon-button" id="help-button" title="Shortcuts and prototype information" aria-label="Help" data-icon="help"></button>
                 </div>
             </header>
-            <div class="document-bar">
-                <span data-icon="file"></span><input id="document-name" value="Foundry crate" aria-label="Surface name" maxlength="64" /><span
-                    id="dirty-indicator"
-                    title="Unsaved work"
-                    class="dirty-indicator clean"
-                ></span>
-                <input type="file" id="import-file" accept=".pigment,.json,.texture,application/json" hidden />
-                <input type="file" id="svg-file" accept=".svg,image/svg+xml" hidden />
-                <input type="file" id="mesh-file" accept=".obj" hidden />
-            </div>
+            <input type="file" id="import-file" accept=".pigment,.json,.texture,application/json" hidden />
+            <input type="file" id="svg-file" accept=".svg,image/svg+xml" hidden />
+            <input type="file" id="mesh-file" accept=".obj" hidden />
             <main class="workspace" id="texture-workspace">
                 <aside class="left-panel">
                     <section class="outliner" id="outliner" aria-label="Objects">
@@ -138,6 +131,7 @@
                                     <i data-icon="grid"></i><span>UDIM</span>
                                 </button>
                                 <span class="plane-note" id="plane-note"></span>
+                                <span class="plane-note" id="tile-hint"></span>
                             </div>
                         </div>
                         <div class="viewport-caption">

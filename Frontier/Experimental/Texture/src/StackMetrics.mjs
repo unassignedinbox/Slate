@@ -92,6 +92,7 @@ import {
     MetalPreset,
     EnvironmentOrdering,
 } from "./MaterialSpecification.js";
+import { InkRamp } from "./DecalSpecification.js";
 import { GeneratorOrdering, GeneratorIndex, NormaliseGenerator, DefaultGenerator, GeneratorControls } from "./GeneratorSpecification.js";
 import {
     FinishFamilies,
@@ -123,6 +124,8 @@ import {
     RampEase,
     RampWhere,
     RampCss,
+    DecalFits,
+    DecalFitIdentifiers,
     LineSnaps,
     LineSamples,
     LineSampleLimit,
@@ -158,6 +161,7 @@ import {
     ResetLayerCounter,
     CreateMark,
     SanitiseMark,
+    DecalDefaults,
     MarkLimit,
     OrderStack,
     LayerSubtree,
@@ -2031,4 +2035,111 @@ test("the ramp draws itself the same way the paint will", () =>
     ]);
     assert.ok(Css.startsWith("linear-gradient(to right,"), Css);
     assert.ok(Css.includes("rgb(255,0,0) 0.00%") && Css.includes("rgb(0,255,0) 50.00%"), Css);
+});
+
+//--------------------------------------------------------------------------------------------------------------------------
+// The ink a decal is printed in.
+//
+// A gradient on a decal is baked into the artwork rather than mixed in the shader, so what is asserted here is the fade
+// that gets painted into the image — the stops handed to the canvas, in order, with the easing already sampled in.
+//--------------------------------------------------------------------------------------------------------------------------
+const FakeContext = () =>
+{
+    const Record = { Kind: "", Frame: [], Stops: [], Mode: "", Fill: null, Painted: null };
+    const Fade = { addColorStop: (Where, Colour) => Record.Stops.push([Number(Where.toFixed(4)), Colour]) };
+    return {
+        canvas: { width: 64, height: 64 },
+        Record,
+        createLinearGradient: (...Frame) => ((Record.Kind = "linear"), (Record.Frame = Frame), Fade),
+        createRadialGradient: (...Frame) => ((Record.Kind = "radial"), (Record.Frame = Frame), Fade),
+        setTransform: () => {},
+        fillRect: (...Frame) => (Record.Painted = Frame),
+        set globalCompositeOperation(Value) { Record.Mode = Record.Mode ? `${Record.Mode},${Value}` : Value; },
+        get globalCompositeOperation() { return Record.Mode; },
+        set fillStyle(Value) { Record.Fill = Value; },
+        get fillStyle() { return Record.Fill; },
+    };
+};
+
+test("a decal's gradient is painted into the artwork, not over it", () =>
+{
+    assert.deepEqual(DecalFitIdentifiers, ["across", "down", "out"], "a rectangle has three honest directions");
+    assert.equal(DecalFits.length, 3);
+
+    const Context = FakeContext();
+    InkRamp(Context, 64, { Fit: "across", Easing: "linear", Reverse: false, Stops: [
+        { Position: 0, Colour: [1, 0, 0] },
+        { Position: 1, Colour: [0, 0, 1] },
+    ] });
+    assert.equal(Context.Record.Kind, "linear");
+    assert.deepEqual(Context.Record.Frame, [0, 0, 64, 0], "across runs left to right");
+    assert.equal(Context.Record.Stops[0][1], "rgb(255,0,0)");
+    assert.equal(Context.Record.Stops.at(-1)[1], "rgb(0,0,255)");
+    // 🔴 source-in is the whole mechanism: the fade keeps the artwork's own coverage and nothing else.
+    assert.ok(Context.Record.Mode.startsWith("source-in"), Context.Record.Mode);
+    assert.ok(Context.Record.Mode.endsWith("source-over"), "and it puts the context back the way it found it");
+    assert.deepEqual(Context.Record.Painted, [0, 0, 64, 64], "the whole square is covered");
+
+    const Down = FakeContext();
+    InkRamp(Down, 64, { Fit: "down", Stops: DefaultRampStops() });
+    assert.deepEqual(Down.Record.Frame, [0, 0, 0, 64], "down runs top to bottom");
+
+    const Out = FakeContext();
+    InkRamp(Out, 64, { Fit: "out", Stops: DefaultRampStops() });
+    assert.equal(Out.Record.Kind, "radial");
+    assert.ok(Out.Record.Frame[5] > 32, "and radial reaches the corners, not just the edges");
+
+    // Turning it around swaps the ends, and the easing is sampled in because canvas only interpolates straight.
+    const Turned = FakeContext();
+    InkRamp(Turned, 64, { Fit: "across", Reverse: true, Easing: "linear", Stops: [
+        { Position: 0, Colour: [1, 0, 0] },
+        { Position: 1, Colour: [0, 0, 1] },
+    ] });
+    assert.equal(Turned.Record.Stops[0][1], "rgb(0,0,255)");
+    const Eased = FakeContext();
+    InkRamp(Eased, 64, { Fit: "across", Easing: "in", Stops: [
+        { Position: 0, Colour: [0, 0, 0] },
+        { Position: 1, Colour: [1, 1, 1] },
+    ] });
+    const Middle = Eased.Record.Stops.find((Stop) => Stop[0] === 0.5);
+    assert.equal(Middle[1], "rgb(64,64,64)", "ease in is a quarter of the way up at the midpoint");
+    assert.ok(Eased.Record.Stops.length > 8, "the curve is sampled finely enough to read as a curve");
+});
+
+test("a decal carries its ink home", () =>
+{
+    const Decal = DecalDefaults();
+    assert.equal(Decal.Ramp.Carry, false, "artwork keeps its own colours until it is told otherwise");
+    assert.equal(Decal.Ramp.Fit, "across");
+    assert.equal(Decal.Ramp.Stops.length, 2);
+
+    const Project = DefaultProject();
+    const Layer = CreateLayer("decal");
+    Layer.Decal.Ramp = { Carry: true, Fit: "out", Easing: "in", Reverse: true, Stops: [
+        { Position: 1, Colour: [0.2, 0.4, 0.6] },
+        { Position: 0, Colour: [1, 1, 1] },
+        { Position: 0.5, Colour: [0, 0, 0] },
+    ] };
+    Project.Layers.push(Layer);
+    const Read = SanitiseProject(JSON.parse(JSON.stringify(Project)));
+    const Restored = Read.Layers.find((Entry) => Entry.Kind === "decal" && Entry.Decal.Ramp.Carry);
+    assert.ok(Restored, "a decal with a gradient survives the round trip");
+    assert.equal(Restored.Decal.Ramp.Fit, "out");
+    assert.equal(Restored.Decal.Ramp.Reverse, true);
+    assert.deepEqual(
+        Restored.Decal.Ramp.Stops.map((Stop) => Stop.Position),
+        [0, 0.5, 1],
+        "and comes back in order, whatever order it went in",
+    );
+
+    // A file written before gradients existed describes artwork in its own colours.
+    const Old = SanitiseProject({ Layers: [{ Kind: "decal", Name: "Badge", Decal: { SourceKind: "svg", Library: "hazard" } }] });
+    const Plain = Old.Layers.find((Entry) => Entry.Kind === "decal");
+    assert.equal(Plain.Decal.Ramp.Carry, false);
+    assert.equal(Plain.Decal.Ramp.Stops.length, 2, "and is handed the default ramp to start from");
+
+    const Nonsense = SanitiseProject({ Layers: [{ Kind: "decal", Decal: { Ramp: { Carry: true, Fit: "sideways", Stops: "none" } } }] });
+    const Fixed = Nonsense.Layers.find((Entry) => Entry.Kind === "decal");
+    assert.equal(Fixed.Decal.Ramp.Fit, "across", "a fit nobody has heard of falls back to the one that always works");
+    assert.equal(Fixed.Decal.Ramp.Stops.length, 2);
 });

@@ -202,32 +202,6 @@ a {
   color: var(--accent);
   background: var(--accent-dark);
 }
-.document-bar {
-  height: 36px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 0 18px;
-  border-bottom: 1px solid var(--line);
-  background: #1d1d1d;
-  flex-shrink: 0;
-}
-.document-bar > span:first-child {
-  color: #a5a5a5;
-}
-.document-bar svg {
-  width: 13px;
-  height: 13px;
-}
-.document-bar input {
-  border: 0;
-  background: transparent;
-  width: 88px;
-  font-size: 11px;
-  padding: 3px 0;
-  field-sizing: content;
-  max-width: 240px;
-}
 .dirty-indicator {
   width: 5px;
   height: 5px;
@@ -236,13 +210,6 @@ a {
 }
 .dirty-indicator.clean {
   visibility: hidden;
-}
-.document-bar .text-button {
-  margin-left: auto;
-  color: #9b9b9b;
-  display: flex;
-  align-items: center;
-  gap: 7px;
 }
 .text-button {
   font-size: 11px;
@@ -1274,9 +1241,6 @@ dialog a {
   }
   .brand strong {
     font-size: 14px;
-  }
-  .document-bar {
-    height: 30px;
   }
   .header-end {
     gap: 8px;

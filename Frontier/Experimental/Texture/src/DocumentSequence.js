@@ -22,7 +22,9 @@ export class DocumentSequence
         this.Icon = Icon;
         this.NextIdentity = 2;
         this.ActiveIdentity = 1;
-        this.Slots = [{ Identity: 1, Name: Select("#document-name").value, Record: null }];
+        // 📝 The tab IS the document's name — there is no second field anywhere in the window holding a copy of it,
+        //    so the project record is the one place it lives and the strip simply draws what the record says.
+        this.Slots = [{ Identity: 1, Name: Panel.Project?.Name || "Untitled", Record: null }];
         this.Construct();
 
         Select("#new-document").addEventListener("click", () => this.Open());
@@ -93,7 +95,7 @@ export class DocumentSequence
     {
         const Slot = this.Active;
         if (!Slot) return null;
-        Slot.Name = Select("#document-name").value.trim() || "Untitled";
+        Slot.Name = String(this.Panel.Project?.Name || "").trim() || "Untitled";
         Slot.Record = this.Panel.CaptureDocument();
         return Slot;
     }
@@ -147,8 +149,7 @@ export class DocumentSequence
     {
         const Name = Field.value.trim().slice(0, 48) || "Untitled";
         this.Active.Name = Name;
-        if (Number(Field.closest("[data-document]").dataset.document) === this.ActiveIdentity)
-            Select("#document-name").value = Name;
+        if (Number(Field.closest("[data-document]").dataset.document) === this.ActiveIdentity) this.Panel.Project.Name = Name;
         this.Construct();
         this.Panel.MarkDirty();
     }
@@ -170,6 +171,11 @@ export class DocumentSequence
                 ${this.Icon("layers")}
                 <span class="document-label">${Escape(Slot.Name)}</span>
                 <input class="document-rename" hidden maxlength="48" aria-label="Rename document" />
+                ${
+                    Slot.Identity === this.ActiveIdentity
+                        ? `<span id="dirty-indicator" class="dirty-indicator ${this.Panel.Dirty ? "" : "clean"}" title="Unsaved work"></span>`
+                        : ""
+                }
                 ${
                     this.Slots.length > 1
                         ? `<button class="icon-button" data-close-document="${Slot.Identity}" aria-label="Close ${Escape(Slot.Name)}">${this.Icon("close")}</button>`

@@ -10,7 +10,8 @@ cd Frontier/Experimental/Texture
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
-npm test           # 126 unit tests, no browser required
+npm test           # 128 unit tests, no browser required
+npm run drive      # boots the whole editor in a headless window and drives the card
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -195,7 +196,10 @@ Nothing on the sheet reaches the model, which is the entire point: a gradient al
 behaviour is in the hand, and the only honest preview of a stroke is a stroke.
 
 **Texture space takes the same tools.** `X` flattens the model to its sheet, and the brush, the eraser, the flood, the
-dropper, the straight line, the gradient and the decal all work there exactly as they do on the model. A point is named
+dropper, the straight line, the gradient and the decal all work there exactly as they do on the model. The UDIM squares
+drawn over the sheet are real elements, so they hand the pointer back the moment a tool that marks is in hand: with a
+brush you paint the sheet, and with the orbit tool — the one that arranges rather than marks — a square is a place to
+move an object onto, which is the only thing a UDIM number means. A point is named
 by a UV coordinate rather than by a ray cast at the model and that is the whole of the difference: a line is still
 walked in screen pixels so its dabs stay evenly spaced at any zoom, a gradient still fades between the two ends of the
 drag — across the sheet this time, lighting the gutter texels the model does not own — and a decal dropped on the sheet
@@ -268,10 +272,26 @@ the model and artwork dropped at rotation zero arrives turned over — the pictu
 model, the same rays, with only the frame changed. On a face that points straight at the viewer's up, where there is no
 up left to lay flat, the direction being looked along takes over, which is how you read a sign painted on a floor.
 
-**Decals, in the card.** The artwork pane switches a decal layer between vector and type, picks the drawing out of the
-library or sets the wording in any of the ten faces with weight, size, tracking and outline, and chooses whether the
-decal is burned into the layer or kept as a movable placement. The ink pane carries the tint, the palette, whether the
-artwork's own colours are kept, and what the decal does to the surface underneath it — emboss, roughness, metalness.
+![The same artwork printed six ways](decal-ink.png)
+
+**Decals, in the card.** Both panes open on the artwork itself. The preview is not a thumbnail of the library entry —
+it is the rasterised image the surface is about to receive, inked exactly as the surface will ink it, on the chequer
+that means nothing is there: the type you typed, at the tracking you set, through the gradient you built. The artwork
+pane switches a decal layer between vector and type, picks the drawing out of the library or sets the wording in any of
+the ten faces with weight, size, tracking and outline, and chooses whether the decal is burned into the layer or kept
+as a movable placement.
+
+**A decal's ink is one answer, not two.** The ink pane offers three positions where there used to be a switch: *as
+drawn* keeps the artwork's own colours, *one colour* ignores them for the tint, and *gradient* runs the artwork through
+a ramp — the same strip, the same eight stops, the same easings as the paint, fitted across a rectangle instead of
+along a stroke, so the directions are across, down and out. Picking it turns the flat tint off and takes every
+placement of that artwork with it, because a mark still colourising would paint the fade out with one colour.
+
+The fade is baked into the image when it is rasterised rather than mixed in the shader. That is one line of canvas —
+`source-in` over the artwork, which keeps its coverage exactly, anti-aliased edges and soft type included — and it is
+why the gradient shows up unchanged in the burn, in the projection, in the ghost under the cursor and in the exported
+texture set, none of which have been taught anything about ramps. The rest of the pane is what the decal does to the
+surface underneath it: emboss, roughness, metalness.
 
 **Folders.** A folder is a layer whose children name it as their parent, so the stack stays one flat array in the order
 the compositor walks it, repaired into a tree after every edit: no loops, no orphans, nothing nested more than four deep,
@@ -521,6 +541,11 @@ green channel is flipped on the way out rather than left for someone to discover
 
 ---
 
+**One name, on the tab.** The document's name lives on its tab and nowhere else — double-click to rename it, and the
+unsaved dot sits on the tab beside it. There used to be a second copy in a bar of its own under the header, which was
+both a duplicate and a band of empty chrome between the window's controls and the work; the panels start directly under
+the header now.
+
 ## Keyboard
 
 | | | | |
@@ -558,6 +583,8 @@ painted. With the orbit tool in hand, a left click that never becomes a drag sel
 | `FinishSpecification.js` | Procedural material families, their styles, named controls and the preset shelf. |
 | `LayerSpecification.js` | Layer, mask and decal records; sanitisers; project defaults and validation. |
 | `DecalSpecification.js` | Vector library, font archive, SVG/text rasterisation. |
+| `harness/DeviceHost.mjs` | A jsdom window with a recording WebGL2 device behind it, so the editor can be driven with no browser. |
+| `harness/CardMetrics.mjs` | `npm run drive` — boots the real editor headless and reads the card back the way a hand would. |
 | `InstrumentSpecification.js` | The instrument library: seven families and twenty-seven types, their drawings, settings schema, the material each one lays and the brush mapping. |
 | `InstrumentPanel.js` | The summoned card: the rail of paint properties, the pane frame and the ribbon preview. |
 | `MediaSolver.js` | What each medium does to a mark — bristle lanes, paper tooth, bleed, dust, wax skip — and the uniform packing the stamping pass reads. |

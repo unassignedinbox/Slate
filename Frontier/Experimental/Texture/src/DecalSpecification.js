@@ -7,6 +7,7 @@
 //============================================================================================================================================
 
 import { SanitiseMarkup } from "./LayerSpecification.js";
+import { SortRampStops, RampColourAt, RampEase } from "./StrokeSpecification.js";
 //--------------------------------------------------------------------------------------------------------------------------
 // Font addresses resolve against this module rather than through a bundler plugin, so the editor runs from a plain static
 // host as happily as it does under the dev server — and the literal form is the one a bundler can still rewrite.
@@ -222,11 +223,55 @@ export const RasteriseText = async (Settings, Size = DecalResolution) =>
     return Surface;
 };
 
+//--------------------------------------------------------------------------------------------------------------------------
+// Ink. A gradient is painted INTO the artwork rather than mixed over it later.
+//
+// 🔴 source-in is the whole trick: the fade covers the square, and what survives is only what the artwork already
+//    covered, at the alpha the artwork already had. Anti-aliased edges and soft text keep their coverage exactly,
+//    which a per-texel multiply in the shader would have had to reconstruct. And because the fade is in the image,
+//    every pass downstream — the burn, the projection, the ghost under the cursor, the exported texture set — shows
+//    it without being taught anything about ramps.
+//--------------------------------------------------------------------------------------------------------------------------
+const RampSteps = 24;
+
+const CssStop = (Colour) => `rgb(${Colour.map((Part) => Math.round(Math.max(0, Math.min(1, Part)) * 255)).join(",")})`;
+
+export const InkRamp = (Context, Size, Ramp) =>
+{
+    const Stops = SortRampStops(Ramp?.Stops);
+    const Middle = Size / 2;
+    const Fade =
+        Ramp?.Fit === "out"
+            ? Context.createRadialGradient(Middle, Middle, 0, Middle, Middle, Middle * Math.SQRT2)
+            : Ramp?.Fit === "down"
+              ? Context.createLinearGradient(0, 0, 0, Size)
+              : Context.createLinearGradient(0, 0, Size, 0);
+    // Canvas interpolates straight between the stops it is given, so the easing is sampled in rather than declared.
+    for (let Step = 0; Step <= RampSteps; Step += 1)
+    {
+        const Share = Step / RampSteps;
+        const Where = RampEase(Ramp?.Reverse ? 1 - Share : Share, Ramp?.Easing || "linear");
+        Fade.addColorStop(Share, CssStop(RampColourAt(Stops, Where)));
+    }
+    Context.setTransform(1, 0, 0, 1, 0, 0);
+    Context.globalCompositeOperation = "source-in";
+    Context.fillStyle = Fade;
+    Context.fillRect(0, 0, Size, Size);
+    Context.globalCompositeOperation = "source-over";
+    return Context.canvas;
+};
+
 export const RasteriseDecal = async (Decal) =>
 {
-    if (Decal.SourceKind === "text") return RasteriseText(Decal.Text);
-    const Markup = SanitiseMarkup(Decal.Library === "custom" ? Decal.Svg : DecalByIdentifier[Decal.Library]?.Markup);
-    return RasteriseVector(Markup || DecalByIdentifier.hazard.Markup);
+    const Surface =
+        Decal.SourceKind === "text"
+            ? await RasteriseText(Decal.Text)
+            : await RasteriseVector(
+                  SanitiseMarkup(Decal.Library === "custom" ? Decal.Svg : DecalByIdentifier[Decal.Library]?.Markup) ||
+                      DecalByIdentifier.hazard.Markup,
+              );
+    if (Decal.Ramp?.Carry) InkRamp(Surface.getContext("2d"), Surface.width, Decal.Ramp);
+    return Surface;
 };
 
 //--------------------------------------------------------------------------------------------------------------------------

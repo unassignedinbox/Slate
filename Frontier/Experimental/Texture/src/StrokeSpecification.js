@@ -72,6 +72,16 @@ export const RampFits = [
 
 export const RampFitIdentifiers = RampFits.map((Fit) => Fit.Identifier);
 
+// 📝 A decal has no hand and no travel, so neither of the two fits above means anything to it. What it has is a
+//    rectangle of artwork, and the only honest answers are which way across that rectangle the colours run.
+export const DecalFits = [
+    { Identifier: "across", Label: "Across", Note: "Left edge to right" },
+    { Identifier: "down", Label: "Down", Note: "Top edge to bottom" },
+    { Identifier: "out", Label: "Out", Note: "Middle to the corners" },
+];
+
+export const DecalFitIdentifiers = DecalFits.map((Fit) => Fit.Identifier);
+
 // Pale to near-black: the pair the gradient tool has always faded between, now stated as what it always was.
 export const DefaultRampStops = () => [
     { Position: 0, Colour: [0.93, 0.94, 0.96] },

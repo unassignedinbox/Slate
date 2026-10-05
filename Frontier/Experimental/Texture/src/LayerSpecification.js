@@ -15,6 +15,7 @@ import {
     BlendOrdering,
 } from "./ChannelSpecification.js";
 import { DefaultGenerator, NormaliseGenerator } from "./GeneratorSpecification.js";
+import { DefaultRampStops, SortRampStops, DecalFitIdentifiers } from "./StrokeSpecification.js";
 import { FinishDefaults, SanitiseFinish, FinishBadge } from "./FinishSpecification.js";
 import { CreateObject, SanitiseObject, FirstTile } from "./SceneStructure.js";
 import { SurfaceDefaults, SurfaceControls } from "./MaterialSpecification.js";
@@ -100,6 +101,17 @@ export const DecalDefaults = () => ({
     },
     Tint: [0.92, 0.92, 0.94],
     Colorise: true,
+    // 🔴 A decal's ink is one of three things and never two of them at once: the artwork's own colours, one colour,
+    //    or a gradient across the artwork. The ramp is baked into the stencil when it is rasterised, so the fade is
+    //    carried by the image itself — which is why it survives into the burn, the projection, the ghost the cursor
+    //    draws and the exported texture set without any of them knowing a gradient was involved.
+    Ramp: {
+        Carry: false,
+        Fit: "across",              // across · down · out
+        Easing: "smooth",
+        Reverse: false,
+        Stops: DefaultRampStops(),
+    },
     Softness: 0.06,
     Emboss: 0.35,
     Transform: {
@@ -400,6 +412,13 @@ const SanitiseDecal = (Decal, Candidate) =>
         Svg: SanitiseMarkup(Candidate.Svg),
         Tint: SanitiseColour(Candidate.Tint, Decal.Tint),
         Colorise: Candidate.Colorise !== false,
+        Ramp: {
+            Carry: Candidate.Ramp?.Carry === true,
+            Fit: DecalFitIdentifiers.includes(Candidate.Ramp?.Fit) ? Candidate.Ramp.Fit : Decal.Ramp.Fit,
+            Easing: typeof Candidate.Ramp?.Easing === "string" ? Candidate.Ramp.Easing.slice(0, 12) : Decal.Ramp.Easing,
+            Reverse: Candidate.Ramp?.Reverse === true,
+            Stops: SortRampStops(Candidate.Ramp?.Stops || Decal.Ramp.Stops),
+        },
         Softness: Clamp(Candidate.Softness ?? Decal.Softness, 0.002, 0.6),
         Emboss: Clamp(Candidate.Emboss ?? Decal.Emboss, -0.5, 0.5),
         Text: {

@@ -26,6 +26,7 @@ import {
     GradientEasings,
     GradientDefaults,
     RampFits,
+    DecalFits,
     RampLimit,
     DefaultRampStops,
     SortRampStops,
@@ -534,6 +535,8 @@ export class TexturePanel
         //    every panel ever built the SAME array — and the second one to edit a colour would edit the first one's.
         this.Gradient = { ...GradientDefaults, Stops: DefaultRampStops() };
         this.RampStop = 0;          // which colour of the ramp the card's picker is pointing at
+        this.InkStop = 0;           // and the same, for the ramp a decal's ink runs through
+        this.DecalImages = new Map();   // the last artwork rasterised for each decal layer, for the card's preview
         this.RampOrigin = null;     // where the stroke carrying the ramp began, and the axis it was aimed down
         this.Curves = DefaultCurves();
         // Colour dynamics: how far each dab is allowed to wander from the colour in hand. Applied per segment on the
@@ -721,13 +724,13 @@ export class TexturePanel
     MarkDirty()
     {
         this.Dirty = true;
-        Select("#dirty-indicator").classList.remove("clean");
+        Select("#dirty-indicator")?.classList.remove("clean");
     }
 
     MarkClean()
     {
         this.Dirty = false;
-        Select("#dirty-indicator").classList.add("clean");
+        Select("#dirty-indicator")?.classList.add("clean");
     }
 
     //----------------------------------------------------------------------------------------------------------------------
@@ -735,12 +738,6 @@ export class TexturePanel
     //----------------------------------------------------------------------------------------------------------------------
     BindHeader()
     {
-        Select("#document-name").addEventListener("input", (Event) =>
-        {
-            this.Project.Name = Event.target.value.slice(0, 64);
-            this.Documents.Synchronise(this.Project.Name || "Untitled");
-            this.MarkDirty();
-        });
         Select("#export-button").addEventListener("click", () => this.OpenExport());
         Select("#flatten-button").addEventListener("click", () => this.FlattenStack());
         Select("#import-button").addEventListener("click", () => Select("#import-file").click());
@@ -1597,6 +1594,7 @@ export class TexturePanel
         const Showing = this.ViewMode === "plane";
         Overlay.hidden = !Showing;
         if (!Showing) return;
+        this.SyncPlaneTiles();
         const Canvas = Select("#surface-canvas");
         const Aspect = (Canvas.clientWidth || 1) / Math.max(Canvas.clientHeight || 1, 1);
         const Zoom = this.PlaneZoom;
@@ -1615,6 +1613,20 @@ export class TexturePanel
             ? `${Surface.Triangles.toLocaleString()} tris · ${Surface.Ranges.length} object${Surface.Ranges.length === 1 ? "" : "s"} · ${Span}×${Span} tiles`
             : "";
         if (Note && Note.textContent !== Text) Note.textContent = Text;
+    }
+
+    // 🔴 Who owns a press over the sheet. The UDIM squares are real elements sitting on top of the canvas, so while
+    //    they take the pointer nothing underneath them can ever be painted — which is exactly what went wrong: in
+    //    texture space the brush was drawing on a grid of divs. A square is clickable only when the hand is holding
+    //    the tool that arranges things rather than one that marks them.
+    SyncPlaneTiles()
+    {
+        const Tiles = Select("#uv-tiles");
+        if (!Tiles) return;
+        const Arranging = this.Tool === "orbit";
+        Tiles.classList.toggle("arranging", Arranging);
+        const Note = Select("#tile-hint");
+        if (Note) Note.textContent = Arranging ? "Click a square to move the object onto it" : "Orbit to rearrange tiles";
     }
 
     // The unwrap itself, drawn over the sheet: every triangle of every visible object, with the one in hand picked out.
@@ -2768,6 +2780,7 @@ export class TexturePanel
         if (Deliberate) this.ChosenTool = Tool;
         this.SyncedLayer = this.ActiveLayer?.Identifier || "";
         this.RefreshToolButtons();
+        this.SyncPlaneTiles();
         this.UpdateCaption();
     }
 
@@ -4562,12 +4575,95 @@ export class TexturePanel
             const Surface = await RasteriseDecal(Layer.Decal);
             this.Integrator.SetDecalImage(Layer, Surface);
             Layer.Decal.Aspect = Surface.width / Surface.height;
+            // The card shows the artwork the surface is about to show, so it is drawn from the very same image.
+            this.DecalImages.set(Layer.Identifier, Surface);
+            this.PaintDecalPreview(Layer);
             this.Recomposite();
         }
         catch (Error)
         {
             this.Notify(`Decal could not be rasterised: ${Error.message}`);
         }
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // The decal preview. A piece of artwork is a picture, and a card that describes a picture in words — a library
+    // name, a face, a tracking in pixels — is a card that has to be imagined before it can be used.
+    //
+    // 📝 It draws the rasterised artwork itself, inked exactly as the surface will ink it, over the chequer that
+    //    means "nothing here". Not a thumbnail of the library entry: the type you typed, at the tracking you set,
+    //    through the gradient you built.
+    //----------------------------------------------------------------------------------------------------------------------
+    DecalPreview(Layer)
+    {
+        const Holder = document.createElement("div");
+        Holder.className = "decal-preview";
+        const Sheet = document.createElement("canvas");
+        Sheet.className = "preview-sheet";
+        Sheet.width = 560;
+        Sheet.height = 280;
+        Sheet.dataset.decal = Layer.Identifier;
+        Holder.append(Sheet);
+        this.PaintDecalPreview(Layer);
+        // Nothing is cached on the way in: a pane built before the first rasterise has landed asks for one.
+        if (!this.DecalImages.has(Layer.Identifier)) this.RefreshDecal(Layer);
+        return Holder;
+    }
+
+    PaintDecalPreview(Layer)
+    {
+        if (!Layer) return;
+        const Artwork = this.DecalImages.get(Layer.Identifier);
+        if (!Artwork) return;
+        for (const Sheet of document.querySelectorAll(`canvas[data-decal="${Layer.Identifier}"]`))
+            this.DrawDecalSheet(Sheet, Layer, Artwork);
+    }
+
+    DrawDecalSheet(Sheet, Layer, Artwork)
+    {
+        const Pen = Sheet.getContext?.("2d");
+        if (!Pen || typeof Pen.createPattern !== "function") return;   // jsdom has no raster context to draw into
+        const Width = Sheet.width;
+        const Height = Sheet.height;
+        Pen.setTransform(1, 0, 0, 1, 0, 0);
+        Pen.clearRect(0, 0, Width, Height);
+
+        // The chequer: the editor's own two greys, so "no artwork here" reads as the card rather than as a texture.
+        const Square = 14;
+        Pen.fillStyle = "#121212";
+        Pen.fillRect(0, 0, Width, Height);
+        Pen.fillStyle = "#171717";
+        for (let Y = 0; Y < Height; Y += Square)
+            for (let X = 0; X < Width; X += Square)
+                if (((X / Square) | 0) % 2 === ((Y / Square) | 0) % 2) Pen.fillRect(X, Y, Square, Square);
+
+        // The ink the surface will use. A flat tint is applied here rather than in the artwork, because that is
+        // where the shader applies it; a gradient is already in the image, because that is where it is baked.
+        let Picture = Artwork;
+        if (Layer.Decal.Colorise && !Layer.Decal.Ramp?.Carry)
+        {
+            const Inked = document.createElement("canvas");
+            Inked.width = Artwork.width;
+            Inked.height = Artwork.height;
+            const Brush = Inked.getContext("2d");
+            if (Brush)
+            {
+                Brush.drawImage(Artwork, 0, 0);
+                Brush.globalCompositeOperation = "source-in";
+                Brush.fillStyle = ToHex(Layer.Decal.Tint);
+                Brush.fillRect(0, 0, Inked.width, Inked.height);
+                Picture = Inked;
+            }
+        }
+
+        const Fit = Math.min((Width * 0.86) / Artwork.width, (Height * 0.86) / Artwork.height);
+        const Drawn = [Artwork.width * Fit, Artwork.height * Fit];
+        Pen.drawImage(Picture, (Width - Drawn[0]) / 2, (Height - Drawn[1]) / 2, Drawn[0], Drawn[1]);
+
+        // The footprint, so the empty space around a wide piece of type is visibly part of the decal.
+        Pen.strokeStyle = "rgba(255,255,255,0.14)";
+        Pen.lineWidth = 2;
+        Pen.strokeRect((Width - Drawn[0]) / 2 + 1, (Height - Drawn[1]) / 2 + 1, Drawn[0] - 2, Drawn[1] - 2);
     }
 
     InvalidateDecals()
@@ -4712,9 +4808,14 @@ export class TexturePanel
             Paint.push({
                 Key: "ink",
                 Group: "Paint",
-                Label: "Ink",
-                Glyph: Icon("fill"),
-                Tone: "#8f6fd0",
+                Label: Layer.Decal.Ramp?.Carry ? "Ink gradient" : "Ink",
+                Glyph: Icon(Layer.Decal.Ramp?.Carry ? "ramp" : "fill"),
+                Tone: Layer.Decal.Ramp?.Carry
+                    ? ToHex(RampColourAt(Layer.Decal.Ramp.Stops, 0.5))
+                    : Layer.Decal.Colorise
+                      ? ToHex(Layer.Decal.Tint)
+                      : "#8f6fd0",
+                Tally: Layer.Decal.Ramp?.Carry ? `${SortRampStops(Layer.Decal.Ramp.Stops).length}` : undefined,
                 Title: "Ink",
                 Note: "What the artwork is made of",
                 Ribbon: false,
@@ -5212,8 +5313,20 @@ export class TexturePanel
     //    the knob under the finger is replaced mid-drag — and a capture held by an element that no longer exists is a
     //    stop that follows the hand for a pixel and then stops dead.
     //----------------------------------------------------------------------------------------------------------------------
-    RampField()
+    RampField(Ramp = null)
     {
+        // The stroke's gradient is the default because it was the only one for a while; a decal hands in its own.
+        const Store = Ramp || {
+            Read: () => this.Gradient.Stops,
+            Write: (Stops) => (this.Gradient.Stops = Stops),
+            Cursor: "RampStop",
+            Arm: () =>
+            {
+                this.Gradient.Carry = true;
+                this.Instruments?.RenderRail();
+                this.Instruments?.DrawPad();
+            },
+        };
         const Holder = document.createElement("div");
         Holder.className = "ramp-well";
         Holder.innerHTML = `
@@ -5234,7 +5347,9 @@ export class TexturePanel
         const Code = Holder.querySelector("[data-stop-code]");
         const Drop = Holder.querySelector("[data-ramp-drop]");
 
-        const Stops = () => this.Gradient.Stops;
+        const Stops = () => Store.Read();
+        const Chose = (Index) => (this[Store.Cursor] = Index);
+        const Chosen = () => this[Store.Cursor] || 0;
         const Place = (ClientX) =>
         {
             const Box = Strip.getBoundingClientRect();
@@ -5243,34 +5358,29 @@ export class TexturePanel
 
         const Draw = () =>
         {
-            const Ramp = Stops();
-            this.RampStop = Math.max(0, Math.min(this.RampStop, Ramp.length - 1));
-            const Chosen = Ramp[this.RampStop];
-            Strip.style.background = RampCss(Ramp);
-            Strip.innerHTML = Ramp.map(
-                (Stop, Index) => `<span class="ramp-knob${Index === this.RampStop ? " active" : ""}" data-stop="${Index}"
-                        style="left:${(Stop.Position * 100).toFixed(2)}%;--knob:${ToHex(Stop.Colour)}"
-                        title="${ToHex(Stop.Colour).toUpperCase()} at ${Math.round(Stop.Position * 100)}%"></span>`,
+            const Ramp_ = Stops();
+            Chose(Math.max(0, Math.min(Chosen(), Ramp_.length - 1)));
+            const Stop = Ramp_[Chosen()];
+            Strip.style.background = RampCss(Ramp_);
+            Strip.innerHTML = Ramp_.map(
+                (Entry, Index) => `<span class="ramp-knob${Index === Chosen() ? " active" : ""}" data-stop="${Index}"
+                        style="left:${(Entry.Position * 100).toFixed(2)}%;--knob:${ToHex(Entry.Colour)}"
+                        title="${ToHex(Entry.Colour).toUpperCase()} at ${Math.round(Entry.Position * 100)}%"></span>`,
             ).join("");
-            NoteCell.textContent = `Stop ${this.RampStop + 1} of ${Ramp.length} · ${Math.round(Chosen.Position * 100)}%`;
-            Field.value = ToHex(Chosen.Colour);
-            Code.textContent = ToHex(Chosen.Colour).toUpperCase();
-            Drop.disabled = Ramp.length <= 2;
+            NoteCell.textContent = `Stop ${Chosen() + 1} of ${Ramp_.length} · ${Math.round(Stop.Position * 100)}%`;
+            Field.value = ToHex(Stop.Colour);
+            Code.textContent = ToHex(Stop.Colour).toUpperCase();
+            Drop.disabled = Ramp_.length <= 2;
         };
 
         // Any edit to the ramp arms it: a colour nobody can see is a control that looks broken.
-        const Arm = () =>
-        {
-            this.Gradient.Carry = true;
-            this.Instruments?.RenderRail();
-            this.Instruments?.DrawPad();
-        };
+        const Arm = () => Store.Arm();
 
         let Holding = false;
         Strip.addEventListener("pointerdown", (Event) =>
         {
             const Knob = Event.target.closest?.("[data-stop]");
-            if (Knob) this.RampStop = Number(Knob.dataset.stop);
+            if (Knob) Chose(Number(Knob.dataset.stop));
             else
             {
                 const Added = PlaceRampStop(Stops(), Place(Event.clientX));
@@ -5279,8 +5389,8 @@ export class TexturePanel
                     this.Notify(`A gradient holds ${RampLimit} colours at most.`);
                     return;
                 }
-                this.Gradient.Stops = Added.Stops;
-                this.RampStop = Added.Index;
+                Store.Write(Added.Stops);
+                Chose(Added.Index);
                 Arm();
             }
             Holding = true;
@@ -5290,9 +5400,10 @@ export class TexturePanel
         Strip.addEventListener("pointermove", (Event) =>
         {
             if (!Holding) return;
-            const Moved = MoveRampStop(Stops(), this.RampStop, Place(Event.clientX));
-            this.Gradient.Stops = Moved.Stops;
-            this.RampStop = Moved.Index;
+            const Moved = MoveRampStop(Stops(), Chosen(), Place(Event.clientX));
+            Store.Write(Moved.Stops);
+            Chose(Moved.Index);
+            Arm();
             Draw();
         });
         const Release = (Event) =>
@@ -5308,32 +5419,30 @@ export class TexturePanel
             const Knob = Event.target.closest?.("[data-stop]");
             if (!Knob) return;
             const Left = RemoveRampStop(Stops(), Number(Knob.dataset.stop));
-            this.Gradient.Stops = Left.Stops;
-            this.RampStop = Left.Index;
+            Store.Write(Left.Stops);
+            Chose(Left.Index);
+            Arm();
             Draw();
         });
 
         Field.addEventListener("input", (Event) =>
         {
-            this.Gradient.Stops = Stops().map((Stop, Index) =>
-                Index === this.RampStop ? { ...Stop, Colour: FromHex(Event.target.value) } : Stop,
-            );
+            Store.Write(Stops().map((Stop, Index) => (Index === Chosen() ? { ...Stop, Colour: FromHex(Event.target.value) } : Stop)));
             Arm();
             Draw();
         });
         Holder.querySelector("[data-ramp-take]").addEventListener("click", () =>
         {
-            this.Gradient.Stops = Stops().map((Stop, Index) =>
-                Index === this.RampStop ? { ...Stop, Colour: [...this.BrushColour] } : Stop,
-            );
+            Store.Write(Stops().map((Stop, Index) => (Index === Chosen() ? { ...Stop, Colour: [...this.BrushColour] } : Stop)));
             Arm();
             Draw();
         });
         Drop.addEventListener("click", () =>
         {
-            const Left = RemoveRampStop(Stops(), this.RampStop);
-            this.Gradient.Stops = Left.Stops;
-            this.RampStop = Left.Index;
+            const Left = RemoveRampStop(Stops(), Chosen());
+            Store.Write(Left.Stops);
+            Chose(Left.Index);
+            Arm();
             Draw();
         });
 
@@ -6271,6 +6380,10 @@ export class TexturePanel
     ArtworkPane(Layer)
     {
         const Sheet = document.createElement("div");
+        const Ink = Layer.Decal.Ramp?.Carry ? "a gradient" : Layer.Decal.Colorise ? "one colour" : "its own colours";
+        const Look = this.CardGroup(Layer.Decal.SourceKind === "text" ? "The type" : "The drawing", `As it will land · ${Ink}`);
+        Look.append(this.DecalPreview(Layer));
+        Sheet.append(Look);
         const Kind = this.CardGroup("Source", "What the decal is made from");
         Kind.append(
             this.CardSegmented(
@@ -6423,47 +6536,127 @@ export class TexturePanel
         return Sheet;
     }
 
+    //----------------------------------------------------------------------------------------------------------------------
+    // Pane · the ink. What the artwork is made of.
+    //
+    // 🔴 Three ways and never two at once. A switch that said "tint it" and a separate gradient would have left the
+    //    hand asking which of them wins; a decal's ink is ONE answer — the artwork's own colours, one colour, or a
+    //    fade across it — so it is one control with three positions.
+    //----------------------------------------------------------------------------------------------------------------------
     InkPane(Layer)
     {
+        const Decal = Layer.Decal;
+        const Ramped = Decal.Ramp?.Carry === true;
         const Sheet = document.createElement("div");
-        const Group = this.CardGroup("Colour", Layer.Decal.Colorise ? "Tinted" : "The artwork's own colours");
+
+        const Look = this.CardGroup("Preview", Ramped ? "Inked by the gradient below" : Decal.Colorise ? "Inked flat" : "Untouched");
+        Look.append(this.DecalPreview(Layer));
+        Sheet.append(Look);
+
+        const Standing = Ramped ? "gradient" : Decal.Colorise ? "flat" : "artwork";
+        const Group = this.CardGroup(
+            "Colour",
+            Ramped ? "A fade across the artwork" : Decal.Colorise ? "One colour" : "The artwork's own colours",
+        );
         Group.append(
-            this.CardSwitch("Tint it", "Ignore the artwork's colours", Layer.Decal.Colorise, (On) =>
-            {
-                this.CaptureStack(() => (Layer.Decal.Colorise = On));
-                this.RefreshDecal(Layer);
-                this.RenderInspector();
-                this.Instruments.RenderPane(false);
-            }),
+            this.CardSegmented(
+                [
+                    { Identifier: "artwork", Label: "As drawn", Note: "Keep the colours the artwork came with" },
+                    { Identifier: "flat", Label: "One colour", Note: "Ignore them and use the tint" },
+                    { Identifier: "gradient", Label: "Gradient", Note: "Run the artwork through a ramp" },
+                ],
+                Standing,
+                (Identifier) =>
+                {
+                    this.CaptureStack(() =>
+                    {
+                        Decal.Colorise = Identifier === "flat";
+                        Decal.Ramp.Carry = Identifier === "gradient";
+                        // 🔴 Every placement follows. A mark keeps its own tint, but a mark still colourising while
+                        //    the artwork carries a gradient would paint that gradient out with one flat colour.
+                        for (const Mark of Decal.Marks || []) Mark.Colorise = Decal.Colorise;
+                    });
+                    this.RefreshDecal(Layer);
+                    this.RenderInspector();
+                    this.Instruments.RenderRail();
+                    this.Instruments.RenderPane(false);
+                },
+            ),
         );
 
-        const Swatches = document.createElement("div");
-        Swatches.className = "card-swatches";
-        const Palette = ["#f0f0f0", "#111111", "#d82a2a", "#e8b53a", "#34c759", "#3a7bd5", "#9b5de5", "#ff8a3d"];
-        Swatches.innerHTML = Palette.map(
-            (Code) => `<button data-ink="${Code}" style="background:${Code}" title="${Code}" aria-label="${Code}"></button>`,
-        ).join("");
-        for (const Button of Swatches.querySelectorAll("[data-ink]"))
-            Button.addEventListener("click", () =>
-            {
-                this.CaptureStack(() => (Layer.Decal.Tint = FromHex(Button.dataset.ink)));
-                this.RefreshDecal(Layer);
-                this.RenderInspector();
-                this.Instruments.RenderPane(false);
-            });
-        Group.append(Swatches);
-
-        const Pick = document.createElement("input");
-        Pick.type = "color";
-        Pick.className = "card-colour";
-        Pick.value = ToHex(Layer.Decal.Tint);
-        Pick.addEventListener("input", () =>
+        if (Standing === "flat")
         {
-            Layer.Decal.Tint = FromHex(Pick.value);
-            this.RefreshDecal(Layer);
-        });
-        Group.append(Pick);
+            const Swatches = document.createElement("div");
+            Swatches.className = "card-swatches";
+            const Palette = ["#f0f0f0", "#111111", "#d82a2a", "#e8b53a", "#34c759", "#3a7bd5", "#9b5de5", "#ff8a3d"];
+            Swatches.innerHTML = Palette.map(
+                (Code) => `<button data-ink="${Code}" style="background:${Code}" title="${Code}" aria-label="${Code}"></button>`,
+            ).join("");
+            for (const Button of Swatches.querySelectorAll("[data-ink]"))
+                Button.addEventListener("click", () =>
+                {
+                    this.CaptureStack(() => (Decal.Tint = FromHex(Button.dataset.ink)));
+                    this.RefreshDecal(Layer);
+                    this.RenderInspector();
+                    this.Instruments.RenderPane(false);
+                });
+            Group.append(Swatches);
+
+            const Pick = document.createElement("input");
+            Pick.type = "color";
+            Pick.className = "card-colour";
+            Pick.value = ToHex(Decal.Tint);
+            Pick.addEventListener("input", () =>
+            {
+                Decal.Tint = FromHex(Pick.value);
+                this.RefreshDecal(Layer);
+            });
+            Group.append(Pick);
+        }
         Sheet.append(Group);
+
+        if (Standing === "gradient")
+        {
+            const Fade = this.CardGroup("Gradient", "The colours the artwork is printed in");
+            // 🔴 The ramp is baked into the artwork, so every edit re-rasterises it. That is also what makes the
+            //    preview above exact rather than indicative: it is the image, not a drawing of what the image means.
+            const Reprint = () =>
+            {
+                this.RefreshDecal(Layer);
+                this.MarkDirty();
+            };
+            Fade.append(
+                this.RampField({
+                    Read: () => Decal.Ramp.Stops,
+                    Write: (Stops) => (Decal.Ramp.Stops = Stops),
+                    Cursor: "InkStop",
+                    Arm: () =>
+                    {
+                        Decal.Ramp.Carry = true;
+                        Reprint();
+                    },
+                }),
+                this.CardSegmented(DecalFits, Decal.Ramp.Fit, (Identifier) =>
+                {
+                    this.CaptureStack(() => (Decal.Ramp.Fit = Identifier));
+                    Reprint();
+                    this.Instruments.RenderPane(false);
+                }),
+                this.CardSegmented(GradientEasings, Decal.Ramp.Easing, (Identifier) =>
+                {
+                    this.CaptureStack(() => (Decal.Ramp.Easing = Identifier));
+                    Reprint();
+                    this.Instruments.RenderPane(false);
+                }),
+                this.CardSwitch("Turn it around", "Start at the far end", Decal.Ramp.Reverse === true, (On) =>
+                {
+                    this.CaptureStack(() => (Decal.Ramp.Reverse = On));
+                    Reprint();
+                    this.Instruments.RenderPane(false);
+                }),
+            );
+            Sheet.append(Fade);
+        }
 
         const Relief = this.CardGroup("Relief", "What the artwork does to the surface");
         Relief.append(
@@ -8261,7 +8454,7 @@ export class TexturePanel
             this.Chronicle("export", `Exported ${Result.Preset}`, `${Result.Count} images`);
             this.Notify(`${Result.Count} images and one descriptor written.`);
             this.Dirty = false;
-            Select("#dirty-indicator").classList.add("clean");
+            Select("#dirty-indicator")?.classList.add("clean");
         }
         catch (Error)
         {
@@ -8278,7 +8471,6 @@ export class TexturePanel
             const Document_ = ReadDocument(await File.text());
             const Record = SanitiseProject(Document_.Project);
             this.Project = Record;
-            Select("#document-name").value = Record.Name;
             this.Documents.Synchronise(Record.Name);
             this.Revisions.Clear();
             this.Integrator.Configure(Record.Resolution);
@@ -8351,7 +8543,6 @@ export class TexturePanel
             this.Display = Record.Display || "material";
             this.ViewMode = Record.ViewMode || "surface";
         }
-        Select("#document-name").value = this.Project.Name;
         Select("#channel-select").value = this.Display;
         Select("#view-mode").value = this.ViewMode;
         RefreshSelect(Select("#channel-select"));
