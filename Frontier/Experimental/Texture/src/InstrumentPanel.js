@@ -460,6 +460,7 @@ export class InstrumentPanel
         }
         // The ribbon and the sheet say the same thing; with the sheet open the ribbon is only a smaller copy of it.
         this.RenderPane(false);
+        if (this.Open) this.Settle();
         if (Open) this.SizePad();
     }
 
@@ -694,16 +695,29 @@ export class InstrumentPanel
             X: X ?? (Viewport ? Viewport.left + 76 : 120),
             Y: Y ?? (Viewport ? Viewport.top + Math.max(16, Viewport.height * 0.12) : 96),
         };
-        // 📝 Measured, not assumed: the card is content-box sized, so its border box is wider than the authored width and
-        //    clamping against the authored number would let an edge sit off-screen.
-        const Box = this.Root.getBoundingClientRect();
-        const Width = Box.width || 560;
-        const Height = Box.height || Math.min(560, window.innerHeight * 0.86);
-        const Margin = 10;
-        this.Root.style.left = `${Math.round(Clamp(Anchor.X, Margin, Math.max(Margin, window.innerWidth - Width - Margin)))}px`;
-        this.Root.style.top = `${Math.round(Clamp(Anchor.Y, Margin, Math.max(Margin, window.innerHeight - Height - Margin)))}px`;
+        this.Settle(Anchor.X, Anchor.Y);
         this.ScheduleRibbon();
         if (this.Padded) this.SizePad();
+    }
+
+    // Hold the card on screen. Called when it is summoned and again whenever it changes width, because a card that
+    // grows a column while it sits against the right edge grows the column off the edge.
+    Settle(X, Y)
+    {
+        // 📝 Measured, not assumed: the card is content-box sized, so its border box is wider than the authored width
+        //    and clamping against the authored number would let an edge sit off-screen.
+        const Box = this.Root.getBoundingClientRect();
+        // 🔴 The authored width, not the measured one, when the two disagree: the card's width is animated, so the
+        //    box measured one frame after the sheet opens is still the narrow card, and clamping against it would
+        //    leave the new column to finish its slide off the edge of the screen.
+        const Authored = Number.parseFloat(getComputedStyle?.(this.Root)?.getPropertyValue("--card-width")) || 0;
+        const Width = Math.max(Box.width || 560, Authored);
+        const Height = Box.height || Math.min(560, window.innerHeight * 0.86);
+        const Margin = 10;
+        const Left = X ?? Box.left;
+        const Top = Y ?? Box.top;
+        this.Root.style.left = `${Math.round(Clamp(Left, Margin, Math.max(Margin, window.innerWidth - Width - Margin)))}px`;
+        this.Root.style.top = `${Math.round(Clamp(Top, Margin, Math.max(Margin, window.innerHeight - Height - Margin)))}px`;
     }
 
     Hide()
