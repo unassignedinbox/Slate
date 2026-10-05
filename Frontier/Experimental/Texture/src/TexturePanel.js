@@ -5028,6 +5028,22 @@ export class TexturePanel
             Strength: () => this.Projection.Brush.Flow,
             Masking: () => this.Projection.Brush.Target === "mask",
             Note: (Text) => this.Notify(Text),
+            // Whose properties the rail is listing: the layer in hand, and which side of it is being painted.
+            Heading: () =>
+            {
+                const Layer = this.ActiveLayer;
+                if (!Layer) return { Title: "Paint", Note: "Nothing selected", Glyph: Icon("palette") };
+                const Kind = LayerKindByIdentifier[Layer.Kind];
+                if (this.Projection.Brush.Target === "mask")
+                    return { Title: "Mask", Note: Layer.Name, Glyph: Icon("mask"), Tone: "#b8b8b8" };
+                if (Layer.Kind === "folder") return { Title: "Folder", Note: Layer.Name, Glyph: Icon("folder"), Tone: Kind?.Accent };
+                return {
+                    Title: Layer.Kind === "decal" ? "Decal" : "Paint",
+                    Note: Layer.Name,
+                    Glyph: Icon(Layer.Kind === "decal" ? Kind?.Glyph || "fill" : "palette"),
+                    Tone: Kind?.Accent,
+                };
+            },
             // Null when the stroke goes down in one colour; otherwise the ramp, asked the same way the paint asks it.
             Tint: () =>
                 this.Gradient.Carry && this.Projection.Brush.Target !== "mask"

@@ -366,6 +366,42 @@ Sweep("pointerup", 300, 20);
 Check("letting go remembers the colour let go of", (Panel.RecentColours || [])[0] === ToCode(Panel.BrushColour), (Panel.RecentColours || [])[0]);
 Check("and remembers exactly one of them", Kept() === Noted + 1, `${Noted} → ${Kept()}`);
 
+//--------------------------------------------------------------------------------------------------------------------------
+// Two columns, one sheet: the rail gets a header the height of the pane's, and the card's groups are cards.
+//--------------------------------------------------------------------------------------------------------------------------
+Card.Show();
+Panel.SelectLayer(Panel.Layers.find((Layer) => Layer.Kind === "stroke").Identifier);
+await Settle(Window, 2);
+const Crown = Card.Root.querySelector("[data-rail-head]");
+const Says = () => Crown.querySelector("[data-rail-title]").textContent;
+const Under = () => Crown.querySelector("[data-rail-sub]").textContent;
+Check("the rail has a header of its own", !!Crown);
+Check("which says what the column is a list of", Says() === "Paint", Says());
+Check("and names the layer the card is tuning", Under() === Panel.ActiveLayer.Name, Under());
+Check("and wears a mark, like the pane head beside it", !!Crown.querySelector("[data-rail-mark] svg"));
+
+Window.dispatchEvent(new Window.KeyboardEvent("keydown", { key: "m", bubbles: true }));
+await Settle(Window, 2);
+Check("painting the mask says so at the top of the rail", Says() === "Mask", Says());
+Window.dispatchEvent(new Window.KeyboardEvent("keydown", { key: "m", bubbles: true }));
+await Settle(Window, 2);
+
+Panel.SelectLayer(Decal.Identifier);
+await Settle(Window, 2);
+Check("and a decal layer is named as one", Says() === "Decal", Says());
+Panel.SelectLayer(Panel.Layers.find((Layer) => Layer.Kind === "stroke").Identifier);
+await Settle(Window, 2);
+
+Check("the foot of the rail stays even when it holds nothing", !!Card.Root.querySelector("[data-shelf]"));
+
+const { readFileSync } = await import("node:fs");
+const Theme = readFileSync(new URL("../src/ThemeSpecification.css", import.meta.url), "utf8");
+const Rule = (Selector) => new RegExp(`\\${Selector} \\{[^}]*`).exec(Theme)?.[0] || "";
+Check("the rail header stands as tall as the pane header", /height: 62px/.test(Rule(".rail-head")) && /height: 62px/.test(Rule(".pane-head")));
+Check("and the two feet are one bar across the bottom", /44px/.test(Rule(".rail-foot")) && /44px/.test(Rule(".pane-foot")));
+Check("a group in a pane is a card", /border-radius: 18px/.test(Rule(".card-group")));
+Check("with air between the cards", /gap: 18px/.test(Rule(".tool-sheet")));
+
 Check("the status bar names the build on screen", Window.document.querySelector("#build-mark")?.textContent?.startsWith("build "), Window.document.querySelector("#build-mark")?.textContent);
 
 Report();

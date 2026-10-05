@@ -63,6 +63,10 @@ export class InstrumentPanel
         //    stroke — the brush is not even offered for it — so a test sheet showing one was a preview of something
         //    that could never happen. The host answers with the artwork, inked, or null for "this one is painted".
         this.ReadArtwork = Options.Artwork || (() => null);
+        // 🔴 What the rail is a list OF. The card follows the layer in hand, so the column of properties needs a
+        //    header saying whose properties they are — otherwise the only thing on the card with a name is the one
+        //    pane that happens to be open. The host answers { Title, Note, Glyph, Tone }.
+        this.ReadHeading = Options.Heading || (() => null);
         // Somewhere to say what just happened, so the pin can speak in the editor's voice rather than inventing one.
         this.Note = Options.Note || (() => {});
 
@@ -120,6 +124,10 @@ export class InstrumentPanel
             <div class="tool-track">
                 <div class="tool-slide">
                     <div class="tool-column">
+                        <div class="rail-head" data-rail-head>
+                            <span class="pane-mark" data-rail-mark aria-hidden="true"></span>
+                            <div><div class="pane-title" data-rail-title></div><div class="pane-sub" data-rail-sub></div></div>
+                        </div>
                         <div class="tool-rail" data-rail></div>
                         <div class="rail-foot" data-shelf></div>
                     </div>
@@ -239,6 +247,7 @@ export class InstrumentPanel
         const Rail = this.Root.querySelector("[data-rail]");
         if (!Rail) return;
         const Every = this.Sections();
+        this.RenderHeading();
         const Panes = Every.filter((Entry) => !Entry.Foot);
         const Standing = Every.find((Entry) => Entry.Key === this.Section) || Panes[0] || null;
 
@@ -249,7 +258,10 @@ export class InstrumentPanel
         if (Shelf)
         {
             const Footed = Every.filter((Entry) => Entry.Foot);
-            Shelf.hidden = !Footed.length;
+            // 🔴 The band stays even with nothing in it. Both columns of the card end on the same line — the foot
+            //    under the rail and the foot under the pane are one bar across the bottom — and a layer with no
+            //    library to offer must not take half of it away with it.
+            Shelf.classList.toggle("bare", !Footed.length);
             Shelf.innerHTML = Footed.map((Entry) => this.RailRow(Entry, Standing)).join("");
             for (const Button of Shelf.querySelectorAll("[data-section]"))
                 Button.addEventListener("click", () => this.ShowSection(Button.dataset.section));
@@ -270,6 +282,24 @@ export class InstrumentPanel
             : `<div class="rail-split">Nothing to paint with</div>`;
         for (const Button of Rail.querySelectorAll("[data-section]"))
             Button.addEventListener("click", () => this.ShowSection(Button.dataset.section));
+    }
+
+    // The rail's own header, drawn to the same height as the pane's so the card reads as two columns under one line
+    // rather than two panels that happen to be side by side.
+    RenderHeading()
+    {
+        const Head = this.Root.querySelector("[data-rail-head]");
+        if (!Head) return;
+        const Heading = this.ReadHeading() || {};
+        const Mark = Head.querySelector("[data-rail-mark]");
+        if (Mark)
+        {
+            Mark.innerHTML = Heading.Glyph || "";
+            Mark.style.color = Heading.Tone || "#8a8a8a";
+            Mark.hidden = !Heading.Glyph;
+        }
+        Head.querySelector("[data-rail-title]").textContent = Heading.Title || "Paint";
+        Head.querySelector("[data-rail-sub]").textContent = Heading.Note || "";
     }
 
     // 📝 Named RenderPane rather than RenderTiles: there are no tiles any more, and a name that describes what the card

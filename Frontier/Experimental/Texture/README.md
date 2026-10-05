@@ -11,7 +11,7 @@ npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
 npm test           # 131 unit tests, no browser required
-npm run drive      # 225 checks against the whole editor, booted in a headless window
+npm run drive      # 236 checks against the whole editor, booted in a headless window
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -633,10 +633,17 @@ layer is the truth, because the layer is what composites — and the brush adopt
 moment you select it. Reaching into the library still narrows both at once: a metallic marker lays colour, metal and
 roughness, so that is what the layer writes.
 
-**The card's panes read as cards.** Each group now has a header of its own — a band across the top of the card with the
-title and, under it, the line that says what the group is for — and the panes are spaced apart rather than butted
-together. The pane header carries the same mark the rail row does, in the same colour, so an open pane announces
-itself instead of leaving the eye to match a title against a list.
+**The card's panes read as cards.** Each group *is* a card — its own surface, its own border and radius, a header band
+across the top with the title and the line that says what the group is for, and real air between one and the next.
+Butted together they read as one long pane with rules drawn across it, and the eye had to work out where a question
+ended. The pane header carries the same mark the rail row does, in the same colour, so an open pane announces itself
+instead of leaving the eye to match a title against a list.
+
+**The rail has a header too, and the card meets at two lines.** The column of properties now says whose properties
+they are — *Paint*, *Decal* or *Mask*, with the layer's name under it and a mark beside it — in a band the same 62px
+as the pane header to its right. The foot under the rail (where the library lives) is the same 44px bar as the foot
+under the pane, and it stays put on a layer with no library to offer, so the card is two columns of one sheet rather
+than two panels that happen to be side by side.
 
 **The card pins, and it is carried by its head.** A summoned card goes away the moment you touch the model, which is
 fine for choosing something and useless for tuning one: turn a knob, press on the surface to see what it did, and the

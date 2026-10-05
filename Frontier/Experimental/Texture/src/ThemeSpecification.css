@@ -532,7 +532,7 @@ b {
 .viewport-bar {
   height: 44px;
   min-height: 44px;
-  background: #171717;
+  background: #1b1b1b;
   border-color: var(--line);
   padding: 0 15px;
 }
@@ -1501,7 +1501,7 @@ dialog {
 }
 .layer-row.folder-row {
   --row-accent: #9fb0c4;
-  background: #171717;
+  background: #1b1b1b;
   border-color: #ffffff14;
 }
 .layer-row.folder-row .layer-swatch {
@@ -1876,7 +1876,7 @@ dialog {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  background: #171717;
+  background: #1b1b1b;
   border: 1px solid #ffffff1a;
   border-radius: 18px;
   box-shadow: 0 22px 44px #000000a8;
@@ -3427,7 +3427,7 @@ dialog {
   height: 36px;
   padding: 0 11px 0 13px;
   border-radius: 999px;
-  background: #171717;
+  background: #1b1b1b;
   border: 1px solid #ffffff0a;
   color: var(--text);
   font-size: 12px;
@@ -3954,6 +3954,48 @@ details.channel-control > summary code {
   background: #0e0e0e;
   border-right: 1px solid var(--line);
 }
+/* The rail's own header. Same 62px band as the pane's, same mark-and-two-lines inside it, so the card reads as one */
+/* sheet in two columns rather than two panels that happen to be side by side — and it names the layer the card is  */
+/* about, which until now only the inspector said out loud.                                                         */
+.rail-head {
+  flex: 0 0 62px;
+  height: 62px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(#ffffff07, #ffffff00);
+  overflow: hidden;
+}
+
+.rail-head > div {
+  min-width: 0;
+}
+
+.rail-head .pane-mark {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
+}
+
+.rail-head .pane-mark svg {
+  width: 15px;
+  height: 15px;
+}
+
+.rail-head .pane-title {
+  font-size: 13.5px;
+}
+
+.rail-head .pane-title,
+.rail-head .pane-sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .tool-rail {
   flex: 1 1 auto;
   padding: 10px 8px;
@@ -3961,13 +4003,21 @@ details.channel-control > summary code {
   min-height: 0;
 }
 .rail-foot {
-  flex: 0 0 auto;
-  padding: 8px;
+  flex: 0 0 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
   border-top: 1px solid var(--line);
   background: #0b0b0b;
 }
+
+/* Nothing to offer, but the bar across the bottom of the card stays level. */
+.rail-foot.bare {
+  background: #0d0d0d;
+}
 .rail-foot .rail-item {
-  height: 38px;
+  height: 32px;
 }
 .tool-body {
   display: flex;
@@ -4782,17 +4832,25 @@ details.channel-control > summary code {
 .tool-sheet {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 6px 2px 14px;
+  gap: 18px;
+  padding: 6px 2px 16px;
 }
 
 .tool-sheet.rising > * {
   animation: tile-rise 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
+/* 🔴 A group in the card is a card, not a stretch of sheet with a line over it. Butted together they read as one  */
+/*    long pane with rules drawn across it, and the eye has to work out where a question ends — so each one gets a  */
+/*    surface of its own, a border and a radius, and the sheet's gap becomes real air between them.                 */
 .card-group {
-  padding: 0 16px 10px;
+  padding: 0 16px 14px;
   margin-bottom: 0;
+  background: #1b1b1b;
+  border: 1px solid #ffffff08;
+  border-radius: 18px;
+  box-shadow: 0 2px 8px #00000026;
+  overflow: hidden;
 }
 
 /* 🔴 Every group in the card is a titled card, and the title is a header rather than a first row: its own band, a */
@@ -4803,9 +4861,9 @@ details.channel-control > summary code {
   flex-direction: column;
   align-items: flex-start;
   gap: 3px;
-  margin: 0 -16px 13px;
+  margin: 0 -16px 14px;
   padding: 13px 16px 11px;
-  background: #ffffff05;
+  background: #ffffff07;
   border-bottom: 1px solid #ffffff0d;
 }
 
@@ -5322,7 +5380,7 @@ details.channel-control > summary code {
 }
 
 .pod-body .sky-tile:hover {
-  background: #171717;
+  background: #1b1b1b;
 }
 
 .pod-body .sky-tile.active {
