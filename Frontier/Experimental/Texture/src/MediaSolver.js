@@ -321,9 +321,20 @@ export const MediaWidth = (Profile, Turn) =>
 //--------------------------------------------------------------------------------------------------------------------------
 // The model itself.
 //
-// Returns the share of the texel the medium covers and the shade it covers it with: 1 is the colour in hand, below 1 is
-// pigment piling into a valley or pooling at a wet rim, above 1 is wax catching the light. Shade is what stops a stroke
-// reading as a decal of flat colour — real media are never one value all the way across.
+// Four numbers come back, and the last two are the material rather than the picture:
+//
+//   Alpha  — the share of the texel the medium covers.
+//   Shade  — what it multiplies the colour in hand by: below 1 is pigment piling into a valley or pooling at a wet rim,
+//            above 1 is wax catching the light. This is what stops a stroke reading as a decal of flat colour.
+//   Relief — signed height, added to the height the instrument writes (0.5 is flat): a ridge of paint standing between
+//            two hairs, a grain of chalk sitting on the tooth, wax bridging a valley.
+//   Grit   — signed roughness, added to the roughness the instrument writes: the furrow between two bristles scatters
+//            more than the ridge, burnished graphite scatters less than the paper it is pressed into, and chalk
+//            scatters more than anything.
+//
+// The last two are why the paint is a material and not a picture of one. Without them every stroke of a medium is one
+// roughness and one height from rim to rim, and a surface that is uniformly rough reads as plastic however good the
+// colour is.
 //--------------------------------------------------------------------------------------------------------------------------
 export const Deposit = (Profile, Sample) =>
 {
@@ -342,10 +353,13 @@ export const Deposit = (Profile, Sample) =>
 
     if (Media.Index === 1)
     {
-        // Bristle. The head is a row of hairs; each lays its own ridge and the gaps between them are the drag marks a
-        // brush leaves. Water closes those gaps, which is why a wash reads flat and a dry brush reads like straw.
-        const Lanes = Math.max(Media.Bristles * (1 + 0.45 * Media.Splay * Press), 3);
-        const Lane = (Across * 0.5 + 0.5) * Lanes;
+        // Bristle. A head is a row of hairs that keep their identity for the whole stroke — pressure FANS them apart,
+        // it does not grow new ones. Dividing by the fan before the lane is taken is the whole of that: hair seven is
+        // hair seven whether the head is pressed flat or barely touching, so its streak runs the length of the mark
+        // instead of the comb swimming sideways every time the hand leans.
+        const Fan = 1 + 0.5 * Media.Splay * Press;
+        const Hairs = Math.max(Media.Bristles, 3);
+        const Lane = (Across / Fan) * 0.5 * Hairs + Hairs * 0.5;
         const Cell = Math.floor(Lane);
         const Within = Lane - Cell;
         const Pick = Hash11(Cell * 1.73 + Media.Seed * 7);
@@ -353,13 +367,36 @@ export const Deposit = (Profile, Sample) =>
         //    corduroy — evenly ruled lines is the one thing a brush never leaves behind.
         const Shift = Hash11(Cell * 3.11 + Media.Seed * 13) * 0.5 - 0.25;
         const Thin = Mix(0.1, 0.44, Hash11(Cell * 5.37 + Media.Seed * 3));
-        const Edge = Clamp(Within - Shift, 0, 1);
+        // 🔴 And a hair is not a ruled line either: it is a spring under a moving hand, so where it sits in its own
+        //    lane wanders as the stroke goes on. One noise lookup keyed to the hair, not to the texel — a hair has to
+        //    wander as ONE hair or the mark dissolves into static.
+        const Wander = (ValueNoise(Along * Media.Fibre * 0.22, Cell * 1.7 + Media.Seed * 31) - 0.5) * 0.5 * (1 - Media.Wetness * 0.5);
+        const Edge = Clamp(Within - Shift - Wander, 0, 1);
         const Ridge = Smoothstep(0, Thin, Edge) * Smoothstep(1, 1 - Thin, Edge);
-        const Comb = Mix(Mix(0.25, 1, Pick) * Ridge, 1, Clamp(Media.Wetness * 0.9, 0, 0.9));
-        const Streak = Mix(1, 0.45 + 0.55 * Fibre, (1 - Media.Wetness) * 0.75);
-        const Alpha = Body(Hardness * Mix(0.75, 1, Press)) * Mix(Comb, 1, 0.12) * Streak * Load * Mix(0.45, 1, Press);
-        const Shade = 1 - 0.18 * Media.Wetness * Smoothstep(0.5, 1, Rim) + 0.04 * (1 - Press);
-        return { Alpha: Clamp(Alpha, 0, 1), Shade: Clamp(Shade, 0.7, 1.08) };
+        // Each hair empties at its own rate, so a brush running out loses hairs one at a time rather than fading
+        // evenly — the straw look at the end of a long drag is hairs dropping out, not pigment thinning.
+        const Spend = Media.Dry * Mix(0.45, 1.65, Hash11(Cell * 7.91 + Media.Seed * 5));
+        // 🔴 The floor is not a fudge: a spent hair is not a clean hair. It keeps staining the paper long after it
+        //    has stopped laying paint, which is why a dry-brush drag trails off instead of being cut square.
+        const Hair = Clamp(1 - Spend * Clamp(Along / Math.max(Media.Reach, 1e-3), 0, 1), 0.08, 1);
+        // And a hair with little left on it only reaches the peaks of the paper. Water fills the valleys, so a loaded
+        // brush lays a wash and the same brush three strokes later lays scaffolding.
+        const Skip = Smoothstep(1 - Hair - 0.3, 1 - Hair + 0.3, Tooth * 0.75 + 0.3);
+        const Bite = Mix(Skip, 1, Clamp(Media.Wetness, 0, 1));
+        // 🔴 Paint bridges between the hairs while there is enough of it. A loaded head lays a CONTINUOUS film with
+        //    the hairs showing as ridges in it, and only an emptying one rakes holes in what it lays — which is the
+        //    difference between a brush mark and the scrubbed-out dry-brush look every naive comb produces.
+        const Bare = Clamp(0.18 + 0.9 * (1 - Hair), 0, 1) * (1 - Clamp(Media.Wetness, 0, 1) * 0.85);
+        const Comb = Mix(1, Mix(0.25, 1, Pick) * Ridge, Bare);
+        const Streak = Mix(1, 0.45 + 0.55 * Fibre, Bare * 0.8);
+        const Alpha = Body(Hardness * Mix(0.75, 1, Press)) * Mix(Comb, 1, 0.12) * Streak * Hair * Bite * Mix(0.45, 1, Press);
+        const Wet = Clamp(Media.Wetness, 0, 1);
+        const Shade = 1 - 0.18 * Wet * Smoothstep(0.5, 1, Rim) + 0.04 * (1 - Press) - 0.05 * (1 - Pick) * (1 - Wet);
+        // A loaded hair drags a ridge of paint with a furrow either side of it, and the furrow is the rougher of the
+        // two. Water flattens both: a wash is level and even, which is exactly why it looks like a wash.
+        const Relief = (Ridge - 0.45) * 0.17 * (1 - Wet * 0.7) * Hair * Mix(0.6, 1, Press);
+        const Grit = (1 - Ridge) * 0.13 * (1 - Wet);
+        return { Alpha: Clamp(Alpha, 0, 1), Shade: Clamp(Shade, 0.7, 1.08), Relief, Grit };
     }
 
     if (Media.Index === 2)
@@ -373,7 +410,14 @@ export const Deposit = (Profile, Sample) =>
         const Gate = Smoothstep(1 - Cover - 0.28, 1 - Cover + 0.24, Tooth + 0.16 * Fibre - 0.08);
         const Alpha = Reach * Mix(Cover, Gate, Media.Grain);
         const Shade = Mix(1.02, 0.8, Clamp(Cover * 0.6 + 0.4 * Tooth, 0, 1));
-        return { Alpha: Clamp(Alpha, 0, 1), Shade: Clamp(Shade, 0.7, 1.08) };
+        // 🔴 Burnish. Graphite is flakes of a semimetal, and a hard stroke lays them flat: the patch goes smoother
+        //    and shinier the harder it is pressed, which is why a pencil drawing has a sheen in the dark passages
+        //    and none in the light ones. Nothing else in the editor does this, and leaving it out is why graphite
+        //    used to read as grey paint.
+        const Burnish = Clamp(Press * Media.Darkness * (1 - Media.Tilt), 0, 1) * Alpha;
+        const Relief = (Tooth - 0.5) * 0.05 * Alpha - Burnish * 0.02;
+        const Grit = -0.26 * Burnish + 0.06 * (1 - Alpha) * Media.Grain;
+        return { Alpha: Clamp(Alpha, 0, 1), Shade: Clamp(Shade, 0.7, 1.08), Relief, Grit };
     }
 
     if (Media.Index === 3)
@@ -384,7 +428,11 @@ export const Deposit = (Profile, Sample) =>
         const Skip = Mix(1, 0.55 + 0.45 * Fibre, Media.Grain) * Load;
         const Alpha = Clamp(Core * Skip + Halo * (1 - Core), 0, 1) * Mix(0.82, 1, Press);
         const Shade = Mix(1, 0.94, Halo);
-        return { Alpha: Clamp(Alpha, 0, 1), Shade: Clamp(Shade, 0.7, 1.08) };
+        // Ink sinks into the sheet rather than sitting on it: level where it pooled, and the film it leaves behind
+        // is smoother than the fibres it soaked into. The feathered halo is the paper, so it keeps the paper's grit.
+        const Relief = -0.015 * Core;
+        const Grit = -0.09 * Core + 0.05 * Halo;
+        return { Alpha: Clamp(Alpha, 0, 1), Shade: Clamp(Shade, 0.7, 1.08), Relief, Grit };
     }
 
     if (Media.Index === 4)
@@ -397,7 +445,10 @@ export const Deposit = (Profile, Sample) =>
         const Alpha = Clamp(Core * Streak * Load + Halo * (1 - Core), 0, 1);
         const Rimness = Smoothstep(0.45, 0.95, Rim) * Core;
         const Shade = Mix(1, 0.8, Rimness * Mix(0.4, 1, Media.Bleed));
-        return { Alpha: Clamp(Alpha, 0, 1), Shade: Clamp(Shade, 0.7, 1.08) };
+        // The wet edge is a bead: it dries slightly proud of the flat middle, and slightly glossier with it.
+        const Relief = Rimness * 0.035 * Mix(0.4, 1, Media.Bleed);
+        const Grit = -0.06 * Core - 0.04 * Rimness;
+        return { Alpha: Clamp(Alpha, 0, 1), Shade: Clamp(Shade, 0.7, 1.08), Relief, Grit };
     }
 
     if (Media.Index === 5)
@@ -413,7 +464,13 @@ export const Deposit = (Profile, Sample) =>
             (0.35 + 0.5 * Press);
         const Alpha = Math.max(Reach * Mix(Cover, Gate, Media.Grain) * Load, Dust);
         const Shade = Mix(1.05, 0.82, Cover);
-        return { Alpha: Clamp(Alpha, 0, 1), Shade: Clamp(Shade, 0.7, 1.08) };
+        // 🔴 Chalk is loose pigment with nothing binding it: every grain sits on top of the tooth it was crushed
+        //    into and every grain scatters. This is the roughest thing the editor can lay down and the only medium
+        //    that is rougher than the paper under it — a chalk line that is not is a grey pencil line.
+        const Grain = Clamp((Tooth - 0.4) * 1.6, 0, 1);
+        const Relief = Alpha * (0.055 + 0.085 * Grain) + Dust * 0.03;
+        const Grit = Alpha * (0.2 + 0.14 * Grain) * Mix(0.6, 1, Media.Darkness);
+        return { Alpha: Clamp(Alpha, 0, 1), Shade: Clamp(Shade, 0.7, 1.08), Relief, Grit };
     }
 
     if (Media.Index === 6)
@@ -428,10 +485,18 @@ export const Deposit = (Profile, Sample) =>
         const Filled = Mix(Gate, 1, Clamp(Media.Melt * Press * 1.3, 0, 1));
         const Alpha = Reach * Mix(Cover, Filled, Media.Grain) * Load;
         const Shade = Mix(1, 1.07, Media.Melt * 0.6 * Alpha);
-        return { Alpha: Clamp(Alpha, 0, 1), Shade: Clamp(Shade, 0.7, 1.08) };
+        // Wax is laid ON the paper, so it is the thickest film of the six — and melting it with a hard stroke is
+        // what turns a dusty crayon line into the waxy sheen a crayon actually has.
+        const Melted = Clamp(Media.Melt * Press * 1.3, 0, 1);
+        // 🔴 Wax piles on the peaks it bridges and barely reaches the valleys between them, and the stick drags the
+        //    film into streaks as it goes — a crayon mark of one even thickness is a sticker of a crayon mark.
+        const Peak = Clamp((Tooth - 0.42) * 1.7, 0, 1);
+        const Relief = Alpha * (0.06 + 0.11 * Peak) * (0.55 + 0.45 * (1 - Melted)) * Mix(0.82, 1.18, Fibre);
+        const Grit = Alpha * (0.07 * (1 - Gate) - 0.24 * Melted);
+        return { Alpha: Clamp(Alpha, 0, 1), Shade: Clamp(Shade, 0.7, 1.08), Relief, Grit };
     }
 
-    return { Alpha: Clamp(1 - Smoothstep(Mix(0, 0.94, Hardness), 1, Rim), 0, 1), Shade: 1 };
+    return { Alpha: Clamp(1 - Smoothstep(Mix(0, 0.94, Hardness), 1, Rim), 0, 1), Shade: 1, Relief: 0, Grit: 0 };
 };
 
 // A line for the heads-up display: what is in hand, in the words a painter would use.

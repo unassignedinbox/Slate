@@ -92,7 +92,11 @@ Check("and opens on every instrument", Pane().querySelectorAll("[data-instrument
 Pane().querySelector("[data-instrument='marker-metallic']").dispatchEvent(new Window.MouseEvent("click", { bubbles: true }));
 Check("taking the metallic marker makes the paint metal", Panel.ActiveLayer.Channels.base_metalness === 1);
 Card.ShowSection("material");
-Check("and the material pane shows what it lays", Pane().querySelectorAll(".channel-value").length === 2, String(Pane().querySelectorAll(".channel-value").length));
+Check(
+    "and the material pane shows every channel it lays — metal, rough, specular, coat, coat rough, height",
+    Pane().querySelectorAll(".channel-value").length === 6,
+    String(Pane().querySelectorAll(".channel-value").length),
+);
 
 //--------------------------------------------------------------------------------------------------------------------------
 // The decal card: a preview of the artwork, and three ways to ink it.

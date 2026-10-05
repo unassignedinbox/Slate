@@ -796,19 +796,24 @@ float MediaExtent()
     return 1.0;
 }
 
-// Returns (coverage, shade). Shade multiplies the colour in hand: below 1 is pigment piling into a valley or pooling at
-// a wet rim, above 1 is wax catching the light. It is what keeps a stroke from reading as flat colour.
-vec2 MediaDeposit(float Across, float Along, float Press, float Hardness, float Tooth, float Fibre, float Speck)
+// Returns (coverage, shade, relief, grit). Shade multiplies the colour in hand: below 1 is pigment piling into a valley
+// or pooling at a wet rim, above 1 is wax catching the light. Relief is signed height added to the height the brush
+// writes, grit is signed roughness added to its roughness — the two that make the paint a material rather than a
+// picture of one. MediaSolver.js holds the same model in JavaScript, line for line and constant for constant.
+vec4 MediaDeposit(float Across, float Along, float Press, float Hardness, float Tooth, float Fibre, float Speck)
 {
     float Rim = abs(Across);
     float Load = 1.0 - uMediaD.x * clamp(Along / max(uMediaD.y, 1e-3), 0.0, 1.0);
 
     if (uMedium == 1)
     {
-        // Bristle. The head is a row of hairs, each laying its own ridge; the gaps between them are the drag marks a
-        // brush leaves. Water closes those gaps, which is why a wash reads flat and a dry brush reads like straw.
-        float Lanes = max(uMediaB.x * (1.0 + 0.45 * uMediaB.y * Press), 3.0);
-        float Lane = (Across * 0.5 + 0.5) * Lanes;
+        // Bristle. A head is a row of hairs that keep their identity for the whole stroke — pressure FANS them apart,
+        // it does not grow new ones. Dividing by the fan before the lane is taken is the whole of that: hair seven is
+        // hair seven whether the head is pressed flat or barely touching, so its streak runs the length of the mark
+        // instead of the comb swimming sideways every time the hand leans.
+        float Fan = 1.0 + 0.5 * uMediaB.y * Press;
+        float Hairs = max(uMediaB.x, 3.0);
+        float Lane = (Across / Fan) * 0.5 * Hairs + Hairs * 0.5;
         float Cell = floor(Lane);
         float Within = Lane - Cell;
         float Pick = Hash11(Cell * 1.73 + uMediaC.w * 7.0);
@@ -816,14 +821,37 @@ vec2 MediaDeposit(float Across, float Along, float Press, float Hardness, float 
         //    corduroy — evenly ruled lines is the one thing a brush never leaves behind.
         float Shift = Hash11(Cell * 3.11 + uMediaC.w * 13.0) * 0.5 - 0.25;
         float Thin = mix(0.1, 0.44, Hash11(Cell * 5.37 + uMediaC.w * 3.0));
-        float Edge = clamp(Within - Shift, 0.0, 1.0);
+        // 🔴 And a hair is not a ruled line either: it is a spring under a moving hand, so where it sits in its own
+        //    lane wanders as the stroke goes on. One noise lookup keyed to the HAIR, not to the texel — a hair has
+        //    to wander as one hair or the mark dissolves into static.
+        float Wander = (ValueNoise(vec2(Along * uMediaD.z * 0.22, Cell * 1.7 + uMediaC.w * 31.0)) - 0.5) * 0.5 * (1.0 - uMediaB.w * 0.5);
+        float Edge = clamp(Within - Shift - Wander, 0.0, 1.0);
         float Ridge = smoothstep(0.0, Thin, Edge) * smoothstep(1.0, 1.0 - Thin, Edge);
-        float Comb = mix(mix(0.25, 1.0, Pick) * Ridge, 1.0, clamp(uMediaB.w * 0.9, 0.0, 0.9));
-        float Streak = mix(1.0, 0.45 + 0.55 * Fibre, (1.0 - uMediaB.w) * 0.75);
+        // Each hair empties at its own rate, so a brush running out loses hairs one at a time rather than fading
+        // evenly — the straw look at the end of a long drag is hairs dropping out, not pigment thinning.
+        float Spend = uMediaD.x * mix(0.45, 1.65, Hash11(Cell * 7.91 + uMediaC.w * 5.0));
+        // 🔴 The floor is not a fudge: a spent hair is not a clean hair. It keeps staining the paper long after it
+        //    has stopped laying paint, which is why a dry-brush drag trails off instead of being cut square.
+        float Hair = clamp(1.0 - Spend * clamp(Along / max(uMediaD.y, 1e-3), 0.0, 1.0), 0.08, 1.0);
+        // And a hair with little left on it only reaches the peaks of the paper. Water fills the valleys, so a loaded
+        // brush lays a wash and the same brush three strokes later lays scaffolding.
+        float Skip = smoothstep(1.0 - Hair - 0.3, 1.0 - Hair + 0.3, Tooth * 0.75 + 0.3);
+        float Bite = mix(Skip, 1.0, clamp(uMediaB.w, 0.0, 1.0));
+        // 🔴 Paint bridges between the hairs while there is enough of it. A loaded head lays a CONTINUOUS film with
+        //    the hairs showing as ridges in it, and only an emptying one rakes holes in what it lays — which is the
+        //    difference between a brush mark and the scrubbed-out dry-brush look every naive comb produces.
+        float Bare = clamp(0.18 + 0.9 * (1.0 - Hair), 0.0, 1.0) * (1.0 - clamp(uMediaB.w, 0.0, 1.0) * 0.85);
+        float Comb = mix(1.0, mix(0.25, 1.0, Pick) * Ridge, Bare);
+        float Streak = mix(1.0, 0.45 + 0.55 * Fibre, Bare * 0.8);
         float Shape = 1.0 - smoothstep(mix(0.0, 0.96, Hardness * mix(0.75, 1.0, Press)), 1.0, Rim);
-        float Alpha = Shape * mix(Comb, 1.0, 0.12) * Streak * Load * mix(0.45, 1.0, Press);
-        float Shade = 1.0 - 0.18 * uMediaB.w * smoothstep(0.5, 1.0, Rim) + 0.04 * (1.0 - Press);
-        return vec2(clamp(Alpha, 0.0, 1.0), clamp(Shade, 0.7, 1.08));
+        float Alpha = Shape * mix(Comb, 1.0, 0.12) * Streak * Hair * Bite * mix(0.45, 1.0, Press);
+        float Wet = clamp(uMediaB.w, 0.0, 1.0);
+        float Shade = 1.0 - 0.18 * Wet * smoothstep(0.5, 1.0, Rim) + 0.04 * (1.0 - Press) - 0.05 * (1.0 - Pick) * (1.0 - Wet);
+        // A loaded hair drags a ridge of paint with a furrow either side of it, and the furrow is the rougher of the
+        // two. Water flattens both: a wash is level and even, which is exactly why it looks like a wash.
+        float Relief = (Ridge - 0.45) * 0.17 * (1.0 - Wet * 0.7) * Hair * mix(0.6, 1.0, Press);
+        float Grit = (1.0 - Ridge) * 0.13 * (1.0 - Wet);
+        return vec4(clamp(Alpha, 0.0, 1.0), clamp(Shade, 0.7, 1.08), Relief, Grit);
     }
 
     if (uMedium == 2)
@@ -837,7 +865,13 @@ vec2 MediaDeposit(float Across, float Along, float Press, float Hardness, float 
         float Gate = smoothstep(1.0 - Cover - 0.28, 1.0 - Cover + 0.24, Tooth + 0.16 * Fibre - 0.08);
         float Alpha = Reach * mix(Cover, Gate, uMediaA.x);
         float Shade = mix(1.02, 0.80, clamp(Cover * 0.6 + 0.4 * Tooth, 0.0, 1.0));
-        return vec2(clamp(Alpha, 0.0, 1.0), clamp(Shade, 0.7, 1.08));
+        // 🔴 Burnish. Graphite is flakes of a semimetal and a hard stroke lays them flat: the patch goes smoother
+        //    and shinier the harder it is pressed, which is why a pencil drawing has a sheen in its dark passages
+        //    and none in the light ones.
+        float Burnish = clamp(Press * uMediaC.x * (1.0 - uMediaC.y), 0.0, 1.0) * Alpha;
+        float Relief = (Tooth - 0.5) * 0.05 * Alpha - Burnish * 0.02;
+        float Grit = -0.26 * Burnish + 0.06 * (1.0 - Alpha) * uMediaA.x;
+        return vec4(clamp(Alpha, 0.0, 1.0), clamp(Shade, 0.7, 1.08), Relief, Grit);
     }
 
     if (uMedium == 3)
@@ -848,7 +882,11 @@ vec2 MediaDeposit(float Across, float Along, float Press, float Hardness, float 
         float Skip = mix(1.0, 0.55 + 0.45 * Fibre, uMediaA.x) * Load;
         float Alpha = clamp(Core * Skip + Halo * (1.0 - Core), 0.0, 1.0) * mix(0.82, 1.0, Press);
         float Shade = mix(1.0, 0.94, Halo);
-        return vec2(clamp(Alpha, 0.0, 1.0), clamp(Shade, 0.7, 1.08));
+        // Ink sinks into the sheet rather than sitting on it: level where it pooled, and the film it leaves behind
+        // is smoother than the fibres it soaked into. The feathered halo is paper, so it keeps the paper's grit.
+        float Relief = -0.015 * Core;
+        float Grit = -0.09 * Core + 0.05 * Halo;
+        return vec4(clamp(Alpha, 0.0, 1.0), clamp(Shade, 0.7, 1.08), Relief, Grit);
     }
 
     if (uMedium == 4)
@@ -861,7 +899,10 @@ vec2 MediaDeposit(float Across, float Along, float Press, float Hardness, float 
         float Alpha = clamp(Core * Streak * Load + Halo * (1.0 - Core), 0.0, 1.0);
         float Rimness = smoothstep(0.45, 0.95, Rim) * Core;
         float Shade = mix(1.0, 0.80, Rimness * mix(0.4, 1.0, uMediaA.w));
-        return vec2(clamp(Alpha, 0.0, 1.0), clamp(Shade, 0.7, 1.08));
+        // The wet edge is a bead: it dries slightly proud of the flat middle, and slightly glossier with it.
+        float Relief = Rimness * 0.035 * mix(0.4, 1.0, uMediaA.w);
+        float Grit = -0.06 * Core - 0.04 * Rimness;
+        return vec4(clamp(Alpha, 0.0, 1.0), clamp(Shade, 0.7, 1.08), Relief, Grit);
     }
 
     if (uMedium == 5)
@@ -876,7 +917,13 @@ vec2 MediaDeposit(float Across, float Along, float Press, float Hardness, float 
                    * (0.35 + 0.5 * Press);
         float Alpha = max(Reach * mix(Cover, Gate, uMediaA.x) * Load, Dust);
         float Shade = mix(1.05, 0.82, Cover);
-        return vec2(clamp(Alpha, 0.0, 1.0), clamp(Shade, 0.7, 1.08));
+        // 🔴 Chalk is loose pigment with nothing binding it: every grain sits on top of the tooth it was crushed
+        //    into and every grain scatters. This is the roughest thing the editor can lay down and the only medium
+        //    rougher than the paper under it — a chalk line that is not is a grey pencil line.
+        float Grain = clamp((Tooth - 0.4) * 1.6, 0.0, 1.0);
+        float Relief = Alpha * (0.055 + 0.085 * Grain) + Dust * 0.03;
+        float Grit = Alpha * (0.2 + 0.14 * Grain) * mix(0.6, 1.0, uMediaC.x);
+        return vec4(clamp(Alpha, 0.0, 1.0), clamp(Shade, 0.7, 1.08), Relief, Grit);
     }
 
     if (uMedium == 6)
@@ -891,12 +938,20 @@ vec2 MediaDeposit(float Across, float Along, float Press, float Hardness, float 
         float Filled = mix(Gate, 1.0, clamp(uMediaC.z * Press * 1.3, 0.0, 1.0));
         float Alpha = Reach * mix(Cover, Filled, uMediaA.x) * Load;
         float Shade = mix(1.0, 1.07, uMediaC.z * 0.6 * Alpha);
-        return vec2(clamp(Alpha, 0.0, 1.0), clamp(Shade, 0.7, 1.08));
+        // Wax is laid ON the paper, so it is the thickest film of the six — and melting it with a hard stroke is
+        // what turns a dusty crayon line into the waxy sheen a crayon actually has.
+        float Melted = clamp(uMediaC.z * Press * 1.3, 0.0, 1.0);
+        // 🔴 Wax piles on the peaks it bridges and barely reaches the valleys between them, and the stick drags the
+        //    film into streaks as it goes — a crayon mark of one even thickness is a sticker of a crayon mark.
+        float Peak = clamp((Tooth - 0.42) * 1.7, 0.0, 1.0);
+        float Relief = Alpha * (0.06 + 0.11 * Peak) * (0.55 + 0.45 * (1.0 - Melted)) * mix(0.82, 1.18, Fibre);
+        float Grit = Alpha * (0.07 * (1.0 - Gate) - 0.24 * Melted);
+        return vec4(clamp(Alpha, 0.0, 1.0), clamp(Shade, 0.7, 1.08), Relief, Grit);
     }
 
     // Plain: the soft round dab the pass drew before any of this existed, kept as medium zero so an untouched project
     // paints exactly as it used to and an unset uniform cannot accidentally mean charcoal.
-    return vec2(clamp(1.0 - smoothstep(mix(0.0, 0.94, Hardness), 1.0, Rim), 0.0, 1.0), 1.0);
+    return vec4(clamp(1.0 - smoothstep(mix(0.0, 0.94, Hardness), 1.0, Rim), 0.0, 1.0), 1.0, 0.0, 0.0);
 }`;
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -952,9 +1007,16 @@ layout(location = 2) out vec4 oCoating;
 layout(location = 3) out vec4 oRadiance;
 
 // Everything a dab puts down, in packing order, routed to wherever this draw is allowed to put it.
-void Emit(vec4 Cover, float Alpha)
+// 🔴 Grain is the medium's own microstructure — (relief, grit) out of MediaDeposit — added to the height and the
+//    roughness the brush writes before either is weighted by coverage. Without it every stroke of a medium is one
+//    roughness and one height from rim to rim, and a surface that is uniformly rough reads as plastic however well
+//    the colour is painted. A decal, a gradient and the plain dab all pass zero and land exactly as they always did.
+void Emit(vec4 Cover, float Alpha, vec2 Grain)
 {
-    vec4 Surfacing = uPaintSurfacing * Alpha;
+    vec4 Paint = uPaintSurfacing;
+    Paint.x = clamp(Paint.x + Grain.y, 0.0, 1.0);
+    Paint.w = clamp(Paint.w + Grain.x, 0.0, 1.0);
+    vec4 Surfacing = Paint * Alpha;
     vec4 Coating = uPaintCoating * Alpha;
     vec4 Radiance = uPaintRadiance * Alpha;
     if (uSlot >= 0)
@@ -1038,7 +1100,7 @@ void main()
             Wash = clamp(Face * uFlow, 0.0, 1.0);
         }
         if (Wash <= 0.0015) discard;
-        Emit(vec4(Ink * Wash, Wash), Wash);
+        Emit(vec4(Ink * Wash, Wash), Wash, vec2(0.0));
         return;
     }
 
@@ -1056,7 +1118,7 @@ void main()
         float Laid = clamp(Artwork.a * Rim * Inside.x * Inside.y * uFlow, 0.0, 1.0);
         if (Laid <= 0.0015) discard;
         vec3 Pigment = mix(Artwork.rgb, uStrokeColour, uStampColourise);
-        Emit(vec4(Pigment * Laid, Laid), Laid);
+        Emit(vec4(Pigment * Laid, Laid), Laid, vec2(0.0));
         return;
     }
 
@@ -1078,7 +1140,7 @@ void main()
         float Burn = clamp(Stencil.a * Edge * Within.x * Within.y * Reach * Face * uFlow, 0.0, 1.0);
         if (Burn <= 0.0015) discard;
         vec3 Ink = mix(Stencil.rgb, uStrokeColour, uStampColourise);
-        Emit(vec4(Ink * Burn, Burn), Burn);
+        Emit(vec4(Ink * Burn, Burn), Burn, vec2(0.0));
         return;
     }
 
@@ -1138,16 +1200,18 @@ void main()
     {
         vec3 Paper = Anchor * uMediaA.y;
         Tooth = ValueNoise3(Paper) * 0.65 + ValueNoise3(Paper * 2.17 + vec3(11.3, -7.1, 3.9)) * 0.35;
-        Fibre = ValueNoise(vec2(Along * uMediaD.z, Across * 3.0 + uMediaC.w * 17.0));
+        // 🔴 A fibre drags a streak ALONG the stroke. Sampling the noise fast in the travel direction and slowly
+        //    across the head gave the opposite — bands marching across the mark like a comb pulled sideways.
+        Fibre = ValueNoise(vec2(Along * uMediaD.z * 0.05, Across * 6.0 + uMediaC.w * 17.0));
         Speck = Hash21(vCoordinate * 1024.0 + uMediaC.w);
     }
 
-    vec2 Media = MediaDeposit(Across, Along, Press, uHardness, Tooth, Fibre, Speck);
+    vec4 Media = MediaDeposit(Across, Along, Press, uHardness, Tooth, Fibre, Speck);
     if (Media.x <= 0.0) discard;
     float Jitter = mix(1.0, 0.65 + 0.35 * Hash21(vCoordinate * 512.0), uAlphaJitter);
     float Alpha = clamp(Media.x * Facing * uFlow * Jitter, 0.0, 1.0);
     if (Alpha <= 0.0015) discard;
-    Emit(vec4(clamp(uStrokeColour * Media.y, 0.0, 1.0) * Alpha, Alpha), Alpha);
+    Emit(vec4(clamp(uStrokeColour * Media.y, 0.0, 1.0) * Alpha, Alpha), Alpha, Media.zw);
 }`;
 
 //--------------------------------------------------------------------------------------------------------------------------

@@ -469,6 +469,11 @@ export class InstrumentPanel
         }
 
         const Pixels = Sheet.data;
+        // 🔴 The medium's relief, kept for a second pass. A ridge of paint is only visible because it is lit, and a
+        //    preview that drew the colour and threw the height away was the one thing on the card that could not
+        //    show what a loaded brush or a stick of chalk actually leaves behind. One float per pixel of the box.
+        const Stride = Right - Left + 1;
+        const Relief = Media.Index === 0 ? null : new Float32Array(Stride * (Bottom - Top + 1));
         for (let Row = Top; Row <= Bottom; Row += 1)
         {
             for (let Column = Left; Column <= Right; Column += 1)
@@ -510,11 +515,12 @@ export class InstrumentPanel
                     Press,
                     Hardness,
                     Tooth: ToothField(Column * Paper, Row * Paper),
-                    Fibre: ValueNoise(Along * Media.Fibre * Metres, Across * 3 + Media.Seed * 17),
+                    Fibre: ValueNoise(Along * Media.Fibre * Metres * 0.05, Across * 6 + Media.Seed * 17),
                     Speck: Hash21(Column * 1.37 + Media.Seed, Row * 2.13),
                 });
                 const Alpha = Clamp(Mark.Alpha * Strength, 0, 1);
                 if (Alpha <= 0.004) continue;
+                if (Relief) Relief[(Row - Top) * Stride + (Column - Left)] = (Mark.Relief || 0) * Alpha;
 
                 // 🔴 The gradient is asked here, per pixel, with the same two distances the model asks with: how far
                 //    the hand has travelled, and how far it is from where it pressed. A preview that faded a flat
@@ -531,6 +537,24 @@ export class InstrumentPanel
                 for (let Part = 0; Part < 3; Part += 1)
                     Pixels[Offset + Part] = (Source[Part] * Alpha + Pixels[Offset + Part] * Under * (1 - Alpha)) / Math.max(Result, 1e-6);
                 Pixels[Offset + 3] = Math.round(Clamp(Result, 0, 1) * 255);
+            }
+        }
+
+        // Lit from the upper left, the way every painter photographs their own work: the slope facing the light is
+        // brighter than the slope away from it, and the difference between the two is the only reason a ridge of
+        // paint reads as a ridge rather than as a line of a slightly different colour.
+        if (!Relief) return;
+        for (let Row = Top + 1; Row < Bottom; Row += 1)
+        {
+            for (let Column = Left + 1; Column < Right; Column += 1)
+            {
+                const Here = (Row - Top) * Stride + (Column - Left);
+                const Slope = Relief[Here - 1] - Relief[Here + 1] + Relief[Here - Stride] - Relief[Here + Stride];
+                if (Slope === 0) continue;
+                const Light = Clamp(1 + Slope * 2.6, 0.7, 1.32);
+                const Offset = (Row * Width + Column) * 4;
+                if (!Pixels[Offset + 3]) continue;
+                for (let Part = 0; Part < 3; Part += 1) Pixels[Offset + Part] = Clamp(Pixels[Offset + Part] * Light, 0, 255);
             }
         }
     }

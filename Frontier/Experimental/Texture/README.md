@@ -440,12 +440,38 @@ or softens when the sheet gets bigger:
 
 | Medium | What the pass computes |
 | --- | --- |
-| Bristle | The head is a row of hairs, each sitting off-centre in its own lane at its own thickness; the gaps between them are the drag marks. Wetness closes the comb and pools pigment at the rim, dryness opens it and streaks along the stroke. The load runs out over a reach set by the head's size and how wet it is, so a long stroke goes dry at the end. |
+| Bristle | The head is a row of hairs, each sitting off-centre in its own lane, at its own thickness, wandering in its own direction and carrying its own load. They are solved as a field — every texel works out which hair covers it rather than the pass drawing hairs one at a time — and a hair keeps its identity for the whole stroke, so pressure fans the head apart instead of dealing a new comb every time the hand leans. Paint bridges between the hairs while there is enough of it, so a loaded head lays a continuous film with the hairs showing as ridges in it and only an emptying one rakes holes; because each hair spends at its own rate, the end of a long drag loses them one at a time and reads as straw rather than as a fade. |
 | Graphite | Lead cannot reach into a valley of the paper, so a surface-anchored tooth field decides where the mark is; pressure and the grade (2H → 6B) decide how far down the sides of those valleys it gets. Tilt spreads the same graphite wider and lighter. |
 | Ink | A hard wet edge, and past it a bleed halo creeping into the fibres. A fountain nib flexes with pressure, a ballpoint skips when it is dragged fast, a fineliner does neither. |
 | Felt | Flat colour laid by a bundle of fibres, streaked along the stroke, with solvent pushing a darker rim out to the edge of the mark — the wet edge every marker drawing has. |
 | Dry pigment | A coarser tooth with nothing binding it, so it sheds: specks land outside the mark and the edge of a chalk line is never a line. |
 | Wax | Stiff enough to bridge the valleys instead of filling them however hard it is pushed, until melt floods them in. |
+
+![Eight media, each drawn by the same model the GPU runs](media-hairs.png)
+
+**Paint is a material, not a colour.** A mark that is one roughness and one height from rim to rim reads as a sticker
+of a mark, however good the colour is. So the model returns four numbers rather than two: coverage and shade for the
+picture, and **relief** and **grit** for the material — signed height and signed roughness, added to whatever the
+instrument is already writing before either is weighted by coverage. The height channel is differentiated into a normal
+by the shading pass, so relief is lit; nothing is faked with a highlight.
+
+| Medium | Relief | Grit |
+| --- | --- | --- |
+| Bristle | A ridge of paint behind each hair with a furrow either side; water flattens both, which is why a wash is level. | The furrow scatters more than the ridge, and a wash scatters evenly. |
+| Graphite | The tooth of the paper, less where a hard stroke has flattened it. | **Burnish** — graphite is flakes of a semimetal and a hard stroke lays them flat, so a dark passage is *smoother* than the paper and a light one is not. This is the sheen a pencil drawing has. |
+| Ink | Slightly below flat: ink soaks into the sheet rather than sitting on it. | Smoother in the core than the paper it filled, rougher in the feathered halo, which is paper. |
+| Felt | A bead at the wet rim, dried slightly proud of the flat middle. | Flat colour is a smooth film; the rim is glossier still. |
+| Dry pigment | Every grain sits on top of the tooth it was crushed into, and the shed dust sits on the paper beside it. | The roughest thing in the editor and the only medium rougher than the paper under it. Chalk that is not is a grey pencil. |
+| Wax | The thickest film of the six, piled on the peaks it bridges and thin in the valleys, streaked by the drag of the stick. | Dull and crumbly cold; melting it into the paper with a hard stroke is what turns a dusty line into the waxy sheen a crayon really has. |
+
+**What an instrument lays.** Every instrument carries an OpenPBR material, not a hint of one, and the card's material
+pane and the layer's channel ticks are the same record read twice. A sable round lays a matte wash (roughness 0.62,
+specular weight 0.28); a hog flat lays impasto (0.44, 0.45, height 0.66); an HB is a semimetal (metalness 0.22,
+roughness 0.40, specular weight 0.85); a fineliner is a flat film with no height at all; **chalk is roughness 0.97 and
+specular weight 0.06**, the matte end of the whole editor, with vine charcoal rougher still at 0.98/0.05; wax, oil stick
+and china marker each carry a coat weight because what is on top of the pigment is a film; and the metallic marker is
+the only full metal. Picking up an instrument ticks exactly the channels it writes and nothing else — a stroke that
+writes a channel the layer is not carrying would write a zero over it.
 
 **Pressure.** A stylus is believed — `pointerType === "pen"` and its own reading. A mouse reports a flat 0.5 and means
 nothing by it, so the speed of the hand stands in: a flicked stroke is a light stroke. On top of either comes the entry
@@ -461,6 +487,8 @@ calligraphy in one number.
 Above the settings the card draws a ribbon, and the ribbon is not a drawing of a stroke: every pixel of it runs the same
 model the GPU runs, at the instrument's real size, on paper. Pale pigment — a white china marker, a chalk stick, a
 blender carrying nothing — is shown on a dark ground instead, because true-to-life invisibility is a preview of nothing.
+The relief the medium lays is lit there too: a second pass over the strip embosses it from the upper left, the way a
+painter photographs their own work, so the ribbon shows the impasto and the tooth and not only the colour.
 `MediaSolver.js` holds the model in JavaScript and `MediaChunk` in `ShadingGlsl.js` holds it in GLSL, written line for
 line against each other; the unit tests pin the constants the two have to agree on. The eraser always lifts with the
 plain medium whatever is in hand, because an undo of the surface that leaves bristle marks of its own is not one.

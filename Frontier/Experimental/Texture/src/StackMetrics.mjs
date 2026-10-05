@@ -2210,3 +2210,188 @@ test("a rig read off disk is three lights or none", () =>
     assert.equal(Written.Environment.Lights[1].Strength, Number(EnvironmentByIdentifier.sunset.Fill.toFixed(2)));
     assert.equal(SanitiseProject({ Environment: { Lights: "all of them" } }).Environment.Lights, null);
 });
+
+//--------------------------------------------------------------------------------------------------------------------------
+// The head is hairs, not a comb — and what the paint does to the material it lands on.
+//
+// A brush is simulated as a field rather than a loop: every texel works out which hair covers it and asks that hair how
+// much it has left. The tests below are what makes that a claim rather than a story — if hair seven stopped being hair
+// seven when the hand leaned, the first of them would fail.
+//--------------------------------------------------------------------------------------------------------------------------
+const MediaOf = (Key, Patch = {}) =>
+{
+    const Type = InstrumentByKey[Key];
+    return MediaFromInstrument(Type, { ...Type.Settings, ...Patch });
+};
+const MediaAt = (Media, Sample = {}) =>
+    Deposit(Media, { Across: 0, Along: 0, Press: 1, Hardness: 0.5, Tooth: 0.5, Fibre: 0.5, Speck: 0, ...Sample });
+
+// Everything below reads the head the same way: a row of samples straight across it, which is the one view in which a
+// comb, a brush and a wash look like three different things.
+const AcrossHead = (Media, Read, Sample = {}, Reach = 0.9, Steps = 320) =>
+{
+    const Out = [];
+    for (let Step = 0; Step < Steps; Step += 1)
+        Out.push(Read(MediaAt(Media, { ...Sample, Across: -Reach + (2 * Reach * Step) / (Steps - 1) })));
+    return Out;
+};
+const Average = (Values) => Values.reduce((Total, Value) => Total + Value, 0) / Values.length;
+const Swing = (Values) => Math.max(...Values) - Math.min(...Values);
+
+test("a hair keeps its identity when the hand leans", () =>
+{
+    // Pressure fans a head apart; it does not mint new hairs. So the streak pattern under full pressure is the pattern
+    // under light pressure STRETCHED, and reading it back at the fanned position finds the same hair in the same place.
+    const Flat = MediaOf("brush-flat");
+    const Fan = (Press) => 1 + 0.5 * Flat.Splay * Press;
+    // Read half way through the stroke, where the head is rationing what is left and the hairs show as hairs. A head
+    // still loaded lays a continuous film on purpose, and a film has no pattern to recognise.
+    const Along = Flat.Reach * 0.4;
+    const Pattern = (Press, Spread) =>
+    {
+        const Out = [];
+        for (let Step = 0; Step < 200; Step += 1)
+        {
+            const Lane = -0.9 + (1.8 * Step) / 199;
+            Out.push(MediaAt(Flat, { Across: Lane * Spread, Press, Along }).Alpha);
+        }
+        const Mean = Average(Out);
+        return Out.map((Value) => Math.sign(Value - Mean));
+    };
+    const Agreement = (First, Second) =>
+        First.filter((Sign, Index) => Sign === Second[Index]).length / First.length;
+
+    const Stretched = Agreement(Pattern(0.3, Fan(0.3)), Pattern(1, Fan(1)));
+    const Fixed_ = Agreement(Pattern(0.3, 1), Pattern(1, 1));
+    assert.ok(Stretched > 0.98, `the hairs were re-dealt when the hand leaned: ${Stretched}`);
+    assert.ok(Stretched > Fixed_ + 0.15, `fanning the head moved nothing: ${Stretched} vs ${Fixed_}`);
+
+    // And a head with a lot of splay in it really does spread: fewer hairs cross a window of fixed width. Counted on
+    // the relief, because that is where a hair is whether or not there is enough paint left to break the film.
+    const Fanned = MediaOf("brush-fan");
+    const Hairs = (Press) =>
+    {
+        const Row = AcrossHead(Fanned, (Mark) => Mark.Relief, { Press, Along: Fanned.Reach * 0.4 });
+        const Mean = Average(Row);
+        let Count = 0;
+        for (let Step = 1; Step < Row.length; Step += 1)
+            if (Math.sign(Row[Step] - Mean) !== Math.sign(Row[Step - 1] - Mean)) Count += 1;
+        return Count;
+    };
+    assert.ok(Hairs(1) < Hairs(0.25), `a fan brush pressed flat kept its hairs together: ${Hairs(1)} vs ${Hairs(0.25)}`);
+});
+
+test("hairs run out one at a time, not all together", () =>
+{
+    // A brush at the end of a long drag looks like straw because the hairs that started loaded are still laying paint
+    // and the ones that did not have dropped out. Evenly fading alpha is a decal of a brush, not a brush.
+    const Flat = MediaOf("brush-flat");
+    const Ragged = (Along) =>
+    {
+        const Row = AcrossHead(Flat, (Mark) => Mark.Alpha, { Along }, 0.8);
+        const Mean = Average(Row);
+        const Spread = Math.sqrt(Average(Row.map((Value) => (Value - Mean) ** 2)));
+        return Spread / Math.max(Mean, 1e-6);
+    };
+    assert.ok(Ragged(Flat.Reach * 0.85) > Ragged(0) * 1.4, `the head emptied evenly: ${Ragged(0)} → ${Ragged(Flat.Reach * 0.85)}`);
+
+    // Water is what evens a head out, so a wash has neither the ridges nor the furrows a dry brush leaves.
+    assert.ok(Swing(AcrossHead(MediaOf("brush-round", { Wetness: 0 }), (Mark) => Mark.Relief)) >
+        Swing(AcrossHead(MediaOf("brush-round", { Wetness: 100 }), (Mark) => Mark.Relief)) + 0.05, "a wash is as ridged as dry paint");
+    assert.ok(Swing(AcrossHead(MediaOf("brush-round", { Wetness: 0 }), (Mark) => Mark.Grit)) >
+        Swing(AcrossHead(MediaOf("brush-round", { Wetness: 100 }), (Mark) => Mark.Grit)) + 0.05, "a wash scatters as unevenly as dry paint");
+});
+
+test("every medium alters the material it lands on, in its own direction", () =>
+{
+    const Dusty = MediaAt(MediaOf("dry-chalk"), { Tooth: 0.7 });
+    const Waxy = MediaAt(MediaOf("wax-crayon"), { Tooth: 0.7 });
+    const Inky = MediaAt(MediaOf("pen-fineliner"), { Tooth: 0.7 });
+
+    // Loose pigment stands on the tooth and scatters; wax is the thickest film of the six; ink soaks in and levels.
+    assert.ok(Dusty.Relief > 0.05 && Dusty.Grit > 0.2, `chalk laid no texture: ${JSON.stringify(Dusty)}`);
+    assert.ok(Waxy.Relief > Dusty.Relief, "wax is thinner on the page than chalk");
+    assert.ok(Inky.Relief < 0 && Inky.Grit < 0, `ink sat on the paper instead of soaking into it: ${JSON.stringify(Inky)}`);
+
+    // Nothing else the editor lays down is as rough as loose pigment, which is the whole look of the dry family.
+    let Roughest = -1;
+    let Named = "";
+    for (const Family of InstrumentFamilies)
+    {
+        if (Family.Key === "dry") continue;
+        for (const Type of Family.Types)
+        {
+            const Mark = MediaAt(MediaFromInstrument(Type, Type.Settings), { Tooth: 0.7 });
+            if (Mark.Grit > Roughest) { Roughest = Mark.Grit; Named = Type.Key; }
+        }
+    }
+    assert.ok(Dusty.Grit > Roughest + 0.1, `${Named} scattered as hard as chalk: ${Roughest} vs ${Dusty.Grit}`);
+
+    // Graphite is flakes of a semimetal: a hard stroke lays them flat, which is the sheen in the dark passages of a
+    // pencil drawing. Pressed lightly it is the paper's roughness, pressed hard it is smoother than the paper.
+    const Light = MediaAt(MediaOf("pencil-graphite"), { Press: 0.2, Tooth: 0.7 });
+    const Heavy = MediaAt(MediaOf("pencil-graphite"), { Press: 1, Tooth: 0.7 });
+    assert.ok(Heavy.Grit < -0.1 && Light.Grit > Heavy.Grit + 0.1, `graphite did not burnish: ${Light.Grit} → ${Heavy.Grit}`);
+
+    // Melting wax into the paper is what turns a dusty crayon line into the sheen a crayon really has.
+    const Cold = MediaAt(MediaOf("wax-crayon", { Melt: 0 }), { Tooth: 0.7 });
+    const Warm = MediaAt(MediaOf("wax-crayon", { Melt: 100 }), { Tooth: 0.7 });
+    assert.ok(Warm.Grit < Cold.Grit - 0.15 && Warm.Relief < Cold.Relief, "melted wax is as dull and as thick as cold wax");
+
+    // And medium zero changes nothing at all, because an unset uniform must leave the authored material alone.
+    for (const Rim of [0, 0.3, 0.75, 1.2])
+    {
+        const Plain = Deposit(PlainMedia, { Across: Rim, Hardness: 0.5 });
+        assert.equal(Plain.Relief, 0, "the plain dab embossed the surface");
+        assert.equal(Plain.Grit, 0, "the plain dab roughened the surface");
+    }
+    assert.equal(Deposit(null, { Across: 0.3 }).Relief, 0);
+});
+
+test("what an instrument lays is a defensible OpenPBR material", () =>
+{
+    const Allowed = new Set(ChannelIdentifiers);
+    let Counted = 0;
+    for (const Family of InstrumentFamilies)
+    {
+        for (const Type of Family.Types)
+        {
+            if (!Type.Paint) { assert.equal(Family.Key, "eraser", `${Type.Key} lays nothing`); continue; }
+            Counted += 1;
+            const Keys = Object.keys(Type.Paint.Channels);
+            assert.ok(Keys.length > 0, `${Type.Key} has an empty paint record`);
+            // Exposes is what the card ticks and what the stroke is allowed to write. A channel set but not exposed is
+            // a value nobody will ever see, and a channel exposed but not set writes a zero over the layer.
+            assert.deepEqual([...Keys].sort(), [...Type.Paint.Exposes].sort(), `${Type.Key} sets and exposes different channels`);
+            for (const [Key, Value] of Object.entries(Type.Paint.Channels))
+            {
+                assert.ok(Allowed.has(Key), `${Type.Key} paints ${Key}, which is not a channel`);
+                assert.ok(Value >= 0 && Value <= 1, `${Type.Key}.${Key} is ${Value}`);
+            }
+            // Height is signed around a flat half. Paint is added to a surface, so no instrument digs a hole.
+            if ("height" in Type.Paint.Channels)
+                assert.ok(Type.Paint.Channels.height >= 0.5, `${Type.Key} carves into the surface`);
+        }
+    }
+    assert.ok(Counted >= 24, `only ${Counted} instruments lay a material`);
+
+    const Lays = (Key) => InstrumentByKey[Key].Paint.Channels;
+    // Loose pigment is the matte end of the whole editor: no binder, no film, nothing to reflect with.
+    for (const Key of ["dry-chalk", "dry-pastel", "dry-charcoal", "dry-conte"])
+    {
+        assert.ok(Lays(Key).specular_roughness > 0.85, `${Key} is glossier than a stick of pigment`);
+        assert.ok(Lays(Key).specular_weight < 0.2, `${Key} reflects like a painted surface`);
+    }
+    assert.ok(Lays("dry-chalk").specular_roughness > 0.9 && Lays("dry-chalk").specular_weight < 0.1, "chalk is not chalk");
+    // Wax and oil leave a film over the pigment, which is what a coat weight is for.
+    for (const Key of ["wax-crayon", "wax-oilstick", "wax-china"])
+        assert.ok(Lays(Key).coat_weight > 0 && Lays(Key).specular_roughness < 0.5, `${Key} has no waxy film on it`);
+    // Graphite is a semimetal and the metallic marker is leafed aluminium; nothing else is metal at all.
+    assert.ok(Lays("pencil-graphite").base_metalness > 0 && Lays("pencil-graphite").base_metalness < 0.5, "graphite is not a mirror");
+    assert.equal(Lays("marker-metallic").base_metalness, 1);
+    assert.ok(!("base_metalness" in Lays("dry-chalk")) && !("base_metalness" in Lays("brush-flat")));
+    // Impasto: a loaded hog brush and a stick of oil stand proud of a watercolour wash and of a fineliner.
+    assert.ok(Lays("brush-flat").height > Lays("brush-round").height, "a hog brush lays paint as thin as a sable wash");
+    assert.ok(Lays("wax-oilstick").height > Lays("brush-flat").height, "an oil stick is thinner than a brush mark");
+    assert.ok(!("height" in Lays("pen-fineliner")), "a fineliner embosses the paper");
+});

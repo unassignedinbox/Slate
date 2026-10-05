@@ -670,7 +670,10 @@ export const InstrumentFamilies = [
                 Tone: "#c49a5e",
                 Art: { Shape: "round", Tip: 244, Reach: 5, Barrel: "wood", Ferrule: "chrome", Hair: "sable" },
                 Settings: { Size: 9, Opacity: 92, Flow: 80, Hardness: 40, Spacing: 10, Smoothing: 38, Head: "Round", Wetness: 45, Pressure: true, Taper: 60 },
-                Paint: { Channels: { specular_roughness: 0.52 }, Exposes: ["specular_roughness"] },
+                Paint: {
+                    Channels: { specular_roughness: 0.62, specular_weight: 0.28, height: 0.53 },
+                    Exposes: ["specular_roughness", "specular_weight", "height"],
+                },
                 Swatches: ["#c0303a", "#2352a6", "#1f7a4d", "#e0a13a", "#6b4a9e", "#15161a"],
             },
             {
@@ -680,7 +683,10 @@ export const InstrumentFamilies = [
                 Tone: "#f2e6c8",
                 Art: { Shape: "flat", Tip: 238, Reach: 7, Barrel: "navy", Ferrule: "chrome", Hair: "hog" },
                 Settings: { Size: 14, Opacity: 96, Flow: 88, Hardness: 62, Spacing: 8, Smoothing: 22, Head: "Flat", Wetness: 30, Pressure: false, Taper: 0 },
-                Paint: { Channels: { specular_roughness: 0.58, height: 0.62 }, Exposes: ["specular_roughness", "height"] },
+                Paint: {
+                    Channels: { specular_roughness: 0.44, specular_weight: 0.45, height: 0.66 },
+                    Exposes: ["specular_roughness", "specular_weight", "height"],
+                },
                 Swatches: ["#2352a6", "#1f7a4d", "#8a5a30", "#15161a", "#f4f1ea"],
             },
             {
@@ -690,7 +696,10 @@ export const InstrumentFamilies = [
                 Tone: "#3a3a44",
                 Art: { Shape: "filbert", Tip: 240, Reach: 7, Barrel: "black", Ferrule: "silver", Hair: "synthetic" },
                 Settings: { Size: 12, Opacity: 90, Flow: 74, Hardness: 46, Spacing: 10, Smoothing: 30, Head: "Filbert", Wetness: 38, Pressure: true, Taper: 35 },
-                Paint: { Channels: { specular_roughness: 0.5, height: 0.56 }, Exposes: ["specular_roughness", "height"] },
+                Paint: {
+                    Channels: { specular_roughness: 0.58, specular_weight: 0.33, height: 0.6 },
+                    Exposes: ["specular_roughness", "specular_weight", "height"],
+                },
                 Swatches: ["#6b4a9e", "#c0303a", "#2b7f88", "#e0a13a", "#15161a"],
             },
             {
@@ -700,7 +709,10 @@ export const InstrumentFamilies = [
                 Tone: "#9a8e80",
                 Art: { Shape: "fan", Tip: 236, Reach: 4, Barrel: "walnut", Ferrule: "chrome", Hair: "squirrel" },
                 Settings: { Size: 16, Opacity: 54, Flow: 40, Hardness: 12, Spacing: 14, Smoothing: 60, Head: "Fan", Wetness: 70, Pressure: true, Taper: 20 },
-                Paint: { Channels: { specular_roughness: 0.44, coat_weight: 0.18 }, Exposes: ["specular_roughness", "coat_weight"] },
+                Paint: {
+                    Channels: { specular_roughness: 0.34, specular_weight: 0.55, coat_weight: 0.22, coat_roughness: 0.22, height: 0.52 },
+                    Exposes: ["specular_roughness", "specular_weight", "coat_weight", "coat_roughness", "height"],
+                },
                 Swatches: ["#f4f1ea", "#d8c496", "#8a5f32", "#4a4038"],
             },
         ],
@@ -721,7 +733,10 @@ export const InstrumentFamilies = [
                 Tone: "#f7d24a",
                 Art: { Barrel: "yellow", Core: "graphite", Back: "eraser", Metal: "gold" },
                 Settings: { Size: 1.6, Opacity: 78, Flow: 55, Hardness: 62, Spacing: 6, Smoothing: 25, Grade: "HB", Grain: 55, Pressure: true, Tilt: 0 },
-                Paint: { Channels: { specular_roughness: 0.46, base_metalness: 0.3 }, Exposes: ["base_metalness", "specular_roughness"] },
+                Paint: {
+                    Channels: { base_metalness: 0.22, specular_roughness: 0.4, specular_weight: 0.85, height: 0.52 },
+                    Exposes: ["base_metalness", "specular_roughness", "specular_weight", "height"],
+                },
                 Swatches: ["#2b2b30", "#4a4a52", "#6d6d76", "#141417"],
             },
             {
@@ -731,7 +746,10 @@ export const InstrumentFamilies = [
                 Tone: "#a8243c",
                 Art: { Barrel: "crimson", Core: "crimson", Back: "flat", Metal: "silver" },
                 Settings: { Size: 1.8, Opacity: 88, Flow: 66, Hardness: 58, Spacing: 6, Smoothing: 28, Grade: "2B", Grain: 42, Pressure: true, Tilt: 0 },
-                Paint: { Channels: { specular_roughness: 0.74 }, Exposes: ["specular_roughness"] },
+                Paint: {
+                    Channels: { specular_roughness: 0.54, specular_weight: 0.38, height: 0.54 },
+                    Exposes: ["specular_roughness", "specular_weight", "height"],
+                },
                 Swatches: ["#c8243c", "#e0a13a", "#2b7f88", "#3a6ad8", "#1f7a4d"],
             },
             {
@@ -741,7 +759,10 @@ export const InstrumentFamilies = [
                 Tone: "#7a838c",
                 Art: { Barrel: "graphite", Core: "graphite", Back: "flat", Metal: "chrome", Clutch: true, Half: 6.5 },
                 Settings: { Size: 0.6, Opacity: 92, Flow: 74, Hardness: 86, Spacing: 4, Smoothing: 40, Grade: "2H", Grain: 18, Pressure: false, Tilt: 0 },
-                Paint: { Channels: { specular_roughness: 0.42, base_metalness: 0.26 }, Exposes: ["base_metalness", "specular_roughness"] },
+                Paint: {
+                    Channels: { base_metalness: 0.25, specular_roughness: 0.34, specular_weight: 0.9, height: 0.51 },
+                    Exposes: ["base_metalness", "specular_roughness", "specular_weight", "height"],
+                },
                 Swatches: ["#1c1c22", "#3a3a42", "#5a5f66"],
             },
             {
@@ -751,7 +772,10 @@ export const InstrumentFamilies = [
                 Tone: "#2a2a2e",
                 Art: { Barrel: "black", Core: "charcoal", Back: "cap", Metal: "copper", Faceted: false },
                 Settings: { Size: 3.2, Opacity: 96, Flow: 82, Hardness: 34, Spacing: 8, Smoothing: 18, Grade: "6B", Grain: 76, Pressure: true, Tilt: 40 },
-                Paint: { Channels: { specular_roughness: 0.95 }, Exposes: ["specular_roughness"] },
+                Paint: {
+                    Channels: { specular_roughness: 0.93, specular_weight: 0.1, height: 0.56 },
+                    Exposes: ["specular_roughness", "specular_weight", "height"],
+                },
                 Swatches: ["#0a0a0c", "#2a2a2e", "#55555d", "#8a8f98"],
             },
         ],
@@ -772,7 +796,7 @@ export const InstrumentFamilies = [
                 Tone: "#8a949c",
                 Art: { Barrel: "graphite", Metal: "chrome", Nib: "tube" },
                 Settings: { Size: 0.5, Opacity: 100, Flow: 100, Hardness: 94, Spacing: 4, Smoothing: 45, Bleed: 6, Pressure: false, Taper: 0 },
-                Paint: { Channels: { specular_roughness: 0.6 }, Exposes: ["specular_roughness"] },
+                Paint: { Channels: { specular_roughness: 0.56, specular_weight: 0.3 }, Exposes: ["specular_roughness", "specular_weight"] },
                 Swatches: ["#15161a", "#1d3a8a", "#8d1e26", "#1f5c3a"],
             },
             {
@@ -782,7 +806,7 @@ export const InstrumentFamilies = [
                 Tone: "#3a5f9c",
                 Art: { Barrel: "navy", Metal: "gold", Nib: "fountain", Section: "bar" },
                 Settings: { Size: 1.1, Opacity: 96, Flow: 88, Hardness: 78, Spacing: 5, Smoothing: 52, Bleed: 30, Pressure: true, Taper: 45 },
-                Paint: { Channels: { specular_roughness: 0.5 }, Exposes: ["specular_roughness"] },
+                Paint: { Channels: { specular_roughness: 0.44, specular_weight: 0.42 }, Exposes: ["specular_roughness", "specular_weight"] },
                 Swatches: ["#16305e", "#15161a", "#5a0a1a", "#123a20"],
             },
             {
@@ -792,7 +816,10 @@ export const InstrumentFamilies = [
                 Tone: "#2b7f88",
                 Art: { Barrel: "teal", Metal: "silver", Nib: "ball" },
                 Settings: { Size: 0.8, Opacity: 84, Flow: 62, Hardness: 88, Spacing: 4, Smoothing: 35, Bleed: 4, Pressure: true, Taper: 20 },
-                Paint: { Channels: { specular_roughness: 0.34, coat_weight: 0.22 }, Exposes: ["specular_roughness", "coat_weight"] },
+                Paint: {
+                    Channels: { specular_roughness: 0.3, specular_weight: 0.6, coat_weight: 0.2, coat_roughness: 0.16, height: 0.52 },
+                    Exposes: ["specular_roughness", "specular_weight", "coat_weight", "coat_roughness", "height"],
+                },
                 Swatches: ["#1d3a8a", "#15161a", "#8d1e26"],
             },
             {
@@ -802,7 +829,10 @@ export const InstrumentFamilies = [
                 Tone: "#f0cf7e",
                 Art: { Barrel: "walnut", Metal: "gold", Nib: "chisel" },
                 Settings: { Size: 2.4, Opacity: 100, Flow: 96, Hardness: 82, Spacing: 5, Smoothing: 48, Bleed: 20, Pressure: true, Taper: 70 },
-                Paint: { Channels: { specular_roughness: 0.52 }, Exposes: ["specular_roughness"] },
+                Paint: {
+                    Channels: { specular_roughness: 0.48, specular_weight: 0.4, height: 0.51 },
+                    Exposes: ["specular_roughness", "specular_weight", "height"],
+                },
                 Swatches: ["#15161a", "#5a0a1a", "#16305e", "#4a2f18"],
             },
         ],
@@ -823,7 +853,7 @@ export const InstrumentFamilies = [
                 Tone: "#15161a",
                 Art: { Barrel: "graphite", Metal: "silver", Nib: "bullet", Ink: Ink.Dark },
                 Settings: { Size: 3.4, Opacity: 100, Flow: 100, Hardness: 86, Spacing: 5, Smoothing: 30, Nib: "Fine", Bleed: 8, Pressure: false },
-                Paint: { Channels: { specular_roughness: 0.66 }, Exposes: ["specular_roughness"] },
+                Paint: { Channels: { specular_roughness: 0.62, specular_weight: 0.26 }, Exposes: ["specular_roughness", "specular_weight"] },
                 Swatches: ["#15161a", "#c0303a", "#2352a6", "#1f7a4d", "#e0a13a"],
             },
             {
@@ -833,7 +863,7 @@ export const InstrumentFamilies = [
                 Tone: "#c0303a",
                 Art: { Barrel: "ivory", Metal: "chrome", Nib: "chisel", Ink: Ink.Warm },
                 Settings: { Size: 6.5, Opacity: 92, Flow: 86, Hardness: 72, Spacing: 6, Smoothing: 26, Nib: "Chisel", Bleed: 38, Pressure: false },
-                Paint: { Channels: { specular_roughness: 0.66 }, Exposes: ["specular_roughness"] },
+                Paint: { Channels: { specular_roughness: 0.7, specular_weight: 0.2 }, Exposes: ["specular_roughness", "specular_weight"] },
                 Swatches: ["#c0303a", "#e0a13a", "#2b7f88", "#6b4a9e", "#15161a"],
             },
             {
@@ -843,7 +873,7 @@ export const InstrumentFamilies = [
                 Tone: "#2352a6",
                 Art: { Barrel: "navy", Metal: "silver", Nib: "taper", Ink: ["#5b8cff", "#2352a6", "#122f66"] },
                 Settings: { Size: 4.2, Opacity: 88, Flow: 78, Hardness: 44, Spacing: 7, Smoothing: 42, Nib: "Fine", Bleed: 46, Pressure: true },
-                Paint: { Channels: { specular_roughness: 0.6 }, Exposes: ["specular_roughness"] },
+                Paint: { Channels: { specular_roughness: 0.66, specular_weight: 0.24 }, Exposes: ["specular_roughness", "specular_weight"] },
                 Swatches: ["#2352a6", "#5b8cff", "#15161a", "#c0303a"],
             },
             {
@@ -855,7 +885,10 @@ export const InstrumentFamilies = [
                 Tone: "#f0cf7e",
                 Art: { Barrel: "graphite", Metal: "gold", Nib: "bullet", Ink: ["#f6e3a8", "#d9a633", "#8a6a2a"] },
                 Settings: { Size: 2.8, Opacity: 100, Flow: 96, Hardness: 80, Spacing: 5, Smoothing: 34, Nib: "Fine", Bleed: 10, Pressure: false },
-                Paint: { Channels: { base_metalness: 1, specular_roughness: 0.26, specular_weight: 1 }, Exposes: ["base_metalness", "specular_roughness"] },
+                Paint: {
+                    Channels: { base_metalness: 1, specular_roughness: 0.26, specular_weight: 1, coat_weight: 0.15, coat_roughness: 0.2, height: 0.53 },
+                    Exposes: ["base_metalness", "specular_roughness", "specular_weight", "coat_weight", "coat_roughness", "height"],
+                },
                 Swatches: ["#d9a633", "#dbdbe6", "#c08a5a", "#8a949c", "#15161a"],
             },
             {
@@ -865,7 +898,10 @@ export const InstrumentFamilies = [
                 Tone: "#e0a13a",
                 Art: { Barrel: "amber", Metal: "gold", Nib: "broad", Ink: ["#f0cf7e", "#d98c2b", "#7a4410"], Half: 10 },
                 Settings: { Size: 11, Opacity: 100, Flow: 100, Hardness: 90, Spacing: 5, Smoothing: 18, Nib: "Broad", Bleed: 4, Pressure: false },
-                Paint: { Channels: { specular_roughness: 0.72 }, Exposes: ["specular_roughness"] },
+                Paint: {
+                    Channels: { specular_roughness: 0.58, specular_weight: 0.34, height: 0.58 },
+                    Exposes: ["specular_roughness", "specular_weight", "height"],
+                },
                 Swatches: ["#e0a13a", "#f4f1ea", "#c0303a", "#15161a"],
             },
         ],
@@ -886,7 +922,10 @@ export const InstrumentFamilies = [
                 Tone: "#efece2",
                 Art: { Pigment: "chalk", Section: "square", Half: 11, Dust: 11, Seed: 2 },
                 Settings: { Size: 8, Opacity: 88, Flow: 62, Hardness: 30, Spacing: 14, Smoothing: 12, Grain: 78, Scatter: 34, Pressure: true },
-                Paint: { Channels: { specular_roughness: 0.96 }, Exposes: ["specular_roughness"] },
+                Paint: {
+                    Channels: { specular_roughness: 0.97, specular_weight: 0.06, height: 0.58 },
+                    Exposes: ["specular_roughness", "specular_weight", "height"],
+                },
                 Swatches: ["#f4f2ec", "#e6d9b8", "#bcd3e6", "#e3bcbc"],
             },
             {
@@ -896,7 +935,10 @@ export const InstrumentFamilies = [
                 Tone: "#d86a22",
                 Art: { Pigment: "pastel", Section: "round", Half: 11, Wrap: true, Dust: 8, Seed: 5 },
                 Settings: { Size: 10, Opacity: 96, Flow: 85, Hardness: 22, Spacing: 12, Smoothing: 18, Grain: 52, Scatter: 20, Pressure: true },
-                Paint: { Channels: { specular_roughness: 0.92 }, Exposes: ["specular_roughness"] },
+                Paint: {
+                    Channels: { specular_roughness: 0.94, specular_weight: 0.09, height: 0.62 },
+                    Exposes: ["specular_roughness", "specular_weight", "height"],
+                },
                 Swatches: ["#f08a3c", "#3f7ae0", "#c0303a", "#3f9e6a", "#6b4a9e"],
             },
             {
@@ -906,7 +948,10 @@ export const InstrumentFamilies = [
                 Tone: "#242428",
                 Art: { Pigment: "charcoal", Section: "round", Half: 11, Back: 126, Tip: 236, Dust: 12, Seed: 7 },
                 Settings: { Size: 6, Opacity: 82, Flow: 58, Hardness: 16, Spacing: 16, Smoothing: 10, Grain: 88, Scatter: 48, Pressure: true },
-                Paint: { Channels: { specular_roughness: 0.97 }, Exposes: ["specular_roughness"] },
+                Paint: {
+                    Channels: { specular_roughness: 0.98, specular_weight: 0.05, height: 0.56 },
+                    Exposes: ["specular_roughness", "specular_weight", "height"],
+                },
                 Swatches: ["#101013", "#3a3a3f", "#6a6a70", "#9a9aa2"],
             },
             {
@@ -916,7 +961,10 @@ export const InstrumentFamilies = [
                 Tone: "#8a3a26",
                 Art: { Pigment: "conte", Section: "square", Half: 9, Back: 132, Dust: 6, Seed: 11 },
                 Settings: { Size: 5, Opacity: 94, Flow: 76, Hardness: 44, Spacing: 10, Smoothing: 16, Grain: 60, Scatter: 14, Pressure: true },
-                Paint: { Channels: { specular_roughness: 0.9 }, Exposes: ["specular_roughness"] },
+                Paint: {
+                    Channels: { specular_roughness: 0.9, specular_weight: 0.12, height: 0.57 },
+                    Exposes: ["specular_roughness", "specular_weight", "height"],
+                },
                 Swatches: ["#a8503a", "#5a2214", "#2a2a2e", "#efece2"],
             },
         ],
@@ -937,7 +985,10 @@ export const InstrumentFamilies = [
                 Tone: "#c02a30",
                 Art: { Pigment: "crayon", Wrap: "band", Half: 9.5 },
                 Settings: { Size: 6, Opacity: 92, Flow: 72, Hardness: 52, Spacing: 9, Smoothing: 20, Grain: 46, Melt: 18, Pressure: true },
-                Paint: { Channels: { specular_roughness: 0.38, coat_weight: 0.26 }, Exposes: ["specular_roughness", "coat_weight"] },
+                Paint: {
+                    Channels: { specular_roughness: 0.4, specular_weight: 0.5, coat_weight: 0.24, coat_roughness: 0.3, height: 0.62 },
+                    Exposes: ["specular_roughness", "specular_weight", "coat_weight", "coat_roughness", "height"],
+                },
                 Swatches: ["#e04a4a", "#3a6ad8", "#e0a13a", "#1f7a4d", "#15161a"],
             },
             {
@@ -947,7 +998,10 @@ export const InstrumentFamilies = [
                 Tone: "#2a4ab0",
                 Art: { Pigment: "oil", Half: 12, Back: 110, Shoulder: 214, Tip: 240, Faceted: true },
                 Settings: { Size: 12, Opacity: 100, Flow: 94, Hardness: 36, Spacing: 10, Smoothing: 24, Grain: 22, Melt: 64, Pressure: true },
-                Paint: { Channels: { specular_roughness: 0.3, coat_weight: 0.38 }, Exposes: ["specular_roughness", "coat_weight"] },
+                Paint: {
+                    Channels: { specular_roughness: 0.3, specular_weight: 0.58, coat_weight: 0.34, coat_roughness: 0.2, height: 0.68 },
+                    Exposes: ["specular_roughness", "specular_weight", "coat_weight", "coat_roughness", "height"],
+                },
                 Swatches: ["#3a6ad8", "#c0303a", "#e0a13a", "#f4f1ea", "#15161a"],
             },
             {
@@ -957,7 +1011,10 @@ export const InstrumentFamilies = [
                 Tone: "#dcd6c8",
                 Art: { Pigment: "china", Wrap: "spiral", Half: 8.5, Back: 112, Shoulder: 216, Tip: 238 },
                 Settings: { Size: 3.6, Opacity: 98, Flow: 88, Hardness: 66, Spacing: 7, Smoothing: 22, Grain: 16, Melt: 30, Pressure: false },
-                Paint: { Channels: { specular_roughness: 0.34, coat_weight: 0.3 }, Exposes: ["specular_roughness", "coat_weight"] },
+                Paint: {
+                    Channels: { specular_roughness: 0.34, specular_weight: 0.54, coat_weight: 0.28, coat_roughness: 0.26, height: 0.6 },
+                    Exposes: ["specular_roughness", "specular_weight", "coat_weight", "coat_roughness", "height"],
+                },
                 Swatches: ["#f2efe8", "#15161a", "#c0303a", "#1f5c3a"],
             },
         ],

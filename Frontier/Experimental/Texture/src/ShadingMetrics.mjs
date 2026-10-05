@@ -22,7 +22,7 @@ import {
 import { BuildSurface } from "./SurfaceStructure.js";
 import { OrbitProjection } from "./OrbitProjection.js";
 import { DefaultStack, DefaultProject, CreateLayer } from "./LayerSpecification.js";
-import { ExportSlots, SurfaceFragment, PlaneFragment, CompositeFragment, Chunks } from "./ShadingGlsl.js";
+import { ExportSlots, SurfaceFragment, PlaneFragment, CompositeFragment, StampFragment, Chunks } from "./ShadingGlsl.js";
 import { DisplayIndex, DisplayOrdering } from "./ChannelSpecification.js";
 import { MediaFromInstrument, PlainMedia } from "./MediaSolver.js";
 import { InstrumentByKey } from "./InstrumentSpecification.js";
@@ -862,4 +862,26 @@ test("a promoted layer survives a change of resolution", () =>
     Integrator.Stamp(Layer, StrokeOptions({ Start: [0.1, 0, 0.8], End: [0.2, 0, 0.8] }));
     assert.ok(Record.PaintTarget, "the combined target was not rebuilt");
     assert.ok(Integrator.PaintedLayer(Layer), "the layer lost its channel images");
+});
+
+test("the medium writes a material and not only a colour", () =>
+{
+    // The model is written twice — once in MediaSolver.js for the card, the rasteriser and the tests, once in GLSL for
+    // the stroke itself. There is no GPU here to run the second copy, so what is checked is that the shader still has
+    // the shape the JavaScript twin was written against: four numbers out, two of them the material.
+    assert.match(Chunks.Media, /vec4 MediaDeposit\(/, "the medium stopped returning a material");
+    assert.match(Chunks.Media, /\(coverage, shade, relief, grit\)/, "the four numbers are not named in the shader");
+    const Branches = Chunks.Media.match(/return vec4\(/g) || [];
+    assert.ok(Branches.length >= 7, `only ${Branches.length} of the seven media return a vec4`);
+    // Medium zero has to leave the authored material exactly as it was, or an unset uniform repaints the surface.
+    assert.match(Chunks.Media, /Rim\), 0\.0, 1\.0\), 1\.0, 0\.0, 0\.0\);/, "the plain dab no longer leaves the material alone");
+    for (const Name of ["Fan", "Wander", "Burnish", "Melted"])
+        assert.ok(Chunks.Media.includes(Name), `${Name} is in the JavaScript twin but not in the shader`);
+
+    // And the stroke has to carry the last two numbers into the channels it writes.
+    assert.match(StampFragment, /void Emit\(vec4 Cover, float Alpha, vec2 Grain\)/, "the dab cannot carry a medium's grain");
+    assert.match(StampFragment, /Paint\.x = clamp\(Paint\.x \+ Grain\.y/, "the medium's grit never reaches the roughness");
+    assert.match(StampFragment, /Paint\.w = clamp\(Paint\.w \+ Grain\.x/, "the medium's relief never reaches the height");
+    assert.match(StampFragment, /Emit\([^;]*Media\.zw\);/, "the stroke throws the medium's material away");
+    assert.equal((StampFragment.match(/Emit\(.*vec2\(0\.0\)\);/g) || []).length, 3, "a decal or a gradient grew a grain of its own");
 });
