@@ -1911,3 +1911,32 @@ Final evidence is in **`VisualProof/CliffSequence/GrainCaptures/`**: eight mater
 and its workflow report. Both browser reports and the grain report have source hashes matching the delivered
 application files. The new browser entry point is `VerifyGrainWorkflow.cjs`. Full mesh dumps, dependencies and
 intermediate/failed runs remain ignored scratch. C033's earlier evidence is preserved.
+
+## C035 — Fix zoom snapping at fractional browser pixel ratios
+
+**Date:** 2026-10-05. **Base:** C034 (`b4ada1b`). The camera fix is in the shared browser `OrbitControls.js`
+under `Experimental/Ocean/lib/addons`, which both cliff views already import. No geometry, material simulation,
+UI layout or native code changed. Other browser consumers of this shared helper also receive the correction.
+
+The snapping was reproduced in Chromium at device pixel ratio 0.8. The old zoom calculation divided a CSS-pixel
+input by `100 * (devicePixelRatio | 0)`. Ratios below 1 therefore became a zero divisor: a negative wheel event
+snapped the camera from 75.082 m directly to its 0.5 m minimum, and the following positive event to its 450 m maximum.
+
+- Removed framebuffer pixel ratio from the wheel/middle-drag calculation. Their input distances use CSS pixels.
+- Preserved fractional trackpad deltas and normalized line/page wheel modes into CSS-pixel equivalents.
+- Limited each event to 200 equivalent pixels and ignored non-finite distances. At the cliff's zoom speed of 1,
+  a single event changes distance by at most a factor of 0.9025 inward or 1.1081 outward, rather than jumping to
+  the limits. Existing orbit, pan, pinch behaviour and near/far distance limits are otherwise unchanged.
+
+`VisualProof/CliffSequence/VerifyCameraZoom.cjs` passed in Chromium 133 / SwiftShader for **both workspaces** at
+pixel ratios **0.5, 0.8, 1, 1.25, 1.5 and 2**. It exercises 120 synthetic pixel/line/page/fractional/oversized wheel
+cases, 12 actual browser-wheel inputs, 12 middle-button drags and repeated movement to both distance limits.
+CDP can rescale injected wheel deltas under pixel-ratio emulation; trusted-input assertions use the actual DOM
+wheel delta received, while identical synthetic CSS-pixel inputs prove invariant behaviour across ratios.
+Browser errors were empty; both WebGL error codes were zero. At ratio 0.8, a 120-pixel wheel event now moves the
+cliff from 75.082 m to 70.600 m inward or 79.849 m outward, each measured from the same framed starting position.
+The material camera similarly moves from 1.297 m to 1.220 m or 1.379 m instead of its 0.02 m / 6 m limits.
+
+Evidence, before-fix readings and runtime source hashes are in **`VisualProof/CliffSequence/ZoomCaptures/`**.
+This fixes the input-induced snap; it does not add camera collision detection or prevent intentionally dollying
+inside a formation after repeated input.
