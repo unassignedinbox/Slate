@@ -691,6 +691,49 @@ test("a placement frame is orthonormal even when the tangent degenerates", () =>
     assert.deepEqual(Frame.Position, [1, 2, 3]);
 });
 
+test("a decal frame stands the artwork up on the screen, not on the mesh", () =>
+{
+    const Cross = (Left, Right) => [
+        Left[1] * Right[2] - Left[2] * Right[1],
+        Left[2] * Right[0] - Left[0] * Right[2],
+        Left[0] * Right[1] - Left[1] * Right[0],
+    ];
+    const Viewer = { Up: [0, 1, 0], Forward: [0, 0, -1] };
+    const Frame = (Normal, Tangent) =>
+    {
+        const Built = StrokeProjection.PlacementFrame({ Position: [0, 0, 0], Normal, Tangent }, Viewer);
+        return { ...Built, Across: Cross(Built.Normal, Built.Tangent) };
+    };
+
+    // Facing the eye: the artwork's across-vector — the direction V grows in — is the screen's up.
+    const Facing = Frame([0, 0, 1], [0, 1, 0]);
+    assert.ok(Facing.Across[1] > 0.999, `up is ${Facing.Across}`);
+    assert.ok(Facing.Tangent[0] > 0.999, `right is ${Facing.Tangent}`);
+
+    // 🔴 The mesh's own tangent must not get a vote. A body of revolution is indexed by 1 - V, so its tangent points
+    //    DOWN over half the model — which is exactly the case that used to land artwork upside down.
+    const Inverted = Frame([0, 0, 1], [0, -1, 0]);
+    assert.ok(Inverted.Across[1] > 0.999, `a downward V turned the artwork over: ${Inverted.Across}`);
+
+    // On a face that points straight at the viewer's up there is no up to lay flat, so the look direction takes over.
+    const Flat = Frame([0, 1, 0], [1, 0, 0]);
+    assert.ok(Flat.Across[2] < -0.999, `a floor should read away from the viewer: ${Flat.Across}`);
+    const Ceiling = Frame([0, -1, 0], [1, 0, 0]);
+    assert.ok(Ceiling.Across[2] > 0.999, `a ceiling should read the other way: ${Ceiling.Across}`);
+
+    // Every frame is still a frame.
+    for (const Built of [Facing, Inverted, Flat, Ceiling])
+    {
+        assert.ok(Math.abs(Math.hypot(...Built.Tangent) - 1) < 1e-6, "tangent is not normalised");
+        const Square = Built.Tangent[0] * Built.Normal[0] + Built.Tangent[1] * Built.Normal[1] + Built.Tangent[2] * Built.Normal[2];
+        assert.ok(Math.abs(Square) < 1e-6, "tangent is not perpendicular to the normal");
+    }
+
+    // With no viewer to ask, the surface's own tangent is still what comes back.
+    const Alone = StrokeProjection.PlacementFrame({ Position: [0, 0, 0], Normal: [0, 0, 1], Tangent: [0, -1, 0] });
+    assert.ok(Alone.Tangent[1] < -0.999, `without a reference the mesh decides: ${Alone.Tangent}`);
+});
+
 test("a click finds the placement it landed on", () =>
 {
     const Decal = CreateLayer("decal", { Decal: { Placement: "project" } }).Decal;
@@ -960,6 +1003,22 @@ test("a material layer carries its finish through the stack and a project round 
     // A project written before finishes existed must still load.
     const Legacy = SanitiseLayer({ Kind: "fill", Name: "Old fill" });
     assert.deepEqual(Legacy.Finish, SanitiseFinish(undefined));
+});
+
+test("the side being painted belongs to the layer, and cannot outlive its mask", () =>
+{
+    const Fresh = CreateLayer("stroke");
+    assert.equal(Fresh.Target, "coverage", "a new layer opens on its own content");
+
+    // A layer saved with its mask in hand comes back the same way.
+    const Masked = SanitiseLayer({ ...Fresh, Target: "mask", Mask: { Kind: "stroke" } });
+    assert.equal(Masked.Target, "mask");
+
+    // 🔴 But only if there is a mask to paint. A record claiming a mask it does not have would put the brush on an
+    //    image that was never allocated, and every stroke after it would go nowhere at all.
+    const Bare = SanitiseLayer({ ...Fresh, Target: "mask" });
+    assert.equal(Bare.Target, "coverage", "a mask target survived a layer with no mask");
+    assert.equal(SanitiseLayer({ ...Fresh, Target: "elsewhere" }).Target, "coverage");
 });
 
 test("a colour mask records a key, a tolerance and the wash it draws in the viewport", () =>

@@ -10,7 +10,7 @@ cd Frontier/Experimental/Texture
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
-npm test           # 119 unit tests, no browser required
+npm test           # 121 unit tests, no browser required
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -113,8 +113,16 @@ Mask group, or by cycling `⇧ M`:
 
 Generator and colour masks have no image behind them, so a pass of their own resolves whichever kind the layer carries
 into a preview target before the viewport samples it: what you see is what the compositor applied, inversion included.
-`M` flips the brush between content and mask while painting and the stack footer always states which one is live. Masks
-are undoable with the rest of the stack, and a removed mask frees its image so the next one starts clean.
+Masks are undoable with the rest of the stack, and a removed mask frees its image so the next one starts clean.
+
+**The side being painted belongs to the layer, not to the brush.** `M` flips between a layer's content and its mask, and
+the layer remembers which one it was left on: step to another layer and back and the same side is in hand, with the same
+tool. The three things that used to be separate switches now move together — going into a mask shows the mask (the
+overlay, unless you were already looking at it another way) and puts a brush in your hand, and coming back out restores
+the view you were in and the tool you were using on the content, so a decal layer hands you the decal tool again rather
+than the brush its mask needed. Moving the *view* moves the side with it, for the same reason: looking at a mask while
+painting the layer underneath it is the oldest way to lose an afternoon. The stack footer and the chips on every layer
+row always state which side is live.
 
 **Content browser.** A drawer across the foot of the viewport — drag its tab, press `B`, or use the grid button in the
 viewport bar; it settles closed, half or full. The library column on the left walks Materials (the four finish families
@@ -126,11 +134,35 @@ inside, the edges put it alongside. A material preset, a decal, a generator, a m
 way. A click only picks an item out so you can read it; <kbd>Enter</kbd> on a focused tile adds it, because a drag cannot
 be typed.
 
-**The card is contextual.** Below the six instrument families the rail carries panes about the layer in hand, and only
-the ones that layer can use: a paint layer gets **Stroke**, **Curves** and **Channels**; a decal layer gets **Artwork**,
-**Ink** and **Channels**; a folder gets none, because painting on a folder opens a layer inside it and that layer is
-what the panes would be about. Aiming the brush at a mask says so in the channel pane rather than offering a choice
-that does not exist.
+**The card is the paint.** `Tab` summons one card and everything on it is a property of the paint in hand — there is no
+library of instruments on it and no row of preset colour chips, because choosing paint and tuning it are different acts
+and a card that tried to be both kept the controls one slide away from the thing they described. The rail is contextual
+to the layer: a paint layer gets **Colour**, **Shape**, **Colour dynamics**, **Grain**, **Taper**, **Stroke**,
+**Stabilization** and **Channels**; a decal layer gets **Colour**, **Artwork**, **Ink**, **Placement** and
+**Channels**; a folder gets none, because painting on a folder opens a layer inside it and that layer is what the panes
+would be about. `Tab` again walks to the next pane and off the end of the rail closes the card.
+
+**Colour** is a picker, not a palette: a saturation-and-brightness square under a hue bar, a hex field that takes a code
+typed straight in, and the last colours mixed. A mask is offered the value ramp instead — a mask holds coverage, not
+hue, so a colour picker there would offer a choice that cannot be expressed. **Shape** is the head: size in centimetres
+of surface, hardness, roundness and the angle a chisel is held at, how many hairs it has and how far they splay, and
+what happens past the rim. **Grain** chooses the medium — plain, bristle, graphite, ink, felt, dry pigment or wax — and
+the paper under it: the tooth in cycles per metre, the streak along the stroke, how dry the head runs and how far one
+load carries. **Taper** is the entry ramp and the two pressure curves. **Stabilization** is how far the mark lags the
+hand. Every one of those numbers is the number the stamping pass runs on, not a percentage translated by an instrument
+nobody can see, and the ribbon at the top of each pane is a real stroke drawn with the same deposition model the GPU
+uses.
+
+**Colour dynamics.** Hue, saturation and brightness, each with a reach the dab may wander inside. The roll happens once
+per dab, on the processor, because one draw call carries one colour and a dab *is* one draw call — so two strokes over
+the same ground never match, which is the point of the control.
+
+**Texture space takes the same tools.** `X` flattens the model to its sheet, and the brush, the eraser, the flood, the
+dropper, the straight line, the gradient and the decal all work there exactly as they do on the model. A point is named
+by a UV coordinate rather than by a ray cast at the model and that is the whole of the difference: a line is still
+walked in screen pixels so its dabs stay evenly spaced at any zoom, a gradient still fades between the two ends of the
+drag — across the sheet this time, lighting the gutter texels the model does not own — and a decal dropped on the sheet
+becomes a placement in UV, draggable with the same press, that crosses no seam because it never leaves the sheet.
 
 **Stroke modes.** *Freehand* is the hand. *Line* is two points: press where it starts, aim, let go — the line is then
 walked across the **screen** and raycast at every step, so it lies on the model instead of cutting through it, and the
@@ -163,6 +195,14 @@ drawn over the viewport rather than in it, so they stay the same size however fa
 target for a finger, and geometry in the scene would shrink out of reach exactly when the decal got small enough to
 need it, and the knob stands off the decal's own top edge rather than the screen's, so it doubles as a reading of
 which way the artwork is standing on the surface. The whole drag is one undo step, not one per pointer move.
+
+![A text decal at rotation zero, before and after](decal-upright.png)
+
+**Upright is zero.** A decal lands in a frame whose up is the *viewer's* up laid flat on the surface, not the surface's
+own V direction. A body of revolution is indexed by `1 - V`, so a frame built from the mesh points downward over half
+the model and artwork dropped at rotation zero arrives turned over — the picture above is the same word, the same
+model, the same rays, with only the frame changed. On a face that points straight at the viewer's up, where there is no
+up left to lay flat, the direction being looked along takes over, which is how you read a sign painted on a floor.
 
 **Decals, in the card.** The artwork pane switches a decal layer between vector and type, picks the drawing out of the
 library or sets the wording in any of the ten faces with weight, size, tracking and outline, and chooses whether the
@@ -424,7 +464,7 @@ green channel is flipped on the way out rather than left for someone to discover
 | Flood / decal / pick | <kbd>4 5 6</kbd> | Mask view: off → overlay → mask | <kbd>⇧ M</kbd> |
 | Brush size | <kbd>[</kbd> <kbd>]</kbd> | Texture space | <kbd>X</kbd> |
 | Show / hide the unwrap | <kbd>W</kbd> | Show / hide the UDIM tiles | <kbd>U</kbd> |
-| Instrument card: tiles → settings → closed | <kbd>Tab</kbd> | Delete the selected layer | <kbd>Del</kbd> / <kbd>⌫</kbd> |
+| Paint card: open → next pane → closed | <kbd>Tab</kbd> | Delete the selected layer | <kbd>Del</kbd> / <kbd>⌫</kbd> |
 | Brush size, live | <kbd>Alt</kbd> + wheel | Frame the surface | <kbd>F</kbd> |
 | Search layers | <kbd>/</kbd> | Content browser | <kbd>B</kbd> |
 | Undo / redo | <kbd>Ctrl Z</kbd> / <kbd>Ctrl ⇧ Z</kbd> | Save `.pigment` / export | <kbd>Ctrl S</kbd> / <kbd>Ctrl E</kbd> |
@@ -452,10 +492,10 @@ painted. With the orbit tool in hand, a left click that never becomes a drag sel
 | `FinishSpecification.js` | Procedural material families, their styles, named controls and the preset shelf. |
 | `LayerSpecification.js` | Layer, mask and decal records; sanitisers; project defaults and validation. |
 | `DecalSpecification.js` | Vector library, font archive, SVG/text rasterisation. |
-| `InstrumentSpecification.js` | The instrument library: six media families, their drawings, settings schema and brush mapping. |
-| `InstrumentPanel.js` | The summoned instrument card: family rail, tiles, settings carousel, ribbon preview. |
+| `InstrumentSpecification.js` | The instrument library: six media families, their drawings, settings schema and brush mapping. The card no longer shows it; it seeds the opening brush. |
+| `InstrumentPanel.js` | The summoned card: the rail of paint properties, the pane frame and the ribbon preview. |
 | `MediaSolver.js` | What each medium does to a mark — bristle lanes, paper tooth, bleed, dust, wax skip — and the uniform packing the stamping pass reads. |
-| `ControlSpecification.js` | The editor's one slider row, mounted by both the inspector and the instrument card. |
+| `ControlSpecification.js` | The editor's one slider row, mounted by both the inspector and the card. |
 | `SurfaceStructure.js` | Built-in surfaces, Wavefront import, tangents, bounds, occlusion, spatial index. |
 | `SceneStructure.js` | Object records, UDIM tiles, and the assembly that folds a scene into one surface. |
 | `OrbitProjection.js` | Damped orbit camera, framing, panning, picking rays. |
