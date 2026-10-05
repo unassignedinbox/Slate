@@ -1,0 +1,1389 @@
+{
+  "Date": "2026-10-05",
+  "Errors": [],
+  "Checks": {
+    "NewSeedChangesMass": true,
+    "NewSeedIsManual": true,
+    "SameSeedReproducesMass": true,
+    "PresetFraming": {
+      "Spire": [
+        0.2892559942552347,
+        0.7992992018341869
+      ],
+      "Needles": [
+        0.46625532643329287,
+        0.7822887199488824
+      ],
+      "WideWall": [
+        0.677903333096226,
+        0.4362688730031765
+      ],
+      "Escarpment": [
+        0.627747335190492,
+        0.5471795763364287
+      ],
+      "Amphitheatre": [
+        0.5916973473844134,
+        0.6228692962844062
+      ]
+    },
+    "NarrowWarningsVisible": true,
+    "DistinctNoiseFamilies": true,
+    "IndependentFractureSeed": true,
+    "FourFracturePatterns": true,
+    "RecipeRoundtrip": true,
+    "MobileNoOverflow": true,
+    "GlError": 0
+  },
+  "Rebuilds": [
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Metrics": {
+        "Stage": 1,
+        "Bodies": 1,
+        "Vertices": 360,
+        "Triangles": 716,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 10.325143688717937,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 2939.723335528047,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Metrics": {
+        "Stage": 1,
+        "Bodies": 1,
+        "Vertices": 340,
+        "Triangles": 676,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 15.15492702619578,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 3498.6738233908895,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Metrics": {
+        "Stage": 1,
+        "Bodies": 1,
+        "Vertices": 360,
+        "Triangles": 716,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 10.325143688717937,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 2939.723335528047,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Metrics": {
+        "Stage": 1,
+        "Bodies": 1,
+        "Vertices": 322,
+        "Triangles": 640,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 10.516049322507481,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 4328.898685956628,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Metrics": {
+        "Stage": 1,
+        "Bodies": 1,
+        "Vertices": 360,
+        "Triangles": 716,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 10.325143688717937,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 2939.723335528047,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Metrics": {
+        "Stage": 1,
+        "Bodies": 1,
+        "Vertices": 1461,
+        "Triangles": 2918,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 5.238107616409922,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 3179.683681863073,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Metrics": {
+        "Stage": 1,
+        "Bodies": 1,
+        "Vertices": 3384,
+        "Triangles": 6764,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 4,
+        "MinimumAngle": 4.936518346751649,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 7376.7003750640815,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Metrics": {
+        "Stage": 1,
+        "Bodies": 1,
+        "Vertices": 559,
+        "Triangles": 1114,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 10.97896304099793,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 14144.03172268849,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Metrics": {
+        "Stage": 1,
+        "Bodies": 1,
+        "Vertices": 370,
+        "Triangles": 736,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 19.62460405955148,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 7763.341807853458,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Metrics": {
+        "Stage": 1,
+        "Bodies": 1,
+        "Vertices": 423,
+        "Triangles": 842,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 13.323178004766142,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 8076.086071952869,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Metrics": {
+        "Stage": 1,
+        "Bodies": 1,
+        "Vertices": 360,
+        "Triangles": 716,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 10.325143688717937,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 2939.723335528047,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Metrics": {
+        "Stage": 1,
+        "Bodies": 1,
+        "Vertices": 324,
+        "Triangles": 644,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 14.09198732164563,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 4800.288088251129,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Metrics": {
+        "Stage": 1,
+        "Bodies": 1,
+        "Vertices": 299,
+        "Triangles": 594,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 12.487882939882338,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 3920.471024771323,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Metrics": {
+        "Stage": 1,
+        "Bodies": 1,
+        "Vertices": 360,
+        "Triangles": 716,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 10.325143688717937,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 2939.723335528047,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        2
+      ],
+      "Reused": [
+        1
+      ],
+      "Metrics": {
+        "Stage": 2,
+        "Bodies": 8,
+        "Vertices": 4790,
+        "Triangles": 9544,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 5.106954132919937,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 2892.3835412368967,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        2
+      ],
+      "Reused": [
+        1
+      ],
+      "Metrics": {
+        "Stage": 2,
+        "Bodies": 8,
+        "Vertices": 4758,
+        "Triangles": 9484,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 5.186477435395805,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 2888.500404377461,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        2
+      ],
+      "Reused": [
+        1
+      ],
+      "Metrics": {
+        "Stage": 2,
+        "Bodies": 8,
+        "Vertices": 4790,
+        "Triangles": 9544,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 5.106954132919937,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 2892.3835412368967,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        2
+      ],
+      "Reused": [
+        1
+      ],
+      "Metrics": {
+        "Stage": 2,
+        "Bodies": 8,
+        "Vertices": 4694,
+        "Triangles": 9344,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 5.350967045927363,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 2896.692951442498,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        2
+      ],
+      "Reused": [
+        1
+      ],
+      "Metrics": {
+        "Stage": 2,
+        "Bodies": 8,
+        "Vertices": 5302,
+        "Triangles": 10564,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 5.830562772826942,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 2872.296116828919,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        2
+      ],
+      "Reused": [
+        1
+      ],
+      "Metrics": {
+        "Stage": 2,
+        "Bodies": 7,
+        "Vertices": 5413,
+        "Triangles": 10786,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 1,
+        "MinimumAngle": 1.0327850924078947,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 2872.9160019716674,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        2
+      ],
+      "Reused": [
+        1
+      ],
+      "Metrics": {
+        "Stage": 2,
+        "Bodies": 8,
+        "Vertices": 4790,
+        "Triangles": 9544,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 5.106954132919937,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 2892.3835412368967,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        3
+      ],
+      "Reused": [
+        1,
+        2
+      ],
+      "Metrics": {
+        "Stage": 3,
+        "Bodies": 54,
+        "Vertices": 10354,
+        "Triangles": 20472,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 5.087724492572477,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 2818.578966701712,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        4
+      ],
+      "Reused": [
+        1,
+        2,
+        3
+      ],
+      "Metrics": {
+        "Stage": 4,
+        "Bodies": 54,
+        "Vertices": 16325,
+        "Triangles": 32414,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 5.001083658373836,
+        "RejectedSpalls": 3,
+        "RejectedCracks": 0,
+        "Volume": 2807.3804832452224,
+        "Spalls": 219,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        5
+      ],
+      "Reused": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "Metrics": {
+        "Stage": 5,
+        "Bodies": 54,
+        "Vertices": 18473,
+        "Triangles": 36710,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 5.001083658373836,
+        "RejectedSpalls": 3,
+        "RejectedCracks": 0,
+        "Volume": 2807.2133898036036,
+        "Spalls": 219,
+        "Cracks": 20
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [],
+      "Reused": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "Metrics": {
+        "Stage": 5,
+        "Bodies": 54,
+        "Vertices": 18473,
+        "Triangles": 36710,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 5.001083658373836,
+        "RejectedSpalls": 3,
+        "RejectedCracks": 0,
+        "Volume": 2807.2133898036036,
+        "Spalls": 219,
+        "Cracks": 20
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Metrics": {
+        "Stage": 1,
+        "Bodies": 1,
+        "Vertices": 1461,
+        "Triangles": 2918,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 5.238107616409922,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 3179.683681863073,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        2,
+        3
+      ],
+      "Reused": [
+        1
+      ],
+      "Metrics": {
+        "Stage": 3,
+        "Bodies": 45,
+        "Vertices": 8048,
+        "Triangles": 15912,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 2,
+        "MinimumAngle": 3.962532775276788,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 3030.1966666206704,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Metrics": {
+        "Stage": 1,
+        "Bodies": 1,
+        "Vertices": 559,
+        "Triangles": 1114,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 10.97896304099793,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 14144.03172268849,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    },
+    {
+      "Error": null,
+      "Executed": [
+        2,
+        3
+      ],
+      "Reused": [
+        1
+      ],
+      "Metrics": {
+        "Stage": 3,
+        "Bodies": 81,
+        "Vertices": 17957,
+        "Triangles": 35590,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 3,
+        "MinimumAngle": 3.199185685369499,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 13738.527650298596,
+        "Spalls": 0,
+        "Cracks": 0
+      }
+    }
+  ],
+  "Captures": [
+    {
+      "Name": "01HeadlandSeed42",
+      "Specification": {
+        "Profile": "Headland",
+        "Seed": 42,
+        "Width": 32,
+        "Height": 18,
+        "Depth": 12,
+        "Relief": 1,
+        "NoiseMode": "Ridged",
+        "Variation": 0.8,
+        "NoiseScale": 2.6,
+        "FractureStyle": "Conjugate",
+        "FractureSeed": 42,
+        "Retreat": 0.48,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "Stage": 1
+    },
+    {
+      "Name": "02HeadlandSeed913",
+      "Specification": {
+        "Profile": "Headland",
+        "Seed": 913,
+        "Width": 32,
+        "Height": 18,
+        "Depth": 12,
+        "Relief": 1,
+        "NoiseMode": "Ridged",
+        "Variation": 0.8,
+        "NoiseScale": 2.6,
+        "FractureStyle": "Conjugate",
+        "FractureSeed": 42,
+        "Retreat": 0.48,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "Stage": 1
+    },
+    {
+      "Name": "03Spire",
+      "Specification": {
+        "Profile": "Spire",
+        "Seed": 42,
+        "Width": 16,
+        "Height": 44,
+        "Depth": 14,
+        "Relief": 0.7,
+        "NoiseMode": "Ridged",
+        "Variation": 0.65,
+        "NoiseScale": 2.2,
+        "FractureStyle": "Conjugate",
+        "FractureSeed": 42,
+        "Retreat": 0.42,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "Stage": 1
+    },
+    {
+      "Name": "04Needles",
+      "Specification": {
+        "Profile": "Needles",
+        "Seed": 42,
+        "Width": 36,
+        "Height": 42,
+        "Depth": 13,
+        "Relief": 1,
+        "NoiseMode": "Ridged",
+        "Variation": 0.75,
+        "NoiseScale": 3.2,
+        "FractureStyle": "Conjugate",
+        "FractureSeed": 42,
+        "Retreat": 0.44,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "Stage": 1
+    },
+    {
+      "Name": "05WideWall",
+      "Specification": {
+        "Profile": "WideWall",
+        "Seed": 42,
+        "Width": 64,
+        "Height": 22,
+        "Depth": 16,
+        "Relief": 0.85,
+        "NoiseMode": "Gradient",
+        "Variation": 0.9,
+        "NoiseScale": 3.4,
+        "FractureStyle": "Conjugate",
+        "FractureSeed": 42,
+        "Retreat": 0.4,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "Stage": 1
+    },
+    {
+      "Name": "06Escarpment",
+      "Specification": {
+        "Profile": "Escarpment",
+        "Seed": 42,
+        "Width": 42,
+        "Height": 22,
+        "Depth": 14,
+        "Relief": 0.85,
+        "NoiseMode": "Gradient",
+        "Variation": 0.7,
+        "NoiseScale": 2.8,
+        "FractureStyle": "Conjugate",
+        "FractureSeed": 42,
+        "Retreat": 0.42,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "Stage": 1
+    },
+    {
+      "Name": "07Amphitheatre",
+      "Specification": {
+        "Profile": "Amphitheatre",
+        "Seed": 42,
+        "Width": 36,
+        "Height": 22,
+        "Depth": 16,
+        "Relief": 1,
+        "NoiseMode": "Cellular",
+        "Variation": 0.7,
+        "NoiseScale": 2.4,
+        "FractureStyle": "Conjugate",
+        "FractureSeed": 42,
+        "Retreat": 0.45,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "Stage": 1
+    },
+    {
+      "Name": "08ConjugateFractures",
+      "Specification": {
+        "Profile": "Headland",
+        "Seed": 42,
+        "Width": 32,
+        "Height": 18,
+        "Depth": 12,
+        "Relief": 1,
+        "NoiseMode": "Ridged",
+        "Variation": 0.8,
+        "NoiseScale": 2.6,
+        "FractureStyle": "Conjugate",
+        "FractureSeed": 42,
+        "Retreat": 0.48,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "Stage": 2
+    },
+    {
+      "Name": "09OrthogonalFractures",
+      "Specification": {
+        "Profile": "Headland",
+        "Seed": 42,
+        "Width": 32,
+        "Height": 18,
+        "Depth": 12,
+        "Relief": 1,
+        "NoiseMode": "Ridged",
+        "Variation": 0.8,
+        "NoiseScale": 2.6,
+        "FractureStyle": "Orthogonal",
+        "FractureSeed": 42,
+        "Retreat": 0.48,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "Stage": 2
+    },
+    {
+      "Name": "10VerticalFractures",
+      "Specification": {
+        "Profile": "Headland",
+        "Seed": 42,
+        "Width": 32,
+        "Height": 18,
+        "Depth": 12,
+        "Relief": 1,
+        "NoiseMode": "Ridged",
+        "Variation": 0.8,
+        "NoiseScale": 2.6,
+        "FractureStyle": "Vertical",
+        "FractureSeed": 42,
+        "Retreat": 0.48,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "Stage": 2
+    },
+    {
+      "Name": "11BeddingFractures",
+      "Specification": {
+        "Profile": "Headland",
+        "Seed": 42,
+        "Width": 32,
+        "Height": 18,
+        "Depth": 12,
+        "Relief": 1,
+        "NoiseMode": "Ridged",
+        "Variation": 0.8,
+        "NoiseScale": 2.6,
+        "FractureStyle": "Bedding",
+        "FractureSeed": 42,
+        "Retreat": 0.48,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "Stage": 2
+    },
+    {
+      "Name": "12BoundedJoints",
+      "Specification": {
+        "Profile": "Headland",
+        "Seed": 42,
+        "Width": 32,
+        "Height": 18,
+        "Depth": 12,
+        "Relief": 1,
+        "NoiseMode": "Ridged",
+        "Variation": 0.8,
+        "NoiseScale": 2.6,
+        "FractureStyle": "Conjugate",
+        "FractureSeed": 42,
+        "Retreat": 0.48,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "Stage": 3
+    },
+    {
+      "Name": "13FinishedHeadland",
+      "Specification": {
+        "Profile": "Headland",
+        "Seed": 42,
+        "Width": 32,
+        "Height": 18,
+        "Depth": 12,
+        "Relief": 1,
+        "NoiseMode": "Ridged",
+        "Variation": 0.8,
+        "NoiseScale": 2.6,
+        "FractureStyle": "Conjugate",
+        "FractureSeed": 42,
+        "Retreat": 0.48,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "Stage": 5
+    },
+    {
+      "Name": "14FinishedRear",
+      "Specification": {
+        "Profile": "Headland",
+        "Seed": 42,
+        "Width": 32,
+        "Height": 18,
+        "Depth": 12,
+        "Relief": 1,
+        "NoiseMode": "Ridged",
+        "Variation": 0.8,
+        "NoiseScale": 2.6,
+        "FractureStyle": "Conjugate",
+        "FractureSeed": 42,
+        "Retreat": 0.48,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "Stage": 5
+    },
+    {
+      "Name": "15FracturedSpire",
+      "Specification": {
+        "Profile": "Spire",
+        "Seed": 42,
+        "Width": 16,
+        "Height": 44,
+        "Depth": 14,
+        "Relief": 0.7,
+        "NoiseMode": "Ridged",
+        "Variation": 0.65,
+        "NoiseScale": 2.2,
+        "FractureStyle": "Conjugate",
+        "FractureSeed": 42,
+        "Retreat": 0.42,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "Stage": 3
+    },
+    {
+      "Name": "16FracturedWideWall",
+      "Specification": {
+        "Profile": "WideWall",
+        "Seed": 42,
+        "Width": 64,
+        "Height": 22,
+        "Depth": 16,
+        "Relief": 0.85,
+        "NoiseMode": "Gradient",
+        "Variation": 0.9,
+        "NoiseScale": 3.4,
+        "FractureStyle": "Conjugate",
+        "FractureSeed": 42,
+        "Retreat": 0.4,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "Stage": 3
+    },
+    {
+      "Name": "17MobileWideWall",
+      "Specification": {
+        "Profile": "WideWall",
+        "Seed": 42,
+        "Width": 64,
+        "Height": 22,
+        "Depth": 16,
+        "Relief": 0.85,
+        "NoiseMode": "Gradient",
+        "Variation": 0.9,
+        "NoiseScale": 3.4,
+        "FractureStyle": "Conjugate",
+        "FractureSeed": 42,
+        "Retreat": 0.4,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "Stage": 3
+    }
+  ],
+  "SourceHashes": {
+    "CliffSpecification.js": "25851f3a9ec6ec27792fc6b09df733ca3bab41cfc5c7f57880c4b056807445be",
+    "FractureSequence.js": "62f1cdec89913ce62602fe7cf334833fa10a3b8b3bd77bae4327e4c8efd43dad",
+    "GenerationQueue.js": "89a2d407eef1920cdebc1de041a0a1d4b71d6537205f860217c6a8438b6ad999",
+    "PolyhedronSolver.js": "5c67f739b74c1361784110e2ef368268a71ff60d93e2f2a21543f0e119ac05a3",
+    "ReliefProjection.js": "c076ea0a0aa28b5d09b819aee915ea40b6bddebd36199d1ee9e7d407bd32a28d",
+    "RuptureSolver.js": "a98ed8ef0f684aead4394cc6368dafc5853adba8e2ab7b44320d13bbae07a242",
+    "TriangleSolver.js": "c3eb7e84c0e996649eecffab018022813fbfa2c8ffde653c94efca40e06a2094",
+    "WorkspacePanel.css": "33fdac700215540f11e66102fca764e6ea81f299fbcc2d2dc03aa75c70ae3f0c",
+    "WorkspacePanel.js": "aff9bfa1885a6e9cdbbf843a5fe0429254e1f12d825dd4817943fa29fbdbefaf",
+    "index.html": "7a6e5dc0efe88efe34527c4ba8ff3377f1ff34f64d90055ffb56f6c1754e4eb8"
+  },
+  "Passed": true
+}

@@ -22,7 +22,7 @@
 <symbol id="FrameIcon" viewBox="0 0 24 24"><path d="M3 9V3h6m6 0h6v6m0 6v6h-6m-6 0H3v-6M8 8h8v8H8z"/></symbol>
 </defs></svg>
 <header class="MenuBar"><span class="Brand">F</span><b>Frontier</b><span class="Divider"></span><span>Project Zero</span><span class="MenuMuted">/</span><span>Cliff formation</span><div class="MenuRight"><span class="Dot"></span> Polygon workspace <span class="BuildLabel">EXPERIMENTAL</span></div></header>
-<div class="DocumentBar"><button class="DocumentTab"><svg><use href="#RockIcon"/></svg>Cliff formation<span>×</span></button><span class="DocumentHint">Procedural geometry / geological profiles</span></div>
+<div class="DocumentBar"><button class="DocumentTab"><svg><use href="#RockIcon"/></svg>Cliff formation<span>×</span></button><span class="DocumentHint">Procedural geology / seeded formations</span></div>
 <main class="Workspace">
 <aside class="Outliner">
 <div class="PanelHeader">Outliner <span>Scene</span></div>
@@ -32,7 +32,7 @@
 <div class="OutlinerEntry"><svg><use href="#SunIcon"/></svg>Studio light<span class="Tile">●</span></div>
 <div class="PanelHeader StageHeader">Construction sequence</div>
 <div id="StageList" class="StageList"></div>
-<div class="ScopeNote"><b>POLYGONS ONLY</b><p>No noise. No displacement.<br>No SDF stage.</p><p>Plain clay, real cavities.<br>Every exported face is a triangle.</p></div>
+<div class="ScopeNote"><b>POLYGONS ONLY</b><p>Seeded geological relief.<br>No SDF stage.</p><p>Plain clay, real cavities.<br>Every exported face is a triangle.</p></div>
 <div class="OutlinerBottom"><div class="PanelHeader">Selection</div><p id="SelectionName">Cliff formation</p><p class="Small" id="SelectionDetail">Double-click a rock to inspect it.</p><button id="Isolate" disabled>Isolate rock</button><button id="ShowAll">Show all</button></div>
 </aside>
 <section class="Viewport" id="Viewport">
@@ -50,7 +50,7 @@
 <div id="ParameterControls"></div>
 <details open><summary>Display</summary><div class="ControlGroup"><label class="FieldLabel" for="LightAngle">Light azimuth <output id="LightValue">−35°</output></label><input id="LightAngle" type="range" min="-160" max="160" step="1" value="-35"><label class="Check"><input id="Shadows" type="checkbox" checked> Cast shadows</label><label class="Check"><input id="Ground" type="checkbox" checked> Ground plane</label><label class="Check"><input id="Explode" type="checkbox"> Explode blocks <span class="Subtle">inspection only</span></label></div></details>
 <details open><summary>Diagnostics</summary><div class="ControlGroup"><div id="Metrics" class="Metrics">Awaiting generated mesh.</div><p class="Small" id="QualityNote"></p></div></details>
-<details><summary>Method & scope</summary><div class="ControlGroup Small"><p>Authored buttress, bay, crown and cross-section profiles establish the silhouette. Seed selects bedding, joint and finite damage plans; it never offsets vertices.</p><p>Kinked joints enter all four exposures and terminate against an interior core. Bedding follows authored step-over surfaces with variable aperture. Local edge spalls cut four- or six-facet cavities while preserving both edge ends. Surface fissures are closed-bottom polygon V-grooves.</p><p>Constrained planar triangulation and bounded topology cleanup. This is a geological modelling tool, not a fracture-mechanics or erosion simulation. SDF erosion is excluded.</p></div></details>
+<details><summary>Method & scope</summary><div class="ControlGroup Small"><p>Landform presets establish cliff proportions. Gradient, ridged and cellular noise vary the crown, bays and cross-sections coherently. Formation and fracture seeds are independent. The same seeds reproduce the same geometry.</p><p>Kinked joints enter all four exposures and terminate against an interior core. Stage 2 offers conjugate fractures, block jointing, steep joints or optional bedding. Non-bedded cuts split selected volumes, rather than drawing rows across the entire cliff. Local edge spalls cut four- or six-facet cavities while preserving both edge ends. Surface fissures are closed-bottom polygon V-grooves.</p><p>Constrained planar triangulation and bounded topology cleanup. This is a geological modelling tool, not a fracture-mechanics or erosion simulation. SDF erosion is excluded.</p></div></details>
 </div><div class="InspectorFooter"><button id="Regenerate" class="Primary">Rebuild through 01</button><div><button id="ExportObj">Export OBJ</button><button id="ExportRecipe">Save recipe</button><button id="ImportRecipe">Load</button></div><input id="RecipeFile" type="file" accept="application/json,.json" hidden></div></aside>
 </main>
 <footer class="StatusBar"><span id="StatusDot" class="Dot"></span><span id="Status">Building geometry</span><span class="ToolbarSpace"></span><span id="TriangleCount">— triangles</span><span class="StatusDivider">|</span><span>Units: metres</span><span class="StatusDivider">|</span><span>Raster · WebGL</span></footer>

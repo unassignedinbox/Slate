@@ -1691,3 +1691,121 @@ axes and two angular axes here, rather than copying a 2D scaling rule.
 
 [RCFormalSource]: https://eprints.gla.ac.uk/343746/1/343746.pdf
 [RCResources]: https://radiance.wiki/
+
+## C033 — Seeded cliff landforms and non-bedded primary fractures
+
+Date: **2026-10-05**. Continues the cliff prototype from C031; the radiance-cascades experiment, earlier raster GI,
+other prototypes and native code are unchanged. The user's new permission to use noise supersedes the earlier
+no-noise restriction. **No SDF stage has been added.**
+
+### Formation controls and workflow
+
+- Stage 1 now owns the **formation seed**. Changing it varies actual crown elevations, promontory projections,
+  station spacing and front/rear relief, rather than merely selecting later fracture/damage catalogues. Repeating
+  the same recipe remains deterministic. `New seed` explicitly avoids returning the immediately previous seed.
+- `ReliefProjection.js` implements layered gradient, ridged-gradient and cellular F2−F1 relief. These fields shape
+  a coarse geological loft, not independent random vertices or a shader displacement texture. The authored profile
+  continues to constrain the landform. Cellular relief is not Voronoi fracture partitioning.
+- Variation strength and horizontal feature frequency are exposed. `None` or zero strength deliberately retains
+  the authored mass; changing the formation seed with variation disabled does not change that mass.
+- Preset selection applies dimensions, relief/retreat and noise settings, while retaining the chosen seeds and
+  downstream fracture/damage parameters. Individual dimensions remain editable afterward.
+
+| Landform preset | Width × height × depth | Noise family |
+|-----------------|------------------------|--------------|
+| Buttressed headland | 32 × 18 × 12 m | Ridged gradient |
+| Stepped escarpment | 42 × 22 × 14 m | Layered gradient |
+| Recessed amphitheatre | 36 × 22 × 16 m | Cellular ridges |
+| Tall solitary spire | 16 × 44 × 14 m | Ridged gradient |
+| Serrated needle ridge | 36 × 42 × 13 m | Ridged gradient |
+| Broad broken escarpment | 64 × 22 × 16 m | Layered gradient |
+
+The dimension limits are now 10–80 m wide, 10–56 m high and 8–24 m deep. Front/rear minimum thickness and an
+orientation-preserving loft check constrain the noise. Tall loft cells choose the better valid diagonal, and tall
+stage-1 masses use the requested triangulation span instead of the coarser overview span. Preset/dimension changes
+reframe the camera with viewport padding; tall spires are no longer cropped by the toolbar.
+
+### Primary fracture patterns
+
+Stage 2 is now **Primary fractures**, with its own **fracture seed** and four choices:
+
+- **Conjugate fractures:** persistent intersecting inclined families, plus a depth-oriented family.
+- **Block-jointed rock:** approximately orthogonal orientation families.
+- **Steep joint set:** predominantly steep fractures, without compulsory horizontal bed rows.
+- **Dipping bedding:** retains the earlier authored, variable-aperture bed-cut method as an explicit option.
+
+`RuptureSolver.js` partitions the largest remaining volume sequentially. Each cut uses six coherent relief knots
+and matching polygon cut surfaces, and terminates at the already established boundaries of its selected fragment.
+Small tip-shaving partitions are rejected. Cut count, family tilt, aperture and roughness remain editable. These
+are geology-inspired construction presets, **not a stress solver or a claim of physically simulated rock failure**.
+
+The approved stage-3 bounded-joint construction is retained. Local spalls and shallow fissures also remain;
+damage avoids faces containing pre-existing planar voids, and a rejected fissure no longer clears those voids.
+
+The initial view still builds **stage 1 only**. Editing is not an automatic full rebuild: select the desired stage
+and press **Rebuild through 0N**. Valid earlier checkpoints are reused; later stages are not calculated. Formation
+seed/noise changes invalidate stage 1 onward; fracture seed/pattern changes invalidate stage 2 onward. Recipes now
+save as version 2. Loading version 1 selects the authored/no-noise mass and bedding, and maps its old seed into the
+independent fracture seed.
+
+### Geometry corrections made during verification
+
+- Rough, non-horizontal cuts exposed planar contours with interior voids. Previously these could be emitted as
+  separately filled faces with reversed boundary winding. `JoinCells` now preserves contour orientation, assigns
+  void loops to their containing outline and shares edge segmentation across both outer and inner boundaries.
+- Microscopic clipped corners exposed a scale problem in SAT-based repair guards: unnormalized edge-cross-normal
+  axes could fall below the axis cutoff, while fixed contact tolerance could exceed the contracted boundary gap.
+  Unit edge directions, coordinate-relative projections and a scale-aware tolerance now retain those axes. The
+  independent BVH/SAT verifier has metre-, 100-micrometre- and 10-micrometre-scale overlap/separation fixtures,
+  including shared-edge neighbours at nonzero world coordinates. This also permits legitimate endpoint cleanup
+  of tiny spire slivers instead of conservatively retaining them. Repair distance remains bounded to 0.12 m per
+  operation, not a claim of 0.12 m cumulative error.
+
+### Executed verification and evidence
+
+The final-source runs passed:
+
+- **23 variation recipes / 62 stage outputs**, covering all six presets, seeds 42/913, all noise families, all four
+  fracture patterns, and tall/wide dimension limits. Both seeds produce different mass meshes for every preset.
+  As a separate control-point measurement, seeds 42→913 move corresponding front/rear loft samples by **3.14 m
+  RMS** for the headland, and 2.73–4.57 m across the six presets; this is not a comparison of remeshed vertex indices.
+- **16 regression recipes / 80 stage outputs**, including the legacy default and prior amphitheatre recipe,
+  strong relief, narrow/deep/wide combinations, dense/no damage and fine fissures. All 142 tested stage outputs
+  had finite triangle coordinates, positive body volumes, zero open/nonmanifold edges or vertices, zero winding
+  errors, zero duplicate triangles and zero zero-area triangles. This does not claim exhaustive coverage of all
+  possible parameter combinations.
+- **34 stage outputs** received the independent BVH/SAT intersection check: all five stages of default, spire,
+  needles, wide wall and headland seed 913; stages 1–3 for orthogonal, steep-joint and bedding alternatives.
+  **Zero self intersections and zero cross-body intersections** were detected in these checks.
+- Checkpoint replay matched one-shot geometry. Every parameter's earliest dependency, future-stage stopping,
+  upstream reuse and late-edit invalidation passed.
+- Two actual Chromium **133.0.6943.0 / SwiftShader** browser runs passed, with **31 screenshots**, empty error lists,
+  GL error zero, runtime source hashes matching the delivered files, and no horizontal overflow at 390 × 844.
+  They exercised preset sizing/framing, real seed variation/replay, all noise/fracture choices, independent fracture
+  seeds, explicit rebuilds, worker reuse/cancellation, late edits, triangle OBJ download, unchanged export under
+  exploded inspection, v2 recipe roundtrip, v1 import, visible angle warnings, failure handling and context loss.
+  These are functional software-renderer checks, not hardware GPU performance claims.
+
+The **new default** is clean at all five stages, including zero triangles below 5°:
+
+| Stage | Closed mesh objects | Vertices | Triangles | Minimum angle |
+|-------|---------------------|----------|-----------|---------------|
+| 1 — mass | 1 | 360 | 716 | 10.325° |
+| 2 — primary fractures | 8 | 4,790 | 9,544 | 5.107° |
+| 3 — bounded joints | 54 | 10,354 | 20,472 | 5.088° |
+| 4 — spalls | 54 | 16,325 | 32,414 | 5.001° |
+| 5 — fissures | 54 | 18,473 | 36,710 | 5.001° |
+
+Final default damage comprises **219 localized spalls and 20 fissures**, with three rejected spalls. Non-default
+recipes are not universally free of narrow angles: the final spire preset retains two triangles below 5°
+(minimum 3.963°), needles three (3.934°), and the wide wall three (3.199°). Other corpus recipes can retain more;
+all counts remain visible in diagnostics and status. The prior authored amphitheatre's single warning is also
+preserved and tested through version-1 import. No threshold was raised to hide these warnings.
+
+Current evidence is in **`VisualProof/CliffSequence/FormationCaptures/`**: 17 preset/fracture screenshots and
+`Presets.json`, 14 workflow screenshots plus `Workflow/Workflow.json`, `Variation.json`, `Geometry.json`,
+`Checkpoints.json`, and the combined `Intersections.json`. The intersection report records each exact specification
+and mesh digest, and the browser reports record source hashes. Full mesh JSON, temporary downloads and browser
+packages remain ignored scratch. C031's `RevisionCaptures` remains historical evidence, not substituted for these
+new runs. Verification entry points are `VerifyVariation.mjs`, `VerifyGeometry.mjs`, `VerifyCheckpoints.mjs`,
+`VerifyIntersections.cjs`, `VerifyPresets.cjs` and `VerifyWorkflow.cjs` under `VisualProof/CliffSequence/`.

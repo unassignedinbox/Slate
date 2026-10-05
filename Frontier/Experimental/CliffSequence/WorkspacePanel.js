@@ -5,12 +5,12 @@
 
 import * as THREE from 'three';
 import {OrbitControls} from '../Ocean/lib/addons/OrbitControls.js';
-import {CliffDefaults, CliffProfiles, ReadSpecification, EarliestStage} from './CliffSpecification.js';
+import {CliffDefaults, CliffProfiles, ReadSpecification, EarliestStage, NoiseModes, FractureStyles, FormationPresets, ReadRecipe} from './CliffSpecification.js';
 
 const Element=Id=>document.getElementById(Id);
 const StageDescriptions=[
-    ['Cliff mass','Buttresses, bays & crown','An all-sided profiled landform. Concave bays and projecting buttresses establish the silhouette before any fractures.'],
-    ['Bedding cuts','Dipping sedimentary beds','Authored stepped flexures and variable-aperture bedding seams. Real polygon cuts; no vertex displacement.'],
+    ['Cliff mass','Buttresses, bays & crown','Seeded, all-sided cliff relief. Choose a landform preset and noise family, or use New seed for a different formation.'],
+    ['Primary fractures','Joint sets, not just bedding','Geological orientation families with rough polygon cuts. New fractures terminate at existing boundaries; bedding is an optional preset.'],
     ['Bounded joints','Finite-depth rock blocks','Kinked joints split front, rear and end exposures, terminating against a retained interior core.'],
     ['Edge spalls','Local fracture cavities','Localized, asymmetric bites with four or six fracture facets. The original edge survives on both sides—not a full-edge bevel.'],
     ['Surface fissures','Shallow polygon incisions','Finite, kinked V-grooves cut into individual rock faces. Closed bottoms, bounded depth; no SDF erosion.']
@@ -31,7 +31,7 @@ const Controls=new OrbitControls(Camera,Renderer.domElement);
 Controls.enableDamping=true;
 Controls.dampingFactor=.12;
 Controls.minDistance=.5;
-Controls.maxDistance=150;
+Controls.maxDistance=450;
 Controls.maxPolarAngle=Math.PI*.49;
 const Hemisphere=new THREE.HemisphereLight('#d7e5fc','#484952',1.25);
 Scene.add(Hemisphere);
@@ -67,7 +67,7 @@ CutMaterial.vertexColors=true;
 const WireMaterial=new THREE.LineBasicMaterial({color:'#111820',transparent:true,opacity:.35});
 const SelectionMaterial=new THREE.LineBasicMaterial({color:'#efb063',transparent:true,opacity:.9,depthTest:true});
 const CutColours={Cliff:'#929aa5',Crown:'#929aa5',Base:'#929aa5',End:'#929aa5',Back:'#929aa5',Bedding:'#8ca49d',
-    Joint:'#8ca49d',Termination:'#8ca49d',Spall:'#e0a570',Crack:'#d07969'};
+    Fracture:'#8ca49d',Joint:'#8ca49d',Termination:'#8ca49d',Spall:'#e0a570',Crack:'#d07969'};
 let SelectionOutline=null;
 let ResizePending=true;
 let RenderRequested=true;
@@ -252,7 +252,7 @@ function FrameView(Body=null, Direction=null)
     const Size=Box.getSize(new THREE.Vector3());
     const Radius=Size.length()*.5;
     const Angle=Math.min(Camera.fov*Math.PI/360,Math.atan(Math.tan(Camera.fov*Math.PI/360)*Camera.aspect));
-    const Distance=Radius/Math.sin(Angle)*(Body?1.10:.93);
+    const Distance=Radius/Math.sin(Angle)*(Body?1.10:1.13);
     const Offset=(Direction||new THREE.Vector3(.47,.25,.88)).clone().normalize();
     Controls.target.copy(Middle);
     Camera.position.copy(Middle).addScaledVector(Offset,Distance);
@@ -283,6 +283,7 @@ function Generate()
     }
     const Revision=++State.Revision;
     const Initial=!State.Result;
+    const Reframe=Initial || ['Profile','Width','Height','Depth'].some(Name=>State.Result.Specification[Name]!==State.Specification[Name]);
     State.Error=null;
     State.Busy=true;
     State.Dirty=true;
@@ -319,7 +320,7 @@ function Generate()
             State.Busy=false;
             Element('Loading').hidden=true;
             ViewStage(State.Stage);
-            if (Initial) FrameView();
+            if (Reframe) FrameView();
             if (!State.Dirty)
             {
                 const Warnings=Message.Result.Stages[State.Stage-1].Metrics.ThinTriangles;
@@ -374,7 +375,7 @@ function ObjText()
     if (!State.Result || State.Dirty) throw new Error('Rebuild the current recipe before exporting.');
     const Stage=State.Result.Stages[State.Stage-1];
     const Lines=[`# Frontier polygon cliff | stage ${State.Stage} | seed ${State.Result.Specification.Seed}`,
-        '# metres; triangles only; untransformed source geometry; no textures, displacement or SDF','s off'];
+        '# metres; triangles only; untransformed source geometry; polygon-only geometry; no textures or SDF','s off'];
     let Offset=1;
     for (const Mesh of Stage.Meshes)
     {
@@ -387,9 +388,13 @@ function ObjText()
 }
 
 const Groups=[
-    ['Cliff mass',true,[['Profile','Landform'],['Width','Width',18,48,.5,'m'],['Height','Height',10,26,.5,'m'],
-        ['Depth','Depth',8,18,.5,'m'],['Relief','Buttress / bay relief',.35,1.3,.05,'×'],['Retreat','Crown retreat',.25,.65,.01,'×']]],
-    ['Bedding cuts',false,[['Seed','Feature seed'],['Beds','Bed count',4,10,1,''],['Dip','Bedding dip',-8,8,.5,'°'],['Aperture','Joint aperture',.035,.18,.005,'m'],['FractureBend','Fracture flexure',0,1.5,.05,'×']]],
+    ['Cliff mass',true,[['Profile','Landform preset · applies size'],['Seed','Formation seed'],
+        ['NoiseMode','Relief noise'],['Variation','Variation strength',0,1,.05,'×'],['NoiseScale','Feature frequency',1,5,.1,'×'],
+        ['Width','Width',10,80,.5,'m'],['Height','Height',10,56,.5,'m'],['Depth','Depth',8,24,.5,'m'],
+        ['Relief','Buttress / bay relief',.35,1.3,.05,'×'],['Retreat','Crown retreat',.25,.65,.01,'×']]],
+    ['Primary fractures',false,[['FractureStyle','Fracture preset'],['FractureSeed','Fracture seed'],
+        ['Beds','Cut / bed count',4,10,1,''],['Dip','Family tilt',-8,8,.5,'°'],['Aperture','Fracture aperture',.035,.18,.005,'m'],
+        ['FractureBend','Fracture roughness',0,1.5,.05,'×']]],
     ['Bounded joints',false,[['JointSpacing','Joint spacing',3,7,.2,'m'],['Penetration','Joint penetration',.55,.9,.01,'×'],['FaceRecess','Face recess scale',0,1.5,.05,'m']]],
     ['Edge spalls',true,[['SpallSize','Spall scale',.25,1.3,.05,'m'],['SpallDensity','Edge occupancy',0,1,.05,'×']]],
     ['Surface fissures',false,[['CrackLength','Maximum length',.5,2.2,.1,'m'],['CrackWidth','Mouth width',.07,.22,.01,'m'],
@@ -398,32 +403,35 @@ const Groups=[
 ];
 function BuildControls()
 {
+    const Choices={Profile:Object.fromEntries(Object.entries(CliffProfiles).map(([Key,Profile])=>[Key,Profile.Label])),NoiseMode:NoiseModes,FractureStyle:FractureStyles};
     Element('ParameterControls').innerHTML=Groups.map(([Title,Open,Fields])=>`<details ${Open?'open':''}><summary>${Title}</summary><div class="ControlGroup">${Fields.map(([Name,Label,Minimum,Maximum,Step,Unit])=>
     {
-        if (Name==='Profile') return `<div class="Property"><label class="FieldLabel" for="Profile">${Label}</label><select id="Profile">${Object.entries(CliffProfiles).map(([Key,Profile])=>`<option value="${Key}">${Profile.Label}</option>`).join('')}</select></div>`;
-        if (Name==='Seed') return `<div class="Property"><label class="FieldLabel" for="Seed">${Label}<span class="Subtle">catalogue selection</span></label><div class="SeedRow"><input type="number" id="Seed" min="0" max="999999" step="1"><button id="NewSeed">New seed</button></div></div>`;
+        if (Choices[Name]) return `<div class="Property"><label class="FieldLabel" for="${Name}">${Label}</label><select id="${Name}">${Object.entries(Choices[Name]).map(([Key,Title])=>`<option value="${Key}">${Title}</option>`).join('')}</select></div>`;
+        if (Name.endsWith('Seed')) return `<div class="Property"><label class="FieldLabel" for="${Name}">${Label}<span class="Subtle">repeatable variation</span></label><div class="SeedRow"><input type="number" id="${Name}" min="0" max="999999" step="1"><button id="New${Name}">New seed</button></div></div>`;
         return `<div class="Property"><label class="FieldLabel" for="${Name}">${Label}<output id="${Name}Value"></output></label><input type="range" id="${Name}" min="${Minimum}" max="${Maximum}" step="${Step}" data-unit="${Unit}"></div>`;
     }).join('')}</div></details>`).join('');
-    for (const [, ,Fields] of Groups)
+    for (const [, ,Fields] of Groups) for (const [Name] of Fields)
     {
-        for (const [Name] of Fields)
+        const Input=Element(Name);
+        Input.value=State.Specification[Name];
+        UpdateRange(Input);
+        Input.addEventListener('input',()=>
         {
-            const Input=Element(Name);
-            Input.value=State.Specification[Name];
-            UpdateRange(Input);
-            Input.addEventListener('input',()=>
+            State.Specification[Name]=Choices[Name]?Input.value:Number(Input.value);
+            if (Name==='Profile')
             {
-                State.Specification[Name]=Name==='Profile'?Input.value:Number(Input.value);
-                UpdateRange(Input);
-                MarkDirty();
-            });
-
-        }
+                Object.assign(State.Specification,FormationPresets[Input.value]);
+                BuildControls();
+            }
+            UpdateRange(Input);
+            MarkDirty();
+        });
     }
-    Element('NewSeed').onclick=()=>
+    for (const Name of ['Seed','FractureSeed']) Element(`New${Name}`).onclick=()=>
     {
-        State.Specification.Seed=crypto.getRandomValues(new Uint32Array(1))[0]%1000000;
-        Element('Seed').value=State.Specification.Seed;
+        const Next=crypto.getRandomValues(new Uint32Array(1))[0]%1000000;
+        State.Specification[Name]=Next===State.Specification[Name]?(Next+1)%1000000:Next;
+        Element(Name).value=State.Specification[Name];
         MarkDirty();
     };
 }
@@ -489,15 +497,14 @@ Element('LightAngle').oninput=Event=>
     Element('LightValue').textContent=`${Event.target.value}°`;
 };
 Element('ExportObj').onclick=()=>Download(`Cliff_${State.Specification.Profile}_${State.Specification.Seed}_Stage${State.Stage}.obj`,ObjText(),'text/plain');
-Element('ExportRecipe').onclick=()=>Download(`Cliff_${State.Specification.Seed}.json`,JSON.stringify({Format:'Frontier.PolygonCliff',Version:1,Specification:State.Specification},null,2),'application/json');
+Element('ExportRecipe').onclick=()=>Download(`Cliff_${State.Specification.Seed}.json`,JSON.stringify({Format:'Frontier.PolygonCliff',Version:2,Specification:State.Specification},null,2),'application/json');
 Element('ImportRecipe').onclick=()=>Element('RecipeFile').click();
 Element('RecipeFile').onchange=async Event=>
 {
     try
     {
         const Recipe=JSON.parse(await Event.target.files[0].text());
-        if (Recipe.Format!=='Frontier.PolygonCliff' || Recipe.Version!==1) throw new Error('Unsupported cliff recipe');
-        State.Specification=ReadSpecification(Recipe.Specification);
+        State.Specification=ReadRecipe(Recipe);
         BuildControls();
         Generate();
     }

@@ -3,35 +3,35 @@
 //============================================================================================================================================
 // 📦 Profiled cliff mass, bedding, finite joints, local spalls and shallow polygon fissures.
 
+import {ConstructRelief} from './ReliefProjection.js';
+import {FractureMass} from './RuptureSolver.js';
 import {CollapseSlivers, FlipCaps, SnapCaps} from './TriangleSolver.js';
-import {CliffProfiles, SectionPlans, RecessPlans, BeddingPlans, JointPlans, SpallPlans, CrackPlans, SelectCatalogue, ReadSpecification, EarliestStage} from './CliffSpecification.js';
+import {RecessPlans, BeddingPlans, JointPlans, SpallPlans, CrackPlans, SelectCatalogue, ReadSpecification, EarliestStage} from './CliffSpecification.js';
 import {Add, Subtract, Scale, Dot, Cross, Length, Normalize, Lerp, Centre, PointKey, EdgeKey, Face, Frame,
     ClipCells, JoinCells, TriangulateFace, TriangulateBody, InsideMesh, MeshMetrics, PointInLoop, LoopClearance} from './PolyhedronSolver.js';
 
 function ConstructMass(Specification)
 {
-    const {Width,Height,Depth,Relief,Retreat,Profile}=Specification;
-    const {Stations,Sections,SectionKinds}=CliffProfiles[Profile];
-    const MinimumProjection=Math.min(...Stations.flatMap(([, ,Projection])=>SectionPlans.flatMap(Plan=>Plan.map(Setback=>Projection*Relief+Setback*Retreat/.48))));
-    const DepthScale=Math.min(1,.88/Math.max(.01,-MinimumProjection));
-    const WidthSections=[1,.97,1.01,.94,.87];
-    const Rows=Stations.map(([X,Crown,Projection],Station)=>Sections.map(([Y],Level)=>
-        [(X-.5)*Width*WidthSections[Level],Y*Crown*Height,(Projection*Relief + SectionPlans[SectionKinds[Station]][Level]*Retreat/.48)*Depth*DepthScale]));
-    const RearRows=Stations.map(([X,Crown],Station)=>Sections.map(([Y],Level)=>
-    {
-        const Opposite=Stations[Stations.length-1-Station];
-        const Setback=SectionPlans[(SectionKinds[Station]+1)%SectionPlans.length][Level];
-        const Front=Rows[Station][Level];
-        const Back=-Depth-Opposite[2]*Relief*Depth*.7-Setback*Depth*Retreat*.75;
-        return [Front[0],Front[1],Math.min(Back,Front[2]-Depth*.24)];
-    }));
+    const {Rows,RearRows,Sections,Stations}=ConstructRelief(Specification);
     const Cells=[];
     for (let Column=0;Column<Rows.length-1;++Column)
     {
         for (let Level=0;Level<Sections.length-1;++Level)
         {
             const CornerIndices=[[Column,Level],[Column+1,Level],[Column+1,Level+1],[Column,Level+1]];
-            for (const Triangle of [[0,1,2],[0,2,3]])
+            const Alternatives=[[[0,1,2],[0,2,3]],[[0,1,3],[1,2,3]]];
+            const Quality=Triangles=>Math.min(...Triangles.flatMap(Triangle=>[Rows,RearRows].map(Grid=>
+            {
+                const Points=Triangle.map(Index=>Grid[CornerIndices[Index][0]][CornerIndices[Index][1]]);
+                const Along=Subtract(Points[1],Points[0]),Across=Subtract(Points[2],Points[0]);
+                if (Along[0]*Across[1]-Along[1]*Across[0]<=1e-5) return -1;
+                const Area=Length(Cross(Along,Across));
+                const Edges=Points.map((Point,Index)=>Length(Subtract(Point,Points[(Index+1)%3])));
+                return Math.min(...Edges.map((Edge,Index)=>Area/(Edge*Edges[(Index+1)%3])));
+            })));
+            // 📝 Tall crowns require the short, well-conditioned loft diagonal rather than a fixed strip direction.
+            if (Specification.NoiseMode!=='None' && Specification.Variation && Quality(Alternatives[1])>Quality(Alternatives[0])) Alternatives.reverse();
+            for (const Triangle of Alternatives[0])
             {
                 const Indices=Triangle.map(Index=>CornerIndices[Index]);
                 const Front=Indices.map(([Column,Level])=>Rows[Column][Level]);
@@ -231,6 +231,7 @@ function CarveSpalls(Body, Specification, Select)
         const [First,Second]=Pair;
         const FirstFace=Original[First.FaceIndex], SecondFace=Original[Second.FaceIndex];
         if (Busy.has(First.FaceIndex) || Busy.has(Second.FaceIndex)) continue;
+        if (FirstFace.Holes.length || SecondFace.Holes.length) continue;
         if (![FirstFace.Tag,SecondFace.Tag].some(Tag=>Tag==='Cliff' || Tag==='Crown')) continue;
         const Cosine=Dot(FirstFace.Normal,SecondFace.Normal);
         if (Cosine>.90 || Cosine<-.7) continue;
@@ -291,7 +292,7 @@ function CarveCracks(Body, Specification, Select)
 {
     if (Body.Rear || !Specification.CrackDensity || Select(100)>=Specification.CrackDensity*100) return Body;
     const Source=TriangulateBody(Body,Infinity);
-    const Faces=Body.Faces.filter(Polygon=>Polygon.Tag==='Cliff');
+    const Faces=Body.Faces.filter(Polygon=>Polygon.Tag==='Cliff' && !Polygon.Holes.length);
     Faces.sort((A,B)=>
     {
         const Area=Polygon=>Length(Polygon.Loop.slice(1,-1).reduce((Sum,Point,Index)=>
@@ -328,6 +329,7 @@ function CarveCracks(Body, Specification, Select)
                 Rim.reverse();
                 RootIndices.reverse();
             }
+            Polygon.CrackOriginalHoles=Polygon.Holes.slice();
             Polygon.Holes.push(Rim.slice().reverse());
             Rim.forEach((A,Index)=>
             {
@@ -364,7 +366,7 @@ function EmitStage(Bodies, Number, Specification, Previous)
         return Metrics.OpenEdges+Metrics.NonmanifoldEdges+Metrics.NonmanifoldVertices+
             Metrics.DuplicateTriangles+Metrics.WindingErrors+Metrics.ZeroArea;
     };
-    const Compile=Body=>SnapCaps(FlipCaps(CollapseSlivers(FlipCaps(TriangulateBody(Body,Number===1 ? Specification.TriangleSpan*3 : Specification.TriangleSpan),.12),.12),.12),.12);
+    const Compile=Body=>SnapCaps(FlipCaps(CollapseSlivers(FlipCaps(TriangulateBody(Body,Specification.TriangleSpan*(Number===1 && Specification.Height<=Specification.Width*.8?3:1)),.12),.12),.12),.12);
     const Meshes=Bodies.map(Body=>
     {
         let Mesh=Compile(Body);
@@ -396,7 +398,7 @@ function EmitStage(Bodies, Number, Specification, Previous)
         }
         if (Number===5 && (Defective(Mesh) || MeshMetrics(Mesh).ThinTriangles>PreviousCount) && Body.Cracks.length)
         {
-            Body.Faces=Body.Faces.filter(Polygon=>Polygon.Tag!=='Crack').map(Polygon=>({...Polygon,Holes:[]}));
+            Body.Faces=Body.Faces.filter(Polygon=>Polygon.Tag!=='Crack').map(Polygon=>({...Polygon,Holes:Polygon.CrackOriginalHoles||Polygon.Holes}));
             Body.RejectedCracks=Body.Cracks.length;
             Body.Cracks=[];
             Mesh=Compile(Body);
@@ -439,7 +441,7 @@ export class CliffSequence
         {
             const Started=performance.now();
             Progress(Number);
-            const Select=SelectCatalogue(Specification.Seed+Number*104729);
+            const Select=SelectCatalogue(Specification.FractureSeed+Number*104729);
             const Previous=this.Construction[Number-2];
             let Content,Bodies;
             if (Number===1)
@@ -449,7 +451,7 @@ export class CliffSequence
             }
             else if (Number===2)
             {
-                Content=SliceBeds(Previous,Specification,Select);
+                Content=Specification.FractureStyle==='Bedding'?SliceBeds(Previous,Specification,Select):FractureMass(Previous,Specification,Select);
                 Bodies=Content.map(Bed=>JoinCells(Bed.Cells,Bed.Name));
             }
             else if (Number===3)

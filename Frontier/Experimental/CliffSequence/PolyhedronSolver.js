@@ -120,14 +120,14 @@ export function ClipCells(Cells, Direction, Offset, Tag)
 
 function SplitEdges(Polygons)
 {
-    const Points = [...new Map(Polygons.flatMap(Polygon => Polygon.Loop.map(Point => [PointKey(Point), Point]))).values()];
-    return Polygons.map(Polygon =>
+    const Points = [...new Map(Polygons.flatMap(Polygon => [Polygon.Loop,...Polygon.Holes].flatMap(Loop=>Loop.map(Point => [PointKey(Point), Point])))).values()];
+    const Split=Contour=>
     {
         const Loop = [];
-        for (let Index = 0; Index < Polygon.Loop.length; ++Index)
+        for (let Index = 0; Index < Contour.length; ++Index)
         {
-            const A = Polygon.Loop[Index];
-            const B = Polygon.Loop[(Index+1)%Polygon.Loop.length];
+            const A = Contour[Index];
+            const B = Contour[(Index+1)%Contour.length];
             const Δ = Subtract(B,A);
             const Squared = Dot(Δ,Δ);
             const OnEdge = [[0,A]];
@@ -140,8 +140,9 @@ function SplitEdges(Polygons)
             OnEdge.sort((First,Second) => First[0]-Second[0]);
             Loop.push(...OnEdge.map(Entry => Entry[1]));
         }
-        return {...Polygon, Loop:CleanLoop(Loop,false)};
-    });
+        return CleanLoop(Loop,false);
+    };
+    return Polygons.map(Polygon=>({...Polygon,Loop:Split(Polygon.Loop),Holes:Polygon.Holes.map(Split)}));
 }
 
 // 📝 Remove construction interfaces before triangulation. Co-planar contours are stitched, not concatenated.
@@ -195,6 +196,7 @@ export function JoinCells(Cells, Name)
                 else Edges.set(Forward,{A,B,Tag:Polygon.Tag,Normal:Polygon.Normal});
             });
         }
+        const Outlines=[],Holes=[];
         while (Edges.size)
         {
             let [Key, Edge] = Edges.entries().next().value;
@@ -218,8 +220,27 @@ export function JoinCells(Cells, Name)
                 [Key, Edge] = Next;
             }
             if (!Closed) throw new Error(`Unclosed construction interface in ${Name}`);
-            if (Loop.length >= 3) Result.push(Face(Loop,Tag,Outward));
+            if (Loop.length >= 3)
+            {
+                if (Dot(Normal(Loop),Outward)<0) Holes.push({Loop,Outward});
+                else Outlines.push(Face(Loop,Tag,Outward));
+            }
         }
+        for (const Hole of Holes)
+        {
+            const Containers=Outlines.filter(Polygon=>
+            {
+                if (Dot(Polygon.Normal,Hole.Outward)<.99) return false;
+                const Basis=Frame(Polygon);
+                return PointInLoop(Basis.Project(Hole.Loop[0]),Polygon.Loop.map(Basis.Project));
+            });
+            if (!Containers.length) throw new Error(`Uncontained planar void in ${Name}`);
+            const Area=Polygon=>Polygon.Loop.slice(1,-1).reduce((Sum,Point,Index)=>
+                Sum+Dot(Cross(Subtract(Point,Polygon.Loop[0]),Subtract(Polygon.Loop[Index+2],Polygon.Loop[0])),Polygon.Normal),0);
+            Containers.sort((First,Second)=>Area(First)-Area(Second));
+            Containers[0].Holes.push(Hole.Loop);
+        }
+        Result.push(...Outlines);
     }
     // 📝 Preserve shared segmentation after coplanar merges; every incident face sees every corner.
     return {Name, Faces:SplitEdges(Result), Spalls:[], Cracks:[]};

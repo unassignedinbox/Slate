@@ -12,7 +12,9 @@ import {InsideMesh, MeshMetrics, Length, Subtract, Dot, Cross} from '../../Front
 const Destination=process.argv[2]||'_AgentScratch/CliffVerification';
 mkdirSync(Destination,{recursive:true});
 const Cases=[
-    ['Default',{}],['Headland17',{Seed:17}],['Headland913',{Seed:913}],
+    ['Default',{}],
+    ['LegacyDefault',{NoiseMode:'None',Variation:0,FractureStyle:'Bedding'}],
+    ['LegacyAmphitheatre',{Profile:'Amphitheatre',NoiseMode:'None',Variation:0,FractureStyle:'Bedding',Beds:5,Dip:-5}],['Headland17',{Seed:17}],['Headland913',{Seed:913}],
     ['Escarpment',{Profile:'Escarpment'}],['Escarpment17',{Profile:'Escarpment',Seed:17}],
     ['Amphitheatre',{Profile:'Amphitheatre'}],['Amphitheatre913',{Profile:'Amphitheatre',Seed:913}],
     ['WideShallow',{Width:48,Height:10,Depth:8,Relief:1.3,Retreat:.65,Beds:10,JointSpacing:3,Penetration:.55}],

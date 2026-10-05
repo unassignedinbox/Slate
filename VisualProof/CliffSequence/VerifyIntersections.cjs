@@ -15,7 +15,11 @@ const Identity=new THREE.Matrix4();
 function Intersects(First,Second)
 {
     const A=[First.a,First.b,First.c],B=[Second.a,Second.b,Second.c];
-    const Edges=Points=>Points.map((Point,Index)=>Points[(Index+1)%3].clone().sub(Point));
+    const RawEdges=Points=>Points.map((Point,Index)=>Points[(Index+1)%3].clone().sub(Point));
+    const MinimumEdge=Math.min(...[...RawEdges(A),...RawEdges(B)].map(Edge=>Edge.length()));
+    const CoordinateScale=Math.max(1,...[...A,...B].flatMap(Point=>Point.toArray().map(Math.abs)));
+    const Tolerance=Math.max(Number.EPSILON*CoordinateScale*8,Math.min(1e-8,MinimumEdge*1e-8));
+    const Edges=Points=>RawEdges(Points).map(Edge=>Edge.normalize());
     const FirstEdges=Edges(A),SecondEdges=Edges(B);
     const FirstNormal=FirstEdges[0].clone().cross(FirstEdges[1]);
     const SecondNormal=SecondEdges[0].clone().cross(SecondEdges[1]);
@@ -26,8 +30,8 @@ function Intersects(First,Second)
         const Magnitude=Axis.length();
         if (Magnitude<1e-12) continue;
         Axis.divideScalar(Magnitude);
-        const First=A.map(Point=>Point.dot(Axis)),Second=B.map(Point=>Point.dot(Axis));
-        if (Math.max(...First)<Math.min(...Second)-1e-8 || Math.max(...Second)<Math.min(...First)-1e-8) return false;
+        const First=A.map(Point=>Point.clone().sub(A[0]).dot(Axis)),Second=B.map(Point=>Point.clone().sub(A[0]).dot(Axis));
+        if (Math.max(...First)<Math.min(...Second)-Tolerance || Math.max(...Second)<Math.min(...First)-Tolerance) return false;
     }
     return true;
 }
@@ -37,7 +41,25 @@ Assert(Intersects(Flat,Fixture([[.5,.5,-1],[.5,.5,1],[1,.5,0]])));
 Assert(!Intersects(Flat,Fixture([[0,0,1],[2,0,1],[0,2,1]])));
 Assert(Intersects(Flat,Fixture([[.3,.3,0],[1,.3,0],[.3,1,0]])));
 Assert(!Intersects(Flat,Fixture([[3,0,0],[5,0,0],[3,2,0]])));
-const Report={Date:'2026-10-05',Method:'Indexed double-precision positions; BVH broad phase and double-precision separating-axis triangle tests (1e-8 m tolerance); All triangle pairs, including coplanar tessellation; shared-vertex pairs contracted toward their centroids by 1e-4 to exclude legitimate boundary contact. Cross-body pairs uncontracted.',Stages:[],Hits:[]};
+// 📝 Tiny clipped corners must not lose their SAT axes or turn legitimate shared-edge contact into overlap.
+for (const Scale of [1,1e-4,1e-5])
+{
+    const Tiny=Points=>Fixture(Points.map(Point=>Point.map(Value=>Value*Scale)));
+    const First=Tiny([[0,0,0],[2,0,0],[0,2,0]]);
+    Assert(Intersects(First,Tiny([[.3,.3,0],[1,.3,0],[.3,1,0]])),'Missed scaled coplanar overlap');
+    Assert(Intersects(First,Tiny([[.5,.5,-1],[.5,.5,1],[1,.5,0]])),'Missed scaled noncoplanar overlap');
+    Assert(!Intersects(First,Tiny([[2.0001,0,0],[4,0,0],[2.0001,2,0]])),'Invented scaled separated overlap');
+    const Neighbours=[Tiny([[0,0,0],[1,0,0],[0,1,0]]),Tiny([[1,0,0],[1,1,0],[0,1,0]])];
+    const Offset=new THREE.Vector3(-4.355,10.0649,-5.215);
+    for (const Triangle of Neighbours)
+    {
+        for (const Point of [Triangle.a,Triangle.b,Triangle.c]) Point.add(Offset);
+        const Middle=Triangle.getMidpoint(new THREE.Vector3());
+        for (const Point of [Triangle.a,Triangle.b,Triangle.c]) Point.lerp(Middle,1e-4);
+    }
+    Assert(!Intersects(...Neighbours),'Invented shared-edge overlap at small scale');
+}
+const Report={Date:'2026-10-05',Method:'Indexed double-precision positions; BVH broad phase and double-precision separating-axis triangle tests with normalized edge directions (tolerance min(1e-8 m, shortest edge * 1e-8), with a coordinate-roundoff floor); All triangle pairs, including coplanar tessellation; shared-vertex pairs contracted toward their centroids by 1e-4 to exclude legitimate boundary contact. Cross-body pairs uncontracted.',Stages:[],Hits:[]};
 for (const Stage of Result.Stages)
 {
     let SelfCandidates=0,BodyCandidates=0,SelfHits=0,BodyHits=0;

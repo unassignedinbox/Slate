@@ -43,7 +43,7 @@ for (const File of Fs.readdirSync('Frontier/Experimental/CliffSequence').filter(
             const Input=document.getElementById(Name);Input.value=Value;
             Input.dispatchEvent(new Event('input',{bubbles:true}));Input.dispatchEvent(new Event('change',{bubbles:true}));
         },{Name,Value});
-        await Page.goto(process.env.CLIFF_URL||'http://127.0.0.1:8080/Frontier/Experimental/CliffSequence/index.html');
+        await Page.goto(process.env.CLIFF_URL||'http://127.0.0.1:8080/Frontier/Experimental/CliffSequence/index.html',{waitUntil:'domcontentloaded',timeout:120000});
         await Ready([1]);
         Assert.equal(await Page.evaluate(()=>CliffApp.State.Result.Stages.length),1);
         await Page.evaluate(()=>{window.FirstWorker=CliffApp.State.Worker;});
@@ -61,7 +61,7 @@ for (const File of Fs.readdirSync('Frontier/Experimental/CliffSequence').filter(
         await Capture('03StageTwoInput');
         await Page.click('#Regenerate');await Ready([2]);
         Assert(await Page.evaluate(()=>CliffApp.State.Worker===FirstWorker));
-        await Page.click('#Front');await Capture('04FlexedBedding');
+        await Page.click('#Front');await Capture('04ConjugateFractures');
         await Edit('FractureBend',1.2);await Page.click('#Regenerate');await Ready([2]);
         await Edit('FractureBend',1);await Page.click('#Regenerate');await Ready([2]);
         for (const Stage of [3,4,5])
@@ -113,7 +113,18 @@ for (const File of Fs.readdirSync('Frontier/Experimental/CliffSequence').filter(
         await Page.evaluate(()=>{CliffApp.ViewStage(5);CliffApp.Generate();});
         await Ready([3,4,5]);await Page.click('#Frame');await Capture('12UserAmphitheatreFinal');
         Report.Checks.UserRecipe=await Page.evaluate(()=>CliffApp.State.Result.Stages[4].Metrics);
+        Fs.writeFileSync(`${Destination}/LegacyRecipe.json`,JSON.stringify({Format:'Frontier.PolygonCliff',Version:1,
+            Specification:{Profile:'Amphitheatre',Beds:5,Dip:-5}}));
+        await Page.click('[data-stage="3"]');
+        const ImportRevision=await Page.evaluate(()=>CliffApp.State.Revision);
+        await Page.setInputFiles('#RecipeFile',`${Destination}/LegacyRecipe.json`);
+        await Page.waitForFunction(Revision=>CliffApp.State.Revision>Revision,ImportRevision);
+        await Ready([1,2,3]);
+        Fs.unlinkSync(`${Destination}/LegacyRecipe.json`);
+        Report.Checks.LegacyRecipe=await Page.evaluate(()=>CliffApp.State.Result.Stages[2].Metrics);
+        Assert.equal(Report.Checks.LegacyRecipe.ThinTriangles,1);
         Assert((await Page.locator('#Status').textContent()).includes('1 narrow-triangle warnings'));
+        await Capture('13LegacyTriangleWarning');
         Report.Checks.NarrowAngleWarningVisible=true;
         await Page.evaluate(()=>
         {
@@ -125,7 +136,7 @@ for (const File of Fs.readdirSync('Frontier/Experimental/CliffSequence').filter(
         Assert(await Page.evaluate(()=>CliffApp.State.Result===null&&CliffApp.BodyGroup.children.length===0&&document.getElementById('ExportObj').disabled));
         Report.Checks.NoFailureFallback=true;
         await Page.evaluate(()=>{window.Worker=OriginalWorker;CliffApp.ViewStage(1);CliffApp.Generate();});await Ready([1]);
-        await Page.setViewportSize({width:390,height:844});await Capture('13Mobile');
+        await Page.setViewportSize({width:390,height:844});await Capture('14Mobile');
         Assert(await Page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
         Report.Checks.MobileNoOverflow=true;
         Report.Checks.GlError=await Page.evaluate(()=>CliffApp.Renderer.getContext().getError());

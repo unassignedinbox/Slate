@@ -33,7 +33,12 @@ function TriangleOverlap(First, Second, Vertices)
         };
         A=Contract(A);B=Contract(B);
     }
-    const Edges=Points=>Points.map((Point,Index)=>Subtract(Points[(Index+1)%3],Point));
+    // 📝 Unit edge directions retain SAT axes at microscopic clipped corners; relative projections avoid cancellation.
+    const RawEdges=Points=>Points.map((Point,Index)=>Subtract(Points[(Index+1)%3],Point));
+    const MinimumEdge=Math.min(...[...RawEdges(A),...RawEdges(B)].map(Length));
+    const CoordinateScale=Math.max(1,...[...A,...B].flat().map(Math.abs));
+    const Tolerance=Math.max(Number.EPSILON*CoordinateScale*8,Math.min(1e-8,MinimumEdge*1e-8));
+    const Edges=Points=>RawEdges(Points).map(Edge=>Edge.map(Component=>Component/Math.max(Length(Edge),1e-30)));
     const FirstEdges=Edges(A), SecondEdges=Edges(B);
     const FirstNormal=Cross(FirstEdges[0],FirstEdges[1]), SecondNormal=Cross(SecondEdges[0],SecondEdges[1]);
     const Axes=[FirstNormal,SecondNormal,...FirstEdges.flatMap(Edge=>SecondEdges.map(Other=>Cross(Edge,Other))),
@@ -42,8 +47,8 @@ function TriangleOverlap(First, Second, Vertices)
     {
         const Magnitude=Length(Axis);
         if (Magnitude<1e-12) continue;
-        const One=A.map(Point=>Dot(Point,Axis)/Magnitude), Two=B.map(Point=>Dot(Point,Axis)/Magnitude);
-        if (Math.max(...One)<Math.min(...Two)-1e-8 || Math.max(...Two)<Math.min(...One)-1e-8) return false;
+        const One=A.map(Point=>Dot(Subtract(Point,A[0]),Axis)/Magnitude), Two=B.map(Point=>Dot(Subtract(Point,A[0]),Axis)/Magnitude);
+        if (Math.max(...One)<Math.min(...Two)-Tolerance || Math.max(...Two)<Math.min(...One)-Tolerance) return false;
     }
     return true;
 }

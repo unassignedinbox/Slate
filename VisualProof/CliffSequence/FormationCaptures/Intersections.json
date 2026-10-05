@@ -1,0 +1,553 @@
+{
+  "Date": "2026-10-05",
+  "SourceHashes": {
+    "CliffSpecification.js": "25851f3a9ec6ec27792fc6b09df733ca3bab41cfc5c7f57880c4b056807445be",
+    "FractureSequence.js": "62f1cdec89913ce62602fe7cf334833fa10a3b8b3bd77bae4327e4c8efd43dad",
+    "GenerationQueue.js": "89a2d407eef1920cdebc1de041a0a1d4b71d6537205f860217c6a8438b6ad999",
+    "PolyhedronSolver.js": "5c67f739b74c1361784110e2ef368268a71ff60d93e2f2a21543f0e119ac05a3",
+    "ReliefProjection.js": "c076ea0a0aa28b5d09b819aee915ea40b6bddebd36199d1ee9e7d407bd32a28d",
+    "RuptureSolver.js": "a98ed8ef0f684aead4394cc6368dafc5853adba8e2ab7b44320d13bbae07a242",
+    "TriangleSolver.js": "c3eb7e84c0e996649eecffab018022813fbfa2c8ffde653c94efca40e06a2094",
+    "WorkspacePanel.css": "33fdac700215540f11e66102fca764e6ea81f299fbcc2d2dc03aa75c70ae3f0c",
+    "WorkspacePanel.js": "aff9bfa1885a6e9cdbbf843a5fe0429254e1f12d825dd4817943fa29fbdbefaf",
+    "index.html": "7a6e5dc0efe88efe34527c4ba8ff3377f1ff34f64d90055ffb56f6c1754e4eb8"
+  },
+  "VerifierHash": "3a0601768cf98c9821f60dcd467ccd8206435f2bca818ae37673e914a4e3fd9d",
+  "Cases": [
+    {
+      "Name": "Default",
+      "Specification": {
+        "Profile": "Headland",
+        "Seed": 42,
+        "Width": 32,
+        "Height": 18,
+        "Depth": 12,
+        "Relief": 1,
+        "NoiseMode": "Ridged",
+        "Variation": 0.8,
+        "NoiseScale": 2.6,
+        "FractureStyle": "Conjugate",
+        "FractureSeed": 42,
+        "Retreat": 0.48,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "MeshDigest": "4fa51dc82032a65652ba0f97339f4449d4f6d8f34023eca9db676e08ce7103ea",
+      "Date": "2026-10-05",
+      "Method": "Indexed double-precision positions; BVH broad phase and double-precision separating-axis triangle tests with normalized edge directions (tolerance min(1e-8 m, shortest edge * 1e-8), with a coordinate-roundoff floor); All triangle pairs, including coplanar tessellation; shared-vertex pairs contracted toward their centroids by 1e-4 to exclude legitimate boundary contact. Cross-body pairs uncontracted.",
+      "Stages": [
+        {
+          "Stage": 1,
+          "SelfCandidates": 23705,
+          "BodyCandidates": 0,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 2,
+          "SelfCandidates": 288335,
+          "BodyCandidates": 141490,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 3,
+          "SelfCandidates": 590587,
+          "BodyCandidates": 322281,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 4,
+          "SelfCandidates": 988554,
+          "BodyCandidates": 416332,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 5,
+          "SelfCandidates": 1142438,
+          "BodyCandidates": 414127,
+          "SelfHits": 0,
+          "BodyHits": 0
+        }
+      ],
+      "Hits": []
+    },
+    {
+      "Name": "Spire42",
+      "Specification": {
+        "Profile": "Spire",
+        "Seed": 42,
+        "Width": 16,
+        "Height": 44,
+        "Depth": 14,
+        "Relief": 0.7,
+        "NoiseMode": "Ridged",
+        "Variation": 0.65,
+        "NoiseScale": 2.2,
+        "FractureStyle": "Conjugate",
+        "FractureSeed": 42,
+        "Retreat": 0.42,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "MeshDigest": "322e4dbfaef29a4f6844b7ee6a6b653bb12cd2f8b2c92fa6c68eed4a002fef09",
+      "Date": "2026-10-05",
+      "Method": "Indexed double-precision positions; BVH broad phase and double-precision separating-axis triangle tests with normalized edge directions (tolerance min(1e-8 m, shortest edge * 1e-8), with a coordinate-roundoff floor); All triangle pairs, including coplanar tessellation; shared-vertex pairs contracted toward their centroids by 1e-4 to exclude legitimate boundary contact. Cross-body pairs uncontracted.",
+      "Stages": [
+        {
+          "Stage": 1,
+          "SelfCandidates": 86187,
+          "BodyCandidates": 0,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 2,
+          "SelfCandidates": 236493,
+          "BodyCandidates": 137189,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 3,
+          "SelfCandidates": 445600,
+          "BodyCandidates": 294256,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 4,
+          "SelfCandidates": 688023,
+          "BodyCandidates": 364526,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 5,
+          "SelfCandidates": 765353,
+          "BodyCandidates": 367559,
+          "SelfHits": 0,
+          "BodyHits": 0
+        }
+      ],
+      "Hits": []
+    },
+    {
+      "Name": "WideWall42",
+      "Specification": {
+        "Profile": "WideWall",
+        "Seed": 42,
+        "Width": 64,
+        "Height": 22,
+        "Depth": 16,
+        "Relief": 0.85,
+        "NoiseMode": "Gradient",
+        "Variation": 0.9,
+        "NoiseScale": 3.4,
+        "FractureStyle": "Conjugate",
+        "FractureSeed": 42,
+        "Retreat": 0.4,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "MeshDigest": "05d31dcede988ea93bd915f37c36c58ddd613f21e6270fe3fe0d0ca3fef4f4ec",
+      "Date": "2026-10-05",
+      "Method": "Indexed double-precision positions; BVH broad phase and double-precision separating-axis triangle tests with normalized edge directions (tolerance min(1e-8 m, shortest edge * 1e-8), with a coordinate-roundoff floor); All triangle pairs, including coplanar tessellation; shared-vertex pairs contracted toward their centroids by 1e-4 to exclude legitimate boundary contact. Cross-body pairs uncontracted.",
+      "Stages": [
+        {
+          "Stage": 1,
+          "SelfCandidates": 31308,
+          "BodyCandidates": 0,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 2,
+          "SelfCandidates": 411049,
+          "BodyCandidates": 185709,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 3,
+          "SelfCandidates": 1017774,
+          "BodyCandidates": 702374,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 4,
+          "SelfCandidates": 1602469,
+          "BodyCandidates": 881477,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 5,
+          "SelfCandidates": 1771274,
+          "BodyCandidates": 884532,
+          "SelfHits": 0,
+          "BodyHits": 0
+        }
+      ],
+      "Hits": []
+    },
+    {
+      "Name": "Needles42",
+      "Specification": {
+        "Profile": "Needles",
+        "Seed": 42,
+        "Width": 36,
+        "Height": 42,
+        "Depth": 13,
+        "Relief": 1,
+        "NoiseMode": "Ridged",
+        "Variation": 0.75,
+        "NoiseScale": 3.2,
+        "FractureStyle": "Conjugate",
+        "FractureSeed": 42,
+        "Retreat": 0.44,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "MeshDigest": "996dabf27d9b4831f0efef34703e9a10149c94f9849f1403acae03bfcc656876",
+      "Date": "2026-10-05",
+      "Method": "Indexed double-precision positions; BVH broad phase and double-precision separating-axis triangle tests with normalized edge directions (tolerance min(1e-8 m, shortest edge * 1e-8), with a coordinate-roundoff floor); All triangle pairs, including coplanar tessellation; shared-vertex pairs contracted toward their centroids by 1e-4 to exclude legitimate boundary contact. Cross-body pairs uncontracted.",
+      "Stages": [
+        {
+          "Stage": 1,
+          "SelfCandidates": 202404,
+          "BodyCandidates": 0,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 2,
+          "SelfCandidates": 437009,
+          "BodyCandidates": 202650,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 3,
+          "SelfCandidates": 866468,
+          "BodyCandidates": 491479,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 4,
+          "SelfCandidates": 1303164,
+          "BodyCandidates": 600688,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 5,
+          "SelfCandidates": 1460105,
+          "BodyCandidates": 603415,
+          "SelfHits": 0,
+          "BodyHits": 0
+        }
+      ],
+      "Hits": []
+    },
+    {
+      "Name": "Orthogonal",
+      "Specification": {
+        "Profile": "Headland",
+        "Seed": 42,
+        "Width": 32,
+        "Height": 18,
+        "Depth": 12,
+        "Relief": 1,
+        "NoiseMode": "Ridged",
+        "Variation": 0.8,
+        "NoiseScale": 2.6,
+        "FractureStyle": "Orthogonal",
+        "FractureSeed": 42,
+        "Retreat": 0.48,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "MeshDigest": "f8a2f3c77d5e3521b47e079ac9e1786609442a635ab9feaf1dda31bf592b5e9a",
+      "Date": "2026-10-05",
+      "Method": "Indexed double-precision positions; BVH broad phase and double-precision separating-axis triangle tests with normalized edge directions (tolerance min(1e-8 m, shortest edge * 1e-8), with a coordinate-roundoff floor); All triangle pairs, including coplanar tessellation; shared-vertex pairs contracted toward their centroids by 1e-4 to exclude legitimate boundary contact. Cross-body pairs uncontracted.",
+      "Stages": [
+        {
+          "Stage": 1,
+          "SelfCandidates": 23705,
+          "BodyCandidates": 0,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 2,
+          "SelfCandidates": 285706,
+          "BodyCandidates": 121436,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 3,
+          "SelfCandidates": 603978,
+          "BodyCandidates": 279793,
+          "SelfHits": 0,
+          "BodyHits": 0
+        }
+      ],
+      "Hits": []
+    },
+    {
+      "Name": "Vertical",
+      "Specification": {
+        "Profile": "Headland",
+        "Seed": 42,
+        "Width": 32,
+        "Height": 18,
+        "Depth": 12,
+        "Relief": 1,
+        "NoiseMode": "Ridged",
+        "Variation": 0.8,
+        "NoiseScale": 2.6,
+        "FractureStyle": "Vertical",
+        "FractureSeed": 42,
+        "Retreat": 0.48,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "MeshDigest": "4b979776f983c21de3ceee22fb7938dbf4f46e3116e39005a80ab8141bbbb188",
+      "Date": "2026-10-05",
+      "Method": "Indexed double-precision positions; BVH broad phase and double-precision separating-axis triangle tests with normalized edge directions (tolerance min(1e-8 m, shortest edge * 1e-8), with a coordinate-roundoff floor); All triangle pairs, including coplanar tessellation; shared-vertex pairs contracted toward their centroids by 1e-4 to exclude legitimate boundary contact. Cross-body pairs uncontracted.",
+      "Stages": [
+        {
+          "Stage": 1,
+          "SelfCandidates": 23705,
+          "BodyCandidates": 0,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 2,
+          "SelfCandidates": 333691,
+          "BodyCandidates": 167442,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 3,
+          "SelfCandidates": 610018,
+          "BodyCandidates": 333835,
+          "SelfHits": 0,
+          "BodyHits": 0
+        }
+      ],
+      "Hits": []
+    },
+    {
+      "Name": "Bedding",
+      "Specification": {
+        "Profile": "Headland",
+        "Seed": 42,
+        "Width": 32,
+        "Height": 18,
+        "Depth": 12,
+        "Relief": 1,
+        "NoiseMode": "Ridged",
+        "Variation": 0.8,
+        "NoiseScale": 2.6,
+        "FractureStyle": "Bedding",
+        "FractureSeed": 42,
+        "Retreat": 0.48,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "MeshDigest": "1ca4ecaa03db34e0d5230857081509a121cdeb20d3a769595612769a9152ba5b",
+      "Date": "2026-10-05",
+      "Method": "Indexed double-precision positions; BVH broad phase and double-precision separating-axis triangle tests with normalized edge directions (tolerance min(1e-8 m, shortest edge * 1e-8), with a coordinate-roundoff floor); All triangle pairs, including coplanar tessellation; shared-vertex pairs contracted toward their centroids by 1e-4 to exclude legitimate boundary contact. Cross-body pairs uncontracted.",
+      "Stages": [
+        {
+          "Stage": 1,
+          "SelfCandidates": 23705,
+          "BodyCandidates": 0,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 2,
+          "SelfCandidates": 328306,
+          "BodyCandidates": 136299,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 3,
+          "SelfCandidates": 810608,
+          "BodyCandidates": 371315,
+          "SelfHits": 0,
+          "BodyHits": 0
+        }
+      ],
+      "Hits": []
+    },
+    {
+      "Name": "Seed913",
+      "Specification": {
+        "Profile": "Headland",
+        "Seed": 913,
+        "Width": 32,
+        "Height": 18,
+        "Depth": 12,
+        "Relief": 1,
+        "NoiseMode": "Ridged",
+        "Variation": 0.8,
+        "NoiseScale": 2.6,
+        "FractureStyle": "Conjugate",
+        "FractureSeed": 42,
+        "Retreat": 0.48,
+        "Beds": 7,
+        "Dip": 4,
+        "Aperture": 0.07,
+        "FractureBend": 1,
+        "JointSpacing": 4.6,
+        "Penetration": 0.78,
+        "FaceRecess": 0.65,
+        "SpallSize": 0.8,
+        "SpallDensity": 0.8,
+        "CrackLength": 1.4,
+        "CrackWidth": 0.12,
+        "CrackDepth": 0.18,
+        "CrackDensity": 0.55,
+        "TriangleSpan": 1.4
+      },
+      "MeshDigest": "61e6e01549e6d45c69061e868271a8708d0c7d1dd274b22176a50b1dacc74a26",
+      "Date": "2026-10-05",
+      "Method": "Indexed double-precision positions; BVH broad phase and double-precision separating-axis triangle tests with normalized edge directions (tolerance min(1e-8 m, shortest edge * 1e-8), with a coordinate-roundoff floor); All triangle pairs, including coplanar tessellation; shared-vertex pairs contracted toward their centroids by 1e-4 to exclude legitimate boundary contact. Cross-body pairs uncontracted.",
+      "Stages": [
+        {
+          "Stage": 1,
+          "SelfCandidates": 20663,
+          "BodyCandidates": 0,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 2,
+          "SelfCandidates": 252927,
+          "BodyCandidates": 137172,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 3,
+          "SelfCandidates": 543763,
+          "BodyCandidates": 332667,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 4,
+          "SelfCandidates": 859375,
+          "BodyCandidates": 414147,
+          "SelfHits": 0,
+          "BodyHits": 0
+        },
+        {
+          "Stage": 5,
+          "SelfCandidates": 999617,
+          "BodyCandidates": 412986,
+          "SelfHits": 0,
+          "BodyHits": 0
+        }
+      ],
+      "Hits": []
+    }
+  ],
+  "Passed": true
+}
