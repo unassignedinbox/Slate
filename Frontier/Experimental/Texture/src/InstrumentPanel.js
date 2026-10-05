@@ -84,6 +84,12 @@ export class InstrumentPanel
         this.ReadLevel = Options.ReadLevel || (() => 1);
         this.OnLevel = Options.OnLevel || (() => {});
 
+        // 📝 The card is the only surface the hand is already on when a stroke is being set up, so the host hangs its
+        //    own panes off the same rail — what they are depends on the layer in hand, and the card does not care.
+        //    Each entry is { Key, Label, Tone, Tally, Title, Note, Render() }, and Render hands back an element.
+        this.Sections = Options.Sections || (() => []);
+        this.Section = "";
+
         this.Family = InstrumentFamilies[0];
         this.Active = this.Family.Types[0];
         this.OnProperties = false;
@@ -126,6 +132,12 @@ export class InstrumentPanel
     get Settings()
     {
         return this.Store.get(this.Active.Key);
+    }
+
+    // The host pane the rail is pointing at, or nothing when the rail is on an instrument family.
+    get Standing()
+    {
+        return this.Sections().find((Entry) => Entry.Key === this.Section) || null;
     }
 
     get Swatch()
@@ -204,9 +216,23 @@ export class InstrumentPanel
             </button>`,
         ).join("");
 
+        const Panes = this.Sections();
+        const Extra = Panes.length
+            ? `<div class="rail-split">For this layer</div>${Panes.map(
+                  (Entry) => `
+            <button class="rail-item ${Entry.Key === this.Section ? "active" : ""}" data-section="${Entry.Key}">
+                <span class="rail-dot" style="background:${Entry.Tone || "#8a8a8a"}"></span>
+                <span>${Escape(Entry.Label)}</span>
+                ${Entry.Tally === undefined ? "" : `<span class="rail-tally">${Escape(String(Entry.Tally))}</span>`}
+            </button>`,
+              ).join("")}`
+            : "";
+
         for (const Rail of this.Root.querySelectorAll("[data-rail], [data-rail-echo]"))
         {
-            Rail.innerHTML = Markup;
+            Rail.innerHTML = Markup + Extra;
+            for (const Button of Rail.querySelectorAll("[data-section]"))
+                Button.addEventListener("click", () => this.ShowSection(Button.dataset.section));
             for (const Button of Rail.querySelectorAll("[data-family]"))
             {
                 Button.addEventListener("click", () =>
@@ -214,6 +240,7 @@ export class InstrumentPanel
                     const Family = InstrumentFamilies.find((Entry) => Entry.Key === Button.dataset.family);
                     if (!Family) return;
                     this.Family = Family;
+                    this.Section = "";
                     this.RenderRail();
                     this.RenderTiles(true);
                     this.ShowTiles();
@@ -225,6 +252,17 @@ export class InstrumentPanel
     RenderTiles(Animate)
     {
         const Tiles = this.Root.querySelector("[data-tiles]");
+        const Standing = this.Standing;
+        if (Standing)
+        {
+            Tiles.innerHTML = "";
+            Tiles.className = `tool-sheet ${Animate ? "rising" : ""}`;
+            Tiles.append(Standing.Render());
+            this.Root.querySelector("[data-family-title]").textContent = Standing.Title || Standing.Label;
+            this.Root.querySelector("[data-family-sub]").textContent = Standing.Note || "";
+            return;
+        }
+        Tiles.className = "tool-tiles";
         const Family = this.Family;
         Tiles.innerHTML = Family.Types.map(
             (Type) => `
@@ -719,6 +757,23 @@ export class InstrumentPanel
         this.OnProperties = false;
     }
 
+    // Point the rail at one of the host's panes. An unknown key falls back to the instruments rather than blanking.
+    ShowSection(Key)
+    {
+        this.Section = this.Sections().some((Entry) => Entry.Key === Key) ? Key : "";
+        this.RenderRail();
+        this.RenderTiles(true);
+        this.ShowTiles();
+    }
+
+    // The layer in hand changed under the card: rebuild the rail, and leave a pane that no longer applies.
+    Refresh()
+    {
+        if (this.Section && !this.Standing) this.Section = "";
+        this.RenderRail();
+        if (!this.OnProperties) this.RenderTiles(false);
+    }
+
     ShowSettings()
     {
         this.RenderSettings();
@@ -732,6 +787,12 @@ export class InstrumentPanel
         if (!this.Open)
         {
             this.Show();
+            return;
+        }
+        // A host pane has no second slide of its own, so Tab leaves from it.
+        if (this.Section)
+        {
+            this.Hide();
             return;
         }
         if (!this.OnProperties)
@@ -794,7 +855,8 @@ export class InstrumentPanel
         window.addEventListener("keydown", (Event) =>
         {
             if (Event.key !== "Escape" || !this.Open) return;
-            if (this.OnProperties) this.ShowTiles();
+            if (this.Section) this.ShowSection("");
+            else if (this.OnProperties) this.ShowTiles();
             else this.Hide();
             Event.preventDefault();
         });

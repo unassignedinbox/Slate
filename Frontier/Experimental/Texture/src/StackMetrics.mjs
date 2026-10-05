@@ -100,6 +100,28 @@ import {
     FinishLabel,
 } from "./FinishSpecification.js";
 import {
+    StrokeModes,
+    GradientShapes,
+    LineSnaps,
+    LineSamples,
+    LineSampleLimit,
+    SnapLine,
+    CurvePresets,
+    DefaultCurve,
+    SortCurve,
+    EvaluateCurve,
+    CurveTable,
+    CurveIsPlain,
+    CurveLimit,
+    PlaceCurvePoint,
+    LiftCurvePoint,
+    WriteSlots,
+    WriteKeys,
+    DefaultWrites,
+    WriteOrdering,
+    WritesSummary,
+} from "./StrokeSpecification.js";
+import {
     CreateLayer,
     CloneLayer,
     ExpandMaterial,
@@ -412,6 +434,104 @@ test("a folder weighs what is inside it, and isolation leaves the rest out", () 
 
     // An isolated layer that is not in the stack at all cannot blank the composite.
     assert.deepEqual(Named(CompositeOrdering(Stack, "gone")), ["ground", "paint", "detail"]);
+});
+
+test("a straight line is aimed in screen space, and the angle can be held", () =>
+{
+    assert.deepEqual(StrokeModes.map((Mode) => Mode.Identifier), ["freehand", "line", "gradient"]);
+    assert.deepEqual(GradientShapes.map((Shape) => Shape.Identifier), ["linear", "radial"]);
+    assert.ok(LineSnaps.includes(0), "there is no free angle");
+
+    // Samples run end to end, both ends included, at roughly the step asked for.
+    const Walk = LineSamples([0, 0], [40, 0], 4);
+    assert.equal(Walk.length, 11);
+    assert.deepEqual(Walk[0], [0, 0]);
+    assert.deepEqual(Walk[Walk.length - 1], [40, 0]);
+    assert.equal(LineSamples([0, 0], [0, 0], 4).length, 2, "a line of no length still has its ends");
+    assert.ok(LineSamples([0, 0], [1e6, 0], 1).length <= LineSampleLimit + 1, "a long drag asked for every pixel");
+
+    // Snapping holds the ANGLE and keeps the length the hand asked for.
+    const Flat = SnapLine([0, 0], [100, 9], 90);
+    assert.ok(Math.abs(Flat[1]) < 1e-9, `${Flat[1]}`);
+    assert.ok(Math.abs(Math.hypot(Flat[0], Flat[1]) - Math.hypot(100, 9)) < 1e-9, "the snap changed the length");
+    assert.deepEqual(SnapLine([0, 0], [100, 9], 0), [100, 9], "a free line was snapped anyway");
+    const Diagonal = SnapLine([0, 0], [100, 80], 45);
+    assert.ok(Math.abs(Diagonal[0] - Diagonal[1]) < 1e-9, "45° did not come out at 45°");
+});
+
+test("a pressure curve stays inside its box and never turns back on itself", () =>
+{
+    // The ends are pinned, the order is fixed, and two points on one x are nudged apart.
+    const Mess = SortCurve([[0.6, 0.4], [0.2, 2], [0.2, -1]]);
+    assert.equal(Mess[0][0], 0, "the curve has no answer for no pressure");
+    assert.equal(Mess[Mess.length - 1][0], 1, "the curve has no answer for full pressure");
+    assert.ok(Mess.every(([Across, Up]) => Across >= 0 && Across <= 1 && Up >= 0 && Up <= 1), "a point left the box");
+    for (let Index = 1; Index < Mess.length; Index += 1) assert.ok(Mess[Index][0] > Mess[Index - 1][0], "two points share an x");
+
+    for (const Preset of CurvePresets)
+    {
+        const Table = CurveTable(Preset.Points, 48);
+        assert.ok(Table.every((Value) => Value >= 0 && Value <= 1), `${Preset.Identifier} left the box`);
+        const Rising = Preset.Identifier !== "steady";
+        if (Rising)
+            Table.forEach((Value, Index) =>
+            {
+                if (Index) assert.ok(Value >= Table[Index - 1] - 1e-9, `${Preset.Identifier} turned back on itself`);
+            });
+    }
+
+    // Monotone cubic, not Catmull-Rom: a flat shoulder must not bulge above the points that made it.
+    const Shoulder = [[0, 0], [0.45, 0.95], [0.55, 0.95], [1, 1]];
+    assert.ok(Math.max(...CurveTable(Shoulder, 64)) <= 1 + 1e-9, "the curve overshot its own points");
+
+    assert.equal(EvaluateCurve(DefaultCurve("linear"), 0.5), 0.5);
+    assert.equal(EvaluateCurve(DefaultCurve("steady"), 0), 1, "a steady curve should ignore pressure");
+    assert.ok(CurveIsPlain(DefaultCurve("linear")), "the curve that does nothing was not recognised");
+    assert.ok(!CurveIsPlain(DefaultCurve("soft")));
+    assert.equal(EvaluateCurve(DefaultCurve("linear"), -5), 0, "a reading below zero escaped");
+    assert.equal(EvaluateCurve(DefaultCurve("linear"), 5), 1, "a reading above one escaped");
+
+    // Points come and go, but never the two that hold the ends.
+    const Placed = PlaceCurvePoint(DefaultCurve("linear"), 0.5, 0.2);
+    assert.equal(Placed.length, 3);
+    assert.equal(LiftCurvePoint(Placed, 1).length, 2);
+    assert.equal(LiftCurvePoint(Placed, 0).length, 3, "the first point was lifted");
+    assert.equal(LiftCurvePoint(Placed, 2).length, 3, "the last point was lifted");
+    let Crowded = DefaultCurve("linear");
+    for (let Which = 0; Which < CurveLimit + 4; Which += 1) Crowded = PlaceCurvePoint(Crowded, (Which + 1) / 20, 0.5);
+    assert.ok(Crowded.length <= CurveLimit, `${Crowded.length} points`);
+});
+
+test("the channels a stroke may write become one colour mask per image", () =>
+{
+    assert.equal(WriteSlots.length, 4, "coverage and the three painted images");
+    assert.equal(WriteKeys.length, 11, "eleven channels a stroke can be aimed at");
+
+    const Everything = WriteOrdering(DefaultWrites());
+    assert.ok(Everything.Full, "the default is not the single draw it should be");
+    assert.ok(Everything.Slots.every((Slot) => Slot.Mask.length === 4 && Slot.Mask.every(Boolean)));
+    assert.equal(WritesSummary(DefaultWrites()), "Every channel");
+
+    // Base colour spreads over three components; the layer's own cover is the fourth and is never masked off.
+    const Quiet = WriteOrdering({ ...DefaultWrites(), base_color: false });
+    assert.deepEqual(Quiet.Slots[0].Mask, [false, false, false, true], "the layer's cover was masked off with the colour");
+    assert.ok(!Quiet.Full);
+
+    const Rough = WriteOrdering({ ...DefaultWrites(), specular_roughness: false, height: false });
+    assert.deepEqual(Rough.Slots[1].Mask, [false, true, true, false]);
+    assert.deepEqual(Rough.Slots[2].Mask, [true, true, true, true], "a different image was masked");
+
+    // Emission spreads over three as well, and transmission sits beside it.
+    const Dark = WriteOrdering({ ...DefaultWrites(), emission_color: false });
+    assert.deepEqual(Dark.Slots[3].Mask, [false, false, false, true]);
+
+    const Nothing = WriteOrdering(Object.fromEntries(WriteKeys.map((Key) => [Key, false])));
+    assert.deepEqual(Nothing.Slots[1].Mask, [false, false, false, false], "an image with nothing on is still drawn");
+    assert.equal(WritesSummary(Object.fromEntries(WriteKeys.map((Key) => [Key, false]))), "Cover only");
+    assert.ok(WritesSummary({ ...DefaultWrites(), height: false }).includes("of 11"));
+
+    // An unknown key cannot turn anything off.
+    assert.ok(WriteOrdering({ nonsense: false }).Full);
 });
 
 test("only the left button paints, and every other button drives the camera", () =>

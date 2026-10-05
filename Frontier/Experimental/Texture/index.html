@@ -107,6 +107,11 @@
                     <div class="viewport" id="viewport">
                         <canvas id="surface-canvas" aria-label="Interactive painted surface viewport"></canvas>
                         <div class="brush-ghost" id="brush-ghost" hidden aria-hidden="true"></div>
+                        <svg class="stroke-rubber" id="stroke-rubber" hidden aria-hidden="true">
+                            <line x1="0" y1="0" x2="0" y2="0" />
+                            <circle class="rubber-end" cx="0" cy="0" r="4" />
+                            <circle class="rubber-end" cx="0" cy="0" r="4" />
+                        </svg>
                         <div class="uv-overlay" id="uv-overlay" hidden aria-hidden="true">
                             <div class="uv-plane" id="uv-plane">
                                 <canvas class="uv-wire" id="uv-wire" aria-hidden="true"></canvas>
@@ -125,7 +130,8 @@
                         <div class="viewport-caption">
                             <span class="live-pill" id="live-pill"><i></i><span>OPENPBR</span></span><span id="viewport-object">Base fill</span
                             ><small id="viewport-subtitle">Brush → coverage</small
-                            ><small class="viewport-hover" id="viewport-hover"></small>
+                            ><small class="viewport-hover" id="viewport-hover"></small
+                            ><span class="stroke-chip" id="stroke-mode-chip" hidden></span>
                         </div>
                         <div class="viewport-tools" aria-label="Viewport tools">
                             <button class="icon-button" data-tool="orbit" title="Orbit camera · 1" aria-label="Orbit camera" data-icon="orbit"></button
@@ -306,7 +312,7 @@
                 ><span>Undo / redo<kbd>Ctrl Z / Ctrl ⇧ Z</kbd></span><span>Save project<kbd>Ctrl S</kbd></span><span>Export set<kbd>Ctrl E</kbd></span
                 ><span>Search layers<kbd>/</kbd></span><span>Orbit the camera<kbd>Right-drag</kbd></span
                 ><span>Pan the camera<kbd>Middle-drag</kbd></span><span>Isolate the layer<kbd>I</kbd></span
-                ><span>Group into a folder<kbd>Ctrl G</kbd></span>
+                ><span>Group into a folder<kbd>Ctrl G</kbd></span><span>Add content<kbd>Drag it from the browser</kbd></span>
             </div>
             <div class="help-note">
                 The left button is the only one that paints, so the tool in the toolbar is always the tool in hand. The right

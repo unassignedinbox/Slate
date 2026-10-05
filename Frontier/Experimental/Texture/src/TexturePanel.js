@@ -9,6 +9,28 @@
 import { ShadingIntegrator, ProbeAcceleration, DeviceReport } from "./ShadingIntegrator.js";
 import { OrbitProjection } from "./OrbitProjection.js";
 import { StrokeProjection, ToolOrdering, SymmetryOrdering, SectorLimits, MarkUnderPoint, PointerIntent } from "./StrokeProjection.js";
+import {
+    StrokeModes,
+    GradientShapes,
+    GradientEasings,
+    GradientDefaults,
+    LineSnaps,
+    LineSamples,
+    SnapLine,
+    CurvePresets,
+    DefaultCurve,
+    DefaultCurves,
+    SortCurve,
+    EvaluateCurve,
+    CurveTable,
+    CurveIsPlain,
+    PlaceCurvePoint,
+    LiftCurvePoint,
+    WriteSlots,
+    WriteKeys,
+    DefaultWrites,
+    WritesSummary,
+} from "./StrokeSpecification.js";
 import { BuildSurface, SurfaceIndex, BakeOcclusion, ParseWavefront } from "./SurfaceStructure.js";
 import {
     AssembleScene,
@@ -24,7 +46,7 @@ import {
 import { InstrumentPanel } from "./InstrumentPanel.js";
 import { MediaSummary } from "./MediaSolver.js";
 // 🔴 The slider lives in ControlSpecification so the instrument card can mount the same one. See the note there.
-import { SliderRow } from "./ControlSpecification.js";
+import { SliderRow, SyncSlider } from "./ControlSpecification.js";
 import { RevisionQueue } from "./RevisionQueue.js";
 import { DocumentSequence } from "./DocumentSequence.js";
 import { EmitTextureSet, EmitProject, ReadDocument, DocumentExtension, ExportSizes } from "./ExportSequence.js";
@@ -378,6 +400,15 @@ export class TexturePanel
         this.HoverTile = FirstTile;
         this.HoverObject = "";
         this.Solo = "";
+        // How the next stroke goes down, and what it answers to on the way. All three live on the panel rather than on
+        // the brush: they are how the hand is being used, not what is in it, and they outlast swapping instruments.
+        this.StrokeMode = "freehand";
+        this.LineSnap = 0;
+        this.Gradient = { ...GradientDefaults };
+        this.Curves = DefaultCurves();
+        this.ChannelWrites = DefaultWrites();
+        this.CurveEdit = "Size";
+        this.LineAnchor = null;
         this.BrowserHeld = "";
         this.DragAsset = null;
         this.AssetLanding = null;
@@ -490,6 +521,8 @@ export class TexturePanel
         this.RenderInspector();
         this.SyncPaintTarget();
         this.SyncMaskView();
+        // The card's own panes are about the layer in hand, so they change with it.
+        this.Instruments?.Refresh();
         if (this.MaskView !== "off") this.Recomposite();
     }
 
@@ -1260,7 +1293,7 @@ export class TexturePanel
                    </button>`
                 : `<button class="browser-tile ${Entry.Active ? "active" : ""} ${Held}" data-item="${Entry.Identifier}" ${Delay}
                            draggable="true" title="${Hint}">
-                       <span class="browser-thumb">${Thumb}<span class="browser-grip">${Icon("drag")}</span></span>
+                       <span class="browser-thumb">${Thumb}<span class="tile-grip">${Icon("drag")}</span></span>
                        <span class="browser-name">${Escape(Entry.Label)}<small>${Escape(Entry.Type)}</small></span>
                    </button>`;
         }).join("");
@@ -2564,6 +2597,7 @@ export class TexturePanel
             Button.classList.toggle("active", Active);
             Button.setAttribute("aria-pressed", String(Active));
         });
+        this.Instruments?.Refresh();
         this.UpdateCaption();
     }
 
@@ -2868,6 +2902,14 @@ export class TexturePanel
             this.FloodActive();
             return;
         }
+        // A line and a gradient are both two points: the press only fixes the first one, and nothing is laid down
+        // until the hand lets go. Until then the rubber band is the whole of the feedback.
+        if (this.StrokeMode !== "freehand" && (this.Tool === "brush" || this.Tool === "eraser"))
+        {
+            this.LineAnchor = { Point: [Event.clientX, Event.clientY], Hit, Reading: this.PointerReading(Event) };
+            this.DrawRubber([Event.clientX, Event.clientY], [Event.clientX, Event.clientY]);
+            return;
+        }
         const Layer = this.PaintTargetLayer();
         if (this.Projection.Brush.Target !== "mask" && this.Tool === "brush") this.EnsureChannel(Layer, "base_color");
         this.BeginStrokeRevision(Layer);
@@ -2942,6 +2984,11 @@ export class TexturePanel
         this.NoteHover(Hit ? ObjectAtTriangle(this.SurfaceRecord, Hit.Triangle) : null);
         this.NotePlacement(Hit);
         this.SyncGhost(Event, Hit);
+        if (this.LineAnchor)
+        {
+            this.DrawRubber(this.LineAnchor.Point, this.AimedPoint(Event));
+            return;
+        }
         if (this.MovingMark && this.PointerButton !== undefined)
         {
             this.MoveMark(Hit);
@@ -2960,6 +3007,18 @@ export class TexturePanel
     OnPointerUp(Event)
     {
         if (this.Canvas.hasPointerCapture?.(Event.pointerId)) this.Canvas.releasePointerCapture(Event.pointerId);
+        if (this.LineAnchor)
+        {
+            const Anchor = this.LineAnchor;
+            this.LineAnchor = null;
+            this.HideRubber();
+            if (Event.type !== "pointercancel") this.LayStraight(Anchor, this.AimedPoint(Event));
+            this.PickCandidate = null;
+            this.Navigating = false;
+            this.PointerButton = undefined;
+            this.PointerPrevious = null;
+            return;
+        }
         if (this.Projection.Active) this.CommitStrokeRevision();
         this.Projection.End();
         // A click that never became a drag, with the camera tool in hand, selects whatever object sits under it.
@@ -2983,6 +3042,145 @@ export class TexturePanel
         this.Navigating = false;
         this.PointerButton = undefined;
         this.PointerPrevious = null;
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // Straight lines and gradients.
+    //
+    // Both are aimed rather than drawn: the press fixes one end, the release fixes the other, and what happens in
+    // between is a rubber band. A line is then walked in SCREEN space and raycast at every step, so it wraps round the
+    // model the way a ruler laid on the object would — a line drawn between two surface points in 3D would cut
+    // straight through it. A gradient is one pass over the whole sheet, fading along the axis between the two points.
+    //----------------------------------------------------------------------------------------------------------------------
+    AimedPoint(Event)
+    {
+        const Point = [Event.clientX, Event.clientY];
+        if (!this.LineAnchor) return Point;
+        return SnapLine(this.LineAnchor.Point, Point, this.LineSnap);
+    }
+
+    DrawRubber(From, To)
+    {
+        const Band = Select("#stroke-rubber");
+        if (!Band) return;
+        const Box = this.Canvas.getBoundingClientRect();
+        const Ends = Band.querySelectorAll("circle");
+        const Line_ = Band.querySelector("line");
+        const Points = [
+            [From[0] - Box.left, From[1] - Box.top],
+            [To[0] - Box.left, To[1] - Box.top],
+        ];
+        Line_?.setAttribute("x1", Points[0][0]);
+        Line_?.setAttribute("y1", Points[0][1]);
+        Line_?.setAttribute("x2", Points[1][0]);
+        Line_?.setAttribute("y2", Points[1][1]);
+        Ends[0]?.setAttribute("cx", Points[0][0]);
+        Ends[0]?.setAttribute("cy", Points[0][1]);
+        Ends[1]?.setAttribute("cx", Points[1][0]);
+        Ends[1]?.setAttribute("cy", Points[1][1]);
+        Band.classList.toggle("gradient", this.StrokeMode === "gradient");
+        Band.hidden = false;
+    }
+
+    HideRubber()
+    {
+        const Band = Select("#stroke-rubber");
+        if (Band) Band.hidden = true;
+    }
+
+    // The furthest point along the aim that still lands on the model, walked back from the far end. A gradient needs
+    // two surface points for its axis, and the hand will drag off the silhouette every time.
+    FurthestHit(From, To)
+    {
+        const Steps = 24;
+        for (let Step = Steps; Step >= 0; Step -= 1)
+        {
+            const Fraction = Step / Steps;
+            const Point = { clientX: From[0] + (To[0] - From[0]) * Fraction, clientY: From[1] + (To[1] - From[1]) * Fraction };
+            const [DeviceX, DeviceY] = this.DeviceCoordinates(Point);
+            const Hit = this.Projection.Resolve(this.Index, this.Camera, DeviceX, DeviceY);
+            if (Hit) return Hit;
+        }
+        return null;
+    }
+
+    LayStraight(Anchor, To)
+    {
+        if (this.StrokeMode === "gradient")
+        {
+            this.LayGradient(Anchor, To);
+            return;
+        }
+        const Layer = this.PaintTargetLayer();
+        if (this.Projection.Brush.Target !== "mask" && this.Tool === "brush") this.EnsureChannel(Layer, "base_color");
+        this.BeginStrokeRevision(Layer);
+
+        // Three pixels between samples is finer than any brush, so the projection's own spacing decides where the
+        // dabs actually land — the same rule a freehand stroke goes down by.
+        const Samples = LineSamples(Anchor.Point, To, 3);
+        let Laid = 0;
+        for (const Point of Samples)
+        {
+            const [DeviceX, DeviceY] = this.DeviceCoordinates({ clientX: Point[0], clientY: Point[1] });
+            const Hit = this.Projection.Resolve(this.Index, this.Camera, DeviceX, DeviceY);
+            if (!Hit) continue;
+            const Reading = { ...Anchor.Reading, Time: (Anchor.Reading.Time || 0) + Laid * 16 };
+            const Segment = this.Projection.Active ? this.Projection.Extend(Hit, Reading) : this.Projection.Begin(Hit, Reading);
+            if (!Segment) continue;
+            this.NotePaintedCoordinate(Hit.Coordinate);
+            this.StampSurface(Layer, Segment);
+            Laid += 1;
+        }
+        if (this.Projection.Active) this.CommitStrokeRevision();
+        this.Projection.End();
+        if (!Laid) this.Notify("The line missed the model.");
+        else this.Notify(`Line laid down — ${Laid} mark${Laid === 1 ? "" : "s"}.`);
+    }
+
+    LayGradient(Anchor, To)
+    {
+        const Far = this.FurthestHit(Anchor.Point, To);
+        if (!Far || !Anchor.Hit)
+        {
+            this.Notify("A gradient needs both ends on the model.");
+            return;
+        }
+        const Span = Math.hypot(
+            Far.Position[0] - Anchor.Hit.Position[0],
+            Far.Position[1] - Anchor.Hit.Position[1],
+            Far.Position[2] - Anchor.Hit.Position[2],
+        );
+        if (Span < 1e-4)
+        {
+            this.Notify("Drag further for a gradient.");
+            return;
+        }
+        const Layer = this.PaintTargetLayer();
+        const Target = this.Projection.Brush.Target;
+        if (Target !== "mask") this.EnsureChannel(Layer, "base_color");
+        this.BeginStrokeRevision(Layer);
+        this.Integrator.Stamp(Layer, {
+            Target,
+            Mode: "gradient",
+            Start: Anchor.Hit.Position,
+            End: Far.Position,
+            Normal: Anchor.Hit.Normal,
+            Colour: Target === "mask" ? this.MaskInk() : this.BrushColour,
+            Radius: this.Projection.Brush.Radius,
+            Hardness: this.Projection.Brush.Hardness,
+            Flow: this.Projection.Brush.Flow,
+            FacingLimit: this.Projection.FacingLimit,
+            Gradient: this.Gradient,
+            Channels: Layer.Channels,
+            Writes: this.ChannelWrites,
+            Erase: this.Tool === "eraser",
+        });
+        this.CommitStrokeRevision();
+        this.Recomposite();
+        this.MarkDirty();
+        const Shape = GradientShapes.find((Entry) => Entry.Identifier === this.Gradient.Shape)?.Label || "Linear";
+        this.Chronicle("stroke", `${Shape} gradient`, `${Span.toFixed(2)} m · ${Layer.Name}`, this.BrushColour);
+        this.Notify(`${Shape} gradient laid down over ${Span.toFixed(2)} m.`);
     }
 
     PlaneRadius()
@@ -3009,6 +3207,16 @@ export class TexturePanel
         const Erase = this.Tool === "eraser";
         const Target = Brush.Target;
         const Colour = Target === "mask" ? this.MaskInk() : this.BrushColour;
+        // 🔴 What the hand reports is not what the paint should do with it. The size curve remaps the pressure handed
+        //    to the pass — which is what thins the mark and what the medium deposits by — and the flow curve rides on
+        //    top of the instrument's own flow. A curve that does nothing is skipped rather than evaluated.
+        const Press = Segment.Press || [1, 1];
+        const Shaped = CurveIsPlain(this.Curves.Size)
+            ? Press
+            : [EvaluateCurve(this.Curves.Size, Press[0]), EvaluateCurve(this.Curves.Size, Press[1])];
+        const Flow = CurveIsPlain(this.Curves.Flow)
+            ? Brush.Flow
+            : Brush.Flow * EvaluateCurve(this.Curves.Flow, (Press[0] + Press[1]) / 2);
         const Options = {
             Target,
             Start: Segment.Start,
@@ -3018,13 +3226,14 @@ export class TexturePanel
             // A chisel nib is as wide as the nib across its edge and as thin as its waist along it.
             Radius: Brush.Radius * (Segment.Width ?? 1),
             Hardness: Brush.Hardness,
-            Flow: Brush.Flow,
+            Flow,
             FacingLimit: this.Projection.FacingLimit,
             Jitter: Brush.Jitter,
+            Writes: this.ChannelWrites,
             // 🔴 The eraser lifts with the plain medium whatever is in hand. Erasing is an undo of the surface, and an
             //    undo that leaves bristle marks of its own is not one.
             Media: Erase ? null : Brush.Media,
-            Press: Segment.Press,
+            Press: Shaped,
             Travel: Segment.Travel,
             Erase,
             Mode: "surface",
@@ -3057,10 +3266,18 @@ export class TexturePanel
             Radius: Brush.Radius,
             PlaneRadius: this.PlaneRadius() * (Segment.Width ?? 1),
             Hardness: Brush.Hardness,
-            Flow: Brush.Flow,
+            Flow: CurveIsPlain(this.Curves.Flow)
+                ? Brush.Flow
+                : Brush.Flow * EvaluateCurve(this.Curves.Flow, ((Segment.Press?.[0] ?? 1) + (Segment.Press?.[1] ?? 1)) / 2),
             Jitter: Brush.Jitter,
+            Writes: this.ChannelWrites,
             Media: Erase ? null : Brush.Media,
-            Press: Segment.Press,
+            Press: CurveIsPlain(this.Curves.Size)
+                ? Segment.Press
+                : [
+                      EvaluateCurve(this.Curves.Size, Segment.Press?.[0] ?? 1),
+                      EvaluateCurve(this.Curves.Size, Segment.Press?.[1] ?? 1),
+                  ],
             Travel: Segment.Travel,
             // The flattened view measures in UV. This is what a UV unit is worth in metres, so the paper comes out the
             // same size here as it does on the surface instead of hundreds of times too fine to see.
@@ -3581,6 +3798,7 @@ export class TexturePanel
             }),
         );
         this.SyncBrushControls();
+        this.SyncStrokeChip();
     }
 
     //----------------------------------------------------------------------------------------------------------------------
@@ -3608,12 +3826,713 @@ export class TexturePanel
             Masking: () => this.Projection.Brush.Target === "mask",
             ReadLevel: () => this.MaskInk()[0],
             OnLevel: (Level) => this.SetBrushColour([Level, Level, Level]),
+            Sections: () => this.CardSections(),
         });
         Select("#instrument-button")?.addEventListener("click", (Event) =>
         {
             Event.stopPropagation();
             this.Instruments.Toggle();
         });
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // The card's own panes.
+    //
+    // 🔴 These are CONTEXTUAL: the rail below the instrument families carries whatever the layer in hand can actually
+    //    use. A decal layer has no pressure curve worth editing and a paint layer has no font, so neither of them is
+    //    offered one. The six instrument families never change — they are what is in the hand, not what it is on.
+    //----------------------------------------------------------------------------------------------------------------------
+    CardSections()
+    {
+        const Layer = this.ActiveLayer;
+        if (!Layer) return [];
+        const Masking = this.Projection.Brush.Target === "mask";
+        // A folder holds layers rather than paint; painting on one opens a layer inside it, and that layer is what the
+        // panes would be about, so there is nothing to show until it exists.
+        if (Layer.Kind === "folder" && !Masking) return [];
+        const Decal = Layer.Kind === "decal" && !Masking;
+        const Sections = [];
+        if (Decal)
+            Sections.push(
+                {
+                    Key: "artwork",
+                    Label: Layer.Decal.SourceKind === "text" ? "Type" : "Artwork",
+                    Tone: "#c9a227",
+                    Title: Layer.Decal.SourceKind === "text" ? "Type" : "Artwork",
+                    Note: `${Layer.Name} · ${Layer.Decal.Placement === "stamp" ? "burned in" : "placed"}`,
+                    Render: () => this.ArtworkPane(Layer),
+                },
+                {
+                    Key: "ink",
+                    Label: "Ink",
+                    Tone: "#8f6fd0",
+                    Title: "Ink",
+                    Note: "What the artwork is made of",
+                    Render: () => this.InkPane(Layer),
+                },
+            );
+        else
+            Sections.push(
+                {
+                    Key: "stroke",
+                    Label: "Stroke",
+                    Tone: "#34c759",
+                    Tally: StrokeModes.find((Mode) => Mode.Identifier === this.StrokeMode)?.Label,
+                    Title: "Stroke",
+                    Note: "How the mark goes down",
+                    Render: () => this.StrokePane(),
+                },
+                {
+                    Key: "curves",
+                    Label: "Curves",
+                    Tone: "#4a9bd8",
+                    Title: "Curves",
+                    Note: "What the hand's pressure is worth",
+                    Render: () => this.CurvePane(),
+                },
+            );
+        Sections.push({
+            Key: "channels",
+            Label: "Channels",
+            Tone: "#d08a4a",
+            Tally: Masking ? "mask" : undefined,
+            Title: "Channels",
+            Note: Masking ? "A mask writes coverage only" : WritesSummary(this.ChannelWrites),
+            Render: () => this.ChannelPane(Layer, Masking),
+        });
+        return Sections;
+    }
+
+    // A card pane, laid out as the inspector's property groups so the two read as one editor.
+    CardGroup(Title, Note = "")
+    {
+        const Group = document.createElement("div");
+        Group.className = "property-group card-group";
+        Group.innerHTML = `<div class="group-head"><h3>${Escape(Title)}</h3>${Note ? `<span>${Escape(Note)}</span>` : ""}</div>`;
+        return Group;
+    }
+
+    CardSegmented(Options, Chosen, OnPick)
+    {
+        const Row = document.createElement("div");
+        Row.className = "segmented card-segmented";
+        Row.innerHTML = Options.map(
+            (Option) => `<button class="segment ${Option.Identifier === Chosen ? "active" : ""}"
+                    data-pick="${Escape(String(Option.Identifier))}"
+                    title="${Escape(Option.Note || Option.Label)}">${Escape(Option.Label)}</button>`,
+        ).join("");
+        for (const Button of Row.querySelectorAll("[data-pick]"))
+            Button.addEventListener("click", () => OnPick(Button.dataset.pick));
+        return Row;
+    }
+
+    CardSlider(Options, OnChange)
+    {
+        const Holder = document.createElement("div");
+        Holder.innerHTML = SliderRow({ ...Options, Bind: "card" });
+        const Row = Holder.firstElementChild;
+        const Input = Row.querySelector("input");
+        Input.addEventListener("input", () =>
+        {
+            const Value = Number(Input.value);
+            SyncSlider(Row, Value, Options.Step);
+            OnChange(Value);
+        });
+        return Row;
+    }
+
+    CardSwitch(Label, Note, On, OnToggle)
+    {
+        const Row = document.createElement("div");
+        Row.className = "property-row switch-row";
+        Row.innerHTML = `<span class="property-label">${Escape(Label)}${
+            Note ? ` · ${Escape(Note)}` : ""
+        }</span><label class="switch"><input type="checkbox" ${On ? "checked" : ""} /><span></span></label>`;
+        Row.querySelector("input").addEventListener("change", (Event) => OnToggle(Event.target.checked));
+        return Row;
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // Pane · how the mark goes down.
+    //----------------------------------------------------------------------------------------------------------------------
+    StrokePane()
+    {
+        const Sheet = document.createElement("div");
+        const Group = this.CardGroup("Mode", StrokeModes.find((Mode) => Mode.Identifier === this.StrokeMode)?.Note || "");
+        Group.append(
+            this.CardSegmented(StrokeModes, this.StrokeMode, (Identifier) =>
+            {
+                this.StrokeMode = Identifier;
+                this.Instruments.RenderRail();
+                this.Instruments.RenderTiles(false);
+                this.SyncStrokeChip();
+                this.Notify(`${StrokeModes.find((Mode) => Mode.Identifier === Identifier)?.Label} strokes.`);
+            }),
+        );
+        Sheet.append(Group);
+
+        if (this.StrokeMode === "line")
+        {
+            const Angles = this.CardGroup("Angle", "Hold the line to a step");
+            Angles.append(
+                this.CardSegmented(
+                    LineSnaps.map((Degrees) => ({ Identifier: String(Degrees), Label: Degrees ? `${Degrees}°` : "Free" })),
+                    String(this.LineSnap),
+                    (Value) =>
+                    {
+                        this.LineSnap = Number(Value);
+                        this.Instruments.RenderTiles(false);
+                    },
+                ),
+            );
+            Sheet.append(Angles);
+        }
+
+        if (this.StrokeMode === "gradient")
+        {
+            const Shape = this.CardGroup("Fade", "Between the two ends of the drag");
+            Shape.append(
+                this.CardSegmented(GradientShapes, this.Gradient.Shape, (Identifier) =>
+                {
+                    this.Gradient.Shape = Identifier;
+                    this.Instruments.RenderTiles(false);
+                }),
+                this.CardSegmented(GradientEasings, this.Gradient.Easing, (Identifier) =>
+                {
+                    this.Gradient.Easing = Identifier;
+                    this.Instruments.RenderTiles(false);
+                }),
+                this.CardSlider(
+                    {
+                        Label: "Softness",
+                        Value: this.Gradient.Softness,
+                        Minimum: 0,
+                        Maximum: 1,
+                        Step: 0.01,
+                        Hint: "How much of the axis is doing the fading",
+                    },
+                    (Value) => (this.Gradient.Softness = Value),
+                ),
+                this.CardSwitch("Reverse", "Fade towards the first point", this.Gradient.Reverse, (On) =>
+                {
+                    this.Gradient.Reverse = On;
+                    this.Instruments.RenderTiles(false);
+                }),
+                this.CardSwitch("All the way round", "Ignore which way the surface faces", this.Gradient.Through, (On) =>
+                {
+                    this.Gradient.Through = On;
+                    this.Instruments.RenderTiles(false);
+                }),
+            );
+            Sheet.append(Shape);
+        }
+
+        const Note = document.createElement("p");
+        Note.className = "card-note";
+        Note.textContent =
+            this.StrokeMode === "freehand"
+                ? "The mark follows the hand, dab by dab, at the spacing the instrument asks for."
+                : this.StrokeMode === "line"
+                  ? "Press where it starts, aim, let go. The line is walked across the screen and raycast at every step, so it lies on the model rather than cutting through it."
+                  : "Press where the colour is strongest, drag to where it has gone, let go. One pass over the whole sheet.";
+        Sheet.append(Note);
+        return Sheet;
+    }
+
+    SyncStrokeChip()
+    {
+        const Chip = Select("#stroke-mode-chip");
+        if (!Chip) return;
+        const Mode = StrokeModes.find((Entry) => Entry.Identifier === this.StrokeMode) || StrokeModes[0];
+        Chip.hidden = this.StrokeMode === "freehand";
+        Chip.innerHTML = `${Icon(Mode.Glyph)}<span>${Escape(Mode.Label)}</span>`;
+        FillIcons(Chip);
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // Pane · pressure curves.
+    //----------------------------------------------------------------------------------------------------------------------
+    CurvePane()
+    {
+        const Sheet = document.createElement("div");
+        const Group = this.CardGroup("Pressure", this.CurveEdit === "Size" ? "to size" : "to flow");
+        Group.append(
+            this.CardSegmented(
+                [
+                    { Identifier: "Size", Label: "Size" },
+                    { Identifier: "Flow", Label: "Flow" },
+                ],
+                this.CurveEdit,
+                (Identifier) =>
+                {
+                    this.CurveEdit = Identifier;
+                    this.Instruments.RenderTiles(false);
+                },
+            ),
+        );
+        Group.append(this.CurveWidget());
+        Group.append(
+            this.CardSegmented(CurvePresets, "", (Identifier) =>
+            {
+                this.Curves[this.CurveEdit] = DefaultCurve(Identifier);
+                this.Instruments.RenderTiles(false);
+                this.Notify(`${this.CurveEdit} curve · ${CurvePresets.find((Entry) => Entry.Identifier === Identifier)?.Label}.`);
+            }),
+        );
+        Sheet.append(Group);
+
+        const Note = document.createElement("p");
+        Note.className = "card-note";
+        Note.textContent =
+            "Across is what the hand reported — a pen's pressure, or the speed of a mouse. Up is what the paint does with it. Click the line to add a point, drag it about, double-click one to take it away.";
+        Sheet.append(Note);
+        return Sheet;
+    }
+
+    // 📝 The widget is a canvas rather than SVG so the grid, the curve and the live pressure read-out can be drawn in
+    //    one pass; it is redrawn on every drag, and 64 strokes of SVG replaced every frame is how a card stutters.
+    CurveWidget()
+    {
+        const Holder = document.createElement("div");
+        Holder.className = "curve-well";
+        const Canvas = document.createElement("canvas");
+        Canvas.width = 440;
+        Canvas.height = 180;
+        Canvas.className = "curve-canvas";
+        Holder.append(Canvas);
+        const Readout = document.createElement("span");
+        Readout.className = "curve-readout";
+        Holder.append(Readout);
+
+        const Points = () => SortCurve(this.Curves[this.CurveEdit]);
+        const Draw = () =>
+        {
+            const Shape = Canvas.getContext("2d");
+            if (!Shape) return;
+            const Width = Canvas.width;
+            const Height = Canvas.height;
+            const Pad = 14;
+            const X = (Value) => Pad + Value * (Width - Pad * 2);
+            const Y = (Value) => Height - Pad - Value * (Height - Pad * 2);
+            Shape.clearRect(0, 0, Width, Height);
+            Shape.fillStyle = "#0f0f0f";
+            Shape.fillRect(0, 0, Width, Height);
+            Shape.strokeStyle = "rgba(255,255,255,.08)";
+            Shape.lineWidth = 1;
+            for (let Step = 0; Step <= 4; Step += 1)
+            {
+                const Fraction = Step / 4;
+                Shape.beginPath();
+                Shape.moveTo(X(Fraction), Y(0));
+                Shape.lineTo(X(Fraction), Y(1));
+                Shape.moveTo(X(0), Y(Fraction));
+                Shape.lineTo(X(1), Y(Fraction));
+                Shape.stroke();
+            }
+            Shape.strokeStyle = "rgba(255,255,255,.14)";
+            Shape.beginPath();
+            Shape.moveTo(X(0), Y(0));
+            Shape.lineTo(X(1), Y(1));
+            Shape.stroke();
+
+            const Table = CurveTable(Points(), 64);
+            Shape.strokeStyle = "#34c759";
+            Shape.lineWidth = 2;
+            Shape.beginPath();
+            Table.forEach((Value, Index) =>
+            {
+                const Along = Index / (Table.length - 1);
+                if (Index === 0) Shape.moveTo(X(Along), Y(Value));
+                else Shape.lineTo(X(Along), Y(Value));
+            });
+            Shape.stroke();
+
+            for (const [Across, Up] of Points())
+            {
+                Shape.fillStyle = "#0b0b0b";
+                Shape.strokeStyle = "#f0f0f0";
+                Shape.lineWidth = 1.5;
+                Shape.beginPath();
+                Shape.arc(X(Across), Y(Up), 4.5, 0, Math.PI * 2);
+                Shape.fill();
+                Shape.stroke();
+            }
+            Readout.textContent = `${Points().length} points · ${this.CurveEdit.toLowerCase()} ×${EvaluateCurve(
+                Points(),
+                1,
+            ).toFixed(2)} at full pressure`;
+        };
+
+        const Place = (Event) =>
+        {
+            const Box = Canvas.getBoundingClientRect();
+            const Pad = 14 / Canvas.width;
+            const Across = (Event.clientX - Box.left) / Math.max(1, Box.width);
+            const Up = 1 - (Event.clientY - Box.top) / Math.max(1, Box.height);
+            return [
+                Clamp((Across - Pad) / Math.max(1e-6, 1 - Pad * 2), 0, 1),
+                Clamp((Up - (14 / Canvas.height)) / Math.max(1e-6, 1 - (28 / Canvas.height)), 0, 1),
+            ];
+        };
+        const Nearest = (Where) =>
+        {
+            const Curve = Points();
+            let Best = -1;
+            let Distance = 0.06;
+            Curve.forEach(([Across, Up], Index) =>
+            {
+                const Reach = Math.hypot(Across - Where[0], Up - Where[1]);
+                if (Reach < Distance)
+                {
+                    Distance = Reach;
+                    Best = Index;
+                }
+            });
+            return Best;
+        };
+
+        let Holding = -1;
+        Canvas.addEventListener("pointerdown", (Event) =>
+        {
+            const Where = Place(Event);
+            Holding = Nearest(Where);
+            if (Holding < 0)
+            {
+                this.Curves[this.CurveEdit] = PlaceCurvePoint(Points(), Where[0], Where[1]);
+                Holding = Nearest(Where);
+            }
+            Canvas.setPointerCapture?.(Event.pointerId);
+            Draw();
+        });
+        Canvas.addEventListener("pointermove", (Event) =>
+        {
+            if (Holding < 0) return;
+            const Where = Place(Event);
+            const Curve = Points();
+            // The two ends keep their x: a curve that can slide its first point off zero has no answer for no pressure.
+            const Pinned = Holding === 0 || Holding === Curve.length - 1;
+            Curve[Holding] = [Pinned ? Curve[Holding][0] : Where[0], Where[1]];
+            this.Curves[this.CurveEdit] = SortCurve(Curve);
+            Holding = Nearest([Pinned ? Curve[Holding][0] : Where[0], Where[1]]);
+            Draw();
+        });
+        const Release = () => (Holding = -1);
+        Canvas.addEventListener("pointerup", Release);
+        Canvas.addEventListener("pointercancel", Release);
+        Canvas.addEventListener("dblclick", (Event) =>
+        {
+            const Index = Nearest(Place(Event));
+            if (Index < 0) return;
+            this.Curves[this.CurveEdit] = LiftCurvePoint(Points(), Index);
+            Draw();
+        });
+        Draw();
+        return Holder;
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // Pane · which channels the stroke is allowed to write.
+    //----------------------------------------------------------------------------------------------------------------------
+    ChannelPane(Layer, Masking)
+    {
+        const Sheet = document.createElement("div");
+        if (Masking)
+        {
+            const Note = document.createElement("p");
+            Note.className = "card-note";
+            Note.textContent =
+                "The brush is aimed at this layer's mask. A mask is one channel — how much of the layer shows — so there is nothing here to choose between. Aim the brush back at the content to pick channels again.";
+            Sheet.append(Note);
+            return Sheet;
+        }
+
+        for (const Slot of WriteSlots)
+        {
+            const Group = this.CardGroup(Slot.Label, Slot.Note);
+            for (const Part of Slot.Components)
+            {
+                const On = Part.Locked || this.ChannelWrites[Part.Key] !== false;
+                const Row = document.createElement("button");
+                Row.className = `channel-pick ${On ? "on" : ""} ${Part.Locked ? "locked" : ""}`;
+                Row.innerHTML = `<span class="channel-tick">${On ? Icon("check") : ""}</span>
+                    <span class="channel-name">${Escape(Part.Label)}</span>
+                    <span class="channel-note">${Part.Locked ? "always" : Escape(Part.Key)}</span>`;
+                FillIcons(Row);
+                if (!Part.Locked)
+                    Row.addEventListener("click", () =>
+                    {
+                        this.ChannelWrites[Part.Key] = !On;
+                        this.Instruments.RenderRail();
+                        this.Instruments.RenderTiles(false);
+                    });
+                Group.append(Row);
+            }
+            Sheet.append(Group);
+        }
+
+        const Row = document.createElement("div");
+        Row.className = "card-actions";
+        Row.innerHTML = `<button data-all>Everything</button><button data-none>Cover only</button>`;
+        Row.querySelector("[data-all]").addEventListener("click", () =>
+        {
+            this.ChannelWrites = DefaultWrites();
+            this.Instruments.RenderRail();
+            this.Instruments.RenderTiles(false);
+        });
+        Row.querySelector("[data-none]").addEventListener("click", () =>
+        {
+            this.ChannelWrites = Object.fromEntries(WriteKeys.map((Key) => [Key, false]));
+            this.Instruments.RenderRail();
+            this.Instruments.RenderTiles(false);
+        });
+        Sheet.append(Row);
+
+        const Note = document.createElement("p");
+        Note.className = "card-note";
+        Note.textContent =
+            "Switched off means the stroke leaves that channel exactly as it found it. The layer's own cover is always written, or a stroke that paints roughness alone would never show.";
+        Sheet.append(Note);
+        return Sheet;
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // Panes · the decal in hand.
+    //----------------------------------------------------------------------------------------------------------------------
+    ArtworkPane(Layer)
+    {
+        const Sheet = document.createElement("div");
+        const Kind = this.CardGroup("Source", "What the decal is made from");
+        Kind.append(
+            this.CardSegmented(
+                [
+                    { Identifier: "svg", Label: "Vector", Note: "A drawing from the library or your own SVG" },
+                    { Identifier: "text", Label: "Type", Note: "Set in one of the editor's faces" },
+                ],
+                Layer.Decal.SourceKind,
+                (Identifier) =>
+                {
+                    this.CaptureStack(() => (Layer.Decal.SourceKind = Identifier));
+                    this.RefreshDecal(Layer);
+                    this.RenderInspector();
+                    this.Instruments.RenderRail();
+                    this.Instruments.RenderTiles(false);
+                },
+            ),
+        );
+        Sheet.append(Kind);
+
+        if (Layer.Decal.SourceKind === "text")
+        {
+            const Type = this.CardGroup("Wording", `${Layer.Decal.Text.Family} ${Layer.Decal.Text.Weight}`);
+            const Field = document.createElement("textarea");
+            Field.className = "card-field";
+            Field.rows = 2;
+            Field.value = Layer.Decal.Text.Content;
+            Field.spellcheck = false;
+            Field.addEventListener("input", () =>
+            {
+                Layer.Decal.Text.Content = Field.value;
+                this.RefreshDecal(Layer);
+            });
+            Field.addEventListener("change", () => this.CaptureStack(() => {}));
+            Type.append(Field);
+
+            const Faces = document.createElement("div");
+            Faces.className = "face-list";
+            Faces.innerHTML = FontArchive.map(
+                (Face) => `<button data-face="${Escape(Face.Family)}" class="${
+                    Face.Family === Layer.Decal.Text.Family ? "active" : ""
+                }" style="font-family:'${Escape(Face.Family)}', 'DM Sans', sans-serif">
+                    <strong>${Escape(Face.Family)}</strong><small>${Escape(Face.Note || "")}</small></button>`,
+            ).join("");
+            for (const Button of Faces.querySelectorAll("[data-face]"))
+                Button.addEventListener("click", () =>
+                {
+                    this.CaptureStack(() => (Layer.Decal.Text.Family = Button.dataset.face));
+                    this.RefreshDecal(Layer);
+                    this.RenderInspector();
+                    this.Instruments.RenderTiles(false);
+                });
+            Type.append(Faces);
+
+            Type.append(
+                this.CardSegmented(
+                    [
+                        { Identifier: "300", Label: "Light" },
+                        { Identifier: "400", Label: "Regular" },
+                        { Identifier: "700", Label: "Bold" },
+                    ],
+                    String(Layer.Decal.Text.Weight),
+                    (Value) =>
+                    {
+                        this.CaptureStack(() => (Layer.Decal.Text.Weight = Number(Value)));
+                        this.RefreshDecal(Layer);
+                        this.Instruments.RenderTiles(false);
+                    },
+                ),
+                this.CardSlider(
+                    { Label: "Size", Value: Layer.Decal.Text.Size, Minimum: 40, Maximum: 320, Step: 1, Unit: "px" },
+                    (Value) =>
+                    {
+                        Layer.Decal.Text.Size = Value;
+                        this.RefreshDecal(Layer);
+                    },
+                ),
+                this.CardSlider(
+                    { Label: "Tracking", Value: Layer.Decal.Text.Tracking, Minimum: -10, Maximum: 40, Step: 0.5 },
+                    (Value) =>
+                    {
+                        Layer.Decal.Text.Tracking = Value;
+                        this.RefreshDecal(Layer);
+                    },
+                ),
+                this.CardSlider(
+                    { Label: "Outline", Value: Layer.Decal.Text.Outline, Minimum: 0, Maximum: 12, Step: 0.5 },
+                    (Value) =>
+                    {
+                        Layer.Decal.Text.Outline = Value;
+                        this.RefreshDecal(Layer);
+                    },
+                ),
+            );
+            Sheet.append(Type);
+        }
+        else
+        {
+            const Library = this.CardGroup("Drawing", `${DecalLibrary.length} in the library`);
+            const Shelf = document.createElement("div");
+            Shelf.className = "mark-shelf";
+            Shelf.innerHTML = DecalLibrary.map(
+                (Entry) => `<button data-mark="${Escape(Entry.Identifier)}" class="${
+                    Entry.Identifier === Layer.Decal.Library ? "active" : ""
+                }" title="${Escape(Entry.Label)}"><span>${Entry.Markup || ""}</span><small>${Escape(Entry.Label)}</small></button>`,
+            ).join("");
+            for (const Button of Shelf.querySelectorAll("[data-mark]"))
+                Button.addEventListener("click", () =>
+                {
+                    this.CaptureStack(() =>
+                    {
+                        Layer.Decal.Library = Button.dataset.mark;
+                        Layer.Decal.Svg = "";
+                    });
+                    this.RefreshDecal(Layer);
+                    this.RenderInspector();
+                    this.Instruments.RenderTiles(false);
+                });
+            Library.append(Shelf);
+            Sheet.append(Library);
+        }
+
+        const Fit = this.CardGroup("Fit", Layer.Decal.Placement === "stamp" ? "Burned into the layer" : "Kept as a placement");
+        Fit.append(
+            this.CardSegmented(
+                [
+                    { Identifier: "stamp", Label: "Burn in", Note: "Click the model and the artwork becomes paint" },
+                    { Identifier: "project", Label: "Place", Note: "Keep it movable on the surface" },
+                ],
+                Layer.Decal.Placement,
+                (Identifier) =>
+                {
+                    this.CaptureStack(() => (Layer.Decal.Placement = Identifier));
+                    this.RenderInspector();
+                    this.Instruments.RenderRail();
+                    this.Instruments.RenderTiles(false);
+                },
+            ),
+            this.CardSlider(
+                { Label: "Softness", Value: Layer.Decal.Softness, Minimum: 0, Maximum: 0.5, Step: 0.005 },
+                (Value) =>
+                {
+                    Layer.Decal.Softness = Value;
+                    this.Recomposite();
+                    this.MarkDirty();
+                },
+            ),
+        );
+        Sheet.append(Fit);
+        return Sheet;
+    }
+
+    InkPane(Layer)
+    {
+        const Sheet = document.createElement("div");
+        const Group = this.CardGroup("Colour", Layer.Decal.Colorise ? "Tinted" : "The artwork's own colours");
+        Group.append(
+            this.CardSwitch("Tint it", "Ignore the artwork's colours", Layer.Decal.Colorise, (On) =>
+            {
+                this.CaptureStack(() => (Layer.Decal.Colorise = On));
+                this.RefreshDecal(Layer);
+                this.RenderInspector();
+                this.Instruments.RenderTiles(false);
+            }),
+        );
+
+        const Swatches = document.createElement("div");
+        Swatches.className = "card-swatches";
+        const Palette = ["#f0f0f0", "#111111", "#d82a2a", "#e8b53a", "#34c759", "#3a7bd5", "#9b5de5", "#ff8a3d"];
+        Swatches.innerHTML = Palette.map(
+            (Code) => `<button data-ink="${Code}" style="background:${Code}" title="${Code}" aria-label="${Code}"></button>`,
+        ).join("");
+        for (const Button of Swatches.querySelectorAll("[data-ink]"))
+            Button.addEventListener("click", () =>
+            {
+                this.CaptureStack(() => (Layer.Decal.Tint = FromHex(Button.dataset.ink)));
+                this.RefreshDecal(Layer);
+                this.RenderInspector();
+                this.Instruments.RenderTiles(false);
+            });
+        Group.append(Swatches);
+
+        const Pick = document.createElement("input");
+        Pick.type = "color";
+        Pick.className = "card-colour";
+        Pick.value = ToHex(Layer.Decal.Tint);
+        Pick.addEventListener("input", () =>
+        {
+            Layer.Decal.Tint = FromHex(Pick.value);
+            this.RefreshDecal(Layer);
+        });
+        Group.append(Pick);
+        Sheet.append(Group);
+
+        const Relief = this.CardGroup("Relief", "What the artwork does to the surface");
+        Relief.append(
+            this.CardSlider(
+                { Label: "Emboss", Value: Layer.Decal.Emboss, Minimum: -1, Maximum: 1, Step: 0.01 },
+                (Value) =>
+                {
+                    Layer.Decal.Emboss = Value;
+                    this.Recomposite();
+                    this.MarkDirty();
+                },
+            ),
+            this.CardSlider(
+                {
+                    Label: "Roughness",
+                    Value: Layer.Channels.specular_roughness ?? 0.3,
+                    Minimum: 0,
+                    Maximum: 1,
+                    Step: 0.01,
+                },
+                (Value) =>
+                {
+                    Layer.Channels.specular_roughness = Value;
+                    this.Recomposite();
+                    this.MarkDirty();
+                },
+            ),
+            this.CardSlider(
+                { Label: "Metalness", Value: Layer.Channels.base_metalness ?? 0, Minimum: 0, Maximum: 1, Step: 0.01 },
+                (Value) =>
+                {
+                    Layer.Channels.base_metalness = Value;
+                    this.Recomposite();
+                    this.MarkDirty();
+                },
+            ),
+        );
+        Sheet.append(Relief);
+        return Sheet;
     }
 
     // One way in for the brush colour, whether it came from the picker, a swatch on the rail or a sampled texel: the

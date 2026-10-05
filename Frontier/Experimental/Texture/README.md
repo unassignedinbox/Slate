@@ -10,7 +10,7 @@ cd Frontier/Experimental/Texture
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
-npm test           # 112 unit tests, no browser required
+npm test           # 115 unit tests, no browser required
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -125,6 +125,39 @@ it to the top of the stack, or drop it on a layer row to say exactly where it go
 inside, the edges put it alongside. A material preset, a decal, a generator, a mesh or an environment all travel the same
 way. A click only picks an item out so you can read it; <kbd>Enter</kbd> on a focused tile adds it, because a drag cannot
 be typed.
+
+**The card is contextual.** Below the six instrument families the rail carries panes about the layer in hand, and only
+the ones that layer can use: a paint layer gets **Stroke**, **Curves** and **Channels**; a decal layer gets **Artwork**,
+**Ink** and **Channels**; a folder gets none, because painting on a folder opens a layer inside it and that layer is
+what the panes would be about. Aiming the brush at a mask says so in the channel pane rather than offering a choice
+that does not exist.
+
+**Stroke modes.** *Freehand* is the hand. *Line* is two points: press where it starts, aim, let go — the line is then
+walked across the **screen** and raycast at every step, so it lies on the model instead of cutting through it, and the
+angle can be held to 15°, 45° or 90°. *Gradient* is two points as well, but it is not a stroke at all: one pass over the
+whole sheet, fading along the axis between them, linear or radial, with four easings, a softness and a switch for
+whether it wraps all the way round the model or stops at the silhouette. Both show a rubber band while they are aimed
+and put nothing down until the hand lets go, so an undo step covers exactly one line or one gradient.
+
+**Curves.** A pen reports pressure and a mouse reports the speed of the hand, and neither is what the paint should do
+with it. Two editable curves per hand — pressure to size and pressure to flow — drawn as monotone cubics through their
+own points, so dragging one point cannot make the curve bulge somewhere else. Click the line to add a point, drag it,
+double-click to take it away; five presets sit under the widget. The size curve remaps the pressure the stamping pass is
+handed, which is what thins the mark and what the medium deposits by; the flow curve rides on the instrument's own flow.
+
+**Channels, per stroke.** Eleven switches over the four images a layer paints into: base colour, roughness, metalness,
+occlusion, height, specular, coat, coat roughness, fuzz, emission and transmission. Switched off means the stroke leaves
+that channel exactly as it found it. The hardware can mask the components of one attachment at a time, so a stroke with
+a partial selection is drawn once per image with the chosen one routed to the first output and a colour mask doing the
+rest; an untouched selection stays the single four-attachment draw it always was. The layer's own cover is always
+written — a stroke that paints roughness alone would otherwise never show — and a layer still carrying one set of values
+for the whole sheet grows its images the moment a partial selection lands on it, because that is the only way to hold
+roughness in one place and not another.
+
+**Decals, in the card.** The artwork pane switches a decal layer between vector and type, picks the drawing out of the
+library or sets the wording in any of the ten faces with weight, size, tracking and outline, and chooses whether the
+decal is burned into the layer or kept as a movable placement. The ink pane carries the tint, the palette, whether the
+artwork's own colours are kept, and what the decal does to the surface underneath it — emboss, roughness, metalness.
 
 **Folders.** A folder is a layer whose children name it as their parent, so the stack stays one flat array in the order
 the compositor walks it, repaired into a tree after every edit: no loops, no orphans, nothing nested more than four deep,
@@ -361,7 +394,7 @@ green channel is flipped on the way out rather than left for someone to discover
 | Search layers | <kbd>/</kbd> | Content browser | <kbd>B</kbd> |
 | Undo / redo | <kbd>Ctrl Z</kbd> / <kbd>Ctrl ⇧ Z</kbd> | Save `.pigment` / export | <kbd>Ctrl S</kbd> / <kbd>Ctrl E</kbd> |
 | Symmetry: off → X → Y → Z → radial | <kbd>S</kbd> | Isolate the selected layer | <kbd>I</kbd> |
-| Group the selection into a folder | <kbd>Ctrl G</kbd> | | |
+| Group the selection into a folder | <kbd>Ctrl G</kbd> | Aim a line or gradient | press · drag · release |
 
 **Only the left button paints.** The tool in the toolbar is the tool in hand, and nothing else puts a mark on the
 model: right-drag orbits, middle-drag pans, <kbd>⇧</kbd> turns either into a pan, and <kbd>Space</kbd> pans from the

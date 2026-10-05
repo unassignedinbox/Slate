@@ -842,7 +842,13 @@ uniform float uHardness;
 uniform float uFlow;
 uniform float uFacingLimit;
 uniform float uAlphaJitter;
-uniform int uStampMode;        // 0 surface space · 1 texture space · 2 decal burned into the texture
+uniform int uStampMode;        // 0 surface space · 1 texture space · 2 decal burned into the texture · 3 gradient
+uniform vec4 uGradient;        // shape (0 linear, 1 radial), easing, reverse, wrap all the way round
+uniform float uGradientEdge;   // how soft the ends of the fade are
+// 🔴 Which image this draw is allowed to write, or −1 for the usual all-four draw. The hardware can mask components of
+//    ONE attachment at a time, so a stroke that writes some channels and not others is drawn once per image with the
+//    chosen one routed to location 0 and the colour mask doing the rest.
+uniform int uSlot;
 uniform sampler2D uStampDecal;
 uniform vec3 uStampCentre;
 uniform vec3 uStampAxis;
@@ -864,15 +870,63 @@ layout(location = 1) out vec4 oSurfacing;
 layout(location = 2) out vec4 oCoating;
 layout(location = 3) out vec4 oRadiance;
 
-void LayDown(float Alpha)
+// Everything a dab puts down, in packing order, routed to wherever this draw is allowed to put it.
+void Emit(vec4 Cover, float Alpha)
 {
-    oSurfacing = uPaintSurfacing * Alpha;
-    oCoating = uPaintCoating * Alpha;
-    oRadiance = uPaintRadiance * Alpha;
+    vec4 Surfacing = uPaintSurfacing * Alpha;
+    vec4 Coating = uPaintCoating * Alpha;
+    vec4 Radiance = uPaintRadiance * Alpha;
+    if (uSlot >= 0)
+    {
+        oCoverage = uSlot == 0 ? Cover : uSlot == 1 ? Surfacing : uSlot == 2 ? Coating : Radiance;
+        return;
+    }
+    oCoverage = Cover;
+    oSurfacing = Surfacing;
+    oCoating = Coating;
+    oRadiance = Radiance;
+}
+
+float GradientRamp(float Fraction)
+{
+    float T = clamp(Fraction, 0.0, 1.0);
+    if (uGradient.y < 0.5) return T;                                 // even
+    if (uGradient.y < 1.5) return T * T * (3.0 - 2.0 * T);           // smooth
+    if (uGradient.y < 2.5) return T * T;                             // ease in
+    return 1.0 - (1.0 - T) * (1.0 - T);                              // ease out
 }
 void main()
 {
     vec4 Sample = texture(uPositionSource, vCoordinate);
+
+    // A gradient is not a stroke: it covers the whole sheet in one pass and fades along the axis between the two
+    // points the hand dragged between. Everything else a dab carries — colour, channel values, flow — it carries too.
+    if (uStampMode == 3)
+    {
+        if (Sample.w < 0.5) discard;
+        vec3 Position = Sample.xyz;
+        vec3 Axis = uStrokeEnd - uStrokeStart;
+        float Span = length(Axis);
+        if (Span < 1e-6) discard;
+        float Fraction = uGradient.x < 0.5
+            ? clamp(dot(Position - uStrokeStart, Axis) / (Span * Span), 0.0, 1.0)
+            : clamp(length(Position - uStrokeStart) / Span, 0.0, 1.0);
+        if (uGradient.z > 0.5) Fraction = 1.0 - Fraction;
+        float Ramp = 1.0 - GradientRamp(Fraction);
+        // The far end is allowed to reach zero and stop; a soft edge widens the part of the axis that is doing the
+        // fading, so the same drag can be a hard wipe or a long breath.
+        Ramp = pow(max(Ramp, 0.0), mix(2.2, 0.45, clamp(uGradientEdge, 0.0, 1.0)));
+        float Face = 1.0;
+        if (uGradient.w < 0.5)
+        {
+            vec3 Normal = normalize(texture(uNormalSource, vCoordinate).xyz);
+            Face = smoothstep(uFacingLimit, mix(uFacingLimit, 1.0, 0.45), dot(Normal, uStrokeNormal));
+        }
+        float Wash = clamp(Ramp * Face * uFlow, 0.0, 1.0);
+        if (Wash <= 0.0015) discard;
+        Emit(vec4(clamp(uStrokeColour, 0.0, 1.0) * Wash, Wash), Wash);
+        return;
+    }
 
     // A stamped decal is paint, not a projector: the artwork is burned into the layer the moment it is placed.
     if (uStampMode == 2)
@@ -892,8 +946,7 @@ void main()
         float Burn = clamp(Stencil.a * Edge * Within.x * Within.y * Reach * Face * uFlow, 0.0, 1.0);
         if (Burn <= 0.0015) discard;
         vec3 Ink = mix(Stencil.rgb, uStrokeColour, uStampColourise);
-        oCoverage = vec4(Ink * Burn, Burn);
-        LayDown(Burn);
+        Emit(vec4(Ink * Burn, Burn), Burn);
         return;
     }
 
@@ -962,8 +1015,7 @@ void main()
     float Jitter = mix(1.0, 0.65 + 0.35 * Hash21(vCoordinate * 512.0), uAlphaJitter);
     float Alpha = clamp(Media.x * Facing * uFlow * Jitter, 0.0, 1.0);
     if (Alpha <= 0.0015) discard;
-    oCoverage = vec4(clamp(uStrokeColour * Media.y, 0.0, 1.0) * Alpha, Alpha);
-    LayDown(Alpha);
+    Emit(vec4(clamp(uStrokeColour * Media.y, 0.0, 1.0) * Alpha, Alpha), Alpha);
 }`;
 
 //--------------------------------------------------------------------------------------------------------------------------

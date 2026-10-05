@@ -39,6 +39,7 @@ import { FinishFamilyIndex, FinishStyleIndex } from "./FinishSpecification.js";
 import { EnvironmentByIdentifier } from "./MaterialSpecification.js";
 import { TileRectangle } from "./SceneStructure.js";
 import { MediaUniforms, PlainMedia } from "./MediaSolver.js";
+import { WriteOrdering, GradientEasings } from "./StrokeSpecification.js";
 
 const MaskKindIndex = (Kind) => ({ stroke: 1, generator: 2, colour: 3 })[Kind] ?? 0;
 
@@ -511,8 +512,10 @@ export class ShadingIntegrator
             if (Slot === "Mask") continue;
             if (Record.PaintTarget) this.Device.deleteFramebuffer(Record.PaintTarget);
             if (Record.SettleTarget) this.Device.deleteFramebuffer(Record.SettleTarget);
+            for (const Slice of Record.SliceTargets || []) if (Slice) this.Device.deleteFramebuffer(Slice);
             Record.PaintTarget = null;
             Record.SettleTarget = null;
+            Record.SliceTargets = null;
         }
     }
 
@@ -690,6 +693,19 @@ export class ShadingIntegrator
         return Record.PaintTarget;
     }
 
+    // 📝 One image on its own. A colour mask is a piece of global state — it applies to every attachment a draw writes —
+    //    so the only way to write roughness without touching base colour is to draw into one attachment at a time.
+    SliceTarget(Record, Index)
+    {
+        if (!Record.SliceTargets) Record.SliceTargets = [];
+        if (!Record.SliceTargets[Index])
+        {
+            const Image = Index === 0 ? Record.Coverage : Record[PaintedImages[Index - 1].Slot];
+            Record.SliceTargets[Index] = this.CreateTarget([Image]);
+        }
+        return Record.SliceTargets[Index];
+    }
+
     // Hands the paint already on the sheet the values it was laid down with. Every texel takes the same numbers, so
     // the pass is a clear rather than a draw: premultiplied by coverage is what the stamp writes, and a clear cannot
     // see the coverage — which is why the images are cleared to the value and then multiplied down by alpha with one
@@ -801,6 +817,7 @@ export class ShadingIntegrator
         for (const Slot of ["Coverage", ...PaintedSlots, "Mask"])
             if (Record[`${Slot}Target`]) Device.deleteFramebuffer(Record[`${Slot}Target`]);
         if (Record.PaintTarget) Device.deleteFramebuffer(Record.PaintTarget);
+        for (const Slice of Record.SliceTargets || []) if (Slice) Device.deleteFramebuffer(Slice);
         this.LayerImages.delete(Identifier);
     }
 
@@ -867,10 +884,22 @@ export class ShadingIntegrator
                 Record.Uniform = null;
             }
         }
+        // Which images this stroke may write. A mask has one image and no channels of its own, so it can honour
+        // nothing finer than the stroke itself.
+        const Wanted = !Masking && Options.Writes ? WriteOrdering(Options.Writes) : null;
+        // 🔴 A layer whose channel values are still one set for the whole sheet cannot hold roughness in one place and
+        //    not another, so a stroke that writes only some channels grows the layer's images before it lands. Without
+        //    this the channel switches would simply do nothing on a fresh layer, which reads as a broken control.
+        if (Wanted && !Wanted.Full && !Options.Erase && !Record.Surfacing)
+        {
+            Record = this.SettlePaintwork(Layer, Record.Uniform || PaintedVector(Options.Channels || Layer.Channels));
+            Record.Uniform = null;
+        }
         const Painted = !Masking && Boolean(Record.Surfacing);
         const Target = Masking ? Record.MaskTarget : Painted ? this.PaintTarget(Record) : Record.CoverageTarget;
         const Size = (Masking ? Record.MaskSize : Record.CoverageSize) || this.Resolution;
         const Program = this.Programs.Stamp;
+        const Slices = Wanted && !Wanted.Full && Painted ? Wanted.Slots.filter((Slot) => Slot.Mask.some(Boolean)) : null;
         Device.bindFramebuffer(Device.FRAMEBUFFER, Target);
         Device.viewport(0, 0, Size, Size);
         Device.useProgram(Program.Program);
@@ -914,7 +943,18 @@ export class ShadingIntegrator
             Options.Travel?.[1] ?? 0,
         ]);
         const Burn = Options.Mode === "decal" ? Options.Decal : null;
-        Device.uniform1i(Uniforms.get("uStampMode"), Options.Mode === "plane" ? 1 : Burn ? 2 : 0);
+        const Gradient = Options.Mode === "gradient" ? Options.Gradient || {} : null;
+        Device.uniform1i(
+            Uniforms.get("uStampMode"),
+            Gradient ? 3 : Options.Mode === "plane" ? 1 : Burn ? 2 : 0,
+        );
+        Device.uniform4fv(Uniforms.get("uGradient"), [
+            Gradient?.Shape === "radial" ? 1 : 0,
+            Math.max(0, GradientEasings.findIndex((Entry) => Entry.Identifier === (Gradient?.Easing || "smooth"))),
+            Gradient?.Reverse ? 1 : 0,
+            Gradient?.Through ? 1 : 0,
+        ]);
+        Device.uniform1f(Uniforms.get("uGradientEdge"), Gradient?.Softness ?? 0.5);
         this.BindImage(Program, "uStampDecal", (Burn && this.LayerImages.get(Burn.Layer)?.Decal) || this.BlankImage(), 2);
         Device.uniform3fv(Uniforms.get("uStampCentre"), Burn?.Position || [0, 0, 0]);
         Device.uniform3fv(Uniforms.get("uStampAxis"), Burn?.Normal || [0, 1, 0]);
@@ -926,11 +966,30 @@ export class ShadingIntegrator
         Device.uniform1f(Uniforms.get("uStampReach"), Burn?.Depth ?? 0.45);
         Device.uniform1f(Uniforms.get("uStampSoftness"), Burn?.Softness ?? 0.06);
         Device.uniform1f(Uniforms.get("uStampColourise"), Burn?.Colorise ? 1 : 0);
-        Device.drawArrays(Device.TRIANGLES, 0, 3);
+        if (Slices)
+        {
+            // One draw per image the stroke is allowed into, with the components it may touch switched on. The chosen
+            // image is routed to location 0, so every draw writes exactly one attachment.
+            for (const Slice of Slices)
+            {
+                Device.bindFramebuffer(Device.FRAMEBUFFER, this.SliceTarget(Record, Slice.Index));
+                Device.uniform1i(Uniforms.get("uSlot"), Slice.Index);
+                Device.colorMask(...Slice.Mask);
+                Device.drawArrays(Device.TRIANGLES, 0, 3);
+                this.Statistics.Stamps += 1;
+            }
+            Device.colorMask(true, true, true, true);
+            Device.uniform1i(Uniforms.get("uSlot"), -1);
+        }
+        else
+        {
+            Device.uniform1i(Uniforms.get("uSlot"), -1);
+            Device.drawArrays(Device.TRIANGLES, 0, 3);
+            this.Statistics.Stamps += 1;
+        }
         Device.disable(Device.BLEND);
         Device.bindVertexArray(null);
         Device.bindFramebuffer(Device.FRAMEBUFFER, null);
-        this.Statistics.Stamps += 1;
     }
 
     // A flood is a dab the size of the sheet, so it carries channel values exactly as a stroke does.
