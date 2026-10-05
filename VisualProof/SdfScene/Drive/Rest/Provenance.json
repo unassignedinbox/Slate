@@ -1,7 +1,7 @@
 {
-  "source": "4bbea45259e1443ff8f935af9685997909846da5",
+  "source": "4eee806f47b327120647302cf3934be3951238d0",
   "pose": "Rest",
-  "run": "37374663397",
+  "run": "37375125331",
   "exitCode": 1,
   "method": "Actual Project Drive DLL and complete opening glTF. CPU BVH supplies primary visibility only; production Vulkan SDF shaders perform lighting on lavapipe.",
   "limitations": [
@@ -15,7 +15,7 @@
       512,
       320
     ],
-    "cardResolution": 1,
+    "cardResolution": 2,
     "volumeResolution": 32,
     "clipCell": 0.15,
     "warmupFrames": 8,
@@ -26,8 +26,8 @@
     "reflections": 0
   },
   "geometrySha256": "2ef215d79aa550425eb0136e6f2b6f0d0e49006066cd1f5d4b6522ded940946e",
-  "refusal": "Command '['/home/runner/work/Slate/Slate/_AgentScratch/build/DriveExecution/Rest/SceneExecution', '/home/runner/work/Slate/Slate/_AgentScratch/build/DriveExecution/Rest/Shaders', '/home/runner/work/Slate/Slate/_AgentScratch/build/DriveExecution/Rest', 'Drive', '/home/runner/work/Slate/Slate/_AgentScratch/build/TyreDeformation/Images/DriveRest.bin']' returned non-zero exit status 1.",
-  "seconds": 108.66559760499999,
+  "refusal": "Command '['/home/runner/work/Slate/Slate/_AgentScratch/build/DriveExecution/Rest/SceneExecution', '/home/runner/work/Slate/Slate/_AgentScratch/build/DriveExecution/Rest/Shaders', '/home/runner/work/Slate/Slate/_AgentScratch/build/DriveExecution/Rest', 'Drive', '/home/runner/work/Slate/Slate/_AgentScratch/build/TyreDeformation/Images/DriveRest.bin']' timed out after 2699.999963852 seconds",
+  "seconds": 2807.149392135,
   "shaders": {
     "DistanceFieldGatherFixed.spv": "98aee7bbd27898532b757061497213c180db3b059e9cf06a1243ea9d32fcdb9c",
     "DistanceFieldConstruct.spv": "4a35deef7dc6ea24f14512d91a5ece51f446bfc327b02a04308d6cbca49d7af6",
@@ -38,5 +38,7 @@
     "DistanceFieldCaptureFixed.spv": "b17923cc09fe65a00a78f4a1fcaf6045ac1dc7cae2fa390e9363e61ab1c1b02d",
     "DistanceFieldRadiance.spv": "3e3a3beb255aba6c33f76a29237a73f23233c5103ac72b6be06d648978734f3a"
   },
-  "images": {}
+  "images": {
+    "Scene-GI.png": "a973d59b7d7c53b990de5ae1d52e1accaa0f586c775e20558fd8b6896434fc89"
+  }
 }
