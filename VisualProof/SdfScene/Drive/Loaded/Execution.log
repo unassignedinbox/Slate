@@ -1,0 +1,67 @@
+$ /usr/bin/python3 <repository>/VisualProof/TyreDeformation/ExecuteTyres.py --capture-drive-only
+/home/runner/work/Slate/Slate/Frontier/Engine/GeometricRaster/DistanceFieldSpace.cpp: In member function ‘float Frontier::DistanceFieldSpace::MarchSoftShadow(Frontier::Vector3, Frontier::Vector3, float, float, float, uint32_t) const’:
+/home/runner/work/Slate/Slate/Frontier/Engine/GeometricRaster/DistanceFieldSpace.cpp:241:11: warning: unused variable ‘PrevH’ [-Wunused-variable]
+  241 |     float PrevH = 1e10f;
+      |           ^~~~~
+PASS DriveTyre SDF1 rest bake: 262144 samples; signature 8981059779717750603; verified existing
+PASS DriveCourse import: 22046 triangles, 6 placements, 22 instances
+PASS DriveTyre SDF1 rest bake: 262144 samples; signature 8981059779717750603; verified existing
+PASS DriveCourse import: 22046 triangles, 6 placements, 22 instances
+Drive rest SDF is absent, stale or corrupt
+/home/runner/work/Slate/Slate/Frontier/Projects/Project-Drive/Source/ProjectDriveInterchange.cpp: In function ‘uint32_t {anonymous}::ConstructProject(const FrontierProjectLaunch*, const FrontierProjectHostInterchange*, void**, FrontierProjectRefusal*)’:
+/home/runner/work/Slate/Slate/Frontier/Projects/Project-Drive/Source/ProjectDriveInterchange.cpp:197:53: warning: ‘std::filesystem::__cxx11::path std::filesystem::__cxx11::u8path(const _Source&) [with _Source = const char*; _Require = path; _CharT = char]’ is deprecated: use 'path((const char8_t*)&*source)' instead [-Wdeprecated-declarations]
+  197 |         std::ifstream Stream(std::filesystem::u8path(ActiveLaunch->SpecificationLocation));
+      |                              ~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /usr/include/c++/13/filesystem:49,
+                 from /home/runner/work/Slate/Slate/Frontier/Projects/Project-Drive/Source/ProjectDriveInterchange.cpp:14:
+/usr/include/c++/13/bits/fs_path.h:843:5: note: declared here
+  843 |     u8path(const _Source& __source)
+      |     ^~~~~~
+/home/runner/work/Slate/Slate/Frontier/Projects/Project-Drive/Source/ProjectDriveInterchange.cpp: In function ‘uint32_t {anonymous}::ConstructProject(const FrontierProjectLaunch*, const FrontierProjectHostInterchange*, void**, FrontierProjectRefusal*)’:
+/home/runner/work/Slate/Slate/Frontier/Projects/Project-Drive/Source/ProjectDriveInterchange.cpp:197:53: warning: ‘std::filesystem::__cxx11::path std::filesystem::__cxx11::u8path(const _Source&) [with _Source = const char*; _Require = path; _CharT = char]’ is deprecated: use 'path((const char8_t*)&*source)' instead [-Wdeprecated-declarations]
+  197 |         std::ifstream Stream(std::filesystem::u8path(ActiveLaunch->SpecificationLocation));
+      |                              ~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /usr/include/c++/13/filesystem:49,
+                 from /home/runner/work/Slate/Slate/Frontier/Projects/Project-Drive/Source/ProjectDriveInterchange.cpp:14:
+/usr/include/c++/13/bits/fs_path.h:843:5: note: declared here
+  843 |     u8path(const _Source& __source)
+      |     ^~~~~~
+PASS edit mode never drives or requests a player camera
+Drive displacement: 17.0723 -0.0013 1.5260 metres
+PASS Play drives the real vehicle solver and emits all five placements plus the chase camera
+PASS pause holds simulation; one step advances exactly one interval
+PASS paused reset returns both chassis and all wheel transforms to spawn
+PASS Simulate integrates without keyboard driving or a chase-camera takeover
+PASS text-input capture suppresses driving
+PASS project retirement
+PASS real deployment callbacks: configured position/yaw, edit-mode safety, optional deletion, respawn edge and new-session restoration
+/home/runner/work/Slate/Slate/Frontier/Engine/GeometricRaster/DistanceFieldSpace.cpp: In member function ‘float Frontier::DistanceFieldSpace::MarchSoftShadow(Frontier::Vector3, Frontier::Vector3, float, float, float, uint32_t) const’:
+/home/runner/work/Slate/Slate/Frontier/Engine/GeometricRaster/DistanceFieldSpace.cpp:241:11: warning: unused variable ‘PrevH’ [-Wunused-variable]
+  241 |     float PrevH = 1e10f;
+      |           ^~~~~
+PASS real Drive non-rigid displacement beyond pose-only wheel: 0.00637654 m
+PASS actual Drive DLL + opening glTF: 35664 rewritten vertices; maximum local-to-world coordinate change 2.29469 m
+PASS native SDF geometry revision, fixed topology, culling bounds, coarse refusal, unchanged revision, pause, exact Stop restore
+PASS native Drive rest/loaded scene export for production Vulkan execution
+$ glslc --target-env=vulkan1.2 -fshader-stage=compute -I<repository>/Frontier/Engine/Shaders -I<repository>/Frontier/Engine <repository>/Frontier/Engine/Shaders/DistanceFieldConstruct.slang -o <repository>/_AgentScratch/build/DriveExecution/Loaded/Shaders/DistanceFieldConstruct.spv
+$ spirv-val --target-env vulkan1.2 <repository>/_AgentScratch/build/DriveExecution/Loaded/Shaders/DistanceFieldConstruct.spv
+$ glslc --target-env=vulkan1.2 -fshader-stage=compute -I<repository>/Frontier/Engine/Shaders -I<repository>/Frontier/Engine <repository>/Frontier/Engine/Shaders/DistanceFieldCapture.slang -o <repository>/_AgentScratch/build/DriveExecution/Loaded/Shaders/DistanceFieldCapture.spv
+$ spirv-val --target-env vulkan1.2 <repository>/_AgentScratch/build/DriveExecution/Loaded/Shaders/DistanceFieldCapture.spv
+$ glslc --target-env=vulkan1.2 -fshader-stage=compute -I<repository>/Frontier/Engine/Shaders -I<repository>/Frontier/Engine <repository>/Frontier/Engine/Shaders/DistanceFieldCaptureFixed.slang -o <repository>/_AgentScratch/build/DriveExecution/Loaded/Shaders/DistanceFieldCaptureFixed.spv
+$ spirv-val --target-env vulkan1.2 <repository>/_AgentScratch/build/DriveExecution/Loaded/Shaders/DistanceFieldCaptureFixed.spv
+$ glslc --target-env=vulkan1.2 -fshader-stage=compute -I<repository>/Frontier/Engine/Shaders -I<repository>/Frontier/Engine <repository>/Frontier/Engine/Shaders/DistanceFieldRadiance.slang -o <repository>/_AgentScratch/build/DriveExecution/Loaded/Shaders/DistanceFieldRadiance.spv
+$ spirv-val --target-env vulkan1.2 <repository>/_AgentScratch/build/DriveExecution/Loaded/Shaders/DistanceFieldRadiance.spv
+$ glslc --target-env=vulkan1.2 -fshader-stage=compute -I<repository>/Frontier/Engine/Shaders -I<repository>/Frontier/Engine <repository>/Frontier/Engine/Shaders/DistanceFieldGather.slang -o <repository>/_AgentScratch/build/DriveExecution/Loaded/Shaders/DistanceFieldGather.spv
+$ spirv-val --target-env vulkan1.2 <repository>/_AgentScratch/build/DriveExecution/Loaded/Shaders/DistanceFieldGather.spv
+$ glslc --target-env=vulkan1.2 -fshader-stage=compute -I<repository>/Frontier/Engine/Shaders -I<repository>/Frontier/Engine <repository>/Frontier/Engine/Shaders/DistanceFieldGatherFixed.slang -o <repository>/_AgentScratch/build/DriveExecution/Loaded/Shaders/DistanceFieldGatherFixed.spv
+$ spirv-val --target-env vulkan1.2 <repository>/_AgentScratch/build/DriveExecution/Loaded/Shaders/DistanceFieldGatherFixed.spv
+$ glslc --target-env=vulkan1.2 -fshader-stage=compute -I<repository>/Frontier/Engine/Shaders -I<repository>/Frontier/Engine <repository>/Frontier/Engine/Shaders/DistanceFieldGIResolve.slang -o <repository>/_AgentScratch/build/DriveExecution/Loaded/Shaders/DistanceFieldGIResolve.spv
+$ spirv-val --target-env vulkan1.2 <repository>/_AgentScratch/build/DriveExecution/Loaded/Shaders/DistanceFieldGIResolve.spv
+$ glslc --target-env=vulkan1.2 -fshader-stage=compute -I<repository>/Frontier/Engine/Shaders -I<repository>/Frontier/Engine <repository>/Frontier/Engine/Shaders/DistanceFieldGIResolveFixed.slang -o <repository>/_AgentScratch/build/DriveExecution/Loaded/Shaders/DistanceFieldGIResolveFixed.spv
+$ spirv-val --target-env vulkan1.2 <repository>/_AgentScratch/build/DriveExecution/Loaded/Shaders/DistanceFieldGIResolveFixed.spv
+$ g++ -std=c++20 -O2 -Wall -Wextra -Wno-missing-field-initializers -I<repository>/Frontier <repository>/VisualProof/SdfScene/SceneExecution.cpp <repository>/Frontier/Engine/DeviceExchange/DistanceFieldGIStage.cpp <repository>/Frontier/Engine/GeometricRaster/DistanceFieldStructure.cpp -lvulkan -o <repository>/_AgentScratch/build/DriveExecution/Loaded/SceneExecution
+$ <repository>/_AgentScratch/build/DriveExecution/Loaded/SceneExecution <repository>/_AgentScratch/build/DriveExecution/Loaded/Shaders <repository>/_AgentScratch/build/DriveExecution/Loaded Drive <repository>/_AgentScratch/build/TyreDeformation/Images/DriveLoaded.bin
+Vulkan execution device: llvmpipe (LLVM 20.1.2, 256 bits)
+CPU JIT flags: nopt
+SCENE case=Drive scale=1 offset=0,0,0 facets=22046 instances=22
+FAIL SDF initialization is missing scene resources or has invalid clipmap dimensions
