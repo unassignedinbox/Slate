@@ -296,8 +296,9 @@ uint32_t SceneStructure::ForkTopology(uint32_t FirstInstance) noexcept
     Fork.TriangleCount = Origin.TriangleCount;
     Fork.VertexCount   = Origin.VertexCount;
     Fork.VertexOffset  = static_cast<uint32_t>(Vertices.size());
-    Vertices.insert(Vertices.end(), Vertices.begin() + Origin.VertexOffset,
-                                    Vertices.begin() + Origin.VertexOffset + Origin.VertexCount);
+    const std::vector<VertexRecord> CopiedVertices(Vertices.begin() + Origin.VertexOffset,
+                                                   Vertices.begin() + Origin.VertexOffset + Origin.VertexCount);
+    Vertices.insert(Vertices.end(), CopiedVertices.begin(), CopiedVertices.end());
 
     for (const TopologyRecord::Partition& Origin2 : Origin.Partitions)
     {
@@ -316,7 +317,8 @@ uint32_t SceneStructure::ForkTopology(uint32_t FirstInstance) noexcept
         Copy.FirstCluster  = static_cast<uint32_t>(ClusterTemplates.size());
         Copy.ClusterCount  = Origin2.ClusterCount;
         const int32_t IndexShift  = static_cast<int32_t>(Copy.FirstIndex) - static_cast<int32_t>(Origin2.FirstIndex);
-        Indices.insert(Indices.end(), Indices.begin() + Origin2.FirstIndex, Indices.begin() + SpanEnd);
+        const std::vector<uint32_t> CopiedIndices(Indices.begin() + Origin2.FirstIndex, Indices.begin() + SpanEnd);
+        Indices.insert(Indices.end(), CopiedIndices.begin(), CopiedIndices.end());
         for (uint32_t C = 0u; C < Origin2.ClusterCount; ++C)
         {
             ClusterRecord T = ClusterTemplates[Origin2.FirstCluster + C];
@@ -404,6 +406,25 @@ void SceneStructure::AttachInstances(uint32_t Placement, uint32_t FirstInstance,
 //------------------------------------------------------------------------------------------------------------------------
 //                                                        FINALISE
 //------------------------------------------------------------------------------------------------------------------------
+
+void SceneStructure::RefreshGeometry(const std::vector<InstanceRecord>& Rows) noexcept
+{
+    if (Rows.size() != Instances.size()) return;
+    Instances = Rows;
+    for (ClusterRecord& Cluster : Clusters)
+    {
+        const InstanceRecord& Instance = Instances[Cluster.InstanceIndex];
+        const ClusterRecord Bounds = ConstructCluster(Vertices.data() + Instance.VertexOffset,
+                                                      Indices.data() + Cluster.FirstIndex, Cluster.TriangleCount, true);
+        Cluster.CenterX = Bounds.CenterX; Cluster.CenterY = Bounds.CenterY; Cluster.CenterZ = Bounds.CenterZ;
+        Cluster.Radius = Bounds.Radius;
+        Cluster.Cutoff = 1.0f;
+        // Authored simplification error and normal cones are not valid under arbitrary deformation.
+        Cluster.CoarseTriangleCount = 0u;
+        Cluster.CoarseError = 0.0f;
+    }
+    Finalise(std::max(1u, Materials.QueryMetrics().SlabLimit));
+}
 
 void SceneStructure::Finalise(uint32_t SlabLimit, std::vector<std::string>* Report) noexcept
 {

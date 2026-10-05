@@ -27,7 +27,7 @@ namespace Frontier {
 namespace Drive {
 
 // Tessellation shared by the export wheel and the simulated wheel. The ring and segment counts deliberately equal
-//    SoftTyreParameters' defaults, so XPBDSoftTyre::Nodes() drops into the lattice one-for-one with no resampling.
+//    SoftTyreParameters' defaults. Gather XPBDSoftTyre::Nodes() in reversed ring order; no resampling is needed.
 inline constexpr uint32_t kDriveWheelRingCount    = 9u;
 inline constexpr uint32_t kDriveWheelSegmentCount = 128u;
 // 0 disables the rim entirely and closes the wheel with a plain hub face. The spoke emitter below is kept
@@ -36,8 +36,8 @@ inline constexpr uint32_t kDriveWheelSpokeCount   = 0u;
 
 //------------------------------------------------------------------------------------------------------------------------ the lattice
 // A ring x segment grid of tread points in hub-local space. Ring 0 is the +Y (left/outboard) shoulder, ring
-//    RingCount-1 the -Y shoulder; segment 0 is at local +X and winds toward +Z. This is XPBDSoftTyre's own node
-//    layout, which is why a live carcass can be handed over with nothing but a frame change.
+//    RingCount-1 the -Y shoulder; segment 0 is at local +X and winds toward +Z. XPBDSoftTyre's rings run -Y to +Y,
+//    so gathering a live carcass requires a ring-index reversal as well as the material-frame change.
 struct WheelTreadLattice
 {
     uint32_t RingCount    = 5u;

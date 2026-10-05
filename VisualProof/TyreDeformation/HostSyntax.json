@@ -1,0 +1,24 @@
+{
+  "command": [
+    "g++",
+    "-std=c++20",
+    "-fsyntax-only",
+    "-I_AgentScratch/Dependencies/Vulkan-Headers/include",
+    "-I_AgentScratch/Dependencies/imgui",
+    "-I_AgentScratch/Dependencies/glfw/include",
+    "-I_AgentScratch/Dependencies/JoltPhysics",
+    "-I_AgentScratch/Dependencies/tomlplusplus/include",
+    "-IFrontier/Engine",
+    "-IFrontier",
+    "Frontier/Engine/Host/FrontierRuntime.cpp"
+  ],
+  "exitCode": 0,
+  "diagnostics": "",
+  "sourceSha256": "119164c92aef3caea1a825855b615d42e6756bde2ffd46a3a879583c4a7344d3",
+  "scope": "GCC syntax check, not linked/windowed/Vulkan execution",
+  "geometryCHeaderLayout": {
+    "language": "C11",
+    "sizeBytes": 56,
+    "executed": true
+  }
+}

@@ -2142,3 +2142,24 @@ reuse invalidation and target-hardware measurement remain future work. No native
 
 **`VisualProof/DistanceIntegrator/Captures/`** retains seventeen actual browser/debug captures and the CPU, WebGPU and
 control reports. Full voxel dumps, dependencies and intermediate attempts remain ignored scratch.
+
+## C039 — Native Project Drive XPBD deformation and tyre SDF evidence
+
+Returned to C++, rather than replacing the C038 browser study or native ReSTIR. Added the requested
+`Plans/Ongoing/MasterPlan.md`, native rest SDF1 baking/verification, closed deformation-aware field reconstruction,
+and an optional ABI3-compatible geometry extension from the actual Drive solver to the shared host.
+
+The host forks wheel topology and rebuilds normals, culling, traversal and native hybrid distance geometry together;
+rigid-only traversal and rest-only coarse errors are disabled for this path. Pause, unchanged revision and exact Stop
+restore are executed checks. Rim materials remain rigid. The production renderer remains hybrid SDF/triangle
+refinement; the local bake is not yet a streamed GPU object-field cache.
+
+`VisualProof/TyreDeformation/index.html` is a gallery of twelve **C++ CPU field-only renders**, not another browser
+simulation or a Vulkan/editor capture. It includes the real Drive DLL front-left snapshot, rest, loaded and banked
+fixtures, gradient normals and signed slices. The full-vehicle check measures 6.38 mm of non-rigid displacement beyond
+pose-only wheels. Loaded fixture projection agrees with actual XPBD nodes within 0.14 micrometres.
+
+The 64³ ray tests retain their failures: 12/15/12 reference hits missed across the three 1,728-ray fixtures, zero
+extra hits, and worst paired depth errors of 632/103/103 mm despite approximately 0.34 mm medians. Local CPU field
+construction is about 1.0–1.2 seconds; native synchronized scene reconstruction is not a real-time performance claim.
+Production Vulkan presentation, optimized streaming and target-hardware profiling remain unverified/future gates.

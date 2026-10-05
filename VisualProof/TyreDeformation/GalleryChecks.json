@@ -1,0 +1,7 @@
+{
+  "selectionCombinations": 12,
+  "allImageFilesExist": true,
+  "directImageLinksMatch": true,
+  "selectedStatesMatch": true,
+  "scope": "Node VM control-logic check; not a rendered browser test"
+}

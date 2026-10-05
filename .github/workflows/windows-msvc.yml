@@ -206,6 +206,19 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Drive check dependencies failed' }
           python Tools/Tests/CheckDrivePlayback.py
           if ($LASTEXITCODE -ne 0) { throw 'Drive playback or scene placement checks failed' }
+          python ../VisualProof/TyreDeformation/ExecuteTyres.py
+          if ($LASTEXITCODE -ne 0) { throw 'Native tyre bake, geometry handoff or field renders failed' }
+      - name: Retain native tyre execution evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: drive-tyre-msvc-${{ github.sha }}
+          retention-days: 14
+          path: |
+            VisualProof/TyreDeformation/Captures/
+            VisualProof/TyreDeformation/*.json
+            VisualProof/TyreDeformation/Execution.log
+
 
   native-editor:
     if: ${{ !inputs.export_browser_run && !contains(github.event.head_commit.message, '[export-executed-pixels]') }}

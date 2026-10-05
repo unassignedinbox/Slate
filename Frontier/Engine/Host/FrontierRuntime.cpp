@@ -61,6 +61,7 @@ int RunProjectFluidPreview();
 #include "FrontierRuntime.h"
 #include "ProjectOpeningSequence.h"
 #include "../ProjectInterchange/CodeInterchange.h"
+#include "GeometrySequence.h"
 #include "../ProjectInterchange/ProjectSpecification.h"
 #include "../SpatialInterface/InterfaceScreenSequence.h"
 #include "../SpatialInterface/InterfaceTextProjection.h"
@@ -318,6 +319,7 @@ int Frontier::RunFrontierRuntime(
     }
 
     Frontier::SceneStructure Level;
+    Frontier::HostRuntime::GeometrySequence ProjectGeometry;
     Frontier::TextureIndex   Textures;
     uint32_t MaxTextureLevels = 1u;   // R6 row 3: deepest mip chain resident (F3 scene-census row; computed once below)
     // Celestial moon atlas: bindless slots, filled right after the scene registers its own textures (below) and
@@ -522,6 +524,7 @@ int Frontier::RunFrontierRuntime(
     //     instance, so object space is world space and this is bit-for-bit what Build() produced before
     //     (Scratchpad/CheckTraversalIdentity.sh is the gate). Per-instance transforms arrive in D2/D3.
     Frontier::TraversalIndex Traversal;
+    ProjectGeometry.Construct(Level, ActiveInterchange);
     std::future<void> TraversalBuildFuture;
     bool TraversalBuildStarted = false;
     {
@@ -851,7 +854,7 @@ int Frontier::RunFrontierRuntime(
     struct RestTransform { float World[16]; };
     std::vector<RestTransform> RestWorlds;
     bool InstancesResident = false;
-    if (AnimatedInstances.size() > 1u)
+    if (AnimatedInstances.size() > 1u && !ProjectGeometry.Active())
     {
         std::vector<Frontier::MeshPrototype> Prototypes;
         Prototypes.reserve(AnimatedInstances.size());
@@ -1777,6 +1780,7 @@ int Frontier::RunFrontierRuntime(
         if (Transport != 0u && PreviousTransport == 0u)
         {
             ProjectRestInstances = AnimatedInstances;
+            ProjectGeometry.CaptureRest(Level, AnimatedInstances);
             ProjectEditCamera = Camera;
         }
         bool ProjectMoved = false;
@@ -1814,8 +1818,20 @@ int Frontier::RunFrontierRuntime(
                     }
                 }
         }
+        bool GeometryChanged = false;
+        if (Transport != 0u && !ProjectGeometry.Advance(Level, AnimatedInstances, ActiveInterchange, GeometryChanged, ProjectRefusal))
+        {
+            Logger.RecordMessage(Frontier::DiagnosticSeverity::Refusal, "Project geometry", ProjectRefusal.c_str());
+            break;
+        }
+        ProjectMoved = ProjectMoved || GeometryChanged;
         if (Transport == 0u && PreviousTransport != 0u)
         {
+            if (ProjectGeometry.Active() && !ProjectGeometry.Restore(Level))
+            {
+                Logger.RecordMessage(Frontier::DiagnosticSeverity::Refusal, "Project geometry", "Authored topology changed during playback");
+                break;
+            }
             if (!ProjectRestInstances.empty()) AnimatedInstances = ProjectRestInstances;
             Camera = ProjectEditCamera;
             ProjectRestInstances.clear();
@@ -1823,7 +1839,21 @@ int Frontier::RunFrontierRuntime(
         }
         if (ProjectMoved)
         {
-            (void)Surface.RefreshInstances(AnimatedInstances.data(), static_cast<uint32_t>(AnimatedInstances.size()));
+            if (ProjectGeometry.Active())
+            {
+                // Correctness-first synchronized publication. UploadScene waits for GPU readers, replaces raster
+                // buffers and hardware traversal, and reconstructs native hybrid SDF geometry at the same revision.
+                // The rigid-only two-level path is disabled above for these projects. This is NOT a fast stream.
+                Level.RefreshGeometry(AnimatedInstances);
+                TracedFacets = Level.QueryFlatTriangles();
+                if (!Traversal.BuildBottomLevel(TracedFacets, false))
+                {
+                    Logger.RecordMessage(Frontier::DiagnosticSeverity::Refusal, "Project geometry", "Traversal rebuild refused");
+                    break;
+                }
+                Surface.UploadScene(Level, Traversal);
+            }
+            else (void)Surface.RefreshInstances(AnimatedInstances.data(), static_cast<uint32_t>(AnimatedInstances.size()));
             if (InstancesResident)
             {
                 bool Valid = true;

@@ -6,6 +6,7 @@
 #pragma once
 
 #include "ProjectInterchange.h"
+#include "GeometryInterchange.h"
 #include "ProjectSpecification.h"
 
 #include <string>
@@ -44,9 +45,14 @@ public:
     /// 📦 Retires project-owned records before closing their code image.
     void Retire() noexcept;
 
+    [[nodiscard]] bool HasGeometry() const noexcept { return GeometryEntry != nullptr; }
+    uint32_t ProjectGeometry(FrontierProjectGeometryReading& Reading) const
+    { return GeometryEntry ? GeometryEntry(ProjectRecord, &Reading) : 0u; }
+
     [[nodiscard]] bool CodeImageOpen() const noexcept;
 
 private:
+    FrontierProjectGeometry   GeometryEntry = nullptr;
     void*                     CodeImage = nullptr;
     FrontierProjectInterchange ActiveInterchange{};
     void*                     ProjectRecord = nullptr;

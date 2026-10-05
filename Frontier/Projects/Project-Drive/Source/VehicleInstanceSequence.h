@@ -94,6 +94,9 @@ public:
     [[nodiscard]] Frontier::Vehicle::VehicleSolverConfiguration& Configuration() noexcept { return ActiveConfiguration; }
     [[nodiscard]] const Frontier::Vehicle::VehicleSolverConfiguration& Configuration() const noexcept { return ActiveConfiguration; }
 
+    [[nodiscard]] const std::vector<Frontier::Vehicle::XPBDSoftTyre>& Tyres() const noexcept
+    { return ActiveVehicleSolver.Tyres(); }
+
     // Apply an inspector edit to the live config (rebuilds the tyres so curve/geometry edits take effect).
     void Reconfigure(const Frontier::Vehicle::VehicleSolverConfiguration& Edited) noexcept;
 

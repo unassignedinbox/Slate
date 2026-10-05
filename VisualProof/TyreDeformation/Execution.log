@@ -1,0 +1,62 @@
+$ g++ -std=c++20 -O2 -Wall -Wextra -pthread -I<repository>/Frontier -I<repository>/Frontier/Engine -I<repository>/_AgentScratch/Dependencies/cgltf -I<repository>/_AgentScratch/Dependencies/stb -I<repository>/_AgentScratch/Dependencies/ufbx -I<repository>/_AgentScratch/Dependencies/Vulkan-Headers/include <repository>/Frontier/Projects/Project-Drive/Build/DriveContentHost.cpp <repository>/Frontier/Projects/Project-Drive/Source/DriveSceneAuthor.cpp <repository>/Frontier/Engine/ContentInterchange/SceneCodec.cpp <repository>/Frontier/Engine/ContentInterchange/MaterialCodec.cpp <repository>/Frontier/Engine/ContentInterchange/MaterialIndex.cpp <repository>/Frontier/Engine/ContentInterchange/TextureIndex.cpp <repository>/Frontier/Engine/ContentInterchange/AssetResolution.cpp <repository>/Frontier/Engine/GeometricRaster/SceneStructure.cpp <repository>/Frontier/Engine/GeometricRaster/GeometryStructure.cpp <repository>/Frontier/Engine/DeviceExchange/OrientationClassifier.cpp <repository>/Frontier/Engine/PhysicalDynamics/Vehicle/XPBDSoftTyre.cpp <repository>/Frontier/Engine/GeometricRaster/DistanceFieldSpace.cpp -ldl -o <repository>/_AgentScratch/build/TyreDeformation/DriveContentHost
+<repository>/Frontier/Engine/GeometricRaster/DistanceFieldSpace.cpp: In member function ‘float Frontier::DistanceFieldSpace::MarchSoftShadow(Frontier::Vector3, Frontier::Vector3, float, float, float, uint32_t) const’:
+<repository>/Frontier/Engine/GeometricRaster/DistanceFieldSpace.cpp:241:11: warning: unused variable ‘PrevH’ [-Wunused-variable]
+  241 |     float PrevH = 1e10f;
+      |           ^~~~~
+
+$ <repository>/_AgentScratch/build/TyreDeformation/DriveContentHost --ensure <repository>/Frontier/Projects/Project-Drive/Content/Scenes/DriveCourse.r4.gltf
+PASS DriveTyre SDF1 rest bake: 262144 samples; signature 8981059779717750603; verified existing
+PASS DriveCourse import: 22046 triangles, 6 placements, 22 instances
+
+$ <repository>/_AgentScratch/build/TyreDeformation/DriveContentHost --verify-only <repository>/Frontier/Projects/Project-Drive/Content/Scenes/DriveCourse.r4.gltf
+PASS DriveTyre SDF1 rest bake: 262144 samples; signature 8981059779717750603; verified existing
+PASS DriveCourse import: 22046 triangles, 6 placements, 22 instances
+
+$ <repository>/_AgentScratch/build/TyreDeformation/DriveContentHost --verify-only <repository>/Frontier/Projects/Project-Drive/Content/Scenes/DriveCourse.r4.gltf
+Drive rest SDF is absent, stale or corrupt
+
+$ g++ -std=c++20 -O2 -Wall -Wextra -pthread -shared -fPIC -I<repository>/Frontier -I<repository>/Frontier/Engine -I<repository>/_AgentScratch/Dependencies/cgltf -I<repository>/_AgentScratch/Dependencies/stb -I<repository>/_AgentScratch/Dependencies/ufbx -I<repository>/_AgentScratch/Dependencies/Vulkan-Headers/include <repository>/Frontier/Projects/Project-Drive/Source/ProjectDriveInterchange.cpp <repository>/Frontier/Projects/Project-Drive/Source/VehicleInstanceSequence.cpp <repository>/Frontier/Projects/Project-Drive/Source/ChaseCameraSolver.cpp <repository>/Frontier/Engine/PhysicalDynamics/Vehicle/VehicleSolver.cpp <repository>/Frontier/Engine/PhysicalDynamics/Vehicle/VehicleGeometry.cpp <repository>/Frontier/Engine/PhysicalDynamics/Vehicle/XPBDSoftTyre.cpp <repository>/Frontier/Engine/PhysicalDynamics/Vehicle/Drivetrain.cpp <repository>/Frontier/Engine/PhysicalDynamics/Vehicle/Aerodynamics.cpp <repository>/Frontier/Engine/PhysicalDynamics/Vehicle/PacejkaMagicFormula.cpp <repository>/Frontier/Engine/PhysicalDynamics/Vehicle/TyreSlipDynamics.cpp <repository>/Frontier/Engine/GeometricRaster/CameraProjection.cpp <repository>/Frontier/Engine/DeviceExchange/OrientationClassifier.cpp -ldl -o <repository>/_AgentScratch/build/TyreDeformation/ProjectDrive.dll
+
+$ g++ -std=c++20 -O2 -Wall -Wextra -pthread -I<repository>/Frontier -I<repository>/Frontier/Engine -I<repository>/_AgentScratch/Dependencies/cgltf -I<repository>/_AgentScratch/Dependencies/stb -I<repository>/_AgentScratch/Dependencies/ufbx -I<repository>/_AgentScratch/Dependencies/Vulkan-Headers/include <repository>/Frontier/Projects/Project-Drive/Source/ProjectDriveInterchange.cpp <repository>/Frontier/Projects/Project-Drive/Source/VehicleInstanceSequence.cpp <repository>/Frontier/Projects/Project-Drive/Source/ChaseCameraSolver.cpp <repository>/Frontier/Engine/PhysicalDynamics/Vehicle/VehicleSolver.cpp <repository>/Frontier/Engine/PhysicalDynamics/Vehicle/VehicleGeometry.cpp <repository>/Frontier/Engine/PhysicalDynamics/Vehicle/XPBDSoftTyre.cpp <repository>/Frontier/Engine/PhysicalDynamics/Vehicle/Drivetrain.cpp <repository>/Frontier/Engine/PhysicalDynamics/Vehicle/Aerodynamics.cpp <repository>/Frontier/Engine/PhysicalDynamics/Vehicle/PacejkaMagicFormula.cpp <repository>/Frontier/Engine/PhysicalDynamics/Vehicle/TyreSlipDynamics.cpp <repository>/Frontier/Engine/GeometricRaster/CameraProjection.cpp <repository>/Frontier/Engine/DeviceExchange/OrientationClassifier.cpp <repository>/Frontier/Projects/Project-Drive/Source/DriveInterchangeChecks.cpp -ldl -o <repository>/_AgentScratch/build/TyreDeformation/DriveInterchangeChecks
+
+$ <repository>/_AgentScratch/build/TyreDeformation/DriveInterchangeChecks
+PASS edit mode never drives or requests a player camera
+Drive displacement: 17.0723 -0.0013 1.5260 metres
+PASS Play drives the real vehicle solver and emits all five placements plus the chase camera
+PASS pause holds simulation; one step advances exactly one interval
+PASS paused reset returns both chassis and all wheel transforms to spawn
+PASS Simulate integrates without keyboard driving or a chase-camera takeover
+PASS text-input capture suppresses driving
+PASS project retirement
+PASS real deployment callbacks: configured position/yaw, edit-mode safety, optional deletion, respawn edge and new-session restoration
+
+$ g++ -std=c++20 -O2 -Wall -Wextra -pthread -I<repository>/Frontier -I<repository>/Frontier/Engine -I<repository>/_AgentScratch/Dependencies/cgltf -I<repository>/_AgentScratch/Dependencies/stb -I<repository>/_AgentScratch/Dependencies/ufbx -I<repository>/_AgentScratch/Dependencies/Vulkan-Headers/include <repository>/Frontier/Projects/Project-Drive/Source/DriveSceneAuthor.cpp <repository>/Frontier/Engine/ContentInterchange/SceneCodec.cpp <repository>/Frontier/Engine/ContentInterchange/MaterialCodec.cpp <repository>/Frontier/Engine/ContentInterchange/MaterialIndex.cpp <repository>/Frontier/Engine/ContentInterchange/TextureIndex.cpp <repository>/Frontier/Engine/ContentInterchange/AssetResolution.cpp <repository>/Frontier/Engine/GeometricRaster/SceneStructure.cpp <repository>/Frontier/Engine/GeometricRaster/GeometryStructure.cpp <repository>/Frontier/Engine/DeviceExchange/OrientationClassifier.cpp <repository>/Frontier/Engine/PhysicalDynamics/Vehicle/XPBDSoftTyre.cpp <repository>/Frontier/Engine/GeometricRaster/DistanceFieldSpace.cpp <repository>/Frontier/Engine/ProjectInterchange/CodeInterchange.cpp <repository>/Frontier/Engine/ProjectInterchange/ProjectSpecification.cpp <repository>/Frontier/Engine/GeometricRaster/DistanceFieldStructure.cpp <repository>/VisualProof/TyreDeformation/InterchangeHost.cpp -ldl -o <repository>/_AgentScratch/build/TyreDeformation/InterchangeHost
+<repository>/Frontier/Engine/GeometricRaster/DistanceFieldSpace.cpp: In member function ‘float Frontier::DistanceFieldSpace::MarchSoftShadow(Frontier::Vector3, Frontier::Vector3, float, float, float, uint32_t) const’:
+<repository>/Frontier/Engine/GeometricRaster/DistanceFieldSpace.cpp:241:11: warning: unused variable ‘PrevH’ [-Wunused-variable]
+  241 |     float PrevH = 1e10f;
+      |           ^~~~~
+
+$ <repository>/_AgentScratch/build/TyreDeformation/InterchangeHost <repository>/_AgentScratch/build/TyreDeformation/ProjectDrive.dll <repository>/Frontier/Projects/Project-Drive/Content/Scenes/DriveCourse.r4.gltf <repository>/_AgentScratch/build/TyreDeformation/Images
+PASS real Drive non-rigid displacement beyond pose-only wheel: 0.00637654 m
+PASS actual Drive DLL + opening glTF: 35664 rewritten vertices; maximum local-to-world coordinate change 2.29469 m
+PASS native SDF geometry revision, fixed topology, culling bounds, coarse refusal, unchanged revision, pause, exact Stop restore
+
+$ g++ -std=c++20 -O2 -Wall -Wextra -pthread -I<repository>/Frontier -I<repository>/Frontier/Engine -I<repository>/_AgentScratch/Dependencies/cgltf -I<repository>/_AgentScratch/Dependencies/stb -I<repository>/_AgentScratch/Dependencies/ufbx -I<repository>/_AgentScratch/Dependencies/Vulkan-Headers/include <repository>/VisualProof/TyreDeformation/TyreHost.cpp <repository>/Frontier/Engine/PhysicalDynamics/Vehicle/XPBDSoftTyre.cpp <repository>/Frontier/Engine/GeometricRaster/DistanceFieldSpace.cpp -ldl -o <repository>/_AgentScratch/build/TyreDeformation/TyreHost
+<repository>/Frontier/Engine/GeometricRaster/DistanceFieldSpace.cpp: In member function ‘float Frontier::DistanceFieldSpace::MarchSoftShadow(Frontier::Vector3, Frontier::Vector3, float, float, float, uint32_t) const’:
+<repository>/Frontier/Engine/GeometricRaster/DistanceFieldSpace.cpp:241:11: warning: unused variable ‘PrevH’ [-Wunused-variable]
+  241 |     float PrevH = 1e10f;
+      |           ^~~~~
+
+$ <repository>/_AgentScratch/build/TyreDeformation/TyreHost <repository>/_AgentScratch/build/TyreDeformation/Images
+Rest projection 0, deformation 5.96046e-08
+Rest field-only primary hits 229927, exhausted 0
+Rest: contacts 0, displacement 5.96046e-08, build 1178.18 ms, missed 12, extra 0
+Loaded projection 1.39466e-07, deformation 0.0699934
+Loaded field-only primary hits 228399, exhausted 0
+Loaded: contacts 207, displacement 0.0699934, build 1000.98 ms, missed 15, extra 0
+Banked projection 1.37584e-07, deformation 0.123887
+Banked field-only primary hits 219170, exhausted 0
+Banked: contacts 197, displacement 0.123887, build 1084.74 ms, missed 12, extra 0
+
+$ <repository>/_AgentScratch/build/TyreDeformation/TyreHost <repository>/_AgentScratch/build/TyreDeformation/Images <repository>/_AgentScratch/build/TyreDeformation/Images/ProjectDrive.sdf 0.505238
+ProjectDrive field-only primary hits 233911, exhausted 0

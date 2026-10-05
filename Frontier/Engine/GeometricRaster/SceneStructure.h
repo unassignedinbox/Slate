@@ -217,6 +217,9 @@ public:
     //    table. `Report` receives the material fold lines.
     void                    Finalise(uint32_t SlabLimit = 1u, std::vector<std::string>* Report = nullptr) noexcept;
 
+    // Commit a fixed-topology deformation snapshot; refresh culling and flattened world triangles together.
+    void                    RefreshGeometry(const std::vector<InstanceRecord>& Rows) noexcept;
+
     void                    Clear() noexcept;
 
     [[nodiscard]] const std::vector<VertexRecord>&      QueryVertices()   const noexcept { return Vertices; }

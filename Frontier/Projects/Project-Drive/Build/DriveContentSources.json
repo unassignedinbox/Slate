@@ -9,7 +9,9 @@
     "Engine/ContentInterchange/AssetResolution.cpp",
     "Engine/GeometricRaster/SceneStructure.cpp",
     "Engine/GeometricRaster/GeometryStructure.cpp",
-    "Engine/DeviceExchange/OrientationClassifier.cpp"
+    "Engine/DeviceExchange/OrientationClassifier.cpp",
+    "Engine/PhysicalDynamics/Vehicle/XPBDSoftTyre.cpp",
+    "Engine/GeometricRaster/DistanceFieldSpace.cpp"
   ],
   "includes": [
     ".",

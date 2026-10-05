@@ -134,6 +134,12 @@ bool CodeInterchange::Construct(const ProjectSpecification& ResolvedSpecificatio
     if (CodeImage == nullptr)
         return false;
 
+#if defined(_WIN32)
+    GeometryEntry = reinterpret_cast<FrontierProjectGeometry>(
+        GetProcAddress(static_cast<HMODULE>(CodeImage), "ProjectGeometryInterchange"));
+#else
+    GeometryEntry = reinterpret_cast<FrontierProjectGeometry>(dlsym(CodeImage, "ProjectGeometryInterchange"));
+#endif
     const FrontierConstructProjectInterchange ConstructInterchange = QueryConstructionEntry(CodeImage);
     if (ConstructInterchange == nullptr)
     {
@@ -234,6 +240,7 @@ void CodeInterchange::Retire() noexcept
         ActiveInterchange.RetireProject(ProjectRecord);
 
     ProjectRecord = nullptr;
+    GeometryEntry = nullptr;
     ActiveInterchange = {};
     ReleaseCodeImage(CodeImage);
     CodeImage = nullptr;

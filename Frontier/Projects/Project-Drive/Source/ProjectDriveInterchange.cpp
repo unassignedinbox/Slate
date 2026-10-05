@@ -6,6 +6,8 @@
 #include "../../../Engine/ProjectInterchange/ProjectInterchange.h"
 
 #include "VehicleInstanceSequence.h"
+#include "TyreSequence.h"
+#include "../../../Engine/ProjectInterchange/GeometryInterchange.h"
 #include "ChaseCameraSolver.h"
 #include "../../../Engine/ProjectInterchange/DeploymentCodec.h"
 #include <fstream>
@@ -37,6 +39,23 @@ struct DriveSequence
     std::vector<Frontier::InstanceRecord> Poses{5u};
     uint32_t PreviousTransport = 0u;
     bool PreviousReset = false;
+    uint64_t GeometryRevision = 0u;
+    std::array<Frontier::Drive::TyreSequence, 4> Surfaces;
+
+    void CaptureSurfaces()
+    {
+        const auto& Tyres = Vehicle->Tyres();
+        const auto& Wheels = Vehicle->Telemetry().Wheels;
+        for (size_t Index = 0u; Index < Surfaces.size() && Index < Tyres.size(); ++Index)
+        {
+            const auto Up = Vehicle->Chassis().Orientation.Rotate({0.0f, 0.0f, 1.0f});
+            const auto Steering = Frontier::Vehicle::Quat::AxisAngle(Up, Wheels[Index].SteerAngleRad);
+            const auto HubRotation = Frontier::Vehicle::QuatNormalize(
+                Frontier::Vehicle::QuatMul(Steering, Vehicle->Chassis().Orientation));
+            Surfaces[Index].Capture(Tyres[Index], Wheels[Index].HubPosition, HubRotation);
+        }
+        ++GeometryRevision;
+    }
 
     void RestoreDeployment()
     {
@@ -242,6 +261,7 @@ uint32_t FRONTIER_CODE_IMAGE_CALL AdvanceProject(
     if (Seconds > 0.0f || Deployed)
     {
         Sequence.Vehicle->AdvanceVehicle(Command.Drive, Sequence.Poses, Seconds);
+        Sequence.CaptureSurfaces();
         Sequence.DeliverPoses();
     }
     if (Transport == 1u) Sequence.DeliverCamera(Seconds, Deployed);
@@ -275,5 +295,33 @@ extern "C" FRONTIER_CODE_IMAGE_EXPORT uint32_t FRONTIER_CODE_IMAGE_CALL Construc
     DeliveredInterchange->ConstructProject = &ConstructProject;
     DeliveredInterchange->AdvanceProject = &AdvanceProject;
     DeliveredInterchange->RetireProject = &RetireProject;
+    return 1u;
+}
+
+extern "C" FRONTIER_CODE_IMAGE_EXPORT uint32_t FRONTIER_CODE_IMAGE_CALL ProjectGeometryInterchange(
+    void* ProjectRecord, FrontierProjectGeometryReading* Reading)
+{
+    if (!Reading || Reading->StructureSize != sizeof(*Reading) || Reading->InterchangeNumber != 1u ||
+        !Reading->SubjectName) return 2u;
+    static const char* Subjects[] = { "XPBD Tyre FL", "XPBD Tyre FR", "XPBD Tyre RL", "XPBD Tyre RR" };
+    size_t Slot = 0u;
+    while (Slot < 4u && std::strcmp(Subjects[Slot], Reading->SubjectName) != 0) ++Slot;
+    if (Slot == 4u) return 0u;
+    auto* Sequence = static_cast<DriveSequence*>(ProjectRecord);
+    Reading->Revision = Sequence && Sequence->Vehicle ? Sequence->GeometryRevision : 0u;
+    if (Reading->VertexCount == 0u) return 1u;
+    if (!Sequence || !Sequence->Vehicle || Reading->Revision == 0u) return 0u;
+    if (!Reading->RestPositions || !Reading->CurrentPositions) return 2u;
+    auto Origin = Sequence->Geometry.AxleMountLocal(static_cast<uint32_t>(Slot));
+    Origin.z += Sequence->Geometry.CoMHeight + 0.02f;
+    for (uint32_t Index = 0u; Index < Reading->VertexCount; ++Index)
+    {
+        const float* Rest = Reading->RestPositions + Index * 3u;
+        if (!std::isfinite(Rest[0]) || !std::isfinite(Rest[1]) || !std::isfinite(Rest[2])) return 2u;
+        const bool Rubber = Reading->MaterialName == nullptr || std::strncmp(Reading->MaterialName, "StandardRubber", 14u) == 0;
+        const auto World = Sequence->Surfaces[Slot].Project({Rest[0] - Origin.x, Rest[1] - Origin.y, Rest[2] - Origin.z}, Rubber);
+        float* Current = Reading->CurrentPositions + Index * 3u;
+        Current[0] = World.x; Current[1] = World.y; Current[2] = World.z;
+    }
     return 1u;
 }
