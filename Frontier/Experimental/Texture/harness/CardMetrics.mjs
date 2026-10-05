@@ -243,6 +243,18 @@ Check("it comes back on the pane it was left on", Card.Open === true && Card.Sta
 Tap();
 Check("and goes away once more, never walking the rail", Card.Open === false);
 
+// 🔴 The regression that made it look like Tab still walked the rail: with focus in one of the card's own fields
+//    the key never reached the editor, so the browser did what it always does with Tab — moved the focus ring to
+//    the next focusable thing, which is the next row of the rail.
+Tap();
+Card.ShowSection("colour");
+const Typed = Pane().querySelector("[data-code]");
+Typed.focus();
+Check("a field in the card can hold focus", Window.document.activeElement === Typed);
+Typed.dispatchEvent(new Window.KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+Check("Tab closes the card from inside a field", Card.Open === false);
+Check("and lets go of the field on the way out", Window.document.activeElement !== Typed);
+
 Report();
 // jsdom keeps timers and a decal rasterise that will never resolve alive, so the run is ended deliberately.
 process.exit(process.exitCode || 0);

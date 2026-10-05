@@ -1842,8 +1842,25 @@ export class TexturePanel
         };
     }
 
-    // Scaling the gradient, from the keyboard as well as the card: `S` shortens it, `⇧S` lengthens it, by the same
-    // step the bracket keys resize the brush by. Which number it is depends on how the ramp is being measured.
+    // Resizing the head from the keyboard: `S` and `[` take it down a step, `⇧S` and `]` take it up one, by the same
+    // ratio either way so a key held down walks evenly in both directions.
+    //
+    // 📝 The card follows, but only once a frame. Key repeat fires about thirty times a second and a rebuilt pane
+    //    redraws a CPU-rasterised ribbon with it, so one rebuild per keystroke turns a held key into a slideshow.
+    NudgeRadius(Factor)
+    {
+        this.Projection.Configure({ Radius: Clamp(this.Projection.Brush.Radius * Factor, 0.004, 1.2) });
+        this.SyncBrushControls();
+        if (!this.Instruments?.Open || this.SizeTurn) return;
+        this.SizeTurn = requestAnimationFrame(() =>
+        {
+            this.SizeTurn = 0;
+            if (this.Instruments?.Open) this.Instruments.RenderPane(false);
+        });
+    }
+
+    // Scaling the gradient, from the keyboard as well as the card: `G` shortens it, `⇧G` lengthens it, by the same
+    // step the brush is resized by. Which number it is depends on how the ramp is being measured.
     ScaleRamp(Factor)
     {
         const Ramp = this.Gradient;
@@ -5275,7 +5292,7 @@ export class TexturePanel
                                     Maximum: 400,
                                     Step: 0.5,
                                     Unit: "cm",
-                                    Hint: "How far the hand travels before the ramp runs out · S and ⇧S",
+                                    Hint: "How far the hand travels before the ramp runs out · G and ⇧G",
                                 },
                                 (Value) =>
                                 {
@@ -5294,7 +5311,7 @@ export class TexturePanel
                                     Maximum: 4,
                                     Step: 0.01,
                                     Unit: "×",
-                                    Hint: "How much of the two ends the ramp covers · S and ⇧S",
+                                    Hint: "How much of the two ends the ramp covers · G and ⇧G",
                                 },
                                 (Value) =>
                                 {
@@ -8744,6 +8761,21 @@ export class TexturePanel
     {
         window.addEventListener("keydown", (Event) =>
         {
+            // 🔴 Tab is read BEFORE the field guard, and it is the only key that is. Everything else belongs to
+            //    whatever holds focus — a hex code being typed owns its own letters — but Tab's default action is
+            //    to walk focus to the next focusable thing, and with the card open that is the next row of its
+            //    rail. Letting the browser have it looked exactly like the card stepping through its own panes:
+            //    the focus ring crawled down the rail, one press per row, and the card never went away.
+            if (Event.key === "Tab" && !Event.ctrlKey && !Event.metaKey && !Event.altKey && !document.querySelector("dialog[open]"))
+            {
+                Event.preventDefault();
+                Event.stopPropagation();
+                // A field inside the card keeps focus when the card is put away, and then swallows the next
+                // keystroke that was meant for the editor. Let go of it on the way out.
+                if (this.Instruments?.Root?.contains(document.activeElement)) document.activeElement.blur?.();
+                this.Instruments?.Toggle();
+                return;
+            }
             // The target is the window itself when nothing holds focus, so matches() cannot be assumed.
             if (Event.target?.matches?.("input, textarea, select")) return;
             if (Event.code === "Space") this.SpaceHeld = true;
@@ -8774,15 +8806,6 @@ export class TexturePanel
                 return;
             }
             if (Event.ctrlKey || Event.metaKey) return;
-            // 🔴 preventDefault is not optional. Tab's default action walks focus to the next focusable element, so
-            //    without it the card opens AND the focus ring wanders off into the stack, and the next Tab is swallowed
-            //    by whatever it landed on.
-            if (Event.key === "Tab")
-            {
-                Event.preventDefault();
-                this.Instruments?.Toggle();
-                return;
-            }
             const Tools = ["orbit", "brush", "eraser", "fill", "decal", "picker"];
             if (/^[1-6]$/.test(Key))
             {
@@ -8803,9 +8826,8 @@ export class TexturePanel
                 this.RemoveLayer();
                 return;
             }
-            if (Key === "[") this.Projection.Configure({ Radius: Clamp(this.Projection.Brush.Radius * 0.84, 0.004, 1.2) });
-            if (Key === "]") this.Projection.Configure({ Radius: Clamp(this.Projection.Brush.Radius * 1.19, 0.004, 1.2) });
-            if (Key === "[" || Key === "]") this.SyncBrushControls();
+            if (Key === "[") this.NudgeRadius(0.84);
+            if (Key === "]") this.NudgeRadius(1.19);
             if (Key === "m" && Event.shiftKey)
                 this.SetMaskView(this.MaskView === "off" ? "overlay" : this.MaskView === "overlay" ? "isolated" : "off");
             else if (Key === "m") Select("#mask-toggle").click();
@@ -8816,10 +8838,15 @@ export class TexturePanel
             }
             if (Key === "b") this.SetBrowserState(this.BrowserState === "closed" ? "half" : "closed");
             if (Key === "f") Select("#focus-button").click();
-            // 🔴 `S` scales the gradient, not the symmetry. Symmetry moved to `Y` when the ramp arrived: scaling is
-            //    the thing a hand reaches for mid-stroke, mirroring is set once and left alone, and the hand that
-            //    wants it has a button for it two centimetres away.
+            // 🔴 `S` is size — the brush's, not the gradient's. It is the letter the hand reaches for when the mark
+            //    is the wrong width, and it had been spent on the ramp; the ramp is now `G`, which is the letter of
+            //    the thing it scales. Symmetry sits on `Y`, where it moved when the ramp arrived.
             if (Key === "s")
+            {
+                this.NudgeRadius(Event.shiftKey ? 1.19 : 0.84);
+                return;
+            }
+            if (Key === "g")
             {
                 this.ScaleRamp(Event.shiftKey ? 1.19 : 0.84);
                 return;

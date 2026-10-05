@@ -11,7 +11,7 @@ npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
 npm test           # 128 unit tests, no browser required
-npm run drive      # 127 checks against the whole editor, booted in a headless window
+npm run drive      # 136 checks against the whole editor, booted in a headless window
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -147,7 +147,11 @@ hunt for four of them, and the whole point of the grouping is that the related o
 carries its own mark in the panel's hairline icon language, tinted with the row's colour, so the rail is read by shape
 before it is read by word. `Tab` again puts the card away: one key, two states. It used to walk the rail — open, next
 pane, next, and out the far end — and the hand that only wanted the card gone had to press it four more times to get
-there, while the rail itself is a column of rows a finger can already reach.
+there, while the rail itself is a column of rows a finger can already reach. The key is read before the editor's
+"a field has focus, leave it alone" guard, and it is the only key that is: with the caret in a hex box or on a slider
+the browser would otherwise take `Tab` for itself and walk the focus ring down the rail one row per press, which
+looks exactly like the card stepping through its own panes. A field inside the card is let go of on the way out, so
+the next keystroke reaches the editor rather than the box that was left behind.
 
 **Colour** is a picker, not a palette: a saturation-and-brightness square under a hue bar, a hex field that takes a code
 typed straight in, and the last colours mixed. Everything the pigment does is in this one pane — the gradient it runs
@@ -243,8 +247,8 @@ choosing for you. **Along** measures the distance the hand has actually travelle
 length — forty centimetres of surface, say — and a stroke that wanders burns through the colours faster than one that
 goes straight. **End to end** measures where the dab falls *between the two ends of the mark*, so the ramp fits the
 stroke whatever path it took: an aimed line, whose two ends are both known before a dab goes down, is fitted exactly;
-freehand has no far end until the hand lets go, so it is measured out from the press. Either way <kbd>S</kbd> and
-<kbd>⇧ S</kbd> scale it from the keyboard — the length in one fit, the fit multiplier in the other — *Repeat* starts
+freehand has no far end until the hand lets go, so it is measured out from the press. Either way <kbd>G</kbd> and
+<kbd>⇧ G</kbd> scale it from the keyboard — the length in one fit, the fit multiplier in the other — *Repeat* starts
 the ramp again instead of holding the last colour, and a ramp laid into a mask is converted to a ramp of values on the
 way, because a mask keeps one number per texel and cannot hold a hue.
 
@@ -573,14 +577,14 @@ the header now.
 | --- | --- | --- | --- |
 | Orbit / brush / eraser | <kbd>1 2 3</kbd> | Content ⇄ mask (adds one if needed) | <kbd>M</kbd> |
 | Flood / decal / pick | <kbd>4 5 6</kbd> | Mask view: off → overlay → mask | <kbd>⇧ M</kbd> |
-| Brush size | <kbd>[</kbd> <kbd>]</kbd> | Texture space | <kbd>X</kbd> |
+| Brush size down / up | <kbd>S</kbd> / <kbd>⇧ S</kbd> · <kbd>[</kbd> <kbd>]</kbd> | Texture space | <kbd>X</kbd> |
 | Show / hide the unwrap | <kbd>W</kbd> | Show / hide the UDIM tiles | <kbd>U</kbd> |
 | Paint card: open, and closed again | <kbd>Tab</kbd> | Delete the selected layer | <kbd>Del</kbd> / <kbd>⌫</kbd> |
 | Brush size, live | <kbd>Alt</kbd> + wheel | Frame the surface | <kbd>F</kbd> |
 | Search layers | <kbd>/</kbd> | Content browser | <kbd>B</kbd> |
 | Undo / redo | <kbd>Ctrl Z</kbd> / <kbd>Ctrl ⇧ Z</kbd> | Save `.pigment` / export | <kbd>Ctrl S</kbd> / <kbd>Ctrl E</kbd> |
 | Symmetry: off → X → Y → Z → radial | <kbd>Y</kbd> | Isolate the selected layer | <kbd>I</kbd> |
-| Scale the gradient down / up | <kbd>S</kbd> / <kbd>⇧ S</kbd> | | |
+| Scale the gradient down / up | <kbd>G</kbd> / <kbd>⇧ G</kbd> | | |
 | Group the selection into a folder | <kbd>Ctrl G</kbd> | Aim a line or gradient | press · drag · release |
 | Size a decal | drag a corner | Stretch one axis | <kbd>Shift</kbd> drag a corner |
 | Turn a decal | drag the knob above it | Snap the angle to 15° | <kbd>Shift</kbd> while turning |

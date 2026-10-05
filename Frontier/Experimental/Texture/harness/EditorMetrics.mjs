@@ -126,6 +126,24 @@ Check("brackets size the head", Wider > Radius, `${Radius} → ${Wider}`);
 Type("[");
 Check("both ways", Panel.Projection.Brush.Radius < Wider, String(Panel.Projection.Brush.Radius));
 
+// 🔴 S is size. It used to scale the gradient, which is the one thing a hand pressing S is never asking for.
+const Held = Panel.Projection.Brush.Radius;
+const Span = Panel.Gradient.Span;
+Type("s", { shiftKey: true });
+Check("S sizes the head too", Panel.Projection.Brush.Radius > Held, `${Held} → ${Panel.Projection.Brush.Radius}`);
+const Grown = Panel.Projection.Brush.Radius;
+Type("s");
+Check("and down again", Panel.Projection.Brush.Radius < Grown, `${Grown} → ${Panel.Projection.Brush.Radius}`);
+Check("leaving the gradient alone", Panel.Gradient.Span === Span, `${Span} → ${Panel.Gradient.Span}`);
+
+const Stretched = Panel.Projection.Brush.Radius;
+Type("g", { shiftKey: true });
+const Longer = Panel.Gradient.Span;
+Check("the gradient scales on G instead", Longer > Span, `${Span} → ${Longer}`);
+Type("g");
+Check("and back", Panel.Gradient.Span < Longer, `${Longer} → ${Panel.Gradient.Span}`);
+Check("without touching the head", Panel.Projection.Brush.Radius === Stretched);
+
 //--------------------------------------------------------------------------------------------------------------------------
 // Decals on the surface: a mark is placed, handled, and carries the artwork's ink.
 //--------------------------------------------------------------------------------------------------------------------------
