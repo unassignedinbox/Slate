@@ -1564,6 +1564,18 @@ function App() {
                 >
                   Asset Browser
                 </button>
+                <button
+                  onClick={() => {
+                    ShowMenu(null);
+                    window.open(
+                      "../FractureEditor/index.html",
+                      "_blank",
+                      "noopener,noreferrer",
+                    );
+                  }}
+                >
+                  Fracture editor · HTML
+                </button>
                 {["Outliner", "Viewport", "Inspector", "ShaderEditor"].map(
                   (Tab) => (
                     <button key={Tab} onClick={() => RestoreTab(Tab)}>

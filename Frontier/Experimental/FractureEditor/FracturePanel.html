@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Frontier · Fracture editor</title>
+    <style>
+      /* INLINE_STYLE */
+    </style>
+  </head>
+  <body>
+    <header class="workspace-tabs">
+      <a href="../ProjectZeroEditor/index.html">Project-Zero</a
+      ><span class="tab selected">Fracture editor <i></i></span
+      ><span class="workspace-caption">FRONTIER / AUTHORING</span
+      ><button id="export">Export recipe ↓</button>
+    </header>
+    <main>
+      <aside class="assets">
+        <div class="pane-title">Assets <span>07</span></div>
+        <label class="search"
+          ><span>⌕</span
+          ><input
+            id="search"
+            aria-label="Search fracture assets"
+            placeholder="Search assets"
+        /></label>
+        <div class="eyebrow">FRACTURE STUDIES</div>
+        <nav id="asset-list"></nav>
+        <div class="source-note">
+          <span class="eyebrow">ONE EDITOR · TWO WORKFLOWS</span>
+          <p>
+            Author where the damage starts.<br />Choose when it is computed.
+          </p>
+          <div><i></i> Runtime generation</div>
+          <div><i class="amber"></i> Baked pattern library</div>
+        </div>
+        <details class="source-details">
+          <summary>Implementation sources</summary>
+          <p>Crack propagation · bc90f99<br />Solid fragmentation · 0cf178a</p>
+          <p>
+            Jolt constraints and native GPU/VAT playback are the next
+            integration step. This HTML review does not simulate debris
+            collisions.
+          </p>
+        </details>
+      </aside>
+      <section class="workspace">
+        <div class="workspace-heading">
+          <div>
+            <span class="eyebrow">GEOMETRY / DAMAGE AUTHORING</span>
+            <h1 id="asset-title">Concrete panel</h1>
+          </div>
+          <span class="pill">HTML REVIEW</span>
+        </div>
+        <div class="workflow">
+          <div role="tablist" aria-label="Execution workflow">
+            <button role="tab" id="runtime" aria-selected="true">Runtime</button
+            ><button role="tab" id="baked" aria-selected="false">Baked</button>
+          </div>
+          <span id="workflow-description"
+            >Generate geometry at the impact site</span
+          >
+        </div>
+        <div class="viewport" id="viewport">
+          <div class="viewport-top">
+            <span id="solver-label">Solid fracture</span>
+            <div>
+              <button id="wireframe" aria-pressed="false">Wireframe</button
+              ><button id="camera">Frame asset</button>
+            </div>
+          </div>
+          <div class="viewport-note">
+            <b id="viewport-status">Ready for impact</b
+            ><span
+              >Drag to orbit · scroll to zoom · double-click to place
+              impact</span
+            >
+          </div>
+          <div class="axis">Y ↑<br />↗ Z &nbsp; X →</div>
+        </div>
+        <div class="metrics">
+          <div><span>FRAGMENTS</span><b id="count">1</b></div>
+          <div>
+            <span id="metric-label">VOLUME ERROR</span
+            ><b id="conservation">—</b>
+          </div>
+          <div><span>LAST SOLVE</span><b id="cost">—</b></div>
+          <div><span>EXECUTION</span><b id="execution">On impact</b></div>
+        </div>
+        <section class="lower">
+          <div class="lower-title">
+            <h2 id="lower-title">Impact inspection</h2>
+            <span id="lower-subtitle">Non-destructive geometry preview</span>
+          </div>
+          <div class="separation">
+            <label for="separation">Fragment separation</label
+            ><input
+              id="separation"
+              type="range"
+              min="0"
+              max="0.7"
+              step="0.005"
+              value="0.065"
+            /><output id="separation-output">0.065 m</output>
+          </div>
+          <div id="patterns" class="patterns"></div>
+          <p id="bottom-note">
+            The intact asset is preserved. Reset returns to the original
+            geometry.
+          </p>
+        </section>
+      </section>
+      <aside class="inspector">
+        <div class="pane-title">Inspector <span>Fracture</span></div>
+        <div class="inspector-heading">
+          <span class="eyebrow">SELECTED ASSET</span>
+          <h2 id="inspector-title">Concrete panel</h2>
+          <p id="material-note"></p>
+        </div>
+        <section class="card">
+          <h3>Fracture response <i></i></h3>
+          <div id="response" class="response">
+            Energy-limited solid splitting
+          </div>
+          <div class="property">
+            <span id="toughness-label">Toughness</span><b id="toughness">—</b>
+          </div>
+          <div class="property">
+            <span id="density-label">Density</span><b id="density">—</b>
+          </div>
+          <p class="hint">
+            Material-specific fracture energy and anisotropy. No Voronoi
+            substitution.
+          </p>
+        </section>
+        <section class="card" id="impact-card">
+          <h3>Impact</h3>
+          <label class="field"
+            >Energy
+            <span
+              ><input
+                id="energy-number"
+                type="number"
+                min="1"
+                max="50000"
+                value="850"
+              />
+              J</span
+            ></label
+          ><input
+            id="energy"
+            aria-label="Impact energy"
+            type="range"
+            min="1"
+            max="50000"
+            value="850"
+            step="1"
+          /><label class="field"
+            >Contact radius
+            <span
+              ><input id="radius" type="number" min="1" max="200" value="25" />
+              mm</span
+            ></label
+          >
+          <div class="coordinate">
+            <label
+              >X
+              <input
+                id="impact-x"
+                type="number"
+                min="-0.6"
+                max="0.6"
+                step="0.01"
+                value="0.08" /></label
+            ><label
+              >Y
+              <input
+                id="impact-y"
+                type="number"
+                min="-0.4"
+                max="0.4"
+                step="0.01"
+                value="0.05"
+            /></label>
+          </div>
+          <p class="hint">
+            Local coordinates, metres. Double-click the preview to reposition.
+          </p>
+        </section>
+        <section class="card" id="plastic-controls" hidden>
+          <h3>Plastic deformation</h3>
+          <div class="property"><span>Sheet samples</span><b>32 × 32</b></div>
+          <div class="property">
+            <span>Damage samples</span><b>12 per tool</b>
+          </div>
+          <div class="property">
+            <span>Prescribed tools</span><b>Dish · Crush · Fold</b>
+          </div>
+          <p class="hint">
+            Actual elasto-plastic sheet solve from the first branch. Full XYZ
+            displacement, not a height-only dent. These tools prescribe travel;
+            they are not calibrated energy-to-damage predictions.
+          </p>
+        </section>
+        <section class="card">
+          <h3 id="generation-title">Runtime generation</h3>
+          <label class="field"
+            >Seed
+            <input
+              id="seed"
+              type="number"
+              min="1"
+              max="999999"
+              value="42" /></label
+          ><label class="field"
+            >Fragment ceiling
+            <input id="budget" type="number" min="16" max="300" value="160"
+          /></label>
+          <div id="bake-controls" hidden>
+            <label class="field"
+              >Pattern count
+              <select id="pattern-count">
+                <option>4</option>
+                <option>8</option>
+              </select></label
+            >
+            <p class="hint">
+              Fixed impact site and energy; seed variants. Settings changes
+              invalidate this library.
+            </p>
+          </div>
+          <button class="primary" id="apply">Apply impact</button
+          ><button id="reset" class="wide">Reset geometry</button>
+          <div class="notice" id="generation-note">
+            Timing is measured in this browser, not a guaranteed gameplay
+            budget.
+          </div>
+        </section>
+        <details class="card">
+          <summary>Integration gates</summary>
+          <p>
+            Convex fragment collision through Jolt; supported-island release;
+            native GPU playback of plastic metal deformation; editor-authored
+            geometry input; native asset serialization.
+          </p>
+          <p>
+            These remain separate from this geometry/UI approval. Steel must
+            bend and yield, not use the brittle fracture solver.
+          </p>
+        </details>
+      </aside>
+    </main>
+    <footer>
+      <span><i></i> Browser geometry preview · native integration pending</span
+      ><span id="message" role="status"
+        >Imported fracture solvers · no debris physics</span
+      >
+    </footer>
+    <script>
+      /* INLINE_SCRIPT */
+    </script>
+  </body>
+</html>

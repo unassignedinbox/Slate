@@ -1,0 +1,21 @@
+{
+  "Browser": "153.0.8010.0",
+  "HtmlSha256": "03669e17aad99afb76aa7925baa35240e1b989fb16cb59bb3bcfcfc41233e1af",
+  "Results": [
+    "Actual solid solver: concrete fragments conserve volume",
+    "Separation and wireframe controls respond",
+    "wood: material-specific solve, finite volume agreement",
+    "rock: material-specific solve, finite volume agreement",
+    "plastic: material-specific solve, finite volume agreement",
+    "First-branch live crack-tip solver finishes and produces shell geometry",
+    "Baked shell library computes four seed variants and reuses stored geometry",
+    "JSON export contains real fragment geometry and both pinned sources; not falsely labelled native",
+    "Recipe edits invalidate cached geometry",
+    "Asset search narrows the visible selection",
+    "Baked solid library also uses the same shared editor",
+    "Reset restores intact geometry",
+    "Metal: real twelve-sample XYZ plastic deformation, three baked tools, scrubbing and export; no brittle fracture",
+    "1024px and 390px layouts have no horizontal overflow"
+  ],
+  "Errors": []
+}

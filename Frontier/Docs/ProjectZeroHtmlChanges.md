@@ -2309,3 +2309,46 @@ transparent statistic cells, live chart animation, preview-first placement, beam
 Folder retention and Cloud deck persistence. `CheckBrowser.mjs`, `CheckWorkspaceCards.mjs` and `CheckWind.mjs` also
 pass serially. Actual captures, HTML SHA256 and receipts are in `Screenshots/Arrangement/`. Official Fontshare requests
 still fail in the sandbox; these captures verify fallback typography, not successful external font delivery.
+
+
+## C044 — Project Drive GI execution and unified fracture HTML review
+
+2026-10-05. Inspector refinements are paused at C043 at the user's request. Vehicle GI is the first task;
+fracture integration follows with HTML approval before a native editor port.
+
+Project Drive: `InterchangeHost.cpp` now exports same-revision execution snapshots of the complete opening scene,
+both authored and after 120 actual DLL simulation intervals at 240 Hz. The existing Vulkan scene executor consumes
+those snapshots, using CPU BVH primary visibility and the unchanged production SDF lighting shaders. This is not
+the earlier isolated-tyre CPU shading gallery. It retains GI-on/off captures and checks for a nonzero image change.
+The two captures are independent, not a continuous GPU deformation execution. Diffuse materials preserve authored
+base colours but deliberately omit production car-paint specular and transparent glazing. Software Vulkan is not
+hardware timing or an interactive Frontier-window capture. Native ReSTIR and the existing raster GI are untouched.
+The first execution correctly refused an unsupported one-texel radiance card; the retry uses supported 2×2 cards.
+Final execution status belongs to the per-pose receipts under `VisualProof/SdfScene/Drive/`, not this UI check.
+
+`Frontier/Experimental/FractureEditor/index.html` is a standalone, unified HTML authoring review, launched from the
+Project-Zero + tab menu. It uses the existing dark, rounded-card/trapezoid-tab design language. A shared asset list,
+viewport, inspector and pattern library serve Runtime and Baked workflows; these are not two unrelated embedded demos.
+Both supplied branches have overlapping runtime and baked capabilities:
+
+- `arena/01a0f3a8-slate`, pinned at `bc90f99`: live crack-tip propagation, plate-region extraction and the corrected
+  elasto-plastic sheet solve with in-plane draw-in, hinge softening, full XYZ positions and deformed normals.
+- `arena/01a0f3a4-slate`, pinned at `0cf178a`: energy-limited solid fragmentation, exact half-space clipping and
+  material-specific anisotropy. Noise/displacement-based fracture-surface dressing is disabled in this review.
+- Seven presets: annealed and tempered glass, concrete, timber, granite, ABS and sheet metal. Steel uses baked
+  plastic deformation, not brittle shattering. Its three prescribed tools each provide twelve real damage samples.
+- Runtime computes at the chosen impact. Baked mode creates seed variants at a fixed site/energy, then reuses stored
+  geometry. Recipe changes invalidate cached patterns. Export contains real geometry and, for metal, damage samples.
+- Orbit/zoom, impact placement, separation, wireframe, reset, measured solve duration, volume-error reporting and
+  searchable presets work. No arbitrary speed-up or guaranteed gameplay-budget claim is made.
+
+Thirteen imported source modules are unchanged and hash-pinned in `SourceDepot/Provenance.json`. This combines
+selected numerical components for the HTML review; it is not yet the complete native fracture system. Jolt debris
+and breakable constraints, native GPU/VAT playback, editor-created arbitrary geometry, support-island release and
+native asset serialization remain integration gates. Shell extraction is approximate; material values and prescribed
+metal tool travel are research/demo parameters, not validated engineering failure predictions.
+
+Verification: fourteen browser checks pass with no page errors, including both algorithms, cached pattern reuse,
+recipe invalidation, geometry export, plastic XYZ motion and damage scrubbing, reset and 1024/390-pixel layouts.
+The Project-Zero launcher and its existing browser regression also pass. Actual captures and receipts are under
+`FractureEditor/Captures/`. No C++ fracture editor has been ported before visual approval.

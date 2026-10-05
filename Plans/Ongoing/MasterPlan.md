@@ -130,3 +130,22 @@ rebuild is deliberately conservative and unprofiled on target hardware. A native
 optimized object-field upload/dirty updates, validated temporal reuse and target-GPU measurements are still gates,
 not completed claims. Rest-grid spacing is approximately 17.8 by 8.1 by 17.8 mm. Thin bead tips, grazing rays,
 self-intersection/tearing and the unresolved internal rubber/air structure remain explicit limitations.
+
+
+## 8. Full Project Drive SDF presentation and fracture-editor follow-up — 2026-10-05
+
+The user resumed full-vehicle GI work before fracture integration. The production SDF execution path now accepts
+rest and loaded snapshots exported from the actual Drive opening scene and DLL. It keeps all 22 instances and
+22,046 facets, including the tyre geometry handoff. Shader captures use software Vulkan, diffuse material overrides
+and independent snapshots; they must not be called a hardware run, full material presentation or continuous GPU
+streaming. Consult `VisualProof/SdfScene/Drive/*/Provenance.json` for executed results and limitations.
+
+Next native gates remain the interactive vehicle presentation, production material response and deformation-frame
+invalidation under continuous play. Preserve native ReSTIR and existing raster paths; do not replace them with the
+browser fracture preview.
+
+The requested combined fracture editor has an HTML-first review at `Frontier/Experimental/FractureEditor/`.
+It combines pinned crack propagation/plasticity from `arena/01a0f3a8-slate` and solid fragmentation from
+`arena/01a0f3a4-slate` behind Runtime and Baked workflows. Native integration waits for UI approval. Follow-up work
+must carry over Jolt contacts and breakable supports, safe geometry ownership, author-created geometry handling,
+material-appropriate failure and native serialization, without treating every material as brittle cells.
