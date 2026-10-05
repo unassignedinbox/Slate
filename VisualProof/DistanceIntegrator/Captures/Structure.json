@@ -1,0 +1,71 @@
+{
+  "Date": "2026-10-05",
+  "Vertices": 5852,
+  "Quads": 5786,
+  "Triangles": 11572,
+  "Components": 31,
+  "Bounds": 8191,
+  "Depth": 12,
+  "Poses": [
+    {
+      "Amount": 0,
+      "MinimumArea": 0.0012192087702728362,
+      "MaximumDisplacement": 0
+    },
+    {
+      "Amount": 0.2,
+      "MinimumArea": 0.0012109019662838144,
+      "MaximumDisplacement": 0.21345366999108278
+    },
+    {
+      "Amount": 0.55,
+      "MinimumArea": 0.0011974193432704558,
+      "MaximumDisplacement": 0.5869975924754776
+    },
+    {
+      "Amount": 0.8,
+      "MinimumArea": 0.0011887070683134966,
+      "MaximumDisplacement": 0.853814679964331
+    },
+    {
+      "Amount": 1,
+      "MinimumArea": 0.0011568814276656351,
+      "MaximumDisplacement": 1.0672683499554139
+    }
+  ],
+  "Witnesses": [
+    {
+      "Point": [
+        0,
+        1.08,
+        1.22
+      ],
+      "Distance": -0.31000000000000005
+    },
+    {
+      "Point": [
+        0,
+        1.85,
+        -1.3
+      ],
+      "Distance": 0.5699251294217511
+    },
+    {
+      "Point": [
+        0,
+        0.35,
+        -0.5
+      ],
+      "Distance": -0.012500000000000011
+    },
+    {
+      "Point": [
+        2.5,
+        2.8,
+        3
+      ],
+      "Distance": 1.734928663284612
+    }
+  ],
+  "Passed": true
+}

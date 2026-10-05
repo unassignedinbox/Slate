@@ -1,0 +1,165 @@
+{
+  "Date": "2026-10-05",
+  "Errors": [],
+  "SourceHashes": {
+    "BodySpecification.js": "f0431f61d82d70350f4a6b4f19a604364ca9490cd6dab5402337b90dd146208c",
+    "DistanceIntegrator.js": "b5b78125d05b39bdeb642483cccdc1e16e232401933e707a28a00c814a37d1ae",
+    "DistancePanel.css": "fc84f3c02abfbe91263fa3353f1cfde94909abca77ad9d7709f8b68308c8e9f9",
+    "DistancePanel.js": "47f471fbac4403ce2d6c8e0b51d66aec80395d60e2759924c6a6f1051b7a0ea5",
+    "index.html": "26ee9980257ce068f3355e1683766f8253945a718697387139f76fb45ee6b1cc"
+  },
+  "External": {
+    "Error": 0,
+    "Difference": 41.90232676267624,
+    "Rejected": 4,
+    "ReplayDifference": 0,
+    "Metrics": {
+      "Ready": true,
+      "Busy": false,
+      "Error": null,
+      "Completed": 4,
+      "Revision": 4,
+      "FieldRevision": 4,
+      "FieldBuilds": 4,
+      "Errors": [],
+      "Adapter": {
+        "Vendor": "google",
+        "Architecture": "swiftshader",
+        "Software": true,
+        "Timestamp": true
+      },
+      "Width": 600,
+      "Height": 480,
+      "Resolution": 32,
+      "VoxelBytes": 262144,
+      "CellWidths": [
+        0.1935483870967742,
+        0.11612903225806451,
+        0.23225806451612904
+      ],
+      "Timings": [
+        {
+          "Name": "Vertices + triangles",
+          "Milliseconds": 11.670259
+        },
+        {
+          "Name": "Construction BVH refit",
+          "Milliseconds": 16.569684
+        },
+        {
+          "Name": "Signed volume rebuild",
+          "Milliseconds": 1973.610853
+        },
+        {
+          "Name": "Field shading / diagnostic",
+          "Milliseconds": 1004.806945
+        },
+        {
+          "Name": "Display",
+          "Milliseconds": 20.152925
+        }
+      ],
+      "LastBuildMilliseconds": 1973.610853,
+      "GpuMilliseconds": 3026.810666,
+      "Work": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "Amount": 0.2,
+      "Configuration": {
+        "Amount": 0.55,
+        "Animate": false,
+        "Resolution": 32,
+        "View": 2,
+        "Rays": 4,
+        "Scale": 0.6,
+        "Exposure": 1.15,
+        "Power": 1,
+        "Slice": 0.48,
+        "Axis": 1,
+        "Frozen": false,
+        "Counters": false
+      },
+      "GeometryChanged": true,
+      "FieldChanged": true,
+      "Rasterized": false
+    }
+  },
+  "RenderScale": true,
+  "Animation": {
+    "Ready": true,
+    "Busy": false,
+    "Error": null,
+    "Completed": 6,
+    "Revision": 5,
+    "FieldRevision": 5,
+    "FieldBuilds": 5,
+    "Errors": [],
+    "Adapter": {
+      "Vendor": "google",
+      "Architecture": "swiftshader",
+      "Software": true,
+      "Timestamp": true
+    },
+    "Width": 128,
+    "Height": 96,
+    "Resolution": 32,
+    "VoxelBytes": 262144,
+    "CellWidths": [
+      0.1935483870967742,
+      0.11612903225806451,
+      0.23225806451612904
+    ],
+    "Timings": [
+      {
+        "Name": "Vertices + triangles",
+        "Milliseconds": 5.408648
+      },
+      {
+        "Name": "Construction BVH refit",
+        "Milliseconds": 3.715427
+      },
+      {
+        "Name": "Signed volume rebuild",
+        "Milliseconds": 1960.193518
+      },
+      {
+        "Name": "Field shading / diagnostic",
+        "Milliseconds": 48.146231
+      },
+      {
+        "Name": "Display",
+        "Milliseconds": 19.805829
+      }
+    ],
+    "LastBuildMilliseconds": 1960.193518,
+    "GpuMilliseconds": 2037.2696529999998,
+    "Work": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "Amount": 0.031072586667264746,
+    "Configuration": {
+      "Amount": 0.55,
+      "Animate": true,
+      "Resolution": 32,
+      "View": 2,
+      "Rays": 4,
+      "Scale": 0.6,
+      "Exposure": 1.15,
+      "Power": 1,
+      "Slice": 0.48,
+      "Axis": 1,
+      "Frozen": false,
+      "Counters": false
+    },
+    "GeometryChanged": true,
+    "FieldChanged": true,
+    "Rasterized": false
+  },
+  "Passed": true
+}

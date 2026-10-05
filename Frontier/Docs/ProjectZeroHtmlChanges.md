@@ -2068,3 +2068,77 @@ real-time performance. The simple renderer has one render in flight and synchron
 verification details. **`VisualProof/DeformationIntegrator/Captures/`** holds eight actual browser captures, the CPU
 and source-hashed WebGPU reports, plus a labelled GIF assembled from captured poses. The GIF is explicitly **not a
 real-time speed recording**. Dependencies, full ray fixtures and intermediate runs remain ignored scratch.
+
+## C038 — Actual dynamic signed-field GI, complex bodywork and unobscured diagnostics
+
+**Date:** 2026-10-05. **Base:** C037 (`5cb3dfe`). New standalone experiment at
+**`Experimental/DistanceIntegrator/index.html`**. C037's tyre used triangle tracing, not an SDF; this explicitly
+corrects that mismatch rather than describing a nonexistent hidden field. Existing demos and native renderers stay
+unchanged. The technical explanation is **`Docs/DistanceTransportReview.html` / `.md`**.
+
+### Implemented
+
+- A vehicle-bodywork stress assembly with **11,572 triangles, 5,786 quads, 5,852 vertices and 31 closed components**:
+  curved arches, crowned/open hood, cabin openings/pillars, side panels, engine casing, cooling fins, braces and a
+  thin undertray. The 25/35 mm features deliberately challenge the volume. This is not the production car asset
+  or a calibrated crash/XPBD model; the thicker panels are enlarged 130–160 mm study geometry.
+- Actual GPU vertex deformation, normal/triangle expansion and BVH refit, followed by **mesh-derived signed 3D
+  volume construction**. Near-first nearest-triangle traversal, component membership and component-AABB sign
+  pruning reduce construction work. Per-component crossing parity and CSG-min signed distances handle overlaps
+  without treating every component as one odd/even count. The fixed topology has 8,191 bounds, depth 12.
+- Actual SDF sphere tracing for shadow visibility and **one-bounce diffuse gathering**. No progressive accumulation,
+  recursive multibounce renderer, surface-lighting cache or ReSTIR reuse was added to this browser experiment.
+  Static room geometry uses matching analytic box SDFs. A triangle reference remains an explicit comparison mode.
+- Default **SDF-only** rendering issues no triangle raster pass. Additional views: field gradient normals, signed
+  X/Y/Z slices with physical aspect, mesh-versus-field primary-hit error, march cost/exhaustion, SDF indirect-only,
+  raster plus SDF GI, triangle reference, source normals/quad edges and SDF direct-only lighting.
+- Deformation/resolution/slice controls, current-field freeze and forced rebuild, render-query counters, revision
+  readouts, and a **persistent last-field-build time**. Reusing a paused field does not hide its construction cost.
+  External finite position input is supported within the field domain; static-room edits are refused.
+
+### Executed verification
+
+`VerifyStructure.mjs` checks closed component edge incidence, exact leaf coverage, domain containment, finite
+normals and positive triangle areas across five poses. Minimum tested area is **0.00115688 m²**; maximum displacement
+is **1.06727 m**. This is not a complete arbitrary-mesh intersection/manifold/import guarantee.
+
+`VerifyWebGpu.cjs` executes the GPU and reads all voxel values in four volumes (32³/64³/96³ at amount 0.55 and 64³
+at amount 1). All samples are finite and written, with both signs present. **96 selected voxel samples** agree with
+independent CPU Voronoi-region closest-point/parity calculations within **0.487 mm**, including half-float storage.
+This is not the between-voxel surface error. GPU deformation differs from its CPU double formula by up to **0.047 mm**,
+including trigonometric approximation; distance/intersection oracles therefore use the actual GPU vertices.
+
+**720 GPU paired field/triangle rays** are checked. GPU triangle distances match brute-force CPU intersections
+within **3.25e-6 m**. In the fixed set of 168 triangle-reference body hits, the field misses **48 at 32³, 8 at 64³,
+and 6 at 96³**. Matched-body median depth errors are **18.48 / 5.52 / 2.88 mm**; p95 values are **1,929.48 / 497.25 /
+30.58 mm**. The review also includes means and extra hits rather than presenting the improving median as universal
+accuracy. Thin features and farther-surface errors remain.
+
+The measured SDF-GI image uses **741,180 marches and zero triangle ray queries**, excluding construction work;
+the reference uses **742,381 triangle queries and zero marches**. **539 field marches exhaust the limit** in that
+full image: shadows fail dark, bounce failures contribute zero, and primary diagnostic failures are magenta.
+Full/direct/indirect decomposition differs by at most **0.001893 RGB** including output rounding; indirect mean RGB
+is **0.010240**. All-lights-off surface RGB is zero. Frozen fields remain byte-identical; refreshing them changes
+lighting. Rebuilding the same settings reproduces the HDR image exactly.
+
+`VerifyControls.cjs` additionally passes external non-rigid position injection and changed-field detection, invalid
+coordinate/out-of-domain/static-edit refusal, exact procedural volume replay, scale adjustment and live animation
+with matched geometry/field revisions. Mobile layout and unsupported-WebGPU refusal pass. Browser error lists are
+empty. Reports contain source hashes for the delivered code and the shared C037 geometry/shader dependencies.
+
+### Cost and interpretation
+
+All execution used **Chromium 133 / SwiftShader software Vulkan-WebGPU**, not a gaming GPU. Measured construction
+intervals are **2,138.42 ms at 32³**, **15,649.39 ms at 64³ / amount 0.55**, **16,642.37 ms at 64³ / amount 1**, and
+**50,572.36 ms at 96³**. A reused-field 480-by-328/four-direction GI render sums to **2,227.19 ms** versus
+**5,669.37 ms** for the triangle reference. These are individual instrumented observations, not equal-quality
+hardware benchmarks.
+**Full dense-field reconstruction dominates changing geometry**; the cached-field number is not its dynamic cost.
+
+The review recommends retaining native ReSTIR sampling/reuse, which already has DI/GI reservoir paths, and separately
+profiling dynamic-field updates and validity. ReSTIR is not a replacement for intersection geometry, nor can it
+recover missing thin panels. Dirty bricks/local fields, faster surface-to-distance updates, thin-surface policy,
+reuse invalidation and target-hardware measurement remain future work. No native integration or AAA-readiness claim.
+
+**`VisualProof/DistanceIntegrator/Captures/`** retains seventeen actual browser/debug captures and the CPU, WebGPU and
+control reports. Full voxel dumps, dependencies and intermediate attempts remain ignored scratch.
