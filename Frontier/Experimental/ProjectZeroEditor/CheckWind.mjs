@@ -25,8 +25,13 @@ Page.setDefaultTimeout(10000);
 const Errors = [],
   Checks = [];
 Page.on("pageerror", (Error) => Errors.push(Error.message));
+const FontFailures = [];
 Page.on("console", (Message) => {
-  if (Message.type() === "error") Errors.push(Message.text());
+  if (Message.type() !== "error") return;
+  // The reference font is an external dependency; report its availability separately from application errors.
+  if (Message.location().url?.startsWith("https://cdn.fontshare.com/"))
+    FontFailures.push({ Url: Message.location().url, Error: Message.text() });
+  else Errors.push(Message.text());
 });
 const Search = Page.getByRole("textbox", {
   name: "Search outliner",
@@ -433,8 +438,8 @@ try {
 } finally {
   fs.writeFileSync(
     Proof + "/Wind.json",
-    JSON.stringify({ Checks, Errors }, null, 2),
+    JSON.stringify({ Checks, Errors, FontFailures }, null, 2),
   );
-  console.log(JSON.stringify({ Checks, Errors }, null, 2));
+  console.log(JSON.stringify({ Checks, Errors, FontFailures }, null, 2));
   await Browser.close();
 }

@@ -1,3 +1,7 @@
+import ReferencePanel, {
+  EnsureReferenceLights,
+  HasReferencePanel,
+} from "./ReferencePanel.jsx";
 import FolderInspector from "./FolderInspector.jsx";
 import { FolderInventory } from "./FolderInventory.mjs";
 import DiagnosticsCard from "./DiagnosticsCard.jsx";
@@ -187,9 +191,17 @@ function App() {
     [Alias, ToggleAlias] = useState(true),
     [PatchError, SetPatchError] = useState(1);
   const [Rows, StoreRows] = useState(() =>
-      EnsureEditorCamera(Saved.Rows || InitialRows),
+      EnsureEditorCamera(
+        Saved.ReferenceDesignRevision === 1
+          ? Saved.Rows || EnsureReferenceLights(InitialRows)
+          : EnsureReferenceLights(Saved.Rows || InitialRows),
+      ),
     ),
-    [Selected, Select] = useState(Saved.Selected || "sun"),
+    [Selected, Select] = useState(
+      new URLSearchParams(location.search).get("inspect") ||
+        Saved.Selected ||
+        "sun",
+    ),
     [Values, AssignValues] = useState(Saved.Values || {}),
     [Hidden, AssignHidden] = useState({ ...Saved.Hidden, camera: false }),
     [Collapsed, Collapse] = useState(Saved.Collapsed || {}),
@@ -390,6 +402,50 @@ function App() {
       ...(Aliases[Key] ? { [Aliases[Key]]: Value } : {}),
     }));
   };
+  const ApplyReference = (Records) => {
+    if (!Array.isArray(Records)) return;
+    const Known = new Map(Rows.map((Row) => [Row.Id, Row]));
+    const Accepted = Records.filter((Record) => Known.has(Record.Id));
+    AssignValues((Previous) => {
+      const Next = { ...Previous };
+      for (const Record of Accepted) {
+        if (!HasReferencePanel(Known.get(Record.Id))) continue;
+        Next[Record.Id] = {
+          ...Next[Record.Id],
+          ReferenceInspector: {
+            Properties: Record.Properties,
+            Locked: Record.Locked,
+            Dynamic: Record.Dynamic,
+            Notes: Record.Notes,
+          },
+        };
+      }
+      return Next;
+    });
+    AssignHidden((Previous) => ({
+      ...Previous,
+      ...Object.fromEntries(
+        Accepted.map((Record) => [
+          Record.Id,
+          Record.Id === "camera" ? false : !Record.Visible,
+        ]),
+      ),
+    }));
+    Collapse((Previous) => ({
+      ...Previous,
+      ...Object.fromEntries(
+        Accepted.map((Record) => [Record.Id, !Record.Open]),
+      ),
+    }));
+    AssignRows((Previous) =>
+      Previous.map((Row) => {
+        const Record = Accepted.find((Value) => Value.Id === Row.Id);
+        return Record && !IsEditorCamera(Row) && typeof Record.Name === "string"
+          ? { ...Row, Name: Record.Name }
+          : Row;
+      }),
+    );
+  };
   const Change = (Key, Value) =>
     AssignValues((Previous) => ({
       ...Previous,
@@ -414,6 +470,7 @@ function App() {
         StorageKey,
         JSON.stringify({
           Rows,
+          ReferenceDesignRevision: 1,
           Assets: AssetRecords,
           Selected,
           Values,
@@ -568,6 +625,8 @@ function App() {
           {
             Format: "Frontier HTML UI study",
             Rows,
+            ReferenceDesignRevision: 1,
+            Collapsed,
             Assets: AssetRecords,
             Values,
             Hidden,
@@ -606,7 +665,12 @@ function App() {
         )
       )
         throw Error();
-      AssignRows(Loaded.Rows);
+      AssignRows(
+        Loaded.ReferenceDesignRevision === 1
+          ? Loaded.Rows
+          : EnsureReferenceLights(Loaded.Rows),
+      );
+      Collapse(Loaded.Collapsed || {});
       AssignValues(Loaded.Values || {});
       StoreAssets(RestoreAssets(Loaded.Assets));
       AssignHidden({ ...Loaded.Hidden, camera: false });
@@ -1320,7 +1384,17 @@ function App() {
     ) : Tab === "Inspector" ? (
       <>
         <div className="inspector-scroll" key={Subject.Id}>
-          {Subject.Panel === "group" ? (
+          {HasReferencePanel(Subject) && (
+            <ReferencePanel
+              Subject={Subject}
+              Rows={Rows}
+              Values={Values}
+              Hidden={Hidden}
+              Collapsed={Collapsed}
+              Apply={ApplyReference}
+            />
+          )}
+          {Subject.ReferenceOnly ? null : Subject.Panel === "group" ? (
             <FolderInspector
               Subject={Subject}
               Rows={Rows}
@@ -1555,7 +1629,7 @@ function App() {
                 <hr />
                 <button
                   onClick={() => {
-                    AssignRows(InitialRows);
+                    AssignRows(EnsureReferenceLights(InitialRows));
                     AssignValues({});
                     AssignHidden({});
                     Collapse({});

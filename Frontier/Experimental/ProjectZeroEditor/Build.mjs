@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
@@ -75,6 +76,33 @@ const Fonts = ["Light", "Regular"]
       `@font-face{font-family:'DM Sans';font-style:normal;font-weight:${Index ? 400 : 300};font-display:swap;src:url(data:font/ttf;base64,${fs.readFileSync(path.join(Frontier, "EngineContent/Fonts/SunReference", "DMSans-" + Weight + ".ttf")).toString("base64")}) format('truetype')}`,
   )
   .join("\n");
+// Preserve the reference's document-wide CSS and control behaviour without restyling the current editor.
+const ReferenceOutput = await build({
+  entryPoints: [path.join(Folder, "InspectorHost.js")],
+  bundle: true,
+  write: false,
+  minify: true,
+  format: "iife",
+  target: ["chrome110", "firefox115", "safari16"],
+});
+const ReferenceStyle = fs.readFileSync(
+  path.join(Folder, "InspectorDepot/styles.css"),
+  "utf8",
+);
+const ReferenceScript = ReferenceOutput.outputFiles[0].text.replaceAll(
+  "</script",
+  "<\\/script",
+);
+const ReferenceHash = createHash("sha256")
+  .update(ReferenceScript)
+  .digest("base64");
+Assets.ReferenceInspector = `<!doctype html><html><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-${ReferenceHash}'; style-src 'unsafe-inline'; font-src https://cdn.fontshare.com; img-src data:; base-uri 'none'">
+<style>${fs.readFileSync(path.join(Folder, "InspectorDepot/Fontshare.css"), "utf8")}
+${ReferenceStyle}
+html,body{height:auto;overflow:hidden;background:var(--panel)}
+#ReferenceMount{display:block;overflow:hidden;flex:none}
+</style></head><body><div id="ReferenceMount" class="props"></div><script>${ReferenceScript}</script></body></html>`;
 const Output = await build({
   entryPoints: [path.join(Folder, "Editor.jsx")],
   bundle: true,

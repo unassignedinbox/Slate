@@ -54,8 +54,13 @@ const Page = await Browser.newPage({
 });
 Page.setDefaultTimeout(15000);
 Page.on("pageerror", (E) => Errors.push(E.stack));
-Page.on("console", (M) => {
-  if (M.type() === "error") Errors.push(M.text());
+const FontFailures = [];
+Page.on("console", (Message) => {
+  if (Message.type() !== "error") return;
+  // The reference font is an external dependency; report its availability separately from application errors.
+  if (Message.location().url?.startsWith("https://cdn.fontshare.com/"))
+    FontFailures.push({ Url: Message.location().url, Error: Message.text() });
+  else Errors.push(Message.text());
 });
 const Saved = () =>
   Page.evaluate(() =>
@@ -241,7 +246,10 @@ try {
   await Page.getByLabel("Diagnostics metric", { exact: true }).selectOption(
     "Scene",
   );
-  assert.equal(parseInt(await Page.locator(".debug-number").innerText()), 27);
+  assert.equal(
+    parseInt(await Page.locator(".debug-number").innerText()),
+    Baseline.Rows.length,
+  );
   await Page.getByRole("button", {
     name: "Resume samples",
     exact: true,
@@ -432,8 +440,8 @@ try {
 } finally {
   fs.writeFileSync(
     Proof + "/WorkspaceCards.json",
-    JSON.stringify({ Results, Errors }, null, 2),
+    JSON.stringify({ Results, Errors, FontFailures }, null, 2),
   );
-  console.log(JSON.stringify({ Results, Errors }, null, 2));
+  console.log(JSON.stringify({ Results, Errors, FontFailures }, null, 2));
   await Browser.close();
 }

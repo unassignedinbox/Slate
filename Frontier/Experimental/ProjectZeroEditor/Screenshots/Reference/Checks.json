@@ -1,0 +1,36 @@
+{
+  "ReferenceCommit": "f65f2f90f033e17671963c6731ea9e7653bc13b6",
+  "Browser": "153.0.8010.0",
+  "GeneratedHtmlSha256": "9708eb2572a3c2cb5c78382fd0b7aa09d9b812755c742c9000c922b8f7aca34c",
+  "OriginalSourceCompared": true,
+  "UnchangedSourceFiles": 15,
+  "Results": [
+    "Folder: requested scope, preserved existing cards, canvas, width and original-source card metrics pass",
+    "Wind: requested scope, preserved existing cards, canvas, width and original-source card metrics pass",
+    "Moon: requested scope, preserved existing cards, canvas, width and original-source card metrics pass",
+    "Clouds: requested scope, preserved existing cards, canvas, width and original-source card metrics pass",
+    "Fog: requested scope, preserved existing cards, canvas, width and original-source card metrics pass",
+    "Sun: requested scope, preserved existing cards, canvas, width and original-source card metrics pass",
+    "ExistingArea: requested scope, preserved existing cards, canvas, width and original-source card metrics pass",
+    "Spot: requested scope, preserved existing cards, canvas, width and original-source card metrics pass",
+    "RimPoint: requested scope, preserved existing cards, canvas, width and original-source card metrics pass",
+    "FillPoint: requested scope, preserved existing cards, canvas, width and original-source card metrics pass",
+    "IES: requested scope, preserved existing cards, canvas, width and original-source card metrics pass",
+    "Softbox: requested scope, preserved existing cards, canvas, width and original-source card metrics pass",
+    "Tube: requested scope, preserved existing cards, canvas, width and original-source card metrics pass",
+    "Cloud deck numeric editing persists across reload",
+    "Light notes, literal rename, visibility and lock survive the host state bridge",
+    "Atlas layers work; expanding and shrinking updates the parent height without nested scrolling",
+    "Folder manifest visibility and collection expansion update the actual outliner",
+    "IES profile switching and continuous tape dragging persist without remounting the inspector",
+    "Deleted copied lights stay deleted on reload; malformed cyclic hierarchy does not recurse"
+  ],
+  "Errors": [],
+  "FontFailures": [
+    "https://cdn.fontshare.com/wf/K46YRH762FH3QJ25IQM3VAXAKCHEXXW4/ISLWQPUZHZF33LRIOTBMFOJL57GBGQ4B/3ZLMEXZEQPLTEPMHTQDAUXP5ZZXCZAEN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2"
+  ],
+  "FontCaveat": "Fontshare is external, as in the reference. Comparisons use the same available font/fallback in both documents; not a font-available pixel-perfect claim."
+}

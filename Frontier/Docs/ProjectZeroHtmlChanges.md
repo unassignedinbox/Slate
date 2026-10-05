@@ -2167,3 +2167,47 @@ Production Vulkan presentation, optimized streaming and target-hardware profilin
 GCC execution and host syntax checks pass. The dedicated Windows/MSVC Drive job also passes for `614d469`;
 ASan/UBSan/leak checks pass for that implementation. Receipts are retained with the gallery. The full-engine Windows
 build is a separate pending job, and none of these CPU receipts is a Vulkan tyre presentation capture.
+
+
+## C040 — Copied reference inspectors for HTML visual approval
+
+2026-10-05. Copied the deployed `c7egoist/Frontier` inspector implementation at
+`f65f2f90f033e17671963c6731ea9e7653bc13b6` into the current experimental Project Zero HTML editor.
+`InspectorDepot/Provenance.json` records SHA256 hashes for fifteen byte-unchanged source files, including the
+original stylesheet, controls, canvases and requested panel builders. The registry is restricted to this scope:
+
+- Folder: complete reference collection inspector, populated from the current scene hierarchy.
+- Wind: identity and flow field through **Anemometer**, inclusive; later reference cards excluded.
+- Moon: **Atlas** only, including grid/labels/terminator toggles, terminator dragging and taller view.
+- Cloud Layer: identity through **Cloud deck**, inclusive.
+- Height Fog: identity through **Light transport**, inclusive.
+- Lights: complete Sun, spot, point, IES/automotive, area and tube inspectors. The six authored reference lights
+  are added under Lighting: Key Spot, Rim Point, Fill Point, ECE Low Beam, Softbox and Studio Tube.
+
+Existing inspector cards remain below the copies, including duplicate concepts. The existing Area Light also
+receives the reference area inspector. New reference-only light rows do not invent an additional legacy inspector.
+Saved scenes are migrated once; deleting an added light does not silently restore it on the next reload.
+`?inspect=wind`, `world`, `moon`, `clouds`, `height-fog` and the new light IDs provide direct review entry points.
+
+`InspectorHost.js` runs the copied DOM/canvas controls in an auto-height, script-only sandboxed document, preserving
+its original CSS without overriding the existing React editor. A script-hash CSP restricts the embedded document.
+Visibility, folder expansion and names update the real HTML outliner. Reference properties and notes persist under
+`Values[id].ReferenceInspector`, including scene export/import, without reinterpreting the existing inspector units.
+This is a **browser-local visual review**, not an engine/rendering connection or a native property conversion.
+No C++ inspector changes were made; native porting remains gated on the user's visual approval.
+
+`CheckReference.mjs` verifies the source hashes, thirteen inspector cases, exact requested cutoffs, retained cards,
+canvas presence, overflow and card dimensions/styles against independently bundled original source at equal width.
+It also executes numeric persistence, literal-name editing, notes, visibility/lock, folder manifest/expansion,
+Atlas height growth/shrinkage and layers, IES profile selection, continuous tape dragging, deletion persistence and
+cyclic-hierarchy refusal. Thirteen actual browser captures and the receipt are in `Screenshots/Reference/`.
+The existing `CheckBrowser.mjs` and `CheckWorkspaceCards.mjs` pass, including the 2,500-record collection fixture.
+`CheckWind.mjs` passes when run serially; its first concurrent run had a pointer-placement timing assertion failure.
+
+**Font qualification:** the source's General Sans is still requested from Fontshare's official CDN. Font binaries
+are not redistributed. That CDN is unreachable in this sandbox; comparisons and captures therefore use the same
+fallback font in both documents. Font failures are reported separately from JavaScript/application errors. These
+checks do not establish font-available pixel identity; typography is part of the requested visual review.
+
+The requested actual Project Drive vehicle/tyre **SDF GI** presentation remains the next-turn task. The prior CPU
+field gallery is not being represented as vehicle GI, and this inspector change does not alter that renderer.

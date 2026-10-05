@@ -26,8 +26,13 @@ const Errors = [],
 let Changed = 0;
 Page.setDefaultTimeout(10000);
 Page.on("pageerror", (Error) => Errors.push(Error.stack));
+const FontFailures = [];
 Page.on("console", (Message) => {
-  if (Message.type() === "error") Errors.push(Message.text());
+  if (Message.type() !== "error") return;
+  // The reference font is an external dependency; report its availability separately from application errors.
+  if (Message.location().url?.startsWith("https://cdn.fontshare.com/"))
+    FontFailures.push({ Url: Message.location().url, Error: Message.text() });
+  else Errors.push(Message.text());
 });
 const PanelNames = [
   "Sun",
@@ -336,6 +341,7 @@ try {
           "four moon slots",
         ],
         Errors,
+        FontFailures,
       },
       null,
       2,
