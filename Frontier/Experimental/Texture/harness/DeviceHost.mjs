@@ -109,6 +109,57 @@ export const CreateWindow = () =>
     Window.matchMedia =
         Window.matchMedia ||
         (() => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+    // 🔴 A raster context jsdom does not have. It draws nothing, but it answers everything the editor asks a canvas
+    //    for — including the pixel buffers the layer thumbnails and the card's test sheet work in, which are real
+    //    typed arrays, so the arithmetic that fills them is genuinely exercised. Every call is recorded.
+    const Raster = (Canvas) =>
+    {
+        const Record = [];
+        const Fade = { addColorStop: (Where, Colour) => Record.push(["stop", Where, Colour]) };
+        return {
+            canvas: Canvas,
+            Record,
+            save() {},
+            restore() {},
+            translate() {},
+            scale() {},
+            rotate() {},
+            setTransform() {},
+            resetTransform() {},
+            clearRect() {},
+            fillRect: (...Frame) => Record.push(["fillRect", ...Frame]),
+            strokeRect: () => {},
+            drawImage: (Picture) => Record.push(["drawImage", Picture?.width || 0]),
+            fillText: (Words) => Record.push(["fillText", String(Words)]),
+            strokeText: (Words) => Record.push(["strokeText", String(Words)]),
+            measureText: (Words) => ({ width: String(Words).length * 12 }),
+            createLinearGradient: (...Frame) => (Record.push(["linear", ...Frame]), Fade),
+            createRadialGradient: (...Frame) => (Record.push(["radial", ...Frame]), Fade),
+            createPattern: () => ({}),
+            createImageData: (Width, Height) => ({ width: Width, height: Height, data: new Uint8ClampedArray(Width * Height * 4) }),
+            getImageData: (X, Y, Width, Height) => ({ width: Width, height: Height, data: new Uint8ClampedArray(Width * Height * 4) }),
+            putImageData: (Image_) => Record.push(["putImageData", Image_.width, Image_.height]),
+            beginPath() {},
+            closePath() {},
+            moveTo() {},
+            lineTo() {},
+            arc() {},
+            fill() {},
+            stroke() {},
+            clip() {},
+            globalCompositeOperation: "source-over",
+            globalAlpha: 1,
+            fillStyle: "#000",
+            strokeStyle: "#000",
+            lineWidth: 1,
+            lineJoin: "round",
+            font: "",
+            textAlign: "center",
+            textBaseline: "middle",
+            letterSpacing: "0px",
+        };
+    };
+
     Window.HTMLCanvasElement.prototype.getContext = function Context(Kind)
     {
         if (Kind === "webgl2")
@@ -116,7 +167,29 @@ export const CreateWindow = () =>
             Device.CanvasElement = this;
             return Device;
         }
-        return null;                            // jsdom has no raster context, and every drawing path guards for it
+        if (Kind !== "2d") return null;
+        if (!this.RasterContext) this.RasterContext = Raster(this);
+        return this.RasterContext;
+    };
+
+    // An image that decodes instantly. jsdom never fires onload for a data: URL, so every rasterise would hang on it.
+    Window.Image = class HarnessImage
+    {
+        constructor()
+        {
+            this.naturalWidth = 1024;
+            this.naturalHeight = 1024;
+            this.decoding = "sync";
+        }
+        set src(Address)
+        {
+            this.Address = Address;
+            Window.setTimeout(() => this.onload?.(), 0);
+        }
+        get src()
+        {
+            return this.Address;
+        }
     };
     // Laid out: jsdom measures nothing, so every box would be zero wide and every pointer sum would divide by it.
     Window.Element.prototype.getBoundingClientRect = function Box()

@@ -4623,6 +4623,18 @@ export class TexturePanel
     {
         const Pen = Sheet.getContext?.("2d");
         if (!Pen || typeof Pen.createPattern !== "function") return;   // jsdom has no raster context to draw into
+
+        // 🔴 The pixel grid is matched to the box it is shown in. A canvas whose backing store disagrees with its
+        //    CSS size stretches everything drawn into it, and a preview that lies about the proportions of a piece
+        //    of artwork is worse than no preview at all.
+        const Ratio = Math.min(window.devicePixelRatio || 1, 2);
+        const Box = [Sheet.clientWidth, Sheet.clientHeight];
+        if (Box[0] > 0 && Box[1] > 0)
+        {
+            const Wanted = [Math.round(Box[0] * Ratio), Math.round(Box[1] * Ratio)];
+            if (Sheet.width !== Wanted[0]) Sheet.width = Wanted[0];
+            if (Sheet.height !== Wanted[1]) Sheet.height = Wanted[1];
+        }
         const Width = Sheet.width;
         const Height = Sheet.height;
         Pen.setTransform(1, 0, 0, 1, 0, 0);

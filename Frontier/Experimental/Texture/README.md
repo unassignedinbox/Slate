@@ -11,7 +11,7 @@ npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
 npm test           # 128 unit tests, no browser required
-npm run drive      # boots the whole editor in a headless window and drives the card
+npm run drive      # 102 checks against the whole editor, booted in a headless window
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -585,6 +585,7 @@ painted. With the orbit tool in hand, a left click that never becomes a drag sel
 | `DecalSpecification.js` | Vector library, font archive, SVG/text rasterisation. |
 | `harness/DeviceHost.mjs` | A jsdom window with a recording WebGL2 device behind it, so the editor can be driven with no browser. |
 | `harness/CardMetrics.mjs` | `npm run drive` — boots the real editor headless and reads the card back the way a hand would. |
+| `harness/EditorMetrics.mjs` | The same window, driving everything around the card: stack, folders, masks, tools, decals, texture space. |
 | `InstrumentSpecification.js` | The instrument library: seven families and twenty-seven types, their drawings, settings schema, the material each one lays and the brush mapping. |
 | `InstrumentPanel.js` | The summoned card: the rail of paint properties, the pane frame and the ribbon preview. |
 | `MediaSolver.js` | What each medium does to a mark — bristle lanes, paper tooth, bleed, dust, wax skip — and the uniform packing the stamping pass reads. |

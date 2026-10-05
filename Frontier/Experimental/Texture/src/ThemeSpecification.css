@@ -3714,6 +3714,10 @@ details.channel-control > summary code {
   letter-spacing: 0.06em;
   white-space: nowrap;
 }
+#tile-hint {
+  color: #6f6f6f;
+  font-style: normal;
+}
 .plane-note:empty {
   display: none;
 }

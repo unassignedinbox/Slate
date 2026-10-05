@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test src/SurfaceMetrics.mjs src/StackMetrics.mjs src/ShadingMetrics.mjs",
-    "drive": "node harness/CardMetrics.mjs"
+    "drive": "node harness/CardMetrics.mjs && node harness/EditorMetrics.mjs"
   },
   "devDependencies": {
     "jsdom": "^30.1.2",
