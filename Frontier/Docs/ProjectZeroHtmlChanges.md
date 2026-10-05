@@ -1940,3 +1940,70 @@ The material camera similarly moves from 1.297 m to 1.220 m or 1.379 m instead o
 Evidence, before-fix readings and runtime source hashes are in **`VisualProof/CliffSequence/ZoomCaptures/`**.
 This fixes the input-induced snap; it does not add camera collision detection or prevent intentionally dollying
 inside a formation after repeated input.
+
+## C036 — Native WebGPU triangle radiance cascades, independent demo and review
+
+**Date:** 2026-10-05. **Base:** C035 (`9389529`). New standalone implementation at
+**`Experimental/RadianceIntegrator/index.html`**, separate from the existing RadianceSequence, RadianceProjection,
+cliff, grain, Fluid and native-engine work. None of those renderers or shared orbit controls changed in this entry.
+
+### Delivered renderer
+
+- Native `webgpu` canvas, WGSL raster and compute pipelines, no WebGL/CPU renderer fallback or editor-style UI.
+  The compact responsive HUD provides quality controls, diagnostics, input hints, adapter identification and
+  measured pass times. Existing Three.js is used for math/orbit input only, not rendering.
+- An original atrium with **2,788 triangles**, **2,134 local BVH nodes**, depth 20 and four rigid instances.
+  Two point-light proxies move continuously and the central triangle sculpture rotates. No lightmap baking.
+- Screen-origin surface probes trace the complete world-space triangle scene, including off-camera triangles.
+  Spatial spacing doubles, angular directions quadruple and finite distance intervals merge coarse-to-fine with
+  `Cnear + Tnear * Cfar` and `Tnear * Tfar`. Balanced 640-by-448 storage has **137,344 directional interval slots**.
+- One-bounce diffuse source evaluation, explicit emissive triangles/environment, SH9 projection, geometry-aware
+  gather, optional mirror-like reflection and reject/clamp temporal reprojection. The Indirect only view is the
+  cascade contribution, including directly received triangle emission/environment, not only paths of length two.
+- Performance work actually implemented: stackless local BVHs, matrix-only rigid motion, rasterized twelve-face
+  point-light depth maps, unchanged-transform shadow reuse, shared per-probe connection visibility, SH9 gather,
+  diagnostic pass skipping, optional atomic counters, asynchronous telemetry and a two-frame GPU queue bound.
+  The simulation clock advances even when GPU capacity causes a render submission to be skipped.
+- Sliders for render scale, probe spacing, angular width, cascade count, first interval, shadow-map size, temporal
+  weight, exposure, source power, sky, speed and debug cascade. Presets preserve scene/animation choices. Debug
+  views cover direct/cascade lighting, normals, albedo, probe tiles, merged radiance/transmittance, BVH cost and history.
+
+### Research and scope
+
+The requested write-up is **`Docs/RadianceIntegratorReview.html`**, with an equivalent Markdown document.
+It reviews three-rc, the Osborne/Sannikov radiative-transfer paper and the accessible Shadertoy description.
+three-rc explicitly withholds a license; no code or upscaler was copied. The atrium and WGSL implementation are
+original. Shadertoy shader source was not exposed by the page fetch; that portion of the review is description-based.
+
+This remains a **bounded, one-bounce, rigid-triangle research prototype**, not an AAA/open-world renderer. The review
+separates implemented optimizations from TLAS/refit, streaming, clipmaps, rebasing, corrected reprojection, multibounce,
+rough-specular transport, image-quality evaluation and hardware profiling still needed. Known approximations include
+screen-neighbour interval merging, SH truncation, finite angular sampling, biased PCF shadows, view dependence and
+low-resolution aliasing. Fixed probe storage does not mean scene-independent BVH traversal cost.
+
+### Executed verification and evidence
+
+`VerifyStructure.mjs` passed **512 CPU brute-force/BVH ray cases** at two rigid poses, triangle/node bounds and leaf
+coverage, plus **108 cascade layouts**. `VerifyWebGpu.cjs` ran the actual production pipelines in Chromium 133 through
+SwiftShader Vulkan/WebGPU. Final-source execution passed with no recorded page/console errors:
+
+- **512 GPU BVH rays** matched the independent brute-force distances within **4.073e-6 m**. Four CPU-reference rays
+  change between poses, so the dynamic geometry is genuinely exercised. GPU interval-composition fixtures pass.
+- HDR full/direct/cascade decomposition, all-sources-off exact zero, deterministic exact replay, changed dynamic
+  lighting, accepted static history, finite merged buffers, open/blocked transmission and the mirror ray pass.
+- **24/24 static emissive triangles** lie outside the test camera frustum. With point proxies and sky disabled,
+  the visible-surface HDR cascade mean is **0.001331**; disabling emission makes it exactly zero. The isolated
+  image is very dark, so this is quantitative off-screen contribution proof, not a dramatic light-spill claim.
+- Quality presets/extremes, real render-scale reallocation, unchanged-shadow reuse, hide/show, pause, wheel zoom,
+  continuous animation, bounded in-flight work, portrait layout and explicit unsupported-WebGPU refusal pass.
+
+At 640 by 448, balanced explicit GPU-data allocation is **36,181,072 bytes** (about **34.5 MiB**), excluding driver,
+canvas and cache overhead. Five warmed moving-frame software pass sums have median **1,094.15 ms** and range
+**1,054.32–1,169.14 ms**. These are **SwiftShader software execution measurements, not gaming-GPU benchmarks**;
+real-time hardware performance has not been established. The HUD distinguishes GPU-pass sum from completed-frame
+rate and estimated data from measured rays/interval slots. A separately instrumented unchanged frame records
+84,566 rays, 4,633,529 node visits and 300,507 triangle tests.
+
+Final browser captures and JSON reports are in **`VisualProof/RadianceIntegrator/Captures/`**, including fourteen
+actual rendered/debug/UI images and the source-hashed browser report. Dependencies, full CPU ray fixtures and
+intermediate runs remain ignored scratch. The usage README documents static hosting and verifier commands.

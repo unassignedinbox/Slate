@@ -1,0 +1,580 @@
+{
+  "Date": "2026-10-05",
+  "Errors": [],
+  "Checks": {
+    "Full": {
+      "Mean": 0.12879840183107874,
+      "Maximum": 10.03125,
+      "Count": 150708,
+      "NonFinite": 0,
+      "Difference": 0,
+      "History": 0
+    },
+    "MeasuredWork": {
+      "Frame": 2,
+      "Times": [
+        {
+          "Name": "Raster",
+          "Milliseconds": 65.474975
+        },
+        {
+          "Name": "Links",
+          "Milliseconds": 35.400698
+        },
+        {
+          "Name": "C3",
+          "Milliseconds": 79.166677
+        },
+        {
+          "Name": "C2",
+          "Milliseconds": 84.874392
+        },
+        {
+          "Name": "C1",
+          "Milliseconds": 83.047858
+        },
+        {
+          "Name": "C0",
+          "Milliseconds": 102.874454
+        },
+        {
+          "Name": "SH9",
+          "Milliseconds": 3.917469
+        },
+        {
+          "Name": "Shade",
+          "Milliseconds": 258.790861
+        },
+        {
+          "Name": "Temporal",
+          "Milliseconds": 37.732279
+        },
+        {
+          "Name": "Display",
+          "Milliseconds": 55.173347
+        }
+      ],
+      "Total": 806.45301,
+      "Rays": 84566,
+      "NodeVisits": 4633529,
+      "TriangleTests": 300507,
+      "Hits": 21515
+    },
+    "Direct": {
+      "Mean": 0.11421211366905253,
+      "Maximum": 10.03125,
+      "Count": 150708,
+      "NonFinite": 0,
+      "Difference": 0.014586288229524449,
+      "History": 0
+    },
+    "Indirect": {
+      "Mean": 0.01458610004361651,
+      "Maximum": 0.406005859375,
+      "Count": 150708,
+      "NonFinite": 0,
+      "Difference": 0.11421230178746222,
+      "History": 0
+    },
+    "Dark": {
+      "Mean": 0,
+      "Maximum": 0,
+      "Count": 150708,
+      "NonFinite": 0,
+      "Difference": 0.12879840183107874,
+      "History": 0
+    },
+    "Moved": {
+      "Mean": 0.12740489258743795,
+      "Maximum": 10.2265625,
+      "Count": 150708,
+      "NonFinite": 0,
+      "Difference": 0.10526847658178042,
+      "History": 0
+    },
+    "Replay": {
+      "Mean": 0.12879840183107874,
+      "Maximum": 10.03125,
+      "Count": 150708,
+      "NonFinite": 0,
+      "Difference": 0,
+      "History": 0
+    },
+    "History": {
+      "Mean": 0.12879840183107874,
+      "Maximum": 10.03125,
+      "Count": 150708,
+      "NonFinite": 0,
+      "Difference": 0,
+      "History": 0.8371014981163907
+    },
+    "UnchangedShadowReuse": true,
+    "Specular": {
+      "Mean": 0.13160431109800355,
+      "Maximum": 10.1484375,
+      "Count": 150708,
+      "NonFinite": 0,
+      "Difference": 0.0028059092669248183,
+      "History": 0
+    },
+    "Cascades": [
+      {
+        "Level": 0,
+        "Slots": 32832,
+        "Open": 17421,
+        "Blocked": 9239
+      },
+      {
+        "Level": 1,
+        "Slots": 32832,
+        "Open": 21812,
+        "Blocked": 3635
+      },
+      {
+        "Level": 2,
+        "Slots": 35840,
+        "Open": 27989,
+        "Blocked": 4357
+      },
+      {
+        "Level": 3,
+        "Slots": 35840,
+        "Open": 31258,
+        "Blocked": 4582
+      }
+    ],
+    "GpuRays": [
+      {
+        "Time": 0,
+        "Count": 256,
+        "Hits": 226,
+        "MaximumError": 0.000004072124394127741
+      },
+      {
+        "Time": 3.4,
+        "Count": 256,
+        "Hits": 226,
+        "MaximumError": 0.000004072124394127741
+      }
+    ],
+    "GpuIntervalAlgebra": true,
+    "Offscreen": {
+      "Total": 24,
+      "Rejected": 24,
+      "Reading": {
+        "Mean": 0.0013308790547030401,
+        "Maximum": 0.007740020751953125,
+        "Count": 286720,
+        "NonFinite": 0,
+        "Difference": 0,
+        "History": 0
+      }
+    },
+    "ExtremeQuality": true,
+    "Low": {
+      "Slots": 36352,
+      "Settings": {
+        "Scale": 0.5,
+        "Spacing": 20,
+        "Directions": 4,
+        "Cascades": 3,
+        "Interval": 1.5,
+        "History": 0.65,
+        "Exposure": 1.1,
+        "Shadow": 256,
+        "Power": 1,
+        "Sky": 0.025,
+        "Speed": 1,
+        "Animate": false,
+        "Motion": true,
+        "Visibility": true,
+        "Specular": false,
+        "Counters": false,
+        "Analytic": true,
+        "Debug": 0,
+        "Level": 0
+      }
+    },
+    "High": {
+      "Slots": 368640,
+      "Settings": {
+        "Scale": 0.8500000000000001,
+        "Spacing": 8,
+        "Directions": 4,
+        "Cascades": 5,
+        "Interval": 1.5,
+        "History": 0.65,
+        "Exposure": 1.1,
+        "Shadow": 1024,
+        "Power": 1,
+        "Sky": 0.025,
+        "Speed": 1,
+        "Animate": false,
+        "Motion": true,
+        "Visibility": true,
+        "Specular": false,
+        "Counters": false,
+        "Analytic": true,
+        "Debug": 0,
+        "Level": 0
+      }
+    },
+    "RenderScale": true,
+    "Animation": {
+      "Frames": 5,
+      "Time": 0.34979999999962796,
+      "InFlight": 2
+    },
+    "UnsupportedRefusal": true
+  },
+  "Captures": [
+    "01FullLighting",
+    "02DirectOnly",
+    "03IndirectOnly",
+    "04ProbeTiles",
+    "05CascadeRadiance",
+    "06Transmission",
+    "07TraversalCost",
+    "08EmittersAndSkyOff",
+    "09MovingLightsAndGeometry",
+    "10HistoryAcceptance",
+    "11MirrorRay",
+    "12OffscreenTriangleEmission",
+    "13CleanView",
+    "14Mobile"
+  ],
+  "Timings": [
+    {
+      "Frame": 27,
+      "Times": [
+        {
+          "Name": "Shadows",
+          "Milliseconds": 131.565398
+        },
+        {
+          "Name": "Raster",
+          "Milliseconds": 61.600159
+        },
+        {
+          "Name": "Links",
+          "Milliseconds": 57.804999
+        },
+        {
+          "Name": "C3",
+          "Milliseconds": 104.546713
+        },
+        {
+          "Name": "C2",
+          "Milliseconds": 121.081093
+        },
+        {
+          "Name": "C1",
+          "Milliseconds": 121.363414
+        },
+        {
+          "Name": "C0",
+          "Milliseconds": 153.477342
+        },
+        {
+          "Name": "SH9",
+          "Milliseconds": 3.175615
+        },
+        {
+          "Name": "Shade",
+          "Milliseconds": 318.655566
+        },
+        {
+          "Name": "Temporal",
+          "Milliseconds": 40.72999
+        },
+        {
+          "Name": "Display",
+          "Milliseconds": 55.140791
+        }
+      ],
+      "Total": 1169.14108,
+      "Rays": 0,
+      "NodeVisits": 0,
+      "TriangleTests": 0,
+      "Hits": 0
+    },
+    {
+      "Frame": 28,
+      "Times": [
+        {
+          "Name": "Shadows",
+          "Milliseconds": 129.009401
+        },
+        {
+          "Name": "Raster",
+          "Milliseconds": 59.678535
+        },
+        {
+          "Name": "Links",
+          "Milliseconds": 45.778693
+        },
+        {
+          "Name": "C3",
+          "Milliseconds": 96.899417
+        },
+        {
+          "Name": "C2",
+          "Milliseconds": 121.025425
+        },
+        {
+          "Name": "C1",
+          "Milliseconds": 119.133792
+        },
+        {
+          "Name": "C0",
+          "Milliseconds": 134.72879
+        },
+        {
+          "Name": "SH9",
+          "Milliseconds": 2.943495
+        },
+        {
+          "Name": "Shade",
+          "Milliseconds": 289.998479
+        },
+        {
+          "Name": "Temporal",
+          "Milliseconds": 36.60754
+        },
+        {
+          "Name": "Display",
+          "Milliseconds": 58.344389
+        }
+      ],
+      "Total": 1094.147956,
+      "Rays": 0,
+      "NodeVisits": 0,
+      "TriangleTests": 0,
+      "Hits": 0
+    },
+    {
+      "Frame": 29,
+      "Times": [
+        {
+          "Name": "Shadows",
+          "Milliseconds": 112.004678
+        },
+        {
+          "Name": "Raster",
+          "Milliseconds": 51.776645
+        },
+        {
+          "Name": "Links",
+          "Milliseconds": 43.939324
+        },
+        {
+          "Name": "C3",
+          "Milliseconds": 95.776324
+        },
+        {
+          "Name": "C2",
+          "Milliseconds": 117.649213
+        },
+        {
+          "Name": "C1",
+          "Milliseconds": 118.252264
+        },
+        {
+          "Name": "C0",
+          "Milliseconds": 155.090047
+        },
+        {
+          "Name": "SH9",
+          "Milliseconds": 3.224708
+        },
+        {
+          "Name": "Shade",
+          "Milliseconds": 308.355043
+        },
+        {
+          "Name": "Temporal",
+          "Milliseconds": 39.135212
+        },
+        {
+          "Name": "Display",
+          "Milliseconds": 51.201959
+        }
+      ],
+      "Total": 1096.405417,
+      "Rays": 0,
+      "NodeVisits": 0,
+      "TriangleTests": 0,
+      "Hits": 0
+    },
+    {
+      "Frame": 30,
+      "Times": [
+        {
+          "Name": "Shadows",
+          "Milliseconds": 110.402881
+        },
+        {
+          "Name": "Raster",
+          "Milliseconds": 50.909697
+        },
+        {
+          "Name": "Links",
+          "Milliseconds": 42.699113
+        },
+        {
+          "Name": "C3",
+          "Milliseconds": 90.413173
+        },
+        {
+          "Name": "C2",
+          "Milliseconds": 118.229482
+        },
+        {
+          "Name": "C1",
+          "Milliseconds": 126.671857
+        },
+        {
+          "Name": "C0",
+          "Milliseconds": 152.002485
+        },
+        {
+          "Name": "SH9",
+          "Milliseconds": 3.250615
+        },
+        {
+          "Name": "Shade",
+          "Milliseconds": 294.881826
+        },
+        {
+          "Name": "Temporal",
+          "Milliseconds": 37.640135
+        },
+        {
+          "Name": "Display",
+          "Milliseconds": 49.323774
+        }
+      ],
+      "Total": 1076.425038,
+      "Rays": 0,
+      "NodeVisits": 0,
+      "TriangleTests": 0,
+      "Hits": 0
+    },
+    {
+      "Frame": 31,
+      "Times": [
+        {
+          "Name": "Shadows",
+          "Milliseconds": 72.257892
+        },
+        {
+          "Name": "Raster",
+          "Milliseconds": 46.510938
+        },
+        {
+          "Name": "Links",
+          "Milliseconds": 41.403364
+        },
+        {
+          "Name": "C3",
+          "Milliseconds": 92.080417
+        },
+        {
+          "Name": "C2",
+          "Milliseconds": 116.453668
+        },
+        {
+          "Name": "C1",
+          "Milliseconds": 126.118114
+        },
+        {
+          "Name": "C0",
+          "Milliseconds": 150.843822
+        },
+        {
+          "Name": "SH9",
+          "Milliseconds": 3.358811
+        },
+        {
+          "Name": "Shade",
+          "Milliseconds": 306.222753
+        },
+        {
+          "Name": "Temporal",
+          "Milliseconds": 46.829186
+        },
+        {
+          "Name": "Display",
+          "Milliseconds": 52.237987
+        }
+      ],
+      "Total": 1054.316952,
+      "Rays": 0,
+      "NodeVisits": 0,
+      "TriangleTests": 0,
+      "Hits": 0
+    }
+  ],
+  "SourceHashes": {
+    "RadiancePanel.css": "2d3b8f4e4e8f93fbe601800dafd156afeecad64608b904b4f7e7675df253810f",
+    "RadiancePanel.js": "54bd489cd4e99b79461f6f13ee84032acf390abd183bc5408c231915454cfa3a",
+    "SceneSpecification.js": "30688af46a380112f153db066fb1dd33e8196c2214d473e0893d637e68247a4d",
+    "TransportIntegrator.js": "d9a74483bd8f79c4e89d56079fa20c89da1ef81349c4ffdecc2c6015e007fd81",
+    "index.html": "161faec494ec506147678784574e8c3ab561a45dc11112b78ef94171e1370f6d"
+  },
+  "Browser": "133.0.6943.0",
+  "Adapter": {
+    "Vendor": "google",
+    "Architecture": "swiftshader",
+    "Device": "",
+    "Description": "",
+    "Timestamp": true
+  },
+  "Software": true,
+  "Scene": {
+    "Triangles": 2788,
+    "Nodes": 2134,
+    "Levels": [
+      {
+        "Level": 0,
+        "X": 54,
+        "Y": 38,
+        "Directions": 4,
+        "Count": 32832,
+        "Near": 0,
+        "Far": 1.5
+      },
+      {
+        "Level": 1,
+        "X": 27,
+        "Y": 19,
+        "Directions": 8,
+        "Count": 32832,
+        "Near": 1.5,
+        "Far": 3
+      },
+      {
+        "Level": 2,
+        "X": 14,
+        "Y": 10,
+        "Directions": 16,
+        "Count": 35840,
+        "Near": 3,
+        "Far": 6
+      },
+      {
+        "Level": 3,
+        "X": 7,
+        "Y": 5,
+        "Directions": 32,
+        "Count": 35840,
+        "Near": 6,
+        "Far": 80
+      }
+    ],
+    "Memory": 36181072,
+    "Width": 640,
+    "Height": 448
+  },
+  "Passed": true
+}
