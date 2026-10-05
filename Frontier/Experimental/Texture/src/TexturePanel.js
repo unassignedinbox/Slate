@@ -737,7 +737,7 @@ export class TexturePanel
         this.Integrator.Composite(CompositeOrdering(this.Layers, this.Solo), this.Project.Material);
         // Generator and colour masks exist only as a recipe until something resolves them, so the preview pass runs
         // whenever the viewport is actually showing a mask.
-        if (this.Display === "mask" || this.Display === "mask_overlay")
+        if (this.Display === "mask")
             this.Integrator.RefreshMaskPreview(this.ActiveLayer, this.Project.Material);
         else this.Integrator.MaskPreviewLayer = "";
     }
@@ -1068,6 +1068,20 @@ export class TexturePanel
             Context.putImageData(Image, 0, 0);
             Holder.classList.add("painted");
             Holder.classList.toggle("masked", Target === "mask");
+            // 📝 A sheet can have a raster behind it and still be empty, and an empty plate that says nothing reads
+            //    as a broken one. Only a holder carrying a word for it pays for the look: one pass over the alpha
+            //    channel of a plate that is 192² at its largest.
+            if (Holder.dataset.empty)
+            {
+                let Ink = false;
+                for (let Index = 3; Index < Preview.Pixels.length; Index += 4)
+                    if (Preview.Pixels[Index] > 2)
+                    {
+                        Ink = true;
+                        break;
+                    }
+                Holder.classList.toggle("blank", !Ink);
+            }
         }
     }
 
@@ -3019,7 +3033,8 @@ export class TexturePanel
         this.SyncingSide = true;
         if (Wanted === "mask")
         {
-            if (this.MaskView === "off") this.SetMaskView("overlay", false);
+            // 📝 The view is deliberately left alone. Painting a mask is watching the surface open and close under
+            //    the brush, so the thing to look at while doing it is the surface.
             if (!["brush", "eraser", "fill"].includes(this.Tool)) this.SetTool("brush", true);
         }
         else
@@ -3140,18 +3155,26 @@ export class TexturePanel
         this.Notify(Layer.Mask.Invert ? "Mask inverted." : "Mask inversion cleared.");
     }
 
-    // Three ways to look at a mask: not at all, washed over the shaded surface so you can keep painting, or on its own in
-    // black and white. The previous view is remembered so the trip out and back is one click.
+    //----------------------------------------------------------------------------------------------------------------------
+    // Two ways to look at a mask: at the surface it is shaping, or at the mask on its own in black and white.
+    //
+    // 🔴 There used to be a third — a pink wash over the surface marking what the mask hid — and it was the one view
+    //    nobody could work in. Masking is hiding and revealing something you are looking at, and a tint over the top
+    //    says where the mask is at the price of the one thing you are judging: what the layer looks like now. The
+    //    wash is gone, and with it the tint colour nobody set. Painting a mask shows the surface, and the surface
+    //    answers the brush: paint black and the layer falls away under it. The brush target and the view are no
+    //    longer welded either — aiming at the mask leaves the view where it is.
+    //----------------------------------------------------------------------------------------------------------------------
     get MaskView()
     {
-        return this.Display === "mask" ? "isolated" : this.Display === "mask_overlay" ? "overlay" : "off";
+        return this.Display === "mask" ? "isolated" : "off";
     }
 
     SetMaskView(Mode, Announce = true)
     {
         const Layer = this.ActiveLayer;
         if (!Layer) return;
-        const Wanted = Mode === "overlay" ? "mask_overlay" : Mode === "isolated" ? "mask" : "off";
+        const Wanted = Mode === "isolated" ? "mask" : "off";
         if (Wanted === "off")
         {
             this.Display = this.DisplayBefore || "material";
@@ -3179,13 +3202,7 @@ export class TexturePanel
         this.RenderInspector();
         this.UpdateCaption();
         if (!Announce) return;
-        this.Notify(
-            Wanted === "mask"
-                ? "Showing the layer mask."
-                : Wanted === "mask_overlay"
-                  ? "Mask overlay on — the wash marks what the mask hides."
-                  : "Back to the shaded surface.",
-        );
+        this.Notify(Wanted === "mask" ? "Showing the layer mask." : "Back to the shaded surface.");
     }
 
     SyncMaskView()
@@ -4907,7 +4924,8 @@ export class TexturePanel
     {
         Select("#undo-button").addEventListener("click", () => this.Undo());
         Select("#redo-button").addEventListener("click", () => this.Redo());
-        Select("#brush-colour").addEventListener("input", (Event) => this.SetBrushColour(FromHex(Event.target.value)));
+        Select("#brush-colour").addEventListener("input", (Event) => this.SetBrushColour(FromHex(Event.target.value), false));
+        Select("#brush-colour").addEventListener("change", (Event) => this.SetBrushColour(FromHex(Event.target.value)));
         Select("#symmetry-select").innerHTML = SymmetryOrdering.map(
             (Entry) => `<option value="${Entry.Identifier}">${Entry.Label}</option>`,
         ).join("");
@@ -5009,6 +5027,7 @@ export class TexturePanel
             Hardness: () => this.Projection.Brush.Hardness,
             Strength: () => this.Projection.Brush.Flow,
             Masking: () => this.Projection.Brush.Target === "mask",
+            Note: (Text) => this.Notify(Text),
             // Null when the stroke goes down in one colour; otherwise the ramp, asked the same way the paint asks it.
             Tint: () =>
                 this.Gradient.Carry && this.Projection.Brush.Target !== "mask"
@@ -5745,7 +5764,7 @@ export class TexturePanel
     {
         const Mix = Store || {
             Read: () => this.BrushColour,
-            Write: (Colour) => this.SetBrushColour(Colour),
+            Write: (Colour, Settled) => this.SetBrushColour(Colour, Settled),
             Hue: "PickerHue",
         };
         const Group = this.CardGroup(Mix.Title || "Mix", Mix.Note || "Saturation across · brightness down");
@@ -5790,32 +5809,37 @@ export class TexturePanel
             if (document.activeElement !== Code) Code.value = Hex.toUpperCase();
         };
 
-        const Apply = () =>
+        const Apply = (Settled = true) =>
         {
-            Mix.Write(HsvToRgb([Tone, Strength, Level]));
+            Mix.Write(HsvToRgb([Tone, Strength, Level]), Settled);
             Draw();
         };
 
+        // 🔴 The colour under the finger is live and the colour let go of is the one that counts. Every move writes
+        //    through unsettled so the viewport, the ribbon and the layer keep up; the release writes the same colour
+        //    once more as settled, which is what lands in the recent rail and in the revision list.
         const Drag = (Node, Move) =>
         {
-            const Follow = (Event) =>
+            const Follow = (Event, Settled) =>
             {
                 const Box = Node.getBoundingClientRect();
                 Move(Clamp((Event.clientX - Box.left) / (Box.width || 1), 0, 1), Clamp((Event.clientY - Box.top) / (Box.height || 1), 0, 1));
-                Apply();
+                Apply(Settled);
             };
             Node.addEventListener("pointerdown", (Event) =>
             {
                 Node.setPointerCapture?.(Event.pointerId);
-                Follow(Event);
+                Follow(Event, false);
             });
             Node.addEventListener("pointermove", (Event) =>
             {
-                if (Node.hasPointerCapture?.(Event.pointerId)) Follow(Event);
+                if (Node.hasPointerCapture?.(Event.pointerId)) Follow(Event, false);
             });
             Node.addEventListener("pointerup", (Event) =>
             {
-                if (Node.hasPointerCapture?.(Event.pointerId)) Node.releasePointerCapture(Event.pointerId);
+                if (!Node.hasPointerCapture?.(Event.pointerId)) return;
+                Node.releasePointerCapture(Event.pointerId);
+                Apply(true);
             });
         };
 
@@ -5880,25 +5904,27 @@ export class TexturePanel
             for (const Chip of Row.querySelectorAll("[data-level]"))
                 Chip.classList.toggle("active", Math.abs(Number(Chip.dataset.level) - Level) < 0.02);
         };
-        const Set = (Across) =>
+        const Set = (Across, Settled) =>
         {
             const Box = Ramp.getBoundingClientRect();
             const Level = Clamp((Across - Box.left) / (Box.width || 1), 0, 1);
-            this.SetBrushColour([Level, Level, Level]);
+            this.SetBrushColour([Level, Level, Level], Settled);
             Draw();
         };
         Ramp.addEventListener("pointerdown", (Event) =>
         {
             Ramp.setPointerCapture?.(Event.pointerId);
-            Set(Event.clientX);
+            Set(Event.clientX, false);
         });
         Ramp.addEventListener("pointermove", (Event) =>
         {
-            if (Ramp.hasPointerCapture?.(Event.pointerId)) Set(Event.clientX);
+            if (Ramp.hasPointerCapture?.(Event.pointerId)) Set(Event.clientX, false);
         });
         Ramp.addEventListener("pointerup", (Event) =>
         {
-            if (Ramp.hasPointerCapture?.(Event.pointerId)) Ramp.releasePointerCapture(Event.pointerId);
+            if (!Ramp.hasPointerCapture?.(Event.pointerId)) return;
+            Ramp.releasePointerCapture(Event.pointerId);
+            Set(Event.clientX, true);
         });
         for (const Chip of Row.querySelectorAll("[data-level]"))
             Chip.addEventListener("click", () =>
@@ -6981,21 +7007,26 @@ export class TexturePanel
                 Note: Standing === "gradient" ? "The colour under the knob on the strip" : "Saturation across · brightness down",
                 Hue: "InkHue",
                 Read: () => (Standing === "gradient" ? Decal.Ramp.Stops[Chosen()]?.Colour || Decal.Tint : Decal.Tint),
-                Write: (Colour) =>
+                Write: (Colour, Settled = true) =>
                 {
-                    if (Standing === "gradient")
-                        Decal.Ramp.Stops = Decal.Ramp.Stops.map((Stop, Index) =>
-                            Index === Chosen() ? { ...Stop, Colour: [...Colour] } : Stop,
-                        );
-                    else
+                    const Recorded = this.SettleStack(Settled, () =>
                     {
-                        Decal.Tint = [...Colour];
-                        // 🔴 A placement carries its own tint — ShadingIntegrator reads the mark before the layer —
-                        //    so an ink mixed here that did not reach them would change the preview and nothing else.
-                        for (const Mark of Decal.Marks || []) Mark.Tint = [...Colour];
-                    }
+                        if (Standing === "gradient")
+                            Decal.Ramp.Stops = Decal.Ramp.Stops.map((Stop, Index) =>
+                                Index === Chosen() ? { ...Stop, Colour: [...Colour] } : Stop,
+                            );
+                        else
+                        {
+                            Decal.Tint = [...Colour];
+                            // 🔴 A placement carries its own tint — ShadingIntegrator reads the mark before the layer
+                            //    — so an ink mixed here that did not reach them would change the preview and nothing
+                            //    else.
+                            for (const Mark of Decal.Marks || []) Mark.Tint = [...Colour];
+                        }
+                    });
                     Well?.Refresh?.();
                     Reprint();
+                    if (Recorded) this.NoteColour(Colour);
                 },
             });
             Sheet.append(Mixer);
@@ -7127,22 +7158,44 @@ export class TexturePanel
 
     // One way in for the brush colour, whether it came from the picker, a swatch on the rail or a sampled texel: the
     // stroke layer in hand follows the brush, because a hand-painted layer is the colour it was painted with.
-    SetBrushColour(Colour)
+    //
+    // 📝 `Settled` is whether the colour has been let go of. A knob still under the finger sweeps through every shade
+    //    between where it started and where it is going, and none of those shades were chosen by anybody — they are a
+    //    gesture, not a decision. Unsettled writes move the brush and repaint the viewport; the recent rail is only
+    //    written when the drag ends, so sliding red to yellow leaves one swatch behind instead of forty.
+    SetBrushColour(Colour, Settled = true)
     {
         this.BrushColour = [...Colour];
         const Code = ToHex(this.BrushColour);
         const Field = Select("#brush-colour");
-        if (Field) Field.value = Code;
+        if (Field && Field.value !== Code) Field.value = Code;
         Select("#brush-swatch")?.style.setProperty("--swatch", Code);
-        this.NoteColour(this.BrushColour);
+        if (Settled) this.NoteColour(this.BrushColour);
         this.Instruments?.ScheduleRibbon();
         const Layer = this.ActiveLayer;
         if (Layer?.Kind === "stroke")
         {
             Layer.Channels.base_color = [...this.BrushColour];
-            this.RenderInspector();
+            if (Settled) this.RenderInspector();
             this.Recomposite();
         }
+    }
+
+    // 📝 The same idea one floor down, for the edits that are worth undoing. The snapshot a drag will undo to is the
+    //    one taken when the finger went down, not the one in front of the last intermediate colour, so a sweep across
+    //    the square is a single revision however many frames it lasted. Returns whether the edit was recorded.
+    SettleStack(Settled, Mutate)
+    {
+        if (!this.SettlingFrom) this.SettlingFrom = structuredClone(this.StackRecord());
+        Mutate();
+        if (!Settled) return false;
+        const Before = this.SettlingFrom;
+        this.SettlingFrom = null;
+        this.Project.Layers = OrderStack(this.Project.Layers);
+        const After = structuredClone(this.StackRecord());
+        this.Revisions.Record({ Kind: "stack", Before, After });
+        this.AfterStackChange();
+        return true;
     }
 
     // The brush pod, by the name the rest of the editor has always called it.
@@ -7621,9 +7674,6 @@ export class TexturePanel
                 break;
             case "mask-view-off":
                 this.SetMaskView("off");
-                break;
-            case "mask-view-overlay":
-                this.SetMaskView("overlay");
                 break;
             case "mask-view-isolated":
                 this.SetMaskView("isolated");
@@ -8182,13 +8232,12 @@ export class TexturePanel
         <div class="property-row target-row">
             <span class="property-label">Mask view</span>
             <div class="target-switch wide" role="group" aria-label="Mask view">
-                <button class="${View === "off" ? "active" : ""}" data-action="mask-view-off" aria-pressed="${View === "off"}">Off</button>
-                <button class="${View === "overlay" ? "active" : ""}" data-action="mask-view-overlay" aria-pressed="${View === "overlay"}">Overlay</button>
+                <button class="${View === "off" ? "active" : ""}" data-action="mask-view-off" aria-pressed="${View === "off"}">Surface</button>
                 <button class="${View === "isolated" ? "active" : ""}" data-action="mask-view-isolated" aria-pressed="${View === "isolated"}">Mask only</button>
             </div>
         </div>
-        ${ColourRow({ Label: "Overlay tint", Path: "Mask.Tint", Value: this.ActiveLayer?.Mask?.Tint || [0.95, 0.22, 0.3] })}
-        <p class="property-hint">Shift M cycles the same three views while you paint.</p>`;
+        <p class="property-hint">Painting a mask shows the surface it is shaping — black hides the layer, white brings it
+            back, and you watch it happen. Shift M looks at the mask on its own.</p>`;
     }
 
     // The same content-or-mask question the rows ask, restated where the mask itself is being set up.
@@ -8234,9 +8283,13 @@ export class TexturePanel
         const Size = this.Integrator.LayerResolution?.(Layer) || this.Project.Resolution;
         const Kind = LayerKindByIdentifier[Layer.Kind];
         const Masked = Layer.Mask.Kind !== "none";
-        const Plate = (Target, Caption, Note) => `
+        // 📝 The plate is a window onto the sheet, so it is checkered like one — neutral greys, not the layer's
+        //    accent, because an orange check reads as orange paint. `data-empty` is the word it says when the sheet
+        //    behind it holds nothing; the thumbnail pass sets `.blank` once it has looked.
+        const Empty = Layer.Kind === "fill" || Layer.Kind === "finish" ? "Painted from values" : "Nothing painted yet";
+        const Plate = (Target, Caption, Note, Word) => `
             <figure class="texture-plate">
-                <span class="layer-swatch plate-sheet" style="--swatch:${Kind.Accent}"
+                <span class="layer-swatch plate-sheet" ${Word ? `data-empty="${Escape(Word)}"` : ""}
                       data-thumbnail="${Layer.Identifier}" data-thumbnail-size="192" data-thumbnail-target="${Target}">
                     <canvas width="192" height="192" aria-hidden="true"></canvas>${Icon(Kind.Glyph)}
                 </span>
@@ -8247,7 +8300,7 @@ export class TexturePanel
             Badge: `${Size}²`,
             Body: `
                 <div class="texture-preview ${Masked ? "paired" : ""}">
-                    ${Plate("coverage", "Sheet", "Colour and cover")}
+                    ${Plate("coverage", "Sheet", "Colour and cover", Empty)}
                     ${Masked ? Plate("mask", "Mask", Layer.Mask.Invert ? "Inverted" : "White reveals") : ""}
                 </div>
                 <p class="property-hint">${
@@ -9227,8 +9280,7 @@ export class TexturePanel
             }
             if (Key === "[") this.NudgeRadius(0.84);
             if (Key === "]") this.NudgeRadius(1.19);
-            if (Key === "m" && Event.shiftKey)
-                this.SetMaskView(this.MaskView === "off" ? "overlay" : this.MaskView === "overlay" ? "isolated" : "off");
+            if (Key === "m" && Event.shiftKey) this.SetMaskView(this.MaskView === "off" ? "isolated" : "off");
             else if (Key === "m") Select("#mask-toggle").click();
             if (Key === "i")
             {
@@ -9543,7 +9595,6 @@ export class TexturePanel
             Material: this.Project.Material,
             Display: DisplayIndex(this.Display),
             MaskLayer: this.Project.Selection,
-            MaskTint: this.ActiveLayer?.Mask?.Tint || [0.95, 0.22, 0.3],
             CheckerScale: 16,
             Symmetry: this.Projection.Brush.Symmetry,
             Sectors: this.Projection.Brush.Sectors,

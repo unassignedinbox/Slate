@@ -63,9 +63,15 @@ export class InstrumentPanel
         //    stroke — the brush is not even offered for it — so a test sheet showing one was a preview of something
         //    that could never happen. The host answers with the artwork, inked, or null for "this one is painted".
         this.ReadArtwork = Options.Artwork || (() => null);
+        // Somewhere to say what just happened, so the pin can speak in the editor's voice rather than inventing one.
+        this.Note = Options.Note || (() => {});
 
         this.Section = "";
         this.Padded = false;
+        // The pin and where the hand left the card. A pinned card survives a press on the model, which is the whole
+        // point of pinning one: the paint is being judged on the model, and the knob being turned is on the card.
+        this.Pinned = false;
+        this.Placed = null;
         this.PadPaths = [];
         this.PadStroke = null;
         this.PadSheet = null;
@@ -118,10 +124,17 @@ export class InstrumentPanel
                         <div class="rail-foot" data-shelf></div>
                     </div>
                     <div class="tool-body">
-                        <div class="pane-head">
+                        <div class="pane-head" data-head>
                             <span class="pane-mark" data-pane-mark aria-hidden="true"></span>
                             <div><div class="pane-title" data-pane-title></div><div class="pane-sub" data-pane-sub></div></div>
                             <div class="pane-tools">
+                                <button class="pane-expand pane-pin" data-pin type="button" aria-pressed="false"
+                                        title="Pin the card open while you paint">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                                        ${Line("M9.4 3.6h5.2l-.7 4.9 3.3 2.6v1.3H6.8v-1.3l3.3-2.6z")}
+                                        ${Line("M12 12.4v7")}
+                                    </svg>
+                                </button>
                                 <button class="pane-expand" data-expand type="button" aria-expanded="false" title="Open a test sheet">
                                     <svg viewBox="0 0 24 24" aria-hidden="true">
                                         ${Line("M4 7.5h7M4 12h7M4 16.5h4")}
@@ -146,9 +159,62 @@ export class InstrumentPanel
                 </div>
             </div>`;
         this.Root.querySelector("[data-expand]")?.addEventListener("click", () => this.TogglePad());
+        this.Root.querySelector("[data-pin]")?.addEventListener("click", () => this.TogglePin());
         this.Root.querySelector("[data-pad-clear]")?.addEventListener("click", () => this.ClearPad());
         this.AttachPad();
+        this.AttachDrag();
         this.RenderRail();
+    }
+
+    // 🔴 The pin is the card's answer to the oldest complaint about summoned panels: it goes away the moment you use
+    //    the thing it is tuning. Pinned, a press on the model paints instead of dismissing, and the card is left
+    //    where it stands — so the knob and the stroke it changes can be watched at the same time.
+    TogglePin(On = !this.Pinned)
+    {
+        this.Pinned = !!On;
+        this.Root.classList.toggle("pinned", this.Pinned);
+        const Button = this.Root.querySelector("[data-pin]");
+        if (Button)
+        {
+            Button.setAttribute("aria-pressed", String(this.Pinned));
+            Button.title = this.Pinned ? "Unpin · the card closes when you paint" : "Pin the card open while you paint";
+        }
+        this.Note(this.Pinned ? "Card pinned — it stays open while you paint. Drag its head to move it." : "Card unpinned.");
+    }
+
+    // The head is the handle. A press anywhere on it that is not one of its own controls picks the card up, and a
+    // card that has been carried somewhere is placed by hand from then on: summoning it again leaves it there.
+    AttachDrag()
+    {
+        const Head = this.Root.querySelector("[data-head]");
+        if (!Head) return;
+        let From = null;
+        Head.addEventListener("pointerdown", (Event) =>
+        {
+            if (Event.button > 0 || Event.target.closest?.("button, kbd, input, select, a")) return;
+            const Box = this.Root.getBoundingClientRect();
+            From = { X: Event.clientX - Box.left, Y: Event.clientY - Box.top, Id: Event.pointerId };
+            Head.setPointerCapture?.(Event.pointerId);
+            this.Root.classList.add("carried");
+            Event.preventDefault();
+        });
+        Head.addEventListener("pointermove", (Event) =>
+        {
+            if (!From || Event.pointerId !== From.Id) return;
+            // 🔴 The point is remembered, not measured back off the card later: a closed card has no box to read,
+            //    and a card that was carried and then dismissed has to come back where it was left.
+            this.Placed = { X: Event.clientX - From.X, Y: Event.clientY - From.Y };
+            this.Settle(this.Placed.X, this.Placed.Y);
+        });
+        const Drop = (Event) =>
+        {
+            if (!From || Event.pointerId !== From.Id) return;
+            if (Head.hasPointerCapture?.(From.Id)) Head.releasePointerCapture(From.Id);
+            From = null;
+            this.Root.classList.remove("carried");
+        };
+        Head.addEventListener("pointerup", Drop);
+        Head.addEventListener("pointercancel", Drop);
     }
 
     // One row of the rail. The mark is raw markup, not the name of one: the card has no icon sheet of its own and no
@@ -805,12 +871,16 @@ export class InstrumentPanel
         this.RenderPane(false);
         this.Root.classList.add("open");
 
+        // A card that was carried somewhere is summoned back to where it was carried to, not to the anchor it was
+        // first opened at — the hand moved it on purpose.
         const Viewport = document.querySelector("#viewport")?.getBoundingClientRect();
+        const Carried = this.Placed && X === undefined && Y === undefined;
         const Anchor = {
             X: X ?? (Viewport ? Viewport.left + 76 : 120),
             Y: Y ?? (Viewport ? Viewport.top + Math.max(16, Viewport.height * 0.12) : 96),
         };
-        this.Settle(Anchor.X, Anchor.Y);
+        if (Carried) this.Settle(this.Placed.X, this.Placed.Y);
+        else this.Settle(Anchor.X, Anchor.Y);
         this.ScheduleRibbon();
         if (this.Padded) this.SizePad();
     }
@@ -856,7 +926,8 @@ export class InstrumentPanel
             "pointerdown",
             (Event) =>
             {
-                if (this.Open && !this.Root.contains(Event.target) && !Event.target.closest?.("#instrument-button")) this.Hide();
+                if (this.Pinned || !this.Open) return;
+                if (!this.Root.contains(Event.target) && !Event.target.closest?.("#instrument-button")) this.Hide();
             },
             true,
         );

@@ -23,7 +23,7 @@ import { BuildSurface } from "./SurfaceStructure.js";
 import { OrbitProjection } from "./OrbitProjection.js";
 import { DefaultStack, DefaultProject, CreateLayer } from "./LayerSpecification.js";
 import { ExportSlots, SurfaceFragment, PlaneFragment, CompositeFragment, Chunks } from "./ShadingGlsl.js";
-import { DisplayIndex } from "./ChannelSpecification.js";
+import { DisplayIndex, DisplayOrdering } from "./ChannelSpecification.js";
 import { MediaFromInstrument, PlainMedia } from "./MediaSolver.js";
 import { InstrumentByKey } from "./InstrumentSpecification.js";
 
@@ -398,16 +398,16 @@ test("a layer with no mask of its own inspects as fully revealed", () =>
 test("the mask inspection is wired to the display mode the shaders switch on", () =>
 {
     assert.equal(DisplayIndex("mask"), 14, "the mask view moved away from the GLSL branch that draws it");
-    assert.equal(DisplayIndex("mask_overlay"), 15, "the mask overlay moved away from the GLSL branch that draws it");
     for (const Source of [SurfaceFragment, PlaneFragment])
     {
         assert.match(Source, /uniform sampler2D uMaskPreview;/, "a fragment stage cannot reach the mask image");
         assert.match(Source, /Mode == 14/, "a fragment stage has no branch for the mask view");
-        assert.match(Source, /uniform vec3 uMaskTint;/, "a fragment stage cannot tint the overlay");
     }
-    // The overlay shades first and washes afterwards, so it must escape the inspection short-circuit.
-    assert.match(SurfaceFragment, /uDisplay > 0\.5 && int\(uDisplay \+ 0\.5\) != 15/, "the overlay is being treated as an inspection");
-    assert.match(PlaneFragment, /Mode == 15/, "texture space has no overlay branch");
+    // The pink wash is gone: there is no tint uniform, no branch that reads one, and no display that selects it.
+    assert.ok(!DisplayOrdering.some((Entry) => Entry.Identifier === "mask_overlay"), "the overlay is still on offer");
+    for (const Source of [SurfaceFragment, PlaneFragment]) assert.doesNotMatch(Source, /uMaskTint/, "a stage still tints a wash");
+    assert.match(SurfaceFragment, /if \(uDisplay > 0\.5\)/, "the inspection short-circuit still carries the overlay's escape clause");
+    assert.doesNotMatch(PlaneFragment, /Mode == 15/, "texture space still has an overlay branch");
 });
 
 test("generator and colour masks resolve through a pass of their own", () =>

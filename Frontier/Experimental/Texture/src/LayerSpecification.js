@@ -176,7 +176,6 @@ export const MaskDefaults = () => ({
     Colour: [0.82, 0.12, 0.14],     // the key a colour mask selects from the stack beneath the layer
     Tolerance: 0.25,
     Softness: 0.12,
-    Tint: [0.95, 0.22, 0.3],        // overlay wash drawn over whatever the mask hides
 });
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -542,7 +541,6 @@ export const SanitiseLayer = (Candidate) =>
             Colour: SanitiseColour(Candidate.Mask.Colour, [0.82, 0.12, 0.14]),
             Tolerance: Clamp(Candidate.Mask.Tolerance ?? 0.25, 0, 1),
             Softness: Clamp(Candidate.Mask.Softness ?? 0.12, 0, 1),
-            Tint: SanitiseColour(Candidate.Mask.Tint, [0.95, 0.22, 0.3]),
         };
     // A layer whose mask was left in hand comes back with the mask in hand; one without a mask can only be its content.
     Layer.Target = Candidate.Target === "mask" && Layer.Mask.Kind !== "none" ? "mask" : "coverage";

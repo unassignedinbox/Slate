@@ -1041,13 +1041,13 @@ test("the side being painted belongs to the layer, and cannot outlive its mask",
     assert.equal(SanitiseLayer({ ...Fresh, Target: "elsewhere" }).Target, "coverage");
 });
 
-test("a colour mask records a key, a tolerance and the wash it draws in the viewport", () =>
+test("a colour mask records a key and a tolerance, and no longer a wash to draw it in", () =>
 {
     const Fresh = CreateLayer("fill");
     assert.equal(Fresh.Mask.Kind, "none");
     assert.equal(Fresh.Mask.Tolerance, 0.25);
     assert.equal(Fresh.Mask.Colour.length, 3);
-    assert.equal(Fresh.Mask.Tint.length, 3);
+    assert.equal(Fresh.Mask.Tint, undefined, "the overlay wash is still on the record");
     assert.ok(MaskKinds.some((Kind) => Kind.Identifier === "colour"), "the colour mask is not offered");
 
     const Keyed = SanitiseLayer({
@@ -1058,7 +1058,7 @@ test("a colour mask records a key, a tolerance and the wash it draws in the view
     assert.deepEqual(Keyed.Mask.Colour, [1, 0.5, 0]);
     assert.equal(Keyed.Mask.Tolerance, 1, "tolerance is a unit range");
     assert.equal(Keyed.Mask.Softness, 0);
-    assert.deepEqual(Keyed.Mask.Tint, [0, 1, 0]);
+    assert.equal(Keyed.Mask.Tint, undefined, "a tint read out of an old document was kept");
     assert.equal(Keyed.Mask.Invert, true);
     assert.match(LayerSummary(Keyed), /colour mask/);
 

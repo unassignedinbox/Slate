@@ -370,5 +370,70 @@ Check(
     Panel.ChannelWrites.base_metalness === Boolean(Panel.ActiveLayer.Enabled.base_metalness),
 );
 
+//--------------------------------------------------------------------------------------------------------------------------
+// The mask, looked at. There are two ways now — the surface the mask is shaping, and the mask on its own — because the
+// third was a pink wash over the only thing worth looking at.
+//--------------------------------------------------------------------------------------------------------------------------
+Panel.SelectLayer(Panel.Layers.find((Layer) => Layer.Kind === "stroke").Identifier);
+if (Panel.ActiveLayer.Mask.Kind === "none") Panel.AddMask("black", false);
+await Settle(Window, 2);
+const Views = All("#mask-view [data-mask-view]").map((Button) => Button.dataset.maskView);
+Check("the viewport offers two mask views", Views.join(",") === "off,isolated", Views.join(","));
+Check("and no wash among them", !Views.includes("overlay"));
+Panel.SetMaskView("isolated");
+await Settle(Window, 2);
+Check("the mask on its own is the mask display", Panel.Display === "mask", Panel.Display);
+Panel.SetMaskView("off");
+await Settle(Window, 2);
+Check("and leaving it puts the surface back", Panel.Display !== "mask", Panel.Display);
+Type("M", { shiftKey: true });
+await Settle(Window, 2);
+Check("⇧M looks at the mask", Panel.MaskView === "isolated", Panel.MaskView);
+Type("M", { shiftKey: true });
+await Settle(Window, 2);
+Check("and ⇧M again looks away", Panel.MaskView === "off", Panel.MaskView);
+
+// Aiming the brush at the mask paints the mask; it does not change what is on screen, because the thing being judged
+// is the surface the mask is shaping.
+const Watching = Panel.Display;
+if (Panel.Projection.Brush.Target !== "mask") Type("m");
+await Settle(Window, 2);
+Check("painting the mask leaves the view alone", Panel.Display === Watching, `${Watching} → ${Panel.Display}`);
+if (Panel.Projection.Brush.Target === "mask") Type("m");
+await Settle(Window, 2);
+
+//--------------------------------------------------------------------------------------------------------------------------
+// The texture plate. A window onto the sheet reads as a window: no layer accent, and a word when there is nothing on it.
+//--------------------------------------------------------------------------------------------------------------------------
+Panel.RenderInspector();
+Panel.DrawThumbnails();
+const Plate = () => Find(".texture-preview .plate-sheet");
+Check("the layer's sheet is on a plate", !!Plate());
+Check("the plate takes no colour from the layer", !Plate().style.getPropertyValue("--swatch"), Plate().getAttribute("style") || "");
+Check("and says what is on it when nothing is", Plate().dataset.empty === "Nothing painted yet", Plate().dataset.empty);
+Check("which it only says once it has looked", Plate().classList.contains("blank"));
+const Reading = Panel.Integrator.PreviewLayer.bind(Panel.Integrator);
+Panel.Integrator.PreviewLayer = (Layer, Target, Size) =>
+{
+    const Preview = Reading(Layer, Target, Size);
+    if (Preview?.Pixels) Preview.Pixels[3] = 255;
+    return Preview;
+};
+Panel.DrawThumbnails();
+Check("and stops the moment one texel is inked", !Plate().classList.contains("blank"));
+Panel.Integrator.PreviewLayer = Reading;
+
+//--------------------------------------------------------------------------------------------------------------------------
+// The theme, read as text: the inspector's cards stand apart, and the plate is checkered in greys rather than in the
+// layer's accent. jsdom applies no stylesheet, so the sheet itself is the only honest thing to assert against.
+//--------------------------------------------------------------------------------------------------------------------------
+const { readFileSync } = await import("node:fs");
+const Theme = readFileSync(new URL("../src/ThemeSpecification.css", import.meta.url), "utf8");
+const Spacing = [...Theme.matchAll(/\.property-group \{[^}]*margin-bottom:\s*(\d+)px/g)].map((Found) => Number(Found[1]));
+Check("the inspector's cards are given room to stand apart", Spacing.length > 0 && Math.max(...Spacing) >= 16, Spacing.join(" · "));
+Check("the plate is checkered in greys", /\.layer-swatch\.plate-sheet \{[^}]*background-color: #131313/.test(Theme));
+Check("and the read-back over it carries no checker of its own", /\.layer-swatch\.plate-sheet canvas \{[^}]*background-image: none/.test(Theme));
+Check("the empty plate speaks in the word it was given", Theme.includes("content: attr(data-empty)"));
+
 Report();
 process.exit(process.exitCode || 0);

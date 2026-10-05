@@ -1461,7 +1461,6 @@ uniform vec3 uViewPosition;
 uniform float uNormalGain;
 uniform float uDisplay;
 uniform float uCheckerScale;
-uniform vec3 uMaskTint;
 
 uniform float uDiffuseRoughness;
 uniform vec3 uSpecularColour;
@@ -1637,8 +1636,8 @@ void main()
     vec3 Emission = Linearise(Channel3.rgb) * uEmissionLuminance;
     float Transmission = Channel3.a;
 
-    // Channel inspections short-circuit the whole slab evaluation. The overlay is not an inspection — it shades first.
-    if (uDisplay > 0.5 && int(uDisplay + 0.5) != 15)
+    // Channel inspections short-circuit the whole slab evaluation.
+    if (uDisplay > 0.5)
     {
         int Mode = int(uDisplay + 0.5);
         vec3 Inspection = vec3(0.0);
@@ -1836,14 +1835,7 @@ void main()
         Radiance = mix(Radiance, vec3(1.5, 1.5, 1.6) * (0.3 + Luminance(Radiance)), Within * Border * 0.55);
     }
 
-    vec3 Shaded = ToneMap(Radiance);
-    if (int(uDisplay + 0.5) == 15)
-    {
-        // Mask overlay: the surface stays paintable and what the mask hides is washed with the overlay tint.
-        float Mask = texture(uMaskPreview, vCoordinate).a;
-        Shaded = mix(mix(Shaded * 0.45 + uMaskTint * 0.55, Shaded, 0.25), Shaded, Mask);
-    }
-    oColour = vec4(Shaded, 1.0);
+    oColour = vec4(ToneMap(Radiance), 1.0);
 }`;
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -1883,7 +1875,6 @@ uniform float uAspect;
 uniform float uDisplay;
 uniform float uNormalGain;
 uniform float uCheckerScale;
-uniform vec3 uMaskTint;
 uniform vec3 uCursor;          // texture-space x, y, radius
 uniform float uCursorVisible;
 uniform vec3 uCursorInk;
@@ -1930,11 +1921,6 @@ void main()
             Colour = mix(vec3(0.16), vec3(0.62), mod(CheckerCell.x + CheckerCell.y, 2.0));
         }
         else if (Mode == 14) Colour = mix(vec3(0.04, 0.05, 0.07), vec3(0.96), texture(uMaskPreview, Coordinate).a);
-        else if (Mode == 15)
-        {
-            float Mask = texture(uMaskPreview, Coordinate).a;
-            Colour = mix(mix(Channel0.rgb * 0.45 + uMaskTint * 0.55, Channel0.rgb, 0.25), Channel0.rgb, Mask);
-        }
         else Colour = Channel0.rgb;
         if (Field.a <= 0.0 && Mode == 0) Colour *= 0.35;
     }

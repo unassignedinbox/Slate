@@ -200,9 +200,20 @@ export const CreateWindow = () =>
     };
     Object.defineProperty(Window.HTMLElement.prototype, "clientWidth", { get: () => 320, configurable: true });
     Object.defineProperty(Window.HTMLElement.prototype, "clientHeight", { get: () => 180, configurable: true });
-    Window.HTMLElement.prototype.setPointerCapture = function () {};
-    Window.HTMLElement.prototype.releasePointerCapture = function () {};
-    Window.HTMLElement.prototype.hasPointerCapture = () => false;
+    // Capture is kept for real, not stubbed away: a drag that is gated on holding the pointer — the colour square,
+    // the ramp, the card's own head — never moves a pixel under a capture that always answers no.
+    Window.HTMLElement.prototype.setPointerCapture = function (Identifier)
+    {
+        (this.Held || (this.Held = new Set())).add(Identifier);
+    };
+    Window.HTMLElement.prototype.releasePointerCapture = function (Identifier)
+    {
+        this.Held?.delete(Identifier);
+    };
+    Window.HTMLElement.prototype.hasPointerCapture = function (Identifier)
+    {
+        return !!this.Held?.has(Identifier);
+    };
     Window.HTMLElement.prototype.scrollIntoView = function () {};
     Window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
     Window.HTMLDialogElement.prototype.close = function () { this.open = false; };

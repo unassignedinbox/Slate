@@ -279,7 +279,6 @@ export const DisplayOrdering = [
     { Identifier: "occlusion_bake", Label: "Baked AO" },
     { Identifier: "checker", Label: "UV checker" },
     { Identifier: "mask", Label: "Layer mask" },
-    { Identifier: "mask_overlay", Label: "Mask overlay" },
 ];
 
 export const DisplayIndex = (Identifier) =>

@@ -1521,7 +1521,6 @@ export class ShadingIntegrator
         Device.uniform1f(Uniforms.get("uNormalGain"), this.NormalGain(Options.Material));
         Device.uniform1f(Uniforms.get("uDisplay"), Options.Display);
         Device.uniform1f(Uniforms.get("uCheckerScale"), Options.CheckerScale || 16);
-        Device.uniform3fv(Uniforms.get("uMaskTint"), Options.MaskTint || [0.95, 0.22, 0.3]);
         const Material = Options.Material;
         Device.uniform1f(Uniforms.get("uDiffuseRoughness"), Material.base_diffuse_roughness);
         Device.uniform3fv(Uniforms.get("uSpecularColour"), Material.specular_color);
@@ -1596,7 +1595,6 @@ export class ShadingIntegrator
         Device.uniform1f(Program.Uniforms.get("uDisplay"), Options.Display);
         Device.uniform1f(Program.Uniforms.get("uNormalGain"), this.NormalGain(Options.Material));
         Device.uniform1f(Program.Uniforms.get("uCheckerScale"), Options.CheckerScale || 16);
-        Device.uniform3fv(Program.Uniforms.get("uMaskTint"), Options.MaskTint || [0.95, 0.22, 0.3]);
         Device.uniform3fv(Program.Uniforms.get("uCursor"), Options.Cursor || [0, 0, 0]);
         Device.uniform1f(Program.Uniforms.get("uCursorVisible"), Options.Cursor ? 1 : 0);
         Device.uniform3fv(Program.Uniforms.get("uCursorInk"), Options.CursorInk || [1, 1, 1]);

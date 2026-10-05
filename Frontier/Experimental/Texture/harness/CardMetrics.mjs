@@ -299,6 +299,73 @@ Check("the pane head wears the pane's own mark", !!Head.querySelector("[data-pan
 Check("and names the pane", Head.querySelector("[data-pane-title]").textContent.length > 0, Head.querySelector("[data-pane-title]").textContent);
 Check("every group in the pane has a header of its own", [...Pane().querySelectorAll(".card-group")].every((Group_) => !!Group_.querySelector(".group-head h3")));
 
+//--------------------------------------------------------------------------------------------------------------------------
+// The pin, and the head as a handle. A card that is dismissed by the act it is tuning cannot be used while painting.
+//--------------------------------------------------------------------------------------------------------------------------
+const Pin = Card.Root.querySelector("[data-pin]");
+Check("the head carries a pin", !!Pin);
+Check("which starts out loose", Pin.getAttribute("aria-pressed") === "false");
+
+Card.Show();
+Press("pointerdown", 420, 250);
+Press("pointerup", 420, 250);
+Check("an unpinned card goes away when the model is touched", Card.Open === false);
+
+Card.Show();
+Pin.dispatchEvent(new Window.MouseEvent("click", { bubbles: true }));
+Check("pinning lights the pin", Pin.getAttribute("aria-pressed") === "true");
+Check("and marks the card", Card.Root.classList.contains("pinned"));
+Press("pointerdown", 420, 250);
+Press("pointerup", 420, 250);
+Check("a pinned card stays while the model is painted", Card.Open === true);
+
+const Handle = Card.Root.querySelector(".pane-head");
+const Carry = (Kind, X, Y) =>
+    Handle.dispatchEvent(new Window.MouseEvent(Kind, { bubbles: true, clientX: X, clientY: Y, button: 0, pointerId: 11 }));
+const Stood = Card.Root.style.left;
+Carry("pointerdown", 40, 20);
+Check("a press on the head picks the card up", Card.Root.classList.contains("carried"));
+Carry("pointermove", 240, 160);
+Check("and moving the hand moves the card", Card.Root.style.left !== Stood, `${Stood} → ${Card.Root.style.left}`);
+Carry("pointerup", 240, 160);
+Check("letting go puts it down", !Card.Root.classList.contains("carried"));
+
+const Left = Card.Root.style.left;
+Card.Hide();
+Card.Show();
+Check("summoning it again leaves it where it was carried to", Card.Root.style.left === Left, `${Left} → ${Card.Root.style.left}`);
+
+const Stayed = Card.Root.style.left;
+Pin.dispatchEvent(new Window.MouseEvent("pointerdown", { bubbles: true, clientX: 300, clientY: 20, button: 0, pointerId: 12 }));
+Handle.dispatchEvent(new Window.MouseEvent("pointermove", { bubbles: true, clientX: 60, clientY: 300, pointerId: 12 }));
+Check("but a press on a control in the head is not a drag", Card.Root.style.left === Stayed);
+Pin.dispatchEvent(new Window.MouseEvent("click", { bubbles: true }));
+Check("and the pin lets go again", Card.Pinned === false);
+
+//--------------------------------------------------------------------------------------------------------------------------
+// The colour under the finger. Dragging red to yellow passes through every shade between the two, and none of them
+// were chosen: the recent rail must be given the colour that was let go of, once.
+//--------------------------------------------------------------------------------------------------------------------------
+Card.Show();
+Panel.SelectLayer(Panel.Layers.find((Layer) => Layer.Kind === "stroke").Identifier);
+Card.ShowSection("colour");
+const Square = Card.Root.querySelector("[data-square]");
+const Kept = () => (Panel.RecentColours || []).length;
+const Sweep = (Kind, X, Y) =>
+    Square.dispatchEvent(new Window.MouseEvent(Kind, { bubbles: true, clientX: X, clientY: Y, button: 0, pointerId: 21 }));
+Check("the mixing square is there to drag", !!Square);
+const Noted = Kept();
+Sweep("pointerdown", 20, 150);
+const Opening = ToCode(Panel.BrushColour);
+Sweep("pointermove", 180, 40);
+Check("the brush follows the finger across the square", ToCode(Panel.BrushColour) !== Opening, `${Opening} → ${ToCode(Panel.BrushColour)}`);
+Sweep("pointermove", 300, 20);
+Check("and nothing is remembered while it is still down", Kept() === Noted, `${Noted} → ${Kept()}`);
+Check("so the rail is not led by the drag", (Panel.RecentColours || [])[0] !== ToCode(Panel.BrushColour));
+Sweep("pointerup", 300, 20);
+Check("letting go remembers the colour let go of", (Panel.RecentColours || [])[0] === ToCode(Panel.BrushColour), (Panel.RecentColours || [])[0]);
+Check("and remembers exactly one of them", Kept() === Noted + 1, `${Noted} → ${Kept()}`);
+
 Check("the status bar names the build on screen", Window.document.querySelector("#build-mark")?.textContent?.startsWith("build "), Window.document.querySelector("#build-mark")?.textContent);
 
 Report();

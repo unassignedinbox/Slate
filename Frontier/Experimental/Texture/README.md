@@ -11,7 +11,7 @@ npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
 npm test           # 131 unit tests, no browser required
-npm run drive      # 191 checks against the whole editor, booted in a headless window
+npm run drive      # 225 checks against the whole editor, booted in a headless window
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -104,13 +104,16 @@ does it. Four kinds — **painted** (a greyscale image the brush writes), **gene
 none at all. A layer with no mask shows a dashed *Add mask* chip; clicking it attaches a black mask and aims the brush at
 it in one step, so the layer disappears and you paint it back.
 
-The mask can be looked at three ways — from the toggle floating at the top of the viewport, from the same switch in the
-Mask group, or by cycling `⇧ M`:
+The mask can be looked at two ways — from the toggle floating at the top of the viewport, from the same switch in the
+Mask group, or with `⇧ M`:
 
-- **Off** — the shaded surface.
-- **Overlay** — the shaded surface with a tint washed over whatever the mask hides. The surface stays live, so you paint
-  the mask and watch the wash retreat.
-- **Mask** — the mask on its own in black and white.
+- **Surface** — the surface the mask is shaping. This is where masking is done: paint black and the layer falls away
+  under the brush, paint white and it comes back, and you are watching the thing you are judging.
+- **Mask** — the mask on its own in black and white, for checking an edge.
+
+There used to be a third, a pink wash over everything the mask hid. It told you where the mask was at the cost of the
+only thing you were looking at, so it is gone, and the tint colour nobody ever set went with it. Aiming the brush at a
+mask no longer changes the view either.
 
 Generator and colour masks have no image behind them, so a pass of their own resolves whichever kind the layer carries
 into a preview target before the viewport samples it: what you see is what the compositor applied, inversion included.
@@ -118,12 +121,11 @@ Masks are undoable with the rest of the stack, and a removed mask frees its imag
 
 **The side being painted belongs to the layer, not to the brush.** `M` flips between a layer's content and its mask, and
 the layer remembers which one it was left on: step to another layer and back and the same side is in hand, with the same
-tool. The three things that used to be separate switches now move together — going into a mask shows the mask (the
-overlay, unless you were already looking at it another way) and puts a brush in your hand, and coming back out restores
-the view you were in and the tool you were using on the content, so a decal layer hands you the decal tool again rather
-than the brush its mask needed. Moving the *view* moves the side with it, for the same reason: looking at a mask while
-painting the layer underneath it is the oldest way to lose an afternoon. The stack footer and the chips on every layer
-row always state which side is live.
+tool. Going into a mask puts a brush in your hand, and coming back out restores the tool you were using on the content,
+so a decal layer hands you the decal tool again rather than the brush its mask needed. Moving the *view* onto the mask
+moves the brush with it — if you are looking at a mask on its own, that is what you meant to paint — but aiming the
+brush at a mask no longer changes what is on screen: masking is judged on the surface it is shaping, not on a picture
+of the mask. The stack footer and the chips on every layer row always state which side is live.
 
 **Content browser.** A drawer across the foot of the viewport — drag its tab, press `B`, or use the grid button in the
 viewport bar; it settles closed, half or full. The library column on the left walks Materials (the four finish families
@@ -636,16 +638,37 @@ title and, under it, the line that says what the group is for — and the panes 
 together. The pane header carries the same mark the rail row does, in the same colour, so an open pane announces
 itself instead of leaving the eye to match a title against a list.
 
+**The card pins, and it is carried by its head.** A summoned card goes away the moment you touch the model, which is
+fine for choosing something and useless for tuning one: turn a knob, press on the surface to see what it did, and the
+card you were turning is gone. The pin in the pane head holds it open — a press on the model paints instead of
+dismissing — and the head itself is the handle, so the card can be carried out of the way of the thing it is changing.
+A card that has been carried is summoned back where it was left rather than snapping to its anchor, `Tab` and
+<kbd>Esc</kbd> still put it away pinned or not, and the pin lights and leans over when it is holding.
+
+**A colour is chosen when it is let go of.** Dragging across the mixing square from red to yellow passes through every
+shade between the two, and not one of them was picked by anybody. The brush, the ribbon, the stroke in hand and the
+viewport all follow the finger live — that is the point of a picker — but the *recent* rail and the revision list are
+written once, from the colour the finger was lifted on. The same rule runs the mask's value ramp, the viewport's colour
+well, and a decal's ink: a sweep across the square used to leave forty swatches behind it and forty steps of undo in
+front of it.
+
+**A blank sheet looks blank.** The plate in the layer panel is a window onto what is painted, so it is checkered like
+one — neutral greys on near-black, not a transparency grid tinted with the layer's accent, which read as orange paint
+on an empty layer. When the read-back behind it holds no ink at all, the plate says so in words under the kind's own
+glyph: *Nothing painted yet*, or *Painted from values* for the layers that have no sheet to fill. And the cards in the
+panel stand further apart, so a group ends where it looks like it ends.
+
 ## Keyboard
 
 | | | | |
 | --- | --- | --- | --- |
 | Orbit / brush / eraser | <kbd>1 2 3</kbd> | Content ⇄ mask (adds one if needed) | <kbd>M</kbd> |
-| Flood / decal / pick | <kbd>4 5 6</kbd> | Mask view: off → overlay → mask | <kbd>⇧ M</kbd> |
+| Flood / decal / pick | <kbd>4 5 6</kbd> | Look at the mask on its own | <kbd>⇧ M</kbd> |
 | Size the head by hand | hold <kbd>S</kbd> · drag out / in | Texture space | <kbd>X</kbd> |
 | Brush size by steps | <kbd>[</kbd> <kbd>]</kbd> · <kbd>Alt</kbd> + wheel | Frame the surface | <kbd>F</kbd> |
 | Show / hide the unwrap | <kbd>W</kbd> | Show / hide the UDIM tiles | <kbd>U</kbd> |
 | Paint card: open, and closed again | <kbd>Tab</kbd> | Delete the selected layer | <kbd>Del</kbd> / <kbd>⌫</kbd> |
+| Pin the card open | the pin in its head | Carry the card | drag its head |
 | Search layers | <kbd>/</kbd> | Content browser | <kbd>B</kbd> |
 | Undo / redo | <kbd>Ctrl Z</kbd> / <kbd>Ctrl ⇧ Z</kbd> | Save `.pigment` / export | <kbd>Ctrl S</kbd> / <kbd>Ctrl E</kbd> |
 | Symmetry: off → X → Y → Z → radial | <kbd>Y</kbd> | Isolate the selected layer | <kbd>I</kbd> |
