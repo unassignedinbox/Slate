@@ -3502,7 +3502,10 @@ export class TexturePanel
         this.Recomposite();
         this.MarkDirty();
         const Shape = GradientShapes.find((Entry) => Entry.Identifier === this.Gradient.Shape)?.Label || "Linear";
-        this.Chronicle("stroke", `${Shape} gradient`, `${Span.toFixed(2)} m · ${Layer.Name}`, this.BrushColour);
+        // The timeline's swatch is what the gradient is made of: the middle of the ramp when it is laying colours,
+        // the colour in hand when it is only fading it away.
+        const Swatch = this.Gradient.Colours ? RampColourAt(this.Gradient.Stops, 0.5) : this.BrushColour;
+        this.Chronicle("stroke", `${Shape} gradient`, `${Span.toFixed(2)} m · ${Layer.Name}`, Swatch);
         this.Notify(`${Shape} gradient laid down over ${Span.toFixed(2)} m.`);
     }
 
@@ -3545,7 +3548,8 @@ export class TexturePanel
             this.Recomposite();
             this.MarkDirty();
             const Shape = GradientShapes.find((Entry) => Entry.Identifier === this.Gradient.Shape)?.Label || "Linear";
-            this.Chronicle("stroke", `${Shape} gradient`, `texture space · ${Layer.Name}`, this.BrushColour);
+            const Swatch = this.Gradient.Colours ? RampColourAt(this.Gradient.Stops, 0.5) : this.BrushColour;
+            this.Chronicle("stroke", `${Shape} gradient`, `texture space · ${Layer.Name}`, Swatch);
             this.Notify(`${Shape} gradient laid across the sheet.`);
             return;
         }
