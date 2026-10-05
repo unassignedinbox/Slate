@@ -1880,30 +1880,39 @@ export class TexturePanel
     }
 
     //----------------------------------------------------------------------------------------------------------------------
-    // Sizing the head by hand: hold `S` and drag. Out from where the key went down grows it, back in shrinks it, and
-    // the ring on the canvas is the size itself rather than a number to be pictured.
+    // Sizing the head by hand: hold `S` and drag. The ring is the head, the cursor is on its rim, and the rim follows
+    // the hand — out from the centre to grow it, in towards the centre to shrink it.
     //
-    // 🔴 The drag is measured ALONG the direction it set off in, not as a raw distance from the anchor. A distance
-    //    cannot be negative, so a brush sized by one could only ever grow; a signed length along the first few pixels
-    //    of travel lets the hand come back through the anchor and keep shrinking, which is what dragging in means.
+    // 🔴 Measured as a DISTANCE from the ring's centre, never as travel along the direction the drag set off in. The
+    //    direction version could invert itself: whichever way the hand twitched in its first few pixels became "out",
+    //    so a drag that meant to grow the brush shrank it to nothing and kept shrinking. Distance from a point cannot
+    //    disagree with the eye — away is bigger and towards is smaller in every direction, with nothing to remember.
     //
-    // 📝 Exponential, not linear. A step of so many pixels should be worth the same fraction of the head at every
-    //    size, or a brush that starts small cannot be grown and one that starts large cannot be tuned.
+    // 📝 Which is why the centre is NOT under the cursor. The key goes down with the cursor on the rim of the ring,
+    //    one radius out from the centre, so there is room to drag inwards. Pressing with the centre under the hand
+    //    would leave the brush at nothing with no way back but outwards.
     //----------------------------------------------------------------------------------------------------------------------
     BeginSizing()
     {
         if (this.Sizing || !this.Canvas) return;
         const Bounds = this.Canvas.getBoundingClientRect?.() || { left: 0, top: 0, width: 0, height: 0 };
+        const At = this.PointerAt ? [...this.PointerAt] : [Bounds.left + Bounds.width / 2, Bounds.top + Bounds.height / 2];
+        // Room to work in: a hair of a brush still needs a few dozen pixels of travel to shrink into, and a brush the
+        // size of the viewport cannot put its centre off the edge of it.
+        const Pixels = this.RadiusPixels();
+        const Reach = Clamp(Pixels, 28, 260);
         this.Sizing = {
-            Anchor: this.PointerAt ? [...this.PointerAt] : [Bounds.left + Bounds.width / 2, Bounds.top + Bounds.height / 2],
+            Anchor: [At[0] - Reach, At[1]],
             From: this.Projection.Brush.Radius,
-            Axis: null,
+            Pixels,
+            Reach,
+            Flat: this.ViewMode !== "surface",
         };
         this.DrawSizingRing();
         if (!this.SizingTold)
         {
             this.SizingTold = true;
-            this.Notify("Drag out to grow the head, back in to shrink it.");
+            this.Notify("Drag away from the ring to grow the head, in towards it to shrink it.");
         }
     }
 
@@ -1911,16 +1920,33 @@ export class TexturePanel
     {
         const Sizing = this.Sizing;
         if (!Sizing) return;
-        const Away = [Event.clientX - Sizing.Anchor[0], Event.clientY - Sizing.Anchor[1]];
-        const Reach = Math.hypot(Away[0], Away[1]);
-        if (!Sizing.Axis)
-        {
-            if (Reach < 6) return;      // the first few pixels only say which way "out" is
-            Sizing.Axis = [Away[0] / Reach, Away[1] / Reach];
-        }
-        const Along = Away[0] * Sizing.Axis[0] + Away[1] * Sizing.Axis[1];
-        this.SetRadius(Sizing.From * Math.exp(Along / 170));
+        const Away = Math.hypot(Event.clientX - Sizing.Anchor[0], Event.clientY - Sizing.Anchor[1]);
+        // 📝 In the viewport the head is sized in SCREEN pixels, one for one: the rim of the ring sits under the
+        //    cursor and stays there, so the size being chosen is the size being looked at. Texture space has no
+        //    camera to measure a pixel against, so there the drag is a plain multiple of where it started.
+        if (Sizing.Flat) this.SetRadius(Sizing.From * Clamp(Away / Sizing.Reach, 0.02, 40));
+        else this.SetRadius(this.RadiusFromPixels(Math.max(1, Sizing.Pixels + (Away - Sizing.Reach))));
         this.DrawSizingRing();
+    }
+
+    // The head's radius in screen pixels, which is what the ring is drawn at and what the drag is measured against,
+    // and the same journey back the other way.
+    RadiusPixels(Radius = this.Projection.Brush.Radius)
+    {
+        if (this.ViewMode !== "surface") return 60;
+        return Radius / this.PixelReach();
+    }
+
+    RadiusFromPixels(Pixels)
+    {
+        return Pixels * this.PixelReach();
+    }
+
+    PixelReach()
+    {
+        const Bounds = this.Canvas?.getBoundingClientRect?.();
+        const Height = Bounds?.height || 1;
+        return (2 * Math.tan(this.Camera.FieldOfView / 2) * Math.max(this.Camera.Distance, 0.1)) / Height;
     }
 
     EndSizing()
@@ -1940,10 +1966,7 @@ export class TexturePanel
         const Ghost = Select("#brush-ghost");
         if (!Ghost || !this.Sizing || this.ViewMode !== "surface") return;
         const Bounds = this.Canvas.getBoundingClientRect();
-        const Height = Bounds.height || 1;
-        const Pixels =
-            (this.Projection.Brush.Radius * Height) /
-            (2 * Math.tan(this.Camera.FieldOfView / 2) * Math.max(this.Camera.Distance, 0.1));
+        const Pixels = this.RadiusPixels();
         Ghost.hidden = false;
         Ghost.classList.add("sizing");
         Ghost.style.width = `${Math.max(Pixels * 2, 8)}px`;
@@ -3276,10 +3299,12 @@ export class TexturePanel
     {
         if (!this.Integrator.Ready) return;
         this.PointerAt = [Event.clientX, Event.clientY];
-        // A press while the head is being sized settles it rather than painting with it: the hand is still holding S.
+        // 🔴 Half the world sizes a brush by holding the key and dragging with the button down. The press is
+        //    swallowed — nothing is painted while the head is being sized — but it does NOT end the drag, because a
+        //    hand that presses the button first and then moves would otherwise get one dab and no resizing at all.
         if (this.Sizing)
         {
-            this.EndSizing();
+            this.Canvas.setPointerCapture?.(Event.pointerId);
             return;
         }
         this.Canvas.setPointerCapture(Event.pointerId);
@@ -3501,6 +3526,14 @@ export class TexturePanel
     OnPointerUp(Event)
     {
         if (this.Canvas.hasPointerCapture?.(Event.pointerId)) this.Canvas.releasePointerCapture(Event.pointerId);
+        // The button going up during an S-drag releases nothing but the button: the size is still in the hand that
+        // is still holding the key, and there is no stroke to finish because none was ever begun.
+        if (this.Sizing)
+        {
+            this.PointerButton = undefined;
+            this.Navigating = false;
+            return;
+        }
         if (this.GizmoGrab)
         {
             this.ReleaseGizmo();

@@ -139,14 +139,42 @@ const Span = Panel.Gradient.Span;
 Point("pointermove", 400, 300);
 Type("s");
 Check("holding S takes hold of the size", !!Panel.Sizing, String(!!Panel.Sizing));
-Check("anchored where the key went down", Panel.Sizing.Anchor[0] === 400 && Panel.Sizing.Anchor[1] === 300);
-Point("pointermove", 480, 300);
+// 🔴 The ring's centre is one radius to the side, so the cursor starts on its rim with room to drag inwards.
+const Centre = Panel.Sizing.Anchor;
+const Reach = Panel.Sizing.Reach;
+Check("the cursor starts on the rim of the ring", Math.abs(Math.hypot(400 - Centre[0], 300 - Centre[1]) - Reach) < 0.001, `${Reach}`);
+Check("nothing has moved yet", Panel.Projection.Brush.Radius === Held);
+
+// 🔴 The regression the hand hit: a first twitch INWARDS used to set the direction, and from then on every pull
+//    outwards shrank the brush. Distance from the centre cannot invert itself, so the twitch is just a twitch.
+Point("pointermove", 400 - Reach * 0.4, 300);
+Check("a twitch towards the centre shrinks it", Panel.Projection.Brush.Radius < Held, `${Held} → ${Panel.Projection.Brush.Radius}`);
+const Rim = Panel.Sizing.Pixels;     // the rim as it was when the key went down, which is what the drag is measured from
+Point("pointermove", 400 + Reach, 300);
 const Grown = Panel.Projection.Brush.Radius;
-Check("dragging out grows the head", Grown > Held, `${Held} → ${Grown}`);
+Check("and pulling away from it grows it, whatever the twitch said", Grown > Held, `${Held} → ${Grown}`);
+// The rim is under the cursor: a hundred pixels further out is a hundred pixels more radius.
+Check(
+    "a pixel of travel is a pixel of radius",
+    Math.abs(Panel.RadiusPixels() - (Rim + Reach)) < 0.5,
+    `${Panel.RadiusPixels().toFixed(2)} vs ${(Rim + Reach).toFixed(2)}`,
+);
 Check("and the ring shows it", Window.document.querySelector("#brush-ghost")?.classList.contains("sizing"));
-Point("pointermove", 320, 300);
-Check("dragging back in shrinks it past where it started", Panel.Projection.Brush.Radius < Held, `${Held} → ${Panel.Projection.Brush.Radius}`);
-Check("nothing is painted while the head is being sized", Panel.Painting !== true);
+
+// Up or down is the same question: it is a distance from the centre, not an axis.
+Point("pointermove", Centre[0], 300 - Reach * 2);
+Check("straight up the screen reads the same as straight out", Math.abs(Panel.Projection.Brush.Radius - Grown) < Grown * 0.001, String(Panel.Projection.Brush.Radius));
+
+// A button held down through the drag is the other way people do this.
+Point("pointerdown", Centre[0] + Reach * 3, 300);
+Check("a press during the drag paints nothing", Panel.Painting !== true);
+Point("pointermove", Centre[0] + Reach * 3, 300);
+Check("and the drag carries on under it", Panel.Projection.Brush.Radius > Grown, String(Panel.Projection.Brush.Radius));
+Check("nothing was laid down by it", Panel.Painting !== true);
+Point("pointerup", Centre[0] + Reach * 3, 300);
+Check("the button coming up does not end it", !!Panel.Sizing);
+Point("pointermove", 400, 300);
+Check("back on the rim is back where it began", Math.abs(Panel.Projection.Brush.Radius - Held) < Held * 0.02, String(Panel.Projection.Brush.Radius));
 Window.dispatchEvent(new Window.KeyboardEvent("keyup", { key: "s", bubbles: true }));
 Check("letting go of S lets go of the size", !Panel.Sizing);
 Check("and takes the ring away", Window.document.querySelector("#brush-ghost")?.hidden === true);

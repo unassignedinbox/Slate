@@ -11,7 +11,7 @@ npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
 npm test           # 128 unit tests, no browser required
-npm run drive      # 150 checks against the whole editor, booted in a headless window
+npm run drive      # 157 checks against the whole editor, booted in a headless window
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -207,12 +207,18 @@ held in, which is how it works at a desk.
 
 ![A silver-to-gold marker, written on the card's own test sheet](test-sheet.png)
 
-**Sizing the head by hand.** Hold <kbd>S</kbd> and drag: out from where the key went down grows the brush, back in
-shrinks it, and the ring drawn on the canvas is the size itself rather than a number to be pictured. The drag is
-measured along the direction it set off in rather than as a distance from the anchor — a distance cannot be
-negative, so a brush sized by one could only ever grow — and it is exponential, so a step of so many pixels is
-worth the same fraction of the head whether the head is a hair or a house. A press settles it, <kbd>Esc</kbd>
-abandons it, and the brackets and <kbd>Alt</kbd> + wheel still step it without the drag.
+**Sizing the head by hand.** Hold <kbd>S</kbd> and drag. A ring appears with the cursor on its rim: pull away from
+its centre and the head grows, push in towards the centre and it shrinks, in any direction, and the rim stays under
+the cursor a pixel for a pixel — the size being chosen is the size being looked at rather than a number to be
+pictured. The centre is deliberately not under the hand but one radius to the side, because a drag that began at
+the centre would have nowhere to shrink into.
+
+It is measured as a *distance from that centre*, never as travel along the direction the drag set off in. The
+direction version inverted itself: whichever way the hand twitched in its first few pixels became "out", so a pull
+meant to grow the brush shrank it instead and kept shrinking. A distance cannot disagree with the eye. A press
+during the drag paints nothing and does not end it — holding the button while sizing is the other way people do
+this — <kbd>Esc</kbd> or letting go of <kbd>S</kbd> ends it, and the brackets and <kbd>Alt</kbd> + wheel still step
+the size without a drag.
 
 **A test sheet, before the model.** The expand button in the head of any pane opens a third column on the card: a sheet
 of paper the width of the column, drawn on with the pointer. It runs the same deposition model the ribbon and the GPU
