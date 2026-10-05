@@ -107,7 +107,14 @@ export class InstrumentPanel
                   (Entry) => `
             <button class="rail-item ${Entry.Key === Standing?.Key ? "active" : ""}" data-section="${Escape(Entry.Key)}"
                     title="${Escape(Entry.Note || Entry.Label)}">
-                <span class="rail-dot" style="background:${Entry.Tone || "#8a8a8a"}"></span>
+                ${
+                    // 🔴 The mark is raw markup, not the name of one. The card has no icon sheet of its own and no
+                    //    business importing the panel's: the host draws from whichever set it uses and hands the
+                    //    finished svg over, exactly as it does for the slider rows.
+                    Entry.Glyph
+                        ? `<span class="rail-mark" style="color:${Entry.Tone || "#8a8a8a"}">${Entry.Glyph}</span>`
+                        : `<span class="rail-dot" style="background:${Entry.Tone || "#8a8a8a"}"></span>`
+                }
                 <span>${Escape(Entry.Label)}</span>
                 ${Entry.Tally === undefined ? "" : `<span class="rail-tally">${Escape(String(Entry.Tally))}</span>`}
             </button>`,
@@ -385,7 +392,7 @@ export class InstrumentPanel
         //    clamping against the authored number would let an edge sit off-screen.
         const Box = this.Root.getBoundingClientRect();
         const Width = Box.width || 560;
-        const Height = Box.height || Math.min(430, window.innerHeight * 0.78);
+        const Height = Box.height || Math.min(560, window.innerHeight * 0.86);
         const Margin = 10;
         this.Root.style.left = `${Math.round(Clamp(Anchor.X, Margin, Math.max(Margin, window.innerWidth - Width - Margin)))}px`;
         this.Root.style.top = `${Math.round(Clamp(Anchor.Y, Margin, Math.max(Margin, window.innerHeight - Height - Margin)))}px`;

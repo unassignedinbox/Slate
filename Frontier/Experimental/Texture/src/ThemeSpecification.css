@@ -3902,7 +3902,7 @@ details.channel-control > summary code {
 }
 .tool-card.open {
   width: var(--card-width);
-  height: min(430px, 78vh);
+  height: min(560px, 86vh);
   opacity: 1;
   pointer-events: auto;
 }
@@ -4069,6 +4069,33 @@ details.channel-control > summary code {
 }
 .rail-item.active .rail-dot {
   transform: scale(1.3);
+}
+/* The mark in front of a rail row. It carries the row's own tone at two thirds strength so the column reads as a list
+   rather than as a paint chart, and comes up to full colour on the row that is open. */
+.rail-mark {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  place-items: center;
+  opacity: 0.62;
+  transition: opacity 0.14s ease;
+}
+.rail-mark svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.rail-item:hover .rail-mark {
+  opacity: 0.85;
+}
+.rail-item.active .rail-mark {
+  opacity: 1;
 }
 .rail-tally {
   margin-left: auto;
@@ -4265,6 +4292,80 @@ details.channel-control > summary code {
     0 0 0 2px var(--panel),
     0 0 0 4px var(--green);
 }
+/* ---------------------------------------------------------------------------------------------------------------- */
+/*  The gradient's own strip: the ramp as it will be painted, with a knob at every colour in it.                       */
+/* ---------------------------------------------------------------------------------------------------------------- */
+
+.ramp-well {
+  margin-bottom: 4px;
+}
+.ramp-strip {
+  position: relative;
+  height: 34px;
+  margin: 2px 0 20px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+  cursor: crosshair;
+  touch-action: none;
+}
+/* 🔴 The knob hangs BELOW the strip rather than on it. A knob drawn over the ramp hides the one colour the hand is
+      trying to judge, and the colour it hides is always the one it is holding. */
+.ramp-knob {
+  position: absolute;
+  top: 100%;
+  width: 14px;
+  height: 14px;
+  margin: 3px 0 0 -7px;
+  border-radius: 50%;
+  background: var(--knob, #fff);
+  border: 2px solid #0d0d0d;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.28);
+  cursor: grab;
+}
+.ramp-knob::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  width: 1px;
+  height: 5px;
+  margin-left: -0.5px;
+  background: rgba(255, 255, 255, 0.4);
+}
+.ramp-knob.active {
+  box-shadow:
+    0 0 0 1px #0d0d0d,
+    0 0 0 3px var(--green);
+}
+.ramp-chosen {
+  margin-bottom: 10px;
+}
+.ramp-actions {
+  display: flex;
+  gap: 6px;
+}
+.chip-button {
+  flex: 1 1 auto;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #1b1b1b;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.chip-button:hover:not(:disabled) {
+  background: var(--raised);
+  color: var(--text);
+}
+.chip-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .mask-ramp {
   position: relative;
   height: 22px;

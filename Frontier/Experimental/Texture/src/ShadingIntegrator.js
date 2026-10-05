@@ -39,7 +39,7 @@ import { FinishFamilyIndex, FinishStyleIndex } from "./FinishSpecification.js";
 import { EnvironmentByIdentifier } from "./MaterialSpecification.js";
 import { TileRectangle } from "./SceneStructure.js";
 import { MediaUniforms, PlainMedia } from "./MediaSolver.js";
-import { WriteOrdering, GradientEasings } from "./StrokeSpecification.js";
+import { WriteOrdering, GradientEasings, SortRampStops, RampLimit } from "./StrokeSpecification.js";
 
 const MaskKindIndex = (Kind) => ({ stroke: 1, generator: 2, colour: 3 })[Kind] ?? 0;
 
@@ -960,12 +960,19 @@ export class ShadingIntegrator
             Gradient?.Through ? 1 : 0,
         ]);
         Device.uniform1f(Uniforms.get("uGradientEdge"), Gradient?.Softness ?? 0.5);
-        Device.uniform4fv(Uniforms.get("uGradientFar"), [
-            Gradient?.Far?.[0] ?? 0,
-            Gradient?.Far?.[1] ?? 0,
-            Gradient?.Far?.[2] ?? 0,
-            Gradient?.Pair ? 1 : 0,
-        ]);
+        // The ramp. Uploaded as a flat array of rgb + position whether or not it is in play, because a uniform left
+        // over from the last stroke is a colour nobody asked for; the count is what arms it.
+        const Ramp = Gradient?.Colours ? SortRampStops(Gradient.Stops).slice(0, RampLimit) : [];
+        const Packed = new Float32Array(RampLimit * 4);
+        Ramp.forEach((Stop, Index) =>
+        {
+            Packed[Index * 4] = Stop.Colour[0];
+            Packed[Index * 4 + 1] = Stop.Colour[1];
+            Packed[Index * 4 + 2] = Stop.Colour[2];
+            Packed[Index * 4 + 3] = Stop.Position;
+        });
+        Device.uniform4fv(Uniforms.get("uRampStops"), Packed);
+        Device.uniform1i(Uniforms.get("uRampCount"), Ramp.length);
         this.BindImage(Program, "uStampDecal", (Burn && this.LayerImages.get(Burn.Layer)?.Decal) || this.BlankImage(), 2);
         Device.uniform3fv(Uniforms.get("uStampCentre"), Burn?.Position || [0, 0, 0]);
         Device.uniform3fv(Uniforms.get("uStampAxis"), Burn?.Normal || [0, 1, 0]);

@@ -10,7 +10,7 @@ cd Frontier/Experimental/Texture
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
-npm test           # 121 unit tests, no browser required
+npm test           # 126 unit tests, no browser required
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -140,11 +140,14 @@ and a card that tried to be both kept the controls one slide away from the thing
 to the layer: a paint layer gets **Colour**, **Shape**, **Colour dynamics**, **Grain**, **Taper**, **Stroke**,
 **Stabilization** and **Channels**; a decal layer gets **Colour**, **Artwork**, **Ink**, **Placement** and
 **Channels**; a folder gets none, because painting on a folder opens a layer inside it and that layer is what the panes
-would be about. `Tab` again walks to the next pane and off the end of the rail closes the card.
+would be about. Every row carries its own mark in the panel's hairline icon language, tinted with the row's colour, so
+the rail is read by shape before it is read by word. `Tab` again walks to the next pane and off the end of the rail
+closes the card.
 
 **Colour** is a picker, not a palette: a saturation-and-brightness square under a hue bar, a hex field that takes a code
-typed straight in, and the last colours mixed. A mask is offered the value ramp instead — a mask holds coverage, not
-hue, so a colour picker there would offer a choice that cannot be expressed. **Shape** is the head: size in centimetres
+typed straight in, and the last colours mixed. With a gradient in hand the pane grows the ramp as well — the strip the
+paint will actually run through, with a knob under every colour in it. A mask is offered the value ramp instead — a
+mask holds coverage, not hue, so a colour picker there would offer a choice that cannot be expressed. **Shape** is the head: size in centimetres
 of surface, hardness, roundness and the angle a chisel is held at, how many hairs it has and how far they splay, and
 what happens past the rim. **Grain** chooses the medium — plain, bristle, graphite, ink, felt, dry pigment or wax — and
 the paper under it: the tooth in cycles per metre, the streak along the stroke, how dry the head runs and how far one
@@ -169,9 +172,28 @@ walked across the **screen** and raycast at every step, so it lies on the model 
 angle can be held to 15°, 45° or 90°. *Gradient* is two points as well, but it is not a stroke at all: one pass over the
 whole sheet, fading along the axis between them, linear or radial, with four easings, a softness and a switch for
 whether it wraps all the way round the model or stops at the silhouette. It fades the paint away to nothing by
-default, which is a wash; give it a second colour in the Colour pane and it lays full coverage the whole way and
-changes from one colour to the other instead, which is a fill. Both show a rubber band while they are aimed
-and put nothing down until the hand lets go, so an undo step covers exactly one line or one gradient.
+default, which is a wash; switch *fade through the colours* on and it lays full coverage the whole way and runs
+through the ramp instead, which is a fill. Both show a rubber band while they are aimed and put nothing down until the
+hand lets go, so an undo step covers exactly one line or one gradient.
+
+![A stroke carrying a four-colour ramp, measured both ways](gradient-stroke.png)
+
+**A stroke can be a gradient too.** The ramp is one record — up to eight colours at places along a fade — and two
+different acts read it. The gradient tool lays it over the sheet in one pass. An ordinary stroke *carries* it: every
+dab asks the ramp what colour it should be, which is rolled on the processor beside the colour dynamics, because one
+draw call carries one colour and a dab is one draw call. Mix it in the Colour pane: click the strip to add a colour,
+drag a knob to move it, double-click one to take it away, *take the colour in hand* to drop the brush's colour into
+the stop you are holding.
+
+There are two honest answers to *where in the ramp does this dab sit*, and the Stroke pane offers both rather than
+choosing for you. **Along** measures the distance the hand has actually travelled, so the ramp runs out after a set
+length — forty centimetres of surface, say — and a stroke that wanders burns through the colours faster than one that
+goes straight. **End to end** measures where the dab falls *between the two ends of the mark*, so the ramp fits the
+stroke whatever path it took: an aimed line, whose two ends are both known before a dab goes down, is fitted exactly;
+freehand has no far end until the hand lets go, so it is measured out from the press. Either way <kbd>S</kbd> and
+<kbd>⇧ S</kbd> scale it from the keyboard — the length in one fit, the fit multiplier in the other — *Repeat* starts
+the ramp again instead of holding the last colour, and a ramp laid into a mask is converted to a ramp of values on the
+way, because a mask keeps one number per texel and cannot hold a hue.
 
 **Curves.** A pen reports pressure and a mouse reports the speed of the hand, and neither is what the paint should do
 with it. Two editable curves per hand — pressure to size and pressure to flow — drawn as monotone cubics through their
@@ -271,7 +293,7 @@ stamp burns the artwork into the mask at the value of its tint.
 **Previews, not guesses.** The cursor ring on the model is filled with the colour the stroke would lay down — the value
 of that colour when the mask is the target, a dark wash for the eraser — and off the mesh it becomes a dashed outline that
 follows the pointer. With the decal tool in hand the artwork itself is drawn where it would land, hairline footprint and
-all, before the click that commits it. Symmetry draws too: the mirror button in the viewport bar (or <kbd>S</kbd>)
+all, before the click that commits it. Symmetry draws too: the mirror button in the viewport bar (or <kbd>Y</kbd>)
 cycles off → X → Y → Z → radial, the seam where the plane cuts the model is drawn in green, and the mirrored cursor
 shows the twin stroke.
 
@@ -470,7 +492,8 @@ green channel is flipped on the way out rather than left for someone to discover
 | Brush size, live | <kbd>Alt</kbd> + wheel | Frame the surface | <kbd>F</kbd> |
 | Search layers | <kbd>/</kbd> | Content browser | <kbd>B</kbd> |
 | Undo / redo | <kbd>Ctrl Z</kbd> / <kbd>Ctrl ⇧ Z</kbd> | Save `.pigment` / export | <kbd>Ctrl S</kbd> / <kbd>Ctrl E</kbd> |
-| Symmetry: off → X → Y → Z → radial | <kbd>S</kbd> | Isolate the selected layer | <kbd>I</kbd> |
+| Symmetry: off → X → Y → Z → radial | <kbd>Y</kbd> | Isolate the selected layer | <kbd>I</kbd> |
+| Scale the gradient down / up | <kbd>S</kbd> / <kbd>⇧ S</kbd> | | |
 | Group the selection into a folder | <kbd>Ctrl G</kbd> | Aim a line or gradient | press · drag · release |
 | Size a decal | drag a corner | Stretch one axis | <kbd>Shift</kbd> drag a corner |
 | Turn a decal | drag the knob above it | Snap the angle to 15° | <kbd>Shift</kbd> while turning |
@@ -504,6 +527,7 @@ painted. With the orbit tool in hand, a left click that never becomes a drag sel
 | `ShadingGlsl.js` | Every shader stage and the export slot table. |
 | `ShadingIntegrator.js` | The WebGL2 device: targets, stamping, compositing, viewport and plane passes, readback. |
 | `StrokeProjection.js` | Brush state, stroke spacing, symmetry, placement frames. |
+| `StrokeSpecification.js` | How a mark goes down: freehand, line and gradient, the colour ramp and the two ways a stroke reads it, the pressure curves, the channel writes. |
 | `RevisionQueue.js` | Byte-budgeted undo of both painted images and structural edits. |
 | `TimelineSequence.js` | Typed timeline events, the head that steps with undo, and the branches a document forks into. |
 | `DocumentSequence.js` | Up to four resident documents and their tabs. |

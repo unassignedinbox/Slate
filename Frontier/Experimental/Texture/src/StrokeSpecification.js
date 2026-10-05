@@ -42,6 +42,39 @@ export const GradientEasings = [
     { Identifier: "out", Label: "Ease out" },
 ];
 
+//--------------------------------------------------------------------------------------------------------------------------
+// The ramp: the colours a gradient is made of.
+//
+// A gradient is a list of colours at places along a fade. Two of them to begin with and as many as eight, because past
+// eight the strip is finer than the finger dragging it. The same ramp serves two different acts, which is the whole
+// reason it is one record rather than two:
+//
+//   · the gradient TOOL lays it over the sheet in one pass, between the two points the hand dragged between;
+//   · an ordinary STROKE carries it, and the colour a dab goes down in is read off the ramp by where that dab sits.
+//
+// Where a dab sits is the second question, and there are two honest answers to it. ALONG measures the distance the hand
+// has actually travelled, so a stroke that doubles back burns through the ramp twice as fast as one that goes straight.
+// ENDS measures where the dab is BETWEEN the two ends of the mark, so the ramp fits the stroke whatever path it took to
+// get there. Neither is the right one; they are different instruments.
+//--------------------------------------------------------------------------------------------------------------------------
+
+// Eight is not a technical limit, it is a judgement: the shader carries a fixed array and the strip is 240 px wide, so
+// a ninth stop would be a colour nobody could grab.
+export const RampLimit = 8;
+
+export const RampFits = [
+    { Identifier: "along", Label: "Along", Note: "By how far the hand has travelled" },
+    { Identifier: "ends", Label: "End to end", Note: "By where the dab falls between the two ends" },
+];
+
+export const RampFitIdentifiers = RampFits.map((Fit) => Fit.Identifier);
+
+// Pale to near-black: the pair the gradient tool has always faded between, now stated as what it always was.
+export const DefaultRampStops = () => [
+    { Position: 0, Colour: [0.93, 0.94, 0.96] },
+    { Position: 1, Colour: [0.09, 0.1, 0.12] },
+];
+
 export const GradientDefaults = {
     Shape: "linear",
     Easing: "smooth",
@@ -50,11 +83,119 @@ export const GradientDefaults = {
     // round instead, which is what you want for a ground-up dirt pass and never what you want for a logo fade.
     Through: false,
     Softness: 0.5,
-    // A gradient normally fades the paint away to nothing, which is what makes it a wash. `Pair` fades it to a second
-    // colour instead and lays full coverage the whole way, which is what makes it a fill.
-    Pair: false,
-    Far: [0.09, 0.1, 0.12],
+    // A gradient normally fades the paint away to nothing, which is what makes it a wash. `Colours` runs it through the
+    // ramp instead and lays full coverage the whole way, which is what makes it a fill.
+    Colours: false,
+    Stops: DefaultRampStops(),
+    // Whether an ordinary stroke carries the ramp too, and how it finds its place in it.
+    Carry: false,
+    Fit: "along",
+    Span: 0.6,   // [m] how far the ramp runs before it ends, when it is measured along the mark
+    Scale: 1,    // [×] how much of the two ends the ramp covers, when it is fitted between them
+    Cycle: false,
 };
+
+const SameColour = (Colour) => [0, 1, 2].map((Part) => Clamp(Number(Colour?.[Part]) || 0, 0, 1));
+
+// Put a ramp in order and inside its bounds: positions clamped, stops sorted by where they sit, colours in 0…1, and
+// never fewer than two — a gradient of one colour is a fill, and the tool that wants a fill is the fill tool.
+export const SortRampStops = (Stops) =>
+{
+    const Kept = (Array.isArray(Stops) ? Stops : [])
+        .filter((Stop) => Stop && Array.isArray(Stop.Colour) && Number.isFinite(Stop.Position))
+        .map((Stop) => ({ Position: Clamp(Stop.Position, 0, 1), Colour: SameColour(Stop.Colour) }))
+        .sort((Left, Right) => Left.Position - Right.Position)
+        .slice(0, RampLimit);
+    if (!Kept.length) return DefaultRampStops();
+    if (Kept.length === 1) return [{ Position: 0, Colour: Kept[0].Colour }, { Position: 1, Colour: [...Kept[0].Colour] }];
+    return Kept;
+};
+
+// The colour at one place along the ramp. Interpolated straight in RGB rather than through a colour space with an
+// opinion: the stops are what the hand chose, and a midpoint it did not choose should be the obvious average of them.
+export const RampColourAt = (Stops, Fraction) =>
+{
+    const Ramp = SortRampStops(Stops);
+    const Where = Clamp(Fraction, 0, 1);
+    if (Where <= Ramp[0].Position) return [...Ramp[0].Colour];
+    const Last = Ramp[Ramp.length - 1];
+    if (Where >= Last.Position) return [...Last.Colour];
+    for (let Index = 1; Index < Ramp.length; Index += 1)
+    {
+        const Low = Ramp[Index - 1];
+        const High = Ramp[Index];
+        if (Where > High.Position) continue;
+        const Spread = High.Position - Low.Position;
+        const Share = Spread > 1e-6 ? (Where - Low.Position) / Spread : 1;
+        return [0, 1, 2].map((Part) => Low.Colour[Part] + (High.Colour[Part] - Low.Colour[Part]) * Share);
+    }
+    return [...Last.Colour];
+};
+
+// Add a colour. With no colour named it takes the one the ramp already shows there, so a new stop never changes the
+// gradient until it is dragged or recoloured — which is what makes clicking the strip safe.
+export const PlaceRampStop = (Stops, Position, Colour = null) =>
+{
+    const Ramp = SortRampStops(Stops);
+    const Where = Clamp(Position, 0, 1);
+    if (Ramp.length >= RampLimit) return { Stops: Ramp, Index: -1 };
+    const Added = { Position: Where, Colour: Colour ? SameColour(Colour) : RampColourAt(Ramp, Where) };
+    // Where it lands: after every stop already sitting at or before it, which is where a stable sort would put it.
+    const Index = Ramp.filter((Stop) => Stop.Position <= Where).length;
+    return { Stops: [...Ramp.slice(0, Index), Added, ...Ramp.slice(Index)], Index };
+};
+
+export const RemoveRampStop = (Stops, Index) =>
+{
+    const Ramp = SortRampStops(Stops);
+    if (Ramp.length <= 2 || Index < 0 || Index >= Ramp.length) return { Stops: Ramp, Index: Clamp(Index, 0, Ramp.length - 1) };
+    const Kept = Ramp.filter((Ignored, Place) => Place !== Index);
+    return { Stops: Kept, Index: Math.min(Index, Kept.length - 1) };
+};
+
+// 🔴 Moving a stop can reorder the list — drag the first one past the last and it IS the last one now — so the caller
+//    is handed back where its stop ended up. Tracking it by index alone is how a drag jumps to a different colour
+//    halfway across the strip.
+export const MoveRampStop = (Stops, Index, Position) =>
+{
+    const Ramp = SortRampStops(Stops);
+    if (Index < 0 || Index >= Ramp.length) return { Stops: Ramp, Index: 0 };
+    const Held = { Position: Clamp(Position, 0, 1), Colour: [...Ramp[Index].Colour] };
+    const Rest = Ramp.filter((Ignored, Place) => Place !== Index);
+    const Landed = Rest.filter((Stop) => Stop.Position <= Held.Position).length;
+    return { Stops: [...Rest.slice(0, Landed), Held, ...Rest.slice(Landed)], Index: Landed };
+};
+
+// The same four shapes of fade the shader runs, in the same order, so the strip on the card and the paint on the
+// surface agree about what `smooth` means.
+export const RampEase = (Fraction, Easing = "linear") =>
+{
+    const Share = Clamp(Fraction, 0, 1);
+    if (Easing === "smooth") return Share * Share * (3 - 2 * Share);
+    if (Easing === "in") return Share * Share;
+    if (Easing === "out") return 1 - (1 - Share) * (1 - Share);
+    return Share;
+};
+
+// A measured distance turned into a place in the ramp. `Cycle` repeats the ramp past its end instead of holding the
+// last colour, which is what makes a rope, a cable or a candy stripe out of one stroke.
+export const RampWhere = (Distance, Length, { Cycle = false, Reverse = false, Easing = "linear" } = {}) =>
+{
+    const Span = Math.max(Length, 1e-6);
+    let Share = Distance / Span;
+    if (Cycle) Share -= Math.floor(Share);
+    Share = Clamp(Share, 0, 1);
+    return RampEase(Reverse ? 1 - Share : Share, Easing);
+};
+
+// The ramp as a CSS gradient, for every strip the card draws. Stops in percent, in the order they sit in.
+export const RampCss = (Stops, Angle = "to right") =>
+    `linear-gradient(${Angle}, ${SortRampStops(Stops)
+        .map(
+            (Stop) =>
+                `rgb(${Stop.Colour.map((Part) => Math.round(Clamp(Part, 0, 1) * 255)).join(",")}) ${(Stop.Position * 100).toFixed(2)}%`,
+        )
+        .join(", ")})`;
 
 // A straight line can be held to an angle. The snap is in degrees; zero is free.
 export const LineSnaps = [0, 15, 45, 90];

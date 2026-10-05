@@ -921,7 +921,10 @@ uniform float uAlphaJitter;
 uniform int uStampMode;        // 0 surface · 1 texture space · 2 decal burned in · 3 gradient · 4 flat gradient · 5 flat burn
 uniform vec4 uGradient;        // shape (0 linear, 1 radial), easing, reverse, wrap all the way round
 uniform float uGradientEdge;   // how soft the ends of the fade are
-uniform vec4 uGradientFar;     // the colour at the far end, and whether there is one at all
+// The colours the fade runs through: rgb and the place along the axis each one sits at. A count of zero means there is
+// no ramp in hand and the gradient does what it always did — fade the colour in hand away to nothing.
+uniform vec4 uRampStops[8];
+uniform int uRampCount;
 // 🔴 Which image this draw is allowed to write, or −1 for the usual all-four draw. The hardware can mask components of
 //    ONE attachment at a time, so a stroke that writes some channels and not others is drawn once per image with the
 //    chosen one routed to location 0 and the colour mask doing the rest.
@@ -973,6 +976,23 @@ float GradientRamp(float Fraction)
     if (uGradient.y < 2.5) return T * T;                             // ease in
     return 1.0 - (1.0 - T) * (1.0 - T);                              // ease out
 }
+
+// The colour at one place along the ramp. Walked rather than searched: eight is few enough that a loop over all of
+// them is cheaper than a branch, and the LAST pair whose low stop is at or behind this texel is the one that wins —
+// which is also why a texel before the first stop keeps the first colour and one past the last keeps the last.
+vec3 RampColour(float Where)
+{
+    vec3 Ink = uRampStops[0].rgb;
+    for (int Index = 1; Index < 8; Index += 1)
+    {
+        if (Index >= uRampCount) break;
+        vec4 Low = uRampStops[Index - 1];
+        vec4 High = uRampStops[Index];
+        float Share = clamp((Where - Low.w) / max(High.w - Low.w, 1e-5), 0.0, 1.0);
+        Ink = mix(Ink, mix(Low.rgb, High.rgb, Share), step(Low.w, Where));
+    }
+    return Ink;
+}
 void main()
 {
     vec4 Sample = texture(uPositionSource, vCoordinate);
@@ -1008,13 +1028,13 @@ void main()
             vec3 Normal = normalize(texture(uNormalSource, vCoordinate).xyz);
             Face = smoothstep(uFacingLimit, mix(uFacingLimit, 1.0, 0.45), dot(Normal, uStrokeNormal));
         }
-        // With a second colour in play the paint does not fade out, it changes: full coverage all the way along, and
-        // the ramp decides which of the two is on the texel. Without one the ramp is the coverage, which is a wash.
+        // With colours in play the paint does not fade out, it changes: full coverage all the way along, and the ramp
+        // decides which colour is on the texel. Without them the ramp IS the coverage, which is a wash.
         vec3 Ink = clamp(uStrokeColour, 0.0, 1.0);
         float Wash = clamp(Ramp * Face * uFlow, 0.0, 1.0);
-        if (uGradientFar.w > 0.5)
+        if (uRampCount > 1)
         {
-            Ink = mix(Ink, clamp(uGradientFar.rgb, 0.0, 1.0), 1.0 - Ramp);
+            Ink = clamp(RampColour(clamp(1.0 - Ramp, 0.0, 1.0)), 0.0, 1.0);
             Wash = clamp(Face * uFlow, 0.0, 1.0);
         }
         if (Wash <= 0.0015) discard;

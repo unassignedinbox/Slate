@@ -25,6 +25,16 @@ import {
     GradientShapes,
     GradientEasings,
     GradientDefaults,
+    RampFits,
+    RampLimit,
+    DefaultRampStops,
+    SortRampStops,
+    RampColourAt,
+    PlaceRampStop,
+    RemoveRampStop,
+    MoveRampStop,
+    RampWhere,
+    RampCss,
     LineSnaps,
     LineSamples,
     SnapLine,
@@ -181,6 +191,13 @@ const GlyphPaths = {
     material: '<circle cx="12" cy="12" r="8.5"/><path d="M7 15.6A6.2 6.2 0 0 1 15.6 7"/><circle cx="15.4" cy="8.6" r="1.1"/>',
     list: '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.1"/><circle cx="4.5" cy="12" r="1.1"/><circle cx="4.5" cy="18" r="1.1"/>',
     drag: '<path d="M5 9h14M5 15h14"/>',
+    // The card's rail: a mark for every property of the paint. Drawn in the same hairline language as the rest of the
+    // sheet — one stroke, no fills — because they sit at 15px beside a word and have to read at a glance.
+    taper: '<path d="M21 12c-6 3.2-12 5-18 5V7c6 0 12 1.8 18 5Z"/>',
+    steady: '<circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v4m0 11v4M2.5 12h4m11 0h4"/>',
+    dynamics: '<circle cx="12" cy="12" r="8.6"/><path d="M12 3.4a8.6 8.6 0 0 1 0 17.2 4.3 4.3 0 0 1 0-8.6 4.3 4.3 0 0 0 0-8.6Z"/>',
+    height: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17M3.5 13h17M3.5 16h17"/>',
+    ramp: '<path d="M3 18h18M3 18 21 6"/><path d="M8 18v-4m5 4V9.5"/>',
 };
 
 const Icon = (Name) =>
@@ -464,7 +481,11 @@ export class TexturePanel
         this.StrokeMode = "freehand";
         this.GizmoGrab = null;
         this.LineSnap = 0;
-        this.Gradient = { ...GradientDefaults };
+        // 🔴 The stops are rebuilt rather than spread. `GradientDefaults` is a module-level record, so a spread hands
+        //    every panel ever built the SAME array — and the second one to edit a colour would edit the first one's.
+        this.Gradient = { ...GradientDefaults, Stops: DefaultRampStops() };
+        this.RampStop = 0;          // which colour of the ramp the card's picker is pointing at
+        this.RampOrigin = null;     // where the stroke carrying the ramp began, and the axis it was aimed down
         this.Curves = DefaultCurves();
         // Colour dynamics: how far each dab is allowed to wander from the colour in hand. Applied per segment on the
         // way to the pass, because one draw call carries one colour — which is exactly what a dab is.
@@ -1622,10 +1643,10 @@ export class TexturePanel
             Button.setAttribute("aria-pressed", String(Known !== "none"));
             Button.title =
                 Known === "none"
-                    ? "Symmetry · S"
+                    ? "Symmetry · Y"
                     : Known === "radial"
-                      ? `Symmetry: radial ×${this.Projection.Brush.Sectors} · S`
-                      : `Symmetry: mirror ${Known.toUpperCase()} · S`;
+                      ? `Symmetry: radial ×${this.Projection.Brush.Sectors} · Y`
+                      : `Symmetry: mirror ${Known.toUpperCase()} · Y`;
         }
         this.UpdateCaption();
         if (Announce)
@@ -1693,10 +1714,86 @@ export class TexturePanel
     // 🔴 Rolled here rather than in the shader. One draw call carries one colour and a dab IS one draw call, so this is
     //    the only place that can vary it without a second uniform the pass would have to unpack for every texel.
     //----------------------------------------------------------------------------------------------------------------------
-    DabColour(Target)
+    DabColour(Target, Segment = null)
     {
-        if (Target === "mask") return this.MaskInk(this.WanderColour(this.BrushColour, true));
-        return this.WanderColour(this.BrushColour, false);
+        const Where = this.RampFraction(Segment);
+        const Colour = Where === null ? this.BrushColour : RampColourAt(this.Gradient.Stops, Where);
+        if (Target === "mask") return this.MaskInk(this.WanderColour(Colour, true));
+        return this.WanderColour(Colour, false);
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // Where one dab sits in the ramp, or null when the stroke is not carrying one.
+    //
+    // Two measurements, because the hand means two different things by "a gradient along a stroke". ALONG is the
+    // distance actually travelled — the projection has been counting it since the press — so a mark that wanders takes
+    // the long way through the colours. END TO END is where the dab falls between the two ends of the mark, which fits
+    // the ramp to the stroke however crooked the path between them was.
+    //
+    // 🔴 A freehand stroke has no far end yet: the hand has not let go. The straight distance out from where the stroke
+    //    began stands in for it — still a position rather than a path length, which is the distinction that matters —
+    //    and an aimed line, whose two ends ARE both known, is fitted exactly.
+    //----------------------------------------------------------------------------------------------------------------------
+    RampFraction(Segment)
+    {
+        const Ramp = this.Gradient;
+        if (!Ramp.Carry || !Segment) return null;
+        // A plane segment names its ends in UV; a surface segment names them in the world.
+        const Flat = Segment.StartPlane !== undefined;
+        // Texture space measures in UV and the ramp is set in metres, so travel is converted by what one UV unit is
+        // worth on the model — the same number the stamping pass is handed as `Span`.
+        const Worth = Flat ? Math.max((this.SurfaceRecord?.Bounds.Radius || 1) * 3.2, 1e-6) : 1;
+        const Middle = Flat
+            ? [(Segment.StartPlane[0] + Segment.EndPlane[0]) / 2, (Segment.StartPlane[1] + Segment.EndPlane[1]) / 2]
+            : [0, 1, 2].map((Axis) => (Segment.Start[Axis] + Segment.End[Axis]) / 2);
+        const Origin = Flat ? this.RampOrigin?.Plane : this.RampOrigin?.Position;
+        if (Ramp.Fit === "ends" && Origin)
+        {
+            const Axis = Flat ? this.RampOrigin?.PlaneAxis : this.RampOrigin?.Axis;
+            const Delta = Middle.map((Part, Index) => Part - Origin[Index]);
+            const Length = Axis ? Math.hypot(...Axis) : 0;
+            if (Axis && Length > 1e-6)
+            {
+                const Along = Delta.reduce((Sum, Part, Index) => Sum + Part * Axis[Index], 0) / Length;
+                return RampWhere(Along, Length * Math.max(Ramp.Scale, 0.01), Ramp);
+            }
+            return RampWhere(Math.hypot(...Delta) * Worth, Math.max(Ramp.Span, 0.001) * Math.max(Ramp.Scale, 0.01), Ramp);
+        }
+        const Travel = ((Segment.Travel?.[0] ?? 0) + (Segment.Travel?.[1] ?? 0)) / 2;
+        return RampWhere(Travel * Worth, Math.max(Ramp.Span, 0.001), Ramp);
+    }
+
+    // The ramp as the pass should receive it. A mask keeps one number per texel, so a gradient laid into one is a
+    // gradient of VALUES — the same conversion a dab makes on its way into a mask, made once for the whole ramp.
+    GradientFor(Target)
+    {
+        if (Target !== "mask") return this.Gradient;
+        return {
+            ...this.Gradient,
+            Stops: SortRampStops(this.Gradient.Stops).map((Stop) => ({ ...Stop, Colour: this.MaskInk(Stop.Colour) })),
+        };
+    }
+
+    // Scaling the gradient, from the keyboard as well as the card: `S` shortens it, `⇧S` lengthens it, by the same
+    // step the bracket keys resize the brush by. Which number it is depends on how the ramp is being measured.
+    ScaleRamp(Factor)
+    {
+        const Ramp = this.Gradient;
+        if (Ramp.Carry && Ramp.Fit === "ends")
+        {
+            Ramp.Scale = Clamp(Ramp.Scale * Factor, 0.05, 8);
+            this.Notify(`Gradient fitted over ×${Ramp.Scale.toFixed(2)} of the stroke.`);
+        }
+        else
+        {
+            Ramp.Span = Clamp(Ramp.Span * Factor, 0.01, 8);
+            this.Notify(
+                Ramp.Carry
+                    ? `Gradient runs ${(Ramp.Span * 100).toFixed(0)} cm along the stroke.`
+                    : `Gradient length ${(Ramp.Span * 100).toFixed(0)} cm · switch it on in Stroke to carry it.`,
+            );
+        }
+        if (this.Instruments?.Open) this.Instruments.RenderPane(false);
     }
 
     WanderColour(Colour, Masking)
@@ -1726,7 +1823,9 @@ export class TexturePanel
         const Erasing = this.Tool === "eraser";
         if (Brush.Target === "mask") return { Ink: Erasing ? [0.04, 0.04, 0.05] : this.MaskInk(), Preview: 0.4 };
         if (Erasing) return { Ink: [0.06, 0.06, 0.07], Preview: 0.32 };
-        return { Ink: this.BrushColour, Preview: Clamp(Brush.Flow * 0.7, 0.12, 0.6) };
+        // A stroke carrying the ramp does not start in the colour in hand, so the ring must not say it does.
+        const Opening = this.Gradient.Carry ? RampColourAt(this.Gradient.Stops, this.Gradient.Reverse ? 1 : 0) : this.BrushColour;
+        return { Ink: Opening, Preview: Clamp(Brush.Flow * 0.7, 0.12, 0.6) };
     }
 
     SetViewMode(Mode)
@@ -3047,6 +3146,7 @@ export class TexturePanel
             const Layer = this.PaintTargetLayer();
             if (this.Projection.Brush.Target !== "mask" && this.Tool === "brush") this.EnsureChannel(Layer, "base_color");
             this.BeginStrokeRevision(Layer);
+            this.RampOrigin = { Plane: [...Coordinate] };
             const Opening = this.Projection.BeginPlane(Coordinate, this.PointerReading(Event));
             this.NotePaintedCoordinate(Coordinate);
             this.StampPlane(Layer, Opening);
@@ -3095,6 +3195,9 @@ export class TexturePanel
         const Layer = this.PaintTargetLayer();
         if (this.Projection.Brush.Target !== "mask" && this.Tool === "brush") this.EnsureChannel(Layer, "base_color");
         this.BeginStrokeRevision(Layer);
+        // Where the ramp starts from, before the first dab asks for its colour. Freehand has no far end to aim at, so
+        // the axis is left out and the ramp is measured out from here.
+        this.RampOrigin = { Position: [...Hit.Position] };
         const Segment = this.Projection.Begin(Hit, this.PointerReading(Event));
         this.NotePaintedCoordinate(Hit.Coordinate);
         this.StampSurface(Layer, Segment);
@@ -3325,6 +3428,15 @@ export class TexturePanel
         const Layer = this.PaintTargetLayer();
         if (this.Projection.Brush.Target !== "mask" && this.Tool === "brush") this.EnsureChannel(Layer, "base_color");
         this.BeginStrokeRevision(Layer);
+        // An aimed line is the one stroke whose two ends are both known before a dab goes down, so a ramp fitted end
+        // to end is fitted exactly rather than measured out from the press.
+        const Landing = this.Gradient.Carry ? this.FurthestHit(Anchor.Point, To) : null;
+        this.RampOrigin = Anchor.Hit
+            ? {
+                  Position: [...Anchor.Hit.Position],
+                  Axis: Landing ? [0, 1, 2].map((Axis) => Landing.Position[Axis] - Anchor.Hit.Position[Axis]) : null,
+              }
+            : null;
 
         // Three pixels between samples is finer than any brush, so the projection's own spacing decides where the
         // dabs actually land — the same rule a freehand stroke goes down by.
@@ -3381,7 +3493,7 @@ export class TexturePanel
             Hardness: this.Projection.Brush.Hardness,
             Flow: this.Projection.Brush.Flow,
             FacingLimit: this.Projection.FacingLimit,
-            Gradient: this.Gradient,
+            Gradient: this.GradientFor(Target),
             Channels: Layer.Channels,
             Writes: this.ChannelWrites,
             Erase: this.Tool === "eraser",
@@ -3424,7 +3536,7 @@ export class TexturePanel
                 Radius: this.Projection.Brush.Radius,
                 Hardness: this.Projection.Brush.Hardness,
                 Flow: this.Projection.Brush.Flow,
-                Gradient: this.Gradient,
+                Gradient: this.GradientFor(Target),
                 Channels: Layer.Channels,
                 Writes: this.ChannelWrites,
                 Erase: this.Tool === "eraser",
@@ -3438,6 +3550,7 @@ export class TexturePanel
             return;
         }
         this.BeginStrokeRevision(Layer);
+        this.RampOrigin = { Plane: [...Start], PlaneAxis: [End[0] - Start[0], End[1] - Start[1]] };
         const Samples = LineSamples(Anchor.Point, To, 3);
         const PlaneRadius = this.PlaneRadius();
         let Laid = 0;
@@ -3481,7 +3594,7 @@ export class TexturePanel
         const Brush = this.Projection.Brush;
         const Erase = this.Tool === "eraser";
         const Target = Brush.Target;
-        const Colour = this.DabColour(Target);
+        const Colour = this.DabColour(Target, Segment);
         // 🔴 What the hand reports is not what the paint should do with it. The size curve remaps the pressure handed
         //    to the pass — which is what thins the mark and what the medium deposits by — and the flow curve rides on
         //    top of the instrument's own flow. A curve that does nothing is skipped rather than evaluated.
@@ -3537,7 +3650,7 @@ export class TexturePanel
             Normal: [0, 1, 0],
             StartPlane: Segment.StartPlane,
             EndPlane: Segment.EndPlane,
-            Colour: this.DabColour(Brush.Target),
+            Colour: this.DabColour(Brush.Target, Segment),
             Radius: Brush.Radius,
             PlaneRadius: this.PlaneRadius() * (Segment.Width ?? 1),
             Hardness: Brush.Hardness,
@@ -4456,13 +4569,18 @@ export class TexturePanel
         if (Layer.Kind === "folder" && !Masking) return [];
         const Decal = Layer.Kind === "decal" && !Masking;
         const Media = this.Projection.Brush.Media || PlainMedia;
+        // A gradient in hand makes the colour row about the ramp rather than about one colour, and the rail says so:
+        // the mark changes and the tally counts the colours.
+        const Ramped = !Masking && (this.StrokeMode === "gradient" || this.Gradient.Carry);
         const Sections = [
             {
                 Key: "colour",
-                Label: Masking ? "Value" : "Colour",
+                Label: Masking ? "Value" : Ramped ? "Gradient" : "Colour",
+                Glyph: Icon(Masking ? "mask" : Ramped ? "ramp" : "palette"),
                 Tone: Masking ? "#9a9a9a" : ToHex(this.BrushColour),
-                Title: Masking ? "Mask value" : "Colour",
-                Note: Masking ? "Black hides · white reveals" : "What the paint is made of",
+                Tally: Ramped ? String(SortRampStops(this.Gradient.Stops).length) : undefined,
+                Title: Masking ? "Mask value" : Ramped ? "Colour · gradient" : "Colour",
+                Note: Masking ? "Black hides · white reveals" : Ramped ? "The colours the mark runs through" : "What the paint is made of",
                 Ribbon: false,
                 Render: () => this.ColourPane(Layer, Masking),
             },
@@ -4471,6 +4589,7 @@ export class TexturePanel
             Sections.push(
                 {
                     Key: "artwork",
+                    Glyph: Icon(Layer.Decal.SourceKind === "text" ? "text" : "decal"),
                     Label: Layer.Decal.SourceKind === "text" ? "Type" : "Artwork",
                     Tone: "#c9a227",
                     Title: Layer.Decal.SourceKind === "text" ? "Type" : "Artwork",
@@ -4480,6 +4599,7 @@ export class TexturePanel
                 },
                 {
                     Key: "ink",
+                    Glyph: Icon("fill"),
                     Label: "Ink",
                     Tone: "#8f6fd0",
                     Title: "Ink",
@@ -4489,6 +4609,7 @@ export class TexturePanel
                 },
                 {
                     Key: "placement",
+                    Glyph: Icon("focus"),
                     Label: "Placement",
                     Tone: "#4a9bd8",
                     Tally: Layer.Decal.Placement === "stamp" ? "burn" : `${Layer.Decal.Marks.length}`,
@@ -4502,6 +4623,7 @@ export class TexturePanel
             Sections.push(
                 {
                     Key: "shape",
+                    Glyph: Icon("brush"),
                     Label: "Shape",
                     Tone: "#34c759",
                     Tally: `${(this.Projection.Brush.Radius * 100).toFixed(1)}`,
@@ -4511,6 +4633,7 @@ export class TexturePanel
                 },
                 {
                     Key: "dynamics",
+                    Glyph: Icon("dynamics"),
                     Label: "Colour dynamics",
                     Tone: "#d05a8a",
                     Tally: this.DynamicsReach() ? "on" : undefined,
@@ -4520,6 +4643,7 @@ export class TexturePanel
                 },
                 {
                     Key: "grain",
+                    Glyph: Icon("noise"),
                     Label: "Grain",
                     Tone: "#c9a227",
                     Tally: MediumByIndex[Media.Index]?.Label,
@@ -4529,6 +4653,7 @@ export class TexturePanel
                 },
                 {
                     Key: "taper",
+                    Glyph: Icon("taper"),
                     Label: "Taper",
                     Tone: "#8f6fd0",
                     Tally: Media.Pressure ? `${Math.round(Media.Taper * 100)}%` : "off",
@@ -4538,6 +4663,7 @@ export class TexturePanel
                 },
                 {
                     Key: "stroke",
+                    Glyph: Icon("vector"),
                     Label: "Stroke",
                     Tone: "#4a9bd8",
                     Tally: StrokeModes.find((Mode) => Mode.Identifier === this.StrokeMode)?.Label,
@@ -4547,6 +4673,7 @@ export class TexturePanel
                 },
                 {
                     Key: "steady",
+                    Glyph: Icon("steady"),
                     Label: "Stabilization",
                     Tone: "#5ac8c8",
                     Tally: `${Math.round(this.Projection.Brush.Smoothing * 100)}%`,
@@ -4557,6 +4684,7 @@ export class TexturePanel
             );
         Sections.push({
             Key: "channels",
+            Glyph: Icon("layers"),
             Label: "Channels",
             Tone: "#d08a4a",
             Tally: Masking ? "mask" : undefined,
@@ -4643,34 +4771,31 @@ export class TexturePanel
             Sheet.append(Recent);
         }
 
-        if (this.StrokeMode === "gradient" && !Masking)
+        const Gradient = this.StrokeMode === "gradient";
+        if (!Masking && (Gradient || this.Gradient.Carry))
         {
-            const Fade = this.CardGroup("Gradient", "What is at the far end of the drag");
-            const Far = document.createElement("div");
-            Far.className = "property-row colour-row";
-            Far.innerHTML = `<span class="property-label">Far colour</span>
-                <label class="colour-field"><input type="color" data-far value="${ToHex(this.Gradient.Far)}"
-                        aria-label="The colour at the far end" /><span class="colour-code">${ToHex(this.Gradient.Far).toUpperCase()}</span></label>`;
-            Far.querySelector("[data-far]").addEventListener("input", (Event) =>
-            {
-                this.Gradient.Far = FromHex(Event.target.value);
-                this.Gradient.Pair = true;
-                this.Instruments.RenderPane(false);
-            });
-            Fade.append(
-                this.CardSwitch("Fade to a second colour", "Otherwise the paint fades away to nothing", this.Gradient.Pair, (On) =>
-                {
-                    this.Gradient.Pair = On;
-                    this.Instruments.RenderPane(false);
-                }),
+            const Fade = this.CardGroup(
+                "Gradient",
+                Gradient ? "The colours the drag fades through" : "The colours the stroke runs through",
             );
-            if (this.Gradient.Pair) Fade.append(Far);
-            Fade.append(
-                this.CardSlider(
-                    { Label: "Softness", Value: this.Gradient.Softness, Minimum: 0, Maximum: 1, Step: 0.01, Hint: "How much of the axis is doing the fading" },
-                    (Value) => (this.Gradient.Softness = Value),
-                ),
-            );
+            Fade.append(this.RampField());
+            if (Gradient)
+                Fade.append(
+                    this.CardSwitch(
+                        "Fade through the colours",
+                        "Otherwise the paint fades away to nothing",
+                        this.Gradient.Colours,
+                        (On) =>
+                        {
+                            this.Gradient.Colours = On;
+                            this.Instruments.RenderPane(false);
+                        },
+                    ),
+                    this.CardSlider(
+                        { Label: "Softness", Value: this.Gradient.Softness, Minimum: 0, Maximum: 1, Step: 0.01, Hint: "How much of the axis is doing the fading" },
+                        (Value) => (this.Gradient.Softness = Value),
+                    ),
+                );
             Sheet.append(Fade);
         }
 
@@ -4678,9 +4803,149 @@ export class TexturePanel
         Note.className = "card-note";
         Note.textContent = Masking
             ? "A mask keeps one number per texel. Paint with white to reveal the layer, black to hide it, and anything between for a partial hold."
-            : "The square mixes saturation against brightness; the bar beside it is the hue. The field below takes a hex code typed straight in.";
+            : Gradient || this.Gradient.Carry
+              ? "The square mixes the colour in hand. The strip below it is the gradient: click it to add a colour, drag one along to move it, double-click one to take it away."
+              : "The square mixes saturation against brightness; the bar beside it is the hue. The field below takes a hex code typed straight in.";
         Sheet.append(Note);
         return Sheet;
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // The gradient's colours: a strip of the ramp itself with a knob at every stop.
+    //
+    // 📝 The strip redraws itself in place rather than asking the card to rebuild the pane. A rebuilt pane is a new
+    //    element, and a new element halfway through a drag is a drag that ends where the finger still is.
+    //
+    // 🔴 The pointer is captured by the STRIP, never by a knob. Dragging one stop past another reorders the list, so
+    //    the knob under the finger is replaced mid-drag — and a capture held by an element that no longer exists is a
+    //    stop that follows the hand for a pixel and then stops dead.
+    //----------------------------------------------------------------------------------------------------------------------
+    RampField()
+    {
+        const Holder = document.createElement("div");
+        Holder.className = "ramp-well";
+        Holder.innerHTML = `
+            <div class="ramp-strip" data-strip title="Click to add a colour"></div>
+            <div class="property-row colour-row ramp-chosen">
+                <span class="property-label" data-stop-note></span>
+                <label class="colour-field"><input type="color" data-stop-colour aria-label="The colour at this stop" />
+                    <span class="colour-code" data-stop-code></span></label>
+            </div>
+            <div class="ramp-actions">
+                <button class="chip-button" data-ramp-take>Take the colour in hand</button>
+                <button class="chip-button" data-ramp-drop>Remove</button>
+            </div>`;
+
+        const Strip = Holder.querySelector("[data-strip]");
+        const NoteCell = Holder.querySelector("[data-stop-note]");
+        const Field = Holder.querySelector("[data-stop-colour]");
+        const Code = Holder.querySelector("[data-stop-code]");
+        const Drop = Holder.querySelector("[data-ramp-drop]");
+
+        const Stops = () => this.Gradient.Stops;
+        const Place = (ClientX) =>
+        {
+            const Box = Strip.getBoundingClientRect();
+            return Clamp((ClientX - Box.left) / (Box.width || 1), 0, 1);
+        };
+
+        const Draw = () =>
+        {
+            const Ramp = Stops();
+            this.RampStop = Math.max(0, Math.min(this.RampStop, Ramp.length - 1));
+            const Chosen = Ramp[this.RampStop];
+            Strip.style.background = RampCss(Ramp);
+            Strip.innerHTML = Ramp.map(
+                (Stop, Index) => `<span class="ramp-knob${Index === this.RampStop ? " active" : ""}" data-stop="${Index}"
+                        style="left:${(Stop.Position * 100).toFixed(2)}%;--knob:${ToHex(Stop.Colour)}"
+                        title="${ToHex(Stop.Colour).toUpperCase()} at ${Math.round(Stop.Position * 100)}%"></span>`,
+            ).join("");
+            NoteCell.textContent = `Stop ${this.RampStop + 1} of ${Ramp.length} · ${Math.round(Chosen.Position * 100)}%`;
+            Field.value = ToHex(Chosen.Colour);
+            Code.textContent = ToHex(Chosen.Colour).toUpperCase();
+            Drop.disabled = Ramp.length <= 2;
+        };
+
+        // Any edit to the ramp arms it: a colour nobody can see is a control that looks broken.
+        const Arm = () =>
+        {
+            if (this.StrokeMode === "gradient") this.Gradient.Colours = true;
+            this.Instruments?.RenderRail();
+        };
+
+        let Holding = false;
+        Strip.addEventListener("pointerdown", (Event) =>
+        {
+            const Knob = Event.target.closest?.("[data-stop]");
+            if (Knob) this.RampStop = Number(Knob.dataset.stop);
+            else
+            {
+                const Added = PlaceRampStop(Stops(), Place(Event.clientX));
+                if (Added.Index < 0)
+                {
+                    this.Notify(`A gradient holds ${RampLimit} colours at most.`);
+                    return;
+                }
+                this.Gradient.Stops = Added.Stops;
+                this.RampStop = Added.Index;
+                Arm();
+            }
+            Holding = true;
+            Strip.setPointerCapture?.(Event.pointerId);
+            Draw();
+        });
+        Strip.addEventListener("pointermove", (Event) =>
+        {
+            if (!Holding) return;
+            const Moved = MoveRampStop(Stops(), this.RampStop, Place(Event.clientX));
+            this.Gradient.Stops = Moved.Stops;
+            this.RampStop = Moved.Index;
+            Draw();
+        });
+        const Release = (Event) =>
+        {
+            if (!Holding) return;
+            Holding = false;
+            if (Strip.hasPointerCapture?.(Event.pointerId)) Strip.releasePointerCapture(Event.pointerId);
+        };
+        Strip.addEventListener("pointerup", Release);
+        Strip.addEventListener("pointercancel", Release);
+        Strip.addEventListener("dblclick", (Event) =>
+        {
+            const Knob = Event.target.closest?.("[data-stop]");
+            if (!Knob) return;
+            const Left = RemoveRampStop(Stops(), Number(Knob.dataset.stop));
+            this.Gradient.Stops = Left.Stops;
+            this.RampStop = Left.Index;
+            Draw();
+        });
+
+        Field.addEventListener("input", (Event) =>
+        {
+            this.Gradient.Stops = Stops().map((Stop, Index) =>
+                Index === this.RampStop ? { ...Stop, Colour: FromHex(Event.target.value) } : Stop,
+            );
+            Arm();
+            Draw();
+        });
+        Holder.querySelector("[data-ramp-take]").addEventListener("click", () =>
+        {
+            this.Gradient.Stops = Stops().map((Stop, Index) =>
+                Index === this.RampStop ? { ...Stop, Colour: [...this.BrushColour] } : Stop,
+            );
+            Arm();
+            Draw();
+        });
+        Drop.addEventListener("click", () =>
+        {
+            const Left = RemoveRampStop(Stops(), this.RampStop);
+            this.Gradient.Stops = Left.Stops;
+            this.RampStop = Left.Index;
+            Draw();
+        });
+
+        Draw();
+        return Holder;
     }
 
     // Saturation across, value down, with a hue bar beside it and a hex field under both.
@@ -5274,6 +5539,83 @@ export class TexturePanel
             Sheet.append(Shape);
         }
 
+        // A gradient is not something a gradient carries: when the gradient tool is in hand the ramp IS the stroke,
+        // and the switch below would be asking the same question twice.
+        if (this.StrokeMode !== "gradient")
+        {
+            const Carry = this.CardGroup(
+                "Gradient",
+                this.Gradient.Carry ? "The mark runs through the ramp" : "The mark goes down in the colour in hand",
+            );
+            Carry.append(
+                this.CardSwitch("Carry the gradient", "Every dab takes its colour from the ramp", this.Gradient.Carry, (On) =>
+                {
+                    this.Gradient.Carry = On;
+                    this.Instruments.RenderRail();
+                    this.Instruments.RenderPane(false);
+                    this.Notify(On ? "Strokes carry the gradient — its colours live in Colour." : "Strokes go down in the colour in hand.");
+                }),
+            );
+            if (this.Gradient.Carry)
+            {
+                Carry.append(
+                    this.CardSegmented(RampFits, this.Gradient.Fit, (Identifier) =>
+                    {
+                        this.Gradient.Fit = Identifier;
+                        this.Instruments.RenderPane(false);
+                    }),
+                );
+                if (this.Gradient.Fit === "along")
+                    Carry.append(
+                        this.CardSlider(
+                            {
+                                Label: "Length",
+                                Value: Number((this.Gradient.Span * 100).toFixed(1)),
+                                Minimum: 1,
+                                Maximum: 400,
+                                Step: 0.5,
+                                Unit: "cm",
+                                Hint: "How far the hand travels before the ramp runs out · S and ⇧S",
+                            },
+                            (Value) => (this.Gradient.Span = Value / 100),
+                        ),
+                    );
+                else
+                    Carry.append(
+                        this.CardSlider(
+                            {
+                                Label: "Fit",
+                                Value: this.Gradient.Scale,
+                                Minimum: 0.05,
+                                Maximum: 4,
+                                Step: 0.01,
+                                Unit: "×",
+                                Hint: "How much of the two ends the ramp covers · S and ⇧S",
+                            },
+                            (Value) => (this.Gradient.Scale = Value),
+                        ),
+                    );
+                Carry.append(
+                    this.CardSwitch("Repeat", "Begin again instead of holding the last colour", this.Gradient.Cycle, (On) =>
+                    {
+                        this.Gradient.Cycle = On;
+                        this.Instruments.RenderPane(false);
+                    }),
+                    this.CardSwitch("Reverse", "Run the colours the other way", this.Gradient.Reverse, (On) =>
+                    {
+                        this.Gradient.Reverse = On;
+                        this.Instruments.RenderPane(false);
+                    }),
+                    this.CardSegmented(GradientEasings, this.Gradient.Easing, (Identifier) =>
+                    {
+                        this.Gradient.Easing = Identifier;
+                        this.Instruments.RenderPane(false);
+                    }),
+                );
+            }
+            Sheet.append(Carry);
+        }
+
         const Note = document.createElement("p");
         Note.className = "card-note";
         Note.textContent =
@@ -5282,6 +5624,11 @@ export class TexturePanel
                 : this.StrokeMode === "line"
                   ? "Press where it starts, aim, let go. The line is walked across the screen and raycast at every step, so it lies on the model rather than cutting through it."
                   : "Press where the colour is strongest, drag to where it has gone, let go. One pass over the whole sheet.";
+        if (this.Gradient.Carry && this.StrokeMode !== "gradient")
+            Note.textContent +=
+                this.Gradient.Fit === "along"
+                    ? " The ramp is measured along the mark, so a stroke that wanders takes the long way through the colours."
+                    : " The ramp is fitted between the two ends of the mark — exactly, for an aimed line; measured out from the press for freehand, which has no far end until the hand lets go.";
         Sheet.append(Note);
         return Sheet;
     }
@@ -7727,7 +8074,15 @@ export class TexturePanel
             }
             if (Key === "b") this.SetBrowserState(this.BrowserState === "closed" ? "half" : "closed");
             if (Key === "f") Select("#focus-button").click();
-            if (Key === "s") Select("#mirror-button").click();
+            // 🔴 `S` scales the gradient, not the symmetry. Symmetry moved to `Y` when the ramp arrived: scaling is
+            //    the thing a hand reaches for mid-stroke, mirroring is set once and left alone, and the hand that
+            //    wants it has a button for it two centimetres away.
+            if (Key === "s")
+            {
+                this.ScaleRamp(Event.shiftKey ? 1.19 : 0.84);
+                return;
+            }
+            if (Key === "y") Select("#mirror-button").click();
             if (Key === "w" && this.ViewMode === "plane")
             {
                 Select("#wire-button")?.click();

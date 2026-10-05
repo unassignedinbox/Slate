@@ -111,6 +111,18 @@ import {
 import {
     StrokeModes,
     GradientShapes,
+    GradientDefaults,
+    RampLimit,
+    RampFits,
+    DefaultRampStops,
+    SortRampStops,
+    RampColourAt,
+    PlaceRampStop,
+    RemoveRampStop,
+    MoveRampStop,
+    RampEase,
+    RampWhere,
+    RampCss,
     LineSnaps,
     LineSamples,
     LineSampleLimit,
@@ -1916,4 +1928,105 @@ test("the editor has one slider, and both panels mount it", () =>
     assert.equal(Fraction(-5, 0, 10), 0, "a value below the floor is not a negative fill");
     assert.equal(Fixed(1.4, 1), "1", "a whole-number step shows no decimals");
     assert.equal(Fixed(0.456, 0.01), "0.46");
+});
+
+//--------------------------------------------------------------------------------------------------------------------------
+// The ramp: the colours a gradient is made of, and the two ways a stroke can find its place in them.
+//--------------------------------------------------------------------------------------------------------------------------
+
+test("a ramp is a sorted list of colours that is never shorter than two", () =>
+{
+    const Opening = DefaultRampStops();
+    assert.equal(Opening.length, 2, "a gradient opens on two colours");
+    assert.deepEqual(GradientDefaults.Fit, "along");
+    assert.deepEqual(RampFits.map((Fit) => Fit.Identifier), ["along", "ends"]);
+
+    // Out of order, out of range, and one of them not a stop at all.
+    const Sorted = SortRampStops([
+        { Position: 0.8, Colour: [0, 0, 1] },
+        { Position: -3, Colour: [1, 0, 0] },
+        { Position: 0.4, Colour: [0, 1, 0] },
+        { Position: Number.NaN, Colour: [1, 1, 1] },
+        null,
+    ]);
+    assert.deepEqual(Sorted.map((Stop) => Stop.Position), [0, 0.4, 0.8], "sorted, clamped, and the rubbish dropped");
+    assert.deepEqual(SortRampStops([]).length, 2, "an empty ramp is the default one, not a crash");
+    assert.equal(SortRampStops([{ Position: 0.5, Colour: [1, 0, 0] }]).length, 2, "one colour is a fill, so it is given an end");
+
+    // 🔴 The cap is a shader array, not a preference: a ninth stop would be uploaded into nothing.
+    const Many = SortRampStops(Array.from({ length: 20 }, (Ignored, Index) => ({ Position: Index / 20, Colour: [0, 0, 0] })));
+    assert.equal(Many.length, RampLimit);
+});
+
+test("a colour can be read off anywhere along the ramp", () =>
+{
+    const Ramp = [
+        { Position: 0, Colour: [1, 0, 0] },
+        { Position: 0.5, Colour: [0, 1, 0] },
+        { Position: 1, Colour: [0, 0, 1] },
+    ];
+    assert.deepEqual(RampColourAt(Ramp, 0), [1, 0, 0]);
+    assert.deepEqual(RampColourAt(Ramp, 0.5), [0, 1, 0]);
+    assert.deepEqual(RampColourAt(Ramp, 1), [0, 0, 1]);
+    const Quarter = RampColourAt(Ramp, 0.25);
+    assert.ok(Math.abs(Quarter[0] - 0.5) < 1e-9 && Math.abs(Quarter[1] - 0.5) < 1e-9, "halfway between the first two");
+    assert.deepEqual(RampColourAt(Ramp, -2), [1, 0, 0], "before the first stop is the first colour");
+    assert.deepEqual(RampColourAt(Ramp, 9), [0, 0, 1], "past the last one is the last colour");
+
+    // A ramp whose ends are pulled inwards holds its end colours out to the edges rather than fading to black.
+    const Short = [
+        { Position: 0.25, Colour: [1, 1, 1] },
+        { Position: 0.75, Colour: [0, 0, 0] },
+    ];
+    assert.deepEqual(RampColourAt(Short, 0), [1, 1, 1]);
+    assert.deepEqual(RampColourAt(Short, 1), [0, 0, 0]);
+});
+
+test("adding, moving and removing a colour keeps the ramp in order", () =>
+{
+    const Opening = DefaultRampStops();
+    // A stop added with no colour of its own takes the one already there, so clicking the strip changes nothing.
+    const Added = PlaceRampStop(Opening, 0.5);
+    assert.equal(Added.Stops.length, 3);
+    assert.equal(Added.Index, 1, "the caller is told where its new stop landed");
+    assert.deepEqual(Added.Stops[1].Colour, RampColourAt(Opening, 0.5), "a new stop is invisible until it is moved");
+
+    // 🔴 Dragging one stop past another reorders the list. The index handed back is where the dragged stop ENDED UP;
+    //    tracking it by its old index is how a drag jumps to a different colour halfway across the strip.
+    const Moved = MoveRampStop(Added.Stops, 1, 1);
+    assert.equal(Moved.Index, 2, "dragged past the last one, it is the last one now");
+    assert.deepEqual(Moved.Stops.map((Stop) => Stop.Position), [0, 1, 1]);
+    assert.deepEqual(Moved.Stops[2].Colour, Added.Stops[1].Colour, "and it is still the same colour");
+
+    const Lost = RemoveRampStop(Moved.Stops, 2);
+    assert.equal(Lost.Stops.length, 2);
+    assert.equal(RemoveRampStop(Lost.Stops, 0).Stops.length, 2, "the last two cannot be taken away");
+    assert.equal(PlaceRampStop(SortRampStops(Array.from({ length: RampLimit }, (Ignored, Index) => ({ Position: Index / 8, Colour: [0, 0, 0] }))), 0.99).Index, -1, "a full ramp refuses a ninth");
+});
+
+test("where a dab sits in the ramp is a distance over a length", () =>
+{
+    assert.equal(RampWhere(0.25, 1), 0.25);
+    assert.equal(RampWhere(2, 1), 1, "past the end it holds the last colour");
+    assert.equal(RampWhere(2.25, 1, { Cycle: true }), 0.25, "unless it is set to repeat");
+    assert.equal(RampWhere(0.25, 1, { Reverse: true }), 0.75);
+    assert.equal(RampWhere(1, 0), 1, "a zero length is not a division by zero");
+
+    // The easings are the same four the shader runs, by the same names.
+    assert.equal(RampEase(0.5, "linear"), 0.5);
+    assert.equal(RampEase(0.5, "smooth"), 0.5);
+    assert.ok(RampEase(0.5, "in") < 0.5 && RampEase(0.5, "out") > 0.5);
+    assert.ok(RampEase(0.25, "smooth") < 0.25, "smooth leans out of the ends");
+    assert.equal(RampEase(-1, "linear"), 0);
+    assert.equal(RampEase(4, "linear"), 1);
+});
+
+test("the ramp draws itself the same way the paint will", () =>
+{
+    const Css = RampCss([
+        { Position: 0, Colour: [1, 0, 0] },
+        { Position: 0.5, Colour: [0, 1, 0] },
+    ]);
+    assert.ok(Css.startsWith("linear-gradient(to right,"), Css);
+    assert.ok(Css.includes("rgb(255,0,0) 0.00%") && Css.includes("rgb(0,255,0) 50.00%"), Css);
 });
