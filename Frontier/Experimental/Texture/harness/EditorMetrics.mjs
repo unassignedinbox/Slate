@@ -269,5 +269,106 @@ const Kept = Read.Project.Layers.find((Entry) => Entry.Kind === "decal");
 Check("with the decal's gradient still on it", Kept.Decal.Ramp.Carry === true);
 Check("and the document's name", Read.Project.Name === Panel.Project.Name, Read.Project.Name);
 
+//--------------------------------------------------------------------------------------------------------------------------
+// The panels, after the move. Two tabs in the inspector, the environment in the viewport header beside the channel it
+// is lighting, and the scene setup on the objects it builds.
+//--------------------------------------------------------------------------------------------------------------------------
+Check(
+    "the inspector is the layer and the diary, and nothing else",
+    All("#inspector-tabs [data-tab]").map((Button) => Button.dataset.tab).join(",") === "layer,timeline",
+    All("#inspector-tabs [data-tab]").map((Button) => Button.dataset.tab).join(","),
+);
+Panel.AddLayer("stroke");
+await Settle(Window, 3);
+const Plates = () => All("#inspector-body .texture-plate [data-thumbnail]");
+Check("a painted layer opens on its own sheet", Plates().length === 1, String(Plates().length));
+Check("read back big, not at the stack's size", Plates()[0].dataset.thumbnailSize === "192", Plates()[0].dataset.thumbnailSize);
+Check("and showing the sheet rather than the mask", Plates()[0].dataset.thumbnailTarget === "coverage");
+Check(
+    "the numbers the card already carries are not typed out twice",
+    !Find("#inspector-body .channel-control"),
+);
+Check("but the channels it writes are listed", All("#inspector-body .chip-rail .channel-pill:not(.plus)").length === 2);
+Panel.OnInspectorAction("mask-add-black");
+await Settle(Window, 3);
+Check("adding a mask puts the mask beside the sheet", Plates().length === 2, String(Plates().length));
+Check("and the second plate is the mask", Plates()[1].dataset.thumbnailTarget === "mask");
+
+// The environment pod: four skies with faces on them, and a rig of three lights behind them.
+Press(Find("#environment-button"));
+await Settle(Window, 2);
+Check("the header button opens the environment", !Find("#environment-pod").hidden);
+Check(
+    "it sits beside the channel dropdown",
+    Find("#channel-select").closest(".dropdown").nextElementSibling?.id === "environment-button",
+    Find("#channel-select").closest(".dropdown").nextElementSibling?.id,
+);
+Check("four skies, each wearing its own face", All("#environment-pod .sky-tile").length === 4);
+Check("the one in use is lit", All("#environment-pod .sky-tile.active").length === 1);
+Press(Find('#environment-pod [data-argument="sunset"]'));
+await Settle(Window, 2);
+Check("picking one lights the surface with it", Panel.Project.Environment.Identifier === "sunset");
+Check("and the rig goes with the sky", Panel.Project.Environment.Lights === null);
+Check("three lights hang in front of it", All("#environment-pod .light-row").length === 3);
+Press(Find('#environment-pod [data-action="toggle-light"]'));
+await Settle(Window, 2);
+Check("switching one off writes the rig out", Array.isArray(Panel.Project.Environment.Lights));
+Check("with that light dark", Panel.Project.Environment.Lights[0].On === false);
+Check("and the sky's own strength remembered", Panel.Project.Environment.Lights[0].Strength === 9);
+Press(Find('#environment-pod [data-action="add-light"]'));
+await Settle(Window, 2);
+Check("adding a light lights the dark one", Panel.Project.Environment.Lights[0].On === true);
+Press(Find('#environment-pod [data-action="reset-lights"]'));
+await Settle(Window, 2);
+Check("and the rig can be handed back to the sky", Panel.Project.Environment.Lights === null);
+
+// The scene setup: everything the layer panel used to carry that was never about a layer.
+Press(Find("#scene-button"));
+await Settle(Window, 2);
+Check("the objects heading opens the surface setup", !Find("#scene-pod").hidden);
+Check("and the environment pod stands down", Find("#environment-pod").hidden);
+Check(
+    "the mesh, the sheet it unwraps onto, the constants under it and the stack",
+    All("#scene-pod details[data-group]").map((Entry) => Entry.dataset.group).join(",") === "Object,UV tiles,Base material,Stack",
+    All("#scene-pod details[data-group]").map((Entry) => Entry.dataset.group).join(","),
+);
+Press(Find('#scene-pod [data-action="open-constants"]'));
+await Settle(Window, 2);
+Check("the OpenPBR constants are one press in", All("#scene-pod .pod-nested details[data-group]").length > 6);
+Type("Escape");
+await Settle(Window, 1);
+Check("Escape puts the pod away", Find("#scene-pod").hidden);
+
+//--------------------------------------------------------------------------------------------------------------------------
+// One switch, two faces: the card's channel ticks and the inspector's chips are the same choice.
+//--------------------------------------------------------------------------------------------------------------------------
+// The brush is aimed back at the layer's content: a mask is one channel, and the pane says so instead of listing them.
+if (Panel.Projection.Brush.Target === "mask") Type("m");
+await Settle(Window, 2);
+const Sheet = Panel.Instruments;
+Sheet.Show();
+Sheet.ShowSection("material");
+await Settle(Window, 2);
+const Face = () => Sheet.Root.querySelector("[data-pane]");
+if (Face().querySelector("[data-every]")) Press(Face().querySelector("[data-every]"));
+await Settle(Window, 2);
+const Tick = (Key) =>
+    [...Face().querySelectorAll(".channel-pick")].find((Button) => Button.querySelector(".channel-note").textContent === Key);
+Check("the card lists every channel it can write", !!Tick("base_metalness"));
+Press(Tick("base_metalness"));
+await Settle(Window, 2);
+Check("ticking one puts it on the layer", Panel.ActiveLayer.Enabled.base_metalness === true);
+Check("and a chip arrives in the inspector", All("#inspector-body .chip-rail [data-argument='base_metalness']").length > 0);
+Press(All("#inspector-body .pill-remove").find((Button) => Button.dataset.argument === "base_metalness"));
+await Settle(Window, 2);
+Check("dropping the chip takes the tick off the card", !Tick("base_metalness").classList.contains("on"));
+Check("and the stroke stops writing it", Panel.ChannelWrites.base_metalness === false);
+Panel.SelectLayer(Panel.Layers[0].Identifier);
+await Settle(Window, 2);
+Check(
+    "a different layer hands the brush its own channels",
+    Panel.ChannelWrites.base_metalness === Boolean(Panel.ActiveLayer.Enabled.base_metalness),
+);
+
 Report();
 process.exit(process.exitCode || 0);

@@ -584,3 +584,45 @@ export const EnvironmentIndex = (Identifier) =>
         0,
         EnvironmentOrdering.findIndex((Environment) => Environment.Identifier === Identifier),
     );
+
+//--------------------------------------------------------------------------------------------------------------------------
+// The rig. Three lights hang in front of the environment, and until the painter touches one they are whatever the
+// environment says they are: the preset's own key, fill and rim strengths, at the angles the viewport has always used.
+//
+// 🔴 Three, and not a number the painter chooses. The shading pass carries three directions and three radiances, so a
+//    fourth light would be a shader with nowhere to put it — and a rig that silently dropped the light you just added
+//    would be worse than one that says plainly how many it holds. `Swing` is an offset from the environment rotation,
+//    so spinning the sky takes the lights with it, which is what every rotation of a lit scene has meant.
+//--------------------------------------------------------------------------------------------------------------------------
+export const LightOrdering = [
+    { Identifier: "key", Label: "Key", Reads: "Key", Swing: 34, Elevation: 49, Tint: [1, 0.97, 0.92], Note: "The light that shapes it" },
+    { Identifier: "fill", Label: "Fill", Reads: "Fill", Swing: 251, Elevation: 15, Tint: [0.82, 0.88, 1], Note: "Opens the shadow side" },
+    { Identifier: "rim", Label: "Rim", Reads: "Rim", Swing: 155, Elevation: 31, Tint: [0.92, 0.95, 1], Note: "Draws the edge away from the background" },
+];
+
+// The rig written out: what the painter is looking at the moment before they change anything.
+export const DefaultLights = (Identifier) =>
+{
+    const Preset = EnvironmentByIdentifier[Identifier] || EnvironmentByIdentifier.studio;
+    return LightOrdering.map((Light) => ({
+        Identifier: Light.Identifier,
+        On: true,
+        Strength: Number((Preset[Light.Reads] ?? 1).toFixed(2)),
+        Swing: Light.Swing,
+        Elevation: Light.Elevation,
+    }));
+};
+
+// One light as the shading pass wants it: a unit direction and a tinted radiance, with an unlit light simply black.
+export const LightVector = (Light, Index, Rotation) =>
+{
+    const Order = LightOrdering[Index] || LightOrdering[0];
+    const Swing = (((Light?.Swing ?? Order.Swing) + Rotation) * Math.PI) / 180;
+    const Rise = ((Light?.Elevation ?? Order.Elevation) * Math.PI) / 180;
+    const Flat = Math.cos(Rise);
+    const Strength = Light?.On === false ? 0 : Math.max(Light?.Strength ?? 0, 0);
+    return {
+        Direction: [Math.sin(Swing) * Flat, Math.sin(Rise), Math.cos(Swing) * Flat],
+        Radiance: Order.Tint.map((Part) => Part * Strength),
+    };
+};

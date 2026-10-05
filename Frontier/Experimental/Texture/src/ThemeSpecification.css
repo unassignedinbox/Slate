@@ -3976,22 +3976,41 @@ details.channel-control > summary code {
 }
 /* 🔴 Fixed height, shared by both panes. If the two heads differ by a pixel the title jitters as the track slides. */
 .pane-head {
-  flex: 0 0 54px;
-  height: 54px;
+  flex: 0 0 62px;
+  height: 62px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   padding: 0 16px;
   border-bottom: 1px solid var(--line);
+  background: linear-gradient(#ffffff07, #ffffff00);
+}
+/* The pane's own mark, in the colour the rail gives it: the head says which of the six properties is open. */
+.pane-mark {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  background: #1e1e1e;
+  border: 1px solid var(--line);
+  color: #8a8a8a;
+}
+.pane-mark svg {
+  width: 15px;
+  height: 15px;
 }
 .pane-title {
-  font-size: 13px;
+  font-size: 14px;
   letter-spacing: 0.01em;
+  color: #f2f2f2;
 }
 .pane-sub {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--muted);
-  margin-top: 2px;
+  margin-top: 3px;
 }
 .pane-key {
   margin-left: auto;
@@ -4730,8 +4749,8 @@ details.channel-control > summary code {
 .tool-sheet {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 2px 2px 8px;
+  gap: 16px;
+  padding: 6px 2px 14px;
 }
 
 .tool-sheet.rising > * {
@@ -4739,29 +4758,36 @@ details.channel-control > summary code {
 }
 
 .card-group {
-  padding: 15px 16px 6px;
+  padding: 0 16px 10px;
   margin-bottom: 0;
 }
 
+/* 🔴 Every group in the card is a titled card, and the title is a header rather than a first row: its own band, a */
+/*    hairline under it, and the note on a line of its own where a long one can breathe instead of being squeezed   */
+/*    against the right edge by the title.                                                                          */
 .card-group .group-head {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  margin: 0 -16px 13px;
+  padding: 13px 16px 11px;
+  background: #ffffff05;
+  border-bottom: 1px solid #ffffff0d;
 }
 
 .card-group .group-head h3 {
   margin: 0;
-  font-size: 14px;
-  font-weight: 300;
-  letter-spacing: -0.2px;
-  color: #e0e0e0;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: #ececec;
 }
 
 .card-group .group-head span {
   font-size: 10px;
-  color: #6f6f6f;
+  line-height: 1.5;
+  color: #767676;
 }
 
 .card-group .property-row {
@@ -5177,4 +5203,228 @@ details.channel-control > summary code {
 .mix-code:focus {
   outline: none;
   border-color: #ffffff2e;
+}
+
+/*==========================================================================================================================================*/
+/* Pods. Two panels that used to be inspector tabs and are now buttons beside the thing they describe: the environment  */
+/* next to the channel the viewport is showing, the surface setup next to the objects it builds.                        */
+/*==========================================================================================================================================*/
+.popover.environment-pod,
+.popover.scene-pod {
+  /* Above the card: a pod the hand just opened is never the thing that goes behind something else. */
+  z-index: 70;
+  width: 332px;
+  padding: 13px 13px 11px;
+  background: #1a1a1a;
+  border: 1px solid #ffffff16;
+  border-radius: 20px;
+  box-shadow: 0 18px 54px #000a;
+}
+
+.popover.scene-pod {
+  width: 352px;
+}
+
+.pod-body {
+  max-height: min(64vh, 640px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+
+.pod-body .property-group {
+  margin-bottom: 9px;
+  border-radius: 18px;
+}
+
+.pod-body .property-group:last-child {
+  margin-bottom: 0;
+}
+
+.pod-body .chip-button {
+  flex: 0 0 auto;
+  width: auto;
+  display: inline-flex;
+  justify-content: center;
+  padding: 0 11px;
+}
+
+.pod-nested {
+  margin-top: 10px;
+}
+
+.pod-nested .property-group {
+  background: #141414;
+}
+
+.pod-body .property-hint {
+  font-size: 10.5px;
+  line-height: 1.65;
+  color: #7a7a7a;
+  padding: 0;
+}
+
+/* The four skies, each wearing its own face: zenith to horizon to ground, with the sun where the rotation put it. */
+.pod-body .sky-rail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 13px;
+}
+
+.pod-body .sky-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 7px;
+  width: 100%;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: #121212;
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease;
+}
+
+.pod-body .sky-tile:hover {
+  background: #171717;
+}
+
+.pod-body .sky-tile.active {
+  border-color: #ffffff3d;
+  background: #1f1f1f;
+}
+
+.pod-body .sky-face {
+  position: relative;
+  display: block;
+  height: 46px;
+  width: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px #00000055;
+}
+
+.pod-body .sky-face i {
+  position: absolute;
+  top: 22%;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffffdd, #ffffff00 68%);
+}
+
+.pod-body .sky-tile b {
+  font-weight: 400;
+  font-size: 11px;
+  color: #bdbdbd;
+  text-align: left;
+}
+
+.pod-body .sky-tile.active b {
+  color: var(--text);
+}
+
+/* The rig: three lights, each with a head that says what it is for and a switch that says whether it is on. */
+.pod-body .light-row {
+  border-top: 1px solid var(--line);
+  padding: 11px 0 1px;
+}
+
+.pod-body .light-row:first-child {
+  border-top: 0;
+  padding-top: 1px;
+}
+
+.pod-body .light-row.dim {
+  opacity: 0.62;
+}
+
+.pod-body .light-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.pod-body .light-head b {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.pod-body .light-head span {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 10px;
+  color: #6f6f6f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pod-body .light-dot {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border-radius: 50%;
+  background: var(--chip, #fff);
+  box-shadow: 0 0 0 1px #00000066;
+}
+
+/*==========================================================================================================================================*/
+/* The layer's own sheet, in the inspector. Same read-back the stack rows draw, at a size that answers what is painted  */
+/* on the layer rather than which layer it is — and beside it the mask, when the layer has one.                         */
+/*==========================================================================================================================================*/
+.texture-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin-bottom: 11px;
+}
+
+.texture-preview.paired {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.texture-plate {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.layer-swatch.plate-sheet {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  border-radius: 16px;
+  margin-top: 0;
+  align-self: stretch;
+}
+
+.layer-swatch.plate-sheet svg {
+  width: 26px;
+  height: 26px;
+}
+
+.texture-plate figcaption {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 0 2px;
+}
+
+.texture-plate figcaption b {
+  font-weight: 400;
+  font-size: 11px;
+  color: #d2d2d2;
+}
+
+.texture-plate figcaption span {
+  font-size: 10px;
+  color: #6f6f6f;
 }

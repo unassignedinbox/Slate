@@ -91,6 +91,10 @@ import {
     MetalByIdentifier,
     MetalPreset,
     EnvironmentOrdering,
+    EnvironmentByIdentifier,
+    LightOrdering,
+    DefaultLights,
+    LightVector,
 } from "./MaterialSpecification.js";
 import { InkRamp } from "./DecalSpecification.js";
 import { GeneratorOrdering, GeneratorIndex, NormaliseGenerator, DefaultGenerator, GeneratorControls } from "./GeneratorSpecification.js";
@@ -2142,4 +2146,67 @@ test("a decal carries its ink home", () =>
     const Fixed = Nonsense.Layers.find((Entry) => Entry.Kind === "decal");
     assert.equal(Fixed.Decal.Ramp.Fit, "across", "a fit nobody has heard of falls back to the one that always works");
     assert.equal(Fixed.Decal.Ramp.Stops.length, 2);
+});
+
+//--------------------------------------------------------------------------------------------------------------------------
+// The light rig. Three lights in front of the environment, written out only once a hand has moved one of them.
+//--------------------------------------------------------------------------------------------------------------------------
+test("an untouched rig is the environment's own three lights", () =>
+{
+    for (const Environment of EnvironmentOrdering)
+    {
+        const Rig = DefaultLights(Environment.Identifier);
+        assert.equal(Rig.length, 3, "the shading pass carries three, so the rig holds three");
+        assert.deepEqual(
+            Rig.map((Light) => Light.Strength),
+            [Environment.Key, Environment.Fill, Environment.Rim].map((Value) => Number(Value.toFixed(2))),
+            `${Environment.Label} should open at its own strengths`,
+        );
+        assert.ok(Rig.every((Light) => Light.On === true));
+    }
+    const Unknown = DefaultLights("nowhere");
+    assert.equal(Unknown[0].Strength, Number(EnvironmentByIdentifier.studio.Key.toFixed(2)), "an unknown sky is the studio");
+});
+
+test("a light is a unit direction and a tinted radiance", () =>
+{
+    const Rig = DefaultLights("studio");
+    for (const [Index, Light] of Rig.entries())
+    {
+        const { Direction, Radiance } = LightVector(Light, Index, 0);
+        assert.ok(Math.abs(Math.hypot(...Direction) - 1) < 1e-6, "the shading pass is handed unit vectors");
+        const Order = LightOrdering[Index];
+        assert.deepEqual(
+            Radiance.map((Part) => Number(Part.toFixed(4))),
+            Order.Tint.map((Part) => Number((Part * Light.Strength).toFixed(4))),
+        );
+    }
+    // Rotation swings the whole rig, which is what rotating a sky has always meant.
+    const Still = LightVector(Rig[0], 0, 0).Direction;
+    const Spun = LightVector(Rig[0], 0, 90).Direction;
+    assert.ok(Math.abs(Still[1] - Spun[1]) < 1e-9, "a swing does not change how high a light hangs");
+    assert.ok(Math.hypot(Still[0] - Spun[0], Still[2] - Spun[2]) > 0.5, "but it does move it round the object");
+    // A light that is off contributes nothing rather than being dropped from the array.
+    const Dark = LightVector({ ...Rig[1], On: false }, 1, 0);
+    assert.deepEqual(Dark.Radiance, [0, 0, 0]);
+    assert.ok(Math.abs(Math.hypot(...Dark.Direction) - 1) < 1e-6);
+});
+
+test("a rig read off disk is three lights or none", () =>
+{
+    const Plain = SanitiseProject({ Environment: { Identifier: "sunset" } });
+    assert.equal(Plain.Environment.Lights, null, "nothing touched means the sky still owns the lights");
+    const Written = SanitiseProject({
+        Environment: {
+            Identifier: "sunset",
+            Lights: [{ Identifier: "key", On: false, Strength: 99, Swing: 999, Elevation: -400 }],
+        },
+    });
+    assert.equal(Written.Environment.Lights.length, 3, "a short rig is filled out from the sky");
+    assert.equal(Written.Environment.Lights[0].On, false);
+    assert.equal(Written.Environment.Lights[0].Strength, 24, "strength is clamped rather than believed");
+    assert.equal(Written.Environment.Lights[0].Swing, 360);
+    assert.equal(Written.Environment.Lights[0].Elevation, -90);
+    assert.equal(Written.Environment.Lights[1].Strength, Number(EnvironmentByIdentifier.sunset.Fill.toFixed(2)));
+    assert.equal(SanitiseProject({ Environment: { Lights: "all of them" } }).Environment.Lights, null);
 });

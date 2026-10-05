@@ -119,6 +119,7 @@ export class InstrumentPanel
                     </div>
                     <div class="tool-body">
                         <div class="pane-head">
+                            <span class="pane-mark" data-pane-mark aria-hidden="true"></span>
                             <div><div class="pane-title" data-pane-title></div><div class="pane-sub" data-pane-sub></div></div>
                             <div class="pane-tools">
                                 <button class="pane-expand" data-expand type="button" aria-expanded="false" title="Open a test sheet">
@@ -216,6 +217,15 @@ export class InstrumentPanel
         Body.className = `tool-sheet ${Animate ? "rising" : ""}`;
         const Title = this.Root.querySelector("[data-pane-title]");
         const Note = this.Root.querySelector("[data-pane-sub]");
+        // The head wears the same mark the rail row does, in the same colour, so the pane announces itself rather
+        // than leaving the painter to match a title against a list.
+        const Mark = this.Root.querySelector("[data-pane-mark]");
+        if (Mark)
+        {
+            Mark.innerHTML = Standing?.Glyph || "";
+            Mark.style.color = Standing?.Tone || "#8a8a8a";
+            Mark.hidden = !Standing?.Glyph;
+        }
         if (!Standing)
         {
             Title.textContent = "No paint";

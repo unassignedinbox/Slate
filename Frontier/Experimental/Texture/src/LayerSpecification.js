@@ -18,7 +18,7 @@ import { DefaultGenerator, NormaliseGenerator } from "./GeneratorSpecification.j
 import { DefaultRampStops, SortRampStops, DecalFitIdentifiers } from "./StrokeSpecification.js";
 import { FinishDefaults, SanitiseFinish, FinishBadge } from "./FinishSpecification.js";
 import { CreateObject, SanitiseObject, FirstTile } from "./SceneStructure.js";
-import { SurfaceDefaults, SurfaceControls } from "./MaterialSpecification.js";
+import { SurfaceDefaults, SurfaceControls, LightOrdering, DefaultLights } from "./MaterialSpecification.js";
 
 export const LayerKinds = [
     {
@@ -327,7 +327,7 @@ export const DefaultProject = () => ({
     Objects: [CreateObject({ Name: "Shader ball", Kind: "shaderball", Subdivision: 2, Tile: FirstTile })],
     Object: "",
     Resolution: 1024,
-    Environment: { Identifier: "studio", Rotation: 35, Intensity: 1, Exposure: 0, Background: true, Shadow: true },
+    Environment: { Identifier: "studio", Rotation: 35, Intensity: 1, Exposure: 0, Background: true, Shadow: true, Lights: null },
     Material: { ...SurfaceDefaults },
     Layers: [],
     Selection: "",
@@ -555,6 +555,27 @@ export const SanitiseLayer = (Candidate) =>
     return Layer;
 };
 
+// A rig read back off disk. `null` is a real answer and the common one: it means nobody has touched the lights, so
+// they are still whatever the environment says, and a later change to a preset's key light reaches this project too.
+export const SanitiseLights = (Candidate) =>
+{
+    const Rig = Candidate?.Lights;
+    if (!Array.isArray(Rig)) return null;
+    const Written = DefaultLights(Candidate?.Identifier);
+    return LightOrdering.map((Light, Index) =>
+    {
+        const Entry = Rig.find((Record) => Record?.Identifier === Light.Identifier) || Rig[Index];
+        if (!Entry || typeof Entry !== "object") return Written[Index];
+        return {
+            Identifier: Light.Identifier,
+            On: Entry.On !== false,
+            Strength: Clamp(Number(Entry.Strength ?? Written[Index].Strength) || 0, 0, 24),
+            Swing: Clamp(Number(Entry.Swing ?? Light.Swing) || 0, 0, 360),
+            Elevation: Clamp(Number(Entry.Elevation ?? Light.Elevation) || 0, -90, 90),
+        };
+    });
+};
+
 export const SanitiseProject = (Candidate) =>
 {
     const Project = DefaultProject();
@@ -592,6 +613,7 @@ export const SanitiseProject = (Candidate) =>
             Exposure: Clamp(Candidate.Environment.Exposure ?? 0, -4, 4),
             Background: Candidate.Environment.Background !== false,
             Shadow: Candidate.Environment.Shadow !== false,
+            Lights: SanitiseLights(Candidate.Environment),
         };
     Project.Material = { ...SurfaceDefaults };
     for (const [Identifier, Value] of Object.entries(Candidate.Material || {}))

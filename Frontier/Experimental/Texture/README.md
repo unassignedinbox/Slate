@@ -10,8 +10,8 @@ cd Frontier/Experimental/Texture
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
-npm test           # 128 unit tests, no browser required
-npm run drive      # 157 checks against the whole editor, booted in a headless window
+npm test           # 131 unit tests, no browser required
+npm run drive      # 188 checks against the whole editor, booted in a headless window
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -478,7 +478,7 @@ cost nothing.
 
 **UDIM tools.** The texture view draws the numbered tile grid over the sheet, and the squares are live: clicking an
 occupied one selects the object that lives there, clicking an empty one moves the object in hand onto it. The `UDIM`
-chip (<kbd>U</kbd>) puts the grid away. In the inspector's UV group, *Spread across tiles* lays every object out in
+chip (<kbd>U</kbd>) puts the grid away. In the surface setup's UV group, *Spread across tiles* lays every object out in
 order from `1001`, filling rows of ten the way UDIM numbers run, and *Collapse to 1001* puts them all back on one tile
 for an engine that imports a single texture. Tile moves are scene edits, so the surface is reassembled and
 <kbd>Ctrl Z</kbd> takes them back — along with adding, removing and hiding an object, which now travel in the undo
@@ -490,7 +490,7 @@ the stack switches between *Whole scene* and the selected object — scoped, the
 scene-wide ones and follows the outliner as the selection changes, and anything added while it is on (or while the
 object is isolated) belongs to that object.
 
-**Timeline and branches.** The fourth inspector tab reads the session back as a story: every stroke, layer, material,
+**Timeline and branches.** The inspector's second tab reads the session back as a story: every stroke, layer, material,
 decal, generator and surface change becomes a typed event on a vertical rail — coloured node, badge, short hash,
 timestamp, and a colour chip when the edit had a colour. Entries are grouped into days under sticky headings, newest
 first, and **each one draws what it did in texture space**: the path a stroke took, the footprint and angle of a stamp
@@ -536,7 +536,7 @@ browser. **Anisotropy is now a shape**: the highlight is drawn out across the gr
 two-alpha GGX with its own Smith term, rather than the narrowed isotropic lobe that could only ever make the same
 round highlight smaller. Brushed aluminium, stainless and machined titanium read as worked metal because of it.
 
-**Every stroke keeps the material it was painted with.** Set the inspector to metalness 1 and roughness 0, paint a
+**Every stroke keeps the material it was painted with.** Set the card to metalness 1 and roughness 0, paint a
 rivet; set it to roughness 0.5, metalness 0.5 and height 1, paint a scuff beside it. Both keep what they were given.
 The same is true of a decal: a mark takes a copy of the channel values in hand the moment it is dropped onto the
 surface, so one layer can hold a matt sticker and a chrome badge.
@@ -597,6 +597,44 @@ green channel is flipped on the way out rather than left for someone to discover
 unsaved dot sits on the tab beside it. There used to be a second copy in a bar of its own under the header, which was
 both a duplicate and a band of empty chrome between the window's controls and the work; the panels start directly under
 the header now.
+
+---
+
+**Each panel holds one idea.** The inspector had four tabs and two of them were about something else. *Material* was
+the card's own Material pane typed out a second time — same eleven channels, same sliders, a panel apart — and
+*Surface* was the scene wearing a layer panel's clothes: a mesh, a UV sheet and the sky, none of which is the thing in
+hand. Both are gone. What is left is **Layer** and **Timeline**.
+
+- **The layer panel opens on the layer's own sheet.** A 192² read-back of what is actually painted there, beside the
+  mask when the layer has one, over the blend and opacity and the list of channels it writes. For a painted or decal
+  layer the *numbers* are not repeated here: what a channel lays down is set on the card, next to the paint that lays
+  it, and the panel points at it. Layers with no paint behind them — a fill, a generator, a finish — keep their
+  sliders, because for those the number *is* the layer.
+- **The environment moved to the viewport header**, one button to the right of the channel dropdown, where the other
+  two decisions about *looking* already live. It opens on four skies wearing their own faces — zenith, horizon and
+  ground drawn as the gradient they are, with the sun where the rotation put it — then rotation, intensity, exposure
+  and the background switch.
+- **Three lights hang in front of the sky.** Key, fill and rim, each with a strength, a swing around the object and a
+  height, and each able to be switched off and added back. The shading pass carries three directions and three
+  radiances, so the rig says three rather than pretending to an arbitrary number and quietly dropping the fourth.
+  Until one of them is touched they are the environment's own, which is why *Follow the sky* is a button: it drops
+  the rig and hands the lighting back to the preset.
+- **The scene setup moved onto the objects it builds** — the button in the Objects heading. Mesh, subdivision, scale,
+  spin and offset; the UDIM tiles and the document resolution; the document's OpenPBR constants one press further in;
+  and the reset for the whole stack. Set once, left for hours, and no longer in the way of the mask.
+
+**One switch, two faces.** The ticks on the card's Material pane and the chips in the layer panel's channel list used
+to be two sets of switches over one idea: the card said what the stroke was allowed to write, the panel said what the
+layer wrote, and nothing kept them level. Tick metalness on the card over a layer whose metalness chip had been
+dropped and the paint went nowhere, with both panels insisting they were right. They are the same switch now — the
+layer is the truth, because the layer is what composites — and the brush adopts whatever the layer in hand writes the
+moment you select it. Reaching into the library still narrows both at once: a metallic marker lays colour, metal and
+roughness, so that is what the layer writes.
+
+**The card's panes read as cards.** Each group now has a header of its own — a band across the top of the card with the
+title and, under it, the line that says what the group is for — and the panes are spaced apart rather than butted
+together. The pane header carries the same mark the rail row does, in the same colour, so an open pane announces
+itself instead of leaving the eye to match a title against a list.
 
 ## Keyboard
 

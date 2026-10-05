@@ -38,7 +38,8 @@
                                 <span data-icon="down"></span><h2>Objects</h2><span class="stack-count" id="object-count">1</span>
                             </button>
                             <div class="outliner-actions">
-                                <button id="isolate-button" class="icon-button" title="Isolate the selected object" aria-label="Isolate object" aria-pressed="false" data-icon="eye"></button
+                                <button id="scene-button" class="icon-button" title="Surface setup · mesh, UV tiles and the base material" aria-label="Surface setup" aria-expanded="false" data-icon="sphere"></button
+                                ><button id="isolate-button" class="icon-button" title="Isolate the selected object" aria-label="Isolate object" aria-pressed="false" data-icon="eye"></button
                                 ><button id="add-object" class="icon-button" title="Add an object" aria-label="Add an object" data-icon="plus"></button>
                             </div>
                         </div>
@@ -90,7 +91,9 @@
                             <option value="plane">Texture space</option>
                         </select>
                         <div class="viewport-bar-end">
-                            <select id="channel-select" aria-label="Displayed channel"></select><select id="symmetry-select" aria-label="Symmetry"></select
+                            <select id="channel-select" aria-label="Displayed channel"></select
+                            ><button id="environment-button" class="icon-button" title="Environment and lights" aria-label="Environment and lights" aria-expanded="false" data-icon="sun"></button
+                            ><select id="symmetry-select" aria-label="Symmetry"></select
                             ><button id="browser-button" class="icon-button" title="Content browser · B" aria-label="Content browser" data-icon="grid"></button
                             ><button id="diagnostics-button" class="icon-button" title="Diagnostics" aria-label="Diagnostics" data-icon="viewport"></button
                             ><button id="focus-button" class="icon-button" title="Frame surface · F" aria-label="Frame surface" data-icon="focus"></button
@@ -240,7 +243,7 @@
                 </section>
                 <aside class="inspector-panel">
                     <div class="panel-heading">
-                        <span>Inspector</span><button id="reset-properties" class="icon-button" title="Reset this inspector tab" aria-label="Reset this inspector tab" data-icon="rotate"></button>
+                        <span>Inspector</span><button id="reset-properties" class="icon-button" title="Reset this layer" aria-label="Reset this layer" data-icon="rotate"></button>
                     </div>
                     <div class="object-heading">
                         <div class="object-symbol" id="layer-symbol" data-icon="layers"></div>
@@ -248,7 +251,7 @@
                         <label class="switch" title="Show the selected layer"><input type="checkbox" id="layer-enabled" aria-label="Show the selected layer" checked /><span></span></label>
                     </div>
                     <div class="inspector-tabs" id="inspector-tabs">
-                        <button class="active" data-tab="layer">Layer</button><button data-tab="material">Material</button><button data-tab="surface">Surface</button><button data-tab="timeline">Timeline</button>
+                        <button class="active" data-tab="layer">Layer</button><button data-tab="timeline">Timeline</button>
                     </div>
                     <div id="inspector-body" class="inspector-body"></div>
                     <div class="inspector-footer"><span data-icon="link"></span>Edits composite immediately</div>
@@ -262,6 +265,14 @@
                     ><span class="status-divider"></span><span class="version" id="build-mark" title="Which copy of the editor this page was served from">build —</span></span
                 >
             </footer>
+        </div>
+        <div id="environment-pod" class="popover environment-pod" hidden role="dialog" aria-label="Environment and lights">
+            <div class="popover-label">ENVIRONMENT</div>
+            <div id="environment-body" class="pod-body"></div>
+        </div>
+        <div id="scene-pod" class="popover scene-pod" hidden role="dialog" aria-label="Surface setup">
+            <div class="popover-label">SURFACE SETUP</div>
+            <div id="scene-body" class="pod-body"></div>
         </div>
         <div id="brush-pod" class="popover brush-pod" hidden role="dialog" aria-label="Brush settings">
             <div class="popover-label">BRUSH</div>

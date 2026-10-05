@@ -36,7 +36,7 @@ import {
 } from "./ChannelSpecification.js";
 import { GeneratorIndex } from "./GeneratorSpecification.js";
 import { FinishFamilyIndex, FinishStyleIndex } from "./FinishSpecification.js";
-import { EnvironmentByIdentifier } from "./MaterialSpecification.js";
+import { EnvironmentByIdentifier, LightOrdering, LightVector } from "./MaterialSpecification.js";
 import { TileRectangle } from "./SceneStructure.js";
 import { MediaUniforms, PlainMedia } from "./MediaSolver.js";
 import { WriteOrdering, GradientEasings, SortRampStops, RampLimit } from "./StrokeSpecification.js";
@@ -772,23 +772,22 @@ export class ShadingIntegrator
         const Surface = Target === "mask" ? Record?.MaskTarget : Record?.CoverageTarget;
         if (!Surface) return null;
         const Source = (Target === "mask" ? Record.MaskSize : Record.CoverageSize) || this.Resolution;
-        if (!this.PreviewTarget || this.PreviewSize !== Size)
+        if (!this.Previews) this.Previews = new Map();
+        let Plate = this.Previews.get(Size);
+        if (!Plate)
         {
-            if (this.PreviewTarget) Device.deleteFramebuffer(this.PreviewTarget);
-            if (this.PreviewImage) Device.deleteTexture(this.PreviewImage);
-            this.PreviewImage = this.CreateColourImage(Size);
-            this.PreviewTarget = this.CreateTarget([this.PreviewImage]);
-            this.PreviewSize = Size;
-            this.PreviewPixels = new Uint8Array(Size * Size * 4);
+            const Image = this.CreateColourImage(Size);
+            Plate = { Image, Target: this.CreateTarget([Image]), Pixels: new Uint8Array(Size * Size * 4) };
+            this.Previews.set(Size, Plate);
         }
         Device.bindFramebuffer(Device.READ_FRAMEBUFFER, Surface);
-        Device.bindFramebuffer(Device.DRAW_FRAMEBUFFER, this.PreviewTarget);
+        Device.bindFramebuffer(Device.DRAW_FRAMEBUFFER, Plate.Target);
         Device.blitFramebuffer(0, 0, Source, Source, 0, 0, Size, Size, Device.COLOR_BUFFER_BIT, Device.LINEAR);
         Device.bindFramebuffer(Device.DRAW_FRAMEBUFFER, null);
-        Device.bindFramebuffer(Device.READ_FRAMEBUFFER, this.PreviewTarget);
-        Device.readPixels(0, 0, Size, Size, Device.RGBA, Device.UNSIGNED_BYTE, this.PreviewPixels);
+        Device.bindFramebuffer(Device.READ_FRAMEBUFFER, Plate.Target);
+        Device.readPixels(0, 0, Size, Size, Device.RGBA, Device.UNSIGNED_BYTE, Plate.Pixels);
         Device.bindFramebuffer(Device.READ_FRAMEBUFFER, null);
-        return { Pixels: this.PreviewPixels, Size };
+        return { Pixels: Plate.Pixels, Size };
     }
 
     EnsureMask(Layer)
@@ -1441,20 +1440,18 @@ export class ShadingIntegrator
         const Uniforms = Program.Uniforms;
         const Preset = EnvironmentByIdentifier[Environment.Identifier] || EnvironmentByIdentifier.studio;
         const Rotation = (Environment.Rotation * Math.PI) / 180;
-        const Directions = [
-            [Math.sin(Rotation + 0.6) * 0.62, 0.72, Math.cos(Rotation + 0.6) * 0.62],
-            [Math.sin(Rotation - 1.9) * 0.84, 0.22, Math.cos(Rotation - 1.9) * 0.84],
-            [Math.sin(Rotation + 2.7) * 0.72, 0.44, Math.cos(Rotation + 2.7) * 0.72],
-        ].map((Direction) =>
-        {
-            const Length = Math.hypot(...Direction) || 1;
-            return Direction.map((Component) => Component / Length);
-        });
-        const Radiance = [
-            [Preset.Key, Preset.Key * 0.97, Preset.Key * 0.92],
-            [Preset.Fill * 0.82, Preset.Fill * 0.88, Preset.Fill],
-            [Preset.Rim * 0.92, Preset.Rim * 0.95, Preset.Rim],
-        ];
+        // The rig, if the painter has built one, and otherwise the environment's own three lights at the angles the
+        // viewport has always used. Either way it arrives here as three directions and three radiances, because that
+        // is what the shading pass holds.
+        const Rig = LightOrdering.map((Light, Index) =>
+            LightVector(
+                Environment.Lights?.[Index] || { Strength: Preset[Light.Reads] },
+                Index,
+                Environment.Rotation,
+            ),
+        );
+        const Directions = Rig.map((Light) => Light.Direction);
+        const Radiance = Rig.map((Light) => Light.Radiance);
         Device.uniform3fv(Uniforms.get("uSkyZenith"), Preset.Zenith);
         Device.uniform3fv(Uniforms.get("uSkyHorizon"), Preset.Horizon);
         Device.uniform3fv(Uniforms.get("uSkyGround"), Preset.Ground);

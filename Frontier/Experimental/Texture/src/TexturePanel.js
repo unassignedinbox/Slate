@@ -95,6 +95,9 @@ import {
 import {
     SurfaceControls,
     EnvironmentOrdering,
+    EnvironmentByIdentifier,
+    LightOrdering,
+    DefaultLights,
     MaterialLibrary,
     MaterialByIdentifier,
     MetalByIdentifier,
@@ -492,7 +495,7 @@ const DressSelects = (Root) => Root.querySelectorAll("select").forEach((Field) =
 const RefreshSelect = (Field) => Field?.dispatchEvent(new Field.ownerDocument.defaultView.Event("dressrefresh"));
 
 const Group = ({ Title, Badge, Body, Open = true }) => `
-    <details class="property-group" ${Open ? "open" : ""}>
+    <details class="property-group" data-group="${Escape(Title)}" ${Open ? "open" : ""}>
         <summary>${Escape(Title)}${Badge ? `<span class="section-badge">${Escape(Badge)}</span>` : ""}</summary>
         <div class="group-content">${Body}</div>
     </details>`;
@@ -576,6 +579,7 @@ export class TexturePanel
         this.WireSignature = "";
         this.ChannelShelf = false;
         this.ChannelFocus = "";
+        this.ConstantsOpen = false;     // whether the surface pod is showing the document's OpenPBR constants
         this.PlaneZoom = 0.82;
         this.PlanePan = [0, 0];
         this.Dirty = false;
@@ -676,6 +680,7 @@ export class TexturePanel
             if (Side === "coverage") this.ContentTool = "";
             this.FollowPaintTarget(Side);
         }
+        this.AdoptChannelWrites();
         this.SyncToolToLayer();
         this.SyncToolRail();
         this.RenderStack();
@@ -795,7 +800,7 @@ export class TexturePanel
         this.RenderObjects();
         if (this.ScopedStack) this.RenderStack();
         this.SyncScopeToggle();
-        if (this.InspectorTab === "surface") this.RenderInspector();
+        this.RenderScenePod();
         if (this.Isolated) this.RebuildSurface();
         if (Announce) this.Notify(`${this.ActiveObject.Name} selected.`);
     }
@@ -1039,8 +1044,11 @@ export class TexturePanel
             const Layer = this.Layers.find((Entry) => Entry.Identifier === Holder.dataset.thumbnail);
             const Canvas = Holder.querySelector("canvas");
             if (!Layer || !Canvas) continue;
-            const Target = Masking && Layer.Mask.Kind === "stroke" ? "mask" : "coverage";
-            const Preview = this.Integrator.PreviewLayer(Layer, Target, 64);
+            // A holder can name the sheet it wants and how big it wants it; a stack row names neither and gets the
+            // 64² plate that follows the brush target, which is what every row has always drawn.
+            const Asked = Holder.dataset.thumbnailTarget;
+            const Target = Asked || (Masking && Layer.Mask.Kind === "stroke" ? "mask" : "coverage");
+            const Preview = this.Integrator.PreviewLayer(Layer, Target, Number(Holder.dataset.thumbnailSize) || 64);
             const Context = Preview ? Canvas.getContext("2d") : null;
             const Size = Preview?.Size || 0;
             if (Preview && Canvas.width !== Size) Canvas.width = Canvas.height = Size;
@@ -4914,8 +4922,32 @@ export class TexturePanel
         Select("#brush-pod-button").addEventListener("click", (Event) =>
         {
             Event.stopPropagation();
-            this.TogglePod(Select("#brush-pod").hidden);
+            this.ShowPopover("brush", Select("#brush-pod").hidden);
         });
+        Select("#environment-button")?.addEventListener("click", (Event) =>
+        {
+            Event.stopPropagation();
+            this.ShowPopover("environment", Select("#environment-pod").hidden);
+        });
+        Select("#scene-button")?.addEventListener("click", (Event) =>
+        {
+            Event.stopPropagation();
+            this.ShowPopover("scene", Select("#scene-pod").hidden);
+        });
+        // The rows inside both pods are the inspector's rows, so they answer to the inspector's own two listeners.
+        for (const Name of ["#environment-pod", "#scene-pod"])
+        {
+            const Pod = Select(Name);
+            if (!Pod) continue;
+            Pod.addEventListener("input", (Event) => this.OnInspectorInput(Event));
+            Pod.addEventListener("change", (Event) => this.OnInspectorInput(Event, true));
+            Pod.addEventListener("click", (Event) =>
+            {
+                const Button = Event.target.closest("[data-action]");
+                if (!Button) return;
+                this.OnInspectorAction(Button.dataset.action, Button.dataset.argument);
+            });
+        }
         Select("#brush-pod").addEventListener("click", (Event) =>
         {
             const Button = Event.target.closest("[data-symmetry]");
@@ -4925,7 +4957,9 @@ export class TexturePanel
         });
         document.addEventListener("click", (Event) =>
         {
-            if (!Event.target.closest("#brush-pod") && !Event.target.closest("#brush-pod-button")) this.TogglePod(false);
+            const Inside =
+                Event.target.closest("#brush-pod, #brush-pod-button, #environment-pod, #environment-button, #scene-pod, #scene-button");
+            if (!Inside) this.ShowPopover("", false);
         });
         Select("#swatch-rail").addEventListener("click", (Event) =>
         {
@@ -5297,14 +5331,11 @@ export class TexturePanel
         const Layer = this.ActiveLayer;
         if (Paint && Layer && this.Projection.Brush.Target !== "mask")
         {
-            for (const [Channel, Value] of Object.entries(Paint.Channels))
-            {
-                Layer.Channels[Channel] = Value;
-                Layer.Enabled[Channel] = true;
-            }
-            this.ChannelWrites = Object.fromEntries(
-                WriteKeys.map((Name) => [Name, Name === "base_color" || Paint.Exposes.includes(Name)]),
-            );
+            for (const [Channel, Value] of Object.entries(Paint.Channels)) Layer.Channels[Channel] = Value;
+            // 🔴 Set, not added. What the instrument lays is what the layer writes — both faces of the switch at
+            //    once — or a marker taken after an hour of chrome would quietly keep writing the coat nobody asked
+            //    it for, and the card would show eleven channels for a paint that has three.
+            for (const Name of WriteKeys) this.SetChannelWrite(Name, Name === "base_color" || Paint.Exposes.includes(Name));
             this.Recomposite();
             this.MarkDirty();
             this.RenderInspector();
@@ -6475,6 +6506,49 @@ export class TexturePanel
     }
 
     //----------------------------------------------------------------------------------------------------------------------
+    // Channels · one switch, two faces.
+    //
+    // 🔴 The card said what the stroke was allowed to write; the inspector said what the layer wrote. Two sets of
+    //    switches over one idea, a panel apart, and nothing kept them level: tick Metalness on the card over a layer
+    //    whose metalness chip had been dropped and the paint went nowhere, with both panels insisting they were
+    //    right. They are the same switch now. The layer is the truth — it is what composites — and the brush adopts
+    //    it whenever the layer in hand changes.
+    //----------------------------------------------------------------------------------------------------------------------
+    ChannelWrote(Key)
+    {
+        const Layer = this.ActiveLayer;
+        if (Layer?.Enabled && this.Projection.Brush.Target !== "mask" && Key in Layer.Enabled) return Boolean(Layer.Enabled[Key]);
+        return this.ChannelWrites[Key] !== false;
+    }
+
+    SetChannelWrite(Key, On)
+    {
+        if (WriteKeys.includes(Key)) this.ChannelWrites[Key] = On;
+        const Layer = this.ActiveLayer;
+        if (!Layer?.Enabled || this.Projection.Brush.Target === "mask" || !(Key in Layer.Enabled)) return;
+        // A channel arriving on the layer brings the value it writes with it, or the first stroke would lay a zero
+        // nobody asked for.
+        if (On && Layer.Channels[Key] === undefined && ChannelByIdentifier[Key])
+            Layer.Channels[Key] = structuredClone(ChannelByIdentifier[Key].Default);
+        Layer.Enabled[Key] = On;
+    }
+
+    // The layer in hand changed under the card: the brush writes what that layer writes.
+    AdoptChannelWrites()
+    {
+        const Layer = this.ActiveLayer;
+        if (!Layer?.Enabled || this.Projection.Brush.Target === "mask") return;
+        for (const Key of WriteKeys) if (Key in Layer.Enabled) this.ChannelWrites[Key] = Boolean(Layer.Enabled[Key]);
+    }
+
+    // Both faces redrawn after a channel moved, whichever of them was pressed.
+    SyncChannelFaces()
+    {
+        this.Instruments?.RenderRail();
+        this.Instruments?.RenderPane(false);
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
     // Pane · the material the paint lays down, and which of it the stroke is allowed to write.
     //
     // 🔴 These were two panes a rail apart: the numbers in the inspector, the write switches on the card. Painting a
@@ -6507,7 +6581,7 @@ export class TexturePanel
         //    eleven would be the one place in the card that lies.
         const Narrow =
             Exposed.length > 0 &&
-            WriteKeys.every((Key) => Key === "base_color" || Exposed.includes(Key) || this.ChannelWrites[Key] === false);
+            WriteKeys.every((Key) => Key === "base_color" || Exposed.includes(Key) || !this.ChannelWrote(Key));
         const Showing = this.EveryChannel || !Narrow;
 
         if (Type && Narrow)
@@ -6527,7 +6601,7 @@ export class TexturePanel
                 const Group = this.CardGroup(Slot.Label, Slot.Note);
                 for (const Part of Slot.Components)
                 {
-                    const On = Part.Locked || this.ChannelWrites[Part.Key] !== false;
+                    const On = Part.Locked || this.ChannelWrote(Part.Key);
                     const Row = document.createElement("button");
                     Row.className = `channel-pick ${On ? "on" : ""} ${Part.Locked ? "locked" : ""}`;
                     Row.innerHTML = `<span class="channel-tick">${On ? Icon("check") : ""}</span>
@@ -6537,9 +6611,8 @@ export class TexturePanel
                     if (!Part.Locked)
                         Row.addEventListener("click", () =>
                         {
-                            this.ChannelWrites[Part.Key] = !On;
-                            this.Instruments.RenderRail();
-                            this.Instruments.RenderPane(false);
+                            this.CaptureStack(() => this.SetChannelWrite(Part.Key, !On));
+                            this.SyncChannelFaces();
                         });
                     Group.append(Row);
                     if (On) Group.append(...this.ChannelValue(Layer, Part));
@@ -6566,16 +6639,20 @@ export class TexturePanel
             : `<button data-all>Everything</button>`;
         Row.querySelector("[data-all]").addEventListener("click", () =>
         {
-            this.ChannelWrites = DefaultWrites();
             this.EveryChannel = true;
-            this.Instruments.RenderRail();
-            this.Instruments.RenderPane(false);
+            this.CaptureStack(() =>
+            {
+                for (const Key of WriteKeys) this.SetChannelWrite(Key, true);
+            });
+            this.SyncChannelFaces();
         });
         Row.querySelector("[data-none]")?.addEventListener("click", () =>
         {
-            this.ChannelWrites = Object.fromEntries(WriteKeys.map((Key) => [Key, false]));
-            this.Instruments.RenderRail();
-            this.Instruments.RenderPane(false);
+            this.CaptureStack(() =>
+            {
+                for (const Key of WriteKeys) this.SetChannelWrite(Key, false);
+            });
+            this.SyncChannelFaces();
         });
         Sheet.append(Row);
 
@@ -7068,20 +7145,19 @@ export class TexturePanel
         }
     }
 
-    // The pod sits above the button that opens it, so the sliders are near the hand that wants them.
+    // The brush pod, by the name the rest of the editor has always called it.
     TogglePod(Open)
     {
-        const Pod = Select("#brush-pod");
-        const Button = Select("#brush-pod-button");
-        if (!Pod || !Button) return;
-        Pod.hidden = !Open;
-        Button.setAttribute("aria-expanded", String(Open));
-        Button.classList.toggle("active", Open);
-        if (!Open) return;
-        const Anchor = Button.getBoundingClientRect();
-        Pod.style.left = `${Math.round(Anchor.left)}px`;
-        Pod.style.top = `${Math.round(Anchor.top - 8 - (Pod.offsetHeight || 352))}px`;
-        this.SyncBrushControls();
+        this.ShowPopover("brush", Open);
+    }
+
+    // The rig is written into the document only when something in it moves. Until then the pod is showing the sky's
+    // own three lights, and a project saved without touching them follows whatever the preset says next.
+    EnsureLights()
+    {
+        const Environment = this.Project.Environment;
+        if (!Array.isArray(Environment.Lights)) Environment.Lights = DefaultLights(Environment.Identifier);
+        return Environment.Lights;
     }
 
     RenderSymmetryChips()
@@ -7287,6 +7363,10 @@ export class TexturePanel
         const Field = Event.target.closest("[data-bind]");
         if (!Field) return;
         const Path = Field.dataset.bind;
+        // 🔴 The rig is shown before it exists. The pod draws the environment's own lights whether or not this
+        //    project has written any of its own, so the first drag on one of those sliders is what mints the record
+        //    — without this the write would resolve to nothing and the slider would spring back, silently.
+        if (Path.startsWith("Environment.Lights.")) this.EnsureLights();
         const { Node, Key } = this.Resolve(Path);
         if (!Node) return;
         let Value;
@@ -7454,6 +7534,14 @@ export class TexturePanel
             if (Path === "Layer.Blend" || Path === "Layer.Opacity") this.RenderStack();
             return;
         }
+        if (Path.startsWith("Environment."))
+        {
+            // A sky chosen from the dropdown behind the tiles brings its own rig, the same as one chosen by its face.
+            if (Path === "Environment.Identifier") this.Project.Environment.Lights = null;
+            if (Committed) this.RenderEnvironmentPod();
+            this.Recomposite();
+            return;
+        }
         if (Path.startsWith("Brush.")) this.SyncBrushControls();
         this.Recomposite();
     }
@@ -7578,15 +7666,19 @@ export class TexturePanel
             case "all-channels":
                 this.CaptureStack(() =>
                 {
+                    for (const Channel of ChannelSpecification) this.SetChannelWrite(Channel.Identifier, true);
                     for (const Channel of ChannelSpecification) Layer.Enabled[Channel.Identifier] = true;
                 });
+                this.SyncChannelFaces();
                 break;
             case "no-channels":
                 this.CaptureStack(() =>
                 {
+                    for (const Channel of ChannelSpecification) this.SetChannelWrite(Channel.Identifier, false);
                     for (const Channel of ChannelSpecification) Layer.Enabled[Channel.Identifier] = false;
-                    Layer.Enabled.base_color = true;
+                    this.SetChannelWrite("base_color", true);
                 });
+                this.SyncChannelFaces();
                 break;
             case "channel-shelf":
                 this.ChannelShelf = !this.ChannelShelf;
@@ -7596,10 +7688,19 @@ export class TexturePanel
                 this.ChannelFocus = this.ChannelFocus === Argument ? "" : Argument;
                 this.RenderInspector();
                 return;
+            case "open-material":
+                this.Instruments?.Show();
+                this.Instruments?.ShowSection("material");
+                return;
+            case "open-artwork":
+                this.Instruments?.Show();
+                this.Instruments?.ShowSection("artwork");
+                return;
             case "channel-add":
                 if (!Layer.Enabled[Argument])
                 {
-                    this.CaptureStack(() => (Layer.Enabled[Argument] = true));
+                    this.CaptureStack(() => this.SetChannelWrite(Argument, true));
+                    this.SyncChannelFaces();
                     this.ChannelFocus = Argument;
                     this.ChannelShelf = false;
                     this.Chronicle("structure", `${ChannelLabel(Argument)} added`, Layer.Name, Layer.Channels[Argument]);
@@ -7609,7 +7710,8 @@ export class TexturePanel
             case "channel-remove":
                 if (Layer.Enabled[Argument])
                 {
-                    this.CaptureStack(() => (Layer.Enabled[Argument] = false));
+                    this.CaptureStack(() => this.SetChannelWrite(Argument, false));
+                    this.SyncChannelFaces();
                     if (this.ChannelFocus === Argument) this.ChannelFocus = "";
                     this.Notify(`${ChannelLabel(Argument)} is back on the shelf.`);
                 }
@@ -7660,7 +7762,12 @@ export class TexturePanel
                 break;
             case "reset-material":
                 this.CaptureStack(() => (this.Project.Material = { ...DefaultProject().Material }));
+                this.RenderScenePod();
                 break;
+            case "open-constants":
+                this.ConstantsOpen = !this.ConstantsOpen;
+                this.RenderScenePod();
+                return;
             case "reset-stack":
                 this.CaptureStack(() =>
                 {
@@ -7668,36 +7775,89 @@ export class TexturePanel
                     this.Project.Selection = this.Project.Layers[this.Project.Layers.length - 1].Identifier;
                 });
                 break;
+            //----------------------------------------------------------------------------------------------------------
+            // The environment pod. A sky is picked whole — the rig it brought with it goes back to the sky's own, or
+            // picking Sunset after an hour of tuning Studio's key light would arrive at a sunset lit like a studio.
+            //----------------------------------------------------------------------------------------------------------
+            case "pick-environment":
+            {
+                if (this.Project.Environment.Identifier === Argument) return;
+                this.Project.Environment.Identifier = Argument;
+                this.Project.Environment.Lights = null;
+                this.MarkDirty();
+                this.RenderEnvironmentPod();
+                this.Chronicle("surface", `${EnvironmentByIdentifier[Argument]?.Label || Argument} lighting`, "environment");
+                this.Notify(`${EnvironmentByIdentifier[Argument]?.Label || Argument} lighting.`);
+                return;
+            }
+            case "toggle-light":
+            {
+                const Rig = this.EnsureLights();
+                const Light = Rig[Number(Argument)];
+                if (!Light) return;
+                Light.On = Light.On === false;
+                this.MarkDirty();
+                this.RenderEnvironmentPod();
+                this.Notify(`${LightOrdering[Number(Argument)]?.Label || "Light"} ${Light.On ? "on" : "off"}.`);
+                return;
+            }
+            case "add-light":
+            {
+                const Rig = this.EnsureLights();
+                const Index = Rig.findIndex((Light) => Light.On === false);
+                if (Index < 0)
+                {
+                    this.Notify(`The rig holds ${LightOrdering.length} lights and all ${LightOrdering.length} are on.`);
+                    return;
+                }
+                Rig[Index].On = true;
+                if (!Rig[Index].Strength) Rig[Index].Strength = 2;
+                this.MarkDirty();
+                this.RenderEnvironmentPod();
+                this.Notify(`${LightOrdering[Index].Label} light added.`);
+                return;
+            }
+            case "reset-lights":
+                this.Project.Environment.Lights = null;
+                this.MarkDirty();
+                this.RenderEnvironmentPod();
+                this.Notify("The lights follow the environment again.");
+                return;
             default:
                 break;
         }
+        // A pod is a panel too, and whichever one is open is quite possibly where the press came from.
+        this.RenderEnvironmentPod();
+        this.RenderScenePod();
     }
 
+    // The reset button resets what the tab is showing, and the tab is the layer or the diary. The diary is not a
+    // thing that can be reset to a default, so it is left alone.
     ResetInspector()
     {
         const Layer = this.ActiveLayer;
-        if (this.InspectorTab === "material") this.OnInspectorAction("reset-material");
-        else if (this.InspectorTab === "surface")
-            this.CaptureStack(() =>
-            {
-                this.Project.Surface = { ...DefaultProject().Surface };
-                this.Project.Environment = { ...DefaultProject().Environment };
-            });
-        else
+        if (this.InspectorTab === "timeline" || !Layer) return;
+        const Fresh = CreateLayer(Layer.Kind, { Name: Layer.Name });
+        this.CaptureStack(() =>
         {
-            const Fresh = CreateLayer(Layer.Kind, { Name: Layer.Name });
-            this.CaptureStack(() =>
-            {
-                Object.assign(Layer, { ...Fresh, Identifier: Layer.Identifier, Name: Layer.Name });
-            });
-        }
+            Object.assign(Layer, { ...Fresh, Identifier: Layer.Identifier, Name: Layer.Name });
+        });
+        this.AdoptChannelWrites();
+        this.SyncChannelFaces();
         this.RenderInspector();
     }
 
+    //----------------------------------------------------------------------------------------------------------------------
+    // 🔴 Two tabs, not four. Material was the card's own Material pane typed out a second time — same channels, same
+    //    numbers, a panel apart — and Surface was the scene wearing a layer panel's clothes: a mesh and a UV sheet and
+    //    the sky, none of which is the thing in hand. The environment moved to the viewport header where the view is
+    //    chosen, the scene moved to the objects it belongs to, and what is left here is the layer and the timeline.
+    //----------------------------------------------------------------------------------------------------------------------
     RenderInspector()
     {
         const Layer = this.ActiveLayer;
         if (!Layer) return;
+        if (this.InspectorTab !== "timeline") this.InspectorTab = "layer";
         const Kind = LayerKindByIdentifier[Layer.Kind];
         Select("#layer-symbol").innerHTML = Icon(Kind.Glyph);
         Select("#layer-symbol").style.setProperty("--row-accent", Kind.Accent);
@@ -7708,17 +7868,11 @@ export class TexturePanel
             Button.classList.toggle("active", Button.dataset.tab === this.InspectorTab),
         );
         const Body = Select("#inspector-body");
-        Body.innerHTML =
-            this.InspectorTab === "material"
-                ? this.MaterialInspector()
-                : this.InspectorTab === "surface"
-                  ? this.SurfaceInspector()
-                  : this.InspectorTab === "timeline"
-                    ? this.TimelineInspector()
-                    : this.LayerInspector(Layer);
+        Body.innerHTML = this.InspectorTab === "timeline" ? this.TimelineInspector() : this.LayerInspector(Layer);
         Body.classList.toggle("timeline-body", this.InspectorTab === "timeline");
         FillIcons(Body);
         DressSelects(Body);
+        this.RefreshThumbnails();
     }
 
     LayerInspector(Layer)
@@ -7753,6 +7907,7 @@ export class TexturePanel
                 ].join(""),
             });
         }
+        Sections.push(this.TexturePreview(Layer));
         Sections.push(
             Group({
                 Title: "Layer",
@@ -7820,7 +7975,42 @@ export class TexturePanel
 
         if (Layer.Kind === "finish") Sections.push(this.FinishSections(Layer));
 
-        if (Layer.Kind === "decal") Sections.push(this.DecalSections(Layer));
+        // 🔴 The drawing, where it lands and the ink it lands in are all three on the card, with a preview of the
+        //    artwork as it will arrive. What is left for the panel is the list of placements — a list of things the
+        //    layer holds, like the stack itself — and the one choice the card has nowhere to put: whether a mark is
+        //    projected onto the model or laid flat in UV space.
+        if (Layer.Kind === "decal")
+        {
+            const Mark = this.ActiveMark || Layer.Decal;
+            const Stamping = Layer.Decal.Placement === "stamp";
+            Sections.push(
+                (Stamping ? "" : this.MarkList(Layer)) +
+                    Group({
+                        Title: "Artwork",
+                        Badge: Layer.Decal.SourceKind === "text" ? "TEXT" : "SVG",
+                        Body: [
+                            Stamping
+                                ? ""
+                                : SelectRow({
+                                      Label: "Projection",
+                                      Path: "Mark.Mode",
+                                      Value: Mark.Mode,
+                                      Options: [
+                                          { Value: "projection", Label: "Projected onto the surface" },
+                                          { Value: "plane", Label: "Placed in UV space" },
+                                      ],
+                                      Hint:
+                                          Mark.Mode === "projection"
+                                              ? "Choose the decal tool and click the model to drop another mark; drag to slide it."
+                                              : "UV placement ignores the model and lays the mark flat in texture space.",
+                                  }),
+                            `<p class="property-hint">The drawing itself, the size it lands at and the ink it is laid in are
+                              on the card — three panes, opening on a preview of the artwork as it will arrive.</p>`,
+                            ActionRow([{ Action: "open-artwork", Label: "Open the artwork pane", Glyph: "palette" }]),
+                        ].join(""),
+                    }),
+            );
+        }
 
         const Mixed = this.Integrator.PaintedLayer?.(Layer) || false;
         if (Layer.Kind === "stroke")
@@ -7840,14 +8030,25 @@ export class TexturePanel
                 }),
             );
 
+        // 🔴 A painted layer shows the list and not the numbers. What a channel lays down is the paint, and the paint
+        //    is on the card — one tick and one slider, side by side, in the pane the hand is already in. The same two
+        //    sliders here were a second answer to the same question, and the one further from the brush was always
+        //    the one that went stale. Layers with no paint behind them — a fill, a generator, a finish — keep theirs,
+        //    because for those the number IS the layer.
         const Written = ChannelSpecification.filter((Channel) => Layer.Enabled[Channel.Identifier]);
+        const Painted = Layer.Kind === "stroke" || Layer.Kind === "decal";
         Sections.push(
             Group({
                 Title: Layer.Kind === "stroke" ? "Channels · in hand" : "Channels",
                 Badge: Mixed ? "MIXED" : `${Written.length}`,
                 Body: [
                     this.ChannelChips(Layer),
-                    ...Written.map((Channel) => this.ChannelControl(Layer, Channel)),
+                    ...(Painted ? [] : Written.map((Channel) => this.ChannelControl(Layer, Channel))),
+                    Painted
+                        ? `<p class="property-hint">Ticking a channel here is the same switch as the card's Material pane —
+                            what each one lays down is set there, beside the paint that lays it.</p>
+                           ${ActionRow([{ Action: "open-material", Label: "Open the material pane", Glyph: "palette" }])}`
+                        : "",
                     Layer.Kind === "stroke"
                         ? ActionRow([{ Action: "level-layer", Label: "Apply to the whole layer", Glyph: "fill" }])
                         : "",
@@ -8023,6 +8224,40 @@ export class TexturePanel
         return { Tag: "CONSTANT", Note: "" };
     }
 
+    //----------------------------------------------------------------------------------------------------------------------
+    // The layer's own sheet, big enough to read. The stack row carries the same read-back at 46px, which answers
+    // "which layer is this"; this one answers "what is on it" — and for a decal layer it is the only place the
+    // artwork can be seen where it actually lands, flattened into texture space with everything else the layer holds.
+    //----------------------------------------------------------------------------------------------------------------------
+    TexturePreview(Layer)
+    {
+        const Size = this.Integrator.LayerResolution?.(Layer) || this.Project.Resolution;
+        const Kind = LayerKindByIdentifier[Layer.Kind];
+        const Masked = Layer.Mask.Kind !== "none";
+        const Plate = (Target, Caption, Note) => `
+            <figure class="texture-plate">
+                <span class="layer-swatch plate-sheet" style="--swatch:${Kind.Accent}"
+                      data-thumbnail="${Layer.Identifier}" data-thumbnail-size="192" data-thumbnail-target="${Target}">
+                    <canvas width="192" height="192" aria-hidden="true"></canvas>${Icon(Kind.Glyph)}
+                </span>
+                <figcaption><b>${Escape(Caption)}</b><span>${Escape(Note)}</span></figcaption>
+            </figure>`;
+        return Group({
+            Title: "Texture",
+            Badge: `${Size}²`,
+            Body: `
+                <div class="texture-preview ${Masked ? "paired" : ""}">
+                    ${Plate("coverage", "Sheet", "Colour and cover")}
+                    ${Masked ? Plate("mask", "Mask", Layer.Mask.Invert ? "Inverted" : "White reveals") : ""}
+                </div>
+                <p class="property-hint">${
+                    Layer.Kind === "fill" || Layer.Kind === "finish"
+                        ? "This layer paints from values rather than a sheet, so there is nothing stored per texel until something is painted into it."
+                        : "The layer's own sheet, read back from the card it paints on."
+                }</p>`,
+        });
+    }
+
     // The chip rail from the channel panel: what the layer writes, an × that takes a channel off it, and a + that
     // opens the shelf of everything it is not writing yet.
     ChannelChips(Layer)
@@ -8131,142 +8366,6 @@ export class TexturePanel
             ...Rows,
             ToggleRow({ Label: "Invert", Path: `${Prefix}.Invert`, Value: Generator.Invert }),
         ].join("");
-    }
-
-    DecalSections(Layer)
-    {
-        const Decal = Layer.Decal;
-        const Marks = DecalLibrary.filter(
-            (Mark) => this.DecalCategory === "all" || Mark.Category === this.DecalCategory,
-        );
-        const Source = Group({
-            Title: "Decal source",
-            Badge: Decal.SourceKind === "text" ? "TEXT" : "SVG",
-            Body: [
-                SelectRow({
-                    Label: "Source",
-                    Path: "Decal.SourceKind",
-                    Value: Decal.SourceKind,
-                    Options: [
-                        { Value: "svg", Label: "Vector mark" },
-                        { Value: "text", Label: "Text" },
-                    ],
-                }),
-                Decal.SourceKind === "svg"
-                    ? `
-                    <div class="decal-filters">
-                        ${DecalCategories.map(
-                            (Category) =>
-                                `<button data-action="decal-category" data-argument="${Category.Identifier}"
-                                         class="${this.DecalCategory === Category.Identifier ? "active" : ""}">${Category.Label}</button>`,
-                        ).join("")}
-                    </div>
-                    <div class="decal-grid">
-                        ${Marks.map(
-                            (Mark) => `
-                            <button class="decal-tile ${Decal.Library === Mark.Identifier ? "active" : ""}"
-                                    data-action="pick-mark" data-argument="${Mark.Identifier}" title="${Escape(Mark.Note || Mark.Label)}">
-                                <span class="decal-preview">${Mark.Markup}</span>
-                                <small>${Escape(Mark.Label)}</small>
-                            </button>`,
-                        ).join("")}
-                    </div>
-                    <details class="custom-markup">
-                        <summary>Custom SVG</summary>
-                        <textarea id="svg-markup" rows="4" spellcheck="false"
-                                  placeholder="&lt;svg viewBox='0 0 100 100'&gt;…&lt;/svg&gt;">${Escape(Decal.Svg || "")}</textarea>
-                        ${ActionRow([
-                            { Action: "apply-markup", Label: "Rasterise markup", Glyph: "vector" },
-                            { Action: "load-svg", Label: "Open .svg", Glyph: "folder" },
-                        ])}
-                    </details>`
-                    : [
-                          `<div class="property-row">
-                              <label class="property-label" for="decal-text">Content</label>
-                              <textarea id="decal-text" rows="2" data-bind="Decal.Text.Content"
-                                        maxlength="120">${Escape(Decal.Text.Content)}</textarea>
-                           </div>`,
-                          SelectRow({
-                              Label: "Typeface",
-                              Path: "Decal.Text.Family",
-                              Value: Decal.Text.Family,
-                              Options: FontArchive.map((Entry) => ({ Value: Entry.Family, Label: `${Entry.Family} · ${Entry.Note}` })),
-                          }),
-                          SelectRow({
-                              Label: "Weight",
-                              Path: "Decal.Text.Weight",
-                              Value: String(Decal.Text.Weight),
-                              Options: [
-                                  { Value: "300", Label: "Light" },
-                                  { Value: "400", Label: "Regular" },
-                                  { Value: "700", Label: "Bold" },
-                              ],
-                          }),
-                          SliderRow({ Label: "Tracking", Path: "Decal.Text.Tracking", Value: Decal.Text.Tracking, Minimum: -20, Maximum: 80, Step: 1, Unit: "px" }),
-                          SliderRow({ Label: "Line height", Path: "Decal.Text.LineHeight", Value: Decal.Text.LineHeight, Minimum: 0.7, Maximum: 2.2, Step: 0.01, Unit: "×" }),
-                          SliderRow({ Label: "Outline", Path: "Decal.Text.Outline", Value: Decal.Text.Outline, Minimum: 0, Maximum: 24, Step: 0.5, Unit: "px" }),
-                      ].join(""),
-            ].join(""),
-        });
-
-        const Mark = this.ActiveMark || Decal;
-        const Stamping = Decal.Placement === "stamp";
-        const Placement = Group({
-            Title: "Placement",
-            Badge: Stamping ? "STAMPED" : Mark.Mode === "plane" ? "UV" : "3D",
-            Body: [
-                SelectRow({
-                    Label: "Decal kind",
-                    Path: "Decal.Placement",
-                    Value: Decal.Placement,
-                    Options: [
-                        { Value: "stamp", Label: "Stamped into the texture" },
-                        { Value: "project", Label: "Placed on the surface · 3D" },
-                    ],
-                    Hint: Stamping
-                        ? "Each click burns the artwork into this layer as paint — erasable, and it takes the mask when the mask is the target."
-                        : "The decal stays a projector on the model: click to drop one, drag to slide it along the surface.",
-                }),
-                Stamping ? "" : SelectRow({
-                    Label: "Projection",
-                    Path: "Mark.Mode",
-                    Value: Mark.Mode,
-                    Options: [
-                        { Value: "projection", Label: "Projected onto the surface" },
-                        { Value: "plane", Label: "Placed in UV space" },
-                    ],
-                    Hint:
-                        Mark.Mode === "projection"
-                            ? "Choose the decal tool and click the model to drop another mark; drag to slide it."
-                            : "UV placement ignores the model and lays the mark flat in texture space.",
-                }),
-                ...(Stamping || Mark.Mode === "projection"
-                    ? [
-                          SliderRow({ Label: "Size", Path: "Mark.Transform.Size", Value: Mark.Transform.Size, Minimum: 0.02, Maximum: 2.4, Step: 0.01, Unit: "m" }),
-                          SliderRow({ Label: "Aspect", Path: "Mark.Transform.Aspect", Value: Mark.Transform.Aspect, Minimum: 0.2, Maximum: 5, Step: 0.01, Unit: "×" }),
-                          SliderRow({ Label: "Rotation", Path: "Mark.Transform.Rotation", Value: Mark.Transform.Rotation, Minimum: 0, Maximum: 360, Step: 1, Unit: "°" }),
-                          SliderRow({ Label: "Depth", Path: "Mark.Transform.Depth", Value: Mark.Transform.Depth, Minimum: 0.01, Maximum: 2, Step: 0.01, Unit: "m" }),
-                          SliderRow({ Label: "Angle limit", Path: "Mark.Transform.AngleLimit", Value: Mark.Transform.AngleLimit, Minimum: 10, Maximum: 180, Step: 1, Unit: "°" }),
-                      ]
-                    : [
-                          SliderRow({ Label: "Centre U", Path: "Mark.Plane.Centre.0", Value: Mark.Plane.Centre[0], Minimum: 0, Maximum: 1, Step: 0.005, Unit: "u" }),
-                          SliderRow({ Label: "Centre V", Path: "Mark.Plane.Centre.1", Value: Mark.Plane.Centre[1], Minimum: 0, Maximum: 1, Step: 0.005, Unit: "v" }),
-                          SliderRow({ Label: "Size", Path: "Mark.Plane.Size", Value: Mark.Plane.Size, Minimum: 0.02, Maximum: 1.6, Step: 0.005, Unit: "uv" }),
-                          SliderRow({ Label: "Rotation", Path: "Mark.Plane.Rotation", Value: Mark.Plane.Rotation, Minimum: 0, Maximum: 360, Step: 1, Unit: "°" }),
-                          SliderRow({ Label: "Aspect", Path: "Mark.Plane.Aspect", Value: Mark.Plane.Aspect, Minimum: 0.2, Maximum: 5, Step: 0.01, Unit: "×" }),
-                      ]),
-                SliderRow({ Label: "Edge softness", Path: "Mark.Softness", Value: Mark.Softness, Minimum: 0.002, Maximum: 0.6, Step: 0.002, Unit: "α" }),
-                SliderRow({ Label: "Emboss", Path: "Mark.Emboss", Value: Mark.Emboss, Minimum: -0.5, Maximum: 0.5, Step: 0.01, Unit: "h" }),
-                ColourRow({ Label: "Colour", Path: "Mark.Tint", Value: Mark.Tint }),
-                ToggleRow({
-                    Label: "Colour the artwork",
-                    Path: "Mark.Colorise",
-                    Value: Mark.Colorise,
-                    Hint: "Off keeps the artwork's own colours; on treats it as a stencil and paints it in the colour above.",
-                }),
-            ].join(""),
-        });
-        return Source + (Stamping ? "" : this.MarkList(Layer)) + Placement;
     }
 
     // Every placement of the layer's artwork, in composite order, grouped by folder. The bottom of the list is painted
@@ -8572,7 +8671,15 @@ export class TexturePanel
         );
     }
 
-    MaterialInspector()
+    //----------------------------------------------------------------------------------------------------------------------
+    // Surface setup · the scene and the material under every layer.
+    //
+    // 🔴 This is not the layer in hand, so it is not in the panel that is about the layer in hand. The mesh, the UV
+    //    sheet it unwraps onto and the OpenPBR constants the whole document sits on are set once and then left for
+    //    hours, which is exactly the shape of a thing that belongs behind a button on the objects it describes
+    //    rather than in a tab the painter has to walk past on the way to the mask.
+    //----------------------------------------------------------------------------------------------------------------------
+    MaterialSetup()
     {
         const Material = this.Project.Material;
         const Groups = new Map();
@@ -8610,9 +8717,8 @@ export class TexturePanel
         return Sections.join("");
     }
 
-    SurfaceInspector()
+    SceneSetup()
     {
-        const Environment = this.Project.Environment;
         const Record = this.SurfaceRecord;
         const Object_ = this.ActiveObject;
         const Range = Record?.Ranges?.find((Entry) => Entry.Identifier === Object_?.Identifier);
@@ -8675,20 +8781,13 @@ export class TexturePanel
                     : "",
             }),
             Group({
-                Title: "Environment",
-                Badge: Environment.Identifier.toUpperCase(),
-                Body: [
-                    SelectRow({
-                        Label: "Lighting",
-                        Path: "Environment.Identifier",
-                        Value: Environment.Identifier,
-                        Options: EnvironmentOrdering.map((Entry) => ({ Value: Entry.Identifier, Label: Entry.Label })),
-                    }),
-                    SliderRow({ Label: "Rotation", Path: "Environment.Rotation", Value: Environment.Rotation, Minimum: 0, Maximum: 360, Step: 1, Unit: "°" }),
-                    SliderRow({ Label: "Intensity", Path: "Environment.Intensity", Value: Environment.Intensity, Minimum: 0, Maximum: 4, Step: 0.01, Unit: "×" }),
-                    SliderRow({ Label: "Exposure", Path: "Environment.Exposure", Value: Environment.Exposure, Minimum: -4, Maximum: 4, Step: 0.01, Unit: "EV" }),
-                    ToggleRow({ Label: "Show background", Path: "Environment.Background", Value: Environment.Background }),
-                ].join(""),
+                Title: "Base material",
+                Badge: "OPENPBR",
+                Open: false,
+                Body: `<p class="property-hint">The constants every layer sits on: what the surface is before a single
+                        stroke is laid, and what an untouched channel exports as.</p>
+                       ${ActionRow([{ Action: "open-constants", Label: this.ConstantsOpen ? "Hide the constants" : "Show the constants", Glyph: "material" }])}
+                       ${this.ConstantsOpen ? `<div class="pod-nested">${this.MaterialSetup()}</div>` : ""}`,
             }),
             Group({
                 Title: "Stack",
@@ -8697,6 +8796,142 @@ export class TexturePanel
                 Body: ActionRow([{ Action: "reset-stack", Label: "Reset to the default stack", Glyph: "layers" }]),
             }),
         ].join("");
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // Environment · the light the surface is being read under.
+    //
+    // 🔴 Lighting is a property of looking, not of the layer, so it sits with the other two things that decide what
+    //    the viewport shows — which channel is on screen and which way the mirror runs — rather than three tabs away
+    //    in a panel about a layer. Four skies with their own faces on them, because "Sunset" as a word in a dropdown
+    //    tells you nothing about what your metal is about to look like under it.
+    //----------------------------------------------------------------------------------------------------------------------
+    EnvironmentBody()
+    {
+        const Environment = this.Project.Environment;
+        const Preset = EnvironmentByIdentifier[Environment.Identifier] || EnvironmentOrdering[0];
+        const Rig = Environment.Lights || DefaultLights(Environment.Identifier);
+        const Lit = Rig.filter((Light) => Light.On !== false).length;
+        const Sky = (Entry) => `linear-gradient(${ToHex(Entry.Zenith)}, ${ToHex(Entry.Horizon)} 62%, ${ToHex(Entry.Ground)} 63%)`;
+        const Tile = (Entry) => `
+            <button class="sky-tile ${Entry.Identifier === Environment.Identifier ? "active" : ""}"
+                    data-action="pick-environment" data-argument="${Entry.Identifier}"
+                    aria-pressed="${Entry.Identifier === Environment.Identifier}" title="Key ${Entry.Key} · fill ${Entry.Fill} · rim ${Entry.Rim}">
+                <span class="sky-face" style="background:${Sky(Entry)}"><i style="left:${(Environment.Rotation / 360) * 100}%"></i></span>
+                <b>${Escape(Entry.Label)}</b>
+            </button>`;
+        const LightRow = (Light, Index) =>
+        {
+            const Order = LightOrdering[Index];
+            const On = Light.On !== false;
+            return `
+            <div class="light-row ${On ? "" : "dim"}">
+                <div class="light-head">
+                    <span class="light-dot" style="--chip:${ToHex(Order.Tint)}"></span>
+                    <b>${Escape(Order.Label)}</b><span>${Escape(Order.Note)}</span>
+                    <button class="chip-button" data-action="toggle-light" data-argument="${Index}" aria-pressed="${On}"
+                            title="${On ? "Switch this light off" : "Switch this light on"}">${On ? "On" : "Off"}</button>
+                </div>
+                ${
+                    On
+                        ? [
+                              SliderRow({ Label: "Strength", Path: `Environment.Lights.${Index}.Strength`, Value: Light.Strength, Minimum: 0, Maximum: 16, Step: 0.1, Unit: "" }),
+                              SliderRow({ Label: "Swing", Path: `Environment.Lights.${Index}.Swing`, Value: Light.Swing, Minimum: 0, Maximum: 360, Step: 1, Unit: "°" }),
+                              SliderRow({ Label: "Height", Path: `Environment.Lights.${Index}.Elevation`, Value: Light.Elevation, Minimum: -90, Maximum: 90, Step: 1, Unit: "°" }),
+                          ].join("")
+                        : ""
+                }
+            </div>`;
+        };
+        return [
+            Group({
+                Title: "Environment",
+                Badge: Preset.Label.toUpperCase(),
+                Body: `
+                    <div class="sky-rail">${EnvironmentOrdering.map(Tile).join("")}</div>
+                    ${SliderRow({ Label: "Rotation", Path: "Environment.Rotation", Value: Environment.Rotation, Minimum: 0, Maximum: 360, Step: 1, Unit: "°" })}
+                    ${SliderRow({ Label: "Intensity", Path: "Environment.Intensity", Value: Environment.Intensity, Minimum: 0, Maximum: 4, Step: 0.01, Unit: "×" })}
+                    ${SliderRow({ Label: "Exposure", Path: "Environment.Exposure", Value: Environment.Exposure, Minimum: -4, Maximum: 4, Step: 0.01, Unit: "EV" })}
+                    ${ToggleRow({ Label: "Show background", Path: "Environment.Background", Value: Environment.Background, Hint: "Off paints the viewport flat and keeps the lighting." })}`,
+            }),
+            Group({
+                Title: "Lights",
+                Badge: `${Lit} OF ${LightOrdering.length}`,
+                Body: `
+                    ${Rig.map(LightRow).join("")}
+                    ${ActionRow([
+                        { Action: "add-light", Label: Lit < LightOrdering.length ? "Add a light" : "The rig is full", Glyph: "plus" },
+                        { Action: "reset-lights", Label: "Follow the sky", Glyph: "rotate" },
+                    ])}
+                    <p class="property-hint">Three lights hang in front of the environment — the shading pass carries three,
+                        so the rig says three. Until one is touched they are the sky's own key, fill and rim, and
+                        <em>Follow the sky</em> hands them back.</p>`,
+            }),
+        ].join("");
+    }
+
+    // Both pods are the inspector's rows in another window, so they are filled the way the inspector body is — and a
+    // pod redrawn under the hand keeps the groups that hand opened and the place it had scrolled to.
+    DressPod(Pod, Markup)
+    {
+        if (!Pod || Pod.hidden) return;
+        const Body = Pod.querySelector(".pod-body");
+        if (!Body) return;
+        const Folded = new Map(
+            [...Body.querySelectorAll("details[data-group]")].map((Entry) => [Entry.dataset.group, Entry.open]),
+        );
+        const Place = Body.scrollTop;
+        Body.innerHTML = Markup;
+        for (const Entry of Body.querySelectorAll("details[data-group]"))
+            if (Folded.has(Entry.dataset.group)) Entry.open = Folded.get(Entry.dataset.group);
+        FillIcons(Body);
+        DressSelects(Body);
+        Body.scrollTop = Place;
+    }
+
+    RenderEnvironmentPod()
+    {
+        this.DressPod(Select("#environment-pod"), this.EnvironmentBody());
+    }
+
+    RenderScenePod()
+    {
+        this.DressPod(Select("#scene-pod"), this.SceneSetup());
+    }
+
+    // 🔴 One opener for every pod in the editor. Three buttons that each remembered to close the other two would be
+    //    three chances to forget, and the one that forgot would leave a panel floating over the viewport.
+    ShowPopover(Name, Open)
+    {
+        const Pods = { brush: "#brush-pod-button", environment: "#environment-button", scene: "#scene-button" };
+        for (const [Key, Opener] of Object.entries(Pods))
+        {
+            const Pod = Select(`#${Key === "brush" ? "brush-pod" : `${Key}-pod`}`);
+            const Button = Select(Opener);
+            if (!Pod || !Button) continue;
+            const Wanted = Key === Name && Open;
+            Pod.hidden = !Wanted;
+            Button.setAttribute("aria-expanded", String(Wanted));
+            Button.classList.toggle("active", Wanted);
+            if (!Wanted) continue;
+            if (Key === "environment") this.RenderEnvironmentPod();
+            if (Key === "scene") this.RenderScenePod();
+            if (Key === "brush") this.SyncBrushControls();
+            this.PlacePopover(Pod, Button, Key === "brush");
+        }
+    }
+
+    // Above the button when the button is at the foot of the screen, below it when it is at the head, and never off
+    // the edge in either direction.
+    PlacePopover(Pod, Button, Above)
+    {
+        const Anchor = Button.getBoundingClientRect();
+        const Height = Pod.offsetHeight || 352;
+        const Width = Pod.offsetWidth || 300;
+        const Room = typeof window === "undefined" ? 1280 : window.innerWidth || 1280;
+        const Left = Math.max(12, Math.min(Anchor.left, Room - Width - 12));
+        Pod.style.left = `${Math.round(Left)}px`;
+        Pod.style.top = `${Math.round(Above ? Anchor.top - 8 - Height : Anchor.bottom + 8)}px`;
     }
 
     //----------------------------------------------------------------------------------------------------------------------
@@ -8924,7 +9159,11 @@ export class TexturePanel
             //    to walk focus to the next focusable thing, and with the card open that is the next row of its
             //    rail. Letting the browser have it looked exactly like the card stepping through its own panes:
             //    the focus ring crawled down the rail, one press per row, and the card never went away.
-            if (Event.key === "Escape") this.EndSizing();
+            if (Event.key === "Escape")
+            {
+                this.EndSizing();
+                this.ShowPopover("", false);
+            }
             const Tabbing = Event.key === "Tab" || Event.code === "Tab";
             if (Tabbing && !Event.ctrlKey && !Event.metaKey && !Event.altKey && !document.querySelector("dialog[open]"))
             {
