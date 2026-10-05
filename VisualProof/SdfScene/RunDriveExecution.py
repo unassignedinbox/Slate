@@ -23,7 +23,7 @@ Report = {'source': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=Ro
                          'Diffuse-only material override retains authored base colours; car-paint specular and transparent glazing are not represented.',
                          'Production SDF secondary traversal remains hybrid with its existing exact near-surface triangle refinement.',
                          'Rest and loaded are separate captures, not a continuous GPU deformation sequence.'],
-          'settings': {'size': [512, 320], 'cardResolution': 1, 'volumeResolution': 32,
+          'settings': {'size': [512, 320], 'cardResolution': 2, 'volumeResolution': 32,
                        'clipCell': 0.15, 'warmupFrames': 8, 'simulationFrames': 120 if Pose == 'Loaded' else 0,
                        'simulationHz': 240, 'sunRadiance': 1.8, 'skyAmbient': 0.005, 'reflections': 0}}
 Started = time.monotonic()

@@ -265,7 +265,7 @@ int main(int Count,char** Arguments)
         DistanceFieldStageInit Initialization;
         Initialization.PhysicalDevice=Host.Physical; Initialization.Device=Host.Device; Initialization.MemoryProperties=Host.Memory;
         Initialization.Geometry=&Geometry; Initialization.SpirvDirectory=Arguments[1];
-        Initialization.CardResolution=Drive ? 1 : 4; Initialization.VolumeResolution=32; Initialization.ClipmapCellSize=.15f;
+        Initialization.CardResolution=Drive ? 2 : 4; Initialization.VolumeResolution=32; Initialization.ClipmapCellSize=.15f;
         Initialization.ImageWidth=Output.Width; Initialization.ImageHeight=Output.Height;
         Initialization.OutputImageView=Output.View; Initialization.SurfaceImageView=Position.View; Initialization.NormalImageView=Normal.View;
         Initialization.TriangleBuffer=Triangles.Buffer; Initialization.MaterialBuffer=MaterialBuffer.Buffer;
