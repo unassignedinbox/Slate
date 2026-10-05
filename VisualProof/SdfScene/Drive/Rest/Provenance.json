@@ -1,0 +1,42 @@
+{
+  "source": "4bbea45259e1443ff8f935af9685997909846da5",
+  "pose": "Rest",
+  "run": "37374663397",
+  "exitCode": 1,
+  "method": "Actual Project Drive DLL and complete opening glTF. CPU BVH supplies primary visibility only; production Vulkan SDF shaders perform lighting on lavapipe.",
+  "limitations": [
+    "Not an interactive Frontier window or hardware performance measurement.",
+    "Diffuse-only material override retains authored base colours; car-paint specular and transparent glazing are not represented.",
+    "Production SDF secondary traversal remains hybrid with its existing exact near-surface triangle refinement.",
+    "Rest and loaded are separate captures, not a continuous GPU deformation sequence."
+  ],
+  "settings": {
+    "size": [
+      512,
+      320
+    ],
+    "cardResolution": 1,
+    "volumeResolution": 32,
+    "clipCell": 0.15,
+    "warmupFrames": 8,
+    "simulationFrames": 0,
+    "simulationHz": 240,
+    "sunRadiance": 1.8,
+    "skyAmbient": 0.005,
+    "reflections": 0
+  },
+  "geometrySha256": "2ef215d79aa550425eb0136e6f2b6f0d0e49006066cd1f5d4b6522ded940946e",
+  "refusal": "Command '['/home/runner/work/Slate/Slate/_AgentScratch/build/DriveExecution/Rest/SceneExecution', '/home/runner/work/Slate/Slate/_AgentScratch/build/DriveExecution/Rest/Shaders', '/home/runner/work/Slate/Slate/_AgentScratch/build/DriveExecution/Rest', 'Drive', '/home/runner/work/Slate/Slate/_AgentScratch/build/TyreDeformation/Images/DriveRest.bin']' returned non-zero exit status 1.",
+  "seconds": 108.66559760499999,
+  "shaders": {
+    "DistanceFieldGatherFixed.spv": "98aee7bbd27898532b757061497213c180db3b059e9cf06a1243ea9d32fcdb9c",
+    "DistanceFieldConstruct.spv": "4a35deef7dc6ea24f14512d91a5ece51f446bfc327b02a04308d6cbca49d7af6",
+    "DistanceFieldGIResolve.spv": "88329b6769214e90e02cdcd62a57c736069fb60c0ca02917152e7b67099a4cb5",
+    "DistanceFieldGather.spv": "84ddad656be6b26ffb9e89a2895cc4981e8bd2a294c0f4823e96b3f109543a78",
+    "DistanceFieldCapture.spv": "e961a784a7484ac90c9db92c41258bdac36d9c784b65ed8a96974a7a3b7582ba",
+    "DistanceFieldGIResolveFixed.spv": "441a7726897d2181a6ac9a00d77ba7e6f6606f518dd5046b26228ad0dfe100c4",
+    "DistanceFieldCaptureFixed.spv": "b17923cc09fe65a00a78f4a1fcaf6045ac1dc7cae2fa390e9363e61ab1c1b02d",
+    "DistanceFieldRadiance.spv": "3e3a3beb255aba6c33f76a29237a73f23233c5103ac72b6be06d648978734f3a"
+  },
+  "images": {}
+}
