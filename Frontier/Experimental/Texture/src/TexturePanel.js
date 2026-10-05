@@ -33,6 +33,7 @@ import {
     PlaceRampStop,
     RemoveRampStop,
     MoveRampStop,
+    RampEase,
     RampWhere,
     RampCss,
     LineSnaps,
@@ -50,7 +51,6 @@ import {
     WriteSlots,
     WriteKeys,
     DefaultWrites,
-    WritesSummary,
 } from "./StrokeSpecification.js";
 import { BuildSurface, SurfaceIndex, BakeOcclusion, ParseWavefront } from "./SurfaceStructure.js";
 import {
@@ -228,6 +228,60 @@ const Clamp = (Value, Minimum, Maximum) => Math.min(Maximum, Math.max(Minimum, V
 const Fixed = (Value, Step) => Number(Value).toFixed(Step >= 1 ? 0 : Step >= 0.1 ? 1 : Step >= 0.01 ? 2 : 3);
 const ToHex = (Colour) =>
     `#${Colour.map((Component) => Math.round(Clamp(Component, 0, 1) * 255).toString(16).padStart(2, "0")).join("")}`;
+// 🔴 A finish is three numbers that always move together. Metal with a dielectric's specular reads as painted
+//    plastic; gloss without a coat reads as wet. Offering them one at a time is honest and useless — a press that
+//    sets the set is how a hand actually asks for "make this gold".
+const MaterialFinishes = [
+    {
+        Identifier: "metal",
+        Label: "Metal",
+        Note: "polished, and the colour IS the reflection",
+        Channels: { base_metalness: 1, specular_roughness: 0.24, specular_weight: 1, coat_weight: 0 },
+    },
+    {
+        Identifier: "gloss",
+        Label: "Gloss",
+        Note: "a clear coat over the colour",
+        Channels: { base_metalness: 0, specular_roughness: 0.3, specular_weight: 1, coat_weight: 0.7, coat_roughness: 0.04 },
+    },
+    {
+        Identifier: "matte",
+        Label: "Matte",
+        Note: "chalk, and no coat at all",
+        Channels: { base_metalness: 0, specular_roughness: 0.86, specular_weight: 0.5, coat_weight: 0 },
+    },
+];
+
+// Which of them the layer is already set to, if any — a segmented control with nothing chosen looks broken.
+const MaterialFinishOf = (Layer) =>
+    MaterialFinishes.find((Entry) =>
+        Object.entries(Entry.Channels).every((Pair) => Math.abs((Layer.Channels?.[Pair[0]] ?? -1) - Pair[1]) < 0.02),
+    )?.Identifier || "";
+
+// The one word the rail has room for.
+const MaterialSummary = (Layer, Writes) =>
+{
+    const Named = MaterialFinishes.find((Entry) => Entry.Identifier === MaterialFinishOf(Layer));
+    if (Named) return Named.Label.toLowerCase();
+    if ((Layer.Channels?.base_metalness ?? 0) > 0.5) return "metal";
+    if ((Layer.Channels?.specular_roughness ?? 0.42) < 0.3) return "gloss";
+    const Written = WriteKeys.filter((Key) => (Writes || {})[Key] !== false).length;
+    return Written === WriteKeys.length ? "all" : `${Written}`;
+};
+
+// Where a distance sits in the ramp. One expression, three callers: the dab on the model, the dab on the flattened
+// sheet, and the dab on the card's test sheet. `Fitted` is the length of the axis an aimed line was drawn down; with
+// no axis the ramp is measured against its own set length instead.
+const RampAt = (Along, Straight, Ramp, Fitted = 0) =>
+{
+    const Ends = Ramp.Fit === "ends";
+    const Scale = Math.max(Ramp.Scale ?? 1, 0.01);
+    const Length = Ends
+        ? (Fitted > 1e-6 ? Fitted : Math.max(Ramp.Span, 0.001)) * Scale
+        : Math.max(Ramp.Span, 0.001);
+    return RampWhere(Ends ? Straight : Along, Length, Ramp);
+};
+
 const FromHex = (Hex) =>
 {
     const Match = /^#?([0-9a-f]{6})$/i.exec(Hex.trim());
@@ -1752,15 +1806,21 @@ export class TexturePanel
             const Axis = Flat ? this.RampOrigin?.PlaneAxis : this.RampOrigin?.Axis;
             const Delta = Middle.map((Part, Index) => Part - Origin[Index]);
             const Length = Axis ? Math.hypot(...Axis) : 0;
-            if (Axis && Length > 1e-6)
-            {
-                const Along = Delta.reduce((Sum, Part, Index) => Sum + Part * Axis[Index], 0) / Length;
-                return RampWhere(Along, Length * Math.max(Ramp.Scale, 0.01), Ramp);
-            }
-            return RampWhere(Math.hypot(...Delta) * Worth, Math.max(Ramp.Span, 0.001) * Math.max(Ramp.Scale, 0.01), Ramp);
+            // An aimed line knows both its ends, so the ramp is fitted to the axis itself. Freehand does not, so the
+            // straight distance out from the press is handed over and `RampAt` measures it against the set length.
+            if (Axis && Length > 1e-6) return RampAt(0, Delta.reduce((Sum, Part, Index) => Sum + Part * Axis[Index], 0) / Length, Ramp, Length);
+            return RampAt(0, Math.hypot(...Delta) * Worth, Ramp);
         }
         const Travel = ((Segment.Travel?.[0] ?? 0) + (Segment.Travel?.[1] ?? 0)) / 2;
-        return RampWhere(Travel * Worth, Math.max(Ramp.Span, 0.001), Ramp);
+        return RampAt(Travel * Worth, 0, Ramp);
+    }
+
+    // What the card's test sheet asks for: the same answer, from the two distances a scratch stroke can measure.
+    // Both are in metres, and which of them counts is the fit — exactly as it is on the model.
+    PadTint(Along, Straight)
+    {
+        if (!this.Gradient.Carry) return null;
+        return RampColourAt(this.Gradient.Stops, RampAt(Along, Straight, this.Gradient));
     }
 
     // The ramp as the pass should receive it. A mask keeps one number per texel, so a gradient laid into one is a
@@ -1790,10 +1850,11 @@ export class TexturePanel
             this.Notify(
                 Ramp.Carry
                     ? `Gradient runs ${(Ramp.Span * 100).toFixed(0)} cm along the stroke.`
-                    : `Gradient length ${(Ramp.Span * 100).toFixed(0)} cm · switch it on in Stroke to carry it.`,
+                    : `Gradient length ${(Ramp.Span * 100).toFixed(0)} cm · switch it on in Colour to run through it.`,
             );
         }
         if (this.Instruments?.Open) this.Instruments.RenderPane(false);
+        this.Instruments?.DrawPad();
     }
 
     WanderColour(Colour, Masking)
@@ -3374,7 +3435,7 @@ export class TexturePanel
         if (!Band) return;
         const Box = this.Canvas.getBoundingClientRect();
         const Ends = Band.querySelectorAll("circle");
-        const Line_ = Band.querySelector("line");
+        const Line_ = Band.querySelector("line:not(.rubber-ink)");
         const Points = [
             [From[0] - Box.left, From[1] - Box.top],
             [To[0] - Box.left, To[1] - Box.top],
@@ -3388,7 +3449,64 @@ export class TexturePanel
         Ends[1]?.setAttribute("cx", Points[1][0]);
         Ends[1]?.setAttribute("cy", Points[1][1]);
         Band.classList.toggle("gradient", this.StrokeMode === "gradient");
+        this.DrawRubberInk(Points, From, To);
         Band.hidden = false;
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // The mark, while it is still being aimed.
+    //
+    // 🔴 A dashed hairline says where the stroke will go. It does not say what the stroke IS — and with a gradient in
+    //    hand that is the whole question: which end is silver, where the gold starts, whether the ramp runs out
+    //    halfway. So the band is painted in the paint: sampled along the aim, through the same `RampAt` the dabs go
+    //    through, at the thickness the brush will actually lay.
+    //
+    // 📝 Sampled rather than handed to one SVG gradient with the ramp's own stops, because the ramp repeats, eases
+    //    and reverses, and may run out long before the far end. Twenty-four samples answer all of that for free.
+    //----------------------------------------------------------------------------------------------------------------------
+    DrawRubberInk(Points, From, To)
+    {
+        const Ink = Select("#rubber-ink");
+        const Ramp = Select("#rubber-ramp");
+        if (!Ink || !Ramp) return;
+        const Wash = this.StrokeMode === "gradient";
+        if (!this.Gradient.Carry || this.Projection.Brush.Target === "mask")
+        {
+            Ink.setAttribute("stroke-width", "0");
+            return;
+        }
+
+        // Screen pixels into metres, at the distance the camera is looking: the inverse of the ghost's own maths.
+        const Box = this.Canvas.getBoundingClientRect();
+        const Metres = (2 * Math.tan(this.Camera.FieldOfView / 2) * Math.max(this.Camera.Distance, 0.1)) / Math.max(Box.height, 1);
+        const Length = Math.hypot(To[0] - From[0], To[1] - From[1]) * Metres;
+        const Stops = SortRampStops(this.Gradient.Stops);
+
+        const Samples = 24;
+        let Markup = "";
+        for (let Step = 0; Step <= Samples; Step += 1)
+        {
+            const Share = Step / Samples;
+            const Where = Wash
+                ? RampEase(this.Gradient.Reverse ? 1 - Share : Share, this.Gradient.Easing)
+                : RampAt(Length * Share, Length * Share, this.Gradient, this.Gradient.Fit === "ends" ? Length : 0);
+            Markup += `<stop offset="${(Share * 100).toFixed(1)}%" stop-color="${ToHex(RampColourAt(Stops, Where))}"/>`;
+        }
+        Ramp.innerHTML = Markup;
+        Ramp.setAttribute("x1", Points[0][0]);
+        Ramp.setAttribute("y1", Points[0][1]);
+        Ramp.setAttribute("x2", Points[1][0]);
+        Ramp.setAttribute("y2", Points[1][1]);
+
+        // A line is laid at the brush's own thickness; a wash covers the whole sheet, so its band is only an axis.
+        const Thickness = Wash
+            ? 12
+            : Math.max((this.Projection.Brush.Radius * Math.max(Box.height, 1)) / (Math.tan(this.Camera.FieldOfView / 2) * Math.max(this.Camera.Distance, 0.1)), 6);
+        Ink.setAttribute("x1", Points[0][0]);
+        Ink.setAttribute("y1", Points[0][1]);
+        Ink.setAttribute("x2", Points[1][0]);
+        Ink.setAttribute("y2", Points[1][1]);
+        Ink.setAttribute("stroke-width", String(Math.min(Thickness, 160)));
     }
 
     HideRubber()
@@ -3504,7 +3622,7 @@ export class TexturePanel
         const Shape = GradientShapes.find((Entry) => Entry.Identifier === this.Gradient.Shape)?.Label || "Linear";
         // The timeline's swatch is what the gradient is made of: the middle of the ramp when it is laying colours,
         // the colour in hand when it is only fading it away.
-        const Swatch = this.Gradient.Colours ? RampColourAt(this.Gradient.Stops, 0.5) : this.BrushColour;
+        const Swatch = this.Gradient.Carry ? RampColourAt(this.Gradient.Stops, 0.5) : this.BrushColour;
         this.Chronicle("stroke", `${Shape} gradient`, `${Span.toFixed(2)} m · ${Layer.Name}`, Swatch);
         this.Notify(`${Shape} gradient laid down over ${Span.toFixed(2)} m.`);
     }
@@ -3548,7 +3666,7 @@ export class TexturePanel
             this.Recomposite();
             this.MarkDirty();
             const Shape = GradientShapes.find((Entry) => Entry.Identifier === this.Gradient.Shape)?.Label || "Linear";
-            const Swatch = this.Gradient.Colours ? RampColourAt(this.Gradient.Stops, 0.5) : this.BrushColour;
+            const Swatch = this.Gradient.Carry ? RampColourAt(this.Gradient.Stops, 0.5) : this.BrushColour;
             this.Chronicle("stroke", `${Shape} gradient`, `texture space · ${Layer.Name}`, Swatch);
             this.Notify(`${Shape} gradient laid across the sheet.`);
             return;
@@ -4548,6 +4666,11 @@ export class TexturePanel
             Hardness: () => this.Projection.Brush.Hardness,
             Strength: () => this.Projection.Brush.Flow,
             Masking: () => this.Projection.Brush.Target === "mask",
+            // Null when the stroke goes down in one colour; otherwise the ramp, asked the same way the paint asks it.
+            Tint: () =>
+                this.Gradient.Carry && this.Projection.Brush.Target !== "mask"
+                    ? (Along, Straight) => this.PadTint(Along, Straight)
+                    : null,
         });
         Select("#instrument-button")?.addEventListener("click", (Event) =>
         {
@@ -4573,28 +4696,58 @@ export class TexturePanel
         if (Layer.Kind === "folder" && !Masking) return [];
         const Decal = Layer.Kind === "decal" && !Masking;
         const Media = this.Projection.Brush.Media || PlainMedia;
-        // A gradient in hand makes the colour row about the ramp rather than about one colour, and the rail says so:
-        // the mark changes and the tally counts the colours.
-        const Ramped = !Masking && (this.StrokeMode === "gradient" || this.Gradient.Carry);
-        const Sections = [
+        const Ramped = !Masking && this.Gradient.Carry;
+
+        // 🔴 Grouped, and the groups are the point. Painting one thing in 3D means saying what the pigment is, what
+        //    the surface under it is made of, what the head is like and how the hand moves — a metallic marker with a
+        //    silver-to-gold fade is all four at once. Eight flat rows made the hand hunt for them; three headings and
+        //    six rows put the related ones within one glance of each other.
+        const Paint = [
             {
                 Key: "colour",
-                Label: Masking ? "Value" : Ramped ? "Gradient" : "Colour",
+                Group: "Paint",
+                Label: Masking ? "Value" : Ramped ? "Colour · gradient" : "Colour",
                 Glyph: Icon(Masking ? "mask" : Ramped ? "ramp" : "palette"),
                 Tone: Masking ? "#9a9a9a" : ToHex(this.BrushColour),
-                Tally: Ramped ? String(SortRampStops(this.Gradient.Stops).length) : undefined,
-                Title: Masking ? "Mask value" : Ramped ? "Colour · gradient" : "Colour",
-                Note: Masking ? "Black hides · white reveals" : Ramped ? "The colours the mark runs through" : "What the paint is made of",
+                Tally: Ramped ? `${SortRampStops(this.Gradient.Stops).length}` : this.DynamicsReach() ? "wander" : undefined,
+                Title: Masking ? "Mask value" : "Colour",
+                Note: Masking ? "Black hides · white reveals" : "The pigment, the gradient it runs through, and how far it may wander",
                 Ribbon: false,
                 Render: () => this.ColourPane(Layer, Masking),
             },
         ];
         if (Decal)
-            Sections.push(
+            Paint.push({
+                Key: "ink",
+                Group: "Paint",
+                Label: "Ink",
+                Glyph: Icon("fill"),
+                Tone: "#8f6fd0",
+                Title: "Ink",
+                Note: "What the artwork is made of",
+                Ribbon: false,
+                Render: () => this.InkPane(Layer),
+            });
+        Paint.push({
+            Key: "material",
+            Group: "Paint",
+            Label: "Material",
+            Glyph: Icon("material"),
+            Tone: "#d08a4a",
+            Tally: Masking ? "mask" : MaterialSummary(Layer, this.ChannelWrites),
+            Title: "Material",
+            Note: Masking ? "A mask writes coverage only" : "The surface the paint lays down, and which of it the stroke writes",
+            Ribbon: false,
+            Render: () => this.MaterialPane(Layer, Masking),
+        });
+
+        if (Decal)
+            return [
                 {
                     Key: "artwork",
-                    Glyph: Icon(Layer.Decal.SourceKind === "text" ? "text" : "decal"),
+                    Group: "Artwork",
                     Label: Layer.Decal.SourceKind === "text" ? "Type" : "Artwork",
+                    Glyph: Icon(Layer.Decal.SourceKind === "text" ? "text" : "decal"),
                     Tone: "#c9a227",
                     Title: Layer.Decal.SourceKind === "text" ? "Type" : "Artwork",
                     Note: `${Layer.Name} · ${Layer.Decal.Placement === "stamp" ? "burned in" : "placed"}`,
@@ -4602,19 +4755,10 @@ export class TexturePanel
                     Render: () => this.ArtworkPane(Layer),
                 },
                 {
-                    Key: "ink",
-                    Glyph: Icon("fill"),
-                    Label: "Ink",
-                    Tone: "#8f6fd0",
-                    Title: "Ink",
-                    Note: "What the artwork is made of",
-                    Ribbon: false,
-                    Render: () => this.InkPane(Layer),
-                },
-                {
                     Key: "placement",
-                    Glyph: Icon("focus"),
+                    Group: "Artwork",
                     Label: "Placement",
+                    Glyph: Icon("focus"),
                     Tone: "#4a9bd8",
                     Tally: Layer.Decal.Placement === "stamp" ? "burn" : `${Layer.Decal.Marks.length}`,
                     Title: "Placement",
@@ -4622,83 +4766,58 @@ export class TexturePanel
                     Ribbon: false,
                     Render: () => this.PlacementPane(Layer),
                 },
-            );
-        else
-            Sections.push(
-                {
-                    Key: "shape",
-                    Glyph: Icon("brush"),
-                    Label: "Shape",
-                    Tone: "#34c759",
-                    Tally: `${(this.Projection.Brush.Radius * 100).toFixed(1)}`,
-                    Title: "Shape",
-                    Note: "The head, and the mark one dab of it leaves",
-                    Render: () => this.ShapePane(),
-                },
-                {
-                    Key: "dynamics",
-                    Glyph: Icon("dynamics"),
-                    Label: "Colour dynamics",
-                    Tone: "#d05a8a",
-                    Tally: this.DynamicsReach() ? "on" : undefined,
-                    Title: "Colour dynamics",
-                    Note: "How far each dab may wander from the colour in hand",
-                    Render: () => this.DynamicsPane(Masking),
-                },
-                {
-                    Key: "grain",
-                    Glyph: Icon("noise"),
-                    Label: "Grain",
-                    Tone: "#c9a227",
-                    Tally: MediumByIndex[Media.Index]?.Label,
-                    Title: "Grain",
-                    Note: "The paper under the paint, and what the medium does with it",
-                    Render: () => this.GrainPane(),
-                },
-                {
-                    Key: "taper",
-                    Glyph: Icon("taper"),
-                    Label: "Taper",
-                    Tone: "#8f6fd0",
-                    Tally: Media.Pressure ? `${Math.round(Media.Taper * 100)}%` : "off",
-                    Title: "Taper",
-                    Note: "How a mark starts, and what the hand's pressure is worth",
-                    Render: () => this.TaperPane(),
-                },
-                {
-                    Key: "stroke",
-                    Glyph: Icon("vector"),
-                    Label: "Stroke",
-                    Tone: "#4a9bd8",
-                    Tally: StrokeModes.find((Mode) => Mode.Identifier === this.StrokeMode)?.Label,
-                    Title: "Stroke",
-                    Note: "How the mark goes down",
-                    Render: () => this.StrokePane(),
-                },
-                {
-                    Key: "steady",
-                    Glyph: Icon("steady"),
-                    Label: "Stabilization",
-                    Tone: "#5ac8c8",
-                    Tally: `${Math.round(this.Projection.Brush.Smoothing * 100)}%`,
-                    Title: "Stabilization",
-                    Note: "How far the mark lags the hand",
-                    Render: () => this.SteadyPane(),
-                },
-            );
-        Sections.push({
-            Key: "channels",
-            Glyph: Icon("layers"),
-            Label: "Channels",
-            Tone: "#d08a4a",
-            Tally: Masking ? "mask" : undefined,
-            Title: "Channels",
-            Note: Masking ? "A mask writes coverage only" : WritesSummary(this.ChannelWrites),
-            Ribbon: false,
-            Render: () => this.ChannelPane(Layer, Masking),
-        });
-        return Sections;
+                ...Paint,
+            ];
+
+        return [
+            ...Paint,
+            {
+                Key: "shape",
+                Group: "Head",
+                Label: "Shape",
+                Glyph: Icon("brush"),
+                Tone: "#34c759",
+                Tally: `${(this.Projection.Brush.Radius * 100).toFixed(1)}`,
+                Title: "Shape",
+                Note: "The head, its hairs, and the mark one dab of it leaves",
+                Render: () => this.ShapePane(),
+            },
+            {
+                Key: "grain",
+                Group: "Head",
+                Label: "Grain",
+                Glyph: Icon("noise"),
+                Tone: "#c9a227",
+                Tally: MediumByIndex[Media.Index]?.Label,
+                Title: "Grain",
+                Note: "The medium, the paper under it, and the strength of the stuff itself",
+                Render: () => this.GrainPane(),
+            },
+            {
+                Key: "stroke",
+                Group: "Hand",
+                Label: "Stroke",
+                Glyph: Icon("vector"),
+                Tone: "#4a9bd8",
+                Tally: StrokeModes.find((Mode) => Mode.Identifier === this.StrokeMode)?.Label,
+                Title: "Stroke",
+                Note: "How the mark goes down, and how far it lags the hand",
+                Render: () => this.StrokePane(),
+            },
+            {
+                Key: "taper",
+                Group: "Hand",
+                Label: "Taper",
+                Glyph: Icon("taper"),
+                Tone: "#8f6fd0",
+                Tally: Media.Pressure ? `${Math.round(Media.Taper * 100)}%` : "off",
+                Title: "Taper",
+                Note: "How a mark starts, and what the hand's pressure is worth",
+                Render: () => this.TaperPane(),
+            },
+        ];
     }
+
 
     // Whether any of the three dynamics is asking for anything at all.
     DynamicsReach()
@@ -4775,40 +4894,149 @@ export class TexturePanel
             Sheet.append(Recent);
         }
 
-        const Gradient = this.StrokeMode === "gradient";
-        if (!Masking && (Gradient || this.Gradient.Carry))
+        const Wash = this.StrokeMode === "gradient";
+        if (!Masking)
         {
+            // 🔴 One switch, and it lives here. There were two — a "carry" in Stroke and a "fade through the colours"
+            //    in the wash — and they armed the same ramp for the same reason, so the hand had to know which of the
+            //    two the tool in its hand listened to. A gradient is a colour, the ramp is the colour it is, and how
+            //    far it runs is the only question the stroke gets to answer.
             const Fade = this.CardGroup(
                 "Gradient",
-                Gradient ? "The colours the drag fades through" : "The colours the stroke runs through",
+                this.Gradient.Carry
+                    ? Wash
+                      ? "The colours the wash lays across the sheet"
+                      : "The colours the stroke runs through"
+                    : "The mark goes down in the colour in hand",
             );
-            Fade.append(this.RampField());
-            if (Gradient)
-                Fade.append(
-                    this.CardSwitch(
-                        "Fade through the colours",
-                        "Otherwise the paint fades away to nothing",
-                        this.Gradient.Colours,
-                        (On) =>
+            Fade.append(
+                this.CardSwitch(
+                    "Run through a gradient",
+                    Wash ? "The wash lays the ramp down the drag" : "Every dab takes its colour from the ramp",
+                    this.Gradient.Carry,
+                    (On) =>
+                    {
+                        this.Gradient.Carry = On;
+                        this.Instruments.RenderRail();
+                        this.Instruments.RenderPane(false);
+                        this.Notify(On ? "Strokes run through the gradient." : "Strokes go down in the colour in hand.");
+                    },
+                ),
+            );
+            if (this.Gradient.Carry)
+            {
+                Fade.append(this.RampField());
+                if (!Wash)
+                {
+                    Fade.append(
+                        this.CardSegmented(RampFits, this.Gradient.Fit, (Identifier) =>
                         {
-                            this.Gradient.Colours = On;
+                            this.Gradient.Fit = Identifier;
                             this.Instruments.RenderPane(false);
-                        },
-                    ),
-                    this.CardSlider(
-                        { Label: "Softness", Value: this.Gradient.Softness, Minimum: 0, Maximum: 1, Step: 0.01, Hint: "How much of the axis is doing the fading" },
-                        (Value) => (this.Gradient.Softness = Value),
-                    ),
+                        }),
+                    );
+                    if (this.Gradient.Fit === "along")
+                        Fade.append(
+                            this.CardSlider(
+                                {
+                                    Label: "Length",
+                                    Value: Number((this.Gradient.Span * 100).toFixed(1)),
+                                    Minimum: 1,
+                                    Maximum: 400,
+                                    Step: 0.5,
+                                    Unit: "cm",
+                                    Hint: "How far the hand travels before the ramp runs out · S and ⇧S",
+                                },
+                                (Value) =>
+                                {
+                                    this.Gradient.Span = Value / 100;
+                                    this.Instruments.DrawPad();
+                                },
+                            ),
+                        );
+                    else
+                        Fade.append(
+                            this.CardSlider(
+                                {
+                                    Label: "Fit",
+                                    Value: this.Gradient.Scale,
+                                    Minimum: 0.05,
+                                    Maximum: 4,
+                                    Step: 0.01,
+                                    Unit: "×",
+                                    Hint: "How much of the two ends the ramp covers · S and ⇧S",
+                                },
+                                (Value) =>
+                                {
+                                    this.Gradient.Scale = Value;
+                                    this.Instruments.DrawPad();
+                                },
+                            ),
+                        );
+                }
+                Fade.append(
+                    this.CardSwitch("Repeat", "Begin again instead of holding the last colour", this.Gradient.Cycle, (On) =>
+                    {
+                        this.Gradient.Cycle = On;
+                        this.Instruments.RenderPane(false);
+                    }),
+                    this.CardSwitch("Reverse", "Run the colours the other way", this.Gradient.Reverse, (On) =>
+                    {
+                        this.Gradient.Reverse = On;
+                        this.Instruments.RenderPane(false);
+                    }),
+                    this.CardSegmented(GradientEasings, this.Gradient.Easing, (Identifier) =>
+                    {
+                        this.Gradient.Easing = Identifier;
+                        this.Instruments.RenderPane(false);
+                    }),
                 );
+            }
             Sheet.append(Fade);
         }
+
+        // Dynamics sit under the colour they wander from, where the eye can see both at once.
+        const Wander = this.CardGroup("Dynamics", "A fresh roll of the dice for every dab laid");
+        if (!Masking)
+            Wander.append(
+                this.CardSlider(
+                    { Label: "Hue", Value: Math.round(this.Dynamics.Hue * 100), Minimum: 0, Maximum: 100, Step: 1, Unit: "%", Hint: "Up to a sixth of the wheel, either way" },
+                    (Value) =>
+                    {
+                        this.Dynamics.Hue = Value / 100;
+                        this.Instruments.RenderRail();
+                        this.Instruments.DrawPad();
+                    },
+                ),
+                this.CardSlider(
+                    { Label: "Saturation", Value: Math.round(this.Dynamics.Saturation * 100), Minimum: 0, Maximum: 100, Step: 1, Unit: "%" },
+                    (Value) =>
+                    {
+                        this.Dynamics.Saturation = Value / 100;
+                        this.Instruments.RenderRail();
+                        this.Instruments.DrawPad();
+                    },
+                ),
+            );
+        Wander.append(
+            this.CardSlider(
+                { Label: "Brightness", Value: Math.round(this.Dynamics.Value * 100), Minimum: 0, Maximum: 100, Step: 1, Unit: "%" },
+                (Value) =>
+                {
+                    this.Dynamics.Value = Value / 100;
+                    this.Instruments.RenderRail();
+                    this.Instruments.DrawPad();
+                },
+            ),
+        );
+        Sheet.append(Wander);
 
         const Note = document.createElement("p");
         Note.className = "card-note";
         Note.textContent = Masking
-            ? "A mask keeps one number per texel. Paint with white to reveal the layer, black to hide it, and anything between for a partial hold."
-            : Gradient || this.Gradient.Carry
-              ? "The square mixes the colour in hand. The strip below it is the gradient: click it to add a colour, drag one along to move it, double-click one to take it away."
+            ? "A mask keeps one number per texel. Paint with white to reveal the layer, black to hide it, and anything between for a partial hold. A mask holds no hue, so only brightness has anything to wander in."
+            : this.Gradient.Carry
+              ? "The square mixes the colour in hand. The strip below it is the gradient: click it to add a colour, drag one along to move it, double-click one to take it away. Try it on the test sheet before you commit it to the model."
               : "The square mixes saturation against brightness; the bar beside it is the hue. The field below takes a hex code typed straight in.";
         Sheet.append(Note);
         return Sheet;
@@ -4873,8 +5101,9 @@ export class TexturePanel
         // Any edit to the ramp arms it: a colour nobody can see is a control that looks broken.
         const Arm = () =>
         {
-            if (this.StrokeMode === "gradient") this.Gradient.Colours = true;
+            this.Gradient.Carry = true;
             this.Instruments?.RenderRail();
+            this.Instruments?.DrawPad();
         };
 
         let Holding = false;
@@ -5195,58 +5424,6 @@ export class TexturePanel
     }
 
     //----------------------------------------------------------------------------------------------------------------------
-    // Pane · colour dynamics.
-    //----------------------------------------------------------------------------------------------------------------------
-    DynamicsPane(Masking)
-    {
-        const Sheet = document.createElement("div");
-        const Group = this.CardGroup("Per dab", "A fresh roll of the dice for every mark laid");
-        Group.append(
-            this.CardSlider(
-                { Label: "Hue", Value: Math.round(this.Dynamics.Hue * 100), Minimum: 0, Maximum: 100, Step: 1, Unit: "%", Hint: "Up to a sixth of the wheel, either way" },
-                (Value) =>
-                {
-                    this.Dynamics.Hue = Value / 100;
-                    this.Instruments.RenderRail();
-                },
-            ),
-            this.CardSlider(
-                { Label: "Saturation", Value: Math.round(this.Dynamics.Saturation * 100), Minimum: 0, Maximum: 100, Step: 1, Unit: "%" },
-                (Value) =>
-                {
-                    this.Dynamics.Saturation = Value / 100;
-                    this.Instruments.RenderRail();
-                },
-            ),
-            this.CardSlider(
-                { Label: "Brightness", Value: Math.round(this.Dynamics.Value * 100), Minimum: 0, Maximum: 100, Step: 1, Unit: "%" },
-                (Value) =>
-                {
-                    this.Dynamics.Value = Value / 100;
-                    this.Instruments.RenderRail();
-                },
-            ),
-        );
-        Sheet.append(Group);
-
-        const Pigment = this.CardGroup("Pigment", "The strength of the stuff itself");
-        Pigment.append(
-            this.MediaSlider("Darkness", "Darkness", { Scale: 100, Maximum: 120, Hint: "How black the pigment is before the paper gets a say" }),
-            this.MediaSlider("Wetness", "Wetness", { Scale: 100, Hint: "Water in the head: closes the comb, pools at the rim" }),
-            this.MediaSlider("Melt", "Melt", { Scale: 100, Hint: "Wax pushed into the valleys by a hard stroke" }),
-        );
-        Sheet.append(Pigment);
-
-        const Note = document.createElement("p");
-        Note.className = "card-note";
-        Note.textContent = Masking
-            ? "A mask holds no hue, so only brightness has anything to wander in. The dab is still rolled once per mark."
-            : "Each dab is rolled once, as it is laid. Two strokes over the same ground will not match, which is the point.";
-        Sheet.append(Note);
-        return Sheet;
-    }
-
-    //----------------------------------------------------------------------------------------------------------------------
     // Pane · grain.
     //----------------------------------------------------------------------------------------------------------------------
     GrainPane()
@@ -5278,6 +5455,14 @@ export class TexturePanel
             this.MediaSlider("Fibre", "Fibre", { Minimum: 20, Maximum: 900, Unit: "/m", Hint: "Streak frequency along the stroke" }),
         );
         Sheet.append(Paper);
+
+        const Pigment = this.CardGroup("Pigment", "The strength of the stuff itself");
+        Pigment.append(
+            this.MediaSlider("Darkness", "Darkness", { Scale: 100, Maximum: 120, Hint: "How black the pigment is before the paper gets a say" }),
+            this.MediaSlider("Wetness", "Wetness", { Scale: 100, Hint: "Water in the head: closes the comb, pools at the rim" }),
+            this.MediaSlider("Melt", "Melt", { Scale: 100, Hint: "Wax pushed into the valleys by a hard stroke" }),
+        );
+        Sheet.append(Pigment);
 
         const Load = this.CardGroup("Load", "One dip of the head, and how far it carries");
         Load.append(
@@ -5318,38 +5503,6 @@ export class TexturePanel
 
     //----------------------------------------------------------------------------------------------------------------------
     // Pane · stabilization.
-    //----------------------------------------------------------------------------------------------------------------------
-    SteadyPane()
-    {
-        const Brush = this.Projection.Brush;
-        const Sheet = document.createElement("div");
-        const Group = this.CardGroup("Lag", "The mark follows the hand at a distance");
-        Group.append(
-            this.CardSlider(
-                { Label: "Stabilization", Value: Math.round(Brush.Smoothing * 100), Minimum: 0, Maximum: 100, Step: 1, Unit: "%", Hint: "How far behind the pointer the mark trails" },
-                (Value) =>
-                {
-                    this.SetBrush({ Smoothing: Clamp(Value / 100, 0, 1) });
-                    this.SetMedia({ Smoothing: Clamp(Value / 100, 0, 1) });
-                    this.Instruments.RenderRail();
-                },
-            ),
-            this.CardSlider(
-                { Label: "Spacing", Value: Math.round(Brush.Spacing * 100), Minimum: 5, Maximum: 100, Step: 1, Unit: "%", Hint: "Distance between dabs, as a share of the head" },
-                (Value) => this.SetBrush({ Spacing: Clamp(Value / 100, 0.05, 1) }),
-            ),
-        );
-        Sheet.append(Group);
-
-        const Note = document.createElement("p");
-        Note.className = "card-note";
-        Note.textContent =
-            "Stabilization pulls the mark towards the pointer rather than onto it, so the shake in a hand never reaches the surface. " +
-            "Past about seventy per cent the lag is visible, which is what you want for a long even line and wrong for a sketch.";
-        Sheet.append(Note);
-        return Sheet;
-    }
-
     //----------------------------------------------------------------------------------------------------------------------
     // Pane · placement. How big a decal lands, which way up, and how far round the surface it wraps.
     //----------------------------------------------------------------------------------------------------------------------
@@ -5504,6 +5657,8 @@ export class TexturePanel
             Sheet.append(Angles);
         }
 
+        // The wash only owns the SHAPE of its one pass. Which colours it lays, in which order, and how they ease are
+        // the gradient's business, and the gradient is a colour — it is in Colour, next to the square that mixes it.
         if (this.StrokeMode === "gradient")
         {
             const Shape = this.CardGroup("Fade", "Between the two ends of the drag");
@@ -5511,11 +5666,6 @@ export class TexturePanel
                 this.CardSegmented(GradientShapes, this.Gradient.Shape, (Identifier) =>
                 {
                     this.Gradient.Shape = Identifier;
-                    this.Instruments.RenderPane(false);
-                }),
-                this.CardSegmented(GradientEasings, this.Gradient.Easing, (Identifier) =>
-                {
-                    this.Gradient.Easing = Identifier;
                     this.Instruments.RenderPane(false);
                 }),
                 this.CardSlider(
@@ -5529,11 +5679,6 @@ export class TexturePanel
                     },
                     (Value) => (this.Gradient.Softness = Value),
                 ),
-                this.CardSwitch("Reverse", "Fade towards the first point", this.Gradient.Reverse, (On) =>
-                {
-                    this.Gradient.Reverse = On;
-                    this.Instruments.RenderPane(false);
-                }),
                 this.CardSwitch("All the way round", "Ignore which way the surface faces", this.Gradient.Through, (On) =>
                 {
                     this.Gradient.Through = On;
@@ -5543,82 +5688,27 @@ export class TexturePanel
             Sheet.append(Shape);
         }
 
-        // A gradient is not something a gradient carries: when the gradient tool is in hand the ramp IS the stroke,
-        // and the switch below would be asking the same question twice.
-        if (this.StrokeMode !== "gradient")
-        {
-            const Carry = this.CardGroup(
-                "Gradient",
-                this.Gradient.Carry ? "The mark runs through the ramp" : "The mark goes down in the colour in hand",
-            );
-            Carry.append(
-                this.CardSwitch("Carry the gradient", "Every dab takes its colour from the ramp", this.Gradient.Carry, (On) =>
+        const Hand = this.CardGroup("Hand", "The mark follows the hand at a distance");
+        Hand.append(
+            this.CardSlider(
+                { Label: "Stabilization", Value: Math.round(this.Projection.Brush.Smoothing * 100), Minimum: 0, Maximum: 100, Step: 1, Unit: "%", Hint: "How far behind the pointer the mark trails" },
+                (Value) =>
                 {
-                    this.Gradient.Carry = On;
+                    this.SetBrush({ Smoothing: Clamp(Value / 100, 0, 1) });
+                    this.SetMedia({ Smoothing: Clamp(Value / 100, 0, 1) });
                     this.Instruments.RenderRail();
-                    this.Instruments.RenderPane(false);
-                    this.Notify(On ? "Strokes carry the gradient — its colours live in Colour." : "Strokes go down in the colour in hand.");
-                }),
-            );
-            if (this.Gradient.Carry)
-            {
-                Carry.append(
-                    this.CardSegmented(RampFits, this.Gradient.Fit, (Identifier) =>
-                    {
-                        this.Gradient.Fit = Identifier;
-                        this.Instruments.RenderPane(false);
-                    }),
-                );
-                if (this.Gradient.Fit === "along")
-                    Carry.append(
-                        this.CardSlider(
-                            {
-                                Label: "Length",
-                                Value: Number((this.Gradient.Span * 100).toFixed(1)),
-                                Minimum: 1,
-                                Maximum: 400,
-                                Step: 0.5,
-                                Unit: "cm",
-                                Hint: "How far the hand travels before the ramp runs out · S and ⇧S",
-                            },
-                            (Value) => (this.Gradient.Span = Value / 100),
-                        ),
-                    );
-                else
-                    Carry.append(
-                        this.CardSlider(
-                            {
-                                Label: "Fit",
-                                Value: this.Gradient.Scale,
-                                Minimum: 0.05,
-                                Maximum: 4,
-                                Step: 0.01,
-                                Unit: "×",
-                                Hint: "How much of the two ends the ramp covers · S and ⇧S",
-                            },
-                            (Value) => (this.Gradient.Scale = Value),
-                        ),
-                    );
-                Carry.append(
-                    this.CardSwitch("Repeat", "Begin again instead of holding the last colour", this.Gradient.Cycle, (On) =>
-                    {
-                        this.Gradient.Cycle = On;
-                        this.Instruments.RenderPane(false);
-                    }),
-                    this.CardSwitch("Reverse", "Run the colours the other way", this.Gradient.Reverse, (On) =>
-                    {
-                        this.Gradient.Reverse = On;
-                        this.Instruments.RenderPane(false);
-                    }),
-                    this.CardSegmented(GradientEasings, this.Gradient.Easing, (Identifier) =>
-                    {
-                        this.Gradient.Easing = Identifier;
-                        this.Instruments.RenderPane(false);
-                    }),
-                );
-            }
-            Sheet.append(Carry);
-        }
+                },
+            ),
+            this.CardSlider(
+                { Label: "Spacing", Value: Math.round(this.Projection.Brush.Spacing * 100), Minimum: 5, Maximum: 100, Step: 1, Unit: "%", Hint: "Distance between dabs, as a share of the head" },
+                (Value) =>
+                {
+                    this.SetBrush({ Spacing: Clamp(Value / 100, 0.05, 1) });
+                    this.Instruments.DrawPad();
+                },
+            ),
+        );
+        Sheet.append(Hand);
 
         const Note = document.createElement("p");
         Note.className = "card-note";
@@ -5627,12 +5717,13 @@ export class TexturePanel
                 ? "The mark follows the hand, dab by dab, at the spacing the instrument asks for."
                 : this.StrokeMode === "line"
                   ? "Press where it starts, aim, let go. The line is walked across the screen and raycast at every step, so it lies on the model rather than cutting through it."
-                  : "Press where the colour is strongest, drag to where it has gone, let go. One pass over the whole sheet.";
+                  : "Press where the gradient starts, drag to where it ends, let go. One pass over the whole sheet — every texel of it, not only the ground under the drag.";
         if (this.Gradient.Carry && this.StrokeMode !== "gradient")
             Note.textContent +=
                 this.Gradient.Fit === "along"
-                    ? " The ramp is measured along the mark, so a stroke that wanders takes the long way through the colours."
-                    : " The ramp is fitted between the two ends of the mark — exactly, for an aimed line; measured out from the press for freehand, which has no far end until the hand lets go.";
+                    ? " The gradient is measured along the mark, so a stroke that wanders takes the long way through the colours."
+                    : " The gradient is fitted between the two ends of the mark — exactly, for an aimed line; measured out from the press for freehand, which has no far end until the hand lets go.";
+        Note.textContent += " Stabilization pulls the mark towards the pointer rather than onto it, so the shake in a hand never reaches the surface.";
         Sheet.append(Note);
         return Sheet;
     }
@@ -5829,9 +5920,15 @@ export class TexturePanel
     }
 
     //----------------------------------------------------------------------------------------------------------------------
-    // Pane · which channels the stroke is allowed to write.
+    // Pane · the material the paint lays down, and which of it the stroke is allowed to write.
+    //
+    // 🔴 These were two panes a rail apart: the numbers in the inspector, the write switches on the card. Painting a
+    //    metallic marker needs both in one breath — gold is a colour AND a metalness AND a roughness, and three of
+    //    the four live in different places the moment you split them. One pane: the tick says whether the stroke
+    //    writes that channel, the slider under it says what it writes. A channel the stroke does not write has
+    //    nothing to say, so it shows no slider.
     //----------------------------------------------------------------------------------------------------------------------
-    ChannelPane(Layer, Masking)
+    MaterialPane(Layer, Masking)
     {
         const Sheet = document.createElement("div");
         if (Masking)
@@ -5843,6 +5940,28 @@ export class TexturePanel
             Sheet.append(Note);
             return Sheet;
         }
+
+        const Finish = this.CardGroup("Finish", "Three numbers, set the way a kind of surface sets them");
+        Finish.append(
+            this.CardSegmented(MaterialFinishes, MaterialFinishOf(Layer), (Identifier) =>
+            {
+                const Chosen = MaterialFinishes.find((Entry) => Entry.Identifier === Identifier);
+                if (!Chosen) return;
+                for (const [Key, Value] of Object.entries(Chosen.Channels))
+                {
+                    Layer.Channels[Key] = Value;
+                    Layer.Enabled[Key] = true;
+                    this.ChannelWrites[Key] = true;
+                }
+                this.Recomposite();
+                this.MarkDirty();
+                this.RenderInspector();
+                this.Instruments.RenderRail();
+                this.Instruments.RenderPane(false);
+                this.Notify(`${Chosen.Label} · ${Chosen.Note}`);
+            }),
+        );
+        Sheet.append(Finish);
 
         for (const Slot of WriteSlots)
         {
@@ -5864,6 +5983,7 @@ export class TexturePanel
                         this.Instruments.RenderPane(false);
                     });
                 Group.append(Row);
+                if (On) Group.append(...this.ChannelValue(Layer, Part));
             }
             Sheet.append(Group);
         }
@@ -5888,9 +6008,68 @@ export class TexturePanel
         const Note = document.createElement("p");
         Note.className = "card-note";
         Note.textContent =
-            "Switched off means the stroke leaves that channel exactly as it found it. The layer's own cover is always written, or a stroke that paints roughness alone would never show.";
+            "Switched off means the stroke leaves that channel exactly as it found it. The layer's own cover is always written, or a stroke that paints roughness alone would never show. " +
+            "Colour is the one channel whose value is not here: it is the colour in hand, one pane up.";
         Sheet.append(Note);
         return Sheet;
+    }
+
+    // What one written channel lays down. Colour comes from the hand, cover comes from the stroke, and neither of
+    // them has a number to set here — the rest are the layer's own, the same values the inspector edits.
+    ChannelValue(Layer, Part)
+    {
+        if (Part.Key === "coverage" || Part.Key === "base_color") return [];
+        const Channel = ChannelSpecification.find((Entry) => Entry.Identifier === Part.Key);
+        if (!Channel) return [];
+        if (Layer.Channels[Part.Key] === undefined) Layer.Channels[Part.Key] = structuredClone(Channel.Default);
+
+        const Settle = () =>
+        {
+            Layer.Enabled[Part.Key] = true;
+            this.Recomposite();
+            this.MarkDirty();
+            this.RenderInspector();
+            this.Instruments.RenderRail();
+        };
+
+        if (Channel.Kind === "color")
+        {
+            const Holder = document.createElement("div");
+            Holder.className = "property-row colour-row channel-value";
+            const Code = ToHex(Layer.Channels[Part.Key]);
+            Holder.innerHTML = `<span class="property-label">Colour</span>
+                <label class="colour-field" style="background:${Code}">
+                    <input type="color" value="${Code}" data-channel-colour>
+                </label>
+                <span class="colour-code">${Code.toUpperCase()}</span>`;
+            const Field = Holder.querySelector("[data-channel-colour]");
+            Field.addEventListener("input", () =>
+            {
+                Layer.Channels[Part.Key] = FromHex(Field.value);
+                Holder.querySelector(".colour-field").style.background = Field.value;
+                Holder.querySelector(".colour-code").textContent = Field.value.toUpperCase();
+                Settle();
+            });
+            return [Holder];
+        }
+
+        const Slider = this.CardSlider(
+            {
+                Label: Channel.Label,
+                Value: Number(Number(Layer.Channels[Part.Key] ?? 0).toFixed(2)),
+                Minimum: 0,
+                Maximum: 1,
+                Step: 0.01,
+                Hint: Channel.Hint,
+            },
+            (Value) =>
+            {
+                Layer.Channels[Part.Key] = Value;
+                Settle();
+            },
+        );
+        Slider.classList.add("channel-value");
+        return [Slider];
     }
 
     //----------------------------------------------------------------------------------------------------------------------

@@ -962,7 +962,7 @@ export class ShadingIntegrator
         Device.uniform1f(Uniforms.get("uGradientEdge"), Gradient?.Softness ?? 0.5);
         // The ramp. Uploaded as a flat array of rgb + position whether or not it is in play, because a uniform left
         // over from the last stroke is a colour nobody asked for; the count is what arms it.
-        const Ramp = Gradient?.Colours ? SortRampStops(Gradient.Stops).slice(0, RampLimit) : [];
+        const Ramp = Gradient?.Carry ? SortRampStops(Gradient.Stops).slice(0, RampLimit) : [];
         const Packed = new Float32Array(RampLimit * 4);
         Ramp.forEach((Stop, Index) =>
         {

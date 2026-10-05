@@ -23,6 +23,21 @@ const Escape = (Text) => String(Text).replace(/[&<>"]/g, (Character) => `&#${Cha
 
 const Clamp = (Value, Low, High) => Math.min(High, Math.max(Low, Value));
 
+// Paper. The test sheet is opaque on purpose: paint on glass tells you nothing about paint.
+const PadPaper = [244, 241, 234, 255];
+
+const FloodSheet = (Sheet, Colour) =>
+{
+    const Pixels = Sheet.data;
+    for (let Index = 0; Index < Pixels.length; Index += 4)
+    {
+        Pixels[Index] = Colour[0];
+        Pixels[Index + 1] = Colour[1];
+        Pixels[Index + 2] = Colour[2];
+        Pixels[Index + 3] = Colour[3];
+    }
+};
+
 //--------------------------------------------------------------------------------------------------------------------------
 // The card.
 //--------------------------------------------------------------------------------------------------------------------------
@@ -40,8 +55,17 @@ export class InstrumentPanel
         this.ReadHardness = Options.Hardness || (() => 0.45);
         this.ReadStrength = Options.Strength || (() => 0.85);
         this.Masking = Options.Masking || (() => false);
+        // 🔴 A function that answers a colour for a point along a mark, or null for "one flat colour". The card never
+        //    learns what a gradient is — it asks the host what this pixel is painted in, which is the only question
+        //    a preview has ever needed to ask.
+        this.ReadTint = Options.Tint || (() => null);
 
         this.Section = "";
+        this.Padded = false;
+        this.PadPaths = [];
+        this.PadStroke = null;
+        this.PadSheet = null;
+        this.PadBase = null;
 
         this.Root = document.createElement("div");
         this.Root.className = "tool-card";
@@ -86,13 +110,33 @@ export class InstrumentPanel
                     <div class="tool-body">
                         <div class="pane-head">
                             <div><div class="pane-title" data-pane-title></div><div class="pane-sub" data-pane-sub></div></div>
-                            <kbd class="pane-key">Tab</kbd>
+                            <div class="pane-tools">
+                                <button class="pane-expand" data-expand type="button" aria-expanded="false" title="Open a test sheet">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                                        ${Line("M4 7.5h7M4 12h7M4 16.5h4")}
+                                        ${Line("M15.5 4.5h4v15h-4z")}
+                                        ${Line("M17.5 9.5c-1.2 1.6-1.2 3.4 0 5", 1.3)}
+                                    </svg>
+                                </button>
+                                <kbd class="pane-key">Tab</kbd>
+                            </div>
                         </div>
                         <div class="pane-scroll"><div class="tool-sheet" data-pane></div></div>
                         <div class="pane-foot"><span data-foot-note></span></div>
                     </div>
+                    <div class="tool-pad" data-pad hidden>
+                        <div class="pad-head">
+                            <span class="pad-title">Test sheet</span>
+                            <button class="chip-button" data-pad-clear type="button">Clear</button>
+                        </div>
+                        <canvas class="pad-canvas" data-pad-canvas width="260" height="420"></canvas>
+                        <div class="pad-note" data-pad-note>Draw here — nothing reaches the model</div>
+                    </div>
                 </div>
             </div>`;
+        this.Root.querySelector("[data-expand]")?.addEventListener("click", () => this.TogglePad());
+        this.Root.querySelector("[data-pad-clear]")?.addEventListener("click", () => this.ClearPad());
+        this.AttachPad();
         this.RenderRail();
     }
 
@@ -102,9 +146,18 @@ export class InstrumentPanel
         if (!Rail) return;
         const Panes = this.Sections();
         const Standing = Panes.find((Entry) => Entry.Key === this.Section) || Panes[0] || null;
+        // 🔴 Headings, not a flat list. Colour, the gradient it runs through and the material under it are one thing
+        //    said three ways — a metallic marker is all of them at once — and eight rows in a column gave the eye no
+        //    reason to believe any two of them were related. The host names the family; the rail draws the rule.
+        let Family = "";
         Rail.innerHTML = Panes.length
             ? Panes.map(
-                  (Entry) => `
+                  (Entry) =>
+                      `${
+                          Entry.Group && Entry.Group !== Family
+                              ? ((Family = Entry.Group), `<div class="rail-split">${Escape(Entry.Group)}</div>`)
+                              : ""
+                      }
             <button class="rail-item ${Entry.Key === Standing?.Key ? "active" : ""}" data-section="${Escape(Entry.Key)}"
                     title="${Escape(Entry.Note || Entry.Label)}">
                 ${
@@ -142,7 +195,7 @@ export class InstrumentPanel
             this.RenderFootnote();
             return;
         }
-        if (Standing.Ribbon !== false) Body.append(this.BuildRibbon());
+        if (Standing.Ribbon !== false && !this.Padded) Body.append(this.BuildRibbon());
         Body.append(Standing.Render());
         Title.textContent = Standing.Title || Standing.Label;
         Note.textContent = Standing.Note || "";
@@ -176,6 +229,7 @@ export class InstrumentPanel
         {
             this.RibbonPending = false;
             this.DrawRibbon(this.Root.querySelector(".ribbon-canvas"));
+            this.DrawPad();
             this.RenderFootnote();
         };
         if (typeof requestAnimationFrame === "function") requestAnimationFrame(Draw);
@@ -183,57 +237,69 @@ export class InstrumentPanel
     }
 
     //----------------------------------------------------------------------------------------------------------------------
-    // The ribbon.
+    // The stroke model, as pixels.
     //
     // 📝 Written as pixels rather than as canvas dabs because the model answers per point: there is no gradient stop
     //    that can describe a bristle gap, and stacking translucent arcs to fake one gets the overlaps wrong anyway.
+    //
+    // 🔴 One routine lays every preview in the card: the ribbon under a pane and the hand's own stroke on the test
+    //    sheet. Two of them would be two answers to "what does this brush do", and the second one to be edited would
+    //    quietly become the liar.
     //----------------------------------------------------------------------------------------------------------------------
-    DrawRibbon(Canvas)
+    // Everything the model needs that does not change along a path. Read fresh, every draw.
+    StrokeSetting()
     {
-        if (!Canvas) return;
-        const Pen = Canvas.getContext("2d");
-        if (!Pen || typeof Pen.createImageData !== "function") return;
-        const Width = Canvas.width;
-        const Height = Canvas.height;
-        const Sheet = Pen.createImageData(Width, Height);
-        // jsdom hands back a proxy whose methods answer undefined; the returned object is the only honest test.
-        if (!Sheet || !Sheet.data) return;
-
         const Media = this.Media;
-        if (!Media) return;
-        const Hardness = Clamp(this.ReadHardness(), 0, 1);
-        const Strength = Clamp(this.ReadStrength(), 0.02, 1);
+        if (!Media) return null;
         const Centimetres = Clamp(this.ReadWidth(), 0.4, 60);
         const Reach = Clamp(Centimetres * 2.4, 3.5, 40);
-        const Extent = MediaExtent(Media);
-        // The preview is drawn at the brush's real size, so a metre of surface and a pixel of ribbon are related by one
-        // number — and the paper's tooth comes out the size it will actually be under the brush.
-        const Metres = Clamp(Centimetres / 100, 0.004, 0.6) / Reach;
-        const [Red, Green, Blue] = this.ReadInk().map((Part) => Clamp(Part, 0, 1) * 255);
+        return {
+            Media,
+            Reach,
+            Extent: MediaExtent(Media),
+            Hardness: Clamp(this.ReadHardness(), 0, 1),
+            Strength: Clamp(this.ReadStrength(), 0.02, 1),
+            // The preview is drawn at the brush's real size, so a metre of surface and a pixel of preview are related
+            // by one number — and the paper's tooth comes out the size it will actually be under the brush.
+            Metres: Clamp(Centimetres / 100, 0.004, 0.6) / Reach,
+            Ink: this.ReadInk().map((Part) => Clamp(Part, 0, 1) * 255),
+        };
+    }
 
-        // 🔴 A white china marker on cream paper is a true preview of nothing at all. When the pigment is as pale as the
-        //    sheet it would be laid on, the ribbon lays a dark ground instead.
-        const Luminance = (0.2126 * Red + 0.7152 * Green + 0.0722 * Blue) / 255;
-        const Ground = Luminance > 0.72 ? [54, 54, 58] : null;
-
-        // The path: one stroke across the strip, with a turn in it so a chisel nib shows both its widths.
-        const Steps = 24;
-        const Points = [];
+    // The walk along a path: its running length, and the nib's width at every step of it.
+    MeasurePath(Points, Media)
+    {
         const Walk = [0];
         const Widths = [1];
-        for (let Step = 0; Step <= Steps; Step += 1)
+        for (let Step = 1; Step < Points.length; Step += 1)
         {
-            const Share = Step / Steps;
-            const X = 18 + Share * (Width - 36);
-            const Y = Height * 0.54 + Math.sin(Share * Math.PI * 1.7) * Height * 0.23;
-            Points.push([X, Y]);
-            if (Step > 0)
-            {
-                Walk.push(Walk[Step - 1] + Math.sqrt((X - Points[Step - 1][0]) ** 2 + (Y - Points[Step - 1][1]) ** 2));
-                Widths.push(MediaWidth(Media, Math.atan2(Y - Points[Step - 1][1], X - Points[Step - 1][0])));
-            }
+            const [AX, AY] = Points[Step - 1];
+            const [BX, BY] = Points[Step];
+            Walk.push(Walk[Step - 1] + Math.hypot(BX - AX, BY - AY));
+            Widths.push(MediaWidth(Media, Math.atan2(BY - AY, BX - AX)));
         }
+        return { Walk, Widths };
+    }
+
+    // Lay one path into a sheet of pixels, compositing over whatever is already there. `Box` limits the work to a
+    // rectangle — the whole sheet for a redraw, one segment's reach for the next inch of a live stroke.
+    LayPath(Sheet, Width, Height, Points, Setting, Options = {})
+    {
+        if (Points.length < 2) return;
+        const { Media, Reach, Extent, Hardness, Strength, Metres } = Setting;
+        const { Walk, Widths } = this.MeasurePath(Points, Media);
         const Total = Walk[Walk.length - 1] || 1;
+        const Ink = Options.Ink || Setting.Ink;
+        const Tint = Options.Tint || null;
+        const Limit = Reach * Extent + 2;
+        const Steps = Points.length - 1;
+
+        const Box = Options.Box || { Left: 0, Top: 0, Right: Width - 1, Bottom: Height - 1 };
+        const Left = Math.max(0, Math.floor(Box.Left));
+        const Right = Math.min(Width - 1, Math.ceil(Box.Right));
+        const Top = Math.max(0, Math.floor(Box.Top));
+        const Bottom = Math.min(Height - 1, Math.ceil(Box.Bottom));
+        if (Right < Left || Bottom < Top) return;
 
         // The same entry ramp StrokeProjection applies, in the same units: no instrument lands at full weight.
         const Pressure = (Along) =>
@@ -241,47 +307,35 @@ export class InstrumentPanel
             if (!Media.Pressure) return 1;
             const Length = Math.max(Reach * (0.5 + 7 * Media.Taper), 1e-5);
             const Entry = Clamp(Along / Length, 0, 1);
-            const Hand = 1 - 0.18 * Math.sin((Along / Total) * Math.PI * 2.3);
+            const Hand = Options.Even ? 1 : 1 - 0.18 * Math.sin((Along / Total) * Math.PI * 2.3);
             return Clamp(Hand * (1 - Media.Taper * (1 - Entry) * 0.88), 0.02, 1);
         };
 
-        const Pixels = Sheet.data;
-        if (Ground)
-        {
-            for (let Index = 0; Index < Width * Height; Index += 1)
-            {
-                Pixels[Index * 4] = Ground[0];
-                Pixels[Index * 4 + 1] = Ground[1];
-                Pixels[Index * 4 + 2] = Ground[2];
-                Pixels[Index * 4 + 3] = 255;
-            }
-        }
-        const Limit = Reach * Extent + 2;
-
-        // 📝 A column index over the path. Without it every pixel of the strip would be measured against every segment
-        //    of the stroke — a sixth of a second per redraw, which on a slider drag is a frozen card.
+        // 📝 A column index over the path. Without it every pixel would be measured against every segment of the
+        //    stroke — a sixth of a second per redraw, which on a slider drag is a frozen card.
         const Reachable = [];
-        for (let Column = 0; Column < Width; Column += 1) Reachable.push([]);
+        for (let Column = 0; Column <= Right - Left; Column += 1) Reachable.push([]);
         const Vertical = [];
         for (let Step = 1; Step <= Steps; Step += 1)
         {
             const [AX, AY] = Points[Step - 1];
             const [BX, BY] = Points[Step];
-            const Low = Math.max(0, Math.floor(Math.min(AX, BX) - Limit));
-            const High = Math.min(Width - 1, Math.ceil(Math.max(AX, BX) + Limit));
-            for (let Column = Low; Column <= High; Column += 1) Reachable[Column].push(Step);
+            const Low = Math.max(Left, Math.floor(Math.min(AX, BX) - Limit));
+            const High = Math.min(Right, Math.ceil(Math.max(AX, BX) + Limit));
+            for (let Column = Low; Column <= High; Column += 1) Reachable[Column - Left].push(Step);
             Vertical.push([Math.min(AY, BY) - Limit, Math.max(AY, BY) + Limit]);
         }
 
-        for (let Row = 0; Row < Height; Row += 1)
+        const Pixels = Sheet.data;
+        for (let Row = Top; Row <= Bottom; Row += 1)
         {
-            for (let Column = 0; Column < Width; Column += 1)
+            for (let Column = Left; Column <= Right; Column += 1)
             {
                 let Closest = Infinity;
                 let Side = 0;
                 let Along = 0;
                 let Nib = 1;
-                for (const Step of Reachable[Column])
+                for (const Step of Reachable[Column - Left])
                 {
                     const Range = Vertical[Step - 1];
                     if (Row < Range[0] || Row > Range[1]) continue;
@@ -320,22 +374,273 @@ export class InstrumentPanel
                 const Alpha = Clamp(Mark.Alpha * Strength, 0, 1);
                 if (Alpha <= 0.004) continue;
 
+                // 🔴 The gradient is asked here, per pixel, with the same two distances the model asks with: how far
+                //    the hand has travelled, and how far it is from where it pressed. A preview that faded a flat
+                //    colour instead would agree with the paint everywhere except where it matters.
+                const Pigment = Tint ? Tint(Along * Metres, Math.hypot(Column - Points[0][0], Row - Points[0][1]) * Metres) : null;
+                const Source = Pigment
+                    ? Pigment.map((Part) => Clamp(Part, 0, 1) * 255 * Mark.Shade)
+                    : Ink.map((Part) => Part * Mark.Shade);
+
+                // Straight "over": what is underneath may be paper, an earlier stroke, or nothing at all.
                 const Offset = (Row * Width + Column) * 4;
-                const Ink = [Clamp(Red * Mark.Shade, 0, 255), Clamp(Green * Mark.Shade, 0, 255), Clamp(Blue * Mark.Shade, 0, 255)];
-                if (Ground)
-                {
-                    for (let Part = 0; Part < 3; Part += 1) Pixels[Offset + Part] = Ground[Part] * (1 - Alpha) + Ink[Part] * Alpha;
-                    Pixels[Offset + 3] = 255;
-                    continue;
-                }
-                for (let Part = 0; Part < 3; Part += 1) Pixels[Offset + Part] = Ink[Part];
-                Pixels[Offset + 3] = Math.round(Alpha * 255);
+                const Under = Pixels[Offset + 3] / 255;
+                const Result = Alpha + Under * (1 - Alpha);
+                for (let Part = 0; Part < 3; Part += 1)
+                    Pixels[Offset + Part] = (Source[Part] * Alpha + Pixels[Offset + Part] * Under * (1 - Alpha)) / Math.max(Result, 1e-6);
+                Pixels[Offset + 3] = Math.round(Clamp(Result, 0, 1) * 255);
             }
         }
+    }
+
+    DrawRibbon(Canvas)
+    {
+        if (!Canvas) return;
+        const Pen = Canvas.getContext("2d");
+        if (!Pen || typeof Pen.createImageData !== "function") return;
+        const Width = Canvas.width;
+        const Height = Canvas.height;
+        const Sheet = Pen.createImageData(Width, Height);
+        // jsdom hands back a proxy whose methods answer undefined; the returned object is the only honest test.
+        if (!Sheet || !Sheet.data) return;
+
+        const Setting = this.StrokeSetting();
+        if (!Setting) return;
+
+        // 🔴 A white china marker on cream paper is a true preview of nothing at all. When the pigment is as pale as
+        //    the sheet it would be laid on, the ribbon lays a dark ground instead.
+        const Luminance = (0.2126 * Setting.Ink[0] + 0.7152 * Setting.Ink[1] + 0.0722 * Setting.Ink[2]) / 255;
+        const Ground = Luminance > 0.72 ? [54, 54, 58, 255] : null;
+        if (Ground) FloodSheet(Sheet, Ground);
+
+        this.LayPath(Sheet, Width, Height, this.RibbonPath(Width, Height), Setting, { Tint: this.ReadTint() });
 
         Pen.clearRect(0, 0, Width, Height);
         Pen.putImageData(Sheet, 0, 0);
     }
+
+    // The path the ribbon draws: one stroke across the strip, with a turn in it so a chisel nib shows both widths.
+    RibbonPath(Width, Height)
+    {
+        const Steps = 24;
+        const Points = [];
+        for (let Step = 0; Step <= Steps; Step += 1)
+        {
+            const Share = Step / Steps;
+            Points.push([18 + Share * (Width - 36), Height * 0.54 + Math.sin(Share * Math.PI * 1.7) * Height * 0.23]);
+        }
+        return Points;
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // The test sheet.
+    //
+    // 🔴 A stroke is the only honest preview of a stroke. The ribbon says what the settings mean; it cannot say what
+    //    YOUR hand does with them, and a gradient that runs along the mark is a setting whose whole behaviour is in
+    //    the hand. So the card grew a sheet of paper: the same model, the same pigment, the hand's own path — and
+    //    nothing it does reaches the model until the hand is happy with it.
+    //
+    // 📝 The sheet keeps its own pixels between frames. A live stroke restores the snapshot it began from inside one
+    //    segment's reach and re-lays the whole current path there, which costs a few thousand pixels a move instead
+    //    of a hundred thousand — and re-laying the WHOLE path, rather than the last segment alone, is what stops the
+    //    joints from coming out twice as dark as the rest of the mark.
+    //----------------------------------------------------------------------------------------------------------------------
+    TogglePad(Open = !this.Padded)
+    {
+        this.Padded = Open;
+        this.Root.classList.toggle("padded", Open);
+        const Pad = this.Root.querySelector("[data-pad]");
+        if (Pad) Pad.hidden = !Open;
+        const Button = this.Root.querySelector("[data-expand]");
+        if (Button)
+        {
+            Button.classList.toggle("on", Open);
+            Button.setAttribute("aria-expanded", Open ? "true" : "false");
+            Button.title = Open ? "Close the test sheet" : "Open a test sheet";
+        }
+        // The ribbon and the sheet say the same thing; with the sheet open the ribbon is only a smaller copy of it.
+        this.RenderPane(false);
+        if (Open) this.SizePad();
+    }
+
+    ClearPad()
+    {
+        this.PadPaths = [];
+        this.PadStroke = null;
+        this.PadBase = null;
+        this.DrawPad();
+    }
+
+    // The canvas takes the size of the column it sits in, once, when the sheet is opened — a canvas sized on every
+    // draw is a canvas cleared on every draw, and the sheet would lose its stroke the first time a slider moved.
+    SizePad()
+    {
+        const Canvas = this.Root.querySelector("[data-pad-canvas]");
+        if (!Canvas) return;
+        const Box = Canvas.getBoundingClientRect();
+        const Width = Math.max(80, Math.round(Box.width || 260));
+        const Height = Math.max(80, Math.round(Box.height || 420));
+        if (Canvas.width !== Width || Canvas.height !== Height)
+        {
+            Canvas.width = Width;
+            Canvas.height = Height;
+        }
+        this.DrawPad();
+    }
+
+    // A full redraw: paper, then every stroke on it. Called whenever a setting the model reads has changed.
+    DrawPad()
+    {
+        if (!this.Padded) return;
+        const Canvas = this.Root.querySelector("[data-pad-canvas]");
+        if (!Canvas) return;
+        const Pen = Canvas.getContext("2d");
+        if (!Pen || typeof Pen.createImageData !== "function") return;
+        const Width = Canvas.width;
+        const Height = Canvas.height;
+        const Sheet = Pen.createImageData(Width, Height);
+        if (!Sheet || !Sheet.data) return;
+        FloodSheet(Sheet, PadPaper);
+
+        const Setting = this.StrokeSetting();
+        if (Setting)
+        {
+            const Tint = this.ReadTint();
+            const Paths = this.PadPaths.length ? this.PadPaths : [this.PadDefault(Width, Height)];
+            for (const Path of Paths) this.LayPath(Sheet, Width, Height, Path, Setting, { Tint, Even: true });
+        }
+
+        this.PadSheet = Sheet;
+        this.PadBase = null;
+        Pen.putImageData(Sheet, 0, 0);
+        this.RenderPadNote();
+    }
+
+    RenderPadNote()
+    {
+        const Note = this.Root.querySelector("[data-pad-note]");
+        if (!Note) return;
+        Note.textContent = this.PadPaths.length
+            ? `${this.PadPaths.length} ${this.PadPaths.length === 1 ? "stroke" : "strokes"} · none of it reaches the model`
+            : "Draw here — nothing reaches the model";
+    }
+
+    // Until the hand draws its own, the sheet shows the stroke the ribbon would: an S down the page, at real size.
+    PadDefault(Width, Height)
+    {
+        const Steps = 30;
+        const Points = [];
+        for (let Step = 0; Step <= Steps; Step += 1)
+        {
+            const Share = Step / Steps;
+            Points.push([Width * 0.5 + Math.sin(Share * Math.PI * 1.6) * Width * 0.26, 26 + Share * (Height - 52)]);
+        }
+        return Points;
+    }
+
+    AttachPad()
+    {
+        const Canvas = this.Root.querySelector("[data-pad-canvas]");
+        if (!Canvas) return;
+
+        const Where = (Event) =>
+        {
+            const Box = Canvas.getBoundingClientRect();
+            const Across = Canvas.width / Math.max(Box.width, 1);
+            const Down = Canvas.height / Math.max(Box.height, 1);
+            return [(Event.clientX - Box.left) * Across, (Event.clientY - Box.top) * Down];
+        };
+
+        Canvas.addEventListener("pointerdown", (Event) =>
+        {
+            Event.preventDefault();
+            Canvas.setPointerCapture?.(Event.pointerId);
+            // The hand's first stroke replaces the example one rather than painting over the top of it.
+            if (!this.PadPaths.length) this.DrawPadEmpty();
+            this.PadStroke = [Where(Event)];
+            this.PadBase = this.PadSheet ? new Uint8ClampedArray(this.PadSheet.data) : null;
+        });
+
+        Canvas.addEventListener("pointermove", (Event) =>
+        {
+            if (!this.PadStroke) return;
+            const Point = Where(Event);
+            const Last = this.PadStroke[this.PadStroke.length - 1];
+            if (Math.hypot(Point[0] - Last[0], Point[1] - Last[1]) < 1.6) return;
+            this.PadStroke.push(Point);
+            this.ExtendPad(Last, Point);
+        });
+
+        const Release = () =>
+        {
+            if (!this.PadStroke) return;
+            if (this.PadStroke.length > 1) this.PadPaths.push(this.PadStroke);
+            this.PadStroke = null;
+            this.PadBase = null;
+            this.RenderPadNote();
+        };
+        Canvas.addEventListener("pointerup", Release);
+        Canvas.addEventListener("pointercancel", Release);
+    }
+
+    // Paper and the strokes already committed to it: no example stroke, and no live one.
+    DrawPadEmpty()
+    {
+        const Canvas = this.Root.querySelector("[data-pad-canvas]");
+        const Pen = Canvas?.getContext("2d");
+        if (!Pen || typeof Pen.createImageData !== "function") return;
+        const Sheet = Pen.createImageData(Canvas.width, Canvas.height);
+        if (!Sheet || !Sheet.data) return;
+        FloodSheet(Sheet, PadPaper);
+        const Setting = this.StrokeSetting();
+        if (Setting)
+        {
+            const Tint = this.ReadTint();
+            for (const Path of this.PadPaths) this.LayPath(Sheet, Canvas.width, Canvas.height, Path, Setting, { Tint, Even: true });
+        }
+        this.PadSheet = Sheet;
+        Pen.putImageData(Sheet, 0, 0);
+    }
+
+    // One more inch of the live stroke: restore the sheet as it was when the stroke began, inside the new segment's
+    // reach, and re-lay the whole stroke there.
+    ExtendPad(From, To)
+    {
+        const Canvas = this.Root.querySelector("[data-pad-canvas]");
+        const Pen = Canvas?.getContext("2d");
+        if (!Pen || !this.PadSheet || !this.PadStroke) return;
+        const Setting = this.StrokeSetting();
+        if (!Setting) return;
+
+        const Limit = Setting.Reach * Setting.Extent + 3;
+        const Box = {
+            Left: Math.min(From[0], To[0]) - Limit,
+            Right: Math.max(From[0], To[0]) + Limit,
+            Top: Math.min(From[1], To[1]) - Limit,
+            Bottom: Math.max(From[1], To[1]) + Limit,
+        };
+        const Left = Math.max(0, Math.floor(Box.Left));
+        const Top = Math.max(0, Math.floor(Box.Top));
+        const Right = Math.min(Canvas.width - 1, Math.ceil(Box.Right));
+        const Bottom = Math.min(Canvas.height - 1, Math.ceil(Box.Bottom));
+        if (Right < Left || Bottom < Top) return;
+
+        if (this.PadBase)
+            for (let Row = Top; Row <= Bottom; Row += 1)
+            {
+                const Start = (Row * Canvas.width + Left) * 4;
+                const Finish = (Row * Canvas.width + Right + 1) * 4;
+                this.PadSheet.data.set(this.PadBase.subarray(Start, Finish), Start);
+            }
+
+        this.LayPath(this.PadSheet, Canvas.width, Canvas.height, this.PadStroke, Setting, {
+            Tint: this.ReadTint(),
+            Even: true,
+            Box,
+        });
+        Pen.putImageData(this.PadSheet, 0, 0, Left, Top, Right - Left + 1, Bottom - Top + 1);
+    }
+
 
     //----------------------------------------------------------------------------------------------------------------------
     // Behaviour.
@@ -354,6 +659,7 @@ export class InstrumentPanel
         if (this.Section && !this.Sections().some((Entry) => Entry.Key === this.Section)) this.Section = "";
         this.RenderRail();
         this.RenderPane(false);
+        this.DrawPad();
     }
 
     // Tab walks the rail: closed → first pane → next → … → closed. The key that opened the card is the one that leaves it.
@@ -397,6 +703,7 @@ export class InstrumentPanel
         this.Root.style.left = `${Math.round(Clamp(Anchor.X, Margin, Math.max(Margin, window.innerWidth - Width - Margin)))}px`;
         this.Root.style.top = `${Math.round(Clamp(Anchor.Y, Margin, Math.max(Margin, window.innerHeight - Height - Margin)))}px`;
         this.ScheduleRibbon();
+        if (this.Padded) this.SizePad();
     }
 
     Hide()

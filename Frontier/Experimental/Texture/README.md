@@ -137,28 +137,45 @@ be typed.
 **The card is the paint.** `Tab` summons one card and everything on it is a property of the paint in hand — there is no
 library of instruments on it and no row of preset colour chips, because choosing paint and tuning it are different acts
 and a card that tried to be both kept the controls one slide away from the thing they described. The rail is contextual
-to the layer: a paint layer gets **Colour**, **Shape**, **Colour dynamics**, **Grain**, **Taper**, **Stroke**,
-**Stabilization** and **Channels**; a decal layer gets **Colour**, **Artwork**, **Ink**, **Placement** and
-**Channels**; a folder gets none, because painting on a folder opens a layer inside it and that layer is what the panes
-would be about. Every row carries its own mark in the panel's hairline icon language, tinted with the row's colour, so
-the rail is read by shape before it is read by word. `Tab` again walks to the next pane and off the end of the rail
-closes the card.
+to the layer and it is grouped, because painting one thing in three dimensions is never one setting: a paint layer gets
+**Paint** (*Colour*, *Material*), **Head** (*Shape*, *Grain*) and **Hand** (*Stroke*, *Taper*); a decal layer gets
+**Artwork** (*Artwork*, *Placement*) and **Paint** (*Colour*, *Ink*, *Material*); a folder gets none, because painting
+on a folder opens a layer inside it and that layer is what the panes would be about. A metallic marker with a
+silver-to-gold fade is a colour, a gradient, a metalness and a roughness all at once — eight flat rows made the hand
+hunt for four of them, and the whole point of the grouping is that the related ones are now one glance apart. Every row
+carries its own mark in the panel's hairline icon language, tinted with the row's colour, so the rail is read by shape
+before it is read by word. `Tab` again walks to the next pane and off the end of the rail closes the card.
 
 **Colour** is a picker, not a palette: a saturation-and-brightness square under a hue bar, a hex field that takes a code
-typed straight in, and the last colours mixed. With a gradient in hand the pane grows the ramp as well — the strip the
-paint will actually run through, with a knob under every colour in it. A mask is offered the value ramp instead — a
-mask holds coverage, not hue, so a colour picker there would offer a choice that cannot be expressed. **Shape** is the head: size in centimetres
+typed straight in, and the last colours mixed. Everything the pigment does is in this one pane — the gradient it runs
+through, and the dynamics it wanders by — because a gradient *is* a colour and splitting it off put half the answer a
+rail away. One switch arms the ramp: the strip the paint will actually run through, a knob under every colour in it,
+the fit, the length, repeat, reverse and easing. A mask is offered the value ramp instead — a mask holds coverage, not
+hue, so a colour picker there would offer a choice that cannot be expressed. **Material** is the surface the paint
+lays down: the write switch for each of the eleven channels, the layer's own value for every channel the stroke writes
+sitting directly under its switch, and three finishes — Metal, Gloss, Matte — that set the three numbers which only
+ever move together. **Shape** is the head: size in centimetres
 of surface, hardness, roundness and the angle a chisel is held at, how many hairs it has and how far they splay, and
 what happens past the rim. **Grain** chooses the medium — plain, bristle, graphite, ink, felt, dry pigment or wax — and
 the paper under it: the tooth in cycles per metre, the streak along the stroke, how dry the head runs and how far one
-load carries. **Taper** is the entry ramp and the two pressure curves. **Stabilization** is how far the mark lags the
-hand. Every one of those numbers is the number the stamping pass runs on, not a percentage translated by an instrument
+load carries. **Taper** is the entry ramp and the two pressure curves. **Stroke** is how the mark goes down — freehand, line or wash
+— and how far it lags the hand. Every one of those numbers is the number the stamping pass runs on, not a percentage translated by an instrument
 nobody can see, and the ribbon at the top of each pane is a real stroke drawn with the same deposition model the GPU
 uses.
 
-**Colour dynamics.** Hue, saturation and brightness, each with a reach the dab may wander inside. The roll happens once
-per dab, on the processor, because one draw call carries one colour and a dab *is* one draw call — so two strokes over
-the same ground never match, which is the point of the control.
+**Colour dynamics.** Hue, saturation and brightness, each with a reach the dab may wander inside, sitting under the
+square they wander from. The roll happens once per dab, on the processor, because one draw call carries one colour and
+a dab *is* one draw call — so two strokes over the same ground never match, which is the point of the control.
+
+![A silver-to-gold marker, written on the card's own test sheet](test-sheet.png)
+
+**A test sheet, before the model.** The expand button in the head of any pane opens a third column on the card: a sheet
+of paper the width of the column, drawn on with the pointer. It runs the same deposition model the ribbon and the GPU
+run, at the brush's real size, through the same ramp the paint runs through — so a gradient that fades over forty
+centimetres fades over forty centimetres there too. Until the hand draws its own stroke the sheet shows the one the
+ribbon would; after that it keeps what was written, re-laying it whenever a setting changes, and *Clear* empties it.
+Nothing on the sheet reaches the model, which is the entire point: a gradient along the mark is a setting whose whole
+behaviour is in the hand, and the only honest preview of a stroke is a stroke.
 
 **Texture space takes the same tools.** `X` flattens the model to its sheet, and the brush, the eraser, the flood, the
 dropper, the straight line, the gradient and the decal all work there exactly as they do on the model. A point is named
@@ -169,23 +186,28 @@ becomes a placement in UV, draggable with the same press, that crosses no seam b
 
 **Stroke modes.** *Freehand* is the hand. *Line* is two points: press where it starts, aim, let go — the line is then
 walked across the **screen** and raycast at every step, so it lies on the model instead of cutting through it, and the
-angle can be held to 15°, 45° or 90°. *Gradient* is two points as well, but it is not a stroke at all: one pass over the
-whole sheet, fading along the axis between them, linear or radial, with four easings, a softness and a switch for
-whether it wraps all the way round the model or stops at the silhouette. It fades the paint away to nothing by
-default, which is a wash; switch *fade through the colours* on and it lays full coverage the whole way and runs
-through the ramp instead, which is a fill. Both show a rubber band while they are aimed and put nothing down until the
-hand lets go, so an undo step covers exactly one line or one gradient.
+angle can be held to 15°, 45° or 90°. *Wash* is two points as well, but it is not a stroke at all: one pass over the
+**whole sheet** — every texel of it, not only the ground under the drag — fading along the axis between the two
+points, linear or radial, with a softness and a switch for whether it wraps all the way round the model or stops at
+the silhouette. With the gradient off it fades the paint away to nothing, which is a wash; with it on it lays the ramp
+across the sheet, which is a fill. Both show a rubber band while they are aimed, and while the ramp is armed the band
+is painted *in the paint* — sampled the whole way along the aim, through the same arithmetic the dabs go through, at
+the thickness the brush will actually lay — so which end is silver and where the gold starts is visible before
+anything lands. Neither puts a texel down until the hand lets go, so an undo step covers exactly one line or one
+wash.
 
 ![A stroke carrying a four-colour ramp, measured both ways](gradient-stroke.png)
 
-**A stroke can be a gradient too.** The ramp is one record — up to eight colours at places along a fade — and two
-different acts read it. The gradient tool lays it over the sheet in one pass. An ordinary stroke *carries* it: every
-dab asks the ramp what colour it should be, which is rolled on the processor beside the colour dynamics, because one
-draw call carries one colour and a dab is one draw call. Mix it in the Colour pane: click the strip to add a colour,
-drag a knob to move it, double-click one to take it away, *take the colour in hand* to drop the brush's colour into
-the stop you are holding.
+**A stroke can be a gradient too.** The ramp is one record — up to eight colours at places along a fade — one switch
+arms it, and two different acts read it. A wash lays it across the sheet in a single pass. An ordinary stroke *runs
+through* it: every dab asks the ramp what colour it should be, rolled on the processor beside the colour dynamics,
+because one draw call carries one colour and a dab is one draw call. There is deliberately no second switch for the
+second reading — the ramp is the colour the stroke is made of, and which of the two readings is in play is the stroke
+mode's business, not the pigment's. Mix it in the Colour pane: click the strip to add a colour, drag a knob to move
+it, double-click one to take it away, *take the colour in hand* to drop the brush's colour into the stop you are
+holding.
 
-There are two honest answers to *where in the ramp does this dab sit*, and the Stroke pane offers both rather than
+There are two honest answers to *where in the ramp does this dab sit*, and the Colour pane offers both rather than
 choosing for you. **Along** measures the distance the hand has actually travelled, so the ramp runs out after a set
 length — forty centimetres of surface, say — and a stroke that wanders burns through the colours faster than one that
 goes straight. **End to end** measures where the dab falls *between the two ends of the mark*, so the ramp fits the
@@ -201,9 +223,10 @@ own points, so dragging one point cannot make the curve bulge somewhere else. Cl
 double-click to take it away; five presets sit under the widget. The size curve remaps the pressure the stamping pass is
 handed, which is what thins the mark and what the medium deposits by; the flow curve rides on the instrument's own flow.
 
-**Channels, per stroke.** Eleven switches over the four images a layer paints into: base colour, roughness, metalness,
-occlusion, height, specular, coat, coat roughness, fuzz, emission and transmission. Switched off means the stroke leaves
-that channel exactly as it found it. The hardware can mask the components of one attachment at a time, so a stroke with
+**Channels, per stroke.** Eleven switches over the four images a layer paints into, in the Material pane: base colour,
+roughness, metalness, occlusion, height, specular, coat, coat roughness, fuzz, emission and transmission. Each one that
+is written carries its value directly under it, so *what the stroke writes* and *what it writes there* are one
+decision in one place. Switched off means the stroke leaves that channel exactly as it found it. The hardware can mask the components of one attachment at a time, so a stroke with
 a partial selection is drawn once per image with the chosen one routed to the first output and a colour mask doing the
 rest; an untouched selection stays the single four-attachment draw it always was. The layer's own cover is always
 written — a stroke that paints roughness alone would otherwise never show — and a layer still carrying one set of values

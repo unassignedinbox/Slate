@@ -4463,13 +4463,21 @@ details.channel-control > summary code {
   overflow: visible;
 }
 
-.stroke-rubber line {
+/* The aim, painted in the paint it will lay: round-capped, half-lit, and under the dashed line that measures it. */
+.rubber-ink {
+  stroke: url(#rubber-ramp);
+  stroke-linecap: round;
+  stroke-width: 0;
+  opacity: 0.62;
+}
+
+.stroke-rubber line:not(.rubber-ink) {
   stroke: rgba(255, 255, 255, 0.85);
   stroke-width: 1.5;
   stroke-dasharray: 5 4;
 }
 
-.stroke-rubber.gradient line {
+.stroke-rubber.gradient line:not(.rubber-ink) {
   stroke: var(--green);
   stroke-dasharray: none;
   stroke-width: 2;
@@ -4506,6 +4514,112 @@ details.channel-control > summary code {
   letter-spacing: 0.9px;
   text-transform: uppercase;
   color: #5a5a5a;
+}
+
+.rail-split:first-child {
+  margin-top: 3px;
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*  The test sheet — a third column, opened from the head of the pane                                                   */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+.pane-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.pane-tools .pane-key {
+  margin-left: 0;
+}
+
+.pane-expand {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #1b1b1b;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.pane-expand svg {
+  width: 16px;
+  height: 16px;
+}
+
+.pane-expand:hover {
+  background: var(--raised);
+  color: var(--text);
+}
+
+.pane-expand.on {
+  border-color: rgba(52, 199, 89, 0.5);
+  background: rgba(52, 199, 89, 0.14);
+  color: var(--green);
+}
+
+/* The card grows sideways rather than reflowing: the pane under the hand keeps its width, and so keeps its place. */
+.tool-card.padded {
+  --card-width: 862px;
+}
+
+.tool-card.padded .tool-slide {
+  grid-template-columns: 186px minmax(0, 1fr) 300px;
+}
+
+.tool-pad {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  padding: 14px 14px 12px;
+  border-left: 1px solid var(--line);
+  background: #0e0e0e;
+}
+
+.pad-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pad-title {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.pad-head .chip-button {
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 12px;
+}
+
+/* 📝 The canvas is sized in pixels by the card when the sheet opens, so one canvas pixel is one screen pixel and the
+      brush on the sheet is the size the brush actually is. */
+.pad-canvas {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  border-radius: 14px;
+  background: #f4f1ea;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.pad-note {
+  font-size: 10.5px;
+  color: #6a6a6a;
+  text-align: center;
+}
+
+.channel-value {
+  padding-left: 30px;
 }
 
 .tool-sheet {

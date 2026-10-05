@@ -24,7 +24,10 @@ const Clamp = (Value, Low, High) => Math.min(High, Math.max(Low, Value));
 export const StrokeModes = [
     { Identifier: "freehand", Label: "Freehand", Note: "Paint follows the hand", Glyph: "brush" },
     { Identifier: "line", Label: "Line", Note: "Press, aim, release", Glyph: "vector" },
-    { Identifier: "gradient", Label: "Gradient", Note: "Fades along the drag", Glyph: "height" },
+    // 📝 Named "Wash" on the card and `gradient` in the file. The identifier is in saved work and in every harness,
+    //    and the word it needed was never the mechanism: this one lays the ramp over the WHOLE sheet in a single
+    //    pass, where Freehand and Line run it along the mark. Two readings of one gradient, told apart by name.
+    { Identifier: "gradient", Label: "Wash", Note: "One pass across the whole sheet", Glyph: "height" },
 ];
 
 export const StrokeModeIdentifiers = StrokeModes.map((Mode) => Mode.Identifier);
@@ -83,12 +86,12 @@ export const GradientDefaults = {
     // round instead, which is what you want for a ground-up dirt pass and never what you want for a logo fade.
     Through: false,
     Softness: 0.5,
-    // A gradient normally fades the paint away to nothing, which is what makes it a wash. `Colours` runs it through the
-    // ramp instead and lays full coverage the whole way, which is what makes it a fill.
-    Colours: false,
-    Stops: DefaultRampStops(),
-    // Whether an ordinary stroke carries the ramp too, and how it finds its place in it.
+    // 🔴 One switch, not two. `Carry` arms the ramp for the paint, and what that means depends on how the mark is
+    //    being laid: a stroke runs THROUGH the colours dab by dab, a wash lays them across the sheet in one pass at
+    //    full coverage. Two switches for one idea is what made the first version of this confusing — the hand turned
+    //    the gradient on, drew, and got the colour in hand because the OTHER switch was the one that mattered.
     Carry: false,
+    Stops: DefaultRampStops(),
     Fit: "along",
     Span: 0.6,   // [m] how far the ramp runs before it ends, when it is measured along the mark
     Scale: 1,    // [×] how much of the two ends the ramp covers, when it is fitted between them

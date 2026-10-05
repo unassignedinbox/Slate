@@ -108,6 +108,10 @@
                         <canvas id="surface-canvas" aria-label="Interactive painted surface viewport"></canvas>
                         <div class="brush-ghost" id="brush-ghost" hidden aria-hidden="true"></div>
                         <svg class="stroke-rubber" id="stroke-rubber" hidden aria-hidden="true">
+                            <defs>
+                                <linearGradient id="rubber-ramp" gradientUnits="userSpaceOnUse"></linearGradient>
+                            </defs>
+                            <line class="rubber-ink" id="rubber-ink" x1="0" y1="0" x2="0" y2="0" />
                             <line x1="0" y1="0" x2="0" y2="0" />
                             <circle class="rubber-end" cx="0" cy="0" r="4" />
                             <circle class="rubber-end" cx="0" cy="0" r="4" />
