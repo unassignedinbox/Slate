@@ -1277,7 +1277,15 @@ export class ShadingIntegrator
             Device.uniform3fv(Uniforms.get("uFinishColourB"), Finish.ColourB);
             Device.uniform4f(Uniforms.get("uFinishShape"), Finish.Scale * Scale, Finish.Density, Finish.Strength, Finish.Gloss);
             Device.uniform4f(Uniforms.get("uFinishTrim"), Finish.Coat, Finish.Angle, Finish.Variation, Finish.Seed);
-            Device.uniform4f(Uniforms.get("uFinishExtra"), Finish.Peel ?? 0.3, 0, 0, 0);
+            // The height range travels with the finish: a flake's facet is a slope in millimetres, and the channel it
+            // is written into only means millimetres because the material says how many.
+            Device.uniform4f(
+                Uniforms.get("uFinishExtra"),
+                Finish.Peel ?? 0.3,
+                Finish.Flake ?? 6,
+                Finish.Tilt ?? 0.55,
+                Material?.height_scale ?? 4,
+            );
         }
 
         // Layer scope: the UDIM tile of the object the layer belongs to, or the whole sheet when it belongs to the scene.

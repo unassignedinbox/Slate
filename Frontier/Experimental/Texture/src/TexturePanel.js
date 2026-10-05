@@ -66,6 +66,7 @@ import {
     EnvironmentOrdering,
     MaterialLibrary,
     MaterialByIdentifier,
+    MetalByIdentifier,
 } from "./MaterialSpecification.js";
 import {
     FinishFamilies,
@@ -940,6 +941,7 @@ export class TexturePanel
                 Label: "Materials",
                 Items: [
                     ...FinishFamilies.map((Family) => ({ Identifier: Family.Identifier, Label: Family.Label })),
+                    { Identifier: "conductors", Label: "Metals" },
                     { Identifier: "presets", Label: "Surface presets" },
                 ],
             },
@@ -983,6 +985,17 @@ export class TexturePanel
                 Note: Entry.Note,
                 Type: "Material",
                 Measure: FinishFamilies.find((Family2) => Family2.Identifier === Entry.Family)?.Label || "",
+                Swatch: Entry.Swatch,
+            }));
+        if (Section === "materials" && Item === "conductors")
+            return MaterialLibrary.filter((Entry) => Entry.Category === "metal").map((Entry) => ({
+                Identifier: Entry.Identifier,
+                Label: Entry.Label,
+                Note: Entry.Note,
+                Type: "Conductor",
+                Measure: MetalByIdentifier[Entry.Identifier.replace("metal-", "")]
+                    ? `rough ${MetalByIdentifier[Entry.Identifier.replace("metal-", "")].Roughness.toFixed(2)}`
+                    : `${Entry.Layers.length} layer${Entry.Layers.length === 1 ? "" : "s"}`,
                 Swatch: Entry.Swatch,
             }));
         if (Section === "materials" && Item === "presets")
@@ -1306,7 +1319,7 @@ export class TexturePanel
     {
         const [Section, Item] = (Landing.Selection || this.BrowserSelection).split("/");
         this.AssetLanding = Landing.At ? { At: Landing.At, Inside: !!Landing.Inside } : null;
-        if (Section === "materials" && Item === "presets")
+        if (Section === "materials" && (Item === "presets" || Item === "conductors"))
         {
             const Preset = MaterialByIdentifier[Identifier];
             if (!Preset) return;

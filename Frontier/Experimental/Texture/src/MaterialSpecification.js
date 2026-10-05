@@ -67,6 +67,77 @@ export const MaterialCategories = [
     { Identifier: "effect", Label: "Effect" },
 ];
 
+//--------------------------------------------------------------------------------------------------------------------------
+// Conductors.
+//
+// A metal is not a colour with the metalness slider pushed up. Its reflectance is complex-valued and varies across the
+// spectrum, which is why gold looks like gold at a glancing angle as well as head-on — and why a metal rendered with a
+// single Schlick term always reads as painted plastic at the silhouette.
+//
+// OpenPBR takes Kutz's F82-tint form for conductors: the colour at normal incidence, and a second colour at the angle
+// where a real conductor dips before it climbs back to white. So every metal here carries BOTH — `Reflectance` is the
+// facing colour and `EdgeTint` is the dip, read off the published n and k at 600/550/450 nm. Both are linear light,
+// not sRGB, because that is what the shading multiplies by.
+//
+// `Roughness` is a plausible mill finish for the metal rather than a property of it; `Anisotropy` is how directional
+// that finish is, which for a rolled or brushed sheet is most of what tells you which metal you are looking at.
+//--------------------------------------------------------------------------------------------------------------------------
+
+export const MetalArchive = [
+    { Identifier: "aluminium", Label: "Aluminium", Note: "Rolled 6061 · n 1.35 k 7.47", Reflectance: [0.912, 0.914, 0.92], EdgeTint: [0.97, 0.97, 0.98], Roughness: 0.22, Anisotropy: 0.55 },
+    { Identifier: "silver", Label: "Silver", Note: "Sterling · the brightest of them", Reflectance: [0.962, 0.949, 0.922], EdgeTint: [0.999, 0.998, 0.998], Roughness: 0.06, Anisotropy: 0 },
+    { Identifier: "chrome", Label: "Chrome", Note: "Plated · faintly blue", Reflectance: [0.55, 0.556, 0.554], EdgeTint: [0.86, 0.9, 0.95], Roughness: 0.04, Anisotropy: 0 },
+    { Identifier: "gold", Label: "Gold", Note: "24 ct · n 0.27 k 2.78", Reflectance: [1, 0.766, 0.336], EdgeTint: [1, 0.91, 0.75], Roughness: 0.1, Anisotropy: 0 },
+    { Identifier: "copper", Label: "Copper", Note: "Freshly turned", Reflectance: [0.955, 0.638, 0.538], EdgeTint: [0.995, 0.826, 0.762], Roughness: 0.16, Anisotropy: 0.2 },
+    { Identifier: "brass", Label: "Brass", Note: "70/30 cartridge", Reflectance: [0.887, 0.789, 0.434], EdgeTint: [0.98, 0.93, 0.78], Roughness: 0.2, Anisotropy: 0.35 },
+    { Identifier: "bronze", Label: "Bronze", Note: "Cast, unpatinated", Reflectance: [0.714, 0.428, 0.181], EdgeTint: [0.93, 0.8, 0.62], Roughness: 0.34, Anisotropy: 0.1 },
+    { Identifier: "iron", Label: "Iron", Note: "Clean, unoxidised", Reflectance: [0.56, 0.57, 0.58], EdgeTint: [0.82, 0.84, 0.86], Roughness: 0.38, Anisotropy: 0.15 },
+    { Identifier: "steel", Label: "Stainless", Note: "304 · 2B mill finish", Reflectance: [0.66, 0.67, 0.68], EdgeTint: [0.9, 0.92, 0.94], Roughness: 0.26, Anisotropy: 0.6 },
+    { Identifier: "titanium", Label: "Titanium", Note: "Grade 5 · warm grey", Reflectance: [0.616, 0.582, 0.544], EdgeTint: [0.88, 0.87, 0.86], Roughness: 0.3, Anisotropy: 0.4 },
+    { Identifier: "nickel", Label: "Nickel", Note: "Plated · slightly yellow", Reflectance: [0.66, 0.609, 0.526], EdgeTint: [0.9, 0.88, 0.84], Roughness: 0.18, Anisotropy: 0 },
+    { Identifier: "platinum", Label: "Platinum", Note: "Neutral, dense", Reflectance: [0.679, 0.642, 0.588], EdgeTint: [0.92, 0.91, 0.9], Roughness: 0.14, Anisotropy: 0 },
+    { Identifier: "zinc", Label: "Galvanised zinc", Note: "Hot-dip · spangled", Reflectance: [0.664, 0.824, 0.85], EdgeTint: [0.9, 0.95, 0.96], Roughness: 0.44, Anisotropy: 0 },
+    { Identifier: "lead", Label: "Lead", Note: "Soft, dull, blue-grey", Reflectance: [0.632, 0.626, 0.641], EdgeTint: [0.84, 0.85, 0.88], Roughness: 0.52, Anisotropy: 0 },
+];
+
+export const MetalByIdentifier = Object.fromEntries(MetalArchive.map((Entry) => [Entry.Identifier, Entry]));
+
+// A conductor as a one-layer material: the facing colour as base, the dip as the material's specular colour, and the
+// mill finish it usually comes with. Anything worked into the surface afterwards goes on as layers above it.
+export const MetalPreset = (Identifier, Overrides = {}) =>
+{
+    const Metal = MetalByIdentifier[Identifier];
+    if (!Metal) return null;
+    const Swatch = Metal.Reflectance
+        .map((Component) => Math.round(Math.min(1, Math.max(0, Component)) ** (1 / 2.2) * 255).toString(16).padStart(2, "0"))
+        .join("");
+    return {
+        Identifier: `metal-${Metal.Identifier}`,
+        Label: Metal.Label,
+        Category: "metal",
+        Note: Metal.Note,
+        Swatch: `#${Swatch}`,
+        Surface: {
+            specular_color: [...Metal.EdgeTint],
+            specular_roughness_anisotropy: Metal.Anisotropy,
+            specular_ior: 2.4,
+        },
+        Layers: [
+            {
+                Name: Metal.Label,
+                Kind: "fill",
+                Channels: {
+                    base_color: [...Metal.Reflectance],
+                    base_metalness: 1,
+                    specular_roughness: Metal.Roughness,
+                    specular_weight: 1,
+                },
+            },
+        ],
+        ...Overrides,
+    };
+};
+
 export const MaterialLibrary = [
     {
         Identifier: "brushed-aluminium",
@@ -444,6 +515,51 @@ export const MaterialLibrary = [
         ],
     },
 ];
+
+// Every conductor in the archive is a preset in its own right, after the hand-built ones so the shelf opens on those.
+MaterialLibrary.push(
+    ...MetalArchive.map((Metal) => MetalPreset(Metal.Identifier)).filter(Boolean),
+    {
+        Identifier: "machined-titanium",
+        Label: "Machined titanium",
+        Category: "metal",
+        Note: "Turned face · concentric tool marks",
+        Swatch: "#8f8a84",
+        Surface: { specular_color: [0.88, 0.87, 0.86], specular_roughness_anisotropy: 0.78 },
+        Layers: [
+            {
+                Name: "Titanium",
+                Kind: "fill",
+                Channels: { base_color: [0.616, 0.582, 0.544], base_metalness: 1, specular_roughness: 0.24, specular_weight: 1 },
+            },
+            {
+                Name: "Tool marks",
+                Kind: "generator",
+                Blend: "overlay",
+                Opacity: 0.6,
+                Generator: { Kind: "scratches", Scale: 12, Contrast: 0.8, Angle: 90, Detail: 4 },
+                Channels: { specular_roughness: 0.44, height: 0.53 },
+            },
+        ],
+    },
+    {
+        Identifier: "flake-metallic",
+        Label: "Metallic basecoat",
+        Category: "effect",
+        Note: "Aluminium leaf in pigment, under clear",
+        Swatch: "#2f4f7a",
+        Surface: { coat_ior: 1.5, coat_darkening: 0.6 },
+        Layers: [
+            {
+                Name: "Metallic paint",
+                Kind: "finish",
+                Finish: { Family: "automotive", Style: "metallic", Flake: 2.4, Tilt: 0.65, Density: 0.5, Strength: 0.7 },
+                // The finish decides what these end up as per texel; they are what the layer reads as before it does.
+                Channels: { base_color: [0.1, 0.19, 0.34], base_metalness: 0.2, specular_roughness: 0.14, coat_weight: 0.9 },
+            },
+        ],
+    },
+);
 
 export const MaterialByIdentifier = Object.fromEntries(
     MaterialLibrary.map((Material) => [Material.Identifier, Material]),

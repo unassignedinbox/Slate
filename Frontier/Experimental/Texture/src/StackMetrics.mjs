@@ -82,7 +82,16 @@ import {
     ExportOrdering,
     ResolutionOrdering,
 } from "./ChannelSpecification.js";
-import { SurfaceDefaults, SurfaceControls, MaterialLibrary, MaterialByIdentifier, EnvironmentOrdering } from "./MaterialSpecification.js";
+import {
+    SurfaceDefaults,
+    SurfaceControls,
+    MaterialLibrary,
+    MaterialByIdentifier,
+    MetalArchive,
+    MetalByIdentifier,
+    MetalPreset,
+    EnvironmentOrdering,
+} from "./MaterialSpecification.js";
 import { GeneratorOrdering, GeneratorIndex, NormaliseGenerator, DefaultGenerator, GeneratorControls } from "./GeneratorSpecification.js";
 import {
     FinishFamilies,
@@ -227,6 +236,50 @@ test("generators normalise unknown input without losing their controls", () =>
         assert.ok(Generator[Name] >= Control.Minimum && Generator[Name] <= Control.Maximum, `${Name} escaped its range`);
     }
     assert.deepEqual(Object.keys(DefaultGenerator("cells")).sort(), Object.keys(Generator).sort());
+});
+
+test("a conductor carries both ends of its Fresnel, and a preset keeps them", () =>
+{
+    assert.ok(MetalArchive.length >= 12, "too few metals to be worth calling an archive");
+    const Seen = new Set();
+    for (const Metal of MetalArchive)
+    {
+        assert.ok(!Seen.has(Metal.Identifier), `${Metal.Identifier} appears twice`);
+        Seen.add(Metal.Identifier);
+        assert.equal(MetalByIdentifier[Metal.Identifier], Metal);
+        for (const Key of ["Reflectance", "EdgeTint"])
+        {
+            assert.equal(Metal[Key].length, 3, `${Metal.Identifier}.${Key}`);
+            assert.ok(Metal[Key].every((Component) => Component >= 0 && Component <= 1), `${Metal.Identifier}.${Key} is not linear`);
+        }
+        // 🔴 A conductor is bright. Anything reflecting less than a third at normal incidence is a dielectric wearing
+        //    a metal's name, and the F82 dip must sit ABOVE the facing colour — that is the whole point of the form.
+        assert.ok(Math.max(...Metal.Reflectance) > 0.33, `${Metal.Identifier} is too dark to be a metal`);
+        Metal.EdgeTint.forEach((Component, Index) =>
+            assert.ok(Component >= Metal.Reflectance[Index] - 1e-6, `${Metal.Identifier} dips below its facing colour`));
+        assert.ok(Metal.Roughness > 0 && Metal.Roughness < 1, `${Metal.Identifier} has no mill finish`);
+        assert.ok(Metal.Anisotropy >= 0 && Metal.Anisotropy <= 1);
+    }
+
+    // Gold and silver are the two everyone checks, so they are the two worth pinning.
+    assert.deepEqual(MetalByIdentifier.gold.Reflectance, [1, 0.766, 0.336]);
+    assert.ok(MetalByIdentifier.silver.Reflectance[0] > 0.95, "silver is the brightest metal there is");
+    assert.ok(MetalByIdentifier.copper.Reflectance[0] > MetalByIdentifier.copper.Reflectance[2], "copper is not red");
+
+    const Preset = MetalPreset("copper");
+    assert.equal(Preset.Identifier, "metal-copper");
+    assert.equal(Preset.Category, "metal");
+    assert.deepEqual(Preset.Surface.specular_color, MetalByIdentifier.copper.EdgeTint, "the dip was dropped");
+    assert.equal(Preset.Layers[0].Channels.base_metalness, 1);
+    assert.deepEqual(Preset.Layers[0].Channels.base_color, MetalByIdentifier.copper.Reflectance);
+    assert.ok(/^#[0-9a-f]{6}$/.test(Preset.Swatch), Preset.Swatch);
+    assert.equal(MetalPreset("nonsense"), null);
+    // The swatch is for the eye, so it is the colour after the transfer curve, not the linear one.
+    assert.equal(MetalPreset("gold").Swatch, "#ffe29b");
+
+    // And every one of them reached the library the browser reads.
+    for (const Metal of MetalArchive)
+        assert.ok(MaterialByIdentifier[`metal-${Metal.Identifier}`], `${Metal.Identifier} never reached the shelf`);
 });
 
 test("material constants cover every control and every library entry resolves", () =>
@@ -696,9 +749,14 @@ test("every finish family declares the controls its shader branch reads", () =>
         assert.equal(FinishColours(Family.Identifier).length, 2, "every family mixes exactly two colours");
         // Seven sliders every family, but the sixth is the family's own: automotive spends it on orange peel, which
         // is the one thing every real car panel has and no other family does, while the rest rotate their field.
+        // Automotive carries two more on top, because flake is a physical size and a physical tilt and nothing else
+        // in the editor has either.
         const Keys = FinishControls(Family.Identifier).map((Control) => Control.Key);
-        const Sixth = Family.Identifier === "automotive" ? "Peel" : "Angle";
-        assert.deepEqual(Keys, ["Scale", "Density", "Strength", "Gloss", "Coat", Sixth, "Variation"], Family.Identifier);
+        const Expected =
+            Family.Identifier === "automotive"
+                ? ["Scale", "Flake", "Density", "Strength", "Tilt", "Gloss", "Coat", "Peel", "Variation"]
+                : ["Scale", "Density", "Strength", "Gloss", "Coat", "Angle", "Variation"];
+        assert.deepEqual(Keys, Expected, Family.Identifier);
         for (const Control of FinishControls(Family.Identifier))
             assert.ok(Control.Maximum > Control.Minimum, `${Family.Identifier}.${Control.Key} has an empty range`);
     });
@@ -711,6 +769,36 @@ test("every finish family declares the controls its shader branch reads", () =>
     );
     assert.equal(FinishStyleIndex("fabric", "nonsense"), 0, "an unknown style must fall back rather than throw");
     assert.equal(FinishFamilyIndex("nonsense"), 0);
+});
+
+test("flake is a size on the panel, and the shelf chooses one per paint", () =>
+{
+    const Automotive = FinishShelf.filter((Entry) => Entry.Family === "automotive");
+    for (const Entry of Automotive)
+    {
+        assert.ok(Entry.Settings.Flake >= 0.4 && Entry.Settings.Flake <= 24, `${Entry.Identifier} flake ${Entry.Settings.Flake}`);
+        assert.ok(Entry.Settings.Tilt >= 0 && Entry.Settings.Tilt <= 1, Entry.Identifier);
+        // A paint with no flake in it must not be given a tilt, and a flake paint must be given one, or the shelf is
+        // choosing numbers the user then has to undo.
+        const Flaked = ["metallic", "pearl", "candy", "chameleon"].includes(Entry.Style);
+        if (!Flaked && Entry.Style !== "matte") assert.equal(Entry.Settings.Tilt, 0, `${Entry.Identifier} tilts nothing`);
+        if (Flaked) assert.ok(Entry.Settings.Tilt > 0.2, `${Entry.Identifier} has flake that cannot flare`);
+    }
+
+    // The show flake is the coarse one. If that ever stops being true the shelf has lost its range.
+    const Coarse = Automotive.find((Entry) => Entry.Identifier === "hot-rod-flake");
+    const Fine = Automotive.find((Entry) => Entry.Identifier === "obsidian-black");
+    assert.ok(Coarse.Settings.Flake > Fine.Settings.Flake * 4, "the coarse and fine metallics are the same paint");
+
+    const Clamped = SanitiseFinish({ Family: "automotive", Style: "metallic", Flake: 900, Tilt: 7 });
+    assert.equal(Clamped.Flake, 24);
+    assert.equal(Clamped.Tilt, 1);
+    assert.equal(SanitiseFinish({ Flake: -5, Tilt: -5 }).Flake, 0.4);
+    assert.equal(SanitiseFinish({ Flake: -5, Tilt: -5 }).Tilt, 0);
+    assert.equal(FinishDefaults().Flake, 4, "the default flake moved");
+    // 🔴 Two texels is the floor. At the default sheet a texel is about two millimetres of panel, so a flake any
+    //    finer than this is a number the sheet cannot keep, however honest the millimetres are.
+    assert.ok(FinishDefaults().Flake >= 4, "the default flake is below what a 1024 sheet can hold");
 });
 
 test("the shelf only offers finishes the families can actually evaluate", () =>

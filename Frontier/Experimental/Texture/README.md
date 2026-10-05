@@ -10,7 +10,7 @@ cd Frontier/Experimental/Texture
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
-npm test           # 115 unit tests, no browser required
+npm test           # 117 unit tests, no browser required
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -324,6 +324,31 @@ shallow undulation in height and a matching wobble in coat roughness, on a slide
 on the shelf, from Rosso corsa through hot rod metalflake to a midnight purple flip, and each one's pigment is the
 linear form of the swatch beside it rather than a guess.
 
+![Metallic basecoat, before and after](car-flake.png)
+
+**Flake is a facet, not a speck.** What makes a metallic panel flare as you walk past it is that each flake lies at
+its own angle, so the one catching the light is never the one that caught it a second ago. The flake field is laid out
+in the **world**, not in the unwrap — a flake is a physical thing, and a field laid out in UV changes size wherever the
+unwrap changes density, which is the clearest tell of a faked metallic. Each flake is then written into the height
+channel as a **ramp across its own width**, because the shading differentiates height into a normal and the derivative
+of a ramp is a tilt. The ramp's height is a real length — the flake's radius over what the height channel is worth end
+to end — so a coarse show flake and a fine factory metallic differ in how wide their facets are rather than in how
+steep, which is the right way round. Flake size is a slider in millimetres measured on the panel, and the honest limit
+is the sheet: a 1024 map on a two-metre object has texels about two millimetres across, and flake finer than a couple
+of texels cannot be held however truthful the number is. Real aluminium leaf is 25 µm; no baked texture can hold it,
+and the editor says so rather than pretending.
+
+![Fourteen conductors](metals.png)
+
+**Metals are conductors, not colours with a slider pushed up.** Fourteen of them carry both ends of their Fresnel:
+`Reflectance`, the colour facing you, and `EdgeTint`, the dip near grazing before it climbs back to white, read off
+published n and k at 600/550/450 nm and stored in linear light. That pair is what OpenPBR's F82-tint form wants, and
+it is the difference between gold that looks like gold at the silhouette and gold that looks like painted plastic
+there. Each one arrives as a one-layer preset with the mill finish it usually comes with, under **Metals** in the
+browser. **Anisotropy is now a shape**: the highlight is drawn out across the grain and squeezed along it, through a
+two-alpha GGX with its own Smith term, rather than the narrowed isotropic lobe that could only ever make the same
+round highlight smaller. Brushed aluminium, stainless and machined titanium read as worked metal because of it.
+
 **Every stroke keeps the material it was painted with.** Set the inspector to metalness 1 and roughness 0, paint a
 rivet; set it to roughness 0.5, metalness 0.5 and height 1, paint a scuff beside it. Both keep what they were given.
 The same is true of a decal: a mark takes a copy of the channel values in hand the moment it is dropped onto the
@@ -410,7 +435,7 @@ painted. With the orbit tool in hand, a left click that never becomes a drag sel
 | --- | --- |
 | `TexturePanel.js` | The panel: stack, masks, inspector, content browser, tools, documents, shortcuts, dialogs. |
 | `ChannelSpecification.js` | The twelve channels, their packing, encodings, blend and export orderings. |
-| `MaterialSpecification.js` | Surface constants, material presets, the six-light environments. |
+| `MaterialSpecification.js` | Surface constants, the conductor archive, material presets, the environments. |
 | `GeneratorSpecification.js` | Procedural and surface-signal generators and their parameter ranges. |
 | `FinishSpecification.js` | Procedural material families, their styles, named controls and the preset shelf. |
 | `LayerSpecification.js` | Layer, mask and decal records; sanitisers; project defaults and validation. |

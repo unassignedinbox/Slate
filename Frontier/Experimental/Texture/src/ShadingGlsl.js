@@ -35,6 +35,12 @@ vec2 Hash22(vec2 Seed)
 {
     return fract(sin(vec2(dot(Seed, vec2(127.1, 311.7)), dot(Seed, vec2(269.5, 183.3)))) * 43758.5453123);
 }
+vec3 Hash33(vec3 Seed)
+{
+    return fract(
+        sin(vec3(dot(Seed, vec3(127.1, 311.7, 74.7)), dot(Seed, vec3(269.5, 183.3, 246.1)), dot(Seed, vec3(113.5, 271.9, 124.6))))
+        * 43758.5453123);
+}
 float ValueNoise(vec2 Coordinate)
 {
     vec2 Cell = floor(Coordinate);
@@ -122,7 +128,60 @@ struct FinishSample
     float Occlusion;
 };
 
-// A sparse field of oriented flakes: each cell either carries one or it does not, and the ones that do catch the light.
+//--------------------------------------------------------------------------------------------------------------------------
+// Flake, properly.
+//
+// 🔴 The flake field lives in the WORLD, not in the unwrap. A flake is a physical thing — aluminium leaf is about 15 to
+//    40 microns across, mica a little wider — and a field laid out in UV would change size wherever the unwrap changed
+//    density, which is the single clearest tell of a faked metallic.
+//
+// 📝 And it is a FACET, not a speck. What makes a metallic panel flare as you walk past it is that each flake lies at
+//    its own angle, so the one catching the light is never the one that caught it a second ago. The pass bakes into a
+//    height channel that the shading differentiates into a normal, so a flake is written as a RAMP across its own
+//    width — the derivative of a ramp is the tilt, and the tilt is the flare. A flat bright speck cannot flare.
+//
+// Cells are 3D: the surface only ever crosses a thin slab of them, so they cost a column of empty cells and in return
+// the field has no seams, no poles and no stretch. The jitter and the flake radius are held below half a cell between
+// them, which is what lets the eight nearest cells be the whole search.
+//
+// Returns: x how much of this texel the flake covers · y its own brightness · z the ramp across its facet, ±1 at the
+// rim · w its radius in metres, which is what turns that ramp into a real slope.
+//--------------------------------------------------------------------------------------------------------------------------
+vec4 FlakeAt(vec3 Position, vec3 Normal, float Size, float Density, float Seed)
+{
+    float Cell = max(Size, 0.00002);
+    vec3 Lattice = Position / Cell;
+    vec3 Base = floor(Lattice - 0.5);
+    vec3 Side = normalize(abs(Normal.y) < 0.9 ? cross(Normal, vec3(0.0, 1.0, 0.0)) : cross(Normal, vec3(1.0, 0.0, 0.0)));
+    vec3 Other = cross(Normal, Side);
+    vec4 Found = vec4(0.0);
+    float Near = 1e9;
+    for (int X = 0; X < 2; ++X)
+    for (int Y = 0; Y < 2; ++Y)
+    for (int Z = 0; Z < 2; ++Z)
+    {
+        vec3 Which = Base + vec3(float(X), float(Y), float(Z));
+        if (Hash31(Which + Seed) > clamp(Density, 0.02, 1.0)) continue;
+        vec3 Centre = (Which + 0.5 + (Hash33(Which + Seed * 3.17) - 0.5) * 0.4) * Cell;
+        vec3 Delta = Position - Centre;
+        float Through = dot(Delta, Normal);
+        if (abs(Through) > Cell * 0.5) continue;
+        vec2 Local = vec2(dot(Delta, Side), dot(Delta, Other));
+        float Reach = length(Local);
+        if (Reach > Near) continue;
+        float Radius = Cell * mix(0.1, 0.25, Hash31(Which + Seed * 7.31));
+        if (Reach > Radius) continue;
+        Near = Reach;
+        float Angle = Hash31(Which + Seed * 13.7) * 6.2831853;
+        float Tilt = mix(0.35, 1.0, Hash31(Which + Seed * 19.3));
+        // The ramp runs across the flake along its own direction: flat at the centre, ±1 at its edges.
+        float Across = dot(Local / max(Radius, 1e-6), vec2(cos(Angle), sin(Angle)));
+        Found = vec4(1.0 - smoothstep(0.72, 1.0, Reach / max(Radius, 1e-6)), Hash31(Which + Seed * 23.9), Across * Tilt, Radius);
+    }
+    return Found;
+}
+
+// The old flake field, still what the galvanised spangle and the weave want: cells in the unwrap, present or absent.
 float FlakeField(vec2 Coordinate, float Scale, float Density, float Seed, out float Facet)
 {
     vec2 Lattice = Coordinate * max(Scale, 0.001);
@@ -167,6 +226,9 @@ FinishSample SampleFinish(
     float Variation = Trim.z;
     float Seed = Trim.w;
     float PeelAmount = clamp(Extra.x, 0.0, 1.0);          // [-]   how far the clear coat failed to level
+    float FlakeSize = max(Extra.y, 0.4) * 0.001;          // [m]   flake across, measured on the panel
+    float FlakeTilt = clamp(Extra.z, 0.0, 1.0);           // [-]   how far the flakes lie off the panel
+    float HeightRange = max(Extra.w, 0.25);               // [mm]  what the whole height channel is worth, end to end
 
     vec2 Turned = Rotate(Coordinate - 0.5, Angle) + 0.5;
     FinishSample Result;
@@ -186,8 +248,16 @@ FinishSample SampleFinish(
         // clear coat over the top that never quite levels. That last part is orange peel, and it is the reason a
         // reflection in car paint wobbles while a reflection in a mirror does not — so it is modelled here as a shallow
         // undulation in height and a matching wobble in coat roughness, present on every style that has a coat at all.
-        float Facet = 0.0;
-        float Flakes = FlakeField(Turned, Scale * 240.0, Density, Seed, Facet);
+        vec4 Leaf = FlakeAt(Position, Normal, FlakeSize, Density, Seed);
+        float Flakes = Leaf.x;
+        float Facet = Leaf.y;
+        // 🔴 The ramp is what the shading differentiates into a tilted facet, and its height has to be a real length
+        //    or the tilt changes every time the flake size or the height range does. A facet of radius r lying at an
+        //    angle rises r·tanθ above its own centre, so the ramp is written in exactly those terms: the flake's
+        //    radius in millimetres over what the height channel is worth end to end. Pick the numbers any other way
+        //    and a coarse show flake comes out flatter than a fine one, which is backwards.
+        float Slope = clamp((Leaf.w * 1000.0) / HeightRange, 0.0, 0.6);
+        float Relief = Leaf.z * Flakes * FlakeTilt * Slope;
         float Drift = Fractal(Turned * (2.0 + Scale * 3.0) + Seed, 4);
         float Peel = (Fractal(Turned * 17.0 + Seed * 0.37, 3) * 0.76 + Fractal(Turned * 54.0, 2) * 0.24 - 0.5) * PeelAmount;
         vec3 Body = mix(ColourA, ColourA * mix(0.86, 1.16, Drift), Variation);
@@ -210,18 +280,22 @@ FinishSample SampleFinish(
             Result.Colour = mix(Body, ColourB, clamp(Sparkle * 0.55, 0.0, 1.0));
             Result.Metalness = clamp(Sparkle * 0.85, 0.0, 1.0);
             Result.Roughness = clamp(mix(0.30, 0.055, Gloss) * (1.0 - 0.55 * Sparkle) + Drift * 0.02 * Variation, 0.02, 1.0);
-            Result.Height = 0.5 + Peel * 0.1 + (Facet - 0.5) * Flakes * 0.02 * Strength;
+            Result.Height = 0.5 + Peel * 0.1 + Relief * Strength;
         }
         else if (Style == 2)
         {
             // Pearl tri-coat: mica, not metal. The flake refracts rather than reflects, so the colour shifts with its
             // tilt while the metalness stays near nothing and the specular lifts instead.
+            // Mica is a stack of thin plates, so what it does with light depends on the angle it is lying at — the
+            // ramp across the flake is exactly that angle, so the interference travels across each flake rather than
+            // tinting it flat.
             float Shift = mix(0.15, 1.0, Facet) * Flakes * 0.8;
-            Result.Colour = mix(Body, ColourB, clamp(Shift * Strength, 0.0, 1.0));
+            float Travel = clamp(0.5 + Leaf.z * 0.5, 0.0, 1.0);
+            Result.Colour = mix(Body, mix(ColourB, ColourB.gbr, Travel * 0.45), clamp(Shift * Strength, 0.0, 1.0));
             Result.Metalness = clamp(Sparkle * 0.18, 0.0, 1.0);
             Result.Roughness = clamp(mix(0.26, 0.05, Gloss) - Shift * 0.03, 0.02, 1.0);
             Result.Specular = clamp(1.0 + Shift * 0.35, 0.0, 2.0);
-            Result.Height = 0.5 + Peel * 0.1 + (Facet - 0.5) * Flakes * 0.012 * Strength;
+            Result.Height = 0.5 + Peel * 0.1 + Relief * Strength * 0.6;
         }
         else if (Style == 3)
         {
@@ -235,6 +309,8 @@ FinishSample SampleFinish(
             Result.Roughness = clamp(mix(0.22, 0.04, Gloss), 0.02, 1.0);
             Result.Coat = max(Coat, 0.7);
             Result.CoatRoughness = clamp(Clear * 0.75, 0.004, 1.0);
+            // The ground under a candy is a metallic basecoat, and it flares through the tint.
+            Result.Height = 0.5 + Peel * 0.1 + Relief * Strength * 0.8;
         }
         else if (Style == 4)
         {
@@ -264,7 +340,7 @@ FinishSample SampleFinish(
             Result.Metalness = clamp(0.25 + Sparkle * 0.6, 0.0, 1.0);
             Result.Roughness = clamp(mix(0.22, 0.045, Gloss), 0.02, 1.0);
             Result.Coat = max(Coat, 0.8);
-            Result.Height = 0.5 + Peel * 0.1 + (Facet - 0.5) * Flakes * 0.016 * Strength;
+            Result.Height = 0.5 + Peel * 0.1 + Relief * Strength * 0.7;
         }
         else if (Style == 6)
         {
@@ -1399,6 +1475,30 @@ float VisibilitySmith(float NdotV, float NdotL, float Roughness)
     float LambdaLight = sqrt(Alpha + (1.0 - Alpha) * NdotL * NdotL);
     return 0.5 / max(NdotL * Lambda + NdotV * LambdaLight, 1e-6);
 }
+// 🔴 Anisotropy is a SHAPE, not a narrower isotropic lobe. A brushed panel's highlight is drawn out across the grain
+//    and squeezed along it; shrinking one roughness number can only ever make the same round highlight smaller, which
+//    is why brushed aluminium never looked brushed. Both of these are the standard GGX forms with two alphas.
+float DistributionGgxAnisotropic(float NdotH, vec3 Half, vec3 Tangent, vec3 Bitangent, float Along, float Across)
+{
+    float ToH = dot(Tangent, Half);
+    float BoH = dot(Bitangent, Half);
+    float Product = Along * Across;
+    vec3 Axis = vec3(Across * ToH, Along * BoH, Product * NdotH);
+    float Length = dot(Axis, Axis);
+    float Weight = Product / max(Length, 1e-9);
+    return Product * Weight * Weight * (1.0 / 3.14159265);
+}
+float VisibilitySmithAnisotropic(
+    float Along, float Across, vec3 Tangent, vec3 Bitangent, vec3 View, vec3 Light, float NdotV, float NdotL)
+{
+    float ToV = dot(Tangent, View);
+    float BoV = dot(Bitangent, View);
+    float ToL = dot(Tangent, Light);
+    float BoL = dot(Bitangent, Light);
+    float LambdaView = NdotL * length(vec3(Along * ToV, Across * BoV, NdotV));
+    float LambdaLight = NdotV * length(vec3(Along * ToL, Across * BoL, NdotL));
+    return 0.5 / max(LambdaView + LambdaLight, 1e-6);
+}
 vec3 FresnelSchlick(vec3 Reflectance, float Cosine)
 {
     return Reflectance + (vec3(1.0) - Reflectance) * pow(clamp(1.0 - Cosine, 0.0, 1.0), 5.0);
@@ -1533,9 +1633,24 @@ void main()
         float NdotH = clamp(dot(Normal, Half), 0.0, 1.0);
         float VdotH = clamp(dot(View, Half), 0.0, 1.0);
 
-        float AnisotropicRoughness = mix(Roughness, clamp(Roughness * (1.0 - uAnisotropy * 0.85), 0.01, 1.0), 0.5);
-        float Distribution = DistributionGgx(NdotH, AnisotropicRoughness);
-        float Visibility = VisibilitySmith(NdotV, NdotL, AnisotropicRoughness);
+        float Distribution;
+        float Visibility;
+        if (uAnisotropy > 0.001)
+        {
+            // Energy is preserved by widening one axis as much as the other narrows, so the grain changes the shape of
+            // the highlight without changing how much light the surface returns.
+            float Alpha = max(Roughness * Roughness, 1e-4);
+            float Spread = clamp(uAnisotropy, 0.0, 0.98);
+            float Along = max(Alpha / max(1.0 - Spread, 0.02), 1e-4);
+            float Across = max(Alpha * (1.0 - Spread), 1e-4);
+            Distribution = DistributionGgxAnisotropic(NdotH, Half, Tangent, Bitangent, Along, Across);
+            Visibility = VisibilitySmithAnisotropic(Along, Across, Tangent, Bitangent, View, Light, NdotV, NdotL);
+        }
+        else
+        {
+            Distribution = DistributionGgx(NdotH, Roughness);
+            Visibility = VisibilitySmith(NdotV, NdotL, Roughness);
+        }
         vec3 Fresnel = mix(
             FresnelSchlick(Reflectance, VdotH),
             FresnelF82(BaseColour, uSpecularColour, VdotH),
