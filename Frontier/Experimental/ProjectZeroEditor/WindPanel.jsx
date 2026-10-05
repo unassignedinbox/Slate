@@ -1,6 +1,6 @@
+import { AttachWindFlow } from "./FlowProjection.js";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  EvaluateWind,
   ResolveWind,
   NewWindComponent,
   WindTypes,
@@ -11,155 +11,19 @@ export function WindCanvas({
   Field,
   Active = true,
   Playing = true,
-  Vectors = true,
-  Gradient = true,
-  Particles = true,
-  Label = "Combined wind vector field",
+  Label = "Wind flow lines",
 }) {
   const Canvas = useRef(null),
-    Latest = useRef({});
-  Latest.current = { Field, Active, Playing, Vectors, Gradient, Particles };
-  useEffect(() => {
-    const Node = Canvas.current,
-      Context = Node.getContext("2d"),
-      Heat = document.createElement("canvas"),
-      HeatContext = Heat.getContext("2d");
-    Heat.width = 64;
-    Heat.height = 48;
-    let Frame,
-      Before = 0,
-      Time = 0,
-      Count = 0;
-    const Points = Array.from({ length: 150 }, (_, Index) => ({
-      X: ((Index * 73) % 151) / 151,
-      Y: ((Index * 43) % 149) / 149,
-    }));
-    const Paint = (Now) => {
-      Frame = requestAnimationFrame(Paint);
-      if (Now - Before < 32 || !Node.getClientRects().length || document.hidden)
-        return;
-      const DT = Math.min(0.05, (Now - (Before || Now)) / 1000);
-      Before = Now;
-      const { Field, Active, Playing, Vectors, Gradient, Particles } =
-        Latest.current;
-      if (Playing && Active) Time += DT;
-      const Box = Node.getBoundingClientRect(),
-        W = Box.width,
-        H = Box.height,
-        Ratio = Math.min(2, devicePixelRatio || 1);
-      if (!W || !H) return;
-      if (
-        Node.width !== Math.round(W * Ratio) ||
-        Node.height !== Math.round(H * Ratio)
-      ) {
-        Node.width = Math.round(W * Ratio);
-        Node.height = Math.round(H * Ratio);
-      }
-      Context.setTransform(Ratio, 0, 0, Ratio, 0, 0);
-      Context.fillStyle = "#111b20";
-      Context.fillRect(0, 0, W, H);
-      const Sample = (X, Y) =>
-        Active
-          ? EvaluateWind(
-              Field,
-              (X / W - 0.5) * Field.Width,
-              (Y / H - 0.5) * Field.Depth,
-              Time,
-            )
-          : [0, 0];
-      const Colour = (Speed, Alpha = 1) =>
-        `hsla(${190 - Math.min(1, Speed / 30) * 150},48%,${32 + Math.min(1, Speed / 30) * 28}%,${Alpha})`;
-      if (Gradient) {
-        for (let Y = 0; Y < 48; Y++)
-          for (let X = 0; X < 64; X++) {
-            const V = Sample(((X + 0.5) / 64) * W, ((Y + 0.5) / 48) * H);
-            HeatContext.fillStyle = Colour(Math.hypot(...V));
-            HeatContext.fillRect(X, Y, 1, 1);
-          }
-        Context.globalAlpha = 0.5;
-        Context.imageSmoothingEnabled = true;
-        Context.drawImage(Heat, 0, 0, W, H);
-        Context.globalAlpha = 1;
-      }
-      Context.strokeStyle = "#ffffff09";
-      Context.lineWidth = 1;
-      Context.beginPath();
-      for (let X = 0; X < W; X += 32) {
-        Context.moveTo(X, 0);
-        Context.lineTo(X, H);
-      }
-      for (let Y = 0; Y < H; Y += 32) {
-        Context.moveTo(0, Y);
-        Context.lineTo(W, Y);
-      }
-      Context.stroke();
-      if (Vectors)
-        for (let Y = 20; Y < H; Y += 32)
-          for (let X = 20; X < W; X += 32) {
-            const [VX, VZ] = Sample(X, Y),
-              Speed = Math.hypot(VX, VZ);
-            if (Speed < 0.01) continue;
-            const Angle = Math.atan2(
-                (VZ * H) / Field.Depth,
-                (VX * W) / Field.Width,
-              ),
-              Length = Math.min(24, 5 + Speed * 0.7);
-            Context.save();
-            Context.translate(X, Y);
-            Context.rotate(Angle);
-            Context.strokeStyle = Colour(Speed, 0.9);
-            Context.lineWidth = 1.2;
-            Context.beginPath();
-            Context.moveTo(-Length / 2, 0);
-            Context.lineTo(Length / 2, 0);
-            Context.lineTo(Length / 2 - 4, -3);
-            Context.moveTo(Length / 2, 0);
-            Context.lineTo(Length / 2 - 4, 3);
-            Context.stroke();
-            Context.restore();
-          }
-      if (Particles)
-        for (const Point of Points) {
-          const X = Point.X * W,
-            Y = Point.Y * H,
-            [VX, VZ] = Sample(X, Y);
-          if (Playing && Active) {
-            Point.X = (((Point.X + (VX * DT * 8) / Field.Width) % 1) + 1) % 1;
-            Point.Y = (((Point.Y + (VZ * DT * 8) / Field.Depth) % 1) + 1) % 1;
-          }
-          const Length = Math.hypot(VX, VZ);
-          if (Length < 0.01) continue;
-          Context.strokeStyle = "#dbf1e5b0";
-          Context.lineWidth = 1.2;
-          Context.beginPath();
-          Context.moveTo(X, Y);
-          Context.lineTo(X + (VX / Length) * 5, Y + (VZ / Length) * 5);
-          Context.stroke();
-        }
-      Context.fillStyle = "#d4e5df";
-      Context.font = "11px sans-serif";
-      Context.fillText(
-        Active ? "XZ · COMBINED FIELD" : "FIELD DISABLED",
-        14,
-        20,
-      );
-      Node.dataset.frame = String(++Count);
-      Node.dataset.time = Time.toFixed(2);
-    };
-    Frame = requestAnimationFrame(Paint);
-    return () => cancelAnimationFrame(Frame);
-  }, []);
+    Latest = useRef(null);
+  Latest.current = {
+    Field: Active ? Field : { ...Field, Components: [] },
+    Paused: !Playing || !Active,
+  };
+  useEffect(() => AttachWindFlow(Canvas.current, () => Latest.current), []);
   return (
     <div className="wind-visual">
       <canvas ref={Canvas} role="img" aria-label={Label} data-active={Active} />
-      <div className="wind-legend">
-        <span>0 m/s</span>
-        <i />
-        <span>30+ m/s</span>
-      </div>
-      <small>
-        Arrows + speed gradient · particles at 8× time · horizontal XZ slice
-      </small>
+      <small>Flow lines · 8× preview time · horizontal XZ slice</small>
     </div>
   );
 }
@@ -486,9 +350,6 @@ export default function WindEditor({
   const Field = ResolveWind(Values),
     [Selection, Select] = useState(Field.Components[0]?.Id),
     [Playing, Play] = useState(true),
-    [Vectors, ShowVectors] = useState(true),
-    [Gradient, ShowGradient] = useState(true),
-    [Particles, ShowParticles] = useState(true),
     Root = useRef(null),
     Latest = useRef(Field);
   Latest.current = Field;
@@ -688,33 +549,10 @@ export default function WindEditor({
               </section>
               <section>
                 <div className="wind-section-head">
-                  <h2>Combined vector field</h2>
+                  <h2>Wind flow lines</h2>
                   <span>02 / EVALUATED SUM</span>
                 </div>
-                <WindCanvas
-                  Field={Field}
-                  Active={!Hidden}
-                  Playing={Playing}
-                  Vectors={Vectors}
-                  Gradient={Gradient}
-                  Particles={Particles}
-                />
-                <div className="wind-view-switches">
-                  {[
-                    ["Vectors", Vectors, ShowVectors],
-                    ["Speed gradient", Gradient, ShowGradient],
-                    ["Particles", Particles, ShowParticles],
-                  ].map(([Label, On, Set]) => (
-                    <label key={Label}>
-                      <input
-                        type="checkbox"
-                        checked={On}
-                        onChange={(Event) => Set(Event.target.checked)}
-                      />
-                      {Label}
-                    </label>
-                  ))}
-                </div>
+                <WindCanvas Field={Field} Active={!Hidden} Playing={Playing} />
               </section>
             </div>
             <section className="wind-component-properties">

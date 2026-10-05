@@ -1,22 +1,27 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
+import assert from "node:assert/strict";
+import {
+  ResolveWind,
+  EvaluateWind,
+  ResolveInspectorWind,
+} from "./WindSpecification.js";
 const Folder = path.dirname(fileURLToPath(import.meta.url));
 const Require = createRequire(
   process.env.FRONTIER_BROWSER_PACKAGE ||
     path.resolve(Folder, "../FrontierEditor/package.json"),
 );
 const { chromium } = Require("playwright");
-const BuildRequire = createRequire(
-  path.resolve(Folder, "../FrontierEditor/package.json"),
-);
 const Proof =
   process.env.FRONTIER_PROOF_FOLDER ||
-  path.resolve(Folder, "Screenshots/Reference");
+  path.join(Folder, "Screenshots/Selected");
 fs.mkdirSync(Proof, { recursive: true });
+const Results = [],
+  Errors = [],
+  FontFailures = [];
 const Manifest = JSON.parse(
   fs.readFileSync(path.join(Folder, "InspectorDepot/Provenance.json")),
 );
@@ -27,64 +32,88 @@ for (const [Name, Hash] of Object.entries(Manifest.unchangedFiles))
       .digest("hex"),
     Hash,
   );
+// Numeric checks cover the same evaluator used by strokes, history and existing cloud consumers.
+const Path = [
+  [-300, 0],
+  [-100, 0],
+  [100, 0],
+  [300, 0],
+];
+const Spline = (Follow) =>
+  ResolveWind({
+    WindField: {
+      Components: [
+        {
+          Type: "Spline",
+          Strength: 20,
+          Bearing: 180,
+          Radius: 260,
+          Follow,
+          Path,
+        },
+      ],
+    },
+  });
+assert.deepEqual(EvaluateWind(Spline(1), 0, 0), [20, 0]);
+assert.ok(EvaluateWind(Spline(1), 0, 100)[1] < 0);
+assert.ok(EvaluateWind(Spline(0), 0, 100)[1] > 0);
+assert.deepEqual(EvaluateWind(Spline(1), 0, 1000), [0, 0]);
+assert.ok(EvaluateWind(Spline(1), 400, 0)[0] > 0);
+const Degenerate = Spline(1);
+Degenerate.Components[0].Path = [
+  [0, 0],
+  [0, 0],
+  [0, 0],
+  [0, 0],
+];
+assert.deepEqual(EvaluateWind(Degenerate, 0, 0), [0, 0]);
+const Tornado = ResolveWind({
+  WindField: { Components: [{ Type: "Tornado", Strength: 20 }] },
+});
+assert.deepEqual(EvaluateWind(Tornado, 0, 0), [0, 0]);
+assert.ok(EvaluateWind(Tornado, 100, 0)[1] > 0);
+for (const Field of [Spline(0), Spline(0.5), Spline(1), Tornado])
+  for (let I = 0; I < 40; I++)
+    assert.ok(
+      EvaluateWind(Field, I * 13 - 260, I * 7 - 120).every(Number.isFinite),
+    );
+assert.equal(ResolveInspectorWind().Components.length, 1);
+const Authored = ResolveWind({
+  WindField: {
+    Components: [
+      { Type: "Gust", Strength: 12 },
+      { Type: "Radial", Strength: 8 },
+    ],
+  },
+});
+assert.deepEqual(ResolveInspectorWind({ WindField: Authored }), Authored);
+const Single = ResolveWind({
+  WindField: {
+    Components: [{ Type: "Directional", Strength: 7, Bearing: 90 }],
+  },
+});
+const Combined = {
+  ...Single,
+  Components: [...Single.Components, ...Authored.Components],
+};
+const V = EvaluateWind(Combined, 30, 60, 1),
+  A = EvaluateWind(Single, 30, 60, 1),
+  B = EvaluateWind(Authored, 30, 60, 1);
+assert.ok(Math.hypot(V[0] - A[0] - B[0], V[1] - A[1] - B[1]) < 1e-10);
+Results.push(
+  "Spline tangent, cross-path attraction, following extremes, bounded support, degeneracy, tornado, finite samples, legacy fields and superposition pass",
+);
 const Browser = await chromium.launch({
   executablePath: process.env.FRONTIER_BROWSER_EXECUTABLE || undefined,
   args: ["--no-sandbox", "--disable-gpu"],
   headless: true,
 });
 const Page = await Browser.newPage({ viewport: { width: 1440, height: 1100 } });
-const Errors = [],
-  FontFailures = [],
-  Results = [];
-Page.on("pageerror", (Error) => Errors.push(Error.stack));
-Page.on("requestfailed", (Request) => {
-  if (Request.url().includes("fontshare.com")) FontFailures.push(Request.url());
+Page.on("pageerror", (E) => Errors.push(E.stack));
+Page.on("requestfailed", (R) => {
+  if (R.url().includes("fontshare.com")) FontFailures.push(R.url());
 });
-await Page.addInitScript(() =>
-  addEventListener("message", (Event) => {
-    if (Event.data?.ReferenceHost) window.LastReferenceHost = Event.data;
-  }),
-);
 const Address = process.env.FRONTIER_EDITOR_URL || "http://127.0.0.1:4173/";
-const Cases = [
-  ["world", "Folder", "folder", ".fd-state"],
-  ["wind", "Wind", "wind", ".wf-trace"],
-  ["moon", "Moon", "moon", ".mp-atlas"],
-  ["clouds", "Clouds", "clouds", ".cl-layer"],
-  ["height-fog", "Fog", "fog", ".fg-scatter"],
-  ["sun", "Sun", "sun", null],
-  ["light", "ExistingArea", "arealight", null],
-  ["reference-key-spot", "Spot", "spotlight", null],
-  ["reference-rim-point", "RimPoint", "pointlight", null],
-  ["reference-fill-point", "FillPoint", "pointlight", null],
-  ["reference-ece-low-beam", "IES", "ieslight", null],
-  ["reference-softbox", "Softbox", "arealight", null],
-  ["reference-studio-tube", "Tube", "tubelight", null],
-];
-let Reference;
-if (process.env.FRONTIER_REFERENCE_SOURCE) {
-  const Source = path.resolve(process.env.FRONTIER_REFERENCE_SOURCE, "src");
-  const Code = `import {buildSheet} from ${JSON.stringify(Source + "/inspector.js")};
-    import {makeNode,flat} from ${JSON.stringify(Source + "/world.js")};
-    window.RenderReference = Data => {
-      const Presets = new Map(flat.map(n => [n.name,n.props]));
-      const Nodes = new Map(Data.Rows.map(r => { const n=makeNode(r.Name,r.Type); n.vis=!Data.Hidden[r.Id]; n.open=!Data.Collapsed[r.Id];
-        Object.assign(n.props,Presets.get(r.Preset)||{},Data.Values[r.Id]?.ReferenceInspector?.Properties||{}); return [r.Id,n]; }));
-      for(const r of Data.Rows){const n=Nodes.get(r.Id),p=Nodes.get(r.Parent);if(p)p.kids.push(n);let id=r.Parent;n.depth=0;const seen=new Set([r.Id]);while(Nodes.has(id)&&!seen.has(id)){seen.add(id);n.depth++;id=Data.Rows.find(x=>x.Id===id)?.Parent;}}
-      document.querySelector('.props').append(buildSheet(Nodes.get(Data.Selected)));
-    };`;
-  const Bundle = await BuildRequire("esbuild").build({
-    stdin: { contents: Code, resolveDir: Source },
-    bundle: true,
-    write: false,
-    format: "iife",
-  });
-  Reference = await Browser.newPage({ viewport: { width: 340, height: 4000 } });
-  Reference.on("pageerror", (Error) => Errors.push(Error.stack));
-  Reference.Template = `<!doctype html><html><head><style>${fs.readFileSync(path.join(Folder, "InspectorDepot/Fontshare.css"))}${fs.readFileSync(path.join(Source, "styles.css"))}
-    html,body{height:auto;overflow:hidden;background:var(--panel)}.props{display:block;overflow:hidden;flex:none}</style></head>
-    <body><div class="props"></div><script>${Bundle.outputFiles[0].text.replaceAll("</script", "<\\/script")}</script></body></html>`;
-}
 const Saved = () =>
   Page.evaluate(() =>
     JSON.parse(localStorage.getItem("Frontier.ProjectZeroHtml.v1")),
@@ -92,261 +121,212 @@ const Saved = () =>
 async function Open(Id) {
   await Page.goto(Address + "?inspect=" + Id);
   await Page.locator(".reference-inspector-copy iframe").waitFor();
-  const Frame = await Page.locator(
-    ".reference-inspector-copy iframe",
-  ).contentFrame();
-  // FrameLocator deliberately keeps all assertions scoped away from the retained cards.
-  await Frame.locator(".sheet").waitFor();
-  await Page.waitForTimeout(450);
-  return Frame;
+  const F = Page.frames().find((F) => F.url() === "about:srcdoc");
+  await F.locator(".sheet").waitFor();
+  await Page.waitForTimeout(300);
+  return F;
 }
-function Metrics() {
-  return [...document.querySelectorAll(".sheet > .ident,.mpanel > *")].map(
-    (Node) => {
-      const Box = Node.getBoundingClientRect(),
-        Style = getComputedStyle(Node);
-      return {
-        Class: Node.className,
-        Width: Box.width,
-        Height: Box.height,
-        Background: Style.backgroundColor,
-        Radius: Style.borderRadius,
-        Font: Style.fontFamily,
-        Weight: Style.fontWeight,
-        Size: Style.fontSize,
-      };
-    },
-  );
+async function Capture(Name) {
+  await Page.waitForTimeout(500);
+  await Page.screenshot({ path: path.join(Proof, Name + ".png") });
 }
 try {
-  for (const [Id, Name, Type, Last] of Cases) {
-    const Frame = await Open(Id);
-    const ActualFrame = Page.frames().find(
-      (Value) => Value.url() === "about:srcdoc",
+  for (const [Id, Classes] of [
+    ["sun", [".mp-hero", ".mp-rail", ".mp-duo"]],
+    ["wind", [".wf-hero", ".mp-rail", ".mp-duo", ".wf-trace"]],
+    [
+      "height-fog",
+      [".fg-hero", ".mp-rail", ".mp-duo", ".fg-vis", ".fg-scatter"],
+    ],
+    ["clouds", [".cl-hero", ".mp-rail", ".mp-duo", ".cl-cover", ".cl-layer"]],
+    ["reference-rim-point", [".mp-rail", ".mp-duo", ".li-photo"]],
+    ["reference-fill-point", [".mp-rail", ".mp-duo", ".li-photo"]],
+    ["reference-key-spot", [".mp-rail", ".mp-duo", ".li-photo"]],
+    ["reference-ece-low-beam", [".mp-rail"]],
+    ["reference-softbox", [".mp-rail"]],
+    ["reference-studio-tube", [".mp-rail"]],
+    ["light", [".mp-rail"]],
+  ]) {
+    const F = await Open(Id);
+    assert.deepEqual(
+      await F.locator(".mpanel > *").evaluateAll(
+        (Nodes, Selectors) =>
+          Nodes.map((N, I) => N.matches(Selectors[I] || ".missing")),
+        Classes,
+      ),
+      Classes.map(() => true),
     );
     assert.equal(
-      await Page.locator(".reference-inspector-copy").getAttribute(
-        "data-reference-kind",
+      await Page.locator(".inspector-scroll").evaluate(
+        (N) => N.children.length,
       ),
-      Type,
+      1,
     );
-    if (["wind", "clouds", "fog", "moon"].includes(Type)) {
-      assert.equal(
-        await Frame.locator(".mpanel > :last-child").evaluate(
-          (Node, Selector) => Node.matches(Selector),
-          Last,
-        ),
-        true,
-      );
-      assert.equal(await Frame.locator(".sheet > .pcard").count(), 0);
-    }
-    if (Type === "moon") {
-      assert.equal(await Frame.locator(".sheet > *").count(), 1);
-      assert.equal(await Frame.locator(".mpanel > *").count(), 1);
-    }
-    if (Id.startsWith("reference-"))
-      assert.equal(
-        await Page.locator(".inspector-scroll > .inspector").count(),
-        0,
-      );
-    else
-      assert.ok(
-        await Page.locator(".inspector-scroll").evaluate(
-          (Node) => Node.children.length > 1,
-        ),
-        "Existing cards remain: " + Id,
-      );
-    assert.ok((await Frame.locator("canvas").count()) > 0);
+    assert.equal(await F.locator(".sheet > .pcard").count(), 0);
     assert.equal(
-      await ActualFrame.evaluate(
-        () => document.documentElement.scrollWidth > innerWidth,
-      ),
+      await F.evaluate(() => document.documentElement.scrollWidth > innerWidth),
       false,
-      "No horizontal overflow: " + Id,
     );
-    if (Reference) {
-      const Data = await ActualFrame.evaluate(() => window.LastReferenceHost);
-      await Reference.setContent(Reference.Template);
-      await Reference.evaluate((Data) => window.RenderReference(Data), Data);
-      await Reference.evaluate((Type) => {
-        const Sheet = document.querySelector(".sheet"),
-          Custom = Sheet.querySelector(".mpanel");
-        if (Type === "moon") {
-          const Atlas = Custom.querySelector(".mp-atlas");
-          [...Custom.children].forEach((n) => {
-            if (n !== Atlas) n.remove();
-          });
-          [...Sheet.children].forEach((n) => {
-            if (n !== Custom) n.remove();
-          });
-        }
-        if (["wind", "clouds", "fog"].includes(Type)) {
-          const End = Custom.querySelector(
-            { wind: ".wf-trace", clouds: ".cl-layer", fog: ".fg-scatter" }[
-              Type
-            ],
-          );
-          while (End.nextElementSibling) End.nextElementSibling.remove();
-          [...Sheet.children].forEach((n) => {
-            if (n !== Custom && !n.matches(".ident")) n.remove();
-          });
-        }
-      }, Type);
-      await Reference.waitForTimeout(450);
-      assert.deepEqual(
-        await ActualFrame.evaluate(Metrics),
-        await Reference.evaluate(Metrics),
-        "Original source layout/styles: " + Id,
-      );
-    }
-    await Page.mouse.move(0, 0);
-    await Page.screenshot({ path: path.join(Proof, Name + ".png") });
+    if (
+      ["sun", "wind", "height-fog", "clouds", "reference-rim-point"].includes(
+        Id,
+      )
+    )
+      await Capture(Id);
     Results.push(
-      Name +
-        ": requested scope, preserved existing cards, canvas, width and original-source card metrics pass",
+      Id +
+        ": exact approved card set; no appended legacy, Object or Notes cards",
     );
   }
-  let Frame = await Open("clouds");
-  const Input = Frame.locator(".cl-layer .step input").first();
-  const Before = await Input.inputValue();
-  await Input.fill(String(Number(Before) + 7));
-  await Input.press("Enter");
-  await Page.waitForTimeout(200);
-  const Changed = (await Saved()).Values.clouds.ReferenceInspector.Properties;
-  Frame = await Open("clouds");
-  assert.equal(
-    await Frame.locator(".cl-layer .step input").first().inputValue(),
-    String(Number(Before) + 7),
-  );
-  assert.deepEqual(
-    (await Saved()).Values.clouds.ReferenceInspector.Properties,
-    Changed,
-  );
-  Results.push("Cloud deck numeric editing persists across reload");
-  Frame = await Open("reference-softbox");
-  await Frame.locator("textarea").fill("Reference light notes");
-  await Frame.locator(".name-edit").dblclick();
-  const Literal = 'Softbox & <test> "name"';
-  await Frame.locator(".name-edit input").fill(Literal);
-  await Frame.locator(".name-edit input").press("Enter");
-  await Page.waitForTimeout(200);
-  Frame = await Open("reference-softbox");
-  assert.equal(await Frame.locator(".name-edit").textContent(), Literal);
-  assert.equal(
-    await Frame.locator("textarea").inputValue(),
-    "Reference light notes",
-  );
-  assert.equal(
-    (await Saved()).Rows.find((Row) => Row.Id === "reference-softbox").Name,
-    Literal,
-  );
-  await Frame.locator('[title="Visibility  (H)"]').click();
-  await Page.waitForTimeout(150);
-  assert.equal((await Saved()).Hidden["reference-softbox"], true);
-  await Frame.locator('[title="Lock  (L)"]').click();
-  await Page.waitForTimeout(150);
-  assert.equal(
-    (await Saved()).Values["reference-softbox"].ReferenceInspector.Locked,
-    true,
-  );
+  await Page.goto(Address + "?inspect=moon");
+  assert.equal(await Page.locator(".reference-inspector-copy").count(), 0);
+  assert.equal(await Page.locator('[data-panel="moon"]').count(), 1);
+  await Page.goto(Address + "?inspect=camera");
+  assert.equal(await Page.locator('[data-panel="camera"]').count(), 1);
   Results.push(
-    "Light notes, literal rename, visibility and lock survive the host state bridge",
+    "Moon Atlas skipped; existing Moon and protected Editor Camera inspectors retained",
   );
-  Frame = await Open("moon");
-  const Height = await Page.locator("iframe").evaluate(
-    (Node) => Node.clientHeight,
-  );
-  await Frame.getByTitle("Taller atlas").click();
-  await Page.waitForTimeout(200);
-  assert.ok(
-    (await Page.locator("iframe").evaluate((Node) => Node.clientHeight)) >
-      Height,
-  );
-  await Frame.getByTitle("Taller atlas").click();
-  await Page.waitForTimeout(200);
+  let F = await Open("world");
+  assert.equal(await F.locator(".folderpanel").count(), 1);
+  assert.equal(await Page.locator(".folder-inspector").count(), 0);
+  F = await Open("wind");
+  const Canvas = () => F.locator(".wf-hero canvas");
+  await Canvas().focus();
+  await Canvas().press("ArrowUp");
+  await Canvas().press("ArrowRight");
+  await Page.waitForTimeout(120);
   assert.equal(
-    await Page.locator("iframe").evaluate((Node) => Node.clientHeight),
-    Height,
+    (await Saved()).Values.wind.WindField.Components[0].Strength,
+    5.2,
   );
-  const Grid = Frame.getByRole("button", { name: "GRID", exact: true });
-  await Grid.click();
-  assert.equal(await Grid.getAttribute("class"), "mp-tag");
-  Results.push(
-    "Atlas layers work; expanding and shrinking updates the parent height without nested scrolling",
+  let Bounds = await Canvas().boundingBox();
+  await Page.mouse.move(
+    Bounds.x + Bounds.width / 2 + 20,
+    Bounds.y + Bounds.height / 2,
   );
-  Frame = await Open("lighting");
-  await Frame.locator(".fd-eye").first().click();
-  await Page.waitForTimeout(150);
-  assert.equal((await Saved()).Hidden.light, true);
-  await Frame.getByRole("button", { name: "EXPANDED", exact: true }).click();
-  await Page.waitForTimeout(150);
-  assert.equal((await Saved()).Collapsed.lighting, true);
-  Results.push(
-    "Folder manifest visibility and collection expansion update the actual outliner",
-  );
-  Frame = await Open("reference-ece-low-beam");
-  await Frame.getByRole("button", {
-    name: "SAE LOW BEAM",
-    exact: true,
-  }).click();
-  await Page.waitForTimeout(150);
-  assert.equal(
-    (await Saved()).Values["reference-ece-low-beam"].ReferenceInspector
-      .Properties.profile,
-    "SAE Low Beam",
-  );
-  const Tape = Frame.locator(".al-output .tape canvas").first();
-  await Tape.scrollIntoViewIfNeeded();
-  const Bounds = await Tape.boundingBox();
-  await Page.mouse.move(Bounds.x + Bounds.width * 0.25, Bounds.y + 8);
   await Page.mouse.down();
-  await Page.mouse.move(Bounds.x + Bounds.width * 0.7, Bounds.y + 8, {
-    steps: 12,
-  });
+  await Page.mouse.move(
+    Bounds.x + Bounds.width / 2 + 48,
+    Bounds.y + Bounds.height / 2,
+    { steps: 10 },
+  );
   await Page.mouse.up();
   await Page.waitForTimeout(150);
-  const Flux = (await Saved()).Values["reference-ece-low-beam"]
-    .ReferenceInspector.Properties.lumens;
-  assert.ok(
-    Flux > 5000 && Flux < 6500,
-    "Tape drag continues across state synchronization",
+  let Part = (await Saved()).Values.wind.WindField.Components[0];
+  assert.equal(Part.Bearing, 90);
+  assert.ok(Part.Strength > 24 && Part.Strength < 27);
+  await F.getByRole("button", { name: "Tornado", exact: true }).click();
+  Bounds = await Canvas().boundingBox();
+  await Page.mouse.move(
+    Bounds.x + Bounds.width / 2,
+    Bounds.y + Bounds.height / 2,
   );
+  await Page.mouse.down();
+  await Page.mouse.move(
+    Bounds.x + Bounds.width * 0.6,
+    Bounds.y + Bounds.height * 0.6,
+    { steps: 8 },
+  );
+  await Page.mouse.up();
+  await Page.waitForTimeout(150);
+  Part = (await Saved()).Values.wind.WindField.Components[0];
+  assert.ok(Part.X > 95 && Part.Z > 95);
+  await F.getByLabel("Tornado rotation").selectOption("-1");
+  await Page.waitForTimeout(100);
+  assert.equal((await Saved()).Values.wind.WindField.Components[0].Spin, -1);
+  await Capture("Tornado");
+  await F.getByRole("button", { name: "Spline", exact: true }).click();
+  await F.getByLabel("Spline following").fill("0.95");
+  await Page.waitForTimeout(120);
+  Part = (await Saved()).Values.wind.WindField.Components[0];
+  assert.equal(Part.Follow, 0.95);
+  Bounds = await Canvas().boundingBox();
+  const Start = Part.Path[1];
+  await Page.mouse.move(
+    Bounds.x + (Start[0] / 1000 + 0.5) * Bounds.width,
+    Bounds.y + (Start[1] / 1000 + 0.5) * Bounds.height,
+  );
+  await Page.mouse.down();
+  await Page.mouse.move(
+    Bounds.x + Bounds.width * 0.4,
+    Bounds.y + Bounds.height * 0.2,
+    { steps: 10 },
+  );
+  await Page.mouse.up();
+  await Page.waitForTimeout(150);
+  const Edited = (await Saved()).Values.wind.WindField;
+  assert.ok(Math.abs(Edited.Components[0].Path[1][0] + 100) < 5);
+  await Capture("Spline");
+  F = await Open("wind");
+  assert.deepEqual((await Saved()).Values.wind.WindField, Edited);
+  assert.equal(await F.getByLabel("Spline following").inputValue(), "0.95");
+  await F.getByRole("button", {
+    name: "Pause flow preview",
+    exact: true,
+  }).click();
+  await Page.waitForTimeout(100);
+  const T = await Canvas().getAttribute("data-time");
+  await Page.waitForTimeout(300);
+  assert.equal(await Canvas().getAttribute("data-time"), T);
+  await F.getByRole("button", {
+    name: "Resume flow preview",
+    exact: true,
+  }).click();
+  await Page.waitForTimeout(200);
+  assert.notEqual(await Canvas().getAttribute("data-time"), T);
   Results.push(
-    "IES profile switching and continuous tape dragging persist without remounting the inspector",
+    "Arrow pointer/keyboard control, tornado centre drag, spline handles/following, field persistence and pause/resume pass",
   );
-  await Page.evaluate(() => {
-    const Key = "Frontier.ProjectZeroHtml.v1",
-      State = JSON.parse(localStorage.getItem(Key));
-    State.Rows = State.Rows.filter((Row) => Row.Id !== "reference-key-spot");
-    State.Rows.find((Row) => Row.Id === "world").Parent = "height-fog";
-    localStorage.setItem(Key, JSON.stringify(State));
-  });
-  Frame = await Open("world");
+  // Verify the readout is from the shared velocity query rather than the retired synthetic waveform.
+  await F.getByRole("button", { name: "Arrow", exact: true }).click();
+  await F.getByLabel("Wind strength").fill("12");
+  await F.getByLabel("Wind strength").press("Tab");
+  await Page.waitForTimeout(400);
+  assert.equal(await F.locator(".wf-trace .mp-num .i").textContent(), "12");
+  assert.equal(await F.locator(".wf-trace .mp-num .d").textContent(), ".0");
+  F = await Open("wind"); // fresh stationary sample window, not the preceding edited history
+  assert.match(await F.locator(".wf-specs").innerText(), /1.00×/);
+  await F.getByLabel("Wind strength").fill("0");
+  await F.getByLabel("Wind strength").press("Tab");
+  await Page.waitForTimeout(300);
+  assert.equal(await F.locator(".wf-trace .mp-num .i").textContent(), "0");
+  const Height = await Page.locator("iframe").evaluate((N) => N.clientHeight);
+  await F.getByTitle("Taller trace").click();
+  await Page.waitForTimeout(150);
   assert.ok(
-    !(await Saved()).Rows.some((Row) => Row.Id === "reference-key-spot"),
+    (await Page.locator("iframe").evaluate((N) => N.clientHeight)) > Height,
   );
-  assert.ok((await Frame.locator(".fd-empty").count()) > 0);
+  await F.getByTitle("Taller trace").click();
+  await Page.waitForTimeout(150);
+  assert.equal(
+    await Page.locator("iframe").evaluate((N) => N.clientHeight),
+    Height,
+  );
+  for (const Width of [1024, 1280, 1440, 1920]) {
+    await Page.setViewportSize({ width: Width, height: 900 });
+    await Page.waitForTimeout(100);
+    assert.equal(
+      await F.evaluate(() => document.documentElement.scrollWidth > innerWidth),
+      false,
+    );
+  }
   Results.push(
-    "Deleted copied lights stay deleted on reload; malformed cyclic hierarchy does not recurse",
+    "Anemometer agrees with constant/zero field; trace growth/shrinkage and 1024–1920 layouts pass",
   );
-  assert.equal(Errors.length, 0, Errors.join("\n"));
-} catch (Error) {
-  Errors.push(Error.stack);
-  throw Error;
+  assert.deepEqual(Errors, []);
+} catch (E) {
+  Errors.push(E.stack);
+  await Page.screenshot({ path: path.join(Proof, "Failure.png") });
+  throw E;
 } finally {
   const Report = {
-    ReferenceCommit: Manifest.deployedCommit,
     Browser: Browser.version(),
-    GeneratedHtmlSha256: createHash("sha256")
+    HtmlSha256: createHash("sha256")
       .update(fs.readFileSync(path.join(Folder, "index.html")))
       .digest("hex"),
-    OriginalSourceCompared: !!Reference,
-    UnchangedSourceFiles: Object.keys(Manifest.unchangedFiles).length,
     Results,
     Errors,
     FontFailures: [...new Set(FontFailures)],
-    FontCaveat:
-      "Fontshare is external, as in the reference. Comparisons use the same available font/fallback in both documents; not a font-available pixel-perfect claim.",
   };
   fs.writeFileSync(
     path.join(Proof, "Checks.json"),

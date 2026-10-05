@@ -412,6 +412,12 @@ function App() {
         if (!HasReferencePanel(Known.get(Record.Id))) continue;
         Next[Record.Id] = {
           ...Next[Record.Id],
+          ...(Known.get(Record.Id).Panel === "wind" && Record.Properties?.field
+            ? {
+                WindField: Record.Properties.field,
+                Speed: Record.Properties.field.Components[0]?.Strength ?? 0,
+              }
+            : {}),
           ReferenceInspector: {
             Properties: Record.Properties,
             Locked: Record.Locked,
@@ -1394,7 +1400,8 @@ function App() {
               Apply={ApplyReference}
             />
           )}
-          {Subject.ReferenceOnly ? null : Subject.Panel === "group" ? (
+          {HasReferencePanel(Subject) ||
+          Subject.ReferenceOnly ? null : Subject.Panel === "group" ? (
             <FolderInspector
               Subject={Subject}
               Rows={Rows}

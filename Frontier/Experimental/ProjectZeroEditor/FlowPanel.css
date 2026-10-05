@@ -1,0 +1,112 @@
+/* Controls live in the existing flow hero, not in another inspector card. */
+.flow-surface {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+}
+.flow-controls {
+  padding: 9px 12px 10px;
+  background: var(--panel);
+  border-top: 1px solid var(--stroke);
+}
+.flow-controls [hidden] {
+  display: none !important;
+}
+.flow-modes {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 9px;
+}
+.flow-modes button {
+  background: transparent;
+  border: 1px solid var(--stroke-strong);
+  border-radius: 999px;
+  padding: 4px 9px;
+  color: var(--text-dim);
+  font-size: 10px;
+  cursor: pointer;
+}
+.flow-modes button.on {
+  color: #a4ead2;
+  background: #18372d;
+  border-color: #356854;
+}
+.flow-modes .flow-pause {
+  margin-left: auto;
+}
+.flow-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+.flow-controls label {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.flow-inputs label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.flow-inputs span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.flow-controls input[type="number"] {
+  width: 64px;
+  max-width: 80%;
+  background: var(--field);
+  color: var(--text);
+  border: 1px solid var(--stroke-strong);
+  border-radius: 7px;
+  padding: 4px;
+  font-size: 11px;
+}
+.flow-follow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.flow-follow input {
+  min-width: 0;
+  flex: 1;
+  accent-color: #89e0c4;
+}
+.flow-follow output {
+  min-width: 29px;
+}
+.flow-help {
+  display: block;
+  color: var(--text-faint);
+  font-size: 9px;
+  line-height: 1.5;
+  margin-top: 7px;
+}
+.flow-component {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.flow-component select {
+  min-width: 0;
+  flex: 1;
+  background: var(--field);
+  color: var(--text);
+  border: 1px solid var(--stroke-strong);
+  border-radius: 6px;
+  padding: 3px;
+  font-size: 10px;
+}
+
+.flow-rotation select {
+  width: 100%;
+  background: var(--field);
+  border: 1px solid var(--stroke-strong);
+  border-radius: 7px;
+  color: var(--text);
+  padding: 4px;
+  font-size: 10px;
+}

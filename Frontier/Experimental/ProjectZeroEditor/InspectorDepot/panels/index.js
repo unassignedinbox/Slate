@@ -1,6 +1,6 @@
 import { moonPanel } from './moon.js';
 import { sunPanel } from './sun.js';
-import { windPanel } from './wind.js';
+import { WindFlowPanel as windPanel } from '../../WindFlowPanel.js';
 import { fogPanel } from './fog.js';
 import { folderPanel } from './folder.js';
 import { cloudsPanel } from './clouds.js';

@@ -2211,3 +2211,45 @@ checks do not establish font-available pixel identity; typography is part of the
 
 The requested actual Project Drive vehicle/tyre **SDF GI** presentation remains the next-turn task. The prior CPU
 field gallery is not being represented as vehicle GI, and this inspector change does not alter that renderer.
+
+
+## C041 — Screenshot-only inspector cards and editable wind flow
+
+2026-10-05. Supersedes C040's request to retain duplicate stacks. The screenshot-selected inspectors now show
+only the selected reference cards, without their legacy React inspector appended underneath:
+
+- Sun: hero, four readings, two summary tiles.
+- Wind: flow hero, readings, gust/lull tiles and Anemometer.
+- Height Fog: hero, readings, summary tiles, Visibility and Light transport. Height-profile card removed.
+- Clouds: hero, readings, summary tiles, Coverage and Cloud deck, as in the two additional screenshots.
+- Point/spot lights: readings, summary tiles and Photometry; unpictured hero/output/placement cards removed.
+- IES/area/tube retain their reading rail; their unpictured distribution, emitter and authoring cards are removed.
+  Light entities and saved values are not deleted.
+- Moon Atlas is skipped. The original Moon inspector remains. The previously requested Folder design remains,
+  without its duplicate legacy inventory appended. Unrelated camera/geometry/environment inspectors are retained.
+
+The wind hero now edits the existing `WindField` model, not a disconnected reference speed/direction illustration.
+Arrow dragging sets heading and strength; arrow keys provide numeric adjustment. Tornado mode supports centre
+placement, strength and clockwise/counterclockwise circulation. Spline mode has four draggable cubic-Bezier handles
+and a 0–100% following control: heading at zero, tangent/cross-track guidance at one. Spatial influence remains
+bounded by the component radius. Tangential attraction is removed at path ends so flow exits rather than reverses.
+Existing authored composite components, IDs and cloud-consumer data remain intact; fresh fields start with one arrow.
+
+`FlowProjection.js` replaces the old heatmap/vector-grid display with teal flow strokes. Both particle advection and
+back-traced stroke curvature sample `EvaluateWind`. The shared canvas is also used by the remaining local-cloud
+wind preview/editor. Obsolete heatmap/vector/particle display switches are removed. No extra inspector cards are added;
+small mode/strength/heading/following controls live in the existing flow hero.
+
+The Anemometer samples the same field at its marked probe (Alt-click to move it), accumulates a real preview-time
+history, retains actual field-change samples, and clears the history when the probe moves. It no longer invents a past minute of gusts. Constant wind
+therefore gives a flat trace; retained gust components give varying measurements. Flow motion is explicitly labelled
+8x preview time. Field changes persist in browser storage and scene export/import through the existing state format.
+This remains a bounded 2D HTML authoring preview, not a native atmospheric solver or engine connection.
+
+The updated `CheckReference.mjs` passes current card-whitelist/absence checks, fifteen original-source hashes,
+velocity/path/circulation/degenerate-input checks, real browser pointer and keyboard editing, spline following,
+reload persistence, pause/resume, constant/zero Anemometer agreement, trace auto-height and 1024–1920 layouts.
+Actual captures and the generated HTML hash are in `Screenshots/Selected/`. Earlier C040 receipts remain historical;
+the old broad inspector/wind tests target intentionally removed legacy controls and are not claimed as current passes.
+Fontshare remains unavailable in the sandbox; the external-font/fallback qualification from C040 still applies.
+No C++ changes or Project Drive SDF-GI rendering work in this revision.

@@ -72,7 +72,7 @@ function TypeOf(Row) {
 export function HasReferencePanel(Row) {
   return (
     !!Row.ReferenceType ||
-    ["group", "wind", "moon", "clouds", "height-fog", "sun", "light"].includes(
+    ["group", "wind", "clouds", "height-fog", "sun", "light"].includes(
       Row.Panel,
     )
   );

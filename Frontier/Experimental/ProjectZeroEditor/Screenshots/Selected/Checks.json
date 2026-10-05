@@ -1,0 +1,28 @@
+{
+  "Browser": "153.0.8010.0",
+  "HtmlSha256": "2241cea1fabe78922a3a08c288f425f6ae362928590b191b6efdc045420761db",
+  "Results": [
+    "Spline tangent, cross-path attraction, following extremes, bounded support, degeneracy, tornado, finite samples, legacy fields and superposition pass",
+    "sun: exact approved card set; no appended legacy, Object or Notes cards",
+    "wind: exact approved card set; no appended legacy, Object or Notes cards",
+    "height-fog: exact approved card set; no appended legacy, Object or Notes cards",
+    "clouds: exact approved card set; no appended legacy, Object or Notes cards",
+    "reference-rim-point: exact approved card set; no appended legacy, Object or Notes cards",
+    "reference-fill-point: exact approved card set; no appended legacy, Object or Notes cards",
+    "reference-key-spot: exact approved card set; no appended legacy, Object or Notes cards",
+    "reference-ece-low-beam: exact approved card set; no appended legacy, Object or Notes cards",
+    "reference-softbox: exact approved card set; no appended legacy, Object or Notes cards",
+    "reference-studio-tube: exact approved card set; no appended legacy, Object or Notes cards",
+    "light: exact approved card set; no appended legacy, Object or Notes cards",
+    "Moon Atlas skipped; existing Moon and protected Editor Camera inspectors retained",
+    "Arrow pointer/keyboard control, tornado centre drag, spline handles/following, field persistence and pause/resume pass",
+    "Anemometer agrees with constant/zero field; trace growth/shrinkage and 1024–1920 layouts pass"
+  ],
+  "Errors": [],
+  "FontFailures": [
+    "https://cdn.fontshare.com/wf/K46YRH762FH3QJ25IQM3VAXAKCHEXXW4/ISLWQPUZHZF33LRIOTBMFOJL57GBGQ4B/3ZLMEXZEQPLTEPMHTQDAUXP5ZZXCZAEN.woff2",
+    "https://cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH.woff2",
+    "https://cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN.woff2",
+    "https://cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5.woff2"
+  ]
+}

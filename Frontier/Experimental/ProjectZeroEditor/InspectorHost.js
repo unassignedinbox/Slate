@@ -1,4 +1,5 @@
 // Browser-only adapter around the pinned, unmodified reference inspector modules.
+import { ResolveInspectorWind } from "./WindSpecification.js";
 import { buildSheet } from "./InspectorDepot/inspector.js";
 import { makeNode, flat, TYPES } from "./InspectorDepot/world.js";
 import { bus } from "./InspectorDepot/bus.js";
@@ -36,19 +37,22 @@ function Measure() {
 }
 function Trim() {
   const Custom = Sheet.querySelector(".mpanel");
-  if (Kind === "moon") {
-    const Atlas = Custom.querySelector(".mp-atlas");
+  // Only the cards approved in the user's screenshots. No hidden legacy tail.
+  const Allowed = {
+    sun: [".mp-hero", ".mp-rail", ".mp-duo"],
+    wind: [".wf-hero", ".mp-rail", ".mp-duo", ".wf-trace"],
+    clouds: [".cl-hero", ".mp-rail", ".mp-duo", ".cl-cover", ".cl-layer"],
+    fog: [".fg-hero", ".mp-rail", ".mp-duo", ".fg-vis", ".fg-scatter"],
+    pointlight: [".mp-rail", ".mp-duo", ".li-photo"],
+    spotlight: [".mp-rail", ".mp-duo", ".li-photo"],
+    ieslight: [".mp-rail"],
+    arealight: [".mp-rail"],
+    tubelight: [".mp-rail"],
+  }[Kind];
+  if (Allowed) {
     [...Custom.children].forEach((Child) => {
-      if (Child !== Atlas) Child.remove();
+      if (!Child.matches(Allowed.join(","))) Child.remove();
     });
-    [...Sheet.children].forEach((Child) => {
-      if (Child !== Custom) Child.remove();
-    });
-  } else if (["wind", "clouds", "fog"].includes(Kind)) {
-    const End = Custom.querySelector(
-      { wind: ".wf-trace", clouds: ".cl-layer", fog: ".fg-scatter" }[Kind],
-    );
-    while (End?.nextElementSibling) End.nextElementSibling.remove();
     [...Sheet.children].forEach((Child) => {
       if (Child !== Custom && !Child.classList.contains("ident"))
         Child.remove();
@@ -144,6 +148,8 @@ function Synchronize(Data) {
       Node.dynamic = !!Stored.Dynamic;
       Node.notes = Stored.Notes || "";
     }
+    if (Node.type === "wind")
+      Node.props.field = ResolveInspectorWind(Data.Values[Row.Id], Node.props);
     Node.kids = [];
   }
   const Present = new Set(Data.Rows.map((Row) => Row.Id));
