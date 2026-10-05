@@ -1117,7 +1117,7 @@ test("a .pigment document carries the paint beside the record", async () =>
     const Image = await EncodeSheet({ Pixels: PaintedSheet(8), Resolution: 8 });
     const Sheets = [{ Layer: "layer-a", Target: "coverage", Resolution: 8, Image }];
     const Written = ComposeDocument(Project, { Distance: 3 }, null, Sheets);
-    assert.equal(Written.Version, 2, "a document carrying paint is a version 2 document");
+    assert.equal(Written.Version, 3, "a document carrying paint is a version 3 document");
     assert.equal(Written.Sheets.length, 1);
 
     const Read = ReadDocument(JSON.stringify(Written));

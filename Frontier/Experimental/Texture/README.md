@@ -10,7 +10,7 @@ cd Frontier/Experimental/Texture
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
-npm test           # 97 unit tests, no browser required
+npm test           # 108 unit tests, no browser required
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -81,12 +81,12 @@ of layer:
 - **decal** — SVG or text artwork, either stamped into the texture or placed on the surface as a movable 3D decal.
 - **finish** — a procedural material: automotive paint, fabric, metal or plastic, evaluated per texel.
 
-**Procedural materials.** A material layer is a recipe rather than a colour. Four families, nineteen presets on the
+**Procedural materials.** A material layer is a recipe rather than a colour. Four families, thirty-two presets on the
 shelf, and one inspector that renames itself to suit the family:
 
 | Family | Styles | What the inspector asks about |
 | --- | --- | --- |
-| Automotive | metallic flake, candy pearl, matte wrap, primer | flake scale, flake density, flake brightness, clear coat, flake angle, pigment variation |
+| Automotive | solid single stage, metallic basecoat, pearl tri-coat, candy over metallic, matte wrap, flip, primer | flake scale, flake density, flake brightness, gloss, clear coat, orange peel, pigment variation |
 | Fabric | plain, twill / denim, satin, knitted rib, velvet | thread count, thread spread, fuzz, sheen, weave angle, thread variation |
 | Metal | brushed, hammered, cast and pitted, galvanised spangle | grain scale, pitting, relief, polish, lacquer, brush angle |
 | Plastic | injection moulded, pebbled grain, soft touch, polycarbonate | grain scale, grain density, grain depth, gloss, clear coat |
@@ -262,11 +262,50 @@ long session costs nothing to remember. The head follows undo and redo, and even
 several versions of itself; the pills at the top switch between them, `+` forks on the spot, and up to eight branches
 live side by side.
 
+**Car paint is a stack, not a colour.** The automotive family models what a real panel is: a primer, a pigmented
+basecoat that may carry aluminium or mica flake, and a clear coat over the top. Seven systems, each a different branch
+rather than a different preset of the same one — a solid single stage, a metallic basecoat, a pearl tri-coat, a candy
+over metallic, a matte wrap, a flip and a primer. Candy tints by absorption rather than by a mix, because depth is what
+makes a candy colour: the coat's thickness drifts across the panel and the pigment eats the light that passes through
+it twice. Pearl shifts colour with the tilt of its mica without pretending mica is a metal, so its metalness stays near
+nothing and its specular lifts instead. Every style with a coat carries **orange peel** — the clear coat never levels
+perfectly, which is the reason a reflection in car paint wobbles where a reflection in a mirror does not; it is a
+shallow undulation in height and a matching wobble in coat roughness, on a slider of its own. Eighteen named paints are
+on the shelf, from Rosso corsa through hot rod metalflake to a midnight purple flip, and each one's pigment is the
+linear form of the swatch beside it rather than a guess.
+
+**Every stroke keeps the material it was painted with.** Set the inspector to metalness 1 and roughness 0, paint a
+rivet; set it to roughness 0.5, metalness 0.5 and height 1, paint a scuff beside it. Both keep what they were given.
+The same is true of a decal: a mark takes a copy of the channel values in hand the moment it is dropped onto the
+surface, so one layer can hold a matt sticker and a chrome badge.
+
+The cost is paid only by layers that need it. A layer painted with one set of values stores that set as twelve numbers
+against its coverage image and composites them as constants, exactly as before. The moment a dab disagrees, the layer
+is **promoted**: three more RGBA8 images are allocated, filled with the values the existing paint was laid down with so
+that nothing already on the sheet changes appearance, and from then on every dab writes colour and channels together in
+one four-target pass. Coverage already holds base colour times alpha in its own alpha, which leaves twelve components
+over, and twelve is exactly what three images hold:
+
+| Image | Holds |
+| --- | --- |
+| Coverage | `base_color` × α, coverage α |
+| Surfacing | `specular_roughness`, `base_metalness`, `ambient_occlusion`, `height` |
+| Coating | `specular_weight`, `coat_weight`, `coat_roughness`, `fuzz_weight` |
+| Radiance | `emission_color` rgb, `transmission_weight` |
+
+Everything is stored premultiplied by the same coverage alpha, which is what makes the ordinary source-over blend do
+the right thing during stamping for free, and the compositor divides it back out. `geometry_opacity` is the one channel
+that stays a layer constant: it is a cut-out for the whole material, and a stroke's own alpha already says how much of
+it is there. Because the values travel with the paint, moving a slider afterwards no longer repaints what is already
+down — the sliders describe the *next* stroke, and the group says so. **Apply to the whole layer** is the way back:
+it hands every texel the set in hand and lets go of the three images.
+
 **The `.pigment` document carries the paint.** Save (<kbd>Ctrl S</kbd>, the timeline's Save button, or the export
 dialog) writes one JSON document holding the project record, the camera pose, the whole branching timeline — and every
-painted sheet in the stack. Each layer's coverage and each painted mask is read back off the GPU, encoded as a PNG and
-written into the file beside the record that describes it, so opening a document returns the strokes and not merely the
-recipe that framed them. Blank sheets cost nothing, because a sheet nothing has been painted into is left out; a sparse
+painted sheet in the stack. Each layer's coverage, each layer's painted channel values and each painted mask is read back off
+the GPU, encoded as a PNG and written into the file beside the record that describes it, so opening a document returns
+the strokes and not merely the recipe that framed them. Blank sheets cost nothing, because a sheet nothing has been
+painted into is left out; a sparse
 1024² stroke layer is four megabytes on the GPU and about sixty kilobytes in the file. A sheet lands back on its layer
 at whatever resolution that layer now asks for, resampled if the two disagree, and one unreadable sheet is counted in
 the toast rather than taking the document down with it.

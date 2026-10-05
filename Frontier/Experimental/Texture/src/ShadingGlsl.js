@@ -852,7 +852,24 @@ uniform float uStampReach;
 uniform float uStampSoftness;
 uniform float uStampColourise;
 uniform vec4 uStrokePress;     // pressure at the segment's start and end, travel in metres at each
-out vec4 oCoverage;
+
+// The channel values this dab is carrying. They go down with the paint, premultiplied by the same alpha, so that the
+// ordinary source-over blend leaves each texel holding whatever the last thing to cover it was carrying.
+uniform vec4 uPaintSurfacing;  // roughness, metalness, occlusion, height
+uniform vec4 uPaintCoating;    // specular weight, coat weight, coat roughness, fuzz weight
+uniform vec4 uPaintRadiance;   // emission rgb, transmission
+
+layout(location = 0) out vec4 oCoverage;
+layout(location = 1) out vec4 oSurfacing;
+layout(location = 2) out vec4 oCoating;
+layout(location = 3) out vec4 oRadiance;
+
+void LayDown(float Alpha)
+{
+    oSurfacing = uPaintSurfacing * Alpha;
+    oCoating = uPaintCoating * Alpha;
+    oRadiance = uPaintRadiance * Alpha;
+}
 void main()
 {
     vec4 Sample = texture(uPositionSource, vCoordinate);
@@ -876,6 +893,7 @@ void main()
         if (Burn <= 0.0015) discard;
         vec3 Ink = mix(Stencil.rgb, uStrokeColour, uStampColourise);
         oCoverage = vec4(Ink * Burn, Burn);
+        LayDown(Burn);
         return;
     }
 
@@ -945,11 +963,34 @@ void main()
     float Alpha = clamp(Media.x * Facing * uFlow * Jitter, 0.0, 1.0);
     if (Alpha <= 0.0015) discard;
     oCoverage = vec4(clamp(uStrokeColour * Media.y, 0.0, 1.0) * Alpha, Alpha);
+    LayDown(Alpha);
 }`;
 
 //--------------------------------------------------------------------------------------------------------------------------
 // ⑤ Compositor — one layer per invocation, four RGBA8 targets in, four out.
 //--------------------------------------------------------------------------------------------------------------------------
+//--------------------------------------------------------------------------------------------------------------------------
+// Settle — gives paint already on the sheet the channel values it was laid down with. Run once, when a layer that has
+// been uniform until now is handed a second set of values and has to start keeping them per texel.
+//--------------------------------------------------------------------------------------------------------------------------
+export const SettleFragment = /* glsl */ `
+in vec2 vCoordinate;
+uniform sampler2D uCoverageSource;
+uniform vec4 uSettleSurfacing;
+uniform vec4 uSettleCoating;
+uniform vec4 uSettleRadiance;
+layout(location = 0) out vec4 oSurfacing;
+layout(location = 1) out vec4 oCoating;
+layout(location = 2) out vec4 oRadiance;
+void main()
+{
+    float Alpha = texture(uCoverageSource, vCoordinate).a;
+    oSurfacing = uSettleSurfacing * Alpha;
+    oCoating = uSettleCoating * Alpha;
+    oRadiance = uSettleRadiance * Alpha;
+}
+`;
+
 export const CompositeFragment = /* glsl */ `
 in vec2 vCoordinate;
 
@@ -958,8 +999,12 @@ uniform sampler2D uLower1;
 uniform sampler2D uLower2;
 uniform sampler2D uLower3;
 uniform sampler2D uCoverageMap;
+uniform sampler2D uSurfacingMap;
+uniform sampler2D uCoatingMap;
+uniform sampler2D uRadianceMap;
 uniform sampler2D uDecalMap;
 uniform sampler2D uMaskMap;
+uniform float uPainted;         // 1 when the layer keeps its channel values per texel rather than as constants
 
 uniform int uKind;              // 0 fill · 1 stroke · 2 decal · 3 generator · 4 finish
 uniform int uBlend;
@@ -1036,12 +1081,32 @@ void main()
     float CoatRoughnessValue = uScalar[6];
     float FuzzValue = uScalar[7];
     float HeightValue = uScalar[3];
+    vec3 EmissionColour = uEmissionColour;
+    float TransmissionValue = uScalar[8];
 
     if (uKind == 1)
     {
         vec4 Painted = texture(uCoverageMap, vCoordinate);
         Coverage = Painted.a;
         Colour = Painted.a > 0.0019 ? Painted.rgb / Painted.a : uBaseColour;
+        // Each stroke left its own channel values behind, stored premultiplied by the coverage that carried them.
+        if (uPainted > 0.5 && Painted.a > 0.0019)
+        {
+            float Share = 1.0 / Painted.a;
+            vec4 Surfacing = texture(uSurfacingMap, vCoordinate) * Share;
+            vec4 Coating = texture(uCoatingMap, vCoordinate) * Share;
+            vec4 Radiance = texture(uRadianceMap, vCoordinate) * Share;
+            RoughnessValue = Surfacing.r;
+            MetalnessValue = Surfacing.g;
+            OcclusionValue = Surfacing.b;
+            HeightValue = Surfacing.a;
+            SpecularValue = Coating.r;
+            CoatValue = Coating.g;
+            CoatRoughnessValue = Coating.b;
+            FuzzValue = Coating.a;
+            EmissionColour = Radiance.rgb;
+            TransmissionValue = Radiance.a;
+        }
     }
     else if (uKind == 2)
     {
@@ -1127,8 +1192,8 @@ void main()
     float Coat = mix(Lower2.g, BlendScalar(uBlend, Lower2.g, CoatValue), Coverage * uEnabled[7]);
     float CoatRoughness = mix(Lower2.b, BlendScalar(uBlend, Lower2.b, CoatRoughnessValue), Coverage * uEnabled[8]);
     float Fuzz = mix(Lower2.a, BlendScalar(uBlend, Lower2.a, FuzzValue), Coverage * uEnabled[9]);
-    vec3 Emission = mix(Lower3.rgb, BlendColour(uBlend, Lower3.rgb, uEmissionColour), Coverage * uEnabled[10]);
-    float Transmission = mix(Lower3.a, BlendScalar(uBlend, Lower3.a, uScalar[8]), Coverage * uEnabled[11]);
+    vec3 Emission = mix(Lower3.rgb, BlendColour(uBlend, Lower3.rgb, EmissionColour), Coverage * uEnabled[10]);
+    float Transmission = mix(Lower3.a, BlendScalar(uBlend, Lower3.a, TransmissionValue), Coverage * uEnabled[11]);
 
     oChannel0 = vec4(clamp(BaseColour, 0.0, 1.0), clamp(Opacity, 0.0, 1.0));
     oChannel1 = clamp(vec4(Roughness, Metalness, Occlusion, Elevation), 0.0, 1.0);

@@ -2773,7 +2773,7 @@ export class TexturePanel
         const Target = this.Projection.Brush.Target;
         if (Target !== "mask") this.EnsureChannel(Layer, "base_color");
         this.BeginStrokeRevision(Layer);
-        this.Integrator.FloodLayer(Layer, Target, Target === "mask" ? this.MaskInk() : this.BrushColour, 1);
+        this.Integrator.FloodLayer(Layer, Target, Target === "mask" ? this.MaskInk() : this.BrushColour, 1, Layer.Channels);
         this.CommitStrokeRevision();
         this.Recomposite();
         this.MarkDirty();
@@ -2791,6 +2791,26 @@ export class TexturePanel
         this.Recomposite();
         this.MarkDirty();
         this.Notify(Target === "mask" ? "Mask cleared." : "Layer coverage cleared.");
+    }
+
+    // The way back out of per-stroke values: hand every texel on the layer the set currently in hand. The channel
+    // images go with them, so the layer costs one image again until the next disagreement.
+    LevelActive()
+    {
+        const Layer = this.PaintTargetLayer();
+        if (Layer.Kind !== "stroke") return;
+        this.BeginStrokeRevision(Layer);
+        const Levelled = this.Integrator.LevelLayer(Layer, Layer.Channels);
+        this.CommitStrokeRevision();
+        if (!Levelled)
+        {
+            this.Notify("Nothing has been painted on this layer yet.");
+            return;
+        }
+        this.Recomposite();
+        this.MarkDirty();
+        this.RenderInspector();
+        this.Notify(`${Layer.Name} levelled — every stroke now carries the values in hand.`);
     }
 
     BeginStrokeRevision(Layer)
@@ -2890,6 +2910,7 @@ export class TexturePanel
                 Waiting.Transform.Normal = Frame.Normal;
                 Waiting.Transform.Tangent = Frame.Tangent;
                 Waiting.Mode = "projection";
+                Waiting.Channels = structuredClone(Layer.Channels);
                 Waiting.Placed = true;
                 Decal.Selection = Waiting.Identifier;
             });
@@ -2942,6 +2963,7 @@ export class TexturePanel
             Colorise: Template.Colorise !== false,
             Softness: Template.Softness,
             Emboss: Template.Emboss,
+            Channels: structuredClone(Layer.Channels),
             Transform: { ...Template.Transform, Position: Frame.Position, Normal: Frame.Normal, Tangent: Frame.Tangent },
         });
         this.CaptureStack(() =>
@@ -3804,6 +3826,9 @@ export class TexturePanel
             case "clear-layer":
                 this.ClearActive();
                 break;
+            case "level-layer":
+                this.LevelActive();
+                break;
             case "all-channels":
                 this.CaptureStack(() =>
                 {
@@ -4018,14 +4043,16 @@ export class TexturePanel
 
         if (Layer.Kind === "decal") Sections.push(this.DecalSections(Layer));
 
+        const Mixed = this.Integrator.PaintedLayer?.(Layer) || false;
         if (Layer.Kind === "stroke")
             Sections.push(
                 Group({
                     Title: "Coverage",
-                    Badge: "PAINTED",
+                    Badge: Mixed ? "PER STROKE" : "PAINTED",
                     Body: [
-                        `<p class="property-hint">Painted colour is stored per texel. The remaining channels below apply
-                          uniformly wherever this layer has coverage.</p>`,
+                        `<p class="property-hint">Every stroke keeps the channel values that were set when it was laid
+                          down. The sliders below describe the <strong>next</strong> stroke, not the ones already on the
+                          layer${Mixed ? " — this layer is holding more than one set" : ""}.</p>`,
                         ActionRow([
                             { Action: "flood-layer", Label: "Flood", Glyph: "fill" },
                             { Action: "clear-layer", Label: "Clear", Glyph: "eraser" },
@@ -4037,11 +4064,14 @@ export class TexturePanel
         const Written = ChannelSpecification.filter((Channel) => Layer.Enabled[Channel.Identifier]);
         Sections.push(
             Group({
-                Title: "Channels",
-                Badge: `${Written.length}`,
+                Title: Layer.Kind === "stroke" ? "Channels · in hand" : "Channels",
+                Badge: Mixed ? "MIXED" : `${Written.length}`,
                 Body: [
                     this.ChannelChips(Layer),
                     ...Written.map((Channel) => this.ChannelControl(Layer, Channel)),
+                    Layer.Kind === "stroke"
+                        ? ActionRow([{ Action: "level-layer", Label: "Apply to the whole layer", Glyph: "fill" }])
+                        : "",
                 ].join(""),
             }),
         );

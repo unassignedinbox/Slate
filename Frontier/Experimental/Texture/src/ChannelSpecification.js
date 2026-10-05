@@ -159,6 +159,53 @@ export const ChannelSpecification = [
     },
 ];
 
+//--------------------------------------------------------------------------------------------------------------------------
+// Painted channel values. A stroke carries the channel values that were in hand when it was laid down, not the layer's —
+// paint a rivet at metalness 1, change the inspector, paint a scuff at roughness 0.6, and both keep what they were given.
+// That needs somewhere per texel to put them, so a painted layer grows three more images beside its coverage, packed to
+// mirror the composite targets. Coverage already holds base colour times alpha in its own alpha, so twelve components
+// are left over and twelve is exactly what three RGBA8 images hold. Every value is stored premultiplied by the same
+// coverage alpha, which makes the ordinary source-over blend during stamping do the right thing for free.
+//
+// `geometry_opacity` is the one channel that stays a layer constant: it is a cut-out for the whole material, and a
+// stroke's own alpha already says how much of it is there.
+//--------------------------------------------------------------------------------------------------------------------------
+export const PaintedImages = [
+    { Slot: "Surfacing", Target: "surfacing", Channels: ["specular_roughness", "base_metalness", "ambient_occlusion", "height"] },
+    { Slot: "Coating", Target: "coating", Channels: ["specular_weight", "coat_weight", "coat_roughness", "fuzz_weight"] },
+    { Slot: "Radiance", Target: "radiance", Channels: ["emission_color.r", "emission_color.g", "emission_color.b", "transmission_weight"] },
+];
+
+export const PaintedSlots = PaintedImages.map((Image) => Image.Slot);
+
+export const PaintedTargets = PaintedImages.map((Image) => Image.Target);
+
+export const PaintedSlotForTarget = Object.fromEntries(PaintedImages.map((Image) => [Image.Target, Image.Slot]));
+
+// The twelve numbers in packing order, read out of a layer's channel values. One of these is held against the next for
+// every dab: identical means the layer is still uniform and needs no images, different means it has to grow them.
+export const PaintedVector = (Channels) =>
+{
+    const Values = new Float32Array(12);
+    PaintedImages.forEach((Image, Which) =>
+        Image.Channels.forEach((Name, Slot) =>
+        {
+            const [Identifier, Component] = Name.split(".");
+            const Value = Channels?.[Identifier];
+            const Number_ = Component ? Value?.[{ r: 0, g: 1, b: 2 }[Component]] : Value;
+            Values[Which * 4 + Slot] = Number.isFinite(Number_) ? Number_ : 0;
+        }),
+    );
+    return Values;
+};
+
+export const PaintedVectorsAgree = (First, Second) =>
+{
+    if (!First || !Second) return false;
+    for (let Index = 0; Index < 12; Index += 1) if (Math.abs(First[Index] - Second[Index]) > 1 / 512) return false;
+    return true;
+};
+
 export const ChannelIdentifiers = ChannelSpecification.map((Channel) => Channel.Identifier);
 
 export const ChannelByIdentifier = Object.fromEntries(

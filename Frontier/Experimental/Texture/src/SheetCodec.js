@@ -14,7 +14,11 @@ import { FlipRows } from "./ExportSequence.js";
 // handing the browser a string it cannot allocate.
 //--------------------------------------------------------------------------------------------------------------------------
 export const SheetAllowance = 96 * 1024 * 1024;              // [B]   encoded text one .pigment document may hold
-export const SheetTargets = ["coverage", "mask"];
+import { PaintedTargets } from "./ChannelSpecification.js";
+
+// Coverage first, then the channel images a per-stroke layer grew, then the mask. A layer that never needed the
+// middle three simply has nothing to collect for them.
+export const SheetTargets = ["coverage", ...PaintedTargets, "mask"];
 
 const Signature = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
@@ -344,7 +348,9 @@ export const CollectSheets = async (Integrator, Layers, Options = {}) =>
     {
         for (const Target of SheetTargets)
         {
-            const Snapshot = Integrator.SnapshotLayer(Layer, Target);
+            // `Gather` off: the painted channel images are collected under their own names just below, so there is no
+            // point reading them twice.
+            const Snapshot = Integrator.SnapshotLayer(Layer, Target, false);
             if (!Snapshot || !Snapshot.Pixels || BlankSheet(Snapshot.Pixels)) continue;
             Report(`Reading ${Layer.Name || Layer.Identifier} · ${Target}`);
             // One turn of the event loop per sheet. Encoding a 2048² sheet is half a second of arithmetic, and a saver
@@ -359,6 +365,10 @@ export const CollectSheets = async (Integrator, Layers, Options = {}) =>
             Bytes += Image.length;
             Sheets.push({ Layer: Layer.Identifier, Target, Resolution: Snapshot.Resolution, Image });
         }
+        // A layer whose strokes all carry the same channel values keeps them as twelve numbers rather than as three
+        // images. They are still part of what was painted, so they are written out beside the sheets.
+        const Settled = typeof Integrator.SettledValues === "function" ? Integrator.SettledValues(Layer) : null;
+        if (Settled) Sheets.push({ Layer: Layer.Identifier, Target: "settled", Values: [...Settled] });
     }
     return { Sheets, Bytes, Skipped };
 };
@@ -372,7 +382,17 @@ export const ApplySheets = async (Integrator, Layers, Sheets, Options = {}) =>
     for (const Sheet of Sheets || [])
     {
         const Layer = (Layers || []).find((Candidate) => Candidate.Identifier === Sheet?.Layer);
-        if (!Layer || !Sheet.Image || !SheetTargets.includes(Sheet.Target)) continue;
+        if (!Layer) continue;
+        if (Sheet.Target === "settled")
+        {
+            if (Array.isArray(Sheet.Values) && Sheet.Values.length === 12 && typeof Integrator.RestoreSettled === "function")
+            {
+                Integrator.RestoreSettled(Layer, Sheet.Values);
+                Restored += 1;
+            }
+            continue;
+        }
+        if (!Sheet.Image || !SheetTargets.includes(Sheet.Target)) continue;
         try
         {
             const Read = await Decode(Sheet.Image);

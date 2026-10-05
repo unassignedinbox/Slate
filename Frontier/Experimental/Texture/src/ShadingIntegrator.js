@@ -22,9 +22,18 @@ import {
     BackgroundFragment,
     PlaneFragment,
     ResolveFragment,
+    SettleFragment,
     Chunks,
 } from "./ShadingGlsl.js";
-import { ChannelSpecification, BlendIndex } from "./ChannelSpecification.js";
+import {
+    ChannelSpecification,
+    BlendIndex,
+    PaintedImages,
+    PaintedSlots,
+    PaintedSlotForTarget,
+    PaintedVector,
+    PaintedVectorsAgree,
+} from "./ChannelSpecification.js";
 import { GeneratorIndex } from "./GeneratorSpecification.js";
 import { FinishFamilyIndex, FinishStyleIndex } from "./FinishSpecification.js";
 import { EnvironmentByIdentifier } from "./MaterialSpecification.js";
@@ -363,6 +372,7 @@ export class ShadingIntegrator
             Background: Link(Device, QuadVertex, BackgroundFragment, ["Environment"]),
             Plane: Link(Device, QuadVertex, PlaneFragment),
             Resolve: Link(Device, QuadVertex, ResolveFragment),
+            Settle: Link(Device, QuadVertex, SettleFragment),
         };
     }
 
@@ -490,13 +500,19 @@ export class ShadingIntegrator
 
     FitLayerImages(Record, Size, Fallback)
     {
-        for (const Slot of ["Coverage", "Mask"])
+        for (const Slot of ["Coverage", ...PaintedSlots, "Mask"])
         {
             if (!Record[Slot]) continue;
             if ((Record[`${Slot}Size`] || Fallback) === Size) continue;
             if (!Record[`${Slot}Target`]) Record[`${Slot}Target`] = this.CreateTarget([Record[Slot]]);
             Record[`${Slot}Size`] = Record[`${Slot}Size`] || Fallback;
             this.ResizeLayerImage(Record, Slot, Size);
+            // The two combined targets name the images that were just replaced, so they have to go with them.
+            if (Slot === "Mask") continue;
+            if (Record.PaintTarget) this.Device.deleteFramebuffer(Record.PaintTarget);
+            if (Record.SettleTarget) this.Device.deleteFramebuffer(Record.SettleTarget);
+            Record.PaintTarget = null;
+            Record.SettleTarget = null;
         }
     }
 
@@ -638,6 +654,73 @@ export class ShadingIntegrator
         return Record;
     }
 
+    // A layer that has only ever been painted with one set of channel values does not need images to hold them: the
+    // one set is remembered on the record and uploaded as a constant, exactly as before. The moment a second set
+    // arrives the layer is promoted — three images are allocated and filled with the values the existing paint was
+    // laid down with, so nothing already on the sheet changes appearance, and from then on every dab writes per texel.
+    PaintedLayer(Layer)
+    {
+        const Record = this.LayerImages.get(Layer.Identifier);
+        return Boolean(Record && Record.Surfacing);
+    }
+
+    EnsurePaintwork(Layer)
+    {
+        const Record = this.EnsureCoverage(Layer);
+        const Size = this.LayerResolution(Layer);
+        if (Record.Surfacing && Record.SurfacingSize === Size) return Record;
+        for (const Image of PaintedImages)
+        {
+            if (Record[Image.Slot] && Record[`${Image.Slot}Size`] !== Size) this.ResizeLayerImage(Record, Image.Slot, Size);
+            if (Record[Image.Slot]) continue;
+            Record[Image.Slot] = this.CreateColourImage(Size);
+            Record[`${Image.Slot}Target`] = this.CreateTarget([Record[Image.Slot]]);
+            Record[`${Image.Slot}Size`] = Size;
+            this.ClearImage(Record[`${Image.Slot}Target`], [0, 0, 0, 0]);
+        }
+        Record.PaintTarget = null;
+        return Record;
+    }
+
+    // One framebuffer naming all four painted images, so a single dab writes colour and channels in the same pass.
+    PaintTarget(Record)
+    {
+        if (!Record.PaintTarget)
+            Record.PaintTarget = this.CreateTarget([Record.Coverage, ...PaintedImages.map((Image) => Record[Image.Slot])]);
+        return Record.PaintTarget;
+    }
+
+    // Hands the paint already on the sheet the values it was laid down with. Every texel takes the same numbers, so
+    // the pass is a clear rather than a draw: premultiplied by coverage is what the stamp writes, and a clear cannot
+    // see the coverage — which is why the images are cleared to the value and then multiplied down by alpha with one
+    // blended full-screen pass instead.
+    SettlePaintwork(Layer, Values)
+    {
+        const Device = this.Device;
+        const Record = this.EnsurePaintwork(Layer);
+        const Program = this.Programs.Settle;
+        const Size = (Record.CoverageSize || this.Resolution);
+        Device.bindFramebuffer(Device.FRAMEBUFFER, this.SettleTarget(Record));
+        Device.viewport(0, 0, Size, Size);
+        Device.disable(Device.BLEND);
+        Device.useProgram(Program.Program);
+        Device.bindVertexArray(this.QuadArray);
+        this.BindImage(Program, "uCoverageSource", Record.Coverage, 0);
+        Device.uniform4fv(Program.Uniforms.get("uSettleSurfacing"), Values.slice(0, 4));
+        Device.uniform4fv(Program.Uniforms.get("uSettleCoating"), Values.slice(4, 8));
+        Device.uniform4fv(Program.Uniforms.get("uSettleRadiance"), Values.slice(8, 12));
+        Device.drawArrays(Device.TRIANGLES, 0, 3);
+        Device.bindVertexArray(null);
+        Device.bindFramebuffer(Device.FRAMEBUFFER, null);
+        return Record;
+    }
+
+    SettleTarget(Record)
+    {
+        if (!Record.SettleTarget) Record.SettleTarget = this.CreateTarget(PaintedImages.map((Image) => Record[Image.Slot]));
+        return Record.SettleTarget;
+    }
+
     // Changing a layer's resolution resamples what is already painted rather than throwing it away.
     ResizeLayerImage(Record, Slot, Size)
     {
@@ -714,8 +797,10 @@ export class ShadingIntegrator
         const Device = this.Device;
         const Record = this.LayerImages.get(Identifier);
         if (!Record) return;
-        for (const Slot of ["Coverage", "Mask", "Decal"]) if (Record[Slot]) Device.deleteTexture(Record[Slot]);
-        for (const Slot of ["CoverageTarget", "MaskTarget"]) if (Record[Slot]) Device.deleteFramebuffer(Record[Slot]);
+        for (const Slot of ["Coverage", ...PaintedSlots, "Mask", "Decal"]) if (Record[Slot]) Device.deleteTexture(Record[Slot]);
+        for (const Slot of ["Coverage", ...PaintedSlots, "Mask"])
+            if (Record[`${Slot}Target`]) Device.deleteFramebuffer(Record[`${Slot}Target`]);
+        if (Record.PaintTarget) Device.deleteFramebuffer(Record.PaintTarget);
         this.LayerImages.delete(Identifier);
     }
 
@@ -767,9 +852,24 @@ export class ShadingIntegrator
     {
         if (!this.Ready) return;
         const Device = this.Device;
-        const Record = Options.Target === "mask" ? this.EnsureMask(Layer) : this.EnsureCoverage(Layer);
-        const Target = Options.Target === "mask" ? Record.MaskTarget : Record.CoverageTarget;
-        const Size = (Options.Target === "mask" ? Record.MaskSize : Record.CoverageSize) || this.Resolution;
+        const Masking = Options.Target === "mask";
+        // What this dab is carrying. A mask has no channel values of its own, and an eraser takes away whatever was
+        // there rather than putting something down, so neither can make a layer grow images.
+        const Values = Masking || Options.Erase ? null : PaintedVector(Options.Channels || Layer.Channels);
+        let Record = Masking ? this.EnsureMask(Layer) : this.EnsureCoverage(Layer);
+        if (Values)
+        {
+            if (!Record.Uniform && !Record.Surfacing) Record.Uniform = Values;
+            else if (!Record.Surfacing && !PaintedVectorsAgree(Record.Uniform, Values))
+            {
+                // Second set of values on this layer: keep what is already down, then start recording per texel.
+                Record = this.SettlePaintwork(Layer, Record.Uniform);
+                Record.Uniform = null;
+            }
+        }
+        const Painted = !Masking && Boolean(Record.Surfacing);
+        const Target = Masking ? Record.MaskTarget : Painted ? this.PaintTarget(Record) : Record.CoverageTarget;
+        const Size = (Masking ? Record.MaskSize : Record.CoverageSize) || this.Resolution;
         const Program = this.Programs.Stamp;
         Device.bindFramebuffer(Device.FRAMEBUFFER, Target);
         Device.viewport(0, 0, Size, Size);
@@ -794,6 +894,10 @@ export class ShadingIntegrator
         Device.uniform1f(Uniforms.get("uFlow"), Options.Flow);
         Device.uniform1f(Uniforms.get("uFacingLimit"), Options.FacingLimit ?? 0.1);
         Device.uniform1f(Uniforms.get("uAlphaJitter"), Options.Jitter || 0);
+        const Carried = Values || new Float32Array(12);
+        Device.uniform4fv(Uniforms.get("uPaintSurfacing"), Carried.slice(0, 4));
+        Device.uniform4fv(Uniforms.get("uPaintCoating"), Carried.slice(4, 8));
+        Device.uniform4fv(Uniforms.get("uPaintRadiance"), Carried.slice(8, 12));
 
         // The medium. `Media` is the profile MediaSolver built from the instrument in hand; with none in hand the
         // plain profile goes up instead, which is the soft round dab this pass has always drawn.
@@ -829,40 +933,141 @@ export class ShadingIntegrator
         this.Statistics.Stamps += 1;
     }
 
-    FloodLayer(Layer, Target, Colour, Alpha)
+    // A flood is a dab the size of the sheet, so it carries channel values exactly as a stroke does.
+    FloodLayer(Layer, Target, Colour, Alpha, Channels = null)
     {
-        const Record = Target === "mask" ? this.EnsureMask(Layer) : this.EnsureCoverage(Layer);
-        const Surface = Target === "mask" ? Record.MaskTarget : Record.CoverageTarget;
+        const Masking = Target === "mask";
+        const Values = Masking ? null : PaintedVector(Channels || Layer.Channels);
+        let Record = Masking ? this.EnsureMask(Layer) : this.EnsureCoverage(Layer);
+        if (Values)
+        {
+            if (!Record.Uniform && !Record.Surfacing) Record.Uniform = Values;
+            else if (!Record.Surfacing && !PaintedVectorsAgree(Record.Uniform, Values))
+            {
+                Record = this.SettlePaintwork(Layer, Record.Uniform);
+                Record.Uniform = null;
+            }
+        }
+        const Surface = Masking ? Record.MaskTarget : Record.CoverageTarget;
         this.ClearImage(Surface, [Colour[0] * Alpha, Colour[1] * Alpha, Colour[2] * Alpha, Alpha]);
+        if (Values && Record.Surfacing)
+            PaintedImages.forEach((Image, Which) =>
+                this.ClearImage(Record[`${Image.Slot}Target`], [
+                    Values[Which * 4] * Alpha,
+                    Values[Which * 4 + 1] * Alpha,
+                    Values[Which * 4 + 2] * Alpha,
+                    Values[Which * 4 + 3] * Alpha,
+                ]),
+            );
     }
 
-    SnapshotLayer(Layer, Target)
+    SettledValues(Layer)
+    {
+        const Record = this.LayerImages.get(Layer?.Identifier);
+        return Record?.Coverage && Record.Uniform ? Record.Uniform : null;
+    }
+
+    RestoreSettled(Layer, Values)
+    {
+        const Record = this.LayerRecord(Layer);
+        if (Record.Surfacing) return;
+        Record.Uniform = Float32Array.from(Values);
+    }
+
+    // Hands every texel on the layer the same channel values, which is the way back from per-stroke to one material.
+    LevelLayer(Layer, Channels = null)
+    {
+        const Record = this.LayerImages.get(Layer.Identifier);
+        if (!Record?.Coverage) return false;
+        this.DropPaintwork(Record);
+        Record.Uniform = PaintedVector(Channels || Layer.Channels);
+        return true;
+    }
+
+    // Lets go of the three channel images, which is how a layer stops being per-texel: on levelling, and on stepping
+    // back to a snapshot taken before it was ever promoted.
+    DropPaintwork(Record)
+    {
+        if (!Record?.Surfacing) return false;
+        for (const Image of PaintedImages)
+        {
+            if (Record[Image.Slot]) this.Device.deleteTexture(Record[Image.Slot]);
+            if (Record[`${Image.Slot}Target`]) this.Device.deleteFramebuffer(Record[`${Image.Slot}Target`]);
+            Record[Image.Slot] = null;
+            Record[`${Image.Slot}Target`] = null;
+            Record[`${Image.Slot}Size`] = 0;
+        }
+        if (Record.PaintTarget) this.Device.deleteFramebuffer(Record.PaintTarget);
+        if (Record.SettleTarget) this.Device.deleteFramebuffer(Record.SettleTarget);
+        Record.PaintTarget = null;
+        Record.SettleTarget = null;
+        return true;
+    }
+
+    // `coverage` and `mask` are the two sheets a document has always carried; the painted channel images answer to
+    // their own names so a saved file can hold them too. Reading the coverage also gathers them, because undo has to
+    // put a stroke's channel values back along with its colour or the two drift apart.
+    SlotForTarget(Target)
+    {
+        if (Target === "mask") return "Mask";
+        return PaintedSlotForTarget[Target] || "Coverage";
+    }
+
+    SnapshotLayer(Layer, Target, Gather = true)
     {
         const Device = this.Device;
         const Record = this.LayerImages.get(Layer.Identifier);
-        const Surface = Target === "mask" ? Record?.MaskTarget : Record?.CoverageTarget;
+        const Slot = this.SlotForTarget(Target);
+        const Surface = Record?.[`${Slot}Target`];
         if (!Surface) return null;
-        const Size = (Target === "mask" ? Record.MaskSize : Record.CoverageSize) || this.Resolution;
+        const Size = Record[`${Slot}Size`] || this.Resolution;
         const Pixels = new Uint8Array(Size * Size * 4);
         Device.bindFramebuffer(Device.FRAMEBUFFER, Surface);
         Device.readPixels(0, 0, Size, Size, Device.RGBA, Device.UNSIGNED_BYTE, Pixels);
         Device.bindFramebuffer(Device.FRAMEBUFFER, null);
-        return { Pixels, Resolution: Size };
+        const Snapshot = { Pixels, Resolution: Size };
+        if (Slot === "Coverage")
+        {
+            Snapshot.Uniform = Record.Uniform ? Float32Array.from(Record.Uniform) : null;
+            if (Gather && Record.Surfacing)
+                Snapshot.Paintwork = PaintedImages.map((Image) => ({
+                    Slot: Image.Slot,
+                    Pixels: this.SnapshotLayer(Layer, Image.Target, false)?.Pixels || null,
+                }));
+        }
+        return Snapshot;
     }
 
     RestoreLayer(Layer, Target, Snapshot)
     {
         const Device = this.Device;
-        const Record = Target === "mask" ? this.EnsureMask(Layer) : this.EnsureCoverage(Layer);
-        const Size = (Target === "mask" ? Record.MaskSize : Record.CoverageSize) || this.Resolution;
+        const Slot = this.SlotForTarget(Target);
+        const Record =
+            Slot === "Mask" ? this.EnsureMask(Layer) : Slot === "Coverage" ? this.EnsureCoverage(Layer) : this.EnsurePaintwork(Layer);
+        const Size = Record[`${Slot}Size`] || this.Resolution;
         if (!Snapshot || Snapshot.Resolution !== Size) return;
-        const Image = Target === "mask" ? Record.Mask : Record.Coverage;
-        Device.bindTexture(Device.TEXTURE_2D, Image);
-        Device.texSubImage2D(
-            Device.TEXTURE_2D, 0, 0, 0, Size, Size,
-            Device.RGBA, Device.UNSIGNED_BYTE, Snapshot.Pixels,
-        );
-        Device.bindTexture(Device.TEXTURE_2D, null);
+        const Write = (Image, Pixels) =>
+        {
+            if (!Image || !Pixels) return;
+            Device.bindTexture(Device.TEXTURE_2D, Image);
+            Device.texSubImage2D(Device.TEXTURE_2D, 0, 0, 0, Size, Size, Device.RGBA, Device.UNSIGNED_BYTE, Pixels);
+            Device.bindTexture(Device.TEXTURE_2D, null);
+        };
+        Write(Record[Slot], Snapshot.Pixels);
+        if (Slot !== "Coverage") return;
+        if (Snapshot.Paintwork)
+        {
+            const Grown = this.EnsurePaintwork(Layer);
+            for (const Entry of Snapshot.Paintwork) Write(Grown[Entry.Slot], Entry.Pixels);
+            Grown.Uniform = null;
+        }
+        else if (Snapshot.Uniform !== undefined)
+        {
+            // 🔴 Stepping back past the promotion has to let go of the images as well. Leaving them in place would
+            //    leave the compositor reading channel values from a stroke that has just been undone.
+            this.DropPaintwork(Record);
+            Record.Uniform = Snapshot.Uniform ? Float32Array.from(Snapshot.Uniform) : null;
+        }
     }
 
     //----------------------------------------------------------------------------------------------------------------------
@@ -922,6 +1127,9 @@ export class ShadingIntegrator
             this.BindImage(Program, "uCoverageMap", Record.Coverage || this.BlankImage(), 7);
             this.BindImage(Program, "uDecalMap", Record.Decal || this.BlankImage(), 8);
             this.BindImage(Program, "uMaskMap", Record.Mask || this.WhiteImage(), 9);
+            this.BindImage(Program, "uSurfacingMap", Record.Surfacing || this.BlankImage(), 10);
+            this.BindImage(Program, "uCoatingMap", Record.Coating || this.BlankImage(), 11);
+            this.BindImage(Program, "uRadianceMap", Record.Radiance || this.BlankImage(), 12);
             this.UploadLayerUniforms(Program, Layer, Material, Mark, Painted);
             Device.drawArrays(Device.TRIANGLES, 0, 3);
             const Swap = Source;
@@ -948,20 +1156,34 @@ export class ShadingIntegrator
         const Enabled = new Float32Array(12);
         ChannelSpecification.forEach((Channel, Index) => (Enabled[Index] = Layer.Enabled[Channel.Identifier] ? 1 : 0));
         Device.uniform1fv(Uniforms.get("uEnabled"), Enabled);
-        Device.uniform3fv(Uniforms.get("uBaseColour"), Layer.Channels.base_color);
-        Device.uniform3fv(Uniforms.get("uEmissionColour"), Layer.Channels.emission_color);
-        const Scalars = new Float32Array([
-            Layer.Channels.specular_roughness,
-            Layer.Channels.base_metalness,
-            Layer.Channels.ambient_occlusion,
-            Layer.Channels.height,
-            Layer.Channels.specular_weight,
-            Layer.Channels.coat_weight,
-            Layer.Channels.coat_roughness,
-            Layer.Channels.fuzz_weight,
-            Layer.Channels.transmission_weight,
-            Layer.Channels.geometry_opacity,
-        ]);
+
+        // A painted layer keeps its channel values with the paint. Where that is one set for the whole layer it is
+        // held on the record and sent as constants; where the strokes disagree it is in the images and `uPainted`
+        // tells the shader to read them. Either way the inspector's current reading describes the *next* stroke, so
+        // it must not be what an already-painted texel is composited with.
+        const Record = this.LayerImages.get(Layer.Identifier);
+        const Laid = KindIndex === 1 ? Record?.Uniform : null;
+        const Channels = Mark?.Channels || Layer.Channels;
+        Device.uniform1f(Uniforms.get("uPainted"), KindIndex === 1 && Record?.Surfacing ? 1 : 0);
+        Device.uniform3fv(Uniforms.get("uBaseColour"), Channels.base_color);
+        Device.uniform3fv(
+            Uniforms.get("uEmissionColour"),
+            Laid ? [Laid[8], Laid[9], Laid[10]] : Channels.emission_color,
+        );
+        const Scalars = Laid
+            ? new Float32Array([Laid[0], Laid[1], Laid[2], Laid[3], Laid[4], Laid[5], Laid[6], Laid[7], Laid[11], Channels.geometry_opacity])
+            : new Float32Array([
+                  Channels.specular_roughness,
+                  Channels.base_metalness,
+                  Channels.ambient_occlusion,
+                  Channels.height,
+                  Channels.specular_weight,
+                  Channels.coat_weight,
+                  Channels.coat_roughness,
+                  Channels.fuzz_weight,
+                  Channels.transmission_weight,
+                  Channels.geometry_opacity,
+              ]);
         Device.uniform1fv(Uniforms.get("uScalar"), Scalars);
 
         const Scale = Material?.texture_scale ?? 1;

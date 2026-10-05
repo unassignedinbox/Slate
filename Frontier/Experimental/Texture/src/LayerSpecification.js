@@ -141,6 +141,10 @@ export const CreateMark = (Decal, Overrides = {}) =>
         Emboss: Template.Emboss,
         Transform: { ...Template.Transform, Position: [...Template.Transform.Position], Normal: [...Template.Transform.Normal], Tangent: [...Template.Transform.Tangent] },
         Plane: { ...Template.Plane, Centre: [...Template.Plane.Centre] },
+        // The channel values this placement carries. Null means it still follows the layer's; a mark dropped onto the
+        // surface takes a copy of whatever the inspector read at that moment, so two marks on one layer can be a matt
+        // sticker and a chrome badge.
+        Channels: null,
         ...Overrides,
     };
 };
@@ -430,6 +434,21 @@ const SanitiseDecal = (Decal, Candidate) =>
     return Sanitised;
 };
 
+export const SanitiseChannels = (Candidate) =>
+{
+    const Channels = DefaultChannelValues();
+    for (const Identifier of ChannelIdentifiers)
+    {
+        const Specification = ChannelByIdentifier[Identifier];
+        const Incoming = Candidate?.[Identifier];
+        Channels[Identifier] =
+            Specification.Kind === "color"
+                ? SanitiseColour(Incoming, Specification.Default)
+                : Clamp(Incoming ?? Specification.Default, 0, 1);      // every channel is stored UNORM8
+    }
+    return Channels;
+};
+
 export const SanitiseMark = (Decal, Candidate) =>
 {
     const Mark = CreateMark(Decal);
@@ -454,6 +473,7 @@ export const SanitiseMark = (Decal, Candidate) =>
         Depth: Clamp(Candidate.Transform?.Depth ?? Mark.Transform.Depth, 0.01, 2),
         AngleLimit: Clamp(Candidate.Transform?.AngleLimit ?? Mark.Transform.AngleLimit, 10, 180),
     };
+    Mark.Channels = Candidate.Channels ? SanitiseChannels(Candidate.Channels) : null;
     Mark.Plane = {
         Centre: [
             Clamp(Candidate.Plane?.Centre?.[0] ?? Mark.Plane.Centre[0], -1, 2),
@@ -478,16 +498,8 @@ export const SanitiseLayer = (Candidate) =>
     Layer.Opacity = Clamp(Candidate.Opacity ?? 1, 0, 1);
     Layer.Blend = BlendOrdering.some((Blend) => Blend.Identifier === Candidate.Blend) ? Candidate.Blend : "normal";
     Layer.Resolution = LayerResolutions.includes(Candidate.Resolution) ? Candidate.Resolution : 0;
-    for (const Identifier of ChannelIdentifiers)
-    {
-        const Specification = ChannelByIdentifier[Identifier];
-        const Incoming = Candidate.Channels?.[Identifier];
-        Layer.Channels[Identifier] =
-            Specification.Kind === "color"
-                ? SanitiseColour(Incoming, Specification.Default)
-                : Clamp(Incoming ?? Specification.Default, 0, 1);      // every channel is stored UNORM8
-        Layer.Enabled[Identifier] = Boolean(Candidate.Enabled?.[Identifier]);
-    }
+    Layer.Channels = SanitiseChannels(Candidate.Channels);
+    for (const Identifier of ChannelIdentifiers) Layer.Enabled[Identifier] = Boolean(Candidate.Enabled?.[Identifier]);
     if (Candidate.Mask)
         Layer.Mask = {
             ...MaskDefaults(),

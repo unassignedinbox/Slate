@@ -163,7 +163,7 @@ test("the integrator links every program and reflects its uniforms", () =>
     const Names = Object.keys(Integrator.Programs);
     assert.deepEqual(
         Names.sort(),
-        ["Background", "Bake", "Composite", "Curvature", "Dilate", "Mask", "Plane", "Resolve", "Shade", "Stamp"].sort(),
+        ["Background", "Bake", "Composite", "Curvature", "Dilate", "Mask", "Plane", "Resolve", "Settle", "Shade", "Stamp"].sort(),
     );
     for (const [Name, Program] of Object.entries(Integrator.Programs))
     {
@@ -674,4 +674,192 @@ test("the integrator reports which kind of renderer it got", () =>
     assert.equal(Integrator.Ready, true, Integrator.Failure);
     assert.equal(Integrator.Software, true);
     assert.match(Integrator.Renderer, /SwiftShader/);
+});
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Per-stroke channel values. The thing being guarded is that two strokes on one layer can disagree about roughness or
+// metalness and both keep what they were given, while a layer that never disagrees pays nothing for the privilege.
+//--------------------------------------------------------------------------------------------------------------------------
+const StrokeOptions = (Overrides = {}) => ({
+    Target: "coverage",
+    Start: [0, 0, 0.8],
+    End: [0.1, 0, 0.8],
+    Normal: [0, 0, 1],
+    Colour: [1, 0.5, 0.25],
+    Radius: 0.1,
+    Hardness: 0.5,
+    Flow: 0.9,
+    FacingLimit: 0.2,
+    Jitter: 0,
+    ...Overrides,
+});
+
+const Uploaded = (Device, Name) =>
+    Device.Calls.filter((Call) => Call.Name === "uniform4fv" && Call.Arguments[0]?.Name === Name).map((Call) => [...Call.Arguments[1]]);
+
+test("a layer painted with one set of channel values never grows images for them", () =>
+{
+    const { Integrator, Device } = Prepare(128);
+    const Layer = CreateLayer("stroke");
+    Layer.Channels.base_metalness = 1;
+    Layer.Channels.specular_roughness = 0;
+    Integrator.Stamp(Layer, StrokeOptions());
+    const Settled = Device.Resources.Textures;
+    Integrator.Stamp(Layer, StrokeOptions({ Start: [0.2, 0, 0.8], End: [0.3, 0, 0.8] }));
+    assert.equal(Integrator.PaintedLayer(Layer), false, "the layer grew channel images it did not need");
+    assert.equal(Device.Resources.Textures, Settled, "a second agreeing stroke allocated something");
+
+    // The values are remembered against the paint, not read back off the inspector.
+    const Record = Integrator.LayerImages.get(Layer.Identifier);
+    assert.ok(Record.Uniform, "the layer forgot what it was painted with");
+    assert.equal(Record.Uniform[0], 0, "roughness was not recorded");
+    assert.equal(Record.Uniform[1], 1, "metalness was not recorded");
+
+    // Moving the inspector afterwards must not change what is already down: the compositor still sends the old set.
+    Layer.Channels.base_metalness = 0;
+    Layer.Channels.specular_roughness = 0.9;
+    Device.Calls.length = 0;
+    Integrator.Composite([{ ...Layer, Visible: true, Opacity: 1 }], null);
+    const Scalars = Device.Calls.filter((Call) => Call.Name === "uniform1fv" && Call.Arguments[0]?.Name === "uScalar[0]");
+    assert.ok(Scalars.length, "the compositor never uploaded the channel scalars");
+    assert.equal([...Scalars.at(-1).Arguments[1]][0], 0, "the painted roughness followed the inspector");
+    assert.equal([...Scalars.at(-1).Arguments[1]][1], 1, "the painted metalness followed the inspector");
+});
+
+test("a second set of channel values promotes the layer and keeps the first stroke's", () =>
+{
+    const { Integrator, Device } = Prepare(128);
+    const Layer = CreateLayer("stroke");
+    Layer.Channels.base_metalness = 1;
+    Layer.Channels.specular_roughness = 0;
+    Integrator.Stamp(Layer, StrokeOptions());
+
+    // The inspector moves, and the next stroke carries the new numbers.
+    Layer.Channels.base_metalness = 0.5;
+    Layer.Channels.specular_roughness = 0.5;
+    Layer.Channels.height = 1;
+    Device.Calls.length = 0;
+    Integrator.Stamp(Layer, StrokeOptions({ Start: [0.2, 0, 0.8], End: [0.3, 0, 0.8] }));
+
+    assert.ok(Integrator.PaintedLayer(Layer), "the layer did not grow channel images");
+    const Record = Integrator.LayerImages.get(Layer.Identifier);
+    assert.equal(Record.Uniform, null, "the layer still claims to be uniform");
+    for (const Image of ["Surfacing", "Coating", "Radiance"]) assert.ok(Record[Image], `${Image} was never allocated`);
+
+    // The settle pass hands the first stroke the values it was laid down with before the second one lands.
+    const Settled = Uploaded(Device, "uSettleSurfacing");
+    assert.equal(Settled.length, 1, "the existing paint was not settled exactly once");
+    assert.deepEqual(Settled[0].slice(0, 2), [0, 1], "the first stroke was settled with the wrong values");
+
+    // The second stroke writes its own.
+    const Carried = Uploaded(Device, "uPaintSurfacing").at(-1);
+    assert.deepEqual(Carried.slice(0, 2), [0.5, 0.5], "the second stroke did not carry its own values");
+    assert.equal(Carried[3], 1, "the second stroke did not carry its height");
+
+    // And the dab goes to the four-image target, not to the coverage image alone.
+    const Bound = Device.Calls.filter((Call) => Call.Name === "bindFramebuffer").at(-2);
+    assert.ok(Record.PaintTarget, "the combined paint target was never built");
+    assert.ok(Bound, "nothing was bound for the stamp");
+});
+
+test("the compositor reads channel values per texel once a layer keeps them that way", () =>
+{
+    const { Integrator, Device } = Prepare(128);
+    const Layer = CreateLayer("stroke");
+    Integrator.Stamp(Layer, StrokeOptions());
+    Layer.Channels.specular_roughness = 0.25;
+    Integrator.Stamp(Layer, StrokeOptions({ Start: [0.3, 0, 0.8], End: [0.4, 0, 0.8] }));
+
+    Device.Calls.length = 0;
+    Integrator.Composite([{ ...Layer, Visible: true, Opacity: 1 }], null);
+    const Flag = Device.Calls.filter((Call) => Call.Name === "uniform1f" && Call.Arguments[0]?.Name === "uPainted");
+    assert.ok(Flag.length, "the compositor never said whether the layer is painted per texel");
+    assert.equal(Flag.at(-1).Arguments[1], 1, "a promoted layer was composited as if it were uniform");
+    for (const Name of ["uSurfacingMap", "uCoatingMap", "uRadianceMap"])
+        assert.ok(
+            Device.Calls.some((Call) => Call.Name === "uniform1i" && Call.Arguments[0]?.Name === Name),
+            `${Name} was never bound`,
+        );
+});
+
+test("neither an eraser nor a mask stroke can promote a layer", () =>
+{
+    const { Integrator } = Prepare(128);
+    const Layer = CreateLayer("stroke");
+    Layer.Channels.base_metalness = 1;
+    Integrator.Stamp(Layer, StrokeOptions());
+    Layer.Channels.base_metalness = 0;
+    Integrator.Stamp(Layer, StrokeOptions({ Erase: true }));
+    assert.equal(Integrator.PaintedLayer(Layer), false, "erasing grew channel images");
+    const Record = Integrator.LayerImages.get(Layer.Identifier);
+    assert.equal(Record.Uniform[1], 1, "erasing rewrote what the layer was painted with");
+
+    Layer.Mask.Kind = "stroke";
+    Integrator.Stamp(Layer, StrokeOptions({ Target: "mask" }));
+    assert.equal(Integrator.PaintedLayer(Layer), false, "a mask stroke grew channel images");
+});
+
+test("undo puts a stroke's channel values back along with its colour", () =>
+{
+    const { Integrator } = Prepare(64);
+    const Layer = CreateLayer("stroke");
+    Layer.Channels.base_metalness = 1;
+    Integrator.Stamp(Layer, StrokeOptions());
+    const Before = Integrator.SnapshotLayer(Layer, "coverage");
+    assert.equal(Before.Paintwork, undefined, "a uniform layer snapshotted images it does not have");
+    assert.equal(Before.Uniform[1], 1, "the snapshot did not record what the layer was painted with");
+
+    Layer.Channels.base_metalness = 0;
+    Layer.Channels.coat_weight = 1;
+    Integrator.Stamp(Layer, StrokeOptions({ Start: [0.4, 0, 0.8], End: [0.5, 0, 0.8] }));
+    const After = Integrator.SnapshotLayer(Layer, "coverage");
+    assert.equal(After.Paintwork?.length, 3, "a promoted layer did not snapshot its channel images");
+    assert.ok(After.Paintwork.every((Image) => Image.Pixels?.length === 64 * 64 * 4), "a channel image came back the wrong size");
+
+    // Stepping back to the first snapshot has to return the layer to being uniform, values and all.
+    Integrator.RestoreLayer(Layer, "coverage", Before);
+    const Record = Integrator.LayerImages.get(Layer.Identifier);
+    assert.equal(Record.Uniform?.[1], 1, "undo did not restore the values the layer was painted with");
+});
+
+test("levelling a layer sends every texel back to one set of values", () =>
+{
+    const { Integrator, Device } = Prepare(64);
+    const Layer = CreateLayer("stroke");
+    Integrator.Stamp(Layer, StrokeOptions());
+    Layer.Channels.specular_roughness = 0.8;
+    Integrator.Stamp(Layer, StrokeOptions({ Start: [0.4, 0, 0.8], End: [0.5, 0, 0.8] }));
+    assert.ok(Integrator.PaintedLayer(Layer), "the layer should have been promoted first");
+
+    const Textures = Device.Resources.Textures;
+    assert.equal(Integrator.LevelLayer(Layer), true, "levelling refused a painted layer");
+    assert.equal(Integrator.PaintedLayer(Layer), false, "levelling left the channel images in place");
+    assert.equal(Device.Resources.Textures, Textures - 3, "levelling leaked the channel images");
+    assert.ok(Math.abs(Integrator.LayerImages.get(Layer.Identifier).Uniform[0] - 0.8) < 1e-6, "levelling used the wrong values");
+    assert.equal(Integrator.LevelLayer(CreateLayer("stroke")), false, "levelling an unpainted layer claimed to work");
+});
+
+test("a promoted layer survives a change of resolution", () =>
+{
+    const { Integrator, Device } = Prepare(128);
+    const Layer = CreateLayer("stroke");
+    Integrator.Stamp(Layer, StrokeOptions());
+    Layer.Channels.specular_roughness = 0.6;
+    Integrator.Stamp(Layer, StrokeOptions({ Start: [0.4, 0, 0.8], End: [0.5, 0, 0.8] }));
+    const Record = Integrator.LayerImages.get(Layer.Identifier);
+    const Framebuffers = Device.Resources.Framebuffers;
+
+    Layer.Resolution = 256;
+    Integrator.ResampleLayer(Layer);
+    assert.equal(Record.CoverageSize, 256);
+    for (const Slot of ["Surfacing", "Coating", "Radiance"])
+        assert.equal(Record[`${Slot}Size`], 256, `${Slot} did not follow the layer to its new size`);
+    assert.equal(Record.PaintTarget, null, "the combined target still names the old images");
+    assert.equal(Record.SettleTarget, null, "the settle target still names the old images");
+    assert.ok(Device.Resources.Framebuffers <= Framebuffers, "resizing leaked framebuffers");
+
+    // And the next dab rebuilds it rather than throwing.
+    Integrator.Stamp(Layer, StrokeOptions({ Start: [0.1, 0, 0.8], End: [0.2, 0, 0.8] }));
+    assert.ok(Record.PaintTarget, "the combined target was not rebuilt");
+    assert.ok(Integrator.PaintedLayer(Layer), "the layer lost its channel images");
 });

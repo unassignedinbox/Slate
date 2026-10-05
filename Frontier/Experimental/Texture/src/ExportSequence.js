@@ -162,7 +162,7 @@ export const EmitTextureSet = async (Integrator, Project, PresetIdentifier, Repo
 // A .pigment document is the whole session in one file: the project record, the camera pose, the branching timeline —
 // and, since version 2, the paint itself. Sheets come last so the readable half of the file is still the first screenful.
 export const DocumentFormat = "pigment";
-export const DocumentVersion = 2;
+export const DocumentVersion = 3;
 export const DocumentExtension = ".pigment";
 
 export const ComposeDocument = (Project, Camera, Timeline = null, Sheets = null) => ({

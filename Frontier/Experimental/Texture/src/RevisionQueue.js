@@ -42,7 +42,10 @@ export class RevisionQueue
     static Measure(Entry)
     {
         if (Entry.Kind !== "image") return 512;
-        return (Entry.Before?.Pixels?.byteLength || 0) + (Entry.After?.Pixels?.byteLength || 0);
+        const Weigh = (Snapshot) =>
+            (Snapshot?.Pixels?.byteLength || 0) +
+            (Snapshot?.Paintwork || []).reduce((Sum, Image) => Sum + (Image?.Pixels?.byteLength || 0), 0);
+        return Weigh(Entry.Before) + Weigh(Entry.After);
     }
 
     Record(Entry)
