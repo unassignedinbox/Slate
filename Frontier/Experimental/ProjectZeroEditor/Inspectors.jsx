@@ -1,3 +1,4 @@
+import FracturePanel from "./FracturePanel.jsx";
 import AtmosphereLab, { AtmosphereProfile } from "./AtmosphereLab.jsx";
 import {
   GraphContext,
@@ -443,6 +444,7 @@ export function Inspector({
   Hidden,
   ToggleHidden,
   OpenShader,
+  OpenFracture,
   OpenWind,
   OpenWindField,
   WindFields = [],
@@ -595,6 +597,12 @@ export function Inspector({
       {Subject.Panel === "geometry" && (
         <>
           <TransformPanel Values={Values} Change={Change} />
+          <FracturePanel
+            Subject={Subject}
+            Values={Values}
+            Change={Change}
+            Expand={OpenFracture}
+          />
           <MaterialPanel
             Subject={Subject}
             Values={Values}

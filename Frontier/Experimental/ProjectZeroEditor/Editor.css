@@ -2833,4 +2833,84 @@ img {
 }
 
 /* The second Wind card is an inline addition, not another padded inspector stack. */
-.specialized-inspector.wind > .reference-inspector-copy { margin-bottom: 16px; }
+.specialized-inspector.wind > .reference-inspector-copy {
+  margin-bottom: 16px;
+}
+
+/* Per-object fracture authoring; shares native inspector controls. */
+.fracture-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.fracture-card h3 {
+  font-size: 15px;
+  margin: 0 0 5px;
+}
+.fracture-card header small {
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  color: #686868;
+}
+.fracture-card .fracture-expand {
+  width: 30px;
+  height: 30px;
+  font-size: 20px;
+  padding: 0;
+}
+.fracture-card h4 {
+  font-size: 10px;
+  letter-spacing: 1.3px;
+  color: #898989;
+  margin: 18px 0 10px;
+}
+.fracture-diagram {
+  border: 1px solid #ffffff09;
+  border-radius: 8px;
+  background: #121212;
+  padding: 12px;
+}
+.fracture-diagram svg {
+  width: 100%;
+  height: 68px;
+  fill: none;
+  stroke: #a3aca7;
+  stroke-width: 1.2;
+}
+.fracture-diagram span {
+  display: block;
+  text-align: center;
+  font-size: 9px;
+  color: #727272;
+}
+.fracture-mode {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: #0e0e0e;
+  border: 1px solid #ffffff0b;
+  border-radius: 8px;
+}
+.fracture-mode button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  font-size: 11px;
+}
+.fracture-mode button[aria-pressed="true"] {
+  background: #343434;
+  color: #eee;
+}
+.fracture-card .fracture-open {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 11px;
+  padding: 10px;
+  margin: 14px 0;
+}
+.fracture-card p {
+  font-size: 10px;
+  line-height: 1.7;
+  color: #767676;
+}

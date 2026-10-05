@@ -1,774 +1,756 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { CrackNetwork } from "./SourceDepot/Propagation/src/frac/crack2d.ts";
-import { RegionExtractor } from "./SourceDepot/Propagation/src/frac/regions.ts";
-import { MATERIALS as ShellMaterials } from "./SourceDepot/Propagation/src/sim/materials.ts";
-import { fracture } from "./SourceDepot/Fragmentation/src/fracture/fracture.ts";
-import { buildGeometry } from "./SourceDepot/Fragmentation/src/core/convex.ts";
-import { makeTarget } from "./SourceDepot/Fragmentation/src/scene/targets.ts";
-import { bakeDentAtlas } from "./SourceDepot/Propagation/src/frac/dentmap.ts";
-import Provenance from "./SourceDepot/Provenance.json";
-
-const Element = (Id) => document.getElementById(Id);
-window.addEventListener("error", (Event) => {
-  Element("message").textContent = "Preview error: " + Event.message;
-});
-const Assets = [
-  {
-    Id: "glass",
-    Name: "Window glass",
-    Detail: "Annealed · shell cracks",
-    Shell: "annealed-glass",
+import {
+  Materials,
+  CreateGeometry,
+  Bounds,
+  Volume,
+  Validate,
+  RenderGeometry,
+  Fracture,
+  EncodeParts,
+  DecodeParts,
+} from "./FractureStructure.js";
+import {
+  Defaults,
+  MaterialNames,
+  Prefix,
+  Normalize,
+  Signature,
+  ReadRecord,
+  Publish,
+} from "./FractureSpecification.js";
+import { ReadFragments, WriteFragments } from "./FractureDepot.js";
+const ById = (Id) => document.getElementById(Id),
+  Query = new URLSearchParams(location.search),
+  Linked = Query.has("object"),
+  Id = Query.get("object") || "standalone-specimen";
+const Initial = ReadRecord(Id);
+let Owner = Initial?.Owner || {
+    Id,
+    Name: Linked ? "Missing scene object" : "Sphere specimen",
+    Primitive: Linked ? "unknown" : "sphere",
+    Scale: [1, 1, 1],
   },
-  {
-    Id: "tempered",
-    Name: "Safety glass",
-    Detail: "Tempered · stored energy",
-    Shell: "tempered-glass",
-  },
-  {
-    Id: "concrete",
-    Name: "Concrete panel",
-    Detail: "Solid · energy-limited splits",
-  },
-  { Id: "wood", Name: "Timber beam", Detail: "Solid · fibre anisotropy" },
-  { Id: "rock", Name: "Granite", Detail: "Solid · bedding planes" },
-  {
-    Id: "plastic",
-    Name: "ABS specimen",
-    Detail: "Solid · high fracture energy",
-  },
-  {
-    Id: "steel",
-    Name: "Sheet metal",
-    Detail: "Baked · plastic crumpling",
-    Metal: true,
-  },
-];
-let Selected = Assets[2],
-  Mode = "runtime",
-  Library = [],
-  Current = null,
-  Meshes = [],
-  Network = null;
-let SolveTime = 0,
-  StartTime = 0,
-  Root,
-  Pieces,
-  Lines,
-  Busy = false;
-const Viewport = Element("viewport");
-const Renderer = new THREE.WebGLRenderer({
-  antialias: true,
-  alpha: false,
-  preserveDrawingBuffer: true,
-});
-Renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-Renderer.setClearColor(0x191d1a);
-Renderer.outputColorSpace = THREE.SRGBColorSpace;
-Viewport.appendChild(Renderer.domElement);
-const Scene = new THREE.Scene(),
-  Camera = new THREE.PerspectiveCamera(40, 1, 0.01, 100);
-const Controls = new OrbitControls(Camera, Renderer.domElement);
-Controls.enableDamping = true;
-Controls.minDistance = 1.1;
-Controls.maxDistance = 12;
-Controls.maxPolarAngle = Math.PI * 0.85;
-const Key = new THREE.DirectionalLight(0xfff3dc, 3.4);
-Key.position.set(2, 5, 5);
-Scene.add(Key);
-const Rim = new THREE.DirectionalLight(0xa3c9af, 2.1);
-Rim.position.set(-3, 2, -3);
-Scene.add(Rim);
-Scene.add(new THREE.HemisphereLight(0xd3e4da, 0x292c27, 2));
-const Ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(30, 30),
-  new THREE.MeshStandardMaterial({ color: 0x171b17, roughness: 1 }),
+  Settings = Normalize(Initial?.Settings || { ...Defaults, Enabled: !Linked }),
+  Root = null,
+  Result = null,
+  Receipt = null,
+  Busy = false,
+  DisplayingFragments = false,
+  Separation = 0.18,
+  Wire = false,
+  Sequence = 0;
+let Scene, Camera, Renderer, Controls, Assembly, Impact, Floor;
+const Bodies = [],
+  Wires = [];
+function Status(Text) {
+  ById("status").textContent = Text;
+}
+function Persist() {
+  Settings.EditedAt = Date.now();
+  try {
+    Publish(Owner, Settings);
+    ById("storage-label").textContent = "Browser · per object";
+  } catch {
+    ById("storage-label").textContent = "UNSAVED";
+    Status(
+      "Browser storage is unavailable or full. Export your work before closing.",
+    );
+  }
+}
+function Ready() {
+  return !!Receipt && Receipt.Signature === Signature(Owner, Settings);
+}
+function BusyControls() {
+  for (const Name of [
+    "fracture",
+    "bake",
+    "export",
+    "clear-bake",
+    "source",
+    "fragments",
+  ])
+    ById(Name).disabled = Busy;
+  ById("fracture").disabled =
+    Busy ||
+    !Root ||
+    !Settings.Enabled ||
+    (Settings.Mode === "baked" && !Ready());
+  ById("bake").disabled = Busy || !Root || !Settings.Enabled;
+  ById("clear-bake").disabled = Busy || !Receipt;
+  ById("fragments").disabled = Busy || !Result;
+  document.body.classList.toggle("busy", Busy);
+}
+function Assign(Key, NumberValue) {
+  Settings = Normalize({ ...Settings, [Key]: NumberValue });
+  Sequence++;
+  Persist();
+  Result = null;
+  DisplaySource();
+  Refresh();
+}
+function Slider(Target, Key, Label, Minimum, Maximum, Step, Unit) {
+  const Field = document.createElement("label");
+  Field.className = "field";
+  Field.innerHTML =
+    '<span></span><div class="slider-pill"><div class="split-value"><input type="number"><small></small></div><input type="range"></div>';
+  Field.querySelector("span").textContent = Label;
+  Field.querySelector("small").textContent = Unit;
+  for (const Input of Field.querySelectorAll("input")) {
+    Input.min = Minimum;
+    Input.max = Maximum;
+    Input.step = Step;
+    Input.dataset.setting = Key;
+    Input.setAttribute(
+      "aria-label",
+      Label + (Input.type === "number" ? " value" : ""),
+    );
+    Input.addEventListener("input", () => Assign(Key, Number(Input.value)));
+  }
+  ById(Target).append(Field);
+}
+Slider("impact-controls", "Energy", "Impact energy", 0, 50000, 10, "J");
+Slider("impact-controls", "Seed", "Pattern seed", 1, 999999, 1, "#");
+Slider("quality-controls", "Ceiling", "Fragment ceiling", 2, 160, 1, "pcs");
+Slider(
+  "quality-controls",
+  "MinimumSize",
+  "Minimum span",
+  0.002,
+  0.3,
+  0.001,
+  "m",
 );
-Ground.rotation.x = -Math.PI / 2;
-Ground.position.y = -0.92;
-Scene.add(Ground);
-const Grid = new THREE.GridHelper(12, 48, 0x38483a, 0x273329);
-Grid.position.y = -0.918;
-Scene.add(Grid);
-const Impact = new THREE.Mesh(
-  new THREE.SphereGeometry(0.014, 16, 8),
-  new THREE.MeshBasicMaterial({ color: 0xe6c281 }),
-);
-Scene.add(Impact);
-const Exterior = new THREE.MeshStandardMaterial({
-  color: 0x899d8c,
-  roughness: 0.74,
-  side: THREE.DoubleSide,
-});
-const Interior = new THREE.MeshStandardMaterial({
-  color: 0xb4c3ac,
-  roughness: 1,
-  side: THREE.DoubleSide,
-});
-const SupportMaterial = new THREE.MeshStandardMaterial({
-  color: 0x353e35,
-  roughness: 0.8,
-});
-const ZeroNoise = { amp: 0, freq: 1, octaves: 1, subdiv: 0, noise: () => 0 };
-function Message(Text) {
-  Element("message").textContent = Text;
+for (const Axis of ["X", "Y", "Z"]) {
+  const Label = document.createElement("label");
+  Label.textContent = Axis;
+  const Input = document.createElement("input");
+  Input.type = "number";
+  Input.step = ".01";
+  Input.dataset.setting = Axis;
+  Input.setAttribute("aria-label", "Impact " + Axis);
+  Input.addEventListener("input", () => Assign(Axis, Number(Input.value)));
+  Label.append(Input);
+  ById("impact-coordinates").append(Label);
 }
-function Numeric(Id, Minimum, Maximum) {
-  let Value = Number(Element(Id).value);
-  if (!Number.isFinite(Value)) Value = Minimum;
-  Value = Math.min(Maximum, Math.max(Minimum, Value));
-  Element(Id).value = String(Value);
-  return Value;
+for (const [Key, Name] of Object.entries(MaterialNames)) {
+  const Button = document.createElement("button");
+  Button.dataset.material = Key;
+  Button.innerHTML = "<i></i><span></span>";
+  Button.querySelector("span").textContent = Name;
+  Button.querySelector("i").style.background =
+    "#" + Materials[Key].color.toString(16).padStart(6, "0");
+  Button.addEventListener("click", () => Assign("Material", Key));
+  ById("material-options").append(Button);
 }
-function Recipe(Seed) {
-  return {
-    asset: Selected.Id,
-    seed: Seed ?? Math.round(Numeric("seed", 1, 999999)),
-    energy: Numeric("energy-number", 1, 50000),
-    radius: Numeric("radius", 1, 200) / 1000,
-    x: Numeric("impact-x", -0.6, 0.6),
-    y: Numeric("impact-y", -0.4, 0.4),
-    budget: Math.round(Numeric("budget", 16, 300)),
-  };
+const Descriptions = {
+  concrete: "Energy-limited bulk cuts. Reinforcement is not represented.",
+  rock: "Brittle stone fracture with its own crack resistance; no surface-noise dressing.",
+  wood: "Local X grain biases longitudinal splits; cross-grain cuts cost more energy.",
+  glass:
+    "Brittle response. Thin panes split through their thickness with no discarded crack cells.",
+  tempered:
+    "Stored elastic energy supports finer fracture, bounded by the quality controls.",
+  plastic:
+    "High crack resistance limits fragmentation. Plastic deformation is not simulated.",
+};
+function Refresh() {
+  document.querySelector(".target-selected svg").innerHTML =
+    Owner.Primitive === "sphere"
+      ? '<circle cx="30" cy="30" r="23"/><ellipse cx="30" cy="30" rx="10" ry="23"/><ellipse cx="30" cy="30" rx="23" ry="9"/>'
+      : Owner.Primitive === "cylinder"
+        ? '<ellipse cx="30" cy="13" rx="21" ry="8"/><path d="M9 13v33c0 11 42 11 42 0V13M9 46c0-11 42-11 42 0"/>'
+        : Owner.Primitive === "cone"
+          ? '<path d="M9 46 30 6l21 40"/><ellipse cx="30" cy="46" rx="21" ry="8"/>'
+          : '<path d="m30 5 23 13v26L30 56 7 44V18Z M7 18l23 13 23-13M30 31v25M30 5v26"/>';
+  ById("owner-name").textContent = Owner.Name;
+  ById("owner-primitive").textContent = Owner.Primitive;
+  ById("owner-id").textContent = Owner.Id;
+  ById("breadcrumb").textContent = Owner.Name + " / Fracture";
+  ById("viewport-name").textContent = Owner.Name;
+  document.title = Owner.Name + " · Fracture";
+  ById("specimen-controls").hidden = Linked;
+  ById("primitive").value = Owner.Primitive;
+  ById("object-scale").textContent = Owner.Scale.map((Coordinate) =>
+    Coordinate.toFixed(2),
+  ).join(" × ");
+  ById("source-label").textContent =
+    Owner.Primitive === "pane"
+      ? "1.7 × 1.15 m · 14 mm plate"
+      : "Analytical " + Owner.Primitive;
+  for (const Input of document.querySelectorAll("[data-setting]")) {
+    Input.value = Settings[Input.dataset.setting];
+    Input.disabled = Busy || !Settings.Enabled;
+    if (Input.type === "range")
+      Input.style.setProperty(
+        "--fill",
+        (100 * (Number(Input.value) - Number(Input.min))) /
+          (Number(Input.max) - Number(Input.min)) +
+          "%",
+      );
+  }
+  for (const Button of document.querySelectorAll("[data-material]")) {
+    Button.setAttribute(
+      "aria-pressed",
+      Button.dataset.material === Settings.Material,
+    );
+    Button.disabled = Busy || !Settings.Enabled;
+  }
+  ById("material-description").textContent = Descriptions[Settings.Material];
+  ById("toughness").textContent =
+    Materials[Settings.Material].Gc.toLocaleString();
+  ById("density").textContent =
+    Materials[Settings.Material].density.toLocaleString();
+  for (const Mode of ["dynamic", "baked"]) {
+    ById(Mode + "-mode").setAttribute("aria-pressed", Settings.Mode === Mode);
+    ById(Mode + "-mode").disabled = Busy || !Settings.Enabled;
+  }
+  ById("execution-label").textContent =
+    (Settings.Enabled ? Settings.Mode.toUpperCase() : "DISABLED") +
+    " / GEOMETRY";
+  ById("mode-description").textContent =
+    Settings.Mode === "dynamic"
+      ? "Generate geometry on demand from this object’s recipe."
+      : "Use the stored fragment geometry—no fracture generation during replay.";
+  ById("fracture").textContent =
+    Settings.Mode === "dynamic" ? "Fracture object" : "Show baked fracture";
+  ById("bake-status").textContent = Ready()
+    ? "Baked · ready"
+    : Receipt
+      ? "Bake is stale"
+      : "Not baked";
+  ById("bake-detail").textContent = Receipt
+    ? Receipt.Parts.length +
+      " closed pieces · " +
+      (Receipt.Bytes / 1024).toFixed(1) +
+      " KiB" +
+      (Ready() ? " · per object" : " · geometry / recipe changed")
+    : "No stored fragment geometry";
+  ById("bake-dot").style.background = Ready()
+    ? "#89a591"
+    : Receipt
+      ? "#aa795a"
+      : "#555";
+  ById("bake").textContent = Receipt ? "Rebake object" : "Bake object";
+  if (Root) {
+    const Extent = Bounds(Root),
+      Metrics = Result || Validate(Root);
+    ById("dimensions").textContent =
+      Extent.size
+        .toArray()
+        .map((Coordinate) => Coordinate.toFixed(3))
+        .join(" × ") + " m";
+    ById("source-volume").textContent = Volume(Root).toPrecision(5) + " m³";
+    ById("metric-pieces").textContent = Result ? Result.parts.length : 1;
+    ById("metric-volume").innerHTML =
+      ((1 - (Result?.volumeError || 0)) * 100).toFixed(3) + "<small>%</small>";
+    ById("metric-quality").textContent = Metrics.quality.toFixed(3);
+    ById("metric-closure").textContent = "Closed";
+    ById("receipt-triangles").textContent = Metrics.triangles.toLocaleString();
+    ById("receipt-rejected").textContent = Result?.rejected ?? "—";
+    ById("receipt-error").textContent = Result
+      ? Result.volumeError.toExponential(2)
+      : "—";
+    ById("receipt-time").textContent = Result
+      ? Result.replay
+        ? "Baked replay"
+        : Result.milliseconds.toFixed(1) + " ms"
+      : "—";
+  }
+  document.querySelector(".quality-graph text").textContent =
+    (Settings.MinimumSize * 1000).toFixed(0) + " mm min span";
+  ById("viewport-caption").textContent = Owner.Removed
+    ? "Object removed from the scene"
+    : !Settings.Enabled
+      ? "Fracture disabled in the object inspector"
+      : DisplayingFragments
+        ? Result?.parts.length +
+          " closed fragments · " +
+          MaterialNames[Settings.Material]
+        : "Source geometry · " + MaterialNames[Settings.Material] + " response";
+  ById("source").setAttribute("aria-pressed", !DisplayingFragments);
+  ById("fragments").setAttribute("aria-pressed", DisplayingFragments);
+  BusyControls();
 }
-function FrameAsset() {
-  Camera.position
-    .set(2.65, 1.55, 4.3)
-    .multiplyScalar(Selected?.Metal ? 0.46 : 1);
-  Controls.target.set(0, 0, 0);
+function DisposeAssembly() {
+  if (!Assembly) return;
+  for (const Child of [...Assembly.children]) {
+    Child.traverse((Part) => {
+      Part.geometry?.dispose();
+      if (Array.isArray(Part.material))
+        Part.material.forEach((Material) => Material.dispose());
+      else Part.material?.dispose();
+    });
+    Assembly.remove(Child);
+  }
+  Bodies.length = 0;
+  Wires.length = 0;
+}
+function Display(Parts, Fragments) {
+  if (!Root || !Assembly) return;
+  DisposeAssembly();
+  DisplayingFragments = Fragments;
+  const Material = Materials[Settings.Material];
+  for (const Part of Parts) {
+    const Geometry = RenderGeometry(Part),
+      Surface = new THREE.Mesh(Geometry, [
+        new THREE.MeshStandardMaterial({
+          color: Material.color,
+          roughness: 0.72,
+          flatShading: true,
+        }),
+        new THREE.MeshStandardMaterial({
+          color: Material.interiorColor,
+          roughness: 0.95,
+          flatShading: true,
+        }),
+      ]);
+    const Outline = new THREE.LineSegments(
+      new THREE.EdgesGeometry(Geometry, 23),
+      new THREE.LineBasicMaterial({
+        color: 0x141915,
+        transparent: true,
+        opacity: 0.45,
+      }),
+    );
+    Surface.add(Outline);
+    const WireGeometry = new THREE.LineSegments(
+      new THREE.WireframeGeometry(Geometry),
+      new THREE.LineBasicMaterial({
+        color: 0x151a17,
+        transparent: true,
+        opacity: 0.36,
+      }),
+    );
+    WireGeometry.visible = Wire;
+    Surface.add(WireGeometry);
+    Wires.push(WireGeometry);
+    Surface.userData.Center = Bounds(Part).center;
+    Surface.userData.Fragments = Fragments;
+    Assembly.add(Surface);
+    Bodies.push(Surface);
+  }
+  Arrange();
+  Refresh();
+}
+function Arrange() {
+  if (!Root) return;
+  const Center = Bounds(Root).center;
+  for (const Body of Bodies)
+    Body.position
+      .copy(Body.userData.Center)
+      .sub(Center)
+      .multiplyScalar(Body.userData.Fragments ? Separation * 2.6 : 0);
+  ById("separation").value = ById("separation-number").value = Math.round(
+    Separation * 100,
+  );
+  ById("separation").style.setProperty("--fill", Separation * 100 + "%");
+}
+function DisplaySource() {
+  if (Root) Display([Root], false);
+}
+function Fit() {
+  if (!Root) return;
+  const Extent = Bounds(Root),
+    Radius = Extent.size.length();
+  Controls.target.copy(Extent.center);
+  const Direction =
+    Owner.Primitive === "pane"
+      ? new THREE.Vector3(0.32, 0.15, 1.65)
+      : new THREE.Vector3(0.9, 0.62, 1.22);
+  Camera.position.copy(Extent.center).addScaledVector(Direction, Radius);
+  Camera.near = Math.max(0.00001, Radius * 0.001);
+  Camera.far = Radius * 100;
+  Camera.updateProjectionMatrix();
+  Controls.minDistance = Radius * 0.3;
+  Controls.maxDistance = Radius * 12;
   Controls.update();
 }
-function Dispose(Group) {
-  if (!Group) return;
-  Group.traverse((Value) => {
-    Value.geometry?.dispose();
-  });
-  Scene.remove(Group);
-}
-function MeshRecord(Geometry, Center) {
-  return { geometry: Geometry, center: Center };
-}
-function PatternShell(Net, Elapsed, Settings) {
-  const Extractor = new RegionExtractor(Net),
-    Fragments = Extractor.harvest(true, 4, Net.nx * Net.ny);
-  const Records = Fragments.map((Fragment) => {
-    const Geometry = new THREE.BufferGeometry();
-    Geometry.setAttribute(
-      "position",
-      new THREE.Float32BufferAttribute(Fragment.mesh.pos, 3),
-    );
-    Geometry.setAttribute(
-      "normal",
-      new THREE.Float32BufferAttribute(Fragment.mesh.nrm, 3),
-    );
-    if (Fragment.mesh.idx) Geometry.setIndex(Array.from(Fragment.mesh.idx));
-    return MeshRecord(Geometry, new THREE.Vector3(Fragment.cx, Fragment.cy, 0));
-  });
-  return {
-    records: Records,
-    settings: Settings,
-    time: Elapsed,
-    metric:
-      (
-        (Fragments.reduce((Sum, Fragment) => Sum + Fragment.area, 0) /
-          (Net.W * Net.H)) *
-        100
-      ).toFixed(1) + "%",
-    metricLabel: "REGION COVERAGE",
-    shell: true,
-    stats: Net.stats(),
-  };
-}
-function BeginShell(Settings) {
-  const Net = new CrackNetwork({
-    width: 1.7,
-    height: 1.15,
-    thickness: 0.014,
-    material: ShellMaterials[Selected.Shell],
-    res: 192,
-    seed: Settings.seed,
-  });
-  Net.impact({
-    x: Settings.x,
-    y: Settings.y,
-    energy: Settings.energy,
-    radius: Settings.radius,
-    penetration: 0.35,
-  });
-  return Net;
-}
-function Solve(Settings) {
-  const Start = performance.now();
-  if (Selected.Shell) {
-    const Net = BeginShell(Settings);
-    let Iterations = 0;
-    while (!Net.done && Iterations++ < 12000) Net.step(0.000015);
-    if (!Net.done)
-      throw new Error(
-        "Crack propagation did not finish within the preview iteration limit",
-      );
-    return PatternShell(Net, performance.now() - Start, Settings);
-  }
-  const Target = makeTarget(Selected.Id);
-  const Hit = {
-    point: new THREE.Vector3(
-      Settings.x,
-      Settings.y,
-      Selected.Id === "rock"
-        ? 0.5
-        : Selected.Id === "concrete"
-          ? 0.11
-          : Selected.Id === "wood"
-            ? 0.025
-            : 0.36,
-    ),
-    dir: new THREE.Vector3(0, 0, -1),
-    energy: Settings.energy,
-    radius: Settings.radius,
-  };
-  const Result = fracture(
-    Target.piece,
-    Target.mat,
-    Hit,
-    Settings.budget,
-    Settings.seed,
-  );
-  const Volume = Result.fragments.reduce((Sum, Part) => Sum + Part.volume, 0),
-    Original = Target.piece.volume();
-  const Records = Result.fragments.map((Part) =>
-    MeshRecord(
-      buildGeometry(Part.piece, ZeroNoise).translate(
-        -Part.centroid.x,
-        -Part.centroid.y,
-        -Part.centroid.z,
-      ),
-      Part.centroid,
-    ),
-  );
-  return {
-    records: Records,
-    settings: Settings,
-    time: performance.now() - Start,
-    metric: ((Math.abs(Volume - Original) / Original) * 100).toFixed(4) + "%",
-    metricLabel: "VOLUME ERROR",
-    shell: false,
-    area: Result.crackArea,
-  };
-}
-function SolveMetal() {
-  const Atlas = bakeDentAtlas(32, 12);
-  return Atlas.types.map((Tool, Type) => {
-    const Frames = [];
-    for (let Frame = 0; Frame < Atlas.frames; Frame++) {
-      const Geometry = new THREE.BufferGeometry(),
-        Positions = [],
-        Normals = [],
-        Indices = [];
-      for (let Row = 0; Row < Atlas.res; Row++)
-        for (let Column = 0; Column < Atlas.res; Column++) {
-          const Offset =
-            ((Type * Atlas.frames + Frame) * Atlas.res * Atlas.res +
-              Row * Atlas.res +
-              Column) *
-            4;
-          Positions.push(
-            (Column / (Atlas.res - 1) - 0.5) * 2 * Tool.half +
-              Atlas.pos[Offset],
-            (Row / (Atlas.res - 1) - 0.5) * 2 * Tool.half +
-              Atlas.pos[Offset + 1],
-            Atlas.pos[Offset + 2],
-          );
-          Normals.push(
-            Atlas.nrm[Offset],
-            Atlas.nrm[Offset + 1],
-            Atlas.nrm[Offset + 2],
-          );
-          if (Row + 1 < Atlas.res && Column + 1 < Atlas.res) {
-            const First = Row * Atlas.res + Column,
-              Last = First + Atlas.res;
-            Indices.push(First, First + 1, Last + 1, First, Last + 1, Last);
-          }
-        }
-      Geometry.setAttribute(
-        "position",
-        new THREE.Float32BufferAttribute(Positions, 3),
-      );
-      Geometry.setAttribute(
-        "normal",
-        new THREE.Float32BufferAttribute(Normals, 3),
-      );
-      Geometry.setIndex(Indices);
-      Frames.push(Geometry);
-    }
-    return {
-      metal: true,
-      label: Tool.label.split(" (")[0],
-      frames: Frames,
-      records: [MeshRecord(Frames.at(-1).clone(), new THREE.Vector3())],
-      settings: {
-        asset: "steel",
-        tool: Tool.label,
-        depth: Tool.depth,
-        drawIn: Tool.drawIn,
-        resolution: 32,
-        frames: 12,
-      },
-      time: Atlas.ms,
-      metric: (Tool.depth * 1000).toFixed(0) + " mm",
-      metricLabel: "PRESCRIBED DEPTH",
-    };
-  });
-}
-function ShowPattern(Pattern) {
-  Network = null;
-  Dispose(Pieces);
-  Dispose(Lines);
-  Lines = null;
-  Pieces = new THREE.Group();
-  Scene.add(Pieces);
-  Meshes = [];
-  Root.visible = false;
-  Current = Pattern;
-  for (const Record of Pattern.records) {
-    const Geometry = Record.geometry.clone();
-    // Solid source geometry is centered by buildGeometry; shell extraction is already local.
-    const Mesh = new THREE.Mesh(Geometry, [Exterior, Interior]);
-    Mesh.userData.center = Record.center.clone();
-    if (Pattern.shell || Pattern.metal) {
-      Mesh.material = Exterior;
-    }
-    Pieces.add(Mesh);
-    Meshes.push(Mesh);
-  }
-  Separate();
-  Element("count").textContent = Pattern.records.length;
-  Element("cost").textContent = Pattern.time.toFixed(1) + " ms";
-  Element("metric-label").textContent = Pattern.metricLabel;
-  Element("conservation").textContent = Pattern.metric;
-  Element("viewport-status").textContent = Pattern.shell
-    ? "Crack network → extracted plate regions"
-    : "Energy-limited fragmentation · finite cut surfaces";
-  Element("bottom-note").textContent = Pattern.shell
-    ? "Grid-based shell extraction omits crack cells and tiny specks; coverage is shown above. Not mass-conserving collision geometry."
-    : "Exterior and interior faces are actual geometry. No displacement/noise surface-detail substitute is enabled.";
-  if (Pattern.metal) {
-    Element("viewport-status").textContent =
-      "Plastic " + Pattern.label + " · one continuous sheet";
-    Element("bottom-note").textContent =
-      "Scrub the actual solved XYZ positions and normals. No brittle shattering is applied to steel.";
-  }
-  Message(
-    `${Mode === "baked" ? "Cached pattern selected" : "Runtime solve complete"} · ${Pattern.records.length} fragments · browser geometry only`,
-  );
-}
-function Separate() {
-  const Amount = Number(Element("separation").value);
-  if (Current?.metal) {
-    const Frame = Math.round(Amount);
-    if (Meshes[0]) {
-      Meshes[0].geometry.dispose();
-      Meshes[0].geometry = Current.frames[Frame].clone();
-    }
-    Element("separation-output").textContent = Frame + " / 11";
-    return;
-  }
-  Element("separation-output").textContent = Amount.toFixed(3) + " m";
-  for (const Mesh of Meshes) {
-    const Center = Mesh.userData.center;
-    Mesh.position
-      .copy(Center)
-      .addScaledVector(Center.clone().normalize(), Amount);
-  }
-}
-function ClearLibrary() {
-  for (const Pattern of Library) {
-    for (const Record of Pattern.records) Record.geometry.dispose();
-    Pattern.frames?.forEach((Geometry) => Geometry.dispose());
-  }
-  Library = [];
-  Element("patterns").replaceChildren();
-}
-function Reset() {
-  Network = null;
-  Dispose(Pieces);
-  Dispose(Lines);
-  Pieces = Lines = null;
-  Meshes = [];
-  if (Current && !Library.includes(Current))
-    for (const Record of Current.records) Record.geometry.dispose();
-  Current = null;
-  if (Root) Root.visible = true;
-  Element("count").textContent = "1";
-  Element("cost").textContent = "—";
-  Element("conservation").textContent = "—";
-  Element("viewport-status").textContent =
-    "Original geometry · ready for impact";
-  Message("Original geometry restored");
-}
-function ImpactPosition() {
-  const Settings = Recipe();
-  Impact.position.set(
-    Settings.x,
-    Settings.y,
-    Selected.Id === "rock"
-      ? 0.55
-      : Selected.Shell
-        ? 0.025
-        : Selected.Id === "concrete"
-          ? 0.125
-          : Selected.Id === "wood"
-            ? 0.04
-            : 0.375,
-  );
-}
-function Invalidate() {
-  Reset();
-  ClearLibrary();
-  ImpactPosition();
-  Element("energy").value = Element("energy-number").value;
-  Message("Settings changed · baked patterns invalidated");
-}
-function SelectAsset(Id) {
-  Reset();
-  ClearLibrary();
-  Selected = Assets.find((Value) => Value.Id === Id);
-  Dispose(Root);
-  Root = new THREE.Group();
-  Scene.add(Root);
-  const Target = makeTarget(Selected.Metal ? "concrete" : Id);
-  Root.add(
-    new THREE.Mesh(
-      Selected.Metal
-        ? new THREE.PlaneGeometry(0.88, 0.88, 31, 31)
-        : buildGeometry(Target.piece, ZeroNoise),
-      [Exterior, Interior],
-    ),
-  );
-  if (Selected.Shell) {
-    for (const Support of Target.supports) {
-      const Mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(...Support.size),
-        SupportMaterial,
-      );
-      Mesh.position.set(...Support.pos);
-      Root.add(Mesh);
-    }
-  }
-  const Colours = {
-    glass: 0x9eb9ad,
-    tempered: 0x9eb9ad,
-    concrete: 0x96978d,
-    wood: 0x9f8055,
-    rock: 0x7d8179,
-    plastic: 0x81969b,
-    steel: 0xa7b4ac,
-  };
-  Exterior.color.setHex(Colours[Id]);
-  for (const Key of ["asset-title", "inspector-title"])
-    Element(Key).textContent = Selected.Name;
-  Element("solver-label").textContent = Selected.Shell
-    ? "Shell crack propagation"
-    : "Energy-limited solid fracture";
-  Element("response").textContent = Selected.Shell
-    ? "Dynamic crack tips → plate regions"
-    : "Anisotropic, energy-limited splitting";
-  Element("material-note").textContent = Selected.Detail;
-  const Material = Selected.Shell ? ShellMaterials[Selected.Shell] : Target.mat;
-  Element("toughness").textContent = (Material.Gc ?? Material.gc) + " J/m²";
-  Element("density").textContent =
-    (Material.rho ?? Material.density) + " kg/m³";
-  for (const Button of Element("asset-list").children)
-    Button.classList.toggle("active", Button.dataset.asset === Id);
-  Element("impact-card").hidden = !!Selected.Metal;
-  Element("plastic-controls").hidden = !Selected.Metal;
-  Element("separation").max = Selected.Metal ? "11" : ".7";
-  Element("separation").step = Selected.Metal ? "1" : ".005";
-  Element("separation").value = Selected.Metal ? "11" : ".065";
-  document.querySelector(".separation label").textContent = Selected.Metal
-    ? "Damage sample"
-    : "Fragment separation";
-  Element("separation-output").textContent = Selected.Metal
-    ? "11 / 11"
-    : ".065 m";
-  if (Selected.Metal) {
-    Workflow("baked");
-    Element("solver-label").textContent =
-      "Elasto-plastic sheet · baked geometry";
-    Element("response").textContent = "Plastic hinges and in-plane draw-in";
-    Element("toughness").textContent = "Plastic yielding";
-    Element("density").textContent = "XYZ + normals";
-  }
-  Element("toughness-label").textContent = Selected.Metal
-    ? "Response"
-    : "Toughness";
-  Element("density-label").textContent = Selected.Metal
-    ? "Representation"
-    : "Density";
-  Element("runtime").disabled = !!Selected.Metal;
-  Element("runtime").title = Selected.Metal
-    ? "Metal uses baked plasticity in this HTML review"
-    : "";
-  for (const Id of ["seed", "budget", "pattern-count"])
-    Element(Id).closest("label").hidden = !!Selected.Metal;
-  Element("budget").closest("label").hidden =
-    !!Selected.Metal || !!Selected.Shell;
-  Element("bake-controls").hidden = Mode !== "baked" || !!Selected.Metal;
-  Impact.visible = !Selected.Metal;
-  ImpactPosition();
-  FrameAsset();
-}
-function LockControls(Locked) {
-  document
-    .querySelectorAll(
-      ".card input,.card select,.asset,#runtime,#baked,#reset,#export",
-    )
-    .forEach((Control) => (Control.disabled = Locked));
-  Element("runtime").disabled = Locked || !!Selected.Metal;
-}
-async function Apply() {
-  if (Busy) return;
-  Busy = true;
-  LockControls(true);
-  Element("apply").disabled = true;
+function Rebuild() {
+  Sequence++;
+  Result = null;
+  DisposeAssembly();
+  Root = null;
+  ById("unsupported").hidden = true;
   try {
-    Reset();
-    const Settings = Recipe();
-    if (Mode === "runtime" && Selected.Shell) {
-      Network = BeginShell(Settings);
-      Network.recipe = Settings;
-      SolveTime = 0;
-      StartTime = performance.now();
-      Element("viewport-status").textContent =
-        "Crack tips propagating · slowed 1000×";
-      return;
-    }
-    if (Mode === "baked") {
-      ClearLibrary();
-      const Count = Selected.Metal ? 0 : Number(Element("pattern-count").value);
-      if (Selected.Metal) {
-        Message("Solving prescribed sheet tools…");
-        await new Promise((Resolve) => setTimeout(Resolve, 25));
-        Library = SolveMetal();
-      }
-      for (let Index = 0; Index < Count; Index++) {
-        Message(`Baking geometry pattern ${Index + 1} / ${Count}…`);
-        await new Promise((Resolve) => setTimeout(Resolve, 20));
-        // Changes remain blocked during this short browser-side library operation.
-        Library.push(Solve({ ...Settings, seed: Settings.seed + Index }));
-      }
-      Element("patterns").replaceChildren(
-        ...Library.map((Pattern, Index) => {
-          const Button = document.createElement("button");
-          Button.className = "pattern";
-          Button.innerHTML = `${Pattern.label || "Pattern " + String(Index + 1).padStart(2, "0")}<small>${Pattern.metal ? "12 damage samples" : "seed " + Pattern.settings.seed + " · " + Pattern.records.length + " pieces"}</small>`;
-          Button.onclick = () => {
-            Element("patterns")
-              .querySelectorAll("button")
-              .forEach((Value) => Value.classList.remove("selected"));
-            Button.classList.add("selected");
-            ShowPattern(Pattern);
-          };
-          return Button;
-        }),
-      );
-      Element("patterns").firstElementChild.click();
-    } else ShowPattern(Solve(Settings));
+    Root = CreateGeometry(Owner.Primitive, Owner.Scale);
+    const Extent = Bounds(Root);
+    Floor.position.y = Extent.min.y - 0.06 * Extent.size.length();
+    Floor.scale.setScalar(Extent.size.length());
+    Impact.scale.setScalar(Extent.size.length() * 0.011);
+    Impact.position.set(Settings.X, Settings.Y, Settings.Z);
+    DisplaySource();
+    Fit();
   } catch (Error) {
-    Message(Error.message);
-    Element("viewport-status").textContent = "Solve refused · see status";
-    console.error(Error);
+    ById("unsupported").hidden = false;
+    ById("unsupported").textContent = Error.message;
+    for (const Name of [
+      "metric-pieces",
+      "metric-quality",
+      "metric-volume",
+      "metric-closure",
+    ])
+      ById(Name).textContent = "—";
+    Status(Error.message);
+  }
+  Refresh();
+}
+async function Execute(Store = false) {
+  if (Busy || !Root || !Settings.Enabled) return;
+  Busy = true;
+  Refresh();
+  const Current = ++Sequence,
+    GenerationOwner = { ...Owner, Scale: [...Owner.Scale] },
+    GenerationSettings = { ...Settings };
+  Status(
+    Store
+      ? "Baking closed fragments…"
+      : Settings.Mode === "baked"
+        ? "Reading stored fragments…"
+        : "Generating closed fragments…",
+  );
+  await new Promise((Resolve) => setTimeout(Resolve, 35));
+  try {
+    let Generated;
+    if (!Store && Settings.Mode === "baked") {
+      if (!Ready())
+        throw new Error("Bake is missing or stale. Bake this object first.");
+      const Parts = DecodeParts(Receipt.Parts),
+        Metrics = Parts.map(Validate);
+      Generated = {
+        parts: Parts,
+        milliseconds: 0,
+        replay: true,
+        volumeError:
+          Math.abs(
+            Parts.reduce((Sum, Part) => Sum + Volume(Part), 0) - Volume(Root),
+          ) / Volume(Root),
+        quality: Math.min(...Metrics.map((Measurement) => Measurement.quality)),
+        triangles: Metrics.reduce(
+          (Sum, Measurement) => Sum + Measurement.triangles,
+          0,
+        ),
+        rejected: Receipt.Rejected,
+      };
+    } else Generated = Fracture(Root, GenerationSettings);
+    if (Generated.volumeError > 1e-7)
+      throw new Error(
+        "Stored geometry failed volume conservation; rebake the object.",
+      );
+    if (Current !== Sequence)
+      throw new Error(
+        "Geometry changed during generation. Run the current recipe again.",
+      );
+    if (Store) {
+      const Encoded = EncodeParts(Generated.parts),
+        Next = {
+          Signature: Signature(GenerationOwner, GenerationSettings),
+          Parts: Encoded,
+          Rejected: Generated.rejected,
+          Bytes: new Blob([JSON.stringify(Encoded)]).size,
+        };
+      await WriteFragments(GenerationOwner.Id, Next);
+      Receipt = Next;
+      Settings.Baked = {
+        Signature: Next.Signature,
+        Fragments: Next.Parts.length,
+        Bytes: Next.Bytes,
+      };
+      Persist();
+      if (Current !== Sequence)
+        throw new Error(
+          "Recipe changed during storage. Stored pattern is stale; rebake the current geometry.",
+        );
+    }
+    Result = Generated;
+    Display(Result.parts, true);
+    Status(
+      (Store ? "Baked" : Generated.replay ? "Replayed" : "Generated") +
+        " " +
+        Result.parts.length +
+        " closed fragments · occupied volume " +
+        ((1 - Result.volumeError) * 100).toFixed(6) +
+        "%" +
+        (Result.parts.length === 1
+          ? " · increase energy or relax minimum span"
+          : ""),
+    );
+  } catch (Error) {
+    Status(Error.message);
   } finally {
     Busy = false;
-    LockControls(false);
-    Element("apply").disabled = false;
+    Refresh();
   }
 }
-function Workflow(Value) {
-  if (Busy || (Selected.Metal && Value === "runtime")) return;
-  Reset();
-  ClearLibrary();
-  Mode = Value;
-  for (const Id of ["runtime", "baked"])
-    Element(Id).setAttribute("aria-selected", Id === Value);
-  Element("bake-controls").hidden = Value !== "baked" || !!Selected.Metal;
-  Element("generation-title").textContent =
-    Value === "baked" ? "Pattern library" : "Runtime generation";
-  Element("apply").textContent =
-    Value === "baked" ? "Bake pattern library" : "Apply impact";
-  Element("execution").textContent =
-    Value === "baked" ? "Cached geometry" : "On impact";
-  Element("workflow-description").textContent =
-    Value === "baked"
-      ? "Compute once · inspect and reuse exact geometry"
-      : "Generate geometry at the impact site";
-  Element("lower-title").textContent =
-    Value === "baked" ? "Baked pattern library" : "Impact inspection";
+async function LoadReceipt() {
+  try {
+    Receipt = await ReadFragments(Owner.Id);
+  } catch {
+    Status(
+      "Baked storage is unavailable. Dynamic geometry and recipe export remain available.",
+    );
+  }
+  Refresh();
 }
-const Icon =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1"><path d="M4 3h16v18H4zM12 3l-3 6 5 4-5 8M9 9l-5 3m10 1 6-4"/></svg>';
-Element("asset-list").innerHTML = Assets.map(
-  (Asset) =>
-    `<button class="asset" data-asset="${Asset.Id}"><span class="asset-icon">${Icon}</span><span><b>${Asset.Name}</b><small>${Asset.Detail}</small></span></button>`,
-).join("");
-Element("asset-list").onclick = (Event) => {
-  const Id = Event.target.closest("[data-asset]")?.dataset.asset;
-  if (Id && !Busy) SelectAsset(Id);
-};
-Element("search").oninput = (Event) => {
-  for (const Button of Element("asset-list").children)
-    Button.hidden = !Button.textContent
-      .toLowerCase()
-      .includes(Event.target.value.toLowerCase());
-};
-for (const Id of [
-  "seed",
-  "radius",
-  "impact-x",
-  "impact-y",
-  "budget",
-  "pattern-count",
-  "energy-number",
-])
-  Element(Id).onchange = () => {
-    if (!Busy) Invalidate();
-  };
-Element("energy").oninput = () => {
-  if (Busy) return;
-  Element("energy-number").value = Element("energy").value;
-  Invalidate();
-};
-Element("runtime").onclick = () => Workflow("runtime");
-Element("baked").onclick = () => Workflow("baked");
-Element("apply").onclick = Apply;
-Element("reset").onclick = () => {
-  if (!Busy) Reset();
-};
-Element("camera").onclick = FrameAsset;
-Element("separation").oninput = Separate;
-Element("wireframe").onclick = () => {
-  Exterior.wireframe = Interior.wireframe = !Exterior.wireframe;
-  Element("wireframe").setAttribute("aria-pressed", Exterior.wireframe);
-};
-Renderer.domElement.addEventListener("dblclick", (Event) => {
-  if (Busy) return;
-  const Box = Renderer.domElement.getBoundingClientRect();
-  const Cursor = new THREE.Vector2(
-    ((Event.clientX - Box.left) / Box.width) * 2 - 1,
-    (-(Event.clientY - Box.top) / Box.height) * 2 + 1,
+function InitialiseScene() {
+  Scene = new THREE.Scene();
+  Scene.background = new THREE.Color(0x171717);
+  Camera = new THREE.PerspectiveCamera(38, 1, 0.001, 100);
+  Renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    preserveDrawingBuffer: true,
+  });
+  Renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  Renderer.outputColorSpace = THREE.SRGBColorSpace;
+  Renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  Renderer.toneMappingExposure = 1.15;
+  ById("viewport").prepend(Renderer.domElement);
+  Renderer.domElement.setAttribute("aria-label", "Object fracture geometry");
+  Controls = new OrbitControls(Camera, Renderer.domElement);
+  Controls.enableDamping = true;
+  Controls.dampingFactor = 0.12;
+  Scene.add(new THREE.HemisphereLight(0xe8eeea, 0x454e47, 2.2));
+  const Key = new THREE.DirectionalLight(0xfff0db, 3.1);
+  Key.position.set(4, 6, 5);
+  Scene.add(Key);
+  const Fill = new THREE.DirectionalLight(0xc4ddeb, 1.4);
+  Fill.position.set(-4, 1, -3);
+  Scene.add(Fill);
+  Assembly = new THREE.Group();
+  Scene.add(Assembly);
+  Floor = new THREE.GridHelper(4, 24, 0x343434, 0x242424);
+  Scene.add(Floor);
+  Impact = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 12, 8),
+    new THREE.MeshBasicMaterial({
+      color: 0x8ab69a,
+      depthTest: false,
+      transparent: true,
+      opacity: 0.8,
+    }),
   );
-  const Ray = new THREE.Raycaster();
-  Ray.setFromCamera(Cursor, Camera);
-  const Point = new THREE.Vector3();
-  if (
-    Ray.ray.intersectPlane(
-      new THREE.Plane(new THREE.Vector3(0, 0, 1), 0),
-      Point,
-    )
-  ) {
-    Element("impact-x").value = Math.max(-0.6, Math.min(0.6, Point.x)).toFixed(
-      2,
+  Impact.renderOrder = 5;
+  Scene.add(Impact);
+  const Resize = new ResizeObserver(() => {
+    const Rect = ById("viewport").getBoundingClientRect();
+    Renderer.setSize(Rect.width, Rect.height, false);
+    Camera.aspect = Rect.width / Math.max(1, Rect.height);
+    Camera.updateProjectionMatrix();
+  });
+  Resize.observe(ById("viewport"));
+  Renderer.setAnimationLoop(() => {
+    Controls.update();
+    Impact.position.set(Settings.X, Settings.Y, Settings.Z);
+    Impact.visible = !!Root && Settings.Enabled;
+    Renderer.render(Scene, Camera);
+  });
+  Renderer.domElement.addEventListener("click", (Event) => {
+    if (!Event.shiftKey || Busy || !Settings.Enabled || !Root) return;
+    const Rect = Renderer.domElement.getBoundingClientRect(),
+      Pointer = new THREE.Vector2(
+        (2 * (Event.clientX - Rect.left)) / Rect.width - 1,
+        1 - (2 * (Event.clientY - Rect.top)) / Rect.height,
+      ),
+      Ray = new THREE.Raycaster();
+    Ray.setFromCamera(Pointer, Camera);
+    const Proxy = new THREE.Mesh(
+      RenderGeometry(Root),
+      new THREE.MeshBasicMaterial(),
     );
-    Element("impact-y").value = Math.max(-0.4, Math.min(0.4, Point.y)).toFixed(
-      2,
+    Proxy.updateMatrixWorld();
+    const Hits = Ray.intersectObject(Proxy);
+    Proxy.geometry.dispose();
+    Proxy.material.dispose();
+    if (!Hits.length) return;
+    const Point = Hits[0].point;
+    Settings = Normalize({
+      ...Settings,
+      X: +Point.x.toFixed(4),
+      Y: +Point.y.toFixed(4),
+      Z: +Point.z.toFixed(4),
+    });
+    Persist();
+    Result = null;
+    Sequence++;
+    DisplaySource();
+    Refresh();
+    Status("Impact placed on the source surface.");
+  });
+}
+ById("fracture").onclick = () => Execute();
+ById("bake").onclick = () => Execute(true);
+ById("source").onclick = DisplaySource;
+ById("fragments").onclick = () => Result && Display(Result.parts, true);
+ById("fit").onclick = Fit;
+ById("wire").onclick = () => {
+  Wire = !Wire;
+  Wires.forEach((Line) => (Line.visible = Wire));
+  ById("wire").setAttribute("aria-pressed", Wire);
+};
+for (const Name of ["separation", "separation-number"])
+  ById(Name).oninput = (Event) => {
+    Separation = Math.max(0, Math.min(1, Number(Event.target.value) / 100));
+    Arrange();
+  };
+ById("assemble").onclick = () => {
+  Separation = 0;
+  Arrange();
+  Status(
+    "Fragments reassembled at their original positions; no cells or shards removed.",
+  );
+};
+ById("center-impact").onclick = () => {
+  const Center = Root ? Bounds(Root).center : new THREE.Vector3();
+  Settings = Normalize({ ...Settings, X: Center.x, Y: Center.y, Z: Center.z });
+  Result = null;
+  Sequence++;
+  Persist();
+  DisplaySource();
+  Refresh();
+};
+for (const Mode of ["dynamic", "baked"])
+  ById(Mode + "-mode").onclick = () => Assign("Mode", Mode);
+ById("primitive").onchange = () => {
+  Owner = {
+    ...Owner,
+    Primitive: ById("primitive").value,
+    Name: ById("primitive").selectedOptions[0].textContent + " specimen",
+  };
+  Settings = { ...Settings, X: 0, Y: 0, Z: 0 };
+  Persist();
+  Rebuild();
+};
+ById("clear-bake").onclick = async () => {
+  if (Busy) return;
+  Busy = true;
+  Refresh();
+  try {
+    await WriteFragments(Owner.Id, null);
+    Receipt = null;
+    delete Settings.Baked;
+    Result = null;
+    DisplaySource();
+    Persist();
+    Status("Stored fragments cleared for this object only.");
+  } catch (Error) {
+    Status("Could not clear fragments: " + Error.message);
+  } finally {
+    Busy = false;
+    Refresh();
+  }
+};
+function ExportRecord() {
+  return {
+    Format: "Frontier.Fracture.Html.v2",
+    Owner,
+    Settings,
+    Signature: Signature(Owner, Settings),
+    Geometry: Ready() ? Receipt.Parts : null,
+    NativeCompatible: false,
+  };
+}
+ById("export").onclick = () => {
+  const Record = ExportRecord(),
+    BlobUrl = URL.createObjectURL(
+      new Blob([JSON.stringify(Record, null, 2)], { type: "application/json" }),
+    ),
+    Link = document.createElement("a");
+  Link.href = BlobUrl;
+  Link.download = Owner.Name.replace(/[^\w.-]/g, "_") + ".fracture.json";
+  Link.click();
+  setTimeout(() => URL.revokeObjectURL(BlobUrl), 1000);
+  Status(
+    "Exported object recipe" +
+      (Record.Geometry
+        ? " and matching baked fragments"
+        : " (no current baked fragments)") +
+      ".",
+  );
+};
+window.addEventListener("storage", (Event) => {
+  if (Event.key !== Prefix + Owner.Id || !Event.newValue) return;
+  try {
+    const Record = JSON.parse(Event.newValue);
+    if (Record.Owner?.Id !== Owner.Id) return;
+    const GeometryChanged =
+      Record.Owner.Primitive !== Owner.Primitive ||
+      JSON.stringify(Record.Owner.Scale) !== JSON.stringify(Owner.Scale);
+    const ModeChanged = Settings.Mode !== Record.Settings?.Mode;
+    const RecipeChanged =
+      Signature(Owner, Settings) !== Signature(Record.Owner, Record.Settings);
+    Owner = Record.Owner;
+    Settings = Normalize(Record.Settings);
+    Sequence++;
+    if (GeometryChanged) Rebuild();
+    else if (RecipeChanged || ModeChanged || !Settings.Enabled) {
+      Result = null;
+      DisplaySource();
+    }
+    Refresh();
+    LoadReceipt();
+    Status(
+      Owner.Removed
+        ? "This object was removed from the scene. Fracture is disabled."
+        : "Updated from the object inspector" +
+            (!Settings.Enabled ? " · fracture disabled" : "") +
+            ".",
     );
-    Invalidate();
+  } catch (Error) {
+    Status("Could not apply object settings: " + Error.message);
   }
 });
-Element("export").onclick = () => {
-  const Payload = {
-    format: "frontier-fracture-ui-review-v1",
-    workflow: Mode,
-    recipe: Recipe(),
-    sources: Provenance,
-    nativeAsset: false,
-    collisionPhysics: false,
-    patterns: Library.map((Pattern) => ({
-      recipe: Pattern.settings,
-      deformationFrames: Pattern.frames?.map((Geometry) => ({
-        vertices: Array.from(Geometry.getAttribute("position").array),
-        normals: Array.from(Geometry.getAttribute("normal").array),
-      })),
-      fragments: Pattern.records.map((Record) => ({
-        position: Record.center.toArray(),
-        vertices: Array.from(Record.geometry.getAttribute("position").array),
-        normals: Array.from(Record.geometry.getAttribute("normal").array),
-        indices: Record.geometry.index
-          ? Array.from(Record.geometry.index.array)
-          : null,
-        groups: Record.geometry.groups,
-      })),
-    })),
-  };
-  const Url = URL.createObjectURL(
-    new Blob([JSON.stringify(Payload)], { type: "application/json" }),
-  );
-  const Link = document.createElement("a");
-  Link.href = Url;
-  Link.download = "FractureRecipe.json";
-  Link.click();
-  setTimeout(() => URL.revokeObjectURL(Url), 1000);
-  Message("Exported browser recipe; not a native fracture asset");
+window.FrontierFracture = {
+  snapshot: () => ({
+    Owner,
+    Settings,
+    Linked,
+    Busy,
+    Supported: !!Root,
+    DisplayingFragments,
+    Baked: Ready(),
+    Receipt: Receipt
+      ? {
+          Signature: Receipt.Signature,
+          Bytes: Receipt.Bytes,
+          Count: Receipt.Parts.length,
+        }
+      : null,
+    Result: Result
+      ? {
+          Count: Result.parts.length,
+          VolumeError: Result.volumeError,
+          Quality: Result.quality,
+          Triangles: Result.triangles,
+          Replay: !!Result.replay,
+        }
+      : null,
+    Bounds: Root ? Bounds(Root).size.toArray() : null,
+    Signature: Signature(Owner, Settings),
+  }),
+  geometry: () =>
+    Result ? EncodeParts(Result.parts) : Root ? EncodeParts([Root]) : [],
+  export: ExportRecord,
 };
-new ResizeObserver(() => {
-  const Width = Viewport.clientWidth,
-    Height = Viewport.clientHeight;
-  Renderer.setSize(Width, Height, false);
-  Camera.aspect = Width / Height;
-  Camera.updateProjectionMatrix();
-}).observe(Viewport);
-let Previous = performance.now();
-function Animate(Now) {
-  requestAnimationFrame(Animate);
-  const Elapsed = Math.min(0.04, (Now - Previous) / 1000);
-  Previous = Now;
-  Controls.update();
-  if (Network) {
-    const Start = performance.now();
-    Network.step(Elapsed * 0.001);
-    SolveTime += performance.now() - Start;
-    Dispose(Lines);
-    const Vertices = [];
-    for (const Path of Network.paths)
-      for (let Index = 2; Index < Path.pts.length; Index += 2)
-        Vertices.push(
-          Path.pts[Index - 2],
-          Path.pts[Index - 1],
-          0.016,
-          Path.pts[Index],
-          Path.pts[Index + 1],
-          0.016,
-        );
-    const Geometry = new THREE.BufferGeometry();
-    Geometry.setAttribute(
-      "position",
-      new THREE.Float32BufferAttribute(Vertices, 3),
+try {
+  InitialiseScene();
+  Rebuild();
+  LoadReceipt();
+  if (Linked && !Initial)
+    Status(
+      "This object is not available. Open Fracture from the object inspector in Project-Zero.",
     );
-    Lines = new THREE.LineSegments(Geometry, CrackMaterial);
-    Scene.add(Lines);
-    Element("count").textContent = Network.activeTips + " tips";
-    Element("cost").textContent = SolveTime.toFixed(1) + " ms";
-    if (Network.done) {
-      const Finished = Network;
-      Network = null;
-      const Started = performance.now();
-      const Pattern = PatternShell(Finished, SolveTime, Finished.recipe);
-      Pattern.time += performance.now() - Started;
-      ShowPattern(Pattern);
-    } else if (Now - StartTime > 12000) {
-      Network = null;
-      Message(
-        "Propagation paused at the 12-second preview limit; reset to continue.",
-      );
-    }
-  }
-  Renderer.render(Scene, Camera);
-  Renderer.domElement.dataset.frame = String(Now);
+  else
+    Status(
+      Linked
+        ? "Editing " +
+            Owner.Name +
+            " · settings are linked to its object inspector."
+        : "Standalone geometry specimen · use Project-Zero for per-object authoring.",
+    );
+} catch (Error) {
+  ById("unsupported").hidden = false;
+  ById("unsupported").textContent =
+    "WebGL preview unavailable: " + Error.message;
+  Status("WebGL could not start.");
 }
-const CrackMaterial = new THREE.LineBasicMaterial({ color: 0xd0eee0 });
-SelectAsset("concrete");
-requestAnimationFrame(Animate);
-setTimeout(Apply, 80);
-window.addEventListener("error", (Event) =>
-  Message("Preview error: " + Event.message),
-);

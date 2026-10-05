@@ -1,3 +1,11 @@
+import {
+  Prefix as FracturePrefix,
+  Publish as PublishFracture,
+  Describe as DescribeFracture,
+  Normalize as NormalizeFracture,
+  OpenFracture,
+  ReadRecord as ReadFracture,
+} from "../FractureEditor/FractureSpecification.js";
 import ReferencePanel, {
   EnsureReferenceLights,
   HasReferencePanel,
@@ -202,7 +210,22 @@ function App() {
         Saved.Selected ||
         "sun",
     ),
-    [Values, AssignValues] = useState(Saved.Values || {}),
+    [Values, AssignValues] = useState(() => {
+      const Restored = { ...Saved.Values };
+      for (const Row of Saved.Rows || InitialRows) {
+        const Record = ReadFracture(Row.Id);
+        if (
+          Row.Panel === "geometry" &&
+          Record?.Settings?.EditedAt >
+            (Restored[Row.Id]?.Fracture?.EditedAt || 0)
+        )
+          Restored[Row.Id] = {
+            ...Restored[Row.Id],
+            Fracture: NormalizeFracture(Record.Settings),
+          };
+      }
+      return Restored;
+    }),
     [Hidden, AssignHidden] = useState({ ...Saved.Hidden, camera: false }),
     [Collapsed, Collapse] = useState(Saved.Collapsed || {}),
     [Query, Search] = useState(""),
@@ -234,6 +257,70 @@ function App() {
     }),
     [LeftWidth, ResizeLeft] = useState(316),
     [RightWidth, ResizeRight] = useState(340);
+  const PreviousFractureRows = useRef(Rows);
+  useEffect(() => {
+    const Receive = (Event) => {
+      if (!Event.key?.startsWith(FracturePrefix) || !Event.newValue) return;
+      try {
+        const Record = JSON.parse(Event.newValue);
+        const Id = Event.key.slice(FracturePrefix.length);
+        if (
+          Record.Owner?.Id !== Id ||
+          !Rows.some((Row) => Row.Id === Id && Row.Panel === "geometry")
+        )
+          return;
+        AssignValues((Previous) =>
+          (Record.Settings?.EditedAt || 0) <
+          (Previous[Id]?.Fracture?.EditedAt || 0)
+            ? Previous
+            : {
+                ...Previous,
+                [Id]: {
+                  ...Previous[Id],
+                  Fracture: NormalizeFracture(Record.Settings),
+                },
+              },
+        );
+      } catch {
+        /* A malformed external record never changes the scene. */
+      }
+    };
+    window.addEventListener("storage", Receive);
+    return () => window.removeEventListener("storage", Receive);
+  }, [Rows]);
+  useEffect(() => {
+    for (const Removed of PreviousFractureRows.current) {
+      if (
+        Removed.Panel !== "geometry" ||
+        Rows.some((Row) => Row.Id === Removed.Id)
+      )
+        continue;
+      try {
+        const Record = ReadFracture(Removed.Id);
+        if (Record)
+          PublishFracture(
+            { ...Record.Owner, Removed: true },
+            { ...Record.Settings, Enabled: false, EditedAt: Date.now() },
+          );
+      } catch {
+        Notify("Could not notify the removed object's fracture editor.");
+      }
+    }
+    PreviousFractureRows.current = Rows;
+    for (const Row of Rows) {
+      if (Row.Panel !== "geometry" || !Values[Row.Id]?.Fracture) continue;
+      try {
+        PublishFracture(
+          DescribeFracture(Row, Values[Row.Id]),
+          Values[Row.Id].Fracture,
+        );
+      } catch {
+        Notify(
+          "Fracture settings could not be saved. Browser storage may be full or disabled.",
+        );
+      }
+    }
+  }, [Rows, Values]);
   const AssignRows = (Update) =>
     StoreRows((Previous) =>
       EnsureEditorCamera(
@@ -449,7 +536,10 @@ function App() {
   const Change = (Key, Value) =>
     AssignValues((Previous) => ({
       ...Previous,
-      [Selected]: { ...Previous[Selected], [Key]: Value },
+      [Selected]: {
+        ...Previous[Selected],
+        [Key]: Key === "Fracture" ? { ...Value, EditedAt: Date.now() } : Value,
+      },
     }));
   useEffect(() => {
     document
@@ -671,7 +761,17 @@ function App() {
           : EnsureReferenceLights(Loaded.Rows),
       );
       Collapse(Loaded.Collapsed || {});
-      AssignValues(Loaded.Values || {});
+      const ImportedValues = { ...Loaded.Values };
+      for (const Row of Loaded.Rows)
+        if (Row.Panel === "geometry")
+          ImportedValues[Row.Id] = {
+            ...ImportedValues[Row.Id],
+            Fracture: NormalizeFracture({
+              ...ImportedValues[Row.Id]?.Fracture,
+              EditedAt: Date.now(),
+            }),
+          };
+      AssignValues(ImportedValues);
       StoreAssets(RestoreAssets(Loaded.Assets));
       AssignHidden({ ...Loaded.Hidden, camera: false });
       ChangeSettings({ ...DefaultSettings, ...Loaded.Settings });
@@ -714,7 +814,15 @@ function App() {
           : null,
       },
     ]);
-    AssignValues((Previous) => ({ ...Previous, [Id]: { ...Properties } }));
+    AssignValues((Previous) => ({
+      ...Previous,
+      [Id]: {
+        ...Properties,
+        ...(Properties.Fracture
+          ? { Fracture: { ...Properties.Fracture, Baked: undefined } }
+          : {}),
+      },
+    }));
     // Show a new placement even when the destination collection was hidden.
     AssignHidden((Previous) => {
       const Next = { ...Previous, [Id]: !Visible };
@@ -1431,6 +1539,15 @@ function App() {
               Hidden={Hidden[Selected]}
               ToggleHidden={() => ToggleHidden(Selected)}
               OpenShader={() => OpenShader(Selected)}
+              OpenFracture={() => {
+                try {
+                  OpenFracture(Subject, Values[Selected] || {});
+                } catch {
+                  Toast(
+                    "Browser storage is unavailable; cannot open the object fracture editor.",
+                  );
+                }
+              }}
               OpenWind={() => {
                 WindOpener.current = document.activeElement;
                 EditWind(Selected);
@@ -1567,14 +1684,23 @@ function App() {
                 <button
                   onClick={() => {
                     ShowMenu(null);
-                    window.open(
-                      "../FractureEditor/index.html",
-                      "_blank",
-                      "noopener,noreferrer",
-                    );
+                    if (
+                      Subject.Panel !== "geometry" ||
+                      !Values[Selected]?.Fracture?.Enabled
+                    ) {
+                      Toast(
+                        "Select geometry and enable Fracture in its inspector first.",
+                      );
+                      return;
+                    }
+                    try {
+                      OpenFracture(Subject, Values[Selected] || {});
+                    } catch {
+                      Toast("Browser storage is unavailable.");
+                    }
                   }}
                 >
-                  Fracture editor · HTML
+                  Selected object fracture…
                 </button>
                 {["Outliner", "Viewport", "Inspector", "ShaderEditor"].map(
                   (Tab) => (
@@ -1649,7 +1775,20 @@ function App() {
                 <button
                   onClick={() => {
                     AssignRows(EnsureReferenceLights(InitialRows));
-                    AssignValues({});
+                    AssignValues(
+                      Object.fromEntries(
+                        InitialRows.filter(
+                          (Row) => Row.Panel === "geometry",
+                        ).map((Row) => [
+                          Row.Id,
+                          {
+                            Fracture: NormalizeFracture({
+                              EditedAt: Date.now(),
+                            }),
+                          },
+                        ]),
+                      ),
+                    );
                     AssignHidden({});
                     Collapse({});
                     Filter([]);
@@ -1702,6 +1841,21 @@ function App() {
                 >
                   Inspect in workspace
                 </button>
+                {Subject.Panel === "geometry" && (
+                  <button
+                    onClick={() => {
+                      Change("Fracture", {
+                        ...NormalizeFracture(Values[Selected]?.Fracture),
+                        Enabled: !Values[Selected]?.Fracture?.Enabled,
+                      });
+                      ShowMenu(null);
+                    }}
+                  >
+                    {Values[Selected]?.Fracture?.Enabled
+                      ? "Disable fracture"
+                      : "Enable fracture"}
+                  </button>
+                )}
                 <button onClick={() => AddRow(Subject)}>Duplicate</button>
                 {Subject.Panel !== "group" && (
                   <button

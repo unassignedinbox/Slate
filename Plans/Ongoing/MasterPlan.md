@@ -144,10 +144,20 @@ Next native gates remain the interactive vehicle presentation, production materi
 invalidation under continuous play. Preserve native ReSTIR and existing raster paths; do not replace them with the
 browser fracture preview.
 
-The requested combined fracture editor has an HTML-first review at `Frontier/Experimental/FractureEditor/`.
-It combines pinned crack propagation/plasticity from `arena/01a0f3a8-slate` and solid fragmentation from
-`arena/01a0f3a4-slate` behind Runtime and Baked workflows. Native integration waits for UI approval. Follow-up work
-must carry over Jolt contacts and breakable supports, safe geometry ownership, author-created geometry handling,
+The fracture editor remains an HTML-first review at `Frontier/Experimental/FractureEditor/`. The C045 revision
+(2026-10-06) removes sheet metal and the material-example gallery from the active editor. Project-Zero now binds
+Enable fracture, Dynamic/Baked and expansion to a selected scene ID. Material changes preserve the selected
+primitive and scale; browser triangle bakes persist per object and invalidate on geometry/recipe changes.
+
+The prior glass-region coverage loss is replaced by closed, volume-preserving convex partitioning. Shared edge
+crossings, complete caps, quality-aware triangulation and fragment-slenderness checks reject defective cuts rather
+than discarding geometry. Checks pass for 168 shape/material/seed combinations, 21 browser workflows and the
+existing main-editor regression. Source snapshots from both supplied branches remain hash-pinned and unchanged;
+the active geometric correction is separate from those snapshots. See C045 in `Frontier/Docs/ProjectZeroHtmlChanges.md`.
+
+Native integration still waits for visual approval. Current source geometry is the HTML editor's analytical convex
+primitive plus scale, not arbitrary native mesh import; concave shapes are explicitly refused. Follow-up work must
+carry over Jolt contacts and breakable supports, safe geometry ownership, author-created geometry handling,
 material-appropriate failure and native serialization, without treating every material as brittle cells.
 
 

@@ -2367,3 +2367,59 @@ GI-off work. That job and therefore the overall workflow failed; a complete auth
 The viewer defaults to the passing loaded case, labels the authored GI-on image as incomplete, and does not present
 a nonexistent authored GI-off image. `VisualProof/SdfScene/CheckDrive.mjs` verifies the loaded comparison and these
 partial-output guards. The remaining native-window, continuous-deformation and full-material gates are still open.
+
+
+## C045 — Object-specific fracture and closed geometry
+
+2026-10-06. Supersedes C044's fracture gallery after the user's topology review. The vehicle GI receipts and
+accepted C043 environment inspectors are unchanged. Sheet metal, deformation tools and their active workflow
+are removed; the upstream source snapshots remain untouched for provenance.
+
+- Select Sphere, Cube, Cylinder or Cone in Project-Zero. Its inspector now has **Enable fracture**, a
+  **Dynamic / Baked** section and an expand button. The outliner context menu also enables/disables fracture.
+  Expansion opens that scene ID's fracture editor, not a global material-example gallery.
+- Source primitive and scale are separate from fracture material. Wood, Stone, Concrete, Glass, Tempered glass
+  and ABS change the response without replacing the selected shape. Position/rotation are excluded because
+  authoring operates in local space. The existing HTML viewport contains analytical markers, not native mesh
+  buffers; this revision constructs the matching tessellated primitive and applies its authored scale.
+- The expanded editor uses the actual main-editor slider CSS, its embedded DM Sans fallback fonts and rounded
+  dark cards. Material resistance/density, impact, fragment quality, bake and geometry receipts have dedicated
+  cards. The impact/quality diagrams are explanatory, not measured stress fields. Font notices are embedded.
+- Runtime generation and stored replay use the same closed geometry. Each scene ID owns its recipe and an
+  IndexedDB triangle-geometry receipt. Geometry/material/recipe changes invalidate replay; presentation changes
+  do not. Reopening, cross-window changes, duplication, disabling, removal and baseline restoration respect
+  ownership. Duplicates never inherit another ID's baked receipt. Export includes a matching triangle pattern
+  and explicitly declares that it is not a native asset.
+
+The missing glass came from raster crack-region extraction, which omitted crack cells and small regions.
+That active path is replaced with paired half-space cuts covering the entire source. Crossings are shared per
+edge; cuts through existing vertices/edges retain their cap boundaries. Coplanar primitive patches are joined
+before subdivision. Every accepted split must conserve signed volume and produce closed, outward triangles.
+
+Triangulation compares a maximum-minimum-quality diagonal solution with an area-centred interior fan and keeps
+whichever has the better weakest triangle. Boundary vertices, including collinear seams, are retained. Added
+interior points are coplanar; no surface displacement or shading trick supplies missing geometry. Exported and
+stored faces are triangles. Cut acceptance also checks split balance, minimum source-axis spans, triangle quality
+and source-normalised fragment slenderness. Naturally thin source dimensions are exempt from an impossible
+absolute thickness requirement; wood retains a larger slenderness allowance for grain-directed fragments.
+Refused cuts leave the original piece intact rather than deleting it or forcing the requested fragment count.
+
+Verification:
+
+- `CheckGeometry.mjs`: **168** shape/material/seed cases pass, plus cuts through vertices/edges, scaling,
+  determinism, zero-energy arrest and explicit concave refusal. Independent checks cover triangle-edge incidence,
+  opposite winding, Euler characteristic, convex containment, float32 vertex collapse and sampled coverage/overlap.
+  Maximum relative volume error is **5.72e-16** before upload and **2.87e-8** after float32 upload. The material
+  matrix checks 75,600 volume samples. The lowest triangle-quality score is 0.0141, including thin plate sides.
+- `CheckBrowser.mjs`: **21** checks pass with no application errors, including the selected-sphere flow, source
+  retention under material changes, actual bake download, reopen/replay, per-object isolation, source-scale
+  invalidation, outliner actions and 1024/390-pixel layouts. Glass reassembly is captured at 100.000% occupied volume.
+- Project-Zero's existing broad browser regression passes. External Fontshare failures remain reported separately
+  there; the fracture editor embeds the existing licensed fallback fonts and needs no font network requests.
+- All thirteen upstream hashes still match `SourceDepot/Provenance.json`. Captures and current receipts are under
+  `FractureEditor/Captures/`; obsolete gallery/metal captures are removed. C044 evidence remains in Git history.
+
+Limits: this is convex-primitive HTML authoring, not arbitrary native geometry import or a calibrated material
+failure simulation. Torus/concave inputs are refused instead of filling holes with a convex hull. ABS plastic
+strain, reinforcement, Jolt debris/constraints, native geometry ownership and native bake serialization remain
+future integration work. Native fracture implementation still waits for visual approval.
