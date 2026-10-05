@@ -412,12 +412,6 @@ function App() {
         if (!HasReferencePanel(Known.get(Record.Id))) continue;
         Next[Record.Id] = {
           ...Next[Record.Id],
-          ...(Known.get(Record.Id).Panel === "wind" && Record.Properties?.field
-            ? {
-                WindField: Record.Properties.field,
-                Speed: Record.Properties.field.Components[0]?.Strength ?? 0,
-              }
-            : {}),
           ReferenceInspector: {
             Properties: Record.Properties,
             Locked: Record.Locked,
@@ -1390,18 +1384,7 @@ function App() {
     ) : Tab === "Inspector" ? (
       <>
         <div className="inspector-scroll" key={Subject.Id}>
-          {HasReferencePanel(Subject) && (
-            <ReferencePanel
-              Subject={Subject}
-              Rows={Rows}
-              Values={Values}
-              Hidden={Hidden}
-              Collapsed={Collapsed}
-              Apply={ApplyReference}
-            />
-          )}
-          {HasReferencePanel(Subject) ||
-          Subject.ReferenceOnly ? null : Subject.Panel === "group" ? (
+          {Subject.ReferenceOnly ? null : Subject.Panel === "group" ? (
             <FolderInspector
               Subject={Subject}
               Rows={Rows}
@@ -1448,6 +1431,16 @@ function App() {
               WindFields={WindFields}
               AllValues={Values}
               AllHidden={Hidden}
+            />
+          )}
+          {HasReferencePanel(Subject) && (
+            <ReferencePanel
+              Subject={Subject}
+              Rows={Rows}
+              Values={Values}
+              Hidden={Hidden}
+              Collapsed={Collapsed}
+              Apply={ApplyReference}
             />
           )}
         </div>

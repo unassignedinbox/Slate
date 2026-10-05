@@ -2253,3 +2253,29 @@ Actual captures and the generated HTML hash are in `Screenshots/Selected/`. Earl
 the old broad inspector/wind tests target intentionally removed legacy controls and are not claimed as current passes.
 Fontshare remains unavailable in the sandbox; the external-font/fallback qualification from C040 still applies.
 No C++ changes or Project Drive SDF-GI rendering work in this revision.
+
+
+## C042 — Roll back C041; restore original inspectors with additive cards
+
+2026-10-05. Reverted the rejected C041 revision (`7efd292`) to its `b424bc3` parent before applying the correction.
+The original Folder inspector is restored, including its inventory, filtering, pagination and notes. The imported
+c7egoist Folder panel is no longer registered or rendered. Moon Atlas remains skipped, as requested previously.
+
+All pre-existing inspector cards are retained in their original order. The screenshot-selected reference cards are
+appended after that list, not substituted for it. The imported-card filter applies only inside the reference frame:
+Sun hero/readings/summary, Wind through Anemometer, Clouds through Cloud deck, Height Fog Visibility/Light transport
+and the pictured light readings/Photometry. Newly added reference-only light rows have no pre-existing stack to restore.
+Unpictured imported cards are not used as a reason to hide any original editor cards.
+
+The C041 flow replacement, spline controls and shared wind-model changes are rolled back as part of the requested
+one-commit undo. Original `WindPanel.jsx` and `WindSpecification.js` are restored byte-for-byte from `b424bc3`.
+No saved scene is cleared, and no C++ or renderer changes are included. The C041 notes above describe a rejected,
+historical revision, not the current UI. Browser checks and captures for this correction are recorded separately.
+
+Verification: the C042 browser check compares the original card names, heading order and control inventory against
+`b424bc3` for World/Showcase/Lighting folders, Camera, Moon, Sun, Wind, Clouds, Height Fog and Area Light. It verifies
+that imported additions follow the original stack, with no Folder/Moon import, and checks imported-card whitelists,
+Cloud deck persistence, Folder notes and the restored WindEditor. All checks pass. The existing `CheckBrowser.mjs`,
+`CheckWorkspaceCards.mjs` (including 2,500-record folders) and `CheckWind.mjs` also pass serially. Receipts and actual
+captures are in `Screenshots/Additive/`. Fontshare connection failures remain separately reported, not hidden.
+Appended frames are measured synchronously at creation so offscreen rAF throttling cannot collapse their scroll area.

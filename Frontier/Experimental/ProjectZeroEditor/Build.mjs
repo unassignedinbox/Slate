@@ -100,7 +100,6 @@ Assets.ReferenceInspector = `<!doctype html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-${ReferenceHash}'; style-src 'unsafe-inline'; font-src https://cdn.fontshare.com; img-src data:; base-uri 'none'">
 <style>${fs.readFileSync(path.join(Folder, "InspectorDepot/Fontshare.css"), "utf8")}
 ${ReferenceStyle}
-${fs.readFileSync(path.join(Folder, "FlowPanel.css"), "utf8")}
 html,body{height:auto;overflow:hidden;background:var(--panel)}
 #ReferenceMount{display:block;overflow:hidden;flex:none}
 </style></head><body><div id="ReferenceMount" class="props"></div><script>${ReferenceScript}</script></body></html>`;

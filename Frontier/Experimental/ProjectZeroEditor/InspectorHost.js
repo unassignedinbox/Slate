@@ -1,5 +1,4 @@
 // Browser-only adapter around the pinned, unmodified reference inspector modules.
-import { ResolveInspectorWind } from "./WindSpecification.js";
 import { buildSheet } from "./InspectorDepot/inspector.js";
 import { makeNode, flat, TYPES } from "./InspectorDepot/world.js";
 import { bus } from "./InspectorDepot/bus.js";
@@ -29,6 +28,7 @@ const Escape = (Value) =>
   );
 
 function Measure() {
+  if (!Sheet?.isConnected) return;
   const Height = Math.ceil(Mount.getBoundingClientRect().height);
   if (Height !== LastHeight) {
     LastHeight = Height;
@@ -37,7 +37,7 @@ function Measure() {
 }
 function Trim() {
   const Custom = Sheet.querySelector(".mpanel");
-  // Only the cards approved in the user's screenshots. No hidden legacy tail.
+  // Filter only the imported additions; the host's existing card list is independent.
   const Allowed = {
     sun: [".mp-hero", ".mp-rail", ".mp-duo"],
     wind: [".wf-hero", ".mp-rail", ".mp-duo", ".wf-trace"],
@@ -148,8 +148,6 @@ function Synchronize(Data) {
       Node.dynamic = !!Stored.Dynamic;
       Node.notes = Stored.Notes || "";
     }
-    if (Node.type === "wind")
-      Node.props.field = ResolveInspectorWind(Data.Values[Row.Id], Node.props);
     Node.kids = [];
   }
   const Present = new Set(Data.Rows.map((Row) => Row.Id));
@@ -210,6 +208,10 @@ function Synchronize(Data) {
   for (const Node of Nodes.values())
     Baseline.set(Node.HostId, JSON.stringify(Record(Node)));
   Applying = false;
+  // Appended frames can start offscreen, where browsers throttle rAF/observers.
+  // Measure the populated sheet synchronously so the full card list is scrollable.
+  repaintSliders(Mount);
+  Measure();
   requestAnimationFrame(() => {
     repaintSliders(Mount);
     Measure();
