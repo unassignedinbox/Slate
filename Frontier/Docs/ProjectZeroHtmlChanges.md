@@ -2007,3 +2007,64 @@ rate and estimated data from measured rays/interval slots. A separately instrume
 Final browser captures and JSON reports are in **`VisualProof/RadianceIntegrator/Captures/`**, including fourteen
 actual rendered/debug/UI images and the source-hashed browser report. Dependencies, full CPU ray fixtures and
 intermediate runs remain ignored scratch. The usage README documents static hosting and verifier commands.
+
+## C037 — Actual non-rigid triangle deformation with current-geometry WebGPU GI
+
+**Date:** 2026-10-05. **Base:** `8d63526` (C036 plus retained native CPU evidence). New standalone browser demo at
+**`Experimental/DeformationIntegrator/index.html`**. The radiance-cascades atrium and native XPBD tyre remain unchanged.
+
+The request is to demonstrate GI when a quad car/tyre surface actually changes shape, independently of whether
+its current vertices come from VAT or a live solver. This demonstration uses a controlled compressing/bulging
+quad tyre, not a rigidly transformed sculpture and not a claimed port of the calibrated native XPBD simulation.
+
+- **1,536 tyre vertices / 1,536 tyre quads**; with the open rim and environment, **1,797 quads / 3,594 triangles**.
+  GPU vertex deformation changes edge lengths by up to approximately **57.2 mm** in the tested enlarged scene.
+- Live positions, a **17-pose rgba32float VAT**, and externally supplied XYZ/XYZW positions enter the same route:
+  triangle expansion, geometric-normal recalculation, eleven-depth bottom-up GPU BVH refit, rasterization, tracing.
+  The BVH has **2,047 bounds**. Its partition/connectivity stays fixed; changing topology would require rebuilding.
+- For a clear geometry/lighting reference, this demo uses **progressive finite-depth diffuse path tracing**, not
+  radiance-cascade interpolation. It samples actual area emitters, traces exact triangle shadow visibility and
+  follows cosine-weighted diffuse paths. Default depth three includes up to two diffuse interreflections.
+- The **frozen-rest comparison** leaves visible geometry current while deliberately giving lighting rays the old
+  triangles/bounds. It shows false self-occlusion and changed GI. This is an explicit wrong-result diagnostic.
+- Changed geometry/camera/lighting resets accumulation. Static geometry reuses its refit and accumulates samples.
+  Quality controls, direct/indirect/normals views, true quad-edge overlay, pause and reproducible pose buttons are
+  in a compact non-editor HUD. Unsupported WebGPU is refused; no CPU/WebGL rendering fallback exists.
+
+### Executed verification
+
+`VisualProof/DeformationIntegrator/VerifyGeometry.mjs` passes a nine-pose finite/positive-area sweep, shared quad-edge
+incidence, exact BVH leaf coverage and non-rigid edge-length change. The minimum tested area is **0.000270846 m²**.
+The deformation is a monotone vertical warp with positive lateral scaling, rather than a singular ground clamp.
+This is not a complete intersection study or validation of arbitrary external solver inputs.
+
+`VerifyWebGpu.cjs` passes in Chromium 133 / SwiftShader WebGPU with no recorded browser errors. It reads back actual
+GPU vertices, triangle normals and every refitted bound, and checks **960 GPU rays across five live/VAT/external
+configurations** against independent brute-force CPU intersections. Maximum distance discrepancy is **1.319e-5 m**;
+maximum vertex component error is **2.59e-7 m**. At full compression, **134/192 frozen-rest ray distances** disagree
+with current geometry by more than 1 mm. The intermediate VAT pose differs from the analytic deformation by at most
+**0.126 mm** per component at the tested 0.373 m load; this is not a general animation-interpolation bound.
+
+An independent CPU area-light integral, using the actual scene rectangles and brute-force shadow visibility,
+compares **20 receivers × 64 samples**, including **601 occluded samples**, with the production GPU light estimator.
+Maximum RGB discrepancy is **5.58e-8**. Full/direct/indirect decomposition differs by at most **1.42e-7**. Emitters-off
+surface RGB and depth-one indirect RGB are exactly zero. Frozen versus current indirect lighting has mean absolute
+RGB difference **0.002618**, with identical visible geometry and matched sample indices. Accumulation invalidation,
+VAT, external-position refusal, live animation, render-scale changes, portrait layout and no-WebGPU refusal pass.
+
+### Scope, timings and evidence
+
+This is a bounded diffuse reference, not production denoised GI, a new tyre physics implementation, topology-change
+support or native SDF integration. Finite samples produce visible noise; finite path depth, ray offsets, float
+precision and raster/display sampling remain approximations. The review explains how current-triangle queries
+could be combined with static-world SDF queries without claiming that integration has already been delivered.
+
+Three warmed moving-pose software GPU-pass sums at **320 × 216 / one sample / depth three** are **1,302.63, 1,314.90
+and 1,297.79 ms**. Vertex/triangle preparation plus refit takes **0.83–16.96 ms** across those samples; path tracing
+dominates. These are **software execution measurements**, not gaming-GPU benchmarks or evidence of hardware
+real-time performance. The simple renderer has one render in flight and synchronous completion-gated telemetry.
+
+**`Docs/DeformationTransportReview.html` / `.md`** provide controls, mechanism, limitations, integration guidance and
+verification details. **`VisualProof/DeformationIntegrator/Captures/`** holds eight actual browser captures, the CPU
+and source-hashed WebGPU reports, plus a labelled GIF assembled from captured poses. The GIF is explicitly **not a
+real-time speed recording**. Dependencies, full ray fixtures and intermediate runs remain ignored scratch.

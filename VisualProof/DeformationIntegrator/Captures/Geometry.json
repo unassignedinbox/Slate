@@ -1,0 +1,59 @@
+{
+  "Date": "2026-10-05",
+  "Quads": 1797,
+  "Triangles": 3594,
+  "TyreVertices": 1536,
+  "Vertices": 1812,
+  "Bounds": 2047,
+  "Depth": 10,
+  "Poses": [
+    {
+      "Compression": 0,
+      "MinimumArea": 0.003587801689677448,
+      "MaximumDisplacement": 1.1102230246251565e-16
+    },
+    {
+      "Compression": 0.04,
+      "MinimumArea": 0.003570543919491154,
+      "MaximumDisplacement": 0.04000000000000015
+    },
+    {
+      "Compression": 0.1,
+      "MinimumArea": 0.003540094194840005,
+      "MaximumDisplacement": 0.10000000000000009
+    },
+    {
+      "Compression": 0.2,
+      "MinimumArea": 0.003256491198336527,
+      "MaximumDisplacement": 0.20000000000000018
+    },
+    {
+      "Compression": 0.325,
+      "MinimumArea": 0.002113933975926506,
+      "MaximumDisplacement": 0.3250000000000002
+    },
+    {
+      "Compression": 0.4,
+      "MinimumArea": 0.0015269050994205918,
+      "MaximumDisplacement": 0.40000000000000013
+    },
+    {
+      "Compression": 0.5,
+      "MinimumArea": 0.0008892168052176937,
+      "MaximumDisplacement": 0.5000000000000001
+    },
+    {
+      "Compression": 0.6,
+      "MinimumArea": 0.0004360893967148185,
+      "MaximumDisplacement": 0.6000000000000001
+    },
+    {
+      "Compression": 0.65,
+      "MinimumArea": 0.00027084589412533044,
+      "MaximumDisplacement": 0.6500000000000001
+    }
+  ],
+  "MaximumEdgeLengthChange": 0.05716494406947642,
+  "ChangedRayDistances": 134,
+  "Passed": true
+}

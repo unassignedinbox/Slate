@@ -1,0 +1,676 @@
+{
+  "Date": "2026-10-05",
+  "Errors": [],
+  "Geometry": [
+    {
+      "Label": "Live 0",
+      "Compression": 0,
+      "Source": 0,
+      "VertexError": 1.1901993346441486e-7,
+      "NormalError": 0.000002079441161206841,
+      "Rays": 192,
+      "MaximumRayError": 0.0000020705719965263825,
+      "StaleDisagreements": 0,
+      "Metrics": {
+        "Ready": true,
+        "Error": null,
+        "Completed": 2,
+        "Samples": 1,
+        "Revision": 2,
+        "Busy": false,
+        "Compression": 0,
+        "GeometryMilliseconds": 0,
+        "Width": 320,
+        "Height": 216,
+        "Errors": [],
+        "Adapter": {
+          "Vendor": "google",
+          "Architecture": "swiftshader",
+          "Description": "",
+          "Timestamp": true,
+          "Software": true
+        },
+        "Timings": [
+          {
+            "Name": "Vertices + triangles",
+            "Milliseconds": 8.477294
+          },
+          {
+            "Name": "BVH refit",
+            "Milliseconds": 5.291989
+          },
+          {
+            "Name": "Raster",
+            "Milliseconds": 37.90098
+          },
+          {
+            "Name": "Diffuse paths",
+            "Milliseconds": 32.718703
+          },
+          {
+            "Name": "Display",
+            "Milliseconds": 41.162789
+          }
+        ],
+        "GpuMilliseconds": 125.55175499999999,
+        "TraceRevision": 2,
+        "GeometryChanged": true,
+        "Configuration": {
+          "Compression": 0.65,
+          "Animate": false,
+          "Source": 0,
+          "Frozen": false,
+          "View": 3,
+          "Bounces": 3,
+          "Samples": 1,
+          "Scale": 0.65,
+          "Exposure": 1,
+          "Power": 1,
+          "Wire": false
+        }
+      }
+    },
+    {
+      "Label": "Live 0.325",
+      "Compression": 0.325,
+      "Source": 0,
+      "VertexError": 1.6383843437495216e-7,
+      "NormalError": 0.000002079441161206841,
+      "Rays": 192,
+      "MaximumRayError": 0.000004320797241774699,
+      "StaleDisagreements": 119,
+      "Metrics": {
+        "Ready": true,
+        "Error": null,
+        "Completed": 3,
+        "Samples": 1,
+        "Revision": 3,
+        "Busy": false,
+        "Compression": 0.325,
+        "GeometryMilliseconds": 0,
+        "Width": 320,
+        "Height": 216,
+        "Errors": [],
+        "Adapter": {
+          "Vendor": "google",
+          "Architecture": "swiftshader",
+          "Description": "",
+          "Timestamp": true,
+          "Software": true
+        },
+        "Timings": [
+          {
+            "Name": "Vertices + triangles",
+            "Milliseconds": 1.015567
+          },
+          {
+            "Name": "BVH refit",
+            "Milliseconds": 0.67068
+          },
+          {
+            "Name": "Raster",
+            "Milliseconds": 11.657614
+          },
+          {
+            "Name": "Diffuse paths",
+            "Milliseconds": 26.3432
+          },
+          {
+            "Name": "Display",
+            "Milliseconds": 37.702222
+          }
+        ],
+        "GpuMilliseconds": 77.389283,
+        "TraceRevision": 3,
+        "GeometryChanged": true,
+        "Configuration": {
+          "Compression": 0.65,
+          "Animate": false,
+          "Source": 0,
+          "Frozen": false,
+          "View": 3,
+          "Bounces": 3,
+          "Samples": 1,
+          "Scale": 0.65,
+          "Exposure": 1,
+          "Power": 1,
+          "Wire": false
+        }
+      }
+    },
+    {
+      "Label": "Live 0.65",
+      "Compression": 0.65,
+      "Source": 0,
+      "VertexError": 2.580452682643397e-7,
+      "NormalError": 0.000003414064628448621,
+      "Rays": 192,
+      "MaximumRayError": 0.00001318902111790976,
+      "StaleDisagreements": 134,
+      "Metrics": {
+        "Ready": true,
+        "Error": null,
+        "Completed": 4,
+        "Samples": 1,
+        "Revision": 4,
+        "Busy": false,
+        "Compression": 0.65,
+        "GeometryMilliseconds": 0,
+        "Width": 320,
+        "Height": 216,
+        "Errors": [],
+        "Adapter": {
+          "Vendor": "google",
+          "Architecture": "swiftshader",
+          "Description": "",
+          "Timestamp": true,
+          "Software": true
+        },
+        "Timings": [
+          {
+            "Name": "Vertices + triangles",
+            "Milliseconds": 1.304882
+          },
+          {
+            "Name": "BVH refit",
+            "Milliseconds": 0.724202
+          },
+          {
+            "Name": "Raster",
+            "Milliseconds": 10.950925
+          },
+          {
+            "Name": "Diffuse paths",
+            "Milliseconds": 25.922366
+          },
+          {
+            "Name": "Display",
+            "Milliseconds": 37.237206
+          }
+        ],
+        "GpuMilliseconds": 76.13958099999999,
+        "TraceRevision": 4,
+        "GeometryChanged": true,
+        "Configuration": {
+          "Compression": 0.65,
+          "Animate": false,
+          "Source": 0,
+          "Frozen": false,
+          "View": 3,
+          "Bounces": 3,
+          "Samples": 1,
+          "Scale": 0.65,
+          "Exposure": 1,
+          "Power": 1,
+          "Wire": false
+        }
+      }
+    },
+    {
+      "Label": "Interpolated VAT",
+      "Compression": 0.373,
+      "Source": 1,
+      "VertexError": 2.0978260284465478e-7,
+      "NormalError": 0.0000020495819963439743,
+      "Rays": 192,
+      "MaximumRayError": 0.000002201671655654991,
+      "StaleDisagreements": 122,
+      "Metrics": {
+        "Ready": true,
+        "Error": null,
+        "Completed": 5,
+        "Samples": 1,
+        "Revision": 5,
+        "Busy": false,
+        "Compression": 0.373,
+        "GeometryMilliseconds": 0,
+        "Width": 320,
+        "Height": 216,
+        "Errors": [],
+        "Adapter": {
+          "Vendor": "google",
+          "Architecture": "swiftshader",
+          "Description": "",
+          "Timestamp": true,
+          "Software": true
+        },
+        "Timings": [
+          {
+            "Name": "Vertices + triangles",
+            "Milliseconds": 0.587467
+          },
+          {
+            "Name": "BVH refit",
+            "Milliseconds": 1.376866
+          },
+          {
+            "Name": "Raster",
+            "Milliseconds": 11.533742
+          },
+          {
+            "Name": "Diffuse paths",
+            "Milliseconds": 24.862265
+          },
+          {
+            "Name": "Display",
+            "Milliseconds": 38.877166
+          }
+        ],
+        "GpuMilliseconds": 77.237506,
+        "TraceRevision": 5,
+        "GeometryChanged": true,
+        "Configuration": {
+          "Compression": 0.65,
+          "Animate": false,
+          "Source": 1,
+          "Frozen": false,
+          "View": 3,
+          "Bounces": 3,
+          "Samples": 1,
+          "Scale": 0.65,
+          "Exposure": 1,
+          "Power": 1,
+          "Wire": false
+        }
+      }
+    },
+    {
+      "Label": "External solver position stream",
+      "Compression": 0.4,
+      "Source": 2,
+      "VertexError": 1.7101128024776813e-7,
+      "NormalError": 0.0000029706102370186116,
+      "Rays": 192,
+      "MaximumRayError": 0.0000016863352811924415,
+      "StaleDisagreements": 122,
+      "Metrics": {
+        "Ready": true,
+        "Error": null,
+        "Completed": 6,
+        "Samples": 1,
+        "Revision": 6,
+        "Busy": false,
+        "Compression": 0.4,
+        "GeometryMilliseconds": 0,
+        "Width": 320,
+        "Height": 216,
+        "Errors": [],
+        "Adapter": {
+          "Vendor": "google",
+          "Architecture": "swiftshader",
+          "Description": "",
+          "Timestamp": true,
+          "Software": true
+        },
+        "Timings": [
+          {
+            "Name": "Vertices + triangles",
+            "Milliseconds": 0.355607
+          },
+          {
+            "Name": "BVH refit",
+            "Milliseconds": 0.977192
+          },
+          {
+            "Name": "Raster",
+            "Milliseconds": 41.930867
+          },
+          {
+            "Name": "Diffuse paths",
+            "Milliseconds": 24.327012
+          },
+          {
+            "Name": "Display",
+            "Milliseconds": 37.071512
+          }
+        ],
+        "GpuMilliseconds": 104.66219,
+        "TraceRevision": 6,
+        "GeometryChanged": true,
+        "Configuration": {
+          "Compression": 0.65,
+          "Animate": false,
+          "Source": 2,
+          "Frozen": false,
+          "View": 3,
+          "Bounces": 3,
+          "Samples": 1,
+          "Scale": 0.65,
+          "Exposure": 1,
+          "Power": 1,
+          "Wire": false
+        }
+      }
+    }
+  ],
+  "Lighting": {
+    "Full": {
+      "Mean": 0.3394684554989801,
+      "Maximum": 12,
+      "NonFinite": 0,
+      "Count": 43148,
+      "FloorMean": 0.17742298656269606,
+      "Samples": 16
+    },
+    "Direct": {
+      "Mean": 0.3287306623317853,
+      "Maximum": 12,
+      "NonFinite": 0,
+      "Count": 43148,
+      "FloorMean": 0.17066577947188238,
+      "Samples": 16
+    },
+    "Indirect": {
+      "Mean": 0.010737793119567511,
+      "Maximum": 0.1975487470626831,
+      "NonFinite": 0,
+      "Count": 43148,
+      "FloorMean": 0.006757207071411533,
+      "Samples": 16
+    },
+    "DecompositionMaximumError": 1.4156103134155273e-7,
+    "Dark": {
+      "Mean": 0,
+      "Maximum": 0,
+      "NonFinite": 0,
+      "Count": 43148,
+      "FloorMean": 0,
+      "Samples": 1
+    },
+    "Frozen": {
+      "Mean": 0.3334330163697163,
+      "Maximum": 12,
+      "NonFinite": 0,
+      "Count": 43148,
+      "FloorMean": 0.17410154202142028,
+      "Samples": 16
+    },
+    "FrozenMeanAbsoluteDifference": 0.00935702989574181,
+    "FrozenIndirect": {
+      "Mean": 0.010224507099912346,
+      "Maximum": 0.20797228813171387,
+      "NonFinite": 0,
+      "Count": 43148,
+      "FloorMean": 0.007135558762450169,
+      "Samples": 16
+    },
+    "FrozenIndirectMeanAbsoluteDifference": 0.0026180320029885033,
+    "Loaded": {
+      "Mean": 0.33935229998807415,
+      "Maximum": 12,
+      "NonFinite": 0,
+      "Count": 43148,
+      "FloorMean": 0.17709507553550624,
+      "Samples": 48
+    },
+    "AccumulationInvalidation": true
+  },
+  "Captures": [
+    "04FrozenGeometryWrong",
+    "02LoadedCurrentGI",
+    "01UnloadedCurrentGI",
+    "03IndirectOnly",
+    "05ActualDeformedQuads",
+    "06VertexTexture",
+    "07CleanView",
+    "08Mobile"
+  ],
+  "SourceHashes": {
+    "DeformationPanel.css": "a7656ee8618dbfc7984f895947ad355cecc177f72d97cc909d9fb0f2017c6d72",
+    "DeformationPanel.js": "a8a5b4752b359d32132d09b69ecaa2f3fa469af21875c4ce470e96a82133069d",
+    "DeformationSpecification.js": "7e2778047ba3b461fe3e70601acc81b922b750eb871d604099dd0136ea6e0488",
+    "TransportIntegrator.js": "0afa19e2abee48e3387117876dda886b6c77e4896939c7b6eff00a0826e472f0",
+    "index.html": "5391baaadfd533372518b5a25c4f6596dd2eda660154e3c7016333aaa8fb525c"
+  },
+  "Adapter": {
+    "Vendor": "google",
+    "Architecture": "swiftshader",
+    "Description": "",
+    "Timestamp": true,
+    "Software": true
+  },
+  "Browser": "133.0.6943.0",
+  "Radiometry": {
+    "Receivers": 20,
+    "SamplesPerReceiver": 64,
+    "OccludedSamples": 601,
+    "MaximumAbsoluteError": 5.579038625525001e-8
+  },
+  "VatPoseError": 0.00012605175858307338,
+  "MovingTimings": [
+    {
+      "Ready": true,
+      "Error": null,
+      "Completed": 45,
+      "Samples": 1,
+      "Revision": 12,
+      "Busy": false,
+      "Compression": 0.1,
+      "GeometryMilliseconds": 0,
+      "Width": 320,
+      "Height": 216,
+      "Errors": [],
+      "Adapter": {
+        "Vendor": "google",
+        "Architecture": "swiftshader",
+        "Description": "",
+        "Timestamp": true,
+        "Software": true
+      },
+      "Timings": [
+        {
+          "Name": "Vertices + triangles",
+          "Milliseconds": 0.320545
+        },
+        {
+          "Name": "BVH refit",
+          "Milliseconds": 0.509079
+        },
+        {
+          "Name": "Raster",
+          "Milliseconds": 10.417666
+        },
+        {
+          "Name": "Diffuse paths",
+          "Milliseconds": 1254.136804
+        },
+        {
+          "Name": "Display",
+          "Milliseconds": 37.242868
+        }
+      ],
+      "GpuMilliseconds": 1302.626962,
+      "TraceRevision": 12,
+      "GeometryChanged": true,
+      "Configuration": {
+        "Compression": 0.65,
+        "Animate": false,
+        "Source": 0,
+        "Frozen": false,
+        "View": 0,
+        "Bounces": 3,
+        "Samples": 1,
+        "Scale": 0.65,
+        "Exposure": 1,
+        "Power": 1,
+        "Wire": false
+      }
+    },
+    {
+      "Ready": true,
+      "Error": null,
+      "Completed": 46,
+      "Samples": 1,
+      "Revision": 13,
+      "Busy": false,
+      "Compression": 0.35,
+      "GeometryMilliseconds": 0,
+      "Width": 320,
+      "Height": 216,
+      "Errors": [],
+      "Adapter": {
+        "Vendor": "google",
+        "Architecture": "swiftshader",
+        "Description": "",
+        "Timestamp": true,
+        "Software": true
+      },
+      "Timings": [
+        {
+          "Name": "Vertices + triangles",
+          "Milliseconds": 11.633023
+        },
+        {
+          "Name": "BVH refit",
+          "Milliseconds": 1.587568
+        },
+        {
+          "Name": "Raster",
+          "Milliseconds": 9.741616
+        },
+        {
+          "Name": "Diffuse paths",
+          "Milliseconds": 1254.629081
+        },
+        {
+          "Name": "Display",
+          "Milliseconds": 37.30949
+        }
+      ],
+      "GpuMilliseconds": 1314.9007780000002,
+      "TraceRevision": 13,
+      "GeometryChanged": true,
+      "Configuration": {
+        "Compression": 0.65,
+        "Animate": false,
+        "Source": 0,
+        "Frozen": false,
+        "View": 0,
+        "Bounces": 3,
+        "Samples": 1,
+        "Scale": 0.65,
+        "Exposure": 1,
+        "Power": 1,
+        "Wire": false
+      }
+    },
+    {
+      "Ready": true,
+      "Error": null,
+      "Completed": 47,
+      "Samples": 1,
+      "Revision": 14,
+      "Busy": false,
+      "Compression": 0.6,
+      "GeometryMilliseconds": 0,
+      "Width": 320,
+      "Height": 216,
+      "Errors": [],
+      "Adapter": {
+        "Vendor": "google",
+        "Architecture": "swiftshader",
+        "Description": "",
+        "Timestamp": true,
+        "Software": true
+      },
+      "Timings": [
+        {
+          "Name": "Vertices + triangles",
+          "Milliseconds": 15.331832
+        },
+        {
+          "Name": "BVH refit",
+          "Milliseconds": 1.626665
+        },
+        {
+          "Name": "Raster",
+          "Milliseconds": 9.684868
+        },
+        {
+          "Name": "Diffuse paths",
+          "Milliseconds": 1234.009679
+        },
+        {
+          "Name": "Display",
+          "Milliseconds": 37.138382
+        }
+      ],
+      "GpuMilliseconds": 1297.791426,
+      "TraceRevision": 14,
+      "GeometryChanged": true,
+      "Configuration": {
+        "Compression": 0.65,
+        "Animate": false,
+        "Source": 0,
+        "Frozen": false,
+        "View": 0,
+        "Bounces": 3,
+        "Samples": 1,
+        "Scale": 0.65,
+        "Exposure": 1,
+        "Power": 1,
+        "Wire": false
+      }
+    }
+  ],
+  "PauseResume": true,
+  "Animation": {
+    "Ready": true,
+    "Error": null,
+    "Completed": 5,
+    "Samples": 1,
+    "Revision": 5,
+    "Busy": false,
+    "Compression": 0.09212291840224243,
+    "GeometryMilliseconds": 0,
+    "Width": 128,
+    "Height": 88,
+    "Errors": [],
+    "Adapter": {
+      "Vendor": "google",
+      "Architecture": "swiftshader",
+      "Description": "",
+      "Timestamp": true,
+      "Software": true
+    },
+    "Timings": [
+      {
+        "Name": "Vertices + triangles",
+        "Milliseconds": 6.0988
+      },
+      {
+        "Name": "BVH refit",
+        "Milliseconds": 27.610517
+      },
+      {
+        "Name": "Raster",
+        "Milliseconds": 29.527039
+      },
+      {
+        "Name": "Diffuse paths",
+        "Milliseconds": 229.3902
+      },
+      {
+        "Name": "Display",
+        "Milliseconds": 43.948
+      }
+    ],
+    "GpuMilliseconds": 336.574556,
+    "TraceRevision": 5,
+    "GeometryChanged": true,
+    "Configuration": {
+      "Compression": 0.65,
+      "Animate": true,
+      "Source": 0,
+      "Frozen": false,
+      "View": 0,
+      "Bounces": 3,
+      "Samples": 1,
+      "Scale": 0.65,
+      "Exposure": 1,
+      "Power": 1,
+      "Wire": false
+    }
+  },
+  "Passed": true
+}

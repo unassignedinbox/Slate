@@ -4,6 +4,7 @@ These browser design studies are separate from the native C++ editor.
 
 | Prototype | Entry point |
 | --- | --- |
+| Deforming quads — current-triangle WebGPU GI | [Open demo](DeformationIntegrator/index.html) |
 | Radiance Transport — native WebGPU | [Open demo](RadianceIntegrator/index.html) |
 | SolidArc — native CAD in WebAssembly with a Fluid-style workspace | [SolidArc/index.html](SolidArc/index.html) |
 | Frontier Editor — outliner, inspector and sliding Construct menu | [FrontierEditor/index.html](FrontierEditor/index.html) |
