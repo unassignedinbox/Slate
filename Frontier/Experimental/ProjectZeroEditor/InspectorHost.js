@@ -40,7 +40,7 @@ function Trim() {
   // Filter only the imported additions; the host's existing card list is independent.
   const Allowed = {
     sun: [".mp-hero", ".mp-rail", ".mp-duo"],
-    wind: [".wf-hero", ".mp-rail", ".mp-duo", ".wf-trace"],
+    wind: [".wf-trace", ".mp-rail", ".mp-duo"],
     clouds: [".cl-hero", ".mp-rail", ".mp-duo", ".cl-cover", ".cl-layer"],
     fog: [".fg-hero", ".mp-rail", ".mp-duo", ".fg-vis", ".fg-scatter"],
     pointlight: [".mp-rail", ".mp-duo", ".li-photo"],
@@ -57,6 +57,14 @@ function Trim() {
       if (Child !== Custom && !Child.classList.contains("ident"))
         Child.remove();
     });
+  }
+  Mount.dataset.referenceKind = Kind;
+  if (["wind", "fog", "sun"].includes(Kind))
+    Sheet.querySelector(".ident")?.remove();
+  if (Kind === "wind") Custom.prepend(Custom.querySelector(".wf-trace"));
+  if (Kind === "fog") {
+    const Transport = Custom.querySelector(".fg-scatter");
+    Transport.replaceChildren(Transport.querySelector(".fg-chamber"));
   }
 }
 function Record(Node) {

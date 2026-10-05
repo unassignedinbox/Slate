@@ -12,7 +12,7 @@ const Require = createRequire(
 const { chromium } = Require("playwright");
 const Proof =
   process.env.FRONTIER_PROOF_FOLDER ||
-  path.join(Folder, "Screenshots/Additive");
+  path.join(Folder, "Screenshots/Arrangement");
 fs.mkdirSync(Proof, { recursive: true });
 const Manifest = JSON.parse(
   fs.readFileSync(path.join(Folder, "InspectorDepot/Provenance.json")),
@@ -96,10 +96,20 @@ try {
     if (Previous) {
       await Previous.goto("http://baseline.test/?inspect=" + Id);
       await Previous.locator(".inspector-scroll > [data-panel]").waitFor();
+      const Expected = await Previous.evaluate(Inventory);
+      if (Id === "wind") {
+        // Only the first two native cards change order; no native controls are dropped.
+        [Expected.Cards[0], Expected.Cards[1]] = [
+          Expected.Cards[1],
+          Expected.Cards[0],
+        ];
+        Expected.Headings.sort();
+        Actual.Headings.sort();
+      }
       assert.deepEqual(
         Actual,
-        await Previous.evaluate(Inventory),
-        Id + " original card order and controls match b424bc3",
+        Expected,
+        Id + " original cards/controls retained with requested order",
       );
     }
     if (["world", "showcase", "lighting", "camera", "moon"].includes(Id)) {
@@ -108,30 +118,37 @@ try {
         assert.equal(await Page.locator(".folder-inspector").count(), 1);
     } else {
       assert.equal(await Page.locator(".reference-inspector-copy").count(), 1);
-      assert.ok(
-        await Page.evaluate(
-          () =>
-            !!(
-              document
-                .querySelector(".inspector-scroll > [data-panel]")
-                .compareDocumentPosition(
-                  document.querySelector(".reference-inspector-copy"),
-                ) & Node.DOCUMENT_POSITION_FOLLOWING
-            ),
-        ),
+      const Placement = await Page.evaluate(() => {
+        const Native = document.querySelector(
+          ".inspector-scroll > [data-panel]",
+        );
+        const Reference = document.querySelector(".reference-inspector-copy");
+        if (Native.contains(Reference)) return "inline";
+        return Reference.compareDocumentPosition(Native) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+          ? "before"
+          : "after";
+      });
+      assert.equal(
+        Placement,
+        Id === "wind"
+          ? "inline"
+          : ["sun", "height-fog"].includes(Id)
+            ? "before"
+            : "after",
       );
     }
     if (["world", "wind", "clouds"].includes(Id))
       await Page.screenshot({ path: path.join(Proof, Id + "-original.png") });
     Results.push(
       Id +
-        ": original inspector retained; correct imported-panel presence and append order" +
+        ": original inspector retained; correct imported-panel presence and requested placement" +
         (Previous ? "; baseline card/control inventory matches" : ""),
     );
   }
   for (const [Id, Selectors] of [
     ["sun", [".mp-hero", ".mp-rail", ".mp-duo"]],
-    ["wind", [".wf-hero", ".mp-rail", ".mp-duo", ".wf-trace"]],
+    ["wind", [".wf-trace", ".mp-rail", ".mp-duo"]],
     ["clouds", [".cl-hero", ".mp-rail", ".mp-duo", ".cl-cover", ".cl-layer"]],
     [
       "height-fog",
@@ -168,7 +185,11 @@ try {
       0,
       "Rejected C041 controls are absent",
     );
-    if (["wind", "clouds", "height-fog", "reference-rim-point"].includes(Id)) {
+    if (
+      ["sun", "wind", "clouds", "height-fog", "reference-rim-point"].includes(
+        Id,
+      )
+    ) {
       await Page.locator(".reference-inspector-copy").evaluate((Node) =>
         Node.scrollIntoView({ block: "start" }),
       );
@@ -177,6 +198,89 @@ try {
     }
     Results.push(Id + ": only selected imported cards are added");
   }
+  for (const Id of ["wind", "sun", "height-fog"]) {
+    const Frame = await Open(Id);
+    assert.equal(await Frame.locator(".ident").count(), 0);
+    if (Id === "wind") {
+      assert.deepEqual(
+        await Page.locator(
+          '[data-panel="wind"] > .property-card, [data-panel="wind"] > .reference-inspector-copy',
+        ).evaluateAll((Nodes) =>
+          Nodes.slice(0, 3).map((Node) => Node.dataset.card || "Reference"),
+        ),
+        ["Wind field", "Reference", "Wind controls"],
+      );
+      assert.equal(
+        await Frame.locator(".mpanel > :first-child").getAttribute("class"),
+        "pcard mp-metric wf-trace",
+      );
+      assert.equal(await Frame.locator(".wf-hero").count(), 0);
+      assert.deepEqual(
+        await Frame.locator(".wf-specs > div").evaluateAll((Nodes) =>
+          Nodes.map((Node) => getComputedStyle(Node).backgroundColor),
+        ),
+        Array(4).fill("rgba(0, 0, 0, 0)"),
+      );
+      await Page.locator(".reference-inspector-copy").evaluate((Node) =>
+        Node.scrollIntoView({ block: "start" }),
+      );
+      await Page.waitForTimeout(400);
+      const Trace = () =>
+        Frame.locator(".wf-trace canvas").evaluate((Node) => Node.toDataURL());
+      const Before = await Trace();
+      await Page.waitForTimeout(600);
+      assert.notEqual(
+        await Trace(),
+        Before,
+        "Anemometer animates after removal of the standalone hero",
+      );
+      Results.push(
+        "Wind: composite first, Anemometer second; transparent statistic tiles; chart animates",
+      );
+    } else {
+      assert.equal(
+        await Page.locator(".inspector-scroll > :first-child").getAttribute(
+          "class",
+        ),
+        "reference-inspector-copy",
+      );
+      if (Id === "height-fog") {
+        assert.deepEqual(
+          await Frame.locator(".fg-scatter > *").evaluateAll((Nodes) =>
+            Nodes.map((Node) => Node.className),
+          ),
+          ["mp-meter fg-chamber"],
+        );
+        assert.equal(await Frame.locator(".fg-scatter canvas").count(), 1);
+        await Page.locator(".inspector-scroll").evaluate((Node) => {
+          const Frame = Node.querySelector("iframe");
+          Node.scrollTop =
+            Frame.offsetTop + Frame.clientHeight - Node.clientHeight;
+        });
+        await Page.screenshot({
+          path: path.join(Proof, "height-fog-chamber.png"),
+        });
+      }
+      Results.push(
+        Id +
+          ": preview first; copied identity removed" +
+          (Id === "height-fog"
+            ? "; Light transport contains only the beam chamber"
+            : ""),
+      );
+    }
+  }
+  await Page.setViewportSize({ width: 1100, height: 900 });
+  const Narrow = await Open("wind");
+  assert.equal(
+    await Narrow.evaluate(
+      () => document.documentElement.scrollWidth > innerWidth,
+    ),
+    false,
+  );
+  await Page.screenshot({ path: path.join(Proof, "wind-narrow.png") });
+  Results.push("Narrow Wind inspector: no horizontal iframe overflow");
+  await Page.setViewportSize({ width: 1440, height: 1000 });
   let Frame = await Open("clouds");
   const Control = Frame.locator(".cl-layer .step input").first();
   const Before = Number(await Control.inputValue());

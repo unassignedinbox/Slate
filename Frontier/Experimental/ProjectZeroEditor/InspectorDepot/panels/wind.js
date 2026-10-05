@@ -498,7 +498,7 @@ export function windPanel(node, ctx) {
   /* ── the only panel that has to keep moving ────────────────────────────────────────────── */
   let raf = 0, alive = true, visible = true, live = 0;
   const io = new IntersectionObserver(es => { visible = es[0].isIntersecting; }, { threshold: 0 });
-  io.observe(hero);
+  io.observe(mc); // Observe the retained Anemometer, not the removed standalone hero.
   const frame = () => {
     if (!alive) return;
     const now = performance.now() / 1000;

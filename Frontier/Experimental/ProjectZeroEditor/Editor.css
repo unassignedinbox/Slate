@@ -2831,3 +2831,6 @@ img {
     min-width: 28px;
   }
 }
+
+/* The second Wind card is an inline addition, not another padded inspector stack. */
+.specialized-inspector.wind > .reference-inspector-copy { margin-bottom: 16px; }

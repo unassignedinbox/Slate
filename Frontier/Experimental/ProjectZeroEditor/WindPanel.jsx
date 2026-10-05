@@ -11,7 +11,7 @@ export function WindCanvas({
   Field,
   Active = true,
   Playing = true,
-  Vectors = true,
+  Vectors = false,
   Gradient = true,
   Particles = true,
   Label = "Combined wind vector field",
@@ -30,7 +30,7 @@ export function WindCanvas({
       Before = 0,
       Time = 0,
       Count = 0;
-    const Points = Array.from({ length: 150 }, (_, Index) => ({
+    const Points = Array.from({ length: 190 }, (_, Index) => ({
       X: ((Index * 73) % 151) / 151,
       Y: ((Index * 43) % 149) / 149,
     }));
@@ -129,11 +129,38 @@ export function WindCanvas({
           }
           const Length = Math.hypot(VX, VZ);
           if (Length < 0.01) continue;
-          Context.strokeStyle = "#dbf1e5b0";
-          Context.lineWidth = 1.2;
+          // Reference-style fading flow strokes, evaluated through the composite field.
+          // Keep the existing blue/green/gold speed palette rather than the reference teal.
+          const StrokeLength = 7 + Math.min(1, Length / 30) * 34;
+          const Trail = [[X, Y]];
+          let TailX = X,
+            TailY = Y;
+          for (let Step = 0; Step < 5; Step++) {
+            const [VelocityX, VelocityZ] = Sample(TailX, TailY);
+            const ScreenX = (VelocityX * W) / Field.Width,
+              ScreenY = (VelocityZ * H) / Field.Depth;
+            const ScreenSpeed = Math.hypot(ScreenX, ScreenY);
+            if (ScreenSpeed < 0.0001) break;
+            TailX -= ((ScreenX / ScreenSpeed) * StrokeLength) / 5;
+            TailY -= ((ScreenY / ScreenSpeed) * StrokeLength) / 5;
+            Trail.push([TailX, TailY]);
+          }
+          const Fade = Context.createLinearGradient(
+            TailX,
+            TailY,
+            X + 0.001,
+            Y + 0.001,
+          );
+          Fade.addColorStop(0, Colour(Length, 0));
+          Fade.addColorStop(1, Colour(Length, 0.9));
+          Context.strokeStyle = Fade;
+          Context.lineWidth = 0.9 + Math.min(1, Length / 30) * 1.3;
           Context.beginPath();
-          Context.moveTo(X, Y);
-          Context.lineTo(X + (VX / Length) * 5, Y + (VZ / Length) * 5);
+          Trail.forEach(([TrailX, TrailY], Index) =>
+            Index
+              ? Context.lineTo(TrailX, TrailY)
+              : Context.moveTo(TrailX, TrailY),
+          );
           Context.stroke();
         }
       Context.fillStyle = "#d4e5df";
@@ -158,7 +185,8 @@ export function WindCanvas({
         <span>30+ m/s</span>
       </div>
       <small>
-        Arrows + speed gradient · particles at 8× time · horizontal XZ slice
+        Fading flow lines · composite speed colours · 8× time · horizontal XZ
+        slice
       </small>
     </div>
   );
@@ -486,7 +514,7 @@ export default function WindEditor({
   const Field = ResolveWind(Values),
     [Selection, Select] = useState(Field.Components[0]?.Id),
     [Playing, Play] = useState(true),
-    [Vectors, ShowVectors] = useState(true),
+    [Vectors, ShowVectors] = useState(false),
     [Gradient, ShowGradient] = useState(true),
     [Particles, ShowParticles] = useState(true),
     Root = useRef(null),

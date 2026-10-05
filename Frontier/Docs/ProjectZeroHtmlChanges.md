@@ -2279,3 +2279,33 @@ Cloud deck persistence, Folder notes and the restored WindEditor. All checks pas
 `CheckWorkspaceCards.mjs` (including 2,500-record folders) and `CheckWind.mjs` also pass serially. Receipts and actual
 captures are in `Screenshots/Additive/`. Fontshare connection failures remain separately reported, not hidden.
 Appended frames are measured synchronously at creation so offscreen rAF throttling cannot collapse their scroll area.
+
+
+## C043 — Wind, Height Fog and Sun card arrangement
+
+2026-10-05. Refines C042 without removing any original inspector cards or restoring the rejected C041 rewrite.
+
+- Wind begins with the existing combined-field card, immediately followed by Anemometer as the second card.
+  Its four statistic cells now have transparent backgrounds and thin separators instead of black tiles.
+  Reading pills use two columns in the narrow inline presentation so numbers and units remain legible.
+  Existing Wind controls and atmospheric modifiers remain below the imported additions.
+- The copied Wind identity with eye/lock controls and the separate wind hero are removed. Reference-style fading
+  strokes now sample the existing combined velocity field in `WindPanel.jsx`, retaining its speed colours and legend.
+  The existing gradient, vector and particle switches remain in WindEditor; vectors default off for the line preview.
+  Directional, gust, radial and tornado calculations, component editing and cloud consumers are unchanged.
+- The copied Sun and Height Fog eye/lock identity rows are removed. Their previews and selected additions appear
+  above the original inspectors. Height Fog Light transport contains only the beam chamber, without its extra
+  title, tape, colour control, toggle and note. All original fog and sun controls remain below.
+- Folder remains the original inspector; Moon Atlas remains excluded. Other additive inspector selections are unchanged.
+
+Anemometer retains the copied reference's illustrative speed trace, not a new measurement of the combined field.
+Its visibility observer now follows the retained Anemometer, so removing the separate hero does not freeze the chart.
+That one-line source adaptation is recorded in `InspectorDepot/Provenance.json`; fourteen other source hashes remain
+unchanged. No saved scene is cleared, and there are no C++ or Project Drive rendering changes.
+
+Verification: the standalone build succeeds (4.40 MiB). `CheckReference.mjs` passes 28 checks with no script errors,
+including original card/control comparisons against `b424bc3`, the intentional Wind reorder, second-card placement,
+transparent statistic cells, live chart animation, preview-first placement, beam-only contents, narrow presentation,
+Folder retention and Cloud deck persistence. `CheckBrowser.mjs`, `CheckWorkspaceCards.mjs` and `CheckWind.mjs` also
+pass serially. Actual captures, HTML SHA256 and receipts are in `Screenshots/Arrangement/`. Official Fontshare requests
+still fail in the sandbox; these captures verify fallback typography, not successful external font delivery.

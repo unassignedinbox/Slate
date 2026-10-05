@@ -1374,6 +1374,16 @@ function App() {
       </footer>
     </>
   );
+  const ReferenceCards = () => (
+    <ReferencePanel
+      Subject={Subject}
+      Rows={Rows}
+      Values={Values}
+      Hidden={Hidden}
+      Collapsed={Collapsed}
+      Apply={ApplyReference}
+    />
+  );
   const PanelBody = (Tab) =>
     Tab === "Outliner" ? (
       Outliner()
@@ -1384,6 +1394,7 @@ function App() {
     ) : Tab === "Inspector" ? (
       <>
         <div className="inspector-scroll" key={Subject.Id}>
+          {["sun", "height-fog"].includes(Subject.Panel) && ReferenceCards()}
           {Subject.ReferenceOnly ? null : Subject.Panel === "group" ? (
             <FolderInspector
               Subject={Subject}
@@ -1431,18 +1442,14 @@ function App() {
               WindFields={WindFields}
               AllValues={Values}
               AllHidden={Hidden}
+              ReferenceCards={
+                Subject.Panel === "wind" ? ReferenceCards() : null
+              }
             />
           )}
-          {HasReferencePanel(Subject) && (
-            <ReferencePanel
-              Subject={Subject}
-              Rows={Rows}
-              Values={Values}
-              Hidden={Hidden}
-              Collapsed={Collapsed}
-              Apply={ApplyReference}
-            />
-          )}
+          {!["sun", "height-fog", "wind"].includes(Subject.Panel) &&
+            HasReferencePanel(Subject) &&
+            ReferenceCards()}
         </div>
         <footer className="inspector-footer">
           <span>{Subject.Description}</span>

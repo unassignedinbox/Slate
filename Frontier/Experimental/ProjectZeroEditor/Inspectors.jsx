@@ -448,6 +448,7 @@ export function Inspector({
   WindFields = [],
   AllValues = {},
   AllHidden = {},
+  ReferenceCards = null,
 }) {
   const Sheet = Panels[Subject.Panel] || Panels.geometry;
   const [MoonSlot, SelectMoon] = useState(0);
@@ -1308,6 +1309,13 @@ export function Inspector({
     Content = (
       <>
         {Header("Environment", Subject.Name)}
+        <WindInspector
+          Values={Values}
+          Change={Change}
+          Open={OpenWind}
+          Hidden={Hidden}
+        />
+        {ReferenceCards}
         <Card Title="Wind controls">
           <div className="tiles">
             <Tile
@@ -1318,12 +1326,6 @@ export function Inspector({
             />
           </div>
         </Card>
-        <WindInspector
-          Values={Values}
-          Change={Change}
-          Open={OpenWind}
-          Hidden={Hidden}
-        />
         <Card Title="Atmospheric modifiers · native draft">
           {Fields("Shear", "Veer", "Turbulence", "Steadiness")}
           {Tiles(["Air shear"])}

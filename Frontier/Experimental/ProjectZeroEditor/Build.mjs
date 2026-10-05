@@ -100,6 +100,10 @@ Assets.ReferenceInspector = `<!doctype html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-${ReferenceHash}'; style-src 'unsafe-inline'; font-src https://cdn.fontshare.com; img-src data:; base-uri 'none'">
 <style>${fs.readFileSync(path.join(Folder, "InspectorDepot/Fontshare.css"), "utf8")}
 ${ReferenceStyle}
+#ReferenceMount[data-reference-kind="wind"]{padding:0;}
+@media(max-width:320px){#ReferenceMount[data-reference-kind="wind"] .mp-rail{grid-template-columns:repeat(2,minmax(0,1fr));}}
+.wf-trace .wf-specs{gap:12px;}
+.wf-trace .wf-specs>div{background:transparent;border:0;border-top:1px solid var(--stroke-strong);border-radius:0;padding:8px 0;}
 html,body{height:auto;overflow:hidden;background:var(--panel)}
 #ReferenceMount{display:block;overflow:hidden;flex:none}
 </style></head><body><div id="ReferenceMount" class="props"></div><script>${ReferenceScript}</script></body></html>`;
