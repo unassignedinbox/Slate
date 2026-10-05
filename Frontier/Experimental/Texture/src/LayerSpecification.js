@@ -60,6 +60,14 @@ export const LayerKinds = [
         Accent: "#c98cff",
         Hint: "A procedural finish — car paint, fabric, metal or plastic — with its own material properties.",
     },
+    {
+        Identifier: "folder",
+        Label: "Folder",
+        Badge: "SET",
+        Glyph: "folder",
+        Accent: "#9fb0c4",
+        Hint: "A set: the layers inside it hide, fade and move together, and collapse out of the way.",
+    },
 ];
 
 export const LayerKindByIdentifier = Object.fromEntries(LayerKinds.map((Kind) => [Kind.Identifier, Kind]));
@@ -176,6 +184,7 @@ export const NextLayerIdentifier = () =>
 };
 
 const DefaultEnabledChannels = {
+    folder: [],
     fill: ["base_color", "specular_roughness", "base_metalness"],
     stroke: ["base_color", "specular_roughness"],
     decal: ["base_color", "specular_roughness", "height"],
@@ -205,6 +214,8 @@ export const CreateLayer = (Kind = "fill", Overrides = {}) =>
         Name: LayerKindByIdentifier[Descriptor].Label,
         Kind: Descriptor,
         Object: "",                 // empty is the whole scene; otherwise the object whose tile this layer paints
+        Parent: "",                 // empty sits at the root of the stack; otherwise the folder this layer is inside
+        Collapsed: false,           // folders only: whether the stack draws what is inside
         Visible: true,
         Locked: false,
         Opacity: 1,
@@ -493,6 +504,8 @@ export const SanitiseLayer = (Candidate) =>
     Layer.Identifier = typeof Candidate.Identifier === "string" ? Candidate.Identifier : Layer.Identifier;
     Layer.Name = typeof Candidate.Name === "string" ? Candidate.Name.slice(0, 64) : Layer.Name;
     Layer.Object = typeof Candidate.Object === "string" ? Candidate.Object.slice(0, 64) : "";
+    Layer.Parent = typeof Candidate.Parent === "string" ? Candidate.Parent.slice(0, 64) : "";
+    Layer.Collapsed = Boolean(Candidate.Collapsed);
     Layer.Visible = Candidate.Visible !== false;
     Layer.Locked = Boolean(Candidate.Locked);
     Layer.Opacity = Clamp(Candidate.Opacity ?? 1, 0, 1);
@@ -579,11 +592,143 @@ export const SanitiseProject = (Candidate) =>
             : Fallback;
     }
     const Layers = Array.isArray(Candidate.Layers) ? Candidate.Layers.map(SanitiseLayer).filter(Boolean) : [];
-    Project.Layers = Layers.length ? Layers.slice(0, 64) : DefaultStack();
+    Project.Layers = Layers.length ? OrderStack(Layers.slice(0, 64)) : DefaultStack();
     Project.Selection = Project.Layers.some((Layer) => Layer.Identifier === Candidate.Selection)
         ? Candidate.Selection
         : Project.Layers[Project.Layers.length - 1].Identifier;
     return Project;
+};
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Folders. The stack stays one flat array, because that is the order the compositor walks and nothing cheaper exists; a
+// folder is a layer, and the layers inside it name it as their parent. Everything below is pure, so the rules a stack
+// has to obey — no loops, no orphans, children always behind their folder — are testable without a renderer.
+//--------------------------------------------------------------------------------------------------------------------------
+export const FolderLimit = 4;                  // [-] how deeply folders may nest
+
+// Repairs a stack into a tree: parents that do not exist or are not folders are dropped, loops and over-deep chains are
+// broken at the layer that closes them, and the array is rebuilt so every folder sits directly behind its own children.
+// The array runs bottom to top, and the stack is drawn top down, so a folder's row lands above what is inside it.
+export const OrderStack = (Layers) =>
+{
+    const ByIdentifier = new Map(Layers.map((Layer) => [Layer.Identifier, Layer]));
+    for (const Layer of Layers)
+    {
+        const Parent = Layer.Parent ? ByIdentifier.get(Layer.Parent) : null;
+        if (Layer.Parent && (!Parent || Parent === Layer || Parent.Kind !== "folder")) Layer.Parent = "";
+    }
+    for (const Layer of Layers)
+    {
+        const Walked = new Set([Layer.Identifier]);
+        let Chain = Layer.Parent ? ByIdentifier.get(Layer.Parent) : null;
+        let Depth = 0;
+        while (Chain)
+        {
+            if (Walked.has(Chain.Identifier) || Depth >= FolderLimit)
+            {
+                Layer.Parent = "";
+                break;
+            }
+            Walked.add(Chain.Identifier);
+            Depth += 1;
+            Chain = Chain.Parent ? ByIdentifier.get(Chain.Parent) : null;
+        }
+    }
+    const Ordered = [];
+    const Visit = (Parent) =>
+    {
+        for (const Layer of Layers)
+        {
+            if ((Layer.Parent || "") !== Parent) continue;
+            if (Layer.Kind === "folder") Visit(Layer.Identifier);
+            Ordered.push(Layer);
+        }
+    };
+    Visit("");
+    return Ordered;
+};
+
+// The folders a layer sits inside, outermost first.
+export const LayerAncestry = (Layers, Identifier) =>
+{
+    const ByIdentifier = new Map(Layers.map((Layer) => [Layer.Identifier, Layer]));
+    const Chain = [];
+    let Walk = ByIdentifier.get(Identifier);
+    let Guard = 0;
+    while (Walk?.Parent && Guard < FolderLimit + 1)
+    {
+        const Parent = ByIdentifier.get(Walk.Parent);
+        if (!Parent) break;
+        Chain.unshift(Parent);
+        Walk = Parent;
+        Guard += 1;
+    }
+    return Chain;
+};
+
+export const LayerDepth = (Layers, Identifier) => LayerAncestry(Layers, Identifier).length;
+
+// A layer and everything inside it, in stack order. For anything but a folder that is just the layer itself.
+// 🔴 The tree is walked through a parent map rather than by sweeping the array: a layer sits *behind* its folder, so a
+//    single forward pass meets a grandchild before the folder that would have admitted it, and quietly loses it.
+export const LayerSubtree = (Layers, Identifier) =>
+{
+    const Children = new Map();
+    for (const Layer of Layers)
+    {
+        const Key = Layer.Parent || "";
+        if (!Children.has(Key)) Children.set(Key, []);
+        Children.get(Key).push(Layer);
+    }
+    const Held = new Set([Identifier]);
+    const Walk = (Key) =>
+    {
+        for (const Layer of Children.get(Key) || [])
+        {
+            if (Held.has(Layer.Identifier)) continue;
+            Held.add(Layer.Identifier);
+            Walk(Layer.Identifier);
+        }
+    };
+    Walk(Identifier);
+    return Layers.filter((Layer) => Held.has(Layer.Identifier));
+};
+
+export const LayerInside = (Layers, Identifier) => LayerSubtree(Layers, Identifier).filter((Layer) => Layer.Identifier !== Identifier);
+
+// Whether a folder may be dropped onto a target: never into itself, and never into anything it contains.
+export const CanHold = (Layers, Identifier, TargetIdentifier) =>
+{
+    if (!TargetIdentifier || Identifier === TargetIdentifier) return false;
+    return !LayerInside(Layers, Identifier).some((Layer) => Layer.Identifier === TargetIdentifier);
+};
+
+// The list the compositor is actually handed: folders dissolve into the layers they hold, a hidden or faded folder
+// carries that down to its children, and an isolated layer leaves everything outside it out of the pass. Groups are
+// pass-through — a child keeps its own blend against the stack below, the folder only weighs it.
+export const CompositeOrdering = (Layers, Solo = "") =>
+{
+    const ByIdentifier = new Map(Layers.map((Layer) => [Layer.Identifier, Layer]));
+    const Isolated = Solo && ByIdentifier.has(Solo) ? new Set(LayerSubtree(Layers, Solo).map((Layer) => Layer.Identifier)) : null;
+    const Lifted = new Set(Isolated ? [Solo, ...LayerAncestry(Layers, Solo).map((Layer) => Layer.Identifier)] : []);
+    const Ordering = [];
+    for (const Layer of Layers)
+    {
+        if (Layer.Kind === "folder") continue;
+        if (Isolated && !Isolated.has(Layer.Identifier)) continue;
+        let Weight = Lifted.has(Layer.Identifier) || Layer.Visible ? Layer.Opacity : 0;
+        let Chain = Layer.Parent ? ByIdentifier.get(Layer.Parent) : null;
+        let Guard = 0;
+        while (Chain && Guard <= FolderLimit)
+        {
+            Weight *= Lifted.has(Chain.Identifier) || Chain.Visible ? Chain.Opacity : 0;
+            Chain = Chain.Parent ? ByIdentifier.get(Chain.Parent) : null;
+            Guard += 1;
+        }
+        if (Weight <= 0.0005) continue;
+        Ordering.push({ ...Layer, Visible: true, Opacity: Weight });
+    }
+    return Ordering;
 };
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -602,6 +747,7 @@ export const LayerChannelCount = (Layer) =>
 
 export const LayerSummary = (Layer) =>
 {
+    if (Layer.Kind === "folder") return "folder";
     const Channels = LayerChannelCount(Layer);
     const Mask =
         Layer.Mask.Kind === "none"

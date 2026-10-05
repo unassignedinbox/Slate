@@ -72,6 +72,13 @@ import {
     MaskKinds,
     CreateMark,
     MarkLimit,
+    OrderStack,
+    LayerAncestry,
+    LayerSubtree,
+    LayerInside,
+    CanHold,
+    CompositeOrdering,
+    FolderLimit,
 } from "./LayerSpecification.js";
 import { DecalLibrary, DecalCategories, DecalResolution, FontArchive, RasteriseDecal, SanitiseMarkup } from "./DecalSpecification.js";
 
@@ -370,6 +377,7 @@ export class TexturePanel
         this.ScopedStack = false;
         this.HoverTile = FirstTile;
         this.HoverObject = "";
+        this.Solo = "";
         this.PickCandidate = null;
         this.Placement = null;
         this.MovingMark = "";
@@ -461,6 +469,11 @@ export class TexturePanel
         return this.Layers.findIndex((Layer) => Layer.Identifier === Identifier);
     }
 
+    LayerByIdentifier(Identifier)
+    {
+        return this.Layers.find((Layer) => Layer.Identifier === Identifier) || null;
+    }
+
     SelectLayer(Identifier)
     {
         if (this.Project.Selection === Identifier) return;
@@ -519,7 +532,7 @@ export class TexturePanel
             if (Layer.Kind === "stroke") this.Integrator.EnsureCoverage(Layer);
             if (Layer.Mask.Kind === "stroke") this.Integrator.EnsureMask(Layer);
         }
-        this.Integrator.Composite(this.Layers, this.Project.Material);
+        this.Integrator.Composite(CompositeOrdering(this.Layers, this.Solo), this.Project.Material);
         // Generator and colour masks exist only as a recipe until something resolves them, so the preview pass runs
         // whenever the viewport is actually showing a mask.
         if (this.Display === "mask" || this.Display === "mask_overlay")
@@ -1575,7 +1588,32 @@ export class TexturePanel
             if (Toggle)
             {
                 const Layer = this.Layers.find((Entry) => Entry.Identifier === Toggle.dataset.toggleLayer);
-                this.CaptureStack(() => (Layer.Visible = !Layer.Visible));
+                // Alt is the shortcut every stack has: hold it and the eye isolates instead of hiding.
+                if (Event.altKey) this.IsolateLayer(Layer.Identifier);
+                else this.CaptureStack(() => (Layer.Visible = !Layer.Visible));
+                return;
+            }
+            const Fold = Event.target.closest("[data-collapse-layer]");
+            if (Fold)
+            {
+                Event.stopPropagation();
+                const Layer = this.LayerByIdentifier(Fold.dataset.collapseLayer);
+                if (Layer) Layer.Collapsed = !Layer.Collapsed;
+                this.RenderStack();
+                return;
+            }
+            const Alone = Event.target.closest("[data-solo-layer]");
+            if (Alone)
+            {
+                Event.stopPropagation();
+                this.IsolateLayer(Alone.dataset.soloLayer);
+                return;
+            }
+            const Loosen = Event.target.closest("[data-ungroup-layer]");
+            if (Loosen)
+            {
+                Event.stopPropagation();
+                this.UngroupFolder(Loosen.dataset.ungroupLayer);
                 return;
             }
             // Deleting is a row action, not a menu entry: the layer you mean is the one your pointer is already on.
@@ -1610,35 +1648,62 @@ export class TexturePanel
             Event.dataTransfer.effectAllowed = "move";
             Row.classList.add("dragging");
         });
+        // Dropping onto the middle of a folder's row puts the layer inside it; the top and bottom thirds of any row
+        // mean "beside this one", which is how a layer gets back out of a folder again.
+        const Landing = (Event, Row) =>
+        {
+            if (!Row || this.LayerByIdentifier(Row.dataset.layer)?.Kind !== "folder") return false;
+            const Bounds = Row.getBoundingClientRect();
+            return Event.clientY > Bounds.top + Bounds.height * 0.3 && Event.clientY < Bounds.bottom - Bounds.height * 0.3;
+        };
         Stack.addEventListener("dragover", (Event) =>
         {
             Event.preventDefault();
             const Row = Event.target.closest("[data-layer]");
-            SelectAll(".layer-row.drop-target").forEach((Element) => Element.classList.remove("drop-target"));
-            if (Row && Row.dataset.layer !== this.DragIdentifier) Row.classList.add("drop-target");
+            SelectAll(".layer-row.drop-target, .layer-row.drop-inside").forEach((Element) =>
+                Element.classList.remove("drop-target", "drop-inside"),
+            );
+            if (!Row || Row.dataset.layer === this.DragIdentifier) return;
+            if (this.DragIdentifier && !CanHold(this.Layers, this.DragIdentifier, Row.dataset.layer)) return;
+            Row.classList.add(Landing(Event, Row) ? "drop-inside" : "drop-target");
         });
         Stack.addEventListener("drop", (Event) =>
         {
             Event.preventDefault();
             const Row = Event.target.closest("[data-layer]");
-            SelectAll(".layer-row.drop-target").forEach((Element) => Element.classList.remove("drop-target"));
+            const Inside = Landing(Event, Row);
+            SelectAll(".layer-row.drop-target, .layer-row.drop-inside").forEach((Element) =>
+                Element.classList.remove("drop-target", "drop-inside"),
+            );
             if (!Row || !this.DragIdentifier) return;
-            this.MoveLayer(this.DragIdentifier, Row.dataset.layer);
+            this.MoveLayer(this.DragIdentifier, Row.dataset.layer, Inside);
             this.DragIdentifier = "";
         });
         Stack.addEventListener("dragend", () =>
         {
             SelectAll(".layer-row.dragging").forEach((Element) => Element.classList.remove("dragging"));
-            SelectAll(".layer-row.drop-target").forEach((Element) => Element.classList.remove("drop-target"));
+            SelectAll(".layer-row.drop-target, .layer-row.drop-inside").forEach((Element) =>
+                Element.classList.remove("drop-target", "drop-inside"),
+            );
         });
     }
 
     VisibleLayers()
     {
+        // A filter or a search flattens the tree — what matches is what shows, wherever it lives.
+        const Flattened = this.LayerFilter !== "all" || !!this.LayerQuery;
+        const Folded = new Set();
+        if (!Flattened)
+            for (const Layer of this.Layers)
+            {
+                if (Layer.Kind !== "folder" || !Layer.Collapsed) continue;
+                for (const Inside of LayerInside(this.Layers, Layer.Identifier)) Folded.add(Inside.Identifier);
+            }
         return [...this.Layers]
             .reverse()
             .filter((Layer) =>
             {
+                if (Folded.has(Layer.Identifier)) return false;
                 // Scoped to the selected object, the stack shows that object's layers and the scene-wide ones under them.
                 if (this.ScopedStack && Layer.Object && Layer.Object !== this.Project.Object) return false;
                 if (this.LayerFilter === "masked")
@@ -1673,6 +1738,11 @@ export class TexturePanel
                   const Kind = LayerKindByIdentifier[Layer.Kind];
                   const Selected = Layer.Identifier === this.Project.Selection;
                   const Carried = Layer.Mask.Kind !== "none";
+                  const Folder = Layer.Kind === "folder";
+                  const Depth = Math.min(FolderLimit, LayerAncestry(this.Layers, Layer.Identifier).length);
+                  const Held = Folder ? LayerInside(this.Layers, Layer.Identifier).length : 0;
+                  const Isolated = this.Solo === Layer.Identifier;
+                  const Dimmed = !!this.Solo && !Isolated && !LayerSubtree(this.Layers, this.Solo).includes(Layer);
                   // A finish never writes the flat base colour, so the plate shows the colour the recipe starts from.
                   const Swatch = ToHex(
                       (Layer.Kind === "finish" ? Layer.Finish?.ColourA : Layer.Channels.base_color) || [0.8, 0.8, 0.8],
@@ -1685,33 +1755,56 @@ export class TexturePanel
                           ? `Colour key${Layer.Mask.Invert ? " · inverted" : ""}`
                           : `Painted${Layer.Mask.Invert ? " · inverted" : ""}`;
                   return `
-                <div class="layer-row ${Selected ? "selected" : ""} ${Layer.Visible ? "" : "muted"}"
-                     data-layer="${Layer.Identifier}" data-object="${Layer.Kind}" draggable="true"
-                     role="treeitem" aria-selected="${Selected}" tabindex="0">
+                <div class="layer-row ${Selected ? "selected" : ""} ${Layer.Visible ? "" : "muted"} ${Folder ? "folder-row" : ""}
+                     ${Depth ? "nested" : ""} ${Isolated ? "isolated" : ""} ${Dimmed ? "outside" : ""}"
+                     style="--depth:${Depth}" data-layer="${Layer.Identifier}" data-object="${Layer.Kind}" draggable="true"
+                     role="treeitem" aria-expanded="${Folder ? String(!Layer.Collapsed) : "undefined"}"
+                     aria-selected="${Selected}" tabindex="0">
                     <span class="layer-accent"></span>
-                    <span class="layer-swatch" style="--swatch:${Swatch}" data-thumbnail="${Layer.Identifier}">
-                        <canvas width="64" height="64" aria-hidden="true"></canvas>${Icon(Kind.Glyph)}
+                    ${
+                        Folder
+                            ? `<button class="icon-button row-fold" data-collapse-layer="${Layer.Identifier}"
+                                       aria-label="${Layer.Collapsed ? "Open" : "Close"} ${Escape(Layer.Name)}"
+                                       title="${Layer.Collapsed ? "Open" : "Close"} the folder">
+                                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+                               </button>`
+                            : ""
+                    }
+                    <span class="layer-swatch" style="--swatch:${Swatch}" ${Folder ? "" : `data-thumbnail="${Layer.Identifier}"`}>
+                        ${Folder ? "" : '<canvas width="64" height="64" aria-hidden="true"></canvas>'}${Icon(Kind.Glyph)}
                     </span>
                     <span class="layer-copy">
                         <span class="layer-name">${Escape(Layer.Name)}</span>
                         <span class="layer-note">${Escape(LayerBadge(Layer).toLowerCase())} · ${Escape(Layer.Blend)} · ${
-                            Layer.Kind === "decal"
-                                ? `${Layer.Decal.Marks.length} mark${Layer.Decal.Marks.length === 1 ? "" : "s"}`
-                                : `${LayerChannelCount(Layer)} channels`
+                            Folder
+                                ? `${Held} inside`
+                                : Layer.Kind === "decal"
+                                  ? `${Layer.Decal.Marks.length} mark${Layer.Decal.Marks.length === 1 ? "" : "s"}`
+                                  : `${LayerChannelCount(Layer)} channels`
                         }</span>
                     </span>
                     <span class="layer-metric"><strong>${Math.round(Layer.Opacity * 100)}</strong><small>%</small></span>
+                    <button class="icon-button row-solo ${Isolated ? "active" : ""}" data-solo-layer="${Layer.Identifier}"
+                            aria-pressed="${Isolated}" aria-label="Isolate ${Escape(Layer.Name)}"
+                            title="${Isolated ? "Show the whole stack again · I" : "Isolate this layer · I"}">${Icon("focus")}</button>
                     <button class="icon-button row-toggle" data-toggle-layer="${Layer.Identifier}"
                             aria-label="${Layer.Visible ? "Hide" : "Show"} ${Escape(Layer.Name)}"
                             title="${Layer.Visible ? "Hide" : "Show"} layer">${Icon(Layer.Visible ? "eye" : "hidden")}</button>
                     <button class="icon-button row-remove" data-remove-layer="${Layer.Identifier}"
                             aria-label="Delete ${Escape(Layer.Name)}" title="Delete layer · Del">${Icon("trash")}</button>
                     <span class="layer-chips">
-                        <button class="row-chip ${Selected && !Masking ? "targeted" : ""}" data-chip="content"
+                        ${
+                            Folder
+                                ? `<button class="row-chip" data-ungroup-layer="${Layer.Identifier}" title="Let these layers out of the folder">
+                                       ${Icon("up")}Ungroup
+                                   </button>`
+                                : ""
+                        }
+                        <button class="row-chip ${Folder ? "hidden-chip" : ""} ${Selected && !Masking ? "targeted" : ""}" data-chip="content"
                                 data-chip-layer="${Layer.Identifier}" title="Paint into the layer">
                             <span class="chip-swatch" style="--swatch:${Swatch}"></span>Content
                         </button>
-                        <button class="row-chip mask-chip ${Carried ? "present" : "absent"} ${Selected && Masking ? "targeted" : ""}"
+                        <button class="row-chip mask-chip ${Folder ? "hidden-chip" : ""} ${Carried ? "present" : "absent"} ${Selected && Masking ? "targeted" : ""}"
                                 data-chip="mask" data-chip-layer="${Layer.Identifier}"
                                 title="${Carried ? "Paint into the mask" : "Add a mask and paint into it"}">
                             ${Icon(Carried ? "mask" : "plus")}${Escape(MaskNote)}
@@ -1720,8 +1813,13 @@ export class TexturePanel
                 </div>`;
               }).join("")
             : `<div class="outliner-empty">No layers match that filter.</div>`;
+        const Folders = this.Layers.filter((Layer) => Layer.Kind === "folder").length;
+        const Isolating = this.Solo ? ` · isolating ${this.LayerByIdentifier(this.Solo)?.Name || "a layer"}` : "";
         Select("#stack-subtitle").textContent =
-            `${this.Layers.length} layer${this.Layers.length === 1 ? "" : "s"} · ${Masked} masked · top first`;
+            `${this.Layers.length} layer${this.Layers.length === 1 ? "" : "s"} · ${Masked} masked${
+                Folders ? ` · ${Folders} folder${Folders === 1 ? "" : "s"}` : ""
+            }${Isolating} · top first`;
+        Select("#layer-stack").classList.toggle("isolating", !!this.Solo);
         this.RefreshThumbnails();
     }
 
@@ -1729,6 +1827,7 @@ export class TexturePanel
     {
         const Before = structuredClone(this.StackRecord());
         Mutate();
+        this.Project.Layers = OrderStack(this.Project.Layers);
         const After = structuredClone(this.StackRecord());
         this.Revisions.Record({ Kind: "stack", Before, After });
         this.AfterStackChange();
@@ -1753,7 +1852,7 @@ export class TexturePanel
     ApplyStackRecord(Record)
     {
         const Scene = JSON.stringify(this.Project.Objects || []);
-        this.Project.Layers = structuredClone(Record.Layers);
+        this.Project.Layers = OrderStack(structuredClone(Record.Layers));
         this.Project.Selection = Record.Selection;
         this.Project.Material = structuredClone(Record.Material);
         if (Record.Objects)
@@ -1821,10 +1920,17 @@ export class TexturePanel
                     Decal: { SourceKind: "svg", Library: "arrow", Placement: "project" },
                     Channels: { base_color: [0.95, 0.3, 0.22], specular_roughness: 0.3, height: 0.58 },
                 }),
+            folder: () => CreateLayer("folder", { Name: "Folder" }),
         };
         const Factory = Descriptor[Kind] || Descriptor.fill;
         const Layer = Factory();
         if (this.ScopedStack || this.Isolated) Layer.Object = this.Project.Object;
+        // A new layer joins whatever the selection is already in — and an open folder adopts it outright.
+        const Chosen = this.ActiveLayer;
+        if (Chosen && Layer.Kind !== "folder")
+            Layer.Parent = Chosen.Kind === "folder" && !Chosen.Collapsed ? Chosen.Identifier : Chosen.Parent || "";
+        else if (Chosen && Layer.Kind === "folder" && LayerAncestry(this.Layers, Chosen.Identifier).length < FolderLimit - 1)
+            Layer.Parent = Chosen.Parent || "";
         const Index = this.LayerIndex(this.Project.Selection);
         this.CaptureStack(() =>
         {
@@ -1862,17 +1968,95 @@ export class TexturePanel
         return Layer;
     }
 
-    MoveLayer(Identifier, TargetIdentifier)
+    // A dragged layer brings its whole subtree with it. `Inside` is the drop that lands on a folder's own row: the run
+    // is parented to that folder and slid in behind it. Anything else lands beside the target and joins its folder.
+    MoveLayer(Identifier, TargetIdentifier, Inside = false)
     {
-        const From = this.LayerIndex(Identifier);
-        const To = this.LayerIndex(TargetIdentifier);
-        if (From < 0 || To < 0 || From === To) return;
+        const Moving = this.LayerByIdentifier(Identifier);
+        const Target = this.LayerByIdentifier(TargetIdentifier);
+        if (!Moving || !Target || Identifier === TargetIdentifier) return;
+        if (!CanHold(this.Layers, Identifier, TargetIdentifier)) return;
+        const Holder = Inside && Target.Kind === "folder" ? Target.Identifier : Target.Parent || "";
+        if (Holder && LayerAncestry(this.Layers, Holder).length + 1 + this.NestingOf(Identifier) > FolderLimit) return;
+        const Run = LayerSubtree(this.Layers, Identifier);
         this.CaptureStack(() =>
         {
-            const [Layer] = this.Project.Layers.splice(From, 1);
-            this.Project.Layers.splice(To, 0, Layer);
+            const Start = this.Project.Layers.indexOf(Run[0]);
+            this.Project.Layers.splice(Start, Run.length);
+            Moving.Parent = Holder;
+            const Landing = this.Project.Layers.indexOf(Target);
+            const At = Landing < 0 ? this.Project.Layers.length : Landing;
+            this.Project.Layers.splice(At, 0, ...Run);
             this.Project.Selection = Identifier;
         });
+    }
+
+    // How many folder levels a layer carries below it, so a drop cannot push the tree past its limit.
+    NestingOf(Identifier)
+    {
+        const Inside = LayerInside(this.Layers, Identifier);
+        if (!Inside.length) return 0;
+        const Root = LayerAncestry(this.Layers, Identifier).length;
+        return Math.max(...Inside.map((Layer) => LayerAncestry(this.Layers, Layer.Identifier).length - Root));
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // Folders and isolation. A folder holds layers the way a scene holds objects: hide it and everything inside goes with
+    // it, fade it and everything inside fades. Isolating a layer is the other half of the same question — what is this
+    // one actually doing? — and it leaves the rest of the stack out of the composite until it is switched off.
+    //----------------------------------------------------------------------------------------------------------------------
+    GroupSelection()
+    {
+        const Layer = this.ActiveLayer;
+        if (!Layer) return;
+        if (LayerAncestry(this.Layers, Layer.Identifier).length + this.NestingOf(Layer.Identifier) + 1 >= FolderLimit)
+        {
+            this.Notify(`Folders only nest ${FolderLimit} deep.`);
+            return;
+        }
+        const Folder = CreateLayer("folder", { Name: `${Layer.Name} set`, Parent: Layer.Parent || "" });
+        const Run = LayerSubtree(this.Layers, Layer.Identifier);
+        this.CaptureStack(() =>
+        {
+            const Start = this.Project.Layers.indexOf(Run[0]);
+            this.Project.Layers.splice(Start + Run.length, 0, Folder);
+            Layer.Parent = Folder.Identifier;
+            this.Project.Selection = Folder.Identifier;
+        });
+        this.Chronicle("structure", `Grouped ${Layer.Name}`, Folder.Name);
+        this.Notify(`${Layer.Name} is now inside ${Folder.Name}.`);
+    }
+
+    UngroupFolder(Identifier)
+    {
+        const Folder = this.LayerByIdentifier(Identifier);
+        if (!Folder || Folder.Kind !== "folder") return;
+        const Inside = LayerInside(this.Layers, Identifier);
+        this.CaptureStack(() =>
+        {
+            for (const Layer of Inside) if (Layer.Parent === Identifier) Layer.Parent = Folder.Parent || "";
+            const At = this.Project.Layers.indexOf(Folder);
+            if (At >= 0) this.Project.Layers.splice(At, 1);
+            this.Project.Selection = Inside[0]?.Identifier || this.Project.Layers.at(-1)?.Identifier || "";
+        });
+        if (this.Solo === Identifier) this.Solo = "";
+        this.Chronicle("structure", `Opened ${Folder.Name}`, `${Inside.length} layers freed`);
+        this.Notify(`${Folder.Name} opened — ${Inside.length} layer${Inside.length === 1 ? "" : "s"} let out.`);
+    }
+
+    IsolateLayer(Identifier = this.Project.Selection)
+    {
+        const Layer = this.LayerByIdentifier(Identifier);
+        if (!Layer) return;
+        this.Solo = this.Solo === Identifier ? "" : Identifier;
+        this.Recomposite();
+        this.RenderStack();
+        this.UpdateStatusBar();
+        this.Notify(
+            this.Solo
+                ? `Isolated ${Layer.Name}${Layer.Kind === "folder" ? " and everything inside it" : ""}. Press I to show the stack again.`
+                : "The whole stack is composited again.",
+        );
     }
 
     ShiftLayer(Delta)
@@ -1891,16 +2075,21 @@ export class TexturePanel
     {
         const Layer = this.ActiveLayer;
         if (!Layer) return;
-        const Copy = CloneLayer(Layer);
+        // A folder is copied with everything inside it, and the copies are re-pointed at each other, not at the original.
+        const Run = LayerSubtree(this.Layers, Layer.Identifier);
+        const Copies = Run.map((Entry) => CloneLayer(Entry));
+        const Renamed = new Map(Run.map((Entry, Index) => [Entry.Identifier, Copies[Index].Identifier]));
+        for (const Copy of Copies) if (Renamed.has(Copy.Parent)) Copy.Parent = Renamed.get(Copy.Parent);
+        const Copy = Copies[Copies.length - 1];
         const Index = this.LayerIndex(Layer.Identifier);
         this.CaptureStack(() =>
         {
-            this.Project.Layers.splice(Index + 1, 0, Copy);
+            this.Project.Layers.splice(Index + 1, 0, ...Copies);
             this.Project.Selection = Copy.Identifier;
         });
-        if (Copy.Kind === "decal") this.RefreshDecal(Copy);
+        for (const Entry of Copies) if (Entry.Kind === "decal") this.RefreshDecal(Entry);
         this.Chronicle("structure", `Duplicated ${Layer.Name}`, `${this.Layers.length} layers`, Layer.Channels.base_color);
-        this.Notify(`${Layer.Name} duplicated.`);
+        this.Notify(Copies.length > 1 ? `${Layer.Name} duplicated with ${Copies.length - 1} inside.` : `${Layer.Name} duplicated.`);
     }
 
     RemoveLayer()
@@ -1911,15 +2100,22 @@ export class TexturePanel
             return;
         }
         const Layer = this.ActiveLayer;
-        const Index = this.LayerIndex(Layer.Identifier);
+        const Run = LayerSubtree(this.Layers, Layer.Identifier);
+        if (Run.length >= this.Layers.length)
+        {
+            this.Notify("A stack keeps at least one layer outside its folders.");
+            return;
+        }
+        const Index = this.LayerIndex(Run[0].Identifier);
         this.CaptureStack(() =>
         {
-            this.Project.Layers.splice(Index, 1);
-            this.Project.Selection = this.Layers[Math.max(0, Index - 1)].Identifier;
+            this.Project.Layers.splice(Index, Run.length);
+            this.Project.Selection = this.Layers[Math.min(this.Layers.length - 1, Math.max(0, Index - 1))].Identifier;
         });
-        this.Integrator.ReleaseLayer(Layer.Identifier);
+        for (const Entry of Run) this.Integrator.ReleaseLayer(Entry.Identifier);
+        if (Run.some((Entry) => Entry.Identifier === this.Solo)) this.Solo = "";
         this.Chronicle("structure", `Removed ${Layer.Name}`, `${this.Layers.length} layers left`);
-        this.Notify(`${Layer.Name} removed.`);
+        this.Notify(Run.length > 1 ? `${Layer.Name} and ${Run.length - 1} inside it removed.` : `${Layer.Name} removed.`);
     }
 
     //----------------------------------------------------------------------------------------------------------------------
@@ -2470,7 +2666,7 @@ export class TexturePanel
     PaintTargetLayer()
     {
         const Layer = this.ActiveLayer;
-        if (this.Projection.Brush.Target === "mask")
+        if (this.Projection.Brush.Target === "mask" && Layer.Kind !== "folder")
         {
             if (Layer.Mask.Kind !== "stroke")
             {
@@ -2484,18 +2680,22 @@ export class TexturePanel
         // A decal layer holds burned pixels of its own, so the brush and the eraser work it directly rather than
         // dropping a hand-painted layer on top of it.
         if (Layer.Kind === "decal") return Layer;
+        // Anything else — a fill, a generator, a material, a folder — keeps its recipe. The brush opens a painted layer
+        // of its own: above the selection, or inside it when the selection is a folder.
+        const Folder = Layer.Kind === "folder";
         const Painted = CreateLayer("stroke", {
             Name: "Hand painted",
+            Parent: Folder ? Layer.Identifier : Layer.Parent || "",
             Channels: { base_color: [...this.BrushColour], specular_roughness: Layer.Channels.specular_roughness },
         });
         const Index = this.LayerIndex(Layer.Identifier);
         this.CaptureStack(() =>
         {
-            this.Project.Layers.splice(Index + 1, 0, Painted);
+            this.Project.Layers.splice(Folder ? Index : Index + 1, 0, Painted);
             this.Project.Selection = Painted.Identifier;
         });
         this.Integrator.EnsureCoverage(Painted);
-        this.Notify("A hand-painted layer was added above the selection.");
+        this.Notify(Folder ? `A hand-painted layer was added inside ${Layer.Name}.` : "A hand-painted layer was added above the selection.");
         return Painted;
     }
 
@@ -3770,6 +3970,15 @@ export class TexturePanel
             case "raise-layer":
                 this.ShiftLayer(1);
                 break;
+            case "isolate-layer":
+                this.IsolateLayer();
+                break;
+            case "group-layer":
+                this.GroupSelection();
+                break;
+            case "ungroup-layer":
+                this.UngroupFolder(this.Project.Selection);
+                break;
             case "lower-layer":
                 this.ShiftLayer(-1);
                 break;
@@ -3986,6 +4195,35 @@ export class TexturePanel
     LayerInspector(Layer)
     {
         const Sections = [];
+        if (Layer.Kind === "folder")
+        {
+            const Inside = LayerInside(this.Layers, Layer.Identifier);
+            const Painted = Inside.filter((Entry) => Entry.Kind !== "folder").length;
+            return Group({
+                Title: "Folder",
+                Badge: `${Inside.length} INSIDE`,
+                Body: [
+                    `<p class="property-hint">A folder passes through: every layer inside keeps its own blend against the
+                      stack below, and the folder weighs the lot. Hide it and the whole set goes with it.</p>`,
+                    SliderRow({
+                        Label: "Opacity",
+                        Path: "Layer.Opacity",
+                        Value: Layer.Opacity,
+                        Minimum: 0,
+                        Maximum: 1,
+                        Step: 0.01,
+                        Unit: "—",
+                        Hint: `Multiplies the ${Painted} painting layer${Painted === 1 ? "" : "s"} inside.`,
+                    }),
+                    ActionRow([
+                        { Action: "isolate-layer", Label: this.Solo === Layer.Identifier ? "Show all" : "Isolate", Glyph: "focus" },
+                        { Action: "ungroup-layer", Label: "Ungroup", Glyph: "up" },
+                        { Action: "duplicate-layer", Label: "Duplicate", Glyph: "copy" },
+                        { Action: "remove-layer", Label: "Remove", Glyph: "trash" },
+                    ]),
+                ].join(""),
+            });
+        }
         Sections.push(
             Group({
                 Title: "Layer",
@@ -4033,6 +4271,10 @@ export class TexturePanel
                         { Action: "lower-layer", Label: "Lower", Glyph: "down" },
                         { Action: "duplicate-layer", Label: "Duplicate", Glyph: "copy" },
                         { Action: "remove-layer", Label: "Remove", Glyph: "trash" },
+                    ]),
+                    ActionRow([
+                        { Action: "isolate-layer", Label: this.Solo === Layer.Identifier ? "Show all" : "Isolate", Glyph: "focus" },
+                        { Action: "group-layer", Label: Layer.Parent ? "Group again" : "Group", Glyph: "folder" },
                     ]),
                 ].join(""),
             }),
@@ -5161,6 +5403,12 @@ export class TexturePanel
                 else this.Undo();
                 return;
             }
+            if ((Event.ctrlKey || Event.metaKey) && Key === "g")
+            {
+                Event.preventDefault();
+                this.GroupSelection();
+                return;
+            }
             if ((Event.ctrlKey || Event.metaKey) && Key === "s")
             {
                 Event.preventDefault();
@@ -5209,6 +5457,11 @@ export class TexturePanel
             if (Key === "m" && Event.shiftKey)
                 this.SetMaskView(this.MaskView === "off" ? "overlay" : this.MaskView === "overlay" ? "isolated" : "off");
             else if (Key === "m") Select("#mask-toggle").click();
+            if (Key === "i")
+            {
+                this.IsolateLayer();
+                return;
+            }
             if (Key === "b") this.SetBrowserState(this.BrowserState === "closed" ? "half" : "closed");
             if (Key === "f") Select("#focus-button").click();
             if (Key === "s") Select("#mirror-button").click();

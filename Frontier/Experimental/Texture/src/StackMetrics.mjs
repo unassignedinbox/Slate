@@ -116,6 +116,13 @@ import {
     CreateMark,
     SanitiseMark,
     MarkLimit,
+    OrderStack,
+    LayerSubtree,
+    LayerInside,
+    LayerAncestry,
+    CanHold,
+    CompositeOrdering,
+    FolderLimit,
 } from "./LayerSpecification.js";
 import { RevisionQueue } from "./RevisionQueue.js";
 import {
@@ -325,6 +332,86 @@ test("strokes segment by spacing and mirror across the chosen axis", () =>
     assert.ok(Projection.FacingLimit <= 1 && Projection.FacingLimit >= -1);
     assert.equal(ToolOrdering.length, new Set(ToolOrdering.map((Tool) => Tool.Identifier)).size);
     assert.ok(BrushDefaults.Radius > 0 && BrushDefaults.Spacing > 0);
+});
+
+test("a stack with folders in it is repaired into a tree", () =>
+{
+    const Make = (Identifier, Kind, Parent = "") => ({ ...CreateLayer(Kind), Identifier, Parent, Name: Identifier });
+    const Folder = Make("set", "folder");
+    const Inner = Make("inner", "folder", "set");
+    const Stack = OrderStack([Make("a", "fill", "inner"), Folder, Inner, Make("b", "fill"), Make("c", "fill", "set")]);
+    const Order = Stack.map((Layer) => Layer.Identifier);
+
+    // Children sit behind their folder, so the stack reads top down as folder, contents, folder, contents.
+    assert.deepEqual(Order, ["a", "inner", "c", "set", "b"], Order.join(","));
+    assert.deepEqual(LayerSubtree(Stack, "set").map((Layer) => Layer.Identifier), ["a", "inner", "c", "set"]);
+    assert.deepEqual(LayerInside(Stack, "inner").map((Layer) => Layer.Identifier), ["a"]);
+    assert.equal(LayerAncestry(Stack, "a").length, 2, "a sits two folders deep");
+
+    // Nothing may hold itself, or anything that already holds it.
+    assert.equal(CanHold(Stack, "set", "a"), false, "a folder was dropped inside itself");
+    assert.equal(CanHold(Stack, "set", "set"), false);
+    assert.equal(CanHold(Stack, "b", "set"), true);
+
+    // A parent that is not a folder, is missing, or closes a loop is dropped.
+    const Broken = OrderStack([
+        { ...CreateLayer("fill"), Identifier: "x", Parent: "ghost" },
+        { ...CreateLayer("fill"), Identifier: "y", Parent: "x" },
+        { ...CreateLayer("folder"), Identifier: "p", Parent: "q" },
+        { ...CreateLayer("folder"), Identifier: "q", Parent: "p" },
+    ]);
+    assert.equal(Broken.find((Layer) => Layer.Identifier === "x").Parent, "", "a missing parent survived");
+    assert.equal(Broken.find((Layer) => Layer.Identifier === "y").Parent, "", "a layer parented to a non-folder survived");
+    assert.ok(Broken.filter((Layer) => Layer.Parent === "").length >= 3, "a loop survived");
+    assert.equal(Broken.length, 4, "the repair lost a layer");
+
+    // Nesting stops at the limit.
+    const Deep = [];
+    for (let Level = 0; Level <= FolderLimit + 2; Level += 1)
+        Deep.push({ ...CreateLayer("folder"), Identifier: `f${Level}`, Parent: Level ? `f${Level - 1}` : "" });
+    const Repaired = OrderStack(Deep);
+    assert.ok(
+        Repaired.every((Layer) => LayerAncestry(Repaired, Layer.Identifier).length <= FolderLimit),
+        "the tree nests deeper than the limit",
+    );
+});
+
+test("a folder weighs what is inside it, and isolation leaves the rest out", () =>
+{
+    const Make = (Identifier, Kind, Parent = "") => ({ ...CreateLayer(Kind), Identifier, Parent, Name: Identifier });
+    const Stack = OrderStack([
+        Make("ground", "fill"),
+        Make("set", "folder"),
+        Make("paint", "stroke", "set"),
+        Make("detail", "fill", "set"),
+    ]);
+    const Named = (Ordering) => Ordering.map((Layer) => Layer.Identifier);
+    const Folder = Stack.find((Layer) => Layer.Identifier === "set");
+    const Paint = Stack.find((Layer) => Layer.Identifier === "paint");
+
+    // A folder never composites itself; what it holds does, in stack order.
+    assert.deepEqual(Named(CompositeOrdering(Stack)), ["ground", "paint", "detail"]);
+
+    Folder.Opacity = 0.5;
+    Paint.Opacity = 0.4;
+    const Weighed = CompositeOrdering(Stack);
+    assert.ok(Math.abs(Weighed.find((Layer) => Layer.Identifier === "paint").Opacity - 0.2) < 1e-6, "the folder did not weigh its contents");
+    assert.ok(Math.abs(Weighed.find((Layer) => Layer.Identifier === "ground").Opacity - 1) < 1e-6, "the folder weighed a layer outside it");
+    assert.ok(Stack.every((Layer) => Layer.Opacity !== 0.2), "compositing edited the stack instead of copying it");
+    Folder.Opacity = 1;
+    Paint.Opacity = 1;
+
+    Folder.Visible = false;
+    assert.deepEqual(Named(CompositeOrdering(Stack)), ["ground"], "a hidden folder left its contents in the composite");
+
+    // Isolation overrides the folder it is inside, or isolating a layer in a closed folder would show nothing.
+    assert.deepEqual(Named(CompositeOrdering(Stack, "paint")), ["paint"]);
+    assert.deepEqual(Named(CompositeOrdering(Stack, "set")), ["paint", "detail"]);
+    assert.deepEqual(Named(CompositeOrdering(Stack, "ground")), ["ground"]);
+    Folder.Visible = true;
+
+    // An isolated layer that is not in the stack at all cannot blank the composite.
+    assert.deepEqual(Named(CompositeOrdering(Stack, "gone")), ["ground", "paint", "detail"]);
 });
 
 test("only the left button paints, and every other button drives the camera", () =>
