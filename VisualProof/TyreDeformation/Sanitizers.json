@@ -1,0 +1,13 @@
+{
+  "exitCode": 0,
+  "checks": "actual Drive DLL + SceneCodec + GeometrySequence + native DistanceFieldStructure",
+  "sanitizers": [
+    "AddressSanitizer",
+    "UndefinedBehaviorSanitizer",
+    "LeakSanitizer"
+  ],
+  "stdout": "PASS real Drive non-rigid displacement beyond pose-only wheel: 0.00637654 m\nPASS actual Drive DLL + opening glTF: 35664 rewritten vertices; maximum local-to-world coordinate change 2.29469 m\nPASS native SDF geometry revision, fixed topology, culling bounds, coarse refusal, unchanged revision, pause, exact Stop restore\n",
+  "stderr": "",
+  "sourceCommit": "614d469d281b0e99f7c603db5a6653255cff8f07",
+  "scopeNote": "Executed before the follow-up no-op guard for projects without a geometry extension; latest complete GCC checks also exercise that guard."
+}

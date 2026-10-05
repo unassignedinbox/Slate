@@ -1,0 +1,79 @@
+{
+  "id": 111933692365,
+  "run_id": 37360522368,
+  "head_sha": "614d469d281b0e99f7c603db5a6653255cff8f07",
+  "name": "Drive MSVC playback and outliner checks",
+  "status": "completed",
+  "conclusion": "success",
+  "started_at": "2026-10-05T19:02:54Z",
+  "completed_at": "2026-10-05T19:07:12Z",
+  "html_url": "https://github.com/unassignedinbox/Slate/actions/runs/37360522368/job/111933692365",
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1,
+      "started_at": "2026-10-05T19:02:55Z",
+      "completed_at": "2026-10-05T19:02:56Z"
+    },
+    {
+      "name": "Run actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2,
+      "started_at": "2026-10-05T19:02:56Z",
+      "completed_at": "2026-10-05T19:03:24Z"
+    },
+    {
+      "name": "Run actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3,
+      "started_at": "2026-10-05T19:03:24Z",
+      "completed_at": "2026-10-05T19:03:24Z"
+    },
+    {
+      "name": "Exercise native project and scene callbacks",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4,
+      "started_at": "2026-10-05T19:03:24Z",
+      "completed_at": "2026-10-05T19:07:07Z"
+    },
+    {
+      "name": "Retain native tyre execution evidence",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5,
+      "started_at": "2026-10-05T19:07:07Z",
+      "completed_at": "2026-10-05T19:07:09Z"
+    },
+    {
+      "name": "Post Run actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 9,
+      "started_at": "2026-10-05T19:07:09Z",
+      "completed_at": "2026-10-05T19:07:09Z"
+    },
+    {
+      "name": "Post Run actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 10,
+      "started_at": "2026-10-05T19:07:09Z",
+      "completed_at": "2026-10-05T19:07:11Z"
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 11,
+      "started_at": "2026-10-05T19:07:11Z",
+      "completed_at": "2026-10-05T19:07:11Z"
+    }
+  ],
+  "artifactRetrieved": false,
+  "artifactRetrievalNote": "Artifact transfer to this sandbox failed with a network EOF. Job conclusion is verified via GitHub API; retained images/metrics are the local GCC execution."
+}

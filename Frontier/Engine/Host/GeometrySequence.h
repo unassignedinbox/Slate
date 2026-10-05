@@ -21,6 +21,7 @@ public:
     void Construct(SceneStructure& Scene, const CodeInterchange& Project)
     {
         Subjects.clear();
+        if (!Project.HasGeometry()) return;
         for (const auto& Placement : Scene.QueryPlacements())
         {
             FrontierProjectGeometryReading Reading{sizeof(Reading), 1u, Placement.Name.c_str(), nullptr, nullptr, 0u, 0u, nullptr};
@@ -39,6 +40,7 @@ public:
 
     void CaptureRest(const SceneStructure& Scene, const std::vector<InstanceRecord>& Rows)
     {
+        if (Subjects.empty()) return;
         RestVertices = Scene.QueryVertices();
         RestIndices = Scene.QueryIndices();
         RestInstances = Rows;

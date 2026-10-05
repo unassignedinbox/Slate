@@ -2161,5 +2161,9 @@ pose-only wheels. Loaded fixture projection agrees with actual XPBD nodes within
 
 The 64³ ray tests retain their failures: 12/15/12 reference hits missed across the three 1,728-ray fixtures, zero
 extra hits, and worst paired depth errors of 632/103/103 mm despite approximately 0.34 mm medians. Local CPU field
-construction is about 1.0–1.2 seconds; native synchronized scene reconstruction is not a real-time performance claim.
+construction is about 1.0–1.6 seconds; native synchronized scene reconstruction is not a real-time performance claim.
 Production Vulkan presentation, optimized streaming and target-hardware profiling remain unverified/future gates.
+
+GCC execution and host syntax checks pass. The dedicated Windows/MSVC Drive job also passes for `614d469`;
+ASan/UBSan/leak checks pass for that implementation. Receipts are retained with the gallery. The full-engine Windows
+build is a separate pending job, and none of these CPU receipts is a Vulkan tyre presentation capture.

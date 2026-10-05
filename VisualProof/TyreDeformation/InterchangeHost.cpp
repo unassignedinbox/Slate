@@ -192,6 +192,11 @@ int main(int ArgumentCount, char** Arguments)
                 "restored native SDF facets differ");
         Project.Retire();
         Require(!Project.HasGeometry(), "geometry callback survived DLL retirement");
+        Frontier::HostRuntime::GeometrySequence RigidOnly;
+        RigidOnly.Construct(Scene, Project);
+        RigidOnly.CaptureRest(Scene, Rows);
+        Require(!RigidOnly.Active() && RigidOnly.Advance(Scene, Rows, Project, Changed, Refusal) && !Changed,
+                "project without geometry export entered the deformation path");
         std::cout << "PASS actual Drive DLL + opening glTF: " << Moved << " rewritten vertices; maximum local-to-world coordinate change " << Maximum << " m\n"
                   << "PASS native SDF geometry revision, fixed topology, culling bounds, coarse refusal, unchanged revision, pause, exact Stop restore\n";
         return 0;

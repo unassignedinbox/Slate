@@ -50,13 +50,13 @@ $ g++ -std=c++20 -O2 -Wall -Wextra -pthread -I<repository>/Frontier -I<repositor
 $ <repository>/_AgentScratch/build/TyreDeformation/TyreHost <repository>/_AgentScratch/build/TyreDeformation/Images
 Rest projection 0, deformation 5.96046e-08
 Rest field-only primary hits 229927, exhausted 0
-Rest: contacts 0, displacement 5.96046e-08, build 1178.18 ms, missed 12, extra 0
+Rest: contacts 0, displacement 5.96046e-08, build 1609.16 ms, missed 12, extra 0
 Loaded projection 1.39466e-07, deformation 0.0699934
 Loaded field-only primary hits 228399, exhausted 0
-Loaded: contacts 207, displacement 0.0699934, build 1000.98 ms, missed 15, extra 0
+Loaded: contacts 207, displacement 0.0699934, build 1284.64 ms, missed 15, extra 0
 Banked projection 1.37584e-07, deformation 0.123887
 Banked field-only primary hits 219170, exhausted 0
-Banked: contacts 197, displacement 0.123887, build 1084.74 ms, missed 12, extra 0
+Banked: contacts 197, displacement 0.123887, build 1362.23 ms, missed 12, extra 0
 
 $ <repository>/_AgentScratch/build/TyreDeformation/TyreHost <repository>/_AgentScratch/build/TyreDeformation/Images <repository>/_AgentScratch/build/TyreDeformation/Images/ProjectDrive.sdf 0.505238
 ProjectDrive field-only primary hits 233911, exhausted 0

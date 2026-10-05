@@ -120,9 +120,12 @@ checks. Its gallery is `VisualProof/TyreDeformation/index.html`; twelve PNGs are
 The pictures are **executed C++ CPU field-only references**, including a snapshot obtained through the real Drive
 DLL. They are not editor screenshots, Vulkan captures, progressive production GI or an analytic browser tyre.
 Primary hits and tyre shadows have no triangle fallback. The native host translation unit was also GCC syntax-checked.
-Windows/MSVC execution has been added to the existing Drive CI job; its outcome must be checked separately.
+Windows/MSVC native Drive playback, bake, handoff and render checks passed for implementation commit `614d469`.
+The independent job receipt is `VisualProof/TyreDeformation/WindowsVerification.json`. ASan, UBSan and leak checks
+also passed for that implementation. A subsequent no-op guard avoids allocating geometry snapshots for unrelated
+projects; the complete GCC check suite was rerun after that guard. The separate full-engine CI build is still pending.
 
-A local 64-cubed CPU reconstruction took about 1.0–1.2 seconds in this environment. The host's complete scene/GPU
+A local 64-cubed CPU reconstruction took about 1.0–1.6 seconds in this environment. The host's complete scene/GPU
 rebuild is deliberately conservative and unprofiled on target hardware. A native Vulkan tyre presentation capture,
 optimized object-field upload/dirty updates, validated temporal reuse and target-GPU measurements are still gates,
 not completed claims. Rest-grid spacing is approximately 17.8 by 8.1 by 17.8 mm. Thin bead tips, grazing rays,
