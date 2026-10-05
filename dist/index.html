@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Slate · Realtime Stress-Field Fracture</title>
+<style>:root{--lightningcss-light: ;--lightningcss-dark:initial;color-scheme:dark;--bg:#0b0d10;--pnl:#12151adb;--ln:#222a33;--tx:#dfe6ee;--dim:#8b97a6;--acc:#6fd3ff}*{box-sizing:border-box}html,body{background:var(--bg);height:100%;color:var(--tx);margin:0;font:13px/1.45 ui-sans-serif,-apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden}canvas{display:block}#ui{background:var(--pnl);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid var(--ln);z-index:10;border-radius:12px;width:268px;max-height:calc(100% - 24px);padding:12px 13px;position:fixed;top:12px;left:12px;overflow:auto}#ui h1{letter-spacing:.14em;text-transform:uppercase;margin:0 0 2px;font-size:13px}#ui .sub{color:var(--dim);margin-bottom:10px;font-size:11px}.row{margin:9px 0}label{color:var(--dim);text-transform:uppercase;letter-spacing:.07em;justify-content:space-between;margin-bottom:4px;font-size:11px;display:flex}label b{color:var(--acc);font-variant-numeric:tabular-nums;font-weight:600}select,button{width:100%;color:var(--tx);border:1px solid var(--ln);font:inherit;background:#161b22;border-radius:7px;padding:7px 8px}button{cursor:pointer}button:hover{border-color:var(--acc);color:#fff}.btns{grid-template-columns:1fr 1fr;gap:6px;display:grid}input[type=range]{width:100%;accent-color:var(--acc)}input[type=checkbox]{accent-color:var(--acc)}.chk{color:var(--dim);text-transform:none;letter-spacing:0;align-items:center;gap:7px;margin:5px 0;font-size:12px;display:flex}hr{border:0;border-top:1px solid var(--ln);margin:11px 0}#stats{color:var(--dim);font-variant-numeric:tabular-nums;font-size:11px}#stats span{color:var(--tx)}#hint{color:var(--dim);background:var(--pnl);border:1px solid var(--ln);z-index:10;border-radius:20px;padding:7px 14px;font-size:12px;position:fixed;bottom:12px;left:50%;transform:translate(-50%)}#crosshair{z-index:5;pointer-events:none;opacity:.5;width:16px;height:16px;margin:-8px 0 0 -8px;position:fixed;top:50%;left:50%}#crosshair:before,#crosshair:after{content:"";background:#fff;position:absolute}#crosshair:before{width:2px;height:16px;top:0;left:7px}#crosshair:after{width:16px;height:2px;top:7px;left:0}#notes{background:var(--pnl);border:1px solid var(--ln);z-index:10;width:250px;color:var(--dim);border-radius:12px;padding:11px 13px;font-size:11.5px;position:fixed;top:12px;right:12px}#notes b{color:var(--tx)}</style>
+  <script type="module" crossorigin src="./assets/index-xH1FjsDx.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/preload-helper-uBIymjUX.js">
+</head>
+<body>
+<div id="ui">
+  <h1>Slate · Fracture</h1>
+  <div class="sub">Stress-field crack propagation with a Griffith energy budget</div>
+
+  <div class="row"><label>Scene</label><select id="scene">
+    <option value="lab">Fracture lab</option>
+    <option value="car">Car crash test (dents + lenses)</option>
+  </select></div>
+  <div class="row" id="matRow"><label>Material</label><select id="mat"></select></div>
+  <div class="row" id="gaugeRow" style="display:none"><label>Steel gauge <b id="gV"></b></label>
+    <input id="gauge" type="range" min="0.6" max="1.6" step="0.05" value="0.8"></div>
+  <div class="row"><label>Impact energy <b id="eV"></b></label><input id="e" type="range" min="5" max="1200" step="5" value="260"></div>
+  <div class="row"><label>Projectile mass <b id="mV"></b></label><input id="m" type="range" min="0.01" max="6" step="0.01" value="0.05"></div>
+  <div class="row"><label>Fragment budget <b id="bV"></b></label><input id="b" type="range" min="16" max="600" step="2" value="180"></div>
+  <div class="row"><label>Crack-surface relief <b id="rV"></b></label><input id="r" type="range" min="0" max="250" step="5" value="100"></div>
+
+  <label class="chk"><input id="secondary" type="checkbox" checked> secondary fracture on re-impact</label>
+  <label class="chk"><input id="rebar" type="checkbox" checked> rebar / hinge constraints</label>
+  <label class="chk"><input id="dust" type="checkbox" checked> comminution dust</label>
+  <label class="chk"><input id="bake" type="checkbox"> pre-bake pattern (0 ms hit)</label>
+  <label class="chk"><input id="slowmo" type="checkbox"> slow motion</label>
+
+  <hr>
+  <div class="btns"><button id="shoot">Shoot (Space)</button><button id="reset">Reset (R)</button></div>
+  <div class="btns" style="margin-top:6px"><button id="ram">Ram it (20 kg)</button><button id="undent">Pop dents out</button></div>
+  <hr>
+  <div id="stats"></div>
+</div>
+
+<div id="notes">
+  <b id="notesTitle">How it breaks</b><br>
+  1 · Hertzian cone crack nucleates under the contact.<br>
+  2 · Cracks open normal to max principal tension → radial stars near the hit, concentric rings further out.<br>
+  3 · Each m² of new crack costs 2·G<sub>c</sub> joules, so cracks <b>arrest</b> on their own: dust at the impact, intact slabs at the edge.<br>
+  4 · Anisotropy = character: grain (wood), bedding (rock), residual stress (tempered glass dices itself), high G<sub>c</sub> (plastic tears).
+</div>
+
+<div id="loading" style="display:none;position:fixed;inset:0;display:none;z-index:20;
+  background:rgba(8,10,13,.82);color:#dfe6ee;font:14px/1.5 ui-sans-serif,sans-serif;
+  align-items:center;justify-content:center;text-align:center;padding-top:45vh"></div>
+<div id="crosshair"></div>
+<div id="hint">Click anywhere on the object to hit it there · drag to orbit · scroll to zoom</div>
+</body>
+</html>

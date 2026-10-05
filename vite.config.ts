@@ -1,5 +1,8 @@
 import { defineConfig } from 'vite';
 export default defineConfig({
+  // relative asset URLs so the built site can be served from any subpath
+  // (raw.githack.com/<user>/<repo>/<ref>/dist/index.html)
+  base: './',
   // COOP/COEP enable SharedArrayBuffer -> the multithreaded Jolt build.
   // If the hosting proxy strips them the app silently uses single-thread Jolt.
   server: {
