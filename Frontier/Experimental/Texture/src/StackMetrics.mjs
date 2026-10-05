@@ -163,6 +163,11 @@ import {
     ToolOrdering,
     MarkReach,
     MarkUnderPoint,
+    MarkBasis,
+    MarkCorners,
+    MarkSpindle,
+    ResizeMark,
+    SpinMark,
     SymmetryTwins,
     SymmetryOrdering,
     SectorLimits,
@@ -585,6 +590,56 @@ test("the channels a stroke may write become one colour mask per image", () =>
 
     // An unknown key cannot turn anything off.
     assert.ok(WriteOrdering({ nonsense: false }).Full);
+});
+
+test("a placement is a rectangle in the plane it was dropped on", () =>
+{
+    const Mark = {
+        Transform: { Position: [1, 2, 3], Normal: [0, 0, 1], Tangent: [1, 0, 0], Size: 0.4, Aspect: 2, Rotation: 0, Depth: 0.4, AngleLimit: 78 },
+    };
+    const Basis = MarkBasis(Mark);
+    assert.deepEqual(Basis.Half, [0.2, 0.1], "the aspect squashes the second axis, not the first");
+    assert.ok(Math.abs(Basis.Along[0] * Basis.Across[0] + Basis.Along[1] * Basis.Across[1] + Basis.Along[2] * Basis.Across[2]) < 1e-12, "the frame is not square");
+
+    const Corners = MarkCorners(Mark);
+    assert.equal(Corners.length, 4);
+    // Bottom left, bottom right, top right, top left — an outline drawn in any other order crosses itself.
+    assert.ok(Corners[0][0] < Corners[1][0] && Corners[1][1] < Corners[2][1] && Corners[2][0] > Corners[3][0]);
+    assert.ok(Corners.every((Corner) => Math.abs(Corner[2] - 3) < 1e-12), "a corner left the plane");
+    // Every corner is on the edge of what the hit test calls the mark, which is what makes the outline truthful.
+    for (const Corner of Corners) assert.ok(Math.abs(MarkReach(Mark, Corner) - 1) < 1e-9, `${MarkReach(Mark, Corner)}`);
+    assert.equal(MarkReach(Mark, [1.3, 2, 3]), null, "a point outside the rectangle was claimed");
+
+    const Turned = MarkCorners({ Transform: { ...Mark.Transform, Rotation: 90 } });
+    assert.ok(Math.abs(Turned[1][1] - 2.2) < 1e-9, `${Turned[1][1]}`);
+    assert.ok(MarkSpindle(Mark)[1] > Corners[2][1], "the spindle is not clear of the top edge");
+    assert.ok(Math.abs(MarkSpindle(Mark)[0] - 1) < 1e-12, "the spindle is off to one side");
+
+    // A mark squashed to a sliver still has a spindle a finger can find.
+    const Sliver = { Transform: { ...Mark.Transform, Aspect: 5 } };
+    assert.ok(MarkSpindle(Sliver)[1] - MarkCorners(Sliver)[2][1] > 0.05, "the spindle collapsed onto the corners");
+});
+
+test("a corner sizes a placement, the spindle turns it, and neither can leave its range", () =>
+{
+    assert.equal(ResizeMark(0.4, 2, 100, 150, false).Size.toFixed(3), "0.600");
+    assert.equal(ResizeMark(0.4, 2, 100, 150, false).Aspect, 2, "a plain corner drag changed the aspect");
+    // Shift widens: size and aspect move together, which is what leaves the other axis where it was.
+    const Stretched = ResizeMark(0.4, 2, 100, 150, true);
+    assert.equal(Stretched.Aspect.toFixed(3), "3.000");
+    assert.equal((Stretched.Size / Stretched.Aspect).toFixed(6), (0.4 / 2).toFixed(6), "stretching moved the height");
+    assert.equal(ResizeMark(2, 2, 10, 1e9, false).Size, 2.4, "a decal was scaled past its limit");
+    assert.equal(ResizeMark(0.1, 2, 1e9, 10, false).Size, 0.02);
+    assert.equal(ResizeMark(0.4, 4.9, 100, 200, true).Aspect, 5);
+    assert.equal(ResizeMark(0.4, 2, 0, 0, false).Size.toFixed(2), "0.40", "a drag of no distance must not resize");
+
+    assert.equal(SpinMark(0, 0, Math.PI / 2, false, false), 90);
+    // 🔴 A decal on the far side of the model projects mirrored, and the handle has to turn with the hand, not
+    //    against it.
+    assert.equal(SpinMark(0, 0, Math.PI / 2, true, false), 270);
+    assert.equal(SpinMark(350, 0, Math.PI, false, false), 170, "the angle left its turn");
+    assert.equal(SpinMark(10, 0, 0.04, false, true) % 15, 0);
+    assert.ok(SpinMark(0, 0, -Math.PI / 2, false, false) === 270);
 });
 
 test("only the left button paints, and every other button drives the camera", () =>

@@ -113,7 +113,74 @@ export const MarkReach = (Mark, Position) =>
     const Along = Dot(Delta, Edge) / Math.max(Transform.Size, 0.001);
     const Sideways = (Dot(Delta, Across) * Math.max(Transform.Aspect, 0.05)) / Math.max(Transform.Size, 0.001);
     const Reach = Math.max(Math.abs(Along), Math.abs(Sideways)) * 2;
-    return Reach <= 1 ? Reach : null;
+    // 📝 The edge belongs to the mark. A corner worked out by MarkCorners lands on exactly 1 in real arithmetic and a
+    //    hair over it in floating point, so without this the outline the gizmo draws and the region a click can take
+    //    hold of disagree along every edge.
+    return Reach <= 1 + 1e-9 ? Reach : null;
+};
+
+//--------------------------------------------------------------------------------------------------------------------------
+// The frame a placement is held by.
+//
+// A decal on a surface is a rectangle lying in the plane the click found: a centre, a normal, and a tangent turned by
+// the mark's own rotation. Everything the handles do is a change to that rectangle, so the corners are worked out in
+// the WORLD and only then projected — which keeps the gizmo honest on a curved panel, where the four corners are not
+// coplanar with what the eye reads as the decal.
+//
+// 📝 The order is the one a rectangle is usually walked in — bottom left, bottom right, top right, top left — because
+//    the handles are named by it and an outline drawn in any other order crosses itself.
+//--------------------------------------------------------------------------------------------------------------------------
+export const MarkBasis = (Mark) =>
+{
+    const Transform = Mark.Transform;
+    const Normal = Transform.Normal;
+    const Along = Turn(Transform.Tangent, Normal, (Transform.Rotation * Math.PI) / 180);
+    return {
+        Centre: [...Transform.Position],
+        Normal: [...Normal],
+        Along,
+        Across: Cross(Normal, Along),
+        Half: [Math.max(Transform.Size, 1e-4) / 2, Math.max(Transform.Size, 1e-4) / Math.max(Transform.Aspect, 0.05) / 2],
+    };
+};
+
+export const MarkCorners = (Mark) =>
+{
+    const { Centre, Along, Across, Half } = MarkBasis(Mark);
+    const At = (Side, Up) =>
+        Centre.map((Component, Index) => Component + Along[Index] * Side * Half[0] + Across[Index] * Up * Half[1]);
+    return [At(-1, -1), At(1, -1), At(1, 1), At(-1, 1)];
+};
+
+// The handle that turns the mark sits off the top edge by a share of the height, so it never lands under the corners
+// however thin the decal is squashed.
+export const MarkSpindle = (Mark) =>
+{
+    const { Centre, Across, Half } = MarkBasis(Mark);
+    const Reach = Half[1] + Math.max(Half[0], Half[1]) * 0.42;
+    return Centre.map((Component, Index) => Component + Across[Index] * Reach);
+};
+
+// What a corner drag does. Both measurements are screen distances from the centre, so the mark follows the hand at
+// whatever angle the panel is being seen from. Plain is a uniform scale; `Stretch` is the shift key, and it widens
+// the mark without touching its height — size and aspect move together, which is what leaves the other axis alone.
+export const ResizeMark = (Size, Aspect, Grabbed, Reached, Stretch) =>
+{
+    const Ratio = Clamp(Math.max(Reached, 1e-4) / Math.max(Grabbed, 1e-4), 0.01, 100);
+    return {
+        Size: Clamp(Size * Ratio, 0.02, 2.4),
+        Aspect: Clamp(Stretch ? Aspect * Ratio : Aspect, 0.2, 5),
+    };
+};
+
+// What the spindle does. The sign comes from the frame as the eye sees it: a decal on the far side of the model has a
+// basis that reads mirrored on screen, and without the flip it would turn the wrong way under the hand.
+export const SpinMark = (Rotation, FromAngle, ToAngle, Flip, Snap) =>
+{
+    const Delta = ((ToAngle - FromAngle) * 180) / Math.PI;
+    let Turned = Rotation + (Flip ? -Delta : Delta);
+    if (Snap) Turned = Math.round(Turned / 15) * 15;
+    return ((Turned % 360) + 360) % 360;
 };
 
 // The placement a click takes hold of: the smallest one under the point, so a decal sitting on another can still be had.

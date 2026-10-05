@@ -141,6 +141,19 @@ export class OrbitProjection
             }
     }
 
+    // The other direction: where a world point lands, in the same normalised device coordinates. Null when the point
+    // is behind the eye, because a point behind the camera projects to a mirrored position in front of it and a handle
+    // drawn from that would sit on the wrong side of the screen.
+    Place(World)
+    {
+        const Matrix = this.ViewClip;
+        const X = Matrix[0] * World[0] + Matrix[4] * World[1] + Matrix[8] * World[2] + Matrix[12];
+        const Y = Matrix[1] * World[0] + Matrix[5] * World[1] + Matrix[9] * World[2] + Matrix[13];
+        const Weight = Matrix[3] * World[0] + Matrix[7] * World[1] + Matrix[11] * World[2] + Matrix[15];
+        if (Weight <= 1e-6) return null;
+        return [X / Weight, Y / Weight];
+    }
+
     // Normalised device coordinates in [-1, 1], y up.
     Ray(DeviceX, DeviceY)
     {

@@ -8,7 +8,18 @@
 
 import { ShadingIntegrator, ProbeAcceleration, DeviceReport } from "./ShadingIntegrator.js";
 import { OrbitProjection } from "./OrbitProjection.js";
-import { StrokeProjection, ToolOrdering, SymmetryOrdering, SectorLimits, MarkUnderPoint, PointerIntent } from "./StrokeProjection.js";
+import {
+    StrokeProjection,
+    ToolOrdering,
+    SymmetryOrdering,
+    SectorLimits,
+    MarkUnderPoint,
+    MarkCorners,
+    MarkSpindle,
+    ResizeMark,
+    SpinMark,
+    PointerIntent,
+} from "./StrokeProjection.js";
 import {
     StrokeModes,
     GradientShapes,
@@ -108,6 +119,10 @@ import { DecalLibrary, DecalCategories, DecalResolution, FontArchive, RasteriseD
 //--------------------------------------------------------------------------------------------------------------------------
 // Document helpers.
 //--------------------------------------------------------------------------------------------------------------------------
+// How near a press has to land to take hold of a decal handle. A finger is about nine millimetres across and a mouse
+// is not much more accurate than one, so the grip is larger than it is drawn.
+const GizmoReach = 14;
+
 const Select = (Selector) => document.querySelector(Selector);
 const SelectAll = (Selector) => [...document.querySelectorAll(Selector)];
 const Escape = (Text) =>
@@ -404,6 +419,7 @@ export class TexturePanel
         // How the next stroke goes down, and what it answers to on the way. All three live on the panel rather than on
         // the brush: they are how the hand is being used, not what is in it, and they outlast swapping instruments.
         this.StrokeMode = "freehand";
+        this.GizmoGrab = null;
         this.LineSnap = 0;
         this.Gradient = { ...GradientDefaults };
         this.Curves = DefaultCurves();
@@ -2881,6 +2897,15 @@ export class TexturePanel
             return;
         }
 
+        // A decal handle is tested before the model is, because the spindle deliberately sits off the outline — in
+        // front of empty space as often as not — and a ray that misses the model must not be read as "orbit".
+        const Grip = Event.button === 0 ? this.GizmoGrip(Event) : null;
+        if (Grip)
+        {
+            this.HoldGizmo(Event, Grip);
+            return;
+        }
+
         const [DeviceX, DeviceY] = this.DeviceCoordinates(Event);
         const Hit = this.Projection.Resolve(this.Index, this.Camera, DeviceX, DeviceY);
         if (!Hit)
@@ -2984,6 +3009,12 @@ export class TexturePanel
             return;
         }
 
+        if (this.GizmoGrab)
+        {
+            this.DragGizmo(Event);
+            return;
+        }
+
         const [DeviceX, DeviceY] = this.DeviceCoordinates(Event);
         const Hit = this.Projection.Resolve(this.Index, this.Camera, DeviceX, DeviceY);
         this.Cursor = Hit
@@ -3020,6 +3051,14 @@ export class TexturePanel
     OnPointerUp(Event)
     {
         if (this.Canvas.hasPointerCapture?.(Event.pointerId)) this.Canvas.releasePointerCapture(Event.pointerId);
+        if (this.GizmoGrab)
+        {
+            this.ReleaseGizmo();
+            this.PickCandidate = null;
+            this.Navigating = false;
+            this.PointerButton = undefined;
+            return;
+        }
         if (this.LineAnchor)
         {
             const Anchor = this.LineAnchor;
@@ -3420,6 +3459,172 @@ export class TexturePanel
     }
 
     // Clicking the model drops another placement of the layer's artwork; dragging from that click moves it.
+    //----------------------------------------------------------------------------------------------------------------------
+    // The handles on a placement.
+    //
+    // A decal has been draggable since it could be placed, but size and rotation were sliders — which means looking away
+    // from the model to set the two things most obviously about where it sits on the model. The gizmo puts them back on
+    // the surface: an outline where the decal actually is, a grip at each corner, and a spindle off the top edge.
+    //
+    // 🔴 The handles are drawn in SCREEN space over the viewport, not as geometry in it. A handle is a target for a
+    //    finger, so it has to stay the same size whether the camera is a metre away or twenty; anything drawn in the
+    //    scene would shrink out of reach exactly when the decal got small enough to need it.
+    //----------------------------------------------------------------------------------------------------------------------
+    GizmoMark()
+    {
+        if (this.Tool !== "decal" || this.ViewMode === "plane") return null;
+        const Layer = this.ActiveLayer;
+        if (Layer?.Kind !== "decal" || Layer.Decal.Placement !== "project") return null;
+        const Mark = this.MarkByIdentifier(Layer.Decal.Selection);
+        if (!Mark || Mark.Placed === false || Mark.Visible === false || Mark.Mode !== "projection") return null;
+        return Mark;
+    }
+
+    GizmoPoints(Mark)
+    {
+        const Box = this.Canvas.getBoundingClientRect();
+        const Screen = (World) =>
+        {
+            const Device = this.Camera.Place(World);
+            if (!Device) return null;
+            return [((Device[0] + 1) / 2) * Box.width, ((1 - Device[1]) / 2) * Box.height];
+        };
+        const Corners = MarkCorners(Mark).map(Screen);
+        const Centre = Screen(Mark.Transform.Position);
+        const Spindle = Screen(MarkSpindle(Mark));
+        if (!Centre || !Spindle || Corners.some((Point) => !Point)) return null;
+        return { Corners, Centre, Spindle };
+    }
+
+    SyncGizmo()
+    {
+        const Frame = Select("#decal-gizmo");
+        if (!Frame) return;
+        const Mark = this.GizmoMark();
+        const Points = Mark && this.GizmoPoints(Mark);
+        if (!Points)
+        {
+            if (!Frame.hidden) Frame.hidden = true;
+            return;
+        }
+        const Round = (Value) => Math.round(Value * 10) / 10;
+        Frame.querySelector(".gizmo-outline")?.setAttribute(
+            "points",
+            Points.Corners.map((Point) => `${Round(Point[0])},${Round(Point[1])}`).join(" "),
+        );
+        const Stem = Frame.querySelector(".gizmo-stem");
+        const Top = [(Points.Corners[2][0] + Points.Corners[3][0]) / 2, (Points.Corners[2][1] + Points.Corners[3][1]) / 2];
+        Stem?.setAttribute("x1", Round(Top[0]));
+        Stem?.setAttribute("y1", Round(Top[1]));
+        Stem?.setAttribute("x2", Round(Points.Spindle[0]));
+        Stem?.setAttribute("y2", Round(Points.Spindle[1]));
+        const Spindle = Frame.querySelector(".gizmo-spindle");
+        Spindle?.setAttribute("cx", Round(Points.Spindle[0]));
+        Spindle?.setAttribute("cy", Round(Points.Spindle[1]));
+        Frame.querySelectorAll(".gizmo-grip").forEach((Grip, Index) =>
+        {
+            const Point = Points.Corners[Index];
+            Grip.setAttribute("x", Round(Point[0] - 4.5));
+            Grip.setAttribute("y", Round(Point[1] - 4.5));
+        });
+        Frame.hidden = false;
+    }
+
+    // Which handle a press landed on, if any. The spindle wins ties because it is the one that sits outside the
+    // outline, where nothing else is competing for the pointer.
+    GizmoGrip(Event)
+    {
+        const Mark = this.GizmoMark();
+        if (!Mark) return null;
+        const Points = this.GizmoPoints(Mark);
+        if (!Points) return null;
+        const Box = this.Canvas.getBoundingClientRect();
+        const At = [Event.clientX - Box.left, Event.clientY - Box.top];
+        const Reach = (Point) => Math.hypot(At[0] - Point[0], At[1] - Point[1]);
+        if (Reach(Points.Spindle) <= GizmoReach) return { Kind: "spin", Mark, Points, At };
+        let Taken = null;
+        Points.Corners.forEach((Point, Index) =>
+        {
+            const Distance = Reach(Point);
+            if (Distance <= GizmoReach && (!Taken || Distance < Taken.Distance))
+                Taken = { Kind: "corner", Index, Distance };
+        });
+        return Taken ? { ...Taken, Mark, Points, At } : null;
+    }
+
+    HoldGizmo(Event, Grip)
+    {
+        const Mark = Grip.Mark;
+        const Centre = Grip.Points.Centre;
+        // Which way the frame reads on screen. A decal on the far side of the model projects mirrored, and without
+        // this the spindle would turn it the opposite way to the hand.
+        const Basis = this.GizmoPoints(Mark);
+        const Along = [Basis.Corners[1][0] - Basis.Corners[0][0], Basis.Corners[1][1] - Basis.Corners[0][1]];
+        const Across = [Basis.Corners[3][0] - Basis.Corners[0][0], Basis.Corners[3][1] - Basis.Corners[0][1]];
+        this.GizmoGrab = {
+            Kind: Grip.Kind,
+            Mark,
+            Centre,
+            Size: Mark.Transform.Size,
+            Aspect: Mark.Transform.Aspect,
+            Rotation: Mark.Transform.Rotation,
+            Grabbed: Math.max(Math.hypot(Grip.At[0] - Centre[0], Grip.At[1] - Centre[1]), 4),
+            Angle: Math.atan2(Grip.At[1] - Centre[1], Grip.At[0] - Centre[0]),
+            Flip: Along[0] * Across[1] - Along[1] * Across[0] < 0,
+            Before: structuredClone(this.StackRecord()),
+        };
+        this.Canvas.setPointerCapture?.(Event.pointerId);
+    }
+
+    DragGizmo(Event)
+    {
+        const Grab = this.GizmoGrab;
+        if (!Grab) return;
+        const Box = this.Canvas.getBoundingClientRect();
+        const At = [Event.clientX - Box.left, Event.clientY - Box.top];
+        const Transform = Grab.Mark.Transform;
+        if (Grab.Kind === "spin")
+        {
+            const Angle = Math.atan2(At[1] - Grab.Centre[1], At[0] - Grab.Centre[0]);
+            Transform.Rotation = SpinMark(Grab.Rotation, Grab.Angle, Angle, Grab.Flip, Event.shiftKey);
+        }
+        else
+        {
+            const Reached = Math.hypot(At[0] - Grab.Centre[0], At[1] - Grab.Centre[1]);
+            const Sized = ResizeMark(Grab.Size, Grab.Aspect, Grab.Grabbed, Reached, Event.shiftKey);
+            Transform.Size = Sized.Size;
+            Transform.Aspect = Sized.Aspect;
+        }
+        this.Recomposite();
+        this.MarkDirty();
+    }
+
+    ReleaseGizmo()
+    {
+        const Grab = this.GizmoGrab;
+        if (!Grab) return;
+        this.GizmoGrab = null;
+        const Transform = Grab.Mark.Transform;
+        const Moved =
+            Math.abs(Transform.Size - Grab.Size) > 1e-4 ||
+            Math.abs(Transform.Aspect - Grab.Aspect) > 1e-4 ||
+            Math.abs(Transform.Rotation - Grab.Rotation) > 1e-4;
+        if (!Moved) return;
+        // One revision for the whole drag, recorded the way CaptureStack would have if it could have held the
+        // mutation open across a hundred pointer moves.
+        this.Revisions.Record({ Kind: "stack", Before: Grab.Before, After: structuredClone(this.StackRecord()) });
+        this.AfterStackChange();
+        this.Chronicle(
+            "decal",
+            Grab.Kind === "spin" ? `Turned ${Grab.Mark.Name}` : `Sized ${Grab.Mark.Name}`,
+            Grab.Kind === "spin"
+                ? `${Math.round(Transform.Rotation)}°`
+                : `${Transform.Size.toFixed(2)} m · ${Transform.Aspect.toFixed(2)}×`,
+            Grab.Mark.Tint,
+        );
+        if (this.InspectorTab === "layer") this.RenderInspector();
+    }
+
     PlaceDecal(Hit)
     {
         const Layer = this.ActiveLayer;
@@ -3466,7 +3671,7 @@ export class TexturePanel
             this.Recomposite();
             this.RenderStack();
             if (this.InspectorTab === "layer") this.RenderInspector();
-            this.Notify(`${Waiting.Name} placed — drag to move it.`);
+            this.Notify(`${Waiting.Name} placed — drag to move it, corners to size it, the knob above to turn it.`);
             return;
         }
         // A click that lands on a decal already on the model takes hold of it instead of dropping another on top.
@@ -3480,7 +3685,7 @@ export class TexturePanel
                 if (this.InspectorTab === "layer") this.RenderInspector();
             }
             this.MovingMark = Taken.Identifier;
-            this.Notify(`${Taken.Name} picked up — drag to move it, or click clear surface to add another.`);
+            this.Notify(`${Taken.Name} picked up — drag to move it, shift a corner to stretch it, or click clear surface to add another.`);
             return;
         }
         if (Decal.Marks.length >= MarkLimit)
@@ -3523,7 +3728,7 @@ export class TexturePanel
         this.Recomposite();
         this.RenderStack();
         if (this.InspectorTab === "layer") this.RenderInspector();
-        this.Notify(`${Mark.Name} placed — drag to move it.`);
+        this.Notify(`${Mark.Name} placed — drag to move it, corners to size it, the knob above to turn it.`);
     }
 
     // Roughly how much of the sheet a placement covers. The exact figure depends on the unwrap, but a decal of a given
@@ -6776,6 +6981,7 @@ export class TexturePanel
         }
         this.Camera.Advance(Delta);
         if (this.ViewMode === "plane") this.SyncPlaneOverlay();
+        this.SyncGizmo();
         const Options = {
             Environment: this.Project.Environment,
             Material: this.Project.Material,

@@ -10,7 +10,7 @@ cd Frontier/Experimental/Texture
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
-npm test           # 117 unit tests, no browser required
+npm test           # 119 unit tests, no browser required
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -153,6 +153,16 @@ rest; an untouched selection stays the single four-attachment draw it always was
 written — a stroke that paints roughness alone would otherwise never show — and a layer still carrying one set of values
 for the whole sheet grows its images the moment a partial selection lands on it, because that is the only way to hold
 roughness in one place and not another.
+
+![The handles on a decal placement](decal-handles.png)
+
+**A decal is handled where it sits.** A placement draws an outline on the model showing where it actually is, a grip
+at each corner and a knob off the top edge. Drag the middle to slide it across the surface, a corner to size it, the
+knob to turn it; hold shift on a corner to stretch one axis and on the knob to snap to fifteen degrees. The handles are
+drawn over the viewport rather than in it, so they stay the same size however far away the camera is — a handle is a
+target for a finger, and geometry in the scene would shrink out of reach exactly when the decal got small enough to
+need it, and the knob stands off the decal's own top edge rather than the screen's, so it doubles as a reading of
+which way the artwork is standing on the surface. The whole drag is one undo step, not one per pointer move.
 
 **Decals, in the card.** The artwork pane switches a decal layer between vector and type, picks the drawing out of the
 library or sets the wording in any of the ten faces with weight, size, tracking and outline, and chooses whether the
@@ -420,6 +430,8 @@ green channel is flipped on the way out rather than left for someone to discover
 | Undo / redo | <kbd>Ctrl Z</kbd> / <kbd>Ctrl ⇧ Z</kbd> | Save `.pigment` / export | <kbd>Ctrl S</kbd> / <kbd>Ctrl E</kbd> |
 | Symmetry: off → X → Y → Z → radial | <kbd>S</kbd> | Isolate the selected layer | <kbd>I</kbd> |
 | Group the selection into a folder | <kbd>Ctrl G</kbd> | Aim a line or gradient | press · drag · release |
+| Size a decal | drag a corner | Stretch one axis | <kbd>Shift</kbd> drag a corner |
+| Turn a decal | drag the knob above it | Snap the angle to 15° | <kbd>Shift</kbd> while turning |
 
 **Only the left button paints.** The tool in the toolbar is the tool in hand, and nothing else puts a mark on the
 model: right-drag orbits, middle-drag pans, <kbd>⇧</kbd> turns either into a pan, and <kbd>Space</kbd> pans from the
