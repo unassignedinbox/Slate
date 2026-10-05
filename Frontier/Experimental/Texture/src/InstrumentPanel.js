@@ -6,7 +6,7 @@
 // chips: picking an instrument is a different act from tuning one, and a card that tried to be both was a card where the
 // settings were always one slide away from the thing they described.
 //
-// Every pane is the host's. The card owns the rail, the frame, the ribbon and the way Tab walks through them; it is handed
+// Every pane is the host's. The card owns the rail, the frame, the ribbon and the key that summons them; it is handed
 // a list of { Key, Label, Tone, Tally, Title, Note, Ribbon, Render } and asks for an element when a rail row is clicked.
 // That is what lets the same card serve a paint layer, a decal and a mask without knowing which it has.
 //
@@ -59,6 +59,10 @@ export class InstrumentPanel
         //    learns what a gradient is — it asks the host what this pixel is painted in, which is the only question
         //    a preview has ever needed to ask.
         this.ReadTint = Options.Tint || (() => null);
+        // 🔴 And what the sheet prints when the layer in hand is not painted at all. A decal layer cannot take a
+        //    stroke — the brush is not even offered for it — so a test sheet showing one was a preview of something
+        //    that could never happen. The host answers with the artwork, inked, or null for "this one is painted".
+        this.ReadArtwork = Options.Artwork || (() => null);
 
         this.Section = "";
         this.Padded = false;
@@ -66,6 +70,9 @@ export class InstrumentPanel
         this.PadStroke = null;
         this.PadSheet = null;
         this.PadBase = null;
+        this.PadMarks = [];         // where the artwork has been pressed onto the sheet
+        this.PadDrag = -1;          // which of them the hand is moving
+        this.PadKey = "";           // the artwork those impressions were made with
 
         this.Root = document.createElement("div");
         this.Root.className = "tool-card";
@@ -121,7 +128,7 @@ export class InstrumentPanel
                                         ${Line("M17.5 9.5c-1.2 1.6-1.2 3.4 0 5", 1.3)}
                                     </svg>
                                 </button>
-                                <kbd class="pane-key">Tab</kbd>
+                                <kbd class="pane-key" title="Tab opens and closes the card">Tab</kbd>
                             </div>
                         </div>
                         <div class="pane-scroll"><div class="tool-sheet" data-pane></div></div>
@@ -490,6 +497,8 @@ export class InstrumentPanel
         this.PadPaths = [];
         this.PadStroke = null;
         this.PadBase = null;
+        this.PadMarks = [];
+        this.PadDrag = -1;
         this.DrawPad();
     }
 
@@ -516,6 +525,12 @@ export class InstrumentPanel
         if (!this.Padded) return;
         const Canvas = this.Root.querySelector("[data-pad-canvas]");
         if (!Canvas) return;
+        const Print = this.ReadArtwork();
+        if (Print)
+        {
+            this.DrawPadPrint(Print);
+            return;
+        }
         const Pen = Canvas.getContext("2d");
         if (!Pen || typeof Pen.createImageData !== "function") return;
         const Width = Canvas.width;
@@ -538,10 +553,74 @@ export class InstrumentPanel
         this.RenderPadNote();
     }
 
+    // The same sheet of paper with the artwork pressed onto it instead of a stroke drawn across it: one impression in
+    // the middle to be looked at, and however many the hand has pressed down to be judged against each other.
+    //
+    // 📝 Drawn with the image, not with the rasteriser. The artwork is already pixels — the host hands over the very
+    //    canvas the surface is about to be given — so there is nothing here that could disagree with what lands.
+    DrawPadPrint(Print)
+    {
+        const Canvas = this.Root.querySelector("[data-pad-canvas]");
+        const Pen = Canvas?.getContext("2d");
+        if (!Pen || typeof Pen.drawImage !== "function") return;
+        const Width = Canvas.width;
+        const Height = Canvas.height;
+
+        // A new piece of artwork is a new sheet: impressions of the last one would be a lie about this one.
+        if (Print.Key && Print.Key !== this.PadKey)
+        {
+            this.PadKey = Print.Key;
+            this.PadMarks = [];
+            this.PadDrag = -1;
+        }
+
+        Pen.setTransform(1, 0, 0, 1, 0, 0);
+        Pen.globalAlpha = 1;
+        Pen.fillStyle = `rgb(${PadPaper[0]},${PadPaper[1]},${PadPaper[2]})`;
+        Pen.fillRect(0, 0, Width, Height);
+
+        const Image = Print.Image;
+        const Lay = (X, Y, Reach) =>
+        {
+            const Scale = Reach / Math.max(Image.width || 1, Image.height || 1);
+            const Across = (Image.width || 1) * Scale;
+            const Down = (Image.height || 1) * Scale;
+            Pen.drawImage(Image, X - Across / 2, Y - Down / 2, Across, Down);
+            return [Across, Down];
+        };
+
+        const Short = Math.min(Width, Height);
+        if (!this.PadMarks.length)
+        {
+            const Drawn = Lay(Width / 2, Height / 2, Short * 0.74);
+            // The footprint, so the empty paper around a wide piece of type still reads as part of the decal.
+            Pen.strokeStyle = "rgba(0,0,0,0.16)";
+            Pen.lineWidth = 1;
+            Pen.strokeRect(
+                Math.round((Width - Drawn[0]) / 2) + 0.5,
+                Math.round((Height - Drawn[1]) / 2) + 0.5,
+                Math.round(Drawn[0]) - 1,
+                Math.round(Drawn[1]) - 1,
+            );
+        }
+        else for (const Mark of this.PadMarks) Lay(Mark[0], Mark[1], Short * 0.42);
+
+        this.PadSheet = null;
+        this.PadBase = null;
+        this.RenderPadNote();
+    }
+
     RenderPadNote()
     {
         const Note = this.Root.querySelector("[data-pad-note]");
         if (!Note) return;
+        if (this.ReadArtwork())
+        {
+            Note.textContent = this.PadMarks.length
+                ? `${this.PadMarks.length} ${this.PadMarks.length === 1 ? "impression" : "impressions"} · none of it reaches the model`
+                : "Press to try it here — nothing reaches the model";
+            return;
+        }
         Note.textContent = this.PadPaths.length
             ? `${this.PadPaths.length} ${this.PadPaths.length === 1 ? "stroke" : "strokes"} · none of it reaches the model`
             : "Draw here — nothing reaches the model";
@@ -577,6 +656,16 @@ export class InstrumentPanel
         {
             Event.preventDefault();
             Canvas.setPointerCapture?.(Event.pointerId);
+            // Artwork is pressed onto the sheet, not drawn across it: one impression where the finger went down,
+            // and it follows the finger until it lifts.
+            const Print = this.ReadArtwork();
+            if (Print)
+            {
+                this.PadMarks.push(Where(Event));
+                this.PadDrag = this.PadMarks.length - 1;
+                this.DrawPadPrint(Print);
+                return;
+            }
             // The hand's first stroke replaces the example one rather than painting over the top of it.
             if (!this.PadPaths.length) this.DrawPadEmpty();
             this.PadStroke = [Where(Event)];
@@ -585,6 +674,14 @@ export class InstrumentPanel
 
         Canvas.addEventListener("pointermove", (Event) =>
         {
+            if (this.PadDrag >= 0)
+            {
+                const Print = this.ReadArtwork();
+                if (!Print) return;
+                this.PadMarks[this.PadDrag] = Where(Event);
+                this.DrawPadPrint(Print);
+                return;
+            }
             if (!this.PadStroke) return;
             const Point = Where(Event);
             const Last = this.PadStroke[this.PadStroke.length - 1];
@@ -595,6 +692,12 @@ export class InstrumentPanel
 
         const Release = () =>
         {
+            if (this.PadDrag >= 0)
+            {
+                this.PadDrag = -1;
+                this.RenderPadNote();
+                return;
+            }
             if (!this.PadStroke) return;
             if (this.PadStroke.length > 1) this.PadPaths.push(this.PadStroke);
             this.PadStroke = null;
@@ -684,25 +787,6 @@ export class InstrumentPanel
         this.DrawPad();
     }
 
-    // Tab walks the rail: closed → first pane → next → … → closed. The key that opened the card is the one that leaves it.
-    Step()
-    {
-        if (!this.Open)
-        {
-            this.Show();
-            return;
-        }
-        const Panes = this.Sections().filter((Entry) => !Entry.Foot);
-        const Standing = this.Standing;
-        const Index = Panes.findIndex((Entry) => Entry.Key === Standing?.Key);
-        if (Index < 0 || Index >= Panes.length - 1)
-        {
-            this.Hide();
-            return;
-        }
-        this.ShowSection(Panes[Index + 1].Key);
-    }
-
     // Summoned at a point, clamped so the card never opens off-screen. With no point it sits beside the viewport tools,
     // which is where the hand already is.
     Show(X, Y)
@@ -746,6 +830,9 @@ export class InstrumentPanel
         this.Root.classList.remove("open");
     }
 
+    // 🔴 One key, two states. Tab used to WALK the rail — open, next pane, next, … and out the far end — and the
+    //    hand that only wanted the card gone had to press it four more times to get there. The rail is a column of
+    //    rows a finger can already reach; the keyboard's job is the card itself.
     Toggle()
     {
         if (this.Open) this.Hide();

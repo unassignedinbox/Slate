@@ -537,6 +537,7 @@ export class TexturePanel
         this.RampStop = 0;          // which colour of the ramp the card's picker is pointing at
         this.InkStop = 0;           // and the same, for the ramp a decal's ink runs through
         this.DecalImages = new Map();   // the last artwork rasterised for each decal layer, for the card's preview
+        this.DecalPrints = new Map();   // and the same artwork with a flat ink laid over it, kept so a drag is cheap
         this.RampOrigin = null;     // where the stroke carrying the ramp began, and the axis it was aimed down
         this.Curves = DefaultCurves();
         // Colour dynamics: how far each dab is allowed to wander from the colour in hand. Applied per segment on the
@@ -4577,12 +4578,37 @@ export class TexturePanel
             Layer.Decal.Aspect = Surface.width / Surface.height;
             // The card shows the artwork the surface is about to show, so it is drawn from the very same image.
             this.DecalImages.set(Layer.Identifier, Surface);
+            this.DecalPrints.delete(Layer.Identifier);
             this.PaintDecalPreview(Layer);
+            if (Layer === this.ActiveLayer) this.Instruments?.DrawPad();
             this.Recomposite();
         }
         catch (Error)
         {
             this.Notify(`Decal could not be rasterised: ${Error.message}`);
+        }
+    }
+
+    // 🔴 One rasterise at a time, and only ever the latest. Dragging a knob along the ink ramp asks for a new 1024²
+    //    print every few milliseconds; firing them all would queue a second of stale work behind the hand and let an
+    //    early one land after a late one. This keeps the most recent ask and drops the rest on the floor.
+    async QueueDecal(Layer)
+    {
+        this.PendingDecal = Layer;
+        if (this.PrintingDecal) return;
+        this.PrintingDecal = true;
+        try
+        {
+            while (this.PendingDecal)
+            {
+                const Next = this.PendingDecal;
+                this.PendingDecal = null;
+                await this.RefreshDecal(Next);
+            }
+        }
+        finally
+        {
+            this.PrintingDecal = false;
         }
     }
 
@@ -4619,6 +4645,32 @@ export class TexturePanel
             this.DrawDecalSheet(Sheet, Layer, Artwork);
     }
 
+    // The artwork exactly as the surface will wear it: the rasterised image, with a flat tint laid through it when the
+    // ink is one colour. A gradient needs nothing added — it is baked into the image, which is the whole point of it.
+    //
+    // 📝 Kept against the tint it was made with. The card's preview, the test sheet and the thumbnail all ask for this
+    //    on every redraw, and a 1024² pass per ask is a slider that stutters.
+    DecalPrint(Layer)
+    {
+        const Artwork = this.DecalImages.get(Layer?.Identifier);
+        if (!Artwork) return null;
+        if (!Layer.Decal.Colorise || Layer.Decal.Ramp?.Carry) return Artwork;
+        const Code = ToHex(Layer.Decal.Tint);
+        const Held = this.DecalPrints.get(Layer.Identifier);
+        if (Held && Held.Code === Code) return Held.Image;
+        const Inked = document.createElement("canvas");
+        Inked.width = Artwork.width;
+        Inked.height = Artwork.height;
+        const Brush = Inked.getContext("2d");
+        if (!Brush || typeof Brush.drawImage !== "function") return Artwork;
+        Brush.drawImage(Artwork, 0, 0);
+        Brush.globalCompositeOperation = "source-in";
+        Brush.fillStyle = Code;
+        Brush.fillRect(0, 0, Inked.width, Inked.height);
+        this.DecalPrints.set(Layer.Identifier, { Code, Image: Inked });
+        return Inked;
+    }
+
     DrawDecalSheet(Sheet, Layer, Artwork)
     {
         const Pen = Sheet.getContext?.("2d");
@@ -4649,24 +4701,9 @@ export class TexturePanel
             for (let X = 0; X < Width; X += Square)
                 if (((X / Square) | 0) % 2 === ((Y / Square) | 0) % 2) Pen.fillRect(X, Y, Square, Square);
 
-        // The ink the surface will use. A flat tint is applied here rather than in the artwork, because that is
-        // where the shader applies it; a gradient is already in the image, because that is where it is baked.
-        let Picture = Artwork;
-        if (Layer.Decal.Colorise && !Layer.Decal.Ramp?.Carry)
-        {
-            const Inked = document.createElement("canvas");
-            Inked.width = Artwork.width;
-            Inked.height = Artwork.height;
-            const Brush = Inked.getContext("2d");
-            if (Brush)
-            {
-                Brush.drawImage(Artwork, 0, 0);
-                Brush.globalCompositeOperation = "source-in";
-                Brush.fillStyle = ToHex(Layer.Decal.Tint);
-                Brush.fillRect(0, 0, Inked.width, Inked.height);
-                Picture = Inked;
-            }
-        }
+        // The ink the surface will use: the flat tint is laid here rather than in the artwork, because that is where
+        // the shader lays it, and a gradient is already in the image, because that is where it is baked.
+        const Picture = this.DecalPrint(Layer) || Artwork;
 
         const Fit = Math.min((Width * 0.86) / Artwork.width, (Height * 0.86) / Artwork.height);
         const Drawn = [Artwork.width * Fit, Artwork.height * Fit];
@@ -4771,6 +4808,18 @@ export class TexturePanel
                 this.Gradient.Carry && this.Projection.Brush.Target !== "mask"
                     ? (Along, Straight) => this.PadTint(Along, Straight)
                     : null,
+            // 🔴 And what the test sheet prints on a decal layer: the artwork, inked. The brush is not offered for a
+            //    layer that is printed rather than painted, so a sheet of brush strokes there previewed a mark the
+            //    hand could not make. Null on every other layer, and the sheet goes back to being paper for paint.
+            Artwork: () =>
+            {
+                const Layer = this.ActiveLayer;
+                if (!Layer || Layer.Kind !== "decal" || this.Projection.Brush.Target === "mask") return null;
+                const Image = this.DecalPrint(Layer);
+                if (!Image) return null;
+                const Ink = Layer.Decal.Ramp?.Carry ? "ramp" : Layer.Decal.Colorise ? ToHex(Layer.Decal.Tint) : "own";
+                return { Image, Key: `${Layer.Identifier}·${Layer.Decal.SourceKind}·${Ink}` };
+            },
         });
         Select("#instrument-button")?.addEventListener("click", (Event) =>
         {
@@ -4802,8 +4851,13 @@ export class TexturePanel
         //    the surface under it is made of, what the head is like and how the hand moves — a metallic marker with a
         //    silver-to-gold fade is all four at once. Eight flat rows made the hand hunt for them; three headings and
         //    six rows put the related ones within one glance of each other.
-        const Paint = [
-            {
+        // 🔴 A decal gets ONE colour row, and it is its ink. The pigment in the brush's hand does not touch a piece
+        //    of artwork — the artwork is printed, not painted — so a card that offered both a Colour pane and an Ink
+        //    pane was offering the same question twice and answering it in two different places. The ink row carries
+        //    the whole picker now: mix, recents, gradient, relief.
+        const Paint = [];
+        if (!Decal)
+            Paint.push({
                 Key: "colour",
                 Group: "Paint",
                 Label: Masking ? "Value" : Ramped ? "Colour dynamics" : "Colour",
@@ -4814,8 +4868,7 @@ export class TexturePanel
                 Note: Masking ? "Black hides · white reveals" : "The pigment, the gradient it runs through, and how far it may wander",
                 Ribbon: false,
                 Render: () => this.ColourPane(Layer, Masking),
-            },
-        ];
+            });
         if (Decal)
             Paint.push({
                 Key: "ink",
@@ -4827,9 +4880,13 @@ export class TexturePanel
                     : Layer.Decal.Colorise
                       ? ToHex(Layer.Decal.Tint)
                       : "#8f6fd0",
-                Tally: Layer.Decal.Ramp?.Carry ? `${SortRampStops(Layer.Decal.Ramp.Stops).length}` : undefined,
+                Tally: Layer.Decal.Ramp?.Carry
+                    ? `${SortRampStops(Layer.Decal.Ramp.Stops).length}`
+                    : Layer.Decal.Colorise
+                      ? "flat"
+                      : "as drawn",
                 Title: "Ink",
-                Note: "What the artwork is made of",
+                Note: "The colour the artwork is printed in, mixed here",
                 Ribbon: false,
                 Render: () => this.InkPane(Layer),
             });
@@ -5360,7 +5417,15 @@ export class TexturePanel
         const Drop = Holder.querySelector("[data-ramp-drop]");
 
         const Stops = () => Store.Read();
-        const Chose = (Index) => (this[Store.Cursor] = Index);
+        // 🔴 Announced, not just recorded. A picker sitting above the strip mixes whichever stop is chosen, so the
+        //    moment the hand points at a different knob the square has to move to that colour — otherwise it edits
+        //    the stop the eye is on using the numbers of the stop it left.
+        const Chose = (Index) =>
+        {
+            const Moved = this[Store.Cursor] !== Index;
+            this[Store.Cursor] = Index;
+            if (Moved) Store.Chose?.(Index);
+        };
         const Chosen = () => this[Store.Cursor] || 0;
         const Place = (ClientX) =>
         {
@@ -5459,13 +5524,25 @@ export class TexturePanel
         });
 
         Draw();
+        // 🔴 Handed out, not kept private. A picker sitting above the strip edits the colour the strip is showing,
+        //    and the strip has to follow it — but rebuilding the pane to do that would destroy the picker's node
+        //    halfway through the drag that is editing it. One function, called in place, keeps both alive.
+        Holder.Refresh = Draw;
         return Holder;
     }
 
     // Saturation across, value down, with a hue bar beside it and a hex field under both.
-    ColourField()
+    //
+    // 📝 `Store` is what the square mixes: a colour to read, somewhere to put it back, and the key the sticky hue
+    //    is remembered under. With none it mixes the brush, which is what it did when the brush was all there was.
+    ColourField(Store = null)
     {
-        const Group = this.CardGroup("Mix", "Saturation across · brightness down");
+        const Mix = Store || {
+            Read: () => this.BrushColour,
+            Write: (Colour) => this.SetBrushColour(Colour),
+            Hue: "PickerHue",
+        };
+        const Group = this.CardGroup(Mix.Title || "Mix", Mix.Note || "Saturation across · brightness down");
         const Field = document.createElement("div");
         Field.className = "mix-field";
         Field.innerHTML = `
@@ -5490,13 +5567,13 @@ export class TexturePanel
 
         // 🔴 The hue is kept here, not derived from the colour on every draw. A grey has no hue to read back, so a
         //    picker that recomputed it would snap the bar to red the moment the brightness reached zero.
-        let [Tone, Strength, Level] = RgbToHsv(this.BrushColour);
-        if (Strength > 0.001) this.PickerHue = Tone;
-        else Tone = this.PickerHue ?? Tone;
+        let [Tone, Strength, Level] = RgbToHsv(Mix.Read());
+        if (Strength > 0.001) this[Mix.Hue] = Tone;
+        else Tone = this[Mix.Hue] ?? Tone;
 
         const Draw = () =>
         {
-            const Colour = this.BrushColour;
+            const Colour = Mix.Read();
             const Hex = ToHex(Colour);
             Field.querySelector("[data-square-hue]").style.background = ToHex(HsvToRgb([Tone, 1, 1]));
             Knob.style.left = `${Strength * 100}%`;
@@ -5509,7 +5586,7 @@ export class TexturePanel
 
         const Apply = () =>
         {
-            this.SetBrushColour(HsvToRgb([Tone, Strength, Level]));
+            Mix.Write(HsvToRgb([Tone, Strength, Level]));
             Draw();
         };
 
@@ -5544,7 +5621,7 @@ export class TexturePanel
         Drag(Hue, (Across, Down) =>
         {
             Tone = Clamp(Down, 0, 0.9999) * 360;
-            this.PickerHue = Tone;
+            this[Mix.Hue] = Tone;
         });
 
         Code.addEventListener("change", () =>
@@ -5556,12 +5633,22 @@ export class TexturePanel
                 return;
             }
             [Tone, Strength, Level] = RgbToHsv(Parsed);
-            if (Strength > 0.001) this.PickerHue = Tone;
+            if (Strength > 0.001) this[Mix.Hue] = Tone;
             Apply();
         });
 
         Draw();
         Group.append(Field);
+        // Read the colour again and move the knobs onto it. For when what is being mixed changes under the square —
+        // another stop on the ramp, say — rather than because the square itself was dragged: a drag must keep the
+        // hue it is holding, or a colour dragged down to black would snap the bar back to red on the way.
+        Group.Refresh = () =>
+        {
+            [Tone, Strength, Level] = RgbToHsv(Mix.Read());
+            if (Strength > 0.001) this[Mix.Hue] = Tone;
+            else Tone = this[Mix.Hue] ?? Tone;
+            Draw();
+        };
         return Group;
     }
 
@@ -6596,58 +6683,124 @@ export class TexturePanel
             ),
         );
 
-        if (Standing === "flat")
+        Sheet.append(Group);
+
+        // 🔴 The ramp is baked into the artwork, so every edit re-prints it. That is also what makes the preview
+        //    above exact rather than indicative: it is the image, not a drawing of what the image means.
+        const Reprint = () =>
         {
+            this.QueueDecal(Layer);
+            this.MarkDirty();
+        };
+
+        // The strip is built before the picker that edits it, so the picker can ask it to redraw in place; the picker
+        // is declared before the strip, so the strip can point it at another stop. Neither rebuilds the pane.
+        let Mixer = null;
+        const Well =
+            Standing === "gradient"
+                ? this.RampField({
+                      Read: () => Decal.Ramp.Stops,
+                      Write: (Stops) => (Decal.Ramp.Stops = Stops),
+                      Cursor: "InkStop",
+                      Chose: () => Mixer?.Refresh?.(),
+                      Arm: () =>
+                      {
+                          Decal.Ramp.Carry = true;
+                          Reprint();
+                      },
+                  })
+                : null;
+
+        if (Well)
+        {
+            const Ramp = this.CardGroup("Gradient", "The colours the artwork is printed in");
+            Ramp.append(Well);
+            Sheet.append(Ramp);
+        }
+
+        // 🔴 The same square the paint is mixed in, pointed at the ink. One colour mode mixes the tint; a gradient
+        //    mixes whichever stop the strip below is pointing at, so there is one place to pick a colour on this
+        //    card and not three — a picker here, chips there and a system colour dialog hiding behind a swatch.
+        const Chosen = () => Math.max(0, Math.min(this.InkStop || 0, (Decal.Ramp?.Stops?.length || 1) - 1));
+        if (Standing !== "artwork")
+        {
+            Mixer = this.ColourField({
+                Title: Standing === "gradient" ? "Mix the stop" : "Mix",
+                Note: Standing === "gradient" ? "The colour under the knob on the strip" : "Saturation across · brightness down",
+                Hue: "InkHue",
+                Read: () => (Standing === "gradient" ? Decal.Ramp.Stops[Chosen()]?.Colour || Decal.Tint : Decal.Tint),
+                Write: (Colour) =>
+                {
+                    if (Standing === "gradient")
+                        Decal.Ramp.Stops = Decal.Ramp.Stops.map((Stop, Index) =>
+                            Index === Chosen() ? { ...Stop, Colour: [...Colour] } : Stop,
+                        );
+                    else
+                    {
+                        Decal.Tint = [...Colour];
+                        // 🔴 A placement carries its own tint — ShadingIntegrator reads the mark before the layer —
+                        //    so an ink mixed here that did not reach them would change the preview and nothing else.
+                        for (const Mark of Decal.Marks || []) Mark.Tint = [...Colour];
+                    }
+                    Well?.Refresh?.();
+                    Reprint();
+                },
+            });
+            Sheet.append(Mixer);
+
+            // Eight inks that are always wanted, and then the colours this hand has actually used — the same list
+            // the brush keeps, because a decal and a stroke are the same person's palette.
+            const Quick = this.CardGroup("Inks", Standing === "gradient" ? "Straight into the stop" : "The ones always wanted");
+            const Take = (Colour) =>
+            {
+                this.CaptureStack(() =>
+                {
+                    if (Standing === "gradient")
+                        Decal.Ramp.Stops = Decal.Ramp.Stops.map((Stop, Index) =>
+                            Index === Chosen() ? { ...Stop, Colour: [...Colour] } : Stop,
+                        );
+                    else
+                    {
+                        Decal.Tint = [...Colour];
+                        for (const Mark of Decal.Marks || []) Mark.Tint = [...Colour];
+                    }
+                });
+                this.NoteColour(Colour);
+                Well?.Refresh?.();
+                Mixer.Refresh?.();
+                Reprint();
+                this.RenderInspector();
+            };
+            const Palette = ["#f0f0f0", "#111111", "#d82a2a", "#e8b53a", "#34c759", "#3a7bd5", "#9b5de5", "#ff8a3d"];
             const Swatches = document.createElement("div");
             Swatches.className = "card-swatches";
-            const Palette = ["#f0f0f0", "#111111", "#d82a2a", "#e8b53a", "#34c759", "#3a7bd5", "#9b5de5", "#ff8a3d"];
             Swatches.innerHTML = Palette.map(
                 (Code) => `<button data-ink="${Code}" style="background:${Code}" title="${Code}" aria-label="${Code}"></button>`,
             ).join("");
             for (const Button of Swatches.querySelectorAll("[data-ink]"))
-                Button.addEventListener("click", () =>
-                {
-                    this.CaptureStack(() => (Decal.Tint = FromHex(Button.dataset.ink)));
-                    this.RefreshDecal(Layer);
-                    this.RenderInspector();
-                    this.Instruments.RenderPane(false);
-                });
-            Group.append(Swatches);
+                Button.addEventListener("click", () => Take(FromHex(Button.dataset.ink)));
+            Quick.append(Swatches);
+            Sheet.append(Quick);
 
-            const Pick = document.createElement("input");
-            Pick.type = "color";
-            Pick.className = "card-colour";
-            Pick.value = ToHex(Decal.Tint);
-            Pick.addEventListener("input", () =>
-            {
-                Decal.Tint = FromHex(Pick.value);
-                this.RefreshDecal(Layer);
-            });
-            Group.append(Pick);
+            const Recent = this.CardGroup("Recent", "The last colours mixed here");
+            const Row = document.createElement("div");
+            Row.className = "swatch-row";
+            Row.innerHTML = (this.RecentColours || [])
+                .map(
+                    (Code) =>
+                        `<button class="tool-swatch" style="background:${Code}" data-recent="${Code}" title="${Code.toUpperCase()}"></button>`,
+                )
+                .join("");
+            for (const Chip of Row.querySelectorAll("[data-recent]"))
+                Chip.addEventListener("click", () => Take(FromHex(Chip.dataset.recent)));
+            Recent.append(Row);
+            Sheet.append(Recent);
         }
-        Sheet.append(Group);
 
         if (Standing === "gradient")
         {
-            const Fade = this.CardGroup("Gradient", "The colours the artwork is printed in");
-            // 🔴 The ramp is baked into the artwork, so every edit re-rasterises it. That is also what makes the
-            //    preview above exact rather than indicative: it is the image, not a drawing of what the image means.
-            const Reprint = () =>
-            {
-                this.RefreshDecal(Layer);
-                this.MarkDirty();
-            };
+            const Fade = this.CardGroup("How it runs", "Which way the colours travel across the artwork");
             Fade.append(
-                this.RampField({
-                    Read: () => Decal.Ramp.Stops,
-                    Write: (Stops) => (Decal.Ramp.Stops = Stops),
-                    Cursor: "InkStop",
-                    Arm: () =>
-                    {
-                        Decal.Ramp.Carry = true;
-                        Reprint();
-                    },
-                }),
                 this.CardSegmented(DecalFits, Decal.Ramp.Fit, (Identifier) =>
                 {
                     this.CaptureStack(() => (Decal.Ramp.Fit = Identifier));
@@ -6707,6 +6860,16 @@ export class TexturePanel
             ),
         );
         Sheet.append(Relief);
+
+        const Note = document.createElement("p");
+        Note.className = "card-note";
+        Note.textContent =
+            Standing === "artwork"
+                ? "The artwork keeps the colours it was drawn in. Switch to one colour or a gradient to print it in ink of your own."
+                : Standing === "gradient"
+                  ? "Click the strip to add a colour, drag one along to move it, double-click one to take it away — and mix whichever is under the knob in the square above. The preview at the top is the image itself, re-printed on every edit."
+                  : "The square mixes the ink the artwork is printed in. Everything a decal is coloured with lives on this one row of the rail — there is no separate pigment for a layer that is printed rather than painted.";
+        Sheet.append(Note);
         return Sheet;
     }
 
@@ -8617,7 +8780,7 @@ export class TexturePanel
             if (Event.key === "Tab")
             {
                 Event.preventDefault();
-                this.Instruments?.Step();
+                this.Instruments?.Toggle();
                 return;
             }
             const Tools = ["orbit", "brush", "eraser", "fill", "decal", "picker"];

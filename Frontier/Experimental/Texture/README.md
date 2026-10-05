@@ -11,7 +11,7 @@ npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
 npm test           # 128 unit tests, no browser required
-npm run drive      # 102 checks against the whole editor, booted in a headless window
+npm run drive      # 127 checks against the whole editor, booted in a headless window
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -140,12 +140,14 @@ row of preset colour chips on it, because choosing a colour and tuning the paint
 tried to be both kept the controls one slide away from the thing they described. The rail is contextual
 to the layer and it is grouped, because painting one thing in three dimensions is never one setting: a paint layer gets
 **Paint** (*Colour*, *Material*), **Head** (*Shape*, *Grain*) and **Hand** (*Stroke*, *Taper*); a decal layer gets
-**Artwork** (*Artwork*, *Placement*) and **Paint** (*Colour*, *Ink*, *Material*); a folder gets none, because painting
+**Artwork** (*Artwork*, *Placement*) and **Paint** (*Ink*, *Material*); a folder gets none, because painting
 on a folder opens a layer inside it and that layer is what the panes would be about. A metallic marker with a
 silver-to-gold fade is a colour, a gradient, a metalness and a roughness all at once — eight flat rows made the hand
 hunt for four of them, and the whole point of the grouping is that the related ones are now one glance apart. Every row
 carries its own mark in the panel's hairline icon language, tinted with the row's colour, so the rail is read by shape
-before it is read by word. `Tab` again walks to the next pane and off the end of the rail closes the card.
+before it is read by word. `Tab` again puts the card away: one key, two states. It used to walk the rail — open, next
+pane, next, and out the far end — and the hand that only wanted the card gone had to press it four more times to get
+there, while the rail itself is a column of rows a finger can already reach.
 
 **Colour** is a picker, not a palette: a saturation-and-brightness square under a hue bar, a hex field that takes a code
 typed straight in, and the last colours mixed. Everything the pigment does is in this one pane — the gradient it runs
@@ -194,6 +196,14 @@ centimetres fades over forty centimetres there too. Until the hand draws its own
 ribbon would; after that it keeps what was written, re-laying it whenever a setting changes, and *Clear* empties it.
 Nothing on the sheet reaches the model, which is the entire point: a gradient along the mark is a setting whose whole
 behaviour is in the hand, and the only honest preview of a stroke is a stroke.
+
+**On a decal layer the sheet prints instead.** A decal cannot take a stroke — the brush is not even offered for one —
+so a sheet of brush strokes there was a preview of a mark the hand could not make. With a decal in hand the sheet
+shows the artwork itself, inked exactly as the surface will ink it, with its footprint drawn around it so the empty
+paper beside a wide piece of type still reads as part of the decal; pressing on the sheet puts an impression down and
+it follows the finger until it lifts, so two sizes of the same badge can be judged against each other. *Clear* takes
+them off. It is drawn with the image rather than with the rasteriser — the very canvas the surface is about to be
+given — so there is nothing in it that could disagree with what lands.
 
 **Texture space takes the same tools.** `X` flattens the model to its sheet, and the brush, the eraser, the flood, the
 dropper, the straight line, the gradient and the decal all work there exactly as they do on the model. The UDIM squares
@@ -287,6 +297,16 @@ a ramp — the same strip, the same eight stops, the same easings as the paint, 
 along a stroke, so the directions are across, down and out. Picking it turns the flat tint off and takes every
 placement of that artwork with it, because a mark still colourising would paint the fade out with one colour.
 
+**And it is one row of the rail, not two.** A decal layer used to carry a *Colour* pane and an *Ink* pane: the first
+mixed the pigment in the brush's hand, which never touches a piece of artwork, and the second offered eight chips and
+a system colour dialog hidden behind a swatch. They are now the same menu. The ink row carries the whole picker — the
+saturation-and-brightness square, the hex field, the eight usual inks, the colours this hand has already mixed — and
+in gradient mode it mixes whichever stop the strip above it is pointing at, so choosing a stop moves the square onto
+that colour and mixing moves the knob under it. The strip redraws in place and the square re-reads in place: neither
+rebuilds the pane, because a pane rebuilt halfway through a drag is a drag that ends where the finger still is. A flat
+ink mixed here also reaches every placement of that artwork, since a mark carries its own tint and the shader reads
+the mark before the layer. What is gone is the per-dab wander, which a printed thing has no use for.
+
 The fade is baked into the image when it is rasterised rather than mixed in the shader. That is one line of canvas —
 `source-in` over the artwork, which keeps its coverage exactly, anti-aliased edges and soft type included — and it is
 why the gradient shows up unchanged in the burn, in the projection, in the ghost under the cursor and in the exported
@@ -370,8 +390,9 @@ why the library is a footer rather than a screen the card has to slide away to. 
 pencil's grade and grain, a marker's nib and bleed, a brush's head and wetness, a dry stick's tooth and scatter, a
 crayon's melt, a kneaded eraser's crumb — leads the Shape pane, above the size, opacity, flow, hardness and spacing
 every mark has. The rows are the editor's own slider, the same `SliderRow` the inspector's property sheets are built
-from: a 26px track with its fill driven by `--fraction`, and a pill you can type into beside it. <kbd>Tab</kbd> walks
-the contextual rows and steps off the end to close; the library sits below that walk, one press away but never in it.
+from: a 26px track with its fill driven by `--fraction`, and a pill you can type into beside it. <kbd>Tab</kbd> brings
+the card up and puts it away again; the library sits in the rail's own foot, one press away but never among the
+properties, because where the paint came from is not a setting to tune.
 
 Every instrument is one 300 × 60 drawing with its working tip at the right, and the tile is that same drawing under a
 cropped viewBox, so nothing is authored twice. Every setting reaches the paint — the foot of the card names the medium
@@ -554,7 +575,7 @@ the header now.
 | Flood / decal / pick | <kbd>4 5 6</kbd> | Mask view: off → overlay → mask | <kbd>⇧ M</kbd> |
 | Brush size | <kbd>[</kbd> <kbd>]</kbd> | Texture space | <kbd>X</kbd> |
 | Show / hide the unwrap | <kbd>W</kbd> | Show / hide the UDIM tiles | <kbd>U</kbd> |
-| Paint card: open → next pane → closed | <kbd>Tab</kbd> | Delete the selected layer | <kbd>Del</kbd> / <kbd>⌫</kbd> |
+| Paint card: open, and closed again | <kbd>Tab</kbd> | Delete the selected layer | <kbd>Del</kbd> / <kbd>⌫</kbd> |
 | Brush size, live | <kbd>Alt</kbd> + wheel | Frame the surface | <kbd>F</kbd> |
 | Search layers | <kbd>/</kbd> | Content browser | <kbd>B</kbd> |
 | Undo / redo | <kbd>Ctrl Z</kbd> / <kbd>Ctrl ⇧ Z</kbd> | Save `.pigment` / export | <kbd>Ctrl S</kbd> / <kbd>Ctrl E</kbd> |

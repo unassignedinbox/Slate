@@ -10,6 +10,10 @@ import { CreateWindow, CreateTally, Settle } from "./DeviceHost.mjs";
 const { Window, Faults } = CreateWindow();
 const { Check, Report } = CreateTally("the card");
 
+// A colour as the editor writes it, so an assertion can say "#111111" rather than three floats that nearly are.
+const ToCode = (Colour) =>
+    `#${[0, 1, 2].map((Index) => Math.round(Math.max(0, Math.min(1, Colour[Index])) * 255).toString(16).padStart(2, "0")).join("")}`;
+
 const { TexturePanel } = await import("../src/TexturePanel.js");
 const Panel = new TexturePanel();
 Panel.Commence();
@@ -95,7 +99,8 @@ const Decal = Panel.ActiveLayer;
 Check("a decal layer is in hand", Decal.Kind === "decal", Decal.Kind);
 Card.Show();
 const DecalRail = () => [...Card.Root.querySelectorAll(".tool-rail [data-section]")].map((Row) => Row.dataset.section);
-Check("the decal rail is its own", DecalRail().join(",") === "artwork,placement,colour,ink,material", DecalRail().join(","));
+Check("the decal rail is its own", DecalRail().join(",") === "artwork,placement,ink,material", DecalRail().join(","));
+Check("with one colour row on it, not two", DecalRail().filter((Key) => Key === "colour" || Key === "ink").length === 1);
 
 Card.ShowSection("artwork");
 Check("the artwork pane opens with a preview", !!Pane().querySelector(`canvas[data-decal="${Decal.Identifier}"]`));
@@ -148,6 +153,95 @@ const Read = SanitiseProject(Written);
 const Restored = Read.Layers.find((Layer) => Layer.Kind === "decal");
 Check("a saved decal keeps its ramp", Restored.Decal.Ramp.Carry === true && Restored.Decal.Ramp.Stops.length === 3);
 Check("and the fit it was given", Restored.Decal.Ramp.Fit === Decal.Decal.Ramp.Fit, Restored.Decal.Ramp.Fit);
+
+//--------------------------------------------------------------------------------------------------------------------------
+// One menu for the ink: the square that mixes the paint, pointed at the artwork.
+//--------------------------------------------------------------------------------------------------------------------------
+Card.ShowSection("ink");
+const Pigment = ToCode(Panel.BrushColour);
+Ink("artwork");
+Check("as drawn has nothing to mix", !Pane().querySelector(".mix-field"));
+
+Ink("flat");
+const Mix = () => Pane().querySelector(".mix-field");
+Check("one colour brings the picker out", !!Mix());
+Check("and the usual inks with it", Pane().querySelectorAll("[data-ink]").length === 8, String(Pane().querySelectorAll("[data-ink]").length));
+Check("and the colours this hand has mixed", Pane().querySelectorAll("[data-recent]").length > 0);
+
+const Black = Pane().querySelector('[data-ink="#111111"]');
+Black.dispatchEvent(new Window.MouseEvent("click", { bubbles: true }));
+await Settle(Window, 2);
+Check("an ink picked here lands on the decal", ToCode(Decal.Decal.Tint) === "#111111", ToCode(Decal.Decal.Tint));
+Check("and on every placement, because a mark carries its own", (Decal.Decal.Marks || []).every((Mark) => ToCode(Mark.Tint) === "#111111"));
+Check("the brush in hand keeps its own colour", ToCode(Panel.BrushColour) === Pigment, ToCode(Panel.BrushColour));
+
+const Code = Pane().querySelector("[data-code]");
+Code.value = "#2f8f4e";
+Code.dispatchEvent(new Window.Event("change", { bubbles: true }));
+await Settle(Window, 2);
+Check("typing a hex into the square inks it too", ToCode(Decal.Decal.Tint) === "#2f8f4e", ToCode(Decal.Decal.Tint));
+
+Ink("gradient");
+Check("a gradient keeps the picker, pointed at the stop", !!Mix());
+Panel.InkStop = 1;
+Card.RenderPane(false);
+const Second = Pane().querySelector("[data-code]");
+Second.value = "#c84a1e";
+Second.dispatchEvent(new Window.Event("change", { bubbles: true }));
+await Settle(Window, 2);
+Check("mixing moves the colour under the knob", ToCode(Decal.Decal.Ramp.Stops[1].Colour) === "#c84a1e", ToCode(Decal.Decal.Ramp.Stops[1].Colour));
+Check("and the strip redraws without rebuilding the pane", Pane().querySelector("[data-stop='1']")?.style.getPropertyValue("--knob") === "#c84a1e");
+
+const Knob = Pane().querySelector("[data-stop='0']");
+Knob.dispatchEvent(new Window.MouseEvent("pointerdown", { bubbles: true, clientX: 0, clientY: 6, pointerId: 3 }));
+Pane().querySelector(".ramp-strip").dispatchEvent(new Window.MouseEvent("pointerup", { bubbles: true, clientX: 0, clientY: 6, pointerId: 3 }));
+Check(
+    "and pointing at another stop moves the square onto its colour",
+    Pane().querySelector("[data-code]").value.toLowerCase() === ToCode(Decal.Decal.Ramp.Stops[0].Colour),
+    `${Pane().querySelector("[data-code]").value} · ${ToCode(Decal.Decal.Ramp.Stops[0].Colour)}`,
+);
+
+//--------------------------------------------------------------------------------------------------------------------------
+// The test sheet prints the artwork when the layer is printed, not a stroke the brush could never make.
+//--------------------------------------------------------------------------------------------------------------------------
+Card.TogglePad(true);
+await Settle(Window, 3);
+const Pad = Card.Root.querySelector("[data-pad-canvas]");
+const Marks = () => Pad.getContext("2d").Record;
+Card.DrawPad();
+Check("the sheet draws the artwork", Marks().some((Entry) => Entry[0] === "drawImage" && Entry[1] === 1024));
+Check("on paper, not through the stroke rasteriser", Marks().filter((Entry) => Entry[0] === "putImageData").length === 0);
+Check("and says what it is for", Card.Root.querySelector("[data-pad-note]").textContent.includes("Press to try it"));
+
+Pad.dispatchEvent(new Window.MouseEvent("pointerdown", { bubbles: true, clientX: 40, clientY: 60, pointerId: 7 }));
+Pad.dispatchEvent(new Window.MouseEvent("pointermove", { bubbles: true, clientX: 70, clientY: 90, pointerId: 7 }));
+Pad.dispatchEvent(new Window.MouseEvent("pointerup", { bubbles: true, clientX: 70, clientY: 90, pointerId: 7 }));
+Check("a press puts an impression on it", Card.PadMarks.length === 1, String(Card.PadMarks.length));
+Check("which follows the hand", Card.PadMarks[0][0] > 40);
+Check("and the note counts them", Card.Root.querySelector("[data-pad-note]").textContent.includes("1 impression"));
+Card.ClearPad();
+Check("Clear takes them off again", Card.PadMarks.length === 0);
+
+Panel.SelectLayer(Panel.Layers.find((Layer) => Layer.Kind === "stroke").Identifier);
+await Settle(Window, 2);
+Card.DrawPad();
+Check("a painted layer gets its stroke sheet back", Card.Root.querySelector("[data-pad-note]").textContent.includes("Draw here"));
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Tab is a toggle. It opens the card, and the next press puts it away.
+//--------------------------------------------------------------------------------------------------------------------------
+const Tap = () => Window.dispatchEvent(new Window.KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+if (Card.Open) Card.Hide();
+Card.ShowSection("material");
+Tap();
+Check("Tab opens the card", Card.Open === true);
+const Standing = Card.Standing?.Key;
+Tap();
+Check("and Tab closes it again", Card.Open === false);
+Tap();
+Check("it comes back on the pane it was left on", Card.Open === true && Card.Standing?.Key === Standing, String(Card.Standing?.Key));
+Tap();
+Check("and goes away once more, never walking the rail", Card.Open === false);
 
 Report();
 // jsdom keeps timers and a decal rasterise that will never resolve alive, so the run is ended deliberately.
