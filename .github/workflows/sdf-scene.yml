@@ -18,7 +18,7 @@ permissions:
   contents: write
 jobs:
   render:
-    if: ${{ !inputs.drive }}
+    if: ${{ !inputs.drive && !contains(github.event.head_commit.message, '[drive-sdf]') }}
     name: CPU SDF / ${{ matrix.scene }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -51,7 +51,7 @@ jobs:
           exit 1
 
   drive:
-    if: ${{ inputs.drive && github.ref == 'refs/heads/arena/01a0fd48-slate' }}
+    if: ${{ (inputs.drive || contains(github.event.head_commit.message, '[drive-sdf]')) && github.ref == 'refs/heads/arena/01a0fd48-slate' }}
     name: Project Drive production SDF / ${{ matrix.pose }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
