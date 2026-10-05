@@ -291,6 +291,14 @@ Search.dispatchEvent(new Window.KeyboardEvent("keydown", { key: "s", bubbles: tr
 Check("but typing an s into a search box is still an s", !Panel.Sizing);
 Search.blur();
 
+// The pane head: a mark in the rail's own colour, a title, and the line under it that says what the pane is for.
+Card.Show();
+Card.ShowSection("shape");
+const Head = Card.Root.querySelector(".pane-head");
+Check("the pane head wears the pane's own mark", !!Head.querySelector("[data-pane-mark] svg"));
+Check("and names the pane", Head.querySelector("[data-pane-title]").textContent.length > 0, Head.querySelector("[data-pane-title]").textContent);
+Check("every group in the pane has a header of its own", [...Pane().querySelectorAll(".card-group")].every((Group_) => !!Group_.querySelector(".group-head h3")));
+
 Check("the status bar names the build on screen", Window.document.querySelector("#build-mark")?.textContent?.startsWith("build "), Window.document.querySelector("#build-mark")?.textContent);
 
 Report();
