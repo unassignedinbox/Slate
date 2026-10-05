@@ -849,9 +849,9 @@ export class ShadingIntegrator
         if (Record.Decal) Device.deleteTexture(Record.Decal);
         const Image = Device.createTexture();
         Device.bindTexture(Device.TEXTURE_2D, Image);
-        // 🔴 Flipped on the way in. The artwork is drawn on a canvas, whose first row is its TOP, and it is sampled in
-        //    a frame whose V runs UP — so an unflipped upload hands back every decal mirrored through its own waist.
-        Device.pixelStorei(Device.UNPACK_FLIP_Y_WEBGL, true);
+        // 🔴 NOT flipped. The artwork is drawn on a canvas, whose first row is its top, and both shaders that read it
+        //    sample at 1 - V to put that row at the top of the frame. Flipping here as well mirrors every decal.
+        Device.pixelStorei(Device.UNPACK_FLIP_Y_WEBGL, false);
         Device.pixelStorei(Device.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
         Device.texImage2D(Device.TEXTURE_2D, 0, Device.RGBA8, Device.RGBA, Device.UNSIGNED_BYTE, Source);
         Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_MIN_FILTER, Device.LINEAR_MIPMAP_LINEAR);
@@ -860,9 +860,6 @@ export class ShadingIntegrator
         Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_WRAP_T, Device.CLAMP_TO_EDGE);
         Device.generateMipmap(Device.TEXTURE_2D);
         Device.bindTexture(Device.TEXTURE_2D, null);
-        // The flip is device state, not texture state, and every other upload here hands over pixels that are already
-        // the right way up — a restored undo snapshot among them — so it is put back before anything else can read it.
-        Device.pixelStorei(Device.UNPACK_FLIP_Y_WEBGL, false);
         Record.Decal = Image;
         return Image;
     }
@@ -949,9 +946,12 @@ export class ShadingIntegrator
         ]);
         const Burn = Options.Mode === "decal" ? Options.Decal : null;
         const Gradient = Options.Mode === "gradient" ? Options.Gradient || {} : null;
+        // Texture space has its own two modes: a gradient laid across the sheet and a decal burned onto it, both
+        // measured in UV. They are separate numbers rather than a flag because the branch is the whole of the shader.
+        const Flat = Options.Space === "plane";
         Device.uniform1i(
             Uniforms.get("uStampMode"),
-            Gradient ? 3 : Options.Mode === "plane" ? 1 : Burn ? 2 : 0,
+            Gradient ? (Flat ? 4 : 3) : Options.Mode === "plane" ? 1 : Burn ? (Flat ? 5 : 2) : 0,
         );
         Device.uniform4fv(Uniforms.get("uGradient"), [
             Gradient?.Shape === "radial" ? 1 : 0,
@@ -963,11 +963,19 @@ export class ShadingIntegrator
         this.BindImage(Program, "uStampDecal", (Burn && this.LayerImages.get(Burn.Layer)?.Decal) || this.BlankImage(), 2);
         Device.uniform3fv(Uniforms.get("uStampCentre"), Burn?.Position || [0, 0, 0]);
         Device.uniform3fv(Uniforms.get("uStampAxis"), Burn?.Normal || [0, 1, 0]);
+        // A burn laid flat has no frame in the world: it is named by a UV centre and an angle, so there is no tangent
+        // to turn and the surface edge stays at its default.
         Device.uniform3fv(
             Uniforms.get("uStampEdge"),
-            Burn ? RotateAround(Burn.Tangent, Burn.Normal, ((Burn.Rotation || 0) * Math.PI) / 180) : [1, 0, 0],
+            Burn?.Tangent ? RotateAround(Burn.Tangent, Burn.Normal, ((Burn.Rotation || 0) * Math.PI) / 180) : [1, 0, 0],
         );
-        Device.uniform2fv(Uniforms.get("uStampSpan"), Burn?.Size || [0.2, 0.2]);
+        Device.uniform2fv(Uniforms.get("uStampSpan"), (Flat ? Burn?.Plane?.Size : Burn?.Size) || [0.2, 0.2]);
+        Device.uniform4fv(Uniforms.get("uStampPlane"), [
+            Burn?.Plane?.Centre?.[0] ?? 0.5,
+            Burn?.Plane?.Centre?.[1] ?? 0.5,
+            ((Burn?.Plane?.Rotation || 0) * Math.PI) / 180,
+            0,
+        ]);
         Device.uniform1f(Uniforms.get("uStampReach"), Burn?.Depth ?? 0.45);
         Device.uniform1f(Uniforms.get("uStampSoftness"), Burn?.Softness ?? 0.06);
         Device.uniform1f(Uniforms.get("uStampColourise"), Burn?.Colorise ? 1 : 0);

@@ -2939,18 +2939,39 @@ export class TexturePanel
             return;
         }
 
+        // Texture space takes the same tools as the surface does. The sheet is the thing being painted either way;
+        // only the way a point is named changes — a UV coordinate here, a ray cast at the model there.
         if (this.ViewMode === "plane")
         {
-            if (this.Tool === "brush" || this.Tool === "eraser")
+            const Coordinate = this.PlaneCoordinates(Event);
+            if (this.Tool === "picker")
             {
-                const Coordinate = this.PlaneCoordinates(Event);
-                const Layer = this.PaintTargetLayer();
-                if (this.Projection.Brush.Target !== "mask" && this.Tool === "brush") this.EnsureChannel(Layer, "base_color");
-                this.BeginStrokeRevision(Layer);
-                const Opening = this.Projection.BeginPlane(Coordinate, this.PointerReading(Event));
-                this.NotePaintedCoordinate(Coordinate);
-                this.StampPlane(Layer, Opening);
+                this.PickAt(Coordinate);
+                return;
             }
+            if (this.Tool === "decal")
+            {
+                this.PlaceDecalPlane(Coordinate);
+                return;
+            }
+            if (this.Tool === "fill")
+            {
+                this.FloodActive();
+                return;
+            }
+            if (this.Tool !== "brush" && this.Tool !== "eraser") return;
+            if (this.StrokeMode !== "freehand")
+            {
+                this.LineAnchor = { Point: [Event.clientX, Event.clientY], Plane: Coordinate, Reading: this.PointerReading(Event) };
+                this.DrawRubber([Event.clientX, Event.clientY], [Event.clientX, Event.clientY]);
+                return;
+            }
+            const Layer = this.PaintTargetLayer();
+            if (this.Projection.Brush.Target !== "mask" && this.Tool === "brush") this.EnsureChannel(Layer, "base_color");
+            this.BeginStrokeRevision(Layer);
+            const Opening = this.Projection.BeginPlane(Coordinate, this.PointerReading(Event));
+            this.NotePaintedCoordinate(Coordinate);
+            this.StampPlane(Layer, Opening);
             return;
         }
 
@@ -2972,19 +2993,7 @@ export class TexturePanel
         }
         if (this.Tool === "picker")
         {
-            const Sample = this.Integrator.PickTexel(Hit.Coordinate);
-            if (Sample)
-            {
-                if (this.PickingMaskColour) this.ResolveColourPick(Sample.BaseColour);
-                else
-                {
-                    this.BrushColour = Sample.BaseColour;
-                    this.SyncBrushControls();
-                    this.Notify(
-                        `Picked ${ToHex(Sample.BaseColour).toUpperCase()} · roughness ${Sample.Roughness.toFixed(2)} · metalness ${Sample.Metalness.toFixed(2)}`,
-                    );
-                }
-            }
+            this.PickAt(Hit.Coordinate);
             return;
         }
         if (this.Tool === "decal")
@@ -3053,6 +3062,16 @@ export class TexturePanel
             {
                 this.HoverTile = Tile;
                 this.MarkHoveredTile();
+            }
+            if (this.LineAnchor)
+            {
+                this.DrawRubber(this.LineAnchor.Point, this.AimedPoint(Event));
+                return;
+            }
+            if (this.MovingMark && this.PointerButton !== undefined)
+            {
+                this.MoveMarkPlane(Coordinate);
+                return;
             }
             if (this.Projection.Active && (this.Tool === "brush" || this.Tool === "eraser"))
             {
@@ -3215,6 +3234,11 @@ export class TexturePanel
 
     LayStraight(Anchor, To)
     {
+        if (this.ViewMode === "plane")
+        {
+            this.LayStraightPlane(Anchor, To);
+            return;
+        }
         if (this.StrokeMode === "gradient")
         {
             this.LayGradient(Anchor, To);
@@ -3290,6 +3314,70 @@ export class TexturePanel
         const Shape = GradientShapes.find((Entry) => Entry.Identifier === this.Gradient.Shape)?.Label || "Linear";
         this.Chronicle("stroke", `${Shape} gradient`, `${Span.toFixed(2)} m · ${Layer.Name}`, this.BrushColour);
         this.Notify(`${Shape} gradient laid down over ${Span.toFixed(2)} m.`);
+    }
+
+    // The same two aimed tools, in texture space. A line is still walked in SCREEN pixels — that is what keeps the
+    // dabs evenly spaced however far the sheet is zoomed — and every step is turned back into a UV coordinate.
+    LayStraightPlane(Anchor, To)
+    {
+        const Layer = this.PaintTargetLayer();
+        const Target = this.Projection.Brush.Target;
+        if (Target !== "mask" && this.Tool === "brush") this.EnsureChannel(Layer, "base_color");
+        const Start = Anchor.Plane || this.PlaneCoordinates({ clientX: Anchor.Point[0], clientY: Anchor.Point[1] });
+        const End = this.PlaneCoordinates({ clientX: To[0], clientY: To[1] });
+        if (this.StrokeMode === "gradient")
+        {
+            if (Math.hypot(End[0] - Start[0], End[1] - Start[1]) < 1e-4)
+            {
+                this.Notify("Drag further for a gradient.");
+                return;
+            }
+            this.BeginStrokeRevision(Layer);
+            this.Integrator.Stamp(Layer, {
+                Target,
+                Mode: "gradient",
+                Space: "plane",
+                Start: [0, 0, 0],
+                End: [0, 0, 0],
+                Normal: [0, 1, 0],
+                StartPlane: Start,
+                EndPlane: End,
+                Colour: Target === "mask" ? this.MaskInk() : this.BrushColour,
+                Radius: this.Projection.Brush.Radius,
+                Hardness: this.Projection.Brush.Hardness,
+                Flow: this.Projection.Brush.Flow,
+                Gradient: this.Gradient,
+                Channels: Layer.Channels,
+                Writes: this.ChannelWrites,
+                Erase: this.Tool === "eraser",
+            });
+            this.CommitStrokeRevision();
+            this.Recomposite();
+            this.MarkDirty();
+            const Shape = GradientShapes.find((Entry) => Entry.Identifier === this.Gradient.Shape)?.Label || "Linear";
+            this.Chronicle("stroke", `${Shape} gradient`, `texture space · ${Layer.Name}`, this.BrushColour);
+            this.Notify(`${Shape} gradient laid across the sheet.`);
+            return;
+        }
+        this.BeginStrokeRevision(Layer);
+        const Samples = LineSamples(Anchor.Point, To, 3);
+        const PlaneRadius = this.PlaneRadius();
+        let Laid = 0;
+        for (const Point of Samples)
+        {
+            const Coordinate = this.PlaneCoordinates({ clientX: Point[0], clientY: Point[1] });
+            const Reading = { ...Anchor.Reading, Time: (Anchor.Reading.Time || 0) + Laid * 16 };
+            const Segment = this.Projection.Active
+                ? this.Projection.ExtendPlane(Coordinate, PlaneRadius, Reading)
+                : this.Projection.BeginPlane(Coordinate, Reading);
+            if (!Segment) continue;
+            this.NotePaintedCoordinate(Segment.EndPlane || Coordinate);
+            this.StampPlane(Layer, Segment);
+            Laid += 1;
+        }
+        if (this.Projection.Active) this.CommitStrokeRevision();
+        this.Projection.End();
+        this.Notify(`Line laid down — ${Laid} mark${Laid === 1 ? "" : "s"}.`);
     }
 
     PlaneRadius()
@@ -3867,6 +3955,164 @@ export class TexturePanel
             },
         );
         this.Notify(`${Layer.Name} stamped into the ${Target === "mask" ? "mask" : "layer"}.`);
+    }
+
+    // The dropper. It reads the composited sheet at one texel, so it works the same whether the texel was named by a
+    // ray cast at the model or by a click in texture space.
+    PickAt(Coordinate)
+    {
+        const Sample = Coordinate ? this.Integrator.PickTexel(Coordinate) : null;
+        if (!Sample) return;
+        if (this.PickingMaskColour)
+        {
+            this.ResolveColourPick(Sample.BaseColour);
+            return;
+        }
+        this.BrushColour = Sample.BaseColour;
+        this.SyncBrushControls();
+        this.Notify(
+            `Picked ${ToHex(Sample.BaseColour).toUpperCase()} · roughness ${Sample.Roughness.toFixed(2)} · metalness ${Sample.Metalness.toFixed(2)}`,
+        );
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // Decals in texture space. A placement here is named in UV rather than in metres: the artwork lies on the sheet, it
+    // crosses no seam because it never leaves the sheet, and it is read back by the compositor as a plane mark.
+    //----------------------------------------------------------------------------------------------------------------------
+    PlaceDecalPlane(Coordinate)
+    {
+        const Layer = this.ActiveLayer;
+        if (Layer?.Kind !== "decal")
+        {
+            this.Notify("Select a decal layer, or add one from the + menu.");
+            return;
+        }
+        const Decal = Layer.Decal;
+        if (Decal.Placement === "stamp" || this.Projection.Brush.Target === "mask")
+        {
+            this.BurnDecalPlane(Layer, Coordinate);
+            return;
+        }
+        const Waiting = Decal.Marks.find((Entry) => Entry.Placed === false);
+        const Under = Waiting ? null : this.PlaneMarkUnder(Decal, Coordinate);
+        let Mark = Waiting || Under;
+        if (!Mark)
+        {
+            if (Decal.Marks.length >= MarkLimit)
+            {
+                this.Notify(`A decal layer holds ${MarkLimit} marks. Remove one, or add another layer.`);
+                return;
+            }
+            const Template = this.ActiveMark || Decal;
+            Mark = CreateMark(Decal, {
+                Name: `Mark ${Decal.Marks.length + 1}`,
+                Folder: this.ActiveMark?.Folder || "",
+                Tint: [...Template.Tint],
+                Colorise: Template.Colorise !== false,
+                Softness: Template.Softness,
+                Emboss: Template.Emboss,
+                Channels: structuredClone(Layer.Channels),
+            });
+            this.CaptureStack(() => Decal.Marks.push(Mark));
+            this.Chronicle("decal", `Placed ${Mark.Name}`, `${Layer.Name} · texture space`, Mark.Tint, {
+                Shape: "stamp",
+                Coordinate: [...Coordinate],
+                Size: [Mark.Plane.Size, Mark.Plane.Size / Math.max(Mark.Plane.Aspect || 1, 0.05)],
+                Rotation: Mark.Plane.Rotation || 0,
+                Glyph: Decal.SourceKind === "text" ? "text" : "vector",
+            });
+        }
+        else if (Under) this.Notify(`Moving ${Mark.Name}.`);
+        this.CaptureStack(() =>
+        {
+            Mark.Mode = "plane";
+            Mark.Placed = true;
+            Mark.Plane = { ...Mark.Plane, Centre: [...Coordinate] };
+        });
+        Decal.Selection = Mark.Identifier;
+        this.MovingMark = Mark.Identifier;
+        this.Recomposite();
+        this.RenderInspector();
+        this.MarkDirty();
+    }
+
+    // The topmost placed mark whose rectangle the coordinate falls in, so clicking an existing one picks it up.
+    PlaneMarkUnder(Decal, Coordinate)
+    {
+        for (let Index = Decal.Marks.length - 1; Index >= 0; Index -= 1)
+        {
+            const Mark = Decal.Marks[Index];
+            if (Mark.Mode !== "plane" || Mark.Placed === false || Mark.Visible === false) continue;
+            const Half = [Mark.Plane.Size / 2, Mark.Plane.Size / (2 * Math.max(Mark.Plane.Aspect || 1, 0.05))];
+            const Angle = (-(Mark.Plane.Rotation || 0) * Math.PI) / 180;
+            const Delta = [Coordinate[0] - Mark.Plane.Centre[0], Coordinate[1] - Mark.Plane.Centre[1]];
+            const Local = [
+                Delta[0] * Math.cos(Angle) - Delta[1] * Math.sin(Angle),
+                Delta[0] * Math.sin(Angle) + Delta[1] * Math.cos(Angle),
+            ];
+            if (Math.abs(Local[0]) <= Half[0] && Math.abs(Local[1]) <= Half[1]) return Mark;
+        }
+        return null;
+    }
+
+    MoveMarkPlane(Coordinate)
+    {
+        const Mark = this.MarkByIdentifier(this.MovingMark);
+        if (!Mark || !Coordinate) return;
+        Mark.Plane = { ...Mark.Plane, Centre: [...Coordinate] };
+        Mark.Mode = "plane";
+        Mark.Placed = true;
+        this.Recomposite();
+        this.MarkDirty();
+    }
+
+    // Burning in texture space: the artwork goes straight into the sheet at the coordinate clicked, at the size the
+    // transform asks for measured in UV rather than in metres.
+    BurnDecalPlane(Layer, Coordinate)
+    {
+        const Decal = Layer.Decal;
+        const Template = this.ActiveMark || Decal;
+        const Target = this.Projection.Brush.Target;
+        const Width = Clamp(Template.Plane?.Size ?? this.FootprintInTexture(Template.Transform)[0] ?? 0.3, 0.01, 2);
+        const Height = Width / Math.max(Template.Plane?.Aspect ?? Template.Transform.Aspect ?? 1, 0.05);
+        const Options = {
+            Target,
+            Mode: "decal",
+            Decal: {
+                Layer: Layer.Identifier,
+                Plane: { Centre: [...Coordinate], Size: [Width, Height], Rotation: Template.Transform.Rotation || 0 },
+                Softness: Template.Softness,
+                Colorise: Target === "mask" ? true : Template.Colorise,
+            },
+            Colour: Target === "mask" ? this.MaskInk(Template.Tint) : Template.Tint,
+            Start: [0, 0, 0],
+            End: [0, 0, 0],
+            Normal: [0, 1, 0],
+            Radius: Width,
+            Hardness: 1,
+            Flow: 1,
+            Jitter: 0,
+            Erase: this.Tool === "eraser",
+            Space: "plane",
+        };
+        if (Target !== "mask") this.EnsureChannel(Layer, "base_color");
+        if (Target === "mask") this.Integrator.EnsureMask(Layer);
+        else this.Integrator.EnsureCoverage(Layer);
+        this.BeginStrokeRevision(Layer);
+        this.Integrator.Stamp(Layer, Options);
+        this.CommitStrokeRevision(false);
+        this.Recomposite();
+        this.RefreshThumbnails();
+        this.MarkDirty();
+        this.Chronicle("decal", `Stamped ${Layer.Name}`, `texture space · ${Target === "mask" ? "mask" : "content"}`,
+            Target === "mask" ? null : Template.Tint, {
+                Shape: "stamp",
+                Coordinate: [...Coordinate],
+                Size: [Width, Height],
+                Rotation: Template.Transform.Rotation || 0,
+                Glyph: Decal.SourceKind === "text" ? "text" : "vector",
+            });
+        this.Notify(`${Layer.Name} stamped into the sheet.`);
     }
 
     // What the viewer calls up and forward. Decal frames are built against it so artwork lands standing up.

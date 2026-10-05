@@ -918,7 +918,7 @@ uniform float uHardness;
 uniform float uFlow;
 uniform float uFacingLimit;
 uniform float uAlphaJitter;
-uniform int uStampMode;        // 0 surface space · 1 texture space · 2 decal burned into the texture · 3 gradient
+uniform int uStampMode;        // 0 surface · 1 texture space · 2 decal burned in · 3 gradient · 4 flat gradient · 5 flat burn
 uniform vec4 uGradient;        // shape (0 linear, 1 radial), easing, reverse, wrap all the way round
 uniform float uGradientEdge;   // how soft the ends of the fade are
 // 🔴 Which image this draw is allowed to write, or −1 for the usual all-four draw. The hardware can mask components of
@@ -933,6 +933,7 @@ uniform vec2 uStampSpan;
 uniform float uStampReach;
 uniform float uStampSoftness;
 uniform float uStampColourise;
+uniform vec4 uStampPlane;      // texture space: centre.xy, rotation in radians, spare
 uniform vec4 uStrokePress;     // pressure at the segment's start and end, travel in metres at each
 
 // The channel values this dab is carrying. They go down with the paint, premultiplied by the same alpha, so that the
@@ -977,23 +978,31 @@ void main()
 
     // A gradient is not a stroke: it covers the whole sheet in one pass and fades along the axis between the two
     // points the hand dragged between. Everything else a dab carries — colour, channel values, flow — it carries too.
-    if (uStampMode == 3)
+    if (uStampMode == 3 || uStampMode == 4)
     {
-        if (Sample.w < 0.5) discard;
+        // In texture space the fade runs between two UV points and every texel of the sheet is fair game, gutters
+        // included; on the surface it runs between two places on the model and only texels the model owns are lit.
+        bool Flat = uStampMode == 4;
+        if (!Flat && Sample.w < 0.5) discard;
         vec3 Position = Sample.xyz;
         vec3 Axis = uStrokeEnd - uStrokeStart;
-        float Span = length(Axis);
+        vec2 FlatAxis = uStrokeEndPlane - uStrokeStartPlane;
+        float Span = Flat ? length(FlatAxis) : length(Axis);
         if (Span < 1e-6) discard;
         float Fraction = uGradient.x < 0.5
-            ? clamp(dot(Position - uStrokeStart, Axis) / (Span * Span), 0.0, 1.0)
-            : clamp(length(Position - uStrokeStart) / Span, 0.0, 1.0);
+            ? (Flat
+                ? clamp(dot(vCoordinate - uStrokeStartPlane, FlatAxis) / (Span * Span), 0.0, 1.0)
+                : clamp(dot(Position - uStrokeStart, Axis) / (Span * Span), 0.0, 1.0))
+            : (Flat
+                ? clamp(length(vCoordinate - uStrokeStartPlane) / Span, 0.0, 1.0)
+                : clamp(length(Position - uStrokeStart) / Span, 0.0, 1.0));
         if (uGradient.z > 0.5) Fraction = 1.0 - Fraction;
         float Ramp = 1.0 - GradientRamp(Fraction);
         // The far end is allowed to reach zero and stop; a soft edge widens the part of the axis that is doing the
         // fading, so the same drag can be a hard wipe or a long breath.
         Ramp = pow(max(Ramp, 0.0), mix(2.2, 0.45, clamp(uGradientEdge, 0.0, 1.0)));
         float Face = 1.0;
-        if (uGradient.w < 0.5)
+        if (!Flat && uGradient.w < 0.5)
         {
             vec3 Normal = normalize(texture(uNormalSource, vCoordinate).xyz);
             Face = smoothstep(uFacingLimit, mix(uFacingLimit, 1.0, 0.45), dot(Normal, uStrokeNormal));
@@ -1001,6 +1010,24 @@ void main()
         float Wash = clamp(Ramp * Face * uFlow, 0.0, 1.0);
         if (Wash <= 0.0015) discard;
         Emit(vec4(clamp(uStrokeColour, 0.0, 1.0) * Wash, Wash), Wash);
+        return;
+    }
+
+    // The same burn, laid flat: the artwork goes onto the sheet in UV, so it crosses no seam and needs no model.
+    if (uStampMode == 5)
+    {
+        vec2 Delta = vCoordinate - uStampPlane.xy;
+        float Cosine = cos(uStampPlane.z);
+        float Sine = sin(uStampPlane.z);
+        vec2 Turned = vec2(Delta.x * Cosine + Delta.y * Sine, -Delta.x * Sine + Delta.y * Cosine);
+        vec2 Local = Turned / max(uStampSpan, vec2(1e-4)) + 0.5;
+        vec2 Inside = step(vec2(0.0), Local) * step(Local, vec2(1.0));
+        vec4 Artwork = texture(uStampDecal, vec2(Local.x, 1.0 - Local.y));
+        float Rim = smoothstep(0.0, max(uStampSoftness, 0.001), Artwork.a);
+        float Laid = clamp(Artwork.a * Rim * Inside.x * Inside.y * uFlow, 0.0, 1.0);
+        if (Laid <= 0.0015) discard;
+        vec3 Pigment = mix(Artwork.rgb, uStrokeColour, uStampColourise);
+        Emit(vec4(Pigment * Laid, Laid), Laid);
         return;
     }
 
