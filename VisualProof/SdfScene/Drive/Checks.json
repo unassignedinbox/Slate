@@ -1,0 +1,23 @@
+{
+  "Browser": "153.0.8010.0",
+  "Results": [
+    {
+      "Pose": "Loaded",
+      "Pixels": {
+        "Rms": 3.5992988186141313,
+        "Changed": 58325,
+        "Colours": 716
+      },
+      "Source": "4eee806f47b327120647302cf3934be3951238d0",
+      "Run": "37375125331",
+      "Verified": true
+    },
+    {
+      "Pose": "Rest",
+      "Verified": false,
+      "RetainedGiOn": true,
+      "Reason": "GI-off execution timed out; viewer correctly distinguishes partial output from a passing comparison"
+    }
+  ],
+  "Errors": []
+}

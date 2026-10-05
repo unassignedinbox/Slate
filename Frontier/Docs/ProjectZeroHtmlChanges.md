@@ -2354,3 +2354,16 @@ Verification: fourteen browser checks pass with no page errors, including both a
 recipe invalidation, geometry export, plastic XYZ motion and damage scrubbing, reset and 1024/390-pixel layouts.
 The Project-Zero launcher and its existing browser regression also pass. Actual captures and receipts are under
 `FractureEditor/Captures/`. No C++ fracture editor has been ported before visual approval.
+
+
+C044 executed vehicle result: Actions run `37375125331`, shader/source revision `4eee806`, completed the loaded
+Project Drive GI-on/off case on llvmpipe. All 22,046 facets and 22 instances were present; the real DLL again proved
+6.37654 mm of non-rigid tyre departure beyond pose-only motion. Both 512×320 images are retained, with no Vulkan
+validation errors. Independent PNG readback checks agree with the native comparison: RGB RMS 3.5992988/255,
+58,325 changed pixels and 716 distinct GI-on colours. The loaded job passed; this is not a hardware-speed result.
+
+The authored/rest case produced its GI-on image but exceeded the 2,700-second execution limit during the remaining
+GI-off work. That job and therefore the overall workflow failed; a complete authored comparison is NOT claimed.
+The viewer defaults to the passing loaded case, labels the authored GI-on image as incomplete, and does not present
+a nonexistent authored GI-off image. `VisualProof/SdfScene/CheckDrive.mjs` verifies the loaded comparison and these
+partial-output guards. The remaining native-window, continuous-deformation and full-material gates are still open.

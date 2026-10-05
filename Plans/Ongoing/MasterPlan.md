@@ -149,3 +149,10 @@ It combines pinned crack propagation/plasticity from `arena/01a0f3a8-slate` and 
 `arena/01a0f3a4-slate` behind Runtime and Baked workflows. Native integration waits for UI approval. Follow-up work
 must carry over Jolt contacts and breakable supports, safe geometry ownership, author-created geometry handling,
 material-appropriate failure and native serialization, without treating every material as brittle cells.
+
+
+Executed result for this step: the loaded full-vehicle production SDF case passed on software Vulkan in run
+`37375125331` (source `4eee806`), with GI-on/off images and zero validation errors. The authored/rest image was
+captured, but its GI-off comparison timed out at 2,700 seconds, so the overall workflow did not pass. Independent
+loaded-image comparison gives RGB RMS 3.5992988/255 across 58,325 changed pixels. This closes the loaded-scene
+production-shader readback gap, not the interactive native-window, continuous GPU update or full-material gates.
