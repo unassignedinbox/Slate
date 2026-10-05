@@ -4034,6 +4034,20 @@ details.channel-control > summary code {
   padding: 0 16px;
   border-bottom: 1px solid var(--line);
   background: linear-gradient(#ffffff07, #ffffff00);
+  overflow: hidden;
+}
+
+/* The head is a fixed band, so the line under the title is held to two of them however long the pane's note is. */
+.pane-head > div {
+  min-width: 0;
+}
+
+.pane-head .pane-sub {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
 /* The pane's own mark, in the colour the rail gives it: the head says which of the six properties is open. */
 .pane-mark {
@@ -4614,6 +4628,10 @@ details.channel-control > summary code {
 /*  The card's own panes — contextual to the layer in hand                                                              */
 /* ------------------------------------------------------------------------------------------------------------------ */
 
+.tool-rail > .rail-split:first-child {
+  margin-top: 2px;
+}
+
 .rail-split {
   margin: 14px 10px 6px;
   font-size: 8px;
@@ -4890,7 +4908,7 @@ details.channel-control > summary code {
 }
 
 .card-note {
-  margin: 2px 6px 0;
+  margin: -4px 10px 0;
   font-size: 10px;
   line-height: 1.7;
   color: #777;
@@ -5324,7 +5342,7 @@ details.channel-control > summary code {
 }
 
 .pod-body .property-group {
-  margin-bottom: 9px;
+  margin-bottom: 13px;
   border-radius: 18px;
 }
 

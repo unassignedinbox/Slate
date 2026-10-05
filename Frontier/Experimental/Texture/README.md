@@ -11,7 +11,7 @@ npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
 npm test           # 131 unit tests, no browser required
-npm run drive      # 236 checks against the whole editor, booted in a headless window
+npm run drive      # 237 checks against the whole editor, booted in a headless window
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -649,8 +649,9 @@ than two panels that happen to be side by side.
 fine for choosing something and useless for tuning one: turn a knob, press on the surface to see what it did, and the
 card you were turning is gone. The pin in the pane head holds it open — a press on the model paints instead of
 dismissing — and the head itself is the handle, so the card can be carried out of the way of the thing it is changing.
-A card that has been carried is summoned back where it was left rather than snapping to its anchor, `Tab` and
-<kbd>Esc</kbd> still put it away pinned or not, and the pin lights and leans over when it is holding.
+A card that has been carried is summoned back where it was left rather than snapping to its anchor, a window that
+narrows under it brings it back on screen rather than leaving it out past the edge, `Tab` and <kbd>Esc</kbd> still put
+it away pinned or not, and the pin lights and leans over when it is holding.
 
 **A colour is chosen when it is let go of.** Dragging across the mixing square from red to yellow passes through every
 shade between the two, and not one of them was picked by anybody. The brush, the ribbon, the stroke in hand and the

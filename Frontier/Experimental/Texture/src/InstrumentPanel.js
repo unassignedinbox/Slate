@@ -223,6 +223,14 @@ export class InstrumentPanel
         };
         Head.addEventListener("pointerup", Drop);
         Head.addEventListener("pointercancel", Drop);
+
+        // 🔴 A card carried to the right edge of a wide window is off the edge of a narrow one, and nothing moves it
+        //    back: it is placed by hand and the hand is not there. Pinned, it would sit out there for the rest of the
+        //    session. The window itself is listened to, and an open card is re-clamped where it stands.
+        window.addEventListener("resize", () =>
+        {
+            if (this.Open) this.Settle(this.Placed?.X, this.Placed?.Y);
+        });
     }
 
     // One row of the rail. The mark is raw markup, not the name of one: the card has no icon sheet of its own and no

@@ -342,6 +342,13 @@ Check("but a press on a control in the head is not a drag", Card.Root.style.left
 Pin.dispatchEvent(new Window.MouseEvent("click", { bubbles: true }));
 Check("and the pin lets go again", Card.Pinned === false);
 
+// A card carried to the edge of a wide window is off the edge of a narrow one, and only the window knows it moved.
+const Wide = Window.innerWidth;
+Object.defineProperty(Window, "innerWidth", { value: 420, configurable: true, writable: true });
+Window.dispatchEvent(new Window.Event("resize", { bubbles: false }));
+Check("a narrower window brings the card back on screen", Number.parseFloat(Card.Root.style.left) <= 90, Card.Root.style.left);
+Object.defineProperty(Window, "innerWidth", { value: Wide, configurable: true, writable: true });
+
 //--------------------------------------------------------------------------------------------------------------------------
 // The colour under the finger. Dragging red to yellow passes through every shade between the two, and none of them
 // were chosen: the recent rail must be given the colour that was let go of, once.
