@@ -18,6 +18,43 @@ function MinimumAngle(Triangle, Vertices)
     return Angle;
 }
 
+function TriangleOverlap(First, Second, Vertices)
+{
+    let A=First.map(Index=>Vertices[Index]), B=Second.map(Index=>Vertices[Index]);
+    for (let Axis=0;Axis<3;++Axis)
+        if (Math.max(...A.map(Point=>Point[Axis]))<Math.min(...B.map(Point=>Point[Axis]))-1e-8 ||
+            Math.max(...B.map(Point=>Point[Axis]))<Math.min(...A.map(Point=>Point[Axis]))-1e-8) return false;
+    if (First.some(Index=>Second.includes(Index)))
+    {
+        const Contract=Points=>
+        {
+            const Middle=[0,1,2].map(Axis=>Points.reduce((Sum,Point)=>Sum+Point[Axis],0)/3);
+            return Points.map(Point=>Point.map((Value,Axis)=>Value+(Middle[Axis]-Value)*1e-5));
+        };
+        A=Contract(A);B=Contract(B);
+    }
+    const Edges=Points=>Points.map((Point,Index)=>Subtract(Points[(Index+1)%3],Point));
+    const FirstEdges=Edges(A), SecondEdges=Edges(B);
+    const FirstNormal=Cross(FirstEdges[0],FirstEdges[1]), SecondNormal=Cross(SecondEdges[0],SecondEdges[1]);
+    const Axes=[FirstNormal,SecondNormal,...FirstEdges.flatMap(Edge=>SecondEdges.map(Other=>Cross(Edge,Other))),
+        ...FirstEdges.map(Edge=>Cross(Edge,FirstNormal)),...SecondEdges.map(Edge=>Cross(Edge,SecondNormal))];
+    for (const Axis of Axes)
+    {
+        const Magnitude=Length(Axis);
+        if (Magnitude<1e-12) continue;
+        const One=A.map(Point=>Dot(Point,Axis)/Magnitude), Two=B.map(Point=>Dot(Point,Axis)/Magnitude);
+        if (Math.max(...One)<Math.min(...Two)-1e-8 || Math.max(...Two)<Math.min(...One)-1e-8) return false;
+    }
+    return true;
+}
+
+function CrossesSurface(Mesh, Replaced, Replacements)
+{
+    const Retained=Mesh.Triangles.filter((Triangle,Index)=>!Replaced.includes(Index));
+    return Replacements.some((Triangle,Index)=>[...Retained,...Replacements.slice(Index+1)]
+        .some(Other=>TriangleOverlap(Triangle,Other,Mesh.Vertices)));
+}
+
 // 📝 Deterministic, bounded-error topology cleanup, not vertex displacement or a shape-generation function.
 // 📝 A collapse keeps an existing endpoint, obeys the manifold link condition, and cannot flip a triangle.
 export function CollapseSlivers(Mesh, Tolerance)
@@ -73,6 +110,9 @@ export function CollapseSlivers(Mesh, Tolerance)
                     }
                     const PreviousMinimum=Math.min(...Affected.map(Index=>Angles[Index]));
                     if (!Valid || After>Before || (After===Before && NewMinimum<=PreviousMinimum+1e-5)) continue;
+                    const Replacements=Affected.map(Index=>Mesh.Triangles[Index].map(Vertex=>Vertex===Drop?Keep:Vertex))
+                        .filter(Triangle=>new Set(Triangle).size===3);
+                    if (CrossesSurface(Mesh,Affected,Replacements)) continue;
                     const Triangles=[],Tags=[];
                     Mesh.Triangles.forEach((Triangle,Index)=>
                     {
@@ -151,6 +191,7 @@ export function FlipCaps(Mesh, Tolerance)
                 const Normal=Cross(Subtract(B,A),Subtract(C,A));
                 return Dot(Normal,OldNormal)<=0 || Dot(Normal,OtherNormal)<=0;
             })) continue;
+            if (CrossesSurface(Mesh,[First.Index,Second.Index],Next)) continue;
             Mesh.Triangles[First.Index]=Next[0];
             Mesh.Triangles[Second.Index]=Next[1];
             ++Flips;

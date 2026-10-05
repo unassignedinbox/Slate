@@ -1,0 +1,306 @@
+{
+  "Date": "2026-10-05",
+  "Errors": [],
+  "Checks": {
+    "PersistentWorker": true,
+    "ManualRebuildOnly": true,
+    "SelectedStageStopping": true,
+    "UnbuiltInputLabel": true,
+    "Metrics": [
+      {
+        "Stage": 1,
+        "Bodies": 1,
+        "Vertices": 347,
+        "Triangles": 690,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 11.436699330011207,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 3800.692028473346,
+        "Spalls": 0,
+        "Cracks": 0
+      },
+      {
+        "Stage": 2,
+        "Bodies": 7,
+        "Vertices": 6337,
+        "Triangles": 12638,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 5.125483078427357,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 3713.4499048050366,
+        "Spalls": 0,
+        "Cracks": 0
+      },
+      {
+        "Stage": 3,
+        "Bodies": 117,
+        "Vertices": 16751,
+        "Triangles": 33010,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 5.018826459848717,
+        "RejectedSpalls": 0,
+        "RejectedCracks": 0,
+        "Volume": 3601.6371829545988,
+        "Spalls": 0,
+        "Cracks": 0
+      },
+      {
+        "Stage": 4,
+        "Bodies": 117,
+        "Vertices": 26976,
+        "Triangles": 53460,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 5.018826459848717,
+        "RejectedSpalls": 10,
+        "RejectedCracks": 0,
+        "Volume": 3588.4238345774124,
+        "Spalls": 353,
+        "Cracks": 0
+      },
+      {
+        "Stage": 5,
+        "Bodies": 117,
+        "Vertices": 30575,
+        "Triangles": 60658,
+        "OpenEdges": 0,
+        "NonmanifoldEdges": 0,
+        "WindingErrors": 0,
+        "ZeroArea": 0,
+        "NonmanifoldVertices": 0,
+        "DuplicateTriangles": 0,
+        "ThinTriangles": 0,
+        "MinimumAngle": 5.018826459848717,
+        "RejectedSpalls": 10,
+        "RejectedCracks": 0,
+        "Volume": 3588.147000160357,
+        "Spalls": 353,
+        "Cracks": 36
+      }
+    ],
+    "TriangleObjFaces": 60658,
+    "ExplodePreservesObj": true,
+    "LateEditReuse": true,
+    "Cancellation": true,
+    "UserRecipe": {
+      "Stage": 5,
+      "Bodies": 77,
+      "Vertices": 22399,
+      "Triangles": 44474,
+      "OpenEdges": 0,
+      "NonmanifoldEdges": 0,
+      "WindingErrors": 0,
+      "ZeroArea": 0,
+      "NonmanifoldVertices": 0,
+      "DuplicateTriangles": 0,
+      "ThinTriangles": 1,
+      "MinimumAngle": 3.4853486315701265,
+      "RejectedSpalls": 4,
+      "RejectedCracks": 1,
+      "Volume": 3435.1670757534084,
+      "Spalls": 268,
+      "Cracks": 27
+    },
+    "NarrowAngleWarningVisible": true,
+    "NoFailureFallback": true,
+    "MobileNoOverflow": true,
+    "GlError": 0,
+    "ContextLoss": true
+  },
+  "Rebuilds": [
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Milliseconds": 346.8000000002794
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Milliseconds": 153.60000000009313
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Milliseconds": 192.79999999981374
+    },
+    {
+      "Error": null,
+      "Executed": [
+        2
+      ],
+      "Reused": [
+        1
+      ],
+      "Milliseconds": 2555.2999999998137
+    },
+    {
+      "Error": null,
+      "Executed": [
+        2
+      ],
+      "Reused": [
+        1
+      ],
+      "Milliseconds": 2463.7999999998137
+    },
+    {
+      "Error": null,
+      "Executed": [
+        2
+      ],
+      "Reused": [
+        1
+      ],
+      "Milliseconds": 2118.600000000093
+    },
+    {
+      "Error": null,
+      "Executed": [
+        3
+      ],
+      "Reused": [
+        1,
+        2
+      ],
+      "Milliseconds": 5662.5
+    },
+    {
+      "Error": null,
+      "Executed": [
+        4
+      ],
+      "Reused": [
+        1,
+        2,
+        3
+      ],
+      "Milliseconds": 9520.299999999814
+    },
+    {
+      "Error": null,
+      "Executed": [
+        5
+      ],
+      "Reused": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "Milliseconds": 10654.69999999972
+    },
+    {
+      "Error": null,
+      "Executed": [
+        5
+      ],
+      "Reused": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "Milliseconds": 10298.69999999972
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Milliseconds": 291.89999999990687
+    },
+    {
+      "Error": null,
+      "Executed": [
+        2
+      ],
+      "Reused": [
+        1
+      ],
+      "Milliseconds": 2688.399999999907
+    },
+    {
+      "Error": null,
+      "Executed": [
+        3,
+        4,
+        5
+      ],
+      "Reused": [
+        1,
+        2
+      ],
+      "Milliseconds": 18935.5
+    },
+    {
+      "Error": null,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Milliseconds": 225.5
+    }
+  ],
+  "Captures": [
+    "01MassFront",
+    "02MassRear",
+    "03StageTwoInput",
+    "04FlexedBedding",
+    "05Stage3",
+    "06Stage4",
+    "07Stage5",
+    "08FracturedRear",
+    "09LocalSpallAfter",
+    "10LocalSpallBefore",
+    "11UserAmphitheatreBeds",
+    "12UserAmphitheatreFinal",
+    "13Mobile"
+  ],
+  "SourceHashes": {
+    "CliffSpecification.js": "4fbbcb8a89c67bb7b213e31ac3d3caa1817ddbf8678876e46f0f8672c445dedb",
+    "FractureSequence.js": "044e21d5541b50625b3e8af3b8da9d81d775175a790afad90b428fe9a3e139eb",
+    "GenerationQueue.js": "89a2d407eef1920cdebc1de041a0a1d4b71d6537205f860217c6a8438b6ad999",
+    "PolyhedronSolver.js": "56701f1489f79aab7c5bd42ed8b93584c6544d06a54e18712ea0ff6063d5582d",
+    "TriangleSolver.js": "b0aa222ecfe321a4e771c7ec83ea85a03d6791ad068ac4e2af1f5926bea53597",
+    "WorkspacePanel.css": "33fdac700215540f11e66102fca764e6ea81f299fbcc2d2dc03aa75c70ae3f0c",
+    "WorkspacePanel.js": "da4641a5668bc67c2c209007a5163a3e98cff1e32d2078dd64cf050efc2b5a26",
+    "index.html": "da1b81542d34a670d2966240381e26352b8288bca243ee8928e71f562ec716e4"
+  },
+  "BrowserVersion": "133.0.6943.0",
+  "Passed": true
+}

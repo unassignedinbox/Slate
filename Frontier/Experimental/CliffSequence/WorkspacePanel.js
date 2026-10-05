@@ -5,17 +5,17 @@
 
 import * as THREE from 'three';
 import {OrbitControls} from '../Ocean/lib/addons/OrbitControls.js';
-import {CliffDefaults, CliffProfiles, ReadSpecification} from './CliffSpecification.js';
+import {CliffDefaults, CliffProfiles, ReadSpecification, EarliestStage} from './CliffSpecification.js';
 
 const Element=Id=>document.getElementById(Id);
 const StageDescriptions=[
-    ['Cliff mass','Buttresses, bays & crown','A continuous profiled landform. Concave bays and projecting buttresses establish the silhouette before any fractures.'],
-    ['Bedding cuts','Dipping sedimentary beds','A coherent family of inclined bedding planes. Authored bed-thickness sequences, with real open seams.'],
-    ['Bounded joints','Finite-depth rock blocks','Staggered joint planes split the exposed strata, then terminate before the rear of the cliff.'],
+    ['Cliff mass','Buttresses, bays & crown','An all-sided profiled landform. Concave bays and projecting buttresses establish the silhouette before any fractures.'],
+    ['Bedding cuts','Dipping sedimentary beds','Authored stepped flexures and variable-aperture bedding seams. Real polygon cuts; no vertex displacement.'],
+    ['Bounded joints','Finite-depth rock blocks','Kinked joints split front, rear and end exposures, terminating against a retained interior core.'],
     ['Edge spalls','Local fracture cavities','Localized, asymmetric bites with four or six fracture facets. The original edge survives on both sides—not a full-edge bevel.'],
     ['Surface fissures','Shallow polygon incisions','Finite, kinked V-grooves cut into individual rock faces. Closed bottoms, bounded depth; no SDF erosion.']
 ];
-const State={Specification:{...CliffDefaults},Result:null,Stage:4,Revision:0,ReadyRevision:0,Worker:null,Dirty:false,
+const State={Specification:{...CliffDefaults},Result:null,Stage:1,Busy:false,DisplayStage:0,Revision:0,ReadyRevision:0,Worker:null,Dirty:false,
     Mode:'Clay',Wire:false,Selected:null,Isolated:false,Exploded:false,Milliseconds:0,Error:null};
 const Scene=new THREE.Scene();
 Scene.background=new THREE.Color('#282e38');
@@ -142,11 +142,28 @@ function ViewStage(StageNumber)
         Button.classList.toggle('Active',Selected);
         Button.setAttribute('aria-pressed',String(Selected));
     });
-    if (!State.Result) return;
+    State.Dirty=State.Busy || !State.Result?.Stages[State.Stage-1] || State.Stage>=EarliestStage(State.Result?.Specification,State.Specification);
+    Element('ExportObj').disabled=State.Dirty;
+    Element('Regenerate').textContent=State.Busy?'Cancel & rebuild':`Rebuild through 0${State.Stage}`;
+    document.querySelectorAll('#ParameterControls details').forEach((Section,Index)=>{Section.open=Index===State.Stage-1;});
+    const ValidThrough=Math.min(State.Stage,EarliestStage(State.Result?.Specification,State.Specification)-1);
+    const Stage=State.Result?.Stages.slice(0,ValidThrough).at(-1);
+    State.DisplayStage=Stage?.Number||0;
+    if (State.Dirty)
+    {
+        Element('StageDescription').textContent=`Stage ${State.Stage} needs rebuilding. ${Stage?`Showing stage ${Stage.Number} as input.`:'No current input mesh.'} ${Description}`;
+        SetStatus(`Rebuild through stage ${State.Stage} · later stages will not run`,true);
+    }
     const Name=State.Selected?.name;
     const Isolated=State.Isolated;
     DisposeBodies();
-    const Stage=State.Result.Stages[State.Stage-1];
+    if (!Stage)
+    {
+        Element('Metrics').textContent='No current mesh at this stage. Rebuild to continue.';
+        Element('BodyCount').textContent='No current mesh';
+        Element('TriangleCount').textContent='— triangles';
+        return;
+    }
     Stage.Meshes.forEach((Mesh,Index)=>BodyGroup.add(BuildRenderBody(Mesh,Index)));
     if (Name)
     {
@@ -160,7 +177,7 @@ function ViewStage(StageNumber)
 
 function UpdateMetrics()
 {
-    const Stage=State.Result?.Stages[State.Stage-1];
+    const Stage=State.Result?.Stages[State.DisplayStage-1];
     if (!Stage) return;
     const Metrics=Stage.Metrics;
     const Format=Value=>Value.toLocaleString('en');
@@ -173,8 +190,8 @@ function UpdateMetrics()
         <span>Rejected spalls / fissures</span><b>${Metrics.RejectedSpalls} / ${Metrics.RejectedCracks}</b>
         <span>Triangles below 5°</span><b class="${Metrics.ThinTriangles?'Warn':'Pass'}">${Metrics.ThinTriangles}</b>
         <span>Minimum triangle angle</span><b>${Metrics.MinimumAngle.toFixed(2)}°</b>
-        <span>Whole pipeline</span><b>${(State.Milliseconds/1000).toFixed(2)} s</b>`;
-    Element('QualityNote').textContent=Metrics.ThinTriangles ?
+        <span>Last requested rebuild</span><b>${(State.Milliseconds/1000).toFixed(2)} s</b>`;
+    Element('QualityNote').textContent=State.Dirty ? `Showing stage ${State.DisplayStage} input, not the selected stage output. Export is disabled.` : Metrics.ThinTriangles ?
         'Narrow triangles remain at some clipped intersections; counted above, not hidden. Topology checks do not prove absence of all surface intersections.' :
         'Indexed export topology checked per body. No n-gons. Display wireframe includes every triangulation edge.';
     Element('BodyCount').textContent=`${Metrics.Bodies} closed mesh objects`;
@@ -246,41 +263,45 @@ function FrameView(Body=null, Direction=null)
 
 function MarkDirty()
 {
-    State.Dirty=true;
-    Element('ExportObj').disabled=true;
-    SetStatus('Parameters changed · rebuild required',true);
+    if (State.Busy)
+    {
+        State.Worker?.terminate();
+        State.Worker=null;
+        State.Busy=false;
+        ++State.Revision;
+        Element('Loading').hidden=true;
+    }
+    ViewStage(State.Stage);
 }
 
 function Generate()
 {
-    State.Worker?.terminate();
+    if (State.Busy)
+    {
+        State.Worker?.terminate();
+        State.Worker=null;
+    }
     const Revision=++State.Revision;
+    const Initial=!State.Result;
     State.Error=null;
-    MarkDirty();
-    State.Result=null;
-    DisposeBodies();
-    Renderer.shadowMap.needsUpdate=true;
-    Element('BodyCount').textContent='Building strata…';
-    Element('Metrics').textContent='Building a new mesh; previous result discarded.';
+    State.Busy=true;
+    State.Dirty=true;
+    Element('ExportObj').disabled=true;
     Element('Failure').hidden=true;
     Element('Loading').hidden=false;
-    Element('LoadingTitle').textContent='Constructing cliff';
-    Element('LoadingDetail').textContent='Stitching geological profiles…';
-    Element('Regenerate').textContent='Restart rebuild';
-    SetStatus('Building new geometry · no cached OBJ fallback');
+    Element('LoadingTitle').textContent=`Rebuilding through stage ${State.Stage}`;
+    Element('LoadingDetail').textContent='Reusing valid upstream checkpoints…';
+    Element('Regenerate').textContent='Cancel & rebuild';
+    SetStatus(`Building through stage ${State.Stage} only`);
     try
     {
         State.Specification=ReadSpecification(State.Specification);
         for (const [Name,Value] of Object.entries(State.Specification))
         {
             const Input=Element(Name);
-            if (Input)
-            {
-                Input.value=Value;
-                UpdateRange(Input);
-            }
+            if (Input) {Input.value=Value;UpdateRange(Input);}
         }
-        const GenerationWorker=new Worker(new URL('./GenerationQueue.js',import.meta.url),{type:'module'});
+        const GenerationWorker=State.Worker||new Worker(new URL('./GenerationQueue.js',import.meta.url),{type:'module'});
         State.Worker=GenerationWorker;
         GenerationWorker.onmessage=Event=>
         {
@@ -288,31 +309,29 @@ function Generate()
             if (Message.Revision!==State.Revision) return;
             if (Message.Progress)
             {
-                Element('LoadingDetail').textContent=`${Message.Progress} / 5 · ${StageDescriptions[Message.Progress-1][0]}`;
+                Element('LoadingDetail').textContent=`Stage ${Message.Progress} · ${StageDescriptions[Message.Progress-1][0]}`;
                 return;
             }
-            if (Message.Error)
-            {
-                FailGeneration(Message.Error);
-                return;
-            }
+            if (Message.Error) {FailGeneration(Message.Error);return;}
             State.Result=Message.Result;
             State.Milliseconds=Message.Milliseconds;
             State.ReadyRevision=Revision;
-            State.Dirty=false;
+            State.Busy=false;
             Element('Loading').hidden=true;
-            Element('Regenerate').textContent='Rebuild geometry';
-            Element('ExportObj').disabled=false;
             ViewStage(State.Stage);
-            FrameView();
-            GenerationWorker.terminate();
-            State.Worker=null;
+            if (Initial) FrameView();
+            if (!State.Dirty)
+            {
+                const Warnings=Message.Result.Stages[State.Stage-1].Metrics.ThinTriangles;
+                const Quality=Warnings?` · ${Warnings} narrow-triangle warnings`:'';
+                SetStatus(`Stage ${State.Stage} ready · calculated ${Message.Result.ExecutedStages.join(', ')||'none'} · reused ${Message.Result.ReusedStages.join(', ')||'none'}${Quality}`,Warnings>0);
+            }
         };
         GenerationWorker.onerror=Event=>
         {
             if (State.Revision===Revision) FailGeneration(Event.message||'Geometry worker failed to load.');
         };
-        GenerationWorker.postMessage({Revision,Specification:State.Specification});
+        GenerationWorker.postMessage({Revision,Specification:State.Specification,Through:State.Stage});
     }
     catch (Error)
     {
@@ -326,6 +345,7 @@ function FailGeneration(Message)
     State.Worker=null;
     State.Result=null;
     State.Error=Message;
+    State.Busy=false;
     State.Dirty=true;
     DisposeBodies();
     Renderer.shadowMap.needsUpdate=true;
@@ -367,9 +387,9 @@ function ObjText()
 }
 
 const Groups=[
-    ['Cliff mass',true,[['Profile','Landform'],['Seed','Feature seed'],['Width','Width',18,48,.5,'m'],['Height','Height',10,26,.5,'m'],
+    ['Cliff mass',true,[['Profile','Landform'],['Width','Width',18,48,.5,'m'],['Height','Height',10,26,.5,'m'],
         ['Depth','Depth',8,18,.5,'m'],['Relief','Buttress / bay relief',.35,1.3,.05,'×'],['Retreat','Crown retreat',.25,.65,.01,'×']]],
-    ['Bedding cuts',false,[['Beds','Bed count',4,10,1,''],['Dip','Bedding dip',-8,8,.5,'°'],['Aperture','Joint aperture',.035,.18,.005,'m']]],
+    ['Bedding cuts',false,[['Seed','Feature seed'],['Beds','Bed count',4,10,1,''],['Dip','Bedding dip',-8,8,.5,'°'],['Aperture','Joint aperture',.035,.18,.005,'m'],['FractureBend','Fracture flexure',0,1.5,.05,'×']]],
     ['Bounded joints',false,[['JointSpacing','Joint spacing',3,7,.2,'m'],['Penetration','Joint penetration',.55,.9,.01,'×'],['FaceRecess','Face recess scale',0,1.5,.05,'m']]],
     ['Edge spalls',true,[['SpallSize','Spall scale',.25,1.3,.05,'m'],['SpallDensity','Edge occupancy',0,1,.05,'×']]],
     ['Surface fissures',false,[['CrackLength','Maximum length',.5,2.2,.1,'m'],['CrackWidth','Mouth width',.07,.22,.01,'m'],
@@ -397,18 +417,14 @@ function BuildControls()
                 UpdateRange(Input);
                 MarkDirty();
             });
-            Input.addEventListener('change',()=>
-            {
-                State.Specification[Name]=Name==='Profile'?Input.value:Number(Input.value);
-                Generate();
-            });
+
         }
     }
     Element('NewSeed').onclick=()=>
     {
         State.Specification.Seed=crypto.getRandomValues(new Uint32Array(1))[0]%1000000;
         Element('Seed').value=State.Specification.Seed;
-        Generate();
+        MarkDirty();
     };
 }
 

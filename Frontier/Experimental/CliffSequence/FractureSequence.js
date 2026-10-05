@@ -4,7 +4,7 @@
 // 📦 Profiled cliff mass, bedding, finite joints, local spalls and shallow polygon fissures.
 
 import {CollapseSlivers, FlipCaps, SnapCaps} from './TriangleSolver.js';
-import {CliffProfiles, SectionPlans, RecessPlans, BeddingPlans, JointPlans, SpallPlans, CrackPlans, SelectCatalogue, ReadSpecification} from './CliffSpecification.js';
+import {CliffProfiles, SectionPlans, RecessPlans, BeddingPlans, JointPlans, SpallPlans, CrackPlans, SelectCatalogue, ReadSpecification, EarliestStage} from './CliffSpecification.js';
 import {Add, Subtract, Scale, Dot, Cross, Length, Normalize, Lerp, Centre, PointKey, EdgeKey, Face, Frame,
     ClipCells, JoinCells, TriangulateFace, TriangulateBody, InsideMesh, MeshMetrics, PointInLoop, LoopClearance} from './PolyhedronSolver.js';
 
@@ -14,8 +14,17 @@ function ConstructMass(Specification)
     const {Stations,Sections,SectionKinds}=CliffProfiles[Profile];
     const MinimumProjection=Math.min(...Stations.flatMap(([, ,Projection])=>SectionPlans.flatMap(Plan=>Plan.map(Setback=>Projection*Relief+Setback*Retreat/.48))));
     const DepthScale=Math.min(1,.88/Math.max(.01,-MinimumProjection));
+    const WidthSections=[1,.97,1.01,.94,.87];
     const Rows=Stations.map(([X,Crown,Projection],Station)=>Sections.map(([Y],Level)=>
-        [(X-.5)*Width,Y*Crown*Height,(Projection*Relief + SectionPlans[SectionKinds[Station]][Level]*Retreat/.48)*Depth*DepthScale]));
+        [(X-.5)*Width*WidthSections[Level],Y*Crown*Height,(Projection*Relief + SectionPlans[SectionKinds[Station]][Level]*Retreat/.48)*Depth*DepthScale]));
+    const RearRows=Stations.map(([X,Crown],Station)=>Sections.map(([Y],Level)=>
+    {
+        const Opposite=Stations[Stations.length-1-Station];
+        const Setback=SectionPlans[(SectionKinds[Station]+1)%SectionPlans.length][Level];
+        const Front=Rows[Station][Level];
+        const Back=-Depth-Opposite[2]*Relief*Depth*.7-Setback*Depth*Retreat*.75;
+        return [Front[0],Front[1],Math.min(Back,Front[2]-Depth*.24)];
+    }));
     const Cells=[];
     for (let Column=0;Column<Rows.length-1;++Column)
     {
@@ -26,16 +35,16 @@ function ConstructMass(Specification)
             {
                 const Indices=Triangle.map(Index=>CornerIndices[Index]);
                 const Front=Indices.map(([Column,Level])=>Rows[Column][Level]);
-                const Back=Front.map(([X,Y])=>[X,Y,-Depth]);
+                const Back=Indices.map(([Column,Level])=>RearRows[Column][Level]);
                 const Middle=Centre([...Front,...Back]);
-                const Faces=[Face(Front,'Cliff',[0,0,1]),Face(Back,'Back',[0,0,-1])];
+                const Faces=[Face(Front,'Cliff',[0,0,1]),Face(Back,'Cliff',[0,0,-1])];
                 for (let Index=0;Index<3;++Index)
                 {
                     const Next=(Index+1)%3;
                     const [A,B]=[Indices[Index],Indices[Next]];
                     const Tag=A[1]===B[1] && A[1]===0 ? 'Base' :
                         A[1]===B[1] && A[1]===Sections.length-1 ? 'Crown' :
-                        A[0]===B[0] && (A[0]===0 || A[0]===Stations.length-1) ? 'End' : 'Construction';
+                        A[0]===B[0] && (A[0]===0 || A[0]===Stations.length-1) ? 'Cliff' : 'Construction';
                     const Loop=[Front[Index],Back[Index],Back[Next],Front[Next]];
                     Faces.push(Face(Loop,Tag,Subtract(Centre(Loop),Middle)));
                 }
@@ -54,61 +63,128 @@ function SeparateCutFromCorners(Cells, Direction, Desired, Clearance, MaximumShi
     return Candidates.find(Value=>Math.abs(Value-Desired)<MaximumShift && Coordinates.every(Corner=>Math.abs(Value-Corner)>=Clearance)) ?? Desired;
 }
 
+// 📝 Authored flexure and step-over traces, expressed as continuous piecewise planes.
+// 📝 These cut surfaces, rather than displacing the cliff vertices or sampling a noise field.
+const Flexures=[
+    [[-.8,0],[-.36,.05],[-.28,.7],[-.06,.65],[.06,-.55],[.29,-.48],[.38,.25],[.8,.1]],
+    [[-.8,.2],[-.43,.2],[-.23,-.6],[.02,-.48],[.12,.65],[.34,.55],[.43,-.3],[.8,-.2]],
+    [[-.8,-.1],[-.4,-.35],[-.3,.4],[-.12,.6],[.14,-.45],[.25,-.35],[.46,.5],[.8,.2]]];
+
+function ClipFlexure(Cells, Level, BedIndex, Side, Specification)
+{
+    if (!Number.isFinite(Level)) return Cells;
+    const {Width,Height,Beds,Dip,Aperture,FractureBend}=Specification;
+    const Knots=Flexures[BedIndex%Flexures.length];
+    const Axis=[1,0,[.28,-.19,.38][BedIndex%3]];
+    const Amplitude=Math.min(Height/Beds*.30,1)*FractureBend;
+    const Result=[];
+    for (let Segment=0;Segment<Knots.length-1;++Segment)
+    {
+        const [U,A]=Knots[Segment], [V,B]=Knots[Segment+1];
+        let Pieces=Cells;
+        if (Segment>0) Pieces=ClipCells(Pieces,Scale(Axis,-1),-U*Width,'Construction');
+        if (Segment<Knots.length-2) Pieces=ClipCells(Pieces,Axis,V*Width,'Construction');
+        const Slope=(B-A)*Amplitude/((V-U)*Width);
+        const Intercept=A*Amplitude-Slope*U*Width;
+        // 📝 Seams open at a step-over and pinch along intact portions; they are not uniform saw slots.
+        const OpenA=.22+Math.abs(A)*1.65, OpenB=.22+Math.abs(B)*1.65;
+        const GapSlope=(OpenB-OpenA)*Aperture*.5/((V-U)*Width);
+        const GapIntercept=OpenA*Aperture*.5-GapSlope*U*Width;
+        const Direction=Subtract([-Math.tan(Dip*Math.PI/180),1,.035],Scale(Axis,Slope-Side*GapSlope));
+        const Offset=Level+Intercept-Side*GapIntercept;
+        Pieces=ClipCells(Pieces,Scale(Direction,Side),Offset*Side,'Bedding');
+        Result.push(...Pieces);
+    }
+    return Result;
+}
+
 function SliceBeds(Cells, Specification, Select)
 {
-    const {Height,Beds,Dip,Aperture}=Specification;
-    const Plan=BeddingPlans[Select(BeddingPlans.length)];
-    const Weights=Array.from({length:Beds},(_,Index)=>Plan[Index%Plan.length]);
+    const {Height,Beds}=Specification;
+    const Sequence=BeddingPlans[Select(BeddingPlans.length)];
+    const Weights=Array.from({length:Beds},(_,Index)=>Sequence[Index%Sequence.length]);
     const Total=Weights.reduce((A,B)=>A+B);
-    const Direction=Normalize([-Math.tan(Dip*Math.PI/180),1,.035]);
     const Levels=[-Infinity];
     let Sum=0;
     for (let Index=0;Index<Beds-1;++Index)
     {
         Sum+=Weights[Index];
-        Levels.push(SeparateCutFromCorners(Cells,Direction,Sum/Total*Height*.99,.19+Aperture*.5,Math.min(.6,.25*Height/Beds)));
+        Levels.push(Sum/Total*Height*.99);
     }
     Levels.push(Infinity);
     return Weights.map((Weight,Index)=>
     {
-        let Pieces=Cells;
-        if (Number.isFinite(Levels[Index])) Pieces=ClipCells(Pieces,Scale(Direction,-1),-Levels[Index]-Aperture*.5,'Bedding');
-        if (Number.isFinite(Levels[Index+1])) Pieces=ClipCells(Pieces,Direction,Levels[Index+1]-Aperture*.5,'Bedding');
-        return {Name:`Bed ${String(Index+1).padStart(2,'0')}`,Cells:Pieces,Layer:Index};
+        let Pieces=ClipFlexure(Cells,Levels[Index],Index,-1,Specification);
+        Pieces=ClipFlexure(Pieces,Levels[Index+1],Index+1,1,Specification);
+        return {Name:`Bed ${String(Index+1).padStart(2,'0')}`,Cells:Pieces,Layer:Index,
+            Middle:(Number.isFinite(Levels[Index])?Levels[Index]:0)+Weight/Total*Height*.5};
     }).filter(Bed=>Bed.Cells.length);
 }
 
 function SplitJoints(Beds, Specification, Select)
 {
-    const {Depth,Width,JointSpacing,Penetration,Aperture}=Specification;
+    const {Depth,Width,JointSpacing,Penetration,Aperture,FractureBend}=Specification;
     const Family=JointPlans[Select(JointPlans.length)];
     const Result=[];
+    const Middle=-Depth*.48, Half=Depth*(1-Penetration)*.5;
     for (const Bed of Beds)
     {
-        // 📝 Front joints stop at this depth. Rear strata are not sliced by the joint family.
-        const Terminal=-Depth*Penetration;
-        const Rear=ClipCells(Bed.Cells,[0,0,1],Terminal-Aperture*.5,'Termination');
-        const Front=ClipCells(Bed.Cells,[0,0,-1],-Terminal-Aperture*.5,'Termination');
-        if (Rear.length) Result.push({Name:`${Bed.Name} · rear`,Cells:Rear,Layer:Bed.Layer,Rear:true});
-        const Direction=Normalize([1,Family.Lean,Family.Obliquity]);
-        const Positions=[-Infinity];
-        const Stagger=Family.Stagger[Bed.Layer%Family.Stagger.length]*JointSpacing;
-        for (let X=-Width*.5+JointSpacing+Stagger;X<Width*.5;X+=JointSpacing) Positions.push(SeparateCutFromCorners(Front,Direction,X,.16+Aperture*.5));
-        Positions.push(Infinity);
-        for (let Index=0;Index<Positions.length-1;++Index)
+        const CentreCells=ClipCells(ClipCells(Bed.Cells,[0,0,1],Middle+Half-Aperture*.5,'Termination'),[0,0,-1],-Middle+Half-Aperture*.5,'Termination');
+        const Core=ClipCells(ClipCells(CentreCells,[1,0,0],Width*.27-Aperture*.5,'Termination'),[-1,0,0],Width*.27-Aperture*.5,'Termination');
+        if (Core.length) Result.push({Name:`${Bed.Name} · core`,Cells:Core,Layer:Bed.Layer,Rear:true});
+        const Exposures=[
+            {Name:'front',Cells:ClipCells(Bed.Cells,[0,0,-1],-Middle-Half-Aperture*.5,'Termination'),Out:[0,0,1]},
+            {Name:'rear',Cells:ClipCells(Bed.Cells,[0,0,1],Middle-Half-Aperture*.5,'Termination'),Out:[0,0,-1]},
+            {Name:'left',Cells:ClipCells(CentreCells,[1,0,0],-Width*.27-Aperture*.5,'Termination'),Out:[-1,0,0]},
+            {Name:'right',Cells:ClipCells(CentreCells,[-1,0,0],-Width*.27-Aperture*.5,'Termination'),Out:[1,0,0]}];
+        for (const Exposure of Exposures)
         {
-            let Pieces=Front;
-            if (Number.isFinite(Positions[Index])) Pieces=ClipCells(Pieces,Scale(Direction,-1),-Positions[Index]-Aperture*.5,'Joint');
-            if (Number.isFinite(Positions[Index+1])) Pieces=ClipCells(Pieces,Direction,Positions[Index+1]-Aperture*.5,'Joint');
-            if (Pieces.length && Specification.FaceRecess>0)
+            if (!Exposure.Cells.length) continue;
+            const AlongEnd=Math.abs(Exposure.Out[0])>.5;
+            const Span=AlongEnd?Depth:Width;
+            const CentreCoordinate=AlongEnd?Middle:0;
+            const Positions=[-Infinity];
+            const Stagger=Family.Stagger[Bed.Layer%4]*JointSpacing;
+            if (!AlongEnd) for (let U=CentreCoordinate-Span*.5+JointSpacing+Stagger;U<CentreCoordinate+Span*.5;U+=JointSpacing) Positions.push(U);
+            Positions.push(Infinity);
+            const JointDirection=AlongEnd?[Family.Obliquity,Family.Lean,1]:[1,Family.Lean,Family.Obliquity];
+            const BendAmount=FractureBend*[.21,-.26,.16][Bed.Layer%3];
+            const Boundary=JoinCells(Exposure.Cells,Exposure.Name).Faces;
+            const Corners=[...new Set(Boundary.flatMap(Polygon=>Polygon.Loop.map(Point=>
+                Dot(Point,JointDirection)-BendAmount*Math.max(0,Point[1]-Bed.Middle))))];
+            for (let Cut=1;Cut<Positions.length-1;++Cut)
             {
-                const Plan=RecessPlans[Select(RecessPlans.length)];
-                const Outward=Normalize(Plan.Normal);
-                const Support=Math.max(...Pieces.flatMap(Cell=>Cell.flatMap(Face=>Face.Loop.map(Point=>Dot(Point,Outward)))));
-                const Depth=Specification.FaceRecess*Plan.Depth*[.35,1,.25,.8,.15,.65,.3][Bed.Layer%7];
-                Pieces=ClipCells(Pieces,Outward,Support-Depth,'Cliff');
+                const Desired=Positions[Cut],Clearance=.13;
+                const Candidates=[Desired,...Corners.flatMap(Corner=>[Corner-Clearance-1e-5,Corner+Clearance+1e-5])];
+                Candidates.sort((First,Second)=>Math.abs(First-Desired)-Math.abs(Second-Desired));
+                Positions[Cut]=Candidates.find(Candidate=>Math.abs(Candidate-Desired)<.5 &&
+                    Corners.every(Corner=>Math.abs(Candidate-Corner)>=Clearance))??Desired;
             }
-            if (Pieces.length) Result.push({Name:`${Bed.Name} · block ${String(Index+1).padStart(2,'0')}`,Cells:Pieces,Layer:Bed.Layer});
+            for (let Index=0;Index<Positions.length-1;++Index)
+            {
+                const Pieces=[];
+                for (const Upper of [false,true])
+                {
+                    let Parts=ClipCells(Exposure.Cells,[0,Upper?-1:1,0],Upper?-Bed.Middle:Bed.Middle,'Construction');
+                    const Bend=Upper ? FractureBend*[.21,-.26,.16][Bed.Layer%3] : 0;
+                    const Direction=AlongEnd?[Family.Obliquity,Family.Lean-Bend,1]:[1,Family.Lean-Bend,Family.Obliquity];
+                    const Shift=-Bend*Bed.Middle;
+                    if (Number.isFinite(Positions[Index])) Parts=ClipCells(Parts,Scale(Direction,-1),-Positions[Index]-Shift-Aperture*.38,'Joint');
+                    if (Number.isFinite(Positions[Index+1])) Parts=ClipCells(Parts,Direction,Positions[Index+1]+Shift-Aperture*.38,'Joint');
+                    Pieces.push(...Parts);
+                }
+                let Carved=Pieces;
+                if (Carved.length && Specification.FaceRecess>0)
+                {
+                    const Feature=RecessPlans[Select(RecessPlans.length)];
+                    const Outward=Normalize(Add(Exposure.Out,[Feature.Normal[0]*.2,Feature.Normal[1],0]));
+                    const Support=Math.max(...Carved.flatMap(Cell=>Cell.flatMap(Face=>Face.Loop.map(Point=>Dot(Point,Outward)))));
+                    const Recession=Specification.FaceRecess*Feature.Depth*[.35,1,.25,.8,.15,.65,.3][Bed.Layer%7];
+                    const Offset=SeparateCutFromCorners(Carved,Outward,Support-Recession,.10,.25);
+                    Carved=ClipCells(Carved,Outward,Math.min(Support,Offset),'Cliff');
+                }
+                if (Carved.length) Result.push({Name:`${Bed.Name} · ${Exposure.Name} ${Index+1}`,Cells:Carved,Layer:Bed.Layer});
+            }
         }
     }
     return Result;
@@ -215,7 +291,7 @@ function CarveCracks(Body, Specification, Select)
 {
     if (Body.Rear || !Specification.CrackDensity || Select(100)>=Specification.CrackDensity*100) return Body;
     const Source=TriangulateBody(Body,Infinity);
-    const Faces=Body.Faces.filter(Polygon=>Polygon.Tag==='Cliff' && Polygon.Normal[2]>.2);
+    const Faces=Body.Faces.filter(Polygon=>Polygon.Tag==='Cliff');
     Faces.sort((A,B)=>
     {
         const Area=Polygon=>Length(Polygon.Loop.slice(1,-1).reduce((Sum,Point,Index)=>
@@ -282,6 +358,12 @@ function PolygonArea(Points)
 
 function EmitStage(Bodies, Number, Specification, Previous)
 {
+    const Defective=Mesh=>
+    {
+        const Metrics=MeshMetrics(Mesh);
+        return Metrics.OpenEdges+Metrics.NonmanifoldEdges+Metrics.NonmanifoldVertices+
+            Metrics.DuplicateTriangles+Metrics.WindingErrors+Metrics.ZeroArea;
+    };
     const Compile=Body=>SnapCaps(FlipCaps(CollapseSlivers(FlipCaps(TriangulateBody(Body,Number===1 ? Specification.TriangleSpan*3 : Specification.TriangleSpan),.12),.12),.12),.12);
     const Meshes=Bodies.map(Body=>
     {
@@ -290,7 +372,7 @@ function EmitStage(Bodies, Number, Specification, Previous)
         // 📝 Damage is transactional: reject a local feature if it worsens the narrow-triangle budget.
         if (Number===4)
         {
-            while (MeshMetrics(Mesh).ThinTriangles>PreviousCount && Body.Spalls.length)
+            while ((Defective(Mesh) || MeshMetrics(Mesh).ThinTriangles>PreviousCount) && Body.Spalls.length)
             {
                 const Narrow=Mesh.Triangles.find(Triangle=>
                 {
@@ -302,7 +384,7 @@ function EmitStage(Bodies, Number, Specification, Previous)
                         return Dot(A,B)>Math.cos(5*Math.PI/180);
                     });
                 });
-                const Position=Centre(Narrow.map(Index=>Mesh.Vertices[Index]));
+                const Position=Narrow ? Centre(Narrow.map(Index=>Mesh.Vertices[Index])) : Body.Spalls.at(-1).Centre;
                 const Ordered=Body.Spalls.slice().sort((A,B)=>Length(Subtract(A.Centre,Position))-Length(Subtract(B.Centre,Position)));
                 const Rejected=Ordered[0];
                 Rejected.AffectedFaces.forEach((FaceIndex,Index)=>{Body.Faces[FaceIndex]=Rejected.OriginalFaces[Index];});
@@ -312,7 +394,7 @@ function EmitStage(Bodies, Number, Specification, Previous)
                 Mesh=Compile(Body);
             }
         }
-        if (Number===5 && MeshMetrics(Mesh).ThinTriangles>PreviousCount && Body.Cracks.length)
+        if (Number===5 && (Defective(Mesh) || MeshMetrics(Mesh).ThinTriangles>PreviousCount) && Body.Cracks.length)
         {
             Body.Faces=Body.Faces.filter(Polygon=>Polygon.Tag!=='Crack').map(Polygon=>({...Polygon,Holes:[]}));
             Body.RejectedCracks=Body.Cracks.length;
@@ -334,28 +416,63 @@ function EmitStage(Bodies, Number, Specification, Previous)
     return {Number,Meshes,Metrics,Records};
 }
 
-export function GenerateCliff(Input, Progress=()=>{})
+export class CliffSequence
 {
-    const Specification=ReadSpecification(Input);
-    const Select=SelectCatalogue(Specification.Seed);
-    const Stages=[];
-    const Mass=ConstructMass(Specification);
-    const Emit=(Bodies,Number)=>
+    constructor()
     {
-        Progress(Number);
-        const Stage=EmitStage(Bodies,Number,Specification,Stages.at(-1));
-        Stages.push(Stage);
-        return Stage;
-    };
-    Emit([JoinCells(Mass,'Cliff mass')],1);
-    const Beds=SliceBeds(Mass,Specification,Select);
-    Emit(Beds.map(Bed=>JoinCells(Bed.Cells,Bed.Name)),2);
-    const Blocks=SplitJoints(Beds,Specification,Select);
-    let Bodies=Blocks.map(Block=>({...JoinCells(Block.Cells,Block.Name),Rear:Block.Rear}));
-    Emit(Bodies,3);
-    Bodies=Bodies.map(Body=>CarveSpalls(structuredClone(Body),Specification,Select));
-    Emit(Bodies,4);
-    Bodies=Bodies.map(Body=>CarveCracks(structuredClone(Body),Specification,Select));
-    Emit(Bodies,5);
-    return {Specification,Stages};
+        this.Specification=null;
+        this.Stages=[];
+        this.Construction=[];
+    }
+
+    Generate(Input, Progress=()=>{}, Through=5)
+    {
+        const Specification=ReadSpecification(Input);
+        Through=Math.max(1,Math.min(5,Math.round(Through)));
+        const Changed=EarliestStage(this.Specification,Specification);
+        this.Stages.length=Math.min(this.Stages.length,Changed-1);
+        this.Construction.length=this.Stages.length;
+        this.Specification=Specification;
+        const ReusedStages=this.Stages.slice(0,Through).map(Stage=>Stage.Number);
+        const ExecutedStages=[],Timings={};
+        for (let Number=this.Stages.length+1;Number<=Through;++Number)
+        {
+            const Started=performance.now();
+            Progress(Number);
+            const Select=SelectCatalogue(Specification.Seed+Number*104729);
+            const Previous=this.Construction[Number-2];
+            let Content,Bodies;
+            if (Number===1)
+            {
+                Content=ConstructMass(Specification);
+                Bodies=[JoinCells(Content,'Cliff mass')];
+            }
+            else if (Number===2)
+            {
+                Content=SliceBeds(Previous,Specification,Select);
+                Bodies=Content.map(Bed=>JoinCells(Bed.Cells,Bed.Name));
+            }
+            else if (Number===3)
+            {
+                Content=SplitJoints(Previous,Specification,Select).map(Part=>({...JoinCells(Part.Cells,Part.Name),Rear:Part.Rear}));
+                Bodies=Content;
+            }
+            else
+            {
+                Content=Previous.map(Body=>(Number===4?CarveSpalls:CarveCracks)(structuredClone(Body),Specification,Select));
+                Bodies=Content;
+            }
+            const Stage=EmitStage(Bodies,Number,Specification,this.Stages.at(-1));
+            this.Construction.push(Content);
+            this.Stages.push(Stage);
+            ExecutedStages.push(Number);
+            Timings[Number]=performance.now()-Started;
+        }
+        return {Specification,Stages:this.Stages.slice(),Through,ExecutedStages,ReusedStages,Timings};
+    }
+}
+
+export function GenerateCliff(Input, Progress=()=>{}, Through=5)
+{
+    return new CliffSequence().Generate(Input,Progress,Through);
 }

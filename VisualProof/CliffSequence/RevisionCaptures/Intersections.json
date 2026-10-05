@@ -1,0 +1,42 @@
+{
+  "Date": "2026-10-05",
+  "Method": "Indexed double-precision positions; BVH broad phase and double-precision separating-axis triangle tests (1e-8 m tolerance); All triangle pairs, including coplanar tessellation; shared-vertex pairs contracted toward their centroids by 1e-4 to exclude legitimate boundary contact. Cross-body pairs uncontracted.",
+  "Stages": [
+    {
+      "Stage": 1,
+      "SelfCandidates": 21523,
+      "BodyCandidates": 0,
+      "SelfHits": 0,
+      "BodyHits": 0
+    },
+    {
+      "Stage": 2,
+      "SelfCandidates": 386795,
+      "BodyCandidates": 170611,
+      "SelfHits": 0,
+      "BodyHits": 0
+    },
+    {
+      "Stage": 3,
+      "SelfCandidates": 962531,
+      "BodyCandidates": 479078,
+      "SelfHits": 0,
+      "BodyHits": 0
+    },
+    {
+      "Stage": 4,
+      "SelfCandidates": 1619551,
+      "BodyCandidates": 598452,
+      "SelfHits": 0,
+      "BodyHits": 0
+    },
+    {
+      "Stage": 5,
+      "SelfCandidates": 1878008,
+      "BodyCandidates": 596850,
+      "SelfHits": 0,
+      "BodyHits": 0
+    }
+  ],
+  "Hits": []
+}

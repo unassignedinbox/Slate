@@ -24,7 +24,7 @@ export function Normal(Points)
     const Origin = Points[0];
     for (let Index = 1; Index < Points.length-1; ++Index)
         Vector = Add(Vector, Cross(Subtract(Points[Index], Origin), Subtract(Points[Index+1], Origin)));
-    return Normalize(Vector);
+    return Length(Vector)>1e-10 ? Normalize(Vector) : [0,0,0];
 }
 
 export function CleanLoop(Points, Collinear = true)
@@ -147,6 +147,23 @@ function SplitEdges(Polygons)
 // 📝 Remove construction interfaces before triangulation. Co-planar contours are stitched, not concatenated.
 export function JoinCells(Cells, Name)
 {
+    // 📝 Rounded keys alone split a shared corner when roundoff straddles a bucket boundary.
+    const Buckets=new Map();
+    const Weld=Point=>
+    {
+        const Coordinate=Point.map(Component=>Math.floor(Component/ε));
+        for (let X=-1;X<=1;++X) for (let Y=-1;Y<=1;++Y) for (let Z=-1;Z<=1;++Z)
+        {
+            const Key=[Coordinate[0]+X,Coordinate[1]+Y,Coordinate[2]+Z].join(',');
+            const Match=Buckets.get(Key)?.find(Other=>Length(Subtract(Point,Other))<ε*.25);
+            if (Match) return Match;
+        }
+        const Key=Coordinate.join(',');
+        if (!Buckets.has(Key)) Buckets.set(Key,[]);
+        Buckets.get(Key).push(Point);
+        return Point;
+    };
+    Cells=Cells.map(Cell=>Cell.map(Polygon=>({...Polygon,Loop:Polygon.Loop.map(Weld)})));
     const Planes = new Map();
     for (const Polygon of Cells.flat())
     {

@@ -1513,3 +1513,181 @@ ground or shadows present. The same application, including shadows, completed th
 This does not establish that the Chromium 153 software-rendering path is fixed, or certify target-GPU/browser
 performance. The verifier can use normal Playwright Chromium, or an explicitly selected sandbox executable;
 its optional compositor resize/readback synchronization is test-side only and does not alter the mesh.
+
+## C031 — All-sided cliff profiles, flexed cuts and selected-stage rebuilding
+
+Date: **2026-10-05**. This revises C030 in response to the confirmed-working app and the three supplied captures.
+C030's original captures remain in `VisualProof/CliffSequence/Captures/`; the new evidence is separate.
+
+### Geometry changes
+
+- Retained the authored front massing. Added independent rear cross-sections and height-dependent end profiles;
+  the back is no longer a constant-depth plane. The convex construction cells still share exact interfaces.
+- Replaced globally planar bedding with continuous, piecewise-planar flexures and step-overs. Boundary families
+  use different authored traces and oblique axes. Aperture pinches along intact portions and opens at ramps.
+  `Fracture flexure` controls their amplitude. These are actual cutting surfaces, not a displacement function.
+- Front and rear exposures receive finite, kinked joints. End portions are separated from a retained interior
+  core; their narrow connecting portions are not needlessly subdivided again along their depth. All exposed
+  sides can receive recessed faces, localized spalls and finite surface fissures.
+- Joint placement avoids nearby construction corners where a bounded alternative exists. Numerical corner
+  welding now searches adjacent tolerance buckets rather than assuming rounded coordinate keys are sufficient.
+- Edge-collapse and diagonal-flip repairs reject new triangle intersections. Damage rollback now also rejects
+  structural defects, not just additional narrow triangles. This caught and removed a faulty local spall in
+  the fine-crack/coarse-triangulation recipe during verification.
+- Still no SDF, noise, stochastic vertex displacement, texture-based shape or whole-edge bevel substitute.
+  Triangle-only export remains independent of display colour, camera, selection and exploded inspection.
+
+### Selected-stage workflow
+
+The app starts at **stage 1**. Select a stage, edit its controls, then press **Rebuild through 0N**.
+Moving a slider or pressing New seed marks the parameters for rebuilding; it no longer launches all five stages.
+
+- A persistent worker retains geometry checkpoints and completed triangle results.
+- Each parameter declares its earliest dependent stage. Only that stage and its downstream results are invalidated.
+- A request stops at the selected stage. Valid upstream stages are reused, not recalculated.
+- Per-stage catalogue streams make stepped generation identical to a one-shot build of the same recipe.
+- Selecting an unbuilt stage shows the last valid upstream input, explicitly labelled as input, with OBJ disabled.
+- Later-stage rebuilds retain the current camera. Cancelling an in-flight job terminates that worker; this also
+  discards its checkpoints, but the replacement job still stops at the selected stage.
+- Generation failure and WebGL context loss still clear invalid output and disable export rather than substitute
+  an earlier or prebaked result.
+
+### Executed verification
+
+`VerifyGeometry.mjs` passed **14 recipes / 70 stages**, including the supplied Amphitheatre parameters
+(seed 42, 32 × 18 × 12 m, five beds, −5° dip). Deterministic replay passed. Every checked mesh had finite indexed
+triangles, positive volume, and zero open/nonmanifold edges, nonmanifold vertices, duplicate faces, degenerate
+triangles or inconsistent edge winding.
+
+Default recipe, final implementation:
+
+| Stage | Bodies | Vertices | Triangles | Minimum angle | Spalls | Fissures |
+|-------|--------|----------|-----------|---------------|--------|----------|
+| 1     | 1      | 347      | 690       | 11.4367°      | 0      | 0        |
+| 2     | 7      | 6,337    | 12,638    | 5.1255°       | 0      | 0        |
+| 3     | 117    | 16,751   | 33,010    | 5.0188°       | 0      | 0        |
+| 4     | 117    | 26,976   | 53,460    | 5.0188°       | 353    | 0        |
+| 5     | 117    | 30,575   | 60,658    | 5.0188°       | 353    | 36       |
+
+The default has **zero triangles below 5°** in every stage. Ten proposed spalls were rejected; no default fissures
+were rejected. A named body can contain more than one disconnected closed component, as in C030.
+
+Independent Float64 separating-axis checks passed all five stages of **both the default and user Amphitheatre
+recipes**, with zero self-intersections and zero cross-body triangle intersections. The verifier retains C030's
+1e−8 m comparison tolerance and 1e−4 relative contraction of shared-vertex pairs to exclude legitimate contact.
+This is not an exhaustive intersection proof for every possible parameter combination.
+
+Quality limits remain visible rather than hidden: the user Amphitheatre ends with **one** sub-5° triangle
+(minimum 3.48535°, 44,474 triangles). WideShallow ends with **eight** (minimum 1.00005°, 77,574 triangles).
+Some other nondefault recipes also retain narrow-angle warnings. Local repair is bounded to 0.12 m per operation,
+not a global cumulative shape-error guarantee. This remains authored geological geometry, not fracture mechanics.
+
+`VerifyCheckpoints.mjs` passed selected-stage stopping, all parameter dependency declarations, unchanged upstream
+geometry, downstream invalidation and byte-identical one-shot/stepped output. A Node run measured approximately
+0.24 / 2.61 / 5.24 / 7.47 / 8.80 seconds for the individual default stages; these are sandbox observations, not
+hardware performance promises. A stage-1 rebuild does not pay the cost of stages 2–5.
+
+`VerifyWorkflow.cjs` passed in Chromium **133.0.6943.0 / software WebGL 2**, with zero browser errors and zero GL
+error readback. It exercised manual edits, persistent-worker reuse, all five individual rebuilds, explicit unbuilt
+inputs, late-stage-only edits, cancellation, actual OBJ download, explode-independent export, failure clearing,
+390 × 844 layout, context loss, and fresh renders of the user's Amphitheatre. Thirteen unretouched screenshots
+include the rear mass, curved bedding traces, fractured rear, and same-camera spall before/after views.
+
+Evidence: `VisualProof/CliffSequence/RevisionCaptures/` contains `Geometry.json`, `Checkpoints.json`,
+`Intersections.json`, `UserIntersections.json`, `Workflow.json`, and the screenshots. `Workflow.json` records the
+runtime source hashes. Generated full-mesh JSON and temporary OBJs remain in ignored scratch. C030's Chromium
+153 software-rendering caveat is not claimed fixed by this revision.
+
+## C032 — Separate three-dimensional radiance-cascades experiment
+
+Date: **2026-10-05**. New static entry: `Frontier/Experimental/RadianceSequence/index.html`.
+The existing `RadianceProjection` raster-GI demo and all native GI code remain unchanged.
+
+### Construction and scope
+
+- `SceneSpecification.js` owns the scene's shared triangle coordinates, materials, receiver charts and cascade
+  dimensions. The displayed and traced coordinates are the same Float32 values, verified component by component.
+- `CascadeSequence.js` owns the GPU radiance intervals, merge targets, diffuse transport iterations and live
+  receiver-lighting targets. `WorkspacePanel.js` exposes scene controls and cascade inspection in the existing
+  Project Zero HTML theme, reusing the shared Three/OrbitControls files and existing font/CSS resources.
+- Four actual **3D spatial lattices**, each with a **full-sphere** cubemap directional discretization:
+
+| Cascade | Spatial samples | Directions/sample | Interval in metres | Traced intervals |
+|---------|-----------------|-------------------|--------------------|------------------|
+| C0      | 16 × 8 × 16     | 96                | 0–1.25             | 196,608          |
+| C1      | 8 × 4 × 8       | 384               | 1.25–3.75          | 98,304           |
+| C2      | 4 × 2 × 4       | 1,536             | 3.75–8.75          | 49,152           |
+| C3      | 2 × 1 × 2       | 6,144             | 8.75–18.75         | 24,576           |
+
+Spatial sample count decreases eightfold, angular sample count increases fourfold, and interval length doubles.
+There are **368,640 traced intervals per diffuse iteration**. This is not a 2D field extruded into a 3D viewer,
+ordinary irradiance probes renamed as cascades, or a relabelling of the earlier raster-GI implementation.
+
+Each RGBA interval records RGB radiance and scalar transmittance. Far-to-near merging uses eight spatial samples
+and four finer angular cells, weighted by their cubemap solid angles:
+
+```text
+L = Lnear + Tnear × Lfar
+T = Tnear × Tfar
+```
+
+The first diffuse iteration traces emission only. Subsequent iterations add reflected radiance from the previous
+solution at triangle hits. The default four iterations therefore include direct area lighting and three reflected
+transport updates. No added ambient term or precomputed lighting scene is substituted.
+
+This experiment uses **software triangle rays in WebGL fragment shaders**, not hardware RT and not the prior
+raster-only visibility method. AABBs are broad-phase rejection only; intersections use the actual scene triangles.
+Opaque interval origins are classified against the planes of the shipped convex solids. The reference scene has
+seven solids / 84 triangles, including a non-rigidly sheared occluder. This is not an arbitrary large-mesh backend.
+
+The merged directional solution is integrated into six positive, axis-oriented cosine integrals. Receiver normals
+use squared-component weights between those integrals. Live 16 × 16 lighting charts per face avoid retracing
+visibility at every screen pixel. They cache illumination only, never simplified geometry, and are cleared and
+recomputed on scene edits. Optional exact receiver-to-sample triangle visibility reduces local interpolation leaks.
+
+The UI exposes emitter position/power, occluder position/deformation, diffuse iteration count, direct/full/bounce-only
+comparison, each cascade's spatial layer, selected X/Y/Z sample, local radiance, merged radiance and transmittance.
+Orbiting the camera does not trigger or change transport. Shader/capability failure is explicit rather than hidden
+behind a prebaked scene.
+
+### Executed numerical and browser verification
+
+`VisualProof/RadianceSequence/VerifyTransport.cjs` passed in Chromium **133.0.6943.0 / SwiftShader WebGL 2**:
+
+- All retained interval, merged, cosine-integral and receiver-lighting texels were finite and nonnegative.
+  Transmittance stayed within floating-point tolerance of [0,1], and passive radiance stayed within the emitter bound.
+- Independent CPU triangle intersections matched **4,096 sampled GPU intervals** in a moved-emitter, deformed-occluder
+  scene. Maximum component error: **4.19617e−7**; no mismatches above tolerance.
+- Independent CPU spatial/angular interpolation and merging matched **4,096 GPU outputs**, including 950 opaque
+  near intervals. Maximum component error: **1.70186e−5**.
+- GPU cubemap quadrature was positive at face resolutions 4, 8, 16 and 32. Each full-sphere sum matched **4π** with
+  absolute error below **8.64e−7**. This check caught a bad two-argument-atan central-cell result during development;
+  the final shader uses unary atan with a strictly positive denominator, not clamping of bad weights.
+- Broad-phase bounds include 1e−5 m numerical slack; triangle barycentric edge comparisons use 1e−6 tolerance.
+  These prevent precision-dependent disagreement at grazing outer triangle edges and are included in the reference.
+- The raster vertex attributes and traced triangle upload were identical. Moving the emitter changed transport;
+  changing top shear changed the actual triangle coordinates and completed a new lighting revision.
+- Full lighting included positive reflected contribution over direct-only lighting, with no negative differences.
+  Setting emission to zero produced exactly zero lighting after recomputation: no hidden ambient or stale source.
+- Camera movement left the lighting target bit-identical. GL error was zero, browser errors were empty, and the
+  390 × 844 layout had no horizontal overflow.
+
+`VisualProof/RadianceSequence/Captures/` contains ten actual browser screenshots and `Transport.json`, including
+source hashes, per-cascade numeric bounds, interval/merge errors, GPU quadrature checks and the executed sequence.
+The captures show full/direct/bounce-only lighting, a coarser 3D layer, interval visibility, rear view, moved emitter,
+deformed occluder, emission-off and mobile views. No generated image or offline render is used as the demo.
+
+### Limits and research basis
+
+This is a small inspectable experiment, not a production-GI or GPU-speed claim. Coarse spatial/angular interpolation
+can leak light or blur shadows, tiny emitters can be undersampled, receiver-direction compression is approximate,
+and multi-bounce updates arrive incrementally. Range is finite at 18.75 m; the exterior environment is black.
+The displayed solve duration is scheduled browser latency, not a GPU timestamp or a hardware FPS benchmark.
+
+The construction follows the radiance-interval and spatial/angular merge discussion in Osborne & Sannikov,
+[Radiance cascades: a novel high-resolution formal solution][RCFormalSource], particularly sections 2.2–2.3;
+[radiance.wiki][RCResources] provides the broader graphics references. The hierarchy is adapted to three spatial
+axes and two angular axes here, rather than copying a 2D scaling rule.
+
+[RCFormalSource]: https://eprints.gla.ac.uk/343746/1/343746.pdf
+[RCResources]: https://radiance.wiki/

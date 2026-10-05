@@ -1,0 +1,67 @@
+{
+  "Date": "2026-10-05",
+  "Stages": [
+    {
+      "Through": 1,
+      "Executed": [
+        1
+      ],
+      "Reused": [],
+      "Milliseconds": 238.96929899999998
+    },
+    {
+      "Through": 2,
+      "Executed": [
+        2
+      ],
+      "Reused": [
+        1
+      ],
+      "Milliseconds": 2614.3230299999996
+    },
+    {
+      "Through": 3,
+      "Executed": [
+        3
+      ],
+      "Reused": [
+        1,
+        2
+      ],
+      "Milliseconds": 5237.63317
+    },
+    {
+      "Through": 4,
+      "Executed": [
+        4
+      ],
+      "Reused": [
+        1,
+        2,
+        3
+      ],
+      "Milliseconds": 7469.116083000001
+    },
+    {
+      "Through": 5,
+      "Executed": [
+        5
+      ],
+      "Reused": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "Milliseconds": 8799.893994999999
+    }
+  ],
+  "Checks": {
+    "OneShotEqualsStepped": true,
+    "AllParameterDependencies": true,
+    "EarliestAffectedInvalidation": true,
+    "NoFutureStageExecution": true,
+    "UpstreamUnchanged": true
+  },
+  "Passed": true
+}

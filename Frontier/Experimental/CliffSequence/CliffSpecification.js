@@ -4,7 +4,7 @@
 // 📦 Authored geological feature catalogues and bounded polygon cliff parameters.
 
 export const CliffDefaults = Object.freeze({Profile:'Headland', Seed:42, Width:32, Height:18, Depth:12, Relief:1,
-    Retreat:0.48, Beds:7, Dip:4, Aperture:0.07, JointSpacing:4.6, Penetration:0.78, FaceRecess:0.65, SpallSize:0.8,
+    Retreat:0.48, Beds:7, Dip:4, Aperture:0.07, FractureBend:1, JointSpacing:4.6, Penetration:0.78, FaceRecess:0.65, SpallSize:0.8,
     SpallDensity:0.8, CrackLength:1.4, CrackWidth:0.12, CrackDepth:0.18, CrackDensity:0.55, TriangleSpan:1.4});
 
 // 📝 These are authored geological cross-sections, not samples of a displacement function.
@@ -73,7 +73,7 @@ export function ReadSpecification(Input = {})
 {
     const Result = {...CliffDefaults, ...Input};
     const Limits = {Seed:[0,999999],Width:[18,48],Height:[10,26],Depth:[8,18],Relief:[.35,1.3],Retreat:[.25,.65],
-        Beds:[4,10],Dip:[-8,8],Aperture:[.035,.18],JointSpacing:[3,7],Penetration:[.55,.9],FaceRecess:[0,1.5],SpallSize:[.25,1.3],
+        Beds:[4,10],Dip:[-8,8],Aperture:[.035,.18],FractureBend:[0,1.5],JointSpacing:[3,7],Penetration:[.55,.9],FaceRecess:[0,1.5],SpallSize:[.25,1.3],
         SpallDensity:[0,1],CrackLength:[.5,2.2],CrackWidth:[.07,.22],CrackDepth:[.06,.3],CrackDensity:[0,1],TriangleSpan:[.8,2.2]};
     if (!Object.hasOwn(CliffProfiles,Result.Profile)) throw new Error('Unknown cliff profile');
     for (const [Name, [Minimum, Maximum]] of Object.entries(Limits))
@@ -84,4 +84,18 @@ export function ReadSpecification(Input = {})
     Result.Seed = Math.round(Result.Seed);
     Result.Beds = Math.round(Result.Beds);
     return Result;
+}
+
+export const StageProperties=[
+    ['Profile','Width','Height','Depth','Relief','Retreat','TriangleSpan'],
+    ['Seed','Beds','Dip','Aperture','FractureBend'],
+    ['JointSpacing','Penetration','FaceRecess'],
+    ['SpallSize','SpallDensity'],
+    ['CrackLength','CrackWidth','CrackDepth','CrackDensity']];
+
+export function EarliestStage(Before,After)
+{
+    if (!Before) return 1;
+    const Index=StageProperties.findIndex(Names=>Names.some(Name=>Before[Name]!==After[Name]));
+    return Index<0?6:Index+1;
 }

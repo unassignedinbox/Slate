@@ -20,6 +20,7 @@ const Cases=[
     ['DeepBay',{Profile:'Amphitheatre',Relief:1.3,Retreat:.65,Dip:8,FaceRecess:1.5,SpallSize:1.3,CrackLength:2.2}],
     ['NoDamage',{SpallDensity:0,CrackDensity:0,FaceRecess:0}],
     ['DenseDamage',{Seed:73,SpallDensity:1,CrackDensity:1,CrackWidth:.22,CrackDepth:.3,TriangleSpan:.8}],
+    ['UserAmphitheatre',{Profile:'Amphitheatre',Beds:5,Dip:-5}],
     ['FineCracks',{Seed:2026,CrackDensity:1,CrackWidth:.07,CrackDepth:.06,TriangleSpan:2.2}]
 ];
 const Report={Date:'2026-10-05',Cases:[],Failures:[],DefaultDigest:null};
@@ -42,9 +43,13 @@ for (const [Name,Specification] of Cases)
                 Assert(Metrics.Volume>0,`${Name} stage ${Stage.Number} ${Mesh.Name}: non-positive volume`);
                 if (Stage.Number>=3)
                 {
-                    const Terminal=-Result.Specification.Depth*Result.Specification.Penetration;
-                    if (Mesh.Name.endsWith('rear')) Assert(Mesh.Vertices.every(Point=>Point[2]<Terminal),`${Name}: joint penetrated the rear core`);
-                    else Assert(Mesh.Vertices.every(Point=>Point[2]>Terminal),`${Name}: front fragment crossed the joint termination`);
+                    if (Mesh.Name.endsWith('core'))
+                    {
+                        const Middle=-Result.Specification.Depth*.48;
+                        const Half=Result.Specification.Depth*(1-Result.Specification.Penetration)*.5;
+                        Assert(Mesh.Vertices.every(Point=>Math.abs(Point[2]-Middle)<Half+.12 &&
+                            Math.abs(Point[0])<Result.Specification.Width*.28+.12),`${Name}: core extends beyond joint termination`);
+                    }
                 }
                 for (const Spall of Mesh.Spalls)
                 {
