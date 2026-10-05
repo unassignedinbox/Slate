@@ -143,6 +143,20 @@ import { DecalLibrary, DecalCategories, DecalResolution, FontArchive, RasteriseD
 // is not much more accurate than one, so the grip is larger than it is drawn.
 const GizmoReach = 14;
 
+// 🔴 A keystroke belongs to whatever is being TYPED into, and a slider is not typed into. The guard used to bail on
+//    every `input`, so one click on a size slider or a colour well took the whole shortcut set away: S did nothing,
+//    the brackets did nothing, 1-6 did nothing, and the only way to get them back was to click the canvas first.
+//    Text, numbers and lists keep their keys; ranges, swatches, checkboxes and buttons hand them to the editor.
+const QuietFields = new Set(["range", "color", "checkbox", "radio", "button", "submit", "reset", "file", "image"]);
+const TypingInto = (Target) =>
+{
+    if (!Target || typeof Target.matches !== "function") return false;
+    if (Target.isContentEditable) return true;
+    if (Target.matches("textarea, select")) return true;
+    if (!Target.matches("input")) return false;
+    return !QuietFields.has(String(Target.type || "text").toLowerCase());
+};
+
 const Select = (Selector) => document.querySelector(Selector);
 const SelectAll = (Selector) => [...document.querySelectorAll(Selector)];
 const Escape = (Text) =>
@@ -615,6 +629,7 @@ export class TexturePanel
         this.SyncMaskView();
         this.SyncToolRail();
         DressSelects(document);
+        this.ShowBuild();
         this.Advance();
         this.Timeline.Clear({
             Kind: "document",
@@ -4737,6 +4752,22 @@ export class TexturePanel
         for (const Layer of this.Layers) if (Layer.Kind === "decal") this.RefreshDecal(Layer);
     }
 
+    // 🔴 Which copy of the editor this is, read out of the address it was served from. A page pinned to a commit —
+    //    raw.githack, jsdelivr, raw.githubusercontent all put the revision in the path — looks identical to the one
+    //    pinned to the commit before it, and a fix that is already shipped is indistinguishable from a fix that is
+    //    not when the only way to tell them apart is to remember which tab is which.
+    ShowBuild()
+    {
+        const Mark = Select("#build-mark");
+        if (!Mark) return;
+        const Parts = String(globalThis.location?.pathname || "").split("/").filter(Boolean);
+        const Revision = Parts.find((Part) => /^[0-9a-f]{7,40}$/i.test(Part));
+        Mark.textContent = Revision ? `build ${Revision.slice(0, 7)}` : "build local";
+        Mark.title = Revision
+            ? `Served from commit ${Revision} · open a newer link if this is not the one you expect`
+            : "Served from a working copy rather than a pinned commit";
+    }
+
     //----------------------------------------------------------------------------------------------------------------------
     // Transport: undo, redo, brush controls, symmetry.
     //----------------------------------------------------------------------------------------------------------------------
@@ -8766,7 +8797,8 @@ export class TexturePanel
             //    to walk focus to the next focusable thing, and with the card open that is the next row of its
             //    rail. Letting the browser have it looked exactly like the card stepping through its own panes:
             //    the focus ring crawled down the rail, one press per row, and the card never went away.
-            if (Event.key === "Tab" && !Event.ctrlKey && !Event.metaKey && !Event.altKey && !document.querySelector("dialog[open]"))
+            const Tabbing = Event.key === "Tab" || Event.code === "Tab";
+            if (Tabbing && !Event.ctrlKey && !Event.metaKey && !Event.altKey && !document.querySelector("dialog[open]"))
             {
                 Event.preventDefault();
                 Event.stopPropagation();
@@ -8777,7 +8809,7 @@ export class TexturePanel
                 return;
             }
             // The target is the window itself when nothing holds focus, so matches() cannot be assumed.
-            if (Event.target?.matches?.("input, textarea, select")) return;
+            if (TypingInto(Event.target)) return;
             if (Event.code === "Space") this.SpaceHeld = true;
             const Key = Event.key.toLowerCase();
             if ((Event.ctrlKey || Event.metaKey) && Key === "z")

@@ -156,7 +156,7 @@ export class InstrumentPanel
     {
         return `
             <button class="rail-item ${Entry.Key === Standing?.Key ? "active" : ""}" data-section="${Escape(Entry.Key)}"
-                    title="${Escape(Entry.Note || Entry.Label)}">
+                    tabindex="-1" title="${Escape(Entry.Note || Entry.Label)}">
                 ${
                     Entry.Glyph
                         ? `<span class="rail-mark" style="color:${Entry.Tone || "#8a8a8a"}">${Entry.Glyph}</span>`

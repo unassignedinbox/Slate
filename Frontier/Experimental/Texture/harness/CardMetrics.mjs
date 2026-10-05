@@ -255,6 +255,41 @@ Typed.dispatchEvent(new Window.KeyboardEvent("keydown", { key: "Tab", bubbles: t
 Check("Tab closes the card from inside a field", Card.Open === false);
 Check("and lets go of the field on the way out", Window.document.activeElement !== Typed);
 
+// 🔴 And the same from a slider, which is where the hand leaves focus most of the time. Belt and braces: the rail's
+//    own rows are taken out of the focus order, so even a Tab that somehow got past the editor cannot walk them.
+Tap();
+Card.ShowSection("shape");
+const Slider = Pane().querySelector("input[type=range]");
+Slider?.focus();
+Slider?.dispatchEvent(new Window.KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+Check("Tab closes the card from a slider too", Card.Open === false, Card.Standing?.Key);
+Tap();
+Check(
+    "and no row of the rail is in the focus order",
+    [...Card.Root.querySelectorAll(".tool-rail [data-section]")].every((Row) => Row.getAttribute("tabindex") === "-1"),
+);
+
+// 🔴 The other half of the same bug: a single-letter shortcut must survive a slider holding focus. Clicking any
+//    knob on the card used to take S, the brackets and the tool keys away until the canvas was clicked again.
+const Held = Panel.Projection.Brush.Radius;
+const Range = Pane().querySelector("input[type=range]");
+Range.focus();
+Window.dispatchEvent(new Window.KeyboardEvent("keydown", { key: "S", shiftKey: true, bubbles: true }));
+Check("S sizes the brush with a slider focused", Panel.Projection.Brush.Radius > Held, `${Held} → ${Panel.Projection.Brush.Radius}`);
+const Grew = Panel.Projection.Brush.Radius;
+Window.dispatchEvent(new Window.KeyboardEvent("keydown", { key: "s", bubbles: true }));
+Check("and back down", Panel.Projection.Brush.Radius < Grew, `${Grew} → ${Panel.Projection.Brush.Radius}`);
+
+// A field that is genuinely typed into keeps its letters.
+const Search = Window.document.querySelector("#layer-search");
+Search.focus();
+const Standing2 = Panel.Projection.Brush.Radius;
+Search.dispatchEvent(new Window.KeyboardEvent("keydown", { key: "s", bubbles: true }));
+Check("but typing an s into a search box is still an s", Panel.Projection.Brush.Radius === Standing2);
+Search.blur();
+
+Check("the status bar names the build on screen", Window.document.querySelector("#build-mark")?.textContent?.startsWith("build "), Window.document.querySelector("#build-mark")?.textContent);
+
 Report();
 // jsdom keeps timers and a decal rasterise that will never resolve alive, so the run is ended deliberately.
 process.exit(process.exitCode || 0);

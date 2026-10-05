@@ -11,7 +11,7 @@ npm install
 npm run dev        # http://localhost:5173
 npm run build      # dist/, fonts and all
 npm test           # 128 unit tests, no browser required
-npm run drive      # 136 checks against the whole editor, booted in a headless window
+npm run drive      # 142 checks against the whole editor, booted in a headless window
 ```
 
 There is no build step in the sources: every module is plain ESM with relative specifiers and every asset address is a
@@ -151,7 +151,19 @@ there, while the rail itself is a column of rows a finger can already reach. The
 "a field has focus, leave it alone" guard, and it is the only key that is: with the caret in a hex box or on a slider
 the browser would otherwise take `Tab` for itself and walk the focus ring down the rail one row per press, which
 looks exactly like the card stepping through its own panes. A field inside the card is let go of on the way out, so
-the next keystroke reaches the editor rather than the box that was left behind.
+the next keystroke reaches the editor rather than the box that was left behind. The rail's own rows are out of the
+focus order for the same reason, so nothing can walk them even if the key were let through.
+
+**A slider is not a field.** The shortcut handler used to stand down for every `input`, which meant one click on a
+size slider or a colour well took the whole keyboard away: `S` did nothing, the brackets did nothing, the tool
+digits did nothing, and the only way to get them back was to click the canvas first. Text, numbers and lists keep
+their keys — an `s` typed into the layer search is an `s` — but ranges, swatches, checkboxes and buttons hand them
+straight to the editor.
+
+**The status bar names the build.** A page pinned to a commit looks exactly like the page pinned to the commit
+before it, so the foot of the window reads the revision out of the address it was served from — `build 886cb8a`,
+or `build local` from a working copy. A fix that is already shipped should not be indistinguishable from one that
+is not.
 
 **Colour** is a picker, not a palette: a saturation-and-brightness square under a hue bar, a hex field that takes a code
 typed straight in, and the last colours mixed. Everything the pigment does is in this one pane — the gradient it runs
