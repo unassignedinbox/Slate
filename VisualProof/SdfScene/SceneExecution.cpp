@@ -70,6 +70,18 @@ struct SceneGeometry
     }
 };
 
+template<typename Record>
+void DecodeRecords(std::ifstream& Stream, std::vector<Record>& Records)
+{
+    uint64_t Count{}, Stride{};
+    Stream.read(reinterpret_cast<char*>(&Count), sizeof(Count));
+    Stream.read(reinterpret_cast<char*>(&Stride), sizeof(Stride));
+    Require(Stream.good() && Count > 0 && Count < 10000000 && Stride == sizeof(Record), "Incompatible Drive execution exchange");
+    Records.resize(size_t(Count));
+    Stream.read(reinterpret_cast<char*>(Records.data()), Count * Stride);
+    Require(Stream.good(), "Truncated Drive execution exchange");
+}
+
 void WritePixels(const std::filesystem::path& File, const std::vector<uint8_t>& Pixels, unsigned Width, unsigned Height)
 {
     std::ofstream Stream(File,std::ios::binary); Stream<<"P6\n"<<Width<<' '<<Height<<"\n255\n";
@@ -90,12 +102,14 @@ int main(int Count,char** Arguments)
     std::cout<<std::unitbuf;
     try
     {
-        Require(Count==4,"Usage: SceneExecution shaders destination case");
+        Require(Count==4 || Count==5,"Usage: SceneExecution shaders destination case [drive-exchange]");
         const std::string Case=Arguments[3]; const std::filesystem::path Destination=Arguments[2];
         std::filesystem::create_directories(Destination);
         ExecutionHost Host;
         Require(Host.TextureIndexing,"Descriptor-indexed CPU Vulkan required");
-        constexpr unsigned Width=384, Height=256;
+        const bool Drive = Case == "Drive";
+        Require(!Drive || Count == 5, "Drive execution exchange is required");
+        const unsigned Width = Drive ? 512 : 384, Height = Drive ? 320 : 256;
         SceneGeometry Scene;
         if (Case=="Small") Scene.Scale=.01;
         if (Case=="Large") Scene.Scale=100;
@@ -139,12 +153,41 @@ int main(int Count,char** Arguments)
         }
         Slabs[5].EmissionLuminance=4; Slabs[5].EmissionColorR=1; Slabs[5].EmissionColorG=.85f; Slabs[5].EmissionColorB=.6f;
         Materials[5].EmissiveR=4; Materials[5].EmissiveG=3.4f; Materials[5].EmissiveB=2.4f;
+        if (Drive)
+        {
+            std::ifstream Stream(Arguments[4], std::ios::binary);
+            uint32_t Signature{};
+            Stream.read(reinterpret_cast<char*>(&Signature), sizeof(Signature));
+            Require(Signature == 0x31565244u, "Invalid Drive execution signature");
+            DecodeRecords(Stream, Scene.Vertices);
+            DecodeRecords(Stream, Scene.Indices);
+            DecodeRecords(Stream, Scene.Instances);
+            DecodeRecords(Stream, Materials);
+            DecodeRecords(Stream, Slabs);
+            Require(Stream.peek() == std::char_traits<char>::eof(), "Trailing Drive execution bytes");
+            // 📝 Isolate diffuse GI with authored base colours; no placeholder specular lookup is presented as production car paint.
+            Slabs.assign(Materials.size(), {});
+            for (size_t Index = 0; Index < Materials.size(); ++Index)
+            {
+                auto& Material = Materials[Index];
+                auto& Slab = Slabs[Index];
+                Material.Metalness = 0; Material.Roughness = 1;
+                Material.BaseColourTexture = Material.NormalTexture = UINT32_MAX;
+                Material.SlabOffset = uint32_t(Index); Material.SlabCount = 1;
+                Slab.BaseColorR = Material.AlbedoR; Slab.BaseColorG = Material.AlbedoG; Slab.BaseColorB = Material.AlbedoB;
+                Slab.BaseWeight = 1; Slab.SpecularWeight = 0; Slab.SpecularRoughness = 1; Slab.SpecularIor = 1.5f;
+                Slab.SpecularColorR = Slab.SpecularColorG = Slab.SpecularColorB = 1;
+                Slab.GeometryOpacity = Slab.NormalScale = Slab.OcclusionStrength = Slab.MixWeight = 1;
+                for (auto& Slot : Slab.TextureSlots) Slot = UINT32_MAX;
+            }
+        }
         DistanceFieldStructure Geometry;
         Require(Geometry.Construct(Scene.Vertices,Scene.Indices,Scene.Instances,Materials),"Scene BVH construction failed");
         SceneVector Eye{7,-10,7}, Target{0,.5,1}; double FieldOfView=50;
         if (Case=="Orbit") Eye={-6,-9,7};
         if (Case=="High") Eye={2,-3,13};
         if (Case=="Far") { Eye=Target+(Eye-Target)*20; FieldOfView=2.67; }
+        if (Drive) { Eye={6,-7,3.5}; Target={0,0,.9}; FieldOfView=43; }
         Eye=Scene.World(Eye); Target=Scene.World(Target);
         std::cout<<"SCENE case="<<Case<<" scale="<<Scene.Scale<<" offset="<<Scene.Offset.X<<','<<Scene.Offset.Y<<','<<Scene.Offset.Z
                  <<" facets="<<Geometry.QueryFacets().size()<<" instances="<<Scene.Instances.size()<<"\n";
@@ -158,8 +201,31 @@ int main(int Count,char** Arguments)
             {
                 const auto Ray=Unit(Forward+Right*((2*(Column+.5)/Width-1)*Aperture*Width/Height)+Up*((1-2*(Row+.5)/Height)*Aperture));
                 double Closest=std::numeric_limits<double>::max(); uint32_t Packed=UINT32_MAX;
-                for (const auto& Facet:Facets)
+                const auto& Branches = Geometry.QueryBranches();
+                for (uint32_t BranchIndex = 0; BranchIndex < Branches.size();)
                 {
+                    const auto& Branch = Branches[BranchIndex];
+                    double Near = 0, Far = Closest;
+                    const double Origin[]{Eye.X, Eye.Y, Eye.Z}, Direction[]{Ray.X, Ray.Y, Ray.Z};
+                    for (unsigned Axis = 0; Axis < 3; ++Axis)
+                    {
+                        if (std::abs(Direction[Axis]) < 1e-15)
+                        {
+                            if (Origin[Axis] < Branch.Minimum[Axis] || Origin[Axis] > Branch.Maximum[Axis]) Far = -1;
+                        }
+                        else
+                        {
+                            const double First = (Branch.Minimum[Axis] - Origin[Axis]) / Direction[Axis];
+                            const double Last = (Branch.Maximum[Axis] - Origin[Axis]) / Direction[Axis];
+                            Near = std::max(Near, std::min(First, Last));
+                            Far = std::min(Far, std::max(First, Last));
+                        }
+                    }
+                    if (Far < Near) { BranchIndex = Branch.Escape; continue; }
+                    ++BranchIndex;
+                    for (uint32_t FacetIndex = Branch.First; FacetIndex < Branch.First + Branch.Count; ++FacetIndex)
+                    {
+                    const auto& Facet = Facets[FacetIndex];
                     const auto A=Point(Facet.Alpha), EdgeA=Point(Facet.Beta)-A, EdgeB=Point(Facet.Gamma)-A;
                     const auto P=Cross(Ray,EdgeB); const double Determinant=Dot(EdgeA,P);
                     if (std::abs(Determinant)<1e-18) continue;
@@ -169,6 +235,7 @@ int main(int Count,char** Arguments)
                     Closest=Travel; uint32_t Instance,Primitive;
                     std::memcpy(&Instance,&Facet.Alpha[3],4); std::memcpy(&Primitive,&Facet.Beta[3],4);
                     Require(Primitive<16384,"Visibility primitive packing exceeded"); Packed=(Instance<<14)|Primitive;
+                }
                 }
                 const auto P=Eye+Ray*(Packed==UINT32_MAX ? 100*Scene.Scale : Closest); const size_t Pixel=(Row*Width+Column)*4;
                 Surface[Pixel]=float(P.X); Surface[Pixel+1]=float(P.Y); Surface[Pixel+2]=float(P.Z); std::memcpy(&Surface[Pixel+3],&Packed,4);
@@ -198,7 +265,7 @@ int main(int Count,char** Arguments)
         DistanceFieldStageInit Initialization;
         Initialization.PhysicalDevice=Host.Physical; Initialization.Device=Host.Device; Initialization.MemoryProperties=Host.Memory;
         Initialization.Geometry=&Geometry; Initialization.SpirvDirectory=Arguments[1];
-        Initialization.CardResolution=4; Initialization.VolumeResolution=32; Initialization.ClipmapCellSize=.15f;
+        Initialization.CardResolution=Drive ? 1 : 4; Initialization.VolumeResolution=32; Initialization.ClipmapCellSize=.15f;
         Initialization.ImageWidth=Output.Width; Initialization.ImageHeight=Output.Height;
         Initialization.OutputImageView=Output.View; Initialization.SurfaceImageView=Position.View; Initialization.NormalImageView=Normal.View;
         Initialization.TriangleBuffer=Triangles.Buffer; Initialization.MaterialBuffer=MaterialBuffer.Buffer;
@@ -231,7 +298,7 @@ int main(int Count,char** Arguments)
             std::cout<<"CAPTURE "<<Name<<" frames="<<Frames<<"\n";
             return Pixels;
         };
-        const auto Original=Execute("Scene-GI",32);
+        const auto Original=Execute("Scene-GI",Drive ? 8 : 32);
         if (Case=="Oracle")
         {
             Stage.Destroy(); Require(ValidationErrors.load()==0,"Vulkan validation errors in dense reference");
@@ -240,6 +307,14 @@ int main(int Count,char** Arguments)
         }
         Frame.FeatureFlags=0; const auto Without=Execute("Scene-GI-off",1); Frame.FeatureFlags=1;
         std::cout<<"METRIC gi_on_off_rms "<<Difference(Original,Without)<<'\n';
+        if (Drive)
+        {
+            Require(Difference(Original, Without) > 0.01, "Vehicle GI toggle produced no pixel change");
+            Stage.Destroy();
+            Require(ValidationErrors.load() == 0, "Vulkan validation errors in Drive capture");
+            std::cout << "PASS full Drive geometry, production SDF diffuse GI and GI-off readbacks; software Vulkan, not hardware timing\n";
+            return 0;
+        }
         if (Case=="Reference")
         {
             Scene.Instances[Movable].World[12]=float(1.5*Scene.Scale);

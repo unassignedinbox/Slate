@@ -9,10 +9,16 @@ on:
       - 'Frontier/Engine/Shaders/DistanceField*.slang'
       - 'Frontier/Engine/DeviceExchange/DistanceFieldGIStage.*'
   workflow_dispatch:
+    inputs:
+      drive:
+        description: 'Render the actual Project Drive rest/loaded geometry with production SDF shaders'
+        type: boolean
+        default: false
 permissions:
   contents: write
 jobs:
   render:
+    if: ${{ !inputs.drive }}
     name: CPU SDF / ${{ matrix.scene }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -38,6 +44,42 @@ jobs:
           if git diff --cached --quiet; then exit 0; fi
           git commit -m 'Retain ${{ matrix.scene }} production SDF perspective readbacks [skip ci]'
           for Attempt in 1 2 3 4 5 6 7 8; do
+            git pull --rebase origin arena/01a0fd48-slate
+            if git push origin HEAD:arena/01a0fd48-slate; then exit 0; fi
+            sleep 3
+          done
+          exit 1
+
+  drive:
+    if: ${{ inputs.drive && github.ref == 'refs/heads/arena/01a0fd48-slate' }}
+    name: Project Drive production SDF / ${{ matrix.pose }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        pose: [Rest, Loaded]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - name: Install software Vulkan
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libvulkan-dev mesa-vulkan-drivers vulkan-validationlayers glslc spirv-tools python3-pil
+      - name: Resolve pinned content dependencies
+        working-directory: Frontier
+        run: python3 Tools/Bootstrap.py --package cgltf --package stb --package ufbx --package vulkan-headers
+      - name: Execute native project and production shader captures
+        run: python3 VisualProof/SdfScene/RunDriveExecution.py '${{ matrix.pose }}'
+      - name: Retain actual pixels and refusal logs
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add 'VisualProof/SdfScene/Drive/${{ matrix.pose }}'
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Retain Project Drive ${{ matrix.pose }} Vulkan readbacks [skip ci]'
+          git restore .
+          for Attempt in 1 2 3 4 5; do
             git pull --rebase origin arena/01a0fd48-slate
             if git push origin HEAD:arena/01a0fd48-slate; then exit 0; fi
             sleep 3

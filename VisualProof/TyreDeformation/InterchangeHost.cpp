@@ -19,6 +19,28 @@ void Require(bool Accepted, const std::string& Message)
 {
     if (!Accepted) throw std::runtime_error(Message);
 }
+// 📝 Same-revision execution exchange, not a portable scene asset format.
+void EncodeDrive(const Frontier::SceneStructure& Scene, const std::filesystem::path& Destination)
+{
+    std::filesystem::create_directories(Destination.parent_path());
+    std::ofstream Stream(Destination, std::ios::binary);
+    const uint32_t Signature = 0x31565244u;
+    Stream.write(reinterpret_cast<const char*>(&Signature), sizeof(Signature));
+    const auto Encode = [&Stream](const auto& Records)
+    {
+        const uint64_t Count = Records.size();
+        const uint64_t Stride = sizeof(Records[0]);
+        Stream.write(reinterpret_cast<const char*>(&Count), sizeof(Count));
+        Stream.write(reinterpret_cast<const char*>(&Stride), sizeof(Stride));
+        Stream.write(reinterpret_cast<const char*>(Records.data()), Count * Stride);
+    };
+    Encode(Scene.QueryVertices());
+    Encode(Scene.QueryIndices());
+    Encode(Scene.QueryInstances());
+    Encode(Scene.QueryMaterials().QueryRecords());
+    Encode(Scene.QueryMaterials().QuerySlabRecords());
+    Require(Stream.good(), "Drive execution exchange write failed");
+}
 struct PoseRecord { std::string Name; float World[16]; };
 void FRONTIER_CODE_IMAGE_CALL Receive(const FrontierProjectSceneMutation* Mutation, void* Address)
 {
@@ -56,6 +78,7 @@ int main(int ArgumentCount, char** Arguments)
         auto Rows = Scene.QueryInstances();
         const auto RestRows = Rows;
         Geometry.CaptureRest(Scene, Rows);
+        EncodeDrive(Scene, std::filesystem::path(Arguments[3]) / "DriveRest.bin");
         Frontier::DistanceFieldStructure NativeField;
         Require(NativeField.Construct(Scene), "rest native SDF geometry build failed");
         const uint64_t RestRevision = NativeField.QueryRevision();
@@ -123,6 +146,7 @@ int main(int ArgumentCount, char** Arguments)
         Require(NonRigidDisplacement > 0.001f, "Drive geometry is only rigidly transformed, not deformed");
         std::cout << "PASS real Drive non-rigid displacement beyond pose-only wheel: " << NonRigidDisplacement << " m\n";
         Scene.RefreshGeometry(Rows);
+        EncodeDrive(Scene, std::filesystem::path(Arguments[3]) / "DriveLoaded.bin");
         Require(NativeField.Construct(Scene) && NativeField.QueryRevision() > RestRevision, "native field revision stayed stale");
         Require(NativeField.QueryFacets().size() == RestFacets.size(), "fixed topology changed triangle count");
         Require(std::memcmp(RestFacets.data(), NativeField.QueryFacets().data(), RestFacets.size() * sizeof(RestFacets[0])) != 0,

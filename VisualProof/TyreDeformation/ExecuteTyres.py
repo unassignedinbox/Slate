@@ -13,6 +13,7 @@ Root = Path(__file__).resolve().parents[2]
 Frontier = Root / 'Frontier'
 Parser = argparse.ArgumentParser(description=__doc__)
 Parser.add_argument('--dependencies', type=Path, default=Frontier / 'ExternalPackages')
+Parser.add_argument('--capture-drive-only', action='store_true', help='Export full native scene snapshots without repeating diagnostic tyre renders')
 Arguments = Parser.parse_args()
 Dependencies = Arguments.dependencies.resolve()
 Destination = Root / 'VisualProof/TyreDeformation'
@@ -98,6 +99,9 @@ InterchangeSources = [Value for Value in ContentSources if Value.name != 'DriveC
     Frontier / 'Engine/GeometricRaster/DistanceFieldStructure.cpp', Destination / 'InterchangeHost.cpp']
 Interchange = Build('InterchangeHost', InterchangeSources)
 Execute([Interchange, Image, Scene, Images])
+if Arguments.capture_drive_only:
+    print('PASS native Drive rest/loaded scene export for production Vulkan execution')
+    sys.exit(0)
 Renderer = Build('TyreHost', [Destination / 'TyreHost.cpp',
                             Frontier / 'Engine/PhysicalDynamics/Vehicle/XPBDSoftTyre.cpp',
                             Frontier / 'Engine/GeometricRaster/DistanceFieldSpace.cpp'])
