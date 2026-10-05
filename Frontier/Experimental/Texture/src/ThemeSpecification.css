@@ -3924,12 +3924,28 @@ details.channel-control > summary code {
   flex: 0 0 var(--card-width);
   height: 100%;
 }
-.tool-rail {
+/* The rail column: the properties scroll, the shelf under them does not. */
+.tool-column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   background: #0e0e0e;
   border-right: 1px solid var(--line);
+}
+.tool-rail {
+  flex: 1 1 auto;
   padding: 10px 8px;
   overflow-y: auto;
   min-height: 0;
+}
+.rail-foot {
+  flex: 0 0 auto;
+  padding: 8px;
+  border-top: 1px solid var(--line);
+  background: #0b0b0b;
+}
+.rail-foot .rail-item {
+  height: 38px;
 }
 .tool-body {
   display: flex;
@@ -4518,6 +4534,55 @@ details.channel-control > summary code {
 
 .rail-split:first-child {
   margin-top: 3px;
+}
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+/*  The library — every instrument the editor knows, drawn as itself                                                    */
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+.shelf-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  padding: 4px 0 2px;
+}
+
+.shelf-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 8px 7px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #141414;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shelf-tile:hover {
+  background: var(--raised);
+  color: var(--text);
+}
+
+.shelf-tile.on {
+  border-color: rgba(52, 199, 89, 0.5);
+  background: rgba(52, 199, 89, 0.1);
+  color: var(--text);
+}
+
+/* 🔴 The drawing is cropped to the working end by its own viewBox, so the tile never scales the whole 300 px barrel
+      down to a smear. Height is fixed because a grid of tiles whose rows disagree reads as a mistake. */
+.shelf-art svg {
+  display: block;
+  width: 100%;
+  height: 44px;
+}
+
+.shelf-name {
+  letter-spacing: 0.01em;
 }
 
 /* ------------------------------------------------------------------------------------------------------------------ */

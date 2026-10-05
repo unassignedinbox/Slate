@@ -66,7 +66,15 @@ import {
 } from "./SceneStructure.js";
 import { InstrumentPanel } from "./InstrumentPanel.js";
 import { MediaSummary, MediumOrdering, MediumByIndex, PlainMedia } from "./MediaSolver.js";
-import { InstrumentByKey, BrushFromInstrument } from "./InstrumentSpecification.js";
+import {
+    InstrumentByKey,
+    InstrumentFamilies,
+    InstrumentArtwork,
+    InstrumentSchema,
+    VisibleControls,
+    BrushFromInstrument,
+    FullView,
+} from "./InstrumentSpecification.js";
 // 🔴 The slider lives in ControlSpecification so the instrument card can mount the same one. See the note there.
 import { SliderRow, SyncSlider } from "./ControlSpecification.js";
 import { RevisionQueue } from "./RevisionQueue.js";
@@ -228,43 +236,30 @@ const Clamp = (Value, Minimum, Maximum) => Math.min(Maximum, Math.max(Minimum, V
 const Fixed = (Value, Step) => Number(Value).toFixed(Step >= 1 ? 0 : Step >= 0.1 ? 1 : Step >= 0.01 ? 2 : 3);
 const ToHex = (Colour) =>
     `#${Colour.map((Component) => Math.round(Clamp(Component, 0, 1) * 255).toString(16).padStart(2, "0")).join("")}`;
-// 🔴 A finish is three numbers that always move together. Metal with a dielectric's specular reads as painted
-//    plastic; gloss without a coat reads as wet. Offering them one at a time is honest and useless — a press that
-//    sets the set is how a hand actually asks for "make this gold".
-const MaterialFinishes = [
-    {
-        Identifier: "metal",
-        Label: "Metal",
-        Note: "polished, and the colour IS the reflection",
-        Channels: { base_metalness: 1, specular_roughness: 0.24, specular_weight: 1, coat_weight: 0 },
-    },
-    {
-        Identifier: "gloss",
-        Label: "Gloss",
-        Note: "a clear coat over the colour",
-        Channels: { base_metalness: 0, specular_roughness: 0.3, specular_weight: 1, coat_weight: 0.7, coat_roughness: 0.04 },
-    },
-    {
-        Identifier: "matte",
-        Label: "Matte",
-        Note: "chalk, and no coat at all",
-        Channels: { base_metalness: 0, specular_roughness: 0.86, specular_weight: 0.5, coat_weight: 0 },
-    },
-];
+// The five every instrument has, which the card already shows as sliders of their own.
+const PlainControls = ["Size", "Opacity", "Flow", "Hardness", "Spacing", "Smoothing"];
 
-// Which of them the layer is already set to, if any — a segmented control with nothing chosen looks broken.
-const MaterialFinishOf = (Layer) =>
-    MaterialFinishes.find((Entry) =>
-        Object.entries(Entry.Channels).every((Pair) => Math.abs((Layer.Channels?.[Pair[0]] ?? -1) - Pair[1]) < 0.02),
-    )?.Identifier || "";
+const FamilyGlyph = (Type) =>
+    ({ brush: "brush", pencil: "taper", pen: "vector", marker: "fill", dry: "noise", wax: "material", eraser: "eraser" })[Type?.Family] ||
+    "layers";
+
+const FamilyNote = (Family) =>
+    ({
+        brush: "Hairs, a ferrule and whatever the head was cut to do",
+        pencil: "Lead on the peaks of the paper",
+        pen: "A hard wet edge that creeps into the fibres",
+        marker: "Flat colour, streaked, pooling at the rim",
+        dry: "Crushed into the tooth, shedding dust",
+        wax: "Skips the valleys until it is pushed hard enough",
+        eraser: "Takes paint away — picking one puts the eraser in hand",
+    })[Family.Key] || "";
 
 // The one word the rail has room for.
 const MaterialSummary = (Layer, Writes) =>
 {
-    const Named = MaterialFinishes.find((Entry) => Entry.Identifier === MaterialFinishOf(Layer));
-    if (Named) return Named.Label.toLowerCase();
     if ((Layer.Channels?.base_metalness ?? 0) > 0.5) return "metal";
     if ((Layer.Channels?.specular_roughness ?? 0.42) < 0.3) return "gloss";
+    if ((Layer.Channels?.specular_roughness ?? 0.42) > 0.8) return "matte";
     const Written = WriteKeys.filter((Key) => (Writes || {})[Key] !== false).length;
     return Written === WriteKeys.length ? "all" : `${Written}`;
 };
@@ -4650,11 +4645,8 @@ export class TexturePanel
     //----------------------------------------------------------------------------------------------------------------------
     BindInstruments()
     {
-        // The paint the editor opens with: a sable pointed round, which is what the instrument library's first tile
-        // used to push onto the brush when the card built itself. The card no longer chooses instruments, so the
-        // choice is made here, once, and everything after it is the painter moving sliders.
-        const Opening = InstrumentByKey["brush-round"];
-        if (Opening) this.Projection.Configure(BrushFromInstrument(Opening, Opening.Settings));
+        // The paint the editor opens with: a sable pointed round, the library's first tile.
+        this.TakeInstrument("brush-round", { Quiet: true });
 
         this.Instruments = new InstrumentPanel(document.body, {
             Sections: () => this.CardSections(),
@@ -4706,7 +4698,7 @@ export class TexturePanel
             {
                 Key: "colour",
                 Group: "Paint",
-                Label: Masking ? "Value" : Ramped ? "Colour · gradient" : "Colour",
+                Label: Masking ? "Value" : Ramped ? "Colour dynamics" : "Colour",
                 Glyph: Icon(Masking ? "mask" : Ramped ? "ramp" : "palette"),
                 Tone: Masking ? "#9a9a9a" : ToHex(this.BrushColour),
                 Tally: Ramped ? `${SortRampStops(this.Gradient.Stops).length}` : this.DynamicsReach() ? "wander" : undefined,
@@ -4741,6 +4733,22 @@ export class TexturePanel
             Render: () => this.MaterialPane(Layer, Masking),
         });
 
+        // The library sits in the rail's own footer: it is not a property of the paint, it is where the paint comes
+        // from, and a row of it in among the properties would read as one more setting to tune.
+        const Held = this.Holding;
+        const Shelf = {
+            Key: "library",
+            Foot: true,
+            Label: Held ? Held.Label : "Instruments",
+            Glyph: Icon(FamilyGlyph(Held)),
+            Tone: Held?.Tone || "#8a8a8a",
+            Tally: this.Instrument?.Altered ? "·" : undefined,
+            Title: "Instruments",
+            Note: Held ? `${Held.Name}${this.Instrument?.Altered ? " · altered" : ""}` : "Pick something to paint with",
+            Ribbon: false,
+            Render: () => this.LibraryPane(),
+        };
+
         if (Decal)
             return [
                 {
@@ -4767,6 +4775,7 @@ export class TexturePanel
                     Render: () => this.PlacementPane(Layer),
                 },
                 ...Paint,
+                Shelf,
             ];
 
         return [
@@ -4815,7 +4824,88 @@ export class TexturePanel
                 Note: "How a mark starts, and what the hand's pressure is worth",
                 Render: () => this.TaperPane(),
             },
+            Shelf,
         ];
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // Pane · the library. Every instrument the editor knows, drawn as itself.
+    //
+    // 🔴 The drawings are the library. A list of names cannot tell a chisel marker from a bullet one, and the whole
+    //    reason an instrument is a thing rather than a row of numbers is that a hand recognises it on sight.
+    //----------------------------------------------------------------------------------------------------------------------
+    LibraryPane()
+    {
+        const Sheet = document.createElement("div");
+        const Standing = this.Instrument?.Key;
+
+        for (const Family of InstrumentFamilies)
+        {
+            const Group = this.CardGroup(Family.Label, FamilyNote(Family));
+            const Shelf = document.createElement("div");
+            Shelf.className = "shelf-row";
+            Shelf.innerHTML = Family.Types.map(
+                (Type) => `
+                <button class="shelf-tile ${Type.Key === Standing ? "on" : ""}" data-instrument="${Escape(Type.Key)}" title="${Escape(Type.Name)}">
+                    <span class="shelf-art">${InstrumentArtwork(Type, Family.Crop)}</span>
+                    <span class="shelf-name">${Escape(Type.Label)}</span>
+                </button>`,
+            ).join("");
+            for (const Tile of Shelf.querySelectorAll("[data-instrument]"))
+                Tile.addEventListener("click", () => this.TakeInstrument(Tile.dataset.instrument));
+            Group.append(Shelf);
+            Sheet.append(Group);
+        }
+
+        const Note = document.createElement("p");
+        Note.className = "card-note";
+        const Held = this.Holding;
+        Note.textContent = Held
+            ? `${Held.Name}. Taking one out of the library sets the head, the medium it lays, the material that lands on the surface and the channels the stroke is allowed to write — four things that are one thing in the world. Move a slider afterwards and it stays yours; the row simply stops claiming to be exactly what the tin said.`
+            : "Pick something to paint with.";
+        Sheet.append(Note);
+        return Sheet;
+    }
+
+    // The instrument's own controls — the ones that belong to the kind of thing it is rather than to every mark.
+    // Turning one re-derives the medium from the instrument, so the choice holds instead of drifting into a custom.
+    InstrumentControls()
+    {
+        const Type = this.Holding;
+        if (!Type) return [];
+        const Settings = this.Instrument.Settings;
+        const Rows = [];
+        for (const Control of VisibleControls(Type, Settings))
+        {
+            if (PlainControls.includes(Control.Key)) continue;
+            if (Control.Kind === "Segmented")
+                Rows.push(
+                    this.CardSegmented(
+                        Control.Options.map((Option) => ({ Identifier: Option, Label: Option })),
+                        Settings[Control.Key] ?? Control.Options[0],
+                        (Identifier) => this.TuneInstrument(Control.Key, Identifier),
+                    ),
+                );
+            else if (Control.Kind === "Switch")
+                Rows.push(
+                    this.CardSwitch(Control.Label, "", Settings[Control.Key] === true, (On) => this.TuneInstrument(Control.Key, On)),
+                );
+            else
+                Rows.push(
+                    this.CardSlider(
+                        {
+                            Label: Control.Label,
+                            Value: Number(Settings[Control.Key] ?? 0),
+                            Minimum: Control.Minimum,
+                            Maximum: Control.Maximum,
+                            Step: Control.Step,
+                            Unit: Control.Unit,
+                        },
+                        (Value) => this.TuneInstrument(Control.Key, Value),
+                    ),
+                );
+        }
+        return Rows;
     }
 
 
@@ -4830,9 +4920,79 @@ export class TexturePanel
     // unpacks into uniforms — and every one of the card's paint panes writes straight into it. There is no instrument
     // in between any more: the numbers on the card ARE the numbers the pass runs on.
     //----------------------------------------------------------------------------------------------------------------------
+    //----------------------------------------------------------------------------------------------------------------------
+    // The instrument in hand.
+    //
+    // 🔴 An instrument is not a preset of the sliders — it is what the sliders are ABOUT. Taking one out of the
+    //    library sets the brush, the medium, the material it lays and the channels it is allowed to write, because
+    //    those four are one object in the world: a metallic marker is metal, 26% rough, 2.8 cm wide and felt-tipped,
+    //    and a library that set only the width would be a library of names.
+    //
+    // 📝 The settings are kept beside the key so the instrument's own controls — nib, grade, head, wetness — can be
+    //    turned without rebuilding the choice. Moving a raw slider instead (size, roundness, tooth) edits the medium
+    //    directly and the instrument is marked as altered rather than silently claiming to still be itself.
+    //----------------------------------------------------------------------------------------------------------------------
+    TakeInstrument(Key, Options = {})
+    {
+        const Type = InstrumentByKey[Key];
+        if (!Type) return;
+        this.Instrument = { Key, Settings: { ...Type.Settings }, Altered: false };
+        this.Projection.Configure(BrushFromInstrument(Type, this.Instrument.Settings));
+
+        // An eraser takes paint away, so taking one out of the library puts the eraser in hand; taking anything
+        // else out hands the brush back, because nobody reaches for a pencil meaning to rub something out.
+        const Erases = InstrumentFamilies.find((Family) => Family.Key === Type.Family)?.Erases === true;
+        if (!Options.Quiet && (Erases ? this.Tool !== "eraser" : this.Tool === "eraser")) this.SetTool(Erases ? "eraser" : "brush");
+
+        // What it paints: the material goes onto the layer, and the stroke is allowed to write exactly that much.
+        // 📝 Not at boot: the editor opens with every channel writable, which is what an untouched project has always
+        //    done, and an instrument narrowing that before the painter has chosen anything would be a setting nobody
+        //    set. The narrowing is an act, and the act is reaching into the library.
+        const Paint = Options.Quiet ? null : Type.Paint;
+        const Layer = this.ActiveLayer;
+        if (Paint && Layer && this.Projection.Brush.Target !== "mask")
+        {
+            for (const [Channel, Value] of Object.entries(Paint.Channels))
+            {
+                Layer.Channels[Channel] = Value;
+                Layer.Enabled[Channel] = true;
+            }
+            this.ChannelWrites = Object.fromEntries(
+                WriteKeys.map((Name) => [Name, Name === "base_color" || Paint.Exposes.includes(Name)]),
+            );
+            this.Recomposite();
+            this.MarkDirty();
+            this.RenderInspector();
+        }
+
+        if (Options.Quiet) return;
+        this.Instruments?.Refresh();
+        this.Instruments?.ScheduleRibbon();
+        this.Notify(`${Type.Name} · ${MediaSummary(this.Projection.Brush.Media)}`);
+    }
+
+    // One of the instrument's own controls moved: re-derive everything from the settings, so the choice holds.
+    TuneInstrument(Key, Value)
+    {
+        const Type = InstrumentByKey[this.Instrument?.Key];
+        if (!Type) return;
+        this.Instrument.Settings = { ...this.Instrument.Settings, [Key]: Value };
+        this.Projection.Configure(BrushFromInstrument(Type, this.Instrument.Settings));
+        this.Instruments?.Refresh();
+        this.Instruments?.ScheduleRibbon();
+        this.SyncBrushControls();
+    }
+
+    // The type in hand, or null once the sliders have been moved far enough that naming it would be a lie.
+    get Holding()
+    {
+        return InstrumentByKey[this.Instrument?.Key] || null;
+    }
+
     SetMedia(Changes)
     {
         const Media = { ...(this.Projection.Brush.Media || PlainMedia), ...Changes };
+        if (this.Instrument) this.Instrument.Altered = true;
         this.Projection.Configure({ Media });
         this.Instruments?.ScheduleRibbon();
         this.SyncBrushControls();
@@ -5346,6 +5506,18 @@ export class TexturePanel
         const Brush = this.Projection.Brush;
         const Media = Brush.Media || PlainMedia;
         const Sheet = document.createElement("div");
+
+        // 🔴 What this particular instrument has that the others do not, at the top, before the five every head
+        //    shares. A chisel marker's nib and a pencil's grade are not advanced settings — they are the first
+        //    thing a hand reaches for, and they were unreachable while the library was gone.
+        const Type = this.Holding;
+        const Own = this.InstrumentControls();
+        if (Type && Own.length)
+        {
+            const Group = this.CardGroup(Type.Label, Type.Name);
+            Group.append(...Own);
+            Sheet.append(Group);
+        }
 
         const Head = this.CardGroup("Head", "Size in centimetres of surface, not of screen");
         Head.append(
@@ -5941,63 +6113,82 @@ export class TexturePanel
             return Sheet;
         }
 
-        const Finish = this.CardGroup("Finish", "Three numbers, set the way a kind of surface sets them");
-        Finish.append(
-            this.CardSegmented(MaterialFinishes, MaterialFinishOf(Layer), (Identifier) =>
-            {
-                const Chosen = MaterialFinishes.find((Entry) => Entry.Identifier === Identifier);
-                if (!Chosen) return;
-                for (const [Key, Value] of Object.entries(Chosen.Channels))
-                {
-                    Layer.Channels[Key] = Value;
-                    Layer.Enabled[Key] = true;
-                    this.ChannelWrites[Key] = true;
-                }
-                this.Recomposite();
-                this.MarkDirty();
-                this.RenderInspector();
-                this.Instruments.RenderRail();
-                this.Instruments.RenderPane(false);
-                this.Notify(`${Chosen.Label} · ${Chosen.Note}`);
-            }),
-        );
-        Sheet.append(Finish);
+        // 🔴 No finish chips. A finish is not something you pick next to the paint — it is what the paint IS, and the
+        //    instrument already said: a metallic marker lays metal, a chalk lays chalk. So the pane opens on the
+        //    channels the instrument in hand actually paints, and the rest of the eleven are one press away for the
+        //    cases the library has no name for.
+        const Type = this.Holding;
+        const Exposed = Type?.Paint?.Exposes || [];
+        // 📝 The short view is shown only while the writes still agree with the instrument. Widen them by hand and
+        //    the pane widens with them: a pane that said "a pencil writes two channels" over a stroke that writes
+        //    eleven would be the one place in the card that lies.
+        const Narrow =
+            Exposed.length > 0 &&
+            WriteKeys.every((Key) => Key === "base_color" || Exposed.includes(Key) || this.ChannelWrites[Key] === false);
+        const Showing = this.EveryChannel || !Narrow;
 
-        for (const Slot of WriteSlots)
+        if (Type && Narrow)
         {
-            const Group = this.CardGroup(Slot.Label, Slot.Note);
-            for (const Part of Slot.Components)
+            const Own = this.CardGroup(Type.Label, `${Type.Name} · what it lays on the surface`);
+            for (const Part of WriteKeys.filter((Key) => Exposed.includes(Key)))
             {
-                const On = Part.Locked || this.ChannelWrites[Part.Key] !== false;
-                const Row = document.createElement("button");
-                Row.className = `channel-pick ${On ? "on" : ""} ${Part.Locked ? "locked" : ""}`;
-                Row.innerHTML = `<span class="channel-tick">${On ? Icon("check") : ""}</span>
-                    <span class="channel-name">${Escape(Part.Label)}</span>
-                    <span class="channel-note">${Part.Locked ? "always" : Escape(Part.Key)}</span>`;
-                FillIcons(Row);
-                if (!Part.Locked)
-                    Row.addEventListener("click", () =>
-                    {
-                        this.ChannelWrites[Part.Key] = !On;
-                        this.Instruments.RenderRail();
-                        this.Instruments.RenderPane(false);
-                    });
-                Group.append(Row);
-                if (On) Group.append(...this.ChannelValue(Layer, Part));
+                const Slot = WriteSlots.flatMap((Entry) => Entry.Components).find((Entry) => Entry.Key === Part);
+                if (Slot) Own.append(...this.ChannelValue(Layer, Slot));
             }
-            Sheet.append(Group);
+            Sheet.append(Own);
+        }
+
+        if (Showing)
+            for (const Slot of WriteSlots)
+            {
+                const Group = this.CardGroup(Slot.Label, Slot.Note);
+                for (const Part of Slot.Components)
+                {
+                    const On = Part.Locked || this.ChannelWrites[Part.Key] !== false;
+                    const Row = document.createElement("button");
+                    Row.className = `channel-pick ${On ? "on" : ""} ${Part.Locked ? "locked" : ""}`;
+                    Row.innerHTML = `<span class="channel-tick">${On ? Icon("check") : ""}</span>
+                        <span class="channel-name">${Escape(Part.Label)}</span>
+                        <span class="channel-note">${Part.Locked ? "always" : Escape(Part.Key)}</span>`;
+                    FillIcons(Row);
+                    if (!Part.Locked)
+                        Row.addEventListener("click", () =>
+                        {
+                            this.ChannelWrites[Part.Key] = !On;
+                            this.Instruments.RenderRail();
+                            this.Instruments.RenderPane(false);
+                        });
+                    Group.append(Row);
+                    if (On) Group.append(...this.ChannelValue(Layer, Part));
+                }
+                Sheet.append(Group);
+            }
+        else
+        {
+            const More = document.createElement("div");
+            More.className = "card-actions";
+            More.innerHTML = `<button data-every>Every channel</button>`;
+            More.querySelector("[data-every]").addEventListener("click", () =>
+            {
+                this.EveryChannel = true;
+                this.Instruments.RenderPane(false);
+            });
+            Sheet.append(More);
         }
 
         const Row = document.createElement("div");
         Row.className = "card-actions";
-        Row.innerHTML = `<button data-all>Everything</button><button data-none>Cover only</button>`;
+        Row.innerHTML = Showing
+            ? `<button data-all>Everything</button><button data-none>Cover only</button>`
+            : `<button data-all>Everything</button>`;
         Row.querySelector("[data-all]").addEventListener("click", () =>
         {
             this.ChannelWrites = DefaultWrites();
+            this.EveryChannel = true;
             this.Instruments.RenderRail();
             this.Instruments.RenderPane(false);
         });
-        Row.querySelector("[data-none]").addEventListener("click", () =>
+        Row.querySelector("[data-none]")?.addEventListener("click", () =>
         {
             this.ChannelWrites = Object.fromEntries(WriteKeys.map((Key) => [Key, false]));
             this.Instruments.RenderRail();
@@ -6007,9 +6198,11 @@ export class TexturePanel
 
         const Note = document.createElement("p");
         Note.className = "card-note";
-        Note.textContent =
-            "Switched off means the stroke leaves that channel exactly as it found it. The layer's own cover is always written, or a stroke that paints roughness alone would never show. " +
-            "Colour is the one channel whose value is not here: it is the colour in hand, one pane up.";
+        Note.textContent = Showing
+            ? "Switched off means the stroke leaves that channel exactly as it found it. The layer's own cover is always written, or a stroke that paints roughness alone would never show. " +
+              "Colour is the one channel whose value is not here: it is the colour in hand, one pane up."
+            : `A ${Type.Label.toLowerCase()} writes colour and ${Exposed.length === 1 ? "one channel" : `${Exposed.length} channels`} and leaves the rest of the surface exactly as it found it. ` +
+              "Open every channel to paint something the library has no name for.";
         Sheet.append(Note);
         return Sheet;
     }

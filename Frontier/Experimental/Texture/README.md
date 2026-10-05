@@ -134,9 +134,9 @@ inside, the edges put it alongside. A material preset, a decal, a generator, a m
 way. A click only picks an item out so you can read it; <kbd>Enter</kbd> on a focused tile adds it, because a drag cannot
 be typed.
 
-**The card is the paint.** `Tab` summons one card and everything on it is a property of the paint in hand — there is no
-library of instruments on it and no row of preset colour chips, because choosing paint and tuning it are different acts
-and a card that tried to be both kept the controls one slide away from the thing they described. The rail is contextual
+**The card is the paint.** `Tab` summons one card and everything on it is a property of the paint in hand. There is no
+row of preset colour chips on it, because choosing a colour and tuning the paint are different acts and a card that
+tried to be both kept the controls one slide away from the thing they described. The rail is contextual
 to the layer and it is grouped, because painting one thing in three dimensions is never one setting: a paint layer gets
 **Paint** (*Colour*, *Material*), **Head** (*Shape*, *Grain*) and **Hand** (*Stroke*, *Taper*); a decal layer gets
 **Artwork** (*Artwork*, *Placement*) and **Paint** (*Colour*, *Ink*, *Material*); a folder gets none, because painting
@@ -152,11 +152,15 @@ through, and the dynamics it wanders by — because a gradient *is* a colour and
 rail away. One switch arms the ramp: the strip the paint will actually run through, a knob under every colour in it,
 the fit, the length, repeat, reverse and easing. A mask is offered the value ramp instead — a mask holds coverage, not
 hue, so a colour picker there would offer a choice that cannot be expressed. **Material** is the surface the paint
-lays down: the write switch for each of the eleven channels, the layer's own value for every channel the stroke writes
-sitting directly under its switch, and three finishes — Metal, Gloss, Matte — that set the three numbers which only
-ever move together. **Shape** is the head: size in centimetres
-of surface, hardness, roundness and the angle a chisel is held at, how many hairs it has and how far they splay, and
-what happens past the rim. **Grain** chooses the medium — plain, bristle, graphite, ink, felt, dry pigment or wax — and
+lays down, and it opens on the instrument in hand rather than on everything the format can hold: a metallic marker
+offers a metalness and a roughness, because that is what a metallic marker is, and the other nine channels stay folded
+behind *Every channel* until they are wanted. Open them and the pane is the full sheet again — a write switch for each
+of the eleven channels with the layer's own value for every channel the stroke writes sitting directly under its
+switch — and it stays the full sheet, because a pane that said "a marker writes two channels" over a stroke that
+writes eleven would be the one place in the card that lies. **Shape** is the head: whatever belongs to the
+kind of thing in hand first — a marker's nib, a pencil's grade, a brush's bristle count and hair thickness, a crayon's
+melt — then size in centimetres of surface, hardness, roundness and the angle a chisel is held at, how many hairs it
+has and how far they splay, and what happens past the rim. **Grain** chooses the medium — plain, bristle, graphite, ink, felt, dry pigment or wax — and
 the paper under it: the tooth in cycles per metre, the streak along the stroke, how dry the head runs and how far one
 load carries. **Taper** is the entry ramp and the two pressure curves. **Stroke** is how the mark goes down — freehand, line or wash
 — and how far it lags the hand. Every one of those numbers is the number the stamping pass runs on, not a percentage translated by an instrument
@@ -166,6 +170,19 @@ uses.
 **Colour dynamics.** Hue, saturation and brightness, each with a reach the dab may wander inside, sitting under the
 square they wander from. The roll happens once per dab, on the processor, because one draw call carries one colour and
 a dab *is* one draw call — so two strokes over the same ground never match, which is the point of the control.
+
+![Every instrument the editor knows, drawn as itself](library.png)
+
+**The library, in the foot of the rail.** Under the contextual rows, pinned to the bottom of the card's left rail and
+never scrolling away with them, is the row that opens the library: twenty-seven instruments in seven families — paint
+brushes, pencils, pens, markers, dry media, wax and oil, and erasers — each drawn as itself. Taking one out sets four
+things that are one thing in the world: the head it paints with, the medium under it, the material it lays on the
+surface and the channels the stroke is allowed to write. A metallic marker is metal at a quarter roughness and its
+pane says metalness and roughness; a graphite pencil is a dark, faintly metallic smear with a grade and a tooth; an
+eraser puts the eraser in hand, because what an eraser does to paint is not a setting on a brush. Move a slider
+afterwards and the paint stays yours — the row simply stops claiming to be exactly what the tin said. That is also why
+there are no finish chips next to the colour any more: what a stroke lays is decided by the kind of instrument it is
+held in, which is how it works at a desk.
 
 ![A silver-to-gold marker, written on the card's own test sheet](test-sheet.png)
 
@@ -326,14 +343,15 @@ symmetry chips. Beside it sit the colours the brush has lately carried, newest f
 one of them. **Radial symmetry** repeats a stroke around the standing axis as many times as the sector count asks, from
 two to sixteen — a cursor in every sector, the spokes drawn on the model, and decal stamps repeated the same way.
 
-**The instrument card (<kbd>Tab</kbd>).** The card is the tool menu: a rail of six media families down the left — paint
-brushes, pencils, pens, markers, dry media, wax and oil — and the types within the family as tiles beside it, each one
-drawn as the instrument itself sitting in a dished well. Pick a tile and the card slides one pane left to that
-instrument's settings: size, opacity, flow, hardness and spacing, plus whatever belongs to the medium alone — a
+**The instruments (<kbd>Tab</kbd>, then the foot of the rail).** Seven families — paint brushes, pencils, pens,
+markers, dry media, wax and oil, erasers — twenty-seven types between them, each a tile drawn as the instrument
+itself. Take one and the card stays where it is: the panes it changed are the panes already in front of you, which is
+why the library is a footer rather than a screen the card has to slide away to. What belongs to the medium alone — a
 pencil's grade and grain, a marker's nib and bleed, a brush's head and wetness, a dry stick's tooth and scatter, a
-crayon's melt. The rows are the editor's own slider, the same `SliderRow` the inspector's property sheets are built
-from: a 26px track with its fill driven by `--fraction`, and a pill you can type into beside it. <kbd>Tab</kbd> steps
-forward through the card — closed → tiles → settings → closed — and <kbd>Esc</kbd> steps back out of it.
+crayon's melt, a kneaded eraser's crumb — leads the Shape pane, above the size, opacity, flow, hardness and spacing
+every mark has. The rows are the editor's own slider, the same `SliderRow` the inspector's property sheets are built
+from: a 26px track with its fill driven by `--fraction`, and a pill you can type into beside it. <kbd>Tab</kbd> walks
+the contextual rows and steps off the end to close; the library sits below that walk, one press away but never in it.
 
 Every instrument is one 300 × 60 drawing with its working tip at the right, and the tile is that same drawing under a
 cropped viewBox, so nothing is authored twice. Every setting reaches the paint — the foot of the card names the medium
@@ -540,7 +558,7 @@ painted. With the orbit tool in hand, a left click that never becomes a drag sel
 | `FinishSpecification.js` | Procedural material families, their styles, named controls and the preset shelf. |
 | `LayerSpecification.js` | Layer, mask and decal records; sanitisers; project defaults and validation. |
 | `DecalSpecification.js` | Vector library, font archive, SVG/text rasterisation. |
-| `InstrumentSpecification.js` | The instrument library: six media families, their drawings, settings schema and brush mapping. The card no longer shows it; it seeds the opening brush. |
+| `InstrumentSpecification.js` | The instrument library: seven families and twenty-seven types, their drawings, settings schema, the material each one lays and the brush mapping. |
 | `InstrumentPanel.js` | The summoned card: the rail of paint properties, the pane frame and the ribbon preview. |
 | `MediaSolver.js` | What each medium does to a mark — bristle lanes, paper tooth, bleed, dust, wax skip — and the uniform packing the stamping pass reads. |
 | `ControlSpecification.js` | The editor's one slider row, mounted by both the inspector and the card. |

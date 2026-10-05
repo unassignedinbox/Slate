@@ -1730,7 +1730,7 @@ test("a dependent control is hidden rather than ground out", () =>
 
 test("every instrument draws at both scales", () =>
 {
-    assert.equal(InstrumentFamilies.length, 6);
+    assert.equal(InstrumentFamilies.length, 7);
     for (const Family of InstrumentFamilies)
     {
         for (const Type of Family.Types)
@@ -1776,7 +1776,9 @@ test("an export preset says which way its normals point", () =>
 //--------------------------------------------------------------------------------------------------------------------------
 test("every instrument resolves to a medium the pass can hold", () =>
 {
-    const Expected = { brush: 1, pencil: 2, pen: 3, marker: 4, dry: 5, wax: 6 };
+    // 📝 An eraser is medium zero on purpose: it takes paint away rather than laying any, so the mark it makes is
+    //    the plain dab the pass has always drawn, shaped by the rubber rather than by a pigment.
+    const Expected = { brush: 1, pencil: 2, pen: 3, marker: 4, dry: 5, wax: 6, eraser: 0 };
     assert.equal(MediumOrdering[0].Identifier, "plain", "medium zero must be the plain dab an unset uniform means");
     for (const Family of InstrumentFamilies)
     {

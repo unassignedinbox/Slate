@@ -62,6 +62,12 @@ const MetalColours = {
     graphite: Stop(0, "#17171b") + Stop(0.5, "#3a3a42") + Stop(1, "#050507"),
 };
 
+const RubberColours = {
+    vinyl: ["#d8d4c8", "#faf8f2", "#a8a496"],
+    putty: ["#6a675e", "#9a948a", "#45433c"],
+    pink: ["#c88a84", "#e8b8ae", "#9a5a52"],
+};
+
 const HairColours = {
     sable: Stop(0, "#5a3c1e") + Stop(0.45, "#c49a5e") + Stop(0.8, "#8a5f32") + Stop(1, "#6a4526"),
     synthetic: Stop(0, "#0c0c10") + Stop(0.45, "#3a3a44") + Stop(0.8, "#17171b") + Stop(1, "#0a0a0e"),
@@ -501,6 +507,60 @@ const WaxArt = (Key, Config) =>
     return Markup;
 };
 
+// Erasers. A rubber body with a worn working end, and whatever holds it: a paper band, a wooden barrel, or nothing
+// at all for a lump of putty.
+const EraserArt = (Key, Config) =>
+{
+    const Half = Config.Half ?? 10;
+    const Back = Config.Back ?? 108;
+    const Tip = Config.Tip ?? 238;
+    const Rubber = RubberColours[Config.Rubber] || RubberColours.vinyl;
+    const Shoulder = Config.Sleeve === "wood" ? 206 : Tip - 16;
+    const Definitions =
+        "<defs>" +
+        Ramp(`${Key}rub`, Band(Rubber)) +
+        Ramp(`${Key}wood`, Band(BarrelColours.cedar)) +
+        Ramp(`${Key}band`, Stop(0, "#e8e4d8") + Stop(0.45, "#cfc8b8") + Stop(1, "#9a9488")) +
+        "</defs>";
+
+    let Markup = Definitions;
+
+    if (Config.Sleeve === "wood")
+        Markup += `<rect x="${Back}" y="${Axis - Half}" width="${Shoulder - Back}" height="${2 * Half}" rx="2" fill="url(#${Key}wood)"/>`;
+    else Markup += `<rect x="${Back}" y="${Axis - Half}" width="${Shoulder - Back}" height="${2 * Half}" rx="${Config.Lumpy ? Half * 0.8 : 2.4}" fill="url(#${Key}rub)"/>`;
+
+    // The working end: a cone on a pencil, a rounded-off corner on a block, a kneaded lump on putty.
+    if (Config.Sleeve === "wood")
+        Markup +=
+            `<path d="M ${Shoulder},${Axis - Half} L ${Tip - 4},${Axis - 3} C ${Tip},${Axis - 2} ${Tip},${Axis + 2} ${Tip - 4},${Axis + 3}` +
+            ` L ${Shoulder},${Axis + Half} Z" fill="url(#${Key}rub)"/>`;
+    else if (Config.Lumpy)
+        Markup +=
+            `<path d="M ${Shoulder},${Axis - Half + 1} C ${Shoulder + 14},${Axis - Half - 3} ${Tip + 2},${Axis - 7} ${Tip},${Axis - 1}` +
+            ` C ${Tip + 2},${Axis + 7} ${Shoulder + 16},${Axis + Half + 2} ${Shoulder},${Axis + Half - 1} Z" fill="url(#${Key}rub)"/>`;
+    else
+        Markup +=
+            `<path d="M ${Shoulder},${Axis - Half} L ${Tip - 3},${Axis - Half} C ${Tip},${Axis - Half + 1} ${Tip},${Axis - 1} ${Tip - 2},${Axis + Half}` +
+            ` L ${Shoulder},${Axis + Half} Z" fill="url(#${Key}rub)"/>`;
+
+    if (Config.Sleeve === "band")
+    {
+        const Left = Back + 12;
+        const Width = 64;
+        Markup += `<rect x="${Left}" y="${Axis - Half - 0.5}" width="${Width}" height="${2 * Half + 1}" rx="1.8" fill="url(#${Key}band)"/>`;
+        Markup += `<rect x="${Left}" y="${Axis - Half - 0.5}" width="${Width}" height="${Half * 0.36}" fill="#fff" opacity="0.5"/>`;
+        Markup += `<rect x="${Left + 8}" y="${Axis - 2}" width="${Width - 26}" height="2.2" rx="1.1" fill="#8e8678" opacity="0.7"/>`;
+    }
+
+    // Rubber is matte: one soft highlight along the top, one shadow under, and the dust it has already made.
+    Markup += `<rect x="${Back + 4}" y="${Axis - Half * 0.78}" width="${Shoulder - Back - 14}" height="${Half * 0.26}" rx="${Half * 0.13}" fill="#fff" opacity="0.28"/>`;
+    Markup += `<rect x="${Back}" y="${Axis + Half * 0.5}" width="${Shoulder - Back}" height="${Half * 0.5}" rx="${Half * 0.25}" fill="#000" opacity="0.18"/>`;
+    for (let Speck = 0; Speck < 4; Speck += 1)
+        Markup += `<circle cx="${Tip + 4 + Speck * 5}" cy="${Axis + (Speck % 2 ? 6 : -5) + Speck}" r="${1.6 - Speck * 0.2}" fill="${Rubber[1]}" opacity="${0.5 - Speck * 0.09}"/>`;
+
+    return Markup;
+};
+
 //--------------------------------------------------------------------------------------------------------------------------
 // Settings schema.
 //
@@ -563,6 +623,15 @@ export const InstrumentSchema = {
         },
     ]),
 
+    Eraser: StrokeControls([
+        { Key: "Scatter", Label: "Crumb", Glyph: "Scatter", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%", Wired: true },
+        { Key: "Pressure", Label: "Pressure sensitive", Glyph: "Pressure", Kind: "Switch", Wired: true },
+        {
+            Key: "Taper", Label: "Taper", Glyph: "Taper", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%", Wired: true,
+            When: (Settings) => Settings.Pressure === true,
+        },
+    ]),
+
     Wax: StrokeControls([
         { Key: "Grain", Label: "Tooth", Glyph: "Grain", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%", Wired: true },
         { Key: "Melt", Label: "Melt", Glyph: "Wetness", Kind: "Slider", Minimum: 0, Maximum: 100, Step: 1, Unit: "%", Wired: true },
@@ -601,6 +670,7 @@ export const InstrumentFamilies = [
                 Tone: "#c49a5e",
                 Art: { Shape: "round", Tip: 244, Reach: 5, Barrel: "wood", Ferrule: "chrome", Hair: "sable" },
                 Settings: { Size: 9, Opacity: 92, Flow: 80, Hardness: 40, Spacing: 10, Smoothing: 38, Head: "Round", Wetness: 45, Pressure: true, Taper: 60 },
+                Paint: { Channels: { specular_roughness: 0.52 }, Exposes: ["specular_roughness"] },
                 Swatches: ["#c0303a", "#2352a6", "#1f7a4d", "#e0a13a", "#6b4a9e", "#15161a"],
             },
             {
@@ -610,6 +680,7 @@ export const InstrumentFamilies = [
                 Tone: "#f2e6c8",
                 Art: { Shape: "flat", Tip: 238, Reach: 7, Barrel: "navy", Ferrule: "chrome", Hair: "hog" },
                 Settings: { Size: 14, Opacity: 96, Flow: 88, Hardness: 62, Spacing: 8, Smoothing: 22, Head: "Flat", Wetness: 30, Pressure: false, Taper: 0 },
+                Paint: { Channels: { specular_roughness: 0.58, height: 0.62 }, Exposes: ["specular_roughness", "height"] },
                 Swatches: ["#2352a6", "#1f7a4d", "#8a5a30", "#15161a", "#f4f1ea"],
             },
             {
@@ -619,6 +690,7 @@ export const InstrumentFamilies = [
                 Tone: "#3a3a44",
                 Art: { Shape: "filbert", Tip: 240, Reach: 7, Barrel: "black", Ferrule: "silver", Hair: "synthetic" },
                 Settings: { Size: 12, Opacity: 90, Flow: 74, Hardness: 46, Spacing: 10, Smoothing: 30, Head: "Filbert", Wetness: 38, Pressure: true, Taper: 35 },
+                Paint: { Channels: { specular_roughness: 0.5, height: 0.56 }, Exposes: ["specular_roughness", "height"] },
                 Swatches: ["#6b4a9e", "#c0303a", "#2b7f88", "#e0a13a", "#15161a"],
             },
             {
@@ -628,6 +700,7 @@ export const InstrumentFamilies = [
                 Tone: "#9a8e80",
                 Art: { Shape: "fan", Tip: 236, Reach: 4, Barrel: "walnut", Ferrule: "chrome", Hair: "squirrel" },
                 Settings: { Size: 16, Opacity: 54, Flow: 40, Hardness: 12, Spacing: 14, Smoothing: 60, Head: "Fan", Wetness: 70, Pressure: true, Taper: 20 },
+                Paint: { Channels: { specular_roughness: 0.44, coat_weight: 0.18 }, Exposes: ["specular_roughness", "coat_weight"] },
                 Swatches: ["#f4f1ea", "#d8c496", "#8a5f32", "#4a4038"],
             },
         ],
@@ -648,6 +721,7 @@ export const InstrumentFamilies = [
                 Tone: "#f7d24a",
                 Art: { Barrel: "yellow", Core: "graphite", Back: "eraser", Metal: "gold" },
                 Settings: { Size: 1.6, Opacity: 78, Flow: 55, Hardness: 62, Spacing: 6, Smoothing: 25, Grade: "HB", Grain: 55, Pressure: true, Tilt: 0 },
+                Paint: { Channels: { specular_roughness: 0.46, base_metalness: 0.3 }, Exposes: ["base_metalness", "specular_roughness"] },
                 Swatches: ["#2b2b30", "#4a4a52", "#6d6d76", "#141417"],
             },
             {
@@ -657,6 +731,7 @@ export const InstrumentFamilies = [
                 Tone: "#a8243c",
                 Art: { Barrel: "crimson", Core: "crimson", Back: "flat", Metal: "silver" },
                 Settings: { Size: 1.8, Opacity: 88, Flow: 66, Hardness: 58, Spacing: 6, Smoothing: 28, Grade: "2B", Grain: 42, Pressure: true, Tilt: 0 },
+                Paint: { Channels: { specular_roughness: 0.74 }, Exposes: ["specular_roughness"] },
                 Swatches: ["#c8243c", "#e0a13a", "#2b7f88", "#3a6ad8", "#1f7a4d"],
             },
             {
@@ -666,6 +741,7 @@ export const InstrumentFamilies = [
                 Tone: "#7a838c",
                 Art: { Barrel: "graphite", Core: "graphite", Back: "flat", Metal: "chrome", Clutch: true, Half: 6.5 },
                 Settings: { Size: 0.6, Opacity: 92, Flow: 74, Hardness: 86, Spacing: 4, Smoothing: 40, Grade: "2H", Grain: 18, Pressure: false, Tilt: 0 },
+                Paint: { Channels: { specular_roughness: 0.42, base_metalness: 0.26 }, Exposes: ["base_metalness", "specular_roughness"] },
                 Swatches: ["#1c1c22", "#3a3a42", "#5a5f66"],
             },
             {
@@ -675,6 +751,7 @@ export const InstrumentFamilies = [
                 Tone: "#2a2a2e",
                 Art: { Barrel: "black", Core: "charcoal", Back: "cap", Metal: "copper", Faceted: false },
                 Settings: { Size: 3.2, Opacity: 96, Flow: 82, Hardness: 34, Spacing: 8, Smoothing: 18, Grade: "6B", Grain: 76, Pressure: true, Tilt: 40 },
+                Paint: { Channels: { specular_roughness: 0.95 }, Exposes: ["specular_roughness"] },
                 Swatches: ["#0a0a0c", "#2a2a2e", "#55555d", "#8a8f98"],
             },
         ],
@@ -695,6 +772,7 @@ export const InstrumentFamilies = [
                 Tone: "#8a949c",
                 Art: { Barrel: "graphite", Metal: "chrome", Nib: "tube" },
                 Settings: { Size: 0.5, Opacity: 100, Flow: 100, Hardness: 94, Spacing: 4, Smoothing: 45, Bleed: 6, Pressure: false, Taper: 0 },
+                Paint: { Channels: { specular_roughness: 0.6 }, Exposes: ["specular_roughness"] },
                 Swatches: ["#15161a", "#1d3a8a", "#8d1e26", "#1f5c3a"],
             },
             {
@@ -704,6 +782,7 @@ export const InstrumentFamilies = [
                 Tone: "#3a5f9c",
                 Art: { Barrel: "navy", Metal: "gold", Nib: "fountain", Section: "bar" },
                 Settings: { Size: 1.1, Opacity: 96, Flow: 88, Hardness: 78, Spacing: 5, Smoothing: 52, Bleed: 30, Pressure: true, Taper: 45 },
+                Paint: { Channels: { specular_roughness: 0.5 }, Exposes: ["specular_roughness"] },
                 Swatches: ["#16305e", "#15161a", "#5a0a1a", "#123a20"],
             },
             {
@@ -713,6 +792,7 @@ export const InstrumentFamilies = [
                 Tone: "#2b7f88",
                 Art: { Barrel: "teal", Metal: "silver", Nib: "ball" },
                 Settings: { Size: 0.8, Opacity: 84, Flow: 62, Hardness: 88, Spacing: 4, Smoothing: 35, Bleed: 4, Pressure: true, Taper: 20 },
+                Paint: { Channels: { specular_roughness: 0.34, coat_weight: 0.22 }, Exposes: ["specular_roughness", "coat_weight"] },
                 Swatches: ["#1d3a8a", "#15161a", "#8d1e26"],
             },
             {
@@ -722,6 +802,7 @@ export const InstrumentFamilies = [
                 Tone: "#f0cf7e",
                 Art: { Barrel: "walnut", Metal: "gold", Nib: "chisel" },
                 Settings: { Size: 2.4, Opacity: 100, Flow: 96, Hardness: 82, Spacing: 5, Smoothing: 48, Bleed: 20, Pressure: true, Taper: 70 },
+                Paint: { Channels: { specular_roughness: 0.52 }, Exposes: ["specular_roughness"] },
                 Swatches: ["#15161a", "#5a0a1a", "#16305e", "#4a2f18"],
             },
         ],
@@ -742,6 +823,7 @@ export const InstrumentFamilies = [
                 Tone: "#15161a",
                 Art: { Barrel: "graphite", Metal: "silver", Nib: "bullet", Ink: Ink.Dark },
                 Settings: { Size: 3.4, Opacity: 100, Flow: 100, Hardness: 86, Spacing: 5, Smoothing: 30, Nib: "Fine", Bleed: 8, Pressure: false },
+                Paint: { Channels: { specular_roughness: 0.66 }, Exposes: ["specular_roughness"] },
                 Swatches: ["#15161a", "#c0303a", "#2352a6", "#1f7a4d", "#e0a13a"],
             },
             {
@@ -751,6 +833,7 @@ export const InstrumentFamilies = [
                 Tone: "#c0303a",
                 Art: { Barrel: "ivory", Metal: "chrome", Nib: "chisel", Ink: Ink.Warm },
                 Settings: { Size: 6.5, Opacity: 92, Flow: 86, Hardness: 72, Spacing: 6, Smoothing: 26, Nib: "Chisel", Bleed: 38, Pressure: false },
+                Paint: { Channels: { specular_roughness: 0.66 }, Exposes: ["specular_roughness"] },
                 Swatches: ["#c0303a", "#e0a13a", "#2b7f88", "#6b4a9e", "#15161a"],
             },
             {
@@ -760,7 +843,20 @@ export const InstrumentFamilies = [
                 Tone: "#2352a6",
                 Art: { Barrel: "navy", Metal: "silver", Nib: "taper", Ink: ["#5b8cff", "#2352a6", "#122f66"] },
                 Settings: { Size: 4.2, Opacity: 88, Flow: 78, Hardness: 44, Spacing: 7, Smoothing: 42, Nib: "Fine", Bleed: 46, Pressure: true },
+                Paint: { Channels: { specular_roughness: 0.6 }, Exposes: ["specular_roughness"] },
                 Swatches: ["#2352a6", "#5b8cff", "#15161a", "#c0303a"],
+            },
+            {
+                // 🔴 The one instrument that paints a material rather than a colour: its pigment IS metal, so it is
+                //    the only marker that writes metalness, and the colour in hand is the metal's own reflectance.
+                Key: "marker-metallic",
+                Label: "Metallic",
+                Name: "Metallic paint marker · 2 mm",
+                Tone: "#f0cf7e",
+                Art: { Barrel: "graphite", Metal: "gold", Nib: "bullet", Ink: ["#f6e3a8", "#d9a633", "#8a6a2a"] },
+                Settings: { Size: 2.8, Opacity: 100, Flow: 96, Hardness: 80, Spacing: 5, Smoothing: 34, Nib: "Fine", Bleed: 10, Pressure: false },
+                Paint: { Channels: { base_metalness: 1, specular_roughness: 0.26, specular_weight: 1 }, Exposes: ["base_metalness", "specular_roughness"] },
+                Swatches: ["#d9a633", "#dbdbe6", "#c08a5a", "#8a949c", "#15161a"],
             },
             {
                 Key: "marker-broad",
@@ -769,6 +865,7 @@ export const InstrumentFamilies = [
                 Tone: "#e0a13a",
                 Art: { Barrel: "amber", Metal: "gold", Nib: "broad", Ink: ["#f0cf7e", "#d98c2b", "#7a4410"], Half: 10 },
                 Settings: { Size: 11, Opacity: 100, Flow: 100, Hardness: 90, Spacing: 5, Smoothing: 18, Nib: "Broad", Bleed: 4, Pressure: false },
+                Paint: { Channels: { specular_roughness: 0.72 }, Exposes: ["specular_roughness"] },
                 Swatches: ["#e0a13a", "#f4f1ea", "#c0303a", "#15161a"],
             },
         ],
@@ -789,6 +886,7 @@ export const InstrumentFamilies = [
                 Tone: "#efece2",
                 Art: { Pigment: "chalk", Section: "square", Half: 11, Dust: 11, Seed: 2 },
                 Settings: { Size: 8, Opacity: 88, Flow: 62, Hardness: 30, Spacing: 14, Smoothing: 12, Grain: 78, Scatter: 34, Pressure: true },
+                Paint: { Channels: { specular_roughness: 0.96 }, Exposes: ["specular_roughness"] },
                 Swatches: ["#f4f2ec", "#e6d9b8", "#bcd3e6", "#e3bcbc"],
             },
             {
@@ -798,6 +896,7 @@ export const InstrumentFamilies = [
                 Tone: "#d86a22",
                 Art: { Pigment: "pastel", Section: "round", Half: 11, Wrap: true, Dust: 8, Seed: 5 },
                 Settings: { Size: 10, Opacity: 96, Flow: 85, Hardness: 22, Spacing: 12, Smoothing: 18, Grain: 52, Scatter: 20, Pressure: true },
+                Paint: { Channels: { specular_roughness: 0.92 }, Exposes: ["specular_roughness"] },
                 Swatches: ["#f08a3c", "#3f7ae0", "#c0303a", "#3f9e6a", "#6b4a9e"],
             },
             {
@@ -807,6 +906,7 @@ export const InstrumentFamilies = [
                 Tone: "#242428",
                 Art: { Pigment: "charcoal", Section: "round", Half: 11, Back: 126, Tip: 236, Dust: 12, Seed: 7 },
                 Settings: { Size: 6, Opacity: 82, Flow: 58, Hardness: 16, Spacing: 16, Smoothing: 10, Grain: 88, Scatter: 48, Pressure: true },
+                Paint: { Channels: { specular_roughness: 0.97 }, Exposes: ["specular_roughness"] },
                 Swatches: ["#101013", "#3a3a3f", "#6a6a70", "#9a9aa2"],
             },
             {
@@ -816,6 +916,7 @@ export const InstrumentFamilies = [
                 Tone: "#8a3a26",
                 Art: { Pigment: "conte", Section: "square", Half: 9, Back: 132, Dust: 6, Seed: 11 },
                 Settings: { Size: 5, Opacity: 94, Flow: 76, Hardness: 44, Spacing: 10, Smoothing: 16, Grain: 60, Scatter: 14, Pressure: true },
+                Paint: { Channels: { specular_roughness: 0.9 }, Exposes: ["specular_roughness"] },
                 Swatches: ["#a8503a", "#5a2214", "#2a2a2e", "#efece2"],
             },
         ],
@@ -836,6 +937,7 @@ export const InstrumentFamilies = [
                 Tone: "#c02a30",
                 Art: { Pigment: "crayon", Wrap: "band", Half: 9.5 },
                 Settings: { Size: 6, Opacity: 92, Flow: 72, Hardness: 52, Spacing: 9, Smoothing: 20, Grain: 46, Melt: 18, Pressure: true },
+                Paint: { Channels: { specular_roughness: 0.38, coat_weight: 0.26 }, Exposes: ["specular_roughness", "coat_weight"] },
                 Swatches: ["#e04a4a", "#3a6ad8", "#e0a13a", "#1f7a4d", "#15161a"],
             },
             {
@@ -845,6 +947,7 @@ export const InstrumentFamilies = [
                 Tone: "#2a4ab0",
                 Art: { Pigment: "oil", Half: 12, Back: 110, Shoulder: 214, Tip: 240, Faceted: true },
                 Settings: { Size: 12, Opacity: 100, Flow: 94, Hardness: 36, Spacing: 10, Smoothing: 24, Grain: 22, Melt: 64, Pressure: true },
+                Paint: { Channels: { specular_roughness: 0.3, coat_weight: 0.38 }, Exposes: ["specular_roughness", "coat_weight"] },
                 Swatches: ["#3a6ad8", "#c0303a", "#e0a13a", "#f4f1ea", "#15161a"],
             },
             {
@@ -854,7 +957,51 @@ export const InstrumentFamilies = [
                 Tone: "#dcd6c8",
                 Art: { Pigment: "china", Wrap: "spiral", Half: 8.5, Back: 112, Shoulder: 216, Tip: 238 },
                 Settings: { Size: 3.6, Opacity: 98, Flow: 88, Hardness: 66, Spacing: 7, Smoothing: 22, Grain: 16, Melt: 30, Pressure: false },
+                Paint: { Channels: { specular_roughness: 0.34, coat_weight: 0.3 }, Exposes: ["specular_roughness", "coat_weight"] },
                 Swatches: ["#f2efe8", "#15161a", "#c0303a", "#1f5c3a"],
+            },
+        ],
+    },
+    {
+        // 🔴 An eraser is an instrument, not a mode. It has a shape, a bite and a tooth of its own — a kneaded lump
+        //    lifts graphite off the peaks of the paper and a vinyl block cuts to the sheet — so it belongs in the
+        //    library beside the things it takes away. Picking one puts the eraser in hand; picking anything else
+        //    hands the brush back.
+        Key: "eraser",
+        Label: "Erasers",
+        Glyph: "eraser",
+        Tone: "#cfc8b8",
+        Crop: "196 7 76 46",
+        Draw: EraserArt,
+        Schema: "Eraser",
+        Erases: true,
+        Types: [
+            {
+                Key: "eraser-block",
+                Label: "Block",
+                Name: "Vinyl block · hard edge",
+                Tone: "#f4f1ea",
+                Art: { Rubber: "vinyl", Sleeve: "band", Half: 10, Tip: 236 },
+                Settings: { Size: 8, Opacity: 100, Flow: 100, Hardness: 88, Spacing: 6, Smoothing: 20, Scatter: 6, Pressure: false },
+                Swatches: [],
+            },
+            {
+                Key: "eraser-kneaded",
+                Label: "Kneaded",
+                Name: "Kneaded putty · lifts rather than cuts",
+                Tone: "#9a948a",
+                Art: { Rubber: "putty", Sleeve: "none", Half: 11, Tip: 240, Lumpy: true },
+                Settings: { Size: 11, Opacity: 62, Flow: 48, Hardness: 16, Spacing: 9, Smoothing: 44, Scatter: 34, Pressure: true, Taper: 30 },
+                Swatches: [],
+            },
+            {
+                Key: "eraser-pencil",
+                Label: "Pencil",
+                Name: "Eraser pencil · sharpened point",
+                Tone: "#d8c0b0",
+                Art: { Rubber: "pink", Sleeve: "wood", Half: 7.5, Tip: 246 },
+                Settings: { Size: 1.6, Opacity: 100, Flow: 96, Hardness: 92, Spacing: 4, Smoothing: 26, Scatter: 10, Pressure: true, Taper: 45 },
+                Swatches: [],
             },
         ],
     },

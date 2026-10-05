@@ -106,7 +106,10 @@ export class InstrumentPanel
         this.Root.innerHTML = `
             <div class="tool-track">
                 <div class="tool-slide">
-                    <div class="tool-rail" data-rail></div>
+                    <div class="tool-column">
+                        <div class="tool-rail" data-rail></div>
+                        <div class="rail-foot" data-shelf></div>
+                    </div>
                     <div class="tool-body">
                         <div class="pane-head">
                             <div><div class="pane-title" data-pane-title></div><div class="pane-sub" data-pane-sub></div></div>
@@ -140,12 +143,43 @@ export class InstrumentPanel
         this.RenderRail();
     }
 
+    // One row of the rail. The mark is raw markup, not the name of one: the card has no icon sheet of its own and no
+    // business importing the panel's — the host draws from whichever set it uses and hands the finished svg over.
+    RailRow(Entry, Standing)
+    {
+        return `
+            <button class="rail-item ${Entry.Key === Standing?.Key ? "active" : ""}" data-section="${Escape(Entry.Key)}"
+                    title="${Escape(Entry.Note || Entry.Label)}">
+                ${
+                    Entry.Glyph
+                        ? `<span class="rail-mark" style="color:${Entry.Tone || "#8a8a8a"}">${Entry.Glyph}</span>`
+                        : `<span class="rail-dot" style="background:${Entry.Tone || "#8a8a8a"}"></span>`
+                }
+                <span>${Escape(Entry.Label)}</span>
+                ${Entry.Tally === undefined ? "" : `<span class="rail-tally">${Escape(String(Entry.Tally))}</span>`}
+            </button>`;
+    }
+
     RenderRail()
     {
         const Rail = this.Root.querySelector("[data-rail]");
         if (!Rail) return;
-        const Panes = this.Sections();
-        const Standing = Panes.find((Entry) => Entry.Key === this.Section) || Panes[0] || null;
+        const Every = this.Sections();
+        const Panes = Every.filter((Entry) => !Entry.Foot);
+        const Standing = Every.find((Entry) => Entry.Key === this.Section) || Panes[0] || null;
+
+        // 🔴 A pane pinned to the foot of the rail rather than listed in it. The library is not a property of the
+        //    paint — it is where the paint came from — and a row of it among the properties reads as one more
+        //    setting to tune. Tab walks the properties and never lands here, for the same reason.
+        const Shelf = this.Root.querySelector("[data-shelf]");
+        if (Shelf)
+        {
+            const Footed = Every.filter((Entry) => Entry.Foot);
+            Shelf.hidden = !Footed.length;
+            Shelf.innerHTML = Footed.map((Entry) => this.RailRow(Entry, Standing)).join("");
+            for (const Button of Shelf.querySelectorAll("[data-section]"))
+                Button.addEventListener("click", () => this.ShowSection(Button.dataset.section));
+        }
         // 🔴 Headings, not a flat list. Colour, the gradient it runs through and the material under it are one thing
         //    said three ways — a metallic marker is all of them at once — and eight rows in a column gave the eye no
         //    reason to believe any two of them were related. The host names the family; the rail draws the rule.
@@ -157,20 +191,7 @@ export class InstrumentPanel
                           Entry.Group && Entry.Group !== Family
                               ? ((Family = Entry.Group), `<div class="rail-split">${Escape(Entry.Group)}</div>`)
                               : ""
-                      }
-            <button class="rail-item ${Entry.Key === Standing?.Key ? "active" : ""}" data-section="${Escape(Entry.Key)}"
-                    title="${Escape(Entry.Note || Entry.Label)}">
-                ${
-                    // 🔴 The mark is raw markup, not the name of one. The card has no icon sheet of its own and no
-                    //    business importing the panel's: the host draws from whichever set it uses and hands the
-                    //    finished svg over, exactly as it does for the slider rows.
-                    Entry.Glyph
-                        ? `<span class="rail-mark" style="color:${Entry.Tone || "#8a8a8a"}">${Entry.Glyph}</span>`
-                        : `<span class="rail-dot" style="background:${Entry.Tone || "#8a8a8a"}"></span>`
-                }
-                <span>${Escape(Entry.Label)}</span>
-                ${Entry.Tally === undefined ? "" : `<span class="rail-tally">${Escape(String(Entry.Tally))}</span>`}
-            </button>`,
+                      }${this.RailRow(Entry, Standing)}`,
               ).join("")
             : `<div class="rail-split">Nothing to paint with</div>`;
         for (const Button of Rail.querySelectorAll("[data-section]"))
@@ -671,7 +692,7 @@ export class InstrumentPanel
             this.Show();
             return;
         }
-        const Panes = this.Sections();
+        const Panes = this.Sections().filter((Entry) => !Entry.Foot);
         const Standing = this.Standing;
         const Index = Panes.findIndex((Entry) => Entry.Key === Standing?.Key);
         if (Index < 0 || Index >= Panes.length - 1)

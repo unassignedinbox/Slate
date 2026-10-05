@@ -247,6 +247,27 @@ export const MediaFromInstrument = (Type, Settings) =>
         };
     }
 
+    // 🔴 An eraser takes paint away, so its medium is the shape of the hole it leaves. Vinyl cuts a hard flat edge
+    //    and runs forever; putty is soft, lifts off the peaks of the paper and loads up as it goes, which is why it
+    //    is the only one with a reach worth speaking of.
+    if (Type.Family === "eraser")
+    {
+        const Putty = Art.Rubber === "putty";
+        return {
+            ...Base,
+            Medium: "plain",
+            Index: 0,
+            Tooth: Putty ? 260 : 180,
+            Fibre: 220,
+            Swell: Putty ? 0.4 : 0.1,
+            Ratio: Art.Rubber === "pink" ? 1 : 0.5,
+            Darkness: 1,
+            Dry: Putty ? 0.46 : 0.04,
+            Reach: Size * (Putty ? 18 : 200),
+            Grain: Putty ? 0.42 : Percent(Settings.Scatter) * 0.5,
+        };
+    }
+
     return { ...Base, Medium: "plain", Index: 0 };
 };
 
