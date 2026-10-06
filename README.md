@@ -13,7 +13,7 @@ Vite serves on `0.0.0.0:5173`, including Arena preview hosts. `npm run build` cr
 
 ### Open with raw.githack.com
 
-Run `npm run verify:published` for the verified, immutable GitHack link. If GitHack shows its external-content notice, select **Open the page**. This is GitHack’s confirmation for HTML pages, not an Alloy error.
+**[Launch Alloy 05 — 100 materials](https://raw.githack.com/unassignedinbox/Slate/d8bf2b1e8b0a1ed1bebb7ca443b556045086fea5/site/index.html).** Run `npm run verify:published` to verify the published artifact. If GitHack shows its external-content notice, select **Open the page**. This is GitHack’s confirmation for HTML pages, not an Alloy error.
 
 `site/index.html` is the committed, **self-contained application**: JavaScript, CSS, fonts, baked cloth geometry and shader recipes are embedded. It needs no development server and makes no runtime CDN imports or material-map requests. WebGL 2 and a modern browser are required.
 
@@ -165,7 +165,7 @@ The standalone test blocks unexpected HTTP asset requests, checks the full mater
 To exercise the actual hosted page instead, set its URL explicitly:
 
 ```sh
-ALLOY_PUBLIC_URL='https://raw.githack.com/unassignedinbox/Slate/<published-commit>/site/index.html' npm run test:standalone
+ALLOY_PUBLIC_URL='https://raw.githack.com/unassignedinbox/Slate/d8bf2b1e8b0a1ed1bebb7ca443b556045086fea5/site/index.html' npm run test:standalone
 ```
 
 The remote mode confirms GitHack's notice if present. Connection failures **fail the test**; it never substitutes a local copy. Successful artifact verification is not a claim that GitHack's live runtime was tested. Some sandbox networks block direct connections to GitHack.
