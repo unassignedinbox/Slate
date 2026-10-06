@@ -102,9 +102,10 @@ offering a flat slider that would be a lie. Occlusion and specular weight keep t
 value is scaled by them. Everything else about the layer is unchanged: blend, opacity, a mask, reorder, and paint on top.
 
 **Masks.** A mask is multiplied into the layer's coverage: black conceals, white reveals, the same way Substance Painter
-does it. Four kinds — **painted** (a greyscale image the brush writes), **generator** (any of the twenty-four in the
-catalogue) and **colour** (keys on the colour already composited beneath the layer, with a tolerance, a softness and an
-eyedropper), or none at all. A layer with no mask shows a dashed *Add mask* chip; clicking it attaches a black mask and aims the brush at
+does it. Four kinds — **painted** (a greyscale image the brush writes), **generator** (one of the twelve the device can
+draw on its own) and **colour** (keys on the colour already composited beneath the layer, with a tolerance, a softness
+and an eyedropper), or none at all. The stack of generators under it is a separate mechanism that multiplies into
+whichever of those four is chosen — see *Two mask mechanisms* below, because the pane does not say so itself. A layer with no mask shows a dashed *Add mask* chip; clicking it attaches a black mask and aims the brush at
 it in one step, so the layer disappears and you paint it back.
 
 The mask can be looked at two ways — from the toggle floating at the top of the viewport, from the same switch in the
@@ -291,7 +292,7 @@ Each sky also carries its own sun: picking Sunset gets a low orange one at seven
 ![Twelve generators solved on a two-object scene](generators.png)
 
 **Generators are the model read back, not a pattern printed on it.** Seven of them are drawn from the UV coordinate and
-need nothing — fBm, cells, scratches, weave, wood, checker, gradient. The other seventeen are readings of the surface
+need nothing — fBm, cells, scratches, weave, wood, checker, gradient. The other eighteen are readings of the surface
 itself, and that is the half Substance is actually loved for: dust settles on what faces the sky and stays where nothing
 has disturbed it, wear comes off the edges that stand proud, grime collects where a crease is buried. None of that can
 be drawn from a coordinate. The catalogue is in four families:
@@ -302,6 +303,7 @@ be drawn from a coordinate. The catalogue is in four families:
 | Surface | Curvature · Cavity · Occlusion · Up-facing · Altitude · Thickness · Position · Facing |
 | Weathering | Dust · Grime · Edge wear · Drips |
 | Selection | Object · UDIM tile · UV island · Picked faces · Vertex map |
+| Baked | Baked map |
 
 **The readings have to be taken before they can be read.** Curvature, cavity, occlusion, thickness, altitude, the island
 and tile each texel belongs to, the face it came from — none of it exists until the model is measured, and measuring is
@@ -329,6 +331,61 @@ turned off the last, skipping anything that landed in the gutter or on the far s
 the model's own radius — the same formula, constant for constant, as `MeasureCurvature`. A cylinder wall now answers one
 flat value along its length instead of rippling a hundred and forty-nine times across it, a sphere answers 0.43 at every
 subdivision, and the ripple that is left is three percent of the signal instead of fifteen.
+
+### Two mask mechanisms, and which one you are looking at
+
+The Mask pane holds two things that both produce a mask and have almost nothing to do with each other, which is worth
+saying plainly because the panel does not make it obvious.
+
+**Mask source** is one choice, evaluated on the device, per pixel, as part of the composite. It is `None`, the painted
+stroke, a **single** generator, or a colour key. Picking `Generator mask` there gives you one generator out of the
+twelve the shader knows how to draw, with no stack, no modes and no weight — it is the cheap path, it costs nothing,
+and it re-evaluates while you orbit.
+
+**Mask generators** is a stack, solved on the processor into a sheet and uploaded as a texture. Twenty-five generators
+rather than twelve — everything that needs to know about neighbours, islands, ray hits or the bake lives only here —
+and each entry has its own combine mode, weight and invert. The sheet then **multiplies into whatever the mask source
+produced**, so the two compose rather than compete: a painted stroke narrowed by edge wear is the source set to the
+stroke and a wear generator on the stack.
+
+The short version: *source* is one generator the GPU draws, *stack* is many the CPU solves. If the generator you want
+is not in the source dropdown it is because the shader cannot compute it — put it on the stack instead.
+
+### What a mask can read
+
+![Eight generators solved into mask sheets on a two-object scene](mask-readings.png)
+
+**Occlusion on the device was reading the coverage flag.** The field pass works curvature and altitude out of the
+position and normal images by comparing a texel to its neighbours, which is the whole of what a fragment shader can
+work out about a shape on its own; its alpha is a coverage flag, one everywhere on the model. Occlusion is not a
+neighbour question — it wants rays — and the shader was reading that alpha for it. So `Mask source → Generator mask →
+Ambient occlusion` drew flat white, an occlusion generator *layer* was a solid fill, and the `Occlusion (baked)`
+inspection view showed the silhouette rather than the occlusion. All three read the traced sheet now, uploaded
+alongside the measurement, so they follow the bake the same way the stack does.
+
+**An empty choice is every one of them, not none of them.** A selection generator arrives with no choice made, and the
+object dropdown's first entry says `Every object` — but the solve compared that empty string against an owner index,
+matched nothing, and returned black. Dropping Object, UDIM tile or UV island on a stack therefore made the layer
+vanish, which is indistinguishable from a generator that does not work. Empty now means the whole model, and the tile
+and island dropdowns say so in words the way the object one always did.
+
+**Baked map** is the twenty-fifth generator and the reason the other twenty-four were not enough. Every one of them
+reads the *measured* sheet — occlusion, thickness, curvature, altitude, position, normal, and the island/tile/face a
+texel belongs to. A bake produces a longer and different list: height, the bevel normal, the bent normal, the identity
+colours, the coordinate map, density, coverage. Those existed only as pixels on their way to disk, so there was no way
+to mask with a map you had just sat through a bake to get. This one samples the baked map itself, at whatever size it
+was baked at — a 2048 bake resamples into a 512 mask cleanly — and takes either the map as a whole (the single channel
+of a grey map, the luminance of a colour one) or one channel of it on its own, which is how a bent normal becomes
+three masks and one identity colour can be told from the next. With nothing baked it answers white and the panel
+offers a bake, rather than answering black and looking broken.
+
+Note the two conventions in the sheet above: the **Occlusion generator** answers *how occluded* a texel is, so a convex
+model is mostly black, while **Baked map · occlusion** is the AO map itself, where white is open sky. Invert either.
+
+**Measured or baked — the stack says which.** Before a bake the generators read the live sixteen-ray measurement; after
+one they read the bake, at the bake's resolution, because `RunReadings` hands its sheet straight to them. The line
+under the stack used to say `Measured at 1024²` in both cases. It now says which, and names how many baked maps are
+sitting there to be masked with.
 
 **Curvature is per vertex on the welded mesh, and it is a real curvature.** The obvious implementation — read the
 neighbouring normals in texture space — cannot see across a UV seam, and a cube is six islands, so every hard edge on it
@@ -1080,7 +1137,7 @@ painted. With the orbit tool in hand, a left click that never becomes a drag sel
 | `MaterialSpecification.js` | Surface constants, the conductor archive, material presets; re-exports the environments. |
 | `EnvironmentSpecification.js` | Nine sky recipes, the rig of three lights, and the sun: defaults, sanitising, colour temperature and the vector the shading pass wants. |
 | `EnvironmentSolver.js` | Generating a sky: value-noise fields, the latitude-longitude map and its chain, the nine harmonics, and the tone-mapped tile the pod draws. |
-| `GeneratorSpecification.js` | The twenty-four generators, their families, glyphs, controls and parameter ranges. |
+| `GeneratorSpecification.js` | The twenty-five generators, their families, glyphs, controls and parameter ranges. |
 | `ReadingSpecification.js` | The bake catalogue: fourteen maps, their families and heritage, the sample counts and the six reconstruction filters. |
 | `ReadingSolver.js` | One walk of the triangles per sample, every map accumulated inside it; bent and bevel normals, identity colours and the identity picture the viewport picks out of, padding. |
 | `SurfaceSolver.js` | Measuring the model: welded-mesh curvature, thickness, UV islands, and the rasterisation that puts every reading into texture space. |

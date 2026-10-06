@@ -165,6 +165,36 @@ export const NormaliseEntry = (Entry = {}) =>
 // One generator, at one texel. Sheets may be absent — a noise generator needs nothing but the coordinate, and that is
 // the whole reason the family exists.
 //--------------------------------------------------------------------------------------------------------------------------
+// An empty choice selects everything the sheet has rather than nothing it has.
+const EveryOr = (Choice, Value) => Choice === "" || Choice === undefined || Choice === null || String(Value) === String(Choice);
+
+//--------------------------------------------------------------------------------------------------------------------------
+// One baked map, at one place on the sheet. The maps are kept as RGBA bytes at their own resolution — a bake may be
+// 2048 while the mask is being solved at 256 — so the coordinate is taken to that resolution rather than the texel
+// index being reused. Channel 3 means "whatever this map is about": the single channel of a grey map, the luminance
+// of a colour one. 0, 1 and 2 pull out red, green or blue on their own, which is how a bent normal becomes three
+// separate masks and how one identity colour can be told from the next.
+//--------------------------------------------------------------------------------------------------------------------------
+export const SampleReading = (Readings, Identifier, U, V, Channel = 3) =>
+{
+    const Map = Readings?.Maps?.find((Entry) => Entry.Identifier === Identifier) || Readings?.Maps?.[0];
+    // 🔴 White, not black, when there is no bake to read. A generator that answers zero everywhere multiplies the
+    //    layer it masks out of existence, which is indistinguishable from a generator that does not work — and that
+    //    was the whole complaint. One that answers one changes nothing and leaves the panel free to say why.
+    if (!Map || !Map.Pixels || !Map.Size) return 1;
+    const Size = Map.Size;
+    const Column = Clamp(Math.floor(U * Size), 0, Size - 1);
+    const Row = Clamp(Math.floor(V * Size), 0, Size - 1);
+    const At = (Row * Size + Column) * 4;
+    const Red = Map.Pixels[At] / 255;
+    const Green = Map.Pixels[At + 1] / 255;
+    const Blue = Map.Pixels[At + 2] / 255;
+    if (Channel === 0) return Red;
+    if (Channel === 1) return Green;
+    if (Channel === 2) return Blue;
+    return Map.Channels === 1 ? Red : Clamp(Red * 0.2126 + Green * 0.7152 + Blue * 0.0722, 0, 1);
+};
+
 export const SolveTexel = (Entry, Context) =>
 {
     const { U, V, Sheets, Texel } = Context;
@@ -283,10 +313,23 @@ export const SolveTexel = (Entry, Context) =>
         const Wall = Smooth(0.85, 0.25, Math.abs(Normal(1)));
         Value = Clamp(Run * Mix(0.3, 1, Wall) * Mix(1, 1 - Field("Altitude"), 0.35), 0, 1);
     }
-    else if (Kind === "object") Value = Filled && String(Sheets.Owner[Texel]) === String(Entry.Choice) ? 1 : 0;
-    else if (Kind === "tile") Value = Filled && String(Sheets.Tile[Texel]) === String(Entry.Choice) ? 1 : 0;
-    else if (Kind === "island") Value = Filled && String(Sheets.Island[Texel]) === String(Entry.Choice) ? 1 : 0;
+    // 🔴 An empty choice is EVERY one of them, not none of them. A new selection generator arrives with no choice on
+    //    it, and comparing that empty string against an owner index matched nothing, so dropping one on the stack
+    //    turned the whole layer black and looked for all the world like a generator that does not work. The dropdown
+    //    offered "Every object" as the first option and that option was the one that selected nothing.
+    else if (Kind === "object") Value = Filled && EveryOr(Entry.Choice, Sheets.Owner[Texel]) ? 1 : 0;
+    else if (Kind === "tile") Value = Filled && EveryOr(Entry.Choice, Sheets.Tile[Texel]) ? 1 : 0;
+    else if (Kind === "island") Value = Filled && EveryOr(Entry.Choice, Sheets.Island[Texel]) ? 1 : 0;
     else if (Kind === "faces") Value = Filled && Context.Picked?.has(Sheets.Face[Texel]) ? 1 : 0;
+    else if (Kind === "reading")
+    {
+        // 🔴 The bake, read back as a mask. Everything above this works off the measured sheet — the handful of
+        //    surface quantities the measurement happens to carry — which is why there was no way to mask with the
+        //    height, the bevel, the bent normal or the identity colours even after sitting through a bake that
+        //    produced all four. This one samples the baked map itself, at whatever size it was baked at, so the
+        //    mask is exactly the pixels that would be exported.
+        Value = SampleReading(Context.Readings, Entry.Choice, U, V, Entry.Channel ?? 3);
+    }
     else if (Kind === "vertex")
     {
         const Map = Entry.Choice || "occlusion";
@@ -318,7 +361,7 @@ export const SolveMask = (Entries, Sheets, Options = {}) =>
     for (const Entry of Live)
     {
         const Picked = Entry.Kind === "faces" ? new Set(Entry.Marks) : null;
-        const Context = { Sheets, Picked, U: 0, V: 0, Texel: 0 };
+        const Context = { Sheets, Readings: Options.Readings || null, Picked, U: 0, V: 0, Texel: 0 };
         for (let Row = 0; Row < Size; Row += 1)
         {
             Context.V = (Row + 0.5) / Size;
@@ -371,7 +414,9 @@ export const MissingMeasurements = (Entries, Sheets) =>
     for (const Entry of Entries || [])
     {
         const Family = GeneratorByIdentifier[Entry.Kind]?.Family;
-        if (Family && Family !== "noise" && Family !== "synthetic") Wanted.add(GeneratorByIdentifier[Entry.Kind].Label);
+        // A baked-map generator is not waiting on a measurement — it is waiting on a bake, and it asks for one itself.
+        if (Family && Family !== "noise" && Family !== "synthetic" && Family !== "reading")
+            Wanted.add(GeneratorByIdentifier[Entry.Kind].Label);
     }
     return [...Wanted];
 };

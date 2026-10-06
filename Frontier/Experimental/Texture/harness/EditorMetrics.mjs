@@ -11,6 +11,7 @@ import { SanitiseLayer } from "../src/LayerSpecification.js";
 import { ReadingOrdering } from "../src/ReadingSpecification.js";
 import { DisplayIndex } from "../src/ChannelSpecification.js";
 import { SunDefaults } from "../src/EnvironmentSpecification.js";
+import { SolveMask } from "../src/MaskSolver.js";
 
 const { Window, Faults } = CreateWindow();
 const { Check, Report } = CreateTally("the editor");
@@ -731,7 +732,7 @@ const Shaped = Panel.ActiveLayer;
 Panel.RenderInspector();
 Check("the inspector offers a generator section", !!Find('[data-group="Mask generators"]'));
 Check("and it opens with the catalogue, not a dropdown", All(".field-chip").length >= 20, String(All(".field-chip").length));
-Check("grouped into families", All(".field-family").length === 4, String(All(".field-family").length));
+Check("grouped into families, the bake among them", All(".field-family").length === 5, String(All(".field-family").length));
 Check("every chip wears a mark of its own", All(".field-chip svg").length === All(".field-chip").length);
 Check("nothing is on the stack to begin with", !All(".field-row").length && !!Find(".field-empty"));
 
@@ -820,6 +821,80 @@ Check(
     "a stack restored by undo is solved again rather than left stale",
     Panel.SheetMarks.get(Shaped.Identifier) === Panel.SheetMark(Panel.LayerByIdentifier(Shaped.Identifier)),
 );
+
+//--------------------------------------------------------------------------------------------------------------------------
+// The three ways a generator used to come out blank. Occlusion on the device read the field's alpha, which is a
+// coverage flag and so white across the whole model. A selection generator with no choice made compared an empty
+// string against an owner index and matched nothing, so it came out black. And a bake produced nine maps that no
+// mask could reach, because every generator read the measured sheet and the measured sheet is a shorter list.
+//--------------------------------------------------------------------------------------------------------------------------
+// The shading source as written rather than as exported: the chunks a program is assembled from are module-private,
+// and the device here cannot compile anything, so the text itself is the only thing left to hold the shaders to.
+const ShadingText = readFileSync(new URL("../src/ShadingGlsl.js", import.meta.url), "utf8");
+Check(
+    "occlusion on the device is traced, not the coverage flag",
+    ShadingText.includes("Value = clamp(1.0 - Measured.r, 0.0, 1.0);") && !ShadingText.includes("Value = clamp(Field.a, 0.0, 1.0);"),
+);
+Check("and the inspection view of it reads the same texture", ShadingText.includes("Mode == 12) Inspection = vec3(texture(uMeasure"));
+Check("the traced sheet goes up to the device with the measurement", !!Panel.Integrator.MeasureImage);
+Check(
+    "at the size it was measured at",
+    Panel.Integrator.MeasureSize === Panel.Measured.Size,
+    `${Panel.Integrator.MeasureSize} vs ${Panel.Measured.Size}`,
+);
+
+const Everything = SolveMask([{ Kind: "object", Combine: "overwrite", Enabled: true, Weight: 1 }], Panel.Measured, { Size: 64 });
+const Covered = [...Everything.Values].filter((Value) => Value > 0.5).length;
+Check("a selection generator with no choice made takes every object, not none", Covered > 64, String(Covered));
+Check("and only where there is a model", Covered < 64 * 64, String(Covered));
+// 🔴 A layer of its own. FieldAction edits whatever is active, and the layer this file opened the generator section
+//    on stopped being active several checks ago — a block that assumes otherwise passes by reading someone else.
+Panel.AddLayer("stroke");
+const Holder = Panel.ActiveLayer;
+Panel.FieldSelection = "";
+Add("object");
+Panel.RenderInspector();
+Check("the object dropdown offers that as a choice in words", (Find('[data-group="Mask generators"]')?.textContent || "").includes("Every object"));
+Panel.FieldAction("field-remove", Holder.Mask.Generators[0].Identifier);
+
+Add("reading");
+const Reader = Holder.Mask.Generators[Holder.Mask.Generators.length - 1];
+Panel.FieldSelection = Reader.Identifier;
+Panel.RenderInspector();
+Check("the shelf offers a generator that reads the bake", Reader.Kind === "reading", Reader.Kind);
+Check("which asks for a bake rather than drawing nothing", (Find(".field-measure")?.textContent || "").includes("baked on this shape yet"));
+Check("and leaves the mask alone until there is one", Panel.SolveLayerSheet(Holder, false).Values.every((Value) => Value > 0.99));
+
+// A bake, stubbed at a different resolution to the sheet so the resampling is exercised too.
+const Ruled = new Uint8Array(32 * 32 * 4);
+for (let Row = 0; Row < 32; Row += 1)
+    for (let Column = 0; Column < 32; Column += 1)
+    {
+        const At = (Row * 32 + Column) * 4;
+        Ruled[At] = Math.round((Column / 31) * 255);
+        Ruled[At + 1] = 255 - Ruled[At];
+        Ruled[At + 2] = 128;
+        Ruled[At + 3] = 255;
+    }
+const HeldBake = Panel.Readings;
+Panel.Readings = {
+    Size: 32,
+    Edition: Panel.SurfaceEdition,
+    Maps: [{ Identifier: "height", Label: "Height", Short: "Height", Channels: 1, Size: 32, Pixels: Ruled }],
+    Sheets: Panel.Sheets,
+};
+Reader.Choice = "height";
+Panel.RenderInspector();
+Check("with a bake in hand it names the maps the bake produced", (Find('[data-group="Mask generators"]')?.textContent || "").includes("Height"));
+Check("and says what size they were baked at", (Find('[data-group="Mask generators"]')?.textContent || "").includes("Baked at 32²"));
+const Ramped = Panel.SolveLayerSheet(Holder, false).Values;
+Check("the baked map comes through as the mask", new Set([...Ramped].map((Value) => Math.round(Value * 16))).size > 4);
+Reader.Channel = 1;
+const Turned = Panel.SolveLayerSheet(Holder, false).Values;
+Check("and one channel of it is a different mask to another", Turned[0] !== Ramped[0], `${Turned[0]} vs ${Ramped[0]}`);
+Panel.FieldAction("field-remove", Reader.Identifier);
+Panel.Readings = HeldBake;
+Panel.RemoveLayer();
 
 //--------------------------------------------------------------------------------------------------------------------------
 // Reading the surface. The dialog a new scene opens with, the maps it produces, and the promise that what it reads is

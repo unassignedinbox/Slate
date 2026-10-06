@@ -963,6 +963,59 @@ export class ShadingIntegrator
         return this.Vacant;
     }
 
+    //----------------------------------------------------------------------------------------------------------------------
+    // 🔴 The measured sheet — occlusion and thickness, in texture space, for the shaders that cannot trace a ray.
+    //
+    //    The field pass computes curvature and altitude on the device out of the position and normal images, and those
+    //    are the only two questions a fragment shader can answer about a shape from its neighbours. Occlusion is not
+    //    one of them: it wants rays, and rays are cast on the processor. Every consumer of occlusion on the device was
+    //    therefore reading the field's ALPHA — which is the coverage flag, 1.0 everywhere on the model — so the
+    //    occlusion generator, the occlusion mask and the baked-occlusion inspection view were all three of them
+    //    drawing flat white and had been since the field pass was written. This is the real answer, uploaded from
+    //    whichever measurement the panel is holding: the live one, or the bake when there is a bake.
+    //----------------------------------------------------------------------------------------------------------------------
+    SetMeasureSheet(Sheets)
+    {
+        const Device = this.Device;
+        if (!Sheets || !Sheets.Size)
+        {
+            if (this.MeasureImage) Device.deleteTexture(this.MeasureImage);
+            this.MeasureImage = null;
+            this.MeasureSize = 0;
+            return null;
+        }
+        const Size = Sheets.Size;
+        const Pixels = new Uint8Array(Size * Size * 4);
+        for (let Texel = 0; Texel < Size * Size; Texel += 1)
+        {
+            const Open = Sheets.Filled[Texel] ? Sheets.Occlusion[Texel] : 1;
+            const Deep = Sheets.Filled[Texel] ? Sheets.Thickness[Texel] : 1;
+            Pixels[Texel * 4] = Math.round(Math.min(1, Math.max(0, Open)) * 255);
+            Pixels[Texel * 4 + 1] = Math.round(Math.min(1, Math.max(0, Deep)) * 255);
+            Pixels[Texel * 4 + 2] = Sheets.Filled[Texel] ? 255 : 0;
+            Pixels[Texel * 4 + 3] = 255;
+        }
+        if (!this.MeasureImage) this.MeasureImage = Device.createTexture();
+        Device.bindTexture(Device.TEXTURE_2D, this.MeasureImage);
+        Device.pixelStorei(Device.UNPACK_FLIP_Y_WEBGL, false);
+        Device.pixelStorei(Device.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+        Device.texImage2D(Device.TEXTURE_2D, 0, Device.RGBA8, Size, Size, 0, Device.RGBA, Device.UNSIGNED_BYTE, Pixels);
+        Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_MIN_FILTER, Device.LINEAR);
+        Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_MAG_FILTER, Device.LINEAR);
+        Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_WRAP_S, Device.CLAMP_TO_EDGE);
+        Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_WRAP_T, Device.CLAMP_TO_EDGE);
+        Device.bindTexture(Device.TEXTURE_2D, null);
+        this.MeasureSize = Size;
+        return this.MeasureImage;
+    }
+
+    // What the shaders should be handed when nothing has been measured: wide open, solid, and off the model, so an
+    // occlusion generator on an unmeasured surface reads as "nothing is in shadow" rather than as a black mask.
+    MeasureSheet()
+    {
+        return this.MeasureImage || this.WhiteImage();
+    }
+
     ClearMaskSheet(Identifier)
     {
         const Record = this.LayerImages.get(Identifier);
@@ -1330,6 +1383,7 @@ export class ShadingIntegrator
             this.BindImage(Program, "uCoatingMap", Record.Coating || this.BlankImage(), 11);
             this.BindImage(Program, "uRadianceMap", Record.Radiance || this.BlankImage(), 12);
             this.BindImage(Program, "uMaskSheet", Record.Sheet || this.WhiteImage(), 13);
+            this.BindImage(Program, "uMeasureMap", this.MeasureSheet(), 14);
             this.UploadLayerUniforms(Program, Layer, Material, Mark, Painted);
             Device.drawArrays(Device.TRIANGLES, 0, 3);
             const Swap = Source;
@@ -1483,6 +1537,7 @@ export class ShadingIntegrator
         this.BindImage(Program, "uNormalMap", this.BakeTarget.Images[1], 3);
         this.BindImage(Program, "uFieldMap", this.FieldTarget.Images[0], 4);
         this.BindImage(Program, "uMaskSheet", Record.Sheet || this.WhiteImage(), 5);
+        this.BindImage(Program, "uMeasureMap", this.MeasureSheet(), 6);
         const Uniforms = Program.Uniforms;
         const Mask = Layer.Mask;
         const Scale = Material?.texture_scale ?? 1;
@@ -1712,6 +1767,7 @@ export class ShadingIntegrator
         this.BindImage(Shade, "uField", this.FieldTarget.Images[0], 4);
         this.BindImage(Shade, "uMaskPreview", this.MaskImage(Options.MaskLayer), 5);
         this.BindImage(Shade, "uInspection", this.InspectionImage(), 7);
+        this.BindImage(Shade, "uMeasure", this.MeasureSheet(), 8);
         this.UploadEnvironment(Shade, Options.Environment, Options.Material);
         const Uniforms = Shade.Uniforms;
         Device.uniformMatrix4fv(Uniforms.get("uViewClip"), false, Camera.ViewClip);
@@ -1807,6 +1863,7 @@ export class ShadingIntegrator
         this.BindImage(Program, "uField", this.FieldTarget.Images[0], 4);
         this.BindImage(Program, "uMaskPreview", this.MaskImage(Options.MaskLayer), 5);
         this.BindImage(Program, "uInspection", this.InspectionImage(), 7);
+        this.BindImage(Program, "uMeasure", this.MeasureSheet(), 8);
         Device.uniform2fv(Program.Uniforms.get("uPan"), Options.Pan);
         Device.uniform1f(Program.Uniforms.get("uZoom"), Options.Zoom);
         Device.uniform1f(Program.Uniforms.get("uAspect"), this.Canvas.width / Math.max(this.Canvas.height, 1));

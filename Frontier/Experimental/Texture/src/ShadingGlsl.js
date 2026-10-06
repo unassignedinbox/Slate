@@ -447,14 +447,15 @@ float ColourMask(vec3 Lower, vec3 Key, float Tolerance, float Softness)
 }
 
 float SampleMask(
-    int Kind, float Painted, vec2 Coordinate, vec3 Position, vec3 Normal, vec4 Field,
+    int Kind, float Painted, vec2 Coordinate, vec3 Position, vec3 Normal, vec4 Field, vec4 Measured,
     int FieldKind, vec4 A, vec4 B, vec3 Lower, vec3 Key, float Tolerance, float Softness, float Invert,
     float Sheet, float Sheeted)
 {
     float Mask = 1.0;
     if (Kind == 1) Mask = Painted;
     else if (Kind == 2)
-        Mask = SampleGenerator(FieldKind, Coordinate, Position, Normal, Field, A.x, int(A.y), A.z, A.w, B.x, B.y, B.z, B.w);
+        Mask = SampleGenerator(
+            FieldKind, Coordinate, Position, Normal, Field, Measured, A.x, int(A.y), A.z, A.w, B.x, B.y, B.z, B.w);
     else if (Kind == 3) Mask = ColourMask(Lower, Key, Tolerance, Softness);
     // The generator stack arrives already solved, as one sheet: dust over wear over a selection of faces, each
     // joined to the one beneath it on the way in. Here it only has to meet the mask it is shaping, and a mask
@@ -468,9 +469,16 @@ const GeneratorChunk = /* glsl */ `
 uniform sampler2D uPositionMap;
 uniform sampler2D uNormalMap;
 uniform sampler2D uFieldMap;
+// 🔴 Occlusion is not in the field, and this is the texture that says so. The field pass derives curvature and
+//    altitude from the position and normal images — the only two questions a fragment can answer about a shape by
+//    looking at its neighbours — and its ALPHA is a coverage flag, 1.0 across the whole of the model. Occlusion wants
+//    rays, so it is traced on the processor and handed back here: .r is how OPEN a texel is (1 = sees the whole sky),
+//    .g is thickness, .b is 1 on the model. White where nothing has been measured, so an occlusion generator on an
+//    unmeasured surface reads as "nothing is in shadow" rather than going black.
+uniform sampler2D uMeasureMap;
 
 float SampleGenerator(
-    int Kind, vec2 Coordinate, vec3 Position, vec3 Normal, vec4 Field,
+    int Kind, vec2 Coordinate, vec3 Position, vec3 Normal, vec4 Field, vec4 Measured,
     float Scale, int Detail, float Contrast, float Balance, float Warp, float Angle, float Seed, float Invert)
 {
     vec2 Placed = Rotate(Coordinate - 0.5, radians(Angle)) + 0.5;
@@ -529,7 +537,7 @@ float SampleGenerator(
     }
     else if (Kind == 9)
     {
-        Value = clamp(Field.a, 0.0, 1.0);
+        Value = clamp(1.0 - Measured.r, 0.0, 1.0);
     }
     else if (Kind == 10)
     {
@@ -1452,7 +1460,7 @@ void main()
     else if (uKind == 3)
     {
         Coverage = SampleGenerator(
-            uGeneratorKind, vCoordinate, Position, Normal, Field,
+            uGeneratorKind, vCoordinate, Position, Normal, Field, texture(uMeasureMap, vCoordinate),
             uGeneratorA.x, int(uGeneratorA.y), uGeneratorA.z, uGeneratorA.w,
             uGeneratorB.x, uGeneratorB.y, uGeneratorB.z, uGeneratorB.w);
     }
@@ -1475,7 +1483,8 @@ void main()
     if (uMaskKind > 0)
         Coverage *= SampleMask(
             uMaskKind, texture(uMaskMap, vCoordinate).a, vCoordinate, Position, Normal, Field,
-            uMaskField, uMaskA, uMaskB, Lower0.rgb, uMaskColour, uMaskTolerance, uMaskSoftness, uMaskInvert,
+            texture(uMeasureMap, vCoordinate), uMaskField, uMaskA, uMaskB, Lower0.rgb,
+            uMaskColour, uMaskTolerance, uMaskSoftness, uMaskInvert,
             texture(uMaskSheet, vCoordinate).r, uMaskSheeted);
 
     // A layer scoped to one object only touches that object's tile of the sheet.
@@ -1546,7 +1555,7 @@ void main()
     vec4 Field = texture(uFieldMap, vCoordinate);
     float Mask = SampleMask(
         uMaskKind, texture(uMaskMap, vCoordinate).a, vCoordinate, Position, Normal, Field,
-        uMaskField, uMaskA, uMaskB, texture(uLower0, vCoordinate).rgb,
+        texture(uMeasureMap, vCoordinate), uMaskField, uMaskA, uMaskB, texture(uLower0, vCoordinate).rgb,
         uMaskColour, uMaskTolerance, uMaskSoftness, uMaskInvert,
         texture(uMaskSheet, vCoordinate).r, uMaskSheeted);
     oMask = vec4(vec3(Mask), Mask);
@@ -1683,6 +1692,7 @@ uniform sampler2D uChannel1;
 uniform sampler2D uChannel2;
 uniform sampler2D uChannel3;
 uniform sampler2D uField;
+uniform sampler2D uMeasure;
 uniform sampler2D uMaskPreview;
 uniform sampler2D uInspection;
 
@@ -1894,7 +1904,7 @@ void main()
         else if (Mode == 9) Inspection = vec3(Channel2.a);
         else if (Mode == 10) Inspection = vec3(Channel3.a);
         else if (Mode == 11) Inspection = vec3(Field.r, Field.g, 0.0);
-        else if (Mode == 12) Inspection = vec3(Field.a);
+        else if (Mode == 12) Inspection = vec3(texture(uMeasure, vCoordinate).r);
         else if (Mode == 14)
         {
             // The selected layer's mask on its own: black is hidden, white is revealed, as the brush sees it.
@@ -2189,6 +2199,7 @@ uniform sampler2D uChannel1;
 uniform sampler2D uChannel2;
 uniform sampler2D uChannel3;
 uniform sampler2D uField;
+uniform sampler2D uMeasure;
 uniform sampler2D uMaskPreview;
 uniform sampler2D uInspection;
 uniform vec2 uPan;
@@ -2236,7 +2247,7 @@ void main()
         else if (Mode == 9) Colour = vec3(Channel2.a);
         else if (Mode == 10) Colour = vec3(Channel3.a);
         else if (Mode == 11) Colour = vec3(Field.r, Field.g, 0.0);
-        else if (Mode == 12) Colour = vec3(Field.a);
+        else if (Mode == 12) Colour = vec3(texture(uMeasure, vCoordinate).r);
         else if (Mode == 13)
         {
             vec2 CheckerCell = floor(Coordinate * uCheckerScale);

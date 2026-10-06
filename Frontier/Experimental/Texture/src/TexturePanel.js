@@ -125,6 +125,7 @@ import {
     GeneratorFamily,
     GeneratorNeedsSurface,
     NormaliseGenerator,
+    ReadingChannels,
     VertexMaps,
 } from "./GeneratorSpecification.js";
 import { MeasureSurface, SheetSize } from "./SurfaceSolver.js";
@@ -847,6 +848,25 @@ export class TexturePanel
         return this.SheetEdition && this.SheetEdition === this.SurfaceEdition ? this.Sheets : null;
     }
 
+    // The last bake, if it was taken on the shape that is here now. A baked-map generator reads this and nothing
+    // else: the measured sheet carries occlusion, thickness, curvature and altitude, and the bake carries height,
+    // bevel, bent normals, identity colours and the rest, which is a different and longer list.
+    get Baked()
+    {
+        return this.Readings && this.Readings.Edition === this.SurfaceEdition ? this.Readings : null;
+    }
+
+    // 🔴 Occlusion is traced here and wanted there. The device works curvature and altitude out of the position and
+    //    normal images by looking at neighbouring texels, which is every question a fragment can answer about a
+    //    shape on its own — occlusion is not one of them, it wants rays, and rays are cast on the processor. So
+    //    whichever measurement the panel is holding goes up as a texture: the live one taken in a second, or the
+    //    bake once there is a bake. Called from the only two places this.Sheets ever changes, which is precisely
+    //    what makes an occlusion mask follow a bake without anything else being told about it.
+    UploadMeasured()
+    {
+        if (this.Integrator?.Ready) this.Integrator.SetMeasureSheet(this.Measured);
+    }
+
     MeasureModel(Announce = true)
     {
         const Surface = this.SurfaceRecord;
@@ -859,6 +879,7 @@ export class TexturePanel
         this.Measuring = true;
         this.Sheets = MeasureSurface(Surface, { Size: this.SheetResolution, Index: this.Index, Rays: 16 });
         this.SheetEdition = this.SurfaceEdition;
+        this.UploadMeasured();
         this.MeasureMilliseconds = Math.round(performance.now() - Started);
         this.SheetMarks.clear();
         this.Measuring = false;
@@ -902,7 +923,7 @@ export class TexturePanel
         if (!this.Measuring && !this.Measured && Entries.some((Entry) => GeneratorNeedsSurface(Entry.Kind)))
             this.MeasureModel(false);
         const Started = performance.now();
-        const Solved = SolveMask(Entries, this.Measured, { Size: this.SheetResolution });
+        const Solved = SolveMask(Entries, this.Measured, { Size: this.SheetResolution, Readings: this.Baked });
         this.Integrator.SetMaskSheet(Layer, SheetImage(Solved), Solved.Size);
         this.SolveMilliseconds = Math.round(performance.now() - Started);
         if (Recomposite) this.Recomposite();
@@ -1172,6 +1193,7 @@ export class TexturePanel
             //    surface sits beside it is the kind of thing nobody notices and everybody can see.
             this.Sheets = this.Readings.Sheets;
             this.SheetEdition = this.SurfaceEdition;
+            this.UploadMeasured();
             this.MeasureMilliseconds = this.Readings.Milliseconds;
             this.SheetMarks.clear();
             this.Recomposite();
@@ -9359,6 +9381,7 @@ export class TexturePanel
         const Entries = Layer.Mask.Generators || [];
         const Live = Entries.filter((Entry) => Entry.Enabled !== false);
         const Measured = this.Measured;
+        const Baked = this.Baked;
         const Wanting = MissingMeasurements(Live, Measured);
         const Chosen = Entries.findIndex((Entry) => Entry.Identifier === this.FieldSelection);
         const Body = [
@@ -9379,10 +9402,19 @@ export class TexturePanel
                      ])}
                    </div>`
                 : Measured
-                  ? `<p class="property-hint">Measured at ${Measured.Size}² · ${Measured.Triangles.toLocaleString()} faces ·
+                  ? `<p class="property-hint">${Baked && Measured === Baked.Sheets ? "Baked" : "Measured"} at
+                      ${Measured.Size}² · ${Measured.Triangles.toLocaleString()} faces ·
                       ${Measured.Islands} island${Measured.Islands === 1 ? "" : "s"} ·
                       ${Measured.Tiles.length} tile${Measured.Tiles.length === 1 ? "" : "s"}
                       ${this.MeasureMilliseconds ? `· ${this.MeasureMilliseconds} ms` : ""}
+                      ${
+                          Baked
+                              ? `<br>These generators are reading the bake. ${Baked.Maps.length} baked maps are also
+                                 available one at a time through <b>Baked map</b>.`
+                              : `<br>Curvature, cavity, occlusion and the weathering read this measurement. Bake the
+                                 surface and they read the bake instead — and the baked height, bevel and bent normal
+                                 become maskable through <b>Baked map</b>.`
+                      }
                       ${ActionRow([
                           { Action: "measure-surface", Label: "Measure again", Glyph: "rotate" },
                           { Action: "open-readings", Label: "Bake the surface…", Glyph: "occlusion" },
@@ -9527,7 +9559,9 @@ export class TexturePanel
                     Label: "UDIM tile",
                     Path: `${Prefix}.Choice`,
                     Value: String(Entry.Choice ?? ""),
-                    Options: Tiles.map((Tile) => ({ Value: String(Tile), Label: TileLabel(Tile) })),
+                    Options: [{ Value: "", Label: "Every tile" }].concat(
+                        Tiles.map((Tile) => ({ Value: String(Tile), Label: TileLabel(Tile) })),
+                    ),
                 }) + Picker("tile")
             );
         }
@@ -9539,9 +9573,39 @@ export class TexturePanel
                 SelectRow({
                     Label: "UV island",
                     Path: `${Prefix}.Choice`,
-                    Value: String(Entry.Choice ?? "0"),
-                    Options: Array.from({ length: Count }, (Ignored, Index) => ({ Value: String(Index), Label: `Island ${Index + 1}` })),
+                    Value: String(Entry.Choice ?? ""),
+                    Options: [{ Value: "", Label: "Every island" }].concat(
+                        Array.from({ length: Count }, (Ignored, Index) => ({ Value: String(Index), Label: `Island ${Index + 1}` })),
+                    ),
                 }) + Picker("island")
+            );
+        }
+        if (Entry.Kind === "reading")
+        {
+            const Baked = this.Baked;
+            if (!Baked)
+                return `
+                <div class="field-measure">
+                    <p>This one reads a map off the last bake, and nothing has been baked on this shape yet. A bake
+                       gives the mask the height, the bevel, the bent normal and the identity colours — none of which
+                       a measurement carries.</p>
+                    ${ActionRow([{ Action: "open-readings", Label: "Bake the surface…", Glyph: "occlusion" }])}
+                </div>`;
+            return (
+                SelectRow({
+                    Label: "Baked map",
+                    Path: `${Prefix}.Choice`,
+                    Value: String(Entry.Choice || Baked.Maps[0]?.Identifier || ""),
+                    Options: Baked.Maps.map((Map) => ({ Value: Map.Identifier, Label: Map.Label })),
+                    Hint: `Baked at ${Baked.Size}² — the same pixels an export would write.`,
+                }) +
+                SelectRow({
+                    Label: "Channel",
+                    Path: `${Prefix}.Channel`,
+                    Value: String(Entry.Channel ?? 3),
+                    Options: ReadingChannels.map((Channel) => ({ Value: String(Channel.Identifier), Label: Channel.Label })),
+                    Hint: "A colour map read as one channel is three masks rather than one.",
+                })
             );
         }
         if (Entry.Kind === "vertex")

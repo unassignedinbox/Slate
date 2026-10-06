@@ -268,6 +268,31 @@ export const GeneratorOrdering = [
         Defaults: { Scale: 1, Detail: 1, Contrast: 0.5, Balance: 0.5, Warp: 0, Angle: 0, Seed: 1, Choice: "occlusion" },
         Hint: "A per-vertex reading carried across the triangles.",
     },
+    // 🔴 The bake, as a mask. Everything above reads the MEASURED sheet — the handful of quantities a measurement
+    //    happens to carry, which is not the same list as the maps a bake produces. Height, bevel, the bent normal,
+    //    the identity colours and the coordinate map all existed only as exported pixels, so there was no way to
+    //    mask with a map you had just sat through a bake to get. Last in the ordering because that ordering is the
+    //    contract with SampleGenerator on the device, and nothing may ever be inserted into the middle of it.
+    {
+        Identifier: "reading",
+        Label: "Baked map",
+        Short: "Baked",
+        Family: "reading",
+        Glyph: "readings",
+        Layers: false,
+        Controls: ["Contrast", "Balance"],
+        Defaults: { Scale: 1, Detail: 1, Contrast: 0.5, Balance: 0.5, Warp: 0, Angle: 0, Seed: 1, Choice: "occlusion", Channel: 3 },
+        Hint: "One of the maps the last bake produced, read back at the size it was baked at.",
+    },
+];
+
+// Which part of a baked map a mask takes. Three means the map itself — the one channel of a grey map, the luminance
+// of a colour one — and the others pull a single channel out, which is how a bent normal becomes three masks.
+export const ReadingChannels = [
+    { Identifier: 3, Label: "The map" },
+    { Identifier: 0, Label: "Red" },
+    { Identifier: 1, Label: "Green" },
+    { Identifier: 2, Label: "Blue" },
 ];
 
 // What a vertex map can be read from: a number that already exists per vertex or per part, interpolated the way a
@@ -288,6 +313,7 @@ export const GeneratorFamilies = [
     { Identifier: "field", Label: "Surface", Hint: "Measured off the model." },
     { Identifier: "weather", Label: "Weathering", Hint: "What time does to a surface." },
     { Identifier: "selection", Label: "Selection", Hint: "Identity rather than shade." },
+    { Identifier: "reading", Label: "Baked", Hint: "Read back off the last bake." },
 ];
 
 // Which family a generator belongs to, for the ones written before families existed.
@@ -301,7 +327,10 @@ export const GeneratorFamily = (Identifier) =>
 };
 
 // Everything past the twelve the device draws needs the surface measured before it can answer.
-export const GeneratorNeedsSurface = (Identifier) => GeneratorFamily(Identifier) !== "noise";
+// A generator that reads the bake does not want the measurement taken on its behalf — it wants a bake, and it says
+// so itself rather than quietly triggering the wrong piece of work.
+export const GeneratorNeedsSurface = (Identifier) =>
+    GeneratorFamily(Identifier) !== "noise" && GeneratorFamily(Identifier) !== "reading";
 
 export const GeneratorIndex = (Identifier) =>
     Math.max(
@@ -349,6 +378,11 @@ export const NormaliseGenerator = (Generator = {}) =>
         Normalised[Name] = Number.isFinite(Value)
             ? Math.min(Control.Maximum, Math.max(Control.Minimum, Value))
             : Base[Name];
+    }
+    if ("Channel" in Base)
+    {
+        const Channel = Math.round(Number(Normalised.Channel));
+        Normalised.Channel = ReadingChannels.some((Entry) => Entry.Identifier === Channel) ? Channel : 3;
     }
     return Normalised;
 };
