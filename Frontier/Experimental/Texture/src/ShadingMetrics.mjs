@@ -466,14 +466,21 @@ test("the inspection image carries identity and the baked maps onto the model", 
         assert.match(Source, /Mode == 15 \|\| Mode == 16/, "a fragment stage has no branch for identity or a baked map");
     }
     const { Integrator, Device } = Prepare();
-    assert.equal(Integrator.InspectionImage(), Integrator.BlankImage(), "an empty inspection should read blank");
+    const Vacant = Integrator.InspectionImage();
+    assert.ok(Vacant, "an empty inspection should still hand the shader something to sample");
+    // 🔴 And it must not be made the way the blank and white images are made. Those clear through a framebuffer and
+    //    leave the viewport one pixel wide; this one is built inside the bind sequence of a frame.
+    const Viewports = Device.Calls.filter((Call) => Call.Name === "viewport").length;
     const Size = 4;
     Integrator.SetInspection(new Uint8Array(Size * Size * 4).fill(200), Size, true);
-    assert.notEqual(Integrator.InspectionImage(), Integrator.BlankImage(), "the laid-in picture never arrived");
+    assert.equal(Device.Calls.filter((Call) => Call.Name === "viewport").length, Viewports, "laying in a picture moved the viewport");
+    assert.notEqual(Integrator.InspectionImage(), Vacant, "the laid-in picture never arrived");
+    const Units = Device.Calls.filter((Call) => Call.Name === "activeTexture").map((Call) => Call.Arguments[0]);
+    assert.equal(Units.at(-1), Device.TEXTURE0 + 7, "the picture went up on whichever unit happened to be live");
     const Filters = Device.Calls.filter((Call) => Call.Name === "texParameteri").map((Call) => Call.Arguments[2]);
     assert.ok(Filters.includes(Device.NEAREST), "an identity map went up filtered, so two objects can blend into a third");
     Integrator.SetInspection(null, 0);
-    assert.equal(Integrator.InspectionImage(), Integrator.BlankImage(), "clearing the inspection left the last picture up");
+    assert.equal(Integrator.InspectionImage(), Vacant, "clearing the inspection left the last picture up");
 });
 
 test("generator and colour masks resolve through a pass of their own", () =>

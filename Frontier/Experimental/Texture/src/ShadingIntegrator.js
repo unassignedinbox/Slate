@@ -311,6 +311,7 @@ export class ShadingIntegrator
         // Whatever the processor last asked the viewport to show flat: an identity map, a baked reading, nothing.
         this.Inspection = null;
         this.InspectionSize = 0;
+        this.Vacant = null;
         const { Device: Acquired, Notes } = AcquireDevice(Canvas);
         this.Device = Acquired;
         this.Notes = Notes;
@@ -486,6 +487,11 @@ export class ShadingIntegrator
         this.FieldTarget = this.CreateTarget([this.CreateColourImage(Resolution)]);
         this.MaskPreviewTarget = this.CreateTarget([this.CreateColourImage(Resolution)]);
         this.MaskPreviewLayer = "";
+        // 🔴 Both of these clear through a framebuffer and leave the viewport one pixel wide, and both are reached
+        //    lazily from inside a frame's bind sequence — a layer with no mask asks for the white one. Built here,
+        //    where the next thing to run sets its own viewport, they can never be built in the middle of a frame.
+        this.BlankImage();
+        this.WhiteImage();
         if (Previous !== Resolution) this.RescaleLayerImages(Previous, Resolution);
         if (this.Surface) this.BakeSurface();
     }
@@ -918,7 +924,10 @@ export class ShadingIntegrator
             return null;
         }
         if (!this.Inspection) this.Inspection = Device.createTexture();
-        Device.activeTexture(Device.TEXTURE0);
+        // 🔴 Unit 7, which is where the inspection sampler lives. Binding a texture without choosing a unit first
+        //    lands it on whichever unit was last active and silently steals another sampler's image — and this is
+        //    called from the panel, between frames, with no way of knowing which that was.
+        Device.activeTexture(Device.TEXTURE0 + 7);
         Device.bindTexture(Device.TEXTURE_2D, this.Inspection);
         Device.pixelStorei(Device.UNPACK_FLIP_Y_WEBGL, false);
         Device.pixelStorei(Device.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
@@ -933,9 +942,25 @@ export class ShadingIntegrator
         return this.Inspection;
     }
 
+    // 🔴 Deliberately not BlankImage. That one clears through a framebuffer and leaves the viewport one pixel wide,
+    //    which is harmless at setup and ruinous here: this is called from inside the bind sequence of a frame, and a
+    //    frame drawn into a single pixel is a black screen nobody can explain.
     InspectionImage()
     {
-        return this.InspectionSize && this.Inspection ? this.Inspection : this.BlankImage();
+        if (this.InspectionSize && this.Inspection) return this.Inspection;
+        if (!this.Vacant)
+        {
+            const Device = this.Device;
+            this.Vacant = Device.createTexture();
+            Device.activeTexture(Device.TEXTURE0 + 7);
+            Device.bindTexture(Device.TEXTURE_2D, this.Vacant);
+            Device.texImage2D(Device.TEXTURE_2D, 0, Device.RGBA8, 1, 1, 0, Device.RGBA, Device.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+            Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_MIN_FILTER, Device.NEAREST);
+            Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_MAG_FILTER, Device.NEAREST);
+            Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_WRAP_S, Device.CLAMP_TO_EDGE);
+            Device.texParameteri(Device.TEXTURE_2D, Device.TEXTURE_WRAP_T, Device.CLAMP_TO_EDGE);
+        }
+        return this.Vacant;
     }
 
     ClearMaskSheet(Identifier)
