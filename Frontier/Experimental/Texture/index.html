@@ -373,6 +373,36 @@
                 <button class="text-button" id="export-project">Save .pigment document</button><button class="button" id="export-confirm"><span data-icon="download"></span>Write images</button>
             </div>
         </dialog>
+        <dialog id="readings-dialog" class="wide-dialog">
+            <div class="dialog-heading">
+                <span data-icon="focus"></span>
+                <h2>Read the surface</h2>
+                <button id="close-readings" class="icon-button" aria-label="Close" data-icon="close"></button>
+            </div>
+            <p class="dialog-description">
+                Ask the model everything once, keep the answers in texture space, and spend the rest of the session asking the
+                texture instead of the triangles. Every map here drives the generators on a mask, and the ones worth keeping
+                can be written out beside the texture set.
+            </p>
+            <div class="readings-body">
+                <div class="readings-choice" id="readings-choice"></div>
+                <div class="readings-view">
+                    <div class="readings-plate">
+                        <canvas id="readings-canvas" width="512" height="512"></canvas>
+                        <span class="readings-empty" id="readings-empty">Nothing read yet</span>
+                    </div>
+                    <p class="readings-caption" id="readings-caption">Pick what to read, then preview it.</p>
+                    <div class="readings-tiles" id="readings-tiles"></div>
+                    <div class="readings-settings" id="readings-settings"></div>
+                </div>
+            </div>
+            <div class="dialog-actions">
+                <span id="readings-progress" class="export-progress"></span>
+                <button class="text-button" id="readings-skip">Not now</button>
+                <button class="text-button" id="readings-write" disabled>Write PNGs</button>
+                <button class="button" id="readings-run"><span data-icon="focus"></span>Read the surface</button>
+            </div>
+        </dialog>
         <script type="module" src="./src/TexturePanel.js"></script>
     </body>
 </html>

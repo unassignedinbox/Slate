@@ -80,7 +80,7 @@ import {
 import { SliderRow, SyncSlider } from "./ControlSpecification.js";
 import { RevisionQueue } from "./RevisionQueue.js";
 import { DocumentSequence } from "./DocumentSequence.js";
-import { EmitTextureSet, EmitProject, ReadDocument, DocumentExtension, ExportSizes } from "./ExportSequence.js";
+import { EmitTextureSet, EmitProject, EmitReadings, ReadDocument, DocumentExtension, ExportSizes } from "./ExportSequence.js";
 import { CollectSheets, ApplySheets, SheetTally, SheetAllowance } from "./SheetCodec.js";
 import { TimelineSequence, EventByKind, EventClock, PreviewLimit } from "./TimelineSequence.js";
 import {
@@ -123,6 +123,19 @@ import {
     VertexMaps,
 } from "./GeneratorSpecification.js";
 import { MeasureSurface, MeasureThickness, SheetSize } from "./SurfaceSolver.js";
+import {
+    FilterKinds,
+    IdentityKinds,
+    ReadingDefaults,
+    ReadingEstimate,
+    ReadingFamilies,
+    ReadingOrdering,
+    ReadingSizes,
+    ReadingSpaces,
+    SampleCounts,
+    SanitiseReading,
+} from "./ReadingSpecification.js";
+import { SolveReadings } from "./ReadingSolver.js";
 import { CombineModes, DefaultEntry, MissingMeasurements, NormaliseEntry, SheetImage, SolveMask } from "./MaskSolver.js";
 import {
     CreateLayer,
@@ -579,6 +592,12 @@ export class TexturePanel
         // The entry of the stack whose controls are showing, and whether clicking the model is picking faces for it.
         this.FieldSelection = "";
         this.PickingFaces = false;
+        // The reading order, which outlives the dialog it is set in: the second surface of a session is usually read
+        // the same way as the first, and being asked the same eight questions again is how a dialog earns its reputation.
+        this.Order = ReadingDefaults();
+        this.Readings = null;
+        this.ReadingShown = "";
+        this.Reading = false;
         this.ToolBefore = "";
         this.Isolated = false;
         this.ScopedStack = false;
@@ -664,6 +683,7 @@ export class TexturePanel
         this.BindTransport();
         this.BindInspector();
         this.BindDialogs();
+        this.BindReadings();
         this.BindInstruments();
         this.BindKeyboard();
         this.Integrator.Configure(this.Project.Resolution);
@@ -839,6 +859,262 @@ export class TexturePanel
             this.SheetTimer = 0;
             this.SolveLayerSheet(Wanted);
         }, 60);
+    }
+
+    //----------------------------------------------------------------------------------------------------------------------
+    // Reading the surface — the dialog a new scene opens with. Every painting tool worth using starts the same way:
+    // before a single stroke, the model is asked what shape it is, and the answers are kept in texture space. Substance
+    // calls them bakers, Unreal calls them bake maps, Blender calls them passes and hides two of the good ones in the
+    // shader graph. They are the same questions, and this is where they are asked.
+    //----------------------------------------------------------------------------------------------------------------------
+    OpenReadings(Opening = false)
+    {
+        const Dialog = Select("#readings-dialog");
+        if (!Dialog) return;
+        this.ReadingOpening = Opening;
+        Select("#readings-skip").textContent = Opening ? "Start painting" : "Close";
+        this.RenderReadings();
+        if (!Dialog.open) Dialog.showModal();
+    }
+
+    BindReadings()
+    {
+        const Dialog = Select("#readings-dialog");
+        if (!Dialog) return;
+        Select("#close-readings").addEventListener("click", () => Dialog.close());
+        Select("#readings-skip").addEventListener("click", () => Dialog.close());
+        Select("#readings-run").addEventListener("click", () => this.RunReadings());
+        Select("#readings-write").addEventListener("click", () => this.WriteReadings());
+        Dialog.addEventListener("click", (Event) =>
+        {
+            const Button = Event.target.closest("[data-reading]");
+            if (Button)
+            {
+                const Identifier = Button.dataset.reading;
+                const Wanted = new Set(this.Order.Wanted);
+                if (Wanted.has(Identifier)) Wanted.delete(Identifier);
+                else Wanted.add(Identifier);
+                this.Order.Wanted = ReadingOrdering.filter((Entry) => Wanted.has(Entry.Identifier)).map((Entry) => Entry.Identifier);
+                this.RenderReadings();
+                return;
+            }
+            const Tile = Event.target.closest("[data-shown]");
+            if (Tile)
+            {
+                this.ReadingShown = Tile.dataset.shown;
+                this.RenderReadings();
+            }
+        });
+        Dialog.addEventListener("change", (Event) =>
+        {
+            const Field = Event.target.closest("[data-order]");
+            if (!Field) return;
+            const Key = Field.dataset.order;
+            const Value = Field.type === "range" || Field.type === "number" || /^-?[\d.]+$/.test(Field.value) ? Number(Field.value) : Field.value;
+            this.Order = SanitiseReading({ ...this.Order, [Key]: Value });
+            this.RenderReadings();
+        });
+        Dialog.addEventListener("input", (Event) =>
+        {
+            const Field = Event.target.closest('[data-order][type="range"]');
+            if (!Field) return;
+            this.Order = SanitiseReading({ ...this.Order, [Field.dataset.order]: Number(Field.value) });
+            this.RenderReadings(true);
+        });
+    }
+
+    // The catalogue on the left, the settings and the preview on the right. Redrawn whole on every change, because the
+    // estimate at the bottom depends on every one of them and a dialog that lies about its cost is worse than no dialog.
+    RenderReadings(Quietly = false)
+    {
+        const Dialog = Select("#readings-dialog");
+        if (!Dialog) return;
+        const Wanted = new Set(this.Order.Wanted);
+        const Directional = ReadingOrdering.some((Entry) => Entry.Spaced && Wanted.has(Entry.Identifier));
+        const Rounded = ReadingOrdering.some((Entry) => Entry.Rounded && Wanted.has(Entry.Identifier));
+        const Rayed = ReadingOrdering.some((Entry) => Entry.Rays && Wanted.has(Entry.Identifier));
+        const Estimate = ReadingEstimate(this.Order, this.SurfaceRecord?.Indices.length / 3 || 0);
+
+        Select("#readings-choice").innerHTML = ReadingFamilies.map(
+            (Family) => `
+            <div class="reading-family">
+                <span class="reading-family-name">${Escape(Family.Label)}<em>${Escape(Family.Hint)}</em></span>
+                ${ReadingOrdering.filter((Entry) => Entry.Family === Family.Identifier)
+                    .map(
+                        (Entry) => `
+                    <button class="reading-chip ${Wanted.has(Entry.Identifier) ? "active" : ""}" data-reading="${Entry.Identifier}"
+                            aria-pressed="${Wanted.has(Entry.Identifier)}">
+                        <span class="reading-mark">${Icon(Entry.Glyph)}</span>
+                        <span class="reading-name">${Escape(Entry.Label)}<em>${Escape(Entry.Hint)}</em></span>
+                        <span class="reading-heritage">${Escape(Entry.Heritage)}</span>
+                    </button>`,
+                    )
+                    .join("")}
+            </div>`,
+        ).join("");
+
+        const Choice = (Key, Label, Options, Value, Hint) => `
+            <label class="reading-field">
+                <span>${Escape(Label)}</span>
+                <select data-order="${Key}">
+                    ${Options.map(
+                        (Option) =>
+                            `<option value="${Escape(Option.Value)}" ${String(Option.Value) === String(Value) ? "selected" : ""}>${Escape(Option.Label)}</option>`,
+                    ).join("")}
+                </select>
+                ${Hint ? `<em>${Escape(Hint)}</em>` : ""}
+            </label>`;
+        const Slide = (Key, Label, Value, Minimum, Maximum, Step, Hint) => `
+            <label class="reading-field">
+                <span>${Escape(Label)}<i>${Escape(String(Value))}</i></span>
+                <input type="range" data-order="${Key}" value="${Value}" min="${Minimum}" max="${Maximum}" step="${Step}" />
+                ${Hint ? `<em>${Escape(Hint)}</em>` : ""}
+            </label>`;
+        Select("#readings-settings").innerHTML = [
+            Choice(
+                "Size",
+                "Resolution",
+                ReadingSizes.map((Size) => ({ Value: Size, Label: `${Size} × ${Size}` })),
+                this.Order.Size,
+            ),
+            Choice(
+                "Samples",
+                "Antialiasing",
+                SampleCounts.map((Entry) => ({ Value: Entry.Value, Label: Entry.Label })),
+                this.Order.Samples,
+                SampleCounts.find((Entry) => Entry.Value === this.Order.Samples)?.Hint,
+            ),
+            Choice(
+                "Filter",
+                "Filter",
+                FilterKinds.map((Entry) => ({ Value: Entry.Identifier, Label: Entry.Label })),
+                this.Order.Filter,
+                FilterKinds.find((Entry) => Entry.Identifier === this.Order.Filter)?.Hint,
+            ),
+            Directional
+                ? Choice(
+                      "Space",
+                      "Direction space",
+                      ReadingSpaces.map((Entry) => ({ Value: Entry.Identifier, Label: Entry.Label })),
+                      this.Order.Space,
+                      ReadingSpaces.find((Entry) => Entry.Identifier === this.Order.Space)?.Hint,
+                  )
+                : "",
+            Wanted.has("identity")
+                ? Choice(
+                      "Identity",
+                      "Identity by",
+                      IdentityKinds.map((Entry) => ({ Value: Entry.Identifier, Label: Entry.Label })),
+                      this.Order.Identity,
+                      IdentityKinds.find((Entry) => Entry.Identifier === this.Order.Identity)?.Hint,
+                  )
+                : "",
+            Rounded ? Slide("Width", "Bevel width", this.Order.Width, 0.005, 0.3, 0.005, "A fraction of the model's radius.") : "",
+            Rayed ? Slide("Rays", "Rays a vertex", this.Order.Rays, 4, 128, 4, "More rays, less speckle, longer wait.") : "",
+            Slide("Padding", "Padding", this.Order.Padding, 0, 32, 1, "Texels of bleed past the edge of every island."),
+        ].join("");
+
+        const Maps = this.Readings?.Maps || [];
+        Select("#readings-tiles").innerHTML = Maps.map(
+            (Map) => `
+            <button class="reading-tile ${Map.Identifier === this.ReadingShown ? "active" : ""}" data-shown="${Map.Identifier}">
+                <canvas width="64" height="64" data-plate="${Map.Identifier}"></canvas>
+                <span>${Escape(Map.Short)}</span>
+            </button>`,
+        ).join("");
+        for (const Map of Maps) this.DrawReading(Select(`[data-plate="${Map.Identifier}"]`), Map);
+        const Shown = Maps.find((Map) => Map.Identifier === this.ReadingShown) || Maps[0];
+        if (Shown) this.ReadingShown = Shown.Identifier;
+        this.DrawReading(Select("#readings-canvas"), Shown);
+        Select("#readings-empty").hidden = Boolean(Shown);
+        Select("#readings-write").disabled = !Maps.length;
+        Select("#readings-caption").textContent = Shown
+            ? `${Shown.Label}${Shown.Space ? ` · ${Shown.Space} space` : ""} · ${this.Readings.Size}² · ` +
+              `${this.Readings.Statistics.Samples} sample${this.Readings.Statistics.Samples === 1 ? "" : "s"} · ` +
+              `${Math.round(this.Readings.Statistics.Occupancy * 100)}% of the sheet covered · ${this.Readings.Milliseconds} ms`
+            : `${this.Order.Wanted.length} map${this.Order.Wanted.length === 1 ? "" : "s"} · about ` +
+              `${Estimate.Seconds < 1 ? "a second" : `${Math.ceil(Estimate.Seconds)} seconds`} and ` +
+              `${Math.ceil(Estimate.Megabytes)} MB while it runs.`;
+        if (!Quietly) Select("#readings-progress").textContent = "";
+    }
+
+    // One map onto one canvas. The plates are small and the maps are big, so the browser does the scaling.
+    DrawReading(Canvas, Map)
+    {
+        if (!Canvas) return;
+        const Context = Canvas.getContext("2d");
+        if (!Context) return;
+        Context.clearRect(0, 0, Canvas.width, Canvas.height);
+        if (!Map) return;
+        const Plate = document.createElement("canvas");
+        Plate.width = Map.Size;
+        Plate.height = Map.Size;
+        const Inner = Plate.getContext("2d");
+        if (!Inner || !Inner.putImageData) return;
+        const Picture = Inner.createImageData(Map.Size, Map.Size);
+        // 🔴 Flipped on the way out. Texture space counts rows from the bottom and a canvas counts them from the
+        //    top, so a map drawn straight is the model standing on its head.
+        for (let Row = 0; Row < Map.Size; Row += 1)
+        {
+            const From = (Map.Size - 1 - Row) * Map.Size * 4;
+            Picture.data.set(Map.Pixels.subarray(From, From + Map.Size * 4), Row * Map.Size * 4);
+        }
+        Inner.putImageData(Picture, 0, 0);
+        Context.imageSmoothingEnabled = Canvas.width < Map.Size;
+        Context.drawImage(Plate, 0, 0, Canvas.width, Canvas.height);
+    }
+
+    // The bake itself. Yielding to the browser between the per-vertex work and the sampling keeps the progress line
+    // honest; without it the dialog freezes and then announces that everything went well.
+    async RunReadings()
+    {
+        if (this.Reading || !this.SurfaceRecord) return;
+        if (!this.Order.Wanted.length)
+        {
+            this.Notify("Nothing is ticked to read.");
+            return;
+        }
+        this.Reading = true;
+        Select("#readings-run").disabled = true;
+        const Line = Select("#readings-progress");
+        const Report = (Fraction, Text) =>
+        {
+            Line.textContent = `${Math.round(Fraction * 100)}% · ${Text}`;
+        };
+        Report(0, "Starting");
+        await new Promise((Resolve) => setTimeout(Resolve, 30));
+        try
+        {
+            this.Readings = SolveReadings(this.SurfaceRecord, this.Index, this.Order, Report);
+            // 🔴 The generators take the bake. A dust mask reading a 256 measurement while a 1024 bake of the same
+            //    surface sits beside it is the kind of thing nobody notices and everybody can see.
+            this.Sheets = this.Readings.Sheets;
+            this.SheetEdition = this.SurfaceEdition;
+            this.MeasureMilliseconds = this.Readings.Milliseconds;
+            this.SheetMarks.clear();
+            this.Recomposite();
+            this.Chronicle("surface", `${this.Readings.Maps.length} maps read at ${this.Readings.Size}²`, this.Project.Name);
+            this.Notify(
+                `Read ${this.Readings.Maps.length} map${this.Readings.Maps.length === 1 ? "" : "s"} at ${this.Readings.Size}² ` +
+                    `in ${(this.Readings.Milliseconds / 1000).toFixed(1)}s — the generators are using them.`,
+            );
+        }
+        finally
+        {
+            this.Reading = false;
+            Select("#readings-run").disabled = false;
+            this.RenderReadings(true);
+            this.RenderInspector();
+        }
+    }
+
+    async WriteReadings()
+    {
+        if (!this.Readings?.Maps.length) return;
+        const Line = Select("#readings-progress");
+        await EmitReadings(this.Readings.Maps, this.Project.Name, (Text) => (Line.textContent = Text));
+        Line.textContent = `${this.Readings.Maps.length} written`;
+        this.Notify(`${this.Readings.Maps.length} maps written beside the texture set.`);
     }
 
     ScheduleOcclusion()
@@ -7883,6 +8159,10 @@ export class TexturePanel
             case "measure-surface":
                 this.MeasureModel(true);
                 break;
+            case "open-readings":
+                this.ShowPopover("", false);
+                this.OpenReadings(false);
+                break;
             case "add-object":
                 this.AddObject("cube");
                 this.RenderInspector();
@@ -8682,14 +8962,20 @@ export class TexturePanel
                 ? `<div class="field-measure">
                      <p>${Escape(Wanting.join(", "))} ${Wanting.length === 1 ? "reads" : "read"} the model, and the model has not
                         been measured on this shape yet.</p>
-                     ${ActionRow([{ Action: "measure-surface", Label: "Measure the surface", Glyph: "focus" }])}
+                     ${ActionRow([
+                         { Action: "measure-surface", Label: "Measure it now", Glyph: "focus" },
+                         { Action: "open-readings", Label: "Read it properly…", Glyph: "layers" },
+                     ])}
                    </div>`
                 : Measured
                   ? `<p class="property-hint">Measured at ${Measured.Size}² · ${Measured.Triangles.toLocaleString()} faces ·
                       ${Measured.Islands} island${Measured.Islands === 1 ? "" : "s"} ·
                       ${Measured.Tiles.length} tile${Measured.Tiles.length === 1 ? "" : "s"}
                       ${this.MeasureMilliseconds ? `· ${this.MeasureMilliseconds} ms` : ""}
-                      ${ActionRow([{ Action: "measure-surface", Label: "Measure again", Glyph: "rotate" }])}</p>`
+                      ${ActionRow([
+                          { Action: "measure-surface", Label: "Measure again", Glyph: "rotate" },
+                          { Action: "open-readings", Label: "Read the surface…", Glyph: "layers" },
+                      ])}</p>`
                   : "",
             Chosen >= 0 ? this.GeneratorEntryBody(Entries[Chosen], Chosen) : "",
         ];
@@ -9406,6 +9692,7 @@ export class TexturePanel
                               { Action: "import-mesh", Label: "Import OBJ", Glyph: "folder" },
                               { Action: "bake-occlusion", Label: "Re-bake AO", Glyph: "rotate" },
                           ]),
+                          ActionRow([{ Action: "open-readings", Label: "Read the surface…", Glyph: "focus" }]),
                       ].join("")
                     : "",
             }),
@@ -9769,6 +10056,9 @@ export class TexturePanel
         this.RenderObjects();
         this.RenderInspector();
         this.UpdateCaption();
+        // A new scene is a model nobody has read yet, and every generator on a mask is waiting on the answers. The
+        // dialog is the first thing the editor says, the way a baker is the first thing Substance opens with.
+        if (!Record) setTimeout(() => this.OpenReadings(true), 60);
     }
 
     DiscardDocument(Record)

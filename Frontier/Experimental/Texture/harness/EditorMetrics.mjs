@@ -8,6 +8,7 @@
 
 import { CreateWindow, CreateTally, Settle } from "./DeviceHost.mjs";
 import { SanitiseLayer } from "../src/LayerSpecification.js";
+import { ReadingOrdering } from "../src/ReadingSpecification.js";
 
 const { Window, Faults } = CreateWindow();
 const { Check, Report } = CreateTally("the editor");
@@ -608,6 +609,65 @@ Check(
     "a stack restored by undo is solved again rather than left stale",
     Panel.SheetMarks.get(Shaped.Identifier) === Panel.SheetMark(Panel.LayerByIdentifier(Shaped.Identifier)),
 );
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Reading the surface. The dialog a new scene opens with, the maps it produces, and the promise that what it reads is
+// what the generators then use.
+//--------------------------------------------------------------------------------------------------------------------------
+Panel.OpenReadings(true);
+Check("a reading dialog exists and opens", Find("#readings-dialog")?.open === true);
+Check("it lists every map in the catalogue", All(".reading-chip").length === ReadingOrdering.length, String(All(".reading-chip").length));
+Check("grouped into families", All(".reading-family").length === 4);
+Check("each one says which editor it came from", All(".reading-heritage").every((Mark) => Mark.textContent.trim().length > 3));
+Check("the normal, bevel and bent normal are all offered", ["normal", "bevel", "bent"].every((Name) => !!Find(`[data-reading="${Name}"]`)));
+Check("so is Blender's bevel, by name", (Find('[data-reading="bevel"]')?.textContent || "").includes("Blender"));
+Check("something sensible is ticked to begin with", All(".reading-chip.active").length >= 4, String(All(".reading-chip.active").length));
+Check("the antialiasing offers more than one kind of filter", All('[data-order="Filter"] option').length === 6);
+Check("and more than one sample count", All('[data-order="Samples"] option').length === 5);
+Check("the plate is empty until something is read", Find("#readings-empty")?.hidden === false);
+Check("and there is nothing to write yet", Find("#readings-write")?.disabled === true);
+
+// Ticking a map off the list changes the order, and the settings follow what is ticked.
+Press(Find('[data-reading="thickness"]'));
+Check("ticking a map adds it to the order", Panel.Order.Wanted.includes("thickness"));
+Press(Find('[data-reading="thickness"]'));
+Check("and ticking it again takes it off", !Panel.Order.Wanted.includes("thickness"));
+const Spaced = !!Find('[data-order="Space"]');
+Check("a direction map brings the space choice with it", Spaced);
+for (const Name of ["normal", "bevel", "bent", "face"]) if (Panel.Order.Wanted.includes(Name)) Press(Find(`[data-reading="${Name}"]`));
+Check("and takes it away again when none is wanted", !Find('[data-order="Space"]'));
+Press(Find('[data-reading="bevel"]'));
+Check("the bevel brings its own width", !!Find('[data-order="Width"]'));
+
+Panel.Order = { ...Panel.Order, Size: 256, Samples: 4, Filter: "gaussian", Wanted: ["curvature", "occlusion", "identity", "bevel", "coverage"] };
+await Panel.RunReadings();
+Check("reading the surface produces a map for everything asked for", Panel.Readings?.Maps.length === 5, String(Panel.Readings?.Maps.length));
+Check("at the size it was asked for", Panel.Readings.Maps.every((Map) => Map.Size === 256 && Map.Pixels.length === 256 * 256 * 4));
+Check("with the samples it was asked for", Panel.Readings.Statistics.Samples === 4, String(Panel.Readings.Statistics.Samples));
+Check("the sheet is mostly covered by the unwrap", Panel.Readings.Statistics.Occupancy > 0.2);
+const Curvature = Panel.Readings.Maps.find((Map) => Map.Identifier === "curvature");
+Check("and the maps are not one flat value", new Set([...Curvature.Pixels.filter((Ignored, Index) => Index % 4 === 0)]).size > 8);
+Check("a bevel normal is written as a direction, around the blue", (() =>
+{
+    const Bevel = Panel.Readings.Maps.find((Map) => Map.Identifier === "bevel");
+    let Blue = 0;
+    let Counted = 0;
+    for (let Texel = 0; Texel < 256 * 256; Texel += 1)
+    {
+        if (!Panel.Readings.Coverage[Texel]) continue;
+        Blue += Bevel.Pixels[Texel * 4 + 2];
+        Counted += 1;
+    }
+    return Blue / Counted > 200;
+})());
+Check("the plate has something on it now", Find("#readings-empty").hidden === true);
+Check("and a tile for every map", All(".reading-tile").length === 5);
+Check("the writer is live", Find("#readings-write").disabled === false);
+Check("the caption says what was read and how long it took", /256² · 4 samples/.test(Find("#readings-caption").textContent));
+
+Check("the generators are handed the bake rather than their own measurement", Panel.Measured === Panel.Readings.Sheets);
+Check("which is at the resolution it was read at", Panel.Measured.Size === 256);
+Check("and knows the scene it came from", Panel.Measured.Islands > 0 && Panel.Measured.Owners.length >= 1);
 
 Report();
 process.exit(process.exitCode || 0);

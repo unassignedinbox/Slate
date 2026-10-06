@@ -195,3 +195,33 @@ export const ReadDocument = (Text) =>
 };
 
 export const ExportSlotLabels = ExportSlots;
+
+//--------------------------------------------------------------------------------------------------------------------------
+// The readings, written out. Same path as the texture set — one PNG a map, named after what it is — because a bake
+// that cannot leave the editor is a bake somebody has to take again in the tool they are actually shipping from.
+//--------------------------------------------------------------------------------------------------------------------------
+export const EmitReadings = async (Maps, Name = "surface", Report = () => {}) =>
+{
+    const Stem = Slug(Name);
+    let Index = 0;
+    for (const Map of Maps)
+    {
+        Index += 1;
+        Report(`Writing ${Map.Identifier} · ${Index}/${Maps.length}`);
+        const Surface = document.createElement("canvas");
+        Surface.width = Map.Size;
+        Surface.height = Map.Size;
+        const Context = Surface.getContext("2d");
+        const Picture = Context.createImageData(Map.Size, Map.Size);
+        // Rows the way an image wants them: texture space counts from the bottom, every file format from the top.
+        for (let Row = 0; Row < Map.Size; Row += 1)
+        {
+            const From = (Map.Size - 1 - Row) * Map.Size * 4;
+            Picture.data.set(Map.Pixels.subarray(From, From + Map.Size * 4), Row * Map.Size * 4);
+        }
+        Context.putImageData(Picture, 0, 0);
+        Download(await Encode(Surface), `${Stem}_${Map.Identifier}${Map.Space ? `_${Map.Space}` : ""}.png`);
+        await new Promise((Resolve) => setTimeout(Resolve, 90));
+    }
+    return { Count: Maps.length };
+};

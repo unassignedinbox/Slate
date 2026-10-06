@@ -1315,3 +1315,256 @@ dialog a {
     grid-template-columns: 1fr;
   }
 }
+
+/*--------------------------------------------------------------------------------------------------------------------------
+  Reading the surface. Two columns: the questions on the left as a list you tick, the answers on the right as a plate
+  you can actually look at. A bake is the one operation in a painting tool where the output is never seen until it is
+  too late to change the settings, and the cure for that is to show it.
+--------------------------------------------------------------------------------------------------------------------------*/
+dialog.wide-dialog {
+  width: 980px;
+}
+
+.readings-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  gap: 18px;
+  margin-top: 4px;
+}
+
+.readings-choice {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  max-height: 460px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.reading-family-name {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #8a8a8a;
+  margin-bottom: 7px;
+}
+
+.reading-family-name em {
+  font-style: normal;
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 11px;
+  color: #6b6b6b;
+}
+
+.reading-chip {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 11px 8px 8px;
+  margin-bottom: 4px;
+  border-radius: 11px;
+  background: #1f1f1f;
+  border: 1px solid transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.reading-chip:hover {
+  background: #262626;
+}
+
+.reading-chip.active {
+  background: #2f2f2f;
+  border-color: #6f6f6f;
+}
+
+.reading-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: #151515;
+  color: #8f8f8f;
+}
+
+.reading-chip.active .reading-mark {
+  background: var(--accent, #34c759);
+  color: #0b0b0b;
+}
+
+.reading-mark svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.reading-name {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: 12.5px;
+}
+
+.reading-name em {
+  font-style: normal;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: #868686;
+}
+
+.reading-heritage {
+  font-size: 9.5px;
+  color: #5f5f5f;
+  white-space: nowrap;
+  align-self: start;
+  padding-top: 2px;
+}
+
+.readings-view {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.readings-plate {
+  position: relative;
+  width: 420px;
+  height: 420px;
+  border-radius: 12px;
+  background:
+    repeating-conic-gradient(#1d1d1d 0% 25%, #171717 0% 50%) 50% / 24px 24px;
+  border: 1px solid #4a4a4a;
+  overflow: hidden;
+}
+
+.readings-plate canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: auto;
+}
+
+.readings-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: #6f6f6f;
+  pointer-events: none;
+}
+
+.readings-caption {
+  font-size: 11px;
+  color: #9a9a9a;
+  margin: 0;
+  min-height: 15px;
+}
+
+.readings-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.reading-tile {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  padding: 4px 4px 5px;
+  border-radius: 9px;
+  background: #1f1f1f;
+  border: 1px solid transparent;
+  color: #8f8f8f;
+  font-size: 9.5px;
+  cursor: pointer;
+}
+
+.reading-tile canvas {
+  width: 42px;
+  height: 42px;
+  border-radius: 5px;
+  background: #111;
+  display: block;
+}
+
+.reading-tile.active {
+  border-color: #7a7a7a;
+  background: #2b2b2b;
+  color: var(--text);
+}
+
+.readings-settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px 12px;
+  padding-top: 4px;
+  border-top: 1px solid #ffffff14;
+}
+
+.reading-field {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  color: #9a9a9a;
+}
+
+.reading-field > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.reading-field > span i {
+  font-style: normal;
+  color: #e4e4e4;
+}
+
+.reading-field em {
+  font-style: normal;
+  font-size: 10px;
+  line-height: 1.4;
+  color: #6b6b6b;
+}
+
+.reading-field select {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #151515;
+  border: 1px solid #4a4a4a;
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+}
+
+.reading-field input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent, #34c759);
+}
+
+@media (max-width: 1040px) {
+  .readings-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .readings-plate {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+  }
+}

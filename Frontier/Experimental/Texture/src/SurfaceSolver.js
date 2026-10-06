@@ -206,6 +206,48 @@ export const MeasureSurface = (Surface, Options = {}) =>
     const Lowest = Surface.Bounds.Minimum[1];
     const Span = Math.max(1e-6, Surface.Bounds.Maximum[1] - Lowest);
 
+    RasteriseSurface(Surface, { Size }, (Texel, Triangle, Weight0, Weight1, Weight2, IA, IB, IC) =>
+    {
+        Sheets.Filled[Texel] = 1;
+        Sheets.Face[Texel] = Triangle;
+        Sheets.Owner[Texel] = Owner[Triangle];
+        Sheets.Tile[Texel] = Tile[Triangle];
+        Sheets.Island[Texel] = Island[Triangle];
+        for (let Axis = 0; Axis < 3; Axis += 1)
+        {
+            Sheets.Position[Texel * 3 + Axis] =
+                Surface.Positions[IA * 3 + Axis] * Weight0 +
+                Surface.Positions[IB * 3 + Axis] * Weight1 +
+                Surface.Positions[IC * 3 + Axis] * Weight2;
+            Sheets.Normal[Texel * 3 + Axis] =
+                Surface.Normals[IA * 3 + Axis] * Weight0 +
+                Surface.Normals[IB * 3 + Axis] * Weight1 +
+                Surface.Normals[IC * 3 + Axis] * Weight2;
+        }
+        if (Surface.Occlusion)
+            Sheets.Occlusion[Texel] =
+                Surface.Occlusion[IA] * Weight0 + Surface.Occlusion[IB] * Weight1 + Surface.Occlusion[IC] * Weight2;
+        if (Thickness)
+            Sheets.Thickness[Texel] = Thickness[IA] * Weight0 + Thickness[IB] * Weight1 + Thickness[IC] * Weight2;
+        Sheets.Curvature[Texel] = Bend[IA] * Weight0 + Bend[IB] * Weight1 + Bend[IC] * Weight2;
+        Sheets.Altitude[Texel] = Clamp((Sheets.Position[Texel * 3 + 1] - Lowest) / Span, 0, 1);
+    });
+
+    return Sheets;
+};
+
+//--------------------------------------------------------------------------------------------------------------------------
+// The walk itself, so everything that reads the model into texture space reads it the same way. The sample point is the
+// texel's centre plus an offset, which is the whole of what antialiasing needs from a rasteriser: take the same pass
+// again from a slightly different place inside the texel and weigh the answers against each other.
+//--------------------------------------------------------------------------------------------------------------------------
+export const RasteriseSurface = (Surface, Options, Visit) =>
+{
+    const Size = Options.Size;
+    const OffsetX = Options.Offset ? Options.Offset[0] : 0;
+    const OffsetY = Options.Offset ? Options.Offset[1] : 0;
+    const Reach = Math.max(0.5, Math.abs(OffsetX), Math.abs(OffsetY)) + 0.5;
+    const Triangles = Surface.Indices.length / 3;
     for (let Triangle = 0; Triangle < Triangles; Triangle += 1)
     {
         const IA = Surface.Indices[Triangle * 3];
@@ -220,55 +262,27 @@ export const MeasureSurface = (Surface, Options = {}) =>
         const Area = (BX - AX) * (CY - AY) - (CX - AX) * (BY - AY);
         if (Math.abs(Area) < 1e-9) continue;
         // A half-texel of overdraw, so the seam between two triangles is covered by both rather than by neither.
-        const Left = Math.max(0, Math.floor(Math.min(AX, BX, CX) - 0.5));
-        const Right = Math.min(Size - 1, Math.ceil(Math.max(AX, BX, CX) + 0.5));
-        const Bottom = Math.max(0, Math.floor(Math.min(AY, BY, CY) - 0.5));
-        const Top = Math.min(Size - 1, Math.ceil(Math.max(AY, BY, CY) + 0.5));
+        const Left = Math.max(0, Math.floor(Math.min(AX, BX, CX) - Reach));
+        const Right = Math.min(Size - 1, Math.ceil(Math.max(AX, BX, CX) + Reach));
+        const Bottom = Math.max(0, Math.floor(Math.min(AY, BY, CY) - Reach));
+        const Top = Math.min(Size - 1, Math.ceil(Math.max(AY, BY, CY) + Reach));
+        const Slack = -0.5 / Math.max(1, Math.abs(Area) ** 0.5);
         for (let Row = Bottom; Row <= Top; Row += 1)
             for (let Column = Left; Column <= Right; Column += 1)
             {
-                const X = Column + 0.5;
-                const Y = Row + 0.5;
+                const X = Column + 0.5 + OffsetX;
+                const Y = Row + 0.5 + OffsetY;
                 let Weight0 = ((BX - X) * (CY - Y) - (CX - X) * (BY - Y)) / Area;
                 let Weight1 = ((CX - X) * (AY - Y) - (AX - X) * (CY - Y)) / Area;
                 let Weight2 = 1 - Weight0 - Weight1;
-                const Slack = -0.5 / Math.max(1, Math.abs(Area) ** 0.5);
                 if (Weight0 < Slack || Weight1 < Slack || Weight2 < Slack) continue;
                 Weight0 = Clamp(Weight0, 0, 1);
                 Weight1 = Clamp(Weight1, 0, 1);
                 Weight2 = Clamp(Weight2, 0, 1);
                 const Total = Weight0 + Weight1 + Weight2 || 1;
-                Weight0 /= Total;
-                Weight1 /= Total;
-                Weight2 /= Total;
-                const Texel = Row * Size + Column;
-                Sheets.Filled[Texel] = 1;
-                Sheets.Face[Texel] = Triangle;
-                Sheets.Owner[Texel] = Owner[Triangle];
-                Sheets.Tile[Texel] = Tile[Triangle];
-                Sheets.Island[Texel] = Island[Triangle];
-                for (let Axis = 0; Axis < 3; Axis += 1)
-                {
-                    Sheets.Position[Texel * 3 + Axis] =
-                        Surface.Positions[IA * 3 + Axis] * Weight0 +
-                        Surface.Positions[IB * 3 + Axis] * Weight1 +
-                        Surface.Positions[IC * 3 + Axis] * Weight2;
-                    Sheets.Normal[Texel * 3 + Axis] =
-                        Surface.Normals[IA * 3 + Axis] * Weight0 +
-                        Surface.Normals[IB * 3 + Axis] * Weight1 +
-                        Surface.Normals[IC * 3 + Axis] * Weight2;
-                }
-                if (Surface.Occlusion)
-                    Sheets.Occlusion[Texel] =
-                        Surface.Occlusion[IA] * Weight0 + Surface.Occlusion[IB] * Weight1 + Surface.Occlusion[IC] * Weight2;
-                if (Thickness)
-                    Sheets.Thickness[Texel] = Thickness[IA] * Weight0 + Thickness[IB] * Weight1 + Thickness[IC] * Weight2;
-                Sheets.Curvature[Texel] = Bend[IA] * Weight0 + Bend[IB] * Weight1 + Bend[IC] * Weight2;
-                Sheets.Altitude[Texel] = Clamp((Sheets.Position[Texel * 3 + 1] - Lowest) / Span, 0, 1);
+                Visit(Row * Size + Column, Triangle, Weight0 / Total, Weight1 / Total, Weight2 / Total, IA, IB, IC);
             }
     }
-
-    return Sheets;
 };
 
 //--------------------------------------------------------------------------------------------------------------------------
@@ -351,4 +365,148 @@ export const MeasureCurvature = (Surface) =>
         Curvature[Vertex] = Taken ? Clamp((Sum / Taken) * Gain, -1, 1) : 0;
     }
     return Curvature;
+};
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Bent normals. The same hemisphere the occlusion rays went out over, averaged over the ones that got away: the
+// direction the sky actually reaches this point from. On a flat wall it is the normal; in a corner it leans out of the
+// corner, which is what makes it worth having over the normal it came from.
+//--------------------------------------------------------------------------------------------------------------------------
+export const MeasureBentNormals = (Surface, Index, Samples = 24) =>
+{
+    const Count = Surface.Positions.length / 3;
+    const Bent = new Float32Array(Count * 3);
+    const Radius = Surface.Bounds.Radius * 1.4;
+    const GoldenAngle = Math.PI * (3 - Math.sqrt(5));
+    for (let Vertex = 0; Vertex < Count; Vertex += 1)
+    {
+        const NX = Surface.Normals[Vertex * 3];
+        const NY = Surface.Normals[Vertex * 3 + 1];
+        const NZ = Surface.Normals[Vertex * 3 + 2];
+        if (!Index)
+        {
+            Bent[Vertex * 3] = NX;
+            Bent[Vertex * 3 + 1] = NY;
+            Bent[Vertex * 3 + 2] = NZ;
+            continue;
+        }
+        const Origin = [
+            Surface.Positions[Vertex * 3] + NX * 1e-3,
+            Surface.Positions[Vertex * 3 + 1] + NY * 1e-3,
+            Surface.Positions[Vertex * 3 + 2] + NZ * 1e-3,
+        ];
+        const Reference = Math.abs(NY) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+        const TangentX = Normalise([
+            Reference[1] * NZ - Reference[2] * NY,
+            Reference[2] * NX - Reference[0] * NZ,
+            Reference[0] * NY - Reference[1] * NX,
+        ]);
+        const TangentY = [NY * TangentX[2] - NZ * TangentX[1], NZ * TangentX[0] - NX * TangentX[2], NX * TangentX[1] - NY * TangentX[0]];
+        let SumX = 0;
+        let SumY = 0;
+        let SumZ = 0;
+        for (let Sample = 0; Sample < Samples; Sample += 1)
+        {
+            const Fraction = (Sample + 0.5) / Samples;
+            const CosineTheta = Math.sqrt(1 - Fraction);
+            const SineTheta = Math.sqrt(Fraction);
+            const Angle = Sample * GoldenAngle;
+            const Cosine = Math.cos(Angle) * SineTheta;
+            const Sine = Math.sin(Angle) * SineTheta;
+            const Direction = Normalise([
+                TangentX[0] * Cosine + TangentY[0] * Sine + NX * CosineTheta,
+                TangentX[1] * Cosine + TangentY[1] * Sine + NY * CosineTheta,
+                TangentX[2] * Cosine + TangentY[2] * Sine + NZ * CosineTheta,
+            ]);
+            if (Index.Occluded(Origin, Direction, Radius)) continue;
+            SumX += Direction[0];
+            SumY += Direction[1];
+            SumZ += Direction[2];
+        }
+        const Length = Math.hypot(SumX, SumY, SumZ);
+        // 🔴 A point that sees nothing has no direction to lean in, and normalising zero is a NaN that spreads
+        //    through every texel the vertex touches. It keeps its own normal, which is what a sealed crack looks like.
+        if (Length < 1e-6)
+        {
+            Bent[Vertex * 3] = NX;
+            Bent[Vertex * 3 + 1] = NY;
+            Bent[Vertex * 3 + 2] = NZ;
+            continue;
+        }
+        Bent[Vertex * 3] = SumX / Length;
+        Bent[Vertex * 3 + 1] = SumY / Length;
+        Bent[Vertex * 3 + 2] = SumZ / Length;
+    }
+    return Bent;
+};
+
+//--------------------------------------------------------------------------------------------------------------------------
+// Bevel normals — Blender's bevel node, which rounds an edge in the shading without rounding it in the geometry. The
+// node does it by tracing; here the surface is already a soup of vertices with normals on them, so the normal field is
+// averaged over a sphere of the bevel's radius instead. Either way a corner's two faces meet in the middle, and a flat
+// wall is left alone because every neighbour inside the radius is already pointing the same way.
+//
+// 🔴 Gathered by POSITION, not by edge. A hard corner is duplicated once per face and each copy carries its own
+//    normal — averaging along the index buffer would average a face with itself and bevel nothing.
+//--------------------------------------------------------------------------------------------------------------------------
+export const MeasureBevelNormals = (Surface, Width = 0.05) =>
+{
+    const Count = Surface.Positions.length / 3;
+    const Bevel = new Float32Array(Count * 3);
+    const Radius = Math.max(1e-5, Width) * Math.max(1e-6, Surface.Bounds.Radius);
+    const Cell = Radius;
+    const Shelves = new Map();
+    const Key = (X, Y, Z) => `${Math.floor(X / Cell)}|${Math.floor(Y / Cell)}|${Math.floor(Z / Cell)}`;
+    for (let Vertex = 0; Vertex < Count; Vertex += 1)
+    {
+        const Name = Key(Surface.Positions[Vertex * 3], Surface.Positions[Vertex * 3 + 1], Surface.Positions[Vertex * 3 + 2]);
+        const Shelf = Shelves.get(Name);
+        if (Shelf) Shelf.push(Vertex);
+        else Shelves.set(Name, [Vertex]);
+    }
+    for (let Vertex = 0; Vertex < Count; Vertex += 1)
+    {
+        const PX = Surface.Positions[Vertex * 3];
+        const PY = Surface.Positions[Vertex * 3 + 1];
+        const PZ = Surface.Positions[Vertex * 3 + 2];
+        const CX = Math.floor(PX / Cell);
+        const CY = Math.floor(PY / Cell);
+        const CZ = Math.floor(PZ / Cell);
+        let SumX = 0;
+        let SumY = 0;
+        let SumZ = 0;
+        for (let StepX = -1; StepX <= 1; StepX += 1)
+            for (let StepY = -1; StepY <= 1; StepY += 1)
+                for (let StepZ = -1; StepZ <= 1; StepZ += 1)
+                {
+                    const Shelf = Shelves.get(`${CX + StepX}|${CY + StepY}|${CZ + StepZ}`);
+                    if (!Shelf) continue;
+                    for (const Other of Shelf)
+                    {
+                        const Distance = Math.hypot(
+                            Surface.Positions[Other * 3] - PX,
+                            Surface.Positions[Other * 3 + 1] - PY,
+                            Surface.Positions[Other * 3 + 2] - PZ,
+                        );
+                        if (Distance > Radius) continue;
+                        // Smooth falloff, so a vertex that drifts in and out of the radius does not snap the shading.
+                        const Weight = 1 - (Distance / Radius) ** 2;
+                        SumX += Surface.Normals[Other * 3] * Weight;
+                        SumY += Surface.Normals[Other * 3 + 1] * Weight;
+                        SumZ += Surface.Normals[Other * 3 + 2] * Weight;
+                    }
+                }
+        const Length = Math.hypot(SumX, SumY, SumZ);
+        if (Length < 1e-6)
+        {
+            Bevel[Vertex * 3] = Surface.Normals[Vertex * 3];
+            Bevel[Vertex * 3 + 1] = Surface.Normals[Vertex * 3 + 1];
+            Bevel[Vertex * 3 + 2] = Surface.Normals[Vertex * 3 + 2];
+            continue;
+        }
+        Bevel[Vertex * 3] = SumX / Length;
+        Bevel[Vertex * 3 + 1] = SumY / Length;
+        Bevel[Vertex * 3 + 2] = SumZ / Length;
+    }
+    return Bevel;
 };
