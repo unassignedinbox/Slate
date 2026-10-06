@@ -574,6 +574,7 @@ export class TexturePanel
         this.SolveMilliseconds = 0;
         this.SheetTimer = 0;
         this.Measuring = false;
+        this.Solving = false;
         // The entry of the stack whose controls are showing, and whether clicking the model is picking faces for it.
         this.FieldSelection = "";
         this.PickingFaces = false;
@@ -779,7 +780,7 @@ export class TexturePanel
         this.MeasureMilliseconds = Math.round(performance.now() - Started);
         this.Measuring = false;
         for (const Layer of this.Layers) this.SolveLayerSheet(Layer, false);
-        this.Recomposite();
+        if (!this.Solving) this.Recomposite();
         this.SetStatus("Ready", "ready");
         if (Announce)
         {
@@ -851,6 +852,17 @@ export class TexturePanel
         {
             if (Layer.Kind === "stroke") this.Integrator.EnsureCoverage(Layer);
             if (Layer.Mask.Kind === "stroke") this.Integrator.EnsureMask(Layer);
+            // A stack nobody has solved yet — a duplicated layer, an opened document, a step back through undo —
+            // has no sheet on the device, and the mask it shapes would composite as though it were not there.
+            if (!this.Solving && (Layer.Mask.Generators || []).some((Entry) => Entry.Enabled !== false))
+            {
+                if (!this.Integrator.LayerImages.get(Layer.Identifier)?.Sheet)
+                {
+                    this.Solving = true;
+                    this.SolveLayerSheet(Layer, false);
+                    this.Solving = false;
+                }
+            }
         }
         this.Integrator.Composite(CompositeOrdering(this.Layers, this.Solo), this.Project.Material);
         // Generator and colour masks exist only as a recipe until something resolves them, so the preview pass runs
@@ -8786,7 +8798,7 @@ export class TexturePanel
                 Label: "UDIM tile",
                 Path: `${Prefix}.Choice`,
                 Value: String(Entry.Choice ?? ""),
-                Options: Tiles.map((Tile) => ({ Value: String(Tile), Label: `${1001 + Tile}` })),
+                Options: Tiles.map((Tile) => ({ Value: String(Tile), Label: TileLabel(Tile) })),
             });
         }
         if (Entry.Kind === "island")

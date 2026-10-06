@@ -264,7 +264,9 @@ export const SolveTexel = (Entry, Context) =>
     else if (Kind === "wear")
     {
         // Rubs through on the convex edges, worse the more they stand proud of what is around them.
-        const Edge = Smooth(Mix(0.5, 0.04, Spread), 1, Math.max(0, -Field("Curvature")));
+        // The floor is high on purpose: everything convex reads as curved, and a mask that wears a whole ball away
+        // is not edge wear. Only what turns sharply against what is around it comes through at full strength.
+        const Edge = Smooth(Mix(0.85, 0.3, Spread), 1, Math.max(0, -Field("Curvature")));
         const Proud = Mix(0.65, 1, Clamp(Field("Occlusion", 1), 0, 1));
         const Grain = Fractal(ScaledX, ScaledY, Detail);
         Value = Clamp(Edge * Proud * Mix(0.35, 1.15, Grain), 0, 1);
@@ -272,10 +274,14 @@ export const SolveTexel = (Entry, Context) =>
     else if (Kind === "drips")
     {
         // Runs down. The streaks are stretched along the sheet's vertical, started by what catches the water above.
+        // 🔴 The window is narrow, not open-ended. Fractal noise clusters around a half, so a threshold with nothing
+        //    above it leaves every streak a tenth of a shade from nothing and the whole generator reads as black.
         const Streak = Fractal(ScaledX, ScaledY * 0.035, Detail);
-        const Caught = Smooth(0.15, 0.85, Normal(1) * 0.5 + 0.5);
-        const Run = Smooth(Mix(0.75, 0.3, Spread), 1, Streak);
-        Value = Clamp(Run * Mix(0.25, 1, Caught) * Mix(1, 1 - Field("Altitude"), 0.35), 0, 1);
+        const Low = Mix(0.62, 0.4, Spread);
+        const Run = Smooth(Low, Low + 0.14, Streak);
+        // Water runs down walls. A floor it sits on, a ceiling it falls off, and neither of them streaks.
+        const Wall = Smooth(0.85, 0.25, Math.abs(Normal(1)));
+        Value = Clamp(Run * Mix(0.3, 1, Wall) * Mix(1, 1 - Field("Altitude"), 0.35), 0, 1);
     }
     else if (Kind === "object") Value = Filled && String(Sheets.Owner[Texel]) === String(Entry.Choice) ? 1 : 0;
     else if (Kind === "tile") Value = Filled && String(Sheets.Tile[Texel]) === String(Entry.Choice) ? 1 : 0;
@@ -322,15 +328,17 @@ export const SolveMask = (Entries, Sheets, Options = {}) =>
                 Context.U = (Column + 0.5) / Size;
                 Context.Texel = Sheets && Sheets.Size !== Size ? SampleTexel(Sheets.Size, Context.U, Context.V) : Texel;
                 const Value = SolveTexel(Entry, Context);
-                Values[Texel] = Clamp(Combine(Entry.Combine, Values[Texel], Value * Entry.Weight + (1 - Entry.Weight) * Idle(Entry.Combine)), 0, 1);
+                // 🔴 The weight crossfades the RESULT against what was already there, rather than fading the entry's
+                //    own value towards whatever its mode treats as nothing. Fading the value works for multiply and
+                //    for add; it cannot work for replace, where there is no value that leaves the stack alone and a
+                //    weight of zero would flood the sheet with mid grey.
+                const Joined = Clamp(Combine(Entry.Combine, Values[Texel], Value), 0, 1);
+                Values[Texel] = Values[Texel] + (Joined - Values[Texel]) * Entry.Weight;
             }
         }
     }
     return { Size, Values, Entries: Live.length };
 };
-
-// What an entry has to be worth for the combine to leave the stack alone, so Weight fades it out rather than down.
-const Idle = (Mode) => (Mode === "multiply" || Mode === "min" ? 1 : Mode === "overwrite" ? 0.5 : 0);
 
 const SampleTexel = (Size, U, V) =>
 {

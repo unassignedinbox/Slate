@@ -99,9 +99,9 @@ offering a flat slider that would be a lie. Occlusion and specular weight keep t
 value is scaled by them. Everything else about the layer is unchanged: blend, opacity, a mask, reorder, and paint on top.
 
 **Masks.** A mask is multiplied into the layer's coverage: black conceals, white reveals, the same way Substance Painter
-does it. Four kinds — **painted** (a greyscale image the brush writes), **generator** (any of the twelve procedurals) and
-**colour** (keys on the colour already composited beneath the layer, with a tolerance, a softness and an eyedropper), or
-none at all. A layer with no mask shows a dashed *Add mask* chip; clicking it attaches a black mask and aims the brush at
+does it. Four kinds — **painted** (a greyscale image the brush writes), **generator** (any of the twenty-four in the
+catalogue) and **colour** (keys on the colour already composited beneath the layer, with a tolerance, a softness and an
+eyedropper), or none at all. A layer with no mask shows a dashed *Add mask* chip; clicking it attaches a black mask and aims the brush at
 it in one step, so the layer disappears and you paint it back.
 
 The mask can be looked at two ways — from the toggle floating at the top of the viewport, from the same switch in the
@@ -118,6 +118,54 @@ mask no longer changes the view either.
 Generator and colour masks have no image behind them, so a pass of their own resolves whichever kind the layer carries
 into a preview target before the viewport samples it: what you see is what the compositor applied, inversion included.
 Masks are undoable with the rest of the stack, and a removed mask frees its image so the next one starts clean.
+
+### Generators
+
+![Twelve generators solved on a two-object scene](generators.png)
+
+**Generators are the model read back, not a pattern printed on it.** Seven of them are drawn from the UV coordinate and
+need nothing — fBm, cells, scratches, weave, wood, checker, gradient. The other seventeen are readings of the surface
+itself, and that is the half Substance is actually loved for: dust settles on what faces the sky and stays where nothing
+has disturbed it, wear comes off the edges that stand proud, grime collects where a crease is buried. None of that can
+be drawn from a coordinate. The catalogue is in four families:
+
+| Family | Generators |
+| --- | --- |
+| Noise | fBm · Cells · Scratches · Weave · Wood · Checker · Gradient |
+| Surface | Curvature · Cavity · Occlusion · Up-facing · Altitude · Thickness · Position · Facing |
+| Weathering | Dust · Grime · Edge wear · Drips |
+| Selection | Object · UDIM tile · UV island · Picked faces · Vertex map |
+
+**The readings have to be taken before they can be read.** Curvature, cavity, occlusion, thickness, altitude, the island
+and tile each texel belongs to, the face it came from — none of it exists until the model is measured, and measuring is
+tenths of a second rather than milliseconds. So it is done once, held against the surface it was taken from, and dropped
+the moment that surface changes. Dropping a generator that needs it onto a layer measures the model rather than asking;
+the section says what it found, and offers to take it again.
+
+**Curvature is per vertex on the welded mesh, and it is a real curvature.** The obvious implementation — read the
+neighbouring normals in texture space — cannot see across a UV seam, and a cube is six islands, so every hard edge on it
+reads flat. This one welds vertices by position first (flat shading duplicates a corner once per face, so the index
+buffer is no help either), then reads each vertex against the ring around it as `mean(dot(normalize(Pᵤ − Pᵥ), Nᵥ) /
+|Pᵤ − Pᵥ|)`, which is the reciprocal of the radius the surface is turning on, and scales it by the model's own radius.
+That last step is what makes it a number about the *shape* rather than about the tessellation: a sphere answers the same
+at every subdivision level, and a bevel two percent of the model across saturates.
+
+**Thickness holds its cone off the tangent plane.** Rays fired into the surface at a grazing angle hit a neighbouring
+triangle a thousandth of a unit away and report a solid ball as foil, so the cone is narrowed to 0.72 of the hemisphere
+and starts at a depth proportional to the model's radius. What comes back is how much material stands behind each
+texel — thin walls light up, and an open surface with no back face reads as solid, because nothing is behind it to find.
+
+**They stack, the way the layer list does.** Each entry joins what is under it by a mode — multiply, add, subtract,
+lighten, darken, screen, replace — and a weight, and the weight fades the entry towards whatever is *neutral* for its
+mode rather than towards black, so pulling a multiply back to zero leaves the stack alone instead of erasing it. The
+first thing on an empty stack replaces, because multiplying into nothing is nothing. The whole stack is solved on the
+processor into one sheet, and the shader's part is a single line: the sheet multiplies into whatever mask the layer
+already had. A painted mask and a dust generator on the same layer are the product of the two.
+
+**Selections mask by what a part of the model is.** An object, a UDIM tile, a UV island, a set of faces you picked by
+clicking them, or a vertex map promoted to a mask. Face picking is a mode rather than a tool, so it is available with a
+brush still in hand: click to add a face, shift-click to take one away, <kbd>Esc</kbd> to leave. The index comes from the
+same raycast the brush uses, so what is picked is what was under the cursor.
 
 **The side being painted belongs to the layer, not to the brush.** `M` flips between a layer's content and its mask, and
 the layer remembers which one it was left on: step to another layer and back and the same side is in hand, with the same
@@ -767,13 +815,15 @@ painted. With the orbit tool in hand, a left click that never becomes a drag sel
 | `TexturePanel.js` | The panel: stack, masks, inspector, content browser, tools, documents, shortcuts, dialogs. |
 | `ChannelSpecification.js` | The twelve channels, their packing, encodings, blend and export orderings. |
 | `MaterialSpecification.js` | Surface constants, the conductor archive, material presets, the environments. |
-| `GeneratorSpecification.js` | Procedural and surface-signal generators and their parameter ranges. |
+| `GeneratorSpecification.js` | The twenty-four generators, their families, glyphs, controls and parameter ranges. |
+| `SurfaceSolver.js` | Measuring the model: welded-mesh curvature, thickness, UV islands, and the rasterisation that puts every reading into texture space. |
+| `MaskSolver.js` | Solving a stack of generators into one sheet — the weathering recipes, the selections, and how entries combine. |
 | `FinishSpecification.js` | Procedural material families, their styles, named controls and the preset shelf. |
 | `LayerSpecification.js` | Layer, mask and decal records; sanitisers; project defaults and validation. |
 | `DecalSpecification.js` | Vector library, font archive, SVG/text rasterisation. |
 | `harness/DeviceHost.mjs` | A jsdom window with a recording WebGL2 device behind it, so the editor can be driven with no browser. |
 | `harness/CardMetrics.mjs` | `npm run drive` — boots the real editor headless and reads the card back the way a hand would. |
-| `harness/EditorMetrics.mjs` | The same window, driving everything around the card: stack, folders, masks, tools, decals, texture space. |
+| `harness/EditorMetrics.mjs` | The same window, driving everything around the card: stack, folders, masks, generators, tools, decals, texture space. |
 | `InstrumentSpecification.js` | The instrument library: seven families and twenty-seven types, their drawings, settings schema, the material each one lays and the brush mapping. |
 | `InstrumentPanel.js` | The summoned card: the rail of paint properties, the pane frame and the ribbon preview. |
 | `MediaSolver.js` | What each medium does to a mark — bristle lanes, paper tooth, bleed, dust, wax skip — and the uniform packing the stamping pass reads. |
@@ -790,6 +840,7 @@ painted. With the orbit tool in hand, a left click that never becomes a drag sel
 | `DocumentSequence.js` | Up to four resident documents and their tabs. |
 | `ExportSequence.js` | Slot resolve, PNG emission, OpenPBR descriptor. |
 | `SheetCodec.js` | Painted sheets ⇄ PNG text: the writer, the reader, the blank test and the resample a saved document needs. |
+| `FieldMetrics.mjs` | What the surface measures to and what a stack of generators makes of it, against shapes whose answers are known. |
 | `*.mjs` | Node test files — surface maths, stack semantics, device behaviour and context recovery, against a recording WebGL2 stand-in. |
 
 `TexturePanel.css` holds the editor-specific rules; `ThemeSpecification.css` is the shared Frontier chrome and should stay

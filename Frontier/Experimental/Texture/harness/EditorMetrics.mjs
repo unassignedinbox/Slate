@@ -7,6 +7,7 @@
 //============================================================================================================================================
 
 import { CreateWindow, CreateTally, Settle } from "./DeviceHost.mjs";
+import { SanitiseLayer } from "../src/LayerSpecification.js";
 
 const { Window, Faults } = CreateWindow();
 const { Check, Report } = CreateTally("the editor");
@@ -575,6 +576,23 @@ Check("a generator can be taken off the stack", Shaped.Mask.Generators.length ==
 while (Shaped.Mask.Generators.length) Press(Find('.field-row .icon-button[data-action="field-remove"]'));
 Check("emptying the stack drops the sheet", !Panel.Integrator.LayerImages.get(Shaped.Identifier)?.Sheet);
 Check("and the empty note comes back", !!Find(".field-empty"));
+
+// A stack has to survive the journeys a layer makes: duplicated, saved, reopened, undone.
+Add("dust");
+Add("wear");
+Panel.DuplicateLayer();
+const Copied = Panel.ActiveLayer;
+Check("a duplicated layer brings its stack", Copied.Mask.Generators.length === 2 && Copied !== Shaped);
+Check("and solves a sheet of its own", !!Panel.Integrator.LayerImages.get(Copied.Identifier)?.Sheet);
+Copied.Mask.Generators[0].Weight = 0.25;
+Check("whose entries are its own, not the original's", Shaped.Mask.Generators[0].Weight === 1);
+
+const Filed = JSON.parse(JSON.stringify({ Layers: Panel.Layers }));
+const Reopened = SanitiseLayer(Filed.Layers.find((Layer) => Layer.Identifier === Copied.Identifier));
+Check("a document round trip keeps the stack", Reopened.Mask.Generators.length === 2, String(Reopened.Mask.Generators.length));
+Check("and keeps what was set on it", Reopened.Mask.Generators[0].Weight === 0.25);
+Check("and keeps the order it was in", Reopened.Mask.Generators.map((Entry) => Entry.Kind).join(",") === Copied.Mask.Generators.map((Entry) => Entry.Kind).join(","));
+Panel.RemoveLayer();
 
 Report();
 process.exit(process.exitCode || 0);
