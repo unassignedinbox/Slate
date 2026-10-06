@@ -183,7 +183,7 @@
     <div class="float" id="badge"><div class="t" id="badgeType">Slick</div><div class="name" id="badgeName">GZero</div><div class="size" id="badgeSize">245/40 R18</div></div>
     <div class="float" id="tiles"></div>
     <div class="float" id="viewbtns">
-      <button class="small" data-view="iso">Iso</button><button class="small" data-view="side">Side</button><button class="small" data-view="tread">Tread</button><button class="small" data-view="front">Front</button><button class="small" id="spinBtn">Spin</button><button class="small" id="threadsBtn">X-ray cords</button>
+      <button class="small" data-view="iso">Iso</button><button class="small" data-view="side">Side</button><button class="small" data-view="tread">Tread</button><button class="small" data-view="front">Front</button><button class="small" id="spinBtn">Spin</button><button class="small" id="threadsBtn">X-ray cords</button><button class="small" id="wireBtn">Wireframe</button>
     </div>
     <div id="toast"></div>
   </main>
@@ -261,7 +261,7 @@ const defaultDecals = () => [
   newDecal({ name: 'Compliance', text: 'DOT SL8T {serial}  ·  TUBELESS RADIAL  ·  MAX 51 PSI', font: 'mono', fontLabel: 'Technical mono', size: 16, color: '#a7a7a7', x: 2, y: 72, align: 'left', weight: 600, opacity: .65, embossed: true })
 ];
 const P = { name: 'GZero', type: 'Slick', layers: [], decals: defaultDecals() };   // tread pattern + sidewall decal layers
-const UI = { sel: -1, decalSel: -1, threads: false, spin: false, treadMode: 'color' };
+const UI = { sel: -1, decalSel: -1, threads: false, spin: false, treadMode: 'color', wireframe: false };
 
 const TYPES = ['Slick', 'Semi-slick', 'Drift', 'Street', 'Grip / UHP', 'Wet', 'Winter', 'Rally', 'Off-road', 'Drag'];
 const RIM_MATERIALS = {
@@ -350,18 +350,6 @@ const PRESETS = [
     layers: [L('dimple', { rows: 2, count: 3, radius: 3, depth: 0.8, from: -0.7, to: 0.7, stagger: true }), L('noise', { amount: 0.05, scale: 2 })] },
   { name: 'Talon Trail', type: 'Off-road', tyre: { width: 265, aspect: 65, rim: 17, treadDepth: 13, crown: 3, shoulder: 13, letter: 'white' },
     layers: [L('hex', { size: 22, width: 8, depth: 1, from: -1.3, to: 1.3 }), L('circ', { pos: 0, width: 9, zig: 4, zigCount: 30 })] },
-  { name: 'Ribline Touring 4', type: 'Street', tyre: { width: 225, aspect: 55, rim: 17, treadDepth: 8, treadFrac: 0.91, crown: 2.0, shoulder: 16, letter: 'blue' },
-    layers: [L('circ', { pos: -0.7, width: 6.5 }), L('circ', { pos: -0.25, width: 6 }), L('circ', { pos: 0.25, width: 6 }), L('circ', { pos: 0.7, width: 6.5 }),
-             L('lateral', { count: 72, angle: 13, width: 3.4, depth: 0.92, from: -1.02, to: -0.38, phase: 0.05, zig: 2 }), L('lateral', { count: 72, angle: -13, width: 3.4, depth: 0.92, from: 0.38, to: 1.02, phase: 0.55, zig: 2 }),
-             L('sipe', { count: 144, angle: 10, width: 1.05, depth: 0.5, from: -1.16, to: 1.16, phase: 0.25, zig: 1.1 })] },
-  { name: 'Trail Lock A/T', type: 'Off-road', tyre: { width: 285, aspect: 70, rim: 17, treadDepth: 15, treadFrac: 0.91, crown: 3.2, shoulder: 12, letter: 'white' },
-    layers: [L('terrain', { count: 17, width: 10, shoulder: 1.12, phase: 0.04 }), L('sipe', { count: 34, angle: 4, width: 1.5, depth: 0.38, from: -1.17, to: 1.17, phase: 0.5, zig: 3 })] },
-  { name: 'Rocklock M/T', type: 'Off-road', tyre: { width: 305, aspect: 65, rim: 18, treadDepth: 16, treadFrac: 0.9, crown: 3.8, shoulder: 11, letter: 'white' },
-    layers: [L('terrain', { count: 15, width: 13, shoulder: 1.22, phase: 0.28 }), L('circ', { pos: 0, width: 5, depth: 0.72, zig: 7, zigCount: 15 }),
-             L('sipe', { count: 30, angle: 7, width: 1.6, depth: 0.34, from: -1.18, to: 1.18, phase: 0.5, zig: 3.5 })] },
-  { name: 'Vector Trail V', type: 'Grip / UHP', tyre: { width: 275, aspect: 40, rim: 19, treadDepth: 10, treadFrac: 0.92, crown: 2.0, shoulder: 15, letter: 'red' },
-    layers: [L('chevron', { count: 19, angle: 52, width: 14, from: 0.03, to: 1.28, curve: 0.16 }), L('circ', { pos: 0, width: 7, zig: 5, zigCount: 19 }),
-             L('lateral', { count: 19, angle: 5, width: 7, depth: 0.84, from: 0.78, to: 1.28, phase: 0.18, zig: 2, mirror: true }), L('sipe', { count: 76, angle: 49, width: 1.2, depth: 0.46, from: 0.3, to: 1.2, phase: 0.48, mirror: true, zig: 1.5 })] },
 ];
 
 // =====================================================================================================================
@@ -815,10 +803,18 @@ function clipPolyToRect(poly, xs, ys, xe, ye) {
   return out;
 }
 function polyArea(poly) { let a = 0; for (let i = 0; i < poly.length; i++) { const p = poly[i], q = poly[(i + 1) % poly.length]; a += p[0] * q[1] - q[0] * p[1]; } return Math.abs(a) / 2; }
-function buildPolyTread(d, pmGeo) {
+function buildPolyTread(d, pmGeo, wantWire) {
   const { pieces, levels } = treadRegions(P, d, T.treadDepth, T.wear);
   const D = T.treadDepth, A = d.acrossHalf, circ = d.circ, CELL = Math.max(2, T.polyDetail);
   const pos = [], nrm = [], uv = [], tan = []; let quads = 0, tris = 0;
+  // Exact wireframe edge list for the "show topology" view: only real edges (quad perimeters,
+  // triangle sides, wall perimeters) are recorded - never the invisible diagonal that splits an
+  // emitted quad into its two triangles - so toggling it on shows the true quad/triangle mix
+  // instead of a busy mesh of triangulation diagonals. Recording is skipped entirely (no-op
+  // closures) unless wireframe view is actually on, so the common case pays no extra cost.
+  const wire = [];
+  const wireSeg3 = wantWire ? (p0, p1) => wire.push(p0[0], p0[1], p0[2], p1[0], p1[1], p1[2]) : () => {};
+  const wireSeg = wantWire ? (x0, y0, x1, y1, hz) => wireSeg3(place(x0, y0, hz), place(x1, y1, hz)) : () => {};
   const wl = y => pmGeo.wearRow((y + A) / (2 * A) * pmGeo.H);
   const place = (x, y, hFrac) => { const pr = treadProfileAt(y, d); const off = D * Math.max(hFrac, wl(y)) * pr.w; const ax = pr.x - pr.nx * off, r = pr.r - pr.nr * off; const th = x / circ * TAU; return [ax, r * Math.cos(th), r * Math.sin(th), pr.nx, pr.nr * Math.cos(th), pr.nr * Math.sin(th)]; };
   const push = (p, n, u, v, t) => { pos.push(p[0], p[1], p[2]); nrm.push(n[0], n[1], n[2]); uv.push(u, v); tan.push(t[0], t[1], t[2], 1); };
@@ -828,6 +824,7 @@ function buildPolyTread(d, pmGeo) {
   const emitQuad = (xs, ys, xe, ye, hz) => {
     pushTop(xs, ys, hz); pushTop(xe, ys, hz); pushTop(xe, ye, hz);
     pushTop(xs, ys, hz); pushTop(xe, ye, hz); pushTop(xs, ye, hz);
+    wireSeg(xs, ys, xe, ys, hz); wireSeg(xe, ys, xe, ye, hz); wireSeg(xe, ye, xs, ye, hz); wireSeg(xs, ye, xs, ys, hz);
     quads++;
   };
   const emitTriPatch = (outerLocal, holesLocal, hz) => {   // tiny boundary-cell patch: exact outline (with any sub-holes), fanned locally
@@ -841,6 +838,7 @@ function buildPolyTread(d, pmGeo) {
       const area = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y); if (Math.abs(area) < 1e-7) continue;
       const ord = area > 0 ? [a, b, c] : [a, c, b];
       for (const q of ord) pushTop(q.x, q.y, hz);
+      wireSeg(ord[0].x, ord[0].y, ord[1].x, ord[1].y, hz); wireSeg(ord[1].x, ord[1].y, ord[2].x, ord[2].y, hz); wireSeg(ord[2].x, ord[2].y, ord[0].x, ord[0].y, hz);
       tris++;
     }
   };
@@ -966,11 +964,13 @@ function buildPolyTread(d, pmGeo) {
       const uvA1 = [uvA0[0] + inU * 0.6, uvA0[1] + inV * 0.6], uvB1 = [uvB0[0] + inU * 0.6, uvB0[1] + inV * 0.6];
       const et = [b0[0] - a0[0], b0[1] - a0[1], b0[2] - a0[2]]; const el = Math.hypot(...et) || 1; const wt = [et[0] / el, et[1] / el, et[2] / el];
       const quad = flip ? [[a0, uvA0], [a1, uvA1], [b0, uvB0], [b0, uvB0], [a1, uvA1], [b1, uvB1]] : [[a0, uvA0], [b0, uvB0], [a1, uvA1], [a1, uvA1], [b0, uvB0], [b1, uvB1]];
-      for (const [q, t] of quad) push(q, n, t[0], t[1], wt); quads++;
+      for (const [q, t] of quad) push(q, n, t[0], t[1], wt);
+      wireSeg3(a0, b0); wireSeg3(b0, b1); wireSeg3(b1, a1); wireSeg3(a1, a0);
+      quads++;
     }
   }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute('tangent', new THREE.Float32BufferAttribute(tan, 4)); g.computeBoundingSphere();
-  g.userData.tris = quads * 2 + tris; g.userData.quads = quads; g.userData.boundaryTris = tris; return g;
+  g.userData.tris = quads * 2 + tris; g.userData.quads = quads; g.userData.boundaryTris = tris; g.userData.wire = new Float32Array(wire); return g;
 }
 // sidewall-only lathe (used together with the polygon tread)
 function buildSidewallGeometry(d, prof) {
@@ -1154,7 +1154,24 @@ const scene = new THREE.Scene(); scene.background = new THREE.Color('#0b0c0e');
 const pmrem = new THREE.PMREMGenerator(renderer); scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 const camera = new THREE.PerspectiveCamera(38, 1, 1, 20000); camera.position.set(700, 380, 720);
 const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.target.set(0, 0, 0);
-controls.zoomSpeed = 0.8; controls.maxPolarAngle = Math.PI / 2 - 0.03; controls.zoomToCursor = false;
+controls.maxPolarAngle = Math.PI / 2 - 0.03; controls.zoomToCursor = false;
+// OrbitControls' built-in wheel zoom applies a FIXED percentage change per wheel *event*,
+// regardless of how big that event's deltaY is. A physical mouse wheel sends one large-delta
+// event per click, so that feels fine - but a trackpad sends dozens of tiny-delta events per
+// swipe, each one applying that same fixed percentage, which compounds into a near-instant jump
+// to the min/max zoom limit from a single gesture. Intercept 'wheel' in the capture phase and
+// stop it from reaching OrbitControls' own handler, replacing it with a handler that scales the
+// zoom step by the actual deltaY so total zoom tracks physical scroll distance, not event count.
+// enableZoom stays true so two-finger touch-pinch zoom (a separate, non-'wheel' code path in
+// OrbitControls) keeps working untouched.
+renderer.domElement.addEventListener('wheel', e => {
+  e.preventDefault(); e.stopImmediatePropagation();
+  const amount = THREE.MathUtils.clamp(e.deltaY, -240, 240) / 100;      // normalise wheel "clicks" vs trackpad pixel deltas
+  const scale = Math.pow(0.96, amount);                                 // ~4% per "standard" 100-delta wheel click, same as before
+  const offset = camera.position.clone().sub(controls.target);
+  const dist = THREE.MathUtils.clamp(offset.length() * scale, controls.minDistance, controls.maxDistance);
+  offset.setLength(dist); camera.position.copy(controls.target).add(offset);
+}, { passive: false, capture: true });
 function fitZoom(d) { const R = d.Rout; controls.minDistance = R * 0.75; controls.maxDistance = R * 7; camera.near = R * 0.02; camera.far = R * 60; camera.updateProjectionMatrix();
   const dist = camera.position.distanceTo(controls.target); if (dist > controls.maxDistance || dist < controls.minDistance) { const dir = camera.position.clone().sub(controls.target).normalize(); camera.position.copy(controls.target).addScaledVector(dir, THREE.MathUtils.clamp(dist, controls.minDistance, controls.maxDistance)); } }
 const key = new THREE.DirectionalLight('#fff4e0', 2.2); key.position.set(600, 900, 500); key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.camera.left = key.shadow.camera.bottom = -600; key.shadow.camera.right = key.shadow.camera.top = 600; key.shadow.camera.far = 3000; key.shadow.bias = -0.0002; key.shadow.normalBias = 2.5; scene.add(key);
@@ -1165,14 +1182,14 @@ const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), new THREE.Mes
 const grid = new THREE.GridHelper(4000, 80, '#232529', '#1a1c1f'); grid.position.y = 0.5; scene.add(grid);
 const tyreGroup = new THREE.Group(); scene.add(tyreGroup);
 
-let tyreMesh, rimGroup, threadLines, maps, patternMap, profileCache, treadMat, sideMatL, sideMatR;
+let tyreMesh, rimGroup, threadLines, wireLines, maps, patternMap, profileCache, treadMat, sideMatL, sideMatR;
 function disposeGroup() { tyreGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); }); tyreGroup.clear(); }
 
 function rebuild(full = true) {
   const d = dims();
   patternMap = renderPattern(P, d, 384, T.wear, T.wearBias, T.treadDepth);
   maps = buildTreadMaps(patternMap, T.treadDepth, T.rubber, T.wear);
-  disposeGroup();
+  disposeGroup(); wireLines = null;
   const tex = c => { const t = new THREE.CanvasTexture(c); t.flipY = false; t.wrapS = THREE.RepeatWrapping; t.anisotropy = 8; t.colorSpace = THREE.NoColorSpace; return t; };
   const colTex = tex(maps.color); colTex.colorSpace = THREE.SRGBColorSpace;
   const usePoly = !!window.ClipperLib;
@@ -1186,8 +1203,15 @@ function rebuild(full = true) {
   tyreMesh = new THREE.Group(); let triCount = 0;
   if (usePoly) {
     const pmGeo = renderPattern(P, d, 384, T.wear, T.wearBias, T.treadDepth, true);
-    let treadGeo; try { treadGeo = buildPolyTread(d, pmGeo); } catch (e) { console.warn('polygon tread failed, falling back', e); }
-    if (treadGeo) { const prof = buildProfile(d); profileCache = prof; tyreMesh.add(new THREE.Mesh(treadGeo, treadMat)); tyreMesh.add(new THREE.Mesh(buildSidewallGeometry(d, prof), sideMat)); triCount = treadGeo.userData.tris; }
+    let treadGeo; try { treadGeo = buildPolyTread(d, pmGeo, UI.wireframe); } catch (e) { console.warn('polygon tread failed, falling back', e); }
+    if (treadGeo) {
+      const prof = buildProfile(d); profileCache = prof; tyreMesh.add(new THREE.Mesh(treadGeo, treadMat)); tyreMesh.add(new THREE.Mesh(buildSidewallGeometry(d, prof), sideMat)); triCount = treadGeo.userData.tris;
+      if (treadGeo.userData.wire) {
+        const wireGeo = new THREE.BufferGeometry(); wireGeo.setAttribute('position', new THREE.Float32BufferAttribute(treadGeo.userData.wire, 3));
+        const wireMesh = new THREE.LineSegments(wireGeo, new THREE.LineBasicMaterial({ color: 0x39ff9e, transparent: true, opacity: 0.85, depthTest: true }));
+        wireMesh.renderOrder = 1; wireMesh.visible = UI.wireframe; tyreMesh.add(wireMesh); wireLines = wireMesh;
+      }
+    }
     else { const { geometry, profile } = buildTyreGeometry(d, patternMap); profileCache = profile; tyreMesh.add(new THREE.Mesh(geometry, [treadMat, sideMat])); triCount = geometry.index.count / 3; }
   } else { const { geometry, profile } = buildTyreGeometry(d, patternMap); profileCache = profile; tyreMesh.add(new THREE.Mesh(geometry, [treadMat, sideMat])); triCount = geometry.index.count / 3; }
   tyreMesh.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (UI.threads) [].concat(o.material).forEach(m => { m.transparent = true; m.opacity = 0.35; }); } });
@@ -1608,6 +1632,16 @@ document.querySelectorAll('#treadMode span').forEach(el => el.onclick = () => { 
 document.querySelectorAll('.tab').forEach(el => el.onclick = () => { document.querySelectorAll('.tab').forEach(x => x.classList.remove('on')); el.classList.add('on'); document.querySelectorAll('.panel').forEach(p => p.classList.toggle('on', p.dataset.panel === el.dataset.tab)); });
 document.getElementById('spinBtn').onclick = e => { UI.spin = !UI.spin; e.target.classList.toggle('primary', UI.spin); };
 document.getElementById('threadsBtn').onclick = e => { UI.threads = !UI.threads; e.target.classList.toggle('primary', UI.threads); if (threadLines) threadLines.visible = UI.threads; if (tyreMesh) tyreMesh.traverse(o => { if (o.isMesh) [].concat(o.material).forEach(m => { m.transparent = UI.threads; m.opacity = UI.threads ? 0.35 : 1; m.needsUpdate = true; }); }); };
+// Exact-edge wireframe overlay (quad perimeters + real triangle/wall edges only, never the
+// hidden diagonal inside an emitted quad) so the grid topology can be inspected directly.
+document.getElementById('wireBtn').onclick = e => {
+  UI.wireframe = !UI.wireframe; e.target.classList.toggle('primary', UI.wireframe);
+  // Wire-edge data is only recorded by buildPolyTread while wireframe is on (it's skipped
+  // otherwise to avoid paying its cost on every normal rebuild), so the very first toggle-on
+  // needs a rebuild to populate it; a toggle-off can just hide the existing line mesh.
+  if (UI.wireframe && (!wireLines || wireLines.geometry.getAttribute('position').count === 0)) rebuild();
+  else if (wireLines) wireLines.visible = UI.wireframe;
+};
 document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => {
   const d = dims(); const R = d.Rout; const v = b.dataset.view;
   const pos = { iso: [R * 2.6, R * 1.4, R * 2.7], side: [R * 4.2, R * 0.9, 0.01], front: [0.01, R * 0.9, R * 4.2], tread: [R * 0.9, R * 2.9, R * 0.7] }[v];
