@@ -3042,3 +3042,18 @@ as implemented by this documentation-only checkpoint.
   Anisotropy. Disabled entities retain a visible authored preview and physical readouts remain uncompressed.
 - Preserved Height Fog's imported Visibility replacement, canonical Height value bridge, Atmospheric spectral study, Local
   bounds, Fog Settings, Wind Binding, notes/persistence and every non-Fog inspector.
+
+## C066 — Atmospheric Fog graph interaction while disabled (2026-10-06)
+
+- Preserved the existing Spectral transmission and Visibility card designs; this correction changes interaction/model
+  behavior only.
+- Both graphs now remain responsive authored previews while Atmospheric Fog is disabled instead of collapsing to a flat
+  100% line from forced zero extinction. The disabled status is explicitly labelled `AUTHORED PREVIEW · MEDIUM DISABLED`.
+- Visibility distance is now the travelled distance inside the medium after the authored Start boundary. Dragging or using
+  arrow/Home/End keys moves the probe and immediately changes its transmission readout and marker.
+- Spectral transmission uses that same in-medium path and authored Density/Mie Blend while disabled. Dragging wavelength
+  now traverses a visible spectral response rather than a flat line when the stored probe distance is before Start.
+- Runtime participation is unchanged: disabling Atmospheric Fog still means zero extinction in the scene. Preview curves
+  are editor-only authoring feedback, and the card copy distinguishes them from live behavior.
+- Atmospheric and Local Beam Chambers use the same authored-density preview rule, while retaining their uncompressed
+  physical labels and explicit LIVE/PREVIEW state.

@@ -131,7 +131,34 @@ try {
       await Page.locator('[data-card="Medium"] .fog-shared-beam svg').getAttribute("aria-label"),
       "Fog beam chamber",
     );
-    Checks.push(`${Id}: uses the corrected shared Beam Chamber inside Medium`);
+    if (Id === "aerial-fog") {
+      if ((await Saved()).Values[Id].Enabled)
+        await Page.getByRole("button", { name: "Enabled", exact: true }).click();
+      await Page.getByText("AUTHORED PREVIEW · MEDIUM DISABLED", {
+        exact: true,
+      }).waitFor();
+      const VisibilityPlot = Page.getByRole("slider", {
+          name: "Fog distance probe",
+          exact: true,
+        }),
+        VisibilityCircle = VisibilityPlot.locator("circle").first(),
+        BeforeVisibilityX = await VisibilityCircle.getAttribute("cx");
+      await VisibilityPlot.focus();
+      await Page.keyboard.press("End");
+      assert.notEqual(await VisibilityCircle.getAttribute("cx"), BeforeVisibilityX);
+      const SpectrumPlot = Page.getByRole("slider", {
+          name: "Aerial fog spectrum",
+          exact: true,
+        }),
+        BeforeSpectrumX = await SpectrumPlot.locator("circle").first().getAttribute("cx");
+      await SpectrumPlot.focus();
+      await Page.keyboard.press("Home");
+      assert.notEqual(
+        await SpectrumPlot.locator("circle").first().getAttribute("cx"),
+        BeforeSpectrumX,
+      );
+    }
+    Checks.push(`${Id}: uses corrected shared cards and responsive authored previews`);
   }
 } catch (Error) {
   Errors.push(Error.stack);

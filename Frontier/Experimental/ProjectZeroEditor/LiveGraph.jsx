@@ -403,8 +403,8 @@ export function PropertyGraph({ Children, Title }) {
     </div>
   );
 }
-export function FogDensity(Kind, V, Height) {
-  if (!V("Enabled")) return 0;
+export function FogDensity(Kind, V, Height, AuthoredPreview = false) {
+  if (!V("Enabled") && !AuthoredPreview) return 0;
   if (Kind === "height-fog")
     return (
       V("Density") *
@@ -429,18 +429,15 @@ export function FogGraph({ Kind, V, Change, Density = false }) {
   const Altitude = V("Probe altitude") ?? 2,
     Distance = V("Probe distance") ?? 200,
     Local = Kind === "local-fog";
-  const Sigma = FogDensity(Kind, V, Altitude),
-    At = (D) =>
-      Math.exp(
-        -Sigma * Math.max(0, D - (Kind === "aerial-fog" ? V("Start") : 0)),
-      ) * 100;
+  const Sigma = FogDensity(Kind, V, Altitude, true),
+    At = (D) => Math.exp(-Sigma * Math.max(0, D)) * 100;
   return (
     <>
       <div className="graph-status">
         <i className={V("Enabled") ? "green" : "red"} />
         {V("Enabled")
           ? "LIVE AUTHORING PROBE"
-          : "MEDIUM DISABLED · ZERO EXTINCTION"}
+          : "AUTHORED PREVIEW · MEDIUM DISABLED"}
       </div>
       <div className="graph-metric">
         <DecimalMetric
@@ -457,7 +454,7 @@ export function FogGraph({ Kind, V, Change, Density = false }) {
       <p>
         {Density
           ? "Extinction at probe altitude"
-          : "Light transmitted at the selected distance"}
+          : `${V("Enabled") ? "Light" : "Preview light"} transmitted after the selected in-medium distance`}
       </p>
       <Plot
         Name={Density ? "Fog altitude probe" : "Fog distance probe"}
@@ -466,7 +463,7 @@ export function FogGraph({ Kind, V, Change, Density = false }) {
         Series={[
           {
             Name: Density ? "Density" : "Transmission",
-            At: Density ? (H) => FogDensity(Kind, V, H) : At,
+            At: Density ? (H) => FogDensity(Kind, V, H, true) : At,
             Colour: Density ? "#a9c5bc" : "#d8cbb0",
           },
         ]}
@@ -513,7 +510,7 @@ export function FogGraph({ Kind, V, Change, Density = false }) {
           ? "σ(z) = density × exp(−z / falloff height); T = exp(−σ × distance). Both cards share this probe."
           : Local
             ? "Homogeneous authoring probe: σ = 0.01 × density × coverage / m. Does not integrate the volume shape."
-            : "Illustrative aerial probe: σ = 0.001 × density / m, after Start distance. Not a native atmosphere march."}
+            : "Illustrative aerial probe: σ = 0.001 × density / m; distance is travel through the medium after Start. Disabled state remains an authored preview. Not a native atmosphere march."}
       </p>
     </>
   );
@@ -621,8 +618,8 @@ export function SunGraph({ V, Change, Mode }) {
 export function FogSpectrum({ V, Change }) {
   const Distance = V("Probe distance") ?? 200,
     Altitude = V("Probe altitude") ?? 2,
-    Sigma = FogDensity("aerial-fog", V, Altitude),
-    Path = Math.max(0, Distance - V("Start")),
+    Sigma = FogDensity("aerial-fog", V, Altitude, true),
+    Path = Math.max(0, Distance),
     Mix = V("Mie Blend");
   return (
     <Plot
@@ -647,7 +644,7 @@ export function FogSpectrum({ V, Change }) {
       Change={(N) => Change("Spectral wavelength", N)}
       XUnit="nm"
       YUnit="%"
-      Note="Illustrative wavelength study using Density, Mie Blend and the shared distance probe. At 550 nm this matches Visibility. Not native spectral rendering."
+      Note={`Drag to sample wavelength. Uses Density, Mie Blend and ${Distance.toFixed(0)} m of travel through the medium after Start; the disabled state remains an authored preview. At 550 nm this matches Visibility. Not native spectral rendering.`}
     />
   );
 }

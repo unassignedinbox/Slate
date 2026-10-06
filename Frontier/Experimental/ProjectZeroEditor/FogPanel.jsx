@@ -7,7 +7,10 @@ import "./FogPanel.css";
 export function FogBeamChamber({ Kind, V }) {
   const Local = Kind === "local-fog",
     Enabled = !!V("Enabled"),
-    Extinction = Math.max(0, FogDensity(Kind, V, V("Probe altitude") ?? 2)),
+    Extinction = Math.max(
+      0,
+      FogDensity(Kind, V, V("Probe altitude") ?? 2, true),
+    ),
     Start = Local ? 0 : Math.max(0, Number(V("Start")) || 0),
     Spread = Math.max(0, Number(V(Local ? "Anisotropy" : "Mie Blend")) || 0),
     Transmission = (Distance) =>
