@@ -2903,3 +2903,22 @@ fracture algorithm, SDF computation, source-property schema or Construct behavio
   Binding controls. Other inspectors are outside this correction.
 - The standalone HTML build succeeds at 4.64 MiB. Focused tests now assert three Height reference slices (summary,
   Visibility and Beam), no duplicate native Visibility card, and Beam ownership by Medium.
+
+## C061 — Height Fog shared variables and authored density visual (2026-10-06)
+
+- Kept the C060 Height-only card arrangement: rich imported Visibility replaces the generic native visual and Beam Chamber
+  remains inside Medium. Atmospheric Fog, Local Fog and non-Fog inspectors are unchanged.
+- Added a single Height Fog property bridge for Enabled, Density, Falloff Height, Sun Scatter and Colour. Native Medium
+  controls now repaint the imported summary, Visibility and Beam Chamber frames; edits made through the imported visual
+  write back to those same native properties.
+- Removed duplicate persistence for those mapped properties from `ReferenceInspector.Properties`. Native Height Fog values
+  are authoritative; imported cards receive projections of the same values instead of maintaining a second copy. Existing
+  saved scenes and newly imported scenes are normalized to remove the legacy duplicate keys.
+- Beam Chamber now responds to every Medium property. Its representative 25 m layer uses Density and Falloff Height for
+  extinction, Sun Scatter for spread, Colour for tint and Enabled for participation.
+- Replaced the blank/flat Density with altitude graph with a non-graph layered-volume illustration. It remains visible as
+  an authored preview when the medium is disabled and uses the same Density, Falloff Height, Sun Scatter, Colour and
+  Enabled values as Medium and Beam Chamber. Redundant probe altitude/distance controls were removed from Height Fog.
+- The standalone build succeeds at 4.65 MiB. Focused checks cover bidirectional value synchronization, Beam repainting for
+  all Medium properties, removal of duplicate persisted properties, the non-graph density visual and unchanged C054 cards
+  for Atmospheric and Local Fog.

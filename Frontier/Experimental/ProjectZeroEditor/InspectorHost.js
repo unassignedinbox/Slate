@@ -5,6 +5,7 @@ import {
   LightNames,
 } from "./LightSpecification.js";
 import { CloudReference } from "./CloudSpecification.js";
+import { HeightFogReference } from "./HeightFogSpecification.js";
 import { LightPanel } from "./LightPanel.js";
 import { CUSTOM_PANELS } from "./InspectorDepot/panels/index.js";
 
@@ -255,6 +256,11 @@ function Synchronize(Data) {
       Object.assign(
         Node.props,
         CloudReference(Data.Values[Row.Id] || {}, Row.Panel),
+      );
+    if (Row.Panel === "height-fog")
+      Object.assign(
+        Node.props,
+        HeightFogReference(Data.Values[Row.Id] || {}),
       );
     Node.kids = [];
   }

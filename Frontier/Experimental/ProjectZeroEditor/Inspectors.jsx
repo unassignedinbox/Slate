@@ -1,12 +1,12 @@
 import { CloudEdit, CloudValue } from "./CloudSpecification.js";
 import CloudDeckPanel from "./CloudDeckPanel.jsx";
 import FogPanel from "./FogPanel.jsx";
+import HeightFogVisual from "./HeightFogVisual.jsx";
 import FracturePanel from "./FracturePanel.jsx";
 import AtmosphereLab, { AtmosphereProfile } from "./AtmosphereLab.jsx";
 import {
   GraphContext,
   PropertyGraph,
-  FogGraph,
   SunGraph,
   FogSpectrum,
   CloudSection,
@@ -1684,12 +1684,7 @@ export function Inspector({
               {Aerial ? (
                 <FogSpectrum V={V} Change={AssignProperty} />
               ) : (
-                <FogGraph
-                  Kind={Subject.Panel}
-                  V={V}
-                  Change={AssignProperty}
-                  Density
-                />
+                <HeightFogVisual V={V} />
               )}
               {Height && F("Colour")}
             </Card>

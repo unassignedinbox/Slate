@@ -7,6 +7,11 @@ import {
   ReadRecord as ReadFracture,
 } from "../FractureEditor/FractureSpecification.js";
 import { CloudProperties, CloudEdit } from "./CloudSpecification.js";
+import {
+  HeightFogChanges,
+  NormalizeHeightFogValues,
+  WithoutHeightFogDuplicates,
+} from "./HeightFogSpecification.js";
 import { LightContextDefaults } from "./LightSpecification.js";
 import ReferencePanel, {
   EnsureReferenceLights,
@@ -376,7 +381,9 @@ function OutlinerMetadata(Row, Record = {}, Rows = []) {
 const Saved = Restore();
 const SceneRows = Saved.Rows ? ConsolidateAtmosphere(Saved.Rows) : undefined;
 const SkyAlias = !SceneRows?.some((Row) => Row.Id === "sky");
-Saved.Values = ConsolidateAtmosphereValues(Saved.Values, Saved.Rows);
+Saved.Values = NormalizeHeightFogValues(
+  ConsolidateAtmosphereValues(Saved.Values, Saved.Rows),
+);
 Saved.Hidden = ConsolidateAtmosphereFlags(Saved.Hidden, Saved.Rows);
 Saved.Collapsed = ConsolidateAtmosphereFlags(Saved.Collapsed, Saved.Rows);
 if (SceneRows)
@@ -699,8 +706,13 @@ function App() {
       const Next = { ...Previous };
       for (const Record of Accepted) {
         if (!HasReferencePanel(Known.get(Record.Id))) continue;
-        const CloudChanges = {};
-        if (["clouds", "local-cloud"].includes(Known.get(Record.Id).Panel)) {
+        const Panel = Known.get(Record.Id).Panel,
+          CloudChanges = {},
+          HeightChanges =
+            Panel === "height-fog"
+              ? HeightFogChanges(Previous[Record.Id] || {}, Record.Properties)
+              : {};
+        if (["clouds", "local-cloud"].includes(Panel)) {
           for (const [Name, Key] of Object.entries(CloudProperties)) {
             if (
               Record.Properties[Key] !==
@@ -712,7 +724,7 @@ function App() {
                   Previous[Record.Id] || {},
                   Name,
                   Record.Properties[Key] * (Name === "Density" ? 4 : 1),
-                  Known.get(Record.Id).Panel,
+                  Panel,
                 ),
               );
           }
@@ -720,8 +732,12 @@ function App() {
         Next[Record.Id] = {
           ...Next[Record.Id],
           ...CloudChanges,
+          ...HeightChanges,
           ReferenceInspector: {
-            Properties: Record.Properties,
+            Properties:
+              Panel === "height-fog"
+                ? WithoutHeightFogDuplicates(Record.Properties)
+                : Record.Properties,
             Locked: Record.Locked,
             Dynamic: Record.Dynamic,
             Notes: Record.Notes,
@@ -987,9 +1003,8 @@ function App() {
         ),
       );
       Collapse(ConsolidateAtmosphereFlags(Loaded.Collapsed, Loaded.Rows));
-      const ImportedValues = ConsolidateAtmosphereValues(
-        Loaded.Values,
-        Loaded.Rows,
+      const ImportedValues = NormalizeHeightFogValues(
+        ConsolidateAtmosphereValues(Loaded.Values, Loaded.Rows),
       );
       for (const Row of Loaded.Rows)
         if (Row.Panel === "geometry")

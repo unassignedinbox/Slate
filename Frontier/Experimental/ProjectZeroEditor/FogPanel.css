@@ -140,3 +140,87 @@
   border-radius: 12px;
   background: #191919 !important;
 }
+
+/* Height Fog authored volume illustration; intentionally not a graph or second control set. */
+.height-density-visual {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.height-density-status,
+.height-density-readings {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.height-density-status {
+  color: #8f9691;
+  font-size: 8px;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+}
+.height-density-status span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.height-density-status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #51d487;
+  box-shadow: 0 0 9px #51d48766;
+}
+.height-density-visual[data-enabled="false"] .height-density-status i {
+  background: #d37171;
+  box-shadow: 0 0 9px #d3717166;
+}
+.height-density-status strong {
+  color: #c9ccc7;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.height-density-visual > svg {
+  display: block;
+  width: 100%;
+  height: 210px;
+  overflow: hidden;
+  border: 1px solid #ffffff0b;
+  border-radius: 12px;
+  background: #08090a;
+}
+.height-density-visual svg text {
+  fill: #969d99;
+  font: 8px sans-serif;
+  letter-spacing: 0.25px;
+}
+.height-density-readings {
+  align-items: stretch;
+}
+.height-density-readings span {
+  display: grid;
+  flex: 1;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px 11px;
+  border-radius: 10px;
+  background: #181918;
+}
+.height-density-readings small {
+  color: #787e79;
+  font-size: 8px;
+  text-transform: uppercase;
+}
+.height-density-readings b {
+  color: #d7dad5;
+  font-size: 13px;
+  font-weight: 400;
+}
+.height-density-visual > p {
+  margin: 0;
+  color: #777d78;
+  font-size: 9px;
+  line-height: 1.55;
+}

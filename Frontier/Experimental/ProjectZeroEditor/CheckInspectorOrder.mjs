@@ -328,11 +328,11 @@ try {
         ExpectedInputs =
           Row.Panel === "height-fog"
             ? PreviousInputs.filter(
-                (Input, Index, All) =>
+                (Input) =>
                   ![
                     "INPUT number Fog probe altitude",
                     "INPUT number Fog probe distance",
-                  ].includes(Input) || Index === All.indexOf(Input),
+                  ].includes(Input),
               )
             : PreviousInputs;
       assert.deepEqual(

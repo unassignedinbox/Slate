@@ -106,10 +106,8 @@ try {
           (Name) => Name !== "Visibility through fog",
         );
         Expected.Controls = Expected.Controls.filter(
-          (Control, Index, All) =>
-            !["Fog probe altitude", "Fog probe distance"].includes(
-              Control[2],
-            ) || Index === All.findIndex((Other) => Other[2] === Control[2]),
+          (Control) =>
+            !["Fog probe altitude", "Fog probe distance"].includes(Control[2]),
         );
       }
       if (Id === "lighting") {

@@ -398,10 +398,9 @@ try {
         ExpectedInventory =
           Id === "height-fog"
             ? PreviousInventory.filter(
-                (Input, Index, All) =>
-                  (!Input.includes("Fog probe altitude") &&
-                    !Input.includes("Fog probe distance")) ||
-                  Index === All.indexOf(Input),
+                (Input) =>
+                  !Input.includes("Fog probe altitude") &&
+                  !Input.includes("Fog probe distance"),
               )
             : PreviousInventory;
       assert.deepEqual(

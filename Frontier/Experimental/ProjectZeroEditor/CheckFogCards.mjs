@@ -33,6 +33,10 @@ const Open = async (Id) => {
   await Page.locator(".inspector-scroll > [data-panel]").waitFor();
   await Page.waitForTimeout(250);
 };
+const Saved = () =>
+  Page.evaluate(() =>
+    JSON.parse(localStorage.getItem("Frontier.ProjectZeroHtml.v1")),
+  );
 
 try {
   await Open("height-fog");
@@ -52,8 +56,44 @@ try {
   await Beam.locator(".fg-chamber").waitFor();
   assert.equal(await Beam.locator(".fg-chamber").count(), 1);
   assert.equal(await Beam.locator(".fg-vis").count(), 0);
+  assert.equal(await Page.getByRole("img", { name: "Height fog density volume" }).count(), 1);
+  assert.equal(await Page.getByLabel("Fog probe altitude").count(), 0);
+  assert.equal(await Page.getByLabel("Fog probe distance").count(), 0);
   Checks.push(
-    "Height Fog uses the retained rich Visibility visual and nests Beam Chamber in Medium",
+    "Height Fog uses the retained rich Visibility visual, a non-graph density volume, and Beam Chamber in Medium",
+  );
+
+  await Page.getByRole("button", { name: "Enabled", exact: true }).click();
+  const BeamCanvas = Beam.locator(".fg-chamber canvas"),
+    Snapshot = () => BeamCanvas.evaluate((Canvas) => Canvas.toDataURL());
+  await BeamCanvas.waitFor();
+  for (const [Label, Value] of [
+    ["Density value", "0.08"],
+    ["Falloff Height value", "120"],
+    ["Sun Scatter value", "1.6"],
+    ["Colour value", "#8fa4bb"],
+  ]) {
+    const Before = await Snapshot();
+    await Page.getByLabel(Label, { exact: true }).fill(Value);
+    await Page.getByLabel(Label, { exact: true }).press("Tab");
+    await Page.waitForTimeout(100);
+    assert.notEqual(await Snapshot(), Before, `${Label} must repaint Beam Chamber`);
+  }
+  Checks.push(
+    "Enabled, Density, Falloff Height, Sun Scatter and Colour all repaint the same Beam Chamber model",
+  );
+
+  const NativeDensity = Page.getByLabel("Density value", { exact: true }),
+    BeforeImportedEdit = await NativeDensity.inputValue();
+  await Visibility.locator(".fg-vis canvas").click({ position: { x: 45, y: 40 } });
+  await Page.waitForTimeout(150);
+  assert.notEqual(await NativeDensity.inputValue(), BeforeImportedEdit);
+  const StoredProperties =
+    (await Saved()).Values["height-fog"].ReferenceInspector?.Properties || {};
+  for (const Key of ["enabled", "density", "height", "sunScatter", "color"])
+    assert.equal(Key in StoredProperties, false, `${Key} must not be stored twice`);
+  Checks.push(
+    "Imported Height visual and native controls are bidirectional; mapped Fog values are stored once",
   );
 
   for (const Id of ["aerial-fog", "local-fog"]) {
